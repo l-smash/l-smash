@@ -35,6 +35,16 @@ static uint64_t isom_update_mdhd_size( isom_trak_entry_t *trak );
 static int isom_update_moov_size( isom_root_t *root );
 
 
+static inline void isom_bs_free( isom_bs_t *bs )
+{
+    if( bs->data )
+        free( bs->data );
+    bs->data = NULL;
+    bs->alloc = 0;
+    bs->store = 0;
+    bs->pos = 0;
+}
+
 static inline void isom_bs_alloc( isom_bs_t *bs, uint64_t size )
 {
     if( bs->error )
@@ -49,24 +59,12 @@ static inline void isom_bs_alloc( isom_bs_t *bs, uint64_t size )
         return;
     if( !data )
     {
-        if( bs->data )
-            free( bs->data );
-        bs->data = NULL;
+        isom_bs_free( bs );
         bs->error = 1;
         return;
     }
     bs->data  = data;
     bs->alloc = alloc;
-}
-
-static inline void isom_bs_free( isom_bs_t *bs )
-{
-    if( bs->data )
-        free( bs->data );
-    bs->data = NULL;
-    bs->alloc = 0;
-    bs->store = 0;
-    bs->pos = 0;
 }
 
 /*---- bitstream writer ----*/
@@ -121,8 +119,7 @@ static inline int isom_bs_write_data( isom_bs_t *bs )
         return 0;
     if( bs->error || !bs->stream || fwrite( bs->data, 1, bs->store, bs->stream ) != bs->store )
     {
-        free( bs->data );
-        bs->data = NULL;
+        isom_bs_free( bs );
         bs->error = 1;
         return -1;
     }
@@ -139,8 +136,7 @@ static inline uint8_t isom_bs_read_byte( isom_bs_t *bs )
         return 0;
     if( bs->pos + 1 > bs->store )
     {
-        free( bs->data );
-        bs->data = NULL;
+        isom_bs_free( bs );
         bs->error = 1;
         return 0;
     }
@@ -154,9 +150,7 @@ static inline uint8_t *isom_bs_read_bytes( isom_bs_t *bs, uint32_t size )
     uint8_t *value = malloc( size );
     if( !value || bs->pos + size > bs->store )
     {
-        if( bs->data )
-            free( bs->data );
-        bs->data = NULL;
+        isom_bs_free( bs );
         bs->error = 1;
         return NULL;
     }
@@ -196,9 +190,7 @@ static inline int isom_bs_read_data( isom_bs_t *bs, uint64_t size )
     isom_bs_alloc( bs, size );
     if( bs->error || !bs->stream || fread( bs->data, 1, size, bs->stream ) != size )
     {
-        if( bs->data )
-            free( bs->data );
-        bs->data = NULL;
+        isom_bs_free( bs );
         bs->error = 1;
         return -1;
     }
