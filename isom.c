@@ -35,9 +35,10 @@ static uint64_t isom_update_mdhd_size( isom_trak_entry_t *trak );
 static int isom_update_moov_size( isom_root_t *root );
 
 
-/*---- bit stream writer ----*/
 static inline void isom_bs_alloc( isom_bs_t *bs, uint64_t size )
 {
+    if( bs->error )
+        return;
     uint64_t alloc = size + (1<<16);
     uint8_t *data;
     if( !bs->data )
@@ -48,6 +49,9 @@ static inline void isom_bs_alloc( isom_bs_t *bs, uint64_t size )
         return;
     if( !data )
     {
+        if( bs->data )
+            free( bs->data );
+        bs->data = NULL;
         bs->error = 1;
         return;
     }
@@ -55,28 +59,34 @@ static inline void isom_bs_alloc( isom_bs_t *bs, uint64_t size )
     bs->alloc = alloc;
 }
 
+static inline void isom_bs_free( isom_bs_t *bs )
+{
+    if( bs->data )
+        free( bs->data );
+    bs->data = NULL;
+    bs->alloc = 0;
+    bs->store = 0;
+    bs->pos = 0;
+}
+
+/*---- bitstream writer ----*/
 static inline void isom_bs_put_byte( isom_bs_t *bs, uint8_t value )
 {
-    if( bs->error || !bs->stream )
-        return;
     isom_bs_alloc( bs, bs->store + 1 );
-    bs->data[bs->store] = value;
-    bs->store += 1;
+    if( bs->error )
+        return;
+    bs->data[bs->store ++] = value;
 }
 
 static inline void isom_bs_put_bytes( isom_bs_t *bs, void *value, uint32_t size )
 {
-    if( !size || bs->error || !bs->stream )
+    if( !size )
         return;
     isom_bs_alloc( bs, bs->store + size );
+    if( bs->error )
+        return;
     memcpy( bs->data + bs->store, value, size );
     bs->store += size;
-}
-
-static inline void isom_bs_put_be8( isom_bs_t *bs, uint8_t *value, uint32_t count )
-{
-    for( int i = 0; i < count; i++ )
-        isom_bs_put_byte( bs, value[i] );
 }
 
 static inline void isom_bs_put_be16( isom_bs_t *bs, uint16_t value )
@@ -105,17 +115,95 @@ static inline void isom_bs_put_be64( isom_bs_t *bs, uint64_t value )
 
 static inline int isom_bs_write_data( isom_bs_t *bs )
 {
+    if( !bs )
+        return -1;
     if( !bs->data )
         return 0;
-    if( bs->error || fwrite( bs->data, 1, bs->store, bs->stream ) != bs->store )
+    if( bs->error || !bs->stream || fwrite( bs->data, 1, bs->store, bs->stream ) != bs->store )
     {
         free( bs->data );
         bs->data = NULL;
+        bs->error = 1;
         return -1;
     }
     bs->size += bs->store;
     bs->store = 0;
-    bs->alloc = 0;
+    return 0;
+}
+/*---- ----*/
+
+/*---- bitstream reader ----*/
+static inline uint8_t isom_bs_read_byte( isom_bs_t *bs )
+{
+    if( bs->error || !bs->data )
+        return 0;
+    if( bs->pos + 1 > bs->store )
+    {
+        free( bs->data );
+        bs->data = NULL;
+        bs->error = 1;
+        return 0;
+    }
+    return bs->data[bs->pos ++];
+}
+
+static inline uint8_t *isom_bs_read_bytes( isom_bs_t *bs, uint32_t size )
+{
+    if( bs->error || !size )
+        return NULL;
+    uint8_t *value = malloc( size );
+    if( !value || bs->pos + size > bs->store )
+    {
+        if( bs->data )
+            free( bs->data );
+        bs->data = NULL;
+        bs->error = 1;
+        return NULL;
+    }
+    memcpy( value, bs->data + bs->pos, size );
+    bs->pos += size;
+    return value;
+}
+
+static inline uint16_t isom_bs_read_be16( isom_bs_t *bs )
+{
+    uint16_t    value = isom_bs_read_byte( bs );
+    return (value<<8) | isom_bs_read_byte( bs );
+}
+
+static inline uint32_t isom_bs_read_be24( isom_bs_t *bs )
+{
+    uint32_t    value = isom_bs_read_be16( bs );
+    return (value<<8) | isom_bs_read_byte( bs );
+}
+
+static inline uint32_t isom_bs_read_be32( isom_bs_t *bs )
+{
+    uint32_t     value = isom_bs_read_be16( bs );
+    return (value<<16) | isom_bs_read_be16( bs );
+}
+
+static inline uint64_t isom_bs_read_be64( isom_bs_t *bs )
+{
+    uint64_t     value = isom_bs_read_be32( bs );
+    return (value<<32) | isom_bs_read_be32( bs );
+}
+
+static inline int isom_bs_read_data( isom_bs_t *bs, uint64_t size )
+{
+    if( !bs )
+        return -1;
+    isom_bs_alloc( bs, size );
+    if( bs->error || !bs->stream || fread( bs->data, 1, size, bs->stream ) != size )
+    {
+        if( bs->data )
+            free( bs->data );
+        bs->data = NULL;
+        bs->error = 1;
+        return -1;
+    }
+    bs->store = size;
+    bs->pos = 0;
     return 0;
 }
 /*---- ----*/
@@ -1944,7 +2032,7 @@ static int isom_put_avcC( isom_bs_t *bs, isom_avcC_t *avcC )
         if( !data )
             return -1;
         isom_bs_put_be16( bs, data->sequenceParameterSetLength );
-        isom_bs_put_be8( bs, data->sequenceParameterSetNALUnit, data->sequenceParameterSetLength );
+        isom_bs_put_bytes( bs, data->sequenceParameterSetNALUnit, data->sequenceParameterSetLength );
     }
     isom_bs_put_byte( bs, avcC->numOfPictureParameterSets );
     for( isom_entry_t *entry = avcC->pictureParameterSets->head; entry; entry = entry->next )
@@ -1953,7 +2041,7 @@ static int isom_put_avcC( isom_bs_t *bs, isom_avcC_t *avcC )
         if( !data )
             return -1;
         isom_bs_put_be16( bs, data->pictureParameterSetLength );
-        isom_bs_put_be8( bs, data->pictureParameterSetNALUnit, data->pictureParameterSetLength );
+        isom_bs_put_bytes( bs, data->pictureParameterSetNALUnit, data->pictureParameterSetLength );
     }
     return 0;
 }
@@ -2469,7 +2557,7 @@ int isom_write_free( isom_root_t *root )
     skip->box_header.size = 8 + skip->length;
     isom_bs_put_box_header( bs, &skip->box_header );
     if( skip->data && skip->length )
-        isom_bs_put_be8( bs, skip->data, skip->length );
+        isom_bs_put_bytes( bs, skip->data, skip->length );
     if( isom_bs_write_data( bs ) )
         return -1;
     return 0;

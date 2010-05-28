@@ -566,6 +566,7 @@ typedef struct
     uint8_t *data;  /* temporary storing data for reading/writing */
     uint64_t store; /* storing data size */
     uint64_t alloc; /* allocated memory size for storing data */
+    uint64_t pos;   /* data position */
     uint64_t size;  /* current stream size */
 } isom_bs_t;
 
