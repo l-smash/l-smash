@@ -833,7 +833,7 @@ static int isom_add_mvhd( isom_root_t *root )
 static int isom_add_tkhd( isom_root_t *root, uint32_t trak_number )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
-    if( !trak || !trak->moov || !trak->moov->mvhd || !trak->moov->trak_list )
+    if( !trak || !trak->root || !trak->root->moov || !trak->root->moov->mvhd || !trak->root->moov->trak_list )
         return -1;
     if( !trak->tkhd )
     {
@@ -841,8 +841,8 @@ static int isom_add_tkhd( isom_root_t *root, uint32_t trak_number )
         tkhd->matrix[0] = 0x00010000;
         tkhd->matrix[4] = 0x00010000;
         tkhd->matrix[8] = 0x40000000;
-        tkhd->track_ID = trak->moov->mvhd->next_track_ID;
-        ++ trak->moov->mvhd->next_track_ID;
+        tkhd->track_ID = trak->root->moov->mvhd->next_track_ID;
+        ++ trak->root->moov->mvhd->next_track_ID;
         trak->tkhd = tkhd;
     }
     return 0;
@@ -1225,7 +1225,7 @@ int isom_add_trak( isom_root_t *root, uint32_t hdlr_type )
     memset( &cache->chunk, 0, sizeof(isom_chunk_cache_t) );
     if( isom_add_entry( moov->trak_list, trak_entry ) )
         return -1;
-    trak_entry->moov = moov;
+    trak_entry->root = root;
     trak_entry->cache = cache;
     uint32_t trak_number = moov->trak_list->entry_count;
     isom_add_tkhd( root, trak_number );
@@ -2493,10 +2493,10 @@ static int isom_write_mdat_header( isom_root_t *root )
 
 uint32_t isom_get_trak_number( isom_trak_entry_t *trak )
 {
-    if( !trak )
+    if( !trak || !trak->root || !trak->root->moov || !trak->root->moov->trak_list )
         return 0;
     uint32_t i = 1;
-    for( isom_entry_t *entry = trak->moov->trak_list->head; entry; entry = entry->next )
+    for( isom_entry_t *entry = trak->root->moov->trak_list->head; entry; entry = entry->next )
     {
         if( trak == (isom_trak_entry_t *)entry->data )
             return i;
@@ -2701,11 +2701,11 @@ static int isom_update_tkhd_duration( isom_root_t *root, uint32_t trak_number )
     tkhd->fullbox.version = 0;
     if( !trak->edts )
     {
-        if( !trak->mdia || !trak->mdia->mdhd || !trak->moov || !trak->moov->mvhd )
+        if( !trak->mdia || !trak->mdia->mdhd || !trak->root || !trak->root->moov || !trak->root->moov->mvhd )
             return -1;
         if( trak->mdia->mdhd->duration && isom_update_mdhd_duration( root, trak_number ) )
             return -1;
-        tkhd->duration = trak->mdia->mdhd->duration * ((double)trak->moov->mvhd->timescale / trak->mdia->mdhd->timescale) + 0.5;
+        tkhd->duration = trak->mdia->mdhd->duration * ((double)trak->root->moov->mvhd->timescale / trak->mdia->mdhd->timescale) + 0.5;
     }
     else
     {

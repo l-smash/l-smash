@@ -561,6 +561,26 @@ typedef struct
 
 typedef struct
 {
+    FILE *stream;   /* I/O stream */
+    uint8_t error;
+    uint8_t *data;  /* temporary storing data for reading/writing */
+    uint64_t store; /* storing data size */
+    uint64_t alloc; /* allocated memory size for storing data */
+    uint64_t size;  /* current stream size */
+} isom_bs_t;
+
+typedef struct
+{
+    isom_ftyp_t *ftyp;      /* File Type Box */
+    isom_moov_t *moov;      /* Movie Box */
+    isom_mdat_t *mdat;      /* Media Data Box */
+    isom_free_t *free;      /* Free Space Box */
+
+    isom_bs_t *bs;
+} isom_root_t;
+
+typedef struct
+{
     uint32_t chunk_number;              /* chunk number */
     uint32_t samples_per_chunk;         /* the number of samples in chunk */
     uint32_t sample_description_index;  /* sample description index */
@@ -586,30 +606,10 @@ typedef struct
     isom_edts_t *edts;         /* Edit Box */
     isom_mdia_t *mdia;         /* Media Box */
 
-    isom_moov_t *moov;         /* go to upper box */
+    isom_root_t *root;         /* go to root */
     isom_mdat_t *mdat;         /* go to referenced mdat box */
     isom_cache_t *cache;
 } isom_trak_entry_t;
-
-typedef struct
-{
-    FILE *stream;   /* I/O stream */
-    uint8_t error;
-    uint8_t *data;  /* temporary storing data for reading/writing */
-    uint64_t store; /* storing data size */
-    uint64_t alloc; /* allocated memory size for storing data */
-    uint64_t size;  /* current stream size */
-} isom_bs_t;
-
-typedef struct
-{
-    isom_ftyp_t *ftyp;      /* File Type Box */
-    isom_moov_t *moov;      /* Movie Box */
-    isom_mdat_t *mdat;      /* Media Data Box */
-    isom_free_t *free;      /* Free Space Box */
-
-    isom_bs_t *bs;
-} isom_root_t;
 
 
 #define ISOM_4CC( a, b, c, d ) (((a)<<24) | ((b)<<16) | ((c)<<8) | (d))
