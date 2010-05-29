@@ -3,5 +3,8 @@
 *.dll
 *.exe
 *.o
+*.orig
+*.patch
+*.rej
 *.mp4
 *.mov
