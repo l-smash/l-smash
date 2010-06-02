@@ -20,6 +20,9 @@
 
 /* This file is available under an ISC license. */
 
+#ifndef MP4SYS_H
+#define MP4SYS_H
+
 /*
     An implementation of ISO/IEC 14496-1, known as MPEG-4 Part 1 Systems.
         Authors:
@@ -329,3 +332,5 @@ int mp4sys_write_ObjectDescriptor( isom_bs_t *bs, mp4sys_ObjectDescriptor_t* od 
 /* to facilitate to make ES_Descriptor */
 mp4sys_ES_Descriptor_t* mp4sys_setup_ES_Descriptor( mp4sys_ES_Descriptor_params_t* params );
 #endif
+
+#endif /* #ifndef MP4SYS_H */
