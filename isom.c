@@ -285,6 +285,17 @@ static void isom_remove_list( isom_entry_list_t *list )
 }
 /*---- ----*/
 
+/* FIXME: mp4sys : We have to fix these magical statements (temporal workarounds). */
+#ifdef mp4sys_ObjectDescriptor_t
+#undef mp4sys_ObjectDescriptor_t
+#endif
+#ifdef mp4sys_ES_Descriptor_t
+#undef mp4sys_ES_Descriptor_t
+#endif
+#include "mp4sys.c"
+/* FIXME: mp4sys : Use this instead at top of this file, when getting arbitrated. */
+//#include "mp4sys.h"
+
 /*---- creator ----*/
 isom_root_t *isom_create_root( char *filename )
 {

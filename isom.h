@@ -29,6 +29,12 @@
 #include <inttypes.h>
 #include <sys/time.h>
 
+/* FIXME: mp4sys : We have to fix these magical statements (temporal workarounds). */
+#define mp4sys_ObjectDescriptor_t void
+#define mp4sys_ES_Descriptor_t void
+/* FIXME: mp4sys : Use this instead, when getting arbitrated. */
+//#include "mp4sys.h"
+
 #define ISOM_MAX( a, b ) ((a) > (b) ? (a) : (b))
 #define ISOM_MIN( a, b ) ((a) < (b) ? (a) : (b))
 
@@ -474,16 +480,6 @@ typedef struct
 typedef isom_free_t isom_skip_t;
 
 /* extended by ISO IEC 14496-14 (MP4 file format) */
-typedef struct
-{
-    void *under_construction;
-} mp4sys_ObjectDescriptor_t;
-
-typedef struct
-{
-    void *under_construction;
-} mp4sys_ES_Descriptor_t;
-
 typedef struct
 {
     isom_fullbox_head_t fullbox;
