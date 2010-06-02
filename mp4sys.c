@@ -397,6 +397,7 @@ int mp4sys_to_InitialObjectDescriptor(
     return 0;
 }
 
+/* returns total size of descriptor, including header, 2 at least */
 static inline uint32_t mp4sys_get_descriptor_size( uint32_t payload_size_in_byte )
 {
     /* descriptor length will be split into 7bits
@@ -487,7 +488,7 @@ static int mp4sys_put_descriptor_header( isom_bs_t *bs, mp4sys_descriptor_head_t
     isom_bs_put_byte( bs, header->tag );
     /* descriptor length will be split into 7bits
        see 14496-1 16.3.3 Expandable classes and J.1 Length encoding of descriptors and commands */
-    for( int i = mp4sys_get_descriptor_size( header->size ) - header->size - 2; i; i-- ){
+    for( uint32_t i = mp4sys_get_descriptor_size( header->size ) - header->size - 2; i; i-- ){
         isom_bs_put_byte( bs, ( header->size >> ( 7 * i ) ) | 0x80 );
     }
     isom_bs_put_byte( bs, header->size );
@@ -554,7 +555,7 @@ int mp4sys_write_ES_Descriptor( isom_bs_t *bs, mp4sys_ES_Descriptor_t* esd )
     return mp4sys_write_SLConfigDescriptor( bs, esd->slConfigDescr );
 }
 
-static uint32_t mp4sys_put_ES_ID_Inc( isom_bs_t *bs, mp4sys_ES_ID_Inc_t* es_id_inc )
+static int mp4sys_put_ES_ID_Inc( isom_bs_t *bs, mp4sys_ES_ID_Inc_t* es_id_inc )
 {
     debug_if( !es_id_inc )
         return 0;
@@ -565,7 +566,7 @@ static uint32_t mp4sys_put_ES_ID_Inc( isom_bs_t *bs, mp4sys_ES_ID_Inc_t* es_id_i
 }
 
 /* This function works of aggregate of ES_ID_Incs */
-static uint32_t mp4sys_write_ES_ID_Incs( isom_bs_t *bs, mp4sys_ObjectDescriptor_t* od )
+static int mp4sys_write_ES_ID_Incs( isom_bs_t *bs, mp4sys_ObjectDescriptor_t* od )
 {
     debug_if( !od )
         return 0;

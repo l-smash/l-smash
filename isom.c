@@ -590,7 +590,7 @@ static int isom_add_mp4a_entry( isom_entry_list_t *list )
     mp4a->data_reference_index = 1;
     mp4a->channelcount = 2;
     mp4a->samplesize = 16;
-    mp4a->samplerate = 48000<<16;
+    mp4a->samplerate = 48000U<<16;
     if( isom_add_entry( list, mp4a ) )
         return -1;
     return 0;
@@ -643,7 +643,7 @@ static int isom_add_audio_entry( isom_entry_list_t *list, uint32_t sample_type )
     audio->data_reference_index = 1;
     audio->channelcount = 2;
     audio->samplesize = 16;
-    audio->samplerate = 48000<<16;
+    audio->samplerate = 48000U<<16;
     if( isom_add_entry( list, audio ) )
         return -1;
     return 0;
@@ -3724,12 +3724,12 @@ static uint64_t isom_update_avcC_size( isom_avcC_t *avcC )
     for( isom_entry_t *entry = avcC->sequenceParameterSets->head; entry; entry = entry->next )
     {
         isom_avcC_sps_entry_t *data = (isom_avcC_sps_entry_t *)entry->data;
-        size += 2 + data->sequenceParameterSetLength;
+        size += 2U + data->sequenceParameterSetLength;
     }
     for( isom_entry_t *entry = avcC->pictureParameterSets->head; entry; entry = entry->next )
     {
         isom_avcC_pps_entry_t *data = (isom_avcC_pps_entry_t *)entry->data;
-        size += 2 + data->pictureParameterSetLength;
+        size += 2U + data->pictureParameterSetLength;
     }
     avcC->box_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
     CHECK_LARGESIZE( avcC->box_header.size );
