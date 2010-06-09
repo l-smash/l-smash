@@ -557,13 +557,13 @@ typedef struct
 
 typedef struct
 {
-    FILE *stream;   /* I/O stream */
+    FILE *stream;     /* I/O stream */
     uint8_t error;
-    uint8_t *data;  /* temporary storing data for reading/writing */
-    uint64_t store; /* storing data size */
-    uint64_t alloc; /* allocated memory size for storing data */
-    uint64_t pos;   /* data position */
-    uint64_t size;  /* current stream size */
+    uint8_t *data;    /* buffer for reading/writing */
+    uint64_t store;   /* valid data size on buffer */
+    uint64_t alloc;   /* total buffer size including invalid area */
+    uint64_t pos;     /* data position on buffer to be read next */
+    uint64_t written; /* data size written into "stream" already */
 } isom_bs_t;
 
 typedef struct

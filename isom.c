@@ -123,9 +123,46 @@ static inline int isom_bs_write_data( isom_bs_t *bs )
         bs->error = 1;
         return -1;
     }
-    bs->size += bs->store;
+    bs->written += bs->store;
     bs->store = 0;
     return 0;
+}
+
+static inline isom_bs_t* isom_bs_create( char* filename )
+{
+    isom_bs_t* bs = malloc( sizeof(isom_bs_t) );
+    if( !bs )
+        return NULL;
+    memset( bs, 0, sizeof(isom_bs_t) );
+    if( filename && (bs->stream = fopen( filename, "wb" )) == NULL )
+    {
+        free( bs );
+        return NULL;
+    }
+    return bs;
+}
+
+static inline void isom_bs_cleanup( isom_bs_t *bs )
+{
+    if( !bs )
+        return;
+    if( bs->stream )
+        fclose( bs->stream );
+    isom_bs_free( bs );
+    free( bs );
+}
+
+static inline void* isom_bs_export_data( isom_bs_t *bs, uint32_t* length )
+{
+    if( !bs || !bs->data || bs->store || bs->error )
+        return NULL;
+    void* buf = malloc( bs->store );
+    if( !buf )
+        return NULL;
+    memcpy( buf, bs->data, bs->store );
+    if( length )
+        *length = bs->store;
+    return buf;
 }
 /*---- ----*/
 
@@ -2881,7 +2918,7 @@ static int isom_add_chunk( isom_root_t *root, uint32_t trak_number, isom_trak_en
     if( !stco->list->entry_count )
     {
         /* Add the first chunk offset in this track here. */
-        if( isom_add_stco_entry( root, trak_number, root->bs->size ) )
+        if( isom_add_stco_entry( root, trak_number, root->bs->written ) )
             return -1;
         current->chunk_number = 1;
         current->samples_per_chunk = 1;
@@ -2909,7 +2946,7 @@ static int isom_add_chunk( isom_root_t *root, uint32_t trak_number, isom_trak_en
                 return -1;
         }
         /* Add a new chunk offset in this track here. */
-        if( isom_add_stco_entry( root, trak_number, root->bs->size ) )
+        if( isom_add_stco_entry( root, trak_number, root->bs->written ) )
             return -1;
         ++ current->chunk_number;
         current->samples_per_chunk = 1;
