@@ -366,7 +366,6 @@ isom_sample_t *isom_create_sample( void )
     memset( box_name, 0, sizeof(isom_##box_name##_t) ); \
     isom_init_box_header( &((box_name)->box_header), box_4cc )
 
-
 #define isom_create_fullbox( box_name, box_4cc ) \
     isom_##box_name##_t *(box_name) = malloc( sizeof(isom_##box_name##_t) ); \
     if( !(box_name) ) \
@@ -441,7 +440,7 @@ static uint32_t isom_get_track_ID( isom_root_t *root, uint32_t trak_number )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
     if( !trak || !trak->tkhd )
-        return -1;
+        return 0;
     return trak->tkhd->track_ID;
 }
 
@@ -690,7 +689,7 @@ int isom_add_sample_entry( isom_root_t *root, uint32_t trak_number, uint32_t sam
 {
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
-        return 0;
+        return -1;
     isom_entry_list_t *list = trak->mdia->minf->stbl->stsd->list;
     switch( sample_type )
     {
@@ -742,9 +741,9 @@ int isom_add_sample_entry( isom_root_t *root, uint32_t trak_number, uint32_t sam
             break;
         /* Under Construction */
         default :
-            return 0;
+            return -1;
     }
-    return trak->mdia->minf->stbl->stsd->list->entry_count;
+    return 0;
 }
 
 int isom_add_stts_entry( isom_root_t *root, uint32_t trak_number, uint32_t sample_delta )
@@ -3170,7 +3169,7 @@ int isom_set_track_presentation_size( isom_root_t *root, uint32_t trak_number, u
     return 0;
 }
 
-int isom_set_track_volume( isom_root_t *root, uint32_t trak_number, uint16_t volume )
+int isom_set_track_volume( isom_root_t *root, uint32_t trak_number, int16_t volume )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
     if( !trak || !trak->tkhd )

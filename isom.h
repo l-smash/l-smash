@@ -1069,7 +1069,7 @@ int isom_set_movie_timescale( isom_root_t *root, uint32_t timescale );
 int isom_set_media_timescale( isom_root_t *root, uint32_t trak_number, uint32_t timescale );
 int isom_set_track_mode( isom_root_t *root, uint32_t trak_number, uint32_t mode );
 int isom_set_track_presentation_size( isom_root_t *root, uint32_t trak_number, uint32_t width, uint32_t height );
-int isom_set_track_volume( isom_root_t *root, uint32_t trak_number, uint16_t volume );
+int isom_set_track_volume( isom_root_t *root, uint32_t trak_number, int16_t volume );
 int isom_set_sample_resolution( isom_root_t *root, uint32_t trak_number, uint32_t entry_number, uint16_t width, uint16_t height );
 int isom_set_sample_type( isom_root_t *root, uint32_t trak_number, uint32_t entry_number, uint32_t sample_type );
 int isom_set_sample_aspect_ratio( isom_root_t *root, uint32_t trak_number, uint32_t entry_number, uint32_t hSpacing, uint32_t vSpacing );
