@@ -1133,8 +1133,7 @@ static int isom_add_dref( isom_root_t *root, uint32_t trak_number )
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->dinf )
         return -1;
-    isom_dref_t *dref = trak->mdia->minf->dinf->dref;
-    if( !dref )
+    if( !trak->mdia->minf->dinf->dref )
     {
         isom_create_list_fullbox( dref, ISOM_BOX_TYPE_DREF );
         trak->mdia->minf->dinf->dref = dref;
@@ -1162,8 +1161,7 @@ static int isom_add_stsd( isom_root_t *root, uint32_t trak_number )
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
         return -1;
-    isom_stsd_t *stsd = trak->mdia->minf->stbl->stsd;
-    if( !stsd )
+    if( !trak->mdia->minf->stbl->stsd )
     {
         isom_create_list_fullbox( stsd, ISOM_BOX_TYPE_STSD );
         trak->mdia->minf->stbl->stsd = stsd;
@@ -1238,8 +1236,7 @@ static int isom_add_stts( isom_root_t *root, uint32_t trak_number )
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
         return -1;
-    isom_stts_t *stts = trak->mdia->minf->stbl->stts;
-    if( !stts )
+    if( !trak->mdia->minf->stbl->stts )
     {
         isom_create_list_fullbox( stts, ISOM_BOX_TYPE_STTS );
         trak->mdia->minf->stbl->stts = stts;
@@ -1252,8 +1249,7 @@ int isom_add_ctts( isom_root_t *root, uint32_t trak_number )
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
         return -1;
-    isom_ctts_t *ctts = trak->mdia->minf->stbl->ctts;
-    if( !ctts )
+    if( !trak->mdia->minf->stbl->ctts )
     {
         isom_create_list_fullbox( ctts, ISOM_BOX_TYPE_CTTS );
         trak->mdia->minf->stbl->ctts = ctts;
@@ -1266,8 +1262,7 @@ static int isom_add_stsc( isom_root_t *root, uint32_t trak_number )
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
         return -1;
-    isom_stsc_t *stsc = trak->mdia->minf->stbl->stsc;
-    if( !stsc )
+    if( !trak->mdia->minf->stbl->stsc )
     {
         isom_create_list_fullbox( stsc, ISOM_BOX_TYPE_STSC );
         trak->mdia->minf->stbl->stsc = stsc;
@@ -1280,8 +1275,7 @@ static int isom_add_stsz( isom_root_t *root, uint32_t trak_number )
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
         return -1;
-    isom_stsz_t *stsz = trak->mdia->minf->stbl->stsz;
-    if( !stsz )
+    if( !trak->mdia->minf->stbl->stsz )
     {
         isom_create_fullbox( stsz, ISOM_BOX_TYPE_STSZ );  /* We don't create a list here. */
         trak->mdia->minf->stbl->stsz = stsz;
@@ -1294,8 +1288,7 @@ int isom_add_stss( isom_root_t *root, uint32_t trak_number )
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
         return -1;
-    isom_stss_t *stss = trak->mdia->minf->stbl->stss;
-    if( !stss )
+    if( !trak->mdia->minf->stbl->stss )
     {
         isom_create_list_fullbox( stss, ISOM_BOX_TYPE_STSS );
         trak->mdia->minf->stbl->stss = stss;
@@ -1308,8 +1301,7 @@ static int isom_add_co64( isom_root_t *root, uint32_t trak_number )
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
         return -1;
-    isom_stco_t *stco = trak->mdia->minf->stbl->stco;
-    if( !stco )
+    if( !trak->mdia->minf->stbl->stco )
     {
         isom_create_list_fullbox( stco, ISOM_BOX_TYPE_CO64 );
         stco->large_presentation = 1;
@@ -1323,8 +1315,7 @@ static int isom_add_stco( isom_root_t *root, uint32_t trak_number )
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
         return -1;
-    isom_stco_t *stco = trak->mdia->minf->stbl->stco;
-    if( !stco )
+    if( !trak->mdia->minf->stbl->stco )
     {
         isom_create_list_fullbox( stco, ISOM_BOX_TYPE_STCO );
         stco->large_presentation = 0;
