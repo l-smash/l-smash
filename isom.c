@@ -584,7 +584,18 @@ static int isom_add_avc_entry( isom_entry_list_t *list, uint32_t sample_type )
     avc->data_reference_index = 1;
     avc->horizresolution = avc->vertresolution = 0x00480000;
     avc->frame_count = 1;
-    avc->compressorname[32] = '\0';
+    switch( sample_type )
+    {
+        case ISOM_CODEC_TYPE_AVC1_VIDEO :
+        case ISOM_CODEC_TYPE_AVC2_VIDEO :
+            strcpy( avc->compressorname, "\012AVC Coding" );
+            break;
+        case ISOM_CODEC_TYPE_AVCP_VIDEO :
+            strcpy( avc->compressorname, "\016AVC Parameters" );
+            break;
+        default :
+            return -1;
+    }
     avc->depth = 0x0018;
     avc->pre_defined3 = -1;
     if( isom_add_entry( list, avc ) )

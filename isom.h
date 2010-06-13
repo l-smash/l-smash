@@ -278,11 +278,11 @@ typedef struct
     uint32_t vertresolution;    /* 16.16 fixed-point / template: vertresolution = 0x00480000 / 72 dpi */ \
     uint32_t reserved2; \
     uint16_t frame_count;       /* frame per sample / template: frame_count = 1 */ \
-    char compressorname[33]; \
+    char compressorname[33];    /* a fixed 32-byte field, with the first byte set to the number of bytes to be displayed */ \
     uint16_t depth;             /* template: depth = 0x0018 */ \
     int16_t pre_defined3;       /* template: pre_defined = -1 */ \
-    isom_clap_t *clap;         /* Clean Aperture Box / optional */ \
-    isom_pasp_t *pasp;         /* Pixel Aspect Ratio Box / optional */
+    isom_clap_t *clap;          /* Clean Aperture Box / optional */ \
+    isom_pasp_t *pasp;          /* Pixel Aspect Ratio Box / optional */
 
 #define ISOM_AUDIO_SAMPLE_ENTRY \
     ISOM_SAMPLE_ENTRY; \
