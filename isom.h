@@ -175,7 +175,7 @@ typedef struct
 
 typedef struct
 {
-    isom_fullbox_head_t fullbox;   /* flags is 1 */
+    isom_fullbox_head_t fullbox;    /* flags is 1 */
     uint16_t graphicsmode;          /* template: graphicsmode = 0 */
     uint16_t opcolor[3];            /* template: opcolor = { 0, 0, 0 } */
 } isom_vmhd_t;
@@ -364,7 +364,7 @@ typedef struct
     isom_fullbox_head_t fullbox;
     uint32_t sample_size;       /* If this field is set to 0, then the samples have different sizes. */
     uint32_t sample_count;
-    isom_entry_list_t *list;   /* available if sample_size == 0 */
+    isom_entry_list_t *list;    /* available if sample_size == 0 */
 } isom_stsz_t;
 
 /* Sync Sample */
@@ -412,16 +412,57 @@ typedef struct
     uint8_t large_presentation;
 } isom_stco_t; /* share with co64 box */
 
+/* Sample To Group */
+typedef struct
+{
+    uint32_t sample_count;              /* the number of consecutive samples with the same sample group descriptor */
+    uint32_t group_description_index;   /* the index of the sample group entry which describes the samples in this group */
+} isom_sbgp_entry_t;
+
+typedef struct
+{
+    isom_fullbox_head_t fullbox;
+    uint32_t grouping_type;     /* Links it to its sample group description table with the same value for grouping type. */
+    isom_entry_list_t *list;
+} isom_sbgp_t;
+
+/* Sample Group Description
+ * description_length are available only if version == 1 and default_length == 0. */
+typedef struct
+{
+    uint32_t description_length;
+} isom_sample_group_entry_t;
+
+typedef struct
+{
+    /* grouping_type is 'roll' */
+    uint32_t description_length;
+    int16_t roll_distance;  /* the number of samples that must be decoded in order for a sample to be decoded correctly */
+} isom_roll_group_entry_t;  /* Roll Recovery Entry */
+
+typedef struct
+{
+    isom_fullbox_head_t fullbox;
+    uint32_t grouping_type;     /* an integer that identifies the sbgp that is associated with this sample group description */
+    uint32_t default_length;    /* the length of every group entry (if the length is constant), or zero (if it is variable)
+                                 * This field is available only if version == 1. */
+    isom_entry_list_t *list;
+} isom_sgpd_t;
+
 typedef struct
 {
     isom_box_head_t box_header;
-    isom_stsd_t *stsd;     /* Sample Description Box */
-    isom_stts_t *stts;     /* Decoding Time to Sample Box */
-    isom_ctts_t *ctts;     /* Composition Time to Sample Box */
-    isom_stss_t *stss;     /* Sync Sample Box */
-    isom_stsc_t *stsc;     /* Sample To Chunk Box */
-    isom_stsz_t *stsz;     /* Sample Size Box */
-    isom_stco_t *stco;     /* Chunk Offset Box */
+    isom_stsd_t *stsd;      /* Sample Description Box */
+    isom_stts_t *stts;      /* Decoding Time to Sample Box */
+    isom_ctts_t *ctts;      /* Composition Time to Sample Box */
+    isom_stss_t *stss;      /* Sync Sample Box */
+    isom_stsc_t *stsc;      /* Sample To Chunk Box */
+    isom_stsz_t *stsz;      /* Sample Size Box */
+    isom_stco_t *stco;      /* Chunk Offset Box */
+    isom_sbgp_t *sbgp;      /* Sample To Group Box / optional */
+    isom_sgpd_t *sgpd;      /* Sample Group Description Box / optional */
+
+    uint32_t grouping_count;
 } isom_stbl_t;
 
 typedef struct
@@ -999,6 +1040,14 @@ enum qt_track_reference_code
     QT_TREF_TYPE_SCPT = ISOM_4CC( 's', 'c', 'p', 't' ),
     QT_TREF_TYPE_SSRC = ISOM_4CC( 's', 's', 'r', 'c' ),
     QT_TREF_TYPE_TMCD = ISOM_4CC( 't', 'm', 'c', 'd' ),
+};
+
+enum isom_grouping_code
+{
+    ISOM_GROUP_TYPE_AVLL = ISOM_4CC( 'a', 'v', 'l', 'l' ),      /* AVC Layer */
+    ISOM_GROUP_TYPE_AVSS = ISOM_4CC( 'a', 'v', 's', 's' ),      /* AVC Sub Sequence */
+    ISOM_GROUP_TYPE_RASH = ISOM_4CC( 'r', 'a', 's', 'h' ),      /* Rate Share */
+    ISOM_GROUP_TYPE_ROLL = ISOM_4CC( 'r', 'o', 'l', 'l' ),      /* Roll Recovery */
 };
 
 typedef struct
