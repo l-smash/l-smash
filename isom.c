@@ -934,8 +934,8 @@ int isom_add_stco_entry( isom_root_t *root, uint32_t trak_number, uint64_t chunk
 int isom_add_sbgp_entry( isom_root_t *root, uint32_t trak_number, uint32_t grouping_number, uint32_t sample_count, uint32_t group_description_index )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
-    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl ||
-        !trak->mdia->minf->stbl->grouping_count || trak->mdia->minf->stbl->grouping_count < grouping_number )
+    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->grouping_count ||
+        !grouping_number || trak->mdia->minf->stbl->grouping_count < grouping_number || !sample_count )
         return -1;
     isom_sbgp_t *sbgp = trak->mdia->minf->stbl->sbgp + grouping_number - 1;
     if( !sbgp || !sbgp->list )
@@ -953,31 +953,17 @@ int isom_add_sbgp_entry( isom_root_t *root, uint32_t trak_number, uint32_t group
 int isom_add_roll_group_entry( isom_root_t *root, uint32_t trak_number, uint32_t grouping_number, uint32_t description_length, int16_t roll_distance )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
-    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl ||
-        !trak->mdia->minf->stbl->grouping_count || trak->mdia->minf->stbl->grouping_count < grouping_number )
+    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->grouping_count ||
+        !grouping_number || trak->mdia->minf->stbl->grouping_count < grouping_number )
         return -1;
     isom_sgpd_t *sgpd = trak->mdia->minf->stbl->sgpd + grouping_number - 1;
-    if( !sgpd || !sgpd->list )
+    if( !sgpd || !sgpd->list || sgpd->grouping_type != ISOM_GROUP_TYPE_ROLL )
         return -1;
-    isom_sample_group_entry_t *data = NULL;
-    switch( sgpd->grouping_type )
-    {
-        case ISOM_GROUP_TYPE_ROLL :
-        {
-            isom_roll_group_entry_t *roll = malloc( sizeof(isom_roll_group_entry_t) );
-            if( !roll )
-                return -1;
-            data = (isom_sample_group_entry_t *)roll;
-            roll->description_length = description_length;
-            roll->roll_distance = roll_distance;
-            break;
-        }
-        default :
-            data = malloc( sizeof(isom_sample_group_entry_t) );
-            if( !data )
-                return -1;
-            break;
-    }
+    isom_roll_group_entry_t *data = malloc( sizeof(isom_roll_group_entry_t) );
+     if( !data )
+        return -1;
+    data->description_length = description_length;
+    data->roll_distance = roll_distance;
     if( isom_add_entry( sgpd->list, data ) )
         return -1;
     return 0;
@@ -1393,27 +1379,27 @@ static int isom_add_sgpd( isom_root_t *root, uint32_t trak_number, uint32_t grou
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
         return -1;
     uint64_t grouping_count = 1;
-    isom_sgpd_t *new_sgpd;
+    isom_sgpd_t *sgpd_array;
     if( !trak->mdia->minf->stbl->sgpd )
-        new_sgpd = malloc( sizeof(isom_sbgp_t) );
+        sgpd_array = malloc( sizeof(isom_sgpd_t) );
     else
     {
         grouping_count += trak->mdia->minf->stbl->grouping_count;
-        new_sgpd = realloc( trak->mdia->minf->stbl->sgpd, grouping_count * sizeof(isom_sbgp_t) );
+        sgpd_array = realloc( trak->mdia->minf->stbl->sgpd, grouping_count * sizeof(isom_sgpd_t) );
     }
-    if( !new_sgpd )
+    if( !sgpd_array )
         return -1;
-    isom_sgpd_t *sgpd = new_sgpd + grouping_count - 1;
+    isom_sgpd_t *sgpd = sgpd_array + grouping_count - 1;
     memset( sgpd, 0, sizeof(isom_sgpd_t) );
     isom_init_fullbox_header( &sgpd->fullbox, ISOM_BOX_TYPE_SGPD );
     sgpd->list = isom_create_entry_list();
     if( !sgpd->list )
     {
         trak->mdia->minf->stbl->sgpd = NULL;
-        free( new_sgpd );
+        free( sgpd_array );
         return -1;
     }
-    trak->mdia->minf->stbl->sgpd = new_sgpd;
+    trak->mdia->minf->stbl->sgpd = sgpd_array;
     sgpd->grouping_type = grouping_type;
     return 0;
 }
@@ -1424,27 +1410,27 @@ int isom_add_sbgp( isom_root_t *root, uint32_t trak_number, uint32_t grouping_ty
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
         return -1;
     uint64_t grouping_count = 1;
-    isom_sbgp_t *new_sbgp;
+    isom_sbgp_t *sbgp_array;
     if( !trak->mdia->minf->stbl->sbgp )
-        new_sbgp = malloc( sizeof(isom_sbgp_t) );
+        sbgp_array = malloc( sizeof(isom_sbgp_t) );
     else
     {
         grouping_count += trak->mdia->minf->stbl->grouping_count;
-        new_sbgp = realloc( trak->mdia->minf->stbl->sbgp, grouping_count * sizeof(isom_sbgp_t) );
+        sbgp_array = realloc( trak->mdia->minf->stbl->sbgp, grouping_count * sizeof(isom_sbgp_t) );
     }
-    if( !new_sbgp )
+    if( !sbgp_array )
         return -1;
-    isom_sbgp_t *sbgp = new_sbgp + grouping_count - 1;
+    isom_sbgp_t *sbgp = sbgp_array + grouping_count - 1;
     memset( sbgp, 0, sizeof(isom_sbgp_t) );
     isom_init_fullbox_header( &sbgp->fullbox, ISOM_BOX_TYPE_SBGP );
     sbgp->list = isom_create_entry_list();
     if( !sbgp->list )
     {
         trak->mdia->minf->stbl->sbgp = NULL;
-        free( new_sbgp );
+        free( sbgp_array );
         return -1;
     }
-    trak->mdia->minf->stbl->sbgp = new_sbgp;
+    trak->mdia->minf->stbl->sbgp = sbgp_array;
     sbgp->grouping_type = grouping_type;
     if( isom_add_sgpd( root, trak_number, grouping_type ) )
         return -1;
@@ -1759,6 +1745,15 @@ static void isom_remove_stbl( isom_stbl_t *stbl )
     isom_remove_list_fullbox( stsz, stbl );
     isom_remove_list_fullbox( stss, stbl );
     isom_remove_list_fullbox( stco, stbl );
+    for( uint32_t i = stbl->grouping_count; i ; i-- )
+    {
+        isom_remove_list( (stbl->sbgp + i - 1)->list );
+        isom_remove_list( (stbl->sgpd + i - 1)->list );
+    }
+    if( stbl->sbgp )
+        free( stbl->sbgp );
+    if( stbl->sgpd )
+        free( stbl->sgpd );
     free( stbl );
 }
 
@@ -4122,7 +4117,7 @@ static uint64_t isom_update_sbgp_size( isom_sbgp_t *sbgp )
         size += 8;
     sbgp->fullbox.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + 4 + size;
     CHECK_LARGESIZE( sbgp->fullbox.size );
-    return size;
+    return sbgp->fullbox.size;
 }
 
 static uint64_t isom_update_sgpd_size( isom_sgpd_t *sgpd )
@@ -4136,7 +4131,7 @@ static uint64_t isom_update_sgpd_size( isom_sgpd_t *sgpd )
         switch( sgpd->grouping_type )
         {
             case ISOM_GROUP_TYPE_ROLL :
-                size += 4;
+                size += 2;
                 break;
             default :
                 break;
@@ -4144,7 +4139,7 @@ static uint64_t isom_update_sgpd_size( isom_sgpd_t *sgpd )
     }
     sgpd->fullbox.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + (1 + (sgpd->fullbox.version == 1)) * 4 + size;
     CHECK_LARGESIZE( sgpd->fullbox.size );
-    return size;
+    return sgpd->fullbox.size;
 }
 
 static uint64_t isom_update_stbl_size( isom_trak_entry_t *trak )

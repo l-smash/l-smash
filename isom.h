@@ -1083,12 +1083,15 @@ int isom_add_stsz_entry( isom_root_t *root, uint32_t trak_number, uint32_t entry
 int isom_add_stss_entry( isom_root_t *root, uint32_t trak_number, uint32_t sample_number );
 int isom_add_co64_entry( isom_root_t *root, uint32_t trak_number, uint64_t chunk_offset );
 int isom_add_stco_entry( isom_root_t *root, uint32_t trak_number, uint64_t chunk_offset );
+int isom_add_sbgp_entry( isom_root_t *root, uint32_t trak_number, uint32_t grouping_number, uint32_t sample_count, uint32_t group_description_index );
+int isom_add_roll_group_entry( isom_root_t *root, uint32_t trak_number, uint32_t grouping_number, uint32_t description_length, int16_t roll_distance );
 
 int isom_add_edts( isom_root_t *root, uint32_t trak_number );
 int isom_add_btrt( isom_root_t *root, uint32_t trak_number, uint32_t entry_number );
 int isom_add_pasp( isom_root_t *root, uint32_t trak_number, uint32_t entry_number );
 int isom_add_ctts( isom_root_t *root, uint32_t trak_number );
 int isom_add_stss( isom_root_t *root, uint32_t trak_number );
+int isom_add_sbgp( isom_root_t *root, uint32_t trak_number, uint32_t grouping_type );
 int isom_add_trak( isom_root_t *root, uint32_t hdlr_type );
 int isom_add_mdat( isom_root_t *root );
 int isom_add_free( isom_root_t *root, uint8_t *data, uint64_t data_length );
