@@ -3438,7 +3438,7 @@ int isom_set_avc_config( isom_root_t *root, uint32_t trak_number, uint32_t entry
 
 int isom_compute_bitrate( isom_root_t *root, uint32_t trak_number, uint32_t entry_number )
 {
-    /* ToDo: support for isom_esds_t. */
+    /* ToDo: support for DecoderConfigDescriptor. */
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
     if( !trak || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->minf || !trak->mdia->minf->stbl ||
         !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list || !trak->mdia->minf->stbl->stsz ||
@@ -3449,20 +3449,14 @@ int isom_compute_bitrate( isom_root_t *root, uint32_t trak_number, uint32_t entr
     isom_btrt_t *btrt = (isom_btrt_t *)data->btrt;
     if( !btrt )
         return -1;
-    //isom_esds_t *esds = isom_get_esds( p_file, p_track, 1 );
-    //if( !esds )
-    //    return;
-    //esds->decoderConfig->avgBitrate = 0;
-    //esds->decoderConfig->maxBitrate = 0;
     uint32_t i = 0;
     uint32_t rate = 0;
     uint32_t time_wnd = 0;
     uint32_t timescale = trak->mdia->mdhd->timescale;
     uint64_t dts = 0;
     isom_entry_t *stts_entry = trak->mdia->minf->stbl->stts->list->head;
-    isom_entry_t *stsz_entry = NULL;
-    if( trak->mdia->minf->stbl->stsz->list )
-        stsz_entry = trak->mdia->minf->stbl->stsz->list->head;
+    isom_entry_t *stsz_entry = trak->mdia->minf->stbl->stsz->list ? trak->mdia->minf->stbl->stsz->list->head : NULL;
+    isom_stts_entry_t *stts_data = NULL;
     while( stts_entry )
     {
         uint32_t size;
@@ -3474,43 +3468,35 @@ int isom_compute_bitrate( isom_root_t *root, uint32_t trak_number, uint32_t entr
             if( !stsz_data )
                 return -1;
             size = stsz_data->entry_size;
+            stsz_entry = stsz_entry->next;
         }
         else
             size = trak->mdia->minf->stbl->stsz->sample_size;
-        isom_stts_entry_t *stts_data = (isom_stts_entry_t *)stts_entry->data;
-        dts += stts_data->sample_delta;
-        //if( esds->decoderConfig->bufferSizeDB < size )
-        //    esds->decoderConfig->bufferSizeDB = size;
-        //esds->decoderConfig->avgBitrate += size;*/
+        if( stts_data )
+            dts += stts_data->sample_delta;
+        stts_data = (isom_stts_entry_t *)stts_entry->data;
+        if( ++i == stts_data->sample_count )
+        {
+            stts_entry = stts_entry->next;
+            i = 0;
+        }
         if( btrt->bufferSizeDB < size )
             btrt->bufferSizeDB = size;
         btrt->avgBitrate += size;
         rate += size;
         if( dts > time_wnd + timescale )
         {
-            //if( rate > esds->decoderConfig->maxBitrate )
-            //    esds->decoderConfig->maxBitrate = rate;
             if( rate > btrt->maxBitrate )
                 btrt->maxBitrate = rate;
             time_wnd = dts;
             rate = 0;
         }
-        if( ++i == stts_data->sample_count )
-        {
-            stts_entry = stts_entry->next;
-            i = 0;
-        }
-        if( trak->mdia->minf->stbl->stsz->list )
-            stsz_entry = stsz_entry->next;
     }
     double duration = (double)trak->mdia->mdhd->duration / timescale;
-    //esds->decoderConfig->avgBitrate = (uint32_t)(esd->decoderConfig->avgBitrate / duration);
     btrt->avgBitrate = (uint32_t)(btrt->avgBitrate / duration);
     if( !btrt->maxBitrate )
         btrt->maxBitrate = btrt->avgBitrate;
-    /*move to bps*/
-    //esds->decoderConfig->avgBitrate *= 8;
-    //esds->decoderConfig->maxBitrate *= 8;
+    /* move to bps */
     btrt->avgBitrate *= 8;
     btrt->maxBitrate *= 8;
     return 0;
