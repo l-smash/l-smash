@@ -3275,6 +3275,19 @@ int isom_write_mdat_size( isom_root_t *root )
     return 0;
 }
 
+#define isom_search_entry( type, list_head ) \
+{ \
+    uint32_t i = 0; \
+    for( isom_entry_t *entry = list_head; entry; entry = entry->next ) \
+        if( ++i == entry_number ) \
+        { \
+            data = (type)entry->data; \
+            break; \
+        } \
+    if( !data ) \
+        return -1; \
+}
+
 int isom_set_brands( isom_root_t *root, uint32_t major_brand, uint32_t minor_version, uint32_t *brands, uint32_t brand_count )
 {
     if( !root->ftyp || !brand_count )
@@ -3359,14 +3372,7 @@ int isom_set_sample_resolution( isom_root_t *root, uint32_t trak_number, uint32_
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
         return -1;
     isom_visual_entry_t *data = NULL;
-    uint32_t i = 0;
-    for( isom_entry_t *entry = trak->mdia->minf->stbl->stsd->list->head; i < entry_number && entry ; entry = entry->next )
-    {
-        data = (isom_visual_entry_t *)entry->data;
-        ++i;
-    }
-    if( i < entry_number || !data )
-        return -1;
+    isom_search_entry( isom_visual_entry_t *, trak->mdia->minf->stbl->stsd->list->head );
     data->width = width;
     data->height = height;
     return 0;
@@ -3378,14 +3384,7 @@ int isom_set_sample_type( isom_root_t *root, uint32_t trak_number, uint32_t entr
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
         return -1;
     isom_sample_entry_t *data = NULL;
-    uint32_t i = 0;
-    for( isom_entry_t *entry = trak->mdia->minf->stbl->stsd->list->head; i < entry_number && entry ; entry = entry->next )
-    {
-        data = (isom_sample_entry_t *)entry->data;
-        ++i;
-    }
-    if( i < entry_number || !data )
-        return -1;
+    isom_search_entry( isom_sample_entry_t *, trak->mdia->minf->stbl->stsd->list->head );
     data->box_header.type = sample_type;
     return 0;
 }
@@ -3396,14 +3395,7 @@ int isom_set_sample_aspect_ratio( isom_root_t *root, uint32_t trak_number, uint3
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
         return -1;
     isom_visual_entry_t *data = NULL;
-    uint32_t i = 0;
-    for( isom_entry_t *entry = trak->mdia->minf->stbl->stsd->list->head; i < entry_number && entry ; entry = entry->next )
-    {
-        data = (isom_visual_entry_t *)entry->data;
-        ++i;
-    }
-    if( i < entry_number || !data )
-        return -1;
+    isom_search_entry( isom_visual_entry_t *, trak->mdia->minf->stbl->stsd->list->head );
     isom_pasp_t *pasp = (isom_pasp_t *)data->pasp;
     if( !pasp )
         return -1;
@@ -3417,18 +3409,11 @@ int isom_set_presentation_map( isom_root_t *root, uint32_t trak_number, uint32_t
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
     if( !trak || !trak->edts || !trak->edts->elst || !trak->edts->elst->list )
         return -1;
-    isom_elst_entry_t *elst = NULL;
-    uint32_t i = 0;
-    for( isom_entry_t *entry = trak->edts->elst->list->head; i < entry_number && entry ; entry = entry->next )
-    {
-        elst = (isom_elst_entry_t *)entry->data;
-        ++i;
-    }
-    if( i < entry_number || !elst )
-        return -1;
-    elst->segment_duration = segment_duration;
-    elst->media_time = media_time;
-    elst->media_rate = media_rate;
+    isom_elst_entry_t *data = NULL;
+    isom_search_entry( isom_elst_entry_t *, trak->edts->elst->list->head );
+    data->segment_duration = segment_duration;
+    data->media_time = media_time;
+    data->media_rate = media_rate;
     return 0;
 }
 
@@ -3439,14 +3424,7 @@ int isom_set_avc_config( isom_root_t *root, uint32_t trak_number, uint32_t entry
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
         return -1;
     isom_avc_entry_t *data = NULL;
-    uint32_t i = 0;
-    for( isom_entry_t *entry = trak->mdia->minf->stbl->stsd->list->head; i < entry_number && entry ; entry = entry->next )
-    {
-        data = (isom_avc_entry_t *)entry->data;
-        ++i;
-    }
-    if( i < entry_number || !data )
-        return -1;
+    isom_search_entry( isom_avc_entry_t *, trak->mdia->minf->stbl->stsd->list->head );
     isom_avcC_t *avcC = (isom_avcC_t *)data->avcC;
     if( !avcC )
         return -1;
@@ -3467,14 +3445,7 @@ int isom_compute_bitrate( isom_root_t *root, uint32_t trak_number, uint32_t entr
         !trak->mdia->minf->stbl->stts->list || !trak->mdia->minf->stbl->stts->list )
         return -1;
     isom_avc_entry_t *data = NULL;
-    uint32_t i = 0;
-    for( isom_entry_t *entry = trak->mdia->minf->stbl->stsd->list->head; i < entry_number && entry ; entry = entry->next )
-    {
-        data = (isom_avc_entry_t *)entry->data;
-        ++i;
-    }
-    if( i < entry_number || !data )
-        return -1;
+    isom_search_entry( isom_avc_entry_t *, trak->mdia->minf->stbl->stsd->list->head );
     isom_btrt_t *btrt = (isom_btrt_t *)data->btrt;
     if( !btrt )
         return -1;
@@ -3483,7 +3454,7 @@ int isom_compute_bitrate( isom_root_t *root, uint32_t trak_number, uint32_t entr
     //    return;
     //esds->decoderConfig->avgBitrate = 0;
     //esds->decoderConfig->maxBitrate = 0;
-    i = 0;
+    uint32_t i = 0;
     uint32_t rate = 0;
     uint32_t time_wnd = 0;
     uint32_t timescale = trak->mdia->mdhd->timescale;
