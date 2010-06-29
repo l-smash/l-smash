@@ -23,11 +23,20 @@
 #ifndef ISOM_H
 #define ISOM_H
 
+#ifndef __MINGW32__
+#define _FILE_OFFSET_BITS 64
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
 #include <sys/time.h>
+
+#ifdef __MINGW32__
+#define fseek fseeko64
+#define ftell ftello64
+#endif
 
 /* FIXME: mp4sys : We have to fix these magical statements (temporal workarounds). */
 #define mp4sys_ObjectDescriptor_t void
