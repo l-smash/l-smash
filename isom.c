@@ -3449,6 +3449,12 @@ int isom_compute_bitrate( isom_root_t *root, uint32_t trak_number, uint32_t entr
     isom_btrt_t *btrt = (isom_btrt_t *)data->btrt;
     if( !btrt )
         return -1;
+    struct bitrate_info_t
+    {
+        uint32_t bufferSizeDB;
+        uint32_t maxBitrate;
+        uint32_t avgBitrate;
+    } info = { 0, 0, 0 };
     uint32_t i = 0;
     uint32_t rate = 0;
     uint32_t time_wnd = 0;
@@ -3480,25 +3486,29 @@ int isom_compute_bitrate( isom_root_t *root, uint32_t trak_number, uint32_t entr
             stts_entry = stts_entry->next;
             i = 0;
         }
-        if( btrt->bufferSizeDB < size )
-            btrt->bufferSizeDB = size;
-        btrt->avgBitrate += size;
+        if( info.bufferSizeDB < size )
+            info.bufferSizeDB = size;
+        info.avgBitrate += size;
         rate += size;
         if( dts > time_wnd + timescale )
         {
-            if( rate > btrt->maxBitrate )
-                btrt->maxBitrate = rate;
+            if( rate > info.maxBitrate )
+                info.maxBitrate = rate;
             time_wnd = dts;
             rate = 0;
         }
     }
     double duration = (double)trak->mdia->mdhd->duration / timescale;
-    btrt->avgBitrate = (uint32_t)(btrt->avgBitrate / duration);
-    if( !btrt->maxBitrate )
-        btrt->maxBitrate = btrt->avgBitrate;
+    info.avgBitrate = (uint32_t)(info.avgBitrate / duration);
+    if( !info.maxBitrate )
+        info.maxBitrate = info.avgBitrate;
     /* move to bps */
-    btrt->avgBitrate *= 8;
-    btrt->maxBitrate *= 8;
+    info.maxBitrate *= 8;
+    info.avgBitrate *= 8;
+    /* set bitrate info */
+    btrt->bufferSizeDB = info.bufferSizeDB;
+    btrt->maxBitrate   = info.maxBitrate;
+    btrt->avgBitrate   = info.avgBitrate;
     return 0;
 }
 
