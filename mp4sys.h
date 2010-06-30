@@ -23,6 +23,8 @@
 #ifndef MP4SYS_H
 #define MP4SYS_H
 
+#include "isom_util.h"
+
 /*
     An implementation of ISO/IEC 14496-1, known as MPEG-4 Part 1 Systems.
         Authors:
@@ -282,8 +284,8 @@ typedef struct {
 } mp4sys_ES_Descriptor_params_t;
 
 #ifndef MP4SYS_INTERNAL
-typedef mp4sys_ES_Descriptor_t void;
-typedef mp4sys_ObjectDescriptor_t void;
+typedef void mp4sys_ES_Descriptor_t;
+typedef void mp4sys_ObjectDescriptor_t;
 
 int mp4sys_remove_DecoderSpecificInfo( mp4sys_ES_Descriptor_t* esd );
 int mp4sys_remove_DecoderConfigDescriptor( mp4sys_ES_Descriptor_t* esd );

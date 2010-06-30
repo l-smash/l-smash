@@ -38,11 +38,8 @@
 #define ftell ftello64
 #endif
 
-/* FIXME: mp4sys : We have to fix these magical statements (temporal workarounds). */
-#define mp4sys_ObjectDescriptor_t void
-#define mp4sys_ES_Descriptor_t void
-/* FIXME: mp4sys : Use this instead, when getting arbitrated. */
-//#include "mp4sys.h"
+#include "isom_util.h"
+#include "mp4sys.h"
 
 #define ISOM_MAX( a, b ) ((a) > (b) ? (a) : (b))
 #define ISOM_MIN( a, b ) ((a) < (b) ? (a) : (b))
@@ -70,23 +67,6 @@ typedef struct
     uint8_t  version;   /* basically, version is either 0 or 1 */
     uint32_t flags;     /* flags is 24 bits */
 } isom_fullbox_head_t;
-
-typedef struct isom_entry_tag isom_entry_t;
-
-struct isom_entry_tag
-{
-    isom_entry_t *next;
-    isom_entry_t *prev;
-    void *data;
-};
-
-typedef struct
-{
-    uint32_t entry_count;
-    isom_entry_t *head;
-    isom_entry_t *tail;
-} isom_entry_list_t;
-
 
 typedef struct
 {
@@ -604,17 +584,6 @@ typedef struct
     isom_iods_t       *iods;
     isom_entry_list_t *trak_list;  /* Track Box List */
 } isom_moov_t;
-
-typedef struct
-{
-    FILE *stream;     /* I/O stream */
-    uint8_t error;
-    uint8_t *data;    /* buffer for reading/writing */
-    uint64_t store;   /* valid data size on buffer */
-    uint64_t alloc;   /* total buffer size including invalid area */
-    uint64_t pos;     /* data position on buffer to be read next */
-    uint64_t written; /* data size written into "stream" already */
-} isom_bs_t;
 
 typedef struct
 {

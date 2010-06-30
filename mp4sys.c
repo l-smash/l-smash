@@ -29,6 +29,9 @@
             ( none yet )
 */
 
+#include <stdlib.h>
+#include <string.h>
+
 #define debug_if(x) if(x)
 
 #define MP4SYS_INTERNAL
