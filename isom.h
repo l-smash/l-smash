@@ -31,7 +31,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
-#include <sys/time.h>
 
 #ifdef __MINGW32__
 #define fseek fseeko64
@@ -1111,12 +1110,16 @@ int isom_set_last_sample_delta( isom_root_t *root, uint32_t trak_number, uint32_
 int isom_set_language( isom_root_t *root, uint32_t trak_number, char *language );
 int isom_set_free( isom_root_t *root, uint8_t *data, uint64_t data_length );
 
+int isom_update_media_modification_time( isom_root_t *root, uint32_t trak_number );
+int isom_update_track_modification_time( isom_root_t *root, uint32_t trak_number );
+int isom_update_movie_modification_time( isom_root_t *root );
 int isom_update_track_duration( isom_root_t *root, uint32_t trak_number );
-int isom_compute_bitrate( isom_root_t *root, uint32_t trak_number, uint32_t entry_number );
+int isom_update_bitrate_info( isom_root_t *root, uint32_t trak_number, uint32_t entry_number );
+
 int isom_write_sample( isom_root_t *root, uint32_t trak_number, isom_sample_t *sample, double max_chunk_duration );
 int isom_write_mdat_size( isom_root_t *root );
-int isom_finish_movie( isom_root_t *root );
 int isom_add_mandatory_boxes( isom_root_t *root, uint32_t hdlr_type );
+int isom_finish_movie( isom_root_t *root );
 void isom_destroy_root( isom_root_t *root );
 
 #endif

@@ -3127,7 +3127,7 @@ int isom_set_avc_config( isom_root_t *root, uint32_t trak_number, uint32_t entry
     return 0;
 }
 
-int isom_compute_bitrate( isom_root_t *root, uint32_t trak_number, uint32_t entry_number )
+int isom_update_bitrate_info( isom_root_t *root, uint32_t trak_number, uint32_t entry_number )
 {
     /* ToDo: support for DecoderConfigDescriptor. */
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
@@ -3201,40 +3201,6 @@ int isom_compute_bitrate( isom_root_t *root, uint32_t trak_number, uint32_t entr
     btrt->bufferSizeDB = info.bufferSizeDB;
     btrt->maxBitrate   = info.maxBitrate;
     btrt->avgBitrate   = info.avgBitrate;
-    return 0;
-}
-
-int isom_set_track_creation_time( isom_root_t *root, uint32_t trak_number )
-{
-    isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
-    if( !trak || !trak->tkhd || !trak->mdia || !trak->mdia->mdhd )
-        return -1;
-    struct timeval tv;
-    gettimeofday( &tv, NULL );
-    uint64_t current_time = (uint64_t)tv.tv_sec + 2082844800;
-    isom_tkhd_t *tkhd = trak->tkhd;
-    isom_mdhd_t *mdhd = trak->mdia->mdhd;
-    tkhd->creation_time = tkhd->modification_time = current_time;
-    mdhd->creation_time = mdhd->modification_time = current_time;
-    isom_update_moov_size( root );
-    return 0;
-}
-
-static int isom_set_movie_creation_time( isom_root_t *root )
-{
-    if( !root || !root->moov || !root->moov->mvhd || !root->moov->trak_list )
-        return -1;
-    struct timeval tv;
-    gettimeofday( &tv, NULL );
-    uint64_t current_time = (uint64_t)tv.tv_sec + 2082844800;
-    isom_mvhd_t *mvhd = root->moov->mvhd;
-    mvhd->creation_time = mvhd->modification_time = current_time;
-    isom_update_moov_size( root );
-    uint32_t i = 1;
-    isom_entry_t *entry;
-    for( entry = root->moov->trak_list->head; entry; entry = entry->next )
-        if( isom_set_track_creation_time( root, i++ ) )
-            return -1;
     return 0;
 }
 
@@ -3379,19 +3345,85 @@ static int isom_check_mandatory_boxes( isom_root_t *root )
     return 0;
 }
 
-int isom_finish_movie( isom_root_t *root )
+/* For generating creation_time and modification_time.
+ * According to ISO/IEC-14496-5-2001, the difference between Unix time and Mac OS time is 2082758400.
+ * However this is wrong and 2082844800 is correct. */
+#include <time.h>
+#define MAC_EPOCH_OFFSET 2082844800
+
+static inline uint64_t isom_get_current_mp4time( void )
 {
-    if( !root || !root->moov || !root->moov->trak_list )
+    return (uint64_t)time( NULL ) + MAC_EPOCH_OFFSET;
+}
+
+static int isom_set_media_creation_time( isom_trak_entry_t *trak, uint64_t current_mp4time )
+{
+    if( !trak->mdia || !trak->mdia->mdhd )
         return -1;
-    for( isom_entry_t *entry = root->moov->trak_list->head; entry; entry = entry->next )
-    {
-        uint32_t trak_number = isom_get_trak_number( (isom_trak_entry_t *)entry->data );
-        if( isom_output_chunk_cache( root, trak_number ) /* Add the last SampleToChunkBox entry. */ ||
-            isom_set_track_mode( root, trak_number, ISOM_TRACK_ENABLED ) )
+    isom_mdhd_t *mdhd = trak->mdia->mdhd;
+    if( !mdhd->creation_time )
+        mdhd->creation_time = mdhd->modification_time = current_mp4time;
+    return 0;
+}
+
+static int isom_set_track_creation_time( isom_trak_entry_t *trak, uint64_t current_mp4time )
+{
+    if( !trak || !trak->tkhd )
+        return -1;
+    isom_tkhd_t *tkhd = trak->tkhd;
+    if( !tkhd->creation_time )
+        tkhd->creation_time = tkhd->modification_time = current_mp4time;
+    if( isom_set_media_creation_time( trak, current_mp4time ) )
+        return -1;
+    return 0;
+}
+
+static int isom_set_movie_creation_time( isom_root_t *root )
+{
+    if( !root || !root->moov || !root->moov->mvhd || !root->moov->trak_list )
+        return -1;
+    uint64_t current_mp4time = isom_get_current_mp4time();
+    for( uint32_t i = 1; i <= root->moov->trak_list->entry_count; i++ )
+        if( isom_set_track_creation_time( isom_get_trak( root, i ), current_mp4time ) )
             return -1;
-    }
-    if( isom_check_mandatory_boxes( root ) || isom_set_movie_creation_time( root ) || isom_write_moov( root ) )
+    isom_mvhd_t *mvhd = root->moov->mvhd;
+    if( !mvhd->creation_time )
+        mvhd->creation_time = mvhd->modification_time = current_mp4time;
+    return 0;
+}
+
+int isom_update_media_modification_time( isom_root_t *root, uint32_t trak_number )
+{
+    isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
+    if( !trak || !trak->mdia || !trak->mdia->mdhd )
         return -1;
+    isom_mdhd_t *mdhd = trak->mdia->mdhd;
+    mdhd->modification_time = isom_get_current_mp4time();
+    if( mdhd->creation_time < mdhd->modification_time )
+        mdhd->creation_time = mdhd->modification_time;
+    return 0;
+}
+
+int isom_update_track_modification_time( isom_root_t *root, uint32_t trak_number )
+{
+    isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
+    if( !trak || !trak->tkhd )
+        return -1;
+    isom_tkhd_t *tkhd = trak->tkhd;
+    tkhd->modification_time = isom_get_current_mp4time();
+    if( tkhd->creation_time < tkhd->modification_time )
+        tkhd->creation_time = tkhd->modification_time;
+    return 0;
+}
+
+int isom_update_movie_modification_time( isom_root_t *root )
+{
+    if( !root || !root->moov || !root->moov->mvhd )
+        return -1;
+    isom_mvhd_t *mvhd = root->moov->mvhd;
+    mvhd->modification_time = isom_get_current_mp4time();
+    if( mvhd->creation_time < mvhd->modification_time )
+        mvhd->creation_time = mvhd->modification_time;
     return 0;
 }
 
@@ -3874,5 +3906,24 @@ static int isom_update_moov_size( isom_root_t *root )
         }
     root->moov->box_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
     CHECK_LARGESIZE( root->moov->box_header.size );
+    return 0;
+}
+
+int isom_finish_movie( isom_root_t *root )
+{
+    if( !root || !root->moov || !root->moov->trak_list )
+        return -1;
+    for( isom_entry_t *entry = root->moov->trak_list->head; entry; entry = entry->next )
+    {
+        uint32_t trak_number = isom_get_trak_number( (isom_trak_entry_t *)entry->data );
+        if( isom_output_chunk_cache( root, trak_number ) /* Add the last SampleToChunkBox entry. */ ||
+            isom_set_track_mode( root, trak_number, ISOM_TRACK_ENABLED ) )
+            return -1;
+    }
+    if( isom_check_mandatory_boxes( root ) ||
+        isom_set_movie_creation_time( root ) ||
+        isom_update_moov_size( root ) ||
+        isom_write_moov( root ) )
+        return -1;
     return 0;
 }
