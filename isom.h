@@ -318,8 +318,8 @@ typedef struct
 /* Decoding Time to Sample Box */
 typedef struct
 {
-    uint32_t  sample_count;
-    uint32_t  sample_delta; /* DTS[n+1] = DTS[n] + sample_delta[n] */
+    uint32_t sample_count;
+    uint32_t sample_delta;      /* DTS[n+1] = DTS[n] + sample_delta[n] */
 } isom_stts_entry_t;
 
 typedef struct
@@ -331,8 +331,8 @@ typedef struct
 /* Composition Time to Sample */
 typedef struct
 {
-    uint32_t  sample_count;
-    uint32_t  sample_offset; /* CTS[n] = DTS[n] + sample_offset[n] */
+    uint32_t sample_count;
+    uint32_t sample_offset;     /* CTS[n] = DTS[n] + sample_offset[n] */
 } isom_ctts_entry_t;
 
 typedef struct
@@ -579,9 +579,9 @@ typedef struct
 typedef struct
 {
     isom_box_head_t box_header;
-    isom_mvhd_t       *mvhd;       /* Movie Header Box */
+    isom_mvhd_t       *mvhd;        /* Movie Header Box */
     isom_iods_t       *iods;
-    isom_entry_list_t *trak_list;  /* Track Box List */
+    isom_entry_list_t *trak_list;   /* Track Box List */
 } isom_moov_t;
 
 typedef struct

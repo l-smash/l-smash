@@ -1723,30 +1723,14 @@ static int isom_write_mdhd( isom_bs_t *bs, isom_trak_entry_t *trak )
 static int isom_write_hdlr( isom_bs_t *bs, isom_trak_entry_t *trak )
 {
     isom_hdlr_t *hdlr = trak->mdia->hdlr;
-    if( hdlr )
-    {
-        isom_bs_put_fullbox_header( bs, &hdlr->fullbox );
-        isom_bs_put_be32( bs, hdlr->pre_defined );
-        isom_bs_put_be32( bs, hdlr->handler_type );
-        for( uint32_t i = 0; i < 3; i++ )
-            isom_bs_put_be32( bs, hdlr->reserved[i] );
-        isom_bs_put_bytes( bs, hdlr->name, hdlr->name_length );
-    }
-    /*else
-    {
-        hdlr = trak->root->meta->hdlr;
-        if( hdlr )
-        {
-            isom_bs_put_fullbox_header( bs, &hdlr->fullbox );
-            isom_bs_put_be32( bs, hdlr->pre_defined );
-            isom_bs_put_be32( bs, hdlr->handler_type );
-            for( uint32_t i = 0; i < 3; i++ )
-                isom_bs_put_be32( bs, hdlr->reserved[i] );
-            isom_bs_data( bs, hdlr->name );
-        }
-        else
-            return -1;
-    }*/
+    if( !hdlr )
+        return -1;
+    isom_bs_put_fullbox_header( bs, &hdlr->fullbox );
+    isom_bs_put_be32( bs, hdlr->pre_defined );
+    isom_bs_put_be32( bs, hdlr->handler_type );
+    for( uint32_t i = 0; i < 3; i++ )
+        isom_bs_put_be32( bs, hdlr->reserved[i] );
+    isom_bs_put_bytes( bs, hdlr->name, hdlr->name_length );
     if( isom_bs_write_data( bs ) )
         return -1;
     return 0;
@@ -2408,11 +2392,9 @@ static int isom_write_trak( isom_bs_t *bs, isom_trak_entry_t *trak )
 
 static int isom_write_mvhd( isom_root_t *root )
 {
-    if( !root || !root->moov )
+    if( !root || !root->moov || !root->moov->mvhd )
         return -1;
     isom_mvhd_t *mvhd = root->moov->mvhd;
-    if( !mvhd )
-        return -1;
     isom_bs_t *bs = root->bs;
     isom_bs_put_fullbox_header( bs, &mvhd->fullbox );
     if( mvhd->fullbox.version )
@@ -2453,11 +2435,8 @@ int isom_write_moov( isom_root_t *root )
         return -1;
     if( root->moov->trak_list )
         for( isom_entry_t *entry = root->moov->trak_list->head; entry; entry = entry->next )
-        {
-            isom_trak_entry_t *data = (isom_trak_entry_t *)entry->data;
-            if( isom_write_trak( root->bs, data ) )
+            if( isom_write_trak( root->bs, (isom_trak_entry_t *)entry->data ) )
                 return -1;
-        }
     return 0;
 }
 
