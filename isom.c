@@ -705,7 +705,7 @@ static int isom_add_mvhd( isom_root_t *root )
     return 0;
 }
 
-static int isom_add_tkhd( isom_root_t *root, uint32_t trak_number )
+static int isom_add_tkhd( isom_root_t *root, uint32_t trak_number, uint32_t hdlr_type )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
     if( !trak || !trak->root || !trak->root->moov || !trak->root->moov->mvhd || !trak->root->moov->trak_list )
@@ -713,9 +713,19 @@ static int isom_add_tkhd( isom_root_t *root, uint32_t trak_number )
     if( !trak->tkhd )
     {
         isom_create_fullbox( tkhd, ISOM_BOX_TYPE_TKHD );
-        tkhd->matrix[0] = 0x00010000;
-        tkhd->matrix[4] = 0x00010000;
-        tkhd->matrix[8] = 0x40000000;
+        switch( hdlr_type )
+        {
+            case ISOM_HDLR_TYPE_VISUAL :
+                tkhd->matrix[0] = 0x00010000;
+                tkhd->matrix[4] = 0x00010000;
+                tkhd->matrix[8] = 0x40000000;
+                break;
+            case ISOM_HDLR_TYPE_AUDIO :
+                tkhd->volume = 0x0100;
+                break;
+            default :
+                break;
+        }
         tkhd->track_ID = trak->root->moov->mvhd->next_track_ID;
         ++ trak->root->moov->mvhd->next_track_ID;
         trak->tkhd = tkhd;
@@ -1159,7 +1169,7 @@ int isom_add_trak( isom_root_t *root, uint32_t hdlr_type )
     trak_entry->root = root;
     trak_entry->cache = cache;
     uint32_t trak_number = moov->trak_list->entry_count;
-    isom_add_tkhd( root, trak_number );
+    isom_add_tkhd( root, trak_number, hdlr_type );
     isom_add_mdia( root, trak_number );
     isom_add_mdhd( root, trak_number );
     isom_add_minf( root, trak_number );
