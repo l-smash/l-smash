@@ -2171,7 +2171,9 @@ static int isom_write_stsz( isom_bs_t *bs, isom_trak_entry_t *trak )
 int isom_write_stss( isom_bs_t *bs, isom_trak_entry_t *trak )
 {
     isom_stss_t *stss = trak->mdia->minf->stbl->stss;
-    if( !stss || !stss->list )
+    if( !stss )
+        return 0;   /* If the sync sample box is not present, every sample is a random access point. */
+    if( !stss->list )
         return -1;
     isom_bs_put_fullbox_header( bs, &stss->fullbox );
     isom_bs_put_be32( bs, stss->list->entry_count );
