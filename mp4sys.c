@@ -20,6 +20,10 @@
 
 /* This file is available under an ISC license. */
 
+#ifndef __MINGW32__
+#define _FILE_OFFSET_BITS 64 /* FIXME: This is redundant. Should be concentrated in isom_util.h */
+#endif
+
 #include "isom_util.h"
 
 #include <stdlib.h>
@@ -31,6 +35,13 @@
 
 #define debug_if(x) if(x)
 
+#ifdef __MINGW32__ /* FIXME: This is redundant. Should be concentrated in isom_util.h */
+#define mp4sys_fseek fseeko64
+#define mp4sys_ftell ftello64
+#else
+#define mp4sys_fseek fseek
+#define mp4sys_ftell ftell
+#endif
 
 /***************************************************************************
     bitstream writer
@@ -1252,4 +1263,93 @@ void mp4sys_cleanup_audio_summary( mp4sys_audio_summary_t* summary )
     if( summary->asc )
         free( summary->asc );
     free( summary );
+}
+
+/***************************************************************************
+    importer framework
+***************************************************************************/
+struct mp4sys_importer_tag;
+
+typedef void ( *mp4sys_importer_cleanup )( struct mp4sys_importer_tag* importer );
+typedef int ( *mp4sys_importer_get_accessunit )( struct mp4sys_importer_tag*, uint32_t track_number , void* buf, uint32_t* size );
+typedef int ( *mp4sys_importer_probe )( struct mp4sys_importer_tag* importer );
+
+typedef struct mp4sys_importer_tag
+{
+    FILE* stream;
+    void* info; /* FIXME: importer internal status information. should be a list corresponding to tracks? */
+    mp4sys_importer_get_accessunit get_accessunit;
+    mp4sys_importer_cleanup cleanup;
+    mp4sys_audio_summary_t* summary; /* FIXME: summary should be a list corresponding to tracks */
+} mp4sys_importer_t;
+
+/***************************************************************************
+    importer public interfaces
+***************************************************************************/
+
+/******** importer listing table ********/
+static mp4sys_importer_probe mp4sys_importer_tbl[] = {
+    NULL,
+};
+
+/******** importer public functions ********/
+void mp4sys_importer_close( mp4sys_importer_t* importer )
+{
+    if( !importer )
+        return;
+    if( importer->stream )
+        fclose( importer->stream );
+    if( importer->cleanup )
+        importer->cleanup( importer );
+    /* FIXME: we have to make a loop for the tracks */
+    mp4sys_cleanup_audio_summary( importer->summary );
+    free( importer );
+}
+
+mp4sys_importer_t* mp4sys_importer_open( char* identifier )
+{
+    mp4sys_importer_t* importer = (mp4sys_importer_t*)malloc( sizeof(mp4sys_importer_t) );
+    if( !importer )
+        return NULL;
+    memset( importer, 0, sizeof(mp4sys_importer_t) );
+    if( (importer->stream = fopen( identifier, "rb" )) == NULL )
+    {
+        free( importer );
+        return NULL;
+    }
+    mp4sys_importer_probe detector;
+    for( int i = 0; (detector = mp4sys_importer_tbl[i]) != NULL && detector( importer ); i++ )
+        mp4sys_fseek( importer->stream, 0, SEEK_SET );
+    if( !detector )
+    {
+        mp4sys_importer_close( importer );
+        return NULL;
+    }
+    return importer;
+}
+
+/* 0 if success, positive if changed, negative if failed */
+int mp4sys_importer_get_access_unit( mp4sys_importer_t* importer, uint32_t track_number, void* buf, uint32_t* size )
+{
+    if( !importer || !importer->get_accessunit || !buf || !size || *size == 0 )
+        return -1;
+    return importer->get_accessunit( importer, track_number, buf, size );
+}
+
+mp4sys_audio_summary_t* mp4sys_duplicate_audio_summary( mp4sys_importer_t* importer, uint32_t track_number )
+{
+    if( !importer )
+        return NULL;
+    mp4sys_audio_summary_t* summary = (mp4sys_audio_summary_t*)malloc( sizeof(mp4sys_audio_summary_t) );
+    if( !summary )
+        return NULL;
+    memcpy( summary, importer->summary, sizeof(mp4sys_audio_summary_t) );
+    summary->asc = NULL;
+    summary->asc_length = 0;
+    if( mp4sys_summary_add_AudioSpecificConfig( summary, importer->summary->asc, importer->summary->asc_length ) )
+    {
+        free( summary );
+        return NULL;
+    }
+    return summary;
 }

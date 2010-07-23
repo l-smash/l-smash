@@ -433,9 +433,22 @@ typedef struct {
 
 #ifndef MP4SYS_INTERNAL
 
+typedef void mp4sys_importer_t;
+
+/* importing functions */
+mp4sys_importer_t* mp4sys_importer_open( char* identifier );
+void mp4sys_importer_close( mp4sys_importer_t* importer );
+int mp4sys_importer_get_access_unit( mp4sys_importer_t* importer, uint32_t track_number, void* buf, uint32_t* buf_size );
+unsigned int mp4sys_importer_get_track_count( mp4sys_importer_t* importer ); /* currently not supported */
+
 /* to facilitate to make DecoderSpecificInfo / AudioSpecificConfig */
 int mp4sys_setup_AudioSpecificConfig( mp4sys_audio_summary_t* summary );
 int mp4sys_summary_set_AudioSpecificConfig( mp4sys_audio_summary_t* summary, void* asc, uint32_t asc_length );
+
+/* FIXME: these functions may change in the future.
+   I wonder these functions should be for generic (not limited to audio) summary. */
+void mp4sys_cleanup_audio_summary( mp4sys_audio_summary_t* summary );
+mp4sys_audio_summary_t* mp4sys_duplicate_audio_summary( mp4sys_importer_t* importer, uint32_t track_number );
 
 #endif /* #ifndef MP4SYS_INTERNAL */
 
