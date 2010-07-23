@@ -324,21 +324,64 @@ static int isom_add_mp4v_entry( isom_entry_list_t *list )
     return 0;
 }
 
-static int isom_add_mp4a_entry( isom_entry_list_t *list )
+static int isom_add_mp4a_entry( isom_entry_list_t *list, mp4sys_audio_summary_t* summary )
 {
-    if( !list )
+    if( !list || !summary
+        || summary->stream_type != MP4SYS_STREAM_TYPE_AudioStream
+        || summary->frequency > 65535 ) /* FIXME: How should we do? */
         return -1;
+    switch( summary->object_type_indication )
+    {
+    case MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3:
+    case MP4SYS_OBJECT_TYPE_Audio_ISO_13818_7_Main_Profile:
+    case MP4SYS_OBJECT_TYPE_Audio_ISO_13818_7_LC_Profile:
+    case MP4SYS_OBJECT_TYPE_Audio_ISO_13818_7_SSR_Profile:
+        break;
+    default:
+        return -1;
+    }
+
+    isom_create_fullbox( esds, ISOM_BOX_TYPE_ESDS );
+    mp4sys_ES_Descriptor_params_t esd_param;
+    esd_param.ES_ID = 0;              /* This is esds internal, so 0 is allowed. */
+    esd_param.objectTypeIndication = summary->object_type_indication;
+    esd_param.streamType = summary->stream_type;
+    esd_param.bufferSizeDB = 0;       /* NOTE: ISO/IEC 14496-3 does not mention this, so we use 0. */
+    esd_param.maxBitrate = 0;         /* This will be updated later if needed. or... I think this can be arbitrary value. */
+    esd_param.avgBitrate = 0;         /* FIXME: 0 if VBR. */
+    esd_param.dsi_payload = summary->asc;
+    esd_param.dsi_payload_length = summary->asc_length;
+    esds->ES = mp4sys_setup_ES_Descriptor( &esd_param );
+    if( !esds->ES )
+    {
+        free( esds );
+        return -1;
+    }
     isom_mp4a_entry_t *mp4a = malloc( sizeof(isom_mp4a_entry_t) );
     if( !mp4a )
+    {
+        mp4sys_remove_ES_Descriptor( esds->ES );
+        free( esds );
         return -1;
+    }
     memset( mp4a, 0, sizeof(isom_mp4a_entry_t) );
     isom_init_box_header( &mp4a->box_header, ISOM_CODEC_TYPE_MP4A_AUDIO );
     mp4a->data_reference_index = 1;
-    mp4a->channelcount = 2;
-    mp4a->samplesize = 16;
-    mp4a->samplerate = 48000U<<16;
+    /* In pure mp4 file, these "template" fields shall be default values according to the spec.
+       But not pure - hybrid with other spec - mp4 file can take other values.
+       Which is to say, these template values shall be ignored in terms of mp4, except some object_type_indications.
+       see 14496-14, "6 Template fields used". */
+    mp4a->channelcount = summary->channels;
+    mp4a->samplesize = summary->bit_depth;
+    mp4a->samplerate = summary->frequency << 16; /* WARNING: This field cannot retain frequency above 65535Hz. */
+    mp4a->esds = esds;
     if( isom_add_entry( list, mp4a ) )
+    {
+        mp4sys_remove_ES_Descriptor( esds->ES );
+        free( esds );
+        free( mp4a );
         return -1;
+    }
     return 0;
 }
 
@@ -395,27 +438,29 @@ static int isom_add_audio_entry( isom_entry_list_t *list, uint32_t sample_type )
     return 0;
 }
 
-int isom_add_sample_entry( isom_root_t *root, uint32_t trak_number, uint32_t sample_type )
+/* This function returns 0 if failed, sample_entry_number if succeeded. */
+int isom_add_sample_entry( isom_root_t *root, uint32_t trak_number, uint32_t sample_type, void* summary )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
-        return -1;
+        return 0;
     isom_entry_list_t *list = trak->mdia->minf->stbl->stsd->list;
+    int ret = -1;
     switch( sample_type )
     {
         case ISOM_CODEC_TYPE_AVC1_VIDEO :
         case ISOM_CODEC_TYPE_AVC2_VIDEO :
         case ISOM_CODEC_TYPE_AVCP_VIDEO :
-            isom_add_avc_entry( list, sample_type );
+            ret = isom_add_avc_entry( list, sample_type );
             break;
         case ISOM_CODEC_TYPE_MP4V_VIDEO :
-            isom_add_mp4v_entry( list );
+            ret = isom_add_mp4v_entry( list );
             break;
         case ISOM_CODEC_TYPE_MP4A_AUDIO :
-            isom_add_mp4a_entry( list );
+            ret = isom_add_mp4a_entry( list, (mp4sys_audio_summary_t*)summary );
             break;
         case ISOM_CODEC_TYPE_MP4S_SYSTEM :
-            isom_add_mp4s_entry( list );
+            ret = isom_add_mp4s_entry( list );
             break;
         case ISOM_CODEC_TYPE_DRAC_VIDEO :
         case ISOM_CODEC_TYPE_ENCV_VIDEO :
@@ -425,7 +470,7 @@ int isom_add_sample_entry( isom_root_t *root, uint32_t trak_number, uint32_t sam
         case ISOM_CODEC_TYPE_S263_VIDEO :
         case ISOM_CODEC_TYPE_SVC1_VIDEO :
         case ISOM_CODEC_TYPE_VC_1_VIDEO :
-            isom_add_visual_entry( list, sample_type );
+            ret = isom_add_visual_entry( list, sample_type );
             break;
         case ISOM_CODEC_TYPE_AC_3_AUDIO :
         case ISOM_CODEC_TYPE_ALAC_AUDIO :
@@ -447,13 +492,13 @@ int isom_add_sample_entry( isom_root_t *root, uint32_t trak_number, uint32_t sam
         case ISOM_CODEC_TYPE_SQCP_AUDIO :
         case ISOM_CODEC_TYPE_SSMV_AUDIO :
         case ISOM_CODEC_TYPE_TWOS_AUDIO :
-            isom_add_audio_entry( list, sample_type );
+            ret = isom_add_audio_entry( list, sample_type );
             break;
         /* Under Construction */
         default :
-            return -1;
+            return 0;
     }
-    return 0;
+    return ret ? 0 : list->entry_count;
 }
 
 int isom_add_stts_entry( isom_root_t *root, uint32_t trak_number, uint32_t sample_delta )
@@ -975,14 +1020,8 @@ int isom_add_btrt( isom_root_t *root, uint32_t trak_number, uint32_t entry_numbe
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
         return -1;
-    isom_avc_entry_t *data = NULL;
-    uint32_t i = 0;
-    for( isom_entry_t *entry = trak->mdia->minf->stbl->stsd->list->head; i < entry_number && entry ; entry = entry->next )
-    {
-        data = (isom_avc_entry_t *)entry->data;
-        ++i;
-    }
-    if( i < entry_number || !data )
+    isom_avc_entry_t *data = isom_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
+    if( !data )
         return -1;
     isom_create_box( btrt, ISOM_BOX_TYPE_BTRT );
     data->btrt = btrt;
@@ -1346,7 +1385,10 @@ static void isom_remove_stsd( isom_stsd_t *stsd )
             {
                 isom_mp4a_entry_t *mp4a = (isom_mp4a_entry_t *)entry->data;
                 if( mp4a->esds )
+                {
+                    mp4sys_remove_ES_Descriptor( mp4a->esds->ES );
                     free( mp4a->esds );
+                }
                 free( mp4a );
                 break;
             }
@@ -1905,6 +1947,14 @@ static void isom_put_btrt( isom_bs_t *bs, isom_btrt_t *btrt )
     return;
 }
 
+static int isom_write_esds( isom_bs_t *bs, isom_esds_t *esds )
+{
+    if( !bs || !esds )
+        return -1;
+    isom_bs_put_fullbox_header( bs, &esds->fullbox );
+    return mp4sys_write_ES_Descriptor( bs, esds->ES );
+}
+
 static int isom_write_avc_entry( isom_bs_t *bs, isom_stsd_t *stsd )
 {
     for( isom_entry_t *entry = stsd->list->head; entry; entry = entry->next )
@@ -1936,6 +1986,31 @@ static int isom_write_avc_entry( isom_bs_t *bs, isom_stsd_t *stsd )
         if( data->btrt )
             isom_put_btrt( bs, data->btrt );
         if( isom_bs_write_data( bs ) )
+            return -1;
+    }
+    return 0;
+}
+
+static int isom_write_mp4a_entry( isom_bs_t *bs, isom_stsd_t *stsd )
+{
+    for( isom_entry_t *entry = stsd->list->head; entry; entry = entry->next )
+    {
+        isom_mp4a_entry_t *data = (isom_mp4a_entry_t *)entry->data;
+        if( !data )
+            return -1;
+        isom_bs_put_box_header( bs, &data->box_header );
+        isom_bs_put_bytes( bs, data->reserved, 6 );
+        isom_bs_put_be16( bs, data->data_reference_index );
+        isom_bs_put_be32( bs, data->reserved1[0] );
+        isom_bs_put_be32( bs, data->reserved1[1] );
+        isom_bs_put_be16( bs, data->channelcount );
+        isom_bs_put_be16( bs, data->samplesize );
+        isom_bs_put_be16( bs, data->pre_defined );
+        isom_bs_put_be16( bs, data->reserved2 );
+        isom_bs_put_be32( bs, data->samplerate );
+        if( isom_bs_write_data( bs ) )
+            return -1;
+        if( isom_write_esds( bs, data->esds ) );
             return -1;
     }
     return 0;
@@ -2056,6 +2131,9 @@ static int isom_write_stsd( isom_bs_t *bs, isom_trak_entry_t *trak )
             case ISOM_CODEC_TYPE_AVC2_VIDEO :
             case ISOM_CODEC_TYPE_AVCP_VIDEO :
                 isom_write_avc_entry( bs, stsd );
+                break;
+            case ISOM_CODEC_TYPE_MP4A_AUDIO :
+                isom_write_mp4a_entry( bs, stsd );
                 break;
             case ISOM_CODEC_TYPE_DRAC_VIDEO :
             case ISOM_CODEC_TYPE_ENCV_VIDEO :
@@ -3184,17 +3262,13 @@ int isom_set_avc_config( isom_root_t *root, uint32_t trak_number, uint32_t entry
 
 int isom_update_bitrate_info( isom_root_t *root, uint32_t trak_number, uint32_t entry_number )
 {
-    /* ToDo: support for DecoderConfigDescriptor. */
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
     if( !trak || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->minf || !trak->mdia->minf->stbl ||
         !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list || !trak->mdia->minf->stbl->stsz ||
         !trak->mdia->minf->stbl->stts->list || !trak->mdia->minf->stbl->stts->list )
         return -1;
-    isom_avc_entry_t *data = (isom_avc_entry_t *)isom_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
-    if( !data )
-        return -1;
-    isom_btrt_t *btrt = (isom_btrt_t *)data->btrt;
-    if( !btrt )
+    isom_sample_entry_t *sample_entry = (isom_sample_entry_t *)isom_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
+    if( !sample_entry )
         return -1;
     struct bitrate_info_t
     {
@@ -3253,9 +3327,35 @@ int isom_update_bitrate_info( isom_root_t *root, uint32_t trak_number, uint32_t 
     info.maxBitrate *= 8;
     info.avgBitrate *= 8;
     /* set bitrate info */
-    btrt->bufferSizeDB = info.bufferSizeDB;
-    btrt->maxBitrate   = info.maxBitrate;
-    btrt->avgBitrate   = info.avgBitrate;
+    switch( sample_entry->box_header.type )
+    {
+        case ISOM_CODEC_TYPE_AVC1_VIDEO :
+        case ISOM_CODEC_TYPE_AVC2_VIDEO :
+        case ISOM_CODEC_TYPE_AVCP_VIDEO :
+        {
+            isom_avc_entry_t *stsd_data = (isom_avc_entry_t *)sample_entry;
+            if( !stsd_data )
+                return -1;
+            //isom_btrt_t *btrt = (isom_btrt_t *)stsd_data->btrt;
+            isom_btrt_t *btrt = stsd_data->btrt;
+            if( btrt )
+            {
+                btrt->bufferSizeDB = info.bufferSizeDB;
+                btrt->maxBitrate   = info.maxBitrate;
+                btrt->avgBitrate   = info.avgBitrate;
+            }
+            break;
+        }
+        case ISOM_CODEC_TYPE_MP4A_AUDIO :
+        {
+            isom_mp4a_entry_t *stsd_data = (isom_mp4a_entry_t *)sample_entry;
+            if( !stsd_data || !stsd_data->esds || !stsd_data->esds->ES )
+                return -1;
+            /* FIXME: avgBitrate is 0 only if VBR in proper. */
+            if( mp4sys_update_DecoderConfigDescriptor( stsd_data->esds->ES, info.bufferSizeDB, info.maxBitrate, 0 ) )
+                return -1;
+        }
+    }
     return 0;
 }
 
@@ -3713,7 +3813,12 @@ static uint64_t isom_update_avc_entry_size( isom_avc_entry_t *avc )
 
 static uint64_t isom_update_esds_size( isom_esds_t *esds )
 {
-    return 0;
+    if( !esds )
+        return 0;
+    esds->fullbox.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE;
+    esds->fullbox.size += mp4sys_update_ES_Descriptor_size( esds->ES );
+    CHECK_LARGESIZE( esds->fullbox.size );
+    return esds->fullbox.size;
 }
 
 static uint64_t isom_update_mp4v_entry_size( isom_mp4v_entry_t *mp4v )

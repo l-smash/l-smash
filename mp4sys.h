@@ -23,52 +23,44 @@
 #ifndef MP4SYS_H
 #define MP4SYS_H
 
-#include "isom_util.h"
+#include <inttypes.h>
 
-/*
-    An implementation of ISO/IEC 14496-1, known as MPEG-4 Part 1 Systems.
-        Authors:
-            Takashi Hirata <felidlabo AT gmail DOT com>
-                (Main coder on this file)
-        Contributors:
-            ( none yet )
-*/
+/***************************************************************************
+    MPEG-4 Systems
+***************************************************************************/
 
 /* 8.6.6.2 Semantics Table 6 - objectTypeIndication Values */
 typedef enum {
     MP4SYS_OBJECT_TYPE_Forbidden                          = 0x00, /* Forbidden */
     MP4SYS_OBJECT_TYPE_Systems_ISO_14496_1                = 0x01, /* Systems ISO/IEC 14496-1 */
-    /* This type is used for all 14496-1 streams unless specifically indicated to the contrary.
+    /* For all 14496-1 streams unless specifically indicated to the contrary.
        Scene Description scenes, which are identified with StreamType=0x03 (see Table 7), using
        this object type value shall use the BIFSConfig specified in section 9.3.5.2.2 of this
        specification. */
-    MP4SYS_OBJECT_TYPE_Systems_ISO_14496_1_BIFSv2         = 0x02, /* Systems ISO/IEC 14496-1, */
-    /* This object type shall be used,  with StreamType=0x03 (see Table 7), for Scene
+    MP4SYS_OBJECT_TYPE_Systems_ISO_14496_1_BIFSv2         = 0x02, /* Systems ISO/IEC 14496-1 */
+    /* This object type shall be used, with StreamType=0x03 (see Table 7), for Scene
        Description streams that use the BIFSv2Config specified in section 9.3.5.3.2 of this
-       specification.  Its use with other StreamTypes is reserved */
+       specification. Its use with other StreamTypes is reserved. */
 
     MP4SYS_OBJECT_TYPE_Interaction_Stream                 = 0x03, /* Interaction Stream */
     MP4SYS_OBJECT_TYPE_Extended_BIFS                      = 0x04, /* Extended BIFS */
     /* Used, with StreamType=0x03, for Scene Description streams that use the BIFSConfigEx; its use with
-       other StreamTypes is reserved. (Was previously reserved for MUCommandStream but not used for that purpose.)  */
+       other StreamTypes is reserved. (Was previously reserved for MUCommandStream but not used for that purpose.) */
     MP4SYS_OBJECT_TYPE_AFX_Stream                         = 0x05, /* AFX Stream */
-    /* Used,  with StreamType=0x03, for Scene Description streams that use the AFXConfig; its use with other StreamTypes is reserved. */
+    /* Used, with StreamType=0x03, for Scene Description streams that use the AFXConfig; its use with other StreamTypes is reserved. */
     MP4SYS_OBJECT_TYPE_Font_Data_Stream                   = 0x06, /* Font Data Stream */
     MP4SYS_OBJECT_TYPE_Synthetised_Texture                = 0x07, /* Synthetised Texture */
     MP4SYS_OBJECT_TYPE_Text_Stream                        = 0x08, /* Text Stream */
 
     MP4SYS_OBJECT_TYPE_Visual_ISO_14496_2                 = 0x20, /* Visual ISO/IEC 14496-2 */
     MP4SYS_OBJECT_TYPE_Visual_H264_ISO_14496_10           = 0x21, /* Visual ITU-T Recommendation H.264 | ISO/IEC 14496-10 */
-    /* The actual object types are defined in ITU-T Recommendation H.264 | ISO/IEC 14496-10
-       and are conveyed in the DecoderSpecificInfo. */
+    /* The actual object types are within the DecoderSpecificInfo and defined in H.264 | 14496-10. */
     MP4SYS_OBJECT_TYPE_Parameter_Sets_H_264_ISO_14496_10  = 0x22, /* Parameter Sets for ITU-T Recommendation H.264 | ISO/IEC 14496-10 */
-    /* The actual object types are defined in ISO/IEC 14496-2 and are conveyed in
-       the DecoderSpecificInfo as specified in ISO/IEC 14496-2, Annex K. */
+    /* The actual object types are within the DecoderSpecificInfo and defined in 14496-2, Annex K. */
 
     MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3                  = 0x40, /* Audio ISO/IEC 14496-3 (MPEG-4 Audio) */
     //MP4SYS_OBJECT_TYPE_MP4A_AUDIO = 0x40,
-    /* The actual object types are  defined in ISO/IEC 14496-3 and are conveyed in
-       the DecoderSpecificInfo as specified in ISO/IEC 14496-3 subpart 1 subclause 6.2.1. */
+    /* The actual object types are defined in 14496-3 and are in the DecoderSpecificInfo as specified in 14496-3 subpart 1 subclause 6.2.1. */
 
     MP4SYS_OBJECT_TYPE_Visual_ISO_13818_2_Simple_Profile  = 0x60, /* Visual ISO/IEC 13818-2 Simple Profile (MPEG-2 Video) */
     MP4SYS_OBJECT_TYPE_Visual_ISO_13818_2_Main_Profile    = 0x61, /* Visual ISO/IEC 13818-2 Main Profile */
@@ -79,7 +71,11 @@ typedef enum {
     MP4SYS_OBJECT_TYPE_Audio_ISO_13818_7_Main_Profile     = 0x66, /* Audio ISO/IEC 13818-7 Main Profile (MPEG-2 Audio)(AAC) */
     MP4SYS_OBJECT_TYPE_Audio_ISO_13818_7_LC_Profile       = 0x67, /* Audio ISO/IEC 13818-7 LowComplexity Profile */
     MP4SYS_OBJECT_TYPE_Audio_ISO_13818_7_SSR_Profile      = 0x68, /* Audio ISO/IEC 13818-7 Scaleable Sampling Rate Profile */
+    /* For streams kinda 13818-7 the decoder specific information consists of the ADIF header if present
+       (or none if not present) and an access unit is a "raw_data_block()" as defined in 13818-7. */
     MP4SYS_OBJECT_TYPE_Audio_ISO_13818_3                  = 0x69, /* Audio ISO/IEC 13818-3 (MPEG-2 BC-Audio)(redefined MPEG-1 Audio in MPEG-2) */
+    /* For streams kinda 13818-3 the decoder specific information is empty since all necessary data is in the bitstream frames itself.
+       The access units in this case are the "frame()" bitstream element as is defined in 11172-3. */
     MP4SYS_OBJECT_TYPE_Visual_ISO_11172_2                 = 0x6A, /* Visual ISO/IEC 11172-2 (MPEG-1 Video) */
     MP4SYS_OBJECT_TYPE_Audio_ISO_11172_3                  = 0x6B, /* Audio ISO/IEC 11172-3 (MPEG-1 Audio) */
     MP4SYS_OBJECT_TYPE_Visual_ISO_10918_1                 = 0x6C, /* Visual ISO/IEC 10918-1 (JPEG) */
@@ -103,8 +99,8 @@ typedef enum {
 
     MP4SYS_OBJECT_TYPE_SQCP_AUDIO                         = 0xE1, /* 13K Voice */
     MP4SYS_OBJECT_TYPE_NONE                               = 0xFF, /* no object type specified */
-    /* Streams with this value with a  StreamType indicating  a systems stream (values 1,2,3,6,7,8,9)
-       shall be treated as if the ObjectTypeIndication had been set to  0x01. */
+    /* Streams with this value with a StreamType indicating a systems stream (values 1,2,3,6,7,8,9)
+       shall be treated as if the ObjectTypeIndication had been set to 0x01. */
 } mp4sys_object_type_indication;
 
 /* 8.6.6.2 Semantics Table 7 - streamType Values */
@@ -273,17 +269,20 @@ typedef enum {
 
 /* Just for mp4sys_setup_ES_Descriptor, to facilitate to make ES_Descriptor */
 typedef struct {
-    uint16_t ES_ID; /* Maybe 0 in stsd(esds), or alternatively, lower 16 bits of the TrackID */
+    uint16_t ES_ID;                 /* Maybe 0 in stsd(esds), or alternatively, lower 16 bits of the TrackID */
     mp4sys_object_type_indication objectTypeIndication;
     mp4sys_stream_type streamType;
-    uint32_t bufferSizeDB; /* byte unit, NOT bit unit. */
+    uint32_t bufferSizeDB;          /* byte unit, NOT bit unit. */
     uint32_t maxBitrate;
-    uint32_t avgBitrate; /* 0 if VBR */
-    void* data; /* FIXME: might be AudioSpecificConfig or so */
-    uint32_t size; /* size of data */
+    uint32_t avgBitrate;            /* 0 if VBR */
+    void* dsi_payload;              /* AudioSpecificConfig or so */
+    uint32_t dsi_payload_length ;   /* size of dsi_payload */
 } mp4sys_ES_Descriptor_params_t;
 
 #ifndef MP4SYS_INTERNAL
+
+#include "isom_util.h"
+
 typedef void mp4sys_ES_Descriptor_t;
 typedef void mp4sys_ObjectDescriptor_t;
 
@@ -331,8 +330,105 @@ uint32_t mp4sys_update_ObjectDescriptor_size( mp4sys_ObjectDescriptor_t* od );
 int mp4sys_write_ES_Descriptor( isom_bs_t *bs, mp4sys_ES_Descriptor_t* esd );
 int mp4sys_write_ObjectDescriptor( isom_bs_t *bs, mp4sys_ObjectDescriptor_t* od );
 
+int mp4sys_update_DecoderConfigDescriptor(
+    mp4sys_ES_Descriptor_t* esd,
+    uint32_t bufferSizeDB,
+    uint32_t maxBitrate,
+    uint32_t avgBitrate
+);
+
 /* to facilitate to make ES_Descriptor */
 mp4sys_ES_Descriptor_t* mp4sys_setup_ES_Descriptor( mp4sys_ES_Descriptor_params_t* params );
-#endif
+
+#endif /* #ifndef MP4SYS_INTERNAL */
+
+/***************************************************************************
+    MPEG-4 Systems for MPEG-4 Audio
+***************************************************************************/
+
+/* ISO/IEC 14496-3 1.6.2.2 Payloads, Table 1.15 Audio Object Types */
+typedef enum {
+    MP4A_AUDIO_OBJECT_TYPE_NULL                           = 0,
+    MP4A_AUDIO_OBJECT_TYPE_AAC_MAIN                       = 1, /* ISO/IEC 14496-3 subpart 4 */
+    MP4A_AUDIO_OBJECT_TYPE_AAC_LC                         = 2, /* ISO/IEC 14496-3 subpart 4 */
+    MP4A_AUDIO_OBJECT_TYPE_AAC_SSR                        = 3, /* ISO/IEC 14496-3 subpart 4 */
+    MP4A_AUDIO_OBJECT_TYPE_AAC_LTP                        = 4, /* ISO/IEC 14496-3 subpart 4 */
+    MP4A_AUDIO_OBJECT_TYPE_SBR                            = 5, /* ISO/IEC 14496-3 subpart 4 */
+    MP4A_AUDIO_OBJECT_TYPE_AAC_scalable                   = 6, /* ISO/IEC 14496-3 subpart 4 */
+    MP4A_AUDIO_OBJECT_TYPE_TwinVQ                         = 7, /* ISO/IEC 14496-3 subpart 4 */
+    MP4A_AUDIO_OBJECT_TYPE_CELP                           = 8, /* ISO/IEC 14496-3 subpart 3 */
+    MP4A_AUDIO_OBJECT_TYPE_HVXC                           = 9, /* ISO/IEC 14496-3 subpart 2 */
+    MP4A_AUDIO_OBJECT_TYPE_TTSI                           = 12, /* ISO/IEC 14496-3 subpart 6 */
+    MP4A_AUDIO_OBJECT_TYPE_Main_synthetic                 = 13, /* ISO/IEC 14496-3 subpart 5 */
+    MP4A_AUDIO_OBJECT_TYPE_Wavetable_synthesis            = 14, /* ISO/IEC 14496-3 subpart 5 */
+    MP4A_AUDIO_OBJECT_TYPE_General_MIDI                   = 15, /* ISO/IEC 14496-3 subpart 5 */
+    MP4A_AUDIO_OBJECT_TYPE_Algorithmic_Synthesis_Audio_FX = 16, /* ISO/IEC 14496-3 subpart 5 */
+    MP4A_AUDIO_OBJECT_TYPE_ER_AAC_LC                      = 17, /* ISO/IEC 14496-3 subpart 4 */
+    MP4A_AUDIO_OBJECT_TYPE_ER_AAC_LTP                     = 19, /* ISO/IEC 14496-3 subpart 4 */
+    MP4A_AUDIO_OBJECT_TYPE_ER_AAC_scalable                = 20, /* ISO/IEC 14496-3 subpart 4 */
+    MP4A_AUDIO_OBJECT_TYPE_ER_Twin_VQ                     = 21, /* ISO/IEC 14496-3 subpart 4 */
+    MP4A_AUDIO_OBJECT_TYPE_ER_BSAC                        = 22, /* ISO/IEC 14496-3 subpart 4 */
+    MP4A_AUDIO_OBJECT_TYPE_ER_AAC_LD                      = 23, /* ISO/IEC 14496-3 subpart 4 */
+    MP4A_AUDIO_OBJECT_TYPE_ER_CELP                        = 24, /* ISO/IEC 14496-3 subpart 3 */
+    MP4A_AUDIO_OBJECT_TYPE_ER_HVXC                        = 25, /* ISO/IEC 14496-3 subpart 2 */
+    MP4A_AUDIO_OBJECT_TYPE_ER_HILN                        = 26, /* ISO/IEC 14496-3 subpart 7 */
+    MP4A_AUDIO_OBJECT_TYPE_ER_Parametric                  = 27, /* ISO/IEC 14496-3 subpart 2 and 7 */
+    MP4A_AUDIO_OBJECT_TYPE_SSC                            = 28, /* ISO/IEC 14496-3 subpart 8 */
+    MP4A_AUDIO_OBJECT_TYPE_ESCAPE                         = 31,
+    MP4A_AUDIO_OBJECT_TYPE_Layer_1                        = 32, /* ISO/IEC 14496-3 subpart 9 */
+    MP4A_AUDIO_OBJECT_TYPE_Layer_2                        = 33, /* ISO/IEC 14496-3 subpart 9 */
+    MP4A_AUDIO_OBJECT_TYPE_Layer_3                        = 34, /* ISO/IEC 14496-3 subpart 9 */
+    MP4A_AUDIO_OBJECT_TYPE_DST                            = 35, /* ISO/IEC 14496-3 subpart 10 */
+} mp4a_AudioObjectType;
+
+/* see ISO/IEC 14496-3 1.6.5 Signaling of SBR, Table 1.22 SBR Signaling and Corresponding Decoder Behavior */
+typedef enum {
+    MP4A_AAC_SBR_NOT_SPECIFIED = 0x0, /* not mention to SBR presence. Implicit signaling. */
+    MP4A_AAC_SBR_NONE,                /* explicitly signals SBR does not present. Useless in general. */
+    MP4A_AAC_SBR_BACKWARD_COMPATIBLE, /* explicitly signals SBR present. Recommended method to signal SBR. */
+    MP4A_AAC_SBR_HIERARCHICAL         /* SBR exists. SBR dedicated method. */
+} mp4a_aac_sbr_mode;
+
+/***************************************************************************
+    importer
+***************************************************************************/
+
+/* L-SMASH's original structure, summary of audio/video stream configuration */
+/* FIXME: I wonder whether this struct should blong to namespace of "isom" or not. */
+/* NOTE: For audio, currently assuming AAC-LC. For video, currently not used. */
+
+typedef struct {
+    mp4sys_object_type_indication object_type_indication;
+    mp4sys_stream_type stream_type;
+    uint32_t max_au_length;      /* buffer length for 1 audio frame */
+    uint32_t frequency;          /* Even if the stream is HE-AAC v1/aacPlus v1/SBR, this is base AAC's one. */
+    uint32_t channels;           /* Even if the stream is HE-AAC v2/aacPlus v2/SBR+PS, this is base AAC's one. */
+    uint32_t bit_depth;          /* If AAC, AAC stream itself does not mention to accuracy (bit_depth of decoded PCM data), we assume 16bit. */
+    uint32_t samples_in_frame;   /* Even if the stream is HE-AAC/aacPlus/SBR(+PS), this is base AAC's one, so 1024. */
+    // mp4sys_audioProfileLevelIndication pli ; /* I wonder we should have this or not. */
+
+    /* I wonder whether properties below should be hidden. */
+    mp4a_AudioObjectType aot;    /* Detailed codec type. */
+    mp4a_aac_sbr_mode sbr_mode;  /* SBR treatment. Currently we always set this as mp4a_AAC_SBR_NOT_SPECIFIED(Implicit signaling).
+                                    User can set this for treatment in other way. */
+    void* asc;                   /* payload of DecoderSpecificInfo (that's called AudioSpecificConfig in mp4a) */
+    uint32_t asc_length;         /* length of asc */
+} mp4sys_audio_summary_t;
+
+typedef struct {
+    mp4sys_object_type_indication object_type_indication;
+    mp4sys_stream_type stream_type;
+    uint32_t max_au_length;      /* buffer length for 1 video frame */
+    uint32_t width;
+    uint32_t height;
+    uint32_t display_width;
+    uint32_t display_height;
+    // mp4sys_visualProfileLevelIndication pli ; /* I wonder we should have this or not. */
+
+    /* I wonder whether properties below should be hidden. */
+    // mp4a_VideoObjectType vot;    /* Detailed codec type. */
+    void* vsc;                   /* payload of DecoderSpecificInfo */
+    uint32_t vsc_length;         /* length of vsc */
+} mp4sys_video_summary_t;
 
 #endif /* #ifndef MP4SYS_H */

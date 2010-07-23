@@ -20,22 +20,20 @@
 
 /* This file is available under an ISC license. */
 
-/*
-    An implementation of ISO/IEC 14496-1, known as MPEG-4 Part 1 Systems.
-        Authors:
-            Takashi Hirata <felidlabo AT gmail DOT com>
-                (Main coder on this file)
-        Contributors:
-            ( none yet )
-*/
+#include "isom_util.h"
 
 #include <stdlib.h>
 #include <string.h>
 
+#define MP4SYS_INTERNAL
+#define MP4A_INTERNAL
+#include "mp4sys.h"
+
 #define debug_if(x) if(x)
 
-#define MP4SYS_INTERNAL
-#include "mp4sys.h"
+/***************************************************************************
+    MPEG-4 Systems
+***************************************************************************/
 
 /* 8.2.1 Overview Table 1 - List of Class Tags for Descriptors */
 typedef enum {
@@ -81,7 +79,7 @@ typedef struct {
 } mp4sys_descriptor_head_t;
 
 /* 8.6.7 DecoderSpecificInfo */
-/* contents varies depends on ObjectTypeIndication and StreamType */
+/* contents varies depends on ObjectTypeIndication and StreamType. */
 typedef struct {
     mp4sys_descriptor_head_t header;
     uint8_t* data;
@@ -92,12 +90,12 @@ typedef struct {
     mp4sys_descriptor_head_t header;
     mp4sys_object_type_indication objectTypeIndication;
     mp4sys_stream_type streamType;
-    // uint8_t upStream; /* bit(1), always 0 in this muxer, used for interactive contents */
+    // uint8_t upStream; /* bit(1), always 0 in this muxer, used for interactive contents. */
     // uint8_t reserved=1; /* const bit(1) */
-    uint32_t bufferSizeDB; /* maybe CPB size in bytes, NOT bits */
+    uint32_t bufferSizeDB; /* maybe CPB size in bytes, NOT bits. */
     uint32_t maxBitrate;
     uint32_t avgBitrate; /* 0 if VBR */
-    mp4sys_DecoderSpecificInfo_t* decSpecificInfo;
+    mp4sys_DecoderSpecificInfo_t* decSpecificInfo;  /* can be NULL. */
     /* 14496-1 seems to say if we are in IOD(InitialObjectDescriptor), we might use this.
        See 8.6.20, 8.6.19 ExtensionProfileLevelDescr, 8.7.3.2 The Initial Object Descriptor.
        But I don't think this is mandatory despite 14496-1, because 14496-14 says, in OD or IOD,
@@ -135,7 +133,7 @@ typedef struct
     //if(OCR_ES_Flag)
         uint16_t OCR_ES_Id;
     */
-    mp4sys_DecoderConfigDescriptor_t* decConfigDescr;
+    mp4sys_DecoderConfigDescriptor_t* decConfigDescr; /* cannot be NULL. */
     mp4sys_SLConfigDescriptor_t* slConfigDescr;
     /* descriptors below are not mandatory, I think Language Descriptor may somewhat useful */
     /*
@@ -247,23 +245,23 @@ int mp4sys_remove_ObjectDescriptor( mp4sys_ObjectDescriptor_t* od )
     return 0;
 }
 
-int mp4sys_add_DecoderSpecificInfo( mp4sys_ES_Descriptor_t* esd, void* data, uint32_t size )
+int mp4sys_add_DecoderSpecificInfo( mp4sys_ES_Descriptor_t* esd, void* dsi_payload, uint32_t dsi_payload_length )
 {
-    if( !esd || !esd->decConfigDescr || data == NULL || size == 0 )
+    if( !esd || !esd->decConfigDescr || dsi_payload == NULL || dsi_payload_length == 0 )
         return -1;
     mp4sys_DecoderSpecificInfo_t* dsi = (mp4sys_DecoderSpecificInfo_t*)malloc( sizeof(mp4sys_DecoderSpecificInfo_t) );
     if( !dsi )
         return -1;
     memset( dsi, 0, sizeof(mp4sys_DecoderSpecificInfo_t) );
     dsi->header.tag = MP4SYS_DESCRIPTOR_TAG_DecSpecificInfoTag;
-    dsi->data = malloc( size );
+    dsi->data = malloc( dsi_payload_length );
     if( !dsi->data )
     {
         free( dsi );
         return -1;
     }
-    memcpy( dsi->data, data, size );
-    dsi->header.size = size;
+    memcpy( dsi->data, dsi_payload, dsi_payload_length );
+    dsi->header.size = dsi_payload_length;
     debug_if( mp4sys_remove_DecoderSpecificInfo( esd ) )
     {
         free( dsi->data );
@@ -307,7 +305,23 @@ int mp4sys_add_DecoderConfigDescriptor(
     return 0;
 }
 
-int mp4sys_add_SLConfigDescriptor( mp4sys_ES_Descriptor_t* esd ){
+/*
+    bufferSizeDB is byte unit, NOT bit unit.
+    avgBitrate is 0 if VBR
+*/
+int mp4sys_update_DecoderConfigDescriptor( mp4sys_ES_Descriptor_t* esd, uint32_t bufferSizeDB, uint32_t maxBitrate, uint32_t avgBitrate )
+{
+    if( !esd || !esd->decConfigDescr )
+        return -1;
+    mp4sys_DecoderConfigDescriptor_t* dcd = esd->decConfigDescr;
+    dcd->bufferSizeDB = bufferSizeDB;
+    dcd->maxBitrate = maxBitrate;
+    dcd->avgBitrate = avgBitrate;
+    return 0;
+}
+
+int mp4sys_add_SLConfigDescriptor( mp4sys_ES_Descriptor_t* esd )
+{
     if( !esd )
         return -1;
     mp4sys_SLConfigDescriptor_t* slcd = (mp4sys_SLConfigDescriptor_t*)malloc( sizeof(mp4sys_SLConfigDescriptor_t) );
@@ -461,7 +475,7 @@ static uint32_t mp4sys_update_ES_ID_Inc_size( mp4sys_ES_ID_Inc_t* es_id_inc )
     return mp4sys_get_descriptor_size( es_id_inc->header.size );
 }
 
-/* This function works of aggregate of ES_ID_Incs, so this function itself updates no size information */
+/* This function works as aggregate of ES_ID_Incs, so this function itself updates no size information */
 static uint32_t mp4sys_update_ES_ID_Incs_size( mp4sys_ObjectDescriptor_t* od )
 {
     debug_if( !od )
@@ -489,7 +503,7 @@ static int mp4sys_put_descriptor_header( isom_bs_t *bs, mp4sys_descriptor_head_t
     debug_if( !bs || !header )
         return -1;
     isom_bs_put_byte( bs, header->tag );
-    /* descriptor length will be split into 7bits
+    /* descriptor length will be splitted into 7bits
        see 14496-1 16.3.3 Expandable classes and J.1 Length encoding of descriptors and commands */
     for( uint32_t i = mp4sys_get_descriptor_size( header->size ) - header->size - 2; i; i-- ){
         isom_bs_put_byte( bs, ( header->size >> ( 7 * i ) ) | 0x80 );
@@ -503,11 +517,11 @@ static int mp4sys_write_DecoderSpecificInfo( isom_bs_t *bs, mp4sys_DecoderSpecif
     debug_if( !bs )
         return -1;
     if( !dsi )
-        return 0;
+        return 0; /* can be NULL */
     debug_if( mp4sys_put_descriptor_header( bs, &dsi->header ) )
         return -1;
-    for( uint8_t* data = dsi->data; data - dsi->data < dsi->header.size; data++ )
-        isom_bs_put_byte( bs, *data );
+    if( dsi->data && dsi->header.size != 0 )
+        isom_bs_put_bytes( bs, dsi->data, dsi->header.size );
     return isom_bs_write_data( bs );
 }
 
@@ -516,7 +530,7 @@ static int mp4sys_write_DecoderConfigDescriptor( isom_bs_t *bs, mp4sys_DecoderCo
     debug_if( !bs )
         return -1;
     if( !dcd )
-        return 0;
+        return -1; /* cannot be NULL */
     debug_if( mp4sys_put_descriptor_header( bs, &dcd->header ) )
         return -1;
     isom_bs_put_byte( bs, dcd->objectTypeIndication );
@@ -550,7 +564,7 @@ int mp4sys_write_ES_Descriptor( isom_bs_t *bs, mp4sys_ES_Descriptor_t* esd )
         return -1;
     isom_bs_put_be16( bs, esd->ES_ID );
     isom_bs_put_byte( bs, 0 ); /* streamDependenceFlag<1>, URL_Flag<1>, OCRstreamFlag<1>, streamPriority<5> */
-    /* here, some syntax elements are omitted due to previous flags are all 0 */
+    /* here, some syntax elements are omitted due to previous flags (all 0) */
     if( isom_bs_write_data( bs ) )
         return -1;
     if( mp4sys_write_DecoderConfigDescriptor( bs, esd->decConfigDescr ) )
@@ -568,7 +582,7 @@ static int mp4sys_put_ES_ID_Inc( isom_bs_t *bs, mp4sys_ES_ID_Inc_t* es_id_inc )
     return 0;
 }
 
-/* This function works of aggregate of ES_ID_Incs */
+/* This function works as aggregate of ES_ID_Incs */
 static int mp4sys_write_ES_ID_Incs( isom_bs_t *bs, mp4sys_ObjectDescriptor_t* od )
 {
     debug_if( !od )
@@ -609,18 +623,17 @@ int mp4sys_write_ObjectDescriptor( isom_bs_t *bs, mp4sys_ObjectDescriptor_t* od 
 
 mp4sys_ES_Descriptor_t* mp4sys_setup_ES_Descriptor( mp4sys_ES_Descriptor_params_t* params )
 {
-    if( !params || params->bufferSizeDB == 0 || params->maxBitrate == 0 || !params->data || params->size == 0 )
+    if( !params )
         return NULL;
     mp4sys_ES_Descriptor_t* esd = mp4sys_create_ES_Descriptor( params->ES_ID );
     if( !esd )
         return NULL;
     if( mp4sys_add_SLConfigDescriptor( esd )
         || mp4sys_add_DecoderConfigDescriptor( esd, params->objectTypeIndication, params->streamType, params->bufferSizeDB, params->maxBitrate, params->avgBitrate )
-        || ( params->data && mp4sys_add_DecoderSpecificInfo( esd, params->data, params->size ) )
+        || ( params->dsi_payload && params->dsi_payload_length != 0 && mp4sys_add_DecoderSpecificInfo( esd, params->dsi_payload, params->dsi_payload_length ) )
     ){
         mp4sys_remove_ES_Descriptor( esd );
         return NULL;
     }
     return esd;
 }
-
