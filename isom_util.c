@@ -144,7 +144,7 @@ void isom_bs_cleanup( isom_bs_t *bs )
 
 void* isom_bs_export_data( isom_bs_t *bs, uint32_t* length )
 {
-    if( !bs || !bs->data || bs->store || bs->error )
+    if( !bs || !bs->data || bs->store == 0 || bs->error )
         return NULL;
     void* buf = malloc( bs->store );
     if( !buf )
