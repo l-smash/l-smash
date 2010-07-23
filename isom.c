@@ -511,7 +511,7 @@ int isom_add_stsz_entry( isom_root_t *root, uint32_t trak_number, uint32_t entry
     /* retrieve initial sample_size */
     if( !stsz->sample_count )
         stsz->sample_size = entry_size;
-    /* if it seems CBR at present, update sample_count only */
+    /* if it seems constant access_unit size at present, update sample_count only */
     if( !stsz->list && stsz->sample_size == entry_size )
     {
         ++ stsz->sample_count;
@@ -1162,8 +1162,7 @@ int isom_add_trak( isom_root_t *root, uint32_t hdlr_type )
     isom_cache_t *cache = malloc( sizeof(isom_cache_t) );
     if( !cache )
         return -1;
-    memset( &cache->ts, 0, sizeof(isom_ts_cache_t) );
-    memset( &cache->chunk, 0, sizeof(isom_chunk_cache_t) );
+    memset( cache, 0, sizeof(isom_cache_t) );
     if( isom_add_entry( moov->trak_list, trak_entry ) )
         return -1;
     trak_entry->root = root;
@@ -1541,7 +1540,10 @@ void isom_remove_trak( isom_root_t *root, uint32_t trak_number )
     isom_remove_edts( root, trak_number );
     isom_remove_mdia( trak->mdia );
     if( trak->cache )
+    {
+        isom_remove_list( trak->cache->chunk.pool );
         free( trak->cache );
+    }
     free( trak );
 }
 
@@ -1560,15 +1562,15 @@ static void isom_remove_moov( isom_root_t *root )
     isom_remove_iods( moov->iods );
     if( moov->trak_list )
     {
+        /* FIXME: These are kinda workarounds.
+           isom_remove_trak, and furthermore, trak_number system itself needs overhaul. */
         uint32_t i = 1;
-        for( isom_entry_t *entry = moov->trak_list->head; entry; i++ )
+        for( isom_entry_t *entry = moov->trak_list->head; entry; i++, entry = entry->next )
         {
             isom_remove_trak( root, i );
-            isom_entry_t *next = entry->next;
-            free( entry );
-            entry = next;
+            entry->data = NULL;
         }
-        free( moov->trak_list );
+        isom_remove_list( moov->trak_list );
     }
     free( moov );
 }
@@ -2570,20 +2572,6 @@ uint32_t isom_get_movie_timescale( isom_root_t *root )
     return root->moov->mvhd->timescale;
 }
 
-static int isom_output_chunk_cache( isom_root_t *root, uint32_t trak_number )
-{
-    isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
-    if( !trak || !trak->cache || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl ||
-        !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
-        return -1;
-    isom_chunk_cache_t *current = &trak->cache->chunk;
-    if( !trak->mdia->minf->stbl->stsc->list->tail ||
-        current->samples_per_chunk != ((isom_stsc_entry_t *)trak->mdia->minf->stbl->stsc->list->tail->data)->samples_per_chunk )
-        if( isom_add_stsc_entry( root, trak_number, current->chunk_number, current->samples_per_chunk, current->sample_description_index ) )
-            return -1;
-    return 0;
-}
-
 static int isom_update_mdhd_duration( isom_root_t *root, uint32_t trak_number )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
@@ -2762,62 +2750,60 @@ static int isom_add_rap( isom_root_t *root, uint32_t trak_number, isom_trak_entr
         trak_number = isom_get_trak_number( trak );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
         return -1;
-    if( !trak->mdia->minf->stbl->stss && isom_add_stss( root, trak_number ) )
+    if( isom_add_stss( root, trak_number ) )
         return -1;
     if( isom_add_stss_entry( root, trak_number, sample_number ) )
         return -1;
     return 0;
 }
 
+/* returns 1 if pooled samples must be flushed. */
+/* FIXME: I wonder if this function should have a extra argument which indicates force_to_flush_cached_chunk.
+   see isom_write_sample for detail. */
 static int isom_add_chunk( isom_root_t *root, uint32_t trak_number, isom_trak_entry_t *trak, isom_sample_t *sample, double max_chunk_duration )
 {
     if( !trak_number )
         trak_number = isom_get_trak_number( trak );
     if( !trak || !trak->cache || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->mdhd->timescale || !trak->mdia->minf || !trak->mdia->minf->stbl ||
-         !trak->mdia->minf->stbl->stco || !trak->mdia->minf->stbl->stco->list || !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
+        !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
         return -1;
-    isom_stco_t *stco = trak->mdia->minf->stbl->stco;
-    isom_stsc_t *stsc = trak->mdia->minf->stbl->stsc;
     isom_chunk_cache_t *current = &trak->cache->chunk;
-    if( !stco->list->entry_count )
+    if( current->chunk_number == 0 )
     {
-        /* Add the first chunk offset in this track here. */
-        if( isom_add_stco_entry( root, trak_number, root->bs->written ) )
+        /* Very initial settings, just once per trak */
+        current->pool = isom_create_entry_list();
+        if( !current->pool )
             return -1;
         current->chunk_number = 1;
-        current->samples_per_chunk = 1;
         current->sample_description_index = sample->index;
         current->first_dts = 0;
-        return 0;
     }
-    if( sample->dts <= current->first_dts )
-        return -1;
-    if( max_chunk_duration == 0 )
-    {
-        /* If max_chunk_duration is zero, we omit splitting media into chunks in this track. */
-        ++ current->samples_per_chunk;
-        return 0;
-    }
+    if( sample->dts < current->first_dts )
+        return -1; /* easy error check. */
     double chunk_duration = (double)(sample->dts - current->first_dts) / trak->mdia->mdhd->timescale;
     if( max_chunk_duration >= chunk_duration )
-        ++ current->samples_per_chunk;
-    else
+        return 0; /* no need to flush current cached chunk, the current sample must be put into that. */
+
+    /* NOTE: chunk relative stuff must be pushed into root after a chunk is fully determined with its contents. */
+    /* now current cached chunk is fixed, actually add chunk relative properties to root accordingly. */
+
+    isom_stsc_t *stsc = trak->mdia->minf->stbl->stsc;
+    /* Add a new chunk sequence in this track if needed. */
+    if( !stsc->list->tail || current->pool->entry_count != ((isom_stsc_entry_t *)stsc->list->tail->data)->samples_per_chunk )
     {
-        if( !stsc->list->tail || current->samples_per_chunk != ((isom_stsc_entry_t *)stsc->list->tail->data)->samples_per_chunk )
-        {
-            /* Add a new chunk sequence in this track here. */
-            if( isom_add_stsc_entry( root, trak_number, current->chunk_number, current->samples_per_chunk, current->sample_description_index ) )
-                return -1;
-        }
-        /* Add a new chunk offset in this track here. */
-        if( isom_add_stco_entry( root, trak_number, root->bs->written ) )
+        if( isom_add_stsc_entry( root, trak_number, current->chunk_number, current->pool->entry_count, current->sample_description_index ) )
             return -1;
-        ++ current->chunk_number;
-        current->samples_per_chunk = 1;
-        current->sample_description_index = sample->index;
-        current->first_dts = sample->dts;
     }
-    return 0;
+    /* Add a new chunk offset in this track here. */
+    if( isom_add_stco_entry( root, trak_number, root->bs->written ) )
+        return -1;
+    /* update cache information */
+    ++ current->chunk_number;
+    /* re-initialize cache, using the current sample */
+    current->sample_description_index = sample->index;
+    current->first_dts = sample->dts;
+    /* current->pool must be flushed in isom_write_sample() */
+    return 1;
 }
 
 static int isom_add_dts( isom_root_t *root, uint32_t trak_number, isom_trak_entry_t *trak, uint64_t dts )
@@ -2901,9 +2887,6 @@ static inline int isom_add_timestamp( isom_root_t *root, uint32_t trak_number, i
     return isom_add_cts( root, trak_number, trak, cts );
 }
 
-/* I consider we should write data per chunk instead of sample.
- * This is reasonable for interleaving of A/V.
- * So, I'll remove the next function in the future. */
 static int isom_write_sample_data( isom_root_t *root, isom_sample_t *sample )
 {
     if( !root || !root->mdat || !root->bs || !root->bs->stream )
@@ -2915,24 +2898,105 @@ static int isom_write_sample_data( isom_root_t *root, isom_sample_t *sample )
     return 0;
 }
 
+static int isom_write_pooled_samples( isom_root_t *root, uint32_t trak_number, isom_trak_entry_t *trak, isom_entry_list_t *pool )
+{
+    for( isom_entry_t *entry = pool->head; entry; entry = entry->next )
+    {
+        isom_sample_t *data = (isom_sample_t *)entry->data;
+        if( !data || !data->data )
+            return -1;
+        /* Add a sample_size and increment sample_count. */
+        if( isom_add_size( root, trak_number, data->length ) )
+            return -1;
+        /* Add a decoding timestamp and a conposition timestamp. */
+        if( isom_add_timestamp( root, trak_number, trak, data->dts, data->cts ) )
+            return -1;
+        /* Add a sync point if needed. */
+        if( data->rap && isom_add_rap( root, trak_number, trak, isom_get_sample_count( trak ) ) )
+            return -1;
+        if( isom_write_sample_data( root, data ) )
+            return -1;
+        free( data->data ); /* isom_remove_entries() does not free this, so do it here. */
+    }
+    isom_remove_entries( pool );
+    return 0;
+}
+
+/* FIXME: This function should be removed after we implement "sample buffer pool system". */
+static isom_sample_t *isom_duplicate_sample( isom_sample_t *sample )
+{
+    if( !sample || !sample->data ) /* This function may belong to public some time, so do not remove this. */
+        return NULL;
+    isom_sample_t *new_sample = (isom_sample_t *)malloc( sizeof(isom_sample_t) );
+    if( !new_sample )
+        return NULL;
+    *new_sample = *sample;
+    /* FIXME: Currently type of data is "char", but I'd prefer "uint8_t" or "void". */
+    new_sample->data = (char *)malloc( sample->length );
+    if( !new_sample->data )
+    {
+        free( new_sample );
+        return NULL;
+    }
+    memcpy( new_sample->data, sample->data, sample->length );
+    return new_sample;
+}
+
 int isom_write_sample( isom_root_t *root, uint32_t trak_number, isom_sample_t *sample, double max_chunk_duration )
 {
+    /* I myself think max_chunk_duration == 0, whici means all samples will be cached on memory, should be prevented.
+       This means removal of a feature that we used to have, but anyway very alone chunk does not make sense. */
+    if( !root || !sample || !sample->data || max_chunk_duration == 0 )
+        return -1;
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
     if( !trak )
         return -1;
-    /* Add a sample_size and increment sample_count. */
-    if( isom_add_size( root, trak_number, sample->length ) )
-        return -1;
+
     /* Add a chunk if needed. */
-    if( isom_add_chunk( root, trak_number, trak, sample, max_chunk_duration ) )
+    /*
+     * FIXME: I think we have to implement "arbitrate chunk handling between tracks" system.
+     * Which means, even if a chunk of a trak has not exceeded max_chunk_duration yet,
+     * the chunk should be forced to be fixed and determined so that it shall be written into the file.
+     * Without that, for example, a video sample with frame rate of 0.01fps would not be written
+     * near the corresponding audio sample.
+     * As a result, players(demuxers) have to use fseek to playback that kind of mp4 in A/V sync.
+     * Note that even though we cannot help the case with random access (i.e. seek) even with this system,
+     * we should do it.
+     */
+    int ret = isom_add_chunk( root, trak_number, trak, sample, max_chunk_duration );
+    if( ret < 0 )
         return -1;
-    /* Add a decoding timestamp and a conposition timestamp. */
-    if( isom_add_timestamp( root, trak_number, trak, sample->dts, sample->cts ) )
+
+    /* ret == 1 means cached samples must be flushed. */
+    isom_chunk_cache_t *current = &trak->cache->chunk;
+    if( ret == 1 && isom_write_pooled_samples( root, trak_number, trak, current->pool ) )
         return -1;
-    /* Add a sync point if needed. */
-    if( sample->rap && isom_add_rap( root, trak_number, trak, isom_get_sample_count( trak ) ) )
+
+    /* anyway the current sample must be pooled. */
+    /* FIXME: Duplicate sample. This is not effective way.
+       We have to implement sample buffer pool in the top level, and calling application should use that
+       in order to reduce memcpy(). */
+    isom_sample_t *dup_sample = isom_duplicate_sample( sample );
+    if( !dup_sample )
         return -1;
-    if( isom_write_sample_data( root, sample ) )
+    if( isom_add_entry( current->pool, dup_sample ) )
+        return -1;
+    return 0;
+}
+
+static int isom_output_cache( isom_root_t *root, uint32_t trak_number )
+{
+    isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
+    if( !trak || !trak->cache || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl ||
+        !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
+        return -1;
+    isom_chunk_cache_t *current = &trak->cache->chunk;
+    if( !trak->mdia->minf->stbl->stsc->list->tail ||
+        current->pool->entry_count != ((isom_stsc_entry_t *)trak->mdia->minf->stbl->stsc->list->tail->data)->samples_per_chunk )
+        if( isom_add_stsc_entry( root, trak_number, current->chunk_number, current->pool->entry_count, current->sample_description_index ) )
+            return -1;
+    if( isom_add_stco_entry( root, trak_number, root->bs->written ) ||
+        isom_write_pooled_samples( root, trak_number, trak, current->pool ) )
         return -1;
     return 0;
 }
@@ -3221,17 +3285,18 @@ int isom_set_last_sample_delta( isom_root_t *root, uint32_t trak_number, uint32_
     if( !trak || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->minf || !trak->mdia->minf->stbl ||
         !trak->mdia->minf->stbl->stsz || !trak->mdia->minf->stbl->stts->list || !trak->mdia->minf->stbl->stts->list )
         return -1;
+    /* Ensure that stts is complete. */
+    if( isom_output_cache( root, trak_number ) )
+        return -1;
     isom_stts_t *stts = trak->mdia->minf->stbl->stts;
     uint32_t sample_count = isom_get_sample_count( trak );
     if( !stts->list->tail )
     {
-        if( sample_count == 1 )
-        {
-            if( isom_add_stts_entry( root, trak_number, sample_delta ) )
-                return -1;
-            return 0;
-        }
-        return -1;
+        if( sample_count != 1 )
+            return -1;
+        if( isom_add_stts_entry( root, trak_number, sample_delta ) )
+            return -1;
+        return 0;
     }
     uint32_t i = 0;
     for( isom_entry_t *entry = stts->list->head; entry; entry = entry->next )
@@ -3907,8 +3972,7 @@ int isom_finish_movie( isom_root_t *root )
     for( isom_entry_t *entry = root->moov->trak_list->head; entry; entry = entry->next )
     {
         uint32_t trak_number = isom_get_trak_number( (isom_trak_entry_t *)entry->data );
-        if( isom_output_chunk_cache( root, trak_number ) /* Add the last SampleToChunkBox entry. */ ||
-            isom_set_track_mode( root, trak_number, ISOM_TRACK_ENABLED ) )
+        if( isom_set_track_mode( root, trak_number, ISOM_TRACK_ENABLED ) )
             return -1;
     }
     if( isom_check_mandatory_boxes( root ) ||

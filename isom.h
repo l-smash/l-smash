@@ -597,9 +597,9 @@ typedef struct
 typedef struct
 {
     uint32_t chunk_number;              /* chunk number */
-    uint32_t samples_per_chunk;         /* the number of samples in chunk */
     uint32_t sample_description_index;  /* sample description index */
     uint64_t first_dts;                 /* the first DTS in chunk */
+    isom_entry_list_t *pool;            /* samples pooled to interleave */
 } isom_chunk_cache_t;
 
 typedef struct
