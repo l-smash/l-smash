@@ -431,4 +431,12 @@ typedef struct {
     uint32_t vsc_length;         /* length of vsc */
 } mp4sys_video_summary_t;
 
+#ifndef MP4SYS_INTERNAL
+
+/* to facilitate to make DecoderSpecificInfo / AudioSpecificConfig */
+int mp4sys_setup_AudioSpecificConfig( mp4sys_audio_summary_t* summary );
+int mp4sys_summary_set_AudioSpecificConfig( mp4sys_audio_summary_t* summary, void* asc, uint32_t asc_length );
+
+#endif /* #ifndef MP4SYS_INTERNAL */
+
 #endif /* #ifndef MP4SYS_H */
