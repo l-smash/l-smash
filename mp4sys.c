@@ -1284,11 +1284,401 @@ typedef struct mp4sys_importer_tag
 } mp4sys_importer_t;
 
 /***************************************************************************
+    ADTS importer
+***************************************************************************/
+#define MP4SYS_ADTS_FIXED_HEADER_LENGTH 4 /* this is partly a lie. actually 28 bits. */
+#define MP4SYS_ADTS_BASIC_HEADER_LENGTH 7
+#define MP4SYS_ADTS_MAX_FRAME_LENGTH ( ( 1 << 13 ) - 1 )
+#define MP4SYS_ADTS_MAX_RAW_DATA_BLOCKS 4
+
+typedef struct
+{
+    unsigned syncword                           : 12;
+    unsigned ID                                 :  1;
+    unsigned layer                              :  2;
+    unsigned protection_absent                  :  1;
+    unsigned profile_ObjectType                 :  2;
+    unsigned sampling_frequency_index           :  4;
+//  unsigned private_bit                        :  1; /* we don't care currently. */
+    unsigned channel_configuration              :  3;
+//  unsigned original_copy                      :  1; /* we don't care currently. */
+//  unsigned home                               :  1; /* we don't care currently. */
+
+} mp4sys_adts_fixed_header_t;
+
+typedef struct
+{
+//  unsigned copyright_identification_bit       :  1; /* we don't care. */
+//  unsigned copyright_identification_start     :  1; /* we don't care. */
+    unsigned frame_length                       : 13;
+//  unsigned adts_buffer_fullness               : 11; /* we don't care. */
+    unsigned number_of_raw_data_blocks_in_frame :  2;
+//  uint16_t adts_error_check;                        /* we don't support */
+//  uint16_t raw_data_block_position[MP4SYS_ADTS_MAX_RAW_DATA_BLOCKS-1]; /* we don't use this directly, and... */
+    uint16_t raw_data_block_size[MP4SYS_ADTS_MAX_RAW_DATA_BLOCKS];       /* use this instead of above. */
+//  uint16_t adts_header_error_check;                 /* we don't support, actually crc_check within this */
+//  uint16_t adts_raw_data_block_error_check[MP4SYS_ADTS_MAX_RAW_DATA_BLOCKS]; /* we don't support */
+} mp4sys_adts_variable_header_t;
+
+static void mp4sys_adts_parse_fixed_header( uint8_t* buf, mp4sys_adts_fixed_header_t* header )
+{
+    /* FIXME: should we rewrite these code using bitstream reader? */
+    header->syncword                 = (buf[0] << 4) | (buf[1] >> 4);
+    header->ID                       = (buf[1] >> 3) & 0x1;
+    header->layer                    = (buf[1] >> 1) & 0x3;
+    header->protection_absent        = buf[1] & 0x1;
+    header->profile_ObjectType       = buf[2] >> 6;
+    header->sampling_frequency_index = (buf[2] >> 2) & 0xF;
+//  header->private_bit              = (buf[2] >> 1) & 0x1; /* we don't care currently. */
+    header->channel_configuration    = ((buf[2] << 2) | (buf[3] >> 6)) & 0x07;
+//  header->original_copy            = (buf[3] >> 5) & 0x1; /* we don't care currently. */
+//  header->home                     = (buf[3] >> 4) & 0x1; /* we don't care currently. */
+}
+
+static int mp4sys_adts_check_fixed_header( mp4sys_adts_fixed_header_t* header )
+{
+    if( header->syncword != 0xFFF )              return -1;
+    // if( header->ID != 0b0 )                      return -1; /* we don't care. */
+    if( header->layer != 0b00 )                  return -1; /* must be 0b00 for any type of AAC */
+    // if( header->protection_absent != 0b1 )       return -1; /* we don't care currently. */
+    if( header->profile_ObjectType != 0b01 )     return -1; /* FIXME: 0b00=Main, 0b01=LC, 0b10=SSR, 0b11=LTP. */
+    if( header->sampling_frequency_index > 0xB ) return -1; /* must not be > 0xB. */
+    if( header->channel_configuration == 0b000 ) return -1; /* FIXME: we do not support 0x0 currently. */
+    if( header->profile_ObjectType == 0b11 && header->ID != 0b0 ) return -1; /* LTP is valid only if ID==0. */
+    return 0;
+}
+
+static int mp4sys_adts_parse_variable_header( FILE* stream, uint8_t* buf, unsigned int protection_absent, mp4sys_adts_variable_header_t* header )
+{
+    /* FIXME: should we rewrite these code using bitstream reader? */
+//  header->copyright_identification_bit       = (buf[3] >> 3) & 0x1; /* we don't care. */
+//  header->copyright_identification_start     = (buf[3] >> 2) & 0x1; /* we don't care. */
+    header->frame_length                       = ((buf[3] << 11) | (buf[4] << 3) | (buf[5] >> 5)) & 0x1FFF ;
+//  header->adts_buffer_fullness               = ((buf[5] << 6) | (buf[6] >> 2)) 0x7FF ;  /* we don't care. */
+    header->number_of_raw_data_blocks_in_frame = buf[6] & 0x3;
+
+    if( header->frame_length <= MP4SYS_ADTS_BASIC_HEADER_LENGTH + 2 * (protection_absent == 0) )
+        return -1; /* easy error check */
+
+    /* protection_absent and number_of_raw_data_blocks_in_frame relatives */
+
+    uint8_t buf2[2];
+    unsigned int number_of_blocks = header->number_of_raw_data_blocks_in_frame;
+    if( number_of_blocks == 0 )
+    {
+        header->raw_data_block_size[0] = header->frame_length - MP4SYS_ADTS_BASIC_HEADER_LENGTH;
+        /* skip adts_error_check() and subtract that from block_size */
+        if( protection_absent == 0 && fread( buf2, 1, 2, stream) != 2 )
+        {
+            header->raw_data_block_size[0] -= 2;
+            if( fread( buf2, 1, 2, stream) != 2 )
+                return -1;
+        }
+        return 0;
+    }
+
+    /* now we have multiple raw_data_block()s, so evaluate adts_header_error_check() */
+
+    uint16_t raw_data_block_position[MP4SYS_ADTS_MAX_RAW_DATA_BLOCKS];
+    /*
+     * NOTE: We never support the case where number_of_raw_data_blocks_in_frame != 0 && protection_absent != 0,
+     * because we have to parse the raw AAC bitstream itself to find boundaries of raw_data_block()s in this case.
+     * Which is to say, that braindamaged spec requires us (mp4 muxer) to decode AAC once to split frames.
+     * L-SMASH is NOT AAC DECODER, so that we've just given up for this case.
+     * This is ISO/IEC 13818-7's sin which defines ADTS format originally.
+     */
+    if( protection_absent != 0 )
+        return -1;
+    for( int i = 0 ; i < number_of_blocks ; i++ ) /* 1-based in the spec, but we use 0-based */
+    {
+        if( fread( buf2, 1, 2, stream) != 2 )
+            return -1;
+        raw_data_block_position[i] = (buf2[0] << 8) | buf2[1];
+    }
+
+    /* skip adts_error_check() */
+    if( protection_absent == 0 && fread( buf2, 1, 2, stream) != 2 )
+        return -1;
+
+    /* convert raw_data_block_position --> raw_data_block_size */
+    uint16_t first_offset = MP4SYS_ADTS_BASIC_HEADER_LENGTH;
+    /* adts_header_error_check() */
+    if( protection_absent == 0 )
+        first_offset += ( 2 * number_of_blocks ) + 2; /* raw_data_block_positions & crc_check */
+    /* set dummy offset */
+    raw_data_block_position[number_of_blocks] = header->frame_length - first_offset;
+    /* do conversion */
+    header->raw_data_block_size[0] = raw_data_block_position[0];
+    for( int i = 1 ; i <= number_of_blocks ; i++ )
+        header->raw_data_block_size[i] = raw_data_block_position[i] - raw_data_block_position[i-1];
+
+    /* adjustment for adts_raw_data_block_error_check() */
+    if( protection_absent == 0 )
+        for( int i = 0 ; i <= number_of_blocks ; i++ )
+            header->raw_data_block_size[i] -= 2;
+
+    return 0;
+}
+
+static int mp4sys_adts_parse_headers( FILE* stream, uint8_t* buf, mp4sys_adts_fixed_header_t* header, mp4sys_adts_variable_header_t* variable_header )
+{
+    mp4sys_adts_parse_fixed_header( buf, header );
+    if( mp4sys_adts_check_fixed_header( header ) )
+        return -1;
+    /* get payload length & skip extra(crc) header */
+    return mp4sys_adts_parse_variable_header( stream, buf, header->protection_absent, variable_header );
+}
+
+static mp4sys_audio_summary_t* mp4sys_adts_create_summary( mp4sys_adts_fixed_header_t* header )
+{
+    mp4sys_audio_summary_t* summary = (mp4sys_audio_summary_t*)malloc( sizeof(mp4sys_audio_summary_t) );
+    if( !summary )
+        return NULL;
+    memset( summary, 0, sizeof(mp4sys_audio_summary_t) );
+    summary->object_type_indication = MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3;
+    summary->stream_type            = MP4SYS_STREAM_TYPE_AudioStream;
+    summary->max_au_length          = MP4SYS_ADTS_MAX_FRAME_LENGTH;
+    summary->frequency              = mp4a_AAC_frequency_table[header->sampling_frequency_index][1];
+    summary->channels               = header->channel_configuration + ( header->channel_configuration == 0x07 ); /* 0x07 means 7.1ch */
+    summary->bit_depth              = 16;
+    summary->samples_in_frame       = 1024;
+    summary->aot                    = header->profile_ObjectType + MP4A_AUDIO_OBJECT_TYPE_AAC_MAIN;
+    summary->sbr_mode               = MP4A_AAC_SBR_NOT_SPECIFIED;
+#if 0 /* FIXME: This is very unstable. So many players crash with this. */
+    if( header->ID != 0 )
+    {
+        /*
+         * NOTE: This ADTS seems of ISO/IEC 13818-7 (MPEG-2 AAC).
+         * It has special object_type_indications, depending on it's profile.
+         * It shall not have decoder specific information, so AudioObjectType neither.
+         * see ISO/IEC 14496-1, 8.6.7 DecoderSpecificInfo.
+         */
+        summary->object_type_indication = header->profile_ObjectType + MP4SYS_OBJECT_TYPE_Audio_ISO_13818_7_Main_Profile;
+        summary->aot                    = MP4A_AUDIO_OBJECT_TYPE_NULL;
+        summary->asc                    = NULL;
+        summary->asc_length             = 0;
+        // summary->sbr_mode            = MP4A_AAC_SBR_NONE; /* MPEG-2 AAC should not be HE-AAC, but we forgive them. */
+        return summary;
+    }
+#endif
+    if( mp4sys_setup_AudioSpecificConfig( summary ) )
+    {
+        mp4sys_cleanup_audio_summary( summary );
+        return NULL;
+    }
+    return summary;
+}
+
+typedef enum
+{
+    MP4SYS_ADTS_ERROR  = -1,
+    MP4SYS_ADTS_OK     = 0,
+    MP4SYS_ADTS_CHANGE = 1,
+    MP4SYS_ADTS_EOF    = 2,
+} mp4sys_adts_status;
+
+typedef struct
+{
+    mp4sys_adts_status status;
+    unsigned int raw_data_block_idx;
+    mp4sys_adts_fixed_header_t header;
+    mp4sys_adts_variable_header_t variable_header;
+} mp4sys_adts_info_t;
+
+static int mp4sys_adts_get_accessunit( mp4sys_importer_t* importer, uint32_t track_number , void* userbuf, uint32_t *size )
+{
+    debug_if( !importer || !importer->info || !userbuf || !size )
+        return -1;
+    if( !importer->info || track_number != 1 )
+        return -1;
+    mp4sys_adts_info_t* info = (mp4sys_adts_info_t*)importer->info;
+    mp4sys_adts_status current_status = info->status;
+    uint16_t raw_data_block_size = info->variable_header.raw_data_block_size[info->raw_data_block_idx];
+    if( current_status == MP4SYS_ADTS_ERROR || *size < raw_data_block_size )
+        return -1;
+    if( current_status == MP4SYS_ADTS_EOF )
+    {
+        *size = 0;
+        return 0;
+    }
+    if( current_status == MP4SYS_ADTS_CHANGE )
+    {
+        mp4sys_audio_summary_t* summary = mp4sys_adts_create_summary( &info->header );
+        if( !summary )
+            return -1;
+        if( importer->summary )
+            mp4sys_cleanup_audio_summary( importer->summary );
+        importer->summary = summary;
+    }
+
+    /* read a raw_data_block(), typically == payload of a ADTS frame */
+    if( fread( userbuf, 1, raw_data_block_size, importer->stream ) != raw_data_block_size )
+    {
+        info->status = MP4SYS_ADTS_ERROR;
+        return -1;
+    }
+    *size = raw_data_block_size;
+
+    /* now we succeeded to read current frame, so "return" takes 0 always below. */
+
+    /* skip adts_raw_data_block_error_check() */
+    if( info->header.protection_absent == 0
+        && info->variable_header.number_of_raw_data_blocks_in_frame != 0
+        && fread( userbuf, 1, 2, importer->stream ) != 2 )
+    {
+        info->status = MP4SYS_ADTS_ERROR;
+        return 0;
+    }
+    /* current adts_frame() has any more raw_data_block()? */
+    if( info->raw_data_block_idx < info->variable_header.number_of_raw_data_blocks_in_frame )
+    {
+        info->raw_data_block_idx++;
+        info->status = MP4SYS_ADTS_OK;
+        return 0;
+    }
+    info->raw_data_block_idx = 0;
+
+    /* preparation for next frame */
+
+    uint8_t buf[MP4SYS_ADTS_MAX_FRAME_LENGTH];
+    size_t ret = fread( buf, 1, MP4SYS_ADTS_BASIC_HEADER_LENGTH, importer->stream );
+    if( ret == 0 )
+    {
+        info->status = MP4SYS_ADTS_EOF;
+        return 0;
+    }
+    if( ret != MP4SYS_ADTS_BASIC_HEADER_LENGTH )
+    {
+        info->status = MP4SYS_ADTS_ERROR;
+        return 0;
+    }
+    /*
+     * NOTE: About the spec of ADTS headers.
+     * By the spec definition, ADTS's fixed header cannot change in the middle of stream.
+     * But spec of MP4 allows that a stream(track) changes its properties in the middle of it.
+     */
+    /*
+     * NOTE: About detailed check for ADTS headers.
+     * We do not ommit detailed check for fixed header by simply testing bits' identification,
+     * because there're some flags which does not matter to audio_summary (so AudioSpecificConfig neither)
+     * so that we can take them as no change and never make new ObjectDescriptor.
+     * I know that can be done with/by bitmask also and that should be fast, but L-SMASH project prefers
+     * even foolishly straightforward way.
+     */
+    /*
+     * NOTE: About our reading algorithm for ADTS.
+     * It's rather simple if we retrieve payload of ADTS (i.e. raw AAC frame) at the same time to
+     * retrieve headers.
+     * But then we have to cache and memcpy every frame so that it requires more clocks and memory.
+     * To avoid them, I adopted this separate retrieving method.
+     */
+    mp4sys_adts_fixed_header_t header = {0};
+    mp4sys_adts_variable_header_t variable_header = {0};
+    if( mp4sys_adts_parse_headers( importer->stream, buf, &header, &variable_header ) )
+    {
+        info->status = MP4SYS_ADTS_ERROR;
+        return 0;
+    }
+    info->variable_header = variable_header;
+
+    /*
+     * NOTE: About our support for change(s) of properties within an ADTS stream.
+     * We have to modify these conditions depending on the features we support.
+     * For example, if we support copyright_identification_* in any way within any feature
+     * defined by/in any specs, such as ISO/IEC 14496-1 (MPEG-4 Systems), like...
+     * "8.3 Intellectual Property Management and Protection (IPMP)", or something similar,
+     * we have to check copyright_identification_* and treat them in audio_summary.
+     * "Change(s)" may result in MP4SYS_ADTS_ERROR or MP4SYS_ADTS_CHANGE
+     * depending on the features we support, and what the spec allows.
+     * Sometimes the "change(s)" can be allowed, while sometimes they're forbidden.
+     */
+    /* currently UNsupported "change(s)". */
+    if( info->header.profile_ObjectType != header.profile_ObjectType /* currently unsupported. */
+        || info->header.ID != header.ID /* In strict, this means change of object_type_indication. */
+        || info->header.sampling_frequency_index != header.sampling_frequency_index ) /* This may change timebase. */
+    {
+        info->status = MP4SYS_ADTS_ERROR;
+        return 0;
+    }
+    /* currently supported "change(s)". */
+    if( info->header.channel_configuration != header.channel_configuration )
+    {
+        /*
+         * FIXME: About conditions of VALID "change(s)".
+         * we have to check whether any "change(s)" affect to audioProfileLevelIndication
+         * in InitialObjectDescriptor (MP4_IOD) or not.
+         * If another type or upper level is required by the change(s), that is forbidden.
+         * Because ObjectDescriptor does not have audioProfileLevelIndication,
+         * so that it seems impossible to change audioProfileLevelIndication in the middle of the stream.
+         * Note also any other properties, such as AudioObjectType, object_type_indication.
+         */
+        /*
+         * NOTE: updating summary must be done on next call,
+         * because user may retrieve summary right after this function call of this time,
+         * and that should be of current, before change, one.
+         */
+        info->header = header;
+        info->status = MP4SYS_ADTS_CHANGE;
+        return 0;
+    }
+    /* no change which matters to mp4 muxing was found */
+    info->status = MP4SYS_ADTS_OK;
+    return 0;
+}
+
+static void mp4sys_adts_cleanup( mp4sys_importer_t* importer )
+{
+    debug_if( importer && importer->info )
+        free( importer->info );
+}
+
+static int mp4sys_adts_probe( mp4sys_importer_t* importer )
+{
+    uint8_t buf[MP4SYS_ADTS_MAX_FRAME_LENGTH];
+    if( fread( buf, 1, MP4SYS_ADTS_BASIC_HEADER_LENGTH, importer->stream ) != MP4SYS_ADTS_BASIC_HEADER_LENGTH )
+        return -1;
+
+    mp4sys_adts_fixed_header_t header = {0};
+    mp4sys_adts_variable_header_t variable_header = {0};
+    if( mp4sys_adts_parse_headers( importer->stream, buf, &header, &variable_header ) )
+        return -1;
+
+    /* now the stream seems valid ADTS */
+
+    mp4sys_audio_summary_t* summary = mp4sys_adts_create_summary( &header );
+    if( !summary )
+        return -1;
+
+    /* importer status */
+    mp4sys_adts_info_t* info = malloc( sizeof(mp4sys_adts_info_t) );
+    if( !info )
+    {
+        mp4sys_cleanup_audio_summary( summary );
+        return -1;
+    }
+    memset( info, 0, sizeof(mp4sys_adts_info_t) );
+    info->status = MP4SYS_ADTS_OK;
+    info->raw_data_block_idx = 0;
+    info->header = header;
+    info->variable_header = variable_header;
+
+    if( importer->summary )
+        mp4sys_cleanup_audio_summary( importer->summary );
+    importer->summary = summary;
+    importer->info = info;
+
+    importer->cleanup = mp4sys_adts_cleanup;
+    importer->get_accessunit = mp4sys_adts_get_accessunit;
+    return 0;
+}
+
+/***************************************************************************
     importer public interfaces
 ***************************************************************************/
 
 /******** importer listing table ********/
 static mp4sys_importer_probe mp4sys_importer_tbl[] = {
+    mp4sys_adts_probe,
     NULL,
 };
 
