@@ -719,7 +719,7 @@ typedef struct {
     uint16_t ObjectDescriptorID;
     // uint8_t URL_Flag; /* bit(1) */
     uint8_t includeInlineProfileLevelFlag; /* bit(1) */
-    //const uint8_t reserved=0b1111 or 0x0b1111.1; /* bit(4 or 5), width is 4 for IOD, 5 for OD */
+    //const uint8_t reserved=0x0F(0b1111) or 0x1F(0b1.1111); /* bit(4 or 5), width is 4 for IOD, 5 for OD */
     /* if (URL_Flag) {
         uint8_t URLlength; // bit(8)
         char URLstring[256]; // bit(8)[]
@@ -913,7 +913,7 @@ mp4sys_ES_Descriptor_t* mp4sys_create_ES_Descriptor( uint16_t ES_ID )
 }
 
 /* NOTE: This is only for MP4_IOD and MP4_OD, not for Iso Base Media's ObjectDescriptor and InitialObjectDescriptor */
-int mp4sys_add_ES_ID_Inc( mp4sys_ObjectDescriptor_t* od, uint32_t Track_ID)
+int mp4sys_add_ES_ID_Inc( mp4sys_ObjectDescriptor_t* od, uint32_t Track_ID )
 {
     if( !od )
         return -1;
@@ -1338,13 +1338,13 @@ static void mp4sys_adts_parse_fixed_header( uint8_t* buf, mp4sys_adts_fixed_head
 static int mp4sys_adts_check_fixed_header( mp4sys_adts_fixed_header_t* header )
 {
     if( header->syncword != 0xFFF )              return -1;
-    // if( header->ID != 0b0 )                      return -1; /* we don't care. */
-    if( header->layer != 0b00 )                  return -1; /* must be 0b00 for any type of AAC */
-    // if( header->protection_absent != 0b1 )       return -1; /* we don't care currently. */
-    if( header->profile_ObjectType != 0b01 )     return -1; /* FIXME: 0b00=Main, 0b01=LC, 0b10=SSR, 0b11=LTP. */
+//  if( header->ID != 0x0 )                      return -1; /* we don't care. */
+    if( header->layer != 0x0 )                   return -1; /* must be 0b00 for any type of AAC */
+//  if( header->protection_absent != 0x1 )       return -1; /* we don't care. */
+    if( header->profile_ObjectType != 0x1 )      return -1; /* FIXME: 0b00=Main, 0b01=LC, 0b10=SSR, 0b11=LTP. */
     if( header->sampling_frequency_index > 0xB ) return -1; /* must not be > 0xB. */
-    if( header->channel_configuration == 0b000 ) return -1; /* FIXME: we do not support 0x0 currently. */
-    if( header->profile_ObjectType == 0b11 && header->ID != 0b0 ) return -1; /* LTP is valid only if ID==0. */
+    if( header->channel_configuration == 0x0 )   return -1; /* FIXME: we do not support 0b000 currently. */
+    if( header->profile_ObjectType == 0x3 && header->ID != 0x0 ) return -1; /* LTP is valid only if ID==0. */
     return 0;
 }
 
