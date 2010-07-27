@@ -83,11 +83,14 @@ typedef struct
     isom_entry_t *tail;
 } isom_entry_list_t;
 
+typedef void (*isom_entry_data_eliminator)(void* data); /* very same as free() of standard c lib; void free(void *); */
+
 isom_entry_list_t *isom_create_entry_list( void );
 int isom_add_entry( isom_entry_list_t *list, void *data );
 int isom_remove_entry( isom_entry_list_t *list, uint32_t entry_number );
-void isom_remove_entries( isom_entry_list_t *list );
-void isom_remove_list( isom_entry_list_t *list );
+void isom_remove_entries( isom_entry_list_t *list, void* eliminator );
+void isom_remove_list( isom_entry_list_t *list, void* eliminator );
+
 isom_entry_t *isom_get_entry( isom_entry_list_t *list, uint32_t entry_number );
 void *isom_get_entry_data( isom_entry_list_t *list, uint32_t entry_number );
 

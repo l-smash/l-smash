@@ -789,7 +789,7 @@ int mp4sys_remove_ES_ID_Incs( mp4sys_ObjectDescriptor_t* od )
         return -1;
     if( od->esDescr )
     {
-        isom_remove_list(od->esDescr);
+        isom_remove_list( od->esDescr, NULL );
         od->esDescr = NULL;
     }
     return 0;

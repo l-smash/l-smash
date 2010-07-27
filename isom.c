@@ -58,6 +58,15 @@ isom_sample_t *isom_create_sample( void )
     return sample;
 }
 
+void isom_remove_sample( isom_sample_t *sample )
+{
+    if( !sample )
+        return;
+    if( sample->data )
+        free( sample->data );
+    free( sample );
+}
+
 #define isom_create_box( box_name, box_4cc ) \
     isom_##box_name##_t *(box_name) = malloc( sizeof(isom_##box_name##_t) ); \
     if( !(box_name) ) \
@@ -653,7 +662,7 @@ int isom_add_stco_entry( isom_root_t *root, uint32_t trak_number, uint64_t chunk
         }
         if( e )
         {
-            isom_remove_list( trak->mdia->minf->stbl->stco->list );
+            isom_remove_list( trak->mdia->minf->stbl->stco->list, NULL );
             trak->mdia->minf->stbl->stco = stco;
             return -1;
         }
@@ -1277,7 +1286,7 @@ int isom_add_mdat( isom_root_t *root )
     isom_##box_type##_t *(box_type) = (container)->box_type; \
     if( box_type ) \
     { \
-        isom_remove_list( (box_type)->list ); \
+        isom_remove_list( (box_type)->list, NULL ); \
         free( box_type ); \
     }
 
@@ -1497,8 +1506,8 @@ static void isom_remove_stbl( isom_stbl_t *stbl )
     isom_remove_list_fullbox( stco, stbl );
     for( uint32_t i = stbl->grouping_count; i ; i-- )
     {
-        isom_remove_list( (stbl->sbgp + i - 1)->list );
-        isom_remove_list( (stbl->sgpd + i - 1)->list );
+        isom_remove_list( (stbl->sbgp + i - 1)->list, NULL );
+        isom_remove_list( (stbl->sgpd + i - 1)->list, NULL );
     }
     if( stbl->sbgp )
         free( stbl->sbgp );
@@ -1583,7 +1592,7 @@ void isom_remove_trak( isom_root_t *root, uint32_t trak_number )
     isom_remove_mdia( trak->mdia );
     if( trak->cache )
     {
-        isom_remove_list( trak->cache->chunk.pool );
+        isom_remove_list( trak->cache->chunk.pool, isom_remove_sample );
         free( trak->cache );
     }
     free( trak );
@@ -1612,7 +1621,7 @@ static void isom_remove_moov( isom_root_t *root )
             isom_remove_trak( root, i );
             entry->data = NULL;
         }
-        isom_remove_list( moov->trak_list );
+        isom_remove_list( moov->trak_list, NULL );
     }
     free( moov );
 }
@@ -2994,9 +3003,8 @@ static int isom_write_pooled_samples( isom_root_t *root, uint32_t trak_number, i
             return -1;
         if( isom_write_sample_data( root, data ) )
             return -1;
-        free( data->data ); /* isom_remove_entries() does not free this, so do it here. */
     }
-    isom_remove_entries( pool );
+    isom_remove_entries( pool, isom_remove_sample );
     return 0;
 }
 
