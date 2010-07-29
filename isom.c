@@ -25,6 +25,8 @@
 static int isom_add_avcC( isom_entry_list_t *list );
 static int isom_add_co64( isom_root_t *root, uint32_t trak_number );
 
+static void isom_remove_avcC_ps( isom_avcC_ps_entry_t *ps );
+
 static int isom_write_mdat_header( isom_root_t *root );
 
 static uint64_t isom_update_mvhd_size( isom_root_t *root );
@@ -202,29 +204,19 @@ int isom_add_dref_entry( isom_root_t *root, uint32_t trak_number, uint32_t flags
     return 0;
 }
 
-static isom_avcC_sps_entry_t *isom_create_sps_entry( uint8_t *sps, uint32_t sps_size )
+static isom_avcC_ps_entry_t *isom_create_ps_entry( uint8_t *ps, uint32_t ps_size )
 {
-    isom_avcC_sps_entry_t *entry = malloc( sizeof(isom_avcC_sps_entry_t) );
+    isom_avcC_ps_entry_t *entry = malloc( sizeof(isom_avcC_ps_entry_t) );
     if( !entry )
         return NULL;
-    entry->sequenceParameterSetLength = sps_size;
-    entry->sequenceParameterSetNALUnit = malloc( sps_size );
-    if( !entry->sequenceParameterSetNALUnit )
+    entry->parameterSetLength = ps_size;
+    entry->parameterSetNALUnit = malloc( ps_size );
+    if( !entry->parameterSetNALUnit )
+    {
+        free( entry );
         return NULL;
-    memcpy( entry->sequenceParameterSetNALUnit, sps, sps_size );
-    return entry;
-}
-
-static isom_avcC_pps_entry_t *isom_create_pps_entry( uint8_t *pps, uint32_t pps_size )
-{
-    isom_avcC_pps_entry_t *entry = malloc( sizeof(isom_avcC_pps_entry_t) );
-    if( !entry )
-        return NULL;
-    entry->pictureParameterSetLength = pps_size;
-    entry->pictureParameterSetNALUnit = malloc( pps_size );
-    if( !entry->pictureParameterSetNALUnit )
-        return NULL;
-    memcpy( entry->pictureParameterSetNALUnit, pps, pps_size );
+    }
+    memcpy( entry->parameterSetNALUnit, ps, ps_size );
     return entry;
 }
 
@@ -233,23 +225,20 @@ int isom_add_sps_entry( isom_root_t *root, uint32_t trak_number, uint32_t entry_
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
         return -1;
-    isom_avc_entry_t *data = NULL;
-    uint32_t i = 0;
-    for( isom_entry_t *entry = trak->mdia->minf->stbl->stsd->list->head; i < entry_number && entry ; entry = entry->next )
-    {
-        data = (isom_avc_entry_t *)entry->data;
-        ++i;
-    }
-    if( i < entry_number || !data )
+    isom_avc_entry_t *data = (isom_avc_entry_t *)isom_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
+    if( !data )
         return -1;
     isom_avcC_t *avcC = (isom_avcC_t *)data->avcC;
     if( !avcC )
         return -1;
-    isom_avcC_sps_entry_t *sps_entry = isom_create_sps_entry( sps, sps_size );
-    if( !sps_entry )
+    isom_avcC_ps_entry_t *ps = isom_create_ps_entry( sps, sps_size );
+    if( !ps )
         return -1;
-    if( isom_add_entry( avcC->sequenceParameterSets, sps_entry ) )
+    if( isom_add_entry( avcC->sequenceParameterSets, ps ) )
+    {
+        isom_remove_avcC_ps( ps );
         return -1;
+    }
     avcC->numOfSequenceParameterSets = avcC->sequenceParameterSets->entry_count;
     return 0;
 }
@@ -259,24 +248,44 @@ int isom_add_pps_entry( isom_root_t *root, uint32_t trak_number, uint32_t entry_
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
         return -1;
-    isom_avc_entry_t *data = NULL;
-    uint32_t i = 0;
-    for( isom_entry_t *entry = trak->mdia->minf->stbl->stsd->list->head; i < entry_number && entry ; entry = entry->next )
-    {
-        data = (isom_avc_entry_t *)entry->data;
-        ++i;
-    }
-    if( i < entry_number || !data )
+    isom_avc_entry_t *data = (isom_avc_entry_t *)isom_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
+    if( !data )
         return -1;
     isom_avcC_t *avcC = (isom_avcC_t *)data->avcC;
     if( !avcC )
         return -1;
-    isom_avcC_pps_entry_t *pps_entry = isom_create_pps_entry( pps, pps_size );
-    if( !pps_entry )
+    isom_avcC_ps_entry_t *ps = isom_create_ps_entry( pps, pps_size );
+    if( !ps )
         return -1;
-    if( isom_add_entry( avcC->pictureParameterSets, pps_entry ) )
+    if( isom_add_entry( avcC->pictureParameterSets, ps ) )
+    {
+        isom_remove_avcC_ps( ps );
         return -1;
+    }
     avcC->numOfPictureParameterSets = avcC->pictureParameterSets->entry_count;
+    return 0;
+}
+
+int isom_add_spsext_entry( isom_root_t *root, uint32_t trak_number, uint32_t entry_number, uint8_t *spsext, uint32_t spsext_size )
+{
+    isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
+    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
+        return -1;
+    isom_avc_entry_t *data = (isom_avc_entry_t *)isom_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
+    if( !data )
+        return -1;
+    isom_avcC_t *avcC = (isom_avcC_t *)data->avcC;
+    if( !avcC )
+        return -1;
+    isom_avcC_ps_entry_t *ps = isom_create_ps_entry( spsext, spsext_size );
+    if( !ps )
+        return -1;
+    if( isom_add_entry( avcC->sequenceParameterSetExt, ps ) )
+    {
+        isom_remove_avcC_ps( ps );
+        return -1;
+    }
+    avcC->numOfSequenceParameterSetExt = avcC->sequenceParameterSetExt->entry_count;
     return 0;
 }
 
@@ -986,14 +995,8 @@ int isom_add_pasp( isom_root_t *root, uint32_t trak_number, uint32_t entry_numbe
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
         return -1;
-    isom_visual_entry_t *visual = NULL;
-    uint32_t i = 0;
-    for( isom_entry_t *entry = trak->mdia->minf->stbl->stsd->list->head; i < entry_number && entry; entry = entry->next )
-    {
-        visual = (isom_visual_entry_t *)entry->data;
-        ++i;
-    }
-    if( i < entry_number )
+    isom_visual_entry_t *visual = (isom_visual_entry_t *)isom_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
+    if( !visual )
         return -1;
     isom_create_box( pasp, ISOM_BOX_TYPE_PASP );
     visual->pasp = pasp;
@@ -1004,14 +1007,8 @@ static int isom_add_avcC( isom_entry_list_t *list )
 {
     if( !list )
         return -1;
-    isom_avc_entry_t *data = NULL;
-    uint32_t i = 0;
-    for( isom_entry_t *entry = list->head; i < list->entry_count && entry ; entry = entry->next )
-    {
-        data = (isom_avc_entry_t *)entry->data;
-        ++i;
-    }
-    if( i < list->entry_count || !data )
+    isom_avc_entry_t *data = (isom_avc_entry_t *)isom_get_entry_data( list, list->entry_count );
+    if( !data )
         return -1;
     isom_create_box( avcC, ISOM_BOX_TYPE_AVCC );
     avcC->sequenceParameterSets = isom_create_entry_list();
@@ -1019,6 +1016,9 @@ static int isom_add_avcC( isom_entry_list_t *list )
         return -1;
     avcC->pictureParameterSets = isom_create_entry_list();
     if( !avcC->pictureParameterSets )
+        return -1;
+    avcC->sequenceParameterSetExt = isom_create_entry_list();
+    if( !avcC->sequenceParameterSetExt )
         return -1;
     data->avcC = avcC;
     return 0;
@@ -1308,36 +1308,22 @@ void isom_remove_edts( isom_root_t *root, uint32_t trak_number )
     free( trak->edts );
 }
 
+static void isom_remove_avcC_ps( isom_avcC_ps_entry_t *ps )
+{
+    if( !ps )
+        return;
+    if( ps->parameterSetNALUnit )
+        free( ps->parameterSetNALUnit  );
+    free( ps );
+}
+
 static void isom_remove_avcC( isom_avcC_t *avcC )
 {
     if( !avcC )
         return;
-    if( avcC->sequenceParameterSets )
-    {
-        for( isom_entry_t *sps_entry = avcC->sequenceParameterSets->head; sps_entry; sps_entry = sps_entry->next )
-        {
-            isom_avcC_sps_entry_t *sps = (isom_avcC_sps_entry_t *)sps_entry->data;
-            if( !sps )
-                continue;
-            if( sps->sequenceParameterSetNALUnit )
-                free( sps->sequenceParameterSetNALUnit );
-            free( sps );
-        }
-        free( avcC->sequenceParameterSets );
-    }
-    if( avcC->pictureParameterSets )
-    {
-        for( isom_entry_t *pps_entry = avcC->pictureParameterSets->head; pps_entry; pps_entry = pps_entry->next )
-        {
-            isom_avcC_pps_entry_t *pps = (isom_avcC_pps_entry_t *)pps_entry->data;
-            if( !pps )
-                continue;
-            if( pps->pictureParameterSetNALUnit )
-                free( pps->pictureParameterSetNALUnit );
-            free( pps );
-        }
-        free( avcC->pictureParameterSets );
-    }
+    isom_remove_list( avcC->sequenceParameterSets,   isom_remove_avcC_ps );
+    isom_remove_list( avcC->pictureParameterSets,    isom_remove_avcC_ps );
+    isom_remove_list( avcC->sequenceParameterSetExt, isom_remove_avcC_ps );
     free( avcC );
 }
 
@@ -1914,6 +1900,19 @@ static void isom_put_clap( isom_bs_t *bs, isom_clap_t *clap )
     return;
 }
 
+static int isom_put_ps_entries( isom_bs_t *bs, isom_entry_list_t *list )
+{
+    for( isom_entry_t *entry = list->head; entry; entry = entry->next )
+    {
+        isom_avcC_ps_entry_t *data = (isom_avcC_ps_entry_t *)entry->data;
+        if( !data )
+            return -1;
+        isom_bs_put_be16( bs, data->parameterSetLength );
+        isom_bs_put_bytes( bs, data->parameterSetNALUnit, data->parameterSetLength );
+    }
+    return 0;
+}
+
 static int isom_put_avcC( isom_bs_t *bs, isom_avcC_t *avcC )
 {
     if( !bs || !avcC || !avcC->sequenceParameterSets || !avcC->pictureParameterSets )
@@ -1923,24 +1922,21 @@ static int isom_put_avcC( isom_bs_t *bs, isom_avcC_t *avcC )
     isom_bs_put_byte( bs, avcC->AVCProfileIndication );
     isom_bs_put_byte( bs, avcC->profile_compatibility );
     isom_bs_put_byte( bs, avcC->AVCLevelIndication );
-    isom_bs_put_byte( bs, avcC->lengthSizeMinusOne | 0xfc );            /* upper 6-bits is reserved as 111111b */
-    isom_bs_put_byte( bs, avcC->numOfSequenceParameterSets | 0xe0 );    /* upper 3-bits is reserved as 111b */
-    for( isom_entry_t *entry = avcC->sequenceParameterSets->head; entry; entry = entry->next )
-    {
-        isom_avcC_sps_entry_t *data = (isom_avcC_sps_entry_t *)entry->data;
-        if( !data )
-            return -1;
-        isom_bs_put_be16( bs, data->sequenceParameterSetLength );
-        isom_bs_put_bytes( bs, data->sequenceParameterSetNALUnit, data->sequenceParameterSetLength );
-    }
+    isom_bs_put_byte( bs, avcC->lengthSizeMinusOne | 0xfc );            /* upper 6-bits are reserved as 111111b */
+    isom_bs_put_byte( bs, avcC->numOfSequenceParameterSets | 0xe0 );    /* upper 3-bits are reserved as 111b */
+    if( isom_put_ps_entries( bs, avcC->sequenceParameterSets ) )
+        return -1;
     isom_bs_put_byte( bs, avcC->numOfPictureParameterSets );
-    for( isom_entry_t *entry = avcC->pictureParameterSets->head; entry; entry = entry->next )
+    if( isom_put_ps_entries( bs, avcC->pictureParameterSets ) )
+        return -1;
+    if( ISOM_REQUIRES_AVCC_EXTENSION( avcC->AVCProfileIndication ) )
     {
-        isom_avcC_pps_entry_t *data = (isom_avcC_pps_entry_t *)entry->data;
-        if( !data )
+        isom_bs_put_byte( bs, avcC->chroma_format | 0xfc );             /* upper 6-bits are reserved as 111111b */
+        isom_bs_put_byte( bs, avcC->bit_depth_luma_minus8 | 0xf8 );     /* upper 5-bits are reserved as 11111b */
+        isom_bs_put_byte( bs, avcC->bit_depth_chroma_minus8 | 0xf8 );   /* upper 5-bits are reserved as 11111b */
+        isom_bs_put_byte( bs, avcC->numOfSequenceParameterSetExt );
+        if( isom_put_ps_entries( bs, avcC->sequenceParameterSetExt ) )
             return -1;
-        isom_bs_put_be16( bs, data->pictureParameterSetLength );
-        isom_bs_put_bytes( bs, data->pictureParameterSetNALUnit, data->pictureParameterSetLength );
     }
     return 0;
 }
@@ -3249,7 +3245,8 @@ int isom_set_presentation_map( isom_root_t *root, uint32_t trak_number, uint32_t
 }
 
 int isom_set_avc_config( isom_root_t *root, uint32_t trak_number, uint32_t entry_number,
-    uint8_t configurationVersion, uint8_t AVCProfileIndication, uint8_t profile_compatibility, uint8_t AVCLevelIndication, uint8_t lengthSizeMinusOne )
+    uint8_t configurationVersion, uint8_t AVCProfileIndication, uint8_t profile_compatibility, uint8_t AVCLevelIndication, uint8_t lengthSizeMinusOne,
+    uint8_t chroma_format, uint8_t bit_depth_luma_minus8, uint8_t bit_depth_chroma_minus8 )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
@@ -3265,6 +3262,12 @@ int isom_set_avc_config( isom_root_t *root, uint32_t trak_number, uint32_t entry
     avcC->profile_compatibility = profile_compatibility;
     avcC->AVCLevelIndication = AVCLevelIndication;
     avcC->lengthSizeMinusOne = lengthSizeMinusOne;
+    if( ISOM_REQUIRES_AVCC_EXTENSION( AVCProfileIndication ) )
+    {
+        avcC->chroma_format = chroma_format;
+        avcC->bit_depth_luma_minus8 = bit_depth_luma_minus8;
+        avcC->bit_depth_chroma_minus8 = bit_depth_chroma_minus8;
+    }
     return 0;
 }
 
@@ -3789,13 +3792,22 @@ static uint64_t isom_update_avcC_size( isom_avcC_t *avcC )
     uint64_t size = 7;
     for( isom_entry_t *entry = avcC->sequenceParameterSets->head; entry; entry = entry->next )
     {
-        isom_avcC_sps_entry_t *data = (isom_avcC_sps_entry_t *)entry->data;
-        size += 2U + data->sequenceParameterSetLength;
+        isom_avcC_ps_entry_t *data = (isom_avcC_ps_entry_t *)entry->data;
+        size += 2U + data->parameterSetLength;
     }
     for( isom_entry_t *entry = avcC->pictureParameterSets->head; entry; entry = entry->next )
     {
-        isom_avcC_pps_entry_t *data = (isom_avcC_pps_entry_t *)entry->data;
-        size += 2U + data->pictureParameterSetLength;
+        isom_avcC_ps_entry_t *data = (isom_avcC_ps_entry_t *)entry->data;
+        size += 2U + data->parameterSetLength;
+    }
+    if( ISOM_REQUIRES_AVCC_EXTENSION( avcC->AVCProfileIndication ) )
+    {
+        size += 4U;
+        for( isom_entry_t *entry = avcC->sequenceParameterSetExt->head; entry; entry = entry->next )
+        {
+            isom_avcC_ps_entry_t *data = (isom_avcC_ps_entry_t *)entry->data;
+            size += 2U + data->parameterSetLength;
+        }
     }
     avcC->box_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
     CHECK_LARGESIZE( avcC->box_header.size );

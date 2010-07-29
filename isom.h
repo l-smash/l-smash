@@ -543,28 +543,30 @@ typedef struct
 /* extended by ISO IEC 14496-15 (AVC file format) */
 typedef struct
 {
-    uint8_t sequenceParameterSetLength;
-    uint8_t *sequenceParameterSetNALUnit;
-} isom_avcC_sps_entry_t;
+    uint8_t parameterSetLength;
+    uint8_t *parameterSetNALUnit;
+} isom_avcC_ps_entry_t;
 
 typedef struct
 {
-    uint8_t pictureParameterSetLength;
-    uint8_t *pictureParameterSetNALUnit;
-} isom_avcC_pps_entry_t;
-
-typedef struct
-{
+#define ISOM_REQUIRES_AVCC_EXTENSION( x ) ((x) == 100 || (x) == 110 || (x) == 122 || (x) == 144)
     isom_box_head_t box_header;
-    uint8_t configurationVersion;
-    uint8_t AVCProfileIndication;
+    uint8_t configurationVersion;                   /* 1 */
+    uint8_t AVCProfileIndication;                   /* profile_idc in SPS */
     uint8_t profile_compatibility;
-    uint8_t AVCLevelIndication;
-    uint8_t lengthSizeMinusOne;         /* in bytes of the NALUnitLength field. upper 6-bits is reserved as 111111b */
-    uint8_t numOfSequenceParameterSets; /* upper 3-bits is reserved as 111b */
-    isom_entry_list_t *sequenceParameterSets;  /* SPSs */
+    uint8_t AVCLevelIndication;                     /* level_idc in SPS */
+    uint8_t lengthSizeMinusOne;                     /* in bytes of the NALUnitLength field. upper 6-bits are reserved as 111111b */
+    uint8_t numOfSequenceParameterSets;             /* upper 3-bits are reserved as 111b */
+    isom_entry_list_t *sequenceParameterSets;       /* SPSs */
     uint8_t numOfPictureParameterSets;
-    isom_entry_list_t *pictureParameterSets;   /* PPSs */
+    isom_entry_list_t *pictureParameterSets;        /* PPSs */
+    /* ISOM_AVCC_EXTENSION( AVCProfileIndication ) */
+    uint8_t chroma_format;                          /* chroma_format_idc in SPS / upper 6-bits are reserved as 111111b */
+    uint8_t bit_depth_luma_minus8;                  /* shall be in the range of 0 to 4 / upper 5-bits are reserved as 11111b */
+    uint8_t bit_depth_chroma_minus8;                /* shall be in the range of 0 to 4 / upper 5-bits are reserved as 11111b */
+    uint8_t numOfSequenceParameterSetExt;
+    isom_entry_list_t *sequenceParameterSetExt;     /* SPSExts */
+    /* */
 } isom_avcC_t;
 
 typedef struct
@@ -1104,7 +1106,8 @@ int isom_set_sample_type( isom_root_t *root, uint32_t trak_number, uint32_t entr
 int isom_set_sample_aspect_ratio( isom_root_t *root, uint32_t trak_number, uint32_t entry_number, uint32_t hSpacing, uint32_t vSpacing );
 int isom_set_presentation_map( isom_root_t *root, uint32_t trak_number, uint32_t entry_number, uint64_t segment_duration, int64_t media_time, int32_t media_rate );
 int isom_set_avc_config( isom_root_t *root, uint32_t trak_number, uint32_t entry_number,
-    uint8_t configurationVersion, uint8_t AVCProfileIndication, uint8_t profile_compatibility, uint8_t AVCLevelIndication, uint8_t lengthSizeMinusOne );
+    uint8_t configurationVersion, uint8_t AVCProfileIndication, uint8_t profile_compatibility, uint8_t AVCLevelIndication, uint8_t lengthSizeMinusOne,
+    uint8_t chroma_format, uint8_t bit_depth_luma_minus8, uint8_t bit_depth_chroma_minus8 );
 int isom_set_handler_name( isom_root_t *root, uint32_t trak_number, char *handler_name );
 int isom_set_last_sample_delta( isom_root_t *root, uint32_t trak_number, uint32_t sample_delta );
 int isom_set_language( isom_root_t *root, uint32_t trak_number, char *language );
