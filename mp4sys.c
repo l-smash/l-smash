@@ -1368,10 +1368,10 @@ static int mp4sys_adts_parse_variable_header( FILE* stream, uint8_t* buf, unsign
     {
         header->raw_data_block_size[0] = header->frame_length - MP4SYS_ADTS_BASIC_HEADER_LENGTH;
         /* skip adts_error_check() and subtract that from block_size */
-        if( protection_absent == 0 && fread( buf2, 1, 2, stream) != 2 )
+        if( protection_absent == 0 )
         {
             header->raw_data_block_size[0] -= 2;
-            if( fread( buf2, 1, 2, stream) != 2 )
+            if( fread( buf2, 1, 2, stream ) != 2 )
                 return -1;
         }
         return 0;
@@ -1380,40 +1380,45 @@ static int mp4sys_adts_parse_variable_header( FILE* stream, uint8_t* buf, unsign
     /* now we have multiple raw_data_block()s, so evaluate adts_header_error_check() */
 
     uint16_t raw_data_block_position[MP4SYS_ADTS_MAX_RAW_DATA_BLOCKS];
-    /*
-     * NOTE: We never support the case where number_of_raw_data_blocks_in_frame != 0 && protection_absent != 0,
-     * because we have to parse the raw AAC bitstream itself to find boundaries of raw_data_block()s in this case.
-     * Which is to say, that braindamaged spec requires us (mp4 muxer) to decode AAC once to split frames.
-     * L-SMASH is NOT AAC DECODER, so that we've just given up for this case.
-     * This is ISO/IEC 13818-7's sin which defines ADTS format originally.
-     */
-    if( protection_absent != 0 )
-        return -1;
-    for( int i = 0 ; i < number_of_blocks ; i++ ) /* 1-based in the spec, but we use 0-based */
+    uint16_t first_offset = MP4SYS_ADTS_BASIC_HEADER_LENGTH;
+    if( protection_absent == 0 )
     {
-        if( fread( buf2, 1, 2, stream) != 2 )
+        /* process adts_header_error_check() */
+        for( int i = 0 ; i < number_of_blocks ; i++ ) /* 1-based in the spec, but we use 0-based */
+        {
+            if( fread( buf2, 1, 2, stream ) != 2 )
+                return -1;
+            raw_data_block_position[i] = (buf2[0] << 8) | buf2[1];
+        }
+        /* skip crc_check in adts_header_error_check().
+           Or might be sizeof( adts_error_check() ) if we share with the case number_of_raw_data_blocks_in_frame == 0 */
+        if( fread( buf2, 1, 2, stream ) != 2 )
             return -1;
-        raw_data_block_position[i] = (buf2[0] << 8) | buf2[1];
+        first_offset += ( 2 * number_of_blocks ) + 2; /* according to above */
+    }
+    else
+    {
+        /*
+         * NOTE: We never support the case where number_of_raw_data_blocks_in_frame != 0 && protection_absent != 0,
+         * because we have to parse the raw AAC bitstream itself to find boundaries of raw_data_block()s in this case.
+         * Which is to say, that braindamaged spec requires us (mp4 muxer) to decode AAC once to split frames.
+         * L-SMASH is NOT AAC DECODER, so that we've just given up for this case.
+         * This is ISO/IEC 13818-7's sin which defines ADTS format originally.
+         */
+        return -1;
     }
 
-    /* skip adts_error_check() */
-    if( protection_absent == 0 && fread( buf2, 1, 2, stream) != 2 )
-        return -1;
-
     /* convert raw_data_block_position --> raw_data_block_size */
-    uint16_t first_offset = MP4SYS_ADTS_BASIC_HEADER_LENGTH;
-    /* adts_header_error_check() */
-    if( protection_absent == 0 )
-        first_offset += ( 2 * number_of_blocks ) + 2; /* raw_data_block_positions & crc_check */
-    /* set dummy offset */
-    raw_data_block_position[number_of_blocks] = header->frame_length - first_offset;
-    /* do conversion */
-    header->raw_data_block_size[0] = raw_data_block_position[0];
+
+    /* do conversion for first */
+    header->raw_data_block_size[0] = raw_data_block_position[0] - first_offset;
+    /* set dummy offset to tail for loop, do coversion for rest. */
+    raw_data_block_position[number_of_blocks] = header->frame_length;
     for( int i = 1 ; i <= number_of_blocks ; i++ )
         header->raw_data_block_size[i] = raw_data_block_position[i] - raw_data_block_position[i-1];
 
     /* adjustment for adts_raw_data_block_error_check() */
-    if( protection_absent == 0 )
+    if( protection_absent == 0 && number_of_blocks != 0 )
         for( int i = 0 ; i <= number_of_blocks ; i++ )
             header->raw_data_block_size[i] -= 2;
 
