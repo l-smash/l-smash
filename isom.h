@@ -367,6 +367,32 @@ typedef struct
     isom_entry_list_t *list;
 } isom_stss_t;
 
+/* Independent and Disposable Samples Box */
+typedef struct
+{
+#define ISOM_SAMPLE_INDEPENDENCY_UNKOWN 0
+#define ISOM_SAMPLE_IS_INDEPENDENT      1
+#define ISOM_SAMPLE_IS_NOT_INDEPENDENT  2
+#define ISOM_SAMPLE_DISPOSABLE_UNKOWN   0
+#define ISOM_SAMPLE_IS_NOT_DISPOSABLE   1
+#define ISOM_SAMPLE_IS_DISPOSABLE       2
+#define ISOM_SAMPLE_REDUNDANCY_UNKOWN   0
+#define ISOM_SAMPLE_HAS_REDUNDANCY      1
+#define ISOM_SAMPLE_HAS_NO_REDUNDANCY   2
+    unsigned reserved              : 2;
+    unsigned sample_depends_on     : 2;     /* independency */
+    unsigned sample_is_depended_on : 2;     /* disposable */
+    unsigned sample_has_redundancy : 2;     /* redundancy */
+} isom_sdtp_entry_t;
+
+typedef struct
+{
+    isom_fullbox_head_t fullbox;
+    /* According to the specification, the size of the table, sample_count, doesn't exist in this box.
+     * Instead of this, it is taken from the sample_count in the stsz or the stz2 box. */
+    isom_entry_list_t *list;
+} isom_sdtp_t;
+
 /* Sample To Chunk */
 typedef struct
 {
@@ -444,6 +470,7 @@ typedef struct
     isom_stts_t *stts;      /* Decoding Time to Sample Box */
     isom_ctts_t *ctts;      /* Composition Time to Sample Box */
     isom_stss_t *stss;      /* Sync Sample Box */
+    isom_sdtp_t *sdtp;      /* Independent and Disposable Samples Box */
     isom_stsc_t *stsc;      /* Sample To Chunk Box */
     isom_stsz_t *stsz;      /* Sample Size Box */
     isom_stco_t *stco;      /* Chunk Offset Box */
@@ -1031,12 +1058,20 @@ enum isom_grouping_code
 
 typedef struct
 {
+    uint8_t sync_point;
+    uint8_t independent;
+    uint8_t disposable;
+    uint8_t redundant;
+} isom_sample_property_t;
+
+typedef struct
+{
     uint32_t length;
-    char    *data;
-    uint64_t  dts;
-    uint64_t  cts;
-    uint8_t  rap;
+    char *data;
+    uint64_t dts;
+    uint64_t cts;
     uint32_t index;
+    isom_sample_property_t prop;
 } isom_sample_t;
 
 typedef struct
@@ -1070,6 +1105,7 @@ int isom_add_btrt( isom_root_t *root, uint32_t trak_number, uint32_t entry_numbe
 int isom_add_pasp( isom_root_t *root, uint32_t trak_number, uint32_t entry_number );
 int isom_add_ctts( isom_root_t *root, uint32_t trak_number );
 int isom_add_stss( isom_root_t *root, uint32_t trak_number );
+int isom_add_sdtp( isom_root_t *root, uint32_t trak_number );
 int isom_add_sbgp( isom_root_t *root, uint32_t trak_number, uint32_t grouping_type );
 int isom_add_trak( isom_root_t *root, uint32_t hdlr_type );
 int isom_add_mdat( isom_root_t *root );
