@@ -2768,7 +2768,7 @@ static int isom_update_tkhd_duration( isom_root_t *root, uint32_t trak_number )
             return -1;
         if( trak->mdia->mdhd->duration && isom_update_mdhd_duration( root, trak_number ) )
             return -1;
-        tkhd->duration = trak->mdia->mdhd->duration * ((double)trak->root->moov->mvhd->timescale / trak->mdia->mdhd->timescale) + 0.5;
+        tkhd->duration = trak->mdia->mdhd->duration * ((double)trak->root->moov->mvhd->timescale / trak->mdia->mdhd->timescale);
     }
     else
     {

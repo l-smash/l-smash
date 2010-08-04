@@ -560,7 +560,7 @@ typedef struct
     isom_entry_list_t *sequenceParameterSets;       /* SPSs */
     uint8_t numOfPictureParameterSets;
     isom_entry_list_t *pictureParameterSets;        /* PPSs */
-    /* ISOM_AVCC_EXTENSION( AVCProfileIndication ) */
+    /* if( ISOM_REQUIRES_AVCC_EXTENSION( AVCProfileIndication ) ) */
     uint8_t chroma_format;                          /* chroma_format_idc in SPS / upper 6-bits are reserved as 111111b */
     uint8_t bit_depth_luma_minus8;                  /* shall be in the range of 0 to 4 / upper 5-bits are reserved as 11111b */
     uint8_t bit_depth_chroma_minus8;                /* shall be in the range of 0 to 4 / upper 5-bits are reserved as 11111b */
