@@ -25,6 +25,7 @@
 static int isom_add_avcC( isom_entry_list_t *list );
 static int isom_add_co64( isom_root_t *root, uint32_t trak_number );
 
+static void isom_remove_avcC( isom_avcC_t *avcC );
 static void isom_remove_avcC_ps( isom_avcC_ps_entry_t *ps );
 
 static int isom_write_mdat_header( isom_root_t *root );
@@ -166,7 +167,10 @@ int isom_add_elst_entry( isom_root_t *root, uint32_t trak_number, uint64_t segme
     data->media_time = ( media_time >= -1 ) ? media_time : 0;
     data->media_rate = ( media_rate >= 0 ) ? media_rate : 1<<16;
     if( isom_add_entry( trak->edts->elst->list, data ) )
+    {
+        free( data );
         return -1;
+    }
     if( data->segment_duration > UINT32_MAX || data->media_time > UINT32_MAX )
         trak->edts->elst->fullbox.version = 1;
     return 0;
@@ -188,7 +192,10 @@ int isom_add_dref_entry( isom_root_t *root, uint32_t trak_number, uint32_t flags
         data->location_length = strlen( location ) + 1;
         data->location = malloc( data->location_length );
         if( !data->location )
+        {
+            free( data );
             return -1;
+        }
         memcpy( data->location, location, data->location_length );
     }
     if( name )
@@ -196,11 +203,23 @@ int isom_add_dref_entry( isom_root_t *root, uint32_t trak_number, uint32_t flags
         data->name_length = strlen( name ) + 1;
         data->name = malloc( data->name_length );
         if( !data->name )
+        {
+            if( data->location )
+                free( data->location );
+            free( data );
             return -1;
+        }
         memcpy( data->name, name, data->name_length );
     }
     if( isom_add_entry( trak->mdia->minf->dinf->dref->list, data ) )
+    {
+        if( data->location )
+            free( data->location );
+        if( data->name )
+            free( data->name );
+        free( data );
         return -1;
+    }
     return 0;
 }
 
@@ -315,10 +334,11 @@ static int isom_add_avc_entry( isom_entry_list_t *list, uint32_t sample_type )
     }
     avc->depth = 0x0018;
     avc->pre_defined3 = -1;
-    if( isom_add_entry( list, avc ) )
+    if( isom_add_entry( list, avc ) || isom_add_avcC( list ) )
+    {
+        free( avc );
         return -1;
-    if( isom_add_avcC( list ) )
-        return -1;
+    }
     return 0;
 }
 
@@ -338,7 +358,10 @@ static int isom_add_mp4v_entry( isom_entry_list_t *list )
     mp4v->depth = 0x0018;
     mp4v->pre_defined3 = -1;
     if( isom_add_entry( list, mp4v ) )
+    {
+        free( mp4v );
         return -1;
+    }
     return 0;
 }
 
@@ -414,7 +437,10 @@ static int isom_add_mp4s_entry( isom_entry_list_t *list )
     isom_init_box_header( &mp4s->box_header, ISOM_CODEC_TYPE_MP4S_SYSTEM );
     mp4s->data_reference_index = 1;
     if( isom_add_entry( list, mp4s ) )
+    {
+        free( mp4s );
         return -1;
+    }
     return 0;
 }
 
@@ -434,7 +460,10 @@ static int isom_add_visual_entry( isom_entry_list_t *list, uint32_t sample_type 
     visual->depth = 0x0018;
     visual->pre_defined3 = -1;
     if( isom_add_entry( list, visual ) )
+    {
+        free( visual );
         return -1;
+    }
     return 0;
 }
 
@@ -452,7 +481,10 @@ static int isom_add_audio_entry( isom_entry_list_t *list, uint32_t sample_type )
     audio->samplesize = 16;
     audio->samplerate = 48000U<<16;
     if( isom_add_entry( list, audio ) )
+    {
+        free( audio );
         return -1;
+    }
     return 0;
 }
 
@@ -530,7 +562,10 @@ int isom_add_stts_entry( isom_root_t *root, uint32_t trak_number, uint32_t sampl
     data->sample_count = 1;
     data->sample_delta = sample_delta;
     if( isom_add_entry( trak->mdia->minf->stbl->stts->list, data ) )
+    {
+        free( data );
         return -1;
+    }
     return 0;
 }
 
@@ -545,7 +580,10 @@ int isom_add_ctts_entry( isom_root_t *root, uint32_t trak_number, uint32_t sampl
     data->sample_count = 1;
     data->sample_offset = sample_offset;
     if( isom_add_entry( trak->mdia->minf->stbl->ctts->list, data ) )
+    {
+        free( data );
         return -1;
+    }
     return 0;
 }
 
@@ -561,7 +599,10 @@ int isom_add_stsc_entry( isom_root_t *root, uint32_t trak_number, uint32_t first
     data->samples_per_chunk = samples_per_chunk;
     data->sample_description_index = sample_description_index;
     if( isom_add_entry( trak->mdia->minf->stbl->stsc->list, data ) )
+    {
+        free( data );
         return -1;
+    }
     return 0;
 }
 
@@ -593,7 +634,10 @@ int isom_add_stsz_entry( isom_root_t *root, uint32_t trak_number, uint32_t entry
                 return -1;
             data->entry_size = stsz->sample_size;
             if( isom_add_entry( stsz->list, data ) )
+            {
+                free( data );
                 return -1;
+            }
         }
         stsz->sample_size = 0;
     }
@@ -602,7 +646,10 @@ int isom_add_stsz_entry( isom_root_t *root, uint32_t trak_number, uint32_t entry
         return -1;
     data->entry_size = entry_size;
     if( isom_add_entry( stsz->list, data ) )
+    {
+        free( data );
         return -1;
+    }
     ++ stsz->sample_count;
     return 0;
 }
@@ -617,7 +664,10 @@ int isom_add_stss_entry( isom_root_t *root, uint32_t trak_number, uint32_t sampl
         return -1;
     data->sample_number = sample_number;
     if( isom_add_entry( trak->mdia->minf->stbl->stss->list, data ) )
+    {
+        free( data );
         return -1;
+    }
     return 0;
 }
 
@@ -650,7 +700,10 @@ int isom_add_co64_entry( isom_root_t *root, uint32_t trak_number, uint64_t chunk
         return -1;
     data->chunk_offset = chunk_offset;
     if( isom_add_entry( trak->mdia->minf->stbl->stco->list, data ) )
+    {
+        free( data );
         return -1;
+    }
     return 0;
 }
 
@@ -708,7 +761,10 @@ int isom_add_stco_entry( isom_root_t *root, uint32_t trak_number, uint64_t chunk
         return -1;
     data->chunk_offset = (uint32_t)chunk_offset;
     if( isom_add_entry( trak->mdia->minf->stbl->stco->list, data ) )
+    {
+        free( data );
         return -1;
+    }
     return 0;
 }
 
@@ -727,7 +783,10 @@ int isom_add_sbgp_entry( isom_root_t *root, uint32_t trak_number, uint32_t group
     data->sample_count = sample_count;
     data->group_description_index = group_description_index;
     if( isom_add_entry( sbgp->list, data ) )
+    {
+        free( data );
         return -1;
+    }
     return 0;
 }
 
@@ -746,7 +805,10 @@ int isom_add_roll_group_entry( isom_root_t *root, uint32_t trak_number, uint32_t
     data->description_length = description_length;
     data->roll_distance = roll_distance;
     if( isom_add_entry( sgpd->list, data ) )
+    {
+        free( data );
         return -1;
+    }
     return 0;
 }
 
@@ -1032,13 +1094,22 @@ static int isom_add_avcC( isom_entry_list_t *list )
     isom_create_box( avcC, ISOM_BOX_TYPE_AVCC );
     avcC->sequenceParameterSets = isom_create_entry_list();
     if( !avcC->sequenceParameterSets )
+    {
+        free( avcC );
         return -1;
+    }
     avcC->pictureParameterSets = isom_create_entry_list();
     if( !avcC->pictureParameterSets )
+    {
+        isom_remove_avcC( avcC );
         return -1;
+    }
     avcC->sequenceParameterSetExt = isom_create_entry_list();
     if( !avcC->sequenceParameterSetExt )
+    {
+        isom_remove_avcC( avcC );
         return -1;
+    }
     data->avcC = avcC;
     return 0;
 }
