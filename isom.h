@@ -370,16 +370,20 @@ typedef struct
 /* Independent and Disposable Samples Box */
 typedef struct
 {
-#define ISOM_SAMPLE_INDEPENDENCY_UNKOWN 0
-#define ISOM_SAMPLE_IS_INDEPENDENT      1
-#define ISOM_SAMPLE_IS_NOT_INDEPENDENT  2
-#define ISOM_SAMPLE_DISPOSABLE_UNKOWN   0
-#define ISOM_SAMPLE_IS_NOT_DISPOSABLE   1
-#define ISOM_SAMPLE_IS_DISPOSABLE       2
-#define ISOM_SAMPLE_REDUNDANCY_UNKOWN   0
-#define ISOM_SAMPLE_HAS_REDUNDANCY      1
-#define ISOM_SAMPLE_HAS_NO_REDUNDANCY   2
-    unsigned reserved              : 2;
+#define ISOM_SAMPLE_LEADING_UNKOWN         0
+#define ISOM_SAMPLE_IS_UNDECODABLE_LEADING 1
+#define ISOM_SAMPLE_IS_NOT_LEADING         2
+#define ISOM_SAMPLE_IS_DECODABLE_LEADING   3
+#define ISOM_SAMPLE_INDEPENDENCY_UNKOWN    0
+#define ISOM_SAMPLE_IS_INDEPENDENT         1
+#define ISOM_SAMPLE_IS_NOT_INDEPENDENT     2
+#define ISOM_SAMPLE_DISPOSABLE_UNKOWN      0
+#define ISOM_SAMPLE_IS_NOT_DISPOSABLE      1
+#define ISOM_SAMPLE_IS_DISPOSABLE          2
+#define ISOM_SAMPLE_REDUNDANCY_UNKOWN      0
+#define ISOM_SAMPLE_HAS_REDUNDANCY         1
+#define ISOM_SAMPLE_HAS_NO_REDUNDANCY      2
+    unsigned is_leading            : 2;     /* leading */
     unsigned sample_depends_on     : 2;     /* independency */
     unsigned sample_is_depended_on : 2;     /* disposable */
     unsigned sample_has_redundancy : 2;     /* redundancy */
@@ -1059,6 +1063,7 @@ enum isom_grouping_code
 typedef struct
 {
     uint8_t sync_point;
+    uint8_t leading;
     uint8_t independent;
     uint8_t disposable;
     uint8_t redundant;
