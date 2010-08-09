@@ -611,10 +611,32 @@ typedef struct
 
 typedef struct
 {
+    uint64_t start_time;    /* expressed in 100 nanoseconds */
+    /* Chapter name is Pascal string */
+    uint8_t name_length;
+    char *chapter_name;
+} isom_chpl_entry_t;
+
+typedef struct
+{
+    isom_fullbox_head_t fullbox;    /* version is 1 */
+    uint8_t reserved;
+    isom_entry_list_t *list;
+} isom_chpl_t;
+
+typedef struct
+{
+    isom_box_head_t box_header;
+    isom_chpl_t *chpl;      /* Chapter Box / This chapter format is NOT included in the ISO/MPEG-4 specs. */
+} isom_udta_t;
+
+typedef struct
+{
     isom_box_head_t box_header;
     isom_mvhd_t       *mvhd;        /* Movie Header Box */
     isom_iods_t       *iods;
     isom_entry_list_t *trak_list;   /* Track Box List */
+    isom_udta_t       *udta;        /* User Data Box */
 } isom_moov_t;
 
 typedef struct
@@ -650,12 +672,13 @@ typedef struct
 typedef struct
 {
     isom_box_head_t box_header;
-    isom_tkhd_t *tkhd;         /* Track Header Box */
-    isom_edts_t *edts;         /* Edit Box */
-    isom_mdia_t *mdia;         /* Media Box */
+    isom_tkhd_t *tkhd;          /* Track Header Box */
+    isom_edts_t *edts;          /* Edit Box */
+    isom_mdia_t *mdia;          /* Media Box */
+    isom_udta_t *udta;          /* User Data Box */
 
-    isom_root_t *root;         /* go to root */
-    isom_mdat_t *mdat;         /* go to referenced mdat box */
+    isom_root_t *root;          /* go to root */
+    isom_mdat_t *mdat;          /* go to referenced mdat box */
     isom_cache_t *cache;
 } isom_trak_entry_t;
 
@@ -817,6 +840,8 @@ enum isom_box_code
     ISOM_BOX_TYPE_CLAP = ISOM_4CC( 'c', 'l', 'a', 'p' ),
     ISOM_BOX_TYPE_ESDS = ISOM_4CC( 'e', 's', 'd', 's' ),
     ISOM_BOX_TYPE_PASP = ISOM_4CC( 'p', 'a', 's', 'p' ),
+
+    ISOM_BOX_TYPE_CHPL = ISOM_4CC( 'c', 'h', 'p', 'l' ),
 };
 
 enum qt_box_code
@@ -829,11 +854,6 @@ enum qt_box_code
     QT_BOX_TYPE_LOAD = ISOM_4CC( 'l', 'o', 'a', 'd' ),
     QT_BOX_TYPE_MATT = ISOM_4CC( 'm', 'a', 't', 't' ),
     QT_BOX_TYPE_PNOT = ISOM_4CC( 'p', 'n', 'o', 't' ),
-};
-
-enum nero_box_code
-{
-    NERO_BOX_TYPE_CHPL = ISOM_4CC( 'c', 'h', 'p', 'l' ),    /* Nero Chapter */
 };
 
 enum isom_hdlr_code
@@ -1153,6 +1173,7 @@ int isom_set_handler_name( isom_root_t *root, uint32_t trak_number, char *handle
 int isom_set_last_sample_delta( isom_root_t *root, uint32_t trak_number, uint32_t sample_delta );
 int isom_set_language( isom_root_t *root, uint32_t trak_number, char *language );
 int isom_set_free( isom_root_t *root, uint8_t *data, uint64_t data_length );
+int isom_set_tyrant_chapter( isom_root_t *root, char *file_name );
 
 int isom_update_media_modification_time( isom_root_t *root, uint32_t trak_number );
 int isom_update_track_modification_time( isom_root_t *root, uint32_t trak_number );

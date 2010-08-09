@@ -816,6 +816,31 @@ int isom_add_roll_group_entry( isom_root_t *root, uint32_t trak_number, uint32_t
     return 0;
 }
 
+int isom_add_chpl_entry( isom_root_t *root, uint64_t start_time, char *chapter_name )
+{
+    if( !chapter_name || !root || !root->moov || !root->moov->udta || !root->moov->udta->chpl || !root->moov->udta->chpl->list )
+        return -1;
+    isom_chpl_entry_t *data = malloc( sizeof(isom_chpl_entry_t) );
+    if( !data )
+        return -1;
+    data->start_time = start_time;
+    data->name_length = ISOM_MIN( strlen( chapter_name ), 255 );
+    data->chapter_name = malloc( data->name_length + 1 );
+    if( !data->chapter_name )
+    {
+        free( data );
+        return -1;
+    }
+    memcpy( data->chapter_name, chapter_name, data->name_length );
+    if( isom_add_entry( root->moov->udta->chpl->list, data ) )
+    {
+        free( data->chapter_name );
+        free( data );
+        return -1;
+    }
+    return 0;
+}
+
 static int isom_add_ftyp( isom_root_t *root )
 {
     if( root->ftyp )
@@ -1302,6 +1327,42 @@ int isom_add_sbgp( isom_root_t *root, uint32_t trak_number, uint32_t grouping_ty
     return 0;
 }
 
+int isom_add_chpl( isom_root_t *root )
+{
+    if( !root || !root->moov || !root->moov->udta )
+        return -1;
+    if( !root->moov->udta->chpl )
+    {
+        isom_create_list_fullbox( chpl, ISOM_BOX_TYPE_CHPL );
+        chpl->fullbox.version = 1;
+        root->moov->udta->chpl = chpl;
+    }
+    return 0;
+}
+
+int isom_add_udta( isom_root_t *root, uint32_t trak_number )
+{
+    /* trak_number == 0 means the direct addition to moov box */
+    if( !trak_number )
+    {
+        if( !root || !root->moov )
+            return -1;
+        if( root->moov->udta )
+            return 0;
+        isom_create_box( udta, ISOM_BOX_TYPE_UDTA );
+        root->moov->udta = udta;
+        return 0;
+    }
+    isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
+    if( !trak )
+        return -1;
+    if( trak->udta )
+        return 0;
+    isom_create_box( udta, ISOM_BOX_TYPE_UDTA );
+    trak->udta = udta;
+    return 0;
+}
+
 int isom_add_trak( isom_root_t *root, uint32_t hdlr_type )
 {
     if( !root || !root->moov || !root->moov->mvhd )
@@ -1676,6 +1737,40 @@ static void isom_remove_mdia( isom_mdia_t *mdia )
     free( mdia );
 }
 
+static void isom_remove_chpl( isom_chpl_t *chpl )
+{
+    if( !chpl )
+        return;
+    if( !chpl->list )
+    {
+        free( chpl );
+        return;
+    }
+    for( isom_entry_t *entry = chpl->list->head; entry; )
+    {
+        isom_chpl_entry_t *data = (isom_chpl_entry_t *)entry->data;
+        if( data )
+        {
+            if( data->chapter_name )
+                free( data->chapter_name );
+            free( data );
+        }
+        isom_entry_t *next = entry->next;
+        free( entry );
+        entry = next;
+    }
+    free( chpl->list );
+    free( chpl );
+}
+
+static void isom_remove_udta( isom_udta_t *udta )
+{
+    if( !udta )
+        return;
+    isom_remove_chpl( udta->chpl );
+    free( udta );
+}
+
 void isom_remove_trak( isom_root_t *root, uint32_t trak_number )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
@@ -1684,6 +1779,7 @@ void isom_remove_trak( isom_root_t *root, uint32_t trak_number )
     isom_remove_fullbox( tkhd, trak );
     isom_remove_edts( root, trak_number );
     isom_remove_mdia( trak->mdia );
+    isom_remove_udta( trak->udta );
     if( trak->cache )
     {
         isom_remove_list( trak->cache->chunk.pool, isom_remove_sample );
@@ -1705,6 +1801,7 @@ static void isom_remove_moov( isom_root_t *root )
     if( moov->mvhd )
         free( moov->mvhd );
     isom_remove_iods( moov->iods );
+    isom_remove_udta( moov->udta );
     if( moov->trak_list )
     {
         /* FIXME: These are kinda workarounds.
@@ -2604,6 +2701,44 @@ static int isom_write_mdia( isom_bs_t *bs, isom_trak_entry_t *trak )
     return 0;
 }
 
+static int isom_write_chpl( isom_bs_t *bs, isom_chpl_t *chpl )
+{
+    if( !chpl )
+        return 0;
+    if( !chpl->list )
+        return -1;
+    isom_bs_put_fullbox_header( bs, &chpl->fullbox );
+    isom_bs_put_byte( bs, chpl->reserved );
+    isom_bs_put_be32( bs, chpl->list->entry_count );
+    for( isom_entry_t *entry = chpl->list->head; entry; entry = entry->next )
+    {
+        isom_chpl_entry_t *data = (isom_chpl_entry_t *)entry->data;
+        if( !data )
+            return -1;
+        isom_bs_put_be64( bs, data->start_time );
+        isom_bs_put_byte( bs, data->name_length );
+        isom_bs_put_bytes( bs, data->chapter_name, data->name_length );
+    }
+    if( isom_bs_write_data( bs ) )
+        return -1;
+    return 0;
+}
+
+static int isom_write_udta( isom_bs_t *bs, isom_moov_t *moov, isom_trak_entry_t *trak )
+{
+    /* Setting non-NULL pointer to trak means trak->udta data will be written in stream.
+     * If trak is set by NULL while moov is set by non-NULL pointer, moov->udta data will be written in stream. */
+    isom_udta_t *udta = trak ? trak->udta : moov ? moov->udta : NULL;
+    if( !udta )
+        return 0;
+    isom_bs_put_box_header( bs, &udta->box_header );
+    if( isom_bs_write_data( bs ) )
+        return -1;
+    if( moov && isom_write_chpl( bs, udta->chpl ) )
+        return -1;
+    return 0;
+}
+
 static int isom_write_trak( isom_bs_t *bs, isom_trak_entry_t *trak )
 {
     if( !trak )
@@ -2616,6 +2751,8 @@ static int isom_write_trak( isom_bs_t *bs, isom_trak_entry_t *trak )
     if( isom_write_edts( bs, trak ) )
         return -1;
     if( isom_write_mdia( bs, trak ) )
+        return -1;
+    if( isom_write_udta( bs, NULL, trak ) )
         return -1;
     return 0;
 }
@@ -2667,6 +2804,8 @@ int isom_write_moov( isom_root_t *root )
         for( isom_entry_t *entry = root->moov->trak_list->head; entry; entry = entry->next )
             if( isom_write_trak( root->bs, (isom_trak_entry_t *)entry->data ) )
                 return -1;
+    if( isom_write_udta( root->bs, root->moov, NULL ) )
+        return -1;
     return 0;
 }
 
@@ -3637,6 +3776,41 @@ int isom_set_free( isom_root_t *root, uint8_t *data, uint64_t data_length )
     return 0;
 }
 
+int isom_set_tyrant_chapter( isom_root_t *root, char *file_name )
+{
+    /* This function should be called after updating of the latest movie duration. */
+    if( !root || !root->moov || !root->moov->mvhd || !root->moov->mvhd->timescale || !root->moov->mvhd->duration )
+        return -1;
+    char buff[512];
+    FILE *chapter = fopen( file_name, "rb" );
+    if( !chapter )
+        return -1;
+    if( isom_add_udta( root, 0 ) || isom_add_chpl( root ) )
+        goto fail;
+    while( fgets( buff, sizeof(buff), chapter ) != NULL )
+    {
+        uint64_t hh, mm, ss, ms;
+        if( sscanf( buff, "%"SCNu64":%"SCNu64":%"SCNu64".%"SCNu64, &hh, &mm, &ss, &ms ) != 4 )
+            return -1;
+        char *chapter_name = strchr( buff, ' ' );   /* find separator */
+        if( !chapter_name || strlen( buff ) <= ++chapter_name - buff )
+            goto fail;
+        /* start_time will overflow at 512409557:36:10.956 */
+        if( hh > 512409556 || mm > 59 || ss > 59 || ms > 999 )
+            goto fail;
+        uint64_t start_time = ms * 10000 + (ss + mm * 60 + hh * 3600) * 10000000;
+        if( start_time / 1e7 > (double)root->moov->mvhd->duration / root->moov->mvhd->timescale )
+            break;
+        if( isom_add_chpl_entry( root, start_time, chapter_name ) )
+            goto fail;
+    }
+    fclose( chapter );
+    return 0;
+fail:
+    fclose( chapter );
+    return -1;
+}
+
 static int isom_check_mandatory_boxes( isom_root_t *root )
 {
     if( !root )
@@ -4229,6 +4403,34 @@ static uint64_t isom_update_mdia_size( isom_trak_entry_t *trak )
     return trak->mdia->box_header.size;
 }
 
+static uint64_t isom_update_chpl_size( isom_chpl_t *chpl )
+{
+    if( !chpl )
+        return 0;
+    uint64_t size = 1;
+    for( isom_entry_t *entry = chpl->list->head; entry; entry = entry->next )
+    {
+        isom_chpl_entry_t *data = (isom_chpl_entry_t *)entry->data;
+        size += 9U + data->name_length;
+    }
+    chpl->fullbox.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( chpl->fullbox.size );
+    return chpl->fullbox.size;
+}
+
+static uint64_t isom_update_udta_size( isom_moov_t *moov, isom_trak_entry_t *trak )
+{
+    isom_udta_t *udta = trak ? trak->udta : moov ? moov->udta : NULL;
+    if( !udta )
+        return 0;
+    uint64_t size = 0;
+    if( moov )
+        size += isom_update_chpl_size( udta->chpl );
+    udta->box_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( udta->box_header.size );
+    return udta->box_header.size;
+}
+
 static uint64_t isom_update_trak_entry_size( isom_trak_entry_t *trak )
 {
     if( !trak )
@@ -4236,6 +4438,7 @@ static uint64_t isom_update_trak_entry_size( isom_trak_entry_t *trak )
     uint64_t size = isom_update_tkhd_size( trak );
     size += isom_update_edts_size( trak );
     size += isom_update_mdia_size( trak );
+    size += isom_update_udta_size( NULL, trak );
     trak->box_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
     CHECK_LARGESIZE( trak->box_header.size );
     return trak->box_header.size;
@@ -4245,7 +4448,9 @@ static int isom_update_moov_size( isom_root_t *root )
 {
     if( !root || !root->moov )
         return -1;
-    uint64_t size = isom_update_mvhd_size( root ) + isom_update_iods_size( root );
+    uint64_t size = isom_update_mvhd_size( root );
+    size += isom_update_iods_size( root );
+    size += isom_update_udta_size( root->moov, NULL );
     if( root->moov->trak_list )
         for( isom_entry_t *entry = root->moov->trak_list->head; entry; entry = entry->next )
         {
