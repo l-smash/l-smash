@@ -216,7 +216,6 @@ typedef enum {
     MP4SYS_VISUAL_PLI_Simple_PL3                     = 0x03, /* 0b00000011, Simple Profile/Level 3 */
     MP4SYS_VISUAL_PLI_Simple_Scalable_PL1            = 0x11, /* 0b00010001, Simple Scalable Profile/Level 1 */
     MP4SYS_VISUAL_PLI_Simple_Scalable_PL2            = 0x12, /* 0b00010010, Simple Scalable Profile/Level 2 */
-    MP4SYS_VISUAL_PLI_H264_AVC                       = 0x15, /* FIXME: ISO/IEC 14496-10 Advanced Video Codec / H.264 */
     MP4SYS_VISUAL_PLI_Core_PL1                       = 0x21, /* 0b00100001, Core Profile/Level 1 */
     MP4SYS_VISUAL_PLI_Core_PL2                       = 0x22, /* 0b00100010, Core Profile/Level 2 */
     MP4SYS_VISUAL_PLI_Main_PL2                       = 0x32, /* 0b00110010, Main Profile/Level 2 */
@@ -230,6 +229,8 @@ typedef enum {
     MP4SYS_VISUAL_PLI_Simple_FBA_PL2                 = 0x64, /* 0b01100100, Simple FBA Profile/Level 2 */
     MP4SYS_VISUAL_PLI_Basic_Animated_Texture_PL1     = 0x71, /* 0b01110001, Basic Animated Texture Profile/Level 1 */
     MP4SYS_VISUAL_PLI_Basic_Animated_Texture_PL2     = 0x72, /* 0b01110010, Basic Animated Texture Profile/Level 2 */
+    MP4SYS_VISUAL_PLI_H264_AVC                       = 0x7F, /* ISO/IEC 14496-10 Advanced Video Codec / H.264, defined in ISO/IEC 14496-1:2001/Amd.7:2004 */
+                                                             /* NOTE: Some other implementations seeem to use 0x15(0b00010101) for AVC, but I think that's wrong. */
     MP4SYS_VISUAL_PLI_Hybrid_PL1                     = 0x81, /* 0b10000001, Hybrid Profile/Level 1 */
     MP4SYS_VISUAL_PLI_Hybrid_PL2                     = 0x82, /* 0b10000010, Hybrid Profile/Level 2 */
     MP4SYS_VISUAL_PLI_Advanced_Real_Time_Simple_PL1  = 0x91, /* 0b10010001, Advanced Real Time Simple Profile/Level 1 */
@@ -292,7 +293,7 @@ int mp4sys_remove_ES_Descriptor( mp4sys_ES_Descriptor_t* esd );
 int mp4sys_remove_ES_ID_Incs( mp4sys_ObjectDescriptor_t* od );
 int mp4sys_remove_ObjectDescriptor( mp4sys_ObjectDescriptor_t* od );
 
-int mp4sys_add_DecoderSpecificInfo( mp4sys_ES_Descriptor_t* esd, void* data, uint32_t size );
+int mp4sys_add_DecoderSpecificInfo( mp4sys_ES_Descriptor_t* esd, void* dsi_payload, uint32_t dsi_payload_length );
 /*
     bufferSizeDB is byte unit, NOT bit unit.
     avgBitrate is 0 if VBR
@@ -315,7 +316,7 @@ mp4sys_ES_Descriptor_t* mp4sys_create_ES_Descriptor( uint16_t ES_ID );
 mp4sys_ObjectDescriptor_t* mp4sys_create_ObjectDescriptor( uint16_t ObjectDescriptorID );
 int mp4sys_to_InitialObjectDescriptor(
     mp4sys_ObjectDescriptor_t* od,
-    uint8_t inline_pli,
+    uint8_t include_inline_pli,
     mp4sys_ODProfileLevelIndication od_pli,
     mp4sys_sceneProfileLevelIndication scene_pli,
     mp4sys_audioProfileLevelIndication audio_pli,
@@ -443,6 +444,11 @@ unsigned int mp4sys_importer_get_track_count( mp4sys_importer_t* importer ); /* 
 /* to facilitate to make DecoderSpecificInfo / AudioSpecificConfig */
 int mp4sys_setup_AudioSpecificConfig( mp4sys_audio_summary_t* summary );
 int mp4sys_summary_set_AudioSpecificConfig( mp4sys_audio_summary_t* summary, void* asc, uint32_t asc_length );
+mp4sys_audioProfileLevelIndication mp4sys_get_audioProfileLevelIndication( mp4sys_audio_summary_t* summary );
+mp4sys_audioProfileLevelIndication mp4sys_max_audioProfileLevelIndication(
+	mp4sys_audioProfileLevelIndication a,
+	mp4sys_audioProfileLevelIndication b
+);
 
 /* FIXME: these functions may change in the future.
    I wonder these functions should be for generic (not limited to audio) summary. */

@@ -416,6 +416,7 @@ static int isom_add_mp4a_entry( isom_entry_list_t *list, mp4sys_audio_summary_t*
     mp4a->samplesize = summary->bit_depth;
     mp4a->samplerate = summary->frequency << 16; /* WARNING: This field cannot retain frequency above 65535Hz. */
     mp4a->esds = esds;
+    mp4a->pli = mp4sys_get_audioProfileLevelIndication( summary );
     if( isom_add_entry( list, mp4a ) )
     {
         mp4sys_remove_ES_Descriptor( esds->ES );
@@ -875,6 +876,132 @@ static int isom_add_mvhd( isom_root_t *root )
         mvhd->next_track_ID = 1;
         root->moov->mvhd = mvhd;
     }
+    return 0;
+}
+
+static int isom_scan_trak_profileLevelIndication( isom_trak_entry_t* trak, mp4sys_audioProfileLevelIndication* audio_pli, mp4sys_visualProfileLevelIndication* visual_pli )
+{
+    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
+        return -1;
+    isom_stsd_t* stsd = trak->mdia->minf->stbl->stsd;
+    if( !stsd || !stsd->list || !stsd->list->head )
+        return -1;
+    for( isom_entry_t *entry = stsd->list->head; entry; entry = entry->next )
+    {
+        isom_sample_entry_t* sample_entry = (isom_sample_entry_t*)entry->data;
+        if( !sample_entry )
+            return -1;
+        switch( sample_entry->box_header.type )
+        {
+            case ISOM_CODEC_TYPE_AVC1_VIDEO :
+            case ISOM_CODEC_TYPE_AVC2_VIDEO :
+            case ISOM_CODEC_TYPE_AVCP_VIDEO :
+                /* FIXME: Do we have to arbitrate like audio? */
+                if( *visual_pli == MP4SYS_VISUAL_PLI_NONE_REQUIRED )
+                    *visual_pli = MP4SYS_VISUAL_PLI_H264_AVC;
+                break;
+            case ISOM_CODEC_TYPE_MP4A_AUDIO :
+                *audio_pli = mp4sys_max_audioProfileLevelIndication( *audio_pli, ((isom_mp4a_entry_t*)sample_entry)->pli );
+                break;
+            case ISOM_CODEC_TYPE_DRAC_VIDEO :
+            case ISOM_CODEC_TYPE_ENCV_VIDEO :
+            case ISOM_CODEC_TYPE_MJP2_VIDEO :
+            case ISOM_CODEC_TYPE_MVC1_VIDEO :
+            case ISOM_CODEC_TYPE_MVC2_VIDEO :
+            case ISOM_CODEC_TYPE_S263_VIDEO :
+            case ISOM_CODEC_TYPE_SVC1_VIDEO :
+            case ISOM_CODEC_TYPE_VC_1_VIDEO :
+                /* FIXME: Do we have to arbitrate like audio? */
+                if( *visual_pli == MP4SYS_VISUAL_PLI_NONE_REQUIRED )
+                    *visual_pli = MP4SYS_VISUAL_PLI_NOT_SPECIFIED;
+                break;
+            case ISOM_CODEC_TYPE_AC_3_AUDIO :
+            case ISOM_CODEC_TYPE_ALAC_AUDIO :
+            case ISOM_CODEC_TYPE_DRA1_AUDIO :
+            case ISOM_CODEC_TYPE_DTSC_AUDIO :
+            case ISOM_CODEC_TYPE_DTSH_AUDIO :
+            case ISOM_CODEC_TYPE_DTSL_AUDIO :
+            case ISOM_CODEC_TYPE_EC_3_AUDIO :
+            case ISOM_CODEC_TYPE_ENCA_AUDIO :
+            case ISOM_CODEC_TYPE_G719_AUDIO :
+            case ISOM_CODEC_TYPE_G726_AUDIO :
+            case ISOM_CODEC_TYPE_M4AE_AUDIO :
+            case ISOM_CODEC_TYPE_MLPA_AUDIO :
+            case ISOM_CODEC_TYPE_RAW_AUDIO :
+            case ISOM_CODEC_TYPE_SAMR_AUDIO :
+            case ISOM_CODEC_TYPE_SAWB_AUDIO :
+            case ISOM_CODEC_TYPE_SAWP_AUDIO :
+            case ISOM_CODEC_TYPE_SEVC_AUDIO :
+            case ISOM_CODEC_TYPE_SQCP_AUDIO :
+            case ISOM_CODEC_TYPE_SSMV_AUDIO :
+            case ISOM_CODEC_TYPE_TWOS_AUDIO :
+                /* NOTE: These audio codecs other than mp4a does not have appropriate pli. */
+                *visual_pli = MP4SYS_VISUAL_PLI_NOT_SPECIFIED;
+                break;
+            case ISOM_CODEC_TYPE_FDP_HINT :
+            case ISOM_CODEC_TYPE_M2TS_HINT :
+            case ISOM_CODEC_TYPE_PM2T_HINT :
+            case ISOM_CODEC_TYPE_PRTP_HINT :
+            case ISOM_CODEC_TYPE_RM2T_HINT :
+            case ISOM_CODEC_TYPE_RRTP_HINT :
+            case ISOM_CODEC_TYPE_RSRP_HINT :
+            case ISOM_CODEC_TYPE_RTP_HINT  :
+            case ISOM_CODEC_TYPE_SM2T_HINT :
+            case ISOM_CODEC_TYPE_SRTP_HINT :
+                /* FIXME: Do we have to set OD_profileLevelIndication? */
+                break;
+            case ISOM_CODEC_TYPE_IXSE_META :
+            case ISOM_CODEC_TYPE_METT_META :
+            case ISOM_CODEC_TYPE_METX_META :
+            case ISOM_CODEC_TYPE_MLIX_META :
+            case ISOM_CODEC_TYPE_OKSD_META :
+            case ISOM_CODEC_TYPE_SVCM_META :
+            case ISOM_CODEC_TYPE_TEXT_META :
+            case ISOM_CODEC_TYPE_URIM_META :
+            case ISOM_CODEC_TYPE_XML_META  :
+                /* FIXME: Do we have to set OD_profileLevelIndication? */
+                break;
+        }
+    }
+    return 0;
+}
+
+static int isom_add_iods( isom_root_t *root )
+{
+    if( !root || !root->moov || !root->moov->trak_list )
+        return -1;
+    if( root->moov->iods )
+        return 0;
+    isom_create_fullbox( iods, ISOM_BOX_TYPE_IODS );
+    iods->OD = mp4sys_create_ObjectDescriptor( 1 ); /* NOTE: Use 1 for ObjectDescriptorID of IOD. */
+    if( !iods->OD )
+    {
+        free( iods );
+        return -1;
+    }
+
+    mp4sys_audioProfileLevelIndication audio_pli = MP4SYS_AUDIO_PLI_NONE_REQUIRED;
+    mp4sys_visualProfileLevelIndication visual_pli = MP4SYS_VISUAL_PLI_NONE_REQUIRED;
+    for( isom_entry_t *entry = root->moov->trak_list->head; entry; entry = entry->next )
+    {
+        isom_trak_entry_t* trak = (isom_trak_entry_t*)entry->data;
+        if( !trak || !trak->tkhd )
+            return -1;
+        if( isom_scan_trak_profileLevelIndication( trak, &audio_pli, &visual_pli ) )
+            return -1;
+        if( mp4sys_add_ES_ID_Inc( iods->OD, trak->tkhd->track_ID ) )
+            return -1;
+    }
+    if( mp4sys_to_InitialObjectDescriptor( iods->OD,
+                                           0, /* FIXME: I'm not quite sure what the spec says. */
+                                           MP4SYS_OD_PLI_NONE_REQUIRED, MP4SYS_SCENE_PLI_NONE_REQUIRED,
+                                           audio_pli, visual_pli,
+                                           MP4SYS_GRAPHICS_PLI_NONE_REQUIRED ) )
+    {
+        free( iods );
+        return -1;
+    }
+    root->moov->iods = iods;
     return 0;
 }
 
@@ -1790,6 +1917,7 @@ void isom_remove_trak( isom_root_t *root, uint32_t trak_number )
 
 void isom_remove_iods( isom_iods_t *iods )
 {
+    mp4sys_remove_ObjectDescriptor( iods->OD );
     return;
 }
 
@@ -2757,6 +2885,16 @@ static int isom_write_trak( isom_bs_t *bs, isom_trak_entry_t *trak )
     return 0;
 }
 
+static int isom_write_iods( isom_root_t *root )
+{
+    if( !root || !root->moov || !root->moov->iods )
+        return -1;
+    isom_iods_t *iods = root->moov->iods;
+    isom_bs_t *bs = root->bs;
+    isom_bs_put_fullbox_header( bs, &iods->fullbox );
+    return mp4sys_write_ObjectDescriptor( bs, iods->OD );
+}
+
 static int isom_write_mvhd( isom_root_t *root )
 {
     if( !root || !root->moov || !root->moov->mvhd )
@@ -2799,6 +2937,8 @@ int isom_write_moov( isom_root_t *root )
     if( isom_bs_write_data( root->bs ) )
         return -1;
     if( isom_write_mvhd( root ) )
+        return -1;
+    if( isom_write_iods( root ) )
         return -1;
     if( root->moov->trak_list )
         for( isom_entry_t *entry = root->moov->trak_list->head; entry; entry = entry->next )
@@ -3943,10 +4083,10 @@ static uint64_t isom_update_mvhd_size( isom_root_t *root )
 
 static uint64_t isom_update_iods_size( isom_root_t *root )
 {
-    if( !root || !root->moov || !root->moov->iods )
+    if( !root || !root->moov || !root->moov->iods || !root->moov->iods->OD )
         return 0;
     isom_iods_t *iods = root->moov->iods;
-    uint64_t size = 12;
+    uint64_t size = mp4sys_update_ObjectDescriptor_size( root->moov->iods->OD );
     iods->fullbox.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + size;
     CHECK_LARGESIZE( iods->fullbox.size );
     return iods->fullbox.size;
@@ -4472,6 +4612,8 @@ int isom_finish_movie( isom_root_t *root )
         if( isom_set_track_mode( root, trak_number, ISOM_TRACK_ENABLED ) )
             return -1;
     }
+    if( isom_add_iods( root ) )
+        return -1;
     if( isom_check_mandatory_boxes( root ) ||
         isom_set_movie_creation_time( root ) ||
         isom_update_moov_size( root ) ||

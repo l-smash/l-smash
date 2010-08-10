@@ -562,6 +562,7 @@ typedef struct
 {
     ISOM_AUDIO_SAMPLE_ENTRY;
     isom_esds_t *esds;
+    mp4sys_audioProfileLevelIndication pli; /* This is not used in mp4a box itself, but the value is specific for that. */
 } isom_mp4a_entry_t;
 
 typedef struct
