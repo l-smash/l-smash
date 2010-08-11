@@ -1917,7 +1917,10 @@ void isom_remove_trak( isom_root_t *root, uint32_t trak_number )
 
 void isom_remove_iods( isom_iods_t *iods )
 {
+    if( !iods )
+        return;
     mp4sys_remove_ObjectDescriptor( iods->OD );
+    free( iods );
     return;
 }
 
