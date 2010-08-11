@@ -3929,11 +3929,28 @@ int isom_set_tyrant_chapter( isom_root_t *root, char *file_name )
         goto fail;
     while( fgets( buff, sizeof(buff), chapter ) != NULL )
     {
-        uint64_t hh, mm, ss, ms;
-        if( sscanf( buff, "%"SCNu64":%"SCNu64":%"SCNu64".%"SCNu64, &hh, &mm, &ss, &ms ) != 4 )
-            return -1;
+        /* skip empty line */
+        if( buff[0] == '\n' || buff[0] == '\r' )
+            continue;
+        /* remove newline codes */
+        char *tail = &buff[ strlen( buff ) - 1 ];
+        if( *tail == '\n' || *tail == '\r' )
+        {
+            if( tail > buff && *tail == '\n' && *(tail-1) == '\r' )
+            {
+                *tail = '\0';
+                *(tail-1) = '\0';
+            }
+            else
+                *tail = '\0';
+        }
+        /* get chapter_name */
         char *chapter_name = strchr( buff, ' ' );   /* find separator */
         if( !chapter_name || strlen( buff ) <= ++chapter_name - buff )
+            goto fail;
+        /* get start_time */
+        uint64_t hh, mm, ss, ms;
+        if( sscanf( buff, "%"SCNu64":%"SCNu64":%"SCNu64".%"SCNu64, &hh, &mm, &ss, &ms ) != 4 )
             goto fail;
         /* start_time will overflow at 512409557:36:10.956 */
         if( hh > 512409556 || mm > 59 || ss > 59 || ms > 999 )
