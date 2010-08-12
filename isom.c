@@ -70,19 +70,19 @@ void isom_remove_sample( isom_sample_t *sample )
     free( sample );
 }
 
-#define isom_create_box( box_name, box_4cc ) \
+#define isom_create_basebox( box_name, box_4cc ) \
     isom_##box_name##_t *(box_name) = malloc( sizeof(isom_##box_name##_t) ); \
     if( !(box_name) ) \
         return -1; \
     memset( box_name, 0, sizeof(isom_##box_name##_t) ); \
-    isom_init_box_header( &((box_name)->box_header), box_4cc )
+    isom_init_base_header( &((box_name)->base_header), box_4cc )
 
 #define isom_create_fullbox( box_name, box_4cc ) \
     isom_##box_name##_t *(box_name) = malloc( sizeof(isom_##box_name##_t) ); \
     if( !(box_name) ) \
         return -1; \
     memset( box_name, 0, sizeof(isom_##box_name##_t) ); \
-    isom_init_fullbox_header( &((box_name)->fullbox), box_4cc )
+    isom_init_full_header( &((box_name)->full_header), box_4cc )
 
 #define isom_create_list_fullbox( box_name, box_4cc ) \
     isom_create_fullbox( box_name, box_4cc ); \
@@ -94,14 +94,14 @@ void isom_remove_sample( isom_sample_t *sample )
     }
 /*---- ----*/
 
-static inline void isom_init_box_header( isom_box_head_t *bh, uint32_t type )
+static inline void isom_init_base_header( isom_base_header_t *bh, uint32_t type )
 {
     bh->size     = 0;
     bh->type     = type;
     bh->usertype = NULL;
 }
 
-static inline void isom_init_fullbox_header( isom_fullbox_head_t *fbh, uint32_t type )
+static inline void isom_init_full_header( isom_full_header_t *fbh, uint32_t type )
 {
     fbh->size     = 0;
     fbh->type     = type;
@@ -110,7 +110,7 @@ static inline void isom_init_fullbox_header( isom_fullbox_head_t *fbh, uint32_t 
     fbh->flags    = 0;
 }
 
-static void isom_bs_put_box_header( isom_bs_t *bs, isom_box_head_t *bh )
+static void isom_bs_put_base_header( isom_bs_t *bs, isom_base_header_t *bh )
 {
     if( bh->size > UINT32_MAX )
     {
@@ -127,11 +127,11 @@ static void isom_bs_put_box_header( isom_bs_t *bs, isom_box_head_t *bh )
         isom_bs_put_bytes( bs, bh->usertype, 16 );
 }
 
-static void isom_bs_put_fullbox_header( isom_bs_t *bs, isom_fullbox_head_t *fbh )
+static void isom_bs_put_full_header( isom_bs_t *bs, isom_full_header_t *fbh )
 {
-    isom_box_head_t bh;
-    memcpy( &bh, fbh, sizeof(isom_box_head_t) );
-    isom_bs_put_box_header( bs, &bh );
+    isom_base_header_t bh;
+    memcpy( &bh, fbh, sizeof(isom_base_header_t) );
+    isom_bs_put_base_header( bs, &bh );
     isom_bs_put_byte( bs, fbh->version );
     isom_bs_put_be24( bs, fbh->flags );
 }
@@ -172,7 +172,7 @@ int isom_add_elst_entry( isom_root_t *root, uint32_t trak_number, uint64_t segme
         return -1;
     }
     if( data->segment_duration > UINT32_MAX || data->media_time > UINT32_MAX )
-        trak->edts->elst->fullbox.version = 1;
+        trak->edts->elst->full_header.version = 1;
     return 0;
 }
 
@@ -185,8 +185,8 @@ int isom_add_dref_entry( isom_root_t *root, uint32_t trak_number, uint32_t flags
     if( !data )
         return -1;
     memset( data, 0, sizeof(isom_dref_entry_t) );
-    isom_init_fullbox_header( &data->fullbox, name ? ISOM_BOX_TYPE_URN : ISOM_BOX_TYPE_URL );
-    data->fullbox.flags = flags;
+    isom_init_full_header( &data->full_header, name ? ISOM_BOX_TYPE_URN : ISOM_BOX_TYPE_URL );
+    data->full_header.flags = flags;
     if( location )
     {
         data->location_length = strlen( location ) + 1;
@@ -316,7 +316,7 @@ static int isom_add_avc_entry( isom_entry_list_t *list, uint32_t sample_type )
     if( !avc )
         return -1;
     memset( avc, 0, sizeof(isom_avc_entry_t) );
-    isom_init_box_header( &avc->box_header, sample_type );
+    isom_init_base_header( &avc->base_header, sample_type );
     avc->data_reference_index = 1;
     avc->horizresolution = avc->vertresolution = 0x00480000;
     avc->frame_count = 1;
@@ -350,7 +350,7 @@ static int isom_add_mp4v_entry( isom_entry_list_t *list )
     if( !mp4v )
         return -1;
     memset( mp4v, 0, sizeof(isom_mp4v_entry_t) );
-    isom_init_box_header( &mp4v->box_header, ISOM_CODEC_TYPE_MP4V_VIDEO );
+    isom_init_base_header( &mp4v->base_header, ISOM_CODEC_TYPE_MP4V_VIDEO );
     mp4v->data_reference_index = 1;
     mp4v->horizresolution = mp4v->vertresolution = 0x00480000;
     mp4v->frame_count = 1;
@@ -406,7 +406,7 @@ static int isom_add_mp4a_entry( isom_entry_list_t *list, mp4sys_audio_summary_t*
         return -1;
     }
     memset( mp4a, 0, sizeof(isom_mp4a_entry_t) );
-    isom_init_box_header( &mp4a->box_header, ISOM_CODEC_TYPE_MP4A_AUDIO );
+    isom_init_base_header( &mp4a->base_header, ISOM_CODEC_TYPE_MP4A_AUDIO );
     mp4a->data_reference_index = 1;
     /* In pure mp4 file, these "template" fields shall be default values according to the spec.
        But not pure - hybrid with other spec - mp4 file can take other values.
@@ -435,7 +435,7 @@ static int isom_add_mp4s_entry( isom_entry_list_t *list )
     if( !mp4s )
         return -1;
     memset( mp4s, 0, sizeof(isom_mp4s_entry_t) );
-    isom_init_box_header( &mp4s->box_header, ISOM_CODEC_TYPE_MP4S_SYSTEM );
+    isom_init_base_header( &mp4s->base_header, ISOM_CODEC_TYPE_MP4S_SYSTEM );
     mp4s->data_reference_index = 1;
     if( isom_add_entry( list, mp4s ) )
     {
@@ -453,7 +453,7 @@ static int isom_add_visual_entry( isom_entry_list_t *list, uint32_t sample_type 
     if( !visual )
         return -1;
     memset( visual, 0, sizeof(isom_visual_entry_t) );
-    isom_init_box_header( &visual->box_header, sample_type );
+    isom_init_base_header( &visual->base_header, sample_type );
     visual->data_reference_index = 1;
     visual->horizresolution = visual->vertresolution = 0x00480000;
     visual->frame_count = 1;
@@ -476,7 +476,7 @@ static int isom_add_audio_entry( isom_entry_list_t *list, uint32_t sample_type )
     if( !audio )
         return -1;
     memset( audio, 0, sizeof(isom_audio_entry_t) );
-    isom_init_box_header( &audio->box_header, sample_type );
+    isom_init_base_header( &audio->base_header, sample_type );
     audio->data_reference_index = 1;
     audio->channelcount = 2;
     audio->samplesize = 16;
@@ -846,8 +846,8 @@ static int isom_add_ftyp( isom_root_t *root )
 {
     if( root->ftyp )
         return -1;
-    isom_create_box( ftyp, ISOM_BOX_TYPE_FTYP );
-    ftyp->box_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 8;
+    isom_create_basebox( ftyp, ISOM_BOX_TYPE_FTYP );
+    ftyp->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 8;
     root->ftyp = ftyp;
     return 0;
 }
@@ -856,7 +856,7 @@ static int isom_add_moov( isom_root_t *root )
 {
     if( root->moov )
         return -1;
-    isom_create_box( moov, ISOM_BOX_TYPE_MOOV );
+    isom_create_basebox( moov, ISOM_BOX_TYPE_MOOV );
     root->moov = moov;
     return 0;
 }
@@ -891,7 +891,7 @@ static int isom_scan_trak_profileLevelIndication( isom_trak_entry_t* trak, mp4sy
         isom_sample_entry_t* sample_entry = (isom_sample_entry_t*)entry->data;
         if( !sample_entry )
             return -1;
-        switch( sample_entry->box_header.type )
+        switch( sample_entry->base_header.type )
         {
             case ISOM_CODEC_TYPE_AVC1_VIDEO :
             case ISOM_CODEC_TYPE_AVC2_VIDEO :
@@ -1053,7 +1053,7 @@ int isom_add_edts( isom_root_t *root, uint32_t trak_number )
         return -1;
     if( !trak->edts )
     {
-        isom_create_box( edts, ISOM_BOX_TYPE_EDTS );
+        isom_create_basebox( edts, ISOM_BOX_TYPE_EDTS );
         trak->edts = edts;
         if( isom_add_elst( root, trak_number ) )
             return -1;
@@ -1068,7 +1068,7 @@ static int isom_add_mdia( isom_root_t *root, uint32_t trak_number )
         return -1;
     if( !trak->mdia )
     {
-        isom_create_box( mdia, ISOM_BOX_TYPE_MDIA );
+        isom_create_basebox( mdia, ISOM_BOX_TYPE_MDIA );
         trak->mdia = mdia;
     }
     return 0;
@@ -1095,7 +1095,7 @@ static int isom_add_minf( isom_root_t *root, uint32_t trak_number )
         return -1;
     if( !trak->mdia->minf )
     {
-        isom_create_box( minf, ISOM_BOX_TYPE_MINF );
+        isom_create_basebox( minf, ISOM_BOX_TYPE_MINF );
         trak->mdia->minf = minf;
     }
     return 0;
@@ -1128,7 +1128,7 @@ static int isom_add_vmhd( isom_root_t *root, uint32_t trak_number )
     if( !trak->mdia->minf->vmhd )
     {
         isom_create_fullbox( vmhd, ISOM_BOX_TYPE_VMHD );
-        vmhd->fullbox.flags = 0x000001;
+        vmhd->full_header.flags = 0x000001;
         trak->mdia->minf->vmhd = vmhd;
     }
     return 0;
@@ -1180,7 +1180,7 @@ static int isom_add_dinf( isom_root_t *root, uint32_t trak_number )
         return -1;
     if( !trak->mdia->minf->dinf )
     {
-        isom_create_box( dinf, ISOM_BOX_TYPE_DINF );
+        isom_create_basebox( dinf, ISOM_BOX_TYPE_DINF );
         trak->mdia->minf->dinf = dinf;
     }
     return 0;
@@ -1208,7 +1208,7 @@ static int isom_add_stbl( isom_root_t *root, uint32_t trak_number )
         return -1;
     if( !trak->mdia->minf->stbl )
     {
-        isom_create_box( stbl, ISOM_BOX_TYPE_STBL );
+        isom_create_basebox( stbl, ISOM_BOX_TYPE_STBL );
         trak->mdia->minf->stbl = stbl;
     }
     return 0;
@@ -1235,7 +1235,7 @@ int isom_add_pasp( isom_root_t *root, uint32_t trak_number, uint32_t entry_numbe
     isom_visual_entry_t *visual = (isom_visual_entry_t *)isom_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
     if( !visual )
         return -1;
-    isom_create_box( pasp, ISOM_BOX_TYPE_PASP );
+    isom_create_basebox( pasp, ISOM_BOX_TYPE_PASP );
     visual->pasp = pasp;
     return 0;
 }
@@ -1247,7 +1247,7 @@ static int isom_add_avcC( isom_entry_list_t *list )
     isom_avc_entry_t *data = (isom_avc_entry_t *)isom_get_entry_data( list, list->entry_count );
     if( !data )
         return -1;
-    isom_create_box( avcC, ISOM_BOX_TYPE_AVCC );
+    isom_create_basebox( avcC, ISOM_BOX_TYPE_AVCC );
     avcC->sequenceParameterSets = isom_create_entry_list();
     if( !avcC->sequenceParameterSets )
     {
@@ -1278,7 +1278,7 @@ int isom_add_btrt( isom_root_t *root, uint32_t trak_number, uint32_t entry_numbe
     isom_avc_entry_t *data = isom_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
     if( !data )
         return -1;
-    isom_create_box( btrt, ISOM_BOX_TYPE_BTRT );
+    isom_create_basebox( btrt, ISOM_BOX_TYPE_BTRT );
     data->btrt = btrt;
     return 0;
 }
@@ -1407,7 +1407,7 @@ static int isom_add_sgpd( isom_root_t *root, uint32_t trak_number, uint32_t grou
         return -1;
     isom_sgpd_t *sgpd = sgpd_array + grouping_count - 1;
     memset( sgpd, 0, sizeof(isom_sgpd_t) );
-    isom_init_fullbox_header( &sgpd->fullbox, ISOM_BOX_TYPE_SGPD );
+    isom_init_full_header( &sgpd->full_header, ISOM_BOX_TYPE_SGPD );
     sgpd->list = isom_create_entry_list();
     if( !sgpd->list )
     {
@@ -1438,7 +1438,7 @@ int isom_add_sbgp( isom_root_t *root, uint32_t trak_number, uint32_t grouping_ty
         return -1;
     isom_sbgp_t *sbgp = sbgp_array + grouping_count - 1;
     memset( sbgp, 0, sizeof(isom_sbgp_t) );
-    isom_init_fullbox_header( &sbgp->fullbox, ISOM_BOX_TYPE_SBGP );
+    isom_init_full_header( &sbgp->full_header, ISOM_BOX_TYPE_SBGP );
     sbgp->list = isom_create_entry_list();
     if( !sbgp->list )
     {
@@ -1461,7 +1461,7 @@ int isom_add_chpl( isom_root_t *root )
     if( !root->moov->udta->chpl )
     {
         isom_create_list_fullbox( chpl, ISOM_BOX_TYPE_CHPL );
-        chpl->fullbox.version = 1;
+        chpl->full_header.version = 1;
         root->moov->udta->chpl = chpl;
     }
     return 0;
@@ -1476,7 +1476,7 @@ int isom_add_udta( isom_root_t *root, uint32_t trak_number )
             return -1;
         if( root->moov->udta )
             return 0;
-        isom_create_box( udta, ISOM_BOX_TYPE_UDTA );
+        isom_create_basebox( udta, ISOM_BOX_TYPE_UDTA );
         root->moov->udta = udta;
         return 0;
     }
@@ -1485,7 +1485,7 @@ int isom_add_udta( isom_root_t *root, uint32_t trak_number )
         return -1;
     if( trak->udta )
         return 0;
-    isom_create_box( udta, ISOM_BOX_TYPE_UDTA );
+    isom_create_basebox( udta, ISOM_BOX_TYPE_UDTA );
     trak->udta = udta;
     return 0;
 }
@@ -1501,7 +1501,7 @@ int isom_add_trak( isom_root_t *root, uint32_t hdlr_type )
         if( !moov->trak_list )
             return -1;
     }
-    isom_create_box( trak_entry, ISOM_BOX_TYPE_TRAK );
+    isom_create_basebox( trak_entry, ISOM_BOX_TYPE_TRAK );
     isom_cache_t *cache = malloc( sizeof(isom_cache_t) );
     if( !cache )
         return -1;
@@ -1548,7 +1548,7 @@ int isom_add_free( isom_root_t *root, uint8_t *data, uint64_t data_length )
         return -1;
     if( !root->free )
     {
-        isom_create_box( skip, ISOM_BOX_TYPE_FREE );
+        isom_create_basebox( skip, ISOM_BOX_TYPE_FREE );
         root->free = skip;
     }
     if( data && data_length )
@@ -1565,7 +1565,7 @@ int isom_add_mdat( isom_root_t *root )
         isom_write_mdat_size( root );   /* flush a current mdat */
     else
     {
-        isom_create_box( mdat, ISOM_BOX_TYPE_MDAT );
+        isom_create_basebox( mdat, ISOM_BOX_TYPE_MDAT );
         root->mdat = mdat;
     }
     isom_write_mdat_header( root );     /* start a new mdat */
@@ -1641,7 +1641,7 @@ static void isom_remove_stsd( isom_stsd_t *stsd )
             entry = next;
             continue;
         }
-        switch( sample->box_header.type )
+        switch( sample->base_header.type )
         {
             case ISOM_CODEC_TYPE_AVC1_VIDEO :
             case ISOM_CODEC_TYPE_AVC2_VIDEO :
@@ -1988,7 +1988,7 @@ int isom_write_ftyp( isom_root_t *root )
 {
     isom_bs_t *bs = root->bs;
     isom_ftyp_t *ftyp = root->ftyp;
-    isom_bs_put_box_header( bs, &ftyp->box_header );
+    isom_bs_put_base_header( bs, &ftyp->base_header );
     isom_bs_put_be32( bs, ftyp->major_brand );
     isom_bs_put_be32( bs, ftyp->minor_version );
     for( uint32_t i = 0; i < ftyp->brand_count; i++ )
@@ -2003,8 +2003,8 @@ static int isom_write_tkhd( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_tkhd_t *tkhd = trak->tkhd;
     if( !tkhd )
         return -1;
-    isom_bs_put_fullbox_header( bs, &tkhd->fullbox );
-    if( tkhd->fullbox.version )
+    isom_bs_put_full_header( bs, &tkhd->full_header );
+    if( tkhd->full_header.version )
     {
         isom_bs_put_be64( bs, tkhd->creation_time );
         isom_bs_put_be64( bs, tkhd->modification_time );
@@ -2041,14 +2041,14 @@ int isom_write_elst( isom_bs_t *bs, isom_trak_entry_t *trak )
         return -1;
     if( !elst->list->entry_count )
         return 0;
-    isom_bs_put_fullbox_header( bs, &elst->fullbox );
+    isom_bs_put_full_header( bs, &elst->full_header );
     isom_bs_put_be32( bs, elst->list->entry_count );
     for( isom_entry_t *entry = elst->list->head; entry; entry = entry->next )
     {
         isom_elst_entry_t *data = (isom_elst_entry_t *)entry->data;
         if( !data )
             return -1;
-        if( elst->fullbox.version )
+        if( elst->full_header.version )
         {
             isom_bs_put_be64( bs, data->segment_duration );
             isom_bs_put_be64( bs, data->media_time );
@@ -2070,7 +2070,7 @@ int isom_write_edts( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_edts_t *edts = trak->edts;
     if( !edts )
         return 0;
-    isom_bs_put_box_header( bs, &edts->box_header );
+    isom_bs_put_base_header( bs, &edts->base_header );
     if( isom_bs_write_data( bs ) )
         return -1;
     if( isom_write_elst( bs, trak ) )
@@ -2083,8 +2083,8 @@ static int isom_write_mdhd( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_mdhd_t *mdhd = trak->mdia->mdhd;
     if( !mdhd )
         return -1;
-    isom_bs_put_fullbox_header( bs, &mdhd->fullbox );
-    if( mdhd->fullbox.version )
+    isom_bs_put_full_header( bs, &mdhd->full_header );
+    if( mdhd->full_header.version )
     {
         isom_bs_put_be64( bs, mdhd->creation_time );
         isom_bs_put_be64( bs, mdhd->modification_time );
@@ -2110,7 +2110,7 @@ static int isom_write_hdlr( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_hdlr_t *hdlr = trak->mdia->hdlr;
     if( !hdlr )
         return -1;
-    isom_bs_put_fullbox_header( bs, &hdlr->fullbox );
+    isom_bs_put_full_header( bs, &hdlr->full_header );
     isom_bs_put_be32( bs, hdlr->pre_defined );
     isom_bs_put_be32( bs, hdlr->handler_type );
     for( uint32_t i = 0; i < 3; i++ )
@@ -2126,7 +2126,7 @@ static int isom_write_vmhd( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_vmhd_t *vmhd = trak->mdia->minf->vmhd;
     if( !vmhd )
         return -1;
-    isom_bs_put_fullbox_header( bs, &vmhd->fullbox );
+    isom_bs_put_full_header( bs, &vmhd->full_header );
     isom_bs_put_be16( bs, vmhd->graphicsmode );
     for( uint32_t i = 0; i < 3; i++ )
         isom_bs_put_be16( bs, vmhd->opcolor[i] );
@@ -2140,7 +2140,7 @@ static int isom_write_smhd( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_smhd_t *smhd = trak->mdia->minf->smhd;
     if( !smhd )
         return -1;
-    isom_bs_put_fullbox_header( bs, &smhd->fullbox );
+    isom_bs_put_full_header( bs, &smhd->full_header );
     isom_bs_put_be16( bs, smhd->balance );
     isom_bs_put_be16( bs, smhd->reserved );
     if( isom_bs_write_data( bs ) )
@@ -2153,7 +2153,7 @@ static int isom_write_hmhd( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_hmhd_t *hmhd = trak->mdia->minf->hmhd;
     if( !hmhd )
         return -1;
-    isom_bs_put_fullbox_header( bs, &hmhd->fullbox );
+    isom_bs_put_full_header( bs, &hmhd->full_header );
     isom_bs_put_be16( bs, hmhd->maxPDUsize );
     isom_bs_put_be16( bs, hmhd->avgPDUsize );
     isom_bs_put_be32( bs, hmhd->maxbitrate );
@@ -2169,7 +2169,7 @@ static int isom_write_nmhd( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_nmhd_t *nmhd = trak->mdia->minf->nmhd;
     if( !nmhd )
         return -1;
-    isom_bs_put_fullbox_header( bs, &nmhd->fullbox );
+    isom_bs_put_full_header( bs, &nmhd->full_header );
     if( isom_bs_write_data( bs ) )
         return -1;
     return 0;
@@ -2180,15 +2180,15 @@ static int isom_write_dref( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_dref_t *dref = trak->mdia->minf->dinf->dref;
     if( !dref || !dref->list )
         return -1;
-    isom_bs_put_fullbox_header( bs, &dref->fullbox );
+    isom_bs_put_full_header( bs, &dref->full_header );
     isom_bs_put_be32( bs, dref->list->entry_count );
     for( isom_entry_t *entry = dref->list->head; entry; entry = entry->next )
     {
         isom_dref_entry_t *data = (isom_dref_entry_t *)entry->data;
         if( !data )
             return -1;
-        isom_bs_put_fullbox_header( bs, &data->fullbox );
-        if( data->fullbox.type == ISOM_BOX_TYPE_URN )
+        isom_bs_put_full_header( bs, &data->full_header );
+        if( data->full_header.type == ISOM_BOX_TYPE_URN )
             isom_bs_put_bytes( bs, data->name, data->name_length );
         isom_bs_put_bytes( bs, data->location, data->location_length );
     }
@@ -2202,7 +2202,7 @@ static int isom_write_dinf( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_dinf_t *dinf = trak->mdia->minf->dinf;
     if( !dinf )
         return -1;
-    isom_bs_put_box_header( bs, &dinf->box_header );
+    isom_bs_put_base_header( bs, &dinf->base_header );
     if( isom_bs_write_data( bs ) )
         return -1;
     if( isom_write_dref( bs, trak ) )
@@ -2214,7 +2214,7 @@ static void isom_put_pasp( isom_bs_t *bs, isom_pasp_t *pasp )
 {
     if( !pasp )
         return;
-    isom_bs_put_box_header( bs, &pasp->box_header );
+    isom_bs_put_base_header( bs, &pasp->base_header );
     isom_bs_put_be32( bs, pasp->hSpacing );
     isom_bs_put_be32( bs, pasp->vSpacing );
     return;
@@ -2224,7 +2224,7 @@ static void isom_put_clap( isom_bs_t *bs, isom_clap_t *clap )
 {
     if( !clap )
         return;
-    isom_bs_put_box_header( bs, &clap->box_header );
+    isom_bs_put_base_header( bs, &clap->base_header );
     isom_bs_put_be32( bs, clap->cleanApertureWidthN );
     isom_bs_put_be32( bs, clap->cleanApertureWidthD );
     isom_bs_put_be32( bs, clap->cleanApertureHeightN );
@@ -2253,7 +2253,7 @@ static int isom_put_avcC( isom_bs_t *bs, isom_avcC_t *avcC )
 {
     if( !bs || !avcC || !avcC->sequenceParameterSets || !avcC->pictureParameterSets )
         return -1;
-    isom_bs_put_box_header( bs, &avcC->box_header );
+    isom_bs_put_base_header( bs, &avcC->base_header );
     isom_bs_put_byte( bs, avcC->configurationVersion );
     isom_bs_put_byte( bs, avcC->AVCProfileIndication );
     isom_bs_put_byte( bs, avcC->profile_compatibility );
@@ -2281,7 +2281,7 @@ static void isom_put_btrt( isom_bs_t *bs, isom_btrt_t *btrt )
 {
     if( !bs || !btrt )
         return;
-    isom_bs_put_box_header( bs, &btrt->box_header );
+    isom_bs_put_base_header( bs, &btrt->base_header );
     isom_bs_put_be32( bs, btrt->bufferSizeDB );
     isom_bs_put_be32( bs, btrt->maxBitrate );
     isom_bs_put_be32( bs, btrt->avgBitrate );
@@ -2292,7 +2292,7 @@ static int isom_write_esds( isom_bs_t *bs, isom_esds_t *esds )
 {
     if( !bs || !esds )
         return -1;
-    isom_bs_put_fullbox_header( bs, &esds->fullbox );
+    isom_bs_put_full_header( bs, &esds->full_header );
     return mp4sys_write_ES_Descriptor( bs, esds->ES );
 }
 
@@ -2303,7 +2303,7 @@ static int isom_write_avc_entry( isom_bs_t *bs, isom_stsd_t *stsd )
         isom_avc_entry_t *data = (isom_avc_entry_t *)entry->data;
         if( !data )
             return -1;
-        isom_bs_put_box_header( bs, &data->box_header );
+        isom_bs_put_base_header( bs, &data->base_header );
         isom_bs_put_bytes( bs, data->reserved, 6 );
         isom_bs_put_be16( bs, data->data_reference_index );
         isom_bs_put_be16( bs, data->pre_defined1 );
@@ -2339,7 +2339,7 @@ static int isom_write_mp4a_entry( isom_bs_t *bs, isom_stsd_t *stsd )
         isom_mp4a_entry_t *data = (isom_mp4a_entry_t *)entry->data;
         if( !data )
             return -1;
-        isom_bs_put_box_header( bs, &data->box_header );
+        isom_bs_put_base_header( bs, &data->base_header );
         isom_bs_put_bytes( bs, data->reserved, 6 );
         isom_bs_put_be16( bs, data->data_reference_index );
         isom_bs_put_be32( bs, data->reserved1[0] );
@@ -2364,7 +2364,7 @@ static int isom_write_visual_entry( isom_bs_t *bs, isom_stsd_t *stsd )
         isom_visual_entry_t *data = (isom_visual_entry_t *)entry->data;
         if( !data )
             return -1;
-        isom_bs_put_box_header( bs, &data->box_header );
+        isom_bs_put_base_header( bs, &data->base_header );
         isom_bs_put_bytes( bs, data->reserved, 6 );
         isom_bs_put_be16( bs, data->data_reference_index );
         isom_bs_put_be16( bs, data->pre_defined1 );
@@ -2382,7 +2382,7 @@ static int isom_write_visual_entry( isom_bs_t *bs, isom_stsd_t *stsd )
         isom_bs_put_be16( bs, data->pre_defined3 );
         isom_put_clap( bs, data->clap );
         isom_put_pasp( bs, data->pasp );
-        if( data->box_header.type == ISOM_CODEC_TYPE_AVC1_VIDEO )
+        if( data->base_header.type == ISOM_CODEC_TYPE_AVC1_VIDEO )
         {
             isom_avc_entry_t *avc = (isom_avc_entry_t *)data;
             if( !avc || !avc->avcC )
@@ -2404,7 +2404,7 @@ static int isom_write_audio_entry( isom_bs_t *bs, isom_stsd_t *stsd )
         isom_audio_entry_t *data = (isom_audio_entry_t *)entry->data;
         if( !data )
             return -1;
-        isom_bs_put_box_header( bs, &data->box_header );
+        isom_bs_put_base_header( bs, &data->base_header );
         isom_bs_put_bytes( bs, data->reserved, 6 );
         isom_bs_put_be16( bs, data->data_reference_index );
         isom_bs_put_be32( bs, data->reserved1[0] );
@@ -2427,7 +2427,7 @@ static int isom_write_hint_entry( isom_bs_t *bs, isom_stsd_t *stsd )
         isom_hint_entry_t *data = (isom_hint_entry_t *)entry->data;
         if( !data )
             return -1;
-        isom_bs_put_box_header( bs, &data->box_header );
+        isom_bs_put_base_header( bs, &data->base_header );
         isom_bs_put_bytes( bs, data->reserved, 6 );
         isom_bs_put_be16( bs, data->data_reference_index );
         if( data->data && data->data_length )
@@ -2445,7 +2445,7 @@ static int isom_write_metadata_entry( isom_bs_t *bs, isom_stsd_t *stsd )
         isom_metadata_entry_t *data = (isom_metadata_entry_t *)entry->data;
         if( !data )
             return -1;
-        isom_bs_put_box_header( bs, &data->box_header );
+        isom_bs_put_base_header( bs, &data->base_header );
         isom_bs_put_bytes( bs, data->reserved, 6 );
         isom_bs_put_be16( bs, data->data_reference_index );
         if( isom_bs_write_data( bs ) )
@@ -2459,14 +2459,14 @@ static int isom_write_stsd( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_stsd_t *stsd = trak->mdia->minf->stbl->stsd;
     if( !stsd || !stsd->list || !stsd->list->head )
         return -1;
-    isom_bs_put_fullbox_header( bs, &stsd->fullbox );
+    isom_bs_put_full_header( bs, &stsd->full_header );
     isom_bs_put_be32( bs, stsd->list->entry_count );
     for( isom_entry_t *entry = stsd->list->head; entry; entry = entry->next )
     {
         isom_sample_entry_t *sample = (isom_sample_entry_t *)entry->data;
         if( !sample )
             return -1;
-        switch( sample->box_header.type )
+        switch( sample->base_header.type )
         {
             case ISOM_CODEC_TYPE_AVC1_VIDEO :
             case ISOM_CODEC_TYPE_AVC2_VIDEO :
@@ -2541,7 +2541,7 @@ static int isom_write_stts( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_stts_t *stts = trak->mdia->minf->stbl->stts;
     if( !stts || !stts->list )
         return -1;
-    isom_bs_put_fullbox_header( bs, &stts->fullbox );
+    isom_bs_put_full_header( bs, &stts->full_header );
     isom_bs_put_be32( bs, stts->list->entry_count );
     for( isom_entry_t *entry = stts->list->head; entry; entry = entry->next )
     {
@@ -2563,7 +2563,7 @@ static int isom_write_ctts( isom_bs_t *bs, isom_trak_entry_t *trak )
         return 0;
     if( !ctts->list )
         return -1;
-    isom_bs_put_fullbox_header( bs, &ctts->fullbox );
+    isom_bs_put_full_header( bs, &ctts->full_header );
     isom_bs_put_be32( bs, ctts->list->entry_count );
     for( isom_entry_t *entry = ctts->list->head; entry; entry = entry->next )
     {
@@ -2583,7 +2583,7 @@ static int isom_write_stsz( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_stsz_t *stsz = trak->mdia->minf->stbl->stsz;
     if( !stsz )
         return -1;
-    isom_bs_put_fullbox_header( bs, &stsz->fullbox );
+    isom_bs_put_full_header( bs, &stsz->full_header );
     isom_bs_put_be32( bs, stsz->sample_size );
     isom_bs_put_be32( bs, stsz->sample_count );
     if( stsz->sample_size == 0 && stsz->list )
@@ -2606,7 +2606,7 @@ static int isom_write_stss( isom_bs_t *bs, isom_trak_entry_t *trak )
         return 0;   /* If the sync sample box is not present, every sample is a random access point. */
     if( !stss->list )
         return -1;
-    isom_bs_put_fullbox_header( bs, &stss->fullbox );
+    isom_bs_put_full_header( bs, &stss->full_header );
     isom_bs_put_be32( bs, stss->list->entry_count );
     for( isom_entry_t *entry = stss->list->head; entry; entry = entry->next )
     {
@@ -2627,7 +2627,7 @@ static int isom_write_sdtp( isom_bs_t *bs, isom_trak_entry_t *trak )
         return 0;
     if( !sdtp->list )
         return -1;
-    isom_bs_put_fullbox_header( bs, &sdtp->fullbox );
+    isom_bs_put_full_header( bs, &sdtp->full_header );
     for( isom_entry_t *entry = sdtp->list->head; entry; entry = entry->next )
     {
         isom_sdtp_entry_t *data = (isom_sdtp_entry_t *)entry->data;
@@ -2648,7 +2648,7 @@ static int isom_write_stsc( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_stsc_t *stsc = trak->mdia->minf->stbl->stsc;
     if( !stsc || !stsc->list )
         return -1;
-    isom_bs_put_fullbox_header( bs, &stsc->fullbox );
+    isom_bs_put_full_header( bs, &stsc->full_header );
     isom_bs_put_be32( bs, stsc->list->entry_count );
     for( isom_entry_t *entry = stsc->list->head; entry; entry = entry->next )
     {
@@ -2669,7 +2669,7 @@ static int isom_write_co64( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_stco_t *co64 = trak->mdia->minf->stbl->stco;
     if( !co64 || !co64->list )
         return -1;
-    isom_bs_put_fullbox_header( bs, &co64->fullbox );
+    isom_bs_put_full_header( bs, &co64->full_header );
     isom_bs_put_be32( bs, co64->list->entry_count );
     for( isom_entry_t *entry = co64->list->head; entry; entry = entry->next )
     {
@@ -2690,7 +2690,7 @@ static int isom_write_stco( isom_bs_t *bs, isom_trak_entry_t *trak )
         return -1;
     if( stco->large_presentation )
         return isom_write_co64( bs, trak );
-    isom_bs_put_fullbox_header( bs, &stco->fullbox );
+    isom_bs_put_full_header( bs, &stco->full_header );
     isom_bs_put_be32( bs, stco->list->entry_count );
     for( isom_entry_t *entry = stco->list->head; entry; entry = entry->next )
     {
@@ -2709,7 +2709,7 @@ static int isom_write_sbgp( isom_bs_t *bs, isom_trak_entry_t *trak, uint32_t gro
     isom_sbgp_t *sbgp = trak->mdia->minf->stbl->sbgp + grouping_number - 1;
     if( !sbgp || !sbgp->list )
         return -1;
-    isom_bs_put_fullbox_header( bs, &sbgp->fullbox );
+    isom_bs_put_full_header( bs, &sbgp->full_header );
     isom_bs_put_be32( bs, sbgp->grouping_type );
     isom_bs_put_be32( bs, sbgp->list->entry_count );
     for( isom_entry_t *entry = sbgp->list->head; entry; entry = entry->next )
@@ -2730,16 +2730,16 @@ static int isom_write_sgpd( isom_bs_t *bs, isom_trak_entry_t *trak, uint32_t gro
     isom_sgpd_t *sgpd = trak->mdia->minf->stbl->sgpd + grouping_number - 1;
     if( !sgpd || !sgpd->list )
         return -1;
-    isom_bs_put_fullbox_header( bs, &sgpd->fullbox );
+    isom_bs_put_full_header( bs, &sgpd->full_header );
     isom_bs_put_be32( bs, sgpd->grouping_type );
-    if( sgpd->fullbox.version == 1 )
+    if( sgpd->full_header.version == 1 )
         isom_bs_put_be32( bs, sgpd->default_length );
     isom_bs_put_be32( bs, sgpd->list->entry_count );
     for( isom_entry_t *entry = sgpd->list->head; entry; entry = entry->next )
     {
         if( !entry->data )
             return -1;
-        if( sgpd->fullbox.version == 1 && !sgpd->default_length )
+        if( sgpd->full_header.version == 1 && !sgpd->default_length )
             isom_bs_put_be32( bs, ((isom_sample_group_entry_t *)entry->data)->description_length );
         switch( sgpd->grouping_type )
         {
@@ -2763,7 +2763,7 @@ static int isom_write_stbl( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     if( !stbl )
         return -1;
-    isom_bs_put_box_header( bs, &stbl->box_header );
+    isom_bs_put_base_header( bs, &stbl->base_header );
     if( isom_bs_write_data( bs ) )
         return -1;
     if( isom_write_stsd( bs, trak ) )
@@ -2797,7 +2797,7 @@ static int isom_write_minf( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_minf_t *minf = trak->mdia->minf;
     if( !minf )
         return -1;
-    isom_bs_put_box_header( bs, &minf->box_header );
+    isom_bs_put_base_header( bs, &minf->base_header );
     if( isom_bs_write_data( bs ) )
         return -1;
     if( minf->vmhd && isom_write_vmhd( bs, trak ) )
@@ -2820,7 +2820,7 @@ static int isom_write_mdia( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_mdia_t *mdia = trak->mdia;
     if( !mdia )
         return -1;
-    isom_bs_put_box_header( bs, &mdia->box_header );
+    isom_bs_put_base_header( bs, &mdia->base_header );
     if( isom_bs_write_data( bs ) )
         return -1;
     if( isom_write_mdhd( bs, trak ) )
@@ -2838,7 +2838,7 @@ static int isom_write_chpl( isom_bs_t *bs, isom_chpl_t *chpl )
         return 0;
     if( !chpl->list )
         return -1;
-    isom_bs_put_fullbox_header( bs, &chpl->fullbox );
+    isom_bs_put_full_header( bs, &chpl->full_header );
     isom_bs_put_byte( bs, chpl->reserved );
     isom_bs_put_be32( bs, chpl->list->entry_count );
     for( isom_entry_t *entry = chpl->list->head; entry; entry = entry->next )
@@ -2862,7 +2862,7 @@ static int isom_write_udta( isom_bs_t *bs, isom_moov_t *moov, isom_trak_entry_t 
     isom_udta_t *udta = trak ? trak->udta : moov ? moov->udta : NULL;
     if( !udta )
         return 0;
-    isom_bs_put_box_header( bs, &udta->box_header );
+    isom_bs_put_base_header( bs, &udta->base_header );
     if( isom_bs_write_data( bs ) )
         return -1;
     if( moov && isom_write_chpl( bs, udta->chpl ) )
@@ -2874,7 +2874,7 @@ static int isom_write_trak( isom_bs_t *bs, isom_trak_entry_t *trak )
 {
     if( !trak )
         return -1;
-    isom_bs_put_box_header( bs, &trak->box_header );
+    isom_bs_put_base_header( bs, &trak->base_header );
     if( isom_bs_write_data( bs ) )
         return -1;
     if( isom_write_tkhd( bs, trak ) )
@@ -2894,7 +2894,7 @@ static int isom_write_iods( isom_root_t *root )
         return -1;
     isom_iods_t *iods = root->moov->iods;
     isom_bs_t *bs = root->bs;
-    isom_bs_put_fullbox_header( bs, &iods->fullbox );
+    isom_bs_put_full_header( bs, &iods->full_header );
     return mp4sys_write_ObjectDescriptor( bs, iods->OD );
 }
 
@@ -2904,8 +2904,8 @@ static int isom_write_mvhd( isom_root_t *root )
         return -1;
     isom_mvhd_t *mvhd = root->moov->mvhd;
     isom_bs_t *bs = root->bs;
-    isom_bs_put_fullbox_header( bs, &mvhd->fullbox );
-    if( mvhd->fullbox.version )
+    isom_bs_put_full_header( bs, &mvhd->full_header );
+    if( mvhd->full_header.version )
     {
         isom_bs_put_be64( bs, mvhd->creation_time );
         isom_bs_put_be64( bs, mvhd->modification_time );
@@ -2936,7 +2936,7 @@ int isom_write_moov( isom_root_t *root )
 {
     if( !root || !root->moov )
         return -1;
-    isom_bs_put_box_header( root->bs, &root->moov->box_header );
+    isom_bs_put_base_header( root->bs, &root->moov->base_header );
     if( isom_bs_write_data( root->bs ) )
         return -1;
     if( isom_write_mvhd( root ) )
@@ -2958,8 +2958,8 @@ int isom_write_free( isom_root_t *root )
         return -1;
     isom_free_t *skip = root->free;
     isom_bs_t *bs = root->bs;
-    skip->box_header.size = 8 + skip->length;
-    isom_bs_put_box_header( bs, &skip->box_header );
+    skip->base_header.size = 8 + skip->length;
+    isom_bs_put_base_header( bs, &skip->base_header );
     if( skip->data && skip->length )
         isom_bs_put_bytes( bs, skip->data, skip->length );
     if( isom_bs_write_data( bs ) )
@@ -2973,9 +2973,9 @@ static int isom_write_mdat_header( isom_root_t *root )
         return -1;
     isom_mdat_t *mdat = root->mdat;
     isom_bs_t *bs = root->bs;
-    mdat->box_header.size = 16;
+    mdat->base_header.size = 16;
     mdat->large_flag = 0;
-    isom_bs_put_box_header( bs, &mdat->box_header );
+    isom_bs_put_base_header( bs, &mdat->base_header );
     isom_bs_put_be64( bs, 0 );     /* reserved for largesize */
     mdat->header_pos = ftell( bs->stream );
     if( isom_bs_write_data( bs ) )
@@ -3080,7 +3080,7 @@ static int isom_update_mdhd_duration( isom_root_t *root, uint32_t trak_number )
     isom_stts_t *stts = trak->mdia->minf->stbl->stts;
     isom_ctts_t *ctts = trak->mdia->minf->stbl->ctts;
     mdhd->duration = 0;
-    mdhd->fullbox.version = 0;
+    mdhd->full_header.version = 0;
     uint32_t sample_count = isom_get_sample_count( trak );
     if( sample_count == 0 )
         return -1;
@@ -3165,7 +3165,7 @@ static int isom_update_mdhd_duration( isom_root_t *root, uint32_t trak_number )
             last_stts_data->sample_delta = last_delta;
     }
     if( mdhd->duration > UINT32_MAX )
-        mdhd->fullbox.version = 1;
+        mdhd->full_header.version = 1;
     return 0;
 }
 
@@ -3176,7 +3176,7 @@ static int isom_update_tkhd_duration( isom_root_t *root, uint32_t trak_number )
         return -1;
     isom_tkhd_t *tkhd = trak->tkhd;
     tkhd->duration = 0;
-    tkhd->fullbox.version = 0;
+    tkhd->full_header.version = 0;
     if( !trak->edts )
     {
         if( !trak->mdia || !trak->mdia->mdhd || !trak->root || !trak->root->moov || !trak->root->moov->mvhd )
@@ -3197,7 +3197,7 @@ static int isom_update_tkhd_duration( isom_root_t *root, uint32_t trak_number )
         }
     }
     if( tkhd->duration > UINT32_MAX )
-        tkhd->fullbox.version = 1;
+        tkhd->full_header.version = 1;
     return 0;
 }
 
@@ -3207,7 +3207,7 @@ static int isom_update_mvhd_duration( isom_root_t *root )
         return -1;
     isom_mvhd_t *mvhd = root->moov->mvhd;
     mvhd->duration = 0;
-    mvhd->fullbox.version = 0;
+    mvhd->full_header.version = 0;
     for( isom_entry_t *entry = root->moov->trak_list->head; entry; entry = entry->next )
     {
         /* We pick maximum track duration as movie duration. */
@@ -3215,7 +3215,7 @@ static int isom_update_mvhd_duration( isom_root_t *root )
         mvhd->duration = entry != root->moov->trak_list->head ? ISOM_MAX( mvhd->duration, data->tkhd->duration ) : data->tkhd->duration;
     }
     if( mvhd->duration > UINT32_MAX )
-        mvhd->fullbox.version = 1;
+        mvhd->full_header.version = 1;
     return 0;
 }
 
@@ -3413,7 +3413,7 @@ static int isom_write_sample_data( isom_root_t *root, isom_sample_t *sample )
     isom_bs_put_bytes( root->bs, sample->data, sample->length );
     if( isom_bs_write_data( root->bs ) )
         return -1;
-    root->mdat->box_header.size += sample->length;
+    root->mdat->base_header.size += sample->length;
     return 0;
 }
 
@@ -3527,7 +3527,7 @@ int isom_write_mdat_size( isom_root_t *root )
     if( !root || !root->bs || !root->bs->stream || !root->mdat )
         return -1;
     isom_mdat_t *mdat = root->mdat;
-    if( mdat->box_header.size > UINT32_MAX )
+    if( mdat->base_header.size > UINT32_MAX )
         mdat->large_flag = 1;
     isom_bs_t *bs = root->bs;
     FILE *stream = bs->stream;
@@ -3537,11 +3537,11 @@ int isom_write_mdat_size( isom_root_t *root )
     {
         isom_bs_put_be32( bs, 1 );
         isom_bs_put_be32( bs, ISOM_BOX_TYPE_MDAT );
-        isom_bs_put_be64( bs, mdat->box_header.size );
+        isom_bs_put_be64( bs, mdat->base_header.size );
     }
     else
     {
-        isom_bs_put_be32( bs, mdat->box_header.size );
+        isom_bs_put_be32( bs, mdat->base_header.size );
         isom_bs_put_be32( bs, ISOM_BOX_TYPE_MDAT );
     }
     if( isom_bs_write_data( bs ) )
@@ -3563,7 +3563,7 @@ int isom_set_brands( isom_root_t *root, uint32_t major_brand, uint32_t minor_ver
     for( uint32_t i = 0; i < brand_count; i++ )
     {
         ftyp->compatible_brands[i] = brands[i];
-        ftyp->box_header.size += 4;
+        ftyp->base_header.size += 4;
     }
     ftyp->brand_count = brand_count;
     return 0;
@@ -3605,7 +3605,7 @@ int isom_set_track_mode( isom_root_t *root, uint32_t trak_number, uint32_t mode 
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
     if( !trak || !trak->tkhd )
         return -1;
-    trak->tkhd->fullbox.flags = mode;
+    trak->tkhd->full_header.flags = mode;
     return 0;
 }
 
@@ -3649,7 +3649,7 @@ int isom_set_sample_type( isom_root_t *root, uint32_t trak_number, uint32_t entr
     isom_sample_entry_t *data = (isom_sample_entry_t *)isom_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
     if( !data )
         return -1;
-    data->box_header.type = sample_type;
+    data->base_header.type = sample_type;
     return 0;
 }
 
@@ -3777,7 +3777,7 @@ int isom_update_bitrate_info( isom_root_t *root, uint32_t trak_number, uint32_t 
     info.maxBitrate *= 8;
     info.avgBitrate *= 8;
     /* set bitrate info */
-    switch( sample_entry->box_header.type )
+    switch( sample_entry->base_header.type )
     {
         case ISOM_CODEC_TYPE_AVC1_VIDEO :
         case ISOM_CODEC_TYPE_AVC2_VIDEO :
@@ -4092,13 +4092,13 @@ static uint64_t isom_update_mvhd_size( isom_root_t *root )
     if( !root || !root->moov || !root->moov->mvhd )
         return 0;
     isom_mvhd_t *mvhd = root->moov->mvhd;
-    mvhd->fullbox.version = 0;
+    mvhd->full_header.version = 0;
     if( mvhd->creation_time > UINT32_MAX || mvhd->modification_time > UINT32_MAX || mvhd->duration > UINT32_MAX )
-        mvhd->fullbox.version = 1;
-    uint64_t size = 96 + (uint64_t)mvhd->fullbox.version * 12;
-    mvhd->fullbox.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + size;
-    CHECK_LARGESIZE( mvhd->fullbox.size );
-    return mvhd->fullbox.size;
+        mvhd->full_header.version = 1;
+    uint64_t size = 96 + (uint64_t)mvhd->full_header.version * 12;
+    mvhd->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( mvhd->full_header.size );
+    return mvhd->full_header.size;
 }
 
 static uint64_t isom_update_iods_size( isom_root_t *root )
@@ -4107,9 +4107,9 @@ static uint64_t isom_update_iods_size( isom_root_t *root )
         return 0;
     isom_iods_t *iods = root->moov->iods;
     uint64_t size = mp4sys_update_ObjectDescriptor_size( root->moov->iods->OD );
-    iods->fullbox.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + size;
-    CHECK_LARGESIZE( iods->fullbox.size );
-    return iods->fullbox.size;
+    iods->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( iods->full_header.size );
+    return iods->full_header.size;
 }
 
 static uint64_t isom_update_tkhd_size( isom_trak_entry_t *trak )
@@ -4117,13 +4117,13 @@ static uint64_t isom_update_tkhd_size( isom_trak_entry_t *trak )
     if( !trak || !trak->tkhd )
         return 0;
     isom_tkhd_t *tkhd = trak->tkhd;
-    tkhd->fullbox.version = 0;
+    tkhd->full_header.version = 0;
     if( tkhd->creation_time > UINT32_MAX || tkhd->modification_time > UINT32_MAX || tkhd->duration > UINT32_MAX )
-        tkhd->fullbox.version = 1;
-    uint64_t size = 80 + (uint64_t)tkhd->fullbox.version * 12;
-    trak->tkhd->fullbox.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + size;
-    CHECK_LARGESIZE( trak->tkhd->fullbox.size );
-    return trak->tkhd->fullbox.size;
+        tkhd->full_header.version = 1;
+    uint64_t size = 80 + (uint64_t)tkhd->full_header.version * 12;
+    trak->tkhd->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( trak->tkhd->full_header.size );
+    return trak->tkhd->full_header.size;
 }
 
 static uint64_t isom_update_elst_size( isom_trak_entry_t *trak )
@@ -4131,26 +4131,26 @@ static uint64_t isom_update_elst_size( isom_trak_entry_t *trak )
     if( !trak || !trak->edts || !trak->edts->elst || !trak->edts->elst->list )
         return 0;
     uint32_t i = 0;
-    trak->edts->elst->fullbox.version = 0;
+    trak->edts->elst->full_header.version = 0;
     for( isom_entry_t *entry = trak->edts->elst->list->head; entry; entry = entry->next, i++ )
     {
         isom_elst_entry_t *data = (isom_elst_entry_t *)entry->data;
         if( data->segment_duration > UINT32_MAX || data->media_time > UINT32_MAX )
-            trak->edts->elst->fullbox.version = 1;
+            trak->edts->elst->full_header.version = 1;
     }
-    uint64_t size = (uint64_t)i * ( trak->edts->elst->fullbox.version ? 20 : 12 );
-    trak->edts->elst->fullbox.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
-    CHECK_LARGESIZE( trak->edts->elst->fullbox.size );
-    return trak->edts->elst->fullbox.size;
+    uint64_t size = (uint64_t)i * ( trak->edts->elst->full_header.version ? 20 : 12 );
+    trak->edts->elst->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( trak->edts->elst->full_header.size );
+    return trak->edts->elst->full_header.size;
 }
 
 static uint64_t isom_update_edts_size( isom_trak_entry_t *trak )
 {
     if( !trak || !trak->edts )
         return 0;
-    trak->edts->box_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + isom_update_elst_size( trak );
-    CHECK_LARGESIZE( trak->edts->box_header.size );
-    return trak->edts->box_header.size;
+    trak->edts->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + isom_update_elst_size( trak );
+    CHECK_LARGESIZE( trak->edts->base_header.size );
+    return trak->edts->base_header.size;
 }
 
 static uint64_t isom_update_mdhd_size( isom_trak_entry_t *trak )
@@ -4158,13 +4158,13 @@ static uint64_t isom_update_mdhd_size( isom_trak_entry_t *trak )
     if( !trak || !trak->mdia || !trak->mdia->mdhd )
         return 0;
     isom_mdhd_t *mdhd = trak->mdia->mdhd;
-    mdhd->fullbox.version = 0;
+    mdhd->full_header.version = 0;
     if( mdhd->creation_time > UINT32_MAX || mdhd->modification_time > UINT32_MAX || mdhd->duration > UINT32_MAX )
-        mdhd->fullbox.version = 1;
-    uint64_t size = 20 + (uint64_t)mdhd->fullbox.version * 12;
-    trak->mdia->mdhd->fullbox.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + size;
-    CHECK_LARGESIZE( trak->mdia->mdhd->fullbox.size );
-    return trak->mdia->mdhd->fullbox.size;
+        mdhd->full_header.version = 1;
+    uint64_t size = 20 + (uint64_t)mdhd->full_header.version * 12;
+    trak->mdia->mdhd->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( trak->mdia->mdhd->full_header.size );
+    return trak->mdia->mdhd->full_header.size;
 }
 
 static uint64_t isom_update_hdlr_size( isom_trak_entry_t *trak )
@@ -4173,9 +4173,9 @@ static uint64_t isom_update_hdlr_size( isom_trak_entry_t *trak )
         return 0;
     isom_hdlr_t *hdlr = trak->mdia->hdlr;
     uint64_t size = 20 + (uint64_t)hdlr->name_length;
-    trak->mdia->hdlr->fullbox.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + size;
-    CHECK_LARGESIZE( trak->mdia->hdlr->fullbox.size );
-    return trak->mdia->hdlr->fullbox.size;
+    trak->mdia->hdlr->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( trak->mdia->hdlr->full_header.size );
+    return trak->mdia->hdlr->full_header.size;
 }
 
 static uint64_t isom_update_dref_entry_size( isom_dref_entry_t *urln )
@@ -4183,9 +4183,9 @@ static uint64_t isom_update_dref_entry_size( isom_dref_entry_t *urln )
     if( !urln )
         return 0;
     uint64_t size = (uint64_t)urln->name_length + urln->location_length;
-    urln->fullbox.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + size;
-    CHECK_LARGESIZE( urln->fullbox.size );
-    return urln->fullbox.size;
+    urln->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( urln->full_header.size );
+    return urln->full_header.size;
 }
 
 static uint64_t isom_update_dref_size( isom_trak_entry_t *trak )
@@ -4199,81 +4199,81 @@ static uint64_t isom_update_dref_size( isom_trak_entry_t *trak )
             isom_dref_entry_t *data = (isom_dref_entry_t *)entry->data;
             size += isom_update_dref_entry_size( data );
         }
-    trak->mdia->minf->dinf->dref->fullbox.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
-    CHECK_LARGESIZE( trak->mdia->minf->dinf->dref->fullbox.size );
-    return trak->mdia->minf->dinf->dref->fullbox.size;
+    trak->mdia->minf->dinf->dref->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( trak->mdia->minf->dinf->dref->full_header.size );
+    return trak->mdia->minf->dinf->dref->full_header.size;
 }
 
 static uint64_t isom_update_dinf_size( isom_trak_entry_t *trak )
 {
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->dinf )
         return 0;
-    trak->mdia->minf->dinf->box_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + isom_update_dref_size( trak );
-    CHECK_LARGESIZE( trak->mdia->minf->dinf->box_header.size );
-    return trak->mdia->minf->dinf->box_header.size;
+    trak->mdia->minf->dinf->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + isom_update_dref_size( trak );
+    CHECK_LARGESIZE( trak->mdia->minf->dinf->base_header.size );
+    return trak->mdia->minf->dinf->base_header.size;
 }
 
 static uint64_t isom_update_vmhd_size( isom_trak_entry_t *trak )
 {
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->vmhd )
         return 0;
-    trak->mdia->minf->vmhd->fullbox.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 8;
-    CHECK_LARGESIZE( trak->mdia->minf->vmhd->fullbox.size );
-    return trak->mdia->minf->vmhd->fullbox.size;
+    trak->mdia->minf->vmhd->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 8;
+    CHECK_LARGESIZE( trak->mdia->minf->vmhd->full_header.size );
+    return trak->mdia->minf->vmhd->full_header.size;
 }
 
 static uint64_t isom_update_smhd_size( isom_trak_entry_t *trak )
 {
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->smhd )
         return 0;
-    trak->mdia->minf->smhd->fullbox.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 4;
-    CHECK_LARGESIZE( trak->mdia->minf->smhd->fullbox.size );
-    return trak->mdia->minf->smhd->fullbox.size;
+    trak->mdia->minf->smhd->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 4;
+    CHECK_LARGESIZE( trak->mdia->minf->smhd->full_header.size );
+    return trak->mdia->minf->smhd->full_header.size;
 }
 
 static uint64_t isom_update_hmhd_size( isom_trak_entry_t *trak )
 {
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->hmhd )
         return 0;
-    trak->mdia->minf->hmhd->fullbox.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 16;
-    CHECK_LARGESIZE( trak->mdia->minf->hmhd->fullbox.size );
-    return trak->mdia->minf->hmhd->fullbox.size;
+    trak->mdia->minf->hmhd->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 16;
+    CHECK_LARGESIZE( trak->mdia->minf->hmhd->full_header.size );
+    return trak->mdia->minf->hmhd->full_header.size;
 }
 
 static uint64_t isom_update_nmhd_size( isom_trak_entry_t *trak )
 {
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->nmhd )
         return 0;
-    trak->mdia->minf->nmhd->fullbox.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE;
-    CHECK_LARGESIZE( trak->mdia->minf->nmhd->fullbox.size );
-    return trak->mdia->minf->nmhd->fullbox.size;
+    trak->mdia->minf->nmhd->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE;
+    CHECK_LARGESIZE( trak->mdia->minf->nmhd->full_header.size );
+    return trak->mdia->minf->nmhd->full_header.size;
 }
 
 static uint64_t isom_update_btrt_size( isom_btrt_t *btrt )
 {
     if( !btrt )
         return 0;
-    btrt->box_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 12;
-    CHECK_LARGESIZE( btrt->box_header.size );
-    return btrt->box_header.size;
+    btrt->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 12;
+    CHECK_LARGESIZE( btrt->base_header.size );
+    return btrt->base_header.size;
 }
 
 static uint64_t isom_update_pasp_size( isom_pasp_t *pasp )
 {
     if( !pasp )
         return 0;
-    pasp->box_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 8;
-    CHECK_LARGESIZE( pasp->box_header.size );
-    return pasp->box_header.size;
+    pasp->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 8;
+    CHECK_LARGESIZE( pasp->base_header.size );
+    return pasp->base_header.size;
 }
 
 static uint64_t isom_update_clap_size( isom_clap_t *clap )
 {
     if( !clap )
         return 0;
-    clap->box_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 32;
-    CHECK_LARGESIZE( clap->box_header.size );
-    return clap->box_header.size;
+    clap->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 32;
+    CHECK_LARGESIZE( clap->base_header.size );
+    return clap->base_header.size;
 }
 
 static uint64_t isom_update_avcC_size( isom_avcC_t *avcC )
@@ -4300,68 +4300,68 @@ static uint64_t isom_update_avcC_size( isom_avcC_t *avcC )
             size += 2U + data->parameterSetLength;
         }
     }
-    avcC->box_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
-    CHECK_LARGESIZE( avcC->box_header.size );
-    return avcC->box_header.size;
+    avcC->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( avcC->base_header.size );
+    return avcC->base_header.size;
 }
 
 static uint64_t isom_update_avc_entry_size( isom_avc_entry_t *avc )
 {
     if( !avc ||
-        ((avc->box_header.type != ISOM_CODEC_TYPE_AVC1_VIDEO) &&
-        (avc->box_header.type != ISOM_CODEC_TYPE_AVC2_VIDEO) &&
-        (avc->box_header.type != ISOM_CODEC_TYPE_AVCP_VIDEO)) )
+        ((avc->base_header.type != ISOM_CODEC_TYPE_AVC1_VIDEO) &&
+        (avc->base_header.type != ISOM_CODEC_TYPE_AVC2_VIDEO) &&
+        (avc->base_header.type != ISOM_CODEC_TYPE_AVCP_VIDEO)) )
         return 0;
     uint64_t size = 78;
     size += isom_update_pasp_size( avc->pasp );
     size += isom_update_clap_size( avc->clap );
     size += isom_update_avcC_size( avc->avcC );
     size += isom_update_btrt_size( avc->btrt );
-    avc->box_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
-    CHECK_LARGESIZE( avc->box_header.size );
-    return avc->box_header.size;
+    avc->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( avc->base_header.size );
+    return avc->base_header.size;
 }
 
 static uint64_t isom_update_esds_size( isom_esds_t *esds )
 {
     if( !esds )
         return 0;
-    esds->fullbox.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE;
-    esds->fullbox.size += mp4sys_update_ES_Descriptor_size( esds->ES );
-    CHECK_LARGESIZE( esds->fullbox.size );
-    return esds->fullbox.size;
+    esds->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE;
+    esds->full_header.size += mp4sys_update_ES_Descriptor_size( esds->ES );
+    CHECK_LARGESIZE( esds->full_header.size );
+    return esds->full_header.size;
 }
 
 static uint64_t isom_update_mp4v_entry_size( isom_mp4v_entry_t *mp4v )
 {
-    if( !mp4v || mp4v->box_header.type != ISOM_CODEC_TYPE_MP4V_VIDEO )
+    if( !mp4v || mp4v->base_header.type != ISOM_CODEC_TYPE_MP4V_VIDEO )
         return 0;
     uint64_t size = 78 + isom_update_esds_size( mp4v->esds );
     size += isom_update_pasp_size( mp4v->pasp );
     size += isom_update_clap_size( mp4v->clap );
-    mp4v->box_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
-    CHECK_LARGESIZE( mp4v->box_header.size );
-    return mp4v->box_header.size;
+    mp4v->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( mp4v->base_header.size );
+    return mp4v->base_header.size;
 }
 
 static uint64_t isom_update_mp4a_entry_size( isom_mp4a_entry_t *mp4a )
 {
-    if( !mp4a || mp4a->box_header.type != ISOM_CODEC_TYPE_MP4A_AUDIO )
+    if( !mp4a || mp4a->base_header.type != ISOM_CODEC_TYPE_MP4A_AUDIO )
         return 0;
     uint64_t size = 28 + isom_update_esds_size( mp4a->esds );
-    mp4a->box_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
-    CHECK_LARGESIZE( mp4a->box_header.size );
-    return mp4a->box_header.size;
+    mp4a->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( mp4a->base_header.size );
+    return mp4a->base_header.size;
 }
 
 static uint64_t isom_update_mp4s_entry_size( isom_mp4s_entry_t *mp4s )
 {
-    if( !mp4s || mp4s->box_header.type != ISOM_CODEC_TYPE_MP4S_SYSTEM )
+    if( !mp4s || mp4s->base_header.type != ISOM_CODEC_TYPE_MP4S_SYSTEM )
         return 0;
     uint64_t size = 8 + isom_update_esds_size( mp4s->esds );
-    mp4s->box_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
-    CHECK_LARGESIZE( mp4s->box_header.size );
-    return mp4s->box_header.size;
+    mp4s->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( mp4s->base_header.size );
+    return mp4s->base_header.size;
 }
 
 static uint64_t isom_update_stsd_size( isom_trak_entry_t *trak )
@@ -4372,7 +4372,7 @@ static uint64_t isom_update_stsd_size( isom_trak_entry_t *trak )
     for( isom_entry_t *entry = trak->mdia->minf->stbl->stsd->list->head; entry; entry = entry->next )
     {
         isom_sample_entry_t *data = (isom_sample_entry_t *)entry->data;
-        switch( data->box_header.type )
+        switch( data->base_header.type )
         {
             case ISOM_CODEC_TYPE_AVC1_VIDEO :
             case ISOM_CODEC_TYPE_AVC2_VIDEO :
@@ -4392,9 +4392,9 @@ static uint64_t isom_update_stsd_size( isom_trak_entry_t *trak )
                 break;
         }
     }
-    trak->mdia->minf->stbl->stsd->fullbox.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
-    CHECK_LARGESIZE( trak->mdia->minf->stbl->stsd->fullbox.size );
-    return trak->mdia->minf->stbl->stsd->fullbox.size;
+    trak->mdia->minf->stbl->stsd->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( trak->mdia->minf->stbl->stsd->full_header.size );
+    return trak->mdia->minf->stbl->stsd->full_header.size;
 }
 
 static uint64_t isom_update_stts_size( isom_trak_entry_t *trak )
@@ -4404,9 +4404,9 @@ static uint64_t isom_update_stts_size( isom_trak_entry_t *trak )
     uint64_t size = 0;
     for( isom_entry_t *entry = trak->mdia->minf->stbl->stts->list->head; entry; entry = entry->next )
         size += 8;
-    trak->mdia->minf->stbl->stts->fullbox.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
-    CHECK_LARGESIZE( trak->mdia->minf->stbl->stts->fullbox.size );
-    return trak->mdia->minf->stbl->stts->fullbox.size;
+    trak->mdia->minf->stbl->stts->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( trak->mdia->minf->stbl->stts->full_header.size );
+    return trak->mdia->minf->stbl->stts->full_header.size;
 }
 
 static uint64_t isom_update_ctts_size( isom_trak_entry_t *trak )
@@ -4416,9 +4416,9 @@ static uint64_t isom_update_ctts_size( isom_trak_entry_t *trak )
     uint64_t size = 0;
     for( isom_entry_t *entry = trak->mdia->minf->stbl->ctts->list->head; entry; entry = entry->next )
         size += 8;
-    trak->mdia->minf->stbl->ctts->fullbox.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
-    CHECK_LARGESIZE( trak->mdia->minf->stbl->ctts->fullbox.size );
-    return trak->mdia->minf->stbl->ctts->fullbox.size;
+    trak->mdia->minf->stbl->ctts->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( trak->mdia->minf->stbl->ctts->full_header.size );
+    return trak->mdia->minf->stbl->ctts->full_header.size;
 }
 
 static uint64_t isom_update_stsz_size( isom_trak_entry_t *trak )
@@ -4429,9 +4429,9 @@ static uint64_t isom_update_stsz_size( isom_trak_entry_t *trak )
     if( trak->mdia->minf->stbl->stsz->list )
         for( isom_entry_t *entry = trak->mdia->minf->stbl->stsz->list->head; entry; entry = entry->next )
             size += 4;
-    trak->mdia->minf->stbl->stsz->fullbox.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 8 + size;
-    CHECK_LARGESIZE( trak->mdia->minf->stbl->stsz->fullbox.size );
-    return trak->mdia->minf->stbl->stsz->fullbox.size;
+    trak->mdia->minf->stbl->stsz->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 8 + size;
+    CHECK_LARGESIZE( trak->mdia->minf->stbl->stsz->full_header.size );
+    return trak->mdia->minf->stbl->stsz->full_header.size;
 }
 
 static uint64_t isom_update_stss_size( isom_trak_entry_t *trak )
@@ -4441,18 +4441,18 @@ static uint64_t isom_update_stss_size( isom_trak_entry_t *trak )
     uint64_t size = 0;
     for( isom_entry_t *entry = trak->mdia->minf->stbl->stss->list->head; entry; entry = entry->next )
         size += 4;
-    trak->mdia->minf->stbl->stss->fullbox.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
-    CHECK_LARGESIZE( trak->mdia->minf->stbl->stss->fullbox.size );
-    return trak->mdia->minf->stbl->stss->fullbox.size;
+    trak->mdia->minf->stbl->stss->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( trak->mdia->minf->stbl->stss->full_header.size );
+    return trak->mdia->minf->stbl->stss->full_header.size;
 }
 
 static uint64_t isom_update_sdtp_size( isom_trak_entry_t *trak )
 {
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->sdtp || !trak->mdia->minf->stbl->sdtp->list )
         return 0;
-    trak->mdia->minf->stbl->sdtp->fullbox.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + trak->mdia->minf->stbl->sdtp->list->entry_count;
-    CHECK_LARGESIZE( trak->mdia->minf->stbl->sdtp->fullbox.size );
-    return trak->mdia->minf->stbl->sdtp->fullbox.size;
+    trak->mdia->minf->stbl->sdtp->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + trak->mdia->minf->stbl->sdtp->list->entry_count;
+    CHECK_LARGESIZE( trak->mdia->minf->stbl->sdtp->full_header.size );
+    return trak->mdia->minf->stbl->sdtp->full_header.size;
 }
 
 static uint64_t isom_update_stsc_size( isom_trak_entry_t *trak )
@@ -4462,9 +4462,9 @@ static uint64_t isom_update_stsc_size( isom_trak_entry_t *trak )
     uint64_t size = 0;
     for( isom_entry_t *entry = trak->mdia->minf->stbl->stsc->list->head; entry; entry = entry->next )
         size += 12;
-    trak->mdia->minf->stbl->stsc->fullbox.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
-    CHECK_LARGESIZE( trak->mdia->minf->stbl->stsc->fullbox.size );
-    return trak->mdia->minf->stbl->stsc->fullbox.size;
+    trak->mdia->minf->stbl->stsc->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( trak->mdia->minf->stbl->stsc->full_header.size );
+    return trak->mdia->minf->stbl->stsc->full_header.size;
 }
 
 static uint64_t isom_update_stco_size( isom_trak_entry_t *trak )
@@ -4475,9 +4475,9 @@ static uint64_t isom_update_stco_size( isom_trak_entry_t *trak )
     for( isom_entry_t *entry = trak->mdia->minf->stbl->stco->list->head; entry; entry = entry->next )
         ++i;
     uint64_t size = (uint64_t)i * (trak->mdia->minf->stbl->stco->large_presentation ? 8 : 4);
-    trak->mdia->minf->stbl->stco->fullbox.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
-    CHECK_LARGESIZE( trak->mdia->minf->stbl->stco->fullbox.size );
-    return trak->mdia->minf->stbl->stco->fullbox.size;
+    trak->mdia->minf->stbl->stco->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( trak->mdia->minf->stbl->stco->full_header.size );
+    return trak->mdia->minf->stbl->stco->full_header.size;
 }
 
 static uint64_t isom_update_sbgp_size( isom_sbgp_t *sbgp )
@@ -4487,9 +4487,9 @@ static uint64_t isom_update_sbgp_size( isom_sbgp_t *sbgp )
     uint32_t size = 0;
     for( isom_entry_t *entry = sbgp->list->head; entry; entry = entry->next )
         size += 8;
-    sbgp->fullbox.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + 4 + size;
-    CHECK_LARGESIZE( sbgp->fullbox.size );
-    return sbgp->fullbox.size;
+    sbgp->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + 4 + size;
+    CHECK_LARGESIZE( sbgp->full_header.size );
+    return sbgp->full_header.size;
 }
 
 static uint64_t isom_update_sgpd_size( isom_sgpd_t *sgpd )
@@ -4499,7 +4499,7 @@ static uint64_t isom_update_sgpd_size( isom_sgpd_t *sgpd )
     uint32_t size = 0;
     for( isom_entry_t *entry = sgpd->list->head; entry; entry = entry->next )
     {
-        size += ((sgpd->fullbox.version == 1) && !sgpd->default_length) * 4;
+        size += ((sgpd->full_header.version == 1) && !sgpd->default_length) * 4;
         switch( sgpd->grouping_type )
         {
             case ISOM_GROUP_TYPE_ROLL :
@@ -4509,9 +4509,9 @@ static uint64_t isom_update_sgpd_size( isom_sgpd_t *sgpd )
                 break;
         }
     }
-    sgpd->fullbox.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + (1 + (sgpd->fullbox.version == 1)) * 4 + size;
-    CHECK_LARGESIZE( sgpd->fullbox.size );
-    return sgpd->fullbox.size;
+    sgpd->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + (1 + (sgpd->full_header.version == 1)) * 4 + size;
+    CHECK_LARGESIZE( sgpd->full_header.size );
+    return sgpd->full_header.size;
 }
 
 static uint64_t isom_update_stbl_size( isom_trak_entry_t *trak )
@@ -4531,9 +4531,9 @@ static uint64_t isom_update_stbl_size( isom_trak_entry_t *trak )
         size += isom_update_sbgp_size( trak->mdia->minf->stbl->sbgp + i );
         size += isom_update_sgpd_size( trak->mdia->minf->stbl->sgpd + i );
     }
-    trak->mdia->minf->stbl->box_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
-    CHECK_LARGESIZE( trak->mdia->minf->stbl->box_header.size );
-    return trak->mdia->minf->stbl->box_header.size;
+    trak->mdia->minf->stbl->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( trak->mdia->minf->stbl->base_header.size );
+    return trak->mdia->minf->stbl->base_header.size;
 }
 
 static uint64_t isom_update_minf_size( isom_trak_entry_t *trak )
@@ -4546,9 +4546,9 @@ static uint64_t isom_update_minf_size( isom_trak_entry_t *trak )
     size += isom_update_nmhd_size( trak );
     size += isom_update_dinf_size( trak );
     size += isom_update_stbl_size( trak );
-    trak->mdia->minf->box_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
-    CHECK_LARGESIZE( trak->mdia->minf->box_header.size );
-    return trak->mdia->minf->box_header.size;
+    trak->mdia->minf->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( trak->mdia->minf->base_header.size );
+    return trak->mdia->minf->base_header.size;
 }
 
 static uint64_t isom_update_mdia_size( isom_trak_entry_t *trak )
@@ -4558,9 +4558,9 @@ static uint64_t isom_update_mdia_size( isom_trak_entry_t *trak )
     uint64_t size = isom_update_mdhd_size( trak );
     size += isom_update_hdlr_size( trak );
     size += isom_update_minf_size( trak );
-    trak->mdia->box_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
-    CHECK_LARGESIZE( trak->mdia->box_header.size );
-    return trak->mdia->box_header.size;
+    trak->mdia->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( trak->mdia->base_header.size );
+    return trak->mdia->base_header.size;
 }
 
 static uint64_t isom_update_chpl_size( isom_chpl_t *chpl )
@@ -4573,9 +4573,9 @@ static uint64_t isom_update_chpl_size( isom_chpl_t *chpl )
         isom_chpl_entry_t *data = (isom_chpl_entry_t *)entry->data;
         size += 9U + data->name_length;
     }
-    chpl->fullbox.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
-    CHECK_LARGESIZE( chpl->fullbox.size );
-    return chpl->fullbox.size;
+    chpl->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( chpl->full_header.size );
+    return chpl->full_header.size;
 }
 
 static uint64_t isom_update_udta_size( isom_moov_t *moov, isom_trak_entry_t *trak )
@@ -4586,9 +4586,9 @@ static uint64_t isom_update_udta_size( isom_moov_t *moov, isom_trak_entry_t *tra
     uint64_t size = 0;
     if( moov )
         size += isom_update_chpl_size( udta->chpl );
-    udta->box_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
-    CHECK_LARGESIZE( udta->box_header.size );
-    return udta->box_header.size;
+    udta->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( udta->base_header.size );
+    return udta->base_header.size;
 }
 
 static uint64_t isom_update_trak_entry_size( isom_trak_entry_t *trak )
@@ -4599,9 +4599,9 @@ static uint64_t isom_update_trak_entry_size( isom_trak_entry_t *trak )
     size += isom_update_edts_size( trak );
     size += isom_update_mdia_size( trak );
     size += isom_update_udta_size( NULL, trak );
-    trak->box_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
-    CHECK_LARGESIZE( trak->box_header.size );
-    return trak->box_header.size;
+    trak->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( trak->base_header.size );
+    return trak->base_header.size;
 }
 
 static int isom_update_moov_size( isom_root_t *root )
@@ -4617,8 +4617,8 @@ static int isom_update_moov_size( isom_root_t *root )
             isom_trak_entry_t *trak = (isom_trak_entry_t *)entry->data;
             size += isom_update_trak_entry_size( trak );
         }
-    root->moov->box_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
-    CHECK_LARGESIZE( root->moov->box_header.size );
+    root->moov->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
+    CHECK_LARGESIZE( root->moov->base_header.size );
     return 0;
 }
 
