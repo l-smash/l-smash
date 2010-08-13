@@ -478,7 +478,7 @@ typedef struct
     isom_entry_list_t *list;
 } isom_sbgp_t;
 
-/* Sample Group Description Box
+/* Sample Group Description Box */
 /* description_length are available only if version == 1 and default_length == 0. */
 typedef struct
 {
