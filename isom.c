@@ -368,8 +368,7 @@ static int isom_add_mp4v_entry( isom_entry_list_t *list )
 static int isom_add_mp4a_entry( isom_entry_list_t *list, mp4sys_audio_summary_t* summary )
 {
     if( !list || !summary
-        || summary->stream_type != MP4SYS_STREAM_TYPE_AudioStream
-        || summary->frequency > 65535 ) /* FIXME: How should we do? */
+        || summary->stream_type != MP4SYS_STREAM_TYPE_AudioStream )
         return -1;
     switch( summary->object_type_indication )
     {
@@ -414,7 +413,10 @@ static int isom_add_mp4a_entry( isom_entry_list_t *list, mp4sys_audio_summary_t*
        see 14496-14, "6 Template fields used". */
     mp4a->channelcount = summary->channels;
     mp4a->samplesize = summary->bit_depth;
-    mp4a->samplerate = summary->frequency << 16; /* WARNING: This field cannot retain frequency above 65535Hz. */
+    /* WARNING: This field cannot retain frequency above 65535Hz.
+       This is not "FIXME", I just honestly implemented what the spec says.
+       BTW, who ever expects sampling frequency takes fixed-point decimal??? */
+    mp4a->samplerate = summary->frequency << 16;
     mp4a->esds = esds;
     mp4a->pli = mp4sys_get_audioProfileLevelIndication( summary );
     if( isom_add_entry( list, mp4a ) )
