@@ -1167,7 +1167,6 @@ typedef struct
 isom_root_t *isom_create_root( char *filename );
 isom_sample_t *isom_create_sample( void );
 
-int isom_add_elst_entry( isom_root_t *root, uint32_t trak_number, uint64_t segment_duration, int64_t media_time, int32_t media_rate );
 int isom_add_dref_entry( isom_root_t *root, uint32_t trak_number, uint32_t flags, char *name, char *location );
 int isom_add_sps_entry( isom_root_t *root, uint32_t trak_number, uint32_t entry_number, uint8_t *sps, uint32_t sps_size );
 int isom_add_pps_entry( isom_root_t *root, uint32_t trak_number, uint32_t entry_number, uint8_t *pps, uint32_t pps_size );
@@ -1182,7 +1181,6 @@ int isom_add_stco_entry( isom_root_t *root, uint32_t trak_number, uint64_t chunk
 int isom_add_sbgp_entry( isom_root_t *root, uint32_t trak_number, uint32_t grouping_number, uint32_t sample_count, uint32_t group_description_index );
 int isom_add_roll_group_entry( isom_root_t *root, uint32_t trak_number, uint32_t grouping_number, uint32_t description_length, int16_t roll_distance );
 
-int isom_add_edts( isom_root_t *root, uint32_t trak_number );
 int isom_add_btrt( isom_root_t *root, uint32_t trak_number, uint32_t entry_number );
 int isom_add_pasp( isom_root_t *root, uint32_t trak_number, uint32_t entry_number );
 int isom_add_ctts( isom_root_t *root, uint32_t trak_number );
@@ -1222,7 +1220,6 @@ int isom_set_track_volume( isom_root_t *root, uint32_t trak_number, int16_t volu
 int isom_set_sample_resolution( isom_root_t *root, uint32_t trak_number, uint32_t entry_number, uint16_t width, uint16_t height );
 int isom_set_sample_type( isom_root_t *root, uint32_t trak_number, uint32_t entry_number, uint32_t sample_type );
 int isom_set_sample_aspect_ratio( isom_root_t *root, uint32_t trak_number, uint32_t entry_number, uint32_t hSpacing, uint32_t vSpacing );
-int isom_set_presentation_map( isom_root_t *root, uint32_t trak_number, uint32_t entry_number, uint64_t segment_duration, int64_t media_time, int32_t media_rate );
 int isom_set_avc_config( isom_root_t *root, uint32_t trak_number, uint32_t entry_number,
     uint8_t configurationVersion, uint8_t AVCProfileIndication, uint8_t profile_compatibility, uint8_t AVCLevelIndication, uint8_t lengthSizeMinusOne,
     uint8_t chroma_format, uint8_t bit_depth_luma_minus8, uint8_t bit_depth_chroma_minus8 );
@@ -1231,6 +1228,9 @@ int isom_set_last_sample_delta( isom_root_t *root, uint32_t trak_number, uint32_
 int isom_set_language( isom_root_t *root, uint32_t trak_number, char *language );
 int isom_set_free( isom_root_t *root, uint8_t *data, uint64_t data_length );
 int isom_set_tyrant_chapter( isom_root_t *root, char *file_name );
+
+int isom_create_explicit_timeline_map( isom_root_t *root, uint32_t trak_number, uint64_t segment_duration, int64_t media_time, int32_t media_rate );
+int isom_modify_timeline_map( isom_root_t *root, uint32_t trak_number, uint32_t entry_number, uint64_t segment_duration, int64_t media_time, int32_t media_rate );
 
 int isom_update_media_modification_time( isom_root_t *root, uint32_t trak_number );
 int isom_update_track_modification_time( isom_root_t *root, uint32_t trak_number );
