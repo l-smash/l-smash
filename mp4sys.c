@@ -1225,10 +1225,10 @@ int mp4sys_setup_AudioSpecificConfig( mp4sys_audio_summary_t* summary )
 
     if( !new_asc )
         return -1;
-    if( summary->asc )
-        free( summary->asc );
-    summary->asc = new_asc;
-    summary->asc_length = new_length;
+    if( summary->exdata )
+        free( summary->exdata );
+    summary->exdata = new_asc;
+    summary->exdata_length = new_length;
     return 0 ;
 }
 
@@ -1245,14 +1245,14 @@ int mp4sys_summary_add_AudioSpecificConfig( mp4sys_audio_summary_t* summary, voi
         if( !new_asc )
             return -1;
         memcpy( new_asc, asc, asc_length );
-        summary->asc_length = asc_length;
+        summary->exdata_length = asc_length;
     }
     else
-        summary->asc_length = 0;
+        summary->exdata_length = 0;
 
-    if( summary->asc )
-        free( summary->asc );
-    summary->asc = new_asc;
+    if( summary->exdata )
+        free( summary->exdata );
+    summary->exdata = new_asc;
     return 0;
 }
 
@@ -1260,8 +1260,8 @@ void mp4sys_cleanup_audio_summary( mp4sys_audio_summary_t* summary )
 {
     if( !summary )
         return;
-    if( summary->asc )
-        free( summary->asc );
+    if( summary->exdata )
+        free( summary->exdata );
     free( summary );
 }
 
@@ -1947,9 +1947,9 @@ mp4sys_audio_summary_t* mp4sys_duplicate_audio_summary( mp4sys_importer_t* impor
     if( !src_summary )
         return NULL;
     memcpy( summary, src_summary, sizeof(mp4sys_audio_summary_t) );
-    summary->asc = NULL;
-    summary->asc_length = 0;
-    if( mp4sys_summary_add_AudioSpecificConfig( summary, src_summary->asc, src_summary->asc_length ) )
+    summary->exdata = NULL;
+    summary->exdata_length = 0;
+    if( mp4sys_summary_add_AudioSpecificConfig( summary, src_summary->exdata, src_summary->exdata_length ) )
     {
         free( summary );
         return NULL;

@@ -386,8 +386,8 @@ static int isom_add_mp4a_entry( isom_entry_list_t *list, mp4sys_audio_summary_t*
     esd_param.bufferSizeDB = 0;       /* NOTE: ISO/IEC 14496-3 does not mention this, so we use 0. */
     esd_param.maxBitrate = 0;         /* This will be updated later if needed. or... I think this can be arbitrary value. */
     esd_param.avgBitrate = 0;         /* FIXME: 0 if VBR. */
-    esd_param.dsi_payload = summary->asc;
-    esd_param.dsi_payload_length = summary->asc_length;
+    esd_param.dsi_payload = summary->exdata;
+    esd_param.dsi_payload_length = summary->exdata_length;
     esds->ES = mp4sys_setup_ES_Descriptor( &esd_param );
     if( !esds->ES )
     {
