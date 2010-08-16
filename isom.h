@@ -705,25 +705,25 @@ typedef struct
     isom_bs_t *bs;
 } isom_root_t;
 
-/* Track Box */
+/** Track Box **/
 typedef struct
 {
     uint32_t chunk_number;              /* chunk number */
     uint32_t sample_description_index;  /* sample description index */
     uint64_t first_dts;                 /* the first DTS in chunk */
     isom_entry_list_t *pool;            /* samples pooled to interleave */
-} isom_chunk_cache_t;
+} isom_chunk_t;
 
 typedef struct
 {
     uint64_t dts;
     uint64_t cts;
-} isom_ts_cache_t;
+} isom_timestamp_t;
 
 typedef struct
 {
-    isom_chunk_cache_t chunk;
-    isom_ts_cache_t ts;
+    isom_chunk_t chunk;
+    isom_timestamp_t timestamp;
 } isom_cache_t;
 
 typedef struct
@@ -738,6 +738,7 @@ typedef struct
     isom_mdat_t *mdat;          /* go to referenced mdat box */
     isom_cache_t *cache;
 } isom_trak_entry_t;
+/** **/
 
 
 #define ISOM_4CC( a, b, c, d ) (((a)<<24) | ((b)<<16) | ((c)<<8) | (d))
@@ -1137,6 +1138,7 @@ enum isom_grouping_code
     ISOM_GROUP_TYPE_ROLL = ISOM_4CC( 'r', 'o', 'l', 'l' ),      /* Roll Recovery */
 };
 
+
 typedef struct
 {
     uint8_t sync_point;
@@ -1149,23 +1151,13 @@ typedef struct
 typedef struct
 {
     uint32_t length;
-    char *data;
+    uint8_t *data;
     uint64_t dts;
     uint64_t cts;
     uint32_t index;
     isom_sample_property_t prop;
 } isom_sample_t;
 
-typedef struct
-{
-    uint32_t index;
-    uint32_t sample_count;
-    isom_sample_t *sample;
-} isom_chunk_t;
-
-
-isom_root_t *isom_create_root( char *filename );
-isom_sample_t *isom_create_sample( void );
 
 int isom_add_dref_entry( isom_root_t *root, uint32_t trak_number, uint32_t flags, char *name, char *location );
 int isom_add_sps_entry( isom_root_t *root, uint32_t trak_number, uint32_t entry_number, uint8_t *sps, uint32_t sps_size );
@@ -1238,6 +1230,10 @@ int isom_update_movie_modification_time( isom_root_t *root );
 int isom_update_track_duration( isom_root_t *root, uint32_t trak_number );
 int isom_update_bitrate_info( isom_root_t *root, uint32_t trak_number, uint32_t entry_number );
 
+
+isom_root_t *isom_create_root( char *filename );
+isom_sample_t *isom_create_sample( uint32_t size );
+void isom_remove_sample( isom_sample_t *sample );
 int isom_write_sample( isom_root_t *root, uint32_t trak_number, isom_sample_t *sample, double max_chunk_duration );
 int isom_write_mdat_size( isom_root_t *root );
 int isom_add_mandatory_boxes( isom_root_t *root, uint32_t hdlr_type );
