@@ -1294,8 +1294,8 @@ mp4sys_audioProfileLevelIndication mp4sys_get_audioProfileLevelIndication( mp4sy
         /* pretending plain AAC-LC, if actually HE-AAC. */
         static const uint32_t mp4sys_aac_pli_table[5][3] = {
             /* channels, frequency,    audioProfileLevelIndication */
-            {         5,     96000,        MP4SYS_AUDIO_PLI_AAC_L5 },
-            {         5,     48000,        MP4SYS_AUDIO_PLI_AAC_L4 },
+            {         6,     96000,        MP4SYS_AUDIO_PLI_AAC_L5 }, /* FIXME: 6ch is not strictly correct, but works in many case. */
+            {         6,     48000,        MP4SYS_AUDIO_PLI_AAC_L4 }, /* FIXME: 6ch is not strictly correct, but works in many case. */
             {         2,     48000,        MP4SYS_AUDIO_PLI_AAC_L2 },
             {         2,     24000,        MP4SYS_AUDIO_PLI_AAC_L1 },
             {         0,         0, MP4SYS_AUDIO_PLI_NOT_SPECIFIED }
