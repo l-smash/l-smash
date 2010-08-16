@@ -1456,13 +1456,19 @@ typedef void ( *mp4sys_importer_cleanup )( struct mp4sys_importer_tag* importer 
 typedef int ( *mp4sys_importer_get_accessunit )( struct mp4sys_importer_tag*, uint32_t track_number , void* buf, uint32_t* size );
 typedef int ( *mp4sys_importer_probe )( struct mp4sys_importer_tag* importer );
 
+typedef struct
+{
+    mp4sys_importer_probe          probe;
+    mp4sys_importer_get_accessunit get_accessunit;
+    mp4sys_importer_cleanup        cleanup;
+} mp4sys_importer_functions;
+
 typedef struct mp4sys_importer_tag
 {
     FILE* stream;
-    void* info; /* FIXME: importer internal status information. should be a list corresponding to tracks? */
-    mp4sys_importer_get_accessunit get_accessunit;
-    mp4sys_importer_cleanup cleanup;
-    mp4sys_audio_summary_t* summary; /* FIXME: summary should be a list corresponding to tracks */
+    void* info; /* importer internal status information. */
+    mp4sys_importer_functions funcs;
+    isom_entry_list_t* summaries;
 } mp4sys_importer_t;
 
 /***************************************************************************
@@ -1693,9 +1699,11 @@ static int mp4sys_adts_get_accessunit( mp4sys_importer_t* importer, uint32_t tra
         mp4sys_audio_summary_t* summary = mp4sys_adts_create_summary( &info->header );
         if( !summary )
             return -1;
-        if( importer->summary )
-            mp4sys_cleanup_audio_summary( importer->summary );
-        importer->summary = summary;
+        isom_entry_t* entry = isom_get_entry( importer->summaries, track_number );
+        if( !entry || !entry->data )
+            return -1;
+        mp4sys_cleanup_audio_summary( entry->data );
+        entry->data = summary;
     }
 
     /* read a raw_data_block(), typically == payload of a ADTS frame */
@@ -1849,23 +1857,31 @@ static int mp4sys_adts_probe( mp4sys_importer_t* importer )
     info->header = header;
     info->variable_header = variable_header;
 
-    if( importer->summary )
-        mp4sys_cleanup_audio_summary( importer->summary );
-    importer->summary = summary;
+    if( isom_add_entry( importer->summaries, summary ) )
+    if( !info )
+    {
+        free( info );
+        mp4sys_cleanup_audio_summary( summary );
+        return -1;
+    }
     importer->info = info;
 
-    importer->cleanup = mp4sys_adts_cleanup;
-    importer->get_accessunit = mp4sys_adts_get_accessunit;
     return 0;
 }
+
+const static mp4sys_importer_functions mp4sys_adts_importer = {
+    mp4sys_adts_probe,
+    mp4sys_adts_get_accessunit,
+    mp4sys_adts_cleanup
+};
 
 /***************************************************************************
     importer public interfaces
 ***************************************************************************/
 
 /******** importer listing table ********/
-static mp4sys_importer_probe mp4sys_importer_tbl[] = {
-    mp4sys_adts_probe,
+const static mp4sys_importer_functions* mp4sys_importer_tbl[] = {
+    &mp4sys_adts_importer,
     NULL,
 };
 
@@ -1876,10 +1892,10 @@ void mp4sys_importer_close( mp4sys_importer_t* importer )
         return;
     if( importer->stream )
         fclose( importer->stream );
-    if( importer->cleanup )
-        importer->cleanup( importer );
-    /* FIXME: we have to make a loop for the tracks */
-    mp4sys_cleanup_audio_summary( importer->summary );
+    if( importer->funcs.cleanup )
+        importer->funcs.cleanup( importer );
+    /* FIXME: To be extended to support visual summary. */
+    isom_remove_list( importer->summaries, mp4sys_cleanup_audio_summary );
     free( importer );
 }
 
@@ -1894,23 +1910,30 @@ mp4sys_importer_t* mp4sys_importer_open( char* identifier )
         free( importer );
         return NULL;
     }
-    mp4sys_importer_probe detector;
-    for( int i = 0; (detector = mp4sys_importer_tbl[i]) != NULL && detector( importer ); i++ )
-        mp4sys_fseek( importer->stream, 0, SEEK_SET );
-    if( !detector )
+    importer->summaries = isom_create_entry_list();
+    if( !importer->summaries )
     {
         mp4sys_importer_close( importer );
         return NULL;
     }
+    const mp4sys_importer_functions* funcs;
+    for( int i = 0; (funcs = mp4sys_importer_tbl[i]) && funcs->probe && funcs->probe( importer ); i++ )
+        mp4sys_fseek( importer->stream, 0, SEEK_SET );
+    if( !funcs )
+    {
+        mp4sys_importer_close( importer );
+        return NULL;
+    }
+    importer->funcs = *funcs;
     return importer;
 }
 
 /* 0 if success, positive if changed, negative if failed */
 int mp4sys_importer_get_access_unit( mp4sys_importer_t* importer, uint32_t track_number, void* buf, uint32_t* size )
 {
-    if( !importer || !importer->get_accessunit || !buf || !size || *size == 0 )
+    if( !importer || !importer->funcs.get_accessunit || !buf || !size || *size == 0 )
         return -1;
-    return importer->get_accessunit( importer, track_number, buf, size );
+    return importer->funcs.get_accessunit( importer, track_number, buf, size );
 }
 
 mp4sys_audio_summary_t* mp4sys_duplicate_audio_summary( mp4sys_importer_t* importer, uint32_t track_number )
@@ -1920,10 +1943,13 @@ mp4sys_audio_summary_t* mp4sys_duplicate_audio_summary( mp4sys_importer_t* impor
     mp4sys_audio_summary_t* summary = (mp4sys_audio_summary_t*)malloc( sizeof(mp4sys_audio_summary_t) );
     if( !summary )
         return NULL;
-    memcpy( summary, importer->summary, sizeof(mp4sys_audio_summary_t) );
+    mp4sys_audio_summary_t* src_summary = isom_get_entry_data( importer->summaries, track_number );
+    if( !src_summary )
+        return NULL;
+    memcpy( summary, src_summary, sizeof(mp4sys_audio_summary_t) );
     summary->asc = NULL;
     summary->asc_length = 0;
-    if( mp4sys_summary_add_AudioSpecificConfig( summary, importer->summary->asc, importer->summary->asc_length ) )
+    if( mp4sys_summary_add_AudioSpecificConfig( summary, src_summary->asc, src_summary->asc_length ) )
     {
         free( summary );
         return NULL;

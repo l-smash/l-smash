@@ -397,37 +397,42 @@ typedef enum {
 /* FIXME: I wonder whether this struct should blong to namespace of "isom" or not. */
 /* NOTE: For audio, currently assuming AAC-LC. For video, currently not used. */
 
+#define MP4SYS_BASE_SUMMARY \
+    mp4sys_object_type_indication object_type_indication;\
+    mp4sys_stream_type stream_type;\
+    uint32_t max_au_length;      /* buffer length for 1 access unit, typically max size of 1 audio/video frame */
+
 typedef struct {
-    mp4sys_object_type_indication object_type_indication;
-    mp4sys_stream_type stream_type;
-    uint32_t max_au_length;      /* buffer length for 1 audio frame */
-    uint32_t frequency;          /* Even if the stream is HE-AAC v1/aacPlus v1/SBR, this is base AAC's one. */
-    uint32_t channels;           /* Even if the stream is HE-AAC v2/aacPlus v2/SBR+PS, this is base AAC's one. */
+    MP4SYS_BASE_SUMMARY
+} mp4sys_summary_t;
+
+typedef struct {
+    MP4SYS_BASE_SUMMARY
+    // mp4sys_audioProfileLevelIndication pli ; /* I wonder we should have this or not. */
+    uint32_t frequency;          /* Even if the stream is HE-AAC v1/SBR, this is base AAC's one. */
+    uint32_t channels;           /* Even if the stream is HE-AAC v2/SBR+PS, this is base AAC's one. */
     uint32_t bit_depth;          /* If AAC, AAC stream itself does not mention to accuracy (bit_depth of decoded PCM data), we assume 16bit. */
     uint32_t samples_in_frame;   /* Even if the stream is HE-AAC/aacPlus/SBR(+PS), this is base AAC's one, so 1024. */
-    // mp4sys_audioProfileLevelIndication pli ; /* I wonder we should have this or not. */
 
-    /* I wonder whether properties below should be hidden. */
-    mp4a_AudioObjectType aot;    /* Detailed codec type. */
+    mp4a_AudioObjectType aot;    /* Detailed codec type. If not mp4a, just ignored. */
     mp4a_aac_sbr_mode sbr_mode;  /* SBR treatment. Currently we always set this as mp4a_AAC_SBR_NOT_SPECIFIED(Implicit signaling).
                                     User can set this for treatment in other way. */
-    void* asc;                   /* payload of DecoderSpecificInfo (that's called AudioSpecificConfig in mp4a) */
+    void* asc;                   /* typically payload of DecoderSpecificInfo (that's called AudioSpecificConfig in mp4a) */
     uint32_t asc_length;         /* length of asc */
 } mp4sys_audio_summary_t;
 
 typedef struct {
-    mp4sys_object_type_indication object_type_indication;
-    mp4sys_stream_type stream_type;
-    uint32_t max_au_length;      /* buffer length for 1 video frame */
+    MP4SYS_BASE_SUMMARY
+    // mp4sys_visualProfileLevelIndication pli ; /* I wonder we should have this or not. */
     uint32_t width;
     uint32_t height;
     uint32_t display_width;
     uint32_t display_height;
-    // mp4sys_visualProfileLevelIndication pli ; /* I wonder we should have this or not. */
+    uint32_t bit_depth;          /* If AAC, AAC stream itself does not mention to accuracy (bit_depth of decoded PCM data), we assume 16bit. */
 
     /* I wonder whether properties below should be hidden. */
-    // mp4a_VideoObjectType vot;    /* Detailed codec type. */
-    void* vsc;                   /* payload of DecoderSpecificInfo */
+    // mp4v_VideoObjectType vot;    /* Detailed codec type. If not mp4v, just ignored. */
+    void* vsc;                   /* typically payload of DecoderSpecificInfo */
     uint32_t vsc_length;         /* length of vsc */
 } mp4sys_video_summary_t;
 
