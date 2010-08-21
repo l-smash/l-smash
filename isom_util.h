@@ -26,6 +26,8 @@
 #include <stdio.h>
 #include <inttypes.h>
 
+#define debug_if(x) if(x)
+
 /*---- bytestream ----*/
 
 typedef struct
@@ -64,6 +66,24 @@ uint32_t isom_bs_read_be24( isom_bs_t *bs );
 uint32_t isom_bs_read_be32( isom_bs_t *bs );
 uint64_t isom_bs_read_be64( isom_bs_t *bs );
 int isom_bs_read_data( isom_bs_t *bs, uint64_t size );
+
+/*---- bitstream ----*/
+typedef struct {
+    isom_bs_t* bs;
+    uint8_t store;
+    uint8_t cache;
+} mp4sys_bits_t;
+
+void mp4sys_bits_init( mp4sys_bits_t* bits, isom_bs_t *bs );
+mp4sys_bits_t* mp4sys_bits_create( isom_bs_t *bs );
+void mp4sys_bits_align( mp4sys_bits_t *bits );
+void mp4sys_bits_cleanup( mp4sys_bits_t *bits );
+
+/*---- bitstream writer ----*/
+void mp4sys_bits_put( mp4sys_bits_t *bits, uint32_t value, uint32_t width );
+mp4sys_bits_t* mp4sys_adhoc_bits_create();
+void mp4sys_adhoc_bits_cleanup( mp4sys_bits_t* bits );
+void* mp4sys_bs_export_data( mp4sys_bits_t* bits, uint32_t* length );
 
 /*---- list ----*/
 
