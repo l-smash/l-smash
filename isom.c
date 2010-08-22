@@ -2499,20 +2499,23 @@ static int isom_write_stsd( isom_bs_t *bs, isom_trak_entry_t *trak )
         switch( sample->base_header.type )
         {
             case ISOM_CODEC_TYPE_AVC1_VIDEO :
+#if 0
             case ISOM_CODEC_TYPE_AVC2_VIDEO :
             case ISOM_CODEC_TYPE_AVCP_VIDEO :
+            case ISOM_CODEC_TYPE_SVC1_VIDEO :
+            case ISOM_CODEC_TYPE_MVC1_VIDEO :
+            case ISOM_CODEC_TYPE_MVC2_VIDEO :
+#endif
                 isom_write_avc_entry( bs, stsd );
                 break;
             case ISOM_CODEC_TYPE_MP4A_AUDIO :
                 isom_write_mp4a_entry( bs, stsd );
                 break;
+#if 0
             case ISOM_CODEC_TYPE_DRAC_VIDEO :
             case ISOM_CODEC_TYPE_ENCV_VIDEO :
             case ISOM_CODEC_TYPE_MJP2_VIDEO :
-            case ISOM_CODEC_TYPE_MVC1_VIDEO :
-            case ISOM_CODEC_TYPE_MVC2_VIDEO :
             case ISOM_CODEC_TYPE_S263_VIDEO :
-            case ISOM_CODEC_TYPE_SVC1_VIDEO :
             case ISOM_CODEC_TYPE_VC_1_VIDEO :
                 isom_write_visual_entry( bs, stsd );
                 break;
@@ -2560,6 +2563,9 @@ static int isom_write_stsd( isom_bs_t *bs, isom_trak_entry_t *trak )
             case ISOM_CODEC_TYPE_URIM_META :
             case ISOM_CODEC_TYPE_XML_META  :
                 isom_write_metadata_entry( bs, stsd );
+                break;
+#endif
+            default :
                 break;
         }
     }
