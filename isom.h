@@ -318,6 +318,8 @@ typedef struct
 typedef struct
 {
     ISOM_AUDIO_SAMPLE_ENTRY;
+    uint32_t exdata_length;
+    void *exdata;
 } isom_audio_entry_t;
 
 /* Hint Sample Entry */

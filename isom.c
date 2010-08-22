@@ -420,7 +420,7 @@ static int isom_add_mp4a_entry( isom_entry_list_t *list, mp4sys_audio_summary_t*
     /* WARNING: This field cannot retain frequency above 65535Hz.
        This is not "FIXME", I just honestly implemented what the spec says.
        BTW, who ever expects sampling frequency takes fixed-point decimal??? */
-    mp4a->samplerate = summary->frequency << 16;
+    mp4a->samplerate = summary->frequency <= UINT16_MAX ? summary->frequency << 16 : 0;
     mp4a->esds = esds;
     mp4a->pli = mp4sys_get_audioProfileLevelIndication( summary );
     if( isom_add_entry( list, mp4a ) )
@@ -474,7 +474,7 @@ static int isom_add_visual_entry( isom_entry_list_t *list, uint32_t sample_type 
     return 0;
 }
 
-static int isom_add_audio_entry( isom_entry_list_t *list, uint32_t sample_type )
+static int isom_add_audio_entry( isom_entry_list_t *list, uint32_t sample_type, mp4sys_audio_summary_t *summary )
 {
     if( !list )
         return -1;
@@ -486,9 +486,24 @@ static int isom_add_audio_entry( isom_entry_list_t *list, uint32_t sample_type )
     audio->data_reference_index = 1;
     audio->channelcount = 2;
     audio->samplesize = 16;
-    audio->samplerate = 48000U<<16;
+    audio->samplerate = summary->frequency <= UINT16_MAX ? summary->frequency << 16 : 0;
+    if( summary->exdata )
+    {
+        audio->exdata_length = summary->exdata_length;
+        audio->exdata = malloc( audio->exdata_length );
+        if( !audio->exdata )
+        {
+            free( audio );
+            return -1;
+        }
+        memcpy( audio->exdata, summary->exdata, audio->exdata_length );
+    }
+    else
+        audio->exdata = NULL;
     if( isom_add_entry( list, audio ) )
     {
+        if( audio->exdata )
+            free( audio->exdata );
         free( audio );
         return -1;
     }
@@ -554,7 +569,7 @@ int isom_add_sample_entry( isom_root_t *root, uint32_t trak_number, uint32_t sam
         case ISOM_CODEC_TYPE_SQCP_AUDIO :
         case ISOM_CODEC_TYPE_SSMV_AUDIO :
         case ISOM_CODEC_TYPE_TWOS_AUDIO :
-            ret = isom_add_audio_entry( list, sample_type );
+            ret = isom_add_audio_entry( list, sample_type, (mp4sys_audio_summary_t *)summary );
             break;
 #endif
         default :
@@ -1740,6 +1755,8 @@ static void isom_remove_stsd( isom_stsd_t *stsd )
             case ISOM_CODEC_TYPE_TWOS_AUDIO :
             {
                 isom_audio_entry_t *audio = (isom_audio_entry_t *)entry->data;
+                if( audio->exdata )
+                    free( audio->exdata );
                 free( audio );
                 break;
             }
@@ -2426,6 +2443,7 @@ static int isom_write_audio_entry( isom_bs_t *bs, isom_stsd_t *stsd )
         isom_bs_put_be16( bs, data->pre_defined );
         isom_bs_put_be16( bs, data->reserved2 );
         isom_bs_put_be32( bs, data->samplerate );
+        isom_bs_put_bytes( bs, data->exdata, data->exdata_length );
         if( isom_bs_write_data( bs ) )
             return -1;
     }
@@ -4372,6 +4390,15 @@ static uint64_t isom_update_mp4s_entry_size( isom_mp4s_entry_t *mp4s )
     return mp4s->base_header.size;
 }
 
+static uint64_t isom_update_audio_entry_size( isom_audio_entry_t *audio )
+{
+    if( !audio )
+        return 0;
+    audio->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 28U + audio->exdata_length;
+    CHECK_LARGESIZE( audio->base_header.size );
+    return audio->base_header.size;
+}
+
 static uint64_t isom_update_stsd_size( isom_trak_entry_t *trak )
 {
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
@@ -4409,7 +4436,7 @@ static uint64_t isom_update_stsd_size( isom_trak_entry_t *trak )
             case ISOM_CODEC_TYPE_MJP2_VIDEO :
             case ISOM_CODEC_TYPE_S263_VIDEO :
             case ISOM_CODEC_TYPE_VC_1_VIDEO :
-                size += isom_update_visual_entry_size( (isom_mp4s_entry_t *)data );
+                size += isom_update_visual_entry_size( (isom_visual_entry_t *)data );
                 break;
             case ISOM_CODEC_TYPE_AC_3_AUDIO :
             case ISOM_CODEC_TYPE_ALAC_AUDIO :
