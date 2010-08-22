@@ -970,7 +970,7 @@ static int isom_scan_trak_profileLevelIndication( isom_trak_entry_t* trak, mp4sy
             case ISOM_CODEC_TYPE_TWOS_AUDIO :
 #endif
                 /* NOTE: These audio codecs other than mp4a does not have appropriate pli. */
-                *visual_pli = MP4SYS_VISUAL_PLI_NOT_SPECIFIED;
+                *audio_pli = MP4SYS_AUDIO_PLI_NOT_SPECIFIED;
                 break;
 #if 0
             case ISOM_CODEC_TYPE_FDP_HINT :
