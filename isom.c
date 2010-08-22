@@ -549,7 +549,9 @@ int isom_add_sample_entry( isom_root_t *root, uint32_t trak_number, uint32_t sam
         case ISOM_CODEC_TYPE_VC_1_VIDEO :
             ret = isom_add_visual_entry( list, sample_type );
             break;
+#endif
         case ISOM_CODEC_TYPE_AC_3_AUDIO :
+#if 0
         case ISOM_CODEC_TYPE_ALAC_AUDIO :
         case ISOM_CODEC_TYPE_DRA1_AUDIO :
         case ISOM_CODEC_TYPE_DTSC_AUDIO :
@@ -569,9 +571,9 @@ int isom_add_sample_entry( isom_root_t *root, uint32_t trak_number, uint32_t sam
         case ISOM_CODEC_TYPE_SQCP_AUDIO :
         case ISOM_CODEC_TYPE_SSMV_AUDIO :
         case ISOM_CODEC_TYPE_TWOS_AUDIO :
+#endif
             ret = isom_add_audio_entry( list, sample_type, (mp4sys_audio_summary_t *)summary );
             break;
-#endif
         default :
             return 0;
     }
@@ -944,7 +946,9 @@ static int isom_scan_trak_profileLevelIndication( isom_trak_entry_t* trak, mp4sy
                 if( *visual_pli == MP4SYS_VISUAL_PLI_NONE_REQUIRED )
                     *visual_pli = MP4SYS_VISUAL_PLI_NOT_SPECIFIED;
                 break;
+#endif
             case ISOM_CODEC_TYPE_AC_3_AUDIO :
+#if 0
             case ISOM_CODEC_TYPE_ALAC_AUDIO :
             case ISOM_CODEC_TYPE_DRA1_AUDIO :
             case ISOM_CODEC_TYPE_DTSC_AUDIO :
@@ -964,9 +968,11 @@ static int isom_scan_trak_profileLevelIndication( isom_trak_entry_t* trak, mp4sy
             case ISOM_CODEC_TYPE_SQCP_AUDIO :
             case ISOM_CODEC_TYPE_SSMV_AUDIO :
             case ISOM_CODEC_TYPE_TWOS_AUDIO :
+#endif
                 /* NOTE: These audio codecs other than mp4a does not have appropriate pli. */
                 *visual_pli = MP4SYS_VISUAL_PLI_NOT_SPECIFIED;
                 break;
+#if 0
             case ISOM_CODEC_TYPE_FDP_HINT :
             case ISOM_CODEC_TYPE_M2TS_HINT :
             case ISOM_CODEC_TYPE_PM2T_HINT :
@@ -1733,7 +1739,9 @@ static void isom_remove_stsd( isom_stsd_t *stsd )
                 free( visual );
                 break;
             }
+#endif
             case ISOM_CODEC_TYPE_AC_3_AUDIO :
+#if 0
             case ISOM_CODEC_TYPE_ALAC_AUDIO :
             case ISOM_CODEC_TYPE_DRA1_AUDIO :
             case ISOM_CODEC_TYPE_DTSC_AUDIO :
@@ -1753,6 +1761,7 @@ static void isom_remove_stsd( isom_stsd_t *stsd )
             case ISOM_CODEC_TYPE_SQCP_AUDIO :
             case ISOM_CODEC_TYPE_SSMV_AUDIO :
             case ISOM_CODEC_TYPE_TWOS_AUDIO :
+#endif
             {
                 isom_audio_entry_t *audio = (isom_audio_entry_t *)entry->data;
                 if( audio->exdata )
@@ -1760,6 +1769,7 @@ static void isom_remove_stsd( isom_stsd_t *stsd )
                 free( audio );
                 break;
             }
+#if 0
             case ISOM_CODEC_TYPE_FDP_HINT :
             case ISOM_CODEC_TYPE_M2TS_HINT :
             case ISOM_CODEC_TYPE_PM2T_HINT :
@@ -2519,7 +2529,9 @@ static int isom_write_stsd( isom_bs_t *bs, isom_trak_entry_t *trak )
             case ISOM_CODEC_TYPE_VC_1_VIDEO :
                 isom_write_visual_entry( bs, stsd );
                 break;
+#endif
             case ISOM_CODEC_TYPE_AC_3_AUDIO :
+#if 0
             case ISOM_CODEC_TYPE_ALAC_AUDIO :
             case ISOM_CODEC_TYPE_DRA1_AUDIO :
             case ISOM_CODEC_TYPE_DTSC_AUDIO :
@@ -2539,8 +2551,10 @@ static int isom_write_stsd( isom_bs_t *bs, isom_trak_entry_t *trak )
             case ISOM_CODEC_TYPE_SQCP_AUDIO :
             case ISOM_CODEC_TYPE_SSMV_AUDIO :
             case ISOM_CODEC_TYPE_TWOS_AUDIO :
+#endif
                 isom_write_audio_entry( bs, stsd );
                 break;
+#if 0
             case ISOM_CODEC_TYPE_FDP_HINT :
             case ISOM_CODEC_TYPE_M2TS_HINT :
             case ISOM_CODEC_TYPE_PM2T_HINT :
@@ -4444,7 +4458,9 @@ static uint64_t isom_update_stsd_size( isom_trak_entry_t *trak )
             case ISOM_CODEC_TYPE_VC_1_VIDEO :
                 size += isom_update_visual_entry_size( (isom_visual_entry_t *)data );
                 break;
+#endif
             case ISOM_CODEC_TYPE_AC_3_AUDIO :
+#if 0
             case ISOM_CODEC_TYPE_ALAC_AUDIO :
             case ISOM_CODEC_TYPE_DRA1_AUDIO :
             case ISOM_CODEC_TYPE_DTSC_AUDIO :
@@ -4464,9 +4480,9 @@ static uint64_t isom_update_stsd_size( isom_trak_entry_t *trak )
             case ISOM_CODEC_TYPE_SQCP_AUDIO :
             case ISOM_CODEC_TYPE_SSMV_AUDIO :
             case ISOM_CODEC_TYPE_TWOS_AUDIO :
+#endif
                 size += isom_update_audio_entry_size( (isom_audio_entry_t *)data );
                 break;
-#endif
             default :
                 break;
         }
@@ -4718,5 +4734,63 @@ int isom_finish_movie( isom_root_t *root )
         isom_update_moov_size( root ) ||
         isom_write_moov( root ) )
         return -1;
+    return 0;
+}
+
+/* data_length must be size of data that is available. */
+int isom_create_dac3_from_syncframe( mp4sys_audio_summary_t *summary, uint8_t *data, uint32_t data_length )
+{
+    /* Requires the following 7 bytes.
+     * syncword                                         : 16
+     * crc1                                             : 16
+     * fscod                                            : 2
+     * frmsizecod                                       : 6
+     * bsid                                             : 5
+     * bsmod                                            : 3
+     * acmod                                            : 3
+     * if((acmod & 0x01) && (acmod != 0x01)) cmixlev    : 2
+     * if(acmod & 0x04) surmixlev                       : 2
+     * if(acmod == 0x02) dsurmod                        : 2
+     * lfeon                                            : 1
+     */
+    if( data_length < 7 )
+        return -1;
+    /* check syncword */
+    if( data[0] != 0x0b || data[1] != 0x77 )
+        return -1;
+    /* get necessary data for AC3SpecificBox */
+    uint32_t fscod, bsid, bsmod, acmod, lfeon, frmsizecod;
+    fscod      = data[4] >> 6;
+    frmsizecod = data[4] & 0x3f;
+    bsid       = data[5] >> 3;
+    bsmod      = data[5] & 0x07;
+    acmod      = data[6] >> 5;
+    if( acmod == 0x02 )
+        lfeon  = data[6] >> 2;      /* skip dsurmod */
+    else
+    {
+        if( (acmod & 0x01) && acmod != 0x01 && (acmod & 0x04) )
+            lfeon = data[6];        /* skip cmixlev and surmixlev */
+        else if( ((acmod & 0x01) && acmod != 0x01) || (acmod & 0x04) )
+            lfeon = data[6] >> 2;   /* skip cmixlev or surmixlev */
+        else
+            lfeon = data[6] >> 4;
+    }
+    lfeon &= 0x01;
+    /* create AC3SpecificBox */
+    mp4sys_bits_t *bits = mp4sys_adhoc_bits_create();
+    mp4sys_bits_put( bits, 11, 32 );
+    mp4sys_bits_put( bits, ISOM_BOX_TYPE_DAC3, 32 );
+    mp4sys_bits_put( bits, fscod, 2 );
+    mp4sys_bits_put( bits, bsid, 5 );
+    mp4sys_bits_put( bits, bsmod, 3 );
+    mp4sys_bits_put( bits, acmod, 3 );
+    mp4sys_bits_put( bits, lfeon, 1 );
+    mp4sys_bits_put( bits, frmsizecod >> 1, 5 );
+    mp4sys_bits_put( bits, 0, 5 );
+    if( summary->exdata )
+        free( summary->exdata );
+    summary->exdata = mp4sys_bs_export_data( bits, &summary->exdata_length );
+    mp4sys_adhoc_bits_cleanup( bits );
     return 0;
 }

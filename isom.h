@@ -902,6 +902,8 @@ enum isom_box_code
     ISOM_BOX_TYPE_PASP = ISOM_4CC( 'p', 'a', 's', 'p' ),
 
     ISOM_BOX_TYPE_CHPL = ISOM_4CC( 'c', 'h', 'p', 'l' ),
+
+    ISOM_BOX_TYPE_DAC3 = ISOM_4CC( 'd', 'a', 'c', '3' ),
 };
 
 enum qt_box_code
@@ -1241,5 +1243,8 @@ int isom_write_mdat_size( isom_root_t *root );
 int isom_add_mandatory_boxes( isom_root_t *root, uint32_t hdlr_type );
 int isom_finish_movie( isom_root_t *root );
 void isom_destroy_root( isom_root_t *root );
+
+
+int isom_create_dac3_from_syncframe( mp4sys_audio_summary_t *summary, uint8_t *data, uint32_t data_length );
 
 #endif
