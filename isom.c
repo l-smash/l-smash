@@ -4103,7 +4103,8 @@ int isom_update_media_modification_time( isom_root_t *root, uint32_t trak_number
         return -1;
     isom_mdhd_t *mdhd = trak->mdia->mdhd;
     mdhd->modification_time = isom_get_current_mp4time();
-    if( mdhd->creation_time < mdhd->modification_time )
+    /* overwrite strange creation_time */
+    if( mdhd->creation_time > mdhd->modification_time )
         mdhd->creation_time = mdhd->modification_time;
     return 0;
 }
@@ -4115,7 +4116,8 @@ int isom_update_track_modification_time( isom_root_t *root, uint32_t trak_number
         return -1;
     isom_tkhd_t *tkhd = trak->tkhd;
     tkhd->modification_time = isom_get_current_mp4time();
-    if( tkhd->creation_time < tkhd->modification_time )
+    /* overwrite strange creation_time */
+    if( tkhd->creation_time > tkhd->modification_time )
         tkhd->creation_time = tkhd->modification_time;
     return 0;
 }
@@ -4126,7 +4128,8 @@ int isom_update_movie_modification_time( isom_root_t *root )
         return -1;
     isom_mvhd_t *mvhd = root->moov->mvhd;
     mvhd->modification_time = isom_get_current_mp4time();
-    if( mvhd->creation_time < mvhd->modification_time )
+    /* overwrite strange creation_time */
+    if( mvhd->creation_time > mvhd->modification_time )
         mvhd->creation_time = mvhd->modification_time;
     return 0;
 }
