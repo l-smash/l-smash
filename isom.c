@@ -551,8 +551,8 @@ int isom_add_sample_entry( isom_root_t *root, uint32_t trak_number, uint32_t sam
             break;
 #endif
         case ISOM_CODEC_TYPE_AC_3_AUDIO :
-#if 0
         case ISOM_CODEC_TYPE_ALAC_AUDIO :
+#if 0
         case ISOM_CODEC_TYPE_DRA1_AUDIO :
         case ISOM_CODEC_TYPE_DTSC_AUDIO :
         case ISOM_CODEC_TYPE_DTSH_AUDIO :
@@ -948,8 +948,8 @@ static int isom_scan_trak_profileLevelIndication( isom_trak_entry_t* trak, mp4sy
                 break;
 #endif
             case ISOM_CODEC_TYPE_AC_3_AUDIO :
-#if 0
             case ISOM_CODEC_TYPE_ALAC_AUDIO :
+#if 0
             case ISOM_CODEC_TYPE_DRA1_AUDIO :
             case ISOM_CODEC_TYPE_DTSC_AUDIO :
             case ISOM_CODEC_TYPE_DTSH_AUDIO :
@@ -1741,8 +1741,8 @@ static void isom_remove_stsd( isom_stsd_t *stsd )
             }
 #endif
             case ISOM_CODEC_TYPE_AC_3_AUDIO :
-#if 0
             case ISOM_CODEC_TYPE_ALAC_AUDIO :
+#if 0
             case ISOM_CODEC_TYPE_DRA1_AUDIO :
             case ISOM_CODEC_TYPE_DTSC_AUDIO :
             case ISOM_CODEC_TYPE_DTSH_AUDIO :
@@ -2531,8 +2531,8 @@ static int isom_write_stsd( isom_bs_t *bs, isom_trak_entry_t *trak )
                 break;
 #endif
             case ISOM_CODEC_TYPE_AC_3_AUDIO :
-#if 0
             case ISOM_CODEC_TYPE_ALAC_AUDIO :
+#if 0
             case ISOM_CODEC_TYPE_DRA1_AUDIO :
             case ISOM_CODEC_TYPE_DTSC_AUDIO :
             case ISOM_CODEC_TYPE_DTSH_AUDIO :
@@ -3831,7 +3831,22 @@ int isom_update_bitrate_info( isom_root_t *root, uint32_t trak_number, uint32_t 
             /* FIXME: avgBitrate is 0 only if VBR in proper. */
             if( mp4sys_update_DecoderConfigDescriptor( stsd_data->esds->ES, info.bufferSizeDB, info.maxBitrate, 0 ) )
                 return -1;
+            break;
         }
+        case ISOM_CODEC_TYPE_ALAC_AUDIO :
+        {
+            isom_audio_entry_t *alac = (isom_audio_entry_t *)sample_entry;
+            if( !alac || alac->exdata_length < 36 || !alac->exdata )
+                return -1;
+            uint8_t *exdata = (uint8_t *)alac->exdata + 28;
+            exdata[0] = (info.avgBitrate >> 24) & 0xff;
+            exdata[1] = (info.avgBitrate >> 16) & 0xff;
+            exdata[2] = (info.avgBitrate >>  8) & 0xff;
+            exdata[3] =  info.avgBitrate        & 0xff;
+            break;
+        }
+        default :
+            break;
     }
     return 0;
 }
@@ -4463,8 +4478,8 @@ static uint64_t isom_update_stsd_size( isom_trak_entry_t *trak )
                 break;
 #endif
             case ISOM_CODEC_TYPE_AC_3_AUDIO :
-#if 0
             case ISOM_CODEC_TYPE_ALAC_AUDIO :
+#if 0
             case ISOM_CODEC_TYPE_DRA1_AUDIO :
             case ISOM_CODEC_TYPE_DTSC_AUDIO :
             case ISOM_CODEC_TYPE_DTSH_AUDIO :
