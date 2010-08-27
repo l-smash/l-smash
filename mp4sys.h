@@ -437,7 +437,7 @@ typedef struct {
 typedef void mp4sys_importer_t;
 
 /* importing functions */
-mp4sys_importer_t* mp4sys_importer_open( char* identifier );
+mp4sys_importer_t* mp4sys_importer_open( const char* identifier, const char* format );
 void mp4sys_importer_close( mp4sys_importer_t* importer );
 int mp4sys_importer_get_access_unit( mp4sys_importer_t* importer, uint32_t track_number, void* buf, uint32_t* buf_size );
 unsigned int mp4sys_importer_get_track_count( mp4sys_importer_t* importer ); /* currently not supported */
