@@ -98,6 +98,12 @@ typedef enum {
     MP4SYS_OBJECT_TYPE_DTSE_AUDIO                         = 0xAC, /* DTS Express low bit rate audio, also known as DTS LBR */
 
     MP4SYS_OBJECT_TYPE_SQCP_AUDIO                         = 0xE1, /* 13K Voice */
+
+    /* FIXME: These OTIs are L-SMASH specific and for internal use. Shall never be coded into output.
+              This is a workaround for L-SMASH's structure issue and will be resolved in the future.
+              See mp4sys_amrnb_probe(). */
+    MP4SYS_OBJECT_TYPE_PRIV_SAMR_AUDIO                    = 0xFFE2, /* AMR-NB */
+
     MP4SYS_OBJECT_TYPE_NONE                               = 0xFF, /* no object type specified */
     /* Streams with this value with a StreamType indicating a systems stream (values 1,2,3,6,7,8,9)
        shall be treated as if the ObjectTypeIndication had been set to 0x01. */

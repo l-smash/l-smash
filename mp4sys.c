@@ -1758,12 +1758,118 @@ const static mp4sys_importer_functions mp4sys_adts_importer = {
 };
 
 /***************************************************************************
+    AMR-NB storage format importer
+    http://www.ietf.org/rfc/rfc3267.txt 5. AMR and AMR-WB Storage Format
+***************************************************************************/
+static int mp4sys_amrnb_get_accessunit( mp4sys_importer_t* importer, uint32_t track_number , void* userbuf, uint32_t *size )
+{
+    debug_if( !importer || !userbuf || !size )
+        return -1;
+    if( track_number != 1 )
+        return -1;
+
+    uint8_t* buf = userbuf;
+    if( fread( buf, 1, 1, importer->stream ) == 0 )
+    {
+        /* EOF */
+        *size = 0;
+        return 0;
+    }
+    uint8_t FT = (*buf >> 3) & 0x0F;
+
+    /* AMR-NB has varieties of frame-size table like this. so I'm not sure yet. */
+    const int frame_size[] = { 13, 14, 16, 18, 20, 21, 27, 32, 5, 5, 5, 5, 0, 0, 0, 1 };
+    int read_size = frame_size[FT];
+    if( read_size == 0 || *size < read_size-- )
+        return -1;
+    if( read_size == 0 )
+        return 0;
+    if( fread( buf+1, 1, read_size, importer->stream ) != read_size )
+        return -1;
+    *size = read_size + 1;
+    return 0;
+}
+
+#define MP4SYS_DAMR_LENGTH 17
+
+int mp4sys_amrnb_create_damr( mp4sys_audio_summary_t *summary )
+{
+    isom_bs_t* bs = isom_bs_create( NULL ); /* no file writing */
+    if( !bs )
+        return -1;
+    isom_bs_put_be32( bs, MP4SYS_DAMR_LENGTH );
+    isom_bs_put_bytes( bs, "damr", 4 ); /* FIXME: corresponding to ISOM_BOX_TYPE_DAMR defined in isom.h */
+    /* NOTE: These are specific to each codec vendor, but we're surely not a vendor.
+              Using dummy data. */
+    isom_bs_put_be32( bs, 0x20202020 ); /* vendor */
+    isom_bs_put_byte( bs, 0 );          /* decoder_version */
+
+    /* NOTE: Using safe value for these settings, maybe sub-optimal. */
+    isom_bs_put_be16( bs, 0x83FF );     /* mode_set, represents for possibly existing frame-type (0x83FF == all). */
+    isom_bs_put_byte( bs, 1 );          /* mode_change_period */
+    isom_bs_put_byte( bs, 1 );          /* frames_per_sample */
+
+    if( summary->exdata )
+        free( summary->exdata );
+    summary->exdata = isom_bs_export_data( bs, &summary->exdata_length );
+    isom_bs_cleanup( bs );
+    if( !summary->exdata )
+        return -1;
+    summary->exdata_length = MP4SYS_DAMR_LENGTH;
+    return 0;
+}
+
+#define MP4SYS_AMRNB_STORAGE_MAGIC_LENGTH 6
+
+static int mp4sys_amrnb_probe( mp4sys_importer_t* importer )
+{
+    uint8_t buf[MP4SYS_AMRNB_STORAGE_MAGIC_LENGTH];
+    if( fread( buf, 1, MP4SYS_AMRNB_STORAGE_MAGIC_LENGTH, importer->stream ) != MP4SYS_AMRNB_STORAGE_MAGIC_LENGTH )
+        return -1;
+    if( memcmp( buf, "#!AMR\n", MP4SYS_AMRNB_STORAGE_MAGIC_LENGTH ) )
+        return -1;
+    mp4sys_audio_summary_t* summary = malloc( sizeof(mp4sys_audio_summary_t) );
+    memset( summary, 0, sizeof(mp4sys_audio_summary_t) );
+    if( !summary )
+        return -1;
+    /* FIXME: Using a workaround for L-SMASH's structure issue.
+              This summary cannot provide enough information to determine isom_codec_code without this.
+              isom_codec_code cannot be a member of summary, because inclusion of isom.h is a cycling reference. */
+    summary->object_type_indication = MP4SYS_OBJECT_TYPE_PRIV_SAMR_AUDIO; /* FIXME: private OTI. */
+    summary->stream_type            = MP4SYS_STREAM_TYPE_AudioStream;
+    summary->exdata                 = NULL; /* to be set in mp4sys_amrnb_create_damr() */
+    summary->exdata_length          = 0;    /* to be set in mp4sys_amrnb_create_damr() */
+    summary->max_au_length          = 32;
+    summary->aot                    = MP4A_AUDIO_OBJECT_TYPE_NULL; /* no effect */
+    summary->frequency              = 8000;
+    summary->channels               = 1;
+    summary->bit_depth              = 16;
+    summary->samples_in_frame       = 160;
+    summary->sbr_mode               = MP4A_AAC_SBR_NOT_SPECIFIED; /* no effect */
+    if( mp4sys_amrnb_create_damr( summary ) || isom_add_entry( importer->summaries, summary ) )
+    {
+        mp4sys_cleanup_audio_summary( summary );
+        return -1;
+    }
+    return 0;
+}
+
+const static mp4sys_importer_functions mp4sys_amrnb_importer = {
+    "amrnb",
+    1,
+    mp4sys_amrnb_probe,
+    mp4sys_amrnb_get_accessunit,
+    NULL
+};
+
+/***************************************************************************
     importer public interfaces
 ***************************************************************************/
 
 /******** importer listing table ********/
 const static mp4sys_importer_functions* mp4sys_importer_tbl[] = {
     &mp4sys_adts_importer,
+    &mp4sys_amrnb_importer,
     NULL,
 };
 
