@@ -1517,14 +1517,14 @@ static mp4sys_audio_summary_t* mp4sys_adts_create_summary( mp4sys_adts_fixed_hea
     summary->samples_in_frame       = 1024;
     summary->aot                    = header->profile_ObjectType + MP4A_AUDIO_OBJECT_TYPE_AAC_MAIN;
     summary->sbr_mode               = MP4A_AAC_SBR_NOT_SPECIFIED;
-#if 0 /* FIXME: This is very unstable. So many players crash with this. */
+#if 0 /* FIXME: This is very unstable. Many players crash with this. */
     if( header->ID != 0 )
     {
         /*
          * NOTE: This ADTS seems of ISO/IEC 13818-7 (MPEG-2 AAC).
-         * It has special object_type_indications, depending on it's profile.
-         * It shall not have decoder specific information, so AudioObjectType neither.
-         * see ISO/IEC 14496-1, 8.6.7 DecoderSpecificInfo.
+         * It has special object_type_indications, depending on it's profile (Legacy Interface).
+         * If ADIF header is not available, it should not have decoder specific information, so AudioObjectType neither.
+         * see ISO/IEC 14496-1, 8.6.7 DecoderSpecificInfo and 14496-3 Subpart 9: MPEG-1/2 Audio in MPEG-4.
          */
         summary->object_type_indication = header->profile_ObjectType + MP4SYS_OBJECT_TYPE_Audio_ISO_13818_7_Main_Profile;
         summary->aot                    = MP4A_AUDIO_OBJECT_TYPE_NULL;
@@ -1739,7 +1739,6 @@ static int mp4sys_adts_probe( mp4sys_importer_t* importer )
     info->variable_header = variable_header;
 
     if( isom_add_entry( importer->summaries, summary ) )
-    if( !info )
     {
         free( info );
         mp4sys_cleanup_audio_summary( summary );
