@@ -448,9 +448,11 @@ void mp4sys_importer_close( mp4sys_importer_t* importer );
 int mp4sys_importer_get_access_unit( mp4sys_importer_t* importer, uint32_t track_number, void* buf, uint32_t* buf_size );
 unsigned int mp4sys_importer_get_track_count( mp4sys_importer_t* importer ); /* currently not supported */
 
-/* to facilitate to make DecoderSpecificInfo / AudioSpecificConfig */
+/* to facilitate to make exdata (typically DecoderSpecificInfo or AudioSpecificConfig). */
 int mp4sys_setup_AudioSpecificConfig( mp4sys_audio_summary_t* summary );
-int mp4sys_summary_set_AudioSpecificConfig( mp4sys_audio_summary_t* summary, void* asc, uint32_t asc_length );
+int mp4sys_summary_add_exdata( mp4sys_audio_summary_t* summary, void* exdata, uint32_t exdata_length );
+
+/* profileLevelIndication relative functions. */
 mp4sys_audioProfileLevelIndication mp4sys_get_audioProfileLevelIndication( mp4sys_audio_summary_t* summary );
 mp4sys_audioProfileLevelIndication mp4sys_max_audioProfileLevelIndication(
 	mp4sys_audioProfileLevelIndication a,

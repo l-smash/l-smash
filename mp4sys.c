@@ -1109,27 +1109,27 @@ int mp4sys_setup_AudioSpecificConfig( mp4sys_audio_summary_t* summary )
     return 0 ;
 }
 
-/* Set AudioSpecificConfig into summary from memory block */
-int mp4sys_summary_add_AudioSpecificConfig( mp4sys_audio_summary_t* summary, void* asc, uint32_t asc_length )
+/* Copy exdata into summary from memory block */
+int mp4sys_summary_add_exdata( mp4sys_audio_summary_t* summary, void* exdata, uint32_t exdata_length )
 {
     if( !summary )
         return -1;
     /* atomic operation */
-    void* new_asc = NULL;
-    if( asc && asc_length != 0 )
+    void* new_exdata = NULL;
+    if( exdata && exdata_length != 0 )
     {
-        new_asc = malloc( asc_length );
-        if( !new_asc )
+        new_exdata = malloc( exdata_length );
+        if( !new_exdata )
             return -1;
-        memcpy( new_asc, asc, asc_length );
-        summary->exdata_length = asc_length;
+        memcpy( new_exdata, exdata, exdata_length );
+        summary->exdata_length = exdata_length;
     }
     else
         summary->exdata_length = 0;
 
     if( summary->exdata )
         free( summary->exdata );
-    summary->exdata = new_asc;
+    summary->exdata = new_exdata;
     return 0;
 }
 
@@ -1975,7 +1975,7 @@ mp4sys_audio_summary_t* mp4sys_duplicate_audio_summary( mp4sys_importer_t* impor
     memcpy( summary, src_summary, sizeof(mp4sys_audio_summary_t) );
     summary->exdata = NULL;
     summary->exdata_length = 0;
-    if( mp4sys_summary_add_AudioSpecificConfig( summary, src_summary->exdata, src_summary->exdata_length ) )
+    if( mp4sys_summary_add_exdata( summary, src_summary->exdata, src_summary->exdata_length ) )
     {
         free( summary );
         return NULL;
