@@ -380,6 +380,8 @@ static int isom_add_mp4a_entry( isom_entry_list_t *list, mp4sys_audio_summary_t*
     case MP4SYS_OBJECT_TYPE_Audio_ISO_13818_7_Main_Profile:
     case MP4SYS_OBJECT_TYPE_Audio_ISO_13818_7_LC_Profile:
     case MP4SYS_OBJECT_TYPE_Audio_ISO_13818_7_SSR_Profile:
+    case MP4SYS_OBJECT_TYPE_Audio_ISO_13818_3: /* Legacy Interface */
+    case MP4SYS_OBJECT_TYPE_Audio_ISO_11172_3: /* Legacy Interface */
         break;
     default:
         return -1;
