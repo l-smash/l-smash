@@ -450,13 +450,14 @@ unsigned int mp4sys_importer_get_track_count( mp4sys_importer_t* importer ); /* 
 
 /* to facilitate to make exdata (typically DecoderSpecificInfo or AudioSpecificConfig). */
 int mp4sys_setup_AudioSpecificConfig( mp4sys_audio_summary_t* summary );
+int mp4sys_amrnb_create_damr( mp4sys_audio_summary_t *summary );
 int mp4sys_summary_add_exdata( mp4sys_audio_summary_t* summary, void* exdata, uint32_t exdata_length );
 
 /* profileLevelIndication relative functions. */
 mp4sys_audioProfileLevelIndication mp4sys_get_audioProfileLevelIndication( mp4sys_audio_summary_t* summary );
 mp4sys_audioProfileLevelIndication mp4sys_max_audioProfileLevelIndication(
-	mp4sys_audioProfileLevelIndication a,
-	mp4sys_audioProfileLevelIndication b
+    mp4sys_audioProfileLevelIndication a,
+    mp4sys_audioProfileLevelIndication b
 );
 
 /* FIXME: these functions may change in the future.
