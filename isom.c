@@ -1064,7 +1064,7 @@ static int isom_add_tkhd( isom_root_t *root, uint32_t trak_number, uint32_t hdlr
             default :
                 break;
         }
-        tkhd->duration = 0xffff;
+        tkhd->duration = 0xffffffff;
         tkhd->track_ID = trak->root->moov->mvhd->next_track_ID;
         ++ trak->root->moov->mvhd->next_track_ID;
         trak->tkhd = tkhd;
@@ -3249,7 +3249,7 @@ static int isom_update_tkhd_duration( isom_root_t *root, uint32_t trak_number )
     if( tkhd->duration > UINT32_MAX )
         tkhd->full_header.version = 1;
     if( !tkhd->duration )
-        tkhd->duration = tkhd->full_header.version == 1 ? 0xffffffff : 0xffff;
+        tkhd->duration = tkhd->full_header.version == 1 ? 0xffffffffffffffff : 0xffffffff;
     return 0;
 }
 
