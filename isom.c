@@ -3879,9 +3879,6 @@ int isom_set_last_sample_delta( isom_root_t *root, uint32_t trak_number, uint32_
     if( !trak || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->minf || !trak->mdia->minf->stbl ||
         !trak->mdia->minf->stbl->stsz || !trak->mdia->minf->stbl->stts->list || !trak->mdia->minf->stbl->stts->list )
         return -1;
-    /* Ensure that stts is complete. */
-    if( isom_output_cache( root, trak_number ) )
-        return -1;
     isom_stts_t *stts = trak->mdia->minf->stbl->stts;
     uint32_t sample_count = isom_get_sample_count( trak );
     if( !stts->list->tail )
@@ -3922,6 +3919,13 @@ int isom_set_last_sample_delta( isom_root_t *root, uint32_t trak_number, uint32_
     else
         return -1;
     return isom_update_track_duration( root, trak_number );
+}
+
+int isom_flush_pooled_samples( isom_root_t *root, uint32_t trak_number, uint32_t last_sample_delta )
+{
+    if( isom_output_cache( root, trak_number ) )
+        return -1;
+    return isom_set_last_sample_delta( root, trak_number, last_sample_delta );
 }
 
 int isom_set_language( isom_root_t *root, uint32_t trak_number, char *language )

@@ -1242,6 +1242,7 @@ void isom_remove_sample( isom_sample_t *sample );
 int isom_write_sample( isom_root_t *root, uint32_t trak_number, isom_sample_t *sample, double max_chunk_duration );
 int isom_write_mdat_size( isom_root_t *root );
 int isom_add_mandatory_boxes( isom_root_t *root, uint32_t hdlr_type );
+int isom_flush_pooled_samples( isom_root_t *root, uint32_t trak_number, uint32_t last_sample_delta );
 int isom_finish_movie( isom_root_t *root );
 void isom_destroy_root( isom_root_t *root );
 
