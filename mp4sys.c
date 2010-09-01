@@ -1894,8 +1894,17 @@ static int mp4sys_mp3_get_accessunit( mp4sys_importer_t* importer, uint32_t trac
     uint32_t frequency = mp4sys_mp3_frequency_tbl[header->ID][header->sampling_frequency];
     debug_if( bitrate == 0 || frequency == 0 )
         return -1;
-    bitrate *= 1000;
-    uint32_t frame_size = ( header->layer == MP4SYS_LAYER_I ? 12 : 144 ) * bitrate / frequency + header->padding_bit;
+    uint32_t frame_size;
+    if( header->layer == MP4SYS_LAYER_I )
+    {
+        /* mp1's 'slot' is 4 bytes unit. see 11172-3, 2.4.2.1 Audio Sequence General. */
+        frame_size = ( 12 * 1000 * bitrate / frequency + header->padding_bit ) * 4;
+    }
+    else
+    {
+        /* mp2/3's 'slot' is 1 bytes unit. */
+        frame_size = 144 * 1000 * bitrate / frequency + header->padding_bit;
+    }
 
     if( current_status == MP4SYS_MP3_ERROR || frame_size <= 4 || *size < frame_size )
         return -1;
@@ -1932,6 +1941,12 @@ static int mp4sys_mp3_get_accessunit( mp4sys_importer_t* importer, uint32_t trac
     size_t ret = fread( buf, 1, MP4SYS_MP3_HEADER_LENGTH, importer->stream );
     if( ret == 0 )
     {
+        info->status = MP4SYS_MP3_EOF;
+        return 0;
+    }
+    if( ret == 1 && *buf == 0x00 )
+    {
+        /* NOTE: ugly hack for mp1 stream created with SCMPX. */
         info->status = MP4SYS_MP3_EOF;
         return 0;
     }
