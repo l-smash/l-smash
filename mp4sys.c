@@ -1834,7 +1834,7 @@ static mp4sys_audio_summary_t* mp4sys_mp3_create_summary( mp4sys_mp3_header_t* h
     summary->channels               = MP4SYS_MODE_IS_2CH( header->mode ) + 1;
     summary->bit_depth              = 16;
     summary->samples_in_frame       = header->layer == MP4SYS_LAYER_I ? 384 : 1152;
-    summary->aot                    = MP4A_AUDIO_OBJECT_TYPE_NULL; /* no effect */
+    summary->aot                    = MP4A_AUDIO_OBJECT_TYPE_Layer_1 + (MP4SYS_LAYER_I - header->layer); /* no effect with Legacy Interface. */
     summary->sbr_mode               = MP4A_AAC_SBR_NOT_SPECIFIED; /* no effect */
     summary->exdata                 = NULL;
     summary->exdata_length          = 0;
@@ -1842,7 +1842,6 @@ static mp4sys_audio_summary_t* mp4sys_mp3_create_summary( mp4sys_mp3_header_t* h
     if( !legacy_mode )
     {
         summary->object_type_indication = MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3;
-        summary->aot                    = MP4A_AUDIO_OBJECT_TYPE_Layer_1 + (MP4SYS_LAYER_I - header->layer);
         if( mp4sys_setup_AudioSpecificConfig( summary ) )
         {
             mp4sys_cleanup_audio_summary( summary );
