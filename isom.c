@@ -3331,7 +3331,7 @@ static int isom_add_dependency_type( isom_root_t *root, uint32_t trak_number, is
 /* returns 1 if pooled samples must be flushed. */
 /* FIXME: I wonder if this function should have a extra argument which indicates force_to_flush_cached_chunk.
    see isom_write_sample for detail. */
-static int isom_add_chunk( isom_root_t *root, uint32_t trak_number, isom_trak_entry_t *trak, isom_sample_t *sample, double max_chunk_duration )
+static int isom_add_chunk( isom_root_t *root, uint32_t trak_number, isom_trak_entry_t *trak, isom_sample_t *sample )
 {
     if( !trak_number )
         trak_number = isom_get_trak_number( trak );
@@ -3352,7 +3352,7 @@ static int isom_add_chunk( isom_root_t *root, uint32_t trak_number, isom_trak_en
     if( sample->dts < current->first_dts )
         return -1; /* easy error check. */
     double chunk_duration = (double)(sample->dts - current->first_dts) / trak->mdia->mdhd->timescale;
-    if( max_chunk_duration >= chunk_duration )
+    if( root->max_chunk_duration >= chunk_duration )
         return 0; /* no need to flush current cached chunk, the current sample must be put into that. */
 
     /* NOTE: chunk relative stuff must be pushed into root after a chunk is fully determined with its contents. */
@@ -3495,11 +3495,11 @@ static int isom_write_pooled_samples( isom_root_t *root, uint32_t trak_number, i
     return 0;
 }
 
-int isom_write_sample( isom_root_t *root, uint32_t trak_number, isom_sample_t *sample, double max_chunk_duration )
+int isom_write_sample( isom_root_t *root, uint32_t trak_number, isom_sample_t *sample )
 {
     /* I myself think max_chunk_duration == 0, which means all samples will be cached on memory, should be prevented.
        This means removal of a feature that we used to have, but anyway very alone chunk does not make sense. */
-    if( !root || !sample || !sample->data || max_chunk_duration == 0 )
+    if( !root || !sample || !sample->data || root->max_chunk_duration == 0 )
         return -1;
     isom_trak_entry_t *trak = isom_get_trak( root, trak_number );
     if( !trak )
@@ -3516,7 +3516,7 @@ int isom_write_sample( isom_root_t *root, uint32_t trak_number, isom_sample_t *s
      * Note that even though we cannot help the case with random access (i.e. seek) even with this system,
      * we should do it.
      */
-    int ret = isom_add_chunk( root, trak_number, trak, sample, max_chunk_duration );
+    int ret = isom_add_chunk( root, trak_number, trak, sample );
     if( ret < 0 )
         return -1;
 
@@ -3592,6 +3592,14 @@ int isom_set_brands( isom_root_t *root, uint32_t major_brand, uint32_t minor_ver
         ftyp->base_header.size += 4;
     }
     ftyp->brand_count = brand_count;
+    return 0;
+}
+
+int isom_set_max_chunk_duration( isom_root_t *root, double max_chunk_duration )
+{
+    if( !root )
+        return -1;
+    root->max_chunk_duration = max_chunk_duration;
     return 0;
 }
 

@@ -705,6 +705,8 @@ typedef struct
     isom_free_t *free;      /* Free Space Box */
 
     isom_bs_t *bs;
+
+    double max_chunk_duration;      /* max duration per chunk in seconds */
 } isom_root_t;
 
 /** Track Box **/
@@ -1208,6 +1210,7 @@ uint32_t isom_get_media_timescale( isom_root_t *root, uint32_t trak_number );
 uint32_t isom_get_movie_timescale( isom_root_t *root );
 
 int isom_set_brands( isom_root_t *root, uint32_t major_brand, uint32_t minor_version, uint32_t *brands, uint32_t brand_count );
+int isom_set_max_chunk_duration( isom_root_t *root, double max_chunk_duration );
 int isom_set_handler( isom_trak_entry_t *trak, uint32_t handler_type, char *name );
 int isom_set_movie_timescale( isom_root_t *root, uint32_t timescale );
 int isom_set_media_timescale( isom_root_t *root, uint32_t trak_number, uint32_t timescale );
@@ -1239,7 +1242,7 @@ int isom_update_bitrate_info( isom_root_t *root, uint32_t trak_number, uint32_t 
 isom_root_t *isom_create_root( char *filename );
 isom_sample_t *isom_create_sample( uint32_t size );
 void isom_remove_sample( isom_sample_t *sample );
-int isom_write_sample( isom_root_t *root, uint32_t trak_number, isom_sample_t *sample, double max_chunk_duration );
+int isom_write_sample( isom_root_t *root, uint32_t trak_number, isom_sample_t *sample );
 int isom_write_mdat_size( isom_root_t *root );
 int isom_add_mandatory_boxes( isom_root_t *root, uint32_t hdlr_type );
 int isom_flush_pooled_samples( isom_root_t *root, uint32_t trak_number, uint32_t last_sample_delta );
