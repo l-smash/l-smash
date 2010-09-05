@@ -2053,7 +2053,10 @@ static int mp4sys_amrnb_get_accessunit( mp4sys_importer_t* importer, uint32_t tr
     if( read_size == 0 || *size < read_size-- )
         return -1;
     if( read_size == 0 )
+    {
+        *size = 1;
         return 0;
+    }
     if( fread( buf+1, 1, read_size, importer->stream ) != read_size )
         return -1;
     *size = read_size + 1;
