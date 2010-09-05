@@ -2028,15 +2028,23 @@ const static mp4sys_importer_functions mp4sys_mp3_importer = {
 };
 
 /***************************************************************************
-    AMR-NB storage format importer
-    http://www.ietf.org/rfc/rfc3267.txt 5. AMR and AMR-WB Storage Format
+    AMR-NB/WB storage format importer
+    http://www.ietf.org/rfc/rfc3267.txt (Obsoleted)
+    http://www.ietf.org/rfc/rfc4867.txt
 ***************************************************************************/
-static int mp4sys_amrnb_get_accessunit( mp4sys_importer_t* importer, uint32_t track_number , void* userbuf, uint32_t *size )
+static void mp4sys_amr_cleanup( mp4sys_importer_t* importer )
 {
-    debug_if( !importer || !userbuf || !size )
+    debug_if( importer && importer->info )
+        free( importer->info );
+}
+
+static int mp4sys_amr_get_accessunit( mp4sys_importer_t* importer, uint32_t track_number , void* userbuf, uint32_t *size )
+{
+    debug_if( !importer || !importer->info || !userbuf || !size )
         return -1;
     if( track_number != 1 )
         return -1;
+    uint8_t wb = *(uint8_t*)importer->info;
 
     uint8_t* buf = userbuf;
     if( fread( buf, 1, 1, importer->stream ) == 0 )
@@ -2048,8 +2056,11 @@ static int mp4sys_amrnb_get_accessunit( mp4sys_importer_t* importer, uint32_t tr
     uint8_t FT = (*buf >> 3) & 0x0F;
 
     /* AMR-NB has varieties of frame-size table like this. so I'm not sure yet. */
-    const int frame_size[] = { 13, 14, 16, 18, 20, 21, 27, 32, 5, 5, 5, 5, 0, 0, 0, 1 };
-    int read_size = frame_size[FT];
+    const int frame_size[2][16] = {
+        { 13, 14, 16, 18, 20, 21, 27, 32,  5, 5, 5, 5, 0, 0, 0, 1 },
+        { 18, 24, 33, 37, 41, 47, 51, 59, 61, 6, 6, 0, 0, 0, 1, 1 }
+    };
+    int read_size = frame_size[wb][FT];
     if( read_size == 0 || *size < read_size-- )
         return -1;
     if( read_size == 0 )
@@ -2065,7 +2076,7 @@ static int mp4sys_amrnb_get_accessunit( mp4sys_importer_t* importer, uint32_t tr
 
 #define MP4SYS_DAMR_LENGTH 17
 
-int mp4sys_amrnb_create_damr( mp4sys_audio_summary_t *summary )
+int mp4sys_amr_create_damr( mp4sys_audio_summary_t *summary )
 {
     isom_bs_t* bs = isom_bs_create( NULL ); /* no file writing */
     if( !bs )
@@ -2092,15 +2103,27 @@ int mp4sys_amrnb_create_damr( mp4sys_audio_summary_t *summary )
     return 0;
 }
 
-#define MP4SYS_AMRNB_STORAGE_MAGIC_LENGTH 6
+#define MP4SYS_AMR_STORAGE_MAGIC_LENGTH 6
+#define MP4SYS_AMRWB_EX_MAGIC_LENGTH 3
 
-static int mp4sys_amrnb_probe( mp4sys_importer_t* importer )
+static int mp4sys_amr_probe( mp4sys_importer_t* importer )
 {
-    uint8_t buf[MP4SYS_AMRNB_STORAGE_MAGIC_LENGTH];
-    if( fread( buf, 1, MP4SYS_AMRNB_STORAGE_MAGIC_LENGTH, importer->stream ) != MP4SYS_AMRNB_STORAGE_MAGIC_LENGTH )
+    uint8_t buf[MP4SYS_AMR_STORAGE_MAGIC_LENGTH];
+    uint8_t wb = 0;
+    if( fread( buf, 1, MP4SYS_AMR_STORAGE_MAGIC_LENGTH, importer->stream ) != MP4SYS_AMR_STORAGE_MAGIC_LENGTH )
         return -1;
-    if( memcmp( buf, "#!AMR\n", MP4SYS_AMRNB_STORAGE_MAGIC_LENGTH ) )
+    if( memcmp( buf, "#!AMR", MP4SYS_AMR_STORAGE_MAGIC_LENGTH-1 ) )
         return -1;
+    if( buf[MP4SYS_AMR_STORAGE_MAGIC_LENGTH-1] != '\n' )
+    {
+        if( buf[MP4SYS_AMR_STORAGE_MAGIC_LENGTH-1] != '-' )
+            return -1;
+        if( fread( buf, 1, MP4SYS_AMRWB_EX_MAGIC_LENGTH, importer->stream ) != MP4SYS_AMRWB_EX_MAGIC_LENGTH )
+            return -1;
+        if( memcmp( buf, "WB\n", MP4SYS_AMRWB_EX_MAGIC_LENGTH ) )
+            return -1;
+        wb = 1;
+    }
     mp4sys_audio_summary_t* summary = malloc( sizeof(mp4sys_audio_summary_t) );
     memset( summary, 0, sizeof(mp4sys_audio_summary_t) );
     if( !summary )
@@ -2108,31 +2131,40 @@ static int mp4sys_amrnb_probe( mp4sys_importer_t* importer )
     /* FIXME: Using a workaround for L-SMASH's structure issue.
               This summary cannot provide enough information to determine isom_codec_code without this.
               isom_codec_code cannot be a member of summary, because inclusion of isom.h is a cycling reference. */
-    summary->object_type_indication = MP4SYS_OBJECT_TYPE_PRIV_SAMR_AUDIO; /* FIXME: private OTI. */
+    summary->object_type_indication = MP4SYS_OBJECT_TYPE_PRIV_SAMR_AUDIO + wb; /* FIXME: private OTI. */
     summary->stream_type            = MP4SYS_STREAM_TYPE_AudioStream;
     summary->exdata                 = NULL; /* to be set in mp4sys_amrnb_create_damr() */
     summary->exdata_length          = 0;    /* to be set in mp4sys_amrnb_create_damr() */
-    summary->max_au_length          = 32;
+    summary->max_au_length          = wb ? 61 : 32;
     summary->aot                    = MP4A_AUDIO_OBJECT_TYPE_NULL; /* no effect */
-    summary->frequency              = 8000;
+    summary->frequency              = (8000 << wb);
     summary->channels               = 1;
     summary->bit_depth              = 16;
-    summary->samples_in_frame       = 160;
+    summary->samples_in_frame       = (160 << wb);
     summary->sbr_mode               = MP4A_AAC_SBR_NOT_SPECIFIED; /* no effect */
-    if( mp4sys_amrnb_create_damr( summary ) || isom_add_entry( importer->summaries, summary ) )
+    importer->info = malloc( sizeof(uint8_t) );
+    if( !importer->info )
     {
+        mp4sys_cleanup_audio_summary( summary );
+        return -1;
+    }
+    *(uint8_t*)importer->info = wb;
+    if( mp4sys_amr_create_damr( summary ) || isom_add_entry( importer->summaries, summary ) )
+    {
+        free( importer->info );
+        importer->info = NULL;
         mp4sys_cleanup_audio_summary( summary );
         return -1;
     }
     return 0;
 }
 
-const static mp4sys_importer_functions mp4sys_amrnb_importer = {
-    "amrnb",
+const static mp4sys_importer_functions mp4sys_amr_importer = {
+    "amr",
     1,
-    mp4sys_amrnb_probe,
-    mp4sys_amrnb_get_accessunit,
-    NULL
+    mp4sys_amr_probe,
+    mp4sys_amr_get_accessunit,
+    mp4sys_amr_cleanup
 };
 
 /***************************************************************************
@@ -2143,7 +2175,7 @@ const static mp4sys_importer_functions mp4sys_amrnb_importer = {
 const static mp4sys_importer_functions* mp4sys_importer_tbl[] = {
     &mp4sys_adts_importer,
     &mp4sys_mp3_importer,
-    &mp4sys_amrnb_importer,
+    &mp4sys_amr_importer,
     NULL,
 };
 
