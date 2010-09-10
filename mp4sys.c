@@ -464,7 +464,7 @@ void mp4a_put_AudioSpecificConfig( isom_bs_t* bs, mp4a_AudioSpecificConfig_t* as
             }
         }
     }
-    mp4sys_bits_align( &bits );
+    mp4sys_bits_put_align( &bits );
 }
 
 /***************************************************************************

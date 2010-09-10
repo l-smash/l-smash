@@ -246,6 +246,21 @@ int isom_bs_read_data( isom_bs_t *bs, uint32_t size )
     bs->store += read_size;
     return 0;
 }
+
+int isom_bs_import_data( isom_bs_t *bs, void* data, uint32_t length )
+{
+    if( !bs || bs->error || !data || length == 0 )
+        return -1;
+    isom_bs_alloc( bs, bs->store + length );
+    if( bs->error || !bs->data ) /* means, failed to alloc. */
+    {
+        isom_bs_free( bs );
+        return -1;
+    }
+    memcpy( bs->data + bs->store, data, length );
+    bs->store += length;
+    return 0;
+}
 /*---- ----*/
 
 /*---- bitstream ----*/
@@ -270,7 +285,7 @@ mp4sys_bits_t* mp4sys_bits_create( isom_bs_t *bs )
 }
 
 #define BITS_IN_BYTE 8
-void mp4sys_bits_align( mp4sys_bits_t *bits )
+void mp4sys_bits_put_align( mp4sys_bits_t *bits )
 {
     debug_if( !bits )
         return;
@@ -279,13 +294,20 @@ void mp4sys_bits_align( mp4sys_bits_t *bits )
     isom_bs_put_byte( bits->bs, bits->cache << ( BITS_IN_BYTE - bits->store ) );
 }
 
+void mp4sys_bits_get_align( mp4sys_bits_t *bits )
+{
+    debug_if( !bits )
+        return;
+    bits->store = 0;
+    bits->cache = 0;
+}
+
 /* Must be used ONLY for bits struct created with isom_create_bits.
    Otherwise, just free() the bits struct. */
 void mp4sys_bits_cleanup( mp4sys_bits_t *bits )
 {
     debug_if( !bits )
         return;
-    mp4sys_bits_align( bits );
     free( bits );
 }
 
@@ -330,6 +352,45 @@ void mp4sys_bits_put( mp4sys_bits_t *bits, uint32_t value, uint32_t width )
     }
 }
 
+/* We can change value's type to unsigned int for 64-bit operation if needed. */
+uint32_t mp4sys_bits_get( mp4sys_bits_t *bits, uint32_t width )
+{
+    debug_if( !bits || !width )
+        return 0;
+    uint32_t value = 0;
+    if( bits->store )
+    {
+        if( bits->store >= width )
+        {
+            /* cache contains all of bits required. */
+            bits->store -= width;
+            return mp4sys_bits_mask_lsb8( bits->cache >> bits->store, width );
+        }
+        /* fill value's leading bits with cache's residual. */
+        value = mp4sys_bits_mask_lsb8( bits->cache, bits->store );
+        width -= bits->store;
+        bits->store = 0;
+        bits->cache = 0;
+    }
+    /* cache is empty here. */
+    /* byte unit operation. */
+    while( width > BITS_IN_BYTE )
+    {
+        value <<= BITS_IN_BYTE;
+        width -= BITS_IN_BYTE;
+        value |= isom_bs_get_byte( bits->bs );
+    }
+    /* bit unit operation for residual. */
+    if( width )
+    {
+        bits->cache = isom_bs_get_byte( bits->bs );
+        bits->store = BITS_IN_BYTE - width;
+        value <<= width;
+        value |= mp4sys_bits_mask_lsb8( bits->cache >> bits->store, width );
+    }
+    return value;
+}
+
 /****
  bitstream with bytestream for adhoc operation
 ****/
@@ -352,13 +413,19 @@ void mp4sys_adhoc_bits_cleanup( mp4sys_bits_t* bits )
 {
     if( !bits )
         return;
-    isom_bs_cleanup( bits->bs );
     mp4sys_bits_cleanup( bits );
+    isom_bs_cleanup( bits->bs );
 }
 
 void* mp4sys_bs_export_data( mp4sys_bits_t* bits, uint32_t* length )
 {
+    mp4sys_bits_put_align( bits );
     return isom_bs_export_data( bits->bs, length );
+}
+
+int mp4sys_bs_import_data( mp4sys_bits_t* bits, void* data, uint32_t length )
+{
+    return isom_bs_import_data( bits->bs, data, length );
 }
 /*---- ----*/
 
