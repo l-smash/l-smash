@@ -1166,26 +1166,12 @@ typedef struct
 } isom_sample_t;
 
 
-int isom_add_dref_entry( isom_root_t *root, uint32_t track_ID, uint32_t flags, char *name, char *location );
 int isom_add_sps_entry( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *sps, uint32_t sps_size );
 int isom_add_pps_entry( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *pps, uint32_t pps_size );
 int isom_add_sample_entry( isom_root_t *root, uint32_t track_ID, uint32_t sample_type, void* summary );
-int isom_add_stts_entry( isom_root_t *root, uint32_t track_ID, uint32_t sample_delta );
-int isom_add_ctts_entry( isom_root_t *root, uint32_t track_ID, uint32_t sample_offset );
-int isom_add_stsc_entry( isom_root_t *root, uint32_t track_ID, uint32_t first_chunk, uint32_t samples_per_chunk, uint32_t sample_description_index );
-int isom_add_stsz_entry( isom_root_t *root, uint32_t track_ID, uint32_t entry_size );
-int isom_add_stss_entry( isom_root_t *root, uint32_t track_ID, uint32_t sample_number );
-int isom_add_co64_entry( isom_root_t *root, uint32_t track_ID, uint64_t chunk_offset );
-int isom_add_stco_entry( isom_root_t *root, uint32_t track_ID, uint64_t chunk_offset );
-int isom_add_sbgp_entry( isom_root_t *root, uint32_t track_ID, uint32_t grouping_number, uint32_t sample_count, uint32_t group_description_index );
-int isom_add_roll_group_entry( isom_root_t *root, uint32_t track_ID, uint32_t grouping_number, uint32_t description_length, int16_t roll_distance );
 
 int isom_add_btrt( isom_root_t *root, uint32_t track_ID, uint32_t entry_number );
 int isom_add_pasp( isom_root_t *root, uint32_t track_ID, uint32_t entry_number );
-int isom_add_ctts( isom_root_t *root, uint32_t track_ID );
-int isom_add_stss( isom_root_t *root, uint32_t track_ID );
-int isom_add_sdtp( isom_root_t *root, uint32_t track_ID );
-int isom_add_sbgp( isom_root_t *root, uint32_t track_ID, uint32_t grouping_type );
 int isom_add_mdat( isom_root_t *root );
 int isom_add_free( isom_root_t *root, uint8_t *data, uint64_t data_length );
 
