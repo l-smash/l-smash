@@ -73,6 +73,10 @@ $(TARGET_LIB): .depend $(OBJS)
 $(TARGET_AUDIOMUXER): $(OBJ_AUDIOMUXER) $(TARGET_LIB)
 	@$(ECHO) "LINK: $@"
 	@$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $+ $(EXTRALIBS)
+ifneq ($(DEBUG),YES)
+	@$(ECHO) "STRIP: $@"
+	@$(STRIP) $@
+endif
 
 #### type rules ####
 %.o: %.c .depend
