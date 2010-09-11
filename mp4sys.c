@@ -2084,7 +2084,7 @@ int mp4sys_amr_create_damr( mp4sys_audio_summary_t *summary )
     if( !bs )
         return -1;
     isom_bs_put_be32( bs, MP4SYS_DAMR_LENGTH );
-    isom_bs_put_bytes( bs, "damr", 4 ); /* FIXME: corresponding to ISOM_BOX_TYPE_DAMR defined in isom.h */
+    isom_bs_put_be32( bs, ISOM_BOX_TYPE_DAMR );
     /* NOTE: These are specific to each codec vendor, but we're surely not a vendor.
               Using dummy data. */
     isom_bs_put_be32( bs, 0x20202020 ); /* vendor */
