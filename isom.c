@@ -67,42 +67,6 @@ isom_root_t *isom_create_movie( char *filename )
     return root;
 }
 
-uint32_t isom_create_track( isom_root_t *root, uint32_t handler_type )
-{
-    isom_trak_entry_t *trak = isom_add_trak( root );
-    if( !trak )
-        return 0;
-    if( isom_add_tkhd( trak, handler_type ) ||
-        isom_add_mdia( trak ) ||
-        isom_add_mdhd( trak->mdia ) ||
-        isom_add_minf( trak->mdia ) ||
-        isom_add_stbl( trak->mdia->minf ) ||
-        isom_add_dinf( trak->mdia->minf ) ||
-        isom_add_dref( trak->mdia->minf->dinf ) ||
-        isom_add_hdlr( trak->mdia, handler_type ) )
-        return 0;
-    switch( handler_type )
-    {
-        case ISOM_HDLR_TYPE_VISUAL :
-            if( isom_add_vmhd( trak->mdia->minf ) )
-                return 0;
-            break;
-        case ISOM_HDLR_TYPE_AUDIO :
-            if( isom_add_smhd( trak->mdia->minf ) )
-                return 0;
-            break;
-        case ISOM_HDLR_TYPE_HINT :
-            if( isom_add_hmhd( trak->mdia->minf ) )
-                return 0;
-            break;
-        default :
-            if( isom_add_nmhd( trak->mdia->minf ) )
-                return 0;
-            break;
-    }
-    return isom_get_track_ID( root, root->moov->trak_list->entry_count );
-}
-
 isom_sample_t *isom_create_sample( uint32_t size )
 {
     isom_sample_t *sample = malloc( sizeof(isom_sample_t) );
@@ -1460,11 +1424,6 @@ static int isom_add_stbl( isom_minf_t *minf )
         return -1;
     isom_create_basebox( stbl, ISOM_BOX_TYPE_STBL );
     minf->stbl = stbl;
-    isom_add_stsd( stbl );
-    isom_add_stts( stbl );
-    isom_add_stsc( stbl );
-    isom_add_stco( stbl );
-    isom_add_stsz( stbl );
     return 0;
 }
 
@@ -1526,6 +1485,47 @@ static isom_trak_entry_t *isom_add_trak( isom_root_t *root )
     trak->root = root;
     trak->cache = cache;
     return trak;
+}
+
+uint32_t isom_create_track( isom_root_t *root, uint32_t handler_type )
+{
+    isom_trak_entry_t *trak = isom_add_trak( root );
+    if( !trak )
+        return 0;
+    if( isom_add_tkhd( trak, handler_type ) ||
+        isom_add_mdia( trak ) ||
+        isom_add_mdhd( trak->mdia ) ||
+        isom_add_minf( trak->mdia ) ||
+        isom_add_stbl( trak->mdia->minf ) ||
+        isom_add_dinf( trak->mdia->minf ) ||
+        isom_add_dref( trak->mdia->minf->dinf ) ||
+        isom_add_hdlr( trak->mdia, handler_type ) ||
+        isom_add_stsd( trak->mdia->minf->stbl ) ||
+        isom_add_stts( trak->mdia->minf->stbl ) ||
+        isom_add_stsc( trak->mdia->minf->stbl ) ||
+        isom_add_stco( trak->mdia->minf->stbl ) ||
+        isom_add_stsz( trak->mdia->minf->stbl ) )
+        return 0;
+    switch( handler_type )
+    {
+        case ISOM_HDLR_TYPE_VISUAL :
+            if( isom_add_vmhd( trak->mdia->minf ) )
+                return 0;
+            break;
+        case ISOM_HDLR_TYPE_AUDIO :
+            if( isom_add_smhd( trak->mdia->minf ) )
+                return 0;
+            break;
+        case ISOM_HDLR_TYPE_HINT :
+            if( isom_add_hmhd( trak->mdia->minf ) )
+                return 0;
+            break;
+        default :
+            if( isom_add_nmhd( trak->mdia->minf ) )
+                return 0;
+            break;
+    }
+    return isom_get_track_ID( root, root->moov->trak_list->entry_count );
 }
 
 int isom_add_free( isom_root_t *root, uint8_t *data, uint64_t data_length )
