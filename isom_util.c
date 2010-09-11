@@ -417,13 +417,13 @@ void mp4sys_adhoc_bits_cleanup( mp4sys_bits_t* bits )
     mp4sys_bits_cleanup( bits );
 }
 
-void* mp4sys_bs_export_data( mp4sys_bits_t* bits, uint32_t* length )
+void* mp4sys_bits_export_data( mp4sys_bits_t* bits, uint32_t* length )
 {
     mp4sys_bits_put_align( bits );
     return isom_bs_export_data( bits->bs, length );
 }
 
-int mp4sys_bs_import_data( mp4sys_bits_t* bits, void* data, uint32_t length )
+int mp4sys_bits_import_data( mp4sys_bits_t* bits, void* data, uint32_t length )
 {
     return isom_bs_import_data( bits->bs, data, length );
 }

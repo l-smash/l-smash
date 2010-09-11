@@ -87,8 +87,8 @@ void mp4sys_bits_put( mp4sys_bits_t *bits, uint32_t value, uint32_t width );
 uint32_t mp4sys_bits_get( mp4sys_bits_t *bits, uint32_t width );
 mp4sys_bits_t* mp4sys_adhoc_bits_create();
 void mp4sys_adhoc_bits_cleanup( mp4sys_bits_t* bits );
-void* mp4sys_bs_export_data( mp4sys_bits_t* bits, uint32_t* length );
-int mp4sys_bs_import_data( mp4sys_bits_t* bits, void* data, uint32_t length );
+void* mp4sys_bits_export_data( mp4sys_bits_t* bits, uint32_t* length );
+int mp4sys_bits_import_data( mp4sys_bits_t* bits, void* data, uint32_t length );
 
 /*---- list ----*/
 

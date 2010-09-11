@@ -4710,7 +4710,7 @@ int isom_create_dac3_from_syncframe( mp4sys_audio_summary_t *summary, uint8_t *d
     mp4sys_bits_put( bits, 0, 5 );
     if( summary->exdata )
         free( summary->exdata );
-    summary->exdata = mp4sys_bs_export_data( bits, &summary->exdata_length );
+    summary->exdata = mp4sys_bits_export_data( bits, &summary->exdata_length );
     mp4sys_adhoc_bits_cleanup( bits );
     return 0;
 }
