@@ -336,29 +336,6 @@ static int isom_add_avc_entry( isom_entry_list_t *list, uint32_t sample_type )
     return 0;
 }
 
-static int isom_add_mp4v_entry( isom_entry_list_t *list )
-{
-    if( !list )
-        return -1;
-    isom_mp4v_entry_t *mp4v = malloc( sizeof(isom_visual_entry_t) );
-    if( !mp4v )
-        return -1;
-    memset( mp4v, 0, sizeof(isom_mp4v_entry_t) );
-    isom_init_base_header( &mp4v->base_header, ISOM_CODEC_TYPE_MP4V_VIDEO );
-    mp4v->data_reference_index = 1;
-    mp4v->horizresolution = mp4v->vertresolution = 0x00480000;
-    mp4v->frame_count = 1;
-    mp4v->compressorname[32] = '\0';
-    mp4v->depth = 0x0018;
-    mp4v->pre_defined3 = -1;
-    if( isom_add_entry( list, mp4v ) )
-    {
-        free( mp4v );
-        return -1;
-    }
-    return 0;
-}
-
 static int isom_add_mp4a_entry( isom_entry_list_t *list, mp4sys_audio_summary_t* summary )
 {
     if( !list || !summary
@@ -425,6 +402,30 @@ static int isom_add_mp4a_entry( isom_entry_list_t *list, mp4sys_audio_summary_t*
     return 0;
 }
 
+#if 0
+static int isom_add_mp4v_entry( isom_entry_list_t *list )
+{
+    if( !list )
+        return -1;
+    isom_mp4v_entry_t *mp4v = malloc( sizeof(isom_visual_entry_t) );
+    if( !mp4v )
+        return -1;
+    memset( mp4v, 0, sizeof(isom_mp4v_entry_t) );
+    isom_init_base_header( &mp4v->base_header, ISOM_CODEC_TYPE_MP4V_VIDEO );
+    mp4v->data_reference_index = 1;
+    mp4v->horizresolution = mp4v->vertresolution = 0x00480000;
+    mp4v->frame_count = 1;
+    mp4v->compressorname[32] = '\0';
+    mp4v->depth = 0x0018;
+    mp4v->pre_defined3 = -1;
+    if( isom_add_entry( list, mp4v ) )
+    {
+        free( mp4v );
+        return -1;
+    }
+    return 0;
+}
+
 static int isom_add_mp4s_entry( isom_entry_list_t *list )
 {
     if( !list )
@@ -465,6 +466,7 @@ static int isom_add_visual_entry( isom_entry_list_t *list, uint32_t sample_type 
     }
     return 0;
 }
+#endif
 
 static int isom_add_audio_entry( isom_entry_list_t *list, uint32_t sample_type, mp4sys_audio_summary_t *summary )
 {
@@ -805,6 +807,7 @@ static int isom_add_stco_entry( isom_stbl_t *stbl, uint64_t chunk_offset )
     return 0;
 }
 
+#if 0
 static int isom_add_sbgp_entry( isom_stbl_t *stbl, uint32_t grouping_number, uint32_t sample_count, uint32_t group_description_index )
 {
     if( !stbl || !stbl->grouping_count || !grouping_number || stbl->grouping_count < grouping_number || !sample_count )
@@ -844,6 +847,7 @@ static int isom_add_roll_group_entry( isom_stbl_t *stbl, uint32_t grouping_numbe
     }
     return 0;
 }
+#endif
 
 static int isom_add_chpl_entry( isom_chpl_t *chpl, uint64_t start_time, char *chapter_name )
 {
@@ -1270,6 +1274,7 @@ static int isom_add_sdtp( isom_stbl_t *stbl )
     return 0;
 }
 
+#if 0
 static int isom_add_sgpd( isom_stbl_t *stbl, uint32_t grouping_type )
 {
     if( !stbl )
@@ -1332,6 +1337,7 @@ static int isom_add_sbgp( isom_stbl_t *stbl, uint32_t grouping_type )
     stbl->grouping_count = grouping_count;
     return 0;
 }
+#endif
 
 static int isom_add_stbl( isom_minf_t *minf )
 {
@@ -2138,6 +2144,31 @@ static int isom_write_mp4a_entry( isom_bs_t *bs, isom_stsd_t *stsd )
     return 0;
 }
 
+static int isom_write_audio_entry( isom_bs_t *bs, isom_stsd_t *stsd )
+{
+    for( isom_entry_t *entry = stsd->list->head; entry; entry = entry->next )
+    {
+        isom_audio_entry_t *data = (isom_audio_entry_t *)entry->data;
+        if( !data )
+            return -1;
+        isom_bs_put_base_header( bs, &data->base_header );
+        isom_bs_put_bytes( bs, data->reserved, 6 );
+        isom_bs_put_be16( bs, data->data_reference_index );
+        isom_bs_put_be32( bs, data->reserved1[0] );
+        isom_bs_put_be32( bs, data->reserved1[1] );
+        isom_bs_put_be16( bs, data->channelcount );
+        isom_bs_put_be16( bs, data->samplesize );
+        isom_bs_put_be16( bs, data->pre_defined );
+        isom_bs_put_be16( bs, data->reserved2 );
+        isom_bs_put_be32( bs, data->samplerate );
+        isom_bs_put_bytes( bs, data->exdata, data->exdata_length );
+        if( isom_bs_write_data( bs ) )
+            return -1;
+    }
+    return 0;
+}
+
+#if 0
 static int isom_write_visual_entry( isom_bs_t *bs, isom_stsd_t *stsd )
 {
     for( isom_entry_t *entry = stsd->list->head; entry; entry = entry->next )
@@ -2178,30 +2209,6 @@ static int isom_write_visual_entry( isom_bs_t *bs, isom_stsd_t *stsd )
     return 0;
 }
 
-static int isom_write_audio_entry( isom_bs_t *bs, isom_stsd_t *stsd )
-{
-    for( isom_entry_t *entry = stsd->list->head; entry; entry = entry->next )
-    {
-        isom_audio_entry_t *data = (isom_audio_entry_t *)entry->data;
-        if( !data )
-            return -1;
-        isom_bs_put_base_header( bs, &data->base_header );
-        isom_bs_put_bytes( bs, data->reserved, 6 );
-        isom_bs_put_be16( bs, data->data_reference_index );
-        isom_bs_put_be32( bs, data->reserved1[0] );
-        isom_bs_put_be32( bs, data->reserved1[1] );
-        isom_bs_put_be16( bs, data->channelcount );
-        isom_bs_put_be16( bs, data->samplesize );
-        isom_bs_put_be16( bs, data->pre_defined );
-        isom_bs_put_be16( bs, data->reserved2 );
-        isom_bs_put_be32( bs, data->samplerate );
-        isom_bs_put_bytes( bs, data->exdata, data->exdata_length );
-        if( isom_bs_write_data( bs ) )
-            return -1;
-    }
-    return 0;
-}
-
 static int isom_write_hint_entry( isom_bs_t *bs, isom_stsd_t *stsd )
 {
     for( isom_entry_t *entry = stsd->list->head; entry; entry = entry->next )
@@ -2235,6 +2242,7 @@ static int isom_write_metadata_entry( isom_bs_t *bs, isom_stsd_t *stsd )
     }
     return 0;
 }
+#endif
 
 static int isom_write_stsd( isom_bs_t *bs, isom_trak_entry_t *trak )
 {
@@ -2773,6 +2781,7 @@ static uint64_t isom_get_dts( isom_stts_t *stts, uint32_t sample_number )
     return dts;
 }
 
+#if 0
 static uint64_t isom_get_cts( isom_stts_t *stts, isom_ctts_t *ctts, uint32_t sample_number )
 {
     if( !stts || !stts->list )
@@ -2797,6 +2806,7 @@ static uint64_t isom_get_cts( isom_stts_t *stts, isom_ctts_t *ctts, uint32_t sam
         return 0;
     return isom_get_dts( stts, sample_number ) + data->sample_offset;
 }
+#endif
 
 static int isom_update_mdhd_duration( isom_trak_entry_t *trak )
 {
@@ -3668,6 +3678,16 @@ static uint64_t isom_update_esds_size( isom_esds_t *esds )
     return esds->full_header.size;
 }
 
+static uint64_t isom_update_mp4a_entry_size( isom_mp4a_entry_t *mp4a )
+{
+    if( !mp4a || mp4a->base_header.type != ISOM_CODEC_TYPE_MP4A_AUDIO )
+        return 0;
+    mp4a->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 28 + isom_update_esds_size( mp4a->esds );
+    CHECK_LARGESIZE( mp4a->base_header.size );
+    return mp4a->base_header.size;
+}
+
+#if 0
 static uint64_t isom_update_mp4v_entry_size( isom_mp4v_entry_t *mp4v )
 {
     if( !mp4v || mp4v->base_header.type != ISOM_CODEC_TYPE_MP4V_VIDEO )
@@ -3680,15 +3700,6 @@ static uint64_t isom_update_mp4v_entry_size( isom_mp4v_entry_t *mp4v )
     return mp4v->base_header.size;
 }
 
-static uint64_t isom_update_mp4a_entry_size( isom_mp4a_entry_t *mp4a )
-{
-    if( !mp4a || mp4a->base_header.type != ISOM_CODEC_TYPE_MP4A_AUDIO )
-        return 0;
-    mp4a->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 28 + isom_update_esds_size( mp4a->esds );
-    CHECK_LARGESIZE( mp4a->base_header.size );
-    return mp4a->base_header.size;
-}
-
 static uint64_t isom_update_mp4s_entry_size( isom_mp4s_entry_t *mp4s )
 {
     if( !mp4s || mp4s->base_header.type != ISOM_CODEC_TYPE_MP4S_SYSTEM )
@@ -3697,6 +3708,7 @@ static uint64_t isom_update_mp4s_entry_size( isom_mp4s_entry_t *mp4s )
     CHECK_LARGESIZE( mp4s->base_header.size );
     return mp4s->base_header.size;
 }
+#endif
 
 static uint64_t isom_update_audio_entry_size( isom_audio_entry_t *audio )
 {
