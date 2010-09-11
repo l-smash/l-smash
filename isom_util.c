@@ -413,8 +413,8 @@ void mp4sys_adhoc_bits_cleanup( mp4sys_bits_t* bits )
 {
     if( !bits )
         return;
-    mp4sys_bits_cleanup( bits );
     isom_bs_cleanup( bits->bs );
+    mp4sys_bits_cleanup( bits );
 }
 
 void* mp4sys_bs_export_data( mp4sys_bits_t* bits, uint32_t* length )
