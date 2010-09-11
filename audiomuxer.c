@@ -184,7 +184,7 @@ int main( int argc, char* argv[] )
         sample->length = structs.summary->max_au_length;
         if( mp4sys_importer_get_access_unit( structs.importer, 1, sample->data, &sample->length ) )
         {
-            isom_remove_sample( sample );
+            isom_delete_sample( sample );
             // return M4AMUX_ERR( "Failed to get a frame from input file. Maybe corrupted.\n" );
             eprintf( "Failed to get a frame from input file. Maybe corrupted.\n" );
             eprintf( "Aborting muxing operation and trying to let output be valid m4a.\n" );
@@ -192,7 +192,7 @@ int main( int argc, char* argv[] )
         }
         if( sample->length == 0 )
         {
-            isom_remove_sample( sample );
+            isom_delete_sample( sample );
             break; /* end of stream */
         }
 

@@ -83,7 +83,7 @@ isom_sample_t *isom_create_sample( uint32_t size )
     return sample;
 }
 
-void isom_remove_sample( isom_sample_t *sample )
+void isom_delete_sample( isom_sample_t *sample )
 {
     if( !sample )
         return;
@@ -1580,13 +1580,12 @@ static void isom_remove_ftyp( isom_ftyp_t *ftyp )
     free( ftyp );
 }
 
-void isom_remove_edts( isom_root_t *root, uint32_t track_ID )
+static void isom_remove_edts( isom_edts_t *edts )
 {
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->edts )
+    if( !edts )
         return;
-    isom_remove_list_fullbox( elst, trak->edts );
-    free( trak->edts );
+    isom_remove_list_fullbox( elst, edts );
+    free( edts );
 }
 
 static void isom_remove_avcC_ps( isom_avcC_ps_entry_t *ps )
@@ -1796,37 +1795,39 @@ static void isom_remove_stbl( isom_stbl_t *stbl )
     free( stbl );
 }
 
+static void isom_remove_dref( isom_dref_t *dref )
+{
+    if( !dref )
+        return;
+    if( !dref->list )
+    {
+        free( dref );
+        return;
+    }
+    for( isom_entry_t *entry = dref->list->head; entry; )
+    {
+        isom_dref_entry_t *data = (isom_dref_entry_t *)entry->data;
+        if( data )
+        {
+            if( data->name )
+                free( data->name );
+            if( data->location )
+                free( data->location );
+            free( data );
+        }
+        isom_entry_t *next = entry->next;
+        free( entry );
+        entry = next;
+    }
+    free( dref->list );
+    free( dref );
+}
+
 static void isom_remove_dinf( isom_dinf_t *dinf )
 {
     if( !dinf )
         return;
-    isom_dref_t *dref = dinf->dref;
-    if( dref )
-    {
-        if( !dref->list )
-        {
-            free( dref );
-            free( dinf );
-            return;
-        }
-        for( isom_entry_t *entry = dref->list->head; entry; )
-        {
-            isom_dref_entry_t *data = (isom_dref_entry_t *)entry->data;
-            if( data )
-            {
-                if( data->name )
-                    free( data->name );
-                if( data->location )
-                    free( data->location );
-                free( data );
-            }
-            isom_entry_t *next = entry->next;
-            free( entry );
-            entry = next;
-        }
-        free( dref->list );
-        free( dref );
-    }
+    isom_remove_dref( dinf->dref );
     free( dinf );
 }
 
@@ -1896,18 +1897,17 @@ static void isom_remove_udta( isom_udta_t *udta )
     free( udta );
 }
 
-void isom_remove_trak( isom_root_t *root, uint32_t track_ID )
+static void isom_remove_trak( isom_trak_entry_t *trak )
 {
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak )
         return;
     isom_remove_fullbox( tkhd, trak );
-    isom_remove_edts( root, track_ID );
+    isom_remove_edts( trak->edts );
     isom_remove_mdia( trak->mdia );
     isom_remove_udta( trak->udta );
     if( trak->cache )
     {
-        isom_remove_list( trak->cache->chunk.pool, isom_remove_sample );
+        isom_remove_list( trak->cache->chunk.pool, isom_delete_sample );
         free( trak->cache );
     }
     free( trak );
@@ -1919,7 +1919,6 @@ static void isom_remove_iods( isom_iods_t *iods )
         return;
     mp4sys_remove_ObjectDescriptor( iods->OD );
     free( iods );
-    return;
 }
 
 static void isom_remove_moov( isom_root_t *root )
@@ -1932,33 +1931,24 @@ static void isom_remove_moov( isom_root_t *root )
     isom_remove_iods( moov->iods );
     isom_remove_udta( moov->udta );
     if( moov->trak_list )
-    {
-        /* FIXME: These are kinda workarounds.
-           isom_remove_trak, and furthermore, track_number system itself needs overhaul. */
-        uint32_t i = 1;
-        for( isom_entry_t *entry = moov->trak_list->head; entry; i++, entry = entry->next )
-        {
-            isom_remove_trak( root, isom_get_track_ID( root, i ) );
-            entry->data = NULL;
-        }
-        isom_remove_list( moov->trak_list, NULL );
-    }
+        isom_remove_list( moov->trak_list, isom_remove_trak );
     free( moov );
+    root->moov = NULL;
 }
 
-void isom_remove_mdat( isom_root_t *root )
+static void isom_remove_mdat( isom_mdat_t *mdat )
 {
-    if( root && root->mdat )
-        free( root->mdat );
+    if( mdat )
+        free( mdat );
 }
 
-void isom_remove_free( isom_root_t *root )
+static void isom_remove_free( isom_free_t *skip )
 {
-    if( root && root->free )
+    if( skip )
     {
-        if( root->free->data )
-            free( root->free->data );
-        free( root->free );
+        if( skip->data )
+            free( skip->data );
+        free( skip );
     }
 }
 
@@ -1968,8 +1958,8 @@ void isom_destroy_root( isom_root_t *root )
         return;
     isom_remove_ftyp( root->ftyp );
     isom_remove_moov( root );
-    isom_remove_mdat( root );
-    isom_remove_free( root );
+    isom_remove_mdat( root->mdat );
+    isom_remove_free( root->free );
     if( root->bs )
     {
         if( root->bs->stream )
@@ -3423,7 +3413,7 @@ static int isom_write_pooled_samples( isom_trak_entry_t *trak, isom_entry_list_t
         if( isom_write_sample_data( trak->root, data ) )
             return -1;
     }
-    isom_remove_entries( pool, isom_remove_sample );
+    isom_remove_entries( pool, isom_delete_sample );
     return 0;
 }
 
@@ -4655,6 +4645,50 @@ int isom_finish_movie( isom_root_t *root )
         isom_write_moov( root ) )
         return -1;
     return 0;
+}
+
+void isom_delete_track( isom_root_t *root, uint32_t track_ID )
+{
+    if( !root || !root->moov || !root->moov->trak_list )
+        return;
+    for( isom_entry_t *entry = root->moov->trak_list->head; entry; entry = entry->next )
+    {
+        isom_trak_entry_t *trak = (isom_trak_entry_t *)entry->data;
+        if( !trak || !trak->tkhd )
+            return;
+        if( trak->tkhd->track_ID == track_ID )
+        {
+            isom_entry_t *next = entry->next;
+            isom_entry_t *prev = entry->prev;
+            isom_remove_trak( trak );
+            free( entry );
+            entry = next;
+            if( entry )
+            {
+                if( prev )
+                    prev->next = entry;
+                entry->prev = prev;
+            }
+            return;
+        }
+    }
+}
+
+void isom_delete_explicit_timeline_map( isom_root_t *root, uint32_t track_ID )
+{
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    if( !trak )
+        return;
+    isom_remove_edts( trak->edts );
+    trak->edts = NULL;
+}
+
+void isom_delete_tyrant_chapter( isom_root_t *root )
+{
+    if( !root || !root->moov || !root->moov->udta )
+        return;
+    isom_remove_chpl( root->moov->udta->chpl );
+    root->moov->udta->chpl = NULL;
 }
 
 /* data_length must be size of data that is available. */

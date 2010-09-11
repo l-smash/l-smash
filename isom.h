@@ -1175,14 +1175,6 @@ int isom_add_pasp( isom_root_t *root, uint32_t track_ID, uint32_t entry_number )
 int isom_add_mdat( isom_root_t *root );
 int isom_add_free( isom_root_t *root, uint8_t *data, uint64_t data_length );
 
-void isom_remove_edts( isom_root_t *root, uint32_t track_ID );
-void isom_remove_btrt( isom_root_t *root, uint32_t track_ID, uint32_t entry_number );
-void isom_remove_ctts( isom_root_t *root, uint32_t track_ID );
-void isom_remove_stss( isom_root_t *root, uint32_t track_ID );
-void isom_remove_trak( isom_root_t *root, uint32_t track_ID );
-void isom_remove_mdat( isom_root_t *root );
-void isom_remove_free( isom_root_t *root );
-
 int isom_write_ftyp( isom_root_t *root );
 int isom_write_moov( isom_root_t *root );
 int isom_write_free( isom_root_t *root );
@@ -1224,13 +1216,16 @@ int isom_update_bitrate_info( isom_root_t *root, uint32_t track_ID, uint32_t ent
 isom_root_t *isom_create_movie( char *filename );
 uint32_t isom_create_track( isom_root_t *root, uint32_t handler_type );
 isom_sample_t *isom_create_sample( uint32_t size );
-void isom_remove_sample( isom_sample_t *sample );
+void isom_delete_sample( isom_sample_t *sample );
 int isom_write_sample( isom_root_t *root, uint32_t track_ID, isom_sample_t *sample );
 int isom_write_mdat_size( isom_root_t *root );
 int isom_flush_pooled_samples( isom_root_t *root, uint32_t track_ID, uint32_t last_sample_delta );
 int isom_finish_movie( isom_root_t *root );
 void isom_destroy_root( isom_root_t *root );
 
+void isom_delete_track( isom_root_t *root, uint32_t track_ID );
+void isom_delete_explicit_timeline_map( isom_root_t *root, uint32_t track_ID );
+void isom_delete_tyrant_chapter( isom_root_t *root );
 
 int isom_create_dac3_from_syncframe( mp4sys_audio_summary_t *summary, uint8_t *data, uint32_t data_length );
 
