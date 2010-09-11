@@ -4107,8 +4107,7 @@ static uint64_t isom_update_mvhd_size( isom_mvhd_t *mvhd )
     mvhd->full_header.version = 0;
     if( mvhd->creation_time > UINT32_MAX || mvhd->modification_time > UINT32_MAX || mvhd->duration > UINT32_MAX )
         mvhd->full_header.version = 1;
-    uint64_t size = 96 + (uint64_t)mvhd->full_header.version * 12;
-    mvhd->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + size;
+    mvhd->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 96 + (uint64_t)mvhd->full_header.version * 12;
     CHECK_LARGESIZE( mvhd->full_header.size );
     return mvhd->full_header.size;
 }
@@ -4117,8 +4116,7 @@ static uint64_t isom_update_iods_size( isom_iods_t *iods )
 {
     if( !iods || !iods->OD )
         return 0;
-    uint64_t size = mp4sys_update_ObjectDescriptor_size( iods->OD );
-    iods->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + size;
+    iods->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + mp4sys_update_ObjectDescriptor_size( iods->OD );
     CHECK_LARGESIZE( iods->full_header.size );
     return iods->full_header.size;
 }
@@ -4130,8 +4128,7 @@ static uint64_t isom_update_tkhd_size( isom_tkhd_t *tkhd )
     tkhd->full_header.version = 0;
     if( tkhd->creation_time > UINT32_MAX || tkhd->modification_time > UINT32_MAX || tkhd->duration > UINT32_MAX )
         tkhd->full_header.version = 1;
-    uint64_t size = 80 + (uint64_t)tkhd->full_header.version * 12;
-    tkhd->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + size;
+    tkhd->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 80 + (uint64_t)tkhd->full_header.version * 12;
     CHECK_LARGESIZE( tkhd->full_header.size );
     return tkhd->full_header.size;
 }
@@ -4148,8 +4145,7 @@ static uint64_t isom_update_elst_size( isom_elst_t *elst )
         if( data->segment_duration > UINT32_MAX || data->media_time > UINT32_MAX )
             elst->full_header.version = 1;
     }
-    uint64_t size = (uint64_t)i * ( elst->full_header.version ? 20 : 12 );
-    elst->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
+    elst->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + (uint64_t)i * ( elst->full_header.version ? 20 : 12 );
     CHECK_LARGESIZE( elst->full_header.size );
     return elst->full_header.size;
 }
@@ -4170,8 +4166,7 @@ static uint64_t isom_update_mdhd_size( isom_mdhd_t *mdhd )
     mdhd->full_header.version = 0;
     if( mdhd->creation_time > UINT32_MAX || mdhd->modification_time > UINT32_MAX || mdhd->duration > UINT32_MAX )
         mdhd->full_header.version = 1;
-    uint64_t size = 20 + (uint64_t)mdhd->full_header.version * 12;
-    mdhd->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + size;
+    mdhd->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 20 + (uint64_t)mdhd->full_header.version * 12;
     CHECK_LARGESIZE( mdhd->full_header.size );
     return mdhd->full_header.size;
 }
@@ -4180,8 +4175,7 @@ static uint64_t isom_update_hdlr_size( isom_hdlr_t *hdlr )
 {
     if( !hdlr )
         return 0;
-    uint64_t size = 20 + (uint64_t)hdlr->name_length;
-    hdlr->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + size;
+    hdlr->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 20 + (uint64_t)hdlr->name_length;
     CHECK_LARGESIZE( hdlr->full_header.size );
     return hdlr->full_header.size;
 }
@@ -4190,8 +4184,7 @@ static uint64_t isom_update_dref_entry_size( isom_dref_entry_t *urln )
 {
     if( !urln )
         return 0;
-    uint64_t size = (uint64_t)urln->name_length + urln->location_length;
-    urln->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + size;
+    urln->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + (uint64_t)urln->name_length + urln->location_length;
     CHECK_LARGESIZE( urln->full_header.size );
     return urln->full_header.size;
 }
@@ -4200,14 +4193,13 @@ static uint64_t isom_update_dref_size( isom_dref_t *dref )
 {
     if( !dref || !dref->list )
         return 0;
-    uint64_t size = 0;
+    dref->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE;
     if( dref->list )
         for( isom_entry_t *entry = dref->list->head; entry; entry = entry->next )
         {
             isom_dref_entry_t *data = (isom_dref_entry_t *)entry->data;
-            size += isom_update_dref_entry_size( data );
+            dref->full_header.size += isom_update_dref_entry_size( data );
         }
-    dref->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
     CHECK_LARGESIZE( dref->full_header.size );
     return dref->full_header.size;
 }
@@ -4288,27 +4280,27 @@ static uint64_t isom_update_avcC_size( isom_avcC_t *avcC )
 {
     if( !avcC || !avcC->sequenceParameterSets || !avcC->pictureParameterSets )
         return 0;
-    uint64_t size = 7;
+    uint64_t size = ISOM_DEFAULT_BOX_HEADER_SIZE + 7;
     for( isom_entry_t *entry = avcC->sequenceParameterSets->head; entry; entry = entry->next )
     {
         isom_avcC_ps_entry_t *data = (isom_avcC_ps_entry_t *)entry->data;
-        size += 2U + data->parameterSetLength;
+        size += 2 + data->parameterSetLength;
     }
     for( isom_entry_t *entry = avcC->pictureParameterSets->head; entry; entry = entry->next )
     {
         isom_avcC_ps_entry_t *data = (isom_avcC_ps_entry_t *)entry->data;
-        size += 2U + data->parameterSetLength;
+        size += 2 + data->parameterSetLength;
     }
     if( ISOM_REQUIRES_AVCC_EXTENSION( avcC->AVCProfileIndication ) )
     {
-        size += 4U;
+        size += 4;
         for( isom_entry_t *entry = avcC->sequenceParameterSetExt->head; entry; entry = entry->next )
         {
             isom_avcC_ps_entry_t *data = (isom_avcC_ps_entry_t *)entry->data;
-            size += 2U + data->parameterSetLength;
+            size += 2 + data->parameterSetLength;
         }
     }
-    avcC->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
+    avcC->base_header.size = size;
     CHECK_LARGESIZE( avcC->base_header.size );
     return avcC->base_header.size;
 }
@@ -4320,12 +4312,11 @@ static uint64_t isom_update_avc_entry_size( isom_avc_entry_t *avc )
         (avc->base_header.type != ISOM_CODEC_TYPE_AVC2_VIDEO) &&
         (avc->base_header.type != ISOM_CODEC_TYPE_AVCP_VIDEO)) )
         return 0;
-    uint64_t size = 78;
-    size += isom_update_pasp_size( avc->pasp );
-    size += isom_update_clap_size( avc->clap );
-    size += isom_update_avcC_size( avc->avcC );
-    size += isom_update_btrt_size( avc->btrt );
-    avc->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
+    avc->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 78
+        + isom_update_pasp_size( avc->pasp )
+        + isom_update_clap_size( avc->clap )
+        + isom_update_avcC_size( avc->avcC )
+        + isom_update_btrt_size( avc->btrt );
     CHECK_LARGESIZE( avc->base_header.size );
     return avc->base_header.size;
 }
@@ -4334,8 +4325,7 @@ static uint64_t isom_update_esds_size( isom_esds_t *esds )
 {
     if( !esds )
         return 0;
-    esds->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE;
-    esds->full_header.size += mp4sys_update_ES_Descriptor_size( esds->ES );
+    esds->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + mp4sys_update_ES_Descriptor_size( esds->ES );
     CHECK_LARGESIZE( esds->full_header.size );
     return esds->full_header.size;
 }
@@ -4344,10 +4334,10 @@ static uint64_t isom_update_mp4v_entry_size( isom_mp4v_entry_t *mp4v )
 {
     if( !mp4v || mp4v->base_header.type != ISOM_CODEC_TYPE_MP4V_VIDEO )
         return 0;
-    uint64_t size = 78 + isom_update_esds_size( mp4v->esds );
-    size += isom_update_pasp_size( mp4v->pasp );
-    size += isom_update_clap_size( mp4v->clap );
-    mp4v->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
+    mp4v->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 78
+        + isom_update_esds_size( mp4v->esds )
+        + isom_update_pasp_size( mp4v->pasp )
+        + isom_update_clap_size( mp4v->clap );
     CHECK_LARGESIZE( mp4v->base_header.size );
     return mp4v->base_header.size;
 }
@@ -4356,8 +4346,7 @@ static uint64_t isom_update_mp4a_entry_size( isom_mp4a_entry_t *mp4a )
 {
     if( !mp4a || mp4a->base_header.type != ISOM_CODEC_TYPE_MP4A_AUDIO )
         return 0;
-    uint64_t size = 28 + isom_update_esds_size( mp4a->esds );
-    mp4a->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
+    mp4a->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 28 + isom_update_esds_size( mp4a->esds );
     CHECK_LARGESIZE( mp4a->base_header.size );
     return mp4a->base_header.size;
 }
@@ -4366,8 +4355,7 @@ static uint64_t isom_update_mp4s_entry_size( isom_mp4s_entry_t *mp4s )
 {
     if( !mp4s || mp4s->base_header.type != ISOM_CODEC_TYPE_MP4S_SYSTEM )
         return 0;
-    uint64_t size = 8 + isom_update_esds_size( mp4s->esds );
-    mp4s->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
+    mp4s->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 8 + isom_update_esds_size( mp4s->esds );
     CHECK_LARGESIZE( mp4s->base_header.size );
     return mp4s->base_header.size;
 }
@@ -4376,7 +4364,7 @@ static uint64_t isom_update_audio_entry_size( isom_audio_entry_t *audio )
 {
     if( !audio )
         return 0;
-    audio->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 28U + audio->exdata_length;
+    audio->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 28 + (uint64_t)audio->exdata_length;
     CHECK_LARGESIZE( audio->base_header.size );
     return audio->base_header.size;
 }
@@ -4385,7 +4373,7 @@ static uint64_t isom_update_stsd_size( isom_stsd_t *stsd )
 {
     if( !stsd || !stsd->list )
         return 0;
-    uint64_t size = 0;
+    uint64_t size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE;
     for( isom_entry_t *entry = stsd->list->head; entry; entry = entry->next )
     {
         isom_sample_entry_t *data = (isom_sample_entry_t *)entry->data;
@@ -4449,7 +4437,7 @@ static uint64_t isom_update_stsd_size( isom_stsd_t *stsd )
                 break;
         }
     }
-    stsd->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
+    stsd->full_header.size = size;
     CHECK_LARGESIZE( stsd->full_header.size );
     return stsd->full_header.size;
 }
@@ -4458,10 +4446,7 @@ static uint64_t isom_update_stts_size( isom_stts_t *stts )
 {
     if( !stts || !stts->list )
         return 0;
-    uint64_t size = 0;
-    for( isom_entry_t *entry = stts->list->head; entry; entry = entry->next )
-        size += 8;
-    stts->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
+    stts->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + (uint64_t)stts->list->entry_count * 8;
     CHECK_LARGESIZE( stts->full_header.size );
     return stts->full_header.size;
 }
@@ -4470,10 +4455,7 @@ static uint64_t isom_update_ctts_size( isom_ctts_t *ctts )
 {
     if( !ctts || !ctts->list )
         return 0;
-    uint64_t size = 0;
-    for( isom_entry_t *entry = ctts->list->head; entry; entry = entry->next )
-        size += 8;
-    ctts->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
+    ctts->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + (uint64_t)ctts->list->entry_count * 8;
     CHECK_LARGESIZE( ctts->full_header.size );
     return ctts->full_header.size;
 }
@@ -4482,11 +4464,7 @@ static uint64_t isom_update_stsz_size( isom_stsz_t *stsz )
 {
     if( !stsz )
         return 0;
-    uint64_t size = 0;
-    if( stsz->list )
-        for( isom_entry_t *entry = stsz->list->head; entry; entry = entry->next )
-            size += 4;
-    stsz->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 8 + size;
+    stsz->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 8 + ( stsz->list ? (uint64_t)stsz->list->entry_count * 4 : 0 );
     CHECK_LARGESIZE( stsz->full_header.size );
     return stsz->full_header.size;
 }
@@ -4495,10 +4473,7 @@ static uint64_t isom_update_stss_size( isom_stss_t *stss )
 {
     if( !stss || !stss->list )
         return 0;
-    uint64_t size = 0;
-    for( isom_entry_t *entry = stss->list->head; entry; entry = entry->next )
-        size += 4;
-    stss->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
+    stss->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + (uint64_t)stss->list->entry_count * 4;
     CHECK_LARGESIZE( stss->full_header.size );
     return stss->full_header.size;
 }
@@ -4507,7 +4482,7 @@ static uint64_t isom_update_sdtp_size( isom_sdtp_t *sdtp )
 {
     if( !sdtp || !sdtp->list )
         return 0;
-    sdtp->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + sdtp->list->entry_count;
+    sdtp->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + (uint64_t)sdtp->list->entry_count;
     CHECK_LARGESIZE( sdtp->full_header.size );
     return sdtp->full_header.size;
 }
@@ -4516,10 +4491,7 @@ static uint64_t isom_update_stsc_size( isom_stsc_t *stsc )
 {
     if( !stsc || !stsc->list )
         return 0;
-    uint64_t size = 0;
-    for( isom_entry_t *entry = stsc->list->head; entry; entry = entry->next )
-        size += 12;
-    stsc->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
+    stsc->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + (uint64_t)stsc->list->entry_count * 12;
     CHECK_LARGESIZE( stsc->full_header.size );
     return stsc->full_header.size;
 }
@@ -4528,11 +4500,7 @@ static uint64_t isom_update_stco_size( isom_stco_t *stco )
 {
     if( !stco || !stco->list )
         return 0;
-    uint32_t i = 0;
-    for( isom_entry_t *entry = stco->list->head; entry; entry = entry->next )
-        ++i;
-    uint64_t size = (uint64_t)i * (stco->large_presentation ? 8 : 4);
-    stco->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
+    stco->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + (uint64_t)stco->list->entry_count * (stco->large_presentation ? 8 : 4);
     CHECK_LARGESIZE( stco->full_header.size );
     return stco->full_header.size;
 }
@@ -4541,10 +4509,7 @@ static uint64_t isom_update_sbgp_size( isom_sbgp_t *sbgp )
 {
     if( !sbgp || !sbgp->list )
         return 0;
-    uint32_t size = 0;
-    for( isom_entry_t *entry = sbgp->list->head; entry; entry = entry->next )
-        size += 8;
-    sbgp->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + 4 + size;
+    sbgp->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + 4 + (uint64_t)sbgp->list->entry_count * 8;
     CHECK_LARGESIZE( sbgp->full_header.size );
     return sbgp->full_header.size;
 }
@@ -4553,20 +4518,17 @@ static uint64_t isom_update_sgpd_size( isom_sgpd_t *sgpd )
 {
     if( !sgpd || !sgpd->list )
         return 0;
-    uint32_t size = 0;
-    for( isom_entry_t *entry = sgpd->list->head; entry; entry = entry->next )
+    uint64_t size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + (1 + (sgpd->full_header.version == 1)) * 4;
+    size += (uint64_t)sgpd->list->entry_count * ((sgpd->full_header.version == 1) && !sgpd->default_length) * 4;
+    switch( sgpd->grouping_type )
     {
-        size += ((sgpd->full_header.version == 1) && !sgpd->default_length) * 4;
-        switch( sgpd->grouping_type )
-        {
-            case ISOM_GROUP_TYPE_ROLL :
-                size += 2;
-                break;
-            default :
-                break;
-        }
+        case ISOM_GROUP_TYPE_ROLL :
+            size += (uint64_t)sgpd->list->entry_count * 2;
+            break;
+        default :
+            break;
     }
-    sgpd->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + (1 + (sgpd->full_header.version == 1)) * 4 + size;
+    sgpd->full_header.size = size;
     CHECK_LARGESIZE( sgpd->full_header.size );
     return sgpd->full_header.size;
 }
@@ -4575,20 +4537,20 @@ static uint64_t isom_update_stbl_size( isom_stbl_t *stbl )
 {
     if( !stbl )
         return 0;
-    uint64_t size = isom_update_stsd_size( stbl->stsd );
-    size += isom_update_stts_size( stbl->stts );
-    size += isom_update_ctts_size( stbl->ctts );
-    size += isom_update_stsz_size( stbl->stsz );
-    size += isom_update_stss_size( stbl->stss );
-    size += isom_update_sdtp_size( stbl->sdtp );
-    size += isom_update_stsc_size( stbl->stsc );
-    size += isom_update_stco_size( stbl->stco );
+    stbl->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE
+        + isom_update_stsd_size( stbl->stsd )
+        + isom_update_stts_size( stbl->stts )
+        + isom_update_ctts_size( stbl->ctts )
+        + isom_update_stsz_size( stbl->stsz )
+        + isom_update_stss_size( stbl->stss )
+        + isom_update_sdtp_size( stbl->sdtp )
+        + isom_update_stsc_size( stbl->stsc )
+        + isom_update_stco_size( stbl->stco );
     for( uint32_t i = 0; i < stbl->grouping_count; i++ )
     {
-        size += isom_update_sbgp_size( stbl->sbgp + i );
-        size += isom_update_sgpd_size( stbl->sgpd + i );
+        stbl->base_header.size += isom_update_sbgp_size( stbl->sbgp + i );
+        stbl->base_header.size += isom_update_sgpd_size( stbl->sgpd + i );
     }
-    stbl->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
     CHECK_LARGESIZE( stbl->base_header.size );
     return stbl->base_header.size;
 }
@@ -4597,13 +4559,13 @@ static uint64_t isom_update_minf_size( isom_minf_t *minf )
 {
     if( !minf )
         return 0;
-    uint64_t size = isom_update_vmhd_size( minf->vmhd );
-    size += isom_update_smhd_size( minf->smhd );
-    size += isom_update_hmhd_size( minf->hmhd );
-    size += isom_update_nmhd_size( minf->nmhd );
-    size += isom_update_dinf_size( minf->dinf );
-    size += isom_update_stbl_size( minf->stbl );
-    minf->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
+    minf->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE
+        + isom_update_vmhd_size( minf->vmhd )
+        + isom_update_smhd_size( minf->smhd )
+        + isom_update_hmhd_size( minf->hmhd )
+        + isom_update_nmhd_size( minf->nmhd )
+        + isom_update_dinf_size( minf->dinf )
+        + isom_update_stbl_size( minf->stbl );
     CHECK_LARGESIZE( minf->base_header.size );
     return minf->base_header.size;
 }
@@ -4612,10 +4574,10 @@ static uint64_t isom_update_mdia_size( isom_mdia_t *mdia )
 {
     if( !mdia )
         return 0;
-    uint64_t size = isom_update_mdhd_size( mdia->mdhd );
-    size += isom_update_hdlr_size( mdia->hdlr );
-    size += isom_update_minf_size( mdia->minf );
-    mdia->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
+    mdia->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE 
+        + isom_update_mdhd_size( mdia->mdhd )
+        + isom_update_hdlr_size( mdia->hdlr )
+        + isom_update_minf_size( mdia->minf );
     CHECK_LARGESIZE( mdia->base_header.size );
     return mdia->base_header.size;
 }
@@ -4624,13 +4586,12 @@ static uint64_t isom_update_chpl_size( isom_chpl_t *chpl )
 {
     if( !chpl )
         return 0;
-    uint64_t size = 1;
+    chpl->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + 1;
     for( isom_entry_t *entry = chpl->list->head; entry; entry = entry->next )
     {
         isom_chpl_entry_t *data = (isom_chpl_entry_t *)entry->data;
-        size += 9U + data->name_length;
+        chpl->full_header.size += 9 + data->name_length;
     }
-    chpl->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + size;
     CHECK_LARGESIZE( chpl->full_header.size );
     return chpl->full_header.size;
 }
@@ -4640,10 +4601,7 @@ static uint64_t isom_update_udta_size( isom_udta_t *udta_moov, isom_udta_t *udta
     isom_udta_t *udta = udta_trak ? udta_trak : udta_moov ? udta_moov : NULL;
     if( !udta )
         return 0;
-    uint64_t size = 0;
-    if( udta_moov )
-        size += isom_update_chpl_size( udta->chpl );
-    udta->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
+    udta->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + ( udta_moov ? isom_update_chpl_size( udta->chpl ) : 0 );
     CHECK_LARGESIZE( udta->base_header.size );
     return udta->base_header.size;
 }
@@ -4652,11 +4610,11 @@ static uint64_t isom_update_trak_entry_size( isom_trak_entry_t *trak )
 {
     if( !trak )
         return 0;
-    uint64_t size = isom_update_tkhd_size( trak->tkhd );
-    size += isom_update_edts_size( trak->edts );
-    size += isom_update_mdia_size( trak->mdia );
-    size += isom_update_udta_size( NULL, trak->udta );
-    trak->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
+    trak->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE
+        + isom_update_tkhd_size( trak->tkhd )
+        + isom_update_edts_size( trak->edts )
+        + isom_update_mdia_size( trak->mdia )
+        + isom_update_udta_size( NULL, trak->udta );
     CHECK_LARGESIZE( trak->base_header.size );
     return trak->base_header.size;
 }
@@ -4665,16 +4623,16 @@ static int isom_update_moov_size( isom_moov_t *moov )
 {
     if( !moov )
         return -1;
-    uint64_t size = isom_update_mvhd_size( moov->mvhd );
-    size += isom_update_iods_size( moov->iods );
-    size += isom_update_udta_size( moov->udta, NULL );
+    moov->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE
+        + isom_update_mvhd_size( moov->mvhd )
+        + isom_update_iods_size( moov->iods )
+        + isom_update_udta_size( moov->udta, NULL );
     if( moov->trak_list )
         for( isom_entry_t *entry = moov->trak_list->head; entry; entry = entry->next )
         {
             isom_trak_entry_t *trak = (isom_trak_entry_t *)entry->data;
-            size += isom_update_trak_entry_size( trak );
+            moov->base_header.size += isom_update_trak_entry_size( trak );
         }
-    moov->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + size;
     CHECK_LARGESIZE( moov->base_header.size );
     return 0;
 }
