@@ -89,36 +89,6 @@ static void isom_bs_put_full_header( isom_bs_t *bs, isom_full_header_t *fbh )
     isom_bs_put_be24( bs, fbh->flags );
 }
 
-static uint32_t isom_get_track_ID( isom_root_t *root, uint32_t track_number )
-{
-    if( !root || !root->moov || !root->moov->trak_list )
-        return 0;
-    uint32_t i = 1;
-    for( isom_entry_t *entry = root->moov->trak_list->head; entry; entry = entry->next )
-        if( i++ == track_number )
-        {
-            isom_trak_entry_t *trak = (isom_trak_entry_t *)entry->data;
-            if( !trak || !trak->tkhd )
-                return 0;
-            return trak->tkhd->track_ID;
-        }
-    return 0;
-}
-
-static uint32_t isom_get_track_number( isom_trak_entry_t *trak )
-{
-    if( !trak || !trak->root || !trak->root->moov || !trak->root->moov->trak_list )
-        return 0;
-    uint32_t i = 1;
-    for( isom_entry_t *entry = trak->root->moov->trak_list->head; entry; entry = entry->next )
-    {
-        if( trak == (isom_trak_entry_t *)entry->data )
-            return i;
-        ++i;
-    }
-    return 0;
-}
-
 static isom_trak_entry_t *isom_get_trak( isom_root_t *root, uint32_t track_ID )
 {
     if( !root || !root->moov || !root->moov->trak_list )
@@ -132,11 +102,6 @@ static isom_trak_entry_t *isom_get_trak( isom_root_t *root, uint32_t track_ID )
             return trak;
     }
     return NULL;
-}
-
-static uint32_t isom_get_track_number_from_ID( isom_root_t *root, uint32_t track_ID )
-{
-    return isom_get_track_number( isom_get_trak( root, track_ID ) );
 }
 
 static int isom_add_elst_entry( isom_elst_t *elst, uint64_t segment_duration, int64_t media_time, int32_t media_rate )
@@ -4081,7 +4046,7 @@ uint32_t isom_create_track( isom_root_t *root, uint32_t handler_type )
                 return 0;
             break;
     }
-    return isom_get_track_ID( root, root->moov->trak_list->entry_count );
+    return trak->tkhd->track_ID;
 }
 
 int isom_set_handler( isom_trak_entry_t *trak, uint32_t handler_type, char *name )
@@ -4383,8 +4348,10 @@ int isom_finish_movie( isom_root_t *root )
         return -1;
     for( isom_entry_t *entry = root->moov->trak_list->head; entry; entry = entry->next )
     {
-        uint32_t track_ID = isom_get_track_ID( root, isom_get_track_number( (isom_trak_entry_t *)entry->data ) );
-        if( isom_set_track_mode( root, track_ID, ISOM_TRACK_ENABLED ) )
+        isom_trak_entry_t *trak = (isom_trak_entry_t *)entry->data;
+        if( !trak || !trak->tkhd )
+            return -1;
+        if( isom_set_track_mode( root, trak->tkhd->track_ID, ISOM_TRACK_ENABLED ) )
             return -1;
     }
     if( isom_add_iods( root->moov ) )
