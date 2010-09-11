@@ -1,24 +1,40 @@
-# should have distclean, install, uninstall in the future
-.PHONY: all lib audiomuxer dep depend clean
-
 # for future use
 #include config.mak
 #$(EXE)
+
+UNAME_S:=$(shell uname -s)
+UNAME_M:=$(shell uname -m)
 
 CC=gcc
 AR=ar
 RANLIB=ranlib
 STRIP=strip
 ECHO=echo
-EXE=.exe
+EXE=
 
 CFLAGS=-Wshadow -Wall -std=gnu99 -I.
 #CFLAGS+=-Wsign-conversion
-CFLAGS+=-g -O0
-#CFLAGS+=-O3
-CFLAGS+=-march=i686 -mfpmath=sse -msse
-LDFLAGS=-Wl,--large-address-aware
+LDFLAGS=
 EXTRALIBS=
+
+ifeq ($(DEBUG),YES)
+CFLAGS+=-g -O0
+else
+CFLAGS+=-O3
+endif
+
+ifneq ($(findstring i686, $(UNAME_M)),)
+CFLAGS+=-march=i686 -mfpmath=sse -msse
+endif
+
+ifneq ($(findstring MINGW, $(UNAME_S)),)
+LDFLAGS+=-Wl,--large-address-aware
+EXE=.exe
+endif
+ifneq ($(findstring CYGWIN, $(UNAME_S)),)
+LDFLAGS+=-Wl,--large-address-aware
+EXE=.exe
+endif
 
 SRCS=isom.c isom_util.c mp4sys.c
 OBJS=$(SRCS:%.c=%.o)
@@ -34,11 +50,19 @@ SRCS_ALL=$(SRCS) $(SRC_AUDIOMUXER)
 OBJS_ALL=$(SRCS_ALL:%.c=%.o)
 
 #### main rules ####
-all: audiomuxer
+
+# should have distclean, install, uninstall in the future
+.PHONY: all lib tools dep depend clean info
+
+all: info tools
+
+info:
+	@echo "CFLAGS : $(CFLAGS)"
+	@echo "LDFLAGS: $(LDFLAGS)"
 
 lib: $(TARGET_LIB)
 
-audiomuxer: $(TARGET_AUDIOMUXER)
+tools: $(TARGET_AUDIOMUXER)
 
 $(TARGET_LIB): .depend $(OBJS)
 	@$(ECHO) "AR: $@"
