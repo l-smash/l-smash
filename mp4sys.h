@@ -3,7 +3,8 @@
  *****************************************************************************
  * Copyright (C) 2010 L-SMASH project
  *
- * Authors: Takashi Hirata <silverfilain AT gmail DOT com>
+ * Authors: Takashi Hirata <silverfilain@gmail.com>
+ * Contributors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -452,6 +453,7 @@ unsigned int mp4sys_importer_get_track_count( mp4sys_importer_t* importer ); /* 
 /* to facilitate to make exdata (typically DecoderSpecificInfo or AudioSpecificConfig). */
 int mp4sys_setup_AudioSpecificConfig( mp4sys_audio_summary_t* summary );
 int mp4sys_amr_create_damr( mp4sys_audio_summary_t *summary );
+int mp4sys_create_dac3_from_syncframe( mp4sys_audio_summary_t *summary, uint8_t *data, uint32_t data_length );
 int mp4sys_summary_add_exdata( mp4sys_audio_summary_t* summary, void* exdata, uint32_t exdata_length );
 
 /* profileLevelIndication relative functions. */

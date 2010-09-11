@@ -38,7 +38,6 @@
 #endif
 
 #include "isom_util.h"
-#include "mp4sys.h"
 
 #define ISOM_MAX( a, b ) ((a) > (b) ? (a) : (b))
 #define ISOM_MIN( a, b ) ((a) < (b) ? (a) : (b))
@@ -584,18 +583,20 @@ typedef isom_free_t isom_skip_t;
 /*** extended by ISO IEC 14496-14 (MP4 file format) ***/
 /* Object Descriptor Box
  * Note that this box is mandatory under 14496-1:2001 (mp41) while not mandatory under 14496-14:2003 (mp42). */
+struct mp4sys_ObjectDescriptor_t; /* FIXME: I think these structs using mp4sys should be placed in isom.c */
 typedef struct
 {
     isom_full_header_t full_header;
-    mp4sys_ObjectDescriptor_t *OD;
+    struct mp4sys_ObjectDescriptor_t *OD;
 } isom_iods_t;
 
 /** Sample Description Boxes **/
 /* ES Descriptor Box */
+struct mp4sys_ES_Descriptor_t; /* FIXME: I think these structs using mp4sys should be placed in isom.c */
 typedef struct
 {
     isom_full_header_t full_header;
-    mp4sys_ES_Descriptor_t *ES;
+    struct mp4sys_ES_Descriptor_t *ES;
 } isom_esds_t;
 
 /* MP4 Visual Sample Entry */
@@ -604,14 +605,6 @@ typedef struct
     ISOM_VISUAL_SAMPLE_ENTRY;
     isom_esds_t *esds;
 } isom_mp4v_entry_t;
-
-/* MP4 Audio Sample Entry */
-typedef struct
-{
-    ISOM_AUDIO_SAMPLE_ENTRY;
-    isom_esds_t *esds;
-    mp4sys_audioProfileLevelIndication pli; /* This is not used in mp4a box itself, but the value is specific for that. */
-} isom_mp4a_entry_t;
 
 /* Mpeg Sample Entry */
 typedef struct
@@ -1226,7 +1219,5 @@ void isom_destroy_root( isom_root_t *root );
 void isom_delete_track( isom_root_t *root, uint32_t track_ID );
 void isom_delete_explicit_timeline_map( isom_root_t *root, uint32_t track_ID );
 void isom_delete_tyrant_chapter( isom_root_t *root );
-
-int isom_create_dac3_from_syncframe( mp4sys_audio_summary_t *summary, uint8_t *data, uint32_t data_length );
 
 #endif

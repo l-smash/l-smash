@@ -22,6 +22,16 @@
 /* This file is available under an ISC license. */
 
 #include "isom.h"
+#include "mp4sys.h"
+
+/* MP4 Audio Sample Entry */
+typedef struct
+{
+    ISOM_AUDIO_SAMPLE_ENTRY;
+    isom_esds_t *esds;
+    mp4sys_audioProfileLevelIndication pli; /* This is not used in mp4a box itself, but the value is specific for that. */
+} isom_mp4a_entry_t;
+
 
 #define isom_create_basebox( box_name, box_4cc ) \
     isom_##box_name##_t *(box_name) = malloc( sizeof(isom_##box_name##_t) ); \
@@ -4662,60 +4672,3 @@ void isom_delete_tyrant_chapter( isom_root_t *root )
     root->moov->udta->chpl = NULL;
 }
 
-/* data_length must be size of data that is available. */
-int isom_create_dac3_from_syncframe( mp4sys_audio_summary_t *summary, uint8_t *data, uint32_t data_length )
-{
-    /* Requires the following 7 bytes.
-     * syncword                                         : 16
-     * crc1                                             : 16
-     * fscod                                            : 2
-     * frmsizecod                                       : 6
-     * bsid                                             : 5
-     * bsmod                                            : 3
-     * acmod                                            : 3
-     * if((acmod & 0x01) && (acmod != 0x01)) cmixlev    : 2
-     * if(acmod & 0x04) surmixlev                       : 2
-     * if(acmod == 0x02) dsurmod                        : 2
-     * lfeon                                            : 1
-     */
-    if( data_length < 7 )
-        return -1;
-    /* check syncword */
-    if( data[0] != 0x0b || data[1] != 0x77 )
-        return -1;
-    /* get necessary data for AC3SpecificBox */
-    uint32_t fscod, bsid, bsmod, acmod, lfeon, frmsizecod;
-    fscod      = data[4] >> 6;
-    frmsizecod = data[4] & 0x3f;
-    bsid       = data[5] >> 3;
-    bsmod      = data[5] & 0x07;
-    acmod      = data[6] >> 5;
-    if( acmod == 0x02 )
-        lfeon  = data[6] >> 2;      /* skip dsurmod */
-    else
-    {
-        if( (acmod & 0x01) && acmod != 0x01 && (acmod & 0x04) )
-            lfeon = data[6];        /* skip cmixlev and surmixlev */
-        else if( ((acmod & 0x01) && acmod != 0x01) || (acmod & 0x04) )
-            lfeon = data[6] >> 2;   /* skip cmixlev or surmixlev */
-        else
-            lfeon = data[6] >> 4;
-    }
-    lfeon &= 0x01;
-    /* create AC3SpecificBox */
-    mp4sys_bits_t *bits = mp4sys_adhoc_bits_create();
-    mp4sys_bits_put( bits, 11, 32 );
-    mp4sys_bits_put( bits, ISOM_BOX_TYPE_DAC3, 32 );
-    mp4sys_bits_put( bits, fscod, 2 );
-    mp4sys_bits_put( bits, bsid, 5 );
-    mp4sys_bits_put( bits, bsmod, 3 );
-    mp4sys_bits_put( bits, acmod, 3 );
-    mp4sys_bits_put( bits, lfeon, 1 );
-    mp4sys_bits_put( bits, frmsizecod >> 1, 5 );
-    mp4sys_bits_put( bits, 0, 5 );
-    if( summary->exdata )
-        free( summary->exdata );
-    summary->exdata = mp4sys_bits_export_data( bits, &summary->exdata_length );
-    mp4sys_adhoc_bits_cleanup( bits );
-    return 0;
-}
