@@ -7,4 +7,12 @@
 *.patch
 *.rej
 *.mp4
+*.m4a
+*.3gp
+*.3g2
+*.mp1
+*.mp2
+*.mp3
+*.aac
+*.adts
 *.mov
