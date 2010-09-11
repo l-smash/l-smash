@@ -1,5 +1,5 @@
 # should have distclean, install, uninstall in the future
-.PHONY: all lib m4amuxer dep depend clean
+.PHONY: all lib audiomuxer dep depend clean
 
 # for future use
 #include config.mak
@@ -26,19 +26,19 @@ OBJS=$(SRCS:%.c=%.o)
 
 TARGET_LIB=liblsmash.a
 
-SRC_M4AMUXER=m4amuxer.c
-OBJ_M4AMUXER=$(SRC_M4AMUXER:%.c=%.o)
-TARGET_M4AMUXER=$(SRC_M4AMUXER:%.c=%$(EXE))
+SRC_AUDIOMUXER=audiomuxer.c
+OBJ_AUDIOMUXER=$(SRC_AUDIOMUXER:%.c=%.o)
+TARGET_AUDIOMUXER=$(SRC_AUDIOMUXER:%.c=%$(EXE))
 
-SRCS_ALL=$(SRCS) $(SRC_M4AMUXER)
+SRCS_ALL=$(SRCS) $(SRC_AUDIOMUXER)
 OBJS_ALL=$(SRCS_ALL:%.c=%.o)
 
 #### main rules ####
-all: m4amuxer
+all: audiomuxer
 
 lib: $(TARGET_LIB)
 
-m4amuxer: $(TARGET_M4AMUXER)
+audiomuxer: $(TARGET_AUDIOMUXER)
 
 $(TARGET_LIB): .depend $(OBJS)
 	@$(ECHO) "AR: $@"
@@ -46,7 +46,7 @@ $(TARGET_LIB): .depend $(OBJS)
 	@$(ECHO) "RANLIB: $@"
 	@$(RANLIB) $@
 
-$(TARGET_M4AMUXER): $(OBJ_M4AMUXER) $(TARGET_LIB)
+$(TARGET_AUDIOMUXER): $(OBJ_AUDIOMUXER) $(TARGET_LIB)
 	@$(ECHO) "LINK: $@"
 	@$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $+ $(EXTRALIBS)
 
@@ -72,4 +72,4 @@ endif
 
 #### clean stuff ####
 clean:
-	rm -f $(OBJS_ALL) $(TARGET_LIB) $(TARGET_M4AMUXER) .depend
+	rm -f $(OBJS_ALL) $(TARGET_LIB) $(TARGET_AUDIOMUXER) .depend

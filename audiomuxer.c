@@ -1,9 +1,9 @@
 /*****************************************************************************
- * mp4amuxer.c:
+ * audiomuxer.c:
  *****************************************************************************
  * Copyright (C) 2010 L-SMASH project
  *
- * Authors: Takashi Hirata <silverfilain AT gmail DOT com>
+ * Authors: Takashi Hirata <silverfilain@gmail.com>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
