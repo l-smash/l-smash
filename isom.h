@@ -1202,7 +1202,7 @@ int isom_modify_timeline_map( isom_root_t *root, uint32_t track_ID, uint32_t ent
 int isom_update_media_modification_time( isom_root_t *root, uint32_t track_ID );
 int isom_update_track_modification_time( isom_root_t *root, uint32_t track_ID );
 int isom_update_movie_modification_time( isom_root_t *root );
-int isom_update_track_duration( isom_root_t *root, uint32_t track_ID );
+int isom_update_track_duration( isom_root_t *root, uint32_t track_ID, uint32_t last_sample_delta );
 int isom_update_bitrate_info( isom_root_t *root, uint32_t track_ID, uint32_t entry_number );
 
 

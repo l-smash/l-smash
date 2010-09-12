@@ -2818,14 +2818,15 @@ static uint64_t isom_get_cts( isom_stts_t *stts, isom_ctts_t *ctts, uint32_t sam
 }
 #endif
 
-static int isom_update_mdhd_duration( isom_trak_entry_t *trak )
+static int isom_update_mdhd_duration( isom_trak_entry_t *trak, uint32_t last_sample_delta )
 {
     if( !trak || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->minf || !trak->mdia->minf->stbl ||
         !trak->mdia->minf->stbl->stts || !trak->mdia->minf->stbl->stts->list || trak->mdia->minf->stbl->stts->list->entry_count == 0 )
         return -1;
     isom_mdhd_t *mdhd = trak->mdia->mdhd;
-    isom_stts_t *stts = trak->mdia->minf->stbl->stts;
-    isom_ctts_t *ctts = trak->mdia->minf->stbl->ctts;
+    isom_stbl_t *stbl = trak->mdia->minf->stbl;
+    isom_stts_t *stts = stbl->stts;
+    isom_ctts_t *ctts = stbl->ctts;
     mdhd->duration = 0;
     uint32_t sample_count = isom_get_sample_count( trak );
     if( sample_count == 0 )
@@ -2841,14 +2842,26 @@ static int isom_update_mdhd_duration( isom_trak_entry_t *trak )
     {
         /* use dts instead of cts */
         mdhd->duration = isom_get_dts( stts, sample_count );
-        if( last_stts_data->sample_count > 1 )
+        if( last_sample_delta )
+        {
+            mdhd->duration += last_sample_delta;
+            if( last_stts_data->sample_count > 1 && last_sample_delta != last_stts_data->sample_delta )
+            {
+                last_stts_data->sample_count -= 1;
+                if( isom_add_stts_entry( stbl, last_sample_delta ) )
+                    return -1;
+            }
+            else
+                last_stts_data->sample_delta = last_sample_delta;
+        }
+        else if( last_stts_data->sample_count > 1 )
             mdhd->duration += last_stts_data->sample_delta; /* no need to update last_stts_data->sample_delta */
         else
         {
-            uint32_t i = 0;
-            for( isom_entry_t *entry = stts->list->head; entry; entry = entry->next )
-                ++i;
-            isom_remove_entry( stts->list, i );     /* Remove the last entry. */
+            /* Remove the last entry. */
+            if( isom_remove_entry( stts->list, stts->list->entry_count ) )
+                return -1;
+            /* copy the previous sample_delta. */
             ++ ((isom_stts_entry_t *)stts->list->tail->data)->sample_count;
             mdhd->duration += ((isom_stts_entry_t *)stts->list->tail->data)->sample_delta;
         }
@@ -2893,22 +2906,25 @@ static int isom_update_mdhd_duration( isom_trak_entry_t *trak )
             }
         }
         dts -= last_stts_data->sample_delta;
-        /* The spec allows an arbitrary value for the duration of the last sample. So, we pick last-1 sample's. */
-        uint32_t last_delta = max_cts - max2_cts;
-        mdhd->duration = max_cts - min_cts + last_delta;
+        if( !last_sample_delta )
+        {
+            /* The spec allows an arbitrary value for the duration of the last sample. So, we pick last-1 sample's. */
+            last_sample_delta = max_cts - max2_cts;
+        }
+        mdhd->duration = max_cts - min_cts + last_sample_delta;
         /* To match dts and mdhd duration, update stts and mdhd relatively. */
         if( mdhd->duration > dts )
-            last_delta = mdhd->duration - dts;
+            last_sample_delta = mdhd->duration - dts;
         else
-            mdhd->duration = dts + last_delta; /* mdhd duration must not less than last dts. */
-        if( last_stts_data->sample_count > 1 && last_delta != last_stts_data->sample_delta )
+            mdhd->duration = dts + last_sample_delta; /* mdhd duration must not less than last dts. */
+        if( last_stts_data->sample_count > 1 && last_sample_delta != last_stts_data->sample_delta )
         {
             last_stts_data->sample_count -= 1;
-            if( isom_add_stts_entry( trak->mdia->minf->stbl, last_delta ) )
+            if( isom_add_stts_entry( stbl, last_sample_delta ) )
                 return -1;
         }
         else
-            last_stts_data->sample_delta = last_delta;
+            last_stts_data->sample_delta = last_sample_delta;
     }
     if( mdhd->duration > UINT32_MAX )
         mdhd->full_header.version = 1;
@@ -2944,7 +2960,7 @@ static int isom_update_tkhd_duration( isom_trak_entry_t *trak )
     {
         if( !trak->mdia || !trak->mdia->mdhd || !trak->root->moov->mvhd || !trak->mdia->mdhd->timescale )
             return -1;
-        if( !trak->mdia->mdhd->duration && isom_update_mdhd_duration( trak ) )
+        if( !trak->mdia->mdhd->duration && isom_update_mdhd_duration( trak, 0 ) )
             return -1;
         tkhd->duration = trak->mdia->mdhd->duration * ((double)trak->root->moov->mvhd->timescale / trak->mdia->mdhd->timescale);
     }
@@ -2965,12 +2981,12 @@ static int isom_update_tkhd_duration( isom_trak_entry_t *trak )
     return isom_update_mvhd_duration( trak->root->moov );
 }
 
-int isom_update_track_duration( isom_root_t *root, uint32_t track_ID )
+int isom_update_track_duration( isom_root_t *root, uint32_t track_ID, uint32_t last_sample_delta )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak )
         return -1;
-    if( isom_update_mdhd_duration( trak ) )
+    if( isom_update_mdhd_duration( trak, last_sample_delta ) )
         return -1;
     /* If the track already has a edit list, we don't change or update duration in tkhd and mvhd. */
     return trak->edts && trak->edts->elst ? 0 : isom_update_tkhd_duration( trak );
@@ -4401,7 +4417,7 @@ int isom_set_last_sample_delta( isom_root_t *root, uint32_t track_ID, uint32_t s
             return -1;
         if( isom_add_stts_entry( stbl, sample_delta ) )
             return -1;
-        return isom_update_track_duration( root, track_ID );
+        return isom_update_track_duration( root, track_ID, 0 );
     }
     uint32_t i = 0;
     for( isom_entry_t *entry = stts->list->head; entry; entry = entry->next )
@@ -4412,8 +4428,7 @@ int isom_set_last_sample_delta( isom_root_t *root, uint32_t track_ID, uint32_t s
         if( sample_count - i > 1 )
             return -1;
         /* Add a sample_delta. */
-        uint32_t prev_delta = last_stts_data->sample_delta;
-        if( sample_delta == prev_delta )
+        if( sample_delta == last_stts_data->sample_delta )
             ++ last_stts_data->sample_count;
         else if( isom_add_stts_entry( stbl, sample_delta ) )
             return -1;
@@ -4421,7 +4436,7 @@ int isom_set_last_sample_delta( isom_root_t *root, uint32_t track_ID, uint32_t s
     else if( sample_count == i )
     {
         /* Reset the last sample_delta */
-        if( last_stts_data->sample_count > 1 )
+        if( last_stts_data->sample_count > 1 && sample_delta != last_stts_data->sample_delta )
         {
             last_stts_data->sample_count -= 1;
             if( isom_add_stts_entry( stbl, sample_delta ) )
@@ -4432,7 +4447,7 @@ int isom_set_last_sample_delta( isom_root_t *root, uint32_t track_ID, uint32_t s
     }
     else
         return -1;
-    return isom_update_track_duration( root, track_ID );
+    return isom_update_track_duration( root, track_ID, sample_delta );
 }
 
 int isom_flush_pooled_samples( isom_root_t *root, uint32_t track_ID, uint32_t last_sample_delta )
