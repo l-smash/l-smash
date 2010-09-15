@@ -2068,164 +2068,134 @@ static int isom_write_esds( isom_bs_t *bs, isom_esds_t *esds )
     return mp4sys_write_ES_Descriptor( bs, esds->ES );
 }
 
-static int isom_write_avc_entry( isom_bs_t *bs, isom_stsd_t *stsd )
+static int isom_write_avc_entry( isom_bs_t *bs, isom_entry_t *entry )
 {
-    for( isom_entry_t *entry = stsd->list->head; entry; entry = entry->next )
-    {
-        isom_avc_entry_t *data = (isom_avc_entry_t *)entry->data;
-        if( !data )
-            return -1;
-        isom_bs_put_base_header( bs, &data->base_header );
-        isom_bs_put_bytes( bs, data->reserved, 6 );
-        isom_bs_put_be16( bs, data->data_reference_index );
-        isom_bs_put_be16( bs, data->pre_defined1 );
-        isom_bs_put_be16( bs, data->reserved1 );
-        for( uint32_t j = 0; j < 3; j++ )
-            isom_bs_put_be32( bs, data->pre_defined2[j] );
-        isom_bs_put_be16( bs, data->width );
-        isom_bs_put_be16( bs, data->height );
-        isom_bs_put_be32( bs, data->horizresolution );
-        isom_bs_put_be32( bs, data->vertresolution );
-        isom_bs_put_be32( bs, data->reserved2 );
-        isom_bs_put_be16( bs, data->frame_count );
-        isom_bs_put_bytes( bs, data->compressorname, 32 );
-        isom_bs_put_be16( bs, data->depth );
-        isom_bs_put_be16( bs, data->pre_defined3 );
-        isom_put_clap( bs, data->clap );
-        isom_put_pasp( bs, data->pasp );
-        if( !data->avcC )
-            return -1;
-        isom_put_avcC( bs, data->avcC );
-        if( data->btrt )
-            isom_put_btrt( bs, data->btrt );
-        if( isom_bs_write_data( bs ) )
-            return -1;
-    }
-    return 0;
+    isom_avc_entry_t *data = (isom_avc_entry_t *)entry->data;
+    if( !data )
+        return -1;
+    isom_bs_put_base_header( bs, &data->base_header );
+    isom_bs_put_bytes( bs, data->reserved, 6 );
+    isom_bs_put_be16( bs, data->data_reference_index );
+    isom_bs_put_be16( bs, data->pre_defined1 );
+    isom_bs_put_be16( bs, data->reserved1 );
+    for( uint32_t j = 0; j < 3; j++ )
+        isom_bs_put_be32( bs, data->pre_defined2[j] );
+    isom_bs_put_be16( bs, data->width );
+    isom_bs_put_be16( bs, data->height );
+    isom_bs_put_be32( bs, data->horizresolution );
+    isom_bs_put_be32( bs, data->vertresolution );
+    isom_bs_put_be32( bs, data->reserved2 );
+    isom_bs_put_be16( bs, data->frame_count );
+    isom_bs_put_bytes( bs, data->compressorname, 32 );
+    isom_bs_put_be16( bs, data->depth );
+    isom_bs_put_be16( bs, data->pre_defined3 );
+    isom_put_clap( bs, data->clap );
+    isom_put_pasp( bs, data->pasp );
+    if( !data->avcC )
+        return -1;
+    isom_put_avcC( bs, data->avcC );
+    if( data->btrt )
+        isom_put_btrt( bs, data->btrt );
+    return isom_bs_write_data( bs );
 }
 
-static int isom_write_mp4a_entry( isom_bs_t *bs, isom_stsd_t *stsd )
+static int isom_write_mp4a_entry( isom_bs_t *bs, isom_entry_t *entry )
 {
-    for( isom_entry_t *entry = stsd->list->head; entry; entry = entry->next )
-    {
-        isom_mp4a_entry_t *data = (isom_mp4a_entry_t *)entry->data;
-        if( !data )
-            return -1;
-        isom_bs_put_base_header( bs, &data->base_header );
-        isom_bs_put_bytes( bs, data->reserved, 6 );
-        isom_bs_put_be16( bs, data->data_reference_index );
-        isom_bs_put_be32( bs, data->reserved1[0] );
-        isom_bs_put_be32( bs, data->reserved1[1] );
-        isom_bs_put_be16( bs, data->channelcount );
-        isom_bs_put_be16( bs, data->samplesize );
-        isom_bs_put_be16( bs, data->pre_defined );
-        isom_bs_put_be16( bs, data->reserved2 );
-        isom_bs_put_be32( bs, data->samplerate );
-        if( isom_bs_write_data( bs ) )
-            return -1;
-        if( isom_write_esds( bs, data->esds ) );
-            return -1;
-    }
-    return 0;
+    isom_mp4a_entry_t *data = (isom_mp4a_entry_t *)entry->data;
+    if( !data )
+        return -1;
+    isom_bs_put_base_header( bs, &data->base_header );
+    isom_bs_put_bytes( bs, data->reserved, 6 );
+    isom_bs_put_be16( bs, data->data_reference_index );
+    isom_bs_put_be32( bs, data->reserved1[0] );
+    isom_bs_put_be32( bs, data->reserved1[1] );
+    isom_bs_put_be16( bs, data->channelcount );
+    isom_bs_put_be16( bs, data->samplesize );
+    isom_bs_put_be16( bs, data->pre_defined );
+    isom_bs_put_be16( bs, data->reserved2 );
+    isom_bs_put_be32( bs, data->samplerate );
+    if( isom_bs_write_data( bs ) )
+        return -1;
+    return isom_write_esds( bs, data->esds );
 }
 
-static int isom_write_audio_entry( isom_bs_t *bs, isom_stsd_t *stsd )
+static int isom_write_audio_entry( isom_bs_t *bs, isom_entry_t *entry )
 {
-    for( isom_entry_t *entry = stsd->list->head; entry; entry = entry->next )
-    {
-        isom_audio_entry_t *data = (isom_audio_entry_t *)entry->data;
-        if( !data )
-            return -1;
-        isom_bs_put_base_header( bs, &data->base_header );
-        isom_bs_put_bytes( bs, data->reserved, 6 );
-        isom_bs_put_be16( bs, data->data_reference_index );
-        isom_bs_put_be32( bs, data->reserved1[0] );
-        isom_bs_put_be32( bs, data->reserved1[1] );
-        isom_bs_put_be16( bs, data->channelcount );
-        isom_bs_put_be16( bs, data->samplesize );
-        isom_bs_put_be16( bs, data->pre_defined );
-        isom_bs_put_be16( bs, data->reserved2 );
-        isom_bs_put_be32( bs, data->samplerate );
-        isom_bs_put_bytes( bs, data->exdata, data->exdata_length );
-        if( isom_bs_write_data( bs ) )
-            return -1;
-    }
-    return 0;
+    isom_audio_entry_t *data = (isom_audio_entry_t *)entry->data;
+    if( !data )
+        return -1;
+    isom_bs_put_base_header( bs, &data->base_header );
+    isom_bs_put_bytes( bs, data->reserved, 6 );
+    isom_bs_put_be16( bs, data->data_reference_index );
+    isom_bs_put_be32( bs, data->reserved1[0] );
+    isom_bs_put_be32( bs, data->reserved1[1] );
+    isom_bs_put_be16( bs, data->channelcount );
+    isom_bs_put_be16( bs, data->samplesize );
+    isom_bs_put_be16( bs, data->pre_defined );
+    isom_bs_put_be16( bs, data->reserved2 );
+    isom_bs_put_be32( bs, data->samplerate );
+    isom_bs_put_bytes( bs, data->exdata, data->exdata_length );
+    return isom_bs_write_data( bs );
 }
 
 #if 0
-static int isom_write_visual_entry( isom_bs_t *bs, isom_stsd_t *stsd )
+static int isom_write_visual_entry( isom_bs_t *bs, isom_entry_t *entry )
 {
-    for( isom_entry_t *entry = stsd->list->head; entry; entry = entry->next )
+    isom_visual_entry_t *data = (isom_visual_entry_t *)entry->data;
+    if( !data )
+        return -1;
+    isom_bs_put_base_header( bs, &data->base_header );
+    isom_bs_put_bytes( bs, data->reserved, 6 );
+    isom_bs_put_be16( bs, data->data_reference_index );
+    isom_bs_put_be16( bs, data->pre_defined1 );
+    isom_bs_put_be16( bs, data->reserved1 );
+    for( uint32_t j = 0; j < 3; j++ )
+        isom_bs_put_be32( bs, data->pre_defined2[j] );
+    isom_bs_put_be16( bs, data->width );
+    isom_bs_put_be16( bs, data->height );
+    isom_bs_put_be32( bs, data->horizresolution );
+    isom_bs_put_be32( bs, data->vertresolution );
+    isom_bs_put_be32( bs, data->reserved2 );
+    isom_bs_put_be16( bs, data->frame_count );
+    isom_bs_put_bytes( bs, data->compressorname, 32 );
+    isom_bs_put_be16( bs, data->depth );
+    isom_bs_put_be16( bs, data->pre_defined3 );
+    isom_put_clap( bs, data->clap );
+    isom_put_pasp( bs, data->pasp );
+    if( data->base_header.type == ISOM_CODEC_TYPE_AVC1_VIDEO )
     {
-        isom_visual_entry_t *data = (isom_visual_entry_t *)entry->data;
-        if( !data )
+        isom_avc_entry_t *avc = (isom_avc_entry_t *)data;
+        if( !avc || !avc->avcC )
             return -1;
-        isom_bs_put_base_header( bs, &data->base_header );
-        isom_bs_put_bytes( bs, data->reserved, 6 );
-        isom_bs_put_be16( bs, data->data_reference_index );
-        isom_bs_put_be16( bs, data->pre_defined1 );
-        isom_bs_put_be16( bs, data->reserved1 );
-        for( uint32_t j = 0; j < 3; j++ )
-            isom_bs_put_be32( bs, data->pre_defined2[j] );
-        isom_bs_put_be16( bs, data->width );
-        isom_bs_put_be16( bs, data->height );
-        isom_bs_put_be32( bs, data->horizresolution );
-        isom_bs_put_be32( bs, data->vertresolution );
-        isom_bs_put_be32( bs, data->reserved2 );
-        isom_bs_put_be16( bs, data->frame_count );
-        isom_bs_put_bytes( bs, data->compressorname, 32 );
-        isom_bs_put_be16( bs, data->depth );
-        isom_bs_put_be16( bs, data->pre_defined3 );
-        isom_put_clap( bs, data->clap );
-        isom_put_pasp( bs, data->pasp );
-        if( data->base_header.type == ISOM_CODEC_TYPE_AVC1_VIDEO )
-        {
-            isom_avc_entry_t *avc = (isom_avc_entry_t *)data;
-            if( !avc || !avc->avcC )
-                return -1;
-            isom_put_avcC( bs, avc->avcC );
-            if( avc->btrt )
-                isom_put_btrt( bs, avc->btrt );
-        }
-        if( isom_bs_write_data( bs ) )
-            return -1;
+        isom_put_avcC( bs, avc->avcC );
+        if( avc->btrt )
+            isom_put_btrt( bs, avc->btrt );
     }
-    return 0;
+    return isom_bs_write_data( bs );
 }
 
-static int isom_write_hint_entry( isom_bs_t *bs, isom_stsd_t *stsd )
+static int isom_write_hint_entry( isom_bs_t *bs, isom_entry_t *entry )
 {
-    for( isom_entry_t *entry = stsd->list->head; entry; entry = entry->next )
-    {
-        isom_hint_entry_t *data = (isom_hint_entry_t *)entry->data;
-        if( !data )
-            return -1;
-        isom_bs_put_base_header( bs, &data->base_header );
-        isom_bs_put_bytes( bs, data->reserved, 6 );
-        isom_bs_put_be16( bs, data->data_reference_index );
-        if( data->data && data->data_length )
-            isom_bs_put_bytes( bs, data->data, data->data_length );
-        if( isom_bs_write_data( bs ) )
-            return -1;
-    }
-    return 0;
+    isom_hint_entry_t *data = (isom_hint_entry_t *)entry->data;
+    if( !data )
+        return -1;
+    isom_bs_put_base_header( bs, &data->base_header );
+    isom_bs_put_bytes( bs, data->reserved, 6 );
+    isom_bs_put_be16( bs, data->data_reference_index );
+    if( data->data && data->data_length )
+        isom_bs_put_bytes( bs, data->data, data->data_length );
+    return isom_bs_write_data( bs );
 }
 
-static int isom_write_metadata_entry( isom_bs_t *bs, isom_stsd_t *stsd )
+static int isom_write_metadata_entry( isom_bs_t *bs, isom_entry_t *entry )
 {
-    for( isom_entry_t *entry = stsd->list->head; entry; entry = entry->next )
-    {
-        isom_metadata_entry_t *data = (isom_metadata_entry_t *)entry->data;
-        if( !data )
-            return -1;
-        isom_bs_put_base_header( bs, &data->base_header );
-        isom_bs_put_bytes( bs, data->reserved, 6 );
-        isom_bs_put_be16( bs, data->data_reference_index );
-        if( isom_bs_write_data( bs ) )
-            return -1;
-    }
-    return 0;
+    isom_metadata_entry_t *data = (isom_metadata_entry_t *)entry->data;
+    if( !data )
+        return -1;
+    isom_bs_put_base_header( bs, &data->base_header );
+    isom_bs_put_bytes( bs, data->reserved, 6 );
+    isom_bs_put_be16( bs, data->data_reference_index );
+    return isom_bs_write_data( bs );
 }
 #endif
 
@@ -2251,10 +2221,10 @@ static int isom_write_stsd( isom_bs_t *bs, isom_trak_entry_t *trak )
             case ISOM_CODEC_TYPE_MVC1_VIDEO :
             case ISOM_CODEC_TYPE_MVC2_VIDEO :
 #endif
-                isom_write_avc_entry( bs, stsd );
+                isom_write_avc_entry( bs, entry );
                 break;
             case ISOM_CODEC_TYPE_MP4A_AUDIO :
-                isom_write_mp4a_entry( bs, stsd );
+                isom_write_mp4a_entry( bs, entry );
                 break;
 #if 0
             case ISOM_CODEC_TYPE_DRAC_VIDEO :
@@ -2262,7 +2232,7 @@ static int isom_write_stsd( isom_bs_t *bs, isom_trak_entry_t *trak )
             case ISOM_CODEC_TYPE_MJP2_VIDEO :
             case ISOM_CODEC_TYPE_S263_VIDEO :
             case ISOM_CODEC_TYPE_VC_1_VIDEO :
-                isom_write_visual_entry( bs, stsd );
+                isom_write_visual_entry( bs, entry );
                 break;
 #endif
             case ISOM_CODEC_TYPE_AC_3_AUDIO :
@@ -2287,7 +2257,7 @@ static int isom_write_stsd( isom_bs_t *bs, isom_trak_entry_t *trak )
             case ISOM_CODEC_TYPE_SSMV_AUDIO :
             case ISOM_CODEC_TYPE_TWOS_AUDIO :
 #endif
-                isom_write_audio_entry( bs, stsd );
+                isom_write_audio_entry( bs, entry );
                 break;
 #if 0
             case ISOM_CODEC_TYPE_FDP_HINT :
@@ -2300,7 +2270,7 @@ static int isom_write_stsd( isom_bs_t *bs, isom_trak_entry_t *trak )
             case ISOM_CODEC_TYPE_RTP_HINT  :
             case ISOM_CODEC_TYPE_SM2T_HINT :
             case ISOM_CODEC_TYPE_SRTP_HINT :
-                isom_write_hint_entry( bs, stsd );
+                isom_write_hint_entry( bs, entry );
                 break;
             case ISOM_CODEC_TYPE_IXSE_META :
             case ISOM_CODEC_TYPE_METT_META :
@@ -2311,7 +2281,7 @@ static int isom_write_stsd( isom_bs_t *bs, isom_trak_entry_t *trak )
             case ISOM_CODEC_TYPE_TEXT_META :
             case ISOM_CODEC_TYPE_URIM_META :
             case ISOM_CODEC_TYPE_XML_META  :
-                isom_write_metadata_entry( bs, stsd );
+                isom_write_metadata_entry( bs, entry );
                 break;
 #endif
             default :
