@@ -1826,9 +1826,7 @@ static int isom_write_tkhd( isom_bs_t *bs, isom_trak_entry_t *trak )
         isom_bs_put_be32( bs, tkhd->matrix[i] );
     isom_bs_put_be32( bs, tkhd->width );
     isom_bs_put_be32( bs, tkhd->height );
-    if( isom_bs_write_data( bs ) )
-        return -1;
-    return 0;
+    return isom_bs_write_data( bs );
 }
 
 static int isom_write_elst( isom_bs_t *bs, isom_trak_entry_t *trak )
@@ -1857,9 +1855,7 @@ static int isom_write_elst( isom_bs_t *bs, isom_trak_entry_t *trak )
         }
         isom_bs_put_be32( bs, data->media_rate );
     }
-    if( isom_bs_write_data( bs ) )
-        return -1;
-    return 0;
+    return isom_bs_write_data( bs );
 }
 
 static int isom_write_edts( isom_bs_t *bs, isom_trak_entry_t *trak )
@@ -1870,9 +1866,7 @@ static int isom_write_edts( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_bs_put_base_header( bs, &edts->base_header );
     if( isom_bs_write_data( bs ) )
         return -1;
-    if( isom_write_elst( bs, trak ) )
-        return -1;
-    return 0;
+    return isom_write_elst( bs, trak );
 }
 
 static int isom_write_mdhd( isom_bs_t *bs, isom_trak_entry_t *trak )
@@ -1897,9 +1891,7 @@ static int isom_write_mdhd( isom_bs_t *bs, isom_trak_entry_t *trak )
     }
     isom_bs_put_be16( bs, mdhd->language );
     isom_bs_put_be16( bs, mdhd->pre_defined );
-    if( isom_bs_write_data( bs ) )
-        return -1;
-    return 0;
+    return isom_bs_write_data( bs );
 }
 
 static int isom_write_hdlr( isom_bs_t *bs, isom_trak_entry_t *trak )
@@ -1913,9 +1905,7 @@ static int isom_write_hdlr( isom_bs_t *bs, isom_trak_entry_t *trak )
     for( uint32_t i = 0; i < 3; i++ )
         isom_bs_put_be32( bs, hdlr->reserved[i] );
     isom_bs_put_bytes( bs, hdlr->name, hdlr->name_length );
-    if( isom_bs_write_data( bs ) )
-        return -1;
-    return 0;
+    return isom_bs_write_data( bs );
 }
 
 static int isom_write_vmhd( isom_bs_t *bs, isom_trak_entry_t *trak )
@@ -1927,9 +1917,7 @@ static int isom_write_vmhd( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_bs_put_be16( bs, vmhd->graphicsmode );
     for( uint32_t i = 0; i < 3; i++ )
         isom_bs_put_be16( bs, vmhd->opcolor[i] );
-    if( isom_bs_write_data( bs ) )
-        return -1;
-    return 0;
+    return isom_bs_write_data( bs );
 }
 
 static int isom_write_smhd( isom_bs_t *bs, isom_trak_entry_t *trak )
@@ -1940,9 +1928,7 @@ static int isom_write_smhd( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_bs_put_full_header( bs, &smhd->full_header );
     isom_bs_put_be16( bs, smhd->balance );
     isom_bs_put_be16( bs, smhd->reserved );
-    if( isom_bs_write_data( bs ) )
-        return -1;
-    return 0;
+    return isom_bs_write_data( bs );
 }
 
 static int isom_write_hmhd( isom_bs_t *bs, isom_trak_entry_t *trak )
@@ -1956,9 +1942,7 @@ static int isom_write_hmhd( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_bs_put_be32( bs, hmhd->maxbitrate );
     isom_bs_put_be32( bs, hmhd->avgbitrate );
     isom_bs_put_be32( bs, hmhd->reserved );
-    if( isom_bs_write_data( bs ) )
-        return -1;
-    return 0;
+    return isom_bs_write_data( bs );
 }
 
 static int isom_write_nmhd( isom_bs_t *bs, isom_trak_entry_t *trak )
@@ -1967,9 +1951,7 @@ static int isom_write_nmhd( isom_bs_t *bs, isom_trak_entry_t *trak )
     if( !nmhd )
         return -1;
     isom_bs_put_full_header( bs, &nmhd->full_header );
-    if( isom_bs_write_data( bs ) )
-        return -1;
-    return 0;
+    return isom_bs_write_data( bs );
 }
 
 static int isom_write_dref( isom_bs_t *bs, isom_trak_entry_t *trak )
@@ -1989,9 +1971,7 @@ static int isom_write_dref( isom_bs_t *bs, isom_trak_entry_t *trak )
             isom_bs_put_bytes( bs, data->name, data->name_length );
         isom_bs_put_bytes( bs, data->location, data->location_length );
     }
-    if( isom_bs_write_data( bs ) )
-        return -1;
-    return 0;
+    return isom_bs_write_data( bs );
 }
 
 static int isom_write_dinf( isom_bs_t *bs, isom_trak_entry_t *trak )
@@ -2002,9 +1982,7 @@ static int isom_write_dinf( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_bs_put_base_header( bs, &dinf->base_header );
     if( isom_bs_write_data( bs ) )
         return -1;
-    if( isom_write_dref( bs, trak ) )
-        return -1;
-    return 0;
+    return isom_write_dref( bs, trak );
 }
 
 static void isom_put_pasp( isom_bs_t *bs, isom_pasp_t *pasp )
@@ -2014,7 +1992,6 @@ static void isom_put_pasp( isom_bs_t *bs, isom_pasp_t *pasp )
     isom_bs_put_base_header( bs, &pasp->base_header );
     isom_bs_put_be32( bs, pasp->hSpacing );
     isom_bs_put_be32( bs, pasp->vSpacing );
-    return;
 }
 
 static void isom_put_clap( isom_bs_t *bs, isom_clap_t *clap )
@@ -2030,7 +2007,6 @@ static void isom_put_clap( isom_bs_t *bs, isom_clap_t *clap )
     isom_bs_put_be32( bs, clap->horizOffD );
     isom_bs_put_be32( bs, clap->vertOffN );
     isom_bs_put_be32( bs, clap->vertOffD );
-    return;
 }
 
 static int isom_put_ps_entries( isom_bs_t *bs, isom_entry_list_t *list )
@@ -2082,7 +2058,6 @@ static void isom_put_btrt( isom_bs_t *bs, isom_btrt_t *btrt )
     isom_bs_put_be32( bs, btrt->bufferSizeDB );
     isom_bs_put_be32( bs, btrt->maxBitrate );
     isom_bs_put_be32( bs, btrt->avgBitrate );
-    return;
 }
 
 static int isom_write_esds( isom_bs_t *bs, isom_esds_t *esds )
@@ -2361,9 +2336,7 @@ static int isom_write_stts( isom_bs_t *bs, isom_trak_entry_t *trak )
         isom_bs_put_be32( bs, data->sample_count );
         isom_bs_put_be32( bs, data->sample_delta );
     }
-    if( isom_bs_write_data( bs ) )
-        return -1;
-    return 0;
+    return isom_bs_write_data( bs );
 }
 
 static int isom_write_ctts( isom_bs_t *bs, isom_trak_entry_t *trak )
@@ -2383,9 +2356,7 @@ static int isom_write_ctts( isom_bs_t *bs, isom_trak_entry_t *trak )
         isom_bs_put_be32( bs, data->sample_count );
         isom_bs_put_be32( bs, data->sample_offset );
     }
-    if( isom_bs_write_data( bs ) )
-        return -1;
-    return 0;
+    return isom_bs_write_data( bs );
 }
 
 static int isom_write_stsz( isom_bs_t *bs, isom_trak_entry_t *trak )
@@ -2404,9 +2375,7 @@ static int isom_write_stsz( isom_bs_t *bs, isom_trak_entry_t *trak )
                 return -1;
             isom_bs_put_be32( bs, data->entry_size );
         }
-    if( isom_bs_write_data( bs ) )
-        return -1;
-    return 0;
+    return isom_bs_write_data( bs );
 }
 
 static int isom_write_stss( isom_bs_t *bs, isom_trak_entry_t *trak )
@@ -2425,9 +2394,7 @@ static int isom_write_stss( isom_bs_t *bs, isom_trak_entry_t *trak )
             return -1;
         isom_bs_put_be32( bs, data->sample_number );
     }
-    if( isom_bs_write_data( bs ) )
-        return -1;
-    return 0;
+    return isom_bs_write_data( bs );
 }
 
 static int isom_write_sdtp( isom_bs_t *bs, isom_trak_entry_t *trak )
@@ -2448,9 +2415,7 @@ static int isom_write_sdtp( isom_bs_t *bs, isom_trak_entry_t *trak )
                               (data->sample_is_depended_on<<2) |
                                data->sample_has_redundancy );
     }
-    if( isom_bs_write_data( bs ) )
-        return -1;
-    return 0;
+    return isom_bs_write_data( bs );
 }
 
 static int isom_write_stsc( isom_bs_t *bs, isom_trak_entry_t *trak )
@@ -2469,9 +2434,7 @@ static int isom_write_stsc( isom_bs_t *bs, isom_trak_entry_t *trak )
         isom_bs_put_be32( bs, data->samples_per_chunk );
         isom_bs_put_be32( bs, data->sample_description_index );
     }
-    if( isom_bs_write_data( bs ) )
-        return -1;
-    return 0;
+    return isom_bs_write_data( bs );
 }
 
 static int isom_write_co64( isom_bs_t *bs, isom_trak_entry_t *trak )
@@ -2488,9 +2451,7 @@ static int isom_write_co64( isom_bs_t *bs, isom_trak_entry_t *trak )
             return -1;
         isom_bs_put_be64( bs, data->chunk_offset );
     }
-    if( isom_bs_write_data( bs ) )
-        return -1;
-    return 0;
+    return isom_bs_write_data( bs );
 }
 
 static int isom_write_stco( isom_bs_t *bs, isom_trak_entry_t *trak )
@@ -2509,9 +2470,7 @@ static int isom_write_stco( isom_bs_t *bs, isom_trak_entry_t *trak )
             return -1;
         isom_bs_put_be32( bs, data->chunk_offset );
     }
-    if( isom_bs_write_data( bs ) )
-        return -1;
-    return 0;
+    return isom_bs_write_data( bs );
 }
 
 static int isom_write_sbgp( isom_bs_t *bs, isom_trak_entry_t *trak, uint32_t grouping_number )
@@ -2530,9 +2489,7 @@ static int isom_write_sbgp( isom_bs_t *bs, isom_trak_entry_t *trak, uint32_t gro
         isom_bs_put_be32( bs, data->sample_count );
         isom_bs_put_be32( bs, data->group_description_index );
     }
-    if( isom_bs_write_data( bs ) )
-        return -1;
-    return 0;
+    return isom_bs_write_data( bs );
 }
 
 static int isom_write_sgpd( isom_bs_t *bs, isom_trak_entry_t *trak, uint32_t grouping_number )
@@ -2563,9 +2520,7 @@ static int isom_write_sgpd( isom_bs_t *bs, isom_trak_entry_t *trak, uint32_t gro
                 break;
         }
     }
-    if( isom_bs_write_data( bs ) )
-        return -1;
-    return 0;
+    return isom_bs_write_data( bs );
 }
 
 static int isom_write_stbl( isom_bs_t *bs, isom_trak_entry_t *trak )
@@ -2576,27 +2531,19 @@ static int isom_write_stbl( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_bs_put_base_header( bs, &stbl->base_header );
     if( isom_bs_write_data( bs ) )
         return -1;
-    if( isom_write_stsd( bs, trak ) )
-        return -1;
-    if( isom_write_stts( bs, trak ) )
-        return -1;
-    if( isom_write_ctts( bs, trak ) )
-        return -1;
-    if( isom_write_stss( bs, trak ) )
-        return -1;
-    if( isom_write_sdtp( bs, trak ) )
-        return -1;
-    if( isom_write_stsc( bs, trak ) )
-        return -1;
-    if( isom_write_stsz( bs, trak ) )
-        return -1;
-    if( isom_write_stco( bs, trak ) )
+    if( isom_write_stsd( bs, trak ) ||
+        isom_write_stts( bs, trak ) ||
+        isom_write_ctts( bs, trak ) ||
+        isom_write_stss( bs, trak ) ||
+        isom_write_sdtp( bs, trak ) ||
+        isom_write_stsc( bs, trak ) ||
+        isom_write_stsz( bs, trak ) ||
+        isom_write_stco( bs, trak ) )
         return -1;
     for( uint32_t i = 1; i <= trak->mdia->minf->stbl->grouping_count; i++ )
     {
-        if( isom_write_sbgp( bs, trak, i ) )
-            return -1;
-        if( isom_write_sgpd( bs, trak, i ) )
+        if( isom_write_sbgp( bs, trak, i ) ||
+            isom_write_sgpd( bs, trak, i ) )
             return -1;
     }
     return 0;
@@ -2610,17 +2557,13 @@ static int isom_write_minf( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_bs_put_base_header( bs, &minf->base_header );
     if( isom_bs_write_data( bs ) )
         return -1;
-    if( minf->vmhd && isom_write_vmhd( bs, trak ) )
+    if( (minf->vmhd && isom_write_vmhd( bs, trak )) ||
+        (minf->smhd && isom_write_smhd( bs, trak )) ||
+        (minf->hmhd && isom_write_hmhd( bs, trak )) ||
+        (minf->nmhd && isom_write_nmhd( bs, trak )) )
         return -1;
-    if( minf->smhd && isom_write_smhd( bs, trak ) )
-        return -1;
-    if( minf->hmhd && isom_write_hmhd( bs, trak ) )
-        return -1;
-    if( minf->nmhd && isom_write_nmhd( bs, trak ) )
-        return -1;
-    if( isom_write_dinf( bs, trak ) )
-        return -1;
-    if( isom_write_stbl( bs, trak ) )
+    if( isom_write_dinf( bs, trak ) ||
+        isom_write_stbl( bs, trak ) )
         return -1;
     return 0;
 }
@@ -2633,11 +2576,9 @@ static int isom_write_mdia( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_bs_put_base_header( bs, &mdia->base_header );
     if( isom_bs_write_data( bs ) )
         return -1;
-    if( isom_write_mdhd( bs, trak ) )
-        return -1;
-    if( isom_write_hdlr( bs, trak ) )
-        return -1;
-    if( isom_write_minf( bs, trak ) )
+    if( isom_write_mdhd( bs, trak ) ||
+        isom_write_hdlr( bs, trak ) ||
+        isom_write_minf( bs, trak ) )
         return -1;
     return 0;
 }
@@ -2660,9 +2601,7 @@ static int isom_write_chpl( isom_bs_t *bs, isom_chpl_t *chpl )
         isom_bs_put_byte( bs, data->name_length );
         isom_bs_put_bytes( bs, data->chapter_name, data->name_length );
     }
-    if( isom_bs_write_data( bs ) )
-        return -1;
-    return 0;
+    return isom_bs_write_data( bs );
 }
 
 static int isom_write_udta( isom_bs_t *bs, isom_moov_t *moov, isom_trak_entry_t *trak )
@@ -2687,13 +2626,10 @@ static int isom_write_trak( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_bs_put_base_header( bs, &trak->base_header );
     if( isom_bs_write_data( bs ) )
         return -1;
-    if( isom_write_tkhd( bs, trak ) )
-        return -1;
-    if( isom_write_edts( bs, trak ) )
-        return -1;
-    if( isom_write_mdia( bs, trak ) )
-        return -1;
-    if( isom_write_udta( bs, NULL, trak ) )
+    if( isom_write_tkhd( bs, trak ) ||
+        isom_write_edts( bs, trak ) ||
+        isom_write_mdia( bs, trak ) ||
+        isom_write_udta( bs, NULL, trak ) )
         return -1;
     return 0;
 }
@@ -2737,9 +2673,7 @@ static int isom_write_mvhd( isom_root_t *root )
     for( uint32_t i = 0; i < 6; i++ )
         isom_bs_put_be32( bs, mvhd->pre_defined[i] );
     isom_bs_put_be32( bs, mvhd->next_track_ID );
-    if( isom_bs_write_data( bs ) )
-        return -1;
-    return 0;
+    return isom_bs_write_data( bs );
 }
 
 static int isom_bs_write_largesize_reserver( isom_bs_t *bs )
@@ -4273,9 +4207,7 @@ int isom_write_ftyp( isom_root_t *root )
     isom_bs_put_be32( bs, ftyp->minor_version );
     for( uint32_t i = 0; i < ftyp->brand_count; i++ )
         isom_bs_put_be32( bs, ftyp->compatible_brands[i] );
-    if( isom_bs_write_data( bs ) )
-        return -1;
-    return 0;
+    return isom_bs_write_data( bs );
 }
 
 int isom_write_moov( isom_root_t *root )
@@ -4285,17 +4217,14 @@ int isom_write_moov( isom_root_t *root )
     isom_bs_put_base_header( root->bs, &root->moov->base_header );
     if( isom_bs_write_data( root->bs ) )
         return -1;
-    if( isom_write_mvhd( root ) )
-        return -1;
-    if( isom_write_iods( root ) )
+    if( isom_write_mvhd( root ) ||
+        isom_write_iods( root ) )
         return -1;
     if( root->moov->trak_list )
         for( isom_entry_t *entry = root->moov->trak_list->head; entry; entry = entry->next )
             if( isom_write_trak( root->bs, (isom_trak_entry_t *)entry->data ) )
                 return -1;
-    if( isom_write_udta( root->bs, root->moov, NULL ) )
-        return -1;
-    return 0;
+    return isom_write_udta( root->bs, root->moov, NULL );
 }
 
 /* If a mdat box already exists, flush a current one and start a new one. */
@@ -4303,15 +4232,14 @@ int isom_add_mdat( isom_root_t *root )
 {
     if( !root )
         return 0;
-    if( root->mdat )
-        isom_write_mdat_size( root );   /* flush a current mdat */
+    if( root->mdat && isom_write_mdat_size( root ) )    /* flush a current mdat */
+        return -1;
     else
     {
         isom_create_basebox( mdat, ISOM_BOX_TYPE_MDAT );
         root->mdat = mdat;
     }
-    isom_write_mdat_header( root );     /* start a new mdat */
-    return 0;
+    return isom_write_mdat_header( root );     /* start a new mdat */
 }
 
 int isom_write_mdat_size( isom_root_t *root )
@@ -4384,9 +4312,7 @@ int isom_write_free( isom_root_t *root )
     isom_bs_put_base_header( bs, &skip->base_header );
     if( skip->data && skip->length )
         isom_bs_put_bytes( bs, skip->data, skip->length );
-    if( isom_bs_write_data( bs ) )
-        return -1;
-    return 0;
+    return isom_bs_write_data( bs );
 }
 
 /*---- finishing functions ----*/
@@ -4589,9 +4515,7 @@ int isom_write_sample( isom_root_t *root, uint32_t track_ID, isom_sample_t *samp
         return -1;
 
     /* anyway the current sample must be pooled. */
-    if( isom_add_entry( current->pool, sample ) )
-        return -1;
-    return 0;
+    return isom_add_entry( current->pool, sample );
 }
 
 isom_sample_t *isom_create_sample( uint32_t size )
@@ -4689,4 +4613,3 @@ void isom_delete_tyrant_chapter( isom_root_t *root )
     isom_remove_chpl( root->moov->udta->chpl );
     root->moov->udta->chpl = NULL;
 }
-
