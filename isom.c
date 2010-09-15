@@ -2742,20 +2742,24 @@ static int isom_write_mvhd( isom_root_t *root )
     return 0;
 }
 
+static int isom_bs_write_largesize_reserver( isom_bs_t *bs )
+{
+    isom_bs_put_be32( bs, ISOM_DEFAULT_BOX_HEADER_SIZE );
+    isom_bs_put_be32( bs, ISOM_BOX_TYPE_FREE );
+    return isom_bs_write_data( bs );
+}
+
 static int isom_write_mdat_header( isom_root_t *root )
 {
     if( !root || !root->bs || !root->mdat )
         return -1;
     isom_mdat_t *mdat = root->mdat;
     isom_bs_t *bs = root->bs;
-    mdat->base_header.size = 16;
+    mdat->base_header.size = 2 * ISOM_DEFAULT_BOX_HEADER_SIZE;
+    mdat->header_pos = ftell( bs->stream );
     mdat->large_flag = 0;
     isom_bs_put_base_header( bs, &mdat->base_header );
-    isom_bs_put_be64( bs, 0 );     /* reserved for largesize */
-    mdat->header_pos = ftell( bs->stream );
-    if( isom_bs_write_data( bs ) )
-        return -1;
-    return 0;
+    return isom_bs_write_largesize_reserver( bs );
 }
 
 static uint32_t isom_get_sample_count( isom_trak_entry_t *trak )
