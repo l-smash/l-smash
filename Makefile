@@ -5,10 +5,12 @@
 UNAME_S:=$(shell uname -s)
 UNAME_M:=$(shell uname -m)
 
-CC=gcc
-AR=ar
-RANLIB=ranlib
-STRIP=strip
+CROSS=
+TARGET_OS=
+CC=$(CROSS)gcc
+AR=$(CROSS)ar
+RANLIB=$(CROSS)ranlib
+STRIP=$(CROSS)strip
 ECHO=echo
 EXE=
 
@@ -23,6 +25,7 @@ else
 CFLAGS+=-O3
 endif
 
+ifeq ($(CROSS),)
 ifneq ($(findstring i686, $(UNAME_M)),)
 CFLAGS+=-march=i686 -mfpmath=sse -msse
 endif
@@ -35,6 +38,11 @@ ifneq ($(findstring CYGWIN, $(UNAME_S)),)
 LDFLAGS+=-Wl,--large-address-aware
 EXE=.exe
 endif
+else #ifeq ($(CROSS),)
+ifeq ($(TARGET_OS),mingw32)
+EXE=.exe
+endif
+endif #ifeq ($(CROSS),)
 
 SRCS=isom.c isom_util.c mp4sys.c
 OBJS=$(SRCS:%.c=%.o)
