@@ -2726,7 +2726,7 @@ static uint64_t isom_get_cts( isom_stts_t *stts, isom_ctts_t *ctts, uint32_t sam
 }
 #endif
 
-static int isom_reset_last_sample_delta( isom_stbl_t *stbl, uint32_t sample_delta )
+static int isom_replace_last_sample_delta( isom_stbl_t *stbl, uint32_t sample_delta )
 {
     if( !stbl || !stbl->stts || !stbl->stts->list || !stbl->stts->list->tail || !stbl->stts->list->tail->data )
         return -1;
@@ -2772,7 +2772,7 @@ static int isom_update_mdhd_duration( isom_trak_entry_t *trak, uint32_t last_sam
         if( last_sample_delta )
         {
             mdhd->duration += last_sample_delta;
-            if( isom_reset_last_sample_delta( stbl, last_sample_delta ) )
+            if( isom_replace_last_sample_delta( stbl, last_sample_delta ) )
                 return -1;
         }
         else if( last_stts_data->sample_count > 1 )
@@ -2838,7 +2838,7 @@ static int isom_update_mdhd_duration( isom_trak_entry_t *trak, uint32_t last_sam
             last_sample_delta = mdhd->duration - dts;
         else
             mdhd->duration = dts + last_sample_delta; /* mdhd duration must not less than last dts. */
-        if( isom_reset_last_sample_delta( stbl, last_sample_delta ) )
+        if( isom_replace_last_sample_delta( stbl, last_sample_delta ) )
             return -1;
     }
     if( mdhd->duration > UINT32_MAX )
@@ -3865,7 +3865,7 @@ static uint64_t isom_update_mdia_size( isom_mdia_t *mdia )
 {
     if( !mdia )
         return 0;
-    mdia->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE 
+    mdia->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE
         + isom_update_mdhd_size( mdia->mdhd )
         + isom_update_hdlr_size( mdia->hdlr )
         + isom_update_minf_size( mdia->minf );
@@ -4344,7 +4344,7 @@ int isom_set_last_sample_delta( isom_root_t *root, uint32_t track_ID, uint32_t s
         else if( isom_add_stts_entry( stbl, sample_delta ) )
             return -1;
     }
-    else if( sample_count == i && isom_reset_last_sample_delta( stbl, sample_delta ) )
+    else if( sample_count == i && isom_replace_last_sample_delta( stbl, sample_delta ) )
         return -1;
     return isom_update_track_duration( root, track_ID, sample_delta );
 }
