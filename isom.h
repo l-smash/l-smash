@@ -1164,7 +1164,6 @@ int isom_add_pps_entry( isom_root_t *root, uint32_t track_ID, uint32_t entry_num
 int isom_add_sample_entry( isom_root_t *root, uint32_t track_ID, uint32_t sample_type, void* summary );
 
 int isom_add_btrt( isom_root_t *root, uint32_t track_ID, uint32_t entry_number );
-int isom_add_pasp( isom_root_t *root, uint32_t track_ID, uint32_t entry_number );
 int isom_add_mdat( isom_root_t *root );
 int isom_add_free( isom_root_t *root, uint8_t *data, uint64_t data_length );
 

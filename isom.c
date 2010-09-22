@@ -1204,13 +1204,9 @@ static int isom_add_stsd( isom_stbl_t *stbl )
     return 0;
 }
 
-int isom_add_pasp( isom_root_t *root, uint32_t track_ID, uint32_t entry_number )
+static int isom_add_pasp( isom_visual_entry_t *visual )
 {
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
-        return -1;
-    isom_visual_entry_t *visual = (isom_visual_entry_t *)isom_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
-    if( !visual )
+    if( !visual || visual->pasp )
         return -1;
     isom_create_basebox( pasp, ISOM_BOX_TYPE_PASP );
     visual->pasp = pasp;
@@ -3128,45 +3124,6 @@ static int isom_output_cache( isom_root_t *root, uint32_t track_ID )
     return 0;
 }
 
-int isom_set_track_presentation_size( isom_root_t *root, uint32_t track_ID, uint32_t width, uint32_t height )
-{
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->tkhd )
-        return -1;
-    trak->tkhd->width = width;
-    trak->tkhd->height = height;
-    return 0;
-}
-
-int isom_set_sample_resolution( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint16_t width, uint16_t height )
-{
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
-        return -1;
-    isom_visual_entry_t *data = (isom_visual_entry_t *)isom_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
-    if( !data )
-        return -1;
-    data->width = width;
-    data->height = height;
-    return 0;
-}
-
-int isom_set_sample_aspect_ratio( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint32_t hSpacing, uint32_t vSpacing )
-{
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
-        return -1;
-    isom_visual_entry_t *data = (isom_visual_entry_t *)isom_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
-    if( !data )
-        return -1;
-    isom_pasp_t *pasp = (isom_pasp_t *)data->pasp;
-    if( !pasp )
-        return -1;
-    pasp->hSpacing = hSpacing;
-    pasp->vSpacing = vSpacing;
-    return 0;
-}
-
 int isom_set_avc_config( isom_root_t *root, uint32_t track_ID, uint32_t entry_number,
     uint8_t configurationVersion, uint8_t AVCProfileIndication, uint8_t profile_compatibility, uint8_t AVCLevelIndication, uint8_t lengthSizeMinusOne,
     uint8_t chroma_format, uint8_t bit_depth_luma_minus8, uint8_t bit_depth_chroma_minus8 )
@@ -4089,6 +4046,45 @@ int isom_set_track_volume( isom_root_t *root, uint32_t track_ID, int16_t volume 
     if( !trak || !trak->tkhd )
         return -1;
     trak->tkhd->volume = volume;
+    return 0;
+}
+
+int isom_set_track_presentation_size( isom_root_t *root, uint32_t track_ID, uint32_t width, uint32_t height )
+{
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    if( !trak || !trak->tkhd )
+        return -1;
+    trak->tkhd->width = width;
+    trak->tkhd->height = height;
+    return 0;
+}
+
+int isom_set_sample_resolution( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint16_t width, uint16_t height )
+{
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
+        return -1;
+    isom_visual_entry_t *data = (isom_visual_entry_t *)isom_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
+    if( !data )
+        return -1;
+    data->width = width;
+    data->height = height;
+    return 0;
+}
+
+int isom_set_sample_aspect_ratio( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint32_t hSpacing, uint32_t vSpacing )
+{
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
+        return -1;
+    isom_visual_entry_t *data = (isom_visual_entry_t *)isom_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
+    if( !data )
+        return -1;
+    isom_pasp_t *pasp = (isom_pasp_t *)data->pasp;
+    if( !pasp && isom_add_pasp( data ) )
+        return -1;
+    pasp->hSpacing = hSpacing;
+    pasp->vSpacing = vSpacing;
     return 0;
 }
 
