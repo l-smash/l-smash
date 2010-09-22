@@ -4080,9 +4080,9 @@ int isom_set_sample_aspect_ratio( isom_root_t *root, uint32_t track_ID, uint32_t
     isom_visual_entry_t *data = (isom_visual_entry_t *)isom_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
     if( !data )
         return -1;
-    isom_pasp_t *pasp = (isom_pasp_t *)data->pasp;
-    if( !pasp && isom_add_pasp( data ) )
+    if( !data->pasp && isom_add_pasp( data ) )
         return -1;
+    isom_pasp_t *pasp = (isom_pasp_t *)data->pasp;
     pasp->hSpacing = hSpacing;
     pasp->vSpacing = vSpacing;
     return 0;
