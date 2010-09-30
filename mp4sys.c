@@ -1363,30 +1363,30 @@ typedef struct mp4sys_importer_tag
 
 typedef struct
 {
-    unsigned syncword                           : 12;
-    unsigned ID                                 :  1;
-    unsigned layer                              :  2;
-    unsigned protection_absent                  :  1;
-    unsigned profile_ObjectType                 :  2;
-    unsigned sampling_frequency_index           :  4;
-//  unsigned private_bit                        :  1; /* we don't care currently. */
-    unsigned channel_configuration              :  3;
-//  unsigned original_copy                      :  1; /* we don't care currently. */
-//  unsigned home                               :  1; /* we don't care currently. */
+    uint16_t syncword;                           /* 12; */
+    uint8_t  ID;                                 /*  1; */
+    uint8_t  layer;                              /*  2; */
+    uint8_t  protection_absent;                  /*  1; */
+    uint8_t  profile_ObjectType;                 /*  2; */
+    uint8_t  sampling_frequency_index;           /*  4; */
+//  uint8_t  private_bit;                        /*  1; we don't care. */
+    uint8_t  channel_configuration;              /*  3; */
+//  uint8_t  original_copy;                      /*  1; we don't care. */
+//  uint8_t  home;                               /*  1; we don't care. */
 
 } mp4sys_adts_fixed_header_t;
 
 typedef struct
 {
-//  unsigned copyright_identification_bit       :  1; /* we don't care. */
-//  unsigned copyright_identification_start     :  1; /* we don't care. */
-    unsigned frame_length                       : 13;
-//  unsigned adts_buffer_fullness               : 11; /* we don't care. */
-    unsigned number_of_raw_data_blocks_in_frame :  2;
-//  uint16_t adts_error_check;                        /* we don't support */
+//  uint8_t  copyright_identification_bit;       /*  1; we don't care. */
+//  uint8_t  copyright_identification_start;     /*  1; we don't care. */
+    uint16_t frame_length;                       /* 13; */
+//  uint16_t adts_buffer_fullness;               /* 11; we don't care. */
+    uint8_t  number_of_raw_data_blocks_in_frame; /*  2; */
+//  uint16_t adts_error_check;                                           /* we don't support */
 //  uint16_t raw_data_block_position[MP4SYS_ADTS_MAX_RAW_DATA_BLOCKS-1]; /* we don't use this directly, and... */
     uint16_t raw_data_block_size[MP4SYS_ADTS_MAX_RAW_DATA_BLOCKS];       /* use this instead of above. */
-//  uint16_t adts_header_error_check;                 /* we don't support, actually crc_check within this */
+//  uint16_t adts_header_error_check;                                    /* we don't support, actually crc_check within this */
 //  uint16_t adts_raw_data_block_error_check[MP4SYS_ADTS_MAX_RAW_DATA_BLOCKS]; /* we don't support */
 } mp4sys_adts_variable_header_t;
 
