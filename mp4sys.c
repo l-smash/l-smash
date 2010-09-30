@@ -1353,6 +1353,14 @@ typedef struct mp4sys_importer_tag
     isom_entry_list_t*        summaries;
 } mp4sys_importer_t;
 
+typedef enum
+{
+    MP4SYS_IMPORTER_ERROR  = -1,
+    MP4SYS_IMPORTER_OK     = 0,
+    MP4SYS_IMPORTER_CHANGE = 1,
+    MP4SYS_IMPORTER_EOF    = 2,
+} mp4sys_importer_status;
+
 /***************************************************************************
     ADTS importer
 ***************************************************************************/
@@ -1544,17 +1552,9 @@ static mp4sys_audio_summary_t* mp4sys_adts_create_summary( mp4sys_adts_fixed_hea
     return summary;
 }
 
-typedef enum
-{
-    MP4SYS_ADTS_ERROR  = -1,
-    MP4SYS_ADTS_OK     = 0,
-    MP4SYS_ADTS_CHANGE = 1,
-    MP4SYS_ADTS_EOF    = 2,
-} mp4sys_adts_status;
-
 typedef struct
 {
-    mp4sys_adts_status status;
+    mp4sys_importer_status status;
     unsigned int raw_data_block_idx;
     mp4sys_adts_fixed_header_t header;
     mp4sys_adts_variable_header_t variable_header;
@@ -1567,16 +1567,16 @@ static int mp4sys_adts_get_accessunit( mp4sys_importer_t* importer, uint32_t tra
     if( !importer->info || track_number != 1 )
         return -1;
     mp4sys_adts_info_t* info = (mp4sys_adts_info_t*)importer->info;
-    mp4sys_adts_status current_status = info->status;
+    mp4sys_importer_status current_status = info->status;
     uint16_t raw_data_block_size = info->variable_header.raw_data_block_size[info->raw_data_block_idx];
-    if( current_status == MP4SYS_ADTS_ERROR || *size < raw_data_block_size )
+    if( current_status == MP4SYS_IMPORTER_ERROR || *size < raw_data_block_size )
         return -1;
-    if( current_status == MP4SYS_ADTS_EOF )
+    if( current_status == MP4SYS_IMPORTER_EOF )
     {
         *size = 0;
         return 0;
     }
-    if( current_status == MP4SYS_ADTS_CHANGE )
+    if( current_status == MP4SYS_IMPORTER_CHANGE )
     {
         mp4sys_audio_summary_t* summary = mp4sys_adts_create_summary( &info->header );
         if( !summary )
@@ -1591,7 +1591,7 @@ static int mp4sys_adts_get_accessunit( mp4sys_importer_t* importer, uint32_t tra
     /* read a raw_data_block(), typically == payload of a ADTS frame */
     if( fread( userbuf, 1, raw_data_block_size, importer->stream ) != raw_data_block_size )
     {
-        info->status = MP4SYS_ADTS_ERROR;
+        info->status = MP4SYS_IMPORTER_ERROR;
         return -1;
     }
     *size = raw_data_block_size;
@@ -1603,14 +1603,14 @@ static int mp4sys_adts_get_accessunit( mp4sys_importer_t* importer, uint32_t tra
         && info->variable_header.number_of_raw_data_blocks_in_frame != 0
         && fread( userbuf, 1, 2, importer->stream ) != 2 )
     {
-        info->status = MP4SYS_ADTS_ERROR;
+        info->status = MP4SYS_IMPORTER_ERROR;
         return 0;
     }
     /* current adts_frame() has any more raw_data_block()? */
     if( info->raw_data_block_idx < info->variable_header.number_of_raw_data_blocks_in_frame )
     {
         info->raw_data_block_idx++;
-        info->status = MP4SYS_ADTS_OK;
+        info->status = MP4SYS_IMPORTER_OK;
         return 0;
     }
     info->raw_data_block_idx = 0;
@@ -1621,12 +1621,12 @@ static int mp4sys_adts_get_accessunit( mp4sys_importer_t* importer, uint32_t tra
     size_t ret = fread( buf, 1, MP4SYS_ADTS_BASIC_HEADER_LENGTH, importer->stream );
     if( ret == 0 )
     {
-        info->status = MP4SYS_ADTS_EOF;
+        info->status = MP4SYS_IMPORTER_EOF;
         return 0;
     }
     if( ret != MP4SYS_ADTS_BASIC_HEADER_LENGTH )
     {
-        info->status = MP4SYS_ADTS_ERROR;
+        info->status = MP4SYS_IMPORTER_ERROR;
         return 0;
     }
     /*
@@ -1653,7 +1653,7 @@ static int mp4sys_adts_get_accessunit( mp4sys_importer_t* importer, uint32_t tra
     mp4sys_adts_variable_header_t variable_header = {0};
     if( mp4sys_adts_parse_headers( importer->stream, buf, &header, &variable_header ) )
     {
-        info->status = MP4SYS_ADTS_ERROR;
+        info->status = MP4SYS_IMPORTER_ERROR;
         return 0;
     }
     info->variable_header = variable_header;
@@ -1665,7 +1665,7 @@ static int mp4sys_adts_get_accessunit( mp4sys_importer_t* importer, uint32_t tra
      * defined by/in any specs, such as ISO/IEC 14496-1 (MPEG-4 Systems), like...
      * "8.3 Intellectual Property Management and Protection (IPMP)", or something similar,
      * we have to check copyright_identification_* and treat them in audio_summary.
-     * "Change(s)" may result in MP4SYS_ADTS_ERROR or MP4SYS_ADTS_CHANGE
+     * "Change(s)" may result in MP4SYS_IMPORTER_ERROR or MP4SYS_IMPORTER_CHANGE
      * depending on the features we support, and what the spec allows.
      * Sometimes the "change(s)" can be allowed, while sometimes they're forbidden.
      */
@@ -1674,7 +1674,7 @@ static int mp4sys_adts_get_accessunit( mp4sys_importer_t* importer, uint32_t tra
         || info->header.ID != header.ID /* In strict, this means change of object_type_indication. */
         || info->header.sampling_frequency_index != header.sampling_frequency_index ) /* This may change timebase. */
     {
-        info->status = MP4SYS_ADTS_ERROR;
+        info->status = MP4SYS_IMPORTER_ERROR;
         return 0;
     }
     /* currently supported "change(s)". */
@@ -1695,11 +1695,11 @@ static int mp4sys_adts_get_accessunit( mp4sys_importer_t* importer, uint32_t tra
          * and that should be of current, before change, one.
          */
         info->header = header;
-        info->status = MP4SYS_ADTS_CHANGE;
+        info->status = MP4SYS_IMPORTER_CHANGE;
         return 0;
     }
     /* no change which matters to mp4 muxing was found */
-    info->status = MP4SYS_ADTS_OK;
+    info->status = MP4SYS_IMPORTER_OK;
     return 0;
 }
 
@@ -1735,7 +1735,7 @@ static int mp4sys_adts_probe( mp4sys_importer_t* importer )
         return -1;
     }
     memset( info, 0, sizeof(mp4sys_adts_info_t) );
-    info->status = MP4SYS_ADTS_OK;
+    info->status = MP4SYS_IMPORTER_OK;
     info->raw_data_block_idx = 0;
     info->header = header;
     info->variable_header = variable_header;
@@ -1854,19 +1854,11 @@ static mp4sys_audio_summary_t* mp4sys_mp3_create_summary( mp4sys_mp3_header_t* h
     return summary;
 }
 
-typedef enum
-{
-    MP4SYS_MP3_ERROR  = -1,
-    MP4SYS_MP3_OK     = 0,
-    MP4SYS_MP3_CHANGE = 1,
-    MP4SYS_MP3_EOF    = 2
-} mp4sys_mp3_status;
-
 typedef struct
 {
-    mp4sys_mp3_status   status;
-    mp4sys_mp3_header_t header;
-    uint8_t             raw_header[MP4SYS_MP3_HEADER_LENGTH];
+    mp4sys_importer_status status;
+    mp4sys_mp3_header_t    header;
+    uint8_t                raw_header[MP4SYS_MP3_HEADER_LENGTH];
 } mp4sys_mp3_info_t;
 
 static int mp4sys_mp3_get_accessunit( mp4sys_importer_t* importer, uint32_t track_number , void* userbuf, uint32_t *size )
@@ -1877,7 +1869,7 @@ static int mp4sys_mp3_get_accessunit( mp4sys_importer_t* importer, uint32_t trac
         return -1;
     mp4sys_mp3_info_t* info = (mp4sys_mp3_info_t*)importer->info;
     mp4sys_mp3_header_t* header = (mp4sys_mp3_header_t*)&info->header;
-    mp4sys_mp3_status current_status = info->status;
+    mp4sys_importer_status current_status = info->status;
 
     const uint32_t bitrate_tbl[2][3][16] = {
         {   /* MPEG-2 BC audio */
@@ -1907,14 +1899,14 @@ static int mp4sys_mp3_get_accessunit( mp4sys_importer_t* importer, uint32_t trac
         frame_size = 144 * 1000 * bitrate / frequency + header->padding_bit;
     }
 
-    if( current_status == MP4SYS_MP3_ERROR || frame_size <= 4 || *size < frame_size )
+    if( current_status == MP4SYS_IMPORTER_ERROR || frame_size <= 4 || *size < frame_size )
         return -1;
-    if( current_status == MP4SYS_MP3_EOF )
+    if( current_status == MP4SYS_IMPORTER_EOF )
     {
         *size = 0;
         return 0;
     }
-    if( current_status == MP4SYS_MP3_CHANGE )
+    if( current_status == MP4SYS_IMPORTER_CHANGE )
     {
         mp4sys_audio_summary_t* summary = mp4sys_mp3_create_summary( header, 1 ); /* FIXME: use legacy mode. */
         if( !summary )
@@ -1930,7 +1922,7 @@ static int mp4sys_mp3_get_accessunit( mp4sys_importer_t* importer, uint32_t trac
     frame_size -= MP4SYS_MP3_HEADER_LENGTH;
     if( fread( ((uint8_t*)userbuf)+MP4SYS_MP3_HEADER_LENGTH, 1, frame_size, importer->stream ) != frame_size )
     {
-        info->status = MP4SYS_MP3_ERROR;
+        info->status = MP4SYS_IMPORTER_ERROR;
         return -1;
     }
     *size = MP4SYS_MP3_HEADER_LENGTH + frame_size;
@@ -1942,25 +1934,25 @@ static int mp4sys_mp3_get_accessunit( mp4sys_importer_t* importer, uint32_t trac
     size_t ret = fread( buf, 1, MP4SYS_MP3_HEADER_LENGTH, importer->stream );
     if( ret == 0 )
     {
-        info->status = MP4SYS_MP3_EOF;
+        info->status = MP4SYS_IMPORTER_EOF;
         return 0;
     }
     if( ret == 1 && *buf == 0x00 )
     {
         /* NOTE: ugly hack for mp1 stream created with SCMPX. */
-        info->status = MP4SYS_MP3_EOF;
+        info->status = MP4SYS_IMPORTER_EOF;
         return 0;
     }
     if( ret != MP4SYS_MP3_HEADER_LENGTH )
     {
-        info->status = MP4SYS_MP3_ERROR;
+        info->status = MP4SYS_IMPORTER_ERROR;
         return 0;
     }
 
     mp4sys_mp3_header_t new_header = {0};
     if( mp4sys_mp3_parse_header( buf, &new_header ) )
     {
-        info->status = MP4SYS_MP3_ERROR;
+        info->status = MP4SYS_IMPORTER_ERROR;
         return 0;
     }
     memcpy( info->raw_header, buf, MP4SYS_MP3_HEADER_LENGTH );
@@ -1969,15 +1961,15 @@ static int mp4sys_mp3_get_accessunit( mp4sys_importer_t* importer, uint32_t trac
     if( header->layer != new_header.layer /* This means change of object_type_indication with Legacy Interface. */
         || header->sampling_frequency != new_header.sampling_frequency ) /* This may change timescale. */
     {
-        info->status = MP4SYS_MP3_ERROR;
+        info->status = MP4SYS_IMPORTER_ERROR;
         return 0;
     }
 
     /* currently supported "change(s)". */
     if( MP4SYS_MODE_IS_2CH( header->mode ) != MP4SYS_MODE_IS_2CH( new_header.mode ) )
-        info->status = MP4SYS_MP3_CHANGE;
+        info->status = MP4SYS_IMPORTER_CHANGE;
     else
-        info->status = MP4SYS_MP3_OK; /* no change which matters to mp4 muxing was found */
+        info->status = MP4SYS_IMPORTER_OK; /* no change which matters to mp4 muxing was found */
     info->header = new_header;
     return 0;
 }
@@ -2006,7 +1998,7 @@ static int mp4sys_mp3_probe( mp4sys_importer_t* importer )
         return -1;
     }
     memset( info, 0, sizeof(mp4sys_mp3_info_t) );
-    info->status = MP4SYS_MP3_OK;
+    info->status = MP4SYS_IMPORTER_OK;
     info->header = header;
     memcpy( info->raw_header, buf, MP4SYS_MP3_HEADER_LENGTH );
 
