@@ -401,6 +401,18 @@ typedef struct
     isom_entry_list_t *list;
 } isom_stss_t;
 
+/* Partial Sync Sample Box */
+typedef struct
+{
+    uint32_t sample_number;
+} isom_stps_entry_t;
+
+typedef struct
+{
+    isom_full_header_t full_header;
+    isom_entry_list_t *list;
+} isom_stps_t;
+
 /* Independent and Disposable Samples Box */
 typedef struct
 {
@@ -510,6 +522,7 @@ typedef struct
     isom_stts_t *stts;      /* Decoding Time to Sample Box */
     isom_ctts_t *ctts;      /* Composition Time to Sample Box */
     isom_stss_t *stss;      /* Sync Sample Box */
+    isom_stps_t *stps;      /* Partial Sync Sample Box / This box is defined by QuickTime file format */
     isom_sdtp_t *sdtp;      /* Independent and Disposable Samples Box */
     isom_stsc_t *stsc;      /* Sample To Chunk Box */
     isom_stsz_t *stsz;      /* Sample Size Box */
@@ -912,6 +925,7 @@ enum qt_box_code
     QT_BOX_TYPE_LOAD = ISOM_4CC( 'l', 'o', 'a', 'd' ),
     QT_BOX_TYPE_MATT = ISOM_4CC( 'm', 'a', 't', 't' ),
     QT_BOX_TYPE_PNOT = ISOM_4CC( 'p', 'n', 'o', 't' ),
+    QT_BOX_TYPE_STPS = ISOM_4CC( 's', 't', 'p', 's' ),
 };
 
 enum isom_hdlr_code
@@ -1142,6 +1156,7 @@ enum isom_grouping_code
 typedef struct
 {
     uint8_t sync_point;
+    uint8_t partial_sync;
     uint8_t leading;
     uint8_t independent;
     uint8_t disposable;

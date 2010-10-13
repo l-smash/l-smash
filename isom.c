@@ -699,6 +699,22 @@ static int isom_add_stss_entry( isom_stbl_t *stbl, uint32_t sample_number )
     return 0;
 }
 
+int isom_add_stps_entry( isom_stbl_t *stbl, uint32_t sample_number )
+{
+    if( !stbl || !stbl->stps || !stbl->stps->list )
+        return -1;
+    isom_stps_entry_t *data = malloc( sizeof(isom_stps_entry_t) );
+    if( !data )
+        return -1;
+    data->sample_number = sample_number;
+    if( isom_add_entry( stbl->stps->list, data ) )
+    {
+        free( data );
+        return -1;
+    }
+    return 0;
+}
+
 static int isom_add_sdtp_entry( isom_stbl_t *stbl, isom_sample_property_t *prop )
 {
     if( !prop )
@@ -1271,6 +1287,15 @@ static int isom_add_stss( isom_stbl_t *stbl )
     return 0;
 }
 
+int isom_add_stps( isom_stbl_t *stbl )
+{
+    if( !stbl || stbl->stps )
+        return -1;
+    isom_create_list_fullbox( stps, QT_BOX_TYPE_STPS );
+    stbl->stps = stps;
+    return 0;
+}
+
 static int isom_add_sdtp( isom_stbl_t *stbl )
 {
     if( !stbl || stbl->sdtp )
@@ -1618,6 +1643,7 @@ static void isom_remove_stbl( isom_stbl_t *stbl )
     isom_remove_list_fullbox( stsc, stbl );
     isom_remove_list_fullbox( stsz, stbl );
     isom_remove_list_fullbox( stss, stbl );
+    isom_remove_list_fullbox( stps, stbl );
     isom_remove_list_fullbox( sdtp, stbl );
     isom_remove_list_fullbox( stco, stbl );
     for( uint32_t i = stbl->grouping_count; i ; i-- )
@@ -2363,6 +2389,25 @@ static int isom_write_stss( isom_bs_t *bs, isom_trak_entry_t *trak )
     return isom_bs_write_data( bs );
 }
 
+static int isom_write_stps( isom_bs_t *bs, isom_trak_entry_t *trak )
+{
+    isom_stps_t *stps = trak->mdia->minf->stbl->stps;
+    if( !stps )
+        return 0;
+    if( !stps->list )
+        return -1;
+    isom_bs_put_full_header( bs, &stps->full_header );
+    isom_bs_put_be32( bs, stps->list->entry_count );
+    for( isom_entry_t *entry = stps->list->head; entry; entry = entry->next )
+    {
+        isom_stps_entry_t *data = (isom_stps_entry_t *)entry->data;
+        if( !data )
+            return -1;
+        isom_bs_put_be32( bs, data->sample_number );
+    }
+    return isom_bs_write_data( bs );
+}
+
 static int isom_write_sdtp( isom_bs_t *bs, isom_trak_entry_t *trak )
 {
     isom_sdtp_t *sdtp = trak->mdia->minf->stbl->sdtp;
@@ -2501,6 +2546,7 @@ static int isom_write_stbl( isom_bs_t *bs, isom_trak_entry_t *trak )
         isom_write_stts( bs, trak ) ||
         isom_write_ctts( bs, trak ) ||
         isom_write_stss( bs, trak ) ||
+        isom_write_stps( bs, trak ) ||
         isom_write_sdtp( bs, trak ) ||
         isom_write_stsc( bs, trak ) ||
         isom_write_stsz( bs, trak ) ||
@@ -2903,35 +2949,37 @@ int isom_update_track_duration( isom_root_t *root, uint32_t track_ID, uint32_t l
     return trak->edts && trak->edts->elst ? 0 : isom_update_tkhd_duration( trak );
 }
 
-static int isom_add_size( isom_trak_entry_t *trak, uint32_t sample_size )
+static int isom_add_size( isom_stbl_t *stbl, uint32_t sample_size )
 {
     if( !sample_size )
         return -1;
-    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
-        return -1;
-    return isom_add_stsz_entry( trak->mdia->minf->stbl, sample_size );
+    return isom_add_stsz_entry( stbl, sample_size );
 }
 
-static int isom_add_sync_point( isom_trak_entry_t *trak, uint32_t sample_number, isom_sample_property_t *prop )
+static int isom_add_sync_point( isom_stbl_t *stbl, uint32_t sample_number, isom_sample_property_t *prop )
 {
     if( !prop->sync_point ) /* no null check for prop */
         return 0;
-    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
-        return -1;
-    isom_stbl_t *stbl = trak->mdia->minf->stbl;
     if( !stbl->stss && isom_add_stss( stbl ) )
         return -1;
     return isom_add_stss_entry( stbl, sample_number );
 }
 
-static int isom_add_dependency_type( isom_trak_entry_t *trak, isom_sample_property_t* prop )
+static int isom_add_partial_sync( isom_stbl_t *stbl, uint32_t sample_number, isom_sample_property_t *prop )
 {
-    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl ) /* no null check for prop */
+    if( !prop->partial_sync ) /* no null check for prop */
+        return 0;
+    if( !stbl->stps && isom_add_stps( stbl ) )
         return -1;
+    return isom_add_stps_entry( stbl, sample_number );
+}
+
+static int isom_add_dependency_type( isom_trak_entry_t *trak, isom_sample_property_t *prop )
+{
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     if( stbl->sdtp )
         return isom_add_sdtp_entry( stbl, prop );
-    if( !prop->leading && !prop->independent && !prop->disposable && !prop->redundant )
+    if( !prop->leading && !prop->independent && !prop->disposable && !prop->redundant )  /* no null check for prop */
         return 0;
     if( isom_add_sdtp( stbl ) )
         return -1;
@@ -2949,8 +2997,8 @@ static int isom_add_dependency_type( isom_trak_entry_t *trak, isom_sample_proper
    see isom_write_sample for detail. */
 static int isom_add_chunk( isom_trak_entry_t *trak, isom_sample_t *sample )
 {
-    if( !trak || !trak->root || !trak->cache || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->mdhd->timescale ||
-        !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
+    if( !trak->root || !trak->cache || !trak->mdia->mdhd || !trak->mdia->mdhd->timescale ||
+        !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
         return -1;
     isom_chunk_t *current = &trak->cache->chunk;
     if( current->chunk_number == 0 )
@@ -2994,8 +3042,7 @@ static int isom_add_chunk( isom_trak_entry_t *trak, isom_sample_t *sample )
 
 static int isom_add_dts( isom_trak_entry_t *trak, uint64_t dts )
 {
-    if( !trak->cache || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl ||
-        !trak->mdia->minf->stbl->stts || !trak->mdia->minf->stbl->stts->list )
+    if( !trak->cache || !trak->mdia->minf->stbl->stts || !trak->mdia->minf->stbl->stts->list )
         return -1;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     isom_stts_t *stts = stbl->stts;
@@ -3020,7 +3067,7 @@ static int isom_add_dts( isom_trak_entry_t *trak, uint64_t dts )
 
 static int isom_add_cts( isom_trak_entry_t *trak, uint64_t cts )
 {
-    if( !trak->cache || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
+    if( !trak->cache )
         return -1;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     isom_ctts_t *ctts = stbl->ctts;
@@ -3082,19 +3129,23 @@ static int isom_write_sample_data( isom_root_t *root, isom_sample_t *sample )
 
 static int isom_write_pooled_samples( isom_trak_entry_t *trak, isom_entry_list_t *pool )
 {
+    isom_stbl_t *stbl = trak->mdia->minf->stbl;
     for( isom_entry_t *entry = pool->head; entry; entry = entry->next )
     {
         isom_sample_t *data = (isom_sample_t *)entry->data;
         if( !data || !data->data )
             return -1;
         /* Add a sample_size and increment sample_count. */
-        if( isom_add_size( trak, data->length ) )
+        if( isom_add_size( stbl, data->length ) )
             return -1;
         /* Add a decoding timestamp and a composition timestamp. */
         if( isom_add_timestamp( trak, data->dts, data->cts ) )
             return -1;
         /* Add a sync point if needed. */
-        if( isom_add_sync_point( trak, isom_get_sample_count( trak ), &data->prop ) )
+        if( isom_add_sync_point( stbl, isom_get_sample_count( trak ), &data->prop ) )
+            return -1;
+        /* Add a partial sync point if needed. */
+        if( isom_add_partial_sync( stbl, isom_get_sample_count( trak ), &data->prop ) )
             return -1;
         /* Add leading, independent, disposable and redundant information if needed. */
         if( isom_add_dependency_type( trak, &data->prop ) )
@@ -3726,6 +3777,15 @@ static uint64_t isom_update_stss_size( isom_stss_t *stss )
     return stss->full_header.size;
 }
 
+static uint64_t isom_update_stps_size( isom_stps_t *stps )
+{
+    if( !stps || !stps->list )
+        return 0;
+    stps->full_header.size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + (uint64_t)stps->list->entry_count * 4;
+    CHECK_LARGESIZE( stps->full_header.size );
+    return stps->full_header.size;
+}
+
 static uint64_t isom_update_sdtp_size( isom_sdtp_t *sdtp )
 {
     if( !sdtp || !sdtp->list )
@@ -3791,6 +3851,7 @@ static uint64_t isom_update_stbl_size( isom_stbl_t *stbl )
         + isom_update_ctts_size( stbl->ctts )
         + isom_update_stsz_size( stbl->stsz )
         + isom_update_stss_size( stbl->stss )
+        + isom_update_stps_size( stbl->stps )
         + isom_update_sdtp_size( stbl->sdtp )
         + isom_update_stsc_size( stbl->stsc )
         + isom_update_stco_size( stbl->stco );
@@ -4457,7 +4518,7 @@ int isom_write_sample( isom_root_t *root, uint32_t track_ID, isom_sample_t *samp
     if( !root || !sample || !sample->data || root->max_chunk_duration == 0 )
         return -1;
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak )
+    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
         return -1;
 
     /* Add a chunk if needed. */
