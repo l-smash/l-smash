@@ -351,55 +351,10 @@ mp4sys_ES_Descriptor_t* mp4sys_setup_ES_Descriptor( mp4sys_ES_Descriptor_params_
 #endif /* #ifndef MP4SYS_INTERNAL */
 
 /***************************************************************************
-    MPEG-4 Systems for MPEG-4 Audio
-***************************************************************************/
-
-/* ISO/IEC 14496-3 1.6.2.2 Payloads, Table 1.15 Audio Object Types */
-typedef enum {
-    MP4A_AUDIO_OBJECT_TYPE_NULL                           = 0,
-    MP4A_AUDIO_OBJECT_TYPE_AAC_MAIN                       = 1, /* ISO/IEC 14496-3 subpart 4 */
-    MP4A_AUDIO_OBJECT_TYPE_AAC_LC                         = 2, /* ISO/IEC 14496-3 subpart 4 */
-    MP4A_AUDIO_OBJECT_TYPE_AAC_SSR                        = 3, /* ISO/IEC 14496-3 subpart 4 */
-    MP4A_AUDIO_OBJECT_TYPE_AAC_LTP                        = 4, /* ISO/IEC 14496-3 subpart 4 */
-    MP4A_AUDIO_OBJECT_TYPE_SBR                            = 5, /* ISO/IEC 14496-3 subpart 4 */
-    MP4A_AUDIO_OBJECT_TYPE_AAC_scalable                   = 6, /* ISO/IEC 14496-3 subpart 4 */
-    MP4A_AUDIO_OBJECT_TYPE_TwinVQ                         = 7, /* ISO/IEC 14496-3 subpart 4 */
-    MP4A_AUDIO_OBJECT_TYPE_CELP                           = 8, /* ISO/IEC 14496-3 subpart 3 */
-    MP4A_AUDIO_OBJECT_TYPE_HVXC                           = 9, /* ISO/IEC 14496-3 subpart 2 */
-    MP4A_AUDIO_OBJECT_TYPE_TTSI                           = 12, /* ISO/IEC 14496-3 subpart 6 */
-    MP4A_AUDIO_OBJECT_TYPE_Main_synthetic                 = 13, /* ISO/IEC 14496-3 subpart 5 */
-    MP4A_AUDIO_OBJECT_TYPE_Wavetable_synthesis            = 14, /* ISO/IEC 14496-3 subpart 5 */
-    MP4A_AUDIO_OBJECT_TYPE_General_MIDI                   = 15, /* ISO/IEC 14496-3 subpart 5 */
-    MP4A_AUDIO_OBJECT_TYPE_Algorithmic_Synthesis_Audio_FX = 16, /* ISO/IEC 14496-3 subpart 5 */
-    MP4A_AUDIO_OBJECT_TYPE_ER_AAC_LC                      = 17, /* ISO/IEC 14496-3 subpart 4 */
-    MP4A_AUDIO_OBJECT_TYPE_ER_AAC_LTP                     = 19, /* ISO/IEC 14496-3 subpart 4 */
-    MP4A_AUDIO_OBJECT_TYPE_ER_AAC_scalable                = 20, /* ISO/IEC 14496-3 subpart 4 */
-    MP4A_AUDIO_OBJECT_TYPE_ER_Twin_VQ                     = 21, /* ISO/IEC 14496-3 subpart 4 */
-    MP4A_AUDIO_OBJECT_TYPE_ER_BSAC                        = 22, /* ISO/IEC 14496-3 subpart 4 */
-    MP4A_AUDIO_OBJECT_TYPE_ER_AAC_LD                      = 23, /* ISO/IEC 14496-3 subpart 4 */
-    MP4A_AUDIO_OBJECT_TYPE_ER_CELP                        = 24, /* ISO/IEC 14496-3 subpart 3 */
-    MP4A_AUDIO_OBJECT_TYPE_ER_HVXC                        = 25, /* ISO/IEC 14496-3 subpart 2 */
-    MP4A_AUDIO_OBJECT_TYPE_ER_HILN                        = 26, /* ISO/IEC 14496-3 subpart 7 */
-    MP4A_AUDIO_OBJECT_TYPE_ER_Parametric                  = 27, /* ISO/IEC 14496-3 subpart 2 and 7 */
-    MP4A_AUDIO_OBJECT_TYPE_SSC                            = 28, /* ISO/IEC 14496-3 subpart 8 */
-    MP4A_AUDIO_OBJECT_TYPE_ESCAPE                         = 31,
-    MP4A_AUDIO_OBJECT_TYPE_Layer_1                        = 32, /* ISO/IEC 14496-3 subpart 9 */
-    MP4A_AUDIO_OBJECT_TYPE_Layer_2                        = 33, /* ISO/IEC 14496-3 subpart 9 */
-    MP4A_AUDIO_OBJECT_TYPE_Layer_3                        = 34, /* ISO/IEC 14496-3 subpart 9 */
-    MP4A_AUDIO_OBJECT_TYPE_DST                            = 35, /* ISO/IEC 14496-3 subpart 10 */
-} mp4a_AudioObjectType;
-
-/* see ISO/IEC 14496-3 1.6.5 Signaling of SBR, Table 1.22 SBR Signaling and Corresponding Decoder Behavior */
-typedef enum {
-    MP4A_AAC_SBR_NOT_SPECIFIED = 0x0, /* not mention to SBR presence. Implicit signaling. */
-    MP4A_AAC_SBR_NONE,                /* explicitly signals SBR does not present. Useless in general. */
-    MP4A_AAC_SBR_BACKWARD_COMPATIBLE, /* explicitly signals SBR present. Recommended method to signal SBR. */
-    MP4A_AAC_SBR_HIERARCHICAL         /* SBR exists. SBR dedicated method. */
-} mp4a_aac_sbr_mode;
-
-/***************************************************************************
     importer
 ***************************************************************************/
+
+#include "mp4a.h"
 
 /* L-SMASH's original structure, summary of audio/video stream configuration */
 /* FIXME: I wonder whether this struct should blong to namespace of "isom" or not. */
