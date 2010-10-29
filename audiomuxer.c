@@ -65,9 +65,9 @@ int main( int argc, char* argv[] )
     int sbr = 0;
     int brand_3gx = 0;
     int m4a = 0;
-    uint32_t brands[5] = { ISOM_BRAND_TYPE_ISOM, ISOM_BRAND_TYPE_MP42, 0, 0, 0 };
+    uint32_t brands[6] = { ISOM_BRAND_TYPE_ISOM, ISOM_BRAND_TYPE_MP41, ISOM_BRAND_TYPE_MP42, 0, 0, 0 };
     uint32_t major_brand = ISOM_BRAND_TYPE_MP42;
-    int num_of_brands = 2;
+    int num_of_brands = 3;
     uint32_t minor_version = 1;
 
     if( argc < 3 )

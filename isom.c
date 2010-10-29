@@ -2662,8 +2662,10 @@ static int isom_write_trak( isom_bs_t *bs, isom_trak_entry_t *trak )
 
 static int isom_write_iods( isom_root_t *root )
 {
-    if( !root || !root->moov || !root->moov->iods )
+    if( !root || !root->moov )
         return -1;
+    if( !root->moov->iods )
+        return 0;
     isom_iods_t *iods = root->moov->iods;
     isom_bs_t *bs = root->bs;
     isom_bs_put_full_header( bs, &iods->full_header );
@@ -3339,6 +3341,8 @@ static int isom_check_compatibility( isom_root_t *root )
     {
         if( root->ftyp->compatible_brands[i] == ISOM_BRAND_TYPE_QT )
             root->qt_compatible = 1;
+        if( root->ftyp->compatible_brands[i] == ISOM_BRAND_TYPE_MP41 )
+            root->request_iods = 1;
     }
     return 0;
 }
@@ -4436,7 +4440,7 @@ int isom_finish_movie( isom_root_t *root )
         if( isom_set_track_mode( root, trak->tkhd->track_ID, ISOM_TRACK_ENABLED ) )
             return -1;
     }
-    if( isom_add_iods( root->moov ) )
+    if( root->request_iods && isom_add_iods( root->moov ) )
         return -1;
     if( isom_check_mandatory_boxes( root ) ||
         isom_set_movie_creation_time( root ) ||
