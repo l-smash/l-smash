@@ -4437,7 +4437,7 @@ int isom_finish_movie( isom_root_t *root )
         isom_trak_entry_t *trak = (isom_trak_entry_t *)entry->data;
         if( !trak || !trak->tkhd )
             return -1;
-        if( isom_set_track_mode( root, trak->tkhd->track_ID, ISOM_TRACK_ENABLED ) )
+        if( isom_set_track_mode( root, trak->tkhd->track_ID, ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE ) )
             return -1;
     }
     if( root->request_iods && isom_add_iods( root->moov ) )
