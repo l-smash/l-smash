@@ -543,7 +543,7 @@ typedef struct
     isom_nmhd_t *nmhd;     /* Null Media Header Box */
     /* */
     isom_hdlr_t *hdlr;     /* Data Handler Reference Box / This box is defined by QuickTime file format
-                            * Note: this box must must come before Data Information Box. */
+                            * Note: this box must come before Data Information Box. */
     isom_dinf_t *dinf;     /* Data Information Box */
     isom_stbl_t *stbl;     /* Sample Table Box */
 } isom_minf_t;
@@ -554,7 +554,7 @@ typedef struct
     isom_base_header_t base_header;
     isom_mdhd_t *mdhd;     /* Media Header Box */
     isom_hdlr_t *hdlr;     /* ISOM: Handler Reference Box / QT: Media Handler Reference Box
-                            * Note: this box must must come before Media Information Box. */
+                            * Note: this box must come before Media Information Box. */
     isom_minf_t *minf;     /* Media Information Box */
 } isom_mdia_t;
 
