@@ -167,7 +167,10 @@ int main( int argc, char* argv[] )
     if( !structs.root )
         return AUDIOMUX_ERR( "Failed to create root.\n" );
 
-    uint32_t track = isom_create_track( structs.root, ISOM_HDLR_TYPE_AUDIO );
+    if( isom_set_brands( structs.root, major_brand, minor_version, brands, num_of_brands ) )
+        return AUDIOMUX_ERR( "Failed to set brands.\n" );
+
+    uint32_t track = isom_create_track( structs.root, ISOM_MEDIA_HANDLER_TYPE_AUDIO );
     if( !track )
         return AUDIOMUX_ERR( "Failed to create a track.\n" );
 
@@ -182,7 +185,7 @@ int main( int argc, char* argv[] )
         return AUDIOMUX_ERR( "Failed to set media timescale.\n" );
 
     char handler_name[24] = "L-SMASH Audio Handler 1";
-    if( isom_set_handler_name( structs.root, track, handler_name ) )
+    if( isom_set_media_handler_name( structs.root, track, handler_name ) )
         return AUDIOMUX_ERR( "Failed to set handler name.\n" );
 
     uint32_t sample_entry = isom_add_sample_entry( structs.root, track, codec_code, structs.summary );
@@ -190,8 +193,8 @@ int main( int argc, char* argv[] )
         return AUDIOMUX_ERR( "Failed to add sample_entry.\n" );
 
     /* Preparation for writing */
-    if( isom_set_brands( structs.root, major_brand, minor_version, brands, num_of_brands ) || isom_write_ftyp( structs.root ) )
-        return AUDIOMUX_ERR( "Failed to set brands.\n" );
+    if( isom_write_ftyp( structs.root ) )
+        return AUDIOMUX_ERR( "Failed to write brands.\n" );
     if( isom_add_mdat( structs.root ) )
         return AUDIOMUX_ERR( "Failed to write mdat.\n" );
 

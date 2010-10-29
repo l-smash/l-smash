@@ -157,14 +157,13 @@ typedef struct
 {
     /* This box is in Media Box or Meta Box */
     isom_full_header_t full_header;
-    uint32_t pre_defined;
-    uint32_t handler_type;  /* when present in a Media Box
-                             * 'vide': Video track
-                             * 'soun': Audio track
-                             * 'hint': Hint track
-                             * 'meta': Timed Metadata track */
+    uint32_t type;      /* ISOM: pre_difined = 0
+                         * QT: 'mhlr' for Media Handler Reference Box and 'dhlr' for Data Handler Reference Box  */
+    uint32_t subtype;   /* ISOM and QT: when present in Media Handler Reference Box, this field defines the type of media data
+                         * QT: when present in Data Handler Reference Box, this field defines the data reference type */
     uint32_t reserved[3];
-    char     *name;         /* a null-terminated string in UTF-8 characters */
+    char     *name;     /* ISOM: a null-terminated string in UTF-8 characters
+                         * QT: Pascal string */
 
     uint32_t name_length;
 } isom_hdlr_t;
@@ -543,6 +542,8 @@ typedef struct
     isom_hmhd_t *hmhd;     /* Hint Media Header Box */
     isom_nmhd_t *nmhd;     /* Null Media Header Box */
     /* */
+    isom_hdlr_t *hdlr;     /* Data Handler Reference Box / This box is defined by QuickTime file format
+                            * Note: this box must must come before Data Information Box. */
     isom_dinf_t *dinf;     /* Data Information Box */
     isom_stbl_t *stbl;     /* Sample Table Box */
 } isom_minf_t;
@@ -552,7 +553,8 @@ typedef struct
 {
     isom_base_header_t base_header;
     isom_mdhd_t *mdhd;     /* Media Header Box */
-    isom_hdlr_t *hdlr;     /* Handler Reference Box */
+    isom_hdlr_t *hdlr;     /* ISOM: Handler Reference Box / QT: Media Handler Reference Box
+                            * Note: this box must must come before Media Information Box. */
     isom_minf_t *minf;     /* Media Information Box */
 } isom_mdia_t;
 
@@ -710,9 +712,10 @@ typedef struct
     isom_mdat_t *mdat;      /* Media Data Box */
     isom_free_t *free;      /* Free Space Box */
 
-    isom_bs_t *bs;
-
-    double max_chunk_duration;      /* max duration per chunk in seconds */
+        isom_bs_t *bs;                  /* bytestream manager */
+        double max_chunk_duration;      /* max duration per chunk in seconds */
+        uint8_t qt_compatible;
+        uint8_t request_iods;
 } isom_root_t;
 
 /** Track Box **/
@@ -928,12 +931,25 @@ enum qt_box_code
     QT_BOX_TYPE_STPS = ISOM_4CC( 's', 't', 'p', 's' ),
 };
 
-enum isom_hdlr_code
+enum isom_handler_type_code
 {
-    ISOM_HDLR_TYPE_AUDIO  = ISOM_4CC( 's', 'o', 'u', 'n' ),
-    ISOM_HDLR_TYPE_VISUAL = ISOM_4CC( 'v', 'i', 'd', 'e' ),
-    ISOM_HDLR_TYPE_HINT   = ISOM_4CC( 'h', 'i', 'n', 't' ),
-    ISOM_HDLR_TYPE_META   = ISOM_4CC( 'm', 'e', 't', 'a' ),
+    ISOM_HANDLER_TYPE_DATA  = ISOM_4CC( 'd', 'h', 'l', 'r' ),
+    ISOM_HANDLER_TYPE_MEDIA = ISOM_4CC( 'm', 'h', 'l', 'r' ),
+};
+
+enum isom_media_type_code
+{
+    ISOM_MEDIA_HANDLER_TYPE_AUDIO  = ISOM_4CC( 's', 'o', 'u', 'n' ),
+    ISOM_MEDIA_HANDLER_TYPE_VISUAL = ISOM_4CC( 'v', 'i', 'd', 'e' ),
+    ISOM_MEDIA_HANDLER_TYPE_HINT   = ISOM_4CC( 'h', 'i', 'n', 't' ),
+    ISOM_MEDIA_HANDLER_TYPE_META   = ISOM_4CC( 'm', 'e', 't', 'a' ),
+};
+
+enum isom_data_reference_type_code
+{
+    ISOM_REFERENCE_HANDLER_TYPE_ALIAS    = ISOM_4CC( 'a', 'l', 'i', 's' ),
+    ISOM_REFERENCE_HANDLER_TYPE_RESOURCE = ISOM_4CC( 'r', 's', 'r', 'c' ),
+    ISOM_REFERENCE_HANDLER_TYPE_URL      = ISOM_4CC( 'u', 'r', 'l', ' ' ),
 };
 
 enum isom_brand_code
@@ -1191,7 +1207,10 @@ uint32_t isom_get_movie_timescale( isom_root_t *root );
 
 int isom_set_brands( isom_root_t *root, uint32_t major_brand, uint32_t minor_version, uint32_t *brands, uint32_t brand_count );
 int isom_set_max_chunk_duration( isom_root_t *root, double max_chunk_duration );
-int isom_set_handler( isom_trak_entry_t *trak, uint32_t handler_type, char *name );
+int isom_set_media_handler( isom_root_t *root, uint32_t track_ID, uint32_t media_type, char *name );
+int isom_set_media_handler_name( isom_root_t *root, uint32_t track_ID, char *handler_name );
+int isom_set_data_handler( isom_root_t *root, uint32_t track_ID, uint32_t reference_type, char *name );
+int isom_set_data_handler_name( isom_root_t *root, uint32_t track_ID, char *handler_name );
 int isom_set_movie_timescale( isom_root_t *root, uint32_t timescale );
 int isom_set_media_timescale( isom_root_t *root, uint32_t track_ID, uint32_t timescale );
 int isom_set_track_mode( isom_root_t *root, uint32_t track_ID, uint32_t mode );

@@ -1074,12 +1074,12 @@ static int isom_add_tkhd( isom_trak_entry_t *trak, uint32_t handler_type )
         isom_create_fullbox( tkhd, ISOM_BOX_TYPE_TKHD );
         switch( handler_type )
         {
-            case ISOM_HDLR_TYPE_VISUAL :
+            case ISOM_MEDIA_HANDLER_TYPE_VISUAL :
                 tkhd->matrix[0] = 0x00010000;
                 tkhd->matrix[4] = 0x00010000;
                 tkhd->matrix[8] = 0x40000000;
                 break;
-            case ISOM_HDLR_TYPE_AUDIO :
+            case ISOM_MEDIA_HANDLER_TYPE_AUDIO :
                 tkhd->volume = 0x0100;
                 break;
             default :
@@ -1130,18 +1130,24 @@ static int isom_add_mdia( isom_trak_entry_t *trak )
     return 0;
 }
 
-static int isom_add_hdlr( isom_mdia_t *mdia, uint32_t handler_type )
+static int isom_add_hdlr( isom_mdia_t *mdia, isom_minf_t *minf, uint32_t type, uint32_t subtype )
 {
-    if( !mdia || mdia->hdlr )
+    if( !mdia && !minf )
+        return -1;    /* Don't use both simultaneously. */
+    if( (!mdia && !minf) || (mdia && mdia->hdlr) || (minf && minf->hdlr) )
         return -1;
     isom_create_fullbox( hdlr, ISOM_BOX_TYPE_HDLR );
-    hdlr->handler_type = handler_type;
+    hdlr->type = type;
+    hdlr->subtype = subtype;
     hdlr->name = malloc( 1 );
     if( !hdlr->name )
         return -1;
     hdlr->name[0] = '\0';
     hdlr->name_length = 1;
-    mdia->hdlr = hdlr;
+    if( mdia )
+        mdia->hdlr = hdlr;
+    else
+        minf->hdlr = hdlr;
     return 0;
 }
 
@@ -1694,6 +1700,15 @@ static void isom_remove_dinf( isom_dinf_t *dinf )
     free( dinf );
 }
 
+static void isom_remove_hdlr( isom_hdlr_t *hdlr )
+{
+    if( !hdlr )
+        return;
+    if( hdlr->name )
+        free( hdlr->name );
+    free( hdlr );
+}
+
 static void isom_remove_minf( isom_minf_t *minf )
 {
     if( !minf )
@@ -1702,18 +1717,10 @@ static void isom_remove_minf( isom_minf_t *minf )
     isom_remove_fullbox( smhd, minf );
     isom_remove_fullbox( hmhd, minf );
     isom_remove_fullbox( nmhd, minf );
+    isom_remove_hdlr( minf->hdlr );
     isom_remove_dinf( minf->dinf );
     isom_remove_stbl( minf->stbl );
     free( minf );
-}
-
-static void isom_remove_hdlr( isom_hdlr_t *hdlr )
-{
-    if( !hdlr )
-        return;
-    if( hdlr->name )
-        free( hdlr->name );
-    free( hdlr );
 }
 
 static void isom_remove_mdia( isom_mdia_t *mdia )
@@ -1916,17 +1923,23 @@ static int isom_write_mdhd( isom_bs_t *bs, isom_trak_entry_t *trak )
     return isom_bs_write_data( bs );
 }
 
-static int isom_write_hdlr( isom_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_hdlr( isom_bs_t *bs, isom_trak_entry_t *trak, uint8_t is_media_handler )
 {
-    isom_hdlr_t *hdlr = trak->mdia->hdlr;
+    isom_hdlr_t *hdlr = is_media_handler ? trak->mdia->hdlr : trak->mdia->minf->hdlr;
     if( !hdlr )
-        return -1;
+        return 0;
     isom_bs_put_full_header( bs, &hdlr->full_header );
-    isom_bs_put_be32( bs, hdlr->pre_defined );
-    isom_bs_put_be32( bs, hdlr->handler_type );
+    isom_bs_put_be32( bs, hdlr->type );
+    isom_bs_put_be32( bs, hdlr->subtype );
     for( uint32_t i = 0; i < 3; i++ )
         isom_bs_put_be32( bs, hdlr->reserved[i] );
-    isom_bs_put_bytes( bs, hdlr->name, hdlr->name_length );
+    if( hdlr->type == ISOM_HANDLER_TYPE_MEDIA || hdlr->type == ISOM_HANDLER_TYPE_DATA )
+    {
+        isom_bs_put_byte( bs, hdlr->name_length );
+        isom_bs_put_bytes( bs, hdlr->name, ISOM_MIN( hdlr->name_length, 255 ) );
+    }
+    else
+        isom_bs_put_bytes( bs, hdlr->name, hdlr->name_length );
     return isom_bs_write_data( bs );
 }
 
@@ -2574,7 +2587,8 @@ static int isom_write_minf( isom_bs_t *bs, isom_trak_entry_t *trak )
         (minf->hmhd && isom_write_hmhd( bs, trak )) ||
         (minf->nmhd && isom_write_nmhd( bs, trak )) )
         return -1;
-    if( isom_write_dinf( bs, trak ) ||
+    if( isom_write_hdlr( bs, trak, 0 ) ||
+        isom_write_dinf( bs, trak ) ||
         isom_write_stbl( bs, trak ) )
         return -1;
     return 0;
@@ -2589,7 +2603,7 @@ static int isom_write_mdia( isom_bs_t *bs, isom_trak_entry_t *trak )
     if( isom_bs_write_data( bs ) )
         return -1;
     if( isom_write_mdhd( bs, trak ) ||
-        isom_write_hdlr( bs, trak ) ||
+        isom_write_hdlr( bs, trak, 1 ) ||
         isom_write_minf( bs, trak ) )
         return -1;
     return 0;
@@ -3316,10 +3330,23 @@ int isom_update_bitrate_info( isom_root_t *root, uint32_t track_ID, uint32_t ent
     return 0;
 }
 
+static int isom_check_compatibility( isom_root_t *root )
+{
+    /* Check brand to decide mandatory boxes. */
+    if( !root || !root->ftyp || !root->ftyp->brand_count )
+        return -1;
+    for( uint32_t i = 0; i < root->ftyp->brand_count; i++ )
+    {
+        if( root->ftyp->compatible_brands[i] == ISOM_BRAND_TYPE_QT )
+            root->qt_compatible = 1;
+    }
+    return 0;
+}
+
 static int isom_check_mandatory_boxes( isom_root_t *root )
 {
-    if( !root )
-        return 0;
+    if( !root || !root->ftyp || !root->ftyp->brand_count )
+        return -1;
     if( !root->moov || !root->moov->mvhd )
         return -1;
     if( root->moov->trak_list )
@@ -3330,7 +3357,7 @@ static int isom_check_mandatory_boxes( isom_root_t *root )
                 return -1;
             if( !trak->mdia->mdhd || !trak->mdia->hdlr || !trak->mdia->minf )
                 return -1;
-            if( !trak->mdia->minf->dinf || !trak->mdia->minf->dinf->dref )
+            if( (root->qt_compatible && !trak->mdia->minf->hdlr) || !trak->mdia->minf->dinf || !trak->mdia->minf->dinf->dref )
                 return -1;
             if( !trak->mdia->minf->stbl )
                 return -1;
@@ -3472,7 +3499,8 @@ static uint64_t isom_update_hdlr_size( isom_hdlr_t *hdlr )
 {
     if( !hdlr )
         return 0;
-    hdlr->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 20 + (uint64_t)hdlr->name_length;
+    hdlr->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 20 + (uint64_t)hdlr->name_length
+                           + (hdlr->type == ISOM_HANDLER_TYPE_MEDIA || hdlr->type == ISOM_HANDLER_TYPE_DATA);
     CHECK_LARGESIZE( hdlr->full_header.size );
     return hdlr->full_header.size;
 }
@@ -3873,6 +3901,7 @@ static uint64_t isom_update_minf_size( isom_minf_t *minf )
         + isom_update_smhd_size( minf->smhd )
         + isom_update_hmhd_size( minf->hmhd )
         + isom_update_nmhd_size( minf->nmhd )
+        + isom_update_hdlr_size( minf->hdlr )
         + isom_update_dinf_size( minf->dinf )
         + isom_update_stbl_size( minf->stbl );
     CHECK_LARGESIZE( minf->base_header.size );
@@ -3979,36 +4008,39 @@ void isom_delete_track( isom_root_t *root, uint32_t track_ID )
     }
 }
 
-uint32_t isom_create_track( isom_root_t *root, uint32_t handler_type )
+uint32_t isom_create_track( isom_root_t *root, uint32_t media_type )
 {
     isom_trak_entry_t *trak = isom_add_trak( root );
     if( !trak )
         return 0;
-    if( isom_add_tkhd( trak, handler_type ) ||
+    if( isom_add_tkhd( trak, media_type ) ||
         isom_add_mdia( trak ) ||
         isom_add_mdhd( trak->mdia ) ||
         isom_add_minf( trak->mdia ) ||
         isom_add_stbl( trak->mdia->minf ) ||
         isom_add_dinf( trak->mdia->minf ) ||
         isom_add_dref( trak->mdia->minf->dinf ) ||
-        isom_add_hdlr( trak->mdia, handler_type ) ||
         isom_add_stsd( trak->mdia->minf->stbl ) ||
         isom_add_stts( trak->mdia->minf->stbl ) ||
         isom_add_stsc( trak->mdia->minf->stbl ) ||
         isom_add_stco( trak->mdia->minf->stbl ) ||
         isom_add_stsz( trak->mdia->minf->stbl ) )
         return 0;
-    switch( handler_type )
+    if( isom_add_hdlr( trak->mdia, NULL, root->qt_compatible ? ISOM_HANDLER_TYPE_MEDIA : 0, media_type ) )
+        return 0;
+    if( root->qt_compatible && isom_add_hdlr( NULL, trak->mdia->minf, ISOM_HANDLER_TYPE_DATA, ISOM_REFERENCE_HANDLER_TYPE_URL ) )
+        return 0;
+    switch( media_type )
     {
-        case ISOM_HDLR_TYPE_VISUAL :
+        case ISOM_MEDIA_HANDLER_TYPE_VISUAL :
             if( isom_add_vmhd( trak->mdia->minf ) )
                 return 0;
             break;
-        case ISOM_HDLR_TYPE_AUDIO :
+        case ISOM_MEDIA_HANDLER_TYPE_AUDIO :
             if( isom_add_smhd( trak->mdia->minf ) )
                 return 0;
             break;
-        case ISOM_HDLR_TYPE_HINT :
+        case ISOM_MEDIA_HANDLER_TYPE_HINT :
             if( isom_add_hmhd( trak->mdia->minf ) )
                 return 0;
             break;
@@ -4020,17 +4052,85 @@ uint32_t isom_create_track( isom_root_t *root, uint32_t handler_type )
     return trak->tkhd->track_ID;
 }
 
-int isom_set_handler( isom_trak_entry_t *trak, uint32_t handler_type, char *name )
+int isom_set_media_handler( isom_root_t *root, uint32_t track_ID, uint32_t media_type, char *name )
 {
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    if( !trak || !trak->mdia )
+        return -1;
+    if( !trak->mdia->hdlr && isom_add_hdlr( trak->mdia, NULL, 0, 0 ) )
+        return -1;
+    isom_hdlr_t *hdlr = trak->mdia->hdlr;
+    hdlr->type = ISOM_HANDLER_TYPE_MEDIA;
+    hdlr->subtype = media_type;
+    if( name )
+    {
+        if( hdlr->name )
+            free( hdlr->name );
+        hdlr->name_length = strlen( name ) + 1;
+        hdlr->name = malloc( hdlr->name_length );
+        memcpy( hdlr->name, name, hdlr->name_length );
+    }
+    return 0;
+}
+
+int isom_set_media_handler_name( isom_root_t *root, uint32_t track_ID, char *handler_name )
+{
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->hdlr )
         return -1;
     isom_hdlr_t *hdlr = trak->mdia->hdlr;
-    hdlr->handler_type = handler_type;
+    char *name = NULL;
+    uint32_t length = strlen( handler_name ) + 1;
+    if( length > hdlr->name_length && hdlr->name )
+        name = realloc( hdlr->name, length );
+    else if( !hdlr->name )
+        name = malloc( length );
+    if( !name )
+        return -1;
+    hdlr->name = name;
+    memcpy( hdlr->name, handler_name, length );
+    hdlr->name_length = length;
+    return 0;
+}
+
+int isom_set_data_handler( isom_root_t *root, uint32_t track_ID, uint32_t reference_type, char *name )
+{
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    if( !trak || !trak->mdia || !trak->mdia->minf )
+        return -1;
+    if( !trak->mdia->minf->hdlr && isom_add_hdlr( NULL, trak->mdia->minf, 0, 0 ) )
+        return -1;
+    isom_hdlr_t *hdlr = trak->mdia->minf->hdlr;
+    hdlr->type = ISOM_HANDLER_TYPE_DATA;
+    hdlr->subtype = reference_type;
     if( name )
     {
-        hdlr->name = name;
-        hdlr->name_length = strlen( name );
+        if( hdlr->name )
+            free( hdlr->name );
+        hdlr->name_length = strlen( name ) + 1;
+        hdlr->name = malloc( hdlr->name_length );
+        memcpy( hdlr->name, name, hdlr->name_length );
     }
+    return 0;
+}
+
+int isom_set_data_handler_name( isom_root_t *root, uint32_t track_ID, char *handler_name )
+{
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->hdlr )
+        return -1;
+    isom_hdlr_t *hdlr = trak->mdia->minf->hdlr;
+    char *name = NULL;
+    uint32_t length = strlen( handler_name ) + 1;
+    if( length > hdlr->name_length && hdlr->name )
+        name = realloc( hdlr->name, length );
+    else if( !hdlr->name )
+        name = malloc( length );
+    if( !name )
+        return -1;
+    hdlr->name = name;
+    memcpy( hdlr->name, handler_name, length );
+    hdlr->name_length = length;
     return 0;
 }
 
@@ -4057,26 +4157,6 @@ int isom_set_track_mode( isom_root_t *root, uint32_t track_ID, uint32_t mode )
     if( !trak || !trak->tkhd )
         return -1;
     trak->tkhd->full_header.flags = mode;
-    return 0;
-}
-
-int isom_set_handler_name( isom_root_t *root, uint32_t track_ID, char *handler_name )
-{
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->hdlr )
-        return -1;
-    isom_hdlr_t *hdlr = trak->mdia->hdlr;
-    char *name = NULL;
-    uint32_t length = strlen( handler_name ) + 1;
-    if( length > hdlr->name_length && hdlr->name )
-        name = realloc( hdlr->name, length );
-    else if( !hdlr->name )
-        name = malloc( length );
-    if( !name )
-        return -1;
-    hdlr->name = name;
-    memcpy( hdlr->name, handler_name, length );
-    hdlr->name_length = length;
     return 0;
 }
 
@@ -4214,7 +4294,7 @@ int isom_set_brands( isom_root_t *root, uint32_t major_brand, uint32_t minor_ver
         ftyp->base_header.size += 4;
     }
     ftyp->brand_count = brand_count;
-    return 0;
+    return isom_check_compatibility( root );
 }
 
 int isom_set_max_chunk_duration( isom_root_t *root, double max_chunk_duration )
