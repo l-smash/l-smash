@@ -1132,10 +1132,10 @@ static int isom_add_mdia( isom_trak_entry_t *trak )
 
 static int isom_add_hdlr( isom_mdia_t *mdia, isom_minf_t *minf, uint32_t type, uint32_t subtype )
 {
-    if( !mdia && !minf )
-        return -1;    /* Don't use both simultaneously. */
-    if( (!mdia && !minf) || (mdia && mdia->hdlr) || (minf && minf->hdlr) )
-        return -1;
+    if( (!mdia && !minf) || (mdia && minf) )
+        return -1;    /* Either one must be given. */
+    if( (mdia && mdia->hdlr) || (minf && minf->hdlr) )
+        return -1;    /* Selected one must not have hdlr yet. */
     isom_create_fullbox( hdlr, ISOM_BOX_TYPE_HDLR );
     hdlr->type = type;
     hdlr->subtype = subtype;
