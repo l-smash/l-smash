@@ -22,7 +22,7 @@
 /* This file is available under an ISC license. */
 
 #include "isom.h"
-#include "mp4sys.h"
+#include "summary.h" /* FIXME: to be replaced with lsmash.h or whatnot */
 
 /* MP4 Audio Sample Entry */
 typedef struct

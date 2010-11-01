@@ -44,7 +44,7 @@ EXE=.exe
 endif
 endif #ifeq ($(CROSS),)
 
-SRCS=isom.c isom_util.c mp4sys.c mp4a.c
+SRCS=isom.c isom_util.c mp4sys.c mp4a.c importer.c summary.c
 OBJS=$(SRCS:%.c=%.o)
 #TARGET=lsmash$(EXE)
 

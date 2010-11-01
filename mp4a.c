@@ -20,8 +20,6 @@
 
 /* This file is available under an ISC license. */
 
-#include "isom_util.h"
-
 #define MP4A_INTERNAL
 #include "mp4a.h"
 
