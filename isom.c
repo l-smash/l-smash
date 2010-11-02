@@ -1093,6 +1093,42 @@ static int isom_add_tkhd( isom_trak_entry_t *trak, uint32_t handler_type )
     return 0;
 }
 
+static int isom_add_clef( isom_tapt_t *tapt )
+{
+    if( tapt->clef )
+        return 0;
+    isom_create_fullbox( clef, QT_BOX_TYPE_CLEF );
+    tapt->clef = clef;
+    return 0;
+}
+
+static int isom_add_prof( isom_tapt_t *tapt )
+{
+    if( tapt->prof )
+        return 0;
+    isom_create_fullbox( prof, QT_BOX_TYPE_PROF );
+    tapt->prof = prof;
+    return 0;
+}
+
+static int isom_add_enof( isom_tapt_t *tapt )
+{
+    if( tapt->enof )
+        return 0;
+    isom_create_fullbox( enof, QT_BOX_TYPE_ENOF );
+    tapt->enof = enof;
+    return 0;
+}
+
+static int isom_add_tapt( isom_trak_entry_t *trak )
+{
+    if( trak->tapt )
+        return 0;
+    isom_create_basebox( tapt, QT_BOX_TYPE_TAPT );
+    trak->tapt = tapt;
+    return 0;
+}
+
 static int isom_add_elst( isom_edts_t *edts )
 {
     if( edts->elst )
@@ -1231,7 +1267,26 @@ static int isom_add_pasp( isom_visual_entry_t *visual )
     if( !visual || visual->pasp )
         return -1;
     isom_create_basebox( pasp, ISOM_BOX_TYPE_PASP );
+    pasp->hSpacing = 1;
+    pasp->vSpacing = 1;
     visual->pasp = pasp;
+    return 0;
+}
+
+static int isom_add_clap( isom_visual_entry_t *visual )
+{
+    if( !visual || visual->clap )
+        return -1;
+    isom_create_basebox( clap, ISOM_BOX_TYPE_CLAP );
+    clap->cleanApertureWidthN = 1;
+    clap->cleanApertureWidthD = 1;
+    clap->cleanApertureHeightN = 1;
+    clap->cleanApertureHeightD = 1;
+    clap->horizOffN = 0;
+    clap->horizOffD = 1;
+    clap->vertOffN = 0;
+    clap->vertOffD = 1;
+    visual->clap = clap;
     return 0;
 }
 
@@ -1465,6 +1520,16 @@ static void isom_remove_ftyp( isom_ftyp_t *ftyp )
     if( ftyp->compatible_brands )
         free( ftyp->compatible_brands );
     free( ftyp );
+}
+
+static void isom_remove_tapt( isom_tapt_t *tapt )
+{
+    if( !tapt )
+        return;
+    isom_remove_fullbox( clef, tapt );
+    isom_remove_fullbox( prof, tapt );
+    isom_remove_fullbox( enof, tapt );
+    free( tapt );
 }
 
 static void isom_remove_edts( isom_edts_t *edts )
@@ -1772,6 +1837,7 @@ static void isom_remove_trak( isom_trak_entry_t *trak )
     if( !trak )
         return;
     isom_remove_fullbox( tkhd, trak );
+    isom_remove_tapt( trak->tapt );
     isom_remove_edts( trak->edts );
     isom_remove_mdia( trak->mdia );
     isom_remove_udta( trak->udta );
@@ -1856,6 +1922,54 @@ static int isom_write_tkhd( isom_bs_t *bs, isom_trak_entry_t *trak )
     isom_bs_put_be32( bs, tkhd->width );
     isom_bs_put_be32( bs, tkhd->height );
     return isom_bs_write_data( bs );
+}
+
+static int isom_write_clef( isom_bs_t *bs, isom_trak_entry_t *trak )
+{
+    isom_clef_t *clef = trak->tapt->clef;
+    if( !clef )
+        return 0;
+    isom_bs_put_full_header( bs, &clef->full_header );
+    isom_bs_put_be32( bs, clef->width );
+    isom_bs_put_be32( bs, clef->height );
+    return isom_bs_write_data( bs );
+}
+
+static int isom_write_prof( isom_bs_t *bs, isom_trak_entry_t *trak )
+{
+    isom_prof_t *prof = trak->tapt->prof;
+    if( !prof )
+        return 0;
+    isom_bs_put_full_header( bs, &prof->full_header );
+    isom_bs_put_be32( bs, prof->width );
+    isom_bs_put_be32( bs, prof->height );
+    return isom_bs_write_data( bs );
+}
+
+static int isom_write_enof( isom_bs_t *bs, isom_trak_entry_t *trak )
+{
+    isom_enof_t *enof = trak->tapt->enof;
+    if( !enof )
+        return 0;
+    isom_bs_put_full_header( bs, &enof->full_header );
+    isom_bs_put_be32( bs, enof->width );
+    isom_bs_put_be32( bs, enof->height );
+    return isom_bs_write_data( bs );
+}
+
+static int isom_write_tapt( isom_bs_t *bs, isom_trak_entry_t *trak )
+{
+    isom_tapt_t *tapt = trak->tapt;
+    if( !tapt )
+        return 0;
+    isom_bs_put_base_header( bs, &tapt->base_header );
+    if( isom_bs_write_data( bs ) )
+        return -1;
+    if( isom_write_clef( bs, trak ) ||
+        isom_write_prof( bs, trak ) ||
+        isom_write_enof( bs, trak ) )
+        return -1;
+    return 0;
 }
 
 static int isom_write_elst( isom_bs_t *bs, isom_trak_entry_t *trak )
@@ -2653,6 +2767,7 @@ static int isom_write_trak( isom_bs_t *bs, isom_trak_entry_t *trak )
     if( isom_bs_write_data( bs ) )
         return -1;
     if( isom_write_tkhd( bs, trak ) ||
+        isom_write_tapt( bs, trak ) ||
         isom_write_edts( bs, trak ) ||
         isom_write_mdia( bs, trak ) ||
         isom_write_udta( bs, NULL, trak ) )
@@ -3461,6 +3576,45 @@ static uint64_t isom_update_tkhd_size( isom_tkhd_t *tkhd )
     return tkhd->full_header.size;
 }
 
+static uint64_t isom_update_clef_size( isom_clef_t *clef )
+{
+    if( !clef )
+        return 0;
+    clef->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 8;
+    CHECK_LARGESIZE( clef->full_header.size );
+    return clef->full_header.size;
+}
+
+static uint64_t isom_update_prof_size( isom_prof_t *prof )
+{
+    if( !prof )
+        return 0;
+    prof->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 8;
+    CHECK_LARGESIZE( prof->full_header.size );
+    return prof->full_header.size;
+}
+
+static uint64_t isom_update_enof_size( isom_enof_t *enof )
+{
+    if( !enof )
+        return 0;
+    enof->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 8;
+    CHECK_LARGESIZE( enof->full_header.size );
+    return enof->full_header.size;
+}
+
+static uint64_t isom_update_tapt_size( isom_tapt_t *tapt )
+{
+    if( !tapt )
+        return 0;
+    tapt->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE
+        + isom_update_clef_size( tapt->clef )
+        + isom_update_prof_size( tapt->prof )
+        + isom_update_enof_size( tapt->enof );
+    CHECK_LARGESIZE( tapt->base_header.size );
+    return tapt->base_header.size;
+}
+
 static uint64_t isom_update_elst_size( isom_elst_t *elst )
 {
     if( !elst || !elst->list )
@@ -3954,6 +4108,7 @@ static uint64_t isom_update_trak_entry_size( isom_trak_entry_t *trak )
         return 0;
     trak->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE
         + isom_update_tkhd_size( trak->tkhd )
+        + isom_update_tapt_size( trak->tapt )
         + isom_update_edts_size( trak->edts )
         + isom_update_mdia_size( trak->mdia )
         + isom_update_udta_size( NULL, trak->udta );
@@ -4212,6 +4367,26 @@ int isom_set_sample_resolution( isom_root_t *root, uint32_t track_ID, uint32_t e
     isom_visual_entry_t *data = (isom_visual_entry_t *)isom_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
     if( !data )
         return -1;
+    switch( data->base_header.type )
+    {
+        case ISOM_CODEC_TYPE_AVC1_VIDEO :
+#if 0
+        case ISOM_CODEC_TYPE_AVC2_VIDEO :
+        case ISOM_CODEC_TYPE_AVCP_VIDEO :
+        case ISOM_CODEC_TYPE_SVC1_VIDEO :
+        case ISOM_CODEC_TYPE_MVC1_VIDEO :
+        case ISOM_CODEC_TYPE_MVC2_VIDEO :
+        case ISOM_CODEC_TYPE_MP4V_VIDEO :
+        case ISOM_CODEC_TYPE_DRAC_VIDEO :
+        case ISOM_CODEC_TYPE_ENCV_VIDEO :
+        case ISOM_CODEC_TYPE_MJP2_VIDEO :
+        case ISOM_CODEC_TYPE_S263_VIDEO :
+        case ISOM_CODEC_TYPE_VC_1_VIDEO :
+#endif
+            break;
+        default :
+            return -1;
+    }
     data->width = width;
     data->height = height;
     return 0;
@@ -4225,11 +4400,113 @@ int isom_set_sample_aspect_ratio( isom_root_t *root, uint32_t track_ID, uint32_t
     isom_visual_entry_t *data = (isom_visual_entry_t *)isom_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
     if( !data )
         return -1;
+    switch( data->base_header.type )
+    {
+        case ISOM_CODEC_TYPE_AVC1_VIDEO :
+#if 0
+        case ISOM_CODEC_TYPE_AVC2_VIDEO :
+        case ISOM_CODEC_TYPE_AVCP_VIDEO :
+        case ISOM_CODEC_TYPE_SVC1_VIDEO :
+        case ISOM_CODEC_TYPE_MVC1_VIDEO :
+        case ISOM_CODEC_TYPE_MVC2_VIDEO :
+        case ISOM_CODEC_TYPE_MP4V_VIDEO :
+        case ISOM_CODEC_TYPE_DRAC_VIDEO :
+        case ISOM_CODEC_TYPE_ENCV_VIDEO :
+        case ISOM_CODEC_TYPE_MJP2_VIDEO :
+        case ISOM_CODEC_TYPE_S263_VIDEO :
+        case ISOM_CODEC_TYPE_VC_1_VIDEO :
+#endif
+            break;
+        default :
+            return -1;
+    }
     if( !data->pasp && isom_add_pasp( data ) )
         return -1;
     isom_pasp_t *pasp = (isom_pasp_t *)data->pasp;
     pasp->hSpacing = hSpacing;
     pasp->vSpacing = vSpacing;
+    return 0;
+}
+
+int isom_set_track_aperture_modes( isom_root_t *root, uint32_t track_ID, uint32_t entry_number )
+{
+    if( !root->qt_compatible )
+        return -1;
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
+        return -1;
+    isom_visual_entry_t *data = (isom_visual_entry_t *)isom_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
+    if( !data )
+        return -1;
+    switch( data->base_header.type )
+    {
+        case ISOM_CODEC_TYPE_AVC1_VIDEO :
+#if 0
+        case ISOM_CODEC_TYPE_AVC2_VIDEO :
+        case ISOM_CODEC_TYPE_AVCP_VIDEO :
+        case ISOM_CODEC_TYPE_SVC1_VIDEO :
+        case ISOM_CODEC_TYPE_MVC1_VIDEO :
+        case ISOM_CODEC_TYPE_MVC2_VIDEO :
+        case ISOM_CODEC_TYPE_MP4V_VIDEO :
+        case ISOM_CODEC_TYPE_DRAC_VIDEO :
+        case ISOM_CODEC_TYPE_ENCV_VIDEO :
+        case ISOM_CODEC_TYPE_MJP2_VIDEO :
+        case ISOM_CODEC_TYPE_S263_VIDEO :
+        case ISOM_CODEC_TYPE_VC_1_VIDEO :
+#endif
+            break;
+        default :
+            return -1;
+    }
+    uint32_t width = data->width << 16;
+    uint32_t height = data->height << 16;
+    if( !trak->tapt && isom_add_tapt( trak ) )
+        return -1;
+    isom_tapt_t *tapt = trak->tapt;
+    if( (!tapt->clef && isom_add_clef( tapt )) ||
+        (!tapt->prof && isom_add_prof( tapt )) ||
+        (!tapt->enof && isom_add_enof( tapt )) )
+        return -1;
+    isom_pasp_t *pasp = data->pasp;
+    if( !pasp )
+    {
+        if( isom_add_pasp( data ) )
+            return -1;
+        pasp = data->pasp;
+    }
+    isom_clap_t *clap = data->clap;
+    if( !clap )
+    {
+        if( isom_add_clap( data ) )
+            return -1;
+        clap = data->clap;
+        clap->cleanApertureWidthN = data->width;
+        clap->cleanApertureHeightN = data->height;
+    }
+    if( !pasp->hSpacing || !pasp->vSpacing ||
+        !clap->cleanApertureWidthN || !clap->cleanApertureWidthD ||
+        !clap->cleanApertureHeightN || !clap->cleanApertureHeightD ||
+        !clap->horizOffD || !clap->vertOffD )
+        return -1;
+    double par = (double)pasp->hSpacing / pasp->vSpacing;
+    double clap_width = ((double)clap->cleanApertureWidthN / clap->cleanApertureWidthD) * (1<<16);
+    double clap_height = ((double)clap->cleanApertureHeightN / clap->cleanApertureHeightD) * (1<<16);
+    if( par >= 1.0 )
+    {
+        tapt->clef->width = clap_width * par;
+        tapt->clef->height = clap_height;
+        tapt->prof->width = width * par;
+        tapt->prof->height = height;
+    }
+    else
+    {
+        tapt->clef->width = clap_width;
+        tapt->clef->height = clap_height / par;
+        tapt->prof->width = width;
+        tapt->prof->height = height / par;
+    }
+    tapt->enof->width = width;
+    tapt->enof->height = height;
     return 0;
 }
 

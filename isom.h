@@ -110,6 +110,42 @@ typedef struct
     /* */
 } isom_tkhd_t;
 
+/* Track Clean Aperture Dimensions Box
+ * A presentation mode where clap and pasp are reflected. */
+typedef struct
+{
+    isom_full_header_t full_header;
+    uint32_t width;     /* fixed point 16.16 number */
+    uint32_t height;    /* fixed point 16.16 number */
+} isom_clef_t;
+
+/* Track Production Aperture Dimensions Box
+ * A presentation mode where pasp is reflected. */
+typedef struct
+{
+    isom_full_header_t full_header;
+    uint32_t width;     /* fixed point 16.16 number */
+    uint32_t height;    /* fixed point 16.16 number */
+} isom_prof_t;
+
+/* Track Encoded Pixels Dimensions Box
+ * A presentation mode where clap and pasp are not reflected. */
+typedef struct
+{
+    isom_full_header_t full_header;
+    uint32_t width;     /* fixed point 16.16 number */
+    uint32_t height;    /* fixed point 16.16 number */
+} isom_enof_t;
+
+/* Track Aperture Mode Dimensions Box */
+typedef struct
+{
+    isom_base_header_t base_header;
+    isom_clef_t *clef;      /* Track Clean Aperture Dimensions Box */
+    isom_prof_t *prof;      /* Track Production Aperture Dimensions Box */
+    isom_enof_t *enof;      /* Track Encoded Pixels Dimensions Box */
+} isom_tapt_t;
+
 /* Edit List Box */
 typedef struct
 {
@@ -743,6 +779,7 @@ typedef struct
 {
     isom_base_header_t base_header;
     isom_tkhd_t *tkhd;          /* Track Header Box */
+    isom_tapt_t *tapt;          /* Track Aperture Mode Dimensions Box / This box is defined in QuickTime file format */
     isom_edts_t *edts;          /* Edit Box */
     isom_mdia_t *mdia;          /* Media Box */
     isom_udta_t *udta;          /* User Data Box */
@@ -920,15 +957,19 @@ enum isom_box_code
 
 enum qt_box_code
 {
+    QT_BOX_TYPE_CLEF = ISOM_4CC( 'c', 'l', 'e', 'f' ),
     QT_BOX_TYPE_CLIP = ISOM_4CC( 'c', 'l', 'i', 'p' ),
     QT_BOX_TYPE_CRGN = ISOM_4CC( 'c', 'r', 'g', 'n' ),
     QT_BOX_TYPE_CTAB = ISOM_4CC( 'c', 't', 'a', 'b' ),
+    QT_BOX_TYPE_ENOF = ISOM_4CC( 'e', 'n', 'o', 'f' ),
     QT_BOX_TYPE_IMAP = ISOM_4CC( 'i', 'm', 'a', 'p' ),
     QT_BOX_TYPE_KMAT = ISOM_4CC( 'k', 'm', 'a', 't' ),
     QT_BOX_TYPE_LOAD = ISOM_4CC( 'l', 'o', 'a', 'd' ),
     QT_BOX_TYPE_MATT = ISOM_4CC( 'm', 'a', 't', 't' ),
     QT_BOX_TYPE_PNOT = ISOM_4CC( 'p', 'n', 'o', 't' ),
+    QT_BOX_TYPE_PROF = ISOM_4CC( 'p', 'r', 'o', 'f' ),
     QT_BOX_TYPE_STPS = ISOM_4CC( 's', 't', 'p', 's' ),
+    QT_BOX_TYPE_TAPT = ISOM_4CC( 't', 'a', 'p', 't' ),
 };
 
 enum isom_handler_type_code
@@ -1216,6 +1257,7 @@ int isom_set_media_timescale( isom_root_t *root, uint32_t track_ID, uint32_t tim
 int isom_set_track_mode( isom_root_t *root, uint32_t track_ID, uint32_t mode );
 int isom_set_track_presentation_size( isom_root_t *root, uint32_t track_ID, uint32_t width, uint32_t height );
 int isom_set_track_volume( isom_root_t *root, uint32_t track_ID, int16_t volume );
+int isom_set_track_aperture_modes( isom_root_t *root, uint32_t track_ID, uint32_t entry_number );
 int isom_set_sample_resolution( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint16_t width, uint16_t height );
 int isom_set_sample_type( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint32_t sample_type );
 int isom_set_sample_aspect_ratio( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint32_t hSpacing, uint32_t vSpacing );
