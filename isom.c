@@ -4667,7 +4667,7 @@ int isom_write_mdat_size( isom_root_t *root )
         fseek( stream, mdat->placeholder_pos, SEEK_SET );
         isom_bs_put_be32( bs, 1 );
         isom_bs_put_be32( bs, ISOM_BOX_TYPE_MDAT );
-        isom_bs_put_be64( bs, mdat->base_header.size );
+        isom_bs_put_be64( bs, mdat->base_header.size + ISOM_DEFAULT_BOX_HEADER_SIZE );
     }
     else
     {
