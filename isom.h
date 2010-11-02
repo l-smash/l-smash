@@ -617,8 +617,7 @@ typedef struct
 {
     isom_base_header_t base_header;     /* If size is 0, then this box is the last box. */
 
-    uint64_t header_pos;
-    uint8_t large_flag;
+        uint64_t placeholder_pos;       /* placeholder position for largesize */
 } isom_mdat_t;
 
 /* Free Space Box */

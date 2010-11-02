@@ -2819,7 +2819,7 @@ static int isom_write_mvhd( isom_root_t *root )
     return isom_bs_write_data( bs );
 }
 
-static int isom_bs_write_largesize_reserver( isom_bs_t *bs )
+static int isom_bs_write_largesize_placeholder( isom_bs_t *bs )
 {
     isom_bs_put_be32( bs, ISOM_DEFAULT_BOX_HEADER_SIZE );
     isom_bs_put_be32( bs, ISOM_BOX_TYPE_FREE );
@@ -2832,11 +2832,12 @@ static int isom_write_mdat_header( isom_root_t *root )
         return -1;
     isom_mdat_t *mdat = root->mdat;
     isom_bs_t *bs = root->bs;
-    mdat->base_header.size = 2 * ISOM_DEFAULT_BOX_HEADER_SIZE;
-    mdat->header_pos = ftell( bs->stream );
-    mdat->large_flag = 0;
+    mdat->placeholder_pos = ftell( bs->stream );
+    if( isom_bs_write_largesize_placeholder( bs ) )
+        return -1;
+    mdat->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE;
     isom_bs_put_base_header( bs, &mdat->base_header );
-    return isom_bs_write_largesize_reserver( bs );
+    return isom_bs_write_data( bs );
 }
 
 static uint32_t isom_get_sample_count( isom_trak_entry_t *trak )
@@ -4635,20 +4636,20 @@ int isom_write_mdat_size( isom_root_t *root )
     if( !root || !root->bs || !root->bs->stream || !root->mdat )
         return -1;
     isom_mdat_t *mdat = root->mdat;
-    if( mdat->base_header.size > UINT32_MAX )
-        mdat->large_flag = 1;
+    uint8_t large_flag = mdat->base_header.size > UINT32_MAX;
     isom_bs_t *bs = root->bs;
     FILE *stream = bs->stream;
     uint64_t current_pos = ftell( stream );
-    fseek( stream, mdat->header_pos, SEEK_SET );
-    if( mdat->large_flag )
+    if( large_flag )
     {
+        fseek( stream, mdat->placeholder_pos, SEEK_SET );
         isom_bs_put_be32( bs, 1 );
         isom_bs_put_be32( bs, ISOM_BOX_TYPE_MDAT );
         isom_bs_put_be64( bs, mdat->base_header.size );
     }
     else
     {
+        fseek( stream, mdat->placeholder_pos + ISOM_DEFAULT_BOX_HEADER_SIZE, SEEK_SET );
         isom_bs_put_be32( bs, mdat->base_header.size );
         isom_bs_put_be32( bs, ISOM_BOX_TYPE_MDAT );
     }
