@@ -3450,9 +3450,15 @@ int isom_update_bitrate_info( isom_root_t *root, uint32_t track_ID, uint32_t ent
 
 static int isom_check_compatibility( isom_root_t *root )
 {
-    /* Check brand to decide mandatory boxes. */
-    if( !root || !root->ftyp || !root->ftyp->brand_count )
+    if( !root )
         return -1;
+    /* Check brand to decide mandatory boxes. */
+    if( !root->ftyp || !root->ftyp->brand_count )
+    {
+        /* We assume this file is not a QuickTime but MP4 version 1 format file. */
+        root->request_iods = 1;
+        return 0;
+    }
     for( uint32_t i = 0; i < root->ftyp->brand_count; i++ )
     {
         if( root->ftyp->compatible_brands[i] == ISOM_BRAND_TYPE_QT )
@@ -3465,7 +3471,7 @@ static int isom_check_compatibility( isom_root_t *root )
 
 static int isom_check_mandatory_boxes( isom_root_t *root )
 {
-    if( !root || !root->ftyp || !root->ftyp->brand_count )
+    if( !root )
         return -1;
     if( !root->moov || !root->moov->mvhd )
         return -1;
@@ -4560,8 +4566,20 @@ uint32_t isom_get_movie_timescale( isom_root_t *root )
 
 int isom_set_brands( isom_root_t *root, uint32_t major_brand, uint32_t minor_version, uint32_t *brands, uint32_t brand_count )
 {
-    if( !root || !brand_count )
+    if( !root )
         return -1;
+    if( !brand_count )
+    {
+        /* Absence of ftyp box means this file is a QuickTime or MP4 version 1 format file. */
+        if( root->ftyp )
+        {
+            if( root->ftyp->compatible_brands )
+                free( root->ftyp->compatible_brands );
+            free( root->ftyp );
+            root->ftyp = NULL;
+        }
+        return 0;
+    }
     if( !root->ftyp && isom_add_ftyp( root ) )
         return -1;
     isom_ftyp_t *ftyp = root->ftyp;
@@ -4589,8 +4607,12 @@ int isom_set_max_chunk_duration( isom_root_t *root, double max_chunk_duration )
 
 int isom_write_ftyp( isom_root_t *root )
 {
-    isom_bs_t *bs = root->bs;
+    if( !root )
+        return -1;
     isom_ftyp_t *ftyp = root->ftyp;
+    if( !ftyp || !ftyp->brand_count )
+        return 0;
+    isom_bs_t *bs = root->bs;
     isom_bs_put_base_header( bs, &ftyp->base_header );
     isom_bs_put_be32( bs, ftyp->major_brand );
     isom_bs_put_be32( bs, ftyp->minor_version );
