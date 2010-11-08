@@ -462,29 +462,23 @@ int isom_add_entry( isom_entry_list_t *list, void *data )
 
 int isom_remove_entry( isom_entry_list_t *list, uint32_t entry_number )
 {
-    if( !list )
+    isom_entry_t *entry = isom_get_entry( list, entry_number );
+    if( !entry )
         return -1;
-    isom_entry_t *entry = list->head;
-    uint32_t i = 0;
-    for( i = 0; i < entry_number && entry; i++ )
-        entry = entry->next;
-    if( i < entry_number )
-        return -1;
-    if( entry )
-    {
-        isom_entry_t *next = entry->next;
-        isom_entry_t *prev = entry->prev;
-        if( entry->data )
-            free( entry->data );
-        free( entry );
-        entry = next;
-        if( entry )
-        {
-            if( prev )
-                prev->next = entry;
-            entry->prev = prev;
-        }
-    }
+    isom_entry_t *next = entry->next;
+    isom_entry_t *prev = entry->prev;
+    if( entry == list->head )
+        list->head = next;
+    else
+        prev->next = next;
+    if( entry == list->tail )
+        list->tail = prev;
+    else
+        next->prev = prev;
+    if( entry->data )
+        free( entry->data );
+    free( entry );
+    list->entry_count -= 1;
     return 0;
 }
 
