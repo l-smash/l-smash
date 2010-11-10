@@ -112,6 +112,7 @@ typedef void (*isom_entry_data_eliminator)(void* data); /* very same as free() o
 
 isom_entry_list_t *isom_create_entry_list( void );
 int isom_add_entry( isom_entry_list_t *list, void *data );
+int isom_remove_entry_direct( isom_entry_list_t *list, isom_entry_t *entry );
 int isom_remove_entry( isom_entry_list_t *list, uint32_t entry_number );
 void isom_remove_entries( isom_entry_list_t *list, void* eliminator );
 void isom_remove_list( isom_entry_list_t *list, void* eliminator );

@@ -460,9 +460,8 @@ int isom_add_entry( isom_entry_list_t *list, void *data )
     return 0;
 }
 
-int isom_remove_entry( isom_entry_list_t *list, uint32_t entry_number )
+int isom_remove_entry_direct( isom_entry_list_t *list, isom_entry_t *entry )
 {
-    isom_entry_t *entry = isom_get_entry( list, entry_number );
     if( !entry )
         return -1;
     isom_entry_t *next = entry->next;
@@ -480,6 +479,12 @@ int isom_remove_entry( isom_entry_list_t *list, uint32_t entry_number )
     free( entry );
     list->entry_count -= 1;
     return 0;
+}
+
+int isom_remove_entry( isom_entry_list_t *list, uint32_t entry_number )
+{
+    isom_entry_t *entry = isom_get_entry( list, entry_number );
+    return isom_remove_entry_direct( list, entry );
 }
 
 void isom_remove_entries( isom_entry_list_t *list, void* eliminator )
