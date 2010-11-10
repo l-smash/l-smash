@@ -3173,7 +3173,7 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, isom_sample_proper
     {
         if( pool->entry_count )
             group->delimited = 1;
-        /* Create a new group. This group is not 'roll' yet, so we set 0 on it's group_description_index. */
+        /* Create a new group. This group is not 'roll' yet, so we set 0 on its group_description_index. */
         group = malloc( sizeof(isom_roll_group_t) );
         if( !group )
             return -1;
@@ -3208,16 +3208,20 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, isom_sample_proper
             return -1;
         if( group->described )
             continue;
+        /* Be careful of consecutive undecodable leading samples after the partial sync sample (i.e. Open-GOP I-picture).
+         * These samples are not able to decode correctly from the recovery point specified in display order.
+         * In this case, therefore, roll_distance will be number of consecutive undecodable leading samples after the partial sync sample plus one. */
         if( group->roll_recovery )
         {
-            if( prop->leading == ISOM_SAMPLE_IS_UNDECODABLE_LEADING )
-                ++ group->roll_recovery->roll_distance;
-            else
+            ++ group->roll_recovery->roll_distance;
+            if( prop->leading != ISOM_SAMPLE_IS_UNDECODABLE_LEADING )
             {
-                /* roll_distance == 0 must not be used. */
-                if( !group->roll_recovery->roll_distance &&
-                    isom_remove_entry( sgpd->list, sgpd->list->entry_count ) )
-                    return -1;
+                if( group->roll_recovery->roll_distance == 1 )
+                {
+                    /* no undecodable leading samples */
+                    if( isom_remove_entry( sgpd->list, sgpd->list->entry_count ) )
+                        return -1;
+                }
                 else
                     group->sample_to_group->group_description_index = sgpd->list->entry_count;
                 group->described = 1;
@@ -3230,9 +3234,6 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, isom_sample_proper
             group->roll_recovery = isom_add_roll_group_entry( sgpd, distance );
             if( !group->roll_recovery )
                 return -1;
-            /* Be careful of consecutive undecodable leading samples after the partial sync sample (i.e. Open-GOP I-picture).
-             * These samples are not able to decode correctly from the recovery point specified in display order.
-             * In this case, therefore, roll_distance will be number of consecutive undecodable leading samples after the partial sync sample. */
             group->described = distance || !(prop->independent || (prop->leading == ISOM_SAMPLE_IS_UNDECODABLE_LEADING));
             if( distance )
             {
