@@ -833,47 +833,66 @@ static int isom_add_stco_entry( isom_stbl_t *stbl, uint64_t chunk_offset )
     return 0;
 }
 
-#if 0
-static int isom_add_sbgp_entry( isom_stbl_t *stbl, uint32_t grouping_number, uint32_t sample_count, uint32_t group_description_index )
+static isom_sbgp_t *isom_get_sample_to_group( isom_stbl_t *stbl, uint32_t grouping_type )
 {
-    if( !stbl || !stbl->grouping_count || !grouping_number || stbl->grouping_count < grouping_number || !sample_count )
-        return -1;
-    isom_sbgp_t *sbgp = stbl->sbgp + grouping_number - 1;
-    if( !sbgp || !sbgp->list )
-        return -1;
+    isom_sbgp_t *sbgp = NULL;
+    for( uint32_t i = 0; i < stbl->grouping_count; i++ )
+    {
+        sbgp = stbl->sbgp + i;
+        if( !sbgp || !sbgp->list )
+            return NULL;
+        if( sbgp->grouping_type == grouping_type )
+            break;
+    }
+    return sbgp;
+}
+
+static isom_sgpd_t *isom_get_sample_group_description( isom_stbl_t *stbl, uint32_t grouping_type )
+{
+    isom_sgpd_t *sgpd = NULL;
+    for( uint32_t i = 0; i < stbl->grouping_count; i++ )
+    {
+        sgpd = stbl->sgpd + i;
+        if( !sgpd || !sgpd->list )
+            return NULL;
+        if( sgpd->grouping_type == grouping_type )
+            break;
+    }
+    return sgpd;
+}
+
+static isom_sbgp_entry_t *isom_add_sbgp_entry( isom_sbgp_t *sbgp, uint32_t sample_count, uint32_t group_description_index )
+{
+    if( !sbgp )
+        return NULL;
     isom_sbgp_entry_t *data = malloc( sizeof(isom_sbgp_entry_t) );
     if( !data )
-        return -1;
+        return NULL;
     data->sample_count = sample_count;
     data->group_description_index = group_description_index;
     if( isom_add_entry( sbgp->list, data ) )
     {
         free( data );
-        return -1;
+        return NULL;
     }
-    return 0;
+    return data;
 }
 
-static int isom_add_roll_group_entry( isom_stbl_t *stbl, uint32_t grouping_number, uint32_t description_length, int16_t roll_distance )
+static isom_roll_entry_t *isom_add_roll_group_entry( isom_sgpd_t *sgpd, int16_t roll_distance )
 {
-    if( !stbl || !stbl->grouping_count || !grouping_number || stbl->grouping_count < grouping_number )
-        return -1;
-    isom_sgpd_t *sgpd = stbl->sgpd + grouping_number - 1;
-    if( !sgpd || !sgpd->list || sgpd->grouping_type != ISOM_GROUP_TYPE_ROLL )
-        return -1;
-    isom_roll_group_entry_t *data = malloc( sizeof(isom_roll_group_entry_t) );
+    if( !sgpd )
+        return NULL;
+    isom_roll_entry_t *data = malloc( sizeof(isom_roll_entry_t) );
      if( !data )
-        return -1;
-    data->description_length = description_length;
+        return NULL;
     data->roll_distance = roll_distance;
     if( isom_add_entry( sgpd->list, data ) )
     {
         free( data );
-        return -1;
+        return NULL;
     }
-    return 0;
+    return data;
 }
-#endif
 
 static int isom_add_chpl_entry( isom_chpl_t *chpl, uint64_t start_time, char *chapter_name )
 {
@@ -1366,7 +1385,6 @@ static int isom_add_sdtp( isom_stbl_t *stbl )
     return 0;
 }
 
-#if 0
 static int isom_add_sgpd( isom_stbl_t *stbl, uint32_t grouping_type )
 {
     if( !stbl )
@@ -1394,6 +1412,16 @@ static int isom_add_sgpd( isom_stbl_t *stbl, uint32_t grouping_type )
     }
     stbl->sgpd = sgpd_array;
     sgpd->grouping_type = grouping_type;
+    sgpd->full_header.version = 1;  /* We use version 1 because it is recommended in the spec. */
+    switch( grouping_type )
+    {
+        case ISOM_GROUP_TYPE_ROLL :
+            sgpd->default_length = 2;
+            break;
+        default :
+            /* We don't consider other grouping types currently. */
+            break;
+    }
     return 0;
 }
 
@@ -1429,7 +1457,6 @@ static int isom_add_sbgp( isom_stbl_t *stbl, uint32_t grouping_type )
     stbl->grouping_count = grouping_count;
     return 0;
 }
-#endif
 
 static int isom_add_stbl( isom_minf_t *minf )
 {
@@ -1844,6 +1871,7 @@ static void isom_remove_trak( isom_trak_entry_t *trak )
     if( trak->cache )
     {
         isom_remove_list( trak->cache->chunk.pool, isom_delete_sample );
+        isom_remove_list( trak->cache->roll.pool, NULL );
         free( trak->cache );
     }
     free( trak );
@@ -2644,17 +2672,17 @@ static int isom_write_sgpd( isom_bs_t *bs, isom_trak_entry_t *trak, uint32_t gro
     {
         if( !entry->data )
             return -1;
-        if( sgpd->full_header.version == 1 && !sgpd->default_length )
-            isom_bs_put_be32( bs, ((isom_sample_group_entry_t *)entry->data)->description_length );
         switch( sgpd->grouping_type )
         {
             case ISOM_GROUP_TYPE_ROLL :
             {
-                isom_roll_group_entry_t *data = (isom_roll_group_entry_t *)entry->data;
-                isom_bs_put_be16( bs, data->roll_distance );
+                isom_bs_put_be16( bs, ((isom_roll_entry_t *)entry->data)->roll_distance );
                 break;
             }
             default :
+                /* We don't consider other grouping types currently. */
+                // if( sgpd->full_header.version == 1 && !sgpd->default_length )
+                //     isom_bs_put_be32( bs, ((isom_sgpd_entry_t *)entry->data)->description_length );
                 break;
         }
     }
@@ -3124,6 +3152,117 @@ static int isom_add_dependency_type( isom_trak_entry_t *trak, isom_sample_proper
     return isom_add_sdtp_entry( stbl, prop );
 }
 
+static int isom_group_roll_recovery( isom_trak_entry_t *trak, isom_sample_property_t *prop )
+{
+    isom_stbl_t *stbl = trak->mdia->minf->stbl;
+    isom_sbgp_t *sbgp = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_ROLL );
+    isom_sgpd_t *sgpd = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_ROLL );
+    if( !sbgp || !sgpd )
+        return 0;
+    isom_entry_list_t *pool = trak->cache->roll.pool;
+    if( !pool )
+    {
+        pool = isom_create_entry_list();
+        if( !pool )
+            return -1;
+        trak->cache->roll.pool = pool;
+    }
+    isom_roll_group_t *group = (isom_roll_group_t *)isom_get_entry_data( pool, pool->entry_count );
+    uint32_t sample_count = isom_get_sample_count( trak );
+    if( !pool->entry_count || prop->recovery.start_point )
+    {
+        if( pool->entry_count )
+            group->delimited = 1;
+        /* Create a new group. This group is not 'roll' yet, so we set 0 on it's group_description_index. */
+        group = malloc( sizeof(isom_roll_group_t) );
+        if( !group )
+            return -1;
+        memset( group, 0, sizeof(isom_roll_group_t) );
+        group->first_sample = sample_count;
+        group->recovery_point = prop->recovery.complete;
+        group->sample_to_group = isom_add_sbgp_entry( sbgp, pool->entry_count ? 1 : sample_count, 0 );
+        if( !group->sample_to_group || isom_add_entry( pool, group ) )
+        {
+            free( group );
+            return -1;
+        }
+    }
+    else
+        ++ group->sample_to_group->sample_count;
+    if( prop->sync_point )
+    {
+        /* All recoveries are completed if encountered a sync sample. */
+        for( isom_entry_t *entry = pool->head; entry; entry = entry->next )
+        {
+            group = (isom_roll_group_t *)entry->data;
+            if( !group )
+                return -1;
+            group->described = 1;
+        }
+        return 0;
+    }
+    for( isom_entry_t *entry = pool->head; entry; entry = entry->next )
+    {
+        group = (isom_roll_group_t *)entry->data;
+        if( !group )
+            return -1;
+        if( group->described )
+            continue;
+        if( group->roll_recovery )
+        {
+            if( prop->leading == ISOM_SAMPLE_IS_UNDECODABLE_LEADING )
+                ++ group->roll_recovery->roll_distance;
+            else
+            {
+                /* roll_distance == 0 must not be used. */
+                if( !group->roll_recovery->roll_distance &&
+                    isom_remove_entry( sgpd->list, sgpd->list->entry_count ) )
+                    return -1;
+                else
+                    group->sample_to_group->group_description_index = sgpd->list->entry_count;
+                group->described = 1;
+            }
+            break;
+        }
+        else if( prop->recovery.identifier == group->recovery_point )
+        {
+            int16_t distance = sample_count - group->first_sample;
+            group->roll_recovery = isom_add_roll_group_entry( sgpd, distance );
+            if( !group->roll_recovery )
+                return -1;
+            /* Be careful of consecutive undecodable leading samples after the partial sync sample (i.e. Open-GOP I-picture).
+             * These samples are not able to decode correctly from the recovery point specified in display order.
+             * In this case, therefore, roll_distance will be number of consecutive undecodable leading samples after the partial sync sample. */
+            group->described = distance || !(prop->independent || (prop->leading == ISOM_SAMPLE_IS_UNDECODABLE_LEADING));
+            if( distance )
+            {
+                group->sample_to_group->group_description_index = sgpd->list->entry_count;
+                /* All groups before the current group are described. */
+                isom_entry_t *current = entry;
+                for( entry = pool->head; entry != current; entry = entry->next )
+                {
+                    group = (isom_roll_group_t *)entry->data;
+                    if( !group )
+                        return -1;
+                    group->described = 1;
+                }
+            }
+            break;
+        }
+    }
+    for( isom_entry_t *entry = pool->head; entry; entry = pool->head )
+    {
+        group = (isom_roll_group_t *)entry->data;
+        if( !group )
+            return -1;
+        if( !group->delimited || !group->described )
+            break;
+        if( isom_remove_entry_direct( pool, entry ) )
+            return -1;
+    }
+    return 0;
+}
+
 /* returns 1 if pooled samples must be flushed. */
 /* FIXME: I wonder if this function should have a extra argument which indicates force_to_flush_cached_chunk.
    see isom_write_sample for detail. */
@@ -3282,6 +3421,9 @@ static int isom_write_pooled_samples( isom_trak_entry_t *trak, isom_entry_list_t
         /* Add leading, independent, disposable and redundant information if needed. */
         if( isom_add_dependency_type( trak, &data->prop ) )
             return -1;
+        /* Group samples into roll recovery type if needed. */
+        if( isom_group_roll_recovery( trak, &data->prop ) )
+            return -1;
         if( isom_write_sample_data( trak->root, data ) )
             return -1;
     }
@@ -3304,6 +3446,23 @@ static int isom_output_cache( isom_root_t *root, uint32_t track_ID )
     if( isom_add_stco_entry( stbl, root->bs->written ) ||
         isom_write_pooled_samples( trak, current->pool ) )
         return -1;
+    isom_sgpd_t *sgpd = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_ROLL );
+    if( !sgpd )
+        return 0;
+    for( isom_entry_t *entry = trak->cache->roll.pool->head; entry; entry = entry->next )
+    {
+        isom_roll_group_t *group = (isom_roll_group_t *)entry->data;
+        if( !group )
+            return -1;
+        if( group->described || !group->roll_recovery )
+            continue;
+        /* roll_distance == 0 must not be used. */
+        if( !group->roll_recovery->roll_distance )
+            isom_remove_entry( sgpd->list, sgpd->list->entry_count );
+        else
+            group->sample_to_group->group_description_index = sgpd->list->entry_count;
+        group->described = 1;
+    }
     return 0;
 }
 
@@ -4027,6 +4186,7 @@ static uint64_t isom_update_sgpd_size( isom_sgpd_t *sgpd )
             size += (uint64_t)sgpd->list->entry_count * 2;
             break;
         default :
+            /* We don't consider other grouping types currently. */
             break;
     }
     sgpd->full_header.size = size;
@@ -4526,6 +4686,16 @@ int isom_set_sample_type( isom_root_t *root, uint32_t track_ID, uint32_t entry_n
     if( !data )
         return -1;
     data->base_header.type = sample_type;
+    return 0;
+}
+
+int isom_create_grouping( isom_root_t *root, uint32_t track_ID, uint32_t grouping_type )
+{
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
+        return -1;
+    if( isom_add_sbgp( trak->mdia->minf->stbl, grouping_type ) )
+        return -1;
     return 0;
 }
 

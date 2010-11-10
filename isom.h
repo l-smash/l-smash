@@ -530,15 +530,10 @@ typedef struct
 /* description_length are available only if version == 1 and default_length == 0. */
 typedef struct
 {
-    uint32_t description_length;
-} isom_sample_group_entry_t;
-
-typedef struct
-{
     /* grouping_type is 'roll' */
-    uint32_t description_length;
+    // uint32_t description_length;
     int16_t roll_distance;  /* the number of samples that must be decoded in order for a sample to be decoded correctly */
-} isom_roll_group_entry_t;  /* Roll Recovery Entry */
+} isom_roll_entry_t;  /* Roll Recovery Entry */
 
 typedef struct
 {
@@ -770,8 +765,25 @@ typedef struct
 
 typedef struct
 {
+    isom_sbgp_entry_t *sample_to_group;     /* the address corresponding to the entry in Sample to Group Box */
+    isom_roll_entry_t *roll_recovery;       /* the address corresponding to the roll recovery entry in Sample Group Description Box */
+    uint32_t first_sample;                  /* number of the first sample of the group */
+    uint32_t recovery_point;
+    uint8_t delimited;                      /* the flag if the sample_count is determined */
+    uint8_t described;                      /* the flag if the group description is determined */
+} isom_roll_group_t;
+
+typedef struct
+{
+    // uint32_t grouping_type;
+    isom_entry_list_t *pool;        /* grouping pooled to delimit and describe */
+} isom_grouping_t;
+
+typedef struct
+{
     isom_chunk_t chunk;
     isom_timestamp_t timestamp;
+    isom_grouping_t roll;
 } isom_cache_t;
 
 typedef struct
@@ -1211,12 +1223,21 @@ enum isom_grouping_code
 
 typedef struct
 {
+    uint32_t complete;      /* recovery point: the identifier necessary for the recovery from its starting point to be completed */
+    uint32_t identifier;    /* the identifier for samples
+                             * If this identifier equals a certain recovery_point, then this sample is the recovery point. */
+    uint8_t start_point;
+} isom_recovery_t;
+
+typedef struct
+{
     uint8_t sync_point;
     uint8_t partial_sync;
     uint8_t leading;
     uint8_t independent;
     uint8_t disposable;
     uint8_t redundant;
+    isom_recovery_t recovery;
 } isom_sample_property_t;
 
 typedef struct
@@ -1272,6 +1293,8 @@ int isom_set_tyrant_chapter( isom_root_t *root, char *file_name );
 
 int isom_create_explicit_timeline_map( isom_root_t *root, uint32_t track_ID, uint64_t segment_duration, int64_t media_time, int32_t media_rate );
 int isom_modify_timeline_map( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint64_t segment_duration, int64_t media_time, int32_t media_rate );
+
+int isom_create_grouping( isom_root_t *root, uint32_t track_ID, uint32_t grouping_type );
 
 int isom_update_media_modification_time( isom_root_t *root, uint32_t track_ID );
 int isom_update_track_modification_time( isom_root_t *root, uint32_t track_ID );
