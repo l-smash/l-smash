@@ -406,9 +406,22 @@ typedef struct
 
 typedef struct
 {
+    /* ISOM: if version is 1, sample_offset is signed 32bit integer.
+     * QT: sample_offset is always signed 32bit integer. */
     isom_full_header_t full_header;
     isom_entry_list_t *list;
 } isom_ctts_t;
+
+/* Composition to Decode Box (Composition Shift Least Greatest Box) */
+typedef struct
+{
+    isom_full_header_t full_header;
+    int32_t compositionToDTSShift;
+    int32_t leastDecodeToDisplayDelta;      /* the smallest sample_offset */
+    int32_t greatestDecodeToDisplayDelta;   /* the largest sample_offset */
+    int32_t compositionStartTime;           /* the smallest CTS for any sample */
+    int32_t compositionEndTime;             /* the CTS plus the composition duration, of the sample with the largest CTS */
+} isom_cslg_t;
 
 /* Sample Size Box */
 typedef struct
@@ -551,9 +564,10 @@ typedef struct
     isom_stsd_t *stsd;      /* Sample Description Box */
     isom_stts_t *stts;      /* Decoding Time to Sample Box */
     isom_ctts_t *ctts;      /* Composition Time to Sample Box */
+    isom_cslg_t *cslg;      /* Composition to Decode Box (Composition Shift Least Greatest Box) / optional */
     isom_stss_t *stss;      /* Sync Sample Box */
     isom_stps_t *stps;      /* Partial Sync Sample Box / This box is defined by QuickTime file format */
-    isom_sdtp_t *sdtp;      /* Independent and Disposable Samples Box */
+    isom_sdtp_t *sdtp;      /* Independent and Disposable Samples Box / optional */
     isom_stsc_t *stsc;      /* Sample To Chunk Box */
     isom_stsz_t *stsz;      /* Sample Size Box */
     isom_stco_t *stco;      /* Chunk Offset Box */

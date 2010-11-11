@@ -1340,6 +1340,15 @@ static int isom_add_ctts( isom_stbl_t *stbl )
     return 0;
 }
 
+static int isom_add_cslg( isom_stbl_t *stbl )
+{
+    if( !stbl || stbl->cslg )
+        return -1;
+    isom_create_fullbox( cslg, ISOM_BOX_TYPE_CSLG );
+    stbl->cslg = cslg;
+    return 0;
+}
+
 static int isom_add_stsc( isom_stbl_t *stbl )
 {
     if( !stbl || stbl->stsc )
@@ -1736,6 +1745,7 @@ static void isom_remove_stbl( isom_stbl_t *stbl )
     if( !stbl )
         return;
     isom_remove_stsd( stbl->stsd );
+    isom_remove_fullbox( cslg, stbl );
     isom_remove_list_fullbox( stts, stbl );
     isom_remove_list_fullbox( ctts, stbl );
     isom_remove_list_fullbox( stsc, stbl );
@@ -2506,6 +2516,20 @@ static int isom_write_ctts( isom_bs_t *bs, isom_trak_entry_t *trak )
     return isom_bs_write_data( bs );
 }
 
+static int isom_write_cslg( isom_bs_t *bs, isom_trak_entry_t *trak )
+{
+    isom_cslg_t *cslg = trak->mdia->minf->stbl->cslg;
+    if( !cslg )
+        return 0;
+    isom_bs_put_full_header( bs, &cslg->full_header );
+    isom_bs_put_be32( bs, cslg->compositionToDTSShift );
+    isom_bs_put_be32( bs, cslg->leastDecodeToDisplayDelta );
+    isom_bs_put_be32( bs, cslg->greatestDecodeToDisplayDelta );
+    isom_bs_put_be32( bs, cslg->compositionStartTime );
+    isom_bs_put_be32( bs, cslg->compositionEndTime );
+    return isom_bs_write_data( bs );
+}
+
 static int isom_write_stsz( isom_bs_t *bs, isom_trak_entry_t *trak )
 {
     isom_stsz_t *stsz = trak->mdia->minf->stbl->stsz;
@@ -2700,6 +2724,7 @@ static int isom_write_stbl( isom_bs_t *bs, isom_trak_entry_t *trak )
     if( isom_write_stsd( bs, trak ) ||
         isom_write_stts( bs, trak ) ||
         isom_write_ctts( bs, trak ) ||
+        isom_write_cslg( bs, trak ) ||
         isom_write_stss( bs, trak ) ||
         isom_write_stps( bs, trak ) ||
         isom_write_sdtp( bs, trak ) ||
@@ -2949,13 +2974,14 @@ static int isom_replace_last_sample_delta( isom_stbl_t *stbl, uint32_t sample_de
 
 static int isom_update_mdhd_duration( isom_trak_entry_t *trak, uint32_t last_sample_delta )
 {
-    if( !trak || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->minf || !trak->mdia->minf->stbl ||
+    if( !trak || !trak->root || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->minf || !trak->mdia->minf->stbl ||
         !trak->mdia->minf->stbl->stts || !trak->mdia->minf->stbl->stts->list || trak->mdia->minf->stbl->stts->list->entry_count == 0 )
         return -1;
     isom_mdhd_t *mdhd = trak->mdia->mdhd;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     isom_stts_t *stts = stbl->stts;
     isom_ctts_t *ctts = stbl->ctts;
+    isom_cslg_t *cslg = stbl->cslg;
     mdhd->duration = 0;
     uint32_t sample_count = isom_get_sample_count( trak );
     if( sample_count == 0 )
@@ -2995,6 +3021,7 @@ static int isom_update_mdhd_duration( isom_trak_entry_t *trak, uint32_t last_sam
             return -1;
         uint64_t dts = 0;
         uint64_t max_cts = 0, max2_cts = 0, min_cts = UINT64_MAX;
+        uint32_t max_offset = 0, min_offset = UINT32_MAX;
         uint32_t j, k;
         isom_entry_t *stts_entry = stts->list->head;
         isom_entry_t *ctts_entry = ctts->list->head;
@@ -3009,6 +3036,8 @@ static int isom_update_mdhd_duration( isom_trak_entry_t *trak, uint32_t last_sam
                 return -1;
             uint64_t cts = dts + ctts_data->sample_offset;
             min_cts = ISOM_MIN( min_cts, cts );
+            max_offset = ISOM_MAX( max_offset, ctts_data->sample_offset );
+            min_offset = ISOM_MIN( min_offset, ctts_data->sample_offset );
             if( max_cts < cts )
             {
                 max2_cts = max_cts;
@@ -3042,6 +3071,31 @@ static int isom_update_mdhd_duration( isom_trak_entry_t *trak, uint32_t last_sam
             mdhd->duration = dts + last_sample_delta; /* mdhd duration must not less than last dts. */
         if( isom_replace_last_sample_delta( stbl, last_sample_delta ) )
             return -1;
+        /* Explicit composition information and DTS shifting  */
+        if( cslg || trak->root->qt_compatible )
+        {
+            if( (min_offset <= UINT32_MAX) && (max_offset <= UINT32_MAX) &&
+                (min_cts <= UINT32_MAX) && (2 * max_cts - max2_cts <= UINT32_MAX) )
+            {
+                if( !cslg )
+                {
+                    if( isom_add_cslg( trak->mdia->minf->stbl ) )
+                        return -1;
+                    cslg = stbl->cslg;
+                }
+                cslg->compositionToDTSShift = 0;    /* We don't consider DTS shifting at present. */
+                cslg->leastDecodeToDisplayDelta = min_offset;
+                cslg->greatestDecodeToDisplayDelta = max_offset;
+                cslg->compositionStartTime = min_cts;
+                cslg->compositionEndTime = 2 * max_cts - max2_cts;
+            }
+            else
+            {
+                if( cslg )
+                    free( cslg );
+                stbl->cslg = NULL;
+            }
+        }
     }
     if( mdhd->duration > UINT32_MAX )
         mdhd->full_header.version = 1;
@@ -4112,6 +4166,15 @@ static uint64_t isom_update_ctts_size( isom_ctts_t *ctts )
     return ctts->full_header.size;
 }
 
+static uint64_t isom_update_cslg_size( isom_cslg_t *cslg )
+{
+    if( !cslg )
+        return 0;
+    cslg->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 20;
+    CHECK_LARGESIZE( cslg->full_header.size );
+    return cslg->full_header.size;
+}
+
 static uint64_t isom_update_stsz_size( isom_stsz_t *stsz )
 {
     if( !stsz )
@@ -4203,6 +4266,7 @@ static uint64_t isom_update_stbl_size( isom_stbl_t *stbl )
         + isom_update_stsd_size( stbl->stsd )
         + isom_update_stts_size( stbl->stts )
         + isom_update_ctts_size( stbl->ctts )
+        + isom_update_cslg_size( stbl->cslg )
         + isom_update_stsz_size( stbl->stsz )
         + isom_update_stss_size( stbl->stss )
         + isom_update_stps_size( stbl->stps )
