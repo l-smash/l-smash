@@ -2734,8 +2734,8 @@ static int isom_write_stbl( isom_bs_t *bs, isom_trak_entry_t *trak )
         return -1;
     for( uint32_t i = 1; i <= trak->mdia->minf->stbl->grouping_count; i++ )
     {
-        if( isom_write_sbgp( bs, trak, i ) ||
-            isom_write_sgpd( bs, trak, i ) )
+        if( isom_write_sgpd( bs, trak, i ) ||
+            isom_write_sbgp( bs, trak, i ) )
             return -1;
     }
     return 0;
