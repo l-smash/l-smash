@@ -3270,14 +3270,11 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, isom_sample_proper
             ++ group->roll_recovery->roll_distance;
             if( prop->leading != ISOM_SAMPLE_IS_UNDECODABLE_LEADING )
             {
-                if( group->roll_recovery->roll_distance == 1 )
-                {
-                    /* no undecodable leading samples */
-                    if( isom_remove_entry( sgpd->list, sgpd->list->entry_count ) )
-                        return -1;
-                }
-                else
-                    group->sample_to_group->group_description_index = sgpd->list->entry_count;
+                /* The intra picture that doesn't lead all pictures that depend on former groups is substantially an instantaneous decoding picture.
+                 * Therefore, roll_distance of the group that includes this picture as the first sample is zero.
+                 * However, this means this group cannot have random access point, since roll_distance = 0 must not be used. This is not preferable.
+                 * So we treat this group as 'roll' and pick roll_distance = 1 though this treatment is over-estimation. */
+                group->sample_to_group->group_description_index = sgpd->list->entry_count;
                 group->described = 1;
             }
             break;
