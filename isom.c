@@ -3452,6 +3452,8 @@ static int isom_write_sample_data( isom_root_t *root, isom_sample_t *sample )
 
 static int isom_write_pooled_samples( isom_trak_entry_t *trak, isom_entry_list_t *pool )
 {
+    if( !trak->root )
+        return -1;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     for( isom_entry_t *entry = pool->head; entry; entry = entry->next )
     {
@@ -3468,7 +3470,7 @@ static int isom_write_pooled_samples( isom_trak_entry_t *trak, isom_entry_list_t
         if( isom_add_sync_point( stbl, isom_get_sample_count( trak ), &data->prop ) )
             return -1;
         /* Add a partial sync point if needed. */
-        if( isom_add_partial_sync( stbl, isom_get_sample_count( trak ), &data->prop ) )
+        if( trak->root->qt_compatible && isom_add_partial_sync( stbl, isom_get_sample_count( trak ), &data->prop ) )
             return -1;
         /* Add leading, independent, disposable and redundant information if needed. */
         if( isom_add_dependency_type( trak, &data->prop ) )
