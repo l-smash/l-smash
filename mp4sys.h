@@ -288,7 +288,7 @@ typedef struct {
 
 #ifndef MP4SYS_INTERNAL
 
-#include "isom_util.h"
+#include "utils.h"
 
 typedef void mp4sys_ES_Descriptor_t;
 typedef void mp4sys_ObjectDescriptor_t;

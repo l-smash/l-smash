@@ -37,7 +37,7 @@
 #define ftell ftello64
 #endif
 
-#include "isom_util.h"
+#include "utils.h"
 
 #define ISOM_MAX( a, b ) ((a) > (b) ? (a) : (b))
 #define ISOM_MIN( a, b ) ((a) < (b) ? (a) : (b))

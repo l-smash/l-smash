@@ -1,5 +1,5 @@
 /*****************************************************************************
- * isom_util.c:
+ * utils.c:
  *****************************************************************************
  * Copyright (C) 2010 L-SMASH project
  *
@@ -23,7 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "isom_util.h"
+#include "utils.h"
 
 uint64_t lsmash_bs_get_pos( lsmash_bs_t *bs )
 {

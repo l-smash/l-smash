@@ -23,7 +23,7 @@
 #ifndef MP4A_H
 #define MP4A_H
 
-#include "isom_util.h"
+#include "utils.h"
 
 /***************************************************************************
     MPEG-4 Systems for MPEG-4 Audio

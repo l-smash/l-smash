@@ -22,7 +22,7 @@
 /* This file is available under an ISC license. */
 
 #ifndef __MINGW32__
-#define _FILE_OFFSET_BITS 64 /* FIXME: This is redundant. Should be concentrated in isom_util.h */
+#define _FILE_OFFSET_BITS 64 /* FIXME: This is redundant. Should be concentrated in utils.h */
 #endif
 
 #define LSMASH_IMPORTER_INTERNAL
@@ -33,7 +33,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef __MINGW32__ /* FIXME: This is redundant. Should be concentrated in isom_util.h */
+#ifdef __MINGW32__ /* FIXME: This is redundant. Should be concentrated in utils.h */
 #define mp4sys_fseek fseeko64
 #define mp4sys_ftell ftello64
 #else
