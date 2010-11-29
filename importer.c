@@ -65,7 +65,7 @@ typedef struct mp4sys_importer_tag
     int                       is_stdin;
     void*                     info; /* importer internal status information. */
     mp4sys_importer_functions funcs;
-    isom_entry_list_t*        summaries;
+    lsmash_entry_list_t*      summaries;
 } mp4sys_importer_t;
 
 typedef enum
@@ -296,7 +296,7 @@ static int mp4sys_adts_get_accessunit( mp4sys_importer_t* importer, uint32_t tra
         mp4sys_audio_summary_t* summary = mp4sys_adts_create_summary( &info->header );
         if( !summary )
             return -1;
-        isom_entry_t* entry = isom_get_entry( importer->summaries, track_number );
+        lsmash_entry_t* entry = lsmash_get_entry( importer->summaries, track_number );
         if( !entry || !entry->data )
             return -1;
         mp4sys_cleanup_audio_summary( entry->data );
@@ -455,7 +455,7 @@ static int mp4sys_adts_probe( mp4sys_importer_t* importer )
     info->header = header;
     info->variable_header = variable_header;
 
-    if( isom_add_entry( importer->summaries, summary ) )
+    if( lsmash_add_entry( importer->summaries, summary ) )
     {
         free( info );
         mp4sys_cleanup_audio_summary( summary );
@@ -626,7 +626,7 @@ static int mp4sys_mp3_get_accessunit( mp4sys_importer_t* importer, uint32_t trac
         mp4sys_audio_summary_t* summary = mp4sys_mp3_create_summary( header, 1 ); /* FIXME: use legacy mode. */
         if( !summary )
             return -1;
-        isom_entry_t* entry = isom_get_entry( importer->summaries, track_number );
+        lsmash_entry_t* entry = lsmash_get_entry( importer->summaries, track_number );
         if( !entry || !entry->data )
             return -1;
         mp4sys_cleanup_audio_summary( entry->data );
@@ -717,7 +717,7 @@ static int mp4sys_mp3_probe( mp4sys_importer_t* importer )
     info->header = header;
     memcpy( info->raw_header, buf, MP4SYS_MP3_HEADER_LENGTH );
 
-    if( isom_add_entry( importer->summaries, summary ) )
+    if( lsmash_add_entry( importer->summaries, summary ) )
     {
         free( info );
         mp4sys_cleanup_audio_summary( summary );
@@ -787,25 +787,25 @@ static int mp4sys_amr_get_accessunit( mp4sys_importer_t* importer, uint32_t trac
 
 int mp4sys_amr_create_damr( mp4sys_audio_summary_t *summary )
 {
-    isom_bs_t* bs = isom_bs_create( NULL ); /* no file writing */
+    lsmash_bs_t* bs = lsmash_bs_create( NULL ); /* no file writing */
     if( !bs )
         return -1;
-    isom_bs_put_be32( bs, MP4SYS_DAMR_LENGTH );
-    isom_bs_put_be32( bs, ISOM_BOX_TYPE_DAMR );
+    lsmash_bs_put_be32( bs, MP4SYS_DAMR_LENGTH );
+    lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_DAMR );
     /* NOTE: These are specific to each codec vendor, but we're surely not a vendor.
               Using dummy data. */
-    isom_bs_put_be32( bs, 0x20202020 ); /* vendor */
-    isom_bs_put_byte( bs, 0 );          /* decoder_version */
+    lsmash_bs_put_be32( bs, 0x20202020 ); /* vendor */
+    lsmash_bs_put_byte( bs, 0 );          /* decoder_version */
 
     /* NOTE: Using safe value for these settings, maybe sub-optimal. */
-    isom_bs_put_be16( bs, 0x83FF );     /* mode_set, represents for possibly existing frame-type (0x83FF == all). */
-    isom_bs_put_byte( bs, 1 );          /* mode_change_period */
-    isom_bs_put_byte( bs, 1 );          /* frames_per_sample */
+    lsmash_bs_put_be16( bs, 0x83FF );     /* mode_set, represents for possibly existing frame-type (0x83FF == all). */
+    lsmash_bs_put_byte( bs, 1 );          /* mode_change_period */
+    lsmash_bs_put_byte( bs, 1 );          /* frames_per_sample */
 
     if( summary->exdata )
         free( summary->exdata );
-    summary->exdata = isom_bs_export_data( bs, &summary->exdata_length );
-    isom_bs_cleanup( bs );
+    summary->exdata = lsmash_bs_export_data( bs, &summary->exdata_length );
+    lsmash_bs_cleanup( bs );
     if( !summary->exdata )
         return -1;
     summary->exdata_length = MP4SYS_DAMR_LENGTH;
@@ -858,7 +858,7 @@ static int mp4sys_amr_probe( mp4sys_importer_t* importer )
         return -1;
     }
     *(uint8_t*)importer->info = wb;
-    if( mp4sys_amr_create_damr( summary ) || isom_add_entry( importer->summaries, summary ) )
+    if( mp4sys_amr_create_damr( summary ) || lsmash_add_entry( importer->summaries, summary ) )
     {
         free( importer->info );
         importer->info = NULL;
@@ -917,20 +917,20 @@ int mp4sys_create_dac3_from_syncframe( mp4sys_audio_summary_t *summary, uint8_t 
     }
     lfeon &= 0x01;
     /* create AC3SpecificBox */
-    mp4sys_bits_t *bits = mp4sys_adhoc_bits_create();
-    mp4sys_bits_put( bits, 11, 32 );
-    mp4sys_bits_put( bits, ISOM_BOX_TYPE_DAC3, 32 );
-    mp4sys_bits_put( bits, fscod, 2 );
-    mp4sys_bits_put( bits, bsid, 5 );
-    mp4sys_bits_put( bits, bsmod, 3 );
-    mp4sys_bits_put( bits, acmod, 3 );
-    mp4sys_bits_put( bits, lfeon, 1 );
-    mp4sys_bits_put( bits, frmsizecod >> 1, 5 );
-    mp4sys_bits_put( bits, 0, 5 );
+    lsmash_bits_t *bits = lsmash_bits_adhoc_create();
+    lsmash_bits_put( bits, 11, 32 );
+    lsmash_bits_put( bits, ISOM_BOX_TYPE_DAC3, 32 );
+    lsmash_bits_put( bits, fscod, 2 );
+    lsmash_bits_put( bits, bsid, 5 );
+    lsmash_bits_put( bits, bsmod, 3 );
+    lsmash_bits_put( bits, acmod, 3 );
+    lsmash_bits_put( bits, lfeon, 1 );
+    lsmash_bits_put( bits, frmsizecod >> 1, 5 );
+    lsmash_bits_put( bits, 0, 5 );
     if( summary->exdata )
         free( summary->exdata );
-    summary->exdata = mp4sys_bits_export_data( bits, &summary->exdata_length );
-    mp4sys_adhoc_bits_cleanup( bits );
+    summary->exdata = lsmash_bits_export_data( bits, &summary->exdata_length );
+    lsmash_bits_adhoc_cleanup( bits );
     return 0;
 }
 
@@ -958,7 +958,7 @@ void mp4sys_importer_close( mp4sys_importer_t* importer )
     if( importer->funcs.cleanup )
         importer->funcs.cleanup( importer );
     /* FIXME: To be extended to support visual summary. */
-    isom_remove_list( importer->summaries, mp4sys_cleanup_audio_summary );
+    lsmash_remove_list( importer->summaries, mp4sys_cleanup_audio_summary );
     free( importer );
 }
 
@@ -989,7 +989,7 @@ mp4sys_importer_t* mp4sys_importer_open( const char* identifier, const char* for
         mp4sys_importer_close( importer );
         return NULL;
     }
-    importer->summaries = isom_create_entry_list();
+    importer->summaries = lsmash_create_entry_list();
     if( !importer->summaries )
     {
         mp4sys_importer_close( importer );
@@ -1044,7 +1044,7 @@ mp4sys_audio_summary_t* mp4sys_duplicate_audio_summary( mp4sys_importer_t* impor
     mp4sys_audio_summary_t* summary = (mp4sys_audio_summary_t*)malloc( sizeof(mp4sys_audio_summary_t) );
     if( !summary )
         return NULL;
-    mp4sys_audio_summary_t* src_summary = isom_get_entry_data( importer->summaries, track_number );
+    mp4sys_audio_summary_t* src_summary = lsmash_get_entry_data( importer->summaries, track_number );
     if( !src_summary )
         return NULL;
     memcpy( summary, src_summary, sizeof(mp4sys_audio_summary_t) );

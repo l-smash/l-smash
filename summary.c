@@ -34,22 +34,22 @@ int mp4sys_setup_AudioSpecificConfig( mp4sys_audio_summary_t* summary )
 {
     if( !summary )
         return -1;
-    isom_bs_t* bs = isom_bs_create( NULL ); /* no file writing */
+    lsmash_bs_t* bs = lsmash_bs_create( NULL ); /* no file writing */
     if( !bs )
         return -1;
     mp4a_AudioSpecificConfig_t* asc = mp4a_create_AudioSpecificConfig( summary->aot, summary->frequency, summary->channels, summary->sbr_mode );
     if( !asc )
     {
-        isom_bs_cleanup( bs );
+        lsmash_bs_cleanup( bs );
         return -1;
     }
 
     mp4a_put_AudioSpecificConfig( bs, asc );
     void* new_asc;
     uint32_t new_length;
-    new_asc = isom_bs_export_data( bs, &new_length );
+    new_asc = lsmash_bs_export_data( bs, &new_length );
     mp4a_remove_AudioSpecificConfig( asc );
-    isom_bs_cleanup( bs );
+    lsmash_bs_cleanup( bs );
 
     if( !new_asc )
         return -1;

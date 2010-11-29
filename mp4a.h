@@ -78,7 +78,7 @@ typedef void mp4a_AudioSpecificConfig_t;
 
 /* export for mp4sys / importer */
 mp4a_AudioSpecificConfig_t* mp4a_create_AudioSpecificConfig( mp4a_AudioObjectType aot, uint32_t frequency, uint32_t channels, mp4a_aac_sbr_mode sbr_mode );
-void mp4a_put_AudioSpecificConfig( isom_bs_t* bs, mp4a_AudioSpecificConfig_t* asc );
+void mp4a_put_AudioSpecificConfig( lsmash_bs_t* bs, mp4a_AudioSpecificConfig_t* asc );
 void mp4a_remove_AudioSpecificConfig( mp4a_AudioSpecificConfig_t* asc );
 
 /* export for importer */

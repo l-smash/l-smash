@@ -334,8 +334,8 @@ int mp4sys_to_InitialObjectDescriptor(
 uint32_t mp4sys_update_ES_Descriptor_size( mp4sys_ES_Descriptor_t* esd );
 uint32_t mp4sys_update_ObjectDescriptor_size( mp4sys_ObjectDescriptor_t* od );
 
-int mp4sys_write_ES_Descriptor( isom_bs_t *bs, mp4sys_ES_Descriptor_t* esd );
-int mp4sys_write_ObjectDescriptor( isom_bs_t *bs, mp4sys_ObjectDescriptor_t* od );
+int mp4sys_write_ES_Descriptor( lsmash_bs_t *bs, mp4sys_ES_Descriptor_t* esd );
+int mp4sys_write_ObjectDescriptor( lsmash_bs_t *bs, mp4sys_ObjectDescriptor_t* od );
 
 int mp4sys_update_DecoderConfigDescriptor(
     mp4sys_ES_Descriptor_t* esd,

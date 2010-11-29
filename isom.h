@@ -162,7 +162,7 @@ typedef struct
 typedef struct
 {
     isom_full_header_t full_header;     /* version is either 0 or 1 */
-    isom_entry_list_t *list;
+    lsmash_entry_list_t *list;
 } isom_elst_t;
 
 /* Edit Box */
@@ -256,7 +256,7 @@ typedef struct
 typedef struct
 {
     isom_full_header_t full_header;
-    isom_entry_list_t *list;
+    lsmash_entry_list_t *list;
 } isom_dref_t;
 
 /* Data Information Box */
@@ -380,7 +380,7 @@ typedef struct
 typedef struct
 {
     isom_full_header_t full_header;
-    isom_entry_list_t *list;
+    lsmash_entry_list_t *list;
 } isom_stsd_t;
 /** **/
 
@@ -394,7 +394,7 @@ typedef struct
 typedef struct
 {
     isom_full_header_t full_header;
-    isom_entry_list_t *list;
+    lsmash_entry_list_t *list;
 } isom_stts_t;
 
 /* Composition Time to Sample Box */
@@ -409,7 +409,7 @@ typedef struct
     /* ISOM: if version is 1, sample_offset is signed 32bit integer.
      * QT: sample_offset is always signed 32bit integer. */
     isom_full_header_t full_header;
-    isom_entry_list_t *list;
+    lsmash_entry_list_t *list;
 } isom_ctts_t;
 
 /* Composition to Decode Box (Composition Shift Least Greatest Box) */
@@ -434,7 +434,7 @@ typedef struct
     isom_full_header_t full_header;
     uint32_t sample_size;       /* If this field is set to 0, then the samples have different sizes. */
     uint32_t sample_count;
-    isom_entry_list_t *list;    /* available if sample_size == 0 */
+    lsmash_entry_list_t *list;  /* available if sample_size == 0 */
 } isom_stsz_t;
 
 /* Sync Sample Box */
@@ -446,7 +446,7 @@ typedef struct
 typedef struct
 {
     isom_full_header_t full_header;
-    isom_entry_list_t *list;
+    lsmash_entry_list_t *list;
 } isom_stss_t;
 
 /* Partial Sync Sample Box */
@@ -458,7 +458,7 @@ typedef struct
 typedef struct
 {
     isom_full_header_t full_header;
-    isom_entry_list_t *list;
+    lsmash_entry_list_t *list;
 } isom_stps_t;
 
 /* Independent and Disposable Samples Box */
@@ -488,7 +488,7 @@ typedef struct
     isom_full_header_t full_header;
     /* According to the specification, the size of the table, sample_count, doesn't exist in this box.
      * Instead of this, it is taken from the sample_count in the stsz or the stz2 box. */
-    isom_entry_list_t *list;
+    lsmash_entry_list_t *list;
 } isom_sdtp_t;
 
 /* Sample To Chunk Box */
@@ -502,7 +502,7 @@ typedef struct
 typedef struct
 {
     isom_full_header_t full_header;
-    isom_entry_list_t *list;
+    lsmash_entry_list_t *list;
 } isom_stsc_t;
 
 /* Chunk Offset Box */
@@ -520,7 +520,7 @@ typedef struct
 typedef struct
 {
     isom_full_header_t full_header;
-    isom_entry_list_t *list;
+    lsmash_entry_list_t *list;
 
     uint8_t large_presentation;
 } isom_stco_t; /* share with co64 box */
@@ -536,7 +536,7 @@ typedef struct
 {
     isom_full_header_t full_header;
     uint32_t grouping_type;     /* Links it to its sample group description table with the same value for grouping type. */
-    isom_entry_list_t *list;
+    lsmash_entry_list_t *list;
 } isom_sbgp_t;
 
 /* Sample Group Description Box */
@@ -554,7 +554,7 @@ typedef struct
     uint32_t grouping_type;     /* an integer that identifies the sbgp that is associated with this sample group description */
     uint32_t default_length;    /* the length of every group entry (if the length is constant), or zero (if it is variable)
                                  * This field is available only if version == 1. */
-    isom_entry_list_t *list;
+    lsmash_entry_list_t *list;
 } isom_sgpd_t;
 
 /* Sample Table Box */
@@ -692,15 +692,15 @@ typedef struct
     uint8_t AVCLevelIndication;                     /* level_idc in SPS */
     uint8_t lengthSizeMinusOne;                     /* in bytes of the NALUnitLength field. upper 6-bits are reserved as 111111b */
     uint8_t numOfSequenceParameterSets;             /* upper 3-bits are reserved as 111b */
-    isom_entry_list_t *sequenceParameterSets;       /* SPSs */
+    lsmash_entry_list_t *sequenceParameterSets;     /* SPSs */
     uint8_t numOfPictureParameterSets;
-    isom_entry_list_t *pictureParameterSets;        /* PPSs */
+    lsmash_entry_list_t *pictureParameterSets;      /* PPSs */
     /* if( ISOM_REQUIRES_AVCC_EXTENSION( AVCProfileIndication ) ) */
     uint8_t chroma_format;                          /* chroma_format_idc in SPS / upper 6-bits are reserved as 111111b */
     uint8_t bit_depth_luma_minus8;                  /* shall be in the range of 0 to 4 / upper 5-bits are reserved as 11111b */
     uint8_t bit_depth_chroma_minus8;                /* shall be in the range of 0 to 4 / upper 5-bits are reserved as 11111b */
     uint8_t numOfSequenceParameterSetExt;
-    isom_entry_list_t *sequenceParameterSetExt;     /* SPSExts */
+    lsmash_entry_list_t *sequenceParameterSetExt;   /* SPSExts */
     /* */
 } isom_avcC_t;
 
@@ -728,7 +728,7 @@ typedef struct
 {
     isom_full_header_t full_header;     /* version is 1 */
     uint8_t reserved;
-    isom_entry_list_t *list;
+    lsmash_entry_list_t *list;
 } isom_chpl_t;
 
 /* User Data Box */
@@ -744,7 +744,7 @@ typedef struct
     isom_base_header_t base_header;
     isom_mvhd_t       *mvhd;        /* Movie Header Box */
     isom_iods_t       *iods;
-    isom_entry_list_t *trak_list;   /* Track Box List */
+    lsmash_entry_list_t *trak_list; /* Track Box List */
     isom_udta_t       *udta;        /* User Data Box */
 } isom_moov_t;
 
@@ -756,7 +756,7 @@ typedef struct
     isom_mdat_t *mdat;      /* Media Data Box */
     isom_free_t *free;      /* Free Space Box */
 
-        isom_bs_t *bs;                  /* bytestream manager */
+        lsmash_bs_t *bs;                /* bytestream manager */
         double max_chunk_duration;      /* max duration per chunk in seconds */
         uint8_t qt_compatible;
         uint8_t request_iods;
@@ -768,7 +768,7 @@ typedef struct
     uint32_t chunk_number;              /* chunk number */
     uint32_t sample_description_index;  /* sample description index */
     uint64_t first_dts;                 /* the first DTS in chunk */
-    isom_entry_list_t *pool;            /* samples pooled to interleave */
+    lsmash_entry_list_t *pool;          /* samples pooled to interleave */
 } isom_chunk_t;
 
 typedef struct
@@ -790,7 +790,7 @@ typedef struct
 typedef struct
 {
     // uint32_t grouping_type;
-    isom_entry_list_t *pool;        /* grouping pooled to delimit and describe */
+    lsmash_entry_list_t *pool;        /* grouping pooled to delimit and describe */
 } isom_grouping_t;
 
 typedef struct

@@ -25,12 +25,12 @@
 
 #include "isom_util.h"
 
-uint64_t isom_bs_get_pos( isom_bs_t *bs )
+uint64_t lsmash_bs_get_pos( lsmash_bs_t *bs )
 {
     return bs->pos;
 }
 
-void isom_bs_empty( isom_bs_t *bs )
+void lsmash_bs_empty( lsmash_bs_t *bs )
 {
     if( !bs )
         return;
@@ -39,7 +39,7 @@ void isom_bs_empty( isom_bs_t *bs )
     bs->pos = 0;
 }
 
-void isom_bs_free( isom_bs_t *bs )
+void lsmash_bs_free( lsmash_bs_t *bs )
 {
     if( bs->data )
         free( bs->data );
@@ -49,7 +49,7 @@ void isom_bs_free( isom_bs_t *bs )
     bs->pos = 0;
 }
 
-void isom_bs_alloc( isom_bs_t *bs, uint64_t size )
+void lsmash_bs_alloc( lsmash_bs_t *bs, uint64_t size )
 {
     if( bs->error )
         return;
@@ -63,7 +63,7 @@ void isom_bs_alloc( isom_bs_t *bs, uint64_t size )
         return;
     if( !data )
     {
-        isom_bs_free( bs );
+        lsmash_bs_free( bs );
         bs->error = 1;
         return;
     }
@@ -72,50 +72,50 @@ void isom_bs_alloc( isom_bs_t *bs, uint64_t size )
 }
 
 /*---- bitstream writer ----*/
-void isom_bs_put_byte( isom_bs_t *bs, uint8_t value )
+void lsmash_bs_put_byte( lsmash_bs_t *bs, uint8_t value )
 {
-    isom_bs_alloc( bs, bs->store + 1 );
+    lsmash_bs_alloc( bs, bs->store + 1 );
     if( bs->error )
         return;
     bs->data[bs->store ++] = value;
 }
 
-void isom_bs_put_bytes( isom_bs_t *bs, void *value, uint32_t size )
+void lsmash_bs_put_bytes( lsmash_bs_t *bs, void *value, uint32_t size )
 {
     if( !size )
         return;
-    isom_bs_alloc( bs, bs->store + size );
+    lsmash_bs_alloc( bs, bs->store + size );
     if( bs->error )
         return;
     memcpy( bs->data + bs->store, value, size );
     bs->store += size;
 }
 
-void isom_bs_put_be16( isom_bs_t *bs, uint16_t value )
+void lsmash_bs_put_be16( lsmash_bs_t *bs, uint16_t value )
 {
-    isom_bs_put_byte( bs, (uint8_t)((value>>8)&0xff) );
-    isom_bs_put_byte( bs, (uint8_t)(value&0xff) );
+    lsmash_bs_put_byte( bs, (uint8_t)((value>>8)&0xff) );
+    lsmash_bs_put_byte( bs, (uint8_t)(value&0xff) );
 }
 
-void isom_bs_put_be24( isom_bs_t *bs, uint32_t value )
+void lsmash_bs_put_be24( lsmash_bs_t *bs, uint32_t value )
 {
-    isom_bs_put_be16( bs, (uint16_t)((value>>8)&0xff) );
-    isom_bs_put_byte( bs, (uint8_t)(value&0xff) );
+    lsmash_bs_put_be16( bs, (uint16_t)((value>>8)&0xff) );
+    lsmash_bs_put_byte( bs, (uint8_t)(value&0xff) );
 }
 
-void isom_bs_put_be32( isom_bs_t *bs, uint32_t value )
+void lsmash_bs_put_be32( lsmash_bs_t *bs, uint32_t value )
 {
-    isom_bs_put_be16( bs, (uint16_t)((value>>16)&0xffff) );
-    isom_bs_put_be16( bs, (uint16_t)(value&0xffff) );
+    lsmash_bs_put_be16( bs, (uint16_t)((value>>16)&0xffff) );
+    lsmash_bs_put_be16( bs, (uint16_t)(value&0xffff) );
 }
 
-void isom_bs_put_be64( isom_bs_t *bs, uint64_t value )
+void lsmash_bs_put_be64( lsmash_bs_t *bs, uint64_t value )
 {
-    isom_bs_put_be32( bs, (uint32_t)((value>>32)&0xffffffff) );
-    isom_bs_put_be32( bs, (uint32_t)(value&0xffffffff) );
+    lsmash_bs_put_be32( bs, (uint32_t)((value>>32)&0xffffffff) );
+    lsmash_bs_put_be32( bs, (uint32_t)(value&0xffffffff) );
 }
 
-int isom_bs_write_data( isom_bs_t *bs )
+int lsmash_bs_write_data( lsmash_bs_t *bs )
 {
     if( !bs )
         return -1;
@@ -123,7 +123,7 @@ int isom_bs_write_data( isom_bs_t *bs )
         return 0;
     if( bs->error || !bs->stream || fwrite( bs->data, 1, bs->store, bs->stream ) != bs->store )
     {
-        isom_bs_free( bs );
+        lsmash_bs_free( bs );
         bs->error = 1;
         return -1;
     }
@@ -132,12 +132,12 @@ int isom_bs_write_data( isom_bs_t *bs )
     return 0;
 }
 
-isom_bs_t* isom_bs_create( char* filename )
+lsmash_bs_t* lsmash_bs_create( char* filename )
 {
-    isom_bs_t* bs = malloc( sizeof(isom_bs_t) );
+    lsmash_bs_t* bs = malloc( sizeof(lsmash_bs_t) );
     if( !bs )
         return NULL;
-    memset( bs, 0, sizeof(isom_bs_t) );
+    memset( bs, 0, sizeof(lsmash_bs_t) );
     if( filename && (bs->stream = fopen( filename, "wb" )) == NULL )
     {
         free( bs );
@@ -146,17 +146,17 @@ isom_bs_t* isom_bs_create( char* filename )
     return bs;
 }
 
-void isom_bs_cleanup( isom_bs_t *bs )
+void lsmash_bs_cleanup( lsmash_bs_t *bs )
 {
     if( !bs )
         return;
     if( bs->stream )
         fclose( bs->stream );
-    isom_bs_free( bs );
+    lsmash_bs_free( bs );
     free( bs );
 }
 
-void* isom_bs_export_data( isom_bs_t *bs, uint32_t* length )
+void* lsmash_bs_export_data( lsmash_bs_t *bs, uint32_t* length )
 {
     if( !bs || !bs->data || bs->store == 0 || bs->error )
         return NULL;
@@ -171,27 +171,27 @@ void* isom_bs_export_data( isom_bs_t *bs, uint32_t* length )
 /*---- ----*/
 
 /*---- bitstream reader ----*/
-uint8_t isom_bs_get_byte( isom_bs_t *bs )
+uint8_t lsmash_bs_get_byte( lsmash_bs_t *bs )
 {
     if( bs->error || !bs->data )
         return 0;
     if( bs->pos + 1 > bs->store )
     {
-        isom_bs_free( bs );
+        lsmash_bs_free( bs );
         bs->error = 1;
         return 0;
     }
     return bs->data[bs->pos ++];
 }
 
-uint8_t *isom_bs_get_bytes( isom_bs_t *bs, uint32_t size )
+uint8_t *lsmash_bs_get_bytes( lsmash_bs_t *bs, uint32_t size )
 {
     if( bs->error || !size )
         return NULL;
     uint8_t *value = malloc( size );
     if( !value || bs->pos + size > bs->store )
     {
-        isom_bs_free( bs );
+        lsmash_bs_free( bs );
         bs->error = 1;
         return NULL;
     }
@@ -200,40 +200,40 @@ uint8_t *isom_bs_get_bytes( isom_bs_t *bs, uint32_t size )
     return value;
 }
 
-uint16_t isom_bs_get_be16( isom_bs_t *bs )
+uint16_t lsmash_bs_get_be16( lsmash_bs_t *bs )
 {
-    uint16_t    value = isom_bs_get_byte( bs );
-    return (value<<8) | isom_bs_get_byte( bs );
+    uint16_t    value = lsmash_bs_get_byte( bs );
+    return (value<<8) | lsmash_bs_get_byte( bs );
 }
 
-uint32_t isom_bs_get_be24( isom_bs_t *bs )
+uint32_t lsmash_bs_get_be24( lsmash_bs_t *bs )
 {
-    uint32_t    value = isom_bs_get_be16( bs );
-    return (value<<8) | isom_bs_get_byte( bs );
+    uint32_t    value = lsmash_bs_get_be16( bs );
+    return (value<<8) | lsmash_bs_get_byte( bs );
 }
 
-uint32_t isom_bs_get_be32( isom_bs_t *bs )
+uint32_t lsmash_bs_get_be32( lsmash_bs_t *bs )
 {
-    uint32_t     value = isom_bs_get_be16( bs );
-    return (value<<16) | isom_bs_get_be16( bs );
+    uint32_t     value = lsmash_bs_get_be16( bs );
+    return (value<<16) | lsmash_bs_get_be16( bs );
 }
 
-uint64_t isom_bs_get_be64( isom_bs_t *bs )
+uint64_t lsmash_bs_get_be64( lsmash_bs_t *bs )
 {
-    uint64_t     value = isom_bs_get_be32( bs );
-    return (value<<32) | isom_bs_get_be32( bs );
+    uint64_t     value = lsmash_bs_get_be32( bs );
+    return (value<<32) | lsmash_bs_get_be32( bs );
 }
 
-int isom_bs_read_data( isom_bs_t *bs, uint32_t size )
+int lsmash_bs_read_data( lsmash_bs_t *bs, uint32_t size )
 {
     if( !bs )
         return -1;
     if( !size )
         return 0;
-    isom_bs_alloc( bs, bs->store + size );
+    lsmash_bs_alloc( bs, bs->store + size );
     if( bs->error || !bs->stream )
     {
-        isom_bs_free( bs );
+        lsmash_bs_free( bs );
         bs->error = 1;
         return -1;
     }
@@ -247,14 +247,14 @@ int isom_bs_read_data( isom_bs_t *bs, uint32_t size )
     return 0;
 }
 
-int isom_bs_import_data( isom_bs_t *bs, void* data, uint32_t length )
+int lsmash_bs_import_data( lsmash_bs_t *bs, void* data, uint32_t length )
 {
     if( !bs || bs->error || !data || length == 0 )
         return -1;
-    isom_bs_alloc( bs, bs->store + length );
+    lsmash_bs_alloc( bs, bs->store + length );
     if( bs->error || !bs->data ) /* means, failed to alloc. */
     {
-        isom_bs_free( bs );
+        lsmash_bs_free( bs );
         return -1;
     }
     memcpy( bs->data + bs->store, data, length );
@@ -264,7 +264,7 @@ int isom_bs_import_data( isom_bs_t *bs, void* data, uint32_t length )
 /*---- ----*/
 
 /*---- bitstream ----*/
-void mp4sys_bits_init( mp4sys_bits_t* bits, isom_bs_t *bs )
+void lsmash_bits_init( lsmash_bits_t* bits, lsmash_bs_t *bs )
 {
     debug_if( !bits || !bs )
         return;
@@ -273,28 +273,28 @@ void mp4sys_bits_init( mp4sys_bits_t* bits, isom_bs_t *bs )
     bits->cache = 0;
 }
 
-mp4sys_bits_t* mp4sys_bits_create( isom_bs_t *bs )
+lsmash_bits_t* lsmash_bits_create( lsmash_bs_t *bs )
 {
     debug_if( !bs )
         return NULL;
-    mp4sys_bits_t* bits = (mp4sys_bits_t*)malloc( sizeof(mp4sys_bits_t) );
+    lsmash_bits_t* bits = (lsmash_bits_t*)malloc( sizeof(lsmash_bits_t) );
     if( !bits )
         return NULL;
-    mp4sys_bits_init( bits, bs );
+    lsmash_bits_init( bits, bs );
     return bits;
 }
 
 #define BITS_IN_BYTE 8
-void mp4sys_bits_put_align( mp4sys_bits_t *bits )
+void lsmash_bits_put_align( lsmash_bits_t *bits )
 {
     debug_if( !bits )
         return;
     if( !bits->store )
         return;
-    isom_bs_put_byte( bits->bs, bits->cache << ( BITS_IN_BYTE - bits->store ) );
+    lsmash_bs_put_byte( bits->bs, bits->cache << ( BITS_IN_BYTE - bits->store ) );
 }
 
-void mp4sys_bits_get_align( mp4sys_bits_t *bits )
+void lsmash_bits_get_align( lsmash_bits_t *bits )
 {
     debug_if( !bits )
         return;
@@ -304,7 +304,7 @@ void mp4sys_bits_get_align( mp4sys_bits_t *bits )
 
 /* Must be used ONLY for bits struct created with isom_create_bits.
    Otherwise, just free() the bits struct. */
-void mp4sys_bits_cleanup( mp4sys_bits_t *bits )
+void lsmash_bits_cleanup( lsmash_bits_t *bits )
 {
     debug_if( !bits )
         return;
@@ -312,13 +312,13 @@ void mp4sys_bits_cleanup( mp4sys_bits_t *bits )
 }
 
 /* we can change value's type to unsigned int for 64-bit operation if needed. */
-static inline uint8_t mp4sys_bits_mask_lsb8( uint32_t value, uint32_t width )
+static inline uint8_t lsmash_bits_mask_lsb8( uint32_t value, uint32_t width )
 {
     return (uint8_t)( value & ~( ~0U << width ) );
 }
 
 /* We can change value's type to unsigned int for 64-bit operation if needed. */
-void mp4sys_bits_put( mp4sys_bits_t *bits, uint32_t value, uint32_t width )
+void lsmash_bits_put( lsmash_bits_t *bits, uint32_t value, uint32_t width )
 {
     debug_if( !bits || !width )
         return;
@@ -328,32 +328,32 @@ void mp4sys_bits_put( mp4sys_bits_t *bits, uint32_t value, uint32_t width )
         {
             /* cache can contain all of value's bits. */
             bits->cache <<= width;
-            bits->cache |= mp4sys_bits_mask_lsb8( value, width );
+            bits->cache |= lsmash_bits_mask_lsb8( value, width );
             bits->store += width;
             return;
         }
         /* flush cache with value's some leading bits. */
         uint32_t free_bits = BITS_IN_BYTE - bits->store;
         bits->cache <<= free_bits;
-        bits->cache |= mp4sys_bits_mask_lsb8( value >> (width -= free_bits), free_bits );
-        isom_bs_put_byte( bits->bs, bits->cache );
+        bits->cache |= lsmash_bits_mask_lsb8( value >> (width -= free_bits), free_bits );
+        lsmash_bs_put_byte( bits->bs, bits->cache );
         bits->store = 0;
         bits->cache = 0;
     }
     /* cache is empty here. */
     /* byte unit operation. */
     while( width > BITS_IN_BYTE )
-        isom_bs_put_byte( bits->bs, (uint8_t)(value >> (width -= BITS_IN_BYTE)) );
+        lsmash_bs_put_byte( bits->bs, (uint8_t)(value >> (width -= BITS_IN_BYTE)) );
     /* bit unit operation for residual. */
     if( width )
     {
-        bits->cache = mp4sys_bits_mask_lsb8( value, width );
+        bits->cache = lsmash_bits_mask_lsb8( value, width );
         bits->store = width;
     }
 }
 
 /* We can change value's type to unsigned int for 64-bit operation if needed. */
-uint32_t mp4sys_bits_get( mp4sys_bits_t *bits, uint32_t width )
+uint32_t lsmash_bits_get( lsmash_bits_t *bits, uint32_t width )
 {
     debug_if( !bits || !width )
         return 0;
@@ -364,10 +364,10 @@ uint32_t mp4sys_bits_get( mp4sys_bits_t *bits, uint32_t width )
         {
             /* cache contains all of bits required. */
             bits->store -= width;
-            return mp4sys_bits_mask_lsb8( bits->cache >> bits->store, width );
+            return lsmash_bits_mask_lsb8( bits->cache >> bits->store, width );
         }
         /* fill value's leading bits with cache's residual. */
-        value = mp4sys_bits_mask_lsb8( bits->cache, bits->store );
+        value = lsmash_bits_mask_lsb8( bits->cache, bits->store );
         width -= bits->store;
         bits->store = 0;
         bits->cache = 0;
@@ -378,15 +378,15 @@ uint32_t mp4sys_bits_get( mp4sys_bits_t *bits, uint32_t width )
     {
         value <<= BITS_IN_BYTE;
         width -= BITS_IN_BYTE;
-        value |= isom_bs_get_byte( bits->bs );
+        value |= lsmash_bs_get_byte( bits->bs );
     }
     /* bit unit operation for residual. */
     if( width )
     {
-        bits->cache = isom_bs_get_byte( bits->bs );
+        bits->cache = lsmash_bs_get_byte( bits->bs );
         bits->store = BITS_IN_BYTE - width;
         value <<= width;
-        value |= mp4sys_bits_mask_lsb8( bits->cache >> bits->store, width );
+        value |= lsmash_bits_mask_lsb8( bits->cache >> bits->store, width );
     }
     return value;
 }
@@ -395,44 +395,44 @@ uint32_t mp4sys_bits_get( mp4sys_bits_t *bits, uint32_t width )
  bitstream with bytestream for adhoc operation
 ****/
 
-mp4sys_bits_t* mp4sys_adhoc_bits_create()
+lsmash_bits_t* lsmash_bits_adhoc_create()
 {
-    isom_bs_t* bs = isom_bs_create( NULL ); /* no file writing */
+    lsmash_bs_t* bs = lsmash_bs_create( NULL ); /* no file writing */
     if( !bs )
         return NULL;
-    mp4sys_bits_t* bits = mp4sys_bits_create( bs );
+    lsmash_bits_t* bits = lsmash_bits_create( bs );
     if( !bits )
     {
-        isom_bs_cleanup( bs );
+        lsmash_bs_cleanup( bs );
         return NULL;
     }
     return bits;
 }
 
-void mp4sys_adhoc_bits_cleanup( mp4sys_bits_t* bits )
+void lsmash_bits_adhoc_cleanup( lsmash_bits_t* bits )
 {
     if( !bits )
         return;
-    isom_bs_cleanup( bits->bs );
-    mp4sys_bits_cleanup( bits );
+    lsmash_bs_cleanup( bits->bs );
+    lsmash_bits_cleanup( bits );
 }
 
-void* mp4sys_bits_export_data( mp4sys_bits_t* bits, uint32_t* length )
+void* lsmash_bits_export_data( lsmash_bits_t* bits, uint32_t* length )
 {
-    mp4sys_bits_put_align( bits );
-    return isom_bs_export_data( bits->bs, length );
+    lsmash_bits_put_align( bits );
+    return lsmash_bs_export_data( bits->bs, length );
 }
 
-int mp4sys_bits_import_data( mp4sys_bits_t* bits, void* data, uint32_t length )
+int lsmash_bits_import_data( lsmash_bits_t* bits, void* data, uint32_t length )
 {
-    return isom_bs_import_data( bits->bs, data, length );
+    return lsmash_bs_import_data( bits->bs, data, length );
 }
 /*---- ----*/
 
 /*---- list ----*/
-isom_entry_list_t *isom_create_entry_list( void )
+lsmash_entry_list_t *lsmash_create_entry_list( void )
 {
-    isom_entry_list_t *list = malloc( sizeof(isom_entry_list_t) );
+    lsmash_entry_list_t *list = malloc( sizeof(lsmash_entry_list_t) );
     if( !list )
         return NULL;
     list->entry_count = 0;
@@ -441,11 +441,11 @@ isom_entry_list_t *isom_create_entry_list( void )
     return list;
 }
 
-int isom_add_entry( isom_entry_list_t *list, void *data )
+int lsmash_add_entry( lsmash_entry_list_t *list, void *data )
 {
     if( !list )
         return -1;
-    isom_entry_t *entry = malloc( sizeof(isom_entry_t) );
+    lsmash_entry_t *entry = malloc( sizeof(lsmash_entry_t) );
     if( !entry )
         return -1;
     entry->next = NULL;
@@ -460,12 +460,12 @@ int isom_add_entry( isom_entry_list_t *list, void *data )
     return 0;
 }
 
-int isom_remove_entry_direct( isom_entry_list_t *list, isom_entry_t *entry )
+int lsmash_remove_entry_direct( lsmash_entry_list_t *list, lsmash_entry_t *entry )
 {
     if( !entry )
         return -1;
-    isom_entry_t *next = entry->next;
-    isom_entry_t *prev = entry->prev;
+    lsmash_entry_t *next = entry->next;
+    lsmash_entry_t *prev = entry->prev;
     if( entry == list->head )
         list->head = next;
     else
@@ -481,23 +481,23 @@ int isom_remove_entry_direct( isom_entry_list_t *list, isom_entry_t *entry )
     return 0;
 }
 
-int isom_remove_entry( isom_entry_list_t *list, uint32_t entry_number )
+int lsmash_remove_entry( lsmash_entry_list_t *list, uint32_t entry_number )
 {
-    isom_entry_t *entry = isom_get_entry( list, entry_number );
-    return isom_remove_entry_direct( list, entry );
+    lsmash_entry_t *entry = lsmash_get_entry( list, entry_number );
+    return lsmash_remove_entry_direct( list, entry );
 }
 
-void isom_remove_entries( isom_entry_list_t *list, void* eliminator )
+void lsmash_remove_entries( lsmash_entry_list_t *list, void* eliminator )
 {
     if( !list )
         return;
     if( !eliminator )
         eliminator = free;
-    for( isom_entry_t *entry = list->head; entry; )
+    for( lsmash_entry_t *entry = list->head; entry; )
     {
-        isom_entry_t *next = entry->next;
+        lsmash_entry_t *next = entry->next;
         if( entry->data )
-            ((isom_entry_data_eliminator)eliminator)( entry->data );
+            ((lsmash_entry_data_eliminator)eliminator)( entry->data );
         free( entry );
         entry = next;
     }
@@ -506,25 +506,25 @@ void isom_remove_entries( isom_entry_list_t *list, void* eliminator )
     list->tail = NULL;
 }
 
-void isom_remove_list( isom_entry_list_t *list, void* eliminator )
+void lsmash_remove_list( lsmash_entry_list_t *list, void* eliminator )
 {
     if( !list )
         return;
-    isom_remove_entries( list, eliminator );
+    lsmash_remove_entries( list, eliminator );
     free( list );
 }
 
-isom_entry_t *isom_get_entry( isom_entry_list_t *list, uint32_t entry_number )
+lsmash_entry_t *lsmash_get_entry( lsmash_entry_list_t *list, uint32_t entry_number )
 {
     if( !list || !entry_number || entry_number > list->entry_count )
         return NULL;
-    isom_entry_t *entry;
+    lsmash_entry_t *entry;
     for( entry = list->head; entry && --entry_number; entry = entry->next );
     return entry;
 }
 
-void *isom_get_entry_data( isom_entry_list_t *list, uint32_t entry_number )
+void *lsmash_get_entry_data( lsmash_entry_list_t *list, uint32_t entry_number )
 {
-    isom_entry_t *entry = isom_get_entry( list, entry_number );
+    lsmash_entry_t *entry = lsmash_get_entry( list, entry_number );
     return entry ? entry->data : NULL;
 }

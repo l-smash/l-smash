@@ -39,85 +39,85 @@ typedef struct
     uint64_t alloc;   /* total buffer size including invalid area */
     uint64_t pos;     /* data position on buffer to be read next */
     uint64_t written; /* data size written into "stream" already */
-} isom_bs_t;
+} lsmash_bs_t;
 
-uint64_t isom_bs_get_pos( isom_bs_t *bs );
-void isom_bs_empty( isom_bs_t *bs );
-void isom_bs_free( isom_bs_t *bs );
-void isom_bs_alloc( isom_bs_t *bs, uint64_t size );
-isom_bs_t* isom_bs_create( char* filename );
-void isom_bs_cleanup( isom_bs_t *bs );
+uint64_t lsmash_bs_get_pos( lsmash_bs_t *bs );
+void lsmash_bs_empty( lsmash_bs_t *bs );
+void lsmash_bs_free( lsmash_bs_t *bs );
+void lsmash_bs_alloc( lsmash_bs_t *bs, uint64_t size );
+lsmash_bs_t* lsmash_bs_create( char* filename );
+void lsmash_bs_cleanup( lsmash_bs_t *bs );
 
 /*---- bytestream writer ----*/
 
-void isom_bs_put_byte( isom_bs_t *bs, uint8_t value );
-void isom_bs_put_bytes( isom_bs_t *bs, void *value, uint32_t size );
-void isom_bs_put_be16( isom_bs_t *bs, uint16_t value );
-void isom_bs_put_be24( isom_bs_t *bs, uint32_t value );
-void isom_bs_put_be32( isom_bs_t *bs, uint32_t value );
-void isom_bs_put_be64( isom_bs_t *bs, uint64_t value );
-int isom_bs_write_data( isom_bs_t *bs );
+void lsmash_bs_put_byte( lsmash_bs_t *bs, uint8_t value );
+void lsmash_bs_put_bytes( lsmash_bs_t *bs, void *value, uint32_t size );
+void lsmash_bs_put_be16( lsmash_bs_t *bs, uint16_t value );
+void lsmash_bs_put_be24( lsmash_bs_t *bs, uint32_t value );
+void lsmash_bs_put_be32( lsmash_bs_t *bs, uint32_t value );
+void lsmash_bs_put_be64( lsmash_bs_t *bs, uint64_t value );
+int lsmash_bs_write_data( lsmash_bs_t *bs );
 
-void* isom_bs_export_data( isom_bs_t *bs, uint32_t* length );
+void* lsmash_bs_export_data( lsmash_bs_t *bs, uint32_t* length );
 
 /*---- bytestream reader ----*/
-uint8_t isom_bs_get_byte( isom_bs_t *bs );
-uint8_t *isom_bs_get_bytes( isom_bs_t *bs, uint32_t size );
-uint16_t isom_bs_get_be16( isom_bs_t *bs );
-uint32_t isom_bs_get_be24( isom_bs_t *bs );
-uint32_t isom_bs_get_be32( isom_bs_t *bs );
-uint64_t isom_bs_get_be64( isom_bs_t *bs );
-int isom_bs_read_data( isom_bs_t *bs, uint32_t size );
+uint8_t lsmash_bs_get_byte( lsmash_bs_t *bs );
+uint8_t *lsmash_bs_get_bytes( lsmash_bs_t *bs, uint32_t size );
+uint16_t lsmash_bs_get_be16( lsmash_bs_t *bs );
+uint32_t lsmash_bs_get_be24( lsmash_bs_t *bs );
+uint32_t lsmash_bs_get_be32( lsmash_bs_t *bs );
+uint64_t lsmash_bs_get_be64( lsmash_bs_t *bs );
+int lsmash_bs_read_data( lsmash_bs_t *bs, uint32_t size );
 
 /*---- bitstream ----*/
 typedef struct {
-    isom_bs_t* bs;
+    lsmash_bs_t* bs;
     uint8_t store;
     uint8_t cache;
-} mp4sys_bits_t;
+} lsmash_bits_t;
 
-void mp4sys_bits_init( mp4sys_bits_t* bits, isom_bs_t *bs );
-mp4sys_bits_t* mp4sys_bits_create( isom_bs_t *bs );
-void mp4sys_bits_put_align( mp4sys_bits_t *bits );
-void mp4sys_bits_get_align( mp4sys_bits_t *bits );
-void mp4sys_bits_cleanup( mp4sys_bits_t *bits );
+void lsmash_bits_init( lsmash_bits_t* bits, lsmash_bs_t *bs );
+lsmash_bits_t* lsmash_bits_create( lsmash_bs_t *bs );
+void lsmash_bits_put_align( lsmash_bits_t *bits );
+void lsmash_bits_get_align( lsmash_bits_t *bits );
+void lsmash_bits_cleanup( lsmash_bits_t *bits );
 
 /*---- bitstream writer ----*/
-void mp4sys_bits_put( mp4sys_bits_t *bits, uint32_t value, uint32_t width );
-uint32_t mp4sys_bits_get( mp4sys_bits_t *bits, uint32_t width );
-mp4sys_bits_t* mp4sys_adhoc_bits_create();
-void mp4sys_adhoc_bits_cleanup( mp4sys_bits_t* bits );
-void* mp4sys_bits_export_data( mp4sys_bits_t* bits, uint32_t* length );
-int mp4sys_bits_import_data( mp4sys_bits_t* bits, void* data, uint32_t length );
+void lsmash_bits_put( lsmash_bits_t *bits, uint32_t value, uint32_t width );
+uint32_t lsmash_bits_get( lsmash_bits_t *bits, uint32_t width );
+lsmash_bits_t* lsmash_bits_adhoc_create();
+void lsmash_bits_adhoc_cleanup( lsmash_bits_t* bits );
+void* lsmash_bits_export_data( lsmash_bits_t* bits, uint32_t* length );
+int lsmash_bits_import_data( lsmash_bits_t* bits, void* data, uint32_t length );
 
 /*---- list ----*/
 
-typedef struct isom_entry_tag isom_entry_t;
+typedef struct lsmash_entry_tag lsmash_entry_t;
 
-struct isom_entry_tag
+struct lsmash_entry_tag
 {
-    isom_entry_t *next;
-    isom_entry_t *prev;
+    lsmash_entry_t *next;
+    lsmash_entry_t *prev;
     void *data;
 };
 
 typedef struct
 {
     uint32_t entry_count;
-    isom_entry_t *head;
-    isom_entry_t *tail;
-} isom_entry_list_t;
+    lsmash_entry_t *head;
+    lsmash_entry_t *tail;
+} lsmash_entry_list_t;
 
-typedef void (*isom_entry_data_eliminator)(void* data); /* very same as free() of standard c lib; void free(void *); */
+typedef void (*lsmash_entry_data_eliminator)(void* data); /* very same as free() of standard c lib; void free(void *); */
 
-isom_entry_list_t *isom_create_entry_list( void );
-int isom_add_entry( isom_entry_list_t *list, void *data );
-int isom_remove_entry_direct( isom_entry_list_t *list, isom_entry_t *entry );
-int isom_remove_entry( isom_entry_list_t *list, uint32_t entry_number );
-void isom_remove_entries( isom_entry_list_t *list, void* eliminator );
-void isom_remove_list( isom_entry_list_t *list, void* eliminator );
+lsmash_entry_list_t *lsmash_create_entry_list( void );
+int lsmash_add_entry( lsmash_entry_list_t *list, void *data );
+int lsmash_remove_entry_direct( lsmash_entry_list_t *list, lsmash_entry_t *entry );
+int lsmash_remove_entry( lsmash_entry_list_t *list, uint32_t entry_number );
+void lsmash_remove_entries( lsmash_entry_list_t *list, void* eliminator );
+void lsmash_remove_list( lsmash_entry_list_t *list, void* eliminator );
 
-isom_entry_t *isom_get_entry( isom_entry_list_t *list, uint32_t entry_number );
-void *isom_get_entry_data( isom_entry_list_t *list, uint32_t entry_number );
+lsmash_entry_t *lsmash_get_entry( lsmash_entry_list_t *list, uint32_t entry_number );
+void *lsmash_get_entry_data( lsmash_entry_list_t *list, uint32_t entry_number );
 
 #endif
