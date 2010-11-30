@@ -161,60 +161,6 @@ typedef enum {
     MP4SYS_SCENE_PLI_NONE_REQUIRED = 0xFF, /* no scene capability required */
 } mp4sys_sceneProfileLevelIndication;
 
-/* 14496-3 1.5.2.4 audioProfileLevelIndication Table 1.12 audioProfileLevelIndication values */
-typedef enum {
-    MP4SYS_AUDIO_PLI_Reserved                 = 0x00, /* Reserved for ISO use */
-    MP4SYS_AUDIO_PLI_Main_L1                  = 0x01, /* Main Audio Profile L1 */
-    MP4SYS_AUDIO_PLI_Main_L2                  = 0x02, /* Main Audio Profile L2 */
-    MP4SYS_AUDIO_PLI_Main_L3                  = 0x03, /* Main Audio Profile L3 */
-    MP4SYS_AUDIO_PLI_Main_L4                  = 0x04, /* Main Audio Profile L4 */
-    MP4SYS_AUDIO_PLI_Scalable_L1              = 0x05, /* Scalable Audio Profile L1 */
-    MP4SYS_AUDIO_PLI_Scalable_L2              = 0x06, /* Scalable Audio Profile L2 */
-    MP4SYS_AUDIO_PLI_Scalable_L3              = 0x07, /* Scalable Audio Profile L3 */
-    MP4SYS_AUDIO_PLI_Scalable_L4              = 0x08, /* Scalable Audio Profile L4 */
-    MP4SYS_AUDIO_PLI_Speech_L1                = 0x09, /* Speech Audio Profile L1 */
-    MP4SYS_AUDIO_PLI_Speech_L2                = 0x0A, /* Speech Audio Profile L2 */
-    MP4SYS_AUDIO_PLI_Synthetic_L1             = 0x0B, /* Synthetic Audio Profile L1 */
-    MP4SYS_AUDIO_PLI_Synthetic_L2             = 0x0C, /* Synthetic Audio Profile L2 */
-    MP4SYS_AUDIO_PLI_Synthetic_L3             = 0x0D, /* Synthetic Audio Profile L3 */
-    MP4SYS_AUDIO_PLI_HighQuality_L1           = 0x0E, /* High Quality Audio Profile L1 */
-    MP4SYS_AUDIO_PLI_HighQuality_L2           = 0x0F, /* High Quality Audio Profile L2 */
-    MP4SYS_AUDIO_PLI_HighQuality_L3           = 0x10, /* High Quality Audio Profile L3 */
-    MP4SYS_AUDIO_PLI_HighQuality_L4           = 0x11, /* High Quality Audio Profile L4 */
-    MP4SYS_AUDIO_PLI_HighQuality_L5           = 0x12, /* High Quality Audio Profile L5 */
-    MP4SYS_AUDIO_PLI_HighQuality_L6           = 0x13, /* High Quality Audio Profile L6 */
-    MP4SYS_AUDIO_PLI_HighQuality_L7           = 0x14, /* High Quality Audio Profile L7 */
-    MP4SYS_AUDIO_PLI_HighQuality_L8           = 0x15, /* High Quality Audio Profile L8 */
-    MP4SYS_AUDIO_PLI_LowDelay_L1              = 0x16, /* Low Delay Audio Profile L1 */
-    MP4SYS_AUDIO_PLI_LowDelay_L2              = 0x17, /* Low Delay Audio Profile L2 */
-    MP4SYS_AUDIO_PLI_LowDelay_L3              = 0x18, /* Low Delay Audio Profile L3 */
-    MP4SYS_AUDIO_PLI_LowDelay_L4              = 0x19, /* Low Delay Audio Profile L4 */
-    MP4SYS_AUDIO_PLI_LowDelay_L5              = 0x1A, /* Low Delay Audio Profile L5 */
-    MP4SYS_AUDIO_PLI_LowDelay_L6              = 0x1B, /* Low Delay Audio Profile L6 */
-    MP4SYS_AUDIO_PLI_LowDelay_L7              = 0x1C, /* Low Delay Audio Profile L7 */
-    MP4SYS_AUDIO_PLI_LowDelay_L8              = 0x1D, /* Low Delay Audio Profile L8 */
-    MP4SYS_AUDIO_PLI_Natural_L1               = 0x1E, /* Natural Audio Profile L1 */
-    MP4SYS_AUDIO_PLI_Natural_L2               = 0x1F, /* Natural Audio Profile L2 */
-    MP4SYS_AUDIO_PLI_Natural_L3               = 0x20, /* Natural Audio Profile L3 */
-    MP4SYS_AUDIO_PLI_Natural_L4               = 0x21, /* Natural Audio Profile L4 */
-    MP4SYS_AUDIO_PLI_MobileInternetworking_L1 = 0x22, /* Mobile Audio Internetworking Profile L1 */
-    MP4SYS_AUDIO_PLI_MobileInternetworking_L2 = 0x23, /* Mobile Audio Internetworking Profile L2 */
-    MP4SYS_AUDIO_PLI_MobileInternetworking_L3 = 0x24, /* Mobile Audio Internetworking Profile L3 */
-    MP4SYS_AUDIO_PLI_MobileInternetworking_L4 = 0x25, /* Mobile Audio Internetworking Profile L4 */
-    MP4SYS_AUDIO_PLI_MobileInternetworking_L5 = 0x26, /* Mobile Audio Internetworking Profile L5 */
-    MP4SYS_AUDIO_PLI_MobileInternetworking_L6 = 0x27, /* Mobile Audio Internetworking Profile L6 */
-    MP4SYS_AUDIO_PLI_AAC_L1                   = 0x28, /* AAC Profile L1 */
-    MP4SYS_AUDIO_PLI_AAC_L2                   = 0x29, /* AAC Profile L2 */
-    MP4SYS_AUDIO_PLI_AAC_L4                   = 0x2A, /* AAC Profile L4 */
-    MP4SYS_AUDIO_PLI_AAC_L5                   = 0x2B, /* AAC Profile L5 */
-    MP4SYS_AUDIO_PLI_HE_AAC_L2                = 0x2C, /* High Efficiency AAC Profile L2 */
-    MP4SYS_AUDIO_PLI_HE_AAC_L3                = 0x2D, /* High Efficiency AAC Profile L3 */
-    MP4SYS_AUDIO_PLI_HE_AAC_L4                = 0x2E, /* High Efficiency AAC Profile L4 */
-    MP4SYS_AUDIO_PLI_HE_AAC_L5                = 0x2F, /* High Efficiency AAC Profile L5 */
-    MP4SYS_AUDIO_PLI_NOT_SPECIFIED            = 0xFE, /* no audio profile specified */
-    MP4SYS_AUDIO_PLI_NONE_REQUIRED            = 0xFF, /* no audio capability required */
-} mp4sys_audioProfileLevelIndication;
-
 /* 14496-2 Annex G Profile and level indication and restrictions */
 typedef enum {
     MP4SYS_VISUAL_PLI_Reserved                       = 0x00, /* 0b00000000, Reserved */
@@ -326,7 +272,7 @@ int mp4sys_to_InitialObjectDescriptor(
     uint8_t include_inline_pli,
     mp4sys_ODProfileLevelIndication od_pli,
     mp4sys_sceneProfileLevelIndication scene_pli,
-    mp4sys_audioProfileLevelIndication audio_pli,
+    mp4a_audioProfileLevelIndication audio_pli,
     mp4sys_visualProfileLevelIndication visual_pli,
     mp4sys_graphicsProfileLevelIndication graph_pli
 );

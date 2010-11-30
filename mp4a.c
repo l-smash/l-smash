@@ -450,3 +450,185 @@ void mp4a_put_AudioSpecificConfig( lsmash_bs_t* bs, mp4a_AudioSpecificConfig_t* 
     }
     lsmash_bits_put_align( &bits );
 }
+
+/***************************************************************************
+    audioProfileLevelIndication
+***************************************************************************/
+/* NOTE: This function is not strictly preferable, but accurate.
+   The spec of audioProfileLevelIndication is too much complicated. */
+mp4a_audioProfileLevelIndication mp4a_get_audioProfileLevelIndication( mp4a_AudioObjectType aot, uint32_t frequency, uint32_t channels, mp4a_aac_sbr_mode sbr_mode )
+{
+    if( channels == 0 || frequency == 0 )
+        return MP4A_AUDIO_PLI_NONE_REQUIRED; /* means error. */
+
+    mp4a_audioProfileLevelIndication pli = MP4A_AUDIO_PLI_NOT_SPECIFIED;
+    switch( aot )
+    {
+    case MP4A_AUDIO_OBJECT_TYPE_AAC_LC:
+        if( sbr_mode == MP4A_AAC_SBR_HIERARCHICAL )
+        {
+            /* NOTE: This is not strictly preferable, but accurate; just possibly over-estimated.
+               We do not expect to use MP4A_AAC_SBR_HIERARCHICAL mode without SBR, nor downsampled mode with SBR. */
+            if( channels <= 2 && frequency <= 24000 )
+                pli = MP4A_AUDIO_PLI_HE_AAC_L2;
+            else if( channels <= 5 && frequency <= 48000 )
+                pli = MP4A_AUDIO_PLI_HE_AAC_L5;
+            else
+                pli = MP4A_AUDIO_PLI_NOT_SPECIFIED;
+            break;
+        }
+        /* pretending plain AAC-LC, if actually HE-AAC. */
+        static const uint32_t mp4sys_aac_pli_table[5][3] = {
+            /* channels, frequency,    audioProfileLevelIndication */
+            {         6,     96000,        MP4A_AUDIO_PLI_AAC_L5 }, /* FIXME: 6ch is not strictly correct, but works in many case. */
+            {         6,     48000,        MP4A_AUDIO_PLI_AAC_L4 }, /* FIXME: 6ch is not strictly correct, but works in many case. */
+            {         2,     48000,        MP4A_AUDIO_PLI_AAC_L2 },
+            {         2,     24000,        MP4A_AUDIO_PLI_AAC_L1 },
+            {         0,         0, MP4A_AUDIO_PLI_NOT_SPECIFIED }
+        };
+        for( int i = 0; channels <= mp4sys_aac_pli_table[i][0] && frequency <= mp4sys_aac_pli_table[i][1] ; i++ )
+            pli = mp4sys_aac_pli_table[i][2];
+        break;
+    case MP4A_AUDIO_OBJECT_TYPE_Layer_1:
+    case MP4A_AUDIO_OBJECT_TYPE_Layer_2:
+    case MP4A_AUDIO_OBJECT_TYPE_Layer_3:
+        pli = MP4A_AUDIO_PLI_NOT_SPECIFIED; /* 14496-3, 1.5.2 Audio profiles and levels, does not allow any pli. */
+        break;
+    default:
+        pli = MP4A_AUDIO_PLI_NOT_SPECIFIED; /* something we don't know/support, or what the spec never covers. */
+        break;
+    }
+    return pli;
+}
+
+static int mp4sys_is_same_profile( mp4a_audioProfileLevelIndication a, mp4a_audioProfileLevelIndication b )
+{
+    switch( a )
+    {
+    case MP4A_AUDIO_PLI_Main_L1:
+    case MP4A_AUDIO_PLI_Main_L2:
+    case MP4A_AUDIO_PLI_Main_L3:
+    case MP4A_AUDIO_PLI_Main_L4:
+        if( MP4A_AUDIO_PLI_Main_L1 <= b && b <= MP4A_AUDIO_PLI_Main_L4 )
+            return 1;
+        return 0;
+        break;
+    case MP4A_AUDIO_PLI_Scalable_L1:
+    case MP4A_AUDIO_PLI_Scalable_L2:
+    case MP4A_AUDIO_PLI_Scalable_L3:
+    case MP4A_AUDIO_PLI_Scalable_L4:
+        if( MP4A_AUDIO_PLI_Scalable_L1 <= b && b <= MP4A_AUDIO_PLI_Scalable_L4 )
+            return 1;
+        return 0;
+        break;
+    case MP4A_AUDIO_PLI_Speech_L1:
+    case MP4A_AUDIO_PLI_Speech_L2:
+        if( MP4A_AUDIO_PLI_Speech_L1 <= b && b <= MP4A_AUDIO_PLI_Speech_L2 )
+            return 1;
+        return 0;
+        break;
+    case MP4A_AUDIO_PLI_Synthetic_L1:
+    case MP4A_AUDIO_PLI_Synthetic_L2:
+    case MP4A_AUDIO_PLI_Synthetic_L3:
+        if( MP4A_AUDIO_PLI_Synthetic_L1 <= b && b <= MP4A_AUDIO_PLI_Synthetic_L3 )
+            return 1;
+        return 0;
+        break;
+    case MP4A_AUDIO_PLI_HighQuality_L1:
+    case MP4A_AUDIO_PLI_HighQuality_L2:
+    case MP4A_AUDIO_PLI_HighQuality_L3:
+    case MP4A_AUDIO_PLI_HighQuality_L4:
+    case MP4A_AUDIO_PLI_HighQuality_L5:
+    case MP4A_AUDIO_PLI_HighQuality_L6:
+    case MP4A_AUDIO_PLI_HighQuality_L7:
+    case MP4A_AUDIO_PLI_HighQuality_L8:
+        if( MP4A_AUDIO_PLI_HighQuality_L1 <= b && b <= MP4A_AUDIO_PLI_HighQuality_L8 )
+            return 1;
+        return 0;
+        break;
+    case MP4A_AUDIO_PLI_LowDelay_L1:
+    case MP4A_AUDIO_PLI_LowDelay_L2:
+    case MP4A_AUDIO_PLI_LowDelay_L3:
+    case MP4A_AUDIO_PLI_LowDelay_L4:
+    case MP4A_AUDIO_PLI_LowDelay_L5:
+    case MP4A_AUDIO_PLI_LowDelay_L6:
+    case MP4A_AUDIO_PLI_LowDelay_L7:
+    case MP4A_AUDIO_PLI_LowDelay_L8:
+        if( MP4A_AUDIO_PLI_LowDelay_L1 <= b && b <= MP4A_AUDIO_PLI_LowDelay_L8 )
+            return 1;
+        return 0;
+        break;
+    case MP4A_AUDIO_PLI_Natural_L1:
+    case MP4A_AUDIO_PLI_Natural_L2:
+    case MP4A_AUDIO_PLI_Natural_L3:
+    case MP4A_AUDIO_PLI_Natural_L4:
+        if( MP4A_AUDIO_PLI_Natural_L1 <= b && b <= MP4A_AUDIO_PLI_Natural_L4 )
+            return 1;
+        return 0;
+        break;
+    case MP4A_AUDIO_PLI_MobileInternetworking_L1:
+    case MP4A_AUDIO_PLI_MobileInternetworking_L2:
+    case MP4A_AUDIO_PLI_MobileInternetworking_L3:
+    case MP4A_AUDIO_PLI_MobileInternetworking_L4:
+    case MP4A_AUDIO_PLI_MobileInternetworking_L5:
+    case MP4A_AUDIO_PLI_MobileInternetworking_L6:
+        if( MP4A_AUDIO_PLI_MobileInternetworking_L1 <= b && b <= MP4A_AUDIO_PLI_MobileInternetworking_L6 )
+            return 1;
+        return 0;
+        break;
+    case MP4A_AUDIO_PLI_AAC_L1:
+    case MP4A_AUDIO_PLI_AAC_L2:
+    case MP4A_AUDIO_PLI_AAC_L4:
+    case MP4A_AUDIO_PLI_AAC_L5:
+        if( MP4A_AUDIO_PLI_AAC_L1 <= b && b <= MP4A_AUDIO_PLI_AAC_L5 )
+            return 1;
+        return 0;
+        break;
+    case MP4A_AUDIO_PLI_HE_AAC_L2:
+    case MP4A_AUDIO_PLI_HE_AAC_L3:
+    case MP4A_AUDIO_PLI_HE_AAC_L4:
+    case MP4A_AUDIO_PLI_HE_AAC_L5:
+        if( MP4A_AUDIO_PLI_HE_AAC_L2 <= b && b <= MP4A_AUDIO_PLI_HE_AAC_L5 )
+            return 1;
+        return 0;
+        break;
+    default:
+        break;
+    }
+    return 0;
+}
+
+/* NOTE: This function is not strictly preferable, but accurate.
+   The spec of audioProfileLevelIndication is too much complicated. */
+mp4a_audioProfileLevelIndication mp4a_max_audioProfileLevelIndication( mp4a_audioProfileLevelIndication a, mp4a_audioProfileLevelIndication b )
+{
+    /* NONE_REQUIRED is minimal priotity, and NOT_SPECIFIED is max priority. */
+    if( a == MP4A_AUDIO_PLI_NOT_SPECIFIED || b == MP4A_AUDIO_PLI_NONE_REQUIRED )
+        return a;
+    if( a == MP4A_AUDIO_PLI_NONE_REQUIRED || b == MP4A_AUDIO_PLI_NOT_SPECIFIED )
+        return b;
+    mp4a_audioProfileLevelIndication c, d;
+    if( a < b )
+    {
+        c = a;
+        d = b;
+    }
+    else
+    {
+        c = b;
+        d = a;
+    }
+    /* AAC-LC and SBR specific; If mixtured there, use correspond HE_AAC profile. */
+    if( MP4A_AUDIO_PLI_AAC_L1 <= c && c <= MP4A_AUDIO_PLI_AAC_L5
+        && MP4A_AUDIO_PLI_HE_AAC_L2 <= d && d <= MP4A_AUDIO_PLI_HE_AAC_L5 )
+    {
+        if( c <= MP4A_AUDIO_PLI_AAC_L2 )
+            return d;
+        c += 4; /* upgrade to HE-AAC */
+        return c > d ? c : d;
+    }
+    /* General */
+    if( mp4sys_is_same_profile( c, d ) )
+        return d;
+    return MP4A_AUDIO_PLI_NOT_SPECIFIED;
+}

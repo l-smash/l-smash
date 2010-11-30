@@ -29,7 +29,7 @@ typedef struct
 {
     ISOM_AUDIO_SAMPLE_ENTRY;
     isom_esds_t *esds;
-    mp4sys_audioProfileLevelIndication pli; /* This is not used in mp4a box itself, but the value is specific for that. */
+    mp4a_audioProfileLevelIndication pli; /* This is not used in mp4a box itself, but the value is specific for that. */
 } isom_mp4a_entry_t;
 
 
@@ -953,7 +953,7 @@ static int isom_add_mvhd( isom_moov_t *moov )
     return 0;
 }
 
-static int isom_scan_trak_profileLevelIndication( isom_trak_entry_t* trak, mp4sys_audioProfileLevelIndication* audio_pli, mp4sys_visualProfileLevelIndication* visual_pli )
+static int isom_scan_trak_profileLevelIndication( isom_trak_entry_t* trak, mp4a_audioProfileLevelIndication* audio_pli, mp4sys_visualProfileLevelIndication* visual_pli )
 {
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
         return -1;
@@ -980,7 +980,7 @@ static int isom_scan_trak_profileLevelIndication( isom_trak_entry_t* trak, mp4sy
                     *visual_pli = MP4SYS_VISUAL_PLI_H264_AVC;
                 break;
             case ISOM_CODEC_TYPE_MP4A_AUDIO :
-                *audio_pli = mp4sys_max_audioProfileLevelIndication( *audio_pli, ((isom_mp4a_entry_t*)sample_entry)->pli );
+                *audio_pli = mp4a_max_audioProfileLevelIndication( *audio_pli, ((isom_mp4a_entry_t*)sample_entry)->pli );
                 break;
 #if 0
             case ISOM_CODEC_TYPE_DRAC_VIDEO :
@@ -1016,7 +1016,7 @@ static int isom_scan_trak_profileLevelIndication( isom_trak_entry_t* trak, mp4sy
             case ISOM_CODEC_TYPE_TWOS_AUDIO :
 #endif
                 /* NOTE: These audio codecs other than mp4a does not have appropriate pli. */
-                *audio_pli = MP4SYS_AUDIO_PLI_NOT_SPECIFIED;
+                *audio_pli = MP4A_AUDIO_PLI_NOT_SPECIFIED;
                 break;
 #if 0
             case ISOM_CODEC_TYPE_FDP_HINT :
@@ -1059,7 +1059,7 @@ static int isom_add_iods( isom_moov_t *moov )
         free( iods );
         return -1;
     }
-    mp4sys_audioProfileLevelIndication audio_pli = MP4SYS_AUDIO_PLI_NONE_REQUIRED;
+    mp4a_audioProfileLevelIndication audio_pli = MP4A_AUDIO_PLI_NONE_REQUIRED;
     mp4sys_visualProfileLevelIndication visual_pli = MP4SYS_VISUAL_PLI_NONE_REQUIRED;
     for( lsmash_entry_t *entry = moov->trak_list->head; entry; entry = entry->next )
     {

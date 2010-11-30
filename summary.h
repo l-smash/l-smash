@@ -43,7 +43,7 @@ typedef struct {
 
 typedef struct {
     MP4SYS_BASE_SUMMARY
-    // mp4sys_audioProfileLevelIndication pli ; /* I wonder we should have this or not. */
+    // mp4a_audioProfileLevelIndication pli ; /* I wonder we should have this or not. */
     mp4a_AudioObjectType aot;    /* Detailed codec type. If not mp4a, just ignored. */
     uint32_t frequency;          /* Even if the stream is HE-AAC v1/SBR, this is base AAC's one. */
     uint32_t channels;           /* Even if the stream is HE-AAC v2/SBR+PS, this is base AAC's one. */
@@ -75,11 +75,6 @@ int mp4sys_summary_add_exdata( mp4sys_audio_summary_t* summary, void* exdata, ui
    I wonder these functions should be for generic (not limited to audio) summary. */
 void mp4sys_cleanup_audio_summary( mp4sys_audio_summary_t* summary );
 
-/* profileLevelIndication relative functions. */
-mp4sys_audioProfileLevelIndication mp4sys_get_audioProfileLevelIndication( mp4sys_audio_summary_t* summary );
-mp4sys_audioProfileLevelIndication mp4sys_max_audioProfileLevelIndication(
-    mp4sys_audioProfileLevelIndication a,
-    mp4sys_audioProfileLevelIndication b
-);
+mp4a_audioProfileLevelIndication mp4sys_get_audioProfileLevelIndication( mp4sys_audio_summary_t* summary );
 
 #endif /* #ifndef LSMASH_SUMMARY_H */

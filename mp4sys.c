@@ -166,7 +166,7 @@ typedef struct {
     /* else { */
         mp4sys_ODProfileLevelIndication ODProfileLevelIndication;
         mp4sys_sceneProfileLevelIndication sceneProfileLevelIndication;
-        mp4sys_audioProfileLevelIndication audioProfileLevelIndication;
+        mp4a_audioProfileLevelIndication audioProfileLevelIndication;
         mp4sys_visualProfileLevelIndication visualProfileLevelIndication;
         mp4sys_graphicsProfileLevelIndication graphicsProfileLevelIndication;
         lsmash_entry_list_t* esDescr; /* List of ES_ID_Inc, not ES_Descriptor defined in 14496-1. 14496-14 overrides. */
@@ -384,7 +384,7 @@ mp4sys_ObjectDescriptor_t* mp4sys_create_ObjectDescriptor( uint16_t ObjectDescri
     od->includeInlineProfileLevelFlag = 1; /* 1 as part of reserved flag. */
     od->ODProfileLevelIndication = MP4SYS_OD_PLI_NONE_REQUIRED;
     od->sceneProfileLevelIndication = MP4SYS_SCENE_PLI_NONE_REQUIRED;
-    od->audioProfileLevelIndication = MP4SYS_AUDIO_PLI_NONE_REQUIRED;
+    od->audioProfileLevelIndication = MP4A_AUDIO_PLI_NONE_REQUIRED;
     od->visualProfileLevelIndication = MP4SYS_VISUAL_PLI_NONE_REQUIRED;
     od->graphicsProfileLevelIndication = MP4SYS_GRAPHICS_PLI_NONE_REQUIRED;
     return od;
@@ -396,7 +396,7 @@ int mp4sys_to_InitialObjectDescriptor(
     uint8_t include_inline_pli,
     mp4sys_ODProfileLevelIndication od_pli,
     mp4sys_sceneProfileLevelIndication scene_pli,
-    mp4sys_audioProfileLevelIndication audio_pli,
+    mp4a_audioProfileLevelIndication audio_pli,
     mp4sys_visualProfileLevelIndication visual_pli,
     mp4sys_graphicsProfileLevelIndication graph_pli
 ){
