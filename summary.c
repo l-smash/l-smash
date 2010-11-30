@@ -111,9 +111,9 @@ mp4sys_audioProfileLevelIndication mp4sys_get_audioProfileLevelIndication( mp4sy
         {
             /* NOTE: This is not strictly preferable, but accurate; just possibly over-estimated.
                We do not expect to use MP4A_AAC_SBR_HIERARCHICAL mode without SBR, nor downsampled mode with SBR. */
-            if( summary->channels <= 2 && summary->frequency <= 24 )
+            if( summary->channels <= 2 && summary->frequency <= 24000 )
                 pli = MP4SYS_AUDIO_PLI_HE_AAC_L2;
-            else if( summary->channels <= 5 && summary->frequency <= 48 )
+            else if( summary->channels <= 5 && summary->frequency <= 48000 )
                 pli = MP4SYS_AUDIO_PLI_HE_AAC_L5;
             else
                 pli = MP4SYS_AUDIO_PLI_NOT_SPECIFIED;
