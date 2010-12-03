@@ -3277,7 +3277,6 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, isom_sample_proper
                 group->sample_to_group->group_description_index = sgpd->list->entry_count;
                 group->described = 1;
             }
-            break;
         }
         else if( prop->recovery.identifier == group->recovery_point )
         {
@@ -3299,7 +3298,7 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, isom_sample_proper
                     group->described = 1;
                 }
             }
-            break;
+            break;      /* Avoid evaluating groups, in the pool, having the same identifier for recovery point again. */
         }
     }
     for( lsmash_entry_t *entry = pool->head; entry; entry = pool->head )
