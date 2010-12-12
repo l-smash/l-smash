@@ -172,6 +172,23 @@ typedef struct
     isom_elst_t *elst;     /* Edit List Box */
 } isom_edts_t;
 
+/* Track Reference Box */
+typedef struct
+{
+    isom_base_header_t base_header;
+    uint32_t *track_ID;         /* track_IDs of reference tracks / Zero value must not be used */
+
+        uint32_t ref_count;     /* number of reference tracks */
+} isom_tref_type_t;
+
+typedef struct
+{
+    isom_base_header_t base_header;
+    isom_tref_type_t *type;     /* Track Reference Type Box */
+
+        uint32_t type_count;    /* number of reference types */
+} isom_tref_t;
+
 /* Media Header Box */
 typedef struct
 {
@@ -240,6 +257,31 @@ typedef struct
     /* Streams other than visual and audio may use a Null Media Header Box */
     isom_full_header_t full_header;     /* flags is currently all zero */
 } isom_nmhd_t;
+
+/* Generic Media Information Box */
+typedef struct
+{
+    isom_full_header_t full_header;
+    uint16_t graphicsmode;
+    uint16_t opcolor[3];
+    int16_t balance;        /* This field is nomally set to 0. */
+    uint16_t reserved;      /* Reserved for use by Apple. Set this field to 0. */
+} isom_gmin_t;
+
+typedef struct
+{
+    isom_base_header_t base_header;
+    int32_t matrix[9];      /* Unkown fields. Default values are probably:
+                             * { 0x00010000, 0, 0, 0, 0x00010000, 0, 0, 0, 0x40000000 } */
+} isom_text_t;
+
+/* Generic Media Information Header Box */
+typedef struct
+{
+    isom_base_header_t base_header;
+    isom_gmin_t *gmin;      /* Generic Media Information Box */
+    isom_text_t *text;
+} isom_gmhd_t;
 /** **/
 
 /* Data Reference Box */
@@ -266,7 +308,7 @@ typedef struct
 {
     /* This box is in Media Information Box or Meta Box */
     isom_base_header_t base_header;
-    isom_dref_t *dref;     /* Data Reference Box */
+    isom_dref_t *dref;      /* Data Reference Box */
 } isom_dinf_t;
 
 /** Sample Description **/
@@ -584,25 +626,26 @@ typedef struct
 {
     isom_base_header_t base_header;
     /* Media Information Header Boxes */
-    isom_vmhd_t *vmhd;     /* Video Media Header Box */
-    isom_smhd_t *smhd;     /* Sound Media Header Box */
-    isom_hmhd_t *hmhd;     /* Hint Media Header Box */
-    isom_nmhd_t *nmhd;     /* Null Media Header Box */
+    isom_vmhd_t *vmhd;      /* Video Media Header Box */
+    isom_smhd_t *smhd;      /* Sound Media Header Box */
+    isom_hmhd_t *hmhd;      /* Hint Media Header Box */
+    isom_nmhd_t *nmhd;      /* Null Media Header Box */
+    isom_gmhd_t *gmhd;      /* Generic Media Information Header Box / This box is defined by QuickTime file format */
     /* */
-    isom_hdlr_t *hdlr;     /* Data Handler Reference Box / This box is defined by QuickTime file format
-                            * Note: this box must come before Data Information Box. */
-    isom_dinf_t *dinf;     /* Data Information Box */
-    isom_stbl_t *stbl;     /* Sample Table Box */
+    isom_hdlr_t *hdlr;      /* Data Handler Reference Box / This box is defined by QuickTime file format
+                             * Note: this box must come before Data Information Box. */
+    isom_dinf_t *dinf;      /* Data Information Box */
+    isom_stbl_t *stbl;      /* Sample Table Box */
 } isom_minf_t;
 
 /* Media Box */
 typedef struct
 {
     isom_base_header_t base_header;
-    isom_mdhd_t *mdhd;     /* Media Header Box */
-    isom_hdlr_t *hdlr;     /* ISOM: Handler Reference Box / QT: Media Handler Reference Box
-                            * Note: this box must come before Media Information Box. */
-    isom_minf_t *minf;     /* Media Information Box */
+    isom_mdhd_t *mdhd;      /* Media Header Box */
+    isom_hdlr_t *hdlr;      /* ISOM: Handler Reference Box / QT: Media Handler Reference Box
+                             * Note: this box must come before Media Information Box. */
+    isom_minf_t *minf;      /* Media Information Box */
 } isom_mdia_t;
 
 /* Movie Header Box */
@@ -716,6 +759,31 @@ typedef struct
 } isom_avc_entry_t;
 /*** ***/
 
+/* Text Sample Entry */
+typedef struct
+{
+    ISOM_SAMPLE_ENTRY;
+    int32_t displayFlags;
+    int32_t textJustification;
+    uint16_t bgColor[3];            /* background RGB color */
+    /* defaultTextBox */
+    int16_t top;
+    int16_t left;
+    int16_t bottom;
+    int16_t right;
+    /* defaultStyle */
+    int32_t scrpStartChar;          /* starting character position */
+    int16_t scrpHeight;
+    int16_t scrpAscent;
+    int16_t scrpFont;
+    uint16_t scrpFace;              /* only first 8-bits are used */
+    int16_t scrpSize;
+    uint16_t scrpColor[3];          /* foreground RGB color */
+    /* defaultFontName is Pascal string */
+    uint8_t name_length;
+    char *font_name;
+} isom_text_entry_t;
+
 /* Chapter List Box
  * This box is NOT defined in the ISO/MPEG-4 specs. */
 typedef struct
@@ -808,12 +876,15 @@ typedef struct
     isom_tkhd_t *tkhd;          /* Track Header Box */
     isom_tapt_t *tapt;          /* Track Aperture Mode Dimensions Box / This box is defined in QuickTime file format */
     isom_edts_t *edts;          /* Edit Box */
+    isom_tref_t *tref;          /* Track Reference Box */
     isom_mdia_t *mdia;          /* Media Box */
     isom_udta_t *udta;          /* User Data Box */
 
     isom_root_t *root;          /* go to root */
     isom_mdat_t *mdat;          /* go to referenced mdat box */
     isom_cache_t *cache;
+    uint32_t related_track_ID;
+    uint8_t is_chapter;
 } isom_trak_entry_t;
 /** **/
 
@@ -989,6 +1060,8 @@ enum qt_box_code
     QT_BOX_TYPE_CRGN = ISOM_4CC( 'c', 'r', 'g', 'n' ),
     QT_BOX_TYPE_CTAB = ISOM_4CC( 'c', 't', 'a', 'b' ),
     QT_BOX_TYPE_ENOF = ISOM_4CC( 'e', 'n', 'o', 'f' ),
+    QT_BOX_TYPE_GMHD = ISOM_4CC( 'g', 'm', 'h', 'd' ),
+    QT_BOX_TYPE_GMIN = ISOM_4CC( 'g', 'm', 'i', 'n' ),
     QT_BOX_TYPE_IMAP = ISOM_4CC( 'i', 'm', 'a', 'p' ),
     QT_BOX_TYPE_KMAT = ISOM_4CC( 'k', 'm', 'a', 't' ),
     QT_BOX_TYPE_LOAD = ISOM_4CC( 'l', 'o', 'a', 'd' ),
@@ -997,6 +1070,7 @@ enum qt_box_code
     QT_BOX_TYPE_PROF = ISOM_4CC( 'p', 'r', 'o', 'f' ),
     QT_BOX_TYPE_STPS = ISOM_4CC( 's', 't', 'p', 's' ),
     QT_BOX_TYPE_TAPT = ISOM_4CC( 't', 'a', 'p', 't' ),
+    QT_BOX_TYPE_TEXT = ISOM_4CC( 't', 'e', 'x', 't' ),
 };
 
 enum isom_handler_type_code
@@ -1011,6 +1085,7 @@ enum isom_media_type_code
     ISOM_MEDIA_HANDLER_TYPE_VISUAL = ISOM_4CC( 'v', 'i', 'd', 'e' ),
     ISOM_MEDIA_HANDLER_TYPE_HINT   = ISOM_4CC( 'h', 'i', 'n', 't' ),
     ISOM_MEDIA_HANDLER_TYPE_META   = ISOM_4CC( 'm', 'e', 't', 'a' ),
+    ISOM_MEDIA_HANDLER_TYPE_TEXT   = ISOM_4CC( 't', 'e', 'x', 't' ),
 };
 
 enum isom_data_reference_type_code
@@ -1201,6 +1276,8 @@ enum qt_codec_code
     QT_CODEC_TYPE_RPZA_VIDEO = ISOM_4CC( 'r', 'p', 'z', 'a' ),
     QT_CODEC_TYPE_TGA_VIDEO  = ISOM_4CC( 't', 'g', 'a', ' ' ),
     QT_CODEC_TYPE_TIFF_VIDEO = ISOM_4CC( 't', 'i', 'f', 'f' ),
+    /* Text Type */
+    QT_CODEC_TYPE_TEXT_TEXT = ISOM_4CC( 't', 'e', 'x', 't' ),
 };
 
 enum isom_track_reference_code
@@ -1313,6 +1390,8 @@ int isom_set_tyrant_chapter( isom_root_t *root, char *file_name );
 
 int isom_create_explicit_timeline_map( isom_root_t *root, uint32_t track_ID, uint64_t segment_duration, int64_t media_time, int32_t media_rate );
 int isom_modify_timeline_map( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint64_t segment_duration, int64_t media_time, int32_t media_rate );
+
+int isom_create_reference_chapter_track( isom_root_t *root, uint32_t track_ID, char *file_name );
 
 int isom_create_grouping( isom_root_t *root, uint32_t track_ID, uint32_t grouping_type );
 
