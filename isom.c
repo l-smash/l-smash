@@ -1166,12 +1166,12 @@ static int isom_add_edts( isom_trak_entry_t *trak )
     return 0;
 }
 
-static int isom_add_mdhd( isom_mdia_t *mdia )
+static int isom_add_mdhd( isom_mdia_t *mdia, uint16_t default_language )
 {
     if( !mdia || mdia->mdhd )
         return -1;
     isom_create_fullbox( mdhd, ISOM_BOX_TYPE_MDHD );
-    mdhd->language = ISOM_LANG( "und" );
+    mdhd->language = default_language;
     mdia->mdhd = mdhd;
     return 0;
 }
@@ -4404,7 +4404,7 @@ uint32_t isom_create_track( isom_root_t *root, uint32_t media_type )
         return 0;
     if( isom_add_tkhd( trak, media_type ) ||
         isom_add_mdia( trak ) ||
-        isom_add_mdhd( trak->mdia ) ||
+        isom_add_mdhd( trak->mdia, root->qt_compatible ? 0 : ISOM_LANG( "und" ) ) ||
         isom_add_minf( trak->mdia ) ||
         isom_add_stbl( trak->mdia->minf ) ||
         isom_add_dinf( trak->mdia->minf ) ||
@@ -4585,12 +4585,12 @@ int isom_set_track_mode( isom_root_t *root, uint32_t track_ID, uint32_t mode )
     return 0;
 }
 
-int isom_set_language( isom_root_t *root, uint32_t track_ID, char *language )
+int isom_set_media_language( isom_root_t *root, uint32_t track_ID, char *ISO_language, uint16_t Mac_language )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->mdhd || !language || strlen( language ) != 3 )
+    if( !trak || !trak->mdia || !trak->mdia->mdhd )
         return -1;
-    trak->mdia->mdhd->language = ISOM_LANG( language );
+    trak->mdia->mdhd->language = ISO_language ? ISOM_LANG( ISO_language ) : !root->qt_compatible ? ISOM_LANG( "und" ): Mac_language;
     return 0;
 }
 

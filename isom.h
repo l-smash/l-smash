@@ -183,8 +183,10 @@ typedef struct
     uint64_t duration;      /* the duration of this media expressed in the time-scale indicated in this box */
     /* */
 #define ISOM_LANG( lang ) ((((lang[0]-0x60)&0x1f)<<10) | (((lang[1]-0x60)&0x1f)<<5) | ((lang[2]-0x60)&0x1f))
-    uint16_t language;      /* ISO-639-2/T language code. The first bit is 0.
-                             * Each character is packed as the difference between its ASCII value and 0x60. */
+    uint16_t language;      /* ISOM: ISO-639-2/T language codes. The first bit is 0.
+                             *       Each character is packed as the difference between its ASCII value and 0x60.
+                             * QTFF: Macintosh language codes is usually used.
+                             *       Mac's value is less than 0x800 while ISO's value is 0x800 or greater. */
     uint16_t pre_defined;
 } isom_mdhd_t;
 
@@ -1304,7 +1306,7 @@ int isom_set_avc_config( isom_root_t *root, uint32_t track_ID, uint32_t entry_nu
     uint8_t chroma_format, uint8_t bit_depth_luma_minus8, uint8_t bit_depth_chroma_minus8 );
 int isom_set_handler_name( isom_root_t *root, uint32_t track_ID, char *handler_name );
 int isom_set_last_sample_delta( isom_root_t *root, uint32_t track_ID, uint32_t sample_delta );
-int isom_set_language( isom_root_t *root, uint32_t track_ID, char *language );
+int isom_set_media_language( isom_root_t *root, uint32_t track_ID, char *ISO_language, uint16_t Mac_language );
 int isom_set_track_ID( isom_root_t *root, uint32_t track_ID, uint32_t new_track_ID );
 int isom_set_free( isom_root_t *root, uint8_t *data, uint64_t data_length );
 int isom_set_tyrant_chapter( isom_root_t *root, char *file_name );
