@@ -4540,6 +4540,42 @@ uint32_t isom_get_media_timescale( isom_root_t *root, uint32_t track_ID )
     return trak->mdia->mdhd->timescale;
 }
 
+uint64_t isom_get_media_duration( isom_root_t *root, uint32_t track_ID )
+{
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    if( !trak || !trak->mdia || !trak->mdia->mdhd )
+        return 0;
+    return trak->mdia->mdhd->duration;
+}
+
+uint64_t isom_get_track_duration( isom_root_t *root, uint32_t track_ID )
+{
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    if( !trak || !trak->tkhd )
+        return 0;
+    return trak->tkhd->duration;
+}
+
+uint32_t isom_get_last_sample_delta( isom_root_t *root, uint32_t track_ID )
+{
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl ||
+        !trak->mdia->minf->stbl->stts || !trak->mdia->minf->stbl->stts->list ||
+        !trak->mdia->minf->stbl->stts->list->head || !trak->mdia->minf->stbl->stts->list->head->data )
+        return 0;
+    return ((isom_stts_entry_t *)trak->mdia->minf->stbl->stts->list->head->data)->sample_delta;
+}
+
+uint32_t isom_get_start_time_offset( isom_root_t *root, uint32_t track_ID )
+{
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl ||
+        !trak->mdia->minf->stbl->ctts || !trak->mdia->minf->stbl->ctts->list ||
+        !trak->mdia->minf->stbl->ctts->list->head || !trak->mdia->minf->stbl->ctts->list->head->data )
+        return 0;
+    return ((isom_ctts_entry_t *)trak->mdia->minf->stbl->ctts->list->head->data)->sample_offset;
+}
+
 int isom_set_track_mode( isom_root_t *root, uint32_t track_ID, uint32_t mode )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );

@@ -1278,6 +1278,10 @@ int isom_write_moov( isom_root_t *root );
 int isom_write_free( isom_root_t *root );
 
 uint32_t isom_get_media_timescale( isom_root_t *root, uint32_t track_ID );
+uint64_t isom_get_media_duration( isom_root_t *root, uint32_t track_ID );
+uint64_t isom_get_track_duration( isom_root_t *root, uint32_t track_ID );
+uint32_t isom_get_last_sample_delta( isom_root_t *root, uint32_t track_ID );
+uint32_t isom_get_start_time_offset( isom_root_t *root, uint32_t track_ID );
 uint32_t isom_get_movie_timescale( isom_root_t *root );
 
 int isom_set_brands( isom_root_t *root, uint32_t major_brand, uint32_t minor_version, uint32_t *brands, uint32_t brand_count );
