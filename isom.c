@@ -5564,7 +5564,7 @@ int isom_create_reference_chapter_track( isom_root_t *root, uint32_t track_ID, c
     if( !tref->type )
         type = (isom_tref_type_t *)malloc( sizeof(isom_tref_type_t) );
     else
-        type = (isom_tref_type_t *)realloc( tref->type, sizeof(isom_tref_type_t) );
+        type = (isom_tref_type_t *)realloc( tref->type, (tref->type_count + 1) * sizeof(isom_tref_type_t) );
     if( !type )
         return -1;
     chap = &type[tref->type_count];
