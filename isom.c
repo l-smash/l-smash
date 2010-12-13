@@ -4835,12 +4835,7 @@ uint32_t isom_create_track( isom_root_t *root, uint32_t media_type )
                 return 0;
             break;
         case ISOM_MEDIA_HANDLER_TYPE_TEXT :
-            if( root->max_3gpp_version >= 6 )
-            {
-                if( isom_add_nmhd( trak->mdia->minf ) )
-                    return 0;
-            }
-            else if( root->qt_compatible )
+            if( root->qt_compatible )
             {
                 if( isom_add_gmhd( trak->mdia->minf ) ||
                     isom_add_gmin( trak->mdia->minf->gmhd ) ||
@@ -4848,7 +4843,7 @@ uint32_t isom_create_track( isom_root_t *root, uint32_t media_type )
                     return 0;
             }
             else
-                return 0;
+                return 0;   /* We support only reference text media track for chapter yet. */
             break;
         default :
             if( isom_add_nmhd( trak->mdia->minf ) )
@@ -5751,11 +5746,8 @@ int isom_create_reference_chapter_track( isom_root_t *root, uint32_t track_ID, c
     /* Set media language field. ISOM: undefined / QTFF: English */
     if( isom_set_media_language( root, chapter_track_ID, root->max_3gpp_version < 6 ? NULL : "und", 0 ) )
         goto fail;
-    /* Set default media handler name. */
-    if( isom_set_media_handler_name( root, chapter_track_ID, "L-SMASH Text Media Handler" ) )
-        goto fail;
-    /* Set default data handler name if this file shall be compatible with QTFF. */
-    if( root->max_3gpp_version < 6 &&
+    /* Set default handler names. */
+    if( isom_set_media_handler_name( root, chapter_track_ID, "L-SMASH Text Media Handler" ) ||
         isom_set_data_handler_name( root, chapter_track_ID, "L-SMASH URL Data Handler" ) )
         goto fail;
     /* Create sample description. */
