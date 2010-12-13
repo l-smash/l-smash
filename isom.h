@@ -780,9 +780,48 @@ typedef struct
     int16_t scrpSize;
     uint16_t scrpColor[3];          /* foreground RGB color */
     /* defaultFontName is Pascal string */
-    uint8_t name_length;
+    uint8_t font_name_length;
     char *font_name;
 } isom_text_entry_t;
+
+typedef struct
+{
+    uint16_t font_ID;
+    /* Pascal string */
+    uint8_t font_name_length;
+    char *font_name;
+} isom_font_record_t;
+
+typedef struct
+{
+    isom_base_header_t base_header;
+    /* FontRecord 
+     * entry_count is uint16_t. */
+    lsmash_entry_list_t *list;
+} isom_ftab_t;
+
+typedef struct
+{
+    ISOM_SAMPLE_ENTRY;
+    uint32_t displayFlags;
+    int8_t horizontal_justification;
+    int8_t vertical_justification;
+    uint8_t background_color_rgba[4];
+    /* BoxRecord default_text_box */
+    int16_t top;
+    int16_t left;
+    int16_t bottom;
+    int16_t right;
+    /* StyleRecord default_style */
+    uint16_t startChar;     /* always 0 */
+    uint16_t endChar;       /* always 0 */
+    uint16_t font_ID;
+    uint8_t face_style_flags;
+    uint8_t font_size;
+    uint8_t text_color_rgba[4];
+    /* Font Table Box font_table */
+    isom_ftab_t *ftab;
+} isom_tx3g_entry_t;
 
 /* Chapter List Box
  * This box is NOT defined in the ISO/MPEG-4 specs. */
@@ -790,7 +829,7 @@ typedef struct
 {
     uint64_t start_time;    /* expressed in 100 nanoseconds */
     /* Chapter name is Pascal string */
-    uint8_t name_length;
+    uint8_t chapter_name_length;
     char *chapter_name;
 } isom_chpl_entry_t;
 
@@ -830,6 +869,7 @@ typedef struct
         double max_chunk_duration;      /* max duration per chunk in seconds */
         uint8_t qt_compatible;
         uint8_t request_iods;
+        uint8_t max_3gpp_version;       /* Maximum 3GPP version */
 } isom_root_t;
 
 /** Track Box **/
@@ -1051,6 +1091,8 @@ enum isom_box_code
 
     ISOM_BOX_TYPE_DAC3 = ISOM_4CC( 'd', 'a', 'c', '3' ),
     ISOM_BOX_TYPE_DAMR = ISOM_4CC( 'd', 'a', 'm', 'r' ),
+
+    ISOM_BOX_TYPE_FTAB = ISOM_4CC( 'f', 't', 'a', 'b' ),
 };
 
 enum qt_box_code

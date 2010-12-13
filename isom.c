@@ -532,6 +532,44 @@ static int isom_add_text_entry( lsmash_entry_list_t *list )
     return 0;
 }
 
+static int isom_add_ftab( isom_tx3g_entry_t *tx3g )
+{
+    if( !tx3g )
+        return -1;
+    isom_ftab_t *ftab = malloc( sizeof(isom_ftab_t) );
+    if( !ftab )
+        return -1;
+    memset( ftab, 0, sizeof(isom_ftab_t) );
+    isom_init_base_header( &ftab->base_header, ISOM_BOX_TYPE_FTAB );
+    ftab->list = lsmash_create_entry_list();
+    if( !ftab->list )
+    {
+        free( ftab );
+        return -1;
+    }
+    tx3g->ftab = ftab;
+    return 0;
+}
+
+static int isom_add_tx3g_entry( lsmash_entry_list_t *list )
+{
+    if( !list )
+        return -1;
+    isom_tx3g_entry_t *tx3g = malloc( sizeof(isom_tx3g_entry_t) );
+    if( !tx3g )
+        return -1;
+    memset( tx3g, 0, sizeof(isom_tx3g_entry_t) );
+    isom_init_base_header( &tx3g->base_header, ISOM_CODEC_TYPE_TX3G_TEXT );
+    tx3g->data_reference_index = 1;
+    if( isom_add_ftab( tx3g ) ||
+        lsmash_add_entry( list, tx3g ) )
+    {
+        free( tx3g );
+        return -1;
+    }
+    return 0;
+}
+
 /* This function returns 0 if failed, sample_entry_number if succeeded. */
 int isom_add_sample_entry( isom_root_t *root, uint32_t track_ID, uint32_t sample_type, void* summary )
 {
@@ -595,6 +633,9 @@ int isom_add_sample_entry( isom_root_t *root, uint32_t track_ID, uint32_t sample
         case ISOM_CODEC_TYPE_TWOS_AUDIO :
 #endif
             ret = isom_add_audio_entry( list, sample_type, (mp4sys_audio_summary_t *)summary );
+            break;
+        case ISOM_CODEC_TYPE_TX3G_TEXT :
+            ret = isom_add_tx3g_entry( list );
             break;
         case QT_CODEC_TYPE_TEXT_TEXT :
             ret = isom_add_text_entry( list );
@@ -923,14 +964,14 @@ static int isom_add_chpl_entry( isom_chpl_t *chpl, uint64_t start_time, char *ch
     if( !data )
         return -1;
     data->start_time = start_time;
-    data->name_length = ISOM_MIN( strlen( chapter_name ), 255 );
-    data->chapter_name = malloc( data->name_length + 1 );
+    data->chapter_name_length = ISOM_MIN( strlen( chapter_name ), 255 );
+    data->chapter_name = malloc( data->chapter_name_length + 1 );
     if( !data->chapter_name )
     {
         free( data );
         return -1;
     }
-    memcpy( data->chapter_name, chapter_name, data->name_length );
+    memcpy( data->chapter_name, chapter_name, data->chapter_name_length );
     if( lsmash_add_entry( chpl->list, data ) )
     {
         free( data->chapter_name );
@@ -1650,6 +1691,23 @@ static void isom_remove_tref( isom_tref_t *tref )
     free( tref );
 }
 
+static void isom_remove_font_record( isom_font_record_t *font_record )
+{
+    if( !font_record )
+        return;
+    if( font_record->font_name )
+        free( font_record->font_name );
+    free( font_record );
+}
+
+static void isom_remove_ftab( isom_ftab_t *ftab )
+{
+    if( !ftab )
+        return;
+    lsmash_remove_list( ftab->list, isom_remove_font_record );
+    free( ftab );
+}
+
 static void isom_remove_stsd( isom_stsd_t *stsd )
 {
     if( !stsd )
@@ -1803,6 +1861,14 @@ static void isom_remove_stsd( isom_stsd_t *stsd )
                 break;
             }
 #endif
+            case ISOM_CODEC_TYPE_TX3G_TEXT :
+            {
+                isom_tx3g_entry_t *tx3g = (isom_tx3g_entry_t *)entry->data;
+                if( tx3g->ftab )
+                    isom_remove_ftab( tx3g->ftab );
+                free( tx3g );
+                break;
+            }
             case QT_CODEC_TYPE_TEXT_TEXT :
             {
                 isom_text_entry_t *text = (isom_text_entry_t *)entry->data;
@@ -2557,9 +2623,56 @@ static int isom_write_text_entry( lsmash_bs_t *bs, lsmash_entry_t *entry )
     lsmash_bs_put_be16( bs, data->scrpSize );
     for( uint32_t i = 0; i < 3; i++ )
         lsmash_bs_put_be16( bs, data->scrpColor[i] );
-    lsmash_bs_put_byte( bs, data->name_length );
-    if( data->font_name && data->name_length )
-        lsmash_bs_put_bytes( bs, data->font_name, data->name_length );
+    lsmash_bs_put_byte( bs, data->font_name_length );
+    if( data->font_name && data->font_name_length )
+        lsmash_bs_put_bytes( bs, data->font_name, data->font_name_length );
+    return lsmash_bs_write_data( bs );
+}
+
+static int isom_put_ftab( lsmash_bs_t *bs, isom_ftab_t *ftab )
+{
+    if( !ftab || !ftab->list )
+        return -1;
+    isom_bs_put_base_header( bs, &ftab->base_header );
+    lsmash_bs_put_be16( bs, ftab->list->entry_count );
+    for( lsmash_entry_t *entry = ftab->list->head; entry; entry = entry->next )
+    {
+        isom_font_record_t *data = (isom_font_record_t *)entry->data;
+        if( !data )
+            return -1;
+        lsmash_bs_put_be16( bs, data->font_ID );
+        lsmash_bs_put_byte( bs, data->font_name_length );
+        if( data->font_name && data->font_name_length )
+            lsmash_bs_put_bytes( bs, data->font_name, data->font_name_length );
+    }
+    return 0;
+}
+
+static int isom_write_tx3g_entry( lsmash_bs_t *bs, lsmash_entry_t *entry )
+{
+    isom_tx3g_entry_t *data = (isom_tx3g_entry_t *)entry->data;
+    if( !data )
+        return -1;
+    isom_bs_put_base_header( bs, &data->base_header );
+    lsmash_bs_put_bytes( bs, data->reserved, 6 );
+    lsmash_bs_put_be16( bs, data->data_reference_index );
+    lsmash_bs_put_be32( bs, data->displayFlags );
+    lsmash_bs_put_byte( bs, data->horizontal_justification );
+    lsmash_bs_put_byte( bs, data->vertical_justification );
+    for( uint32_t i = 0; i < 4; i++ )
+        lsmash_bs_put_byte( bs, data->background_color_rgba[i] );
+    lsmash_bs_put_be16( bs, data->top );
+    lsmash_bs_put_be16( bs, data->left );
+    lsmash_bs_put_be16( bs, data->bottom );
+    lsmash_bs_put_be16( bs, data->right );
+    lsmash_bs_put_be16( bs, data->startChar );
+    lsmash_bs_put_be16( bs, data->endChar );
+    lsmash_bs_put_be16( bs, data->font_ID );
+    lsmash_bs_put_byte( bs, data->face_style_flags );
+    lsmash_bs_put_byte( bs, data->font_size );
+    for( uint32_t i = 0; i < 4; i++ )
+        lsmash_bs_put_byte( bs, data->text_color_rgba[i] );
+    isom_put_ftab( bs, data->ftab );
     return lsmash_bs_write_data( bs );
 }
 
@@ -2648,6 +2761,9 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
                 isom_write_metadata_entry( bs, entry );
                 break;
 #endif
+            case ISOM_CODEC_TYPE_TX3G_TEXT :
+                isom_write_tx3g_entry( bs, entry );
+                break;
             case QT_CODEC_TYPE_TEXT_TEXT :
                 isom_write_text_entry( bs, entry );
                 break;
@@ -2972,8 +3088,8 @@ static int isom_write_chpl( lsmash_bs_t *bs, isom_chpl_t *chpl )
         if( !data )
             return -1;
         lsmash_bs_put_be64( bs, data->start_time );
-        lsmash_bs_put_byte( bs, data->name_length );
-        lsmash_bs_put_bytes( bs, data->chapter_name, data->name_length );
+        lsmash_bs_put_byte( bs, data->chapter_name_length );
+        lsmash_bs_put_bytes( bs, data->chapter_name, data->chapter_name_length );
     }
     return lsmash_bs_write_data( bs );
 }
@@ -3855,10 +3971,28 @@ static int isom_check_compatibility( isom_root_t *root )
     }
     for( uint32_t i = 0; i < root->ftyp->brand_count; i++ )
     {
-        if( root->ftyp->compatible_brands[i] == ISOM_BRAND_TYPE_QT )
-            root->qt_compatible = 1;
-        if( root->ftyp->compatible_brands[i] == ISOM_BRAND_TYPE_MP41 )
-            root->request_iods = 1;
+        switch( root->ftyp->compatible_brands[i] )
+        {
+            case ISOM_BRAND_TYPE_QT :
+                root->qt_compatible = 1;
+                break;
+            case ISOM_BRAND_TYPE_MP41 :
+                root->request_iods = 1;
+                break;
+            case ISOM_BRAND_TYPE_3GP4 :
+                root->max_3gpp_version = ISOM_MAX( root->max_3gpp_version, 4 );
+                break;
+            case ISOM_BRAND_TYPE_3GP5 :
+                root->max_3gpp_version = ISOM_MAX( root->max_3gpp_version, 5 );
+                break;
+            case ISOM_BRAND_TYPE_3GE6 :
+            case ISOM_BRAND_TYPE_3GG6 :
+            case ISOM_BRAND_TYPE_3GP6 :
+            case ISOM_BRAND_TYPE_3GR6 :
+            case ISOM_BRAND_TYPE_3GS6 :
+                root->max_3gpp_version = ISOM_MAX( root->max_3gpp_version, 6 );
+                break;
+        }
     }
     return 0;
 }
@@ -4304,9 +4438,32 @@ static uint64_t isom_update_text_entry_size( isom_text_entry_t *text )
 {
     if( !text )
         return 0;
-    text->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 51 + (uint64_t)text->name_length;
+    text->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 51 + (uint64_t)text->font_name_length;
     CHECK_LARGESIZE( text->base_header.size );
     return text->base_header.size;
+}
+
+static uint64_t isom_update_ftab_size( isom_ftab_t *ftab )
+{
+    if( !ftab || !ftab->list )
+        return 0;
+    ftab->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 2;
+    for( lsmash_entry_t *entry = ftab->list->head; entry; entry = entry->next )
+    {
+        isom_font_record_t *data = (isom_font_record_t *)entry->data;
+        ftab->base_header.size += 3 + data->font_name_length;
+    }
+    CHECK_LARGESIZE( ftab->base_header.size );
+    return ftab->base_header.size;
+}
+
+static uint64_t isom_update_tx3g_entry_size( isom_tx3g_entry_t *tx3g )
+{
+    if( !tx3g )
+        return 0;
+    tx3g->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 38 + isom_update_ftab_size( tx3g->ftab );
+    CHECK_LARGESIZE( tx3g->base_header.size );
+    return tx3g->base_header.size;
 }
 
 static uint64_t isom_update_stsd_size( isom_stsd_t *stsd )
@@ -4372,6 +4529,9 @@ static uint64_t isom_update_stsd_size( isom_stsd_t *stsd )
             case ISOM_CODEC_TYPE_TWOS_AUDIO :
 #endif
                 size += isom_update_audio_entry_size( (isom_audio_entry_t *)data );
+                break;
+            case ISOM_CODEC_TYPE_TX3G_TEXT :
+                size += isom_update_tx3g_entry_size( (isom_tx3g_entry_t *)data );
                 break;
             case QT_CODEC_TYPE_TEXT_TEXT :
                 size += isom_update_text_entry_size( (isom_text_entry_t *)data );
@@ -4556,7 +4716,7 @@ static uint64_t isom_update_chpl_size( isom_chpl_t *chpl )
     for( lsmash_entry_t *entry = chpl->list->head; entry; entry = entry->next )
     {
         isom_chpl_entry_t *data = (isom_chpl_entry_t *)entry->data;
-        chpl->full_header.size += 9 + data->name_length;
+        chpl->full_header.size += 9 + data->chapter_name_length;
     }
     CHECK_LARGESIZE( chpl->full_header.size );
     return chpl->full_header.size;
@@ -4675,7 +4835,12 @@ uint32_t isom_create_track( isom_root_t *root, uint32_t media_type )
                 return 0;
             break;
         case ISOM_MEDIA_HANDLER_TYPE_TEXT :
-            if( root->qt_compatible )
+            if( root->max_3gpp_version >= 6 )
+            {
+                if( isom_add_nmhd( trak->mdia->minf ) )
+                    return 0;
+            }
+            else if( root->qt_compatible )
             {
                 if( isom_add_gmhd( trak->mdia->minf ) ||
                     isom_add_gmin( trak->mdia->minf->gmhd ) ||
@@ -4683,7 +4848,7 @@ uint32_t isom_create_track( isom_root_t *root, uint32_t media_type )
                     return 0;
             }
             else
-                return 0;   /* We don't support 3GPP Timed Text yet. */
+                return 0;
             break;
         default :
             if( isom_add_nmhd( trak->mdia->minf ) )
@@ -5553,7 +5718,7 @@ fail:
 
 int isom_create_reference_chapter_track( isom_root_t *root, uint32_t track_ID, char *file_name )
 {
-    if( !root || !root->qt_compatible || !root->moov || !root->moov->mvhd )
+    if( !root || (!root->qt_compatible && root->max_3gpp_version < 6) || !root->moov || !root->moov->mvhd )
         return -1;
     /* Create Track Reference Type Box. */
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
@@ -5583,21 +5748,27 @@ int isom_create_reference_chapter_track( isom_root_t *root, uint32_t track_ID, c
     uint64_t media_timescale = isom_get_media_timescale( root, track_ID );
     if( !media_timescale || isom_set_media_timescale( root, chapter_track_ID, media_timescale ) )
         goto fail;
-    /* Fill media language field with 0s (Macintosh language codes : English). */
-    if( isom_set_media_language( root, chapter_track_ID, NULL, 0 ) )
+    /* Set media language field. ISOM: undefined / QTFF: English */
+    if( isom_set_media_language( root, chapter_track_ID, root->max_3gpp_version ? "und" : NULL, 0 ) )
         goto fail;
-    /* Set default handler names. */
-    if( isom_set_media_handler_name( root, chapter_track_ID, "L-SMASH Text Media Handler" ) ||
+    /* Set default media handler name. */
+    if( isom_set_media_handler_name( root, chapter_track_ID, "L-SMASH Text Media Handler" ) )
+        goto fail;
+    /* Set default data handler name if this file shall be compatible with QTFF. */
+    if( root->qt_compatible &&
         isom_set_data_handler_name( root, chapter_track_ID, "L-SMASH URL Data Handler" ) )
         goto fail;
-    /* We use QuickTime Text Media. */
-    uint32_t sample_entry = isom_add_sample_entry( root, chapter_track_ID, QT_CODEC_TYPE_TEXT_TEXT, NULL );
+    /* Create sample description. */
+    uint32_t sample_type = root->max_3gpp_version ? ISOM_CODEC_TYPE_TX3G_TEXT : QT_CODEC_TYPE_TEXT_TEXT;
+    uint32_t sample_entry = isom_add_sample_entry( root, chapter_track_ID, sample_type, NULL );
     if( !sample_entry )
         goto fail;
-    char buff[512];
+    /* Open chapter format file. */
     FILE *chapter = fopen( file_name, "rb" );
     if( !chapter )
         goto fail;
+    /* Parse the file and write text samples. */
+    char buff[512];
     while( fgets( buff, sizeof(buff), chapter ) != NULL )
     {
         /* skip empty line */
@@ -5624,18 +5795,18 @@ int isom_create_reference_chapter_track( isom_root_t *root, uint32_t track_ID, c
         if( sscanf( buff, "%"SCNu64":%"SCNu64":%"SCNu64".%"SCNu64, &hh, &mm, &ss, &ms ) != 4 )
             goto fail;
         uint64_t start_time = (ms * 1e-3 + (ss + mm * 60 + hh * 3600)) * media_timescale + 0.5;
-        /* write a chapter sample here */
+        /* write a text sample here */
         uint16_t name_length = strlen( chapter_name );
-        /* QuickTime Player requires encd atom if media language is ISO language codes : undefined. */
-        //uint8_t extradata[12] = { 0x00, 0x00, 0x00, 0x0C,   /* size: 12 */
-        //                          0x65, 0x6E, 0x63, 0x64,   /* type: 'encd' */
-        //                          0x00, 0x00, 0x01, 0x00 };
         isom_sample_t *sample = isom_create_sample( name_length + 2 );
         if( !sample )
             goto fail;
         sample->data[0] = (name_length >> 8) & 0xff;
         sample->data[1] =  name_length       & 0xff;
         memcpy( sample->data + 2, chapter_name, name_length );
+        /* QuickTime Player requires encd atom if media language is ISO language codes : undefined. */
+        //uint8_t extradata[12] = { 0x00, 0x00, 0x00, 0x0C,   /* size: 12 */
+        //                          0x65, 0x6E, 0x63, 0x64,   /* type: 'encd' */
+        //                          0x00, 0x00, 0x01, 0x00 };
         //memcpy( sample->data + 2 + name_length, extradata, 12 );
         sample->dts = sample->cts = start_time;
         sample->index = sample_entry;
