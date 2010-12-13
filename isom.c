@@ -5718,7 +5718,7 @@ fail:
 
 int isom_create_reference_chapter_track( isom_root_t *root, uint32_t track_ID, char *file_name )
 {
-    if( !root || (!root->qt_compatible && root->max_3gpp_version < 6) || !root->moov || !root->moov->mvhd )
+    if( !root || !root->qt_compatible || !root->moov || !root->moov->mvhd )
         return -1;
     /* Create Track Reference Type Box. */
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
@@ -5749,17 +5749,17 @@ int isom_create_reference_chapter_track( isom_root_t *root, uint32_t track_ID, c
     if( !media_timescale || isom_set_media_timescale( root, chapter_track_ID, media_timescale ) )
         goto fail;
     /* Set media language field. ISOM: undefined / QTFF: English */
-    if( isom_set_media_language( root, chapter_track_ID, root->max_3gpp_version ? "und" : NULL, 0 ) )
+    if( isom_set_media_language( root, chapter_track_ID, root->max_3gpp_version < 6 ? NULL : "und", 0 ) )
         goto fail;
     /* Set default media handler name. */
     if( isom_set_media_handler_name( root, chapter_track_ID, "L-SMASH Text Media Handler" ) )
         goto fail;
     /* Set default data handler name if this file shall be compatible with QTFF. */
-    if( root->qt_compatible &&
+    if( root->max_3gpp_version < 6 &&
         isom_set_data_handler_name( root, chapter_track_ID, "L-SMASH URL Data Handler" ) )
         goto fail;
     /* Create sample description. */
-    uint32_t sample_type = root->max_3gpp_version ? ISOM_CODEC_TYPE_TX3G_TEXT : QT_CODEC_TYPE_TEXT_TEXT;
+    uint32_t sample_type = root->max_3gpp_version < 6 ? QT_CODEC_TYPE_TEXT_TEXT : ISOM_CODEC_TYPE_TX3G_TEXT;
     uint32_t sample_entry = isom_add_sample_entry( root, chapter_track_ID, sample_type, NULL );
     if( !sample_entry )
         goto fail;
