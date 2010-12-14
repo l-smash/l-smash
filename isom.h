@@ -1125,11 +1125,11 @@ enum isom_handler_type_code
 
 enum isom_media_type_code
 {
-    ISOM_MEDIA_HANDLER_TYPE_AUDIO  = ISOM_4CC( 's', 'o', 'u', 'n' ),
+    ISOM_MEDIA_HANDLER_TYPE_AUDIO = ISOM_4CC( 's', 'o', 'u', 'n' ),
     ISOM_MEDIA_HANDLER_TYPE_VIDEO = ISOM_4CC( 'v', 'i', 'd', 'e' ),
-    ISOM_MEDIA_HANDLER_TYPE_HINT   = ISOM_4CC( 'h', 'i', 'n', 't' ),
-    ISOM_MEDIA_HANDLER_TYPE_META   = ISOM_4CC( 'm', 'e', 't', 'a' ),
-    ISOM_MEDIA_HANDLER_TYPE_TEXT   = ISOM_4CC( 't', 'e', 'x', 't' ),
+    ISOM_MEDIA_HANDLER_TYPE_HINT  = ISOM_4CC( 'h', 'i', 'n', 't' ),
+    ISOM_MEDIA_HANDLER_TYPE_META  = ISOM_4CC( 'm', 'e', 't', 'a' ),
+    ISOM_MEDIA_HANDLER_TYPE_TEXT  = ISOM_4CC( 't', 'e', 'x', 't' ),
 };
 
 enum isom_data_reference_type_code
