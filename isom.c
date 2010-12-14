@@ -1155,7 +1155,7 @@ static int isom_add_tkhd( isom_trak_entry_t *trak, uint32_t handler_type )
         isom_create_fullbox( tkhd, ISOM_BOX_TYPE_TKHD );
         switch( handler_type )
         {
-            case ISOM_MEDIA_HANDLER_TYPE_VISUAL :
+            case ISOM_MEDIA_HANDLER_TYPE_VIDEO :
                 tkhd->matrix[0] = 0x00010000;
                 tkhd->matrix[4] = 0x00010000;
                 tkhd->matrix[8] = 0x40000000;
@@ -1285,10 +1285,10 @@ static int isom_add_hdlr( isom_mdia_t *mdia, isom_minf_t *minf, uint32_t media_t
     switch( subtype )
     {
         case ISOM_MEDIA_HANDLER_TYPE_AUDIO :
-            subtype_name = "Audio ";
+            subtype_name = "Sound ";
             subtype_name_length = 6;
             break;
-        case ISOM_MEDIA_HANDLER_TYPE_VISUAL :
+        case ISOM_MEDIA_HANDLER_TYPE_VIDEO :
             subtype_name = "Video ";
             subtype_name_length = 6;
             break;
@@ -4881,7 +4881,7 @@ uint32_t isom_create_track( isom_root_t *root, uint32_t media_type )
         return 0;
     switch( media_type )
     {
-        case ISOM_MEDIA_HANDLER_TYPE_VISUAL :
+        case ISOM_MEDIA_HANDLER_TYPE_VIDEO :
             if( isom_add_vmhd( trak->mdia->minf ) )
                 return 0;
             break;
