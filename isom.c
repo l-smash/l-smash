@@ -3966,7 +3966,7 @@ static int isom_check_compatibility( isom_root_t *root )
     if( !root->ftyp || !root->ftyp->brand_count )
     {
         /* We assume this file is not a QuickTime but MP4 version 1 format file. */
-        root->request_iods = 1;
+        root->mp4_version1 = 1;
         return 0;
     }
     for( uint32_t i = 0; i < root->ftyp->brand_count; i++ )
@@ -3977,7 +3977,10 @@ static int isom_check_compatibility( isom_root_t *root )
                 root->qt_compatible = 1;
                 break;
             case ISOM_BRAND_TYPE_MP41 :
-                root->request_iods = 1;
+                root->mp4_version1 = 1;
+                break;
+            case ISOM_BRAND_TYPE_MP42 :
+                root->mp4_version2 = 1;
                 break;
             case ISOM_BRAND_TYPE_3GP4 :
                 root->max_3gpp_version = ISOM_MAX( root->max_3gpp_version, 4 );
@@ -5205,9 +5208,7 @@ int isom_create_grouping( isom_root_t *root, uint32_t track_ID, uint32_t groupin
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
         return -1;
-    if( isom_add_sbgp( trak->mdia->minf->stbl, grouping_type ) )
-        return -1;
-    return 0;
+    return isom_add_sbgp( trak->mdia->minf->stbl, grouping_type );
 }
 
 /*---- movie manipulators ----*/
@@ -5407,6 +5408,16 @@ int isom_write_free( isom_root_t *root )
     return lsmash_bs_write_data( bs );
 }
 
+int isom_create_object_descriptor( isom_root_t *root )
+{
+    if( !root )
+        return -1;
+    /* Return error if this file is not compatible with MP4 file format. */
+    if( !root->mp4_version1 && !root->mp4_version2 )
+        return -1;
+    return isom_add_iods( root->moov );
+}
+
 /*---- finishing functions ----*/
 
 int isom_finish_movie( isom_root_t *root )
@@ -5432,7 +5443,7 @@ int isom_finish_movie( isom_root_t *root )
                 return -1;
         }
     }
-    if( root->request_iods && isom_add_iods( root->moov ) )
+    if( root->mp4_version1 == 1 && isom_add_iods( root->moov ) )
         return -1;
     if( isom_check_mandatory_boxes( root ) ||
         isom_set_movie_creation_time( root ) ||

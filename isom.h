@@ -867,9 +867,10 @@ typedef struct
 
         lsmash_bs_t *bs;                /* bytestream manager */
         double max_chunk_duration;      /* max duration per chunk in seconds */
-        uint8_t qt_compatible;
-        uint8_t request_iods;
-        uint8_t max_3gpp_version;       /* Maximum 3GPP version */
+        uint8_t qt_compatible;          /* compatibility with QuickTime file format */
+        uint8_t mp4_version1;           /* compatibility with MP4 ver.1 file format */
+        uint8_t mp4_version2;           /* compatibility with MP4 ver.2 file format */
+        uint8_t max_3gpp_version;       /* maximum 3GPP version */
 } isom_root_t;
 
 /** Track Box **/
@@ -1431,11 +1432,11 @@ int isom_set_free( isom_root_t *root, uint8_t *data, uint64_t data_length );
 int isom_set_tyrant_chapter( isom_root_t *root, char *file_name );
 
 int isom_create_explicit_timeline_map( isom_root_t *root, uint32_t track_ID, uint64_t segment_duration, int64_t media_time, int32_t media_rate );
-int isom_modify_timeline_map( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint64_t segment_duration, int64_t media_time, int32_t media_rate );
-
 int isom_create_reference_chapter_track( isom_root_t *root, uint32_t track_ID, char *file_name );
-
 int isom_create_grouping( isom_root_t *root, uint32_t track_ID, uint32_t grouping_type );
+int isom_create_object_descriptor( isom_root_t *root );
+
+int isom_modify_timeline_map( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint64_t segment_duration, int64_t media_time, int32_t media_rate );
 
 int isom_update_media_modification_time( isom_root_t *root, uint32_t track_ID );
 int isom_update_track_modification_time( isom_root_t *root, uint32_t track_ID );
