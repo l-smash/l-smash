@@ -217,7 +217,7 @@ typedef struct
     uint32_t subtype;   /* ISOM and QT: when present in Media Handler Reference Box, this field defines the type of media data
                          * QT: when present in Data Handler Reference Box, this field defines the data reference type */
     uint32_t reserved[3];
-    char     *name;     /* ISOM: a null-terminated string in UTF-8 characters
+    uint8_t *name;      /* ISOM: a null-terminated string in UTF-8 characters
                          * QT: Pascal string */
 
     uint32_t name_length;
@@ -868,6 +868,7 @@ typedef struct
         lsmash_bs_t *bs;                /* bytestream manager */
         double max_chunk_duration;      /* max duration per chunk in seconds */
         uint8_t qt_compatible;          /* compatibility with QuickTime file format */
+        uint8_t isom_compatible;        /* compatibility with ISO Base Media file format */
         uint8_t mp4_version1;           /* compatibility with MP4 ver.1 file format */
         uint8_t mp4_version2;           /* compatibility with MP4 ver.2 file format */
         uint8_t max_3gpp_version;       /* maximum 3GPP version */
