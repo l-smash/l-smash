@@ -5416,8 +5416,7 @@ int isom_finish_movie( isom_root_t *root )
     for( lsmash_entry_t *entry = root->moov->trak_list->head; entry; entry = entry->next )
     {
         isom_trak_entry_t *trak = (isom_trak_entry_t *)entry->data;
-        if( !trak || !trak->tkhd || !trak->mdia || !trak->mdia->minf ||
-            !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stts )
+        if( !trak || !trak->tkhd )
             return -1;
         uint32_t track_ID = trak->tkhd->track_ID;
         uint32_t related_track_ID = trak->related_track_ID;
@@ -5427,19 +5426,9 @@ int isom_finish_movie( isom_root_t *root )
             return -1;
         if( trak->is_chapter && related_track_ID )
         {
-            /* In order that the media duration of the chapter track matches that of related track. */
-            isom_trak_entry_t *related_trak = isom_get_trak( root, related_track_ID );
-            if( !related_trak || !related_trak->mdia || !related_trak->mdia->minf ||
-                !related_trak->mdia->minf->stbl || !related_trak->mdia->minf->stbl->stts )
-                return -1;
-            int64_t sample_delta = isom_get_dts( related_trak->mdia->minf->stbl->stts, isom_get_sample_count( related_trak ) )
-                                 - isom_get_dts(         trak->mdia->minf->stbl->stts, isom_get_sample_count( trak ) )
-                                 + isom_get_last_sample_delta( root, related_track_ID );
-            if( sample_delta > 0 && isom_set_last_sample_delta( root, track_ID, sample_delta ) )
-                return -1;
-            uint64_t track_duration = isom_get_track_duration( root, related_track_ID );
-            uint32_t start_offset = isom_get_start_time_offset( root, track_ID );
-            if( isom_create_explicit_timeline_map( root, track_ID, track_duration, start_offset, ISOM_NORMAL_EDIT ) )
+            /* In order that the track duration of the chapter track doesn't exceed that of the related track. */
+            uint64_t track_duration = ISOM_MIN( trak->tkhd->duration, isom_get_track_duration( root, related_track_ID ) );
+            if( isom_create_explicit_timeline_map( root, track_ID, track_duration, 0, ISOM_NORMAL_EDIT ) )
                 return -1;
         }
     }
