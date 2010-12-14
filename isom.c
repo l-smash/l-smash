@@ -835,53 +835,36 @@ static int isom_add_co64_entry( isom_stbl_t *stbl, uint64_t chunk_offset )
     return 0;
 }
 
+static int isom_convert_stco_to_co64( isom_stbl_t* stbl )
+{
+    /* backup stco */
+    isom_stco_t *stco = stbl->stco;
+    stbl->stco = NULL;
+    if( isom_add_co64( stbl ) )
+        return -1;
+    /* move chunk_offset to co64 from stco */
+    for( lsmash_entry_t *entry = stco->list->head; entry; entry = entry->next )
+    {
+        isom_stco_entry_t *data = (isom_stco_entry_t*)entry->data;
+        if( isom_add_co64_entry( stbl, data->chunk_offset ) )
+            return -1;
+    }
+    lsmash_remove_list( stco->list, NULL );
+    free( stco );
+    return 0;
+}
+
 static int isom_add_stco_entry( isom_stbl_t *stbl, uint64_t chunk_offset )
 {
     if( !stbl || !stbl->stco || !stbl->stco->list )
         return -1;
     if( stbl->stco->large_presentation )
-    {
-        if( isom_add_co64_entry( stbl, chunk_offset ) )
-            return -1;
-        return 0;
-    }
+        return isom_add_co64_entry( stbl, chunk_offset );
     if( chunk_offset > UINT32_MAX )
     {
-        /* backup stco */
-        isom_stco_t *stco = stbl->stco;
-        stbl->stco = NULL;
-        int e = 0;
-        if( isom_add_co64( stbl ) )
-            e = 1;
-        /* move chunk_offset to co64 from stco */
-        for( lsmash_entry_t *entry = stco->list->head; !e && entry; )
-        {
-            isom_stco_entry_t *data = (isom_stco_entry_t *)entry->data;
-            if( isom_add_co64_entry( stbl, data->chunk_offset ) )
-                e = 1;
-            lsmash_entry_t *next = entry->next;
-            if( entry )
-            {
-                if( entry->data )
-                    free( entry->data );
-                free( entry );
-            }
-            entry = next;
-        }
-        if( e )
-        {
-            lsmash_remove_list( stbl->stco->list, NULL );
-            stbl->stco = stco;
+        if( isom_convert_stco_to_co64( stbl ) )
             return -1;
-        }
-        else
-        {
-            free( stco->list );
-            free( stco );
-        }
-        if( isom_add_co64_entry( stbl, chunk_offset ) )
-            return -1;
-        return 0;
+        return isom_add_co64_entry( stbl, chunk_offset );
     }
     isom_stco_entry_t *data = malloc( sizeof(isom_stco_entry_t) );
     if( !data )
@@ -5319,7 +5302,7 @@ isom_root_t *isom_create_movie( char *filename )
     if( !root->bs )
         return NULL;
     memset( root->bs, 0, sizeof(lsmash_bs_t) );
-    root->bs->stream = fopen( filename, "wb" );
+    root->bs->stream = fopen( filename, "w+b" );
     if( !root->bs->stream )
         return NULL;
     if( isom_add_moov( root ) || isom_add_mvhd( root->moov ) )
@@ -5516,7 +5499,7 @@ int isom_create_object_descriptor( isom_root_t *root )
 
 /*---- finishing functions ----*/
 
-int isom_finish_movie( isom_root_t *root )
+int isom_finish_movie( isom_root_t *root, isom_adhoc_remux_t* remux )
 {
     if( !root || !root->moov || !root->moov->trak_list )
         return -1;
@@ -5543,10 +5526,102 @@ int isom_finish_movie( isom_root_t *root )
         return -1;
     if( isom_check_mandatory_boxes( root ) ||
         isom_set_movie_creation_time( root ) ||
-        isom_update_moov_size( root->moov ) ||
-        isom_write_moov( root ) )
+        isom_update_moov_size( root->moov ) )
         return -1;
+
+    if( !remux )
+        return isom_write_moov( root );
+
+    /* stco->co64 conversion, depending on last chunk's offset */
+    for( lsmash_entry_t* entry = root->moov->trak_list->head; entry; )
+    {
+        isom_trak_entry_t* trak = (isom_trak_entry_t*)entry->data;
+        if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
+            return -1;
+        isom_stco_t* stco = trak->mdia->minf->stbl->stco;
+        if( !stco || !stco->list || !stco->list->tail )
+            return -1;
+        if( stco->large_presentation
+            || ((isom_stco_entry_t*)stco->list->tail->data)->chunk_offset + root->moov->base_header.size <= UINT32_MAX )
+        {
+            entry = entry->next;
+            continue; /* no need to remux */
+        }
+        /* stco->co64 conversion */
+        if( isom_convert_stco_to_co64( trak->mdia->minf->stbl )
+            || isom_update_moov_size( root->moov ) )
+            return -1;
+        entry = root->moov->trak_list->head; /* whenever any conversion, re-check all traks */
+    }
+
+    /* now the amount of offset is fixed. */
+
+    /* buffer size must be at least sizeof(moov)*2 */
+    remux->buffer_size = ISOM_MAX( remux->buffer_size, root->moov->base_header.size * 2 );
+
+    uint8_t* buf[2];
+    if( (buf[0] = (uint8_t*)malloc( remux->buffer_size )) == NULL )
+        return -1; /* NOTE: i think we still can fallback to "return isom_write_moov( root );" here. */
+    uint64_t size = remux->buffer_size / 2;
+    buf[1] = buf[0] + size; /* split to 2 buffers */
+
+    /* now the amount of offset is fixed. apply that to stco/co64 */
+    for( lsmash_entry_t* entry = root->moov->trak_list->head; entry; entry = entry->next )
+    {
+        isom_stco_t* stco = ((isom_trak_entry_t*)entry->data)->mdia->minf->stbl->stco;
+        if( stco->large_presentation )
+            for( lsmash_entry_t* co64_entry = stco->list->head ; co64_entry ; co64_entry = co64_entry->next )
+                ((isom_co64_entry_t*)co64_entry->data)->chunk_offset += root->moov->base_header.size;
+        else
+            for( lsmash_entry_t* stco_entry = stco->list->head ; stco_entry ; stco_entry = stco_entry->next )
+                ((isom_stco_entry_t*)stco_entry->data)->chunk_offset += root->moov->base_header.size;
+    }
+
+    FILE *stream = root->bs->stream;
+    isom_mdat_t *mdat = root->mdat;
+    uint64_t total = ftell( stream ) + root->moov->base_header.size; // FIXME:
+    uint64_t readnum;
+    /* backup starting area of mdat and write moov there instead */
+    if( fseek( stream, mdat->placeholder_pos, SEEK_SET ) )
+        goto fail;
+    readnum = fread( buf[0], 1, size, stream );
+    uint64_t read_pos = ftell( stream );
+
+    /* write moov there instead */
+    if( fseek( stream, mdat->placeholder_pos, SEEK_SET )
+        || isom_write_moov( root ) )
+        goto fail;
+    uint64_t write_pos = ftell( stream );
+
+    mdat->placeholder_pos += root->moov->base_header.size; /* update placeholder */
+
+    /* copy-pastan */
+    int buf_switch = 1;
+    while( readnum == size )
+    {
+        if( fseek( stream, read_pos, SEEK_SET ) )
+            goto fail;
+        readnum = fread( buf[buf_switch], 1, size, stream );
+        read_pos = ftell( stream );
+
+        buf_switch ^= 0x1;
+
+        if( fseek( stream, write_pos, SEEK_SET )
+            || fwrite( buf[buf_switch], 1, size, stream ) != size )
+            goto fail;
+        write_pos = ftell( stream );
+        if( remux->func ) remux->func( remux->param, write_pos, total ); // FIXME:
+    }
+    if( fwrite( buf[buf_switch^0x1], 1, readnum, stream ) != readnum )
+        goto fail;
+    if( remux->func ) remux->func( remux->param, total, total ); // FIXME:
+
+    free( buf[0] );
     return 0;
+
+fail:
+    free( buf[0] );
+    return -1;
 }
 
 int isom_set_last_sample_delta( isom_root_t *root, uint32_t track_ID, uint32_t sample_delta )

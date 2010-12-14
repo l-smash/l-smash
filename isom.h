@@ -1387,6 +1387,12 @@ typedef struct
     isom_sample_property_t prop;
 } isom_sample_t;
 
+typedef int (*isom_adhoc_remux_callback)( void* param, uint64_t done, uint64_t total );
+typedef struct {
+    uint64_t buffer_size;
+    isom_adhoc_remux_callback func;
+    void* param;
+} isom_adhoc_remux_t;
 
 int isom_add_sps_entry( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *sps, uint32_t sps_size );
 int isom_add_pps_entry( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *pps, uint32_t pps_size );
@@ -1453,7 +1459,7 @@ void isom_delete_sample( isom_sample_t *sample );
 int isom_write_sample( isom_root_t *root, uint32_t track_ID, isom_sample_t *sample );
 int isom_write_mdat_size( isom_root_t *root );
 int isom_flush_pooled_samples( isom_root_t *root, uint32_t track_ID, uint32_t last_sample_delta );
-int isom_finish_movie( isom_root_t *root );
+int isom_finish_movie( isom_root_t *root, isom_adhoc_remux_t* remux );
 void isom_destroy_root( isom_root_t *root );
 
 void isom_delete_track( isom_root_t *root, uint32_t track_ID );

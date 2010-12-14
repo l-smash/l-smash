@@ -246,7 +246,7 @@ int main( int argc, char* argv[] )
         eprintf( "Failed to update bitrate info.\n" );
 
     /* close movie */
-    if( isom_finish_movie( structs.root ) )
+    if( isom_finish_movie( structs.root, NULL ) )
         eprintf( "Failed to finish movie.\n" );
     if( isom_write_mdat_size( structs.root ) )
         eprintf( "Failed to write mdat size.\n" );
