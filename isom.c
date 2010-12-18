@@ -1455,6 +1455,16 @@ static int isom_add_clap( isom_visual_entry_t *visual )
     return 0;
 }
 
+static int isom_add_stsl( isom_visual_entry_t *visual )
+{
+    if( !visual || visual->stsl )
+        return -1;
+    isom_create_fullbox( stsl, ISOM_BOX_TYPE_STSL );
+    stsl->scale_method = ISOM_SCALING_METHOD_HIDDEN;
+    visual->stsl = stsl;
+    return 0;
+}
+
 int isom_add_btrt( isom_root_t *root, uint32_t track_ID, uint32_t entry_number )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
@@ -1788,6 +1798,8 @@ static void isom_remove_stsd( isom_stsd_t *stsd )
                     free( avc->pasp );
                 if( avc->clap )
                     free( avc->clap );
+                if( avc->stsl )
+                    free( avc->stsl );
                 if( avc->avcC )
                     isom_remove_avcC( avc->avcC );
                 if( avc->btrt )
@@ -1803,6 +1815,8 @@ static void isom_remove_stsd( isom_stsd_t *stsd )
                     free( mp4v->pasp );
                 if( mp4v->clap )
                     free( mp4v->clap );
+                if( mp4v->stsl )
+                    free( mp4v->stsl );
                 if( mp4v->esds )
                     free( mp4v->esds );
                 free( mp4v );
@@ -1840,6 +1854,8 @@ static void isom_remove_stsd( isom_stsd_t *stsd )
                     free( visual->pasp );
                 if( visual->clap )
                     free( visual->clap );
+                if( visual->stsl )
+                    free( visual->stsl );
                 free( visual );
                 break;
             }
@@ -2448,6 +2464,17 @@ static void isom_put_clap( lsmash_bs_t *bs, isom_clap_t *clap )
     lsmash_bs_put_be32( bs, clap->vertOffD );
 }
 
+static void isom_put_stsl( lsmash_bs_t *bs, isom_stsl_t *stsl )
+{
+    if( !stsl )
+        return;
+    isom_bs_put_full_header( bs, &stsl->full_header );
+    lsmash_bs_put_byte( bs, stsl->constraint_flag );
+    lsmash_bs_put_byte( bs, stsl->scale_method );
+    lsmash_bs_put_be16( bs, stsl->display_center_x );
+    lsmash_bs_put_be16( bs, stsl->display_center_y );
+}
+
 static int isom_put_ps_entries( lsmash_bs_t *bs, lsmash_entry_list_t *list )
 {
     for( lsmash_entry_t *entry = list->head; entry; entry = entry->next )
@@ -2530,6 +2557,7 @@ static int isom_write_avc_entry( lsmash_bs_t *bs, lsmash_entry_t *entry )
     lsmash_bs_put_be16( bs, data->pre_defined3 );
     isom_put_clap( bs, data->clap );
     isom_put_pasp( bs, data->pasp );
+    isom_put_stsl( bs, data->stsl );
     if( !data->avcC )
         return -1;
     isom_put_avcC( bs, data->avcC );
@@ -2601,6 +2629,7 @@ static int isom_write_visual_entry( lsmash_bs_t *bs, lsmash_entry_t *entry )
     lsmash_bs_put_be16( bs, data->pre_defined3 );
     isom_put_clap( bs, data->clap );
     isom_put_pasp( bs, data->pasp );
+    isom_put_stsl( bs, data->stsl );
     if( data->base_header.type == ISOM_CODEC_TYPE_AVC1_VIDEO )
     {
         isom_avc_entry_t *avc = (isom_avc_entry_t *)data;
@@ -4381,6 +4410,15 @@ static uint64_t isom_update_clap_size( isom_clap_t *clap )
     return clap->base_header.size;
 }
 
+static uint64_t isom_update_stsl_size( isom_stsl_t *stsl )
+{
+    if( !stsl )
+        return 0;
+    stsl->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 6;
+    CHECK_LARGESIZE( stsl->full_header.size );
+    return stsl->full_header.size;
+}
+
 static uint64_t isom_update_avcC_size( isom_avcC_t *avcC )
 {
     if( !avcC || !avcC->sequenceParameterSets || !avcC->pictureParameterSets )
@@ -4420,6 +4458,7 @@ static uint64_t isom_update_avc_entry_size( isom_avc_entry_t *avc )
     avc->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 78
         + isom_update_pasp_size( avc->pasp )
         + isom_update_clap_size( avc->clap )
+        + isom_update_stsl_size( avc->stsl )
         + isom_update_avcC_size( avc->avcC )
         + isom_update_btrt_size( avc->btrt );
     CHECK_LARGESIZE( avc->base_header.size );
@@ -4452,7 +4491,8 @@ static uint64_t isom_update_mp4v_entry_size( isom_mp4v_entry_t *mp4v )
     mp4v->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 78
         + isom_update_esds_size( mp4v->esds )
         + isom_update_pasp_size( mp4v->pasp )
-        + isom_update_clap_size( mp4v->clap );
+        + isom_update_clap_size( mp4v->clap )
+        + isom_update_stsl_size( mp4v->stsl );
     CHECK_LARGESIZE( mp4v->base_header.size );
     return mp4v->base_header.size;
 }
@@ -5267,6 +5307,31 @@ int isom_set_track_aperture_modes( isom_root_t *root, uint32_t track_ID, uint32_
     }
     tapt->enof->width = width;
     tapt->enof->height = height;
+    return 0;
+}
+
+int isom_set_scaling_method( isom_root_t *root, uint32_t track_ID, uint32_t entry_number,
+                             uint8_t scale_method, int16_t display_center_x, int16_t display_center_y )
+{
+    if( !root || !track_ID || !entry_number || !scale_method )
+        return -1;
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
+        return -1;
+    isom_visual_entry_t *data = (isom_visual_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
+    if( !data )
+        return -1;
+    isom_stsl_t *stsl = data->stsl;
+    if( !stsl )
+    {
+        if( isom_add_stsl( data ) )
+            return -1;
+        stsl = data->stsl;
+    }
+    stsl->constraint_flag = 1;
+    stsl->scale_method = scale_method;
+    stsl->display_center_x = display_center_x;
+    stsl->display_center_y = display_center_y;
     return 0;
 }
 

@@ -343,6 +343,23 @@ typedef struct
     uint32_t vertOffD;
 } isom_clap_t;
 
+/* Sample Scale Box */
+typedef struct
+{
+#define ISOM_SCALING_METHOD_FILL    1
+#define ISOM_SCALING_METHOD_HIDDEN  2
+#define ISOM_SCALING_METHOD_MEET    3
+#define ISOM_SCALING_METHOD_SLICE_X 4
+#define ISOM_SCALING_METHOD_SLICE_Y 5
+    isom_full_header_t full_header;
+    uint8_t constraint_flag;    /* Upper 7-bits are reserved.
+                                 * If this flag is set, all samples described by this sample entry shall be scaled
+                                 * according to the method specified by the field 'scale_method'. */
+    uint8_t scale_method;       /* The semantics of the values for scale_method are as specified for the 'fit' attribute of regions in SMIL 1.0. */
+    int16_t display_center_x;
+    int16_t display_center_y;
+} isom_stsl_t;
+
 /* Sample Entry */
 #define ISOM_SAMPLE_ENTRY \
     isom_base_header_t base_header; \
@@ -376,7 +393,8 @@ typedef struct
                                  *  0x0020: gray or colour with alpha */ \
     int16_t pre_defined3;       /* template: pre_defined = -1 */ \
     isom_clap_t *clap;          /* Clean Aperture Box / optional */ \
-    isom_pasp_t *pasp;          /* Pixel Aspect Ratio Box / optional */
+    isom_pasp_t *pasp;          /* Pixel Aspect Ratio Box / optional */ \
+    isom_stsl_t *stsl;          /* Sample Scale Box / optional */
 
 typedef struct
 {
@@ -1088,6 +1106,7 @@ enum isom_box_code
     ISOM_BOX_TYPE_CLAP = ISOM_4CC( 'c', 'l', 'a', 'p' ),
     ISOM_BOX_TYPE_ESDS = ISOM_4CC( 'e', 's', 'd', 's' ),
     ISOM_BOX_TYPE_PASP = ISOM_4CC( 'p', 'a', 's', 'p' ),
+    ISOM_BOX_TYPE_STSL = ISOM_4CC( 's', 't', 's', 'l' ),
 
     ISOM_BOX_TYPE_CHPL = ISOM_4CC( 'c', 'h', 'p', 'l' ),
 
@@ -1428,9 +1447,12 @@ int isom_set_track_aperture_modes( isom_root_t *root, uint32_t track_ID, uint32_
 int isom_set_sample_resolution( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint16_t width, uint16_t height );
 int isom_set_sample_type( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint32_t sample_type );
 int isom_set_sample_aspect_ratio( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint32_t hSpacing, uint32_t vSpacing );
+int isom_set_scaling_method( isom_root_t *root, uint32_t track_ID, uint32_t entry_number,
+                             uint8_t scale_method, int16_t display_center_x, int16_t display_center_y );
 int isom_set_avc_config( isom_root_t *root, uint32_t track_ID, uint32_t entry_number,
-    uint8_t configurationVersion, uint8_t AVCProfileIndication, uint8_t profile_compatibility, uint8_t AVCLevelIndication, uint8_t lengthSizeMinusOne,
-    uint8_t chroma_format, uint8_t bit_depth_luma_minus8, uint8_t bit_depth_chroma_minus8 );
+                         uint8_t configurationVersion, uint8_t AVCProfileIndication, uint8_t profile_compatibility,
+                         uint8_t AVCLevelIndication, uint8_t lengthSizeMinusOne,
+                         uint8_t chroma_format, uint8_t bit_depth_luma_minus8, uint8_t bit_depth_chroma_minus8 );
 int isom_set_handler_name( isom_root_t *root, uint32_t track_ID, char *handler_name );
 int isom_set_last_sample_delta( isom_root_t *root, uint32_t track_ID, uint32_t sample_delta );
 int isom_set_media_language( isom_root_t *root, uint32_t track_ID, char *ISO_language, uint16_t Mac_language );
