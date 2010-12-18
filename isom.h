@@ -337,9 +337,9 @@ typedef struct
     uint32_t cleanApertureWidthD;
     uint32_t cleanApertureHeightN;
     uint32_t cleanApertureHeightD;
-    uint32_t horizOffN;
+    int32_t  horizOffN;
     uint32_t horizOffD;
-    uint32_t vertOffN;
+    int32_t  vertOffN;
     uint32_t vertOffD;
 } isom_clap_t;
 
