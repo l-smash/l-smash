@@ -5579,7 +5579,7 @@ int isom_finish_movie( isom_root_t *root, isom_adhoc_remux_t* remux )
         uint32_t track_ID = trak->tkhd->track_ID;
         uint32_t related_track_ID = trak->related_track_ID;
         uint32_t track_mode = trak->is_chapter ? 0 : ISOM_TRACK_ENABLED;
-        track_mode |= ISOM_TRACK_IN_MOVIE;  /* presentaion for QuickTime Player */
+        track_mode |= ISOM_TRACK_IN_MOVIE;  /* presentation for QuickTime Player */
         if( isom_set_track_mode( root, track_ID, track_mode ) )
             return -1;
         if( trak->is_chapter && related_track_ID )
