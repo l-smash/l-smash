@@ -1290,12 +1290,15 @@ static int isom_add_hdlr( isom_mdia_t *mdia, isom_minf_t *minf, uint32_t media_t
         case ISOM_REFERENCE_HANDLER_TYPE_ALIAS :
             subtype_name = "Alias ";
             subtype_name_length = 6;
+            break;
         case ISOM_REFERENCE_HANDLER_TYPE_RESOURCE :
             subtype_name = "Resource ";
             subtype_name_length = 9;
+            break;
         case ISOM_REFERENCE_HANDLER_TYPE_URL :
             subtype_name = "URL ";
             subtype_name_length = 4;
+            break;
         default :
             subtype_name = "Unknown ";
             subtype_name_length = 8;
@@ -5981,10 +5984,6 @@ int isom_create_reference_chapter_track( isom_root_t *root, uint32_t track_ID, c
         goto fail;
     /* Set media language field. ISOM: undefined / QTFF: English */
     if( isom_set_media_language( root, chapter_track_ID, root->max_3gpp_version < 6 ? NULL : "und", 0 ) )
-        goto fail;
-    /* Set default handler names. */
-    if( isom_set_media_handler_name( root, chapter_track_ID, "L-SMASH Text Media Handler" ) ||
-        isom_set_data_handler_name( root, chapter_track_ID, "L-SMASH URL Data Handler" ) )
         goto fail;
     /* Create sample description. */
     uint32_t sample_type = root->max_3gpp_version < 6 ? QT_CODEC_TYPE_TEXT_TEXT : ISOM_CODEC_TYPE_TX3G_TEXT;
