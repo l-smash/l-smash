@@ -777,7 +777,7 @@ int isom_add_stps_entry( isom_stbl_t *stbl, uint32_t sample_number )
     return 0;
 }
 
-static int isom_add_sdtp_entry( isom_stbl_t *stbl, isom_sample_property_t *prop )
+static int isom_add_sdtp_entry( isom_stbl_t *stbl, isom_sample_property_t *prop, uint8_t avc_extensions )
 {
     if( !prop )
         return -1;
@@ -787,7 +787,7 @@ static int isom_add_sdtp_entry( isom_stbl_t *stbl, isom_sample_property_t *prop 
     if( !data )
         return -1;
     /* isom_sdtp_entry_t is smaller than isom_sample_property_t. */
-    data->is_leading = prop->leading & 0x03;
+    data->is_leading = (avc_extensions ? prop->leading : prop->allow_earlier) & 0x03;
     data->sample_depends_on = prop->independent & 0x03;
     data->sample_is_depended_on = prop->disposable & 0x03;
     data->sample_has_redundancy = prop->redundant & 0x03;
@@ -3532,26 +3532,30 @@ int isom_update_track_duration( isom_root_t *root, uint32_t track_ID, uint32_t l
     return trak->edts && trak->edts->elst ? 0 : isom_update_tkhd_duration( trak );
 }
 
-static int isom_add_size( isom_stbl_t *stbl, uint32_t sample_size )
+static int isom_add_size( isom_trak_entry_t *trak, uint32_t sample_size )
 {
     if( !sample_size )
         return -1;
-    return isom_add_stsz_entry( stbl, sample_size );
+    return isom_add_stsz_entry( trak->mdia->minf->stbl, sample_size );
 }
 
-static int isom_add_sync_point( isom_stbl_t *stbl, uint32_t sample_number, isom_sample_property_t *prop )
+static int isom_add_sync_point( isom_trak_entry_t *trak, uint32_t sample_number, isom_sample_property_t *prop )
 {
     if( !prop->sync_point ) /* no null check for prop */
         return 0;
+    isom_stbl_t *stbl = trak->mdia->minf->stbl;
     if( !stbl->stss && isom_add_stss( stbl ) )
         return -1;
     return isom_add_stss_entry( stbl, sample_number );
 }
 
-static int isom_add_partial_sync( isom_stbl_t *stbl, uint32_t sample_number, isom_sample_property_t *prop )
+static int isom_add_partial_sync( isom_trak_entry_t *trak, uint32_t sample_number, isom_sample_property_t *prop )
 {
+    if( !trak->root->qt_compatible )
+        return 0;
     if( !prop->partial_sync ) /* no null check for prop */
         return 0;
+    isom_stbl_t *stbl = trak->mdia->minf->stbl;
     if( !stbl->stps && isom_add_stps( stbl ) )
         return -1;
     return isom_add_stps_entry( stbl, sample_number );
@@ -3559,10 +3563,13 @@ static int isom_add_partial_sync( isom_stbl_t *stbl, uint32_t sample_number, iso
 
 static int isom_add_dependency_type( isom_trak_entry_t *trak, isom_sample_property_t *prop )
 {
+    if( !trak->root->qt_compatible && !trak->root->avc_extensions )
+        return 0;
+    uint8_t avc_extensions = trak->root->avc_extensions;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     if( stbl->sdtp )
-        return isom_add_sdtp_entry( stbl, prop );
-    if( !prop->leading && !prop->independent && !prop->disposable && !prop->redundant )  /* no null check for prop */
+        return isom_add_sdtp_entry( stbl, prop, avc_extensions );
+    if( !prop->allow_earlier && !prop->leading && !prop->independent && !prop->disposable && !prop->redundant )  /* no null check for prop */
         return 0;
     if( isom_add_sdtp( stbl ) )
         return -1;
@@ -3570,13 +3577,15 @@ static int isom_add_dependency_type( isom_trak_entry_t *trak, isom_sample_proper
     /* fill past samples with ISOM_SAMPLE_*_UNKNOWN */
     isom_sample_property_t null_prop = { 0 };
     for( uint32_t i = 1; i < count; i++ )
-        if( isom_add_sdtp_entry( stbl, &null_prop ) )
+        if( isom_add_sdtp_entry( stbl, &null_prop, avc_extensions ) )
             return -1;
-    return isom_add_sdtp_entry( stbl, prop );
+    return isom_add_sdtp_entry( stbl, prop, avc_extensions );
 }
 
 static int isom_group_roll_recovery( isom_trak_entry_t *trak, isom_sample_property_t *prop )
 {
+    if( !trak->root->avc_extensions )
+        return 0;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     isom_sbgp_t *sbgp = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_ROLL );
     isom_sgpd_t *sgpd = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_ROLL );
@@ -3822,23 +3831,22 @@ static int isom_write_pooled_samples( isom_trak_entry_t *trak, lsmash_entry_list
 {
     if( !trak->root )
         return -1;
-    isom_stbl_t *stbl = trak->mdia->minf->stbl;
     for( lsmash_entry_t *entry = pool->head; entry; entry = entry->next )
     {
         isom_sample_t *data = (isom_sample_t *)entry->data;
         if( !data || !data->data )
             return -1;
         /* Add a sample_size and increment sample_count. */
-        if( isom_add_size( stbl, data->length ) )
+        if( isom_add_size( trak, data->length ) )
             return -1;
         /* Add a decoding timestamp and a composition timestamp. */
         if( isom_add_timestamp( trak, data->dts, data->cts ) )
             return -1;
         /* Add a sync point if needed. */
-        if( isom_add_sync_point( stbl, isom_get_sample_count( trak ), &data->prop ) )
+        if( isom_add_sync_point( trak, isom_get_sample_count( trak ), &data->prop ) )
             return -1;
         /* Add a partial sync point if needed. */
-        if( trak->root->qt_compatible && isom_add_partial_sync( stbl, isom_get_sample_count( trak ), &data->prop ) )
+        if( isom_add_partial_sync( trak, isom_get_sample_count( trak ), &data->prop ) )
             return -1;
         /* Add leading, independent, disposable and redundant information if needed. */
         if( isom_add_dependency_type( trak, &data->prop ) )
@@ -4052,6 +4060,12 @@ static int isom_check_compatibility( isom_root_t *root )
                 break;
             case ISOM_BRAND_TYPE_MP42 :
                 root->mp4_version2 = 1;
+                break;
+            case ISOM_BRAND_TYPE_AVC1 :
+            case ISOM_BRAND_TYPE_ISO2 :
+            case ISOM_BRAND_TYPE_ISO3 :
+            case ISOM_BRAND_TYPE_ISO4 :
+                root->avc_extensions = 1;
                 break;
             case ISOM_BRAND_TYPE_3GP4 :
                 root->max_3gpp_version = ISOM_MAX( root->max_3gpp_version, 4 );

@@ -526,6 +526,7 @@ typedef struct
 /* Independent and Disposable Samples Box */
 typedef struct
 {
+#define QT_SAMPLE_EARLIER_PTS_ALLOWED      1
 #define ISOM_SAMPLE_LEADING_UNKOWN         0
 #define ISOM_SAMPLE_IS_UNDECODABLE_LEADING 1
 #define ISOM_SAMPLE_IS_NOT_LEADING         2
@@ -539,7 +540,7 @@ typedef struct
 #define ISOM_SAMPLE_REDUNDANCY_UNKOWN      0
 #define ISOM_SAMPLE_HAS_REDUNDANCY         1
 #define ISOM_SAMPLE_HAS_NO_REDUNDANCY      2
-    unsigned is_leading            : 2;     /* leading */
+    unsigned is_leading            : 2;     /* ISOM: leading / QTFF: samples later in decode order may have earlier display times */
     unsigned sample_depends_on     : 2;     /* independency */
     unsigned sample_is_depended_on : 2;     /* disposable */
     unsigned sample_has_redundancy : 2;     /* redundancy */
@@ -813,7 +814,7 @@ typedef struct
 typedef struct
 {
     isom_base_header_t base_header;
-    /* FontRecord 
+    /* FontRecord
      * entry_count is uint16_t. */
     lsmash_entry_list_t *list;
 } isom_ftab_t;
@@ -887,6 +888,7 @@ typedef struct
         double max_chunk_duration;      /* max duration per chunk in seconds */
         uint8_t qt_compatible;          /* compatibility with QuickTime file format */
         uint8_t isom_compatible;        /* compatibility with ISO Base Media file format */
+        uint8_t avc_extensions;         /* compatibility with AVC extensions */
         uint8_t mp4_version1;           /* compatibility with MP4 ver.1 file format */
         uint8_t mp4_version2;           /* compatibility with MP4 ver.2 file format */
         uint8_t max_3gpp_version;       /* maximum 3GPP version */
@@ -1389,6 +1391,7 @@ typedef struct
 {
     uint8_t sync_point;
     uint8_t partial_sync;
+    uint8_t allow_earlier;
     uint8_t leading;
     uint8_t independent;
     uint8_t disposable;
