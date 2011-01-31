@@ -31,10 +31,10 @@
 /* NOTE: For audio, currently assuming AAC-LC. For video, currently not used. */
 
 #define MP4SYS_BASE_SUMMARY \
-    mp4sys_object_type_indication object_type_indication;\
-    mp4sys_stream_type stream_type;\
-    void* exdata;                /* typically payload of DecoderSpecificInfo (that's called AudioSpecificConfig in mp4a) */\
-    uint32_t exdata_length;      /* length of exdata */\
+    mp4sys_object_type_indication object_type_indication; \
+    mp4sys_stream_type stream_type; \
+    void* exdata;                /* typically payload of DecoderSpecificInfo (that's called AudioSpecificConfig in mp4a) */ \
+    uint32_t exdata_length;      /* length of exdata */ \
     uint32_t max_au_length;      /* buffer length for 1 access unit, typically max size of 1 audio/video frame */
 
 typedef struct {
@@ -61,8 +61,6 @@ typedef struct {
     uint32_t height;
     uint32_t display_width;
     uint32_t display_height;
-    uint32_t bit_depth;          /* If AAC, AAC stream itself does not mention to accuracy (bit_depth of decoded PCM data), we assume 16bit. */
-
 } mp4sys_video_summary_t;
 
 int mp4sys_summary_add_exdata( mp4sys_audio_summary_t* summary, void* exdata, uint32_t exdata_length );

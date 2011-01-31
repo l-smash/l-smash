@@ -478,6 +478,44 @@ static int isom_add_visual_entry( lsmash_entry_list_t *list, uint32_t sample_typ
 }
 #endif
 
+static void isom_remove_wave( isom_wave_t *wave );
+
+static int isom_add_wave( isom_audio_entry_t *audio )
+{
+    if( !audio || audio->wave )
+        return -1;
+    isom_create_basebox( wave, QT_BOX_TYPE_WAVE );
+    audio->wave = wave;
+    return 0;
+}
+
+static int isom_add_frma( isom_wave_t *wave )
+{
+    if( !wave || wave->frma )
+        return -1;
+    isom_create_basebox( frma, QT_BOX_TYPE_FRMA );
+    wave->frma = frma;
+    return 0;
+}
+
+static int isom_add_mp4a( isom_wave_t *wave )
+{
+    if( !wave || wave->mp4a )
+        return -1;
+    isom_create_basebox( mp4a, QT_BOX_TYPE_MP4A );
+    wave->mp4a = mp4a;
+    return 0;
+}
+
+static int isom_add_terminator( isom_wave_t *wave )
+{
+    if( !wave || wave->terminator )
+        return -1;
+    isom_create_basebox( terminator, QT_BOX_TYPE_TERMINATOR );
+    wave->terminator = terminator;
+    return 0;
+}
+
 static int isom_add_audio_entry( lsmash_entry_list_t *list, uint32_t sample_type, mp4sys_audio_summary_t *summary )
 {
     if( !list )
@@ -491,27 +529,63 @@ static int isom_add_audio_entry( lsmash_entry_list_t *list, uint32_t sample_type
     audio->channelcount = 2;
     audio->samplesize = 16;
     audio->samplerate = summary->frequency <= UINT16_MAX ? summary->frequency << 16 : 0;
-    if( summary->exdata )
+    if( audio->base_header.type == ISOM_CODEC_TYPE_MP4A_AUDIO )
     {
-        audio->exdata_length = summary->exdata_length;
-        audio->exdata = malloc( audio->exdata_length );
-        if( !audio->exdata )
+        audio->version = 1;
+        audio->channelcount = ISOM_MIN( summary->channels, 2 );
+        audio->compression_ID = -2;     /* assume VBR */
+        audio->samplesPerPacket = summary->samples_in_frame;
+        audio->bytesPerPacket = summary->bit_depth / 8;
+        audio->bytesPerFrame = audio->bytesPerPacket * summary->channels;
+        audio->bytesPerSample = 1 + (summary->bit_depth != 8);
+        if( isom_add_wave( audio ) ||
+            isom_add_frma( audio->wave ) ||
+            isom_add_mp4a( audio->wave ) ||
+            isom_add_terminator( audio->wave ) )
+            goto fail;
+        audio->wave->frma->data_format = sample_type;
+        /* create ES Descriptor */
+        isom_esds_t *esds = malloc( sizeof(isom_esds_t) );
+        if( !esds )
+            goto fail;
+        memset( esds, 0, sizeof(isom_esds_t) );
+        isom_init_full_header( &esds->full_header, ISOM_BOX_TYPE_ESDS );
+        mp4sys_ES_Descriptor_params_t esd_param;
+        memset( &esd_param, 0, sizeof(mp4sys_ES_Descriptor_params_t) );
+        esd_param.objectTypeIndication = summary->object_type_indication;
+        esd_param.streamType = summary->stream_type;
+        esd_param.dsi_payload = summary->exdata;
+        esd_param.dsi_payload_length = summary->exdata_length;
+        esds->ES = mp4sys_setup_ES_Descriptor( &esd_param );
+        if( !esds->ES )
         {
-            free( audio );
-            return -1;
+            free( esds );
+            goto fail;
         }
-        memcpy( audio->exdata, summary->exdata, audio->exdata_length );
+        audio->wave->esds = esds;
     }
     else
-        audio->exdata = NULL;
-    if( lsmash_add_entry( list, audio ) )
     {
-        if( audio->exdata )
-            free( audio->exdata );
-        free( audio );
-        return -1;
+        if( summary->exdata )
+        {
+            audio->exdata_length = summary->exdata_length;
+            audio->exdata = malloc( audio->exdata_length );
+            if( !audio->exdata )
+                goto fail;
+            memcpy( audio->exdata, summary->exdata, audio->exdata_length );
+        }
+        else
+            audio->exdata = NULL;
     }
+    if( lsmash_add_entry( list, audio ) )
+        goto fail;
     return 0;
+fail:
+    isom_remove_wave( audio->wave );
+    if( audio->exdata )
+        free( audio->exdata );
+    free( audio );
+    return -1;
 }
 
 static int isom_add_text_entry( lsmash_entry_list_t *list )
@@ -571,10 +645,11 @@ static int isom_add_tx3g_entry( lsmash_entry_list_t *list )
 }
 
 /* This function returns 0 if failed, sample_entry_number if succeeded. */
-int isom_add_sample_entry( isom_root_t *root, uint32_t track_ID, uint32_t sample_type, void* summary )
+int isom_add_sample_entry( isom_root_t *root, uint32_t track_ID, uint32_t sample_type, void *summary )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
+    if( !trak || !trak->root || !trak->root->ftyp || !trak->mdia || !trak->mdia->minf ||
+        !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
         return 0;
     lsmash_entry_list_t *list = trak->mdia->minf->stbl->stsd->list;
     int ret = -1;
@@ -596,7 +671,10 @@ int isom_add_sample_entry( isom_root_t *root, uint32_t track_ID, uint32_t sample
             break;
 #endif
         case ISOM_CODEC_TYPE_MP4A_AUDIO :
-            ret = isom_add_mp4a_entry( list, (mp4sys_audio_summary_t*)summary );
+            if( trak->root->ftyp->major_brand != ISOM_BRAND_TYPE_QT )
+                ret = isom_add_mp4a_entry( list, (mp4sys_audio_summary_t *)summary );
+            else
+                ret = isom_add_audio_entry( list, sample_type, (mp4sys_audio_summary_t *)summary );
             break;
 #if 0
         case ISOM_CODEC_TYPE_MP4S_SYSTEM :
@@ -1749,6 +1827,14 @@ static void isom_remove_tref( isom_tref_t *tref )
     free( tref );
 }
 
+static void isom_remove_esds( isom_esds_t *esds )
+{
+    if( !esds )
+        return;
+    mp4sys_remove_ES_Descriptor( esds->ES );
+    free( esds );
+}
+
 static void isom_remove_font_record( isom_font_record_t *font_record )
 {
     if( !font_record )
@@ -1764,6 +1850,17 @@ static void isom_remove_ftab( isom_ftab_t *ftab )
         return;
     lsmash_remove_list( ftab->list, isom_remove_font_record );
     free( ftab );
+}
+
+static void isom_remove_wave( isom_wave_t *wave )
+{
+    if( !wave )
+        return;
+    free( wave->frma );
+    free( wave->mp4a );
+    isom_remove_esds( wave->esds );
+    free( wave->terminator );
+    free( wave );
 }
 
 static void isom_remove_stsd( isom_stsd_t *stsd )
@@ -1820,29 +1917,35 @@ static void isom_remove_stsd( isom_stsd_t *stsd )
                     free( mp4v->clap );
                 if( mp4v->stsl )
                     free( mp4v->stsl );
-                if( mp4v->esds )
-                    free( mp4v->esds );
+                isom_remove_esds( mp4v->esds );
                 free( mp4v );
                 break;
             }
 #endif
             case ISOM_CODEC_TYPE_MP4A_AUDIO :
             {
-                isom_mp4a_entry_t *mp4a = (isom_mp4a_entry_t *)entry->data;
-                if( mp4a->esds )
+                if( !((isom_audio_entry_t *)sample)->version )
                 {
-                    mp4sys_remove_ES_Descriptor( mp4a->esds->ES );
-                    free( mp4a->esds );
+                    isom_mp4a_entry_t *mp4a = (isom_mp4a_entry_t *)entry->data;
+                    isom_remove_esds( mp4a->esds );
+                    free( mp4a );
                 }
-                free( mp4a );
+                else
+                {
+                    /* MPEG-4 Audio in QTFF */
+                    isom_audio_entry_t *audio = (isom_audio_entry_t *)entry->data;
+                    isom_remove_wave( audio->wave );
+                    if( audio->exdata )
+                        free( audio->exdata );
+                    free( audio );
+                }
                 break;
             }
 #if 0
             case ISOM_CODEC_TYPE_MP4S_SYSTEM :
             {
                 isom_mp4s_entry_t *mp4s = (isom_mp4s_entry_t *)entry->data;
-                if( mp4s->esds )
-                    free( mp4s->esds );
+                isom_remove_esds( mp4s->esds );
                 free( mp4s );
                 break;
             }
@@ -2537,6 +2640,46 @@ static int isom_write_esds( lsmash_bs_t *bs, isom_esds_t *esds )
     return mp4sys_write_ES_Descriptor( bs, esds->ES );
 }
 
+static int isom_write_frma( lsmash_bs_t *bs, isom_frma_t *frma )
+{
+    if( !frma )
+        return -1;
+    isom_bs_put_base_header( bs, &frma->base_header );
+    lsmash_bs_put_be32( bs, frma->data_format );
+    return lsmash_bs_write_data( bs );
+}
+
+static int isom_write_mp4a( lsmash_bs_t *bs, isom_mp4a_t *mp4a )
+{
+    if( !mp4a )
+        return 0;
+    isom_bs_put_base_header( bs, &mp4a->base_header );
+    lsmash_bs_put_be32( bs, mp4a->unknown );
+    return lsmash_bs_write_data( bs );
+}
+
+static int isom_write_terminator( lsmash_bs_t *bs, isom_terminator_t *terminator )
+{
+    if( !terminator )
+        return -1;
+    isom_bs_put_base_header( bs, &terminator->base_header );
+    return lsmash_bs_write_data( bs );
+}
+
+static int isom_write_wave( lsmash_bs_t *bs, isom_wave_t *wave )
+{
+    if( !wave )
+        return 0;
+    isom_bs_put_base_header( bs, &wave->base_header );
+    if( lsmash_bs_write_data( bs ) )
+        return -1;
+    if( isom_write_frma( bs, wave->frma ) ||
+        isom_write_mp4a( bs, wave->mp4a ) ||
+        isom_write_esds( bs, wave->esds ) )
+        return -1;
+    return isom_write_terminator( bs, wave->terminator );
+}
+
 static int isom_write_avc_entry( lsmash_bs_t *bs, lsmash_entry_t *entry )
 {
     isom_avc_entry_t *data = (isom_avc_entry_t *)entry->data;
@@ -2577,12 +2720,13 @@ static int isom_write_mp4a_entry( lsmash_bs_t *bs, lsmash_entry_t *entry )
     isom_bs_put_base_header( bs, &data->base_header );
     lsmash_bs_put_bytes( bs, data->reserved, 6 );
     lsmash_bs_put_be16( bs, data->data_reference_index );
-    lsmash_bs_put_be32( bs, data->reserved1[0] );
-    lsmash_bs_put_be32( bs, data->reserved1[1] );
+    lsmash_bs_put_be16( bs, data->version );
+    lsmash_bs_put_be16( bs, data->revision_level );
+    lsmash_bs_put_be32( bs, data->vendor );
     lsmash_bs_put_be16( bs, data->channelcount );
     lsmash_bs_put_be16( bs, data->samplesize );
-    lsmash_bs_put_be16( bs, data->pre_defined );
-    lsmash_bs_put_be16( bs, data->reserved2 );
+    lsmash_bs_put_be16( bs, data->compression_ID );
+    lsmash_bs_put_be16( bs, data->packet_size );
     lsmash_bs_put_be32( bs, data->samplerate );
     if( lsmash_bs_write_data( bs ) )
         return -1;
@@ -2597,14 +2741,24 @@ static int isom_write_audio_entry( lsmash_bs_t *bs, lsmash_entry_t *entry )
     isom_bs_put_base_header( bs, &data->base_header );
     lsmash_bs_put_bytes( bs, data->reserved, 6 );
     lsmash_bs_put_be16( bs, data->data_reference_index );
-    lsmash_bs_put_be32( bs, data->reserved1[0] );
-    lsmash_bs_put_be32( bs, data->reserved1[1] );
+    lsmash_bs_put_be16( bs, data->version );
+    lsmash_bs_put_be16( bs, data->revision_level );
+    lsmash_bs_put_be32( bs, data->vendor );
     lsmash_bs_put_be16( bs, data->channelcount );
     lsmash_bs_put_be16( bs, data->samplesize );
-    lsmash_bs_put_be16( bs, data->pre_defined );
-    lsmash_bs_put_be16( bs, data->reserved2 );
+    lsmash_bs_put_be16( bs, data->compression_ID );
+    lsmash_bs_put_be16( bs, data->packet_size );
     lsmash_bs_put_be32( bs, data->samplerate );
     lsmash_bs_put_bytes( bs, data->exdata, data->exdata_length );
+    if( data->version == 1 )
+    {
+        lsmash_bs_put_be32( bs, data->samplesPerPacket );
+        lsmash_bs_put_be32( bs, data->bytesPerPacket );
+        lsmash_bs_put_be32( bs, data->bytesPerFrame );
+        lsmash_bs_put_be32( bs, data->bytesPerSample );
+        if( isom_write_wave( bs, data->wave ) )
+            return -1;
+    }
     return lsmash_bs_write_data( bs );
 }
 
@@ -2754,6 +2908,7 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
         return -1;
     isom_bs_put_full_header( bs, &stsd->full_header );
     lsmash_bs_put_be32( bs, stsd->list->entry_count );
+    int ret = -1;
     for( lsmash_entry_t *entry = stsd->list->head; entry; entry = entry->next )
     {
         isom_sample_entry_t *sample = (isom_sample_entry_t *)entry->data;
@@ -2769,10 +2924,13 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
             case ISOM_CODEC_TYPE_MVC1_VIDEO :
             case ISOM_CODEC_TYPE_MVC2_VIDEO :
 #endif
-                isom_write_avc_entry( bs, entry );
+                ret = isom_write_avc_entry( bs, entry );
                 break;
             case ISOM_CODEC_TYPE_MP4A_AUDIO :
-                isom_write_mp4a_entry( bs, entry );
+                if( !((isom_audio_entry_t *)sample)->version )
+                    ret = isom_write_mp4a_entry( bs, entry );
+                else
+                    ret = isom_write_audio_entry( bs, entry );
                 break;
 #if 0
             case ISOM_CODEC_TYPE_DRAC_VIDEO :
@@ -2780,7 +2938,7 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
             case ISOM_CODEC_TYPE_MJP2_VIDEO :
             case ISOM_CODEC_TYPE_S263_VIDEO :
             case ISOM_CODEC_TYPE_VC_1_VIDEO :
-                isom_write_visual_entry( bs, entry );
+                ret = isom_write_visual_entry( bs, entry );
                 break;
 #endif
             case ISOM_CODEC_TYPE_AC_3_AUDIO :
@@ -2805,7 +2963,7 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
             case ISOM_CODEC_TYPE_SSMV_AUDIO :
             case ISOM_CODEC_TYPE_TWOS_AUDIO :
 #endif
-                isom_write_audio_entry( bs, entry );
+                ret = isom_write_audio_entry( bs, entry );
                 break;
 #if 0
             case ISOM_CODEC_TYPE_FDP_HINT :
@@ -2818,7 +2976,7 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
             case ISOM_CODEC_TYPE_RTP_HINT  :
             case ISOM_CODEC_TYPE_SM2T_HINT :
             case ISOM_CODEC_TYPE_SRTP_HINT :
-                isom_write_hint_entry( bs, entry );
+                ret = isom_write_hint_entry( bs, entry );
                 break;
             case ISOM_CODEC_TYPE_IXSE_META :
             case ISOM_CODEC_TYPE_METT_META :
@@ -2829,20 +2987,22 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
             case ISOM_CODEC_TYPE_TEXT_META :
             case ISOM_CODEC_TYPE_URIM_META :
             case ISOM_CODEC_TYPE_XML_META  :
-                isom_write_metadata_entry( bs, entry );
+                ret = isom_write_metadata_entry( bs, entry );
                 break;
 #endif
             case ISOM_CODEC_TYPE_TX3G_TEXT :
-                isom_write_tx3g_entry( bs, entry );
+                ret = isom_write_tx3g_entry( bs, entry );
                 break;
             case QT_CODEC_TYPE_TEXT_TEXT :
-                isom_write_text_entry( bs, entry );
+                ret = isom_write_text_entry( bs, entry );
                 break;
             default :
                 break;
         }
+        if( ret )
+            break;
     }
-    return 0;
+    return ret;
 }
 
 static int isom_write_stts( lsmash_bs_t *bs, isom_trak_entry_t *trak )
@@ -4011,6 +4171,8 @@ int isom_update_bitrate_info( isom_root_t *root, uint32_t track_ID, uint32_t ent
         }
         case ISOM_CODEC_TYPE_MP4A_AUDIO :
         {
+            if( ((isom_audio_entry_t *)sample_entry)->version )
+                break;
             isom_mp4a_entry_t *stsd_data = (isom_mp4a_entry_t *)sample_entry;
             if( !stsd_data || !stsd_data->esds || !stsd_data->esds->ES )
                 return -1;
@@ -4524,11 +4686,53 @@ static uint64_t isom_update_mp4s_entry_size( isom_mp4s_entry_t *mp4s )
 }
 #endif
 
+static uint64_t isom_update_frma_size( isom_frma_t *frma )
+{
+    if( !frma )
+        return 0;
+    frma->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 4;
+    CHECK_LARGESIZE( frma->base_header.size );
+    return frma->base_header.size;
+}
+
+static uint64_t isom_update_mp4a_size( isom_mp4a_t *mp4a )
+{
+    if( !mp4a )
+        return 0;
+    mp4a->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 4;
+    CHECK_LARGESIZE( mp4a->base_header.size );
+    return mp4a->base_header.size;
+}
+
+static uint64_t isom_update_terminator_size( isom_terminator_t *terminator )
+{
+    if( !terminator )
+        return 0;
+    terminator->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE;
+    CHECK_LARGESIZE( terminator->base_header.size );
+    return terminator->base_header.size;
+}
+
+static uint64_t isom_update_wave_size( isom_wave_t *wave )
+{
+    if( !wave )
+        return 0;
+    wave->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE
+        + isom_update_frma_size( wave->frma )
+        + isom_update_mp4a_size( wave->mp4a )
+        + isom_update_esds_size( wave->esds )
+        + isom_update_terminator_size( wave->terminator );
+    CHECK_LARGESIZE( wave->base_header.size );
+    return wave->base_header.size;
+}
+
 static uint64_t isom_update_audio_entry_size( isom_audio_entry_t *audio )
 {
     if( !audio )
         return 0;
     audio->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 28 + (uint64_t)audio->exdata_length;
+    if( audio->version == 1 )
+        audio->base_header.size += 16 + isom_update_wave_size( audio->wave );
     CHECK_LARGESIZE( audio->base_header.size );
     return audio->base_header.size;
 }
@@ -4591,7 +4795,10 @@ static uint64_t isom_update_stsd_size( isom_stsd_t *stsd )
                 break;
 #endif
             case ISOM_CODEC_TYPE_MP4A_AUDIO :
-                size += isom_update_mp4a_entry_size( (isom_mp4a_entry_t *)data );
+                if( !((isom_audio_entry_t *)data)->version )
+                    size += isom_update_mp4a_entry_size( (isom_mp4a_entry_t *)data );
+                else
+                    size += isom_update_audio_entry_size( (isom_audio_entry_t *)data );
                 break;
 #if 0
             case ISOM_CODEC_TYPE_MP4S_SYSTEM :
