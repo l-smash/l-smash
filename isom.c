@@ -4171,13 +4171,23 @@ int isom_update_bitrate_info( isom_root_t *root, uint32_t track_ID, uint32_t ent
         }
         case ISOM_CODEC_TYPE_MP4A_AUDIO :
         {
+            isom_esds_t *esds = NULL;
             if( ((isom_audio_entry_t *)sample_entry)->version )
-                break;
-            isom_mp4a_entry_t *stsd_data = (isom_mp4a_entry_t *)sample_entry;
-            if( !stsd_data || !stsd_data->esds || !stsd_data->esds->ES )
-                return -1;
+            {
+                isom_audio_entry_t *stsd_data = (isom_audio_entry_t *)sample_entry;
+                if( !stsd_data || !stsd_data->wave || !stsd_data->wave->esds || !stsd_data->wave->esds->ES )
+                    return -1;
+                esds = stsd_data->wave->esds;
+            }
+            else
+            {
+                isom_mp4a_entry_t *stsd_data = (isom_mp4a_entry_t *)sample_entry;
+                if( !stsd_data || !stsd_data->esds || !stsd_data->esds->ES )
+                    return -1;
+                esds = stsd_data->esds;
+            }
             /* FIXME: avgBitrate is 0 only if VBR in proper. */
-            if( mp4sys_update_DecoderConfigDescriptor( stsd_data->esds->ES, info.bufferSizeDB, info.maxBitrate, 0 ) )
+            if( mp4sys_update_DecoderConfigDescriptor( esds->ES, info.bufferSizeDB, info.maxBitrate, 0 ) )
                 return -1;
             break;
         }
