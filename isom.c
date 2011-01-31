@@ -6236,6 +6236,7 @@ int isom_create_reference_chapter_track( isom_root_t *root, uint32_t track_ID, c
 {
     if( !root || !root->qt_compatible || !root->moov || !root->moov->mvhd )
         return -1;
+    FILE *chapter = NULL;       /* shut up 'uninitialized' warning */
     /* Create Track Reference Type Box. */
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || isom_add_tref( trak ) )
@@ -6273,7 +6274,7 @@ int isom_create_reference_chapter_track( isom_root_t *root, uint32_t track_ID, c
     if( !sample_entry )
         goto fail;
     /* Open chapter format file. */
-    FILE *chapter = fopen( file_name, "rb" );
+    chapter = fopen( file_name, "rb" );
     if( !chapter )
         goto fail;
     /* Parse the file and write text samples. */
