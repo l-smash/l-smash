@@ -5121,7 +5121,7 @@ uint32_t isom_create_track( isom_root_t *root, uint32_t media_type )
         return 0;
     if( isom_add_tkhd( trak, media_type ) ||
         isom_add_mdia( trak ) ||
-        isom_add_mdhd( trak->mdia, root->qt_compatible ? 0 : ISOM_LANG( "und" ) ) ||
+        isom_add_mdhd( trak->mdia, root->qt_compatible ? 0 : ISOM_LANGUAGE_CODE_UNDEFINED ) ||
         isom_add_minf( trak->mdia ) ||
         isom_add_stbl( trak->mdia->minf ) ||
         isom_add_dinf( trak->mdia->minf ) ||
@@ -5353,12 +5353,63 @@ int isom_set_track_mode( isom_root_t *root, uint32_t track_ID, uint32_t mode )
     return 0;
 }
 
-int isom_set_media_language( isom_root_t *root, uint32_t track_ID, char *ISO_language, uint16_t Mac_language )
+static int isom_iso2mac_language( uint16_t ISO_language, uint16_t *MAC_language )
+{
+    if( !MAC_language )
+        return -1;
+    int i = 0;
+    for( ; isom_languages[i].iso_name; i++ )
+        if( ISO_language == isom_languages[i].iso_name )
+            break;
+    if( !isom_languages[i].iso_name )
+        return -1;
+    *MAC_language = isom_languages[i].mac_value;
+    return 0;
+}
+
+static int isom_mac2iso_language( uint16_t MAC_language, uint16_t *ISO_language )
+{
+    if( !ISO_language )
+        return -1;
+    int i = 0;
+    for( ; isom_languages[i].iso_name; i++ )
+        if( MAC_language == isom_languages[i].mac_value )
+            break;
+    *ISO_language = isom_languages[i].iso_name ? isom_languages[i].iso_name : ISOM_LANGUAGE_CODE_UNDEFINED;
+    return 0;
+}
+
+int isom_set_media_language( isom_root_t *root, uint32_t track_ID, char *ISO_language, uint16_t MAC_language )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->mdhd )
         return -1;
-    trak->mdia->mdhd->language = ISO_language ? ISOM_LANG( ISO_language ) : !root->qt_compatible ? ISOM_LANG( "und" ): Mac_language;
+    uint16_t language = 0;
+    if( root->isom_compatible )
+    {
+        if( ISO_language && (strlen( ISO_language ) == 3) )
+            language = ISOM_LANG( ISO_language );
+        else if( MAC_language )
+        {
+            if( isom_mac2iso_language( MAC_language, &language ) )
+                return -1;
+        }
+        else
+            language = ISOM_LANGUAGE_CODE_UNDEFINED;
+    }
+    else if( root->qt_compatible )
+    {
+        if( ISO_language && (strlen( ISO_language ) == 3) )
+        {
+            if( isom_iso2mac_language( ISOM_LANG( ISO_language ), &language ) )
+                return -1;
+        }
+        else
+            language = MAC_language;
+    }
+    else
+        return -1;
+    trak->mdia->mdhd->language = language;
     return 0;
 }
 

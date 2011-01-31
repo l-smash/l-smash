@@ -1417,6 +1417,104 @@ enum isom_grouping_code
     ISOM_GROUP_TYPE_ROLL = ISOM_4CC( 'r', 'o', 'l', 'l' ),      /* Roll Recovery */
 };
 
+#define ISOM_LANG_T( a, b, c ) ((((a-0x60)&0x1f)<<10) | (((b-0x60)&0x1f)<<5) | ((c-0x60)&0x1f))
+
+enum isom_language_code
+{
+    ISOM_LANGUAGE_CODE_ENGLISH    = ISOM_LANG_T( 'e', 'n', 'g' ),
+    ISOM_LANGUAGE_CODE_FRENCH     = ISOM_LANG_T( 'f', 'r', 'a' ),
+    ISOM_LANGUAGE_CODE_GERMAN     = ISOM_LANG_T( 'd', 'e', 'u' ),
+    ISOM_LANGUAGE_CODE_ITALIAN    = ISOM_LANG_T( 'i', 't', 'a' ),
+    ISOM_LANGUAGE_CODE_DUTCH_M    = ISOM_LANG_T( 'd', 'u', 'm' ),
+    ISOM_LANGUAGE_CODE_SWEDISH    = ISOM_LANG_T( 's', 'w', 'e' ),
+    ISOM_LANGUAGE_CODE_SPANISH    = ISOM_LANG_T( 's', 'p', 'a' ),
+    ISOM_LANGUAGE_CODE_DANISH     = ISOM_LANG_T( 'd', 'a', 'n' ),
+    ISOM_LANGUAGE_CODE_PORTUGUESE = ISOM_LANG_T( 'p', 'o', 'r' ),
+    ISOM_LANGUAGE_CODE_NORWEGIAN  = ISOM_LANG_T( 'n', 'o', 'r' ),
+    ISOM_LANGUAGE_CODE_HEBREW     = ISOM_LANG_T( 'h', 'e', 'b' ),
+    ISOM_LANGUAGE_CODE_JAPANESE   = ISOM_LANG_T( 'j', 'p', 'n' ),
+    ISOM_LANGUAGE_CODE_ARABIC     = ISOM_LANG_T( 'a', 'r', 'a' ),
+    ISOM_LANGUAGE_CODE_FINNISH    = ISOM_LANG_T( 'f', 'i', 'n' ),
+    ISOM_LANGUAGE_CODE_GREEK      = ISOM_LANG_T( 'e', 'l', 'l' ),
+    ISOM_LANGUAGE_CODE_ICELANDIC  = ISOM_LANG_T( 'i', 's', 'l' ),
+    ISOM_LANGUAGE_CODE_MALTESE    = ISOM_LANG_T( 'm', 'l', 't' ),
+    ISOM_LANGUAGE_CODE_TURKISH    = ISOM_LANG_T( 't', 'u', 'r' ),
+    ISOM_LANGUAGE_CODE_CROATIAN   = ISOM_LANG_T( 'h', 'r', 'v' ),
+    ISOM_LANGUAGE_CODE_CHINESE    = ISOM_LANG_T( 'z', 'h', 'o' ),
+    ISOM_LANGUAGE_CODE_URDU       = ISOM_LANG_T( 'u', 'r', 'd' ),
+    ISOM_LANGUAGE_CODE_HINDI      = ISOM_LANG_T( 'h', 'i', 'n' ),
+    ISOM_LANGUAGE_CODE_THAI       = ISOM_LANG_T( 't', 'h', 'a' ),
+    ISOM_LANGUAGE_CODE_KOREAN     = ISOM_LANG_T( 'k', 'o', 'r' ),
+    ISOM_LANGUAGE_CODE_LITHUANIAN = ISOM_LANG_T( 'l', 'i', 't' ),
+    ISOM_LANGUAGE_CODE_POLISH     = ISOM_LANG_T( 'p', 'o', 'l' ),
+    ISOM_LANGUAGE_CODE_HUNGARIAN  = ISOM_LANG_T( 'h', 'u', 'n' ),
+    ISOM_LANGUAGE_CODE_ESTONIAN   = ISOM_LANG_T( 'e', 's', 't' ),
+    ISOM_LANGUAGE_CODE_LATVIAN    = ISOM_LANG_T( 'l', 'a', 'v' ),
+    ISOM_LANGUAGE_CODE_SAMI       = ISOM_LANG_T( 's', 'm', 'i' ),
+    ISOM_LANGUAGE_CODE_FAROESE    = ISOM_LANG_T( 'f', 'a', 'o' ),
+    ISOM_LANGUAGE_CODE_RUSSIAN    = ISOM_LANG_T( 'r', 'u', 's' ),
+    ISOM_LANGUAGE_CODE_DUTCH      = ISOM_LANG_T( 'n', 'l', 'd' ),
+    ISOM_LANGUAGE_CODE_IRISH      = ISOM_LANG_T( 'g', 'l', 'e' ),
+    ISOM_LANGUAGE_CODE_ALBANIAN   = ISOM_LANG_T( 's', 'q', 'i' ),
+    ISOM_LANGUAGE_CODE_ROMANIAN   = ISOM_LANG_T( 'r', 'o', 'n' ),
+    ISOM_LANGUAGE_CODE_CZECH      = ISOM_LANG_T( 'c', 'e', 's' ),
+    ISOM_LANGUAGE_CODE_SLOVAK     = ISOM_LANG_T( 's', 'l', 'k' ),
+    ISOM_LANGUAGE_CODE_SLOVENIA   = ISOM_LANG_T( 's', 'l', 'v' ),
+    ISOM_LANGUAGE_CODE_UNDEFINED  = ISOM_LANG_T( 'u', 'n', 'd' ),
+};
+
+#undef ISOM_LANG_T
+
+typedef struct
+{
+    uint16_t mac_value;
+    uint16_t iso_name;
+} isom_language_t;
+
+static const isom_language_t isom_languages[] =
+{
+    {   0, ISOM_LANGUAGE_CODE_ENGLISH },
+    {   1, ISOM_LANGUAGE_CODE_FRENCH },
+    {   2, ISOM_LANGUAGE_CODE_GERMAN },
+    {   3, ISOM_LANGUAGE_CODE_ITALIAN },
+    {   4, ISOM_LANGUAGE_CODE_DUTCH_M },
+    {   5, ISOM_LANGUAGE_CODE_SWEDISH },
+    {   6, ISOM_LANGUAGE_CODE_SPANISH },
+    {   7, ISOM_LANGUAGE_CODE_DANISH },
+    {   8, ISOM_LANGUAGE_CODE_PORTUGUESE },
+    {   9, ISOM_LANGUAGE_CODE_NORWEGIAN },
+    {  10, ISOM_LANGUAGE_CODE_HEBREW },
+    {  11, ISOM_LANGUAGE_CODE_JAPANESE },
+    {  12, ISOM_LANGUAGE_CODE_ARABIC },
+    {  13, ISOM_LANGUAGE_CODE_FINNISH },
+    {  14, ISOM_LANGUAGE_CODE_GREEK },
+    {  15, ISOM_LANGUAGE_CODE_ICELANDIC },
+    {  16, ISOM_LANGUAGE_CODE_MALTESE },
+    {  17, ISOM_LANGUAGE_CODE_TURKISH },
+    {  18, ISOM_LANGUAGE_CODE_CROATIAN },
+    {  19, ISOM_LANGUAGE_CODE_CHINESE },
+    {  20, ISOM_LANGUAGE_CODE_URDU },
+    {  21, ISOM_LANGUAGE_CODE_HINDI },
+    {  22, ISOM_LANGUAGE_CODE_THAI },
+    {  23, ISOM_LANGUAGE_CODE_KOREAN },
+    {  24, ISOM_LANGUAGE_CODE_LITHUANIAN },
+    {  25, ISOM_LANGUAGE_CODE_POLISH },
+    {  26, ISOM_LANGUAGE_CODE_HUNGARIAN },
+    {  27, ISOM_LANGUAGE_CODE_ESTONIAN },
+    {  28, ISOM_LANGUAGE_CODE_LATVIAN },
+    {  29, ISOM_LANGUAGE_CODE_SAMI },
+    {  30, ISOM_LANGUAGE_CODE_FAROESE },
+    {  32, ISOM_LANGUAGE_CODE_RUSSIAN },
+    {  33, ISOM_LANGUAGE_CODE_CHINESE },
+    {  34, ISOM_LANGUAGE_CODE_DUTCH },
+    {  35, ISOM_LANGUAGE_CODE_IRISH },
+    {  36, ISOM_LANGUAGE_CODE_ALBANIAN },
+    {  37, ISOM_LANGUAGE_CODE_ROMANIAN },
+    {  38, ISOM_LANGUAGE_CODE_CZECH },
+    {  39, ISOM_LANGUAGE_CODE_SLOVAK },
+    {  40, ISOM_LANGUAGE_CODE_SLOVENIA },
+    { UINT16_MAX, 0 }
+};
 
 typedef struct
 {
