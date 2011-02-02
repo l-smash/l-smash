@@ -4239,6 +4239,10 @@ static int isom_check_compatibility( isom_root_t *root )
             case ISOM_BRAND_TYPE_ISO4 :
                 root->avc_extensions = 1;
                 break;
+            case ISOM_BRAND_TYPE_M4A :
+            case ISOM_BRAND_TYPE_M4B :
+                root->itunes_audio = 1;
+                break;
             case ISOM_BRAND_TYPE_3GP4 :
                 root->max_3gpp_version = ISOM_MAX( root->max_3gpp_version, 4 );
                 break;
@@ -4254,7 +4258,7 @@ static int isom_check_compatibility( isom_root_t *root )
                 break;
         }
     }
-    root->isom_compatible = !root->qt_compatible || root->mp4_version1 || root->mp4_version2 || root->max_3gpp_version;
+    root->isom_compatible = !root->qt_compatible || root->mp4_version1 || root->mp4_version2 || root->itunes_audio || root->max_3gpp_version;
     return 0;
 }
 
@@ -5151,7 +5155,7 @@ uint32_t isom_create_track( isom_root_t *root, uint32_t media_type )
                 return 0;
             break;
         case ISOM_MEDIA_HANDLER_TYPE_TEXT :
-            if( root->qt_compatible )
+            if( root->qt_compatible || root->itunes_audio )
             {
                 if( isom_add_gmhd( trak->mdia->minf ) ||
                     isom_add_gmin( trak->mdia->minf->gmhd ) ||
@@ -6234,7 +6238,7 @@ fail:
 
 int isom_create_reference_chapter_track( isom_root_t *root, uint32_t track_ID, char *file_name )
 {
-    if( !root || !root->qt_compatible || !root->moov || !root->moov->mvhd )
+    if( !root || (!root->qt_compatible && !root->itunes_audio) || !root->moov || !root->moov->mvhd )
         return -1;
     FILE *chapter = NULL;       /* shut up 'uninitialized' warning */
     /* Create Track Reference Type Box. */
@@ -6266,10 +6270,10 @@ int isom_create_reference_chapter_track( isom_root_t *root, uint32_t track_ID, c
     if( !media_timescale || isom_set_media_timescale( root, chapter_track_ID, media_timescale ) )
         goto fail;
     /* Set media language field. ISOM: undefined / QTFF: English */
-    if( isom_set_media_language( root, chapter_track_ID, root->max_3gpp_version < 6 ? NULL : "und", 0 ) )
+    if( isom_set_media_language( root, chapter_track_ID, root->max_3gpp_version < 6 && !root->itunes_audio ? NULL : "und", 0 ) )
         goto fail;
     /* Create sample description. */
-    uint32_t sample_type = root->max_3gpp_version < 6 ? QT_CODEC_TYPE_TEXT_TEXT : ISOM_CODEC_TYPE_TX3G_TEXT;
+    uint32_t sample_type = root->max_3gpp_version < 6 && !root->itunes_audio ? QT_CODEC_TYPE_TEXT_TEXT : ISOM_CODEC_TYPE_TX3G_TEXT;
     uint32_t sample_entry = isom_add_sample_entry( root, chapter_track_ID, sample_type, NULL );
     if( !sample_entry )
         goto fail;

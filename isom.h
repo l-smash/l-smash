@@ -925,6 +925,7 @@ typedef struct
         uint8_t avc_extensions;         /* compatibility with AVC extensions */
         uint8_t mp4_version1;           /* compatibility with MP4 ver.1 file format */
         uint8_t mp4_version2;           /* compatibility with MP4 ver.2 file format */
+        uint8_t itunes_audio;           /* compatibility with iTunes Audio */
         uint8_t max_3gpp_version;       /* maximum 3GPP version */
 } isom_root_t;
 
