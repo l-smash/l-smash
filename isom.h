@@ -498,11 +498,11 @@ typedef struct
     int16_t version;            /* ISOM: reserved / QTFF: sample description version */ \
     int16_t revision_level;     /* ISOM: reserved / QTFF: version of the CODEC */ \
     int32_t vendor;             /* ISOM: reserved / QTFF: whose CODEC */ \
-    uint16_t channelcount;      /* ISOM: template: channelcount = 2 / QTFF: 3 or higher channels are not supported */ \
+    uint16_t channelcount;      /* ISOM: template: channelcount = 2 / QTFF: version = 1 -> 2, version = 2 -> 3 */ \
     uint16_t samplesize;        /* ISOM: template: samplesize = 16 */ \
     uint16_t compression_ID;    /* ISOM: pre_defined / QTFF: set -2 on some version 1 audio descriptions */ \
     uint16_t packet_size;       /* ISOM: reserved / QTFF: must be set to 0 */ \
-    uint32_t samplerate;        /* 16.16 fixed-point number */
+    uint32_t samplerate;        /* 16.16 fixed-point number / QTFF: version = 2 -> must be set to 0x00010000 */
 
 typedef struct
 {
@@ -512,7 +512,16 @@ typedef struct
     uint32_t bytesPerPacket;        /* the number of bytes in a sample for a single channel */
     uint32_t bytesPerFrame;         /* the number of bytes in a frame */
     uint32_t bytesPerSample;        /* 8-bit audio: 1, other audio: 2 */
-    /* */
+    /* QTFF: version 2 fields */
+    uint32_t sizeOfStructOnly;                  /* offset to extensions */
+    uint64_t audioSampleRate;                   /* 64-bit floating point */
+    uint32_t numAudioChannels;                  /* any channel assignment info will be in Channel Compositor Box */
+    int32_t  always7F000000;                    /* always 0x7F000000 */
+    uint32_t constBitsPerChannel;               /* only set if constant (and only for uncompressed audio) */
+    uint32_t formatSpecificFlags;
+    uint32_t constBytesPerAudioPacket;          /* only set if constant */
+    uint32_t constLPCMFramesPerAudioPacket;     /* only set if constant */
+    /* extensions */
     isom_wave_t *wave;              /* Sound Information Decompression Parameters Box */
     uint32_t exdata_length;
     void *exdata;

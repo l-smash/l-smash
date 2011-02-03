@@ -531,18 +531,34 @@ static int isom_add_audio_entry( lsmash_entry_list_t *list, uint32_t sample_type
     audio->samplerate = summary->frequency <= UINT16_MAX ? summary->frequency << 16 : 0;
     if( audio->base_header.type == ISOM_CODEC_TYPE_MP4A_AUDIO )
     {
-        audio->version = 1;
-        audio->channelcount = ISOM_MIN( summary->channels, 2 );
-        audio->compression_ID = -2;     /* assume VBR */
-        audio->samplesPerPacket = summary->samples_in_frame;
-        audio->bytesPerPacket = 1;      /* Apparently, this field is set to 1. */
-        audio->bytesPerFrame = audio->bytesPerPacket * summary->channels;
-        audio->bytesPerSample = 1 + (summary->bit_depth != 8);
         if( isom_add_wave( audio ) ||
             isom_add_frma( audio->wave ) ||
             isom_add_mp4a( audio->wave ) ||
             isom_add_terminator( audio->wave ) )
             goto fail;
+        audio->version = (summary->channels > 2 || summary->frequency > UINT16_MAX) ? 2 : 1;
+        audio->channelcount = audio->version == 2 ? 3 : ISOM_MIN( summary->channels, 2 );
+        audio->compression_ID = -2;     /* assume VBR */
+        audio->packet_size = 0;
+        if( audio->version == 1 )
+        {
+            audio->samplesPerPacket = summary->samples_in_frame;
+            audio->bytesPerPacket = 1;      /* Apparently, this field is set to 1. */
+            audio->bytesPerFrame = audio->bytesPerPacket * summary->channels;
+            audio->bytesPerSample = 1 + (summary->bit_depth != 8);
+        }
+        else    /* audio->version == 2 */
+        {
+            audio->samplerate = 0x00010000;
+            audio->sizeOfStructOnly = 72;
+            audio->audioSampleRate = (union {double d; uint64_t i;}){summary->frequency}.i;
+            audio->numAudioChannels = summary->channels;
+            audio->always7F000000 = 0x7F000000;
+            audio->constBitsPerChannel = 0;
+            audio->formatSpecificFlags = 0;
+            audio->constBytesPerAudioPacket = 0;
+            audio->constLPCMFramesPerAudioPacket = summary->samples_in_frame;
+        }
         audio->wave->frma->data_format = sample_type;
         /* create ES Descriptor */
         isom_esds_t *esds = malloc( sizeof(isom_esds_t) );
@@ -2749,16 +2765,27 @@ static int isom_write_audio_entry( lsmash_bs_t *bs, lsmash_entry_t *entry )
     lsmash_bs_put_be16( bs, data->compression_ID );
     lsmash_bs_put_be16( bs, data->packet_size );
     lsmash_bs_put_be32( bs, data->samplerate );
-    lsmash_bs_put_bytes( bs, data->exdata, data->exdata_length );
     if( data->version == 1 )
     {
         lsmash_bs_put_be32( bs, data->samplesPerPacket );
         lsmash_bs_put_be32( bs, data->bytesPerPacket );
         lsmash_bs_put_be32( bs, data->bytesPerFrame );
         lsmash_bs_put_be32( bs, data->bytesPerSample );
-        if( isom_write_wave( bs, data->wave ) )
-            return -1;
     }
+    else if( data->version == 2 )
+    {
+        lsmash_bs_put_be32( bs, data->sizeOfStructOnly );
+        lsmash_bs_put_be64( bs, data->audioSampleRate );
+        lsmash_bs_put_be32( bs, data->numAudioChannels );
+        lsmash_bs_put_be32( bs, data->always7F000000 );
+        lsmash_bs_put_be32( bs, data->constBitsPerChannel );
+        lsmash_bs_put_be32( bs, data->formatSpecificFlags );
+        lsmash_bs_put_be32( bs, data->constBytesPerAudioPacket );
+        lsmash_bs_put_be32( bs, data->constLPCMFramesPerAudioPacket );
+    }
+    lsmash_bs_put_bytes( bs, data->exdata, data->exdata_length );
+    if( data->version && isom_write_wave( bs, data->wave ) )
+        return -1;
     return lsmash_bs_write_data( bs );
 }
 
@@ -4747,6 +4774,8 @@ static uint64_t isom_update_audio_entry_size( isom_audio_entry_t *audio )
     audio->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 28 + (uint64_t)audio->exdata_length;
     if( audio->version == 1 )
         audio->base_header.size += 16 + isom_update_wave_size( audio->wave );
+    else if( audio->version == 2 )
+        audio->base_header.size += 36 + isom_update_wave_size( audio->wave );
     CHECK_LARGESIZE( audio->base_header.size );
     return audio->base_header.size;
 }
