@@ -535,7 +535,7 @@ static int isom_add_audio_entry( lsmash_entry_list_t *list, uint32_t sample_type
         audio->channelcount = ISOM_MIN( summary->channels, 2 );
         audio->compression_ID = -2;     /* assume VBR */
         audio->samplesPerPacket = summary->samples_in_frame;
-        audio->bytesPerPacket = (summary->bit_depth / 8) / summary->channels;
+        audio->bytesPerPacket = 1;      /* Apparently, this field is set to 1. */
         audio->bytesPerFrame = audio->bytesPerPacket * summary->channels;
         audio->bytesPerSample = 1 + (summary->bit_depth != 8);
         if( isom_add_wave( audio ) ||
