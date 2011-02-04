@@ -351,6 +351,18 @@ typedef struct
     uint32_t vertOffD;
 } isom_clap_t;
 
+/* Color Parameter Box
+ * This box is defined by QuickTime file format. */
+typedef struct
+{
+    isom_base_header_t base_header;
+    uint32_t color_parameter_type;          /* 'nclc' or 'prof' */
+    /* for 'nclc' */
+    uint16_t primaries_index;
+    uint16_t transfer_function_index;
+    uint16_t matrix_index;
+} isom_colr_t;
+
 /* Sample Scale Box */
 typedef struct
 {
@@ -409,6 +421,7 @@ typedef struct
     int16_t pre_defined3;       /* template: pre_defined = -1 */ \
     isom_clap_t *clap;          /* Clean Aperture Box / optional */ \
     isom_pasp_t *pasp;          /* Pixel Aspect Ratio Box / optional */ \
+    isom_colr_t *colr;          /* Color Parameter Box / optional / This box is defined by QuickTime file format */ \
     isom_stsl_t *stsl;          /* Sample Scale Box / optional */
 
 typedef struct
@@ -1166,6 +1179,7 @@ enum qt_box_code
 {
     QT_BOX_TYPE_CLEF = ISOM_4CC( 'c', 'l', 'e', 'f' ),
     QT_BOX_TYPE_CLIP = ISOM_4CC( 'c', 'l', 'i', 'p' ),
+    QT_BOX_TYPE_COLR = ISOM_4CC( 'c', 'o', 'l', 'r' ),
     QT_BOX_TYPE_CRGN = ISOM_4CC( 'c', 'r', 'g', 'n' ),
     QT_BOX_TYPE_CTAB = ISOM_4CC( 'c', 't', 'a', 'b' ),
     QT_BOX_TYPE_ENOF = ISOM_4CC( 'e', 'n', 'o', 'f' ),
@@ -1526,6 +1540,47 @@ static const isom_language_t isom_languages[] =
     { UINT16_MAX, 0 }
 };
 
+enum qt_color_patameter_type_code
+{
+    QT_COLOR_PARAMETER_TYPE_NCLC = ISOM_4CC( 'n', 'c', 'l', 'c' ),      /* nonconstant luminance coding */
+    QT_COLOR_PARAMETER_TYPE_PROF = ISOM_4CC( 'p', 'r', 'o', 'f' ),      /* ICC profile */
+};
+
+enum qt_color_parameter_table
+{
+#define UINT16_MAX_PLUS_ONE 0x10000
+    QT_COLOR_PARAMETER_NOT_SPECIFIED = UINT16_MAX_PLUS_ONE,
+    QT_COLOR_PARAMETER_ITU_R_BT470_M,
+    QT_COLOR_PARAMETER_ITU_R_BT470_BG,
+    QT_COLOR_PARAMETER_ITU_R_BT709,
+    QT_COLOR_PARAMETER_SMPTE_170M,
+    QT_COLOR_PARAMETER_SMPTE_240M,
+    QT_COLOR_PARAMETER_SMPTE_274M,
+    QT_COLOR_PARAMETER_SMPTE_293M,
+    QT_COLOR_PARAMETER_SMPTE_296M,
+    QT_COLOR_PARAMETER_END,
+};
+
+typedef struct
+{
+    uint16_t primaries;
+    uint16_t transfer;
+    uint16_t matrix;
+} isom_color_parameter_t;
+
+static const isom_color_parameter_t isom_color_parameter_tbl[] =
+{
+    { 2, 2, 2 },        /* Not specified */
+    { 2, 2, 2 },        /* ITU-R BT.470 System M */
+    { 5, 2, 6 },        /* ITU-R BT.470 System B, G */
+    { 1, 1, 1 },        /* ITU-R BT.709 */
+    { 6, 1, 6 },        /* SMPTE 170M */
+    { 6, 7, 7 },        /* SMPTE 240M */
+    { 1, 1, 1 },        /* SMPTE 274M */
+    { 5, 1, 6 },        /* SMPTE 293M */
+    { 1, 1, 1 },        /* SMPTE 296M */
+};
+
 typedef struct
 {
     uint32_t complete;      /* recovery point: the identifier necessary for the recovery from its starting point to be completed */
@@ -1597,6 +1652,7 @@ int isom_set_track_aperture_modes( isom_root_t *root, uint32_t track_ID, uint32_
 int isom_set_sample_resolution( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint16_t width, uint16_t height );
 int isom_set_sample_type( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint32_t sample_type );
 int isom_set_sample_aspect_ratio( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint32_t hSpacing, uint32_t vSpacing );
+int isom_set_color_parameter( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, int primaries, int transfer, int matrix );
 int isom_set_scaling_method( isom_root_t *root, uint32_t track_ID, uint32_t entry_number,
                              uint8_t scale_method, int16_t display_center_x, int16_t display_center_y );
 int isom_set_avc_config( isom_root_t *root, uint32_t track_ID, uint32_t entry_number,
