@@ -516,6 +516,16 @@ static int isom_add_terminator( isom_wave_t *wave )
     return 0;
 }
 
+static int isom_add_chan( isom_audio_entry_t *audio )
+{
+    if( !audio || audio->chan )
+        return -1;
+    isom_create_fullbox( chan, QT_BOX_TYPE_CHAN );
+    chan->channelLayoutTag = QT_CHANNEL_LAYOUT_UNKNOWN;
+    audio->chan = chan;
+    return 0;
+}
+
 static int isom_add_audio_entry( lsmash_entry_list_t *list, uint32_t sample_type, mp4sys_audio_summary_t *summary )
 {
     if( !list )
@@ -1893,6 +1903,15 @@ static void isom_remove_wave( isom_wave_t *wave )
     free( wave );
 }
 
+static void isom_remove_chan( isom_chan_t *chan )
+{
+    if( !chan )
+        return;
+    if( chan->channelDescriptions )
+        free( chan->channelDescriptions );
+    free( chan );
+}
+
 static void isom_remove_visual_extensions( isom_visual_entry_t *visual )
 {
     if( !visual )
@@ -1969,6 +1988,7 @@ static void isom_remove_stsd( isom_stsd_t *stsd )
                     /* MPEG-4 Audio in QTFF */
                     isom_audio_entry_t *audio = (isom_audio_entry_t *)entry->data;
                     isom_remove_wave( audio->wave );
+                    isom_remove_chan( audio->chan );
                     if( audio->exdata )
                         free( audio->exdata );
                     free( audio );
@@ -2730,6 +2750,29 @@ static int isom_write_wave( lsmash_bs_t *bs, isom_wave_t *wave )
     return isom_write_terminator( bs, wave->terminator );
 }
 
+static int isom_write_chan( lsmash_bs_t *bs, isom_chan_t *chan )
+{
+    if( !chan )
+        return 0;
+    isom_bs_put_full_header( bs, &chan->full_header );
+    lsmash_bs_put_be32( bs, chan->channelLayoutTag );
+    lsmash_bs_put_be32( bs, chan->channelBitmap );
+    lsmash_bs_put_be32( bs, chan->numberChannelDescriptions );
+    if( chan->channelDescriptions )
+        for( uint32_t i = 0; i < chan->numberChannelDescriptions; i++ )
+        {
+            isom_channel_description_t *channelDescriptions = (isom_channel_description_t *)(&chan->channelDescriptions[i]);
+            if( !channelDescriptions )
+                return -1;
+            lsmash_bs_put_be32( bs, channelDescriptions->channelLabel );
+            lsmash_bs_put_be32( bs, channelDescriptions->channelFlags );
+            lsmash_bs_put_be32( bs, channelDescriptions->coordinates[0] );
+            lsmash_bs_put_be32( bs, channelDescriptions->coordinates[1] );
+            lsmash_bs_put_be32( bs, channelDescriptions->coordinates[2] );
+        }
+    return lsmash_bs_write_data( bs );
+}
+
 static int isom_write_avc_entry( lsmash_bs_t *bs, lsmash_entry_t *entry )
 {
     isom_avc_entry_t *data = (isom_avc_entry_t *)entry->data;
@@ -2816,9 +2859,11 @@ static int isom_write_audio_entry( lsmash_bs_t *bs, lsmash_entry_t *entry )
         lsmash_bs_put_be32( bs, data->constLPCMFramesPerAudioPacket );
     }
     lsmash_bs_put_bytes( bs, data->exdata, data->exdata_length );
+    if( lsmash_bs_write_data( bs ) )
+        return -1;
     if( data->version && isom_write_wave( bs, data->wave ) )
         return -1;
-    return lsmash_bs_write_data( bs );
+    return isom_write_chan( bs, data->chan );
 }
 
 #if 0
@@ -4821,11 +4866,22 @@ static uint64_t isom_update_wave_size( isom_wave_t *wave )
     return wave->base_header.size;
 }
 
+static uint64_t isom_update_chan_size( isom_chan_t *chan )
+{
+    if( !chan )
+        return 0;
+    chan->full_header.size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 12 + 20 * (uint64_t)chan->numberChannelDescriptions;
+    CHECK_LARGESIZE( chan->full_header.size );
+    return chan->full_header.size;
+}
+
 static uint64_t isom_update_audio_entry_size( isom_audio_entry_t *audio )
 {
     if( !audio )
         return 0;
-    audio->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 28 + (uint64_t)audio->exdata_length;
+    audio->base_header.size = ISOM_DEFAULT_BOX_HEADER_SIZE + 28
+        + isom_update_chan_size( audio->chan )
+        + (uint64_t)audio->exdata_length;
     if( audio->version == 1 )
         audio->base_header.size += 16 + isom_update_wave_size( audio->wave );
     else if( audio->version == 2 )
@@ -5700,6 +5756,32 @@ int isom_set_scaling_method( isom_root_t *root, uint32_t track_ID, uint32_t entr
     stsl->scale_method = scale_method;
     stsl->display_center_x = display_center_x;
     stsl->display_center_y = display_center_y;
+    return 0;
+}
+
+int isom_set_channel_layout( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint32_t layout_tag, uint32_t bitmap )
+{
+    if( !root || !track_ID || !entry_number )
+        return -1;
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
+        return -1;
+    isom_audio_entry_t *data = (isom_audio_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
+    if( !data )
+        return -1;
+    if( !data->chan && isom_add_chan( data ) )
+        return -1;
+    isom_chan_t *chan = data->chan;
+    if( layout_tag == QT_CHANNEL_LAYOUT_USE_CHANNEL_BITMAP && (!bitmap || bitmap > QT_CHANNEL_BIT_FULL) )
+    {
+        chan->channelLayoutTag = QT_CHANNEL_LAYOUT_UNKNOWN;
+        chan->channelBitmap = 0;
+    }
+    else
+    {
+        chan->channelLayoutTag = layout_tag;
+        chan->channelBitmap = bitmap;
+    }
     return 0;
 }
 

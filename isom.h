@@ -505,6 +505,24 @@ typedef struct
     isom_terminator_t *terminator;      /* Terminator Box */
 } isom_wave_t;
 
+/* Channel Compositor Box */
+typedef struct
+{
+    uint32_t channelLabel;          /* the channelLabel that describes the channel */
+    uint32_t channelFlags;          /* flags that control the interpretation of coordinates */
+    uint32_t coordinates[3];        /* an ordered triple that specifies a precise speaker location / 32-bit floating point */
+} isom_channel_description_t;
+
+typedef struct
+{
+    isom_full_header_t full_header;
+    uint32_t channelLayoutTag;              /* the channelLayoutTag indicates the layout */
+    uint32_t channelBitmap;                 /* If channelLayoutTag is set to 0x00010000, this field is the channel usage bitmap. */
+    uint32_t numberChannelDescriptions;     /* the number of items in the Channel Descriptions array */
+    /* Channel Descriptions array */
+    isom_channel_description_t *channelDescriptions;
+} isom_chan_t;
+
 /* Audio Sample Entry */
 #define ISOM_AUDIO_SAMPLE_ENTRY \
     ISOM_SAMPLE_ENTRY; \
@@ -535,7 +553,8 @@ typedef struct
     uint32_t constBytesPerAudioPacket;          /* only set if constant */
     uint32_t constLPCMFramesPerAudioPacket;     /* only set if constant */
     /* extensions */
-    isom_wave_t *wave;              /* Sound Information Decompression Parameters Box */
+    isom_wave_t *wave;      /* Sound Information Decompression Parameters Box */
+    isom_chan_t *chan;      /* Channel Compositor Box / optional / This box is defined by QuickTime file format */
     uint32_t exdata_length;
     void *exdata;
 } isom_audio_entry_t;
@@ -1177,6 +1196,7 @@ enum isom_box_code
 
 enum qt_box_code
 {
+    QT_BOX_TYPE_CHAN = ISOM_4CC( 'c', 'h', 'a', 'n' ),
     QT_BOX_TYPE_CLEF = ISOM_4CC( 'c', 'l', 'e', 'f' ),
     QT_BOX_TYPE_CLIP = ISOM_4CC( 'c', 'l', 'i', 'p' ),
     QT_BOX_TYPE_COLR = ISOM_4CC( 'c', 'o', 'l', 'r' ),
@@ -1581,6 +1601,283 @@ static const isom_color_parameter_t isom_color_parameter_tbl[] =
     { 1, 1, 1 },        /* SMPTE 296M */
 };
 
+enum qt_channel_label_code
+{
+    QT_CHANNEL_LABEL_UNKNOWN                = 0xffffffff,   /* unknown or unspecified other use */
+    QT_CHANNEL_LABEL_UNUSED                 = 0,            /* channel is present, but has no intended use or destination */
+    QT_CHANNEL_LABEL_USE_COORDINATES        = 100,          /* channel is described by the coordinates fields. */
+
+    QT_CHANNEL_LABEL_LEFT                   = 1,
+    QT_CHANNEL_LABEL_RIGHT                  = 2,
+    QT_CHANNEL_LABEL_CENTER                 = 3,
+    QT_CHANNEL_LABEL_LFE_SCREEN             = 4,
+    QT_CHANNEL_LABEL_LEFT_SURROUND          = 5,            /* WAVE: "Back Left" */
+    QT_CHANNEL_LABEL_RIGHT_SUROUND          = 6,            /* WAVE: "Back Right" */
+    QT_CHANNEL_LABEL_LEFT_CENTER            = 7,
+    QT_CHANNEL_LABEL_RIGHT_CENTER           = 8,
+    QT_CHANNEL_LABEL_CENTER_SURROUND        = 9,            /* WAVE: "Back Center" or plain "Rear Surround" */
+    QT_CHANNEL_LABEL_LEFT_SURROUND_DIRECT   = 10,           /* WAVE: "Side Left" */
+    QT_CHANNEL_LABEL_RIGHT_SURROUND_DIRECT  = 11,           /* WAVE: "Side Right" */
+    QT_CHANNEL_LABEL_TOP_CENTER_SURROUND    = 12,
+    QT_CHANNEL_LABEL_VERTICAL_HEIGHT_LEFT   = 13,           /* WAVE: "Top Front Left" */
+    QT_CHANNEL_LABEL_VERTICAL_HEIGHT_CENTER = 14,           /* WAVE: "Top Front Center" */
+    QT_CHANNEL_LABEL_VERTICAL_HEIGHT_RIGHT  = 15,           /* WAVE: "Top Front Right" */
+
+    QT_CHANNEL_LABEL_TOP_BACK_LEFT          = 16,
+    QT_CHANNEL_LABEL_TOP_BACK_CENTER        = 17,
+    QT_CHANNEL_LABEL_TOP_BACK_RIGHT         = 18,
+
+    QT_CHANNEL_LABEL_REAR_SURROUND_LEFT     = 33,
+    QT_CHANNEL_LABEL_REAR_SURROUND_RIGHT    = 34,
+    QT_CHANNEL_LABEL_LEFT_WIDE              = 35,
+    QT_CHANNEL_LABEL_RIGHT_WIDE             = 36,
+    QT_CHANNEL_LABEL_LFE2                   = 37,
+    QT_CHANNEL_LABEL_LEFT_TOTAL             = 38,           /* matrix encoded 4 channels */
+    QT_CHANNEL_LABEL_RIGHT_TOTAL            = 39,           /* matrix encoded 4 channels */
+    QT_CHANNEL_LABEL_HEARING_IMPAIRED       = 40,
+    QT_CHANNEL_LABEL_NARRATION              = 41,
+    QT_CHANNEL_LABEL_MONO                   = 42,
+    QT_CHANNEL_LABEL_DIALOG_CENTRIC_MIX     = 43,
+
+    QT_CHANNEL_LABEL_CENTER_SURROUND_DIRECT = 44,           /* back center, non diffuse */
+
+    QT_CHANNEL_LABEL_HAPTIC                 = 45,
+
+    /* first order ambisonic channels */
+    QT_CHANNEL_LABEL_AMBISONIC_W            = 200,
+    QT_CHANNEL_LABEL_AMBISONIC_X            = 201,
+    QT_CHANNEL_LABEL_AMBISONIC_Y            = 202,
+    QT_CHANNEL_LABEL_AMBISONIC_Z            = 203,
+
+    /* Mid/Side Recording */
+    QT_CHANNEL_LABEL_MS_MID                 = 204,
+    QT_CHANNEL_LABEL_MS_SIDE                = 205,
+
+    /* X-Y Recording */
+    QT_CHANNEL_LABEL_XY_X                   = 206,
+    QT_CHANNEL_LABEL_XY_Y                   = 207,
+
+    /* other */
+    QT_CHANNEL_LABEL_HEADPHONES_LEFT        = 301,
+    QT_CHANNEL_LABEL_HEADPHONES_RIGHT       = 302,
+    QT_CHANNEL_LABEL_CLICK_TRACK            = 304,
+    QT_CHANNEL_LABEL_FOREIGN_LANGUAGE       = 305,
+
+    /* generic discrete channel */
+    QT_CHANNEL_LABEL_DISCRETE               = 400,
+
+    /* numbered discrete channel */
+    QT_CHANNEL_LABEL_DISCRETE_0             = (1<<16),
+    QT_CHANNEL_LABEL_DISCRETE_1             = (1<<16) | 1,
+    QT_CHANNEL_LABEL_DISCRETE_2             = (1<<16) | 2,
+    QT_CHANNEL_LABEL_DISCRETE_3             = (1<<16) | 3,
+    QT_CHANNEL_LABEL_DISCRETE_4             = (1<<16) | 4,
+    QT_CHANNEL_LABEL_DISCRETE_5             = (1<<16) | 5,
+    QT_CHANNEL_LABEL_DISCRETE_6             = (1<<16) | 6,
+    QT_CHANNEL_LABEL_DISCRETE_7             = (1<<16) | 7,
+    QT_CHANNEL_LABEL_DISCRETE_8             = (1<<16) | 8,
+    QT_CHANNEL_LABEL_DISCRETE_9             = (1<<16) | 9,
+    QT_CHANNEL_LABEL_DISCRETE_10            = (1<<16) | 10,
+    QT_CHANNEL_LABEL_DISCRETE_11            = (1<<16) | 11,
+    QT_CHANNEL_LABEL_DISCRETE_12            = (1<<16) | 12,
+    QT_CHANNEL_LABEL_DISCRETE_13            = (1<<16) | 13,
+    QT_CHANNEL_LABEL_DISCRETE_14            = (1<<16) | 14,
+    QT_CHANNEL_LABEL_DISCRETE_15            = (1<<16) | 15,
+    QT_CHANNEL_LABEL_DISCRETE_65535         = (1<<16) | 65535,
+};
+
+enum qt_channel_bitmap_code
+{
+    QT_CHANNEL_BIT_LEFT                   = 1,
+    QT_CHANNEL_BIT_RIGHT                  = 1<<1,
+    QT_CHANNEL_BIT_CENTER                 = 1<<2,
+    QT_CHANNEL_BIT_LFE_SCREEN             = 1<<3,
+    QT_CHANNEL_BIT_LEFT_SURROUND          = 1<<4,       /* WAVE: "Back Left" */
+    QT_CHANNEL_BIT_RIGHT_SURROUND         = 1<<5,       /* WAVE: "Back Right" */
+    QT_CHANNEL_BIT_LEFT_CENTER            = 1<<6,
+    QT_CHANNEL_BIT_RIGHT_CENTER           = 1<<7,
+    QT_CHANNEL_BIT_CENTER_SURROUND        = 1<<8,       /* WAVE: "Back Center" */
+    QT_CHANNEL_BIT_LEFT_SURROUND_DIRECT   = 1<<9,       /* WAVE: "Side Left" */
+    QT_CHANNEL_BIT_RIGHT_SURROUND_DIRECT  = 1<<10,      /* WAVE: "Side Right" */
+    QT_CHANNEL_BIT_TOP_CENTER_SURROUND    = 1<<11,
+    QT_CHANNEL_BIT_VERTICAL_HEIGHT_LEFT   = 1<<12,      /* WAVE: "Top Front Left" */
+    QT_CHANNEL_BIT_VERTICAL_HEIGHT_CENTER = 1<<13,      /* WAVE: "Top Front Center" */
+    QT_CHANNEL_BIT_VERTICAL_HEIGHT_RIGHT  = 1<<14,      /* WAVE: "Top Front Right" */
+    QT_CHANNEL_BIT_TOP_BACK_LEFT          = 1<<15,
+    QT_CHANNEL_BIT_TOP_BACK_CENTER        = 1<<16,
+    QT_CHANNEL_BIT_TOP_BACK_RIGHT         = 1<<17,
+    QT_CHANNEL_BIT_FULL                   = 0x3ffff,
+};
+
+enum qt_channel_flags_code
+{
+    QT_CHANNEL_FLAGS_ALL_OFF                 = 0,
+    QT_CHANNEL_FLAGS_RECTANGULAR_COORDINATES = 1,
+    QT_CHANNEL_FLAGS_SPHERICAL_COORDINATES   = 1<<1,
+    QT_CHANNEL_FLAGS_METERS                  = 1<<2,
+};
+
+enum qt_channel_coordinates_index_code
+{
+    /* indices for accessing the coordinates array in Channel Descriptions */
+    /* for rectangulare coordinates */
+    QT_CHANNEL_COORDINATES_LEFT_RIGHT = 0,      /* Negative is left and positive is right. */
+    QT_CHANNEL_COORDINATES_BACK_FRONT = 1,      /* Negative is back and positive is front. */
+    QT_CHANNEL_COORDINATES_DOWN_UP    = 2,      /* Negative is below ground level, 0 is ground level, and positive is above ground level. */
+    /* for spherical coordinates */
+    QT_CHANNEL_COORDINATES_AZIMUTH    = 0,      /* 0 is front center, positive is right, negative is left. This is measured in degrees. */
+    QT_CHANNEL_COORDINATES_ELEVATION  = 1,      /* +90 is zenith, 0 is horizontal, -90 is nadir. This is measured in degrees. */
+    QT_CHANNEL_COORDINATES_DISTANCE   = 2,      /* The units are described by flags. */
+};
+
+enum qt_channel_layout_tag_code
+{
+    /* channel abbreviations:
+     * L - left
+     * R - right
+     * C - center
+     * Ls - left surround
+     * Rs - right surround
+     * Cs - center surround
+     * Rls - rear left surround
+     * Rrs - rear right surround
+     * Lw - left wide
+     * Rw - right wide
+     * Lsd - left surround direct
+     * Rsd - right surround direct
+     * Lc - left center
+     * Rc - right center
+     * Ts - top surround
+     * Vhl - vertical height left
+     * Vhc - vertical height center
+     * Vhr - vertical height right
+     * Lt - left matrix total. for matrix encoded stereo.
+     * Rt - right matrix total. for matrix encoded stereo. */
+
+    /*  General layouts */
+    QT_CHANNEL_LAYOUT_USE_CHANNEL_DESCRIPTIONS = 0,                 /* use the array of Channel Descriptions to define the mapping. */
+    QT_CHANNEL_LAYOUT_USE_CHANNEL_BITMAP       = 1<<16,             /* use the bitmap to define the mapping. */
+
+    QT_CHANNEL_LAYOUT_MONO                     = (100<<16) | 1,     /* a standard mono stream */
+    QT_CHANNEL_LAYOUT_STEREO                   = (101<<16) | 2,     /* a standard stereo stream (L R) - implied playback */
+    QT_CHANNEL_LAYOUT_STEREO_HEADPHONES        = (102<<16) | 2,     /* a standard stereo stream (L R) - implied headphone playback */
+    QT_CHANNEL_LAYOUT_MATRIX_STEREO            = (103<<16) | 2,     /* a matrix encoded stereo stream (Lt, Rt) */
+    QT_CHANNEL_LAYOUT_MID_SIDE                 = (104<<16) | 2,     /* mid/side recording */
+    QT_CHANNEL_LAYOUT_XY                       = (105<<16) | 2,     /* coincident mic pair (often 2 figure 8's) */
+    QT_CHANNEL_LAYOUT_BINAURAL                 = (106<<16) | 2,     /* binaural stereo (left, right) */
+    QT_CHANNEL_LAYOUT_AMBISONIC_B_FORMAT       = (107<<16) | 4,     /* W, X, Y, Z */
+
+    QT_CHANNEL_LAYOUT_QUADRAPHONIC             = (108<<16) | 4,     /* front left, front right, back left, back right */
+
+    QT_CHANNEL_LAYOUT_PENTAGONAL               = (109<<16) | 5,     /* left, right, rear left, rear right, center */
+
+    QT_CHANNEL_LAYOUT_HEXAGONAL                = (110<<16) | 6,     /* left, right, rear left, rear right, center, rear */
+
+    QT_CHANNEL_LAYOUT_OCTAGONAL                = (111<<16) | 8,     /* front left, front right, rear left, rear right,
+                                                                     * front center, rear center, side left, side right */
+
+    QT_CHANNEL_LAYOUT_CUBE                     = (112<<16) | 8,     /* left, right, rear left, rear right,
+                                                                     * top left, top right, top rear left, top rear right */
+
+    /*  MPEG defined layouts */
+    QT_CHANNEL_LAYOUT_MPEG_1_0                 = QT_CHANNEL_LAYOUT_MONO,            /* C */
+    QT_CHANNEL_LAYOUT_MPEG_2_0                 = QT_CHANNEL_LAYOUT_STEREO,          /* L R */
+    QT_CHANNEL_LAYOUT_MPEG_3_0_A               = (113<<16) | 3,                     /* L R C */
+    QT_CHANNEL_LAYOUT_MPEG_3_0_B               = (114<<16) | 3,                     /* C L R */
+    QT_CHANNEL_LAYOUT_MPEG_4_0_A               = (115<<16) | 4,                     /* L R C Cs */
+    QT_CHANNEL_LAYOUT_MPEG_4_0_B               = (116<<16) | 4,                     /* C L R Cs */
+    QT_CHANNEL_LAYOUT_MPEG_5_0_A               = (117<<16) | 5,                     /* L R C Ls Rs */
+    QT_CHANNEL_LAYOUT_MPEG_5_0_B               = (118<<16) | 5,                     /* L R Ls Rs C */
+    QT_CHANNEL_LAYOUT_MPEG_5_0_C               = (119<<16) | 5,                     /* L C R Ls Rs */
+    QT_CHANNEL_LAYOUT_MPEG_5_0_D               = (120<<16) | 5,                     /* C L R Ls Rs */
+    QT_CHANNEL_LAYOUT_MPEG_5_1_A               = (121<<16) | 6,                     /* L R C LFE Ls Rs */
+    QT_CHANNEL_LAYOUT_MPEG_5_1_B               = (122<<16) | 6,                     /* L R Ls Rs C LFE */
+    QT_CHANNEL_LAYOUT_MPEG_5_1_C               = (123<<16) | 6,                     /* L C R Ls Rs LFE */
+    QT_CHANNEL_LAYOUT_MPEG_5_1_D               = (124<<16) | 6,                     /* C L R Ls Rs LFE */
+    QT_CHANNEL_LAYOUT_MPEG_6_1_A               = (125<<16) | 7,                     /* L R C LFE Ls Rs Cs */
+    QT_CHANNEL_LAYOUT_MPEG_7_1_A               = (126<<16) | 8,                     /* L R C LFE Ls Rs Lc Rc */
+    QT_CHANNEL_LAYOUT_MPEG_7_1_B               = (127<<16) | 8,                     /* C Lc Rc L R Ls Rs LFE (doc: IS-13818-7 MPEG2-AAC Table 3.1) */
+    QT_CHANNEL_LAYOUT_MPEG_7_1_C               = (128<<16) | 8,                     /* L R C LFE Ls Rs Rls Rrs */
+    QT_CHANNEL_LAYOUT_EMAGIC_DEFAULT_7_1       = (129<<16) | 8,                     /* L R Ls Rs C LFE Lc Rc */
+    QT_CHANNEL_LAYOUT_SMPTE_DTV                = (130<<16) | 8,                     /* L R C LFE Ls Rs Lt Rt */
+
+    /*  ITU defined layouts */
+    QT_CHANNEL_LAYOUT_ITU_1_0                  = QT_CHANNEL_LAYOUT_MONO,            /* C */
+    QT_CHANNEL_LAYOUT_ITU_2_0                  = QT_CHANNEL_LAYOUT_STEREO,          /* L R */
+
+    QT_CHANNEL_LAYOUT_ITU_2_1                  = (131<<16) | 3,                     /* L R Cs */
+    QT_CHANNEL_LAYOUT_ITU_2_2                  = (132<<16) | 4,                     /* L R Ls Rs */
+    QT_CHANNEL_LAYOUT_ITU_3_0                  = QT_CHANNEL_LAYOUT_MPEG_3_0_A,      /* L R C */
+    QT_CHANNEL_LAYOUT_ITU_3_1                  = QT_CHANNEL_LAYOUT_MPEG_4_0_A,      /* L R C Cs */
+
+    QT_CHANNEL_LAYOUT_ITU_3_2                  = QT_CHANNEL_LAYOUT_MPEG_5_0_A,      /* L R C Ls Rs */
+    QT_CHANNEL_LAYOUT_ITU_3_2_1                = QT_CHANNEL_LAYOUT_MPEG_5_1_A,      /* L R C LFE Ls Rs */
+    QT_CHANNEL_LAYOUT_ITU_3_4_1                = QT_CHANNEL_LAYOUT_MPEG_7_1_C,      /* L R C LFE Ls Rs Rls Rrs */
+
+    /* DVD defined layouts */
+    QT_CHANNEL_LAYOUT_DVD_0                    = QT_CHANNEL_LAYOUT_MONO,            /* C (mono) */
+    QT_CHANNEL_LAYOUT_DVD_1                    = QT_CHANNEL_LAYOUT_STEREO,          /* L R */
+    QT_CHANNEL_LAYOUT_DVD_2                    = QT_CHANNEL_LAYOUT_ITU_2_1,         /* L R Cs */
+    QT_CHANNEL_LAYOUT_DVD_3                    = QT_CHANNEL_LAYOUT_ITU_2_2,         /* L R Ls Rs */
+    QT_CHANNEL_LAYOUT_DVD_4                    = (133<<16) | 3,                     /* L R LFE */
+    QT_CHANNEL_LAYOUT_DVD_5                    = (134<<16) | 4,                     /* L R LFE Cs */
+    QT_CHANNEL_LAYOUT_DVD_6                    = (135<<16) | 5,                     /* L R LFE Ls Rs */
+    QT_CHANNEL_LAYOUT_DVD_7                    = QT_CHANNEL_LAYOUT_MPEG_3_0_A,      /* L R C */
+    QT_CHANNEL_LAYOUT_DVD_8                    = QT_CHANNEL_LAYOUT_MPEG_4_0_A,      /* L R C Cs */
+    QT_CHANNEL_LAYOUT_DVD_9                    = QT_CHANNEL_LAYOUT_MPEG_5_0_A,      /* L R C Ls Rs */
+    QT_CHANNEL_LAYOUT_DVD_10                   = (136<<16) | 4,                     /* L R C LFE */
+    QT_CHANNEL_LAYOUT_DVD_11                   = (137<<16) | 5,                     /* L R C LFE Cs */
+    QT_CHANNEL_LAYOUT_DVD_12                   = QT_CHANNEL_LAYOUT_MPEG_5_1_A,      /* L R C LFE Ls Rs */
+    /* 13 through 17 are duplicates of 8 through 12. */
+    QT_CHANNEL_LAYOUT_DVD_13                   = QT_CHANNEL_LAYOUT_DVD_8,           /* L R C Cs */
+    QT_CHANNEL_LAYOUT_DVD_14                   = QT_CHANNEL_LAYOUT_DVD_9,           /* L R C Ls Rs */
+    QT_CHANNEL_LAYOUT_DVD_15                   = QT_CHANNEL_LAYOUT_DVD_10,          /* L R C LFE */
+    QT_CHANNEL_LAYOUT_DVD_16                   = QT_CHANNEL_LAYOUT_DVD_11,          /* L R C LFE Cs */
+    QT_CHANNEL_LAYOUT_DVD_17                   = QT_CHANNEL_LAYOUT_DVD_12,          /* L R C LFE Ls Rs */
+    QT_CHANNEL_LAYOUT_DVD_18                   = (138<<16) | 5,                     /* L R Ls Rs LFE */
+    QT_CHANNEL_LAYOUT_DVD_19                   = QT_CHANNEL_LAYOUT_MPEG_5_0_B,      /* L R Ls Rs C */
+    QT_CHANNEL_LAYOUT_DVD_20                   = QT_CHANNEL_LAYOUT_MPEG_5_1_B,      /* L R Ls Rs C LFE */
+
+    /* These are the symmetrical layouts */
+    QT_CHANNEL_LAYOUT_AUDIO_UNIT_4             = QT_CHANNEL_LAYOUT_QUADRAPHONIC,
+    QT_CHANNEL_LAYOUT_AUDIO_UNIT_5             = QT_CHANNEL_LAYOUT_PENTAGONAL,
+    QT_CHANNEL_LAYOUT_AUDIO_UNIT_6             = QT_CHANNEL_LAYOUT_HEXAGONAL,
+    QT_CHANNEL_LAYOUT_AUDIO_UNIT_8             = QT_CHANNEL_LAYOUT_OCTAGONAL,
+    /* These are the surround-based layouts */
+    QT_CHANNEL_LAYOUT_AUDIO_UNIT_5_0           = QT_CHANNEL_LAYOUT_MPEG_5_0_B,      /* L R Ls Rs C */
+    QT_CHANNEL_LAYOUT_AUDIO_UNIT_6_0           = (139<<16) | 6,                     /* L R Ls Rs C Cs */
+    QT_CHANNEL_LAYOUT_AUDIO_UNIT_7_0           = (140<<16) | 7,                     /* L R Ls Rs C Rls Rrs */
+    QT_CHANNEL_LAYOUT_AUDIO_UNIT_7_0_FRONT     = (148<<16) | 7,                     /* L R Ls Rs C Lc Rc */
+    QT_CHANNEL_LAYOUT_AUDIO_UNIT_5_1           = QT_CHANNEL_LAYOUT_MPEG_5_1_A,      /* L R C LFE Ls Rs */
+    QT_CHANNEL_LAYOUT_AUDIO_UNIT_6_1           = QT_CHANNEL_LAYOUT_MPEG_6_1_A,      /* L R C LFE Ls Rs Cs */
+    QT_CHANNEL_LAYOUT_AUDIO_UNIT_7_1           = QT_CHANNEL_LAYOUT_MPEG_7_1_C,      /* L R C LFE Ls Rs Rls Rrs */
+    QT_CHANNEL_LAYOUT_AUDIO_UNIT_7_1_FRONT     = QT_CHANNEL_LAYOUT_MPEG_7_1_A,      /* L R C LFE Ls Rs Lc Rc */
+
+    QT_CHANNEL_LAYOUT_AAC_3_0                  = QT_CHANNEL_LAYOUT_MPEG_3_0_B,      /* C L R */
+    QT_CHANNEL_LAYOUT_AAC_QUADRAPHONIC         = QT_CHANNEL_LAYOUT_QUADRAPHONIC,    /* L R Ls Rs */
+    QT_CHANNEL_LAYOUT_AAC_4_0                  = QT_CHANNEL_LAYOUT_MPEG_4_0_B,      /* C L R Cs */
+    QT_CHANNEL_LAYOUT_AAC_5_0                  = QT_CHANNEL_LAYOUT_MPEG_5_0_D,      /* C L R Ls Rs */
+    QT_CHANNEL_LAYOUT_AAC_5_1                  = QT_CHANNEL_LAYOUT_MPEG_5_1_D,      /* C L R Ls Rs Lfe */
+    QT_CHANNEL_LAYOUT_AAC_6_0                  = (141<<16) | 6,                     /* C L R Ls Rs Cs */
+    QT_CHANNEL_LAYOUT_AAC_6_1                  = (142<<16) | 7,                     /* C L R Ls Rs Cs Lfe */
+    QT_CHANNEL_LAYOUT_AAC_7_0                  = (143<<16) | 7,                     /* C L R Ls Rs Rls Rrs */
+    QT_CHANNEL_LAYOUT_AAC_7_1                  = QT_CHANNEL_LAYOUT_MPEG_7_1_B,      /* C Lc Rc L R Ls Rs Lfe */
+    QT_CHANNEL_LAYOUT_AAC_OCTAGONAL            = (144<<16) | 8,                     /* C L R Ls Rs Rls Rrs Cs */
+
+    QT_CHANNEL_LAYOUT_TMH_10_2_STD             = (145<<16) | 16,                    /* L R C Vhc Lsd Rsd Ls Rs Vhl Vhr Lw Rw Csd Cs LFE1 LFE2 */
+    QT_CHANNEL_LAYOUT_TMH_10_2_FULL            = (146<<16) | 21,                    /* TMH_10_2_std plus: Lc Rc HI VI Haptic */
+
+    QT_CHANNEL_LAYOUT_AC3_1_0_1                = (149<<16) | 2,                     /* C LFE */
+    QT_CHANNEL_LAYOUT_AC3_3_0                  = (150<<16) | 3,                     /* L C R */
+    QT_CHANNEL_LAYOUT_AC3_3_1                  = (151<<16) | 4,                     /* L C R Cs */
+    QT_CHANNEL_LAYOUT_AC3_3_0_1                = (152<<16) | 4,                     /* L C R LFE */
+    QT_CHANNEL_LAYOUT_AC3_2_1_1                = (153<<16) | 4,                     /* L R Cs LFE */
+    QT_CHANNEL_LAYOUT_AC3_3_1_1                = (154<<16) | 5,                     /* L C R Cs LFE */
+
+    QT_CHANNEL_LAYOUT_DISCRETE_IN_ORDER        = 147<<16,                           /* needs to be ORed with the actual number of channels */  
+    QT_CHANNEL_LAYOUT_UNKNOWN                  = 0xffff0000,                        /* needs to be ORed with the actual number of channels */
+};
+
 typedef struct
 {
     uint32_t complete;      /* recovery point: the identifier necessary for the recovery from its starting point to be completed */
@@ -1655,6 +1952,7 @@ int isom_set_sample_aspect_ratio( isom_root_t *root, uint32_t track_ID, uint32_t
 int isom_set_color_parameter( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, int primaries, int transfer, int matrix );
 int isom_set_scaling_method( isom_root_t *root, uint32_t track_ID, uint32_t entry_number,
                              uint8_t scale_method, int16_t display_center_x, int16_t display_center_y );
+int isom_set_channel_layout( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint32_t layout_tag, uint32_t bitmap );
 int isom_set_avc_config( isom_root_t *root, uint32_t track_ID, uint32_t entry_number,
                          uint8_t configurationVersion, uint8_t AVCProfileIndication, uint8_t profile_compatibility,
                          uint8_t AVCLevelIndication, uint8_t lengthSizeMinusOne,
