@@ -539,6 +539,7 @@ static int isom_add_audio_entry( lsmash_entry_list_t *list, uint32_t sample_type
     audio->channelcount = 2;
     audio->samplesize = 16;
     audio->samplerate = summary->frequency <= UINT16_MAX ? summary->frequency << 16 : 0;
+    audio->numAudioChannels = summary->channels;    /* store the actual number of channels, here */
     if( audio->base_header.type == ISOM_CODEC_TYPE_MP4A_AUDIO )
     {
         if( isom_add_wave( audio ) ||
@@ -562,7 +563,6 @@ static int isom_add_audio_entry( lsmash_entry_list_t *list, uint32_t sample_type
             audio->samplerate = 0x00010000;
             audio->sizeOfStructOnly = 72;
             audio->audioSampleRate = (union {double d; uint64_t i;}){summary->frequency}.i;
-            audio->numAudioChannels = summary->channels;
             audio->always7F000000 = 0x7F000000;
             audio->constBitsPerChannel = 0;
             audio->formatSpecificFlags = 0;
@@ -5776,7 +5776,7 @@ int isom_set_channel_layout( isom_root_t *root, uint32_t track_ID, uint32_t entr
     isom_chan_t *chan = data->chan;
     if( layout_tag == QT_CHANNEL_LAYOUT_USE_CHANNEL_BITMAP && (!bitmap || bitmap > QT_CHANNEL_BIT_FULL) )
     {
-        chan->channelLayoutTag = QT_CHANNEL_LAYOUT_UNKNOWN;
+        chan->channelLayoutTag = QT_CHANNEL_LAYOUT_UNKNOWN | data->numAudioChannels;
         chan->channelBitmap = 0;
     }
     else

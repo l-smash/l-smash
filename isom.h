@@ -529,7 +529,7 @@ typedef struct
     int16_t version;            /* ISOM: reserved / QTFF: sample description version */ \
     int16_t revision_level;     /* ISOM: reserved / QTFF: version of the CODEC */ \
     int32_t vendor;             /* ISOM: reserved / QTFF: whose CODEC */ \
-    uint16_t channelcount;      /* ISOM: template: channelcount = 2 / QTFF: version = 1 -> 2, version = 2 -> 3 */ \
+    uint16_t channelcount;      /* ISOM: template: channelcount = 2 / QTFF: version = 1 -> 1 or 2, version = 2 -> always 3 */ \
     uint16_t samplesize;        /* ISOM: template: samplesize = 16 */ \
     uint16_t compression_ID;    /* ISOM: pre_defined / QTFF: set -2 on some version 1 audio descriptions */ \
     uint16_t packet_size;       /* ISOM: reserved / QTFF: must be set to 0 */ \
@@ -1838,12 +1838,12 @@ enum qt_channel_layout_tag_code
     QT_CHANNEL_LAYOUT_DVD_19                   = QT_CHANNEL_LAYOUT_MPEG_5_0_B,      /* L R Ls Rs C */
     QT_CHANNEL_LAYOUT_DVD_20                   = QT_CHANNEL_LAYOUT_MPEG_5_1_B,      /* L R Ls Rs C LFE */
 
-    /* These are the symmetrical layouts */
+    /* These are the symmetrical layouts. */
     QT_CHANNEL_LAYOUT_AUDIO_UNIT_4             = QT_CHANNEL_LAYOUT_QUADRAPHONIC,
     QT_CHANNEL_LAYOUT_AUDIO_UNIT_5             = QT_CHANNEL_LAYOUT_PENTAGONAL,
     QT_CHANNEL_LAYOUT_AUDIO_UNIT_6             = QT_CHANNEL_LAYOUT_HEXAGONAL,
     QT_CHANNEL_LAYOUT_AUDIO_UNIT_8             = QT_CHANNEL_LAYOUT_OCTAGONAL,
-    /* These are the surround-based layouts */
+    /* These are the surround-based layouts. */
     QT_CHANNEL_LAYOUT_AUDIO_UNIT_5_0           = QT_CHANNEL_LAYOUT_MPEG_5_0_B,      /* L R Ls Rs C */
     QT_CHANNEL_LAYOUT_AUDIO_UNIT_6_0           = (139<<16) | 6,                     /* L R Ls Rs C Cs */
     QT_CHANNEL_LAYOUT_AUDIO_UNIT_7_0           = (140<<16) | 7,                     /* L R Ls Rs C Rls Rrs */
