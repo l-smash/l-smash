@@ -5761,6 +5761,8 @@ int isom_set_scaling_method( isom_root_t *root, uint32_t track_ID, uint32_t entr
 
 int isom_set_channel_layout( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint32_t layout_tag, uint32_t bitmap )
 {
+    if( layout_tag == QT_CHANNEL_LAYOUT_USE_CHANNEL_DESCRIPTIONS )
+        return -1;  /* We don't support the feature of Channel Descriptions */
     if( !root || !track_ID || !entry_number )
         return -1;
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
