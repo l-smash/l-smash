@@ -3976,7 +3976,7 @@ static int isom_add_chunk( isom_trak_entry_t *trak, isom_sample_t *sample )
     if( sample->dts < current->first_dts )
         return -1; /* easy error check. */
     double chunk_duration = (double)(sample->dts - current->first_dts) / trak->mdia->mdhd->timescale;
-    if( trak->root->max_chunk_duration >= chunk_duration )
+    if( trak->root->max_chunk_duration >= chunk_duration && current->sample_description_index == sample->index )
         return 0; /* no need to flush current cached chunk, the current sample must be put into that. */
 
     /* NOTE: chunk relative stuff must be pushed into root after a chunk is fully determined with its contents. */
@@ -3985,7 +3985,8 @@ static int isom_add_chunk( isom_trak_entry_t *trak, isom_sample_t *sample )
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     isom_stsc_t *stsc = stbl->stsc;
     /* Add a new chunk sequence in this track if needed. */
-    if( !stsc->list->tail || current->pool->entry_count != ((isom_stsc_entry_t *)stsc->list->tail->data)->samples_per_chunk )
+    if( !stsc->list->tail || current->sample_description_index != sample->index ||
+        current->pool->entry_count != ((isom_stsc_entry_t *)stsc->list->tail->data)->samples_per_chunk )
     {
         if( isom_add_stsc_entry( stbl, current->chunk_number, current->pool->entry_count, current->sample_description_index ) )
             return -1;
