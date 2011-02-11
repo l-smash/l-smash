@@ -439,7 +439,7 @@ typedef struct
 /* Parameter Set Entry */
 typedef struct
 {
-    uint8_t parameterSetLength;
+    uint16_t parameterSetLength;
     uint8_t *parameterSetNALUnit;
 } isom_avcC_ps_entry_t;
 
@@ -531,7 +531,7 @@ typedef struct
     int32_t vendor;             /* ISOM: reserved / QTFF: whose CODEC */ \
     uint16_t channelcount;      /* ISOM: template: channelcount = 2 / QTFF: version = 1 -> 1 or 2, version = 2 -> always 3 */ \
     uint16_t samplesize;        /* ISOM: template: samplesize = 16 */ \
-    uint16_t compression_ID;    /* ISOM: pre_defined / QTFF: set -2 on some version 1 audio descriptions */ \
+    int16_t compression_ID;    /* ISOM: pre_defined / QTFF: set -2 on some version 1 audio descriptions */ \
     uint16_t packet_size;       /* ISOM: reserved / QTFF: must be set to 0 */ \
     uint32_t samplerate;        /* 16.16 fixed-point number / QTFF: version = 2 -> must be set to 0x00010000 */
 
@@ -884,7 +884,7 @@ typedef struct
     /* */
     int32_t  rate;              /* fixed point 16.16 number. 0x00010000 is normal forward playback. */
     int16_t  volume;            /* fixed point 8.8 number. 0x0100 is full volume. */
-    char     reserved[10];
+    uint8_t  reserved[10];
     int32_t  matrix[9];         /* transformation matrix for the video */
     uint32_t pre_defined[6];
     uint32_t next_track_ID;     /* larger than the largest track-ID in use */
