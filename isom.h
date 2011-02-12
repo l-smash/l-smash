@@ -42,36 +42,35 @@
 #define ISOM_MAX( a, b ) ((a) > (b) ? (a) : (b))
 #define ISOM_MIN( a, b ) ((a) < (b) ? (a) : (b))
 
+typedef struct isom_box_tag isom_box_t;
+
 /* If size is 1, then largesize is actual size.
  * If size is 0, then this box is the last one in the file. This is useful for pipe I/O.
  * usertype is for uuid. */
-#define ISOM_BASE \
+#define ISOM_BASEBOX_COMMON \
+    isom_box_t *parent; /* pointer of parent box */ \
     uint64_t size; \
     uint32_t type; \
     uint8_t  *usertype
 
-#define ISOM_DEFAULT_BOX_HEADER_SIZE 8
-#define ISOM_DEFAULT_FULLBOX_HEADER_SIZE 12
+#define ISOM_FULLBOX_COMMON \
+    ISOM_BASEBOX_COMMON; \
+    uint8_t  version;   /* basically, version is either 0 or 1 */ \
+    uint32_t flags      /* In the actual structure of box, flags is 24 bits. */
+
+#define ISOM_DEFAULT_BOX_HEADER_SIZE          8
+#define ISOM_DEFAULT_FULLBOX_HEADER_SIZE      12
 #define ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE 16
 
-/* Box header */
-typedef struct
+struct isom_box_tag
 {
-    ISOM_BASE;
-} isom_base_header_t;
-
-/* FullBox header */
-typedef struct
-{
-    ISOM_BASE;
-    uint8_t  version;   /* basically, version is either 0 or 1 */
-    uint32_t flags;     /* flags is 24 bits */
-} isom_full_header_t;
+    ISOM_FULLBOX_COMMON;
+};
 
 /* File Type Box */
 typedef struct
 {
-    isom_base_header_t base_header;
+    ISOM_BASEBOX_COMMON;
     uint32_t major_brand;           /* brand identifier */
     uint32_t minor_version;         /* the minor version of the major brand */
     uint32_t *compatible_brands;    /* a list, to the end of the box, of brands */
@@ -90,7 +89,7 @@ typedef struct
 #define ISOM_TRACK_ENABLED 0x000001
 #define ISOM_TRACK_IN_MOVIE 0x000002
 #define ISOM_TRACK_IN_PREVIEW 0x000004
-    isom_full_header_t full_header;
+    ISOM_FULLBOX_COMMON;
     /* version == 0: uint64_t -> uint32_t */
     uint64_t creation_time;
     uint64_t modification_time;
@@ -114,7 +113,7 @@ typedef struct
  * A presentation mode where clap and pasp are reflected. */
 typedef struct
 {
-    isom_full_header_t full_header;
+    ISOM_FULLBOX_COMMON;
     uint32_t width;     /* fixed point 16.16 number */
     uint32_t height;    /* fixed point 16.16 number */
 } isom_clef_t;
@@ -123,7 +122,7 @@ typedef struct
  * A presentation mode where pasp is reflected. */
 typedef struct
 {
-    isom_full_header_t full_header;
+    ISOM_FULLBOX_COMMON;
     uint32_t width;     /* fixed point 16.16 number */
     uint32_t height;    /* fixed point 16.16 number */
 } isom_prof_t;
@@ -132,7 +131,7 @@ typedef struct
  * A presentation mode where clap and pasp are not reflected. */
 typedef struct
 {
-    isom_full_header_t full_header;
+    ISOM_FULLBOX_COMMON;
     uint32_t width;     /* fixed point 16.16 number */
     uint32_t height;    /* fixed point 16.16 number */
 } isom_enof_t;
@@ -140,7 +139,7 @@ typedef struct
 /* Track Aperture Mode Dimensions Box */
 typedef struct
 {
-    isom_base_header_t base_header;
+    ISOM_BASEBOX_COMMON;
     isom_clef_t *clef;      /* Track Clean Aperture Dimensions Box */
     isom_prof_t *prof;      /* Track Production Aperture Dimensions Box */
     isom_enof_t *enof;      /* Track Encoded Pixels Dimensions Box */
@@ -161,21 +160,21 @@ typedef struct
 
 typedef struct
 {
-    isom_full_header_t full_header;     /* version is either 0 or 1 */
+    ISOM_FULLBOX_COMMON;        /* version is either 0 or 1 */
     lsmash_entry_list_t *list;
 } isom_elst_t;
 
 /* Edit Box */
 typedef struct
 {
-    isom_base_header_t base_header;
+    ISOM_BASEBOX_COMMON;
     isom_elst_t *elst;     /* Edit List Box */
 } isom_edts_t;
 
 /* Track Reference Box */
 typedef struct
 {
-    isom_base_header_t base_header;
+    ISOM_BASEBOX_COMMON;
     uint32_t *track_ID;         /* track_IDs of reference tracks / Zero value must not be used */
 
         uint32_t ref_count;     /* number of reference tracks */
@@ -183,8 +182,8 @@ typedef struct
 
 typedef struct
 {
-    isom_base_header_t base_header;
-    isom_tref_type_t *type;     /* Track Reference Type Box */
+    ISOM_BASEBOX_COMMON;
+    isom_tref_type_t *ref;      /* Track Reference Type Box */
 
         uint32_t type_count;    /* number of reference types */
 } isom_tref_t;
@@ -192,7 +191,7 @@ typedef struct
 /* Media Header Box */
 typedef struct
 {
-    isom_full_header_t full_header;     /* version is either 0 or 1 */
+    ISOM_FULLBOX_COMMON;    /* version is either 0 or 1 */
     /* version == 0: uint64_t -> uint32_t */
     uint64_t creation_time;
     uint64_t modification_time;
@@ -211,8 +210,8 @@ typedef struct
 typedef struct
 {
     /* This box is in Media Box or Meta Box */
-    isom_full_header_t full_header;
-    uint32_t type;      /* ISOM: pre_difined = 0
+    ISOM_FULLBOX_COMMON;
+    uint32_t maintype;  /* ISOM: pre_difined = 0
                          * QT: 'mhlr' for Media Handler Reference Box and 'dhlr' for Data Handler Reference Box  */
     uint32_t subtype;   /* ISOM and QT: when present in Media Handler Reference Box, this field defines the type of media data
                          * QT: when present in Data Handler Reference Box, this field defines the data reference type */
@@ -227,15 +226,15 @@ typedef struct
 /* Video Media Header Box */
 typedef struct
 {
-    isom_full_header_t full_header;     /* flags is 1 */
-    uint16_t graphicsmode;              /* template: graphicsmode = 0 */
-    uint16_t opcolor[3];                /* template: opcolor = { 0, 0, 0 } */
+    ISOM_FULLBOX_COMMON;        /* flags is 1 */
+    uint16_t graphicsmode;      /* template: graphicsmode = 0 */
+    uint16_t opcolor[3];        /* template: opcolor = { 0, 0, 0 } */
 } isom_vmhd_t;
 
 /* Sound Media Header Box */
 typedef struct
 {
-    isom_full_header_t full_header;
+    ISOM_FULLBOX_COMMON;
     int16_t balance;    /* a fixed-point 8.8 number that places mono audio tracks in a stereo space. template: balance = 0 */
     uint16_t reserved;
 } isom_smhd_t;
@@ -243,7 +242,7 @@ typedef struct
 /* Hint Media Header Box */
 typedef struct
 {
-    isom_full_header_t full_header;
+    ISOM_FULLBOX_COMMON;
     uint16_t maxPDUsize;
     uint16_t avgPDUsize;
     uint32_t maxbitrate;
@@ -255,13 +254,13 @@ typedef struct
 typedef struct
 {
     /* Streams other than visual and audio may use a Null Media Header Box */
-    isom_full_header_t full_header;     /* flags is currently all zero */
+    ISOM_FULLBOX_COMMON;    /* flags is currently all zero */
 } isom_nmhd_t;
 
 /* Generic Media Information Box */
 typedef struct
 {
-    isom_full_header_t full_header;
+    ISOM_FULLBOX_COMMON;
     uint16_t graphicsmode;
     uint16_t opcolor[3];
     int16_t balance;        /* This field is nomally set to 0. */
@@ -270,7 +269,7 @@ typedef struct
 
 typedef struct
 {
-    isom_base_header_t base_header;
+    ISOM_BASEBOX_COMMON;
     int32_t matrix[9];      /* Unkown fields. Default values are probably:
                              * { 0x00010000, 0, 0, 0, 0x00010000, 0, 0, 0, 0x40000000 } */
 } isom_text_t;
@@ -278,7 +277,7 @@ typedef struct
 /* Generic Media Information Header Box */
 typedef struct
 {
-    isom_base_header_t base_header;
+    ISOM_BASEBOX_COMMON;
     isom_gmin_t *gmin;      /* Generic Media Information Box */
     isom_text_t *text;
 } isom_gmhd_t;
@@ -288,8 +287,8 @@ typedef struct
 typedef struct
 {
     /* This box is DataEntryUrlBox or DataEntryUrnBox */
-    isom_full_header_t full_header;     /* flags == 0x000001 means that the media data is in the same file
-                                         * as the Movie Box containing this data reference. */
+    ISOM_FULLBOX_COMMON;    /* flags == 0x000001 means that the media data is in the same file
+                             * as the Movie Box containing this data reference. */
     char *name;     /* only for DataEntryUrnBox */
     char *location;
 
@@ -299,7 +298,7 @@ typedef struct
 
 typedef struct
 {
-    isom_full_header_t full_header;
+    ISOM_FULLBOX_COMMON;
     lsmash_entry_list_t *list;
 } isom_dref_t;
 
@@ -307,7 +306,7 @@ typedef struct
 typedef struct
 {
     /* This box is in Media Information Box or Meta Box */
-    isom_base_header_t base_header;
+    ISOM_BASEBOX_COMMON;
     isom_dref_t *dref;      /* Data Reference Box */
 } isom_dinf_t;
 
@@ -316,14 +315,14 @@ typedef struct
 struct mp4sys_ES_Descriptor_t; /* FIXME: I think these structs using mp4sys should be placed in isom.c */
 typedef struct
 {
-    isom_full_header_t full_header;
+    ISOM_FULLBOX_COMMON;
     struct mp4sys_ES_Descriptor_t *ES;
 } isom_esds_t;
 
 /* Bit Rate Box */
 typedef struct
 {
-    isom_base_header_t base_header;
+    ISOM_BASEBOX_COMMON;
     uint32_t bufferSizeDB;  /* the size of the decoding buffer for the elementary stream in bytes */
     uint32_t maxBitrate;    /* the maximum rate in bits/second over any window of one second */
     uint32_t avgBitrate;    /* the average rate in bits/second over the entire presentation */
@@ -332,7 +331,7 @@ typedef struct
 /* Pixel Aspect Ratio Box */
 typedef struct
 {
-    isom_base_header_t base_header;
+    ISOM_BASEBOX_COMMON;
     uint32_t hSpacing;
     uint32_t vSpacing;
 } isom_pasp_t;
@@ -340,7 +339,7 @@ typedef struct
 /* Clean Aperture Box */
 typedef struct
 {
-    isom_base_header_t base_header;
+    ISOM_BASEBOX_COMMON;
     uint32_t cleanApertureWidthN;
     uint32_t cleanApertureWidthD;
     uint32_t cleanApertureHeightN;
@@ -355,7 +354,7 @@ typedef struct
  * This box is defined by QuickTime file format. */
 typedef struct
 {
-    isom_base_header_t base_header;
+    ISOM_BASEBOX_COMMON;
     uint32_t color_parameter_type;          /* 'nclc' or 'prof' */
     /* for 'nclc' */
     uint16_t primaries_index;
@@ -371,7 +370,7 @@ typedef struct
 #define ISOM_SCALING_METHOD_MEET    3
 #define ISOM_SCALING_METHOD_SLICE_X 4
 #define ISOM_SCALING_METHOD_SLICE_Y 5
-    isom_full_header_t full_header;
+    ISOM_FULLBOX_COMMON;
     uint8_t constraint_flag;    /* Upper 7-bits are reserved.
                                  * If this flag is set, all samples described by this sample entry shall be scaled
                                  * according to the method specified by the field 'scale_method'. */
@@ -382,7 +381,7 @@ typedef struct
 
 /* Sample Entry */
 #define ISOM_SAMPLE_ENTRY \
-    isom_base_header_t base_header; \
+    ISOM_BASEBOX_COMMON; \
     uint8_t reserved[6]; \
     uint16_t data_reference_index;
 
@@ -447,7 +446,7 @@ typedef struct
 typedef struct
 {
 #define ISOM_REQUIRES_AVCC_EXTENSION( x ) ((x) == 100 || (x) == 110 || (x) == 122 || (x) == 144)
-    isom_base_header_t base_header;
+    ISOM_BASEBOX_COMMON;
     uint8_t configurationVersion;                   /* 1 */
     uint8_t AVCProfileIndication;                   /* profile_idc in SPS */
     uint8_t profile_compatibility;
@@ -478,27 +477,27 @@ typedef struct
 /* Format Box */
 typedef struct
 {
-    isom_base_header_t base_header;
+    ISOM_BASEBOX_COMMON;
     uint32_t data_format;       /* copy of sample description type */
 } isom_frma_t;
 
 /* MPEG-4 Audio Box */
 typedef struct
 {
-    isom_base_header_t base_header;
+    ISOM_BASEBOX_COMMON;
     uint32_t unknown;           /* always 0? */
 } isom_mp4a_t;
 
 /* Terminator Box */
 typedef struct
 {
-    isom_base_header_t base_header;     /* size = 8, type = 0x00000000 */
+    ISOM_BASEBOX_COMMON;    /* size = 8, type = 0x00000000 */
 } isom_terminator_t;
 
 /* Sound Information Decompression Parameters Box */
 typedef struct
 {
-    isom_base_header_t base_header;
+    ISOM_BASEBOX_COMMON;
     isom_frma_t       *frma;            /* Format Box */
     isom_mp4a_t       *mp4a;            /* MPEG-4 Audio Box */
     isom_esds_t       *esds;            /* ES Descriptor Box */
@@ -515,7 +514,7 @@ typedef struct
 
 typedef struct
 {
-    isom_full_header_t full_header;
+    ISOM_FULLBOX_COMMON;
     uint32_t channelLayoutTag;              /* the channelLayoutTag indicates the layout */
     uint32_t channelBitmap;                 /* If channelLayoutTag is set to 0x00010000, this field is the channel usage bitmap. */
     uint32_t numberChannelDescriptions;     /* the number of items in the Channel Descriptions array */
@@ -614,7 +613,7 @@ typedef struct
 
 typedef struct
 {
-    isom_base_header_t base_header;
+    ISOM_BASEBOX_COMMON;
     /* FontRecord
      * entry_count is uint16_t. */
     lsmash_entry_list_t *list;
@@ -646,7 +645,7 @@ typedef struct
 /* Sample Description Box */
 typedef struct
 {
-    isom_full_header_t full_header;
+    ISOM_FULLBOX_COMMON;
     lsmash_entry_list_t *list;
 } isom_stsd_t;
 /** **/
@@ -660,7 +659,7 @@ typedef struct
 
 typedef struct
 {
-    isom_full_header_t full_header;
+    ISOM_FULLBOX_COMMON;
     lsmash_entry_list_t *list;
 } isom_stts_t;
 
@@ -675,14 +674,14 @@ typedef struct
 {
     /* ISOM: if version is 1, sample_offset is signed 32bit integer.
      * QT: sample_offset is always signed 32bit integer. */
-    isom_full_header_t full_header;
+    ISOM_FULLBOX_COMMON;
     lsmash_entry_list_t *list;
 } isom_ctts_t;
 
 /* Composition to Decode Box (Composition Shift Least Greatest Box) */
 typedef struct
 {
-    isom_full_header_t full_header;
+    ISOM_FULLBOX_COMMON;
     int32_t compositionToDTSShift;
     int32_t leastDecodeToDisplayDelta;      /* the smallest sample_offset */
     int32_t greatestDecodeToDisplayDelta;   /* the largest sample_offset */
@@ -698,7 +697,7 @@ typedef struct
 
 typedef struct
 {
-    isom_full_header_t full_header;
+    ISOM_FULLBOX_COMMON;
     uint32_t sample_size;       /* If this field is set to 0, then the samples have different sizes. */
     uint32_t sample_count;
     lsmash_entry_list_t *list;  /* available if sample_size == 0 */
@@ -712,7 +711,7 @@ typedef struct
 
 typedef struct
 {
-    isom_full_header_t full_header;
+    ISOM_FULLBOX_COMMON;
     lsmash_entry_list_t *list;
 } isom_stss_t;
 
@@ -724,7 +723,7 @@ typedef struct
 
 typedef struct
 {
-    isom_full_header_t full_header;
+    ISOM_FULLBOX_COMMON;
     lsmash_entry_list_t *list;
 } isom_stps_t;
 
@@ -753,7 +752,7 @@ typedef struct
 
 typedef struct
 {
-    isom_full_header_t full_header;
+    ISOM_FULLBOX_COMMON;
     /* According to the specification, the size of the table, sample_count, doesn't exist in this box.
      * Instead of this, it is taken from the sample_count in the stsz or the stz2 box. */
     lsmash_entry_list_t *list;
@@ -769,7 +768,7 @@ typedef struct
 
 typedef struct
 {
-    isom_full_header_t full_header;
+    ISOM_FULLBOX_COMMON;
     lsmash_entry_list_t *list;
 } isom_stsc_t;
 
@@ -787,7 +786,7 @@ typedef struct
 
 typedef struct
 {
-    isom_full_header_t full_header;
+    ISOM_FULLBOX_COMMON;
     lsmash_entry_list_t *list;
 
     uint8_t large_presentation;
@@ -802,7 +801,7 @@ typedef struct
 
 typedef struct
 {
-    isom_full_header_t full_header;
+    ISOM_FULLBOX_COMMON;
     uint32_t grouping_type;     /* Links it to its sample group description table with the same value for grouping type. */
     lsmash_entry_list_t *list;
 } isom_sbgp_t;
@@ -818,7 +817,7 @@ typedef struct
 
 typedef struct
 {
-    isom_full_header_t full_header;
+    ISOM_FULLBOX_COMMON;
     uint32_t grouping_type;     /* an integer that identifies the sbgp that is associated with this sample group description */
     uint32_t default_length;    /* the length of every group entry (if the length is constant), or zero (if it is variable)
                                  * This field is available only if version == 1. */
@@ -828,7 +827,7 @@ typedef struct
 /* Sample Table Box */
 typedef struct
 {
-    isom_base_header_t base_header;
+    ISOM_BASEBOX_COMMON;
     isom_stsd_t *stsd;      /* Sample Description Box */
     isom_stts_t *stts;      /* Decoding Time to Sample Box */
     isom_ctts_t *ctts;      /* Composition Time to Sample Box */
@@ -848,7 +847,7 @@ typedef struct
 /* Media Information Box */
 typedef struct
 {
-    isom_base_header_t base_header;
+    ISOM_BASEBOX_COMMON;
     /* Media Information Header Boxes */
     isom_vmhd_t *vmhd;      /* Video Media Header Box */
     isom_smhd_t *smhd;      /* Sound Media Header Box */
@@ -865,7 +864,7 @@ typedef struct
 /* Media Box */
 typedef struct
 {
-    isom_base_header_t base_header;
+    ISOM_BASEBOX_COMMON;
     isom_mdhd_t *mdhd;      /* Media Header Box */
     isom_hdlr_t *hdlr;      /* ISOM: Handler Reference Box / QT: Media Handler Reference Box
                              * Note: this box must come before Media Information Box. */
@@ -875,7 +874,7 @@ typedef struct
 /* Movie Header Box */
 typedef struct
 {
-    isom_full_header_t full_header;     /* version is either 0 or 1 */
+    ISOM_FULLBOX_COMMON;        /* version is either 0 or 1 */
     /* version == 0: uint64_t -> uint32_t */
     uint64_t creation_time;
     uint64_t modification_time;
@@ -895,14 +894,14 @@ typedef struct
 struct mp4sys_ObjectDescriptor_t; /* FIXME: I think these structs using mp4sys should be placed in isom.c */
 typedef struct
 {
-    isom_full_header_t full_header;
+    ISOM_FULLBOX_COMMON;
     struct mp4sys_ObjectDescriptor_t *OD;
 } isom_iods_t;
 
 /* Media Data Box */
 typedef struct
 {
-    isom_base_header_t base_header;     /* If size is 0, then this box is the last box. */
+    ISOM_BASEBOX_COMMON;    /* If size is 0, then this box is the last box. */
 
         uint64_t placeholder_pos;       /* placeholder position for largesize */
 } isom_mdat_t;
@@ -910,7 +909,7 @@ typedef struct
 /* Free Space Box */
 typedef struct
 {
-    isom_base_header_t base_header;     /* type is 'free' or 'skip' */
+    ISOM_BASEBOX_COMMON;    /* type is 'free' or 'skip' */
     uint32_t length;
     uint8_t *data;
 } isom_free_t;
@@ -929,7 +928,7 @@ typedef struct
 
 typedef struct
 {
-    isom_full_header_t full_header;     /* version is 1 */
+    ISOM_FULLBOX_COMMON;    /* version is 1 */
     uint8_t reserved;
     lsmash_entry_list_t *list;
 } isom_chpl_t;
@@ -937,23 +936,25 @@ typedef struct
 /* User Data Box */
 typedef struct
 {
-    isom_base_header_t base_header;
+    ISOM_BASEBOX_COMMON;
     isom_chpl_t *chpl;      /* Chapter List Box */
 } isom_udta_t;
 
 /* Movie Box */
 typedef struct
 {
-    isom_base_header_t base_header;
-    isom_mvhd_t       *mvhd;        /* Movie Header Box */
-    isom_iods_t       *iods;
-    lsmash_entry_list_t *trak_list; /* Track Box List */
-    isom_udta_t       *udta;        /* User Data Box */
+    ISOM_BASEBOX_COMMON;
+    isom_mvhd_t         *mvhd;          /* Movie Header Box */
+    isom_iods_t         *iods;
+    lsmash_entry_list_t *trak_list;     /* Track Box List */
+    isom_udta_t         *udta;          /* User Data Box */
 } isom_moov_t;
 
 /* ROOT */
 typedef struct
 {
+    ISOM_FULLBOX_COMMON;    /* the size field expresses total file size 
+                             * the flags field expresses file mode */
     isom_ftyp_t *ftyp;      /* File Type Box */
     isom_moov_t *moov;      /* Movie Box */
     isom_mdat_t *mdat;      /* Media Data Box */
@@ -1010,7 +1011,7 @@ typedef struct
 
 typedef struct
 {
-    isom_base_header_t base_header;
+    ISOM_BASEBOX_COMMON;
     isom_tkhd_t *tkhd;          /* Track Header Box */
     isom_tapt_t *tapt;          /* Track Aperture Mode Dimensions Box / This box is defined in QuickTime file format */
     isom_edts_t *edts;          /* Edit Box */
