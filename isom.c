@@ -409,7 +409,7 @@ static int isom_add_avc_entry( isom_stsd_t *stsd, uint32_t sample_type )
             return -1;
     }
     avc->depth = 0x0018;
-    avc->pre_defined3 = -1;
+    avc->color_table_ID = -1;
     if( lsmash_add_entry( list, avc ) || isom_add_avcC( list, avc ) )
     {
         free( avc );
@@ -500,7 +500,7 @@ static int isom_add_mp4v_entry( isom_stsd_t *stsd )
     mp4v->frame_count = 1;
     mp4v->compressorname[32] = '\0';
     mp4v->depth = 0x0018;
-    mp4v->pre_defined3 = -1;
+    mp4v->color_table_ID = -1;
     if( lsmash_add_entry( stsd->list, mp4v ) )
     {
         free( mp4v );
@@ -541,7 +541,7 @@ static int isom_add_visual_entry( isom_stsd_t *stsd, uint32_t sample_type )
     visual->frame_count = 1;
     visual->compressorname[32] = '\0';
     visual->depth = 0x0018;
-    visual->pre_defined3 = -1;
+    visual->color_table_ID = -1;
     if( lsmash_add_entry( list, visual ) )
     {
         free( visual );
@@ -1833,7 +1833,7 @@ static int isom_add_chpl( isom_moov_t *moov )
     if( !moov || !moov->udta || moov->udta->chpl )
         return -1;
     isom_create_list_box( chpl, moov, ISOM_BOX_TYPE_CHPL );
-    chpl->version = 1;
+    chpl->version = 1;      /* version = 1 is popular. */
     moov->udta->chpl = chpl;
     return 0;
 }
@@ -2538,7 +2538,7 @@ static int isom_write_mdhd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
         lsmash_bs_put_be32( bs, (uint32_t)mdhd->duration );
     }
     lsmash_bs_put_be16( bs, mdhd->language );
-    lsmash_bs_put_be16( bs, mdhd->pre_defined );
+    lsmash_bs_put_be16( bs, mdhd->quality );
     return lsmash_bs_write_data( bs );
 }
 
@@ -2856,19 +2856,20 @@ static int isom_write_avc_entry( lsmash_bs_t *bs, lsmash_entry_t *entry )
     isom_bs_put_box_common( bs, data );
     lsmash_bs_put_bytes( bs, data->reserved, 6 );
     lsmash_bs_put_be16( bs, data->data_reference_index );
-    lsmash_bs_put_be16( bs, data->pre_defined1 );
-    lsmash_bs_put_be16( bs, data->reserved1 );
-    for( uint32_t j = 0; j < 3; j++ )
-        lsmash_bs_put_be32( bs, data->pre_defined2[j] );
+    lsmash_bs_put_be16( bs, data->version );
+    lsmash_bs_put_be16( bs, data->revision_level );
+    lsmash_bs_put_be32( bs, data->vendor );
+    lsmash_bs_put_be32( bs, data->temporalQuality );
+    lsmash_bs_put_be32( bs, data->spatialQuality );
     lsmash_bs_put_be16( bs, data->width );
     lsmash_bs_put_be16( bs, data->height );
     lsmash_bs_put_be32( bs, data->horizresolution );
     lsmash_bs_put_be32( bs, data->vertresolution );
-    lsmash_bs_put_be32( bs, data->reserved2 );
+    lsmash_bs_put_be32( bs, data->dataSize );
     lsmash_bs_put_be16( bs, data->frame_count );
     lsmash_bs_put_bytes( bs, data->compressorname, 32 );
     lsmash_bs_put_be16( bs, data->depth );
-    lsmash_bs_put_be16( bs, data->pre_defined3 );
+    lsmash_bs_put_be16( bs, data->color_table_ID );
     isom_put_visual_extensions( bs, (isom_visual_entry_t *)data );
     if( !data->avcC )
         return -1;
@@ -2950,19 +2951,20 @@ static int isom_write_visual_entry( lsmash_bs_t *bs, lsmash_entry_t *entry )
     isom_bs_put_box_common( bs, data );
     lsmash_bs_put_bytes( bs, data->reserved, 6 );
     lsmash_bs_put_be16( bs, data->data_reference_index );
-    lsmash_bs_put_be16( bs, data->pre_defined1 );
-    lsmash_bs_put_be16( bs, data->reserved1 );
-    for( uint32_t j = 0; j < 3; j++ )
-        lsmash_bs_put_be32( bs, data->pre_defined2[j] );
+    lsmash_bs_put_be16( bs, data->version );
+    lsmash_bs_put_be16( bs, data->revision_level );
+    lsmash_bs_put_be32( bs, data->vendor );
+    lsmash_bs_put_be32( bs, data->temporalQuality );
+    lsmash_bs_put_be32( bs, data->spatialQuality );
     lsmash_bs_put_be16( bs, data->width );
     lsmash_bs_put_be16( bs, data->height );
     lsmash_bs_put_be32( bs, data->horizresolution );
     lsmash_bs_put_be32( bs, data->vertresolution );
-    lsmash_bs_put_be32( bs, data->reserved2 );
+    lsmash_bs_put_be32( bs, data->dataSize );
     lsmash_bs_put_be16( bs, data->frame_count );
     lsmash_bs_put_bytes( bs, data->compressorname, 32 );
     lsmash_bs_put_be16( bs, data->depth );
-    lsmash_bs_put_be16( bs, data->pre_defined3 );
+    lsmash_bs_put_be16( bs, data->color_table_ID );
     isom_put_visual_extensions( bs, data );
     if( data->type == ISOM_CODEC_TYPE_AVC1_VIDEO )
     {
@@ -3485,11 +3487,16 @@ static int isom_write_chpl( lsmash_bs_t *bs, isom_chpl_t *chpl )
 {
     if( !chpl )
         return 0;
-    if( !chpl->list )
+    if( !chpl->list || chpl->version > 1 )
         return -1;
     isom_bs_put_box_common( bs, chpl );
-    lsmash_bs_put_byte( bs, chpl->reserved );
-    lsmash_bs_put_be32( bs, chpl->list->entry_count );
+    if( chpl->version == 1 )
+    {
+        lsmash_bs_put_byte( bs, chpl->unknown );
+        lsmash_bs_put_be32( bs, chpl->list->entry_count );
+    }
+    else    /* chpl->version == 0 */
+        lsmash_bs_put_byte( bs, (uint8_t)chpl->list->entry_count );
     for( lsmash_entry_t *entry = chpl->list->head; entry; entry = entry->next )
     {
         isom_chpl_entry_t *data = (isom_chpl_entry_t *)entry->data;
@@ -3569,11 +3576,17 @@ static int isom_write_mvhd( isom_root_t *root )
     }
     lsmash_bs_put_be32( bs, mvhd->rate );
     lsmash_bs_put_be16( bs, mvhd->volume );
-    lsmash_bs_put_bytes( bs, mvhd->reserved, 10 );
-    for( uint32_t i = 0; i < 9; i++ )
+    lsmash_bs_put_be16( bs, mvhd->reserved );
+    lsmash_bs_put_be32( bs, mvhd->preferredLong[0] );
+    lsmash_bs_put_be32( bs, mvhd->preferredLong[1] );
+    for( int i = 0; i < 9; i++ )
         lsmash_bs_put_be32( bs, mvhd->matrix[i] );
-    for( uint32_t i = 0; i < 6; i++ )
-        lsmash_bs_put_be32( bs, mvhd->pre_defined[i] );
+    lsmash_bs_put_be32( bs, mvhd->previewTime );
+    lsmash_bs_put_be32( bs, mvhd->previewDuration );
+    lsmash_bs_put_be32( bs, mvhd->posterTime );
+    lsmash_bs_put_be32( bs, mvhd->selectionTime );
+    lsmash_bs_put_be32( bs, mvhd->selectionDuration );
+    lsmash_bs_put_be32( bs, mvhd->currentTime );
     lsmash_bs_put_be32( bs, mvhd->next_track_ID );
     return lsmash_bs_write_data( bs );
 }
@@ -5247,7 +5260,7 @@ static uint64_t isom_update_chpl_size( isom_chpl_t *chpl )
 {
     if( !chpl )
         return 0;
-    chpl->size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + 1;
+    chpl->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 4 * (chpl->version == 1) + 1;
     for( lsmash_entry_t *entry = chpl->list->head; entry; entry = entry->next )
     {
         isom_chpl_entry_t *data = (isom_chpl_entry_t *)entry->data;
