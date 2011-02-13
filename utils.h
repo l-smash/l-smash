@@ -112,8 +112,8 @@ typedef void (*lsmash_entry_data_eliminator)(void* data); /* very same as free()
 
 lsmash_entry_list_t *lsmash_create_entry_list( void );
 int lsmash_add_entry( lsmash_entry_list_t *list, void *data );
-int lsmash_remove_entry_direct( lsmash_entry_list_t *list, lsmash_entry_t *entry );
-int lsmash_remove_entry( lsmash_entry_list_t *list, uint32_t entry_number );
+int lsmash_remove_entry_direct( lsmash_entry_list_t *list, lsmash_entry_t *entry, void* eliminator );
+int lsmash_remove_entry( lsmash_entry_list_t *list, uint32_t entry_number, void* eliminator );
 void lsmash_remove_entries( lsmash_entry_list_t *list, void* eliminator );
 void lsmash_remove_list( lsmash_entry_list_t *list, void* eliminator );
 

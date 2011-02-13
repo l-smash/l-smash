@@ -460,10 +460,12 @@ int lsmash_add_entry( lsmash_entry_list_t *list, void *data )
     return 0;
 }
 
-int lsmash_remove_entry_direct( lsmash_entry_list_t *list, lsmash_entry_t *entry )
+int lsmash_remove_entry_direct( lsmash_entry_list_t *list, lsmash_entry_t *entry, void* eliminator )
 {
     if( !entry )
         return -1;
+    if( !eliminator )
+        eliminator = free;
     lsmash_entry_t *next = entry->next;
     lsmash_entry_t *prev = entry->prev;
     if( entry == list->head )
@@ -475,16 +477,16 @@ int lsmash_remove_entry_direct( lsmash_entry_list_t *list, lsmash_entry_t *entry
     else
         next->prev = prev;
     if( entry->data )
-        free( entry->data );
+        ((lsmash_entry_data_eliminator)eliminator)( entry->data );
     free( entry );
     list->entry_count -= 1;
     return 0;
 }
 
-int lsmash_remove_entry( lsmash_entry_list_t *list, uint32_t entry_number )
+int lsmash_remove_entry( lsmash_entry_list_t *list, uint32_t entry_number, void* eliminator )
 {
     lsmash_entry_t *entry = lsmash_get_entry( list, entry_number );
-    return lsmash_remove_entry_direct( list, entry );
+    return lsmash_remove_entry_direct( list, entry, eliminator );
 }
 
 void lsmash_remove_entries( lsmash_entry_list_t *list, void* eliminator )

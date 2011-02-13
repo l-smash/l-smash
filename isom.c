@@ -2335,7 +2335,7 @@ static void isom_remove_trak( isom_trak_entry_t *trak )
         lsmash_remove_list( trak->cache->roll.pool, NULL );
         free( trak->cache );
     }
-    free( trak );
+    free( trak );   /* Note: the list that contains this trak still has the address of the entry. */
 }
 
 static void isom_remove_iods( isom_iods_t *iods )
@@ -3727,7 +3727,7 @@ static int isom_update_mdhd_duration( isom_trak_entry_t *trak, uint32_t last_sam
         else
         {
             /* Remove the last entry. */
-            if( lsmash_remove_entry( stts->list, stts->list->entry_count ) )
+            if( lsmash_remove_entry( stts->list, stts->list->entry_count, NULL ) )
                 return -1;
             /* copy the previous sample_delta. */
             ++ ((isom_stts_entry_t *)stts->list->tail->data)->sample_count;
@@ -4036,7 +4036,7 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, isom_sample_proper
             return -1;
         if( !group->delimited || !group->described )
             break;
-        if( lsmash_remove_entry_direct( pool, entry ) )
+        if( lsmash_remove_entry_direct( pool, entry, NULL ) )
             return -1;
     }
     return 0;
@@ -4219,6 +4219,8 @@ static int isom_output_cache( isom_root_t *root, uint32_t track_ID )
         !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
         return -1;
     isom_chunk_t *current = &trak->cache->chunk;
+    if( !current->pool )
+        return 0;   /* no caches */
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     if( !stbl->stsc->list->tail ||
         current->pool->entry_count != ((isom_stsc_entry_t *)stbl->stsc->list->tail->data)->samples_per_chunk )
@@ -4239,7 +4241,7 @@ static int isom_output_cache( isom_root_t *root, uint32_t track_ID )
             continue;
         /* roll_distance == 0 must not be used. */
         if( !group->roll_recovery->roll_distance )
-            lsmash_remove_entry( sgpd->list, sgpd->list->entry_count );
+            lsmash_remove_entry( sgpd->list, sgpd->list->entry_count, NULL );
         else
             group->sample_to_group->group_description_index = sgpd->list->entry_count;
         group->described = 1;
@@ -6241,8 +6243,10 @@ int isom_set_last_sample_delta( isom_root_t *root, uint32_t track_ID, uint32_t s
     uint32_t sample_count = isom_get_sample_count( trak );
     if( !stts->list->tail )
     {
-        if( sample_count != 1 )
-            return -1;
+        if( !sample_count )
+            return 0;       /* no samples */
+        if( sample_count > 1 )
+            return -1;      /* irregular sample_count */
         if( isom_add_stts_entry( stbl, sample_delta ) )
             return -1;
         return isom_update_track_duration( root, track_ID, 0 );
@@ -6598,7 +6602,8 @@ fail:
         fclose( chapter );
     free( chap->track_ID );
     chap->track_ID = NULL;
-    isom_remove_trak( isom_get_trak( root, chapter_track_ID ) );
+    /* Remove the reference chapter track attached at tail of the list. */
+    lsmash_remove_entry_direct( root->moov->trak_list, root->moov->trak_list->tail, isom_remove_trak );
     return -1;
 }
 
