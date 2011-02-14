@@ -6588,12 +6588,12 @@ int isom_create_reference_chapter_track( isom_root_t *root, uint32_t track_ID, c
         if( isom_write_sample( root, chapter_track_ID, sample ) )
             goto fail;
     }
-    fclose( chapter );
     if( isom_flush_pooled_samples( root, chapter_track_ID, 0 ) )
         goto fail;
     trak = isom_get_trak( root, chapter_track_ID );
     if( !trak )
         goto fail;
+    fclose( chapter );
     trak->is_chapter = 1;
     trak->related_track_ID = track_ID;
     return 0;
