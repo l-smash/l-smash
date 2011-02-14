@@ -821,20 +821,6 @@ typedef struct
         uint8_t large_presentation;     /* Set 1 to this if 64-bit chunk-offset are needed. */
 } isom_stco_t;      /* share with co64 box */
 
-/* Sample to Group Box */
-typedef struct
-{
-    uint32_t sample_count;                  /* the number of consecutive samples with the same sample group descriptor */
-    uint32_t group_description_index;       /* the index of the sample group entry which describes the samples in this group */
-} isom_sbgp_entry_t;
-
-typedef struct
-{
-    ISOM_FULLBOX_COMMON;
-    uint32_t grouping_type;     /* Links it to its sample group description table with the same value for grouping type. */
-    lsmash_entry_list_t *list;
-} isom_sbgp_t;
-
 /* Sample Group Description Box
  * description_length are available only if version == 1 and default_length == 0. */
 /* Roll Recovery Entry */
@@ -854,6 +840,20 @@ typedef struct
     lsmash_entry_list_t *list;
 } isom_sgpd_t;
 
+/* Sample to Group Box */
+typedef struct
+{
+    uint32_t sample_count;                  /* the number of consecutive samples with the same sample group descriptor */
+    uint32_t group_description_index;       /* the index of the sample group entry which describes the samples in this group */
+} isom_sbgp_entry_t;
+
+typedef struct
+{
+    ISOM_FULLBOX_COMMON;
+    uint32_t grouping_type;     /* Links it to its sample group description table with the same value for grouping type. */
+    lsmash_entry_list_t *list;
+} isom_sbgp_t;
+
 /* Sample Table Box */
 typedef struct
 {
@@ -868,10 +868,11 @@ typedef struct
     isom_stsc_t *stsc;      /* Sample To Chunk Box */
     isom_stsz_t *stsz;      /* Sample Size Box */
     isom_stco_t *stco;      /* Chunk Offset Box */
-    isom_sbgp_t *sbgp;      /* ISOM: Sample To Group Box / QTFF: null */
     isom_sgpd_t *sgpd;      /* ISOM: Sample Group Description Box / QTFF: null */
+    isom_sbgp_t *sbgp;      /* ISOM: Sample To Group Box / QTFF: null */
 
-    uint32_t grouping_count;
+        uint32_t sgpd_count;
+        uint32_t sbgp_count;
 } isom_stbl_t;
 
 /* Media Information Box */

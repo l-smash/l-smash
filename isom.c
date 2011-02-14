@@ -1056,10 +1056,24 @@ static int isom_add_stco_entry( isom_stbl_t *stbl, uint64_t chunk_offset )
     return 0;
 }
 
+static isom_sgpd_t *isom_get_sample_group_description( isom_stbl_t *stbl, uint32_t grouping_type )
+{
+    isom_sgpd_t *sgpd = NULL;
+    for( uint32_t i = 0; i < stbl->sgpd_count; i++ )
+    {
+        sgpd = stbl->sgpd + i;
+        if( !sgpd || !sgpd->list )
+            return NULL;
+        if( sgpd->grouping_type == grouping_type )
+            break;
+    }
+    return sgpd;
+}
+
 static isom_sbgp_t *isom_get_sample_to_group( isom_stbl_t *stbl, uint32_t grouping_type )
 {
     isom_sbgp_t *sbgp = NULL;
-    for( uint32_t i = 0; i < stbl->grouping_count; i++ )
+    for( uint32_t i = 0; i < stbl->sbgp_count; i++ )
     {
         sbgp = stbl->sbgp + i;
         if( !sbgp || !sbgp->list )
@@ -1070,18 +1084,20 @@ static isom_sbgp_t *isom_get_sample_to_group( isom_stbl_t *stbl, uint32_t groupi
     return sbgp;
 }
 
-static isom_sgpd_t *isom_get_sample_group_description( isom_stbl_t *stbl, uint32_t grouping_type )
+static isom_roll_entry_t *isom_add_roll_group_entry( isom_sgpd_t *sgpd, int16_t roll_distance )
 {
-    isom_sgpd_t *sgpd = NULL;
-    for( uint32_t i = 0; i < stbl->grouping_count; i++ )
+    if( !sgpd )
+        return NULL;
+    isom_roll_entry_t *data = malloc( sizeof(isom_roll_entry_t) );
+     if( !data )
+        return NULL;
+    data->roll_distance = roll_distance;
+    if( lsmash_add_entry( sgpd->list, data ) )
     {
-        sgpd = stbl->sgpd + i;
-        if( !sgpd || !sgpd->list )
-            return NULL;
-        if( sgpd->grouping_type == grouping_type )
-            break;
+        free( data );
+        return NULL;
     }
-    return sgpd;
+    return data;
 }
 
 static isom_sbgp_entry_t *isom_add_sbgp_entry( isom_sbgp_t *sbgp, uint32_t sample_count, uint32_t group_description_index )
@@ -1094,22 +1110,6 @@ static isom_sbgp_entry_t *isom_add_sbgp_entry( isom_sbgp_t *sbgp, uint32_t sampl
     data->sample_count = sample_count;
     data->group_description_index = group_description_index;
     if( lsmash_add_entry( sbgp->list, data ) )
-    {
-        free( data );
-        return NULL;
-    }
-    return data;
-}
-
-static isom_roll_entry_t *isom_add_roll_group_entry( isom_sgpd_t *sgpd, int16_t roll_distance )
-{
-    if( !sgpd )
-        return NULL;
-    isom_roll_entry_t *data = malloc( sizeof(isom_roll_entry_t) );
-     if( !data )
-        return NULL;
-    data->roll_distance = roll_distance;
-    if( lsmash_add_entry( sgpd->list, data ) )
     {
         free( data );
         return NULL;
@@ -1750,18 +1750,18 @@ static int isom_add_sgpd( isom_stbl_t *stbl, uint32_t grouping_type )
 {
     if( !stbl )
         return -1;
-    uint64_t grouping_count = 1;
+    uint64_t sgpd_count = 1;
     isom_sgpd_t *sgpd_array;
     if( !stbl->sgpd )
         sgpd_array = malloc( sizeof(isom_sgpd_t) );
     else
     {
-        grouping_count += stbl->grouping_count;
-        sgpd_array = realloc( stbl->sgpd, grouping_count * sizeof(isom_sgpd_t) );
+        sgpd_count += stbl->sgpd_count;
+        sgpd_array = realloc( stbl->sgpd, sgpd_count * sizeof(isom_sgpd_t) );
     }
     if( !sgpd_array )
         return -1;
-    isom_sgpd_t *sgpd = sgpd_array + grouping_count - 1;
+    isom_sgpd_t *sgpd = sgpd_array + sgpd_count - 1;
     memset( sgpd, 0, sizeof(isom_sgpd_t) );
     isom_init_box_common( sgpd, stbl, ISOM_BOX_TYPE_SGPD );
     sgpd->list = lsmash_create_entry_list();
@@ -1772,6 +1772,7 @@ static int isom_add_sgpd( isom_stbl_t *stbl, uint32_t grouping_type )
         return -1;
     }
     stbl->sgpd = sgpd_array;
+    stbl->sgpd_count = sgpd_count;
     sgpd->grouping_type = grouping_type;
     sgpd->version = 1;      /* We use version 1 because it is recommended in the spec. */
     switch( grouping_type )
@@ -1790,18 +1791,18 @@ static int isom_add_sbgp( isom_stbl_t *stbl, uint32_t grouping_type )
 {
     if( !stbl )
         return -1;
-    uint64_t grouping_count = 1;
+    uint64_t sbgp_count = 1;
     isom_sbgp_t *sbgp_array;
     if( !stbl->sbgp )
         sbgp_array = malloc( sizeof(isom_sbgp_t) );
     else
     {
-        grouping_count += stbl->grouping_count;
-        sbgp_array = realloc( stbl->sbgp, grouping_count * sizeof(isom_sbgp_t) );
+        sbgp_count += stbl->sbgp_count;
+        sbgp_array = realloc( stbl->sbgp, sbgp_count * sizeof(isom_sbgp_t) );
     }
     if( !sbgp_array )
         return -1;
-    isom_sbgp_t *sbgp = sbgp_array + grouping_count - 1;
+    isom_sbgp_t *sbgp = sbgp_array + sbgp_count - 1;
     memset( sbgp, 0, sizeof(isom_sbgp_t) );
     isom_init_box_common( sbgp, stbl, ISOM_BOX_TYPE_SBGP );
     sbgp->list = lsmash_create_entry_list();
@@ -1812,10 +1813,8 @@ static int isom_add_sbgp( isom_stbl_t *stbl, uint32_t grouping_type )
         return -1;
     }
     stbl->sbgp = sbgp_array;
+    stbl->sbgp_count = sbgp_count;
     sbgp->grouping_type = grouping_type;
-    if( isom_add_sgpd( stbl, grouping_type ) )
-        return -1;
-    stbl->grouping_count = grouping_count;
     return 0;
 }
 
@@ -2193,11 +2192,10 @@ static void isom_remove_stbl( isom_stbl_t *stbl )
     isom_remove_list_fullbox( stps, stbl );
     isom_remove_list_fullbox( sdtp, stbl );
     isom_remove_list_fullbox( stco, stbl );
-    for( uint32_t i = stbl->grouping_count; i ; i-- )
-    {
-        lsmash_remove_list( (stbl->sbgp + i - 1)->list, NULL );
+    for( uint32_t i = stbl->sgpd_count; i ; i-- )
         lsmash_remove_list( (stbl->sgpd + i - 1)->list, NULL );
-    }
+    for( uint32_t i = stbl->sbgp_count; i ; i-- )
+        lsmash_remove_list( (stbl->sbgp + i - 1)->list, NULL );
     if( stbl->sbgp )
         free( stbl->sbgp );
     if( stbl->sgpd )
@@ -3438,12 +3436,12 @@ static int isom_write_stbl( lsmash_bs_t *bs, isom_trak_entry_t *trak )
         isom_write_stsz( bs, trak ) ||
         isom_write_stco( bs, trak ) )
         return -1;
-    for( uint32_t i = 1; i <= trak->mdia->minf->stbl->grouping_count; i++ )
-    {
-        if( isom_write_sgpd( bs, trak, i ) ||
-            isom_write_sbgp( bs, trak, i ) )
+    for( uint32_t i = 1; i <= stbl->sgpd_count; i++ )
+        if( isom_write_sgpd( bs, trak, i ) )
             return -1;
-    }
+    for( uint32_t i = 1; i <= stbl->sbgp_count; i++ )
+        if( isom_write_sbgp( bs, trak, i ) )
+            return -1;
     return 0;
 }
 
@@ -5220,11 +5218,10 @@ static uint64_t isom_update_stbl_size( isom_stbl_t *stbl )
         + isom_update_sdtp_size( stbl->sdtp )
         + isom_update_stsc_size( stbl->stsc )
         + isom_update_stco_size( stbl->stco );
-    for( uint32_t i = 0; i < stbl->grouping_count; i++ )
-    {
-        stbl->size += isom_update_sbgp_size( stbl->sbgp + i );
+    for( uint32_t i = 0; i < stbl->sgpd_count; i++ )
         stbl->size += isom_update_sgpd_size( stbl->sgpd + i );
-    }
+    for( uint32_t i = 0; i < stbl->sbgp_count; i++ )
+        stbl->size += isom_update_sbgp_size( stbl->sbgp + i );
     CHECK_LARGESIZE( stbl->size );
     return stbl->size;
 }
@@ -5895,7 +5892,10 @@ int isom_create_grouping( isom_root_t *root, uint32_t track_ID, uint32_t groupin
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
         return -1;
-    return isom_add_sbgp( trak->mdia->minf->stbl, grouping_type );
+    if( isom_add_sgpd( trak->mdia->minf->stbl, grouping_type ) ||
+        isom_add_sbgp( trak->mdia->minf->stbl, grouping_type ) )
+        return -1;
+    return 0;
 }
 
 /*---- movie manipulators ----*/
