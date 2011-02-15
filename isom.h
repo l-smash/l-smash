@@ -218,20 +218,29 @@ typedef struct
     int16_t quality;                /* ISOM: pre_defined / QTFF: the media's playback quality */
 } isom_mdhd_t;
 
-/* Handler Reference Box */
+/* Handler Reference Box
+ * In Media Box, this box is mandatory.
+ * ISOM: this box might be also in Meta Box
+ * QTFF: this box might be also in Media Information Box */
 typedef struct
 {
-    /* This box is in Media Box or Meta Box */
     ISOM_FULLBOX_COMMON;
-    uint32_t maintype;      /* ISOM: pre_difined = 0
-                             * QTFF: 'mhlr' for Media Handler Reference Box and 'dhlr' for Data Handler Reference Box  */
-    uint32_t subtype;       /* ISOM and QT: when present in Media Handler Reference Box, this field defines the type of media data
-                             * QTFF: when present in Data Handler Reference Box, this field defines the data reference type */
-    uint32_t reserved[3];
-    uint8_t *name;          /* ISOM: a null-terminated string in UTF-8 characters
-                             * QTFF: Pascal string */
+    uint32_t componentType;             /* ISOM: pre_difined = 0
+                                         * QTFF: 'mhlr' for Media Handler Reference Box and 'dhlr' for Data Handler Reference Box  */
+    uint32_t componentSubtype;          /* ISOM and QT: when present in Media Handler Reference Box, this field defines the type of media data
+                                         * QTFF: when present in Data Handler Reference Box, this field defines the data reference type */
+    /* The following fields are defined in QTFF however these fields aren't mentioned in QuickTime SDK and are reserved in the specification.
+     * In ISOM, these fields are still defined as reserved. */
+    uint32_t componentManufacturer;     /* vendor indentification / A value of 0 matches any manufacturer. */
+    uint32_t componentFlags;            /* flags describing required component capabilities
+                                         * The high-order 8 bits should be set to 0.
+                                         * The low-order 24 bits are specific to each component type. */
+    uint32_t componentFlagsMask;        /* This field indicates which flags in the componentFlags field are relevant to this operation. */
+    /* */
+    uint8_t *componentName;             /* ISOM: a null-terminated string in UTF-8 characters
+                                         * QTFF: Pascal string */
 
-    uint32_t name_length;
+        uint32_t componentName_length;
 } isom_hdlr_t;
 
 /** Media Information Header Boxes **/

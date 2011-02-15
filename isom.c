@@ -1427,8 +1427,8 @@ static int isom_add_hdlr( isom_mdia_t *mdia, isom_minf_t *minf, uint32_t media_t
     isom_create_box( hdlr, parent, ISOM_BOX_TYPE_HDLR );
     uint32_t type = mdia ? (root->qt_compatible ? ISOM_HANDLER_TYPE_MEDIA : 0) : ISOM_HANDLER_TYPE_DATA;
     uint32_t subtype = media_type;
-    hdlr->maintype = type;
-    hdlr->subtype = subtype;
+    hdlr->componentType = type;
+    hdlr->componentSubtype = subtype;
     char *type_name = NULL;
     char *subtype_name = NULL;
     uint8_t type_name_length = 0;
@@ -1495,8 +1495,8 @@ static int isom_add_hdlr( isom_mdia_t *mdia, isom_minf_t *minf, uint32_t media_t
     memcpy( name + root->qt_compatible + 8 + subtype_name_length + type_name_length, "HANDLER", 7 );
     if( root->isom_compatible )
         name[name_length - 1] = 0;
-    hdlr->name = name;
-    hdlr->name_length = name_length;
+    hdlr->componentName = name;
+    hdlr->componentName_length = name_length;
     if( mdia )
         mdia->hdlr = hdlr;
     else
@@ -2243,8 +2243,8 @@ static void isom_remove_hdlr( isom_hdlr_t *hdlr )
 {
     if( !hdlr )
         return;
-    if( hdlr->name )
-        free( hdlr->name );
+    if( hdlr->componentName )
+        free( hdlr->componentName );
     free( hdlr );
 }
 
@@ -2546,11 +2546,12 @@ static int isom_write_hdlr( lsmash_bs_t *bs, isom_trak_entry_t *trak, uint8_t is
     if( !hdlr )
         return 0;
     isom_bs_put_box_common( bs, hdlr );
-    lsmash_bs_put_be32( bs, hdlr->maintype );
-    lsmash_bs_put_be32( bs, hdlr->subtype );
-    for( uint32_t i = 0; i < 3; i++ )
-        lsmash_bs_put_be32( bs, hdlr->reserved[i] );
-    lsmash_bs_put_bytes( bs, hdlr->name, hdlr->name_length );
+    lsmash_bs_put_be32( bs, hdlr->componentType );
+    lsmash_bs_put_be32( bs, hdlr->componentSubtype );
+    lsmash_bs_put_be32( bs, hdlr->componentManufacturer );
+    lsmash_bs_put_be32( bs, hdlr->componentFlags );
+    lsmash_bs_put_be32( bs, hdlr->componentFlagsMask );
+    lsmash_bs_put_bytes( bs, hdlr->componentName, hdlr->componentName_length );
     return lsmash_bs_write_data( bs );
 }
 
@@ -4664,7 +4665,7 @@ static uint64_t isom_update_hdlr_size( isom_hdlr_t *hdlr )
 {
     if( !hdlr )
         return 0;
-    hdlr->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 20 + (uint64_t)hdlr->name_length;
+    hdlr->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 20 + (uint64_t)hdlr->componentName_length;
     CHECK_LARGESIZE( hdlr->size );
     return hdlr->size;
 }
@@ -5408,12 +5409,12 @@ int isom_set_media_handler( isom_root_t *root, uint32_t track_ID, uint32_t media
     if( !trak->mdia->hdlr && isom_add_hdlr( trak->mdia, NULL, 0, 0 ) )
         return -1;
     isom_hdlr_t *hdlr = trak->mdia->hdlr;
-    hdlr->maintype = ISOM_HANDLER_TYPE_MEDIA;
-    hdlr->subtype = media_type;
+    hdlr->componentType = ISOM_HANDLER_TYPE_MEDIA;
+    hdlr->componentSubtype = media_type;
     if( handler_name )
     {
-        if( hdlr->name )
-            free( hdlr->name );
+        if( hdlr->componentName )
+            free( hdlr->componentName );
         uint32_t name_length = strlen( handler_name ) + root->isom_compatible + root->qt_compatible;
         uint8_t *name = NULL;
         if( root->qt_compatible )
@@ -5427,8 +5428,8 @@ int isom_set_media_handler( isom_root_t *root, uint32_t track_ID, uint32_t media
         memcpy( name + root->qt_compatible, name, strlen( handler_name ) );
         if( root->isom_compatible )
             name[name_length - 1] = 0;
-        hdlr->name = name;
-        hdlr->name_length = name_length;
+        hdlr->componentName = name;
+        hdlr->componentName_length = name_length;
     }
     return 0;
 }
@@ -5443,12 +5444,12 @@ int isom_set_media_handler_name( isom_root_t *root, uint32_t track_ID, char *han
     uint32_t name_length = strlen( handler_name ) + root->isom_compatible + root->qt_compatible;
     if( root->qt_compatible )
         name_length = ISOM_MIN( name_length, 255 );
-    if( name_length > hdlr->name_length && hdlr->name )
-        name = realloc( hdlr->name, name_length );
-    else if( !hdlr->name )
+    if( name_length > hdlr->componentName_length && hdlr->componentName )
+        name = realloc( hdlr->componentName, name_length );
+    else if( !hdlr->componentName )
         name = malloc( name_length );
     else
-        name = hdlr->name;
+        name = hdlr->componentName;
     if( !name )
         return -1;
     if( root->qt_compatible )
@@ -5456,8 +5457,8 @@ int isom_set_media_handler_name( isom_root_t *root, uint32_t track_ID, char *han
     memcpy( name + root->qt_compatible, handler_name, strlen( handler_name ) );
     if( root->isom_compatible )
         name[name_length - 1] = 0;
-    hdlr->name = name;
-    hdlr->name_length = name_length;
+    hdlr->componentName = name;
+    hdlr->componentName_length = name_length;
     return 0;
 }
 
@@ -5469,12 +5470,12 @@ int isom_set_data_handler( isom_root_t *root, uint32_t track_ID, uint32_t refere
     if( !trak->mdia->minf->hdlr && isom_add_hdlr( NULL, trak->mdia->minf, 0, 0 ) )
         return -1;
     isom_hdlr_t *hdlr = trak->mdia->minf->hdlr;
-    hdlr->maintype = ISOM_HANDLER_TYPE_DATA;
-    hdlr->subtype = reference_type;
+    hdlr->componentType = ISOM_HANDLER_TYPE_DATA;
+    hdlr->componentSubtype = reference_type;
     if( handler_name )
     {
-        if( hdlr->name )
-            free( hdlr->name );
+        if( hdlr->componentName )
+            free( hdlr->componentName );
         uint32_t name_length = strlen( handler_name ) + root->isom_compatible + root->qt_compatible;
         uint8_t *name = NULL;
         if( root->qt_compatible )
@@ -5488,8 +5489,8 @@ int isom_set_data_handler( isom_root_t *root, uint32_t track_ID, uint32_t refere
         memcpy( name + root->qt_compatible, name, strlen( handler_name ) );
         if( root->isom_compatible )
             name[name_length - 1] = 0;
-        hdlr->name = name;
-        hdlr->name_length = name_length;
+        hdlr->componentName = name;
+        hdlr->componentName_length = name_length;
     }
     return 0;
 }
@@ -5504,12 +5505,12 @@ int isom_set_data_handler_name( isom_root_t *root, uint32_t track_ID, char *hand
     uint32_t name_length = strlen( handler_name ) + root->isom_compatible + root->qt_compatible;
     if( root->qt_compatible )
         name_length = ISOM_MIN( name_length, 255 );
-    if( name_length > hdlr->name_length && hdlr->name )
-        name = realloc( hdlr->name, name_length );
-    else if( !hdlr->name )
+    if( name_length > hdlr->componentName_length && hdlr->componentName )
+        name = realloc( hdlr->componentName, name_length );
+    else if( !hdlr->componentName )
         name = malloc( name_length );
     else
-        name = hdlr->name;
+        name = hdlr->componentName;
     if( !name )
         return -1;
     if( root->qt_compatible )
@@ -5517,8 +5518,8 @@ int isom_set_data_handler_name( isom_root_t *root, uint32_t track_ID, char *hand
     memcpy( name + root->qt_compatible, handler_name, strlen( handler_name ) );
     if( root->isom_compatible )
         name[name_length - 1] = 0;
-    hdlr->name = name;
-    hdlr->name_length = name_length;
+    hdlr->componentName = name;
+    hdlr->componentName_length = name_length;
     return 0;
 }
 
