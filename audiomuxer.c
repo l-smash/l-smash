@@ -163,7 +163,7 @@ int main( int argc, char* argv[] )
     }
 
     /* Initialize L-SMASH muxer */
-    structs.root = isom_create_movie( argv[i++] );
+    structs.root = isom_open_movie( argv[i++], ISOM_FILE_MODE_WRITE );
     if( !structs.root )
         return AUDIOMUX_ERR( "Failed to create root.\n" );
 

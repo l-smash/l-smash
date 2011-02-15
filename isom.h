@@ -37,7 +37,17 @@
 #define ftell ftello64
 #endif
 
+/* For generating creation_time and modification_time.
+ * According to ISO/IEC-14496-5-2001, the difference between Unix time and Mac OS time is 2082758400.
+ * However this is wrong and 2082844800 is correct. */
+#include <time.h>
+#define ISOM_MAC_EPOCH_OFFSET 2082844800
+
 #include "utils.h"
+
+#define ISOM_FILE_MODE_WRITE 0x00000001
+#define ISOM_FILE_MODE_READ  0x00000002
+#define ISOM_FILE_MODE_DUMP  0x00000004
 
 #define ISOM_MAX( a, b ) ((a) > (b) ? (a) : (b))
 #define ISOM_MIN( a, b ) ((a) < (b) ? (a) : (b))
@@ -48,7 +58,8 @@ typedef struct isom_box_tag isom_box_t;
  * If size is 0, then this box is the last one in the file. This is useful for pipe I/O.
  * usertype is for uuid. */
 #define ISOM_BASEBOX_COMMON \
-    isom_box_t *parent; /* pointer of parent box */ \
+        isom_box_t *parent; /* pointer of parent box */ \
+        uint8_t  manager;   /* flags for L-SMASH */ \
     uint64_t size; \
     uint32_t type; \
     uint8_t  *usertype
@@ -836,7 +847,7 @@ typedef struct
 typedef struct
 {
     /* grouping_type is 'roll' */
-    // uint32_t description_length;
+    uint32_t description_length;
     int16_t roll_distance;      /* the number of samples that must be decoded in order for a sample to be decoded correctly */
 } isom_roll_entry_t;
 
@@ -859,7 +870,9 @@ typedef struct
 typedef struct
 {
     ISOM_FULLBOX_COMMON;
-    uint32_t grouping_type;     /* Links it to its sample group description table with the same value for grouping type. */
+    uint32_t grouping_type;             /* Links it to its sample group description table with the same value for grouping type. */
+    uint32_t grouping_type_parameter;   /* an indication of the sub-type of the grouping
+                                         * This field is available only if version == 1. */
     lsmash_entry_list_t *list;
 } isom_sbgp_t;
 
@@ -1019,7 +1032,17 @@ typedef struct
         uint8_t mp4_version2;           /* compatibility with MP4 ver.2 file format */
         uint8_t itunes_audio;           /* compatibility with iTunes Audio */
         uint8_t max_3gpp_version;       /* maximum 3GPP version */
+        lsmash_entry_list_t *print;
 } isom_root_t;
+
+typedef int (*isom_print_box_t)( isom_root_t *, isom_box_t *, int );
+
+typedef struct
+{
+    int level;
+    isom_box_t *box;
+    isom_print_box_t func;
+} isom_print_entry_t;
 
 /** Track Box **/
 typedef struct
@@ -2029,7 +2052,7 @@ int isom_update_track_duration( isom_root_t *root, uint32_t track_ID, uint32_t l
 int isom_update_bitrate_info( isom_root_t *root, uint32_t track_ID, uint32_t entry_number );
 
 
-isom_root_t *isom_create_movie( char *filename );
+isom_root_t *isom_open_movie( const char *filename, uint32_t mode );
 uint32_t isom_create_track( isom_root_t *root, uint32_t handler_type );
 isom_sample_t *isom_create_sample( uint32_t size );
 void isom_delete_sample( isom_sample_t *sample );
@@ -2043,4 +2066,6 @@ void isom_delete_track( isom_root_t *root, uint32_t track_ID );
 void isom_delete_explicit_timeline_map( isom_root_t *root, uint32_t track_ID );
 void isom_delete_tyrant_chapter( isom_root_t *root );
 
+isom_root_t *isom_parse_movie( char *filename );
+int isom_print_movie( isom_root_t *root );
 #endif

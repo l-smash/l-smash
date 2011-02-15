@@ -3368,25 +3368,6 @@ static int isom_write_stco( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_sbgp( lsmash_bs_t *bs, isom_trak_entry_t *trak, uint32_t grouping_number )
-{
-    isom_sbgp_t *sbgp = trak->mdia->minf->stbl->sbgp + grouping_number - 1;
-    if( !sbgp || !sbgp->list )
-        return -1;
-    isom_bs_put_box_common( bs, sbgp );
-    lsmash_bs_put_be32( bs, sbgp->grouping_type );
-    lsmash_bs_put_be32( bs, sbgp->list->entry_count );
-    for( lsmash_entry_t *entry = sbgp->list->head; entry; entry = entry->next )
-    {
-        isom_sbgp_entry_t *data = (isom_sbgp_entry_t *)entry->data;
-        if( !data )
-            return -1;
-        lsmash_bs_put_be32( bs, data->sample_count );
-        lsmash_bs_put_be32( bs, data->group_description_index );
-    }
-    return lsmash_bs_write_data( bs );
-}
-
 static int isom_write_sgpd( lsmash_bs_t *bs, isom_trak_entry_t *trak, uint32_t grouping_number )
 {
     isom_sgpd_t *sgpd = trak->mdia->minf->stbl->sgpd + grouping_number - 1;
@@ -3414,6 +3395,27 @@ static int isom_write_sgpd( lsmash_bs_t *bs, isom_trak_entry_t *trak, uint32_t g
                 //     lsmash_bs_put_be32( bs, ((isom_sgpd_entry_t *)entry->data)->description_length );
                 break;
         }
+    }
+    return lsmash_bs_write_data( bs );
+}
+
+static int isom_write_sbgp( lsmash_bs_t *bs, isom_trak_entry_t *trak, uint32_t grouping_number )
+{
+    isom_sbgp_t *sbgp = trak->mdia->minf->stbl->sbgp + grouping_number - 1;
+    if( !sbgp || !sbgp->list )
+        return -1;
+    isom_bs_put_box_common( bs, sbgp );
+    lsmash_bs_put_be32( bs, sbgp->grouping_type );
+    if( sbgp->version == 1 )
+        lsmash_bs_put_be32( bs, sbgp->grouping_type_parameter );
+    lsmash_bs_put_be32( bs, sbgp->list->entry_count );
+    for( lsmash_entry_t *entry = sbgp->list->head; entry; entry = entry->next )
+    {
+        isom_sbgp_entry_t *data = (isom_sbgp_entry_t *)entry->data;
+        if( !data )
+            return -1;
+        lsmash_bs_put_be32( bs, data->sample_count );
+        lsmash_bs_put_be32( bs, data->group_description_index );
     }
     return lsmash_bs_write_data( bs );
 }
@@ -3609,6 +3611,3716 @@ static int isom_write_mdat_header( isom_root_t *root )
     mdat->size = ISOM_DEFAULT_BOX_HEADER_SIZE;
     isom_bs_put_box_common( bs, mdat );
     return lsmash_bs_write_data( bs );
+}
+
+static int isom_check_compatibility( isom_root_t *root )
+{
+    if( !root )
+        return -1;
+    /* Check brand to decide mandatory boxes. */
+    if( !root->ftyp || !root->ftyp->brand_count )
+    {
+        /* We assume this file is not a QuickTime but MP4 version 1 format file. */
+        root->mp4_version1 = 1;
+        return 0;
+    }
+    for( uint32_t i = 0; i < root->ftyp->brand_count; i++ )
+    {
+        switch( root->ftyp->compatible_brands[i] )
+        {
+            case ISOM_BRAND_TYPE_QT :
+                root->qt_compatible = 1;
+                break;
+            case ISOM_BRAND_TYPE_MP41 :
+                root->mp4_version1 = 1;
+                break;
+            case ISOM_BRAND_TYPE_MP42 :
+                root->mp4_version2 = 1;
+                break;
+            case ISOM_BRAND_TYPE_AVC1 :
+            case ISOM_BRAND_TYPE_ISO2 :
+            case ISOM_BRAND_TYPE_ISO3 :
+            case ISOM_BRAND_TYPE_ISO4 :
+                root->avc_extensions = 1;
+                break;
+            case ISOM_BRAND_TYPE_M4A :
+            case ISOM_BRAND_TYPE_M4B :
+                root->itunes_audio = 1;
+                break;
+            case ISOM_BRAND_TYPE_3GP4 :
+                root->max_3gpp_version = ISOM_MAX( root->max_3gpp_version, 4 );
+                break;
+            case ISOM_BRAND_TYPE_3GP5 :
+                root->max_3gpp_version = ISOM_MAX( root->max_3gpp_version, 5 );
+                break;
+            case ISOM_BRAND_TYPE_3GE6 :
+            case ISOM_BRAND_TYPE_3GG6 :
+            case ISOM_BRAND_TYPE_3GP6 :
+            case ISOM_BRAND_TYPE_3GR6 :
+            case ISOM_BRAND_TYPE_3GS6 :
+                root->max_3gpp_version = ISOM_MAX( root->max_3gpp_version, 6 );
+                break;
+        }
+    }
+    root->isom_compatible = !root->qt_compatible || root->mp4_version1 || root->mp4_version2 || root->itunes_audio || root->max_3gpp_version;
+    return 0;
+}
+
+static char *isom_4cc2str( uint32_t fourcc )
+{
+    static char str[5];
+    str[0] = (fourcc >> 24) & 0xff;
+    str[1] = (fourcc >> 16) & 0xff;
+    str[2] = (fourcc >>  8) & 0xff;
+    str[3] =  fourcc        & 0xff;
+    str[4] = 0;
+    return str;
+}
+
+static void isom_iprintf( int indent, const char *format, ... )
+{
+#include <stdarg.h>
+    va_list args;
+    va_start( args, format );
+    for( int i = 0; i < indent; i++ )
+        printf( "    " );
+    vprintf( format, args );
+    va_end( args );
+}
+
+static double isom_fixed2double( uint64_t value, int frac_width )
+{
+    return value / (double)(1ULL << frac_width);
+}
+
+static float isom_int2float32( uint32_t value )
+{
+    return (union {uint32_t i; float f;}){value}.f;
+}
+
+static double isom_int2float64( uint64_t value )
+{
+    return (union {uint64_t i; double d;}){value}.d;
+}
+
+static void isom_iprintf_duration( int indent, uint64_t duration, uint32_t timescale )
+{
+    if( !timescale )
+    {
+        isom_iprintf( indent, "duration = %"PRIu64"\n", duration );
+        return;
+    }
+    int dur = duration / timescale;
+    int hour = (dur / 3600) % 24;
+    int min  = (dur /   60) % 60;
+    int sec  =  dur         % 60;
+    int ms   = ((double)duration / timescale - (hour * 3600 + min * 60 + sec)) * 1e3 + 0.5;
+    static char str[32];
+    sprintf( str, "%02d:%02d:%02d.%03d", hour, min, sec, ms );
+    isom_iprintf( indent, "duration = %"PRIu64" (%s)\n", duration, str );
+}
+
+static char *isom_mp4time2utc( uint64_t mp4time )
+{
+    int year_offset = mp4time / 31536000;
+    int leap_years = year_offset / 4 + ((mp4time / 86400) > 366);   /* 1904 itself is leap year */
+    int day = (mp4time / 86400) - (year_offset * 365) - leap_years + 1;
+    while( day < 1 )
+    {
+        --year_offset;
+        leap_years = year_offset / 4 + ((mp4time / 86400) > 366);
+        day = (mp4time / 86400) - (year_offset * 365) - leap_years + 1;
+    }
+    int year = 1904 + year_offset;
+    int is_leap = (!(year % 4) && (year % 100)) || !(year % 400);
+    int month_days[13] = { 29, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+    int month;
+    for( month = 1; month <= 12; month++ )
+    {
+        int i = (month == 2 && is_leap) ? 0 : month;
+        if( day <= month_days[i] )
+            break;
+        day -= month_days[i];
+    }
+    int hour = (mp4time / 3600) % 24;
+    int min  = (mp4time /   60) % 60;
+    int sec  =  mp4time         % 60;
+    static char utc[64];
+    sprintf( utc, "UTC %d/%02d/%02d, %02d:%02d:%02d\n", year, month, day, hour, min, sec );
+    return utc;
+}
+
+static char *isom_unpack_iso_language( uint16_t language )
+{
+    static char unpacked[4];
+    unpacked[0] = ((language >> 10) & 0x1f) + 0x60;
+    unpacked[1] = ((language >>  5) & 0x1f) + 0x60;
+    unpacked[2] = ( language        & 0x1f) + 0x60;
+    unpacked[3] = 0;
+    return unpacked;
+}
+
+static void isom_iprint_matrix( int indent, int32_t *matrix )
+{
+    isom_iprintf( indent, "| a, b, u |   | %f, %f, %f |\n", isom_fixed2double( matrix[0], 16 ),
+                                                            isom_fixed2double( matrix[1], 16 ),
+                                                            isom_fixed2double( matrix[2], 30 ) );
+    isom_iprintf( indent, "| c, d, v | = | %f, %f, %f |\n", isom_fixed2double( matrix[3], 16 ),
+                                                            isom_fixed2double( matrix[4], 16 ),
+                                                            isom_fixed2double( matrix[5], 30 ) );
+    isom_iprintf( indent, "| x, y, z |   | %f, %f, %f |\n", isom_fixed2double( matrix[6], 16 ),
+                                                            isom_fixed2double( matrix[7], 16 ),
+                                                            isom_fixed2double( matrix[8], 30 ) );
+}
+
+static void isom_iprint_rgb_color( int indent, uint16_t *color )
+{
+    isom_iprintf( indent, "{ R, G, B } = { %"PRIu16", %"PRIu16", %"PRIu16" }\n", color[0], color[1], color[2] );
+}
+
+static void isom_iprint_rgba_color( int indent, uint8_t *color )
+{
+    isom_iprintf( indent, "{ R, G, B, A } = { %"PRIu8", %"PRIu8", %"PRIu8", %"PRIu8" }\n", color[0], color[1], color[2], color[3] );
+}
+
+static inline int isom_print_simple( isom_root_t *root, isom_box_t *box, int level, char *name )
+{
+    if( !box )
+        return -1;
+    int indent = level;
+    isom_iprintf( indent++, "[%s: %s]\n", isom_4cc2str( box->type ), name );
+    isom_iprintf( indent, "size = %"PRIu64"\n", box->size );
+    return 0;
+}
+
+static int isom_print_unknown( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    int indent = level;
+    isom_iprintf( indent++, "[%s]\n", isom_4cc2str( box->type ) );
+    isom_iprintf( indent, "size = %"PRIu64"\n", box->size );
+    return 0;
+}
+
+static int isom_print_ftyp( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_ftyp_t *ftyp = (isom_ftyp_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[ftyp: File Type Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", ftyp->size );
+    isom_iprintf( indent, "major_brand = %s\n", isom_4cc2str( ftyp->major_brand ) );
+    isom_iprintf( indent, "minor_version = %"PRIu32"\n", ftyp->minor_version );
+    isom_iprintf( indent++, "compatible_brands\n" );
+    for( uint32_t i = 0; i < ftyp->brand_count; i++ )
+        isom_iprintf( indent, "brand[%"PRIu32"] = %s\n", i, isom_4cc2str( ftyp->compatible_brands[i] ) );
+    return 0;
+}
+
+static int isom_print_moov( isom_root_t *root, isom_box_t *box, int level )
+{
+    return isom_print_simple( root, box, level, "Movie Box" );
+}
+
+static int isom_print_mvhd( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_mvhd_t *mvhd = (isom_mvhd_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[mvhd: Movie Header Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", mvhd->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", mvhd->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", mvhd->flags );
+    isom_iprintf( indent, "creation_time = %s", isom_mp4time2utc( mvhd->creation_time ) );
+    isom_iprintf( indent, "modification_time = %s", isom_mp4time2utc( mvhd->modification_time ) );
+    isom_iprintf( indent, "timescale = %"PRIu32"\n", mvhd->timescale );
+    isom_iprintf_duration( indent, mvhd->duration, mvhd->timescale );
+    isom_iprintf( indent, "rate = %f\n", isom_fixed2double( mvhd->rate, 16 ) );
+    isom_iprintf( indent, "volume = %f\n", isom_fixed2double( mvhd->volume, 8 ) );
+    isom_iprintf( indent, "reserved = 0x%04"PRIx16"\n", mvhd->reserved );
+    if( root->qt_compatible )
+    {
+        isom_iprintf( indent, "preferredLong1 = 0x%08"PRIx32"\n", mvhd->preferredLong[0] );
+        isom_iprintf( indent, "preferredLong2 = 0x%08"PRIx32"\n", mvhd->preferredLong[1] );
+        isom_iprintf( indent, "transformation matrix\n" );
+        isom_iprint_matrix( indent + 1, mvhd->matrix );
+        isom_iprintf( indent, "previewTime = %"PRId32"\n", mvhd->previewTime );
+        isom_iprintf( indent, "previewDuration = %"PRId32"\n", mvhd->previewDuration );
+        isom_iprintf( indent, "posterTime = %"PRId32"\n", mvhd->posterTime );
+        isom_iprintf( indent, "selectionTime = %"PRId32"\n", mvhd->selectionTime );
+        isom_iprintf( indent, "selectionDuration = %"PRId32"\n", mvhd->selectionDuration );
+        isom_iprintf( indent, "currentTime = %"PRId32"\n", mvhd->currentTime );
+    }
+    else
+    {
+        isom_iprintf( indent, "reserved = 0x%08"PRIx32"\n", mvhd->preferredLong[0] );
+        isom_iprintf( indent, "reserved = 0x%08"PRIx32"\n", mvhd->preferredLong[1] );
+        isom_iprintf( indent, "transformation matrix\n" );
+        isom_iprint_matrix( indent + 1, mvhd->matrix );
+        isom_iprintf( indent, "pre_defined = 0x%08"PRIx32"\n", mvhd->previewTime );
+        isom_iprintf( indent, "pre_defined = 0x%08"PRIx32"\n", mvhd->previewDuration );
+        isom_iprintf( indent, "pre_defined = 0x%08"PRIx32"\n", mvhd->posterTime );
+        isom_iprintf( indent, "pre_defined = 0x%08"PRIx32"\n", mvhd->selectionTime );
+        isom_iprintf( indent, "pre_defined = 0x%08"PRIx32"\n", mvhd->selectionDuration );
+        isom_iprintf( indent, "pre_defined = 0x%08"PRIx32"\n", mvhd->currentTime );
+    }
+    isom_iprintf( indent, "next_track_ID = %"PRIu32"\n", mvhd->next_track_ID );
+    return 0;
+}
+
+static int isom_print_iods( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_iods_t *iods = (isom_iods_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[iods: Object Descriptor Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", iods->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", iods->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", iods->flags & 0x00ffffff );
+    return 0;
+}
+
+static int isom_print_esds( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_esds_t *esds = (isom_esds_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[esds: ES Descriptor Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", esds->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", esds->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", esds->flags & 0x00ffffff );
+    return 0;
+}
+
+static int isom_print_trak( isom_root_t *root, isom_box_t *box, int level )
+{
+    return isom_print_simple( root, box, level, "Track Box" );
+}
+
+static int isom_print_tkhd( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_tkhd_t *tkhd = (isom_tkhd_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[tkhd: Track Header Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", tkhd->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", tkhd->version );
+    isom_iprintf( indent++, "flags = 0x%06"PRIx32"\n", tkhd->flags );
+    if( tkhd->flags & ISOM_TRACK_ENABLED )
+        isom_iprintf( indent, "Track enabled\n" );
+    else
+        isom_iprintf( indent, "Track disabled\n" );
+    if( tkhd->flags & ISOM_TRACK_IN_MOVIE )
+        isom_iprintf( indent, "Track in movie\n" );
+    if( tkhd->flags & ISOM_TRACK_IN_PREVIEW )
+        isom_iprintf( indent, "Track in preview\n" );
+    if( root->qt_compatible && (tkhd->flags & QT_TRACK_IN_POSTER) )
+        isom_iprintf( indent, "Track in poster\n" );
+    isom_iprintf( --indent, "creation_time = %s", isom_mp4time2utc( tkhd->creation_time ) );
+    isom_iprintf( indent, "modification_time = %s", isom_mp4time2utc( tkhd->modification_time ) );
+    isom_iprintf( indent, "track_ID = %"PRIu32"\n", tkhd->track_ID );
+    isom_iprintf( indent, "reserved = 0x%08"PRIx32"\n", tkhd->reserved1 );
+    if( root && root->moov && root->moov->mvhd )
+        isom_iprintf_duration( indent, tkhd->duration, root->moov->mvhd->timescale );
+    else
+        isom_iprintf_duration( indent, tkhd->duration, 0 );
+    isom_iprintf( indent, "reserved = 0x%08"PRIx32"\n", tkhd->reserved2[0] );
+    isom_iprintf( indent, "reserved = 0x%08"PRIx32"\n", tkhd->reserved2[1] );
+    isom_iprintf( indent, "layer = %"PRId16"\n", tkhd->layer );
+    isom_iprintf( indent, "alternate_group = %"PRId16"\n", tkhd->alternate_group );
+    isom_iprintf( indent, "volume = %f\n", isom_fixed2double( tkhd->volume, 8 ) );
+    isom_iprintf( indent, "reserved = 0x%04"PRIx16"\n", tkhd->reserved3 );
+    isom_iprintf( indent, "transformation matrix\n" );
+    isom_iprint_matrix( indent + 1, tkhd->matrix );
+    isom_iprintf( indent, "width = %f\n", isom_fixed2double( tkhd->width, 16 ) );
+    isom_iprintf( indent, "height = %f\n", isom_fixed2double( tkhd->height, 16 ) );
+    return 0;
+}
+
+static int isom_print_tapt( isom_root_t *root, isom_box_t *box, int level )
+{
+    return isom_print_simple( root, box, level, "Track Aperture Mode Dimensions Box" );
+}
+
+static int isom_print_clef( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_clef_t *clef = (isom_clef_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[clef: Track Clean Aperture Dimensions Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", clef->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", clef->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", clef->flags );
+    isom_iprintf( indent, "width = %f\n", isom_fixed2double( clef->width, 16 ) );
+    isom_iprintf( indent, "height = %f\n", isom_fixed2double( clef->height, 16 ) );
+    return 0;
+}
+
+static int isom_print_prof( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_prof_t *prof = (isom_prof_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[prof: Track Production Aperture Dimensions Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", prof->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", prof->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", prof->flags );
+    isom_iprintf( indent, "width = %f\n", isom_fixed2double( prof->width, 16 ) );
+    isom_iprintf( indent, "height = %f\n", isom_fixed2double( prof->height, 16 ) );
+    return 0;
+}
+
+static int isom_print_enof( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_enof_t *enof = (isom_enof_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[enof: Track Encoded Pixels Dimensions Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", enof->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", enof->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", enof->flags );
+    isom_iprintf( indent, "width = %f\n", isom_fixed2double( enof->width, 16 ) );
+    isom_iprintf( indent, "height = %f\n", isom_fixed2double( enof->height, 16 ) );
+    return 0;
+}
+
+static int isom_print_edts( isom_root_t *root, isom_box_t *box, int level )
+{
+    return isom_print_simple( root, box, level, "Edit Box" );
+}
+
+static int isom_print_elst( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_elst_t *elst = (isom_elst_t *)box;
+    int indent = level;
+    uint32_t i = 0;
+    isom_iprintf( indent++, "[elst: Edit List Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", elst->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", elst->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", elst->flags );
+    isom_iprintf( indent, "entry_count = %"PRIu32"\n", elst->list->entry_count );
+    for( lsmash_entry_t *entry = elst->list->head; entry; entry = entry->next )
+    {
+        isom_elst_entry_t *data = (isom_elst_entry_t *)entry->data;
+        isom_iprintf( indent++, "entry[%"PRIu32"]\n", i++ );
+        isom_iprintf( indent, "segment_duration = %"PRIu64"\n", data->segment_duration );
+        isom_iprintf( indent, "media_time = %"PRId64"\n", data->media_time );
+        isom_iprintf( indent--, "media_rate = %f\n", isom_fixed2double( data->media_rate, 16 ) );
+    }
+    return 0;
+}
+
+static int isom_print_tref( isom_root_t *root, isom_box_t *box, int level )
+{
+    return isom_print_simple( root, box, level, "Track Reference Box" );
+}
+
+static int isom_print_track_reference_type( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_tref_type_t *ref = (isom_tref_type_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[%s: Track Reference Type Box]\n", isom_4cc2str( ref->type ) );
+    isom_iprintf( indent, "size = %"PRIu64"\n", ref->size );
+    for( uint32_t i = 0; i < ref->ref_count; i++ )
+        isom_iprintf( indent, "track_ID[%"PRIu32"] = %"PRIu32"\n", i, ref->track_ID[i] );
+    return 0;
+
+
+    return isom_print_simple( root, box, level, "Track Reference Type Box" );
+}
+
+static int isom_print_mdia( isom_root_t *root, isom_box_t *box, int level )
+{
+    return isom_print_simple( root, box, level, "Media Box" );
+}
+
+static int isom_print_mdhd( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_mdhd_t *mdhd = (isom_mdhd_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[mdhd: Media Header Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", mdhd->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", mdhd->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", mdhd->flags );
+    isom_iprintf( indent, "creation_time = %s", isom_mp4time2utc( mdhd->creation_time ) );
+    isom_iprintf( indent, "modification_time = %s", isom_mp4time2utc( mdhd->modification_time ) );
+    isom_iprintf( indent, "timescale = %"PRIu32"\n", mdhd->timescale );
+    isom_iprintf_duration( indent, mdhd->duration, mdhd->timescale );
+    if( mdhd->language >= 0x800 )
+        isom_iprintf( indent, "language = %s\n", isom_unpack_iso_language( mdhd->language ) );
+    else
+        isom_iprintf( indent, "language = %"PRIu16"\n", mdhd->language );
+    if( root->qt_compatible )
+        isom_iprintf( indent, "quality = %"PRId16"\n", mdhd->quality );
+    else
+        isom_iprintf( indent, "pre_defined = 0x%04"PRIx16"\n", mdhd->quality );
+    return 0;
+}
+
+static int isom_print_hdlr( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_hdlr_t *hdlr = (isom_hdlr_t *)box;
+    int indent = level;
+    char str[hdlr->componentName_length + 1];
+    memcpy( str, hdlr->componentName, hdlr->componentName_length );
+    str[hdlr->componentName_length] = 0;
+    isom_iprintf( indent++, "[hdlr: Handler Reference Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", hdlr->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", hdlr->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", hdlr->flags );
+    if( root->qt_compatible )
+    {
+        isom_iprintf( indent, "componentType = %s\n", isom_4cc2str( hdlr->componentType ) );
+        isom_iprintf( indent, "componentSubtype = %s\n", isom_4cc2str( hdlr->componentSubtype ) );
+        isom_iprintf( indent, "componentManufacturer = %s\n", isom_4cc2str( hdlr->componentManufacturer ) );
+        isom_iprintf( indent, "componentFlags = 0x%08"PRIx32"\n", hdlr->componentFlags );
+        isom_iprintf( indent, "componentFlagsMask = 0x%08"PRIx32"\n", hdlr->componentFlagsMask );
+        if( hdlr->componentName_length )
+            isom_iprintf( indent, "componentName = %s\n", &str[1] );
+    }
+    else
+    {
+        isom_iprintf( indent, "pre_defined = 0x%08"PRIx32"\n", hdlr->componentType );
+        isom_iprintf( indent, "handler_type = %s\n", isom_4cc2str( hdlr->componentSubtype ) );
+        isom_iprintf( indent, "reserved = 0x%08"PRIx32"\n", hdlr->componentManufacturer );
+        isom_iprintf( indent, "reserved = 0x%08"PRIx32"\n", hdlr->componentFlags );
+        isom_iprintf( indent, "reserved = 0x%08"PRIx32"\n", hdlr->componentFlagsMask );
+        isom_iprintf( indent, "name = %s\n", str );
+    }
+    return 0;
+}
+
+static int isom_print_minf( isom_root_t *root, isom_box_t *box, int level )
+{
+    return isom_print_simple( root, box, level, "Media Information Box" );
+}
+
+static int isom_print_vmhd( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_vmhd_t *vmhd = (isom_vmhd_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[vmhd: Video Media Header Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", vmhd->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", vmhd->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", vmhd->flags );
+    isom_iprintf( indent, "graphicsmode = %"PRIu16"\n", vmhd->graphicsmode );
+    isom_iprintf( indent, "opcolor\n" ); 
+    isom_iprint_rgb_color( indent + 1, vmhd->opcolor );
+    return 0;
+}
+
+static int isom_print_smhd( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_smhd_t *smhd = (isom_smhd_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[smhd: Sound Media Header Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", smhd->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", smhd->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", smhd->flags );
+    isom_iprintf( indent, "balance = %f\n", isom_fixed2double( smhd->balance, 8 ) );
+    isom_iprintf( indent, "reserved = 0x%04"PRIx16"\n", smhd->reserved );
+    return 0;
+}
+
+static int isom_print_hmhd( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_hmhd_t *hmhd = (isom_hmhd_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[hmhd: Hint Media Header Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", hmhd->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", hmhd->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", hmhd->flags );
+    isom_iprintf( indent, "maxPDUsize = %"PRIu16"\n", hmhd->maxPDUsize );
+    isom_iprintf( indent, "avgPDUsize = %"PRIu16"\n", hmhd->avgPDUsize );
+    isom_iprintf( indent, "maxbitrate = %"PRIu32"\n", hmhd->maxbitrate );
+    isom_iprintf( indent, "avgbitrate = %"PRIu32"\n", hmhd->avgbitrate );
+    isom_iprintf( indent, "reserved = 0x%08"PRIx32"\n", hmhd->reserved );
+    return 0;
+}
+
+static int isom_print_nmhd( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_nmhd_t *nmhd = (isom_nmhd_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[nmhd: Null Media Header Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", nmhd->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", nmhd->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", nmhd->flags );
+    return 0;
+}
+
+static int isom_print_gmhd( isom_root_t *root, isom_box_t *box, int level )
+{
+    return isom_print_simple( root, box, level, "Generic Media Information Header Box" );
+}
+
+static int isom_print_gmin( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_gmin_t *gmin = (isom_gmin_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[gmin: Generic Media Information Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", gmin->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", gmin->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", gmin->flags );
+    isom_iprintf( indent, "graphicsmode = %"PRIu16"\n", gmin->graphicsmode );
+    isom_iprintf( indent, "opcolor\n" ); 
+    isom_iprint_rgb_color( indent + 1, gmin->opcolor );
+    isom_iprintf( indent, "balance = %f\n", isom_fixed2double( gmin->balance, 8 ) );
+    isom_iprintf( indent, "reserved = 0x%04"PRIx16"\n", gmin->reserved );
+    return 0;
+}
+
+static int isom_print_text( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_text_t *text = (isom_text_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[text]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", text->size );
+    isom_iprintf( indent, "Unknown matrix\n" );
+    isom_iprint_matrix( indent + 1, text->matrix );
+    return 0;
+}
+
+static int isom_print_dinf( isom_root_t *root, isom_box_t *box, int level )
+{
+    return isom_print_simple( root, box, level, "Data Information Box" );
+}
+
+static int isom_print_dref( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_dref_t *dref = (isom_dref_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[dref: Data Reference Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", dref->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", dref->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", dref->flags );
+    isom_iprintf( indent, "entry_count = %"PRIu16"\n", dref->list->entry_count );
+    return 0;
+}
+
+static int isom_print_url( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_dref_entry_t *url = (isom_dref_entry_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[url : Data Entry Url Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", url->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", url->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", url->flags );
+    if( url->flags & 0x000001 )
+        isom_iprintf( indent, "location = in the same file\n" );
+    else
+        isom_iprintf( indent, "location = %s\n", url->location );
+    return 0;
+}
+
+static int isom_print_stbl( isom_root_t *root, isom_box_t *box, int level )
+{
+    return isom_print_simple( root, box, level, "Sample Table Box" );
+}
+
+static int isom_print_stsd( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box || !((isom_stsd_t *)box)->list )
+        return -1;
+    isom_stsd_t *stsd = (isom_stsd_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[stsd: Sample Description Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", stsd->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", stsd->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", stsd->flags );
+    isom_iprintf( indent, "entry_count = %"PRIu16"\n", stsd->list->entry_count );
+    return 0;
+}
+
+static int isom_print_visual_description( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_visual_entry_t *visual = (isom_visual_entry_t *)box;
+    int indent = level;
+    uint64_t reserved = visual->reserved[0] | visual->reserved[1] | visual->reserved[2]
+                      | visual->reserved[3] | visual->reserved[4] | visual->reserved[5];
+    isom_iprintf( indent++, "[%s: Visual Description]\n", isom_4cc2str( visual->type ) );
+    isom_iprintf( indent, "size = %"PRIu64"\n", visual->size );
+    isom_iprintf( indent, "reserved = 0x%016"PRIx64"\n", reserved );
+    isom_iprintf( indent, "data_reference_index = %"PRIu16"\n", visual->data_reference_index );
+    if( root->qt_compatible )
+    {
+        isom_iprintf( indent, "version = %"PRId16"\n", visual->version );
+        isom_iprintf( indent, "revision_level = %"PRId16"\n", visual->revision_level );
+        isom_iprintf( indent, "vendor = %s\n", isom_4cc2str( visual->vendor ) );
+        isom_iprintf( indent, "temporalQuality = %"PRIu32"\n", visual->temporalQuality );
+        isom_iprintf( indent, "spatialQuality = %"PRIu32"\n", visual->spatialQuality );
+        isom_iprintf( indent, "width = %"PRIu16"\n", visual->width );
+        isom_iprintf( indent, "height = %"PRIu16"\n", visual->height );
+        isom_iprintf( indent, "horizresolution = %f\n", isom_fixed2double( visual->horizresolution, 16 ) );
+        isom_iprintf( indent, "vertresolution = %f\n", isom_fixed2double( visual->vertresolution, 16 ) );
+        isom_iprintf( indent, "dataSize = %"PRIu32"\n", visual->dataSize );
+        isom_iprintf( indent, "frame_count = %"PRIu16"\n", visual->frame_count );
+        isom_iprintf( indent, "compressorname_length = %"PRIu8"\n", visual->compressorname[0] );
+        isom_iprintf( indent, "compressorname = %s\n", visual->compressorname + 1 );
+        isom_iprintf( indent, "depth = 0x%04"PRIx16, visual->depth );
+        if( visual->depth == 32 )
+            printf( " (colour with alpha)\n" );
+        else if( visual->depth >= 33 && visual->depth <= 40 )
+            printf( " (grayscale with no alpha)\n" );
+        else
+            printf( "\n" );
+        isom_iprintf( indent, "color_table_ID = %"PRId16"\n", visual->color_table_ID );
+    }
+    else
+    {
+        isom_iprintf( indent, "pre_defined = 0x%04"PRIx16"\n", visual->version );
+        isom_iprintf( indent, "reserved = 0x%04"PRIx16"\n", visual->revision_level );
+        isom_iprintf( indent, "pre_defined = 0x%08"PRIx32"\n", visual->vendor );
+        isom_iprintf( indent, "pre_defined = 0x%08"PRIx32"\n", visual->temporalQuality );
+        isom_iprintf( indent, "pre_defined = 0x%08"PRIx32"\n", visual->spatialQuality );
+        isom_iprintf( indent, "width = %"PRIu16"\n", visual->width );
+        isom_iprintf( indent, "height = %"PRIu16"\n", visual->height );
+        isom_iprintf( indent, "horizresolution = %f\n", isom_fixed2double( visual->horizresolution, 16 ) );
+        isom_iprintf( indent, "vertresolution = %f\n", isom_fixed2double( visual->vertresolution, 16 ) );
+        isom_iprintf( indent, "reserved = 0x%08"PRIx32"\n", visual->dataSize );
+        isom_iprintf( indent, "frame_count = %"PRIu16"\n", visual->frame_count );
+        isom_iprintf( indent, "compressorname_length = %"PRIu8"\n", visual->compressorname[0] );
+        isom_iprintf( indent, "compressorname = %s\n", visual->compressorname + 1 );
+        isom_iprintf( indent, "depth = 0x%04"PRIx16, visual->depth );
+        if( visual->depth == 0x0018 )
+            printf( " (colour with no alpha)\n" );
+        else if( visual->depth == 0x0028 )
+            printf( " (grayscale with no alpha)\n" );
+        else if( visual->depth == 0x0020 )
+            printf( " (gray or colour with alpha)\n" );
+        else
+            printf( "\n" );
+        isom_iprintf( indent, "pre_defined = 0x%04"PRIx16"\n", visual->color_table_ID );
+    }
+    return 0;
+}
+
+static int isom_print_btrt( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_btrt_t *btrt = (isom_btrt_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[btrt: Bit Rate Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", btrt->size );
+    isom_iprintf( indent, "bufferSizeDB = %"PRIu32"\n", btrt->bufferSizeDB );
+    isom_iprintf( indent, "maxBitrate = %"PRIu32"\n", btrt->maxBitrate );
+    isom_iprintf( indent, "avgBitrate = %"PRIu32"\n", btrt->avgBitrate );
+    return 0;
+}
+
+static int isom_print_clap( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_clap_t *clap = (isom_clap_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[clap: Clean Aperture Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", clap->size );
+    isom_iprintf( indent, "cleanApertureWidthN = %"PRIu32"\n", clap->cleanApertureWidthN );
+    isom_iprintf( indent, "cleanApertureWidthD = %"PRIu32"\n", clap->cleanApertureWidthD );
+    isom_iprintf( indent, "cleanApertureHeightN = %"PRIu32"\n", clap->cleanApertureHeightN );
+    isom_iprintf( indent, "cleanApertureHeightD = %"PRIu32"\n", clap->cleanApertureHeightD );
+    isom_iprintf( indent, "horizOffN = %"PRId32"\n", clap->horizOffN );
+    isom_iprintf( indent, "horizOffD = %"PRIu32"\n", clap->horizOffD );
+    isom_iprintf( indent, "vertOffN = %"PRId32"\n", clap->vertOffN );
+    isom_iprintf( indent, "vertOffD = %"PRIu32"\n", clap->vertOffD );
+    return 0;
+}
+
+static int isom_print_pasp( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_pasp_t *pasp = (isom_pasp_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[pasp: Pixel Aspect Ratio Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", pasp->size );
+    isom_iprintf( indent, "hSpacing = %"PRIu32"\n", pasp->hSpacing );
+    isom_iprintf( indent, "vSpacing = %"PRIu32"\n", pasp->vSpacing );
+    return 0;
+}
+
+static int isom_print_colr( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_colr_t *colr = (isom_colr_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[colr: Color Parameter Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", colr->size );
+    isom_iprintf( indent, "color_parameter_type = %s\n", isom_4cc2str( colr->color_parameter_type ) );
+    if( colr->color_parameter_type == QT_COLOR_PARAMETER_TYPE_NCLC )
+    {
+        isom_iprintf( indent, "primaries_index = %"PRIu16"\n", colr->primaries_index );
+        isom_iprintf( indent, "transfer_function_index = %"PRIu16"\n", colr->transfer_function_index );
+        isom_iprintf( indent, "matrix_index = %"PRIu16"\n", colr->matrix_index );
+    }
+    return 0;
+}
+
+static int isom_print_stsl( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_stsl_t *stsl = (isom_stsl_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[stsl: Sample Scale Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", stsl->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", stsl->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", stsl->flags );
+    isom_iprintf( indent, "constraint_flag = %s\n", (stsl->constraint_flag & 0x01) ? "on" : "off" );
+    isom_iprintf( indent, "scale_method = " );
+    if( stsl->scale_method == ISOM_SCALING_METHOD_FILL )
+        printf( "'fill'\n" );
+    else if( stsl->scale_method == ISOM_SCALING_METHOD_HIDDEN )
+        printf( "'hidden'\n" );
+    else if( stsl->scale_method == ISOM_SCALING_METHOD_MEET )
+        printf( "'meet'\n" );
+    else if( stsl->scale_method == ISOM_SCALING_METHOD_SLICE_X )
+        printf( "'slice' in the x-coodinate\n" );
+    else if( stsl->scale_method == ISOM_SCALING_METHOD_SLICE_Y )
+        printf( "'slice' in the y-coodinate\n" );
+    isom_iprintf( indent, "display_center_x = %"PRIu16"\n", stsl->display_center_x );
+    isom_iprintf( indent, "display_center_y = %"PRIu16"\n", stsl->display_center_y );
+    return 0;
+}
+
+static int isom_print_avcC( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_avcC_t *avcC = (isom_avcC_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[avcC: AVCDecoderConfigurationRecord]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", avcC->size );
+    isom_iprintf( indent, "configurationVersion = %"PRIu8"\n", avcC->configurationVersion );
+    isom_iprintf( indent, "AVCProfileIndication = %"PRIu8"\n", avcC->AVCProfileIndication );
+    isom_iprintf( indent, "profile_compatibility = 0x%02"PRIu8"\n", avcC->profile_compatibility );
+    isom_iprintf( indent, "AVCLevelIndication = %"PRIu8"\n", avcC->AVCLevelIndication );
+    isom_iprintf( indent, "lengthSizeMinusOne = %"PRIu8"\n", avcC->lengthSizeMinusOne & 0x03 );
+    isom_iprintf( indent, "numOfSequenceParameterSets = %"PRIu8"\n", avcC->numOfSequenceParameterSets & 0x1f );
+    isom_iprintf( indent, "numOfPictureParameterSets = %"PRIu8"\n", avcC->numOfPictureParameterSets );
+    if( ISOM_REQUIRES_AVCC_EXTENSION( avcC->AVCProfileIndication ) )
+    {
+        isom_iprintf( indent, "chroma_format = %"PRIu8"\n", avcC->chroma_format & 0x03 );
+        isom_iprintf( indent, "bit_depth_luma_minus8 = %"PRIu8"\n", avcC->bit_depth_luma_minus8 & 0x7 );
+        isom_iprintf( indent, "bit_depth_chroma_minus8 = %"PRIu8"\n", avcC->bit_depth_chroma_minus8 & 0x7 );
+        isom_iprintf( indent, "numOfSequenceParameterSetExt = %"PRIu8"\n", avcC->numOfSequenceParameterSetExt );
+    }
+    return 0;
+}
+
+static int isom_print_audio_description( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_audio_entry_t *audio = (isom_audio_entry_t *)box;
+    int indent = level;
+    uint64_t reserved = audio->reserved[0] | audio->reserved[1] | audio->reserved[2]
+                      | audio->reserved[3] | audio->reserved[4] | audio->reserved[5];
+    isom_iprintf( indent++, "[%s: Audio Description]\n", isom_4cc2str( audio->type ) );
+    isom_iprintf( indent, "size = %"PRIu64"\n", audio->size );
+    isom_iprintf( indent, "reserved = 0x%016"PRIx64"\n", reserved );
+    isom_iprintf( indent, "data_reference_index = %"PRIu16"\n", audio->data_reference_index );
+    if( root->qt_compatible )
+    {
+        isom_iprintf( indent, "version = %"PRId16"\n", audio->version );
+        isom_iprintf( indent, "revision_level = %"PRId16"\n", audio->revision_level );
+        isom_iprintf( indent, "vendor = %s\n", isom_4cc2str( audio->vendor ) );
+        isom_iprintf( indent, "channelcount = %"PRIu16"\n", audio->channelcount );
+        isom_iprintf( indent, "samplesize = %"PRIu16"\n", audio->samplesize );
+        isom_iprintf( indent, "compression_ID = %"PRId16"\n", audio->compression_ID );
+        isom_iprintf( indent, "packet_size = %"PRIu16"\n", audio->packet_size );
+    }
+    else
+    {
+        isom_iprintf( indent, "reserved = 0x%04"PRIx16"\n", audio->version );
+        isom_iprintf( indent, "reserved = 0x%04"PRIx16"\n", audio->revision_level );
+        isom_iprintf( indent, "reserved = 0x%08"PRIx32"\n", audio->vendor );
+        isom_iprintf( indent, "channelcount = %"PRIu16"\n", audio->channelcount );
+        isom_iprintf( indent, "samplesize = %"PRIu16"\n", audio->samplesize );
+        isom_iprintf( indent, "pre_defined = %"PRId16"\n", audio->compression_ID );
+        isom_iprintf( indent, "reserved = %"PRIu16"\n", audio->packet_size );
+    }
+    isom_iprintf( indent, "samplerate = %f\n", isom_fixed2double( audio->samplerate, 16 ) );
+    if( audio->version == 1 )
+    {
+        isom_iprintf( indent, "samplesPerPacket = %"PRIu32"\n", audio->samplesPerPacket );
+        isom_iprintf( indent, "bytesPerPacket = %"PRIu32"\n", audio->bytesPerPacket );
+        isom_iprintf( indent, "bytesPerFrame = %"PRIu32"\n", audio->bytesPerFrame );
+        isom_iprintf( indent, "bytesPerSample = %"PRIu32"\n", audio->bytesPerSample );
+    }
+    else if( audio->version == 2 )
+    {
+        isom_iprintf( indent, "sizeOfStructOnly = %"PRIu32"\n", audio->sizeOfStructOnly );
+        isom_iprintf( indent, "audioSampleRate = %lf\n", isom_int2float64( audio->audioSampleRate ) );
+        isom_iprintf( indent, "numAudioChannels = %"PRIu32"\n", audio->numAudioChannels );
+        isom_iprintf( indent, "always7F000000 = 0x%08"PRIx32"\n", audio->always7F000000 );
+        isom_iprintf( indent, "constBitsPerChannel = %"PRIu32"\n", audio->constBitsPerChannel );
+        isom_iprintf( indent, "formatSpecificFlags = 0x%08"PRIx32"\n", audio->formatSpecificFlags );
+        isom_iprintf( indent, "constBytesPerAudioPacket = %"PRIu32"\n", audio->constBytesPerAudioPacket );
+        isom_iprintf( indent, "constLPCMFramesPerAudioPacket = %"PRIu32"\n", audio->constLPCMFramesPerAudioPacket );
+    }
+    return 0;
+}
+
+static int isom_print_wave( isom_root_t *root, isom_box_t *box, int level )
+{
+    return isom_print_simple( root, box, level, "Sound Information Decompression Parameters Box" );
+}
+
+static int isom_print_frma( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_frma_t *frma = (isom_frma_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[frma: Format Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", frma->size );
+    isom_iprintf( indent, "data_format = %s\n", isom_4cc2str( frma->data_format ) );
+    return 0;
+}
+
+static int isom_print_terminator( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_terminator_t *terminator = (isom_terminator_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[0x00000000: Terminator Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", terminator->size );
+    return 0;
+}
+
+static int isom_print_chan( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_chan_t *chan = (isom_chan_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[chan: Channel Compositor Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", chan->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", chan->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", chan->flags );
+    isom_iprintf( indent, "channelLayoutTag = 0x%08"PRIx32"\n", chan->channelLayoutTag );
+    isom_iprintf( indent, "channelBitmap = 0x%08"PRIx32"\n", chan->channelBitmap );
+    isom_iprintf( indent, "numberChannelDescriptions = %"PRIu32"\n", chan->numberChannelDescriptions );
+    if( chan->numberChannelDescriptions )
+    {
+        isom_channel_description_t *desc = chan->channelDescriptions;
+        for( uint32_t i = 0; i < chan->numberChannelDescriptions; i++ )
+        {
+            isom_iprintf( indent++, "ChannelDescriptions[%"PRIu32"]\n", i );
+            isom_iprintf( indent, "channelLabel = 0x%08"PRIx32"\n", desc->channelLabel );
+            isom_iprintf( indent, "channelFlags = 0x%08"PRIx32"\n", desc->channelFlags );
+            for( int j = 0; j < 3; j++ )
+                isom_iprintf( indent, "coordinates[%d] = %f\n", j, isom_int2float32( desc->coordinates[j] ) );
+            --indent;
+        }
+    }
+    return 0;
+}
+
+static int isom_print_text_description( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_text_entry_t *text = (isom_text_entry_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[%s: QuickTime Text Description]\n", isom_4cc2str( text->type ) );
+    isom_iprintf( indent, "size = %"PRIu64"\n", text->size );
+    isom_iprintf( indent, "data_reference_index = %"PRIu16"\n", text->data_reference_index );
+    isom_iprintf( indent, "displayFlags = 0x%08"PRId32"\n", text->displayFlags );
+    isom_iprintf( indent, "textJustification = %"PRId32"\n", text->textJustification );
+    isom_iprintf( indent, "bgColor\n" );
+    isom_iprint_rgb_color( indent + 1, text->bgColor );
+    isom_iprintf( indent, "top = %"PRId16"\n", text->top );
+    isom_iprintf( indent, "left = %"PRId16"\n", text->left );
+    isom_iprintf( indent, "bottom = %"PRId16"\n", text->bottom );
+    isom_iprintf( indent, "right = %"PRId16"\n", text->right );
+    isom_iprintf( indent, "scrpStartChar = %"PRId32"\n", text->scrpStartChar );
+    isom_iprintf( indent, "scrpHeight = %"PRId16"\n", text->scrpHeight );
+    isom_iprintf( indent, "scrpAscent = %"PRId16"\n", text->scrpAscent );
+    isom_iprintf( indent, "scrpFont = %"PRId16"\n", text->scrpFont );
+    isom_iprintf( indent, "scrpFace = %"PRIu16"\n", text->scrpFace );
+    isom_iprintf( indent, "scrpSize = %"PRId16"\n", text->scrpSize );
+    isom_iprintf( indent, "scrpColor\n" );
+    isom_iprint_rgb_color( indent + 1, text->scrpColor );
+    if( text->font_name_length )
+        isom_iprintf( indent, "font_name = %s\n", text->font_name );
+    return 0;
+}
+
+static int isom_print_tx3g_description( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_tx3g_entry_t *tx3g = (isom_tx3g_entry_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[%s: Timed Text Description]\n", isom_4cc2str( tx3g->type ) );
+    isom_iprintf( indent, "size = %"PRIu64"\n", tx3g->size );
+    isom_iprintf( indent, "data_reference_index = %"PRIu16"\n", tx3g->data_reference_index );
+    isom_iprintf( indent, "displayFlags = 0x%08"PRId32"\n", tx3g->displayFlags );
+    isom_iprintf( indent, "horizontal_justification = %"PRId8"\n", tx3g->horizontal_justification );
+    isom_iprintf( indent, "vertical_justification = %"PRId8"\n", tx3g->vertical_justification );
+    isom_iprintf( indent, "background_color_rgba\n" );
+    isom_iprint_rgba_color( indent + 1, tx3g->background_color_rgba );
+    isom_iprintf( indent, "top = %"PRId16"\n", tx3g->top );
+    isom_iprintf( indent, "left = %"PRId16"\n", tx3g->left );
+    isom_iprintf( indent, "bottom = %"PRId16"\n", tx3g->bottom );
+    isom_iprintf( indent, "right = %"PRId16"\n", tx3g->right );
+    isom_iprintf( indent, "startChar = %"PRIu16"\n", tx3g->startChar );
+    isom_iprintf( indent, "endChar = %"PRIu16"\n", tx3g->endChar );
+    isom_iprintf( indent, "font_ID = %"PRIu16"\n", tx3g->font_ID );
+    isom_iprintf( indent, "face_style_flags = %"PRIu8"\n", tx3g->face_style_flags );
+    isom_iprintf( indent, "font_size = %"PRIu8"\n", tx3g->font_size );
+    isom_iprintf( indent, "text_color_rgba\n" );
+    isom_iprint_rgba_color( indent + 1, tx3g->text_color_rgba );
+    return 0;
+}
+
+static int isom_print_ftab( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box || !((isom_ftab_t *)box)->list )
+        return -1;
+    isom_ftab_t *ftab = (isom_ftab_t *)box;
+    int indent = level;
+    uint16_t i = 0;
+    isom_iprintf( indent++, "[ftab: Font Table Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", ftab->size );
+    isom_iprintf( indent, "entry_count = %"PRIu16"\n", ftab->list->entry_count );
+    for( lsmash_entry_t *entry = ftab->list->head; entry; entry = entry->next )
+    {
+        isom_font_record_t *data = (isom_font_record_t *)entry->data;
+        isom_iprintf( indent++, "entry[%"PRIu16"]\n", i++ );
+        isom_iprintf( indent, "font_ID = %"PRIu16"\n", data->font_ID );
+        if( data->font_name_length )
+            isom_iprintf( indent, "font_name = %s\n", data->font_name );
+        --indent;
+    }
+    return 0;
+}
+
+static int isom_print_stts( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box || !((isom_stts_t *)box)->list )
+        return -1;
+    isom_stts_t *stts = (isom_stts_t *)box;
+    int indent = level;
+    uint32_t i = 0;
+    isom_iprintf( indent++, "[stts: Decoding Time to Sample Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", stts->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", stts->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", stts->flags );
+    isom_iprintf( indent, "entry_count = %"PRIu32"\n", stts->list->entry_count );
+    for( lsmash_entry_t *entry = stts->list->head; entry; entry = entry->next )
+    {
+        isom_stts_entry_t *data = (isom_stts_entry_t *)entry->data;
+        isom_iprintf( indent++, "entry[%"PRIu32"]\n", i++ );
+        isom_iprintf( indent, "sample_count = %"PRIu32"\n", data->sample_count );
+        isom_iprintf( indent--, "sample_delta = %"PRIu32"\n", data->sample_delta );
+    }
+    return 0;
+}
+
+static int isom_print_ctts( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box || !((isom_ctts_t *)box)->list )
+        return -1;
+    isom_ctts_t *ctts = (isom_ctts_t *)box;
+    int indent = level;
+    uint32_t i = 0;
+    isom_iprintf( indent++, "[ctts: Composition Time to Sample Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", ctts->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", ctts->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", ctts->flags );
+    isom_iprintf( indent, "entry_count = %"PRIu32"\n", ctts->list->entry_count );
+    if( root->qt_compatible || ctts->version == 1 )
+        for( lsmash_entry_t *entry = ctts->list->head; entry; entry = entry->next )
+        {
+            isom_ctts_entry_t *data = (isom_ctts_entry_t *)entry->data;
+            isom_iprintf( indent++, "entry[%"PRIu32"]\n", i++ );
+            isom_iprintf( indent, "sample_count = %"PRIu32"\n", data->sample_count );
+            isom_iprintf( indent--, "sample_offset = %"PRId32"\n", (union {uint32_t ui; int32_t si;}){data->sample_offset}.si );
+        }
+    else
+        for( lsmash_entry_t *entry = ctts->list->head; entry; entry = entry->next )
+        {
+            isom_ctts_entry_t *data = (isom_ctts_entry_t *)entry->data;
+            isom_iprintf( indent++, "entry[%"PRIu32"]\n", i++ );
+            isom_iprintf( indent, "sample_count = %"PRIu32"\n", data->sample_count );
+            isom_iprintf( indent--, "sample_offset = %"PRIu32"\n", data->sample_offset );
+        }
+    return 0;
+}
+
+static int isom_print_cslg( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_cslg_t *cslg = (isom_cslg_t *)box;
+    int indent = level;
+    if( root->qt_compatible )
+    {
+        isom_iprintf( indent++, "[cslg: Composition Shift Least Greatest Box]\n" );
+        isom_iprintf( indent, "size = %"PRIu64"\n", cslg->size );
+        isom_iprintf( indent, "version = %"PRIu8"\n", cslg->version );
+        isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", cslg->flags );
+        isom_iprintf( indent, "compositionOffsetToDTDDeltaShift = %"PRId32"\n", cslg->compositionToDTSShift );
+        isom_iprintf( indent, "leastDecodeToDisplayDelta = %"PRId32"\n", cslg->leastDecodeToDisplayDelta );
+        isom_iprintf( indent, "greatestDecodeToDisplayDelta = %"PRId32"\n", cslg->greatestDecodeToDisplayDelta );
+        isom_iprintf( indent, "displayStartTime = %"PRId32"\n", cslg->compositionStartTime );
+        isom_iprintf( indent, "displayEndTime = %"PRId32"\n", cslg->compositionEndTime );
+    }
+    else
+    {
+        isom_iprintf( indent++, "[cslg: Composition to Decode Box]\n" );
+        isom_iprintf( indent, "size = %"PRIu64"\n", cslg->size );
+        isom_iprintf( indent, "version = %"PRIu8"\n", cslg->version );
+        isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", cslg->flags );
+        isom_iprintf( indent, "compositionToDTSShift = %"PRId32"\n", cslg->compositionToDTSShift );
+        isom_iprintf( indent, "leastDecodeToDisplayDelta = %"PRId32"\n", cslg->leastDecodeToDisplayDelta );
+        isom_iprintf( indent, "greatestDecodeToDisplayDelta = %"PRId32"\n", cslg->greatestDecodeToDisplayDelta );
+        isom_iprintf( indent, "compositionStartTime = %"PRId32"\n", cslg->compositionStartTime );
+        isom_iprintf( indent, "compositionEndTime = %"PRId32"\n", cslg->compositionEndTime );
+    }
+    return 0;
+}
+
+static int isom_print_stss( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box || !((isom_stss_t *)box)->list )
+        return -1;
+    isom_stss_t *stss = (isom_stss_t *)box;
+    int indent = level;
+    uint32_t i = 0;
+    isom_iprintf( indent++, "[stss: Sync Sample Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", stss->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", stss->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", stss->flags );
+    isom_iprintf( indent, "entry_count = %"PRIu32"\n", stss->list->entry_count );
+    for( lsmash_entry_t *entry = stss->list->head; entry; entry = entry->next )
+        isom_iprintf( indent, "sample_number[%"PRIu32"] = %"PRIu32"\n", i++, ((isom_stss_entry_t *)entry->data)->sample_number );
+    return 0;
+}
+
+static int isom_print_stps( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box || !((isom_stps_t *)box)->list )
+        return -1;
+    isom_stps_t *stps = (isom_stps_t *)box;
+    int indent = level;
+    uint32_t i = 0;
+    isom_iprintf( indent++, "[stps: Partial Sync Sample Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", stps->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", stps->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", stps->flags );
+    isom_iprintf( indent, "entry_count = %"PRIu32"\n", stps->list->entry_count );
+    for( lsmash_entry_t *entry = stps->list->head; entry; entry = entry->next )
+        isom_iprintf( indent, "sample_number[%"PRIu32"] = %"PRIu32"\n", i++, ((isom_stps_entry_t *)entry->data)->sample_number );
+    return 0;
+}
+
+static int isom_print_sdtp( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box || !((isom_sdtp_t *)box)->list )
+        return -1;
+    isom_sdtp_t *sdtp = (isom_sdtp_t *)box;
+    int indent = level;
+    uint32_t i = 0;
+    isom_iprintf( indent++, "[sdtp: Independent and Disposable Samples Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", sdtp->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", sdtp->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", sdtp->flags );
+    for( lsmash_entry_t *entry = sdtp->list->head; entry; entry = entry->next )
+    {
+        isom_sdtp_entry_t *data = (isom_sdtp_entry_t *)entry->data;
+        isom_iprintf( indent++, "entry[%"PRIu32"]\n", i++ );
+        if( data->is_leading || data->sample_depends_on || data->sample_is_depended_on || data->sample_has_redundancy )
+        {
+            if( root->avc_extensions )
+            {
+                if( data->is_leading & ISOM_SAMPLE_IS_UNDECODABLE_LEADING )
+                    isom_iprintf( indent, "undecodable leading\n" );
+                else if( data->is_leading & ISOM_SAMPLE_IS_NOT_LEADING )
+                    isom_iprintf( indent, "non-leading\n" );
+                else if( data->is_leading & ISOM_SAMPLE_IS_DECODABLE_LEADING )
+                    isom_iprintf( indent, "decodable leading\n" );
+            }
+            else if( data->is_leading & QT_SAMPLE_EARLIER_PTS_ALLOWED )
+                isom_iprintf( indent, "early display times allowed\n" );
+            if( data->sample_depends_on & ISOM_SAMPLE_IS_INDEPENDENT )
+                isom_iprintf( indent, "independent\n" );
+            else if( data->sample_depends_on & ISOM_SAMPLE_IS_NOT_INDEPENDENT )
+                isom_iprintf( indent, "dependent\n" );
+            if( data->sample_is_depended_on & ISOM_SAMPLE_IS_NOT_DISPOSABLE )
+                isom_iprintf( indent, "non-disposable\n" );
+            else if( data->sample_is_depended_on & ISOM_SAMPLE_IS_DISPOSABLE )
+                isom_iprintf( indent, "disposable\n" );
+            if( data->sample_has_redundancy & ISOM_SAMPLE_HAS_REDUNDANCY )
+                isom_iprintf( indent, "redundant\n" );
+            else if( data->sample_has_redundancy & ISOM_SAMPLE_HAS_NO_REDUNDANCY )
+                isom_iprintf( indent, "non-redundant\n" );
+        }
+        else
+            isom_iprintf( indent, "no description\n" );
+        --indent;
+    }
+    return 0;
+}
+
+static int isom_print_stsc( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box || !((isom_stsc_t *)box)->list )
+        return -1;
+    isom_stsc_t *stsc = (isom_stsc_t *)box;
+    int indent = level;
+    uint32_t i = 0;
+    isom_iprintf( indent++, "[stsc: Sample To Chunk Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", stsc->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", stsc->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", stsc->flags );
+    isom_iprintf( indent, "entry_count = %"PRIu32"\n", stsc->list->entry_count );
+    for( lsmash_entry_t *entry = stsc->list->head; entry; entry = entry->next )
+    {
+        isom_stsc_entry_t *data = (isom_stsc_entry_t *)entry->data;
+        isom_iprintf( indent++, "entry[%"PRIu32"]\n", i++ );
+        isom_iprintf( indent, "first_chunk = %"PRIu32"\n", data->first_chunk );
+        isom_iprintf( indent, "samples_per_chunk = %"PRIu32"\n", data->samples_per_chunk );
+        isom_iprintf( indent--, "sample_description_index = %"PRIu32"\n", data->sample_description_index );
+    }
+    return 0;
+}
+
+static int isom_print_stsz( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_stsz_t *stsz = (isom_stsz_t *)box;
+    int indent = level;
+    uint32_t i = 0;
+    isom_iprintf( indent++, "[stsz: Sample Size Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", stsz->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", stsz->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", stsz->flags );
+    if( !stsz->sample_size )
+        isom_iprintf( indent, "sample_size = 0 (variable)\n" );
+    else
+        isom_iprintf( indent, "sample_size = %"PRIu32" (constant)\n", stsz->sample_size );
+    isom_iprintf( indent, "sample_count = %"PRIu32"\n", stsz->sample_count );
+    if( !stsz->sample_size && stsz->list )
+        for( lsmash_entry_t *entry = stsz->list->head; entry; entry = entry->next )
+        {
+            isom_stsz_entry_t *data = (isom_stsz_entry_t *)entry->data;
+            isom_iprintf( indent, "entry_size[%"PRIu32"] = %"PRIu32"\n", i++, data->entry_size );
+        }
+    return 0;
+}
+
+static int isom_print_stco( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box || !((isom_stco_t *)box)->list )
+        return -1;
+    isom_stco_t *stco = (isom_stco_t *)box;
+    int indent = level;
+    uint32_t i = 0;
+    isom_iprintf( indent++, "[%s: Chunk Offset Box]\n", isom_4cc2str( stco->type ) );
+    isom_iprintf( indent, "size = %"PRIu64"\n", stco->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", stco->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", stco->flags );
+    isom_iprintf( indent, "entry_count = %"PRIu32"\n", stco->list->entry_count );
+    if( stco->type == ISOM_BOX_TYPE_STCO )
+    {
+        for( lsmash_entry_t *entry = stco->list->head; entry; entry = entry->next )
+            isom_iprintf( indent, "chunk_offset[%"PRIu32"] = %"PRIu32"\n", i++, ((isom_stco_entry_t *)entry->data)->chunk_offset );
+    }
+    else
+    {
+        for( lsmash_entry_t *entry = stco->list->head; entry; entry = entry->next )
+            isom_iprintf( indent, "chunk_offset[%"PRIu32"] = %"PRIu64"\n", i++, ((isom_co64_entry_t *)entry->data)->chunk_offset );
+    }
+    return 0;
+}
+
+static int isom_print_sgpd( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box || !((isom_sgpd_t *)box)->list )
+        return -1;
+    isom_sgpd_t *sgpd = (isom_sgpd_t *)box;
+    int indent = level;
+    uint32_t i = 0;
+    isom_iprintf( indent++, "[sgpd: Sample Group Description Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", sgpd->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", sgpd->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", sgpd->flags );
+    isom_iprintf( indent, "grouping_type = %s\n", isom_4cc2str( sgpd->grouping_type ) );
+    if( sgpd->version == 1 )
+    {
+        isom_iprintf( indent, "default_length = %"PRIu32, sgpd->default_length );
+        printf( " %s\n", sgpd->default_length ? "(constant)" : "(variable)" );
+    }
+    isom_iprintf( indent, "entry_count = %"PRIu32"\n", sgpd->list->entry_count );
+    if( sgpd->grouping_type == ISOM_GROUP_TYPE_ROLL )
+        for( lsmash_entry_t *entry = sgpd->list->head; entry; entry = entry->next )
+        {
+            if( sgpd->version == 1 && !sgpd->default_length )
+                isom_iprintf( indent, "description_length[%"PRIu32"] = %"PRIu32"\n", i++, ((isom_roll_entry_t *)entry->data)->description_length );
+            else
+                isom_iprintf( indent, "roll_distance[%"PRIu32"] = %"PRIu16"\n", i++, ((isom_roll_entry_t *)entry->data)->roll_distance );
+        }
+    return 0;
+}
+
+static int isom_print_sbgp( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box || !((isom_sbgp_t *)box)->list )
+        return -1;
+    isom_sbgp_t *sbgp = (isom_sbgp_t *)box;
+    int indent = level;
+    uint32_t i = 0;
+    isom_iprintf( indent++, "[sbgp: Sample to Group Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", sbgp->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", sbgp->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", sbgp->flags );
+    isom_iprintf( indent, "grouping_type = %s\n", isom_4cc2str( sbgp->grouping_type ) );
+    if( sbgp->version == 1 )
+        isom_iprintf( indent, "grouping_type_parameter = %s\n", isom_4cc2str( sbgp->grouping_type_parameter ) );
+    isom_iprintf( indent, "entry_count = %"PRIu32"\n", sbgp->list->entry_count );
+    for( lsmash_entry_t *entry = sbgp->list->head; entry; entry = entry->next )
+    {
+        isom_sbgp_entry_t *data = (isom_sbgp_entry_t *)entry->data;
+        isom_iprintf( indent++, "entry[%"PRIu32"]\n", i++ );
+        isom_iprintf( indent, "sample_count = %"PRIu32"\n", data->sample_count );
+        isom_iprintf( indent--, "group_description_index = %"PRIu32, data->group_description_index );
+        if( !data->group_description_index )
+            printf( " (not in this grouping type)\n" );
+        else
+            printf( "\n" );
+    }
+    return 0;
+}
+
+static int isom_print_udta( isom_root_t *root, isom_box_t *box, int level )
+{
+    return isom_print_simple( root, box, level, "User Data Box" );
+}
+
+static int isom_print_chpl( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_chpl_t *chpl = (isom_chpl_t *)box;
+    uint32_t timescale;
+    if( !chpl->version )
+    {
+        if( !root->moov && !root->moov->mvhd )
+            return -1;
+        timescale = root->moov->mvhd->timescale;
+    }
+    else
+        timescale = 10000000;
+    int indent = level;
+    uint32_t i = 0;
+    isom_iprintf( indent++, "[chpl: Chapter List Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", chpl->size );
+    isom_iprintf( indent, "version = %"PRIu8"\n", chpl->version );
+    isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", chpl->flags );
+    if( chpl->version == 1 )
+    {
+        isom_iprintf( indent, "unknown = 0x%02"PRIx8"\n", chpl->unknown );
+        isom_iprintf( indent, "entry_count = %"PRIu32"\n", chpl->list->entry_count );
+    }
+    else
+        isom_iprintf( indent, "entry_count = %"PRIu8"\n", (uint8_t)chpl->list->entry_count );
+    for( lsmash_entry_t *entry = chpl->list->head; entry; entry = entry->next )
+    {
+        isom_chpl_entry_t *data = (isom_chpl_entry_t *)entry->data;
+        int64_t start_time = data->start_time / timescale;
+        int hh =  start_time / 3600;
+        int mm = (start_time /   60) % 60;
+        int ss =  start_time         % 60;
+        int ms = ((data->start_time / (double)timescale) - hh * 3600 - mm * 60 - ss) * 1e3 + 0.5; 
+        char str[256];
+        memset( str, 0, sizeof(str) );
+        memcpy( str, data->chapter_name, data->chapter_name_length );
+        isom_iprintf( indent++, "chapter[%"PRIu32"]\n", i++ );
+        isom_iprintf( indent, "start_time = %02d:%02d:%02d.%03d\n", hh, mm, ss, ms );
+        isom_iprintf( indent--, "chapter_name = %s\n", data->chapter_name );
+    }
+    return 0;
+}
+
+static int isom_print_free( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_free_t *skip = (isom_free_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[free: Free Space Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", skip->size );
+    return 0;
+}
+
+static int isom_print_mdat( isom_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_mdat_t *mdat = (isom_mdat_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[mdat: Media Data Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", mdat->size );
+    return 0;
+}
+
+int isom_print_movie( isom_root_t *root )
+{
+    if( !root || !root->print || !(root->flags & ISOM_FILE_MODE_DUMP) )
+        return -1;
+    printf( "[ROOT]\n" );
+    printf( "    size = %"PRIu64"\n", root->size );
+    for( lsmash_entry_t *entry = root->print->head; entry; entry = entry->next )
+    {
+        isom_print_entry_t *data = (isom_print_entry_t *)entry->data;
+        if( !data || data->func( root, data->box, data->level ) )
+            return -1;
+    }
+    return 0;
+}
+
+static isom_print_box_t isom_select_print_func( isom_box_t *box )
+{
+    if( box->manager & 0x01 )
+        return isom_print_unknown;
+    if( box->parent )
+    {
+        if( box->parent->type == ISOM_BOX_TYPE_STSD )
+            switch( box->type )
+            {
+                case ISOM_CODEC_TYPE_AVC1_VIDEO :
+                case ISOM_CODEC_TYPE_AVC2_VIDEO :
+                case ISOM_CODEC_TYPE_AVCP_VIDEO :
+                case ISOM_CODEC_TYPE_DRAC_VIDEO :
+                case ISOM_CODEC_TYPE_ENCV_VIDEO :
+                case ISOM_CODEC_TYPE_MJP2_VIDEO :
+                case ISOM_CODEC_TYPE_MP4V_VIDEO :
+                case ISOM_CODEC_TYPE_MVC1_VIDEO :
+                case ISOM_CODEC_TYPE_MVC2_VIDEO :
+                case ISOM_CODEC_TYPE_S263_VIDEO :
+                case ISOM_CODEC_TYPE_SVC1_VIDEO :
+                case ISOM_CODEC_TYPE_VC_1_VIDEO :
+                    return isom_print_visual_description;
+                case ISOM_CODEC_TYPE_AC_3_AUDIO :
+                case ISOM_CODEC_TYPE_ALAC_AUDIO :
+                case ISOM_CODEC_TYPE_DRA1_AUDIO :
+                case ISOM_CODEC_TYPE_DTSC_AUDIO :
+                case ISOM_CODEC_TYPE_DTSH_AUDIO :
+                case ISOM_CODEC_TYPE_DTSL_AUDIO :
+                case ISOM_CODEC_TYPE_DTSE_AUDIO :
+                case ISOM_CODEC_TYPE_EC_3_AUDIO :
+                case ISOM_CODEC_TYPE_ENCA_AUDIO :
+                case ISOM_CODEC_TYPE_G719_AUDIO :
+                case ISOM_CODEC_TYPE_G726_AUDIO :
+                case ISOM_CODEC_TYPE_M4AE_AUDIO :
+                case ISOM_CODEC_TYPE_MLPA_AUDIO :
+                case ISOM_CODEC_TYPE_MP4A_AUDIO :
+                case ISOM_CODEC_TYPE_RAW_AUDIO  :
+                case ISOM_CODEC_TYPE_SAMR_AUDIO :
+                case ISOM_CODEC_TYPE_SAWB_AUDIO :
+                case ISOM_CODEC_TYPE_SAWP_AUDIO :
+                case ISOM_CODEC_TYPE_SEVC_AUDIO :
+                case ISOM_CODEC_TYPE_SQCP_AUDIO :
+                case ISOM_CODEC_TYPE_SSMV_AUDIO :
+                case ISOM_CODEC_TYPE_TWOS_AUDIO :
+                case QT_CODEC_TYPE_QDM2_AUDIO :
+                case QT_CODEC_TYPE_QDMC_AUDIO :
+                case QT_CODEC_TYPE_QCLP_AUDIO :
+                case QT_CODEC_TYPE_AGSM_AUDIO :
+                case QT_CODEC_TYPE_ALAW_AUDIO :
+                case QT_CODEC_TYPE_DVI_AUDIO  :
+                case QT_CODEC_TYPE_FL32_AUDIO :
+                case QT_CODEC_TYPE_FL64_AUDIO :
+                case QT_CODEC_TYPE_IMA4_AUDIO :
+                case QT_CODEC_TYPE_IN24_AUDIO :
+                case QT_CODEC_TYPE_IN32_AUDIO :
+                case QT_CODEC_TYPE_LPCM_AUDIO :
+                case QT_CODEC_TYPE_ULAW_AUDIO :
+                case QT_CODEC_TYPE_VDVA_AUDIO :
+                    return isom_print_audio_description;
+                case QT_CODEC_TYPE_TEXT_TEXT :
+                    return isom_print_text_description;
+                case ISOM_CODEC_TYPE_TX3G_TEXT :
+                    return isom_print_tx3g_description;
+                default :
+                    return isom_print_unknown;
+            }
+        if( box->parent->type == QT_BOX_TYPE_WAVE )
+            switch( box->type )
+            {
+                case QT_BOX_TYPE_FRMA :
+                    return isom_print_frma;
+                case ISOM_BOX_TYPE_ESDS :
+                    return isom_print_esds;
+                case QT_BOX_TYPE_TERMINATOR :
+                    return isom_print_terminator;
+                default :
+                    return isom_print_unknown;
+            }
+        if( box->parent->type == ISOM_BOX_TYPE_TREF )
+            return isom_print_track_reference_type;
+    }
+    switch( box->type )
+    {
+        case ISOM_BOX_TYPE_FTYP :
+            return isom_print_ftyp;
+        case ISOM_BOX_TYPE_MOOV :
+            return isom_print_moov;
+        case ISOM_BOX_TYPE_MVHD :
+            return isom_print_mvhd;
+        case ISOM_BOX_TYPE_IODS :
+            return isom_print_iods;
+        case ISOM_BOX_TYPE_ESDS :
+            return isom_print_esds;
+        case ISOM_BOX_TYPE_TRAK :
+            return isom_print_trak;
+        case ISOM_BOX_TYPE_TKHD :
+            return isom_print_tkhd;
+        case QT_BOX_TYPE_TAPT :
+            return isom_print_tapt;
+        case QT_BOX_TYPE_CLEF :
+            return isom_print_clef;
+        case QT_BOX_TYPE_PROF :
+            return isom_print_prof;
+        case QT_BOX_TYPE_ENOF :
+            return isom_print_enof;
+        case ISOM_BOX_TYPE_EDTS :
+            return isom_print_edts;
+        case ISOM_BOX_TYPE_ELST :
+            return isom_print_elst;
+        case ISOM_BOX_TYPE_TREF :
+            return isom_print_tref;
+        case ISOM_BOX_TYPE_MDIA :
+            return isom_print_mdia;
+        case ISOM_BOX_TYPE_MDHD :
+            return isom_print_mdhd;
+        case ISOM_BOX_TYPE_HDLR :
+            return isom_print_hdlr;
+        case ISOM_BOX_TYPE_MINF :
+            return isom_print_minf;
+        case ISOM_BOX_TYPE_VMHD :
+            return isom_print_vmhd;
+        case ISOM_BOX_TYPE_SMHD :
+            return isom_print_smhd;
+        case ISOM_BOX_TYPE_HMHD :
+            return isom_print_hmhd;
+        case ISOM_BOX_TYPE_NMHD :
+            return isom_print_nmhd;
+        case QT_BOX_TYPE_GMHD :
+            return isom_print_gmhd;
+        case QT_BOX_TYPE_GMIN :
+            return isom_print_gmin;
+        case QT_BOX_TYPE_TEXT :
+            return isom_print_text;
+        case ISOM_BOX_TYPE_DINF :
+            return isom_print_dinf;
+        case ISOM_BOX_TYPE_DREF :
+            return isom_print_dref;
+        case ISOM_BOX_TYPE_URL  :
+            return isom_print_url;
+        case ISOM_BOX_TYPE_STBL :
+            return isom_print_stbl;
+        case ISOM_BOX_TYPE_STSD :
+            return isom_print_stsd;
+        case ISOM_BOX_TYPE_BTRT :
+            return isom_print_btrt;
+        case ISOM_BOX_TYPE_CLAP :
+            return isom_print_clap;
+        case ISOM_BOX_TYPE_PASP :
+            return isom_print_pasp;
+        case QT_BOX_TYPE_COLR :
+            return isom_print_colr;
+        case ISOM_BOX_TYPE_STSL :
+            return isom_print_stsl;
+        case ISOM_BOX_TYPE_AVCC :
+            return isom_print_avcC;
+        case QT_BOX_TYPE_WAVE :
+            return isom_print_wave;
+        case QT_BOX_TYPE_CHAN :
+            return isom_print_chan;
+        case ISOM_BOX_TYPE_FTAB :
+            return isom_print_ftab;
+        case ISOM_BOX_TYPE_STTS :
+            return isom_print_stts;
+        case ISOM_BOX_TYPE_CTTS :
+            return isom_print_ctts;
+        case ISOM_BOX_TYPE_CSLG :
+            return isom_print_cslg;
+        case ISOM_BOX_TYPE_STSS :
+            return isom_print_stss;
+        case QT_BOX_TYPE_STPS :
+            return isom_print_stps;
+        case ISOM_BOX_TYPE_SDTP :
+            return isom_print_sdtp;
+        case ISOM_BOX_TYPE_STSC :
+            return isom_print_stsc;
+        case ISOM_BOX_TYPE_STSZ :
+            return isom_print_stsz;
+        case ISOM_BOX_TYPE_STCO :
+        case ISOM_BOX_TYPE_CO64 :
+            return isom_print_stco;
+        case ISOM_BOX_TYPE_SGPD :
+            return isom_print_sgpd;
+        case ISOM_BOX_TYPE_SBGP :
+            return isom_print_sbgp;
+        case ISOM_BOX_TYPE_UDTA :
+            return isom_print_udta;
+        case ISOM_BOX_TYPE_CHPL :
+            return isom_print_chpl;
+        case ISOM_BOX_TYPE_FREE :
+        case ISOM_BOX_TYPE_SKIP :
+            return isom_print_free;
+        case ISOM_BOX_TYPE_MDAT :
+            return isom_print_mdat;
+        default :
+            return isom_print_unknown;
+    }
+}
+
+static int isom_add_print_func( isom_root_t *root, void *box, int level )
+{
+    if( !(root->flags & ISOM_FILE_MODE_DUMP) )
+        return 0;
+    isom_print_entry_t *data = malloc( sizeof(isom_print_entry_t) );
+    if( !data )
+        return -1;
+    data->level = level;
+    data->box = (isom_box_t *)box;
+    data->func = isom_select_print_func( (isom_box_t *)box );
+    if( !data->func || lsmash_add_entry( root->print, data ) )
+    {
+        free( data );
+        return -1;
+    }
+    return 0;
+}
+
+static void isom_remove_print_func( isom_print_entry_t *data )
+{
+    if( !data || !data->box )
+        return;
+    if( data->box->manager & 0x02 )
+        free( data->box );      /* free flagged box */
+    free( data );
+}
+
+static void isom_remove_print_funcs( isom_root_t *root )
+{
+    lsmash_remove_list( root->print, isom_remove_print_func );
+    root->print = NULL;
+}
+
+static int isom_read_box( isom_root_t *root, isom_box_t *box, isom_box_t *parent, uint64_t parent_pos, int level );
+
+static int isom_bs_read_box_common( lsmash_bs_t *bs, isom_box_t *box )
+{
+    /* read size and type */
+    if( lsmash_bs_read_data( bs, ISOM_DEFAULT_BOX_HEADER_SIZE ) )
+        return -1;
+    if( feof( bs->stream ) )
+        return 1;
+    box->size = lsmash_bs_get_be32( bs );
+    box->type = lsmash_bs_get_be32( bs );
+    if( box->size == 1 )
+    {
+        if( lsmash_bs_read_data( bs, sizeof(uint64_t) ) )
+            return -1;
+        box->size = lsmash_bs_get_be64( bs );
+    }
+    if( !box->size )
+        box->size = UINT64_MAX;
+    /* read version and flags */
+    switch( box->type )
+    {
+        case ISOM_FULLBOX_CASE :
+            if( lsmash_bs_read_data( bs, sizeof(uint32_t) ) )
+                return -1;
+            box->version = lsmash_bs_get_byte( bs );
+            box->flags   = lsmash_bs_get_be24( bs );
+            break;
+        default :
+            break;
+    }
+    return 0;
+}
+
+static void isom_basebox_common_copy( isom_box_t *dst, isom_box_t *src )
+{
+    dst->parent   = src->parent;
+    dst->manager  = src->manager;
+    dst->size     = src->size;
+    dst->type     = src->type;
+    dst->usertype = src->usertype;
+}
+
+static void isom_fullbox_common_copy( isom_box_t *dst, isom_box_t *src )
+{
+    dst->parent   = src->parent;
+    dst->manager  = src->manager;
+    dst->size     = src->size;
+    dst->type     = src->type;
+    dst->usertype = src->usertype;
+    dst->version  = src->version;
+    dst->flags    = src->flags;
+}
+
+static void isom_box_common_copy( void *dst, void *src )
+{
+    if( src && ((isom_box_t *)src)->type == ISOM_BOX_TYPE_STSD )
+    {
+        isom_basebox_common_copy( (isom_box_t *)dst, (isom_box_t *)src );
+        return;
+    }
+    switch( ((isom_box_t *)src)->type )
+    {
+        case ISOM_FULLBOX_CASE :
+            isom_fullbox_common_copy( (isom_box_t *)dst, (isom_box_t *)src );
+            break;
+        default :
+            isom_basebox_common_copy( (isom_box_t *)dst, (isom_box_t *)src );
+            break;
+    }
+}
+
+static void isom_read_box_rest( lsmash_bs_t *bs, isom_box_t *box )
+{
+    if( lsmash_bs_read_data( bs, box->size - lsmash_bs_get_pos( bs ) ) )
+        return;
+    if( box->size != bs->store )  /* not match size */
+        bs->error = 1;
+}
+
+static void isom_skip_box_rest( lsmash_bs_t *bs, isom_box_t *box )
+{
+    fseek( bs->stream, box->size - lsmash_bs_get_pos( bs ), SEEK_CUR );
+}
+
+static int isom_read_children( isom_root_t *root, isom_box_t *box, void *parent, int level )
+{
+    int ret;
+    lsmash_bs_t *bs = root->bs;
+    isom_box_t *parent_box = (isom_box_t *)parent;
+    uint64_t parent_pos = lsmash_bs_get_pos( bs );
+    while( !(ret = isom_read_box( root, box, parent_box, parent_pos, level )) )
+    {
+        parent_pos += box->size;
+        if( parent_box->size <= parent_pos || bs->error )
+            break;
+    }
+    box->size = parent_pos;    /* for ROOT size */
+    return ret;
+}
+
+static int isom_read_unknown_box( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    isom_box_t *unknown = malloc( sizeof(isom_box_t) );
+    if( !unknown )
+        return -1;
+    memset( unknown, 0, sizeof(isom_box_t) );
+    lsmash_bs_t *bs = root->bs;
+    isom_skip_box_rest( bs, box );
+    unknown->parent = parent;
+    unknown->size = box->size;
+    unknown->type = box->type;
+    unknown->manager = 0x03;   /* add unknown box flag + free flag */
+    if( isom_add_print_func( root, unknown, level ) )
+    {
+        free( unknown );
+        return -1;
+    }
+    return 0;
+}
+
+static int isom_read_ftyp( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( !!parent->type )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( ftyp, parent, box->type );
+    ((isom_root_t *)parent)->ftyp = ftyp;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    ftyp->major_brand              = lsmash_bs_get_be32( bs );
+    ftyp->minor_version            = lsmash_bs_get_be32( bs );
+    uint64_t pos = lsmash_bs_get_pos( bs );
+    ftyp->brand_count = box->size > pos ? (box->size - pos) / sizeof(uint32_t) : 0;
+    ftyp->compatible_brands = ftyp->brand_count ? malloc( ftyp->brand_count * sizeof(uint32_t) ) : NULL;
+    if( !ftyp->compatible_brands )
+        return -1;
+    for( uint32_t i = 0; i < ftyp->brand_count; i++ )
+        ftyp->compatible_brands[i] = lsmash_bs_get_be32( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( ftyp, box );
+    return isom_add_print_func( root, ftyp, level );
+}
+
+static int isom_read_moov( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( !!parent->type )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( moov, parent, box->type );
+    ((isom_root_t *)parent)->moov = moov;
+    isom_box_common_copy( moov, box );
+    if( isom_add_print_func( root, moov, level ) )
+        return -1;
+    return isom_read_children( root, box, moov, level );
+}
+
+static int isom_read_mvhd( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_MOOV )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( mvhd, parent, box->type );
+    ((isom_moov_t *)parent)->mvhd = mvhd;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    if( box->version )
+    {
+        mvhd->creation_time     = lsmash_bs_get_be64( bs );
+        mvhd->modification_time = lsmash_bs_get_be64( bs );
+        mvhd->timescale         = lsmash_bs_get_be32( bs );
+        mvhd->duration          = lsmash_bs_get_be64( bs );
+    }
+    else
+    {
+        mvhd->creation_time     = lsmash_bs_get_be32( bs );
+        mvhd->modification_time = lsmash_bs_get_be32( bs );
+        mvhd->timescale         = lsmash_bs_get_be32( bs );
+        mvhd->duration          = lsmash_bs_get_be32( bs );
+    }
+    mvhd->rate              = lsmash_bs_get_be32( bs );
+    mvhd->volume            = lsmash_bs_get_be16( bs );
+    mvhd->reserved          = lsmash_bs_get_be16( bs );
+    mvhd->preferredLong[0]  = lsmash_bs_get_be32( bs );
+    mvhd->preferredLong[1]  = lsmash_bs_get_be32( bs );
+    for( int i = 0; i < 9; i++ )
+        mvhd->matrix[i]     = lsmash_bs_get_be32( bs );
+    mvhd->previewTime       = lsmash_bs_get_be32( bs );
+    mvhd->previewDuration   = lsmash_bs_get_be32( bs );
+    mvhd->posterTime        = lsmash_bs_get_be32( bs );
+    mvhd->selectionTime     = lsmash_bs_get_be32( bs );
+    mvhd->selectionDuration = lsmash_bs_get_be32( bs );
+    mvhd->currentTime       = lsmash_bs_get_be32( bs );
+    mvhd->next_track_ID     = lsmash_bs_get_be32( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( mvhd, box );
+    return isom_add_print_func( root, mvhd, level );
+}
+
+static int isom_read_iods( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_MOOV )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_box_t *iods = malloc( sizeof(isom_box_t) );
+    if( !iods )
+        return -1;
+    memset( iods, 0, sizeof(isom_box_t) );
+    lsmash_bs_t *bs = root->bs;
+    isom_skip_box_rest( bs, box );
+    box->manager |= 0x02;       /* add free flag */
+    isom_box_common_copy( iods, box );
+    if( isom_add_print_func( root, iods, level ) )
+    {
+        free( iods );
+        return -1;
+    }
+    return 0;
+}
+
+static int isom_read_esds( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    isom_box_t *esds = malloc( sizeof(isom_box_t) );
+    if( !esds )
+        return -1;
+    memset( esds, 0, sizeof(isom_box_t) );
+    lsmash_bs_t *bs = root->bs;
+    isom_skip_box_rest( bs, box );
+    box->manager |= 0x02;       /* add free flag */
+    isom_box_common_copy( esds, box );
+    if( isom_add_print_func( root, esds, level ) )
+    {
+        free( esds );
+        return -1;
+    }
+    return 0;
+}
+
+static int isom_read_trak( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_MOOV )
+        return isom_read_unknown_box( root, box, parent, level );
+    lsmash_entry_list_t *list = ((isom_moov_t *)parent)->trak_list;
+    if( !list )
+    {
+        list = lsmash_create_entry_list();
+        if( !list )
+            return -1;
+    }
+    isom_trak_entry_t *trak = malloc( sizeof(isom_trak_entry_t) );
+    if( !trak )
+        return -1;
+    memset( trak, 0, sizeof(isom_trak_entry_t) );
+    isom_cache_t *cache = malloc( sizeof(isom_cache_t) );
+    if( !cache )
+    {
+        free( trak );
+        return -1;
+    }
+    memset( cache, 0, sizeof(isom_chunk_t) );
+    trak->root = root;
+    trak->cache = cache;
+    if( lsmash_add_entry( list, trak ) )
+    {
+        free( trak->cache );
+        free( trak );
+        return -1;
+    }
+    box->parent = parent;
+    isom_box_common_copy( trak, box );
+    if( isom_add_print_func( root, trak, level ) )
+        return -1;
+    return isom_read_children( root, box, trak, level );
+}
+
+static int isom_read_tkhd( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_TRAK )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( tkhd, parent, box->type );
+    ((isom_trak_entry_t *)parent)->tkhd = tkhd;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    if( box->version )
+    {
+        tkhd->creation_time     = lsmash_bs_get_be64( bs );
+        tkhd->modification_time = lsmash_bs_get_be64( bs );
+        tkhd->track_ID          = lsmash_bs_get_be32( bs );
+        tkhd->reserved1         = lsmash_bs_get_be32( bs );
+        tkhd->duration          = lsmash_bs_get_be64( bs );
+    }
+    else
+    {
+        tkhd->creation_time     = lsmash_bs_get_be32( bs );
+        tkhd->modification_time = lsmash_bs_get_be32( bs );
+        tkhd->track_ID          = lsmash_bs_get_be32( bs );
+        tkhd->reserved1         = lsmash_bs_get_be32( bs );
+        tkhd->duration          = lsmash_bs_get_be32( bs );
+    }
+    tkhd->reserved2[0]    = lsmash_bs_get_be32( bs );
+    tkhd->reserved2[1]    = lsmash_bs_get_be32( bs );
+    tkhd->layer           = lsmash_bs_get_be16( bs );
+    tkhd->alternate_group = lsmash_bs_get_be16( bs );
+    tkhd->volume          = lsmash_bs_get_be16( bs );
+    tkhd->reserved3       = lsmash_bs_get_be16( bs );
+    for( int i = 0; i < 9; i++ )
+        tkhd->matrix[i]   = lsmash_bs_get_be32( bs );
+    tkhd->width           = lsmash_bs_get_be32( bs );
+    tkhd->height          = lsmash_bs_get_be32( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( tkhd, box );
+    return isom_add_print_func( root, tkhd, level );
+}
+
+static int isom_read_tapt( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_TRAK )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( tapt, parent, box->type );
+    ((isom_trak_entry_t *)parent)->tapt = tapt;
+    isom_box_common_copy( tapt, box );
+    if( isom_add_print_func( root, tapt, level ) )
+        return -1;
+    return isom_read_children( root, box, tapt, level );
+}
+
+static int isom_read_clef( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != QT_BOX_TYPE_TAPT )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( clef, parent, box->type );
+    ((isom_tapt_t *)parent)->clef = clef;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    clef->width  = lsmash_bs_get_be32( bs );
+    clef->height = lsmash_bs_get_be32( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( clef, box );
+    return isom_add_print_func( root, clef, level );
+}
+
+static int isom_read_prof( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != QT_BOX_TYPE_TAPT )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( prof, parent, box->type );
+    ((isom_tapt_t *)parent)->prof = prof;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    prof->width  = lsmash_bs_get_be32( bs );
+    prof->height = lsmash_bs_get_be32( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( prof, box );
+    return isom_add_print_func( root, prof, level );
+}
+
+static int isom_read_enof( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != QT_BOX_TYPE_TAPT )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( enof, parent, box->type );
+    ((isom_tapt_t *)parent)->enof = enof;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    enof->width  = lsmash_bs_get_be32( bs );
+    enof->height = lsmash_bs_get_be32( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( enof, box );
+    return isom_add_print_func( root, enof, level );
+}
+
+static int isom_read_edts( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_TRAK )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( edts, parent, box->type );
+    ((isom_trak_entry_t *)parent)->edts = edts;
+    isom_box_common_copy( edts, box );
+    if( isom_add_print_func( root, edts, level ) )
+        return -1;
+    return isom_read_children( root, box, edts, level );
+}
+
+static int isom_read_elst( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_EDTS )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_list_box( elst, parent, box->type );
+    ((isom_edts_t *)parent)->elst = elst;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    uint32_t entry_count = lsmash_bs_get_be32( bs );
+    uint64_t pos;
+    for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+    {
+        isom_elst_entry_t *data = malloc( sizeof(isom_elst_entry_t) );
+        if( !data || lsmash_add_entry( elst->list, data ) )
+        {
+            if( data )
+                free( data );
+            return -1;
+        }
+        memset( data, 0, sizeof(isom_elst_entry_t) );
+        if( box->version == 1 )
+        {
+            data->segment_duration = lsmash_bs_get_be64( bs );
+            data->media_time       = lsmash_bs_get_be64( bs );
+        }
+        else
+        {
+            data->segment_duration = lsmash_bs_get_be32( bs );
+            data->media_time       = lsmash_bs_get_be32( bs );
+        }
+        data->media_rate = lsmash_bs_get_be32( bs );
+    }
+    if( entry_count != elst->list->entry_count || box->size < pos )
+        printf( "[elst] box has extra bytes: %"PRId64"\n", pos - box->size );
+    box->size = pos;
+    isom_box_common_copy( elst, box );
+    return isom_add_print_func( root, elst, level );
+}
+
+static int isom_read_tref( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_TRAK )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( tref, parent, box->type );
+    ((isom_trak_entry_t *)parent)->tref = tref;
+    isom_box_common_copy( tref, box );
+    if( isom_add_print_func( root, tref, level ) )
+        return -1;
+    return isom_read_children( root, box, tref, level );
+}
+
+static int isom_read_track_reference_type( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_TREF )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_tref_type_t *ref = NULL;
+    isom_tref_t *tref = (isom_tref_t *)parent;
+    if( !tref->ref && !tref->type_count )
+        ref = malloc( sizeof(isom_tref_type_t) );
+    else
+        ref = realloc( tref->ref, (tref->type_count + 1) * sizeof(isom_tref_type_t) );
+    if( !ref )
+        return -1;
+    tref->ref = ref;
+    ref += tref->type_count++;      /* move the newest ref and update type_count */
+    memset( ref, 0, sizeof(isom_tref_type_t) );
+    lsmash_bs_t *bs = root->bs;
+    ref->ref_count = (box->size - lsmash_bs_get_pos( bs ) ) / sizeof(uint32_t);
+    ref->track_ID = malloc( ref->ref_count * sizeof(uint32_t) );
+    if( !ref->track_ID )
+    {
+        free( tref->ref );
+        tref->ref = NULL;
+        return -1;
+    }
+    isom_read_box_rest( bs, box );
+    for( uint32_t i = 0; i < ref->ref_count; i++ )
+        ref->track_ID[i] = lsmash_bs_get_be32( bs );
+    uint64_t pos = lsmash_bs_get_pos( bs );
+    if( box->size != pos )
+        printf( "[%s] box has extra bytes: %"PRId64"\n", isom_4cc2str( box->type ), box->size - pos );
+    box->size = pos;
+    isom_box_common_copy( ref, box );
+    return isom_add_print_func( root, ref, level );
+}
+
+static int isom_read_mdia( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_TRAK )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( mdia, parent, box->type );
+    ((isom_trak_entry_t *)parent)->mdia = mdia;
+    isom_box_common_copy( mdia, box );
+    if( isom_add_print_func( root, mdia, level ) )
+        return -1;
+    return isom_read_children( root, box, mdia, level );
+}
+
+static int isom_read_mdhd( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_MDIA )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( mdhd, parent, box->type );
+    ((isom_mdia_t *)parent)->mdhd = mdhd;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    if( box->version )
+    {
+        mdhd->creation_time     = lsmash_bs_get_be64( bs );
+        mdhd->modification_time = lsmash_bs_get_be64( bs );
+        mdhd->timescale         = lsmash_bs_get_be32( bs );
+        mdhd->duration          = lsmash_bs_get_be64( bs );
+    }
+    else
+    {
+        mdhd->creation_time     = lsmash_bs_get_be32( bs );
+        mdhd->modification_time = lsmash_bs_get_be32( bs );
+        mdhd->timescale         = lsmash_bs_get_be32( bs );
+        mdhd->duration          = lsmash_bs_get_be32( bs );
+    }
+    mdhd->language = lsmash_bs_get_be16( bs );
+    mdhd->quality  = lsmash_bs_get_be16( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( mdhd, box );
+    return isom_add_print_func( root, mdhd, level );
+}
+
+static int isom_read_hdlr( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_MDIA &&
+        /*parent->type != ISOM_BOX_TYPE_META &&*/
+        parent->type != ISOM_BOX_TYPE_MINF )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( hdlr, parent, box->type );
+    if( parent->type == ISOM_BOX_TYPE_MDIA )
+        ((isom_mdia_t *)parent)->hdlr = hdlr;
+    else
+        ((isom_minf_t *)parent)->hdlr = hdlr;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    hdlr->componentType         = lsmash_bs_get_be32( bs );
+    hdlr->componentSubtype      = lsmash_bs_get_be32( bs );
+    hdlr->componentManufacturer = lsmash_bs_get_be32( bs );
+    hdlr->componentFlags        = lsmash_bs_get_be32( bs );
+    hdlr->componentFlagsMask    = lsmash_bs_get_be32( bs );
+    uint64_t pos = lsmash_bs_get_pos( bs );
+    hdlr->componentName_length = box->size - pos;
+    if( hdlr->componentName_length )
+    {
+        hdlr->componentName = malloc( hdlr->componentName_length );
+        if( !hdlr->componentName )
+            return -1;
+        for( uint32_t i = 0; pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+            hdlr->componentName[i++] = lsmash_bs_get_byte( bs );
+    }
+    box->size = pos;
+    isom_box_common_copy( hdlr, box );
+    return isom_add_print_func( root, hdlr, level );
+}
+
+static int isom_read_minf( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_MDIA )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( minf, parent, box->type );
+    ((isom_mdia_t *)parent)->minf = minf;
+    isom_box_common_copy( minf, box );
+    if( isom_add_print_func( root, minf, level ) )
+        return -1;
+    return isom_read_children( root, box, (isom_box_t *)minf, level );
+}
+
+static int isom_read_vmhd( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_MINF )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( vmhd, parent, box->type );
+    ((isom_minf_t *)parent)->vmhd = vmhd;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    vmhd->graphicsmode   = lsmash_bs_get_be16( bs );
+    for( int i = 0; i < 3; i++ )
+        vmhd->opcolor[i] = lsmash_bs_get_be16( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( vmhd, box );
+    return isom_add_print_func( root, vmhd, level );
+}
+
+static int isom_read_smhd( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_MINF )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( smhd, parent, box->type );
+    ((isom_minf_t *)parent)->smhd = smhd;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    smhd->balance  = lsmash_bs_get_be16( bs );
+    smhd->reserved = lsmash_bs_get_be16( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( smhd, box );
+    return isom_add_print_func( root, smhd, level );
+}
+
+static int isom_read_hmhd( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_MINF )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( hmhd, parent, box->type );
+    ((isom_minf_t *)parent)->hmhd = hmhd;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    hmhd->maxPDUsize = lsmash_bs_get_be16( bs );
+    hmhd->avgPDUsize = lsmash_bs_get_be16( bs );
+    hmhd->maxbitrate = lsmash_bs_get_be32( bs );
+    hmhd->avgbitrate = lsmash_bs_get_be32( bs );
+    hmhd->reserved   = lsmash_bs_get_be32( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( hmhd, box );
+    return isom_add_print_func( root, hmhd, level );
+}
+
+static int isom_read_nmhd( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_MINF )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( nmhd, parent, box->type );
+    ((isom_minf_t *)parent)->nmhd = nmhd;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( nmhd, box );
+    return isom_add_print_func( root, nmhd, level );
+}
+
+static int isom_read_gmhd( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_MINF )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( gmhd, parent, box->type );
+    ((isom_minf_t *)parent)->gmhd = gmhd;
+    isom_box_common_copy( gmhd, box );
+    if( isom_add_print_func( root, gmhd, level ) )
+        return -1;
+    return isom_read_children( root, box, gmhd, level );
+}
+
+static int isom_read_gmin( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != QT_BOX_TYPE_GMHD )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( gmin, parent, box->type );
+    ((isom_gmhd_t *)parent)->gmin = gmin;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    gmin->graphicsmode   = lsmash_bs_get_be16( bs );
+    for( int i = 0; i < 3; i++ )
+        gmin->opcolor[i] = lsmash_bs_get_be16( bs );
+    gmin->balance        = lsmash_bs_get_be16( bs );
+    gmin->reserved       = lsmash_bs_get_be16( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( gmin, box );
+    return isom_add_print_func( root, gmin, level );
+}
+
+static int isom_read_text( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != QT_BOX_TYPE_GMHD )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( text, parent, box->type );
+    ((isom_gmhd_t *)parent)->text = text;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    for( int i = 0; i < 9; i++ )
+        text->matrix[i] = lsmash_bs_get_be32( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( text, box );
+    return isom_add_print_func( root, text, level );
+}
+
+static int isom_read_dinf( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_MINF )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( dinf, parent, box->type );
+    ((isom_minf_t *)parent)->dinf = dinf;
+    isom_box_common_copy( dinf, box );
+    if( isom_add_print_func( root, dinf, level ) )
+        return -1;
+    return isom_read_children( root, box, (isom_box_t *)dinf, level );
+}
+
+static int isom_read_dref( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_DINF /*&& parent->type != ISOM_BOX_TYPE_META*/ )
+        return isom_read_unknown_box( root, box, parent, level );
+   isom_create_list_box( dref, parent, box->type );
+    ((isom_dinf_t *)parent)->dref = dref;
+    lsmash_bs_t *bs = root->bs;
+    if( lsmash_bs_read_data( bs, sizeof(uint32_t) ) )
+        return -1;
+    dref->list->entry_count = lsmash_bs_get_be32( bs );
+    isom_box_common_copy( dref, box );
+    if( isom_add_print_func( root, dref, level ) )
+        return -1;
+    return isom_read_children( root, box, dref, level );
+}
+
+static int isom_read_url( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_DREF )
+        return isom_read_unknown_box( root, box, parent, level );
+    lsmash_entry_list_t *list = ((isom_dref_t *)parent)->list;
+    if( !list )
+        return -1;
+    isom_dref_entry_t *url = malloc( sizeof(isom_dref_entry_t) );
+    if( !url )
+        return -1;
+    memset( url, 0, sizeof(isom_dref_entry_t) );
+    if( !list->head )
+        list->entry_count = 0;      /* discard entry_count gotten from the file */
+    if( lsmash_add_entry( list, url ) )
+    {
+        free( url );
+        return -1;
+    }
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    uint64_t pos = lsmash_bs_get_pos( bs );
+    url->location_length = box->size - pos;
+    if( url->location_length )
+    {
+        url->location = malloc( url->location_length );
+        if( !url->location )
+            return -1;
+        for( uint32_t i = 0; pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+            url->location[i++] = lsmash_bs_get_byte( bs );
+    }
+    box->size = pos;
+    box->parent = parent;
+    isom_box_common_copy( url, box );
+    return isom_add_print_func( root, url, level );
+}
+
+static int isom_read_stbl( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_MINF )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( stbl, parent, box->type );
+    ((isom_minf_t *)parent)->stbl = stbl;
+    isom_box_common_copy( stbl, box );
+    if( isom_add_print_func( root, stbl, level ) )
+        return -1;
+    return isom_read_children( root, box, stbl, level );
+}
+
+static int isom_read_stsd( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_STBL )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_list_box( stsd, parent, box->type );
+    ((isom_stbl_t *)parent)->stsd = stsd;
+    lsmash_bs_t *bs = root->bs;
+    if( lsmash_bs_read_data( bs, sizeof(uint32_t) ) )
+        return -1;
+    stsd->list->entry_count = lsmash_bs_get_be32( bs );
+    isom_box_common_copy( stsd, box );
+    if( isom_add_print_func( root, stsd, level ) )
+        return -1;
+    return isom_read_children( root, box, (isom_box_t *)stsd, level );
+}
+
+static void *isom_sample_description_alloc( uint32_t sample_type )
+{
+    switch( sample_type )
+    {
+        case ISOM_CODEC_TYPE_AVC1_VIDEO :
+        case ISOM_CODEC_TYPE_AVC2_VIDEO :
+        case ISOM_CODEC_TYPE_AVCP_VIDEO :
+        case ISOM_CODEC_TYPE_MVC1_VIDEO :
+        case ISOM_CODEC_TYPE_MVC2_VIDEO :
+            return malloc( sizeof(isom_avc_entry_t) );
+        case ISOM_CODEC_TYPE_MP4V_VIDEO :
+            return malloc( sizeof(isom_mp4v_entry_t) );
+        case ISOM_CODEC_TYPE_DRAC_VIDEO :
+        case ISOM_CODEC_TYPE_ENCV_VIDEO :
+        case ISOM_CODEC_TYPE_MJP2_VIDEO :
+        case ISOM_CODEC_TYPE_S263_VIDEO :
+        case ISOM_CODEC_TYPE_SVC1_VIDEO :
+        case ISOM_CODEC_TYPE_VC_1_VIDEO :
+            return malloc( sizeof(isom_visual_entry_t) );
+        case ISOM_CODEC_TYPE_MP4A_AUDIO :
+            return malloc( sizeof(isom_mp4a_entry_t) );
+        case ISOM_CODEC_TYPE_AC_3_AUDIO :
+        case ISOM_CODEC_TYPE_ALAC_AUDIO :
+        case ISOM_CODEC_TYPE_DRA1_AUDIO :
+        case ISOM_CODEC_TYPE_DTSC_AUDIO :
+        case ISOM_CODEC_TYPE_DTSH_AUDIO :
+        case ISOM_CODEC_TYPE_DTSL_AUDIO :
+        case ISOM_CODEC_TYPE_DTSE_AUDIO :
+        case ISOM_CODEC_TYPE_EC_3_AUDIO :
+        case ISOM_CODEC_TYPE_ENCA_AUDIO :
+        case ISOM_CODEC_TYPE_G719_AUDIO :
+        case ISOM_CODEC_TYPE_G726_AUDIO :
+        case ISOM_CODEC_TYPE_M4AE_AUDIO :
+        case ISOM_CODEC_TYPE_MLPA_AUDIO :
+        case ISOM_CODEC_TYPE_RAW_AUDIO  :
+        case ISOM_CODEC_TYPE_SAMR_AUDIO :
+        case ISOM_CODEC_TYPE_SAWB_AUDIO :
+        case ISOM_CODEC_TYPE_SAWP_AUDIO :
+        case ISOM_CODEC_TYPE_SEVC_AUDIO :
+        case ISOM_CODEC_TYPE_SQCP_AUDIO :
+        case ISOM_CODEC_TYPE_SSMV_AUDIO :
+        case ISOM_CODEC_TYPE_TWOS_AUDIO :
+        case QT_CODEC_TYPE_QDM2_AUDIO :
+        case QT_CODEC_TYPE_QDMC_AUDIO :
+        case QT_CODEC_TYPE_QCLP_AUDIO :
+        case QT_CODEC_TYPE_AGSM_AUDIO :
+        case QT_CODEC_TYPE_ALAW_AUDIO :
+        case QT_CODEC_TYPE_DVI_AUDIO  :
+        case QT_CODEC_TYPE_FL32_AUDIO :
+        case QT_CODEC_TYPE_FL64_AUDIO :
+        case QT_CODEC_TYPE_IMA4_AUDIO :
+        case QT_CODEC_TYPE_IN24_AUDIO :
+        case QT_CODEC_TYPE_IN32_AUDIO :
+        case QT_CODEC_TYPE_LPCM_AUDIO :
+        case QT_CODEC_TYPE_ULAW_AUDIO :
+        case QT_CODEC_TYPE_VDVA_AUDIO :
+            return malloc( sizeof(isom_audio_entry_t) );
+        case ISOM_CODEC_TYPE_TX3G_TEXT :
+            return malloc( sizeof(isom_tx3g_entry_t) );
+        case QT_CODEC_TYPE_TEXT_TEXT :
+            return malloc( sizeof(isom_text_entry_t) );
+        default :
+            return NULL;
+    }
+}
+
+static void isom_sample_description_init( void *sample, uint32_t sample_type )
+{
+    switch( sample_type )
+    {
+        case ISOM_CODEC_TYPE_AVC1_VIDEO :
+        case ISOM_CODEC_TYPE_AVC2_VIDEO :
+        case ISOM_CODEC_TYPE_AVCP_VIDEO :
+        case ISOM_CODEC_TYPE_MVC1_VIDEO :
+        case ISOM_CODEC_TYPE_MVC2_VIDEO :
+            memset( sample, 0, sizeof(isom_avc_entry_t) );
+            break;
+        case ISOM_CODEC_TYPE_MP4V_VIDEO :
+            memset( sample, 0, sizeof(isom_mp4v_entry_t) );
+            break;
+        case ISOM_CODEC_TYPE_DRAC_VIDEO :
+        case ISOM_CODEC_TYPE_ENCV_VIDEO :
+        case ISOM_CODEC_TYPE_MJP2_VIDEO :
+        case ISOM_CODEC_TYPE_S263_VIDEO :
+        case ISOM_CODEC_TYPE_SVC1_VIDEO :
+        case ISOM_CODEC_TYPE_VC_1_VIDEO :
+            memset( sample, 0, sizeof(isom_visual_entry_t) );
+            break;
+        case ISOM_CODEC_TYPE_MP4A_AUDIO :
+            memset( sample, 0, sizeof(isom_mp4a_entry_t) );
+            break;
+        case ISOM_CODEC_TYPE_AC_3_AUDIO :
+        case ISOM_CODEC_TYPE_ALAC_AUDIO :
+        case ISOM_CODEC_TYPE_DRA1_AUDIO :
+        case ISOM_CODEC_TYPE_DTSC_AUDIO :
+        case ISOM_CODEC_TYPE_DTSH_AUDIO :
+        case ISOM_CODEC_TYPE_DTSL_AUDIO :
+        case ISOM_CODEC_TYPE_DTSE_AUDIO :
+        case ISOM_CODEC_TYPE_EC_3_AUDIO :
+        case ISOM_CODEC_TYPE_ENCA_AUDIO :
+        case ISOM_CODEC_TYPE_G719_AUDIO :
+        case ISOM_CODEC_TYPE_G726_AUDIO :
+        case ISOM_CODEC_TYPE_M4AE_AUDIO :
+        case ISOM_CODEC_TYPE_MLPA_AUDIO :
+        case ISOM_CODEC_TYPE_RAW_AUDIO  :
+        case ISOM_CODEC_TYPE_SAMR_AUDIO :
+        case ISOM_CODEC_TYPE_SAWB_AUDIO :
+        case ISOM_CODEC_TYPE_SAWP_AUDIO :
+        case ISOM_CODEC_TYPE_SEVC_AUDIO :
+        case ISOM_CODEC_TYPE_SQCP_AUDIO :
+        case ISOM_CODEC_TYPE_SSMV_AUDIO :
+        case ISOM_CODEC_TYPE_TWOS_AUDIO :
+        case QT_CODEC_TYPE_QDM2_AUDIO :
+        case QT_CODEC_TYPE_QDMC_AUDIO :
+        case QT_CODEC_TYPE_QCLP_AUDIO :
+        case QT_CODEC_TYPE_AGSM_AUDIO :
+        case QT_CODEC_TYPE_ALAW_AUDIO :
+        case QT_CODEC_TYPE_DVI_AUDIO  :
+        case QT_CODEC_TYPE_FL32_AUDIO :
+        case QT_CODEC_TYPE_FL64_AUDIO :
+        case QT_CODEC_TYPE_IMA4_AUDIO :
+        case QT_CODEC_TYPE_IN24_AUDIO :
+        case QT_CODEC_TYPE_IN32_AUDIO :
+        case QT_CODEC_TYPE_LPCM_AUDIO :
+        case QT_CODEC_TYPE_ULAW_AUDIO :
+        case QT_CODEC_TYPE_VDVA_AUDIO :
+            memset( sample, 0, sizeof(isom_audio_entry_t) );
+            break;
+        case ISOM_CODEC_TYPE_TX3G_TEXT :
+            memset( sample, 0, sizeof(isom_tx3g_entry_t) );
+            break;
+        case QT_CODEC_TYPE_TEXT_TEXT :
+            memset( sample, 0, sizeof(isom_text_entry_t) );
+            break;
+        default :
+            break;
+    }
+}
+
+static void *isom_add_description( uint32_t sample_type, lsmash_entry_list_t *list )
+{
+    if( !list )
+        return NULL;
+    void *sample = isom_sample_description_alloc( sample_type );
+    if( !sample )
+        return NULL;
+    isom_sample_description_init( sample, sample_type );
+    if( !list->head )
+        list->entry_count = 0;      /* discard entry_count gotten from the file */
+    if( lsmash_add_entry( list, sample ) )
+    {
+        free( sample );
+        return NULL;
+    }
+    return sample;
+}
+
+static int isom_read_visual_description( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_STSD )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_visual_entry_t *visual = (isom_visual_entry_t *)isom_add_description( box->type, ((isom_stsd_t *)parent)->list );
+    if( !visual )
+        return -1;
+    lsmash_bs_t *bs = root->bs;
+    if( lsmash_bs_read_data( bs, 78 ) )
+        return -1;
+    for( int i = 0; i < 6; i++ )
+        visual->reserved[i]       = lsmash_bs_get_byte( bs );
+    visual->data_reference_index  = lsmash_bs_get_be16( bs );
+    visual->version               = lsmash_bs_get_be16( bs );
+    visual->revision_level        = lsmash_bs_get_be16( bs );
+    visual->vendor                = lsmash_bs_get_be32( bs );
+    visual->temporalQuality       = lsmash_bs_get_be32( bs );
+    visual->spatialQuality        = lsmash_bs_get_be32( bs );
+    visual->width                 = lsmash_bs_get_be16( bs );
+    visual->height                = lsmash_bs_get_be16( bs );
+    visual->horizresolution       = lsmash_bs_get_be32( bs );
+    visual->vertresolution        = lsmash_bs_get_be32( bs );
+    visual->dataSize              = lsmash_bs_get_be32( bs );
+    visual->frame_count           = lsmash_bs_get_be16( bs );
+    for( int i = 0; i < 32; i++ )
+        visual->compressorname[i] = lsmash_bs_get_byte( bs );
+    visual->depth                 = lsmash_bs_get_be16( bs );
+    visual->color_table_ID        = lsmash_bs_get_be16( bs );
+    box->parent = parent;
+    isom_box_common_copy( visual, box );
+    if( isom_add_print_func( root, visual, level ) )
+        return -1;
+    return isom_read_children( root, box, visual, level );
+}
+
+static int isom_read_btrt( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    isom_create_box( btrt, parent, box->type );
+    ((isom_avc_entry_t *)parent)->btrt = btrt;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    btrt->bufferSizeDB = lsmash_bs_get_be32( bs );
+    btrt->maxBitrate   = lsmash_bs_get_be32( bs );
+    btrt->avgBitrate   = lsmash_bs_get_be32( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( btrt, box );
+    return isom_add_print_func( root, btrt, level );
+}
+
+static int isom_read_clap( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    isom_create_box( clap, parent, box->type );
+    ((isom_visual_entry_t *)parent)->clap = clap;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    clap->cleanApertureWidthN  = lsmash_bs_get_be32( bs );
+    clap->cleanApertureWidthD  = lsmash_bs_get_be32( bs );
+    clap->cleanApertureHeightN = lsmash_bs_get_be32( bs );
+    clap->cleanApertureHeightD = lsmash_bs_get_be32( bs );
+    clap->horizOffN            = lsmash_bs_get_be32( bs );
+    clap->horizOffD            = lsmash_bs_get_be32( bs );
+    clap->vertOffN             = lsmash_bs_get_be32( bs );
+    clap->vertOffD             = lsmash_bs_get_be32( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( clap, box );
+    return isom_add_print_func( root, clap, level );
+}
+
+static int isom_read_pasp( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    isom_create_box( pasp, parent, box->type );
+    ((isom_visual_entry_t *)parent)->pasp = pasp;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    pasp->hSpacing = lsmash_bs_get_be32( bs );
+    pasp->vSpacing = lsmash_bs_get_be32( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( pasp, box );
+    return isom_add_print_func( root, pasp, level );
+}
+
+static int isom_read_colr( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    isom_create_box( colr, parent, box->type );
+    ((isom_visual_entry_t *)parent)->colr = colr;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    colr->color_parameter_type = lsmash_bs_get_be32( bs );
+    if( colr->color_parameter_type == QT_COLOR_PARAMETER_TYPE_NCLC )
+    {
+        colr->primaries_index         = lsmash_bs_get_be16( bs );
+        colr->transfer_function_index = lsmash_bs_get_be16( bs );
+        colr->matrix_index            = lsmash_bs_get_be16( bs );
+    }
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( colr, box );
+    return isom_add_print_func( root, colr, level );
+}
+
+static int isom_read_stsl( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    isom_create_box( stsl, parent, box->type );
+    ((isom_visual_entry_t *)parent)->stsl = stsl;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    stsl->constraint_flag  = lsmash_bs_get_byte( bs );
+    stsl->scale_method     = lsmash_bs_get_byte( bs );
+    stsl->display_center_x = lsmash_bs_get_be16( bs );
+    stsl->display_center_y = lsmash_bs_get_be16( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( stsl, box );
+    return isom_add_print_func( root, stsl, level );
+}
+
+static int isom_read_avcC_ps( lsmash_bs_t *bs, lsmash_entry_list_t *list, uint8_t entry_count )
+{
+    if( !list )
+        return -1;
+    for( uint8_t i = 0; i < entry_count; i++ )
+    {
+        isom_avcC_ps_entry_t *data = malloc( sizeof(isom_avcC_ps_entry_t) );
+        if( !data || lsmash_add_entry( list, data ) )
+            return -1;      /* don't free list, here */
+        data->parameterSetLength  = lsmash_bs_get_be16( bs );
+        data->parameterSetNALUnit = lsmash_bs_get_bytes( bs, data->parameterSetLength );
+        if( !data->parameterSetNALUnit )
+            return -1;      /* don't free list, here */
+    }
+    return 0;
+}
+
+static int isom_read_avcC( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    isom_create_box( avcC, parent, box->type );
+    isom_avc_entry_t *avc = (isom_avc_entry_t *)parent;
+    avc->avcC = avcC;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    avcC->configurationVersion       = lsmash_bs_get_byte( bs );
+    avcC->AVCProfileIndication       = lsmash_bs_get_byte( bs );
+    avcC->profile_compatibility      = lsmash_bs_get_byte( bs );
+    avcC->AVCLevelIndication         = lsmash_bs_get_byte( bs );
+    avcC->lengthSizeMinusOne         = lsmash_bs_get_byte( bs );
+    avcC->numOfSequenceParameterSets = lsmash_bs_get_byte( bs );
+    if( avcC->numOfSequenceParameterSets & 0x1f )
+    {
+        avcC->sequenceParameterSets = lsmash_create_entry_list();
+        if( !avcC->sequenceParameterSets ||
+            isom_read_avcC_ps( bs, avcC->sequenceParameterSets, avcC->numOfSequenceParameterSets & 0x1f ) )
+            goto fail;
+    }
+    avcC->numOfPictureParameterSets  = lsmash_bs_get_byte( bs );
+    if( avcC->numOfPictureParameterSets )
+    {
+        avcC->pictureParameterSets = lsmash_create_entry_list();
+        if( !avcC->pictureParameterSets ||
+            isom_read_avcC_ps( bs, avcC->pictureParameterSets, avcC->numOfPictureParameterSets ) )
+            goto fail;
+    }
+    /* Note: there are too many files, in the world, that don't contain the following fields.*/
+    if( ISOM_REQUIRES_AVCC_EXTENSION( avcC->AVCProfileIndication ) && lsmash_bs_get_pos( bs ) < box->size )
+    {
+        avcC->chroma_format                = lsmash_bs_get_byte( bs );
+        avcC->bit_depth_luma_minus8        = lsmash_bs_get_byte( bs );
+        avcC->bit_depth_chroma_minus8      = lsmash_bs_get_byte( bs );
+        avcC->numOfSequenceParameterSetExt = lsmash_bs_get_byte( bs );
+        if( avcC->numOfSequenceParameterSetExt )
+        {
+            avcC->sequenceParameterSetExt = lsmash_create_entry_list();
+            if( !avcC->sequenceParameterSetExt ||
+                isom_read_avcC_ps( bs, avcC->sequenceParameterSetExt, avcC->numOfSequenceParameterSetExt ) )
+                goto fail;
+        }
+    }
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( avcC, box );
+    return isom_add_print_func( root, avcC, level );
+fail:
+    lsmash_remove_list( avcC->sequenceParameterSets,   isom_remove_avcC_ps );
+    lsmash_remove_list( avcC->pictureParameterSets,    isom_remove_avcC_ps );
+    lsmash_remove_list( avcC->sequenceParameterSetExt, isom_remove_avcC_ps );
+    free( avcC );
+    avc->avcC = NULL;
+    return -1;
+}
+
+static int isom_read_audio_description( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_STSD )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_audio_entry_t *audio = (isom_audio_entry_t *)isom_add_description( box->type, ((isom_stsd_t *)parent)->list );
+    if( !audio )
+        return -1;
+    lsmash_bs_t *bs = root->bs;
+    if( lsmash_bs_read_data( bs, 28 ) )
+        return -1;
+    for( int i = 0; i < 6; i++ )
+        audio->reserved[i]      = lsmash_bs_get_byte( bs );
+    audio->data_reference_index = lsmash_bs_get_be16( bs );
+    audio->version              = lsmash_bs_get_be16( bs );
+    audio->revision_level       = lsmash_bs_get_be16( bs );
+    audio->vendor               = lsmash_bs_get_be32( bs );
+    audio->channelcount         = lsmash_bs_get_be16( bs );
+    audio->samplesize           = lsmash_bs_get_be16( bs );
+    audio->compression_ID       = lsmash_bs_get_be16( bs );
+    audio->packet_size          = lsmash_bs_get_be16( bs );
+    audio->samplerate           = lsmash_bs_get_be32( bs );
+    if( audio->version == 1 )
+    {
+        if( lsmash_bs_read_data( bs, 16 ) )
+            return -1;
+        audio->samplesPerPacket = lsmash_bs_get_be32( bs );
+        audio->bytesPerPacket   = lsmash_bs_get_be32( bs );
+        audio->bytesPerFrame    = lsmash_bs_get_be32( bs );
+        audio->bytesPerSample   = lsmash_bs_get_be32( bs );
+    }
+    else if( audio->version == 2 )
+    {
+        if( lsmash_bs_read_data( bs, 36 ) )
+            return -1;
+        audio->sizeOfStructOnly              = lsmash_bs_get_be32( bs );
+        audio->audioSampleRate               = lsmash_bs_get_be64( bs );
+        audio->numAudioChannels              = lsmash_bs_get_be32( bs );
+        audio->always7F000000                = lsmash_bs_get_be32( bs );
+        audio->constBitsPerChannel           = lsmash_bs_get_be32( bs );
+        audio->formatSpecificFlags           = lsmash_bs_get_be32( bs );
+        audio->constBytesPerAudioPacket      = lsmash_bs_get_be32( bs );
+        audio->constLPCMFramesPerAudioPacket = lsmash_bs_get_be32( bs );
+    }
+    box->parent = parent;
+    isom_box_common_copy( audio, box );
+    if( isom_add_print_func( root, audio, level ) )
+        return -1;
+    return isom_read_children( root, box, audio, level );
+}
+
+static int isom_read_wave( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    isom_create_box( wave, parent, box->type );
+    ((isom_audio_entry_t *)parent)->wave = wave;
+    isom_box_common_copy( wave, box );
+    if( isom_add_print_func( root, wave, level ) )
+        return -1;
+    return isom_read_children( root, box, wave, level );
+}
+
+static int isom_read_frma( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != QT_BOX_TYPE_WAVE )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( frma, parent, box->type );
+    ((isom_wave_t *)parent)->frma = frma;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    frma->data_format = lsmash_bs_get_be32( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( frma, box );
+    return isom_add_print_func( root, frma, level );
+}
+
+static int isom_read_audio_specific( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != QT_BOX_TYPE_WAVE )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_box_t *specific = malloc( sizeof(isom_box_t) );
+    if( !specific )
+        return -1;
+    memset( specific, 0, sizeof(isom_box_t) );
+    lsmash_bs_t *bs = root->bs;
+    isom_skip_box_rest( bs, box );
+    box->manager |= 0x02;       /* add free flag */
+    isom_box_common_copy( specific, box );
+    if( isom_add_print_func( root, specific, level ) )
+    {
+        free( specific );
+        return -1;
+    }
+    return 0;
+}
+
+static int isom_read_terminator( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != QT_BOX_TYPE_WAVE )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( terminator, parent, box->type );
+    ((isom_wave_t *)parent)->terminator = terminator;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( terminator, box );
+    return isom_add_print_func( root, terminator, level );
+}
+
+static int isom_read_chan( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    isom_create_box( chan, parent, box->type );
+    isom_audio_entry_t *audio = (isom_audio_entry_t *)parent;
+    audio->chan = chan;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    chan->channelLayoutTag          = lsmash_bs_get_be32( bs );
+    chan->channelBitmap             = lsmash_bs_get_be32( bs );
+    chan->numberChannelDescriptions = lsmash_bs_get_be32( bs );
+    if( chan->numberChannelDescriptions )
+    {
+        isom_channel_description_t *desc = malloc( chan->numberChannelDescriptions * sizeof(isom_channel_description_t) );
+        if( !desc )
+        {
+            free( chan );
+            audio->chan = NULL;
+            return -1;
+        }
+        chan->channelDescriptions = desc;
+        for( uint32_t i = 0; i < chan->numberChannelDescriptions; i++ )
+        {
+            desc->channelLabel       = lsmash_bs_get_be32( bs );
+            desc->channelFlags       = lsmash_bs_get_be32( bs );
+            for( int j = 0; j < 3; j++ )
+                desc->coordinates[j] = lsmash_bs_get_be32( bs );
+        }
+    }
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( chan, box );
+    return isom_add_print_func( root, chan, level );
+}
+
+static int isom_read_text_description( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_STSD )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_text_entry_t *text = (isom_text_entry_t *)isom_add_description( box->type, ((isom_stsd_t *)parent)->list );
+    if( !text )
+        return -1;
+    lsmash_bs_t *bs = root->bs;
+    if( lsmash_bs_read_data( bs, 51 ) )
+        return -1;
+    for( int i = 0; i < 6; i++ )
+        text->reserved[i]        = lsmash_bs_get_byte( bs );
+    text->data_reference_index   = lsmash_bs_get_be16( bs );
+    text->displayFlags           = lsmash_bs_get_be32( bs );
+    text->textJustification      = lsmash_bs_get_be32( bs );
+    for( int i = 0; i < 3; i++ )
+        text->bgColor[i]         = lsmash_bs_get_be16( bs );
+    text->top                    = lsmash_bs_get_be16( bs );
+    text->left                   = lsmash_bs_get_be16( bs );
+    text->bottom                 = lsmash_bs_get_be16( bs );
+    text->right                  = lsmash_bs_get_be16( bs );
+    text->scrpStartChar          = lsmash_bs_get_be32( bs );
+    text->scrpHeight             = lsmash_bs_get_be16( bs );
+    text->scrpAscent             = lsmash_bs_get_be16( bs );
+    text->scrpFont               = lsmash_bs_get_be16( bs );
+    text->scrpFace               = lsmash_bs_get_be16( bs );
+    text->scrpSize               = lsmash_bs_get_be16( bs );
+    for( int i = 0; i < 3; i++ )
+        text->scrpColor[i]       = lsmash_bs_get_be16( bs );
+    text->font_name_length       = lsmash_bs_get_byte( bs );
+    if( text->font_name_length )
+    {
+        if( lsmash_bs_read_data( bs, text->font_name_length ) )
+            return -1;
+        text->font_name = malloc( text->font_name_length + 1 );
+        if( !text->font_name )
+            return -1;
+        for( uint8_t i = 0; i < text->font_name_length; i++ )
+            text->font_name[i] = lsmash_bs_get_byte( bs );
+        text->font_name[text->font_name_length] = '\0';
+    }
+    box->parent = parent;
+    isom_box_common_copy( text, box );
+    if( isom_add_print_func( root, text, level ) )
+        return -1;
+    return isom_read_children( root, box, text, level );
+}
+
+static int isom_read_tx3g_description( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_STSD )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_tx3g_entry_t *tx3g = (isom_tx3g_entry_t *)isom_add_description( box->type, ((isom_stsd_t *)parent)->list );
+    if( !tx3g )
+        return -1;
+    lsmash_bs_t *bs = root->bs;
+    if( lsmash_bs_read_data( bs, 38 ) )
+        return -1;
+    for( int i = 0; i < 6; i++ )
+        tx3g->reserved[i]              = lsmash_bs_get_byte( bs );
+    tx3g->data_reference_index         = lsmash_bs_get_be16( bs );
+    tx3g->displayFlags                 = lsmash_bs_get_be32( bs );
+    tx3g->horizontal_justification     = lsmash_bs_get_byte( bs );
+    tx3g->vertical_justification       = lsmash_bs_get_byte( bs );
+    for( int i = 0; i < 4; i++ )
+        tx3g->background_color_rgba[i] = lsmash_bs_get_byte( bs );
+    tx3g->top                          = lsmash_bs_get_be16( bs );
+    tx3g->left                         = lsmash_bs_get_be16( bs );
+    tx3g->bottom                       = lsmash_bs_get_be16( bs );
+    tx3g->right                        = lsmash_bs_get_be16( bs );
+    tx3g->startChar                    = lsmash_bs_get_be16( bs );
+    tx3g->endChar                      = lsmash_bs_get_be16( bs );
+    tx3g->font_ID                      = lsmash_bs_get_be16( bs );
+    tx3g->face_style_flags             = lsmash_bs_get_byte( bs );
+    tx3g->font_size                    = lsmash_bs_get_byte( bs );
+    for( int i = 0; i < 4; i++ )
+        tx3g->text_color_rgba[i]       = lsmash_bs_get_byte( bs );
+    box->parent = parent;
+    isom_box_common_copy( tx3g, box );
+    if( isom_add_print_func( root, tx3g, level ) )
+        return -1;
+    return isom_read_children( root, box, tx3g, level );
+}
+
+static int isom_read_ftab( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_CODEC_TYPE_TX3G_TEXT )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_list_box( ftab, parent, box->type );
+    ((isom_tx3g_entry_t *)parent)->ftab = ftab;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    uint32_t entry_count = lsmash_bs_get_be16( bs );
+    uint64_t pos;
+    for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+    {
+        isom_font_record_t *data = malloc( sizeof(isom_font_record_t) );
+        if( !data || lsmash_add_entry( ftab->list, data ) )
+        {
+            if( data )
+                free( data );
+            return -1;
+        }
+        memset( data, 0, sizeof(isom_font_record_t) );
+        data->font_ID          = lsmash_bs_get_be16( bs );
+        data->font_name_length = lsmash_bs_get_byte( bs );
+        if( data->font_name_length )
+        {
+            data->font_name = malloc( data->font_name_length + 1 );
+            if( !data->font_name )
+                return -1;
+            for( uint8_t i = 0; i < data->font_name_length; i++ )
+                data->font_name[i] = lsmash_bs_get_byte( bs );
+            data->font_name[data->font_name_length] = '\0';
+        }
+    }
+    if( entry_count != ftab->list->entry_count || box->size < pos )
+        printf( "[ftab] box has extra bytes: %"PRId64"\n", pos - box->size );
+    box->size = pos;
+    isom_box_common_copy( ftab, box );
+    return isom_add_print_func( root, ftab, level );
+}
+
+static int isom_read_stts( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_STBL )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_list_box( stts, parent, box->type );
+    ((isom_stbl_t *)parent)->stts = stts;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    uint32_t entry_count = lsmash_bs_get_be32( bs );
+    uint64_t pos;
+    for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+    {
+        isom_stts_entry_t *data = malloc( sizeof(isom_stts_entry_t) );
+        if( !data || lsmash_add_entry( stts->list, data ) )
+        {
+            if( data )
+                free( data );
+            return -1;
+        }
+        memset( data, 0, sizeof(isom_stts_entry_t) );
+        data->sample_count = lsmash_bs_get_be32( bs );
+        data->sample_delta = lsmash_bs_get_be32( bs );
+    }
+    if( entry_count != stts->list->entry_count || box->size < pos )
+        printf( "[stts] box has extra bytes: %"PRId64"\n", pos - box->size );
+    box->size = pos;
+    isom_box_common_copy( stts, box );
+    return isom_add_print_func( root, stts, level );
+}
+
+static int isom_read_ctts( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_STBL )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_list_box( ctts, parent, box->type );
+    ((isom_stbl_t *)parent)->ctts = ctts;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    uint32_t entry_count = lsmash_bs_get_be32( bs );
+    uint64_t pos;
+    for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+    {
+        isom_ctts_entry_t *data = malloc( sizeof(isom_ctts_entry_t) );
+        if( !data || lsmash_add_entry( ctts->list, data ) )
+        {
+            if( data )
+                free( data );
+            return -1;
+        }
+        memset( data, 0, sizeof(isom_ctts_entry_t) );
+        data->sample_count  = lsmash_bs_get_be32( bs );
+        data->sample_offset = lsmash_bs_get_be32( bs );
+    }
+    if( entry_count != ctts->list->entry_count || box->size < pos )
+        printf( "[ctts] box has extra bytes: %"PRId64"\n", pos - box->size );
+    box->size = pos;
+    isom_box_common_copy( ctts, box );
+    return isom_add_print_func( root, ctts, level );
+}
+
+static int isom_read_cslg( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_STBL )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( cslg, parent, box->type );
+    ((isom_stbl_t *)parent)->cslg = cslg;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    cslg->compositionToDTSShift        = lsmash_bs_get_be32( bs );
+    cslg->leastDecodeToDisplayDelta    = lsmash_bs_get_be32( bs );
+    cslg->greatestDecodeToDisplayDelta = lsmash_bs_get_be32( bs );
+    cslg->compositionStartTime         = lsmash_bs_get_be32( bs );
+    cslg->compositionEndTime           = lsmash_bs_get_be32( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( cslg, box );
+    return isom_add_print_func( root, cslg, level );
+}
+
+static int isom_read_stss( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_STBL )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_list_box( stss, parent, box->type );
+    ((isom_stbl_t *)parent)->stss = stss;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    uint32_t entry_count = lsmash_bs_get_be32( bs );
+    uint64_t pos;
+    for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+    {
+        isom_stss_entry_t *data = malloc( sizeof(isom_stss_entry_t) );
+        if( !data || lsmash_add_entry( stss->list, data ) )
+        {
+            if( data )
+                free( data );
+            return -1;
+        }
+        memset( data, 0, sizeof(isom_stss_entry_t) );
+        data->sample_number = lsmash_bs_get_be32( bs );
+    }
+    if( entry_count != stss->list->entry_count || box->size < pos )
+        printf( "[stss] box has extra bytes: %"PRId64"\n", pos - box->size );
+    box->size = pos;
+    isom_box_common_copy( stss, box );
+    return isom_add_print_func( root, stss, level );
+}
+
+static int isom_read_stps( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_STBL )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_list_box( stps, parent, box->type );
+    ((isom_stbl_t *)parent)->stps = stps;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    uint32_t entry_count = lsmash_bs_get_be32( bs );
+    uint64_t pos;
+    for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+    {
+        isom_stps_entry_t *data = malloc( sizeof(isom_stps_entry_t) );
+        if( !data || lsmash_add_entry( stps->list, data ) )
+        {
+            if( data )
+                free( data );
+            return -1;
+        }
+        memset( data, 0, sizeof(isom_stps_entry_t) );
+        data->sample_number = lsmash_bs_get_be32( bs );
+    }
+    if( entry_count != stps->list->entry_count || box->size < pos )
+        printf( "[stps] box has extra bytes: %"PRId64"\n", pos - box->size );
+    box->size = pos;
+    isom_box_common_copy( stps, box );
+    return isom_add_print_func( root, stps, level );
+}
+
+static int isom_read_sdtp( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_STBL )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_list_box( sdtp, parent, box->type );
+    ((isom_stbl_t *)parent)->sdtp = sdtp;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    uint64_t pos;
+    for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+    {
+        isom_sdtp_entry_t *data = malloc( sizeof(isom_sdtp_entry_t) );
+        if( !data || lsmash_add_entry( sdtp->list, data ) )
+        {
+            if( data )
+                free( data );
+            return -1;
+        }
+        memset( data, 0, sizeof(isom_sdtp_entry_t) );
+        uint8_t temp = lsmash_bs_get_byte( bs );
+        data->is_leading            = (temp >> 6) & 0x3;
+        data->sample_depends_on     = (temp >> 4) & 0x3;
+        data->sample_is_depended_on = (temp >> 2) & 0x3;
+        data->sample_has_redundancy =  temp       & 0x3;
+    }
+    box->size = pos;
+    isom_box_common_copy( sdtp, box );
+    return isom_add_print_func( root, sdtp, level );
+}
+
+static int isom_read_stsc( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_STBL )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_list_box( stsc, parent, box->type );
+    ((isom_stbl_t *)parent)->stsc = stsc;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    uint32_t entry_count = lsmash_bs_get_be32( bs );
+    uint64_t pos;
+    for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+    {
+        isom_stsc_entry_t *data = malloc( sizeof(isom_stsc_entry_t) );
+        if( !data || lsmash_add_entry( stsc->list, data ) )
+        {
+            if( data )
+                free( data );
+            return -1;
+        }
+        memset( data, 0, sizeof(isom_stsc_entry_t) );
+        data->first_chunk              = lsmash_bs_get_be32( bs );
+        data->samples_per_chunk        = lsmash_bs_get_be32( bs );
+        data->sample_description_index = lsmash_bs_get_be32( bs );
+    }
+    if( entry_count != stsc->list->entry_count || box->size < pos )
+        printf( "[stsc] box has extra bytes: %"PRId64"\n", pos - box->size );
+    box->size = pos;
+    isom_box_common_copy( stsc, box );
+    return isom_add_print_func( root, stsc, level );
+}
+
+static int isom_read_stsz( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_STBL )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( stsz, parent, box->type );
+    ((isom_stbl_t *)parent)->stsz = stsz;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    stsz->sample_size  = lsmash_bs_get_be32( bs );
+    stsz->sample_count = lsmash_bs_get_be32( bs );
+    uint64_t pos = lsmash_bs_get_pos( bs );
+    if( pos < box->size )
+    {
+        stsz->list = lsmash_create_entry_list();
+        if( !stsz->list )
+            return -1;
+        for( ; pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+        {
+            isom_stsz_entry_t *data = malloc( sizeof(isom_stsz_entry_t) );
+            if( !data || lsmash_add_entry( stsz->list, data ) )
+            {
+                if( data )
+                    free( data );
+                return -1;
+            }
+            memset( data, 0, sizeof(isom_stsz_entry_t) );
+            data->entry_size = lsmash_bs_get_be32( bs );
+        }
+    }
+    if( (stsz->list && stsz->sample_count != stsz->list->entry_count) || box->size < pos )
+        printf( "[stsz] box has extra bytes: %"PRId64"\n", pos - box->size );
+    box->size = pos;
+    isom_box_common_copy( stsz, box );
+    return isom_add_print_func( root, stsz, level );
+}
+
+static int isom_read_stco( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_STBL )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_list_box( stco, parent, box->type );
+    ((isom_stbl_t *)parent)->stco = stco;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    uint32_t entry_count = lsmash_bs_get_be32( bs );
+    uint64_t pos;
+    if( box->type == ISOM_BOX_TYPE_STCO )
+        for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+        {
+            isom_stco_entry_t *data = malloc( sizeof(isom_stco_entry_t) );
+            if( !data || lsmash_add_entry( stco->list, data ) )
+            {
+                if( data )
+                    free( data );
+                return -1;
+            }
+            memset( data, 0, sizeof(isom_stco_entry_t) );
+            data->chunk_offset = lsmash_bs_get_be32( bs );
+        }
+    else
+        for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+        {
+            isom_co64_entry_t *data = malloc( sizeof(isom_co64_entry_t) );
+            if( !data || lsmash_add_entry( stco->list, data ) )
+            {
+                if( data )
+                    free( data );
+                return -1;
+            }
+            memset( data, 0, sizeof(isom_co64_entry_t) );
+            data->chunk_offset = lsmash_bs_get_be64( bs );
+        }
+    if( entry_count != stco->list->entry_count || box->size < pos )
+        printf( "[%s] box has extra bytes: %"PRId64"\n", isom_4cc2str( box->type ), pos - box->size );
+    box->size = pos;
+    isom_box_common_copy( stco, box );
+    return isom_add_print_func( root, stco, level );
+}
+
+static int isom_read_sgpd( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_STBL )
+        return isom_read_unknown_box( root, box, parent, level );
+
+    isom_sgpd_t *sgpd = NULL;
+    isom_stbl_t *stbl = (isom_stbl_t *)parent;
+    if( !stbl->sgpd && !stbl->sgpd_count )
+        sgpd = malloc( sizeof(isom_sgpd_t) );
+    else
+        sgpd = realloc( stbl->sgpd, (stbl->sgpd_count + 1) * sizeof(isom_sgpd_t) );
+    if( !sgpd )
+        return -1;
+    stbl->sgpd = sgpd;
+    sgpd += stbl->sgpd_count++;      /* move the newest sgpd and update sgpd_count */
+    memset( sgpd, 0, sizeof(isom_sgpd_t) );
+    sgpd->list = lsmash_create_entry_list();
+    if( !sgpd->list )
+    {
+        free( stbl->sgpd );
+        stbl->sgpd = NULL;
+        return -1;
+    }
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    sgpd->grouping_type      = lsmash_bs_get_be32( bs );
+    if( box->version == 1 )
+        sgpd->default_length = lsmash_bs_get_be32( bs );
+    uint32_t entry_count     = lsmash_bs_get_be32( bs );
+    if( sgpd->grouping_type == ISOM_GROUP_TYPE_ROLL )
+    {
+        uint64_t pos;
+        for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+        {
+            isom_roll_entry_t *data = malloc( sizeof(isom_roll_entry_t) );
+            if( !data || lsmash_add_entry( sgpd->list, data ) )
+            {
+                if( data )
+                    free( data );
+                return -1;
+            }
+            memset( data, 0, sizeof(isom_roll_entry_t) );
+            /* We don't know roll_recovery decided by variable description length. If encountering, skip getting of bytes of it. */
+            if( box->version == 1 && !sgpd->default_length )
+                data->description_length = lsmash_bs_get_be32( bs );
+            else
+                data->roll_distance      = lsmash_bs_get_be16( bs );
+        }
+        if( entry_count != sgpd->list->entry_count || box->size < pos )
+            printf( "[sgpd] box has extra bytes: %"PRId64"\n", pos - box->size );
+        box->size = pos;
+    }
+    isom_box_common_copy( sgpd, box );
+    return isom_add_print_func( root, sgpd, level );
+}
+
+static int isom_read_sbgp( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_STBL )
+        return isom_read_unknown_box( root, box, parent, level );
+
+    isom_sbgp_t *sbgp = NULL;
+    isom_stbl_t *stbl = (isom_stbl_t *)parent;
+    if( !stbl->sbgp && !stbl->sbgp_count )
+        sbgp = malloc( sizeof(isom_sbgp_t) );
+    else
+        sbgp = realloc( stbl->sbgp, (stbl->sbgp_count + 1) * sizeof(isom_sbgp_t) );
+    if( !sbgp )
+        return -1;
+    stbl->sbgp = sbgp;
+    sbgp += stbl->sbgp_count++;      /* move the newest sbgp and update sbgp_count */
+    memset( sbgp, 0, sizeof(isom_sbgp_t) );
+    sbgp->list = lsmash_create_entry_list();
+    if( !sbgp->list )
+    {
+        free( stbl->sbgp );
+        stbl->sbgp = NULL;
+        return -1;
+    }
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    sbgp->grouping_type  = lsmash_bs_get_be32( bs );
+    if( sbgp->version == 1 )
+        sbgp->grouping_type_parameter = lsmash_bs_get_be32( bs );
+    uint32_t entry_count = lsmash_bs_get_be32( bs );
+    uint64_t pos;
+    for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+    {
+        isom_sbgp_entry_t *data = malloc( sizeof(isom_sbgp_entry_t) );
+        if( !data || lsmash_add_entry( sbgp->list, data ) )
+        {
+            if( data )
+                free( data );
+            return -1;
+        }
+        memset( data, 0, sizeof(isom_sbgp_entry_t) );
+        data->sample_count            = lsmash_bs_get_be32( bs );
+        data->group_description_index = lsmash_bs_get_be32( bs );
+    }
+    if( entry_count != sbgp->list->entry_count || box->size < pos )
+        printf( "[sbgp] box has extra bytes: %"PRId64"\n", pos - box->size );
+    box->size = pos;
+    isom_box_common_copy( sbgp, box );
+    return isom_add_print_func( root, sbgp, level );
+}
+
+static int isom_read_udta( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_MOOV && parent->type != ISOM_BOX_TYPE_TRAK )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( udta, parent, box->type );
+    if( parent->type == ISOM_BOX_TYPE_MOOV )
+        ((isom_moov_t *)parent)->udta = udta;
+    else
+        ((isom_trak_entry_t *)parent)->udta = udta;
+    isom_box_common_copy( udta, box );
+    if( isom_add_print_func( root, udta, level ) )
+        return -1;
+    return isom_read_children( root, box, udta, level );
+}
+
+static int isom_read_chpl( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_UDTA )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_list_box( chpl, parent, box->type );
+    ((isom_udta_t *)parent)->chpl = chpl;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    uint32_t entry_count;
+    if( box->version == 1 )
+    {
+        chpl->unknown = lsmash_bs_get_byte( bs );
+        entry_count   = lsmash_bs_get_be32( bs );
+    }
+    else
+        entry_count   = lsmash_bs_get_byte( bs );
+    uint64_t pos;
+    for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+    {
+        isom_chpl_entry_t *data = malloc( sizeof(isom_chpl_entry_t) );
+        if( !data || lsmash_add_entry( chpl->list, data ) )
+        {
+            if( data )
+                free( data );
+            return -1;
+        }
+        memset( data, 0, sizeof(isom_chpl_entry_t) );
+        data->start_time          = lsmash_bs_get_be64( bs );
+        data->chapter_name_length = lsmash_bs_get_byte( bs );
+        data->chapter_name = malloc( data->chapter_name_length + 1 );
+        if( !data->chapter_name )
+        {
+            free( data );
+            return -1;
+        }
+        for( uint8_t i = 0; i < data->chapter_name_length; i++ )
+            data->chapter_name[i] = lsmash_bs_get_byte( bs );
+        data->chapter_name[data->chapter_name_length] = '\0';
+    }
+    if( entry_count != chpl->list->entry_count || box->size < pos )
+        printf( "[chpl] box has extra bytes: %"PRId64"\n", pos - box->size );
+    box->size = pos;
+    isom_box_common_copy( chpl, box );
+    return isom_add_print_func( root, chpl, level );
+}
+
+static int isom_read_free( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    isom_box_t *skip = malloc( sizeof(isom_box_t) );
+    if( !skip )
+        return -1;
+    memset( skip, 0, sizeof(isom_box_t) );
+    lsmash_bs_t *bs = root->bs;
+    isom_skip_box_rest( bs, box );
+    box->manager |= 0x02;       /* add free flag */
+    isom_box_common_copy( skip, box );
+    if( isom_add_print_func( root, skip, level ) )
+    {
+        free( skip );
+        return -1;
+    }
+    return 0;
+}
+
+static int isom_read_mdat( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( !!parent->type )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_box_t *mdat = malloc( sizeof(isom_box_t) );
+    if( !mdat )
+        return -1;
+    memset( mdat, 0, sizeof(isom_box_t) );
+    lsmash_bs_t *bs = root->bs;
+    isom_skip_box_rest( bs, box );
+    box->manager |= 0x02;       /* add free flag */
+    isom_box_common_copy( mdat, box );
+    if( isom_add_print_func( root, mdat, level ) )
+    {
+        free( mdat );
+        return -1;
+    }
+    return 0;
+}
+
+static int isom_read_box( isom_root_t *root, isom_box_t *box, isom_box_t *parent, uint64_t parent_pos, int level )
+{
+    lsmash_bs_t *bs = root->bs;
+    memset( box, 0, sizeof(isom_box_t) );
+    if( !parent )
+        return -1;
+    box->parent = parent;
+    if( parent->size < parent_pos + ISOM_DEFAULT_BOX_HEADER_SIZE )
+    {
+        /* skip extra bytes */
+        uint64_t rest_size = parent->size - parent_pos;
+        fseek( bs->stream, rest_size, SEEK_CUR );
+        box->size = rest_size;
+        return 0;
+    }
+    lsmash_bs_empty( bs );
+    int ret = -1;
+    if( !!(ret = isom_bs_read_box_common( bs, box )) )
+        return ret;     /* return if reached EOF */
+    ++level;
+    if( parent->type == ISOM_BOX_TYPE_STSD )
+        switch( box->type )
+        {
+            case ISOM_CODEC_TYPE_AVC1_VIDEO :
+            case ISOM_CODEC_TYPE_AVC2_VIDEO :
+            case ISOM_CODEC_TYPE_AVCP_VIDEO :
+            case ISOM_CODEC_TYPE_DRAC_VIDEO :
+            case ISOM_CODEC_TYPE_ENCV_VIDEO :
+            case ISOM_CODEC_TYPE_MJP2_VIDEO :
+            case ISOM_CODEC_TYPE_MP4V_VIDEO :
+            case ISOM_CODEC_TYPE_MVC1_VIDEO :
+            case ISOM_CODEC_TYPE_MVC2_VIDEO :
+            case ISOM_CODEC_TYPE_S263_VIDEO :
+            case ISOM_CODEC_TYPE_SVC1_VIDEO :
+            case ISOM_CODEC_TYPE_VC_1_VIDEO :
+                return isom_read_visual_description( root, box, parent, level );
+            case ISOM_CODEC_TYPE_AC_3_AUDIO :
+            case ISOM_CODEC_TYPE_ALAC_AUDIO :
+            case ISOM_CODEC_TYPE_DRA1_AUDIO :
+            case ISOM_CODEC_TYPE_DTSC_AUDIO :
+            case ISOM_CODEC_TYPE_DTSH_AUDIO :
+            case ISOM_CODEC_TYPE_DTSL_AUDIO :
+            case ISOM_CODEC_TYPE_DTSE_AUDIO :
+            case ISOM_CODEC_TYPE_EC_3_AUDIO :
+            case ISOM_CODEC_TYPE_ENCA_AUDIO :
+            case ISOM_CODEC_TYPE_G719_AUDIO :
+            case ISOM_CODEC_TYPE_G726_AUDIO :
+            case ISOM_CODEC_TYPE_M4AE_AUDIO :
+            case ISOM_CODEC_TYPE_MLPA_AUDIO :
+            case ISOM_CODEC_TYPE_MP4A_AUDIO :
+            case ISOM_CODEC_TYPE_RAW_AUDIO  :
+            case ISOM_CODEC_TYPE_SAMR_AUDIO :
+            case ISOM_CODEC_TYPE_SAWB_AUDIO :
+            case ISOM_CODEC_TYPE_SAWP_AUDIO :
+            case ISOM_CODEC_TYPE_SEVC_AUDIO :
+            case ISOM_CODEC_TYPE_SQCP_AUDIO :
+            case ISOM_CODEC_TYPE_SSMV_AUDIO :
+            case ISOM_CODEC_TYPE_TWOS_AUDIO :
+            case QT_CODEC_TYPE_QDM2_AUDIO :
+            case QT_CODEC_TYPE_QDMC_AUDIO :
+            case QT_CODEC_TYPE_QCLP_AUDIO :
+            case QT_CODEC_TYPE_AGSM_AUDIO :
+            case QT_CODEC_TYPE_ALAW_AUDIO :
+            case QT_CODEC_TYPE_DVI_AUDIO  :
+            case QT_CODEC_TYPE_FL32_AUDIO :
+            case QT_CODEC_TYPE_FL64_AUDIO :
+            case QT_CODEC_TYPE_IMA4_AUDIO :
+            case QT_CODEC_TYPE_IN24_AUDIO :
+            case QT_CODEC_TYPE_IN32_AUDIO :
+            case QT_CODEC_TYPE_LPCM_AUDIO :
+            case QT_CODEC_TYPE_ULAW_AUDIO :
+            case QT_CODEC_TYPE_VDVA_AUDIO :
+                return isom_read_audio_description( root, box, parent, level );
+            case QT_CODEC_TYPE_TEXT_TEXT :
+                return isom_read_text_description( root, box, parent, level );
+            case ISOM_CODEC_TYPE_TX3G_TEXT :
+                return isom_read_tx3g_description( root, box, parent, level );
+            default :
+                return isom_read_unknown_box( root, box, parent, level );
+        }
+    if( parent->type == QT_BOX_TYPE_WAVE )
+        switch( box->type )
+        {
+            case QT_BOX_TYPE_FRMA :
+                return isom_read_frma( root, box, parent, level );
+            case ISOM_BOX_TYPE_ESDS :
+                return isom_read_esds( root, box, parent, level );
+            case QT_BOX_TYPE_TERMINATOR :
+                return isom_read_terminator( root, box, parent, level );
+            default :
+                return isom_read_audio_specific( root, box, parent, level );
+        }
+    if( parent->type == ISOM_BOX_TYPE_TREF )
+        return isom_read_track_reference_type( root, box, parent, level );
+    switch( box->type )
+    {
+        case ISOM_BOX_TYPE_FTYP :
+            return isom_read_ftyp( root, box, parent, level );
+        case ISOM_BOX_TYPE_MOOV :
+            return isom_read_moov( root, box, parent, level );
+        case ISOM_BOX_TYPE_MVHD :
+            return isom_read_mvhd( root, box, parent, level );
+        case ISOM_BOX_TYPE_IODS :
+            return isom_read_iods( root, box, parent, level );
+        case ISOM_BOX_TYPE_ESDS :
+            return isom_read_esds( root, box, parent, level );
+        case ISOM_BOX_TYPE_TRAK :
+            return isom_read_trak( root, box, parent, level );
+        case ISOM_BOX_TYPE_TKHD :
+            return isom_read_tkhd( root, box, parent, level );
+        case QT_BOX_TYPE_TAPT :
+            return isom_read_tapt( root, box, parent, level );
+        case QT_BOX_TYPE_CLEF :
+            return isom_read_clef( root, box, parent, level );
+        case QT_BOX_TYPE_PROF :
+            return isom_read_prof( root, box, parent, level );
+        case QT_BOX_TYPE_ENOF :
+            return isom_read_enof( root, box, parent, level );
+        case ISOM_BOX_TYPE_EDTS :
+            return isom_read_edts( root, box, parent, level );
+        case ISOM_BOX_TYPE_ELST :
+            return isom_read_elst( root, box, parent, level );
+        case ISOM_BOX_TYPE_TREF :
+            return isom_read_tref( root, box, parent, level );
+        case ISOM_BOX_TYPE_MDIA :
+            return isom_read_mdia( root, box, parent, level );
+        case ISOM_BOX_TYPE_MDHD :
+            return isom_read_mdhd( root, box, parent, level );
+        case ISOM_BOX_TYPE_HDLR :
+            return isom_read_hdlr( root, box, parent, level );
+        case ISOM_BOX_TYPE_MINF :
+            return isom_read_minf( root, box, parent, level );
+        case ISOM_BOX_TYPE_VMHD :
+            return isom_read_vmhd( root, box, parent, level );
+        case ISOM_BOX_TYPE_SMHD :
+            return isom_read_smhd( root, box, parent, level );
+        case ISOM_BOX_TYPE_HMHD :
+            return isom_read_hmhd( root, box, parent, level );
+        case ISOM_BOX_TYPE_NMHD :
+            return isom_read_nmhd( root, box, parent, level );
+        case QT_BOX_TYPE_GMHD :
+            return isom_read_gmhd( root, box, parent, level );
+        case QT_BOX_TYPE_GMIN :
+            return isom_read_gmin( root, box, parent, level );
+        case QT_BOX_TYPE_TEXT :
+            return isom_read_text( root, box, parent, level );
+        case ISOM_BOX_TYPE_DINF :
+            return isom_read_dinf( root, box, parent, level );
+        case ISOM_BOX_TYPE_DREF :
+            return isom_read_dref( root, box, parent, level );
+        case ISOM_BOX_TYPE_URL  :
+            return isom_read_url ( root, box, parent, level );
+        case ISOM_BOX_TYPE_STBL :
+            return isom_read_stbl( root, box, parent, level );
+        case ISOM_BOX_TYPE_STSD :
+            return isom_read_stsd( root, box, parent, level );
+        case ISOM_BOX_TYPE_BTRT :
+            return isom_read_btrt( root, box, parent, level );
+        case ISOM_BOX_TYPE_CLAP :
+            return isom_read_clap( root, box, parent, level );
+        case ISOM_BOX_TYPE_PASP :
+            return isom_read_pasp( root, box, parent, level );
+        case QT_BOX_TYPE_COLR :
+            return isom_read_colr( root, box, parent, level );
+        case ISOM_BOX_TYPE_STSL :
+            return isom_read_stsl( root, box, parent, level );
+        case ISOM_BOX_TYPE_AVCC :
+            return isom_read_avcC( root, box, parent, level );
+        case QT_BOX_TYPE_WAVE :
+            return isom_read_wave( root, box, parent, level );
+        case QT_BOX_TYPE_CHAN :
+            return isom_read_chan( root, box, parent, level );
+        case ISOM_BOX_TYPE_FTAB :
+            return isom_read_ftab( root, box, parent, level );
+        case ISOM_BOX_TYPE_STTS :
+            return isom_read_stts( root, box, parent, level );
+        case ISOM_BOX_TYPE_CTTS :
+            return isom_read_ctts( root, box, parent, level );
+        case ISOM_BOX_TYPE_CSLG :
+            return isom_read_cslg( root, box, parent, level );
+        case ISOM_BOX_TYPE_STSS :
+            return isom_read_stss( root, box, parent, level );
+        case QT_BOX_TYPE_STPS :
+            return isom_read_stps( root, box, parent, level );
+        case ISOM_BOX_TYPE_SDTP :
+            return isom_read_sdtp( root, box, parent, level );
+        case ISOM_BOX_TYPE_STSC :
+            return isom_read_stsc( root, box, parent, level );
+        case ISOM_BOX_TYPE_STSZ :
+            return isom_read_stsz( root, box, parent, level );
+        case ISOM_BOX_TYPE_STCO :
+        case ISOM_BOX_TYPE_CO64 :
+            return isom_read_stco( root, box, parent, level );
+        case ISOM_BOX_TYPE_SGPD :
+            return isom_read_sgpd( root, box, parent, level );
+        case ISOM_BOX_TYPE_SBGP :
+            return isom_read_sbgp( root, box, parent, level );
+        case ISOM_BOX_TYPE_UDTA :
+            return isom_read_udta( root, box, parent, level );
+        case ISOM_BOX_TYPE_CHPL :
+            return isom_read_chpl( root, box, parent, level );
+        case ISOM_BOX_TYPE_FREE :
+        case ISOM_BOX_TYPE_SKIP :
+            return isom_read_free( root, box, parent, level );
+        case ISOM_BOX_TYPE_MDAT :
+            return isom_read_mdat( root, box, parent, level );
+        default :
+            return isom_read_unknown_box( root, box, parent, level );
+    }
+}
+
+static int isom_read_root( isom_root_t *root )
+{
+    lsmash_bs_t *bs = root->bs;
+    if( !bs )
+        return -1;
+    isom_box_t box;
+    if( root->flags & ISOM_FILE_MODE_DUMP )
+    {
+        root->print = lsmash_create_entry_list();
+        if( !root->print )
+            return -1;
+    }
+    root->size = UINT64_MAX;
+    int ret = isom_read_children( root, &box, root, 0 );
+    root->size = box.size;
+    lsmash_bs_empty( bs );
+    if( ret < 0 )
+        return ret;
+    return isom_check_compatibility( root );
 }
 
 static uint32_t isom_get_sample_count( isom_trak_entry_t *trak )
@@ -4401,59 +8113,6 @@ int isom_update_bitrate_info( isom_root_t *root, uint32_t track_ID, uint32_t ent
     return 0;
 }
 
-static int isom_check_compatibility( isom_root_t *root )
-{
-    if( !root )
-        return -1;
-    /* Check brand to decide mandatory boxes. */
-    if( !root->ftyp || !root->ftyp->brand_count )
-    {
-        /* We assume this file is not a QuickTime but MP4 version 1 format file. */
-        root->mp4_version1 = 1;
-        return 0;
-    }
-    for( uint32_t i = 0; i < root->ftyp->brand_count; i++ )
-    {
-        switch( root->ftyp->compatible_brands[i] )
-        {
-            case ISOM_BRAND_TYPE_QT :
-                root->qt_compatible = 1;
-                break;
-            case ISOM_BRAND_TYPE_MP41 :
-                root->mp4_version1 = 1;
-                break;
-            case ISOM_BRAND_TYPE_MP42 :
-                root->mp4_version2 = 1;
-                break;
-            case ISOM_BRAND_TYPE_AVC1 :
-            case ISOM_BRAND_TYPE_ISO2 :
-            case ISOM_BRAND_TYPE_ISO3 :
-            case ISOM_BRAND_TYPE_ISO4 :
-                root->avc_extensions = 1;
-                break;
-            case ISOM_BRAND_TYPE_M4A :
-            case ISOM_BRAND_TYPE_M4B :
-                root->itunes_audio = 1;
-                break;
-            case ISOM_BRAND_TYPE_3GP4 :
-                root->max_3gpp_version = ISOM_MAX( root->max_3gpp_version, 4 );
-                break;
-            case ISOM_BRAND_TYPE_3GP5 :
-                root->max_3gpp_version = ISOM_MAX( root->max_3gpp_version, 5 );
-                break;
-            case ISOM_BRAND_TYPE_3GE6 :
-            case ISOM_BRAND_TYPE_3GG6 :
-            case ISOM_BRAND_TYPE_3GP6 :
-            case ISOM_BRAND_TYPE_3GR6 :
-            case ISOM_BRAND_TYPE_3GS6 :
-                root->max_3gpp_version = ISOM_MAX( root->max_3gpp_version, 6 );
-                break;
-        }
-    }
-    root->isom_compatible = !root->qt_compatible || root->mp4_version1 || root->mp4_version2 || root->itunes_audio || root->max_3gpp_version;
-    return 0;
-}
-
 static int isom_check_mandatory_boxes( isom_root_t *root )
 {
     if( !root )
@@ -4486,15 +8145,9 @@ static int isom_check_mandatory_boxes( isom_root_t *root )
     return 0;
 }
 
-/* For generating creation_time and modification_time.
- * According to ISO/IEC-14496-5-2001, the difference between Unix time and Mac OS time is 2082758400.
- * However this is wrong and 2082844800 is correct. */
-#include <time.h>
-#define MAC_EPOCH_OFFSET 2082844800
-
 static inline uint64_t isom_get_current_mp4time( void )
 {
-    return (uint64_t)time( NULL ) + MAC_EPOCH_OFFSET;
+    return (uint64_t)time( NULL ) + ISOM_MAC_EPOCH_OFFSET;
 }
 
 static int isom_set_media_creation_time( isom_trak_entry_t *trak, uint64_t current_mp4time )
@@ -5901,22 +9554,35 @@ int isom_create_grouping( isom_root_t *root, uint32_t track_ID, uint32_t groupin
 
 /*---- movie manipulators ----*/
 
-isom_root_t *isom_create_movie( char *filename )
+isom_root_t *isom_open_movie( const char *filename, uint32_t mode )
 {
+    char open_mode[4] = { 0 };
+    if( mode & ISOM_FILE_MODE_WRITE )
+        memcpy( open_mode, "w+b", 4 );
+    else if( mode & ISOM_FILE_MODE_READ )
+        memcpy( open_mode, "rb", 3 );
+    if( !open_mode[0] )
+        return NULL;
     isom_root_t *root = malloc( sizeof(isom_root_t) );
     if( !root )
         return NULL;
     memset( root, 0, sizeof(isom_root_t) );
     root->bs = malloc( sizeof(lsmash_bs_t) );
     if( !root->bs )
-        return NULL;
+        goto fail;
     memset( root->bs, 0, sizeof(lsmash_bs_t) );
-    root->bs->stream = fopen( filename, "w+b" );
+    root->bs->stream = fopen( filename, open_mode );
     if( !root->bs->stream )
-        return NULL;
-    if( isom_add_moov( root ) || isom_add_mvhd( root->moov ) )
-        return NULL;
+        goto fail;
+    root->flags = mode;
+    if( (mode & ISOM_FILE_MODE_WRITE) && (isom_add_moov( root ) || isom_add_mvhd( root->moov )) )
+        goto fail;
+    if( (mode & (ISOM_FILE_MODE_READ | ISOM_FILE_MODE_DUMP)) && isom_read_root( root ) )
+        goto fail;
     return root;
+fail:
+    isom_destroy_root( root );
+    return NULL;
 }
 
 int isom_set_movie_timescale( isom_root_t *root, uint32_t timescale )
@@ -6300,6 +9966,7 @@ void isom_destroy_root( isom_root_t *root )
             free( root->bs->data );
         free( root->bs );
     }
+    isom_remove_print_funcs( root );
     free( root );
 }
 

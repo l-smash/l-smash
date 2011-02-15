@@ -54,13 +54,17 @@ SRC_AUDIOMUXER=audiomuxer.c
 OBJ_AUDIOMUXER=$(SRC_AUDIOMUXER:%.c=%.o)
 TARGET_AUDIOMUXER=$(SRC_AUDIOMUXER:%.c=%$(EXE))
 
-SRCS_ALL=$(SRCS) $(SRC_AUDIOMUXER)
+SRC_BOXDUMPER=boxdumper.c
+OBJ_BOXDUMPER=$(SRC_BOXDUMPER:%.c=%.o)
+TARGET_BOXDUMPER=$(SRC_BOXDUMPER:%.c=%$(EXE))
+
+SRCS_ALL=$(SRCS) $(SRC_AUDIOMUXER) $(SRC_BOXDUMPER)
 OBJS_ALL=$(SRCS_ALL:%.c=%.o)
 
 #### main rules ####
 
 # should have distclean, install, uninstall in the future
-.PHONY: all lib tools dep depend clean info
+.PHONY: all lib tools audiomuxer boxdumper dep depend clean info
 
 all: info tools
 
@@ -70,7 +74,11 @@ info:
 
 lib: $(TARGET_LIB)
 
-tools: $(TARGET_AUDIOMUXER)
+tools: $(TARGET_AUDIOMUXER) $(TARGET_BOXDUMPER)
+
+audiomuxer: $(TARGET_AUDIOMUXER)
+
+boxdumper: $(TARGET_BOXDUMPER)
 
 $(TARGET_LIB): .depend $(OBJS)
 	@$(ECHO) "AR: $@"
@@ -80,6 +88,15 @@ $(TARGET_LIB): .depend $(OBJS)
 
 $(TARGET_AUDIOMUXER): $(OBJ_AUDIOMUXER) $(TARGET_LIB)
 	@$(ECHO) "LINK: $@"
+	@$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $+ $(EXTRALIBS)
+ifneq ($(DEBUG),YES)
+	@$(ECHO) "STRIP: $@"
+	@$(STRIP) $@
+endif
+
+$(TARGET_BOXDUMPER): $(OBJ_BOXDUMPER) $(TARGET_LIB)
+	@$(ECHO) "LINK: $@"
+	@$(ECHO) "$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $+ $(EXTRALIBS)"
 	@$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $+ $(EXTRALIBS)
 ifneq ($(DEBUG),YES)
 	@$(ECHO) "STRIP: $@"
@@ -108,4 +125,4 @@ endif
 
 #### clean stuff ####
 clean:
-	rm -f $(OBJS_ALL) $(TARGET_LIB) $(TARGET_AUDIOMUXER) .depend
+	rm -f $(OBJS_ALL) $(TARGET_LIB) $(TARGET_AUDIOMUXER) $(TARGET_BOXDUMPER) .depend
