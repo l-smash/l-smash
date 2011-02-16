@@ -7602,11 +7602,32 @@ static int isom_add_size( isom_trak_entry_t *trak, uint32_t sample_size )
 
 static int isom_add_sync_point( isom_trak_entry_t *trak, uint32_t sample_number, isom_sample_property_t *prop )
 {
-    if( !prop->sync_point ) /* no null check for prop */
-        return 0;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
-    if( !stbl->stss && isom_add_stss( stbl ) )
-        return -1;
+    isom_cache_t *cache = trak->cache;
+    if( !prop->sync_point )         /* no null check for prop */
+    {
+        if( cache->all_sync )
+        {
+            if( !stbl->stss && isom_add_stss( stbl ) )
+                return -1;
+            if( isom_add_stss_entry( stbl, 1 ) )    /* Declare here the first sample is a sync sample. */
+                return -1;
+            cache->all_sync = 0;
+        }
+        return 0;
+    }
+    if( cache->all_sync )     /* We don't need stss box if all samples are sync sample. */
+        return 0;
+    if( !stbl->stss )
+    {
+        if( isom_get_sample_count( trak ) == 1 )
+        {
+            cache->all_sync = 1;    /* Also the first sample is a sync sample. */
+            return 0;
+        }
+        if( isom_add_stss( stbl ) )
+            return -1;
+    }
     return isom_add_stss_entry( stbl, sample_number );
 }
 
@@ -7614,7 +7635,7 @@ static int isom_add_partial_sync( isom_trak_entry_t *trak, uint32_t sample_numbe
 {
     if( !trak->root->qt_compatible )
         return 0;
-    if( !prop->partial_sync ) /* no null check for prop */
+    if( !prop->partial_sync )       /* no null check for prop */
         return 0;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     if( !stbl->stps && isom_add_stps( stbl ) )
@@ -7891,7 +7912,7 @@ static int isom_write_sample_data( isom_root_t *root, isom_sample_t *sample )
 
 static int isom_write_pooled_samples( isom_trak_entry_t *trak, lsmash_entry_list_t *pool )
 {
-    if( !trak->root )
+    if( !trak->root || !trak->cache )
         return -1;
     for( lsmash_entry_t *entry = pool->head; entry; entry = entry->next )
     {
@@ -9781,7 +9802,7 @@ int isom_finish_movie( isom_root_t *root, isom_adhoc_remux_t* remux )
     for( lsmash_entry_t *entry = root->moov->trak_list->head; entry; entry = entry->next )
     {
         isom_trak_entry_t *trak = (isom_trak_entry_t *)entry->data;
-        if( !trak || !trak->tkhd )
+        if( !trak || !trak->cache || !trak->tkhd || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
             return -1;
         uint32_t track_ID = trak->tkhd->track_ID;
         uint32_t related_track_ID = trak->related_track_ID;
@@ -9798,6 +9819,10 @@ int isom_finish_movie( isom_root_t *root, isom_adhoc_remux_t* remux )
             if( isom_create_explicit_timeline_map( root, track_ID, track_duration, 0, ISOM_NORMAL_EDIT ) )
                 return -1;
         }
+        /* Add stss box if any samples aren't sync sample. */
+        isom_stbl_t *stbl = trak->mdia->minf->stbl;
+        if( !trak->cache->all_sync && !stbl->stss && isom_add_stss( stbl ) )
+            return -1;
     }
     if( root->mp4_version1 == 1 && isom_add_iods( root->moov ) )
         return -1;
@@ -10056,7 +10081,7 @@ int isom_write_sample( isom_root_t *root, uint32_t track_ID, isom_sample_t *samp
     if( !root || !sample || !sample->data || root->max_chunk_duration == 0 )
         return -1;
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
+    if( !trak || !trak->cache || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
         return -1;
 
     /* Add a chunk if needed. */
@@ -10254,6 +10279,7 @@ int isom_create_reference_chapter_track( isom_root_t *root, uint32_t track_ID, c
             memcpy( sample->data + 2 + name_length, encd, 12 );
         }
         sample->dts = sample->cts = start_time;
+        sample->prop.sync_point = 1;
         sample->index = sample_entry;
         if( isom_write_sample( root, chapter_track_ID, sample ) )
             goto fail;

@@ -1077,6 +1077,7 @@ typedef struct
 
 typedef struct
 {
+    uint8_t all_sync;       /* if all samples are sync sample */
     isom_chunk_t chunk;
     isom_timestamp_t timestamp;
     isom_grouping_t roll;
