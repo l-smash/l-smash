@@ -28,7 +28,7 @@
 #define LSMASH_IMPORTER_INTERNAL
 #include "importer.h"
 
-#include "isom.h"
+#include "box.h"
 
 #include <stdlib.h>
 #include <string.h>

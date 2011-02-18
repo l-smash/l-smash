@@ -20,13 +20,16 @@
 
 /* This file is available under an ISC license. */
 
-#ifndef ISOM_UTIL_H
-#define ISOM_UTIL_H
+#ifndef LSMASH_UTIL_H
+#define LSMASH_UTIL_H
 
 #include <stdio.h>
 #include <inttypes.h>
 
 #define debug_if(x) if(x)
+
+#define LSMASH_MAX( a, b ) ((a) > (b) ? (a) : (b))
+#define LSMASH_MIN( a, b ) ((a) < (b) ? (a) : (b))
 
 /*---- bytestream ----*/
 

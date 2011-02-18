@@ -21,7 +21,7 @@
 
 /* This file is available under an ISC license. */
 
-#include "isom.h"
+#include "box.h"
 #include "summary.h" /* FIXME: to be replaced with lsmash.h or whatnot */
 
 /* MP4 Audio Sample Entry */
@@ -621,7 +621,7 @@ static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, mp4sys
             isom_add_terminator( audio->wave ) )
             goto fail;
         audio->version = (summary->channels > 2 || summary->frequency > UINT16_MAX) ? 2 : 1;
-        audio->channelcount = audio->version == 2 ? 3 : ISOM_MIN( summary->channels, 2 );
+        audio->channelcount = audio->version == 2 ? 3 : LSMASH_MIN( summary->channels, 2 );
         audio->compression_ID = -2;     /* assume VBR */
         audio->packet_size = 0;
         if( audio->version == 1 )
@@ -1125,7 +1125,7 @@ static int isom_add_chpl_entry( isom_chpl_t *chpl, uint64_t start_time, char *ch
     if( !data )
         return -1;
     data->start_time = start_time;
-    data->chapter_name_length = ISOM_MIN( strlen( chapter_name ), 255 );
+    data->chapter_name_length = LSMASH_MIN( strlen( chapter_name ), 255 );
     data->chapter_name = malloc( data->chapter_name_length + 1 );
     if( !data->chapter_name )
     {
@@ -3648,17 +3648,17 @@ static int isom_check_compatibility( isom_root_t *root )
                 root->itunes_audio = 1;
                 break;
             case ISOM_BRAND_TYPE_3GP4 :
-                root->max_3gpp_version = ISOM_MAX( root->max_3gpp_version, 4 );
+                root->max_3gpp_version = LSMASH_MAX( root->max_3gpp_version, 4 );
                 break;
             case ISOM_BRAND_TYPE_3GP5 :
-                root->max_3gpp_version = ISOM_MAX( root->max_3gpp_version, 5 );
+                root->max_3gpp_version = LSMASH_MAX( root->max_3gpp_version, 5 );
                 break;
             case ISOM_BRAND_TYPE_3GE6 :
             case ISOM_BRAND_TYPE_3GG6 :
             case ISOM_BRAND_TYPE_3GP6 :
             case ISOM_BRAND_TYPE_3GR6 :
             case ISOM_BRAND_TYPE_3GS6 :
-                root->max_3gpp_version = ISOM_MAX( root->max_3gpp_version, 6 );
+                root->max_3gpp_version = LSMASH_MAX( root->max_3gpp_version, 6 );
                 break;
         }
     }
@@ -7465,9 +7465,9 @@ static int isom_update_mdhd_duration( isom_trak_entry_t *trak, uint32_t last_sam
             if( !stts_data || !ctts_data )
                 return -1;
             uint64_t cts = dts + ctts_data->sample_offset;
-            min_cts = ISOM_MIN( min_cts, cts );
-            max_offset = ISOM_MAX( max_offset, ctts_data->sample_offset );
-            min_offset = ISOM_MIN( min_offset, ctts_data->sample_offset );
+            min_cts = LSMASH_MIN( min_cts, cts );
+            max_offset = LSMASH_MAX( max_offset, ctts_data->sample_offset );
+            min_offset = LSMASH_MIN( min_offset, ctts_data->sample_offset );
             if( max_cts < cts )
             {
                 max2_cts = max_cts;
@@ -7544,7 +7544,7 @@ static int isom_update_mvhd_duration( isom_moov_t *moov )
         isom_trak_entry_t *data = (isom_trak_entry_t *)entry->data;
         if( !data || !data->tkhd )
             return -1;
-        mvhd->duration = entry != moov->trak_list->head ? ISOM_MAX( mvhd->duration, data->tkhd->duration ) : data->tkhd->duration;
+        mvhd->duration = entry != moov->trak_list->head ? LSMASH_MAX( mvhd->duration, data->tkhd->duration ) : data->tkhd->duration;
     }
     if( mvhd->duration > UINT32_MAX )
         mvhd->version = 1;
@@ -9093,7 +9093,7 @@ int isom_set_media_handler( isom_root_t *root, uint32_t track_ID, uint32_t media
         uint8_t *name = NULL;
         if( root->qt_compatible )
         {
-            name_length = ISOM_MIN( name_length, 255 );
+            name_length = LSMASH_MIN( name_length, 255 );
             name = malloc( name_length );
             name[0] = name_length & 0xff;
         }
@@ -9117,7 +9117,7 @@ int isom_set_media_handler_name( isom_root_t *root, uint32_t track_ID, char *han
     uint8_t *name = NULL;
     uint32_t name_length = strlen( handler_name ) + root->isom_compatible + root->qt_compatible;
     if( root->qt_compatible )
-        name_length = ISOM_MIN( name_length, 255 );
+        name_length = LSMASH_MIN( name_length, 255 );
     if( name_length > hdlr->componentName_length && hdlr->componentName )
         name = realloc( hdlr->componentName, name_length );
     else if( !hdlr->componentName )
@@ -9154,7 +9154,7 @@ int isom_set_data_handler( isom_root_t *root, uint32_t track_ID, uint32_t refere
         uint8_t *name = NULL;
         if( root->qt_compatible )
         {
-            name_length = ISOM_MIN( name_length, 255 );
+            name_length = LSMASH_MIN( name_length, 255 );
             name = malloc( name_length );
             name[0] = name_length & 0xff;
         }
@@ -9178,7 +9178,7 @@ int isom_set_data_handler_name( isom_root_t *root, uint32_t track_ID, char *hand
     uint8_t *name = NULL;
     uint32_t name_length = strlen( handler_name ) + root->isom_compatible + root->qt_compatible;
     if( root->qt_compatible )
-        name_length = ISOM_MIN( name_length, 255 );
+        name_length = LSMASH_MIN( name_length, 255 );
     if( name_length > hdlr->componentName_length && hdlr->componentName )
         name = realloc( hdlr->componentName, name_length );
     else if( !hdlr->componentName )
@@ -9815,8 +9815,8 @@ int isom_finish_movie( isom_root_t *root, isom_adhoc_remux_t* remux )
         if( trak->is_chapter && related_track_ID )
         {
             /* In order that the track duration of the chapter track doesn't exceed that of the related track. */
-            uint64_t track_duration = ISOM_MIN( trak->tkhd->duration, isom_get_track_duration( root, related_track_ID ) );
-            if( isom_create_explicit_timeline_map( root, track_ID, track_duration, 0, ISOM_NORMAL_EDIT ) )
+            uint64_t track_duration = LSMASH_MIN( trak->tkhd->duration, isom_get_track_duration( root, related_track_ID ) );
+            if( isom_create_explicit_timeline_map( root, track_ID, track_duration, 0, ISOM_EDIT_MODE_NORMAL ) )
                 return -1;
         }
         /* Add stss box if any samples aren't sync sample. */
@@ -9859,7 +9859,7 @@ int isom_finish_movie( isom_root_t *root, isom_adhoc_remux_t* remux )
     /* now the amount of offset is fixed. */
 
     /* buffer size must be at least sizeof(moov)*2 */
-    remux->buffer_size = ISOM_MAX( remux->buffer_size, root->moov->size * 2 );
+    remux->buffer_size = LSMASH_MAX( remux->buffer_size, root->moov->size * 2 );
 
     uint8_t* buf[2];
     if( (buf[0] = (uint8_t*)malloc( remux->buffer_size )) == NULL )
