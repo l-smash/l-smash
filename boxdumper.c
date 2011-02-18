@@ -20,7 +20,7 @@
 
 /* This file is available under an ISC license. */
 
-#include "isom.h"
+#include "lsmash.h"
 
 int main( int argc, char *argv[] )
 {

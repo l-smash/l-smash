@@ -20,7 +20,7 @@
 
 /* This file is available under an ISC license. */
 
-#include "isom.h"
+#include "lsmash.h"
 #include "importer.h"
 #include <stdarg.h>
 
@@ -240,7 +240,7 @@ int main( int argc, char* argv[] )
     if( isom_flush_pooled_samples( structs.root, track, structs.summary->samples_in_frame ) )
         eprintf( "Failed to flush the rest of samples.\n" );
     // if( isom_update_track_duration( structs.root, track ) ) /* if not use edts */
-    if( isom_create_explicit_timeline_map( structs.root, track, 0, 0, ISOM_NORMAL_EDIT ) ) /* use edts */
+    if( isom_create_explicit_timeline_map( structs.root, track, 0, 0, ISOM_EDIT_MODE_NORMAL ) ) /* use edts */
         eprintf( "Failed to set timeline map.\n" );
     if( isom_update_bitrate_info( structs.root, track, sample_entry ) )
         eprintf( "Failed to update bitrate info.\n" );
