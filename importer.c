@@ -233,6 +233,7 @@ static mp4sys_audio_summary_t* mp4sys_adts_create_summary( mp4sys_adts_fixed_hea
     if( !summary )
         return NULL;
     memset( summary, 0, sizeof(mp4sys_audio_summary_t) );
+    summary->sample_type            = ISOM_CODEC_TYPE_MP4A_AUDIO;
     summary->object_type_indication = MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3;
     summary->stream_type            = MP4SYS_STREAM_TYPE_AudioStream;
     summary->max_au_length          = MP4SYS_ADTS_MAX_FRAME_LENGTH;
@@ -544,6 +545,7 @@ static mp4sys_audio_summary_t* mp4sys_mp3_create_summary( mp4sys_mp3_header_t* h
     if( !summary )
         return NULL;
     memset( summary, 0, sizeof(mp4sys_audio_summary_t) );
+    summary->sample_type            = ISOM_CODEC_TYPE_MP4A_AUDIO;
     summary->object_type_indication = header->ID ? MP4SYS_OBJECT_TYPE_Audio_ISO_11172_3 : MP4SYS_OBJECT_TYPE_Audio_ISO_13818_3;
     summary->stream_type            = MP4SYS_STREAM_TYPE_AudioStream;
     summary->max_au_length          = MP4SYS_MP3_MAX_FRAME_LENGTH;
@@ -837,10 +839,8 @@ static int mp4sys_amr_probe( mp4sys_importer_t* importer )
     memset( summary, 0, sizeof(mp4sys_audio_summary_t) );
     if( !summary )
         return -1;
-    /* FIXME: Using a workaround for L-SMASH's structure issue.
-              This summary cannot provide enough information to determine isom_codec_code without this.
-              isom_codec_code cannot be a member of summary, because inclusion of isom.h is a cycling reference. */
-    summary->object_type_indication = MP4SYS_OBJECT_TYPE_PRIV_SAMR_AUDIO + wb; /* FIXME: private OTI. */
+    summary->sample_type            = wb ? ISOM_CODEC_TYPE_SAWB_AUDIO : ISOM_CODEC_TYPE_SAMR_AUDIO;
+    summary->object_type_indication = MP4SYS_OBJECT_TYPE_NONE; /* AMR is not defined in ISO/IEC 14496-3 */
     summary->stream_type            = MP4SYS_STREAM_TYPE_AudioStream;
     summary->exdata                 = NULL; /* to be set in mp4sys_amrnb_create_damr() */
     summary->exdata_length          = 0;    /* to be set in mp4sys_amrnb_create_damr() */

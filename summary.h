@@ -23,6 +23,7 @@
 #ifndef LSMASH_SUMMARY_H
 #define LSMASH_SUMMARY_H
 
+#include "lsmash.h"
 #include "mp4a.h"
 #include "mp4sys.h"
 
@@ -44,6 +45,7 @@ typedef struct {
 typedef struct {
     MP4SYS_BASE_SUMMARY
     // mp4a_audioProfileLevelIndication pli ; /* I wonder we should have this or not. */
+    uint32_t sample_type;        /* Audio codec type. */
     mp4a_AudioObjectType aot;    /* Detailed codec type. If not mp4a, just ignored. */
     uint32_t frequency;          /* Even if the stream is HE-AAC v1/SBR, this is base AAC's one. */
     uint32_t channels;           /* Even if the stream is HE-AAC v2/SBR+PS, this is base AAC's one. */

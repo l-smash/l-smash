@@ -125,23 +125,18 @@ int main( int argc, char* argv[] )
         return AUDIOMUX_ERR( "Failed to open input file.\n" );
 
     /* check codec type. */
-    enum isom_codec_code codec_code;
-    switch( structs.summary->object_type_indication )
+    enum isom_codec_code codec_code = structs.summary->sample_type;
+    switch( codec_code )
     {
-    case MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3:
-    case MP4SYS_OBJECT_TYPE_Audio_ISO_13818_3: /* Legacy Interface */
-    case MP4SYS_OBJECT_TYPE_Audio_ISO_11172_3: /* Legacy Interface */
-        codec_code = ISOM_CODEC_TYPE_MP4A_AUDIO; break;
-    case MP4SYS_OBJECT_TYPE_PRIV_SAMR_AUDIO:
+    case ISOM_CODEC_TYPE_MP4A_AUDIO:
+        break;
+    case ISOM_CODEC_TYPE_SAWB_AUDIO:
+    case ISOM_CODEC_TYPE_SAMR_AUDIO:
         if( m4a )
-            return AUDIOMUX_ERR( "The input seems AMR-NB but it's not compatible with --m4a.\n" );
-        codec_code = ISOM_CODEC_TYPE_SAMR_AUDIO; break;
-    case MP4SYS_OBJECT_TYPE_PRIV_SAWB_AUDIO:
-        if( m4a )
-            return AUDIOMUX_ERR( "The input seems AMR-WB but it's not compatible with --m4a.\n" );
-        codec_code = ISOM_CODEC_TYPE_SAWB_AUDIO; break;
+            return AUDIOMUX_ERR( "The input seems AMR-NB/WB but it's not compatible with --m4a.\n" );
+        break;
     default:
-        return AUDIOMUX_ERR( "Unknown object_type_indication.\n" );
+        return AUDIOMUX_ERR( "Unknown sample_type.\n" );
     }
     /* user defined sbr mode. */
     if( sbr )
