@@ -950,6 +950,12 @@ typedef struct
     lsmash_entry_list_t *list;      /* if version is set to 0, entry_count is uint8_t. */
 } isom_chpl_t;
 
+typedef struct
+{
+    char *chapter_name;
+    uint64_t start_time;
+} isom_chapter_entry_t;
+
 /* User Data Box */
 typedef struct
 {

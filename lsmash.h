@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
+#include <ctype.h> /* for chapter handling */
 
 #ifdef __MINGW32__
 #define fseek fseeko64

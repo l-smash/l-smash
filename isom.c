@@ -1117,22 +1117,23 @@ static isom_sbgp_entry_t *isom_add_sbgp_entry( isom_sbgp_t *sbgp, uint32_t sampl
     return data;
 }
 
-static int isom_add_chpl_entry( isom_chpl_t *chpl, uint64_t start_time, char *chapter_name )
+static int isom_add_chpl_entry( isom_chpl_t *chpl, isom_chapter_entry_t *chap_data )
 {
-    if( !chapter_name || !chpl || !chpl->list )
+    if( !chap_data->chapter_name || !chpl || !chpl->list )
         return -1;
     isom_chpl_entry_t *data = malloc( sizeof(isom_chpl_entry_t) );
     if( !data )
         return -1;
-    data->start_time = start_time;
-    data->chapter_name_length = LSMASH_MIN( strlen( chapter_name ), 255 );
-    data->chapter_name = malloc( data->chapter_name_length + 1 );
+    data->start_time = chap_data->start_time;
+    data->chapter_name_length = strlen( chap_data->chapter_name );
+    data->chapter_name = ( char* )malloc( data->chapter_name_length + 1 );
     if( !data->chapter_name )
     {
         free( data );
         return -1;
     }
-    memcpy( data->chapter_name, chapter_name, data->chapter_name_length );
+    memcpy( data->chapter_name, chap_data->chapter_name, data->chapter_name_length );
+    data->chapter_name[data->chapter_name_length] = '\0';
     if( lsmash_add_entry( chpl->list, data ) )
     {
         free( data->chapter_name );
@@ -10135,54 +10136,132 @@ void isom_delete_sample( isom_sample_t *sample )
 
 /*---- misc functions ----*/
 
+#define CHAPTER_BUFSIZE 512 /* for chapter handling */
+
+static int isom_get_start_time( char *chap_time, isom_chapter_entry_t *data )
+{
+    uint64_t hh, mm;
+    double ss;
+    if( sscanf( chap_time, "%"SCNu64":%2"SCNu64":%lf", &hh, &mm, &ss ) != 3 )
+        return -1;
+    /* check overflow */
+    if( hh >= 5124095 || mm >= 60 || ss >= 60 )
+        return -1;
+    /* 1ns timescale */
+    data->start_time = (hh * 3600 + mm * 60 + ss) * 1e9;
+    return 0;
+}
+
+static int isom_lumber_line( char *buff, int bufsize, FILE *chapter  )
+{
+    char *tail;
+    /* remove newline codes and skip empty line */
+    do{
+        if( fgets( buff, bufsize, chapter ) == NULL )
+            return -1;
+        tail = &buff[ strlen( buff ) - 1 ];
+        while( tail >= buff && ( *tail == '\n' || *tail == '\r' ) )
+            *tail-- = '\0';
+    }while( tail < buff );
+    return 0;
+}
+
+static int isom_read_simple_chapter( FILE *chapter, isom_chapter_entry_t *data )
+{
+    char buff[CHAPTER_BUFSIZE];
+    int len;
+
+    /* get start_time */
+    if( isom_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) )
+        return -1;
+    char *chapter_time = strchr( buff, '=' );   /* find separator */
+    if( !chapter_time++
+        || isom_get_start_time( chapter_time, data )
+        || isom_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) ) /* get chapter_name */
+        return -1;
+    char *chapter_name = strchr( buff, '=' );   /* find separator */
+    if( !chapter_name++ )
+        return -1;
+    len = LSMASH_MIN( 255, strlen( chapter_name ) );  /* We support length of chapter_name up to 255 */
+    data->chapter_name = ( char* )malloc( len + 1 );
+    if( !data->chapter_name )
+        return -1;
+    memcpy( data->chapter_name, chapter_name, len );
+    data->chapter_name[len] = '\0';
+    return 0;
+}
+
+static int isom_read_minimum_chapter( FILE *chapter, isom_chapter_entry_t *data )
+{
+    char buff[CHAPTER_BUFSIZE];
+    int len;
+
+    if( isom_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) /* read newline */
+        || isom_get_start_time( buff, data ) ) /* get start_time */
+        return -1;
+    /* get chapter_name */
+    char *chapter_name = strchr( buff, ' ' );   /* find separator */
+    if( !chapter_name++ )
+        return -1;
+    len = LSMASH_MIN( 255, strlen( chapter_name ) );  /* We support length of chapter_name up to 255 */
+    data->chapter_name = ( char* )malloc( len + 1 );
+    if( !data->chapter_name )
+        return -1;
+    memcpy( data->chapter_name, chapter_name, len );
+    data->chapter_name[len] = '\0';
+    return 0;
+}
+
+typedef int (*fn_get_chapter_data)( FILE *, isom_chapter_entry_t * );
+
+static fn_get_chapter_data isom_check_chap_line( char *file_name )
+{
+    char buff[CHAPTER_BUFSIZE];
+    FILE *fp = fopen( file_name, "rb" );
+    if( !fp )
+        return NULL;
+    fn_get_chapter_data fnc = NULL;
+    if( fgets( buff, CHAPTER_BUFSIZE, fp ) != NULL )
+    {
+        if( strncmp( buff, "CHAPTER", 7 ) == 0 )
+            fnc = isom_read_simple_chapter;
+        else if( isdigit( buff[0] ) && isdigit( buff[1] ) && buff[2] == ':'
+             && isdigit( buff[3] ) && isdigit( buff[4] ) && buff[5] == ':' )
+            fnc = isom_read_minimum_chapter;
+    }
+    fclose( fp );
+    return fnc;
+}
+
 int isom_set_tyrant_chapter( isom_root_t *root, char *file_name )
 {
     /* This function should be called after updating of the latest movie duration. */
     if( !root || !root->moov || !root->moov->mvhd || !root->moov->mvhd->timescale || !root->moov->mvhd->duration )
         return -1;
-    char buff[512];
+    /* check each line format */
+    fn_get_chapter_data fnc = isom_check_chap_line( file_name );
+    if( !fnc )
+        return -1;
     FILE *chapter = fopen( file_name, "rb" );
     if( !chapter )
         return -1;
     if( isom_add_udta( root, 0 ) || isom_add_chpl( root->moov ) )
         goto fail;
-    while( fgets( buff, sizeof(buff), chapter ) != NULL )
+    isom_chapter_entry_t data;
+    while( !fnc( chapter, &data ) )
     {
-        /* skip empty line */
-        if( buff[0] == '\n' || buff[0] == '\r' )
-            continue;
-        /* remove newline codes */
-        char *tail = &buff[ strlen( buff ) - 1 ];
-        if( *tail == '\n' || *tail == '\r' )
-        {
-            if( tail > buff && *tail == '\n' && *(tail-1) == '\r' )
-            {
-                *tail = '\0';
-                *(tail-1) = '\0';
-            }
-            else
-                *tail = '\0';
-        }
-        /* get chapter_name */
-        char *chapter_name = strchr( buff, ' ' );   /* find separator */
-        if( !chapter_name || strlen( buff ) <= ++chapter_name - buff )
+        data.start_time = (data.start_time + 50) / 100;    /* convert to 100ns unit */
+        if( data.start_time / 1e7 > (double)root->moov->mvhd->duration / root->moov->mvhd->timescale
+            || isom_add_chpl_entry( root->moov->udta->chpl, &data ) )
             goto fail;
-        /* get start_time */
-        uint64_t hh, mm, ss, ms;
-        if( sscanf( buff, "%"SCNu64":%"SCNu64":%"SCNu64".%"SCNu64, &hh, &mm, &ss, &ms ) != 4 )
-            goto fail;
-        /* start_time will overflow at 512409557:36:10.956 */
-        if( hh > 512409556 || mm > 59 || ss > 59 || ms > 999 )
-            goto fail;
-        uint64_t start_time = ms * 10000 + (ss + mm * 60 + hh * 3600) * 10000000;
-        if( start_time / 1e7 > (double)root->moov->mvhd->duration / root->moov->mvhd->timescale )
-            break;
-        if( isom_add_chpl_entry( root->moov->udta->chpl, start_time, chapter_name ) )
-            goto fail;
+        free( data.chapter_name );
+        data.chapter_name = NULL;
     }
     fclose( chapter );
     return 0;
 fail:
+    if( data.chapter_name )
+        free( data.chapter_name );
     fclose( chapter );
     return -1;
 }
@@ -10228,46 +10307,28 @@ int isom_create_reference_chapter_track( isom_root_t *root, uint32_t track_ID, c
     uint32_t sample_entry = isom_add_sample_entry( root, chapter_track_ID, sample_type, NULL );
     if( !sample_entry )
         goto fail;
+    /* Check each line format */
+    fn_get_chapter_data fnc = isom_check_chap_line( file_name );
+    if( !fnc )
+        return -1;
     /* Open chapter format file. */
     chapter = fopen( file_name, "rb" );
     if( !chapter )
         goto fail;
     /* Parse the file and write text samples. */
-    char buff[512];
-    while( fgets( buff, sizeof(buff), chapter ) != NULL )
+    isom_chapter_entry_t data;
+    while( !fnc( chapter, &data ) )
     {
-        /* skip empty line */
-        if( buff[0] == '\n' || buff[0] == '\r' )
-            continue;
-        /* remove newline codes */
-        char *tail = &buff[ strlen( buff ) - 1 ];
-        if( *tail == '\n' || *tail == '\r' )
-        {
-            if( tail > buff && *tail == '\n' && *(tail-1) == '\r' )
-            {
-                *tail = '\0';
-                *(tail-1) = '\0';
-            }
-            else
-                *tail = '\0';
-        }
-        /* get chapter_name */
-        char *chapter_name = strchr( buff, ' ' );   /* find separator */
-        if( !chapter_name || strlen( buff ) <= ++chapter_name - buff )
-            goto fail;
-        /* get start_time */
-        uint64_t hh, mm, ss, ms;
-        if( sscanf( buff, "%"SCNu64":%"SCNu64":%"SCNu64".%"SCNu64, &hh, &mm, &ss, &ms ) != 4 )
-            goto fail;
-        uint64_t start_time = (ms * 1e-3 + (ss + mm * 60 + hh * 3600)) * media_timescale + 0.5;
+        /* set start_time */
+        data.start_time = data.start_time * 1e-9 * media_timescale + 0.5;
         /* write a text sample here */
-        uint16_t name_length = strlen( chapter_name );
+        uint16_t name_length = strlen( data.chapter_name );
         isom_sample_t *sample = isom_create_sample( 2 + name_length + 12 * (sample_type == QT_CODEC_TYPE_TEXT_TEXT) );
         if( !sample )
             goto fail;
         sample->data[0] = (name_length >> 8) & 0xff;
         sample->data[1] =  name_length       & 0xff;
-        memcpy( sample->data + 2, chapter_name, name_length );
+        memcpy( sample->data + 2, data.chapter_name, name_length );
         if( sample_type == QT_CODEC_TYPE_TEXT_TEXT )
         {
             /* QuickTime Player requires Text Encoding Attribute Box ('encd') if media language is ISO language codes : undefined.
@@ -10278,11 +10339,13 @@ int isom_create_reference_chapter_track( isom_root_t *root, uint32_t track_ID, c
                                  0x00, 0x00, 0x01, 0x00 };      /* Unicode Encoding */
             memcpy( sample->data + 2 + name_length, encd, 12 );
         }
-        sample->dts = sample->cts = start_time;
+        sample->dts = sample->cts = data.start_time;
         sample->prop.sync_point = 1;
         sample->index = sample_entry;
         if( isom_write_sample( root, chapter_track_ID, sample ) )
             goto fail;
+        free( data.chapter_name );
+        data.chapter_name = NULL;
     }
     if( isom_flush_pooled_samples( root, chapter_track_ID, 0 ) )
         goto fail;
@@ -10296,6 +10359,8 @@ int isom_create_reference_chapter_track( isom_root_t *root, uint32_t track_ID, c
 fail:
     if( chapter )
         fclose( chapter );
+    if( data.chapter_name )
+        free( data.chapter_name );
     free( chap->track_ID );
     chap->track_ID = NULL;
     /* Remove the reference chapter track attached at tail of the list. */
