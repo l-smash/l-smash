@@ -418,7 +418,7 @@ static int isom_add_avc_entry( isom_stsd_t *stsd, uint32_t sample_type )
     return 0;
 }
 
-static int isom_add_mp4a_entry( isom_stsd_t *stsd, mp4sys_audio_summary_t* summary )
+static int isom_add_mp4a_entry( isom_stsd_t *stsd, lsmash_audio_summary_t *summary )
 {
     if( !stsd || !stsd->list || !summary
         || summary->stream_type != MP4SYS_STREAM_TYPE_AudioStream )
@@ -599,7 +599,7 @@ static int isom_add_chan( isom_audio_entry_t *audio )
     return 0;
 }
 
-static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, mp4sys_audio_summary_t *summary )
+static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash_audio_summary_t *summary )
 {
     if( !stsd || !stsd->list )
         return -1;
@@ -772,9 +772,9 @@ int isom_add_sample_entry( isom_root_t *root, uint32_t track_ID, uint32_t sample
 #endif
         case ISOM_CODEC_TYPE_MP4A_AUDIO :
             if( trak->root->ftyp->major_brand != ISOM_BRAND_TYPE_QT )
-                ret = isom_add_mp4a_entry( stsd, (mp4sys_audio_summary_t *)summary );
+                ret = isom_add_mp4a_entry( stsd, (lsmash_audio_summary_t *)summary );
             else
-                ret = isom_add_audio_entry( stsd, sample_type, (mp4sys_audio_summary_t *)summary );
+                ret = isom_add_audio_entry( stsd, sample_type, (lsmash_audio_summary_t *)summary );
             break;
 #if 0
         case ISOM_CODEC_TYPE_MP4S_SYSTEM :
@@ -810,7 +810,7 @@ int isom_add_sample_entry( isom_root_t *root, uint32_t track_ID, uint32_t sample
         case ISOM_CODEC_TYPE_SSMV_AUDIO :
         case ISOM_CODEC_TYPE_TWOS_AUDIO :
 #endif
-            ret = isom_add_audio_entry( stsd, sample_type, (mp4sys_audio_summary_t *)summary );
+            ret = isom_add_audio_entry( stsd, sample_type, (lsmash_audio_summary_t *)summary );
             break;
         case ISOM_CODEC_TYPE_TX3G_TEXT :
             ret = isom_add_tx3g_entry( stsd );
@@ -955,7 +955,7 @@ int isom_add_stps_entry( isom_stbl_t *stbl, uint32_t sample_number )
     return 0;
 }
 
-static int isom_add_sdtp_entry( isom_stbl_t *stbl, isom_sample_property_t *prop, uint8_t avc_extensions )
+static int isom_add_sdtp_entry( isom_stbl_t *stbl, lsmash_sample_property_t *prop, uint8_t avc_extensions )
 {
     if( !prop )
         return -1;
@@ -964,7 +964,7 @@ static int isom_add_sdtp_entry( isom_stbl_t *stbl, isom_sample_property_t *prop,
     isom_sdtp_entry_t *data = malloc( sizeof(isom_sdtp_entry_t) );
     if( !data )
         return -1;
-    /* isom_sdtp_entry_t is smaller than isom_sample_property_t. */
+    /* isom_sdtp_entry_t is smaller than lsmash_sample_property_t. */
     data->is_leading = (avc_extensions ? prop->leading : prop->allow_earlier) & 0x03;
     data->sample_depends_on = prop->independent & 0x03;
     data->sample_is_depended_on = prop->disposable & 0x03;
@@ -1317,12 +1317,12 @@ static int isom_add_tkhd( isom_trak_entry_t *trak, uint32_t handler_type )
         isom_create_box( tkhd, trak, ISOM_BOX_TYPE_TKHD );
         switch( handler_type )
         {
-            case ISOM_MEDIA_HANDLER_TYPE_VIDEO :
+            case ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK :
                 tkhd->matrix[0] = 0x00010000;
                 tkhd->matrix[4] = 0x00010000;
                 tkhd->matrix[8] = 0x40000000;
                 break;
-            case ISOM_MEDIA_HANDLER_TYPE_AUDIO :
+            case ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK :
                 tkhd->volume = 0x0100;
                 break;
             default :
@@ -1426,7 +1426,7 @@ static int isom_add_hdlr( isom_mdia_t *mdia, isom_minf_t *minf, uint32_t media_t
         return -1;    /* Selected one must not have hdlr yet. */
     isom_box_t *parent = mdia ? (isom_box_t *)mdia : (isom_box_t *)minf;
     isom_create_box( hdlr, parent, ISOM_BOX_TYPE_HDLR );
-    uint32_t type = mdia ? (root->qt_compatible ? ISOM_HANDLER_TYPE_MEDIA : 0) : ISOM_HANDLER_TYPE_DATA;
+    uint32_t type = mdia ? (root->qt_compatible ? QT_HANDLER_TYPE_MEDIA : 0) : QT_HANDLER_TYPE_DATA;
     uint32_t subtype = media_type;
     hdlr->componentType = type;
     hdlr->componentSubtype = subtype;
@@ -1436,7 +1436,7 @@ static int isom_add_hdlr( isom_mdia_t *mdia, isom_minf_t *minf, uint32_t media_t
     uint8_t subtype_name_length = 0;
     switch( type )
     {
-        case ISOM_HANDLER_TYPE_DATA :
+        case QT_HANDLER_TYPE_DATA :
             type_name = "Data ";
             type_name_length = 5;
             break;
@@ -1447,35 +1447,35 @@ static int isom_add_hdlr( isom_mdia_t *mdia, isom_minf_t *minf, uint32_t media_t
     }
     switch( subtype )
     {
-        case ISOM_MEDIA_HANDLER_TYPE_AUDIO :
+        case ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK :
             subtype_name = "Sound ";
             subtype_name_length = 6;
             break;
-        case ISOM_MEDIA_HANDLER_TYPE_VIDEO :
+        case ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK :
             subtype_name = "Video ";
             subtype_name_length = 6;
             break;
-        case ISOM_MEDIA_HANDLER_TYPE_HINT :
+        case ISOM_MEDIA_HANDLER_TYPE_HINT_TRACK :
             subtype_name = "Hint ";
             subtype_name_length = 5;
             break;
-        case ISOM_MEDIA_HANDLER_TYPE_META :
+        case ISOM_MEDIA_HANDLER_TYPE_TIMED_METADATA_TRACK :
             subtype_name = "Meta ";
             subtype_name_length = 5;
             break;
-        case ISOM_MEDIA_HANDLER_TYPE_TEXT :
+        case ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK :
             subtype_name = "Text ";
             subtype_name_length = 5;
             break;
-        case ISOM_REFERENCE_HANDLER_TYPE_ALIAS :
+        case QT_REFERENCE_HANDLER_TYPE_ALIAS :
             subtype_name = "Alias ";
             subtype_name_length = 6;
             break;
-        case ISOM_REFERENCE_HANDLER_TYPE_RESOURCE :
+        case QT_REFERENCE_HANDLER_TYPE_RESOURCE :
             subtype_name = "Resource ";
             subtype_name_length = 9;
             break;
-        case ISOM_REFERENCE_HANDLER_TYPE_URL :
+        case QT_REFERENCE_HANDLER_TYPE_URL :
             subtype_name = "URL ";
             subtype_name_length = 4;
             break;
@@ -7601,7 +7601,7 @@ static int isom_add_size( isom_trak_entry_t *trak, uint32_t sample_size )
     return isom_add_stsz_entry( trak->mdia->minf->stbl, sample_size );
 }
 
-static int isom_add_sync_point( isom_trak_entry_t *trak, uint32_t sample_number, isom_sample_property_t *prop )
+static int isom_add_sync_point( isom_trak_entry_t *trak, uint32_t sample_number, lsmash_sample_property_t *prop )
 {
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     isom_cache_t *cache = trak->cache;
@@ -7632,7 +7632,7 @@ static int isom_add_sync_point( isom_trak_entry_t *trak, uint32_t sample_number,
     return isom_add_stss_entry( stbl, sample_number );
 }
 
-static int isom_add_partial_sync( isom_trak_entry_t *trak, uint32_t sample_number, isom_sample_property_t *prop )
+static int isom_add_partial_sync( isom_trak_entry_t *trak, uint32_t sample_number, lsmash_sample_property_t *prop )
 {
     if( !trak->root->qt_compatible )
         return 0;
@@ -7644,7 +7644,7 @@ static int isom_add_partial_sync( isom_trak_entry_t *trak, uint32_t sample_numbe
     return isom_add_stps_entry( stbl, sample_number );
 }
 
-static int isom_add_dependency_type( isom_trak_entry_t *trak, isom_sample_property_t *prop )
+static int isom_add_dependency_type( isom_trak_entry_t *trak, lsmash_sample_property_t *prop )
 {
     if( !trak->root->qt_compatible && !trak->root->avc_extensions )
         return 0;
@@ -7658,14 +7658,14 @@ static int isom_add_dependency_type( isom_trak_entry_t *trak, isom_sample_proper
         return -1;
     uint32_t count = isom_get_sample_count( trak );
     /* fill past samples with ISOM_SAMPLE_*_UNKNOWN */
-    isom_sample_property_t null_prop = { 0 };
+    lsmash_sample_property_t null_prop = { 0 };
     for( uint32_t i = 1; i < count; i++ )
         if( isom_add_sdtp_entry( stbl, &null_prop, avc_extensions ) )
             return -1;
     return isom_add_sdtp_entry( stbl, prop, avc_extensions );
 }
 
-static int isom_group_roll_recovery( isom_trak_entry_t *trak, isom_sample_property_t *prop )
+static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_property_t *prop )
 {
     if( !trak->root->avc_extensions )
         return 0;
@@ -7778,7 +7778,7 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, isom_sample_proper
 /* returns 1 if pooled samples must be flushed. */
 /* FIXME: I wonder if this function should have a extra argument which indicates force_to_flush_cached_chunk.
    see isom_write_sample for detail. */
-static int isom_add_chunk( isom_trak_entry_t *trak, isom_sample_t *sample )
+static int isom_add_chunk( isom_trak_entry_t *trak, lsmash_sample_t *sample )
 {
     if( !trak->root || !trak->cache || !trak->mdia->mdhd || !trak->mdia->mdhd->timescale ||
         !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
@@ -7900,7 +7900,7 @@ static int isom_add_timestamp( isom_trak_entry_t *trak, uint64_t dts, uint64_t c
     return isom_add_cts( trak, cts );
 }
 
-static int isom_write_sample_data( isom_root_t *root, isom_sample_t *sample )
+static int isom_write_sample_data( isom_root_t *root, lsmash_sample_t *sample )
 {
     if( !root || !root->mdat || !root->bs || !root->bs->stream )
         return -1;
@@ -7917,7 +7917,7 @@ static int isom_write_pooled_samples( isom_trak_entry_t *trak, lsmash_entry_list
         return -1;
     for( lsmash_entry_t *entry = pool->head; entry; entry = entry->next )
     {
-        isom_sample_t *data = (isom_sample_t *)entry->data;
+        lsmash_sample_t *data = (lsmash_sample_t *)entry->data;
         if( !data || !data->data )
             return -1;
         /* Add a sample_size and increment sample_count. */
@@ -9041,23 +9041,23 @@ uint32_t isom_create_track( isom_root_t *root, uint32_t media_type )
         return 0;
     if( isom_add_hdlr( trak->mdia, NULL, media_type, root ) )
         return 0;
-    if( root->qt_compatible && isom_add_hdlr( NULL, trak->mdia->minf, ISOM_REFERENCE_HANDLER_TYPE_URL, root ) )
+    if( root->qt_compatible && isom_add_hdlr( NULL, trak->mdia->minf, QT_REFERENCE_HANDLER_TYPE_URL, root ) )
         return 0;
     switch( media_type )
     {
-        case ISOM_MEDIA_HANDLER_TYPE_VIDEO :
+        case ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK :
             if( isom_add_vmhd( trak->mdia->minf ) )
                 return 0;
             break;
-        case ISOM_MEDIA_HANDLER_TYPE_AUDIO :
+        case ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK :
             if( isom_add_smhd( trak->mdia->minf ) )
                 return 0;
             break;
-        case ISOM_MEDIA_HANDLER_TYPE_HINT :
+        case ISOM_MEDIA_HANDLER_TYPE_HINT_TRACK :
             if( isom_add_hmhd( trak->mdia->minf ) )
                 return 0;
             break;
-        case ISOM_MEDIA_HANDLER_TYPE_TEXT :
+        case ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK :
             if( root->qt_compatible || root->itunes_audio )
             {
                 if( isom_add_gmhd( trak->mdia->minf ) ||
@@ -9076,7 +9076,7 @@ uint32_t isom_create_track( isom_root_t *root, uint32_t media_type )
     return trak->tkhd->track_ID;
 }
 
-int isom_set_media_handler( isom_root_t *root, uint32_t track_ID, uint32_t media_type, char *handler_name )
+int isom_set_media_handler( isom_root_t *root, uint32_t track_ID, lsmash_media_type_code media_type, char *handler_name )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia )
@@ -9084,7 +9084,7 @@ int isom_set_media_handler( isom_root_t *root, uint32_t track_ID, uint32_t media
     if( !trak->mdia->hdlr && isom_add_hdlr( trak->mdia, NULL, 0, 0 ) )
         return -1;
     isom_hdlr_t *hdlr = trak->mdia->hdlr;
-    hdlr->componentType = ISOM_HANDLER_TYPE_MEDIA;
+    hdlr->componentType = QT_HANDLER_TYPE_MEDIA;
     hdlr->componentSubtype = media_type;
     if( handler_name )
     {
@@ -9137,7 +9137,7 @@ int isom_set_media_handler_name( isom_root_t *root, uint32_t track_ID, char *han
     return 0;
 }
 
-int isom_set_data_handler( isom_root_t *root, uint32_t track_ID, uint32_t reference_type, char *handler_name )
+int isom_set_data_handler( isom_root_t *root, uint32_t track_ID, lsmash_data_reference_type_code reference_type, char *handler_name )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf )
@@ -9145,7 +9145,7 @@ int isom_set_data_handler( isom_root_t *root, uint32_t track_ID, uint32_t refere
     if( !trak->mdia->minf->hdlr && isom_add_hdlr( NULL, trak->mdia->minf, 0, 0 ) )
         return -1;
     isom_hdlr_t *hdlr = trak->mdia->minf->hdlr;
-    hdlr->componentType = ISOM_HANDLER_TYPE_DATA;
+    hdlr->componentType = QT_HANDLER_TYPE_DATA;
     hdlr->componentSubtype = reference_type;
     if( handler_name )
     {
@@ -9251,7 +9251,7 @@ uint32_t isom_get_start_time_offset( isom_root_t *root, uint32_t track_ID )
     return ((isom_ctts_entry_t *)trak->mdia->minf->stbl->ctts->list->head->data)->sample_offset;
 }
 
-int isom_set_track_mode( isom_root_t *root, uint32_t track_ID, uint32_t mode )
+int isom_set_track_mode( isom_root_t *root, uint32_t track_ID, lsmash_track_mode_code mode )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->tkhd )
@@ -9405,7 +9405,8 @@ int isom_set_sample_aspect_ratio( isom_root_t *root, uint32_t track_ID, uint32_t
     return 0;
 }
 
-int isom_set_color_parameter( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, int primaries, int transfer, int matrix )
+int isom_set_color_parameter( isom_root_t *root, uint32_t track_ID, uint32_t entry_number,
+                              lsmash_color_parameter primaries, lsmash_color_parameter transfer, lsmash_color_parameter matrix )
 {
     if( !root->qt_compatible )
         return -1;
@@ -9503,7 +9504,7 @@ int isom_set_track_aperture_modes( isom_root_t *root, uint32_t track_ID, uint32_
 }
 
 int isom_set_scaling_method( isom_root_t *root, uint32_t track_ID, uint32_t entry_number,
-                             uint8_t scale_method, int16_t display_center_x, int16_t display_center_y )
+                             lsmash_scaling_method_code scale_method, int16_t display_center_x, int16_t display_center_y )
 {
     if( !root || !track_ID || !entry_number || !scale_method )
         return -1;
@@ -9523,7 +9524,7 @@ int isom_set_scaling_method( isom_root_t *root, uint32_t track_ID, uint32_t entr
     return 0;
 }
 
-int isom_set_channel_layout( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint32_t layout_tag, uint32_t bitmap )
+int isom_set_channel_layout( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, lsmash_channel_layout_tag_code layout_tag, lsmash_channel_bitmap_code bitmap )
 {
     if( layout_tag == QT_CHANNEL_LAYOUT_USE_CHANNEL_DESCRIPTIONS )
         return -1;  /* We don't support the feature of Channel Descriptions */
@@ -9563,7 +9564,7 @@ int isom_set_sample_type( isom_root_t *root, uint32_t track_ID, uint32_t entry_n
     return 0;
 }
 
-int isom_create_grouping( isom_root_t *root, uint32_t track_ID, uint32_t grouping_type )
+int isom_create_grouping( isom_root_t *root, uint32_t track_ID, lsmash_grouping_type_code grouping_type )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
@@ -9622,7 +9623,7 @@ uint32_t isom_get_movie_timescale( isom_root_t *root )
     return root->moov->mvhd->timescale;
 }
 
-int isom_set_brands( isom_root_t *root, uint32_t major_brand, uint32_t minor_version, uint32_t *brands, uint32_t brand_count )
+int isom_set_brands( isom_root_t *root, lsmash_brand_type_code major_brand, uint32_t minor_version, lsmash_brand_type_code *brands, uint32_t brand_count )
 {
     if( !root )
         return -1;
@@ -9796,7 +9797,7 @@ int isom_create_object_descriptor( isom_root_t *root )
 
 /*---- finishing functions ----*/
 
-int isom_finish_movie( isom_root_t *root, isom_adhoc_remux_t* remux )
+int isom_finish_movie( isom_root_t *root, lsmash_adhoc_remux_t* remux )
 {
     if( !root || !root->moov || !root->moov->trak_list )
         return -1;
@@ -10075,7 +10076,7 @@ int isom_update_movie_modification_time( isom_root_t *root )
 
 /*---- sample manipulators ----*/
 
-int isom_write_sample( isom_root_t *root, uint32_t track_ID, isom_sample_t *sample )
+int isom_write_sample( isom_root_t *root, uint32_t track_ID, lsmash_sample_t *sample )
 {
     /* I myself think max_chunk_duration == 0, which means all samples will be cached on memory, should be prevented.
        This means removal of a feature that we used to have, but anyway very alone chunk does not make sense. */
@@ -10109,12 +10110,12 @@ int isom_write_sample( isom_root_t *root, uint32_t track_ID, isom_sample_t *samp
     return lsmash_add_entry( current->pool, sample );
 }
 
-isom_sample_t *isom_create_sample( uint32_t size )
+lsmash_sample_t *isom_create_sample( uint32_t size )
 {
-    isom_sample_t *sample = malloc( sizeof(isom_sample_t) );
+    lsmash_sample_t *sample = malloc( sizeof(lsmash_sample_t) );
     if( !sample )
         return NULL;
-    memset( sample, 0, sizeof(isom_sample_t) );
+    memset( sample, 0, sizeof(lsmash_sample_t) );
     sample->data = malloc( size );
     if( !sample->data )
     {
@@ -10125,7 +10126,7 @@ isom_sample_t *isom_create_sample( uint32_t size )
     return sample;
 }
 
-void isom_delete_sample( isom_sample_t *sample )
+void isom_delete_sample( lsmash_sample_t *sample )
 {
     if( !sample )
         return;
@@ -10293,7 +10294,7 @@ int isom_create_reference_chapter_track( isom_root_t *root, uint32_t track_ID, c
     uint32_t chapter_track_ID = chap->track_ID[0] = root->moov->mvhd->next_track_ID;
     chap->ref_count = 1;
     /* Create reference chapter track. */
-    if( chapter_track_ID != isom_create_track( root, ISOM_MEDIA_HANDLER_TYPE_TEXT ) )
+    if( chapter_track_ID != isom_create_track( root, ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK ) )
         return -1;
     /* Copy media timescale. */
     uint64_t media_timescale = isom_get_media_timescale( root, track_ID );
@@ -10323,7 +10324,7 @@ int isom_create_reference_chapter_track( isom_root_t *root, uint32_t track_ID, c
         data.start_time = data.start_time * 1e-9 * media_timescale + 0.5;
         /* write a text sample here */
         uint16_t name_length = strlen( data.chapter_name );
-        isom_sample_t *sample = isom_create_sample( 2 + name_length + 12 * (sample_type == QT_CODEC_TYPE_TEXT_TEXT) );
+        lsmash_sample_t *sample = isom_create_sample( 2 + name_length + 12 * (sample_type == QT_CODEC_TYPE_TEXT_TEXT) );
         if( !sample )
             goto fail;
         sample->data[0] = (name_length >> 8) & 0xff;

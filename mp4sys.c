@@ -86,8 +86,8 @@ typedef struct {
 /* 8.6.6 DecoderConfigDescriptor */
 typedef struct {
     mp4sys_descriptor_head_t header;
-    mp4sys_object_type_indication objectTypeIndication;
-    mp4sys_stream_type streamType;
+    lsmash_mp4sys_object_type_indication objectTypeIndication;
+    lsmash_mp4sys_stream_type streamType;
     // uint8_t upStream; /* bit(1), always 0 in this muxer, used for interactive contents. */
     // uint8_t reserved=1; /* const bit(1) */
     uint32_t bufferSizeDB; /* maybe CPB size in bytes, NOT bits. */
@@ -276,8 +276,8 @@ int mp4sys_add_DecoderSpecificInfo( mp4sys_ES_Descriptor_t* esd, void* dsi_paylo
 */
 int mp4sys_add_DecoderConfigDescriptor(
     mp4sys_ES_Descriptor_t* esd,
-    mp4sys_object_type_indication objectTypeIndication,
-    mp4sys_stream_type streamType,
+    lsmash_mp4sys_object_type_indication objectTypeIndication,
+    lsmash_mp4sys_stream_type streamType,
     uint32_t bufferSizeDB,
     uint32_t maxBitrate,
     uint32_t avgBitrate

@@ -53,12 +53,12 @@ const uint32_t mp4a_AAC_frequency_table[13][4] = {
 /* This structure is represent of regularized AudioSpecificConfig. */
 /* for actual definition, see Table 1.14 Syntax of GetAudioObjectType() for audioObjectType and extensionAudioObjectType. */
 typedef struct {
-    mp4a_aac_sbr_mode sbr_mode; /* L-SMASH's original, including sbrPresent flag. */
-    mp4a_AudioObjectType audioObjectType;
+    lsmash_mp4a_aac_sbr_mode sbr_mode; /* L-SMASH's original, including sbrPresent flag. */
+    lsmash_mp4a_AudioObjectType audioObjectType;
     uint8_t samplingFrequencyIndex;
     uint32_t samplingFrequency;
     uint8_t channelConfiguration;
-    mp4a_AudioObjectType extensionAudioObjectType;
+    lsmash_mp4a_AudioObjectType extensionAudioObjectType;
     uint8_t extensionSamplingFrequencyIndex;
     uint8_t extensionSamplingFrequency;
     /* if( audioObjectType in
@@ -190,7 +190,7 @@ void mp4a_remove_AudioSpecificConfig( mp4a_AudioSpecificConfig_t* asc )
 
 /* ADIF/PCE(program config element) style GASpecificConfig is not not supported. */
 /* channelConfig/samplingFrequencyIndex will be used when we support ADIF/PCE style GASpecificConfig. */
-static mp4a_GASpecificConfig_t* mp4a_create_GASpecificConfig( uint8_t samplingFrequencyIndex, uint8_t channelConfig, mp4a_AudioObjectType aot )
+static mp4a_GASpecificConfig_t* mp4a_create_GASpecificConfig( uint8_t samplingFrequencyIndex, uint8_t channelConfig, lsmash_mp4a_AudioObjectType aot )
 {
     debug_if( aot != MP4A_AUDIO_OBJECT_TYPE_AAC_MAIN && aot != MP4A_AUDIO_OBJECT_TYPE_AAC_LC
         && aot != MP4A_AUDIO_OBJECT_TYPE_AAC_SSR && aot != MP4A_AUDIO_OBJECT_TYPE_AAC_LTP
@@ -245,7 +245,7 @@ static mp4a_MPEG_1_2_SpecificConfig_t* mp4a_create_MPEG_1_2_SpecificConfig()
    aot shall not be MP4A_AUDIO_OBJECT_TYPE_SBR even if you wish to signal SBR explicitly, use sbr_mode instead.
    Frequency/channels shall be base AAC's one, even if SBR/PS.
    If other than AAC with SBR, sbr_mode shall be MP4A_AAC_SBR_NOT_SPECIFIED. */
-mp4a_AudioSpecificConfig_t* mp4a_create_AudioSpecificConfig( mp4a_AudioObjectType aot, uint32_t frequency, uint32_t channels, mp4a_aac_sbr_mode sbr_mode )
+mp4a_AudioSpecificConfig_t* mp4a_create_AudioSpecificConfig( lsmash_mp4a_AudioObjectType aot, uint32_t frequency, uint32_t channels, lsmash_mp4a_aac_sbr_mode sbr_mode )
 {
     if( aot != MP4A_AUDIO_OBJECT_TYPE_AAC_MAIN && aot != MP4A_AUDIO_OBJECT_TYPE_AAC_LC
         && aot != MP4A_AUDIO_OBJECT_TYPE_AAC_SSR && aot != MP4A_AUDIO_OBJECT_TYPE_AAC_LTP
@@ -364,7 +364,7 @@ static void mp4a_put_MPEG_1_2_SpecificConfig( lsmash_bits_t* bits, mp4a_MPEG_1_2
     lsmash_bits_put( bits, mpeg_1_2_sc->extension, 1); /* shall be 0 */
 }
 
-static inline void mp4a_put_AudioObjectType( lsmash_bits_t* bits, mp4a_AudioObjectType aot )
+static inline void mp4a_put_AudioObjectType( lsmash_bits_t* bits, lsmash_mp4a_AudioObjectType aot )
 {
     if( aot > MP4A_AUDIO_OBJECT_TYPE_ESCAPE )
     {
@@ -456,7 +456,7 @@ void mp4a_put_AudioSpecificConfig( lsmash_bs_t* bs, mp4a_AudioSpecificConfig_t* 
 ***************************************************************************/
 /* NOTE: This function is not strictly preferable, but accurate.
    The spec of audioProfileLevelIndication is too much complicated. */
-mp4a_audioProfileLevelIndication mp4a_get_audioProfileLevelIndication( mp4a_AudioObjectType aot, uint32_t frequency, uint32_t channels, mp4a_aac_sbr_mode sbr_mode )
+mp4a_audioProfileLevelIndication mp4a_get_audioProfileLevelIndication( lsmash_mp4a_AudioObjectType aot, uint32_t frequency, uint32_t channels, lsmash_mp4a_aac_sbr_mode sbr_mode )
 {
     if( channels == 0 || frequency == 0 )
         return MP4A_AUDIO_PLI_NONE_REQUIRED; /* means error. */

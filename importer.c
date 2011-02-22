@@ -227,12 +227,12 @@ static int mp4sys_adts_parse_headers( FILE* stream, uint8_t* buf, mp4sys_adts_fi
     return mp4sys_adts_parse_variable_header( stream, buf, header->protection_absent, variable_header );
 }
 
-static mp4sys_audio_summary_t* mp4sys_adts_create_summary( mp4sys_adts_fixed_header_t* header )
+static lsmash_audio_summary_t* mp4sys_adts_create_summary( mp4sys_adts_fixed_header_t* header )
 {
-    mp4sys_audio_summary_t* summary = (mp4sys_audio_summary_t*)malloc( sizeof(mp4sys_audio_summary_t) );
+    lsmash_audio_summary_t* summary = (lsmash_audio_summary_t*)malloc( sizeof(lsmash_audio_summary_t) );
     if( !summary )
         return NULL;
-    memset( summary, 0, sizeof(mp4sys_audio_summary_t) );
+    memset( summary, 0, sizeof(lsmash_audio_summary_t) );
     summary->sample_type            = ISOM_CODEC_TYPE_MP4A_AUDIO;
     summary->object_type_indication = MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3;
     summary->stream_type            = MP4SYS_STREAM_TYPE_AudioStream;
@@ -294,7 +294,7 @@ static int mp4sys_adts_get_accessunit( mp4sys_importer_t* importer, uint32_t tra
     }
     if( current_status == MP4SYS_IMPORTER_CHANGE )
     {
-        mp4sys_audio_summary_t* summary = mp4sys_adts_create_summary( &info->header );
+        lsmash_audio_summary_t* summary = mp4sys_adts_create_summary( &info->header );
         if( !summary )
             return -1;
         lsmash_entry_t* entry = lsmash_get_entry( importer->summaries, track_number );
@@ -439,7 +439,7 @@ static int mp4sys_adts_probe( mp4sys_importer_t* importer )
 
     /* now the stream seems valid ADTS */
 
-    mp4sys_audio_summary_t* summary = mp4sys_adts_create_summary( &header );
+    lsmash_audio_summary_t* summary = mp4sys_adts_create_summary( &header );
     if( !summary )
         return -1;
 
@@ -539,12 +539,12 @@ static const uint32_t mp4sys_mp3_frequency_tbl[2][3] = {
     { 44100, 48000, 32000 }  /* MPEG-1 audio */
 };
 
-static mp4sys_audio_summary_t* mp4sys_mp3_create_summary( mp4sys_mp3_header_t* header, int legacy_mode )
+static lsmash_audio_summary_t* mp4sys_mp3_create_summary( mp4sys_mp3_header_t* header, int legacy_mode )
 {
-    mp4sys_audio_summary_t* summary = (mp4sys_audio_summary_t*)malloc( sizeof(mp4sys_audio_summary_t) );
+    lsmash_audio_summary_t* summary = (lsmash_audio_summary_t*)malloc( sizeof(lsmash_audio_summary_t) );
     if( !summary )
         return NULL;
-    memset( summary, 0, sizeof(mp4sys_audio_summary_t) );
+    memset( summary, 0, sizeof(lsmash_audio_summary_t) );
     summary->sample_type            = ISOM_CODEC_TYPE_MP4A_AUDIO;
     summary->object_type_indication = header->ID ? MP4SYS_OBJECT_TYPE_Audio_ISO_11172_3 : MP4SYS_OBJECT_TYPE_Audio_ISO_13818_3;
     summary->stream_type            = MP4SYS_STREAM_TYPE_AudioStream;
@@ -625,7 +625,7 @@ static int mp4sys_mp3_get_accessunit( mp4sys_importer_t* importer, uint32_t trac
     }
     if( current_status == MP4SYS_IMPORTER_CHANGE )
     {
-        mp4sys_audio_summary_t* summary = mp4sys_mp3_create_summary( header, 1 ); /* FIXME: use legacy mode. */
+        lsmash_audio_summary_t* summary = mp4sys_mp3_create_summary( header, 1 ); /* FIXME: use legacy mode. */
         if( !summary )
             return -1;
         lsmash_entry_t* entry = lsmash_get_entry( importer->summaries, track_number );
@@ -703,7 +703,7 @@ static int mp4sys_mp3_probe( mp4sys_importer_t* importer )
 
     /* now the stream seems valid mp3 */
 
-    mp4sys_audio_summary_t* summary = mp4sys_mp3_create_summary( &header, 1 ); /* FIXME: use legacy mode. */
+    lsmash_audio_summary_t* summary = mp4sys_mp3_create_summary( &header, 1 ); /* FIXME: use legacy mode. */
     if( !summary )
         return -1;
 
@@ -787,7 +787,7 @@ static int mp4sys_amr_get_accessunit( mp4sys_importer_t* importer, uint32_t trac
 
 #define MP4SYS_DAMR_LENGTH 17
 
-int mp4sys_amr_create_damr( mp4sys_audio_summary_t *summary )
+int mp4sys_amr_create_damr( lsmash_audio_summary_t *summary )
 {
     lsmash_bs_t* bs = lsmash_bs_create( NULL ); /* no file writing */
     if( !bs )
@@ -835,8 +835,8 @@ static int mp4sys_amr_probe( mp4sys_importer_t* importer )
             return -1;
         wb = 1;
     }
-    mp4sys_audio_summary_t* summary = malloc( sizeof(mp4sys_audio_summary_t) );
-    memset( summary, 0, sizeof(mp4sys_audio_summary_t) );
+    lsmash_audio_summary_t* summary = malloc( sizeof(lsmash_audio_summary_t) );
+    memset( summary, 0, sizeof(lsmash_audio_summary_t) );
     if( !summary )
         return -1;
     summary->sample_type            = wb ? ISOM_CODEC_TYPE_SAWB_AUDIO : ISOM_CODEC_TYPE_SAMR_AUDIO;
@@ -877,7 +877,7 @@ const static mp4sys_importer_functions mp4sys_amr_importer = {
 };
 
 /* data_length must be size of data that is available. */
-int mp4sys_create_dac3_from_syncframe( mp4sys_audio_summary_t *summary, uint8_t *data, uint32_t data_length )
+int mp4sys_create_dac3_from_syncframe( lsmash_audio_summary_t *summary, uint8_t *data, uint32_t data_length )
 {
     /* Requires the following 7 bytes.
      * syncword                                         : 16
@@ -1037,17 +1037,17 @@ int mp4sys_importer_get_access_unit( mp4sys_importer_t* importer, uint32_t track
     return importer->funcs.get_accessunit( importer, track_number, buf, size );
 }
 
-mp4sys_audio_summary_t* mp4sys_duplicate_audio_summary( mp4sys_importer_t* importer, uint32_t track_number )
+lsmash_audio_summary_t* mp4sys_duplicate_audio_summary( mp4sys_importer_t* importer, uint32_t track_number )
 {
     if( !importer )
         return NULL;
-    mp4sys_audio_summary_t* summary = (mp4sys_audio_summary_t*)malloc( sizeof(mp4sys_audio_summary_t) );
+    lsmash_audio_summary_t* summary = (lsmash_audio_summary_t*)malloc( sizeof(lsmash_audio_summary_t) );
     if( !summary )
         return NULL;
-    mp4sys_audio_summary_t* src_summary = lsmash_get_entry_data( importer->summaries, track_number );
+    lsmash_audio_summary_t* src_summary = lsmash_get_entry_data( importer->summaries, track_number );
     if( !src_summary )
         return NULL;
-    memcpy( summary, src_summary, sizeof(mp4sys_audio_summary_t) );
+    memcpy( summary, src_summary, sizeof(lsmash_audio_summary_t) );
     summary->exdata = NULL;
     summary->exdata_length = 0;
     if( mp4sys_summary_add_exdata( summary, src_summary->exdata, src_summary->exdata_length ) )

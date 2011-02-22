@@ -30,7 +30,7 @@
 ***************************************************************************/
 
 /* create AudioSpecificConfig as memory block from summary, and set it into that summary itself */
-int mp4sys_setup_AudioSpecificConfig( mp4sys_audio_summary_t* summary )
+int mp4sys_setup_AudioSpecificConfig( lsmash_audio_summary_t* summary )
 {
     if( !summary )
         return -1;
@@ -61,7 +61,7 @@ int mp4sys_setup_AudioSpecificConfig( mp4sys_audio_summary_t* summary )
 }
 
 /* Copy exdata into summary from memory block */
-int mp4sys_summary_add_exdata( mp4sys_audio_summary_t* summary, void* exdata, uint32_t exdata_length )
+int mp4sys_summary_add_exdata( lsmash_audio_summary_t* summary, void* exdata, uint32_t exdata_length )
 {
     if( !summary )
         return -1;
@@ -84,7 +84,7 @@ int mp4sys_summary_add_exdata( mp4sys_audio_summary_t* summary, void* exdata, ui
     return 0;
 }
 
-void mp4sys_cleanup_audio_summary( mp4sys_audio_summary_t* summary )
+void mp4sys_cleanup_audio_summary( lsmash_audio_summary_t* summary )
 {
     if( !summary )
         return;
@@ -93,7 +93,7 @@ void mp4sys_cleanup_audio_summary( mp4sys_audio_summary_t* summary )
     free( summary );
 }
 
-mp4a_audioProfileLevelIndication mp4sys_get_audioProfileLevelIndication( mp4sys_audio_summary_t* summary )
+mp4a_audioProfileLevelIndication mp4sys_get_audioProfileLevelIndication( lsmash_audio_summary_t* summary )
 {
     if( !summary || summary->stream_type != MP4SYS_STREAM_TYPE_AudioStream )
         return MP4A_AUDIO_PLI_NONE_REQUIRED; /* means error. */

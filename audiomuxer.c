@@ -29,7 +29,7 @@
 typedef struct
 {
     mp4sys_importer_t* importer;
-    mp4sys_audio_summary_t* summary;
+    lsmash_audio_summary_t* summary;
     isom_root_t* root;
 } structs_t;
 
@@ -125,7 +125,7 @@ int main( int argc, char* argv[] )
         return AUDIOMUX_ERR( "Failed to open input file.\n" );
 
     /* check codec type. */
-    enum isom_codec_code codec_code = structs.summary->sample_type;
+    lsmash_codec_type_code codec_code = structs.summary->sample_type;
     switch( codec_code )
     {
     case ISOM_CODEC_TYPE_MP4A_AUDIO:
@@ -165,7 +165,7 @@ int main( int argc, char* argv[] )
     if( isom_set_brands( structs.root, major_brand, minor_version, brands, num_of_brands ) )
         return AUDIOMUX_ERR( "Failed to set brands.\n" );
 
-    uint32_t track = isom_create_track( structs.root, ISOM_MEDIA_HANDLER_TYPE_AUDIO );
+    uint32_t track = isom_create_track( structs.root, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK );
     if( !track )
         return AUDIOMUX_ERR( "Failed to create a track.\n" );
 
@@ -195,11 +195,11 @@ int main( int argc, char* argv[] )
 
     /* transfer */
     uint32_t numframe = 0;
-    isom_sample_property_t dependency = { 0 }; /* nothing */
+    lsmash_sample_property_t dependency = { 0 }; /* nothing */
     while(1)
     {
         /* allocate sample buffer */
-        isom_sample_t *sample = isom_create_sample( structs.summary->max_au_length );
+        lsmash_sample_t *sample = isom_create_sample( structs.summary->max_au_length );
         if( !sample )
             return AUDIOMUX_ERR( "Failed to alloc memory for buffer.\n" );
         /* read a audio frame */
