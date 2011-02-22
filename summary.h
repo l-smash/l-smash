@@ -27,8 +27,6 @@
 #include "mp4a.h"
 #include "mp4sys.h"
 
-int mp4sys_summary_add_exdata( lsmash_audio_summary_t* summary, void* exdata, uint32_t exdata_length );
-
 /* to facilitate to make exdata (typically DecoderSpecificInfo or AudioSpecificConfig). */
 int mp4sys_setup_AudioSpecificConfig( lsmash_audio_summary_t* summary );
 int mp4sys_summary_add_exdata( lsmash_audio_summary_t* summary, void* exdata, uint32_t exdata_length );
