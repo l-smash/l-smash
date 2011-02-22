@@ -30,7 +30,7 @@ typedef struct
 {
     mp4sys_importer_t* importer;
     lsmash_audio_summary_t* summary;
-    isom_root_t* root;
+    lsmash_root_t* root;
 } structs_t;
 
 static void cleanup_structs( structs_t* structs )

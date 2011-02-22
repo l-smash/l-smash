@@ -170,7 +170,7 @@ static void isom_bs_put_box_common( lsmash_bs_t *bs, void *box )
     }
 }
 
-static isom_trak_entry_t *isom_get_trak( isom_root_t *root, uint32_t track_ID )
+static isom_trak_entry_t *isom_get_trak( lsmash_root_t *root, uint32_t track_ID )
 {
     if( !track_ID || !root || !root->moov || !root->moov->trak_list )
         return NULL;
@@ -274,7 +274,7 @@ static void isom_remove_avcC_ps( isom_avcC_ps_entry_t *ps )
     free( ps );
 }
 
-int isom_add_sps_entry( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *sps, uint32_t sps_size )
+int isom_add_sps_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *sps, uint32_t sps_size )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
@@ -297,7 +297,7 @@ int isom_add_sps_entry( isom_root_t *root, uint32_t track_ID, uint32_t entry_num
     return 0;
 }
 
-int isom_add_pps_entry( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *pps, uint32_t pps_size )
+int isom_add_pps_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *pps, uint32_t pps_size )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
@@ -320,7 +320,7 @@ int isom_add_pps_entry( isom_root_t *root, uint32_t track_ID, uint32_t entry_num
     return 0;
 }
 
-int isom_add_spsext_entry( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *spsext, uint32_t spsext_size )
+int isom_add_spsext_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *spsext, uint32_t spsext_size )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
@@ -744,7 +744,7 @@ static int isom_add_tx3g_entry( isom_stsd_t *stsd )
 }
 
 /* This function returns 0 if failed, sample_entry_number if succeeded. */
-int isom_add_sample_entry( isom_root_t *root, uint32_t track_ID, uint32_t sample_type, void *summary )
+int isom_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_type, void *summary )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->root || !trak->root->ftyp || !trak->mdia || !trak->mdia->minf ||
@@ -1143,7 +1143,7 @@ static int isom_add_chpl_entry( isom_chpl_t *chpl, isom_chapter_entry_t *chap_da
     return 0;
 }
 
-static int isom_add_ftyp( isom_root_t *root )
+static int isom_add_ftyp( lsmash_root_t *root )
 {
     if( root->ftyp )
         return -1;
@@ -1153,7 +1153,7 @@ static int isom_add_ftyp( isom_root_t *root )
     return 0;
 }
 
-static int isom_add_moov( isom_root_t *root )
+static int isom_add_moov( lsmash_root_t *root )
 {
     if( root->moov )
         return -1;
@@ -1418,7 +1418,7 @@ static int isom_add_mdia( isom_trak_entry_t *trak )
     return 0;
 }
 
-static int isom_add_hdlr( isom_mdia_t *mdia, isom_minf_t *minf, uint32_t media_type, isom_root_t *root )
+static int isom_add_hdlr( isom_mdia_t *mdia, isom_minf_t *minf, uint32_t media_type, lsmash_root_t *root )
 {
     if( (!mdia && !minf) || (mdia && minf) )
         return -1;    /* Either one must be given. */
@@ -1662,7 +1662,7 @@ static int isom_add_stsl( isom_visual_entry_t *visual )
     return 0;
 }
 
-int isom_add_btrt( isom_root_t *root, uint32_t track_ID, uint32_t entry_number )
+int isom_add_btrt( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
@@ -1838,7 +1838,7 @@ static int isom_add_chpl( isom_moov_t *moov )
     return 0;
 }
 
-static int isom_add_udta( isom_root_t *root, uint32_t track_ID )
+static int isom_add_udta( lsmash_root_t *root, uint32_t track_ID )
 {
     /* track_ID == 0 means the direct addition to moov box */
     if( !track_ID )
@@ -1861,7 +1861,7 @@ static int isom_add_udta( isom_root_t *root, uint32_t track_ID )
     return 0;
 }
 
-static isom_trak_entry_t *isom_add_trak( isom_root_t *root )
+static isom_trak_entry_t *isom_add_trak( lsmash_root_t *root )
 {
     if( !root || !root->moov || !root->moov->mvhd )
         return NULL;
@@ -2345,7 +2345,7 @@ static void isom_remove_iods( isom_iods_t *iods )
     free( iods );
 }
 
-static void isom_remove_moov( isom_root_t *root )
+static void isom_remove_moov( lsmash_root_t *root )
 {
     if( !root || !root->moov )
         return;
@@ -3543,7 +3543,7 @@ static int isom_write_trak( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return 0;
 }
 
-static int isom_write_iods( isom_root_t *root )
+static int isom_write_iods( lsmash_root_t *root )
 {
     if( !root || !root->moov )
         return -1;
@@ -3555,7 +3555,7 @@ static int isom_write_iods( isom_root_t *root )
     return mp4sys_write_ObjectDescriptor( bs, iods->OD );
 }
 
-static int isom_write_mvhd( isom_root_t *root )
+static int isom_write_mvhd( lsmash_root_t *root )
 {
     if( !root || !root->moov || !root->moov->mvhd )
         return -1;
@@ -3600,7 +3600,7 @@ static int isom_bs_write_largesize_placeholder( lsmash_bs_t *bs )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_mdat_header( isom_root_t *root )
+static int isom_write_mdat_header( lsmash_root_t *root )
 {
     if( !root || !root->bs || !root->mdat )
         return -1;
@@ -3614,7 +3614,7 @@ static int isom_write_mdat_header( isom_root_t *root )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_check_compatibility( isom_root_t *root )
+static int isom_check_compatibility( lsmash_root_t *root )
 {
     if( !root )
         return -1;
@@ -3784,7 +3784,7 @@ static void isom_iprint_rgba_color( int indent, uint8_t *color )
     isom_iprintf( indent, "{ R, G, B, A } = { %"PRIu8", %"PRIu8", %"PRIu8", %"PRIu8" }\n", color[0], color[1], color[2], color[3] );
 }
 
-static inline int isom_print_simple( isom_root_t *root, isom_box_t *box, int level, char *name )
+static inline int isom_print_simple( lsmash_root_t *root, isom_box_t *box, int level, char *name )
 {
     if( !box )
         return -1;
@@ -3794,7 +3794,7 @@ static inline int isom_print_simple( isom_root_t *root, isom_box_t *box, int lev
     return 0;
 }
 
-static int isom_print_unknown( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_unknown( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -3804,7 +3804,7 @@ static int isom_print_unknown( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_ftyp( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_ftyp( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -3820,12 +3820,12 @@ static int isom_print_ftyp( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_moov( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_moov( lsmash_root_t *root, isom_box_t *box, int level )
 {
     return isom_print_simple( root, box, level, "Movie Box" );
 }
 
-static int isom_print_mvhd( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_mvhd( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -3872,7 +3872,7 @@ static int isom_print_mvhd( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_iods( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_iods( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -3885,7 +3885,7 @@ static int isom_print_iods( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_esds( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_esds( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -3898,12 +3898,12 @@ static int isom_print_esds( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_trak( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_trak( lsmash_root_t *root, isom_box_t *box, int level )
 {
     return isom_print_simple( root, box, level, "Track Box" );
 }
 
-static int isom_print_tkhd( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_tkhd( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -3944,12 +3944,12 @@ static int isom_print_tkhd( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_tapt( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_tapt( lsmash_root_t *root, isom_box_t *box, int level )
 {
     return isom_print_simple( root, box, level, "Track Aperture Mode Dimensions Box" );
 }
 
-static int isom_print_clef( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_clef( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -3964,7 +3964,7 @@ static int isom_print_clef( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_prof( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_prof( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -3979,7 +3979,7 @@ static int isom_print_prof( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_enof( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_enof( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -3994,12 +3994,12 @@ static int isom_print_enof( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_edts( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_edts( lsmash_root_t *root, isom_box_t *box, int level )
 {
     return isom_print_simple( root, box, level, "Edit Box" );
 }
 
-static int isom_print_elst( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_elst( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4022,12 +4022,12 @@ static int isom_print_elst( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_tref( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_tref( lsmash_root_t *root, isom_box_t *box, int level )
 {
     return isom_print_simple( root, box, level, "Track Reference Box" );
 }
 
-static int isom_print_track_reference_type( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_track_reference_type( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4043,12 +4043,12 @@ static int isom_print_track_reference_type( isom_root_t *root, isom_box_t *box, 
     return isom_print_simple( root, box, level, "Track Reference Type Box" );
 }
 
-static int isom_print_mdia( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_mdia( lsmash_root_t *root, isom_box_t *box, int level )
 {
     return isom_print_simple( root, box, level, "Media Box" );
 }
 
-static int isom_print_mdhd( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_mdhd( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4073,7 +4073,7 @@ static int isom_print_mdhd( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_hdlr( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_hdlr( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4108,12 +4108,12 @@ static int isom_print_hdlr( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_minf( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_minf( lsmash_root_t *root, isom_box_t *box, int level )
 {
     return isom_print_simple( root, box, level, "Media Information Box" );
 }
 
-static int isom_print_vmhd( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_vmhd( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4129,7 +4129,7 @@ static int isom_print_vmhd( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_smhd( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_smhd( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4144,7 +4144,7 @@ static int isom_print_smhd( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_hmhd( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_hmhd( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4162,7 +4162,7 @@ static int isom_print_hmhd( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_nmhd( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_nmhd( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4175,12 +4175,12 @@ static int isom_print_nmhd( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_gmhd( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_gmhd( lsmash_root_t *root, isom_box_t *box, int level )
 {
     return isom_print_simple( root, box, level, "Generic Media Information Header Box" );
 }
 
-static int isom_print_gmin( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_gmin( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4198,7 +4198,7 @@ static int isom_print_gmin( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_text( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_text( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4211,12 +4211,12 @@ static int isom_print_text( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_dinf( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_dinf( lsmash_root_t *root, isom_box_t *box, int level )
 {
     return isom_print_simple( root, box, level, "Data Information Box" );
 }
 
-static int isom_print_dref( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_dref( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4230,7 +4230,7 @@ static int isom_print_dref( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_url( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_url( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4247,12 +4247,12 @@ static int isom_print_url( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_stbl( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_stbl( lsmash_root_t *root, isom_box_t *box, int level )
 {
     return isom_print_simple( root, box, level, "Sample Table Box" );
 }
 
-static int isom_print_stsd( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_stsd( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box || !((isom_stsd_t *)box)->list )
         return -1;
@@ -4266,7 +4266,7 @@ static int isom_print_stsd( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_visual_description( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_visual_description( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4331,7 +4331,7 @@ static int isom_print_visual_description( isom_root_t *root, isom_box_t *box, in
     return 0;
 }
 
-static int isom_print_btrt( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_btrt( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4345,7 +4345,7 @@ static int isom_print_btrt( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_clap( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_clap( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4364,7 +4364,7 @@ static int isom_print_clap( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_pasp( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_pasp( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4377,7 +4377,7 @@ static int isom_print_pasp( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_colr( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_colr( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4395,7 +4395,7 @@ static int isom_print_colr( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_stsl( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_stsl( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4422,7 +4422,7 @@ static int isom_print_stsl( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_avcC( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_avcC( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4447,7 +4447,7 @@ static int isom_print_avcC( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_audio_description( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_audio_description( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4501,12 +4501,12 @@ static int isom_print_audio_description( isom_root_t *root, isom_box_t *box, int
     return 0;
 }
 
-static int isom_print_wave( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_wave( lsmash_root_t *root, isom_box_t *box, int level )
 {
     return isom_print_simple( root, box, level, "Sound Information Decompression Parameters Box" );
 }
 
-static int isom_print_frma( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_frma( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4518,7 +4518,7 @@ static int isom_print_frma( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_terminator( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_terminator( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4529,7 +4529,7 @@ static int isom_print_terminator( isom_root_t *root, isom_box_t *box, int level 
     return 0;
 }
 
-static int isom_print_chan( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_chan( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4558,7 +4558,7 @@ static int isom_print_chan( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_text_description( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_text_description( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4588,7 +4588,7 @@ static int isom_print_text_description( isom_root_t *root, isom_box_t *box, int 
     return 0;
 }
 
-static int isom_print_tx3g_description( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_tx3g_description( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4616,7 +4616,7 @@ static int isom_print_tx3g_description( isom_root_t *root, isom_box_t *box, int 
     return 0;
 }
 
-static int isom_print_ftab( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_ftab( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box || !((isom_ftab_t *)box)->list )
         return -1;
@@ -4638,7 +4638,7 @@ static int isom_print_ftab( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_stts( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_stts( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box || !((isom_stts_t *)box)->list )
         return -1;
@@ -4660,7 +4660,7 @@ static int isom_print_stts( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_ctts( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_ctts( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box || !((isom_ctts_t *)box)->list )
         return -1;
@@ -4691,7 +4691,7 @@ static int isom_print_ctts( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_cslg( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_cslg( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4724,7 +4724,7 @@ static int isom_print_cslg( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_stss( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_stss( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box || !((isom_stss_t *)box)->list )
         return -1;
@@ -4741,7 +4741,7 @@ static int isom_print_stss( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_stps( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_stps( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box || !((isom_stps_t *)box)->list )
         return -1;
@@ -4758,7 +4758,7 @@ static int isom_print_stps( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_sdtp( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_sdtp( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box || !((isom_sdtp_t *)box)->list )
         return -1;
@@ -4806,7 +4806,7 @@ static int isom_print_sdtp( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_stsc( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_stsc( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box || !((isom_stsc_t *)box)->list )
         return -1;
@@ -4829,7 +4829,7 @@ static int isom_print_stsc( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_stsz( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_stsz( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4854,7 +4854,7 @@ static int isom_print_stsz( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_stco( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_stco( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box || !((isom_stco_t *)box)->list )
         return -1;
@@ -4879,7 +4879,7 @@ static int isom_print_stco( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_sgpd( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_sgpd( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box || !((isom_sgpd_t *)box)->list )
         return -1;
@@ -4908,7 +4908,7 @@ static int isom_print_sgpd( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_sbgp( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_sbgp( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box || !((isom_sbgp_t *)box)->list )
         return -1;
@@ -4937,12 +4937,12 @@ static int isom_print_sbgp( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_udta( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_udta( lsmash_root_t *root, isom_box_t *box, int level )
 {
     return isom_print_simple( root, box, level, "User Data Box" );
 }
 
-static int isom_print_chpl( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_chpl( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4987,7 +4987,7 @@ static int isom_print_chpl( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_free( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_free( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -4998,7 +4998,7 @@ static int isom_print_free( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-static int isom_print_mdat( isom_root_t *root, isom_box_t *box, int level )
+static int isom_print_mdat( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
         return -1;
@@ -5009,7 +5009,7 @@ static int isom_print_mdat( isom_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-int isom_print_movie( isom_root_t *root )
+int isom_print_movie( lsmash_root_t *root )
 {
     if( !root || !root->print || !(root->flags & ISOM_FILE_MODE_DUMP) )
         return -1;
@@ -5222,7 +5222,7 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
     }
 }
 
-static int isom_add_print_func( isom_root_t *root, void *box, int level )
+static int isom_add_print_func( lsmash_root_t *root, void *box, int level )
 {
     if( !(root->flags & ISOM_FILE_MODE_DUMP) )
         return 0;
@@ -5249,13 +5249,13 @@ static void isom_remove_print_func( isom_print_entry_t *data )
     free( data );
 }
 
-static void isom_remove_print_funcs( isom_root_t *root )
+static void isom_remove_print_funcs( lsmash_root_t *root )
 {
     lsmash_remove_list( root->print, isom_remove_print_func );
     root->print = NULL;
 }
 
-static int isom_read_box( isom_root_t *root, isom_box_t *box, isom_box_t *parent, uint64_t parent_pos, int level );
+static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, uint64_t parent_pos, int level );
 
 static int isom_bs_read_box_common( lsmash_bs_t *bs, isom_box_t *box )
 {
@@ -5340,7 +5340,7 @@ static void isom_skip_box_rest( lsmash_bs_t *bs, isom_box_t *box )
     fseek( bs->stream, box->size - lsmash_bs_get_pos( bs ), SEEK_CUR );
 }
 
-static int isom_read_children( isom_root_t *root, isom_box_t *box, void *parent, int level )
+static int isom_read_children( lsmash_root_t *root, isom_box_t *box, void *parent, int level )
 {
     int ret;
     lsmash_bs_t *bs = root->bs;
@@ -5356,7 +5356,7 @@ static int isom_read_children( isom_root_t *root, isom_box_t *box, void *parent,
     return ret;
 }
 
-static int isom_read_unknown_box( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_unknown_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_box_t *unknown = malloc( sizeof(isom_box_t) );
     if( !unknown )
@@ -5376,12 +5376,12 @@ static int isom_read_unknown_box( isom_root_t *root, isom_box_t *box, isom_box_t
     return 0;
 }
 
-static int isom_read_ftyp( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_ftyp( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( !!parent->type )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( ftyp, parent, box->type );
-    ((isom_root_t *)parent)->ftyp = ftyp;
+    ((lsmash_root_t *)parent)->ftyp = ftyp;
     lsmash_bs_t *bs = root->bs;
     isom_read_box_rest( bs, box );
     ftyp->major_brand              = lsmash_bs_get_be32( bs );
@@ -5398,19 +5398,19 @@ static int isom_read_ftyp( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, ftyp, level );
 }
 
-static int isom_read_moov( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_moov( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( !!parent->type )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( moov, parent, box->type );
-    ((isom_root_t *)parent)->moov = moov;
+    ((lsmash_root_t *)parent)->moov = moov;
     isom_box_common_copy( moov, box );
     if( isom_add_print_func( root, moov, level ) )
         return -1;
     return isom_read_children( root, box, moov, level );
 }
 
-static int isom_read_mvhd( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_mvhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_MOOV )
         return isom_read_unknown_box( root, box, parent, level );
@@ -5451,7 +5451,7 @@ static int isom_read_mvhd( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, mvhd, level );
 }
 
-static int isom_read_iods( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_iods( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_MOOV )
         return isom_read_unknown_box( root, box, parent, level );
@@ -5471,7 +5471,7 @@ static int isom_read_iods( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return 0;
 }
 
-static int isom_read_esds( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_esds( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_box_t *esds = malloc( sizeof(isom_box_t) );
     if( !esds )
@@ -5489,7 +5489,7 @@ static int isom_read_esds( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return 0;
 }
 
-static int isom_read_trak( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_trak( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_MOOV )
         return isom_read_unknown_box( root, box, parent, level );
@@ -5526,7 +5526,7 @@ static int isom_read_trak( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_read_children( root, box, trak, level );
 }
 
-static int isom_read_tkhd( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_tkhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_TRAK )
         return isom_read_unknown_box( root, box, parent, level );
@@ -5565,7 +5565,7 @@ static int isom_read_tkhd( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, tkhd, level );
 }
 
-static int isom_read_tapt( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_tapt( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_TRAK )
         return isom_read_unknown_box( root, box, parent, level );
@@ -5577,7 +5577,7 @@ static int isom_read_tapt( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_read_children( root, box, tapt, level );
 }
 
-static int isom_read_clef( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_clef( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != QT_BOX_TYPE_TAPT )
         return isom_read_unknown_box( root, box, parent, level );
@@ -5592,7 +5592,7 @@ static int isom_read_clef( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, clef, level );
 }
 
-static int isom_read_prof( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_prof( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != QT_BOX_TYPE_TAPT )
         return isom_read_unknown_box( root, box, parent, level );
@@ -5607,7 +5607,7 @@ static int isom_read_prof( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, prof, level );
 }
 
-static int isom_read_enof( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_enof( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != QT_BOX_TYPE_TAPT )
         return isom_read_unknown_box( root, box, parent, level );
@@ -5622,7 +5622,7 @@ static int isom_read_enof( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, enof, level );
 }
 
-static int isom_read_edts( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_edts( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_TRAK )
         return isom_read_unknown_box( root, box, parent, level );
@@ -5634,7 +5634,7 @@ static int isom_read_edts( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_read_children( root, box, edts, level );
 }
 
-static int isom_read_elst( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_elst( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_EDTS )
         return isom_read_unknown_box( root, box, parent, level );
@@ -5673,7 +5673,7 @@ static int isom_read_elst( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, elst, level );
 }
 
-static int isom_read_tref( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_tref( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_TRAK )
         return isom_read_unknown_box( root, box, parent, level );
@@ -5685,7 +5685,7 @@ static int isom_read_tref( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_read_children( root, box, tref, level );
 }
 
-static int isom_read_track_reference_type( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_track_reference_type( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_TREF )
         return isom_read_unknown_box( root, box, parent, level );
@@ -5720,7 +5720,7 @@ static int isom_read_track_reference_type( isom_root_t *root, isom_box_t *box, i
     return isom_add_print_func( root, ref, level );
 }
 
-static int isom_read_mdia( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_mdia( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_TRAK )
         return isom_read_unknown_box( root, box, parent, level );
@@ -5732,7 +5732,7 @@ static int isom_read_mdia( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_read_children( root, box, mdia, level );
 }
 
-static int isom_read_mdhd( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_mdhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_MDIA )
         return isom_read_unknown_box( root, box, parent, level );
@@ -5761,7 +5761,7 @@ static int isom_read_mdhd( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, mdhd, level );
 }
 
-static int isom_read_hdlr( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_hdlr( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_MDIA &&
         /*parent->type != ISOM_BOX_TYPE_META &&*/
@@ -5794,7 +5794,7 @@ static int isom_read_hdlr( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, hdlr, level );
 }
 
-static int isom_read_minf( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_minf( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_MDIA )
         return isom_read_unknown_box( root, box, parent, level );
@@ -5806,7 +5806,7 @@ static int isom_read_minf( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_read_children( root, box, (isom_box_t *)minf, level );
 }
 
-static int isom_read_vmhd( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_vmhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_MINF )
         return isom_read_unknown_box( root, box, parent, level );
@@ -5822,7 +5822,7 @@ static int isom_read_vmhd( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, vmhd, level );
 }
 
-static int isom_read_smhd( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_smhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_MINF )
         return isom_read_unknown_box( root, box, parent, level );
@@ -5837,7 +5837,7 @@ static int isom_read_smhd( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, smhd, level );
 }
 
-static int isom_read_hmhd( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_hmhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_MINF )
         return isom_read_unknown_box( root, box, parent, level );
@@ -5855,7 +5855,7 @@ static int isom_read_hmhd( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, hmhd, level );
 }
 
-static int isom_read_nmhd( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_nmhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_MINF )
         return isom_read_unknown_box( root, box, parent, level );
@@ -5868,7 +5868,7 @@ static int isom_read_nmhd( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, nmhd, level );
 }
 
-static int isom_read_gmhd( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_gmhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_MINF )
         return isom_read_unknown_box( root, box, parent, level );
@@ -5880,7 +5880,7 @@ static int isom_read_gmhd( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_read_children( root, box, gmhd, level );
 }
 
-static int isom_read_gmin( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_gmin( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != QT_BOX_TYPE_GMHD )
         return isom_read_unknown_box( root, box, parent, level );
@@ -5898,7 +5898,7 @@ static int isom_read_gmin( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, gmin, level );
 }
 
-static int isom_read_text( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_text( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != QT_BOX_TYPE_GMHD )
         return isom_read_unknown_box( root, box, parent, level );
@@ -5913,7 +5913,7 @@ static int isom_read_text( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, text, level );
 }
 
-static int isom_read_dinf( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_dinf( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_MINF )
         return isom_read_unknown_box( root, box, parent, level );
@@ -5925,7 +5925,7 @@ static int isom_read_dinf( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_read_children( root, box, (isom_box_t *)dinf, level );
 }
 
-static int isom_read_dref( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_dref( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_DINF /*&& parent->type != ISOM_BOX_TYPE_META*/ )
         return isom_read_unknown_box( root, box, parent, level );
@@ -5941,7 +5941,7 @@ static int isom_read_dref( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_read_children( root, box, dref, level );
 }
 
-static int isom_read_url( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_url( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_DREF )
         return isom_read_unknown_box( root, box, parent, level );
@@ -5977,7 +5977,7 @@ static int isom_read_url( isom_root_t *root, isom_box_t *box, isom_box_t *parent
     return isom_add_print_func( root, url, level );
 }
 
-static int isom_read_stbl( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_stbl( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_MINF )
         return isom_read_unknown_box( root, box, parent, level );
@@ -5989,7 +5989,7 @@ static int isom_read_stbl( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_read_children( root, box, stbl, level );
 }
 
-static int isom_read_stsd( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_stsd( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_STBL )
         return isom_read_unknown_box( root, box, parent, level );
@@ -6162,7 +6162,7 @@ static void *isom_add_description( uint32_t sample_type, lsmash_entry_list_t *li
     return sample;
 }
 
-static int isom_read_visual_description( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_visual_description( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_STSD )
         return isom_read_unknown_box( root, box, parent, level );
@@ -6197,7 +6197,7 @@ static int isom_read_visual_description( isom_root_t *root, isom_box_t *box, iso
     return isom_read_children( root, box, visual, level );
 }
 
-static int isom_read_btrt( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_btrt( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( btrt, parent, box->type );
     ((isom_avc_entry_t *)parent)->btrt = btrt;
@@ -6211,7 +6211,7 @@ static int isom_read_btrt( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, btrt, level );
 }
 
-static int isom_read_clap( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_clap( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( clap, parent, box->type );
     ((isom_visual_entry_t *)parent)->clap = clap;
@@ -6230,7 +6230,7 @@ static int isom_read_clap( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, clap, level );
 }
 
-static int isom_read_pasp( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_pasp( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( pasp, parent, box->type );
     ((isom_visual_entry_t *)parent)->pasp = pasp;
@@ -6243,7 +6243,7 @@ static int isom_read_pasp( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, pasp, level );
 }
 
-static int isom_read_colr( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_colr( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( colr, parent, box->type );
     ((isom_visual_entry_t *)parent)->colr = colr;
@@ -6261,7 +6261,7 @@ static int isom_read_colr( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, colr, level );
 }
 
-static int isom_read_stsl( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_stsl( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( stsl, parent, box->type );
     ((isom_visual_entry_t *)parent)->stsl = stsl;
@@ -6293,7 +6293,7 @@ static int isom_read_avcC_ps( lsmash_bs_t *bs, lsmash_entry_list_t *list, uint8_
     return 0;
 }
 
-static int isom_read_avcC( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_avcC( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( avcC, parent, box->type );
     isom_avc_entry_t *avc = (isom_avc_entry_t *)parent;
@@ -6348,7 +6348,7 @@ fail:
     return -1;
 }
 
-static int isom_read_audio_description( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_audio_description( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_STSD )
         return isom_read_unknown_box( root, box, parent, level );
@@ -6398,7 +6398,7 @@ static int isom_read_audio_description( isom_root_t *root, isom_box_t *box, isom
     return isom_read_children( root, box, audio, level );
 }
 
-static int isom_read_wave( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_wave( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( wave, parent, box->type );
     ((isom_audio_entry_t *)parent)->wave = wave;
@@ -6408,7 +6408,7 @@ static int isom_read_wave( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_read_children( root, box, wave, level );
 }
 
-static int isom_read_frma( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_frma( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != QT_BOX_TYPE_WAVE )
         return isom_read_unknown_box( root, box, parent, level );
@@ -6422,7 +6422,7 @@ static int isom_read_frma( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, frma, level );
 }
 
-static int isom_read_audio_specific( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_audio_specific( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != QT_BOX_TYPE_WAVE )
         return isom_read_unknown_box( root, box, parent, level );
@@ -6442,7 +6442,7 @@ static int isom_read_audio_specific( isom_root_t *root, isom_box_t *box, isom_bo
     return 0;
 }
 
-static int isom_read_terminator( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_terminator( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != QT_BOX_TYPE_WAVE )
         return isom_read_unknown_box( root, box, parent, level );
@@ -6455,7 +6455,7 @@ static int isom_read_terminator( isom_root_t *root, isom_box_t *box, isom_box_t 
     return isom_add_print_func( root, terminator, level );
 }
 
-static int isom_read_chan( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_chan( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( chan, parent, box->type );
     isom_audio_entry_t *audio = (isom_audio_entry_t *)parent;
@@ -6488,7 +6488,7 @@ static int isom_read_chan( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, chan, level );
 }
 
-static int isom_read_text_description( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_text_description( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_STSD )
         return isom_read_unknown_box( root, box, parent, level );
@@ -6536,7 +6536,7 @@ static int isom_read_text_description( isom_root_t *root, isom_box_t *box, isom_
     return isom_read_children( root, box, text, level );
 }
 
-static int isom_read_tx3g_description( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_tx3g_description( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_STSD )
         return isom_read_unknown_box( root, box, parent, level );
@@ -6572,7 +6572,7 @@ static int isom_read_tx3g_description( isom_root_t *root, isom_box_t *box, isom_
     return isom_read_children( root, box, tx3g, level );
 }
 
-static int isom_read_ftab( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_ftab( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_CODEC_TYPE_TX3G_TEXT )
         return isom_read_unknown_box( root, box, parent, level );
@@ -6611,7 +6611,7 @@ static int isom_read_ftab( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, ftab, level );
 }
 
-static int isom_read_stts( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_stts( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_STBL )
         return isom_read_unknown_box( root, box, parent, level );
@@ -6641,7 +6641,7 @@ static int isom_read_stts( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, stts, level );
 }
 
-static int isom_read_ctts( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_ctts( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_STBL )
         return isom_read_unknown_box( root, box, parent, level );
@@ -6671,7 +6671,7 @@ static int isom_read_ctts( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, ctts, level );
 }
 
-static int isom_read_cslg( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_cslg( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_STBL )
         return isom_read_unknown_box( root, box, parent, level );
@@ -6689,7 +6689,7 @@ static int isom_read_cslg( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, cslg, level );
 }
 
-static int isom_read_stss( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_stss( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_STBL )
         return isom_read_unknown_box( root, box, parent, level );
@@ -6718,7 +6718,7 @@ static int isom_read_stss( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, stss, level );
 }
 
-static int isom_read_stps( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_stps( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_STBL )
         return isom_read_unknown_box( root, box, parent, level );
@@ -6747,7 +6747,7 @@ static int isom_read_stps( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, stps, level );
 }
 
-static int isom_read_sdtp( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_sdtp( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_STBL )
         return isom_read_unknown_box( root, box, parent, level );
@@ -6777,7 +6777,7 @@ static int isom_read_sdtp( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, sdtp, level );
 }
 
-static int isom_read_stsc( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_stsc( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_STBL )
         return isom_read_unknown_box( root, box, parent, level );
@@ -6808,7 +6808,7 @@ static int isom_read_stsc( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, stsc, level );
 }
 
-static int isom_read_stsz( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_stsz( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_STBL )
         return isom_read_unknown_box( root, box, parent, level );
@@ -6844,7 +6844,7 @@ static int isom_read_stsz( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, stsz, level );
 }
 
-static int isom_read_stco( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_stco( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_STBL )
         return isom_read_unknown_box( root, box, parent, level );
@@ -6887,7 +6887,7 @@ static int isom_read_stco( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, stco, level );
 }
 
-static int isom_read_sgpd( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_sgpd( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_STBL )
         return isom_read_unknown_box( root, box, parent, level );
@@ -6943,7 +6943,7 @@ static int isom_read_sgpd( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, sgpd, level );
 }
 
-static int isom_read_sbgp( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_sbgp( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_STBL )
         return isom_read_unknown_box( root, box, parent, level );
@@ -6993,7 +6993,7 @@ static int isom_read_sbgp( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, sbgp, level );
 }
 
-static int isom_read_udta( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_udta( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_MOOV && parent->type != ISOM_BOX_TYPE_TRAK )
         return isom_read_unknown_box( root, box, parent, level );
@@ -7008,7 +7008,7 @@ static int isom_read_udta( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_read_children( root, box, udta, level );
 }
 
-static int isom_read_chpl( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_chpl( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_UDTA )
         return isom_read_unknown_box( root, box, parent, level );
@@ -7054,7 +7054,7 @@ static int isom_read_chpl( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return isom_add_print_func( root, chpl, level );
 }
 
-static int isom_read_free( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_free( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_box_t *skip = malloc( sizeof(isom_box_t) );
     if( !skip )
@@ -7072,7 +7072,7 @@ static int isom_read_free( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return 0;
 }
 
-static int isom_read_mdat( isom_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_mdat( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( !!parent->type )
         return isom_read_unknown_box( root, box, parent, level );
@@ -7092,7 +7092,7 @@ static int isom_read_mdat( isom_root_t *root, isom_box_t *box, isom_box_t *paren
     return 0;
 }
 
-static int isom_read_box( isom_root_t *root, isom_box_t *box, isom_box_t *parent, uint64_t parent_pos, int level )
+static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, uint64_t parent_pos, int level )
 {
     lsmash_bs_t *bs = root->bs;
     memset( box, 0, sizeof(isom_box_t) );
@@ -7303,7 +7303,7 @@ static int isom_read_box( isom_root_t *root, isom_box_t *box, isom_box_t *parent
     }
 }
 
-static int isom_read_root( isom_root_t *root )
+static int isom_read_root( lsmash_root_t *root )
 {
     lsmash_bs_t *bs = root->bs;
     if( !bs )
@@ -7583,7 +7583,7 @@ static int isom_update_tkhd_duration( isom_trak_entry_t *trak )
     return isom_update_mvhd_duration( trak->root->moov );
 }
 
-int isom_update_track_duration( isom_root_t *root, uint32_t track_ID, uint32_t last_sample_delta )
+int isom_update_track_duration( lsmash_root_t *root, uint32_t track_ID, uint32_t last_sample_delta )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak )
@@ -7900,7 +7900,7 @@ static int isom_add_timestamp( isom_trak_entry_t *trak, uint64_t dts, uint64_t c
     return isom_add_cts( trak, cts );
 }
 
-static int isom_write_sample_data( isom_root_t *root, lsmash_sample_t *sample )
+static int isom_write_sample_data( lsmash_root_t *root, lsmash_sample_t *sample )
 {
     if( !root || !root->mdat || !root->bs || !root->bs->stream )
         return -1;
@@ -7945,7 +7945,7 @@ static int isom_write_pooled_samples( isom_trak_entry_t *trak, lsmash_entry_list
     return 0;
 }
 
-static int isom_output_cache( isom_root_t *root, uint32_t track_ID )
+static int isom_output_cache( lsmash_root_t *root, uint32_t track_ID )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->cache || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl ||
@@ -7982,7 +7982,7 @@ static int isom_output_cache( isom_root_t *root, uint32_t track_ID )
     return 0;
 }
 
-int isom_set_avc_config( isom_root_t *root, uint32_t track_ID, uint32_t entry_number,
+int isom_set_avc_config( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number,
     uint8_t configurationVersion, uint8_t AVCProfileIndication, uint8_t profile_compatibility, uint8_t AVCLevelIndication, uint8_t lengthSizeMinusOne,
     uint8_t chroma_format, uint8_t bit_depth_luma_minus8, uint8_t bit_depth_chroma_minus8 )
 {
@@ -8009,7 +8009,7 @@ int isom_set_avc_config( isom_root_t *root, uint32_t track_ID, uint32_t entry_nu
     return 0;
 }
 
-int isom_update_bitrate_info( isom_root_t *root, uint32_t track_ID, uint32_t entry_number )
+int isom_update_bitrate_info( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->minf || !trak->mdia->minf->stbl ||
@@ -8135,7 +8135,7 @@ int isom_update_bitrate_info( isom_root_t *root, uint32_t track_ID, uint32_t ent
     return 0;
 }
 
-static int isom_check_mandatory_boxes( isom_root_t *root )
+static int isom_check_mandatory_boxes( lsmash_root_t *root )
 {
     if( !root )
         return -1;
@@ -8194,7 +8194,7 @@ static int isom_set_track_creation_time( isom_trak_entry_t *trak, uint64_t curre
     return 0;
 }
 
-static int isom_set_movie_creation_time( isom_root_t *root )
+static int isom_set_movie_creation_time( lsmash_root_t *root )
 {
     if( !root || !root->moov || !root->moov->mvhd || !root->moov->trak_list )
         return -1;
@@ -8994,7 +8994,7 @@ static int isom_update_moov_size( isom_moov_t *moov )
 
 /*---- track manipulators ----*/
 
-void isom_delete_track( isom_root_t *root, uint32_t track_ID )
+void isom_delete_track( lsmash_root_t *root, uint32_t track_ID )
 {
     if( !root || !root->moov || !root->moov->trak_list )
         return;
@@ -9021,7 +9021,7 @@ void isom_delete_track( isom_root_t *root, uint32_t track_ID )
     }
 }
 
-uint32_t isom_create_track( isom_root_t *root, uint32_t media_type )
+uint32_t isom_create_track( lsmash_root_t *root, uint32_t media_type )
 {
     isom_trak_entry_t *trak = isom_add_trak( root );
     if( !trak )
@@ -9076,7 +9076,7 @@ uint32_t isom_create_track( isom_root_t *root, uint32_t media_type )
     return trak->tkhd->track_ID;
 }
 
-int isom_set_media_handler( isom_root_t *root, uint32_t track_ID, lsmash_media_type_code media_type, char *handler_name )
+int isom_set_media_handler( lsmash_root_t *root, uint32_t track_ID, lsmash_media_type_code media_type, char *handler_name )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia )
@@ -9109,7 +9109,7 @@ int isom_set_media_handler( isom_root_t *root, uint32_t track_ID, lsmash_media_t
     return 0;
 }
 
-int isom_set_media_handler_name( isom_root_t *root, uint32_t track_ID, char *handler_name )
+int isom_set_media_handler_name( lsmash_root_t *root, uint32_t track_ID, char *handler_name )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->hdlr )
@@ -9137,7 +9137,7 @@ int isom_set_media_handler_name( isom_root_t *root, uint32_t track_ID, char *han
     return 0;
 }
 
-int isom_set_data_handler( isom_root_t *root, uint32_t track_ID, lsmash_data_reference_type_code reference_type, char *handler_name )
+int isom_set_data_handler( lsmash_root_t *root, uint32_t track_ID, lsmash_data_reference_type_code reference_type, char *handler_name )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf )
@@ -9170,7 +9170,7 @@ int isom_set_data_handler( isom_root_t *root, uint32_t track_ID, lsmash_data_ref
     return 0;
 }
 
-int isom_set_data_handler_name( isom_root_t *root, uint32_t track_ID, char *handler_name )
+int isom_set_data_handler_name( lsmash_root_t *root, uint32_t track_ID, char *handler_name )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->hdlr )
@@ -9198,7 +9198,7 @@ int isom_set_data_handler_name( isom_root_t *root, uint32_t track_ID, char *hand
     return 0;
 }
 
-int isom_set_media_timescale( isom_root_t *root, uint32_t track_ID, uint32_t timescale )
+int isom_set_media_timescale( lsmash_root_t *root, uint32_t track_ID, uint32_t timescale )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->mdhd )
@@ -9207,7 +9207,7 @@ int isom_set_media_timescale( isom_root_t *root, uint32_t track_ID, uint32_t tim
     return 0;
 }
 
-uint32_t isom_get_media_timescale( isom_root_t *root, uint32_t track_ID )
+uint32_t isom_get_media_timescale( lsmash_root_t *root, uint32_t track_ID )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->mdhd )
@@ -9215,7 +9215,7 @@ uint32_t isom_get_media_timescale( isom_root_t *root, uint32_t track_ID )
     return trak->mdia->mdhd->timescale;
 }
 
-uint64_t isom_get_media_duration( isom_root_t *root, uint32_t track_ID )
+uint64_t isom_get_media_duration( lsmash_root_t *root, uint32_t track_ID )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->mdhd )
@@ -9223,7 +9223,7 @@ uint64_t isom_get_media_duration( isom_root_t *root, uint32_t track_ID )
     return trak->mdia->mdhd->duration;
 }
 
-uint64_t isom_get_track_duration( isom_root_t *root, uint32_t track_ID )
+uint64_t isom_get_track_duration( lsmash_root_t *root, uint32_t track_ID )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->tkhd )
@@ -9231,7 +9231,7 @@ uint64_t isom_get_track_duration( isom_root_t *root, uint32_t track_ID )
     return trak->tkhd->duration;
 }
 
-uint32_t isom_get_last_sample_delta( isom_root_t *root, uint32_t track_ID )
+uint32_t isom_get_last_sample_delta( lsmash_root_t *root, uint32_t track_ID )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl ||
@@ -9241,7 +9241,7 @@ uint32_t isom_get_last_sample_delta( isom_root_t *root, uint32_t track_ID )
     return ((isom_stts_entry_t *)trak->mdia->minf->stbl->stts->list->head->data)->sample_delta;
 }
 
-uint32_t isom_get_start_time_offset( isom_root_t *root, uint32_t track_ID )
+uint32_t isom_get_start_time_offset( lsmash_root_t *root, uint32_t track_ID )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl ||
@@ -9251,7 +9251,7 @@ uint32_t isom_get_start_time_offset( isom_root_t *root, uint32_t track_ID )
     return ((isom_ctts_entry_t *)trak->mdia->minf->stbl->ctts->list->head->data)->sample_offset;
 }
 
-int isom_set_track_mode( isom_root_t *root, uint32_t track_ID, lsmash_track_mode_code mode )
+int isom_set_track_mode( lsmash_root_t *root, uint32_t track_ID, lsmash_track_mode_code mode )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->tkhd )
@@ -9286,7 +9286,7 @@ static int isom_mac2iso_language( uint16_t MAC_language, uint16_t *ISO_language 
     return 0;
 }
 
-int isom_set_media_language( isom_root_t *root, uint32_t track_ID, char *ISO_language, uint16_t MAC_language )
+int isom_set_media_language( lsmash_root_t *root, uint32_t track_ID, char *ISO_language, uint16_t MAC_language )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->mdhd )
@@ -9320,7 +9320,7 @@ int isom_set_media_language( isom_root_t *root, uint32_t track_ID, char *ISO_lan
     return 0;
 }
 
-int isom_set_track_ID( isom_root_t *root, uint32_t track_ID, uint32_t new_track_ID )
+int isom_set_track_ID( lsmash_root_t *root, uint32_t track_ID, uint32_t new_track_ID )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->tkhd || !root->moov->mvhd )
@@ -9332,7 +9332,7 @@ int isom_set_track_ID( isom_root_t *root, uint32_t track_ID, uint32_t new_track_
     return 0;
 }
 
-int isom_set_track_volume( isom_root_t *root, uint32_t track_ID, int16_t volume )
+int isom_set_track_volume( lsmash_root_t *root, uint32_t track_ID, int16_t volume )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->tkhd )
@@ -9341,7 +9341,7 @@ int isom_set_track_volume( isom_root_t *root, uint32_t track_ID, int16_t volume 
     return 0;
 }
 
-int isom_set_track_presentation_size( isom_root_t *root, uint32_t track_ID, uint32_t width, uint32_t height )
+int isom_set_track_presentation_size( lsmash_root_t *root, uint32_t track_ID, uint32_t width, uint32_t height )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->tkhd )
@@ -9376,7 +9376,7 @@ static int isom_confirm_visual_type( uint32_t sample_type )
     return 0;
 }
 
-int isom_set_sample_resolution( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint16_t width, uint16_t height )
+int isom_set_sample_resolution( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint16_t width, uint16_t height )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
@@ -9389,7 +9389,7 @@ int isom_set_sample_resolution( isom_root_t *root, uint32_t track_ID, uint32_t e
     return 0;
 }
 
-int isom_set_sample_aspect_ratio( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint32_t hSpacing, uint32_t vSpacing )
+int isom_set_sample_aspect_ratio( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint32_t hSpacing, uint32_t vSpacing )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
@@ -9405,7 +9405,7 @@ int isom_set_sample_aspect_ratio( isom_root_t *root, uint32_t track_ID, uint32_t
     return 0;
 }
 
-int isom_set_color_parameter( isom_root_t *root, uint32_t track_ID, uint32_t entry_number,
+int isom_set_color_parameter( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number,
                               lsmash_color_parameter primaries, lsmash_color_parameter transfer, lsmash_color_parameter matrix )
 {
     if( !root->qt_compatible )
@@ -9445,7 +9445,7 @@ int isom_set_color_parameter( isom_root_t *root, uint32_t track_ID, uint32_t ent
     return 0;
 }
 
-int isom_set_track_aperture_modes( isom_root_t *root, uint32_t track_ID, uint32_t entry_number )
+int isom_set_track_aperture_modes( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number )
 {
     if( !root->qt_compatible )
         return -1;
@@ -9503,7 +9503,7 @@ int isom_set_track_aperture_modes( isom_root_t *root, uint32_t track_ID, uint32_
     return 0;
 }
 
-int isom_set_scaling_method( isom_root_t *root, uint32_t track_ID, uint32_t entry_number,
+int isom_set_scaling_method( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number,
                              lsmash_scaling_method_code scale_method, int16_t display_center_x, int16_t display_center_y )
 {
     if( !root || !track_ID || !entry_number || !scale_method )
@@ -9524,7 +9524,7 @@ int isom_set_scaling_method( isom_root_t *root, uint32_t track_ID, uint32_t entr
     return 0;
 }
 
-int isom_set_channel_layout( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, lsmash_channel_layout_tag_code layout_tag, lsmash_channel_bitmap_code bitmap )
+int isom_set_channel_layout( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, lsmash_channel_layout_tag_code layout_tag, lsmash_channel_bitmap_code bitmap )
 {
     if( layout_tag == QT_CHANNEL_LAYOUT_USE_CHANNEL_DESCRIPTIONS )
         return -1;  /* We don't support the feature of Channel Descriptions */
@@ -9552,7 +9552,7 @@ int isom_set_channel_layout( isom_root_t *root, uint32_t track_ID, uint32_t entr
     return 0;
 }
 
-int isom_set_sample_type( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint32_t sample_type )
+int isom_set_sample_type( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint32_t sample_type )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
@@ -9564,7 +9564,7 @@ int isom_set_sample_type( isom_root_t *root, uint32_t track_ID, uint32_t entry_n
     return 0;
 }
 
-int isom_create_grouping( isom_root_t *root, uint32_t track_ID, lsmash_grouping_type_code grouping_type )
+int isom_create_grouping( lsmash_root_t *root, uint32_t track_ID, lsmash_grouping_type_code grouping_type )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
@@ -9577,7 +9577,7 @@ int isom_create_grouping( isom_root_t *root, uint32_t track_ID, lsmash_grouping_
 
 /*---- movie manipulators ----*/
 
-isom_root_t *isom_open_movie( const char *filename, uint32_t mode )
+lsmash_root_t *isom_open_movie( const char *filename, uint32_t mode )
 {
     char open_mode[4] = { 0 };
     if( mode & ISOM_FILE_MODE_WRITE )
@@ -9586,10 +9586,10 @@ isom_root_t *isom_open_movie( const char *filename, uint32_t mode )
         memcpy( open_mode, "rb", 3 );
     if( !open_mode[0] )
         return NULL;
-    isom_root_t *root = malloc( sizeof(isom_root_t) );
+    lsmash_root_t *root = malloc( sizeof(lsmash_root_t) );
     if( !root )
         return NULL;
-    memset( root, 0, sizeof(isom_root_t) );
+    memset( root, 0, sizeof(lsmash_root_t) );
     root->bs = malloc( sizeof(lsmash_bs_t) );
     if( !root->bs )
         goto fail;
@@ -9608,7 +9608,7 @@ fail:
     return NULL;
 }
 
-int isom_set_movie_timescale( isom_root_t *root, uint32_t timescale )
+int isom_set_movie_timescale( lsmash_root_t *root, uint32_t timescale )
 {
     if( !root || !root->moov || !root->moov->mvhd )
         return -1;
@@ -9616,14 +9616,14 @@ int isom_set_movie_timescale( isom_root_t *root, uint32_t timescale )
     return 0;
 }
 
-uint32_t isom_get_movie_timescale( isom_root_t *root )
+uint32_t isom_get_movie_timescale( lsmash_root_t *root )
 {
     if( !root || !root->moov || !root->moov->mvhd )
         return 0;
     return root->moov->mvhd->timescale;
 }
 
-int isom_set_brands( isom_root_t *root, lsmash_brand_type_code major_brand, uint32_t minor_version, lsmash_brand_type_code *brands, uint32_t brand_count )
+int isom_set_brands( lsmash_root_t *root, lsmash_brand_type_code major_brand, uint32_t minor_version, lsmash_brand_type_code *brands, uint32_t brand_count )
 {
     if( !root )
         return -1;
@@ -9656,7 +9656,7 @@ int isom_set_brands( isom_root_t *root, lsmash_brand_type_code major_brand, uint
     return isom_check_compatibility( root );
 }
 
-int isom_set_max_chunk_duration( isom_root_t *root, double max_chunk_duration )
+int isom_set_max_chunk_duration( lsmash_root_t *root, double max_chunk_duration )
 {
     if( !root )
         return -1;
@@ -9664,7 +9664,7 @@ int isom_set_max_chunk_duration( isom_root_t *root, double max_chunk_duration )
     return 0;
 }
 
-int isom_write_ftyp( isom_root_t *root )
+int isom_write_ftyp( lsmash_root_t *root )
 {
     if( !root )
         return -1;
@@ -9680,7 +9680,7 @@ int isom_write_ftyp( isom_root_t *root )
     return lsmash_bs_write_data( bs );
 }
 
-int isom_write_moov( isom_root_t *root )
+int isom_write_moov( lsmash_root_t *root )
 {
     if( !root || !root->moov )
         return -1;
@@ -9698,7 +9698,7 @@ int isom_write_moov( isom_root_t *root )
 }
 
 /* If a mdat box already exists, flush a current one and start a new one. */
-int isom_add_mdat( isom_root_t *root )
+int isom_add_mdat( lsmash_root_t *root )
 {
     if( !root )
         return 0;
@@ -9712,7 +9712,7 @@ int isom_add_mdat( isom_root_t *root )
     return isom_write_mdat_header( root );     /* start a new mdat */
 }
 
-int isom_write_mdat_size( isom_root_t *root )
+int isom_write_mdat_size( lsmash_root_t *root )
 {
     if( !root || !root->bs || !root->bs->stream || !root->mdat )
         return -1;
@@ -9740,7 +9740,7 @@ int isom_write_mdat_size( isom_root_t *root )
     return 0;
 }
 
-int isom_set_free( isom_root_t *root, uint8_t *data, uint64_t data_length )
+int isom_set_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length )
 {
     if( !root || !root->free || !data || !data_length )
         return -1;
@@ -9758,7 +9758,7 @@ int isom_set_free( isom_root_t *root, uint8_t *data, uint64_t data_length )
     return 0;
 }
 
-int isom_add_free( isom_root_t *root, uint8_t *data, uint64_t data_length )
+int isom_add_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length )
 {
     if( !root )
         return -1;
@@ -9772,7 +9772,7 @@ int isom_add_free( isom_root_t *root, uint8_t *data, uint64_t data_length )
     return 0;
 }
 
-int isom_write_free( isom_root_t *root )
+int isom_write_free( lsmash_root_t *root )
 {
     if( !root || !root->bs || !root->free )
         return -1;
@@ -9785,7 +9785,7 @@ int isom_write_free( isom_root_t *root )
     return lsmash_bs_write_data( bs );
 }
 
-int isom_create_object_descriptor( isom_root_t *root )
+int isom_create_object_descriptor( lsmash_root_t *root )
 {
     if( !root )
         return -1;
@@ -9797,7 +9797,7 @@ int isom_create_object_descriptor( isom_root_t *root )
 
 /*---- finishing functions ----*/
 
-int isom_finish_movie( isom_root_t *root, lsmash_adhoc_remux_t* remux )
+int isom_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
 {
     if( !root || !root->moov || !root->moov->trak_list )
         return -1;
@@ -9928,7 +9928,7 @@ fail:
     return -1;
 }
 
-int isom_set_last_sample_delta( isom_root_t *root, uint32_t track_ID, uint32_t sample_delta )
+int isom_set_last_sample_delta( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_delta )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->minf || !trak->mdia->minf->stbl ||
@@ -9970,14 +9970,14 @@ int isom_set_last_sample_delta( isom_root_t *root, uint32_t track_ID, uint32_t s
     return isom_update_track_duration( root, track_ID, sample_delta );
 }
 
-int isom_flush_pooled_samples( isom_root_t *root, uint32_t track_ID, uint32_t last_sample_delta )
+int isom_flush_pooled_samples( lsmash_root_t *root, uint32_t track_ID, uint32_t last_sample_delta )
 {
     if( isom_output_cache( root, track_ID ) )
         return -1;
     return isom_set_last_sample_delta( root, track_ID, last_sample_delta );
 }
 
-void isom_destroy_root( isom_root_t *root )
+void isom_destroy_root( lsmash_root_t *root )
 {
     if( !root )
         return;
@@ -9999,7 +9999,7 @@ void isom_destroy_root( isom_root_t *root )
 
 /*---- timeline manipulator ----*/
 
-int isom_modify_timeline_map( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint64_t segment_duration, int64_t media_time, int32_t media_rate )
+int isom_modify_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint64_t segment_duration, int64_t media_time, int32_t media_rate )
 {
     if( !segment_duration || media_time < -1 )
         return -1;
@@ -10015,7 +10015,7 @@ int isom_modify_timeline_map( isom_root_t *root, uint32_t track_ID, uint32_t ent
     return isom_update_tkhd_duration( trak ) ? -1 : isom_update_mvhd_duration( root->moov );
 }
 
-int isom_create_explicit_timeline_map( isom_root_t *root, uint32_t track_ID, uint64_t segment_duration, int64_t media_time, int32_t media_rate )
+int isom_create_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint64_t segment_duration, int64_t media_time, int32_t media_rate )
 {
     if( media_time < -1 )
         return -1;
@@ -10036,7 +10036,7 @@ int isom_create_explicit_timeline_map( isom_root_t *root, uint32_t track_ID, uin
 
 /*---- create / modification time fields manipulators ----*/
 
-int isom_update_media_modification_time( isom_root_t *root, uint32_t track_ID )
+int isom_update_media_modification_time( lsmash_root_t *root, uint32_t track_ID )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->mdhd )
@@ -10049,7 +10049,7 @@ int isom_update_media_modification_time( isom_root_t *root, uint32_t track_ID )
     return 0;
 }
 
-int isom_update_track_modification_time( isom_root_t *root, uint32_t track_ID )
+int isom_update_track_modification_time( lsmash_root_t *root, uint32_t track_ID )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->tkhd )
@@ -10062,7 +10062,7 @@ int isom_update_track_modification_time( isom_root_t *root, uint32_t track_ID )
     return 0;
 }
 
-int isom_update_movie_modification_time( isom_root_t *root )
+int isom_update_movie_modification_time( lsmash_root_t *root )
 {
     if( !root || !root->moov || !root->moov->mvhd )
         return -1;
@@ -10076,7 +10076,7 @@ int isom_update_movie_modification_time( isom_root_t *root )
 
 /*---- sample manipulators ----*/
 
-int isom_write_sample( isom_root_t *root, uint32_t track_ID, lsmash_sample_t *sample )
+int isom_write_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_t *sample )
 {
     /* I myself think max_chunk_duration == 0, which means all samples will be cached on memory, should be prevented.
        This means removal of a feature that we used to have, but anyway very alone chunk does not make sense. */
@@ -10234,7 +10234,7 @@ static fn_get_chapter_data isom_check_chap_line( char *file_name )
     return fnc;
 }
 
-int isom_set_tyrant_chapter( isom_root_t *root, char *file_name )
+int isom_set_tyrant_chapter( lsmash_root_t *root, char *file_name )
 {
     /* This function should be called after updating of the latest movie duration. */
     if( !root || !root->moov || !root->moov->mvhd || !root->moov->mvhd->timescale || !root->moov->mvhd->duration )
@@ -10267,7 +10267,7 @@ fail:
     return -1;
 }
 
-int isom_create_reference_chapter_track( isom_root_t *root, uint32_t track_ID, char *file_name )
+int isom_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_ID, char *file_name )
 {
     if( !root || (!root->qt_compatible && !root->itunes_audio) || !root->moov || !root->moov->mvhd )
         return -1;
@@ -10369,7 +10369,7 @@ fail:
     return -1;
 }
 
-void isom_delete_explicit_timeline_map( isom_root_t *root, uint32_t track_ID )
+void isom_delete_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak )
@@ -10378,7 +10378,7 @@ void isom_delete_explicit_timeline_map( isom_root_t *root, uint32_t track_ID )
     trak->edts = NULL;
 }
 
-void isom_delete_tyrant_chapter( isom_root_t *root )
+void isom_delete_tyrant_chapter( lsmash_root_t *root )
 {
     if( !root || !root->moov || !root->moov->udta )
         return;

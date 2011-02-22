@@ -974,7 +974,7 @@ typedef struct
 } isom_moov_t;
 
 /* ROOT */
-struct isom_root_tag
+struct lsmash_root_tag
 {
     ISOM_FULLBOX_COMMON;    /* the size field expresses total file size 
                              * the flags field expresses file mode */
@@ -995,7 +995,7 @@ struct isom_root_tag
         lsmash_entry_list_t *print;
 };
 
-typedef int (*isom_print_box_t)( isom_root_t *, isom_box_t *, int );
+typedef int (*isom_print_box_t)( lsmash_root_t *, isom_box_t *, int );
 
 typedef struct
 {
@@ -1053,7 +1053,7 @@ typedef struct
     isom_mdia_t *mdia;          /* Media Box */
     isom_udta_t *udta;          /* User Data Box */
 
-    isom_root_t *root;          /* go to root */
+    lsmash_root_t *root;          /* go to root */
     isom_mdat_t *mdat;          /* go to referenced mdat box */
     isom_cache_t *cache;
     uint32_t related_track_ID;

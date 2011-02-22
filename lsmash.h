@@ -1107,89 +1107,89 @@ typedef struct {
     uint32_t display_height;
 } lsmash_video_summary_t;
 
-typedef struct isom_root_tag isom_root_t;
+typedef struct lsmash_root_tag lsmash_root_t;
 
 
 /* public functions */
-int isom_add_sps_entry( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *sps, uint32_t sps_size );
-int isom_add_pps_entry( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *pps, uint32_t pps_size );
-int isom_add_sample_entry( isom_root_t *root, uint32_t track_ID, uint32_t sample_type, void* summary );
+int isom_add_sps_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *sps, uint32_t sps_size );
+int isom_add_pps_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *pps, uint32_t pps_size );
+int isom_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_type, void* summary );
 
-int isom_add_btrt( isom_root_t *root, uint32_t track_ID, uint32_t entry_number );
-int isom_add_mdat( isom_root_t *root );
-int isom_add_free( isom_root_t *root, uint8_t *data, uint64_t data_length );
+int isom_add_btrt( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number );
+int isom_add_mdat( lsmash_root_t *root );
+int isom_add_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length );
 
-int isom_write_ftyp( isom_root_t *root );
-int isom_write_moov( isom_root_t *root );
-int isom_write_free( isom_root_t *root );
+int isom_write_ftyp( lsmash_root_t *root );
+int isom_write_moov( lsmash_root_t *root );
+int isom_write_free( lsmash_root_t *root );
 
-uint32_t isom_get_media_timescale( isom_root_t *root, uint32_t track_ID );
-uint64_t isom_get_media_duration( isom_root_t *root, uint32_t track_ID );
-uint64_t isom_get_track_duration( isom_root_t *root, uint32_t track_ID );
-uint32_t isom_get_last_sample_delta( isom_root_t *root, uint32_t track_ID );
-uint32_t isom_get_start_time_offset( isom_root_t *root, uint32_t track_ID );
-uint32_t isom_get_movie_timescale( isom_root_t *root );
+uint32_t isom_get_media_timescale( lsmash_root_t *root, uint32_t track_ID );
+uint64_t isom_get_media_duration( lsmash_root_t *root, uint32_t track_ID );
+uint64_t isom_get_track_duration( lsmash_root_t *root, uint32_t track_ID );
+uint32_t isom_get_last_sample_delta( lsmash_root_t *root, uint32_t track_ID );
+uint32_t isom_get_start_time_offset( lsmash_root_t *root, uint32_t track_ID );
+uint32_t isom_get_movie_timescale( lsmash_root_t *root );
 
-int isom_set_brands( isom_root_t *root, lsmash_brand_type_code major_brand, uint32_t minor_version, lsmash_brand_type_code *brands, uint32_t brand_count );
-int isom_set_max_chunk_duration( isom_root_t *root, double max_chunk_duration );
-int isom_set_media_handler( isom_root_t *root, uint32_t track_ID, lsmash_media_type_code media_type, char *name );
-int isom_set_media_handler_name( isom_root_t *root, uint32_t track_ID, char *handler_name );
-int isom_set_data_handler( isom_root_t *root, uint32_t track_ID, lsmash_data_reference_type_code reference_type, char *name );
-int isom_set_data_handler_name( isom_root_t *root, uint32_t track_ID, char *handler_name );
-int isom_set_movie_timescale( isom_root_t *root, uint32_t timescale );
-int isom_set_media_timescale( isom_root_t *root, uint32_t track_ID, uint32_t timescale );
-int isom_set_track_mode( isom_root_t *root, uint32_t track_ID, lsmash_track_mode_code mode );
-int isom_set_track_presentation_size( isom_root_t *root, uint32_t track_ID, uint32_t width, uint32_t height );
-int isom_set_track_volume( isom_root_t *root, uint32_t track_ID, int16_t volume );
-int isom_set_track_aperture_modes( isom_root_t *root, uint32_t track_ID, uint32_t entry_number );
-int isom_set_sample_resolution( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint16_t width, uint16_t height );
-int isom_set_sample_type( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint32_t sample_type );
-int isom_set_sample_aspect_ratio( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint32_t hSpacing, uint32_t vSpacing );
-int isom_set_color_parameter( isom_root_t *root, uint32_t track_ID, uint32_t entry_number,
+int isom_set_brands( lsmash_root_t *root, lsmash_brand_type_code major_brand, uint32_t minor_version, lsmash_brand_type_code *brands, uint32_t brand_count );
+int isom_set_max_chunk_duration( lsmash_root_t *root, double max_chunk_duration );
+int isom_set_media_handler( lsmash_root_t *root, uint32_t track_ID, lsmash_media_type_code media_type, char *name );
+int isom_set_media_handler_name( lsmash_root_t *root, uint32_t track_ID, char *handler_name );
+int isom_set_data_handler( lsmash_root_t *root, uint32_t track_ID, lsmash_data_reference_type_code reference_type, char *name );
+int isom_set_data_handler_name( lsmash_root_t *root, uint32_t track_ID, char *handler_name );
+int isom_set_movie_timescale( lsmash_root_t *root, uint32_t timescale );
+int isom_set_media_timescale( lsmash_root_t *root, uint32_t track_ID, uint32_t timescale );
+int isom_set_track_mode( lsmash_root_t *root, uint32_t track_ID, lsmash_track_mode_code mode );
+int isom_set_track_presentation_size( lsmash_root_t *root, uint32_t track_ID, uint32_t width, uint32_t height );
+int isom_set_track_volume( lsmash_root_t *root, uint32_t track_ID, int16_t volume );
+int isom_set_track_aperture_modes( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number );
+int isom_set_sample_resolution( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint16_t width, uint16_t height );
+int isom_set_sample_type( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint32_t sample_type );
+int isom_set_sample_aspect_ratio( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint32_t hSpacing, uint32_t vSpacing );
+int isom_set_color_parameter( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number,
                               lsmash_color_parameter primaries, lsmash_color_parameter transfer, lsmash_color_parameter matrix );
-int isom_set_scaling_method( isom_root_t *root, uint32_t track_ID, uint32_t entry_number,
+int isom_set_scaling_method( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number,
                              lsmash_scaling_method_code scale_method, int16_t display_center_x, int16_t display_center_y );
-int isom_set_channel_layout( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, lsmash_channel_layout_tag_code layout_tag, lsmash_channel_bitmap_code bitmap );
-int isom_set_avc_config( isom_root_t *root, uint32_t track_ID, uint32_t entry_number,
+int isom_set_channel_layout( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, lsmash_channel_layout_tag_code layout_tag, lsmash_channel_bitmap_code bitmap );
+int isom_set_avc_config( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number,
                          uint8_t configurationVersion, uint8_t AVCProfileIndication, uint8_t profile_compatibility,
                          uint8_t AVCLevelIndication, uint8_t lengthSizeMinusOne,
                          uint8_t chroma_format, uint8_t bit_depth_luma_minus8, uint8_t bit_depth_chroma_minus8 );
-int isom_set_handler_name( isom_root_t *root, uint32_t track_ID, char *handler_name );
-int isom_set_last_sample_delta( isom_root_t *root, uint32_t track_ID, uint32_t sample_delta );
-int isom_set_media_language( isom_root_t *root, uint32_t track_ID, char *ISO_language, uint16_t Mac_language );
-int isom_set_track_ID( isom_root_t *root, uint32_t track_ID, uint32_t new_track_ID );
-int isom_set_free( isom_root_t *root, uint8_t *data, uint64_t data_length );
-int isom_set_tyrant_chapter( isom_root_t *root, char *file_name );
+int isom_set_handler_name( lsmash_root_t *root, uint32_t track_ID, char *handler_name );
+int isom_set_last_sample_delta( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_delta );
+int isom_set_media_language( lsmash_root_t *root, uint32_t track_ID, char *ISO_language, uint16_t Mac_language );
+int isom_set_track_ID( lsmash_root_t *root, uint32_t track_ID, uint32_t new_track_ID );
+int isom_set_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length );
+int isom_set_tyrant_chapter( lsmash_root_t *root, char *file_name );
 
-int isom_create_explicit_timeline_map( isom_root_t *root, uint32_t track_ID, uint64_t segment_duration, int64_t media_time, int32_t media_rate );
-int isom_create_reference_chapter_track( isom_root_t *root, uint32_t track_ID, char *file_name );
-int isom_create_grouping( isom_root_t *root, uint32_t track_ID, lsmash_grouping_type_code grouping_type );
-int isom_create_object_descriptor( isom_root_t *root );
+int isom_create_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint64_t segment_duration, int64_t media_time, int32_t media_rate );
+int isom_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_ID, char *file_name );
+int isom_create_grouping( lsmash_root_t *root, uint32_t track_ID, lsmash_grouping_type_code grouping_type );
+int isom_create_object_descriptor( lsmash_root_t *root );
 
-int isom_modify_timeline_map( isom_root_t *root, uint32_t track_ID, uint32_t entry_number, uint64_t segment_duration, int64_t media_time, int32_t media_rate );
+int isom_modify_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint64_t segment_duration, int64_t media_time, int32_t media_rate );
 
-int isom_update_media_modification_time( isom_root_t *root, uint32_t track_ID );
-int isom_update_track_modification_time( isom_root_t *root, uint32_t track_ID );
-int isom_update_movie_modification_time( isom_root_t *root );
-int isom_update_track_duration( isom_root_t *root, uint32_t track_ID, uint32_t last_sample_delta );
-int isom_update_bitrate_info( isom_root_t *root, uint32_t track_ID, uint32_t entry_number );
+int isom_update_media_modification_time( lsmash_root_t *root, uint32_t track_ID );
+int isom_update_track_modification_time( lsmash_root_t *root, uint32_t track_ID );
+int isom_update_movie_modification_time( lsmash_root_t *root );
+int isom_update_track_duration( lsmash_root_t *root, uint32_t track_ID, uint32_t last_sample_delta );
+int isom_update_bitrate_info( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number );
 
 
-isom_root_t *isom_open_movie( const char *filename, uint32_t mode );
-uint32_t isom_create_track( isom_root_t *root, uint32_t handler_type );
+lsmash_root_t *isom_open_movie( const char *filename, uint32_t mode );
+uint32_t isom_create_track( lsmash_root_t *root, uint32_t handler_type );
 lsmash_sample_t *isom_create_sample( uint32_t size );
 void isom_delete_sample( lsmash_sample_t *sample );
-int isom_write_sample( isom_root_t *root, uint32_t track_ID, lsmash_sample_t *sample );
-int isom_write_mdat_size( isom_root_t *root );
-int isom_flush_pooled_samples( isom_root_t *root, uint32_t track_ID, uint32_t last_sample_delta );
-int isom_finish_movie( isom_root_t *root, lsmash_adhoc_remux_t* remux );
-void isom_destroy_root( isom_root_t *root );
+int isom_write_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_t *sample );
+int isom_write_mdat_size( lsmash_root_t *root );
+int isom_flush_pooled_samples( lsmash_root_t *root, uint32_t track_ID, uint32_t last_sample_delta );
+int isom_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux );
+void isom_destroy_root( lsmash_root_t *root );
 
-void isom_delete_track( isom_root_t *root, uint32_t track_ID );
-void isom_delete_explicit_timeline_map( isom_root_t *root, uint32_t track_ID );
-void isom_delete_tyrant_chapter( isom_root_t *root );
+void isom_delete_track( lsmash_root_t *root, uint32_t track_ID );
+void isom_delete_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID );
+void isom_delete_tyrant_chapter( lsmash_root_t *root );
 
-isom_root_t *isom_parse_movie( char *filename );
-int isom_print_movie( isom_root_t *root );
+lsmash_root_t *isom_parse_movie( char *filename );
+int isom_print_movie( lsmash_root_t *root );
 
 #endif

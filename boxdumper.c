@@ -30,7 +30,7 @@ int main( int argc, char *argv[] )
         return -1;
     }
     char *filename = argv[1];
-    isom_root_t *root = isom_open_movie( filename, ISOM_FILE_MODE_READ | ISOM_FILE_MODE_DUMP );
+    lsmash_root_t *root = isom_open_movie( filename, ISOM_FILE_MODE_READ | ISOM_FILE_MODE_DUMP );
     if( !root )
     {
         fprintf( stderr, "Failed to open input file.\n" );
