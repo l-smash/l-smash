@@ -1071,7 +1071,7 @@ typedef struct {
 
 /* L-SMASH's original structure, summary of audio/video stream configuration */
 /* FIXME: I wonder whether this struct should blong to namespace of "isom" or not. */
-/* NOTE: For audio, currently assuming AAC-LC. For video, currently not used. */
+/* NOTE: For audio, currently assuming AAC-LC. */
 
 #define LSMASH_BASE_SUMMARY \
     lsmash_mp4sys_object_type_indication object_type_indication; \
@@ -1101,10 +1101,18 @@ typedef struct {
     LSMASH_BASE_SUMMARY
     // mp4sys_visualProfileLevelIndication pli ; /* I wonder we should have this or not. */
     // lsmash_mp4v_VideoObjectType vot;    /* Detailed codec type. If not mp4v, just ignored. */
-    uint32_t width;
-    uint32_t height;
-    uint32_t display_width;
-    uint32_t display_height;
+    uint32_t width;         /* pixel counts of width samples have */
+    uint32_t height;        /* pixel counts of height samples have */
+    uint32_t crop_top;
+    uint32_t crop_left;
+    uint32_t crop_bottom;
+    uint32_t crop_right;
+    uint32_t par_h;         /* horizontal factor of pixel aspect ratio */
+    uint32_t par_v;         /* vertical factor of pixel aspect ratio */
+    lsmash_scaling_method_code scaling_method;
+    lsmash_color_parameter primaries;
+    lsmash_color_parameter transfer;
+    lsmash_color_parameter matrix;
 } lsmash_video_summary_t;
 
 typedef struct lsmash_root_tag lsmash_root_t;
