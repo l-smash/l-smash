@@ -363,20 +363,38 @@ typedef enum
     ISOM_CODEC_TYPE_SSMV_AUDIO  = ISOM_4CC( 's', 's', 'm', 'v' ),   /* SMV Voice */
     ISOM_CODEC_TYPE_TWOS_AUDIO  = ISOM_4CC( 't', 'w', 'o', 's' ),   /* Uncompressed 16-bit audio */
 
+    QT_CODEC_TYPE_23NI_AUDIO    = ISOM_4CC( '2', '3', 'n', 'i' ),   /* 32-bit little endian integer uncompressed */
+    QT_CODEC_TYPE_MAC3_AUDIO    = ISOM_4CC( 'M', 'A', 'C', '3' ),   /* MACE 3:1 */
+    QT_CODEC_TYPE_MAC6_AUDIO    = ISOM_4CC( 'M', 'A', 'C', '6' ),   /* MACE 6:1 */
+    QT_CODEC_TYPE_NONE_AUDIO    = ISOM_4CC( 'N', 'O', 'N', 'E' ),   /* either 'raw ' or 'twos' */
     QT_CODEC_TYPE_QDM2_AUDIO    = ISOM_4CC( 'Q', 'D', 'M', '2' ),   /* Qdesign music 2 */
     QT_CODEC_TYPE_QDMC_AUDIO    = ISOM_4CC( 'Q', 'D', 'M', 'C' ),   /* Qdesign music 1 */
     QT_CODEC_TYPE_QCLP_AUDIO    = ISOM_4CC( 'Q', 'c', 'l', 'p' ),   /* Qualcomm PureVoice */
     QT_CODEC_TYPE_AGSM_AUDIO    = ISOM_4CC( 'a', 'g', 's', 'm' ),   /* GSM */
-    QT_CODEC_TYPE_ALAW_AUDIO    = ISOM_4CC( 'a', 'l', 'a', 'w' ),   /* a-Law */
+    QT_CODEC_TYPE_ALAC_AUDIO    = ISOM_4CC( 'a', 'l', 'a', 'c' ),   /* Apple lossless audio codec */
+    QT_CODEC_TYPE_ALAW_AUDIO    = ISOM_4CC( 'a', 'l', 'a', 'w' ),   /* a-Law 2:1 */
+    QT_CODEC_TYPE_CDX2_AUDIO    = ISOM_4CC( 'c', 'd', 'x', '2' ),   /* CD/XA 2:1 */
+    QT_CODEC_TYPE_CDX4_AUDIO    = ISOM_4CC( 'c', 'd', 'x', '4' ),   /* CD/XA 4:1 */
+    QT_CODEC_TYPE_DVCA_AUDIO    = ISOM_4CC( 'd', 'v', 'c', 'a' ),   /* DV Audio */
     QT_CODEC_TYPE_DVI_AUDIO     = ISOM_4CC( 'd', 'v', 'i', ' ' ),   /* DVI (as used in RTP, 4:1 compression) */
-    QT_CODEC_TYPE_FL32_AUDIO    = ISOM_4CC( 'f', 'l', '3', '2' ),   /* 32 bit float */
-    QT_CODEC_TYPE_FL64_AUDIO    = ISOM_4CC( 'f', 'l', '6', '4' ),   /* 64 bit float */
+    QT_CODEC_TYPE_FL32_AUDIO    = ISOM_4CC( 'f', 'l', '3', '2' ),   /* 32-bit float */
+    QT_CODEC_TYPE_FL64_AUDIO    = ISOM_4CC( 'f', 'l', '6', '4' ),   /* 64-bit float */
     QT_CODEC_TYPE_IMA4_AUDIO    = ISOM_4CC( 'i', 'm', 'a', '4' ),   /* IMA (International Multimedia Assocation, defunct, 4:1) */
-    QT_CODEC_TYPE_IN24_AUDIO    = ISOM_4CC( 'i', 'n', '2', '4' ),   /* 24 bit integer uncompressed */
-    QT_CODEC_TYPE_IN32_AUDIO    = ISOM_4CC( 'i', 'n', '3', '2' ),   /* 32 bit integer uncompressed */
+    QT_CODEC_TYPE_IN24_AUDIO    = ISOM_4CC( 'i', 'n', '2', '4' ),   /* 24-bit integer uncompressed */
+    QT_CODEC_TYPE_IN32_AUDIO    = ISOM_4CC( 'i', 'n', '3', '2' ),   /* 32-bit integer uncompressed */
     QT_CODEC_TYPE_LPCM_AUDIO    = ISOM_4CC( 'l', 'p', 'c', 'm' ),   /* Uncompressed audio (various integer and float formats) */
-    QT_CODEC_TYPE_ULAW_AUDIO    = ISOM_4CC( 'u', 'l', 'a', 'w' ),   /* Samples have been compressed using uLaw 2:1 */
+    QT_CODEC_TYPE_MP4A_AUDIO    = ISOM_4CC( 'm', 'p', '4', 'a' ),   /* MPEG-4 Audio */
+    QT_CODEC_TYPE_RAW_AUDIO     = ISOM_4CC( 'r', 'a', 'w', ' ' ),   /* 8-bit offset-binary uncompressed */
+    QT_CODEC_TYPE_SOWT_AUDIO    = ISOM_4CC( 's', 'o', 'w', 't' ),   /* 16-bit little endian uncompressed */
+    QT_CODEC_TYPE_TWOS_AUDIO    = ISOM_4CC( 't', 'w', 'o', 's' ),   /* 8-bit or 16-bit big endian uncompressed */
+    QT_CODEC_TYPE_ULAW_AUDIO    = ISOM_4CC( 'u', 'l', 'a', 'w' ),   /* uLaw 2:1 */
     QT_CODEC_TYPE_VDVA_AUDIO    = ISOM_4CC( 'v', 'd', 'v', 'a' ),   /* DV audio (variable duration per video frame) */
+    QT_CODEC_TYPE_FULLMP3_AUDIO = ISOM_4CC( '.', 'm', 'p', '3' ),   /* MPEG-1 layer 3, CBR & VBR (QT4.1 and later) */
+    QT_CODEC_TYPE_MP3_AUDIO     = 0x6D730055,                       /* MPEG-1 layer 3, CBR only (pre-QT4.1) */
+    QT_CODEC_TYPE_ADPCM2_AUDIO  = 0x6D730002,                       /* Microsoft ADPCM - ACM code 2 */
+    QT_CODEC_TYPE_ADPCM17_AUDIO = 0x6D730011,                       /* DVI/Intel IMA ADPCM - ACM code 17 */
+    QT_CODEC_TYPE_GSM49_AUDIO   = 0x6D730031,                       /* Microsoft GSM 6.10 - ACM code 49 */
+    QT_CODEC_TYPE_NOT_SPECIFIED = 0x00000000,                       /* either 'raw ' or 'twos' */
 
     /* Video Type */
     ISOM_CODEC_TYPE_AVC1_VIDEO  = ISOM_4CC( 'a', 'v', 'c', '1' ),   /* Advanced Video Coding */
@@ -1095,6 +1113,13 @@ typedef struct {
     uint32_t samples_in_frame;          /* Even if the stream is HE-AAC/aacPlus/SBR(+PS), this is base AAC's one, so 1024. */
     lsmash_mp4a_aac_sbr_mode sbr_mode;  /* SBR treatment. Currently we always set this as mp4a_AAC_SBR_NOT_SPECIFIED(Implicit signaling).
                                          * User can set this for treatment in other way. */
+    /* LPCM descriptions */
+    uint8_t sample_format;      /* 0: integer, 1: floating point */
+    uint8_t endianness;         /* 0: big endian, 1: little endian */
+    uint8_t signedness;         /* 0: unsigned, 1: signed / This is only valid when sample format is integer. */
+    uint8_t packed;             /* 0: unpacked, 1: packed i.e. the sample bits occupy the entire available bits for the channel */
+    uint8_t alignment;          /* 0: low bit placement, 1: high bit placement / This is only valid when unpacked. */
+    uint8_t interleaved;        /* 0: non-interleaved, 1: interleaved i.e. the samples for each channels are stored in one stream */
 } lsmash_audio_summary_t;
 
 typedef struct {

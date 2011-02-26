@@ -84,6 +84,19 @@ typedef struct
     case ISOM_BOX_TYPE_SBGP : \
     case ISOM_BOX_TYPE_CHPL
 
+#define QT_CODEC_TYPE_UNCOMPLESSED_AUDIO_CASE \
+         QT_CODEC_TYPE_23NI_AUDIO : \
+    case QT_CODEC_TYPE_NONE_AUDIO : \
+    case QT_CODEC_TYPE_LPCM_AUDIO : \
+    case QT_CODEC_TYPE_RAW_AUDIO : \
+    case QT_CODEC_TYPE_SOWT_AUDIO : \
+    case QT_CODEC_TYPE_TWOS_AUDIO : \
+    case QT_CODEC_TYPE_FL32_AUDIO : \
+    case QT_CODEC_TYPE_FL64_AUDIO : \
+    case QT_CODEC_TYPE_IN24_AUDIO : \
+    case QT_CODEC_TYPE_IN32_AUDIO : \
+    case QT_CODEC_TYPE_NOT_SPECIFIED
+
 /*---- ----*/
 
 static inline void isom_init_basebox_common( isom_box_t *box, isom_box_t *parent, uint32_t type )
@@ -770,11 +783,9 @@ static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash
     memset( audio, 0, sizeof(isom_audio_entry_t) );
     isom_init_box_common( audio, stsd, sample_type );
     audio->data_reference_index = 1;
-    audio->channelcount = 2;
-    audio->samplesize = 16;
     audio->samplerate = summary->frequency <= UINT16_MAX ? summary->frequency << 16 : 0;
     audio->numAudioChannels = summary->channels;    /* store the actual number of channels, here */
-    if( audio->type == ISOM_CODEC_TYPE_MP4A_AUDIO )
+    if( sample_type == ISOM_CODEC_TYPE_MP4A_AUDIO )
     {
         if( isom_add_wave( audio ) ||
             isom_add_frma( audio->wave ) ||
@@ -783,6 +794,7 @@ static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash
             goto fail;
         audio->version = (summary->channels > 2 || summary->frequency > UINT16_MAX) ? 2 : 1;
         audio->channelcount = audio->version == 2 ? 3 : LSMASH_MIN( summary->channels, 2 );
+        audio->samplesize = 16;
         audio->compression_ID = -2;     /* assume VBR */
         audio->packet_size = 0;
         if( audio->version == 1 )
@@ -824,8 +836,85 @@ static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash
         }
         audio->wave->esds = esds;
     }
+    else if( sample_type == QT_CODEC_TYPE_LPCM_AUDIO ||
+        sample_type == QT_CODEC_TYPE_TWOS_AUDIO || sample_type == QT_CODEC_TYPE_SOWT_AUDIO ||
+        sample_type == QT_CODEC_TYPE_FL32_AUDIO || sample_type == QT_CODEC_TYPE_FL64_AUDIO ||
+        sample_type == QT_CODEC_TYPE_IN24_AUDIO || sample_type == QT_CODEC_TYPE_IN32_AUDIO ||
+        sample_type == QT_CODEC_TYPE_23NI_AUDIO || sample_type == QT_CODEC_TYPE_RAW_AUDIO ||
+        sample_type == QT_CODEC_TYPE_NONE_AUDIO || sample_type == QT_CODEC_TYPE_NOT_SPECIFIED )
+    {
+        /* Convert the sample type into 'lpcm' if the description isn't match the format or version = 2 fields are needed. */
+        if( (sample_type == QT_CODEC_TYPE_RAW_AUDIO && (summary->bit_depth != 8 || summary->sample_format)) ||
+            (sample_type == QT_CODEC_TYPE_FL32_AUDIO && (summary->bit_depth != 32 || !summary->sample_format)) ||
+            (sample_type == QT_CODEC_TYPE_FL64_AUDIO && (summary->bit_depth != 64 || !summary->sample_format)) ||
+            (sample_type == QT_CODEC_TYPE_IN24_AUDIO && (summary->bit_depth != 24 || summary->sample_format)) ||
+            (sample_type == QT_CODEC_TYPE_IN32_AUDIO && (summary->bit_depth != 32 || summary->sample_format)) ||
+            (sample_type == QT_CODEC_TYPE_23NI_AUDIO && (summary->bit_depth != 32 || summary->sample_format || !summary->endianness)) ||
+            (sample_type == QT_CODEC_TYPE_SOWT_AUDIO && (summary->bit_depth != 16 || summary->sample_format || !summary->endianness)) ||
+            (sample_type == QT_CODEC_TYPE_TWOS_AUDIO && ((summary->bit_depth != 16 && summary->bit_depth != 8) || summary->sample_format || summary->endianness)) ||
+            (sample_type == QT_CODEC_TYPE_NONE_AUDIO && ((summary->bit_depth != 16 && summary->bit_depth != 8) || summary->sample_format || summary->endianness)) ||
+            (sample_type == QT_CODEC_TYPE_NOT_SPECIFIED && ((summary->bit_depth != 16 && summary->bit_depth != 8) || summary->sample_format || summary->endianness)) ||
+            (summary->channels > 2 || summary->frequency > UINT16_MAX || summary->bit_depth % 8) )
+        {
+            audio->type = QT_CODEC_TYPE_LPCM_AUDIO;
+            audio->version = 2;
+        }
+        else if( sample_type == QT_CODEC_TYPE_LPCM_AUDIO )
+            audio->version = 2;
+        else if( summary->bit_depth > 16 ||
+            sample_type != QT_CODEC_TYPE_RAW_AUDIO || sample_type != QT_CODEC_TYPE_TWOS_AUDIO ||
+            sample_type != QT_CODEC_TYPE_NONE_AUDIO || sample_type != QT_CODEC_TYPE_NOT_SPECIFIED )
+            audio->version = 1;
+        if( audio->version == 2 )
+        {
+            audio->channelcount = 3;
+            audio->samplesize = 16;
+            audio->compression_ID = -2;
+            audio->samplerate = 0x00010000;
+            audio->sizeOfStructOnly = 72;
+            audio->audioSampleRate = (union {double d; uint64_t i;}){summary->frequency}.i;
+            audio->always7F000000 = 0x7F000000;
+            audio->constBitsPerChannel = summary->bit_depth;
+            audio->constBytesPerAudioPacket = (audio->constBitsPerChannel * audio->numAudioChannels) / 8;
+            audio->constLPCMFramesPerAudioPacket = 1;
+            if( summary->sample_format )
+                audio->formatSpecificFlags |= QT_LPCM_FORMAT_FLAG_FLOAT;
+            if( sample_type == QT_CODEC_TYPE_TWOS_AUDIO || !summary->endianness )
+                audio->formatSpecificFlags |= QT_LPCM_FORMAT_FLAG_BIG_ENDIAN;
+            if( !summary->sample_format && summary->signedness )
+                audio->formatSpecificFlags |= QT_LPCM_FORMAT_FLAG_SIGNED_INTEGER;
+            if( summary->packed )
+                audio->formatSpecificFlags |= QT_LPCM_FORMAT_FLAG_PACKED;
+            if( !summary->packed && summary->alignment )
+                audio->formatSpecificFlags |= QT_LPCM_FORMAT_FLAG_ALIGNED_HIGH;
+            if( !summary->interleaved )
+                audio->formatSpecificFlags |= QT_LPCM_FORMAT_FLAG_NON_INTERLEAVED;
+        }
+        else if( audio->version == 1 )
+        {
+            audio->channelcount = summary->channels;
+            audio->samplesize = 16;
+            /* Audio formats other than 'raw ' and 'twos' are treated as compressed audio. */
+            if( sample_type == QT_CODEC_TYPE_RAW_AUDIO || sample_type == QT_CODEC_TYPE_TWOS_AUDIO )
+                audio->compression_ID = QT_COMPRESSION_ID_NOT_COMPRESSED;
+            else
+                audio->compression_ID = QT_COMPRESSION_ID_FIXED_COMPRESSION;
+            audio->samplesPerPacket = 1;
+            audio->bytesPerPacket = summary->bit_depth / 8;
+            audio->bytesPerFrame = audio->bytesPerPacket * summary->channels;   /* sample_size field in stsz box is NOT used. */
+            audio->bytesPerSample = 1 + (summary->bit_depth != 8);
+        }
+        else    /* audio->version == 0 */
+        {
+            audio->channelcount = summary->channels;
+            audio->samplesize = summary->bit_depth;
+            audio->compression_ID = 0;
+        }
+    }
     else
     {
+        audio->channelcount = 2;
+        audio->samplesize = 16;
         if( summary->exdata )
         {
             audio->exdata_length = summary->exdata_length;
@@ -953,6 +1042,7 @@ int isom_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t samp
         case ISOM_CODEC_TYPE_ALAC_AUDIO :
         case ISOM_CODEC_TYPE_SAMR_AUDIO :
         case ISOM_CODEC_TYPE_SAWB_AUDIO :
+        case QT_CODEC_TYPE_UNCOMPLESSED_AUDIO_CASE :
 #if 0
         case ISOM_CODEC_TYPE_DRA1_AUDIO :
         case ISOM_CODEC_TYPE_DTSC_AUDIO :
@@ -2189,6 +2279,7 @@ static void isom_remove_stsd( isom_stsd_t *stsd )
             case ISOM_CODEC_TYPE_ALAC_AUDIO :
             case ISOM_CODEC_TYPE_SAMR_AUDIO :
             case ISOM_CODEC_TYPE_SAWB_AUDIO :
+            case QT_CODEC_TYPE_UNCOMPLESSED_AUDIO_CASE :
 #if 0
             case ISOM_CODEC_TYPE_DRA1_AUDIO :
             case ISOM_CODEC_TYPE_DTSC_AUDIO :
@@ -3219,6 +3310,7 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
             case ISOM_CODEC_TYPE_ALAC_AUDIO :
             case ISOM_CODEC_TYPE_SAMR_AUDIO :
             case ISOM_CODEC_TYPE_SAWB_AUDIO :
+            case QT_CODEC_TYPE_UNCOMPLESSED_AUDIO_CASE :
 #if 0
             case ISOM_CODEC_TYPE_DRA1_AUDIO :
             case ISOM_CODEC_TYPE_DTSC_AUDIO :
@@ -4589,8 +4681,43 @@ static int isom_print_audio_description( lsmash_root_t *root, isom_box_t *box, i
         isom_iprintf( indent, "numAudioChannels = %"PRIu32"\n", audio->numAudioChannels );
         isom_iprintf( indent, "always7F000000 = 0x%08"PRIx32"\n", audio->always7F000000 );
         isom_iprintf( indent, "constBitsPerChannel = %"PRIu32"\n", audio->constBitsPerChannel );
-        isom_iprintf( indent, "formatSpecificFlags = 0x%08"PRIx32"\n", audio->formatSpecificFlags );
-        isom_iprintf( indent, "constBytesPerAudioPacket = %"PRIu32"\n", audio->constBytesPerAudioPacket );
+        isom_iprintf( indent++, "formatSpecificFlags = 0x%08"PRIx32"\n", audio->formatSpecificFlags );
+        switch( audio->type )
+        {
+            case QT_CODEC_TYPE_UNCOMPLESSED_AUDIO_CASE :
+                isom_iprintf( indent, "sample format: " );
+                if( audio->formatSpecificFlags & QT_LPCM_FORMAT_FLAG_FLOAT )
+                    printf( "floating point\n" );
+                else
+                {
+                    printf( "integer\n" );
+                    isom_iprintf( indent, "signedness: " );
+                    printf( audio->formatSpecificFlags & QT_LPCM_FORMAT_FLAG_SIGNED_INTEGER ? "signed\n" : "unsigned\n" );
+                }
+                if( audio->constBytesPerAudioPacket != 1 )
+                {
+                    isom_iprintf( indent, "endianness: " );
+                    printf( audio->formatSpecificFlags & QT_LPCM_FORMAT_FLAG_BIG_ENDIAN ? "big\n" : "little\n" );
+                }
+                isom_iprintf( indent, "packed: " );
+                if( audio->formatSpecificFlags & QT_LPCM_FORMAT_FLAG_PACKED )
+                    printf( "yes\n" );
+                else
+                {
+                    printf( "no\n" );
+                    isom_iprintf( indent, "alignment: " );
+                    printf( audio->formatSpecificFlags & QT_LPCM_FORMAT_FLAG_ALIGNED_HIGH ? "high\n" : "low\n" );
+                }
+                if( audio->numAudioChannels > 1 )
+                {
+                    isom_iprintf( indent, "interleved: " );
+                    printf( audio->formatSpecificFlags & QT_LPCM_FORMAT_FLAG_NON_INTERLEAVED ? "no\n" : "yes\n" );
+                }
+                break;
+            default :
+                break;
+        }
+        isom_iprintf( --indent, "constBytesPerAudioPacket = %"PRIu32"\n", audio->constBytesPerAudioPacket );
         isom_iprintf( indent, "constLPCMFramesPerAudioPacket = %"PRIu32"\n", audio->constLPCMFramesPerAudioPacket );
     }
     return 0;
@@ -5155,19 +5282,26 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
                 case ISOM_CODEC_TYPE_M4AE_AUDIO :
                 case ISOM_CODEC_TYPE_MLPA_AUDIO :
                 case ISOM_CODEC_TYPE_MP4A_AUDIO :
-                case ISOM_CODEC_TYPE_RAW_AUDIO  :
+                //case ISOM_CODEC_TYPE_RAW_AUDIO  :
                 case ISOM_CODEC_TYPE_SAMR_AUDIO :
                 case ISOM_CODEC_TYPE_SAWB_AUDIO :
                 case ISOM_CODEC_TYPE_SAWP_AUDIO :
                 case ISOM_CODEC_TYPE_SEVC_AUDIO :
                 case ISOM_CODEC_TYPE_SQCP_AUDIO :
                 case ISOM_CODEC_TYPE_SSMV_AUDIO :
-                case ISOM_CODEC_TYPE_TWOS_AUDIO :
+                //case ISOM_CODEC_TYPE_TWOS_AUDIO :
+                case QT_CODEC_TYPE_23NI_AUDIO :
+                case QT_CODEC_TYPE_MAC3_AUDIO :
+                case QT_CODEC_TYPE_MAC6_AUDIO :
+                case QT_CODEC_TYPE_NONE_AUDIO :
                 case QT_CODEC_TYPE_QDM2_AUDIO :
                 case QT_CODEC_TYPE_QDMC_AUDIO :
                 case QT_CODEC_TYPE_QCLP_AUDIO :
                 case QT_CODEC_TYPE_AGSM_AUDIO :
                 case QT_CODEC_TYPE_ALAW_AUDIO :
+                case QT_CODEC_TYPE_CDX2_AUDIO :
+                case QT_CODEC_TYPE_CDX4_AUDIO :
+                case QT_CODEC_TYPE_DVCA_AUDIO :
                 case QT_CODEC_TYPE_DVI_AUDIO  :
                 case QT_CODEC_TYPE_FL32_AUDIO :
                 case QT_CODEC_TYPE_FL64_AUDIO :
@@ -5175,8 +5309,17 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
                 case QT_CODEC_TYPE_IN24_AUDIO :
                 case QT_CODEC_TYPE_IN32_AUDIO :
                 case QT_CODEC_TYPE_LPCM_AUDIO :
+                case QT_CODEC_TYPE_RAW_AUDIO :
+                case QT_CODEC_TYPE_SOWT_AUDIO :
+                case QT_CODEC_TYPE_TWOS_AUDIO :
                 case QT_CODEC_TYPE_ULAW_AUDIO :
                 case QT_CODEC_TYPE_VDVA_AUDIO :
+                case QT_CODEC_TYPE_FULLMP3_AUDIO :
+                case QT_CODEC_TYPE_MP3_AUDIO :
+                case QT_CODEC_TYPE_ADPCM2_AUDIO :
+                case QT_CODEC_TYPE_ADPCM17_AUDIO :
+                case QT_CODEC_TYPE_GSM49_AUDIO :
+                case QT_CODEC_TYPE_NOT_SPECIFIED :
                     return isom_print_audio_description;
                 case QT_CODEC_TYPE_TEXT_TEXT :
                     return isom_print_text_description;
@@ -6134,19 +6277,26 @@ static void *isom_sample_description_alloc( uint32_t sample_type )
         case ISOM_CODEC_TYPE_G726_AUDIO :
         case ISOM_CODEC_TYPE_M4AE_AUDIO :
         case ISOM_CODEC_TYPE_MLPA_AUDIO :
-        case ISOM_CODEC_TYPE_RAW_AUDIO  :
+        //case ISOM_CODEC_TYPE_RAW_AUDIO  :
         case ISOM_CODEC_TYPE_SAMR_AUDIO :
         case ISOM_CODEC_TYPE_SAWB_AUDIO :
         case ISOM_CODEC_TYPE_SAWP_AUDIO :
         case ISOM_CODEC_TYPE_SEVC_AUDIO :
         case ISOM_CODEC_TYPE_SQCP_AUDIO :
         case ISOM_CODEC_TYPE_SSMV_AUDIO :
-        case ISOM_CODEC_TYPE_TWOS_AUDIO :
+        //case ISOM_CODEC_TYPE_TWOS_AUDIO :
+        case QT_CODEC_TYPE_23NI_AUDIO :
+        case QT_CODEC_TYPE_MAC3_AUDIO :
+        case QT_CODEC_TYPE_MAC6_AUDIO :
+        case QT_CODEC_TYPE_NONE_AUDIO :
         case QT_CODEC_TYPE_QDM2_AUDIO :
         case QT_CODEC_TYPE_QDMC_AUDIO :
         case QT_CODEC_TYPE_QCLP_AUDIO :
         case QT_CODEC_TYPE_AGSM_AUDIO :
         case QT_CODEC_TYPE_ALAW_AUDIO :
+        case QT_CODEC_TYPE_CDX2_AUDIO :
+        case QT_CODEC_TYPE_CDX4_AUDIO :
+        case QT_CODEC_TYPE_DVCA_AUDIO :
         case QT_CODEC_TYPE_DVI_AUDIO  :
         case QT_CODEC_TYPE_FL32_AUDIO :
         case QT_CODEC_TYPE_FL64_AUDIO :
@@ -6154,8 +6304,17 @@ static void *isom_sample_description_alloc( uint32_t sample_type )
         case QT_CODEC_TYPE_IN24_AUDIO :
         case QT_CODEC_TYPE_IN32_AUDIO :
         case QT_CODEC_TYPE_LPCM_AUDIO :
+        case QT_CODEC_TYPE_RAW_AUDIO :
+        case QT_CODEC_TYPE_SOWT_AUDIO :
+        case QT_CODEC_TYPE_TWOS_AUDIO :
         case QT_CODEC_TYPE_ULAW_AUDIO :
         case QT_CODEC_TYPE_VDVA_AUDIO :
+        case QT_CODEC_TYPE_FULLMP3_AUDIO :
+        case QT_CODEC_TYPE_MP3_AUDIO :
+        case QT_CODEC_TYPE_ADPCM2_AUDIO :
+        case QT_CODEC_TYPE_ADPCM17_AUDIO :
+        case QT_CODEC_TYPE_GSM49_AUDIO :
+        case QT_CODEC_TYPE_NOT_SPECIFIED :
             return malloc( sizeof(isom_audio_entry_t) );
         case ISOM_CODEC_TYPE_TX3G_TEXT :
             return malloc( sizeof(isom_tx3g_entry_t) );
@@ -6204,19 +6363,26 @@ static void isom_sample_description_init( void *sample, uint32_t sample_type )
         case ISOM_CODEC_TYPE_G726_AUDIO :
         case ISOM_CODEC_TYPE_M4AE_AUDIO :
         case ISOM_CODEC_TYPE_MLPA_AUDIO :
-        case ISOM_CODEC_TYPE_RAW_AUDIO  :
+        //case ISOM_CODEC_TYPE_RAW_AUDIO  :
         case ISOM_CODEC_TYPE_SAMR_AUDIO :
         case ISOM_CODEC_TYPE_SAWB_AUDIO :
         case ISOM_CODEC_TYPE_SAWP_AUDIO :
         case ISOM_CODEC_TYPE_SEVC_AUDIO :
         case ISOM_CODEC_TYPE_SQCP_AUDIO :
         case ISOM_CODEC_TYPE_SSMV_AUDIO :
-        case ISOM_CODEC_TYPE_TWOS_AUDIO :
+        //case ISOM_CODEC_TYPE_TWOS_AUDIO :
+        case QT_CODEC_TYPE_23NI_AUDIO :
+        case QT_CODEC_TYPE_MAC3_AUDIO :
+        case QT_CODEC_TYPE_MAC6_AUDIO :
+        case QT_CODEC_TYPE_NONE_AUDIO :
         case QT_CODEC_TYPE_QDM2_AUDIO :
         case QT_CODEC_TYPE_QDMC_AUDIO :
         case QT_CODEC_TYPE_QCLP_AUDIO :
         case QT_CODEC_TYPE_AGSM_AUDIO :
         case QT_CODEC_TYPE_ALAW_AUDIO :
+        case QT_CODEC_TYPE_CDX2_AUDIO :
+        case QT_CODEC_TYPE_CDX4_AUDIO :
+        case QT_CODEC_TYPE_DVCA_AUDIO :
         case QT_CODEC_TYPE_DVI_AUDIO  :
         case QT_CODEC_TYPE_FL32_AUDIO :
         case QT_CODEC_TYPE_FL64_AUDIO :
@@ -6224,8 +6390,17 @@ static void isom_sample_description_init( void *sample, uint32_t sample_type )
         case QT_CODEC_TYPE_IN24_AUDIO :
         case QT_CODEC_TYPE_IN32_AUDIO :
         case QT_CODEC_TYPE_LPCM_AUDIO :
+        case QT_CODEC_TYPE_RAW_AUDIO :
+        case QT_CODEC_TYPE_SOWT_AUDIO :
+        case QT_CODEC_TYPE_TWOS_AUDIO :
         case QT_CODEC_TYPE_ULAW_AUDIO :
         case QT_CODEC_TYPE_VDVA_AUDIO :
+        case QT_CODEC_TYPE_FULLMP3_AUDIO :
+        case QT_CODEC_TYPE_MP3_AUDIO :
+        case QT_CODEC_TYPE_ADPCM2_AUDIO :
+        case QT_CODEC_TYPE_ADPCM17_AUDIO :
+        case QT_CODEC_TYPE_GSM49_AUDIO :
+        case QT_CODEC_TYPE_NOT_SPECIFIED :
             memset( sample, 0, sizeof(isom_audio_entry_t) );
             break;
         case ISOM_CODEC_TYPE_TX3G_TEXT :
@@ -7237,19 +7412,26 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
             case ISOM_CODEC_TYPE_M4AE_AUDIO :
             case ISOM_CODEC_TYPE_MLPA_AUDIO :
             case ISOM_CODEC_TYPE_MP4A_AUDIO :
-            case ISOM_CODEC_TYPE_RAW_AUDIO  :
+            //case ISOM_CODEC_TYPE_RAW_AUDIO  :
             case ISOM_CODEC_TYPE_SAMR_AUDIO :
             case ISOM_CODEC_TYPE_SAWB_AUDIO :
             case ISOM_CODEC_TYPE_SAWP_AUDIO :
             case ISOM_CODEC_TYPE_SEVC_AUDIO :
             case ISOM_CODEC_TYPE_SQCP_AUDIO :
             case ISOM_CODEC_TYPE_SSMV_AUDIO :
-            case ISOM_CODEC_TYPE_TWOS_AUDIO :
+            //case ISOM_CODEC_TYPE_TWOS_AUDIO :
+            case QT_CODEC_TYPE_23NI_AUDIO :
+            case QT_CODEC_TYPE_MAC3_AUDIO :
+            case QT_CODEC_TYPE_MAC6_AUDIO :
+            case QT_CODEC_TYPE_NONE_AUDIO :
             case QT_CODEC_TYPE_QDM2_AUDIO :
             case QT_CODEC_TYPE_QDMC_AUDIO :
             case QT_CODEC_TYPE_QCLP_AUDIO :
             case QT_CODEC_TYPE_AGSM_AUDIO :
             case QT_CODEC_TYPE_ALAW_AUDIO :
+            case QT_CODEC_TYPE_CDX2_AUDIO :
+            case QT_CODEC_TYPE_CDX4_AUDIO :
+            case QT_CODEC_TYPE_DVCA_AUDIO :
             case QT_CODEC_TYPE_DVI_AUDIO  :
             case QT_CODEC_TYPE_FL32_AUDIO :
             case QT_CODEC_TYPE_FL64_AUDIO :
@@ -7257,8 +7439,17 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
             case QT_CODEC_TYPE_IN24_AUDIO :
             case QT_CODEC_TYPE_IN32_AUDIO :
             case QT_CODEC_TYPE_LPCM_AUDIO :
+            case QT_CODEC_TYPE_RAW_AUDIO :
+            case QT_CODEC_TYPE_SOWT_AUDIO :
+            case QT_CODEC_TYPE_TWOS_AUDIO :
             case QT_CODEC_TYPE_ULAW_AUDIO :
             case QT_CODEC_TYPE_VDVA_AUDIO :
+            case QT_CODEC_TYPE_FULLMP3_AUDIO :
+            case QT_CODEC_TYPE_MP3_AUDIO :
+            case QT_CODEC_TYPE_ADPCM2_AUDIO :
+            case QT_CODEC_TYPE_ADPCM17_AUDIO :
+            case QT_CODEC_TYPE_GSM49_AUDIO :
+            case QT_CODEC_TYPE_NOT_SPECIFIED :
                 return isom_read_audio_description( root, box, parent, level );
             case QT_CODEC_TYPE_TEXT_TEXT :
                 return isom_read_text_description( root, box, parent, level );
@@ -8829,6 +9020,17 @@ static uint64_t isom_update_stsd_size( isom_stsd_t *stsd )
             case ISOM_CODEC_TYPE_ALAC_AUDIO :
             case ISOM_CODEC_TYPE_SAMR_AUDIO :
             case ISOM_CODEC_TYPE_SAWB_AUDIO :
+            case QT_CODEC_TYPE_23NI_AUDIO :
+            case QT_CODEC_TYPE_NONE_AUDIO :
+            case QT_CODEC_TYPE_LPCM_AUDIO :
+            case QT_CODEC_TYPE_RAW_AUDIO :
+            case QT_CODEC_TYPE_SOWT_AUDIO :
+            case QT_CODEC_TYPE_TWOS_AUDIO :
+            case QT_CODEC_TYPE_FL32_AUDIO :
+            case QT_CODEC_TYPE_FL64_AUDIO :
+            case QT_CODEC_TYPE_IN24_AUDIO :
+            case QT_CODEC_TYPE_IN32_AUDIO :
+            case QT_CODEC_TYPE_NOT_SPECIFIED :
 #if 0
             case ISOM_CODEC_TYPE_DRA1_AUDIO :
             case ISOM_CODEC_TYPE_DTSC_AUDIO :
