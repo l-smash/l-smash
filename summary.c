@@ -99,5 +99,5 @@ mp4a_audioProfileLevelIndication mp4sys_get_audioProfileLevelIndication( lsmash_
         return MP4A_AUDIO_PLI_NONE_REQUIRED; /* means error. */
     if( summary->object_type_indication != MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3 )
         return MP4A_AUDIO_PLI_NOT_SPECIFIED; /* This is of audio stream, but not described in ISO/IEC 14496-3. */
-    return mp4a_get_audioProfileLevelIndication( summary->aot, summary->frequency, summary->channels, summary->sbr_mode );
+    return mp4a_get_audioProfileLevelIndication( summary );
 }

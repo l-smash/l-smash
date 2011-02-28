@@ -80,6 +80,19 @@ typedef enum {
     MP4A_AUDIO_PLI_HE_AAC_L3                = 0x2D, /* High Efficiency AAC Profile L3 */
     MP4A_AUDIO_PLI_HE_AAC_L4                = 0x2E, /* High Efficiency AAC Profile L4 */
     MP4A_AUDIO_PLI_HE_AAC_L5                = 0x2F, /* High Efficiency AAC Profile L5 */
+    MP4A_AUDIO_PLI_HE_AAC_v2_L2             = 0x30, /* High Efficiency AAC v2 Profile L2 */
+    MP4A_AUDIO_PLI_HE_AAC_v2_L3             = 0x31, /* High Efficiency AAC v2 Profile L3 */
+    MP4A_AUDIO_PLI_HE_AAC_v2_L4             = 0x32, /* High Efficiency AAC v2 Profile L4 */
+    MP4A_AUDIO_PLI_HE_AAC_v2_L5             = 0x33, /* High Efficiency AAC v2 Profile L5 */
+    MP4A_AUDIO_PLI_LowDelay_AAC_L1          = 0x34, /* Low Delay AAC Profile L1 */
+    MP4A_AUDIO_PLI_Baseline_MPEG_Surround_L1= 0x35, /* Baseline MPEG Surround Profile L1 */
+    MP4A_AUDIO_PLI_Baseline_MPEG_Surround_L2= 0x36, /* Baseline MPEG Surround Profile L2 */
+    MP4A_AUDIO_PLI_Baseline_MPEG_Surround_L3= 0x37, /* Baseline MPEG Surround Profile L3 */
+    MP4A_AUDIO_PLI_Baseline_MPEG_Surround_L4= 0x38, /* Baseline MPEG Surround Profile L4 */
+    MP4A_AUDIO_PLI_Baseline_MPEG_Surround_L5= 0x39, /* Baseline MPEG Surround Profile L5 */
+    MP4A_AUDIO_PLI_Baseline_MPEG_Surround_L6= 0x3A, /* Baseline MPEG Surround Profile L6 */
+    MP4A_AUDIO_PLI_HD_AAC_L1                = 0x3B, /* High Definition AAC Profile L1 */
+    MP4A_AUDIO_PLI_ALS_Simple_L1            = 0x3C, /* ALS Simple Profile L1 */
     MP4A_AUDIO_PLI_NOT_SPECIFIED            = 0xFE, /* no audio profile specified */
     MP4A_AUDIO_PLI_NONE_REQUIRED            = 0xFF, /* no audio capability required */
 } mp4a_audioProfileLevelIndication;
@@ -97,7 +110,7 @@ void mp4a_remove_AudioSpecificConfig( mp4a_AudioSpecificConfig_t* asc );
 extern const uint32_t mp4a_AAC_frequency_table[13][4];
 
 /* profileLevelIndication relative functions. */
-mp4a_audioProfileLevelIndication mp4a_get_audioProfileLevelIndication( lsmash_mp4a_AudioObjectType aot, uint32_t frequency, uint32_t channels, lsmash_mp4a_aac_sbr_mode sbr_mode );
+mp4a_audioProfileLevelIndication mp4a_get_audioProfileLevelIndication( lsmash_audio_summary_t *summary );
 mp4a_audioProfileLevelIndication mp4a_max_audioProfileLevelIndication(
     mp4a_audioProfileLevelIndication a,
     mp4a_audioProfileLevelIndication b
