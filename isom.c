@@ -84,7 +84,7 @@ typedef struct
     case ISOM_BOX_TYPE_SBGP : \
     case ISOM_BOX_TYPE_CHPL
 
-#define QT_CODEC_TYPE_UNCOMPLESSED_AUDIO_CASE \
+#define QT_CODEC_TYPE_LPCM_AUDIO_CASE \
          QT_CODEC_TYPE_23NI_AUDIO : \
     case QT_CODEC_TYPE_NONE_AUDIO : \
     case QT_CODEC_TYPE_LPCM_AUDIO : \
@@ -1042,7 +1042,7 @@ int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t sa
         case ISOM_CODEC_TYPE_ALAC_AUDIO :
         case ISOM_CODEC_TYPE_SAMR_AUDIO :
         case ISOM_CODEC_TYPE_SAWB_AUDIO :
-        case QT_CODEC_TYPE_UNCOMPLESSED_AUDIO_CASE :
+        case QT_CODEC_TYPE_LPCM_AUDIO_CASE :
 #if 0
         case ISOM_CODEC_TYPE_DRA1_AUDIO :
         case ISOM_CODEC_TYPE_DTSC_AUDIO :
@@ -2279,7 +2279,7 @@ static void isom_remove_stsd( isom_stsd_t *stsd )
             case ISOM_CODEC_TYPE_ALAC_AUDIO :
             case ISOM_CODEC_TYPE_SAMR_AUDIO :
             case ISOM_CODEC_TYPE_SAWB_AUDIO :
-            case QT_CODEC_TYPE_UNCOMPLESSED_AUDIO_CASE :
+            case QT_CODEC_TYPE_LPCM_AUDIO_CASE :
 #if 0
             case ISOM_CODEC_TYPE_DRA1_AUDIO :
             case ISOM_CODEC_TYPE_DTSC_AUDIO :
@@ -3310,7 +3310,7 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
             case ISOM_CODEC_TYPE_ALAC_AUDIO :
             case ISOM_CODEC_TYPE_SAMR_AUDIO :
             case ISOM_CODEC_TYPE_SAWB_AUDIO :
-            case QT_CODEC_TYPE_UNCOMPLESSED_AUDIO_CASE :
+            case QT_CODEC_TYPE_LPCM_AUDIO_CASE :
 #if 0
             case ISOM_CODEC_TYPE_DRA1_AUDIO :
             case ISOM_CODEC_TYPE_DTSC_AUDIO :
@@ -4684,7 +4684,7 @@ static int isom_print_audio_description( lsmash_root_t *root, isom_box_t *box, i
         isom_iprintf( indent++, "formatSpecificFlags = 0x%08"PRIx32"\n", audio->formatSpecificFlags );
         switch( audio->type )
         {
-            case QT_CODEC_TYPE_UNCOMPLESSED_AUDIO_CASE :
+            case QT_CODEC_TYPE_LPCM_AUDIO_CASE :
                 isom_iprintf( indent, "sample format: " );
                 if( audio->formatSpecificFlags & QT_LPCM_FORMAT_FLAG_FLOAT )
                     printf( "floating point\n" );
