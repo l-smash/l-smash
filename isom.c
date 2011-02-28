@@ -5233,7 +5233,7 @@ static int isom_print_mdat( lsmash_root_t *root, isom_box_t *box, int level )
 
 int lsmash_print_movie( lsmash_root_t *root )
 {
-    if( !root || !root->print || !(root->flags & ISOM_FILE_MODE_DUMP) )
+    if( !root || !root->print || !(root->flags & LSMASH_FILE_MODE_DUMP) )
         return -1;
     printf( "[ROOT]\n" );
     printf( "    size = %"PRIu64"\n", root->size );
@@ -5462,7 +5462,7 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
 
 static int isom_add_print_func( lsmash_root_t *root, void *box, int level )
 {
-    if( !(root->flags & ISOM_FILE_MODE_DUMP) )
+    if( !(root->flags & LSMASH_FILE_MODE_DUMP) )
         return 0;
     isom_print_entry_t *data = malloc( sizeof(isom_print_entry_t) );
     if( !data )
@@ -7595,7 +7595,7 @@ static int isom_read_root( lsmash_root_t *root )
     if( !bs )
         return -1;
     isom_box_t box;
-    if( root->flags & ISOM_FILE_MODE_DUMP )
+    if( root->flags & LSMASH_FILE_MODE_DUMP )
     {
         root->print = lsmash_create_entry_list();
         if( !root->print )
@@ -9877,9 +9877,9 @@ int lsmash_create_grouping( lsmash_root_t *root, uint32_t track_ID, lsmash_group
 lsmash_root_t *lsmash_open_movie( const char *filename, uint32_t mode )
 {
     char open_mode[4] = { 0 };
-    if( mode & ISOM_FILE_MODE_WRITE )
+    if( mode & LSMASH_FILE_MODE_WRITE )
         memcpy( open_mode, "w+b", 4 );
-    else if( mode & ISOM_FILE_MODE_READ )
+    else if( mode & LSMASH_FILE_MODE_READ )
         memcpy( open_mode, "rb", 3 );
     if( !open_mode[0] )
         return NULL;
@@ -9895,9 +9895,9 @@ lsmash_root_t *lsmash_open_movie( const char *filename, uint32_t mode )
     if( !root->bs->stream )
         goto fail;
     root->flags = mode;
-    if( (mode & ISOM_FILE_MODE_WRITE) && (isom_add_moov( root ) || isom_add_mvhd( root->moov )) )
+    if( (mode & LSMASH_FILE_MODE_WRITE) && (isom_add_moov( root ) || isom_add_mvhd( root->moov )) )
         goto fail;
-    if( (mode & (ISOM_FILE_MODE_READ | ISOM_FILE_MODE_DUMP)) && isom_read_root( root ) )
+    if( (mode & (LSMASH_FILE_MODE_READ | LSMASH_FILE_MODE_DUMP)) && isom_read_root( root ) )
         goto fail;
     return root;
 fail:
