@@ -38,7 +38,7 @@ static void cleanup_structs( structs_t* structs )
     if( !structs )
         return;
     if( structs->root )
-        isom_destroy_root( structs->root );
+        lsmash_destroy_root( structs->root );
     if( structs->summary )
         mp4sys_cleanup_audio_summary( structs->summary );
     if( structs->importer )
@@ -158,39 +158,39 @@ int main( int argc, char* argv[] )
     }
 
     /* Initialize L-SMASH muxer */
-    structs.root = isom_open_movie( argv[i++], ISOM_FILE_MODE_WRITE );
+    structs.root = lsmash_open_movie( argv[i++], ISOM_FILE_MODE_WRITE );
     if( !structs.root )
         return AUDIOMUX_ERR( "Failed to create root.\n" );
 
-    if( isom_set_brands( structs.root, major_brand, minor_version, brands, num_of_brands ) )
+    if( lsmash_set_brands( structs.root, major_brand, minor_version, brands, num_of_brands ) )
         return AUDIOMUX_ERR( "Failed to set brands.\n" );
 
-    uint32_t track = isom_create_track( structs.root, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK );
+    uint32_t track = lsmash_create_track( structs.root, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK );
     if( !track )
         return AUDIOMUX_ERR( "Failed to create a track.\n" );
 
-    if( isom_set_max_chunk_duration( structs.root, 0.5 ) )
+    if( lsmash_set_max_chunk_duration( structs.root, 0.5 ) )
         return AUDIOMUX_ERR( "Failed to set max duration per chunk.\n" );
 
-    if( isom_set_movie_timescale( structs.root, 600 ) )
+    if( lsmash_set_movie_timescale( structs.root, 600 ) )
         return AUDIOMUX_ERR( "Failed to set movie timescale.\n" );
 
     /* Initialize track */
-    if( isom_set_media_timescale( structs.root, track, structs.summary->frequency ) )
+    if( lsmash_set_media_timescale( structs.root, track, structs.summary->frequency ) )
         return AUDIOMUX_ERR( "Failed to set media timescale.\n" );
 
     char handler_name[24] = "L-SMASH Audio Handler 1";
-    if( isom_set_media_handler_name( structs.root, track, handler_name ) )
+    if( lsmash_set_media_handler_name( structs.root, track, handler_name ) )
         return AUDIOMUX_ERR( "Failed to set handler name.\n" );
 
-    uint32_t sample_entry = isom_add_sample_entry( structs.root, track, codec_code, structs.summary );
+    uint32_t sample_entry = lsmash_add_sample_entry( structs.root, track, codec_code, structs.summary );
     if( !sample_entry )
         return AUDIOMUX_ERR( "Failed to add sample_entry.\n" );
 
     /* Preparation for writing */
-    if( isom_write_ftyp( structs.root ) )
+    if( lsmash_write_ftyp( structs.root ) )
         return AUDIOMUX_ERR( "Failed to write brands.\n" );
-    if( isom_add_mdat( structs.root ) )
+    if( lsmash_add_mdat( structs.root ) )
         return AUDIOMUX_ERR( "Failed to write mdat.\n" );
 
     /* transfer */
@@ -199,7 +199,7 @@ int main( int argc, char* argv[] )
     while(1)
     {
         /* allocate sample buffer */
-        lsmash_sample_t *sample = isom_create_sample( structs.summary->max_au_length );
+        lsmash_sample_t *sample = lsmash_create_sample( structs.summary->max_au_length );
         if( !sample )
             return AUDIOMUX_ERR( "Failed to alloc memory for buffer.\n" );
         /* read a audio frame */
@@ -208,7 +208,7 @@ int main( int argc, char* argv[] )
         sample->length = structs.summary->max_au_length;
         if( mp4sys_importer_get_access_unit( structs.importer, 1, sample->data, &sample->length ) )
         {
-            isom_delete_sample( sample );
+            lsmash_delete_sample( sample );
             // return AUDIOMUX_ERR( "Failed to get a frame from input file. Maybe corrupted.\n" );
             eprintf( "Failed to get a frame from input file. Maybe corrupted.\n" );
             eprintf( "Aborting muxing operation and trying to let output be valid m4a.\n" );
@@ -216,7 +216,7 @@ int main( int argc, char* argv[] )
         }
         if( sample->length == 0 )
         {
-            isom_delete_sample( sample );
+            lsmash_delete_sample( sample );
             break; /* end of stream */
         }
 
@@ -224,7 +224,7 @@ int main( int argc, char* argv[] )
         sample->cts = sample->dts;
         sample->index = sample_entry;
         sample->prop = dependency; /* every sample is a random access point. */
-        if( isom_write_sample( structs.root, track, sample ) )
+        if( lsmash_write_sample( structs.root, track, sample ) )
             return AUDIOMUX_ERR( "Failed to write a frame.\n" );
         numframe++;
         eprintf( "frame = %d\r", numframe );
@@ -232,20 +232,20 @@ int main( int argc, char* argv[] )
     eprintf( "total frames = %d\n", numframe );
 
     /* close track */
-    if( isom_flush_pooled_samples( structs.root, track, structs.summary->samples_in_frame ) )
+    if( lsmash_flush_pooled_samples( structs.root, track, structs.summary->samples_in_frame ) )
         eprintf( "Failed to flush the rest of samples.\n" );
-    // if( isom_update_track_duration( structs.root, track ) ) /* if not use edts */
-    if( isom_create_explicit_timeline_map( structs.root, track, 0, 0, ISOM_EDIT_MODE_NORMAL ) ) /* use edts */
+    // if( lsmash_update_track_duration( structs.root, track ) ) /* if not use edts */
+    if( lsmash_create_explicit_timeline_map( structs.root, track, 0, 0, ISOM_EDIT_MODE_NORMAL ) ) /* use edts */
         eprintf( "Failed to set timeline map.\n" );
-    if( isom_update_bitrate_info( structs.root, track, sample_entry ) )
+    if( lsmash_update_bitrate_info( structs.root, track, sample_entry ) )
         eprintf( "Failed to update bitrate info.\n" );
 
     /* close movie */
-    if( isom_finish_movie( structs.root, NULL ) )
+    if( lsmash_finish_movie( structs.root, NULL ) )
         eprintf( "Failed to finish movie.\n" );
-    if( isom_write_mdat_size( structs.root ) )
+    if( lsmash_write_mdat_size( structs.root ) )
         eprintf( "Failed to write mdat size.\n" );
 
-    cleanup_structs( &structs ); /* including isom_destroy_root() */
+    cleanup_structs( &structs ); /* including lsmash_destroy_root() */
     return 0;
 }

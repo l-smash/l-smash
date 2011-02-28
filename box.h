@@ -740,10 +740,13 @@ typedef struct
     lsmash_entry_list_t *list;      /* available if sample_size == 0 */
 } isom_stsz_t;
 
-/* Sync Sample Box */
+/* Sync Sample Box
+ * If this box is not present, every sample is a random access point.
+ * In AVC streams, this box cannot point non-IDR samples.
+ * The table is arranged in strictly increasing order of sample number. */
 typedef struct
 {
-    uint32_t sample_number;
+    uint32_t sample_number;     /* the numbers of the samples that are random access points in the stream. */
 } isom_stss_entry_t;
 
 typedef struct
@@ -752,10 +755,14 @@ typedef struct
     lsmash_entry_list_t *list;
 } isom_stss_t;
 
-/* Partial Sync Sample Box */
+/* Partial Sync Sample Box
+ * Tip from QT engineering - Open-GOP intra frames need to be marked as "partial sync samples".
+ * Partial sync frames perform a partial reset of inter-frame dependencies;
+ * decoding two partial sync frames and the non-droppable difference frames between them is
+ * sufficient to prepare a decompressor for correctly decoding the difference frames that follow. */
 typedef struct
 {
-    uint32_t sample_number;
+    uint32_t sample_number;     /* the numbers of the samples that are partial sync samples in the stream. */
 } isom_stps_entry_t;
 
 typedef struct

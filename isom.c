@@ -287,7 +287,7 @@ static void isom_remove_avcC_ps( isom_avcC_ps_entry_t *ps )
     free( ps );
 }
 
-int isom_add_sps_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *sps, uint32_t sps_size )
+int lsmash_add_sps_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *sps, uint32_t sps_size )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
@@ -310,7 +310,7 @@ int isom_add_sps_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_n
     return 0;
 }
 
-int isom_add_pps_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *pps, uint32_t pps_size )
+int lsmash_add_pps_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *pps, uint32_t pps_size )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
@@ -843,7 +843,7 @@ static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash
         sample_type == QT_CODEC_TYPE_23NI_AUDIO || sample_type == QT_CODEC_TYPE_RAW_AUDIO ||
         sample_type == QT_CODEC_TYPE_NONE_AUDIO || sample_type == QT_CODEC_TYPE_NOT_SPECIFIED )
     {
-        /* Convert the sample type into 'lpcm' if the description isn't match the format or version = 2 fields are needed. */
+        /* Convert the sample type into 'lpcm' if the description doesn't match the format or version = 2 fields are needed. */
         if( (sample_type == QT_CODEC_TYPE_RAW_AUDIO && (summary->bit_depth != 8 || summary->sample_format)) ||
             (sample_type == QT_CODEC_TYPE_FL32_AUDIO && (summary->bit_depth != 32 || !summary->sample_format)) ||
             (sample_type == QT_CODEC_TYPE_FL64_AUDIO && (summary->bit_depth != 64 || !summary->sample_format)) ||
@@ -994,7 +994,7 @@ static int isom_add_tx3g_entry( isom_stsd_t *stsd )
 }
 
 /* This function returns 0 if failed, sample_entry_number if succeeded. */
-int isom_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_type, void *summary )
+int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_type, void *summary )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->root || !trak->root->ftyp || !trak->mdia || !trak->mdia->minf ||
@@ -1861,7 +1861,7 @@ static int isom_add_stsd( isom_stbl_t *stbl )
     return 0;
 }
 
-int isom_add_btrt( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number )
+int lsmash_add_btrt( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
@@ -2516,7 +2516,7 @@ static void isom_remove_trak( isom_trak_entry_t *trak )
     isom_remove_udta( trak->udta );
     if( trak->cache )
     {
-        lsmash_remove_list( trak->cache->chunk.pool, isom_delete_sample );
+        lsmash_remove_list( trak->cache->chunk.pool, lsmash_delete_sample );
         lsmash_remove_list( trak->cache->roll.pool, NULL );
         free( trak->cache );
     }
@@ -5231,7 +5231,7 @@ static int isom_print_mdat( lsmash_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
-int isom_print_movie( lsmash_root_t *root )
+int lsmash_print_movie( lsmash_root_t *root )
 {
     if( !root || !root->print || !(root->flags & ISOM_FILE_MODE_DUMP) )
         return -1;
@@ -7869,7 +7869,7 @@ static int isom_update_tkhd_duration( isom_trak_entry_t *trak )
     return isom_update_mvhd_duration( trak->root->moov );
 }
 
-int isom_update_track_duration( lsmash_root_t *root, uint32_t track_ID, uint32_t last_sample_delta )
+int lsmash_update_track_duration( lsmash_root_t *root, uint32_t track_ID, uint32_t last_sample_delta )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak )
@@ -8063,7 +8063,7 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_prop
 
 /* returns 1 if pooled samples must be flushed. */
 /* FIXME: I wonder if this function should have a extra argument which indicates force_to_flush_cached_chunk.
-   see isom_write_sample for detail. */
+   see lsmash_write_sample for detail. */
 static int isom_add_chunk( isom_trak_entry_t *trak, lsmash_sample_t *sample )
 {
     if( !trak->root || !trak->cache || !trak->mdia->mdhd || !trak->mdia->mdhd->timescale ||
@@ -8106,7 +8106,7 @@ static int isom_add_chunk( isom_trak_entry_t *trak, lsmash_sample_t *sample )
     /* re-initialize cache, using the current sample */
     current->sample_description_index = sample->index;
     current->first_dts = sample->dts;
-    /* current->pool must be flushed in isom_write_sample() */
+    /* current->pool must be flushed in lsmash_write_sample() */
     return 1;
 }
 
@@ -8186,7 +8186,7 @@ static int isom_add_timestamp( isom_trak_entry_t *trak, uint64_t dts, uint64_t c
     return isom_add_cts( trak, cts );
 }
 
-static int isom_write_sample_data( lsmash_root_t *root, lsmash_sample_t *sample )
+static int lsmash_write_sample_data( lsmash_root_t *root, lsmash_sample_t *sample )
 {
     if( !root || !root->mdat || !root->bs || !root->bs->stream )
         return -1;
@@ -8224,10 +8224,10 @@ static int isom_write_pooled_samples( isom_trak_entry_t *trak, lsmash_entry_list
         /* Group samples into roll recovery type if needed. */
         if( isom_group_roll_recovery( trak, &data->prop ) )
             return -1;
-        if( isom_write_sample_data( trak->root, data ) )
+        if( lsmash_write_sample_data( trak->root, data ) )
             return -1;
     }
-    lsmash_remove_entries( pool, isom_delete_sample );
+    lsmash_remove_entries( pool, lsmash_delete_sample );
     return 0;
 }
 
@@ -8268,7 +8268,7 @@ static int isom_output_cache( lsmash_root_t *root, uint32_t track_ID )
     return 0;
 }
 
-int isom_set_avc_config( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number,
+int lsmash_set_avc_config( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number,
     uint8_t configurationVersion, uint8_t AVCProfileIndication, uint8_t profile_compatibility, uint8_t AVCLevelIndication, uint8_t lengthSizeMinusOne,
     uint8_t chroma_format, uint8_t bit_depth_luma_minus8, uint8_t bit_depth_chroma_minus8 )
 {
@@ -8295,7 +8295,7 @@ int isom_set_avc_config( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_
     return 0;
 }
 
-int isom_update_bitrate_info( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number )
+int lsmash_update_bitrate_info( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->minf || !trak->mdia->minf->stbl ||
@@ -9291,7 +9291,7 @@ static int isom_update_moov_size( isom_moov_t *moov )
 
 /*---- track manipulators ----*/
 
-void isom_delete_track( lsmash_root_t *root, uint32_t track_ID )
+void lsmash_delete_track( lsmash_root_t *root, uint32_t track_ID )
 {
     if( !root || !root->moov || !root->moov->trak_list )
         return;
@@ -9318,7 +9318,7 @@ void isom_delete_track( lsmash_root_t *root, uint32_t track_ID )
     }
 }
 
-uint32_t isom_create_track( lsmash_root_t *root, uint32_t media_type )
+uint32_t lsmash_create_track( lsmash_root_t *root, uint32_t media_type )
 {
     isom_trak_entry_t *trak = isom_add_trak( root );
     if( !trak )
@@ -9373,7 +9373,7 @@ uint32_t isom_create_track( lsmash_root_t *root, uint32_t media_type )
     return trak->tkhd->track_ID;
 }
 
-int isom_set_media_handler( lsmash_root_t *root, uint32_t track_ID, lsmash_media_type_code media_type, char *handler_name )
+int lsmash_set_media_handler( lsmash_root_t *root, uint32_t track_ID, lsmash_media_type_code media_type, char *handler_name )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia )
@@ -9406,7 +9406,7 @@ int isom_set_media_handler( lsmash_root_t *root, uint32_t track_ID, lsmash_media
     return 0;
 }
 
-int isom_set_media_handler_name( lsmash_root_t *root, uint32_t track_ID, char *handler_name )
+int lsmash_set_media_handler_name( lsmash_root_t *root, uint32_t track_ID, char *handler_name )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->hdlr )
@@ -9434,7 +9434,7 @@ int isom_set_media_handler_name( lsmash_root_t *root, uint32_t track_ID, char *h
     return 0;
 }
 
-int isom_set_data_handler( lsmash_root_t *root, uint32_t track_ID, lsmash_data_reference_type_code reference_type, char *handler_name )
+int lsmash_set_data_handler( lsmash_root_t *root, uint32_t track_ID, lsmash_data_reference_type_code reference_type, char *handler_name )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf )
@@ -9467,7 +9467,7 @@ int isom_set_data_handler( lsmash_root_t *root, uint32_t track_ID, lsmash_data_r
     return 0;
 }
 
-int isom_set_data_handler_name( lsmash_root_t *root, uint32_t track_ID, char *handler_name )
+int lsmash_set_data_handler_name( lsmash_root_t *root, uint32_t track_ID, char *handler_name )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->hdlr )
@@ -9495,7 +9495,7 @@ int isom_set_data_handler_name( lsmash_root_t *root, uint32_t track_ID, char *ha
     return 0;
 }
 
-int isom_set_media_timescale( lsmash_root_t *root, uint32_t track_ID, uint32_t timescale )
+int lsmash_set_media_timescale( lsmash_root_t *root, uint32_t track_ID, uint32_t timescale )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->mdhd )
@@ -9504,7 +9504,7 @@ int isom_set_media_timescale( lsmash_root_t *root, uint32_t track_ID, uint32_t t
     return 0;
 }
 
-uint32_t isom_get_media_timescale( lsmash_root_t *root, uint32_t track_ID )
+uint32_t lsmash_get_media_timescale( lsmash_root_t *root, uint32_t track_ID )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->mdhd )
@@ -9512,7 +9512,7 @@ uint32_t isom_get_media_timescale( lsmash_root_t *root, uint32_t track_ID )
     return trak->mdia->mdhd->timescale;
 }
 
-uint64_t isom_get_media_duration( lsmash_root_t *root, uint32_t track_ID )
+uint64_t lsmash_get_media_duration( lsmash_root_t *root, uint32_t track_ID )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->mdhd )
@@ -9520,7 +9520,7 @@ uint64_t isom_get_media_duration( lsmash_root_t *root, uint32_t track_ID )
     return trak->mdia->mdhd->duration;
 }
 
-uint64_t isom_get_track_duration( lsmash_root_t *root, uint32_t track_ID )
+uint64_t lsmash_get_track_duration( lsmash_root_t *root, uint32_t track_ID )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->tkhd )
@@ -9528,7 +9528,7 @@ uint64_t isom_get_track_duration( lsmash_root_t *root, uint32_t track_ID )
     return trak->tkhd->duration;
 }
 
-uint32_t isom_get_last_sample_delta( lsmash_root_t *root, uint32_t track_ID )
+uint32_t lsmash_get_last_sample_delta( lsmash_root_t *root, uint32_t track_ID )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl ||
@@ -9538,7 +9538,7 @@ uint32_t isom_get_last_sample_delta( lsmash_root_t *root, uint32_t track_ID )
     return ((isom_stts_entry_t *)trak->mdia->minf->stbl->stts->list->head->data)->sample_delta;
 }
 
-uint32_t isom_get_start_time_offset( lsmash_root_t *root, uint32_t track_ID )
+uint32_t lsmash_get_start_time_offset( lsmash_root_t *root, uint32_t track_ID )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl ||
@@ -9548,7 +9548,7 @@ uint32_t isom_get_start_time_offset( lsmash_root_t *root, uint32_t track_ID )
     return ((isom_ctts_entry_t *)trak->mdia->minf->stbl->ctts->list->head->data)->sample_offset;
 }
 
-int isom_set_track_mode( lsmash_root_t *root, uint32_t track_ID, lsmash_track_mode_code mode )
+int lsmash_set_track_mode( lsmash_root_t *root, uint32_t track_ID, lsmash_track_mode_code mode )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->tkhd )
@@ -9583,7 +9583,7 @@ static int isom_mac2iso_language( uint16_t MAC_language, uint16_t *ISO_language 
     return 0;
 }
 
-int isom_set_media_language( lsmash_root_t *root, uint32_t track_ID, char *ISO_language, uint16_t MAC_language )
+int lsmash_set_media_language( lsmash_root_t *root, uint32_t track_ID, char *ISO_language, uint16_t MAC_language )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->mdhd )
@@ -9617,7 +9617,7 @@ int isom_set_media_language( lsmash_root_t *root, uint32_t track_ID, char *ISO_l
     return 0;
 }
 
-int isom_set_track_ID( lsmash_root_t *root, uint32_t track_ID, uint32_t new_track_ID )
+int lsmash_set_track_ID( lsmash_root_t *root, uint32_t track_ID, uint32_t new_track_ID )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->tkhd || !root->moov->mvhd )
@@ -9629,7 +9629,7 @@ int isom_set_track_ID( lsmash_root_t *root, uint32_t track_ID, uint32_t new_trac
     return 0;
 }
 
-int isom_set_track_volume( lsmash_root_t *root, uint32_t track_ID, int16_t volume )
+int lsmash_set_track_volume( lsmash_root_t *root, uint32_t track_ID, int16_t volume )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->tkhd )
@@ -9638,7 +9638,7 @@ int isom_set_track_volume( lsmash_root_t *root, uint32_t track_ID, int16_t volum
     return 0;
 }
 
-int isom_set_track_presentation_size( lsmash_root_t *root, uint32_t track_ID, uint32_t width, uint32_t height )
+int lsmash_set_track_presentation_size( lsmash_root_t *root, uint32_t track_ID, uint32_t width, uint32_t height )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->tkhd )
@@ -9673,7 +9673,7 @@ static int isom_confirm_visual_type( uint32_t sample_type )
     return 0;
 }
 
-int isom_set_sample_resolution( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint16_t width, uint16_t height )
+int lsmash_set_sample_resolution( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint16_t width, uint16_t height )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
@@ -9702,7 +9702,7 @@ int isom_set_sample_aspect_ratio( lsmash_root_t *root, uint32_t track_ID, uint32
     return 0;
 }
 
-int isom_set_color_parameter( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number,
+int lsmash_set_color_parameter( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number,
                               lsmash_color_parameter primaries, lsmash_color_parameter transfer, lsmash_color_parameter matrix )
 {
     if( !root->qt_compatible )
@@ -9742,7 +9742,7 @@ int isom_set_color_parameter( lsmash_root_t *root, uint32_t track_ID, uint32_t e
     return 0;
 }
 
-int isom_set_track_aperture_modes( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number )
+int lsmash_set_track_aperture_modes( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number )
 {
     if( !root->qt_compatible )
         return -1;
@@ -9800,7 +9800,7 @@ int isom_set_track_aperture_modes( lsmash_root_t *root, uint32_t track_ID, uint3
     return 0;
 }
 
-int isom_set_scaling_method( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number,
+int lsmash_set_scaling_method( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number,
                              lsmash_scaling_method_code scale_method, int16_t display_center_x, int16_t display_center_y )
 {
     if( !root || !track_ID || !entry_number || !scale_method )
@@ -9821,7 +9821,7 @@ int isom_set_scaling_method( lsmash_root_t *root, uint32_t track_ID, uint32_t en
     return 0;
 }
 
-int isom_set_channel_layout( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, lsmash_channel_layout_tag_code layout_tag, lsmash_channel_bitmap_code bitmap )
+int lsmash_set_channel_layout( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, lsmash_channel_layout_tag_code layout_tag, lsmash_channel_bitmap_code bitmap )
 {
     if( layout_tag == QT_CHANNEL_LAYOUT_USE_CHANNEL_DESCRIPTIONS )
         return -1;  /* We don't support the feature of Channel Descriptions */
@@ -9849,7 +9849,7 @@ int isom_set_channel_layout( lsmash_root_t *root, uint32_t track_ID, uint32_t en
     return 0;
 }
 
-int isom_set_sample_type( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint32_t sample_type )
+int lsmash_set_sample_type( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint32_t sample_type )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
@@ -9861,7 +9861,7 @@ int isom_set_sample_type( lsmash_root_t *root, uint32_t track_ID, uint32_t entry
     return 0;
 }
 
-int isom_create_grouping( lsmash_root_t *root, uint32_t track_ID, lsmash_grouping_type_code grouping_type )
+int lsmash_create_grouping( lsmash_root_t *root, uint32_t track_ID, lsmash_grouping_type_code grouping_type )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
@@ -9874,7 +9874,7 @@ int isom_create_grouping( lsmash_root_t *root, uint32_t track_ID, lsmash_groupin
 
 /*---- movie manipulators ----*/
 
-lsmash_root_t *isom_open_movie( const char *filename, uint32_t mode )
+lsmash_root_t *lsmash_open_movie( const char *filename, uint32_t mode )
 {
     char open_mode[4] = { 0 };
     if( mode & ISOM_FILE_MODE_WRITE )
@@ -9901,11 +9901,11 @@ lsmash_root_t *isom_open_movie( const char *filename, uint32_t mode )
         goto fail;
     return root;
 fail:
-    isom_destroy_root( root );
+    lsmash_destroy_root( root );
     return NULL;
 }
 
-int isom_set_movie_timescale( lsmash_root_t *root, uint32_t timescale )
+int lsmash_set_movie_timescale( lsmash_root_t *root, uint32_t timescale )
 {
     if( !root || !root->moov || !root->moov->mvhd )
         return -1;
@@ -9913,14 +9913,14 @@ int isom_set_movie_timescale( lsmash_root_t *root, uint32_t timescale )
     return 0;
 }
 
-uint32_t isom_get_movie_timescale( lsmash_root_t *root )
+uint32_t lsmash_get_movie_timescale( lsmash_root_t *root )
 {
     if( !root || !root->moov || !root->moov->mvhd )
         return 0;
     return root->moov->mvhd->timescale;
 }
 
-int isom_set_brands( lsmash_root_t *root, lsmash_brand_type_code major_brand, uint32_t minor_version, lsmash_brand_type_code *brands, uint32_t brand_count )
+int lsmash_set_brands( lsmash_root_t *root, lsmash_brand_type_code major_brand, uint32_t minor_version, lsmash_brand_type_code *brands, uint32_t brand_count )
 {
     if( !root )
         return -1;
@@ -9953,7 +9953,7 @@ int isom_set_brands( lsmash_root_t *root, lsmash_brand_type_code major_brand, ui
     return isom_check_compatibility( root );
 }
 
-int isom_set_max_chunk_duration( lsmash_root_t *root, double max_chunk_duration )
+int lsmash_set_max_chunk_duration( lsmash_root_t *root, double max_chunk_duration )
 {
     if( !root )
         return -1;
@@ -9961,7 +9961,7 @@ int isom_set_max_chunk_duration( lsmash_root_t *root, double max_chunk_duration 
     return 0;
 }
 
-int isom_write_ftyp( lsmash_root_t *root )
+int lsmash_write_ftyp( lsmash_root_t *root )
 {
     if( !root )
         return -1;
@@ -9977,7 +9977,7 @@ int isom_write_ftyp( lsmash_root_t *root )
     return lsmash_bs_write_data( bs );
 }
 
-int isom_write_moov( lsmash_root_t *root )
+static int isom_write_moov( lsmash_root_t *root )
 {
     if( !root || !root->moov )
         return -1;
@@ -9995,11 +9995,11 @@ int isom_write_moov( lsmash_root_t *root )
 }
 
 /* If a mdat box already exists, flush a current one and start a new one. */
-int isom_add_mdat( lsmash_root_t *root )
+int lsmash_add_mdat( lsmash_root_t *root )
 {
     if( !root )
         return 0;
-    if( root->mdat && isom_write_mdat_size( root ) )    /* flush a current mdat */
+    if( root->mdat && lsmash_write_mdat_size( root ) )    /* flush a current mdat */
         return -1;
     else
     {
@@ -10009,7 +10009,7 @@ int isom_add_mdat( lsmash_root_t *root )
     return isom_write_mdat_header( root );     /* start a new mdat */
 }
 
-int isom_write_mdat_size( lsmash_root_t *root )
+int lsmash_write_mdat_size( lsmash_root_t *root )
 {
     if( !root || !root->bs || !root->bs->stream || !root->mdat )
         return -1;
@@ -10037,7 +10037,7 @@ int isom_write_mdat_size( lsmash_root_t *root )
     return 0;
 }
 
-int isom_set_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length )
+int lsmash_set_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length )
 {
     if( !root || !root->free || !data || !data_length )
         return -1;
@@ -10055,7 +10055,7 @@ int isom_set_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length )
     return 0;
 }
 
-int isom_add_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length )
+int lsmash_add_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length )
 {
     if( !root )
         return -1;
@@ -10065,11 +10065,11 @@ int isom_add_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length )
         root->free = skip;
     }
     if( data && data_length )
-        return isom_set_free( root, data, data_length );
+        return lsmash_set_free( root, data, data_length );
     return 0;
 }
 
-int isom_write_free( lsmash_root_t *root )
+int lsmash_write_free( lsmash_root_t *root )
 {
     if( !root || !root->bs || !root->free )
         return -1;
@@ -10082,7 +10082,7 @@ int isom_write_free( lsmash_root_t *root )
     return lsmash_bs_write_data( bs );
 }
 
-int isom_create_object_descriptor( lsmash_root_t *root )
+int lsmash_create_object_descriptor( lsmash_root_t *root )
 {
     if( !root )
         return -1;
@@ -10094,7 +10094,7 @@ int isom_create_object_descriptor( lsmash_root_t *root )
 
 /*---- finishing functions ----*/
 
-int isom_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
+int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
 {
     if( !root || !root->moov || !root->moov->trak_list )
         return -1;
@@ -10109,13 +10109,13 @@ int isom_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
         track_mode |= ISOM_TRACK_IN_MOVIE | ISOM_TRACK_IN_PREVIEW;
         if( root->qt_compatible )
             track_mode |= QT_TRACK_IN_POSTER;
-        if( isom_set_track_mode( root, track_ID, track_mode ) )
+        if( lsmash_set_track_mode( root, track_ID, track_mode ) )
             return -1;
         if( trak->is_chapter && related_track_ID )
         {
             /* In order that the track duration of the chapter track doesn't exceed that of the related track. */
-            uint64_t track_duration = LSMASH_MIN( trak->tkhd->duration, isom_get_track_duration( root, related_track_ID ) );
-            if( isom_create_explicit_timeline_map( root, track_ID, track_duration, 0, ISOM_EDIT_MODE_NORMAL ) )
+            uint64_t track_duration = LSMASH_MIN( trak->tkhd->duration, lsmash_get_track_duration( root, related_track_ID ) );
+            if( lsmash_create_explicit_timeline_map( root, track_ID, track_duration, 0, ISOM_EDIT_MODE_NORMAL ) )
                 return -1;
         }
         /* Add stss box if any samples aren't sync sample. */
@@ -10225,7 +10225,7 @@ fail:
     return -1;
 }
 
-int isom_set_last_sample_delta( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_delta )
+int lsmash_set_last_sample_delta( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_delta )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->minf || !trak->mdia->minf->stbl ||
@@ -10242,7 +10242,7 @@ int isom_set_last_sample_delta( lsmash_root_t *root, uint32_t track_ID, uint32_t
             return -1;      /* irregular sample_count */
         if( isom_add_stts_entry( stbl, sample_delta ) )
             return -1;
-        return isom_update_track_duration( root, track_ID, 0 );
+        return lsmash_update_track_duration( root, track_ID, 0 );
     }
     uint32_t i = 0;
     for( lsmash_entry_t *entry = stts->list->head; entry; entry = entry->next )
@@ -10264,17 +10264,17 @@ int isom_set_last_sample_delta( lsmash_root_t *root, uint32_t track_ID, uint32_t
     }
     else if( sample_count == i && isom_replace_last_sample_delta( stbl, sample_delta ) )
         return -1;
-    return isom_update_track_duration( root, track_ID, sample_delta );
+    return lsmash_update_track_duration( root, track_ID, sample_delta );
 }
 
-int isom_flush_pooled_samples( lsmash_root_t *root, uint32_t track_ID, uint32_t last_sample_delta )
+int lsmash_flush_pooled_samples( lsmash_root_t *root, uint32_t track_ID, uint32_t last_sample_delta )
 {
     if( isom_output_cache( root, track_ID ) )
         return -1;
-    return isom_set_last_sample_delta( root, track_ID, last_sample_delta );
+    return lsmash_set_last_sample_delta( root, track_ID, last_sample_delta );
 }
 
-void isom_destroy_root( lsmash_root_t *root )
+void lsmash_destroy_root( lsmash_root_t *root )
 {
     if( !root )
         return;
@@ -10296,7 +10296,7 @@ void isom_destroy_root( lsmash_root_t *root )
 
 /*---- timeline manipulator ----*/
 
-int isom_modify_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint64_t segment_duration, int64_t media_time, int32_t media_rate )
+int lsmash_modify_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint64_t segment_duration, int64_t media_time, int32_t media_rate )
 {
     if( !segment_duration || media_time < -1 )
         return -1;
@@ -10312,7 +10312,7 @@ int isom_modify_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint32_t e
     return isom_update_tkhd_duration( trak ) ? -1 : isom_update_mvhd_duration( root->moov );
 }
 
-int isom_create_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint64_t segment_duration, int64_t media_time, int32_t media_rate )
+int lsmash_create_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint64_t segment_duration, int64_t media_time, int32_t media_rate )
 {
     if( media_time < -1 )
         return -1;
@@ -10333,7 +10333,7 @@ int isom_create_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, u
 
 /*---- create / modification time fields manipulators ----*/
 
-int isom_update_media_modification_time( lsmash_root_t *root, uint32_t track_ID )
+int lsmash_update_media_modification_time( lsmash_root_t *root, uint32_t track_ID )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->mdhd )
@@ -10346,7 +10346,7 @@ int isom_update_media_modification_time( lsmash_root_t *root, uint32_t track_ID 
     return 0;
 }
 
-int isom_update_track_modification_time( lsmash_root_t *root, uint32_t track_ID )
+int lsmash_update_track_modification_time( lsmash_root_t *root, uint32_t track_ID )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->tkhd )
@@ -10359,7 +10359,7 @@ int isom_update_track_modification_time( lsmash_root_t *root, uint32_t track_ID 
     return 0;
 }
 
-int isom_update_movie_modification_time( lsmash_root_t *root )
+int lsmash_update_movie_modification_time( lsmash_root_t *root )
 {
     if( !root || !root->moov || !root->moov->mvhd )
         return -1;
@@ -10373,7 +10373,7 @@ int isom_update_movie_modification_time( lsmash_root_t *root )
 
 /*---- sample manipulators ----*/
 
-int isom_write_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_t *sample )
+int lsmash_write_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_t *sample )
 {
     /* I myself think max_chunk_duration == 0, which means all samples will be cached on memory, should be prevented.
        This means removal of a feature that we used to have, but anyway very alone chunk does not make sense. */
@@ -10407,7 +10407,7 @@ int isom_write_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_t *
     return lsmash_add_entry( current->pool, sample );
 }
 
-lsmash_sample_t *isom_create_sample( uint32_t size )
+lsmash_sample_t *lsmash_create_sample( uint32_t size )
 {
     lsmash_sample_t *sample = malloc( sizeof(lsmash_sample_t) );
     if( !sample )
@@ -10423,7 +10423,7 @@ lsmash_sample_t *isom_create_sample( uint32_t size )
     return sample;
 }
 
-void isom_delete_sample( lsmash_sample_t *sample )
+void lsmash_delete_sample( lsmash_sample_t *sample )
 {
     if( !sample )
         return;
@@ -10531,7 +10531,7 @@ static fn_get_chapter_data isom_check_chap_line( char *file_name )
     return fnc;
 }
 
-int isom_set_tyrant_chapter( lsmash_root_t *root, char *file_name )
+int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name )
 {
     /* This function should be called after updating of the latest movie duration. */
     if( !root || !root->moov || !root->moov->mvhd || !root->moov->mvhd->timescale || !root->moov->mvhd->duration )
@@ -10564,7 +10564,7 @@ fail:
     return -1;
 }
 
-int isom_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_ID, char *file_name )
+int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_ID, char *file_name )
 {
     if( !root || (!root->qt_compatible && !root->itunes_audio) || !root->moov || !root->moov->mvhd )
         return -1;
@@ -10591,18 +10591,18 @@ int isom_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_ID,
     uint32_t chapter_track_ID = chap->track_ID[0] = root->moov->mvhd->next_track_ID;
     chap->ref_count = 1;
     /* Create reference chapter track. */
-    if( chapter_track_ID != isom_create_track( root, ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK ) )
+    if( chapter_track_ID != lsmash_create_track( root, ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK ) )
         return -1;
     /* Copy media timescale. */
-    uint64_t media_timescale = isom_get_media_timescale( root, track_ID );
-    if( !media_timescale || isom_set_media_timescale( root, chapter_track_ID, media_timescale ) )
+    uint64_t media_timescale = lsmash_get_media_timescale( root, track_ID );
+    if( !media_timescale || lsmash_set_media_timescale( root, chapter_track_ID, media_timescale ) )
         goto fail;
     /* Set media language field. ISOM: undefined / QTFF: English */
-    if( isom_set_media_language( root, chapter_track_ID, root->max_3gpp_version < 6 && !root->itunes_audio ? NULL : "und", 0 ) )
+    if( lsmash_set_media_language( root, chapter_track_ID, root->max_3gpp_version < 6 && !root->itunes_audio ? NULL : "und", 0 ) )
         goto fail;
     /* Create sample description. */
     uint32_t sample_type = root->max_3gpp_version < 6 && !root->itunes_audio ? QT_CODEC_TYPE_TEXT_TEXT : ISOM_CODEC_TYPE_TX3G_TEXT;
-    uint32_t sample_entry = isom_add_sample_entry( root, chapter_track_ID, sample_type, NULL );
+    uint32_t sample_entry = lsmash_add_sample_entry( root, chapter_track_ID, sample_type, NULL );
     if( !sample_entry )
         goto fail;
     /* Check each line format */
@@ -10621,7 +10621,7 @@ int isom_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_ID,
         data.start_time = data.start_time * 1e-9 * media_timescale + 0.5;
         /* write a text sample here */
         uint16_t name_length = strlen( data.chapter_name );
-        lsmash_sample_t *sample = isom_create_sample( 2 + name_length + 12 * (sample_type == QT_CODEC_TYPE_TEXT_TEXT) );
+        lsmash_sample_t *sample = lsmash_create_sample( 2 + name_length + 12 * (sample_type == QT_CODEC_TYPE_TEXT_TEXT) );
         if( !sample )
             goto fail;
         sample->data[0] = (name_length >> 8) & 0xff;
@@ -10640,12 +10640,12 @@ int isom_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_ID,
         sample->dts = sample->cts = data.start_time;
         sample->prop.sync_point = 1;
         sample->index = sample_entry;
-        if( isom_write_sample( root, chapter_track_ID, sample ) )
+        if( lsmash_write_sample( root, chapter_track_ID, sample ) )
             goto fail;
         free( data.chapter_name );
         data.chapter_name = NULL;
     }
-    if( isom_flush_pooled_samples( root, chapter_track_ID, 0 ) )
+    if( lsmash_flush_pooled_samples( root, chapter_track_ID, 0 ) )
         goto fail;
     trak = isom_get_trak( root, chapter_track_ID );
     if( !trak )
@@ -10666,7 +10666,7 @@ fail:
     return -1;
 }
 
-void isom_delete_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID )
+void lsmash_delete_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak )
@@ -10675,7 +10675,7 @@ void isom_delete_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID )
     trak->edts = NULL;
 }
 
-void isom_delete_tyrant_chapter( lsmash_root_t *root )
+void lsmash_delete_tyrant_chapter( lsmash_root_t *root )
 {
     if( !root || !root->moov || !root->moov->udta )
         return;

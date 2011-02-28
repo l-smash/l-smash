@@ -30,15 +30,15 @@ int main( int argc, char *argv[] )
         return -1;
     }
     char *filename = argv[1];
-    lsmash_root_t *root = isom_open_movie( filename, ISOM_FILE_MODE_READ | ISOM_FILE_MODE_DUMP );
+    lsmash_root_t *root = lsmash_open_movie( filename, ISOM_FILE_MODE_READ | ISOM_FILE_MODE_DUMP );
     if( !root )
     {
         fprintf( stderr, "Failed to open input file.\n" );
         return -1;
     }
-    int ret = isom_print_movie( root );
+    int ret = lsmash_print_movie( root );
     if( ret )
         fprintf( stderr, "Failed to dump input file.\n" );;
-    isom_destroy_root( root );
+    lsmash_destroy_root( root );
     return ret;
 }
