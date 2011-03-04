@@ -35,7 +35,7 @@
 typedef struct isom_box_tag isom_box_t;
 
 /* If size is 1, then largesize is actual size.
- * If size is 0, then this box is the last one in the file. This is useful for pipe I/O.
+ * If size is 0, then this box is the last one in the file.
  * usertype is for uuid. */
 #define ISOM_BASEBOX_COMMON \
         isom_box_t *parent; /* pointer of parent box */ \
@@ -46,7 +46,7 @@ typedef struct isom_box_tag isom_box_t;
 
 #define ISOM_FULLBOX_COMMON \
     ISOM_BASEBOX_COMMON; \
-    uint8_t  version;   /* basically, version is either 0 or 1 */ \
+    uint8_t  version;   /* Basically, version is either 0 or 1 */ \
     uint32_t flags      /* In the actual structure of box, flags is 24 bits. */
 
 #define ISOM_DEFAULT_BOX_HEADER_SIZE          8
@@ -58,7 +58,13 @@ struct isom_box_tag
     ISOM_FULLBOX_COMMON;
 };
 
-/* File Type Box */
+/* File Type Box
+ * This box identifies the specifications to which this file complies.
+ * This box shall occur before any variable-length box.
+ * In the absence of this box, the file is QuickTime file format or MP4 version 1 file format.
+ * In MP4 version 1 file format, Object Descriptor Box is mandatory.
+ * In QuickTime file format, Object Descriptor Box isn't defined.
+ * Therefore, if this box and an Object Descriptor Box are absent in the file, the file shall be QuikcTime file format. */
 typedef struct
 {
     ISOM_BASEBOX_COMMON;
@@ -69,7 +75,8 @@ typedef struct
         uint32_t brand_count;       /* the number of factors in compatible_brands array */
 } isom_ftyp_t;
 
-/* Track Header Box */
+/* Track Header Box
+ * This box specifies the characteristics of a single track. */
 typedef struct
 {
     /* version is either 0 or 1
@@ -88,20 +95,20 @@ typedef struct
     uint32_t track_ID;              /* an integer that uniquely identifies the track
                                      * Track IDs are never re-used and cannot be zero. */
     uint32_t reserved1;
-    uint64_t duration;              /* the duration of this track expressed in the movie timescale */
-    /* */
+    uint64_t duration;              /* the duration of this track expressed in the movie timescale units */
+    /* The following fields are treated as reserved in MP4 version 1. */
     uint32_t reserved2[2];
     int16_t  layer;                 /* the front-to-back ordering of video tracks; tracks with lower numbers are closer to the viewer. */
     int16_t  alternate_group;       /* an integer that specifies a group or collection of tracks
                                      * If this field is not 0, it should be the same for tracks that contain alternate data for one another
                                      * and different for tracks belonging to different such groups.
-                                     * Only one track within an alternate group should be played or streamed at any one time.
-                                     * Note: this field isn't defined in MP4 version 1. */
+                                     * Only one track within an alternate group should be played or streamed at any one time. */
     int16_t  volume;                /* fixed point 8.8 number. 0x0100 is full volume. */
     uint16_t reserved3;
     int32_t  matrix[9];             /* transformation matrix for the video */
     /* track's visual presentation size
-     * All images in the sequence are scaled to this size, before any overall transformation of the track represented by the matrix. */
+     * All images in the sequence are scaled to this size, before any overall transformation of the track represented by the matrix.
+     * Note: these fields are treated as reserved in MP4 version 1. */
     uint32_t width;                 /* fixed point 16.16 number */
     uint32_t height;                /* fixed point 16.16 number */
     /* */
@@ -143,15 +150,25 @@ typedef struct
     isom_enof_t *enof;      /* Track Encoded Pixels Dimensions Box */
 } isom_tapt_t;
 
-/* Edit List Box */
+/* Edit List Box
+ * This box contains an explicit timeline map.
+ * Each entry defines part of the track timeline: by mapping part of the media timeline, or by indicating 'empty' time, 
+ * or by defining a 'dwell', where a single time-point in the media is held for a period.
+ * The last edit in a track shall never be an empty edit.
+ * Any difference between the duration in the Movie Header Box, and the track's duration is expressed as an implicit empty edit at the end.
+ * It is recommended that any edits, explicit or implied, not select any portion of the composition timeline that doesn't map to a sample.
+ * Therefore, if the first sample in the track has non-zero CTS, then this track should have at least one edit and the start time in it should
+ * correspond to the value of the CTS the first sample has or more not to exceed the largest CTS in this track. */
 typedef struct
 {
     /* version == 0: 64bits -> 32bits */
-    uint64_t segment_duration;  /* the duration of this edit expressed in the time-scale indicated in the mvhd */
+    uint64_t segment_duration;  /* the duration of this edit expressed in the movie timescale units */
     int64_t  media_time;        /* the starting composition time within the media of this edit segment
                                  * If this field is set to -1, it is an empty edit. */
     int32_t  media_rate;        /* the relative rate at which to play the media corresponding to this edit segment
-                                 * 16.16 fixed-point number */
+                                 * If this value is 0, then the edit is specifying a 'dwell':
+                                 * the media at media_time is presented for the segment_duration.
+                                 * This field is expressed as 16.16 fixed-point number. */
 } isom_elst_entry_t;
 
 typedef struct
@@ -160,14 +177,20 @@ typedef struct
     lsmash_entry_list_t *list;
 } isom_elst_t;
 
-/* Edit Box */
+/* Edit Box
+ * This optional box maps the presentation time-line to the media time-line as it is stored in the file.
+ * In the absence of this box, there is an implicit one-to-one mapping of these time-lines,
+ * and the presentation of a track starts at the beginning of the presentation. */
 typedef struct
 {
     ISOM_BASEBOX_COMMON;
     isom_elst_t *elst;     /* Edit List Box */
 } isom_edts_t;
 
-/* Track Reference Box */
+/* Track Reference Box
+ * The Track Reference Box contains Track Reference Type Boxes.
+ * Track Reference Type Boxes define relationships between tracks.
+ * They allow one track to specify how it is related to other tracks. */
 typedef struct
 {
     ISOM_BASEBOX_COMMON;
@@ -184,7 +207,8 @@ typedef struct
         uint32_t type_count;    /* number of reference types */
 } isom_tref_t;
 
-/* Media Header Box */
+/* Media Header Box
+ * This box declares overall information that is media-independent, and relevant to characteristics of the media in a track.*/
 typedef struct
 {
     ISOM_FULLBOX_COMMON;            /* version is either 0 or 1 */
@@ -203,9 +227,9 @@ typedef struct
 } isom_mdhd_t;
 
 /* Handler Reference Box
- * In Media Box, this box is mandatory.
- * ISOM: this box might be also in Meta Box
- * QTFF: this box might be also in Media Information Box */
+ * In Media Box, this box is mandatory and (ISOM: should/QTFF: must) come before Media Information Box.
+ * ISOM: this box might be also in Meta Box.
+ * QTFF: this box might be also in Media Information Box. If this box is present there, it must come before Data Information Box. */
 typedef struct
 {
     ISOM_FULLBOX_COMMON;
@@ -227,8 +251,12 @@ typedef struct
         uint32_t componentName_length;
 } isom_hdlr_t;
 
-/** Media Information Header Boxes **/
-/* Video Media Header Box */
+
+/** Media Information Header Boxes
+ ** There is a different media information header for each track type
+ ** (corresponding to the media handler-type); the matching header shall be present. **/
+/* Video Media Header Box
+ * This box contains general presentation information, independent of the coding, for video media. */
 typedef struct
 {
     ISOM_FULLBOX_COMMON;        /* flags is 1 */
@@ -236,7 +264,8 @@ typedef struct
     uint16_t opcolor[3];        /* template: opcolor = { 0, 0, 0 } */
 } isom_vmhd_t;
 
-/* Sound Media Header Box */
+/* Sound Media Header Box
+ * This box contains general presentation information, independent of the coding, for audio media. */
 typedef struct
 {
     ISOM_FULLBOX_COMMON;
@@ -244,18 +273,20 @@ typedef struct
     uint16_t reserved;
 } isom_smhd_t;
 
-/* Hint Media Header Box */
+/* Hint Media Header Box
+ * This box contains general information, independent of the protocol, for hint tracks. (A PDU is a Protocol Data Unit.) */
 typedef struct
 {
     ISOM_FULLBOX_COMMON;
-    uint16_t maxPDUsize;
-    uint16_t avgPDUsize;
-    uint32_t maxbitrate;
-    uint32_t avgbitrate;
+    uint16_t maxPDUsize;        /* the size in bytes of the largest PDU in this (hint) stream */
+    uint16_t avgPDUsize;        /* the average size of a PDU over the entire presentation */
+    uint32_t maxbitrate;        /* the maximum rate in bits/second over any window of one second */
+    uint32_t avgbitrate;        /* the average rate in bits/second over the entire presentation */
     uint32_t reserved;
 } isom_hmhd_t;
 
-/* Null Media Header Box */
+/* Null Media Header Box
+ * This box may be used for streams other than visual and audio (e.g., timed metadata streams). */
 typedef struct
 {
     /* Streams other than visual and audio may use a Null Media Header Box */
@@ -326,7 +357,8 @@ typedef struct
     struct mp4sys_ES_Descriptor_t *ES;
 } isom_esds_t;
 
-/* Bit Rate Box */
+/* MPEG-4 Bit Rate Box
+ * This box signals the bit rate information of the AVC video stream. */
 typedef struct
 {
     ISOM_BASEBOX_COMMON;
@@ -335,7 +367,16 @@ typedef struct
     uint32_t avgBitrate;    /* the average rate in bits/second over the entire presentation */
 } isom_btrt_t;
 
-/* Clean Aperture Box */
+/* Clean Aperture Box
+ * There are notionally four values in this box and these parameters are represented as a fraction N/D.
+ * Here, we refer to the pair of parameters fooN and fooD as foo.
+ * Considering the pixel dimensions as defined by the VisualSampleEntry width and height.
+ * If picture centre of the image is at pcX and pcY, then horizOff and vertOff are defined as follows:
+ *  pcX = horizOff + (width - 1)/2;
+ *  pcY = vertOff + (height - 1)/2;
+ * The leftmost/rightmost pixel and the topmost/bottommost line of the clean aperture fall at:
+ *  pcX +/- (cleanApertureWidth - 1)/2;
+ *  pcY +/- (cleanApertureHeight - 1)/2; */
 typedef struct
 {
     ISOM_BASEBOX_COMMON;
@@ -349,7 +390,10 @@ typedef struct
     uint32_t vertOffD;
 } isom_clap_t;
 
-/* Pixel Aspect Ratio Box */
+/* Pixel Aspect Ratio Box
+ * This box specifies the aspect ratio of a pixel, in arbitrary units.
+ * If a pixel appears H wide and V tall, then hSpacing/vSpacing is equal to H/V.
+ * When adjusting pixel aspect ratio, normally, the horizontal dimension of the video is scaled, if needed. */
 typedef struct
 {
     ISOM_BASEBOX_COMMON;
@@ -358,7 +402,9 @@ typedef struct
 } isom_pasp_t;
 
 /* Color Parameter Box
- * This box is defined by QuickTime file format. */
+ * This box is used to map the numerical values of pixels in the file to a common representation of color
+ * in which images can be correctly compared, combined, and displayed.
+ * This box is defined in QuickTime file format. */
 typedef struct
 {
     ISOM_BASEBOX_COMMON;
@@ -410,7 +456,8 @@ typedef struct
     int32_t  vendor;            /* ISOM: pre_defined / QTFF: whose CODEC */ \
     uint32_t temporalQuality;   /* ISOM: pre_defined / QTFF: the temporal quality factor */ \
     uint32_t spatialQuality;    /* ISOM: pre_defined / QTFF: the spatial quality factor */ \
-    /* pixel counts that the codec will deliver */ \
+    /* The width and height are the maximum pixel counts that the codec will deliver. \
+     * Since these are counts they do not take into account pixel aspect ratio. */ \
     uint16_t width; \
     uint16_t height; \
     /* */ \
@@ -429,10 +476,10 @@ typedef struct
                                  *       If this field is set to 0, the default color table should be used for the specified depth \
                                  *       If the color table ID is set to 0, a color table is contained within the sample description itself. \
                                  *       The color table immediately follows the color table ID field. */ \
-    isom_clap_t *clap;          /* Clean Aperture Box / optional */ \
-    isom_pasp_t *pasp;          /* Pixel Aspect Ratio Box / optional */ \
+    isom_clap_t *clap;          /* Clean Aperture Box @ optional */ \
+    isom_pasp_t *pasp;          /* Pixel Aspect Ratio Box @ optional */ \
     isom_colr_t *colr;          /* ISOM: null / QTFF: Color Parameter Box @ optional */ \
-    isom_stsl_t *stsl;          /* ISOM: Sample Scale Box @ optional / QTFF null */
+    isom_stsl_t *stsl;          /* ISOM: Sample Scale Box @ optional / QTFF: null */
 
 typedef struct
 {
@@ -481,11 +528,14 @@ typedef struct
 {
     ISOM_VISUAL_SAMPLE_ENTRY;
     isom_avcC_t *avcC;         /* AVCDecoderConfigurationRecord */
-    isom_btrt_t *btrt;         /* MPEG4BitRateBox / optional */
-    // isom_m4ds_t *m4ds;        /* MPEG4ExtensionDescriptorsBox / optional */
+    isom_btrt_t *btrt;         /* MPEG-4 Bit Rate Box @ optional */
+    // isom_m4ds_t *m4ds;        /* MPEG4ExtensionDescriptorsBox @ optional */
 } isom_avc_entry_t;
 
-/* Format Box */
+/* Format Box
+ * This box shows the data format of the stored sound media.
+ * ISO base media file format also defines the same four-character-code for the type field,
+ * however, that is used to indicate original sample description of the media when a protected sample entry is used. */
 typedef struct
 {
     ISOM_BASEBOX_COMMON;
@@ -499,13 +549,16 @@ typedef struct
     uint32_t unknown;           /* always 0? */
 } isom_mp4a_t;
 
-/* Terminator Box */
+/* Terminator Box
+ * This box is present to indicate the end of the sound description. It contains no data. */
 typedef struct
 {
     ISOM_BASEBOX_COMMON;    /* size = 8, type = 0x00000000 */
 } isom_terminator_t;
 
-/* Sound Information Decompression Parameters Box */
+/* Sound Information Decompression Parameters Box
+ * This box provides the ability to store data specific to a given audio decompressor in the sound description.
+ * The contents of this box are dependent on the audio decompressor. */
 typedef struct
 {
     ISOM_BASEBOX_COMMON;
@@ -540,7 +593,7 @@ typedef struct
                                  * QTFF: sample description version \
                                  *       version = 0 supports only 'raw ' or 'twos' audio format. \
                                  *       version = 1 is used to support out-of-band configuration settings for decompression. \
-                                 *       version = 2 is used to support high frequency or 3 or more multichannel audio. */ \
+                                 *       version = 2 is used to support high samplerate or 3 or more multichannel audio. */ \
     int16_t  revision_level;    /* ISOM: reserved / QTFF: version of the CODEC */ \
     int32_t  vendor;            /* ISOM: reserved / QTFF: whose CODEC */ \
     uint16_t channelcount;      /* ISOM: template: channelcount = 2 \
@@ -575,7 +628,7 @@ typedef struct
      *              For compressed audio, an AudioPacket is the natural compressed access unit of that format. */ \
     uint32_t sizeOfStructOnly;                  /* offset to extensions */ \
     uint64_t audioSampleRate;                   /* 64-bit floating point */ \
-    uint32_t numAudioChannels;                  /* any channel assignment info will be in Channel Compositor Box */ \
+    uint32_t numAudioChannels;                  /* any channel assignment info will be in Channel Compositor Box. */ \
     int32_t  always7F000000;                    /* always 0x7F000000 */ \
     uint32_t constBitsPerChannel;               /* only set if constant (and only for uncompressed audio) */ \
     uint32_t formatSpecificFlags; \
@@ -687,11 +740,17 @@ typedef struct
 } isom_stsd_t;
 /** **/
 
-/* Decoding Time to Sample Box */
+/* Decoding Time to Sample Box
+ * This box contains a compact version of a table that allows indexing from decoding time to sample number.
+ * Each entry in the table gives the number of consecutive samples with the same time delta, and the delta of those samples.
+ * By adding the deltas a complete time-to-sample map may be built.
+ * All samples must have non-zero durations except for the last one.
+ * The sum of all deltas gives the media duration in the track (not mapped to the movie timescale, and not considering any edit list).
+ * DTS is an abbreviation of 'decoding time stamp'. */
 typedef struct
 {
     uint32_t sample_count;      /* number of consecutive samples that have the given sample_delta */
-    uint32_t sample_delta;      /* DTS[n+1] = DTS[n] + sample_delta[n] */
+    uint32_t sample_delta;      /* DTS[0] = 0; DTS[n+1] = DTS[n] + sample_delta[n]; */
 } isom_stts_entry_t;
 
 typedef struct
@@ -701,12 +760,15 @@ typedef struct
 } isom_stts_t;
 
 /* Composition Time to Sample Box
- *  ISOM: if version is set to 1, sample_offset is signed 32bit integer.
- *  QT: sample_offset is always signed 32bit integer. */
+ * This box provides the offset between decoding time and composition time.
+ * CTS is an abbreviation of 'composition time stamp'.
+ * This box is optional and must only be present if DTS and CTS differ for any samples.
+ * ISOM: if version is set to 1, sample_offset is signed 32-bit integer.
+ * QTFF: sample_offset is always signed 32-bit integer. */
 typedef struct
 {
     uint32_t sample_count;      /* number of consecutive samples that have the given sample_offset */
-    uint32_t sample_offset;     /* CTS[n] = DTS[n] + sample_offset[n] */
+    uint32_t sample_offset;     /* CTS[n] = DTS[n] + sample_offset[n]; */
 } isom_ctts_entry_t;
 
 typedef struct
@@ -715,18 +777,26 @@ typedef struct
     lsmash_entry_list_t *list;
 } isom_ctts_t;
 
-/* Composition to Decode Box (Composition Shift Least Greatest Box) */
+/* Composition to Decode Box (Composition Shift Least Greatest Box)
+ * This box may be used to relate the composition and decoding timelines,
+ * and deal with some of the ambiguities that signed composition offsets introduce. */
 typedef struct
 {
     ISOM_FULLBOX_COMMON;
-    int32_t compositionToDTSShift;
-    int32_t leastDecodeToDisplayDelta;      /* the smallest sample_offset */
-    int32_t greatestDecodeToDisplayDelta;   /* the largest sample_offset */
+    int32_t compositionToDTSShift;          /* If this value is added to the composition times (as calculated by the CTS offsets from the DTS),
+                                             * then for all samples, their CTS is guaranteed to be greater than or equal to their DTS,
+                                             * and the buffer model implied by the indicated profile/level will be honoured;
+                                             * if leastDecodeToDisplayDelta is positive or zero, this field can be 0;
+                                             * otherwise it should be at least (- leastDecodeToDisplayDelta). */
+    int32_t leastDecodeToDisplayDelta;      /* the smallest sample_offset in this track */
+    int32_t greatestDecodeToDisplayDelta;   /* the largest sample_offset in this track */
     int32_t compositionStartTime;           /* the smallest CTS for any sample */
-    int32_t compositionEndTime;             /* the CTS plus the composition duration, of the sample with the largest CTS */
+    int32_t compositionEndTime;             /* the CTS plus the composition duration, of the sample with the largest CTS in this track */
 } isom_cslg_t;
 
-/* Sample Size Box */
+/* Sample Size Box
+ * This box contains the sample count and a table giving the size in bytes of each sample.
+ * The total number of samples in the media is always indicated in the sample_count. */
 typedef struct
 {
     uint32_t entry_size;        /* the size of a sample */
@@ -788,11 +858,14 @@ typedef struct
     lsmash_entry_list_t *list;
 } isom_sdtp_t;
 
-/* Sample To Chunk Box */
+/* Sample To Chunk Box
+ * This box can be used to find the chunk that contains a sample, its position, and the associated sample description.
+ * The table is compactly coded. Each entry gives the index of the first chunk of a run of chunks with the same characteristics.
+ * By subtracting one entry here from the previous one, you can compute how many chunks are in this run.
+ * You can convert this to a sample count by multiplying by the appropriate samples_per_chunk. */
 typedef struct
 {
-    uint32_t first_chunk;                   /* the index of the first chunk in this run of chunks
-                                             * that share the same samples-per-chunk and sample-description-index */
+    uint32_t first_chunk;                   /* the index of the first chunk in this run of chunks that share the same samples_per_chunk and sample_description_index */
     uint32_t samples_per_chunk;             /* the number of samples in each of these chunks */
     uint32_t sample_description_index;      /* the index of the sample entry that describes the samples in this chunk */
 } isom_stsc_entry_t;
@@ -826,29 +899,32 @@ typedef struct
 } isom_stco_t;      /* share with co64 box */
 
 /* Sample Group Description Box
- * description_length are available only if version == 1 and default_length == 0. */
+ * This box gives information about the characteristics of sample groups. */
 /* Roll Recovery Entry */
 typedef struct
 {
     /* grouping_type is 'roll' */
-    uint32_t description_length;
-    int16_t roll_distance;      /* the number of samples that must be decoded in order for a sample to be decoded correctly */
+    uint32_t description_length;        /* This field is available only if version == 1 and default_length == 0. */
+    int16_t roll_distance;              /* the number of samples that must be decoded in order for a sample to be decoded correctly */
 } isom_roll_entry_t;
 
 typedef struct
 {
-    ISOM_FULLBOX_COMMON;
+    ISOM_FULLBOX_COMMON;            /* Use of version 0 entries is deprecated. */
     uint32_t grouping_type;         /* an integer that identifies the sbgp that is associated with this sample group description */
     uint32_t default_length;        /* the length of every group entry (if the length is constant), or zero (if it is variable)
                                      * This field is available only if version == 1. */
     lsmash_entry_list_t *list;
 } isom_sgpd_t;
 
-/* Sample to Group Box */
+/* Sample to Group Box
+ * This box is used to find the group that a sample belongs to and the associated description of that sample group. */
 typedef struct
 {
     uint32_t sample_count;                  /* the number of consecutive samples with the same sample group descriptor */
-    uint32_t group_description_index;       /* the index of the sample group entry which describes the samples in this group */
+    uint32_t group_description_index;       /* the index of the sample group entry which describes the samples in this group
+                                             * The index ranges from 1 to the number of sample group entries in the Sample Group Description Box,
+                                             * or takes the value 0 to indicate that this sample is a member of no group of this type. */
 } isom_sbgp_entry_t;
 
 typedef struct
@@ -908,7 +984,8 @@ typedef struct
     isom_minf_t *minf;      /* Media Information Box */
 } isom_mdia_t;
 
-/* Movie Header Box */
+/* Movie Header Box
+ * This box defines overall information which is media-independent, and relevant to the entire presentation considered as a whole. */
 typedef struct
 {
     ISOM_FULLBOX_COMMON;            /* version is either 0 or 1 */
@@ -917,19 +994,19 @@ typedef struct
     uint64_t modification_time;     /* the most recent time the presentation was modified (in seconds since midnight, Jan. 1, 1904, in UTC time) */
     uint32_t timescale;             /* movie timescale: timescale for the entire presentation */
     uint64_t duration;              /* the duration, expressed in movie timescale, of the longest track */
-    /* */
+    /* The following fields are treated as reserved in MP4 version 1. */
     int32_t  rate;                  /* fixed point 16.16 number. 0x00010000 is normal forward playback. */
     int16_t  volume;                /* fixed point 8.8 number. 0x0100 is full volume. */
     int16_t  reserved;
     int32_t  preferredLong[2];      /* ISOM: reserved / QTFF: unknown */
     int32_t  matrix[9];             /* transformation matrix for the video */
-    /* The following fileds are defined in QuickTime file format.
+    /* The following fields are defined in QuickTime file format.
      * In ISO Base Media file format, these fields are treated as pre_defined. */
     int32_t  previewTime;           /* the time value in the movie at which the preview begins */
-    int32_t  previewDuration;       /* the duration of the movie preview in movie time scale units */
+    int32_t  previewDuration;       /* the duration of the movie preview in movie timescale units */
     int32_t  posterTime;            /* the time value of the time of the movie poster */
     int32_t  selectionTime;         /* the time value for the start time of the current selection */
-    int32_t  selectionDuration;     /* the duration of the current selection in movie time scale units */
+    int32_t  selectionDuration;     /* the duration of the current selection in movie timescale units */
     int32_t  currentTime;           /* the time value for current time position within the movie */
     /* */
     uint32_t next_track_ID;         /* larger than the largest track-ID in use */
@@ -944,7 +1021,9 @@ typedef struct
     struct mp4sys_ObjectDescriptor_t *OD;
 } isom_iods_t;
 
-/* Media Data Box */
+/* Media Data Box
+ * This box contains the media data.
+ * A presentation may contain zero or more Media Data Boxes.*/
 typedef struct
 {
     ISOM_BASEBOX_COMMON;    /* If size is 0, then this box is the last box. */
@@ -952,7 +1031,8 @@ typedef struct
         uint64_t placeholder_pos;       /* placeholder position for largesize */
 } isom_mdat_t;
 
-/* Free Space Box */
+/* Free Space Box
+ * The contents of a free-space box are irrelevant and may be ignored without affecting the presentation. */
 typedef struct
 {
     ISOM_BASEBOX_COMMON;    /* type is 'free' or 'skip' */
@@ -966,7 +1046,7 @@ typedef isom_free_t isom_skip_t;
  * This box is NOT defined in the ISO/MPEG-4 specs. */
 typedef struct
 {
-    uint64_t start_time;    /* version = 0: expressed in movie timescale
+    uint64_t start_time;    /* version = 0: expressed in movie timescale units
                              * version = 1: expressed in 100 nanoseconds */
     /* Chapter name is Pascal string */
     uint8_t chapter_name_length;
@@ -986,7 +1066,10 @@ typedef struct
     uint64_t start_time;
 } isom_chapter_entry_t;
 
-/* User Data Box */
+/* User Data Box
+ * This box is a container box for informative user-data.
+ * This user data is formatted as a set of boxes with more specific box types, which declare more precisely their content.
+ * QTFF: for historical reasons, this box is optionally terminated by a 32-bit integer set to 0. */
 typedef struct
 {
     ISOM_BASEBOX_COMMON;
@@ -998,7 +1081,7 @@ typedef struct
 {
     ISOM_BASEBOX_COMMON;
     isom_mvhd_t         *mvhd;          /* Movie Header Box */
-    isom_iods_t         *iods;          /* MP4: Object Descriptor Box / ISOM & QTFF: null */
+    isom_iods_t         *iods;          /* ISOM: Object Descriptor Box / QTFF: null */
     lsmash_entry_list_t *trak_list;     /* Track Box List */
     isom_udta_t         *udta;          /* User Data Box */
 } isom_moov_t;

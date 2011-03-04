@@ -4391,7 +4391,7 @@ static int isom_print_text( lsmash_root_t *root, isom_box_t *box, int level )
         return -1;
     isom_text_t *text = (isom_text_t *)box;
     int indent = level;
-    isom_iprintf( indent++, "[text]\n" );
+    isom_iprintf( indent++, "[text: Text Media Information Box]\n" );
     isom_iprintf( indent, "size = %"PRIu64"\n", text->size );
     isom_iprintf( indent, "Unknown matrix\n" );
     isom_iprint_matrix( indent + 1, text->matrix );
