@@ -190,8 +190,6 @@ int main( int argc, char* argv[] )
     /* Preparation for writing */
     if( lsmash_write_ftyp( structs.root ) )
         return AUDIOMUX_ERR( "Failed to write brands.\n" );
-    if( lsmash_add_mdat( structs.root ) )
-        return AUDIOMUX_ERR( "Failed to write mdat.\n" );
 
     /* transfer */
     uint32_t numframe = 0;

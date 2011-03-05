@@ -1167,7 +1167,6 @@ typedef struct
     isom_udta_t *udta;          /* User Data Box */
 
     lsmash_root_t *root;        /* go to root */
-    isom_mdat_t *mdat;          /* go to referenced mdat box */
     isom_cache_t *cache;
     uint32_t related_track_ID;
     uint8_t is_chapter;

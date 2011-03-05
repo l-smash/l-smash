@@ -1158,7 +1158,6 @@ int lsmash_add_pps_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t entry
 int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_type, void* summary );
 
 int lsmash_add_btrt( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number );
-int lsmash_add_mdat( lsmash_root_t *root );
 int lsmash_add_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length );
 
 int lsmash_write_ftyp( lsmash_root_t *root );

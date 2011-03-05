@@ -3801,6 +3801,21 @@ static int isom_write_mdat_header( lsmash_root_t *root )
     return lsmash_bs_write_data( bs );
 }
 
+/* If a mdat box already exists, flush a current one and start a new one. */
+static int isom_new_mdat( lsmash_root_t *root )
+{
+    if( !root )
+        return 0;
+    if( root->mdat && lsmash_write_mdat_size( root ) )    /* flush a current mdat */
+        return -1;
+    else
+    {
+        isom_create_box( mdat, root, ISOM_BOX_TYPE_MDAT );
+        root->mdat = mdat;
+    }
+    return isom_write_mdat_header( root );     /* start a new mdat */
+}
+
 static int isom_check_compatibility( lsmash_root_t *root )
 {
     if( !root )
@@ -8017,7 +8032,7 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_prop
             ++ group->roll_recovery->roll_distance;
             if( prop->leading != ISOM_SAMPLE_IS_UNDECODABLE_LEADING )
             {
-                /* The intra picture that doesn't lead any pictures that depend on former groups is substantially an instantaneous decoding picture.
+                /* The intra picture that doesn't lead any picture that depend on former groups is substantially an instantaneous decoding picture.
                  * Therefore, roll_distance of the group that includes this picture as the first sample is zero.
                  * However, this means this group cannot have random access point, since roll_distance = 0 must not be used. This is not preferable.
                  * So we treat this group as 'roll' and pick roll_distance = 1 though this treatment is over-estimation. */
@@ -9994,21 +10009,6 @@ static int isom_write_moov( lsmash_root_t *root )
     return isom_write_udta( root->bs, root->moov, NULL );
 }
 
-/* If a mdat box already exists, flush a current one and start a new one. */
-int lsmash_add_mdat( lsmash_root_t *root )
-{
-    if( !root )
-        return 0;
-    if( root->mdat && lsmash_write_mdat_size( root ) )    /* flush a current mdat */
-        return -1;
-    else
-    {
-        isom_create_box( mdat, root, ISOM_BOX_TYPE_MDAT );
-        root->mdat = mdat;
-    }
-    return isom_write_mdat_header( root );     /* start a new mdat */
-}
-
 int lsmash_write_mdat_size( lsmash_root_t *root )
 {
     if( !root || !root->bs || !root->bs->stream || !root->mdat )
@@ -10382,7 +10382,9 @@ int lsmash_write_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_t
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->cache || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
         return -1;
-
+    /* If there is no available mdat box to write samples, add and write a new one before any chunk offset is decided. */
+    if( !trak->root->mdat && isom_new_mdat( trak->root ) )
+        return -1;
     /* Add a chunk if needed. */
     /*
      * FIXME: I think we have to implement "arbitrate chunk handling between tracks" system.
