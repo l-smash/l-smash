@@ -176,6 +176,13 @@ int main( int argc, char* argv[] )
         return AUDIOMUX_ERR( "Failed to create a track.\n" );
 
     /* Initialize track */
+    lsmash_track_parameters_t track_param;
+    lsmash_initialize_track_parameters( &track_param );
+    track_param.mode = ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE | ISOM_TRACK_IN_PREVIEW;
+    if( lsmash_set_track_parameters( structs.root, track, &track_param ) )
+        return AUDIOMUX_ERR( "Failed to set track parameters.\n" );
+
+    /* Initialize media */
     if( lsmash_set_media_timescale( structs.root, track, structs.summary->frequency ) )
         return AUDIOMUX_ERR( "Failed to set media timescale.\n" );
 

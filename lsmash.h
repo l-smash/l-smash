@@ -866,11 +866,14 @@ typedef enum
 
 typedef enum
 {
-    ISOM_TRACK_ENABLED      = 0x000001,
-    ISOM_TRACK_IN_MOVIE     = 0x000002,
-    ISOM_TRACK_IN_PREVIEW   = 0x000004,
+    /* In MP4 and/or ISO base media file format, if in a presentation all tracks have neither track_in_movie nor track_in_preview set,
+     * then all tracks shall be treated as if both flags were set on all tracks. */
+    ISOM_TRACK_ENABLED      = 0x000001,     /* Track_enabled: Indicates that the track is enabled.
+                                             * A disabled track is treated as if it were not present. */
+    ISOM_TRACK_IN_MOVIE     = 0x000002,     /* Track_in_movie: Indicates that the track is used in the presentation. */
+    ISOM_TRACK_IN_PREVIEW   = 0x000004,     /* Track_in_preview: Indicates that the track is used when previewing the presentation. */
 
-    QT_TRACK_IN_POSTER      = 0x000008,
+    QT_TRACK_IN_POSTER      = 0x000008,     /* Track_in_poster: Indicates that the track is used in the movie's poster. (only defined in QuickTime file format) */
 } lsmash_track_mode_code;
 
 typedef enum
@@ -1138,19 +1141,38 @@ typedef struct
     LSMASH_BASE_SUMMARY
     // mp4sys_visualProfileLevelIndication pli ; /* I wonder we should have this or not. */
     // lsmash_mp4v_VideoObjectType vot;    /* Detailed codec type. If not mp4v, just ignored. */
-    uint32_t width;         /* pixel counts of width samples have */
-    uint32_t height;        /* pixel counts of height samples have */
+    uint32_t width;                                 /* pixel counts of width samples have */
+    uint32_t height;                                /* pixel counts of height samples have */
     uint32_t crop_top;
     uint32_t crop_left;
     uint32_t crop_bottom;
     uint32_t crop_right;
-    uint32_t par_h;         /* horizontal factor of pixel aspect ratio */
-    uint32_t par_v;         /* vertical factor of pixel aspect ratio */
-    lsmash_scaling_method_code scaling_method;
+    uint32_t par_h;                                 /* horizontal factor of pixel aspect ratio */
+    uint32_t par_v;                                 /* vertical factor of pixel aspect ratio */
+    lsmash_scaling_method_code scaling_method;      /* If not set, video samples are scaled into the visual presentation region to fill it. */
     lsmash_color_parameter primaries;
     lsmash_color_parameter transfer;
     lsmash_color_parameter matrix;
 } lsmash_video_summary_t;
+
+typedef struct
+{
+    lsmash_track_mode_code mode;
+
+    uint32_t track_ID;              /* an integer that uniquely identifies the track
+                                     * Don't set to value already used except for zero value.
+                                     * Zero value don't override established track_ID. */
+    uint64_t duration;              /* the duration of this track expressed in the movie timescale units
+                                     * You can't set this parameter manually. */
+    int16_t  video_layer;           /* the front-to-back ordering of video tracks; tracks with lower numbers are closer to the viewer. */
+    int16_t  alternate_group;       /* an integer that specifies a group or collection of tracks
+                                     * If this field is not 0, it should be the same for tracks that contain alternate data for one another
+                                     * and different for tracks belonging to different such groups.
+                                     * Only one track within an alternate group should be played or streamed at any one time. */
+    int16_t  audio_volume;          /* fixed point 8.8 number. 0x0100 is full volume. */
+    uint32_t display_width;         /* visual presentation region size of horizontal direction as fixed point 16.16 number.  */
+    uint32_t display_height;        /* visual presentation region size of vertical direction as fixed point 16.16 number. */
+} lsmash_track_parameters_t;
 
 typedef struct
 {
@@ -1234,6 +1256,9 @@ lsmash_root_t *lsmash_open_movie( const char *filename, uint32_t mode );
 void lsmash_initialize_movie_parameters( lsmash_movie_parameters_t *param );
 int lsmash_set_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t *param );
 int lsmash_get_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t *param );
+void lsmash_initialize_track_parameters( lsmash_track_parameters_t *param );
+int lsmash_set_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_track_parameters_t *param );
+int lsmash_get_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_track_parameters_t *param );
 uint32_t lsmash_create_track( lsmash_root_t *root, uint32_t handler_type );
 lsmash_sample_t *lsmash_create_sample( uint32_t size );
 void lsmash_delete_sample( lsmash_sample_t *sample );

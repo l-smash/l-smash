@@ -9388,6 +9388,50 @@ uint32_t lsmash_create_track( lsmash_root_t *root, uint32_t media_type )
     return trak->tkhd->track_ID;
 }
 
+void lsmash_initialize_track_parameters( lsmash_track_parameters_t *param )
+{
+    param->mode            = 0;
+    param->track_ID        = 0;
+    param->video_layer     = 0;
+    param->alternate_group = 0;
+    param->audio_volume    = 0x0100;
+    param->display_width   = 0;
+    param->display_height  = 0;
+}
+
+int lsmash_set_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_track_parameters_t *param )
+{
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    if( !trak || !trak->mdia || !trak->mdia->hdlr )
+        return -1;
+    uint32_t media_type = trak->mdia->hdlr->componentSubtype;
+    isom_tkhd_t *tkhd = trak->tkhd;
+    tkhd->flags           = param->mode;
+    tkhd->track_ID        = param->track_ID ? param->track_ID : tkhd->track_ID;
+    tkhd->layer           = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? param->video_layer    : 0;
+    tkhd->alternate_group = param->alternate_group;
+    tkhd->volume          = media_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK ? param->audio_volume   : 0;
+    tkhd->width           = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? param->display_width  : 0;
+    tkhd->height          = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? param->display_height : 0;
+    return 0;
+}
+
+int lsmash_get_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_track_parameters_t *param )
+{
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    if( !trak )
+        return -1;
+    isom_tkhd_t *tkhd = trak->tkhd;
+    param->mode            = tkhd->flags;
+    param->track_ID        = tkhd->track_ID;
+    param->video_layer     = tkhd->layer;
+    param->alternate_group = tkhd->alternate_group;
+    param->audio_volume    = tkhd->volume;
+    param->display_width   = tkhd->width;
+    param->display_height  = tkhd->height;
+    return 0;
+}
+
 int lsmash_set_media_handler( lsmash_root_t *root, uint32_t track_ID, lsmash_media_type_code media_type, char *handler_name )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
@@ -10148,11 +10192,8 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
             return -1;
         uint32_t track_ID = trak->tkhd->track_ID;
         uint32_t related_track_ID = trak->related_track_ID;
-        uint32_t track_mode = trak->is_chapter ? 0 : ISOM_TRACK_ENABLED;
-        track_mode |= ISOM_TRACK_IN_MOVIE | ISOM_TRACK_IN_PREVIEW;
-        if( root->qt_compatible )
-            track_mode |= QT_TRACK_IN_POSTER;
-        if( lsmash_set_track_mode( root, track_ID, track_mode ) )
+        /* Disable the track if the track is a track reference chapter. */
+        if( trak->is_chapter && lsmash_set_track_mode( root, track_ID, trak->tkhd->flags & 0xfffffe ) )
             return -1;
         if( trak->is_chapter && related_track_ID )
         {
@@ -10638,6 +10679,11 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     /* Create reference chapter track. */
     if( chapter_track_ID != lsmash_create_track( root, ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK ) )
         return -1;
+    lsmash_track_parameters_t track_param;
+    lsmash_initialize_track_parameters( &track_param );
+    track_param.mode = ISOM_TRACK_IN_MOVIE | ISOM_TRACK_IN_PREVIEW;
+    if( lsmash_set_track_parameters( root, chapter_track_ID, &track_param ) )
+        return -1;
     /* Copy media timescale. */
     uint64_t media_timescale = lsmash_get_media_timescale( root, track_ID );
     if( !media_timescale || lsmash_set_media_timescale( root, chapter_track_ID, media_timescale ) )
@@ -10650,7 +10696,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     uint32_t sample_entry = lsmash_add_sample_entry( root, chapter_track_ID, sample_type, NULL );
     if( !sample_entry )
         goto fail;
-    /* Check each line format */
+    /* Check each line format. */
     fn_get_chapter_data fnc = isom_check_chap_line( file_name );
     if( !fnc )
         return -1;
