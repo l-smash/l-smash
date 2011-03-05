@@ -9920,6 +9920,49 @@ fail:
     return NULL;
 }
 
+void lsmash_initialize_movie_parameters( lsmash_movie_parameters_t *param )
+{
+    param->max_chunk_duration = 0.5;
+    param->timescale          = 600;
+    param->duration           = 0;
+    param->playback_rate      = 0x00010000;
+    param->playback_volume    = 0x0100;
+    param->preview_time       = 0;
+    param->preview_duration   = 0;
+    param->poster_time        = 0;
+}
+
+int lsmash_set_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t *param )
+{
+    if( !root || !root->moov || !root->moov->mvhd )
+        return -1;
+    isom_mvhd_t *mvhd = root->moov->mvhd;
+    root->max_chunk_duration = param->max_chunk_duration;
+    mvhd->timescale          = param->timescale;
+    mvhd->rate               = param->playback_rate;
+    mvhd->volume             = param->playback_volume;
+    mvhd->previewTime        = param->preview_time;
+    mvhd->previewDuration    = param->preview_duration;
+    mvhd->posterTime         = param->poster_time;
+    return 0;
+}
+
+int lsmash_get_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t *param )
+{
+    if( !root || !root->moov || !root->moov->mvhd )
+        return -1;
+    isom_mvhd_t *mvhd = root->moov->mvhd;
+    param->max_chunk_duration = root->max_chunk_duration;
+    param->timescale          = mvhd->timescale;
+    param->duration           = mvhd->duration;
+    param->playback_rate      = mvhd->rate;
+    param->playback_volume    = mvhd->volume;
+    param->preview_time       = mvhd->previewTime;
+    param->preview_duration   = mvhd->previewDuration;
+    param->poster_time        = mvhd->posterTime;
+    return 0;
+}
+
 int lsmash_set_movie_timescale( lsmash_root_t *root, uint32_t timescale )
 {
     if( !root || !root->moov || !root->moov->mvhd )

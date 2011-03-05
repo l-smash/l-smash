@@ -165,15 +165,15 @@ int main( int argc, char* argv[] )
     if( lsmash_set_brands( structs.root, major_brand, minor_version, brands, num_of_brands ) )
         return AUDIOMUX_ERR( "Failed to set brands.\n" );
 
+    /* Initialize movie */
+    lsmash_movie_parameters_t movie_param;
+    lsmash_initialize_movie_parameters( &movie_param );
+    if( lsmash_set_movie_parameters( structs.root, &movie_param ) )
+        return AUDIOMUX_ERR( "Failed to set movie parameters.\n" );
+
     uint32_t track = lsmash_create_track( structs.root, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK );
     if( !track )
         return AUDIOMUX_ERR( "Failed to create a track.\n" );
-
-    if( lsmash_set_max_chunk_duration( structs.root, 0.5 ) )
-        return AUDIOMUX_ERR( "Failed to set max duration per chunk.\n" );
-
-    if( lsmash_set_movie_timescale( structs.root, 600 ) )
-        return AUDIOMUX_ERR( "Failed to set movie timescale.\n" );
 
     /* Initialize track */
     if( lsmash_set_media_timescale( structs.root, track, structs.summary->frequency ) )

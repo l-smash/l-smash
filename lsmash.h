@@ -1103,15 +1103,17 @@ typedef struct {
 #define LSMASH_BASE_SUMMARY \
     lsmash_mp4sys_object_type_indication object_type_indication; \
     lsmash_mp4sys_stream_type stream_type; \
-    void* exdata;               /* typically payload of DecoderSpecificInfo (that's called AudioSpecificConfig in mp4a) */ \
+    void *exdata;               /* typically payload of DecoderSpecificInfo (that's called AudioSpecificConfig in mp4a) */ \
     uint32_t exdata_length;     /* length of exdata */ \
     uint32_t max_au_length;     /* buffer length for 1 access unit, typically max size of 1 audio/video frame */
 
-typedef struct {
+typedef struct
+{
     LSMASH_BASE_SUMMARY
 } lsmash_summary_t;
 
-typedef struct {
+typedef struct
+{
     LSMASH_BASE_SUMMARY
     // mp4a_audioProfileLevelIndication pli ; /* I wonder we should have this or not. */
     uint32_t sample_type;               /* Audio codec type. */
@@ -1131,7 +1133,8 @@ typedef struct {
     uint8_t interleaved;        /* 0: non-interleaved, 1: interleaved i.e. the samples for each channels are stored in one stream */
 } lsmash_audio_summary_t;
 
-typedef struct {
+typedef struct
+{
     LSMASH_BASE_SUMMARY
     // mp4sys_visualProfileLevelIndication pli ; /* I wonder we should have this or not. */
     // lsmash_mp4v_VideoObjectType vot;    /* Detailed codec type. If not mp4v, just ignored. */
@@ -1148,6 +1151,19 @@ typedef struct {
     lsmash_color_parameter transfer;
     lsmash_color_parameter matrix;
 } lsmash_video_summary_t;
+
+typedef struct
+{
+    double   max_chunk_duration;    /* max duration per chunk in seconds */
+    uint32_t timescale;             /* movie timescale: timescale for the entire presentation */
+    uint64_t duration;              /* the duration, expressed in movie timescale, of the longest track
+                                     * You can't set this parameter manually. */
+    int32_t  playback_rate;         /* fixed point 16.16 number. 0x00010000 is normal forward playback. */
+    int32_t  playback_volume;       /* fixed point 8.8 number. 0x0100 is full volume. */
+    int32_t  preview_time;          /* the time value in the movie at which the preview begins */
+    int32_t  preview_duration;      /* the duration of the movie preview in movie timescale units */
+    int32_t  poster_time;           /* the time value of the time of the movie poster */
+} lsmash_movie_parameters_t;
 
 typedef struct lsmash_root_tag lsmash_root_t;
 
@@ -1215,6 +1231,9 @@ int lsmash_update_bitrate_info( lsmash_root_t *root, uint32_t track_ID, uint32_t
 
 
 lsmash_root_t *lsmash_open_movie( const char *filename, uint32_t mode );
+void lsmash_initialize_movie_parameters( lsmash_movie_parameters_t *param );
+int lsmash_set_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t *param );
+int lsmash_get_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t *param );
 uint32_t lsmash_create_track( lsmash_root_t *root, uint32_t handler_type );
 lsmash_sample_t *lsmash_create_sample( uint32_t size );
 void lsmash_delete_sample( lsmash_sample_t *sample );
