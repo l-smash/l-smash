@@ -38,6 +38,7 @@
 #define ftell ftello64
 #endif
 
+#define PRIVATE     /* If this declaration is placed at a variable, any user shouldn't use it. */
 
 /* public defines */
 #define LSMASH_FILE_MODE_WRITE 0x00000001
@@ -1157,13 +1158,30 @@ typedef struct
 
 typedef struct
 {
+    uint32_t timescale;             /* media timescale: timescale for this media */
+    uint64_t duration;              /* the duration of this media, expressed in the media timescale
+                                     * You can't set this parameter manually. */
+    /* Use either type of language code. */
+    uint16_t MAC_language;          /* Macintosh language code for this media */
+    char    *ISO_language;          /* ISO 639-2/T language code for this media */
+    /* human-readable name for the track type (for debugging and inspection purposes) */
+    char *media_handler_name;
+    char *data_handler_name;
+    /* Any user shouldn't use the following parameters. */
+    PRIVATE char language_shadow[4];
+    PRIVATE char media_handler_name_shadow[256];
+    PRIVATE char data_handler_name_shadow[256];
+} lsmash_media_parameters_t;
+
+typedef struct
+{
     lsmash_track_mode_code mode;
 
     uint32_t track_ID;              /* an integer that uniquely identifies the track
                                      * Don't set to value already used except for zero value.
                                      * Zero value don't override established track_ID. */
     uint64_t duration;              /* the duration of this track expressed in the movie timescale units
-                                     * You can't set this parameter manually. */
+                                     * If there is any edit, your setting is ignored. */
     int16_t  video_layer;           /* the front-to-back ordering of video tracks; tracks with lower numbers are closer to the viewer. */
     int16_t  alternate_group;       /* an integer that specifies a group or collection of tracks
                                      * If this field is not 0, it should be the same for tracks that contain alternate data for one another
@@ -1176,12 +1194,12 @@ typedef struct
 
 typedef struct
 {
-    double   max_chunk_duration;    /* max duration per chunk in seconds */
+    double   max_chunk_duration;    /* max duration per chunk in seconds. 0.5 is default value. */
     uint32_t timescale;             /* movie timescale: timescale for the entire presentation */
     uint64_t duration;              /* the duration, expressed in movie timescale, of the longest track
                                      * You can't set this parameter manually. */
-    int32_t  playback_rate;         /* fixed point 16.16 number. 0x00010000 is normal forward playback. */
-    int32_t  playback_volume;       /* fixed point 8.8 number. 0x0100 is full volume. */
+    int32_t  playback_rate;         /* fixed point 16.16 number. 0x00010000 is normal forward playback and default value. */
+    int32_t  playback_volume;       /* fixed point 8.8 number. 0x0100 is full volume and default value. */
     int32_t  preview_time;          /* the time value in the movie at which the preview begins */
     int32_t  preview_duration;      /* the duration of the movie preview in movie timescale units */
     int32_t  poster_time;           /* the time value of the time of the movie poster */
@@ -1256,10 +1274,13 @@ lsmash_root_t *lsmash_open_movie( const char *filename, uint32_t mode );
 void lsmash_initialize_movie_parameters( lsmash_movie_parameters_t *param );
 int lsmash_set_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t *param );
 int lsmash_get_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t *param );
+uint32_t lsmash_create_track( lsmash_root_t *root, uint32_t handler_type );
 void lsmash_initialize_track_parameters( lsmash_track_parameters_t *param );
 int lsmash_set_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_track_parameters_t *param );
 int lsmash_get_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_track_parameters_t *param );
-uint32_t lsmash_create_track( lsmash_root_t *root, uint32_t handler_type );
+void lsmash_initialize_media_parameters( lsmash_media_parameters_t *param );
+int lsmash_set_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_media_parameters_t *param );
+int lsmash_get_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_media_parameters_t *param );
 lsmash_sample_t *lsmash_create_sample( uint32_t size );
 void lsmash_delete_sample( lsmash_sample_t *sample );
 int lsmash_write_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_t *sample );

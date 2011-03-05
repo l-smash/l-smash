@@ -183,12 +183,12 @@ int main( int argc, char* argv[] )
         return AUDIOMUX_ERR( "Failed to set track parameters.\n" );
 
     /* Initialize media */
-    if( lsmash_set_media_timescale( structs.root, track, structs.summary->frequency ) )
-        return AUDIOMUX_ERR( "Failed to set media timescale.\n" );
-
-    char handler_name[24] = "L-SMASH Audio Handler 1";
-    if( lsmash_set_media_handler_name( structs.root, track, handler_name ) )
-        return AUDIOMUX_ERR( "Failed to set handler name.\n" );
+    lsmash_media_parameters_t media_param;
+    lsmash_initialize_media_parameters( &media_param );
+    media_param.timescale = structs.summary->frequency;
+    media_param.media_handler_name = "L-SMASH Audio Handler 1";
+    if( lsmash_set_media_parameters( structs.root, track, &media_param ) )
+        return AUDIOMUX_ERR( "Failed to set media parameters.\n" );
 
     uint32_t sample_entry = lsmash_add_sample_entry( structs.root, track, codec_code, structs.summary );
     if( !sample_entry )

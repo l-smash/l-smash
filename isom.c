@@ -9408,6 +9408,7 @@ int lsmash_set_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     isom_tkhd_t *tkhd = trak->tkhd;
     tkhd->flags           = param->mode;
     tkhd->track_ID        = param->track_ID ? param->track_ID : tkhd->track_ID;
+    tkhd->duration        = !trak->edts || !trak->edts->elst ? param->duration : tkhd->duration;
     tkhd->layer           = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? param->video_layer    : 0;
     tkhd->alternate_group = param->alternate_group;
     tkhd->volume          = media_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK ? param->audio_volume   : 0;
@@ -9424,6 +9425,7 @@ int lsmash_get_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     isom_tkhd_t *tkhd = trak->tkhd;
     param->mode            = tkhd->flags;
     param->track_ID        = tkhd->track_ID;
+    param->duration        = tkhd->duration;
     param->video_layer     = tkhd->layer;
     param->alternate_group = tkhd->alternate_group;
     param->audio_volume    = tkhd->volume;
@@ -9704,6 +9706,87 @@ int lsmash_set_track_presentation_size( lsmash_root_t *root, uint32_t track_ID, 
         return -1;
     trak->tkhd->width = width;
     trak->tkhd->height = height;
+    return 0;
+}
+
+void lsmash_initialize_media_parameters( lsmash_media_parameters_t *param )
+{
+    memset( param, 0, sizeof(lsmash_media_parameters_t) );
+    param->timescale = 1;
+}
+
+int lsmash_set_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_media_parameters_t *param )
+{
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    if( !trak || !trak->mdia || !trak->mdia->mdhd )
+        return -1;
+    trak->mdia->mdhd->timescale = param->timescale;
+    if( lsmash_set_media_language( root, track_ID, param->ISO_language, param->MAC_language ) )
+        return -1;
+    if( param->media_handler_name && lsmash_set_media_handler_name( root, track_ID, param->media_handler_name ) )
+        return -1;
+    if( root->qt_compatible && param->data_handler_name && lsmash_set_data_handler_name( root, track_ID, param->data_handler_name ) )
+        return -1;
+    return 0;
+}
+
+int lsmash_get_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_media_parameters_t *param )
+{
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    if( !trak || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->hdlr || !trak->mdia->minf )
+        return -1;
+    isom_mdhd_t *mdhd = trak->mdia->mdhd;
+    param->timescale = mdhd->timescale;
+    param->duration  = mdhd->duration;
+    /* Get media language. */
+    if( mdhd->language >= 0x800 )
+    {
+        param->MAC_language = 0;
+        param->ISO_language = isom_unpack_iso_language( mdhd->language );
+        memcpy( param->language_shadow, param->ISO_language, sizeof(param->language_shadow) );
+        param->ISO_language = param->language_shadow;
+    }
+    else
+    {
+        param->MAC_language = mdhd->language;
+        param->ISO_language = NULL;
+        memset( param->language_shadow, 0, sizeof(param->language_shadow) );
+    }
+    /* Get handler name(s). */
+    isom_hdlr_t *hdlr = trak->mdia->hdlr;
+    int length = LSMASH_MIN( 255, hdlr->componentName_length );
+    if( length )
+    {
+        memcpy( param->media_handler_name_shadow, hdlr->componentName + root->qt_compatible, length );
+        param->media_handler_name_shadow[length - 2 + root->isom_compatible + root->qt_compatible] = '\0';
+        param->media_handler_name = param->media_handler_name_shadow;
+    }
+    else
+    {
+        param->media_handler_name = NULL;
+        memset( param->media_handler_name_shadow, 0, sizeof(param->media_handler_name_shadow) );
+    }
+    if( trak->mdia->minf->hdlr )
+    {
+        hdlr = trak->mdia->minf->hdlr;
+        length = LSMASH_MIN( 255, hdlr->componentName_length );
+        if( length )
+        {
+            memcpy( param->data_handler_name_shadow, hdlr->componentName + root->qt_compatible, length );
+            param->data_handler_name_shadow[length - 2 + root->isom_compatible + root->qt_compatible] = '\0';
+            param->data_handler_name = param->data_handler_name_shadow;
+        }
+        else
+        {
+            param->data_handler_name = NULL;
+            memset( param->data_handler_name_shadow, 0, sizeof(param->data_handler_name_shadow) );
+        }
+    }
+    else
+    {
+        param->data_handler_name = NULL;
+        memset( param->data_handler_name_shadow, 0, sizeof(param->data_handler_name_shadow) );
+    }
     return 0;
 }
 
