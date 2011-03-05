@@ -200,7 +200,6 @@ int main( int argc, char* argv[] )
 
     /* transfer */
     uint32_t numframe = 0;
-    lsmash_sample_property_t dependency = { 0 }; /* nothing */
     while(1)
     {
         /* allocate sample buffer */
@@ -228,7 +227,7 @@ int main( int argc, char* argv[] )
         sample->dts = numframe * structs.summary->samples_in_frame;
         sample->cts = sample->dts;
         sample->index = sample_entry;
-        sample->prop = dependency; /* every sample is a random access point. */
+        sample->prop.sync_point = 1; /* every sample is a random access point. */
         if( lsmash_write_sample( structs.root, track, sample ) )
             return AUDIOMUX_ERR( "Failed to write a frame.\n" );
         numframe++;
