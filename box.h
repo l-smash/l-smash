@@ -29,7 +29,6 @@
 #include <time.h>
 #define ISOM_MAC_EPOCH_OFFSET 2082844800
 
-#include "lsmash.h"
 #include "utils.h"
 
 typedef struct isom_box_tag isom_box_t;

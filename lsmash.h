@@ -23,20 +23,7 @@
 #ifndef LSMASH_H
 #define LSMASH_H
 
-#ifndef __MINGW32__
-#define _FILE_OFFSET_BITS 64
-#endif
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <inttypes.h>
-#include <ctype.h> /* for chapter handling */
-
-#ifdef __MINGW32__
-#define fseek fseeko64
-#define ftell ftello64
-#endif
+#include <stdint.h>
 
 #define PRIVATE     /* If this declaration is placed at a variable, any user shouldn't use it. */
 

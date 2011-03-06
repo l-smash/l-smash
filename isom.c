@@ -21,6 +21,13 @@
 
 /* This file is available under an ISC license. */
 
+#include "internal.h" /* must be placed first */
+
+#include <stdlib.h>
+#include <string.h>
+#include <inttypes.h>
+#include <ctype.h> /* for chapter handling */
+
 #include "box.h"
 #include "summary.h" /* FIXME: to be replaced with lsmash.h or whatnot */
 
@@ -3793,7 +3800,7 @@ static int isom_write_mdat_header( lsmash_root_t *root )
         return -1;
     isom_mdat_t *mdat = root->mdat;
     lsmash_bs_t *bs = root->bs;
-    mdat->placeholder_pos = ftell( bs->stream );
+    mdat->placeholder_pos = lsmash_ftell( bs->stream );
     if( isom_bs_write_largesize_placeholder( bs ) )
         return -1;
     mdat->size = ISOM_DEFAULT_BOX_HEADER_SIZE;
@@ -5590,7 +5597,7 @@ static void isom_read_box_rest( lsmash_bs_t *bs, isom_box_t *box )
 
 static void isom_skip_box_rest( lsmash_bs_t *bs, isom_box_t *box )
 {
-    fseek( bs->stream, box->size - lsmash_bs_get_pos( bs ), SEEK_CUR );
+    lsmash_fseek( bs->stream, box->size - lsmash_bs_get_pos( bs ), SEEK_CUR );
 }
 
 static int isom_read_children( lsmash_root_t *root, isom_box_t *box, void *parent, int level )
@@ -7388,7 +7395,7 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
     {
         /* skip extra bytes */
         uint64_t rest_size = parent->size - parent_pos;
-        fseek( bs->stream, rest_size, SEEK_CUR );
+        lsmash_fseek( bs->stream, rest_size, SEEK_CUR );
         box->size = rest_size;
         return 0;
     }
@@ -10187,23 +10194,23 @@ int lsmash_write_mdat_size( lsmash_root_t *root )
     uint8_t large_flag = mdat->size > UINT32_MAX;
     lsmash_bs_t *bs = root->bs;
     FILE *stream = bs->stream;
-    uint64_t current_pos = ftell( stream );
+    uint64_t current_pos = lsmash_ftell( stream );
     if( large_flag )
     {
-        fseek( stream, mdat->placeholder_pos, SEEK_SET );
+        lsmash_fseek( stream, mdat->placeholder_pos, SEEK_SET );
         lsmash_bs_put_be32( bs, 1 );
         lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_MDAT );
         lsmash_bs_put_be64( bs, mdat->size + ISOM_DEFAULT_BOX_HEADER_SIZE );
     }
     else
     {
-        fseek( stream, mdat->placeholder_pos + ISOM_DEFAULT_BOX_HEADER_SIZE, SEEK_SET );
+        lsmash_fseek( stream, mdat->placeholder_pos + ISOM_DEFAULT_BOX_HEADER_SIZE, SEEK_SET );
         lsmash_bs_put_be32( bs, mdat->size );
         lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_MDAT );
     }
     if( lsmash_bs_write_data( bs ) )
         return -1;
-    fseek( stream, current_pos, SEEK_SET );
+    lsmash_fseek( stream, current_pos, SEEK_SET );
     return 0;
 }
 
@@ -10347,19 +10354,19 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
 
     FILE *stream = root->bs->stream;
     isom_mdat_t *mdat = root->mdat;
-    uint64_t total = ftell( stream ) + root->moov->size; // FIXME:
+    uint64_t total = lsmash_ftell( stream ) + root->moov->size; // FIXME:
     uint64_t readnum;
     /* backup starting area of mdat and write moov there instead */
-    if( fseek( stream, mdat->placeholder_pos, SEEK_SET ) )
+    if( lsmash_fseek( stream, mdat->placeholder_pos, SEEK_SET ) )
         goto fail;
     readnum = fread( buf[0], 1, size, stream );
-    uint64_t read_pos = ftell( stream );
+    uint64_t read_pos = lsmash_ftell( stream );
 
     /* write moov there instead */
-    if( fseek( stream, mdat->placeholder_pos, SEEK_SET )
+    if( lsmash_fseek( stream, mdat->placeholder_pos, SEEK_SET )
         || isom_write_moov( root ) )
         goto fail;
-    uint64_t write_pos = ftell( stream );
+    uint64_t write_pos = lsmash_ftell( stream );
 
     mdat->placeholder_pos += root->moov->size; /* update placeholder */
 
@@ -10367,17 +10374,17 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
     int buf_switch = 1;
     while( readnum == size )
     {
-        if( fseek( stream, read_pos, SEEK_SET ) )
+        if( lsmash_fseek( stream, read_pos, SEEK_SET ) )
             goto fail;
         readnum = fread( buf[buf_switch], 1, size, stream );
-        read_pos = ftell( stream );
+        read_pos = lsmash_ftell( stream );
 
         buf_switch ^= 0x1;
 
-        if( fseek( stream, write_pos, SEEK_SET )
+        if( lsmash_fseek( stream, write_pos, SEEK_SET )
             || fwrite( buf[buf_switch], 1, size, stream ) != size )
             goto fail;
-        write_pos = ftell( stream );
+        write_pos = lsmash_ftell( stream );
         if( remux->func ) remux->func( remux->param, write_pos, total ); // FIXME:
     }
     if( fwrite( buf[buf_switch^0x1], 1, readnum, stream ) != readnum )

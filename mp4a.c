@@ -20,6 +20,8 @@
 
 /* This file is available under an ISC license. */
 
+#include "internal.h" /* must be placed first */
+
 #define MP4A_INTERNAL
 #include "mp4a.h"
 

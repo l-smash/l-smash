@@ -21,25 +21,15 @@
 
 /* This file is available under an ISC license. */
 
-#ifndef __MINGW32__
-#define _FILE_OFFSET_BITS 64 /* FIXME: This is redundant. Should be concentrated in utils.h */
-#endif
+#include "internal.h" /* must be placed first */
+
+#include <stdlib.h>
+#include <string.h>
 
 #define LSMASH_IMPORTER_INTERNAL
 #include "importer.h"
 
 #include "box.h"
-
-#include <stdlib.h>
-#include <string.h>
-
-#ifdef __MINGW32__ /* FIXME: This is redundant. Should be concentrated in utils.h */
-#define mp4sys_fseek fseeko64
-#define mp4sys_ftell ftello64
-#else
-#define mp4sys_fseek fseek
-#define mp4sys_ftell ftell
-#endif
 
 /***************************************************************************
     importer framework
@@ -1004,7 +994,7 @@ mp4sys_importer_t* mp4sys_importer_open( const char* identifier, const char* for
         {
             if( !funcs->detectable )
                 continue;
-            if( !funcs->probe( importer ) || mp4sys_fseek( importer->stream, 0, SEEK_SET ) )
+            if( !funcs->probe( importer ) || lsmash_fseek( importer->stream, 0, SEEK_SET ) )
                 break;
         }
     }

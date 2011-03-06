@@ -23,7 +23,6 @@
 #ifndef MP4A_H
 #define MP4A_H
 
-#include "lsmash.h"
 #include "utils.h"
 
 /***************************************************************************

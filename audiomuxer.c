@@ -22,7 +22,9 @@
 
 #include "lsmash.h"
 #include "importer.h"
+
 #include <stdarg.h>
+#include <string.h>
 
 #define eprintf( ... ) fprintf( stderr, __VA_ARGS__ )
 

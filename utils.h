@@ -23,9 +23,6 @@
 #ifndef LSMASH_UTIL_H
 #define LSMASH_UTIL_H
 
-#include <stdio.h>
-#include <inttypes.h>
-
 #define debug_if(x) if(x)
 
 #define LSMASH_MAX( a, b ) ((a) > (b) ? (a) : (b))

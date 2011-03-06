@@ -22,6 +22,9 @@
 
 #include "lsmash.h"
 
+#include <stdio.h>
+#include <string.h>
+
 int main( int argc, char *argv[] )
 {
     if( argc != 2 || !strcasecmp( argv[1], "-h" ) || !strcasecmp( argv[1], "--help" ) )
