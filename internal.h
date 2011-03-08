@@ -25,6 +25,7 @@
 
 #include "common/osdep.h" /* must be placed before stdio.h */
 #include <stdio.h>
+#include <assert.h>
 
 #include "lsmash.h"
 

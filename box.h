@@ -899,14 +899,6 @@ typedef struct
 
 /* Sample Group Description Box
  * This box gives information about the characteristics of sample groups. */
-/* Roll Recovery Entry */
-typedef struct
-{
-    /* grouping_type is 'roll' */
-    uint32_t description_length;        /* This field is available only if version == 1 and default_length == 0. */
-    int16_t roll_distance;              /* the number of samples that must be decoded in order for a sample to be decoded correctly */
-} isom_roll_entry_t;
-
 typedef struct
 {
     ISOM_FULLBOX_COMMON;            /* Use of version 0 entries is deprecated. */
@@ -916,16 +908,30 @@ typedef struct
     lsmash_entry_list_t *list;
 } isom_sgpd_t;
 
-/* Sample to Group Box
- * This box is used to find the group that a sample belongs to and the associated description of that sample group. */
+/* Random Access Entry
+ * Samples marked by this group must be random access points, and may also be sync points. */
 typedef struct
 {
-    uint32_t sample_count;                  /* the number of consecutive samples with the same sample group descriptor */
-    uint32_t group_description_index;       /* the index of the sample group entry which describes the samples in this group
-                                             * The index ranges from 1 to the number of sample group entries in the Sample Group Description Box,
-                                             * or takes the value 0 to indicate that this sample is a member of no group of this type. */
-} isom_sbgp_entry_t;
+    /* grouping_type is 'rap ' */
+    uint32_t description_length;                /* This field is available only if version == 1 and default_length == 0. */
+    unsigned num_leading_samples_known : 1;     /* the value of one indicates that the number of leading samples is known for each sample in this group,
+                                                 * and the number is specified by num_leading_samples. */
+    unsigned num_leading_samples       : 7;     /* the number of leading samples for each sample in this group
+                                                 * Note: when num_leading_samples_known is equal to 0, this field should be ignored. */
+} isom_rap_entry_t;
 
+/* Roll Recovery Entry
+ * This grouping type is defined as that group of samples having the same roll distance. */
+typedef struct
+{
+    /* grouping_type is 'roll' */
+    uint32_t description_length;        /* This field is available only if version == 1 and default_length == 0. */
+    int16_t roll_distance;              /* the number of samples that must be decoded in order for a sample to be decoded correctly
+                                         * The value zero must not be used. */
+} isom_roll_entry_t;
+
+/* Sample to Group Box
+ * This box is used to find the group that a sample belongs to and the associated description of that sample group. */
 typedef struct
 {
     ISOM_FULLBOX_COMMON;
@@ -934,6 +940,14 @@ typedef struct
                                          * This field is available only if version == 1. */
     lsmash_entry_list_t *list;
 } isom_sbgp_t;
+
+typedef struct
+{
+    uint32_t sample_count;                  /* the number of consecutive samples with the same sample group descriptor */
+    uint32_t group_description_index;       /* the index of the sample group entry which describes the samples in this group
+                                             * The index ranges from 1 to the number of sample group entries in the Sample Group Description Box,
+                                             * or takes the value 0 to indicate that this sample is a member of no group of this type. */
+} isom_sbgp_entry_t;
 
 /* Sample Table Box */
 typedef struct
@@ -1104,6 +1118,7 @@ struct lsmash_root_tag
         uint8_t mp4_version2;           /* compatibility with MP4 ver.2 file format */
         uint8_t itunes_audio;           /* compatibility with iTunes Audio */
         uint8_t max_3gpp_version;       /* maximum 3GPP version */
+        uint8_t max_isom_version;       /* maximum ISO Base Media file format version */
         lsmash_entry_list_t *print;
 };
 
@@ -1133,17 +1148,23 @@ typedef struct
 
 typedef struct
 {
+    isom_sbgp_entry_t *sample_to_group;         /* the address corresponding to the entry in Sample to Group Box */
+    isom_rap_entry_t  *random_access;           /* the address corresponding to the random access entry in Sample Group Description Box */
+    uint8_t            is_prev_rap;             /* whether the previous sample is a random access point or not */
+} isom_rap_group_t;
+
+typedef struct
+{
     isom_sbgp_entry_t *sample_to_group;     /* the address corresponding to the entry in Sample to Group Box */
     isom_roll_entry_t *roll_recovery;       /* the address corresponding to the roll recovery entry in Sample Group Description Box */
-    uint32_t first_sample;                  /* number of the first sample of the group */
-    uint32_t recovery_point;
+    uint32_t first_sample;                  /* the number of the first sample of the group */
+    uint32_t recovery_point;                /* the identifier necessary for the recovery from its starting point to be completed */
     uint8_t delimited;                      /* the flag if the sample_count is determined */
     uint8_t described;                      /* the flag if the group description is determined */
 } isom_roll_group_t;
 
 typedef struct
 {
-    // uint32_t grouping_type;
     lsmash_entry_list_t *pool;        /* grouping pooled to delimit and describe */
 } isom_grouping_t;
 
@@ -1153,6 +1174,7 @@ typedef struct
     isom_chunk_t chunk;
     isom_timestamp_t timestamp;
     isom_grouping_t roll;
+    isom_rap_group_t *rap;
 } isom_cache_t;
 
 typedef struct

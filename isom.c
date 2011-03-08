@@ -1342,6 +1342,22 @@ static isom_sbgp_t *isom_get_sample_to_group( isom_stbl_t *stbl, uint32_t groupi
     return NULL;
 }
 
+static isom_rap_entry_t *isom_add_rap_group_entry( isom_sgpd_t *sgpd )
+{
+    if( !sgpd )
+        return NULL;
+    isom_rap_entry_t *data = malloc( sizeof(isom_rap_entry_t) );
+     if( !data )
+        return NULL;
+    memset( data, 0, sizeof(isom_rap_entry_t) );
+    if( lsmash_add_entry( sgpd->list, data ) )
+    {
+        free( data );
+        return NULL;
+    }
+    return data;
+}
+
 static isom_roll_entry_t *isom_add_roll_group_entry( isom_sgpd_t *sgpd, int16_t roll_distance )
 {
     if( !sgpd )
@@ -1349,6 +1365,7 @@ static isom_roll_entry_t *isom_add_roll_group_entry( isom_sgpd_t *sgpd, int16_t 
     isom_roll_entry_t *data = malloc( sizeof(isom_roll_entry_t) );
      if( !data )
         return NULL;
+    data->description_length = 0;
     data->roll_distance = roll_distance;
     if( lsmash_add_entry( sgpd->list, data ) )
     {
@@ -1984,6 +2001,9 @@ static int isom_add_sgpd( isom_stbl_t *stbl, uint32_t grouping_type )
     sgpd->version = 1;      /* We use version 1 because it is recommended in the spec. */
     switch( grouping_type )
     {
+        case ISOM_GROUP_TYPE_RAP :
+            sgpd->default_length = 1;
+            break;
         case ISOM_GROUP_TYPE_ROLL :
             sgpd->default_length = 2;
             break;
@@ -2525,6 +2545,8 @@ static void isom_remove_trak( isom_trak_entry_t *trak )
     {
         lsmash_remove_list( trak->cache->chunk.pool, lsmash_delete_sample );
         lsmash_remove_list( trak->cache->roll.pool, NULL );
+        if( trak->cache->rap )
+            free( trak->cache->rap );
         free( trak->cache );
     }
     free( trak );   /* Note: the list that contains this trak still has the address of the entry. */
@@ -3579,11 +3601,15 @@ static int isom_write_sgpd( lsmash_bs_t *bs, isom_trak_entry_t *trak, uint32_t g
             return -1;
         switch( sgpd->grouping_type )
         {
-            case ISOM_GROUP_TYPE_ROLL :
+            case ISOM_GROUP_TYPE_RAP :
             {
-                lsmash_bs_put_be16( bs, ((isom_roll_entry_t *)entry->data)->roll_distance );
+                isom_rap_entry_t *rap = (isom_rap_entry_t *)entry->data;
+                lsmash_bs_put_byte( bs, (rap->num_leading_samples_known << 7) | rap->num_leading_samples );
                 break;
             }
+            case ISOM_GROUP_TYPE_ROLL :
+                lsmash_bs_put_be16( bs, ((isom_roll_entry_t *)entry->data)->roll_distance );
+                break;
             default :
                 /* We don't consider other grouping types currently. */
                 // if( sgpd->version == 1 && !sgpd->default_length )
@@ -3847,11 +3873,23 @@ static int isom_check_compatibility( lsmash_root_t *root )
             case ISOM_BRAND_TYPE_MP42 :
                 root->mp4_version2 = 1;
                 break;
-            case ISOM_BRAND_TYPE_AVC1 :
+            case ISOM_BRAND_TYPE_ISOM :
+                root->max_isom_version = LSMASH_MAX( root->max_isom_version, 1 );
+                break;
             case ISOM_BRAND_TYPE_ISO2 :
+                root->max_isom_version = LSMASH_MAX( root->max_isom_version, 2 );
+                break;
             case ISOM_BRAND_TYPE_ISO3 :
+                root->max_isom_version = LSMASH_MAX( root->max_isom_version, 3 );
+                break;
             case ISOM_BRAND_TYPE_ISO4 :
-                root->avc_extensions = 1;
+                root->max_isom_version = LSMASH_MAX( root->max_isom_version, 4 );
+                break;
+            case ISOM_BRAND_TYPE_ISO5 :
+                root->max_isom_version = LSMASH_MAX( root->max_isom_version, 5 );
+                break;
+            case ISOM_BRAND_TYPE_ISO6 :
+                root->max_isom_version = LSMASH_MAX( root->max_isom_version, 6 );
                 break;
             case ISOM_BRAND_TYPE_M4A :
             case ISOM_BRAND_TYPE_M4B :
@@ -3869,6 +3907,21 @@ static int isom_check_compatibility( lsmash_root_t *root )
             case ISOM_BRAND_TYPE_3GR6 :
             case ISOM_BRAND_TYPE_3GS6 :
                 root->max_3gpp_version = LSMASH_MAX( root->max_3gpp_version, 6 );
+                break;
+            default :
+                break;
+        }
+        switch( root->ftyp->compatible_brands[i] )
+        {
+            case ISOM_BRAND_TYPE_AVC1 :
+            case ISOM_BRAND_TYPE_ISO2 :
+            case ISOM_BRAND_TYPE_ISO3 :
+            case ISOM_BRAND_TYPE_ISO4 :
+            case ISOM_BRAND_TYPE_ISO5 :
+            case ISOM_BRAND_TYPE_ISO6 :
+                root->avc_extensions = 1;
+                break;
+            default :
                 break;
         }
     }
@@ -5141,14 +5194,34 @@ static int isom_print_sgpd( lsmash_root_t *root, isom_box_t *box, int level )
         printf( " %s\n", sgpd->default_length ? "(constant)" : "(variable)" );
     }
     isom_iprintf( indent, "entry_count = %"PRIu32"\n", sgpd->list->entry_count );
-    if( sgpd->grouping_type == ISOM_GROUP_TYPE_ROLL )
-        for( lsmash_entry_t *entry = sgpd->list->head; entry; entry = entry->next )
-        {
-            if( sgpd->version == 1 && !sgpd->default_length )
-                isom_iprintf( indent, "description_length[%"PRIu32"] = %"PRIu32"\n", i++, ((isom_roll_entry_t *)entry->data)->description_length );
-            else
-                isom_iprintf( indent, "roll_distance[%"PRIu32"] = %"PRIu16"\n", i++, ((isom_roll_entry_t *)entry->data)->roll_distance );
-        }
+    switch( sgpd->grouping_type )
+    {
+        case ISOM_GROUP_TYPE_RAP :
+            for( lsmash_entry_t *entry = sgpd->list->head; entry; entry = entry->next )
+            {
+                if( sgpd->version == 1 && !sgpd->default_length )
+                    isom_iprintf( indent, "description_length[%"PRIu32"] = %"PRIu32"\n", i++, ((isom_rap_entry_t *)entry->data)->description_length );
+                else
+                {
+                    isom_rap_entry_t *rap = (isom_rap_entry_t *)entry->data;
+                    isom_iprintf( indent++, "entry[%"PRIu32"]\n", i++ );
+                    isom_iprintf( indent, "num_leading_samples_known = %"PRIu8"\n", rap->num_leading_samples_known );
+                    isom_iprintf( indent--, "num_leading_samples = %"PRIu8"\n", rap->num_leading_samples );
+                }
+            }
+            break;
+        case ISOM_GROUP_TYPE_ROLL :
+            for( lsmash_entry_t *entry = sgpd->list->head; entry; entry = entry->next )
+            {
+                if( sgpd->version == 1 && !sgpd->default_length )
+                    isom_iprintf( indent, "description_length[%"PRIu32"] = %"PRIu32"\n", i++, ((isom_roll_entry_t *)entry->data)->description_length );
+                else
+                    isom_iprintf( indent, "roll_distance[%"PRIu32"] = %"PRIu16"\n", i++, ((isom_roll_entry_t *)entry->data)->roll_distance );
+            }
+            break;
+        default :
+            break;
+    }
     return 0;
 }
 
@@ -7208,28 +7281,62 @@ static int isom_read_sgpd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     if( box->version == 1 )
         sgpd->default_length = lsmash_bs_get_be32( bs );
     uint32_t entry_count     = lsmash_bs_get_be32( bs );
-    if( sgpd->grouping_type == ISOM_GROUP_TYPE_ROLL )
+    switch( sgpd->grouping_type )
     {
-        uint64_t pos;
-        for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+        case ISOM_GROUP_TYPE_RAP :
         {
-            isom_roll_entry_t *data = malloc( sizeof(isom_roll_entry_t) );
-            if( !data || lsmash_add_entry( sgpd->list, data ) )
+            uint64_t pos;
+            for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
             {
-                if( data )
-                    free( data );
-                return -1;
+                isom_rap_entry_t *data = malloc( sizeof(isom_rap_entry_t) );
+                if( !data || lsmash_add_entry( sgpd->list, data ) )
+                {
+                    if( data )
+                        free( data );
+                    return -1;
+                }
+                memset( data, 0, sizeof(isom_rap_entry_t) );
+                /* We don't know groups decided by variable description length. If encountering, skip getting of bytes of it. */
+                if( box->version == 1 && !sgpd->default_length )
+                    data->description_length = lsmash_bs_get_be32( bs );
+                else
+                {
+                    uint8_t temp = lsmash_bs_get_byte( bs );
+                    data->num_leading_samples_known = (temp >> 7) & 0x01;
+                    data->num_leading_samples       =  temp       & 0x7f;
+                }
             }
-            memset( data, 0, sizeof(isom_roll_entry_t) );
-            /* We don't know roll_recovery decided by variable description length. If encountering, skip getting of bytes of it. */
-            if( box->version == 1 && !sgpd->default_length )
-                data->description_length = lsmash_bs_get_be32( bs );
-            else
-                data->roll_distance      = lsmash_bs_get_be16( bs );
+            if( entry_count != sgpd->list->entry_count || box->size < pos )
+                printf( "[sgpd] box has extra bytes: %"PRId64"\n", pos - box->size );
+            box->size = pos;
+            break;
         }
-        if( entry_count != sgpd->list->entry_count || box->size < pos )
-            printf( "[sgpd] box has extra bytes: %"PRId64"\n", pos - box->size );
-        box->size = pos;
+        case ISOM_GROUP_TYPE_ROLL :
+        {
+            uint64_t pos;
+            for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+            {
+                isom_roll_entry_t *data = malloc( sizeof(isom_roll_entry_t) );
+                if( !data || lsmash_add_entry( sgpd->list, data ) )
+                {
+                    if( data )
+                        free( data );
+                    return -1;
+                }
+                memset( data, 0, sizeof(isom_roll_entry_t) );
+                /* We don't know groups decided by variable description length. If encountering, skip getting of bytes of it. */
+                if( box->version == 1 && !sgpd->default_length )
+                    data->description_length = lsmash_bs_get_be32( bs );
+                else
+                    data->roll_distance      = lsmash_bs_get_be16( bs );
+            }
+            if( entry_count != sgpd->list->entry_count || box->size < pos )
+                printf( "[sgpd] box has extra bytes: %"PRId64"\n", pos - box->size );
+            box->size = pos;
+            break;
+        }
+        default :
+            break;
     }
     isom_box_common_copy( sgpd, box );
     return isom_add_print_func( root, sgpd, level );
@@ -7811,7 +7918,7 @@ static int isom_update_mdhd_duration( isom_trak_entry_t *trak, uint32_t last_sam
         if( isom_replace_last_sample_delta( stbl, last_sample_delta ) )
             return -1;
         /* Explicit composition information and DTS shifting  */
-        if( cslg || trak->root->qt_compatible )
+        if( cslg || trak->root->qt_compatible || trak->root->max_isom_version >= 4 )
         {
             if( (min_offset <= UINT32_MAX) && (max_offset <= UINT32_MAX) &&
                 (min_cts <= UINT32_MAX) && (2 * max_cts - max2_cts <= UINT32_MAX) )
@@ -7973,6 +8080,117 @@ static int isom_add_dependency_type( isom_trak_entry_t *trak, lsmash_sample_prop
     return isom_add_sdtp_entry( stbl, prop, avc_extensions );
 }
 
+static int isom_group_random_access( isom_trak_entry_t *trak, lsmash_sample_property_t *prop )
+{
+    if( trak->root->max_isom_version < 6 )
+        return 0;
+    isom_stbl_t *stbl = trak->mdia->minf->stbl;
+    isom_sbgp_t *sbgp = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_RAP );
+    isom_sgpd_t *sgpd = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_RAP );
+    if( !sbgp || !sgpd )
+        return 0;
+    uint8_t is_rap = prop->sync_point || prop->partial_sync || (prop->recovery.start_point && prop->recovery.identifier == prop->recovery.complete);
+    isom_rap_group_t *group = trak->cache->rap;
+    if( !group )
+    {
+        /* This sample is the first sample, create a grouping cache. */
+        assert( isom_get_sample_count( trak ) == 1 );
+        group = malloc( sizeof(isom_rap_group_t) );
+        if( !group )
+            return -1;
+        if( is_rap )
+        {
+            group->random_access = isom_add_rap_group_entry( sgpd );
+            group->sample_to_group = isom_add_sbgp_entry( sbgp, 1, sgpd->list->entry_count );
+        }
+        else
+        {
+            /* The first sample is not always random access point. */
+            group->random_access = NULL;
+            group->sample_to_group = isom_add_sbgp_entry( sbgp, 1, 0 );
+        }
+        if( !group->sample_to_group )
+        {
+            free( group );
+            return -1;
+        }
+        /* No need checking if group->sample_to_group exists from here. */
+        group->is_prev_rap = is_rap;
+        trak->cache->rap = group;
+        return 0;
+    }
+    if( group->is_prev_rap )
+    {
+        /* OK. here, the previous sample is a menber of 'rap '. */
+        if( !is_rap )
+        {
+            /* This sample isn't a member of 'rap ' and the previous sample is.
+             * So we create a new group and set 0 on its group_description_index. */
+            group->sample_to_group = isom_add_sbgp_entry( sbgp, 1, 0 );
+            if( !group->sample_to_group )
+            {
+                free( group );
+                return -1;
+            }
+        }
+        else if( !prop->sync_point )
+        {
+            /* Create a new group since there is the possibility the next sample is a leading sample.
+             * This sample is a member of 'rap ', so we set appropriate value on its group_description_index. */
+            if( group->random_access )
+                group->random_access->num_leading_samples_known = 1;
+            group->random_access = isom_add_rap_group_entry( sgpd );
+            group->sample_to_group = isom_add_sbgp_entry( sbgp, 1, sgpd->list->entry_count );
+            if( !group->sample_to_group )
+            {
+                free( group );
+                return -1;
+            }
+        }
+        else    /* The previous and current sample are a member of 'rap ', and the next sample must not be a leading sample. */
+            ++ group->sample_to_group->sample_count;
+    }
+    else if( is_rap )
+    {
+        /* This sample is a member of 'rap ' and the previous sample isn't.
+         * So we create a new group and set appropriate value on its group_description_index. */
+        if( group->random_access )
+            group->random_access->num_leading_samples_known = 1;
+        group->random_access = isom_add_rap_group_entry( sgpd );
+        group->sample_to_group = isom_add_sbgp_entry( sbgp, 1, sgpd->list->entry_count );
+        if( !group->sample_to_group )
+        {
+            free( group );
+            return -1;
+        }
+    }
+    else    /* The previous and current sample aren't a member of 'rap '. */
+        ++ group->sample_to_group->sample_count;
+    /* Obtain the property of the latest random access point group. */
+    if( !is_rap && group->random_access )
+    {
+        if( !group->sample_to_group->group_description_index && prop->leading == ISOM_SAMPLE_LEADING_UNKNOWN )
+        {
+            /* We can no longer know num_leading_samples in this group. */
+            group->random_access->num_leading_samples_known = 0;
+            group->random_access = NULL;
+        }
+        else
+        {
+            if( prop->leading == ISOM_SAMPLE_IS_UNDECODABLE_LEADING || prop->leading == ISOM_SAMPLE_IS_DECODABLE_LEADING )
+                ++ group->random_access->num_leading_samples;
+            else
+            {
+                /* no more consecutive leading samples in this group */
+                group->random_access->num_leading_samples_known = 1;
+                group->random_access = NULL;
+            }
+        }
+    }
+    group->is_prev_rap = is_rap;
+    return 0;
+}
+
 static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_property_t *prop )
 {
     if( !trak->root->avc_extensions )
@@ -7992,10 +8210,12 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_prop
     }
     isom_roll_group_t *group = (isom_roll_group_t *)lsmash_get_entry_data( pool, pool->entry_count );
     uint32_t sample_count = isom_get_sample_count( trak );
-    if( !pool->entry_count || prop->recovery.start_point )
+    if( !group || prop->recovery.start_point )
     {
-        if( pool->entry_count )
+        if( group )
             group->delimited = 1;
+        else
+            assert( sample_count == 1 );
         /* Create a new group. This group is not 'roll' yet, so we set 0 on its group_description_index. */
         group = malloc( sizeof(isom_roll_group_t) );
         if( !group )
@@ -8003,7 +8223,7 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_prop
         memset( group, 0, sizeof(isom_roll_group_t) );
         group->first_sample = sample_count;
         group->recovery_point = prop->recovery.complete;
-        group->sample_to_group = isom_add_sbgp_entry( sbgp, pool->entry_count ? 1 : sample_count, 0 );
+        group->sample_to_group = isom_add_sbgp_entry( sbgp, 1, 0 );
         if( !group->sample_to_group || lsmash_add_entry( pool, group ) )
         {
             free( group );
@@ -8243,7 +8463,10 @@ static int isom_write_pooled_samples( isom_trak_entry_t *trak, lsmash_entry_list
         /* Add leading, independent, disposable and redundant information if needed. */
         if( isom_add_dependency_type( trak, &data->prop ) )
             return -1;
-        /* Group samples into roll recovery type if needed. */
+        /* Group samples into random access point type if needed. */
+        if( isom_group_random_access( trak, &data->prop ) )
+            return -1;
+        /* Group samples into random access recovery point type if needed. */
         if( isom_group_roll_recovery( trak, &data->prop ) )
             return -1;
         if( lsmash_write_sample_data( trak->root, data ) )
@@ -8270,22 +8493,40 @@ static int isom_output_cache( lsmash_root_t *root, uint32_t track_ID )
     if( isom_add_stco_entry( stbl, root->bs->written ) ||
         isom_write_pooled_samples( trak, current->pool ) )
         return -1;
-    isom_sgpd_t *sgpd = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_ROLL );
-    if( !sgpd )
-        return 0;
-    for( lsmash_entry_t *entry = trak->cache->roll.pool->head; entry; entry = entry->next )
+    for( uint32_t i = 0; i < stbl->sgpd_count; i++ )
     {
-        isom_roll_group_t *group = (isom_roll_group_t *)entry->data;
-        if( !group )
-            return -1;
-        if( group->described || !group->roll_recovery )
-            continue;
-        /* roll_distance == 0 must not be used. */
-        if( !group->roll_recovery->roll_distance )
-            lsmash_remove_entry( sgpd->list, sgpd->list->entry_count, NULL );
-        else
-            group->sample_to_group->group_description_index = sgpd->list->entry_count;
-        group->described = 1;
+        isom_sgpd_t *sgpd = stbl->sgpd + i;
+        switch( sgpd->grouping_type )
+        {
+            case ISOM_GROUP_TYPE_RAP :
+            {
+                isom_rap_group_t *group = trak->cache->rap;
+                if( !group )
+                    return -1;
+                if( !group->random_access )
+                    continue;
+                group->random_access->num_leading_samples_known = 1;
+                break;
+            }
+            case ISOM_GROUP_TYPE_ROLL :
+                for( lsmash_entry_t *entry = trak->cache->roll.pool->head; entry; entry = entry->next )
+                {
+                    isom_roll_group_t *group = (isom_roll_group_t *)entry->data;
+                    if( !group )
+                        return -1;
+                    if( group->described || !group->roll_recovery )
+                        continue;
+                    /* roll_distance == 0 must not be used. */
+                    if( !group->roll_recovery->roll_distance )
+                        lsmash_remove_entry( sgpd->list, sgpd->list->entry_count, NULL );
+                    else
+                        group->sample_to_group->group_description_index = sgpd->list->entry_count;
+                    group->described = 1;
+                }
+                break;
+            default :
+                break;
+        }
     }
     return 0;
 }
@@ -9186,6 +9427,9 @@ static uint64_t isom_update_sgpd_size( isom_sgpd_t *sgpd )
     size += (uint64_t)sgpd->list->entry_count * ((sgpd->version == 1) && !sgpd->default_length) * 4;
     switch( sgpd->grouping_type )
     {
+        case ISOM_GROUP_TYPE_RAP :
+            size += sgpd->list->entry_count;
+            break;
         case ISOM_GROUP_TYPE_ROLL :
             size += (uint64_t)sgpd->list->entry_count * 2;
             break;
@@ -10015,6 +10259,19 @@ int lsmash_create_grouping( lsmash_root_t *root, uint32_t track_ID, lsmash_group
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
         return -1;
+    switch( grouping_type )
+    {
+        case ISOM_GROUP_TYPE_RAP :
+            if( root->max_isom_version < 6 )
+                return -1;
+            break;
+        case ISOM_GROUP_TYPE_ROLL :
+            if( !root->avc_extensions )
+                return -1;
+            break;
+        default :
+            break;
+    }
     if( isom_add_sgpd( trak->mdia->minf->stbl, grouping_type ) ||
         isom_add_sbgp( trak->mdia->minf->stbl, grouping_type ) )
         return -1;
