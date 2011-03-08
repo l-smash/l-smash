@@ -1323,9 +1323,9 @@ static isom_sgpd_t *isom_get_sample_group_description( isom_stbl_t *stbl, uint32
         if( !sgpd || !sgpd->list )
             return NULL;
         if( sgpd->grouping_type == grouping_type )
-            break;
+            return sgpd;
     }
-    return sgpd;
+    return NULL;
 }
 
 static isom_sbgp_t *isom_get_sample_to_group( isom_stbl_t *stbl, uint32_t grouping_type )
@@ -1337,9 +1337,9 @@ static isom_sbgp_t *isom_get_sample_to_group( isom_stbl_t *stbl, uint32_t groupi
         if( !sbgp || !sbgp->list )
             return NULL;
         if( sbgp->grouping_type == grouping_type )
-            break;
+            return sbgp;
     }
-    return sbgp;
+    return NULL;
 }
 
 static isom_roll_entry_t *isom_add_roll_group_entry( isom_sgpd_t *sgpd, int16_t roll_distance )
@@ -8032,7 +8032,7 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_prop
         if( group->described )
             continue;
         /* Be careful of consecutive undecodable leading samples after the partial sync sample (i.e. Open-GOP I-picture).
-         * These samples are not able to decode correctly from the recovery point specified in display order.
+         * These samples are not able to decode correctly from the starting point of recovery specified in display order.
          * In this case, therefore, roll_distance will be number of consecutive undecodable leading samples after the partial sync sample plus one. */
         if( group->roll_recovery )
         {

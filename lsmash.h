@@ -885,7 +885,7 @@ typedef enum
     /* allow_ealier */
     QT_SAMPLE_EARLIER_PTS_ALLOWED       = 1,
     /* leading */
-    ISOM_SAMPLE_LEADING_UNKOWN          = 0,
+    ISOM_SAMPLE_LEADING_UNKNOWN         = 0,
     ISOM_SAMPLE_IS_UNDECODABLE_LEADING  = 1,
     ISOM_SAMPLE_IS_NOT_LEADING          = 2,
     ISOM_SAMPLE_IS_DECODABLE_LEADING    = 3,
