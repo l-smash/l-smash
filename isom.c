@@ -8169,7 +8169,7 @@ static int isom_group_random_access( isom_trak_entry_t *trak, lsmash_sample_prop
     /* Obtain the property of the latest random access point group. */
     if( !is_rap && group->random_access )
     {
-        if( !group->sample_to_group->group_description_index && prop->leading == ISOM_SAMPLE_LEADING_UNKNOWN )
+        if( prop->leading == ISOM_SAMPLE_LEADING_UNKNOWN )
         {
             /* We can no longer know num_leading_samples in this group. */
             group->random_access->num_leading_samples_known = 0;
