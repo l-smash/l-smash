@@ -8232,9 +8232,9 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_prop
     }
     else
         ++ group->sample_to_group->sample_count;
+    /* If encountered a sync sample, all recoveries are completed here. */
     if( prop->sync_point )
     {
-        /* All recoveries are completed if encountered a sync sample. */
         for( lsmash_entry_t *entry = pool->head; entry; entry = entry->next )
         {
             group = (isom_roll_group_t *)entry->data;
@@ -8251,31 +8251,16 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_prop
             return -1;
         if( group->described )
             continue;
-        /* Be careful of consecutive undecodable leading samples after the partial sync sample (i.e. Open-GOP I-picture).
-         * These samples are not able to decode correctly from the starting point of recovery specified in display order.
-         * In this case, therefore, roll_distance will be number of consecutive undecodable leading samples after the partial sync sample plus one. */
-        if( group->roll_recovery )
+        if( prop->recovery.identifier == group->recovery_point )
         {
-            ++ group->roll_recovery->roll_distance;
-            if( prop->leading != ISOM_SAMPLE_IS_UNDECODABLE_LEADING )
-            {
-                /* The intra picture that doesn't lead any picture that depend on former groups is substantially an instantaneous decoding picture.
-                 * Therefore, roll_distance of the group that includes this picture as the first sample is zero.
-                 * However, this means this group cannot have random access point, since roll_distance = 0 must not be used. This is not preferable.
-                 * So we treat this group as 'roll' and pick roll_distance = 1 though this treatment is over-estimation. */
-                group->sample_to_group->group_description_index = sgpd->list->entry_count;
-                group->described = 1;
-            }
-        }
-        else if( prop->recovery.identifier == group->recovery_point )
-        {
+            group->described = 1;
             int16_t distance = sample_count - group->first_sample;
-            group->roll_recovery = isom_add_roll_group_entry( sgpd, distance );
-            if( !group->roll_recovery )
-                return -1;
-            group->described = distance || !(prop->independent || (prop->leading == ISOM_SAMPLE_IS_UNDECODABLE_LEADING));
+            /* Add a roll recovery entry only when roll_distance isn't zero since roll_distance = 0 must not be used. */
             if( distance )
             {
+                /* Now, this group is a 'roll'. */
+                if( !isom_add_roll_group_entry( sgpd, distance ) )
+                    return -1;
                 group->sample_to_group->group_description_index = sgpd->list->entry_count;
                 /* All groups before the current group are described. */
                 lsmash_entry_t *current = entry;
@@ -8290,6 +8275,7 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_prop
             break;      /* Avoid evaluating groups, in the pool, having the same identifier for recovery point again. */
         }
     }
+    /* Remove pooled caches that has become unnecessary. */
     for( lsmash_entry_t *entry = pool->head; entry; entry = pool->head )
     {
         group = (isom_roll_group_t *)entry->data;
@@ -8514,13 +8500,6 @@ static int isom_output_cache( lsmash_root_t *root, uint32_t track_ID )
                     isom_roll_group_t *group = (isom_roll_group_t *)entry->data;
                     if( !group )
                         return -1;
-                    if( group->described || !group->roll_recovery )
-                        continue;
-                    /* roll_distance == 0 must not be used. */
-                    if( !group->roll_recovery->roll_distance )
-                        lsmash_remove_entry( sgpd->list, sgpd->list->entry_count, NULL );
-                    else
-                        group->sample_to_group->group_description_index = sgpd->list->entry_count;
                     group->described = 1;
                 }
                 break;

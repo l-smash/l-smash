@@ -1148,15 +1148,14 @@ typedef struct
 
 typedef struct
 {
-    isom_sbgp_entry_t *sample_to_group;         /* the address corresponding to the entry in Sample to Group Box */
-    isom_rap_entry_t  *random_access;           /* the address corresponding to the random access entry in Sample Group Description Box */
-    uint8_t            is_prev_rap;             /* whether the previous sample is a random access point or not */
+    isom_sbgp_entry_t *sample_to_group;     /* the address corresponding to the entry in Sample to Group Box */
+    isom_rap_entry_t  *random_access;       /* the address corresponding to the random access entry in Sample Group Description Box */
+    uint8_t            is_prev_rap;         /* whether the previous sample is a random access point or not */
 } isom_rap_group_t;
 
 typedef struct
 {
     isom_sbgp_entry_t *sample_to_group;     /* the address corresponding to the entry in Sample to Group Box */
-    isom_roll_entry_t *roll_recovery;       /* the address corresponding to the roll recovery entry in Sample Group Description Box */
     uint32_t first_sample;                  /* the number of the first sample of the group */
     uint32_t recovery_point;                /* the identifier necessary for the recovery from its starting point to be completed */
     uint8_t delimited;                      /* the flag if the sample_count is determined */
