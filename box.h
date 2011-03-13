@@ -541,6 +541,13 @@ typedef struct
     uint32_t data_format;       /* copy of sample description type */
 } isom_frma_t;
 
+/* Audio Endian Box */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    int16_t littleEndian;
+} isom_enda_t;
+
 /* MPEG-4 Audio Box */
 typedef struct
 {
@@ -562,6 +569,7 @@ typedef struct
 {
     ISOM_BASEBOX_COMMON;
     isom_frma_t       *frma;            /* Format Box */
+    isom_enda_t       *enda;            /* Audio Endian Box */
     isom_mp4a_t       *mp4a;            /* MPEG-4 Audio Box */
     isom_esds_t       *esds;            /* ES Descriptor Box */
     isom_terminator_t *terminator;      /* Terminator Box */

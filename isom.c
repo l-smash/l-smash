@@ -752,6 +752,15 @@ static int isom_add_frma( isom_wave_t *wave )
     return 0;
 }
 
+static int isom_add_enda( isom_wave_t *wave )
+{
+    if( !wave || wave->enda )
+        return -1;
+    isom_create_box( enda, wave, QT_BOX_TYPE_ENDA );
+    wave->enda = enda;
+    return 0;
+}
+
 static int isom_add_mp4a( isom_wave_t *wave )
 {
     if( !wave || wave->mp4a )
@@ -910,6 +919,17 @@ static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash
             audio->bytesPerPacket = summary->bit_depth / 8;
             audio->bytesPerFrame = audio->bytesPerPacket * summary->channels;   /* sample_size field in stsz box is NOT used. */
             audio->bytesPerSample = 1 + (summary->bit_depth != 8);
+            if( sample_type == QT_CODEC_TYPE_FL32_AUDIO || sample_type == QT_CODEC_TYPE_FL64_AUDIO ||
+                sample_type == QT_CODEC_TYPE_IN24_AUDIO || sample_type == QT_CODEC_TYPE_IN32_AUDIO )
+            {
+                if( isom_add_wave( audio ) ||
+                    isom_add_frma( audio->wave ) ||
+                    isom_add_enda( audio->wave ) ||
+                    isom_add_terminator( audio->wave ) )
+                    goto fail;
+                audio->wave->frma->data_format = sample_type;
+                audio->wave->enda->littleEndian = summary->endianness;
+            }
         }
         else    /* audio->version == 0 */
         {
@@ -2198,6 +2218,7 @@ static void isom_remove_wave( isom_wave_t *wave )
     if( !wave )
         return;
     free( wave->frma );
+    free( wave->enda );
     free( wave->mp4a );
     isom_remove_esds( wave->esds );
     free( wave->terminator );
@@ -2984,7 +3005,7 @@ static int isom_put_avcC( lsmash_bs_t *bs, isom_avcC_t *avcC )
 
 static void isom_put_btrt( lsmash_bs_t *bs, isom_btrt_t *btrt )
 {
-    if( !bs || !btrt )
+    if( !btrt )
         return;
     isom_bs_put_box_common( bs, btrt );
     lsmash_bs_put_be32( bs, btrt->bufferSizeDB );
@@ -2994,8 +3015,8 @@ static void isom_put_btrt( lsmash_bs_t *bs, isom_btrt_t *btrt )
 
 static int isom_write_esds( lsmash_bs_t *bs, isom_esds_t *esds )
 {
-    if( !bs || !esds )
-        return -1;
+    if( !esds )
+        return 0;
     isom_bs_put_box_common( bs, esds );
     return mp4sys_write_ES_Descriptor( bs, esds->ES );
 }
@@ -3006,6 +3027,15 @@ static int isom_write_frma( lsmash_bs_t *bs, isom_frma_t *frma )
         return -1;
     isom_bs_put_box_common( bs, frma );
     lsmash_bs_put_be32( bs, frma->data_format );
+    return lsmash_bs_write_data( bs );
+}
+
+static int isom_write_enda( lsmash_bs_t *bs, isom_enda_t *enda )
+{
+    if( !enda )
+        return 0;
+    isom_bs_put_box_common( bs, enda );
+    lsmash_bs_put_be16( bs, enda->littleEndian );
     return lsmash_bs_write_data( bs );
 }
 
@@ -3034,6 +3064,7 @@ static int isom_write_wave( lsmash_bs_t *bs, isom_wave_t *wave )
     if( lsmash_bs_write_data( bs ) )
         return -1;
     if( isom_write_frma( bs, wave->frma ) ||
+        isom_write_enda( bs, wave->enda ) ||
         isom_write_mp4a( bs, wave->mp4a ) ||
         isom_write_esds( bs, wave->esds ) )
         return -1;
@@ -3152,7 +3183,7 @@ static int isom_write_audio_entry( lsmash_bs_t *bs, lsmash_entry_t *entry )
     lsmash_bs_put_bytes( bs, data->exdata, data->exdata_length );
     if( lsmash_bs_write_data( bs ) )
         return -1;
-    if( data->version && isom_write_wave( bs, data->wave ) )
+    if( isom_write_wave( bs, data->wave ) )
         return -1;
     return isom_write_chan( bs, data->chan );
 }
@@ -4815,6 +4846,18 @@ static int isom_print_frma( lsmash_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
+static int isom_print_enda( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_enda_t *enda = (isom_enda_t *)box;
+    int indent = level;
+    isom_iprintf( indent++, "[enda: Audio Endian Box]\n" );
+    isom_iprintf( indent, "size = %"PRIu64"\n", enda->size );
+    isom_iprintf( indent, "littleEndian = %s\n", enda->littleEndian ? "yes" : "no" );
+    return 0;
+}
+
 static int isom_print_terminator( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
@@ -5428,6 +5471,8 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
             {
                 case QT_BOX_TYPE_FRMA :
                     return isom_print_frma;
+                case QT_BOX_TYPE_ENDA :
+                    return isom_print_enda;
                 case ISOM_BOX_TYPE_ESDS :
                     return isom_print_esds;
                 case QT_BOX_TYPE_TERMINATOR :
@@ -6787,6 +6832,20 @@ static int isom_read_frma( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     return isom_add_print_func( root, frma, level );
 }
 
+static int isom_read_enda( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != QT_BOX_TYPE_WAVE )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( enda, parent, box->type );
+    ((isom_wave_t *)parent)->enda = enda;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    enda->littleEndian = lsmash_bs_get_be16( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( enda, box );
+    return isom_add_print_func( root, enda, level );
+}
+
 static int isom_read_audio_specific( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != QT_BOX_TYPE_WAVE )
@@ -7592,6 +7651,8 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
         {
             case QT_BOX_TYPE_FRMA :
                 return isom_read_frma( root, box, parent, level );
+            case QT_BOX_TYPE_ENDA :
+                return isom_read_enda( root, box, parent, level );
             case ISOM_BOX_TYPE_ESDS :
                 return isom_read_esds( root, box, parent, level );
             case QT_BOX_TYPE_TERMINATOR :
@@ -9128,6 +9189,15 @@ static uint64_t isom_update_frma_size( isom_frma_t *frma )
     return frma->size;
 }
 
+static uint64_t isom_update_enda_size( isom_enda_t *enda )
+{
+    if( !enda )
+        return 0;
+    enda->size = ISOM_DEFAULT_BOX_HEADER_SIZE + 2;
+    CHECK_LARGESIZE( enda->size );
+    return enda->size;
+}
+
 static uint64_t isom_update_mp4a_size( isom_mp4a_t *mp4a )
 {
     if( !mp4a )
@@ -9152,6 +9222,7 @@ static uint64_t isom_update_wave_size( isom_wave_t *wave )
         return 0;
     wave->size = ISOM_DEFAULT_BOX_HEADER_SIZE
         + isom_update_frma_size( wave->frma )
+        + isom_update_enda_size( wave->enda )
         + isom_update_mp4a_size( wave->mp4a )
         + isom_update_esds_size( wave->esds )
         + isom_update_terminator_size( wave->terminator );
@@ -9173,12 +9244,13 @@ static uint64_t isom_update_audio_entry_size( isom_audio_entry_t *audio )
     if( !audio )
         return 0;
     audio->size = ISOM_DEFAULT_BOX_HEADER_SIZE + 28
+        + isom_update_wave_size( audio->wave )
         + isom_update_chan_size( audio->chan )
         + (uint64_t)audio->exdata_length;
     if( audio->version == 1 )
-        audio->size += 16 + isom_update_wave_size( audio->wave );
+        audio->size += 16;
     else if( audio->version == 2 )
-        audio->size += 36 + isom_update_wave_size( audio->wave );
+        audio->size += 36;
     CHECK_LARGESIZE( audio->size );
     return audio->size;
 }
