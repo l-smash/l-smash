@@ -878,8 +878,8 @@ static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash
         else if( sample_type == QT_CODEC_TYPE_LPCM_AUDIO )
             audio->version = 2;
         else if( summary->bit_depth > 16 ||
-            sample_type != QT_CODEC_TYPE_RAW_AUDIO || sample_type != QT_CODEC_TYPE_TWOS_AUDIO ||
-            sample_type != QT_CODEC_TYPE_NONE_AUDIO || sample_type != QT_CODEC_TYPE_NOT_SPECIFIED )
+            (sample_type != QT_CODEC_TYPE_RAW_AUDIO && sample_type != QT_CODEC_TYPE_TWOS_AUDIO &&
+            sample_type != QT_CODEC_TYPE_NONE_AUDIO && sample_type != QT_CODEC_TYPE_NOT_SPECIFIED) )
             audio->version = 1;
         if( audio->version == 2 )
         {
