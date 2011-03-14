@@ -6181,7 +6181,7 @@ static int isom_read_minf( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     isom_box_common_copy( minf, box );
     if( isom_add_print_func( root, minf, level ) )
         return -1;
-    return isom_read_children( root, box, (isom_box_t *)minf, level );
+    return isom_read_children( root, box, minf, level );
 }
 
 static int isom_read_vmhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
@@ -6300,7 +6300,7 @@ static int isom_read_dinf( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     isom_box_common_copy( dinf, box );
     if( isom_add_print_func( root, dinf, level ) )
         return -1;
-    return isom_read_children( root, box, (isom_box_t *)dinf, level );
+    return isom_read_children( root, box, dinf, level );
 }
 
 static int isom_read_dref( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
@@ -6380,7 +6380,7 @@ static int isom_read_stsd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     isom_box_common_copy( stsd, box );
     if( isom_add_print_func( root, stsd, level ) )
         return -1;
-    return isom_read_children( root, box, (isom_box_t *)stsd, level );
+    return isom_read_children( root, box, stsd, level );
 }
 
 static void *isom_sample_description_alloc( uint32_t sample_type )
