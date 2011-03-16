@@ -10930,7 +10930,6 @@ int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_
     /* If there is no available mdat box to write samples, add and write a new one before any chunk offset is decided. */
     if( !trak->root->mdat && isom_new_mdat( trak->root ) )
         return -1;
-    int ret = 0;
     isom_sample_entry_t *sample_entry = (isom_sample_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->stsd->list, sample->index );
     if( !sample_entry )
         return -1;
@@ -10950,15 +10949,16 @@ int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_
             lpcm_sample->cts = cts++;
             lpcm_sample->prop = sample->prop;
             lpcm_sample->index = sample->index;
-            ret = lsmash_append_sample_internal( trak, lpcm_sample );
-            if( ret )
-                break;
+            if( lsmash_append_sample_internal( trak, lpcm_sample ) )
+            {
+                lsmash_delete_sample( lpcm_sample );
+                return -1;
+            }
         }
         lsmash_delete_sample( sample );
+        return 0;
     }
-    else
-        ret = lsmash_append_sample_internal( trak, sample );
-    return ret;
+    return lsmash_append_sample_internal( trak, sample );
 }
 
 /*---- misc functions ----*/
