@@ -56,41 +56,6 @@ typedef struct
         return -1; \
     }
 
-#define ISOM_FULLBOX_CASE \
-         ISOM_BOX_TYPE_MVHD : \
-    case ISOM_BOX_TYPE_IODS : \
-    case ISOM_BOX_TYPE_ESDS : \
-    case ISOM_BOX_TYPE_TKHD : \
-    case QT_BOX_TYPE_CLEF : \
-    case QT_BOX_TYPE_PROF : \
-    case QT_BOX_TYPE_ENOF : \
-    case ISOM_BOX_TYPE_ELST : \
-    case ISOM_BOX_TYPE_MDHD : \
-    case ISOM_BOX_TYPE_HDLR : \
-    case ISOM_BOX_TYPE_VMHD : \
-    case ISOM_BOX_TYPE_SMHD : \
-    case ISOM_BOX_TYPE_HMHD : \
-    case ISOM_BOX_TYPE_NMHD : \
-    case QT_BOX_TYPE_GMIN : \
-    case ISOM_BOX_TYPE_DREF : \
-    case ISOM_BOX_TYPE_URL  : \
-    case ISOM_BOX_TYPE_STSD : \
-    case ISOM_BOX_TYPE_STSL : \
-    case QT_BOX_TYPE_CHAN : \
-    case ISOM_BOX_TYPE_STTS : \
-    case ISOM_BOX_TYPE_CTTS : \
-    case ISOM_BOX_TYPE_CSLG : \
-    case ISOM_BOX_TYPE_STSS : \
-    case QT_BOX_TYPE_STPS : \
-    case ISOM_BOX_TYPE_SDTP : \
-    case ISOM_BOX_TYPE_STSC : \
-    case ISOM_BOX_TYPE_STSZ : \
-    case ISOM_BOX_TYPE_STCO : \
-    case ISOM_BOX_TYPE_CO64 : \
-    case ISOM_BOX_TYPE_SGPD : \
-    case ISOM_BOX_TYPE_SBGP : \
-    case ISOM_BOX_TYPE_CHPL
-
 #define QT_CODEC_TYPE_LPCM_AUDIO_CASE \
          QT_CODEC_TYPE_23NI_AUDIO : \
     case QT_CODEC_TYPE_NONE_AUDIO : \
@@ -105,6 +70,45 @@ typedef struct
     case QT_CODEC_TYPE_NOT_SPECIFIED
 
 /*---- ----*/
+/* Return 1 if the box is fullbox, Otherwise return 0. */
+static int isom_is_fullbox( void *box )
+{
+    uint32_t type = ((isom_box_t *)box)->type;
+    return type == ISOM_BOX_TYPE_MVHD ||
+           type == ISOM_BOX_TYPE_IODS ||
+           type == ISOM_BOX_TYPE_ESDS ||
+           type == ISOM_BOX_TYPE_TKHD ||
+           type == QT_BOX_TYPE_CLEF ||
+           type == QT_BOX_TYPE_PROF ||
+           type == QT_BOX_TYPE_ENOF ||
+           type == ISOM_BOX_TYPE_ELST ||
+           type == ISOM_BOX_TYPE_MDHD ||
+           type == ISOM_BOX_TYPE_HDLR ||
+           type == ISOM_BOX_TYPE_VMHD ||
+           type == ISOM_BOX_TYPE_SMHD ||
+           type == ISOM_BOX_TYPE_HMHD ||
+           type == ISOM_BOX_TYPE_NMHD ||
+           type == QT_BOX_TYPE_GMIN ||
+           type == ISOM_BOX_TYPE_DREF ||
+           type == ISOM_BOX_TYPE_URL  ||
+           type == ISOM_BOX_TYPE_STSD ||
+           type == ISOM_BOX_TYPE_STSL ||
+           type == QT_BOX_TYPE_CHAN ||
+           type == ISOM_BOX_TYPE_STTS ||
+           type == ISOM_BOX_TYPE_CTTS ||
+           type == ISOM_BOX_TYPE_CSLG ||
+           type == ISOM_BOX_TYPE_STSS ||
+           type == QT_BOX_TYPE_STPS ||
+           type == ISOM_BOX_TYPE_SDTP ||
+           type == ISOM_BOX_TYPE_STSC ||
+           type == ISOM_BOX_TYPE_STSZ ||
+           type == ISOM_BOX_TYPE_STCO ||
+           type == ISOM_BOX_TYPE_CO64 ||
+           type == ISOM_BOX_TYPE_SGPD ||
+           type == ISOM_BOX_TYPE_SBGP ||
+           type == ISOM_BOX_TYPE_CHPL;
+}
+
 
 static inline void isom_init_basebox_common( isom_box_t *box, isom_box_t *parent, uint32_t type )
 {
@@ -131,15 +135,10 @@ static void isom_init_box_common( void *box, void *parent, uint32_t type )
         isom_init_basebox_common( (isom_box_t *)box, (isom_box_t *)parent, type );
         return;
     }
-    switch( ((isom_box_t *)box)->type )
-    {
-        case ISOM_FULLBOX_CASE :
-            isom_init_fullbox_common( (isom_box_t *)box, (isom_box_t *)parent, type );
-            break;
-        default :
-            isom_init_basebox_common( (isom_box_t *)box, (isom_box_t *)parent, type );
-            break;
-    }
+    if( isom_is_fullbox( box ) )
+        isom_init_fullbox_common( (isom_box_t *)box, (isom_box_t *)parent, type );
+    else
+        isom_init_basebox_common( (isom_box_t *)box, (isom_box_t *)parent, type );
 }
 
 static void isom_bs_put_basebox_common( lsmash_bs_t *bs, isom_box_t *box )
@@ -173,21 +172,16 @@ static void isom_bs_put_box_common( lsmash_bs_t *bs, void *box )
         bs->error = 1;
         return;
     }
-    isom_box_t *p = (isom_box_t *)box;
-    if( p->parent && p->parent->type == ISOM_BOX_TYPE_STSD )
+    isom_box_t *parent = ((isom_box_t *)box)->parent;
+    if( parent && parent->type == ISOM_BOX_TYPE_STSD )
     {
-        isom_bs_put_basebox_common( bs, p );
+        isom_bs_put_basebox_common( bs, (isom_box_t *)box );
         return;
     }
-    switch( p->type )
-    {
-        case ISOM_FULLBOX_CASE :
-            isom_bs_put_fullbox_common( bs, p );
-            break;
-        default :
-            isom_bs_put_basebox_common( bs, p );
-            break;
-    }
+    if( isom_is_fullbox( box ) )
+        isom_bs_put_fullbox_common( bs, (isom_box_t *)box );
+    else
+        isom_bs_put_basebox_common( bs, (isom_box_t *)box );
 }
 
 static isom_trak_entry_t *isom_get_trak( lsmash_root_t *root, uint32_t track_ID )
@@ -5653,16 +5647,12 @@ static int isom_bs_read_box_common( lsmash_bs_t *bs, isom_box_t *box )
     if( !box->size )
         box->size = UINT64_MAX;
     /* read version and flags */
-    switch( box->type )
+    if( isom_is_fullbox( box ) )
     {
-        case ISOM_FULLBOX_CASE :
-            if( lsmash_bs_read_data( bs, sizeof(uint32_t) ) )
-                return -1;
-            box->version = lsmash_bs_get_byte( bs );
-            box->flags   = lsmash_bs_get_be24( bs );
-            break;
-        default :
-            break;
+        if( lsmash_bs_read_data( bs, sizeof(uint32_t) ) )
+            return -1;
+        box->version = lsmash_bs_get_byte( bs );
+        box->flags   = lsmash_bs_get_be24( bs );
     }
     return 0;
 }
@@ -5694,15 +5684,10 @@ static void isom_box_common_copy( void *dst, void *src )
         isom_basebox_common_copy( (isom_box_t *)dst, (isom_box_t *)src );
         return;
     }
-    switch( ((isom_box_t *)src)->type )
-    {
-        case ISOM_FULLBOX_CASE :
-            isom_fullbox_common_copy( (isom_box_t *)dst, (isom_box_t *)src );
-            break;
-        default :
-            isom_basebox_common_copy( (isom_box_t *)dst, (isom_box_t *)src );
-            break;
-    }
+    if( isom_is_fullbox( src ) )
+        isom_fullbox_common_copy( (isom_box_t *)dst, (isom_box_t *)src );
+    else
+        isom_basebox_common_copy( (isom_box_t *)dst, (isom_box_t *)src );
 }
 
 static void isom_read_box_rest( lsmash_bs_t *bs, isom_box_t *box )
