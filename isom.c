@@ -10869,7 +10869,32 @@ int lsmash_update_movie_modification_time( lsmash_root_t *root )
 }
 
 /*---- sample manipulators ----*/
-int lsmash_append_sample_internal( isom_trak_entry_t *trak, lsmash_sample_t *sample )
+lsmash_sample_t *lsmash_create_sample( uint32_t size )
+{
+    lsmash_sample_t *sample = malloc( sizeof(lsmash_sample_t) );
+    if( !sample )
+        return NULL;
+    memset( sample, 0, sizeof(lsmash_sample_t) );
+    sample->data = malloc( size );
+    if( !sample->data )
+    {
+        free( sample );
+        return NULL;
+    }
+    sample->length = size;
+    return sample;
+}
+
+void lsmash_delete_sample( lsmash_sample_t *sample )
+{
+    if( !sample )
+        return;
+    if( sample->data )
+        free( sample->data );
+    free( sample );
+}
+
+static int lsmash_append_sample_internal( isom_trak_entry_t *trak, lsmash_sample_t *sample )
 {
     /* Add a chunk if needed. */
     /*
@@ -10934,31 +10959,6 @@ int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_
     else
         ret = lsmash_append_sample_internal( trak, sample );
     return ret;
-}
-
-lsmash_sample_t *lsmash_create_sample( uint32_t size )
-{
-    lsmash_sample_t *sample = malloc( sizeof(lsmash_sample_t) );
-    if( !sample )
-        return NULL;
-    memset( sample, 0, sizeof(lsmash_sample_t) );
-    sample->data = malloc( size );
-    if( !sample->data )
-    {
-        free( sample );
-        return NULL;
-    }
-    sample->length = size;
-    return sample;
-}
-
-void lsmash_delete_sample( lsmash_sample_t *sample )
-{
-    if( !sample )
-        return;
-    if( sample->data )
-        free( sample->data );
-    free( sample );
 }
 
 /*---- misc functions ----*/
