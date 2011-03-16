@@ -808,7 +808,7 @@ static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash
         audio->version = (summary->channels > 2 || summary->frequency > UINT16_MAX) ? 2 : 1;
         audio->channelcount = audio->version == 2 ? 3 : LSMASH_MIN( summary->channels, 2 );
         audio->samplesize = 16;
-        audio->compression_ID = -2;     /* assume VBR */
+        audio->compression_ID = QT_COMPRESSION_ID_VARIABLE_COMPRESSION;
         audio->packet_size = 0;
         if( audio->version == 1 )
         {
@@ -823,9 +823,9 @@ static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash
             audio->sizeOfStructOnly = 72;
             audio->audioSampleRate = (union {double d; uint64_t i;}){summary->frequency}.i;
             audio->always7F000000 = 0x7F000000;
-            audio->constBitsPerChannel = 0;
+            audio->constBitsPerChannel = 0;         /* compressed audio */
             audio->formatSpecificFlags = 0;
-            audio->constBytesPerAudioPacket = 0;
+            audio->constBytesPerAudioPacket = 0;    /* variable */
             audio->constLPCMFramesPerAudioPacket = summary->samples_in_frame;
         }
         audio->wave->frma->data_format = sample_type;
@@ -887,8 +887,6 @@ static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash
             audio->sizeOfStructOnly = 72;
             audio->audioSampleRate = (union {double d; uint64_t i;}){summary->frequency}.i;
             audio->always7F000000 = 0x7F000000;
-            audio->constBitsPerChannel = summary->bit_depth;
-            audio->constBytesPerAudioPacket = (audio->constBitsPerChannel * audio->numAudioChannels) / 8;
             audio->constLPCMFramesPerAudioPacket = 1;
             if( summary->sample_format )
                 audio->formatSpecificFlags |= QT_LPCM_FORMAT_FLAG_FLOAT;
@@ -932,8 +930,11 @@ static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash
         {
             audio->channelcount = summary->channels;
             audio->samplesize = summary->bit_depth;
-            audio->compression_ID = 0;
+            audio->compression_ID = QT_COMPRESSION_ID_NOT_COMPRESSED;
         }
+        /* store the actual number of bits per channel and bytes per LPCMFrame, here */
+        audio->constBitsPerChannel = summary->bit_depth;
+        audio->constBytesPerAudioPacket = (audio->constBitsPerChannel * audio->numAudioChannels) / 8;
     }
     else
     {
@@ -10868,19 +10869,8 @@ int lsmash_update_movie_modification_time( lsmash_root_t *root )
 }
 
 /*---- sample manipulators ----*/
-
-int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_t *sample )
+int lsmash_append_sample_internal( isom_trak_entry_t *trak, lsmash_sample_t *sample )
 {
-    /* I myself think max_chunk_duration == 0, which means all samples will be cached on memory, should be prevented.
-       This means removal of a feature that we used to have, but anyway very alone chunk does not make sense. */
-    if( !root || !sample || !sample->data || root->max_chunk_duration == 0 )
-        return -1;
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->cache || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
-        return -1;
-    /* If there is no available mdat box to write samples, add and write a new one before any chunk offset is decided. */
-    if( !trak->root->mdat && isom_new_mdat( trak->root ) )
-        return -1;
     /* Add a chunk if needed. */
     /*
      * FIXME: I think we have to implement "arbitrate chunk handling between tracks" system.
@@ -10895,14 +10885,55 @@ int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_
     int ret = isom_add_chunk( trak, sample );
     if( ret < 0 )
         return -1;
-
     /* ret == 1 means cached samples must be flushed. */
     isom_chunk_t *current = &trak->cache->chunk;
     if( ret == 1 && isom_write_pooled_samples( trak, current->pool ) )
         return -1;
-
     /* anyway the current sample must be pooled. */
     return lsmash_add_entry( current->pool, sample );
+}
+
+int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_t *sample )
+{
+    /* We think max_chunk_duration == 0, which means all samples will be cached on memory, should be prevented.
+       This means removal of a feature that we used to have, but anyway very alone chunk does not make sense. */
+    if( !root || !sample || !sample->data || root->max_chunk_duration == 0 )
+        return -1;
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    if( !trak || !trak->cache || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd )
+        return -1;
+    /* If there is no available mdat box to write samples, add and write a new one before any chunk offset is decided. */
+    if( !trak->root->mdat && isom_new_mdat( trak->root ) )
+        return -1;
+    int ret = 0;
+    isom_sample_entry_t *sample_entry = (isom_sample_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->stsd->list, sample->index );
+    if( !sample_entry )
+        return -1;
+    if( isom_is_lpcm_audio( sample_entry->type ) )
+    {
+        uint32_t frame_size = ((isom_audio_entry_t *)sample_entry)->constBytesPerAudioPacket;
+        uint64_t dts = sample->dts;
+        uint64_t cts = sample->cts;
+        /* Append samples splitted into each LPCMFrame. */
+        for( uint32_t offset = 0; offset < sample->length; offset += frame_size )
+        {
+            lsmash_sample_t *lpcm_sample = lsmash_create_sample( frame_size );
+            if( !lpcm_sample )
+                return -1;
+            memcpy( lpcm_sample->data, sample->data + offset, frame_size );
+            lpcm_sample->dts = dts++;
+            lpcm_sample->cts = cts++;
+            lpcm_sample->prop = sample->prop;
+            lpcm_sample->index = sample->index;
+            ret = lsmash_append_sample_internal( trak, lpcm_sample );
+            if( ret )
+                break;
+        }
+        lsmash_delete_sample( sample );
+    }
+    else
+        ret = lsmash_append_sample_internal( trak, sample );
+    return ret;
 }
 
 lsmash_sample_t *lsmash_create_sample( uint32_t size )
