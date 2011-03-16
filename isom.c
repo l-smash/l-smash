@@ -8352,7 +8352,7 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_prop
 
 /* returns 1 if pooled samples must be flushed. */
 /* FIXME: I wonder if this function should have a extra argument which indicates force_to_flush_cached_chunk.
-   see lsmash_write_sample for detail. */
+   see lsmash_append_sample for detail. */
 static int isom_add_chunk( isom_trak_entry_t *trak, lsmash_sample_t *sample )
 {
     if( !trak->root || !trak->cache || !trak->mdia->mdhd || !trak->mdia->mdhd->timescale ||
@@ -8395,7 +8395,7 @@ static int isom_add_chunk( isom_trak_entry_t *trak, lsmash_sample_t *sample )
     /* re-initialize cache, using the current sample */
     current->sample_description_index = sample->index;
     current->first_dts = sample->dts;
-    /* current->pool must be flushed in lsmash_write_sample() */
+    /* current->pool must be flushed in lsmash_append_sample() */
     return 1;
 }
 
@@ -10855,7 +10855,7 @@ int lsmash_update_movie_modification_time( lsmash_root_t *root )
 
 /*---- sample manipulators ----*/
 
-int lsmash_write_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_t *sample )
+int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_t *sample )
 {
     /* I myself think max_chunk_duration == 0, which means all samples will be cached on memory, should be prevented.
        This means removal of a feature that we used to have, but anyway very alone chunk does not make sense. */
@@ -11129,7 +11129,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
         sample->dts = sample->cts = data.start_time;
         sample->prop.sync_point = 1;
         sample->index = sample_entry;
-        if( lsmash_write_sample( root, chapter_track_ID, sample ) )
+        if( lsmash_append_sample( root, chapter_track_ID, sample ) )
             goto fail;
         free( data.chapter_name );
         data.chapter_name = NULL;

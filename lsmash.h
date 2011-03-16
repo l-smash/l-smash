@@ -1337,7 +1337,7 @@ int lsmash_set_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
 int lsmash_get_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_media_parameters_t *param );
 lsmash_sample_t *lsmash_create_sample( uint32_t size );
 void lsmash_delete_sample( lsmash_sample_t *sample );
-int lsmash_write_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_t *sample );
+int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_t *sample );
 int lsmash_write_mdat_size( lsmash_root_t *root );
 int lsmash_flush_pooled_samples( lsmash_root_t *root, uint32_t track_ID, uint32_t last_sample_delta );
 int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux );
