@@ -61,39 +61,45 @@ typedef struct
 static int isom_is_fullbox( void *box )
 {
     uint32_t type = ((isom_box_t *)box)->type;
-    return type == ISOM_BOX_TYPE_MVHD ||
-           type == ISOM_BOX_TYPE_IODS ||
-           type == ISOM_BOX_TYPE_ESDS ||
-           type == ISOM_BOX_TYPE_TKHD ||
-           type == QT_BOX_TYPE_CLEF ||
-           type == QT_BOX_TYPE_PROF ||
-           type == QT_BOX_TYPE_ENOF ||
-           type == ISOM_BOX_TYPE_ELST ||
-           type == ISOM_BOX_TYPE_MDHD ||
-           type == ISOM_BOX_TYPE_HDLR ||
-           type == ISOM_BOX_TYPE_VMHD ||
-           type == ISOM_BOX_TYPE_SMHD ||
-           type == ISOM_BOX_TYPE_HMHD ||
-           type == ISOM_BOX_TYPE_NMHD ||
-           type == QT_BOX_TYPE_GMIN ||
-           type == ISOM_BOX_TYPE_DREF ||
-           type == ISOM_BOX_TYPE_URL  ||
-           type == ISOM_BOX_TYPE_STSD ||
-           type == ISOM_BOX_TYPE_STSL ||
-           type == QT_BOX_TYPE_CHAN ||
-           type == ISOM_BOX_TYPE_STTS ||
-           type == ISOM_BOX_TYPE_CTTS ||
-           type == ISOM_BOX_TYPE_CSLG ||
-           type == ISOM_BOX_TYPE_STSS ||
-           type == QT_BOX_TYPE_STPS ||
-           type == ISOM_BOX_TYPE_SDTP ||
-           type == ISOM_BOX_TYPE_STSC ||
-           type == ISOM_BOX_TYPE_STSZ ||
-           type == ISOM_BOX_TYPE_STCO ||
-           type == ISOM_BOX_TYPE_CO64 ||
-           type == ISOM_BOX_TYPE_SGPD ||
-           type == ISOM_BOX_TYPE_SBGP ||
-           type == ISOM_BOX_TYPE_CHPL;
+    uint32_t fullbox_table[] = {
+        ISOM_BOX_TYPE_MVHD,
+        ISOM_BOX_TYPE_IODS,
+        ISOM_BOX_TYPE_ESDS,
+        ISOM_BOX_TYPE_TKHD,
+        QT_BOX_TYPE_CLEF,
+        QT_BOX_TYPE_PROF,
+        QT_BOX_TYPE_ENOF,
+        ISOM_BOX_TYPE_ELST,
+        ISOM_BOX_TYPE_MDHD,
+        ISOM_BOX_TYPE_HDLR,
+        ISOM_BOX_TYPE_VMHD,
+        ISOM_BOX_TYPE_SMHD,
+        ISOM_BOX_TYPE_HMHD,
+        ISOM_BOX_TYPE_NMHD,
+        QT_BOX_TYPE_GMIN,
+        ISOM_BOX_TYPE_DREF,
+        ISOM_BOX_TYPE_URL ,
+        ISOM_BOX_TYPE_STSD,
+        ISOM_BOX_TYPE_STSL,
+        QT_BOX_TYPE_CHAN,
+        ISOM_BOX_TYPE_STTS,
+        ISOM_BOX_TYPE_CTTS,
+        ISOM_BOX_TYPE_CSLG,
+        ISOM_BOX_TYPE_STSS,
+        QT_BOX_TYPE_STPS,
+        ISOM_BOX_TYPE_SDTP,
+        ISOM_BOX_TYPE_STSC,
+        ISOM_BOX_TYPE_STSZ,
+        ISOM_BOX_TYPE_STCO,
+        ISOM_BOX_TYPE_CO64,
+        ISOM_BOX_TYPE_SGPD,
+        ISOM_BOX_TYPE_SBGP,
+        ISOM_BOX_TYPE_CHPL
+    };
+    for( int i = 0; i < sizeof(fullbox_table)/sizeof(uint32_t); i++ )
+        if( type == fullbox_table[i] )
+            return 1;
+    return 0;
 }
 
 /* Return 1 if the sample type is LPCM audio, Otherwise return 0. */
