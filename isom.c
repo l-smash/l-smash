@@ -61,7 +61,7 @@ typedef struct
 static int isom_is_fullbox( void *box )
 {
     uint32_t type = ((isom_box_t *)box)->type;
-    uint32_t fullbox_table[] = {
+    static const uint32_t fullbox_table[] = {
         ISOM_BOX_TYPE_MVHD,
         ISOM_BOX_TYPE_IODS,
         ISOM_BOX_TYPE_ESDS,
@@ -4061,7 +4061,7 @@ static char *isom_mp4time2utc( uint64_t mp4time )
     }
     int year = 1904 + year_offset;
     int is_leap = (!(year % 4) && (year % 100)) || !(year % 400);
-    int month_days[13] = { 29, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
+    static const int month_days[13] = { 29, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 };
     int month;
     for( month = 1; month <= 12; month++ )
     {
@@ -11172,9 +11172,9 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
             /* QuickTime Player requires Text Encoding Attribute Box ('encd') if media language is ISO language codes : undefined.
              * Also this box can avoid garbling if the QuickTime text sample is encoded by Unicode characters.
              * Note: 3GPP Timed Text supports only UTF-8 or UTF-16, so this box isn't needed. */
-            uint8_t encd[12] = { 0x00, 0x00, 0x00, 0x0C,        /* size: 12 */
-                                 0x65, 0x6E, 0x63, 0x64,        /* type: 'encd' */
-                                 0x00, 0x00, 0x01, 0x00 };      /* Unicode Encoding */
+            static const uint8_t encd[12] = { 0x00, 0x00, 0x00, 0x0C,       /* size: 12 */
+                                              0x65, 0x6E, 0x63, 0x64,       /* type: 'encd' */
+                                              0x00, 0x00, 0x01, 0x00 };     /* Unicode Encoding */
             memcpy( sample->data + 2 + name_length, encd, 12 );
         }
         sample->dts = sample->cts = data.start_time;
