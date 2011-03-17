@@ -27,6 +27,11 @@
 #include <stdio.h>
 #include <assert.h>
 
+#ifndef lsmash_fseek
+#define lsmash_fseek fseek
+#define lsmash_ftell ftell
+#endif
+
 #include "lsmash.h"
 
 #endif
