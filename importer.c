@@ -240,7 +240,7 @@ static lsmash_audio_summary_t* mp4sys_adts_create_summary( mp4sys_adts_fixed_hea
          * NOTE: This ADTS seems of ISO/IEC 13818-7 (MPEG-2 AAC).
          * It has special object_type_indications, depending on it's profile (Legacy Interface).
          * If ADIF header is not available, it should not have decoder specific information, so AudioObjectType neither.
-         * see ISO/IEC 14496-1, 8.6.7 DecoderSpecificInfo and 14496-3 Subpart 9: MPEG-1/2 Audio in MPEG-4.
+         * see ISO/IEC 14496-1, DecoderSpecificInfo and 14496-3 Subpart 9: MPEG-1/2 Audio in MPEG-4.
          */
         summary->object_type_indication = header->profile_ObjectType + MP4SYS_OBJECT_TYPE_Audio_ISO_13818_7_Main_Profile;
         summary->aot                    = MP4A_AUDIO_OBJECT_TYPE_NULL;
@@ -597,7 +597,7 @@ static int mp4sys_mp3_get_accessunit( mp4sys_importer_t* importer, uint32_t trac
     uint32_t frame_size;
     if( header->layer == MP4SYS_LAYER_I )
     {
-        /* mp1's 'slot' is 4 bytes unit. see 11172-3, 2.4.2.1 Audio Sequence General. */
+        /* mp1's 'slot' is 4 bytes unit. see 11172-3, Audio Sequence General. */
         frame_size = ( 12 * 1000 * bitrate / frequency + header->padding_bit ) * 4;
     }
     else

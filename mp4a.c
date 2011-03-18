@@ -32,8 +32,8 @@
     implementation of part of ISO/IEC 14496-3 (ISO/IEC 14496-1 relevant)
 ***************************************************************************/
 
-/* ISO/IEC 14496-3 1.6.3.4 samplingFrequencyIndex, Table 1.16 Sampling Frequency Index */
-/* ISO/IEC 14496-3 4.5 Overall data structure, Table 4.68 Sampling frequency mapping */
+/* ISO/IEC 14496-3 samplingFrequencyIndex */
+/* ISO/IEC 14496-3 Sampling frequency mapping */
 const uint32_t mp4a_AAC_frequency_table[13][4] = {
     /* threshold, exact, idx, idx_for_sbr */
     {      92017, 96000, 0x0,         0xF }, /* SBR is not allowed */
@@ -51,9 +51,9 @@ const uint32_t mp4a_AAC_frequency_table[13][4] = {
     {          0,  7350, 0xB,         0xF } /* samplingFrequencyIndex for GASpecificConfig is 0xB (same as 8000Hz). */
 };
 
-/* ISO/IEC 14496-3 1.6 Interface to ISO/IEC 14496-1 (MPEG-4 Systems), Table 1.13 Syntax of AudioSpecificConfig(). */
+/* ISO/IEC 14496-3 Interface to ISO/IEC 14496-1 (MPEG-4 Systems), Syntax of AudioSpecificConfig(). */
 /* This structure is represent of regularized AudioSpecificConfig. */
-/* for actual definition, see Table 1.14 Syntax of GetAudioObjectType() for audioObjectType and extensionAudioObjectType. */
+/* for actual definition, see Syntax of GetAudioObjectType() for audioObjectType and extensionAudioObjectType. */
 typedef struct {
     lsmash_mp4a_aac_sbr_mode sbr_mode; /* L-SMASH's original, including sbrPresent flag. */
     lsmash_mp4a_AudioObjectType audioObjectType;
@@ -95,8 +95,8 @@ typedef struct {
     */
 } mp4a_AudioSpecificConfig_t;
 
-/* ISO/IEC 14496-3 4.4.1 Decoder configuration (GASpecificConfig), Table 4.1 Syntax of GASpecificConfig() */
-/* ISO/IEC 14496-3 4.5.1.1 GASpecificConfig(), Table 4.68 Sampling frequency mapping */
+/* ISO/IEC 14496-3 Decoder configuration (GASpecificConfig), Syntax of GASpecificConfig() */
+/* ISO/IEC 14496-3 GASpecificConfig(), Sampling frequency mapping */
 typedef struct {
     uint8_t frameLengthFlag; /* FIXME: AAC_SSR: shall be 0, Others: depends, but noramally 0. */
     uint8_t dependsOnCoreCoder; /* FIXME: used if scalable AAC. */
@@ -137,7 +137,7 @@ typedef struct {
     */
 } mp4a_GASpecificConfig_t;
 
-/* ISO/IEC 14496-3 9.2 MPEG_1_2_SpecificConfig, Table 9.1 MPEG_1_2_SpecificConfig() */
+/* ISO/IEC 14496-3 MPEG_1_2_SpecificConfig */
 typedef struct {
     uint8_t extension; /* shall be 0. */
 } mp4a_MPEG_1_2_SpecificConfig_t;
@@ -294,7 +294,7 @@ mp4a_AudioSpecificConfig_t* mp4a_create_AudioSpecificConfig( lsmash_mp4a_AudioOb
     if( sbr_mode != MP4A_AAC_SBR_NOT_SPECIFIED )
     {
         /* SBR limitation */
-        /* see ISO/IEC 14496-3 Table, 1.5.2.3 Levels within the profiles, 1.11 Levels for the High Efficiency AAC Profile */
+        /* see ISO/IEC 14496-3 Levels within the profiles / Levels for the High Efficiency AAC Profile */
         if( i < 0x3 )
         {
             free( asc );
@@ -500,7 +500,7 @@ mp4a_audioProfileLevelIndication mp4a_get_audioProfileLevelIndication( lsmash_au
     case MP4A_AUDIO_OBJECT_TYPE_Layer_1:
     case MP4A_AUDIO_OBJECT_TYPE_Layer_2:
     case MP4A_AUDIO_OBJECT_TYPE_Layer_3:
-        pli = MP4A_AUDIO_PLI_NOT_SPECIFIED; /* 14496-3, 1.5.2 Audio profiles and levels, does not allow any pli. */
+        pli = MP4A_AUDIO_PLI_NOT_SPECIFIED; /* 14496-3, Audio profiles and levels, does not allow any pli. */
         break;
     default:
         pli = MP4A_AUDIO_PLI_NOT_SPECIFIED; /* something we don't know/support, or what the spec never covers. */

@@ -27,14 +27,14 @@
     MPEG-4 Systems
 ***************************************************************************/
 
-/* 8.6.4.2 Semantics Table 3 - ODProfileLevelIndication Values */
+/* ODProfileLevelIndication */
 typedef enum {
     MP4SYS_OD_PLI_Forbidden     = 0x00, /* Forbidden */
     MP4SYS_OD_PLI_NOT_SPECIFIED = 0xFE, /* no OD profile specified */
     MP4SYS_OD_PLI_NONE_REQUIRED = 0xFF, /* no OD capability required */
 } mp4sys_ODProfileLevelIndication;
 
-/* 8.6.4.2 Semantics Table 4 - sceneProfileLevelIndication Values */
+/* sceneProfileLevelIndication */
 typedef enum {
     MP4SYS_SCENE_PLI_RESERVED      = 0x00, /* Reserved for ISO use */
     MP4SYS_SCENE_PLI_Simple2D_L1   = 0x01, /* Simple 2D L1 */
@@ -60,7 +60,7 @@ typedef enum {
     MP4SYS_SCENE_PLI_NONE_REQUIRED = 0xFF, /* no scene capability required */
 } mp4sys_sceneProfileLevelIndication;
 
-/* 14496-2 Annex G Profile and level indication and restrictions */
+/* 14496-2 Profile and level indication and restrictions */
 typedef enum {
     MP4SYS_VISUAL_PLI_Reserved                       = 0x00, /* 0b00000000, Reserved */
     MP4SYS_VISUAL_PLI_Simple_PL1                     = 0x01, /* 0b00000001, Simple Profile/Level 1 */
@@ -82,7 +82,7 @@ typedef enum {
     MP4SYS_VISUAL_PLI_Basic_Animated_Texture_PL1     = 0x71, /* 0b01110001, Basic Animated Texture Profile/Level 1 */
     MP4SYS_VISUAL_PLI_Basic_Animated_Texture_PL2     = 0x72, /* 0b01110010, Basic Animated Texture Profile/Level 2 */
     MP4SYS_VISUAL_PLI_H264_AVC                       = 0x7F, /* ISO/IEC 14496-10 Advanced Video Codec / H.264, defined in ISO/IEC 14496-1:2001/Amd.7:2004 */
-                                                             /* NOTE: Some other implementations seeem to use 0x15(0b00010101) for AVC, but I think that's wrong. */
+                                                             /* NOTE: Some other implementations seem to use 0x15(0b00010101) for AVC, but I think that's wrong. */
     MP4SYS_VISUAL_PLI_Hybrid_PL1                     = 0x81, /* 0b10000001, Hybrid Profile/Level 1 */
     MP4SYS_VISUAL_PLI_Hybrid_PL2                     = 0x82, /* 0b10000010, Hybrid Profile/Level 2 */
     MP4SYS_VISUAL_PLI_Advanced_Real_Time_Simple_PL1  = 0x91, /* 0b10010001, Advanced Real Time Simple Profile/Level 1 */
@@ -105,7 +105,7 @@ typedef enum {
     MP4SYS_VISUAL_PLI_NONE_REQUIRED                  = 0xFF, /* no visual capability required */
 } mp4sys_visualProfileLevelIndication;
 
-/* 8.6.4.2 Semantics Table 5 - graphicsProfileLevelIndication Values */
+/* graphicsProfileLevelIndication */
 typedef enum {
     MP4SYS_GRAPHICS_PLI_RESERVED         = 0x00, /* Reserved for ISO use */
     MP4SYS_GRAPHICS_PLI_Simple2D_L1      = 0x01, /* Simple2D profile L1 */

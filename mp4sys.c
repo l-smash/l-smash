@@ -35,7 +35,7 @@
     MPEG-4 Systems
 ***************************************************************************/
 
-/* 8.2.1 Overview Table 1 - List of Class Tags for Descriptors */
+/* List of Class Tags for Descriptors */
 typedef enum {
     MP4SYS_DESCRIPTOR_TAG_Forbidden                           = 0x00, /* Forbidden */
     MP4SYS_DESCRIPTOR_TAG_ObjectDescrTag                      = 0x01, /* ObjectDescrTag */
@@ -71,21 +71,21 @@ typedef enum {
     MP4SYS_DESCRIPTOR_TAG_SmpteCameraPositionDescrTag         = 0x4A, /* SmpteCameraPositionDescrTag */
     MP4SYS_DESCRIPTOR_TAG_Forbidden1                          = 0xFF, /* Forbidden */
 } mp4sys_descriptor_tag;
-//    MP4SYS_DESCRIPTOR_TAG_ES_DescrRemoveRefTag                = 0x07, /* FIXME: (command tag), see 14496-14 3.1.3 Object Descriptors */
+//    MP4SYS_DESCRIPTOR_TAG_ES_DescrRemoveRefTag                = 0x07, /* FIXME: (command tag), see 14496-14 Object Descriptors */
 
 typedef struct {
     uint32_t size; // 2^28 at most
     mp4sys_descriptor_tag tag;
 } mp4sys_descriptor_head_t;
 
-/* 8.6.7 DecoderSpecificInfo */
+/* DecoderSpecificInfo */
 /* contents varies depends on ObjectTypeIndication and StreamType. */
 typedef struct {
     mp4sys_descriptor_head_t header;
     uint8_t* data;
 } mp4sys_DecoderSpecificInfo_t;
 
-/* 8.6.6 DecoderConfigDescriptor */
+/* DecoderConfigDescriptor */
 typedef struct {
     mp4sys_descriptor_head_t header;
     lsmash_mp4sys_object_type_indication objectTypeIndication;
@@ -97,13 +97,13 @@ typedef struct {
     uint32_t avgBitrate; /* 0 if VBR */
     mp4sys_DecoderSpecificInfo_t* decSpecificInfo;  /* can be NULL. */
     /* 14496-1 seems to say if we are in IOD(InitialObjectDescriptor), we might use this.
-       See 8.6.20, 8.6.19 ExtensionProfileLevelDescr, 8.7.3.2 The Initial Object Descriptor.
+       See ExtensionProfileLevelDescr, The Initial Object Descriptor.
        But I don't think this is mandatory despite 14496-1, because 14496-14 says, in OD or IOD,
        we have to use ES_ID_Inc instead of ES_Descriptor, which does not have DecoderConfigDescriptor. */
     // profileLevelIndicationIndexDescriptor profileLevelIndicationIndexDescr [0..255];
 } mp4sys_DecoderConfigDescriptor_t;
 
-/* 8.6.8 SLConfigDescriptor */
+/* SLConfigDescriptor */
 typedef struct {
     mp4sys_descriptor_head_t header;
     uint8_t predefined; /* MP4 file that does not use URL_Flag shall have constant value 0x02 */
@@ -111,7 +111,7 @@ typedef struct {
        without external references */
 } mp4sys_SLConfigDescriptor_t;
 
-/* 8.6.5 ES_Descriptor */
+/* ES_Descriptor */
 typedef struct
 {
     mp4sys_descriptor_head_t header;
@@ -148,13 +148,13 @@ typedef struct
     */
 } mp4sys_ES_Descriptor_t;
 
-/* 14496-14 3.1.3 Object Descriptors (ES_ID_Inc) */
+/* 14496-14 Object Descriptors (ES_ID_Inc) */
 typedef struct {
     mp4sys_descriptor_head_t header;
     uint32_t Track_ID;
 } mp4sys_ES_ID_Inc_t;
 
-/* 14496-1 8.6.3 ObjectDescriptor / 8.6.4 InitialObjectDescriptor */
+/* 14496-1 ObjectDescriptor / InitialObjectDescriptor */
 typedef struct {
     mp4sys_descriptor_head_t header;
     uint16_t ObjectDescriptorID;
@@ -418,7 +418,7 @@ int mp4sys_to_InitialObjectDescriptor(
 static inline uint32_t mp4sys_get_descriptor_size( uint32_t payload_size_in_byte )
 {
     /* descriptor length will be split into 7bits
-       see 14496-1 16.3.3 Expandable classes and J.1 Length encoding of descriptors and commands */
+       see 14496-1 Expandable classes and Length encoding of descriptors and commands */
     uint32_t i;
     for( i = 1; payload_size_in_byte >> ( 7 * i ) ; i++);
     return payload_size_in_byte + i + 1; /* +1 means tag's space */
@@ -504,7 +504,7 @@ static int mp4sys_put_descriptor_header( lsmash_bs_t *bs, mp4sys_descriptor_head
         return -1;
     lsmash_bs_put_byte( bs, header->tag );
     /* descriptor length will be splitted into 7bits
-       see 14496-1 16.3.3 Expandable classes and J.1 Length encoding of descriptors and commands */
+       see 14496-1 Expandable classes and Length encoding of descriptors and commands */
     for( uint32_t i = mp4sys_get_descriptor_size( header->size ) - header->size - 2; i; i-- ){
         lsmash_bs_put_byte( bs, ( header->size >> ( 7 * i ) ) | 0x80 );
     }

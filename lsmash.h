@@ -969,25 +969,25 @@ typedef enum
     ISOM_SAMPLE_HAS_NO_REDUNDANCY       = 2,
 } lsmash_sample_property_code;
 
-/* 8.6.6.2 Semantics Table 6 - objectTypeIndication Values */
+/* objectTypeIndication */
 typedef enum {
     MP4SYS_OBJECT_TYPE_Forbidden                          = 0x00,   /* Forbidden */
     MP4SYS_OBJECT_TYPE_Systems_ISO_14496_1                = 0x01,   /* Systems ISO/IEC 14496-1 */
     /* For all 14496-1 streams unless specifically indicated to the contrary.
-       Scene Description scenes, which are identified with StreamType=0x03 (see Table 7), using
-       this object type value shall use the BIFSConfig specified in section 9.3.5.2.2 of this
-       specification. */
+       Scene Description scenes, which are identified with StreamType=0x03, using
+       this object type value shall use the BIFSConfig. */
     MP4SYS_OBJECT_TYPE_Systems_ISO_14496_1_BIFSv2         = 0x02,   /* Systems ISO/IEC 14496-1 */
-    /* This object type shall be used, with StreamType=0x03 (see Table 7), for Scene
-       Description streams that use the BIFSv2Config specified in section 9.3.5.3.2 of this
-       specification. Its use with other StreamTypes is reserved. */
+    /* This object type shall be used, with StreamType=0x03, for Scene
+       Description streams that use the BIFSv2Config.
+       Its use with other StreamTypes is reserved. */
 
     MP4SYS_OBJECT_TYPE_Interaction_Stream                 = 0x03,   /* Interaction Stream */
     MP4SYS_OBJECT_TYPE_Extended_BIFS                      = 0x04,   /* Extended BIFS */
     /* Used, with StreamType=0x03, for Scene Description streams that use the BIFSConfigEx; its use with
        other StreamTypes is reserved. (Was previously reserved for MUCommandStream but not used for that purpose.) */
     MP4SYS_OBJECT_TYPE_AFX_Stream                         = 0x05,   /* AFX Stream */
-    /* Used, with StreamType=0x03, for Scene Description streams that use the AFXConfig; its use with other StreamTypes is reserved. */
+    /* Used, with StreamType=0x03, for Scene Description streams that use the AFXConfig;
+       its use with other StreamTypes is reserved. */
     MP4SYS_OBJECT_TYPE_Font_Data_Stream                   = 0x06,   /* Font Data Stream */
     MP4SYS_OBJECT_TYPE_Synthetised_Texture                = 0x07,   /* Synthetised Texture */
     MP4SYS_OBJECT_TYPE_Text_Stream                        = 0x08,   /* Text Stream */
@@ -996,11 +996,11 @@ typedef enum {
     MP4SYS_OBJECT_TYPE_Visual_H264_ISO_14496_10           = 0x21,   /* Visual ITU-T Recommendation H.264 | ISO/IEC 14496-10 */
     /* The actual object types are within the DecoderSpecificInfo and defined in H.264 | 14496-10. */
     MP4SYS_OBJECT_TYPE_Parameter_Sets_H_264_ISO_14496_10  = 0x22,   /* Parameter Sets for ITU-T Recommendation H.264 | ISO/IEC 14496-10 */
-    /* The actual object types are within the DecoderSpecificInfo and defined in 14496-2, Annex K. */
+    /* The actual object types are within the DecoderSpecificInfo and defined in 14496-2. */
 
     MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3                  = 0x40,   /* Audio ISO/IEC 14496-3 (MPEG-4 Audio) */
     //MP4SYS_OBJECT_TYPE_MP4A_AUDIO = 0x40,
-    /* The actual object types are defined in 14496-3 and are in the DecoderSpecificInfo as specified in 14496-3 subpart 1 subclause 6.2.1. */
+    /* The actual object types are defined in 14496-3 and are in the DecoderSpecificInfo as specified in 14496-3. */
 
     MP4SYS_OBJECT_TYPE_Visual_ISO_13818_2_Simple_Profile  = 0x60,   /* Visual ISO/IEC 13818-2 Simple Profile (MPEG-2 Video) */
     MP4SYS_OBJECT_TYPE_Visual_ISO_13818_2_Main_Profile    = 0x61,   /* Visual ISO/IEC 13818-2 Main Profile */
@@ -1044,17 +1044,17 @@ typedef enum {
        shall be treated as if the ObjectTypeIndication had been set to 0x01. */
 } lsmash_mp4sys_object_type_indication;
 
-/* 8.6.6.2 Semantics Table 7 - streamType Values */
+/* streamType */
 typedef enum {
     MP4SYS_STREAM_TYPE_Forbidden               = 0x00,  /* Forbidden */
-    MP4SYS_STREAM_TYPE_ObjectDescriptorStream  = 0x01,  /* ObjectDescriptorStream (see 8.5) */
-    MP4SYS_STREAM_TYPE_ClockReferenceStream    = 0x02,  /* ClockReferenceStream (see 10.2.5) */
-    MP4SYS_STREAM_TYPE_SceneDescriptionStream  = 0x03,  /* SceneDescriptionStream (see 9.2.1) */
+    MP4SYS_STREAM_TYPE_ObjectDescriptorStream  = 0x01,  /* ObjectDescriptorStream */
+    MP4SYS_STREAM_TYPE_ClockReferenceStream    = 0x02,  /* ClockReferenceStream */
+    MP4SYS_STREAM_TYPE_SceneDescriptionStream  = 0x03,  /* SceneDescriptionStream */
     MP4SYS_STREAM_TYPE_VisualStream            = 0x04,  /* VisualStream */
     MP4SYS_STREAM_TYPE_AudioStream             = 0x05,  /* AudioStream */
     MP4SYS_STREAM_TYPE_MPEG7Stream             = 0x06,  /* MPEG7Stream */
-    MP4SYS_STREAM_TYPE_IPMPStream              = 0x07,  /* IPMPStream (see 8.3.2) */
-    MP4SYS_STREAM_TYPE_ObjectContentInfoStream = 0x08,  /* ObjectContentInfoStream (see 8.4.2) */
+    MP4SYS_STREAM_TYPE_IPMPStream              = 0x07,  /* IPMPStream */
+    MP4SYS_STREAM_TYPE_ObjectContentInfoStream = 0x08,  /* ObjectContentInfoStream */
     MP4SYS_STREAM_TYPE_MPEGJStream             = 0x09,  /* MPEGJStream */
     MP4SYS_STREAM_TYPE_InteractionStream       = 0x0A,  /* Interaction Stream */
     MP4SYS_STREAM_TYPE_IPMPToolStream          = 0x0B,  /* IPMPToolStream */
@@ -1062,7 +1062,7 @@ typedef enum {
     MP4SYS_STREAM_TYPE_StreamingText           = 0x0D,  /* StreamingText */
 } lsmash_mp4sys_stream_type;
 
-/* ISO/IEC 14496-3 1.6.2.2 Payloads, Table 1.15 Audio Object Types */
+/* Audio Object Types */
 typedef enum {
     MP4A_AUDIO_OBJECT_TYPE_NULL                           = 0,
     MP4A_AUDIO_OBJECT_TYPE_AAC_MAIN                       = 1,  /* ISO/IEC 14496-3 subpart 4 */
@@ -1106,7 +1106,7 @@ typedef enum {
     MP4A_AUDIO_OBJECT_TYPE_SAOC                           = 43, /* ISO/IEC 23003-2 */
 } lsmash_mp4a_AudioObjectType;
 
-/* see ISO/IEC 14496-3 1.6.5 Signaling of SBR, Table 1.22 SBR Signaling and Corresponding Decoder Behavior */
+/* see ISO/IEC 14496-3 Signaling of SBR, SBR Signaling and Corresponding Decoder Behavior */
 typedef enum {
     MP4A_AAC_SBR_NOT_SPECIFIED = 0x0,   /* not mention to SBR presence. Implicit signaling. */
     MP4A_AAC_SBR_NONE,                  /* explicitly signals SBR does not present. Useless in general. */
@@ -1155,7 +1155,6 @@ typedef struct {
 } lsmash_adhoc_remux_t;
 
 /* L-SMASH's original structure, summary of audio/video stream configuration */
-/* FIXME: I wonder whether this struct should blong to namespace of "isom" or not. */
 /* NOTE: For audio, currently assuming AAC-LC. */
 
 #define LSMASH_BASE_SUMMARY \
