@@ -508,7 +508,7 @@ static int mp4sys_put_descriptor_header( lsmash_bs_t *bs, mp4sys_descriptor_head
     for( uint32_t i = mp4sys_get_descriptor_size( header->size ) - header->size - 2; i; i-- ){
         lsmash_bs_put_byte( bs, ( header->size >> ( 7 * i ) ) | 0x80 );
     }
-    lsmash_bs_put_byte( bs, header->size );
+    lsmash_bs_put_byte( bs, header->size & 0x7F );
     return 0;
 }
 
