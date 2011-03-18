@@ -29,9 +29,6 @@
 #ifdef __MINGW32__
 #define lsmash_fseek fseeko64
 #define lsmash_ftell ftello64
-#else
-#define lsmash_fseek fseek
-#define lsmash_ftell ftell
 #endif
 
 #endif
