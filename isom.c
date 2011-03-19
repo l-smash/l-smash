@@ -8135,507 +8135,6 @@ int lsmash_update_track_duration( lsmash_root_t *root, uint32_t track_ID, uint32
     return trak->edts && trak->edts->elst ? 0 : isom_update_tkhd_duration( trak );
 }
 
-static int isom_add_size( isom_trak_entry_t *trak, uint32_t sample_size )
-{
-    if( !sample_size )
-        return -1;
-    return isom_add_stsz_entry( trak->mdia->minf->stbl, sample_size );
-}
-
-static int isom_add_sync_point( isom_trak_entry_t *trak, uint32_t sample_number, lsmash_sample_property_t *prop )
-{
-    isom_stbl_t *stbl = trak->mdia->minf->stbl;
-    isom_cache_t *cache = trak->cache;
-    if( !prop->sync_point )         /* no null check for prop */
-    {
-        if( cache->all_sync )
-        {
-            if( !stbl->stss && isom_add_stss( stbl ) )
-                return -1;
-            if( isom_add_stss_entry( stbl, 1 ) )    /* Declare here the first sample is a sync sample. */
-                return -1;
-            cache->all_sync = 0;
-        }
-        return 0;
-    }
-    if( cache->all_sync )     /* We don't need stss box if all samples are sync sample. */
-        return 0;
-    if( !stbl->stss )
-    {
-        if( isom_get_sample_count( trak ) == 1 )
-        {
-            cache->all_sync = 1;    /* Also the first sample is a sync sample. */
-            return 0;
-        }
-        if( isom_add_stss( stbl ) )
-            return -1;
-    }
-    return isom_add_stss_entry( stbl, sample_number );
-}
-
-static int isom_add_partial_sync( isom_trak_entry_t *trak, uint32_t sample_number, lsmash_sample_property_t *prop )
-{
-    if( !trak->root->qt_compatible )
-        return 0;
-    if( !prop->partial_sync )       /* no null check for prop */
-        return 0;
-    isom_stbl_t *stbl = trak->mdia->minf->stbl;
-    if( !stbl->stps && isom_add_stps( stbl ) )
-        return -1;
-    return isom_add_stps_entry( stbl, sample_number );
-}
-
-static int isom_add_dependency_type( isom_trak_entry_t *trak, lsmash_sample_property_t *prop )
-{
-    if( !trak->root->qt_compatible && !trak->root->avc_extensions )
-        return 0;
-    uint8_t avc_extensions = trak->root->avc_extensions;
-    isom_stbl_t *stbl = trak->mdia->minf->stbl;
-    if( stbl->sdtp )
-        return isom_add_sdtp_entry( stbl, prop, avc_extensions );
-    if( !prop->allow_earlier && !prop->leading && !prop->independent && !prop->disposable && !prop->redundant )  /* no null check for prop */
-        return 0;
-    if( isom_add_sdtp( stbl ) )
-        return -1;
-    uint32_t count = isom_get_sample_count( trak );
-    /* fill past samples with ISOM_SAMPLE_*_UNKNOWN */
-    lsmash_sample_property_t null_prop = { 0 };
-    for( uint32_t i = 1; i < count; i++ )
-        if( isom_add_sdtp_entry( stbl, &null_prop, avc_extensions ) )
-            return -1;
-    return isom_add_sdtp_entry( stbl, prop, avc_extensions );
-}
-
-static int isom_group_random_access( isom_trak_entry_t *trak, lsmash_sample_property_t *prop )
-{
-    if( trak->root->max_isom_version < 6 )
-        return 0;
-    isom_stbl_t *stbl = trak->mdia->minf->stbl;
-    isom_sbgp_t *sbgp = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_RAP );
-    isom_sgpd_t *sgpd = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_RAP );
-    if( !sbgp || !sgpd )
-        return 0;
-    uint8_t is_rap = prop->sync_point || prop->partial_sync || (prop->recovery.start_point && prop->recovery.identifier == prop->recovery.complete);
-    isom_rap_group_t *group = trak->cache->rap;
-    if( !group )
-    {
-        /* This sample is the first sample, create a grouping cache. */
-        assert( isom_get_sample_count( trak ) == 1 );
-        group = malloc( sizeof(isom_rap_group_t) );
-        if( !group )
-            return -1;
-        if( is_rap )
-        {
-            group->random_access = isom_add_rap_group_entry( sgpd );
-            group->sample_to_group = isom_add_sbgp_entry( sbgp, 1, sgpd->list->entry_count );
-        }
-        else
-        {
-            /* The first sample is not always random access point. */
-            group->random_access = NULL;
-            group->sample_to_group = isom_add_sbgp_entry( sbgp, 1, 0 );
-        }
-        if( !group->sample_to_group )
-        {
-            free( group );
-            return -1;
-        }
-        /* No need checking if group->sample_to_group exists from here. */
-        group->is_prev_rap = is_rap;
-        trak->cache->rap = group;
-        return 0;
-    }
-    if( group->is_prev_rap )
-    {
-        /* OK. here, the previous sample is a menber of 'rap '. */
-        if( !is_rap )
-        {
-            /* This sample isn't a member of 'rap ' and the previous sample is.
-             * So we create a new group and set 0 on its group_description_index. */
-            group->sample_to_group = isom_add_sbgp_entry( sbgp, 1, 0 );
-            if( !group->sample_to_group )
-            {
-                free( group );
-                return -1;
-            }
-        }
-        else if( !prop->sync_point )
-        {
-            /* Create a new group since there is the possibility the next sample is a leading sample.
-             * This sample is a member of 'rap ', so we set appropriate value on its group_description_index. */
-            if( group->random_access )
-                group->random_access->num_leading_samples_known = 1;
-            group->random_access = isom_add_rap_group_entry( sgpd );
-            group->sample_to_group = isom_add_sbgp_entry( sbgp, 1, sgpd->list->entry_count );
-            if( !group->sample_to_group )
-            {
-                free( group );
-                return -1;
-            }
-        }
-        else    /* The previous and current sample are a member of 'rap ', and the next sample must not be a leading sample. */
-            ++ group->sample_to_group->sample_count;
-    }
-    else if( is_rap )
-    {
-        /* This sample is a member of 'rap ' and the previous sample isn't.
-         * So we create a new group and set appropriate value on its group_description_index. */
-        if( group->random_access )
-            group->random_access->num_leading_samples_known = 1;
-        group->random_access = isom_add_rap_group_entry( sgpd );
-        group->sample_to_group = isom_add_sbgp_entry( sbgp, 1, sgpd->list->entry_count );
-        if( !group->sample_to_group )
-        {
-            free( group );
-            return -1;
-        }
-    }
-    else    /* The previous and current sample aren't a member of 'rap '. */
-        ++ group->sample_to_group->sample_count;
-    /* Obtain the property of the latest random access point group. */
-    if( !is_rap && group->random_access )
-    {
-        if( prop->leading == ISOM_SAMPLE_LEADING_UNKNOWN )
-        {
-            /* We can no longer know num_leading_samples in this group. */
-            group->random_access->num_leading_samples_known = 0;
-            group->random_access = NULL;
-        }
-        else
-        {
-            if( prop->leading == ISOM_SAMPLE_IS_UNDECODABLE_LEADING || prop->leading == ISOM_SAMPLE_IS_DECODABLE_LEADING )
-                ++ group->random_access->num_leading_samples;
-            else
-            {
-                /* no more consecutive leading samples in this group */
-                group->random_access->num_leading_samples_known = 1;
-                group->random_access = NULL;
-            }
-        }
-    }
-    group->is_prev_rap = is_rap;
-    return 0;
-}
-
-static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_property_t *prop )
-{
-    if( !trak->root->avc_extensions )
-        return 0;
-    isom_stbl_t *stbl = trak->mdia->minf->stbl;
-    isom_sbgp_t *sbgp = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_ROLL );
-    isom_sgpd_t *sgpd = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_ROLL );
-    if( !sbgp || !sgpd )
-        return 0;
-    lsmash_entry_list_t *pool = trak->cache->roll.pool;
-    if( !pool )
-    {
-        pool = lsmash_create_entry_list();
-        if( !pool )
-            return -1;
-        trak->cache->roll.pool = pool;
-    }
-    isom_roll_group_t *group = (isom_roll_group_t *)lsmash_get_entry_data( pool, pool->entry_count );
-    uint32_t sample_count = isom_get_sample_count( trak );
-    if( !group || prop->recovery.start_point )
-    {
-        if( group )
-            group->delimited = 1;
-        else
-            assert( sample_count == 1 );
-        /* Create a new group. This group is not 'roll' yet, so we set 0 on its group_description_index. */
-        group = malloc( sizeof(isom_roll_group_t) );
-        if( !group )
-            return -1;
-        memset( group, 0, sizeof(isom_roll_group_t) );
-        group->first_sample = sample_count;
-        group->recovery_point = prop->recovery.complete;
-        group->sample_to_group = isom_add_sbgp_entry( sbgp, 1, 0 );
-        if( !group->sample_to_group || lsmash_add_entry( pool, group ) )
-        {
-            free( group );
-            return -1;
-        }
-    }
-    else
-        ++ group->sample_to_group->sample_count;
-    /* If encountered a sync sample, all recoveries are completed here. */
-    if( prop->sync_point )
-    {
-        for( lsmash_entry_t *entry = pool->head; entry; entry = entry->next )
-        {
-            group = (isom_roll_group_t *)entry->data;
-            if( !group )
-                return -1;
-            group->described = 1;
-        }
-        return 0;
-    }
-    for( lsmash_entry_t *entry = pool->head; entry; entry = entry->next )
-    {
-        group = (isom_roll_group_t *)entry->data;
-        if( !group )
-            return -1;
-        if( group->described )
-            continue;
-        if( prop->recovery.identifier == group->recovery_point )
-        {
-            group->described = 1;
-            int16_t distance = sample_count - group->first_sample;
-            /* Add a roll recovery entry only when roll_distance isn't zero since roll_distance = 0 must not be used. */
-            if( distance )
-            {
-                /* Now, this group is a 'roll'. */
-                if( !isom_add_roll_group_entry( sgpd, distance ) )
-                    return -1;
-                group->sample_to_group->group_description_index = sgpd->list->entry_count;
-                /* All groups before the current group are described. */
-                lsmash_entry_t *current = entry;
-                for( entry = pool->head; entry != current; entry = entry->next )
-                {
-                    group = (isom_roll_group_t *)entry->data;
-                    if( !group )
-                        return -1;
-                    group->described = 1;
-                }
-            }
-            break;      /* Avoid evaluating groups, in the pool, having the same identifier for recovery point again. */
-        }
-    }
-    /* Remove pooled caches that has become unnecessary. */
-    for( lsmash_entry_t *entry = pool->head; entry; entry = pool->head )
-    {
-        group = (isom_roll_group_t *)entry->data;
-        if( !group )
-            return -1;
-        if( !group->delimited || !group->described )
-            break;
-        if( lsmash_remove_entry_direct( pool, entry, NULL ) )
-            return -1;
-    }
-    return 0;
-}
-
-/* returns 1 if pooled samples must be flushed. */
-/* FIXME: I wonder if this function should have a extra argument which indicates force_to_flush_cached_chunk.
-   see lsmash_append_sample for detail. */
-static int isom_add_chunk( isom_trak_entry_t *trak, lsmash_sample_t *sample )
-{
-    if( !trak->root || !trak->cache || !trak->mdia->mdhd || !trak->mdia->mdhd->timescale ||
-        !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
-        return -1;
-    isom_chunk_t *current = &trak->cache->chunk;
-    if( current->chunk_number == 0 )
-    {
-        /* Very initial settings, just once per trak */
-        current->pool = lsmash_create_entry_list();
-        if( !current->pool )
-            return -1;
-        current->chunk_number = 1;
-        current->sample_description_index = sample->index;
-        current->first_dts = 0;
-    }
-    if( sample->dts < current->first_dts )
-        return -1; /* easy error check. */
-    double chunk_duration = (double)(sample->dts - current->first_dts) / trak->mdia->mdhd->timescale;
-    if( trak->root->max_chunk_duration >= chunk_duration && current->sample_description_index == sample->index )
-        return 0; /* no need to flush current cached chunk, the current sample must be put into that. */
-
-    /* NOTE: chunk relative stuff must be pushed into root after a chunk is fully determined with its contents. */
-    /* now current cached chunk is fixed, actually add chunk relative properties to root accordingly. */
-
-    isom_stbl_t *stbl = trak->mdia->minf->stbl;
-    isom_stsc_t *stsc = stbl->stsc;
-    /* Add a new chunk sequence in this track if needed. */
-    if( !stsc->list->tail || current->sample_description_index != sample->index ||
-        current->pool->entry_count != ((isom_stsc_entry_t *)stsc->list->tail->data)->samples_per_chunk )
-    {
-        if( isom_add_stsc_entry( stbl, current->chunk_number, current->pool->entry_count, current->sample_description_index ) )
-            return -1;
-    }
-    /* Add a new chunk offset in this track here. */
-    if( isom_add_stco_entry( stbl, trak->root->bs->written ) )
-        return -1;
-    /* update cache information */
-    ++ current->chunk_number;
-    /* re-initialize cache, using the current sample */
-    current->sample_description_index = sample->index;
-    current->first_dts = sample->dts;
-    /* current->pool must be flushed in lsmash_append_sample() */
-    return 1;
-}
-
-static int isom_add_dts( isom_trak_entry_t *trak, uint64_t dts )
-{
-    if( !trak->cache || !trak->mdia->minf->stbl->stts || !trak->mdia->minf->stbl->stts->list )
-        return -1;
-    isom_stbl_t *stbl = trak->mdia->minf->stbl;
-    isom_stts_t *stts = stbl->stts;
-    if( !stts->list->entry_count )
-    {
-        if( isom_add_stts_entry( stbl, dts ) )
-            return -1;
-        trak->cache->timestamp.dts = dts;
-        return 0;
-    }
-    if( dts <= trak->cache->timestamp.dts )
-        return -1;
-    uint32_t sample_delta = dts - trak->cache->timestamp.dts;
-    isom_stts_entry_t *data = (isom_stts_entry_t *)stts->list->tail->data;
-    if( data->sample_delta == sample_delta )
-        ++ data->sample_count;
-    else if( isom_add_stts_entry( stbl, sample_delta ) )
-        return -1;
-    trak->cache->timestamp.dts = dts;
-    return 0;
-}
-
-static int isom_add_cts( isom_trak_entry_t *trak, uint64_t cts )
-{
-    if( !trak->cache )
-        return -1;
-    isom_stbl_t *stbl = trak->mdia->minf->stbl;
-    isom_ctts_t *ctts = stbl->ctts;
-    if( !ctts )
-    {
-        if( cts == trak->cache->timestamp.dts )
-        {
-            trak->cache->timestamp.cts = cts;
-            return 0;
-        }
-        /* Add ctts box and the first ctts entry. */
-        if( isom_add_ctts( stbl ) || isom_add_ctts_entry( stbl, 0 ) )
-            return -1;
-        uint32_t sample_count = isom_get_sample_count( trak );
-        ctts = stbl->ctts;
-        isom_ctts_entry_t *data = (isom_ctts_entry_t *)ctts->list->head->data;
-        if( sample_count != 1 )
-        {
-            data->sample_count = isom_get_sample_count( trak ) - 1;
-            if( isom_add_ctts_entry( stbl, cts - trak->cache->timestamp.dts ) )
-                return -1;
-        }
-        else
-            data->sample_offset = cts;
-        trak->cache->timestamp.cts = cts;
-        return 0;
-    }
-    if( !ctts->list )
-        return -1;
-    isom_ctts_entry_t *data = (isom_ctts_entry_t *)ctts->list->tail->data;
-    uint32_t sample_offset = cts - trak->cache->timestamp.dts;
-    if( data->sample_offset == sample_offset )
-        ++ data->sample_count;
-    else if( isom_add_ctts_entry( stbl, sample_offset ) )
-        return -1;
-    trak->cache->timestamp.cts = cts;
-    return 0;
-}
-
-static int isom_add_timestamp( isom_trak_entry_t *trak, uint64_t dts, uint64_t cts )
-{
-    if( cts < dts )
-        return -1;
-    if( isom_get_sample_count( trak ) > 1 && isom_add_dts( trak, dts ) )
-        return -1;
-    return isom_add_cts( trak, cts );
-}
-
-static int lsmash_write_sample_data( lsmash_root_t *root, lsmash_sample_t *sample )
-{
-    if( !root || !root->mdat || !root->bs || !root->bs->stream )
-        return -1;
-    lsmash_bs_put_bytes( root->bs, sample->data, sample->length );
-    if( lsmash_bs_write_data( root->bs ) )
-        return -1;
-    root->mdat->size += sample->length;
-    return 0;
-}
-
-static int isom_write_pooled_samples( isom_trak_entry_t *trak, lsmash_entry_list_t *pool )
-{
-    if( !trak->root || !trak->cache )
-        return -1;
-    for( lsmash_entry_t *entry = pool->head; entry; entry = entry->next )
-    {
-        lsmash_sample_t *data = (lsmash_sample_t *)entry->data;
-        if( !data || !data->data )
-            return -1;
-        /* Add a sample_size and increment sample_count. */
-        if( isom_add_size( trak, data->length ) )
-            return -1;
-        /* Add a decoding timestamp and a composition timestamp. */
-        if( isom_add_timestamp( trak, data->dts, data->cts ) )
-            return -1;
-        /* Add a sync point if needed. */
-        if( isom_add_sync_point( trak, isom_get_sample_count( trak ), &data->prop ) )
-            return -1;
-        /* Add a partial sync point if needed. */
-        if( isom_add_partial_sync( trak, isom_get_sample_count( trak ), &data->prop ) )
-            return -1;
-        /* Add leading, independent, disposable and redundant information if needed. */
-        if( isom_add_dependency_type( trak, &data->prop ) )
-            return -1;
-        /* Group samples into random access point type if needed. */
-        if( isom_group_random_access( trak, &data->prop ) )
-            return -1;
-        /* Group samples into random access recovery point type if needed. */
-        if( isom_group_roll_recovery( trak, &data->prop ) )
-            return -1;
-        if( lsmash_write_sample_data( trak->root, data ) )
-            return -1;
-    }
-    lsmash_remove_entries( pool, lsmash_delete_sample );
-    return 0;
-}
-
-static int isom_output_cache( lsmash_root_t *root, uint32_t track_ID )
-{
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->cache || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl ||
-        !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
-        return -1;
-    isom_chunk_t *current = &trak->cache->chunk;
-    if( !current->pool )
-        return 0;   /* no caches */
-    isom_stbl_t *stbl = trak->mdia->minf->stbl;
-    if( !stbl->stsc->list->tail ||
-        current->pool->entry_count != ((isom_stsc_entry_t *)stbl->stsc->list->tail->data)->samples_per_chunk )
-        if( isom_add_stsc_entry( stbl, current->chunk_number, current->pool->entry_count, current->sample_description_index ) )
-            return -1;
-    if( isom_add_stco_entry( stbl, root->bs->written ) ||
-        isom_write_pooled_samples( trak, current->pool ) )
-        return -1;
-    for( uint32_t i = 0; i < stbl->sgpd_count; i++ )
-    {
-        isom_sgpd_t *sgpd = stbl->sgpd + i;
-        switch( sgpd->grouping_type )
-        {
-            case ISOM_GROUP_TYPE_RAP :
-            {
-                isom_rap_group_t *group = trak->cache->rap;
-                if( !group )
-                    return -1;
-                if( !group->random_access )
-                    continue;
-                group->random_access->num_leading_samples_known = 1;
-                break;
-            }
-            case ISOM_GROUP_TYPE_ROLL :
-                for( lsmash_entry_t *entry = trak->cache->roll.pool->head; entry; entry = entry->next )
-                {
-                    isom_roll_group_t *group = (isom_roll_group_t *)entry->data;
-                    if( !group )
-                        return -1;
-                    group->described = 1;
-                }
-                break;
-            default :
-                break;
-        }
-    }
-    return 0;
-}
-
 int lsmash_set_avc_config( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number,
     uint8_t configurationVersion, uint8_t AVCProfileIndication, uint8_t profile_compatibility, uint8_t AVCLevelIndication, uint8_t lengthSizeMinusOne,
     uint8_t chroma_format, uint8_t bit_depth_luma_minus8, uint8_t bit_depth_chroma_minus8 )
@@ -10551,13 +10050,6 @@ int lsmash_set_last_sample_delta( lsmash_root_t *root, uint32_t track_ID, uint32
     return lsmash_update_track_duration( root, track_ID, sample_delta );
 }
 
-int lsmash_flush_pooled_samples( lsmash_root_t *root, uint32_t track_ID, uint32_t last_sample_delta )
-{
-    if( isom_output_cache( root, track_ID ) )
-        return -1;
-    return lsmash_set_last_sample_delta( root, track_ID, last_sample_delta );
-}
-
 void lsmash_destroy_root( lsmash_root_t *root )
 {
     if( !root )
@@ -10681,8 +10173,461 @@ void lsmash_delete_sample( lsmash_sample_t *sample )
     free( sample );
 }
 
-static int isom_append_sample_internal( isom_trak_entry_t *trak, lsmash_sample_t *sample )
+static uint32_t isom_add_size( isom_trak_entry_t *trak, uint32_t sample_size )
 {
+    if( !sample_size || isom_add_stsz_entry( trak->mdia->minf->stbl, sample_size ) )
+        return 0;
+    return isom_get_sample_count( trak );
+}
+
+static int isom_add_dts( isom_trak_entry_t *trak, uint64_t dts )
+{
+    if( !trak->cache || !trak->mdia->minf->stbl->stts || !trak->mdia->minf->stbl->stts->list )
+        return -1;
+    isom_stbl_t *stbl = trak->mdia->minf->stbl;
+    isom_stts_t *stts = stbl->stts;
+    if( !stts->list->entry_count )
+    {
+        if( isom_add_stts_entry( stbl, dts ) )
+            return -1;
+        trak->cache->timestamp.dts = dts;
+        return 0;
+    }
+    if( dts <= trak->cache->timestamp.dts )
+        return -1;
+    uint32_t sample_delta = dts - trak->cache->timestamp.dts;
+    isom_stts_entry_t *data = (isom_stts_entry_t *)stts->list->tail->data;
+    if( data->sample_delta == sample_delta )
+        ++ data->sample_count;
+    else if( isom_add_stts_entry( stbl, sample_delta ) )
+        return -1;
+    trak->cache->timestamp.dts = dts;
+    return 0;
+}
+
+static int isom_add_cts( isom_trak_entry_t *trak, uint64_t cts )
+{
+    if( !trak->cache )
+        return -1;
+    isom_stbl_t *stbl = trak->mdia->minf->stbl;
+    isom_ctts_t *ctts = stbl->ctts;
+    if( !ctts )
+    {
+        if( cts == trak->cache->timestamp.dts )
+        {
+            trak->cache->timestamp.cts = cts;
+            return 0;
+        }
+        /* Add ctts box and the first ctts entry. */
+        if( isom_add_ctts( stbl ) || isom_add_ctts_entry( stbl, 0 ) )
+            return -1;
+        uint32_t sample_count = isom_get_sample_count( trak );
+        ctts = stbl->ctts;
+        isom_ctts_entry_t *data = (isom_ctts_entry_t *)ctts->list->head->data;
+        if( sample_count != 1 )
+        {
+            data->sample_count = isom_get_sample_count( trak ) - 1;
+            if( isom_add_ctts_entry( stbl, cts - trak->cache->timestamp.dts ) )
+                return -1;
+        }
+        else
+            data->sample_offset = cts;
+        trak->cache->timestamp.cts = cts;
+        return 0;
+    }
+    if( !ctts->list )
+        return -1;
+    isom_ctts_entry_t *data = (isom_ctts_entry_t *)ctts->list->tail->data;
+    uint32_t sample_offset = cts - trak->cache->timestamp.dts;
+    if( data->sample_offset == sample_offset )
+        ++ data->sample_count;
+    else if( isom_add_ctts_entry( stbl, sample_offset ) )
+        return -1;
+    trak->cache->timestamp.cts = cts;
+    return 0;
+}
+
+static int isom_add_timestamp( isom_trak_entry_t *trak, uint64_t dts, uint64_t cts )
+{
+    if( cts < dts )
+        return -1;
+    if( isom_get_sample_count( trak ) > 1 && isom_add_dts( trak, dts ) )
+        return -1;
+    return isom_add_cts( trak, cts );
+}
+
+static int isom_add_sync_point( isom_trak_entry_t *trak, uint32_t sample_number, lsmash_sample_property_t *prop )
+{
+    isom_stbl_t *stbl = trak->mdia->minf->stbl;
+    isom_cache_t *cache = trak->cache;
+    if( !prop->sync_point )         /* no null check for prop */
+    {
+        if( cache->all_sync )
+        {
+            if( !stbl->stss && isom_add_stss( stbl ) )
+                return -1;
+            if( isom_add_stss_entry( stbl, 1 ) )    /* Declare here the first sample is a sync sample. */
+                return -1;
+            cache->all_sync = 0;
+        }
+        return 0;
+    }
+    if( cache->all_sync )     /* We don't need stss box if all samples are sync sample. */
+        return 0;
+    if( !stbl->stss )
+    {
+        if( isom_get_sample_count( trak ) == 1 )
+        {
+            cache->all_sync = 1;    /* Also the first sample is a sync sample. */
+            return 0;
+        }
+        if( isom_add_stss( stbl ) )
+            return -1;
+    }
+    return isom_add_stss_entry( stbl, sample_number );
+}
+
+static int isom_add_partial_sync( isom_trak_entry_t *trak, uint32_t sample_number, lsmash_sample_property_t *prop )
+{
+    if( !trak->root->qt_compatible )
+        return 0;
+    if( !prop->partial_sync )       /* no null check for prop */
+        return 0;
+    isom_stbl_t *stbl = trak->mdia->minf->stbl;
+    if( !stbl->stps && isom_add_stps( stbl ) )
+        return -1;
+    return isom_add_stps_entry( stbl, sample_number );
+}
+
+static int isom_add_dependency_type( isom_trak_entry_t *trak, lsmash_sample_property_t *prop )
+{
+    if( !trak->root->qt_compatible && !trak->root->avc_extensions )
+        return 0;
+    uint8_t avc_extensions = trak->root->avc_extensions;
+    isom_stbl_t *stbl = trak->mdia->minf->stbl;
+    if( stbl->sdtp )
+        return isom_add_sdtp_entry( stbl, prop, avc_extensions );
+    if( !prop->allow_earlier && !prop->leading && !prop->independent && !prop->disposable && !prop->redundant )  /* no null check for prop */
+        return 0;
+    if( isom_add_sdtp( stbl ) )
+        return -1;
+    uint32_t count = isom_get_sample_count( trak );
+    /* fill past samples with ISOM_SAMPLE_*_UNKNOWN */
+    lsmash_sample_property_t null_prop = { 0 };
+    for( uint32_t i = 1; i < count; i++ )
+        if( isom_add_sdtp_entry( stbl, &null_prop, avc_extensions ) )
+            return -1;
+    return isom_add_sdtp_entry( stbl, prop, avc_extensions );
+}
+
+static int isom_group_random_access( isom_trak_entry_t *trak, lsmash_sample_property_t *prop )
+{
+    if( trak->root->max_isom_version < 6 )
+        return 0;
+    isom_stbl_t *stbl = trak->mdia->minf->stbl;
+    isom_sbgp_t *sbgp = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_RAP );
+    isom_sgpd_t *sgpd = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_RAP );
+    if( !sbgp || !sgpd )
+        return 0;
+    uint8_t is_rap = prop->sync_point || prop->partial_sync || (prop->recovery.start_point && prop->recovery.identifier == prop->recovery.complete);
+    isom_rap_group_t *group = trak->cache->rap;
+    if( !group )
+    {
+        /* This sample is the first sample, create a grouping cache. */
+        assert( isom_get_sample_count( trak ) == 1 );
+        group = malloc( sizeof(isom_rap_group_t) );
+        if( !group )
+            return -1;
+        if( is_rap )
+        {
+            group->random_access = isom_add_rap_group_entry( sgpd );
+            group->sample_to_group = isom_add_sbgp_entry( sbgp, 1, sgpd->list->entry_count );
+        }
+        else
+        {
+            /* The first sample is not always random access point. */
+            group->random_access = NULL;
+            group->sample_to_group = isom_add_sbgp_entry( sbgp, 1, 0 );
+        }
+        if( !group->sample_to_group )
+        {
+            free( group );
+            return -1;
+        }
+        /* No need checking if group->sample_to_group exists from here. */
+        group->is_prev_rap = is_rap;
+        trak->cache->rap = group;
+        return 0;
+    }
+    if( group->is_prev_rap )
+    {
+        /* OK. here, the previous sample is a menber of 'rap '. */
+        if( !is_rap )
+        {
+            /* This sample isn't a member of 'rap ' and the previous sample is.
+             * So we create a new group and set 0 on its group_description_index. */
+            group->sample_to_group = isom_add_sbgp_entry( sbgp, 1, 0 );
+            if( !group->sample_to_group )
+            {
+                free( group );
+                return -1;
+            }
+        }
+        else if( !prop->sync_point )
+        {
+            /* Create a new group since there is the possibility the next sample is a leading sample.
+             * This sample is a member of 'rap ', so we set appropriate value on its group_description_index. */
+            if( group->random_access )
+                group->random_access->num_leading_samples_known = 1;
+            group->random_access = isom_add_rap_group_entry( sgpd );
+            group->sample_to_group = isom_add_sbgp_entry( sbgp, 1, sgpd->list->entry_count );
+            if( !group->sample_to_group )
+            {
+                free( group );
+                return -1;
+            }
+        }
+        else    /* The previous and current sample are a member of 'rap ', and the next sample must not be a leading sample. */
+            ++ group->sample_to_group->sample_count;
+    }
+    else if( is_rap )
+    {
+        /* This sample is a member of 'rap ' and the previous sample isn't.
+         * So we create a new group and set appropriate value on its group_description_index. */
+        if( group->random_access )
+            group->random_access->num_leading_samples_known = 1;
+        group->random_access = isom_add_rap_group_entry( sgpd );
+        group->sample_to_group = isom_add_sbgp_entry( sbgp, 1, sgpd->list->entry_count );
+        if( !group->sample_to_group )
+        {
+            free( group );
+            return -1;
+        }
+    }
+    else    /* The previous and current sample aren't a member of 'rap '. */
+        ++ group->sample_to_group->sample_count;
+    /* Obtain the property of the latest random access point group. */
+    if( !is_rap && group->random_access )
+    {
+        if( prop->leading == ISOM_SAMPLE_LEADING_UNKNOWN )
+        {
+            /* We can no longer know num_leading_samples in this group. */
+            group->random_access->num_leading_samples_known = 0;
+            group->random_access = NULL;
+        }
+        else
+        {
+            if( prop->leading == ISOM_SAMPLE_IS_UNDECODABLE_LEADING || prop->leading == ISOM_SAMPLE_IS_DECODABLE_LEADING )
+                ++ group->random_access->num_leading_samples;
+            else
+            {
+                /* no more consecutive leading samples in this group */
+                group->random_access->num_leading_samples_known = 1;
+                group->random_access = NULL;
+            }
+        }
+    }
+    group->is_prev_rap = is_rap;
+    return 0;
+}
+
+static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_property_t *prop )
+{
+    if( !trak->root->avc_extensions )
+        return 0;
+    isom_stbl_t *stbl = trak->mdia->minf->stbl;
+    isom_sbgp_t *sbgp = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_ROLL );
+    isom_sgpd_t *sgpd = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_ROLL );
+    if( !sbgp || !sgpd )
+        return 0;
+    lsmash_entry_list_t *pool = trak->cache->roll.pool;
+    if( !pool )
+    {
+        pool = lsmash_create_entry_list();
+        if( !pool )
+            return -1;
+        trak->cache->roll.pool = pool;
+    }
+    isom_roll_group_t *group = (isom_roll_group_t *)lsmash_get_entry_data( pool, pool->entry_count );
+    uint32_t sample_count = isom_get_sample_count( trak );
+    if( !group || prop->recovery.start_point )
+    {
+        if( group )
+            group->delimited = 1;
+        else
+            assert( sample_count == 1 );
+        /* Create a new group. This group is not 'roll' yet, so we set 0 on its group_description_index. */
+        group = malloc( sizeof(isom_roll_group_t) );
+        if( !group )
+            return -1;
+        memset( group, 0, sizeof(isom_roll_group_t) );
+        group->first_sample = sample_count;
+        group->recovery_point = prop->recovery.complete;
+        group->sample_to_group = isom_add_sbgp_entry( sbgp, 1, 0 );
+        if( !group->sample_to_group || lsmash_add_entry( pool, group ) )
+        {
+            free( group );
+            return -1;
+        }
+    }
+    else
+        ++ group->sample_to_group->sample_count;
+    /* If encountered a sync sample, all recoveries are completed here. */
+    if( prop->sync_point )
+    {
+        for( lsmash_entry_t *entry = pool->head; entry; entry = entry->next )
+        {
+            group = (isom_roll_group_t *)entry->data;
+            if( !group )
+                return -1;
+            group->described = 1;
+        }
+        return 0;
+    }
+    for( lsmash_entry_t *entry = pool->head; entry; entry = entry->next )
+    {
+        group = (isom_roll_group_t *)entry->data;
+        if( !group )
+            return -1;
+        if( group->described )
+            continue;
+        if( prop->recovery.identifier == group->recovery_point )
+        {
+            group->described = 1;
+            int16_t distance = sample_count - group->first_sample;
+            /* Add a roll recovery entry only when roll_distance isn't zero since roll_distance = 0 must not be used. */
+            if( distance )
+            {
+                /* Now, this group is a 'roll'. */
+                if( !isom_add_roll_group_entry( sgpd, distance ) )
+                    return -1;
+                group->sample_to_group->group_description_index = sgpd->list->entry_count;
+                /* All groups before the current group are described. */
+                lsmash_entry_t *current = entry;
+                for( entry = pool->head; entry != current; entry = entry->next )
+                {
+                    group = (isom_roll_group_t *)entry->data;
+                    if( !group )
+                        return -1;
+                    group->described = 1;
+                }
+            }
+            break;      /* Avoid evaluating groups, in the pool, having the same identifier for recovery point again. */
+        }
+    }
+    /* Remove pooled caches that has become unnecessary. */
+    for( lsmash_entry_t *entry = pool->head; entry; entry = pool->head )
+    {
+        group = (isom_roll_group_t *)entry->data;
+        if( !group )
+            return -1;
+        if( !group->delimited || !group->described )
+            break;
+        if( lsmash_remove_entry_direct( pool, entry, NULL ) )
+            return -1;
+    }
+    return 0;
+}
+
+/* returns 1 if pooled samples must be flushed. */
+/* FIXME: I wonder if this function should have a extra argument which indicates force_to_flush_cached_chunk.
+   see lsmash_append_sample for detail. */
+static int isom_add_chunk( isom_trak_entry_t *trak, lsmash_sample_t *sample )
+{
+    if( !trak->root || !trak->cache || !trak->mdia->mdhd || !trak->mdia->mdhd->timescale ||
+        !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
+        return -1;
+    isom_chunk_t *current = &trak->cache->chunk;
+    if( current->chunk_number == 0 )
+    {
+        /* Very initial settings, just once per trak */
+        current->pool = lsmash_create_entry_list();
+        if( !current->pool )
+            return -1;
+        current->chunk_number = 1;
+        current->sample_description_index = sample->index;
+        current->first_dts = 0;
+    }
+    if( sample->dts < current->first_dts )
+        return -1; /* easy error check. */
+    double chunk_duration = (double)(sample->dts - current->first_dts) / trak->mdia->mdhd->timescale;
+    if( trak->root->max_chunk_duration >= chunk_duration && current->sample_description_index == sample->index )
+        return 0; /* no need to flush current cached chunk, the current sample must be put into that. */
+
+    /* NOTE: chunk relative stuff must be pushed into root after a chunk is fully determined with its contents. */
+    /* now current cached chunk is fixed, actually add chunk relative properties to root accordingly. */
+
+    isom_stbl_t *stbl = trak->mdia->minf->stbl;
+    isom_stsc_t *stsc = stbl->stsc;
+    /* Add a new chunk sequence in this track if needed. */
+    if( !stsc->list->tail || current->sample_description_index != sample->index ||
+        current->pool->entry_count != ((isom_stsc_entry_t *)stsc->list->tail->data)->samples_per_chunk )
+    {
+        if( isom_add_stsc_entry( stbl, current->chunk_number, current->pool->entry_count, current->sample_description_index ) )
+            return -1;
+    }
+    /* Add a new chunk offset in this track here. */
+    if( isom_add_stco_entry( stbl, trak->root->bs->written ) )
+        return -1;
+    /* update cache information */
+    ++ current->chunk_number;
+    /* re-initialize cache, using the current sample */
+    current->sample_description_index = sample->index;
+    current->first_dts = sample->dts;
+    /* current->pool must be flushed in lsmash_append_sample() */
+    return 1;
+}
+
+static int lsmash_write_sample_data( lsmash_root_t *root, lsmash_sample_t *sample )
+{
+    if( !root || !root->mdat || !root->bs || !root->bs->stream )
+        return -1;
+    lsmash_bs_put_bytes( root->bs, sample->data, sample->length );
+    if( lsmash_bs_write_data( root->bs ) )
+        return -1;
+    root->mdat->size += sample->length;
+    return 0;
+}
+
+static int isom_write_pooled_samples( isom_trak_entry_t *trak, lsmash_entry_list_t *pool )
+{
+    if( !trak->root || !trak->cache )
+        return -1;
+    for( lsmash_entry_t *entry = pool->head; entry; entry = entry->next )
+    {
+        lsmash_sample_t *sample = (lsmash_sample_t *)entry->data;
+        if( !sample || !sample->data ||
+            lsmash_write_sample_data( trak->root, sample ) )
+            return -1;
+    }
+    lsmash_remove_entries( pool, lsmash_delete_sample );
+    return 0;
+}
+
+static int isom_update_sample_tables( isom_trak_entry_t *trak, lsmash_sample_t *sample )
+{
+    /* Add a sample_size and increment sample_count. */
+    uint32_t sample_count = isom_add_size( trak, sample->length );
+    if( !sample_count )
+        return -1;
+    /* Add a decoding timestamp and a composition timestamp. */
+    if( isom_add_timestamp( trak, sample->dts, sample->cts ) )
+        return -1;
+    /* Add a sync point if needed. */
+    if( isom_add_sync_point( trak, sample_count, &sample->prop ) )
+        return -1;
+    /* Add a partial sync point if needed. */
+    if( isom_add_partial_sync( trak, sample_count, &sample->prop ) )
+        return -1;
+    /* Add leading, independent, disposable and redundant information if needed. */
+    if( isom_add_dependency_type( trak, &sample->prop ) )
+        return -1;
+    /* Group samples into random access point type if needed. */
+    if( isom_group_random_access( trak, &sample->prop ) )
+        return -1;
+    /* Group samples into random access recovery point type if needed. */
+    if( isom_group_roll_recovery( trak, &sample->prop ) )
+        return -1;
     /* Add a chunk if needed. */
     /*
      * FIXME: I think we have to implement "arbitrate chunk handling between tracks" system.
@@ -10694,7 +10639,12 @@ static int isom_append_sample_internal( isom_trak_entry_t *trak, lsmash_sample_t
      * Note that even though we cannot help the case with random access (i.e. seek) even with this system,
      * we should do it.
      */
-    int ret = isom_add_chunk( trak, sample );
+    return isom_add_chunk( trak, sample );
+}
+
+static int isom_append_sample_internal( isom_trak_entry_t *trak, lsmash_sample_t *sample )
+{
+    int ret = isom_update_sample_tables( trak, sample );
     if( ret < 0 )
         return -1;
     /* ret == 1 means cached samples must be flushed. */
@@ -10746,6 +10696,61 @@ int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_
         return 0;
     }
     return isom_append_sample_internal( trak, sample );
+}
+
+static int isom_output_cache( lsmash_root_t *root, uint32_t track_ID )
+{
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    if( !trak || !trak->cache || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl ||
+        !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
+        return -1;
+    isom_chunk_t *current = &trak->cache->chunk;
+    if( !current->pool )
+        return 0;   /* no caches */
+    isom_stbl_t *stbl = trak->mdia->minf->stbl;
+    if( !stbl->stsc->list->tail ||
+        current->pool->entry_count != ((isom_stsc_entry_t *)stbl->stsc->list->tail->data)->samples_per_chunk )
+        if( isom_add_stsc_entry( stbl, current->chunk_number, current->pool->entry_count, current->sample_description_index ) )
+            return -1;
+    if( isom_add_stco_entry( stbl, root->bs->written ) ||
+        isom_write_pooled_samples( trak, current->pool ) )
+        return -1;
+    for( uint32_t i = 0; i < stbl->sgpd_count; i++ )
+    {
+        isom_sgpd_t *sgpd = stbl->sgpd + i;
+        switch( sgpd->grouping_type )
+        {
+            case ISOM_GROUP_TYPE_RAP :
+            {
+                isom_rap_group_t *group = trak->cache->rap;
+                if( !group )
+                    return -1;
+                if( !group->random_access )
+                    continue;
+                group->random_access->num_leading_samples_known = 1;
+                break;
+            }
+            case ISOM_GROUP_TYPE_ROLL :
+                for( lsmash_entry_t *entry = trak->cache->roll.pool->head; entry; entry = entry->next )
+                {
+                    isom_roll_group_t *group = (isom_roll_group_t *)entry->data;
+                    if( !group )
+                        return -1;
+                    group->described = 1;
+                }
+                break;
+            default :
+                break;
+        }
+    }
+    return 0;
+}
+
+int lsmash_flush_pooled_samples( lsmash_root_t *root, uint32_t track_ID, uint32_t last_sample_delta )
+{
+    if( isom_output_cache( root, track_ID ) )
+        return -1;
+    return lsmash_set_last_sample_delta( root, track_ID, last_sample_delta );
 }
 
 /*---- misc functions ----*/
