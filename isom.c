@@ -3920,6 +3920,34 @@ static int isom_write_mdat_header( lsmash_root_t *root )
     return lsmash_bs_write_data( bs );
 }
 
+int isom_write_mdat_size( lsmash_root_t *root )
+{
+    if( !root || !root->bs || !root->bs->stream || !root->mdat )
+        return -1;
+    isom_mdat_t *mdat = root->mdat;
+    uint8_t large_flag = mdat->size > UINT32_MAX;
+    lsmash_bs_t *bs = root->bs;
+    FILE *stream = bs->stream;
+    uint64_t current_pos = lsmash_ftell( stream );
+    if( large_flag )
+    {
+        lsmash_fseek( stream, mdat->placeholder_pos, SEEK_SET );
+        lsmash_bs_put_be32( bs, 1 );
+        lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_MDAT );
+        lsmash_bs_put_be64( bs, mdat->size + ISOM_DEFAULT_BOX_HEADER_SIZE );
+    }
+    else
+    {
+        lsmash_fseek( stream, mdat->placeholder_pos + ISOM_DEFAULT_BOX_HEADER_SIZE, SEEK_SET );
+        lsmash_bs_put_be32( bs, mdat->size );
+        lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_MDAT );
+    }
+    if( lsmash_bs_write_data( bs ) )
+        return -1;
+    lsmash_fseek( stream, current_pos, SEEK_SET );
+    return 0;
+}
+
 /* If a mdat box already exists, flush a current one and start a new one. */
 static int isom_new_mdat( lsmash_root_t *root )
 {
@@ -10296,34 +10324,6 @@ static int isom_write_moov( lsmash_root_t *root )
             if( isom_write_trak( root->bs, (isom_trak_entry_t *)entry->data ) )
                 return -1;
     return isom_write_udta( root->bs, root->moov, NULL );
-}
-
-int isom_write_mdat_size( lsmash_root_t *root )
-{
-    if( !root || !root->bs || !root->bs->stream || !root->mdat )
-        return -1;
-    isom_mdat_t *mdat = root->mdat;
-    uint8_t large_flag = mdat->size > UINT32_MAX;
-    lsmash_bs_t *bs = root->bs;
-    FILE *stream = bs->stream;
-    uint64_t current_pos = lsmash_ftell( stream );
-    if( large_flag )
-    {
-        lsmash_fseek( stream, mdat->placeholder_pos, SEEK_SET );
-        lsmash_bs_put_be32( bs, 1 );
-        lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_MDAT );
-        lsmash_bs_put_be64( bs, mdat->size + ISOM_DEFAULT_BOX_HEADER_SIZE );
-    }
-    else
-    {
-        lsmash_fseek( stream, mdat->placeholder_pos + ISOM_DEFAULT_BOX_HEADER_SIZE, SEEK_SET );
-        lsmash_bs_put_be32( bs, mdat->size );
-        lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_MDAT );
-    }
-    if( lsmash_bs_write_data( bs ) )
-        return -1;
-    lsmash_fseek( stream, current_pos, SEEK_SET );
-    return 0;
 }
 
 int lsmash_set_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length )
