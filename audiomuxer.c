@@ -243,8 +243,6 @@ int main( int argc, char* argv[] )
     // if( lsmash_update_track_duration( structs.root, track ) ) /* if not use edts */
     if( lsmash_create_explicit_timeline_map( structs.root, track, 0, 0, ISOM_EDIT_MODE_NORMAL ) ) /* use edts */
         eprintf( "Failed to set timeline map.\n" );
-    if( lsmash_update_bitrate_info( structs.root, track, sample_entry ) )
-        eprintf( "Failed to update bitrate info.\n" );
 
     /* close movie */
     if( lsmash_finish_movie( structs.root, NULL ) )

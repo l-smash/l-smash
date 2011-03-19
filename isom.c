@@ -8640,14 +8640,14 @@ int lsmash_set_avc_config( lsmash_root_t *root, uint32_t track_ID, uint32_t entr
     return 0;
 }
 
-int lsmash_update_bitrate_info( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number )
+int isom_update_bitrate_info( isom_mdia_t *mdia )
 {
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->minf || !trak->mdia->minf->stbl ||
-        !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list || !trak->mdia->minf->stbl->stsz ||
-        !trak->mdia->minf->stbl->stts->list || !trak->mdia->minf->stbl->stts->list )
+    if( !mdia || !mdia->mdhd || !mdia->minf || !mdia->minf->stbl ||
+        !mdia->minf->stbl->stsd || !mdia->minf->stbl->stsd->list ||
+        !mdia->minf->stbl->stsz || !mdia->minf->stbl->stts || !mdia->minf->stbl->stts->list )
         return -1;
-    isom_sample_entry_t *sample_entry = (isom_sample_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
+    /* Not supporting multi sample entries yet. */
+    isom_sample_entry_t *sample_entry = (isom_sample_entry_t *)lsmash_get_entry_data( mdia->minf->stbl->stsd->list, 1 );
     if( !sample_entry )
         return -1;
     struct bitrate_info_t
@@ -8659,15 +8659,16 @@ int lsmash_update_bitrate_info( lsmash_root_t *root, uint32_t track_ID, uint32_t
     uint32_t i = 0;
     uint32_t rate = 0;
     uint32_t time_wnd = 0;
-    uint32_t timescale = trak->mdia->mdhd->timescale;
+    uint32_t timescale = mdia->mdhd->timescale;
     uint64_t dts = 0;
-    lsmash_entry_t *stts_entry = trak->mdia->minf->stbl->stts->list->head;
-    lsmash_entry_t *stsz_entry = trak->mdia->minf->stbl->stsz->list ? trak->mdia->minf->stbl->stsz->list->head : NULL;
+    isom_stsz_t *stsz = mdia->minf->stbl->stsz;
+    lsmash_entry_t *stsz_entry = stsz->list ? stsz->list->head : NULL;
+    lsmash_entry_t *stts_entry = mdia->minf->stbl->stts->list->head;
     isom_stts_entry_t *stts_data = NULL;
     while( stts_entry )
     {
         uint32_t size;
-        if( trak->mdia->minf->stbl->stsz->list )
+        if( stsz->list )
         {
             if( !stsz_entry )
                 break;
@@ -8678,7 +8679,7 @@ int lsmash_update_bitrate_info( lsmash_root_t *root, uint32_t track_ID, uint32_t
             stsz_entry = stsz_entry->next;
         }
         else
-            size = trak->mdia->minf->stbl->stsz->sample_size;
+            size = stsz->sample_size;
         if( stts_data )
             dts += stts_data->sample_delta;
         stts_data = (isom_stts_entry_t *)stts_entry->data;
@@ -8699,7 +8700,7 @@ int lsmash_update_bitrate_info( lsmash_root_t *root, uint32_t track_ID, uint32_t
             rate = 0;
         }
     }
-    double duration = (double)trak->mdia->mdhd->duration / timescale;
+    double duration = (double)mdia->mdhd->duration / timescale;
     info.avgBitrate = (uint32_t)(info.avgBitrate / duration);
     if( !info.maxBitrate )
         info.maxBitrate = info.avgBitrate;
@@ -10406,6 +10407,8 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
         /* Add stss box if any samples aren't sync sample. */
         isom_stbl_t *stbl = trak->mdia->minf->stbl;
         if( !trak->cache->all_sync && !stbl->stss && isom_add_stss( stbl ) )
+            return -1;
+        if( isom_update_bitrate_info( trak->mdia ) )
             return -1;
     }
     if( root->mp4_version1 == 1 && isom_add_iods( root->moov ) )

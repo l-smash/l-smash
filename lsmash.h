@@ -1304,7 +1304,6 @@ int lsmash_update_media_modification_time( lsmash_root_t *root, uint32_t track_I
 int lsmash_update_track_modification_time( lsmash_root_t *root, uint32_t track_ID );
 int lsmash_update_movie_modification_time( lsmash_root_t *root );
 int lsmash_update_track_duration( lsmash_root_t *root, uint32_t track_ID, uint32_t last_sample_delta );
-int lsmash_update_bitrate_info( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number );
 
 
 lsmash_root_t *lsmash_open_movie( const char *filename, uint32_t mode );
