@@ -856,12 +856,7 @@ static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash
         }
         audio->wave->esds = esds;
     }
-    else if( sample_type == QT_CODEC_TYPE_LPCM_AUDIO ||
-        sample_type == QT_CODEC_TYPE_TWOS_AUDIO || sample_type == QT_CODEC_TYPE_SOWT_AUDIO ||
-        sample_type == QT_CODEC_TYPE_FL32_AUDIO || sample_type == QT_CODEC_TYPE_FL64_AUDIO ||
-        sample_type == QT_CODEC_TYPE_IN24_AUDIO || sample_type == QT_CODEC_TYPE_IN32_AUDIO ||
-        sample_type == QT_CODEC_TYPE_23NI_AUDIO || sample_type == QT_CODEC_TYPE_RAW_AUDIO ||
-        sample_type == QT_CODEC_TYPE_NONE_AUDIO || sample_type == QT_CODEC_TYPE_NOT_SPECIFIED )
+    else if( isom_is_lpcm_audio( sample_type ) )
     {
         /* Convert the sample type into 'lpcm' if the description doesn't match the format or version = 2 fields are needed. */
         if( (sample_type == QT_CODEC_TYPE_RAW_AUDIO && (summary->bit_depth != 8 || summary->sample_format)) ||
