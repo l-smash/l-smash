@@ -736,6 +736,7 @@ static int isom_add_visual_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmas
 #endif
 
 static void isom_remove_wave( isom_wave_t *wave );
+static void isom_remove_chan( isom_chan_t *chan );
 
 static int isom_add_wave( isom_audio_entry_t *audio )
 {
@@ -792,7 +793,7 @@ static int isom_add_chan( isom_audio_entry_t *audio )
     return 0;
 }
 
-static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash_audio_summary_t *summary )
+static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash_audio_summary_t *summary, uint8_t qt_compatible )
 {
     if( !stsd || !stsd->list )
         return -1;
@@ -957,11 +958,31 @@ static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash
         else
             audio->exdata = NULL;
     }
+    if( qt_compatible )
+    {
+        lsmash_channel_layout_tag_code layout_tag = summary->layout_tag;
+        lsmash_channel_bitmap_code bitmap = summary->bitmap;
+        if( layout_tag == QT_CHANNEL_LAYOUT_USE_CHANNEL_DESCRIPTIONS || /* We don't support the feature of Channel Descriptions. */
+            (layout_tag == QT_CHANNEL_LAYOUT_USE_CHANNEL_BITMAP && (!bitmap || bitmap > QT_CHANNEL_BIT_FULL)) )
+        {
+            layout_tag = summary->layout_tag = QT_CHANNEL_LAYOUT_UNKNOWN | audio->numAudioChannels;
+            bitmap = summary->bitmap = 0;
+        }
+        /* Don't create Channel Compositor Box if the channel layout is unknown. */
+        if( layout_tag & QT_CHANNEL_LAYOUT_UNKNOWN )
+        {
+            if( isom_add_chan( audio ) )
+                goto fail;
+            audio->chan->channelLayoutTag = layout_tag;
+            audio->chan->channelBitmap = bitmap;
+        }
+    }
     if( lsmash_add_entry( stsd->list, audio ) )
         goto fail;
     return 0;
 fail:
     isom_remove_wave( audio->wave );
+    isom_remove_chan( audio->chan );
     if( audio->exdata )
         free( audio->exdata );
     free( audio );
@@ -1055,7 +1076,7 @@ int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t sa
             if( trak->root->ftyp->major_brand != ISOM_BRAND_TYPE_QT )
                 ret = isom_add_mp4a_entry( stsd, (lsmash_audio_summary_t *)summary );
             else
-                ret = isom_add_audio_entry( stsd, sample_type, (lsmash_audio_summary_t *)summary );
+                ret = isom_add_audio_entry( stsd, sample_type, (lsmash_audio_summary_t *)summary, trak->root->qt_compatible );
             break;
 #if 0
         case ISOM_CODEC_TYPE_MP4S_SYSTEM :
@@ -1102,7 +1123,7 @@ int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t sa
         case ISOM_CODEC_TYPE_SSMV_AUDIO :
         case ISOM_CODEC_TYPE_TWOS_AUDIO :
 #endif
-            ret = isom_add_audio_entry( stsd, sample_type, (lsmash_audio_summary_t *)summary );
+            ret = isom_add_audio_entry( stsd, sample_type, (lsmash_audio_summary_t *)summary, trak->root->qt_compatible );
             break;
         case ISOM_CODEC_TYPE_TX3G_TEXT :
             ret = isom_add_tx3g_entry( stsd );
@@ -10092,34 +10113,6 @@ int lsmash_set_track_aperture_modes( lsmash_root_t *root, uint32_t track_ID, uin
     return 0;
 }
 
-int lsmash_set_channel_layout( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, lsmash_channel_layout_tag_code layout_tag, lsmash_channel_bitmap_code bitmap )
-{
-    if( layout_tag == QT_CHANNEL_LAYOUT_USE_CHANNEL_DESCRIPTIONS )
-        return -1;  /* We don't support the feature of Channel Descriptions */
-    if( !root || !track_ID || !entry_number )
-        return -1;
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
-        return -1;
-    isom_audio_entry_t *data = (isom_audio_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
-    if( !data )
-        return -1;
-    if( !data->chan && isom_add_chan( data ) )
-        return -1;
-    isom_chan_t *chan = data->chan;
-    if( layout_tag == QT_CHANNEL_LAYOUT_USE_CHANNEL_BITMAP && (!bitmap || bitmap > QT_CHANNEL_BIT_FULL) )
-    {
-        chan->channelLayoutTag = QT_CHANNEL_LAYOUT_UNKNOWN | data->numAudioChannels;
-        chan->channelBitmap = 0;
-    }
-    else
-    {
-        chan->channelLayoutTag = layout_tag;
-        chan->channelBitmap = bitmap;
-    }
-    return 0;
-}
-
 int lsmash_create_grouping( lsmash_root_t *root, uint32_t track_ID, lsmash_grouping_type_code grouping_type )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
@@ -10689,7 +10682,7 @@ void lsmash_delete_sample( lsmash_sample_t *sample )
     free( sample );
 }
 
-static int lsmash_append_sample_internal( isom_trak_entry_t *trak, lsmash_sample_t *sample )
+static int isom_append_sample_internal( isom_trak_entry_t *trak, lsmash_sample_t *sample )
 {
     /* Add a chunk if needed. */
     /*
@@ -10744,7 +10737,7 @@ int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_
             lpcm_sample->cts = cts++;
             lpcm_sample->prop = sample->prop;
             lpcm_sample->index = sample->index;
-            if( lsmash_append_sample_internal( trak, lpcm_sample ) )
+            if( isom_append_sample_internal( trak, lpcm_sample ) )
             {
                 lsmash_delete_sample( lpcm_sample );
                 return -1;
@@ -10753,7 +10746,7 @@ int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_
         lsmash_delete_sample( sample );
         return 0;
     }
-    return lsmash_append_sample_internal( trak, sample );
+    return isom_append_sample_internal( trak, sample );
 }
 
 /*---- misc functions ----*/

@@ -1181,6 +1181,8 @@ typedef struct
     uint32_t samples_in_frame;          /* Even if the stream is HE-AAC/aacPlus/SBR(+PS), this is base AAC's one, so 1024. */
     lsmash_mp4a_aac_sbr_mode sbr_mode;  /* SBR treatment. Currently we always set this as mp4a_AAC_SBR_NOT_SPECIFIED(Implicit signaling).
                                          * User can set this for treatment in other way. */
+    lsmash_channel_layout_tag_code layout_tag;  /* channel layout */
+    lsmash_channel_bitmap_code bitmap;          /* Only available when layout_tag is set to QT_CHANNEL_LAYOUT_USE_CHANNEL_BITMAP. */
     /* LPCM descriptions */
     uint8_t sample_format;      /* 0: integer, 1: floating point */
     uint8_t endianness;         /* 0: big endian, 1: little endian */
@@ -1283,7 +1285,6 @@ int lsmash_set_brands( lsmash_root_t *root, lsmash_brand_type_code major_brand, 
 int lsmash_set_media_handler_name( lsmash_root_t *root, uint32_t track_ID, char *handler_name );
 int lsmash_set_data_handler_name( lsmash_root_t *root, uint32_t track_ID, char *handler_name );
 int lsmash_set_track_aperture_modes( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number );
-int lsmash_set_channel_layout( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, lsmash_channel_layout_tag_code layout_tag, lsmash_channel_bitmap_code bitmap );
 int lsmash_set_avc_config( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number,
                            uint8_t configurationVersion, uint8_t AVCProfileIndication, uint8_t profile_compatibility,
                            uint8_t AVCLevelIndication, uint8_t lengthSizeMinusOne,
