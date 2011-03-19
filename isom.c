@@ -9818,7 +9818,7 @@ int lsmash_get_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     return 0;
 }
 
-int lsmash_set_media_handler_name( lsmash_root_t *root, uint32_t track_ID, char *handler_name )
+int isom_set_media_handler_name( lsmash_root_t *root, uint32_t track_ID, char *handler_name )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->hdlr )
@@ -9846,7 +9846,7 @@ int lsmash_set_media_handler_name( lsmash_root_t *root, uint32_t track_ID, char 
     return 0;
 }
 
-int lsmash_set_data_handler_name( lsmash_root_t *root, uint32_t track_ID, char *handler_name )
+int isom_set_data_handler_name( lsmash_root_t *root, uint32_t track_ID, char *handler_name )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->hdlr )
@@ -9992,9 +9992,9 @@ int lsmash_set_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     trak->mdia->mdhd->timescale = param->timescale;
     if( isom_set_media_language( root, track_ID, param->ISO_language, param->MAC_language ) )
         return -1;
-    if( param->media_handler_name && lsmash_set_media_handler_name( root, track_ID, param->media_handler_name ) )
+    if( param->media_handler_name && isom_set_media_handler_name( root, track_ID, param->media_handler_name ) )
         return -1;
-    if( root->qt_compatible && param->data_handler_name && lsmash_set_data_handler_name( root, track_ID, param->data_handler_name ) )
+    if( root->qt_compatible && param->data_handler_name && isom_set_data_handler_name( root, track_ID, param->data_handler_name ) )
         return -1;
     return 0;
 }

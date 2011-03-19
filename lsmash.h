@@ -1282,8 +1282,6 @@ uint32_t lsmash_get_start_time_offset( lsmash_root_t *root, uint32_t track_ID );
 uint32_t lsmash_get_movie_timescale( lsmash_root_t *root );
 
 int lsmash_set_brands( lsmash_root_t *root, lsmash_brand_type_code major_brand, uint32_t minor_version, lsmash_brand_type_code *brands, uint32_t brand_count );
-int lsmash_set_media_handler_name( lsmash_root_t *root, uint32_t track_ID, char *handler_name );
-int lsmash_set_data_handler_name( lsmash_root_t *root, uint32_t track_ID, char *handler_name );
 int lsmash_set_track_aperture_modes( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number );
 int lsmash_set_avc_config( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number,
                            uint8_t configurationVersion, uint8_t AVCProfileIndication, uint8_t profile_compatibility,
