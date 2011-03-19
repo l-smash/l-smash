@@ -249,8 +249,6 @@ int main( int argc, char* argv[] )
     /* close movie */
     if( lsmash_finish_movie( structs.root, NULL ) )
         eprintf( "Failed to finish movie.\n" );
-    if( lsmash_write_mdat_size( structs.root ) )
-        eprintf( "Failed to write mdat size.\n" );
 
     cleanup_structs( &structs ); /* including lsmash_destroy_root() */
     return 0;

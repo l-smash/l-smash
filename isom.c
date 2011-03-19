@@ -3925,7 +3925,7 @@ static int isom_new_mdat( lsmash_root_t *root )
 {
     if( !root )
         return 0;
-    if( root->mdat && lsmash_write_mdat_size( root ) )    /* flush a current mdat */
+    if( root->mdat && isom_write_mdat_size( root ) )    /* flush a current mdat */
         return -1;
     else
     {
@@ -10297,7 +10297,7 @@ static int isom_write_moov( lsmash_root_t *root )
     return isom_write_udta( root->bs, root->moov, NULL );
 }
 
-int lsmash_write_mdat_size( lsmash_root_t *root )
+int isom_write_mdat_size( lsmash_root_t *root )
 {
     if( !root || !root->bs || !root->bs->stream || !root->mdat )
         return -1;
@@ -10412,7 +10412,8 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
         return -1;
     if( isom_check_mandatory_boxes( root ) ||
         isom_set_movie_creation_time( root ) ||
-        isom_update_moov_size( root->moov ) )
+        isom_update_moov_size( root->moov ) ||
+        isom_write_mdat_size( root ) )
         return -1;
 
     if( !remux )
