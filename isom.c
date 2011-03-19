@@ -10163,7 +10163,7 @@ int lsmash_create_grouping( lsmash_root_t *root, uint32_t track_ID, lsmash_group
 
 /*---- movie manipulators ----*/
 
-lsmash_root_t *lsmash_open_movie( const char *filename, uint32_t mode )
+lsmash_root_t *lsmash_open_movie( const char *filename, lsmash_file_mode_code mode )
 {
     char open_mode[4] = { 0 };
     if( mode & LSMASH_FILE_MODE_WRITE )

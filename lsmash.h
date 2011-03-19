@@ -27,15 +27,17 @@
 
 #define PRIVATE     /* If this declaration is placed at a variable, any user shouldn't use it. */
 
-/* public defines */
-#define LSMASH_FILE_MODE_WRITE 0x00000001
-#define LSMASH_FILE_MODE_READ  0x00000002
-#define LSMASH_FILE_MODE_DUMP  0x00000004
-
 #define LSMASH_4CC( a, b, c, d ) (((a)<<24) | ((b)<<16) | ((c)<<8) | (d))
 
 
 /* public constants */
+typedef enum
+{
+    LSMASH_FILE_MODE_WRITE  = 1,
+    LSMASH_FILE_MODE_READ   = 1<<1,
+    LSMASH_FILE_MODE_DUMP   = 1<<2,
+} lsmash_file_mode_code;
+
 typedef enum
 {
     ISOM_BOX_TYPE_ID32  = LSMASH_4CC( 'I', 'D', '3', '2' ),
@@ -1304,7 +1306,7 @@ int lsmash_update_movie_modification_time( lsmash_root_t *root );
 int lsmash_update_track_duration( lsmash_root_t *root, uint32_t track_ID, uint32_t last_sample_delta );
 
 
-lsmash_root_t *lsmash_open_movie( const char *filename, uint32_t mode );
+lsmash_root_t *lsmash_open_movie( const char *filename, lsmash_file_mode_code mode );
 void lsmash_initialize_movie_parameters( lsmash_movie_parameters_t *param );
 int lsmash_set_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t *param );
 int lsmash_get_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t *param );
@@ -1327,5 +1329,7 @@ void lsmash_delete_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID
 void lsmash_delete_tyrant_chapter( lsmash_root_t *root );
 
 int lsmash_print_movie( lsmash_root_t *root );
+
+#undef PRIVATE
 
 #endif
