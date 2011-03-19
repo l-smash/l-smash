@@ -645,9 +645,9 @@ static int isom_add_mp4a_entry( isom_stsd_t *stsd, lsmash_audio_summary_t *summa
     /* In pure mp4 file, these "template" fields shall be default values according to the spec.
        But not pure - hybrid with other spec - mp4 file can take other values.
        Which is to say, these template values shall be ignored in terms of mp4, except some object_type_indications.
-       see 14496-14, "6 Template fields used". */
-    mp4a->channelcount = summary->channels;
-    mp4a->samplesize = summary->bit_depth;
+       see 14496-14, "Template fields used". */
+    mp4a->channelcount = 2;
+    mp4a->samplesize = 16;
     /* WARNING: This field cannot retain frequency above 65535Hz.
        This is not "FIXME", I just honestly implemented what the spec says.
        BTW, who ever expects sampling frequency takes fixed-point decimal??? */
@@ -9732,9 +9732,17 @@ int lsmash_set_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     tkhd->flags           = param->mode;
     tkhd->track_ID        = param->track_ID ? param->track_ID : tkhd->track_ID;
     tkhd->duration        = !trak->edts || !trak->edts->elst ? param->duration : tkhd->duration;
-    tkhd->layer           = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? param->video_layer    : 0;
-    tkhd->alternate_group = param->alternate_group;
-    tkhd->volume          = media_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK ? param->audio_volume   : 0;
+    tkhd->alternate_group = root->qt_compatible || root->itunes_audio || root->max_3gpp_version >= 4 ? param->alternate_group : 0;
+    if( root->qt_compatible || root->itunes_audio )
+    {
+        tkhd->layer       = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? param->video_layer    : 0;
+        tkhd->volume      = media_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK ? param->audio_volume   : 0;
+    }
+    else
+    {
+        tkhd->layer       = 0;
+        tkhd->volume      = media_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK ? 0x0100                : 0;
+    }
     tkhd->width           = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? param->display_width  : 0;
     tkhd->height          = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? param->display_height : 0;
     return 0;
@@ -10402,11 +10410,22 @@ int lsmash_set_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t 
     isom_mvhd_t *mvhd = root->moov->mvhd;
     root->max_chunk_duration = param->max_chunk_duration;
     mvhd->timescale          = param->timescale;
-    mvhd->rate               = param->playback_rate;
-    mvhd->volume             = param->playback_volume;
-    mvhd->previewTime        = param->preview_time;
-    mvhd->previewDuration    = param->preview_duration;
-    mvhd->posterTime         = param->poster_time;
+    if( root->qt_compatible || root->itunes_audio )
+    {
+        mvhd->rate            = param->playback_rate;
+        mvhd->volume          = param->playback_volume;
+        mvhd->previewTime     = param->preview_time;
+        mvhd->previewDuration = param->preview_duration;
+        mvhd->posterTime      = param->poster_time;
+    }
+    else
+    {
+        mvhd->rate            = 0x00010000;
+        mvhd->volume          = 0x0100;
+        mvhd->previewTime     = 0;
+        mvhd->previewDuration = 0;
+        mvhd->posterTime      = 0;
+    }
     return 0;
 }
 
