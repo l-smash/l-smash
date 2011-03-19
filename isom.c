@@ -1802,7 +1802,7 @@ static int isom_add_hdlr( isom_mdia_t *mdia, isom_minf_t *minf, uint32_t media_t
     memcpy( name + root->qt_compatible, "L-SMASH ", 8 );
     memcpy( name + root->qt_compatible + 8, subtype_name, subtype_name_length );
     memcpy( name + root->qt_compatible + 8 + subtype_name_length, type_name, type_name_length );
-    memcpy( name + root->qt_compatible + 8 + subtype_name_length + type_name_length, "HANDLER", 7 );
+    memcpy( name + root->qt_compatible + 8 + subtype_name_length + type_name_length, "Handler", 7 );
     if( root->isom_compatible )
         name[name_length - 1] = 0;
     hdlr->componentName = name;
@@ -9725,7 +9725,7 @@ void lsmash_initialize_track_parameters( lsmash_track_parameters_t *param )
 int lsmash_set_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_track_parameters_t *param )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->hdlr )
+    if( !trak || !trak->mdia || !trak->mdia->hdlr || !root->moov->mvhd )
         return -1;
     uint32_t media_type = trak->mdia->hdlr->componentSubtype;
     isom_tkhd_t *tkhd = trak->tkhd;
@@ -9745,6 +9745,9 @@ int lsmash_set_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     }
     tkhd->width           = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? param->display_width  : 0;
     tkhd->height          = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? param->display_height : 0;
+    /* Update next_track_ID if needed. */
+    if( root->moov->mvhd->next_track_ID <= tkhd->track_ID )
+        root->moov->mvhd->next_track_ID = tkhd->track_ID + 1;
     return 0;
 }
 
@@ -9762,39 +9765,6 @@ int lsmash_get_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     param->audio_volume    = tkhd->volume;
     param->display_width   = tkhd->width;
     param->display_height  = tkhd->height;
-    return 0;
-}
-
-int lsmash_set_media_handler( lsmash_root_t *root, uint32_t track_ID, lsmash_media_type_code media_type, char *handler_name )
-{
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia )
-        return -1;
-    if( !trak->mdia->hdlr && isom_add_hdlr( trak->mdia, NULL, 0, 0 ) )
-        return -1;
-    isom_hdlr_t *hdlr = trak->mdia->hdlr;
-    hdlr->componentType = QT_HANDLER_TYPE_MEDIA;
-    hdlr->componentSubtype = media_type;
-    if( handler_name )
-    {
-        if( hdlr->componentName )
-            free( hdlr->componentName );
-        uint32_t name_length = strlen( handler_name ) + root->isom_compatible + root->qt_compatible;
-        uint8_t *name = NULL;
-        if( root->qt_compatible )
-        {
-            name_length = LSMASH_MIN( name_length, 255 );
-            name = malloc( name_length );
-            name[0] = name_length & 0xff;
-        }
-        else
-            name = malloc( name_length );
-        memcpy( name + root->qt_compatible, name, strlen( handler_name ) );
-        if( root->isom_compatible )
-            name[name_length - 1] = 0;
-        hdlr->componentName = name;
-        hdlr->componentName_length = name_length;
-    }
     return 0;
 }
 
@@ -9826,39 +9796,6 @@ int lsmash_set_media_handler_name( lsmash_root_t *root, uint32_t track_ID, char 
     return 0;
 }
 
-int lsmash_set_data_handler( lsmash_root_t *root, uint32_t track_ID, lsmash_data_reference_type_code reference_type, char *handler_name )
-{
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->minf )
-        return -1;
-    if( !trak->mdia->minf->hdlr && isom_add_hdlr( NULL, trak->mdia->minf, 0, 0 ) )
-        return -1;
-    isom_hdlr_t *hdlr = trak->mdia->minf->hdlr;
-    hdlr->componentType = QT_HANDLER_TYPE_DATA;
-    hdlr->componentSubtype = reference_type;
-    if( handler_name )
-    {
-        if( hdlr->componentName )
-            free( hdlr->componentName );
-        uint32_t name_length = strlen( handler_name ) + root->isom_compatible + root->qt_compatible;
-        uint8_t *name = NULL;
-        if( root->qt_compatible )
-        {
-            name_length = LSMASH_MIN( name_length, 255 );
-            name = malloc( name_length );
-            name[0] = name_length & 0xff;
-        }
-        else
-            name = malloc( name_length );
-        memcpy( name + root->qt_compatible, name, strlen( handler_name ) );
-        if( root->isom_compatible )
-            name[name_length - 1] = 0;
-        hdlr->componentName = name;
-        hdlr->componentName_length = name_length;
-    }
-    return 0;
-}
-
 int lsmash_set_data_handler_name( lsmash_root_t *root, uint32_t track_ID, char *handler_name )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
@@ -9884,15 +9821,6 @@ int lsmash_set_data_handler_name( lsmash_root_t *root, uint32_t track_ID, char *
         name[name_length - 1] = 0;
     hdlr->componentName = name;
     hdlr->componentName_length = name_length;
-    return 0;
-}
-
-int lsmash_set_media_timescale( lsmash_root_t *root, uint32_t track_ID, uint32_t timescale )
-{
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->mdhd )
-        return -1;
-    trak->mdia->mdhd->timescale = timescale;
     return 0;
 }
 
@@ -9940,15 +9868,6 @@ uint32_t lsmash_get_start_time_offset( lsmash_root_t *root, uint32_t track_ID )
     return ((isom_ctts_entry_t *)trak->mdia->minf->stbl->ctts->list->head->data)->sample_offset;
 }
 
-int lsmash_set_track_mode( lsmash_root_t *root, uint32_t track_ID, lsmash_track_mode_code mode )
-{
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->tkhd )
-        return -1;
-    trak->tkhd->flags = mode;
-    return 0;
-}
-
 static int isom_iso2mac_language( uint16_t ISO_language, uint16_t *MAC_language )
 {
     if( !MAC_language )
@@ -9975,7 +9894,7 @@ static int isom_mac2iso_language( uint16_t MAC_language, uint16_t *ISO_language 
     return 0;
 }
 
-int lsmash_set_media_language( lsmash_root_t *root, uint32_t track_ID, char *ISO_language, uint16_t MAC_language )
+int isom_set_media_language( lsmash_root_t *root, uint32_t track_ID, char *ISO_language, uint16_t MAC_language )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->mdhd )
@@ -10009,37 +9928,6 @@ int lsmash_set_media_language( lsmash_root_t *root, uint32_t track_ID, char *ISO
     return 0;
 }
 
-int lsmash_set_track_ID( lsmash_root_t *root, uint32_t track_ID, uint32_t new_track_ID )
-{
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->tkhd || !root->moov->mvhd )
-        return -1;
-    trak->tkhd->track_ID = new_track_ID;
-    /* Update next_track_ID if needed. */
-    if( root->moov->mvhd->next_track_ID <= new_track_ID )
-        root->moov->mvhd->next_track_ID = new_track_ID + 1;
-    return 0;
-}
-
-int lsmash_set_track_volume( lsmash_root_t *root, uint32_t track_ID, int16_t volume )
-{
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->tkhd )
-        return -1;
-    trak->tkhd->volume = volume;
-    return 0;
-}
-
-int lsmash_set_track_presentation_size( lsmash_root_t *root, uint32_t track_ID, uint32_t width, uint32_t height )
-{
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->tkhd )
-        return -1;
-    trak->tkhd->width = width;
-    trak->tkhd->height = height;
-    return 0;
-}
-
 void lsmash_initialize_media_parameters( lsmash_media_parameters_t *param )
 {
     memset( param, 0, sizeof(lsmash_media_parameters_t) );
@@ -10052,7 +9940,7 @@ int lsmash_set_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     if( !trak || !trak->mdia || !trak->mdia->mdhd )
         return -1;
     trak->mdia->mdhd->timescale = param->timescale;
-    if( lsmash_set_media_language( root, track_ID, param->ISO_language, param->MAC_language ) )
+    if( isom_set_media_language( root, track_ID, param->ISO_language, param->MAC_language ) )
         return -1;
     if( param->media_handler_name && lsmash_set_media_handler_name( root, track_ID, param->media_handler_name ) )
         return -1;
@@ -10146,75 +10034,6 @@ static int isom_confirm_visual_type( uint32_t sample_type )
     return 0;
 }
 
-int lsmash_set_sample_resolution( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint16_t width, uint16_t height )
-{
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
-        return -1;
-    isom_visual_entry_t *data = (isom_visual_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
-    if( !data || isom_confirm_visual_type( data->type ) )
-        return -1;
-    data->width = width;
-    data->height = height;
-    return 0;
-}
-
-int isom_set_sample_aspect_ratio( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint32_t hSpacing, uint32_t vSpacing )
-{
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
-        return -1;
-    isom_visual_entry_t *data = (isom_visual_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
-    if( !data || isom_confirm_visual_type( data->type ) )
-        return -1;
-    if( !data->pasp && isom_add_pasp( data ) )
-        return -1;
-    isom_pasp_t *pasp = data->pasp;
-    pasp->hSpacing = hSpacing;
-    pasp->vSpacing = vSpacing;
-    return 0;
-}
-
-int lsmash_set_color_parameter( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number,
-                              lsmash_color_parameter primaries, lsmash_color_parameter transfer, lsmash_color_parameter matrix )
-{
-    if( !root->qt_compatible )
-        return -1;
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
-        return -1;
-    isom_visual_entry_t *data = (isom_visual_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
-    if( !data || isom_confirm_visual_type( data->type ) )
-        return -1;
-    if( !data->colr && isom_add_colr( data ) )
-        return -1;
-    isom_colr_t *colr = data->colr;
-    /* Set 'nclc' to parameter type, we don't support 'prof'. */
-    colr->color_parameter_type = QT_COLOR_PARAMETER_TYPE_NCLC;
-    /* primaries */
-    if( primaries >= QT_COLOR_PARAMETER_END )
-        return -1;
-    else if( primaries > UINT16_MAX )
-        colr->primaries_index = isom_color_parameter_tbl[primaries - UINT16_MAX_PLUS_ONE].primaries;
-    else
-        colr->primaries_index = (primaries == 1 || primaries == 5 || primaries == 6) ? primaries : 2;
-    /* transfer */
-    if( transfer >= QT_COLOR_PARAMETER_END )
-        return -1;
-    else if( transfer > UINT16_MAX )
-        colr->transfer_function_index = isom_color_parameter_tbl[transfer - UINT16_MAX_PLUS_ONE].transfer;
-    else
-        colr->transfer_function_index = (transfer == 1 || transfer == 7) ? transfer : 2;
-    /* matrix */
-    if( matrix >= QT_COLOR_PARAMETER_END )
-        return -1;
-    else if( matrix > UINT16_MAX )
-        colr->matrix_index = isom_color_parameter_tbl[matrix - UINT16_MAX_PLUS_ONE].matrix;
-    else
-        colr->matrix_index = (matrix == 1 || matrix == 6 || matrix == 7 ) ? matrix : 2;
-    return 0;
-}
-
 int lsmash_set_track_aperture_modes( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number )
 {
     if( !root->qt_compatible )
@@ -10273,27 +10092,6 @@ int lsmash_set_track_aperture_modes( lsmash_root_t *root, uint32_t track_ID, uin
     return 0;
 }
 
-int lsmash_set_scaling_method( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number,
-                             lsmash_scaling_method_code scale_method, int16_t display_center_x, int16_t display_center_y )
-{
-    if( !root || !track_ID || !entry_number || !scale_method )
-        return -1;
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
-        return -1;
-    isom_visual_entry_t *data = (isom_visual_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
-    if( !data || isom_confirm_visual_type( data->type ) )
-        return -1;
-    if( !data->stsl && isom_add_stsl( data ) )
-        return -1;
-    isom_stsl_t *stsl = data->stsl;
-    stsl->constraint_flag = 1;
-    stsl->scale_method = scale_method;
-    stsl->display_center_x = display_center_x;
-    stsl->display_center_y = display_center_y;
-    return 0;
-}
-
 int lsmash_set_channel_layout( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, lsmash_channel_layout_tag_code layout_tag, lsmash_channel_bitmap_code bitmap )
 {
     if( layout_tag == QT_CHANNEL_LAYOUT_USE_CHANNEL_DESCRIPTIONS )
@@ -10319,18 +10117,6 @@ int lsmash_set_channel_layout( lsmash_root_t *root, uint32_t track_ID, uint32_t 
         chan->channelLayoutTag = layout_tag;
         chan->channelBitmap = bitmap;
     }
-    return 0;
-}
-
-int lsmash_set_sample_type( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint32_t sample_type )
-{
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
-        return -1;
-    isom_sample_entry_t *data = (isom_sample_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
-    if( !data )
-        return -1;
-    data->type = sample_type;
     return 0;
 }
 
@@ -10445,14 +10231,6 @@ int lsmash_get_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t 
     return 0;
 }
 
-int lsmash_set_movie_timescale( lsmash_root_t *root, uint32_t timescale )
-{
-    if( !root || !root->moov || !root->moov->mvhd )
-        return -1;
-    root->moov->mvhd->timescale = timescale;
-    return 0;
-}
-
 uint32_t lsmash_get_movie_timescale( lsmash_root_t *root )
 {
     if( !root || !root->moov || !root->moov->mvhd )
@@ -10491,14 +10269,6 @@ int lsmash_set_brands( lsmash_root_t *root, lsmash_brand_type_code major_brand, 
     }
     ftyp->brand_count = brand_count;
     return isom_check_compatibility( root );
-}
-
-int lsmash_set_max_chunk_duration( lsmash_root_t *root, double max_chunk_duration )
-{
-    if( !root )
-        return -1;
-    root->max_chunk_duration = max_chunk_duration;
-    return 0;
 }
 
 int lsmash_write_ftyp( lsmash_root_t *root )
@@ -10631,8 +10401,8 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
         uint32_t track_ID = trak->tkhd->track_ID;
         uint32_t related_track_ID = trak->related_track_ID;
         /* Disable the track if the track is a track reference chapter. */
-        if( trak->is_chapter && lsmash_set_track_mode( root, track_ID, trak->tkhd->flags & 0xfffffe ) )
-            return -1;
+        if( trak->is_chapter )
+            trak->tkhd->flags &= 0xfffffe;
         if( trak->is_chapter && related_track_ID )
         {
             /* In order that the track duration of the chapter track doesn't exceed that of the related track. */
@@ -11152,15 +10922,18 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     track_param.mode = ISOM_TRACK_IN_MOVIE | ISOM_TRACK_IN_PREVIEW;
     if( lsmash_set_track_parameters( root, chapter_track_ID, &track_param ) )
         return -1;
-    /* Copy media timescale. */
     uint64_t media_timescale = lsmash_get_media_timescale( root, track_ID );
-    if( !media_timescale || lsmash_set_media_timescale( root, chapter_track_ID, media_timescale ) )
+    if( !media_timescale )
         goto fail;
-    /* Set media language field. ISOM: undefined / QTFF: English */
-    if( lsmash_set_media_language( root, chapter_track_ID, root->max_3gpp_version < 6 && !root->itunes_audio ? NULL : "und", 0 ) )
+    lsmash_media_parameters_t media_param;
+    lsmash_initialize_media_parameters( &media_param );
+    media_param.timescale = media_timescale;
+    media_param.ISO_language = root->max_3gpp_version >= 6 || root->itunes_audio ? "und" : NULL;
+    media_param.MAC_language = 0;
+    if( lsmash_set_media_parameters( root, chapter_track_ID, &media_param ) )
         goto fail;
     /* Create sample description. */
-    uint32_t sample_type = root->max_3gpp_version < 6 && !root->itunes_audio ? QT_CODEC_TYPE_TEXT_TEXT : ISOM_CODEC_TYPE_TX3G_TEXT;
+    uint32_t sample_type = root->max_3gpp_version >= 6 || root->itunes_audio ? ISOM_CODEC_TYPE_TX3G_TEXT : QT_CODEC_TYPE_TEXT_TEXT;
     uint32_t sample_entry = lsmash_add_sample_entry( root, chapter_track_ID, sample_type, NULL );
     if( !sample_entry )
         goto fail;

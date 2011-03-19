@@ -1280,32 +1280,15 @@ uint32_t lsmash_get_start_time_offset( lsmash_root_t *root, uint32_t track_ID );
 uint32_t lsmash_get_movie_timescale( lsmash_root_t *root );
 
 int lsmash_set_brands( lsmash_root_t *root, lsmash_brand_type_code major_brand, uint32_t minor_version, lsmash_brand_type_code *brands, uint32_t brand_count );
-int lsmash_set_max_chunk_duration( lsmash_root_t *root, double max_chunk_duration );
-int lsmash_set_media_handler( lsmash_root_t *root, uint32_t track_ID, lsmash_media_type_code media_type, char *name );
 int lsmash_set_media_handler_name( lsmash_root_t *root, uint32_t track_ID, char *handler_name );
-int lsmash_set_data_handler( lsmash_root_t *root, uint32_t track_ID, lsmash_data_reference_type_code reference_type, char *name );
 int lsmash_set_data_handler_name( lsmash_root_t *root, uint32_t track_ID, char *handler_name );
-int lsmash_set_movie_timescale( lsmash_root_t *root, uint32_t timescale );
-int lsmash_set_media_timescale( lsmash_root_t *root, uint32_t track_ID, uint32_t timescale );
-int lsmash_set_track_mode( lsmash_root_t *root, uint32_t track_ID, lsmash_track_mode_code mode );
-int lsmash_set_track_presentation_size( lsmash_root_t *root, uint32_t track_ID, uint32_t width, uint32_t height );
-int lsmash_set_track_volume( lsmash_root_t *root, uint32_t track_ID, int16_t volume );
 int lsmash_set_track_aperture_modes( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number );
-int lsmash_set_sample_resolution( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint16_t width, uint16_t height );
-int lsmash_set_sample_type( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint32_t sample_type );
-int lsmash_set_sample_aspect_ratio( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint32_t hSpacing, uint32_t vSpacing );
-int lsmash_set_color_parameter( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number,
-                              lsmash_color_parameter primaries, lsmash_color_parameter transfer, lsmash_color_parameter matrix );
-int lsmash_set_scaling_method( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number,
-                             lsmash_scaling_method_code scale_method, int16_t display_center_x, int16_t display_center_y );
 int lsmash_set_channel_layout( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, lsmash_channel_layout_tag_code layout_tag, lsmash_channel_bitmap_code bitmap );
 int lsmash_set_avc_config( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number,
-                         uint8_t configurationVersion, uint8_t AVCProfileIndication, uint8_t profile_compatibility,
-                         uint8_t AVCLevelIndication, uint8_t lengthSizeMinusOne,
-                         uint8_t chroma_format, uint8_t bit_depth_luma_minus8, uint8_t bit_depth_chroma_minus8 );
+                           uint8_t configurationVersion, uint8_t AVCProfileIndication, uint8_t profile_compatibility,
+                           uint8_t AVCLevelIndication, uint8_t lengthSizeMinusOne,
+                           uint8_t chroma_format, uint8_t bit_depth_luma_minus8, uint8_t bit_depth_chroma_minus8 );
 int lsmash_set_last_sample_delta( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_delta );
-int lsmash_set_media_language( lsmash_root_t *root, uint32_t track_ID, char *ISO_language, uint16_t Mac_language );
-int lsmash_set_track_ID( lsmash_root_t *root, uint32_t track_ID, uint32_t new_track_ID );
 int lsmash_set_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length );
 int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name );
 
