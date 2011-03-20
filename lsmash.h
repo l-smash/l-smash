@@ -1268,6 +1268,7 @@ typedef struct lsmash_root_tag lsmash_root_t;
 /* public functions */
 int lsmash_add_sps_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *sps, uint32_t sps_size );
 int lsmash_add_pps_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *pps, uint32_t pps_size );
+int lsmash_add_spsext_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *spsext, uint32_t spsext_size );
 int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_type, void* summary );
 
 int lsmash_add_btrt( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number );
