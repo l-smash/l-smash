@@ -105,17 +105,17 @@ static int isom_is_fullbox( void *box )
 /* Return 1 if the sample type is LPCM audio, Otherwise return 0. */
 static int isom_is_lpcm_audio( uint32_t type )
 {
-    return type == QT_CODEC_TYPE_23NI_AUDIO ||
-           type == QT_CODEC_TYPE_NONE_AUDIO ||
-           type == QT_CODEC_TYPE_LPCM_AUDIO ||
-           type == QT_CODEC_TYPE_RAW_AUDIO ||
-           type == QT_CODEC_TYPE_SOWT_AUDIO ||
-           type == QT_CODEC_TYPE_TWOS_AUDIO ||
-           type == QT_CODEC_TYPE_FL32_AUDIO ||
-           type == QT_CODEC_TYPE_FL64_AUDIO ||
-           type == QT_CODEC_TYPE_IN24_AUDIO ||
-           type == QT_CODEC_TYPE_IN32_AUDIO ||
-           type == QT_CODEC_TYPE_NOT_SPECIFIED;
+    return type == QT_CODEC_TYPE_23NI_AUDIO
+        || type == QT_CODEC_TYPE_NONE_AUDIO
+        || type == QT_CODEC_TYPE_LPCM_AUDIO
+        || type == QT_CODEC_TYPE_RAW_AUDIO
+        || type == QT_CODEC_TYPE_SOWT_AUDIO
+        || type == QT_CODEC_TYPE_TWOS_AUDIO
+        || type == QT_CODEC_TYPE_FL32_AUDIO
+        || type == QT_CODEC_TYPE_FL64_AUDIO
+        || type == QT_CODEC_TYPE_IN24_AUDIO
+        || type == QT_CODEC_TYPE_IN32_AUDIO
+        || type == QT_CODEC_TYPE_NOT_SPECIFIED;
 }
 
 
@@ -601,7 +601,7 @@ static int isom_add_avc_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash_v
 static int isom_add_mp4a_entry( isom_stsd_t *stsd, lsmash_audio_summary_t *summary )
 {
     if( !stsd || !stsd->list || !summary
-        || summary->stream_type != MP4SYS_STREAM_TYPE_AudioStream )
+     || summary->stream_type != MP4SYS_STREAM_TYPE_AudioStream )
         return -1;
     switch( summary->object_type_indication )
     {
@@ -615,7 +615,6 @@ static int isom_add_mp4a_entry( isom_stsd_t *stsd, lsmash_audio_summary_t *summa
     default:
         return -1;
     }
-
     isom_create_box( esds, NULL, ISOM_BOX_TYPE_ESDS );
     mp4sys_ES_Descriptor_params_t esd_param;
     esd_param.ES_ID = 0;              /* This is esds internal, so 0 is allowed. */
@@ -807,10 +806,10 @@ static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash
     audio->numAudioChannels = summary->channels;    /* store the actual number of channels, here */
     if( sample_type == ISOM_CODEC_TYPE_MP4A_AUDIO )
     {
-        if( isom_add_wave( audio ) ||
-            isom_add_frma( audio->wave ) ||
-            isom_add_mp4a( audio->wave ) ||
-            isom_add_terminator( audio->wave ) )
+        if( isom_add_wave( audio )
+         || isom_add_frma( audio->wave )
+         || isom_add_mp4a( audio->wave )
+         || isom_add_terminator( audio->wave ) )
             goto fail;
         audio->version = (summary->channels > 2 || summary->frequency > UINT16_MAX) ? 2 : 1;
         audio->channelcount = audio->version == 2 ? 3 : LSMASH_MIN( summary->channels, 2 );
@@ -859,26 +858,26 @@ static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash
     else if( isom_is_lpcm_audio( sample_type ) )
     {
         /* Convert the sample type into 'lpcm' if the description doesn't match the format or version = 2 fields are needed. */
-        if( (sample_type == QT_CODEC_TYPE_RAW_AUDIO && (summary->bit_depth != 8 || summary->sample_format)) ||
-            (sample_type == QT_CODEC_TYPE_FL32_AUDIO && (summary->bit_depth != 32 || !summary->sample_format)) ||
-            (sample_type == QT_CODEC_TYPE_FL64_AUDIO && (summary->bit_depth != 64 || !summary->sample_format)) ||
-            (sample_type == QT_CODEC_TYPE_IN24_AUDIO && (summary->bit_depth != 24 || summary->sample_format)) ||
-            (sample_type == QT_CODEC_TYPE_IN32_AUDIO && (summary->bit_depth != 32 || summary->sample_format)) ||
-            (sample_type == QT_CODEC_TYPE_23NI_AUDIO && (summary->bit_depth != 32 || summary->sample_format || !summary->endianness)) ||
-            (sample_type == QT_CODEC_TYPE_SOWT_AUDIO && (summary->bit_depth != 16 || summary->sample_format || !summary->endianness)) ||
-            (sample_type == QT_CODEC_TYPE_TWOS_AUDIO && ((summary->bit_depth != 16 && summary->bit_depth != 8) || summary->sample_format || summary->endianness)) ||
-            (sample_type == QT_CODEC_TYPE_NONE_AUDIO && ((summary->bit_depth != 16 && summary->bit_depth != 8) || summary->sample_format || summary->endianness)) ||
-            (sample_type == QT_CODEC_TYPE_NOT_SPECIFIED && ((summary->bit_depth != 16 && summary->bit_depth != 8) || summary->sample_format || summary->endianness)) ||
-            (summary->channels > 2 || summary->frequency > UINT16_MAX || summary->bit_depth % 8) )
+        if( (sample_type == QT_CODEC_TYPE_RAW_AUDIO && (summary->bit_depth != 8 || summary->sample_format))
+         || (sample_type == QT_CODEC_TYPE_FL32_AUDIO && (summary->bit_depth != 32 || !summary->sample_format))
+         || (sample_type == QT_CODEC_TYPE_FL64_AUDIO && (summary->bit_depth != 64 || !summary->sample_format))
+         || (sample_type == QT_CODEC_TYPE_IN24_AUDIO && (summary->bit_depth != 24 || summary->sample_format))
+         || (sample_type == QT_CODEC_TYPE_IN32_AUDIO && (summary->bit_depth != 32 || summary->sample_format))
+         || (sample_type == QT_CODEC_TYPE_23NI_AUDIO && (summary->bit_depth != 32 || summary->sample_format || !summary->endianness))
+         || (sample_type == QT_CODEC_TYPE_SOWT_AUDIO && (summary->bit_depth != 16 || summary->sample_format || !summary->endianness))
+         || (sample_type == QT_CODEC_TYPE_TWOS_AUDIO && ((summary->bit_depth != 16 && summary->bit_depth != 8) || summary->sample_format || summary->endianness))
+         || (sample_type == QT_CODEC_TYPE_NONE_AUDIO && ((summary->bit_depth != 16 && summary->bit_depth != 8) || summary->sample_format || summary->endianness))
+         || (sample_type == QT_CODEC_TYPE_NOT_SPECIFIED && ((summary->bit_depth != 16 && summary->bit_depth != 8) || summary->sample_format || summary->endianness))
+         || (summary->channels > 2 || summary->frequency > UINT16_MAX || summary->bit_depth % 8) )
         {
             audio->type = QT_CODEC_TYPE_LPCM_AUDIO;
             audio->version = 2;
         }
         else if( sample_type == QT_CODEC_TYPE_LPCM_AUDIO )
             audio->version = 2;
-        else if( summary->bit_depth > 16 ||
-            (sample_type != QT_CODEC_TYPE_RAW_AUDIO && sample_type != QT_CODEC_TYPE_TWOS_AUDIO &&
-            sample_type != QT_CODEC_TYPE_NONE_AUDIO && sample_type != QT_CODEC_TYPE_NOT_SPECIFIED) )
+        else if( summary->bit_depth > 16
+         || (sample_type != QT_CODEC_TYPE_RAW_AUDIO && sample_type != QT_CODEC_TYPE_TWOS_AUDIO
+         && sample_type != QT_CODEC_TYPE_NONE_AUDIO && sample_type != QT_CODEC_TYPE_NOT_SPECIFIED) )
             audio->version = 1;
         if( audio->version == 2 )
         {
@@ -916,13 +915,13 @@ static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash
             audio->bytesPerPacket = summary->bit_depth / 8;
             audio->bytesPerFrame = audio->bytesPerPacket * summary->channels;   /* sample_size field in stsz box is NOT used. */
             audio->bytesPerSample = 1 + (summary->bit_depth != 8);
-            if( sample_type == QT_CODEC_TYPE_FL32_AUDIO || sample_type == QT_CODEC_TYPE_FL64_AUDIO ||
-                sample_type == QT_CODEC_TYPE_IN24_AUDIO || sample_type == QT_CODEC_TYPE_IN32_AUDIO )
+            if( sample_type == QT_CODEC_TYPE_FL32_AUDIO || sample_type == QT_CODEC_TYPE_FL64_AUDIO
+             || sample_type == QT_CODEC_TYPE_IN24_AUDIO || sample_type == QT_CODEC_TYPE_IN32_AUDIO )
             {
-                if( isom_add_wave( audio ) ||
-                    isom_add_frma( audio->wave ) ||
-                    isom_add_enda( audio->wave ) ||
-                    isom_add_terminator( audio->wave ) )
+                if( isom_add_wave( audio )
+                 || isom_add_frma( audio->wave )
+                 || isom_add_enda( audio->wave )
+                 || isom_add_terminator( audio->wave ) )
                     goto fail;
                 audio->wave->frma->data_format = sample_type;
                 audio->wave->enda->littleEndian = summary->endianness;
@@ -957,8 +956,8 @@ static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash
     {
         lsmash_channel_layout_tag_code layout_tag = summary->layout_tag;
         lsmash_channel_bitmap_code bitmap = summary->bitmap;
-        if( layout_tag == QT_CHANNEL_LAYOUT_USE_CHANNEL_DESCRIPTIONS || /* We don't support the feature of Channel Descriptions. */
-            (layout_tag == QT_CHANNEL_LAYOUT_USE_CHANNEL_BITMAP && (!bitmap || bitmap > QT_CHANNEL_BIT_FULL)) )
+        if( layout_tag == QT_CHANNEL_LAYOUT_USE_CHANNEL_DESCRIPTIONS    /* We don't support the feature of Channel Descriptions. */
+         || (layout_tag == QT_CHANNEL_LAYOUT_USE_CHANNEL_BITMAP && (!bitmap || bitmap > QT_CHANNEL_BIT_FULL)) )
         {
             layout_tag = summary->layout_tag = QT_CHANNEL_LAYOUT_UNKNOWN | audio->numAudioChannels;
             bitmap = summary->bitmap = 0;
@@ -1044,8 +1043,8 @@ static int isom_add_tx3g_entry( isom_stsd_t *stsd )
 int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_type, void *summary )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->root || !trak->root->ftyp || !trak->mdia || !trak->mdia->minf ||
-        !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
+    if( !trak || !trak->root || !trak->root->ftyp || !trak->mdia || !trak->mdia->minf
+     || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
         return 0;
     isom_stsd_t *stsd = trak->mdia->minf->stbl->stsd;
     lsmash_entry_list_t *list = stsd->list;
@@ -2729,9 +2728,9 @@ static int isom_write_tapt( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     isom_bs_put_box_common( bs, tapt );
     if( lsmash_bs_write_data( bs ) )
         return -1;
-    if( isom_write_clef( bs, trak ) ||
-        isom_write_prof( bs, trak ) ||
-        isom_write_enof( bs, trak ) )
+    if( isom_write_clef( bs, trak )
+     || isom_write_prof( bs, trak )
+     || isom_write_enof( bs, trak ) )
         return -1;
     return 0;
 }
@@ -3103,10 +3102,10 @@ static int isom_write_wave( lsmash_bs_t *bs, isom_wave_t *wave )
     isom_bs_put_box_common( bs, wave );
     if( lsmash_bs_write_data( bs ) )
         return -1;
-    if( isom_write_frma( bs, wave->frma ) ||
-        isom_write_enda( bs, wave->enda ) ||
-        isom_write_mp4a( bs, wave->mp4a ) ||
-        isom_write_esds( bs, wave->esds ) )
+    if( isom_write_frma( bs, wave->frma )
+     || isom_write_enda( bs, wave->enda )
+     || isom_write_mp4a( bs, wave->mp4a )
+     || isom_write_esds( bs, wave->esds ) )
         return -1;
     return isom_write_terminator( bs, wave->terminator );
 }
@@ -3603,10 +3602,11 @@ static int isom_write_sdtp( lsmash_bs_t *bs, isom_trak_entry_t *trak )
         isom_sdtp_entry_t *data = (isom_sdtp_entry_t *)entry->data;
         if( !data )
             return -1;
-        lsmash_bs_put_byte( bs, (data->is_leading<<6) |
-                              (data->sample_depends_on<<4) |
-                              (data->sample_is_depended_on<<2) |
-                               data->sample_has_redundancy );
+        uint8_t temp = (data->is_leading            << 6)
+                     | (data->sample_depends_on     << 4)
+                     | (data->sample_is_depended_on << 2)
+                     |  data->sample_has_redundancy;
+        lsmash_bs_put_byte( bs, temp );
     }
     return lsmash_bs_write_data( bs );
 }
@@ -3685,7 +3685,9 @@ static int isom_write_sgpd( lsmash_bs_t *bs, isom_trak_entry_t *trak, uint32_t g
             case ISOM_GROUP_TYPE_RAP :
             {
                 isom_rap_entry_t *rap = (isom_rap_entry_t *)entry->data;
-                lsmash_bs_put_byte( bs, (rap->num_leading_samples_known << 7) | rap->num_leading_samples );
+                uint8_t temp = (rap->num_leading_samples_known << 7) 
+                             |  rap->num_leading_samples;
+                lsmash_bs_put_byte( bs, temp );
                 break;
             }
             case ISOM_GROUP_TYPE_ROLL :
@@ -3730,16 +3732,16 @@ static int isom_write_stbl( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     isom_bs_put_box_common( bs, stbl );
     if( lsmash_bs_write_data( bs ) )
         return -1;
-    if( isom_write_stsd( bs, trak ) ||
-        isom_write_stts( bs, trak ) ||
-        isom_write_ctts( bs, trak ) ||
-        isom_write_cslg( bs, trak ) ||
-        isom_write_stss( bs, trak ) ||
-        isom_write_stps( bs, trak ) ||
-        isom_write_sdtp( bs, trak ) ||
-        isom_write_stsc( bs, trak ) ||
-        isom_write_stsz( bs, trak ) ||
-        isom_write_stco( bs, trak ) )
+    if( isom_write_stsd( bs, trak )
+     || isom_write_stts( bs, trak )
+     || isom_write_ctts( bs, trak )
+     || isom_write_cslg( bs, trak )
+     || isom_write_stss( bs, trak )
+     || isom_write_stps( bs, trak )
+     || isom_write_sdtp( bs, trak )
+     || isom_write_stsc( bs, trak )
+     || isom_write_stsz( bs, trak )
+     || isom_write_stco( bs, trak ) )
         return -1;
     for( uint32_t i = 1; i <= stbl->sgpd_count; i++ )
         if( isom_write_sgpd( bs, trak, i ) )
@@ -3758,15 +3760,15 @@ static int isom_write_minf( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     isom_bs_put_box_common( bs, minf );
     if( lsmash_bs_write_data( bs ) )
         return -1;
-    if( (minf->vmhd && isom_write_vmhd( bs, trak )) ||
-        (minf->smhd && isom_write_smhd( bs, trak )) ||
-        (minf->hmhd && isom_write_hmhd( bs, trak )) ||
-        (minf->nmhd && isom_write_nmhd( bs, trak )) ||
-        (minf->gmhd && isom_write_gmhd( bs, trak )) )
+    if( (minf->vmhd && isom_write_vmhd( bs, trak ))
+     || (minf->smhd && isom_write_smhd( bs, trak ))
+     || (minf->hmhd && isom_write_hmhd( bs, trak ))
+     || (minf->nmhd && isom_write_nmhd( bs, trak ))
+     || (minf->gmhd && isom_write_gmhd( bs, trak )) )
         return -1;
-    if( isom_write_hdlr( bs, trak, 0 ) ||
-        isom_write_dinf( bs, trak ) ||
-        isom_write_stbl( bs, trak ) )
+    if( isom_write_hdlr( bs, trak, 0 )
+     || isom_write_dinf( bs, trak )
+     || isom_write_stbl( bs, trak ) )
         return -1;
     return 0;
 }
@@ -3779,9 +3781,9 @@ static int isom_write_mdia( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     isom_bs_put_box_common( bs, mdia );
     if( lsmash_bs_write_data( bs ) )
         return -1;
-    if( isom_write_mdhd( bs, trak ) ||
-        isom_write_hdlr( bs, trak, 1 ) ||
-        isom_write_minf( bs, trak ) )
+    if( isom_write_mdhd( bs, trak )
+     || isom_write_hdlr( bs, trak, 1 )
+     || isom_write_minf( bs, trak ) )
         return -1;
     return 0;
 }
@@ -3834,12 +3836,12 @@ static int isom_write_trak( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     isom_bs_put_box_common( bs, trak );
     if( lsmash_bs_write_data( bs ) )
         return -1;
-    if( isom_write_tkhd( bs, trak ) ||
-        isom_write_tapt( bs, trak ) ||
-        isom_write_edts( bs, trak ) ||
-        isom_write_tref( bs, trak ) ||
-        isom_write_mdia( bs, trak ) ||
-        isom_write_udta( bs, NULL, trak ) )
+    if( isom_write_tkhd( bs, trak )
+     || isom_write_tapt( bs, trak )
+     || isom_write_edts( bs, trak )
+     || isom_write_tref( bs, trak )
+     || isom_write_mdia( bs, trak )
+     || isom_write_udta( bs, NULL, trak ) )
         return -1;
     return 0;
 }
@@ -6206,9 +6208,9 @@ static int isom_read_mdhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_hdlr( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_MDIA &&
-        /*parent->type != ISOM_BOX_TYPE_META &&*/
-        parent->type != ISOM_BOX_TYPE_MINF )
+    if( parent->type != ISOM_BOX_TYPE_MDIA
+     //&& parent->type != ISOM_BOX_TYPE_META
+     && parent->type != ISOM_BOX_TYPE_MINF )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( hdlr, parent, box->type );
     if( parent->type == ISOM_BOX_TYPE_MDIA )
@@ -7946,8 +7948,8 @@ static int isom_replace_last_sample_delta( isom_stbl_t *stbl, uint32_t sample_de
 
 static int isom_update_mdhd_duration( isom_trak_entry_t *trak, uint32_t last_sample_delta )
 {
-    if( !trak || !trak->root || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->minf || !trak->mdia->minf->stbl ||
-        !trak->mdia->minf->stbl->stts || !trak->mdia->minf->stbl->stts->list || trak->mdia->minf->stbl->stts->list->entry_count == 0 )
+    if( !trak || !trak->root || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->minf || !trak->mdia->minf->stbl
+     || !trak->mdia->minf->stbl->stts || !trak->mdia->minf->stbl->stts->list || trak->mdia->minf->stbl->stts->list->entry_count == 0 )
         return -1;
     isom_mdhd_t *mdhd = trak->mdia->mdhd;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
@@ -8046,8 +8048,8 @@ static int isom_update_mdhd_duration( isom_trak_entry_t *trak, uint32_t last_sam
         /* Explicit composition information and DTS shifting  */
         if( cslg || trak->root->qt_compatible || trak->root->max_isom_version >= 4 )
         {
-            if( (min_offset <= UINT32_MAX) && (max_offset <= UINT32_MAX) &&
-                (min_cts <= UINT32_MAX) && (2 * max_cts - max2_cts <= UINT32_MAX) )
+            if( (min_offset <= UINT32_MAX) && (max_offset <= UINT32_MAX)
+             && (min_cts <= UINT32_MAX) && (2 * max_cts - max2_cts <= UINT32_MAX) )
             {
                 if( !cslg )
                 {
@@ -8164,9 +8166,9 @@ int lsmash_set_avc_config( lsmash_root_t *root, uint32_t track_ID, uint32_t entr
 
 static int isom_update_bitrate_info( isom_mdia_t *mdia )
 {
-    if( !mdia || !mdia->mdhd || !mdia->minf || !mdia->minf->stbl ||
-        !mdia->minf->stbl->stsd || !mdia->minf->stbl->stsd->list ||
-        !mdia->minf->stbl->stsz || !mdia->minf->stbl->stts || !mdia->minf->stbl->stts->list )
+    if( !mdia || !mdia->mdhd || !mdia->minf || !mdia->minf->stbl
+     || !mdia->minf->stbl->stsd || !mdia->minf->stbl->stsd->list
+     || !mdia->minf->stbl->stsz || !mdia->minf->stbl->stts || !mdia->minf->stbl->stts->list )
         return -1;
     /* Not supporting multi sample entries yet. */
     isom_sample_entry_t *sample_entry = (isom_sample_entry_t *)lsmash_get_entry_data( mdia->minf->stbl->stsd->list, 1 );
@@ -9205,18 +9207,18 @@ uint32_t lsmash_create_track( lsmash_root_t *root, uint32_t media_type )
     isom_trak_entry_t *trak = isom_add_trak( root );
     if( !trak )
         return 0;
-    if( isom_add_tkhd( trak, media_type ) ||
-        isom_add_mdia( trak ) ||
-        isom_add_mdhd( trak->mdia, root->qt_compatible ? 0 : ISOM_LANGUAGE_CODE_UNDEFINED ) ||
-        isom_add_minf( trak->mdia ) ||
-        isom_add_stbl( trak->mdia->minf ) ||
-        isom_add_dinf( trak->mdia->minf ) ||
-        isom_add_dref( trak->mdia->minf->dinf ) ||
-        isom_add_stsd( trak->mdia->minf->stbl ) ||
-        isom_add_stts( trak->mdia->minf->stbl ) ||
-        isom_add_stsc( trak->mdia->minf->stbl ) ||
-        isom_add_stco( trak->mdia->minf->stbl ) ||
-        isom_add_stsz( trak->mdia->minf->stbl ) )
+    if( isom_add_tkhd( trak, media_type )
+     || isom_add_mdia( trak )
+     || isom_add_mdhd( trak->mdia, root->qt_compatible ? 0 : ISOM_LANGUAGE_CODE_UNDEFINED )
+     || isom_add_minf( trak->mdia )
+     || isom_add_stbl( trak->mdia->minf )
+     || isom_add_dinf( trak->mdia->minf )
+     || isom_add_dref( trak->mdia->minf->dinf )
+     || isom_add_stsd( trak->mdia->minf->stbl )
+     || isom_add_stts( trak->mdia->minf->stbl )
+     || isom_add_stsc( trak->mdia->minf->stbl )
+     || isom_add_stco( trak->mdia->minf->stbl )
+     || isom_add_stsz( trak->mdia->minf->stbl ) )
         return 0;
     if( isom_add_hdlr( trak->mdia, NULL, media_type, root ) )
         return 0;
@@ -9239,9 +9241,9 @@ uint32_t lsmash_create_track( lsmash_root_t *root, uint32_t media_type )
         case ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK :
             if( root->qt_compatible || root->itunes_audio )
             {
-                if( isom_add_gmhd( trak->mdia->minf ) ||
-                    isom_add_gmin( trak->mdia->minf->gmhd ) ||
-                    isom_add_text( trak->mdia->minf->gmhd ) )
+                if( isom_add_gmhd( trak->mdia->minf )
+                 || isom_add_gmin( trak->mdia->minf->gmhd )
+                 || isom_add_text( trak->mdia->minf->gmhd ) )
                     return 0;
             }
             else
@@ -9395,9 +9397,9 @@ uint64_t lsmash_get_track_duration( lsmash_root_t *root, uint32_t track_ID )
 uint32_t lsmash_get_last_sample_delta( lsmash_root_t *root, uint32_t track_ID )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl ||
-        !trak->mdia->minf->stbl->stts || !trak->mdia->minf->stbl->stts->list ||
-        !trak->mdia->minf->stbl->stts->list->head || !trak->mdia->minf->stbl->stts->list->head->data )
+    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl
+     || !trak->mdia->minf->stbl->stts || !trak->mdia->minf->stbl->stts->list
+     || !trak->mdia->minf->stbl->stts->list->head || !trak->mdia->minf->stbl->stts->list->head->data )
         return 0;
     return ((isom_stts_entry_t *)trak->mdia->minf->stbl->stts->list->head->data)->sample_delta;
 }
@@ -9405,9 +9407,9 @@ uint32_t lsmash_get_last_sample_delta( lsmash_root_t *root, uint32_t track_ID )
 uint32_t lsmash_get_start_time_offset( lsmash_root_t *root, uint32_t track_ID )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl ||
-        !trak->mdia->minf->stbl->ctts || !trak->mdia->minf->stbl->ctts->list ||
-        !trak->mdia->minf->stbl->ctts->list->head || !trak->mdia->minf->stbl->ctts->list->head->data )
+    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl
+     || !trak->mdia->minf->stbl->ctts || !trak->mdia->minf->stbl->ctts->list
+     || !trak->mdia->minf->stbl->ctts->list->head || !trak->mdia->minf->stbl->ctts->list->head->data )
         return 0;
     return ((isom_ctts_entry_t *)trak->mdia->minf->stbl->ctts->list->head->data)->sample_offset;
 }
@@ -9593,9 +9595,9 @@ int lsmash_set_track_aperture_modes( lsmash_root_t *root, uint32_t track_ID, uin
     if( !trak->tapt && isom_add_tapt( trak ) )
         return -1;
     isom_tapt_t *tapt = trak->tapt;
-    if( (!tapt->clef && isom_add_clef( tapt )) ||
-        (!tapt->prof && isom_add_prof( tapt )) ||
-        (!tapt->enof && isom_add_enof( tapt )) )
+    if( (!tapt->clef && isom_add_clef( tapt ))
+     || (!tapt->prof && isom_add_prof( tapt ))
+     || (!tapt->enof && isom_add_enof( tapt )) )
         return -1;
     if( !data->pasp && isom_add_pasp( data ) )
         return -1;
@@ -9609,10 +9611,10 @@ int lsmash_set_track_aperture_modes( lsmash_root_t *root, uint32_t track_ID, uin
         clap->cleanApertureWidthN = data->width;
         clap->cleanApertureHeightN = data->height;
     }
-    if( !pasp->hSpacing || !pasp->vSpacing ||
-        !clap->cleanApertureWidthN || !clap->cleanApertureWidthD ||
-        !clap->cleanApertureHeightN || !clap->cleanApertureHeightD ||
-        !clap->horizOffD || !clap->vertOffD )
+    if( !pasp->hSpacing || !pasp->vSpacing
+     || !clap->cleanApertureWidthN || !clap->cleanApertureWidthD
+     || !clap->cleanApertureHeightN || !clap->cleanApertureHeightD
+     || !clap->horizOffD || !clap->vertOffD )
         return -1;
     double par = (double)pasp->hSpacing / pasp->vSpacing;
     double clap_width = ((double)clap->cleanApertureWidthN / clap->cleanApertureWidthD) * (1<<16);
@@ -9654,8 +9656,8 @@ int lsmash_create_grouping( lsmash_root_t *root, uint32_t track_ID, lsmash_group
         default :
             break;
     }
-    if( isom_add_sgpd( trak->mdia->minf->stbl, grouping_type ) ||
-        isom_add_sbgp( trak->mdia->minf->stbl, grouping_type ) )
+    if( isom_add_sgpd( trak->mdia->minf->stbl, grouping_type )
+     || isom_add_sbgp( trak->mdia->minf->stbl, grouping_type ) )
         return -1;
     return 0;
 }
@@ -9810,8 +9812,8 @@ static int isom_write_moov( lsmash_root_t *root )
     isom_bs_put_box_common( root->bs, root->moov );
     if( lsmash_bs_write_data( root->bs ) )
         return -1;
-    if( isom_write_mvhd( root ) ||
-        isom_write_iods( root ) )
+    if( isom_write_mvhd( root )
+     || isom_write_iods( root ) )
         return -1;
     if( root->moov->trak_list )
         for( lsmash_entry_t *entry = root->moov->trak_list->head; entry; entry = entry->next )
@@ -9907,10 +9909,10 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
     }
     if( root->mp4_version1 == 1 && isom_add_iods( root->moov ) )
         return -1;
-    if( isom_check_mandatory_boxes( root ) ||
-        isom_set_movie_creation_time( root ) ||
-        isom_update_moov_size( root->moov ) ||
-        isom_write_mdat_size( root ) )
+    if( isom_check_mandatory_boxes( root )
+     || isom_set_movie_creation_time( root )
+     || isom_update_moov_size( root->moov )
+     || isom_write_mdat_size( root ) )
         return -1;
 
     if( !remux )
@@ -10011,8 +10013,8 @@ fail:
 int lsmash_set_last_sample_delta( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_delta )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->minf || !trak->mdia->minf->stbl ||
-        !trak->mdia->minf->stbl->stsz || !trak->mdia->minf->stbl->stts || !trak->mdia->minf->stbl->stts->list )
+    if( !trak || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->minf || !trak->mdia->minf->stbl
+     || !trak->mdia->minf->stbl->stsz || !trak->mdia->minf->stbl->stts || !trak->mdia->minf->stbl->stts->list )
         return -1;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     isom_stts_t *stts = stbl->stts;
@@ -10095,14 +10097,13 @@ int lsmash_create_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID,
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->tkhd )
         return -1;
-    segment_duration = segment_duration ? segment_duration :
-                       trak->tkhd->duration ? trak->tkhd->duration :
-                       isom_update_tkhd_duration( trak ) ? 0 : trak->tkhd->duration;
-    if( isom_add_edts( trak ) )
-        return -1;
-    if( isom_add_elst( trak->edts ) )
-        return -1;
-    if( isom_add_elst_entry( trak->edts->elst, segment_duration, media_time, media_rate ) )
+    segment_duration = segment_duration ? segment_duration
+                     : trak->tkhd->duration ? trak->tkhd->duration
+                     : isom_update_tkhd_duration( trak ) ? 0
+                     : trak->tkhd->duration;
+    if( isom_add_edts( trak )
+     || isom_add_elst( trak->edts )
+     || isom_add_elst_entry( trak->edts->elst, segment_duration, media_time, media_rate ) )
         return -1;
     return isom_update_tkhd_duration( trak );
 }
@@ -10534,8 +10535,8 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_prop
    see lsmash_append_sample for detail. */
 static int isom_add_chunk( isom_trak_entry_t *trak, lsmash_sample_t *sample )
 {
-    if( !trak->root || !trak->cache || !trak->mdia->mdhd || !trak->mdia->mdhd->timescale ||
-        !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
+    if( !trak->root || !trak->cache || !trak->mdia->mdhd || !trak->mdia->mdhd->timescale
+     || !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
         return -1;
     isom_chunk_t *current = &trak->cache->chunk;
     if( current->chunk_number == 0 )
@@ -10560,12 +10561,10 @@ static int isom_add_chunk( isom_trak_entry_t *trak, lsmash_sample_t *sample )
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     isom_stsc_t *stsc = stbl->stsc;
     /* Add a new chunk sequence in this track if needed. */
-    if( !stsc->list->tail || current->sample_description_index != sample->index ||
-        current->pool->entry_count != ((isom_stsc_entry_t *)stsc->list->tail->data)->samples_per_chunk )
-    {
+    if( !stsc->list->tail || current->sample_description_index != sample->index
+     || current->pool->entry_count != ((isom_stsc_entry_t *)stsc->list->tail->data)->samples_per_chunk )
         if( isom_add_stsc_entry( stbl, current->chunk_number, current->pool->entry_count, current->sample_description_index ) )
             return -1;
-    }
     /* Add a new chunk offset in this track here. */
     if( isom_add_stco_entry( stbl, trak->root->bs->written ) )
         return -1;
@@ -10596,8 +10595,8 @@ static int isom_write_pooled_samples( isom_trak_entry_t *trak, lsmash_entry_list
     for( lsmash_entry_t *entry = pool->head; entry; entry = entry->next )
     {
         lsmash_sample_t *sample = (lsmash_sample_t *)entry->data;
-        if( !sample || !sample->data ||
-            lsmash_write_sample_data( trak->root, sample ) )
+        if( !sample || !sample->data
+         || lsmash_write_sample_data( trak->root, sample ) )
             return -1;
     }
     lsmash_remove_entries( pool, lsmash_delete_sample );
@@ -10701,19 +10700,19 @@ int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_
 static int isom_output_cache( lsmash_root_t *root, uint32_t track_ID )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->cache || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl ||
-        !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
+    if( !trak || !trak->cache || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl
+     || !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
         return -1;
     isom_chunk_t *current = &trak->cache->chunk;
     if( !current->pool )
         return 0;   /* no caches */
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
-    if( !stbl->stsc->list->tail ||
-        current->pool->entry_count != ((isom_stsc_entry_t *)stbl->stsc->list->tail->data)->samples_per_chunk )
+    if( !stbl->stsc->list->tail
+     || current->pool->entry_count != ((isom_stsc_entry_t *)stbl->stsc->list->tail->data)->samples_per_chunk )
         if( isom_add_stsc_entry( stbl, current->chunk_number, current->pool->entry_count, current->sample_description_index ) )
             return -1;
-    if( isom_add_stco_entry( stbl, root->bs->written ) ||
-        isom_write_pooled_samples( trak, current->pool ) )
+    if( isom_add_stco_entry( stbl, root->bs->written )
+     || isom_write_pooled_samples( trak, current->pool ) )
         return -1;
     for( uint32_t i = 0; i < stbl->sgpd_count; i++ )
     {
