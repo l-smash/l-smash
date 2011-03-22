@@ -29,7 +29,8 @@
 #include <ctype.h> /* for chapter handling */
 
 #include "box.h"
-#include "summary.h" /* FIXME: to be replaced with lsmash.h or whatnot */
+#include "mp4a.h"
+#include "mp4sys.h"
 
 /* MP4 Audio Sample Entry */
 typedef struct
@@ -652,7 +653,7 @@ static int isom_add_mp4a_entry( isom_stsd_t *stsd, lsmash_audio_summary_t *summa
        BTW, who ever expects sampling frequency takes fixed-point decimal??? */
     mp4a->samplerate = summary->frequency <= UINT16_MAX ? summary->frequency << 16 : 0;
     mp4a->esds = esds;
-    mp4a->pli = mp4sys_get_audioProfileLevelIndication( summary );
+    mp4a->pli = mp4a_get_audioProfileLevelIndication( summary );
     if( lsmash_add_entry( stsd->list, mp4a ) )
     {
         mp4sys_remove_ES_Descriptor( esds->ES );

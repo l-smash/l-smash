@@ -28,8 +28,6 @@
     importer
 ***************************************************************************/
 
-#include "summary.h"
-
 #ifndef LSMASH_IMPORTER_INTERNAL
 
 typedef void mp4sys_importer_t;

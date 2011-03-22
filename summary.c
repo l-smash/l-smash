@@ -22,17 +22,17 @@
 
 #include "internal.h" /* must be placed first */
 
-#include "summary.h"
-
 #include <stdlib.h>
 #include <string.h>
+
+#include "mp4a.h"
 
 /***************************************************************************
     summary and AudioSpecificConfig relative tools
 ***************************************************************************/
 
 /* create AudioSpecificConfig as memory block from summary, and set it into that summary itself */
-int mp4sys_setup_AudioSpecificConfig( lsmash_audio_summary_t* summary )
+int lsmash_setup_AudioSpecificConfig( lsmash_audio_summary_t* summary )
 {
     if( !summary )
         return -1;
@@ -63,7 +63,7 @@ int mp4sys_setup_AudioSpecificConfig( lsmash_audio_summary_t* summary )
 }
 
 /* Copy exdata into summary from memory block */
-int mp4sys_summary_add_exdata( lsmash_audio_summary_t* summary, void* exdata, uint32_t exdata_length )
+int lsmash_summary_add_exdata( lsmash_audio_summary_t* summary, void* exdata, uint32_t exdata_length )
 {
     if( !summary )
         return -1;
@@ -86,20 +86,11 @@ int mp4sys_summary_add_exdata( lsmash_audio_summary_t* summary, void* exdata, ui
     return 0;
 }
 
-void mp4sys_cleanup_audio_summary( lsmash_audio_summary_t* summary )
+void lsmash_cleanup_audio_summary( lsmash_audio_summary_t* summary )
 {
     if( !summary )
         return;
     if( summary->exdata )
         free( summary->exdata );
     free( summary );
-}
-
-mp4a_audioProfileLevelIndication mp4sys_get_audioProfileLevelIndication( lsmash_audio_summary_t* summary )
-{
-    if( !summary || summary->stream_type != MP4SYS_STREAM_TYPE_AudioStream )
-        return MP4A_AUDIO_PLI_NONE_REQUIRED; /* means error. */
-    if( summary->object_type_indication != MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3 )
-        return MP4A_AUDIO_PLI_NOT_SPECIFIED; /* This is of audio stream, but not described in ISO/IEC 14496-3. */
-    return mp4a_get_audioProfileLevelIndication( summary );
 }

@@ -1333,6 +1333,14 @@ void lsmash_delete_tyrant_chapter( lsmash_root_t *root );
 
 int lsmash_print_movie( lsmash_root_t *root );
 
+/* to facilitate to make exdata (typically DecoderSpecificInfo or AudioSpecificConfig). */
+int lsmash_setup_AudioSpecificConfig( lsmash_audio_summary_t* summary );
+int lsmash_summary_add_exdata( lsmash_audio_summary_t* summary, void* exdata, uint32_t exdata_length );
+
+/* FIXME: these functions may change in the future.
+   I wonder these functions should be for generic (not limited to audio) summary. */
+void lsmash_cleanup_audio_summary( lsmash_audio_summary_t* summary );
+
 #undef PRIVATE
 
 #endif

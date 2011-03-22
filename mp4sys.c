@@ -27,9 +27,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "mp4a.h"
 #define MP4SYS_INTERNAL
 #include "mp4sys.h"
-#include "importer.h" /* FIXME: to be replaced with lsmash.h or whatnot */
 
 /***************************************************************************
     MPEG-4 Systems

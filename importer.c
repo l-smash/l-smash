@@ -29,6 +29,7 @@
 #define LSMASH_IMPORTER_INTERNAL
 #include "importer.h"
 
+#include "mp4a.h"
 #include "box.h"
 
 /***************************************************************************
@@ -250,9 +251,9 @@ static lsmash_audio_summary_t* mp4sys_adts_create_summary( mp4sys_adts_fixed_hea
         return summary;
     }
 #endif
-    if( mp4sys_setup_AudioSpecificConfig( summary ) )
+    if( lsmash_setup_AudioSpecificConfig( summary ) )
     {
-        mp4sys_cleanup_audio_summary( summary );
+        lsmash_cleanup_audio_summary( summary );
         return NULL;
     }
     return summary;
@@ -290,7 +291,7 @@ static int mp4sys_adts_get_accessunit( mp4sys_importer_t* importer, uint32_t tra
         lsmash_entry_t* entry = lsmash_get_entry( importer->summaries, track_number );
         if( !entry || !entry->data )
             return -1;
-        mp4sys_cleanup_audio_summary( entry->data );
+        lsmash_cleanup_audio_summary( entry->data );
         entry->data = summary;
     }
 
@@ -437,7 +438,7 @@ static int mp4sys_adts_probe( mp4sys_importer_t* importer )
     mp4sys_adts_info_t* info = malloc( sizeof(mp4sys_adts_info_t) );
     if( !info )
     {
-        mp4sys_cleanup_audio_summary( summary );
+        lsmash_cleanup_audio_summary( summary );
         return -1;
     }
     memset( info, 0, sizeof(mp4sys_adts_info_t) );
@@ -449,7 +450,7 @@ static int mp4sys_adts_probe( mp4sys_importer_t* importer )
     if( lsmash_add_entry( importer->summaries, summary ) )
     {
         free( info );
-        mp4sys_cleanup_audio_summary( summary );
+        lsmash_cleanup_audio_summary( summary );
         return -1;
     }
     importer->info = info;
@@ -551,9 +552,9 @@ static lsmash_audio_summary_t* mp4sys_mp3_create_summary( mp4sys_mp3_header_t* h
     if( !legacy_mode )
     {
         summary->object_type_indication = MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3;
-        if( mp4sys_setup_AudioSpecificConfig( summary ) )
+        if( lsmash_setup_AudioSpecificConfig( summary ) )
         {
-            mp4sys_cleanup_audio_summary( summary );
+            lsmash_cleanup_audio_summary( summary );
             return NULL;
         }
     }
@@ -621,7 +622,7 @@ static int mp4sys_mp3_get_accessunit( mp4sys_importer_t* importer, uint32_t trac
         lsmash_entry_t* entry = lsmash_get_entry( importer->summaries, track_number );
         if( !entry || !entry->data )
             return -1;
-        mp4sys_cleanup_audio_summary( entry->data );
+        lsmash_cleanup_audio_summary( entry->data );
         entry->data = summary;
     }
     /* read a frame's data. */
@@ -701,7 +702,7 @@ static int mp4sys_mp3_probe( mp4sys_importer_t* importer )
     mp4sys_mp3_info_t* info = malloc( sizeof(mp4sys_mp3_info_t) );
     if( !info )
     {
-        mp4sys_cleanup_audio_summary( summary );
+        lsmash_cleanup_audio_summary( summary );
         return -1;
     }
     memset( info, 0, sizeof(mp4sys_mp3_info_t) );
@@ -712,7 +713,7 @@ static int mp4sys_mp3_probe( mp4sys_importer_t* importer )
     if( lsmash_add_entry( importer->summaries, summary ) )
     {
         free( info );
-        mp4sys_cleanup_audio_summary( summary );
+        lsmash_cleanup_audio_summary( summary );
         return -1;
     }
     importer->info = info;
@@ -844,7 +845,7 @@ static int mp4sys_amr_probe( mp4sys_importer_t* importer )
     importer->info = malloc( sizeof(uint8_t) );
     if( !importer->info )
     {
-        mp4sys_cleanup_audio_summary( summary );
+        lsmash_cleanup_audio_summary( summary );
         return -1;
     }
     *(uint8_t*)importer->info = wb;
@@ -852,7 +853,7 @@ static int mp4sys_amr_probe( mp4sys_importer_t* importer )
     {
         free( importer->info );
         importer->info = NULL;
-        mp4sys_cleanup_audio_summary( summary );
+        lsmash_cleanup_audio_summary( summary );
         return -1;
     }
     return 0;
@@ -948,7 +949,7 @@ void mp4sys_importer_close( mp4sys_importer_t* importer )
     if( importer->funcs.cleanup )
         importer->funcs.cleanup( importer );
     /* FIXME: To be extended to support visual summary. */
-    lsmash_remove_list( importer->summaries, mp4sys_cleanup_audio_summary );
+    lsmash_remove_list( importer->summaries, lsmash_cleanup_audio_summary );
     free( importer );
 }
 
@@ -1040,7 +1041,7 @@ lsmash_audio_summary_t* mp4sys_duplicate_audio_summary( mp4sys_importer_t* impor
     memcpy( summary, src_summary, sizeof(lsmash_audio_summary_t) );
     summary->exdata = NULL;
     summary->exdata_length = 0;
-    if( mp4sys_summary_add_exdata( summary, src_summary->exdata, src_summary->exdata_length ) )
+    if( lsmash_summary_add_exdata( summary, src_summary->exdata, src_summary->exdata_length ) )
     {
         free( summary );
         return NULL;
