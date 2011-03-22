@@ -20,11 +20,12 @@
 
 /* This file is available under an ISC license. */
 
-#include "lsmash.h"
-#include "importer.h"
-
+#include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
+
+#include "lsmash.h"
+#include "importer.h"
 
 #define eprintf( ... ) fprintf( stderr, __VA_ARGS__ )
 
@@ -42,7 +43,7 @@ static void cleanup_structs( structs_t* structs )
     if( structs->root )
         lsmash_destroy_root( structs->root );
     if( structs->summary )
-        mp4sys_cleanup_audio_summary( structs->summary );
+        lsmash_cleanup_audio_summary( structs->summary );
     if( structs->importer )
         mp4sys_importer_close( structs->importer );
 }
@@ -146,7 +147,7 @@ int main( int argc, char* argv[] )
         if( structs.summary->object_type_indication != MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3 )
             return AUDIOMUX_ERR( "--sbr is only valid with MP4A.\n" );
         structs.summary->sbr_mode = MP4A_AAC_SBR_BACKWARD_COMPATIBLE;
-        if( mp4sys_setup_AudioSpecificConfig( structs.summary ) )
+        if( lsmash_setup_AudioSpecificConfig( structs.summary ) )
             return AUDIOMUX_ERR( "Failed to set SBR mode.\n" );
     }
     /* user defined brand mode. */
