@@ -1119,6 +1119,7 @@ struct lsmash_root_tag
 
         lsmash_bs_t *bs;                /* bytestream manager */
         double max_chunk_duration;      /* max duration per chunk in seconds */
+        double max_async_tolerance;     /* max tolerance, in seconds, for amount of interleaving asynchronization between tracks */
         uint8_t qt_compatible;          /* compatibility with QuickTime file format */
         uint8_t isom_compatible;        /* compatibility with ISO Base Media file format */
         uint8_t avc_extensions;         /* compatibility with AVC extensions */

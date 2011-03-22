@@ -9697,14 +9697,15 @@ fail:
 
 void lsmash_initialize_movie_parameters( lsmash_movie_parameters_t *param )
 {
-    param->max_chunk_duration = 0.5;
-    param->timescale          = 600;
-    param->duration           = 0;
-    param->playback_rate      = 0x00010000;
-    param->playback_volume    = 0x0100;
-    param->preview_time       = 0;
-    param->preview_duration   = 0;
-    param->poster_time        = 0;
+    param->max_chunk_duration  = 0.5;
+    param->max_async_tolerance = 2.0;
+    param->timescale           = 600;
+    param->duration            = 0;
+    param->playback_rate       = 0x00010000;
+    param->playback_volume     = 0x0100;
+    param->preview_time        = 0;
+    param->preview_duration    = 0;
+    param->poster_time         = 0;
 }
 
 int lsmash_set_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t *param )
@@ -9712,8 +9713,9 @@ int lsmash_set_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t 
     if( !root || !root->moov || !root->moov->mvhd )
         return -1;
     isom_mvhd_t *mvhd = root->moov->mvhd;
-    root->max_chunk_duration = param->max_chunk_duration;
-    mvhd->timescale          = param->timescale;
+    root->max_chunk_duration  = param->max_chunk_duration;
+    root->max_async_tolerance = LSMASH_MAX( param->max_async_tolerance, 2 * param->max_chunk_duration );
+    mvhd->timescale           = param->timescale;
     if( root->qt_compatible || root->itunes_audio )
     {
         mvhd->rate            = param->playback_rate;
@@ -9738,14 +9740,15 @@ int lsmash_get_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t 
     if( !root || !root->moov || !root->moov->mvhd )
         return -1;
     isom_mvhd_t *mvhd = root->moov->mvhd;
-    param->max_chunk_duration = root->max_chunk_duration;
-    param->timescale          = mvhd->timescale;
-    param->duration           = mvhd->duration;
-    param->playback_rate      = mvhd->rate;
-    param->playback_volume    = mvhd->volume;
-    param->preview_time       = mvhd->previewTime;
-    param->preview_duration   = mvhd->previewDuration;
-    param->poster_time        = mvhd->posterTime;
+    param->max_chunk_duration  = root->max_chunk_duration;
+    param->max_async_tolerance = root->max_async_tolerance;
+    param->timescale           = mvhd->timescale;
+    param->duration            = mvhd->duration;
+    param->playback_rate       = mvhd->rate;
+    param->playback_volume     = mvhd->volume;
+    param->preview_time        = mvhd->previewTime;
+    param->preview_duration    = mvhd->previewDuration;
+    param->poster_time         = mvhd->posterTime;
     return 0;
 }
 
@@ -10539,15 +10542,20 @@ static int isom_add_chunk( isom_trak_entry_t *trak, lsmash_sample_t *sample )
      || !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
         return -1;
     isom_chunk_t *current = &trak->cache->chunk;
-    if( current->chunk_number == 0 )
+    if( !current->pool )
     {
         /* Very initial settings, just once per trak */
         current->pool = lsmash_create_entry_list();
         if( !current->pool )
             return -1;
-        current->chunk_number = 1;
+    }
+    if( !current->pool->entry_count )
+    {
+        /* Cannot decide whether we should flush the current sample or not here yet. */
+        ++ current->chunk_number;
         current->sample_description_index = sample->index;
-        current->first_dts = 0;
+        current->first_dts = sample->dts;
+        return 0;
     }
     if( sample->dts < current->first_dts )
         return -1; /* easy error check. */
@@ -10559,13 +10567,12 @@ static int isom_add_chunk( isom_trak_entry_t *trak, lsmash_sample_t *sample )
     /* now current cached chunk is fixed, actually add chunk relative properties to root accordingly. */
 
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
-    isom_stsc_t *stsc = stbl->stsc;
-    /* Add a new chunk sequence in this track if needed. */
-    if( !stsc->list->tail || current->sample_description_index != sample->index
-     || current->pool->entry_count != ((isom_stsc_entry_t *)stsc->list->tail->data)->samples_per_chunk )
-        if( isom_add_stsc_entry( stbl, current->chunk_number, current->pool->entry_count, current->sample_description_index ) )
-            return -1;
-    /* Add a new chunk offset in this track here. */
+    lsmash_entry_t *last_stsc_entry = stbl->stsc->list->tail;
+    /* Create a new chunk sequence in this track if needed. */
+    if( (!last_stsc_entry || current->pool->entry_count != ((isom_stsc_entry_t *)last_stsc_entry->data)->samples_per_chunk)
+     && isom_add_stsc_entry( stbl, current->chunk_number, current->pool->entry_count, current->sample_description_index ) )
+        return -1;
+    /* Add a new chunk offset in this track. */
     if( isom_add_stco_entry( stbl, trak->root->bs->written ) )
         return -1;
     /* update cache information */
@@ -10573,13 +10580,13 @@ static int isom_add_chunk( isom_trak_entry_t *trak, lsmash_sample_t *sample )
     /* re-initialize cache, using the current sample */
     current->sample_description_index = sample->index;
     current->first_dts = sample->dts;
-    /* current->pool must be flushed in lsmash_append_sample() */
+    /* current->pool must be flushed in isom_append_sample_internal() */
     return 1;
 }
 
 static int lsmash_write_sample_data( lsmash_root_t *root, lsmash_sample_t *sample )
 {
-    if( !root || !root->mdat || !root->bs || !root->bs->stream )
+    if( !root->mdat || !root->bs || !root->bs->stream )
         return -1;
     lsmash_bs_put_bytes( root->bs, sample->data, sample->length );
     if( lsmash_bs_write_data( root->bs ) )
@@ -10590,7 +10597,7 @@ static int lsmash_write_sample_data( lsmash_root_t *root, lsmash_sample_t *sampl
 
 static int isom_write_pooled_samples( isom_trak_entry_t *trak, lsmash_entry_list_t *pool )
 {
-    if( !trak->root || !trak->cache )
+    if( !trak->root || !trak->cache || !trak->tkhd )
         return -1;
     for( lsmash_entry_t *entry = pool->head; entry; entry = entry->next )
     {
@@ -10628,28 +10635,65 @@ static int isom_update_sample_tables( isom_trak_entry_t *trak, lsmash_sample_t *
     if( isom_group_roll_recovery( trak, &sample->prop ) )
         return -1;
     /* Add a chunk if needed. */
-    /*
-     * FIXME: I think we have to implement "arbitrate chunk handling between tracks" system.
-     * Which means, even if a chunk of a trak has not exceeded max_chunk_duration yet,
-     * the chunk should be forced to be fixed and determined so that it shall be written into the file.
-     * Without that, for example, a video sample with frame rate of 0.01fps would not be written
-     * near the corresponding audio sample.
-     * As a result, players(demuxers) have to use fseek to playback that kind of mp4 in A/V sync.
-     * Note that even though we cannot help the case with random access (i.e. seek) even with this system,
-     * we should do it.
-     */
     return isom_add_chunk( trak, sample );
+}
+
+static int isom_output_cached_chunk( isom_trak_entry_t *trak )
+{
+    isom_chunk_t *chunk = &trak->cache->chunk;
+    isom_stbl_t *stbl = trak->mdia->minf->stbl;
+    lsmash_entry_t *last_stsc_entry = stbl->stsc->list->tail;
+    /* Create a new chunk sequence in this track if needed. */
+    if( (!last_stsc_entry || chunk->pool->entry_count != ((isom_stsc_entry_t *)last_stsc_entry->data)->samples_per_chunk)
+     && isom_add_stsc_entry( stbl, chunk->chunk_number, chunk->pool->entry_count, chunk->sample_description_index ) )
+        return -1;
+    /* Add a new chunk offset in this track. */
+    if( isom_add_stco_entry( stbl, trak->root->bs->written ) )
+        return -1;
+    /* Output pooled samples in this track. */
+    return isom_write_pooled_samples( trak, chunk->pool );
 }
 
 static int isom_append_sample_internal( isom_trak_entry_t *trak, lsmash_sample_t *sample )
 {
-    int ret = isom_update_sample_tables( trak, sample );
-    if( ret < 0 )
+    int flush = isom_update_sample_tables( trak, sample );
+    if( flush < 0 )
         return -1;
-    /* ret == 1 means cached samples must be flushed. */
+    /* flush == 1 means pooled samples must be flushed. */
     isom_chunk_t *current = &trak->cache->chunk;
-    if( ret == 1 && isom_write_pooled_samples( trak, current->pool ) )
+    if( flush == 1 && isom_write_pooled_samples( trak, current->pool ) )
         return -1;
+    /* Arbitration system between tracks with extremely scattering dts.
+     * Here, we check whether asynchronization between the tracks exceeds the tolerance.
+     * If a track has too old "first DTS" in its cached chunk than current sample's DTS, then its pooled samples must be flushed.
+     * We don't consider presentation of media since any edit can pick an arbitrary portion of media in track.
+     * Note: you needn't read this loop until you grasp the basic handling of chunks. */
+    lsmash_root_t *root = trak->root;
+    double tolerance = root->max_async_tolerance;
+    for( lsmash_entry_t *entry = root->moov->trak_list->head; entry; entry = entry->next )
+    {
+        isom_trak_entry_t *other = (isom_trak_entry_t *)entry->data;
+        if( trak == other )
+            continue;
+        if( !other || !other->cache || !other->mdia || !other->mdia->mdhd || !other->mdia->mdhd->timescale
+         || !other->mdia->minf || !other->mdia->minf->stbl || !other->mdia->minf->stbl->stsc || !other->mdia->minf->stbl->stsc->list )
+            return -1;
+        isom_chunk_t *chunk = &other->cache->chunk;
+        if( !chunk->pool || !chunk->pool->entry_count )
+            continue;
+        double diff = ((double)sample->dts / trak->mdia->mdhd->timescale)
+                    - ((double)chunk->first_dts / other->mdia->mdhd->timescale);
+        if( diff > tolerance && isom_output_cached_chunk( other ) )
+            return -1;
+        /* Note: we don't flush the cached chunk in the current track and the current sample here
+         * even if the conditional expression of '-diff > tolerance' meets.
+         * That's useless because appending a sample to another track would be a good equivalent.
+         * It's even harmful because it causes excess chunk division by calling
+         * isom_output_cached_chunk() which always generates a new chunk. 
+         * Anyway some excess chunk division will be there, but rather less without it.
+         * To completely avoid this, we need to observe at least whether the current sample will be placed
+         * right next to the previous chunk of the same track or not. */
+    }
     /* anyway the current sample must be pooled. */
     return lsmash_add_entry( current->pool, sample );
 }
@@ -10658,13 +10702,18 @@ int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_
 {
     /* We think max_chunk_duration == 0, which means all samples will be cached on memory, should be prevented.
        This means removal of a feature that we used to have, but anyway very alone chunk does not make sense. */
-    if( !root || !sample || !sample->data || root->max_chunk_duration == 0 )
+    if( !root || !root->bs || !sample || !sample->data
+     || root->max_chunk_duration == 0 || root->max_async_tolerance == 0 )
         return -1;
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->cache || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd )
+    if( !trak || !trak->root || !trak->cache || !trak->mdia
+     || !trak->mdia->mdhd || !trak->mdia->mdhd->timescale
+     || !trak->mdia->minf || !trak->mdia->minf->stbl
+     || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list
+     || !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
         return -1;
     /* If there is no available mdat box to write samples, add and write a new one before any chunk offset is decided. */
-    if( !trak->root->mdat && isom_new_mdat( trak->root ) )
+    if( !root->mdat && isom_new_mdat( root ) )
         return -1;
     isom_sample_entry_t *sample_entry = (isom_sample_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->stsd->list, sample->index );
     if( !sample_entry )
@@ -10697,23 +10746,12 @@ int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_
     return isom_append_sample_internal( trak, sample );
 }
 
-static int isom_output_cache( lsmash_root_t *root, uint32_t track_ID )
+static int isom_output_cache( isom_trak_entry_t *trak )
 {
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->cache || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl
-     || !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
+    if( trak->cache->chunk.pool && trak->cache->chunk.pool->entry_count
+     && isom_output_cached_chunk( trak ) )
         return -1;
-    isom_chunk_t *current = &trak->cache->chunk;
-    if( !current->pool )
-        return 0;   /* no caches */
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
-    if( !stbl->stsc->list->tail
-     || current->pool->entry_count != ((isom_stsc_entry_t *)stbl->stsc->list->tail->data)->samples_per_chunk )
-        if( isom_add_stsc_entry( stbl, current->chunk_number, current->pool->entry_count, current->sample_description_index ) )
-            return -1;
-    if( isom_add_stco_entry( stbl, root->bs->written )
-     || isom_write_pooled_samples( trak, current->pool ) )
-        return -1;
     for( uint32_t i = 0; i < stbl->sgpd_count; i++ )
     {
         isom_sgpd_t *sgpd = stbl->sgpd + i;
@@ -10747,7 +10785,11 @@ static int isom_output_cache( lsmash_root_t *root, uint32_t track_ID )
 
 int lsmash_flush_pooled_samples( lsmash_root_t *root, uint32_t track_ID, uint32_t last_sample_delta )
 {
-    if( isom_output_cache( root, track_ID ) )
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    if( !trak || !trak->cache || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl
+     || !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
+        return -1;
+    if( isom_output_cache( trak ) )
         return -1;
     return lsmash_set_last_sample_delta( root, track_ID, last_sample_delta );
 }
