@@ -86,6 +86,15 @@ int lsmash_summary_add_exdata( lsmash_audio_summary_t* summary, void* exdata, ui
     return 0;
 }
 
+lsmash_audio_summary_t* lsmash_create_audio_summary()
+{
+    lsmash_audio_summary_t* summary = (lsmash_audio_summary_t*)malloc( sizeof(lsmash_audio_summary_t) );
+    if( !summary )
+        return NULL;
+    memset( summary, 0, sizeof(lsmash_audio_summary_t) );
+    return summary;
+}
+
 void lsmash_cleanup_audio_summary( lsmash_audio_summary_t* summary )
 {
     if( !summary )

@@ -1339,6 +1339,7 @@ int lsmash_summary_add_exdata( lsmash_audio_summary_t* summary, void* exdata, ui
 
 /* FIXME: these functions may change in the future.
    I wonder these functions should be for generic (not limited to audio) summary. */
+lsmash_audio_summary_t* lsmash_create_audio_summary();
 void lsmash_cleanup_audio_summary( lsmash_audio_summary_t* summary );
 
 #undef PRIVATE
