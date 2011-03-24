@@ -2139,7 +2139,7 @@ static int isom_add_udta( lsmash_root_t *root, uint32_t track_ID )
 
 static isom_trak_entry_t *isom_add_trak( lsmash_root_t *root )
 {
-    if( !root || !root->moov || !root->moov->mvhd )
+    if( !root || !root->moov )
         return NULL;
     isom_moov_t *moov = root->moov;
     if( !moov->trak_list )
@@ -2630,8 +2630,7 @@ static void isom_remove_moov( lsmash_root_t *root )
         free( moov->mvhd );
     isom_remove_iods( moov->iods );
     isom_remove_udta( moov->udta );
-    if( moov->trak_list )
-        lsmash_remove_list( moov->trak_list, isom_remove_trak );
+    lsmash_remove_list( moov->trak_list, isom_remove_trak );
     free( moov );
     root->moov = NULL;
 }
@@ -5336,7 +5335,7 @@ static int isom_print_sgpd( lsmash_root_t *root, isom_box_t *box, int level )
                 if( sgpd->version == 1 && !sgpd->default_length )
                     isom_iprintf( indent, "description_length[%"PRIu32"] = %"PRIu32"\n", i++, ((isom_roll_entry_t *)entry->data)->description_length );
                 else
-                    isom_iprintf( indent, "roll_distance[%"PRIu32"] = %"PRIu16"\n", i++, ((isom_roll_entry_t *)entry->data)->roll_distance );
+                    isom_iprintf( indent, "roll_distance[%"PRIu32"] = %"PRId16"\n", i++, ((isom_roll_entry_t *)entry->data)->roll_distance );
             }
             break;
         default :
@@ -8686,10 +8685,10 @@ static uint64_t isom_update_avcC_size( isom_avcC_t *avcC )
 
 static uint64_t isom_update_avc_entry_size( isom_avc_entry_t *avc )
 {
-    if( !avc ||
-        ((avc->type != ISOM_CODEC_TYPE_AVC1_VIDEO) &&
-        (avc->type != ISOM_CODEC_TYPE_AVC2_VIDEO) &&
-        (avc->type != ISOM_CODEC_TYPE_AVCP_VIDEO)) )
+    if( !avc
+     || ((avc->type != ISOM_CODEC_TYPE_AVC1_VIDEO)
+     && (avc->type != ISOM_CODEC_TYPE_AVC2_VIDEO)
+     && (avc->type != ISOM_CODEC_TYPE_AVCP_VIDEO)) )
         return 0;
     avc->size = ISOM_DEFAULT_BOX_HEADER_SIZE + 78
         + isom_update_visual_extension_size( (isom_visual_entry_t *)avc )
