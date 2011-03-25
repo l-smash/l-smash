@@ -4157,6 +4157,17 @@ static void isom_iprint_rgba_color( int indent, uint8_t *color )
     isom_iprintf( indent, "{ R, G, B, A } = { %"PRIu8", %"PRIu8", %"PRIu8", %"PRIu8" }\n", color[0], color[1], color[2], color[3] );
 }
 
+static void isom_iprint_sample_description_common_reserved( int indent, uint8_t *reserved )
+{
+    uint64_t temp = ((uint64_t)reserved[0] << 40)
+                  | ((uint64_t)reserved[1] << 32)
+                  | ((uint64_t)reserved[2] << 24)
+                  | ((uint64_t)reserved[3] << 16)
+                  | ((uint64_t)reserved[4] <<  8)
+                  |  (uint64_t)reserved[5];
+    isom_iprintf( indent, "reserved = 0x%012"PRIx64"\n", temp );
+}
+
 static inline int isom_print_simple( lsmash_root_t *root, isom_box_t *box, int level, char *name )
 {
     if( !box )
@@ -4645,11 +4656,9 @@ static int isom_print_visual_description( lsmash_root_t *root, isom_box_t *box, 
         return -1;
     isom_visual_entry_t *visual = (isom_visual_entry_t *)box;
     int indent = level;
-    uint64_t reserved = visual->reserved[0] | visual->reserved[1] | visual->reserved[2]
-                      | visual->reserved[3] | visual->reserved[4] | visual->reserved[5];
     isom_iprintf( indent++, "[%s: Visual Description]\n", isom_4cc2str( visual->type ) );
     isom_iprintf( indent, "size = %"PRIu64"\n", visual->size );
-    isom_iprintf( indent, "reserved = 0x%012"PRIx64"\n", reserved );
+    isom_iprint_sample_description_common_reserved( indent, visual->reserved );
     isom_iprintf( indent, "data_reference_index = %"PRIu16"\n", visual->data_reference_index );
     if( root->qt_compatible )
     {
@@ -4826,11 +4835,9 @@ static int isom_print_audio_description( lsmash_root_t *root, isom_box_t *box, i
         return -1;
     isom_audio_entry_t *audio = (isom_audio_entry_t *)box;
     int indent = level;
-    uint64_t reserved = audio->reserved[0] | audio->reserved[1] | audio->reserved[2]
-                      | audio->reserved[3] | audio->reserved[4] | audio->reserved[5];
     isom_iprintf( indent++, "[%s: Audio Description]\n", isom_4cc2str( audio->type ) );
     isom_iprintf( indent, "size = %"PRIu64"\n", audio->size );
-    isom_iprintf( indent, "reserved = 0x%012"PRIx64"\n", reserved );
+    isom_iprint_sample_description_common_reserved( indent, audio->reserved );
     isom_iprintf( indent, "data_reference_index = %"PRIu16"\n", audio->data_reference_index );
     if( root->qt_compatible )
     {
@@ -4980,11 +4987,9 @@ static int isom_print_text_description( lsmash_root_t *root, isom_box_t *box, in
         return -1;
     isom_text_entry_t *text = (isom_text_entry_t *)box;
     int indent = level;
-    uint64_t reserved = text->reserved[0] | text->reserved[1] | text->reserved[2]
-                      | text->reserved[3] | text->reserved[4] | text->reserved[5];
     isom_iprintf( indent++, "[text: QuickTime Text Description]\n" );
     isom_iprintf( indent, "size = %"PRIu64"\n", text->size );
-    isom_iprintf( indent, "reserved = 0x%012"PRIx64"\n", reserved );
+    isom_iprint_sample_description_common_reserved( indent, text->reserved );
     isom_iprintf( indent, "data_reference_index = %"PRIu16"\n", text->data_reference_index );
     isom_iprintf( indent, "displayFlags = 0x%08"PRId32"\n", text->displayFlags );
     isom_iprintf( indent, "textJustification = %"PRId32"\n", text->textJustification );
@@ -5013,11 +5018,9 @@ static int isom_print_tx3g_description( lsmash_root_t *root, isom_box_t *box, in
         return -1;
     isom_tx3g_entry_t *tx3g = (isom_tx3g_entry_t *)box;
     int indent = level;
-    uint64_t reserved = tx3g->reserved[0] | tx3g->reserved[1] | tx3g->reserved[2]
-                      | tx3g->reserved[3] | tx3g->reserved[4] | tx3g->reserved[5];
     isom_iprintf( indent++, "[tx3g: Timed Text Description]\n" );
     isom_iprintf( indent, "size = %"PRIu64"\n", tx3g->size );
-    isom_iprintf( indent, "reserved = 0x%012"PRIx64"\n", reserved );
+    isom_iprint_sample_description_common_reserved( indent, tx3g->reserved );
     isom_iprintf( indent, "data_reference_index = %"PRIu16"\n", tx3g->data_reference_index );
     isom_iprintf( indent, "displayFlags = 0x%08"PRId32"\n", tx3g->displayFlags );
     isom_iprintf( indent, "horizontal_justification = %"PRId8"\n", tx3g->horizontal_justification );
