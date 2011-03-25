@@ -37,10 +37,11 @@ typedef struct isom_box_tag isom_box_t;
  * If size is 0, then this box is the last one in the file.
  * usertype is for uuid. */
 #define ISOM_BASEBOX_COMMON \
-        isom_box_t *parent; /* pointer of parent box */ \
+        isom_box_t *parent; /* pointer of the parent box of this box */ \
         uint8_t  manager;   /* flags for L-SMASH */ \
-    uint64_t size; \
-    uint32_t type; \
+        uint64_t pos;       /* starting position of this box in the file */ \
+    uint64_t size;          /* the number of bytes in this box */ \
+    uint32_t type;          /* four characters codes that identify box type */ \
     uint8_t  *usertype
 
 #define ISOM_FULLBOX_COMMON \
