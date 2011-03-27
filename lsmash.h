@@ -1116,6 +1116,21 @@ typedef enum {
     MP4A_AAC_SBR_HIERARCHICAL           /* SBR exists. SBR dedicated method. */
 } lsmash_mp4a_aac_sbr_mode;
 
+typedef enum
+{
+    ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE         = 0,        /* not random access point */
+    ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC         = 1,        /* sync sample */
+    ISOM_SAMPLE_RANDOM_ACCESS_TYPE_CLOSED_RAP   = 1,        /* the first sample of a closed GOP */
+    ISOM_SAMPLE_RANDOM_ACCESS_TYPE_OPEN_RAP     = 2,        /* the first sample of an open GOP  */
+    ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY     = 3,        /* starting point of gradual decoder refresh */
+
+    QT_SAMPLE_RANDOM_ACCESS_TYPE_NONE           = 0,        /* not random access point */
+    QT_SAMPLE_RANDOM_ACCESS_TYPE_SYNC           = 1,        /* sync sample */
+    QT_SAMPLE_RANDOM_ACCESS_TYPE_PARTIAL_SYNC   = 2,        /* partial sync sample */
+    QT_SAMPLE_RANDOM_ACCESS_TYPE_CLOSED_RAP     = 1,        /* the first sample of a closed GOP */
+    QT_SAMPLE_RANDOM_ACCESS_TYPE_OPEN_RAP       = 2,        /* the first sample of an open GOP  */
+} lsmash_random_access_type;
+
 
 /* public data types */
 typedef struct
@@ -1124,18 +1139,16 @@ typedef struct
     uint32_t identifier;    /* the identifier for samples
                              * If this identifier equals a certain identifier of recovery point,
                              * then this sample is the recovery point of the earliest group in the pool. */
-    uint8_t start_point;    /* starting point of recovery */
 } lsmash_recovery_t;
 
 typedef struct
 {
-    uint8_t sync_point;
-    uint8_t partial_sync;
     uint8_t allow_earlier;
     uint8_t leading;
     uint8_t independent;
     uint8_t disposable;
     uint8_t redundant;
+    lsmash_random_access_type random_access_type;
     lsmash_recovery_t recovery;
 } lsmash_sample_property_t;
 

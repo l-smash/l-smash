@@ -230,7 +230,7 @@ int main( int argc, char* argv[] )
         sample->dts = numframe * structs.summary->samples_in_frame;
         sample->cts = sample->dts;
         sample->index = sample_entry;
-        sample->prop.sync_point = 1; /* every sample is a random access point. */
+        sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC; /* every sample is a random access point. */
         if( lsmash_append_sample( structs.root, track, sample ) )
             return AUDIOMUX_ERR( "Failed to write a frame.\n" );
         numframe++;

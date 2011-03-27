@@ -10174,16 +10174,15 @@ static int isom_add_sync_point( isom_trak_entry_t *trak, uint32_t sample_number,
 {
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     isom_cache_t *cache = trak->cache;
-    if( !prop->sync_point )         /* no null check for prop */
+    if( prop->random_access_type != ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC )       /* no null check for prop */
     {
-        if( cache->all_sync )
-        {
-            if( !stbl->stss && isom_add_stss( stbl ) )
-                return -1;
-            if( isom_add_stss_entry( stbl, 1 ) )    /* Declare here the first sample is a sync sample. */
-                return -1;
-            cache->all_sync = 0;
-        }
+        if( !cache->all_sync )
+            return 0;
+        if( !stbl->stss && isom_add_stss( stbl ) )
+            return -1;
+        if( isom_add_stss_entry( stbl, 1 ) )    /* Declare here the first sample is a sync sample. */
+            return -1;
+        cache->all_sync = 0;
         return 0;
     }
     if( cache->all_sync )     /* We don't need stss box if all samples are sync sample. */
@@ -10205,7 +10204,8 @@ static int isom_add_partial_sync( isom_trak_entry_t *trak, uint32_t sample_numbe
 {
     if( !trak->root->qt_compatible )
         return 0;
-    if( !prop->partial_sync )       /* no null check for prop */
+    if( prop->random_access_type != QT_SAMPLE_RANDOM_ACCESS_TYPE_PARTIAL_SYNC
+     && !(prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY && prop->recovery.identifier == prop->recovery.complete) )
         return 0;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     if( !stbl->stps && isom_add_stps( stbl ) )
@@ -10243,7 +10243,9 @@ static int isom_group_random_access( isom_trak_entry_t *trak, lsmash_sample_prop
     isom_sgpd_t *sgpd = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_RAP );
     if( !sbgp || !sgpd )
         return 0;
-    uint8_t is_rap = prop->sync_point || prop->partial_sync || (prop->recovery.start_point && prop->recovery.identifier == prop->recovery.complete);
+    uint8_t is_rap = prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_CLOSED_RAP
+                  || prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_OPEN_RAP
+                  || (prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY && prop->recovery.identifier == prop->recovery.complete);
     isom_rap_group_t *group = trak->cache->rap;
     if( !group )
     {
@@ -10287,7 +10289,7 @@ static int isom_group_random_access( isom_trak_entry_t *trak, lsmash_sample_prop
                 return -1;
             }
         }
-        else if( !prop->sync_point )
+        else if( prop->random_access_type != ISOM_SAMPLE_RANDOM_ACCESS_TYPE_CLOSED_RAP )
         {
             /* Create a new group since there is the possibility the next sample is a leading sample.
              * This sample is a member of 'rap ', so we set appropriate value on its group_description_index. */
@@ -10364,7 +10366,7 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_prop
     }
     isom_roll_group_t *group = (isom_roll_group_t *)lsmash_get_entry_data( pool, pool->entry_count );
     uint32_t sample_count = isom_get_sample_count( trak );
-    if( !group || prop->recovery.start_point )
+    if( !group || prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY )
     {
         if( group )
             group->delimited = 1;
@@ -10387,7 +10389,7 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_prop
     else
         ++ group->sample_to_group->sample_count;
     /* If encountered a sync sample, all recoveries are completed here. */
-    if( prop->sync_point )
+    if( prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_CLOSED_RAP )
     {
         for( lsmash_entry_t *entry = pool->head; entry; entry = entry->next )
         {
@@ -10918,7 +10920,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
             memcpy( sample->data + 2 + name_length, encd, 12 );
         }
         sample->dts = sample->cts = data.start_time;
-        sample->prop.sync_point = 1;
+        sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
         sample->index = sample_entry;
         if( lsmash_append_sample( root, chapter_track_ID, sample ) )
             goto fail;
