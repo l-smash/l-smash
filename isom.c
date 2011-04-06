@@ -5854,6 +5854,7 @@ static int isom_read_trak( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         list = lsmash_create_entry_list();
         if( !list )
             return -1;
+        ((isom_moov_t *)parent)->trak_list = list;
     }
     isom_trak_entry_t *trak = malloc( sizeof(isom_trak_entry_t) );
     if( !trak )
@@ -5865,7 +5866,7 @@ static int isom_read_trak( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         free( trak );
         return -1;
     }
-    memset( cache, 0, sizeof(isom_chunk_t) );
+    memset( cache, 0, sizeof(isom_cache_t) );
     trak->root = root;
     trak->cache = cache;
     if( lsmash_add_entry( list, trak ) )
@@ -6284,7 +6285,7 @@ static int isom_read_dref( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 {
     if( parent->type != ISOM_BOX_TYPE_DINF /*&& parent->type != ISOM_BOX_TYPE_META*/ )
         return isom_read_unknown_box( root, box, parent, level );
-   isom_create_list_box( dref, parent, box->type );
+    isom_create_list_box( dref, parent, box->type );
     ((isom_dinf_t *)parent)->dref = dref;
     lsmash_bs_t *bs = root->bs;
     if( lsmash_bs_read_data( bs, sizeof(uint32_t) ) )
