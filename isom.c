@@ -9806,7 +9806,7 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
         uint32_t related_track_ID = trak->related_track_ID;
         /* Disable the track if the track is a track reference chapter. */
         if( trak->is_chapter )
-            trak->tkhd->flags &= 0xfffffe;
+            trak->tkhd->flags &= ~ISOM_TRACK_ENABLED;
         if( trak->is_chapter && related_track_ID )
         {
             /* In order that the track duration of the chapter track doesn't exceed that of the related track. */
@@ -9970,6 +9970,7 @@ void lsmash_destroy_root( lsmash_root_t *root )
 {
     if( !root )
         return;
+    isom_remove_print_funcs( root );
     isom_remove_ftyp( root->ftyp );
     isom_remove_moov( root );
     isom_remove_mdat( root->mdat );
@@ -9982,7 +9983,6 @@ void lsmash_destroy_root( lsmash_root_t *root )
             free( root->bs->data );
         free( root->bs );
     }
-    isom_remove_print_funcs( root );
     free( root );
 }
 
