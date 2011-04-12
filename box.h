@@ -1098,55 +1098,13 @@ typedef struct
     isom_chpl_t *chpl;      /* Chapter List Box */
 } isom_udta_t;
 
-/* Movie Box */
-typedef struct
-{
-    ISOM_BASEBOX_COMMON;
-    isom_mvhd_t         *mvhd;          /* Movie Header Box */
-    isom_iods_t         *iods;          /* ISOM: Object Descriptor Box / QTFF: null */
-    lsmash_entry_list_t *trak_list;     /* Track Box List */
-    isom_udta_t         *udta;          /* User Data Box */
-} isom_moov_t;
-
-/* ROOT */
-struct lsmash_root_tag
-{
-    ISOM_FULLBOX_COMMON;    /* the size field expresses total file size 
-                             * the flags field expresses file mode */
-    isom_ftyp_t *ftyp;      /* File Type Box */
-    isom_moov_t *moov;      /* Movie Box */
-    isom_mdat_t *mdat;      /* Media Data Box */
-    isom_free_t *free;      /* Free Space Box */
-
-        lsmash_bs_t *bs;                /* bytestream manager */
-        double max_chunk_duration;      /* max duration per chunk in seconds */
-        double max_async_tolerance;     /* max tolerance, in seconds, for amount of interleaving asynchronization between tracks */
-        uint8_t qt_compatible;          /* compatibility with QuickTime file format */
-        uint8_t isom_compatible;        /* compatibility with ISO Base Media file format */
-        uint8_t avc_extensions;         /* compatibility with AVC extensions */
-        uint8_t mp4_version1;           /* compatibility with MP4 ver.1 file format */
-        uint8_t mp4_version2;           /* compatibility with MP4 ver.2 file format */
-        uint8_t itunes_audio;           /* compatibility with iTunes Audio */
-        uint8_t max_3gpp_version;       /* maximum 3GPP version */
-        uint8_t max_isom_version;       /* maximum ISO Base Media file format version */
-        lsmash_entry_list_t *print;
-};
-
-typedef int (*isom_print_box_t)( lsmash_root_t *, isom_box_t *, int );
-
-typedef struct
-{
-    int level;
-    isom_box_t *box;
-    isom_print_box_t func;
-} isom_print_entry_t;
-
-/** Track Box **/
+/** Caches for handling tracks **/
 typedef struct
 {
     uint32_t chunk_number;                  /* chunk number */
     uint32_t sample_description_index;      /* sample description index */
     uint64_t first_dts;                     /* the first DTS in chunk */
+    uint64_t pool_size;                     /* the sum of the size of samples in the pool */
     lsmash_entry_list_t *pool;              /* samples pooled to interleave */
 } isom_chunk_t;
 
@@ -1179,13 +1137,285 @@ typedef struct
 
 typedef struct
 {
+    uint32_t traf_number;
+    uint32_t last_duration;     /* the last sample duration in this track fragment */
+    uint64_t largest_cts;       /* the largest CTS in this track fragments */
+} isom_fragment_t;
+
+typedef struct
+{
     uint8_t all_sync;       /* if all samples are sync sample */
     isom_chunk_t chunk;
     isom_timestamp_t timestamp;
     isom_grouping_t roll;
     isom_rap_group_t *rap;
+    isom_fragment_t *fragment;
 } isom_cache_t;
 
+/** Movie Fragments Boxes **/
+/* Track Fragments Flags ('tf_flags') */
+typedef enum
+{
+    ISOM_TF_FLAGS_BASE_DATA_OFFSET_PRESENT               = 0x000001,    /* base_data_offset field exists. */
+    ISOM_TF_FLAGS_SAMPLE_DESCRIPTION_INDEX_PRESENT       = 0x000002,    /* sample_description_index field exists. */
+    ISOM_TF_FLAGS_DEFAULT_SAMPLE_DURATION_PRESENT        = 0x000008,    /* default_sample_duration field exists. */
+    ISOM_TF_FLAGS_DEFAULT_SAMPLE_SIZE_PRESENT            = 0x000010,    /* default_sample_size field exists. */
+    ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT           = 0x000020,    /* default_sample_flags field exists. */
+    ISOM_TF_FLAGS_DURATION_IS_EMPTY                      = 0x010000,    /* There are no samples for this time interval. */
+} isom_tf_flags_code;
+
+/* Track Run Flags ('tr_flags') */
+typedef enum
+{
+    ISOM_TR_FLAGS_DATA_OFFSET_PRESENT                    = 0x000001,    /* data_offset field exists. */
+    ISOM_TR_FLAGS_FIRST_SAMPLE_FLAGS_PRESENT             = 0x000004,    /* first_sample_flags field exists. */
+    ISOM_TR_FLAGS_SAMPLE_DURATION_PRESENT                = 0x000100,    /* sample_duration field exists. */
+    ISOM_TR_FLAGS_SAMPLE_SIZE_PRESENT                    = 0x000200,    /* sample_size field exists. */
+    ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT                   = 0x000400,    /* sample_flags field exists. */
+    ISOM_TR_FLAGS_SAMPLE_COMPOSITION_TIME_OFFSET_PRESENT = 0x000800,    /* sample_composition_time_offset field exists. */
+} isom_tr_flags_code;
+
+/* Sample Flags */
+typedef struct
+{
+    unsigned reserved                    : 4;
+    /* The definition of the following fields is quite the same as Independent and Disposable Samples Box. */
+    unsigned is_leading                  : 2;
+    unsigned sample_depends_on           : 2;
+    unsigned sample_is_depended_on       : 2;
+    unsigned sample_has_redundancy       : 2;
+    /* */
+    unsigned sample_padding_value        : 3;       /* the number of bits at the end of this sample */
+    unsigned sample_is_difference_sample : 1;       /* 0 value means this sample is sync sample. */
+    uint16_t sample_degradation_priority;
+} isom_sample_flags_t;
+
+/* Movie Extends Header Box
+ * This box is omitted when used in live streaming.
+ * If this box is not present, the overall duration must be computed by examining each fragment. */
+typedef struct
+{
+    ISOM_FULLBOX_COMMON;
+    /* version == 0: uint64_t -> uint32_t */
+    uint64_t fragment_duration;     /* the duration of the longest track, in the timescale indicated in the Movie Header Box, including movie fragments. */
+} isom_mehd_t;
+
+/* Track Extends Box
+ * This box sets up default values used by the movie fragments. */
+typedef struct
+{
+    ISOM_FULLBOX_COMMON;
+    uint32_t            track_ID;       /* identifier of the track; this shall be the track ID of a track in the Movie Box */
+    uint32_t            default_sample_description_index;
+    uint32_t            default_sample_duration;
+    uint32_t            default_sample_size;
+    isom_sample_flags_t default_sample_flags;
+} isom_trex_entry_t;
+
+/* Movie Extends Box
+ * This box warns readers that there might be Movie Fragment Boxes in this file. */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    isom_mehd_t         *mehd;          /* Movie Extends Header Box / omitted when used in live streaming */
+    lsmash_entry_list_t *trex_list;     /* Track Extends Box */
+
+        uint64_t placeholder_pos;       /* placeholder position for Movie Extends Header Box */ 
+} isom_mvex_t;
+
+/* Movie Fragment Header Box
+ * This box contains a sequence number, as a safety check.
+ * The sequence number 'usually' starts at 1 and must increase for each movie fragment in the file, in the order in which they occur. */
+typedef struct
+{
+    ISOM_FULLBOX_COMMON;
+    uint32_t sequence_number;       /* the ordinal number of this fragment, in increasing order */
+} isom_mfhd_t;
+
+/* Track Fragment Header Box
+ * Each movie fragment can contain zero or more fragments for each track;
+ * and a track fragment can contain zero or more contiguous runs of samples.
+ * This box sets up information and defaults used for those runs of samples. */
+typedef struct
+{
+    ISOM_FULLBOX_COMMON;                            /* flags field is used for 'tf_flags'. */
+    uint32_t            track_ID;
+    /* all the following are optional fields */
+    uint64_t            base_data_offset;           /* an explicit anchor for the data offsets in each track run
+                                                     * Offsets are file offsets as like as chunk_offset in Chunk Offset Box.
+                                                     * If not provided, the base_data_offset for the first track in the movie fragment is the position 
+                                                     * of the first byte of the enclosing Movie Fragment Box, and for second and subsequent track fragments,
+                                                     * the default is the end of the data defined by the preceding fragment.
+                                                     * To avoid the case this field might overflow, e.g. semi-permanent live streaming and broadcasting,
+                                                     * you shall not use this optional field. */
+    uint32_t            sample_description_index;   /* override default_sample_description_index in Track Extends Box */
+    uint32_t            default_sample_duration;    /* override default_sample_duration in Track Extends Box */
+    uint32_t            default_sample_size;        /* override default_sample_size in Track Extends Box */
+    isom_sample_flags_t default_sample_flags;       /* override default_sample_flags in Track Extends Box */
+} isom_tfhd_t;
+
+/* Track Fragment Run Box
+ * Within the Track Fragment Box, there are zero or more Track Fragment Run Boxes.
+ * If the duration-is-empty flag is set in the tf_flags, there are no track runs.
+ * A track run documents a contiguous set of samples for a track. */
+typedef struct
+{
+    ISOM_FULLBOX_COMMON;                        /* flags field is used for 'tr_flags'. */
+    uint32_t            sample_count;           /* the number of samples being added in this run; also the number of rows in the following table */
+    /* The following are optional fields. */
+    int32_t             data_offset;            /* This value is added to the implicit or explicit data_offset established in the Track Fragment Header Box.
+                                                 * If this field is not present, then the data for this run starts immediately after the data of the previous run,
+                                                 * or at the base_data_offset defined by the Track Fragment Header Box if this is the first run in a track fragment. */
+    isom_sample_flags_t first_sample_flags;     /* a set of flags for the first sample only of this run */
+    lsmash_entry_list_t *optional;              /* all fields in this array are optional. */
+} isom_trun_entry_t;
+
+typedef struct
+{
+    /* If the following fields is present, each field overrides default value described in Track Fragment Header Box or Track Extends Box. */
+    uint32_t            sample_duration;                    /* override default_sample_duration */
+    uint32_t            sample_size;                        /* override default_sample_size */
+    isom_sample_flags_t sample_flags;                       /* override default_sample_flags */
+    /* */
+    uint32_t            sample_composition_time_offset;     /* composition time offset */
+} isom_trun_optional_row_t;
+
+/* Track Fragment Box */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    isom_tfhd_t         *tfhd;          /* Track Fragment Header Box */
+    lsmash_entry_list_t *trun_list;     /* Track Fragment Run Box List
+                                         * If the duration-is-empty flag is set in the tf_flags, there are no track runs. */
+
+        lsmash_root_t *root;            /* go to root */
+        isom_cache_t *cache;
+} isom_traf_entry_t;
+
+/* Movie Fragment Box */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    isom_mfhd_t         *mfhd;          /* Movie Fragment Header Box */
+    lsmash_entry_list_t *traf_list;     /* Track Fragment Box List */
+} isom_moof_entry_t;
+
+/* Track Fragment Random Access Box
+ * Each entry in this box contains the location and the presentation time of the random accessible sample.
+ * Note that not every random accessible sample in the track needs to be listed in the table.
+ * The absence of this box does not mean that all the samples are sync samples. */
+typedef struct
+{
+    ISOM_FULLBOX_COMMON;
+    uint32_t track_ID;
+    unsigned int reserved                  : 26;
+    unsigned int length_size_of_traf_num   : 2;     /* the length in byte of the traf_number field minus one */
+    unsigned int length_size_of_trun_num   : 2;     /* the length in byte of the trun_number field minus one */
+    unsigned int length_size_of_sample_num : 2;     /* the length in byte of the sample_number field minus one */
+    uint32_t number_of_entry;                       /* the number of the entries for this track
+                                                     * Value zero indicates that every sample is a random access point and no table entry follows. */
+    lsmash_entry_list_t *list;                      /* entry_count corresponds to number_of_entry. */
+} isom_tfra_entry_t;
+
+typedef struct
+{
+    /* version == 0: 64bits -> 32bits */
+    uint64_t time;              /* the presentation time of the random access sample in units defined in the Media Header Box of the associated track
+                                 * According to 14496-12:2008/FPDAM 3, presentation times are composition times. */
+    uint64_t moof_offset;       /* the offset of the Movie Fragment Box used in this entry
+                                 * Offset is the byte-offset between the beginning of the file and the beginning of the Movie Fragment Box. */
+    /* */
+    uint32_t traf_number;       /* the Track Fragment Box ('traf') number that contains the random accessible sample
+                                 * The number ranges from 1 in each Movie Fragment Box ('moof'). */
+    uint32_t trun_number;       /* the Track Fragment Run Box ('trun') number that contains the random accessible sample
+                                 * The number ranges from 1 in each Track Fragment Box ('traf'). */
+    uint32_t sample_number;     /* the sample number that contains the random accessible sample
+                                 * The number ranges from 1 in each Track Fragment Run Box ('trun'). */
+} isom_tfra_location_time_entry_t;
+
+/* Movie Fragment Random Access Offset Box
+ * This box provides a copy of the length field from the enclosing Movie Fragment Random Access Box. */
+typedef struct
+{
+    ISOM_FULLBOX_COMMON;
+    uint32_t length;        /* an integer gives the number of bytes of the enclosing Movie Fragment Random Access Box
+                             * This field is placed at the last of the enclosing box to assist readers scanning
+                             * from the end of the file in finding the Movie Fragment Random Access Box. */
+} isom_mfro_t;
+
+/* Movie Fragment Random Access Box
+ * This box provides a table which may assist readers in finding random access points in a file using movie fragments,
+ * and is usually placed at or near the end of the file.
+ * The last box within the Movie Fragment Random Access Box, which is called Movie Fragment Random Access Offset Box,
+ * provides a copy of the length field from the Movie Fragment Random Access Box. */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    lsmash_entry_list_t *tfra_list;     /* Track Fragment Random Access Box */
+    isom_mfro_t         *mfro;          /* Movie Fragment Random Access Offset Box */
+} isom_mfra_t;
+
+/* Movie fragment manager 
+ * The presence of this means we use the structure of movie fragments. */
+typedef struct
+{
+    isom_moof_entry_t *movie;       /* the address corresponding to the current Movie Fragment Box */
+    uint64_t fragment_count;        /* the number of movie fragments we created */
+    uint64_t pool_size;
+    uint8_t has_samples;
+    lsmash_entry_list_t *pool;      /* samples pooled to interleave for the current movie fragment */
+} isom_fragment_manager_t;
+
+/** **/
+
+/* Movie Box */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    isom_mvhd_t         *mvhd;          /* Movie Header Box */
+    isom_iods_t         *iods;          /* ISOM: Object Descriptor Box / QTFF: null */
+    lsmash_entry_list_t *trak_list;     /* Track Box List */
+    isom_udta_t         *udta;          /* User Data Box */
+    isom_mvex_t         *mvex;          /* Movie Extends Box */
+} isom_moov_t;
+
+/* ROOT */
+struct lsmash_root_tag
+{
+    ISOM_FULLBOX_COMMON;                /* the size field expresses total file size 
+                                         * the flags field expresses file mode */
+    isom_ftyp_t         *ftyp;          /* File Type Box */
+    isom_moov_t         *moov;          /* Movie Box */
+    lsmash_entry_list_t *moof_list;     /* Movie Fragment Box List */
+    isom_mdat_t         *mdat;          /* Media Data Box */
+    isom_free_t         *free;          /* Free Space Box */
+    isom_mfra_t         *mfra;          /* Movie Fragment Random Access Box */
+
+        lsmash_bs_t *bs;                    /* bytestream manager */
+        isom_fragment_manager_t *fragment;  /* movie fragment manager */
+        double max_chunk_duration;          /* max duration per chunk in seconds */
+        double max_async_tolerance;         /* max tolerance, in seconds, for amount of interleaving asynchronization between tracks */
+        uint8_t qt_compatible;              /* compatibility with QuickTime file format */
+        uint8_t isom_compatible;            /* compatibility with ISO Base Media file format */
+        uint8_t avc_extensions;             /* compatibility with AVC extensions */
+        uint8_t mp4_version1;               /* compatibility with MP4 ver.1 file format */
+        uint8_t mp4_version2;               /* compatibility with MP4 ver.2 file format */
+        uint8_t itunes_audio;               /* compatibility with iTunes Audio */
+        uint8_t max_3gpp_version;           /* maximum 3GPP version */
+        uint8_t max_isom_version;           /* maximum ISO Base Media file format version */
+        lsmash_entry_list_t *print;
+};
+
+typedef int (*isom_print_box_t)( lsmash_root_t *, isom_box_t *, int );
+
+typedef struct
+{
+    int level;
+    isom_box_t *box;
+    isom_print_box_t func;
+} isom_print_entry_t;
+
+/* Track Box */
 typedef struct
 {
     ISOM_BASEBOX_COMMON;
@@ -1196,10 +1426,10 @@ typedef struct
     isom_mdia_t *mdia;          /* Media Box */
     isom_udta_t *udta;          /* User Data Box */
 
-    lsmash_root_t *root;        /* go to root */
-    isom_cache_t *cache;
-    uint32_t related_track_ID;
-    uint8_t is_chapter;
+        lsmash_root_t *root;    /* go to root */
+        isom_cache_t *cache;
+        uint32_t related_track_ID;
+        uint8_t is_chapter;
 } isom_trak_entry_t;
 /** **/
 

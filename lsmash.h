@@ -33,9 +33,12 @@
 /* public constants */
 typedef enum
 {
-    LSMASH_FILE_MODE_WRITE  = 1,
-    LSMASH_FILE_MODE_READ   = 1<<1,
-    LSMASH_FILE_MODE_DUMP   = 1<<2,
+    LSMASH_FILE_MODE_WRITE             = 1,
+    LSMASH_FILE_MODE_READ              = 1<<1,
+    LSMASH_FILE_MODE_DUMP              = 1<<2,
+    LSMASH_FILE_MODE_FRAGMENTED        = 1<<16,
+    LSMASH_FILE_MODE_WRITE_FRAGMENTED  = LSMASH_FILE_MODE_WRITE | LSMASH_FILE_MODE_FRAGMENTED,
+    LSMASH_FILE_MODE_READ_FRAGMENTED   = LSMASH_FILE_MODE_READ  | LSMASH_FILE_MODE_FRAGMENTED,
 } lsmash_file_mode_code;
 
 typedef enum
@@ -1339,6 +1342,9 @@ int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_
 int lsmash_flush_pooled_samples( lsmash_root_t *root, uint32_t track_ID, uint32_t last_sample_delta );
 int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux );
 void lsmash_destroy_root( lsmash_root_t *root );
+
+int lsmash_create_fragment_movie( lsmash_root_t *root );
+int lsmash_create_fragment_empty_duration( lsmash_root_t *root, uint32_t track_ID, uint32_t duration );
 
 void lsmash_delete_track( lsmash_root_t *root, uint32_t track_ID );
 void lsmash_delete_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID );

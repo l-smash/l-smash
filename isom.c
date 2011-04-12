@@ -95,7 +95,14 @@ static int isom_is_fullbox( void *box )
         ISOM_BOX_TYPE_CO64,
         ISOM_BOX_TYPE_SGPD,
         ISOM_BOX_TYPE_SBGP,
-        ISOM_BOX_TYPE_CHPL
+        ISOM_BOX_TYPE_CHPL,
+        ISOM_BOX_TYPE_MEHD,
+        ISOM_BOX_TYPE_TREX,
+        ISOM_BOX_TYPE_MFHD,
+        ISOM_BOX_TYPE_TFHD,
+        ISOM_BOX_TYPE_TRUN,
+        ISOM_BOX_TYPE_TFRA,
+        ISOM_BOX_TYPE_MFRO
     };
     for( int i = 0; i < sizeof(fullbox_table)/sizeof(uint32_t); i++ )
         if( type == fullbox_table[i] )
@@ -205,6 +212,51 @@ static isom_trak_entry_t *isom_get_trak( lsmash_root_t *root, uint32_t track_ID 
             return NULL;
         if( trak->tkhd->track_ID == track_ID )
             return trak;
+    }
+    return NULL;
+}
+
+static isom_trex_entry_t *isom_get_trex( isom_mvex_t *mvex, uint32_t track_ID )
+{
+    if( !track_ID || !mvex || !mvex->trex_list )
+        return NULL;
+    for( lsmash_entry_t *entry = mvex->trex_list->head; entry; entry = entry->next )
+    {
+        isom_trex_entry_t *trex = (isom_trex_entry_t *)entry->data;
+        if( !trex )
+            return NULL;
+        if( trex->track_ID == track_ID )
+            return trex;
+    }
+    return NULL;
+}
+
+static isom_traf_entry_t *isom_get_traf( isom_moof_entry_t *moof, uint32_t track_ID )
+{
+    if( !track_ID || !moof || !moof->traf_list )
+        return NULL;
+    for( lsmash_entry_t *entry = moof->traf_list->head; entry; entry = entry->next )
+    {
+        isom_traf_entry_t *traf = (isom_traf_entry_t *)entry->data;
+        if( !traf || !traf->tfhd )
+            return NULL;
+        if( traf->tfhd->track_ID == track_ID )
+            return traf;
+    }
+    return NULL;
+}
+
+static isom_tfra_entry_t *isom_get_tfra( isom_mfra_t *mfra, uint32_t track_ID )
+{
+    if( !track_ID || !mfra || !mfra->tfra_list )
+        return NULL;
+    for( lsmash_entry_t *entry = mfra->tfra_list->head; entry; entry = entry->next )
+    {
+        isom_tfra_entry_t *tfra = (isom_tfra_entry_t *)entry->data;
+        if( !tfra )
+            return NULL;
+        if( tfra->track_ID == track_ID )
+            return tfra;
     }
     return NULL;
 }
@@ -1468,6 +1520,131 @@ static int isom_add_chpl_entry( isom_chpl_t *chpl, isom_chapter_entry_t *chap_da
     return 0;
 }
 
+static isom_trex_entry_t *isom_add_trex( isom_mvex_t *mvex )
+{
+    if( !mvex )
+        return NULL;
+    if( !mvex->trex_list )
+    {
+        mvex->trex_list = lsmash_create_entry_list();
+        if( !mvex->trex_list )
+            return NULL;
+    }
+    isom_trex_entry_t *trex = malloc( sizeof(isom_trex_entry_t) );
+    if( !trex )
+        return NULL;
+    memset( trex, 0, sizeof(isom_trex_entry_t) );
+    isom_init_box_common( trex, mvex, ISOM_BOX_TYPE_TREX );
+    if( lsmash_add_entry( mvex->trex_list, trex ) )
+    {
+        free( trex );
+        return NULL;
+    }
+    return trex;
+}
+
+static isom_trun_entry_t *isom_add_trun( isom_traf_entry_t *traf )
+{
+    if( !traf )
+        return NULL;
+    if( !traf->trun_list )
+    {
+        traf->trun_list = lsmash_create_entry_list();
+        if( !traf->trun_list )
+            return NULL;
+    }
+    isom_trun_entry_t *trun = malloc( sizeof(isom_trun_entry_t) );
+    if( !trun )
+        return NULL;
+    memset( trun, 0, sizeof(isom_trun_entry_t) );
+    isom_init_box_common( trun, traf, ISOM_BOX_TYPE_TRUN );
+    if( lsmash_add_entry( traf->trun_list, trun ) )
+    {
+        free( trun );
+        return NULL;
+    }
+    return trun;
+}
+
+static isom_traf_entry_t *isom_add_traf( lsmash_root_t *root, isom_moof_entry_t *moof )
+{
+    if( !root || !root->moof_list || !moof )
+        return NULL;
+    if( !moof->traf_list )
+    {
+        moof->traf_list = lsmash_create_entry_list();
+        if( !moof->traf_list )
+            return NULL;
+    }
+    isom_traf_entry_t *traf = malloc( sizeof(isom_traf_entry_t) );
+    if( !traf )
+        return NULL;
+    memset( traf, 0, sizeof(isom_traf_entry_t) );
+    isom_init_box_common( traf, moof, ISOM_BOX_TYPE_TRAF );
+    isom_cache_t *cache = malloc( sizeof(isom_cache_t) );
+    if( !cache )
+    {
+        free( traf );
+        return NULL;
+    }
+    memset( cache, 0, sizeof(isom_cache_t) );
+    if( lsmash_add_entry( moof->traf_list, traf ) )
+    {
+        free( cache );
+        free( traf );
+        return NULL;
+    }
+    traf->root = root;
+    traf->cache = cache;
+    return traf;
+}
+
+static isom_moof_entry_t *isom_add_moof( lsmash_root_t *root )
+{
+    if( !root )
+        return NULL;
+    if( !root->moof_list )
+    {
+        root->moof_list = lsmash_create_entry_list();
+        if( !root->moof_list )
+            return NULL;
+    }
+    isom_moof_entry_t *moof = malloc( sizeof(isom_moof_entry_t) );
+    if( !moof )
+        return NULL;
+    memset( moof, 0, sizeof(isom_moof_entry_t) );
+    isom_init_box_common( moof, root, ISOM_BOX_TYPE_MOOF );
+    if( lsmash_add_entry( root->moof_list, moof ) )
+    {
+        free( moof );
+        return NULL;
+    }
+    return moof;
+}
+
+static isom_tfra_entry_t *isom_add_tfra( isom_mfra_t *mfra )
+{
+    if( !mfra )
+        return NULL;
+    if( !mfra->tfra_list )
+    {
+        mfra->tfra_list = lsmash_create_entry_list();
+        if( !mfra->tfra_list )
+            return NULL;
+    }
+    isom_tfra_entry_t *tfra = malloc( sizeof(isom_tfra_entry_t) );
+    if( !tfra )
+        return NULL;
+    memset( tfra, 0, sizeof(isom_tfra_entry_t) );
+    isom_init_box_common( tfra, mfra, ISOM_BOX_TYPE_TFRA );
+    if( lsmash_add_entry( mfra->tfra_list, tfra ) )
+    {
+        free( tfra );
+        return NULL;
+    }
+    return tfra;
+}
+
 static int isom_add_ftyp( lsmash_root_t *root )
 {
     if( root->ftyp )
@@ -2155,13 +2332,89 @@ static isom_trak_entry_t *isom_add_trak( lsmash_root_t *root )
     isom_init_box_common( trak, moov, ISOM_BOX_TYPE_TRAK );
     isom_cache_t *cache = malloc( sizeof(isom_cache_t) );
     if( !cache )
+    {
+        free( trak );
         return NULL;
+    }
     memset( cache, 0, sizeof(isom_cache_t) );
+    isom_fragment_t *fragment = NULL;
+    if( root->fragment )
+    {
+        fragment = malloc( sizeof(isom_fragment_t) );
+        if( !fragment )
+        {
+            free( cache );
+            free( trak );
+            return NULL;
+        }
+        memset( fragment, 0, sizeof(isom_fragment_t) );
+        cache->fragment = fragment;
+    }
     if( lsmash_add_entry( moov->trak_list, trak ) )
+    {
+        if( fragment )
+            free( fragment );
+        free( cache );
+        free( trak );
         return NULL;
+    }
     trak->root = root;
     trak->cache = cache;
     return trak;
+}
+
+static int isom_add_mvex( isom_moov_t *moov )
+{
+    if( !moov || moov->mvex )
+        return -1;
+    isom_create_box( mvex, moov, ISOM_BOX_TYPE_MVEX );
+    moov->mvex = mvex;
+    return 0;
+}
+
+static int isom_add_mehd( isom_mvex_t *mvex )
+{
+    if( !mvex || mvex->mehd )
+        return -1;
+    isom_create_box( mehd, mvex, ISOM_BOX_TYPE_MEHD );
+    mvex->mehd = mehd;
+    return 0;
+}
+
+static int isom_add_tfhd( isom_traf_entry_t *traf )
+{
+    if( !traf || traf->tfhd )
+        return -1;
+    isom_create_box( tfhd, traf, ISOM_BOX_TYPE_TFHD );
+    traf->tfhd = tfhd;
+    return 0;
+}
+
+static int isom_add_mfhd( isom_moof_entry_t *moof )
+{
+    if( !moof || moof->mfhd )
+        return -1;
+    isom_create_box( mfhd, moof, ISOM_BOX_TYPE_MFHD );
+    moof->mfhd = mfhd;
+    return 0;
+}
+
+static int isom_add_mfra( lsmash_root_t *root )
+{
+    if( !root || root->mfra )
+        return -1;
+    isom_create_box( mfra, root, ISOM_BOX_TYPE_MFRA );
+    root->mfra = mfra;
+    return 0;
+}
+
+static int isom_add_mfro( isom_mfra_t *mfra )
+{
+    if( !mfra || mfra->mfro )
+        return -1;
+    isom_create_box( mfro, mfra, ISOM_BOX_TYPE_MFRO );
+    mfra->mfro = mfro;
+    return 0;
 }
 
 #define isom_remove_fullbox( box_type, container ) \
@@ -2621,6 +2874,15 @@ static void isom_remove_iods( isom_iods_t *iods )
     free( iods );
 }
 
+static void isom_remove_mvex( isom_mvex_t *mvex )
+{
+    if( !mvex )
+        return;
+    isom_remove_fullbox( mehd, mvex );
+    lsmash_remove_list( mvex->trex_list, NULL );
+    free( mvex );
+}
+
 static void isom_remove_moov( lsmash_root_t *root )
 {
     if( !root || !root->moov )
@@ -2631,8 +2893,35 @@ static void isom_remove_moov( lsmash_root_t *root )
     isom_remove_iods( moov->iods );
     isom_remove_udta( moov->udta );
     lsmash_remove_list( moov->trak_list, isom_remove_trak );
+    isom_remove_mvex( moov->mvex );
     free( moov );
     root->moov = NULL;
+}
+
+static void isom_remove_trun( isom_trun_entry_t *trun )
+{
+    if( !trun )
+        return;
+    lsmash_remove_list( trun->optional, NULL );
+    free( trun );   /* Note: the list that contains this trun still has the address of the entry. */
+}
+
+static void isom_remove_traf( isom_traf_entry_t *traf )
+{
+    if( !traf )
+        return;
+    isom_remove_fullbox( tfhd, traf );
+    lsmash_remove_list( traf->trun_list, isom_remove_trun );
+    free( traf );   /* Note: the list that contains this traf still has the address of the entry. */
+}
+
+static void isom_remove_moof( isom_moof_entry_t *moof )
+{
+    if( !moof )
+        return;
+    isom_remove_fullbox( mfhd, moof );
+    lsmash_remove_list( moof->traf_list, isom_remove_traf );
+    free( moof );
 }
 
 static void isom_remove_mdat( isom_mdat_t *mdat )
@@ -2649,6 +2938,23 @@ static void isom_remove_free( isom_free_t *skip )
             free( skip->data );
         free( skip );
     }
+}
+
+static void isom_remove_tfra( isom_tfra_entry_t *tfra )
+{
+    if( !tfra )
+        return;
+    lsmash_remove_list( tfra->list, NULL );
+    free( tfra );
+}
+
+static void isom_remove_mfra( isom_mfra_t *mfra )
+{
+    if( !mfra )
+        return;
+    lsmash_remove_list( mfra->tfra_list, isom_remove_tfra );
+    isom_remove_fullbox( mfro, mfra );
+    free( mfra );
 }
 
 /* Box writers */
@@ -3896,6 +4202,226 @@ static int isom_write_mvhd( lsmash_root_t *root )
     return lsmash_bs_write_data( bs );
 }
 
+static void isom_bs_put_sample_flags( lsmash_bs_t *bs, isom_sample_flags_t *flags )
+{
+    uint32_t temp = (flags->reserved                    << 28)
+                  | (flags->is_leading                  << 26)
+                  | (flags->sample_depends_on           << 24)
+                  | (flags->sample_is_depended_on       << 22)
+                  | (flags->sample_has_redundancy       << 20)
+                  | (flags->sample_padding_value        << 17)
+                  | (flags->sample_is_difference_sample << 16)
+                  |  flags->sample_degradation_priority;
+    lsmash_bs_put_be32( bs, temp );
+}
+
+static int isom_write_mehd( lsmash_bs_t *bs, isom_mehd_t *mehd )
+{
+    if( !mehd )
+        return -1;
+    isom_bs_put_box_common( bs, mehd );
+    if( mehd->version == 1 )
+        lsmash_bs_put_be64( bs, mehd->fragment_duration );
+    else
+        lsmash_bs_put_be32( bs, (uint32_t)mehd->fragment_duration );
+    return lsmash_bs_write_data( bs );
+}
+
+static int isom_write_trex( lsmash_bs_t *bs, isom_trex_entry_t *trex )
+{
+    if( !trex )
+        return -1;
+    isom_bs_put_box_common( bs, trex );
+    lsmash_bs_put_be32( bs, trex->track_ID );
+    lsmash_bs_put_be32( bs, trex->default_sample_description_index );
+    lsmash_bs_put_be32( bs, trex->default_sample_duration );
+    lsmash_bs_put_be32( bs, trex->default_sample_size );
+    isom_bs_put_sample_flags( bs, &trex->default_sample_flags );
+    return lsmash_bs_write_data( bs );
+}
+
+static int isom_bs_write_movie_extends_placeholder( lsmash_bs_t *bs )
+{
+    /* The following will be overwritten by Movie Extends Header Box.
+     * We use version 1 Movie Extends Header Box since it causes extra 4 bytes region
+     * we cannot replace with empty Free Space Box as we place version 0 one.  */
+    lsmash_bs_put_be32( bs, ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 8 );
+    lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_FREE );
+    lsmash_bs_put_be32( bs, 0 );
+    lsmash_bs_put_be64( bs, 0 );
+    return lsmash_bs_write_data( bs );
+}
+
+static int isom_write_mvex( lsmash_bs_t *bs, isom_mvex_t *mvex )
+{
+    if( !mvex )
+        return 0;
+    isom_bs_put_box_common( bs, mvex );
+    if( lsmash_bs_write_data( bs ) )
+        return -1;
+    /* Movie Extends Header Box is not written immediatly.
+     * It's done after finishing all movie fragments. */
+    if( mvex->mehd )
+    {
+        if( isom_write_mehd( bs, mvex->mehd ) )
+            return -1;
+    }
+    else
+    {
+        mvex->placeholder_pos = lsmash_ftell( bs->stream );
+        if( isom_bs_write_movie_extends_placeholder( bs ) )
+            return -1;
+    }
+    if( mvex->trex_list )
+        for( lsmash_entry_t *entry = mvex->trex_list->head; entry; entry = entry->next )
+            if( isom_write_trex( bs, (isom_trex_entry_t *)entry->data ) )
+                return -1;
+    return 0;
+}
+
+static int isom_write_mfhd( lsmash_bs_t *bs, isom_mfhd_t *mfhd )
+{
+    if( !mfhd )
+        return -1;
+    isom_bs_put_box_common( bs, mfhd );
+    lsmash_bs_put_be32( bs, mfhd->sequence_number );
+    return lsmash_bs_write_data( bs );
+}
+
+static int isom_write_tfhd( lsmash_bs_t *bs, isom_tfhd_t *tfhd )
+{
+    if( !tfhd )
+        return -1;
+    isom_bs_put_box_common( bs, tfhd );
+    lsmash_bs_put_be32( bs, tfhd->track_ID );
+    if( tfhd->flags & ISOM_TF_FLAGS_BASE_DATA_OFFSET_PRESENT         ) lsmash_bs_put_be64( bs, tfhd->base_data_offset );
+    if( tfhd->flags & ISOM_TF_FLAGS_SAMPLE_DESCRIPTION_INDEX_PRESENT ) lsmash_bs_put_be32( bs, tfhd->sample_description_index );
+    if( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_DURATION_PRESENT  ) lsmash_bs_put_be32( bs, tfhd->default_sample_duration );
+    if( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_SIZE_PRESENT      ) lsmash_bs_put_be32( bs, tfhd->default_sample_size );
+    if( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT     ) isom_bs_put_sample_flags( bs, &tfhd->default_sample_flags );
+    return lsmash_bs_write_data( bs );
+}
+
+static int isom_write_trun( lsmash_bs_t *bs, isom_trun_entry_t *trun )
+{
+    if( !trun )
+        return -1;
+    isom_bs_put_box_common( bs, trun );
+    lsmash_bs_put_be32( bs, trun->sample_count );
+    if( trun->flags & ISOM_TR_FLAGS_DATA_OFFSET_PRESENT        ) lsmash_bs_put_be32( bs, trun->data_offset );
+    if( trun->flags & ISOM_TR_FLAGS_FIRST_SAMPLE_FLAGS_PRESENT ) isom_bs_put_sample_flags( bs, &trun->first_sample_flags );
+    if( trun->optional )
+        for( lsmash_entry_t *entry = trun->optional->head; entry; entry = entry->next )
+        {
+            isom_trun_optional_row_t *data = (isom_trun_optional_row_t *)entry->data;
+            if( !data )
+                return -1;
+            if( trun->flags & ISOM_TR_FLAGS_SAMPLE_DURATION_PRESENT                ) lsmash_bs_put_be32( bs, data->sample_duration );
+            if( trun->flags & ISOM_TR_FLAGS_SAMPLE_SIZE_PRESENT                    ) lsmash_bs_put_be32( bs, data->sample_size );
+            if( trun->flags & ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT                   ) isom_bs_put_sample_flags( bs, &data->sample_flags );
+            if( trun->flags & ISOM_TR_FLAGS_SAMPLE_COMPOSITION_TIME_OFFSET_PRESENT ) lsmash_bs_put_be32( bs, data->sample_composition_time_offset );
+        }
+    return lsmash_bs_write_data( bs );
+}
+
+static int isom_write_traf( lsmash_bs_t *bs, isom_traf_entry_t *traf )
+{
+    if( !traf )
+        return -1;
+    isom_bs_put_box_common( bs, traf );
+    if( lsmash_bs_write_data( bs ) )
+        return -1;
+    if( isom_write_tfhd( bs, traf->tfhd ) )
+        return -1;
+    if( traf->trun_list )
+        for( lsmash_entry_t *entry = traf->trun_list->head; entry; entry = entry->next )
+            if( isom_write_trun( bs, (isom_trun_entry_t *)entry->data ) )
+                return -1;
+    return 0;
+}
+
+static int isom_write_moof( lsmash_bs_t *bs, isom_moof_entry_t *moof )
+{
+    if( !moof )
+        return -1;
+    isom_bs_put_box_common( bs, moof );
+    if( lsmash_bs_write_data( bs ) )
+        return -1;
+    if( isom_write_mfhd( bs, moof->mfhd ) )
+        return -1;
+    if( moof->traf_list )
+        for( lsmash_entry_t *entry = moof->traf_list->head; entry; entry = entry->next )
+            if( isom_write_traf( bs, (isom_traf_entry_t *)entry->data ) )
+                return -1;
+    return 0;
+}
+
+static int isom_write_tfra( lsmash_bs_t *bs, isom_tfra_entry_t *tfra )
+{
+    if( !tfra )
+        return -1;
+    isom_bs_put_box_common( bs, tfra );
+    uint32_t temp = (tfra->reserved                << 6)
+                  | (tfra->length_size_of_traf_num << 4)
+                  | (tfra->length_size_of_trun_num << 2)
+                  |  tfra->length_size_of_sample_num;
+    lsmash_bs_put_be32( bs, tfra->track_ID );
+    lsmash_bs_put_be32( bs, temp );
+    lsmash_bs_put_be32( bs, tfra->number_of_entry );
+    if( tfra->list )
+    {
+        lsmash_bits_t *bits = lsmash_bits_create( bs );
+        if( !bits )
+            return -1;
+        uint32_t bits_of_time        = tfra->version == 1 ? 64 : 32;
+        uint32_t bits_of_moof_offset = tfra->version == 1 ? 64 : 32;
+        uint32_t bits_of_traf_num    = (tfra->length_size_of_traf_num   + 1) * 8;
+        uint32_t bits_of_trun_num    = (tfra->length_size_of_trun_num   + 1) * 8;
+        uint32_t bits_of_sample_num  = (tfra->length_size_of_sample_num + 1) * 8;
+        for( lsmash_entry_t *entry = tfra->list->head; entry; entry = entry->next )
+        {
+            isom_tfra_location_time_entry_t *data = (isom_tfra_location_time_entry_t *)entry->data;
+            if( !data )
+            {
+                lsmash_bits_cleanup( bits );
+                return -1;
+            }
+            lsmash_bits_put( bits, data->time,          bits_of_time );
+            lsmash_bits_put( bits, data->moof_offset,   bits_of_moof_offset );
+            lsmash_bits_put( bits, data->traf_number,   bits_of_traf_num );
+            lsmash_bits_put( bits, data->trun_number,   bits_of_trun_num );
+            lsmash_bits_put( bits, data->sample_number, bits_of_sample_num );
+
+        }
+        lsmash_bits_put_align( bits );
+        lsmash_bits_cleanup( bits );
+    }
+    return lsmash_bs_write_data( bs );
+}
+
+static int isom_write_mfro( lsmash_bs_t *bs, isom_mfro_t *mfro )
+{
+    if( !mfro )
+        return -1;
+    isom_bs_put_box_common( bs, mfro );
+    lsmash_bs_put_be32( bs, mfro->length );
+    return lsmash_bs_write_data( bs );
+}
+
+static int isom_write_mfra( lsmash_bs_t *bs, isom_mfra_t *mfra )
+{
+    if( !mfra )
+        return -1;
+    isom_bs_put_box_common( bs, mfra );
+    if( lsmash_bs_write_data( bs ) )
+        return -1;
+    if( mfra->tfra_list )
+        for( lsmash_entry_t *entry = mfra->tfra_list->head; entry; entry = entry->next )
+            if( isom_write_tfra( bs, (isom_tfra_entry_t *)entry->data ) )
+                return -1;
+    return isom_write_mfro( bs, mfra->mfro );
+}
+
 static int isom_bs_write_largesize_placeholder( lsmash_bs_t *bs )
 {
     lsmash_bs_put_be32( bs, ISOM_DEFAULT_BOX_HEADER_SIZE );
@@ -3903,24 +4429,35 @@ static int isom_bs_write_largesize_placeholder( lsmash_bs_t *bs )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_mdat_header( lsmash_root_t *root )
+static int isom_write_mdat_header( lsmash_root_t *root, uint64_t media_size )
 {
     if( !root || !root->bs || !root->mdat )
         return -1;
     isom_mdat_t *mdat = root->mdat;
     lsmash_bs_t *bs = root->bs;
-    mdat->placeholder_pos = lsmash_ftell( bs->stream );
-    if( isom_bs_write_largesize_placeholder( bs ) )
-        return -1;
-    mdat->size = ISOM_DEFAULT_BOX_HEADER_SIZE;
+    if( media_size )
+    {
+        mdat->size = ISOM_DEFAULT_BOX_HEADER_SIZE + media_size;
+        if( mdat->size > UINT32_MAX )
+            mdat->size += 8;    /* large_size */
+    }
+    else
+    {
+        mdat->placeholder_pos = lsmash_ftell( bs->stream );
+        if( isom_bs_write_largesize_placeholder( bs ) )
+            return -1;
+        mdat->size = ISOM_DEFAULT_BOX_HEADER_SIZE;
+    }
     isom_bs_put_box_common( bs, mdat );
     return lsmash_bs_write_data( bs );
 }
 
 static int isom_write_mdat_size( lsmash_root_t *root )
 {
-    if( !root || !root->bs || !root->bs->stream || !root->mdat )
+    if( !root || !root->bs || !root->bs->stream )
         return -1;
+    if( !root->mdat )
+        return 0;
     isom_mdat_t *mdat = root->mdat;
     uint8_t large_flag = mdat->size > UINT32_MAX;
     lsmash_bs_t *bs = root->bs;
@@ -3939,25 +4476,31 @@ static int isom_write_mdat_size( lsmash_root_t *root )
         lsmash_bs_put_be32( bs, mdat->size );
         lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_MDAT );
     }
-    if( lsmash_bs_write_data( bs ) )
-        return -1;
+    int ret = lsmash_bs_write_data( bs );
     lsmash_fseek( stream, current_pos, SEEK_SET );
-    return 0;
+    return ret;
 }
 
-/* If a mdat box already exists, flush a current one and start a new one. */
-static int isom_new_mdat( lsmash_root_t *root )
+/* We put a placeholder for 64-bit media data if the media_size of the argument is set to 0.
+ * If a Media Data Box already exists and we don't pick movie fragments structure,
+ * write the actual size of the current one and start a new one. */
+static int isom_new_mdat( lsmash_root_t *root, uint64_t media_size )
 {
     if( !root )
         return 0;
-    if( root->mdat && isom_write_mdat_size( root ) )    /* flush a current mdat */
-        return -1;
+    if( root->mdat )
+    {
+        /* Write the actual size of the current Media Data Box. */
+        if( !root->fragment && isom_write_mdat_size( root ) )
+            return -1;
+    }
     else
     {
         isom_create_box( mdat, root, ISOM_BOX_TYPE_MDAT );
         root->mdat = mdat;
     }
-    return isom_write_mdat_header( root );     /* start a new mdat */
+    /* Start a new Media Data Box. */
+    return isom_write_mdat_header( root, media_size );
 }
 
 static int isom_check_compatibility( lsmash_root_t *root )
@@ -4077,7 +4620,7 @@ static double isom_int2float64( uint64_t value )
     return (union {uint64_t i; double d;}){value}.d;
 }
 
-static void isom_iprintf_duration( int indent, uint64_t duration, uint32_t timescale )
+static void isom_iprintf_duration( int indent, char *field_name, uint64_t duration, uint32_t timescale )
 {
     if( !timescale )
     {
@@ -4091,7 +4634,7 @@ static void isom_iprintf_duration( int indent, uint64_t duration, uint32_t times
     int ms   = ((double)duration / timescale - (hour * 3600 + min * 60 + sec)) * 1e3 + 0.5;
     static char str[32];
     sprintf( str, "%02d:%02d:%02d.%03d", hour, min, sec, ms );
-    isom_iprintf( indent, "duration = %"PRIu64" (%s)\n", duration, str );
+    isom_iprintf( indent, "%s = %"PRIu64" (%s)\n", field_name, duration, str );
 }
 
 static char *isom_mp4time2utc( uint64_t mp4time )
@@ -4166,6 +4709,32 @@ static void isom_iprint_sample_description_common_reserved( int indent, uint8_t 
                   | ((uint64_t)reserved[4] <<  8)
                   |  (uint64_t)reserved[5];
     isom_iprintf( indent, "reserved = 0x%012"PRIx64"\n", temp );
+}
+
+static void isom_iprint_sample_flags( int indent, char *field_name, isom_sample_flags_t *flags )
+{
+    uint32_t temp = (flags->reserved                    << 28)
+                  | (flags->is_leading                  << 26)
+                  | (flags->sample_depends_on           << 24)
+                  | (flags->sample_is_depended_on       << 22)
+                  | (flags->sample_has_redundancy       << 20)
+                  | (flags->sample_padding_value        << 17)
+                  | (flags->sample_is_difference_sample << 16)
+                  |  flags->sample_degradation_priority;
+    isom_iprintf( indent++, "%s = 0x%08"PRIx32"\n", field_name, temp );
+         if( flags->is_leading & ISOM_SAMPLE_IS_UNDECODABLE_LEADING       ) isom_iprintf( indent, "undecodable leading\n" );
+    else if( flags->is_leading & ISOM_SAMPLE_IS_NOT_LEADING               ) isom_iprintf( indent, "non-leading\n" );
+    else if( flags->is_leading & ISOM_SAMPLE_IS_DECODABLE_LEADING         ) isom_iprintf( indent, "decodable leading\n" );
+         if( flags->sample_depends_on & ISOM_SAMPLE_IS_INDEPENDENT        ) isom_iprintf( indent, "independent\n" );
+    else if( flags->sample_depends_on & ISOM_SAMPLE_IS_NOT_INDEPENDENT    ) isom_iprintf( indent, "dependent\n" );
+         if( flags->sample_is_depended_on & ISOM_SAMPLE_IS_NOT_DISPOSABLE ) isom_iprintf( indent, "non-disposable\n" );
+    else if( flags->sample_is_depended_on & ISOM_SAMPLE_IS_DISPOSABLE     ) isom_iprintf( indent, "disposable\n" );
+         if( flags->sample_has_redundancy & ISOM_SAMPLE_HAS_REDUNDANCY    ) isom_iprintf( indent, "redundant\n" );
+    else if( flags->sample_has_redundancy & ISOM_SAMPLE_HAS_NO_REDUNDANCY ) isom_iprintf( indent, "non-redundant\n" );
+    if( flags->sample_padding_value )
+        isom_iprintf( indent, "padding_bits = %"PRIu8"\n", flags->sample_padding_value );
+    isom_iprintf( indent, flags->sample_is_difference_sample ? "non-sync sample\n" : "sync sample\n" );
+    isom_iprintf( indent, "degradation_priority = %"PRIu16"\n", flags->sample_degradation_priority );
 }
 
 static inline int isom_print_simple( isom_box_t *box, int level, char *name )
@@ -4247,7 +4816,7 @@ static int isom_print_mvhd( lsmash_root_t *root, isom_box_t *box, int level )
     isom_iprintf( indent, "creation_time = %s", isom_mp4time2utc( mvhd->creation_time ) );
     isom_iprintf( indent, "modification_time = %s", isom_mp4time2utc( mvhd->modification_time ) );
     isom_iprintf( indent, "timescale = %"PRIu32"\n", mvhd->timescale );
-    isom_iprintf_duration( indent, mvhd->duration, mvhd->timescale );
+    isom_iprintf_duration( indent, "duration", mvhd->duration, mvhd->timescale );
     isom_iprintf( indent, "rate = %f\n", isom_fixed2double( mvhd->rate, 16 ) );
     isom_iprintf( indent, "volume = %f\n", isom_fixed2double( mvhd->volume, 8 ) );
     isom_iprintf( indent, "reserved = 0x%04"PRIx16"\n", mvhd->reserved );
@@ -4319,9 +4888,9 @@ static int isom_print_tkhd( lsmash_root_t *root, isom_box_t *box, int level )
     isom_iprintf( indent, "track_ID = %"PRIu32"\n", tkhd->track_ID );
     isom_iprintf( indent, "reserved = 0x%08"PRIx32"\n", tkhd->reserved1 );
     if( root && root->moov && root->moov->mvhd )
-        isom_iprintf_duration( indent, tkhd->duration, root->moov->mvhd->timescale );
+        isom_iprintf_duration( indent, "duration", tkhd->duration, root->moov->mvhd->timescale );
     else
-        isom_iprintf_duration( indent, tkhd->duration, 0 );
+        isom_iprintf_duration( indent, "duration", tkhd->duration, 0 );
     isom_iprintf( indent, "reserved = 0x%08"PRIx32"\n", tkhd->reserved2[0] );
     isom_iprintf( indent, "reserved = 0x%08"PRIx32"\n", tkhd->reserved2[1] );
     isom_iprintf( indent, "layer = %"PRId16"\n", tkhd->layer );
@@ -4436,7 +5005,7 @@ static int isom_print_mdhd( lsmash_root_t *root, isom_box_t *box, int level )
     isom_iprintf( indent, "creation_time = %s", isom_mp4time2utc( mdhd->creation_time ) );
     isom_iprintf( indent, "modification_time = %s", isom_mp4time2utc( mdhd->modification_time ) );
     isom_iprintf( indent, "timescale = %"PRIu32"\n", mdhd->timescale );
-    isom_iprintf_duration( indent, mdhd->duration, mdhd->timescale );
+    isom_iprintf_duration( indent, "duration", mdhd->duration, mdhd->timescale );
     if( mdhd->language >= 0x800 )
         isom_iprintf( indent, "language = %s\n", isom_unpack_iso_language( mdhd->language ) );
     else
@@ -5342,6 +5911,128 @@ static int isom_print_chpl( lsmash_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
+static int isom_print_mvex( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    return isom_print_simple( box, level, "Movie Extends Box" );
+}
+
+static int isom_print_mehd( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_mehd_t *mehd = (isom_mehd_t *)box;
+    int indent = level;
+    isom_print_box_common( indent++, box, "Movie Extends Header Box" );
+    if( root && root->moov && root->moov->mvhd )
+        isom_iprintf_duration( indent, "fragment_duration", mehd->fragment_duration, root->moov->mvhd->timescale );
+    else
+        isom_iprintf_duration( indent, "fragment_duration", mehd->fragment_duration, 0 );
+    return 0;
+}
+
+static int isom_print_trex( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_trex_entry_t *trex = (isom_trex_entry_t *)box;
+    int indent = level;
+    isom_print_box_common( indent++, box, "Track Extends Box" );
+    isom_iprintf( indent, "track_ID = %"PRIu32"\n", trex->track_ID );
+    isom_iprintf( indent, "default_sample_description_index = %"PRIu32"\n", trex->default_sample_description_index );
+    isom_iprintf( indent, "default_sample_duration = %"PRIu32"\n", trex->default_sample_duration );
+    isom_iprintf( indent, "default_sample_size = %"PRIu32"\n", trex->default_sample_size );
+    isom_iprint_sample_flags( indent, "default_sample_flags", &trex->default_sample_flags );
+    return 0;
+}
+
+static int isom_print_moof( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    return isom_print_simple( box, level, "Movie Fragment Box" );
+}
+
+static int isom_print_mfhd( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_mfhd_t *mfhd = (isom_mfhd_t *)box;
+    int indent = level;
+    isom_print_box_common( indent++, box, "Movie Fragment Header Box" );
+    isom_iprintf( indent, "sequence_number = %"PRIu32"\n", mfhd->sequence_number );
+    return 0;
+}
+
+static int isom_print_traf( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    return isom_print_simple( box, level, "Track Fragment Box" );
+}
+
+static int isom_print_tfhd( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_tfhd_t *tfhd = (isom_tfhd_t *)box;
+    int indent = level;
+    isom_print_box_common( indent++, box, "Track Fragment Header Box" );
+    ++indent;
+    if( tfhd->flags & ISOM_TF_FLAGS_BASE_DATA_OFFSET_PRESENT         ) isom_iprintf( indent, "base-data-offset-present\n" );
+    if( tfhd->flags & ISOM_TF_FLAGS_SAMPLE_DESCRIPTION_INDEX_PRESENT ) isom_iprintf( indent, "sample-description-index-present\n" );
+    if( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_DURATION_PRESENT  ) isom_iprintf( indent, "default-sample-duration-present\n" );
+    if( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_SIZE_PRESENT      ) isom_iprintf( indent, "default-sample-size-present\n" );
+    if( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT     ) isom_iprintf( indent, "default-sample-flags-present\n" );
+    isom_iprintf( --indent, "track_ID = %"PRIu32"\n", tfhd->track_ID );
+    if( tfhd->flags & ISOM_TF_FLAGS_BASE_DATA_OFFSET_PRESENT )
+        isom_iprintf( indent, "base_data_offset = %"PRIu64"\n", tfhd->base_data_offset );
+    if( tfhd->flags & ISOM_TF_FLAGS_SAMPLE_DESCRIPTION_INDEX_PRESENT )
+        isom_iprintf( indent, "sample_description_index = %"PRIu32"\n", tfhd->sample_description_index );
+    if( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_DURATION_PRESENT )
+        isom_iprintf( indent, "default_sample_duration = %"PRIu32"\n", tfhd->default_sample_duration );
+    if( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_SIZE_PRESENT )
+        isom_iprintf( indent, "default_sample_size = %"PRIu32"\n", tfhd->default_sample_size );
+    if( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT )
+        isom_iprint_sample_flags( indent, "default_sample_flags", &tfhd->default_sample_flags );
+    return 0;
+}
+
+static int isom_print_trun( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_trun_entry_t *trun = (isom_trun_entry_t *)box;
+    int indent = level;
+    isom_print_box_common( indent++, box, "Track Fragment Run Box" );
+    ++indent;
+    if( trun->flags & ISOM_TR_FLAGS_DATA_OFFSET_PRESENT                    ) isom_iprintf( indent, "data-offset-present\n" );
+    if( trun->flags & ISOM_TR_FLAGS_FIRST_SAMPLE_FLAGS_PRESENT             ) isom_iprintf( indent, "first-sample-flags-present\n" );
+    if( trun->flags & ISOM_TR_FLAGS_SAMPLE_DURATION_PRESENT                ) isom_iprintf( indent, "sample-duration-present\n" );
+    if( trun->flags & ISOM_TR_FLAGS_SAMPLE_SIZE_PRESENT                    ) isom_iprintf( indent, "sample-size-present\n" );
+    if( trun->flags & ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT                   ) isom_iprintf( indent, "sample-flags-present\n" );
+    if( trun->flags & ISOM_TR_FLAGS_SAMPLE_COMPOSITION_TIME_OFFSET_PRESENT ) isom_iprintf( indent, "sample-composition-time-offsets-present\n" );
+    isom_iprintf( --indent, "sample_count = %"PRIu32"\n", trun->sample_count );
+    if( trun->flags & ISOM_TR_FLAGS_DATA_OFFSET_PRESENT )
+        isom_iprintf( indent, "data_offset = %"PRId32"\n", trun->data_offset );
+    if( trun->flags & ISOM_TR_FLAGS_FIRST_SAMPLE_FLAGS_PRESENT )
+        isom_iprint_sample_flags( indent, "first_sample_flags", &trun->first_sample_flags );
+    if( trun->optional )
+    {
+        uint32_t i = 0;
+        for( lsmash_entry_t *entry = trun->optional->head; entry; entry = entry->next )
+        {
+            isom_trun_optional_row_t *row = (isom_trun_optional_row_t *)entry->data;
+            isom_iprintf( indent++, "sample[%"PRIu32"]\n", i++ );
+            if( trun->flags & ISOM_TR_FLAGS_SAMPLE_DURATION_PRESENT )
+                isom_iprintf( indent, "sample_duration = %"PRIu32"\n", row->sample_duration );
+            if( trun->flags & ISOM_TR_FLAGS_SAMPLE_SIZE_PRESENT )
+                isom_iprintf( indent, "sample_size = %"PRIu32"\n", row->sample_size );
+            if( trun->flags & ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT )
+                isom_iprint_sample_flags( indent, "sample_flags", &row->sample_flags );
+            if( trun->flags & ISOM_TR_FLAGS_SAMPLE_COMPOSITION_TIME_OFFSET_PRESENT )
+                isom_iprintf( indent, "sample_composition_time_offset = %"PRIu32"\n", row->sample_composition_time_offset );
+            --indent;
+        }
+    }
+    return 0;
+}
+
 static int isom_print_free( lsmash_root_t *root, isom_box_t *box, int level )
 {
     return isom_print_simple( box, level, "Free Space Box" );
@@ -5350,6 +6041,53 @@ static int isom_print_free( lsmash_root_t *root, isom_box_t *box, int level )
 static int isom_print_mdat( lsmash_root_t *root, isom_box_t *box, int level )
 {
     return isom_print_simple( box, level, "Media Data Box" );
+}
+
+static int isom_print_mfra( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    return isom_print_simple( box, level, "Movie Fragment Random Access Box" );
+}
+
+static int isom_print_tfra( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_tfra_entry_t *tfra = (isom_tfra_entry_t *)box;
+    int indent = level;
+    isom_print_box_common( indent++, box, "Track Fragment Random Access Box" );
+    isom_iprintf( indent, "track_ID = %"PRIu32"\n", tfra->track_ID );
+    isom_iprintf( indent, "reserved = 0x%08"PRIx32"\n", tfra->reserved );
+    isom_iprintf( indent, "length_size_of_traf_num = %"PRIu8"\n", tfra->length_size_of_traf_num );
+    isom_iprintf( indent, "length_size_of_trun_num = %"PRIu8"\n", tfra->length_size_of_trun_num );
+    isom_iprintf( indent, "length_size_of_sample_num = %"PRIu8"\n", tfra->length_size_of_sample_num );
+    isom_iprintf( indent, "number_of_entry = %"PRIu32"\n", tfra->number_of_entry );
+    if( tfra->list )
+    {
+        uint32_t i = 0;
+        for( lsmash_entry_t *entry = tfra->list->head; entry; entry = entry->next )
+        {
+            isom_tfra_location_time_entry_t *data = (isom_tfra_location_time_entry_t *)entry->data;
+            isom_iprintf( indent++, "entry[%"PRIu32"]\n", i++ );
+            isom_iprintf( indent, "time = %"PRIu64"\n", data->time );
+            isom_iprintf( indent, "moof_offset = %"PRIu64"\n", data->moof_offset );
+            isom_iprintf( indent, "traf_number = %"PRIu32"\n", data->traf_number );
+            isom_iprintf( indent, "trun_number = %"PRIu32"\n", data->trun_number );
+            isom_iprintf( indent, "sample_number = %"PRIu32"\n", data->sample_number );
+            --indent;
+        }
+    }
+    return 0;
+}
+
+static int isom_print_mfro( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_mfro_t *mfro = (isom_mfro_t *)box;
+    int indent = level;
+    isom_print_box_common( indent++, box, "Movie Fragment Random Access Offset Box" );
+    isom_iprintf( indent, "size = %"PRIu32"\n", mfro->length );
+    return 0;
 }
 
 int lsmash_print_movie( lsmash_root_t *root )
@@ -5573,11 +6311,33 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
             return isom_print_udta;
         case ISOM_BOX_TYPE_CHPL :
             return isom_print_chpl;
+        case ISOM_BOX_TYPE_MVEX :
+            return isom_print_mvex;
+        case ISOM_BOX_TYPE_MEHD :
+            return isom_print_mehd;
+        case ISOM_BOX_TYPE_TREX :
+            return isom_print_trex;
+        case ISOM_BOX_TYPE_MOOF :
+            return isom_print_moof;
+        case ISOM_BOX_TYPE_MFHD :
+            return isom_print_mfhd;
+        case ISOM_BOX_TYPE_TRAF :
+            return isom_print_traf;
+        case ISOM_BOX_TYPE_TFHD :
+            return isom_print_tfhd;
+        case ISOM_BOX_TYPE_TRUN :
+            return isom_print_trun;
         case ISOM_BOX_TYPE_FREE :
         case ISOM_BOX_TYPE_SKIP :
             return isom_print_free;
         case ISOM_BOX_TYPE_MDAT :
             return isom_print_mdat;
+        case ISOM_BOX_TYPE_MFRA :
+            return isom_print_mfra;
+        case ISOM_BOX_TYPE_TFRA :
+            return isom_print_tfra;
+        case ISOM_BOX_TYPE_MFRO :
+            return isom_print_mfro;
         default :
             return isom_print_unknown;
     }
@@ -7293,7 +8053,6 @@ static int isom_read_sgpd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 {
     if( parent->type != ISOM_BOX_TYPE_STBL )
         return isom_read_unknown_box( root, box, parent, level );
-
     isom_sgpd_t *sgpd = NULL;
     isom_stbl_t *stbl = (isom_stbl_t *)parent;
     if( !stbl->sgpd && !stbl->sgpd_count )
@@ -7381,9 +8140,8 @@ static int isom_read_sgpd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_sbgp( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_STBL )
+    if( parent->type != ISOM_BOX_TYPE_STBL && parent->type != ISOM_BOX_TYPE_TRAF )
         return isom_read_unknown_box( root, box, parent, level );
-
     isom_sbgp_t *sbgp = NULL;
     isom_stbl_t *stbl = (isom_stbl_t *)parent;
     if( !stbl->sbgp && !stbl->sbgp_count )
@@ -7490,6 +8248,236 @@ static int isom_read_chpl( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     return isom_add_print_func( root, chpl, level );
 }
 
+static int isom_read_mvex( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_MOOV )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( mvex, parent, box->type );
+    ((isom_moov_t *)parent)->mvex = mvex;
+    isom_box_common_copy( mvex, box );
+    if( isom_add_print_func( root, mvex, level ) )
+        return -1;
+    return isom_read_children( root, box, mvex, level );
+}
+
+static int isom_read_mehd( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_MVEX )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( mehd, parent, box->type );
+    ((isom_mvex_t *)parent)->mehd = mehd;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    if( box->version == 1 )
+        mehd->fragment_duration = lsmash_bs_get_be64( bs );
+    else
+        mehd->fragment_duration = lsmash_bs_get_be32( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( mehd, box );
+    return isom_add_print_func( root, mehd, level );
+}
+
+static isom_sample_flags_t isom_bs_get_sample_flags( lsmash_bs_t *bs )
+{
+    uint32_t temp = lsmash_bs_get_be32( bs );
+    isom_sample_flags_t flags;
+    flags.reserved                    = (temp >> 28) & 0xf;
+    flags.is_leading                  = (temp >> 26) & 0x3;
+    flags.sample_depends_on           = (temp >> 24) & 0x3;
+    flags.sample_is_depended_on       = (temp >> 22) & 0x3;
+    flags.sample_has_redundancy       = (temp >> 20) & 0x3;
+    flags.sample_padding_value        = (temp >> 17) & 0x7;
+    flags.sample_is_difference_sample = (temp >> 16) & 0x1;
+    flags.sample_degradation_priority =  temp        & 0xffff;
+    return flags;
+}
+
+static int isom_read_trex( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_MVEX )
+        return isom_read_unknown_box( root, box, parent, level );
+    lsmash_entry_list_t *list = ((isom_mvex_t *)parent)->trex_list;
+    if( !list )
+    {
+        list = lsmash_create_entry_list();
+        if( !list )
+            return -1;
+        ((isom_mvex_t *)parent)->trex_list = list;
+    }
+    isom_trex_entry_t *trex = malloc( sizeof(isom_trex_entry_t) );
+    if( !trex )
+        return -1;
+    memset( trex, 0, sizeof(isom_trex_entry_t) );
+    if( lsmash_add_entry( list, trex ) )
+    {
+        free( trex );
+        return -1;
+    }
+    box->parent = parent;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    trex->track_ID                         = lsmash_bs_get_be32( bs );
+    trex->default_sample_description_index = lsmash_bs_get_be32( bs );
+    trex->default_sample_duration          = lsmash_bs_get_be32( bs );
+    trex->default_sample_size              = lsmash_bs_get_be32( bs );
+    trex->default_sample_flags             = isom_bs_get_sample_flags( bs );
+    isom_box_common_copy( trex, box );
+    return isom_add_print_func( root, trex, level );
+}
+
+static int isom_read_moof( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( !!parent->type )
+        return isom_read_unknown_box( root, box, parent, level );
+    lsmash_entry_list_t *list = ((lsmash_root_t *)parent)->moof_list;
+    if( !list )
+    {
+        list = lsmash_create_entry_list();
+        if( !list )
+            return -1;
+        ((lsmash_root_t *)parent)->moof_list = list;
+    }
+    isom_moof_entry_t *moof = malloc( sizeof(isom_moof_entry_t) );
+    if( !moof )
+        return -1;
+    memset( moof, 0, sizeof(isom_moof_entry_t) );
+    if( lsmash_add_entry( list, moof ) )
+    {
+        free( moof );
+        return -1;
+    }
+    box->parent = parent;
+    isom_box_common_copy( moof, box );
+    if( isom_add_print_func( root, moof, level ) )
+        return -1;
+    return isom_read_children( root, box, moof, level );
+}
+
+static int isom_read_mfhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_MOOF )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( mfhd, parent, box->type );
+    ((isom_moof_entry_t *)parent)->mfhd = mfhd;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    mfhd->sequence_number = lsmash_bs_get_be32( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( mfhd, box );
+    return isom_add_print_func( root, mfhd, level );
+}
+
+static int isom_read_traf( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_MOOF )
+        return isom_read_unknown_box( root, box, parent, level );
+    lsmash_entry_list_t *list = ((isom_moof_entry_t *)parent)->traf_list;
+    if( !list )
+    {
+        list = lsmash_create_entry_list();
+        if( !list )
+            return -1;
+        ((isom_moof_entry_t *)parent)->traf_list = list;
+    }
+    isom_traf_entry_t *traf = malloc( sizeof(isom_traf_entry_t) );
+    if( !traf )
+        return -1;
+    memset( traf, 0, sizeof(isom_traf_entry_t) );
+    if( lsmash_add_entry( list, traf ) )
+    {
+        free( traf );
+        return -1;
+    }
+    box->parent = parent;
+    isom_box_common_copy( traf, box );
+    if( isom_add_print_func( root, traf, level ) )
+        return -1;
+    return isom_read_children( root, box, traf, level );
+}
+
+static int isom_read_tfhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_TRAF )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( tfhd, parent, box->type );
+    ((isom_traf_entry_t *)parent)->tfhd = tfhd;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    tfhd->track_ID = lsmash_bs_get_be32( bs );
+    if( box->flags & ISOM_TF_FLAGS_BASE_DATA_OFFSET_PRESENT         ) tfhd->base_data_offset         = lsmash_bs_get_be64( bs );
+    if( box->flags & ISOM_TF_FLAGS_SAMPLE_DESCRIPTION_INDEX_PRESENT ) tfhd->sample_description_index = lsmash_bs_get_be32( bs );
+    if( box->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_DURATION_PRESENT  ) tfhd->default_sample_duration  = lsmash_bs_get_be32( bs );
+    if( box->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_SIZE_PRESENT      ) tfhd->default_sample_size      = lsmash_bs_get_be32( bs );
+    if( box->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT     ) tfhd->default_sample_flags     = isom_bs_get_sample_flags( bs );
+    uint32_t pos = lsmash_bs_get_pos( bs );
+    if( box->size < pos )
+        printf( "[tfhd] box has extra bytes: %"PRId64"\n", pos - box->size );
+    box->size = pos;
+    isom_box_common_copy( tfhd, box );
+    return isom_add_print_func( root, tfhd, level );
+}
+
+static int isom_read_trun( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_TRAF )
+        return isom_read_unknown_box( root, box, parent, level );
+    lsmash_entry_list_t *list = ((isom_traf_entry_t *)parent)->trun_list;
+    if( !list )
+    {
+        list = lsmash_create_entry_list();
+        if( !list )
+            return -1;
+        ((isom_traf_entry_t *)parent)->trun_list = list;
+    }
+    isom_trun_entry_t *trun = malloc( sizeof(isom_trun_entry_t) );
+    if( !trun )
+        return -1;
+    memset( trun, 0, sizeof(isom_trun_entry_t) );
+    if( lsmash_add_entry( list, trun ) )
+    {
+        free( trun );
+        return -1;
+    }
+    box->parent = parent;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    int has_optional_rows = ISOM_TR_FLAGS_SAMPLE_DURATION_PRESENT
+                          | ISOM_TR_FLAGS_SAMPLE_SIZE_PRESENT
+                          | ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT
+                          | ISOM_TR_FLAGS_SAMPLE_COMPOSITION_TIME_OFFSET_PRESENT;
+    has_optional_rows &= box->flags;
+    trun->sample_count = lsmash_bs_get_be32( bs );
+    if( box->flags & ISOM_TR_FLAGS_DATA_OFFSET_PRESENT        ) trun->data_offset        = lsmash_bs_get_be32( bs );
+    if( box->flags & ISOM_TR_FLAGS_FIRST_SAMPLE_FLAGS_PRESENT ) trun->first_sample_flags = isom_bs_get_sample_flags( bs );
+    if( trun->sample_count && has_optional_rows )
+    {
+        trun->optional = lsmash_create_entry_list();
+        if( !trun->optional )
+            return -1;
+        for( uint32_t i = 0; i < trun->sample_count; i++ )
+        {
+            isom_trun_optional_row_t *data = malloc( sizeof(isom_trun_optional_row_t) );
+            if( !data || lsmash_add_entry( trun->optional, data ) )
+            {
+                if( data )
+                    free( data );
+                return -1;
+            }
+            memset( data, 0, sizeof(isom_trun_optional_row_t) );
+            if( box->flags & ISOM_TR_FLAGS_SAMPLE_DURATION_PRESENT                ) data->sample_duration                = lsmash_bs_get_be32( bs );
+            if( box->flags & ISOM_TR_FLAGS_SAMPLE_SIZE_PRESENT                    ) data->sample_size                    = lsmash_bs_get_be32( bs );
+            if( box->flags & ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT                   ) data->sample_flags                   = isom_bs_get_sample_flags( bs );
+            if( box->flags & ISOM_TR_FLAGS_SAMPLE_COMPOSITION_TIME_OFFSET_PRESENT ) data->sample_composition_time_offset = lsmash_bs_get_be32( bs );
+        }
+    }
+    uint32_t pos = lsmash_bs_get_pos( bs );
+    if( box->size < pos )
+        printf( "[trun] box has extra bytes: %"PRId64"\n", pos - box->size );
+    box->size = pos;
+    isom_box_common_copy( trun, box );
+    return isom_add_print_func( root, trun, level );
+}
+
 static int isom_read_free( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_box_t *skip = malloc( sizeof(isom_box_t) );
@@ -7526,6 +8514,105 @@ static int isom_read_mdat( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         return -1;
     }
     return 0;
+}
+
+static int isom_read_mfra( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( !!parent->type )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( mfra, parent, box->type );
+    ((lsmash_root_t *)parent)->mfra = mfra;
+    isom_box_common_copy( mfra, box );
+    if( isom_add_print_func( root, mfra, level ) )
+        return -1;
+    return isom_read_children( root, box, mfra, level );
+}
+
+static int isom_read_tfra( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_MFRA )
+        return isom_read_unknown_box( root, box, parent, level );
+    lsmash_entry_list_t *list = ((isom_mfra_t *)parent)->tfra_list;
+    if( !list )
+    {
+        list = lsmash_create_entry_list();
+        if( !list )
+            return -1;
+        ((isom_mfra_t *)parent)->tfra_list = list;
+    }
+    isom_tfra_entry_t *tfra = malloc( sizeof(isom_tfra_entry_t) );
+    if( !tfra )
+        return -1;
+    memset( tfra, 0, sizeof(isom_tfra_entry_t) );
+    if( lsmash_add_entry( list, tfra ) )
+        goto fail;
+    box->parent = parent;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    tfra->track_ID        = lsmash_bs_get_be32( bs );
+    uint32_t temp         = lsmash_bs_get_be32( bs );
+    tfra->number_of_entry = lsmash_bs_get_be32( bs );
+    tfra->reserved                  = (temp >> 6) & 0x3ffffff;
+    tfra->length_size_of_traf_num   = (temp >> 4) & 0x3;
+    tfra->length_size_of_trun_num   = (temp >> 2) & 0x3;
+    tfra->length_size_of_sample_num =  temp       & 0x3;
+    if( tfra->number_of_entry )
+    {
+        tfra->list = lsmash_create_entry_list();
+        if( !tfra->list )
+            goto fail;
+        lsmash_bits_t *bits = lsmash_bits_create( bs );
+        if( !bits )
+            goto fail;
+        uint32_t bits_of_time        = box->version == 1 ? 64 : 32;
+        uint32_t bits_of_moof_offset = box->version == 1 ? 64 : 32;
+        uint32_t bits_of_traf_num    = (tfra->length_size_of_traf_num   + 1) * 8;
+        uint32_t bits_of_trun_num    = (tfra->length_size_of_trun_num   + 1) * 8;
+        uint32_t bits_of_sample_num  = (tfra->length_size_of_sample_num + 1) * 8;
+        for( uint32_t i = 0; i < tfra->number_of_entry; i++ )
+        {
+            isom_tfra_location_time_entry_t *data = malloc( sizeof(isom_tfra_location_time_entry_t) );
+            if( !data || lsmash_add_entry( tfra->list, data ) )
+            {
+                if( data )
+                    free( data );
+                lsmash_bits_cleanup( bits );
+                goto fail;
+            }
+            memset( data, 0, sizeof(isom_tfra_location_time_entry_t) );
+            data->time          = lsmash_bits_get( bits, bits_of_time );
+            data->moof_offset   = lsmash_bits_get( bits, bits_of_moof_offset );
+            data->traf_number   = lsmash_bits_get( bits, bits_of_traf_num );
+            data->trun_number   = lsmash_bits_get( bits, bits_of_trun_num );
+            data->sample_number = lsmash_bits_get( bits, bits_of_sample_num );
+        }
+        lsmash_bits_cleanup( bits );
+    }
+    uint32_t pos = lsmash_bs_get_pos( bs );
+    if( (tfra->list && tfra->number_of_entry != tfra->list->entry_count) || box->size < pos )
+        printf( "[tfra] box has extra bytes: %"PRId64"\n", pos - box->size );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( tfra, box );
+    return isom_add_print_func( root, tfra, level );
+fail:
+    if( tfra->list )
+        free( tfra->list );
+    free( tfra );
+    return -1;
+}
+
+static int isom_read_mfro( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_MFRA )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( mfro, parent, box->type );
+    ((isom_mfra_t *)parent)->mfro = mfro;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    mfro->length = lsmash_bs_get_be32( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( mfro, box );
+    return isom_add_print_func( root, mfro, level );
 }
 
 static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, uint64_t parent_pos, int level )
@@ -7747,11 +8834,33 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
             return isom_read_udta( root, box, parent, level );
         case ISOM_BOX_TYPE_CHPL :
             return isom_read_chpl( root, box, parent, level );
+        case ISOM_BOX_TYPE_MVEX :
+            return isom_read_mvex( root, box, parent, level );
+        case ISOM_BOX_TYPE_MEHD :
+            return isom_read_mehd( root, box, parent, level );
+        case ISOM_BOX_TYPE_TREX :
+            return isom_read_trex( root, box, parent, level );
+        case ISOM_BOX_TYPE_MOOF :
+            return isom_read_moof( root, box, parent, level );
+        case ISOM_BOX_TYPE_MFHD :
+            return isom_read_mfhd( root, box, parent, level );
+        case ISOM_BOX_TYPE_TRAF :
+            return isom_read_traf( root, box, parent, level );
+        case ISOM_BOX_TYPE_TFHD :
+            return isom_read_tfhd( root, box, parent, level );
+        case ISOM_BOX_TYPE_TRUN :
+            return isom_read_trun( root, box, parent, level );
         case ISOM_BOX_TYPE_FREE :
         case ISOM_BOX_TYPE_SKIP :
             return isom_read_free( root, box, parent, level );
         case ISOM_BOX_TYPE_MDAT :
             return isom_read_mdat( root, box, parent, level );
+        case ISOM_BOX_TYPE_MFRA :
+            return isom_read_mfra( root, box, parent, level );
+        case ISOM_BOX_TYPE_TFRA :
+            return isom_read_tfra( root, box, parent, level );
+        case ISOM_BOX_TYPE_MFRO :
+            return isom_read_mfro( root, box, parent, level );
         default :
             return isom_read_unknown_box( root, box, parent, level );
     }
@@ -7862,6 +8971,7 @@ static int isom_update_mdhd_duration( isom_trak_entry_t *trak, uint32_t last_sam
     if( !trak || !trak->root || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->minf || !trak->mdia->minf->stbl
      || !trak->mdia->minf->stbl->stts || !trak->mdia->minf->stbl->stts->list || trak->mdia->minf->stbl->stts->list->entry_count == 0 )
         return -1;
+    lsmash_root_t *root = trak->root;
     isom_mdhd_t *mdhd = trak->mdia->mdhd;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     isom_stts_t *stts = stbl->stts;
@@ -7927,7 +9037,8 @@ static int isom_update_mdhd_duration( isom_trak_entry_t *trak, uint32_t last_sam
             {
                 max2_cts = max_cts;
                 max_cts = cts;
-            }else if( max2_cts < cts )
+            }
+            else if( max2_cts < cts )
                 max2_cts = cts;
             dts += stts_data->sample_delta;
             /* If finished sample_count of current entry, move to next. */
@@ -7943,21 +9054,31 @@ static int isom_update_mdhd_duration( isom_trak_entry_t *trak, uint32_t last_sam
             }
         }
         dts -= last_stts_data->sample_delta;
-        if( !last_sample_delta )
-        {
-            /* The spec allows an arbitrary value for the duration of the last sample. So, we pick last-1 sample's. */
-            last_sample_delta = max_cts - max2_cts;
-        }
-        mdhd->duration = max_cts - min_cts + last_sample_delta;
-        /* To match dts and mdhd duration, update stts and mdhd relatively. */
-        if( mdhd->duration > dts )
-            last_sample_delta = mdhd->duration - dts;
+        if( root->fragment )
+            /* Overall presentation is extended exceeding this movie fragment.
+             * So, any players shall display the movie exceeding the durations
+             * indicated in Movie Header Box, Track Header Boxes and Media Header Boxes.
+             * Samples up to the duration indicated in Movie Extends Header Box shall be displayed.
+             * In the absence of Movie Extends Header Box, all samples shall be displayed. */
+            mdhd->duration += dts + last_sample_delta;
         else
-            mdhd->duration = dts + last_sample_delta; /* mdhd duration must not less than last dts. */
+        {
+            if( !last_sample_delta )
+            {
+                /* The spec allows an arbitrary value for the duration of the last sample. So, we pick last-1 sample's. */
+                last_sample_delta = max_cts - max2_cts;
+            }
+            mdhd->duration = max_cts - min_cts + last_sample_delta;
+            /* To match dts and media duration, update stts and mdhd relatively. */
+            if( mdhd->duration > dts )
+                last_sample_delta = mdhd->duration - dts;
+            else
+                mdhd->duration = dts + last_sample_delta;   /* media duration must not less than last dts. */
+        }
         if( isom_replace_last_sample_delta( stbl, last_sample_delta ) )
             return -1;
         /* Explicit composition information and DTS shifting  */
-        if( cslg || trak->root->qt_compatible || trak->root->max_isom_version >= 4 )
+        if( cslg || root->qt_compatible || root->max_isom_version >= 4 )
         {
             if( (min_offset <= UINT32_MAX) && (max_offset <= UINT32_MAX)
              && (min_cts <= UINT32_MAX) && (2 * max_cts - max2_cts <= UINT32_MAX) )
@@ -9062,6 +10183,42 @@ static uint64_t isom_update_trak_entry_size( isom_trak_entry_t *trak )
     return trak->size;
 }
 
+static uint64_t isom_update_mehd_size( isom_mehd_t *mehd )
+{
+    if( !mehd )
+        return 0;
+    if( mehd->fragment_duration > UINT32_MAX )
+        mehd->version = 1;
+    mehd->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 4 * (1 + (mehd->version == 1));
+    CHECK_LARGESIZE( mehd->size );
+    return mehd->size;
+}
+
+static uint64_t isom_update_trex_entry_size( isom_trex_entry_t *trex )
+{
+    if( !trex )
+        return 0;
+    trex->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 20;
+    CHECK_LARGESIZE( trex->size );
+    return trex->size;
+}
+
+static uint64_t isom_update_mvex_size( isom_mvex_t *mvex )
+{
+    if( !mvex )
+        return 0;
+    mvex->size = ISOM_DEFAULT_BOX_HEADER_SIZE;
+    if( mvex->trex_list )
+        for( lsmash_entry_t *entry = mvex->trex_list->head; entry; entry = entry->next )
+        {
+            isom_trex_entry_t *trex = (isom_trex_entry_t *)entry->data;
+            mvex->size += isom_update_trex_entry_size( trex );
+        }
+    mvex->size += mvex->mehd ? isom_update_mehd_size( mvex->mehd ) : 20;    /* 20 bytes is of placeholder. */
+    CHECK_LARGESIZE( mvex->size );
+    return mvex->size;
+}
+
 static int isom_update_moov_size( isom_moov_t *moov )
 {
     if( !moov )
@@ -9069,7 +10226,8 @@ static int isom_update_moov_size( isom_moov_t *moov )
     moov->size = ISOM_DEFAULT_BOX_HEADER_SIZE
         + isom_update_mvhd_size( moov->mvhd )
         + isom_update_iods_size( moov->iods )
-        + isom_update_udta_size( moov->udta, NULL );
+        + isom_update_udta_size( moov->udta, NULL )
+        + isom_update_mvex_size( moov->mvex );
     if( moov->trak_list )
         for( lsmash_entry_t *entry = moov->trak_list->head; entry; entry = entry->next )
         {
@@ -9077,6 +10235,120 @@ static int isom_update_moov_size( isom_moov_t *moov )
             moov->size += isom_update_trak_entry_size( trak );
         }
     CHECK_LARGESIZE( moov->size );
+    return 0;
+}
+
+static uint64_t isom_update_mfhd_size( isom_mfhd_t *mfhd )
+{
+    if( !mfhd )
+        return 0;
+    mfhd->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 4;
+    CHECK_LARGESIZE( mfhd->size );
+    return mfhd->size;
+}
+
+static uint64_t isom_update_tfhd_size( isom_tfhd_t *tfhd )
+{
+    if( !tfhd )
+        return 0;
+    tfhd->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE
+               + 4
+               + 8 * !!( tfhd->flags & ISOM_TF_FLAGS_BASE_DATA_OFFSET_PRESENT         )
+               + 4 * !!( tfhd->flags & ISOM_TF_FLAGS_SAMPLE_DESCRIPTION_INDEX_PRESENT )
+               + 4 * !!( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_DURATION_PRESENT  )
+               + 4 * !!( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_SIZE_PRESENT      )
+               + 4 * !!( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT     );
+    CHECK_LARGESIZE( tfhd->size );
+    return tfhd->size;
+}
+
+static uint64_t isom_update_trun_entry_size( isom_trun_entry_t *trun )
+{
+    if( !trun )
+        return 0;
+    trun->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE
+               + 4
+               + 4 * !!( trun->flags & ISOM_TR_FLAGS_DATA_OFFSET_PRESENT        )
+               + 4 * !!( trun->flags & ISOM_TR_FLAGS_FIRST_SAMPLE_FLAGS_PRESENT );
+    uint64_t row_size = 4 * !!( trun->flags & ISOM_TR_FLAGS_SAMPLE_DURATION_PRESENT                )
+                      + 4 * !!( trun->flags & ISOM_TR_FLAGS_SAMPLE_SIZE_PRESENT                    )
+                      + 4 * !!( trun->flags & ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT                   )
+                      + 4 * !!( trun->flags & ISOM_TR_FLAGS_SAMPLE_COMPOSITION_TIME_OFFSET_PRESENT );
+    trun->size += row_size * trun->sample_count;
+    CHECK_LARGESIZE( trun->size );
+    return trun->size;
+}
+
+static uint64_t isom_update_traf_entry_size( isom_traf_entry_t *traf )
+{
+    if( !traf )
+        return 0;
+    traf->size = ISOM_DEFAULT_BOX_HEADER_SIZE + isom_update_tfhd_size( traf->tfhd );
+    if( traf->trun_list )
+        for( lsmash_entry_t *entry = traf->trun_list->head; entry; entry = entry->next )
+        {
+            isom_trun_entry_t *trun = (isom_trun_entry_t *)entry->data;
+            traf->size += isom_update_trun_entry_size( trun );
+        }
+    CHECK_LARGESIZE( traf->size );
+    return traf->size;
+}
+
+static int isom_update_moof_entry_size( isom_moof_entry_t *moof )
+{
+    if( !moof )
+        return -1;
+    moof->size = ISOM_DEFAULT_BOX_HEADER_SIZE + isom_update_mfhd_size( moof->mfhd );
+    if( moof->traf_list )
+        for( lsmash_entry_t *entry = moof->traf_list->head; entry; entry = entry->next )
+        {
+            isom_traf_entry_t *traf = (isom_traf_entry_t *)entry->data;
+            moof->size += isom_update_traf_entry_size( traf );
+        }
+    CHECK_LARGESIZE( moof->size );
+    return 0;
+}
+
+static uint64_t isom_update_tfra_entry_size( isom_tfra_entry_t *tfra )
+{
+    if( !tfra )
+        return 0;
+    tfra->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 12;
+    uint32_t entry_size = 8 * (1 + (tfra->version == 1))
+                        + tfra->length_size_of_traf_num   + 1
+                        + tfra->length_size_of_trun_num   + 1
+                        + tfra->length_size_of_sample_num + 1;
+    tfra->size += entry_size * tfra->number_of_entry;
+    CHECK_LARGESIZE( tfra->size );
+    return tfra->size;
+}
+
+static uint64_t isom_update_mfro_size( isom_mfro_t *mfro )
+{
+    if( !mfro )
+        return 0;
+    mfro->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 4;
+    CHECK_LARGESIZE( mfro->size );
+    return mfro->size;
+}
+
+static int isom_update_mfra_size( isom_mfra_t *mfra )
+{
+    if( !mfra )
+        return -1;
+    mfra->size = ISOM_DEFAULT_BOX_HEADER_SIZE;
+    if( mfra->tfra_list )
+        for( lsmash_entry_t *entry = mfra->tfra_list->head; entry; entry = entry->next )
+        {
+            isom_tfra_entry_t *tfra = (isom_tfra_entry_t *)entry->data;
+            mfra->size += isom_update_tfra_entry_size( tfra );
+        }
+    CHECK_LARGESIZE( mfra->size );
+    if( mfra->mfro )
+    {
+        mfra->size += isom_update_mfro_size( mfra->mfro );
+        mfra->mfro->length = mfra->size;
+    }
     return 0;
 }
 
@@ -9600,10 +10872,45 @@ lsmash_root_t *lsmash_open_movie( const char *filename, lsmash_file_mode_code mo
         goto fail;
     if( (mode & (LSMASH_FILE_MODE_READ | LSMASH_FILE_MODE_DUMP)) && isom_read_root( root ) )
         goto fail;
+    if( mode & LSMASH_FILE_MODE_FRAGMENTED )
+    {
+        root->fragment = malloc( sizeof(isom_fragment_manager_t) );
+        if( !root->fragment )
+            goto fail;
+        memset( root->fragment, 0, sizeof(isom_fragment_manager_t) );
+        root->fragment->pool = lsmash_create_entry_list();
+        if( !root->fragment->pool )
+            goto fail;
+    }
     return root;
 fail:
     lsmash_destroy_root( root );
     return NULL;
+}
+
+static int isom_finish_fragment_movie( lsmash_root_t *root );
+
+/* A movie fragment cannot switch a sample description to another.
+ * So you must call this function before switching sample descriptions. */
+int lsmash_create_fragment_movie( lsmash_root_t *root )
+{
+    if( !root || !root->bs || !root->fragment || !root->moov || !root->moov->trak_list )
+        return -1;
+    /* Finish the previous movie fragment before starting a new one. */
+    if( isom_finish_fragment_movie( root ) )
+        return -1;
+    /* We always hold only one movie fragment except for the initial movie (a pair of moov and mdat). */
+    if( root->fragment->movie && root->moof_list->entry_count != 1 )
+        return -1;
+    isom_moof_entry_t *moof = isom_add_moof( root );
+    if( isom_add_mfhd( moof ) )
+        return -1;
+    root->fragment->movie = moof;
+    moof->mfhd->sequence_number = ++ root->fragment->fragment_count;
+    if( root->moof_list->entry_count == 1 )
+        return 0;
+    /* Remove the previous movie fragment. */
+    return lsmash_remove_entry( root->moof_list, 1, isom_remove_moof );
 }
 
 void lsmash_initialize_movie_parameters( lsmash_movie_parameters_t *param )
@@ -9716,24 +11023,30 @@ int lsmash_write_ftyp( lsmash_root_t *root )
     lsmash_bs_put_be32( bs, ftyp->minor_version );
     for( uint32_t i = 0; i < ftyp->brand_count; i++ )
         lsmash_bs_put_be32( bs, ftyp->compatible_brands[i] );
-    return lsmash_bs_write_data( bs );
+    if( lsmash_bs_write_data( bs ) )
+        return -1;
+    root->size += ftyp->size;
+    return 0;
 }
 
 static int isom_write_moov( lsmash_root_t *root )
 {
     if( !root || !root->moov )
         return -1;
-    isom_bs_put_box_common( root->bs, root->moov );
-    if( lsmash_bs_write_data( root->bs ) )
+    lsmash_bs_t *bs = root->bs;
+    isom_bs_put_box_common( bs, root->moov );
+    if( lsmash_bs_write_data( bs ) )
         return -1;
     if( isom_write_mvhd( root )
      || isom_write_iods( root ) )
         return -1;
     if( root->moov->trak_list )
         for( lsmash_entry_t *entry = root->moov->trak_list->head; entry; entry = entry->next )
-            if( isom_write_trak( root->bs, (isom_trak_entry_t *)entry->data ) )
+            if( isom_write_trak( bs, (isom_trak_entry_t *)entry->data ) )
                 return -1;
-    return isom_write_udta( root->bs, root->moov, NULL );
+    if( isom_write_udta( bs, root->moov, NULL ) )
+        return -1;
+    return isom_write_mvex( bs, root->moov->mvex );
 }
 
 int lsmash_set_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length )
@@ -9793,11 +11106,60 @@ int lsmash_create_object_descriptor( lsmash_root_t *root )
 
 /*---- finishing functions ----*/
 
+static int isom_set_fragment_overall_duration( lsmash_root_t *root )
+{
+    isom_mvex_t *mvex = root->moov->mvex;
+    if( isom_add_mehd( mvex ) )
+        return -1;
+    /* Get the longest duration of the tracks. */
+    double longest_duration = 0;
+    for( lsmash_entry_t *entry = root->moov->trak_list->head; entry; entry = entry->next )
+    {
+        isom_trak_entry_t *trak = (isom_trak_entry_t *)entry->data;
+        if( !trak || !trak->cache || !trak->cache->fragment || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->mdhd->timescale )
+            return -1;
+        uint64_t duration = trak->cache->fragment->largest_cts + trak->cache->fragment->last_duration;
+        longest_duration = LSMASH_MAX( (double)duration / trak->mdia->mdhd->timescale, longest_duration );
+    }
+    mvex->mehd->fragment_duration = (uint64_t)(longest_duration * root->moov->mvhd->timescale);
+    mvex->mehd->version = 1;
+    isom_update_mehd_size( mvex->mehd );
+    /* Write Movie Extends Header Box here. */
+    lsmash_bs_t *bs = root->bs;
+    FILE *stream = bs->stream;
+    uint64_t current_pos = lsmash_ftell( stream );
+    lsmash_fseek( stream, mvex->placeholder_pos, SEEK_SET );
+    int ret = isom_write_mehd( bs, mvex->mehd );
+    if( !ret )
+        ret = lsmash_bs_write_data( bs );
+    lsmash_fseek( stream, current_pos, SEEK_SET );
+    return ret;
+}
+
+static int isom_write_fragment_random_access_info( lsmash_root_t *root )
+{
+    if( isom_update_mfra_size( root->mfra ) )
+        return -1;
+    return isom_write_mfra( root->bs, root->mfra );
+}
+
 int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
 {
-    if( !root || !root->moov || !root->moov->trak_list )
+    if( !root || !root->bs || !root->moov || !root->moov->trak_list )
         return -1;
-    for( lsmash_entry_t *entry = root->moov->trak_list->head; entry; entry = entry->next )
+    if( root->fragment )
+    {
+        /* Output the final movie fragment. */
+        if( isom_finish_fragment_movie( root ) )
+            return -1;
+        /* Write the overall random access information at the tail of the movie. */
+        if( isom_write_fragment_random_access_info( root ) )
+            return -1;
+        /* Set overall duration of the movie. */
+        return isom_set_fragment_overall_duration( root );
+    }
+    isom_moov_t *moov = root->moov;
+    for( lsmash_entry_t *entry = moov->trak_list->head; entry; entry = entry->next )
     {
         isom_trak_entry_t *trak = (isom_trak_entry_t *)entry->data;
         if( !trak || !trak->cache || !trak->tkhd || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
@@ -9821,19 +11183,24 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
         if( isom_update_bitrate_info( trak->mdia ) )
             return -1;
     }
-    if( root->mp4_version1 == 1 && isom_add_iods( root->moov ) )
+    if( root->mp4_version1 == 1 && isom_add_iods( moov ) )
         return -1;
     if( isom_check_mandatory_boxes( root )
      || isom_set_movie_creation_time( root )
-     || isom_update_moov_size( root->moov )
+     || isom_update_moov_size( moov )
      || isom_write_mdat_size( root ) )
         return -1;
 
     if( !remux )
-        return isom_write_moov( root );
+    {
+        if( isom_write_moov( root ) )
+            return -1;
+        root->size += moov->size;
+        return 0;
+    }
 
     /* stco->co64 conversion, depending on last chunk's offset */
-    for( lsmash_entry_t* entry = root->moov->trak_list->head; entry; )
+    for( lsmash_entry_t* entry = moov->trak_list->head; entry; )
     {
         isom_trak_entry_t* trak = (isom_trak_entry_t*)entry->data;
         if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
@@ -9842,22 +11209,22 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
         if( !stco || !stco->list || !stco->list->tail )
             return -1;
         if( stco->large_presentation
-            || ((isom_stco_entry_t*)stco->list->tail->data)->chunk_offset + root->moov->size <= UINT32_MAX )
+            || ((isom_stco_entry_t*)stco->list->tail->data)->chunk_offset + moov->size <= UINT32_MAX )
         {
             entry = entry->next;
             continue; /* no need to remux */
         }
         /* stco->co64 conversion */
         if( isom_convert_stco_to_co64( trak->mdia->minf->stbl )
-            || isom_update_moov_size( root->moov ) )
+            || isom_update_moov_size( moov ) )
             return -1;
-        entry = root->moov->trak_list->head; /* whenever any conversion, re-check all traks */
+        entry = moov->trak_list->head; /* whenever any conversion, re-check all traks */
     }
 
     /* now the amount of offset is fixed. */
 
     /* buffer size must be at least sizeof(moov)*2 */
-    remux->buffer_size = LSMASH_MAX( remux->buffer_size, root->moov->size * 2 );
+    remux->buffer_size = LSMASH_MAX( remux->buffer_size, moov->size * 2 );
 
     uint8_t* buf[2];
     if( (buf[0] = (uint8_t*)malloc( remux->buffer_size )) == NULL )
@@ -9866,20 +11233,20 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
     buf[1] = buf[0] + size; /* split to 2 buffers */
 
     /* now the amount of offset is fixed. apply that to stco/co64 */
-    for( lsmash_entry_t* entry = root->moov->trak_list->head; entry; entry = entry->next )
+    for( lsmash_entry_t* entry = moov->trak_list->head; entry; entry = entry->next )
     {
         isom_stco_t* stco = ((isom_trak_entry_t*)entry->data)->mdia->minf->stbl->stco;
         if( stco->large_presentation )
             for( lsmash_entry_t* co64_entry = stco->list->head ; co64_entry ; co64_entry = co64_entry->next )
-                ((isom_co64_entry_t*)co64_entry->data)->chunk_offset += root->moov->size;
+                ((isom_co64_entry_t*)co64_entry->data)->chunk_offset += moov->size;
         else
             for( lsmash_entry_t* stco_entry = stco->list->head ; stco_entry ; stco_entry = stco_entry->next )
-                ((isom_stco_entry_t*)stco_entry->data)->chunk_offset += root->moov->size;
+                ((isom_stco_entry_t*)stco_entry->data)->chunk_offset += moov->size;
     }
 
     FILE *stream = root->bs->stream;
     isom_mdat_t *mdat = root->mdat;
-    uint64_t total = lsmash_ftell( stream ) + root->moov->size; // FIXME:
+    uint64_t total = lsmash_ftell( stream ) + moov->size; // FIXME:
     uint64_t readnum;
     /* backup starting area of mdat and write moov there instead */
     if( lsmash_fseek( stream, mdat->placeholder_pos, SEEK_SET ) )
@@ -9893,7 +11260,7 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
         goto fail;
     uint64_t write_pos = lsmash_ftell( stream );
 
-    mdat->placeholder_pos += root->moov->size; /* update placeholder */
+    mdat->placeholder_pos += moov->size; /* update placeholder */
 
     /* copy-pastan */
     int buf_switch = 1;
@@ -9916,6 +11283,7 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
         goto fail;
     if( remux->func ) remux->func( remux->param, total, total ); // FIXME:
 
+    root->size += moov->size;
     free( buf[0] );
     return 0;
 
@@ -9924,8 +11292,428 @@ fail:
     return -1;
 }
 
+#define GET_MOST_USED( box_name, index, flag_name ) \
+    if( most_used[index] < stats.flag_name[i] ) \
+    { \
+        most_used[index] = stats.flag_name[i]; \
+        box_name->default_sample_flags.flag_name = i; \
+    }
+
+static int isom_create_fragment_overall_default_settings( lsmash_root_t *root )
+{
+    if( isom_add_mvex( root->moov ) )
+        return -1;
+    for( lsmash_entry_t *trak_entry = root->moov->trak_list->head; trak_entry; trak_entry = trak_entry->next )
+    {
+        isom_trak_entry_t *trak = (isom_trak_entry_t *)trak_entry->data;
+        if( !trak || !trak->cache || !trak->tkhd || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
+            return -1;
+        isom_stbl_t *stbl = trak->mdia->minf->stbl;
+        if( !stbl->stts || !stbl->stts->list || !stbl->stsz || !stbl->stsc
+         || !stbl->stsc->list || !stbl->stsc->list->tail || !stbl->stsc->list->tail->data )
+            return -1;
+        isom_trex_entry_t *trex = isom_add_trex( root->moov->mvex );
+        if( !trex )
+            return -1;
+        trex->track_ID = trak->tkhd->track_ID;
+        /* Set up defaults. */
+        trex->default_sample_description_index = trak->cache->chunk.sample_description_index;
+        trex->default_sample_duration = stbl->stts->list->tail ? ((isom_stts_entry_t *)stbl->stts->list->tail->data)->sample_delta : 0;
+        trex->default_sample_size = !stbl->stsz->list ? stbl->stsz->sample_size
+                                  : stbl->stsz->list->head ? ((isom_stsz_entry_t *)stbl->stsz->list->head->data)->entry_size : 0;
+        if( stbl->sdtp && stbl->sdtp->list )
+        {
+            struct sample_flags_stats_t
+            {
+                uint32_t is_leading           [4];
+                uint32_t sample_depends_on    [4];
+                uint32_t sample_is_depended_on[4];
+                uint32_t sample_has_redundancy[4];
+            } stats = { { 0 }, { 0 }, { 0 }, { 0 } };
+            for( lsmash_entry_t *sdtp_entry = stbl->sdtp->list->head; sdtp_entry; sdtp_entry = sdtp_entry->next )
+            {
+                isom_sdtp_entry_t *data = (isom_sdtp_entry_t *)sdtp_entry->data;
+                if( !data )
+                    return -1;
+                ++ stats.is_leading           [ data->is_leading            ];
+                ++ stats.sample_depends_on    [ data->sample_depends_on     ];
+                ++ stats.sample_is_depended_on[ data->sample_is_depended_on ];
+                ++ stats.sample_has_redundancy[ data->sample_has_redundancy ];
+            }
+            uint32_t most_used[4] = { 0, 0, 0, 0 };
+            for( int i = 0; i < 4; i++ )
+            {
+                GET_MOST_USED( trex, 0, is_leading            );
+                GET_MOST_USED( trex, 1, sample_depends_on     );
+                GET_MOST_USED( trex, 2, sample_is_depended_on );
+                GET_MOST_USED( trex, 3, sample_has_redundancy );
+            }
+        }
+        trex->default_sample_flags.sample_is_difference_sample = !trak->cache->all_sync;
+    }
+    return 0;
+}
+
+static int isom_prepare_random_access_info( lsmash_root_t *root )
+{
+    if( isom_add_mfra( root )
+     || isom_add_mfro( root->mfra ) )
+        return -1;
+    return 0;
+}
+
+static int isom_output_fragment_media_data( lsmash_root_t *root )
+{
+    isom_fragment_manager_t *fragment = root->fragment;
+    if( !fragment->pool->entry_count )
+    {
+        /* no need to write media data */
+        lsmash_remove_entries( fragment->pool, lsmash_delete_sample );
+        fragment->pool_size = 0;
+        return 0;
+    }
+    /* If there is no available Media Data Box to write samples, add and write a new one. */
+    if( isom_new_mdat( root, fragment->pool_size ) )
+        return -1;
+    /* Write samples in the current movie fragment. */
+    for( lsmash_entry_t* entry = fragment->pool->head; entry; entry = entry->next )
+    {
+        lsmash_sample_t *sample = (lsmash_sample_t *)entry->data;
+        if( !sample || !sample->data )
+            return -1;
+        lsmash_bs_put_bytes( root->bs, sample->data, sample->length );
+        if( lsmash_bs_write_data( root->bs ) )
+            return -1;
+    }
+    lsmash_remove_entries( fragment->pool, lsmash_delete_sample );
+    root->size += root->mdat->size;
+    fragment->pool_size = 0;
+    return 0;
+}
+
+static int isom_finish_fragment_initial_movie( lsmash_root_t *root )
+{
+    if( !root->moov || !root->moov->trak_list )
+        return -1;
+    isom_moov_t *moov = root->moov;
+    for( lsmash_entry_t *entry = moov->trak_list->head; entry; entry = entry->next )
+    {
+        isom_trak_entry_t *trak = (isom_trak_entry_t *)entry->data;
+        if( !trak || !trak->cache || !trak->tkhd || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->minf || !trak->mdia->minf->stbl )
+            return -1;
+        /* Add stss box if any samples aren't sync sample. */
+        isom_stbl_t *stbl = trak->mdia->minf->stbl;
+        if( !trak->cache->all_sync && !stbl->stss && isom_add_stss( stbl ) )
+            return -1;
+        if( isom_update_bitrate_info( trak->mdia ) )
+            return -1;
+    }
+    if( root->mp4_version1 == 1 && isom_add_iods( moov ) )
+        return -1;
+    if( isom_check_mandatory_boxes( root )
+     || isom_set_movie_creation_time( root )
+     || isom_create_fragment_overall_default_settings( root )
+     || isom_prepare_random_access_info( root )
+     || isom_update_moov_size( moov ) )
+        return -1;
+    /* stco->co64 conversion, depending on last chunk's offset */
+    for( lsmash_entry_t* entry = moov->trak_list->head; entry; )
+    {
+        isom_trak_entry_t* trak = (isom_trak_entry_t*)entry->data;
+        if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
+            return -1;
+        isom_stco_t* stco = trak->mdia->minf->stbl->stco;
+        if( !stco || !stco->list || !stco->list->tail )
+            return -1;
+        if( stco->large_presentation
+            || ((isom_stco_entry_t*)stco->list->tail->data)->chunk_offset + moov->size <= UINT32_MAX )
+        {
+            entry = entry->next;
+            continue; /* no need to remux */
+        }
+        /* stco->co64 conversion */
+        if( isom_convert_stco_to_co64( trak->mdia->minf->stbl )
+            || isom_update_moov_size( moov ) )
+            return -1;
+        entry = moov->trak_list->head; /* whenever any conversion, re-check all traks */
+    }
+    /* Now, the amount of offset is fixed. Apply that to stco/co64. */
+    for( lsmash_entry_t* entry = moov->trak_list->head; entry; entry = entry->next )
+    {
+        isom_stco_t* stco = ((isom_trak_entry_t*)entry->data)->mdia->minf->stbl->stco;
+        if( stco->large_presentation )
+            for( lsmash_entry_t* co64_entry = stco->list->head ; co64_entry ; co64_entry = co64_entry->next )
+                ((isom_co64_entry_t*)co64_entry->data)->chunk_offset += moov->size;
+        else
+            for( lsmash_entry_t* stco_entry = stco->list->head ; stco_entry ; stco_entry = stco_entry->next )
+                ((isom_stco_entry_t*)stco_entry->data)->chunk_offset += moov->size;
+    }
+    if( isom_write_moov( root ) )
+        return -1;
+    root->size += moov->size;
+    /* Output samples. */
+    return isom_output_fragment_media_data( root );
+}
+
+static int isom_finish_fragment_movie( lsmash_root_t *root )
+{
+    if( !root->moov || !root->moov->trak_list || !root->fragment || !root->fragment->pool )
+        return -1;
+    isom_moof_entry_t *moof = root->fragment->movie;
+    if( !moof )
+        return isom_finish_fragment_initial_movie( root );
+    /* Calculate appropriate default_sample_flags of each Track Fragment Header Box. */
+    for( lsmash_entry_t *entry = moof->traf_list->head; entry; entry = entry->next )
+    {
+        isom_traf_entry_t *traf = (isom_traf_entry_t *)entry->data;
+        if( !traf || !traf->tfhd || !traf->root || !traf->root->moov || !traf->root->moov->mvex )
+            return -1;
+        isom_tfhd_t *tfhd = traf->tfhd;
+        isom_trex_entry_t *trex = isom_get_trex( root->moov->mvex, tfhd->track_ID );
+        if( !trex )
+            return -1;
+        struct sample_flags_stats_t
+        {
+            uint32_t is_leading                 [4];
+            uint32_t sample_depends_on          [4];
+            uint32_t sample_is_depended_on      [4];
+            uint32_t sample_has_redundancy      [4];
+            uint32_t sample_is_difference_sample[2];
+        } stats = { { 0 }, { 0 }, { 0 }, { 0 }, { 0 } };
+        for( lsmash_entry_t *trun_entry = traf->trun_list->head; trun_entry; trun_entry = trun_entry->next )
+        {
+            isom_trun_entry_t *trun = (isom_trun_entry_t *)trun_entry->data;
+            if( !trun )
+                return -1;
+            isom_sample_flags_t *sample_flags;
+            if( trun->flags & ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT )
+            {
+                if( !trun->optional )
+                    return -1;
+                for( lsmash_entry_t *optional_entry = trun->optional->head; optional_entry; optional_entry = optional_entry->next )
+                {
+                    isom_trun_optional_row_t *row = (isom_trun_optional_row_t *)optional_entry->data;
+                    if( !row )
+                        return -1;
+                    sample_flags = &row->sample_flags;
+                    ++ stats.is_leading                 [ sample_flags->is_leading                  ];
+                    ++ stats.sample_depends_on          [ sample_flags->sample_depends_on           ];
+                    ++ stats.sample_is_depended_on      [ sample_flags->sample_is_depended_on       ];
+                    ++ stats.sample_has_redundancy      [ sample_flags->sample_has_redundancy       ];
+                    ++ stats.sample_is_difference_sample[ sample_flags->sample_is_difference_sample ];
+                }
+            }
+            else
+            {
+                if( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT )
+                    sample_flags = &tfhd->default_sample_flags;
+                else
+                    sample_flags = &trex->default_sample_flags;
+                stats.is_leading                 [ sample_flags->is_leading                  ] += trun->sample_count;
+                stats.sample_depends_on          [ sample_flags->sample_depends_on           ] += trun->sample_count;
+                stats.sample_is_depended_on      [ sample_flags->sample_is_depended_on       ] += trun->sample_count;
+                stats.sample_has_redundancy      [ sample_flags->sample_has_redundancy       ] += trun->sample_count;
+                stats.sample_is_difference_sample[ sample_flags->sample_is_difference_sample ] += trun->sample_count;
+            }
+        }
+        uint32_t most_used[5] = { 0, 0, 0, 0, 0 };
+        for( int i = 0; i < 4; i++ )
+        {
+            GET_MOST_USED( tfhd, 0, is_leading            );
+            GET_MOST_USED( tfhd, 1, sample_depends_on     );
+            GET_MOST_USED( tfhd, 2, sample_is_depended_on );
+            GET_MOST_USED( tfhd, 3, sample_has_redundancy );
+            if( i < 2 )
+                GET_MOST_USED( tfhd, 4, sample_is_difference_sample );
+        }
+        if( memcmp( &tfhd->default_sample_flags, &trex->default_sample_flags, sizeof(isom_sample_flags_t) ) )
+            tfhd->flags |= ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT;
+        else
+            tfhd->flags &= ~ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT;
+    }
+    /* Check whether first-sample-flags-present or sample-flags-present is useful or not. */
+    for( lsmash_entry_t *entry = moof->traf_list->head; entry; entry = entry->next )
+    {
+        isom_traf_entry_t *traf = (isom_traf_entry_t *)entry->data;
+        isom_tfhd_t *tfhd = traf->tfhd;
+        for( lsmash_entry_t *trun_entry = traf->trun_list->head; trun_entry; trun_entry = trun_entry->next )
+        {
+            isom_trun_entry_t *trun = (isom_trun_entry_t *)trun_entry->data;
+            int useful_first_sample_flags = 1;
+            int useful_default_sample_flags = 1;
+            if( trun->sample_count > 1 && trun->optional && trun->optional->head )
+            {
+                lsmash_entry_t *optional_entry = trun->optional->head->next;
+                isom_trun_optional_row_t *row = (isom_trun_optional_row_t *)optional_entry->data;
+                isom_sample_flags_t representative_sample_flags = row->sample_flags;
+                if( !memcmp( &trun->first_sample_flags, &representative_sample_flags, sizeof(isom_sample_flags_t) ) )
+                    useful_first_sample_flags = 0;
+                if( memcmp( &tfhd->default_sample_flags, &representative_sample_flags, sizeof(isom_sample_flags_t) ) )
+                {
+                    useful_first_sample_flags = 0;
+                    useful_default_sample_flags = 0;
+                }
+                if( useful_default_sample_flags )
+                    for( optional_entry = optional_entry->next; optional_entry; optional_entry = optional_entry->next )
+                    {
+                        row = (isom_trun_optional_row_t *)optional_entry->data;
+                        if( memcmp( &representative_sample_flags, &row->sample_flags, sizeof(isom_sample_flags_t) ) )
+                        {
+                            useful_first_sample_flags = 0;
+                            useful_default_sample_flags = 0;
+                            break;
+                        }
+                    }
+            }
+            if( useful_first_sample_flags )
+                trun->flags |= ISOM_TR_FLAGS_FIRST_SAMPLE_FLAGS_PRESENT;
+            if( useful_default_sample_flags )
+                trun->flags &= ~ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT;
+            else
+                trun->flags |= ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT;
+        }
+    }
+    /* When using for live streaming, setting explicit base_data_offset is not preferable.
+     * However, it's OK because we haven't supported this yet.
+     * Implicit base_data_offsets that originate in the first byte of each Movie Fragment Box will be implemented
+     * by the feature of ISO Base Media File Format version 5 or later. 
+     * Media Data Box starts immediately after Movie Fragment Box. */
+    for( lsmash_entry_t *entry = moof->traf_list->head; entry; entry = entry->next )
+    {
+        isom_traf_entry_t *traf = (isom_traf_entry_t *)entry->data;
+        traf->tfhd->flags |= ISOM_TF_FLAGS_BASE_DATA_OFFSET_PRESENT;
+    }
+    /* Consider the update of tf_flags here. */
+    if( isom_update_moof_entry_size( moof ) )
+        return -1;
+    /* Now, we can calculate offsets in the current movie fragment, so do it. */
+    for( lsmash_entry_t *entry = moof->traf_list->head; entry; entry = entry->next )
+    {
+        isom_traf_entry_t *traf = (isom_traf_entry_t *)entry->data;
+        traf->tfhd->base_data_offset = root->size + moof->size + ISOM_DEFAULT_BOX_HEADER_SIZE;
+    }
+    if( isom_write_moof( root->bs, moof ) )
+        return -1;
+    root->size += moof->size;
+    /* Output samples. */
+    return isom_output_fragment_media_data( root );
+}
+
+#undef GET_MOST_USED
+
+static isom_trun_optional_row_t *isom_request_trun_optional_row( isom_trun_entry_t *trun, isom_tfhd_t *tfhd, uint32_t sample_number )
+{
+    isom_trun_optional_row_t *row = NULL;
+    if( !trun->optional )
+    {
+        trun->optional = lsmash_create_entry_list();
+        if( !trun->optional )
+            return NULL;
+    }
+    if( trun->optional->entry_count < sample_number )
+    {
+        while( trun->optional->entry_count < sample_number )
+        {
+            row = malloc( sizeof(isom_trun_optional_row_t) );
+            if( !row )
+                return NULL;
+            /* Copy from default. */
+            row->sample_duration                = tfhd->default_sample_duration;
+            row->sample_size                    = tfhd->default_sample_size;
+            row->sample_flags                   = tfhd->default_sample_flags;
+            row->sample_composition_time_offset = 0;
+            if( lsmash_add_entry( trun->optional, row ) )
+            {
+                free( row );
+                return NULL;
+            }
+        }
+        return row;
+    }
+    uint32_t i = 0;
+    for( lsmash_entry_t *entry = trun->optional->head; entry; entry = entry->next )
+    {
+        row = (isom_trun_optional_row_t *)entry->data;
+        if( !row )
+            return NULL;
+        if( ++i == sample_number )
+            return row;
+    }
+    return NULL;
+}
+
+int lsmash_create_fragment_empty_duration( lsmash_root_t *root, uint32_t track_ID, uint32_t duration )
+{
+    if( !root || !root->fragment || !root->fragment->movie || !root->moov )
+        return -1;
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    if( !trak || !trak->tkhd )
+        return -1;
+    isom_trex_entry_t *trex = isom_get_trex( root->moov->mvex, track_ID );
+    if( !trex )
+        return -1;
+    isom_moof_entry_t *moof = root->fragment->movie;
+    isom_traf_entry_t *traf = isom_get_traf( moof, track_ID );
+    if( traf )
+        return -1;
+    traf = isom_add_traf( root, moof );
+    if( isom_add_tfhd( traf ) )
+        return -1;
+    isom_tfhd_t *tfhd = traf->tfhd;
+    tfhd->flags = ISOM_TF_FLAGS_DURATION_IS_EMPTY;        /* no samples for this track fragment yet */
+    tfhd->track_ID = trak->tkhd->track_ID;
+    tfhd->default_sample_duration = duration;
+    if( duration != trex->default_sample_duration )
+        tfhd->flags |= ISOM_TF_FLAGS_DEFAULT_SAMPLE_DURATION_PRESENT;
+    traf->root = root;
+    traf->cache = trak->cache;
+    traf->cache->fragment->traf_number = moof->traf_list->entry_count;
+    traf->cache->fragment->last_duration += duration;       /* The duration of the last sample includes this empty-duration. */
+    return 0;
+}
+
+static int isom_set_fragment_last_duration( isom_traf_entry_t *traf, uint32_t last_duration )
+{
+    isom_tfhd_t *tfhd = traf->tfhd;
+    if( !traf->trun_list || !traf->trun_list->tail || !traf->trun_list->tail->data )
+    {
+        /* There are no track runs in this track fragment, so it is a empty-duration. */
+        isom_trex_entry_t *trex = isom_get_trex( traf->root->moov->mvex, tfhd->track_ID );
+        if( !trex )
+            return -1;
+        tfhd->flags |= ISOM_TF_FLAGS_DURATION_IS_EMPTY;
+        if( last_duration != trex->default_sample_duration )
+            tfhd->flags |= ISOM_TF_FLAGS_DEFAULT_SAMPLE_DURATION_PRESENT;
+        tfhd->default_sample_duration = last_duration;
+        traf->cache->fragment->last_duration = last_duration;
+        return 0;
+    }
+    isom_trun_entry_t *trun = (isom_trun_entry_t *)traf->trun_list->tail->data;
+    /* Update the last sample_duration if needed. */
+    if( last_duration != tfhd->default_sample_duration )
+        trun->flags |= ISOM_TR_FLAGS_SAMPLE_DURATION_PRESENT;
+    if( trun->flags )
+    {
+        isom_trun_optional_row_t *row = isom_request_trun_optional_row( trun, tfhd, trun->sample_count );
+        if( !row )
+            return -1;
+        row->sample_duration = last_duration;
+    }
+    traf->cache->fragment->last_duration = last_duration;
+    return 0;
+}
+
 int lsmash_set_last_sample_delta( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_delta )
 {
+    if( !root || !track_ID )
+        return -1;
+    if( root->fragment && root->fragment->movie )
+    {
+        isom_traf_entry_t *traf = isom_get_traf( root->fragment->movie, track_ID );
+        if( !traf || !traf->cache || !traf->tfhd || !traf->trun_list )
+            return -1;
+        return isom_set_fragment_last_duration( traf, sample_delta );
+    }
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->minf || !trak->mdia->minf->stbl
      || !trak->mdia->minf->stbl->stsz || !trak->mdia->minf->stbl->stts || !trak->mdia->minf->stbl->stts->list )
@@ -9973,8 +11761,10 @@ void lsmash_destroy_root( lsmash_root_t *root )
     isom_remove_print_funcs( root );
     isom_remove_ftyp( root->ftyp );
     isom_remove_moov( root );
+    lsmash_remove_list( root->moof_list, isom_remove_moof );
     isom_remove_mdat( root->mdat );
     isom_remove_free( root->free );
+    isom_remove_mfra( root->mfra );
     if( root->bs )
     {
         if( root->bs->stream )
@@ -9982,6 +11772,11 @@ void lsmash_destroy_root( lsmash_root_t *root )
         if( root->bs->data )
             free( root->bs->data );
         free( root->bs );
+    }
+    if( root->fragment )
+    {
+        lsmash_remove_list( root->fragment->pool, lsmash_delete_sample );
+        free( root->fragment );
     }
     free( root );
 }
@@ -10095,29 +11890,30 @@ static uint32_t isom_add_size( isom_trak_entry_t *trak, uint32_t sample_size )
     return isom_get_sample_count( trak );
 }
 
-static int isom_add_dts( isom_trak_entry_t *trak, uint64_t dts )
+static uint32_t isom_add_dts( isom_trak_entry_t *trak, uint64_t dts )
 {
     if( !trak->cache || !trak->mdia->minf->stbl->stts || !trak->mdia->minf->stbl->stts->list )
-        return -1;
+        return 0;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     isom_stts_t *stts = stbl->stts;
+    isom_timestamp_t *cache = &trak->cache->timestamp;
     if( !stts->list->entry_count )
     {
         if( isom_add_stts_entry( stbl, dts ) )
-            return -1;
-        trak->cache->timestamp.dts = dts;
-        return 0;
+            return 0;
+        cache->dts = dts;
+        return dts;
     }
-    if( dts <= trak->cache->timestamp.dts )
-        return -1;
-    uint32_t sample_delta = dts - trak->cache->timestamp.dts;
+    if( dts <= cache->dts )
+        return 0;
+    uint32_t sample_delta = dts - cache->dts;
     isom_stts_entry_t *data = (isom_stts_entry_t *)stts->list->tail->data;
     if( data->sample_delta == sample_delta )
         ++ data->sample_count;
     else if( isom_add_stts_entry( stbl, sample_delta ) )
-        return -1;
-    trak->cache->timestamp.dts = dts;
-    return 0;
+        return 0;
+    cache->dts = dts;
+    return sample_delta;
 }
 
 static int isom_add_cts( isom_trak_entry_t *trak, uint64_t cts )
@@ -10126,11 +11922,12 @@ static int isom_add_cts( isom_trak_entry_t *trak, uint64_t cts )
         return -1;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     isom_ctts_t *ctts = stbl->ctts;
+    isom_timestamp_t *cache = &trak->cache->timestamp;
     if( !ctts )
     {
-        if( cts == trak->cache->timestamp.dts )
+        if( cts == cache->dts )
         {
-            trak->cache->timestamp.cts = cts;
+            cache->cts = cts;
             return 0;
         }
         /* Add ctts box and the first ctts entry. */
@@ -10142,23 +11939,23 @@ static int isom_add_cts( isom_trak_entry_t *trak, uint64_t cts )
         if( sample_count != 1 )
         {
             data->sample_count = isom_get_sample_count( trak ) - 1;
-            if( isom_add_ctts_entry( stbl, cts - trak->cache->timestamp.dts ) )
+            if( isom_add_ctts_entry( stbl, cts - cache->dts ) )
                 return -1;
         }
         else
             data->sample_offset = cts;
-        trak->cache->timestamp.cts = cts;
+        cache->cts = cts;
         return 0;
     }
     if( !ctts->list )
         return -1;
     isom_ctts_entry_t *data = (isom_ctts_entry_t *)ctts->list->tail->data;
-    uint32_t sample_offset = cts - trak->cache->timestamp.dts;
+    uint32_t sample_offset = cts - cache->dts;
     if( data->sample_offset == sample_offset )
         ++ data->sample_count;
     else if( isom_add_ctts_entry( stbl, sample_offset ) )
         return -1;
-    trak->cache->timestamp.cts = cts;
+    cache->cts = cts;
     return 0;
 }
 
@@ -10166,9 +11963,19 @@ static int isom_add_timestamp( isom_trak_entry_t *trak, uint64_t dts, uint64_t c
 {
     if( cts < dts )
         return -1;
-    if( isom_get_sample_count( trak ) > 1 && isom_add_dts( trak, dts ) )
+    uint32_t sample_count = isom_get_sample_count( trak );
+    uint32_t sample_delta = sample_count > 1 ? isom_add_dts( trak, dts ) : 0;
+    if( sample_count > 1 && !sample_delta )
         return -1;
-    return isom_add_cts( trak, cts );
+    if( isom_add_cts( trak, cts ) )
+        return -1;
+    if( trak->cache->fragment )
+    {
+        isom_cache_t *cache = trak->cache;
+        cache->fragment->last_duration = sample_delta;
+        cache->fragment->largest_cts = LSMASH_MAX( cache->timestamp.cts, cache->fragment->largest_cts );
+    }
+    return 0;
 }
 
 static int isom_add_sync_point( isom_trak_entry_t *trak, uint32_t sample_number, lsmash_sample_property_t *prop )
@@ -10454,6 +12261,7 @@ static int isom_add_chunk( isom_trak_entry_t *trak, lsmash_sample_t *sample )
     if( !trak->root || !trak->cache || !trak->mdia->mdhd || !trak->mdia->mdhd->timescale
      || !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
         return -1;
+    lsmash_root_t *root = trak->root;
     isom_chunk_t *current = &trak->cache->chunk;
     if( !current->pool )
     {
@@ -10473,7 +12281,7 @@ static int isom_add_chunk( isom_trak_entry_t *trak, lsmash_sample_t *sample )
     if( sample->dts < current->first_dts )
         return -1; /* easy error check. */
     double chunk_duration = (double)(sample->dts - current->first_dts) / trak->mdia->mdhd->timescale;
-    if( trak->root->max_chunk_duration >= chunk_duration && current->sample_description_index == sample->index )
+    if( root->max_chunk_duration >= chunk_duration && current->sample_description_index == sample->index )
         return 0; /* no need to flush current cached chunk, the current sample must be put into that. */
 
     /* NOTE: chunk relative stuff must be pushed into root after a chunk is fully determined with its contents. */
@@ -10486,7 +12294,10 @@ static int isom_add_chunk( isom_trak_entry_t *trak, lsmash_sample_t *sample )
      && isom_add_stsc_entry( stbl, current->chunk_number, current->pool->entry_count, current->sample_description_index ) )
         return -1;
     /* Add a new chunk offset in this track. */
-    if( isom_add_stco_entry( stbl, trak->root->bs->written ) )
+    uint64_t offset = root->size;
+    if( root->fragment )
+        offset += ISOM_DEFAULT_BOX_HEADER_SIZE + root->fragment->pool_size;
+    if( isom_add_stco_entry( stbl, offset ) )
         return -1;
     /* update cache information */
     ++ current->chunk_number;
@@ -10497,7 +12308,7 @@ static int isom_add_chunk( isom_trak_entry_t *trak, lsmash_sample_t *sample )
     return 1;
 }
 
-static int lsmash_write_sample_data( lsmash_root_t *root, lsmash_sample_t *sample )
+static int isom_write_sample_data( lsmash_root_t *root, lsmash_sample_t *sample )
 {
     if( !root->mdat || !root->bs || !root->bs->stream )
         return -1;
@@ -10512,12 +12323,14 @@ static int isom_write_pooled_samples( isom_trak_entry_t *trak, lsmash_entry_list
 {
     if( !trak->root || !trak->cache || !trak->tkhd )
         return -1;
+    lsmash_root_t *root = trak->root;
     for( lsmash_entry_t *entry = pool->head; entry; entry = entry->next )
     {
         lsmash_sample_t *sample = (lsmash_sample_t *)entry->data;
         if( !sample || !sample->data
-         || lsmash_write_sample_data( trak->root, sample ) )
+         || isom_write_sample_data( root, sample ) )
             return -1;
+        root->size += sample->length;
     }
     lsmash_remove_entries( pool, lsmash_delete_sample );
     return 0;
@@ -10551,8 +12364,30 @@ static int isom_update_sample_tables( isom_trak_entry_t *trak, lsmash_sample_t *
     return isom_add_chunk( trak, sample );
 }
 
+static void isom_append_fragment_track_run( lsmash_root_t *root, isom_chunk_t *chunk )
+{
+    isom_fragment_manager_t *fragment = root->fragment;
+    /* Move samples in the pool of the current track fragment to the pool of the current movie fragment.
+     * Empty the pool of current track. We don't delete data of samples here. */
+    if( fragment->pool->tail )
+    {
+        fragment->pool->tail->next = chunk->pool->head;
+        fragment->pool->tail->next->prev = fragment->pool->tail;
+    }
+    else
+        fragment->pool->head = chunk->pool->head;
+    fragment->pool->tail = chunk->pool->tail;
+    fragment->pool->entry_count += chunk->pool->entry_count;
+    fragment->pool_size += chunk->pool_size;
+    chunk->pool_size = 0;
+    chunk->pool->entry_count = 0;
+    chunk->pool->head = NULL;
+    chunk->pool->tail = NULL;
+}
+
 static int isom_output_cached_chunk( isom_trak_entry_t *trak )
 {
+    lsmash_root_t *root = trak->root;
     isom_chunk_t *chunk = &trak->cache->chunk;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     lsmash_entry_t *last_stsc_entry = stbl->stsc->list->tail;
@@ -10560,8 +12395,16 @@ static int isom_output_cached_chunk( isom_trak_entry_t *trak )
     if( (!last_stsc_entry || chunk->pool->entry_count != ((isom_stsc_entry_t *)last_stsc_entry->data)->samples_per_chunk)
      && isom_add_stsc_entry( stbl, chunk->chunk_number, chunk->pool->entry_count, chunk->sample_description_index ) )
         return -1;
+    if( root->fragment )
+    {
+        /* Add a new chunk offset in this track. */
+        if( isom_add_stco_entry( stbl, root->size + ISOM_DEFAULT_BOX_HEADER_SIZE + root->fragment->pool_size ) )
+            return -1;
+        isom_append_fragment_track_run( root, chunk );
+        return 0;
+    }
     /* Add a new chunk offset in this track. */
-    if( isom_add_stco_entry( stbl, trak->root->bs->written ) )
+    if( isom_add_stco_entry( stbl, root->size ) )
         return -1;
     /* Output pooled samples in this track. */
     return isom_write_pooled_samples( trak, chunk->pool );
@@ -10611,13 +12454,8 @@ static int isom_append_sample_internal( isom_trak_entry_t *trak, lsmash_sample_t
     return lsmash_add_entry( current->pool, sample );
 }
 
-int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_t *sample )
+static int isom_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_t *sample )
 {
-    /* We think max_chunk_duration == 0, which means all samples will be cached on memory, should be prevented.
-       This means removal of a feature that we used to have, but anyway very alone chunk does not make sense. */
-    if( !root || !root->bs || !sample || !sample->data
-     || root->max_chunk_duration == 0 || root->max_async_tolerance == 0 )
-        return -1;
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->root || !trak->cache || !trak->mdia
      || !trak->mdia->mdhd || !trak->mdia->mdhd->timescale
@@ -10625,9 +12463,14 @@ int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_
      || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list
      || !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
         return -1;
-    /* If there is no available mdat box to write samples, add and write a new one before any chunk offset is decided. */
-    if( !root->mdat && isom_new_mdat( root ) )
-        return -1;
+    /* If there is no available Media Data Box to write samples, add and write a new one before any chunk offset is decided. */
+    if( !root->mdat )
+    {
+        if( isom_new_mdat( root, 0 ) )
+            return -1;
+        /* Add the size of the Media Data Box and the placeholder. */
+        root->size += 2 * ISOM_DEFAULT_BOX_HEADER_SIZE;
+    }
     isom_sample_entry_t *sample_entry = (isom_sample_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->stsd->list, sample->index );
     if( !sample_entry )
         return -1;
@@ -10696,8 +12539,31 @@ static int isom_output_cache( isom_trak_entry_t *trak )
     return 0;
 }
 
+static int isom_flush_fragment_pooled_samples( lsmash_root_t *root, uint32_t track_ID, uint32_t last_sample_duration )
+{
+    isom_traf_entry_t *traf = isom_get_traf( root->fragment->movie, track_ID );
+    if( !traf )
+        return 0;   /* no samples */
+    if( !traf->cache || !traf->cache->fragment )
+        return -1;
+    if( traf->trun_list && traf->trun_list->entry_count && traf->trun_list->tail && traf->trun_list->tail->data )
+    {
+        /* Media Data Box preceded by Movie Fragment Box could change base_data_offsets in each track fragments later.
+         * We can't consider this here because the length of Movie Fragment Box is unknown at this step yet. */
+        isom_trun_entry_t *trun = (isom_trun_entry_t *)traf->trun_list->tail->data;
+        trun->flags |= ISOM_TR_FLAGS_DATA_OFFSET_PRESENT;
+        trun->data_offset = root->fragment->pool_size;
+    }
+    isom_append_fragment_track_run( root, &traf->cache->chunk );
+    return isom_set_fragment_last_duration( traf, last_sample_duration );
+}
+
 int lsmash_flush_pooled_samples( lsmash_root_t *root, uint32_t track_ID, uint32_t last_sample_delta )
 {
+    if( !root )
+        return -1;
+    if( root->fragment && root->fragment->movie )
+        return isom_flush_fragment_pooled_samples( root, track_ID, last_sample_delta );
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->cache || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl
      || !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
@@ -10705,6 +12571,298 @@ int lsmash_flush_pooled_samples( lsmash_root_t *root, uint32_t track_ID, uint32_
     if( isom_output_cache( trak ) )
         return -1;
     return lsmash_set_last_sample_delta( root, track_ID, last_sample_delta );
+}
+
+/* This function doesn't update sample_duration of the last sample in the previous movie fragment.
+ * Instead of this, isom_finish_movie_fragment undertakes this task. */
+static int isom_update_fragment_previous_sample_duration( isom_traf_entry_t *traf, isom_trex_entry_t *trex, uint32_t duration )
+{
+    isom_tfhd_t *tfhd = traf->tfhd;
+    isom_trun_entry_t *trun = (isom_trun_entry_t *)traf->trun_list->tail->data;
+    int previous_run_has_previous_sample = 0;
+    if( trun->sample_count == 1 )
+    {
+        if( traf->trun_list->entry_count == 1 )
+            return 0;       /* The previous track run belongs to the previous movie fragment if it exists. */
+        if( !traf->trun_list->tail->prev || !traf->trun_list->tail->prev->data )
+            return -1;
+        /* OK. The previous sample exists in the previous track run in the same track fragment. */
+        trun = (isom_trun_entry_t *)traf->trun_list->tail->prev->data;
+        previous_run_has_previous_sample = 1;
+    }
+    /* Update default_sample_duration of the Track Fragment Header Box
+     * if this duration is what the first sample in the current track fragment owns. */
+    else if( trun->sample_count == 2 && traf->trun_list->entry_count == 1 )
+    {
+        if( duration != trex->default_sample_duration )
+            tfhd->flags |= ISOM_TF_FLAGS_DEFAULT_SAMPLE_DURATION_PRESENT;
+        tfhd->default_sample_duration = duration;
+    }
+    /* Update the previous sample_duration if needed. */
+    if( duration != tfhd->default_sample_duration )
+        trun->flags |= ISOM_TR_FLAGS_SAMPLE_DURATION_PRESENT;
+    if( trun->flags )
+    {
+        uint32_t sample_number = trun->sample_count - !previous_run_has_previous_sample;
+        isom_trun_optional_row_t *row = isom_request_trun_optional_row( trun, tfhd, sample_number );
+        if( !row )
+            return -1;
+        row->sample_duration = duration;
+    }
+    traf->cache->fragment->last_duration = duration;
+    return 0;
+}
+
+static isom_sample_flags_t isom_generate_fragment_sample_flags( lsmash_sample_t *sample )
+{
+    isom_sample_flags_t flags;
+    flags.reserved                    = 0;
+    flags.is_leading                  = sample->prop.leading     & 0x3;
+    flags.sample_depends_on           = sample->prop.independent & 0x3;
+    flags.sample_is_depended_on       = sample->prop.disposable  & 0x3;
+    flags.sample_has_redundancy       = sample->prop.redundant   & 0x3;
+    flags.sample_padding_value        = 0;
+    flags.sample_is_difference_sample = sample->prop.random_access_type != ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+    flags.sample_degradation_priority = 0;
+    return flags;
+}
+
+static int isom_update_fragment_sample_tables( isom_traf_entry_t *traf, lsmash_sample_t *sample )
+{
+    isom_tfhd_t *tfhd = traf->tfhd;
+    isom_trex_entry_t *trex = isom_get_trex( traf->root->moov->mvex, tfhd->track_ID );
+    if( !trex )
+        return -1;
+    lsmash_root_t *root = traf->root;
+    isom_cache_t *cache = traf->cache;
+    /* Create a new track run if the duration exceeds max_chunk_duration.
+     * Old one will be appended to the pool of this track fragment. */
+    int delimit = root->max_chunk_duration < (double)(sample->dts - traf->cache->chunk.first_dts) / lsmash_get_media_timescale( root, tfhd->track_ID );
+    isom_trun_entry_t *trun = NULL;
+    if( !traf->trun_list || !traf->trun_list->entry_count || delimit )
+    {
+        if( delimit && traf->trun_list && traf->trun_list->entry_count && traf->trun_list->tail && traf->trun_list->tail->data )
+        {
+            /* Media Data Box preceded by Movie Fragment Box could change base data offsets in each track fragments later.
+             * We can't consider this here because the length of Movie Fragment Box is unknown at this step yet. */
+            trun = (isom_trun_entry_t *)traf->trun_list->tail->data;
+            trun->flags |= ISOM_TR_FLAGS_DATA_OFFSET_PRESENT;
+            trun->data_offset = root->fragment->pool_size;
+        }
+        trun = isom_add_trun( traf );
+        if( !trun )
+            return -1;
+    }
+    else
+    {
+        if( !traf->trun_list->tail || !traf->trun_list->tail->data )
+            return -1;
+        trun = (isom_trun_entry_t *)traf->trun_list->tail->data;
+    }
+    uint32_t sample_composition_time_offset = sample->cts - sample->dts;
+    isom_sample_flags_t sample_flags = isom_generate_fragment_sample_flags( sample );
+    if( ++trun->sample_count == 1 )
+    {
+        if( traf->trun_list->entry_count == 1 )
+        {
+            /* This track fragment isn't empty-duration-fragment any more. */
+            tfhd->flags &= ~ISOM_TF_FLAGS_DURATION_IS_EMPTY;
+            /* Set up sample_description_index in this track fragment. */
+            if( sample->index != trex->default_sample_description_index )
+                tfhd->flags |= ISOM_TF_FLAGS_SAMPLE_DESCRIPTION_INDEX_PRESENT;
+            tfhd->sample_description_index = sample->index;
+            /* Set up defaults used in this track fragment except for sample_duration. */
+            if( sample->length != trex->default_sample_size )
+                tfhd->flags |= ISOM_TF_FLAGS_DEFAULT_SAMPLE_SIZE_PRESENT;
+            tfhd->default_sample_size = sample->length;
+            if( memcmp( &sample_flags, &trex->default_sample_flags, sizeof(isom_sample_flags_t) ) )
+                tfhd->flags |= ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT;
+            tfhd->default_sample_flags = sample_flags;
+            /* Set up random access information if this sample is random accessible sample.
+             * We inform only the first sample in each movie fragment. */
+            if( sample->prop.random_access_type )
+            {
+                isom_tfra_entry_t *tfra = isom_get_tfra( root->mfra, tfhd->track_ID );
+                if( !tfra )
+                {
+                    tfra = isom_add_tfra( root->mfra );
+                    if( !tfra )
+                        return -1;
+                    tfra->track_ID = tfhd->track_ID;
+                }
+                if( !tfra->list )
+                {
+                    tfra->list = lsmash_create_entry_list();
+                    if( !tfra->list )
+                        return -1;
+                }
+                isom_tfra_location_time_entry_t *rap = malloc( sizeof(isom_tfra_location_time_entry_t) );
+                if( !rap )
+                    return -1;
+                rap->time          = sample->cts;   /* If this is wrong, blame vague descriptions of 'presentation time' in the spec. */
+                rap->moof_offset   = root->size;    /* We place Movie Fragment Box in the head of each movie fragment. */
+                rap->traf_number   = cache->fragment->traf_number;
+                rap->trun_number   = traf->trun_list->entry_count;
+                rap->sample_number = trun->sample_count;
+                if( lsmash_add_entry( tfra->list, rap ) )
+                    return -1;
+                tfra->number_of_entry = tfra->list->entry_count;
+                int length;
+                for( length = 1; rap->traf_number >> (length * 8); length++ );
+                tfra->length_size_of_traf_num = LSMASH_MAX( length - 1, tfra->length_size_of_traf_num );
+                for( length = 1; rap->traf_number >> (length * 8); length++ );
+                tfra->length_size_of_trun_num = LSMASH_MAX( length - 1, tfra->length_size_of_trun_num );
+                for( length = 1; rap->sample_number >> (length * 8); length++ );
+                tfra->length_size_of_sample_num = LSMASH_MAX( length - 1, tfra->length_size_of_sample_num );
+            }
+        }
+        trun->first_sample_flags = sample_flags;
+        cache->chunk.first_dts = sample->dts;
+    }
+    /* Update the optional rows in the current track run except for sample_duration if needed. */
+    if( sample->length != tfhd->default_sample_size )
+        trun->flags |= ISOM_TR_FLAGS_SAMPLE_SIZE_PRESENT;
+    if( memcmp( &sample_flags, &tfhd->default_sample_flags, sizeof(isom_sample_flags_t) ) )
+        trun->flags |= ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT;
+    if( sample_composition_time_offset )
+        trun->flags |= ISOM_TR_FLAGS_SAMPLE_COMPOSITION_TIME_OFFSET_PRESENT;
+    if( trun->flags )
+    {
+        isom_trun_optional_row_t *row = isom_request_trun_optional_row( trun, tfhd, trun->sample_count );
+        if( !row )
+            return -1;
+        row->sample_size                    = sample->length;
+        row->sample_flags                   = sample_flags;
+        row->sample_composition_time_offset = sample_composition_time_offset;
+    }
+    /* Set up the previous sample_duration if this sample is not the first sample in the overall movie. */
+    if( traf->root->fragment->has_samples )
+    {
+        /* Note: when using for live streaming, it is not good idea to return error (-1) by sample->dts < prev_dts
+         * since that's trivial for such semi-permanent presentation. */
+        uint64_t prev_dts = cache->timestamp.dts;
+        if( sample->dts <= prev_dts || sample->dts > prev_dts + UINT32_MAX )
+            return -1;
+        uint32_t sample_duration = sample->dts - prev_dts;
+        if( isom_update_fragment_previous_sample_duration( traf, trex, sample_duration ) )
+            return -1;
+    }
+    cache->timestamp.dts = sample->dts;
+    cache->fragment->largest_cts = LSMASH_MAX( sample->cts, cache->fragment->largest_cts );
+    return delimit;
+}
+
+static int isom_append_fragment_sample_internal_initial( isom_trak_entry_t *trak, lsmash_sample_t *sample )
+{
+    int delimit = 0;
+    /* Update the sample tables of this track fragment.
+     * If a new chunk was created, append the previous one to the pool of this movie fragment. */
+    delimit = isom_update_sample_tables( trak, sample );
+    if( delimit < 0 )
+        return -1;
+    else if( delimit == 1 )
+        isom_append_fragment_track_run( trak->root, &trak->cache->chunk );
+    /* Add a new sample into the pool of this track fragment. */
+    trak->cache->chunk.pool_size += sample->length;
+    trak->root->fragment->has_samples = 1;
+    return lsmash_add_entry( trak->cache->chunk.pool, sample );
+}
+
+static int isom_append_fragment_sample_internal( isom_traf_entry_t *traf, lsmash_sample_t *sample )
+{
+    int delimit = 0;
+    /* Update the sample tables of this track fragment.
+     * If a new track run was created, append the previous one to the pool of this movie fragment. */
+    delimit = isom_update_fragment_sample_tables( traf, sample );
+    if( delimit < 0 )
+        return -1;
+    else if( delimit == 1 )
+        isom_append_fragment_track_run( traf->root, &traf->cache->chunk );
+    /* Add a new sample into the pool of this track fragment. */
+    traf->cache->chunk.pool_size += sample->length;
+    traf->root->fragment->has_samples = 1;
+    return lsmash_add_entry( traf->cache->chunk.pool, sample );
+}
+
+static int isom_append_fragment_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_t *sample )
+{
+    isom_fragment_manager_t *fragment = root->fragment;
+    if( !fragment || !fragment->pool )
+        return -1;
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    if( !trak || !trak->root || !trak->cache || !trak->cache->fragment || !trak->tkhd || !trak->mdia
+     || !trak->mdia->mdhd || !trak->mdia->mdhd->timescale
+     || !trak->mdia->minf || !trak->mdia->minf->stbl
+     || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list
+     || !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
+        return -1;
+    int (*append_sample_func)( void *, lsmash_sample_t * ) = NULL;
+    void *track_fragment = NULL;
+    if( !fragment->movie )
+    {
+        append_sample_func = (int (*)( void *, lsmash_sample_t * ))isom_append_fragment_sample_internal_initial;
+        track_fragment = trak;
+    }
+    else
+    {
+        isom_traf_entry_t *traf = isom_get_traf( fragment->movie, track_ID );
+        if( !traf )
+        {
+            traf = isom_add_traf( root, fragment->movie );
+            if( isom_add_tfhd( traf ) )
+                return -1;
+            traf->tfhd->flags = ISOM_TF_FLAGS_DURATION_IS_EMPTY;        /* no samples for this track fragment yet */
+            traf->tfhd->track_ID = trak->tkhd->track_ID;
+            traf->root = root;
+            traf->cache = trak->cache;
+            traf->cache->fragment->traf_number = fragment->movie->traf_list->entry_count;
+        }
+        else if( !traf->root || !traf->root->moov || !traf->root->moov->mvex || !traf->cache || !traf->tfhd )
+            return -1;
+        append_sample_func = (int (*)( void *, lsmash_sample_t * ))isom_append_fragment_sample_internal;
+        track_fragment = traf;
+    }
+    isom_sample_entry_t *sample_entry = (isom_sample_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->stsd->list, sample->index );
+    if( !sample_entry )
+        return -1;
+    if( isom_is_lpcm_audio( sample_entry->type ) )
+    {
+        uint32_t frame_size = ((isom_audio_entry_t *)sample_entry)->constBytesPerAudioPacket;
+        uint64_t dts = sample->dts;
+        uint64_t cts = sample->cts;
+        /* Append samples splitted into each LPCMFrame. */
+        for( uint32_t offset = 0; offset < sample->length; offset += frame_size )
+        {
+            lsmash_sample_t *lpcm_sample = lsmash_create_sample( frame_size );
+            if( !lpcm_sample )
+                return -1;
+            memcpy( lpcm_sample->data, sample->data + offset, frame_size );
+            lpcm_sample->dts = dts++;
+            lpcm_sample->cts = cts++;
+            lpcm_sample->prop = sample->prop;
+            lpcm_sample->index = sample->index;
+            if( append_sample_func( track_fragment, lpcm_sample ) )
+            {
+                lsmash_delete_sample( lpcm_sample );
+                return -1;
+            }
+        }
+        lsmash_delete_sample( sample );
+        return 0;
+    }
+    return append_sample_func( track_fragment, sample );
+}
+
+int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_t *sample )
+{
+    /* We think max_chunk_duration == 0, which means all samples will be cached on memory, should be prevented.
+     * This means removal of a feature that we used to have, but anyway very alone chunk does not make sense. */
+    if( !root || !root->bs || !sample || !sample->data || !track_ID
+     || root->max_chunk_duration == 0 || root->max_async_tolerance == 0 )
+        return -1;
+    if( root->fragment && root->fragment->pool )
+        return isom_append_fragment_sample( root, track_ID, sample );
+    return isom_append_sample( root, track_ID, sample );
 }
 
 /*---- misc functions ----*/
