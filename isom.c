@@ -11462,7 +11462,8 @@ static int isom_finish_fragment_movie( lsmash_root_t *root )
     isom_moof_entry_t *moof = root->fragment->movie;
     if( !moof )
         return isom_finish_fragment_initial_movie( root );
-    /* Calculate appropriate default_sample_flags of each Track Fragment Header Box. */
+    /* Calculate appropriate default_sample_flags of each Track Fragment Header Box.
+     * And check whether that default_sample_flags is useful or not. */
     for( lsmash_entry_t *entry = moof->traf_list->head; entry; entry = entry->next )
     {
         isom_traf_entry_t *traf = (isom_traf_entry_t *)entry->data;
@@ -11526,16 +11527,6 @@ static int isom_finish_fragment_movie( lsmash_root_t *root )
             if( i < 2 )
                 GET_MOST_USED( tfhd, 4, sample_is_difference_sample );
         }
-        if( memcmp( &tfhd->default_sample_flags, &trex->default_sample_flags, sizeof(isom_sample_flags_t) ) )
-            tfhd->flags |= ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT;
-        else
-            tfhd->flags &= ~ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT;
-    }
-    /* Check whether first-sample-flags-present or sample-flags-present is useful or not. */
-    for( lsmash_entry_t *entry = moof->traf_list->head; entry; entry = entry->next )
-    {
-        isom_traf_entry_t *traf = (isom_traf_entry_t *)entry->data;
-        isom_tfhd_t *tfhd = traf->tfhd;
         for( lsmash_entry_t *trun_entry = traf->trun_list->head; trun_entry; trun_entry = trun_entry->next )
         {
             isom_trun_entry_t *trun = (isom_trun_entry_t *)trun_entry->data;
@@ -11566,12 +11557,22 @@ static int isom_finish_fragment_movie( lsmash_root_t *root )
                     }
             }
             if( useful_first_sample_flags )
+            {
+                assert( useful_default_sample_flags );
                 trun->flags |= ISOM_TR_FLAGS_FIRST_SAMPLE_FLAGS_PRESENT;
+            }
             if( useful_default_sample_flags )
+            {
+                tfhd->flags |= ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT;
                 trun->flags &= ~ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT;
+            }
             else
                 trun->flags |= ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT;
         }
+        if( !(tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT) )
+            tfhd->default_sample_flags = trex->default_sample_flags;    /* This might be redundant, but is to be more natural. */
+        else if( !memcmp( &tfhd->default_sample_flags, &trex->default_sample_flags, sizeof(isom_sample_flags_t) ) )
+            tfhd->flags &= ~ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT;
     }
     /* When using for live streaming, setting explicit base_data_offset is not preferable.
      * However, it's OK because we haven't supported this yet.
@@ -12671,13 +12672,10 @@ static int isom_update_fragment_sample_tables( isom_traf_entry_t *traf, lsmash_s
             if( sample->index != trex->default_sample_description_index )
                 tfhd->flags |= ISOM_TF_FLAGS_SAMPLE_DESCRIPTION_INDEX_PRESENT;
             tfhd->sample_description_index = sample->index;
-            /* Set up defaults used in this track fragment except for sample_duration. */
+            /* Set up default_sample_size used in this track fragment. */
             if( sample->length != trex->default_sample_size )
                 tfhd->flags |= ISOM_TF_FLAGS_DEFAULT_SAMPLE_SIZE_PRESENT;
             tfhd->default_sample_size = sample->length;
-            if( memcmp( &sample_flags, &trex->default_sample_flags, sizeof(isom_sample_flags_t) ) )
-                tfhd->flags |= ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT;
-            tfhd->default_sample_flags = sample_flags;
             /* Set up random access information if this sample is random accessible sample.
              * We inform only the first sample in each movie fragment. */
             if( sample->prop.random_access_type )
