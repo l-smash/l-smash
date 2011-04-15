@@ -11668,7 +11668,7 @@ int lsmash_create_fragment_empty_duration( lsmash_root_t *root, uint32_t track_I
     if( isom_add_tfhd( traf ) )
         return -1;
     isom_tfhd_t *tfhd = traf->tfhd;
-    tfhd->flags = ISOM_TF_FLAGS_DURATION_IS_EMPTY;        /* no samples for this track fragment yet */
+    tfhd->flags = ISOM_TF_FLAGS_DURATION_IS_EMPTY;          /* no samples for this track fragment yet */
     tfhd->track_ID = trak->tkhd->track_ID;
     tfhd->default_sample_duration = duration;
     if( duration != trex->default_sample_duration )
@@ -12644,7 +12644,7 @@ static int isom_update_fragment_sample_tables( isom_traf_entry_t *traf, lsmash_s
     lsmash_root_t *root = traf->root;
     isom_cache_t *cache = traf->cache;
     /* Create a new track run if the duration exceeds max_chunk_duration.
-     * Old one will be appended to the pool of this track fragment. */
+     * Old one will be appended to the pool of this movie fragment. */
     int delimit = root->max_chunk_duration < (double)(sample->dts - traf->cache->chunk.first_dts) / lsmash_get_media_timescale( root, tfhd->track_ID );
     isom_trun_entry_t *trun = NULL;
     if( !traf->trun_list || !traf->trun_list->entry_count || delimit )
