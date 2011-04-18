@@ -9080,9 +9080,10 @@ static int isom_update_mdhd_duration( isom_trak_entry_t *trak, uint32_t last_sam
         /* Explicit composition information and DTS shifting  */
         if( cslg || root->qt_compatible || root->max_isom_version >= 4 )
         {
+            int64_t composition_end_time = max_cts + (max_cts - max2_cts);
             if( !root->fragment
-             && (min_offset <= UINT32_MAX) && (max_offset <= UINT32_MAX)
-             && (min_cts <= UINT32_MAX) && (max_cts + (max_cts - max2_cts) <= UINT32_MAX) )
+             && (min_offset <= INT32_MAX) && (max_offset <= INT32_MAX)
+             && (min_cts <= INT32_MAX) && (composition_end_time <= INT32_MAX) )
             {
                 if( !cslg )
                 {
@@ -9094,7 +9095,7 @@ static int isom_update_mdhd_duration( isom_trak_entry_t *trak, uint32_t last_sam
                 cslg->leastDecodeToDisplayDelta = min_offset;
                 cslg->greatestDecodeToDisplayDelta = max_offset;
                 cslg->compositionStartTime = min_cts;
-                cslg->compositionEndTime = 2 * max_cts - max2_cts;
+                cslg->compositionEndTime = composition_end_time;
             }
             else
             {
