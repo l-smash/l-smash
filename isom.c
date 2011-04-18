@@ -11524,10 +11524,7 @@ static int isom_finish_fragment_movie( lsmash_root_t *root )
             }
             else
             {
-                if( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT )
-                    sample_flags = &tfhd->default_sample_flags;
-                else
-                    sample_flags = &trex->default_sample_flags;
+                sample_flags = &tfhd->default_sample_flags;
                 stats.is_leading                 [ sample_flags->is_leading                  ] += trun->sample_count;
                 stats.sample_depends_on          [ sample_flags->sample_depends_on           ] += trun->sample_count;
                 stats.sample_is_depended_on      [ sample_flags->sample_is_depended_on       ] += trun->sample_count;
