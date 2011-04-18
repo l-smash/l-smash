@@ -9330,29 +9330,45 @@ static int isom_check_mandatory_boxes( lsmash_root_t *root )
         return -1;
     if( !root->moov || !root->moov->mvhd )
         return -1;
-    if( root->moov->trak_list )
-        for( lsmash_entry_t *entry = root->moov->trak_list->head; entry; entry = entry->next )
-        {
-            isom_trak_entry_t *trak = (isom_trak_entry_t *)entry->data;
-            if( !trak->tkhd || !trak->mdia )
-                return -1;
-            if( !trak->mdia->mdhd || !trak->mdia->hdlr || !trak->mdia->minf )
-                return -1;
-            if( (root->qt_compatible && !trak->mdia->minf->hdlr) || !trak->mdia->minf->dinf || !trak->mdia->minf->dinf->dref )
-                return -1;
-            if( !trak->mdia->minf->stbl )
-                return -1;
-            if( !trak->mdia->minf->stbl->stsz )
-                return -1;
-            if( !trak->mdia->minf->stbl->stts || !trak->mdia->minf->stbl->stts->list->head )
-                return -1;
-            if( !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list->head )
-                return -1;
-            if( !trak->mdia->minf->stbl->stco || !trak->mdia->minf->stbl->stco->list->head )
-                return -1;
-        }
+    if( !root->moov->trak_list )
+        return -1;
+    /* A movie requires at least one track. */
     if( !root->moov->trak_list->head )
         return -1;
+    for( lsmash_entry_t *entry = root->moov->trak_list->head; entry; entry = entry->next )
+    {
+        isom_trak_entry_t *trak = (isom_trak_entry_t *)entry->data;
+        if( !trak
+         || !trak->tkhd
+         || !trak->mdia
+         || !trak->mdia->mdhd
+         || !trak->mdia->hdlr
+         || !trak->mdia->minf
+         || !trak->mdia->minf->dinf
+         || !trak->mdia->minf->dinf->dref
+         || !trak->mdia->minf->stbl
+         || !trak->mdia->minf->stbl->stsd
+         || !trak->mdia->minf->stbl->stsz
+         || !trak->mdia->minf->stbl->stts
+         || !trak->mdia->minf->stbl->stsc
+         || !trak->mdia->minf->stbl->stco )
+            return -1;
+        if( root->qt_compatible && !trak->mdia->minf->hdlr )
+            return -1;
+        if( !root->fragment
+         && (!trak->mdia->minf->stbl->stsd->list->head
+         || !trak->mdia->minf->stbl->stts->list->head
+         || !trak->mdia->minf->stbl->stsc->list->head
+         || !trak->mdia->minf->stbl->stco->list->head) )
+            return -1;
+    }
+    if( !root->fragment )
+        return 0;
+    if( !root->moov->mvex || !root->moov->mvex->trex_list )
+        return -1;
+    for( lsmash_entry_t *entry = root->moov->mvex->trex_list->head; entry; entry = entry->next )
+        if( !entry->data )  /* trex */
+            return -1;
     return 0;
 }
 
@@ -11411,10 +11427,10 @@ static int isom_finish_fragment_initial_movie( lsmash_root_t *root )
     }
     if( root->mp4_version1 == 1 && isom_add_iods( moov ) )
         return -1;
-    if( isom_check_mandatory_boxes( root )
-     || isom_set_movie_creation_time( root )
-     || isom_create_fragment_overall_default_settings( root )
+    if( isom_create_fragment_overall_default_settings( root )
      || isom_prepare_random_access_info( root )
+     || isom_check_mandatory_boxes( root )
+     || isom_set_movie_creation_time( root )
      || isom_update_moov_size( moov ) )
         return -1;
     /* stco->co64 conversion, depending on last chunk's offset */
