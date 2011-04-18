@@ -9080,8 +9080,9 @@ static int isom_update_mdhd_duration( isom_trak_entry_t *trak, uint32_t last_sam
         /* Explicit composition information and DTS shifting  */
         if( cslg || root->qt_compatible || root->max_isom_version >= 4 )
         {
-            if( (min_offset <= UINT32_MAX) && (max_offset <= UINT32_MAX)
-             && (min_cts <= UINT32_MAX) && (2 * max_cts - max2_cts <= UINT32_MAX) )
+            if( !root->fragment
+             && (min_offset <= UINT32_MAX) && (max_offset <= UINT32_MAX)
+             && (min_cts <= UINT32_MAX) && (max_cts + (max_cts - max2_cts) <= UINT32_MAX) )
             {
                 if( !cslg )
                 {
