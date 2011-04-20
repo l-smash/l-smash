@@ -1137,6 +1137,7 @@ typedef struct
 
 typedef struct
 {
+    uint8_t has_samples;
     uint32_t traf_number;
     uint32_t last_duration;     /* the last sample duration in this track fragment */
     uint64_t largest_cts;       /* the largest CTS in this track fragments */
@@ -1362,7 +1363,6 @@ typedef struct
     isom_moof_entry_t *movie;       /* the address corresponding to the current Movie Fragment Box */
     uint64_t fragment_count;        /* the number of movie fragments we created */
     uint64_t pool_size;
-    uint8_t has_samples;
     lsmash_entry_list_t *pool;      /* samples pooled to interleave for the current movie fragment */
 } isom_fragment_manager_t;
 
