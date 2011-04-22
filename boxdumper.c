@@ -24,6 +24,8 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <io.h>
+#include <fcntl.h>
 
 int main( int argc, char *argv[] )
 {
@@ -32,6 +34,9 @@ int main( int argc, char *argv[] )
         fprintf( stderr, "Usage: boxdumper input\n" );
         return -1;
     }
+#ifdef _WIN32
+    _setmode( _fileno(stdin), _O_BINARY );
+#endif
     char *filename = argv[1];
     lsmash_root_t *root = lsmash_open_movie( filename, LSMASH_FILE_MODE_READ | LSMASH_FILE_MODE_DUMP );
     if( !root )

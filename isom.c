@@ -4266,9 +4266,31 @@ static int isom_write_mvex( lsmash_bs_t *bs, isom_mvex_t *mvex )
         if( isom_write_mehd( bs, mvex->mehd ) )
             return -1;
     }
-    else
+    else if( bs->stream != stdout )
     {
-        mvex->placeholder_pos = lsmash_ftell( bs->stream );
+        /*
+            [ROOT]
+             |
+             |--[ftyp]
+             |
+             ---[moov]
+                 |
+                 |--[mvhd]
+                 |
+                 |--[trak]
+                 |
+                 *
+                 *
+                 *
+                 |
+                 ---[mvex]
+                     |
+                     ---[mehd] <--- mehd->pos == placeholder position
+        */
+        mvex->placeholder_pos = mvex->parent->parent->size      /* the total size of boxes before the moov box */
+                              + mvex->parent->size              /* the size of moov box */
+                              + ISOM_DEFAULT_BOX_HEADER_SIZE    /* the offset from the mvex box */
+                              - mvex->size;
         if( isom_bs_write_movie_extends_placeholder( bs ) )
             return -1;
     }
@@ -4440,14 +4462,13 @@ static int isom_write_mdat_header( lsmash_root_t *root, uint64_t media_size )
         mdat->size = ISOM_DEFAULT_BOX_HEADER_SIZE + media_size;
         if( mdat->size > UINT32_MAX )
             mdat->size += 8;    /* large_size */
+        isom_bs_put_box_common( bs, mdat );
+        return 0;
     }
-    else
-    {
-        mdat->placeholder_pos = lsmash_ftell( bs->stream );
-        if( isom_bs_write_largesize_placeholder( bs ) )
-            return -1;
-        mdat->size = ISOM_DEFAULT_BOX_HEADER_SIZE;
-    }
+    mdat->placeholder_pos = lsmash_ftell( bs->stream );
+    if( isom_bs_write_largesize_placeholder( bs ) )
+        return -1;
+    mdat->size = ISOM_DEFAULT_BOX_HEADER_SIZE;
     isom_bs_put_box_common( bs, mdat );
     return lsmash_bs_write_data( bs );
 }
@@ -6452,7 +6473,13 @@ static void isom_read_box_rest( lsmash_bs_t *bs, isom_box_t *box )
 
 static void isom_skip_box_rest( lsmash_bs_t *bs, isom_box_t *box )
 {
-    lsmash_fseek( bs->stream, box->size - lsmash_bs_get_pos( bs ), SEEK_CUR );
+    uint64_t skip_bytes = box->size - lsmash_bs_get_pos( bs );
+    if( bs->stream != stdin )
+        lsmash_fseek( bs->stream, skip_bytes, SEEK_CUR );
+    else
+        for( uint64_t i = 0; i < skip_bytes; i++ )
+            if( fgetc( stdin ) == EOF )
+                break;
 }
 
 static int isom_read_children( lsmash_root_t *root, isom_box_t *box, void *parent, int level )
@@ -10235,7 +10262,8 @@ static uint64_t isom_update_mvex_size( isom_mvex_t *mvex )
             isom_trex_entry_t *trex = (isom_trex_entry_t *)entry->data;
             mvex->size += isom_update_trex_entry_size( trex );
         }
-    mvex->size += mvex->mehd ? isom_update_mehd_size( mvex->mehd ) : 20;    /* 20 bytes is of placeholder. */
+    if( ((lsmash_root_t *)mvex->parent->parent)->bs->stream != stdout )
+        mvex->size += mvex->mehd ? isom_update_mehd_size( mvex->mehd ) : 20;    /* 20 bytes is of placeholder. */
     CHECK_LARGESIZE( mvex->size );
     return mvex->size;
 }
@@ -10886,7 +10914,15 @@ lsmash_root_t *lsmash_open_movie( const char *filename, lsmash_file_mode_code mo
     if( !root->bs )
         goto fail;
     memset( root->bs, 0, sizeof(lsmash_bs_t) );
-    root->bs->stream = fopen( filename, open_mode );
+    if( !strcmp( filename, "-" ) )
+    {
+        if( mode & LSMASH_FILE_MODE_READ )
+            root->bs->stream = stdin;
+        else if( (mode & LSMASH_FILE_MODE_WRITE) && (mode & LSMASH_FILE_MODE_FRAGMENTED) )
+            root->bs->stream = stdout;
+    }
+    else
+        root->bs->stream = fopen( filename, open_mode );
     if( !root->bs->stream )
         goto fail;
     root->flags = mode;
@@ -11130,6 +11166,8 @@ int lsmash_create_object_descriptor( lsmash_root_t *root )
 
 static int isom_set_fragment_overall_duration( lsmash_root_t *root )
 {
+    if( root->bs->stream == stdout )
+        return 0;
     isom_mvex_t *mvex = root->moov->mvex;
     if( isom_add_mehd( mvex ) )
         return -1;
