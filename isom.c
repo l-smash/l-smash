@@ -12433,7 +12433,7 @@ static int isom_update_sample_tables( isom_trak_entry_t *trak, lsmash_sample_t *
 
 static void isom_append_fragment_track_run( lsmash_root_t *root, isom_chunk_t *chunk )
 {
-    if( !chunk->pool )
+    if( !chunk->pool || !chunk->pool->head )
         return;
     isom_fragment_manager_t *fragment = root->fragment;
     /* Move samples in the pool of the current track fragment to the pool of the current movie fragment.
