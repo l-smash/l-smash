@@ -11198,6 +11198,8 @@ static int isom_set_fragment_overall_duration( lsmash_root_t *root )
 
 static int isom_write_fragment_random_access_info( lsmash_root_t *root )
 {
+    if( root->bs->stream == stdout )
+        return 0;
     if( isom_update_mfra_size( root->mfra ) )
         return -1;
     return isom_write_mfra( root->bs, root->mfra );
@@ -11416,6 +11418,8 @@ static int isom_create_fragment_overall_default_settings( lsmash_root_t *root )
 
 static int isom_prepare_random_access_info( lsmash_root_t *root )
 {
+    if( root->bs->stream == stdout )
+        return 0;
     if( isom_add_mfra( root )
      || isom_add_mfro( root->mfra ) )
         return -1;
@@ -12766,7 +12770,7 @@ static int isom_update_fragment_sample_tables( isom_traf_entry_t *traf, lsmash_s
             tfhd->default_sample_flags = sample_flags;
             /* Set up random access information if this sample is random accessible sample.
              * We inform only the first sample in each movie fragment. */
-            if( sample->prop.random_access_type )
+            if( root->bs->stream != stdout && sample->prop.random_access_type )
             {
                 isom_tfra_entry_t *tfra = isom_get_tfra( root->mfra, tfhd->track_ID );
                 if( !tfra )
