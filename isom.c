@@ -11550,7 +11550,7 @@ static int isom_finish_fragment_movie( lsmash_root_t *root )
         for( lsmash_entry_t *trun_entry = traf->trun_list->head; trun_entry; trun_entry = trun_entry->next )
         {
             isom_trun_entry_t *trun = (isom_trun_entry_t *)trun_entry->data;
-            if( !trun )
+            if( !trun || !trun->sample_count )
                 return -1;
             isom_sample_flags_t *sample_flags;
             if( trun->flags & ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT )
@@ -11590,15 +11590,23 @@ static int isom_finish_fragment_movie( lsmash_root_t *root )
             if( i < 2 )
                 GET_MOST_USED( tfhd, 4, sample_is_difference_sample );
         }
+        int useful_default_sample_duration = 0;
         int useful_default_sample_size = 0;
         for( lsmash_entry_t *trun_entry = traf->trun_list->head; trun_entry; trun_entry = trun_entry->next )
         {
             isom_trun_entry_t *trun = (isom_trun_entry_t *)trun_entry->data;
+            if( !(trun->flags & ISOM_TR_FLAGS_SAMPLE_DURATION_PRESENT) )
+                useful_default_sample_duration = 1;
             if( !(trun->flags & ISOM_TR_FLAGS_SAMPLE_SIZE_PRESENT) )
-               useful_default_sample_size = 1;
+                useful_default_sample_size = 1;
             int useful_first_sample_flags = 1;
             int useful_default_sample_flags = 1;
-            if( trun->sample_count > 1 && trun->optional && trun->optional->head )
+            if( trun->sample_count == 1 )
+            {
+                if( !memcmp( &trun->first_sample_flags, &tfhd->default_sample_flags, sizeof(isom_sample_flags_t) ) )
+                    useful_first_sample_flags = 0;
+            }
+            else if( trun->optional && trun->optional->head )
             {
                 lsmash_entry_t *optional_entry = trun->optional->head->next;
                 isom_trun_optional_row_t *row = (isom_trun_optional_row_t *)optional_entry->data;
@@ -11635,14 +11643,18 @@ static int isom_finish_fragment_movie( lsmash_root_t *root )
             else
                 trun->flags |= ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT;
         }
-        if( !(tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT) )
-            tfhd->default_sample_flags = trex->default_sample_flags;    /* This might be redundant, but is to be more natural. */
-        else if( !memcmp( &tfhd->default_sample_flags, &trex->default_sample_flags, sizeof(isom_sample_flags_t) ) )
-            tfhd->flags &= ~ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT;
+        if( useful_default_sample_duration && tfhd->default_sample_duration != trex->default_sample_duration )
+            tfhd->flags |= ISOM_TF_FLAGS_DEFAULT_SAMPLE_DURATION_PRESENT;
+        else
+            tfhd->default_sample_duration = trex->default_sample_duration;      /* This might be redundant, but is to be more natural. */
         if( useful_default_sample_size && tfhd->default_sample_size != trex->default_sample_size )
             tfhd->flags |= ISOM_TF_FLAGS_DEFAULT_SAMPLE_SIZE_PRESENT;
         else
-            tfhd->default_sample_size = trex->default_sample_size;      /* This might be redundant, but is to be more natural. */
+            tfhd->default_sample_size = trex->default_sample_size;              /* This might be redundant, but is to be more natural. */
+        if( !(tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT) )
+            tfhd->default_sample_flags = trex->default_sample_flags;            /* This might be redundant, but is to be more natural. */
+        else if( !memcmp( &tfhd->default_sample_flags, &trex->default_sample_flags, sizeof(isom_sample_flags_t) ) )
+            tfhd->flags &= ~ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT;
     }
     /* When using for live streaming, setting explicit base_data_offset is not preferable.
      * However, it's OK because we haven't supported this yet.
@@ -12677,7 +12689,8 @@ static int isom_update_fragment_previous_sample_duration( isom_traf_entry_t *tra
     }
     /* Update default_sample_duration of the Track Fragment Header Box
      * if this duration is what the first sample in the current track fragment owns. */
-    else if( trun->sample_count == 2 && traf->trun_list->entry_count == 1 )
+    if( (trun->sample_count == 2 && traf->trun_list->entry_count == 1)
+     || (trun->sample_count == 1 && traf->trun_list->entry_count == 2) )
     {
         if( duration != trex->default_sample_duration )
             tfhd->flags |= ISOM_TF_FLAGS_DEFAULT_SAMPLE_DURATION_PRESENT;
