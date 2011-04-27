@@ -202,9 +202,7 @@ typedef struct
 typedef struct
 {
     ISOM_BASEBOX_COMMON;
-    isom_tref_type_t *ref;      /* Track Reference Type Box */
-
-        uint32_t type_count;    /* number of reference types */
+    lsmash_entry_list_t *ref_list;      /* Track Reference Type Box List */
 } isom_tref_t;
 
 /* Media Header Box

@@ -279,6 +279,24 @@ static int isom_add_elst_entry( isom_elst_t *elst, uint64_t segment_duration, in
     return 0;
 }
 
+static isom_tref_type_t *isom_add_track_reference_type( isom_tref_t *tref, lsmash_track_reference_type_code type, uint32_t ref_count, uint32_t *track_ID )
+{
+    if( !tref || !tref->ref_list )
+        return NULL;
+    isom_tref_type_t *ref = malloc( sizeof(isom_tref_type_t) );
+    if( !ref )
+        return NULL;
+    isom_init_box_common( ref, tref, type );
+    ref->ref_count = ref_count;
+    ref->track_ID = track_ID;
+    if( lsmash_add_entry( tref->ref_list, ref ) )
+    {
+        free( ref );
+        return NULL;
+    }
+    return ref;
+}
+
 static int isom_add_dref_entry( isom_dref_t *dref, uint32_t flags, char *name, char *location )
 {
     if( !dref || !dref->list )
@@ -1897,6 +1915,12 @@ static int isom_add_tref( isom_trak_entry_t *trak )
     if( trak->tref )
         return 0;
     isom_create_box( tref, trak, ISOM_BOX_TYPE_TREF );
+    tref->ref_list = lsmash_create_entry_list();
+    if( !tref->ref_list )
+    {
+        free( tref );
+        return -1;
+    }
     trak->tref = tref;
     return 0;
 }
@@ -2457,17 +2481,20 @@ static void isom_remove_edts( isom_edts_t *edts )
     free( edts );
 }
 
+static void isom_remove_track_reference_type( isom_tref_type_t *ref )
+{
+    if( !ref )
+        return;
+    if( ref->track_ID )
+        free( ref->track_ID );
+    free( ref );
+}
+
 static void isom_remove_tref( isom_tref_t *tref )
 {
     if( !tref )
         return;
-    for( uint32_t i = 0; i < tref->type_count; i++ )
-    {
-        isom_tref_type_t *ref = &tref->ref[i];
-        if( ref && ref->track_ID )
-            free( ref->track_ID );
-    }
-    free( tref->ref );
+    lsmash_remove_list( tref->ref_list, isom_remove_track_reference_type );
     free( tref );
 }
 
@@ -3087,13 +3114,16 @@ static int isom_write_tref( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     if( !tref )
         return 0;
     isom_bs_put_box_common( bs, tref );
-    for( uint32_t i = 0; i < tref->type_count; i++ )
-    {
-        isom_tref_type_t *ref = &tref->ref[i];
-        isom_bs_put_box_common( bs, ref );
-        for( uint32_t j = 0; j < ref->ref_count; j++ )
-            lsmash_bs_put_be32( bs, ref->track_ID[j] );
-    }
+    if( tref->ref_list )
+        for( lsmash_entry_t *entry = tref->ref_list->head; entry; entry = entry->next )
+        {
+            isom_tref_type_t *ref = (isom_tref_type_t *)entry->data;
+            if( !ref )
+                return -1;
+            isom_bs_put_box_common( bs, ref );
+            for( uint32_t i = 0; i < ref->ref_count; i++ )
+                lsmash_bs_put_be32( bs, ref->track_ID[i] );
+        }
     return lsmash_bs_write_data( bs );
 }
 
@@ -6832,29 +6862,38 @@ static int isom_read_track_reference_type( lsmash_root_t *root, isom_box_t *box,
 {
     if( parent->type != ISOM_BOX_TYPE_TREF )
         return isom_read_unknown_box( root, box, parent, level );
-    isom_tref_type_t *ref = NULL;
     isom_tref_t *tref = (isom_tref_t *)parent;
-    if( !tref->ref && !tref->type_count )
-        ref = malloc( sizeof(isom_tref_type_t) );
-    else
-        ref = realloc( tref->ref, (tref->type_count + 1) * sizeof(isom_tref_type_t) );
+    lsmash_entry_list_t *list = tref->ref_list;
+    if( !list )
+    {
+        list = lsmash_create_entry_list();
+        if( !list )
+            return -1;
+        tref->ref_list = list;
+    }
+    isom_tref_type_t *ref = malloc( sizeof(isom_tref_type_t) );
     if( !ref )
         return -1;
-    tref->ref = ref;
-    ref += tref->type_count++;      /* move the newest ref and update type_count */
     memset( ref, 0, sizeof(isom_tref_type_t) );
-    lsmash_bs_t *bs = root->bs;
-    ref->ref_count = (box->size - lsmash_bs_get_pos( bs ) ) / sizeof(uint32_t);
-    ref->track_ID = malloc( ref->ref_count * sizeof(uint32_t) );
-    if( !ref->track_ID )
+    if( lsmash_add_entry( list, ref ) )
     {
-        free( tref->ref );
-        tref->ref = NULL;
+        free( ref );
         return -1;
     }
-    isom_read_box_rest( bs, box );
-    for( uint32_t i = 0; i < ref->ref_count; i++ )
-        ref->track_ID[i] = lsmash_bs_get_be32( bs );
+    lsmash_bs_t *bs = root->bs;
+    ref->ref_count = (box->size - lsmash_bs_get_pos( bs ) ) / sizeof(uint32_t);
+    if( ref->ref_count )
+    {
+        ref->track_ID = malloc( ref->ref_count * sizeof(uint32_t) );
+        if( !ref->track_ID )
+        {
+            ref->ref_count = 0;
+            return -1;
+        }
+        isom_read_box_rest( bs, box );
+        for( uint32_t i = 0; i < ref->ref_count; i++ )
+            ref->track_ID[i] = lsmash_bs_get_be32( bs );
+    }
     uint64_t pos = lsmash_bs_get_pos( bs );
     if( box->size != pos )
         printf( "[%s] box has extra bytes: %"PRId64"\n", isom_4cc2str( box->type ), box->size - pos );
@@ -9549,13 +9588,14 @@ static uint64_t isom_update_tref_size( isom_tref_t *tref )
     if( !tref )
         return 0;
     tref->size = ISOM_DEFAULT_BOX_HEADER_SIZE;
-    for( uint32_t i = 0; i < tref->type_count; i++ )
-    {
-        isom_tref_type_t *ref = &tref->ref[i];
-        ref->size = ISOM_DEFAULT_BOX_HEADER_SIZE + (uint64_t)ref->ref_count * 4;
-        CHECK_LARGESIZE( ref->size );
-        tref->size += ref->size;
-    }
+    if( tref->ref_list )
+        for( lsmash_entry_t *entry = tref->ref_list->head; entry; entry = entry->next )
+        {
+            isom_tref_type_t *ref = (isom_tref_type_t *)entry->data;
+            ref->size = ISOM_DEFAULT_BOX_HEADER_SIZE + (uint64_t)ref->ref_count * 4;
+            CHECK_LARGESIZE( ref->size );
+            tref->size += ref->size;
+        }
     CHECK_LARGESIZE( tref->size );
     return tref->size;
 }
@@ -13105,35 +13145,29 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     if( !root || (!root->qt_compatible && !root->itunes_audio) || !root->moov || !root->moov->mvhd )
         return -1;
     FILE *chapter = NULL;       /* shut up 'uninitialized' warning */
-    /* Create Track Reference Type Box. */
+    /* Create a Track Reference Box. */
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || isom_add_tref( trak ) )
         return -1;
-    isom_tref_t *tref = trak->tref;
-    isom_tref_type_t *ref = NULL, *chap = NULL;
-    if( !tref->ref )
-        ref = (isom_tref_type_t *)malloc( sizeof(isom_tref_type_t) );
-    else
-        ref = (isom_tref_type_t *)realloc( tref->ref, (tref->type_count + 1) * sizeof(isom_tref_type_t) );
-    if( !ref )
+    /* Create a track_ID for a new chapter track. */
+    uint32_t *id = (uint32_t *)malloc( sizeof(uint32_t) );
+    if( !id )
         return -1;
-    chap = &ref[tref->type_count];
-    tref->ref = ref;
-    tref->type_count += 1;
-    isom_init_box_common( chap, tref, QT_TREF_TYPE_CHAP );
-    chap->track_ID = (uint32_t *)malloc( sizeof(uint32_t) );
-    if( !chap->track_ID )
-        return -1;
-    uint32_t chapter_track_ID = chap->track_ID[0] = root->moov->mvhd->next_track_ID;
-    chap->ref_count = 1;
-    /* Create reference chapter track. */
+    uint32_t chapter_track_ID = *id = root->moov->mvhd->next_track_ID;
+    /* Create a Track Reference Type Box. */
+    isom_tref_type_t *chap = isom_add_track_reference_type( trak->tref, QT_TREF_TYPE_CHAP, 1, id );
+    if( !chap )
+        return -1;      /* no need to free id */
+    /* Create a reference chapter track. */
     if( chapter_track_ID != lsmash_create_track( root, ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK ) )
         return -1;
+    /* Set track parameters. */
     lsmash_track_parameters_t track_param;
     lsmash_initialize_track_parameters( &track_param );
     track_param.mode = ISOM_TRACK_IN_MOVIE | ISOM_TRACK_IN_PREVIEW;
     if( lsmash_set_track_parameters( root, chapter_track_ID, &track_param ) )
         return -1;
+    /* Set media parameters. */
     uint64_t media_timescale = lsmash_get_media_timescale( root, track_ID );
     if( !media_timescale )
         goto fail;
@@ -13144,7 +13178,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     media_param.MAC_language = 0;
     if( lsmash_set_media_parameters( root, chapter_track_ID, &media_param ) )
         goto fail;
-    /* Create sample description. */
+    /* Create a sample description. */
     uint32_t sample_type = root->max_3gpp_version >= 6 || root->itunes_audio ? ISOM_CODEC_TYPE_TX3G_TEXT : QT_CODEC_TYPE_TEXT_TEXT;
     uint32_t sample_entry = lsmash_add_sample_entry( root, chapter_track_ID, sample_type, NULL );
     if( !sample_entry )
