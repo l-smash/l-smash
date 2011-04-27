@@ -202,7 +202,7 @@ typedef struct
 typedef struct
 {
     ISOM_BASEBOX_COMMON;
-    lsmash_entry_list_t *ref_list;      /* Track Reference Type Box List */
+    lsmash_entry_list_t *ref_list;      /* Track Reference Type Boxes */
 } isom_tref_t;
 
 /* Media Header Box
@@ -913,7 +913,7 @@ typedef struct
     uint32_t default_length;        /* the length of every group entry (if the length is constant), or zero (if it is variable)
                                      * This field is available only if version == 1. */
     lsmash_entry_list_t *list;
-} isom_sgpd_t;
+} isom_sgpd_entry_t;
 
 /* Random Access Entry
  * Samples marked by this group must be random access points, and may also be sync points. */
@@ -946,7 +946,7 @@ typedef struct
     uint32_t grouping_type_parameter;   /* an indication of the sub-type of the grouping
                                          * This field is available only if version == 1. */
     lsmash_entry_list_t *list;
-} isom_sbgp_t;
+} isom_sbgp_entry_t;
 
 typedef struct
 {
@@ -954,7 +954,7 @@ typedef struct
     uint32_t group_description_index;       /* the index of the sample group entry which describes the samples in this group
                                              * The index ranges from 1 to the number of sample group entries in the Sample Group Description Box,
                                              * or takes the value 0 to indicate that this sample is a member of no group of this type. */
-} isom_sbgp_entry_t;
+} isom_group_assignment_entry_t;
 
 /* Sample Table Box */
 typedef struct
@@ -970,11 +970,8 @@ typedef struct
     isom_stsc_t *stsc;      /* Sample To Chunk Box */
     isom_stsz_t *stsz;      /* Sample Size Box */
     isom_stco_t *stco;      /* Chunk Offset Box */
-    isom_sgpd_t *sgpd;      /* ISOM: Sample Group Description Box / QTFF: null */
-    isom_sbgp_t *sbgp;      /* ISOM: Sample To Group Box / QTFF: null */
-
-        uint32_t sgpd_count;
-        uint32_t sbgp_count;
+    lsmash_entry_list_t *sgpd_list;      /* ISOM: Sample Group Description Boxes / QTFF: null */
+    lsmash_entry_list_t *sbgp_list;      /* ISOM: Sample To Group Boxes / QTFF: null */
 } isom_stbl_t;
 
 /* Media Information Box */
@@ -1114,18 +1111,18 @@ typedef struct
 
 typedef struct
 {
-    isom_sbgp_entry_t *sample_to_group;     /* the address corresponding to the entry in Sample to Group Box */
-    isom_rap_entry_t  *random_access;       /* the address corresponding to the random access entry in Sample Group Description Box */
-    uint8_t            is_prev_rap;         /* whether the previous sample is a random access point or not */
+    isom_group_assignment_entry_t *assignment;      /* the address corresponding to the entry in Sample to Group Box */
+    isom_rap_entry_t  *random_access;               /* the address corresponding to the random access entry in Sample Group Description Box */
+    uint8_t            is_prev_rap;                 /* whether the previous sample is a random access point or not */
 } isom_rap_group_t;
 
 typedef struct
 {
-    isom_sbgp_entry_t *sample_to_group;     /* the address corresponding to the entry in Sample to Group Box */
-    uint32_t first_sample;                  /* the number of the first sample of the group */
-    uint32_t recovery_point;                /* the identifier necessary for the recovery from its starting point to be completed */
-    uint8_t delimited;                      /* the flag if the sample_count is determined */
-    uint8_t described;                      /* the flag if the group description is determined */
+    isom_group_assignment_entry_t *assignment;      /* the address corresponding to the entry in Sample to Group Box */
+    uint32_t first_sample;                          /* the number of the first sample of the group */
+    uint32_t recovery_point;                        /* the identifier necessary for the recovery from its starting point to be completed */
+    uint8_t delimited;                              /* the flag if the sample_count is determined */
+    uint8_t described;                              /* the flag if the group description is determined */
 } isom_roll_group_t;
 
 typedef struct
