@@ -1037,7 +1037,7 @@ static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash
             bitmap = summary->bitmap = 0;
         }
         /* Don't create Channel Compositor Box if the channel layout is unknown. */
-        if( layout_tag & QT_CHANNEL_LAYOUT_UNKNOWN )
+        if( (layout_tag ^ QT_CHANNEL_LAYOUT_UNKNOWN) >> 16 )
         {
             if( isom_add_chan( audio ) )
                 goto fail;
