@@ -12794,7 +12794,8 @@ static int isom_update_fragment_sample_tables( isom_traf_entry_t *traf, lsmash_s
             /* Media Data Box preceded by Movie Fragment Box could change base data offsets in each track fragments later.
              * We can't consider this here because the length of Movie Fragment Box is unknown at this step yet. */
             trun = (isom_trun_entry_t *)traf->trun_list->tail->data;
-            trun->flags |= ISOM_TR_FLAGS_DATA_OFFSET_PRESENT;
+            if( root->fragment->pool_size )
+                trun->flags |= ISOM_TR_FLAGS_DATA_OFFSET_PRESENT;
             trun->data_offset = root->fragment->pool_size;
         }
         trun = isom_add_trun( traf );
