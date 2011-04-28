@@ -32,14 +32,6 @@
 #include "mp4a.h"
 #include "mp4sys.h"
 
-/* MP4 Audio Sample Entry */
-typedef struct
-{
-    ISOM_AUDIO_SAMPLE_ENTRY;
-    isom_esds_t *esds;
-    mp4a_audioProfileLevelIndication pli; /* This is not used in mp4a box itself, but the value is specific for that. */
-} isom_mp4a_entry_t;
-
 
 #define isom_create_box( box_name, parent_name, box_4cc ) \
     isom_##box_name##_t *(box_name) = malloc( sizeof(isom_##box_name##_t) ); \
@@ -669,72 +661,6 @@ static int isom_add_avc_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash_v
     return isom_add_visual_extensions( (isom_visual_entry_t *)avc, summary );
 }
 
-static int isom_add_mp4a_entry( isom_stsd_t *stsd, lsmash_audio_summary_t *summary )
-{
-    if( !stsd || !stsd->list || !summary
-     || summary->stream_type != MP4SYS_STREAM_TYPE_AudioStream )
-        return -1;
-    switch( summary->object_type_indication )
-    {
-    case MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3:
-    case MP4SYS_OBJECT_TYPE_Audio_ISO_13818_7_Main_Profile:
-    case MP4SYS_OBJECT_TYPE_Audio_ISO_13818_7_LC_Profile:
-    case MP4SYS_OBJECT_TYPE_Audio_ISO_13818_7_SSR_Profile:
-    case MP4SYS_OBJECT_TYPE_Audio_ISO_13818_3: /* Legacy Interface */
-    case MP4SYS_OBJECT_TYPE_Audio_ISO_11172_3: /* Legacy Interface */
-        break;
-    default:
-        return -1;
-    }
-    isom_create_box( esds, NULL, ISOM_BOX_TYPE_ESDS );
-    mp4sys_ES_Descriptor_params_t esd_param;
-    esd_param.ES_ID = 0;              /* This is esds internal, so 0 is allowed. */
-    esd_param.objectTypeIndication = summary->object_type_indication;
-    esd_param.streamType = summary->stream_type;
-    esd_param.bufferSizeDB = 0;       /* NOTE: ISO/IEC 14496-3 does not mention this, so we use 0. */
-    esd_param.maxBitrate = 0;         /* This will be updated later if needed. or... I think this can be arbitrary value. */
-    esd_param.avgBitrate = 0;         /* FIXME: 0 if VBR. */
-    esd_param.dsi_payload = summary->exdata;
-    esd_param.dsi_payload_length = summary->exdata_length;
-    esds->ES = mp4sys_setup_ES_Descriptor( &esd_param );
-    if( !esds->ES )
-    {
-        free( esds );
-        return -1;
-    }
-    isom_mp4a_entry_t *mp4a = malloc( sizeof(isom_mp4a_entry_t) );
-    if( !mp4a )
-    {
-        mp4sys_remove_ES_Descriptor( esds->ES );
-        free( esds );
-        return -1;
-    }
-    memset( mp4a, 0, sizeof(isom_mp4a_entry_t) );
-    isom_init_box_common( mp4a, stsd, ISOM_CODEC_TYPE_MP4A_AUDIO );
-    mp4a->data_reference_index = 1;
-    /* In pure mp4 file, these "template" fields shall be default values according to the spec.
-       But not pure - hybrid with other spec - mp4 file can take other values.
-       Which is to say, these template values shall be ignored in terms of mp4, except some object_type_indications.
-       see 14496-14, "Template fields used". */
-    mp4a->channelcount = 2;
-    mp4a->samplesize = 16;
-    /* WARNING: This field cannot retain frequency above 65535Hz.
-       This is not "FIXME", I just honestly implemented what the spec says.
-       BTW, who ever expects sampling frequency takes fixed-point decimal??? */
-    mp4a->samplerate = summary->frequency <= UINT16_MAX ? summary->frequency << 16 : 0;
-    mp4a->esds = esds;
-    mp4a->pli = mp4a_get_audioProfileLevelIndication( summary );
-    if( lsmash_add_entry( stsd->list, mp4a ) )
-    {
-        mp4sys_remove_ES_Descriptor( esds->ES );
-        free( esds );
-        free( mp4a );
-        return -1;
-    }
-    esds->parent = (isom_box_t *)mp4a;
-    return 0;
-}
-
 #if 0
 static int isom_add_mp4v_entry( isom_stsd_t *stsd, lsmash_video_summary_t *summary )
 {
@@ -805,6 +731,7 @@ static int isom_add_visual_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmas
 }
 #endif
 
+static void isom_remove_esds( isom_esds_t *esds );
 static void isom_remove_wave( isom_wave_t *wave );
 static void isom_remove_chan( isom_chan_t *chan );
 
@@ -863,174 +790,250 @@ static int isom_add_chan( isom_audio_entry_t *audio )
     return 0;
 }
 
-static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash_audio_summary_t *summary, uint8_t qt_compatible )
+static int isom_set_qtff_mp4a_description( isom_audio_entry_t *audio )
 {
-    if( !stsd || !stsd->list )
+    lsmash_audio_summary_t *summary = &audio->summary;
+    if( isom_add_wave( audio )
+     || isom_add_frma( audio->wave )
+     || isom_add_mp4a( audio->wave )
+     || isom_add_terminator( audio->wave ) )
+        return -1;
+    audio->data_reference_index = 1;
+    audio->version = (summary->channels > 2 || summary->frequency > UINT16_MAX) ? 2 : 1;
+    audio->channelcount = audio->version == 2 ? 3 : LSMASH_MIN( summary->channels, 2 );
+    audio->samplesize = 16;
+    audio->compression_ID = QT_COMPRESSION_ID_VARIABLE_COMPRESSION;
+    audio->packet_size = 0;
+    if( audio->version == 1 )
+    {
+        audio->samplerate = summary->frequency << 16;
+        audio->samplesPerPacket = summary->samples_in_frame;
+        audio->bytesPerPacket = 1;      /* Apparently, this field is set to 1. */
+        audio->bytesPerFrame = audio->bytesPerPacket * summary->channels;
+        audio->bytesPerSample = 1 + (summary->bit_depth != 8);
+    }
+    else    /* audio->version == 2 */
+    {
+        audio->samplerate = 0x00010000;
+        audio->sizeOfStructOnly = 72;
+        audio->audioSampleRate = (union {double d; uint64_t i;}){summary->frequency}.i;
+        audio->numAudioChannels = summary->channels;
+        audio->always7F000000 = 0x7F000000;
+        audio->constBitsPerChannel = 0;         /* compressed audio */
+        audio->formatSpecificFlags = 0;
+        audio->constBytesPerAudioPacket = 0;    /* variable */
+        audio->constLPCMFramesPerAudioPacket = summary->samples_in_frame;
+    }
+    audio->wave->frma->data_format = audio->type;
+    /* create ES Descriptor */
+    isom_esds_t *esds = malloc( sizeof(isom_esds_t) );
+    if( !esds )
+        return -1;
+    memset( esds, 0, sizeof(isom_esds_t) );
+    isom_init_box_common( esds, audio->wave, ISOM_BOX_TYPE_ESDS );
+    mp4sys_ES_Descriptor_params_t esd_param;
+    memset( &esd_param, 0, sizeof(mp4sys_ES_Descriptor_params_t) );
+    esd_param.objectTypeIndication = summary->object_type_indication;
+    esd_param.streamType = summary->stream_type;
+    esd_param.dsi_payload = summary->exdata;
+    esd_param.dsi_payload_length = summary->exdata_length;
+    esds->ES = mp4sys_setup_ES_Descriptor( &esd_param );
+    if( !esds->ES )
+        return -1;
+    audio->wave->esds = esds;
+    return 0;
+}
+
+static int isom_set_isom_mp4a_description( isom_audio_entry_t *audio )
+{
+    lsmash_audio_summary_t *summary = &audio->summary;
+    if( summary->stream_type != MP4SYS_STREAM_TYPE_AudioStream )
+        return -1;
+    switch( summary->object_type_indication )
+    {
+        case MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3:
+        case MP4SYS_OBJECT_TYPE_Audio_ISO_13818_7_Main_Profile:
+        case MP4SYS_OBJECT_TYPE_Audio_ISO_13818_7_LC_Profile:
+        case MP4SYS_OBJECT_TYPE_Audio_ISO_13818_7_SSR_Profile:
+        case MP4SYS_OBJECT_TYPE_Audio_ISO_13818_3:      /* Legacy Interface */
+        case MP4SYS_OBJECT_TYPE_Audio_ISO_11172_3:      /* Legacy Interface */
+            break;
+        default:
+            return -1;
+    }
+    isom_create_box( esds, audio, ISOM_BOX_TYPE_ESDS );
+    mp4sys_ES_Descriptor_params_t esd_param;
+    esd_param.ES_ID = 0;              /* This is esds internal, so 0 is allowed. */
+    esd_param.objectTypeIndication = summary->object_type_indication;
+    esd_param.streamType = summary->stream_type;
+    esd_param.bufferSizeDB = 0;       /* NOTE: ISO/IEC 14496-3 does not mention this, so we use 0. */
+    esd_param.maxBitrate = 0;         /* This will be updated later if needed. or... I think this can be arbitrary value. */
+    esd_param.avgBitrate = 0;         /* FIXME: 0 if VBR. */
+    esd_param.dsi_payload = summary->exdata;
+    esd_param.dsi_payload_length = summary->exdata_length;
+    esds->ES = mp4sys_setup_ES_Descriptor( &esd_param );
+    if( !esds->ES )
+        return -1;
+    audio->data_reference_index = 1;
+    /* WARNING: This field cannot retain frequency above 65535Hz.
+       This is not "FIXME", I just honestly implemented what the spec says.
+       BTW, who ever expects sampling frequency takes fixed-point decimal??? */
+    audio->samplerate = summary->frequency <= UINT16_MAX ? summary->frequency << 16 : 0;
+    /* In pure mp4 file, these "template" fields shall be default values according to the spec.
+       But not pure - hybrid with other spec - mp4 file can take other values.
+       Which is to say, these template values shall be ignored in terms of mp4, except some object_type_indications.
+       see 14496-14, "Template fields used". */
+    audio->channelcount = 2;
+    audio->samplesize = 16;
+    audio->esds = esds;
+    return 0;
+}
+
+static int isom_set_qtff_lpcm_description( isom_audio_entry_t *audio )
+{
+    uint32_t sample_type = audio->type;
+    lsmash_audio_summary_t *summary = &audio->summary;
+    /* Convert the sample type into 'lpcm' if the description doesn't match the format or version = 2 fields are needed. */
+    if( (sample_type == QT_CODEC_TYPE_RAW_AUDIO && (summary->bit_depth != 8 || summary->sample_format))
+     || (sample_type == QT_CODEC_TYPE_FL32_AUDIO && (summary->bit_depth != 32 || !summary->sample_format))
+     || (sample_type == QT_CODEC_TYPE_FL64_AUDIO && (summary->bit_depth != 64 || !summary->sample_format))
+     || (sample_type == QT_CODEC_TYPE_IN24_AUDIO && (summary->bit_depth != 24 || summary->sample_format))
+     || (sample_type == QT_CODEC_TYPE_IN32_AUDIO && (summary->bit_depth != 32 || summary->sample_format))
+     || (sample_type == QT_CODEC_TYPE_23NI_AUDIO && (summary->bit_depth != 32 || summary->sample_format || !summary->endianness))
+     || (sample_type == QT_CODEC_TYPE_SOWT_AUDIO && (summary->bit_depth != 16 || summary->sample_format || !summary->endianness))
+     || (sample_type == QT_CODEC_TYPE_TWOS_AUDIO && ((summary->bit_depth != 16 && summary->bit_depth != 8) || summary->sample_format || summary->endianness))
+     || (sample_type == QT_CODEC_TYPE_NONE_AUDIO && ((summary->bit_depth != 16 && summary->bit_depth != 8) || summary->sample_format || summary->endianness))
+     || (sample_type == QT_CODEC_TYPE_NOT_SPECIFIED && ((summary->bit_depth != 16 && summary->bit_depth != 8) || summary->sample_format || summary->endianness))
+     || (summary->channels > 2 || summary->frequency > UINT16_MAX || summary->bit_depth % 8) )
+    {
+        audio->type = QT_CODEC_TYPE_LPCM_AUDIO;
+        audio->version = 2;
+    }
+    else if( sample_type == QT_CODEC_TYPE_LPCM_AUDIO )
+        audio->version = 2;
+    else if( summary->bit_depth > 16
+     || (sample_type != QT_CODEC_TYPE_RAW_AUDIO && sample_type != QT_CODEC_TYPE_TWOS_AUDIO
+     && sample_type != QT_CODEC_TYPE_NONE_AUDIO && sample_type != QT_CODEC_TYPE_NOT_SPECIFIED) )
+        audio->version = 1;
+    audio->data_reference_index = 1;
+    /* Set up constBytesPerAudioPacket field.
+     * We use constBytesPerAudioPacket as the actual size of audio frame even when version is not 2. */
+    audio->constBytesPerAudioPacket = (summary->bit_depth * summary->channels) / 8;
+    /* Set up other fields in this description by its version. */
+    if( audio->version == 2 )
+    {
+        audio->channelcount = 3;
+        audio->samplesize = 16;
+        audio->compression_ID = -2;
+        audio->samplerate = 0x00010000;
+        audio->sizeOfStructOnly = 72;
+        audio->audioSampleRate = (union {double d; uint64_t i;}){summary->frequency}.i;
+        audio->numAudioChannels = summary->channels;
+        audio->always7F000000 = 0x7F000000;
+        audio->constBitsPerChannel = summary->bit_depth;
+        audio->constLPCMFramesPerAudioPacket = 1;
+        if( summary->sample_format )
+            audio->formatSpecificFlags |= QT_LPCM_FORMAT_FLAG_FLOAT;
+        if( sample_type == QT_CODEC_TYPE_TWOS_AUDIO || !summary->endianness )
+            audio->formatSpecificFlags |= QT_LPCM_FORMAT_FLAG_BIG_ENDIAN;
+        if( !summary->sample_format && summary->signedness )
+            audio->formatSpecificFlags |= QT_LPCM_FORMAT_FLAG_SIGNED_INTEGER;
+        if( summary->packed )
+            audio->formatSpecificFlags |= QT_LPCM_FORMAT_FLAG_PACKED;
+        if( !summary->packed && summary->alignment )
+            audio->formatSpecificFlags |= QT_LPCM_FORMAT_FLAG_ALIGNED_HIGH;
+        if( !summary->interleaved )
+            audio->formatSpecificFlags |= QT_LPCM_FORMAT_FLAG_NON_INTERLEAVED;
+    }
+    else if( audio->version == 1 )
+    {
+        audio->channelcount = summary->channels;
+        audio->samplesize = 16;
+        /* Audio formats other than 'raw ' and 'twos' are treated as compressed audio. */
+        if( sample_type == QT_CODEC_TYPE_RAW_AUDIO || sample_type == QT_CODEC_TYPE_TWOS_AUDIO )
+            audio->compression_ID = QT_COMPRESSION_ID_NOT_COMPRESSED;
+        else
+            audio->compression_ID = QT_COMPRESSION_ID_FIXED_COMPRESSION;
+        audio->samplerate = summary->frequency << 16;
+        audio->samplesPerPacket = 1;
+        audio->bytesPerPacket = summary->bit_depth / 8;
+        audio->bytesPerFrame = audio->bytesPerPacket * summary->channels;   /* sample_size field in stsz box is NOT used. */
+        audio->bytesPerSample = 1 + (summary->bit_depth != 8);
+        if( sample_type == QT_CODEC_TYPE_FL32_AUDIO || sample_type == QT_CODEC_TYPE_FL64_AUDIO
+         || sample_type == QT_CODEC_TYPE_IN24_AUDIO || sample_type == QT_CODEC_TYPE_IN32_AUDIO )
+        {
+            if( isom_add_wave( audio )
+             || isom_add_frma( audio->wave )
+             || isom_add_enda( audio->wave )
+             || isom_add_terminator( audio->wave ) )
+                return -1;
+            audio->wave->frma->data_format = sample_type;
+            audio->wave->enda->littleEndian = summary->endianness;
+        }
+    }
+    else    /* audio->version == 0 */
+    {
+        audio->channelcount = summary->channels;
+        audio->samplesize = summary->bit_depth;
+        audio->compression_ID = QT_COMPRESSION_ID_NOT_COMPRESSED;
+        audio->samplerate = summary->frequency << 16;
+    }
+    return 0;
+}
+
+static int isom_set_extra_description( isom_audio_entry_t *audio )
+{
+    lsmash_audio_summary_t *summary = &audio->summary;
+    audio->data_reference_index = 1;
+    audio->samplerate = summary->frequency <= UINT16_MAX ? summary->frequency << 16 : 0;
+    audio->channelcount = 2;
+    audio->samplesize = 16;
+    if( summary->exdata )
+    {
+        audio->exdata_length = summary->exdata_length;
+        audio->exdata = malloc( audio->exdata_length );
+        if( !audio->exdata )
+            return -1;
+        memcpy( audio->exdata, summary->exdata, audio->exdata_length );
+    }
+    else
+        audio->exdata = NULL;
+    return 0;
+}
+
+static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash_audio_summary_t *summary )
+{
+    if( !stsd || !stsd->list || !summary )
         return -1;
     isom_audio_entry_t *audio = malloc( sizeof(isom_audio_entry_t) );
     if( !audio )
         return -1;
     memset( audio, 0, sizeof(isom_audio_entry_t) );
     isom_init_box_common( audio, stsd, sample_type );
-    audio->data_reference_index = 1;
-    audio->samplerate = summary->frequency <= UINT16_MAX ? summary->frequency << 16 : 0;
-    audio->numAudioChannels = summary->channels;    /* store the actual number of channels, here */
+    memcpy( &audio->summary, summary, sizeof(lsmash_audio_summary_t) );
+    int ret = 0;
+    lsmash_root_t *root = ((isom_trak_entry_t *)stsd->parent->parent->parent->parent)->root;
     if( sample_type == ISOM_CODEC_TYPE_MP4A_AUDIO )
     {
-        if( isom_add_wave( audio )
-         || isom_add_frma( audio->wave )
-         || isom_add_mp4a( audio->wave )
-         || isom_add_terminator( audio->wave ) )
-            goto fail;
-        audio->version = (summary->channels > 2 || summary->frequency > UINT16_MAX) ? 2 : 1;
-        audio->channelcount = audio->version == 2 ? 3 : LSMASH_MIN( summary->channels, 2 );
-        audio->samplesize = 16;
-        audio->compression_ID = QT_COMPRESSION_ID_VARIABLE_COMPRESSION;
-        audio->packet_size = 0;
-        if( audio->version == 1 )
-        {
-            audio->samplesPerPacket = summary->samples_in_frame;
-            audio->bytesPerPacket = 1;      /* Apparently, this field is set to 1. */
-            audio->bytesPerFrame = audio->bytesPerPacket * summary->channels;
-            audio->bytesPerSample = 1 + (summary->bit_depth != 8);
-        }
-        else    /* audio->version == 2 */
-        {
-            audio->samplerate = 0x00010000;
-            audio->sizeOfStructOnly = 72;
-            audio->audioSampleRate = (union {double d; uint64_t i;}){summary->frequency}.i;
-            audio->always7F000000 = 0x7F000000;
-            audio->constBitsPerChannel = 0;         /* compressed audio */
-            audio->formatSpecificFlags = 0;
-            audio->constBytesPerAudioPacket = 0;    /* variable */
-            audio->constLPCMFramesPerAudioPacket = summary->samples_in_frame;
-        }
-        audio->wave->frma->data_format = sample_type;
-        /* create ES Descriptor */
-        isom_esds_t *esds = malloc( sizeof(isom_esds_t) );
-        if( !esds )
-            goto fail;
-        memset( esds, 0, sizeof(isom_esds_t) );
-        isom_init_box_common( esds, audio->wave, ISOM_BOX_TYPE_ESDS );
-        mp4sys_ES_Descriptor_params_t esd_param;
-        memset( &esd_param, 0, sizeof(mp4sys_ES_Descriptor_params_t) );
-        esd_param.objectTypeIndication = summary->object_type_indication;
-        esd_param.streamType = summary->stream_type;
-        esd_param.dsi_payload = summary->exdata;
-        esd_param.dsi_payload_length = summary->exdata_length;
-        esds->ES = mp4sys_setup_ES_Descriptor( &esd_param );
-        if( !esds->ES )
-        {
-            free( esds );
-            goto fail;
-        }
-        audio->wave->esds = esds;
+        if( root->ftyp->major_brand == ISOM_BRAND_TYPE_QT )
+            ret = isom_set_qtff_mp4a_description( audio );
+        else
+            ret = isom_set_isom_mp4a_description( audio );
     }
     else if( isom_is_lpcm_audio( sample_type ) )
-    {
-        /* Convert the sample type into 'lpcm' if the description doesn't match the format or version = 2 fields are needed. */
-        if( (sample_type == QT_CODEC_TYPE_RAW_AUDIO && (summary->bit_depth != 8 || summary->sample_format))
-         || (sample_type == QT_CODEC_TYPE_FL32_AUDIO && (summary->bit_depth != 32 || !summary->sample_format))
-         || (sample_type == QT_CODEC_TYPE_FL64_AUDIO && (summary->bit_depth != 64 || !summary->sample_format))
-         || (sample_type == QT_CODEC_TYPE_IN24_AUDIO && (summary->bit_depth != 24 || summary->sample_format))
-         || (sample_type == QT_CODEC_TYPE_IN32_AUDIO && (summary->bit_depth != 32 || summary->sample_format))
-         || (sample_type == QT_CODEC_TYPE_23NI_AUDIO && (summary->bit_depth != 32 || summary->sample_format || !summary->endianness))
-         || (sample_type == QT_CODEC_TYPE_SOWT_AUDIO && (summary->bit_depth != 16 || summary->sample_format || !summary->endianness))
-         || (sample_type == QT_CODEC_TYPE_TWOS_AUDIO && ((summary->bit_depth != 16 && summary->bit_depth != 8) || summary->sample_format || summary->endianness))
-         || (sample_type == QT_CODEC_TYPE_NONE_AUDIO && ((summary->bit_depth != 16 && summary->bit_depth != 8) || summary->sample_format || summary->endianness))
-         || (sample_type == QT_CODEC_TYPE_NOT_SPECIFIED && ((summary->bit_depth != 16 && summary->bit_depth != 8) || summary->sample_format || summary->endianness))
-         || (summary->channels > 2 || summary->frequency > UINT16_MAX || summary->bit_depth % 8) )
-        {
-            audio->type = QT_CODEC_TYPE_LPCM_AUDIO;
-            audio->version = 2;
-        }
-        else if( sample_type == QT_CODEC_TYPE_LPCM_AUDIO )
-            audio->version = 2;
-        else if( summary->bit_depth > 16
-         || (sample_type != QT_CODEC_TYPE_RAW_AUDIO && sample_type != QT_CODEC_TYPE_TWOS_AUDIO
-         && sample_type != QT_CODEC_TYPE_NONE_AUDIO && sample_type != QT_CODEC_TYPE_NOT_SPECIFIED) )
-            audio->version = 1;
-        if( audio->version == 2 )
-        {
-            audio->channelcount = 3;
-            audio->samplesize = 16;
-            audio->compression_ID = -2;
-            audio->samplerate = 0x00010000;
-            audio->sizeOfStructOnly = 72;
-            audio->audioSampleRate = (union {double d; uint64_t i;}){summary->frequency}.i;
-            audio->always7F000000 = 0x7F000000;
-            audio->constLPCMFramesPerAudioPacket = 1;
-            if( summary->sample_format )
-                audio->formatSpecificFlags |= QT_LPCM_FORMAT_FLAG_FLOAT;
-            if( sample_type == QT_CODEC_TYPE_TWOS_AUDIO || !summary->endianness )
-                audio->formatSpecificFlags |= QT_LPCM_FORMAT_FLAG_BIG_ENDIAN;
-            if( !summary->sample_format && summary->signedness )
-                audio->formatSpecificFlags |= QT_LPCM_FORMAT_FLAG_SIGNED_INTEGER;
-            if( summary->packed )
-                audio->formatSpecificFlags |= QT_LPCM_FORMAT_FLAG_PACKED;
-            if( !summary->packed && summary->alignment )
-                audio->formatSpecificFlags |= QT_LPCM_FORMAT_FLAG_ALIGNED_HIGH;
-            if( !summary->interleaved )
-                audio->formatSpecificFlags |= QT_LPCM_FORMAT_FLAG_NON_INTERLEAVED;
-        }
-        else if( audio->version == 1 )
-        {
-            audio->channelcount = summary->channels;
-            audio->samplesize = 16;
-            /* Audio formats other than 'raw ' and 'twos' are treated as compressed audio. */
-            if( sample_type == QT_CODEC_TYPE_RAW_AUDIO || sample_type == QT_CODEC_TYPE_TWOS_AUDIO )
-                audio->compression_ID = QT_COMPRESSION_ID_NOT_COMPRESSED;
-            else
-                audio->compression_ID = QT_COMPRESSION_ID_FIXED_COMPRESSION;
-            audio->samplesPerPacket = 1;
-            audio->bytesPerPacket = summary->bit_depth / 8;
-            audio->bytesPerFrame = audio->bytesPerPacket * summary->channels;   /* sample_size field in stsz box is NOT used. */
-            audio->bytesPerSample = 1 + (summary->bit_depth != 8);
-            if( sample_type == QT_CODEC_TYPE_FL32_AUDIO || sample_type == QT_CODEC_TYPE_FL64_AUDIO
-             || sample_type == QT_CODEC_TYPE_IN24_AUDIO || sample_type == QT_CODEC_TYPE_IN32_AUDIO )
-            {
-                if( isom_add_wave( audio )
-                 || isom_add_frma( audio->wave )
-                 || isom_add_enda( audio->wave )
-                 || isom_add_terminator( audio->wave ) )
-                    goto fail;
-                audio->wave->frma->data_format = sample_type;
-                audio->wave->enda->littleEndian = summary->endianness;
-            }
-        }
-        else    /* audio->version == 0 */
-        {
-            audio->channelcount = summary->channels;
-            audio->samplesize = summary->bit_depth;
-            audio->compression_ID = QT_COMPRESSION_ID_NOT_COMPRESSED;
-        }
-        /* store the actual number of bits per channel and bytes per LPCMFrame, here */
-        audio->constBitsPerChannel = summary->bit_depth;
-        audio->constBytesPerAudioPacket = (audio->constBitsPerChannel * audio->numAudioChannels) / 8;
-    }
+        ret = isom_set_qtff_lpcm_description( audio );
     else
-    {
-        audio->channelcount = 2;
-        audio->samplesize = 16;
-        if( summary->exdata )
-        {
-            audio->exdata_length = summary->exdata_length;
-            audio->exdata = malloc( audio->exdata_length );
-            if( !audio->exdata )
-                goto fail;
-            memcpy( audio->exdata, summary->exdata, audio->exdata_length );
-        }
-        else
-            audio->exdata = NULL;
-    }
-    if( qt_compatible )
+        ret = isom_set_extra_description( audio );
+    if( ret )
+        goto fail;
+    if( root->qt_compatible )
     {
         lsmash_channel_layout_tag_code layout_tag = summary->layout_tag;
         lsmash_channel_bitmap_code bitmap = summary->bitmap;
         if( layout_tag == QT_CHANNEL_LAYOUT_USE_CHANNEL_DESCRIPTIONS    /* We don't support the feature of Channel Descriptions. */
          || (layout_tag == QT_CHANNEL_LAYOUT_USE_CHANNEL_BITMAP && (!bitmap || bitmap > QT_CHANNEL_BIT_FULL)) )
         {
-            layout_tag = summary->layout_tag = QT_CHANNEL_LAYOUT_UNKNOWN | audio->numAudioChannels;
+            layout_tag = summary->layout_tag = QT_CHANNEL_LAYOUT_UNKNOWN | summary->channels;
             bitmap = summary->bitmap = 0;
         }
         /* Don't create Channel Compositor Box if the channel layout is unknown. */
@@ -1046,6 +1049,7 @@ static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash
         goto fail;
     return 0;
 fail:
+    isom_remove_esds( audio->esds );
     isom_remove_wave( audio->wave );
     isom_remove_chan( audio->chan );
     if( audio->exdata )
@@ -1136,14 +1140,6 @@ int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t sa
         case ISOM_CODEC_TYPE_MP4V_VIDEO :
             ret = isom_add_mp4v_entry( stsd, (lsmash_video_summary_t *)summary );
             break;
-#endif
-        case ISOM_CODEC_TYPE_MP4A_AUDIO :
-            if( trak->root->ftyp->major_brand != ISOM_BRAND_TYPE_QT )
-                ret = isom_add_mp4a_entry( stsd, (lsmash_audio_summary_t *)summary );
-            else
-                ret = isom_add_audio_entry( stsd, sample_type, (lsmash_audio_summary_t *)summary, trak->root->qt_compatible );
-            break;
-#if 0
         case ISOM_CODEC_TYPE_MP4S_SYSTEM :
             ret = isom_add_mp4s_entry( stsd );
             break;
@@ -1155,6 +1151,7 @@ int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t sa
             ret = isom_add_visual_entry( stsd, sample_type, (lsmash_video_summary_t *)summary );
             break;
 #endif
+        case ISOM_CODEC_TYPE_MP4A_AUDIO :
         case ISOM_CODEC_TYPE_AC_3_AUDIO :
         case ISOM_CODEC_TYPE_ALAC_AUDIO :
         case ISOM_CODEC_TYPE_SAMR_AUDIO :
@@ -1188,7 +1185,7 @@ int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t sa
         case ISOM_CODEC_TYPE_SSMV_AUDIO :
         case ISOM_CODEC_TYPE_TWOS_AUDIO :
 #endif
-            ret = isom_add_audio_entry( stsd, sample_type, (lsmash_audio_summary_t *)summary, trak->root->qt_compatible );
+            ret = isom_add_audio_entry( stsd, sample_type, (lsmash_audio_summary_t *)summary );
             break;
         case ISOM_CODEC_TYPE_TX3G_TEXT :
             ret = isom_add_tx3g_entry( stsd );
@@ -1726,7 +1723,7 @@ static int isom_scan_trak_profileLevelIndication( isom_trak_entry_t* trak, mp4a_
                     *visual_pli = MP4SYS_VISUAL_PLI_H264_AVC;
                 break;
             case ISOM_CODEC_TYPE_MP4A_AUDIO :
-                *audio_pli = mp4a_max_audioProfileLevelIndication( *audio_pli, ((isom_mp4a_entry_t*)sample_entry)->pli );
+                *audio_pli = mp4a_max_audioProfileLevelIndication( *audio_pli, mp4a_get_audioProfileLevelIndication( &((isom_audio_entry_t*)sample_entry)->summary ) );
                 break;
 #if 0
             case ISOM_CODEC_TYPE_DRAC_VIDEO :
@@ -2582,28 +2579,6 @@ static void isom_remove_stsd( isom_stsd_t *stsd )
                 free( mp4v );
                 break;
             }
-#endif
-            case ISOM_CODEC_TYPE_MP4A_AUDIO :
-            {
-                if( !((isom_audio_entry_t *)sample)->version )
-                {
-                    isom_mp4a_entry_t *mp4a = (isom_mp4a_entry_t *)entry->data;
-                    isom_remove_esds( mp4a->esds );
-                    free( mp4a );
-                }
-                else
-                {
-                    /* MPEG-4 Audio in QTFF */
-                    isom_audio_entry_t *audio = (isom_audio_entry_t *)entry->data;
-                    isom_remove_wave( audio->wave );
-                    isom_remove_chan( audio->chan );
-                    if( audio->exdata )
-                        free( audio->exdata );
-                    free( audio );
-                }
-                break;
-            }
-#if 0
             case ISOM_CODEC_TYPE_MP4S_SYSTEM :
             {
                 isom_mp4s_entry_t *mp4s = (isom_mp4s_entry_t *)entry->data;
@@ -2623,6 +2598,7 @@ static void isom_remove_stsd( isom_stsd_t *stsd )
                 break;
             }
 #endif
+            case ISOM_CODEC_TYPE_MP4A_AUDIO :
             case ISOM_CODEC_TYPE_AC_3_AUDIO :
             case ISOM_CODEC_TYPE_ALAC_AUDIO :
             case ISOM_CODEC_TYPE_SAMR_AUDIO :
@@ -2658,6 +2634,9 @@ static void isom_remove_stsd( isom_stsd_t *stsd )
 #endif
             {
                 isom_audio_entry_t *audio = (isom_audio_entry_t *)entry->data;
+                isom_remove_esds( audio->esds );
+                isom_remove_wave( audio->wave );
+                isom_remove_chan( audio->chan );
                 if( audio->exdata )
                     free( audio->exdata );
                 free( audio );
@@ -3500,27 +3479,6 @@ static int isom_write_avc_entry( lsmash_bs_t *bs, lsmash_entry_t *entry )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_mp4a_entry( lsmash_bs_t *bs, lsmash_entry_t *entry )
-{
-    isom_mp4a_entry_t *data = (isom_mp4a_entry_t *)entry->data;
-    if( !data )
-        return -1;
-    isom_bs_put_box_common( bs, data );
-    lsmash_bs_put_bytes( bs, data->reserved, 6 );
-    lsmash_bs_put_be16( bs, data->data_reference_index );
-    lsmash_bs_put_be16( bs, data->version );
-    lsmash_bs_put_be16( bs, data->revision_level );
-    lsmash_bs_put_be32( bs, data->vendor );
-    lsmash_bs_put_be16( bs, data->channelcount );
-    lsmash_bs_put_be16( bs, data->samplesize );
-    lsmash_bs_put_be16( bs, data->compression_ID );
-    lsmash_bs_put_be16( bs, data->packet_size );
-    lsmash_bs_put_be32( bs, data->samplerate );
-    if( lsmash_bs_write_data( bs ) )
-        return -1;
-    return isom_write_esds( bs, data->esds );
-}
-
 static int isom_write_audio_entry( lsmash_bs_t *bs, lsmash_entry_t *entry )
 {
     isom_audio_entry_t *data = (isom_audio_entry_t *)entry->data;
@@ -3558,9 +3516,11 @@ static int isom_write_audio_entry( lsmash_bs_t *bs, lsmash_entry_t *entry )
     lsmash_bs_put_bytes( bs, data->exdata, data->exdata_length );
     if( lsmash_bs_write_data( bs ) )
         return -1;
-    if( isom_write_wave( bs, data->wave ) )
+    if( isom_write_esds( bs, data->esds )
+     || isom_write_wave( bs, data->wave )
+     || isom_write_chan( bs, data->chan ) )
         return -1;
-    return isom_write_chan( bs, data->chan );
+    return 0;
 }
 
 #if 0
@@ -3726,12 +3686,6 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
 #endif
                 ret = isom_write_avc_entry( bs, entry );
                 break;
-            case ISOM_CODEC_TYPE_MP4A_AUDIO :
-                if( !((isom_audio_entry_t *)sample)->version )
-                    ret = isom_write_mp4a_entry( bs, entry );
-                else
-                    ret = isom_write_audio_entry( bs, entry );
-                break;
 #if 0
             case ISOM_CODEC_TYPE_DRAC_VIDEO :
             case ISOM_CODEC_TYPE_ENCV_VIDEO :
@@ -3741,6 +3695,7 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
                 ret = isom_write_visual_entry( bs, entry );
                 break;
 #endif
+            case ISOM_CODEC_TYPE_MP4A_AUDIO :
             case ISOM_CODEC_TYPE_AC_3_AUDIO :
             case ISOM_CODEC_TYPE_ALAC_AUDIO :
             case ISOM_CODEC_TYPE_SAMR_AUDIO :
@@ -7209,7 +7164,7 @@ static void *isom_sample_description_alloc( uint32_t sample_type )
         case ISOM_CODEC_TYPE_VC_1_VIDEO :
             return malloc( sizeof(isom_visual_entry_t) );
         case ISOM_CODEC_TYPE_MP4A_AUDIO :
-            return malloc( sizeof(isom_mp4a_entry_t) );
+            return malloc( sizeof(isom_audio_entry_t) );
         case ISOM_CODEC_TYPE_AC_3_AUDIO :
         case ISOM_CODEC_TYPE_ALAC_AUDIO :
         case ISOM_CODEC_TYPE_DRA1_AUDIO :
@@ -7294,7 +7249,7 @@ static void isom_sample_description_init( void *sample, uint32_t sample_type )
             memset( sample, 0, sizeof(isom_visual_entry_t) );
             break;
         case ISOM_CODEC_TYPE_MP4A_AUDIO :
-            memset( sample, 0, sizeof(isom_mp4a_entry_t) );
+            memset( sample, 0, sizeof(isom_audio_entry_t) );
             break;
         case ISOM_CODEC_TYPE_AC_3_AUDIO :
         case ISOM_CODEC_TYPE_ALAC_AUDIO :
@@ -9360,6 +9315,7 @@ static int isom_update_bitrate_info( isom_mdia_t *mdia )
             isom_esds_t *esds = NULL;
             if( ((isom_audio_entry_t *)sample_entry)->version )
             {
+                /* MPEG-4 Audio in QTFF */
                 isom_audio_entry_t *stsd_data = (isom_audio_entry_t *)sample_entry;
                 if( !stsd_data || !stsd_data->wave || !stsd_data->wave->esds || !stsd_data->wave->esds->ES )
                     return -1;
@@ -9367,7 +9323,7 @@ static int isom_update_bitrate_info( isom_mdia_t *mdia )
             }
             else
             {
-                isom_mp4a_entry_t *stsd_data = (isom_mp4a_entry_t *)sample_entry;
+                isom_audio_entry_t *stsd_data = (isom_audio_entry_t *)sample_entry;
                 if( !stsd_data || !stsd_data->esds || !stsd_data->esds->ES )
                     return -1;
                 esds = stsd_data->esds;
@@ -9831,15 +9787,6 @@ static uint64_t isom_update_esds_size( isom_esds_t *esds )
     return esds->size;
 }
 
-static uint64_t isom_update_mp4a_entry_size( isom_mp4a_entry_t *mp4a )
-{
-    if( !mp4a || mp4a->type != ISOM_CODEC_TYPE_MP4A_AUDIO )
-        return 0;
-    mp4a->size = ISOM_DEFAULT_BOX_HEADER_SIZE + 28 + isom_update_esds_size( mp4a->esds );
-    CHECK_LARGESIZE( mp4a->size );
-    return mp4a->size;
-}
-
 #if 0
 static uint64_t isom_update_visual_entry_size( isom_visual_entry_t *visual )
 {
@@ -9935,6 +9882,7 @@ static uint64_t isom_update_audio_entry_size( isom_audio_entry_t *audio )
     if( !audio )
         return 0;
     audio->size = ISOM_DEFAULT_BOX_HEADER_SIZE + 28
+        + isom_update_esds_size( audio->esds )
         + isom_update_wave_size( audio->wave )
         + isom_update_chan_size( audio->chan )
         + (uint64_t)audio->exdata_length;
@@ -10002,14 +9950,6 @@ static uint64_t isom_update_stsd_size( isom_stsd_t *stsd )
             case ISOM_CODEC_TYPE_MP4V_VIDEO :
                 size += isom_update_mp4v_entry_size( (isom_mp4v_entry_t *)data );
                 break;
-#endif
-            case ISOM_CODEC_TYPE_MP4A_AUDIO :
-                if( !((isom_audio_entry_t *)data)->version )
-                    size += isom_update_mp4a_entry_size( (isom_mp4a_entry_t *)data );
-                else
-                    size += isom_update_audio_entry_size( (isom_audio_entry_t *)data );
-                break;
-#if 0
             case ISOM_CODEC_TYPE_MP4S_SYSTEM :
                 size += isom_update_mp4s_entry_size( (isom_mp4s_entry_t *)data );
                 break;
@@ -10021,6 +9961,7 @@ static uint64_t isom_update_stsd_size( isom_stsd_t *stsd )
                 size += isom_update_visual_entry_size( (isom_visual_entry_t *)data );
                 break;
 #endif
+            case ISOM_CODEC_TYPE_MP4A_AUDIO :
             case ISOM_CODEC_TYPE_AC_3_AUDIO :
             case ISOM_CODEC_TYPE_ALAC_AUDIO :
             case ISOM_CODEC_TYPE_SAMR_AUDIO :
