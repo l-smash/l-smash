@@ -24,8 +24,10 @@
 
 #include <stdio.h>
 #include <string.h>
+#ifdef _WIN32
 #include <io.h>
 #include <fcntl.h>
+#endif
 
 int main( int argc, char *argv[] )
 {
