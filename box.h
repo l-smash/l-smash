@@ -37,11 +37,12 @@ typedef struct isom_box_tag isom_box_t;
  * If size is 0, then this box is the last one in the file.
  * usertype is for uuid. */
 #define ISOM_BASEBOX_COMMON \
-        isom_box_t *parent; /* pointer of the parent box of this box */ \
-        uint8_t  manager;   /* flags for L-SMASH */ \
-        uint64_t pos;       /* starting position of this box in the file */ \
-    uint64_t size;          /* the number of bytes in this box */ \
-    uint32_t type;          /* four characters codes that identify box type */ \
+        lsmash_root_t *root;    /* pointer of root */ \
+        isom_box_t *parent;     /* pointer of the parent box of this box */ \
+        uint8_t  manager;       /* flags for L-SMASH */ \
+        uint64_t pos;           /* starting position of this box in the file */ \
+    uint64_t size;              /* the number of bytes in this box */ \
+    uint32_t type;              /* four characters codes that identify box type */ \
     uint8_t  *usertype
 
 #define ISOM_FULLBOX_COMMON \
@@ -1284,7 +1285,6 @@ typedef struct
     lsmash_entry_list_t *trun_list;     /* Track Fragment Run Box List
                                          * If the duration-is-empty flag is set in the tf_flags, there are no track runs. */
 
-        lsmash_root_t *root;            /* go to root */
         isom_cache_t *cache;
 } isom_traf_entry_t;
 
@@ -1421,7 +1421,6 @@ typedef struct
     isom_mdia_t *mdia;          /* Media Box */
     isom_udta_t *udta;          /* User Data Box */
 
-        lsmash_root_t *root;    /* go to root */
         isom_cache_t *cache;
         uint32_t related_track_ID;
         uint8_t is_chapter;

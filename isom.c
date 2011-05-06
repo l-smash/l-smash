@@ -121,6 +121,7 @@ static int isom_is_lpcm_audio( uint32_t type )
 
 static inline void isom_init_basebox_common( isom_box_t *box, isom_box_t *parent, uint32_t type )
 {
+    box->root     = parent->root;
     box->parent   = parent;
     box->size     = 0;
     box->type     = type;
@@ -129,6 +130,7 @@ static inline void isom_init_basebox_common( isom_box_t *box, isom_box_t *parent
 
 static inline void isom_init_fullbox_common( isom_box_t *box, isom_box_t *parent, uint32_t type )
 {
+    box->root     = parent->root;
     box->parent   = parent;
     box->size     = 0;
     box->type     = type;
@@ -139,7 +141,8 @@ static inline void isom_init_fullbox_common( isom_box_t *box, isom_box_t *parent
 
 static void isom_init_box_common( void *box, void *parent, uint32_t type )
 {
-    if( parent && ((isom_box_t *)parent)->type == ISOM_BOX_TYPE_STSD )
+    assert( parent && ((isom_box_t *)parent)->root );
+    if( ((isom_box_t *)parent)->type == ISOM_BOX_TYPE_STSD )
     {
         isom_init_basebox_common( (isom_box_t *)box, (isom_box_t *)parent, type );
         return;
@@ -1012,10 +1015,10 @@ static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash
     isom_init_box_common( audio, stsd, sample_type );
     memcpy( &audio->summary, summary, sizeof(lsmash_audio_summary_t) );
     int ret = 0;
-    lsmash_root_t *root = ((isom_trak_entry_t *)stsd->parent->parent->parent->parent)->root;
+    lsmash_root_t *root = stsd->root;
     if( sample_type == ISOM_CODEC_TYPE_MP4A_AUDIO )
     {
-        if( root->ftyp->major_brand == ISOM_BRAND_TYPE_QT )
+        if( root->ftyp && root->ftyp->major_brand == ISOM_BRAND_TYPE_QT )
             ret = isom_set_qtff_mp4a_description( audio );
         else
             ret = isom_set_isom_mp4a_description( audio );
@@ -1611,7 +1614,6 @@ static isom_traf_entry_t *isom_add_traf( lsmash_root_t *root, isom_moof_entry_t 
         free( traf );
         return NULL;
     }
-    traf->root = root;
     traf->cache = cache;
     return traf;
 }
@@ -1943,7 +1945,7 @@ static int isom_add_mdia( isom_trak_entry_t *trak )
     return 0;
 }
 
-static int isom_add_hdlr( isom_mdia_t *mdia, isom_minf_t *minf, uint32_t media_type, lsmash_root_t *root )
+static int isom_add_hdlr( isom_mdia_t *mdia, isom_minf_t *minf, uint32_t media_type )
 {
     if( (!mdia && !minf) || (mdia && minf) )
         return -1;    /* Either one must be given. */
@@ -1951,6 +1953,7 @@ static int isom_add_hdlr( isom_mdia_t *mdia, isom_minf_t *minf, uint32_t media_t
         return -1;    /* Selected one must not have hdlr yet. */
     isom_box_t *parent = mdia ? (isom_box_t *)mdia : (isom_box_t *)minf;
     isom_create_box( hdlr, parent, ISOM_BOX_TYPE_HDLR );
+    lsmash_root_t *root = hdlr->root;
     uint32_t type = mdia ? (root->qt_compatible ? QT_HANDLER_TYPE_MEDIA : 0) : QT_HANDLER_TYPE_DATA;
     uint32_t subtype = media_type;
     hdlr->componentType = type;
@@ -2369,7 +2372,6 @@ static isom_trak_entry_t *isom_add_trak( lsmash_root_t *root )
         free( trak );
         return NULL;
     }
-    trak->root = root;
     trak->cache = cache;
     return trak;
 }
@@ -4257,22 +4259,15 @@ static int isom_write_mvex( lsmash_bs_t *bs, isom_mvex_t *mvex )
     {
         /*
             [ROOT]
-             |
              |--[ftyp]
-             |
-             ---[moov]
-                 |
+             |--[moov]
                  |--[mvhd]
-                 |
                  |--[trak]
-                 |
                  *
                  *
                  *
-                 |
-                 ---[mvex]
-                     |
-                     ---[mehd] <--- mehd->pos == placeholder position
+                 |--[mvex]
+                     |--[mehd] <--- mehd->pos == mvex->placeholder_pos
         */
         mvex->placeholder_pos = mvex->parent->parent->size      /* the total size of boxes before the moov box */
                               + mvex->parent->size              /* the size of moov box */
@@ -6417,6 +6412,7 @@ static int isom_bs_read_box_common( lsmash_bs_t *bs, isom_box_t *box )
 
 static void isom_basebox_common_copy( isom_box_t *dst, isom_box_t *src )
 {
+    dst->root     = src->root;
     dst->parent   = src->parent;
     dst->manager  = src->manager;
     dst->pos      = src->pos;
@@ -6427,6 +6423,7 @@ static void isom_basebox_common_copy( isom_box_t *dst, isom_box_t *src )
 
 static void isom_fullbox_common_copy( isom_box_t *dst, isom_box_t *src )
 {
+    dst->root     = src->root;
     dst->parent   = src->parent;
     dst->manager  = src->manager;
     dst->pos      = src->pos;
@@ -8644,8 +8641,8 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
 {
     lsmash_bs_t *bs = root->bs;
     memset( box, 0, sizeof(isom_box_t) );
-    if( !parent )
-        return -1;
+    assert( parent && parent->root );
+    box->root = parent->root;
     box->parent = parent;
     if( parent->size < parent_pos + ISOM_DEFAULT_BOX_HEADER_SIZE )
     {
@@ -9158,15 +9155,16 @@ static int isom_update_tkhd_duration( isom_trak_entry_t *trak )
 {
     if( !trak || !trak->tkhd || !trak->root || !trak->root->moov )
         return -1;
+    lsmash_root_t *root = trak->root;
     isom_tkhd_t *tkhd = trak->tkhd;
     tkhd->duration = 0;
     if( !trak->edts || !trak->edts->elst )
     {
-        if( !trak->mdia || !trak->mdia->mdhd || !trak->root->moov->mvhd || !trak->mdia->mdhd->timescale )
+        if( !trak->mdia || !trak->mdia->mdhd || !root->moov->mvhd || !trak->mdia->mdhd->timescale )
             return -1;
         if( !trak->mdia->mdhd->duration && isom_update_mdhd_duration( trak, 0 ) )
             return -1;
-        tkhd->duration = trak->mdia->mdhd->duration * ((double)trak->root->moov->mvhd->timescale / trak->mdia->mdhd->timescale);
+        tkhd->duration = trak->mdia->mdhd->duration * ((double)root->moov->mvhd->timescale / trak->mdia->mdhd->timescale);
     }
     else
     {
@@ -9182,7 +9180,7 @@ static int isom_update_tkhd_duration( isom_trak_entry_t *trak )
         tkhd->version = 1;
     if( !tkhd->duration )
         tkhd->duration = tkhd->version == 1 ? 0xffffffffffffffff : 0xffffffff;
-    return isom_update_mvhd_duration( trak->root->moov );
+    return isom_update_mvhd_duration( root->moov );
 }
 
 int lsmash_update_track_duration( lsmash_root_t *root, uint32_t track_ID, uint32_t last_sample_delta )
@@ -10249,7 +10247,7 @@ static uint64_t isom_update_mvex_size( isom_mvex_t *mvex )
             isom_trex_entry_t *trex = (isom_trex_entry_t *)entry->data;
             mvex->size += isom_update_trex_entry_size( trex );
         }
-    if( ((lsmash_root_t *)mvex->parent->parent)->bs->stream != stdout )
+    if( mvex->root->bs->stream != stdout )
         mvex->size += mvex->mehd ? isom_update_mehd_size( mvex->mehd ) : 20;    /* 20 bytes is of placeholder. */
     CHECK_LARGESIZE( mvex->size );
     return mvex->size;
@@ -10439,9 +10437,9 @@ uint32_t lsmash_create_track( lsmash_root_t *root, uint32_t media_type )
      || isom_add_stco( trak->mdia->minf->stbl )
      || isom_add_stsz( trak->mdia->minf->stbl ) )
         return 0;
-    if( isom_add_hdlr( trak->mdia, NULL, media_type, root ) )
+    if( isom_add_hdlr( trak->mdia, NULL, media_type ) )
         return 0;
-    if( root->qt_compatible && isom_add_hdlr( NULL, trak->mdia->minf, QT_REFERENCE_HANDLER_TYPE_URL, root ) )
+    if( root->qt_compatible && isom_add_hdlr( NULL, trak->mdia->minf, QT_REFERENCE_HANDLER_TYPE_URL ) )
         return 0;
     switch( media_type )
     {
@@ -10897,6 +10895,7 @@ lsmash_root_t *lsmash_open_movie( const char *filename, lsmash_file_mode_code mo
     if( !root )
         return NULL;
     memset( root, 0, sizeof(lsmash_root_t) );
+    root->root = root;
     root->bs = malloc( sizeof(lsmash_bs_t) );
     if( !root->bs )
         goto fail;
@@ -11735,7 +11734,6 @@ int lsmash_create_fragment_empty_duration( lsmash_root_t *root, uint32_t track_I
     tfhd->default_sample_duration = duration;
     if( duration != trex->default_sample_duration )
         tfhd->flags |= ISOM_TF_FLAGS_DEFAULT_SAMPLE_DURATION_PRESENT;
-    traf->root = root;
     traf->cache = trak->cache;
     traf->cache->fragment->traf_number = moof->traf_list->entry_count;
     traf->cache->fragment->last_duration += duration;       /* The duration of the last sample includes this empty-duration. */
@@ -12908,7 +12906,6 @@ static int isom_append_fragment_sample( lsmash_root_t *root, uint32_t track_ID, 
                 return -1;
             traf->tfhd->flags = ISOM_TF_FLAGS_DURATION_IS_EMPTY;        /* no samples for this track fragment yet */
             traf->tfhd->track_ID = trak->tkhd->track_ID;
-            traf->root = root;
             traf->cache = trak->cache;
             traf->cache->fragment->traf_number = fragment->movie->traf_list->entry_count;
         }
