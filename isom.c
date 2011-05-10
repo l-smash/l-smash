@@ -4374,31 +4374,30 @@ static int isom_write_tfra( lsmash_bs_t *bs, isom_tfra_entry_t *tfra )
     lsmash_bs_put_be32( bs, tfra->number_of_entry );
     if( tfra->list )
     {
-        lsmash_bits_t *bits = lsmash_bits_create( bs );
-        if( !bits )
-            return -1;
-        uint32_t bits_of_time        = tfra->version == 1 ? 64 : 32;
-        uint32_t bits_of_moof_offset = tfra->version == 1 ? 64 : 32;
-        uint32_t bits_of_traf_num    = (tfra->length_size_of_traf_num   + 1) * 8;
-        uint32_t bits_of_trun_num    = (tfra->length_size_of_trun_num   + 1) * 8;
-        uint32_t bits_of_sample_num  = (tfra->length_size_of_sample_num + 1) * 8;
+        void (*bs_put_funcs[5])( lsmash_bs_t *, uint64_t ) =
+            {
+              lsmash_bs_put_byte_from_64,
+              lsmash_bs_put_be16_from_64,
+              lsmash_bs_put_be24_from_64,
+              lsmash_bs_put_be32_from_64,
+              lsmash_bs_put_be64
+            };
+        void (*bs_put_time)         ( lsmash_bs_t *, uint64_t ) = bs_put_funcs[ 3 + (tfra->version == 1)        ];
+        void (*bs_put_moof_offset)  ( lsmash_bs_t *, uint64_t ) = bs_put_funcs[ 3 + (tfra->version == 1)        ];
+        void (*bs_put_traf_number)  ( lsmash_bs_t *, uint64_t ) = bs_put_funcs[ tfra->length_size_of_traf_num   ];
+        void (*bs_put_trun_number)  ( lsmash_bs_t *, uint64_t ) = bs_put_funcs[ tfra->length_size_of_trun_num   ];
+        void (*bs_put_sample_number)( lsmash_bs_t *, uint64_t ) = bs_put_funcs[ tfra->length_size_of_sample_num ];
         for( lsmash_entry_t *entry = tfra->list->head; entry; entry = entry->next )
         {
             isom_tfra_location_time_entry_t *data = (isom_tfra_location_time_entry_t *)entry->data;
             if( !data )
-            {
-                lsmash_bits_cleanup( bits );
                 return -1;
-            }
-            lsmash_bits_put( bits, data->time,          bits_of_time );
-            lsmash_bits_put( bits, data->moof_offset,   bits_of_moof_offset );
-            lsmash_bits_put( bits, data->traf_number,   bits_of_traf_num );
-            lsmash_bits_put( bits, data->trun_number,   bits_of_trun_num );
-            lsmash_bits_put( bits, data->sample_number, bits_of_sample_num );
-
+            bs_put_time         ( bs, data->time          );
+            bs_put_moof_offset  ( bs, data->moof_offset   );
+            bs_put_traf_number  ( bs, data->traf_number   );
+            bs_put_trun_number  ( bs, data->trun_number   );
+            bs_put_sample_number( bs, data->sample_number );
         }
-        lsmash_bits_put_align( bits );
-        lsmash_bits_cleanup( bits );
     }
     return lsmash_bs_write_data( bs );
 }
@@ -8583,14 +8582,19 @@ static int isom_read_tfra( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         tfra->list = lsmash_create_entry_list();
         if( !tfra->list )
             goto fail;
-        lsmash_bits_t *bits = lsmash_bits_create( bs );
-        if( !bits )
-            goto fail;
-        uint32_t bits_of_time        = box->version == 1 ? 64 : 32;
-        uint32_t bits_of_moof_offset = box->version == 1 ? 64 : 32;
-        uint32_t bits_of_traf_num    = (tfra->length_size_of_traf_num   + 1) * 8;
-        uint32_t bits_of_trun_num    = (tfra->length_size_of_trun_num   + 1) * 8;
-        uint32_t bits_of_sample_num  = (tfra->length_size_of_sample_num + 1) * 8;
+        uint64_t (*bs_get_funcs[5])( lsmash_bs_t * ) =
+            {
+              lsmash_bs_get_byte_to_64,
+              lsmash_bs_get_be16_to_64,
+              lsmash_bs_get_be24_to_64,
+              lsmash_bs_get_be32_to_64,
+              lsmash_bs_get_be64
+            };
+        uint64_t (*bs_put_time)         ( lsmash_bs_t * ) = bs_get_funcs[ 3 + (tfra->version == 1)        ];
+        uint64_t (*bs_put_moof_offset)  ( lsmash_bs_t * ) = bs_get_funcs[ 3 + (tfra->version == 1)        ];
+        uint64_t (*bs_put_traf_number)  ( lsmash_bs_t * ) = bs_get_funcs[ tfra->length_size_of_traf_num   ];
+        uint64_t (*bs_put_trun_number)  ( lsmash_bs_t * ) = bs_get_funcs[ tfra->length_size_of_trun_num   ];
+        uint64_t (*bs_put_sample_number)( lsmash_bs_t * ) = bs_get_funcs[ tfra->length_size_of_sample_num ];
         for( uint32_t i = 0; i < tfra->number_of_entry; i++ )
         {
             isom_tfra_location_time_entry_t *data = malloc( sizeof(isom_tfra_location_time_entry_t) );
@@ -8598,17 +8602,15 @@ static int isom_read_tfra( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
             {
                 if( data )
                     free( data );
-                lsmash_bits_cleanup( bits );
                 goto fail;
             }
             memset( data, 0, sizeof(isom_tfra_location_time_entry_t) );
-            data->time          = lsmash_bits_get( bits, bits_of_time );
-            data->moof_offset   = lsmash_bits_get( bits, bits_of_moof_offset );
-            data->traf_number   = lsmash_bits_get( bits, bits_of_traf_num );
-            data->trun_number   = lsmash_bits_get( bits, bits_of_trun_num );
-            data->sample_number = lsmash_bits_get( bits, bits_of_sample_num );
+            data->time          = bs_put_time         ( bs );
+            data->moof_offset   = bs_put_moof_offset  ( bs );
+            data->traf_number   = bs_put_traf_number  ( bs );
+            data->trun_number   = bs_put_trun_number  ( bs );
+            data->sample_number = bs_put_sample_number( bs );
         }
-        lsmash_bits_cleanup( bits );
     }
     uint32_t pos = lsmash_bs_get_pos( bs );
     if( (tfra->list && tfra->number_of_entry != tfra->list->entry_count) || box->size < pos )

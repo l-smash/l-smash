@@ -56,6 +56,10 @@ void lsmash_bs_put_be16( lsmash_bs_t *bs, uint16_t value );
 void lsmash_bs_put_be24( lsmash_bs_t *bs, uint32_t value );
 void lsmash_bs_put_be32( lsmash_bs_t *bs, uint32_t value );
 void lsmash_bs_put_be64( lsmash_bs_t *bs, uint64_t value );
+void lsmash_bs_put_byte_from_64( lsmash_bs_t *bs, uint64_t value );
+void lsmash_bs_put_be16_from_64( lsmash_bs_t *bs, uint64_t value );
+void lsmash_bs_put_be24_from_64( lsmash_bs_t *bs, uint64_t value );
+void lsmash_bs_put_be32_from_64( lsmash_bs_t *bs, uint64_t value );
 int lsmash_bs_write_data( lsmash_bs_t *bs );
 
 void* lsmash_bs_export_data( lsmash_bs_t *bs, uint32_t* length );
@@ -67,6 +71,10 @@ uint16_t lsmash_bs_get_be16( lsmash_bs_t *bs );
 uint32_t lsmash_bs_get_be24( lsmash_bs_t *bs );
 uint32_t lsmash_bs_get_be32( lsmash_bs_t *bs );
 uint64_t lsmash_bs_get_be64( lsmash_bs_t *bs );
+uint64_t lsmash_bs_get_byte_to_64( lsmash_bs_t *bs );
+uint64_t lsmash_bs_get_be16_to_64( lsmash_bs_t *bs );
+uint64_t lsmash_bs_get_be24_to_64( lsmash_bs_t *bs );
+uint64_t lsmash_bs_get_be32_to_64( lsmash_bs_t *bs );
 int lsmash_bs_read_data( lsmash_bs_t *bs, uint32_t size );
 
 /*---- bitstream ----*/
