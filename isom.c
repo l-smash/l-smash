@@ -3056,6 +3056,8 @@ static int isom_write_elst( lsmash_bs_t *bs, isom_trak_entry_t *trak )
         return -1;
     if( !elst->list->entry_count )
         return 0;
+    if( elst->root->fragment && elst->root->bs->stream != stdout )
+        elst->pos = elst->root->bs->written;    /* Remember to rewrite entries. */
     isom_bs_put_box_common( bs, elst );
     lsmash_bs_put_be32( bs, elst->list->entry_count );
     for( lsmash_entry_t *entry = elst->list->head; entry; entry = entry->next )
@@ -4269,10 +4271,7 @@ static int isom_write_mvex( lsmash_bs_t *bs, isom_mvex_t *mvex )
                  |--[mvex]
                      |--[mehd] <--- mehd->pos == mvex->placeholder_pos
         */
-        mvex->placeholder_pos = mvex->parent->parent->size      /* the total size of boxes before the moov box */
-                              + mvex->parent->size              /* the size of moov box */
-                              + ISOM_DEFAULT_BOX_HEADER_SIZE    /* the offset from the mvex box */
-                              - mvex->size;
+        mvex->placeholder_pos = mvex->root->bs->written;
         if( isom_bs_write_movie_extends_placeholder( bs ) )
             return -1;
     }
@@ -8993,7 +8992,7 @@ static int isom_replace_last_sample_delta( isom_stbl_t *stbl, uint32_t sample_de
 static int isom_update_mdhd_duration( isom_trak_entry_t *trak, uint32_t last_sample_delta )
 {
     if( !trak || !trak->root || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->minf || !trak->mdia->minf->stbl
-     || !trak->mdia->minf->stbl->stts || !trak->mdia->minf->stbl->stts->list || trak->mdia->minf->stbl->stts->list->entry_count == 0 )
+     || !trak->mdia->minf->stbl->stts || !trak->mdia->minf->stbl->stts->list )
         return -1;
     lsmash_root_t *root = trak->root;
     isom_mdhd_t *mdhd = trak->mdia->mdhd;
@@ -9003,8 +9002,13 @@ static int isom_update_mdhd_duration( isom_trak_entry_t *trak, uint32_t last_sam
     isom_cslg_t *cslg = stbl->cslg;
     mdhd->duration = 0;
     uint32_t sample_count = isom_get_sample_count( trak );
-    if( sample_count == 0 )
-        return -1;
+    if( !sample_count )
+    {
+        /* Return error if non-fragmented movie has no samples. */
+        if( !root->fragment && !stts->list->entry_count )
+            return -1;
+        return 0;
+    }
     /* Now we have at least 1 sample, so do stts_entry. */
     lsmash_entry_t *last_stts = stts->list->tail;
     isom_stts_entry_t *last_stts_data = (isom_stts_entry_t *)last_stts->data;
@@ -9079,7 +9083,7 @@ static int isom_update_mdhd_duration( isom_trak_entry_t *trak, uint32_t last_sam
         }
         dts -= last_stts_data->sample_delta;
         if( root->fragment )
-            /* Overall presentation is extended exceeding this movie fragment.
+            /* Overall presentation is extended exceeding this initial movie.
              * So, any players shall display the movie exceeding the durations
              * indicated in Movie Header Box, Track Header Boxes and Media Header Boxes.
              * Samples up to the duration indicated in Movie Extends Header Box shall be displayed.
@@ -9160,8 +9164,9 @@ static int isom_update_tkhd_duration( isom_trak_entry_t *trak )
     lsmash_root_t *root = trak->root;
     isom_tkhd_t *tkhd = trak->tkhd;
     tkhd->duration = 0;
-    if( !trak->edts || !trak->edts->elst )
+    if( root->fragment || !trak->edts || !trak->edts->elst )
     {
+        /* If this presentation might be extended or this track doesn't have edit list, calculate track duration from media duration. */
         if( !trak->mdia || !trak->mdia->mdhd || !root->moov->mvhd || !trak->mdia->mdhd->timescale )
             return -1;
         if( !trak->mdia->mdhd->duration && isom_update_mdhd_duration( trak, 0 ) )
@@ -9170,6 +9175,7 @@ static int isom_update_tkhd_duration( isom_trak_entry_t *trak )
     }
     else
     {
+        /* If the presentation won't be extended and this track has any edit, then track duration is just the sum of the segment_duartions. */
         for( lsmash_entry_t *entry = trak->edts->elst->list->head; entry; entry = entry->next )
         {
             isom_elst_entry_t *data = (isom_elst_entry_t *)entry->data;
@@ -9180,7 +9186,7 @@ static int isom_update_tkhd_duration( isom_trak_entry_t *trak )
     }
     if( tkhd->duration > UINT32_MAX )
         tkhd->version = 1;
-    if( !tkhd->duration )
+    if( !root->fragment && !tkhd->duration )
         tkhd->duration = tkhd->version == 1 ? 0xffffffffffffffff : 0xffffffff;
     return isom_update_mvhd_duration( root->moov );
 }
@@ -9192,8 +9198,8 @@ int lsmash_update_track_duration( lsmash_root_t *root, uint32_t track_ID, uint32
         return -1;
     if( isom_update_mdhd_duration( trak, last_sample_delta ) )
         return -1;
-    /* If the track already has a edit list, we don't change or update duration in tkhd and mvhd. */
-    return trak->edts && trak->edts->elst ? 0 : isom_update_tkhd_duration( trak );
+    /* If the presentation won't be extended and this track has any edit, we don't change or update duration in tkhd and mvhd. */
+    return (!root->fragment && trak->edts && trak->edts->elst) ? 0 : isom_update_tkhd_duration( trak );
 }
 
 int lsmash_set_avc_config( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number,
@@ -11160,16 +11166,32 @@ static int isom_set_fragment_overall_duration( lsmash_root_t *root )
     if( isom_add_mehd( mvex ) )
         return -1;
     /* Get the longest duration of the tracks. */
-    double longest_duration = 0;
+    uint64_t longest_duration = 0;
     for( lsmash_entry_t *entry = root->moov->trak_list->head; entry; entry = entry->next )
     {
         isom_trak_entry_t *trak = (isom_trak_entry_t *)entry->data;
         if( !trak || !trak->cache || !trak->cache->fragment || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->mdhd->timescale )
             return -1;
-        uint64_t duration = trak->cache->fragment->largest_cts + trak->cache->fragment->last_duration;
-        longest_duration = LSMASH_MAX( (double)duration / trak->mdia->mdhd->timescale, longest_duration );
+        uint64_t duration;
+        if( !trak->edts || !trak->edts->elst || !trak->edts->elst->list )
+        {
+            duration = trak->cache->fragment->largest_cts + trak->cache->fragment->last_duration;
+            duration = (uint64_t)(((double)duration / trak->mdia->mdhd->timescale) * root->moov->mvhd->timescale);
+        }
+        else
+        {
+            duration = 0;
+            for( lsmash_entry_t *elst_entry = trak->edts->elst->list->head; elst_entry; elst_entry = elst_entry->next )
+            {
+                isom_elst_entry_t *data = (isom_elst_entry_t *)elst_entry->data;
+                if( !data )
+                    return -1;
+                duration += data->segment_duration;
+            }
+        }
+        longest_duration = LSMASH_MAX( duration, longest_duration );
     }
-    mvex->mehd->fragment_duration = (uint64_t)(longest_duration * root->moov->mvhd->timescale);
+    mvex->mehd->fragment_duration = longest_duration;
     mvex->mehd->version = 1;
     isom_update_mehd_size( mvex->mehd );
     /* Write Movie Extends Header Box here. */
@@ -11860,13 +11882,35 @@ int lsmash_modify_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint32_t
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->edts || !trak->edts->elst || !trak->edts->elst->list )
         return -1;
-    isom_elst_entry_t *data = (isom_elst_entry_t *)lsmash_get_entry_data( trak->edts->elst->list, entry_number );
+    isom_elst_t *elst = trak->edts->elst;
+    isom_elst_entry_t *data = (isom_elst_entry_t *)lsmash_get_entry_data( elst->list, entry_number );
     if( !data )
         return -1;
     data->segment_duration = segment_duration;
     data->media_time = media_time;
     data->media_rate = media_rate;
-    return isom_update_tkhd_duration( trak ) ? -1 : isom_update_mvhd_duration( root->moov );
+    if( !elst->pos || !elst->root->fragment || elst->root->bs->stream == stdout )
+        return isom_update_tkhd_duration( trak );
+    /* Rewrite the specified entry. */
+    lsmash_bs_t *bs = root->bs;
+    FILE *stream = bs->stream;
+    uint64_t current_pos = lsmash_ftell( stream );
+    uint64_t entry_pos = elst->pos + ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + ((uint64_t)entry_number - 1) * (elst->version == 1 ? 20 : 12);
+    lsmash_fseek( stream, entry_pos, SEEK_SET );
+    if( elst->version )
+    {
+        lsmash_bs_put_be64( bs, data->segment_duration );
+        lsmash_bs_put_be64( bs, data->media_time );
+    }
+    else
+    {
+        lsmash_bs_put_be32( bs, (uint32_t)data->segment_duration );
+        lsmash_bs_put_be32( bs, (uint32_t)data->media_time );
+    }
+    lsmash_bs_put_be32( bs, data->media_rate );
+    int ret = lsmash_bs_write_data( bs );
+    lsmash_fseek( stream, current_pos, SEEK_SET );
+    return ret;
 }
 
 int lsmash_create_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint64_t segment_duration, int64_t media_time, int32_t media_rate )
@@ -11876,7 +11920,7 @@ int lsmash_create_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID,
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->tkhd )
         return -1;
-    segment_duration = segment_duration ? segment_duration
+    segment_duration = (segment_duration || root->fragment) ? segment_duration
                      : trak->tkhd->duration ? trak->tkhd->duration
                      : isom_update_tkhd_duration( trak ) ? 0
                      : trak->tkhd->duration;
