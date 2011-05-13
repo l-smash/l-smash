@@ -4965,7 +4965,10 @@ static int isom_print_elst( lsmash_root_t *root, isom_box_t *box, int level )
         isom_elst_entry_t *data = (isom_elst_entry_t *)entry->data;
         isom_iprintf( indent++, "entry[%"PRIu32"]\n", i++ );
         isom_iprintf( indent, "segment_duration = %"PRIu64"\n", data->segment_duration );
-        isom_iprintf( indent, "media_time = %"PRId64"\n", data->media_time );
+        if( box->version == 1 )
+            isom_iprintf( indent, "media_time = %"PRId64"\n", data->media_time );
+        else
+            isom_iprintf( indent, "media_time = %"PRId32"\n", data->media_time );
         isom_iprintf( indent--, "media_rate = %f\n", isom_fixed2double( data->media_rate, 16 ) );
     }
     return 0;
