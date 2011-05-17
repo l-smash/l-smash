@@ -803,7 +803,9 @@ typedef struct
 
 /* Sample Size Box
  * This box contains the sample count and a table giving the size in bytes of each sample.
- * The total number of samples in the media is always indicated in the sample_count. */
+ * The total number of samples in the media is always indicated in the sample_count.
+ * Note: a sample size of zero is not prohibited in general, but it must be valid and defined for the coding system,
+ *       as defined by the sample entry, that the sample belongs to. */
 typedef struct
 {
     uint32_t entry_size;        /* the size of a sample */
@@ -1183,7 +1185,7 @@ typedef struct
     unsigned sample_has_redundancy       : 2;
     /* */
     unsigned sample_padding_value        : 3;       /* the number of bits at the end of this sample */
-    unsigned sample_is_difference_sample : 1;       /* 0 value means this sample is sync sample. */
+    unsigned sample_is_non_sync_sample   : 1;       /* 0 value means this sample is sync sample. */
     uint16_t sample_degradation_priority;
 } isom_sample_flags_t;
 

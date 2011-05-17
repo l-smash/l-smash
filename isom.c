@@ -4195,13 +4195,13 @@ static int isom_write_mvhd( lsmash_root_t *root )
 
 static void isom_bs_put_sample_flags( lsmash_bs_t *bs, isom_sample_flags_t *flags )
 {
-    uint32_t temp = (flags->reserved                    << 28)
-                  | (flags->is_leading                  << 26)
-                  | (flags->sample_depends_on           << 24)
-                  | (flags->sample_is_depended_on       << 22)
-                  | (flags->sample_has_redundancy       << 20)
-                  | (flags->sample_padding_value        << 17)
-                  | (flags->sample_is_difference_sample << 16)
+    uint32_t temp = (flags->reserved                  << 28)
+                  | (flags->is_leading                << 26)
+                  | (flags->sample_depends_on         << 24)
+                  | (flags->sample_is_depended_on     << 22)
+                  | (flags->sample_has_redundancy     << 20)
+                  | (flags->sample_padding_value      << 17)
+                  | (flags->sample_is_non_sync_sample << 16)
                   |  flags->sample_degradation_priority;
     lsmash_bs_put_be32( bs, temp );
 }
@@ -4714,13 +4714,13 @@ static void isom_iprint_sample_description_common_reserved( int indent, uint8_t 
 
 static void isom_iprint_sample_flags( int indent, char *field_name, isom_sample_flags_t *flags )
 {
-    uint32_t temp = (flags->reserved                    << 28)
-                  | (flags->is_leading                  << 26)
-                  | (flags->sample_depends_on           << 24)
-                  | (flags->sample_is_depended_on       << 22)
-                  | (flags->sample_has_redundancy       << 20)
-                  | (flags->sample_padding_value        << 17)
-                  | (flags->sample_is_difference_sample << 16)
+    uint32_t temp = (flags->reserved                  << 28)
+                  | (flags->is_leading                << 26)
+                  | (flags->sample_depends_on         << 24)
+                  | (flags->sample_is_depended_on     << 22)
+                  | (flags->sample_has_redundancy     << 20)
+                  | (flags->sample_padding_value      << 17)
+                  | (flags->sample_is_non_sync_sample << 16)
                   |  flags->sample_degradation_priority;
     isom_iprintf( indent++, "%s = 0x%08"PRIx32"\n", field_name, temp );
          if( flags->is_leading & ISOM_SAMPLE_IS_UNDECODABLE_LEADING       ) isom_iprintf( indent, "undecodable leading\n" );
@@ -4734,7 +4734,7 @@ static void isom_iprint_sample_flags( int indent, char *field_name, isom_sample_
     else if( flags->sample_has_redundancy & ISOM_SAMPLE_HAS_NO_REDUNDANCY ) isom_iprintf( indent, "non-redundant\n" );
     if( flags->sample_padding_value )
         isom_iprintf( indent, "padding_bits = %"PRIu8"\n", flags->sample_padding_value );
-    isom_iprintf( indent, flags->sample_is_difference_sample ? "non-sync sample\n" : "sync sample\n" );
+    isom_iprintf( indent, flags->sample_is_non_sync_sample ? "non-sync sample\n" : "sync sample\n" );
     isom_iprintf( indent, "degradation_priority = %"PRIu16"\n", flags->sample_degradation_priority );
 }
 
@@ -8310,7 +8310,7 @@ static isom_sample_flags_t isom_bs_get_sample_flags( lsmash_bs_t *bs )
     flags.sample_is_depended_on       = (temp >> 22) & 0x3;
     flags.sample_has_redundancy       = (temp >> 20) & 0x3;
     flags.sample_padding_value        = (temp >> 17) & 0x7;
-    flags.sample_is_difference_sample = (temp >> 16) & 0x1;
+    flags.sample_is_non_sync_sample   = (temp >> 16) & 0x1;
     flags.sample_degradation_priority =  temp        & 0xffff;
     return flags;
 }
@@ -11424,7 +11424,7 @@ static int isom_create_fragment_overall_default_settings( lsmash_root_t *root )
                 GET_MOST_USED( trex, 3, sample_has_redundancy );
             }
         }
-        trex->default_sample_flags.sample_is_difference_sample = !trak->cache->all_sync;
+        trex->default_sample_flags.sample_is_non_sync_sample = !trak->cache->all_sync;
     }
     return 0;
 }
@@ -11554,11 +11554,11 @@ static int isom_finish_fragment_movie( lsmash_root_t *root )
             return -1;
         struct sample_flags_stats_t
         {
-            uint32_t is_leading                 [4];
-            uint32_t sample_depends_on          [4];
-            uint32_t sample_is_depended_on      [4];
-            uint32_t sample_has_redundancy      [4];
-            uint32_t sample_is_difference_sample[2];
+            uint32_t is_leading               [4];
+            uint32_t sample_depends_on        [4];
+            uint32_t sample_is_depended_on    [4];
+            uint32_t sample_has_redundancy    [4];
+            uint32_t sample_is_non_sync_sample[2];
         } stats = { { 0 }, { 0 }, { 0 }, { 0 }, { 0 } };
         for( lsmash_entry_t *trun_entry = traf->trun_list->head; trun_entry; trun_entry = trun_entry->next )
         {
@@ -11576,21 +11576,21 @@ static int isom_finish_fragment_movie( lsmash_root_t *root )
                     if( !row )
                         return -1;
                     sample_flags = &row->sample_flags;
-                    ++ stats.is_leading                 [ sample_flags->is_leading                  ];
-                    ++ stats.sample_depends_on          [ sample_flags->sample_depends_on           ];
-                    ++ stats.sample_is_depended_on      [ sample_flags->sample_is_depended_on       ];
-                    ++ stats.sample_has_redundancy      [ sample_flags->sample_has_redundancy       ];
-                    ++ stats.sample_is_difference_sample[ sample_flags->sample_is_difference_sample ];
+                    ++ stats.is_leading               [ sample_flags->is_leading                ];
+                    ++ stats.sample_depends_on        [ sample_flags->sample_depends_on         ];
+                    ++ stats.sample_is_depended_on    [ sample_flags->sample_is_depended_on     ];
+                    ++ stats.sample_has_redundancy    [ sample_flags->sample_has_redundancy     ];
+                    ++ stats.sample_is_non_sync_sample[ sample_flags->sample_is_non_sync_sample ];
                 }
             }
             else
             {
                 sample_flags = &tfhd->default_sample_flags;
-                stats.is_leading                 [ sample_flags->is_leading                  ] += trun->sample_count;
-                stats.sample_depends_on          [ sample_flags->sample_depends_on           ] += trun->sample_count;
-                stats.sample_is_depended_on      [ sample_flags->sample_is_depended_on       ] += trun->sample_count;
-                stats.sample_has_redundancy      [ sample_flags->sample_has_redundancy       ] += trun->sample_count;
-                stats.sample_is_difference_sample[ sample_flags->sample_is_difference_sample ] += trun->sample_count;
+                stats.is_leading               [ sample_flags->is_leading                ] += trun->sample_count;
+                stats.sample_depends_on        [ sample_flags->sample_depends_on         ] += trun->sample_count;
+                stats.sample_is_depended_on    [ sample_flags->sample_is_depended_on     ] += trun->sample_count;
+                stats.sample_has_redundancy    [ sample_flags->sample_has_redundancy     ] += trun->sample_count;
+                stats.sample_is_non_sync_sample[ sample_flags->sample_is_non_sync_sample ] += trun->sample_count;
             }
         }
         uint32_t most_used[5] = { 0, 0, 0, 0, 0 };
@@ -11601,7 +11601,7 @@ static int isom_finish_fragment_movie( lsmash_root_t *root )
             GET_MOST_USED( tfhd, 2, sample_is_depended_on );
             GET_MOST_USED( tfhd, 3, sample_has_redundancy );
             if( i < 2 )
-                GET_MOST_USED( tfhd, 4, sample_is_difference_sample );
+                GET_MOST_USED( tfhd, 4, sample_is_non_sync_sample );
         }
         int useful_default_sample_duration = 0;
         int useful_default_sample_size = 0;
@@ -12002,7 +12002,7 @@ void lsmash_delete_sample( lsmash_sample_t *sample )
 
 static uint32_t isom_add_size( isom_trak_entry_t *trak, uint32_t sample_size )
 {
-    if( !sample_size || isom_add_stsz_entry( trak->mdia->minf->stbl, sample_size ) )
+    if( isom_add_stsz_entry( trak->mdia->minf->stbl, sample_size ) )
         return 0;
     return isom_get_sample_count( trak );
 }
@@ -12758,7 +12758,7 @@ static isom_sample_flags_t isom_generate_fragment_sample_flags( lsmash_sample_t 
     flags.sample_is_depended_on       = sample->prop.disposable  & 0x3;
     flags.sample_has_redundancy       = sample->prop.redundant   & 0x3;
     flags.sample_padding_value        = 0;
-    flags.sample_is_difference_sample = sample->prop.random_access_type != ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+    flags.sample_is_non_sync_sample   = sample->prop.random_access_type != ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
     flags.sample_degradation_priority = 0;
     return flags;
 }
