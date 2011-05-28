@@ -35,6 +35,8 @@
     MPEG-4 Systems
 ***************************************************************************/
 
+#define ALWAYS_28BITS_LENGTH_CODING 1 // for some weird (but originator's) devices
+
 /* List of Class Tags for Descriptors */
 typedef enum {
     MP4SYS_DESCRIPTOR_TAG_Forbidden                           = 0x00, /* Forbidden */
@@ -417,11 +419,15 @@ int mp4sys_to_InitialObjectDescriptor(
 /* returns total size of descriptor, including header, 2 at least */
 static inline uint32_t mp4sys_get_descriptor_size( uint32_t payload_size_in_byte )
 {
+#if ALWAYS_28BITS_LENGTH_CODING
+    return payload_size_in_byte + 4 + 1; /* +4 means 28bits length coding, +1 means tag's space */
+#else
     /* descriptor length will be split into 7bits
        see 14496-1 Expandable classes and Length encoding of descriptors and commands */
     uint32_t i;
     for( i = 1; payload_size_in_byte >> ( 7 * i ) ; i++);
     return payload_size_in_byte + i + 1; /* +1 means tag's space */
+#endif
 }
 
 static uint32_t mp4sys_update_DecoderSpecificInfo_size( mp4sys_ES_Descriptor_t* esd )
@@ -505,9 +511,15 @@ static int mp4sys_put_descriptor_header( lsmash_bs_t *bs, mp4sys_descriptor_head
     lsmash_bs_put_byte( bs, header->tag );
     /* descriptor length will be splitted into 7bits
        see 14496-1 Expandable classes and Length encoding of descriptors and commands */
+#if ALWAYS_28BITS_LENGTH_CODING
+    lsmash_bs_put_byte( bs, ( header->size >> 21 ) | 0x80 );
+    lsmash_bs_put_byte( bs, ( header->size >> 14 ) | 0x80 );
+    lsmash_bs_put_byte( bs, ( header->size >>  7 ) | 0x80 );
+#else
     for( uint32_t i = mp4sys_get_descriptor_size( header->size ) - header->size - 2; i; i-- ){
         lsmash_bs_put_byte( bs, ( header->size >> ( 7 * i ) ) | 0x80 );
     }
+#endif
     lsmash_bs_put_byte( bs, header->size & 0x7F );
     return 0;
 }
