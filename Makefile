@@ -14,7 +14,7 @@ STRIP=$(CROSS)strip
 ECHO=echo
 EXE=
 
-CFLAGS=-Wshadow -Wall -std=gnu99 -I.
+CFLAGS=-Wshadow -Wall -std=gnu99 -I. -DLSMASH_DEMUXER_ENABLED
 #CFLAGS+=-Wsign-conversion
 LDFLAGS=
 EXTRALIBS=
@@ -44,7 +44,7 @@ EXE=.exe
 endif
 endif #ifeq ($(CROSS),)
 
-SRCS=isom.c utils.c mp4sys.c mp4a.c importer.c summary.c
+SRCS=isom.c utils.c mp4sys.c mp4a.c importer.c summary.c print.c read.c
 OBJS=$(SRCS:%.c=%.o)
 #TARGET=lsmash$(EXE)
 

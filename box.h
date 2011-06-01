@@ -1177,15 +1177,15 @@ typedef enum
 /* Sample Flags */
 typedef struct
 {
-    unsigned reserved                    : 4;
+    unsigned reserved                  : 4;
     /* The definition of the following fields is quite the same as Independent and Disposable Samples Box. */
-    unsigned is_leading                  : 2;
-    unsigned sample_depends_on           : 2;
-    unsigned sample_is_depended_on       : 2;
-    unsigned sample_has_redundancy       : 2;
+    unsigned is_leading                : 2;
+    unsigned sample_depends_on         : 2;
+    unsigned sample_is_depended_on     : 2;
+    unsigned sample_has_redundancy     : 2;
     /* */
-    unsigned sample_padding_value        : 3;       /* the number of bits at the end of this sample */
-    unsigned sample_is_non_sync_sample   : 1;       /* 0 value means this sample is sync sample. */
+    unsigned sample_padding_value      : 3;     /* the number of bits at the end of this sample */
+    unsigned sample_is_non_sync_sample : 1;     /* 0 value means this sample is sync sample. */
     uint16_t sample_degradation_priority;
 } isom_sample_flags_t;
 
@@ -1607,5 +1607,29 @@ enum qt_audio_format_flags_code
     QT_ALAC_FORMAT_FLAG_24BIT_SOURCE_DATA = 3,
     QT_ALAC_FORMAT_FLAG_32BIT_SOURCE_DATA = 4,
 };
+
+int isom_is_fullbox( void *box );
+int isom_is_lpcm_audio( uint32_t type );
+void isom_init_box_common( void *box, void *parent, uint32_t type );
+void isom_remove_avcC_ps( isom_avcC_ps_entry_t *ps );
+int isom_check_compatibility( lsmash_root_t *root );
+char *isom_4cc2str( uint32_t fourcc );
+char *isom_unpack_iso_language( uint16_t language );
+
+#define isom_create_box( box_name, parent_name, box_4cc ) \
+    isom_##box_name##_t *(box_name) = malloc( sizeof(isom_##box_name##_t) ); \
+    if( !box_name ) \
+        return -1; \
+    memset( box_name, 0, sizeof(isom_##box_name##_t) ); \
+    isom_init_box_common( box_name, parent_name, box_4cc )
+
+#define isom_create_list_box( box_name, parent_name, box_4cc ) \
+    isom_create_box( box_name, parent_name, box_4cc ); \
+    box_name->list = lsmash_create_entry_list(); \
+    if( !box_name->list ) \
+    { \
+        free( box_name ); \
+        return -1; \
+    }
 
 #endif

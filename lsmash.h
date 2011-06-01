@@ -1350,7 +1350,9 @@ void lsmash_delete_track( lsmash_root_t *root, uint32_t track_ID );
 void lsmash_delete_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID );
 void lsmash_delete_tyrant_chapter( lsmash_root_t *root );
 
+#ifdef LSMASH_DEMUXER_ENABLED
 int lsmash_print_movie( lsmash_root_t *root );
+#endif
 
 /* to facilitate to make exdata (typically DecoderSpecificInfo or AudioSpecificConfig). */
 int lsmash_setup_AudioSpecificConfig( lsmash_audio_summary_t* summary );

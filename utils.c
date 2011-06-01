@@ -572,3 +572,21 @@ void *lsmash_get_entry_data( lsmash_entry_list_t *list, uint32_t entry_number )
     lsmash_entry_t *entry = lsmash_get_entry( list, entry_number );
     return entry ? entry->data : NULL;
 }
+
+/*---- ----*/
+
+/*---- type ----*/
+double lsmash_fixed2double( uint64_t value, int frac_width )
+{
+    return value / (double)(1ULL << frac_width);
+}
+
+float lsmash_int2float32( uint32_t value )
+{
+    return (union {uint32_t i; float f;}){value}.f;
+}
+
+double lsmash_int2float64( uint64_t value )
+{
+    return (union {uint64_t i; double d;}){value}.d;
+}
