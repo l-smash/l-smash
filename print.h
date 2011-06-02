@@ -26,4 +26,4 @@
 int isom_add_print_func( lsmash_root_t *root, void *box, int level );
 void isom_remove_print_funcs( lsmash_root_t *root );
 
-#endif  /* LSMASH_PRINT_H */
+#endif /* LSMASH_PRINT_H */

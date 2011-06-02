@@ -20,4 +20,9 @@
 
 /* This file is available under an ISC license. */
 
+#ifndef LSMASH_READ_H
+#define LSMASH_READ_H
+
 int isom_read_root( lsmash_root_t *root );
+
+#endif /* LSMASH_READ_H */
