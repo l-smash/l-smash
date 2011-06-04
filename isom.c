@@ -8371,7 +8371,8 @@ static int isom_flush_fragment_pooled_samples( lsmash_root_t *root, uint32_t tra
         /* Media Data Box preceded by Movie Fragment Box could change base_data_offsets in each track fragments later.
          * We can't consider this here because the length of Movie Fragment Box is unknown at this step yet. */
         isom_trun_entry_t *trun = (isom_trun_entry_t *)traf->trun_list->tail->data;
-        trun->flags |= ISOM_TR_FLAGS_DATA_OFFSET_PRESENT;
+        if( root->fragment->pool_size )
+            trun->flags |= ISOM_TR_FLAGS_DATA_OFFSET_PRESENT;
         trun->data_offset = root->fragment->pool_size;
     }
     isom_append_fragment_track_run( root, &traf->cache->chunk );
