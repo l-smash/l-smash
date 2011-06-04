@@ -7466,9 +7466,18 @@ static int isom_set_fragment_last_duration( isom_traf_entry_t *traf, uint32_t la
         traf->cache->fragment->last_duration = last_duration;
         return 0;
     }
-    isom_trun_entry_t *trun = (isom_trun_entry_t *)traf->trun_list->tail->data;
     /* Update the last sample_duration if needed. */
-    if( last_duration != tfhd->default_sample_duration )
+    isom_trun_entry_t *trun = (isom_trun_entry_t *)traf->trun_list->tail->data;
+    if( trun->sample_count == 1 && traf->trun_list->entry_count == 1 )
+    {
+        isom_trex_entry_t *trex = isom_get_trex( traf->root->moov->mvex, tfhd->track_ID );
+        if( !trex )
+            return -1;
+        if( last_duration != trex->default_sample_duration )
+            tfhd->flags |= ISOM_TF_FLAGS_DEFAULT_SAMPLE_DURATION_PRESENT;
+        tfhd->default_sample_duration = last_duration;
+    }
+    else if( last_duration != tfhd->default_sample_duration )
         trun->flags |= ISOM_TR_FLAGS_SAMPLE_DURATION_PRESENT;
     if( trun->flags )
     {
