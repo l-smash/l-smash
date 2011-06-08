@@ -267,7 +267,7 @@ static int isom_add_elst_entry( isom_elst_t *elst, uint64_t segment_duration, in
         free( data );
         return -1;
     }
-    if( data->segment_duration > UINT32_MAX || data->media_time > UINT32_MAX )
+    if( data->segment_duration > UINT32_MAX || data->media_time > INT32_MAX || data->media_time < INT32_MIN )
         elst->version = 1;
     return 0;
 }
@@ -5204,7 +5204,7 @@ static uint64_t isom_update_elst_size( isom_elst_t *elst )
     for( lsmash_entry_t *entry = elst->list->head; entry; entry = entry->next, i++ )
     {
         isom_elst_entry_t *data = (isom_elst_entry_t *)entry->data;
-        if( data->segment_duration > UINT32_MAX || data->media_time > UINT32_MAX )
+        if( data->segment_duration > UINT32_MAX || data->media_time > INT32_MAX || data->media_time < INT32_MIN )
             elst->version = 1;
     }
     elst->size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + (uint64_t)i * ( elst->version ? 20 : 12 );
@@ -7588,7 +7588,8 @@ int lsmash_modify_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint32_t
     data->media_rate = media_rate;
     if( !elst->pos || !root->fragment || root->bs->stream == stdout )
         return isom_update_tkhd_duration( trak );
-    /* Rewrite the specified entry. */
+    /* Rewrite the specified entry.
+     * Note: we don't update the version of the Edit List Box. */
     lsmash_bs_t *bs = root->bs;
     FILE *stream = bs->stream;
     uint64_t current_pos = lsmash_ftell( stream );

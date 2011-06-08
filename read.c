@@ -436,13 +436,13 @@ static int isom_read_elst( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         memset( data, 0, sizeof(isom_elst_entry_t) );
         if( box->version == 1 )
         {
-            data->segment_duration = lsmash_bs_get_be64( bs );
-            data->media_time       = lsmash_bs_get_be64( bs );
+            data->segment_duration =          lsmash_bs_get_be64( bs );
+            data->media_time       = (int64_t)lsmash_bs_get_be64( bs );
         }
         else
         {
-            data->segment_duration = lsmash_bs_get_be32( bs );
-            data->media_time       = lsmash_bs_get_be32( bs );
+            data->segment_duration =          lsmash_bs_get_be32( bs );
+            data->media_time       = (int32_t)lsmash_bs_get_be32( bs );
         }
         data->media_rate = lsmash_bs_get_be32( bs );
     }
