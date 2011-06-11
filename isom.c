@@ -728,7 +728,7 @@ static int isom_add_visual_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmas
         free( visual );
         return -1;
     }
-    return isom_add_visual_extensions( visual, summary );;
+    return isom_add_visual_extensions( visual, summary );
 }
 #endif
 
@@ -6409,8 +6409,9 @@ int lsmash_get_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     if( !trak || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->hdlr || !trak->mdia->minf )
         return -1;
     isom_mdhd_t *mdhd = trak->mdia->mdhd;
-    param->timescale = mdhd->timescale;
-    param->duration  = mdhd->duration;
+    param->timescale    = mdhd->timescale;
+    param->handler_type = trak->mdia->hdlr->componentSubtype;
+    param->duration     = mdhd->duration;
     /* Get media language. */
     if( mdhd->language >= 0x800 )
     {

@@ -1232,6 +1232,8 @@ typedef struct
 typedef struct
 {
     uint32_t timescale;             /* media timescale: timescale for this media */
+    uint32_t handler_type;          /* the nature of the media
+                                     * You can't change handler_type through this parameter manually. */
     uint64_t duration;              /* the duration of this media, expressed in the media timescale
                                      * You can't set this parameter manually. */
     /* Use either type of language code. */
