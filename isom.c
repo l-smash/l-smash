@@ -7676,14 +7676,43 @@ lsmash_sample_t *lsmash_create_sample( uint32_t size )
     if( !sample )
         return NULL;
     memset( sample, 0, sizeof(lsmash_sample_t) );
-    sample->data = malloc( size );
-    if( !sample->data )
+    if( size )
     {
-        free( sample );
-        return NULL;
+        sample->data = malloc( size );
+        if( !sample->data )
+        {
+            free( sample );
+            return NULL;
+        }
+        sample->length = size;
     }
-    sample->length = size;
     return sample;
+}
+
+int lsmash_sample_alloc( lsmash_sample_t *sample, uint32_t size )
+{
+    if( !sample )
+        return -1;
+    if( !size )
+    {
+        if( sample->data )
+            free( sample->data );
+        sample->data = NULL;
+        sample->length = 0;
+        return 0;
+    }
+    if( size == sample->length )
+        return 0;
+    uint8_t *data;
+    if( !sample->data )
+        data = malloc( size );
+    else
+        data = realloc( sample->data, size );
+    if( !data )
+        return -1;
+    sample->data = data;
+    sample->length = size;
+    return 0;
 }
 
 void lsmash_delete_sample( lsmash_sample_t *sample )
