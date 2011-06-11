@@ -6154,6 +6154,16 @@ uint32_t lsmash_create_track( lsmash_root_t *root, uint32_t media_type )
     return trak->tkhd->track_ID;
 }
 
+uint32_t lsmash_get_track_ID( lsmash_root_t *root, uint32_t track_number )
+{
+    if( !root || !root->moov )
+        return 0;
+    isom_trak_entry_t *trak = (isom_trak_entry_t *)lsmash_get_entry_data( root->moov->trak_list, track_number );
+    if( !trak || !trak->tkhd )
+        return 0;
+    return trak->tkhd->track_ID;
+}
+
 void lsmash_initialize_track_parameters( lsmash_track_parameters_t *param )
 {
     param->mode            = 0;

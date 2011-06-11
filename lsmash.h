@@ -1334,6 +1334,7 @@ void lsmash_initialize_movie_parameters( lsmash_movie_parameters_t *param );
 int lsmash_set_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t *param );
 int lsmash_get_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t *param );
 uint32_t lsmash_create_track( lsmash_root_t *root, uint32_t handler_type );
+uint32_t lsmash_get_track_ID( lsmash_root_t *root, uint32_t track_number );
 void lsmash_initialize_track_parameters( lsmash_track_parameters_t *param );
 int lsmash_set_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_track_parameters_t *param );
 int lsmash_get_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_track_parameters_t *param );
