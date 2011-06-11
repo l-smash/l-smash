@@ -572,7 +572,6 @@ void *lsmash_get_entry_data( lsmash_entry_list_t *list, uint32_t entry_number )
     lsmash_entry_t *entry = lsmash_get_entry( list, entry_number );
     return entry ? entry->data : NULL;
 }
-
 /*---- ----*/
 
 /*---- type ----*/
@@ -589,4 +588,17 @@ float lsmash_int2float32( uint32_t value )
 double lsmash_int2float64( uint64_t value )
 {
     return (union {uint64_t i; double d;}){value}.d;
+}
+/*---- ----*/
+
+/*---- allocator ----*/
+void *lsmash_memdup( void *src, size_t size )
+{
+    if( !size )
+        return NULL;
+    void *dst = malloc( size );
+    if( !dst )
+        return NULL;
+    memcpy( dst, src, size );
+    return dst;
 }

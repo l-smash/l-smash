@@ -128,10 +128,12 @@ void lsmash_remove_list( lsmash_entry_list_t *list, void* eliminator );
 lsmash_entry_t *lsmash_get_entry( lsmash_entry_list_t *list, uint32_t entry_number );
 void *lsmash_get_entry_data( lsmash_entry_list_t *list, uint32_t entry_number );
 
-
 /*---- type ----*/
 double lsmash_fixed2double( uint64_t value, int frac_width );
 float lsmash_int2float32( uint32_t value );
 double lsmash_int2float64( uint64_t value );
+
+/*---- allocator ----*/
+void *lsmash_memdup( void *src, size_t size );
 
 #endif
