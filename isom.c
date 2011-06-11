@@ -6663,6 +6663,7 @@ void lsmash_initialize_movie_parameters( lsmash_movie_parameters_t *param )
     param->preview_time        = 0;
     param->preview_duration    = 0;
     param->poster_time         = 0;
+    param->number_of_tracks    = 0;
 }
 
 int lsmash_set_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t *param )
@@ -6706,6 +6707,7 @@ int lsmash_get_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t 
     param->preview_time        = mvhd->previewTime;
     param->preview_duration    = mvhd->previewDuration;
     param->poster_time         = mvhd->posterTime;
+    param->number_of_tracks    = root->moov->trak_list ? root->moov->trak_list->entry_count : 0;
     return 0;
 }
 

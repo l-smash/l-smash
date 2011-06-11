@@ -1280,6 +1280,8 @@ typedef struct
     int32_t  preview_time;          /* the time value in the movie at which the preview begins */
     int32_t  preview_duration;      /* the duration of the movie preview in movie timescale units */
     int32_t  poster_time;           /* the time value of the time of the movie poster */
+    uint32_t number_of_tracks;      /* the number of tracks in the movie
+                                     * You can't set this parameter manually. */
 } lsmash_movie_parameters_t;
 
 typedef struct lsmash_root_tag lsmash_root_t;
