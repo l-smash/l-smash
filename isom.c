@@ -4524,14 +4524,12 @@ static uint64_t isom_get_dts( isom_stts_t *stts, uint32_t sample_number )
             return 0;
         if( i + data->sample_count > sample_number )
             break;
-        for( uint32_t j = 0; j < data->sample_count; j++ )
-            dts += data->sample_delta;
+        dts += (uint64_t)data->sample_delta * data->sample_count;
         i += data->sample_count;
     }
     if( !entry )
         return 0;
-    while( i++ < sample_number )
-        dts += data->sample_delta;
+    dts += (uint64_t)data->sample_delta * (sample_number - i);
     return dts;
 }
 
