@@ -803,9 +803,7 @@ static void *isom_sample_description_alloc( uint32_t sample_type )
         case ISOM_CODEC_TYPE_AVCP_VIDEO :
         case ISOM_CODEC_TYPE_MVC1_VIDEO :
         case ISOM_CODEC_TYPE_MVC2_VIDEO :
-            return malloc( sizeof(isom_avc_entry_t) );
         case ISOM_CODEC_TYPE_MP4V_VIDEO :
-            return malloc( sizeof(isom_mp4v_entry_t) );
         case ISOM_CODEC_TYPE_DRAC_VIDEO :
         case ISOM_CODEC_TYPE_ENCV_VIDEO :
         case ISOM_CODEC_TYPE_MJP2_VIDEO :
@@ -885,11 +883,7 @@ static void isom_sample_description_init( void *sample, uint32_t sample_type )
         case ISOM_CODEC_TYPE_AVCP_VIDEO :
         case ISOM_CODEC_TYPE_MVC1_VIDEO :
         case ISOM_CODEC_TYPE_MVC2_VIDEO :
-            memset( sample, 0, sizeof(isom_avc_entry_t) );
-            break;
         case ISOM_CODEC_TYPE_MP4V_VIDEO :
-            memset( sample, 0, sizeof(isom_mp4v_entry_t) );
-            break;
         case ISOM_CODEC_TYPE_DRAC_VIDEO :
         case ISOM_CODEC_TYPE_ENCV_VIDEO :
         case ISOM_CODEC_TYPE_MJP2_VIDEO :
@@ -1021,7 +1015,7 @@ static int isom_read_visual_description( lsmash_root_t *root, isom_box_t *box, i
 static int isom_read_btrt( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( btrt, parent, box->type );
-    ((isom_avc_entry_t *)parent)->btrt = btrt;
+    ((isom_visual_entry_t *)parent)->btrt = btrt;
     lsmash_bs_t *bs = root->bs;
     isom_read_box_rest( bs, box );
     btrt->bufferSizeDB = lsmash_bs_get_be32( bs );
@@ -1117,8 +1111,8 @@ static int isom_read_avcC_ps( lsmash_bs_t *bs, lsmash_entry_list_t *list, uint8_
 static int isom_read_avcC( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( avcC, parent, box->type );
-    isom_avc_entry_t *avc = (isom_avc_entry_t *)parent;
-    avc->avcC = avcC;
+    isom_visual_entry_t *visual = (isom_visual_entry_t *)parent;
+    visual->avcC = avcC;
     lsmash_bs_t *bs = root->bs;
     isom_read_box_rest( bs, box );
     avcC->configurationVersion       = lsmash_bs_get_byte( bs );
@@ -1165,7 +1159,7 @@ fail:
     lsmash_remove_list( avcC->pictureParameterSets,    isom_remove_avcC_ps );
     lsmash_remove_list( avcC->sequenceParameterSetExt, isom_remove_avcC_ps );
     free( avcC );
-    avc->avcC = NULL;
+    visual->avcC = NULL;
     return -1;
 }
 
