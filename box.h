@@ -1391,15 +1391,6 @@ struct lsmash_root_tag
         lsmash_entry_list_t *print;
 };
 
-typedef int (*isom_print_box_t)( lsmash_root_t *, isom_box_t *, int );
-
-typedef struct
-{
-    int level;
-    isom_box_t *box;
-    isom_print_box_t func;
-} isom_print_entry_t;
-
 /* Track Box */
 typedef struct
 {

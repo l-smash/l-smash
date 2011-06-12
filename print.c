@@ -32,6 +32,15 @@
 #include "box.h"
 
 
+typedef int (*isom_print_box_t)( lsmash_root_t *, isom_box_t *, int );
+
+typedef struct
+{
+    int level;
+    isom_box_t *box;
+    isom_print_box_t func;
+} isom_print_entry_t;
+
 static void isom_iprintf( int indent, const char *format, ... )
 {
     va_list args;

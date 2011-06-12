@@ -4293,11 +4293,11 @@ static int isom_write_tfra( lsmash_bs_t *bs, isom_tfra_entry_t *tfra )
     {
         void (*bs_put_funcs[5])( lsmash_bs_t *, uint64_t ) =
             {
-              lsmash_bs_put_byte_from_64,
-              lsmash_bs_put_be16_from_64,
-              lsmash_bs_put_be24_from_64,
-              lsmash_bs_put_be32_from_64,
-              lsmash_bs_put_be64
+                lsmash_bs_put_byte_from_64,
+                lsmash_bs_put_be16_from_64,
+                lsmash_bs_put_be24_from_64,
+                lsmash_bs_put_be32_from_64,
+                lsmash_bs_put_be64
             };
         void (*bs_put_time)         ( lsmash_bs_t *, uint64_t ) = bs_put_funcs[ 3 + (tfra->version == 1)        ];
         void (*bs_put_moof_offset)  ( lsmash_bs_t *, uint64_t ) = bs_put_funcs[ 3 + (tfra->version == 1)        ];
@@ -8833,9 +8833,12 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
             /* QuickTime Player requires Text Encoding Attribute Box ('encd') if media language is ISO language codes : undefined.
              * Also this box can avoid garbling if the QuickTime text sample is encoded by Unicode characters.
              * Note: 3GPP Timed Text supports only UTF-8 or UTF-16, so this box isn't needed. */
-            static const uint8_t encd[12] = { 0x00, 0x00, 0x00, 0x0C,       /* size: 12 */
-                                              0x65, 0x6E, 0x63, 0x64,       /* type: 'encd' */
-                                              0x00, 0x00, 0x01, 0x00 };     /* Unicode Encoding */
+            static const uint8_t encd[12] =
+                {
+                    0x00, 0x00, 0x00, 0x0C,     /* size: 12 */
+                    0x65, 0x6E, 0x63, 0x64,     /* type: 'encd' */
+                    0x00, 0x00, 0x01, 0x00      /* Unicode Encoding */
+                };
             memcpy( sample->data + 2 + name_length, encd, 12 );
         }
         sample->dts = sample->cts = data.start_time;
