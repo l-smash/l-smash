@@ -563,7 +563,15 @@ lsmash_entry_t *lsmash_get_entry( lsmash_entry_list_t *list, uint32_t entry_numb
     if( !list || !entry_number || entry_number > list->entry_count )
         return NULL;
     lsmash_entry_t *entry;
-    for( entry = list->head; entry && --entry_number; entry = entry->next );
+    if( entry_number <= (list->entry_count >> 1) )
+        /* Look for from the head. */
+        for( entry = list->head; entry && --entry_number; entry = entry->next );
+    else
+    {
+        /* Look for from the tail. */
+        entry_number = list->entry_count - entry_number;
+        for( entry = list->tail; entry && entry_number--; entry = entry->prev );
+    }
     return entry;
 }
 
