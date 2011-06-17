@@ -2696,157 +2696,136 @@ static void isom_remove_chan( isom_chan_t *chan )
     isom_remove_box( chan, isom_audio_entry_t );
 }
 
+static void isom_remove_sample_description( isom_sample_entry_t *sample )
+{
+    if( !sample )
+        return;
+    switch( sample->type )
+    {
+        case ISOM_CODEC_TYPE_AVC1_VIDEO :
+        case ISOM_CODEC_TYPE_AVC2_VIDEO :
+        case ISOM_CODEC_TYPE_AVCP_VIDEO :
+        case ISOM_CODEC_TYPE_SVC1_VIDEO :
+        case ISOM_CODEC_TYPE_MVC1_VIDEO :
+        case ISOM_CODEC_TYPE_MVC2_VIDEO :
+        case ISOM_CODEC_TYPE_MP4V_VIDEO :
+        case ISOM_CODEC_TYPE_DRAC_VIDEO :
+        case ISOM_CODEC_TYPE_ENCV_VIDEO :
+        case ISOM_CODEC_TYPE_MJP2_VIDEO :
+        case ISOM_CODEC_TYPE_S263_VIDEO :
+        case ISOM_CODEC_TYPE_VC_1_VIDEO :
+        {
+            isom_visual_entry_t *visual = (isom_visual_entry_t *)sample;
+            isom_remove_visual_extensions( (isom_visual_entry_t *)visual );
+            free( visual );
+            break;
+        }
+        case ISOM_CODEC_TYPE_MP4A_AUDIO :
+        case ISOM_CODEC_TYPE_AC_3_AUDIO :
+        case ISOM_CODEC_TYPE_ALAC_AUDIO :
+        case ISOM_CODEC_TYPE_SAMR_AUDIO :
+        case ISOM_CODEC_TYPE_SAWB_AUDIO :
+        case QT_CODEC_TYPE_23NI_AUDIO :
+        case QT_CODEC_TYPE_NONE_AUDIO :
+        case QT_CODEC_TYPE_LPCM_AUDIO :
+        case QT_CODEC_TYPE_RAW_AUDIO :
+        case QT_CODEC_TYPE_SOWT_AUDIO :
+        case QT_CODEC_TYPE_TWOS_AUDIO :
+        case QT_CODEC_TYPE_FL32_AUDIO :
+        case QT_CODEC_TYPE_FL64_AUDIO :
+        case QT_CODEC_TYPE_IN24_AUDIO :
+        case QT_CODEC_TYPE_IN32_AUDIO :
+        case QT_CODEC_TYPE_NOT_SPECIFIED :
+        case ISOM_CODEC_TYPE_DRA1_AUDIO :
+        case ISOM_CODEC_TYPE_DTSC_AUDIO :
+        case ISOM_CODEC_TYPE_DTSH_AUDIO :
+        case ISOM_CODEC_TYPE_DTSL_AUDIO :
+        case ISOM_CODEC_TYPE_EC_3_AUDIO :
+        case ISOM_CODEC_TYPE_ENCA_AUDIO :
+        case ISOM_CODEC_TYPE_G719_AUDIO :
+        case ISOM_CODEC_TYPE_G726_AUDIO :
+        case ISOM_CODEC_TYPE_M4AE_AUDIO :
+        case ISOM_CODEC_TYPE_MLPA_AUDIO :
+        //case ISOM_CODEC_TYPE_RAW_AUDIO :
+        case ISOM_CODEC_TYPE_SAWP_AUDIO :
+        case ISOM_CODEC_TYPE_SEVC_AUDIO :
+        case ISOM_CODEC_TYPE_SQCP_AUDIO :
+        case ISOM_CODEC_TYPE_SSMV_AUDIO :
+        //case ISOM_CODEC_TYPE_TWOS_AUDIO :
+        {
+            isom_audio_entry_t *audio = (isom_audio_entry_t *)sample;
+            isom_remove_esds( audio->esds );
+            isom_remove_wave( audio->wave );
+            isom_remove_chan( audio->chan );
+            if( audio->exdata )
+                free( audio->exdata );
+            free( audio );
+            break;
+        }
+        case ISOM_CODEC_TYPE_FDP_HINT :
+        case ISOM_CODEC_TYPE_M2TS_HINT :
+        case ISOM_CODEC_TYPE_PM2T_HINT :
+        case ISOM_CODEC_TYPE_PRTP_HINT :
+        case ISOM_CODEC_TYPE_RM2T_HINT :
+        case ISOM_CODEC_TYPE_RRTP_HINT :
+        case ISOM_CODEC_TYPE_RSRP_HINT :
+        case ISOM_CODEC_TYPE_RTP_HINT  :
+        case ISOM_CODEC_TYPE_SM2T_HINT :
+        case ISOM_CODEC_TYPE_SRTP_HINT :
+        {
+            isom_hint_entry_t *hint = (isom_hint_entry_t *)sample;
+            if( hint->data )
+                free( hint->data );
+            free( hint );
+            break;
+        }
+        case ISOM_CODEC_TYPE_IXSE_META :
+        case ISOM_CODEC_TYPE_METT_META :
+        case ISOM_CODEC_TYPE_METX_META :
+        case ISOM_CODEC_TYPE_MLIX_META :
+        case ISOM_CODEC_TYPE_OKSD_META :
+        case ISOM_CODEC_TYPE_SVCM_META :
+        //case ISOM_CODEC_TYPE_TEXT_META :
+        case ISOM_CODEC_TYPE_URIM_META :
+        case ISOM_CODEC_TYPE_XML_META  :
+        {
+            isom_metadata_entry_t *metadata = (isom_metadata_entry_t *)sample;
+            free( metadata );
+            break;
+        }
+        case ISOM_CODEC_TYPE_TX3G_TEXT :
+        {
+            isom_tx3g_entry_t *tx3g = (isom_tx3g_entry_t *)sample;
+            if( tx3g->ftab )
+                isom_remove_ftab( tx3g->ftab );
+            free( tx3g );
+            break;
+        }
+        case QT_CODEC_TYPE_TEXT_TEXT :
+        {
+            isom_text_entry_t *text = (isom_text_entry_t *)sample;
+            if( text->font_name )
+                free( text->font_name );
+            free( text );
+            break;
+        }
+        case ISOM_CODEC_TYPE_MP4S_SYSTEM :
+        {
+            isom_mp4s_entry_t *mp4s = (isom_mp4s_entry_t *)sample;
+            isom_remove_esds( mp4s->esds );
+            free( mp4s );
+            break;
+        }
+        default :
+            break;
+    }
+}
+
 static void isom_remove_stsd( isom_stsd_t *stsd )
 {
     if( !stsd )
         return;
-    if( !stsd->list )
-    {
-        free( stsd );
-        return;
-    }
-    for( lsmash_entry_t *entry = stsd->list->head; entry; )
-    {
-        isom_sample_entry_t *sample = (isom_sample_entry_t *)entry->data;
-        if( !sample )
-        {
-            lsmash_entry_t *next = entry->next;
-            free( entry );
-            entry = next;
-            continue;
-        }
-        switch( sample->type )
-        {
-            case ISOM_CODEC_TYPE_AVC1_VIDEO :
-#if 0
-            case ISOM_CODEC_TYPE_AVC2_VIDEO :
-            case ISOM_CODEC_TYPE_AVCP_VIDEO :
-            case ISOM_CODEC_TYPE_SVC1_VIDEO :
-            case ISOM_CODEC_TYPE_MVC1_VIDEO :
-            case ISOM_CODEC_TYPE_MVC2_VIDEO :
-            case ISOM_CODEC_TYPE_MP4V_VIDEO :
-            case ISOM_CODEC_TYPE_DRAC_VIDEO :
-            case ISOM_CODEC_TYPE_ENCV_VIDEO :
-            case ISOM_CODEC_TYPE_MJP2_VIDEO :
-            case ISOM_CODEC_TYPE_S263_VIDEO :
-            case ISOM_CODEC_TYPE_VC_1_VIDEO :
-#endif
-            {
-                isom_visual_entry_t *visual = (isom_visual_entry_t *)entry->data;
-                isom_remove_visual_extensions( (isom_visual_entry_t *)visual );
-                free( visual );
-                break;
-            }
-#if 0
-            case ISOM_CODEC_TYPE_MP4S_SYSTEM :
-            {
-                isom_mp4s_entry_t *mp4s = (isom_mp4s_entry_t *)entry->data;
-                isom_remove_esds( mp4s->esds );
-                free( mp4s );
-                break;
-            }
-#endif
-            case ISOM_CODEC_TYPE_MP4A_AUDIO :
-            case ISOM_CODEC_TYPE_AC_3_AUDIO :
-            case ISOM_CODEC_TYPE_ALAC_AUDIO :
-            case ISOM_CODEC_TYPE_SAMR_AUDIO :
-            case ISOM_CODEC_TYPE_SAWB_AUDIO :
-            case QT_CODEC_TYPE_23NI_AUDIO :
-            case QT_CODEC_TYPE_NONE_AUDIO :
-            case QT_CODEC_TYPE_LPCM_AUDIO :
-            case QT_CODEC_TYPE_RAW_AUDIO :
-            case QT_CODEC_TYPE_SOWT_AUDIO :
-            case QT_CODEC_TYPE_TWOS_AUDIO :
-            case QT_CODEC_TYPE_FL32_AUDIO :
-            case QT_CODEC_TYPE_FL64_AUDIO :
-            case QT_CODEC_TYPE_IN24_AUDIO :
-            case QT_CODEC_TYPE_IN32_AUDIO :
-            case QT_CODEC_TYPE_NOT_SPECIFIED :
-#if 0
-            case ISOM_CODEC_TYPE_DRA1_AUDIO :
-            case ISOM_CODEC_TYPE_DTSC_AUDIO :
-            case ISOM_CODEC_TYPE_DTSH_AUDIO :
-            case ISOM_CODEC_TYPE_DTSL_AUDIO :
-            case ISOM_CODEC_TYPE_EC_3_AUDIO :
-            case ISOM_CODEC_TYPE_ENCA_AUDIO :
-            case ISOM_CODEC_TYPE_G719_AUDIO :
-            case ISOM_CODEC_TYPE_G726_AUDIO :
-            case ISOM_CODEC_TYPE_M4AE_AUDIO :
-            case ISOM_CODEC_TYPE_MLPA_AUDIO :
-            case ISOM_CODEC_TYPE_RAW_AUDIO :
-            case ISOM_CODEC_TYPE_SAWP_AUDIO :
-            case ISOM_CODEC_TYPE_SEVC_AUDIO :
-            case ISOM_CODEC_TYPE_SQCP_AUDIO :
-            case ISOM_CODEC_TYPE_SSMV_AUDIO :
-            case ISOM_CODEC_TYPE_TWOS_AUDIO :
-#endif
-            {
-                isom_audio_entry_t *audio = (isom_audio_entry_t *)entry->data;
-                isom_remove_esds( audio->esds );
-                isom_remove_wave( audio->wave );
-                isom_remove_chan( audio->chan );
-                if( audio->exdata )
-                    free( audio->exdata );
-                free( audio );
-                break;
-            }
-#if 0
-            case ISOM_CODEC_TYPE_FDP_HINT :
-            case ISOM_CODEC_TYPE_M2TS_HINT :
-            case ISOM_CODEC_TYPE_PM2T_HINT :
-            case ISOM_CODEC_TYPE_PRTP_HINT :
-            case ISOM_CODEC_TYPE_RM2T_HINT :
-            case ISOM_CODEC_TYPE_RRTP_HINT :
-            case ISOM_CODEC_TYPE_RSRP_HINT :
-            case ISOM_CODEC_TYPE_RTP_HINT  :
-            case ISOM_CODEC_TYPE_SM2T_HINT :
-            case ISOM_CODEC_TYPE_SRTP_HINT :
-            {
-                isom_hint_entry_t *hint = (isom_hint_entry_t *)entry->data;
-                if( hint->data )
-                    free( hint->data );
-                free( hint );
-                break;
-            }
-            case ISOM_CODEC_TYPE_IXSE_META :
-            case ISOM_CODEC_TYPE_METT_META :
-            case ISOM_CODEC_TYPE_METX_META :
-            case ISOM_CODEC_TYPE_MLIX_META :
-            case ISOM_CODEC_TYPE_OKSD_META :
-            case ISOM_CODEC_TYPE_SVCM_META :
-            case ISOM_CODEC_TYPE_TEXT_META :
-            case ISOM_CODEC_TYPE_URIM_META :
-            case ISOM_CODEC_TYPE_XML_META  :
-            {
-                isom_metadata_entry_t *metadata = (isom_metadata_entry_t *)entry->data;
-                free( metadata );
-                break;
-            }
-#endif
-            case ISOM_CODEC_TYPE_TX3G_TEXT :
-            {
-                isom_tx3g_entry_t *tx3g = (isom_tx3g_entry_t *)entry->data;
-                if( tx3g->ftab )
-                    isom_remove_ftab( tx3g->ftab );
-                free( tx3g );
-                break;
-            }
-            case QT_CODEC_TYPE_TEXT_TEXT :
-            {
-                isom_text_entry_t *text = (isom_text_entry_t *)entry->data;
-                if( text->font_name )
-                    free( text->font_name );
-                free( text );
-                break;
-            }
-            default :
-                break;
-        }
-        lsmash_entry_t *next = entry->next;
-        free( entry );
-        entry = next;
-    }
-    free( stsd->list );
+    lsmash_remove_list( stsd->list, isom_remove_sample_description );
     isom_remove_box( stsd, isom_stbl_t );
 }
 

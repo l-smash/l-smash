@@ -811,8 +811,6 @@ static void *isom_sample_description_alloc( uint32_t sample_type )
         case ISOM_CODEC_TYPE_SVC1_VIDEO :
         case ISOM_CODEC_TYPE_VC_1_VIDEO :
             return malloc( sizeof(isom_visual_entry_t) );
-        case ISOM_CODEC_TYPE_MP4A_AUDIO :
-            return malloc( sizeof(isom_audio_entry_t) );
         case ISOM_CODEC_TYPE_AC_3_AUDIO :
         case ISOM_CODEC_TYPE_ALAC_AUDIO :
         case ISOM_CODEC_TYPE_DRA1_AUDIO :
@@ -826,6 +824,7 @@ static void *isom_sample_description_alloc( uint32_t sample_type )
         case ISOM_CODEC_TYPE_G726_AUDIO :
         case ISOM_CODEC_TYPE_M4AE_AUDIO :
         case ISOM_CODEC_TYPE_MLPA_AUDIO :
+        case ISOM_CODEC_TYPE_MP4A_AUDIO :
         //case ISOM_CODEC_TYPE_RAW_AUDIO  :
         case ISOM_CODEC_TYPE_SAMR_AUDIO :
         case ISOM_CODEC_TYPE_SAWB_AUDIO :
@@ -892,9 +891,6 @@ static void isom_sample_description_init( void *sample, uint32_t sample_type )
         case ISOM_CODEC_TYPE_VC_1_VIDEO :
             memset( sample, 0, sizeof(isom_visual_entry_t) );
             break;
-        case ISOM_CODEC_TYPE_MP4A_AUDIO :
-            memset( sample, 0, sizeof(isom_audio_entry_t) );
-            break;
         case ISOM_CODEC_TYPE_AC_3_AUDIO :
         case ISOM_CODEC_TYPE_ALAC_AUDIO :
         case ISOM_CODEC_TYPE_DRA1_AUDIO :
@@ -908,6 +904,7 @@ static void isom_sample_description_init( void *sample, uint32_t sample_type )
         case ISOM_CODEC_TYPE_G726_AUDIO :
         case ISOM_CODEC_TYPE_M4AE_AUDIO :
         case ISOM_CODEC_TYPE_MLPA_AUDIO :
+        case ISOM_CODEC_TYPE_MP4A_AUDIO :
         //case ISOM_CODEC_TYPE_RAW_AUDIO  :
         case ISOM_CODEC_TYPE_SAMR_AUDIO :
         case ISOM_CODEC_TYPE_SAWB_AUDIO :

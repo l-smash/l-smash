@@ -386,11 +386,11 @@ typedef enum
     QT_CODEC_TYPE_ULAW_AUDIO    = LSMASH_4CC( 'u', 'l', 'a', 'w' ),   /* uLaw 2:1 */
     QT_CODEC_TYPE_VDVA_AUDIO    = LSMASH_4CC( 'v', 'd', 'v', 'a' ),   /* DV audio (variable duration per video frame) */
     QT_CODEC_TYPE_FULLMP3_AUDIO = LSMASH_4CC( '.', 'm', 'p', '3' ),   /* MPEG-1 layer 3, CBR & VBR (QT4.1 and later) */
-    QT_CODEC_TYPE_MP3_AUDIO     = 0x6D730055,                       /* MPEG-1 layer 3, CBR only (pre-QT4.1) */
-    QT_CODEC_TYPE_ADPCM2_AUDIO  = 0x6D730002,                       /* Microsoft ADPCM - ACM code 2 */
-    QT_CODEC_TYPE_ADPCM17_AUDIO = 0x6D730011,                       /* DVI/Intel IMA ADPCM - ACM code 17 */
-    QT_CODEC_TYPE_GSM49_AUDIO   = 0x6D730031,                       /* Microsoft GSM 6.10 - ACM code 49 */
-    QT_CODEC_TYPE_NOT_SPECIFIED = 0x00000000,                       /* either 'raw ' or 'twos' */
+    QT_CODEC_TYPE_MP3_AUDIO     = 0x6D730055,                         /* MPEG-1 layer 3, CBR only (pre-QT4.1) */
+    QT_CODEC_TYPE_ADPCM2_AUDIO  = 0x6D730002,                         /* Microsoft ADPCM - ACM code 2 */
+    QT_CODEC_TYPE_ADPCM17_AUDIO = 0x6D730011,                         /* DVI/Intel IMA ADPCM - ACM code 17 */
+    QT_CODEC_TYPE_GSM49_AUDIO   = 0x6D730031,                         /* Microsoft GSM 6.10 - ACM code 49 */
+    QT_CODEC_TYPE_NOT_SPECIFIED = 0x00000000,                         /* either 'raw ' or 'twos' */
 
     /* Video Type */
     ISOM_CODEC_TYPE_AVC1_VIDEO  = LSMASH_4CC( 'a', 'v', 'c', '1' ),   /* Advanced Video Coding */
