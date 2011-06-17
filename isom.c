@@ -6572,6 +6572,27 @@ static int isom_set_media_language( lsmash_root_t *root, uint32_t track_ID, char
     return 0;
 }
 
+static int isom_create_grouping( isom_trak_entry_t *trak, lsmash_grouping_type_code grouping_type )
+{
+    lsmash_root_t *root = trak->root;
+    switch( grouping_type )
+    {
+        case ISOM_GROUP_TYPE_RAP :
+            assert( root->max_isom_version >= 6 );
+            break;
+        case ISOM_GROUP_TYPE_ROLL :
+            assert( root->avc_extensions );
+            break;
+        default :
+            assert( 0 );
+            break;
+    }
+    if( !isom_add_sgpd( trak->mdia->minf->stbl, grouping_type )
+     || !isom_add_sbgp( trak->mdia->minf->stbl, grouping_type ) )
+        return -1;
+    return 0;
+}
+
 void lsmash_initialize_media_parameters( lsmash_media_parameters_t *param )
 {
     memset( param, 0, sizeof(lsmash_media_parameters_t) );
@@ -6581,14 +6602,22 @@ void lsmash_initialize_media_parameters( lsmash_media_parameters_t *param )
 int lsmash_set_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_media_parameters_t *param )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->mdhd )
+    if( !trak || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->minf || !trak->mdia->minf->stbl )
         return -1;
     trak->mdia->mdhd->timescale = param->timescale;
     if( isom_set_media_language( root, track_ID, param->ISO_language, param->MAC_language ) )
         return -1;
-    if( param->media_handler_name && isom_set_media_handler_name( root, track_ID, param->media_handler_name ) )
+    if( param->media_handler_name
+     && isom_set_media_handler_name( root, track_ID, param->media_handler_name ) )
         return -1;
-    if( root->qt_compatible && param->data_handler_name && isom_set_data_handler_name( root, track_ID, param->data_handler_name ) )
+    if( root->qt_compatible && param->data_handler_name
+     && isom_set_data_handler_name( root, track_ID, param->data_handler_name ) )
+        return -1;
+    if( root->avc_extensions && param->roll_grouping
+     && isom_create_grouping( trak, ISOM_GROUP_TYPE_ROLL ) )
+        return -1;
+    if( (root->max_isom_version >= 6) && param->rap_grouping
+     && isom_create_grouping( trak, ISOM_GROUP_TYPE_RAP ) )
         return -1;
     return 0;
 }
@@ -6596,12 +6625,23 @@ int lsmash_set_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
 int lsmash_get_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_media_parameters_t *param )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->hdlr || !trak->mdia->minf )
+    if( !trak || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->hdlr
+     || !trak->mdia->minf || !trak->mdia->minf->stbl )
         return -1;
     isom_mdhd_t *mdhd = trak->mdia->mdhd;
+    isom_stbl_t *stbl = trak->mdia->minf->stbl;
+    isom_sbgp_entry_t *sbgp;
+    isom_sgpd_entry_t *sgpd;
     param->timescale    = mdhd->timescale;
     param->handler_type = trak->mdia->hdlr->componentSubtype;
     param->duration     = mdhd->duration;
+    /* Whether sample grouping present. */
+    sbgp = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_ROLL );
+    sgpd = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_ROLL );
+    param->roll_grouping = sbgp && sgpd;
+    sbgp = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_RAP );
+    sgpd = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_RAP );
+    param->rap_grouping = sbgp && sgpd;
     /* Get media language. */
     if( mdhd->language >= 0x800 )
     {
@@ -6734,30 +6774,6 @@ int lsmash_set_track_aperture_modes( lsmash_root_t *root, uint32_t track_ID, uin
     }
     tapt->enof->width  = width;
     tapt->enof->height = height;
-    return 0;
-}
-
-int lsmash_create_grouping( lsmash_root_t *root, uint32_t track_ID, lsmash_grouping_type_code grouping_type )
-{
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
-        return -1;
-    switch( grouping_type )
-    {
-        case ISOM_GROUP_TYPE_RAP :
-            if( root->max_isom_version < 6 )
-                return -1;
-            break;
-        case ISOM_GROUP_TYPE_ROLL :
-            if( !root->avc_extensions )
-                return -1;
-            break;
-        default :
-            break;
-    }
-    if( !isom_add_sgpd( trak->mdia->minf->stbl, grouping_type )
-     || !isom_add_sbgp( trak->mdia->minf->stbl, grouping_type ) )
-        return -1;
     return 0;
 }
 

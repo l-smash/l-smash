@@ -1236,6 +1236,10 @@ typedef struct
                                      * You can't change handler_type through this parameter manually. */
     uint64_t duration;              /* the duration of this media, expressed in the media timescale
                                      * You can't set this parameter manually. */
+    uint8_t roll_grouping;          /* roll recovery grouping present
+                                     * Require 'avc1' brand or ISO Base Media File Format version 2 or later. */
+    uint8_t rap_grouping;           /* random access point grouping present
+                                     * Require ISO Base Media File Format version 6 or later. */
     /* Use either type of language code. */
     uint16_t MAC_language;          /* Macintosh language code for this media */
     char    *ISO_language;          /* ISO 639-2/T language code for this media */
@@ -1318,7 +1322,6 @@ int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name );
 
 int lsmash_create_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint64_t segment_duration, int64_t media_time, int32_t media_rate );
 int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_ID, char *file_name );
-int lsmash_create_grouping( lsmash_root_t *root, uint32_t track_ID, lsmash_grouping_type_code grouping_type );
 int lsmash_create_object_descriptor( lsmash_root_t *root );
 
 int lsmash_modify_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint64_t segment_duration, int64_t media_time, int32_t media_rate );
