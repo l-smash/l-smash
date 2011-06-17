@@ -4700,11 +4700,18 @@ int isom_check_compatibility( lsmash_root_t *root )
 {
     if( !root )
         return -1;
+    root->qt_compatible = 0;
     /* Check brand to decide mandatory boxes. */
     if( !root->ftyp || !root->ftyp->brand_count )
     {
-        /* We assume this file is not a QuickTime but MP4 version 1 format file. */
-        root->mp4_version1 = 1;
+        /* No brand declaration means this file is a MP4 version 1 or QuickTime file format. */
+        if( root->moov && root->moov->iods )
+        {
+            root->mp4_version1 = 1;
+            root->isom_compatible = 1;
+        }
+        else
+            root->qt_compatible = 1;
         return 0;
     }
     for( uint32_t i = 0; i < root->ftyp->brand_count; i++ )
@@ -6790,8 +6797,12 @@ lsmash_root_t *lsmash_open_movie( const char *filename, lsmash_file_mode_code mo
     if( !root->bs->stream )
         goto fail;
     root->flags = mode;
-    if( (mode & LSMASH_FILE_MODE_WRITE) && (isom_add_moov( root ) || isom_add_mvhd( root->moov )) )
-        goto fail;
+    if( mode & LSMASH_FILE_MODE_WRITE )
+    {
+        if( isom_add_moov( root ) || isom_add_mvhd( root->moov ) )
+            goto fail;
+        root->qt_compatible = 1;    /* QTFF is default file format. */
+    }
 #ifdef LSMASH_DEMUXER_ENABLED
     if( (mode & (LSMASH_FILE_MODE_READ | LSMASH_FILE_MODE_DUMP)) && isom_read_root( root ) )
         goto fail;
