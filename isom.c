@@ -7498,6 +7498,9 @@ static int isom_finish_fragment_movie( lsmash_root_t *root )
             int useful_default_sample_flags = 1;
             if( trun->sample_count == 1 )
             {
+                /* It is enough to check only if first_sample_flags equals default_sample_flags or not.
+                 * If it is equal, just use default_sample_flags.
+                 * If not, just use first_sample_flags of this run. */
                 if( !memcmp( &trun->first_sample_flags, &tfhd->default_sample_flags, sizeof(isom_sample_flags_t) ) )
                     useful_first_sample_flags = 0;
             }
@@ -7506,29 +7509,20 @@ static int isom_finish_fragment_movie( lsmash_root_t *root )
                 lsmash_entry_t *optional_entry = trun->optional->head->next;
                 isom_trun_optional_row_t *row = (isom_trun_optional_row_t *)optional_entry->data;
                 isom_sample_flags_t representative_sample_flags = row->sample_flags;
+                if( memcmp( &tfhd->default_sample_flags, &representative_sample_flags, sizeof(isom_sample_flags_t) ) )
+                    useful_default_sample_flags = 0;
                 if( !memcmp( &trun->first_sample_flags, &representative_sample_flags, sizeof(isom_sample_flags_t) ) )
                     useful_first_sample_flags = 0;
-                if( memcmp( &tfhd->default_sample_flags, &representative_sample_flags, sizeof(isom_sample_flags_t) ) )
-                {
-                    useful_first_sample_flags = 0;
-                    useful_default_sample_flags = 0;
-                }
                 if( useful_default_sample_flags )
                     for( optional_entry = optional_entry->next; optional_entry; optional_entry = optional_entry->next )
                     {
                         row = (isom_trun_optional_row_t *)optional_entry->data;
                         if( memcmp( &representative_sample_flags, &row->sample_flags, sizeof(isom_sample_flags_t) ) )
                         {
-                            useful_first_sample_flags = 0;
                             useful_default_sample_flags = 0;
                             break;
                         }
                     }
-            }
-            if( useful_first_sample_flags )
-            {
-                assert( useful_default_sample_flags );
-                trun->flags |= ISOM_TR_FLAGS_FIRST_SAMPLE_FLAGS_PRESENT;
             }
             if( useful_default_sample_flags )
             {
@@ -7536,7 +7530,12 @@ static int isom_finish_fragment_movie( lsmash_root_t *root )
                 trun->flags &= ~ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT;
             }
             else
+            {
+                useful_first_sample_flags = 0;
                 trun->flags |= ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT;
+            }
+            if( useful_first_sample_flags )
+                trun->flags |= ISOM_TR_FLAGS_FIRST_SAMPLE_FLAGS_PRESENT;
         }
         if( useful_default_sample_duration && tfhd->default_sample_duration != trex->default_sample_duration )
             tfhd->flags |= ISOM_TF_FLAGS_DEFAULT_SAMPLE_DURATION_PRESENT;
