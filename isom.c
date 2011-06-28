@@ -6848,23 +6848,58 @@ int lsmash_create_fragment_movie( lsmash_root_t *root )
     return lsmash_remove_entry( root->moof_list, 1, isom_remove_moof );
 }
 
+static int isom_set_brands( lsmash_root_t *root, lsmash_brand_type_code major_brand, uint32_t minor_version, lsmash_brand_type_code *brands, uint32_t brand_count )
+{
+    if( brand_count > 50 )
+        return -1;      /* We support setting brands up to 50. */
+    if( !brand_count )
+    {
+        /* Absence of File Type Box means this file is a QuickTime or MP4 version 1 format file. */
+        if( root->ftyp )
+        {
+            if( root->ftyp->compatible_brands )
+                free( root->ftyp->compatible_brands );
+            free( root->ftyp );
+            root->ftyp = NULL;
+        }
+        return 0;
+    }
+    if( !root->ftyp && isom_add_ftyp( root ) )
+        return -1;
+    isom_ftyp_t *ftyp = root->ftyp;
+    ftyp->major_brand = major_brand;
+    ftyp->minor_version = minor_version;
+    lsmash_brand_type_code *compatible_brands;
+    if( !ftyp->compatible_brands )
+        compatible_brands = malloc( brand_count * sizeof(uint32_t) );
+    else
+        compatible_brands = realloc( ftyp->compatible_brands, brand_count * sizeof(uint32_t) );
+    if( !compatible_brands )
+        return -1;
+    ftyp->compatible_brands = compatible_brands;
+    for( uint32_t i = 0; i < brand_count; i++ )
+    {
+        ftyp->compatible_brands[i] = brands[i];
+        ftyp->size += 4;
+    }
+    ftyp->brand_count = brand_count;
+    return isom_check_compatibility( root );
+}
+
 void lsmash_initialize_movie_parameters( lsmash_movie_parameters_t *param )
 {
+    memset( param, 0, sizeof(lsmash_movie_parameters_t) );
     param->max_chunk_duration  = 0.5;
     param->max_async_tolerance = 2.0;
     param->timescale           = 600;
-    param->duration            = 0;
     param->playback_rate       = 0x00010000;
     param->playback_volume     = 0x0100;
-    param->preview_time        = 0;
-    param->preview_duration    = 0;
-    param->poster_time         = 0;
-    param->number_of_tracks    = 0;
 }
 
 int lsmash_set_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t *param )
 {
-    if( !root || !root->moov || !root->moov->mvhd )
+    if( !root || !root->moov || !root->moov->mvhd
+     || isom_set_brands( root, param->major_brand, param->minor_version, param->brands, param->number_of_brands ) )
         return -1;
     isom_mvhd_t *mvhd = root->moov->mvhd;
     root->max_chunk_duration  = param->max_chunk_duration;
@@ -6894,6 +6929,17 @@ int lsmash_get_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t 
     if( !root || !root->moov || !root->moov->mvhd )
         return -1;
     isom_mvhd_t *mvhd = root->moov->mvhd;
+    if( root->ftyp )
+    {
+        isom_ftyp_t *ftyp = root->ftyp;
+        uint32_t brand_count = LSMASH_MIN( ftyp->brand_count, 50 );     /* brands up to 50 */
+        for( uint32_t i = 0; i < brand_count; i++ )
+            param->brands_shadow[i] = ftyp->compatible_brands[i];
+        param->major_brand      = ftyp->major_brand;
+        param->brands           = param->brands_shadow;
+        param->number_of_brands = brand_count;
+        param->minor_version    = ftyp->minor_version;
+    }
     param->max_chunk_duration  = root->max_chunk_duration;
     param->max_async_tolerance = root->max_async_tolerance;
     param->timescale           = mvhd->timescale;
@@ -6914,43 +6960,8 @@ uint32_t lsmash_get_movie_timescale( lsmash_root_t *root )
     return root->moov->mvhd->timescale;
 }
 
-int lsmash_set_brands( lsmash_root_t *root, lsmash_brand_type_code major_brand, uint32_t minor_version, lsmash_brand_type_code *brands, uint32_t brand_count )
+static int isom_write_ftyp( lsmash_root_t *root )
 {
-    if( !root )
-        return -1;
-    if( !brand_count )
-    {
-        /* Absence of ftyp box means this file is a QuickTime or MP4 version 1 format file. */
-        if( root->ftyp )
-        {
-            if( root->ftyp->compatible_brands )
-                free( root->ftyp->compatible_brands );
-            free( root->ftyp );
-            root->ftyp = NULL;
-        }
-        return 0;
-    }
-    if( !root->ftyp && isom_add_ftyp( root ) )
-        return -1;
-    isom_ftyp_t *ftyp = root->ftyp;
-    ftyp->major_brand = major_brand;
-    ftyp->minor_version = minor_version;
-    ftyp->compatible_brands = malloc( brand_count * sizeof(uint32_t) );
-    if( !ftyp->compatible_brands )
-        return -1;
-    for( uint32_t i = 0; i < brand_count; i++ )
-    {
-        ftyp->compatible_brands[i] = brands[i];
-        ftyp->size += 4;
-    }
-    ftyp->brand_count = brand_count;
-    return isom_check_compatibility( root );
-}
-
-int lsmash_write_ftyp( lsmash_root_t *root )
-{
-    if( !root )
-        return -1;
     isom_ftyp_t *ftyp = root->ftyp;
     if( !ftyp || !ftyp->brand_count )
         return 0;
@@ -6963,6 +6974,7 @@ int lsmash_write_ftyp( lsmash_root_t *root )
     if( lsmash_bs_write_data( bs ) )
         return -1;
     root->size += ftyp->size;
+    root->file_type_written = 1;
     return 0;
 }
 
@@ -7409,6 +7421,10 @@ static int isom_finish_fragment_initial_movie( lsmash_root_t *root )
             for( lsmash_entry_t* stco_entry = stco->list->head ; stco_entry ; stco_entry = stco_entry->next )
                 ((isom_stco_entry_t*)stco_entry->data)->chunk_offset += moov->size;
     }
+    /* Write File Type Box here if it was not written yet. */
+    if( !root->file_type_written && isom_write_ftyp( root ) )
+        return -1;
+    /* Write Movie Box. */
     if( isom_write_moov( root ) )
         return -1;
     root->size += moov->size;
@@ -8923,6 +8939,9 @@ int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_
      * This means removal of a feature that we used to have, but anyway very alone chunk does not make sense. */
     if( !root || !root->bs || !sample || !sample->data || !track_ID
      || root->max_chunk_duration == 0 || root->max_async_tolerance == 0 )
+        return -1;
+    /* Write File Type Box here if it was not written yet. */
+    if( !root->file_type_written && isom_write_ftyp( root ) )
         return -1;
     if( root->fragment && root->fragment->pool )
         return isom_append_fragment_sample( root, track_ID, sample );

@@ -1255,7 +1255,6 @@ typedef struct
 typedef struct
 {
     lsmash_track_mode_code mode;
-
     uint32_t track_ID;              /* an integer that uniquely identifies the track
                                      * Don't set to value already used except for zero value.
                                      * Zero value don't override established track_ID. */
@@ -1273,19 +1272,25 @@ typedef struct
 
 typedef struct
 {
-    double   max_chunk_duration;    /* max duration per chunk in seconds. 0.5 is default value. */
-    double   max_async_tolerance;   /* max tolerance, in seconds, for amount of interleaving asynchronization between tracks.
-                                     * 2.0 is default value. At least twice of max_chunk_duration is used. */
-    uint32_t timescale;             /* movie timescale: timescale for the entire presentation */
-    uint64_t duration;              /* the duration, expressed in movie timescale, of the longest track
-                                     * You can't set this parameter manually. */
-    int32_t  playback_rate;         /* fixed point 16.16 number. 0x00010000 is normal forward playback and default value. */
-    int32_t  playback_volume;       /* fixed point 8.8 number. 0x0100 is full volume and default value. */
-    int32_t  preview_time;          /* the time value in the movie at which the preview begins */
-    int32_t  preview_duration;      /* the duration of the movie preview in movie timescale units */
-    int32_t  poster_time;           /* the time value of the time of the movie poster */
-    uint32_t number_of_tracks;      /* the number of tracks in the movie
-                                     * You can't set this parameter manually. */
+    lsmash_brand_type_code  major_brand;    /* the best used brand */
+    lsmash_brand_type_code *brands;         /* the list of compatible brands */
+    uint32_t number_of_brands;              /* the number of compatible brands used in the movie */
+    uint32_t minor_version;                 /* minor version of best used brand */
+    double   max_chunk_duration;            /* max duration per chunk in seconds. 0.5 is default value. */
+    double   max_async_tolerance;           /* max tolerance, in seconds, for amount of interleaving asynchronization between tracks.
+                                             * 2.0 is default value. At least twice of max_chunk_duration is used. */
+    uint32_t timescale;                     /* movie timescale: timescale for the entire presentation */
+    uint64_t duration;                      /* the duration, expressed in movie timescale, of the longest track
+                                             * You can't set this parameter manually. */
+    int32_t  playback_rate;                 /* fixed point 16.16 number. 0x00010000 is normal forward playback and default value. */
+    int32_t  playback_volume;               /* fixed point 8.8 number. 0x0100 is full volume and default value. */
+    int32_t  preview_time;                  /* the time value in the movie at which the preview begins */
+    int32_t  preview_duration;              /* the duration of the movie preview in movie timescale units */
+    int32_t  poster_time;                   /* the time value of the time of the movie poster */
+    uint32_t number_of_tracks;              /* the number of tracks in the movie
+                                             * You can't set this parameter manually. */
+    /* Any user shouldn't use the following parameter. */
+    PRIVATE lsmash_brand_type_code brands_shadow[50];
 } lsmash_movie_parameters_t;
 
 typedef struct lsmash_root_tag lsmash_root_t;
@@ -1300,7 +1305,6 @@ int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t sa
 int lsmash_add_btrt( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number );
 int lsmash_add_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length );
 
-int lsmash_write_ftyp( lsmash_root_t *root );
 int lsmash_write_free( lsmash_root_t *root );
 
 uint32_t lsmash_get_media_timescale( lsmash_root_t *root, uint32_t track_ID );
@@ -1310,7 +1314,6 @@ uint32_t lsmash_get_last_sample_delta( lsmash_root_t *root, uint32_t track_ID );
 uint32_t lsmash_get_start_time_offset( lsmash_root_t *root, uint32_t track_ID );
 uint32_t lsmash_get_movie_timescale( lsmash_root_t *root );
 
-int lsmash_set_brands( lsmash_root_t *root, lsmash_brand_type_code major_brand, uint32_t minor_version, lsmash_brand_type_code *brands, uint32_t brand_count );
 int lsmash_set_track_aperture_modes( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number );
 int lsmash_set_avc_config( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number,
                            uint8_t configurationVersion, uint8_t AVCProfileIndication, uint8_t profile_compatibility,

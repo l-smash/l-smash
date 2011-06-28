@@ -165,12 +165,13 @@ int main( int argc, char* argv[] )
     if( !structs.root )
         return AUDIOMUX_ERR( "Failed to create root.\n" );
 
-    if( lsmash_set_brands( structs.root, major_brand, minor_version, brands, num_of_brands ) )
-        return AUDIOMUX_ERR( "Failed to set brands.\n" );
-
     /* Initialize movie */
     lsmash_movie_parameters_t movie_param;
     lsmash_initialize_movie_parameters( &movie_param );
+    movie_param.major_brand = major_brand;
+    movie_param.brands = brands;
+    movie_param.number_of_brands = num_of_brands;
+    movie_param.minor_version = minor_version;
     if( lsmash_set_movie_parameters( structs.root, &movie_param ) )
         return AUDIOMUX_ERR( "Failed to set movie parameters.\n" );
 
@@ -196,10 +197,6 @@ int main( int argc, char* argv[] )
     uint32_t sample_entry = lsmash_add_sample_entry( structs.root, track, codec_code, structs.summary );
     if( !sample_entry )
         return AUDIOMUX_ERR( "Failed to add sample_entry.\n" );
-
-    /* Preparation for writing */
-    if( lsmash_write_ftyp( structs.root ) )
-        return AUDIOMUX_ERR( "Failed to write brands.\n" );
 
     /* transfer */
     uint32_t numframe = 0;
