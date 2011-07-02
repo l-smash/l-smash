@@ -599,7 +599,7 @@ static int isom_add_visual_extensions( isom_visual_entry_t *visual, lsmash_video
             colr->matrix_index = (matrix == 1 || matrix == 6 || matrix == 7 ) ? matrix : 2;
     }
     /* Set up Sample Scaling. */
-    if( summary->scaling_method )
+    if( !qt_compatible && summary->scaling_method )
     {
         if( isom_add_stsl( visual ) )
         {
