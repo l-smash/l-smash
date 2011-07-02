@@ -513,8 +513,9 @@ static int isom_add_visual_extensions( isom_visual_entry_t *visual, lsmash_video
 {
     /* Check if set up Track Aperture Modes. */
     isom_trak_entry_t *trak = (isom_trak_entry_t *)visual->parent->parent->parent->parent->parent;
+    int qt_compatible = trak->root->qt_compatible;
     isom_tapt_t *tapt = trak->tapt;
-    int set_aperture_modes = trak->root->qt_compatible          /* Track Aperture Modes is only available under QuickTime file format. */
+    int set_aperture_modes = qt_compatible                      /* Track Aperture Modes is only available under QuickTime file format. */
         && !summary->scaling_method                             /* Sample scaling method might conflict with this feature. */
         && tapt && tapt->clef && tapt->prof && tapt->enof       /* Check if required boxes exist. */
         && !((isom_stsd_t *)visual->parent)->list->entry_count; /* Multiple sample description might conflict with this, so in that case, disable this feature.
@@ -562,7 +563,7 @@ static int isom_add_visual_extensions( isom_visual_entry_t *visual, lsmash_video
         pasp->vSpacing = summary->par_v;
     }
     /* Set up Color Parameter. */
-    if( summary->primaries || summary->transfer || summary->matrix )
+    if( qt_compatible && (summary->primaries || summary->transfer || summary->matrix) )
     {
         if( isom_add_colr( visual ) )
         {
