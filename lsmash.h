@@ -1268,6 +1268,9 @@ typedef struct
     int16_t  audio_volume;          /* fixed point 8.8 number. 0x0100 is full volume. */
     uint32_t display_width;         /* visual presentation region size of horizontal direction as fixed point 16.16 number.  */
     uint32_t display_height;        /* visual presentation region size of vertical direction as fixed point 16.16 number. */
+    uint8_t  aperture_modes;        /* track aperture modes present
+                                     * This feature is only available under QuickTime file format.
+                                     * Automatically disabled if multiple sample description is present or scaling method is specified. */
 } lsmash_track_parameters_t;
 
 typedef struct
@@ -1314,7 +1317,6 @@ uint32_t lsmash_get_last_sample_delta( lsmash_root_t *root, uint32_t track_ID );
 uint32_t lsmash_get_start_time_offset( lsmash_root_t *root, uint32_t track_ID );
 uint32_t lsmash_get_movie_timescale( lsmash_root_t *root );
 
-int lsmash_set_track_aperture_modes( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number );
 int lsmash_set_avc_config( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number,
                            uint8_t configurationVersion, uint8_t AVCProfileIndication, uint8_t profile_compatibility,
                            uint8_t AVCLevelIndication, uint8_t lengthSizeMinusOne,

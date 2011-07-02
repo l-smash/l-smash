@@ -505,13 +505,24 @@ static int isom_add_stsl( isom_visual_entry_t *visual )
     return 0;
 }
 
+static void isom_remove_tapt( isom_tapt_t *tapt );
 static void isom_remove_esds( isom_esds_t *esds );
 static void isom_remove_visual_extensions( isom_visual_entry_t *visual );
 
 static int isom_add_visual_extensions( isom_visual_entry_t *visual, lsmash_video_summary_t *summary )
 {
+    /* Check if set up Track Aperture Modes. */
+    isom_trak_entry_t *trak = (isom_trak_entry_t *)visual->parent->parent->parent->parent->parent;
+    isom_tapt_t *tapt = trak->tapt;
+    int set_aperture_modes = trak->root->qt_compatible          /* Track Aperture Modes is only available under QuickTime file format. */
+        && !summary->scaling_method                             /* Sample scaling method might conflict with this feature. */
+        && tapt && tapt->clef && tapt->prof && tapt->enof       /* Check if required boxes exist. */
+        && !((isom_stsd_t *)visual->parent)->list->entry_count; /* Multiple sample description might conflict with this, so in that case, disable this feature.
+                                                                 * Note: this sample description isn't added yet here. */
+    if( !set_aperture_modes )
+        isom_remove_tapt( trak->tapt );
     /* Set up Clean Aperture. */
-    if( summary->crop_top || summary->crop_left || summary->crop_bottom || summary->crop_right )
+    if( set_aperture_modes || summary->crop_top || summary->crop_left || summary->crop_bottom || summary->crop_right )
     {
         if( isom_add_clap( visual ) )
         {
@@ -539,7 +550,7 @@ static int isom_add_visual_extensions( isom_visual_entry_t *visual, lsmash_video
             clap->vertOffD = 2;
     }
     /* Set up Pixel Aspect Ratio. */
-    if( summary->par_h && summary->par_v )
+    if( set_aperture_modes || (summary->par_h && summary->par_v) )
     {
         if( isom_add_pasp( visual ) )
         {
@@ -612,6 +623,31 @@ static int isom_add_visual_extensions( isom_visual_entry_t *visual, lsmash_video
                 return -1;
             break;
         }
+    /* Set up Track Apeture Modes. */
+    if( set_aperture_modes )
+    {
+        uint32_t width  = visual->width  << 16;
+        uint32_t height = visual->height << 16;
+        double clap_width  = ((double)visual->clap->cleanApertureWidthN  / visual->clap->cleanApertureWidthD)  * (1<<16);
+        double clap_height = ((double)visual->clap->cleanApertureHeightN / visual->clap->cleanApertureHeightD) * (1<<16);
+        double par = (double)visual->pasp->hSpacing / visual->pasp->vSpacing;
+        if( par >= 1.0 )
+        {
+            tapt->clef->width  = clap_width * par;
+            tapt->clef->height = clap_height;
+            tapt->prof->width  = width * par;
+            tapt->prof->height = height;
+        }
+        else
+        {
+            tapt->clef->width  = clap_width;
+            tapt->clef->height = clap_height / par;
+            tapt->prof->width  = width;
+            tapt->prof->height = height / par;
+        }
+        tapt->enof->width  = width;
+        tapt->enof->height = height;
+    }
     return 0;
 }
 
@@ -6332,14 +6368,8 @@ uint32_t lsmash_get_track_ID( lsmash_root_t *root, uint32_t track_number )
 
 void lsmash_initialize_track_parameters( lsmash_track_parameters_t *param )
 {
-    param->mode            = 0;
-    param->track_ID        = 0;
-    param->duration        = 0;
-    param->video_layer     = 0;
-    param->alternate_group = 0;
-    param->audio_volume    = 0x0100;
-    param->display_width   = 0;
-    param->display_height  = 0;
+    memset( param, 0, sizeof(lsmash_track_parameters_t) );
+    param->audio_volume = 0x0100;
 }
 
 int lsmash_set_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_track_parameters_t *param )
@@ -6347,6 +6377,20 @@ int lsmash_set_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->hdlr || !root->moov->mvhd )
         return -1;
+    /* Prepare Track Aperture Modes if required. */
+    if( root->qt_compatible && param->aperture_modes )
+    {
+        if( !trak->tapt && isom_add_tapt( trak ) )
+            return -1;
+        isom_tapt_t *tapt = trak->tapt;
+        if( (!tapt->clef && isom_add_clef( tapt ))
+         || (!tapt->prof && isom_add_prof( tapt ))
+         || (!tapt->enof && isom_add_enof( tapt )) )
+            return -1;
+    }
+    else
+        isom_remove_tapt( trak->tapt );
+    /* Set up Track Header. */
     uint32_t media_type = trak->mdia->hdlr->componentSubtype;
     isom_tkhd_t *tkhd = trak->tkhd;
     tkhd->flags           = param->mode;
@@ -6385,6 +6429,7 @@ int lsmash_get_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     param->audio_volume    = tkhd->volume;
     param->display_width   = tkhd->width;
     param->display_height  = tkhd->height;
+    param->aperture_modes  = !!trak->tapt;
     return 0;
 }
 
@@ -6677,89 +6722,6 @@ int lsmash_get_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
         param->data_handler_name = NULL;
         memset( param->data_handler_name_shadow, 0, sizeof(param->data_handler_name_shadow) );
     }
-    return 0;
-}
-
-static int isom_confirm_visual_type( uint32_t sample_type )
-{
-    switch( sample_type )
-    {
-        case ISOM_CODEC_TYPE_AVC1_VIDEO :
-#if 0
-        case ISOM_CODEC_TYPE_AVC2_VIDEO :
-        case ISOM_CODEC_TYPE_AVCP_VIDEO :
-        case ISOM_CODEC_TYPE_SVC1_VIDEO :
-        case ISOM_CODEC_TYPE_MVC1_VIDEO :
-        case ISOM_CODEC_TYPE_MVC2_VIDEO :
-        case ISOM_CODEC_TYPE_MP4V_VIDEO :
-        case ISOM_CODEC_TYPE_DRAC_VIDEO :
-        case ISOM_CODEC_TYPE_ENCV_VIDEO :
-        case ISOM_CODEC_TYPE_MJP2_VIDEO :
-        case ISOM_CODEC_TYPE_S263_VIDEO :
-        case ISOM_CODEC_TYPE_VC_1_VIDEO :
-#endif
-            break;
-        default :
-            return -1;
-    }
-    return 0;
-}
-
-int lsmash_set_track_aperture_modes( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number )
-{
-    if( !root->qt_compatible )
-        return -1;
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
-        return -1;
-    isom_visual_entry_t *data = (isom_visual_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
-    if( !data || isom_confirm_visual_type( data->type ) )
-        return -1;
-    uint32_t width = data->width << 16;
-    uint32_t height = data->height << 16;
-    if( !trak->tapt && isom_add_tapt( trak ) )
-        return -1;
-    isom_tapt_t *tapt = trak->tapt;
-    if( (!tapt->clef && isom_add_clef( tapt ))
-     || (!tapt->prof && isom_add_prof( tapt ))
-     || (!tapt->enof && isom_add_enof( tapt )) )
-        return -1;
-    if( !data->pasp && isom_add_pasp( data ) )
-        return -1;
-    isom_pasp_t *pasp = data->pasp;
-    isom_clap_t *clap = data->clap;
-    if( !clap )
-    {
-        if( isom_add_clap( data ) )
-            return -1;
-        clap = data->clap;
-        clap->cleanApertureWidthN  = data->width;
-        clap->cleanApertureHeightN = data->height;
-    }
-    if( !pasp->hSpacing || !pasp->vSpacing
-     || !clap->cleanApertureWidthN || !clap->cleanApertureWidthD
-     || !clap->cleanApertureHeightN || !clap->cleanApertureHeightD
-     || !clap->horizOffD || !clap->vertOffD )
-        return -1;
-    double par = (double)pasp->hSpacing / pasp->vSpacing;
-    double clap_width  = ((double)clap->cleanApertureWidthN / clap->cleanApertureWidthD) * (1<<16);
-    double clap_height = ((double)clap->cleanApertureHeightN / clap->cleanApertureHeightD) * (1<<16);
-    if( par >= 1.0 )
-    {
-        tapt->clef->width  = clap_width * par;
-        tapt->clef->height = clap_height;
-        tapt->prof->width  = width * par;
-        tapt->prof->height = height;
-    }
-    else
-    {
-        tapt->clef->width  = clap_width;
-        tapt->clef->height = clap_height / par;
-        tapt->prof->width  = width;
-        tapt->prof->height = height / par;
-    }
-    tapt->enof->width  = width;
-    tapt->enof->height = height;
     return 0;
 }
 
