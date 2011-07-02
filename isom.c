@@ -8071,6 +8071,7 @@ static int isom_group_random_access( isom_trak_entry_t *trak, lsmash_sample_prop
         return 0;
     uint8_t is_rap = prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_CLOSED_RAP
                   || prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_OPEN_RAP
+                  || prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_UNKNOWN_RAP
                   || (prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY && prop->recovery.identifier == prop->recovery.complete);
     isom_rap_group_t *group = trak->cache->rap;
     if( !group )

@@ -1124,14 +1124,15 @@ typedef enum
     ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE         = 0,        /* not random access point */
     ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC         = 1,        /* sync sample */
     ISOM_SAMPLE_RANDOM_ACCESS_TYPE_CLOSED_RAP   = 1,        /* the first sample of a closed GOP */
-    ISOM_SAMPLE_RANDOM_ACCESS_TYPE_OPEN_RAP     = 2,        /* the first sample of an open GOP  */
-    ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY     = 3,        /* starting point of gradual decoder refresh */
+    ISOM_SAMPLE_RANDOM_ACCESS_TYPE_OPEN_RAP     = 2,        /* the first sample of an open GOP */
+    ISOM_SAMPLE_RANDOM_ACCESS_TYPE_UNKNOWN_RAP  = 3,        /* the first sample of an open or closed GOP */
+    ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY     = 4,        /* starting point of gradual decoder refresh */
 
     QT_SAMPLE_RANDOM_ACCESS_TYPE_NONE           = 0,        /* not random access point */
     QT_SAMPLE_RANDOM_ACCESS_TYPE_SYNC           = 1,        /* sync sample */
     QT_SAMPLE_RANDOM_ACCESS_TYPE_PARTIAL_SYNC   = 2,        /* partial sync sample */
     QT_SAMPLE_RANDOM_ACCESS_TYPE_CLOSED_RAP     = 1,        /* the first sample of a closed GOP */
-    QT_SAMPLE_RANDOM_ACCESS_TYPE_OPEN_RAP       = 2,        /* the first sample of an open GOP  */
+    QT_SAMPLE_RANDOM_ACCESS_TYPE_OPEN_RAP       = 2,        /* the first sample of an open GOP */
 } lsmash_random_access_type;
 
 
