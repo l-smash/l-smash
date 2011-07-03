@@ -44,7 +44,7 @@ EXE=.exe
 endif
 endif #ifeq ($(CROSS),)
 
-SRCS=isom.c utils.c mp4sys.c mp4a.c importer.c summary.c print.c read.c
+SRCS=isom.c utils.c mp4sys.c mp4a.c importer.c summary.c print.c read.c timeline.c
 OBJS=$(SRCS:%.c=%.o)
 #TARGET=lsmash$(EXE)
 
@@ -58,13 +58,17 @@ SRC_BOXDUMPER=boxdumper.c
 OBJ_BOXDUMPER=$(SRC_BOXDUMPER:%.c=%.o)
 TARGET_BOXDUMPER=$(SRC_BOXDUMPER:%.c=%$(EXE))
 
+SRC_REMUXER=remuxer.c
+OBJ_REMUXER=$(SRC_REMUXER:%.c=%.o)
+TARGET_REMUXER=$(SRC_REMUXER:%.c=%$(EXE))
+
 SRCS_ALL=$(SRCS) $(SRC_AUDIOMUXER) $(SRC_BOXDUMPER)
 OBJS_ALL=$(SRCS_ALL:%.c=%.o)
 
 #### main rules ####
 
 # should have distclean, install, uninstall in the future
-.PHONY: all lib tools audiomuxer boxdumper dep depend clean info
+.PHONY: all lib tools audiomuxer boxdumper remuxer dep depend clean info
 
 all: info tools
 
@@ -74,11 +78,13 @@ info:
 
 lib: $(TARGET_LIB)
 
-tools: $(TARGET_AUDIOMUXER) $(TARGET_BOXDUMPER)
+tools: $(TARGET_AUDIOMUXER) $(TARGET_BOXDUMPER) $(TARGET_REMUXER)
 
 audiomuxer: $(TARGET_AUDIOMUXER)
 
 boxdumper: $(TARGET_BOXDUMPER)
+
+remuxer: $(TARGET_REMUXER)
 
 $(TARGET_LIB): .depend $(OBJS)
 	@$(ECHO) "AR: $@"
@@ -97,6 +103,14 @@ endif
 $(TARGET_BOXDUMPER): $(OBJ_BOXDUMPER) $(TARGET_LIB)
 	@$(ECHO) "LINK: $@"
 	@$(ECHO) "$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $+ $(EXTRALIBS)"
+	@$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $+ $(EXTRALIBS)
+ifneq ($(DEBUG),YES)
+	@$(ECHO) "STRIP: $@"
+	@$(STRIP) $@
+endif
+
+$(TARGET_REMUXER): $(OBJ_REMUXER) $(TARGET_LIB)
+	@$(ECHO) "LINK: $@"
 	@$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $+ $(EXTRALIBS)
 ifneq ($(DEBUG),YES)
 	@$(ECHO) "STRIP: $@"
@@ -125,4 +139,4 @@ endif
 
 #### clean stuff ####
 clean:
-	rm -f $(OBJS_ALL) $(TARGET_LIB) $(TARGET_AUDIOMUXER) $(TARGET_BOXDUMPER) .depend
+	rm -f $(OBJS_ALL) $(TARGET_LIB) $(TARGET_AUDIOMUXER) $(TARGET_BOXDUMPER) $(TARGET_REMUXER) .depend

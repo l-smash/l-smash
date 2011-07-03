@@ -92,8 +92,8 @@ typedef struct {
     mp4sys_descriptor_head_t header;
     lsmash_mp4sys_object_type_indication objectTypeIndication;
     lsmash_mp4sys_stream_type streamType;
-    // uint8_t upStream; /* bit(1), always 0 in this muxer, used for interactive contents. */
-    // uint8_t reserved=1; /* const bit(1) */
+    uint8_t upStream; /* bit(1), always 0 in this muxer, used for interactive contents. */
+    uint8_t reserved; /* const bit(1), always 1. */
     uint32_t bufferSizeDB; /* maybe CPB size in bytes, NOT bits. */
     uint32_t maxBitrate;
     uint32_t avgBitrate; /* 0 if VBR */
@@ -108,9 +108,39 @@ typedef struct {
 /* SLConfigDescriptor */
 typedef struct {
     mp4sys_descriptor_head_t header;
-    uint8_t predefined; /* MP4 file that does not use URL_Flag shall have constant value 0x02 */
-    /* custom values may be placed here if predefined == 0, but we need not care in MP4 files
-       without external references */
+    uint8_t predefined;     /* default the values from a set of predefined parameter sets as detailed below.
+                             *  0x00        : Custum
+                             *  0x01        : null SL packet header
+                             *  0x02        : Reserved for use in MP4 files
+                             *  0x03 - 0xFF : Reserved for ISO use
+                             * MP4 file that does not use URL_Flag shall have constant value 0x02. */
+    /* Custom values
+     * The following fields are placed if predefined == 0x00. */
+    unsigned useAccessUnitStartFlag       : 1;
+    unsigned useAccessUnitEndFlag         : 1;
+    unsigned useRandomAccessPointFlag     : 1;
+    unsigned hasRandomAccessUnitsOnlyFlag : 1;
+    unsigned usePaddingFlag               : 1;
+    unsigned useTimeStampsFlag            : 1;
+    unsigned useIdleFlag                  : 1;
+    unsigned durationFlag                 : 1;
+    uint32_t timeStampResolution;
+    uint32_t OCRResolution;
+    uint8_t  timeStampLength;
+    uint8_t  OCRLength;
+    uint8_t  AU_Length;
+    uint8_t  instantBitrateLength;
+    unsigned degradationPriorityLength    : 4;
+    unsigned AU_seqNumLength              : 5;
+    unsigned packetSeqNumLength           : 5;
+    unsigned reserved                     : 2;
+    /* The following fields are placed if durationFlag is true. */
+    uint32_t timeScale;
+    uint16_t accessUnitDuration;
+    uint16_t compositionUnitDuration;
+    /* The following fields are placed if useTimeStampsFlag is false. */
+    uint64_t startDecodingTimeStamp;
+    uint64_t startCompositionTimeStamp;
 } mp4sys_SLConfigDescriptor_t;
 
 /* ES_Descriptor */
@@ -118,25 +148,16 @@ typedef struct
 {
     mp4sys_descriptor_head_t header;
     uint16_t ES_ID;
-    // uint8_t ESD_flags; /* this 8bit value is always 0 in this muxer, see below for detail */
-    /*
-    typedef struct TAG_ESD_flags{
-        unsigned streamDependenceFlag : 1; // no stream depencies between streams in this muxer, ES_ID of another elementary stream
-        unsigned URL_Flag             : 1; // no external URL referencing stream in MP4
-        unsigned OCRstreamFlag        : 1; // no Object Clock Reference stream in this muxer (shall be false in MP4, useful if we're importing from MPEG-2?)
-        unsigned streamPriority       : 5; // no priority among streams in this muxer, higher is important
-    } ESD_flags;
-    // These are omitted according to ESD_flags == 0
-    //if(streamDependenceFlag)
-        uint16_t dependsOn_ES_ID; // bit(16)
-    //if(URL_Flag)
-        uint8_t URLlength; // bit(8)
-        char URLstring[256]; // bit(8)[], UTF-8 encoded URL
-    //if(OCR_ES_Flag)
-        uint16_t OCR_ES_Id;
-    */
-    mp4sys_DecoderConfigDescriptor_t* decConfigDescr; /* cannot be NULL. */
-    mp4sys_SLConfigDescriptor_t* slConfigDescr;
+    unsigned streamDependenceFlag : 1;  /* no stream depencies between streams in this muxer, ES_ID of another elementary stream */
+    unsigned URL_Flag             : 1;  /* no external URL referencing stream in MP4 */
+    unsigned OCRstreamFlag        : 1;  /* no Object Clock Reference stream in this muxer (shall be false in MP4, useful if we're importing from MPEG-2?) */
+    unsigned streamPriority       : 5;  /* no priority among streams in this muxer, higher is important */
+    uint16_t dependsOn_ES_ID;
+    uint8_t URLlength;
+    uint8_t URLstring[255];
+    uint16_t OCR_ES_Id;
+    mp4sys_DecoderConfigDescriptor_t *decConfigDescr; /* cannot be NULL. */
+    mp4sys_SLConfigDescriptor_t *slConfigDescr;
     /* descriptors below are not mandatory, I think Language Descriptor may somewhat useful */
     /*
     IPI_DescrPointer ipiPtr[0 .. 1];               // used to indicate using other ES's IP_IdentificationDataSet
@@ -168,10 +189,10 @@ typedef struct {
         char URLstring[256]; // bit(8)[]
     }*/
     /* else { */
-        mp4sys_ODProfileLevelIndication ODProfileLevelIndication;
-        mp4sys_sceneProfileLevelIndication sceneProfileLevelIndication;
-        mp4a_audioProfileLevelIndication audioProfileLevelIndication;
-        mp4sys_visualProfileLevelIndication visualProfileLevelIndication;
+        mp4sys_ODProfileLevelIndication       ODProfileLevelIndication;
+        mp4sys_sceneProfileLevelIndication    sceneProfileLevelIndication;
+        mp4a_audioProfileLevelIndication      audioProfileLevelIndication;
+        mp4sys_visualProfileLevelIndication   visualProfileLevelIndication;
         mp4sys_graphicsProfileLevelIndication graphicsProfileLevelIndication;
         lsmash_entry_list_t* esDescr; /* List of ES_ID_Inc, not ES_Descriptor defined in 14496-1. 14496-14 overrides. */
         // OCI_Descriptor ociDescr[0 .. 255];
@@ -425,7 +446,7 @@ static inline uint32_t mp4sys_get_descriptor_size( uint32_t payload_size_in_byte
     /* descriptor length will be split into 7bits
        see 14496-1 Expandable classes and Length encoding of descriptors and commands */
     uint32_t i;
-    for( i = 1; payload_size_in_byte >> ( 7 * i ) ; i++);
+    for( i = 1; payload_size_in_byte >> ( 7 * i ); i++ );
     return payload_size_in_byte + i + 1; /* +1 means tag's space */
 #endif
 }
@@ -458,8 +479,16 @@ static uint32_t mp4sys_update_SLConfigDescriptor_size( mp4sys_ES_Descriptor_t* e
         return 0;
     if( !esd->slConfigDescr )
         return 0;
-    esd->slConfigDescr->header.size = 1;
-    return mp4sys_get_descriptor_size( esd->slConfigDescr->header.size );
+    mp4sys_SLConfigDescriptor_t *slcd = esd->slConfigDescr;
+    uint32_t size = 1;
+    if( slcd->predefined == 0x00 )
+        size += 15;
+    if( slcd->durationFlag )
+        size += 8;
+    if( !slcd->useTimeStampsFlag )
+        size += (2 * slcd->timeStampLength + 7) / 8;
+    esd->slConfigDescr->header.size = size;
+    return mp4sys_get_descriptor_size( size );
 }
 
 uint32_t mp4sys_update_ES_Descriptor_size( mp4sys_ES_Descriptor_t* esd )
@@ -467,6 +496,12 @@ uint32_t mp4sys_update_ES_Descriptor_size( mp4sys_ES_Descriptor_t* esd )
     if( !esd )
         return 0;
     uint32_t size = 3;
+    if( esd->streamDependenceFlag )
+        size += 2;
+    if( esd->URL_Flag )
+        size += 1 + esd->URLlength;
+    if( esd->OCRstreamFlag )
+        size += 2;
     size += mp4sys_update_DecoderConfigDescriptor_size( esd );
     size += mp4sys_update_SLConfigDescriptor_size( esd );
     esd->header.size = size;
@@ -546,7 +581,11 @@ static int mp4sys_write_DecoderConfigDescriptor( lsmash_bs_t *bs, mp4sys_Decoder
     debug_if( mp4sys_put_descriptor_header( bs, &dcd->header ) )
         return -1;
     lsmash_bs_put_byte( bs, dcd->objectTypeIndication );
-    lsmash_bs_put_byte( bs, (dcd->streamType << 2) | 0x01 ); /* contains upStream<1> = 0, reserved<1> = 1 */
+    uint8_t temp;
+    temp  = (dcd->streamType << 2) & 0x3F;
+    temp |= (dcd->upStream   << 1) & 0x01;
+    temp |=  dcd->reserved         & 0x01;
+    lsmash_bs_put_byte( bs, temp );
     lsmash_bs_put_be24( bs, dcd->bufferSizeDB );
     lsmash_bs_put_be32( bs, dcd->maxBitrate );
     lsmash_bs_put_be32( bs, dcd->avgBitrate );
@@ -565,6 +604,47 @@ static int mp4sys_write_SLConfigDescriptor( lsmash_bs_t *bs, mp4sys_SLConfigDesc
     debug_if( mp4sys_put_descriptor_header( bs, &slcd->header ) )
         return -1;
     lsmash_bs_put_byte( bs, slcd->predefined );
+    if( slcd->predefined == 0x00 )
+    {
+        uint8_t temp8;
+        temp8  = slcd->useAccessUnitStartFlag       << 7;
+        temp8 |= slcd->useAccessUnitEndFlag         << 6;
+        temp8 |= slcd->useRandomAccessPointFlag     << 5;
+        temp8 |= slcd->hasRandomAccessUnitsOnlyFlag << 4;
+        temp8 |= slcd->usePaddingFlag               << 3;
+        temp8 |= slcd->useTimeStampsFlag            << 2;
+        temp8 |= slcd->useIdleFlag                  << 1;
+        temp8 |= slcd->durationFlag;
+        lsmash_bs_put_byte( bs, temp8 );
+        lsmash_bs_put_be32( bs, slcd->timeStampResolution );
+        lsmash_bs_put_be32( bs, slcd->OCRResolution );
+        lsmash_bs_put_byte( bs, slcd->timeStampLength );
+        lsmash_bs_put_byte( bs, slcd->OCRLength );
+        lsmash_bs_put_byte( bs, slcd->AU_Length );
+        lsmash_bs_put_byte( bs, slcd->instantBitrateLength );
+        uint16_t temp16;
+        temp16  = slcd->degradationPriorityLength << 12;
+        temp16 |= slcd->AU_seqNumLength           << 7;
+        temp16 |= slcd->packetSeqNumLength        << 2;
+        temp16 |= slcd->reserved;
+        lsmash_bs_put_be32( bs, temp16 );
+    }
+    if( slcd->durationFlag )
+    {
+        lsmash_bs_put_be32( bs, slcd->timeScale );
+        lsmash_bs_put_be16( bs, slcd->accessUnitDuration );
+        lsmash_bs_put_be16( bs, slcd->compositionUnitDuration );
+    }
+    if( !slcd->useTimeStampsFlag )
+    {
+        lsmash_bits_t *bits = lsmash_bits_create( bs );
+        if( !bits )
+            return -1;
+        lsmash_bits_put( bits, slcd->startDecodingTimeStamp,    slcd->timeStampLength );
+        lsmash_bits_put( bits, slcd->startCompositionTimeStamp, slcd->timeStampLength );
+        lsmash_bits_put_align( bits );
+        lsmash_bits_cleanup( bits );
+    }
     return lsmash_bs_write_data( bs );
 }
 
@@ -575,7 +655,21 @@ int mp4sys_write_ES_Descriptor( lsmash_bs_t *bs, mp4sys_ES_Descriptor_t* esd )
     debug_if( mp4sys_put_descriptor_header( bs, &esd->header ) )
         return -1;
     lsmash_bs_put_be16( bs, esd->ES_ID );
-    lsmash_bs_put_byte( bs, 0 ); /* streamDependenceFlag<1>, URL_Flag<1>, OCRstreamFlag<1>, streamPriority<5> */
+    uint8_t temp;
+    temp  = esd->streamDependenceFlag << 7;
+    temp |= esd->URL_Flag             << 6;
+    temp |= esd->OCRstreamFlag        << 5;
+    temp |= esd->streamPriority;
+    lsmash_bs_put_byte( bs, temp );
+    if( esd->streamDependenceFlag )
+        lsmash_bs_put_be16( bs, esd->dependsOn_ES_ID );
+    if( esd->URL_Flag )
+    {
+        lsmash_bs_put_byte( bs, esd->URLlength );
+        lsmash_bs_put_bytes( bs, esd->URLstring, esd->URLlength );
+    }
+    if( esd->OCRstreamFlag )
+        lsmash_bs_put_be16( bs, esd->OCR_ES_Id );
     /* here, some syntax elements are omitted due to previous flags (all 0) */
     if( lsmash_bs_write_data( bs ) )
         return -1;
@@ -630,6 +724,214 @@ int mp4sys_write_ObjectDescriptor( lsmash_bs_t *bs, mp4sys_ObjectDescriptor_t* o
         return -1;
     return mp4sys_write_ES_ID_Incs( bs, od );
 }
+
+#ifdef LSMASH_DEMUXER_ENABLED
+static int mp4sys_copy_DecoderSpecificInfo( mp4sys_ES_Descriptor_t *dst, mp4sys_ES_Descriptor_t *src )
+{
+    if( !src || !src->decConfigDescr || !dst || !dst->decConfigDescr
+     || mp4sys_remove_DecoderSpecificInfo( dst ) )
+        return -1;
+    mp4sys_DecoderSpecificInfo_t *dsi = src->decConfigDescr->decSpecificInfo;
+    if( !dsi || !dsi->data || !dsi->header.size )
+        return 0;
+    return mp4sys_add_DecoderSpecificInfo( dst, dsi->data, dsi->header.size );
+}
+
+static int mp4sys_copy_DecoderConfigDescriptor( mp4sys_ES_Descriptor_t *dst, mp4sys_ES_Descriptor_t *src )
+{
+    if( !src || !dst
+     || mp4sys_remove_DecoderConfigDescriptor( dst ) )
+        return -1;
+    if( !src->decConfigDescr )
+        return 0;
+    if( mp4sys_add_DecoderConfigDescriptor( dst, 0, 0, 0, 0, 0 ) )
+        return -1;
+    *dst->decConfigDescr = *src->decConfigDescr;
+    dst->decConfigDescr->decSpecificInfo = NULL;
+    return mp4sys_copy_DecoderSpecificInfo( dst, src );
+}
+
+static int mp4sys_copy_SLConfigDescriptor( mp4sys_ES_Descriptor_t *dst, mp4sys_ES_Descriptor_t *src )
+{
+    if( !src || !dst
+     || mp4sys_remove_SLConfigDescriptor( dst ) )
+        return -1;
+    if( !src->slConfigDescr )
+        return 0;
+    if( mp4sys_add_SLConfigDescriptor( dst ) )
+        return -1;
+    *dst->slConfigDescr = *src->slConfigDescr;
+    return 0;
+}
+
+mp4sys_ES_Descriptor_t *mp4sys_duplicate_ES_Descriptor( mp4sys_ES_Descriptor_t *src )
+{
+    if( !src )
+        return NULL;
+    mp4sys_ES_Descriptor_t *dst = mp4sys_create_ES_Descriptor( 0 );
+    if( !dst )
+        return NULL;
+    *dst = *src;
+    dst->decConfigDescr = NULL;
+    dst->slConfigDescr = NULL;
+    if( mp4sys_copy_DecoderConfigDescriptor( dst, src )
+     || mp4sys_copy_SLConfigDescriptor( dst, src ) )
+    {
+        mp4sys_remove_ES_Descriptor( dst );
+        return NULL;
+    }
+    return dst;
+}
+
+static void mp4sys_get_descriptor_header( lsmash_bs_t *bs, mp4sys_descriptor_head_t* header )
+{
+    header->tag  = lsmash_bs_get_byte( bs );
+    uint8_t temp = lsmash_bs_get_byte( bs );
+    int nextByte = temp & 0x80;
+    uint32_t sizeOfInstance = temp & 0x7F;
+    while( nextByte )
+    {
+        temp = lsmash_bs_get_byte( bs );
+        nextByte = temp & 0x80;
+        sizeOfInstance = (sizeOfInstance << 7) | (temp & 0x7F);
+    }
+    header->size = sizeOfInstance;
+}
+
+static int mp4sys_get_DecoderSpecificInfo( lsmash_bs_t *bs, mp4sys_ES_Descriptor_t *esd )
+{
+    mp4sys_DecoderSpecificInfo_t *dsi = (mp4sys_DecoderSpecificInfo_t *)malloc( sizeof(mp4sys_DecoderSpecificInfo_t) );
+    if( !dsi )
+        return -1;
+    memset( dsi, 0, sizeof(mp4sys_DecoderSpecificInfo_t) );
+    esd->decConfigDescr->decSpecificInfo = dsi;
+    mp4sys_get_descriptor_header( bs, &dsi->header );
+    if( dsi->header.size )
+    {
+        dsi->data = lsmash_bs_get_bytes( bs, dsi->header.size );
+        if( !dsi->data )
+        {
+            mp4sys_remove_DecoderSpecificInfo( esd );
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static int mp4sys_get_DecoderConfigDescriptor( lsmash_bs_t *bs, mp4sys_ES_Descriptor_t *esd )
+{
+    mp4sys_DecoderConfigDescriptor_t *dcd = (mp4sys_DecoderConfigDescriptor_t *)malloc( sizeof(mp4sys_DecoderConfigDescriptor_t) );
+    if( !dcd )
+        return -1;
+    memset( dcd, 0, sizeof(mp4sys_DecoderConfigDescriptor_t) );
+    esd->decConfigDescr = dcd;
+    mp4sys_get_descriptor_header( bs, &dcd->header );
+    dcd->objectTypeIndication = lsmash_bs_get_byte( bs );
+    uint8_t temp              = lsmash_bs_get_byte( bs );
+    dcd->streamType = (temp >> 2) & 0x3F;
+    dcd->upStream   = (temp >> 1) & 0x01;
+    dcd->reserved   =  temp       & 0x01;
+    dcd->bufferSizeDB         = lsmash_bs_get_be24( bs );
+    dcd->maxBitrate           = lsmash_bs_get_be32( bs );
+    dcd->avgBitrate           = lsmash_bs_get_be32( bs );
+    if( dcd->header.size > 13
+     && mp4sys_get_DecoderSpecificInfo( bs, esd ) )
+    {
+        mp4sys_remove_DecoderConfigDescriptor( esd );
+        return -1;
+    }
+    return 0;
+}
+
+static int mp4sys_get_SLConfigDescriptor( lsmash_bs_t *bs, mp4sys_ES_Descriptor_t *esd )
+{
+    mp4sys_SLConfigDescriptor_t *slcd = (mp4sys_SLConfigDescriptor_t *)malloc( sizeof(mp4sys_SLConfigDescriptor_t) );
+    if( !slcd )
+        return -1;
+    memset( slcd, 0, sizeof(mp4sys_SLConfigDescriptor_t) );
+    esd->slConfigDescr = slcd;
+    mp4sys_get_descriptor_header( bs, &slcd->header );
+    slcd->predefined = lsmash_bs_get_byte( bs );
+    if( slcd->predefined == 0x00 )
+    {
+        uint8_t temp8              = lsmash_bs_get_byte( bs );
+        slcd->useAccessUnitStartFlag       = (temp8 >> 7) & 0x01;
+        slcd->useAccessUnitEndFlag         = (temp8 >> 6) & 0x01;
+        slcd->useRandomAccessPointFlag     = (temp8 >> 5) & 0x01;
+        slcd->hasRandomAccessUnitsOnlyFlag = (temp8 >> 4) & 0x01;
+        slcd->usePaddingFlag               = (temp8 >> 3) & 0x01;
+        slcd->useTimeStampsFlag            = (temp8 >> 2) & 0x01;
+        slcd->useIdleFlag                  = (temp8 >> 1) & 0x01;
+        slcd->durationFlag                 =  temp8       & 0x01;
+        slcd->timeStampResolution  = lsmash_bs_get_be32( bs );
+        slcd->OCRResolution        = lsmash_bs_get_be32( bs );
+        slcd->timeStampLength      = lsmash_bs_get_byte( bs );
+        slcd->OCRLength            = lsmash_bs_get_byte( bs );
+        slcd->AU_Length            = lsmash_bs_get_byte( bs );
+        slcd->instantBitrateLength = lsmash_bs_get_byte( bs );
+        uint16_t temp16            = lsmash_bs_get_be16( bs );
+        slcd->degradationPriorityLength = (temp16 >> 12) & 0x0F;
+        slcd->AU_seqNumLength           = (temp16 >>  7) & 0x1F;
+        slcd->packetSeqNumLength        = (temp16 >>  2) & 0x1F;
+        slcd->reserved                  =  temp16        & 0x03;
+    }
+    else if( slcd->predefined == 0x01 )
+    {
+        slcd->timeStampResolution  = 1000;
+        slcd->timeStampLength      = 32;
+    }
+    else if( slcd->predefined == 0x02 )
+        slcd->useTimeStampsFlag = 1;
+    if( slcd->durationFlag )
+    {
+        slcd->timeScale               = lsmash_bs_get_be32( bs );
+        slcd->accessUnitDuration      = lsmash_bs_get_be16( bs );
+        slcd->compositionUnitDuration = lsmash_bs_get_be16( bs );
+    }
+    if( !slcd->useTimeStampsFlag )
+    {
+        lsmash_bits_t *bits = lsmash_bits_create( bs );
+        if( !bits )
+            return -1;
+        slcd->startDecodingTimeStamp    = lsmash_bits_get( bits, slcd->timeStampLength );
+        slcd->startCompositionTimeStamp = lsmash_bits_get( bits, slcd->timeStampLength );
+        lsmash_bits_cleanup( bits );
+    }
+    return 0;
+}
+
+mp4sys_ES_Descriptor_t *mp4sys_get_ES_Descriptor( lsmash_bs_t *bs )
+{
+    mp4sys_ES_Descriptor_t *esd = (mp4sys_ES_Descriptor_t *)malloc( sizeof(mp4sys_ES_Descriptor_t) );
+    if( !esd )
+        return NULL;
+    memset( esd, 0, sizeof(mp4sys_ES_Descriptor_t) );
+    mp4sys_get_descriptor_header( bs, &esd->header );
+    esd->ES_ID   = lsmash_bs_get_be16( bs );
+    uint8_t temp = lsmash_bs_get_byte( bs );
+    esd->streamDependenceFlag = (temp >> 7) & 0x01;
+    esd->URL_Flag             = (temp >> 6) & 0x01;
+    esd->OCRstreamFlag        = (temp >> 5) & 0x01;
+    esd->streamPriority       =  temp       & 0x1F;
+    if( esd->streamDependenceFlag )
+        esd->dependsOn_ES_ID = lsmash_bs_get_be16( bs );
+    if( esd->URL_Flag )
+    {
+        esd->URLlength = lsmash_bs_get_byte( bs );
+        for( uint8_t i = 0; i < esd->URLlength; i++ )
+            esd->URLstring[i] = lsmash_bs_get_byte( bs );
+    }
+    if( esd->OCRstreamFlag )
+        esd->OCR_ES_Id = lsmash_bs_get_be16( bs );
+    if( mp4sys_get_DecoderConfigDescriptor( bs, esd )
+     || mp4sys_get_SLConfigDescriptor( bs, esd ) )
+    {
+        mp4sys_remove_ES_Descriptor( esd );
+        return NULL;
+    }
+    return esd;
+}
+#endif /* LSMASH_DEMUXER_ENABLED */
 
 /**** following functions are for facilitation purpose ****/
 

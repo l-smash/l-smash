@@ -1528,7 +1528,7 @@ int lsmash_print_movie( lsmash_root_t *root )
 
 static isom_print_box_t isom_select_print_func( isom_box_t *box )
 {
-    if( box->manager & 0x01 )
+    if( box->manager & LSMASH_UNKNOWN_BOX )
         return isom_print_unknown;
     if( box->parent )
     {
@@ -1786,7 +1786,7 @@ static void isom_remove_print_func( isom_print_entry_t *data )
 {
     if( !data || !data->box )
         return;
-    if( data->box->manager & 0x02 )
+    if( data->box->manager & LSMASH_ABSENT_IN_ROOT )
         free( data->box );      /* free flagged box */
     free( data );
 }

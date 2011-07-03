@@ -200,11 +200,14 @@ typedef enum
 
     ISOM_BOX_TYPE_CHPL  = LSMASH_4CC( 'c', 'h', 'p', 'l' ),
 
+    ISOM_BOX_TYPE_ALAC  = LSMASH_4CC( 'a', 'l', 'a', 'c' ),
     ISOM_BOX_TYPE_DAC3  = LSMASH_4CC( 'd', 'a', 'c', '3' ),
     ISOM_BOX_TYPE_DAMR  = LSMASH_4CC( 'd', 'a', 'm', 'r' ),
+    ISOM_BOX_TYPE_DEC3  = LSMASH_4CC( 'd', 'e', 'c', '3' ),
 
     ISOM_BOX_TYPE_FTAB  = LSMASH_4CC( 'f', 't', 'a', 'b' ),
 
+    QT_BOX_TYPE_ALAC    = LSMASH_4CC( 'a', 'l', 'a', 'c' ),
     QT_BOX_TYPE_CHAN    = LSMASH_4CC( 'c', 'h', 'a', 'n' ),
     QT_BOX_TYPE_CLEF    = LSMASH_4CC( 'c', 'l', 'e', 'f' ),
     QT_BOX_TYPE_CLIP    = LSMASH_4CC( 'c', 'l', 'i', 'p' ),
@@ -1356,6 +1359,7 @@ void lsmash_delete_sample( lsmash_sample_t *sample );
 int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_t *sample );
 int lsmash_flush_pooled_samples( lsmash_root_t *root, uint32_t track_ID, uint32_t last_sample_delta );
 int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux );
+void lsmash_discard_boxes( lsmash_root_t *root );
 void lsmash_destroy_root( lsmash_root_t *root );
 
 int lsmash_create_fragment_movie( lsmash_root_t *root );
@@ -1367,6 +1371,15 @@ void lsmash_delete_tyrant_chapter( lsmash_root_t *root );
 
 #ifdef LSMASH_DEMUXER_ENABLED
 int lsmash_print_movie( lsmash_root_t *root );
+
+int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_root_t *src, uint32_t src_track_ID );
+int lsmash_copy_decoder_specific_info( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_root_t *src, uint32_t src_track_ID );
+int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID );
+void lsmash_destruct_timeline( lsmash_root_t *root, uint32_t track_ID );
+int lsmash_get_last_sample_delta_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t *last_sample_delta );
+int lsmash_get_dts_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number, uint64_t *dts );
+lsmash_sample_t *lsmash_get_sample_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number );
+int lsmash_check_sample_existence_in_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number );
 #endif
 
 /* to facilitate to make exdata (typically DecoderSpecificInfo or AudioSpecificConfig). */

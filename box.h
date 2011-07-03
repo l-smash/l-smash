@@ -54,6 +54,9 @@ typedef struct isom_box_tag isom_box_t;
 #define ISOM_DEFAULT_FULLBOX_HEADER_SIZE      12
 #define ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE 16
 
+#define LSMASH_UNKNOWN_BOX    0x01
+#define LSMASH_ABSENT_IN_ROOT 0x02
+
 struct isom_box_tag
 {
     ISOM_FULLBOX_COMMON;
@@ -561,6 +564,9 @@ typedef struct
     isom_mp4a_t       *mp4a;            /* MPEG-4 Audio Box */
     isom_esds_t       *esds;            /* ES Descriptor Box */
     isom_terminator_t *terminator;      /* Terminator Box */
+
+        uint32_t exdata_length;
+        void *exdata;
 } isom_wave_t;
 
 /* Channel Compositor Box */
@@ -1390,6 +1396,7 @@ struct lsmash_root_tag
         uint8_t max_3gpp_version;           /* maximum 3GPP version */
         uint8_t max_isom_version;           /* maximum ISO Base Media file format version */
         lsmash_entry_list_t *print;
+        lsmash_entry_list_t *timeline;
 };
 
 /* Track Box */
@@ -1590,11 +1597,52 @@ enum qt_audio_format_flags_code
 
 int isom_is_fullbox( void *box );
 int isom_is_lpcm_audio( uint32_t type );
+
 void isom_init_box_common( void *box, void *parent, uint32_t type );
-void isom_remove_avcC_ps( isom_avcC_ps_entry_t *ps );
+
 int isom_check_compatibility( lsmash_root_t *root );
+
 char *isom_4cc2str( uint32_t fourcc );
 char *isom_unpack_iso_language( uint16_t language );
+
+isom_trak_entry_t *isom_get_trak( lsmash_root_t *root, uint32_t track_ID );
+isom_sgpd_entry_t *isom_get_sample_group_description( isom_stbl_t *stbl, uint32_t grouping_type );
+isom_sbgp_entry_t *isom_get_sample_to_group( isom_stbl_t *stbl, uint32_t grouping_type );
+
+isom_avcC_ps_entry_t *isom_create_ps_entry( uint8_t *ps, uint32_t ps_size );
+void isom_remove_avcC_ps( isom_avcC_ps_entry_t *ps );
+
+int isom_add_edts( isom_trak_entry_t *trak );
+int isom_add_elst( isom_edts_t *edts );
+int isom_add_clap( isom_visual_entry_t *visual );
+int isom_add_pasp( isom_visual_entry_t *visual );
+int isom_add_colr( isom_visual_entry_t *visual );
+int isom_add_stsl( isom_visual_entry_t *visual );
+int isom_add_avcC( isom_visual_entry_t *visual );
+int isom_add_btrt( isom_visual_entry_t *visual );
+int isom_add_wave( isom_audio_entry_t *audio );
+int isom_add_frma( isom_wave_t *wave );
+int isom_add_enda( isom_wave_t *wave );
+int isom_add_mp4a( isom_wave_t *wave );
+int isom_add_terminator( isom_wave_t *wave );
+int isom_add_chan( isom_audio_entry_t *audio );
+int isom_add_ftab( isom_tx3g_entry_t *tx3g );
+
+void isom_remove_tapt( isom_tapt_t *tapt );
+void isom_remove_clap( isom_clap_t *clap );
+void isom_remove_pasp( isom_pasp_t *pasp );
+void isom_remove_colr( isom_colr_t *colr );
+void isom_remove_stsl( isom_stsl_t *stsl );
+void isom_remove_avcC( isom_avcC_t *avcC );
+void isom_remove_btrt( isom_btrt_t *btrt );
+void isom_remove_frma( isom_frma_t *frma );
+void isom_remove_enda( isom_enda_t *enda );
+void isom_remove_mp4a( isom_mp4a_t *mp4a );
+void isom_remove_terminator( isom_terminator_t *terminator );
+void isom_remove_wave( isom_wave_t *wave );
+void isom_remove_chan( isom_chan_t *chan );
+void isom_remove_ftab( isom_ftab_t *ftab );
+void isom_remove_sample_description( isom_sample_entry_t *sample );
 
 #define isom_create_box( box_name, parent_name, box_4cc ) \
     isom_##box_name##_t *(box_name) = malloc( sizeof(isom_##box_name##_t) ); \

@@ -30,6 +30,8 @@
 
 #include "box.h"
 #include "print.h"
+#include "mp4a.h"
+#include "mp4sys.h"
 
 
 static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, uint64_t parent_pos, int level );
@@ -146,7 +148,7 @@ static int isom_read_unknown_box( lsmash_root_t *root, isom_box_t *box, isom_box
     unknown->parent = parent;
     unknown->size = box->size;
     unknown->type = box->type;
-    unknown->manager = 0x03;   /* add unknown box flag + free flag */
+    unknown->manager |= LSMASH_UNKNOWN_BOX | LSMASH_ABSENT_IN_ROOT;
     if( isom_add_print_func( root, unknown, level ) )
     {
         free( unknown );
@@ -240,29 +242,11 @@ static int isom_read_iods( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     memset( iods, 0, sizeof(isom_box_t) );
     lsmash_bs_t *bs = root->bs;
     isom_skip_box_rest( bs, box );
-    box->manager |= 0x02;       /* add free flag */
+    box->manager |= LSMASH_ABSENT_IN_ROOT;
     isom_box_common_copy( iods, box );
     if( isom_add_print_func( root, iods, level ) )
     {
         free( iods );
-        return -1;
-    }
-    return 0;
-}
-
-static int isom_read_esds( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
-{
-    isom_box_t *esds = malloc( sizeof(isom_box_t) );
-    if( !esds )
-        return -1;
-    memset( esds, 0, sizeof(isom_box_t) );
-    lsmash_bs_t *bs = root->bs;
-    isom_skip_box_rest( bs, box );
-    box->manager |= 0x02;       /* add free flag */
-    isom_box_common_copy( esds, box );
-    if( isom_add_print_func( root, esds, level ) )
-    {
-        free( esds );
         return -1;
     }
     return 0;
@@ -1009,6 +993,43 @@ static int isom_read_visual_description( lsmash_root_t *root, isom_box_t *box, i
     return isom_read_children( root, box, visual, level );
 }
 
+static int isom_read_esds( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_CODEC_TYPE_MP4V_VIDEO
+     && parent->type != ISOM_CODEC_TYPE_MP4A_AUDIO
+     && parent->type != ISOM_CODEC_TYPE_M4AE_AUDIO
+     && parent->type != ISOM_CODEC_TYPE_MP4S_SYSTEM
+     && parent->type != QT_BOX_TYPE_WAVE )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_esds_t *esds = malloc( sizeof(isom_esds_t) );
+    if( !esds )
+        return -1;
+    memset( esds, 0, sizeof(isom_esds_t) );
+    switch( parent->type )
+    {
+        case ISOM_CODEC_TYPE_MP4V_VIDEO :
+            ((isom_visual_entry_t *)parent)->esds = esds;
+            break;
+        case ISOM_CODEC_TYPE_MP4A_AUDIO :
+        case ISOM_CODEC_TYPE_M4AE_AUDIO :
+            ((isom_audio_entry_t *)parent)->esds = esds;
+            break;
+        case QT_BOX_TYPE_WAVE :
+            ((isom_wave_t *)parent)->esds = esds;
+            break;
+        case ISOM_CODEC_TYPE_MP4S_SYSTEM :
+            ((isom_mp4s_entry_t *)parent)->esds = esds;
+            break;
+    }
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    esds->ES = mp4sys_get_ES_Descriptor( bs );
+    if( !esds->ES )
+        return -1;
+    isom_box_common_copy( esds, box );
+    return isom_add_print_func( root, esds, level );
+}
+
 static int isom_read_btrt( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( btrt, parent, box->type );
@@ -1250,15 +1271,79 @@ static int isom_read_enda( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_audio_specific( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != QT_BOX_TYPE_WAVE )
-        return isom_read_unknown_box( root, box, parent, level );
+    struct
+    {
+        uint32_t white_parent;
+        uint32_t white_box;
+    } white_list[] =
+        {
+            { ISOM_CODEC_TYPE_AC_3_AUDIO, ISOM_BOX_TYPE_DAC3 },
+            { ISOM_CODEC_TYPE_ALAC_AUDIO, ISOM_BOX_TYPE_ALAC },
+            { ISOM_CODEC_TYPE_EC_3_AUDIO, ISOM_BOX_TYPE_DEC3 },
+            { ISOM_CODEC_TYPE_SAMR_AUDIO, ISOM_BOX_TYPE_DAMR },
+            { ISOM_CODEC_TYPE_SAWB_AUDIO, ISOM_BOX_TYPE_DAMR },
+            { QT_BOX_TYPE_WAVE,           QT_BOX_TYPE_MP4A },
+            { QT_BOX_TYPE_WAVE,           QT_BOX_TYPE_ALAC },
+            { 0 }
+        };
+    for( int i = 0; 1 ; i++ )
+    {
+        if( !white_list[i].white_parent )
+            return isom_read_unknown_box( root, box, parent, level );
+        if( parent->type == white_list[i].white_parent && box->type == white_list[i].white_box )
+            break;
+    }
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    uint32_t exdata_length;
+    void *exdata = lsmash_bs_export_data( bs, &exdata_length );
+    if( !exdata )
+        return -1;
+    if( parent->type == QT_BOX_TYPE_WAVE )
+    {
+        isom_wave_t *wave = (isom_wave_t *)parent;
+        if( wave->exdata )
+        {
+            /* Append exdata. */
+            void *temp = realloc( wave->exdata, wave->exdata_length + exdata_length );
+            if( !temp )
+                free( exdata );
+            wave->exdata = temp;
+            memcpy( wave->exdata + wave->exdata_length, exdata, exdata_length );
+            wave->exdata_length += exdata_length;
+            free( exdata );
+        }
+        else
+        {
+            wave->exdata_length = exdata_length;
+            wave->exdata = exdata;
+        }
+    }
+    else
+    {
+        isom_audio_entry_t *audio = (isom_audio_entry_t *)parent;
+        if( audio->exdata )
+        {
+            /* Append exdata. */
+            void *temp = realloc( audio->exdata, audio->exdata_length + exdata_length );
+            if( !temp )
+                free( exdata );
+            audio->exdata = temp;
+            memcpy( audio->exdata + audio->exdata_length, exdata, exdata_length );
+            audio->exdata_length += exdata_length;
+            free( exdata );
+        }
+        else
+        {
+            audio->exdata_length = exdata_length;
+            audio->exdata = exdata;
+        }
+    }
     isom_box_t *specific = malloc( sizeof(isom_box_t) );
     if( !specific )
         return -1;
     memset( specific, 0, sizeof(isom_box_t) );
-    lsmash_bs_t *bs = root->bs;
-    isom_skip_box_rest( bs, box );
-    box->manager |= 0x02;       /* add free flag */
+    box->manager |= LSMASH_ABSENT_IN_ROOT;
     isom_box_common_copy( specific, box );
     if( isom_add_print_func( root, specific, level ) )
     {
@@ -2152,7 +2237,7 @@ static int isom_read_free( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     memset( skip, 0, sizeof(isom_box_t) );
     lsmash_bs_t *bs = root->bs;
     isom_skip_box_rest( bs, box );
-    box->manager |= 0x02;       /* add free flag */
+    box->manager |= LSMASH_ABSENT_IN_ROOT;
     isom_box_common_copy( skip, box );
     if( isom_add_print_func( root, skip, level ) )
     {
@@ -2172,7 +2257,7 @@ static int isom_read_mdat( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     memset( mdat, 0, sizeof(isom_box_t) );
     lsmash_bs_t *bs = root->bs;
     isom_skip_box_rest( bs, box );
-    box->manager |= 0x02;       /* add free flag */
+    box->manager |= LSMASH_ABSENT_IN_ROOT;
     isom_box_common_copy( mdat, box );
     if( isom_add_print_func( root, mdat, level ) )
     {
@@ -2531,8 +2616,15 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
         case ISOM_BOX_TYPE_MFRO :
             return isom_read_mfro( root, box, parent, level );
         default :
-            return isom_read_unknown_box( root, box, parent, level );
+            break;
     }
+    if( parent->type == ISOM_CODEC_TYPE_AC_3_AUDIO
+     || parent->type == ISOM_CODEC_TYPE_ALAC_AUDIO
+     || parent->type == ISOM_CODEC_TYPE_EC_3_AUDIO
+     || parent->type == ISOM_CODEC_TYPE_SAMR_AUDIO
+     || parent->type == ISOM_CODEC_TYPE_SAWB_AUDIO )
+        return isom_read_audio_specific( root, box, parent, level );
+    return isom_read_unknown_box( root, box, parent, level );
 }
 
 int isom_read_root( lsmash_root_t *root )

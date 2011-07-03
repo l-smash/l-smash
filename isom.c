@@ -34,6 +34,7 @@
 #ifdef LSMASH_DEMUXER_ENABLED
 #include "read.h"
 #include "print.h"
+#include "timeline.h"
 #endif
 
 
@@ -194,7 +195,7 @@ static void isom_bs_put_box_common( lsmash_bs_t *bs, void *box )
         isom_bs_put_basebox_common( bs, (isom_box_t *)box );
 }
 
-static isom_trak_entry_t *isom_get_trak( lsmash_root_t *root, uint32_t track_ID )
+isom_trak_entry_t *isom_get_trak( lsmash_root_t *root, uint32_t track_ID )
 {
     if( !track_ID || !root || !root->moov || !root->moov->trak_list )
         return NULL;
@@ -336,7 +337,7 @@ static int isom_add_dref_entry( isom_dref_t *dref, uint32_t flags, char *name, c
     return 0;
 }
 
-static isom_avcC_ps_entry_t *isom_create_ps_entry( uint8_t *ps, uint32_t ps_size )
+isom_avcC_ps_entry_t *isom_create_ps_entry( uint8_t *ps, uint32_t ps_size )
 {
     isom_avcC_ps_entry_t *entry = malloc( sizeof(isom_avcC_ps_entry_t) );
     if( !entry )
@@ -424,9 +425,7 @@ int lsmash_add_spsext_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t en
     return 0;
 }
 
-static void isom_remove_avcC( isom_avcC_t *avcC );
-
-static int isom_add_avcC( isom_visual_entry_t *visual )
+int isom_add_avcC( isom_visual_entry_t *visual )
 {
     if( !visual )
         return -1;
@@ -453,18 +452,7 @@ static int isom_add_avcC( isom_visual_entry_t *visual )
     return 0;
 }
 
-static int isom_add_pasp( isom_visual_entry_t *visual )
-{
-    if( !visual || visual->pasp )
-        return -1;
-    isom_create_box( pasp, visual, ISOM_BOX_TYPE_PASP );
-    pasp->hSpacing = 1;
-    pasp->vSpacing = 1;
-    visual->pasp = pasp;
-    return 0;
-}
-
-static int isom_add_clap( isom_visual_entry_t *visual )
+int isom_add_clap( isom_visual_entry_t *visual )
 {
     if( !visual || visual->clap )
         return -1;
@@ -481,7 +469,18 @@ static int isom_add_clap( isom_visual_entry_t *visual )
     return 0;
 }
 
-static int isom_add_colr( isom_visual_entry_t *visual )
+int isom_add_pasp( isom_visual_entry_t *visual )
+{
+    if( !visual || visual->pasp )
+        return -1;
+    isom_create_box( pasp, visual, ISOM_BOX_TYPE_PASP );
+    pasp->hSpacing = 1;
+    pasp->vSpacing = 1;
+    visual->pasp = pasp;
+    return 0;
+}
+
+int isom_add_colr( isom_visual_entry_t *visual )
 {
     if( !visual || visual->colr )
         return -1;
@@ -495,7 +494,7 @@ static int isom_add_colr( isom_visual_entry_t *visual )
     return 0;
 }
 
-static int isom_add_stsl( isom_visual_entry_t *visual )
+int isom_add_stsl( isom_visual_entry_t *visual )
 {
     if( !visual || visual->stsl )
         return -1;
@@ -505,7 +504,6 @@ static int isom_add_stsl( isom_visual_entry_t *visual )
     return 0;
 }
 
-static void isom_remove_tapt( isom_tapt_t *tapt );
 static void isom_remove_esds( isom_esds_t *esds );
 static void isom_remove_visual_extensions( isom_visual_entry_t *visual );
 
@@ -711,10 +709,7 @@ static int isom_add_mp4s_entry( isom_stsd_t *stsd )
 }
 #endif
 
-static void isom_remove_wave( isom_wave_t *wave );
-static void isom_remove_chan( isom_chan_t *chan );
-
-static int isom_add_wave( isom_audio_entry_t *audio )
+int isom_add_wave( isom_audio_entry_t *audio )
 {
     if( !audio || audio->wave )
         return -1;
@@ -723,7 +718,7 @@ static int isom_add_wave( isom_audio_entry_t *audio )
     return 0;
 }
 
-static int isom_add_frma( isom_wave_t *wave )
+int isom_add_frma( isom_wave_t *wave )
 {
     if( !wave || wave->frma )
         return -1;
@@ -732,7 +727,7 @@ static int isom_add_frma( isom_wave_t *wave )
     return 0;
 }
 
-static int isom_add_enda( isom_wave_t *wave )
+int isom_add_enda( isom_wave_t *wave )
 {
     if( !wave || wave->enda )
         return -1;
@@ -741,7 +736,7 @@ static int isom_add_enda( isom_wave_t *wave )
     return 0;
 }
 
-static int isom_add_mp4a( isom_wave_t *wave )
+int isom_add_mp4a( isom_wave_t *wave )
 {
     if( !wave || wave->mp4a )
         return -1;
@@ -750,7 +745,7 @@ static int isom_add_mp4a( isom_wave_t *wave )
     return 0;
 }
 
-static int isom_add_terminator( isom_wave_t *wave )
+int isom_add_terminator( isom_wave_t *wave )
 {
     if( !wave || wave->terminator )
         return -1;
@@ -759,7 +754,7 @@ static int isom_add_terminator( isom_wave_t *wave )
     return 0;
 }
 
-static int isom_add_chan( isom_audio_entry_t *audio )
+int isom_add_chan( isom_audio_entry_t *audio )
 {
     if( !audio || audio->chan )
         return -1;
@@ -1055,7 +1050,7 @@ static int isom_add_text_entry( isom_stsd_t *stsd )
     return 0;
 }
 
-static int isom_add_ftab( isom_tx3g_entry_t *tx3g )
+int isom_add_ftab( isom_tx3g_entry_t *tx3g )
 {
     if( !tx3g )
         return -1;
@@ -1406,7 +1401,7 @@ static int isom_add_stco_entry( isom_stbl_t *stbl, uint64_t chunk_offset )
     return 0;
 }
 
-static isom_sgpd_entry_t *isom_get_sample_group_description( isom_stbl_t *stbl, uint32_t grouping_type )
+isom_sgpd_entry_t *isom_get_sample_group_description( isom_stbl_t *stbl, uint32_t grouping_type )
 {
     if( !stbl->sgpd_list )
         return NULL;
@@ -1421,7 +1416,7 @@ static isom_sgpd_entry_t *isom_get_sample_group_description( isom_stbl_t *stbl, 
     return NULL;
 }
 
-static isom_sbgp_entry_t *isom_get_sample_to_group( isom_stbl_t *stbl, uint32_t grouping_type )
+isom_sbgp_entry_t *isom_get_sample_to_group( isom_stbl_t *stbl, uint32_t grouping_type )
 {
     if( !stbl->sbgp_list )
         return NULL;
@@ -1714,12 +1709,14 @@ static int isom_scan_trak_profileLevelIndication( isom_trak_entry_t* trak, mp4a_
             case ISOM_CODEC_TYPE_ALAC_AUDIO :
             case ISOM_CODEC_TYPE_SAMR_AUDIO :
             case ISOM_CODEC_TYPE_SAWB_AUDIO :
+#ifdef LSMASH_DEMUXER_ENABLED
+            case ISOM_CODEC_TYPE_EC_3_AUDIO :
+#endif
 #if 0
             case ISOM_CODEC_TYPE_DRA1_AUDIO :
             case ISOM_CODEC_TYPE_DTSC_AUDIO :
             case ISOM_CODEC_TYPE_DTSH_AUDIO :
             case ISOM_CODEC_TYPE_DTSL_AUDIO :
-            case ISOM_CODEC_TYPE_EC_3_AUDIO :
             case ISOM_CODEC_TYPE_ENCA_AUDIO :
             case ISOM_CODEC_TYPE_G719_AUDIO :
             case ISOM_CODEC_TYPE_G726_AUDIO :
@@ -1865,7 +1862,7 @@ static int isom_add_tapt( isom_trak_entry_t *trak )
     return 0;
 }
 
-static int isom_add_elst( isom_edts_t *edts )
+int isom_add_elst( isom_edts_t *edts )
 {
     if( edts->elst )
         return 0;
@@ -1874,7 +1871,7 @@ static int isom_add_elst( isom_edts_t *edts )
     return 0;
 }
 
-static int isom_add_edts( isom_trak_entry_t *trak )
+int isom_add_edts( isom_trak_entry_t *trak )
 {
     if( trak->edts )
         return 0;
@@ -2110,17 +2107,22 @@ static int isom_add_stsd( isom_stbl_t *stbl )
     return 0;
 }
 
+int isom_add_btrt( isom_visual_entry_t *visual )
+{
+    if( !visual || visual->btrt )
+        return -1;
+    isom_create_box( btrt, visual, ISOM_BOX_TYPE_BTRT );
+    visual->btrt = btrt;
+    return 0;
+}
+
 int lsmash_add_btrt( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
         return -1;
     isom_visual_entry_t *data = (isom_visual_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
-    if( !data )
-        return -1;
-    isom_create_box( btrt, data, ISOM_BOX_TYPE_BTRT );
-    data->btrt = btrt;
-    return 0;
+    return isom_add_btrt( data );
 }
 
 static int isom_add_stts( isom_stbl_t *stbl )
@@ -2448,7 +2450,7 @@ static void isom_remove_enof( isom_enof_t *enof )
     isom_remove_box( enof, isom_tapt_t );
 }
 
-static void isom_remove_tapt( isom_tapt_t *tapt )
+void isom_remove_tapt( isom_tapt_t *tapt )
 {
     if( !tapt )
         return;
@@ -2568,28 +2570,28 @@ static void isom_remove_hdlr( isom_hdlr_t *hdlr )
     free( hdlr );
 }
 
-static void isom_remove_clap( isom_clap_t *clap )
+void isom_remove_clap( isom_clap_t *clap )
 {
     if( !clap )
         return;
     isom_remove_box( clap, isom_visual_entry_t );
 }
 
-static void isom_remove_pasp( isom_pasp_t *pasp )
+void isom_remove_pasp( isom_pasp_t *pasp )
 {
     if( !pasp )
         return;
     isom_remove_box( pasp, isom_visual_entry_t );
 }
 
-static void isom_remove_colr( isom_colr_t *colr )
+void isom_remove_colr( isom_colr_t *colr )
 {
     if( !colr )
         return;
     isom_remove_box( colr, isom_visual_entry_t );
 }
 
-static void isom_remove_stsl( isom_stsl_t *stsl )
+void isom_remove_stsl( isom_stsl_t *stsl )
 {
     if( !stsl )
         return;
@@ -2637,7 +2639,7 @@ static void isom_remove_esds( isom_esds_t *esds )
     free( esds );
 }
 
-static void isom_remove_avcC( isom_avcC_t *avcC )
+void isom_remove_avcC( isom_avcC_t *avcC )
 {
     if( !avcC )
         return;
@@ -2647,7 +2649,7 @@ static void isom_remove_avcC( isom_avcC_t *avcC )
     isom_remove_box( avcC, isom_visual_entry_t );
 }
 
-static void isom_remove_btrt( isom_btrt_t *btrt )
+void isom_remove_btrt( isom_btrt_t *btrt )
 {
     if( !btrt )
         return;
@@ -2676,7 +2678,7 @@ static void isom_remove_font_record( isom_font_record_t *font_record )
     free( font_record );
 }
 
-static void isom_remove_ftab( isom_ftab_t *ftab )
+void isom_remove_ftab( isom_ftab_t *ftab )
 {
     if( !ftab )
         return;
@@ -2684,35 +2686,35 @@ static void isom_remove_ftab( isom_ftab_t *ftab )
     isom_remove_box( ftab, isom_tx3g_entry_t );
 }
 
-static void isom_remove_frma( isom_frma_t *frma )
+void isom_remove_frma( isom_frma_t *frma )
 {
     if( !frma )
         return;
     isom_remove_box( frma, isom_wave_t );
 }
 
-static void isom_remove_enda( isom_enda_t *enda )
+void isom_remove_enda( isom_enda_t *enda )
 {
     if( !enda )
         return;
     isom_remove_box( enda, isom_wave_t );
 }
 
-static void isom_remove_mp4a( isom_mp4a_t *mp4a )
+void isom_remove_mp4a( isom_mp4a_t *mp4a )
 {
     if( !mp4a )
         return;
     isom_remove_box( mp4a, isom_wave_t );
 }
 
-static void isom_remove_terminator( isom_terminator_t *terminator )
+void isom_remove_terminator( isom_terminator_t *terminator )
 {
     if( !terminator )
         return;
     isom_remove_box( terminator, isom_wave_t );
 }
 
-static void isom_remove_wave( isom_wave_t *wave )
+void isom_remove_wave( isom_wave_t *wave )
 {
     if( !wave )
         return;
@@ -2721,10 +2723,12 @@ static void isom_remove_wave( isom_wave_t *wave )
     isom_remove_mp4a( wave->mp4a );
     isom_remove_esds( wave->esds );
     isom_remove_terminator( wave->terminator );
+    if( wave->exdata )
+        free( wave->exdata );
     isom_remove_box( wave, isom_audio_entry_t );
 }
 
-static void isom_remove_chan( isom_chan_t *chan )
+void isom_remove_chan( isom_chan_t *chan )
 {
     if( !chan )
         return;
@@ -2733,7 +2737,7 @@ static void isom_remove_chan( isom_chan_t *chan )
     isom_remove_box( chan, isom_audio_entry_t );
 }
 
-static void isom_remove_sample_description( isom_sample_entry_t *sample )
+void isom_remove_sample_description( isom_sample_entry_t *sample )
 {
     if( !sample )
         return;
@@ -3687,8 +3691,12 @@ static int isom_write_wave( lsmash_bs_t *bs, isom_wave_t *wave )
         return -1;
     if( isom_write_frma( bs, wave->frma )
      || isom_write_enda( bs, wave->enda )
-     || isom_write_mp4a( bs, wave->mp4a )
-     || isom_write_esds( bs, wave->esds ) )
+     || isom_write_mp4a( bs, wave->mp4a ) )
+        return -1;
+    lsmash_bs_put_bytes( bs, wave->exdata, wave->exdata_length );
+    if( lsmash_bs_write_data( bs ) )
+        return -1;
+    if( isom_write_esds( bs, wave->esds ) )
         return -1;
     return isom_write_terminator( bs, wave->terminator );
 }
@@ -3944,12 +3952,14 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
             case QT_CODEC_TYPE_IN24_AUDIO :
             case QT_CODEC_TYPE_IN32_AUDIO :
             case QT_CODEC_TYPE_NOT_SPECIFIED :
+#ifdef LSMASH_DEMUXER_ENABLED
+            case ISOM_CODEC_TYPE_EC_3_AUDIO :
+#endif
 #if 0
             case ISOM_CODEC_TYPE_DRA1_AUDIO :
             case ISOM_CODEC_TYPE_DTSC_AUDIO :
             case ISOM_CODEC_TYPE_DTSH_AUDIO :
             case ISOM_CODEC_TYPE_DTSL_AUDIO :
-            case ISOM_CODEC_TYPE_EC_3_AUDIO :
             case ISOM_CODEC_TYPE_ENCA_AUDIO :
             case ISOM_CODEC_TYPE_G719_AUDIO :
             case ISOM_CODEC_TYPE_G726_AUDIO :
@@ -5858,12 +5868,14 @@ static uint64_t isom_update_stsd_size( isom_stsd_t *stsd )
             case QT_CODEC_TYPE_IN24_AUDIO :
             case QT_CODEC_TYPE_IN32_AUDIO :
             case QT_CODEC_TYPE_NOT_SPECIFIED :
+#ifdef LSMASH_DEMUXER_ENABLED
+            case ISOM_CODEC_TYPE_EC_3_AUDIO :
+#endif
 #if 0
             case ISOM_CODEC_TYPE_DRA1_AUDIO :
             case ISOM_CODEC_TYPE_DTSC_AUDIO :
             case ISOM_CODEC_TYPE_DTSH_AUDIO :
             case ISOM_CODEC_TYPE_DTSL_AUDIO :
-            case ISOM_CODEC_TYPE_EC_3_AUDIO :
             case ISOM_CODEC_TYPE_ENCA_AUDIO :
             case ISOM_CODEC_TYPE_G719_AUDIO :
             case ISOM_CODEC_TYPE_G726_AUDIO :
@@ -7718,19 +7730,33 @@ int lsmash_set_last_sample_delta( lsmash_root_t *root, uint32_t track_ID, uint32
     return lsmash_update_track_duration( root, track_ID, sample_delta );
 }
 
-void lsmash_destroy_root( lsmash_root_t *root )
+void lsmash_discard_boxes( lsmash_root_t *root )
 {
     if( !root )
         return;
-#ifdef LSMASH_DEMUXER_ENABLED
-    isom_remove_print_funcs( root );
-#endif
     isom_remove_ftyp( root->ftyp );
     isom_remove_moov( root );
     lsmash_remove_list( root->moof_list, isom_remove_moof );
     isom_remove_mdat( root->mdat );
     isom_remove_free( root->free );
     isom_remove_mfra( root->mfra );
+    root->ftyp = NULL;
+    root->moov = NULL;
+    root->moof_list = NULL;
+    root->mdat = NULL;
+    root->free = NULL;
+    root->mfra = NULL;
+}
+
+void lsmash_destroy_root( lsmash_root_t *root )
+{
+    if( !root )
+        return;
+#ifdef LSMASH_DEMUXER_ENABLED
+    isom_remove_print_funcs( root );
+    isom_remove_timelines( root );
+#endif
+    lsmash_discard_boxes( root );
     if( root->bs )
     {
         if( root->bs->stream )

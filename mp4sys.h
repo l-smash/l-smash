@@ -189,6 +189,10 @@ int mp4sys_update_DecoderConfigDescriptor(
     uint32_t avgBitrate
 );
 
+mp4sys_ES_Descriptor_t *mp4sys_duplicate_ES_Descriptor( mp4sys_ES_Descriptor_t *src );
+
+mp4sys_ES_Descriptor_t *mp4sys_get_ES_Descriptor( lsmash_bs_t *bs );
+
 /* to facilitate to make ES_Descriptor */
 mp4sys_ES_Descriptor_t* mp4sys_setup_ES_Descriptor( mp4sys_ES_Descriptor_params_t* params );
 
