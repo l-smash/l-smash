@@ -671,8 +671,8 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     lsmash_entry_t *next_stsc_entry = stsc_entry ? stsc_entry->next : NULL;
     isom_stsc_entry_t *stsc_data = stsc_entry ? (isom_stsc_entry_t *)stsc_entry->data : NULL;
     isom_sample_entry_t *description = stsd_entry ? (isom_sample_entry_t *)stsd_entry->data : NULL;
-    isom_sample_info_t *info = NULL;    /* shut up 'uninitialized' warning */
-    isom_portable_chunk_t *chunk = NULL;         /* shut up 'uninitialized' warning */
+    isom_sample_info_t *info = NULL;        /* shut up 'uninitialized' warning */
+    isom_portable_chunk_t *chunk = NULL;    /* shut up 'uninitialized' warning */
     if( !description || !stts_entry || !stsc_entry || !stco_entry || !stco_entry->data )
         goto fail;
     chunk = malloc( sizeof(isom_portable_chunk_t) );

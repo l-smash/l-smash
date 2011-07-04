@@ -7343,11 +7343,11 @@ static int isom_output_fragment_media_data( lsmash_root_t *root )
         if( !sample || !sample->data )
             return -1;
         lsmash_bs_put_bytes( root->bs, sample->data, sample->length );
-        if( lsmash_bs_write_data( root->bs ) )
-            return -1;
     }
-    lsmash_remove_entries( fragment->pool, lsmash_delete_sample );
+    if( lsmash_bs_write_data( root->bs ) )
+        return -1;
     root->size += root->mdat->size;
+    lsmash_remove_entries( fragment->pool, lsmash_delete_sample );
     fragment->pool_size = 0;
     return 0;
 }
@@ -8368,30 +8368,24 @@ static int isom_add_chunk( isom_trak_entry_t *trak, lsmash_sample_t *sample )
     return 1;
 }
 
-static int isom_write_sample_data( lsmash_root_t *root, lsmash_sample_t *sample )
-{
-    if( !root->mdat || !root->bs || !root->bs->stream )
-        return -1;
-    lsmash_bs_put_bytes( root->bs, sample->data, sample->length );
-    if( lsmash_bs_write_data( root->bs ) )
-        return -1;
-    root->mdat->size += sample->length;
-    return 0;
-}
-
 static int isom_write_pooled_samples( isom_trak_entry_t *trak, lsmash_entry_list_t *pool )
 {
-    if( !trak->root || !trak->cache || !trak->tkhd )
-        return -1;
     lsmash_root_t *root = trak->root;
+    if( !root || !root->mdat || !root->bs || !root->bs->stream )
+        return -1;
+    uint64_t chunk_size = 0;
     for( lsmash_entry_t *entry = pool->head; entry; entry = entry->next )
     {
         lsmash_sample_t *sample = (lsmash_sample_t *)entry->data;
-        if( !sample || !sample->data
-         || isom_write_sample_data( root, sample ) )
+        if( !sample || !sample->data )
             return -1;
-        root->size += sample->length;
+        lsmash_bs_put_bytes( root->bs, sample->data, sample->length );
+        chunk_size += sample->length;
     }
+    if( lsmash_bs_write_data( root->bs ) )
+        return -1;
+    root->mdat->size += chunk_size;
+    root->size += chunk_size;
     lsmash_remove_entries( pool, lsmash_delete_sample );
     return 0;
 }
