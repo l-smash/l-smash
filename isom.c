@@ -5260,8 +5260,15 @@ static int isom_update_bitrate_info( isom_mdia_t *mdia )
         case ISOM_CODEC_TYPE_ALAC_AUDIO :
         {
             isom_audio_entry_t *alac = (isom_audio_entry_t *)sample_entry;
-            if( !alac || alac->exdata_length < 36 || !alac->exdata )
+            if( !alac )
                 return -1;
+            if( alac->exdata_length < 36 || !alac->exdata )
+            {
+                isom_wave_t *wave = alac->wave;
+                if( !wave || wave->exdata_length < 36 || !wave->exdata )
+                    return -1;
+                break;      /* Apparently, average bitrate field is 0. */
+            }
             uint8_t *exdata = (uint8_t *)alac->exdata + 28;
             exdata[0] = (info.avgBitrate >> 24) & 0xff;
             exdata[1] = (info.avgBitrate >> 16) & 0xff;
@@ -5758,7 +5765,8 @@ static uint64_t isom_update_wave_size( isom_wave_t *wave )
         + isom_update_enda_size( wave->enda )
         + isom_update_mp4a_size( wave->mp4a )
         + isom_update_esds_size( wave->esds )
-        + isom_update_terminator_size( wave->terminator );
+        + isom_update_terminator_size( wave->terminator )
+        + (uint64_t)wave->exdata_length;
     CHECK_LARGESIZE( wave->size );
     return wave->size;
 }
