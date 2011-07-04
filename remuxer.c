@@ -296,13 +296,14 @@ int main( int argc, char *argv[] )
                 if( !sample )
                     return REMUXER_ERR( "Failed to get sample.\n" );
                 /* Append sample into output movie. */
+                uint64_t sample_size = sample->length;      /* sample might be deleted internally after appending. */
                 if( lsmash_append_sample( output.root, out_track_ID, sample ) )
                 {
                     lsmash_delete_sample( sample );
                     return REMUXER_ERR( "Failed to append a sample.\n" );
                 }
                 largest_dts = LSMASH_MAX( largest_dts, (double)dts / input_media_timescale );
-                total_media_size += sample->length;
+                total_media_size += sample_size;
                 eprintf( "Importing: %"PRIu64" bytes\r", total_media_size );
                 ++ in_track->current_sample_number;
                 ++ out_track->current_sample_number;
