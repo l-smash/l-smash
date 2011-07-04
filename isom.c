@@ -6383,6 +6383,9 @@ void lsmash_initialize_track_parameters( lsmash_track_parameters_t *param )
 {
     memset( param, 0, sizeof(lsmash_track_parameters_t) );
     param->audio_volume = 0x0100;
+    param->matrix[0] = 0x00010000;
+    param->matrix[4] = 0x00010000;
+    param->matrix[8] = 0x40000000;
 }
 
 int lsmash_set_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_track_parameters_t *param )
@@ -6420,6 +6423,8 @@ int lsmash_set_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
         tkhd->layer       = 0;
         tkhd->volume      = media_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK ? 0x0100                : 0;
     }
+    for( int i = 0; i < 9; i++ )
+        tkhd->matrix[i]   = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? param->matrix[i]      : 0;
     tkhd->width           = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? param->display_width  : 0;
     tkhd->height          = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? param->display_height : 0;
     /* Update next_track_ID if needed. */
@@ -6440,6 +6445,8 @@ int lsmash_get_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     param->video_layer     = tkhd->layer;
     param->alternate_group = tkhd->alternate_group;
     param->audio_volume    = tkhd->volume;
+    for( int i = 0; i < 9; i++ )
+        param->matrix[i]   = tkhd->matrix[i];
     param->display_width   = tkhd->width;
     param->display_height  = tkhd->height;
     param->aperture_modes  = !!trak->tapt;

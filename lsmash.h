@@ -1270,6 +1270,17 @@ typedef struct
                                      * and different for tracks belonging to different such groups.
                                      * Only one track within an alternate group should be played or streamed at any one time. */
     int16_t  audio_volume;          /* fixed point 8.8 number. 0x0100 is full volume. */
+    int32_t  matrix[9];             /* transformation matrix for the video
+                                     * Each value represents, in order, a, b, u, c, d, v, x, y and w.
+                                     * All the values in a matrix are stored as 16.16 fixed-point values,
+                                     * except for u, v and w, which are stored as 2.30 fixed-point values.
+                                     * Not all derived specifications use matrices.
+                                     * If a matrix is used, the point (p, q) is transformed into (p', q') using the matrix as follows:
+                                     *             | a b u |
+                                     * (p, q, 1) * | c d v | = z * (p', q', 1)
+                                     *             | x y w |
+                                     * p' = (a * p + c * q + x) / z; q' = (b * p + d * q + y) / z; z = u * p + v * q + w
+                                     * Note: transformation matrix is applied after scaling to display size up to display_width and display_height. */
     uint32_t display_width;         /* visual presentation region size of horizontal direction as fixed point 16.16 number.  */
     uint32_t display_height;        /* visual presentation region size of vertical direction as fixed point 16.16 number. */
     uint8_t  aperture_modes;        /* track aperture modes present
