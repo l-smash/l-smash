@@ -477,9 +477,11 @@ lsmash_entry_list_t *lsmash_create_entry_list( void )
     lsmash_entry_list_t *list = malloc( sizeof(lsmash_entry_list_t) );
     if( !list )
         return NULL;
-    list->entry_count = 0;
     list->head = NULL;
     list->tail = NULL;
+    list->last_accessed_entry = NULL;
+    list->last_accessed_number = 0;
+    list->entry_count = 0;
     return list;
 }
 
@@ -520,6 +522,21 @@ int lsmash_remove_entry_direct( lsmash_entry_list_t *list, lsmash_entry_t *entry
         next->prev = prev;
     if( entry->data )
         ((lsmash_entry_data_eliminator)eliminator)( entry->data );
+    if( entry == list->last_accessed_entry )
+    {
+        if( next )
+            list->last_accessed_entry = next;
+        else if( prev )
+        {
+            list->last_accessed_entry = prev;
+            list->last_accessed_number -= 1;
+        }
+        else
+        {
+            list->last_accessed_entry = NULL;
+            list->last_accessed_number = 0;
+        }
+    }
     free( entry );
     list->entry_count -= 1;
     return 0;
@@ -545,9 +562,11 @@ void lsmash_remove_entries( lsmash_entry_list_t *list, void* eliminator )
         free( entry );
         entry = next;
     }
-    list->entry_count = 0;
     list->head = NULL;
     list->tail = NULL;
+    list->last_accessed_entry = NULL;
+    list->last_accessed_number = 0;
+    list->entry_count = 0;
 }
 
 void lsmash_remove_list( lsmash_entry_list_t *list, void* eliminator )
@@ -562,15 +581,40 @@ lsmash_entry_t *lsmash_get_entry( lsmash_entry_list_t *list, uint32_t entry_numb
 {
     if( !list || !entry_number || entry_number > list->entry_count )
         return NULL;
-    lsmash_entry_t *entry;
-    if( entry_number <= (list->entry_count >> 1) )
-        /* Look for from the head. */
-        for( entry = list->head; entry && --entry_number; entry = entry->next );
-    else
+    int shortcut = 1;
+    lsmash_entry_t *entry = NULL;
+    if( list->last_accessed_entry )
     {
-        /* Look for from the tail. */
-        entry_number = list->entry_count - entry_number;
-        for( entry = list->tail; entry && entry_number--; entry = entry->prev );
+        if( entry_number == list->last_accessed_number )
+            entry = list->last_accessed_entry;
+        else if( entry_number == list->last_accessed_number + 1 )
+            entry = list->last_accessed_entry->next;
+        else if( entry_number == list->last_accessed_number - 1 )
+            entry = list->last_accessed_entry->prev;
+        else
+            shortcut = 0;
+    }
+    else
+        shortcut = 0;
+    if( !shortcut )
+    {
+        if( entry_number <= (list->entry_count >> 1) )
+        {
+            /* Look for from the head. */
+            uint32_t distance_plus_one = entry_number;
+            for( entry = list->head; entry && --distance_plus_one; entry = entry->next );
+        }
+        else
+        {
+            /* Look for from the tail. */
+            uint32_t distance = list->entry_count - entry_number;
+            for( entry = list->tail; entry && distance--; entry = entry->prev );
+        }
+    }
+    if( entry )
+    {
+        list->last_accessed_entry = entry;
+        list->last_accessed_number = entry_number;
     }
     return entry;
 }
