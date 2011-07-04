@@ -472,16 +472,21 @@ int lsmash_bits_import_data( lsmash_bits_t* bits, void* data, uint32_t length )
 /*---- ----*/
 
 /*---- list ----*/
-lsmash_entry_list_t *lsmash_create_entry_list( void )
+void lsmash_init_entry_list( lsmash_entry_list_t *list )
 {
-    lsmash_entry_list_t *list = malloc( sizeof(lsmash_entry_list_t) );
-    if( !list )
-        return NULL;
     list->head = NULL;
     list->tail = NULL;
     list->last_accessed_entry = NULL;
     list->last_accessed_number = 0;
     list->entry_count = 0;
+}
+
+lsmash_entry_list_t *lsmash_create_entry_list( void )
+{
+    lsmash_entry_list_t *list = malloc( sizeof(lsmash_entry_list_t) );
+    if( !list )
+        return NULL;
+    lsmash_init_entry_list( list );
     return list;
 }
 
@@ -562,11 +567,7 @@ void lsmash_remove_entries( lsmash_entry_list_t *list, void* eliminator )
         free( entry );
         entry = next;
     }
-    list->head = NULL;
-    list->tail = NULL;
-    list->last_accessed_entry = NULL;
-    list->last_accessed_number = 0;
-    list->entry_count = 0;
+    lsmash_init_entry_list( list );
 }
 
 void lsmash_remove_list( lsmash_entry_list_t *list, void* eliminator )

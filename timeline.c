@@ -35,21 +35,32 @@
 
 typedef struct
 {
-    uint64_t pos;
+    uint64_t offset;
+    uint64_t length;
+    void *data;
+    uint32_t number;
+} isom_portable_chunk_t;
+
+typedef struct
+{
     uint64_t dts;
     uint64_t cts;
+    uint64_t pos;
     uint32_t duration;
     uint32_t length;
     uint32_t index;
+    isom_portable_chunk_t *chunk;
     lsmash_sample_property_t prop;
 } isom_sample_info_t;
 
 typedef struct
 {
     uint32_t track_ID;
-    lsmash_entry_list_t *edit_list;         /* list of edits */
-    lsmash_entry_list_t *description_list;  /* list of descriptions */
-    lsmash_entry_list_t *info_list;         /* list of sample info */
+    uint32_t last_accessed_chunk_number;
+    lsmash_entry_list_t edit_list       [1];    /* list of edits */
+    lsmash_entry_list_t description_list[1];    /* list of descriptions */
+    lsmash_entry_list_t chunk_list      [1];    /* list of chunks */
+    lsmash_entry_list_t info_list       [1];    /* list of sample info */
 } isom_timeline_t;
 
 static isom_timeline_t *isom_get_timeline( lsmash_root_t *root, uint32_t track_ID )
@@ -72,28 +83,12 @@ static isom_timeline_t *isom_create_timeline( void )
     isom_timeline_t *timeline = malloc( sizeof(isom_timeline_t) );
     if( !timeline )
         return NULL;
-    memset( timeline, 0, sizeof(isom_timeline_t) );
-    timeline->edit_list = lsmash_create_entry_list();
-    if( !timeline->edit_list )
-    {
-        free( timeline );
-        return NULL;
-    }
-    timeline->description_list = lsmash_create_entry_list();
-    if( !timeline->description_list )
-    {
-        lsmash_remove_list( timeline->edit_list, NULL );
-        free( timeline );
-        return NULL;
-    }
-    timeline->info_list = lsmash_create_entry_list();
-    if( !timeline->info_list )
-    {
-        lsmash_remove_list( timeline->edit_list, NULL );
-        lsmash_remove_list( timeline->description_list, isom_remove_sample_description );
-        free( timeline );
-        return NULL;
-    }
+    timeline->track_ID = 0;
+    timeline->last_accessed_chunk_number = 0;
+    lsmash_init_entry_list( timeline->edit_list );
+    lsmash_init_entry_list( timeline->description_list );
+    lsmash_init_entry_list( timeline->chunk_list );
+    lsmash_init_entry_list( timeline->info_list );
     return timeline;
 }
 
@@ -103,6 +98,7 @@ static void isom_destruct_timeline_direct( isom_timeline_t *timeline )
         return;
     lsmash_remove_list( timeline->edit_list, NULL );
     lsmash_remove_list( timeline->description_list, isom_remove_sample_description );
+    lsmash_remove_list( timeline->chunk_list, NULL );
     lsmash_remove_list( timeline->info_list, NULL );
     free( timeline );
 }
@@ -645,7 +641,6 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     if( !timeline )
         return -1;
     /* Preparation for construction. */
-    isom_sample_info_t *info = NULL;    /* shut up 'uninitialized' warning */
     isom_elst_t *elst = trak->edts ? trak->edts->elst : NULL;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     isom_stsd_t *stsd = stbl->stsd;
@@ -676,8 +671,16 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     lsmash_entry_t *next_stsc_entry = stsc_entry ? stsc_entry->next : NULL;
     isom_stsc_entry_t *stsc_data = stsc_entry ? (isom_stsc_entry_t *)stsc_entry->data : NULL;
     isom_sample_entry_t *description = stsd_entry ? (isom_sample_entry_t *)stsd_entry->data : NULL;
+    isom_sample_info_t *info = NULL;    /* shut up 'uninitialized' warning */
+    isom_portable_chunk_t *chunk = NULL;         /* shut up 'uninitialized' warning */
     if( !description || !stts_entry || !stsc_entry || !stco_entry || !stco_entry->data )
         goto fail;
+    chunk = malloc( sizeof(isom_portable_chunk_t) );
+    if( !chunk || lsmash_add_entry( timeline->chunk_list, chunk ) )
+        goto fail;
+    chunk->number = 1;
+    chunk->data = NULL;
+    /* Copy edits. */
     while( elst_entry )
     {
         isom_elst_entry_t *edit = (isom_elst_entry_t *)lsmash_memdup( elst_entry->data, sizeof(isom_elst_entry_t) );
@@ -686,9 +689,9 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
             goto fail;
         elst_entry = elst_entry->next;
     }
+    /* Copy sample descriptions. */
     while( stsd_entry )
     {
-        /* Copy sample descriptions. */
         description = isom_duplicate_description( (isom_sample_entry_t *)stsd_entry->data, NULL );
         if( !description
          || lsmash_add_entry( timeline->description_list, description ) )
@@ -709,7 +712,9 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     uint32_t sample_number_in_sbgp_rap_entry  = 1;
     uint32_t sample_number_in_chunk = 1;
     uint32_t chunk_number = 1;
-    uint64_t offset = large_presentation
+    uint64_t offset_from_chunk = 0;
+    uint64_t offset = chunk->offset
+                    = large_presentation
                     ? ((isom_co64_entry_t *)stco_entry->data)->chunk_offset
                     : ((isom_stco_entry_t *)stco_entry->data)->chunk_offset;
     uint32_t constant_sample_size = is_lpcm_audio
@@ -824,18 +829,30 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
             info->length = ((isom_stsz_entry_t *)stsz_entry->data)->entry_size;
             stsz_entry = stsz_entry->next;
         }
-        /* Get offset in the stream, and sample description index. */
+        /* Get chunk info. */
         info->pos = offset;
         info->index = stsc_data->sample_description_index;
+        info->chunk = chunk;
+        offset_from_chunk += info->length;
         if( sample_number_in_chunk == stsc_data->samples_per_chunk )
         {
+            /* Move the next chunk. */
             sample_number_in_chunk = 1;
             stco_entry = stco_entry->next;
             if( stco_entry && stco_entry->data )
                 offset = large_presentation
                        ? ((isom_co64_entry_t *)stco_entry->data)->chunk_offset
                        : ((isom_stco_entry_t *)stco_entry->data)->chunk_offset;
-            ++chunk_number;
+            chunk->length = offset_from_chunk;      /* the length of the previous chunk */
+            chunk = malloc( sizeof(isom_portable_chunk_t) );
+            if( !chunk )
+                goto fail;
+            chunk->number = ++chunk_number;
+            chunk->offset = offset;
+            chunk->data = NULL;
+            offset_from_chunk = 0;
+            if( lsmash_add_entry( timeline->chunk_list, chunk ) )
+                goto fail;
             if( next_stsc_entry
              && chunk_number == ((isom_stsc_entry_t *)next_stsc_entry->data)->first_chunk )
             {
@@ -861,6 +878,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
             goto fail;
         ++sample_number;
     }
+    chunk->length = offset_from_chunk;
     timeline->track_ID = track_ID;
     if( lsmash_add_entry( root->timeline, timeline ) )
     {
@@ -872,38 +890,62 @@ fail:
     isom_destruct_timeline_direct( timeline );
     if( info )
         free( info );
+    if( chunk )
+        free( chunk );
     return -1;
+}
+
+lsmash_sample_t *lsmash_get_sample_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number )
+{
+    isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
+    lsmash_entry_t *entry = lsmash_get_entry( timeline->info_list, sample_number );
+    if( !entry || !entry->data )
+        return NULL;
+    /* Get data of a sample from a chunk. */
+    isom_sample_info_t *info = (isom_sample_info_t *)entry->data;
+    isom_portable_chunk_t *chunk = info->chunk;
+    lsmash_bs_t *bs = root->bs;
+    if( chunk->number != timeline->last_accessed_chunk_number )
+    {
+        /* Read data of a chunk in the stream. */
+        lsmash_fseek( bs->stream, chunk->offset, SEEK_SET );
+        lsmash_bs_empty( bs );
+        if( lsmash_bs_read_data( bs, chunk->length ) )
+            return NULL;
+        if( chunk->data )
+            free( chunk->data );
+        chunk->data = lsmash_bs_export_data( bs, NULL );
+        if( !chunk->data )
+            return NULL;
+        lsmash_bs_empty( bs );
+        timeline->last_accessed_chunk_number = chunk->number;
+    }
+    lsmash_sample_t *sample = lsmash_create_sample( 0 );
+    if( !sample )
+        return NULL;
+    uint64_t offset_from_chunk = info->pos - chunk->offset;
+    sample->data = lsmash_memdup( chunk->data + offset_from_chunk, info->length );
+    if( !sample->data )
+    {
+        lsmash_delete_sample( sample );
+        return NULL;
+    }
+    /* Get sample info. */
+    sample->length = info->length;
+    sample->dts    = info->dts;
+    sample->cts    = info->cts;
+    sample->index  = info->index;
+    sample->prop   = info->prop;
+    return sample;
 }
 
 static isom_sample_info_t *isom_get_sample_info_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number )
 {
     isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
+    if( !timeline )
+        return NULL;
     lsmash_entry_t *entry = lsmash_get_entry( timeline->info_list, sample_number );
     return entry ? entry->data : NULL;
-}
-
-static lsmash_sample_t *isom_get_sample_from_sample_info_entry( lsmash_root_t *root, isom_sample_info_t *info )
-{
-    if( !info )
-        return NULL;
-    lsmash_bs_t *bs = root->bs;
-    lsmash_fseek( bs->stream, info->pos, SEEK_SET );
-    if( lsmash_bs_read_data( bs, info->length ) )
-        return NULL;
-    lsmash_sample_t *sample = lsmash_create_sample( 0 );
-    sample->data  = lsmash_bs_export_data( bs, &sample->length );
-    sample->dts   = info->dts;
-    sample->cts   = info->cts;
-    sample->index = info->index;
-    sample->prop  = info->prop;
-    lsmash_bs_empty( bs );
-    return sample;
-}
-
-lsmash_sample_t *lsmash_get_sample_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number )
-{
-    isom_sample_info_t *info = isom_get_sample_info_from_media_timeline( root, track_ID, sample_number );
-    return isom_get_sample_from_sample_info_entry( root, info );
 }
 
 int lsmash_get_dts_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number, uint64_t *dts )

@@ -120,6 +120,7 @@ typedef struct
 
 typedef void (*lsmash_entry_data_eliminator)(void* data); /* very same as free() of standard c lib; void free(void *); */
 
+void lsmash_init_entry_list( lsmash_entry_list_t *list );
 lsmash_entry_list_t *lsmash_create_entry_list( void );
 int lsmash_add_entry( lsmash_entry_list_t *list, void *data );
 int lsmash_remove_entry_direct( lsmash_entry_list_t *list, lsmash_entry_t *entry, void* eliminator );
