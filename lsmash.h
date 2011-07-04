@@ -1297,6 +1297,8 @@ typedef struct
     double   max_chunk_duration;            /* max duration per chunk in seconds. 0.5 is default value. */
     double   max_async_tolerance;           /* max tolerance, in seconds, for amount of interleaving asynchronization between tracks.
                                              * 2.0 is default value. At least twice of max_chunk_duration is used. */
+    uint64_t max_chunk_size;                /* max size per chunk in bytes. 4*1024*1024 (4MiB) is default value. */
+    uint64_t max_read_size;                 /* max size of reading from a chunk at a time. 4*1024*1024 (4MiB) is default value. */
     uint32_t timescale;                     /* movie timescale: timescale for the entire presentation */
     uint64_t duration;                      /* the duration, expressed in movie timescale, of the longest track
                                              * You can't set this parameter manually. */

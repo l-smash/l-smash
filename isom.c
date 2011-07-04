@@ -6794,8 +6794,12 @@ lsmash_root_t *lsmash_open_movie( const char *filename, lsmash_file_mode_code mo
         root->qt_compatible = 1;    /* QTFF is default file format. */
     }
 #ifdef LSMASH_DEMUXER_ENABLED
-    if( (mode & (LSMASH_FILE_MODE_READ | LSMASH_FILE_MODE_DUMP)) && isom_read_root( root ) )
-        goto fail;
+    if( (mode & (LSMASH_FILE_MODE_READ | LSMASH_FILE_MODE_DUMP)) )
+    {
+        if( isom_read_root( root ) )
+            goto fail;
+        root->max_read_size = 4 * 1024 * 1024;
+    }
 #endif
     if( mode & LSMASH_FILE_MODE_FRAGMENTED )
     {
@@ -6881,6 +6885,8 @@ void lsmash_initialize_movie_parameters( lsmash_movie_parameters_t *param )
     memset( param, 0, sizeof(lsmash_movie_parameters_t) );
     param->max_chunk_duration  = 0.5;
     param->max_async_tolerance = 2.0;
+    param->max_chunk_size      = 4 * 1024 * 1024;
+    param->max_read_size       = 4 * 1024 * 1024;
     param->timescale           = 600;
     param->playback_rate       = 0x00010000;
     param->playback_volume     = 0x0100;
@@ -6894,6 +6900,8 @@ int lsmash_set_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t 
     isom_mvhd_t *mvhd = root->moov->mvhd;
     root->max_chunk_duration  = param->max_chunk_duration;
     root->max_async_tolerance = LSMASH_MAX( param->max_async_tolerance, 2 * param->max_chunk_duration );
+    root->max_chunk_size      = param->max_chunk_size;
+    root->max_read_size       = param->max_read_size;
     mvhd->timescale           = param->timescale;
     if( root->qt_compatible || root->itunes_audio )
     {
@@ -6932,6 +6940,8 @@ int lsmash_get_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t 
     }
     param->max_chunk_duration  = root->max_chunk_duration;
     param->max_async_tolerance = root->max_async_tolerance;
+    param->max_chunk_size      = root->max_chunk_size;
+    param->max_read_size       = root->max_read_size;
     param->timescale           = mvhd->timescale;
     param->duration            = mvhd->duration;
     param->playback_rate       = mvhd->rate;
@@ -8339,14 +8349,13 @@ static int isom_add_chunk( isom_trak_entry_t *trak, lsmash_sample_t *sample )
         return 0;
     }
     if( sample->dts < current->first_dts )
-        return -1; /* easy error check. */
-    double chunk_duration = (double)(sample->dts - current->first_dts) / trak->mdia->mdhd->timescale;
-    if( root->max_chunk_duration >= chunk_duration && current->sample_description_index == sample->index )
-        return 0; /* no need to flush current cached chunk, the current sample must be put into that. */
-
+        return -1;  /* easy error check. */
+    if( (root->max_chunk_duration >= ((double)(sample->dts - current->first_dts) / trak->mdia->mdhd->timescale))
+     && (root->max_chunk_size >= current->pool_size + sample->length)
+     && (current->sample_description_index == sample->index) )
+        return 0;   /* No need to flush current cached chunk, the current sample must be put into that. */
     /* NOTE: chunk relative stuff must be pushed into root after a chunk is fully determined with its contents. */
     /* now current cached chunk is fixed, actually add chunk relative properties to root accordingly. */
-
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     lsmash_entry_t *last_stsc_entry = stbl->stsc->list->tail;
     /* Create a new chunk sequence in this track if needed. */
@@ -8368,13 +8377,12 @@ static int isom_add_chunk( isom_trak_entry_t *trak, lsmash_sample_t *sample )
     return 1;
 }
 
-static int isom_write_pooled_samples( isom_trak_entry_t *trak, lsmash_entry_list_t *pool )
+static int isom_write_pooled_samples( lsmash_root_t *root, isom_chunk_t *chunk )
 {
-    lsmash_root_t *root = trak->root;
     if( !root || !root->mdat || !root->bs || !root->bs->stream )
         return -1;
     uint64_t chunk_size = 0;
-    for( lsmash_entry_t *entry = pool->head; entry; entry = entry->next )
+    for( lsmash_entry_t *entry = chunk->pool->head; entry; entry = entry->next )
     {
         lsmash_sample_t *sample = (lsmash_sample_t *)entry->data;
         if( !sample || !sample->data )
@@ -8386,7 +8394,8 @@ static int isom_write_pooled_samples( isom_trak_entry_t *trak, lsmash_entry_list
         return -1;
     root->mdat->size += chunk_size;
     root->size += chunk_size;
-    lsmash_remove_entries( pool, lsmash_delete_sample );
+    lsmash_remove_entries( chunk->pool, lsmash_delete_sample );
+    chunk->pool_size = 0;
     return 0;
 }
 
@@ -8463,7 +8472,7 @@ static int isom_output_cached_chunk( isom_trak_entry_t *trak )
     if( isom_add_stco_entry( stbl, root->size ) )
         return -1;
     /* Output pooled samples in this track. */
-    return isom_write_pooled_samples( trak, chunk->pool );
+    return isom_write_pooled_samples( root, chunk );
 }
 
 static int isom_append_sample_internal( isom_trak_entry_t *trak, lsmash_sample_t *sample )
@@ -8472,15 +8481,15 @@ static int isom_append_sample_internal( isom_trak_entry_t *trak, lsmash_sample_t
     if( flush < 0 )
         return -1;
     /* flush == 1 means pooled samples must be flushed. */
+    lsmash_root_t *root = trak->root;
     isom_chunk_t *current = &trak->cache->chunk;
-    if( flush == 1 && isom_write_pooled_samples( trak, current->pool ) )
+    if( flush == 1 && isom_write_pooled_samples( root, current ) )
         return -1;
     /* Arbitration system between tracks with extremely scattering dts.
      * Here, we check whether asynchronization between the tracks exceeds the tolerance.
      * If a track has too old "first DTS" in its cached chunk than current sample's DTS, then its pooled samples must be flushed.
      * We don't consider presentation of media since any edit can pick an arbitrary portion of media in track.
      * Note: you needn't read this loop until you grasp the basic handling of chunks. */
-    lsmash_root_t *root = trak->root;
     double tolerance = root->max_async_tolerance;
     for( lsmash_entry_t *entry = root->moov->trak_list->head; entry; entry = entry->next )
     {
@@ -8711,7 +8720,8 @@ static int isom_update_fragment_sample_tables( isom_traf_entry_t *traf, lsmash_s
     isom_cache_t *cache = traf->cache;
     /* Create a new track run if the duration exceeds max_chunk_duration.
      * Old one will be appended to the pool of this movie fragment. */
-    int delimit = root->max_chunk_duration < (double)(sample->dts - traf->cache->chunk.first_dts) / lsmash_get_media_timescale( root, tfhd->track_ID );
+    int delimit = (root->max_chunk_duration < ((double)(sample->dts - traf->cache->chunk.first_dts) / lsmash_get_media_timescale( root, tfhd->track_ID )))
+               || (root->max_chunk_size < (cache->chunk.pool_size + sample->length));
     isom_trun_entry_t *trun = NULL;
     if( !traf->trun_list || !traf->trun_list->entry_count || delimit )
     {
@@ -8843,9 +8853,11 @@ static int isom_append_fragment_sample_internal_initial( isom_trak_entry_t *trak
     else if( delimit == 1 )
         isom_append_fragment_track_run( trak->root, &trak->cache->chunk );
     /* Add a new sample into the pool of this track fragment. */
+    if( lsmash_add_entry( trak->cache->chunk.pool, sample ) )
+        return -1;
     trak->cache->chunk.pool_size += sample->length;
     trak->cache->fragment->has_samples = 1;
-    return lsmash_add_entry( trak->cache->chunk.pool, sample );
+    return 0;
 }
 
 static int isom_append_fragment_sample_internal( isom_traf_entry_t *traf, lsmash_sample_t *sample )
@@ -8859,9 +8871,11 @@ static int isom_append_fragment_sample_internal( isom_traf_entry_t *traf, lsmash
     else if( delimit == 1 )
         isom_append_fragment_track_run( traf->root, &traf->cache->chunk );
     /* Add a new sample into the pool of this track fragment. */
+    if( lsmash_add_entry( traf->cache->chunk.pool, sample ) )
+        return -1;
     traf->cache->chunk.pool_size += sample->length;
     traf->cache->fragment->has_samples = 1;
-    return lsmash_add_entry( traf->cache->chunk.pool, sample );
+    return 0;
 }
 
 static int isom_append_fragment_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_t *sample )

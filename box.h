@@ -1386,6 +1386,8 @@ struct lsmash_root_tag
         isom_fragment_manager_t *fragment;  /* movie fragment manager */
         double max_chunk_duration;          /* max duration per chunk in seconds */
         double max_async_tolerance;         /* max tolerance, in seconds, for amount of interleaving asynchronization between tracks */
+        uint64_t max_chunk_size;            /* max size per chunk in bytes. */
+        uint64_t max_read_size;             /* max size of reading from a chunk at a time. */
         uint8_t file_type_written;          /* whether File Type Box was written */
         uint8_t qt_compatible;              /* compatibility with QuickTime file format */
         uint8_t isom_compatible;            /* compatibility with ISO Base Media file format */

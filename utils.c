@@ -141,7 +141,7 @@ int lsmash_bs_write_data( lsmash_bs_t *bs )
 {
     if( !bs )
         return -1;
-    if( !bs->data )
+    if( !bs->store || !bs->data )
         return 0;
     if( bs->error || !bs->stream || fwrite( bs->data, 1, bs->store, bs->stream ) != bs->store )
     {

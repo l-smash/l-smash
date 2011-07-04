@@ -57,6 +57,8 @@ typedef struct
 {
     uint32_t track_ID;
     uint32_t last_accessed_chunk_number;
+    uint64_t last_accessed_offset;
+    uint64_t last_read_size;
     lsmash_entry_list_t edit_list       [1];    /* list of edits */
     lsmash_entry_list_t description_list[1];    /* list of descriptions */
     lsmash_entry_list_t chunk_list      [1];    /* list of chunks */
@@ -85,6 +87,8 @@ static isom_timeline_t *isom_create_timeline( void )
         return NULL;
     timeline->track_ID = 0;
     timeline->last_accessed_chunk_number = 0;
+    timeline->last_accessed_offset = 0;
+    timeline->last_read_size = 0;
     lsmash_init_entry_list( timeline->edit_list );
     lsmash_init_entry_list( timeline->description_list );
     lsmash_init_entry_list( timeline->chunk_list );
@@ -898,19 +902,32 @@ fail:
 lsmash_sample_t *lsmash_get_sample_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number )
 {
     isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
-    lsmash_entry_t *entry = lsmash_get_entry( timeline->info_list, sample_number );
-    if( !entry || !entry->data )
+    isom_sample_info_t *info = (isom_sample_info_t *)lsmash_get_entry_data( timeline->info_list, sample_number );
+    if( !info )
         return NULL;
     /* Get data of a sample from a chunk. */
-    isom_sample_info_t *info = (isom_sample_info_t *)entry->data;
     isom_portable_chunk_t *chunk = info->chunk;
     lsmash_bs_t *bs = root->bs;
-    if( chunk->number != timeline->last_accessed_chunk_number )
+    if( (timeline->last_accessed_chunk_number != chunk->number)
+     || (timeline->last_accessed_offset > info->pos)
+     || (timeline->last_read_size < (info->pos + info->length - timeline->last_accessed_offset)) )
     {
         /* Read data of a chunk in the stream. */
-        lsmash_fseek( bs->stream, chunk->offset, SEEK_SET );
+        uint64_t read_size;
+        uint64_t seek_pos;
+        if( root->max_read_size >= chunk->length )
+        {
+            read_size = chunk->length;
+            seek_pos = chunk->offset;
+        }
+        else
+        {
+            read_size = LSMASH_MAX( root->max_read_size, info->length );
+            seek_pos = info->pos;
+        }
+        lsmash_fseek( bs->stream, seek_pos, SEEK_SET );
         lsmash_bs_empty( bs );
-        if( lsmash_bs_read_data( bs, chunk->length ) )
+        if( lsmash_bs_read_data( bs, read_size ) )
             return NULL;
         if( chunk->data )
             free( chunk->data );
@@ -919,12 +936,14 @@ lsmash_sample_t *lsmash_get_sample_from_media_timeline( lsmash_root_t *root, uin
             return NULL;
         lsmash_bs_empty( bs );
         timeline->last_accessed_chunk_number = chunk->number;
+        timeline->last_accessed_offset = seek_pos;
+        timeline->last_read_size = read_size;
     }
     lsmash_sample_t *sample = lsmash_create_sample( 0 );
     if( !sample )
         return NULL;
-    uint64_t offset_from_chunk = info->pos - chunk->offset;
-    sample->data = lsmash_memdup( chunk->data + offset_from_chunk, info->length );
+    uint64_t offset_from_seek = info->pos - timeline->last_accessed_offset;
+    sample->data = lsmash_memdup( chunk->data + offset_from_seek, info->length );
     if( !sample->data )
     {
         lsmash_delete_sample( sample );
@@ -944,8 +963,7 @@ static isom_sample_info_t *isom_get_sample_info_from_media_timeline( lsmash_root
     isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
     if( !timeline )
         return NULL;
-    lsmash_entry_t *entry = lsmash_get_entry( timeline->info_list, sample_number );
-    return entry ? entry->data : NULL;
+    return (isom_sample_info_t *)lsmash_get_entry_data( timeline->info_list, sample_number );
 }
 
 int lsmash_get_dts_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number, uint64_t *dts )
