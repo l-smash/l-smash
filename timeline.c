@@ -59,6 +59,7 @@ typedef struct
     uint32_t last_accessed_chunk_number;
     uint64_t last_accessed_offset;
     uint64_t last_read_size;
+    void    *last_accessed_chunk_data;
     lsmash_entry_list_t edit_list       [1];    /* list of edits */
     lsmash_entry_list_t description_list[1];    /* list of descriptions */
     lsmash_entry_list_t chunk_list      [1];    /* list of chunks */
@@ -85,10 +86,11 @@ static isom_timeline_t *isom_create_timeline( void )
     isom_timeline_t *timeline = malloc( sizeof(isom_timeline_t) );
     if( !timeline )
         return NULL;
-    timeline->track_ID = 0;
+    timeline->track_ID                   = 0;
     timeline->last_accessed_chunk_number = 0;
-    timeline->last_accessed_offset = 0;
-    timeline->last_read_size = 0;
+    timeline->last_accessed_offset       = 0;
+    timeline->last_read_size             = 0;
+    timeline->last_accessed_chunk_data   = NULL;
     lsmash_init_entry_list( timeline->edit_list );
     lsmash_init_entry_list( timeline->description_list );
     lsmash_init_entry_list( timeline->chunk_list );
@@ -100,10 +102,12 @@ static void isom_destruct_timeline_direct( isom_timeline_t *timeline )
 {
     if( !timeline )
         return;
-    lsmash_remove_list( timeline->edit_list, NULL );
+    if( timeline->last_accessed_chunk_data )
+        free( timeline->last_accessed_chunk_data );
+    lsmash_remove_list( timeline->edit_list,        NULL );
     lsmash_remove_list( timeline->description_list, isom_remove_sample_description );
-    lsmash_remove_list( timeline->chunk_list, NULL );
-    lsmash_remove_list( timeline->info_list, NULL );
+    lsmash_remove_list( timeline->chunk_list,       NULL );     /* chunk data must be already freed. */
+    lsmash_remove_list( timeline->info_list,        NULL );
     free( timeline );
 }
 
@@ -929,15 +933,19 @@ lsmash_sample_t *lsmash_get_sample_from_media_timeline( lsmash_root_t *root, uin
         lsmash_bs_empty( bs );
         if( lsmash_bs_read_data( bs, read_size ) )
             return NULL;
-        if( chunk->data )
-            free( chunk->data );
         chunk->data = lsmash_bs_export_data( bs, NULL );
         if( !chunk->data )
             return NULL;
         lsmash_bs_empty( bs );
+        if( timeline->last_accessed_chunk_data )
+        {
+            free( timeline->last_accessed_chunk_data );
+            timeline->last_accessed_chunk_data = NULL;
+        }
         timeline->last_accessed_chunk_number = chunk->number;
-        timeline->last_accessed_offset = seek_pos;
-        timeline->last_read_size = read_size;
+        timeline->last_accessed_chunk_data   = chunk->data;
+        timeline->last_accessed_offset       = seek_pos;
+        timeline->last_read_size             = read_size;
     }
     lsmash_sample_t *sample = lsmash_create_sample( 0 );
     if( !sample )
