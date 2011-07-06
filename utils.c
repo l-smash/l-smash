@@ -542,6 +542,13 @@ int lsmash_remove_entry_direct( lsmash_entry_list_t *list, lsmash_entry_t *entry
             list->last_accessed_number = 0;
         }
     }
+    else
+    {
+        /* We can't know the current entry number immediately,
+         * so discard the last accessed entry info because time is wasted to know it. */
+        list->last_accessed_entry = NULL;
+        list->last_accessed_number = 0;
+    }
     free( entry );
     list->entry_count -= 1;
     return 0;

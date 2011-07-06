@@ -5105,7 +5105,7 @@ int lsmash_update_track_duration( lsmash_root_t *root, uint32_t track_ID, uint32
         return -1;
     if( isom_update_mdhd_duration( trak, last_sample_delta ) )
         return -1;
-    /* If the presentation won't be extended and this track has any edit, we don't change or update duration in tkhd and mvhd. */
+    /* If the presentation won't be extended and this track has any edit, we don't change or update duration in tkhd. */
     return (!root->fragment && trak->edts && trak->edts->elst)
          ? isom_update_mvhd_duration( root->moov )  /* Only update movie duration. */
          : isom_update_tkhd_duration( trak );       /* Also update movie duration internally. */
