@@ -2607,29 +2607,18 @@ static void isom_remove_esds( isom_esds_t *esds )
     {
         switch( esds->parent->type )
         {
-            case QT_BOX_TYPE_WAVE :
-                isom_remove_box( esds, isom_wave_t );
-                break;
-            case ISOM_CODEC_TYPE_AVC1_VIDEO :
+            case ISOM_CODEC_TYPE_MP4V_VIDEO :
                 isom_remove_box( esds, isom_visual_entry_t );
                 break;
             case ISOM_CODEC_TYPE_MP4A_AUDIO :
-            case ISOM_CODEC_TYPE_AC_3_AUDIO :
-            case ISOM_CODEC_TYPE_ALAC_AUDIO :
-            case ISOM_CODEC_TYPE_SAMR_AUDIO :
-            case ISOM_CODEC_TYPE_SAWB_AUDIO :
-            case QT_CODEC_TYPE_23NI_AUDIO :
-            case QT_CODEC_TYPE_NONE_AUDIO :
-            case QT_CODEC_TYPE_LPCM_AUDIO :
-            case QT_CODEC_TYPE_RAW_AUDIO :
-            case QT_CODEC_TYPE_SOWT_AUDIO :
-            case QT_CODEC_TYPE_TWOS_AUDIO :
-            case QT_CODEC_TYPE_FL32_AUDIO :
-            case QT_CODEC_TYPE_FL64_AUDIO :
-            case QT_CODEC_TYPE_IN24_AUDIO :
-            case QT_CODEC_TYPE_IN32_AUDIO :
-            case QT_CODEC_TYPE_NOT_SPECIFIED :
+            case ISOM_CODEC_TYPE_M4AE_AUDIO :
                 isom_remove_box( esds, isom_audio_entry_t );
+                break;
+            case QT_BOX_TYPE_WAVE :
+                isom_remove_box( esds, isom_wave_t );
+                break;
+            case ISOM_CODEC_TYPE_MP4S_SYSTEM :
+                isom_remove_box( esds, isom_mp4s_entry_t );
                 break;
             default :
                 assert( 0 );
