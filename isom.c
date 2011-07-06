@@ -8516,7 +8516,10 @@ static int isom_append_sample_internal( isom_trak_entry_t *trak, lsmash_sample_t
          * right next to the previous chunk of the same track or not. */
     }
     /* anyway the current sample must be pooled. */
-    return lsmash_add_entry( current->pool, sample );
+    if( lsmash_add_entry( current->pool, sample ) )
+        return -1;
+    current->pool_size += sample->length;
+    return 0;
 }
 
 static int isom_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_t *sample )
