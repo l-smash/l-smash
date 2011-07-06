@@ -106,10 +106,10 @@ static void isom_destruct_timeline_direct( isom_timeline_t *timeline )
         return;
     if( timeline->last_accessed_chunk_data )
         free( timeline->last_accessed_chunk_data );
-    lsmash_remove_list( timeline->edit_list,        NULL );
-    lsmash_remove_list( timeline->description_list, isom_remove_sample_description );
-    lsmash_remove_list( timeline->chunk_list,       NULL );     /* chunk data must be already freed. */
-    lsmash_remove_list( timeline->info_list,        NULL );
+    lsmash_remove_entries( timeline->edit_list,        NULL );
+    lsmash_remove_entries( timeline->description_list, isom_remove_sample_description );
+    lsmash_remove_entries( timeline->chunk_list,       NULL );     /* chunk data must be already freed. */
+    lsmash_remove_entries( timeline->info_list,        NULL );
     free( timeline );
 }
 
