@@ -180,11 +180,11 @@ static int set_movie_parameters( movie_io_t *io )
     uint32_t num_output_brands = 0;
     for( uint32_t i = 0; i < num_input_brands; i++ )
     {
-        output_brands[num_output_brands] = input_brands[i];
-        if( !output_brands[num_output_brands] )
+        if( !input_brands[i] )
             continue;
-        for( uint32_t j = 0; j < num_input_brands; j++ )
-            if( output_brands[num_output_brands] == input_brands[j] && i > j )
+        output_brands[num_output_brands] = input_brands[i];
+        for( uint32_t j = 0; j < num_output_brands; j++ )
+            if( output_brands[num_output_brands] == output_brands[j] )
             {
                 /* This brand already exists. Skip this. */
                 --num_output_brands;
