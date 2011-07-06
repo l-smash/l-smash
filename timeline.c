@@ -56,6 +56,8 @@ typedef struct
 typedef struct
 {
     uint32_t track_ID;
+    uint32_t movie_timescale;
+    uint32_t media_timescale;
     uint32_t last_accessed_chunk_number;
     uint64_t last_accessed_offset;
     uint64_t last_read_size;
@@ -633,21 +635,26 @@ static isom_sample_entry_t *isom_duplicate_description( isom_sample_entry_t *ent
 
 int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
 {
+    if( !root || !root->moov || !root->moov->mvhd || !root->moov->mvhd->timescale )
+        return -1;
     /* Get track by track_ID. */
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
+    if( !trak || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->mdhd->timescale || !trak->mdia->minf || !trak->mdia->minf->stbl )
         return -1;
-    /* Create the timeline list if it doesn't exist. */
+    /* Create a timeline list if it doesn't exist. */
     if( !root->timeline )
     {
         root->timeline = lsmash_create_entry_list();
         if( !root->timeline )
             return -1;
     }
-    /* Create media timeline. */
+    /* Create a timeline. */
     isom_timeline_t *timeline = isom_create_timeline();
     if( !timeline )
         return -1;
+    timeline->track_ID        = track_ID;
+    timeline->movie_timescale = root->moov->mvhd->timescale;
+    timeline->media_timescale = trak->mdia->mdhd->timescale;
     /* Preparation for construction. */
     isom_elst_t *elst = trak->edts ? trak->edts->elst : NULL;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
@@ -887,7 +894,6 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
         ++sample_number;
     }
     chunk->length = offset_from_chunk;
-    timeline->track_ID = track_ID;
     if( lsmash_add_entry( root->timeline, timeline ) )
     {
         isom_destruct_timeline_direct( timeline );
@@ -1005,37 +1011,54 @@ int lsmash_get_last_sample_delta_from_media_timeline( lsmash_root_t *root, uint3
 int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_root_t *src, uint32_t src_track_ID )
 {
     isom_trak_entry_t *dst_trak = isom_get_trak( dst, dst_track_ID );
-    if( !dst_trak )
+    if( !dst_trak || !dst_trak->mdia || !dst_trak->mdia->mdhd || !dst_trak->mdia->mdhd->timescale
+     || !dst->moov || !dst->moov->mvhd || !dst->moov->mvhd->timescale )
         return -1;
     if( dst_trak->edts && dst_trak->edts->elst )
         lsmash_remove_entries( dst_trak->edts->elst->list, NULL );
-    lsmash_entry_t *src_entry = NULL;
+    uint32_t src_movie_timescale;
+    uint32_t src_media_timescale;
+    lsmash_entry_t *src_entry;
     isom_trak_entry_t *src_trak = isom_get_trak( src, src_track_ID );
     if( !src_trak || !src_trak->edts || !src_trak->edts->elst || !src_trak->edts->elst->list )
     {
-        /* Get source entry from timeline instead of Edit List Box. */
+        /* Get from timeline instead of boxes. */
         isom_timeline_t *src_timeline = isom_get_timeline( src, src_track_ID );
-        if( !src_timeline || !src_timeline->edit_list )
+        if( !src_timeline ||!src_timeline->movie_timescale || !src_timeline->media_timescale || !src_timeline->edit_list )
             return -1;
+        src_movie_timescale = src_timeline->movie_timescale;
+        src_media_timescale = src_timeline->media_timescale;
         src_entry = src_timeline->edit_list->head;
     }
     else
+    {
+        if( !src->moov || !src->moov->mvhd || !src->moov->mvhd->timescale
+         || !src_trak->mdia || !src_trak->mdia->mdhd || !src_trak->mdia->mdhd->timescale )
+            return -1;
+        src_movie_timescale = src->moov->mvhd->timescale;
+        src_media_timescale = src_trak->mdia->mdhd->timescale;
         src_entry = src_trak->edts->elst->list->head;
+    }
     if( !src_entry )
         return 0;
     /* Generate edit list if absent in destination. */
     if( (!dst_trak->edts       && isom_add_edts( dst_trak ))
      || (!dst_trak->edts->elst && isom_add_elst( dst_trak->edts )) )
         return -1;
+    uint32_t dst_movie_timescale = dst->moov->mvhd->timescale;
+    uint32_t dst_media_timescale = dst_trak->mdia->mdhd->timescale;
     lsmash_entry_list_t *dst_list = dst_trak->edts->elst->list;
     while( src_entry )
     {
         isom_elst_entry_t *src_data = (isom_elst_entry_t *)src_entry->data;
         if( !src_data )
             return -1;
-        isom_elst_entry_t *dst_data = (isom_elst_entry_t *)lsmash_memdup( src_data, sizeof(isom_elst_entry_t) );
+        isom_elst_entry_t *dst_data = (isom_elst_entry_t *)malloc( sizeof(isom_elst_entry_t) );
         if( !dst_data )
             return -1;
+        dst_data->segment_duration = src_data->segment_duration * ((double)dst_movie_timescale / src_movie_timescale) + 0.5;
+        dst_data->media_time       = src_data->media_time       * ((double)dst_media_timescale / src_media_timescale) + 0.5;
+        dst_data->media_rate       = src_data->media_rate;
         if( lsmash_add_entry( dst_list, dst_data ) )
         {
             free( dst_data );
