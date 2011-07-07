@@ -519,7 +519,6 @@ typedef struct
     /* AVC specific extensions */
     isom_avcC_t *avcC;          /* AVCDecoderConfigurationRecord */
     isom_btrt_t *btrt;          /* MPEG-4 Bit Rate Box @ optional */
-    // isom_m4ds_t *m4ds;       /* MPEG4ExtensionDescriptorsBox @ optional */
 } isom_visual_entry_t;
 
 /* Format Box

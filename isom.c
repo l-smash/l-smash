@@ -3584,7 +3584,9 @@ static int isom_put_ps_entries( lsmash_bs_t *bs, lsmash_entry_list_t *list )
 
 static int isom_write_avcC( lsmash_bs_t *bs, isom_avcC_t *avcC )
 {
-    if( !bs || !avcC || !avcC->sequenceParameterSets || !avcC->pictureParameterSets )
+    if( !avcC )
+        return 0;
+    if( !avcC->sequenceParameterSets || !avcC->pictureParameterSets )
         return -1;
     isom_bs_put_box_common( bs, avcC );
     lsmash_bs_put_byte( bs, avcC->configurationVersion );
@@ -3910,13 +3912,15 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
         switch( sample->type )
         {
             case ISOM_CODEC_TYPE_AVC1_VIDEO :
+#ifdef LSMASH_DEMUXER_ENABLED
+            case ISOM_CODEC_TYPE_MP4V_VIDEO :
+#endif
 #if 0
             case ISOM_CODEC_TYPE_AVC2_VIDEO :
             case ISOM_CODEC_TYPE_AVCP_VIDEO :
             case ISOM_CODEC_TYPE_SVC1_VIDEO :
             case ISOM_CODEC_TYPE_MVC1_VIDEO :
             case ISOM_CODEC_TYPE_MVC2_VIDEO :
-            case ISOM_CODEC_TYPE_MP4V_VIDEO :
             case ISOM_CODEC_TYPE_DRAC_VIDEO :
             case ISOM_CODEC_TYPE_ENCV_VIDEO :
             case ISOM_CODEC_TYPE_MJP2_VIDEO :
@@ -5831,13 +5835,15 @@ static uint64_t isom_update_stsd_size( isom_stsd_t *stsd )
         switch( data->type )
         {
             case ISOM_CODEC_TYPE_AVC1_VIDEO :
+#ifdef LSMASH_DEMUXER_ENABLED
+            case ISOM_CODEC_TYPE_MP4V_VIDEO :
+#endif
 #if 0
             case ISOM_CODEC_TYPE_AVC2_VIDEO :
             case ISOM_CODEC_TYPE_AVCP_VIDEO :
             case ISOM_CODEC_TYPE_SVC1_VIDEO :
             case ISOM_CODEC_TYPE_MVC1_VIDEO :
             case ISOM_CODEC_TYPE_MVC2_VIDEO :
-            case ISOM_CODEC_TYPE_MP4V_VIDEO :
             case ISOM_CODEC_TYPE_DRAC_VIDEO :
             case ISOM_CODEC_TYPE_ENCV_VIDEO :
             case ISOM_CODEC_TYPE_MJP2_VIDEO :

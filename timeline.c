@@ -577,6 +577,7 @@ static isom_sample_entry_t *isom_duplicate_description( isom_sample_entry_t *ent
     switch( entry->type )
     {
         case ISOM_CODEC_TYPE_AVC1_VIDEO :
+        case ISOM_CODEC_TYPE_MP4V_VIDEO :
             description = isom_duplicate_visual_description( (isom_visual_entry_t *)entry );
             is_visual = 1;
             break;
