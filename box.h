@@ -220,7 +220,6 @@ typedef struct
     uint32_t timescale;             /* media timescale: timescale for this media */
     uint64_t duration;              /* the duration of this media expressed in the timescale indicated in this box */
     /* */
-#define ISOM_LANG( lang ) ((((lang[0]-0x60)&0x1f)<<10) | (((lang[1]-0x60)&0x1f)<<5) | ((lang[2]-0x60)&0x1f))
     uint16_t language;              /* ISOM: ISO-639-2/T language codes. The first bit is 0.
                                      *       Each character is packed as the difference between its ASCII value and 0x60.
                                      * QTFF: Macintosh language codes is usually used.
@@ -1945,7 +1944,6 @@ void isom_init_box_common( void *box, void *parent, uint32_t type );
 int isom_check_compatibility( lsmash_root_t *root );
 
 char *isom_4cc2str( uint32_t fourcc );
-char *isom_unpack_iso_language( uint16_t language );
 
 isom_trak_entry_t *isom_get_trak( lsmash_root_t *root, uint32_t track_ID );
 isom_sgpd_entry_t *isom_get_sample_group_description( isom_stbl_t *stbl, uint32_t grouping_type );

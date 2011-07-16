@@ -121,6 +121,16 @@ static void isom_iprint_rgba_color( int indent, uint8_t *color )
     isom_iprintf( indent, "{ R, G, B, A } = { %"PRIu8", %"PRIu8", %"PRIu8", %"PRIu8" }\n", color[0], color[1], color[2], color[3] );
 }
 
+static char *isom_unpack_iso_language( uint16_t language )
+{
+    static char unpacked[4];
+    unpacked[0] = ((language >> 10) & 0x1f) + 0x60;
+    unpacked[1] = ((language >>  5) & 0x1f) + 0x60;
+    unpacked[2] = ( language        & 0x1f) + 0x60;
+    unpacked[3] = 0;
+    return unpacked;
+}
+
 static void isom_iprint_sample_description_common_reserved( int indent, uint8_t *reserved )
 {
     uint64_t temp = ((uint64_t)reserved[0] << 40)

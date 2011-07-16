@@ -2266,6 +2266,7 @@ static int isom_add_chpl( isom_moov_t *moov )
     return 0;
 }
 
+#ifdef LSMASH_DEMUXER_ENABLED
 static int isom_add_mean( isom_metaitem_t *metaitem )
 {
     if( !metaitem || metaitem->mean )
@@ -2343,6 +2344,7 @@ static int isom_add_meta( isom_box_t *parent )
     }
     return 0;
 }
+#endif /* LSMASH_DEMUXER_ENABLED */
 
 static int isom_add_udta( lsmash_root_t *root, uint32_t track_ID )
 {
@@ -6373,7 +6375,7 @@ static uint64_t isom_update_udta_size( isom_udta_t *udta_moov, isom_udta_t *udta
     isom_udta_t *udta = udta_trak ? udta_trak : udta_moov ? udta_moov : NULL;
     if( !udta )
         return 0;
-    udta->size = ISOM_BASEBOX_COMMON_SIZE 
+    udta->size = ISOM_BASEBOX_COMMON_SIZE
         + ( udta_moov ? isom_update_chpl_size( udta->chpl ) : 0 )
         + isom_update_meta_size( udta->meta );
     CHECK_LARGESIZE( udta->size );
@@ -6839,14 +6841,11 @@ uint32_t lsmash_get_start_time_offset( lsmash_root_t *root, uint32_t track_ID )
     return ((isom_ctts_entry_t *)trak->mdia->minf->stbl->ctts->list->head->data)->sample_offset;
 }
 
-char *isom_unpack_iso_language( uint16_t language )
+uint16_t lsmash_pack_iso_language( char *iso_language )
 {
-    static char unpacked[4];
-    unpacked[0] = ((language >> 10) & 0x1f) + 0x60;
-    unpacked[1] = ((language >>  5) & 0x1f) + 0x60;
-    unpacked[2] = ( language        & 0x1f) + 0x60;
-    unpacked[3] = 0;
-    return unpacked;
+    if( !iso_language || strlen( iso_language ) != 3 )
+        return 0;
+    return (uint16_t)LSMASH_PACK_ISO_LANGUAGE( iso_language[0], iso_language[1], iso_language[2] );
 }
 
 static int isom_iso2mac_language( uint16_t ISO_language, uint16_t *MAC_language )
@@ -6875,7 +6874,7 @@ static int isom_mac2iso_language( uint16_t MAC_language, uint16_t *ISO_language 
     return 0;
 }
 
-static int isom_set_media_language( lsmash_root_t *root, uint32_t track_ID, char *ISO_language, uint16_t MAC_language )
+static int isom_set_media_language( lsmash_root_t *root, uint32_t track_ID, uint16_t ISO_language, uint16_t MAC_language )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->mdhd )
@@ -6883,8 +6882,8 @@ static int isom_set_media_language( lsmash_root_t *root, uint32_t track_ID, char
     uint16_t language = 0;
     if( root->isom_compatible )
     {
-        if( ISO_language && (strlen( ISO_language ) == 3) )
-            language = ISOM_LANG( ISO_language );
+        if( ISO_language )
+            language = ISO_language;
         else if( MAC_language )
         {
             if( isom_mac2iso_language( MAC_language, &language ) )
@@ -6895,9 +6894,9 @@ static int isom_set_media_language( lsmash_root_t *root, uint32_t track_ID, char
     }
     else if( root->qt_compatible )
     {
-        if( ISO_language && (strlen( ISO_language ) == 3) )
+        if( ISO_language )
         {
-            if( isom_iso2mac_language( ISOM_LANG( ISO_language ), &language ) )
+            if( isom_iso2mac_language( ISO_language, &language ) )
                 return -1;
         }
         else
@@ -6983,15 +6982,12 @@ int lsmash_get_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     if( mdhd->language >= 0x800 )
     {
         param->MAC_language = 0;
-        param->ISO_language = isom_unpack_iso_language( mdhd->language );
-        memcpy( param->language_shadow, param->ISO_language, sizeof(param->language_shadow) );
-        param->ISO_language = param->language_shadow;
+        param->ISO_language = mdhd->language;
     }
     else
     {
         param->MAC_language = mdhd->language;
-        param->ISO_language = NULL;
-        memset( param->language_shadow, 0, sizeof(param->language_shadow) );
+        param->ISO_language = 0;
     }
     /* Get handler name(s). */
     isom_hdlr_t *hdlr = trak->mdia->hdlr;
@@ -9419,7 +9415,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     lsmash_media_parameters_t media_param;
     lsmash_initialize_media_parameters( &media_param );
     media_param.timescale = media_timescale;
-    media_param.ISO_language = root->max_3gpp_version >= 6 || root->itunes_audio ? "und" : NULL;
+    media_param.ISO_language = root->max_3gpp_version >= 6 || root->itunes_audio ? ISOM_LANGUAGE_CODE_UNDEFINED : 0;
     media_param.MAC_language = 0;
     if( lsmash_set_media_parameters( root, chapter_track_ID, &media_param ) )
         goto fail;
