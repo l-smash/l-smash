@@ -9519,7 +9519,7 @@ static int isom_copy_mean( isom_metaitem_t *dst, isom_metaitem_t *src )
         return -1;
     if( src->mean->meaning_string )
     {
-        dst->mean->meaning_string = lsmash_memdup( src->mean->meaning_string, sizeof(src->mean->meaning_string_length) );
+        dst->mean->meaning_string = lsmash_memdup( src->mean->meaning_string, src->mean->meaning_string_length );
         if( !dst->mean->meaning_string )
             return -1;
         dst->mean->meaning_string_length = src->mean->meaning_string_length;
@@ -9538,7 +9538,7 @@ static int isom_copy_name( isom_metaitem_t *dst, isom_metaitem_t *src )
         return -1;
     if( src->name->name )
     {
-        dst->name->name = lsmash_memdup( src->name->name, sizeof(src->name->name_length) );
+        dst->name->name = lsmash_memdup( src->name->name, src->name->name_length );
         if( !dst->name->name )
             return -1;
         dst->name->name_length = src->name->name_length;
@@ -9558,7 +9558,7 @@ static int isom_copy_data( isom_metaitem_t *dst, isom_metaitem_t *src )
     isom_copy_fields( dst, src, data );
     if( src->data->value )
     {
-        dst->data->value = lsmash_memdup( src->data->value, sizeof(src->data->value_length) );
+        dst->data->value = lsmash_memdup( src->data->value, src->data->value_length );
         if( !dst->data->value )
             return -1;
         dst->data->value_length = src->data->value_length;
