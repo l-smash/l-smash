@@ -77,6 +77,9 @@ int isom_is_fullbox( void *box )
         ISOM_BOX_TYPE_SGPD,
         ISOM_BOX_TYPE_SBGP,
         ISOM_BOX_TYPE_CHPL,
+        ISOM_BOX_TYPE_META,
+        ISOM_BOX_TYPE_MEAN,
+        ISOM_BOX_TYPE_NAME,
         ISOM_BOX_TYPE_MEHD,
         ISOM_BOX_TYPE_TREX,
         ISOM_BOX_TYPE_MFHD,
@@ -1914,16 +1917,16 @@ static int isom_add_mdia( isom_trak_entry_t *trak )
     return 0;
 }
 
-static int isom_add_hdlr( isom_mdia_t *mdia, isom_minf_t *minf, uint32_t media_type )
+static int isom_add_hdlr( isom_mdia_t *mdia, isom_meta_t *meta, isom_minf_t *minf, uint32_t media_type )
 {
-    if( (!mdia && !minf) || (mdia && minf) )
+    if( (!mdia && !meta && !minf) || (mdia && meta) || (meta && minf) || (minf && mdia) )
         return -1;    /* Either one must be given. */
-    if( (mdia && mdia->hdlr) || (minf && minf->hdlr) )
+    if( (mdia && mdia->hdlr) || (meta && meta->hdlr) || (minf && minf->hdlr) )
         return -1;    /* Selected one must not have hdlr yet. */
-    isom_box_t *parent = mdia ? (isom_box_t *)mdia : (isom_box_t *)minf;
+    isom_box_t *parent = mdia ? (isom_box_t *)mdia : meta ? (isom_box_t *)meta : (isom_box_t *)minf;
     isom_create_box( hdlr, parent, ISOM_BOX_TYPE_HDLR );
     lsmash_root_t *root = hdlr->root;
-    uint32_t type = mdia ? (root->qt_compatible ? QT_HANDLER_TYPE_MEDIA : 0) : QT_HANDLER_TYPE_DATA;
+    uint32_t type = mdia ? (root->qt_compatible ? QT_HANDLER_TYPE_MEDIA : 0) : (meta ? 0 : QT_HANDLER_TYPE_DATA);
     uint32_t subtype = media_type;
     hdlr->componentType = type;
     hdlr->componentSubtype = subtype;
@@ -1931,56 +1934,38 @@ static int isom_add_hdlr( isom_mdia_t *mdia, isom_minf_t *minf, uint32_t media_t
     char *subtype_name = NULL;
     uint8_t type_name_length = 0;
     uint8_t subtype_name_length = 0;
-    switch( type )
+    if( mdia )
+        type_name = "Media ";
+    else if( meta )
+        type_name = "Metadata ";
+    else    /* if( minf ) */
+        type_name = "Data ";
+    type_name_length = strlen( type_name );
+    struct
     {
-        case QT_HANDLER_TYPE_DATA :
-            type_name = "Data ";
-            type_name_length = 5;
+        uint32_t subtype;
+        char    *subtype_name;
+        uint8_t  subtype_name_length;
+    } subtype_table[] =
+        {
+            { ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK,          "Sound ",    6 },
+            { ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK,          "Video",     6 },
+            { ISOM_MEDIA_HANDLER_TYPE_HINT_TRACK,           "Hint ",     5 },
+            { ISOM_MEDIA_HANDLER_TYPE_TIMED_METADATA_TRACK, "Metadata ", 9 },
+            { ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK,           "Text ",     5 },
+            { ISOM_META_HANDLER_TYPE_ITUNES_METADATA,       "iTunes ",   7 },
+            { QT_REFERENCE_HANDLER_TYPE_ALIAS,              "Alias ",    6 },
+            { QT_REFERENCE_HANDLER_TYPE_RESOURCE,           "Resource ", 9 },
+            { QT_REFERENCE_HANDLER_TYPE_URL,                "URL ",      4 },
+            { subtype,                                      "Unknown ",  8 }
+        };
+    for( int i = 0; subtype_table[i].subtype; i++ )
+        if( subtype == subtype_table[i].subtype )
+        {
+            subtype_name        = subtype_table[i].subtype_name;
+            subtype_name_length = subtype_table[i].subtype_name_length;
             break;
-        default :
-            type_name = "Media ";
-            type_name_length = 6;
-            break;
-    }
-    switch( subtype )
-    {
-        case ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK :
-            subtype_name = "Sound ";
-            subtype_name_length = 6;
-            break;
-        case ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK :
-            subtype_name = "Video ";
-            subtype_name_length = 6;
-            break;
-        case ISOM_MEDIA_HANDLER_TYPE_HINT_TRACK :
-            subtype_name = "Hint ";
-            subtype_name_length = 5;
-            break;
-        case ISOM_MEDIA_HANDLER_TYPE_TIMED_METADATA_TRACK :
-            subtype_name = "Meta ";
-            subtype_name_length = 5;
-            break;
-        case ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK :
-            subtype_name = "Text ";
-            subtype_name_length = 5;
-            break;
-        case QT_REFERENCE_HANDLER_TYPE_ALIAS :
-            subtype_name = "Alias ";
-            subtype_name_length = 6;
-            break;
-        case QT_REFERENCE_HANDLER_TYPE_RESOURCE :
-            subtype_name = "Resource ";
-            subtype_name_length = 9;
-            break;
-        case QT_REFERENCE_HANDLER_TYPE_URL :
-            subtype_name = "URL ";
-            subtype_name_length = 4;
-            break;
-        default :
-            subtype_name = "Unknown ";
-            subtype_name_length = 8;
-            break;
-    }
+        }
     uint32_t name_length = 15 + subtype_name_length + type_name_length + root->isom_compatible + root->qt_compatible;
     uint8_t *name = malloc( name_length );
     if( !name )
@@ -1997,6 +1982,8 @@ static int isom_add_hdlr( isom_mdia_t *mdia, isom_minf_t *minf, uint32_t media_t
     hdlr->componentName_length = name_length;
     if( mdia )
         mdia->hdlr = hdlr;
+    else if( meta )
+        meta->hdlr = hdlr;
     else
         minf->hdlr = hdlr;
     return 0;
@@ -2273,9 +2260,87 @@ static int isom_add_chpl( isom_moov_t *moov )
 {
     if( !moov || !moov->udta || moov->udta->chpl )
         return -1;
-    isom_create_list_box( chpl, moov, ISOM_BOX_TYPE_CHPL );
+    isom_create_list_box( chpl, moov->udta, ISOM_BOX_TYPE_CHPL );
     chpl->version = 1;      /* version = 1 is popular. */
     moov->udta->chpl = chpl;
+    return 0;
+}
+
+static int isom_add_mean( isom_metaitem_t *metaitem )
+{
+    if( !metaitem || metaitem->mean )
+        return -1;
+    isom_create_box( mean, metaitem, ISOM_BOX_TYPE_MEAN );
+    metaitem->mean = mean;
+    return 0;
+}
+
+static int isom_add_name( isom_metaitem_t *metaitem )
+{
+    if( !metaitem || metaitem->name )
+        return -1;
+    isom_create_box( name, metaitem, ISOM_BOX_TYPE_NAME );
+    metaitem->name = name;
+    return 0;
+}
+
+static int isom_add_data( isom_metaitem_t *metaitem )
+{
+    if( !metaitem || metaitem->data )
+        return -1;
+    isom_create_box( data, metaitem, ISOM_BOX_TYPE_DATA );
+    metaitem->data = data;
+    return 0;
+}
+
+static int isom_add_ilst( isom_moov_t *moov )
+{
+    if( !moov || !moov->udta || !moov->udta->meta || moov->udta->meta->ilst )
+        return -1;
+    isom_create_box( ilst, moov->udta->meta, ISOM_BOX_TYPE_ILST );
+    ilst->item_list = lsmash_create_entry_list();
+    if( !ilst->item_list )
+    {
+        free( ilst );
+        return -1;
+    }
+    moov->udta->meta->ilst = ilst;
+    return 0;
+}
+
+static int isom_add_meta( isom_box_t *parent )
+{
+    if( !parent )
+        return -1;
+    isom_create_box( meta, parent, ISOM_BOX_TYPE_META );
+    if( !parent->type )
+    {
+        lsmash_root_t *root = (lsmash_root_t *)root;
+        if( root->meta )
+            return -1;
+        root->meta = meta;
+    }
+    else if( parent->type == ISOM_BOX_TYPE_MOOV )
+    {
+        isom_moov_t *moov = (isom_moov_t *)parent;
+        if( moov->meta )
+            return -1;
+        moov->meta = meta;
+    }
+    else if( parent->type == ISOM_BOX_TYPE_TRAK )
+    {
+        isom_trak_entry_t *trak = (isom_trak_entry_t *)trak;
+        if( trak->meta )
+            return -1;
+        trak->meta = meta;
+    }
+    else
+    {
+        isom_udta_t *udta = (isom_udta_t *)parent;
+        if( udta->meta )
+            return -1;
+        udta->meta = meta;
+    }
     return 0;
 }
 
@@ -2561,6 +2626,8 @@ static void isom_remove_hdlr( isom_hdlr_t *hdlr )
     {
         if( hdlr->parent->type == ISOM_BOX_TYPE_MDIA )
             isom_remove_box( hdlr, isom_mdia_t );
+        else if( hdlr->parent->type == ISOM_BOX_TYPE_META )
+            isom_remove_box( hdlr, isom_meta_t );
         else if( hdlr->parent->type == ISOM_BOX_TYPE_MINF )
             isom_remove_box( hdlr, isom_minf_t );
         else
@@ -3070,6 +3137,75 @@ static void isom_remove_udta( isom_udta_t *udta )
     free( udta );
 }
 
+static void isom_remove_mean( isom_mean_t *mean )
+{
+    if( !mean )
+        return;
+    if( mean->meaning_string )
+        free( mean->meaning_string );
+    isom_remove_box( mean, isom_metaitem_t );
+}
+
+static void isom_remove_name( isom_name_t *name )
+{
+    if( !name )
+        return;
+    if( name->name )
+        free( name->name );
+    isom_remove_box( name, isom_metaitem_t );
+}
+
+static void isom_remove_data( isom_data_t *data )
+{
+    if( !data )
+        return;
+    if( data->value )
+        free( data->value );
+    isom_remove_box( data, isom_metaitem_t );
+}
+
+static void isom_remove_metaitem( isom_metaitem_t *metaitem )
+{
+    if( !metaitem )
+        return;
+    isom_remove_mean( metaitem->mean );
+    isom_remove_name( metaitem->name );
+    isom_remove_data( metaitem->data );
+    free( metaitem );
+}
+
+static void isom_remove_ilst( isom_ilst_t *ilst )
+{
+    if( !ilst )
+        return;
+    lsmash_remove_list( ilst->item_list, isom_remove_metaitem );
+    isom_remove_box( ilst, isom_meta_t );
+}
+
+static void isom_remove_meta( isom_meta_t *meta )
+{
+    if( !meta )
+        return;
+    isom_remove_hdlr( meta->hdlr );
+    isom_remove_dinf( meta->dinf );
+    isom_remove_ilst( meta->ilst );
+    if( meta->parent )
+    {
+        if( !meta->parent->type )
+            isom_remove_box( meta, lsmash_root_t );
+        else if( meta->parent->type == ISOM_BOX_TYPE_MOOV )
+            isom_remove_box( meta, isom_moov_t );
+        else if( meta->parent->type == ISOM_BOX_TYPE_TRAK )
+            isom_remove_box( meta, isom_trak_entry_t );
+        else if( meta->parent->type == ISOM_BOX_TYPE_UDTA )
+            isom_remove_box( meta, isom_udta_t );
+        else
+            assert( 0 );
+        return;
+    }
+    free( meta );
+}
+
 static void isom_remove_trak( isom_trak_entry_t *trak )
 {
     if( !trak )
@@ -3080,6 +3216,7 @@ static void isom_remove_trak( isom_trak_entry_t *trak )
     isom_remove_tref( trak->tref );
     isom_remove_mdia( trak->mdia );
     isom_remove_udta( trak->udta );
+    isom_remove_meta( trak->meta );
     if( trak->cache )
     {
         lsmash_remove_list( trak->cache->chunk.pool, lsmash_delete_sample );
@@ -3123,8 +3260,9 @@ static void isom_remove_moov( lsmash_root_t *root )
     if( moov->mvhd )
         free( moov->mvhd );
     isom_remove_iods( moov->iods );
-    isom_remove_udta( moov->udta );
     lsmash_remove_list( moov->trak_list, isom_remove_trak );
+    isom_remove_udta( moov->udta );
+    isom_remove_meta( moov->meta );
     isom_remove_mvex( moov->mvex );
     free( moov );
     root->moov = NULL;
@@ -3382,11 +3520,10 @@ static int isom_write_mdhd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_hdlr( lsmash_bs_t *bs, isom_trak_entry_t *trak, uint8_t is_media_handler )
+static int isom_write_hdlr( lsmash_bs_t *bs, isom_hdlr_t *hdlr, uint32_t parent_type )
 {
-    isom_hdlr_t *hdlr = is_media_handler ? trak->mdia->hdlr : trak->mdia->minf->hdlr;
     if( !hdlr )
-        return 0;
+        return parent_type == ISOM_BOX_TYPE_MINF ? 0 : -1;
     isom_bs_put_box_common( bs, hdlr );
     lsmash_bs_put_be32( bs, hdlr->componentType );
     lsmash_bs_put_be32( bs, hdlr->componentSubtype );
@@ -3480,9 +3617,8 @@ static int isom_write_gmhd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return 0;
 }
 
-static int isom_write_dref( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_dref( lsmash_bs_t *bs, isom_dref_t *dref )
 {
-    isom_dref_t *dref = trak->mdia->minf->dinf->dref;
     if( !dref || !dref->list )
         return -1;
     isom_bs_put_box_common( bs, dref );
@@ -3500,15 +3636,14 @@ static int isom_write_dref( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_dinf( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_dinf( lsmash_bs_t *bs, isom_dinf_t *dinf, uint32_t parent_type )
 {
-    isom_dinf_t *dinf = trak->mdia->minf->dinf;
     if( !dinf )
-        return -1;
+        return parent_type == ISOM_BOX_TYPE_MINF ? -1 : 0;
     isom_bs_put_box_common( bs, dinf );
     if( lsmash_bs_write_data( bs ) )
         return -1;
-    return isom_write_dref( bs, trak );
+    return isom_write_dref( bs, dinf->dref );
 }
 
 static int isom_write_pasp( lsmash_bs_t *bs, isom_pasp_t *pasp )
@@ -4295,8 +4430,8 @@ static int isom_write_minf( lsmash_bs_t *bs, isom_trak_entry_t *trak )
      || (minf->nmhd && isom_write_nmhd( bs, trak ))
      || (minf->gmhd && isom_write_gmhd( bs, trak )) )
         return -1;
-    if( isom_write_hdlr( bs, trak, 0 )
-     || isom_write_dinf( bs, trak )
+    if( isom_write_hdlr( bs, minf->hdlr, minf->type )
+     || isom_write_dinf( bs, minf->dinf, minf->type )
      || isom_write_stbl( bs, trak ) )
         return -1;
     return 0;
@@ -4311,7 +4446,7 @@ static int isom_write_mdia( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     if( lsmash_bs_write_data( bs ) )
         return -1;
     if( isom_write_mdhd( bs, trak )
-     || isom_write_hdlr( bs, trak, 1 )
+     || isom_write_hdlr( bs, mdia->hdlr, mdia->type )
      || isom_write_minf( bs, trak ) )
         return -1;
     return 0;
@@ -4343,6 +4478,82 @@ static int isom_write_chpl( lsmash_bs_t *bs, isom_chpl_t *chpl )
     return lsmash_bs_write_data( bs );
 }
 
+static int isom_write_mean( lsmash_bs_t *bs, isom_mean_t *mean )
+{
+    if( !mean )
+        return 0;
+    isom_bs_put_box_common( bs, mean );
+    if( mean->meaning_string && mean->meaning_string_length )
+        lsmash_bs_put_bytes( bs, mean->meaning_string, mean->meaning_string_length );
+    return lsmash_bs_write_data( bs );
+}
+
+static int isom_write_name( lsmash_bs_t *bs, isom_name_t *name )
+{
+    if( !name )
+        return 0;
+    isom_bs_put_box_common( bs, name );
+    if( name->name && name->name_length )
+        lsmash_bs_put_bytes( bs, name->name, name->name_length );
+    return lsmash_bs_write_data( bs );
+}
+
+static int isom_write_data( lsmash_bs_t *bs, isom_data_t *data )
+{
+    if( !data || data->size < 16 )
+        return -1;
+    isom_bs_put_box_common( bs, data );
+    lsmash_bs_put_be16( bs, data->reserved );
+    lsmash_bs_put_byte( bs, data->type_set_identifier );
+    lsmash_bs_put_byte( bs, data->type_code );
+    lsmash_bs_put_be32( bs, data->the_locale );
+    if( data->value && data->value_length )
+        lsmash_bs_put_bytes( bs, data->value, data->value_length );
+    return lsmash_bs_write_data( bs );
+}
+
+static int isom_write_metaitem( lsmash_bs_t *bs, isom_metaitem_t *metaitem )
+{
+    if( !metaitem )
+        return -1;
+    isom_bs_put_box_common( bs, metaitem );
+    if( lsmash_bs_write_data( bs ) )
+        return -1;
+    if( isom_write_mean( bs, metaitem->mean )
+     || isom_write_name( bs, metaitem->name )
+     || isom_write_data( bs, metaitem->data ) )
+        return -1;
+    return 0;
+}
+
+static int isom_write_ilst( lsmash_bs_t *bs, isom_ilst_t *ilst )
+{
+    if( !ilst )
+        return 0;
+    isom_bs_put_box_common( bs, ilst );
+    if( lsmash_bs_write_data( bs ) )
+        return -1;
+    if( ilst->item_list )
+        for( lsmash_entry_t *entry = ilst->item_list->head; entry; entry = entry->next )
+            if( isom_write_metaitem( bs, (isom_metaitem_t *)entry->data ) )
+                return -1;
+    return 0;
+}
+
+static int isom_write_meta( lsmash_bs_t *bs, isom_meta_t *meta )
+{
+    if( !meta )
+        return 0;
+    isom_bs_put_box_common( bs, meta );
+    if( lsmash_bs_write_data( bs ) )
+        return -1;
+    if( isom_write_hdlr( bs, meta->hdlr, meta->type )
+     || isom_write_dinf( bs, meta->dinf, meta->type )
+     || isom_write_ilst( bs, meta->ilst ) )
+        return -1;
+    return 0;
+}
+
 static int isom_write_udta( lsmash_bs_t *bs, isom_moov_t *moov, isom_trak_entry_t *trak )
 {
     /* Setting non-NULL pointer to trak means trak->udta data will be written in stream.
@@ -4355,7 +4566,7 @@ static int isom_write_udta( lsmash_bs_t *bs, isom_moov_t *moov, isom_trak_entry_
         return -1;
     if( moov && isom_write_chpl( bs, udta->chpl ) )
         return -1;
-    return 0;
+    return isom_write_meta( bs, udta->meta );
 }
 
 static int isom_write_trak( lsmash_bs_t *bs, isom_trak_entry_t *trak )
@@ -4370,7 +4581,8 @@ static int isom_write_trak( lsmash_bs_t *bs, isom_trak_entry_t *trak )
      || isom_write_edts( bs, trak )
      || isom_write_tref( bs, trak )
      || isom_write_mdia( bs, trak )
-     || isom_write_udta( bs, NULL, trak ) )
+     || isom_write_udta( bs, NULL, trak )
+     || isom_write_meta( bs, trak->meta ) )
         return -1;
     return 0;
 }
@@ -4788,6 +5000,9 @@ int isom_check_compatibility( lsmash_root_t *root )
             case ISOM_BRAND_TYPE_M4A :
             case ISOM_BRAND_TYPE_M4B :
                 root->itunes_audio = 1;
+            case ISOM_BRAND_TYPE_M4P :
+            case ISOM_BRAND_TYPE_M4V :
+                root->itunes_movie = 1;
                 break;
             case ISOM_BRAND_TYPE_3GP4 :
                 root->max_3gpp_version = LSMASH_MAX( root->max_3gpp_version, 4 );
@@ -4819,7 +5034,7 @@ int isom_check_compatibility( lsmash_root_t *root )
                 break;
         }
     }
-    root->isom_compatible = !root->qt_compatible || root->mp4_version1 || root->mp4_version2 || root->itunes_audio || root->max_3gpp_version;
+    root->isom_compatible = !root->qt_compatible || root->mp4_version1 || root->mp4_version2 || root->itunes_movie || root->max_3gpp_version;
     return 0;
 }
 
@@ -6091,12 +6306,76 @@ static uint64_t isom_update_chpl_size( isom_chpl_t *chpl )
     return chpl->size;
 }
 
+static uint64_t isom_update_mean_size( isom_mean_t *mean )
+{
+    if( !mean )
+        return 0;
+    mean->size = ISOM_FULLBOX_COMMON_SIZE + mean->meaning_string_length;
+    CHECK_LARGESIZE( mean->size );
+    return mean->size;
+}
+
+static uint64_t isom_update_name_size( isom_name_t *name )
+{
+    if( !name )
+        return 0;
+    name->size = ISOM_FULLBOX_COMMON_SIZE + name->name_length;
+    CHECK_LARGESIZE( name->size );
+    return name->size;
+}
+
+static uint64_t isom_update_data_size( isom_data_t *data )
+{
+    if( !data )
+        return 0;
+    data->size = ISOM_BASEBOX_COMMON_SIZE + 8 + data->value_length;
+    CHECK_LARGESIZE( data->size );
+    return data->size;
+}
+
+static uint64_t isom_update_metaitem_size( isom_metaitem_t *metaitem )
+{
+    if( !metaitem )
+        return 0;
+    metaitem->size = ISOM_BASEBOX_COMMON_SIZE
+        + isom_update_mean_size( metaitem->mean )
+        + isom_update_name_size( metaitem->name )
+        + isom_update_data_size( metaitem->data );
+    CHECK_LARGESIZE( metaitem->size );
+    return metaitem->size;
+}
+
+static uint64_t isom_update_ilst_size( isom_ilst_t *ilst )
+{
+    if( !ilst )
+        return 0;
+    ilst->size = ISOM_BASEBOX_COMMON_SIZE;
+    for( lsmash_entry_t *entry = ilst->item_list->head; entry; entry = entry->next )
+        ilst->size += isom_update_metaitem_size( (isom_metaitem_t *)entry->data );
+    CHECK_LARGESIZE( ilst->size );
+    return ilst->size;
+}
+
+static uint64_t isom_update_meta_size( isom_meta_t *meta )
+{
+    if( !meta )
+        return 0;
+    meta->size = ISOM_BASEBOX_COMMON_SIZE
+        + isom_update_hdlr_size( meta->hdlr )
+        + isom_update_dinf_size( meta->dinf )
+        + isom_update_ilst_size( meta->ilst );
+    CHECK_LARGESIZE( meta->size );
+    return meta->size;
+}
+
 static uint64_t isom_update_udta_size( isom_udta_t *udta_moov, isom_udta_t *udta_trak )
 {
     isom_udta_t *udta = udta_trak ? udta_trak : udta_moov ? udta_moov : NULL;
     if( !udta )
         return 0;
-    udta->size = ISOM_BASEBOX_COMMON_SIZE + ( udta_moov ? isom_update_chpl_size( udta->chpl ) : 0 );
+    udta->size = ISOM_BASEBOX_COMMON_SIZE 
+        + ( udta_moov ? isom_update_chpl_size( udta->chpl ) : 0 )
+        + isom_update_meta_size( udta->meta );
     CHECK_LARGESIZE( udta->size );
     return udta->size;
 }
@@ -6111,7 +6390,8 @@ static uint64_t isom_update_trak_entry_size( isom_trak_entry_t *trak )
         + isom_update_edts_size( trak->edts )
         + isom_update_tref_size( trak->tref )
         + isom_update_mdia_size( trak->mdia )
-        + isom_update_udta_size( NULL, trak->udta );
+        + isom_update_udta_size( NULL, trak->udta )
+        + isom_update_meta_size( trak->meta );
     CHECK_LARGESIZE( trak->size );
     return trak->size;
 }
@@ -6161,6 +6441,7 @@ static int isom_update_moov_size( isom_moov_t *moov )
         + isom_update_mvhd_size( moov->mvhd )
         + isom_update_iods_size( moov->iods )
         + isom_update_udta_size( moov->udta, NULL )
+        + isom_update_meta_size( moov->meta )
         + isom_update_mvex_size( moov->mvex );
     if( moov->trak_list )
         for( lsmash_entry_t *entry = moov->trak_list->head; entry; entry = entry->next )
@@ -6337,9 +6618,9 @@ uint32_t lsmash_create_track( lsmash_root_t *root, lsmash_media_type media_type 
      || isom_add_stco( trak->mdia->minf->stbl )
      || isom_add_stsz( trak->mdia->minf->stbl ) )
         return 0;
-    if( isom_add_hdlr( trak->mdia, NULL, media_type ) )
+    if( isom_add_hdlr( trak->mdia, NULL, NULL, media_type ) )
         return 0;
-    if( root->qt_compatible && isom_add_hdlr( NULL, trak->mdia->minf, QT_REFERENCE_HANDLER_TYPE_URL ) )
+    if( root->qt_compatible && isom_add_hdlr( NULL, NULL, trak->mdia->minf, QT_REFERENCE_HANDLER_TYPE_URL ) )
         return 0;
     switch( media_type )
     {
@@ -6980,19 +7261,21 @@ static int isom_write_moov( lsmash_root_t *root )
     if( !root || !root->moov )
         return -1;
     lsmash_bs_t *bs = root->bs;
-    isom_bs_put_box_common( bs, root->moov );
+    isom_moov_t *moov = root->moov;
+    isom_bs_put_box_common( bs, moov );
     if( lsmash_bs_write_data( bs ) )
         return -1;
     if( isom_write_mvhd( root )
      || isom_write_iods( root ) )
         return -1;
-    if( root->moov->trak_list )
-        for( lsmash_entry_t *entry = root->moov->trak_list->head; entry; entry = entry->next )
+    if( moov->trak_list )
+        for( lsmash_entry_t *entry = moov->trak_list->head; entry; entry = entry->next )
             if( isom_write_trak( bs, (isom_trak_entry_t *)entry->data ) )
                 return -1;
-    if( isom_write_udta( bs, root->moov, NULL ) )
+    if( isom_write_udta( bs, moov, NULL )
+     || isom_write_meta( bs, moov->meta ) )
         return -1;
-    return isom_write_mvex( bs, root->moov->mvex );
+    return isom_write_mvex( bs, moov->mvex );
 }
 
 int lsmash_set_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length )
@@ -7157,11 +7440,14 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
      || isom_write_mdat_size( root ) )
         return -1;
 
+    lsmash_bs_t *bs = root->bs;
+    uint64_t meta_size = root->meta ? root->meta->size : 0;
     if( !remux )
     {
-        if( isom_write_moov( root ) )
+        if( isom_write_moov( root )
+         || isom_write_meta( bs, root->meta ) )
             return -1;
-        root->size += moov->size;
+        root->size += moov->size + meta_size;
         return 0;
     }
 
@@ -7173,7 +7459,7 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
         if( !stco->list->tail )
             return -1;
         if( stco->large_presentation
-            || ((isom_stco_entry_t*)stco->list->tail->data)->chunk_offset + moov->size <= UINT32_MAX )
+         || (((isom_stco_entry_t*)stco->list->tail->data)->chunk_offset + moov->size + meta_size) <= UINT32_MAX )
         {
             entry = entry->next;
             continue;   /* no need to convert stco into co64 */
@@ -7186,9 +7472,10 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
     }
 
     /* now the amount of offset is fixed. */
+    uint64_t mtf_size = moov->size + meta_size;     /* sum of size of boxes moved to front */
 
-    /* buffer size must be at least sizeof(moov)*2 */
-    remux->buffer_size = LSMASH_MAX( remux->buffer_size, moov->size * 2 );
+    /* buffer size must be at least mtf_size * 2 */
+    remux->buffer_size = LSMASH_MAX( remux->buffer_size, mtf_size * 2 );
 
     uint8_t* buf[2];
     if( (buf[0] = (uint8_t*)malloc( remux->buffer_size )) == NULL )
@@ -7202,29 +7489,30 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
         isom_stco_t* stco = ((isom_trak_entry_t*)entry->data)->mdia->minf->stbl->stco;
         if( stco->large_presentation )
             for( lsmash_entry_t* co64_entry = stco->list->head ; co64_entry ; co64_entry = co64_entry->next )
-                ((isom_co64_entry_t*)co64_entry->data)->chunk_offset += moov->size;
+                ((isom_co64_entry_t*)co64_entry->data)->chunk_offset += mtf_size;
         else
             for( lsmash_entry_t* stco_entry = stco->list->head ; stco_entry ; stco_entry = stco_entry->next )
-                ((isom_stco_entry_t*)stco_entry->data)->chunk_offset += moov->size;
+                ((isom_stco_entry_t*)stco_entry->data)->chunk_offset += mtf_size;
     }
 
-    FILE *stream = root->bs->stream;
+    FILE *stream = bs->stream;
     isom_mdat_t *mdat = root->mdat;
-    uint64_t total = lsmash_ftell( stream ) + moov->size; // FIXME:
+    uint64_t total = root->size + mtf_size;
     uint64_t readnum;
-    /* backup starting area of mdat and write moov there instead */
+    /* backup starting area of mdat and write moov + meta there instead */
     if( lsmash_fseek( stream, mdat->placeholder_pos, SEEK_SET ) )
         goto fail;
     readnum = fread( buf[0], 1, size, stream );
     uint64_t read_pos = lsmash_ftell( stream );
 
-    /* write moov there instead */
+    /* write moov + meta there instead */
     if( lsmash_fseek( stream, mdat->placeholder_pos, SEEK_SET )
-        || isom_write_moov( root ) )
+     || isom_write_moov( root )
+     || isom_write_meta( bs, root->meta ) )
         goto fail;
     uint64_t write_pos = lsmash_ftell( stream );
 
-    mdat->placeholder_pos += moov->size; /* update placeholder */
+    mdat->placeholder_pos += mtf_size; /* update placeholder */
 
     /* copy-pastan */
     int buf_switch = 1;
@@ -7238,7 +7526,7 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
         buf_switch ^= 0x1;
 
         if( lsmash_fseek( stream, write_pos, SEEK_SET )
-            || fwrite( buf[buf_switch], 1, size, stream ) != size )
+         || fwrite( buf[buf_switch], 1, size, stream ) != size )
             goto fail;
         write_pos = lsmash_ftell( stream );
         if( remux->func ) remux->func( remux->param, write_pos, total ); // FIXME:
@@ -7247,7 +7535,7 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
         goto fail;
     if( remux->func ) remux->func( remux->param, total, total ); // FIXME:
 
-    root->size += moov->size;
+    root->size += mtf_size;
     free( buf[0] );
     return 0;
 
@@ -7390,13 +7678,14 @@ static int isom_finish_fragment_initial_movie( lsmash_root_t *root )
      || isom_update_moov_size( moov ) )
         return -1;
     /* stco->co64 conversion, depending on last chunk's offset */
+    uint64_t meta_size = root->meta ? root->meta->size : 0;
     for( lsmash_entry_t* entry = moov->trak_list->head; entry; )
     {
         isom_trak_entry_t* trak = (isom_trak_entry_t*)entry->data;
         isom_stco_t* stco = trak->mdia->minf->stbl->stco;
         if( !stco->list->tail   /* no samples */
          || stco->large_presentation
-         || ((isom_stco_entry_t*)stco->list->tail->data)->chunk_offset + moov->size <= UINT32_MAX )
+         || (((isom_stco_entry_t*)stco->list->tail->data)->chunk_offset + moov->size + meta_size) <= UINT32_MAX )
         {
             entry = entry->next;
             continue;   /* no need to convert stco into co64 */
@@ -7408,23 +7697,25 @@ static int isom_finish_fragment_initial_movie( lsmash_root_t *root )
         entry = moov->trak_list->head;  /* whenever any conversion, re-check all traks */
     }
     /* Now, the amount of offset is fixed. Apply that to stco/co64. */
+    uint64_t preceding_size = moov->size + meta_size;
     for( lsmash_entry_t* entry = moov->trak_list->head; entry; entry = entry->next )
     {
         isom_stco_t* stco = ((isom_trak_entry_t*)entry->data)->mdia->minf->stbl->stco;
         if( stco->large_presentation )
             for( lsmash_entry_t* co64_entry = stco->list->head ; co64_entry ; co64_entry = co64_entry->next )
-                ((isom_co64_entry_t*)co64_entry->data)->chunk_offset += moov->size;
+                ((isom_co64_entry_t*)co64_entry->data)->chunk_offset += preceding_size;
         else
             for( lsmash_entry_t* stco_entry = stco->list->head ; stco_entry ; stco_entry = stco_entry->next )
-                ((isom_stco_entry_t*)stco_entry->data)->chunk_offset += moov->size;
+                ((isom_stco_entry_t*)stco_entry->data)->chunk_offset += preceding_size;
     }
     /* Write File Type Box here if it was not written yet. */
     if( !root->file_type_written && isom_write_ftyp( root ) )
         return -1;
     /* Write Movie Box. */
-    if( isom_write_moov( root ) )
+    if( isom_write_moov( root )
+     || isom_write_meta( root->bs, root->meta ) )
         return -1;
-    root->size += moov->size;
+    root->size += preceding_size;
     /* Output samples. */
     return isom_output_fragment_media_data( root );
 }
@@ -7761,6 +8052,7 @@ void lsmash_discard_boxes( lsmash_root_t *root )
     lsmash_remove_list( root->moof_list, isom_remove_moof );
     isom_remove_mdat( root->mdat );
     isom_remove_free( root->free );
+    isom_remove_meta( root->meta );
     isom_remove_mfra( root->mfra );
     root->ftyp = NULL;
     root->moov = NULL;
@@ -9216,3 +9508,164 @@ void lsmash_delete_tyrant_chapter( lsmash_root_t *root )
     isom_remove_chpl( root->moov->udta->chpl );
     root->moov->udta->chpl = NULL;
 }
+
+#ifdef LSMASH_DEMUXER_ENABLED
+/*---- remuxer functions ----*/
+
+static int isom_copy_mean( isom_metaitem_t *dst, isom_metaitem_t *src )
+{
+    if( !dst )
+        return 0;
+    isom_remove_mean( dst->mean );
+    if( !src || !src->mean )
+        return 0;
+    if( isom_add_mean( dst ) )
+        return -1;
+    if( src->mean->meaning_string )
+    {
+        dst->mean->meaning_string = lsmash_memdup( src->mean->meaning_string, sizeof(src->mean->meaning_string_length) );
+        if( !dst->mean->meaning_string )
+            return -1;
+        dst->mean->meaning_string_length = src->mean->meaning_string_length;
+    }
+    return 0;
+}
+
+static int isom_copy_name( isom_metaitem_t *dst, isom_metaitem_t *src )
+{
+    if( !dst )
+        return 0;
+    isom_remove_name( dst->name );
+    if( !src || !src->name )
+        return 0;
+    if( isom_add_name( dst ) )
+        return -1;
+    if( src->name->name )
+    {
+        dst->name->name = lsmash_memdup( src->name->name, sizeof(src->name->name_length) );
+        if( !dst->name->name )
+            return -1;
+        dst->name->name_length = src->name->name_length;
+    }
+    return 0;
+}
+
+static int isom_copy_data( isom_metaitem_t *dst, isom_metaitem_t *src )
+{
+    if( !dst )
+        return 0;
+    isom_remove_data( dst->data );
+    if( !src || !src->data )
+        return 0;
+    if( isom_add_data( dst ) )
+        return -1;
+    isom_copy_fields( dst, src, data );
+    if( src->data->value )
+    {
+        dst->data->value = lsmash_memdup( src->data->value, sizeof(src->data->value_length) );
+        if( !dst->data->value )
+            return -1;
+        dst->data->value_length = src->data->value_length;
+    }
+    return 0;
+}
+
+static isom_metaitem_t *isom_duplicate_metaitem( isom_metaitem_t *src )
+{
+    isom_metaitem_t *dst = lsmash_memdup( src, sizeof(isom_metaitem_t) );
+    if( !dst )
+        return NULL;
+    dst->mean = NULL;
+    dst->name = NULL;
+    dst->data = NULL;
+    /* Copy children. */
+    if( isom_copy_mean( dst, src )
+     || isom_copy_name( dst, src )
+     || isom_copy_data( dst, src ) )
+    {
+        isom_remove_metaitem( dst );
+        return NULL;
+    }
+    return dst;
+}
+
+lsmash_itunes_metadata_list_t *lsmash_export_itunes_metadata( lsmash_root_t *root )
+{
+    if( !root || !root->moov )
+        return NULL;
+    if( !root->moov->udta || !root->moov->udta->meta || !root->moov->udta->meta->ilst )
+    {
+        isom_ilst_t *dst = malloc( sizeof(isom_ilst_t) );
+        if( !dst )
+            return NULL;
+        memset( dst, 0, sizeof(isom_ilst_t) );
+        return (lsmash_itunes_metadata_list_t *)dst;
+    }
+    isom_ilst_t *src = root->moov->udta->meta->ilst;
+    isom_ilst_t *dst = lsmash_memdup( src, sizeof(isom_ilst_t) );
+    if( !dst )
+        return NULL;
+    dst->root      = NULL;
+    dst->parent    = NULL;
+    dst->item_list = NULL;
+    if( src->item_list )
+    {
+        dst->item_list = lsmash_create_entry_list();
+        if( !dst->item_list )
+        {
+            free( dst );
+            return NULL;
+        }
+        for( lsmash_entry_t *entry = src->item_list->head; entry; entry = entry->next )
+        {
+            isom_metaitem_t *dst_metaitem = isom_duplicate_metaitem( (isom_metaitem_t *)entry->data );
+            if( !dst_metaitem )
+            {
+                isom_remove_ilst( dst );
+                return NULL;
+            }
+            if( lsmash_add_entry( dst->item_list, dst_metaitem ) )
+            {
+                isom_remove_metaitem( dst_metaitem );
+                isom_remove_ilst( dst );
+                return NULL;
+            }
+        }
+    }
+    return (lsmash_itunes_metadata_list_t *)dst;
+}
+
+int lsmash_import_itunes_metadata( lsmash_root_t *root, lsmash_itunes_metadata_list_t *list )
+{
+    if( !root || !list )
+        return -1;
+    if( !root->itunes_movie )
+        return 0;
+    isom_ilst_t *src = (isom_ilst_t *)list;
+    if( !src->item_list || !src->item_list->entry_count )
+        return 0;
+    if( (!root->moov->udta             && isom_add_udta( root, 0 ))
+     || (!root->moov->udta->meta       && isom_add_meta( (isom_box_t *)root->moov->udta ))
+     || (!root->moov->udta->meta->hdlr && isom_add_hdlr( NULL, root->moov->udta->meta, NULL, ISOM_META_HANDLER_TYPE_ITUNES_METADATA ))
+     || (!root->moov->udta->meta->ilst && isom_add_ilst( root->moov )) )
+        return -1;
+    isom_ilst_t *dst = root->moov->udta->meta->ilst;
+    for( lsmash_entry_t *entry = src->item_list->head; entry; entry = entry->next )
+    {
+        isom_metaitem_t *dst_metaitem = isom_duplicate_metaitem( (isom_metaitem_t *)entry->data );
+        if( !dst_metaitem )
+            return -1;
+        if( lsmash_add_entry( dst->item_list, dst_metaitem ) )
+        {
+            isom_remove_metaitem( dst_metaitem );
+            return -1;
+        }
+    }
+    return 0;
+}
+
+void lsmash_destroy_itunes_metadata( lsmash_itunes_metadata_list_t *list )
+{
+    isom_remove_ilst( (isom_ilst_t *)list );
+}
+#endif /* LSMASH_DEMUXER_ENABLED */

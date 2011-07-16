@@ -33,19 +33,20 @@
 
 typedef struct
 {
-    lsmash_track_parameters_t track_param;
-    lsmash_media_parameters_t media_param;
     uint32_t track_ID;
     uint32_t last_sample_delta;
     uint32_t current_sample_number;
-    int reach_end_of_media_timeline;
+    int      reach_end_of_media_timeline;
+    lsmash_track_parameters_t track_param;
+    lsmash_media_parameters_t media_param;
 } track_t;
 
 typedef struct
 {
-    lsmash_root_t *root;
+    lsmash_root_t                 *root;
+    lsmash_itunes_metadata_list_t *itunes_meta_list;
+    track_t                       *track;
     lsmash_movie_parameters_t movie_param;
-    track_t *track;
     uint32_t num_tracks;
     uint32_t current_track_number;
 } movie_t;
@@ -61,10 +62,13 @@ static void cleanup_movie( movie_t *movie )
 {
     if( !movie )
         return;
+    if( movie->itunes_meta_list )
+        lsmash_destroy_itunes_metadata( movie->itunes_meta_list );
     if( movie->track )
         free( movie->track );
     lsmash_destroy_root( movie->root );
     movie->root = NULL;
+    movie->itunes_meta_list = NULL;
     movie->track = NULL;
 }
 
@@ -111,6 +115,9 @@ static int get_movie( movie_t *input, char *input_name )
     }
     for( uint32_t i = 0; i < num_tracks; i++ )
     {
+        input->itunes_meta_list = lsmash_export_itunes_metadata( input->root );
+        if( !input->itunes_meta_list )
+            return ERROR_MSG( "Failed to get iTunes metadata.\n" );
         lsmash_initialize_track_parameters( &track[i].track_param );
         if( lsmash_get_track_parameters( input->root, track[i].track_ID, &track[i].track_param ) )
             return ERROR_MSG( "Failed to get track parameters.\n" );
@@ -215,14 +222,20 @@ int main( int argc, char *argv[] )
     movie_t input[ num_input ];
     movie_io_t io = { &output, input, num_input };
     memset( input, 0, num_input * sizeof(movie_t) );
+    /* Get input movies. */
     for( int i = 0; i < num_input; i++ )
         if( get_movie( &input[i], argv[i + 1] ) )
             return REMUXER_ERR( "Failed to get input movie.\n" );
+    /* Create output movie. */
     output.root = lsmash_open_movie( argv[argc - 1], LSMASH_FILE_MODE_WRITE );
     if( !output.root )
         return REMUXER_ERR( "Failed to open output movie.\n" );
     if( set_movie_parameters( &io ) )
         return REMUXER_ERR( "Failed to set output movie parameters.\n" );
+    /* Set iTunes metadata. */
+    for( int i = 0; i < num_input; i++ )
+        if( lsmash_import_itunes_metadata( output.root, input[i].itunes_meta_list ) )
+            return REMUXER_ERR( "Failed to set iTunes metadata.\n" );
     /* Create tracks of the output movie. */
     for( int i = 0; i < num_input; i++ )
         output.num_tracks += input[i].num_tracks;

@@ -189,13 +189,6 @@ static isom_esds_t *isom_duplicate_esds( isom_box_t *dst_parent, isom_esds_t *sr
     return dst;
 }
 
-#define isom_copy_fields( dst, src, box_name ) \
-    lsmash_root_t *root = dst->box_name->root; \
-    isom_box_t *parent = dst->box_name->parent; \
-    *dst->box_name = *src->box_name; \
-    dst->box_name->root = root; \
-    dst->box_name->parent = parent
-
 static int isom_copy_clap( isom_visual_entry_t *dst, isom_visual_entry_t *src )
 {
     if( !dst )

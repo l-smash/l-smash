@@ -1332,6 +1332,152 @@ static int isom_print_chpl( lsmash_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
+static int isom_print_meta( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    return isom_print_simple( box, level, "Meta Box" );
+}
+
+static int isom_print_ilst( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    return isom_print_simple( box, level, "Metadata Item List Box" );
+}
+
+static int isom_print_metaitem( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_metaitem_t *metaitem = (isom_metaitem_t *)box;
+    char *name;
+    static const struct
+    {
+        uint32_t type;
+        char    *name;
+    } metaitem_table[] =
+        {
+            { LSMASH_4CC( 0xA9, 'a', 'l', 'b' ), "Album Name" },
+            { LSMASH_4CC( 0xA9, 'a', 'r', 't' ), "Artist" },
+            { LSMASH_4CC( 0xA9, 'A', 'R', 'T' ), "Artist" },
+            { LSMASH_4CC( 0xA9, 'c', 'm', 't' ), "User Comment" },
+            { LSMASH_4CC( 0xA9, 'd', 'a', 'y' ), "Release Date" },
+            { LSMASH_4CC( 0xA9, 'e', 'n', 'c' ), "Encoded By" },
+            { LSMASH_4CC( 0xA9, 'g', 'e', 'n' ), "User Genre" },
+            { LSMASH_4CC( 0xA9, 'g', 'r', 'p' ), "Grouping" },
+            { LSMASH_4CC( 0xA9, 'l', 'y', 'r' ), "Lyrics" },
+            { LSMASH_4CC( 0xA9, 'n', 'a', 'm' ), "Title" },
+            { LSMASH_4CC( 0xA9, 't', 'o', 'o' ), "Encoding Tool" },
+            { LSMASH_4CC( 0xA9, 'w', 'r', 't' ), "Composer" },
+            { LSMASH_4CC( 'a', 'A', 'R', 'T' ),  "Album Artist" },
+            { LSMASH_4CC( 'c', 'a', 't', 'g' ),  "Category" },
+            { LSMASH_4CC( 'c', 'o', 'v', 'r' ),  "Cover Art" },
+            { LSMASH_4CC( 'c', 'p', 'i', 'l' ),  "Disc Compilation" },
+            { LSMASH_4CC( 'c', 'p', 'r', 't' ),  "Copyright" },
+            { LSMASH_4CC( 'd', 'e', 's', 'c' ),  "Description" },
+            { LSMASH_4CC( 'd', 'i', 's', 'k' ),  "Disc Number" },
+            { LSMASH_4CC( 'e', 'g', 'i', 'd' ),  "Episode Global Unique ID" },
+            { LSMASH_4CC( 'g', 'n', 'r', 'e' ),  "Pre-defined Genre" },
+            { LSMASH_4CC( 'g', 'r', 'u', 'p' ),  "Grouping" },
+            { LSMASH_4CC( 'h', 'd', 'v', 'd' ),  "High Definition Video" },
+            { LSMASH_4CC( 'k', 'e', 'y', 'w' ),  "Keyword" },
+            { LSMASH_4CC( 'l', 'd', 'e', 's' ),  "Long Description" },
+            { LSMASH_4CC( 'p', 'c', 's', 't' ),  "Podcast" },
+            { LSMASH_4CC( 'p', 'g', 'a', 'p' ),  "Gapless Playback" },
+            { LSMASH_4CC( 'p', 'u', 'r', 'd' ),  "Purcase Date" },
+            { LSMASH_4CC( 'p', 'u', 'r', 'l' ),  "Podcast URL" },
+            { LSMASH_4CC( 'r', 't', 'n', 'g' ),  "Content Rating" },
+            { LSMASH_4CC( 's', 't', 'i', 'k' ),  "Media Type" },
+            { LSMASH_4CC( 't', 'm', 'p', 'o' ),  "Beats Per Minute" },
+            { LSMASH_4CC( 't', 'r', 'k', 'n' ),  "Track Number" },
+            { LSMASH_4CC( 't', 'v', 'e', 'n' ),  "TV Episode Number" },
+            { LSMASH_4CC( 't', 'v', 'e', 's' ),  "TV Episode" },
+            { LSMASH_4CC( 't', 'v', 'n', 'n' ),  "TV Network" },
+            { LSMASH_4CC( 't', 'v', 's', 'h' ),  "TV Show Name" },
+            { LSMASH_4CC( 't', 'v', 's', 'n' ),  "TV Season" },
+            { LSMASH_4CC( 'a', 'k', 'I', 'D' ),  "iTunes Account Used for Purchase" },
+            { LSMASH_4CC( 'a', 'p', 'I', 'D' ),  "iTunes Acount Type" },
+            { LSMASH_4CC( 'a', 't', 'I', 'D' ),  "iTunes Artist ID" },
+            { LSMASH_4CC( 'c', 'm', 'I', 'D' ),  "iTunes Composer ID" },
+            { LSMASH_4CC( 'c', 'n', 'I', 'D' ),  "iTunes Content ID" },
+            { LSMASH_4CC( 'g', 'e', 'I', 'D' ),  "iTunes TV Genre ID" },
+            { LSMASH_4CC( 'p', 'l', 'I', 'D' ),  "iTunes Playlist ID" },
+            { LSMASH_4CC( 's', 'f', 'I', 'D' ),  "iTunes Country Code" },
+            { LSMASH_4CC( '-', '-', '-', '-' ),  "Custom Metadata Item" },
+            { 0 }
+        };
+    int i;
+    for( i = 0; metaitem_table[i].type; i++ )
+        if( metaitem->type == metaitem_table[i].type )
+        {
+            name = metaitem_table[i].name;
+            break;
+        }
+    if( !metaitem_table[i].type )
+        name = "Unknown";
+    return isom_print_simple( box, level, name );
+}
+
+static int isom_print_name( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_name_t *name = (isom_name_t *)box;
+    int indent = level;
+    isom_print_box_common( indent++, box, "Name Box" );
+    char str[name->name_length + 1];
+    memcpy( str, name->name, name->name_length );
+    str[name->name_length] = 0;
+    isom_iprintf( indent, "name = %s\n", str );
+    return 0;
+}
+
+static int isom_print_mean( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_mean_t *mean = (isom_mean_t *)box;
+    int indent = level;
+    isom_print_box_common( indent++, box, "Mean Box" );
+    char str[mean->meaning_string_length + 1];
+    memcpy( str, mean->meaning_string, mean->meaning_string_length );
+    str[mean->meaning_string_length] = 0;
+    isom_iprintf( indent, "meaning_string = %s\n", str );
+    return 0;
+}
+
+static int isom_print_data( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_data_t *data = (isom_data_t *)box;
+    int indent = level;
+    isom_print_box_common( indent++, box, "Data Box" );
+    isom_iprintf( indent, "reserved = %"PRIu16"\n", data->reserved );
+    isom_iprintf( indent, "type_set_identifier = %"PRIu8"%s\n",
+                  data->type_set_identifier,
+                  data->type_set_identifier ? "" : " (basic type set)" );
+    isom_iprintf( indent, "type_code = %"PRIu8"\n", data->type_code );
+    isom_iprintf( indent, "the_locale = %"PRIu32"\n", data->the_locale );
+    if( data->type_code == 21 )
+    {
+        /* integer type */
+        isom_iprintf( indent, "value = " );
+        if( data->value_length )
+        {
+            printf( "0x" );
+            for( uint32_t i = 0; i < data->value_length; i++ )
+                printf( "%02"PRIx8, data->value[i] );
+        }
+        printf( "\n" );
+    }
+    else
+    {
+        char str[data->value_length + 1];
+        memcpy( str, data->value, data->value_length );
+        str[data->value_length] = 0;
+        isom_iprintf( indent, "value = %s\n", str );
+    }
+    return 0;
+}
+
 static int isom_print_mvex( lsmash_root_t *root, isom_box_t *box, int level )
 {
     return isom_print_simple( box, level, "Movie Extends Box" );
@@ -1532,7 +1678,8 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
         return isom_print_unknown;
     if( box->parent )
     {
-        if( box->parent->type == ISOM_BOX_TYPE_STSD )
+        isom_box_t *parent = box->parent;
+        if( parent->type == ISOM_BOX_TYPE_STSD )
             switch( box->type )
             {
                 case ISOM_CODEC_TYPE_AVC1_VIDEO :
@@ -1608,7 +1755,7 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
                 default :
                     return isom_print_unknown;
             }
-        if( box->parent->type == QT_BOX_TYPE_WAVE )
+        if( parent->type == QT_BOX_TYPE_WAVE )
             switch( box->type )
             {
                 case QT_BOX_TYPE_FRMA :
@@ -1622,8 +1769,22 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
                 default :
                     return isom_print_unknown;
             }
-        if( box->parent->type == ISOM_BOX_TYPE_TREF )
+        if( parent->type == ISOM_BOX_TYPE_TREF )
             return isom_print_track_reference_type;
+        if( parent->parent && parent->parent->type == ISOM_BOX_TYPE_ILST )
+        {
+            if( parent->type == LSMASH_4CC( '-', '-', '-', '-' ) )
+            {
+                if( box->type == ISOM_BOX_TYPE_MEAN )
+                    return isom_print_mean;
+                if( box->type == ISOM_BOX_TYPE_NAME )
+                    return isom_print_name;
+            }
+            if( box->type == ISOM_BOX_TYPE_DATA )
+                return isom_print_data;
+        }
+        if( parent->type == ISOM_BOX_TYPE_ILST )
+            return isom_print_metaitem;
     }
     switch( box->type )
     {
@@ -1753,6 +1914,10 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
             return isom_print_free;
         case ISOM_BOX_TYPE_MDAT :
             return isom_print_mdat;
+        case ISOM_BOX_TYPE_META :
+            return isom_print_meta;
+        case ISOM_BOX_TYPE_ILST :
+            return isom_print_ilst;
         case ISOM_BOX_TYPE_MFRA :
             return isom_print_mfra;
         case ISOM_BOX_TYPE_TFRA :

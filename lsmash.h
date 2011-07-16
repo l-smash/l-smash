@@ -207,6 +207,11 @@ typedef enum
 
     ISOM_BOX_TYPE_FTAB  = LSMASH_4CC( 'f', 't', 'a', 'b' ),
 
+    ISOM_BOX_TYPE_DATA  = LSMASH_4CC( 'd', 'a', 't', 'a' ),
+    ISOM_BOX_TYPE_ILST  = LSMASH_4CC( 'i', 'l', 's', 't' ),
+    ISOM_BOX_TYPE_MEAN  = LSMASH_4CC( 'm', 'e', 'a', 'n' ),
+    ISOM_BOX_TYPE_NAME  = LSMASH_4CC( 'n', 'a', 'm', 'e' ),
+
     QT_BOX_TYPE_ALAC    = LSMASH_4CC( 'a', 'l', 'a', 'c' ),
     QT_BOX_TYPE_CHAN    = LSMASH_4CC( 'c', 'h', 'a', 'n' ),
     QT_BOX_TYPE_CLEF    = LSMASH_4CC( 'c', 'l', 'e', 'f' ),
@@ -268,6 +273,11 @@ typedef enum
     ISOM_MEDIA_HANDLER_TYPE_PROPRIETARY_DESCRIPTIVE_METADATA    = LSMASH_4CC( 'u', 'r', 'i', ' ' ),
     ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK                         = LSMASH_4CC( 'v', 'i', 'd', 'e' ),
 } lsmash_media_type;
+
+typedef enum
+{
+    ISOM_META_HANDLER_TYPE_ITUNES_METADATA = LSMASH_4CC( 'm', 'd', 'i', 'r' ),
+} lsmash_meta_type;
 
 typedef enum
 {
@@ -1314,7 +1324,7 @@ typedef struct
 } lsmash_movie_parameters_t;
 
 typedef struct lsmash_root_tag lsmash_root_t;
-
+typedef void lsmash_itunes_metadata_list_t;
 
 /* public functions */
 int lsmash_add_sps_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *sps, uint32_t sps_size );
@@ -1393,6 +1403,10 @@ int lsmash_get_last_sample_delta_from_media_timeline( lsmash_root_t *root, uint3
 int lsmash_get_dts_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number, uint64_t *dts );
 lsmash_sample_t *lsmash_get_sample_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number );
 int lsmash_check_sample_existence_in_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number );
+
+lsmash_itunes_metadata_list_t *lsmash_export_itunes_metadata( lsmash_root_t *root );
+int lsmash_import_itunes_metadata( lsmash_root_t *root, lsmash_itunes_metadata_list_t *list );
+void lsmash_destroy_itunes_metadata( lsmash_itunes_metadata_list_t *list );
 #endif
 
 /* to facilitate to make exdata (typically DecoderSpecificInfo or AudioSpecificConfig). */

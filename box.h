@@ -237,8 +237,9 @@ typedef struct
     ISOM_FULLBOX_COMMON;
     uint32_t componentType;             /* ISOM: pre_difined = 0
                                          * QTFF: 'mhlr' for Media Handler Reference Box and 'dhlr' for Data Handler Reference Box  */
-    uint32_t componentSubtype;          /* ISOM and QT: when present in Media Handler Reference Box, this field defines the type of media data
-                                         * QTFF: when present in Data Handler Reference Box, this field defines the data reference type */
+    uint32_t componentSubtype;          /* Both ISOM and QT: when present in Media Handler Reference Box, this field defines the type of media data.
+                                         * ISOM: when present in Metadata Handler Reference Box, this field defines the format of the meta box contents.
+                                         * QTFF: when present in Data Handler Reference Box, this field defines the data reference type. */
     /* The following fields are defined in QTFF however these fields aren't mentioned in QuickTime SDK and are reserved in the specification.
      * In ISOM, these fields are still defined as reserved. */
     uint32_t componentManufacturer;     /* vendor indentification / A value of 0 matches any manufacturer. */
@@ -1079,6 +1080,65 @@ typedef struct
     uint64_t start_time;
 } isom_chapter_entry_t;
 
+/* Meaning Box */
+typedef struct
+{
+    ISOM_FULLBOX_COMMON;
+    uint8_t *meaning_string;        /* to fill the box */
+
+        uint32_t meaning_string_length;
+} isom_mean_t;
+
+/* Name Box */
+typedef struct
+{
+    ISOM_FULLBOX_COMMON;
+    uint8_t *name;      /* to fill the box */
+
+        uint32_t name_length;
+} isom_name_t;
+
+/* Data Box */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    /* type indicator */
+    uint16_t reserved;              /* always 0 */
+    uint8_t  type_set_identifier;   /* 0: type set of the common basic data types */
+    uint8_t  type_code;             /* type of data code */
+    /* */
+    uint32_t the_locale;            /* reserved to be 0 */
+    uint8_t *value;                 /* to fill the box */
+
+        uint32_t value_length;
+} isom_data_t;
+
+/* Metadata Item Box */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    isom_mean_t *mean;      /* Meaning Box */
+    isom_name_t *name;      /* Name Box */
+    isom_data_t *data;      /* Data Box */
+} isom_metaitem_t;
+
+/* Metadata Item List Box */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    lsmash_entry_list_t *item_list;     /* Metadata Item Box List
+                                         * There is no entry_count field. */
+} isom_ilst_t;
+
+/* Meta Box */
+typedef struct
+{
+    ISOM_FULLBOX_COMMON;
+    isom_hdlr_t *hdlr;      /* Metadata Handler Reference Box */
+    isom_dinf_t *dinf;      /* Data Information Box */
+    isom_ilst_t *ilst;      /* Metadata Item List Box */
+} isom_meta_t;
+
 /* User Data Box
  * This box is a container box for informative user-data.
  * This user data is formatted as a set of boxes with more specific box types, which declare more precisely their content.
@@ -1087,6 +1147,7 @@ typedef struct
 {
     ISOM_BASEBOX_COMMON;
     isom_chpl_t *chpl;      /* Chapter List Box */
+    isom_meta_t *meta;      /* Meta Box extended by Apple */
 } isom_udta_t;
 
 /** Caches for handling tracks **/
@@ -1366,6 +1427,7 @@ typedef struct
     isom_iods_t         *iods;          /* ISOM: Object Descriptor Box / QTFF: null */
     lsmash_entry_list_t *trak_list;     /* Track Box List */
     isom_udta_t         *udta;          /* User Data Box */
+    isom_meta_t         *meta;          /* Meta Box */
     isom_mvex_t         *mvex;          /* Movie Extends Box */
 } isom_moov_t;
 
@@ -1379,6 +1441,7 @@ struct lsmash_root_tag
     lsmash_entry_list_t *moof_list;     /* Movie Fragment Box List */
     isom_mdat_t         *mdat;          /* Media Data Box */
     isom_free_t         *free;          /* Free Space Box */
+    isom_meta_t         *meta;          /* Meta Box */
     isom_mfra_t         *mfra;          /* Movie Fragment Random Access Box */
 
         lsmash_bs_t *bs;                    /* bytestream manager */
@@ -1394,6 +1457,7 @@ struct lsmash_root_tag
         uint8_t mp4_version1;               /* compatibility with MP4 ver.1 file format */
         uint8_t mp4_version2;               /* compatibility with MP4 ver.2 file format */
         uint8_t itunes_audio;               /* compatibility with iTunes Audio */
+        uint8_t itunes_movie;               /* compatibility with iTunes Movie */
         uint8_t max_3gpp_version;           /* maximum 3GPP version */
         uint8_t max_isom_version;           /* maximum ISO Base Media file format version */
         lsmash_entry_list_t *print;
@@ -1410,6 +1474,7 @@ typedef struct
     isom_tref_t *tref;          /* Track Reference Box */
     isom_mdia_t *mdia;          /* Media Box */
     isom_udta_t *udta;          /* User Data Box */
+    isom_meta_t *meta;          /* Meta Box */
 
         isom_cache_t *cache;
         uint32_t related_track_ID;
@@ -1660,5 +1725,14 @@ void isom_remove_sample_description( isom_sample_entry_t *sample );
         free( box_name ); \
         return -1; \
     }
+
+#define isom_copy_fields( dst, src, box_name ) \
+    lsmash_root_t *root   = dst->box_name->root; \
+    isom_box_t *parent    = dst->box_name->parent; \
+    uint64_t pos          = dst->box_name->pos; \
+    *dst->box_name        = *src->box_name; \
+    dst->box_name->root   = root; \
+    dst->box_name->parent = parent; \
+    dst->box_name->pos    = pos
 
 #endif
