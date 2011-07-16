@@ -276,7 +276,7 @@ static int isom_add_elst_entry( isom_elst_t *elst, uint64_t segment_duration, in
     return 0;
 }
 
-static isom_tref_type_t *isom_add_track_reference_type( isom_tref_t *tref, lsmash_track_reference_type type, uint32_t ref_count, uint32_t *track_ID )
+static isom_tref_type_t *isom_add_track_reference_type( isom_tref_t *tref, isom_track_reference_type type, uint32_t ref_count, uint32_t *track_ID )
 {
     if( !tref || !tref->ref_list )
         return NULL;
@@ -6909,7 +6909,7 @@ static int isom_set_media_language( lsmash_root_t *root, uint32_t track_ID, char
     return 0;
 }
 
-static int isom_create_grouping( isom_trak_entry_t *trak, lsmash_grouping_type grouping_type )
+static int isom_create_grouping( isom_trak_entry_t *trak, isom_grouping_type grouping_type )
 {
     lsmash_root_t *root = trak->root;
     switch( grouping_type )
