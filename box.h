@@ -68,7 +68,7 @@ struct isom_box_tag
  * In the absence of this box, the file is QuickTime file format or MP4 version 1 file format.
  * In MP4 version 1 file format, Object Descriptor Box is mandatory.
  * In QuickTime file format, Object Descriptor Box isn't defined.
- * Therefore, if this box and an Object Descriptor Box are absent in the file, the file shall be QuikcTime file format. */
+ * Therefore, if this box and an Object Descriptor Box are absent in the file, the file shall be QuickTime file format. */
 typedef struct
 {
     ISOM_BASEBOX_COMMON;

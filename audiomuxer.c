@@ -128,8 +128,8 @@ int main( int argc, char* argv[] )
         return AUDIOMUX_ERR( "Failed to open input file.\n" );
 
     /* check codec type. */
-    lsmash_codec_type_code codec_code = structs.summary->sample_type;
-    switch( codec_code )
+    lsmash_codec_type codec_type = structs.summary->sample_type;
+    switch( codec_type )
     {
     case ISOM_CODEC_TYPE_MP4A_AUDIO:
         break;
@@ -194,7 +194,7 @@ int main( int argc, char* argv[] )
     if( lsmash_set_media_parameters( structs.root, track, &media_param ) )
         return AUDIOMUX_ERR( "Failed to set media parameters.\n" );
 
-    uint32_t sample_entry = lsmash_add_sample_entry( structs.root, track, codec_code, structs.summary );
+    uint32_t sample_entry = lsmash_add_sample_entry( structs.root, track, codec_type, structs.summary );
     if( !sample_entry )
         return AUDIOMUX_ERR( "Failed to add sample_entry.\n" );
 

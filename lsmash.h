@@ -39,7 +39,7 @@ typedef enum
     LSMASH_FILE_MODE_FRAGMENTED        = 1<<16,
     LSMASH_FILE_MODE_WRITE_FRAGMENTED  = LSMASH_FILE_MODE_WRITE | LSMASH_FILE_MODE_FRAGMENTED,
     LSMASH_FILE_MODE_READ_FRAGMENTED   = LSMASH_FILE_MODE_READ  | LSMASH_FILE_MODE_FRAGMENTED,
-} lsmash_file_mode_code;
+} lsmash_file_mode;
 
 typedef enum
 {
@@ -232,13 +232,13 @@ typedef enum
     QT_BOX_TYPE_WAVE    = LSMASH_4CC( 'w', 'a', 'v', 'e' ),
 
     QT_BOX_TYPE_TERMINATOR  = 0x00000000,
-} lsmash_box_type_code;
+} lsmash_box_type;
 
 typedef enum
 {
     QT_HANDLER_TYPE_DATA    = LSMASH_4CC( 'd', 'h', 'l', 'r' ),
     QT_HANDLER_TYPE_MEDIA   = LSMASH_4CC( 'm', 'h', 'l', 'r' ),
-} lsmash_handler_type_code;
+} lsmash_handler_type;
 
 typedef enum
 {
@@ -267,14 +267,14 @@ typedef enum
     ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK                          = LSMASH_4CC( 't', 'e', 'x', 't' ),
     ISOM_MEDIA_HANDLER_TYPE_PROPRIETARY_DESCRIPTIVE_METADATA    = LSMASH_4CC( 'u', 'r', 'i', ' ' ),
     ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK                         = LSMASH_4CC( 'v', 'i', 'd', 'e' ),
-} lsmash_media_type_code;
+} lsmash_media_type;
 
 typedef enum
 {
     QT_REFERENCE_HANDLER_TYPE_ALIAS     = LSMASH_4CC( 'a', 'l', 'i', 's' ),
     QT_REFERENCE_HANDLER_TYPE_RESOURCE  = LSMASH_4CC( 'r', 's', 'r', 'c' ),
     QT_REFERENCE_HANDLER_TYPE_URL       = LSMASH_4CC( 'u', 'r', 'l', ' ' ),
-} lsmash_data_reference_type_code;
+} lsmash_data_reference_type;
 
 typedef enum
 {
@@ -334,7 +334,7 @@ typedef enum
     ISOM_BRAND_TYPE_PANA  = LSMASH_4CC( 'p', 'a', 'n', 'a' ),
     ISOM_BRAND_TYPE_QT    = LSMASH_4CC( 'q', 't', ' ', ' ' ),
     ISOM_BRAND_TYPE_SDV   = LSMASH_4CC( 's', 'd', 'v', ' ' ),
-} lsmash_brand_type_code;
+} lsmash_brand_type;
 
 typedef enum
 {
@@ -476,7 +476,7 @@ typedef enum
     /* Other Type */
     ISOM_CODEC_TYPE_ENCS_SYSTEM = LSMASH_4CC( 'e', 'n', 'c', 's' ),   /* Encrypted Systems stream */
     ISOM_CODEC_TYPE_MP4S_SYSTEM = LSMASH_4CC( 'm', 'p', '4', 's' ),   /* MPEG-4 Systems */
-} lsmash_codec_type_code;
+} lsmash_codec_type;
 
 typedef enum
 {
@@ -499,7 +499,7 @@ typedef enum
     QT_TREF_TYPE_SCPT   = LSMASH_4CC( 's', 'c', 'p', 't' ),   /* Transcript. Usually references a text track. */
     QT_TREF_TYPE_SSRC   = LSMASH_4CC( 's', 's', 'r', 'c' ),   /* Nonprimary source. Indicates that the referenced track should send its data to this track, rather than presenting it. */
     QT_TREF_TYPE_TMCD   = LSMASH_4CC( 't', 'm', 'c', 'd' ),   /* Time code. Usually references a time code track. */
-} lsmash_track_reference_type_code;
+} lsmash_track_reference_type;
 
 typedef enum
 {
@@ -516,7 +516,7 @@ typedef enum
     ISOM_GROUP_TYPE_SCIF = LSMASH_4CC( 's', 'c', 'i', 'f' ),      /* SVC Scalability Information */
     ISOM_GROUP_TYPE_SCNM = LSMASH_4CC( 's', 'c', 'n', 'm' ),      /* AVC/SVC/MVC map groups */
     ISOM_GROUP_TYPE_VIPR = LSMASH_4CC( 'v', 'i', 'p', 'r' ),      /* View priority */
-} lsmash_grouping_type_code;
+} lsmash_grouping_type;
 
 #define ISOM_LANG_T( a, b, c ) ((((a-0x60)&0x1f)<<10) | (((b-0x60)&0x1f)<<5) | ((c-0x60)&0x1f))
 
@@ -632,7 +632,7 @@ typedef enum
 {
     QT_COLOR_PARAMETER_TYPE_NCLC = LSMASH_4CC( 'n', 'c', 'l', 'c' ),      /* nonconstant luminance coding */
     QT_COLOR_PARAMETER_TYPE_PROF = LSMASH_4CC( 'p', 'r', 'o', 'f' ),      /* ICC profile */
-} lsmash_color_patameter_type_code;
+} lsmash_color_patameter_type;
 
 typedef enum
 {
@@ -732,7 +732,7 @@ typedef enum
     QT_CHANNEL_LABEL_DISCRETE_14            = (1<<16) | 14,
     QT_CHANNEL_LABEL_DISCRETE_15            = (1<<16) | 15,
     QT_CHANNEL_LABEL_DISCRETE_65535         = (1<<16) | 65535,
-} lsmash_channel_label_code;
+} lsmash_channel_label;
 
 typedef enum
 {
@@ -755,7 +755,7 @@ typedef enum
     QT_CHANNEL_BIT_TOP_BACK_CENTER        = 1<<16,
     QT_CHANNEL_BIT_TOP_BACK_RIGHT         = 1<<17,
     QT_CHANNEL_BIT_FULL                   = 0x3ffff,
-} lsmash_channel_bitmap_code;
+} lsmash_channel_bitmap;
 
 typedef enum
 {
@@ -763,7 +763,7 @@ typedef enum
     QT_CHANNEL_FLAGS_RECTANGULAR_COORDINATES = 1,
     QT_CHANNEL_FLAGS_SPHERICAL_COORDINATES   = 1<<1,
     QT_CHANNEL_FLAGS_METERS                  = 1<<2,
-} lsmash_channel_flags_code;
+} lsmash_channel_flags;
 
 typedef enum
 {
@@ -776,7 +776,7 @@ typedef enum
     QT_CHANNEL_COORDINATES_AZIMUTH    = 0,      /* 0 is front center, positive is right, negative is left. This is measured in degrees. */
     QT_CHANNEL_COORDINATES_ELEVATION  = 1,      /* +90 is zenith, 0 is horizontal, -90 is nadir. This is measured in degrees. */
     QT_CHANNEL_COORDINATES_DISTANCE   = 2,      /* The units are described by flags. */
-} lsmash_channel_coordinates_index_code;
+} lsmash_channel_coordinates_index;
 
 typedef enum
 {
@@ -924,7 +924,7 @@ typedef enum
 
     QT_CHANNEL_LAYOUT_DISCRETE_IN_ORDER        = 147<<16,                           /* needs to be ORed with the actual number of channels */  
     QT_CHANNEL_LAYOUT_UNKNOWN                  = 0xffff0000,                        /* needs to be ORed with the actual number of channels */
-} lsmash_channel_layout_tag_code;
+} lsmash_channel_layout_tag;
 
 typedef enum
 {
@@ -936,7 +936,7 @@ typedef enum
     ISOM_TRACK_IN_PREVIEW   = 0x000004,     /* Track_in_preview: Indicates that the track is used when previewing the presentation. */
 
     QT_TRACK_IN_POSTER      = 0x000008,     /* Track_in_poster: Indicates that the track is used in the movie's poster. (only defined in QuickTime file format) */
-} lsmash_track_mode_code;
+} lsmash_track_mode;
 
 typedef enum
 {
@@ -945,14 +945,14 @@ typedef enum
     ISOM_SCALING_METHOD_MEET    = 3,
     ISOM_SCALING_METHOD_SLICE_X = 4,
     ISOM_SCALING_METHOD_SLICE_Y = 5,
-} lsmash_scaling_method_code;
+} lsmash_scaling_method;
 
 typedef enum
 {
     ISOM_EDIT_MODE_NORMAL   = 1<<16,
     ISOM_EDIT_MODE_DWELL    = 0,
     ISOM_EDIT_MODE_EMPTY    = -1,
-} lsmash_edit_mode_code;
+} lsmash_edit_mode;
 
 typedef enum
 {
@@ -975,7 +975,7 @@ typedef enum
     ISOM_SAMPLE_REDUNDANCY_UNKNOWN      = 0,
     ISOM_SAMPLE_HAS_REDUNDANCY          = 1,
     ISOM_SAMPLE_HAS_NO_REDUNDANCY       = 2,
-} lsmash_sample_property_code;
+} lsmash_sample_dependency;
 
 /* objectTypeIndication */
 typedef enum {
@@ -1194,17 +1194,17 @@ typedef struct
 typedef struct
 {
     LSMASH_BASE_SUMMARY
-    // mp4a_audioProfileLevelIndication pli ; /* I wonder we should have this or not. */
-    uint32_t sample_type;               /* Audio codec type. */
-    lsmash_mp4a_AudioObjectType aot;    /* Detailed codec type. If not mp4a, just ignored. */
-    uint32_t frequency;                 /* Even if the stream is HE-AAC v1/SBR, this is base AAC's one. */
-    uint32_t channels;                  /* Even if the stream is HE-AAC v2/SBR+PS, this is base AAC's one. */
-    uint32_t bit_depth;                 /* If AAC, AAC stream itself does not mention to accuracy (bit_depth of decoded PCM data), we assume 16bit. */
-    uint32_t samples_in_frame;          /* Even if the stream is HE-AAC/aacPlus/SBR(+PS), this is base AAC's one, so 1024. */
-    lsmash_mp4a_aac_sbr_mode sbr_mode;  /* SBR treatment. Currently we always set this as mp4a_AAC_SBR_NOT_SPECIFIED(Implicit signaling).
-                                         * User can set this for treatment in other way. */
-    lsmash_channel_layout_tag_code layout_tag;  /* channel layout */
-    lsmash_channel_bitmap_code bitmap;          /* Only available when layout_tag is set to QT_CHANNEL_LAYOUT_USE_CHANNEL_BITMAP. */
+    // mp4a_audioProfileLevelIndication pli;   /* I wonder we should have this or not. */
+    lsmash_codec_type sample_type;          /* Audio codec type. */
+    lsmash_mp4a_AudioObjectType aot;        /* Detailed codec type. If not mp4a, just ignored. */
+    uint32_t frequency;                     /* Even if the stream is HE-AAC v1/SBR, this is base AAC's one. */
+    uint32_t channels;                      /* Even if the stream is HE-AAC v2/SBR+PS, this is base AAC's one. */
+    uint32_t bit_depth;                     /* If AAC, AAC stream itself does not mention to accuracy (bit_depth of decoded PCM data), we assume 16bit. */
+    uint32_t samples_in_frame;              /* Even if the stream is HE-AAC/aacPlus/SBR(+PS), this is base AAC's one, so 1024. */
+    lsmash_mp4a_aac_sbr_mode sbr_mode;      /* SBR treatment. Currently we always set this as mp4a_AAC_SBR_NOT_SPECIFIED(Implicit signaling).
+                                             * User can set this for treatment in other way. */
+    lsmash_channel_layout_tag layout_tag;   /* channel layout */
+    lsmash_channel_bitmap bitmap;           /* Only available when layout_tag is set to QT_CHANNEL_LAYOUT_USE_CHANNEL_BITMAP. */
     /* LPCM descriptions */
     uint8_t sample_format;      /* 0: integer, 1: floating point */
     uint8_t endianness;         /* 0: big endian, 1: little endian */
@@ -1217,17 +1217,17 @@ typedef struct
 typedef struct
 {
     LSMASH_BASE_SUMMARY
-    // mp4sys_visualProfileLevelIndication pli ; /* I wonder we should have this or not. */
-    // lsmash_mp4v_VideoObjectType vot;    /* Detailed codec type. If not mp4v, just ignored. */
-    uint32_t width;                                 /* pixel counts of width samples have */
-    uint32_t height;                                /* pixel counts of height samples have */
+    // mp4sys_visualProfileLevelIndication pli;    /* I wonder we should have this or not. */
+    // lsmash_mp4v_VideoObjectType vot;            /* Detailed codec type. If not mp4v, just ignored. */
+    uint32_t width;                             /* pixel counts of width samples have */
+    uint32_t height;                            /* pixel counts of height samples have */
     uint32_t crop_top;
     uint32_t crop_left;
     uint32_t crop_bottom;
     uint32_t crop_right;
-    uint32_t par_h;                                 /* horizontal factor of pixel aspect ratio */
-    uint32_t par_v;                                 /* vertical factor of pixel aspect ratio */
-    lsmash_scaling_method_code scaling_method;      /* If not set, video samples are scaled into the visual presentation region to fill it. */
+    uint32_t par_h;                             /* horizontal factor of pixel aspect ratio */
+    uint32_t par_v;                             /* vertical factor of pixel aspect ratio */
+    lsmash_scaling_method scaling_method;       /* If not set, video samples are scaled into the visual presentation region to fill it. */
     lsmash_color_parameter primaries;
     lsmash_color_parameter transfer;
     lsmash_color_parameter matrix;
@@ -1235,18 +1235,18 @@ typedef struct
 
 typedef struct
 {
-    uint32_t timescale;             /* media timescale: timescale for this media */
-    uint32_t handler_type;          /* the nature of the media
-                                     * You can't change handler_type through this parameter manually. */
-    uint64_t duration;              /* the duration of this media, expressed in the media timescale
-                                     * You can't set this parameter manually. */
-    uint8_t roll_grouping;          /* roll recovery grouping present
-                                     * Require 'avc1' brand or ISO Base Media File Format version 2 or later. */
-    uint8_t rap_grouping;           /* random access point grouping present
-                                     * Require ISO Base Media File Format version 6 or later. */
+    lsmash_media_type handler_type;     /* the nature of the media
+                                         * You can't change handler_type through this parameter manually. */
+    uint32_t timescale;                 /* media timescale: timescale for this media */
+    uint64_t duration;                  /* the duration of this media, expressed in the media timescale
+                                         * You can't set this parameter manually. */
+    uint8_t roll_grouping;              /* roll recovery grouping present
+                                         * Require 'avc1' brand or ISO Base Media File Format version 2 or later. */
+    uint8_t rap_grouping;               /* random access point grouping present
+                                         * Require ISO Base Media File Format version 6 or later. */
     /* Use either type of language code. */
-    uint16_t MAC_language;          /* Macintosh language code for this media */
-    char    *ISO_language;          /* ISO 639-2/T language code for this media */
+    uint16_t MAC_language;              /* Macintosh language code for this media */
+    char    *ISO_language;              /* ISO 639-2/T language code for this media */
     /* human-readable name for the track type (for debugging and inspection purposes) */
     char *media_handler_name;
     char *data_handler_name;
@@ -1258,7 +1258,7 @@ typedef struct
 
 typedef struct
 {
-    lsmash_track_mode_code mode;
+    lsmash_track_mode mode;
     uint32_t track_ID;              /* an integer that uniquely identifies the track
                                      * Don't set to value already used except for zero value.
                                      * Zero value don't override established track_ID. */
@@ -1290,8 +1290,8 @@ typedef struct
 
 typedef struct
 {
-    lsmash_brand_type_code  major_brand;    /* the best used brand */
-    lsmash_brand_type_code *brands;         /* the list of compatible brands */
+    lsmash_brand_type  major_brand;         /* the best used brand */
+    lsmash_brand_type *brands;              /* the list of compatible brands */
     uint32_t number_of_brands;              /* the number of compatible brands used in the movie */
     uint32_t minor_version;                 /* minor version of best used brand */
     double   max_chunk_duration;            /* max duration per chunk in seconds. 0.5 is default value. */
@@ -1310,7 +1310,7 @@ typedef struct
     uint32_t number_of_tracks;              /* the number of tracks in the movie
                                              * You can't set this parameter manually. */
     /* Any user shouldn't use the following parameter. */
-    PRIVATE lsmash_brand_type_code brands_shadow[50];
+    PRIVATE lsmash_brand_type brands_shadow[50];
 } lsmash_movie_parameters_t;
 
 typedef struct lsmash_root_tag lsmash_root_t;
@@ -1354,11 +1354,11 @@ int lsmash_update_movie_modification_time( lsmash_root_t *root );
 int lsmash_update_track_duration( lsmash_root_t *root, uint32_t track_ID, uint32_t last_sample_delta );
 
 
-lsmash_root_t *lsmash_open_movie( const char *filename, lsmash_file_mode_code mode );
+lsmash_root_t *lsmash_open_movie( const char *filename, lsmash_file_mode mode );
 void lsmash_initialize_movie_parameters( lsmash_movie_parameters_t *param );
 int lsmash_set_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t *param );
 int lsmash_get_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t *param );
-uint32_t lsmash_create_track( lsmash_root_t *root, uint32_t handler_type );
+uint32_t lsmash_create_track( lsmash_root_t *root, lsmash_media_type media_type );
 uint32_t lsmash_get_track_ID( lsmash_root_t *root, uint32_t track_number );
 void lsmash_initialize_track_parameters( lsmash_track_parameters_t *param );
 int lsmash_set_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_track_parameters_t *param );

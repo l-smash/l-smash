@@ -273,7 +273,7 @@ static int isom_add_elst_entry( isom_elst_t *elst, uint64_t segment_duration, in
     return 0;
 }
 
-static isom_tref_type_t *isom_add_track_reference_type( isom_tref_t *tref, lsmash_track_reference_type_code type, uint32_t ref_count, uint32_t *track_ID )
+static isom_tref_type_t *isom_add_track_reference_type( isom_tref_t *tref, lsmash_track_reference_type type, uint32_t ref_count, uint32_t *track_ID )
 {
     if( !tref || !tref->ref_list )
         return NULL;
@@ -1002,8 +1002,8 @@ static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash
         goto fail;
     if( root->qt_compatible )
     {
-        lsmash_channel_layout_tag_code layout_tag = summary->layout_tag;
-        lsmash_channel_bitmap_code bitmap = summary->bitmap;
+        lsmash_channel_layout_tag layout_tag = summary->layout_tag;
+        lsmash_channel_bitmap bitmap = summary->bitmap;
         if( layout_tag == QT_CHANNEL_LAYOUT_USE_CHANNEL_DESCRIPTIONS    /* We don't support the feature of Channel Descriptions. */
          || (layout_tag == QT_CHANNEL_LAYOUT_USE_CHANNEL_BITMAP && (!bitmap || bitmap > QT_CHANNEL_BIT_FULL)) )
         {
@@ -6319,7 +6319,7 @@ void lsmash_delete_track( lsmash_root_t *root, uint32_t track_ID )
     }
 }
 
-uint32_t lsmash_create_track( lsmash_root_t *root, uint32_t media_type )
+uint32_t lsmash_create_track( lsmash_root_t *root, lsmash_media_type media_type )
 {
     isom_trak_entry_t *trak = isom_add_trak( root );
     if( !trak )
@@ -6628,7 +6628,7 @@ static int isom_set_media_language( lsmash_root_t *root, uint32_t track_ID, char
     return 0;
 }
 
-static int isom_create_grouping( isom_trak_entry_t *trak, lsmash_grouping_type_code grouping_type )
+static int isom_create_grouping( isom_trak_entry_t *trak, lsmash_grouping_type grouping_type )
 {
     lsmash_root_t *root = trak->root;
     switch( grouping_type )
@@ -6752,7 +6752,7 @@ int lsmash_get_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
 
 /*---- movie manipulators ----*/
 
-lsmash_root_t *lsmash_open_movie( const char *filename, lsmash_file_mode_code mode )
+lsmash_root_t *lsmash_open_movie( const char *filename, lsmash_file_mode mode )
 {
     char open_mode[4] = { 0 };
     if( mode & LSMASH_FILE_MODE_WRITE )
@@ -6839,7 +6839,7 @@ int lsmash_create_fragment_movie( lsmash_root_t *root )
     return lsmash_remove_entry( root->moof_list, 1, isom_remove_moof );
 }
 
-static int isom_set_brands( lsmash_root_t *root, lsmash_brand_type_code major_brand, uint32_t minor_version, lsmash_brand_type_code *brands, uint32_t brand_count )
+static int isom_set_brands( lsmash_root_t *root, lsmash_brand_type major_brand, uint32_t minor_version, lsmash_brand_type *brands, uint32_t brand_count )
 {
     if( brand_count > 50 )
         return -1;      /* We support setting brands up to 50. */
@@ -6860,7 +6860,7 @@ static int isom_set_brands( lsmash_root_t *root, lsmash_brand_type_code major_br
     isom_ftyp_t *ftyp = root->ftyp;
     ftyp->major_brand = major_brand;
     ftyp->minor_version = minor_version;
-    lsmash_brand_type_code *compatible_brands;
+    lsmash_brand_type *compatible_brands;
     if( !ftyp->compatible_brands )
         compatible_brands = malloc( brand_count * sizeof(uint32_t) );
     else

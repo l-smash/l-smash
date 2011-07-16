@@ -134,10 +134,10 @@ static int set_movie_parameters( movie_io_t *io )
     movie_t *output    = io->output;
     lsmash_initialize_movie_parameters( &output->movie_param );
     /* Pick the most used major_brands. */
-    lsmash_brand_type_code major_brand      [num_input];
-    uint32_t               minor_version    [num_input];
-    uint32_t               major_brand_count[num_input];
-    uint32_t               num_major_brand = 0;
+    lsmash_brand_type major_brand      [num_input];
+    uint32_t          minor_version    [num_input];
+    uint32_t          major_brand_count[num_input];
+    uint32_t          num_major_brand = 0;
     for( uint32_t i = 0; i < num_input; i++ )
     {
         major_brand      [num_major_brand] = input[i].movie_param.major_brand;
@@ -171,12 +171,12 @@ static int set_movie_parameters( movie_io_t *io )
     uint32_t num_input_brands = 0;
     for( uint32_t i = 0; i < num_input; i++ )
         num_input_brands += input[i].movie_param.number_of_brands;
-    lsmash_brand_type_code input_brands[num_input_brands];
+    lsmash_brand_type input_brands[num_input_brands];
     num_input_brands = 0;
     for( uint32_t i = 0; i < num_input; i++ )
         for( uint32_t j = 0; j < input[i].movie_param.number_of_brands; j++ )
             input_brands[num_input_brands++] = input[i].movie_param.brands[j];
-    lsmash_brand_type_code output_brands[num_input_brands];
+    lsmash_brand_type output_brands[num_input_brands];
     uint32_t num_output_brands = 0;
     for( uint32_t i = 0; i < num_input_brands; i++ )
     {
