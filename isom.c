@@ -1636,7 +1636,7 @@ static int isom_add_ftyp( lsmash_root_t *root )
     if( root->ftyp )
         return -1;
     isom_create_box( ftyp, root, ISOM_BOX_TYPE_FTYP );
-    ftyp->size = ISOM_DEFAULT_BOX_HEADER_SIZE + 8;
+    ftyp->size = ISOM_BASEBOX_COMMON_SIZE + 8;
     root->ftyp = ftyp;
     return 0;
 }
@@ -4468,7 +4468,7 @@ static int isom_bs_write_movie_extends_placeholder( lsmash_bs_t *bs )
     /* The following will be overwritten by Movie Extends Header Box.
      * We use version 1 Movie Extends Header Box since it causes extra 4 bytes region
      * we cannot replace with empty Free Space Box as we place version 0 one.  */
-    lsmash_bs_put_be32( bs, ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 8 );
+    lsmash_bs_put_be32( bs, ISOM_FULLBOX_COMMON_SIZE + 8 );
     lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_FREE );
     lsmash_bs_put_be32( bs, 0 );
     lsmash_bs_put_be64( bs, 0 );
@@ -4658,7 +4658,7 @@ static int isom_write_mfra( lsmash_bs_t *bs, isom_mfra_t *mfra )
 
 static int isom_bs_write_largesize_placeholder( lsmash_bs_t *bs )
 {
-    lsmash_bs_put_be32( bs, ISOM_DEFAULT_BOX_HEADER_SIZE );
+    lsmash_bs_put_be32( bs, ISOM_BASEBOX_COMMON_SIZE );
     lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_FREE );
     return lsmash_bs_write_data( bs );
 }
@@ -4671,7 +4671,7 @@ static int isom_write_mdat_header( lsmash_root_t *root, uint64_t media_size )
     lsmash_bs_t *bs = root->bs;
     if( media_size )
     {
-        mdat->size = ISOM_DEFAULT_BOX_HEADER_SIZE + media_size;
+        mdat->size = ISOM_BASEBOX_COMMON_SIZE + media_size;
         if( mdat->size > UINT32_MAX )
             mdat->size += 8;    /* large_size */
         isom_bs_put_box_common( bs, mdat );
@@ -4680,7 +4680,7 @@ static int isom_write_mdat_header( lsmash_root_t *root, uint64_t media_size )
     mdat->placeholder_pos = lsmash_ftell( bs->stream );
     if( isom_bs_write_largesize_placeholder( bs ) )
         return -1;
-    mdat->size = ISOM_DEFAULT_BOX_HEADER_SIZE;
+    mdat->size = ISOM_BASEBOX_COMMON_SIZE;
     isom_bs_put_box_common( bs, mdat );
     return lsmash_bs_write_data( bs );
 }
@@ -4701,11 +4701,11 @@ static int isom_write_mdat_size( lsmash_root_t *root )
         lsmash_fseek( stream, mdat->placeholder_pos, SEEK_SET );
         lsmash_bs_put_be32( bs, 1 );
         lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_MDAT );
-        lsmash_bs_put_be64( bs, mdat->size + ISOM_DEFAULT_BOX_HEADER_SIZE );
+        lsmash_bs_put_be64( bs, mdat->size + ISOM_BASEBOX_COMMON_SIZE );
     }
     else
     {
-        lsmash_fseek( stream, mdat->placeholder_pos + ISOM_DEFAULT_BOX_HEADER_SIZE, SEEK_SET );
+        lsmash_fseek( stream, mdat->placeholder_pos + ISOM_BASEBOX_COMMON_SIZE, SEEK_SET );
         lsmash_bs_put_be32( bs, mdat->size );
         lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_MDAT );
     }
@@ -5378,7 +5378,7 @@ static uint64_t isom_update_mvhd_size( isom_mvhd_t *mvhd )
     mvhd->version = 0;
     if( mvhd->creation_time > UINT32_MAX || mvhd->modification_time > UINT32_MAX || mvhd->duration > UINT32_MAX )
         mvhd->version = 1;
-    mvhd->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 96 + (uint64_t)mvhd->version * 12;
+    mvhd->size = ISOM_FULLBOX_COMMON_SIZE + 96 + (uint64_t)mvhd->version * 12;
     CHECK_LARGESIZE( mvhd->size );
     return mvhd->size;
 }
@@ -5387,7 +5387,7 @@ static uint64_t isom_update_iods_size( isom_iods_t *iods )
 {
     if( !iods || !iods->OD )
         return 0;
-    iods->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + mp4sys_update_ObjectDescriptor_size( iods->OD );
+    iods->size = ISOM_FULLBOX_COMMON_SIZE + mp4sys_update_ObjectDescriptor_size( iods->OD );
     CHECK_LARGESIZE( iods->size );
     return iods->size;
 }
@@ -5399,7 +5399,7 @@ static uint64_t isom_update_tkhd_size( isom_tkhd_t *tkhd )
     tkhd->version = 0;
     if( tkhd->creation_time > UINT32_MAX || tkhd->modification_time > UINT32_MAX || tkhd->duration > UINT32_MAX )
         tkhd->version = 1;
-    tkhd->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 80 + (uint64_t)tkhd->version * 12;
+    tkhd->size = ISOM_FULLBOX_COMMON_SIZE + 80 + (uint64_t)tkhd->version * 12;
     CHECK_LARGESIZE( tkhd->size );
     return tkhd->size;
 }
@@ -5408,7 +5408,7 @@ static uint64_t isom_update_clef_size( isom_clef_t *clef )
 {
     if( !clef )
         return 0;
-    clef->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 8;
+    clef->size = ISOM_FULLBOX_COMMON_SIZE + 8;
     CHECK_LARGESIZE( clef->size );
     return clef->size;
 }
@@ -5417,7 +5417,7 @@ static uint64_t isom_update_prof_size( isom_prof_t *prof )
 {
     if( !prof )
         return 0;
-    prof->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 8;
+    prof->size = ISOM_FULLBOX_COMMON_SIZE + 8;
     CHECK_LARGESIZE( prof->size );
     return prof->size;
 }
@@ -5426,7 +5426,7 @@ static uint64_t isom_update_enof_size( isom_enof_t *enof )
 {
     if( !enof )
         return 0;
-    enof->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 8;
+    enof->size = ISOM_FULLBOX_COMMON_SIZE + 8;
     CHECK_LARGESIZE( enof->size );
     return enof->size;
 }
@@ -5435,7 +5435,7 @@ static uint64_t isom_update_tapt_size( isom_tapt_t *tapt )
 {
     if( !tapt )
         return 0;
-    tapt->size = ISOM_DEFAULT_BOX_HEADER_SIZE
+    tapt->size = ISOM_BASEBOX_COMMON_SIZE
         + isom_update_clef_size( tapt->clef )
         + isom_update_prof_size( tapt->prof )
         + isom_update_enof_size( tapt->enof );
@@ -5455,7 +5455,7 @@ static uint64_t isom_update_elst_size( isom_elst_t *elst )
         if( data->segment_duration > UINT32_MAX || data->media_time > INT32_MAX || data->media_time < INT32_MIN )
             elst->version = 1;
     }
-    elst->size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + (uint64_t)i * ( elst->version ? 20 : 12 );
+    elst->size = ISOM_LIST_FULLBOX_COMMON_SIZE + (uint64_t)i * ( elst->version ? 20 : 12 );
     CHECK_LARGESIZE( elst->size );
     return elst->size;
 }
@@ -5464,7 +5464,7 @@ static uint64_t isom_update_edts_size( isom_edts_t *edts )
 {
     if( !edts )
         return 0;
-    edts->size = ISOM_DEFAULT_BOX_HEADER_SIZE + isom_update_elst_size( edts->elst );
+    edts->size = ISOM_BASEBOX_COMMON_SIZE + isom_update_elst_size( edts->elst );
     CHECK_LARGESIZE( edts->size );
     return edts->size;
 }
@@ -5473,12 +5473,12 @@ static uint64_t isom_update_tref_size( isom_tref_t *tref )
 {
     if( !tref )
         return 0;
-    tref->size = ISOM_DEFAULT_BOX_HEADER_SIZE;
+    tref->size = ISOM_BASEBOX_COMMON_SIZE;
     if( tref->ref_list )
         for( lsmash_entry_t *entry = tref->ref_list->head; entry; entry = entry->next )
         {
             isom_tref_type_t *ref = (isom_tref_type_t *)entry->data;
-            ref->size = ISOM_DEFAULT_BOX_HEADER_SIZE + (uint64_t)ref->ref_count * 4;
+            ref->size = ISOM_BASEBOX_COMMON_SIZE + (uint64_t)ref->ref_count * 4;
             CHECK_LARGESIZE( ref->size );
             tref->size += ref->size;
         }
@@ -5493,7 +5493,7 @@ static uint64_t isom_update_mdhd_size( isom_mdhd_t *mdhd )
     mdhd->version = 0;
     if( mdhd->creation_time > UINT32_MAX || mdhd->modification_time > UINT32_MAX || mdhd->duration > UINT32_MAX )
         mdhd->version = 1;
-    mdhd->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 20 + (uint64_t)mdhd->version * 12;
+    mdhd->size = ISOM_FULLBOX_COMMON_SIZE + 20 + (uint64_t)mdhd->version * 12;
     CHECK_LARGESIZE( mdhd->size );
     return mdhd->size;
 }
@@ -5502,7 +5502,7 @@ static uint64_t isom_update_hdlr_size( isom_hdlr_t *hdlr )
 {
     if( !hdlr )
         return 0;
-    hdlr->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 20 + (uint64_t)hdlr->componentName_length;
+    hdlr->size = ISOM_FULLBOX_COMMON_SIZE + 20 + (uint64_t)hdlr->componentName_length;
     CHECK_LARGESIZE( hdlr->size );
     return hdlr->size;
 }
@@ -5511,7 +5511,7 @@ static uint64_t isom_update_dref_entry_size( isom_dref_entry_t *urln )
 {
     if( !urln )
         return 0;
-    urln->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + (uint64_t)urln->name_length + urln->location_length;
+    urln->size = ISOM_FULLBOX_COMMON_SIZE + (uint64_t)urln->name_length + urln->location_length;
     CHECK_LARGESIZE( urln->size );
     return urln->size;
 }
@@ -5520,7 +5520,7 @@ static uint64_t isom_update_dref_size( isom_dref_t *dref )
 {
     if( !dref || !dref->list )
         return 0;
-    dref->size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE;
+    dref->size = ISOM_LIST_FULLBOX_COMMON_SIZE;
     if( dref->list )
         for( lsmash_entry_t *entry = dref->list->head; entry; entry = entry->next )
         {
@@ -5535,7 +5535,7 @@ static uint64_t isom_update_dinf_size( isom_dinf_t *dinf )
 {
     if( !dinf )
         return 0;
-    dinf->size = ISOM_DEFAULT_BOX_HEADER_SIZE + isom_update_dref_size( dinf->dref );
+    dinf->size = ISOM_BASEBOX_COMMON_SIZE + isom_update_dref_size( dinf->dref );
     CHECK_LARGESIZE( dinf->size );
     return dinf->size;
 }
@@ -5544,7 +5544,7 @@ static uint64_t isom_update_vmhd_size( isom_vmhd_t *vmhd )
 {
     if( !vmhd )
         return 0;
-    vmhd->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 8;
+    vmhd->size = ISOM_FULLBOX_COMMON_SIZE + 8;
     CHECK_LARGESIZE( vmhd->size );
     return vmhd->size;
 }
@@ -5553,7 +5553,7 @@ static uint64_t isom_update_smhd_size( isom_smhd_t *smhd )
 {
     if( !smhd )
         return 0;
-    smhd->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 4;
+    smhd->size = ISOM_FULLBOX_COMMON_SIZE + 4;
     CHECK_LARGESIZE( smhd->size );
     return smhd->size;
 }
@@ -5562,7 +5562,7 @@ static uint64_t isom_update_hmhd_size( isom_hmhd_t *hmhd )
 {
     if( !hmhd )
         return 0;
-    hmhd->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 16;
+    hmhd->size = ISOM_FULLBOX_COMMON_SIZE + 16;
     CHECK_LARGESIZE( hmhd->size );
     return hmhd->size;
 }
@@ -5571,7 +5571,7 @@ static uint64_t isom_update_nmhd_size( isom_nmhd_t *nmhd )
 {
     if( !nmhd )
         return 0;
-    nmhd->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE;
+    nmhd->size = ISOM_FULLBOX_COMMON_SIZE;
     CHECK_LARGESIZE( nmhd->size );
     return nmhd->size;
 }
@@ -5580,7 +5580,7 @@ static uint64_t isom_update_gmin_size( isom_gmin_t *gmin )
 {
     if( !gmin )
         return 0;
-    gmin->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 12;
+    gmin->size = ISOM_FULLBOX_COMMON_SIZE + 12;
     CHECK_LARGESIZE( gmin->size );
     return gmin->size;
 }
@@ -5589,7 +5589,7 @@ static uint64_t isom_update_text_size( isom_text_t *text )
 {
     if( !text )
         return 0;
-    text->size = ISOM_DEFAULT_BOX_HEADER_SIZE + 36;
+    text->size = ISOM_BASEBOX_COMMON_SIZE + 36;
     CHECK_LARGESIZE( text->size );
     return text->size;
 }
@@ -5598,7 +5598,7 @@ static uint64_t isom_update_gmhd_size( isom_gmhd_t *gmhd )
 {
     if( !gmhd )
         return 0;
-    gmhd->size = ISOM_DEFAULT_BOX_HEADER_SIZE
+    gmhd->size = ISOM_BASEBOX_COMMON_SIZE
         + isom_update_gmin_size( gmhd->gmin )
         + isom_update_text_size( gmhd->text );
     CHECK_LARGESIZE( gmhd->size );
@@ -5609,7 +5609,7 @@ static uint64_t isom_update_pasp_size( isom_pasp_t *pasp )
 {
     if( !pasp )
         return 0;
-    pasp->size = ISOM_DEFAULT_BOX_HEADER_SIZE + 8;
+    pasp->size = ISOM_BASEBOX_COMMON_SIZE + 8;
     CHECK_LARGESIZE( pasp->size );
     return pasp->size;
 }
@@ -5618,7 +5618,7 @@ static uint64_t isom_update_clap_size( isom_clap_t *clap )
 {
     if( !clap )
         return 0;
-    clap->size = ISOM_DEFAULT_BOX_HEADER_SIZE + 32;
+    clap->size = ISOM_BASEBOX_COMMON_SIZE + 32;
     CHECK_LARGESIZE( clap->size );
     return clap->size;
 }
@@ -5627,7 +5627,7 @@ static uint64_t isom_update_colr_size( isom_colr_t *colr )
 {
     if( !colr || colr->color_parameter_type == QT_COLOR_PARAMETER_TYPE_PROF )
         return 0;
-    colr->size = ISOM_DEFAULT_BOX_HEADER_SIZE + 10;
+    colr->size = ISOM_BASEBOX_COMMON_SIZE + 10;
     CHECK_LARGESIZE( colr->size );
     return colr->size;
 }
@@ -5636,7 +5636,7 @@ static uint64_t isom_update_stsl_size( isom_stsl_t *stsl )
 {
     if( !stsl )
         return 0;
-    stsl->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 6;
+    stsl->size = ISOM_FULLBOX_COMMON_SIZE + 6;
     CHECK_LARGESIZE( stsl->size );
     return stsl->size;
 }
@@ -5645,7 +5645,7 @@ static uint64_t isom_update_esds_size( isom_esds_t *esds )
 {
     if( !esds )
         return 0;
-    esds->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + mp4sys_update_ES_Descriptor_size( esds->ES );
+    esds->size = ISOM_FULLBOX_COMMON_SIZE + mp4sys_update_ES_Descriptor_size( esds->ES );
     CHECK_LARGESIZE( esds->size );
     return esds->size;
 }
@@ -5654,7 +5654,7 @@ static uint64_t isom_update_avcC_size( isom_avcC_t *avcC )
 {
     if( !avcC || !avcC->sequenceParameterSets || !avcC->pictureParameterSets )
         return 0;
-    uint64_t size = ISOM_DEFAULT_BOX_HEADER_SIZE + 7;
+    uint64_t size = ISOM_BASEBOX_COMMON_SIZE + 7;
     for( lsmash_entry_t *entry = avcC->sequenceParameterSets->head; entry; entry = entry->next )
     {
         isom_avcC_ps_entry_t *data = (isom_avcC_ps_entry_t *)entry->data;
@@ -5683,7 +5683,7 @@ static uint64_t isom_update_btrt_size( isom_btrt_t *btrt )
 {
     if( !btrt )
         return 0;
-    btrt->size = ISOM_DEFAULT_BOX_HEADER_SIZE + 12;
+    btrt->size = ISOM_BASEBOX_COMMON_SIZE + 12;
     CHECK_LARGESIZE( btrt->size );
     return btrt->size;
 }
@@ -5692,7 +5692,7 @@ static uint64_t isom_update_visual_entry_size( isom_visual_entry_t *visual )
 {
     if( !visual )
         return 0;
-    visual->size = ISOM_DEFAULT_BOX_HEADER_SIZE + 78
+    visual->size = ISOM_BASEBOX_COMMON_SIZE + 78
         + isom_update_clap_size( visual->clap )
         + isom_update_pasp_size( visual->pasp )
         + isom_update_colr_size( visual->colr )
@@ -5709,7 +5709,7 @@ static uint64_t isom_update_mp4s_entry_size( isom_mp4s_entry_t *mp4s )
 {
     if( !mp4s || mp4s->type != ISOM_CODEC_TYPE_MP4S_SYSTEM )
         return 0;
-    mp4s->size = ISOM_DEFAULT_BOX_HEADER_SIZE + 8 + isom_update_esds_size( mp4s->esds );
+    mp4s->size = ISOM_BASEBOX_COMMON_SIZE + 8 + isom_update_esds_size( mp4s->esds );
     CHECK_LARGESIZE( mp4s->size );
     return mp4s->size;
 }
@@ -5719,7 +5719,7 @@ static uint64_t isom_update_frma_size( isom_frma_t *frma )
 {
     if( !frma )
         return 0;
-    frma->size = ISOM_DEFAULT_BOX_HEADER_SIZE + 4;
+    frma->size = ISOM_BASEBOX_COMMON_SIZE + 4;
     CHECK_LARGESIZE( frma->size );
     return frma->size;
 }
@@ -5728,7 +5728,7 @@ static uint64_t isom_update_enda_size( isom_enda_t *enda )
 {
     if( !enda )
         return 0;
-    enda->size = ISOM_DEFAULT_BOX_HEADER_SIZE + 2;
+    enda->size = ISOM_BASEBOX_COMMON_SIZE + 2;
     CHECK_LARGESIZE( enda->size );
     return enda->size;
 }
@@ -5737,7 +5737,7 @@ static uint64_t isom_update_mp4a_size( isom_mp4a_t *mp4a )
 {
     if( !mp4a )
         return 0;
-    mp4a->size = ISOM_DEFAULT_BOX_HEADER_SIZE + 4;
+    mp4a->size = ISOM_BASEBOX_COMMON_SIZE + 4;
     CHECK_LARGESIZE( mp4a->size );
     return mp4a->size;
 }
@@ -5746,7 +5746,7 @@ static uint64_t isom_update_terminator_size( isom_terminator_t *terminator )
 {
     if( !terminator )
         return 0;
-    terminator->size = ISOM_DEFAULT_BOX_HEADER_SIZE;
+    terminator->size = ISOM_BASEBOX_COMMON_SIZE;
     CHECK_LARGESIZE( terminator->size );
     return terminator->size;
 }
@@ -5755,7 +5755,7 @@ static uint64_t isom_update_wave_size( isom_wave_t *wave )
 {
     if( !wave )
         return 0;
-    wave->size = ISOM_DEFAULT_BOX_HEADER_SIZE
+    wave->size = ISOM_BASEBOX_COMMON_SIZE
         + isom_update_frma_size( wave->frma )
         + isom_update_enda_size( wave->enda )
         + isom_update_mp4a_size( wave->mp4a )
@@ -5770,7 +5770,7 @@ static uint64_t isom_update_chan_size( isom_chan_t *chan )
 {
     if( !chan )
         return 0;
-    chan->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 12 + 20 * (uint64_t)chan->numberChannelDescriptions;
+    chan->size = ISOM_FULLBOX_COMMON_SIZE + 12 + 20 * (uint64_t)chan->numberChannelDescriptions;
     CHECK_LARGESIZE( chan->size );
     return chan->size;
 }
@@ -5779,7 +5779,7 @@ static uint64_t isom_update_audio_entry_size( isom_audio_entry_t *audio )
 {
     if( !audio )
         return 0;
-    audio->size = ISOM_DEFAULT_BOX_HEADER_SIZE + 28
+    audio->size = ISOM_BASEBOX_COMMON_SIZE + 28
         + isom_update_esds_size( audio->esds )
         + isom_update_wave_size( audio->wave )
         + isom_update_chan_size( audio->chan )
@@ -5796,7 +5796,7 @@ static uint64_t isom_update_text_entry_size( isom_text_entry_t *text )
 {
     if( !text )
         return 0;
-    text->size = ISOM_DEFAULT_BOX_HEADER_SIZE + 51 + (uint64_t)text->font_name_length;
+    text->size = ISOM_BASEBOX_COMMON_SIZE + 51 + (uint64_t)text->font_name_length;
     CHECK_LARGESIZE( text->size );
     return text->size;
 }
@@ -5805,7 +5805,7 @@ static uint64_t isom_update_ftab_size( isom_ftab_t *ftab )
 {
     if( !ftab || !ftab->list )
         return 0;
-    ftab->size = ISOM_DEFAULT_BOX_HEADER_SIZE + 2;
+    ftab->size = ISOM_BASEBOX_COMMON_SIZE + 2;
     for( lsmash_entry_t *entry = ftab->list->head; entry; entry = entry->next )
     {
         isom_font_record_t *data = (isom_font_record_t *)entry->data;
@@ -5819,7 +5819,7 @@ static uint64_t isom_update_tx3g_entry_size( isom_tx3g_entry_t *tx3g )
 {
     if( !tx3g )
         return 0;
-    tx3g->size = ISOM_DEFAULT_BOX_HEADER_SIZE + 38 + isom_update_ftab_size( tx3g->ftab );
+    tx3g->size = ISOM_BASEBOX_COMMON_SIZE + 38 + isom_update_ftab_size( tx3g->ftab );
     CHECK_LARGESIZE( tx3g->size );
     return tx3g->size;
 }
@@ -5828,7 +5828,7 @@ static uint64_t isom_update_stsd_size( isom_stsd_t *stsd )
 {
     if( !stsd || !stsd->list )
         return 0;
-    uint64_t size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE;
+    uint64_t size = ISOM_LIST_FULLBOX_COMMON_SIZE;
     for( lsmash_entry_t *entry = stsd->list->head; entry; entry = entry->next )
     {
         isom_sample_entry_t *data = (isom_sample_entry_t *)entry->data;
@@ -5914,7 +5914,7 @@ static uint64_t isom_update_stts_size( isom_stts_t *stts )
 {
     if( !stts || !stts->list )
         return 0;
-    stts->size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + (uint64_t)stts->list->entry_count * 8;
+    stts->size = ISOM_LIST_FULLBOX_COMMON_SIZE + (uint64_t)stts->list->entry_count * 8;
     CHECK_LARGESIZE( stts->size );
     return stts->size;
 }
@@ -5923,7 +5923,7 @@ static uint64_t isom_update_ctts_size( isom_ctts_t *ctts )
 {
     if( !ctts || !ctts->list )
         return 0;
-    ctts->size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + (uint64_t)ctts->list->entry_count * 8;
+    ctts->size = ISOM_LIST_FULLBOX_COMMON_SIZE + (uint64_t)ctts->list->entry_count * 8;
     CHECK_LARGESIZE( ctts->size );
     return ctts->size;
 }
@@ -5932,7 +5932,7 @@ static uint64_t isom_update_cslg_size( isom_cslg_t *cslg )
 {
     if( !cslg )
         return 0;
-    cslg->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 20;
+    cslg->size = ISOM_FULLBOX_COMMON_SIZE + 20;
     CHECK_LARGESIZE( cslg->size );
     return cslg->size;
 }
@@ -5941,7 +5941,7 @@ static uint64_t isom_update_stsz_size( isom_stsz_t *stsz )
 {
     if( !stsz )
         return 0;
-    stsz->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 8 + ( stsz->list ? (uint64_t)stsz->list->entry_count * 4 : 0 );
+    stsz->size = ISOM_FULLBOX_COMMON_SIZE + 8 + ( stsz->list ? (uint64_t)stsz->list->entry_count * 4 : 0 );
     CHECK_LARGESIZE( stsz->size );
     return stsz->size;
 }
@@ -5950,7 +5950,7 @@ static uint64_t isom_update_stss_size( isom_stss_t *stss )
 {
     if( !stss || !stss->list )
         return 0;
-    stss->size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + (uint64_t)stss->list->entry_count * 4;
+    stss->size = ISOM_LIST_FULLBOX_COMMON_SIZE + (uint64_t)stss->list->entry_count * 4;
     CHECK_LARGESIZE( stss->size );
     return stss->size;
 }
@@ -5959,7 +5959,7 @@ static uint64_t isom_update_stps_size( isom_stps_t *stps )
 {
     if( !stps || !stps->list )
         return 0;
-    stps->size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + (uint64_t)stps->list->entry_count * 4;
+    stps->size = ISOM_LIST_FULLBOX_COMMON_SIZE + (uint64_t)stps->list->entry_count * 4;
     CHECK_LARGESIZE( stps->size );
     return stps->size;
 }
@@ -5968,7 +5968,7 @@ static uint64_t isom_update_sdtp_size( isom_sdtp_t *sdtp )
 {
     if( !sdtp || !sdtp->list )
         return 0;
-    sdtp->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + (uint64_t)sdtp->list->entry_count;
+    sdtp->size = ISOM_FULLBOX_COMMON_SIZE + (uint64_t)sdtp->list->entry_count;
     CHECK_LARGESIZE( sdtp->size );
     return sdtp->size;
 }
@@ -5977,7 +5977,7 @@ static uint64_t isom_update_stsc_size( isom_stsc_t *stsc )
 {
     if( !stsc || !stsc->list )
         return 0;
-    stsc->size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + (uint64_t)stsc->list->entry_count * 12;
+    stsc->size = ISOM_LIST_FULLBOX_COMMON_SIZE + (uint64_t)stsc->list->entry_count * 12;
     CHECK_LARGESIZE( stsc->size );
     return stsc->size;
 }
@@ -5986,7 +5986,7 @@ static uint64_t isom_update_stco_size( isom_stco_t *stco )
 {
     if( !stco || !stco->list )
         return 0;
-    stco->size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + (uint64_t)stco->list->entry_count * (stco->large_presentation ? 8 : 4);
+    stco->size = ISOM_LIST_FULLBOX_COMMON_SIZE + (uint64_t)stco->list->entry_count * (stco->large_presentation ? 8 : 4);
     CHECK_LARGESIZE( stco->size );
     return stco->size;
 }
@@ -5995,7 +5995,7 @@ static uint64_t isom_update_sbgp_size( isom_sbgp_entry_t *sbgp )
 {
     if( !sbgp || !sbgp->list )
         return 0;
-    sbgp->size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + 4 + (uint64_t)sbgp->list->entry_count * 8;
+    sbgp->size = ISOM_LIST_FULLBOX_COMMON_SIZE + 4 + (uint64_t)sbgp->list->entry_count * 8;
     CHECK_LARGESIZE( sbgp->size );
     return sbgp->size;
 }
@@ -6004,7 +6004,7 @@ static uint64_t isom_update_sgpd_size( isom_sgpd_entry_t *sgpd )
 {
     if( !sgpd || !sgpd->list )
         return 0;
-    uint64_t size = ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + (1 + (sgpd->version == 1)) * 4;
+    uint64_t size = ISOM_LIST_FULLBOX_COMMON_SIZE + (1 + (sgpd->version == 1)) * 4;
     size += (uint64_t)sgpd->list->entry_count * ((sgpd->version == 1) && !sgpd->default_length) * 4;
     switch( sgpd->grouping_type )
     {
@@ -6027,7 +6027,7 @@ static uint64_t isom_update_stbl_size( isom_stbl_t *stbl )
 {
     if( !stbl )
         return 0;
-    stbl->size = ISOM_DEFAULT_BOX_HEADER_SIZE
+    stbl->size = ISOM_BASEBOX_COMMON_SIZE
         + isom_update_stsd_size( stbl->stsd )
         + isom_update_stts_size( stbl->stts )
         + isom_update_ctts_size( stbl->ctts )
@@ -6052,7 +6052,7 @@ static uint64_t isom_update_minf_size( isom_minf_t *minf )
 {
     if( !minf )
         return 0;
-    minf->size = ISOM_DEFAULT_BOX_HEADER_SIZE
+    minf->size = ISOM_BASEBOX_COMMON_SIZE
         + isom_update_vmhd_size( minf->vmhd )
         + isom_update_smhd_size( minf->smhd )
         + isom_update_hmhd_size( minf->hmhd )
@@ -6069,7 +6069,7 @@ static uint64_t isom_update_mdia_size( isom_mdia_t *mdia )
 {
     if( !mdia )
         return 0;
-    mdia->size = ISOM_DEFAULT_BOX_HEADER_SIZE
+    mdia->size = ISOM_BASEBOX_COMMON_SIZE
         + isom_update_mdhd_size( mdia->mdhd )
         + isom_update_hdlr_size( mdia->hdlr )
         + isom_update_minf_size( mdia->minf );
@@ -6081,7 +6081,7 @@ static uint64_t isom_update_chpl_size( isom_chpl_t *chpl )
 {
     if( !chpl )
         return 0;
-    chpl->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 4 * (chpl->version == 1) + 1;
+    chpl->size = ISOM_FULLBOX_COMMON_SIZE + 4 * (chpl->version == 1) + 1;
     for( lsmash_entry_t *entry = chpl->list->head; entry; entry = entry->next )
     {
         isom_chpl_entry_t *data = (isom_chpl_entry_t *)entry->data;
@@ -6096,7 +6096,7 @@ static uint64_t isom_update_udta_size( isom_udta_t *udta_moov, isom_udta_t *udta
     isom_udta_t *udta = udta_trak ? udta_trak : udta_moov ? udta_moov : NULL;
     if( !udta )
         return 0;
-    udta->size = ISOM_DEFAULT_BOX_HEADER_SIZE + ( udta_moov ? isom_update_chpl_size( udta->chpl ) : 0 );
+    udta->size = ISOM_BASEBOX_COMMON_SIZE + ( udta_moov ? isom_update_chpl_size( udta->chpl ) : 0 );
     CHECK_LARGESIZE( udta->size );
     return udta->size;
 }
@@ -6105,7 +6105,7 @@ static uint64_t isom_update_trak_entry_size( isom_trak_entry_t *trak )
 {
     if( !trak )
         return 0;
-    trak->size = ISOM_DEFAULT_BOX_HEADER_SIZE
+    trak->size = ISOM_BASEBOX_COMMON_SIZE
         + isom_update_tkhd_size( trak->tkhd )
         + isom_update_tapt_size( trak->tapt )
         + isom_update_edts_size( trak->edts )
@@ -6122,7 +6122,7 @@ static uint64_t isom_update_mehd_size( isom_mehd_t *mehd )
         return 0;
     if( mehd->fragment_duration > UINT32_MAX )
         mehd->version = 1;
-    mehd->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 4 * (1 + (mehd->version == 1));
+    mehd->size = ISOM_FULLBOX_COMMON_SIZE + 4 * (1 + (mehd->version == 1));
     CHECK_LARGESIZE( mehd->size );
     return mehd->size;
 }
@@ -6131,7 +6131,7 @@ static uint64_t isom_update_trex_entry_size( isom_trex_entry_t *trex )
 {
     if( !trex )
         return 0;
-    trex->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 20;
+    trex->size = ISOM_FULLBOX_COMMON_SIZE + 20;
     CHECK_LARGESIZE( trex->size );
     return trex->size;
 }
@@ -6140,7 +6140,7 @@ static uint64_t isom_update_mvex_size( isom_mvex_t *mvex )
 {
     if( !mvex )
         return 0;
-    mvex->size = ISOM_DEFAULT_BOX_HEADER_SIZE;
+    mvex->size = ISOM_BASEBOX_COMMON_SIZE;
     if( mvex->trex_list )
         for( lsmash_entry_t *entry = mvex->trex_list->head; entry; entry = entry->next )
         {
@@ -6157,7 +6157,7 @@ static int isom_update_moov_size( isom_moov_t *moov )
 {
     if( !moov )
         return -1;
-    moov->size = ISOM_DEFAULT_BOX_HEADER_SIZE
+    moov->size = ISOM_BASEBOX_COMMON_SIZE
         + isom_update_mvhd_size( moov->mvhd )
         + isom_update_iods_size( moov->iods )
         + isom_update_udta_size( moov->udta, NULL )
@@ -6176,7 +6176,7 @@ static uint64_t isom_update_mfhd_size( isom_mfhd_t *mfhd )
 {
     if( !mfhd )
         return 0;
-    mfhd->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 4;
+    mfhd->size = ISOM_FULLBOX_COMMON_SIZE + 4;
     CHECK_LARGESIZE( mfhd->size );
     return mfhd->size;
 }
@@ -6185,7 +6185,7 @@ static uint64_t isom_update_tfhd_size( isom_tfhd_t *tfhd )
 {
     if( !tfhd )
         return 0;
-    tfhd->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE
+    tfhd->size = ISOM_FULLBOX_COMMON_SIZE
                + 4
                + 8 * !!( tfhd->flags & ISOM_TF_FLAGS_BASE_DATA_OFFSET_PRESENT         )
                + 4 * !!( tfhd->flags & ISOM_TF_FLAGS_SAMPLE_DESCRIPTION_INDEX_PRESENT )
@@ -6200,7 +6200,7 @@ static uint64_t isom_update_trun_entry_size( isom_trun_entry_t *trun )
 {
     if( !trun )
         return 0;
-    trun->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE
+    trun->size = ISOM_FULLBOX_COMMON_SIZE
                + 4
                + 4 * !!( trun->flags & ISOM_TR_FLAGS_DATA_OFFSET_PRESENT        )
                + 4 * !!( trun->flags & ISOM_TR_FLAGS_FIRST_SAMPLE_FLAGS_PRESENT );
@@ -6217,7 +6217,7 @@ static uint64_t isom_update_traf_entry_size( isom_traf_entry_t *traf )
 {
     if( !traf )
         return 0;
-    traf->size = ISOM_DEFAULT_BOX_HEADER_SIZE + isom_update_tfhd_size( traf->tfhd );
+    traf->size = ISOM_BASEBOX_COMMON_SIZE + isom_update_tfhd_size( traf->tfhd );
     if( traf->trun_list )
         for( lsmash_entry_t *entry = traf->trun_list->head; entry; entry = entry->next )
         {
@@ -6232,7 +6232,7 @@ static int isom_update_moof_entry_size( isom_moof_entry_t *moof )
 {
     if( !moof )
         return -1;
-    moof->size = ISOM_DEFAULT_BOX_HEADER_SIZE + isom_update_mfhd_size( moof->mfhd );
+    moof->size = ISOM_BASEBOX_COMMON_SIZE + isom_update_mfhd_size( moof->mfhd );
     if( moof->traf_list )
         for( lsmash_entry_t *entry = moof->traf_list->head; entry; entry = entry->next )
         {
@@ -6247,7 +6247,7 @@ static uint64_t isom_update_tfra_entry_size( isom_tfra_entry_t *tfra )
 {
     if( !tfra )
         return 0;
-    tfra->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 12;
+    tfra->size = ISOM_FULLBOX_COMMON_SIZE + 12;
     uint32_t entry_size = 8 * (1 + (tfra->version == 1))
                         + tfra->length_size_of_traf_num   + 1
                         + tfra->length_size_of_trun_num   + 1
@@ -6261,7 +6261,7 @@ static uint64_t isom_update_mfro_size( isom_mfro_t *mfro )
 {
     if( !mfro )
         return 0;
-    mfro->size = ISOM_DEFAULT_FULLBOX_HEADER_SIZE + 4;
+    mfro->size = ISOM_FULLBOX_COMMON_SIZE + 4;
     CHECK_LARGESIZE( mfro->size );
     return mfro->size;
 }
@@ -6270,7 +6270,7 @@ static int isom_update_mfra_size( isom_mfra_t *mfra )
 {
     if( !mfra )
         return -1;
-    mfra->size = ISOM_DEFAULT_BOX_HEADER_SIZE;
+    mfra->size = ISOM_BASEBOX_COMMON_SIZE;
     if( mfra->tfra_list )
         for( lsmash_entry_t *entry = mfra->tfra_list->head; entry; entry = entry->next )
         {
@@ -7580,7 +7580,7 @@ static int isom_finish_fragment_movie( lsmash_root_t *root )
     for( lsmash_entry_t *entry = moof->traf_list->head; entry; entry = entry->next )
     {
         isom_traf_entry_t *traf = (isom_traf_entry_t *)entry->data;
-        traf->tfhd->base_data_offset = root->size + moof->size + ISOM_DEFAULT_BOX_HEADER_SIZE;
+        traf->tfhd->base_data_offset = root->size + moof->size + ISOM_BASEBOX_COMMON_SIZE;
     }
     if( isom_write_moof( root->bs, moof ) )
         return -1;
@@ -7818,7 +7818,7 @@ int lsmash_modify_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint32_t
     lsmash_bs_t *bs = root->bs;
     FILE *stream = bs->stream;
     uint64_t current_pos = lsmash_ftell( stream );
-    uint64_t entry_pos = elst->pos + ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE + ((uint64_t)entry_number - 1) * (elst->version == 1 ? 20 : 12);
+    uint64_t entry_pos = elst->pos + ISOM_LIST_FULLBOX_COMMON_SIZE + ((uint64_t)entry_number - 1) * (elst->version == 1 ? 20 : 12);
     lsmash_fseek( stream, entry_pos, SEEK_SET );
     if( elst->version )
     {
@@ -8362,7 +8362,7 @@ static int isom_add_chunk( isom_trak_entry_t *trak, lsmash_sample_t *sample )
     /* Add a new chunk offset in this track. */
     uint64_t offset = root->size;
     if( root->fragment )
-        offset += ISOM_DEFAULT_BOX_HEADER_SIZE + root->fragment->pool_size;
+        offset += ISOM_BASEBOX_COMMON_SIZE + root->fragment->pool_size;
     if( isom_add_stco_entry( stbl, offset ) )
         return -1;
     /* update cache information */
@@ -8460,7 +8460,7 @@ static int isom_output_cached_chunk( isom_trak_entry_t *trak )
     if( root->fragment )
     {
         /* Add a new chunk offset in this track. */
-        if( isom_add_stco_entry( stbl, root->size + ISOM_DEFAULT_BOX_HEADER_SIZE + root->fragment->pool_size ) )
+        if( isom_add_stco_entry( stbl, root->size + ISOM_BASEBOX_COMMON_SIZE + root->fragment->pool_size ) )
             return -1;
         isom_append_fragment_track_run( root, chunk );
         return 0;
@@ -8534,7 +8534,7 @@ static int isom_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sa
         if( isom_new_mdat( root, 0 ) )
             return -1;
         /* Add the size of the Media Data Box and the placeholder. */
-        root->size += 2 * ISOM_DEFAULT_BOX_HEADER_SIZE;
+        root->size += 2 * ISOM_BASEBOX_COMMON_SIZE;
     }
     isom_sample_entry_t *sample_entry = (isom_sample_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->stsd->list, sample->index );
     if( !sample_entry )

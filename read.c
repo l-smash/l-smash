@@ -40,7 +40,7 @@ static int isom_bs_read_box_common( lsmash_bs_t *bs, isom_box_t *box )
 {
     box->pos = lsmash_ftell( bs->stream );
     /* read size and type */
-    if( lsmash_bs_read_data( bs, ISOM_DEFAULT_BOX_HEADER_SIZE ) )
+    if( lsmash_bs_read_data( bs, ISOM_BASEBOX_COMMON_SIZE ) )
         return -1;
     if( feof( bs->stream ) )
         return 1;
@@ -2376,7 +2376,7 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
     assert( parent && parent->root );
     box->root = parent->root;
     box->parent = parent;
-    if( parent->size < parent_pos + ISOM_DEFAULT_BOX_HEADER_SIZE )
+    if( parent->size < parent_pos + ISOM_BASEBOX_COMMON_SIZE )
     {
         /* skip extra bytes */
         uint64_t rest_size = parent->size - parent_pos;

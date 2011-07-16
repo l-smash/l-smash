@@ -50,9 +50,9 @@ typedef struct isom_box_tag isom_box_t;
     uint8_t  version;   /* Basically, version is either 0 or 1 */ \
     uint32_t flags      /* In the actual structure of box, flags is 24 bits. */
 
-#define ISOM_DEFAULT_BOX_HEADER_SIZE          8
-#define ISOM_DEFAULT_FULLBOX_HEADER_SIZE      12
-#define ISOM_DEFAULT_LIST_FULLBOX_HEADER_SIZE 16
+#define ISOM_BASEBOX_COMMON_SIZE       8
+#define ISOM_FULLBOX_COMMON_SIZE      12
+#define ISOM_LIST_FULLBOX_COMMON_SIZE 16
 
 #define LSMASH_UNKNOWN_BOX    0x01
 #define LSMASH_ABSENT_IN_ROOT 0x02
