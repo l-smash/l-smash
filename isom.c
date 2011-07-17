@@ -6362,7 +6362,7 @@ static uint64_t isom_update_meta_size( isom_meta_t *meta )
 {
     if( !meta )
         return 0;
-    meta->size = ISOM_BASEBOX_COMMON_SIZE
+    meta->size = ISOM_FULLBOX_COMMON_SIZE
         + isom_update_hdlr_size( meta->hdlr )
         + isom_update_dinf_size( meta->dinf )
         + isom_update_ilst_size( meta->ilst );
