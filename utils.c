@@ -53,16 +53,14 @@ void lsmash_bs_free( lsmash_bs_t *bs )
 
 void lsmash_bs_alloc( lsmash_bs_t *bs, uint64_t size )
 {
-    if( bs->error )
+    if( (bs->alloc >= size) || bs->error )
         return;
     uint64_t alloc = size + (1<<16);
     uint8_t *data;
     if( !bs->data )
         data = malloc( alloc );
-    else if( bs->alloc < size )
-        data = realloc( bs->data, alloc );
     else
-        return;
+        data = realloc( bs->data, alloc );
     if( !data )
     {
         lsmash_bs_free( bs );

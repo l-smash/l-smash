@@ -1152,11 +1152,18 @@ typedef struct
 /** Caches for handling tracks **/
 typedef struct
 {
+    uint64_t alloc;             /* total buffer size for the pool */
+    uint64_t size;              /* total size of samples in the pool */
+    uint32_t sample_count;      /* number of samples in the pool */
+    uint8_t *data;              /* actual data of samples in the pool */
+} isom_sample_pool_t;
+
+typedef struct
+{
     uint32_t chunk_number;                  /* chunk number */
     uint32_t sample_description_index;      /* sample description index */
     uint64_t first_dts;                     /* the first DTS in chunk */
-    uint64_t pool_size;                     /* the sum of the size of samples in the pool */
-    lsmash_entry_list_t *pool;              /* samples pooled to interleave */
+    isom_sample_pool_t *pool;               /* samples pooled to interleave */
 } isom_chunk_t;
 
 typedef struct

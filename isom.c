@@ -3208,6 +3208,8 @@ static void isom_remove_meta( isom_meta_t *meta )
     free( meta );
 }
 
+static void isom_remove_sample_pool( isom_sample_pool_t *pool );
+
 static void isom_remove_trak( isom_trak_entry_t *trak )
 {
     if( !trak )
@@ -3221,7 +3223,7 @@ static void isom_remove_trak( isom_trak_entry_t *trak )
     isom_remove_meta( trak->meta );
     if( trak->cache )
     {
-        lsmash_remove_list( trak->cache->chunk.pool, lsmash_delete_sample );
+        isom_remove_sample_pool( trak->cache->chunk.pool );
         lsmash_remove_list( trak->cache->roll.pool, NULL );
         if( trak->cache->rap )
             free( trak->cache->rap );
@@ -7630,15 +7632,15 @@ static int isom_output_fragment_media_data( lsmash_root_t *root )
     /* Write samples in the current movie fragment. */
     for( lsmash_entry_t* entry = fragment->pool->head; entry; entry = entry->next )
     {
-        lsmash_sample_t *sample = (lsmash_sample_t *)entry->data;
-        if( !sample || !sample->data )
+        isom_sample_pool_t *pool = (isom_sample_pool_t *)entry->data;
+        if( !pool )
             return -1;
-        lsmash_bs_put_bytes( root->bs, sample->data, sample->length );
+        lsmash_bs_put_bytes( root->bs, pool->data, pool->size );
     }
     if( lsmash_bs_write_data( root->bs ) )
         return -1;
     root->size += root->mdat->size;
-    lsmash_remove_entries( fragment->pool, lsmash_delete_sample );
+    lsmash_remove_entries( fragment->pool, isom_remove_sample_pool );
     fragment->pool_size = 0;
     return 0;
 }
@@ -8189,16 +8191,15 @@ lsmash_sample_t *lsmash_create_sample( uint32_t size )
     if( !sample )
         return NULL;
     memset( sample, 0, sizeof(lsmash_sample_t) );
-    if( size )
+    if( !size )
+        return sample;
+    sample->data = malloc( size );
+    if( !sample->data )
     {
-        sample->data = malloc( size );
-        if( !sample->data )
-        {
-            free( sample );
-            return NULL;
-        }
-        sample->length = size;
+        free( sample );
+        return NULL;
     }
+    sample->length = size;
     return sample;
 }
 
@@ -8235,6 +8236,33 @@ void lsmash_delete_sample( lsmash_sample_t *sample )
     if( sample->data )
         free( sample->data );
     free( sample );
+}
+
+isom_sample_pool_t *isom_create_sample_pool( uint64_t size )
+{
+    isom_sample_pool_t *pool = malloc( sizeof(isom_sample_pool_t) );
+    if( !pool )
+        return NULL;
+    memset( pool, 0, sizeof(isom_sample_pool_t) );
+    if( !size )
+        return pool;
+    pool->data = malloc( size );
+    if( !pool->data )
+    {
+        free( pool );
+        return NULL;
+    }
+    pool->alloc = size;
+    return pool;
+}
+
+static void isom_remove_sample_pool( isom_sample_pool_t *pool )
+{
+    if( !pool )
+        return;
+    if( pool->data )
+        free( pool->data );
+    free( pool );
 }
 
 static uint32_t isom_add_size( isom_trak_entry_t *trak, uint32_t sample_size )
@@ -8621,11 +8649,11 @@ static int isom_add_chunk( isom_trak_entry_t *trak, lsmash_sample_t *sample )
     if( !current->pool )
     {
         /* Very initial settings, just once per track */
-        current->pool = lsmash_create_entry_list();
+        current->pool = isom_create_sample_pool( 0 );
         if( !current->pool )
             return -1;
     }
-    if( !current->pool->entry_count )
+    if( !current->pool->sample_count )
     {
         /* Cannot decide whether we should flush the current sample or not here yet. */
         ++ current->chunk_number;
@@ -8636,7 +8664,7 @@ static int isom_add_chunk( isom_trak_entry_t *trak, lsmash_sample_t *sample )
     if( sample->dts < current->first_dts )
         return -1;  /* easy error check. */
     if( (root->max_chunk_duration >= ((double)(sample->dts - current->first_dts) / trak->mdia->mdhd->timescale))
-     && (root->max_chunk_size >= current->pool_size + sample->length)
+     && (root->max_chunk_size >= current->pool->size + sample->length)
      && (current->sample_description_index == sample->index) )
         return 0;   /* No need to flush current cached chunk, the current sample must be put into that. */
     /* NOTE: chunk relative stuff must be pushed into root after a chunk is fully determined with its contents. */
@@ -8644,8 +8672,8 @@ static int isom_add_chunk( isom_trak_entry_t *trak, lsmash_sample_t *sample )
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     lsmash_entry_t *last_stsc_entry = stbl->stsc->list->tail;
     /* Create a new chunk sequence in this track if needed. */
-    if( (!last_stsc_entry || current->pool->entry_count != ((isom_stsc_entry_t *)last_stsc_entry->data)->samples_per_chunk)
-     && isom_add_stsc_entry( stbl, current->chunk_number, current->pool->entry_count, current->sample_description_index ) )
+    if( (!last_stsc_entry || current->pool->sample_count != ((isom_stsc_entry_t *)last_stsc_entry->data)->samples_per_chunk)
+     && isom_add_stsc_entry( stbl, current->chunk_number, current->pool->sample_count, current->sample_description_index ) )
         return -1;
     /* Add a new chunk offset in this track. */
     uint64_t offset = root->size;
@@ -8662,25 +8690,17 @@ static int isom_add_chunk( isom_trak_entry_t *trak, lsmash_sample_t *sample )
     return 1;
 }
 
-static int isom_write_pooled_samples( lsmash_root_t *root, isom_chunk_t *chunk )
+static int isom_write_pooled_samples( lsmash_root_t *root, isom_sample_pool_t *pool )
 {
     if( !root || !root->mdat || !root->bs || !root->bs->stream )
         return -1;
-    uint64_t chunk_size = 0;
-    for( lsmash_entry_t *entry = chunk->pool->head; entry; entry = entry->next )
-    {
-        lsmash_sample_t *sample = (lsmash_sample_t *)entry->data;
-        if( !sample || !sample->data )
-            return -1;
-        lsmash_bs_put_bytes( root->bs, sample->data, sample->length );
-        chunk_size += sample->length;
-    }
+    lsmash_bs_put_bytes( root->bs, pool->data, pool->size );
     if( lsmash_bs_write_data( root->bs ) )
         return -1;
-    root->mdat->size += chunk_size;
-    root->size += chunk_size;
-    lsmash_remove_entries( chunk->pool, lsmash_delete_sample );
-    chunk->pool_size = 0;
+    root->mdat->size  += pool->size;
+    root->size        += pool->size;
+    pool->sample_count = 0;
+    pool->size         = 0;
     return 0;
 }
 
@@ -8712,27 +8732,19 @@ static int isom_update_sample_tables( isom_trak_entry_t *trak, lsmash_sample_t *
     return isom_add_chunk( trak, sample );
 }
 
-static void isom_append_fragment_track_run( lsmash_root_t *root, isom_chunk_t *chunk )
+static int isom_append_fragment_track_run( lsmash_root_t *root, isom_chunk_t *chunk )
 {
-    if( !chunk->pool || !chunk->pool->head )
-        return;
+    if( !chunk->pool || !chunk->pool->size )
+        return 0;
     isom_fragment_manager_t *fragment = root->fragment;
-    /* Move samples in the pool of the current track fragment to the pool of the current movie fragment.
+    /* Move data in the pool of the current track fragment to the pool of the current movie fragment.
      * Empty the pool of current track. We don't delete data of samples here. */
-    if( fragment->pool->tail )
-    {
-        fragment->pool->tail->next = chunk->pool->head;
-        fragment->pool->tail->next->prev = fragment->pool->tail;
-    }
-    else
-        fragment->pool->head = chunk->pool->head;
-    fragment->pool->tail = chunk->pool->tail;
-    fragment->pool->entry_count += chunk->pool->entry_count;
-    fragment->pool_size += chunk->pool_size;
-    chunk->pool_size = 0;
-    chunk->pool->entry_count = 0;
-    chunk->pool->head = NULL;
-    chunk->pool->tail = NULL;
+    if( lsmash_add_entry( fragment->pool, chunk->pool ) )
+        return -1;
+    fragment->pool->entry_count += chunk->pool->sample_count;
+    fragment->pool_size         += chunk->pool->size;
+    chunk->pool = isom_create_sample_pool( chunk->pool->size );
+    return chunk->pool ? 0 : -1;
 }
 
 static int isom_output_cached_chunk( isom_trak_entry_t *trak )
@@ -8742,22 +8754,44 @@ static int isom_output_cached_chunk( isom_trak_entry_t *trak )
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     lsmash_entry_t *last_stsc_entry = stbl->stsc->list->tail;
     /* Create a new chunk sequence in this track if needed. */
-    if( (!last_stsc_entry || chunk->pool->entry_count != ((isom_stsc_entry_t *)last_stsc_entry->data)->samples_per_chunk)
-     && isom_add_stsc_entry( stbl, chunk->chunk_number, chunk->pool->entry_count, chunk->sample_description_index ) )
+    if( (!last_stsc_entry || chunk->pool->sample_count != ((isom_stsc_entry_t *)last_stsc_entry->data)->samples_per_chunk)
+     && isom_add_stsc_entry( stbl, chunk->chunk_number, chunk->pool->sample_count, chunk->sample_description_index ) )
         return -1;
     if( root->fragment )
     {
         /* Add a new chunk offset in this track. */
         if( isom_add_stco_entry( stbl, root->size + ISOM_BASEBOX_COMMON_SIZE + root->fragment->pool_size ) )
             return -1;
-        isom_append_fragment_track_run( root, chunk );
-        return 0;
+        return isom_append_fragment_track_run( root, chunk );
     }
     /* Add a new chunk offset in this track. */
     if( isom_add_stco_entry( stbl, root->size ) )
         return -1;
     /* Output pooled samples in this track. */
-    return isom_write_pooled_samples( root, chunk );
+    return isom_write_pooled_samples( root, chunk->pool );
+}
+
+static int isom_pool_sample( isom_sample_pool_t *pool, lsmash_sample_t *sample )
+{
+    uint64_t pool_size = pool->size + sample->length;
+    if( pool->alloc < pool_size )
+    {
+        uint8_t *data;
+        uint64_t alloc = pool_size + (1<<16);
+        if( !pool->data )
+            data = malloc( alloc );
+        else
+            data = realloc( pool->data, alloc );
+        if( !data )
+            return -1;
+        pool->data = data;
+        pool->alloc = alloc;
+    }
+    memcpy( pool->data + pool->size, sample->data, sample->length );
+    pool->size = pool_size;
+    pool->sample_count += 1;
+    lsmash_delete_sample( sample );
+    return 0;
 }
 
 static int isom_append_sample_internal( isom_trak_entry_t *trak, lsmash_sample_t *sample )
@@ -8767,8 +8801,8 @@ static int isom_append_sample_internal( isom_trak_entry_t *trak, lsmash_sample_t
         return -1;
     /* flush == 1 means pooled samples must be flushed. */
     lsmash_root_t *root = trak->root;
-    isom_chunk_t *current = &trak->cache->chunk;
-    if( flush == 1 && isom_write_pooled_samples( root, current ) )
+    isom_sample_pool_t *current_pool = trak->cache->chunk.pool;
+    if( flush == 1 && isom_write_pooled_samples( root, current_pool ) )
         return -1;
     /* Arbitration system between tracks with extremely scattering dts.
      * Here, we check whether asynchronization between the tracks exceeds the tolerance.
@@ -8785,7 +8819,7 @@ static int isom_append_sample_internal( isom_trak_entry_t *trak, lsmash_sample_t
          || !other->mdia->minf || !other->mdia->minf->stbl || !other->mdia->minf->stbl->stsc || !other->mdia->minf->stbl->stsc->list )
             return -1;
         isom_chunk_t *chunk = &other->cache->chunk;
-        if( !chunk->pool || !chunk->pool->entry_count )
+        if( !chunk->pool || !chunk->pool->sample_count )
             continue;
         double diff = ((double)sample->dts / trak->mdia->mdhd->timescale)
                     - ((double)chunk->first_dts / other->mdia->mdhd->timescale);
@@ -8801,10 +8835,7 @@ static int isom_append_sample_internal( isom_trak_entry_t *trak, lsmash_sample_t
          * right next to the previous chunk of the same track or not. */
     }
     /* anyway the current sample must be pooled. */
-    if( lsmash_add_entry( current->pool, sample ) )
-        return -1;
-    current->pool_size += sample->length;
-    return 0;
+    return isom_pool_sample( current_pool, sample );
 }
 
 static int isom_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_t *sample )
@@ -8857,7 +8888,7 @@ static int isom_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sa
 
 static int isom_output_cache( isom_trak_entry_t *trak )
 {
-    if( trak->cache->chunk.pool && trak->cache->chunk.pool->entry_count
+    if( trak->cache->chunk.pool && trak->cache->chunk.pool->sample_count
      && isom_output_cached_chunk( trak ) )
         return -1;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
@@ -8924,7 +8955,8 @@ static int isom_flush_fragment_pooled_samples( lsmash_root_t *root, uint32_t tra
             trun->flags |= ISOM_TR_FLAGS_DATA_OFFSET_PRESENT;
         trun->data_offset = root->fragment->pool_size;
     }
-    isom_append_fragment_track_run( root, &traf->cache->chunk );
+    if( isom_append_fragment_track_run( root, &traf->cache->chunk ) )
+        return -1;
     return isom_set_fragment_last_duration( traf, last_sample_duration );
 }
 
@@ -9004,12 +9036,13 @@ static int isom_update_fragment_sample_tables( isom_traf_entry_t *traf, lsmash_s
     isom_trex_entry_t *trex = isom_get_trex( traf->root->moov->mvex, tfhd->track_ID );
     if( !trex )
         return -1;
-    lsmash_root_t *root = traf->root;
-    isom_cache_t *cache = traf->cache;
+    lsmash_root_t *root   = traf->root;
+    isom_cache_t *cache   = traf->cache;
+    isom_chunk_t *current = &cache->chunk;
     /* Create a new track run if the duration exceeds max_chunk_duration.
      * Old one will be appended to the pool of this movie fragment. */
-    int delimit = (root->max_chunk_duration < ((double)(sample->dts - traf->cache->chunk.first_dts) / lsmash_get_media_timescale( root, tfhd->track_ID )))
-               || (root->max_chunk_size < (cache->chunk.pool_size + sample->length));
+    int delimit = (root->max_chunk_duration < ((double)(sample->dts - current->first_dts) / lsmash_get_media_timescale( root, tfhd->track_ID )))
+               || (root->max_chunk_size < (current->pool->size + sample->length));
     isom_trun_entry_t *trun = NULL;
     if( !traf->trun_list || !traf->trun_list->entry_count || delimit )
     {
@@ -9025,11 +9058,11 @@ static int isom_update_fragment_sample_tables( isom_traf_entry_t *traf, lsmash_s
         trun = isom_add_trun( traf );
         if( !trun )
             return -1;
-        if( !cache->chunk.pool )
+        if( !current->pool )
         {
             /* Very initial settings, just once per track */
-            cache->chunk.pool = lsmash_create_entry_list();
-            if( !cache->chunk.pool )
+            current->pool = isom_create_sample_pool( 0 );
+            if( !current->pool )
                 return -1;
         }
     }
@@ -9050,7 +9083,7 @@ static int isom_update_fragment_sample_tables( isom_traf_entry_t *traf, lsmash_s
             /* Set up sample_description_index in this track fragment. */
             if( sample->index != trex->default_sample_description_index )
                 tfhd->flags |= ISOM_TF_FLAGS_SAMPLE_DESCRIPTION_INDEX_PRESENT;
-            tfhd->sample_description_index = cache->chunk.sample_description_index = sample->index;
+            tfhd->sample_description_index = current->sample_description_index = sample->index;
             /* Set up default_sample_size used in this track fragment. */
             tfhd->default_sample_size = sample->length;
             /* Set up default_sample_flags used in this track fragment.
@@ -9095,7 +9128,7 @@ static int isom_update_fragment_sample_tables( isom_traf_entry_t *traf, lsmash_s
             }
         }
         trun->first_sample_flags = sample_flags;
-        cache->chunk.first_dts = sample->dts;
+        current->first_dts = sample->dts;
     }
     /* Update the optional rows in the current track run except for sample_duration if needed. */
     if( sample->length != tfhd->default_sample_size )
@@ -9141,9 +9174,8 @@ static int isom_append_fragment_sample_internal_initial( isom_trak_entry_t *trak
     else if( delimit == 1 )
         isom_append_fragment_track_run( trak->root, &trak->cache->chunk );
     /* Add a new sample into the pool of this track fragment. */
-    if( lsmash_add_entry( trak->cache->chunk.pool, sample ) )
+    if( isom_pool_sample( trak->cache->chunk.pool, sample ) )
         return -1;
-    trak->cache->chunk.pool_size += sample->length;
     trak->cache->fragment->has_samples = 1;
     return 0;
 }
@@ -9159,9 +9191,8 @@ static int isom_append_fragment_sample_internal( isom_traf_entry_t *traf, lsmash
     else if( delimit == 1 )
         isom_append_fragment_track_run( traf->root, &traf->cache->chunk );
     /* Add a new sample into the pool of this track fragment. */
-    if( lsmash_add_entry( traf->cache->chunk.pool, sample ) )
+    if( isom_pool_sample( traf->cache->chunk.pool, sample ) )
         return -1;
-    traf->cache->chunk.pool_size += sample->length;
     traf->cache->fragment->has_samples = 1;
     return 0;
 }
