@@ -8861,9 +8861,13 @@ static int isom_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sa
     if( isom_is_lpcm_audio( sample_entry->type ) )
     {
         uint32_t frame_size = ((isom_audio_entry_t *)sample_entry)->constBytesPerAudioPacket;
+        if( sample->length == frame_size )
+            return isom_append_sample_internal( trak, sample );
+        else if( sample->length < frame_size )
+            return -1;
+        /* Append samples splitted into each LPCMFrame. */
         uint64_t dts = sample->dts;
         uint64_t cts = sample->cts;
-        /* Append samples splitted into each LPCMFrame. */
         for( uint32_t offset = 0; offset < sample->length; offset += frame_size )
         {
             lsmash_sample_t *lpcm_sample = lsmash_create_sample( frame_size );
@@ -9240,9 +9244,13 @@ static int isom_append_fragment_sample( lsmash_root_t *root, uint32_t track_ID, 
     if( isom_is_lpcm_audio( sample_entry->type ) )
     {
         uint32_t frame_size = ((isom_audio_entry_t *)sample_entry)->constBytesPerAudioPacket;
+        if( sample->length == frame_size )
+            return append_sample_func( track_fragment, sample );
+        else if( sample->length < frame_size )
+            return -1;
+        /* Append samples splitted into each LPCMFrame. */
         uint64_t dts = sample->dts;
         uint64_t cts = sample->cts;
-        /* Append samples splitted into each LPCMFrame. */
         for( uint32_t offset = 0; offset < sample->length; offset += frame_size )
         {
             lsmash_sample_t *lpcm_sample = lsmash_create_sample( frame_size );

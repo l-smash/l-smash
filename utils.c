@@ -82,7 +82,7 @@ void lsmash_bs_put_byte( lsmash_bs_t *bs, uint8_t value )
 
 void lsmash_bs_put_bytes( lsmash_bs_t *bs, void *value, uint32_t size )
 {
-    if( !size )
+    if( !size || !value )
         return;
     lsmash_bs_alloc( bs, bs->store + size );
     if( bs->error )
