@@ -276,6 +276,7 @@ int main( int argc, char *argv[] )
     uint32_t num_consecutive_sample_skip = 0;
     uint32_t num_active_input_tracks = output.num_tracks;
     uint64_t total_media_size = 0;
+    uint8_t  sample_count = 0;
     while( 1 )
     {
         movie_t *movie = &input[input_movie_number - 1];
@@ -317,10 +318,12 @@ int main( int argc, char *argv[] )
                 }
                 largest_dts = LSMASH_MAX( largest_dts, (double)dts / input_media_timescale );
                 total_media_size += sample_size;
-                eprintf( "Importing: %"PRIu64" bytes\r", total_media_size );
                 ++ in_track->current_sample_number;
                 ++ out_track->current_sample_number;
                 num_consecutive_sample_skip = 0;
+                /* Print, per 256 samples, total size of imported media. */
+                if( ++sample_count == 0 )
+                    eprintf( "Importing: %"PRIu64" bytes\r", total_media_size );
             }
             else
                 ++num_consecutive_sample_skip;      /* Skip appendig sample. */
