@@ -566,13 +566,11 @@ static isom_sample_entry_t *isom_duplicate_description( isom_sample_entry_t *ent
     if( !entry )
         return NULL;
     void *description = NULL;
-    int is_visual = 0;
     switch( entry->type )
     {
         case ISOM_CODEC_TYPE_AVC1_VIDEO :
         case ISOM_CODEC_TYPE_MP4V_VIDEO :
             description = isom_duplicate_visual_description( (isom_visual_entry_t *)entry );
-            is_visual = 1;
             break;
         case ISOM_CODEC_TYPE_MP4A_AUDIO :
         case ISOM_CODEC_TYPE_AC_3_AUDIO :
@@ -604,17 +602,6 @@ static isom_sample_entry_t *isom_duplicate_description( isom_sample_entry_t *ent
     }
     if( description )
         ((isom_sample_entry_t *)description)->parent = (isom_box_t *)dst_parent;
-    if( dst_parent && is_visual )
-    {
-        /* Check if needed Track Aperture Modes. */
-        isom_trak_entry_t *trak = (isom_trak_entry_t *)dst_parent->parent->parent->parent->parent;
-        isom_tapt_t *tapt = trak->tapt;
-        if( !trak->root->qt_compatible                              /* Track Aperture Modes is only available under QuickTime file format. */
-         || ((isom_visual_entry_t *)description)->stsl              /* Sample scaling method might conflict with this feature. */
-         || !tapt || !tapt->clef || !tapt->prof || !tapt->enof      /* Check if required boxes exist. */
-         || dst_parent->list->entry_count != 0 )                    /* Multiple sample description might conflict with this. */
-            isom_remove_tapt( trak->tapt );
-    }
     return (isom_sample_entry_t *)description;
 }
 
@@ -1125,6 +1112,42 @@ int lsmash_copy_decoder_specific_info( lsmash_root_t *dst, uint32_t dst_track_ID
             return -1;
         }
         src_entry = src_entry->next;
+    }
+    /* Check if needed Track Aperture Modes. */
+    if( dst_trak->mdia->minf->vmhd )
+    {
+        isom_tapt_t *tapt = dst_trak->tapt;
+        isom_visual_entry_t *visual = (isom_visual_entry_t *)dst_stsd->list->head->data;
+        if( dst_trak->root->qt_compatible                       /* Track Aperture Modes is only available under QuickTime file format. */
+         && !visual->stsl                                       /* Sample scaling method might conflict with this feature. */
+         && visual->clap && visual->pasp                        /* Check if required boxes exist. */
+         && tapt && tapt->clef && tapt->prof && tapt->enof      /* */
+         && dst_stsd->list->entry_count == 1 )                  /* Multiple sample description might conflict with this. */
+        {
+            uint32_t width  = visual->width  << 16;
+            uint32_t height = visual->height << 16;
+            double clap_width  = ((double)visual->clap->cleanApertureWidthN  / visual->clap->cleanApertureWidthD)  * (1<<16);
+            double clap_height = ((double)visual->clap->cleanApertureHeightN / visual->clap->cleanApertureHeightD) * (1<<16);
+            double par = (double)visual->pasp->hSpacing / visual->pasp->vSpacing;
+            if( par >= 1.0 )
+            {
+                tapt->clef->width  = clap_width * par;
+                tapt->clef->height = clap_height;
+                tapt->prof->width  = width * par;
+                tapt->prof->height = height;
+            }
+            else
+            {
+                tapt->clef->width  = clap_width;
+                tapt->clef->height = clap_height / par;
+                tapt->prof->width  = width;
+                tapt->prof->height = height / par;
+            }
+            tapt->enof->width  = width;
+            tapt->enof->height = height;
+        }
+        else
+            isom_remove_tapt( dst_trak->tapt );
     }
     return 0;
 }
