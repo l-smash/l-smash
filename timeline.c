@@ -764,82 +764,87 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
         info->cts      = cts;
         info->duration = stts_data->sample_delta;
         dts += info->duration;
-        /* Check whether sync sample or not. */
-        if( stss_entry )
+        if( !is_lpcm_audio )
         {
-            isom_stss_entry_t *stss_data = (isom_stss_entry_t *)stss_entry->data;
-            if( !stss_data )
-                goto fail;
-            if( sample_number == stss_data->sample_number )
+            /* Check whether sync sample or not. */
+            if( stss_entry )
             {
+                isom_stss_entry_t *stss_data = (isom_stss_entry_t *)stss_entry->data;
+                if( !stss_data )
+                    goto fail;
+                if( sample_number == stss_data->sample_number )
+                {
+                    info->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+                    stss_entry = stss_entry->next;
+                }
+            }
+            else if( all_sync )
                 info->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
-                stss_entry = stss_entry->next;
+            /* Check whether partial sync sample or not. */
+            if( stps_entry )
+            {
+                isom_stps_entry_t *stps_data = (isom_stps_entry_t *)stps_entry->data;
+                if( !stps_data )
+                    goto fail;
+                if( sample_number == stps_data->sample_number )
+                {
+                    info->prop.random_access_type = QT_SAMPLE_RANDOM_ACCESS_TYPE_PARTIAL_SYNC;
+                    stps_entry = stps_entry->next;
+                }
+            }
+            /* Get sample dependency info. */
+            if( sdtp_entry )
+            {
+                isom_sdtp_entry_t *sdtp_data = (isom_sdtp_entry_t *)sdtp_entry->data;
+                if( !sdtp_data )
+                    goto fail;
+                if( iso_sdtp )
+                    info->prop.leading       = sdtp_data->is_leading;
+                else
+                    info->prop.allow_earlier = sdtp_data->is_leading;
+                info->prop.independent = sdtp_data->sample_depends_on;
+                info->prop.disposable  = sdtp_data->sample_is_depended_on;
+                info->prop.redundant   = sdtp_data->sample_has_redundancy;
+                sdtp_entry = sdtp_entry->next;
+            }
+            /* Get roll recovery grouping info. */
+            if( sbgp_roll_entry )
+            {
+                isom_group_assignment_entry_t *assignment = (isom_group_assignment_entry_t *)sbgp_roll_entry->data;
+                if( !assignment )
+                    goto fail;
+                if( sample_number_in_sbgp_roll_entry == 1 && assignment->group_description_index )
+                {
+                    isom_roll_entry_t *roll_data = (isom_roll_entry_t *)lsmash_get_entry_data( sgpd_roll->list, assignment->group_description_index );
+                    if( !roll_data )
+                        goto fail;
+                    info->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY;
+                    info->prop.recovery.complete  = sample_number + roll_data->roll_distance;
+                }
+                INCREMENT_SAMPLE_NUMBER_IN_ENTRY( sample_number_in_sbgp_roll_entry, sbgp_roll_entry, assignment );
+            }
+            info->prop.recovery.identifier = sample_number;
+            /* Get random access point grouping info. */
+            if( sbgp_rap_entry )
+            {
+                isom_group_assignment_entry_t *assignment = (isom_group_assignment_entry_t *)sbgp_rap_entry->data;
+                if( !assignment )
+                    goto fail;
+                if( assignment->group_description_index && (info->prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE) )
+                {
+                    isom_rap_entry_t *rap_data = (isom_rap_entry_t *)lsmash_get_entry_data( sgpd_rap->list, assignment->group_description_index );
+                    if( !rap_data )
+                        goto fail;
+                    /* If this is not an open RAP, we treat it as an unknown RAP since non-IDR sample could make a closed GOP. */
+                    info->prop.random_access_type = (rap_data->num_leading_samples_known && !!rap_data->num_leading_samples)
+                                                  ? ISOM_SAMPLE_RANDOM_ACCESS_TYPE_OPEN_RAP
+                                                  : ISOM_SAMPLE_RANDOM_ACCESS_TYPE_UNKNOWN_RAP;
+                }
+                INCREMENT_SAMPLE_NUMBER_IN_ENTRY( sample_number_in_sbgp_rap_entry, sbgp_rap_entry, assignment );
             }
         }
-        else if( all_sync )
+        else    /* All LPCMFrame is sync sample. */
             info->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
-        /* Check whether partial sync sample or not. */
-        if( stps_entry )
-        {
-            isom_stps_entry_t *stps_data = (isom_stps_entry_t *)stps_entry->data;
-            if( !stps_data )
-                goto fail;
-            if( sample_number == stps_data->sample_number )
-            {
-                info->prop.random_access_type = QT_SAMPLE_RANDOM_ACCESS_TYPE_PARTIAL_SYNC;
-                stps_entry = stps_entry->next;
-            }
-        }
-        /* Get independent and disposable info. */
-        if( !is_lpcm_audio && sdtp_entry )
-        {
-            isom_sdtp_entry_t *sdtp_data = (isom_sdtp_entry_t *)sdtp_entry->data;
-            if( !sdtp_data )
-                goto fail;
-            if( iso_sdtp )
-                info->prop.leading       = sdtp_data->is_leading;
-            else
-                info->prop.allow_earlier = sdtp_data->is_leading;
-            info->prop.independent = sdtp_data->sample_depends_on;
-            info->prop.disposable  = sdtp_data->sample_is_depended_on;
-            info->prop.redundant   = sdtp_data->sample_has_redundancy;
-            sdtp_entry = sdtp_entry->next;
-        }
-        /* Get roll recovery grouping info. */
-        if( sbgp_roll_entry )
-        {
-            isom_group_assignment_entry_t *assignment = (isom_group_assignment_entry_t *)sbgp_roll_entry->data;
-            if( !assignment )
-                goto fail;
-            if( sample_number_in_sbgp_roll_entry == 1 && assignment->group_description_index )
-            {
-                isom_roll_entry_t *roll_data = (isom_roll_entry_t *)lsmash_get_entry_data( sgpd_roll->list, assignment->group_description_index );
-                if( !roll_data )
-                    goto fail;
-                info->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY;
-                info->prop.recovery.complete  = sample_number + roll_data->roll_distance;
-            }
-            INCREMENT_SAMPLE_NUMBER_IN_ENTRY( sample_number_in_sbgp_roll_entry, sbgp_roll_entry, assignment );
-        }
-        info->prop.recovery.identifier = sample_number;
-        /* Get random access point grouping info. */
-        if( sbgp_rap_entry )
-        {
-            isom_group_assignment_entry_t *assignment = (isom_group_assignment_entry_t *)sbgp_rap_entry->data;
-            if( !assignment )
-                goto fail;
-            if( assignment->group_description_index && (info->prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE) )
-            {
-                isom_rap_entry_t *rap_data = (isom_rap_entry_t *)lsmash_get_entry_data( sgpd_rap->list, assignment->group_description_index );
-                if( !rap_data )
-                    goto fail;
-                /* If this is not an open RAP, we treat it as an unknown RAP since non-IDR sample could make a closed GOP. */
-                info->prop.random_access_type = (rap_data->num_leading_samples_known && !!rap_data->num_leading_samples)
-                                              ? ISOM_SAMPLE_RANDOM_ACCESS_TYPE_OPEN_RAP
-                                              : ISOM_SAMPLE_RANDOM_ACCESS_TYPE_UNKNOWN_RAP;
-            }
-            INCREMENT_SAMPLE_NUMBER_IN_ENTRY( sample_number_in_sbgp_rap_entry, sbgp_rap_entry, assignment );
-        }
         /* Get size of sample in the stream. */
         if( is_lpcm_audio || !stsz_entry )
             info->length = constant_sample_size;
