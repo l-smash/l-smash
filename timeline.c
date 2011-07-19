@@ -689,6 +689,27 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
         goto fail;
     chunk->number = 1;
     chunk->data = NULL;
+    int all_sync = !stss;
+    int large_presentation = stco->large_presentation;
+    int is_lpcm_audio = isom_is_lpcm_audio( description->type );
+    int iso_sdtp = root->max_isom_version >= 4;
+    uint64_t dts = 0;
+    uint64_t cts = 0;
+    uint32_t sample_number = 1;
+    uint32_t sample_number_in_stts_entry = 1;
+    uint32_t sample_number_in_ctts_entry = 1;
+    uint32_t sample_number_in_sbgp_roll_entry = 1;
+    uint32_t sample_number_in_sbgp_rap_entry  = 1;
+    uint32_t sample_number_in_chunk = 1;
+    uint32_t chunk_number = 1;
+    uint64_t offset_from_chunk = 0;
+    uint64_t offset = chunk->offset
+                    = large_presentation
+                    ? ((isom_co64_entry_t *)stco_entry->data)->chunk_offset
+                    : ((isom_stco_entry_t *)stco_entry->data)->chunk_offset;
+    uint32_t constant_sample_size = is_lpcm_audio
+                                  ? ((isom_audio_entry_t *)description)->constBytesPerAudioPacket
+                                  : stsz->sample_size;
     /* Copy edits. */
     while( elst_entry )
     {
@@ -709,26 +730,27 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     }
     stsd_entry = stsd->list->head;
     description = (isom_sample_entry_t *)stsd_entry->data;
-    int all_sync = !stss;
-    int large_presentation = stco->large_presentation;
-    int is_lpcm_audio = isom_is_lpcm_audio( description->type );
-    uint64_t dts = 0;
-    uint64_t cts = 0;
-    uint32_t sample_number = 1;
-    uint32_t sample_number_in_stts_entry = 1;
-    uint32_t sample_number_in_ctts_entry = 1;
-    uint32_t sample_number_in_sbgp_roll_entry = 1;
-    uint32_t sample_number_in_sbgp_rap_entry  = 1;
-    uint32_t sample_number_in_chunk = 1;
-    uint32_t chunk_number = 1;
-    uint64_t offset_from_chunk = 0;
-    uint64_t offset = chunk->offset
-                    = large_presentation
-                    ? ((isom_co64_entry_t *)stco_entry->data)->chunk_offset
-                    : ((isom_stco_entry_t *)stco_entry->data)->chunk_offset;
-    uint32_t constant_sample_size = is_lpcm_audio
-                                  ? ((isom_audio_entry_t *)description)->constBytesPerAudioPacket
-                                  : stsz->sample_size;
+    /* Check what the first 2-bits of sample dependency means.
+     * This check is for chimera of ISO Base Media and QTFF. */
+    if( iso_sdtp && sdtp_entry )
+    {
+        while( sdtp_entry )
+        {
+            isom_sdtp_entry_t *sdtp_data = (isom_sdtp_entry_t *)sdtp_entry->data;
+            if( !sdtp_data )
+                goto fail;
+            if( sdtp_data->is_leading > 1 )
+                break;      /* Apparently, it's defined under ISO Base Media. */
+            if( (sdtp_data->is_leading == 1) && (sdtp_data->sample_depends_on == ISOM_SAMPLE_IS_INDEPENDENT) )
+            {
+                /* Obviously, it's not defined under ISO Base Media. */
+                iso_sdtp = 0;
+                break;
+            }
+            sdtp_entry = sdtp_entry->next;
+        }
+        sdtp_entry = sdtp->list->head;
+    }
     /* Construct media timeline. */
     while( sample_number <= stsz->sample_count )
     {
@@ -787,7 +809,10 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
             isom_sdtp_entry_t *sdtp_data = (isom_sdtp_entry_t *)sdtp_entry->data;
             if( !sdtp_data )
                 goto fail;
-            info->prop.leading     = sdtp_data->is_leading;
+            if( iso_sdtp )
+                info->prop.leading       = sdtp_data->is_leading;
+            else
+                info->prop.allow_earlier = sdtp_data->is_leading;
             info->prop.independent = sdtp_data->sample_depends_on;
             info->prop.disposable  = sdtp_data->sample_is_depended_on;
             info->prop.redundant   = sdtp_data->sample_has_redundancy;
