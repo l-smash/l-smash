@@ -8107,7 +8107,7 @@ void lsmash_destroy_root( lsmash_root_t *root )
 
 /*---- timeline manipulator ----*/
 
-int lsmash_modify_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint64_t segment_duration, int64_t media_time, int32_t media_rate )
+int lsmash_modify_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint64_t segment_duration, int64_t media_time, int32_t media_rate )
 {
     if( !segment_duration || media_time < -1 )
         return -1;
@@ -9555,13 +9555,14 @@ fail:
     return -1;
 }
 
-void lsmash_delete_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID )
+int lsmash_delete_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak )
-        return;
+        return -1;
     isom_remove_edts( trak->edts );
     trak->edts = NULL;
+    return isom_update_tkhd_duration( trak );
 }
 
 void lsmash_delete_tyrant_chapter( lsmash_root_t *root )

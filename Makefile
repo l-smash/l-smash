@@ -62,13 +62,17 @@ SRC_REMUXER=remuxer.c
 OBJ_REMUXER=$(SRC_REMUXER:%.c=%.o)
 TARGET_REMUXER=$(SRC_REMUXER:%.c=%$(EXE))
 
-SRCS_ALL=$(SRCS) $(SRC_AUDIOMUXER) $(SRC_BOXDUMPER)
+SRC_TIMELINEEDITOR=timelineeditor.c
+OBJ_TIMELINEEDITOR=$(SRC_TIMELINEEDITOR:%.c=%.o)
+TARGET_TIMELINEEDITOR=$(SRC_TIMELINEEDITOR:%.c=%$(EXE))
+
+SRCS_ALL=$(SRCS) $(SRC_AUDIOMUXER) $(SRC_BOXDUMPER) $(SRC_REMUXER) $(SRC_TIMELINEEDITOR)
 OBJS_ALL=$(SRCS_ALL:%.c=%.o)
 
 #### main rules ####
 
 # should have distclean, install, uninstall in the future
-.PHONY: all lib tools audiomuxer boxdumper remuxer dep depend clean info
+.PHONY: all lib tools audiomuxer boxdumper remuxer timelineeditor dep depend clean info
 
 all: info tools
 
@@ -78,13 +82,15 @@ info:
 
 lib: $(TARGET_LIB)
 
-tools: $(TARGET_AUDIOMUXER) $(TARGET_BOXDUMPER) $(TARGET_REMUXER)
+tools: $(TARGET_AUDIOMUXER) $(TARGET_BOXDUMPER) $(TARGET_REMUXER) $(TARGET_TIMELINEEDITOR)
 
 audiomuxer: $(TARGET_AUDIOMUXER)
 
 boxdumper: $(TARGET_BOXDUMPER)
 
 remuxer: $(TARGET_REMUXER)
+
+timelineeditor : $(SRC_TIMELINEEDITOR)
 
 $(TARGET_LIB): .depend $(OBJS)
 	@$(ECHO) "AR: $@"
@@ -117,6 +123,14 @@ ifneq ($(DEBUG),YES)
 	@$(STRIP) $@
 endif
 
+$(TARGET_TIMELINEEDITOR): $(OBJ_TIMELINEEDITOR) $(TARGET_LIB)
+	@$(ECHO) "LINK: $@"
+	@$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $+ $(EXTRALIBS)
+ifneq ($(DEBUG),YES)
+	@$(ECHO) "STRIP: $@"
+	@$(STRIP) $@
+endif
+
 #### type rules ####
 %.o: %.c .depend
 	@$(ECHO) "CC: $<"
@@ -139,4 +153,4 @@ endif
 
 #### clean stuff ####
 clean:
-	rm -f $(OBJS_ALL) $(TARGET_LIB) $(TARGET_AUDIOMUXER) $(TARGET_BOXDUMPER) $(TARGET_REMUXER) .depend
+	rm -f $(OBJS_ALL) $(TARGET_LIB) $(TARGET_AUDIOMUXER) $(TARGET_BOXDUMPER) $(TARGET_REMUXER) $(TARGET_TIMELINEEDITOR) .depend

@@ -1098,11 +1098,12 @@ int lsmash_set_last_sample_delta( lsmash_root_t *root, uint32_t track_ID, uint32
 int lsmash_set_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length );
 int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name );
 
-int lsmash_create_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint64_t segment_duration, int64_t media_time, int32_t media_rate );
 int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_ID, char *file_name );
 int lsmash_create_object_descriptor( lsmash_root_t *root );
 
-int lsmash_modify_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint64_t segment_duration, int64_t media_time, int32_t media_rate );
+int lsmash_create_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint64_t segment_duration, int64_t media_time, int32_t media_rate );
+int lsmash_modify_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint64_t segment_duration, int64_t media_time, int32_t media_rate );
+int lsmash_delete_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID );
 
 int lsmash_update_media_modification_time( lsmash_root_t *root, uint32_t track_ID );
 int lsmash_update_track_modification_time( lsmash_root_t *root, uint32_t track_ID );
@@ -1136,7 +1137,6 @@ int lsmash_create_fragment_movie( lsmash_root_t *root );
 int lsmash_create_fragment_empty_duration( lsmash_root_t *root, uint32_t track_ID, uint32_t duration );
 
 void lsmash_delete_track( lsmash_root_t *root, uint32_t track_ID );
-void lsmash_delete_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID );
 void lsmash_delete_tyrant_chapter( lsmash_root_t *root );
 
 #ifdef LSMASH_DEMUXER_ENABLED
@@ -1155,6 +1155,7 @@ lsmash_itunes_metadata_list_t *lsmash_export_itunes_metadata( lsmash_root_t *roo
 int lsmash_import_itunes_metadata( lsmash_root_t *root, lsmash_itunes_metadata_list_t *list );
 void lsmash_destroy_itunes_metadata( lsmash_itunes_metadata_list_t *list );
 
+int lsmash_set_media_timestamps( lsmash_root_t *root, uint32_t track_ID, lsmash_media_ts_list_t *ts_list );
 int lsmash_get_media_timestamps( lsmash_root_t *root, uint32_t track_ID, lsmash_media_ts_list_t *ts_list );
 int lsmash_get_media_timeline_shift( lsmash_root_t *root, uint32_t track_ID, int32_t *timeline_shift );
 #endif

@@ -1216,6 +1216,64 @@ int lsmash_copy_decoder_specific_info( lsmash_root_t *dst, uint32_t dst_track_ID
     return 0;
 }
 
+int lsmash_set_media_timestamps( lsmash_root_t *root, uint32_t track_ID, lsmash_media_ts_list_t *ts_list )
+{
+    if( !ts_list )
+        return -1;
+    isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
+    if( !timeline )
+        return -1;
+    if( ts_list->sample_count != timeline->info_list->entry_count )
+        return -1;      /* Number of samples must be same. */
+    lsmash_media_ts_t *ts = ts_list->timestamp;
+    if( ts[0].dts )
+        return -1;      /* DTS must start from value zero. */
+    /* Update DTSs. */
+    uint32_t sample_count  = ts_list->sample_count;
+    uint32_t i;
+    if( timeline->info_list->entry_count > 1 )
+    {
+        i = 1;
+        lsmash_entry_t *entry = timeline->info_list->head;
+        isom_sample_info_t *info;
+        while( i < sample_count )
+        {
+            info = (isom_sample_info_t *)entry->data;
+            if( !info || (ts[i].dts < ts[i - 1].dts) )
+                return -1;
+            info->duration = ts[i].dts - ts[i - 1].dts;
+            entry = entry->next;
+            ++i;
+        }
+        if( i > 1 )
+        {
+            if( !entry || !entry->data )
+                return -1;
+            /* Copy the previous duration. */
+            ((isom_sample_info_t *)entry->data)->duration = info->duration;
+        }
+        else
+            return -1;      /* Irregular case: sample_count this timeline has is incorrect. */
+    }
+    else    /* still image */
+        ((isom_sample_info_t *)timeline->info_list->head->data)->duration = UINT32_MAX;
+    /* Update CTSs.
+     * ToDo: hint track must not have any sample_offset. */
+    i = 0;
+    timeline->ctd_shift = 0;
+    for( lsmash_entry_t *entry = timeline->info_list->head; entry; entry = entry->next )
+    {
+        isom_sample_info_t *info = (isom_sample_info_t *)entry->data;
+        if( (ts[i].cts + timeline->ctd_shift) < ts[i].dts )
+            timeline->ctd_shift = ts[i].dts - ts[i].cts;
+        info->offset = ts[i].cts - ts[i].dts;
+        ++i;
+    }
+    if( timeline->ctd_shift && (!root->qt_compatible || root->max_isom_version < 4) )
+        return -1;      /* Don't allow composition to decode timeline shift. */
+    return 0;
+}
+
 int lsmash_get_media_timestamps( lsmash_root_t *root, uint32_t track_ID, lsmash_media_ts_list_t *ts_list )
 {
     if( !ts_list )
