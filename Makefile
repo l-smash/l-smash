@@ -90,7 +90,7 @@ boxdumper: $(TARGET_BOXDUMPER)
 
 remuxer: $(TARGET_REMUXER)
 
-timelineeditor : $(SRC_TIMELINEEDITOR)
+timelineeditor : $(TARGET_TIMELINEEDITOR)
 
 $(TARGET_LIB): .depend $(OBJS)
 	@$(ECHO) "AR: $@"
