@@ -1170,6 +1170,7 @@ typedef struct
 {
     uint64_t dts;
     uint64_t cts;
+    int32_t  ctd_shift;
 } isom_timestamp_t;
 
 typedef struct

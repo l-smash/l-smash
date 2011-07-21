@@ -136,7 +136,7 @@ static int get_movie( movie_t *input, char *input_name )
 
 static int set_movie_parameters( movie_io_t *io )
 {
-    uint32_t num_input = io->num_input;
+    int      num_input = io->num_input;
     movie_t *input     = io->input;
     movie_t *output    = io->output;
     lsmash_initialize_movie_parameters( &output->movie_param );
@@ -145,12 +145,12 @@ static int set_movie_parameters( movie_io_t *io )
     uint32_t          minor_version    [num_input];
     uint32_t          major_brand_count[num_input];
     uint32_t          num_major_brand = 0;
-    for( uint32_t i = 0; i < num_input; i++ )
+    for( int i = 0; i < num_input; i++ )
     {
         major_brand      [num_major_brand] = input[i].movie_param.major_brand;
         minor_version    [num_major_brand] = input[i].movie_param.minor_version;
         major_brand_count[num_major_brand] = 0;
-        for( uint32_t j = 0; j < num_input; j++ )
+        for( int j = 0; j < num_input; j++ )
             if( (major_brand  [num_major_brand] == input[j].movie_param.major_brand)
              && (minor_version[num_major_brand] == input[j].movie_param.minor_version) )
             {
@@ -176,11 +176,11 @@ static int set_movie_parameters( movie_io_t *io )
         }
     /* Deduplicate compatible brands. */
     uint32_t num_input_brands = 0;
-    for( uint32_t i = 0; i < num_input; i++ )
+    for( int i = 0; i < num_input; i++ )
         num_input_brands += input[i].movie_param.number_of_brands;
     lsmash_brand_type input_brands[num_input_brands];
     num_input_brands = 0;
-    for( uint32_t i = 0; i < num_input; i++ )
+    for( int i = 0; i < num_input; i++ )
         for( uint32_t j = 0; j < input[i].movie_param.number_of_brands; j++ )
             input_brands[num_input_brands++] = input[i].movie_param.brands[j];
     lsmash_brand_type output_brands[num_input_brands];
@@ -260,8 +260,6 @@ int main( int argc, char *argv[] )
                 return REMUXER_ERR( "Failed to set track parameters.\n" );
             if( lsmash_set_media_parameters( output.root, out_track->track_ID, &out_track->media_param ) )
                 return REMUXER_ERR( "Failed to set media parameters.\n" );
-            if( lsmash_copy_timeline_map( output.root, out_track->track_ID, input[i].root, in_track->track_ID ) )
-                return REMUXER_ERR( "Failed to copy a timeline map.\n" );
             if( lsmash_copy_decoder_specific_info( output.root, out_track->track_ID, input[i].root, in_track->track_ID ) )
                 return REMUXER_ERR( "Failed to copy a Decoder Specific Info.\n" );
             out_track->last_sample_delta = in_track->last_sample_delta;
@@ -345,6 +343,16 @@ int main( int argc, char *argv[] )
     for( uint32_t i = 0; i < output.num_tracks; i++ )
         if( lsmash_flush_pooled_samples( output.root, output.track[i].track_ID, output.track[i].last_sample_delta ) )
             return REMUXER_ERR( "Failed to flush samples.\n" );
+    /* Copy timeline maps. */
+    output.current_track_number = 1;
+    for( int i = 0; i < num_input; i++ )
+        for( uint32_t j = 0; j < input[i].num_tracks; j++ )
+        {
+            track_t *out_track = &output.track[output.current_track_number ++ - 1];
+            if( lsmash_copy_timeline_map( output.root, out_track->track_ID, input[i].root, input[i].track[j].track_ID ) )
+                return REMUXER_ERR( "Failed to copy a timeline map.\n" );
+        }
+    /* Finish muxing. */
     lsmash_adhoc_remux_t moov_to_front;
     moov_to_front.func = moov_to_front_callback;
     moov_to_front.buffer_size = 4*1024*1024;
