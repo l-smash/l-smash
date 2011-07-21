@@ -64,14 +64,16 @@ int main( int argc, char *argv[] )
             DO_NOTHING;
         else if( !strcasecmp( argv[1], "--timestamp" ) )
             dump_box = 0;
-        else if( !strcasecmp( argv[1], "-h" ) || !strcasecmp( argv[1], "--help" ) )
-            return print_help( 0 );
         else
             return print_help( -1 );
         filename = argv[2];
     }
     else
+    {
+        if( !strcasecmp( argv[1], "-h" ) || !strcasecmp( argv[1], "--help" ) )
+            return print_help( 0 );
         filename = argv[1];
+    }
 #ifdef _WIN32
     _setmode( _fileno(stdin), _O_BINARY );
 #endif
