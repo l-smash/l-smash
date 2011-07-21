@@ -125,7 +125,7 @@ static int get_movie( movie_t *input, char *input_name )
         if( lsmash_get_media_parameters( input->root, track[i].track_ID, &track[i].media_param ) )
             return ERROR_MSG( "Failed to get media parameters.\n" );
         if( lsmash_construct_timeline( input->root, track[i].track_ID ) )
-            return ERROR_MSG( "Failed to construct media_timeline.\n" );
+            return ERROR_MSG( "Failed to construct timeline.\n" );
         if( lsmash_get_last_sample_delta_from_media_timeline( input->root, track[i].track_ID, &track[i].last_sample_delta ) )
             return ERROR_MSG( "Failed to get the last sample delta.\n" );
         track[i].current_sample_number = 1;

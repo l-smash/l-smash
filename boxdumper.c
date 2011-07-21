@@ -24,31 +24,106 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <inttypes.h>
 #ifdef _WIN32
 #include <io.h>
 #include <fcntl.h>
 #endif
 
+#define eprintf( ... ) fprintf( stderr, __VA_ARGS__ )
+
+static int print_help( int ret )
+{
+    eprintf( "Usage: boxdumper [option] input\n"
+             "  options:\n"
+             "    --box          Dump box structure\n"
+             "    --timestamp    Dump media timestamps\n" );
+    return ret;
+}
+
+static int boxdumper_error( lsmash_root_t *root, char* message )
+{
+    lsmash_destroy_root( root );
+    eprintf( message );
+    return -1;
+}
+
+#define BOXDUMPER_ERR( message ) boxdumper_error( root, message )
+#define DO_NOTHING
+
 int main( int argc, char *argv[] )
 {
-    if( argc != 2 || !strcasecmp( argv[1], "-h" ) || !strcasecmp( argv[1], "--help" ) )
+    if( argc < 2 || argc > 3 )
+        return print_help( -1 );
+    int dump_box = 1;
+    char *filename;
+    if( argc > 2 )
     {
-        fprintf( stderr, "Usage: boxdumper input\n" );
-        return -1;
+        if( !strcasecmp( argv[1], "--box" ) )
+            DO_NOTHING;
+        else if( !strcasecmp( argv[1], "--timestamp" ) )
+            dump_box = 0;
+        else if( !strcasecmp( argv[1], "-h" ) || !strcasecmp( argv[1], "--help" ) )
+            return print_help( 0 );
+        else
+            return print_help( -1 );
+        filename = argv[2];
     }
+    else
+        filename = argv[1];
 #ifdef _WIN32
     _setmode( _fileno(stdin), _O_BINARY );
 #endif
-    char *filename = argv[1];
-    lsmash_root_t *root = lsmash_open_movie( filename, LSMASH_FILE_MODE_READ | LSMASH_FILE_MODE_DUMP );
+    lsmash_file_mode mode = dump_box ? (LSMASH_FILE_MODE_READ | LSMASH_FILE_MODE_DUMP) : LSMASH_FILE_MODE_READ;
+    lsmash_root_t *root = lsmash_open_movie( filename, mode );
     if( !root )
     {
         fprintf( stderr, "Failed to open input file.\n" );
         return -1;
     }
-    int ret = lsmash_print_movie( root );
-    if( ret )
-        fprintf( stderr, "Failed to dump input file.\n" );;
+    if( dump_box )
+    {
+        if( lsmash_print_movie( root ) )
+            return BOXDUMPER_ERR( "Failed to dump box structure.\n" );
+    }
+    else
+    {
+        lsmash_movie_parameters_t movie_param;
+        lsmash_initialize_movie_parameters( &movie_param );
+        lsmash_get_movie_parameters( root, &movie_param );
+        uint32_t num_tracks = movie_param.number_of_tracks;
+        for( uint32_t track_number = 1; track_number <= num_tracks; track_number++ )
+        {
+            uint32_t track_ID = lsmash_get_track_ID( root, track_number );
+            if( !track_ID )
+                return BOXDUMPER_ERR( "Failed to get track_ID.\n" );
+            lsmash_media_parameters_t media_param;
+            lsmash_initialize_media_parameters( &media_param );
+            if( lsmash_get_media_parameters( root, track_ID, &media_param ) )
+                return BOXDUMPER_ERR( "Failed to get media parameters.\n" );
+            if( lsmash_construct_timeline( root, track_ID ) )
+                return BOXDUMPER_ERR( "Failed to construct timeline.\n" );
+            int32_t timeline_shift;
+            if( lsmash_get_media_timeline_shift( root, track_ID, &timeline_shift ) )
+                return BOXDUMPER_ERR( "Failed to get timestamps.\n" );
+            lsmash_media_ts_list_t ts_list;
+            if( lsmash_get_media_timestamps( root, track_ID, &ts_list ) )
+                return BOXDUMPER_ERR( "Failed to get timestamps.\n" );
+            fprintf( stdout, "track_ID: %"PRIu32"\n", track_ID );
+            fprintf( stdout, "Media timescale: %"PRIu32"\n", media_param.timescale );
+            lsmash_media_ts_t *ts_array = ts_list.timestamp;
+            if( !ts_array )
+            {
+                fprintf( stdout, "\n" );
+                continue;
+            }
+            for( uint32_t i = 0; i < ts_list.sample_count; i++ )
+                fprintf( stdout, "DTS = %"PRIu64", CTS = %"PRIu64"\n", ts_array[i].dts, ts_array[i].cts + timeline_shift );
+            free( ts_array );
+            fprintf( stdout, "\n" );
+        }
+    }
     lsmash_destroy_root( root );
-    return ret;
+    return 0;
 }

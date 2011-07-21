@@ -1216,4 +1216,52 @@ int lsmash_copy_decoder_specific_info( lsmash_root_t *dst, uint32_t dst_track_ID
     return 0;
 }
 
+int lsmash_get_media_timestamps( lsmash_root_t *root, uint32_t track_ID, lsmash_media_ts_list_t *ts_list )
+{
+    if( !ts_list )
+        return -1;
+    isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
+    if( !timeline )
+        return -1;
+    uint32_t sample_count = timeline->info_list->entry_count;
+    if( !sample_count )
+    {
+        ts_list->sample_count = 0;
+        ts_list->timestamp    = NULL;
+        return 0;
+    }
+    lsmash_media_ts_t *ts = malloc( sample_count * sizeof(lsmash_media_ts_t) );
+    if( !ts )
+        return -1;
+    uint64_t dts = 0;
+    uint32_t i = 0;
+    for( lsmash_entry_t *entry = timeline->info_list->head; entry; entry = entry->next )
+    {
+        isom_sample_info_t *info = (isom_sample_info_t *)entry->data;
+        if( !info )
+        {
+            free( ts );
+            return -1;
+        }
+        ts[i].dts = dts;
+        ts[i].cts = timeline->ctd_shift ? (dts + (int32_t)info->offset) : (dts + info->offset);
+        dts += info->duration;
+        ++i;
+    }
+    ts_list->sample_count = sample_count;
+    ts_list->timestamp    = ts;
+    return 0;
+}
+
+int lsmash_get_media_timeline_shift( lsmash_root_t *root, uint32_t track_ID, int32_t *timeline_shift )
+{
+    if( !timeline_shift )
+        return -1;
+    isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
+    if( !timeline )
+        return -1;
+    *timeline_shift = timeline->ctd_shift;
+    return 0;
+}
+
 #endif /* LSMASH_DEMUXER_ENABLED */

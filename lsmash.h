@@ -913,6 +913,19 @@ typedef struct
     lsmash_sample_property_t prop;
 } lsmash_sample_t;
 
+typedef struct
+{
+    uint64_t dts;
+    uint64_t cts;
+} lsmash_media_ts_t;
+
+typedef struct
+{
+    uint32_t sample_count;
+    lsmash_media_ts_t *timestamp;
+} lsmash_media_ts_list_t;
+
+/* */
 typedef int (*lsmash_adhoc_remux_callback)( void* param, uint64_t done, uint64_t total );
 typedef struct {
     uint64_t buffer_size;
@@ -1141,6 +1154,9 @@ int lsmash_check_sample_existence_in_media_timeline( lsmash_root_t *root, uint32
 lsmash_itunes_metadata_list_t *lsmash_export_itunes_metadata( lsmash_root_t *root );
 int lsmash_import_itunes_metadata( lsmash_root_t *root, lsmash_itunes_metadata_list_t *list );
 void lsmash_destroy_itunes_metadata( lsmash_itunes_metadata_list_t *list );
+
+int lsmash_get_media_timestamps( lsmash_root_t *root, uint32_t track_ID, lsmash_media_ts_list_t *ts_list );
+int lsmash_get_media_timeline_shift( lsmash_root_t *root, uint32_t track_ID, int32_t *timeline_shift );
 #endif
 
 /* to facilitate to make exdata (typically DecoderSpecificInfo or AudioSpecificConfig). */
