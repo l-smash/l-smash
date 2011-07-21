@@ -70,6 +70,7 @@ typedef struct
 {
     uint32_t track_number;
     uint32_t media_timescale;
+    uint32_t media_timebase;
     uint32_t skip_duration;
     uint32_t empty_delay;
     int      dts_compression;
@@ -272,7 +273,7 @@ static int compare_dts( const lsmash_media_ts_t *a, const lsmash_media_ts_t *b )
 static int edit_media_timeline( movie_io_t *io, opt_t *opt )
 {
     timecode_t *timecode = io->timecode;
-    if( !timecode->file && !opt->media_timescale && !opt->dts_compression )
+    if( !timecode->file && !opt->media_timescale && !opt->media_timebase && !opt->dts_compression )
         return 0;
     movie_t *input = io->input;
     track_t *in_track = &input->track[opt->track_number - 1];
@@ -285,13 +286,15 @@ static int edit_media_timeline( movie_io_t *io, opt_t *opt )
         return ERROR_MSG( "Failed to get media timebase.\n" );
     lsmash_media_ts_t *timestamp = ts_list.timestamp;
     uint32_t sample_count = ts_list.sample_count;
+    uint32_t orig_timebase = timebase;
     uint32_t timescale;
     double   timebase_convert_multiplier;
-    if( opt->media_timescale )
+    if( opt->media_timescale || opt->media_timebase )
     {
         uint32_t orig_timescale = in_track->media_param.timescale;
-        timescale = opt->media_timescale;
-        timebase_convert_multiplier = ((double)timescale / orig_timescale);
+        timescale = opt->media_timescale ? opt->media_timescale : orig_timescale;
+        timebase  = opt->media_timebase  ? opt->media_timebase  : orig_timebase;
+        timebase_convert_multiplier = ((double)timescale / orig_timescale) * ((double)orig_timebase / timebase);
     }
     else
     {
@@ -318,9 +321,9 @@ static int edit_media_timeline( movie_io_t *io, opt_t *opt )
             return ERROR_MSG( "Failed to alloc timestamps\n" );
         for( uint32_t i = 0; i < sample_count; i++ )
         {
-            timecode->ts[i] = (timestamp[i].cts - timestamp[0].cts) / timebase;
+            timecode->ts[i] = (timestamp[i].cts - timestamp[0].cts) / orig_timebase + 0.5;
             timecode->ts[i] = (uint64_t)(timecode->ts[i] * timebase_convert_multiplier + 0.5) * timebase;
-            if( i && (timecode->ts[i] < timecode->ts[i - 1]) )
+            if( i && (timecode->ts[i] <= timecode->ts[i - 1]) )
                 return ERROR_MSG( "Invalid timescale conversion.\n" );
         }
     }
@@ -349,7 +352,7 @@ static int edit_media_timeline( movie_io_t *io, opt_t *opt )
             else
             {
                 timestamp[i].dts = (i * initial_delta) / (!!opt->media_timescale * sample_delay + 1);
-                if( i && (timestamp[i].dts < timestamp[i - 1].dts) )
+                if( i && (timestamp[i].dts <= timestamp[i - 1].dts) )
                     return ERROR_MSG( "Failed to do DTS compression.\n" );
             }
             prev_reordered_cts[ i % sample_delay ] = timecode->ts[i] + sample_delay_time;
@@ -389,6 +392,7 @@ int main( int argc, char *argv[] )
              "    --track           <integer>  Specify track number to edit [1]\n"
              "    --timecode        <string>   Specify timecode file to edit timeline\n"
              "    --media-timescale <integer>  Specify media timescale to convert\n"
+             "    --media-timebase  <integer>  Specify media timebase to convert\n"
              "    --skip            <integer>  Skip start of media presentation in milliseconds\n"
              "    --delay           <integer>  Insert blank clip before actual media presentation in milliseconds\n"
              "    --dts-compression            Eliminate composition delay with DTS hack\n"
@@ -399,7 +403,7 @@ int main( int argc, char *argv[] )
     movie_t    input    = { 0 };
     timecode_t timecode = { 0 };
     movie_io_t io = { &output, &input, &timecode };
-    opt_t opt = { 1, 0, 0, 0, 0 };
+    opt_t opt = { 1, 0, 0, 0, 0, 0 };
     /* Parse options. */
     int argn = 1;
     while( argn < argc - 2 )
@@ -423,6 +427,13 @@ int main( int argc, char *argv[] )
             opt.media_timescale = atoi( argv[++argn] );
             if( !opt.media_timescale )
                 return TIMELINEEDITOR_ERR( "Invalid media timescale.\n" );
+            ++argn;
+        }
+        else if( !strcasecmp( argv[argn], "--media-timebase" ) )
+        {
+            opt.media_timebase = atoi( argv[++argn] );
+            if( !opt.media_timebase )
+                return TIMELINEEDITOR_ERR( "Invalid media timebase.\n" );
             ++argn;
         }
         else if( !strcasecmp( argv[argn], "--skip" ) )
