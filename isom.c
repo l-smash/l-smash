@@ -5458,7 +5458,6 @@ static int isom_update_bitrate_info( isom_mdia_t *mdia )
             isom_visual_entry_t *stsd_data = (isom_visual_entry_t *)sample_entry;
             if( !stsd_data )
                 return -1;
-            //isom_btrt_t *btrt = (isom_btrt_t *)stsd_data->btrt;
             isom_btrt_t *btrt = stsd_data->btrt;
             if( btrt )
             {
@@ -5466,6 +5465,17 @@ static int isom_update_bitrate_info( isom_mdia_t *mdia )
                 btrt->maxBitrate   = info.maxBitrate;
                 btrt->avgBitrate   = info.avgBitrate;
             }
+            break;
+        }
+        case ISOM_CODEC_TYPE_MP4V_VIDEO :
+        {
+            isom_visual_entry_t *stsd_data = (isom_visual_entry_t *)sample_entry;
+            if( !stsd_data || !stsd_data->esds || !stsd_data->esds->ES )
+                return -1;
+            isom_esds_t *esds = stsd_data->esds;
+            /* FIXME: avgBitrate is 0 only if VBR in proper. */
+            if( mp4sys_update_DecoderConfigDescriptor( esds->ES, info.bufferSizeDB, info.maxBitrate, 0 ) )
+                return -1;
             break;
         }
         case ISOM_CODEC_TYPE_MP4A_AUDIO :
