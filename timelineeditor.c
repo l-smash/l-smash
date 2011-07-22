@@ -294,6 +294,8 @@ static int edit_media_timeline( movie_io_t *io, opt_t *opt )
         uint32_t orig_timescale = in_track->media_param.timescale;
         timescale = opt->media_timescale ? opt->media_timescale : orig_timescale;
         timebase  = opt->media_timebase  ? opt->media_timebase  : orig_timebase;
+        if( !opt->media_timescale && opt->media_timebase && (timebase > orig_timebase) )
+            timescale = timescale * ((double)timebase / orig_timebase) + 0.5;
         timebase_convert_multiplier = ((double)timescale / orig_timescale) * ((double)orig_timebase / timebase);
     }
     else
@@ -321,8 +323,8 @@ static int edit_media_timeline( movie_io_t *io, opt_t *opt )
             return ERROR_MSG( "Failed to alloc timestamps\n" );
         for( uint32_t i = 0; i < sample_count; i++ )
         {
-            timecode->ts[i] = (timestamp[i].cts - timestamp[0].cts) / orig_timebase + 0.5;
-            timecode->ts[i] = (uint64_t)(timecode->ts[i] * timebase_convert_multiplier + 0.5) * timebase;
+            timecode->ts[i] = (timestamp[i].cts - timestamp[0].cts) / orig_timebase;
+            timecode->ts[i] = ((uint64_t)(timecode->ts[i] * timebase_convert_multiplier + 0.5)) * timebase;
             if( i && (timecode->ts[i] <= timecode->ts[i - 1]) )
                 return ERROR_MSG( "Invalid timescale conversion.\n" );
         }
