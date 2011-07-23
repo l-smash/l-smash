@@ -331,9 +331,6 @@ static int edit_media_timeline( movie_io_t *io, opt_t *opt )
     }
     if( sample_delay )
     {
-        uint64_t *prev_reordered_cts = malloc( sample_delay * sizeof(uint64_t) );
-        if( !prev_reordered_cts )
-            return ERROR_MSG( "Falied to alloc cache for reordered CTS\n" );
         /* If media timescale is specified, disable DTS compression multiplier. */
         uint32_t dts_compression_multiplier = opt->dts_compression * !opt->media_timescale * sample_delay + 1;
         uint64_t initial_delta = timecode->ts[1];
@@ -347,6 +344,7 @@ static int edit_media_timeline( movie_io_t *io, opt_t *opt )
             timestamp[i].cts = timecode->ts[i] + sample_delay_time;
         /* Reorder decode order and generate new DTS from CTS. */
         qsort( timestamp, sample_count, sizeof(lsmash_media_ts_t), (int(*)( const void *, const void * ))compare_dts );
+        uint64_t prev_reordered_cts[sample_delay];
         for( uint32_t i = 0; i <= sample_delay; i++ )
         {
             if( !opt->dts_compression )
@@ -364,7 +362,6 @@ static int edit_media_timeline( movie_io_t *io, opt_t *opt )
             timestamp[i].dts = prev_reordered_cts[ (i - sample_delay) % sample_delay ];
             prev_reordered_cts[ i % sample_delay ] = timecode->ts[i] + sample_delay_time;
         }
-        free( prev_reordered_cts );
     }
     else
         for( uint32_t i = 0; i < sample_count; i++ )
