@@ -24,6 +24,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 
 #include "utils.h"
 
@@ -659,4 +660,31 @@ void *lsmash_memdup( void *src, size_t size )
         return NULL;
     memcpy( dst, src, size );
     return dst;
+}
+
+void lsmash_log( lsmash_log_level level, const char* message, ... )
+{
+    char *prefix;
+    va_list args;
+
+    va_start( args, message );
+    switch( level )
+    {
+        case LSMASH_LOG_ERROR:
+            prefix = "Error";
+            break;
+        case LSMASH_LOG_WARNING:
+            prefix = "Warning";
+            break;
+        case LSMASH_LOG_INFO:
+            prefix = "Info";
+            break;
+        default:
+            prefix = "Unknown";
+            break;
+    }
+
+    fprintf( stderr, "[%s]: ", prefix );
+    vfprintf( stderr, message, args );
+    va_end( args );
 }

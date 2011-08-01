@@ -139,4 +139,13 @@ double lsmash_int2float64( uint64_t value );
 /*---- allocator ----*/
 void *lsmash_memdup( void *src, size_t size );
 
+typedef enum
+{
+    LSMASH_LOG_ERROR,
+    LSMASH_LOG_WARNING,
+    LSMASH_LOG_INFO,
+} lsmash_log_level;
+
+void lsmash_log( lsmash_log_level level, const char* message, ... );
+
 #endif
