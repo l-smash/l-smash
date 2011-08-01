@@ -6729,24 +6729,39 @@ int lsmash_set_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     /* Set up Track Header. */
     uint32_t media_type = trak->mdia->hdlr->componentSubtype;
     isom_tkhd_t *tkhd = trak->tkhd;
-    tkhd->flags           = param->mode;
-    tkhd->track_ID        = param->track_ID ? param->track_ID : tkhd->track_ID;
-    tkhd->duration        = !trak->edts || !trak->edts->elst ? param->duration : tkhd->duration;
+    tkhd->flags    = param->mode;
+    tkhd->track_ID = param->track_ID ? param->track_ID : tkhd->track_ID;
+    tkhd->duration = !trak->edts || !trak->edts->elst ? param->duration : tkhd->duration;
+    /* Template fields
+     * According to 14496-14, these value are all set to defaut values in 14496-12.
+     * And when a file is read as an MPEG-4 file, these values shall be ignored.
+     * If a file complies with other specifications, then those fields may have non-default values
+     * as required by those other specifications. */
     tkhd->alternate_group = root->qt_compatible || root->itunes_audio || root->max_3gpp_version >= 4 ? param->alternate_group : 0;
     if( root->qt_compatible || root->itunes_audio )
     {
-        tkhd->layer       = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? param->video_layer    : 0;
-        tkhd->volume      = media_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK ? param->audio_volume   : 0;
+        tkhd->layer  = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? param->video_layer  : 0;
+        tkhd->volume = media_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK ? param->audio_volume : 0;
+        if( media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK )
+            for( int i = 0; i < 9; i++ )
+                tkhd->matrix[i] = param->matrix[i];
+        else
+            for( int i = 0; i < 9; i++ )
+                tkhd->matrix[i] = 0;
     }
     else
     {
-        tkhd->layer       = 0;
-        tkhd->volume      = media_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK ? 0x0100                : 0;
+        tkhd->layer     = 0;
+        tkhd->volume    = media_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK ? 0x0100     : 0;
+        tkhd->matrix[0] = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? 0x00010000 : 0;
+        tkhd->matrix[1] = tkhd->matrix[2] = tkhd->matrix[3] = 0;
+        tkhd->matrix[4] = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? 0x00010000 : 0;
+        tkhd->matrix[5] = tkhd->matrix[6] = tkhd->matrix[7] = 0;
+        tkhd->matrix[8] = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? 0x40000000 : 0;
     }
-    for( int i = 0; i < 9; i++ )
-        tkhd->matrix[i]   = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? param->matrix[i]      : 0;
-    tkhd->width           = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? param->display_width  : 0;
-    tkhd->height          = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? param->display_height : 0;
+    /* visual presentation size */
+    tkhd->width  = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? param->display_width  : 0;
+    tkhd->height = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? param->display_height : 0;
     /* Update next_track_ID if needed. */
     if( root->moov->mvhd->next_track_ID <= tkhd->track_ID )
         root->moov->mvhd->next_track_ID = tkhd->track_ID + 1;

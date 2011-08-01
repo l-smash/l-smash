@@ -100,7 +100,12 @@ typedef struct
                                      * Track IDs are never re-used and cannot be zero. */
     uint32_t reserved1;
     uint64_t duration;              /* the duration of this track expressed in the movie timescale units */
-    /* The following fields are treated as reserved in MP4 version 1. */
+    /* The following fields are treated as
+     * ISOM: template fields.
+     * MP41: reserved fields.
+     * MP42: ignored fileds since compositions are done using BIFS system.
+     * 3GPP: ignored fields except for alternate_group.
+     * QTFF: usable fields. */
     uint32_t reserved2[2];
     int16_t  layer;                 /* the front-to-back ordering of video tracks; tracks with lower numbers are closer to the viewer. */
     int16_t  alternate_group;       /* an integer that specifies a group or collection of tracks
@@ -1007,7 +1012,12 @@ typedef struct
     uint64_t modification_time;     /* the most recent time the presentation was modified (in seconds since midnight, Jan. 1, 1904, in UTC time) */
     uint32_t timescale;             /* movie timescale: timescale for the entire presentation */
     uint64_t duration;              /* the duration, expressed in movie timescale, of the longest track */
-    /* The following fields are treated as reserved in MP4 version 1. */
+    /* The following fields are treated as
+     * ISOM: template fields.
+     * MP41: reserved fields.
+     * MP42: ignored fileds since compositions are done using BIFS system.
+     * 3GPP: ignored fields.
+     * QTFF: usable fields. */
     int32_t  rate;                  /* fixed point 16.16 number. 0x00010000 is normal forward playback. */
     int16_t  volume;                /* fixed point 8.8 number. 0x0100 is full volume. */
     int16_t  reserved;
