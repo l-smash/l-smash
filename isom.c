@@ -78,6 +78,7 @@ int isom_is_fullbox( void *box )
         ISOM_BOX_TYPE_SBGP,
         ISOM_BOX_TYPE_CHPL,
         ISOM_BOX_TYPE_META,
+        QT_BOX_TYPE_KEYS,
         ISOM_BOX_TYPE_MEAN,
         ISOM_BOX_TYPE_NAME,
         ISOM_BOX_TYPE_MEHD,

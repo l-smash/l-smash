@@ -467,6 +467,8 @@ static int isom_print_hdlr( lsmash_root_t *root, isom_box_t *box, int level )
         isom_iprintf( indent, "componentFlagsMask = 0x%08"PRIx32"\n", hdlr->componentFlagsMask );
         if( hdlr->componentName_length )
             isom_iprintf( indent, "componentName = %s\n", &str[1] );
+        else
+            isom_iprintf( indent, "componentName = \n" );
     }
     else
     {
@@ -1337,14 +1339,49 @@ static int isom_print_chpl( lsmash_root_t *root, isom_box_t *box, int level )
         memcpy( str, data->chapter_name, data->chapter_name_length );
         isom_iprintf( indent++, "chapter[%"PRIu32"]\n", i++ );
         isom_iprintf( indent, "start_time = %02d:%02d:%02d.%03d\n", hh, mm, ss, ms );
-        isom_iprintf( indent--, "chapter_name = %s\n", data->chapter_name );
+        isom_iprintf( indent--, "chapter_name = %s\n", str );
     }
     return 0;
 }
 
 static int isom_print_meta( lsmash_root_t *root, isom_box_t *box, int level )
 {
-    return isom_print_simple( box, level, "Meta Box" );
+    if( !box )
+        return -1;
+    int indent = level;
+    if( !(box->manager & LSMASH_QTFF_BASE) )
+    {
+        isom_print_basebox_common( indent++, box, "Meta Box" );
+        isom_iprintf( indent, "version = %"PRIu8"\n", box->version );
+        isom_iprintf( indent, "flags = 0x%06"PRIx32"\n", box->flags & 0x00ffffff );
+    }
+    else
+        isom_print_basebox_common( indent, box, "Metadata Box" );
+    return 0;
+}
+
+static int isom_print_keys( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box || !((isom_keys_t *)box)->list )
+        return -1;
+    isom_keys_t *keys = (isom_keys_t *)box;
+    int indent = level;
+    uint32_t i = 1;
+    isom_print_box_common( indent++, box, "Metadata Item Keys Box" );
+    isom_iprintf( indent, "entry_count = %"PRIu32"\n", keys->list->entry_count );
+    for( lsmash_entry_t *entry = keys->list->head; entry; entry = entry->next )
+    {
+        isom_keys_entry_t *data = (isom_keys_entry_t *)entry->data;
+        isom_iprintf( indent++, "[key %"PRIu32"]\n", i++ );
+        isom_iprintf( indent, "key_size = %"PRIu32"\n", data->key_size );
+        isom_iprintf( indent, "key_namespace = %s\n", isom_4cc2str( data->key_namespace ) );
+        uint32_t value_length = data->key_size - 8;
+        char str[value_length + 1];
+        memcpy( str, data->key_value, value_length );
+        str[value_length] = 0;
+        isom_iprintf( indent--, "key_value = %s\n", str );
+    }
+    return 0;
 }
 
 static int isom_print_ilst( lsmash_root_t *root, isom_box_t *box, int level )
@@ -1357,6 +1394,14 @@ static int isom_print_metaitem( lsmash_root_t *root, isom_box_t *box, int level 
     if( !box )
         return -1;
     isom_metaitem_t *metaitem = (isom_metaitem_t *)box;
+    if( box->parent && box->parent->parent && (box->parent->parent->manager & LSMASH_QTFF_BASE) )
+    {
+        int indent = level;
+        isom_iprintf( indent++, "[key_index %"PRIu32": Metadata Item Box]\n", box->type );
+        isom_iprintf( indent, "position = %"PRIu64"\n", box->pos );
+        isom_iprintf( indent, "size = %"PRIu64"\n", box->size );
+        return 0;
+    }
     char *name;
     static const struct
     {
@@ -1422,7 +1467,14 @@ static int isom_print_metaitem( lsmash_root_t *root, isom_box_t *box, int level 
         }
     if( !metaitem_table[i].type )
         name = "Unknown";
-    return isom_print_simple( box, level, name );
+    uint32_t name_length = strlen( name );
+    uint32_t display_name_length = name_length + 20;
+    char display_name[display_name_length + 1];
+    memcpy( display_name, "Metadata Item Box (", 19 );
+    memcpy( display_name + 19, name, name_length );
+    display_name[display_name_length - 1] = ')';
+    display_name[display_name_length] = 0;
+    return isom_print_simple( box, level, display_name );
 }
 
 static int isom_print_name( lsmash_root_t *root, isom_box_t *box, int level )
@@ -1460,30 +1512,130 @@ static int isom_print_data( lsmash_root_t *root, isom_box_t *box, int level )
     isom_data_t *data = (isom_data_t *)box;
     int indent = level;
     isom_print_box_common( indent++, box, "Data Box" );
-    isom_iprintf( indent, "reserved = %"PRIu16"\n", data->reserved );
-    isom_iprintf( indent, "type_set_identifier = %"PRIu8"%s\n",
-                  data->type_set_identifier,
-                  data->type_set_identifier ? "" : " (basic type set)" );
-    isom_iprintf( indent, "type_code = %"PRIu8"\n", data->type_code );
-    isom_iprintf( indent, "the_locale = %"PRIu32"\n", data->the_locale );
-    if( data->type_code == 21 )
+    if( box->parent && box->parent->parent && box->parent->parent->parent
+     && (box->parent->parent->parent->manager & LSMASH_QTFF_BASE) )
     {
-        /* integer type */
-        isom_iprintf( indent, "value = " );
-        if( data->value_length )
+        uint32_t type_set_indicator = data->reserved >> 8;
+        uint32_t well_known_type = ((data->reserved << 16) | (data->type_set_identifier << 8) | data->type_code) & 0xffffff;
+        char *well_known_type_name;
+        static const struct
         {
-            printf( "0x" );
-            for( uint32_t i = 0; i < data->value_length; i++ )
-                printf( "%02"PRIx8, data->value[i] );
+            uint32_t type;
+            char    *name;
+        } well_known_type_table[] =
+            {
+                { 0,  "reserved" },
+                { 1,  "UTF-8" },
+                { 2,  "UTF-16 BE" },
+                { 3,  "S/JIS" },
+                { 4,  "UTF-8 sort" },
+                { 5,  "UTF-16 sort" },
+                { 13,  "JPEG in a JFIF wrapper" },
+                { 14,  "PNG in a PNG wrapper" },
+                { 21,  "BE Signed Integer" },
+                { 22,  "BE Unsigned Integer" },
+                { 23,  "BE Float32" },
+                { 24,  "BE Float64" },
+                { 27,  "BMP (Windows bitmap format graphics)" },
+                { 28,  "QuickTime Metadata box" },
+                { UINT32_MAX }
+            };
+        int table_index;
+        for( table_index = 0; well_known_type_table[table_index].type != UINT32_MAX; table_index++ )
+            if( well_known_type == well_known_type_table[table_index].type )
+            {
+                well_known_type_name = well_known_type_table[table_index].name;
+                break;
+            }
+        if( well_known_type_table[table_index].type == UINT32_MAX )
+            well_known_type_name = "Unknown";
+        isom_iprintf( indent, "type_set_indicator = %"PRIu8"\n", type_set_indicator );
+        isom_iprintf( indent, "well_known_type = %"PRIu32" (%s)\n", well_known_type, well_known_type_name );
+        isom_iprintf( indent, "locale_indicator = %"PRIu32"\n", data->the_locale );
+        if( well_known_type == 1 )
+        {
+            /* UTF-8 without any count or null terminator */
+            char str[data->value_length + 1];
+            memcpy( str, data->value, data->value_length );
+            str[data->value_length] = 0;
+            isom_iprintf( indent, "value = %s\n", str );
         }
-        printf( "\n" );
+        else if( well_known_type == 13 || well_known_type == 14 || well_known_type == 27 )
+            isom_iprintf( indent, "value = (binary data)\n" );
+        else if( well_known_type == 21 && data->value_length && data->value_length <= 4 )
+        {
+            /* a big-endian signed integer in 1,2,3 or 4 bytes */
+            uint32_t integer   = data->value[0];
+            uint32_t max_value = 0xff;
+            for( uint32_t i = 1; i < data->value_length; i++ )
+            {
+                integer   = (integer   << 8) | data->value[i];
+                max_value = (max_value << 8) | 0xff;
+            }
+            isom_iprintf( indent, "value = %"PRId32"\n", (int32_t)(integer | (integer > (max_value >> 1) ? ~max_value : 0)) );
+        }
+        else if( well_known_type == 22 && data->value_length && data->value_length <= 4 )
+        {
+            /* a big-endian unsigned integer in 1,2,3 or 4 bytes */
+            uint32_t integer = data->value[0];
+            for( uint32_t i = 1; i < data->value_length; i++ )
+                integer = (integer << 8) | data->value[i];
+            isom_iprintf( indent, "value = %"PRIu32"\n", integer );
+        }
+        else if( well_known_type == 23 && data->value_length == 4 )
+        {
+            /* a big-endian 32-bit floating point value (IEEE754) */
+            uint32_t float32 = (data->value[0] << 24) | (data->value[1] << 16) | (data->value[2] << 8) | data->value[3];
+            isom_iprintf( indent, "value = %f\n", lsmash_int2float32( float32 ) );
+        }
+        else if( well_known_type == 24 && data->value_length == 8 )
+        {
+            /* a big-endian 64-bit floating point value (IEEE754) */
+            uint64_t float64 = ((uint64_t)data->value[0] << 56) | ((uint64_t)data->value[1] << 48)
+                             | ((uint64_t)data->value[2] << 40) | ((uint64_t)data->value[3] << 32)
+                             | ((uint64_t)data->value[4] << 24) | ((uint64_t)data->value[5] << 16)
+                             | ((uint64_t)data->value[6] <<  8) |  (uint64_t)data->value[7];
+            isom_iprintf( indent, "value = %lf\n", lsmash_int2float64( float64 ) );
+        }
+        else
+        {
+            isom_iprintf( indent, "value = " );
+            if( data->value_length )
+            {
+                printf( "0x" );
+                for( uint32_t i = 0; i < data->value_length; i++ )
+                    printf( "%02"PRIx8, data->value[i] );
+            }
+            printf( "\n" );
+        }
     }
     else
     {
-        char str[data->value_length + 1];
-        memcpy( str, data->value, data->value_length );
-        str[data->value_length] = 0;
-        isom_iprintf( indent, "value = %s\n", str );
+        isom_iprintf( indent, "reserved = %"PRIu16"\n", data->reserved );
+        isom_iprintf( indent, "type_set_identifier = %"PRIu8"%s\n",
+                      data->type_set_identifier,
+                      data->type_set_identifier ? "" : " (basic type set)" );
+        isom_iprintf( indent, "type_code = %"PRIu8"\n", data->type_code );
+        isom_iprintf( indent, "the_locale = %"PRIu32"\n", data->the_locale );
+        if( data->type_code == 21 )
+        {
+            /* integer type */
+            isom_iprintf( indent, "value = " );
+            if( data->value_length )
+            {
+                printf( "0x" );
+                for( uint32_t i = 0; i < data->value_length; i++ )
+                    printf( "%02"PRIx8, data->value[i] );
+            }
+            printf( "\n" );
+        }
+        else
+        {
+            char str[data->value_length + 1];
+            memcpy( str, data->value, data->value_length );
+            str[data->value_length] = 0;
+            isom_iprintf( indent, "value = %s\n", str );
+        }
     }
     return 0;
 }
@@ -1739,7 +1891,7 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
                 case QT_CODEC_TYPE_CDX2_AUDIO :
                 case QT_CODEC_TYPE_CDX4_AUDIO :
                 case QT_CODEC_TYPE_DVCA_AUDIO :
-                case QT_CODEC_TYPE_DVI_AUDIO  :
+                case QT_CODEC_TYPE_DVI_AUDIO :
                 case QT_CODEC_TYPE_FL32_AUDIO :
                 case QT_CODEC_TYPE_FL64_AUDIO :
                 case QT_CODEC_TYPE_IMA4_AUDIO :
@@ -1924,6 +2076,8 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
             return isom_print_free;
         case ISOM_BOX_TYPE_MDAT :
             return isom_print_mdat;
+        case QT_BOX_TYPE_KEYS :
+            return isom_print_keys;
         case ISOM_BOX_TYPE_META :
             return isom_print_meta;
         case ISOM_BOX_TYPE_ILST :

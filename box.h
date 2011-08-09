@@ -56,6 +56,7 @@ typedef struct isom_box_tag isom_box_t;
 
 #define LSMASH_UNKNOWN_BOX    0x01
 #define LSMASH_ABSENT_IN_ROOT 0x02
+#define LSMASH_QTFF_BASE      0x04
 
 struct isom_box_tag
 {
@@ -1089,6 +1090,23 @@ typedef struct
     uint64_t start_time;
 } isom_chapter_entry_t;
 
+/* Metadata Item Keys Box */
+typedef struct
+{
+    ISOM_FULLBOX_COMMON;
+    lsmash_entry_list_t *list;
+} isom_keys_t;
+
+typedef struct
+{
+    uint32_t key_size;          /* the size of the entire structure containing a key definition
+                                 * key_size = sizeof(key_size) + sizeof(key_namespace) + sizeof(key_value) */
+    uint32_t key_namespace;     /* a naming scheme used for metadata keys
+                                 * Location metadata keys, for example, use the 'mdta' key namespace. */
+    uint8_t *key_value;         /* the actual name of the metadata key
+                                 * Keys with the 'mdta' namespace use a reverse DNS naming convention. */
+} isom_keys_entry_t;
+
 /* Meaning Box */
 typedef struct
 {
@@ -1142,10 +1160,11 @@ typedef struct
 /* Meta Box */
 typedef struct
 {
-    ISOM_FULLBOX_COMMON;
+    ISOM_FULLBOX_COMMON;    /* ISOM: FullBox / QTFF: BaseBox */
     isom_hdlr_t *hdlr;      /* Metadata Handler Reference Box */
-    isom_dinf_t *dinf;      /* Data Information Box */
-    isom_ilst_t *ilst;      /* Metadata Item List Box */
+    isom_dinf_t *dinf;      /* ISOM: Data Information Box / QTFF: null */
+    isom_keys_t *keys;      /* ISOM: null / QTFF: Metadata Item Keys Box */
+    isom_ilst_t *ilst;      /* Metadata Item List Box only defined in Apple MPEG-4 and QTFF */
 } isom_meta_t;
 
 /* User Data Box
@@ -1687,9 +1706,11 @@ enum qt_box_type
     QT_BOX_TYPE_GMHD    = LSMASH_4CC( 'g', 'm', 'h', 'd' ),
     QT_BOX_TYPE_GMIN    = LSMASH_4CC( 'g', 'm', 'i', 'n' ),
     QT_BOX_TYPE_IMAP    = LSMASH_4CC( 'i', 'm', 'a', 'p' ),
+    QT_BOX_TYPE_KEYS    = LSMASH_4CC( 'k', 'e', 'y', 's' ),
     QT_BOX_TYPE_KMAT    = LSMASH_4CC( 'k', 'm', 'a', 't' ),
     QT_BOX_TYPE_LOAD    = LSMASH_4CC( 'l', 'o', 'a', 'd' ),
     QT_BOX_TYPE_MATT    = LSMASH_4CC( 'm', 'a', 't', 't' ),
+    QT_BOX_TYPE_META    = LSMASH_4CC( 'm', 'e', 't', 'a' ),
     QT_BOX_TYPE_MP4A    = LSMASH_4CC( 'm', 'p', '4', 'a' ),
     QT_BOX_TYPE_PNOT    = LSMASH_4CC( 'p', 'n', 'o', 't' ),
     QT_BOX_TYPE_PROF    = LSMASH_4CC( 'p', 'r', 'o', 'f' ),

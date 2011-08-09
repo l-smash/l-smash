@@ -36,11 +36,10 @@
 
 static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, uint64_t parent_pos, int level );
 
-static int isom_bs_read_box_common( lsmash_bs_t *bs, isom_box_t *box )
+static int isom_bs_read_box_common( lsmash_bs_t *bs, isom_box_t *box, uint32_t read_size )
 {
-    box->pos = lsmash_ftell( bs->stream );
     /* read size and type */
-    if( lsmash_bs_read_data( bs, ISOM_BASEBOX_COMMON_SIZE ) )
+    if( lsmash_bs_read_data( bs, read_size ) )
         return -1;
     if( feof( bs->stream ) )
         return 1;
@@ -54,9 +53,9 @@ static int isom_bs_read_box_common( lsmash_bs_t *bs, isom_box_t *box )
     }
     if( !box->size )
         box->size = UINT64_MAX;
-    /* read version and flags */
     if( isom_is_fullbox( box ) )
     {
+        /* read version and flags */
         if( lsmash_bs_read_data( bs, sizeof(uint32_t) ) )
             return -1;
         box->version = lsmash_bs_get_byte( bs );
@@ -834,7 +833,7 @@ static void *isom_sample_description_alloc( uint32_t sample_type )
         case QT_CODEC_TYPE_CDX2_AUDIO :
         case QT_CODEC_TYPE_CDX4_AUDIO :
         case QT_CODEC_TYPE_DVCA_AUDIO :
-        case QT_CODEC_TYPE_DVI_AUDIO  :
+        case QT_CODEC_TYPE_DVI_AUDIO :
         case QT_CODEC_TYPE_FL32_AUDIO :
         case QT_CODEC_TYPE_FL64_AUDIO :
         case QT_CODEC_TYPE_IMA4_AUDIO :
@@ -914,7 +913,7 @@ static void isom_sample_description_init( void *sample, uint32_t sample_type )
         case QT_CODEC_TYPE_CDX2_AUDIO :
         case QT_CODEC_TYPE_CDX4_AUDIO :
         case QT_CODEC_TYPE_DVCA_AUDIO :
-        case QT_CODEC_TYPE_DVI_AUDIO  :
+        case QT_CODEC_TYPE_DVI_AUDIO :
         case QT_CODEC_TYPE_FL32_AUDIO :
         case QT_CODEC_TYPE_FL64_AUDIO :
         case QT_CODEC_TYPE_IMA4_AUDIO :
@@ -1399,7 +1398,6 @@ static int isom_read_chan( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
                 desc->coordinates[j] = lsmash_bs_get_be32( bs );
         }
     }
-    box->size = lsmash_bs_get_pos( bs );
     isom_box_common_copy( chan, box );
     return isom_add_print_func( root, chan, level );
 }
@@ -2294,6 +2292,42 @@ static int isom_read_meta( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     return isom_read_children( root, box, meta, level );
 }
 
+static int isom_read_keys( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != QT_BOX_TYPE_META && !(parent->manager & LSMASH_QTFF_BASE) )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_list_box( keys, parent, box->type );
+    ((isom_meta_t *)parent)->keys = keys;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    uint32_t entry_count = lsmash_bs_get_be32( bs );
+    uint64_t pos;
+    for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+    {
+        isom_keys_entry_t *data = malloc( sizeof(isom_keys_entry_t) );
+        if( !data || lsmash_add_entry( keys->list, data ) )
+        {
+            if( data )
+                free( data );
+            return -1;
+        }
+        memset( data, 0, sizeof(isom_keys_entry_t) );
+        data->key_size      = lsmash_bs_get_be32( bs );
+        data->key_namespace = lsmash_bs_get_be32( bs );
+        if( data->key_size > 8 )
+        {
+            data->key_value = lsmash_bs_get_bytes( bs, data->key_size - 8 );
+            if( !data->key_value )
+                return -1;
+        }
+    }
+    if( entry_count != keys->list->entry_count || box->size < pos )
+        printf( "[keys] box has extra bytes: %"PRId64"\n", pos - box->size );
+    box->size = pos;
+    isom_box_common_copy( keys, box );
+    return isom_add_print_func( root, keys, level );
+}
+
 static int isom_read_ilst( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_META )
@@ -2388,9 +2422,12 @@ static int isom_read_data( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     data->type_set_identifier = lsmash_bs_get_byte( bs );
     data->type_code           = lsmash_bs_get_byte( bs );
     data->the_locale          = lsmash_bs_get_be32( bs );
-    data->value               = lsmash_bs_get_bytes( bs, data->value_length );
-    if( !data->value )
-        return -1;
+    if( data->value_length )
+    {
+        data->value = lsmash_bs_get_bytes( bs, data->value_length );
+        if( !data->value )
+            return -1;
+    }
     box->size = lsmash_bs_get_pos( bs );
     isom_box_common_copy( data, box );
     return isom_add_print_func( root, data, level );
@@ -2498,6 +2535,16 @@ static int isom_read_mfro( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     return isom_add_print_func( root, mfro, level );
 }
 
+static int isom_check_qtff_meta( lsmash_bs_t *bs )
+{
+    if( bs->store < ISOM_FULLBOX_COMMON_SIZE
+     || LSMASH_4CC( bs->data[4], bs->data[5], bs->data[6], bs->data[7] ) != ISOM_BOX_TYPE_META )
+        return 0;   /* Obviously, not 'meta' box */
+    if( !((bs->data[8] << 24) | (bs->data[9] << 16) | (bs->data[10] << 8) | bs->data[11]) )
+        return 0;   /* If this field is 0, this shall be 'meta' box of ISO. */
+    return 1;       /* OK. This shall be 'meta' box of QTFF. */
+}
+
 static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, uint64_t parent_pos, int level )
 {
     lsmash_bs_t *bs = root->bs;
@@ -2509,13 +2556,38 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
     {
         /* skip extra bytes */
         uint64_t rest_size = parent->size - parent_pos;
-        lsmash_fseek( bs->stream, rest_size, SEEK_CUR );
+        if( bs->stream != stdin )
+            lsmash_fseek( bs->stream, rest_size, SEEK_CUR );
+        else
+            for( uint64_t i = 0; i < rest_size; i++ )
+                if( fgetc( stdin ) == EOF )
+                    break;
         box->size = rest_size;
         return 0;
     }
-    lsmash_bs_empty( bs );
+    uint32_t read_size;
+    if( isom_check_qtff_meta( bs ) )
+    {
+        /* 'meta' box of QTFF is not extended from FullBox.
+         * Reuse the last 4 bytes as the size of the current box. */
+        parent->manager |= LSMASH_QTFF_BASE;    /* identifier of 'meta' box of QTFF */
+        parent->version = 0;
+        parent->flags   = 0;
+        memcpy( bs->data, bs->data + bs->store - 4, 4 );
+        memset( bs->data + 4, 0, bs->store - 4 );
+        bs->store = 4;
+        bs->pos = 0;
+        read_size = ISOM_BASEBOX_COMMON_SIZE - 4;
+        box->pos = lsmash_ftell( bs->stream ) - 4;
+    }
+    else
+    {
+        lsmash_bs_empty( bs );
+        read_size = ISOM_BASEBOX_COMMON_SIZE;
+        box->pos = lsmash_ftell( bs->stream );
+    }
     int ret = -1;
-    if( !!(ret = isom_bs_read_box_common( bs, box )) )
+    if( !!(ret = isom_bs_read_box_common( bs, box, read_size )) )
         return ret;     /* return if reached EOF */
     ++level;
     if( parent->type == ISOM_BOX_TYPE_STSD )
@@ -2568,7 +2640,7 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
             case QT_CODEC_TYPE_CDX2_AUDIO :
             case QT_CODEC_TYPE_CDX4_AUDIO :
             case QT_CODEC_TYPE_DVCA_AUDIO :
-            case QT_CODEC_TYPE_DVI_AUDIO  :
+            case QT_CODEC_TYPE_DVI_AUDIO :
             case QT_CODEC_TYPE_FL32_AUDIO :
             case QT_CODEC_TYPE_FL64_AUDIO :
             case QT_CODEC_TYPE_IMA4_AUDIO :
@@ -2740,6 +2812,8 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
             return isom_read_mdat( root, box, parent, level );
         case ISOM_BOX_TYPE_META :
             return isom_read_meta( root, box, parent, level );
+        case QT_BOX_TYPE_KEYS :
+            return isom_read_keys( root, box, parent, level );
         case ISOM_BOX_TYPE_ILST :
             return isom_read_ilst( root, box, parent, level );
         case ISOM_BOX_TYPE_MFRA :
