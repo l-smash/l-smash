@@ -3140,6 +3140,23 @@ static void isom_remove_udta( isom_udta_t *udta )
     free( udta );
 }
 
+static void isom_remove_keys_entry( isom_keys_entry_t *data )
+{
+    if( !data )
+        return;
+    if( data->key_value )
+        free( data->key_value );
+    free( data );
+}
+
+static void isom_remove_keys( isom_keys_t *keys )
+{
+    if( !keys )
+        return;
+    lsmash_remove_list( keys->list, isom_remove_keys_entry );
+    isom_remove_box( keys, isom_meta_t );
+}
+
 static void isom_remove_mean( isom_mean_t *mean )
 {
     if( !mean )
@@ -3191,6 +3208,7 @@ static void isom_remove_meta( isom_meta_t *meta )
         return;
     isom_remove_hdlr( meta->hdlr );
     isom_remove_dinf( meta->dinf );
+    isom_remove_keys( meta->keys );
     isom_remove_ilst( meta->ilst );
     if( meta->parent )
     {
