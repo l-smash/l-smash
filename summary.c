@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "importer.h"
 #include "mp4a.h"
 
 /***************************************************************************
@@ -63,7 +64,7 @@ int lsmash_setup_AudioSpecificConfig( lsmash_audio_summary_t* summary )
 }
 
 /* Copy exdata into summary from memory block */
-int lsmash_summary_add_exdata( lsmash_audio_summary_t* summary, void* exdata, uint32_t exdata_length )
+int lsmash_summary_add_exdata( lsmash_summary_t *summary, void* exdata, uint32_t exdata_length )
 {
     if( !summary )
         return -1;
@@ -84,6 +85,24 @@ int lsmash_summary_add_exdata( lsmash_audio_summary_t* summary, void* exdata, ui
         free( summary->exdata );
     summary->exdata = new_exdata;
     return 0;
+}
+
+lsmash_video_summary_t *lsmash_create_video_summary()
+{
+    lsmash_video_summary_t *summary = (lsmash_video_summary_t *)malloc( sizeof(lsmash_video_summary_t) );
+    if( !summary )
+        return NULL;
+    memset( summary, 0, sizeof(lsmash_video_summary_t) );
+    return summary;
+}
+
+void lsmash_cleanup_video_summary( lsmash_video_summary_t *summary )
+{
+    if( !summary )
+        return;
+    if( summary->exdata )
+        free( summary->exdata );
+    free( summary );
 }
 
 lsmash_audio_summary_t* lsmash_create_audio_summary()

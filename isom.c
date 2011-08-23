@@ -622,6 +622,22 @@ static int isom_add_visual_extensions( isom_visual_entry_t *visual, lsmash_video
     for( int i = 0; i < sizeof(avc_type)/sizeof(avc_type[0]); i++ )
         if( visual->type == avc_type[i] )
         {
+            if( summary->exdata_length >= 15 )
+            {
+                /* Chech if avcC is constructed as exdata. */
+                uint8_t *exdata = (uint8_t *)summary->exdata;
+                uint32_t length = (exdata[0] << 24) | (exdata[1] << 16) | (exdata[2] << 8) | exdata[3];
+                if( length == summary->exdata_length
+                 && LSMASH_4CC( exdata[4], exdata[5], exdata[6], exdata[7] ) == ISOM_BOX_TYPE_AVCC )
+                {
+                    visual->exdata_length = summary->exdata_length;
+                    visual->exdata = malloc( visual->exdata_length );
+                    if( !visual->exdata )
+                        return -1;
+                    memcpy( visual->exdata, summary->exdata, visual->exdata_length );
+                    break;
+                }
+            }
             if( isom_add_avcC( visual ) )
                 return -1;
             break;
@@ -3906,6 +3922,7 @@ static int isom_write_visual_entry( lsmash_bs_t *bs, lsmash_entry_t *entry )
     lsmash_bs_put_bytes( bs, data->compressorname, 32 );
     lsmash_bs_put_be16( bs, data->depth );
     lsmash_bs_put_be16( bs, data->color_table_ID );
+    lsmash_bs_put_bytes( bs, data->exdata, data->exdata_length );
     if( lsmash_bs_write_data( bs ) )
         return -1;
     return isom_write_visual_extensions( bs, data );
@@ -5968,7 +5985,8 @@ static uint64_t isom_update_visual_entry_size( isom_visual_entry_t *visual )
         + isom_update_stsl_size( visual->stsl )
         + isom_update_esds_size( visual->esds )
         + isom_update_avcC_size( visual->avcC )
-        + isom_update_btrt_size( visual->btrt );
+        + isom_update_btrt_size( visual->btrt )
+        + (uint64_t)visual->exdata_length;
     CHECK_LARGESIZE( visual->size );
     return visual->size;
 }

@@ -35,8 +35,9 @@ typedef void mp4sys_importer_t;
 /* importing functions */
 mp4sys_importer_t* mp4sys_importer_open( const char* identifier, const char* format );
 void mp4sys_importer_close( mp4sys_importer_t* importer );
-int mp4sys_importer_get_access_unit( mp4sys_importer_t* importer, uint32_t track_number, void* buf, uint32_t* buf_size );
+int mp4sys_importer_get_access_unit( mp4sys_importer_t* importer, uint32_t track_number, lsmash_sample_t *buffered_sample );
 unsigned int mp4sys_importer_get_track_count( mp4sys_importer_t* importer ); /* currently not supported */
+lsmash_video_summary_t *mp4sys_duplicate_video_summary( mp4sys_importer_t *importer, uint32_t track_number );
 lsmash_audio_summary_t* mp4sys_duplicate_audio_summary( mp4sys_importer_t* importer, uint32_t track_number );
 
 int mp4sys_amr_create_damr( lsmash_audio_summary_t *summary );

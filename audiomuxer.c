@@ -190,7 +190,7 @@ int main( int argc, char* argv[] )
     lsmash_media_parameters_t media_param;
     lsmash_initialize_media_parameters( &media_param );
     media_param.timescale = structs.summary->frequency;
-    media_param.media_handler_name = "L-SMASH Audio Handler 1";
+    media_param.media_handler_name = "L-SMASH Audio Handler";
     if( lsmash_set_media_parameters( structs.root, track, &media_param ) )
         return AUDIOMUX_ERR( "Failed to set media parameters.\n" );
 
@@ -210,7 +210,7 @@ int main( int argc, char* argv[] )
         /* FIXME: mp4sys_importer_get_access_unit() returns 1 if there're any changes in stream's properties.
            If you want to support them, you have to retrieve summary again, and make some operation accordingly. */
         sample->length = structs.summary->max_au_length;
-        if( mp4sys_importer_get_access_unit( structs.importer, 1, sample->data, &sample->length ) )
+        if( mp4sys_importer_get_access_unit( structs.importer, 1, sample ) )
         {
             lsmash_delete_sample( sample );
             // return AUDIOMUX_ERR( "Failed to get a frame from input file. Maybe corrupted.\n" );
@@ -223,11 +223,7 @@ int main( int argc, char* argv[] )
             lsmash_delete_sample( sample );
             break; /* end of stream */
         }
-
-        sample->dts = numframe * structs.summary->samples_in_frame;
-        sample->cts = sample->dts;
         sample->index = sample_entry;
-        sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC; /* every sample is a random access point. */
         if( lsmash_append_sample( structs.root, track, sample ) )
             return AUDIOMUX_ERR( "Failed to write a frame.\n" );
         numframe++;

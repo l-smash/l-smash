@@ -975,7 +975,15 @@ typedef struct
 {
     LSMASH_BASE_SUMMARY
     // mp4sys_visualProfileLevelIndication pli;    /* I wonder we should have this or not. */
+    lsmash_codec_type sample_type;              /* Video codec type. */
     // lsmash_mp4v_VideoObjectType vot;            /* Detailed codec type. If not mp4v, just ignored. */
+    uint32_t timescale;                         /* media timescale
+                                                 * User can't set this parameter manually. */
+    uint32_t timebase;                          /* increment unit of timestamp
+                                                 * User can't set this parameter manually. */
+    uint8_t assumed_vfr;                        /* whether a stream is assumed as variable frame rate
+                                                 * User can't set this parameter manually. */
+    uint8_t full_range;
     uint32_t width;                             /* pixel counts of width samples have */
     uint32_t height;                            /* pixel counts of height samples have */
     uint32_t crop_top;
@@ -1167,12 +1175,15 @@ int lsmash_get_media_timeline_shift( lsmash_root_t *root, uint32_t track_ID, int
 
 /* to facilitate to make exdata (typically DecoderSpecificInfo or AudioSpecificConfig). */
 int lsmash_setup_AudioSpecificConfig( lsmash_audio_summary_t* summary );
-int lsmash_summary_add_exdata( lsmash_audio_summary_t* summary, void* exdata, uint32_t exdata_length );
+int lsmash_summary_add_exdata( lsmash_summary_t *summary, void* exdata, uint32_t exdata_length );
 
 /* FIXME: these functions may change in the future.
    I wonder these functions should be for generic (not limited to audio) summary. */
 lsmash_audio_summary_t* lsmash_create_audio_summary();
-void lsmash_cleanup_audio_summary( lsmash_audio_summary_t* summary );
+void lsmash_cleanup_audio_summary( lsmash_audio_summary_t *summary );
+
+lsmash_video_summary_t *lsmash_create_video_summary();
+void lsmash_cleanup_video_summary( lsmash_video_summary_t *summary );
 
 #undef PRIVATE
 

@@ -325,6 +325,15 @@ lsmash_bits_t* lsmash_bits_create( lsmash_bs_t *bs )
     return bits;
 }
 
+void lsmash_bits_empty( lsmash_bits_t *bits )
+{
+    debug_if( !bits )
+        return;
+    lsmash_bs_empty( bits->bs );
+    bits->store = 0;
+    bits->cache = 0;
+}
+
 #define BITS_IN_BYTE 8
 void lsmash_bits_put_align( lsmash_bits_t *bits )
 {
@@ -661,7 +670,9 @@ void *lsmash_memdup( void *src, size_t size )
     memcpy( dst, src, size );
     return dst;
 }
+/*---- ----*/
 
+/*---- others ----*/
 void lsmash_log( lsmash_log_level level, const char* message, ... )
 {
     char *prefix;
@@ -687,4 +698,11 @@ void lsmash_log( lsmash_log_level level, const char* message, ... )
     fprintf( stderr, "[%s]: ", prefix );
     vfprintf( stderr, message, args );
     va_end( args );
+}
+
+/* for qsort function */
+int compare_u64( const uint64_t *a, const uint64_t *b )
+{
+    int64_t diff = (int64_t)(*a - *b);
+    return diff > 0 ? 1 : (diff == 0 ? 0 : -1);
 }
