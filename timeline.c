@@ -684,7 +684,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     int all_sync = !stss;
     int large_presentation = stco->large_presentation;
     int is_lpcm_audio = isom_is_lpcm_audio( description->type );
-    int iso_sdtp = root->max_isom_version >= 4;
+    int iso_sdtp = root->max_isom_version >= 2 || root->avc_extensions;
     int allow_negative_sample_offset = ctts && ((root->max_isom_version >= 4 && ctts->version == 1) || root->qt_compatible);
     uint32_t sample_number = 1;
     uint32_t sample_number_in_stts_entry = 1;

@@ -5002,6 +5002,7 @@ int isom_check_compatibility( lsmash_root_t *root )
             case ISOM_BRAND_TYPE_MP42 :
                 root->mp4_version2 = 1;
                 break;
+            case ISOM_BRAND_TYPE_AVC1 :
             case ISOM_BRAND_TYPE_ISOM :
                 root->max_isom_version = LSMASH_MAX( root->max_isom_version, 1 );
                 break;
