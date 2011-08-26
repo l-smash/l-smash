@@ -2238,10 +2238,10 @@ static lsmash_video_summary_t *h264_create_summary( mp4sys_h264_info_t *info, ui
     summary->sample_type            = ISOM_CODEC_TYPE_AVC1_VIDEO;
     summary->object_type_indication = MP4SYS_OBJECT_TYPE_Visual_H264_ISO_14496_10;
     summary->stream_type            = MP4SYS_STREAM_TYPE_VisualStream;
-    summary->timescale              = sps->vui.time_scale >> sps->frame_mbs_only_flag;
+    summary->timescale              = sps->vui.time_scale;
     summary->timebase               = sps->vui.num_units_in_tick;
     summary->full_range             = sps->vui.video_full_range_flag;
-    summary->assumed_vfr            = !sps->vui.fixed_frame_rate_flag;
+    summary->vfr                    = !sps->vui.fixed_frame_rate_flag;
     summary->width                  = sps->cropped_width;
     summary->height                 = sps->cropped_height;
     summary->par_h                  = sps->vui.sar_width;

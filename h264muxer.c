@@ -257,22 +257,28 @@ int main( int argc, char *argv[] )
     /* Initialize media */
     lsmash_media_parameters_t media_param;
     lsmash_initialize_media_parameters( &media_param );
-    media_param.timescale = 25;     /* default value */
-    uint32_t timebase = 1;
+    uint32_t timescale = 25;    /* default value */
+    uint32_t timebase  = 1;     /* default value */
     if( user_fps )
     {
-        media_param.timescale = fps_num;
-        timebase              = fps_den;
+        timescale = fps_num;
+        timebase  = fps_den;
     }
-    else if( !structs.summary->assumed_vfr )
+    else if( !structs.summary->vfr )
+    {
+        /* maximum_fps = ceil(timescale / (2 * timebase) */
+        uint32_t compare_timescale = (structs.summary->timescale >> 1) + (structs.summary->timescale & 1);
+        uint32_t compare_timebase  = structs.summary->timebase;
         for( i = 0; well_known_fps[i].timescale; i++ )
-            if( well_known_fps[i].timescale == structs.summary->timescale
-             && well_known_fps[i].timebase  == structs.summary->timebase )
+            if( well_known_fps[i].timescale == compare_timescale
+             && well_known_fps[i].timebase  == compare_timebase )
             {
-                media_param.timescale = well_known_fps[i].timescale;
-                timebase              = well_known_fps[i].timebase;
+                timescale = well_known_fps[i].timescale;
+                timebase  = well_known_fps[i].timebase;
                 break;
             }
+    }
+    media_param.timescale = timescale;
     media_param.media_handler_name = "L-SMASH Video Handler";
     media_param.roll_grouping = 1;
     media_param.rap_grouping = isom_version >= 6;

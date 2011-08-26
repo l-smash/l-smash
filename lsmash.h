@@ -981,7 +981,7 @@ typedef struct
                                                  * User can't set this parameter manually. */
     uint32_t timebase;                          /* increment unit of timestamp
                                                  * User can't set this parameter manually. */
-    uint8_t assumed_vfr;                        /* whether a stream is assumed as variable frame rate
+    uint8_t vfr;                                /* whether a stream is assumed as variable frame rate
                                                  * User can't set this parameter manually. */
     uint8_t full_range;
     uint32_t width;                             /* pixel counts of width samples have */
