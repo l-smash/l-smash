@@ -701,8 +701,14 @@ void lsmash_log( lsmash_log_level level, const char* message, ... )
 }
 
 /* for qsort function */
-int compare_u64( const uint64_t *a, const uint64_t *b )
+int lsmash_compare_dts( const lsmash_media_ts_t *a, const lsmash_media_ts_t *b )
 {
-    int64_t diff = (int64_t)(*a - *b);
+    int64_t diff = (int64_t)(a->dts - b->dts);
+    return diff > 0 ? 1 : (diff == 0 ? 0 : -1);
+}
+
+int lsmash_compare_cts( const lsmash_media_ts_t *a, const lsmash_media_ts_t *b )
+{
+    int64_t diff = (int64_t)(a->cts - b->cts);
     return diff > 0 ? 1 : (diff == 0 ? 0 : -1);
 }

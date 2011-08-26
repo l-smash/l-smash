@@ -24,6 +24,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <stdlib.h>
+#include <inttypes.h>
 
 #include "lsmash.h"
 #include "importer.h"
@@ -65,6 +66,7 @@ static int h264mux_error( structs_t *structs, char *msg )
     "    --3g2                    Enable 3GPP2 muxing mode\n" \
     "    --qt                     Enable QuickTime file format muxing mode\n" \
     "    --chimera                Allow chimera of ISO Base Media and QTFF\n" \
+    "    --fps <int/int>          Specify video framerate\n" \
     "    --shift-timeline         Enable composition to decode timeline shift\n" \
     "  Note: --3gp and 3g2 are exclusive.\n" \
     "        --qt overrides all brands by itself unless you specify --chimera.\n" \
@@ -74,7 +76,7 @@ static const struct
 {
     uint32_t timescale;
     uint32_t timebase;
-} well_known_framerate[]
+} well_known_fps[]
     = {
         { 24000, 1001 }, { 30000, 1001 }, { 60000, 1001 }, { 120000, 1001 }, { 72000, 1001 },
         { 25, 1 }, { 50, 1 }, { 24, 1 }, { 30, 1 }, { 60, 1 }, { 120, 1 }, { 72, 1 }, { 0, 0 }
@@ -93,6 +95,8 @@ int main( int argc, char *argv[] )
     int brand_3gx = 0;
     int chimera = 0;
     int qtff = 0;
+    int user_fps = 0;
+    uint32_t fps_num = 0, fps_den = 0;
     uint32_t brands[12] = { ISOM_BRAND_TYPE_ISOM, ISOM_BRAND_TYPE_AVC1 };
     uint32_t major_brand = ISOM_BRAND_TYPE_MP42;
     int num_of_brands = 2;
@@ -121,6 +125,17 @@ int main( int argc, char *argv[] )
             qtff = 1;
         else if( !strcasecmp( argv[i], "--chimera" ) )
             chimera = 1;
+        else if( !strcasecmp( argv[i], "--fps" ) )
+        {
+            if( argc == ++i )
+                return H264MUX_USAGE_ERR();
+            if( sscanf( argv[i], "%"SCNu32"/%"SCNu32, &fps_num, &fps_den ) == 1 )
+            {
+                fps_num = atoi( argv[i] );
+                fps_den = 1;
+            }
+            user_fps = 1;
+        }
         else if( !strcasecmp( argv[i], "--shift-timeline" ) )
             timeline_shift = 1;
         else
@@ -244,13 +259,18 @@ int main( int argc, char *argv[] )
     lsmash_initialize_media_parameters( &media_param );
     media_param.timescale = 25;     /* default value */
     uint32_t timebase = 1;
-    if( !structs.summary->assumed_vfr )
-        for( i = 0; well_known_framerate[i].timescale; i++ )
-            if( well_known_framerate[i].timescale == structs.summary->timescale
-             && well_known_framerate[i].timebase  == structs.summary->timebase )
+    if( user_fps )
+    {
+        media_param.timescale = fps_num;
+        timebase              = fps_den;
+    }
+    else if( !structs.summary->assumed_vfr )
+        for( i = 0; well_known_fps[i].timescale; i++ )
+            if( well_known_fps[i].timescale == structs.summary->timescale
+             && well_known_fps[i].timebase  == structs.summary->timebase )
             {
-                media_param.timescale = well_known_framerate[i].timescale;
-                timebase              = well_known_framerate[i].timebase;
+                media_param.timescale = well_known_fps[i].timescale;
+                timebase              = well_known_fps[i].timebase;
                 break;
             }
     media_param.media_handler_name = "L-SMASH Video Handler";

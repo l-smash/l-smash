@@ -2891,21 +2891,7 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
     if( min_poc )
         for( uint32_t i = 0; i < num_access_units; i++ )
             poc[i] -= min_poc;
-    /* Reduce POCs in the array. */
-    if( num_access_units > 1 )
-    {
-        uint64_t reduce = poc[1];
-        for( uint32_t i = 1; reduce != 1 && i < num_access_units; i++ )
-            reduce = lsmash_get_gcd( poc[i], reduce );
-        if( reduce != 1 )
-            for( uint32_t i = 0; i < num_access_units; i++ )
-                poc[i] /= reduce;
-    }
     /* Deduplicate POCs. */
-#if 0
-    for( uint32_t i = 0; i < num_access_units; i++ )
-        fprintf( stderr, "POC[%"PRIu32"]: %"PRIu64"\n", i, poc[i] );
-#endif
     uint64_t poc_offset = 0;
     uint64_t poc_max = 0;
     for( uint32_t i = 1; i < num_access_units; i++ )
@@ -2926,47 +2912,33 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
             break;
         ++info->num_undecodable;
     }
-    /* Get max sample delay. */
-    uint32_t sample_delay = 0;
-    uint32_t max_sample_delay = 0;
+    /* Get max composition delay. */
+    uint32_t composition_delay = 0;
+    uint32_t max_composition_delay = 0;
     for( uint32_t i = 1; i < num_access_units; i++ )
         if( poc[i] < poc[i - 1] )
         {
-            ++sample_delay;
-            max_sample_delay = LSMASH_MAX( max_sample_delay, sample_delay );
+            ++composition_delay;
+            max_composition_delay = LSMASH_MAX( max_composition_delay, composition_delay );
         }
         else
-            sample_delay = 0;
+            composition_delay = 0;
     /* Generate timestamps. */
-    if( max_sample_delay )
+    if( max_composition_delay )
     {
-        /* Generate CTSs. */
         for( uint32_t i = 0; i < num_access_units; i++ )
+        {
             timestamp[i].cts = poc[i];
-        qsort( poc, num_access_units, sizeof(uint64_t), (int(*)( const void *, const void * ))compare_u64 );
-#if 0
-        for( uint32_t i = 0; i < num_access_units; i++ )
-            fprintf( stderr, "POC[%"PRIu32"]: %"PRIu64"\n", i, poc[i] );
-#endif
-        uint64_t composition_delay = poc[max_sample_delay];
-        for( uint32_t i = 0; i < num_access_units; i++ )
-            timestamp[i].cts += composition_delay;
-        /* Generate DTSs. */
-        uint64_t prev_reordered_cts[max_sample_delay];
-        for( uint32_t i = 0; i <= max_sample_delay; i++ )
-        {
-            timestamp[i].dts = poc[i];
-            prev_reordered_cts[ i % max_sample_delay ] = poc[i] + composition_delay;
+            timestamp[i].dts = i;
         }
-        for( uint32_t i = max_sample_delay + 1; i < num_access_units; i++ )
-        {
-            timestamp[i].dts = prev_reordered_cts[ (i - max_sample_delay) % max_sample_delay ];
-            prev_reordered_cts[ i % max_sample_delay ] = poc[i] + composition_delay;
-        }
+        qsort( timestamp, num_access_units, sizeof(lsmash_media_ts_t), (int(*)( const void *, const void * ))lsmash_compare_cts );
+        for( uint32_t i = 0; i < num_access_units; i++ )
+            timestamp[i].cts = i + max_composition_delay;
+        qsort( timestamp, num_access_units, sizeof(lsmash_media_ts_t), (int(*)( const void *, const void * ))lsmash_compare_dts );
     }
     else
         for( uint32_t i = 0; i < num_access_units; i++ )
-            timestamp[i].cts = timestamp[i].dts = poc[i];
+            timestamp[i].cts = timestamp[i].dts = i;
     free( poc );
 #if 0
     for( uint32_t i = 0; i < num_access_units; i++ )
@@ -2974,7 +2946,7 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
 #endif
     info->ts_list.sample_count           = num_access_units;
     info->ts_list.timestamp              = timestamp;
-    info->composition_reordering_present = !!max_sample_delay;
+    info->composition_reordering_present = !!max_composition_delay;
     /* Go back to EBSP of the first NALU. */
     lsmash_fseek( importer->stream, first_ebsp_head_pos, SEEK_SET );
     read_size = fread( info->stream_buffer, 1, info->stream_buffer_size, importer->stream );

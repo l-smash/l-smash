@@ -149,7 +149,8 @@ typedef enum
 
 /*---- others ----*/
 void lsmash_log( lsmash_log_level level, const char* message, ... );
-int compare_u64( const uint64_t *a, const uint64_t *b );
+int lsmash_compare_dts( const lsmash_media_ts_t *a, const lsmash_media_ts_t *b );
+int lsmash_compare_cts( const lsmash_media_ts_t *a, const lsmash_media_ts_t *b );
 
 static inline uint64_t lsmash_get_gcd( uint64_t a, uint64_t b )
 {
