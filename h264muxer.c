@@ -255,7 +255,7 @@ int main( int argc, char *argv[] )
             }
     media_param.media_handler_name = "L-SMASH Video Handler";
     media_param.roll_grouping = 1;
-    media_param.rap_grouping = isom_version <= 6;
+    media_param.rap_grouping = isom_version >= 6;
     if( lsmash_set_media_parameters( structs.root, track, &media_param ) )
         return H264MUX_ERR( "Failed to set media parameters.\n" );
 
