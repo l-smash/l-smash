@@ -108,6 +108,9 @@ void mp4a_remove_AudioSpecificConfig( mp4a_AudioSpecificConfig_t* asc );
 /* export for importer */
 extern const uint32_t mp4a_AAC_frequency_table[13][4];
 
+/* setup for summary */
+int mp4a_setup_summary_from_AudioSpecificConfig( lsmash_audio_summary_t *summary, uint8_t *dsi_payload, uint32_t dsi_payload_length );
+
 /* profileLevelIndication relative functions. */
 mp4a_audioProfileLevelIndication mp4a_get_audioProfileLevelIndication( lsmash_audio_summary_t *summary );
 mp4a_audioProfileLevelIndication mp4a_max_audioProfileLevelIndication(

@@ -931,6 +931,38 @@ mp4sys_ES_Descriptor_t *mp4sys_get_ES_Descriptor( lsmash_bs_t *bs )
     }
     return esd;
 }
+
+static uint8_t *mp4sys_export_DecoderSpecificInfo( mp4sys_ES_Descriptor_t *esd, uint32_t *dsi_payload_length )
+{
+    if( !esd || !esd->decConfigDescr || !esd->decConfigDescr->decSpecificInfo )
+        return NULL;
+    mp4sys_DecoderSpecificInfo_t *dsi = (mp4sys_DecoderSpecificInfo_t *)esd->decConfigDescr->decSpecificInfo;
+    if( dsi->header.size == 0 )
+        return NULL;
+    uint8_t *dsi_payload = malloc( dsi->header.size );
+    if( !dsi_payload )
+        return NULL;
+    memcpy( dsi_payload, dsi->data, dsi->header.size );
+    if( dsi_payload_length )
+        *dsi_payload_length = dsi->header.size;
+    return dsi_payload;
+}
+
+/* Sumamry is needed to decide ProfileLevelIndication.
+ * Currently, support audio's only. */
+int mp4sys_setup_summary_from_DecoderSpecificInfo( lsmash_audio_summary_t *summary, mp4sys_ES_Descriptor_t *esd )
+{
+    uint32_t dsi_payload_length;
+    uint8_t *dsi_payload = mp4sys_export_DecoderSpecificInfo( esd, &dsi_payload_length );
+    if( !dsi_payload )
+        return -1;
+    if( mp4a_setup_summary_from_AudioSpecificConfig( summary, dsi_payload, dsi_payload_length ) )
+    {
+        free( dsi_payload );
+        return -1;
+    }
+    return 0;
+}
 #endif /* LSMASH_DEMUXER_ENABLED */
 
 /**** following functions are for facilitation purpose ****/

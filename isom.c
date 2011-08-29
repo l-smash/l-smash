@@ -1712,8 +1712,16 @@ static int isom_scan_trak_profileLevelIndication( isom_trak_entry_t* trak, mp4a_
                     *visual_pli = MP4SYS_VISUAL_PLI_H264_AVC;
                 break;
             case ISOM_CODEC_TYPE_MP4A_AUDIO :
-                *audio_pli = mp4a_max_audioProfileLevelIndication( *audio_pli, mp4a_get_audioProfileLevelIndication( &((isom_audio_entry_t*)sample_entry)->summary ) );
+            {
+                isom_audio_entry_t *audio = (isom_audio_entry_t *)sample_entry;
+                if( !audio->esds || !audio->esds->ES )
+                    return -1;
+                if( audio->summary.sample_type != ISOM_CODEC_TYPE_MP4A_AUDIO )
+                    /* This is needed when copying descriptions. */
+                    mp4sys_setup_summary_from_DecoderSpecificInfo( &audio->summary, audio->esds->ES );
+                *audio_pli = mp4a_max_audioProfileLevelIndication( *audio_pli, mp4a_get_audioProfileLevelIndication( &audio->summary ) );
                 break;
+            }
 #if 0
             case ISOM_CODEC_TYPE_DRAC_VIDEO :
             case ISOM_CODEC_TYPE_ENCV_VIDEO :
