@@ -937,12 +937,15 @@ static uint8_t *mp4sys_export_DecoderSpecificInfo( mp4sys_ES_Descriptor_t *esd, 
     if( !esd || !esd->decConfigDescr || !esd->decConfigDescr->decSpecificInfo )
         return NULL;
     mp4sys_DecoderSpecificInfo_t *dsi = (mp4sys_DecoderSpecificInfo_t *)esd->decConfigDescr->decSpecificInfo;
-    if( dsi->header.size == 0 )
-        return NULL;
-    uint8_t *dsi_payload = malloc( dsi->header.size );
-    if( !dsi_payload )
-        return NULL;
-    memcpy( dsi_payload, dsi->data, dsi->header.size );
+    uint8_t *dsi_payload = NULL;
+    /* DecoderSpecificInfo can be absent. */
+    if( dsi->header.size )
+    {
+        dsi_payload = malloc( dsi->header.size );
+        if( !dsi_payload )
+            return NULL;
+        memcpy( dsi_payload, dsi->data, dsi->header.size );
+    }
     if( dsi_payload_length )
         *dsi_payload_length = dsi->header.size;
     return dsi_payload;
@@ -952,11 +955,11 @@ static uint8_t *mp4sys_export_DecoderSpecificInfo( mp4sys_ES_Descriptor_t *esd, 
  * Currently, support audio's only. */
 int mp4sys_setup_summary_from_DecoderSpecificInfo( lsmash_audio_summary_t *summary, mp4sys_ES_Descriptor_t *esd )
 {
-    uint32_t dsi_payload_length;
+    uint32_t dsi_payload_length = UINT32_MAX;       /* arbitrary */
     uint8_t *dsi_payload = mp4sys_export_DecoderSpecificInfo( esd, &dsi_payload_length );
-    if( !dsi_payload )
+    if( !dsi_payload && dsi_payload_length )
         return -1;
-    if( mp4a_setup_summary_from_AudioSpecificConfig( summary, dsi_payload, dsi_payload_length ) )
+    if( dsi_payload_length && mp4a_setup_summary_from_AudioSpecificConfig( summary, dsi_payload, dsi_payload_length ) )
     {
         free( dsi_payload );
         return -1;
