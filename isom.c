@@ -1714,11 +1714,13 @@ static int isom_scan_trak_profileLevelIndication( isom_trak_entry_t* trak, mp4a_
             case ISOM_CODEC_TYPE_MP4A_AUDIO :
             {
                 isom_audio_entry_t *audio = (isom_audio_entry_t *)sample_entry;
+#ifdef LSMASH_DEMUXER_ENABLED
                 if( !audio->esds || !audio->esds->ES )
                     return -1;
                 if( audio->summary.sample_type != ISOM_CODEC_TYPE_MP4A_AUDIO )
                     /* This is needed when copying descriptions. */
                     mp4sys_setup_summary_from_DecoderSpecificInfo( &audio->summary, audio->esds->ES );
+#endif
                 *audio_pli = mp4a_max_audioProfileLevelIndication( *audio_pli, mp4a_get_audioProfileLevelIndication( &audio->summary ) );
                 break;
             }
