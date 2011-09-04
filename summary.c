@@ -87,22 +87,26 @@ int lsmash_summary_add_exdata( lsmash_summary_t *summary, void* exdata, uint32_t
     return 0;
 }
 
-lsmash_video_summary_t *lsmash_create_video_summary()
+lsmash_summary_t *lsmash_create_summary( lsmash_mp4sys_stream_type stream_type )
 {
-    lsmash_video_summary_t *summary = (lsmash_video_summary_t *)malloc( sizeof(lsmash_video_summary_t) );
+    size_t summary_size;
+    switch( stream_type )
+    {
+        case MP4SYS_STREAM_TYPE_VisualStream :
+            summary_size = sizeof(lsmash_video_summary_t);
+            break;
+        case MP4SYS_STREAM_TYPE_AudioStream :
+            summary_size = sizeof(lsmash_audio_summary_t);
+            break;
+        default :
+            return NULL;
+    }
+    lsmash_summary_t *summary = (lsmash_summary_t *)malloc( summary_size );
     if( !summary )
         return NULL;
-    memset( summary, 0, sizeof(lsmash_video_summary_t) );
+    memset( summary, 0, summary_size );
+    summary->stream_type = stream_type;
     return summary;
-}
-
-void lsmash_cleanup_video_summary( lsmash_video_summary_t *summary )
-{
-    if( !summary )
-        return;
-    if( summary->exdata )
-        free( summary->exdata );
-    free( summary );
 }
 
 lsmash_audio_summary_t* lsmash_create_audio_summary()
@@ -114,7 +118,7 @@ lsmash_audio_summary_t* lsmash_create_audio_summary()
     return summary;
 }
 
-void lsmash_cleanup_audio_summary( lsmash_audio_summary_t* summary )
+void lsmash_cleanup_summary( lsmash_summary_t *summary )
 {
     if( !summary )
         return;

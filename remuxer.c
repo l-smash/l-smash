@@ -245,7 +245,7 @@ static int parse_track_option( movie_io_t *io )
             if( current_track_opt->raw_track_option == NULL )
                 break;
             if( !strchr( current_track_opt->raw_track_option, ':' )
-                || strchr( current_track_opt->raw_track_option, ':' ) == current_track_opt->raw_track_option )
+             || strchr( current_track_opt->raw_track_option, ':' ) == current_track_opt->raw_track_option )
                 return ERROR_MSG( "Error: track number is not specified in %s\n", current_track_opt->raw_track_option );
             if( strchr( current_track_opt->raw_track_option, ':' ) != strrchr( current_track_opt->raw_track_option, ':' ) )
                 return ERROR_MSG( "Error: multiple colons inside one track option in %s.\n", current_track_opt->raw_track_option );
@@ -270,7 +270,7 @@ static int parse_track_option( movie_io_t *io )
                     track[i][track_number - 1].ISO_language = lsmash_pack_iso_language( track_parameter );
                 }
                 else
-                    return ERROR_MSG( "Error: unkown track option %s\n", track_option );
+                    return ERROR_MSG( "Error: unknown track option %s\n", track_option );
             }
         }
     return 0;

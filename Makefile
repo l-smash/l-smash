@@ -50,13 +50,9 @@ OBJS=$(SRCS:%.c=%.o)
 
 TARGET_LIB=liblsmash.a
 
-SRC_AUDIOMUXER=audiomuxer.c
-OBJ_AUDIOMUXER=$(SRC_AUDIOMUXER:%.c=%.o)
-TARGET_AUDIOMUXER=$(SRC_AUDIOMUXER:%.c=%$(EXE))
-
-SRC_H264MUXER=h264muxer.c
-OBJ_H264MUXER=$(SRC_H264MUXER:%.c=%.o)
-TARGET_H264MUXER=$(SRC_H264MUXER:%.c=%$(EXE))
+SRC_MUXER=muxer.c
+OBJ_MUXER=$(SRC_MUXER:%.c=%.o)
+TARGET_MUXER=$(SRC_MUXER:%.c=%$(EXE))
 
 SRC_BOXDUMPER=boxdumper.c
 OBJ_BOXDUMPER=$(SRC_BOXDUMPER:%.c=%.o)
@@ -70,13 +66,13 @@ SRC_TIMELINEEDITOR=timelineeditor.c
 OBJ_TIMELINEEDITOR=$(SRC_TIMELINEEDITOR:%.c=%.o)
 TARGET_TIMELINEEDITOR=$(SRC_TIMELINEEDITOR:%.c=%$(EXE))
 
-SRCS_ALL=$(SRCS) $(SRC_AUDIOMUXER) $(SRC_H264MUXER) $(SRC_BOXDUMPER) $(SRC_REMUXER) $(SRC_TIMELINEEDITOR)
+SRCS_ALL=$(SRCS) $(SRC_MUXER) $(SRC_BOXDUMPER) $(SRC_REMUXER) $(SRC_TIMELINEEDITOR)
 OBJS_ALL=$(SRCS_ALL:%.c=%.o)
 
 #### main rules ####
 
 # should have distclean, install, uninstall in the future
-.PHONY: all lib tools audiomuxer h264muxer boxdumper remuxer timelineeditor dep depend clean info
+.PHONY: all lib tools muxer boxdumper remuxer timelineeditor dep depend clean info
 
 all: info tools
 
@@ -86,11 +82,9 @@ info:
 
 lib: $(TARGET_LIB)
 
-tools: $(TARGET_AUDIOMUXER) $(TARGET_H264MUXER) $(TARGET_BOXDUMPER) $(TARGET_REMUXER) $(TARGET_TIMELINEEDITOR)
+tools: $(TARGET_MUXER) $(TARGET_BOXDUMPER) $(TARGET_REMUXER) $(TARGET_TIMELINEEDITOR)
 
-audiomuxer: $(TARGET_AUDIOMUXER)
-
-h264muxer: $(TARGET_H264MUXER)
+muxer: $(TARGET_MUXER)
 
 boxdumper: $(TARGET_BOXDUMPER)
 
@@ -104,15 +98,7 @@ $(TARGET_LIB): .depend $(OBJS)
 	@$(ECHO) "RANLIB: $@"
 	@$(RANLIB) $@
 
-$(TARGET_AUDIOMUXER): $(OBJ_AUDIOMUXER) $(TARGET_LIB)
-	@$(ECHO) "LINK: $@"
-	@$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $+ $(EXTRALIBS)
-ifneq ($(DEBUG),YES)
-	@$(ECHO) "STRIP: $@"
-	@$(STRIP) $@
-endif
-
-$(TARGET_H264MUXER): $(OBJ_H264MUXER) $(TARGET_LIB)
+$(TARGET_MUXER): $(OBJ_MUXER) $(TARGET_LIB)
 	@$(ECHO) "LINK: $@"
 	@$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $+ $(EXTRALIBS)
 ifneq ($(DEBUG),YES)
@@ -167,4 +153,4 @@ endif
 
 #### clean stuff ####
 clean:
-	rm -f $(OBJS_ALL) $(TARGET_LIB) $(TARGET_AUDIOMUXER) $(TARGET_H264MUXER) $(TARGET_BOXDUMPER) $(TARGET_REMUXER) $(TARGET_TIMELINEEDITOR) .depend
+	rm -f $(OBJS_ALL) $(TARGET_LIB) $(TARGET_MUXER) $(TARGET_BOXDUMPER) $(TARGET_REMUXER) $(TARGET_TIMELINEEDITOR) .depend

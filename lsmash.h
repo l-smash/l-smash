@@ -937,6 +937,7 @@ typedef struct {
 /* NOTE: For audio, currently assuming AAC-LC. */
 
 #define LSMASH_BASE_SUMMARY \
+    lsmash_codec_type sample_type;      /* Codec type */ \
     lsmash_mp4sys_object_type_indication object_type_indication; \
     lsmash_mp4sys_stream_type stream_type; \
     void *exdata;               /* typically payload of DecoderSpecificInfo (that's called AudioSpecificConfig in mp4a) */ \
@@ -952,7 +953,6 @@ typedef struct
 {
     LSMASH_BASE_SUMMARY
     // mp4a_audioProfileLevelIndication pli;   /* I wonder we should have this or not. */
-    lsmash_codec_type sample_type;          /* Audio codec type. */
     lsmash_mp4a_AudioObjectType aot;        /* Detailed codec type. If not mp4a, just ignored. */
     uint32_t frequency;                     /* Even if the stream is HE-AAC v1/SBR, this is base AAC's one. */
     uint32_t channels;                      /* Even if the stream is HE-AAC v2/SBR+PS, this is base AAC's one. */
@@ -975,7 +975,6 @@ typedef struct
 {
     LSMASH_BASE_SUMMARY
     // mp4sys_visualProfileLevelIndication pli;    /* I wonder we should have this or not. */
-    lsmash_codec_type sample_type;              /* Video codec type. */
     // lsmash_mp4v_VideoObjectType vot;            /* Detailed codec type. If not mp4v, just ignored. */
     uint32_t timescale;                         /* media timescale
                                                  * User can't set this parameter manually. */
@@ -1177,13 +1176,8 @@ int lsmash_get_media_timeline_shift( lsmash_root_t *root, uint32_t track_ID, int
 int lsmash_setup_AudioSpecificConfig( lsmash_audio_summary_t* summary );
 int lsmash_summary_add_exdata( lsmash_summary_t *summary, void* exdata, uint32_t exdata_length );
 
-/* FIXME: these functions may change in the future.
-   I wonder these functions should be for generic (not limited to audio) summary. */
-lsmash_audio_summary_t* lsmash_create_audio_summary();
-void lsmash_cleanup_audio_summary( lsmash_audio_summary_t *summary );
-
-lsmash_video_summary_t *lsmash_create_video_summary();
-void lsmash_cleanup_video_summary( lsmash_video_summary_t *summary );
+lsmash_summary_t *lsmash_create_summary( lsmash_mp4sys_stream_type stream_type );
+void lsmash_cleanup_summary( lsmash_summary_t *summary );
 
 #undef PRIVATE
 
