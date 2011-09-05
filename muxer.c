@@ -41,12 +41,12 @@
 typedef struct
 {
     int      help;
+    int      isom;
     int      isom_version;
-    int      timeline_shift;
-    int      brand_3gx;
-    int      chimera;
     int      qtff;
+    int      brand_3gx;
     int      optimize_pd;
+    int      timeline_shift;
     uint32_t num_of_brands;
     uint32_t brands[MAX_NUM_OF_BRANDS];
     uint32_t major_brand;
@@ -178,10 +178,12 @@ static void display_help( void )
              "    --help                    Display help\n"
              "    --optimize-pd             Optimize for progressive download\n"
              "    --file-format <string>    Specify output file format\n"
-             "    --chimera                 Allow chimera of output file format\n"
+             "                              Multiple file format can be specified by comma separators\n"
+             "                              The first is applied as the best used one\n"
              "    --isom-version <integer>  Specify maximum compatible ISO Base Media version\n"
              "    --shift-timeline          Enable composition to decode timeline shift\n"
-             "    Output file format: mp4, mov, 3gp, 3g2, m4a, m4v\n"
+             "Output file formats:\n"
+             "    mp4, mov, 3gp, 3g2, m4a, m4v\n"
              "Track options:\n"
              "    fps=<int/int>             Specify video framerate\n"
              "    language=<string>         Specify media language\n"
@@ -245,10 +247,8 @@ static int decide_brands( option_t *opt )
         return setup_isom_version( opt );
     }
     opt->major_brand = opt->brands[0];      /* Pick the first brand as major brand. */
-    if( !opt->chimera )
-        opt->num_of_brands = 1;
-    uint32_t num_of_loops = opt->chimera ? opt->num_of_brands : 1;
-    for( uint32_t i = 0; i < num_of_loops; i++ )
+    for( uint32_t i = 0; i < opt->num_of_brands; i++ )
+    {
         switch( opt->brands[i] )
         {
             case ISOM_BRAND_TYPE_3GP6 :
@@ -271,6 +271,9 @@ static int decide_brands( option_t *opt )
             default :
                 break;
         }
+        if( opt->brands[i] != ISOM_BRAND_TYPE_QT )
+            opt->isom = 1;
+    }
     switch( opt->major_brand )
     {
         case ISOM_BRAND_TYPE_MP42 :
@@ -298,7 +301,7 @@ static int decide_brands( option_t *opt )
             break;
     }
     /* Set up ISO Base Media version. */
-    if( opt->chimera || !opt->qtff )
+    if( opt->isom )
         setup_isom_version( opt );
     if( opt->num_of_brands > MAX_NUM_OF_BRANDS )
         return ERROR_MSG( "exceed the maximum number of brands we can deal with.\n" );
@@ -360,7 +363,7 @@ static int parse_global_options( int argc, char **argv, muxer_t *muxer )
             static const struct
             {
                 uint32_t brand_4cc;
-                char    *file_type;
+                char    *file_format;
             } file_format_list[]
                 = {
                     { ISOM_BRAND_TYPE_MP42, "mp4" },
@@ -371,22 +374,24 @@ static int parse_global_options( int argc, char **argv, muxer_t *muxer )
                     { ISOM_BRAND_TYPE_M4V,  "m4v" },
                     { 0, NULL }
                   };
-            int j;
-            for( j = 0; file_format_list[j].file_type; j++ )
-                if( !strcmp( argv[i], file_format_list[j].file_type ) )
-                {
-                    int ret = add_brand( opt, file_format_list[j].brand_4cc );
-                    if( ret == -2 )
-                        return ERROR_MSG( "you specified same output file format twice.\n" );
-                    else if( ret == -1 )
-                        return ERROR_MSG( "exceed the maximum number of brands we can deal with.\n" );
-                    break;
-                }
-            if( !file_format_list[j].file_type )
-                return MUXER_USAGE_ERR();
+            char *file_format = NULL;
+            while( (file_format = strtok( file_format ? NULL : argv[i], "," )) != NULL )
+            {
+                int j;
+                for( j = 0; file_format_list[j].file_format; j++ )
+                    if( !strcmp( file_format, file_format_list[j].file_format ) )
+                    {
+                        int ret = add_brand( opt, file_format_list[j].brand_4cc );
+                        if( ret == -2 )
+                            return ERROR_MSG( "you specified same output file format twice.\n" );
+                        else if( ret == -1 )
+                            return ERROR_MSG( "exceed the maximum number of brands we can deal with.\n" );
+                        break;
+                    }
+                if( !file_format_list[j].file_format )
+                    return MUXER_USAGE_ERR();
+            }
         }
-        else if( !strcasecmp( argv[i], "--chimera" ) )
-            opt->chimera = 1;
         else if( !strcasecmp( argv[i], "--isom-version" ) )
         {
             CHECK_NEXT_ARG;
@@ -520,7 +525,7 @@ int main( int argc, char *argv[] )
             switch( codec_type )
             {
                 case ISOM_CODEC_TYPE_AVC1_VIDEO :
-                    if( opt->chimera || !opt->qtff )
+                    if( opt->isom )
                         add_brand( opt, ISOM_BRAND_TYPE_AVC1 );
                     break;
                 case ISOM_CODEC_TYPE_MP4A_AUDIO:
