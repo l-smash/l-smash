@@ -214,6 +214,23 @@ static int add_brand( option_t *opt, uint32_t brand )
     return 0;
 }
 
+static int setup_isom_version( option_t *opt )
+{
+    add_brand( opt, ISOM_BRAND_TYPE_ISOM );
+    if( opt->isom_version > 6 )
+        return ERROR_MSG( "unknown ISO Base Media version.\n" );
+#define SET_ISOM_VERSION( version ) \
+    if( opt->isom_version >= version ) \
+        add_brand( opt, ISOM_BRAND_TYPE_ISO##version )
+    SET_ISOM_VERSION( 2 );
+    SET_ISOM_VERSION( 3 );
+    SET_ISOM_VERSION( 4 );
+    SET_ISOM_VERSION( 5 );
+    SET_ISOM_VERSION( 6 );
+#undef SET_ISOM_VERSION
+    return 0;
+}
+
 static int decide_brands( option_t *opt )
 {
     if( opt->num_of_brands == 0 )
@@ -225,7 +242,7 @@ static int decide_brands( option_t *opt )
         add_brand( opt, ISOM_BRAND_TYPE_MP41 );
         add_brand( opt, ISOM_BRAND_TYPE_ISOM );
         eprintf( "MP4 muxing mode\n" );
-        return 0;
+        return setup_isom_version( opt );
     }
     opt->major_brand = opt->brands[0];      /* Pick the first brand as major brand. */
     if( !opt->chimera )
@@ -282,20 +299,7 @@ static int decide_brands( option_t *opt )
     }
     /* Set up ISO Base Media version. */
     if( opt->chimera || !opt->qtff )
-    {
-        add_brand( opt, ISOM_BRAND_TYPE_ISOM );
-        if( opt->isom_version > 6 )
-            return ERROR_MSG( "unknown ISO Base Media version.\n" );
-#define SET_ISOM_VERSION( version ) \
-        if( opt->isom_version >= version ) \
-            add_brand( opt, ISOM_BRAND_TYPE_ISO##version )
-        SET_ISOM_VERSION( 2 );
-        SET_ISOM_VERSION( 3 );
-        SET_ISOM_VERSION( 4 );
-        SET_ISOM_VERSION( 5 );
-        SET_ISOM_VERSION( 6 );
-#undef SET_ISOM_VERSION
-    }
+        setup_isom_version( opt );
     if( opt->num_of_brands > MAX_NUM_OF_BRANDS )
         return ERROR_MSG( "exceed the maximum number of brands we can deal with.\n" );
     return 0;
