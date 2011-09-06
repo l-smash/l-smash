@@ -863,7 +863,7 @@ static int mp4sys_amr_probe( mp4sys_importer_t* importer )
     summary->samples_in_frame       = (160 << wb);
     summary->sbr_mode               = MP4A_AAC_SBR_NOT_SPECIFIED; /* no effect */
     mp4sys_amr_info_t *info = malloc( sizeof(mp4sys_amr_info_t) );
-    if( !importer->info )
+    if( !info )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         return -1;
@@ -890,63 +890,303 @@ const static mp4sys_importer_functions mp4sys_amr_importer = {
     mp4sys_amr_cleanup
 };
 
+/***************************************************************************
+    AC-3 importer
+***************************************************************************/
+#define AC3_MAX_AU_LENGTH 3840
+#define AC3_MIN_AU_LENGTH 128
+
+typedef struct
+{
+    mp4sys_importer_status status;
+    uint8_t fscod;
+    uint8_t bsid;
+    uint8_t bsmod;
+    uint8_t acmod;
+    uint8_t lfeon;
+    uint8_t frmsizecod;
+    lsmash_bits_t *bits;
+    uint8_t buffer[AC3_MAX_AU_LENGTH];
+    uint8_t *next_dac3;
+    uint32_t au_number;
+} mp4sys_ac3_info_t;
+
+static void mp4sys_remove_ac3_info( mp4sys_ac3_info_t *info )
+{
+    if( !info )
+        return;
+    lsmash_bits_adhoc_cleanup( info->bits );
+    free( info );
+}
+
+static mp4sys_ac3_info_t *mp4sys_create_ac3_info( void )
+{
+    mp4sys_ac3_info_t *info = (mp4sys_ac3_info_t *)malloc( sizeof(mp4sys_ac3_info_t) );
+    if( !info )
+        return NULL;
+    memset( info, 0, sizeof(mp4sys_ac3_info_t) );
+    info->bits = lsmash_bits_adhoc_create();
+    if( !info->bits )
+    {
+        free( info );
+        return NULL;
+    }
+    return info;
+}
+
+static void mp4sys_ac3_cleanup( mp4sys_importer_t *importer )
+{
+    debug_if( importer && importer->info )
+        mp4sys_remove_ac3_info( importer->info );
+}
+
+static int ac3_check_syncframe_header( mp4sys_ac3_info_t *info )
+{
+    if( info->fscod == 0x3 )
+        return -1;      /* unknown Sample Rate Code */
+    if( info->frmsizecod > 0x25 )
+        return -1;      /* unknown Frame Size Code */
+    if( info->bsid >= 10 )
+        return -1;      /* might be EAC-3 */
+    return 0;
+}
+
+static int ac3_parse_syncframe_header( mp4sys_ac3_info_t *info, uint8_t *data )
+{
+    lsmash_bits_t *bits = info->bits;
+    if( lsmash_bits_import_data( bits, data, AC3_MIN_AU_LENGTH ) )
+        return -1;
+    lsmash_bits_get( bits, 32 );    /* syncword + crc1 */
+    info->fscod      = lsmash_bits_get( bits, 2 );
+    info->frmsizecod = lsmash_bits_get( bits, 6 );
+    info->bsid       = lsmash_bits_get( bits, 5 );
+    info->bsmod      = lsmash_bits_get( bits, 3 );
+    info->acmod      = lsmash_bits_get( bits, 3 );
+    if( (info->acmod & 0x01) && (info->acmod != 0x01) )
+        lsmash_bits_get( bits, 2 );     /* cmixlev */
+    if( info->acmod & 0x04 )
+        lsmash_bits_get( bits, 2 );     /* surmixlev */
+    if( info->acmod == 0x02 )
+        lsmash_bits_get( bits, 2 );     /* dsurmod */
+    info->lfeon = lsmash_bits_get( bits, 1 );
+    lsmash_bits_empty( bits );
+    return ac3_check_syncframe_header( info );
+}
+
+#define AC3_DAC3_BOX_LENGTH 11
+
+static uint8_t *ac3_create_dac3( mp4sys_ac3_info_t *info )
+{
+    lsmash_bits_t *bits = info->bits;
+    lsmash_bits_put( bits, AC3_DAC3_BOX_LENGTH, 32 );
+    lsmash_bits_put( bits, ISOM_BOX_TYPE_DAC3, 32 );
+    lsmash_bits_put( bits, info->fscod, 2 );
+    lsmash_bits_put( bits, info->bsid, 5 );
+    lsmash_bits_put( bits, info->bsmod, 3 );
+    lsmash_bits_put( bits, info->acmod, 3 );
+    lsmash_bits_put( bits, info->lfeon, 1 );
+    lsmash_bits_put( bits, info->frmsizecod >> 1, 5 );
+    lsmash_bits_put( bits, 0, 5 );
+    uint8_t *dac3 = lsmash_bits_export_data( bits, NULL );
+    lsmash_bits_empty( bits );
+    return dac3;
+}
+
+#define IF_AC3_SYNCWORD( x ) if( (x)[0] != 0x0b || (x)[1] != 0x77 )
+
 /* data_length must be size of data that is available. */
 int mp4sys_create_dac3_from_syncframe( lsmash_audio_summary_t *summary, uint8_t *data, uint32_t data_length )
 {
-    /* Requires the following 7 bytes.
-     * syncword                                         : 16
-     * crc1                                             : 16
-     * fscod                                            : 2
-     * frmsizecod                                       : 6
-     * bsid                                             : 5
-     * bsmod                                            : 3
-     * acmod                                            : 3
-     * if((acmod & 0x01) && (acmod != 0x01)) cmixlev    : 2
-     * if(acmod & 0x04) surmixlev                       : 2
-     * if(acmod == 0x02) dsurmod                        : 2
-     * lfeon                                            : 1
-     */
-    if( data_length < 7 )
+    if( data_length < AC3_MIN_AU_LENGTH )
         return -1;
-    /* check syncword */
-    if( data[0] != 0x0b || data[1] != 0x77 )
+    IF_AC3_SYNCWORD( data )
         return -1;
-    /* get necessary data for AC3SpecificBox */
-    uint32_t fscod, bsid, bsmod, acmod, lfeon, frmsizecod;
-    fscod      = data[4] >> 6;
-    frmsizecod = data[4] & 0x3f;
-    bsid       = data[5] >> 3;
-    bsmod      = data[5] & 0x07;
-    acmod      = data[6] >> 5;
-    if( acmod == 0x02 )
-        lfeon  = data[6] >> 2;      /* skip dsurmod */
-    else
+    mp4sys_ac3_info_t info;
+    info.bits = lsmash_bits_adhoc_create();
+    if( !info.bits )
+        return -1;
+    if( ac3_parse_syncframe_header( &info, data ) )
     {
-        if( (acmod & 0x01) && acmod != 0x01 && (acmod & 0x04) )
-            lfeon = data[6];        /* skip cmixlev and surmixlev */
-        else if( ((acmod & 0x01) && acmod != 0x01) || (acmod & 0x04) )
-            lfeon = data[6] >> 2;   /* skip cmixlev or surmixlev */
-        else
-            lfeon = data[6] >> 4;
+        lsmash_bits_adhoc_cleanup( info.bits );
+        return -1;
     }
-    lfeon &= 0x01;
-    /* create AC3SpecificBox */
-    lsmash_bits_t *bits = lsmash_bits_adhoc_create();
-    lsmash_bits_put( bits, 11, 32 );
-    lsmash_bits_put( bits, ISOM_BOX_TYPE_DAC3, 32 );
-    lsmash_bits_put( bits, fscod, 2 );
-    lsmash_bits_put( bits, bsid, 5 );
-    lsmash_bits_put( bits, bsmod, 3 );
-    lsmash_bits_put( bits, acmod, 3 );
-    lsmash_bits_put( bits, lfeon, 1 );
-    lsmash_bits_put( bits, frmsizecod >> 1, 5 );
-    lsmash_bits_put( bits, 0, 5 );
+    uint8_t *dac3 = ac3_create_dac3( &info );
+    lsmash_bits_adhoc_cleanup( info.bits );
+    if( !dac3 )
+        return -1;
     if( summary->exdata )
         free( summary->exdata );
-    summary->exdata = lsmash_bits_export_data( bits, &summary->exdata_length );
-    lsmash_bits_adhoc_cleanup( bits );
+    summary->exdata = dac3;
+    summary->exdata_length = AC3_DAC3_BOX_LENGTH;
     return 0;
 }
+
+static const uint32_t ac3_sample_rate_table[4] = { 48000, 44100, 32000, 0 };
+
+static const uint32_t ac3_frame_size_table[19][3] =
+{
+    /*  48,  44.1,    32 */
+    {  128,   138,   192 },
+    {  160,   174,   240 },
+    {  192,   208,   288 },
+    {  224,   242,   336 },
+    {  256,   278,   384 },
+    {  320,   348,   480 },
+    {  384,   416,   576 },
+    {  448,   486,   672 },
+    {  512,   556,   768 },
+    {  640,   696,   960 },
+    {  768,   834,  1152 },
+    {  896,   974,  1344 },
+    { 1024,  1114,  1536 },
+    { 1280,  1392,  1920 },
+    { 1536,  1670,  2304 },
+    { 1792,  1950,  2688 },
+    { 2048,  2228,  3072 },
+    { 2304,  2506,  3456 },
+    { 2560,  2786,  3840 }
+};
+
+static const uint32_t ac3_channel_count_table[8] = { 2, 1, 2, 3, 3, 4, 4, 5 };
+
+static const lsmash_channel_layout_tag ac3_channel_layout_table[8][2] =
+{
+    /*        LFE: off                      LFE: on             */
+    { QT_CHANNEL_LAYOUT_UNKNOWN,    QT_CHANNEL_LAYOUT_UNKNOWN    },     /* FIXME: dual mono */
+    { QT_CHANNEL_LAYOUT_MONO,       QT_CHANNEL_LAYOUT_AC3_1_0_1  },
+    { QT_CHANNEL_LAYOUT_STEREO,     QT_CHANNEL_LAYOUT_DVD_4      },
+    { QT_CHANNEL_LAYOUT_AC3_3_0,    QT_CHANNEL_LAYOUT_AC3_3_0_1  },
+    { QT_CHANNEL_LAYOUT_DVD_2,      QT_CHANNEL_LAYOUT_AC3_2_1_1  },
+    { QT_CHANNEL_LAYOUT_AC3_3_1,    QT_CHANNEL_LAYOUT_AC3_3_1_1  },
+    { QT_CHANNEL_LAYOUT_DVD_3,      QT_CHANNEL_LAYOUT_DVD_18     },
+    { QT_CHANNEL_LAYOUT_MPEG_5_0_C, QT_CHANNEL_LAYOUT_MPEG_5_1_C }
+};
+
+static lsmash_audio_summary_t *ac3_create_summary( mp4sys_ac3_info_t *info )
+{
+    lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_create_summary( MP4SYS_STREAM_TYPE_AudioStream );
+    if( !summary )
+        return NULL;
+    uint8_t *dac3 = ac3_create_dac3( info );
+    if( !dac3 )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        return NULL;
+    }
+    summary->exdata                 = dac3;
+    summary->exdata_length          = AC3_DAC3_BOX_LENGTH;
+    summary->sample_type            = ISOM_CODEC_TYPE_AC_3_AUDIO;
+    summary->object_type_indication = MP4SYS_OBJECT_TYPE_NONE;
+    summary->max_au_length          = AC3_MAX_AU_LENGTH;
+    summary->aot                    = MP4A_AUDIO_OBJECT_TYPE_NULL; /* no effect */
+    summary->frequency              = ac3_sample_rate_table[ info->fscod ];
+    summary->channels               = ac3_channel_count_table[ info->acmod ] + info->lfeon;
+    summary->bit_depth              = 16;       /* no effect */
+    summary->samples_in_frame       = 1536;     /* 256 (samples per audio block) * 6 (audio blocks) */
+    summary->sbr_mode               = MP4A_AAC_SBR_NOT_SPECIFIED; /* no effect */
+    summary->layout_tag             = ac3_channel_layout_table[ info->acmod ][ info->lfeon ];
+    return summary;
+}
+
+static int mp4sys_ac3_get_accessunit( mp4sys_importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
+{
+    debug_if( !importer || !importer->info || !buffered_sample->data || !buffered_sample->length )
+        return -1;
+    if( !importer->info || track_number != 1 )
+        return -1;
+    lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_get_entry_data( importer->summaries, track_number );
+    if( !summary )
+        return -1;
+    mp4sys_ac3_info_t *info = (mp4sys_ac3_info_t *)importer->info;
+    mp4sys_importer_status current_status = info->status;
+    if( current_status == MP4SYS_IMPORTER_EOF )
+    {
+        buffered_sample->length = 0;
+        return 0;
+    }
+    if( current_status == MP4SYS_IMPORTER_CHANGE )
+    {
+        free( summary->exdata );
+        summary->exdata     = info->next_dac3;
+        summary->frequency  = ac3_sample_rate_table[ info->fscod ];
+        summary->channels   = ac3_channel_count_table[ info->acmod ] + info->lfeon;
+        summary->layout_tag = ac3_channel_layout_table[ info->acmod ][ info->lfeon ];
+    }
+    uint32_t frame_size = ac3_frame_size_table[ info->frmsizecod >> 1 ][ info->fscod ];
+    if( info->fscod == 0x1 && info->frmsizecod & 0x1 )
+        ++frame_size;
+    if( frame_size > AC3_MIN_AU_LENGTH )
+    {
+        uint32_t read_size = frame_size - AC3_MIN_AU_LENGTH;
+        if( fread( info->buffer + AC3_MIN_AU_LENGTH, 1, read_size, importer->stream ) != read_size )
+            return -1;
+    }
+    memcpy( buffered_sample->data, info->buffer, frame_size );
+    buffered_sample->length = frame_size;
+    buffered_sample->dts = info->au_number++ * summary->samples_in_frame;
+    buffered_sample->cts = buffered_sample->dts;
+    buffered_sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+    if( fread( info->buffer, 1, AC3_MIN_AU_LENGTH, importer->stream ) != AC3_MIN_AU_LENGTH )
+        info->status = MP4SYS_IMPORTER_EOF;
+    else
+    {
+        /* Parse the next syncframe header. */
+        IF_AC3_SYNCWORD( info->buffer )
+            return -1;
+        ac3_parse_syncframe_header( info, info->buffer );
+        uint8_t *dac3 = ac3_create_dac3( info );
+        if( memcmp( dac3, summary->exdata, AC3_DAC3_BOX_LENGTH ) )
+        {
+            info->status = MP4SYS_IMPORTER_CHANGE;
+            info->next_dac3 = dac3;
+        }
+        else
+        {
+            info->status = MP4SYS_IMPORTER_OK;
+            free( dac3 );
+        }
+    }
+    return current_status;
+}
+
+static int mp4sys_ac3_probe( mp4sys_importer_t* importer )
+{
+    uint8_t buf[AC3_MIN_AU_LENGTH];
+    if( fread( buf, 1, AC3_MIN_AU_LENGTH, importer->stream ) != AC3_MIN_AU_LENGTH )
+        return -1;
+    IF_AC3_SYNCWORD( buf )
+        return -1;
+    mp4sys_ac3_info_t *info = mp4sys_create_ac3_info();
+    if( !info )
+        return -1;
+    ac3_parse_syncframe_header( info, buf );
+    lsmash_audio_summary_t *summary = ac3_create_summary( info );
+    if( !summary )
+    {
+        mp4sys_remove_ac3_info( info );
+        return -1;
+    }
+    info->status = MP4SYS_IMPORTER_OK;
+    info->au_number = 0;
+    memcpy( info->buffer, buf, AC3_MIN_AU_LENGTH );
+    importer->info = info;
+    if( lsmash_add_entry( importer->summaries, summary ) )
+    {
+        mp4sys_remove_ac3_info( importer->info );
+        importer->info = NULL;
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        return -1;
+    }
+    return 0;
+}
+
+const static mp4sys_importer_functions mp4sys_ac3_importer = {
+    "ac3",
+    1,
+    mp4sys_ac3_probe,
+    mp4sys_ac3_get_accessunit,
+    mp4sys_ac3_cleanup
+};
 
 /***************************************************************************
     H.264 importer
@@ -2925,18 +3165,18 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
     /* Go back to EBSP of the first NALU. */
     lsmash_fseek( importer->stream, first_ebsp_head_pos, SEEK_SET );
     read_size = fread( info->stream_buffer, 1, info->stream_buffer_size, importer->stream );
-    info->status                            = MP4SYS_IMPORTER_OK;
-    info->nalu_header                       = first_nalu_header;
-    info->prev_nalu_type                    = 0;
-    info->no_more_read                      = 0;
-    info->first_summary                     = 0;
-    info->summary->max_au_length            = info->max_au_length;
-    info->summary                           = NULL;
-    info->stream_buffer_pos                 = info->stream_buffer;
-    info->stream_read_size                  = read_size;
-    info->ebsp_head_pos                     = first_ebsp_head_pos;
-    uint8_t *temp_au                        = info->picture.au;
-    uint8_t *temp_incomplete_au             = info->picture.incomplete_au;
+    info->status                 = MP4SYS_IMPORTER_OK;
+    info->nalu_header            = first_nalu_header;
+    info->prev_nalu_type         = 0;
+    info->no_more_read           = 0;
+    info->first_summary          = 0;
+    info->summary->max_au_length = info->max_au_length;
+    info->summary                = NULL;
+    info->stream_buffer_pos      = info->stream_buffer;
+    info->stream_read_size       = read_size;
+    info->ebsp_head_pos          = first_ebsp_head_pos;
+    uint8_t *temp_au             = info->picture.au;
+    uint8_t *temp_incomplete_au  = info->picture.incomplete_au;
     memset( &info->picture, 0, sizeof(h264_picture_info_t) );
     info->picture.au            = temp_au;
     info->picture.incomplete_au = temp_incomplete_au;
@@ -2972,6 +3212,7 @@ const static mp4sys_importer_functions* mp4sys_importer_tbl[] = {
     &mp4sys_adts_importer,
     &mp4sys_mp3_importer,
     &mp4sys_amr_importer,
+    &mp4sys_ac3_importer,
     &mp4sys_h264_importer,
     NULL,
 };

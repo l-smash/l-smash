@@ -528,10 +528,11 @@ int main( int argc, char *argv[] )
                     if( opt->isom )
                         add_brand( opt, ISOM_BRAND_TYPE_AVC1 );
                     break;
-                case ISOM_CODEC_TYPE_MP4A_AUDIO:
+                case ISOM_CODEC_TYPE_MP4A_AUDIO :
+                case ISOM_CODEC_TYPE_AC_3_AUDIO :
                     break;
-                case ISOM_CODEC_TYPE_SAWB_AUDIO:
-                case ISOM_CODEC_TYPE_SAMR_AUDIO:
+                case ISOM_CODEC_TYPE_SAWB_AUDIO :
+                case ISOM_CODEC_TYPE_SAMR_AUDIO :
                     if( !opt->brand_3gx )
 #if 0
                     {
