@@ -530,6 +530,7 @@ int main( int argc, char *argv[] )
                     break;
                 case ISOM_CODEC_TYPE_MP4A_AUDIO :
                 case ISOM_CODEC_TYPE_AC_3_AUDIO :
+                case ISOM_CODEC_TYPE_EC_3_AUDIO :
                     break;
                 case ISOM_CODEC_TYPE_SAWB_AUDIO :
                 case ISOM_CODEC_TYPE_SAMR_AUDIO :
