@@ -1480,6 +1480,7 @@ static void eac3_update_sample_rate( lsmash_audio_summary_t *summary, mp4sys_eac
 
 static void eac3_update_channel_count( lsmash_audio_summary_t *summary, mp4sys_eac3_info_t *info )
 {
+    summary->channels = 0;
     for( int i = 0; i < info->number_of_independent_substreams; i++ )
     {
         int channel_count = 0;
