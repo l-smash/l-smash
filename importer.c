@@ -1296,30 +1296,28 @@ static int eac3_parse_syncframe_header( mp4sys_importer_t *importer )
     lsmash_bits_get( bits, 16 );    /* syncword */
     info->strmtyp     = lsmash_bits_get( bits, 2 );
     info->substreamid = lsmash_bits_get( bits, 3 );
-    eac3_substream_info_t *independent_info;
+    eac3_substream_info_t *substream_info;
     if( info->strmtyp != 0x1 )
     {
         info->current_independent_substream_id = info->substreamid;
-        independent_info = &info->independent_info[ info->current_independent_substream_id ];
+        substream_info = &info->independent_info[ info->current_independent_substream_id ];
         if( info->substreamid == 0x0 )
-            info->independent_info_0 = *independent_info;   /* backup */
+            info->independent_info_0 = *substream_info;     /* backup */
+        substream_info->chan_loc = 0;
     }
     else
-    {
-        info->independent_info[ info->current_independent_substream_id ].chan_loc = 0;
-        independent_info = &info->dependent_info;
-    }
+        substream_info = &info->dependent_info;
     uint16_t frmsiz = lsmash_bits_get( bits, 11 );
-    independent_info->fscod = lsmash_bits_get( bits, 2 );
-    if( independent_info->fscod == 0x3 )
+    substream_info->fscod = lsmash_bits_get( bits, 2 );
+    if( substream_info->fscod == 0x3 )
     {
-        independent_info->fscod2 = lsmash_bits_get( bits, 2 );
+        substream_info->fscod2 = lsmash_bits_get( bits, 2 );
         info->numblkscod = 0x3;
     }
     else
         info->numblkscod = lsmash_bits_get( bits, 2 );
-    independent_info->acmod = lsmash_bits_get( bits, 3 );
-    independent_info->lfeon = lsmash_bits_get( bits, 1 );
+    substream_info->acmod = lsmash_bits_get( bits, 3 );
+    substream_info->lfeon = lsmash_bits_get( bits, 1 );
     lsmash_bits_empty( bits );
     /* Read the end of the current syncframe. */
     info->frame_size = 2 * (frmsiz + 1);
@@ -1329,11 +1327,11 @@ static int eac3_parse_syncframe_header( mp4sys_importer_t *importer )
     if( lsmash_bits_import_data( bits, info->buffer + EAC3_FIRST_FIVE_BYTES, read_size ) )
         return -1;
     /* Continue to parse header. */
-    independent_info->bsid = lsmash_bits_get( bits, 5 );
+    substream_info->bsid = lsmash_bits_get( bits, 5 );
     lsmash_bits_get( bits, 5 );         /* dialnorm */
     if( lsmash_bits_get( bits, 1 ) )    /* compre */
         lsmash_bits_get( bits, 8 );     /* compr */
-    if( independent_info->acmod == 0x0 )
+    if( substream_info->acmod == 0x0 )
     {
         lsmash_bits_get( bits, 5 );         /* dialnorm2 */
         if( lsmash_bits_get( bits, 1 ) )    /* compre2 */
@@ -1348,17 +1346,17 @@ static int eac3_parse_syncframe_header( mp4sys_importer_t *importer )
     }
     if( lsmash_bits_get( bits, 1 ) )    /* mixmdate */
     {
-        if( independent_info->acmod > 0x2 )
+        if( substream_info->acmod > 0x2 )
             lsmash_bits_get( bits, 2 );     /* dmixmod */
-        if( ((independent_info->acmod & 0x1) && (independent_info->acmod > 0x2)) || (independent_info->acmod & 0x4) )
+        if( ((substream_info->acmod & 0x1) && (substream_info->acmod > 0x2)) || (substream_info->acmod & 0x4) )
             lsmash_bits_get( bits, 6 );     /* ltrt[c/sur]mixlev + loro[c/sur]mixlev */
-        if( independent_info->lfeon && lsmash_bits_get( bits, 1 ) )     /* lfemixlevcode */
+        if( substream_info->lfeon && lsmash_bits_get( bits, 1 ) )   /* lfemixlevcode */
             lsmash_bits_get( bits, 5 );     /* lfemixlevcod */
         if( info->strmtyp == 0x0 )
         {
             if( lsmash_bits_get( bits, 1 ) )    /* pgmscle*/
                 lsmash_bits_get( bits, 6 );         /* pgmscl */
-            if( independent_info->acmod == 0x0 && lsmash_bits_get( bits, 1 ) )      /* pgmscle2 */
+            if( substream_info->acmod == 0x0 && lsmash_bits_get( bits, 1 ) )    /* pgmscle2 */
                 lsmash_bits_get( bits, 6 );         /* pgmscl2 */
             if( lsmash_bits_get( bits, 1 ) )    /* extpgmscle */
                 lsmash_bits_get( bits, 6 );         /* extpgmscl */
@@ -1372,11 +1370,11 @@ static int eac3_parse_syncframe_header( mp4sys_importer_t *importer )
                 uint8_t mixdeflen = lsmash_bits_get( bits, 5 );
                 lsmash_bits_get( bits, 8 * (mixdeflen + 2) );     /* mixdata */
             }
-            if( independent_info->acmod < 0x2 )
+            if( substream_info->acmod < 0x2 )
             {
                 if( lsmash_bits_get( bits, 1 ) )    /* paninfoe */
                     lsmash_bits_get( bits, 14 );        /* paninfo */
-                if( independent_info->acmod == 0x0 && lsmash_bits_get( bits, 1 ) )      /* paninfo2e */
+                if( substream_info->acmod == 0x0 && lsmash_bits_get( bits, 1 ) )    /* paninfo2e */
                     lsmash_bits_get( bits, 14 );        /* paninfo2 */
             }
             if( lsmash_bits_get( bits, 1 ) )        /* frmmixcfginfoe */
@@ -1395,22 +1393,22 @@ static int eac3_parse_syncframe_header( mp4sys_importer_t *importer )
     }
     if( lsmash_bits_get( bits, 1 ) )    /* infomdate */
     {
-        independent_info->bsmod = lsmash_bits_get( bits, 3 );
+        substream_info->bsmod = lsmash_bits_get( bits, 3 );
         lsmash_bits_get( bits, 1 );         /* copyrightb */
         lsmash_bits_get( bits, 1 );         /* origbs */
-        if( independent_info->acmod == 0x2 )
+        if( substream_info->acmod == 0x2 )
             lsmash_bits_get( bits, 4 );         /* dsurmod + dheadphonmod */
-        else if( independent_info->acmod >= 0x6 )
+        else if( substream_info->acmod >= 0x6 )
             lsmash_bits_get( bits, 2 );         /* dsurexmod */
         if( lsmash_bits_get( bits, 1 ) )    /* audprodie */
             lsmash_bits_get( bits, 8 );         /* mixlevel + roomtyp + adconvtyp */
-        if( independent_info->acmod == 0x0 && lsmash_bits_get( bits, 1 ) )  /* audprodie2 */
+        if( substream_info->acmod == 0x0 && lsmash_bits_get( bits, 1 ) )    /* audprodie2 */
             lsmash_bits_get( bits, 8 );         /* mixlevel2 + roomtyp2 + adconvtyp2 */
-        if( independent_info->fscod < 0x3 )
+        if( substream_info->fscod < 0x3 )
             lsmash_bits_get( bits, 1 );     /* sourcefscod */
     }
     else
-        independent_info->bsmod = 0;
+        substream_info->bsmod = 0;
     if( info->strmtyp == 0x0 && info->numblkscod != 0x3 )
         lsmash_bits_get( bits, 1 );     /* convsync */
     if( info->strmtyp == 0x2 )
@@ -1471,6 +1469,7 @@ static uint8_t *eac3_create_dec3( mp4sys_eac3_info_t *info, uint32_t *dec3_lengt
 
 static void eac3_update_sample_rate( lsmash_audio_summary_t *summary, mp4sys_eac3_info_t *info )
 {
+    /* Additional independent substreams 1 to 7 must be encoded at the same sample rate as independent substream 0. */
     summary->frequency = ac3_sample_rate_table[ info->independent_info_0.fscod ];
     if( summary->frequency == 0 )
     {
