@@ -2220,6 +2220,7 @@ static int h264_parse_sps_nalu( lsmash_bits_t *bits, h264_sps_t *sps, h264_nalu_
             uint8_t aspect_ratio_idc = lsmash_bits_get( bits, 8 );
             if( aspect_ratio_idc == 255 )
             {
+                /* Extended_SAR */
                 sps->vui.sar_width  = lsmash_bits_get( bits, 16 );
                 sps->vui.sar_height = lsmash_bits_get( bits, 16 );
             }
@@ -2240,6 +2241,12 @@ static int h264_parse_sps_nalu( lsmash_bits_t *bits, h264_sps_t *sps, h264_nalu_
                 {
                     sps->vui.sar_width  = pre_defined_sar[ aspect_ratio_idc ].sar_width;
                     sps->vui.sar_height = pre_defined_sar[ aspect_ratio_idc ].sar_height;
+                }
+                else
+                {
+                    /* Behavior when unknown aspect_ratio_idc is detected is not specified in the specification. */
+                    sps->vui.sar_width  = 0;
+                    sps->vui.sar_height = 0;
                 }
             }
         }
