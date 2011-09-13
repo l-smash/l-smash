@@ -243,6 +243,7 @@ static int decide_brands( option_t *opt )
         add_brand( opt, ISOM_BRAND_TYPE_MP42 );
         add_brand( opt, ISOM_BRAND_TYPE_MP41 );
         add_brand( opt, ISOM_BRAND_TYPE_ISOM );
+        opt->isom = 1;
         eprintf( "MP4 muxing mode\n" );
         return setup_isom_version( opt );
     }
