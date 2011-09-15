@@ -444,7 +444,7 @@ static int parse_track_options( input_t *input )
         {
             if( strchr( track_option, '=' ) != strrchr( track_option, '=' ) )
                 return ERROR_MSG( "multiple equal signs inside one track option in %s\n", track_option );
-            if( strstr( track_option, "alternate_group=" ) )
+            if( strstr( track_option, "alternate-group=" ) )
             {
                 char *track_parameter = strchr( track_option, '=' ) + 1;
                 track_opt->alternate_group = atoi( track_parameter );

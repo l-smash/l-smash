@@ -259,7 +259,7 @@ static int parse_track_option( movie_io_t *io )
             {
                 if( strchr( track_option, '=' ) != strrchr( track_option, '=' ) )
                     return ERROR_MSG( "Error: multiple equal signs inside one track option in %s\n", track_option );
-                if( strstr( track_option, "alternate_group=" ) )
+                if( strstr( track_option, "alternate-group=" ) )
                 {
                     char *track_parameter = strchr( track_option, '=' ) + 1;
                     track[i][track_number - 1].alternate_group = atoi( track_parameter );
@@ -347,7 +347,7 @@ static void display_help( void )
     eprintf( "For example:\n" );
     eprintf( "    remuxer -i input1 -i input2?2:alternate_group=1?3:language=jpn,alternate_group=1 -o output\n" );
     eprintf( "Available track options are:\n" );
-    eprintf( "    alternate_group\n" );
+    eprintf( "    alternate-group\n" );
     eprintf( "    language\n" );
 }
 
