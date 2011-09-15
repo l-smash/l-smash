@@ -345,7 +345,7 @@ static void display_help( void )
     eprintf( "How to use track options:\n" );
     eprintf( "    -i input?[track_number1]:[track_option1],[track_option2]?[track_number2]:...\n" );
     eprintf( "For example:\n" );
-    eprintf( "    remuxer -i input1 -i input2?2:alternate_group=1?3:language=jpn,alternate_group=1 -o output\n" );
+    eprintf( "    remuxer -i input1 -i input2?2:alternate-group=1?3:language=jpn,alternate-group=1 -o output\n" );
     eprintf( "Available track options are:\n" );
     eprintf( "    alternate-group\n" );
     eprintf( "    language\n" );
