@@ -488,6 +488,35 @@ static int moov_to_front_callback( void *param, uint64_t written_movie_size, uin
     return 0;
 }
 
+static void display_codec_name( uint32_t codec_type, uint32_t track_number )
+{
+#define DISPLAY_CODEC_NAME( CODEC_NAME ) eprintf( "Track %"PRIu32": "#CODEC_NAME"\n", track_number )
+    switch( codec_type )
+    {
+        case ISOM_CODEC_TYPE_AVC1_VIDEO :
+            DISPLAY_CODEC_NAME( H.264 Advanced Video Coding );
+            break;
+        case ISOM_CODEC_TYPE_MP4A_AUDIO :
+            DISPLAY_CODEC_NAME( MPEG-4 Audio );
+            break;
+        case ISOM_CODEC_TYPE_AC_3_AUDIO :
+            DISPLAY_CODEC_NAME( AC-3 );
+            break;
+        case ISOM_CODEC_TYPE_EC_3_AUDIO :
+            DISPLAY_CODEC_NAME( Enhanced AC-3 );
+            break;
+        case ISOM_CODEC_TYPE_SAWB_AUDIO :
+            DISPLAY_CODEC_NAME( Wideband AMR voice );
+            break;
+        case ISOM_CODEC_TYPE_SAMR_AUDIO :
+            DISPLAY_CODEC_NAME( Narrowband AMR voice );
+            break;
+        default :
+            break;
+    }
+#undef DISPLAY_CODEC_NAME
+}
+
 int main( int argc, char *argv[] )
 {
     if( argc < 3 )
@@ -537,7 +566,6 @@ int main( int argc, char *argv[] )
                 case ISOM_CODEC_TYPE_AVC1_VIDEO :
                     if( opt->isom )
                         add_brand( opt, ISOM_BRAND_TYPE_AVC1 );
-                    break;
                 case ISOM_CODEC_TYPE_MP4A_AUDIO :
                 case ISOM_CODEC_TYPE_AC_3_AUDIO :
                 case ISOM_CODEC_TYPE_EC_3_AUDIO :
@@ -561,7 +589,11 @@ int main( int argc, char *argv[] )
                     in_track->active = 0;
                     break;
             }
-            input->num_of_active_tracks += in_track->active;
+            if( in_track->active )
+            {
+                ++ input->num_of_active_tracks;
+                display_codec_name( codec_type, output->num_of_tracks + input->num_of_active_tracks );
+            }
         }
         output->num_of_tracks += input->num_of_active_tracks;
     }
