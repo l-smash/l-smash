@@ -47,6 +47,7 @@ typedef struct
     int      brand_3gx;
     int      optimize_pd;
     int      timeline_shift;
+    uint32_t interleave;
     uint32_t num_of_brands;
     uint32_t brands[MAX_NUM_OF_BRANDS];
     uint32_t major_brand;
@@ -177,6 +178,7 @@ static void display_help( void )
              "Global options:\n"
              "    --help                    Display help\n"
              "    --optimize-pd             Optimize for progressive download\n"
+             "    --interleave <integer>    Specify time interval for media interleaving in milliseconds\n"
              "    --file-format <string>    Specify output file format\n"
              "                              Multiple file format can be specified by comma separators\n"
              "                              The first is applied as the best used one\n"
@@ -358,6 +360,13 @@ static int parse_global_options( int argc, char **argv, muxer_t *muxer )
         }
         else if( !strcasecmp( argv[i], "--optimize-pd" ) )
             opt->optimize_pd = 1;
+        else if( !strcasecmp( argv[i], "--interleave" ) )
+        {
+            CHECK_NEXT_ARG;
+            if( opt->interleave )
+                return ERROR_MSG( "you specified --interleave twice.\n" );
+            opt->interleave = atoi( argv[i] );
+        }
         else if( !strcasecmp( argv[i], "--file-format" ) )
         {
             CHECK_NEXT_ARG;
@@ -574,6 +583,8 @@ int main( int argc, char *argv[] )
     movie_param.brands           = opt->brands;
     movie_param.number_of_brands = opt->num_of_brands;
     movie_param.minor_version    = opt->minor_version;
+    if( opt->interleave )
+        movie_param.max_chunk_duration = opt->interleave * 1e-3;
     if( lsmash_set_movie_parameters( output->root, &movie_param ) )
         return MUXER_ERR( "failed to set movie parameters.\n" );
     output->current_track_number = 1;
