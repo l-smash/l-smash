@@ -798,6 +798,45 @@ static void *isom_sample_description_alloc( uint32_t sample_type )
         case ISOM_CODEC_TYPE_S263_VIDEO :
         case ISOM_CODEC_TYPE_SVC1_VIDEO :
         case ISOM_CODEC_TYPE_VC_1_VIDEO :
+        case QT_CODEC_TYPE_CFHD_VIDEO :
+        case QT_CODEC_TYPE_DV10_VIDEO :
+        case QT_CODEC_TYPE_DVOO_VIDEO :
+        case QT_CODEC_TYPE_DVOR_VIDEO :
+        case QT_CODEC_TYPE_DVTV_VIDEO :
+        case QT_CODEC_TYPE_DVVT_VIDEO :
+        case QT_CODEC_TYPE_HD10_VIDEO :
+        case QT_CODEC_TYPE_M105_VIDEO :
+        case QT_CODEC_TYPE_PNTG_VIDEO :
+        case QT_CODEC_TYPE_SVQ1_VIDEO :
+        case QT_CODEC_TYPE_SVQ3_VIDEO :
+        case QT_CODEC_TYPE_SHR0_VIDEO :
+        case QT_CODEC_TYPE_SHR1_VIDEO :
+        case QT_CODEC_TYPE_SHR2_VIDEO :
+        case QT_CODEC_TYPE_SHR3_VIDEO :
+        case QT_CODEC_TYPE_SHR4_VIDEO :
+        case QT_CODEC_TYPE_WRLE_VIDEO :
+        case QT_CODEC_TYPE_APCH_VIDEO :
+        case QT_CODEC_TYPE_APCN_VIDEO :
+        case QT_CODEC_TYPE_APCS_VIDEO :
+        case QT_CODEC_TYPE_APCO_VIDEO :
+        case QT_CODEC_TYPE_AP4H_VIDEO :
+        case QT_CODEC_TYPE_CIVD_VIDEO :
+        //case QT_CODEC_TYPE_DRAC_VIDEO :
+        case QT_CODEC_TYPE_DVH5_VIDEO :
+        case QT_CODEC_TYPE_DVH6_VIDEO :
+        case QT_CODEC_TYPE_DVHP_VIDEO :
+        case QT_CODEC_TYPE_FLIC_VIDEO :
+        case QT_CODEC_TYPE_GIF_VIDEO :
+        case QT_CODEC_TYPE_H261_VIDEO :
+        case QT_CODEC_TYPE_H263_VIDEO :
+        case QT_CODEC_TYPE_JPEG_VIDEO :
+        case QT_CODEC_TYPE_MJPA_VIDEO :
+        case QT_CODEC_TYPE_MJPB_VIDEO :
+        case QT_CODEC_TYPE_PNG_VIDEO :
+        case QT_CODEC_TYPE_RLE_VIDEO :
+        case QT_CODEC_TYPE_RPZA_VIDEO :
+        case QT_CODEC_TYPE_TGA_VIDEO :
+        case QT_CODEC_TYPE_TIFF_VIDEO :
             return malloc( sizeof(isom_visual_entry_t) );
         case ISOM_CODEC_TYPE_AC_3_AUDIO :
         case ISOM_CODEC_TYPE_ALAC_AUDIO :
@@ -877,6 +916,45 @@ static void isom_sample_description_init( void *sample, uint32_t sample_type )
         case ISOM_CODEC_TYPE_S263_VIDEO :
         case ISOM_CODEC_TYPE_SVC1_VIDEO :
         case ISOM_CODEC_TYPE_VC_1_VIDEO :
+        case QT_CODEC_TYPE_CFHD_VIDEO :
+        case QT_CODEC_TYPE_DV10_VIDEO :
+        case QT_CODEC_TYPE_DVOO_VIDEO :
+        case QT_CODEC_TYPE_DVOR_VIDEO :
+        case QT_CODEC_TYPE_DVTV_VIDEO :
+        case QT_CODEC_TYPE_DVVT_VIDEO :
+        case QT_CODEC_TYPE_HD10_VIDEO :
+        case QT_CODEC_TYPE_M105_VIDEO :
+        case QT_CODEC_TYPE_PNTG_VIDEO :
+        case QT_CODEC_TYPE_SVQ1_VIDEO :
+        case QT_CODEC_TYPE_SVQ3_VIDEO :
+        case QT_CODEC_TYPE_SHR0_VIDEO :
+        case QT_CODEC_TYPE_SHR1_VIDEO :
+        case QT_CODEC_TYPE_SHR2_VIDEO :
+        case QT_CODEC_TYPE_SHR3_VIDEO :
+        case QT_CODEC_TYPE_SHR4_VIDEO :
+        case QT_CODEC_TYPE_WRLE_VIDEO :
+        case QT_CODEC_TYPE_APCH_VIDEO :
+        case QT_CODEC_TYPE_APCN_VIDEO :
+        case QT_CODEC_TYPE_APCS_VIDEO :
+        case QT_CODEC_TYPE_APCO_VIDEO :
+        case QT_CODEC_TYPE_AP4H_VIDEO :
+        case QT_CODEC_TYPE_CIVD_VIDEO :
+        //case QT_CODEC_TYPE_DRAC_VIDEO :
+        case QT_CODEC_TYPE_DVH5_VIDEO :
+        case QT_CODEC_TYPE_DVH6_VIDEO :
+        case QT_CODEC_TYPE_DVHP_VIDEO :
+        case QT_CODEC_TYPE_FLIC_VIDEO :
+        case QT_CODEC_TYPE_GIF_VIDEO :
+        case QT_CODEC_TYPE_H261_VIDEO :
+        case QT_CODEC_TYPE_H263_VIDEO :
+        case QT_CODEC_TYPE_JPEG_VIDEO :
+        case QT_CODEC_TYPE_MJPA_VIDEO :
+        case QT_CODEC_TYPE_MJPB_VIDEO :
+        case QT_CODEC_TYPE_PNG_VIDEO :
+        case QT_CODEC_TYPE_RLE_VIDEO :
+        case QT_CODEC_TYPE_RPZA_VIDEO :
+        case QT_CODEC_TYPE_TGA_VIDEO :
+        case QT_CODEC_TYPE_TIFF_VIDEO :
             memset( sample, 0, sizeof(isom_visual_entry_t) );
             break;
         case ISOM_CODEC_TYPE_AC_3_AUDIO :
@@ -2605,6 +2683,45 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
             case ISOM_CODEC_TYPE_S263_VIDEO :
             case ISOM_CODEC_TYPE_SVC1_VIDEO :
             case ISOM_CODEC_TYPE_VC_1_VIDEO :
+            case QT_CODEC_TYPE_CFHD_VIDEO :
+            case QT_CODEC_TYPE_DV10_VIDEO :
+            case QT_CODEC_TYPE_DVOO_VIDEO :
+            case QT_CODEC_TYPE_DVOR_VIDEO :
+            case QT_CODEC_TYPE_DVTV_VIDEO :
+            case QT_CODEC_TYPE_DVVT_VIDEO :
+            case QT_CODEC_TYPE_HD10_VIDEO :
+            case QT_CODEC_TYPE_M105_VIDEO :
+            case QT_CODEC_TYPE_PNTG_VIDEO :
+            case QT_CODEC_TYPE_SVQ1_VIDEO :
+            case QT_CODEC_TYPE_SVQ3_VIDEO :
+            case QT_CODEC_TYPE_SHR0_VIDEO :
+            case QT_CODEC_TYPE_SHR1_VIDEO :
+            case QT_CODEC_TYPE_SHR2_VIDEO :
+            case QT_CODEC_TYPE_SHR3_VIDEO :
+            case QT_CODEC_TYPE_SHR4_VIDEO :
+            case QT_CODEC_TYPE_WRLE_VIDEO :
+            case QT_CODEC_TYPE_APCH_VIDEO :
+            case QT_CODEC_TYPE_APCN_VIDEO :
+            case QT_CODEC_TYPE_APCS_VIDEO :
+            case QT_CODEC_TYPE_APCO_VIDEO :
+            case QT_CODEC_TYPE_AP4H_VIDEO :
+            case QT_CODEC_TYPE_CIVD_VIDEO :
+            //case QT_CODEC_TYPE_DRAC_VIDEO :
+            case QT_CODEC_TYPE_DVH5_VIDEO :
+            case QT_CODEC_TYPE_DVH6_VIDEO :
+            case QT_CODEC_TYPE_DVHP_VIDEO :
+            case QT_CODEC_TYPE_FLIC_VIDEO :
+            case QT_CODEC_TYPE_GIF_VIDEO :
+            case QT_CODEC_TYPE_H261_VIDEO :
+            case QT_CODEC_TYPE_H263_VIDEO :
+            case QT_CODEC_TYPE_JPEG_VIDEO :
+            case QT_CODEC_TYPE_MJPA_VIDEO :
+            case QT_CODEC_TYPE_MJPB_VIDEO :
+            case QT_CODEC_TYPE_PNG_VIDEO :
+            case QT_CODEC_TYPE_RLE_VIDEO :
+            case QT_CODEC_TYPE_RPZA_VIDEO :
+            case QT_CODEC_TYPE_TGA_VIDEO :
+            case QT_CODEC_TYPE_TIFF_VIDEO :
                 return isom_read_visual_description( root, box, parent, level );
             case ISOM_CODEC_TYPE_AC_3_AUDIO :
             case ISOM_CODEC_TYPE_ALAC_AUDIO :
