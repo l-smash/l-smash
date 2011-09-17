@@ -213,6 +213,7 @@ static int isom_print_unknown( lsmash_root_t *root, isom_box_t *box, int level )
         return -1;
     int indent = level;
     isom_iprintf( indent++, "[%s]\n", isom_4cc2str( box->type ) );
+    isom_iprintf( indent, "position = %"PRIu64"\n", box->pos );
     isom_iprintf( indent, "size = %"PRIu64"\n", box->size );
     return 0;
 }

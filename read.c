@@ -145,6 +145,7 @@ static int isom_read_unknown_box( lsmash_root_t *root, isom_box_t *box, isom_box
     lsmash_bs_t *bs = root->bs;
     isom_skip_box_rest( bs, box );
     unknown->parent = parent;
+    unknown->pos = box->pos;
     unknown->size = box->size;
     unknown->type = box->type;
     unknown->manager |= LSMASH_UNKNOWN_BOX | LSMASH_ABSENT_IN_ROOT;
