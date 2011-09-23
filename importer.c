@@ -1542,6 +1542,10 @@ static int eac3_get_next_accessunit_internal( mp4sys_importer_t *importer )
             return -1;
         else if( ret == 1 )
         {
+            /* According to ETSI TS 102 366 V1.2.1 (2008-08),
+             * one access unit consists of 6 audio blocks and begins with independent substream 0.
+             * The specification doesn't mention the case where a enhanced AC-3 stream ends at non-mod6 audio blocks.
+             * At the end of the stream, therefore, we might make an access unit which has less than 6 audio blocks anyway. */
             info->status = MP4SYS_IMPORTER_EOF;
             complete_au = 1;
         }
@@ -1552,9 +1556,8 @@ static int eac3_get_next_accessunit_internal( mp4sys_importer_t *importer )
             {
                 if( info->number_of_audio_blocks == 6 )
                 {
+                    /* Encountered the first syncframe of the next access unit. */
                     info->number_of_audio_blocks = 0;
-                    info->syncframe_count_in_au = info->syncframe_count;
-                    info->syncframe_count = 0;
                     complete_au = 1;
                 }
                 else if( info->number_of_audio_blocks > 6 )
@@ -1575,6 +1578,8 @@ static int eac3_get_next_accessunit_internal( mp4sys_importer_t *importer )
             memcpy( info->au, info->incomplete_au, info->incomplete_au_length );
             info->au_length = info->incomplete_au_length;
             info->incomplete_au_length = 0;
+            info->syncframe_count_in_au = info->syncframe_count;
+            info->syncframe_count = 0;
             if( info->status == MP4SYS_IMPORTER_EOF )
                 break;
         }
@@ -1639,13 +1644,13 @@ static int mp4sys_eac3_get_accessunit( mp4sys_importer_t *importer, uint32_t tra
     uint32_t old_syncframe_count_in_au = info->syncframe_count_in_au;
     if( eac3_get_next_accessunit_internal( importer ) )
         return -1;
-    if( info->status != MP4SYS_IMPORTER_EOF )
+    if( info->syncframe_count_in_au )
     {
         uint32_t new_length;
         uint8_t *dec3 = eac3_create_dec3( info, &new_length );
         if( !dec3 )
             return -1;
-        if( (info->syncframe_count_in_au != old_syncframe_count_in_au)
+        if( (info->syncframe_count_in_au > old_syncframe_count_in_au)
          || (new_length != summary->exdata_length || memcmp( dec3, summary->exdata, summary->exdata_length )) )
         {
             info->status = MP4SYS_IMPORTER_CHANGE;
