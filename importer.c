@@ -1319,7 +1319,7 @@ static int eac3_parse_syncframe_header( mp4sys_importer_t *importer )
     substream_info->acmod = lsmash_bits_get( bits, 3 );
     substream_info->lfeon = lsmash_bits_get( bits, 1 );
     lsmash_bits_empty( bits );
-    /* Read the end of the current syncframe. */
+    /* Read up to the end of the current syncframe. */
     info->frame_size = 2 * (frmsiz + 1);
     uint32_t read_size = info->frame_size - EAC3_FIRST_FIVE_BYTES;
     if( fread( info->buffer + EAC3_FIRST_FIVE_BYTES, 1, read_size, importer->stream ) != read_size )
@@ -1341,7 +1341,7 @@ static int eac3_parse_syncframe_header( mp4sys_importer_t *importer )
     {
         uint16_t chanmap = lsmash_bits_get( bits, 16 );
         uint16_t chan_loc = chanmap >> 5;
-        chan_loc = (chanmap & 0xff ) | ((chanmap & 0x200) >> 1);
+        chan_loc = (chan_loc & 0xff ) | ((chan_loc & 0x200) >> 1);
         info->independent_info[ info->current_independent_substream_id ].chan_loc |= chan_loc;
     }
     if( lsmash_bits_get( bits, 1 ) )    /* mixmdate */
