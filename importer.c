@@ -1586,9 +1586,10 @@ static int eac3_get_next_accessunit_internal( mp4sys_importer_t *importer )
             uint8_t *temp = realloc( info->au_buffer, 2 * new_au_buffer_size );
             if( !temp )
                 return -1;
-            info->au_buffer = temp;
-            info->au = info->au_buffer;
-            info->incomplete_au = info->au_buffer + new_au_buffer_size;
+            info->au_buffer      = temp;
+            info->au_buffer_size = new_au_buffer_size;
+            info->au             = info->au_buffer;
+            info->incomplete_au  = info->au_buffer + new_au_buffer_size;
             memmove( info->incomplete_au, info->au_buffer + old_au_buffer_size, info->incomplete_au_length );
         }
         memcpy( info->incomplete_au + info->incomplete_au_length, info->buffer, info->frame_size );
