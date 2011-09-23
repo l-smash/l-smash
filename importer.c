@@ -1553,14 +1553,14 @@ static int eac3_get_next_accessunit_internal( mp4sys_importer_t *importer )
                 if( info->number_of_audio_blocks == 6 )
                 {
                     info->number_of_audio_blocks = 0;
+                    info->syncframe_count_in_au = info->syncframe_count;
+                    info->syncframe_count = 0;
                     complete_au = 1;
                 }
                 else if( info->number_of_audio_blocks > 6 )
                     return -1;
                 info->number_of_independent_substreams = 0;
                 info->number_of_audio_blocks += audio_block_table[ info->numblkscod ];
-                info->syncframe_count_in_au = info->syncframe_count;
-                info->syncframe_count = 0;
             }
             else if( info->syncframe_count == 0 )
                 /* The first syncframe in an AU must be independent and assigned substream ID 0. */
@@ -1637,7 +1637,6 @@ static int mp4sys_eac3_get_accessunit( mp4sys_importer_t *importer, uint32_t tra
         return 0;
     }
     uint32_t old_syncframe_count_in_au = info->syncframe_count_in_au;
-    info->syncframe_count_in_au = info->syncframe_count;
     if( eac3_get_next_accessunit_internal( importer ) )
         return -1;
     if( info->status != MP4SYS_IMPORTER_EOF )
