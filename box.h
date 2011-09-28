@@ -515,16 +515,19 @@ typedef struct
                                  *       If this field is set to 0, the default color table should be used for the specified depth
                                  *       If the color table ID is set to 0, a color table is contained within the sample description itself.
                                  *       The color table immediately follows the color table ID field. */
-    /* common extensions */
-    isom_clap_t *clap;          /* Clean Aperture Box @ optional */
-    isom_pasp_t *pasp;          /* Pixel Aspect Ratio Box @ optional */
-    isom_colr_t *colr;          /* ISOM: null / QTFF: Color Parameter Box @ optional */
-    isom_stsl_t *stsl;          /* ISOM: Sample Scale Box @ optional / QTFF: null */
-    /* MP4 specific extension */
-    isom_esds_t *esds;          /* ES Descriptor Box */
     /* AVC specific extensions */
     isom_avcC_t *avcC;          /* AVCDecoderConfigurationRecord */
     isom_btrt_t *btrt;          /* MPEG-4 Bit Rate Box @ optional */
+    /* MP4 specific extension */
+    isom_esds_t *esds;          /* ES Descriptor Box */
+    /* QuickTime specific extension */
+    isom_colr_t *colr;          /* Color Parameter Box @ optional */
+    /* ISO Base Media extension */
+    isom_stsl_t *stsl;          /* Sample Scale Box @ optional */
+    /* common extensions
+     * For maximum compatibility, these boxes should follow, not precede, any boxes defined in or required by derived specifications. */
+    isom_clap_t *clap;          /* Clean Aperture Box @ optional */
+    isom_pasp_t *pasp;          /* Pixel Aspect Ratio Box @ optional */
 
         uint32_t exdata_length;
         void *exdata;

@@ -2743,13 +2743,13 @@ static void isom_remove_visual_extensions( isom_visual_entry_t *visual )
 {
     if( !visual )
         return;
-    isom_remove_clap( visual->clap );
-    isom_remove_pasp( visual->pasp );
-    isom_remove_colr( visual->colr );
-    isom_remove_stsl( visual->stsl );
-    isom_remove_esds( visual->esds );
     isom_remove_avcC( visual->avcC );
     isom_remove_btrt( visual->btrt );
+    isom_remove_esds( visual->esds );
+    isom_remove_colr( visual->colr );
+    isom_remove_stsl( visual->stsl );
+    isom_remove_clap( visual->clap );
+    isom_remove_pasp( visual->pasp );
 }
 
 static void isom_remove_font_record( isom_font_record_t *font_record )
@@ -3809,13 +3809,13 @@ static int isom_write_visual_extensions( lsmash_bs_t *bs, isom_visual_entry_t *v
 {
     if( !visual )
         return 0;
-    if( isom_write_clap( bs, visual->clap )
-     || isom_write_pasp( bs, visual->pasp )
+    if( isom_write_avcC( bs, visual->avcC )
+     || isom_write_btrt( bs, visual->btrt )
+     || isom_write_esds( bs, visual->esds )
      || isom_write_colr( bs, visual->colr )
      || isom_write_stsl( bs, visual->stsl )
-     || isom_write_esds( bs, visual->esds )
-     || isom_write_avcC( bs, visual->avcC )
-     || isom_write_btrt( bs, visual->btrt ) )
+     || isom_write_clap( bs, visual->clap )
+     || isom_write_pasp( bs, visual->pasp ) )
         return -1;
     return 0;
 }
@@ -6002,13 +6002,13 @@ static uint64_t isom_update_visual_entry_size( isom_visual_entry_t *visual )
     if( !visual )
         return 0;
     visual->size = ISOM_BASEBOX_COMMON_SIZE + 78
-        + isom_update_clap_size( visual->clap )
-        + isom_update_pasp_size( visual->pasp )
-        + isom_update_colr_size( visual->colr )
-        + isom_update_stsl_size( visual->stsl )
-        + isom_update_esds_size( visual->esds )
         + isom_update_avcC_size( visual->avcC )
         + isom_update_btrt_size( visual->btrt )
+        + isom_update_esds_size( visual->esds )
+        + isom_update_colr_size( visual->colr )
+        + isom_update_stsl_size( visual->stsl )
+        + isom_update_clap_size( visual->clap )
+        + isom_update_pasp_size( visual->pasp )
         + (uint64_t)visual->exdata_length;
     CHECK_LARGESIZE( visual->size );
     return visual->size;
