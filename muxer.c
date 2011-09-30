@@ -567,21 +567,16 @@ int main( int argc, char *argv[] )
                     if( opt->isom )
                         add_brand( opt, ISOM_BRAND_TYPE_AVC1 );
                 case ISOM_CODEC_TYPE_MP4A_AUDIO :
+                    break;
                 case ISOM_CODEC_TYPE_AC_3_AUDIO :
                 case ISOM_CODEC_TYPE_EC_3_AUDIO :
+                    if( !opt->isom && opt->qtff )
+                        return MUXER_ERR( "the input seems (Enhanced) AC-3, at present available only for ISO Base Media file format.\n" );
                     break;
                 case ISOM_CODEC_TYPE_SAWB_AUDIO :
                 case ISOM_CODEC_TYPE_SAMR_AUDIO :
                     if( !opt->brand_3gx )
-#if 0
-                    {
-                        eprintf( "Warning: the input seems AMR-NB/WB but it is available for 3GPP(2) file format.\n"
-                                 "Just skip this input stream.\n" );
-                        in_track->active = 0;
-                    }
-#else
-                        return MUXER_ERR( "the input seems AMR-NB/WB but it is available for 3GPP(2) file format.\n" );
-#endif
+                        return MUXER_ERR( "the input seems AMR-NB/WB, available for 3GPP(2) file format.\n" );
                     break;
                 default :
                     lsmash_cleanup_summary( in_track->summary );
