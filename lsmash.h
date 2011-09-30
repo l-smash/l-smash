@@ -163,6 +163,7 @@ typedef enum
     QT_CODEC_TYPE_QDM2_AUDIO    = LSMASH_4CC( 'Q', 'D', 'M', '2' ),   /* Qdesign music 2 */
     QT_CODEC_TYPE_QDMC_AUDIO    = LSMASH_4CC( 'Q', 'D', 'M', 'C' ),   /* Qdesign music 1 */
     QT_CODEC_TYPE_QCLP_AUDIO    = LSMASH_4CC( 'Q', 'c', 'l', 'p' ),   /* Qualcomm PureVoice */
+    QT_CODEC_TYPE_AC_3_AUDIO    = LSMASH_4CC( 'a', 'c', '-', '3' ),   /* Digital Audio Compression Standard (AC-3, Enhanced AC-3) */
     QT_CODEC_TYPE_AGSM_AUDIO    = LSMASH_4CC( 'a', 'g', 's', 'm' ),   /* GSM */
     QT_CODEC_TYPE_ALAC_AUDIO    = LSMASH_4CC( 'a', 'l', 'a', 'c' ),   /* Apple lossless audio codec */
     QT_CODEC_TYPE_ALAW_AUDIO    = LSMASH_4CC( 'a', 'l', 'a', 'w' ),   /* a-Law 2:1 */
@@ -670,6 +671,22 @@ typedef enum
     QT_CHANNEL_LAYOUT_AC3_3_0_1                = (152<<16) | 4,                     /* L C R LFE */
     QT_CHANNEL_LAYOUT_AC3_2_1_1                = (153<<16) | 4,                     /* L R Cs LFE */
     QT_CHANNEL_LAYOUT_AC3_3_1_1                = (154<<16) | 5,                     /* L C R Cs LFE */
+
+    QT_CHANNEL_LAYOUT_EAC_6_0_A                = (155<<16) | 6,                     /* L C R Ls Rs Cs */
+    QT_CHANNEL_LAYOUT_EAC_7_0_A                = (156<<16) | 7,                     /* L C R Ls Rs Rls Rrs */
+
+    QT_CHANNEL_LAYOUT_EAC3_6_1_A               = (157<<16) | 7,                     /* L C R Ls Rs LFE Cs */
+    QT_CHANNEL_LAYOUT_EAC3_6_1_B               = (158<<16) | 7,                     /* L C R Ls Rs LFE Ts */
+    QT_CHANNEL_LAYOUT_EAC3_6_1_C               = (159<<16) | 7,                     /* L C R Ls Rs LFE Vhc */
+    QT_CHANNEL_LAYOUT_EAC3_7_1_A               = (160<<16) | 8,                     /* L C R Ls Rs LFE Rls Rrs */
+    QT_CHANNEL_LAYOUT_EAC3_7_1_B               = (161<<16) | 8,                     /* L C R Ls Rs LFE Lc Rc */
+    QT_CHANNEL_LAYOUT_EAC3_7_1_C               = (162<<16) | 8,                     /* L C R Ls Rs LFE Lsd Rsd */
+    QT_CHANNEL_LAYOUT_EAC3_7_1_D               = (163<<16) | 8,                     /* L C R Ls Rs LFE Lw Rw */
+    QT_CHANNEL_LAYOUT_EAC3_7_1_E               = (164<<16) | 8,                     /* L C R Ls Rs LFE Vhl Vhr */
+
+    QT_CHANNEL_LAYOUT_EAC3_7_1_F               = (165<<16) | 8,                     /* L C R Ls Rs LFE Cs Ts */
+    QT_CHANNEL_LAYOUT_EAC3_7_1_G               = (166<<16) | 8,                     /* L C R Ls Rs LFE Cs Vhc */
+    QT_CHANNEL_LAYOUT_EAC3_7_1_H               = (167<<16) | 8,                     /* L C R Ls Rs LFE Ts Vhc */
 
     QT_CHANNEL_LAYOUT_DISCRETE_IN_ORDER        = 147<<16,                           /* needs to be ORed with the actual number of channels */  
     QT_CHANNEL_LAYOUT_UNKNOWN                  = 0xffff0000,                        /* needs to be ORed with the actual number of channels */

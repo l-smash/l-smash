@@ -1478,17 +1478,82 @@ static void eac3_update_sample_rate( lsmash_audio_summary_t *summary, mp4sys_eac
     }
 }
 
-static void eac3_update_channel_count( lsmash_audio_summary_t *summary, mp4sys_eac3_info_t *info )
+static void eac3_update_channel_layout( lsmash_audio_summary_t *summary, eac3_substream_info_t *independent_info )
+{
+    if( independent_info->chan_loc == 0 )
+    {
+        summary->layout_tag = ac3_channel_layout_table[ independent_info->acmod ][ independent_info->lfeon ];
+        return;
+    }
+    else if( independent_info->acmod != 0x7 )
+    {
+        summary->layout_tag = QT_CHANNEL_LAYOUT_UNKNOWN;
+        return;
+    }
+    /* OK. All L, C, R, Ls and Rs exsist. */
+    if( !independent_info->lfeon )
+    {
+        if( independent_info->chan_loc == 0x2 )
+            summary->layout_tag = QT_CHANNEL_LAYOUT_EAC_7_0_A;
+        else if( independent_info->chan_loc == 0x4 )
+            summary->layout_tag = QT_CHANNEL_LAYOUT_EAC_6_0_A;
+        else
+            summary->layout_tag = QT_CHANNEL_LAYOUT_UNKNOWN;
+        return;
+    }
+    /* Also LFE exsists. */
+    static const struct
+    {
+        uint16_t chan_loc;
+        lsmash_channel_layout_tag tag;
+    } eac3_channel_layout_table[]
+        = {
+            { 0x1,   QT_CHANNEL_LAYOUT_EAC3_7_1_B },
+            { 0x2,   QT_CHANNEL_LAYOUT_EAC3_7_1_A },
+            { 0x4,   QT_CHANNEL_LAYOUT_EAC3_6_1_A },
+            { 0x8,   QT_CHANNEL_LAYOUT_EAC3_6_1_B },
+            { 0x10,  QT_CHANNEL_LAYOUT_EAC3_7_1_C },
+            { 0x10,  QT_CHANNEL_LAYOUT_EAC3_7_1_D },
+            { 0x40,  QT_CHANNEL_LAYOUT_EAC3_7_1_E },
+            { 0x80,  QT_CHANNEL_LAYOUT_EAC3_6_1_C },
+            { 0xc,   QT_CHANNEL_LAYOUT_EAC3_7_1_F },
+            { 0x84,  QT_CHANNEL_LAYOUT_EAC3_7_1_G },
+            { 0x88,  QT_CHANNEL_LAYOUT_EAC3_7_1_H },
+            { 0 }
+          };
+    for( int i = 0; eac3_channel_layout_table[i].chan_loc; i++ )
+        if( independent_info->chan_loc == eac3_channel_layout_table[i].chan_loc )
+        {
+            summary->layout_tag = eac3_channel_layout_table[i].tag;
+            return;
+        }
+    summary->layout_tag = QT_CHANNEL_LAYOUT_UNKNOWN;
+}
+
+static void eac3_update_channel_info( lsmash_audio_summary_t *summary, mp4sys_eac3_info_t *info )
 {
     summary->channels = 0;
     for( int i = 0; i < info->number_of_independent_substreams; i++ )
     {
         int channel_count = 0;
         eac3_substream_info_t *independent_info = i ? &info->independent_info[i] : &info->independent_info_0;
-        for( int j = 0; j < 9; j++ )
-            channel_count += (independent_info->chan_loc >> j) & 0x1;
-        channel_count += ac3_channel_count_table[ independent_info->acmod ] + independent_info->lfeon;
-        summary->channels = LSMASH_MAX( summary->channels, channel_count );
+        channel_count = ac3_channel_count_table[ independent_info->acmod ]  /* L/C/R/Ls/Rs combination */
+                      + 2 * !!(independent_info->chan_loc & 0x1)            /* Lc/Rc pair */
+                      + 2 * !!(independent_info->chan_loc & 0x2)            /* Lrs/Rrs pair */
+                      +     !!(independent_info->chan_loc & 0x4)            /* Cs */
+                      +     !!(independent_info->chan_loc & 0x8)            /* Ts */
+                      + 2 * !!(independent_info->chan_loc & 0x10)           /* Lsd/Rsd pair */
+                      + 2 * !!(independent_info->chan_loc & 0x20)           /* Lw/Rw pair */
+                      + 2 * !!(independent_info->chan_loc & 0x40)           /* Lvh/Rvh pair */
+                      +     !!(independent_info->chan_loc & 0x80)           /* Cvh */
+                      +       (independent_info->chan_loc & 0x100)          /* LFE2 */
+                      + independent_info->lfeon;                            /* LFE */
+        if( channel_count > summary->channels )
+        {
+            /* Pick the maximum number of channels. */
+            summary->channels = channel_count;
+            eac3_update_channel_layout( summary, independent_info );
+        }
     }
 }
 
@@ -1511,7 +1576,7 @@ static lsmash_audio_summary_t *eac3_create_summary( mp4sys_eac3_info_t *info )
     summary->samples_in_frame       = 1536;     /* 256 (samples per audio block) * 6 (audio blocks) */
     summary->sbr_mode               = MP4A_AAC_SBR_NOT_SPECIFIED; /* no effect */
     eac3_update_sample_rate( summary, info );
-    eac3_update_channel_count( summary, info );
+    eac3_update_channel_info( summary, info );
     return summary;
 }
 
@@ -1629,7 +1694,7 @@ static int mp4sys_eac3_get_accessunit( mp4sys_importer_t *importer, uint32_t tra
         summary->exdata_length = info->next_dec3_length;
         summary->max_au_length = info->syncframe_count_in_au * EAC3_MAX_SYNCFRAME_LENGTH;
         eac3_update_sample_rate( summary, info );
-        eac3_update_channel_count( summary, info );
+        eac3_update_channel_info( summary, info );
     }
     memcpy( buffered_sample->data, info->au, info->au_length );
     buffered_sample->length = info->au_length;
