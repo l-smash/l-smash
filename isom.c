@@ -984,14 +984,29 @@ static int isom_set_extra_description( isom_audio_entry_t *audio )
     audio->samplesize = 16;
     if( summary->exdata )
     {
-        audio->exdata_length = summary->exdata_length;
-        audio->exdata = malloc( audio->exdata_length );
+        audio->exdata = malloc( summary->exdata_length );
         if( !audio->exdata )
             return -1;
-        memcpy( audio->exdata, summary->exdata, audio->exdata_length );
+        memcpy( audio->exdata, summary->exdata, summary->exdata_length );
+        audio->exdata_length = summary->exdata_length;
     }
     else
+    {
+        /* No CODEC Specific Info */
+        switch( audio->type )
+        {
+            case ISOM_CODEC_TYPE_AC_3_AUDIO :
+            case ISOM_CODEC_TYPE_ALAC_AUDIO :
+            case ISOM_CODEC_TYPE_EC_3_AUDIO :
+            case ISOM_CODEC_TYPE_SAMR_AUDIO :
+            case ISOM_CODEC_TYPE_SAWB_AUDIO :
+                return -1;
+            default :
+                break;
+        }
         audio->exdata = NULL;
+        audio->exdata_length = 0;
+    }
     return 0;
 }
 
