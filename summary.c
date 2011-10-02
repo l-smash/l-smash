@@ -72,10 +72,9 @@ int lsmash_summary_add_exdata( lsmash_summary_t *summary, void* exdata, uint32_t
     void* new_exdata = NULL;
     if( exdata && exdata_length != 0 )
     {
-        new_exdata = malloc( exdata_length );
+        new_exdata = lsmash_memdup( exdata, exdata_length );
         if( !new_exdata )
             return -1;
-        memcpy( new_exdata, exdata, exdata_length );
         summary->exdata_length = exdata_length;
     }
     else
@@ -101,20 +100,10 @@ lsmash_summary_t *lsmash_create_summary( lsmash_mp4sys_stream_type stream_type )
         default :
             return NULL;
     }
-    lsmash_summary_t *summary = (lsmash_summary_t *)malloc( summary_size );
+    lsmash_summary_t *summary = (lsmash_summary_t *)lsmash_malloc_zero( summary_size );
     if( !summary )
         return NULL;
-    memset( summary, 0, summary_size );
     summary->stream_type = stream_type;
-    return summary;
-}
-
-lsmash_audio_summary_t* lsmash_create_audio_summary()
-{
-    lsmash_audio_summary_t* summary = (lsmash_audio_summary_t*)malloc( sizeof(lsmash_audio_summary_t) );
-    if( !summary )
-        return NULL;
-    memset( summary, 0, sizeof(lsmash_audio_summary_t) );
     return summary;
 }
 

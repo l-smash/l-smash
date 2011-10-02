@@ -143,10 +143,9 @@ void lsmash_destruct_timeline( lsmash_root_t *root, uint32_t track_ID )
 static lsmash_video_summary_t *isom_create_video_summary_from_description( isom_visual_entry_t *visual )
 {
     isom_visual_entry_t *visual;
-    lsmash_video_summary_t *summary = malloc( sizeof(lsmash_video_summary_t) );
+    lsmash_video_summary_t *summary = lsmash_malloc_zero( sizeof(lsmash_video_summary_t) );
     if( !summary )
         return NULL;
-    memset( summary, 0, sizeof(lsmash_video_summary_t) );
     summary->width  = visual->width;
     summary->height = visual->height;
     if( visual->clap )
@@ -747,10 +746,9 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     /* Construct media timeline. */
     while( sample_number <= stsz->sample_count )
     {
-        info = malloc( sizeof(isom_sample_info_t) );
+        info = lsmash_malloc_zero( sizeof(isom_sample_info_t) );
         if( !info )
             goto fail;
-        memset( info, 0, sizeof(isom_sample_info_t) );
         /* Get sample duration and sample offset. */
         isom_stts_entry_t *stts_data = (isom_stts_entry_t *)stts_entry->data;
         if( !stts_data )

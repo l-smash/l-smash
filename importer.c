@@ -441,13 +441,12 @@ static int mp4sys_adts_probe( mp4sys_importer_t* importer )
         return -1;
 
     /* importer status */
-    mp4sys_adts_info_t* info = malloc( sizeof(mp4sys_adts_info_t) );
+    mp4sys_adts_info_t* info = lsmash_malloc_zero( sizeof(mp4sys_adts_info_t) );
     if( !info )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         return -1;
     }
-    memset( info, 0, sizeof(mp4sys_adts_info_t) );
     info->status = MP4SYS_IMPORTER_OK;
     info->raw_data_block_idx = 0;
     info->header = header;
@@ -710,13 +709,12 @@ static int mp4sys_mp3_probe( mp4sys_importer_t* importer )
         return -1;
 
     /* importer status */
-    mp4sys_mp3_info_t* info = malloc( sizeof(mp4sys_mp3_info_t) );
+    mp4sys_mp3_info_t* info = lsmash_malloc_zero( sizeof(mp4sys_mp3_info_t) );
     if( !info )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         return -1;
     }
-    memset( info, 0, sizeof(mp4sys_mp3_info_t) );
     info->status = MP4SYS_IMPORTER_OK;
     info->header = header;
     info->samples_in_frame = summary->samples_in_frame;
@@ -921,10 +919,9 @@ static void mp4sys_remove_ac3_info( mp4sys_ac3_info_t *info )
 
 static mp4sys_ac3_info_t *mp4sys_create_ac3_info( void )
 {
-    mp4sys_ac3_info_t *info = (mp4sys_ac3_info_t *)malloc( sizeof(mp4sys_ac3_info_t) );
+    mp4sys_ac3_info_t *info = (mp4sys_ac3_info_t *)lsmash_malloc_zero( sizeof(mp4sys_ac3_info_t) );
     if( !info )
         return NULL;
-    memset( info, 0, sizeof(mp4sys_ac3_info_t) );
     info->bits = lsmash_bits_adhoc_create();
     if( !info->bits )
     {
@@ -1252,10 +1249,9 @@ static void mp4sys_remove_eac3_info( mp4sys_eac3_info_t *info )
 
 static mp4sys_eac3_info_t *mp4sys_create_eac3_info( void )
 {
-    mp4sys_eac3_info_t *info = (mp4sys_eac3_info_t *)malloc( sizeof(mp4sys_eac3_info_t) );
+    mp4sys_eac3_info_t *info = (mp4sys_eac3_info_t *)lsmash_malloc_zero( sizeof(mp4sys_eac3_info_t) );
     if( !info )
         return NULL;
-    memset( info, 0, sizeof(mp4sys_eac3_info_t) );
     info->bits = lsmash_bits_adhoc_create();
     if( !info->bits )
     {
@@ -1977,10 +1973,9 @@ static void mp4sys_remove_h264_info( mp4sys_h264_info_t *info )
 
 static mp4sys_h264_info_t *mp4sys_create_h264_info( void )
 {
-    mp4sys_h264_info_t *info = malloc( sizeof(mp4sys_h264_info_t) );
+    mp4sys_h264_info_t *info = lsmash_malloc_zero( sizeof(mp4sys_h264_info_t) );
     if( !info )
         return NULL;
-    memset( info, 0, sizeof(mp4sys_h264_info_t) );
     info->bits = lsmash_bits_adhoc_create();
     if( !info->bits )
     {
@@ -2965,14 +2960,13 @@ static lsmash_video_summary_t *h264_create_summary( mp4sys_h264_info_t *info, ui
                 isom_avcC_ps_entry_t *ps = malloc( sizeof(isom_avcC_ps_entry_t) );
                 if( !ps )
                     return NULL;
-                ps->parameterSetLength = sps_nalu_length;
-                ps->parameterSetNALUnit = malloc( sps_nalu_length );
+                ps->parameterSetNALUnit = lsmash_memdup( sps_nalu, sps_nalu_length );
                 if( !ps->parameterSetNALUnit )
                 {
                     free( ps );
                     return NULL;
                 }
-                memcpy( ps->parameterSetNALUnit, sps_nalu, sps_nalu_length );
+                ps->parameterSetLength = sps_nalu_length;
                 if( lsmash_add_entry( avcC->sequenceParameterSets, ps ) )
                 {
                     free( ps->parameterSetNALUnit );
@@ -2998,14 +2992,13 @@ static lsmash_video_summary_t *h264_create_summary( mp4sys_h264_info_t *info, ui
                 isom_avcC_ps_entry_t *ps = malloc( sizeof(isom_avcC_ps_entry_t) );
                 if( !ps )
                     return NULL;
-                ps->parameterSetLength = pps_nalu_length;
-                ps->parameterSetNALUnit = malloc( pps_nalu_length );
+                ps->parameterSetNALUnit = lsmash_memdup( pps_nalu, pps_nalu_length );
                 if( !ps->parameterSetNALUnit )
                 {
                     free( ps );
                     return NULL;
                 }
-                memcpy( ps->parameterSetNALUnit, pps_nalu, pps_nalu_length );
+                ps->parameterSetLength = pps_nalu_length;
                 if( lsmash_add_entry( avcC->pictureParameterSets, ps ) )
                 {
                     free( ps->parameterSetNALUnit );
@@ -3812,16 +3805,15 @@ void mp4sys_importer_close( mp4sys_importer_t* importer )
     free( importer );
 }
 
-mp4sys_importer_t* mp4sys_importer_open( const char* identifier, const char* format )
+mp4sys_importer_t *mp4sys_importer_open( const char *identifier, const char *format )
 {
     if( identifier == NULL )
         return NULL;
 
     int auto_detect = ( format == NULL || !strcmp( format, "auto" ) );
-    mp4sys_importer_t* importer = (mp4sys_importer_t*)malloc( sizeof(mp4sys_importer_t) );
+    mp4sys_importer_t *importer = (mp4sys_importer_t *)lsmash_malloc_zero( sizeof(mp4sys_importer_t) );
     if( !importer )
         return NULL;
-    memset( importer, 0, sizeof(mp4sys_importer_t) );
 
     if( !strcmp( identifier, "-" ) )
     {
@@ -3846,7 +3838,7 @@ mp4sys_importer_t* mp4sys_importer_open( const char* identifier, const char* for
         return NULL;
     }
     /* find importer */
-    const mp4sys_importer_functions* funcs;
+    const mp4sys_importer_functions *funcs;
     if( auto_detect )
     {
         /* just rely on detector. */

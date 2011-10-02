@@ -214,10 +214,9 @@ static mp4a_GASpecificConfig_t* mp4a_create_GASpecificConfig( uint8_t samplingFr
         return NULL;
     if( samplingFrequencyIndex > 0xB || channelConfig == 0 || channelConfig == 7 )
         return NULL;
-    mp4a_GASpecificConfig_t* gasc = (mp4a_GASpecificConfig_t*)malloc( sizeof(mp4a_GASpecificConfig_t) );
+    mp4a_GASpecificConfig_t *gasc = (mp4a_GASpecificConfig_t *)lsmash_malloc_zero( sizeof(mp4a_GASpecificConfig_t) );
     if( !gasc )
         return NULL;
-    memset( gasc, 0, sizeof(mp4a_GASpecificConfig_t) );
     gasc->frameLengthFlag = 0; /* FIXME: AAC_SSR: shall be 0, Others: depends, but noramally 0. */
     gasc->dependsOnCoreCoder = 0; /* FIXME: used if scalable AAC. */
     switch( aot ){
@@ -247,10 +246,9 @@ static mp4a_GASpecificConfig_t* mp4a_create_GASpecificConfig( uint8_t samplingFr
 
 static mp4a_MPEG_1_2_SpecificConfig_t* mp4a_create_MPEG_1_2_SpecificConfig()
 {
-    mp4a_MPEG_1_2_SpecificConfig_t* mpeg_1_2_sc = (mp4a_MPEG_1_2_SpecificConfig_t*)malloc( sizeof(mp4a_MPEG_1_2_SpecificConfig_t) );
+    mp4a_MPEG_1_2_SpecificConfig_t *mpeg_1_2_sc = (mp4a_MPEG_1_2_SpecificConfig_t *)lsmash_malloc_zero( sizeof(mp4a_MPEG_1_2_SpecificConfig_t) );
     if( !mpeg_1_2_sc )
         return NULL;
-    memset( mpeg_1_2_sc, 0, sizeof(mp4a_MPEG_1_2_SpecificConfig_t) );
     mpeg_1_2_sc->extension = 0; /* shall be 0. */
     return mpeg_1_2_sc;
 }
@@ -287,10 +285,9 @@ mp4a_AudioSpecificConfig_t* mp4a_create_AudioSpecificConfig( lsmash_mp4a_AudioOb
         return NULL;
     }
 
-    mp4a_AudioSpecificConfig_t* asc = (mp4a_AudioSpecificConfig_t*)malloc( sizeof(mp4a_AudioSpecificConfig_t) );
+    mp4a_AudioSpecificConfig_t *asc = (mp4a_AudioSpecificConfig_t *)lsmash_malloc_zero( sizeof(mp4a_AudioSpecificConfig_t) );
     if( !asc )
         return NULL;
-    memset( asc, 0, sizeof(mp4a_AudioSpecificConfig_t) );
 
     asc->sbr_mode = sbr_mode;
     asc->audioObjectType = aot;
@@ -524,7 +521,7 @@ static mp4a_AudioSpecificConfig_t * mp4a_get_AudioSpecificConfig( lsmash_bits_t 
 {
     if( lsmash_bits_import_data( bits, dsi_payload, dsi_payload_length ) )
         return NULL;
-    mp4a_AudioSpecificConfig_t *asc = (mp4a_AudioSpecificConfig_t *)malloc( sizeof(mp4a_AudioSpecificConfig_t) );
+    mp4a_AudioSpecificConfig_t *asc = (mp4a_AudioSpecificConfig_t *)lsmash_malloc_zero( sizeof(mp4a_AudioSpecificConfig_t) );
     if( !asc )
         return NULL;
     asc->audioObjectType = lsmash_bits_get( bits, 5 );

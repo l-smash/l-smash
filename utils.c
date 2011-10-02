@@ -155,10 +155,9 @@ int lsmash_bs_write_data( lsmash_bs_t *bs )
 
 lsmash_bs_t* lsmash_bs_create( char* filename )
 {
-    lsmash_bs_t* bs = malloc( sizeof(lsmash_bs_t) );
+    lsmash_bs_t* bs = lsmash_malloc_zero( sizeof(lsmash_bs_t) );
     if( !bs )
         return NULL;
-    memset( bs, 0, sizeof(lsmash_bs_t) );
     if( filename && (bs->stream = fopen( filename, "wb" )) == NULL )
     {
         free( bs );
@@ -181,10 +180,9 @@ void* lsmash_bs_export_data( lsmash_bs_t *bs, uint32_t* length )
 {
     if( !bs || !bs->data || bs->store == 0 || bs->error )
         return NULL;
-    void* buf = malloc( bs->store );
+    void *buf = lsmash_memdup( bs->data, bs->store );
     if( !buf )
         return NULL;
-    memcpy( buf, bs->data, bs->store );
     if( length )
         *length = bs->store;
     return buf;
@@ -209,14 +207,19 @@ uint8_t *lsmash_bs_get_bytes( lsmash_bs_t *bs, uint32_t size )
 {
     if( bs->error || !size )
         return NULL;
-    uint8_t *value = malloc( size );
-    if( !value || bs->pos + size > bs->store )
+    if( bs->pos + size > bs->store )
     {
         lsmash_bs_free( bs );
         bs->error = 1;
         return NULL;
     }
-    memcpy( value, bs->data + bs->pos, size );
+    uint8_t *value = lsmash_memdup( bs->data + bs->pos, size );
+    if( !value )
+    {
+        lsmash_bs_free( bs );
+        bs->error = 1;
+        return NULL;
+    }
     bs->pos += size;
     return value;
 }
@@ -305,7 +308,7 @@ int lsmash_bs_import_data( lsmash_bs_t *bs, void* data, uint32_t length )
 /*---- ----*/
 
 /*---- bitstream ----*/
-void lsmash_bits_init( lsmash_bits_t* bits, lsmash_bs_t *bs )
+void lsmash_bits_init( lsmash_bits_t *bits, lsmash_bs_t *bs )
 {
     debug_if( !bits || !bs )
         return;
@@ -314,11 +317,11 @@ void lsmash_bits_init( lsmash_bits_t* bits, lsmash_bs_t *bs )
     bits->cache = 0;
 }
 
-lsmash_bits_t* lsmash_bits_create( lsmash_bs_t *bs )
+lsmash_bits_t *lsmash_bits_create( lsmash_bs_t *bs )
 {
     debug_if( !bs )
         return NULL;
-    lsmash_bits_t* bits = (lsmash_bits_t*)malloc( sizeof(lsmash_bits_t) );
+    lsmash_bits_t *bits = (lsmash_bits_t *)malloc( sizeof(lsmash_bits_t) );
     if( !bits )
         return NULL;
     lsmash_bits_init( bits, bs );
@@ -660,6 +663,17 @@ double lsmash_int2float64( uint64_t value )
 /*---- ----*/
 
 /*---- allocator ----*/
+void *lsmash_malloc_zero( size_t size )
+{
+    if( !size )
+        return NULL;
+    void *p = malloc( size );
+    if( !p )
+        return NULL;
+    memset( p, 0, size );
+    return p;
+}
+
 void *lsmash_memdup( void *src, size_t size )
 {
     if( !size )
