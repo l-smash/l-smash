@@ -9566,7 +9566,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     /* Check each line format. */
     fn_get_chapter_data fnc = isom_check_chap_line( file_name );
     if( !fnc )
-        return -1;
+        goto fail;
     /* Open chapter format file. */
     chapter = fopen( file_name, "rb" );
     if( !chapter )
@@ -9581,7 +9581,10 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
         uint16_t name_length = strlen( data.chapter_name );
         lsmash_sample_t *sample = lsmash_create_sample( 2 + name_length + 12 * (sample_type == QT_CODEC_TYPE_TEXT_TEXT) );
         if( !sample )
+        {
+            free( data.chapter_name );
             goto fail;
+        }
         sample->data[0] = (name_length >> 8) & 0xff;
         sample->data[1] =  name_length       & 0xff;
         memcpy( sample->data + 2, data.chapter_name, name_length );
@@ -9602,7 +9605,10 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
         sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
         sample->index = sample_entry;
         if( lsmash_append_sample( root, chapter_track_ID, sample ) )
+        {
+            free( data.chapter_name );
             goto fail;
+        }
         free( data.chapter_name );
         data.chapter_name = NULL;
     }
@@ -9618,10 +9624,10 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
 fail:
     if( chapter )
         fclose( chapter );
-    if( data.chapter_name )
-        free( data.chapter_name );
-    free( chap->track_ID );
-    chap->track_ID = NULL;
+    /* Remove chapter track reference. */
+    lsmash_remove_entry_direct( trak->tref->ref_list, trak->tref->ref_list->tail, isom_remove_track_reference_type );
+    if( trak->tref->ref_list->entry_count == 0 )
+        isom_remove_tref( trak->tref );
     /* Remove the reference chapter track attached at tail of the list. */
     lsmash_remove_entry_direct( root->moov->trak_list, root->moov->trak_list->tail, isom_remove_trak );
     return -1;
