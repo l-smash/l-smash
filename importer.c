@@ -3633,9 +3633,11 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
     info->stream_buffer_pos = &info->stream_buffer[buf_pos - buf];
     info->stream_read_size  = valid_length;
     /* Parse all NALU in the stream for preparation of calculating timestamps. */
+    uint32_t poc_alloc = (1 << 12) * sizeof(uint64_t);
+    uint64_t *poc = malloc( poc_alloc );
+    if( !poc )
+        goto fail;
     uint32_t num_access_units = 0;
-    uint64_t *poc = NULL;
-    uint32_t poc_alloc = 0;
     fprintf( stderr, "Analyzing stream as H.264\r" );
     while( info->status != MP4SYS_IMPORTER_EOF )
     {
@@ -3647,10 +3649,10 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
             goto fail;
         if( h264_calculate_poc( &info->sps, &info->picture, &prev_picture ) )
             goto fail;
-        if( poc_alloc <= num_access_units )
+        if( poc_alloc <= num_access_units * sizeof(uint64_t) )
         {
-            uint32_t alloc = (num_access_units + (1 << 12)) * sizeof(uint64_t);
-            uint64_t *temp = poc ? realloc( poc, alloc ) : malloc( alloc );
+            uint32_t alloc = 2 * num_access_units * sizeof(uint64_t);
+            uint64_t *temp = realloc( poc, alloc );
             if( !temp )
             {
                 if( poc )
