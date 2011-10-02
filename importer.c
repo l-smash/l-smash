@@ -1546,7 +1546,7 @@ static void eac3_update_channel_info( lsmash_audio_summary_t *summary, mp4sys_ea
                       + 2 * !!(independent_info->chan_loc & 0x20)           /* Lw/Rw pair */
                       + 2 * !!(independent_info->chan_loc & 0x40)           /* Lvh/Rvh pair */
                       +     !!(independent_info->chan_loc & 0x80)           /* Cvh */
-                      +       (independent_info->chan_loc & 0x100)          /* LFE2 */
+                      +     !!(independent_info->chan_loc & 0x100)          /* LFE2 */
                       + independent_info->lfeon;                            /* LFE */
         if( channel_count > summary->channels )
         {
