@@ -65,6 +65,9 @@ typedef struct
     movie_t *input;
     int num_input;
     track_media_option **track_option;
+    char *chap_file;
+    int ref_chap_available;
+    uint32_t chap_track;
 } movie_io_t;
 
 typedef struct
@@ -226,6 +229,14 @@ static int set_movie_parameters( movie_io_t *io )
     }
     output->movie_param.number_of_brands = num_output_brands;
     output->movie_param.brands           = output_brands;
+    if( io->chap_file )
+        for( uint32_t i = 0; i < output->movie_param.number_of_brands; i++ )
+            if( output->movie_param.brands[i] == ISOM_BRAND_TYPE_QT || output->movie_param.brands[i] == ISOM_BRAND_TYPE_M4A
+             || output->movie_param.brands[i] == ISOM_BRAND_TYPE_M4B )
+            {
+                io->ref_chap_available = 1;
+                break;
+            }
     return lsmash_set_movie_parameters( output->root, &output->movie_param );
 }
 
@@ -310,6 +321,20 @@ static int parse_cli_option( int argc, char **argv, movie_io_t *io )
                 return ERROR_MSG( "Error: -o requires an argument.\n" );
             io->output->root = lsmash_open_movie( argv[i], LSMASH_FILE_MODE_WRITE );
         }
+        else if( !strcasecmp( argv[i], "--chapter" ) )    /* chapter file */
+        {
+            if( ++i == argc )
+                return ERROR_MSG( "Error: --chapter requires an argument.\n" );
+            io->chap_file = argv[i];
+        }
+        else if( !strcasecmp( argv[i], "--chapter-track" ) )    /* track to apply reference chapter to */
+        {
+            if( ++i == argc )
+                return ERROR_MSG( "Error: --chapter-track requires an argument.\n" );
+            io->chap_track = atoi( argv[i] );
+            if( !io->chap_track )
+                return ERROR_MSG( "Error: %s is an invalid track number.\n", argv[i] );
+        }
         else
             return ERROR_MSG( "Unkown option found: %s\n", argv[i] );
     }
@@ -343,14 +368,21 @@ static int parse_cli_option( int argc, char **argv, movie_io_t *io )
 
 static void display_help( void )
 {
-    eprintf( "Usage: remuxer -i input1 [-i input2 -i input3 ...] -o output\n" );
-    eprintf( "How to use track options:\n" );
-    eprintf( "    -i input?[track_number1]:[track_option1],[track_option2]?[track_number2]:...\n" );
-    eprintf( "For example:\n" );
-    eprintf( "    remuxer -i input1 -i input2?2:alternate-group=1?3:language=jpn,alternate-group=1 -o output\n" );
-    eprintf( "Available track options are:\n" );
-    eprintf( "    alternate-group\n" );
-    eprintf( "    language\n" );
+    eprintf( "Usage: remuxer -i input1 [-i input2 -i input3 ...] -o output\n"
+             "Global options:\n"
+             "    --help                    Display help.\n"
+             "    --chapter <string>        Set chapters from the file.\n"
+             "    --chapter-track <integer> Set which track the chapter applies to.\n"
+             "                              This option takes effect only when reference\n"
+             "                              chapter is available.\n"
+             "                              If this option is not used, it defaults to 1.\n"
+             "Track options:\n"
+             "    language=<string>\n"
+             "    alternate-group=<integer>\n"
+             "How to use track options:\n"
+             "    -i input?[track_number1]:[track_option1],[track_option2]?[track_number2]:...\n"
+             "For example:\n"
+             "    remuxer -i input1 -i input2?2:alternate-group=1?3:language=jpn,alternate-group=1 -o output\n" );
 }
 
 int main( int argc, char *argv[] )
@@ -367,7 +399,7 @@ int main( int argc, char *argv[] )
     movie_t output = { 0 };
     movie_t input[ num_input ];
     track_media_option *track_option[num_input];
-    movie_io_t io = { &output, input, num_input, track_option };
+    movie_io_t io = { &output, input, num_input, track_option, NULL, 0, 1 };
     memset( input, 0, num_input * sizeof(movie_t) );
     memset( track_option, 0, num_input * sizeof(track_media_option *) );
     if( !num_input )
@@ -420,6 +452,14 @@ int main( int argc, char *argv[] )
         }
         free( track_option[i] );
         io.track_option[i] = NULL;
+    }
+    /* Set reference chapter */
+    if( io.ref_chap_available )
+    {
+        if( io.chap_track > output.num_tracks )
+            ERROR_MSG( "Warning: the track number specified in --chapter-track is larger than the number of the output tracks. Reference chapter will not be set.\n" );
+        else if( lsmash_create_reference_chapter_track( output.root, io.chap_track, io.chap_file ) )
+            ERROR_MSG( "Warning: failed to set reference chapter.\n" );
     }
     output.current_track_number = 1;
     /* Start muxing. */
@@ -506,6 +546,10 @@ int main( int argc, char *argv[] )
             if( lsmash_copy_timeline_map( output.root, out_track->track_ID, input[i].root, input[i].track[j].track_ID ) )
                 return REMUXER_ERR( "Failed to copy a timeline map.\n" );
         }
+    /* Set tyrant chapter */
+    if( io.chap_file )
+        if( lsmash_set_tyrant_chapter( output.root, io.chap_file ) )
+            ERROR_MSG( "Warning: failed to set tyrant chapter.\n" );
     /* Finish muxing. */
     lsmash_adhoc_remux_t moov_to_front;
     moov_to_front.func = moov_to_front_callback;

@@ -47,6 +47,9 @@ typedef struct
     int      brand_3gx;
     int      optimize_pd;
     int      timeline_shift;
+    char    *chap_file;
+    int      ref_chap_available;
+    uint32_t chap_track;
     uint32_t interleave;
     uint32_t num_of_brands;
     uint32_t brands[MAX_NUM_OF_BRANDS];
@@ -184,6 +187,11 @@ static void display_help( void )
              "                              The first is applied as the best used one\n"
              "    --isom-version <integer>  Specify maximum compatible ISO Base Media version\n"
              "    --shift-timeline          Enable composition to decode timeline shift\n"
+             "    --chapter <string>        Set chapters from the file.\n"
+             "    --chapter-track <integer> Set which track the chapter applies to.\n"
+             "                              This option takes effect only when reference\n"
+             "                              chapter is available.\n"
+             "                              If this option is not used, it defaults to 1.\n"
              "Output file formats:\n"
              "    mp4, mov, 3gp, 3g2, m4a, m4v\n"
              "Track options:\n"
@@ -308,6 +316,13 @@ static int decide_brands( option_t *opt )
         setup_isom_version( opt );
     if( opt->num_of_brands > MAX_NUM_OF_BRANDS )
         return ERROR_MSG( "exceed the maximum number of brands we can deal with.\n" );
+    if( opt->chap_file )
+        for( uint32_t i = 0; i < opt->num_of_brands; i++ )
+            if( opt->brands[i] == ISOM_BRAND_TYPE_QT || opt->brands[i] == ISOM_BRAND_TYPE_M4A )
+            {
+                opt->ref_chap_available = 1;
+                break;
+            }
     return 0;
 }
 
@@ -411,6 +426,18 @@ static int parse_global_options( int argc, char **argv, muxer_t *muxer )
         }
         else if( !strcasecmp( argv[i], "--shift-timeline" ) )
             opt->timeline_shift = 1;
+        else if( !strcasecmp( argv[i], "--chapter" ) )
+        {
+            CHECK_NEXT_ARG;
+            opt->chap_file = argv[i];
+        }
+        else if( !strcasecmp( argv[i], "--chapter-track" ) )
+        {
+            CHECK_NEXT_ARG;
+            opt->chap_track = atoi( argv[i] );
+            if( !opt->chap_track )
+                return ERROR_MSG( "%s is an invalid track number.\n", argv[i] );
+        }
         else
             return ERROR_MSG( "you specified invalid option: %s.\n", argv[i] );
         ++i;
@@ -526,6 +553,7 @@ int main( int argc, char *argv[] )
     /* Parse options */
     muxer_t muxer = { { 0 } };
     option_t *opt = &muxer.opt;
+    opt->chap_track = 1;
     if( parse_global_options( argc, argv, &muxer ) )
         return MUXER_USAGE_ERR();
     if( opt->help )
@@ -736,6 +764,14 @@ int main( int argc, char *argv[] )
         }
         input->current_track_number = 1;
     }
+    /* Set reference chapter */
+    if( opt->ref_chap_available )
+    {
+        if( opt->chap_track > output->num_of_tracks )
+            ERROR_MSG( "Warning: the track number specified in --chapter-track is larger than the number of the actual output tracks. Reference chapter will not be set.\n" );
+        else if( lsmash_create_reference_chapter_track( output->root, opt->chap_track, opt->chap_file ) )
+            ERROR_MSG( "Warning: failed to set reference chapter.\n" );
+    }
     output->current_track_number = 1;
     muxer.current_input_number = 1;
     /* Start muxing. */
@@ -841,6 +877,10 @@ int main( int argc, char *argv[] )
         if( lsmash_create_explicit_timeline_map( output->root, out_track->track_ID, 0, out_track->start_offset, ISOM_EDIT_MODE_NORMAL ) )
             ERROR_MSG( "failed to set timeline map                                                    .\n" );
     }
+    /* Set tyrant chapter */
+    if( opt->chap_file )
+        if( lsmash_set_tyrant_chapter( output->root, opt->chap_file ) )
+            ERROR_MSG( "Warning: failed to set tyrant chapter.\n" );
     /* Close movie. */
     lsmash_adhoc_remux_t *finalize;
     if( opt->optimize_pd )
