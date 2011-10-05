@@ -7131,6 +7131,8 @@ int lsmash_get_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
 
 lsmash_root_t *lsmash_open_movie( const char *filename, lsmash_file_mode mode )
 {
+    if( !filename )
+        return NULL;
     char open_mode[4] = { 0 };
     if( mode & LSMASH_FILE_MODE_WRITE )
         memcpy( open_mode, "w+b", 4 );

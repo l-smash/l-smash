@@ -415,6 +415,8 @@ static int parse_global_options( int argc, char **argv, muxer_t *muxer )
             return ERROR_MSG( "you specified invalid option: %s.\n", argv[i] );
         ++i;
     }
+    if( !muxer->output.file_name )
+        return ERROR_MSG( "output file name is not specified.\n" );
     if( decide_brands( opt ) )
         return ERROR_MSG( "failed to set up output file format.\n" );
     if( opt->timeline_shift && !opt->qtff && opt->isom_version < 4 )

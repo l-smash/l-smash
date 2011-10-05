@@ -313,6 +313,8 @@ static int parse_cli_option( int argc, char **argv, movie_io_t *io )
         else
             return ERROR_MSG( "Unkown option found: %s\n", argv[i] );
     }
+    if( !io->output->root )
+        return ERROR_MSG( "Error: output file name is not specified.\n" );
     /* Parse track options */
     /* Get current track and media parameters */
     for( int i = 0; i < io->num_input; i++ )
