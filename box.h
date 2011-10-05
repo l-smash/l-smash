@@ -1210,9 +1210,10 @@ typedef struct
 
 typedef struct
 {
-    isom_group_assignment_entry_t *assignment;      /* the address corresponding to the entry in Sample to Group Box */
-    isom_rap_entry_t  *random_access;               /* the address corresponding to the random access entry in Sample Group Description Box */
-    uint8_t            is_prev_rap;                 /* whether the previous sample is a random access point or not */
+    isom_group_assignment_entry_t *assignment;          /* the address corresponding to the entry in Sample to Group Box */
+    isom_group_assignment_entry_t *prev_assignment;     /* the address of the previous assignment */
+    isom_rap_entry_t              *random_access;       /* the address corresponding to the random access entry in Sample Group Description Box */
+    uint8_t                        is_prev_rap;         /* whether the previous sample is a random access point or not */
 } isom_rap_group_t;
 
 typedef struct

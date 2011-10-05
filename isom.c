@@ -8525,6 +8525,42 @@ static int isom_add_dependency_type( isom_trak_entry_t *trak, lsmash_sample_prop
     return isom_add_sdtp_entry( stbl, prop, avc_extensions );
 }
 
+static int isom_rap_grouping_established( isom_rap_group_t *group, int num_leading_samples_known, isom_sgpd_entry_t *sgpd )
+{
+    isom_rap_entry_t *rap = group->random_access;
+    if( !rap )
+        return 0;
+    assert( rap == (isom_rap_entry_t *)sgpd->list->tail->data );
+    rap->num_leading_samples_known = num_leading_samples_known;
+    /* Avoid duplication of sample group descriptions. */
+    uint32_t group_description_index = 1;
+    for( lsmash_entry_t *entry = sgpd->list->head; entry != sgpd->list->tail; entry = entry->next )
+    {
+        isom_rap_entry_t *data = (isom_rap_entry_t *)entry->data;
+        if( !data )
+            return -1;
+        if( rap->num_leading_samples_known == data->num_leading_samples_known
+         && rap->num_leading_samples       == data->num_leading_samples )
+        {
+            /* The same description already exists.
+             * Remove the latest random access entry. */
+            lsmash_remove_entry_direct( sgpd->list, sgpd->list->tail, NULL );
+            /* Replace assigned group_description_index with the one corresponding the same description. */
+            if( group->assignment->group_description_index == 0 )
+            {
+                if( group->prev_assignment )
+                    group->prev_assignment->group_description_index = group_description_index;
+            }
+            else
+                group->assignment->group_description_index = group_description_index;
+            break;
+        }
+        ++group_description_index;
+    }
+    group->random_access = NULL;
+    return 0;
+}
+
 static int isom_group_random_access( isom_trak_entry_t *trak, lsmash_sample_property_t *prop )
 {
     if( trak->root->max_isom_version < 6 )
@@ -8549,22 +8585,22 @@ static int isom_group_random_access( isom_trak_entry_t *trak, lsmash_sample_prop
         if( is_rap )
         {
             group->random_access = isom_add_rap_group_entry( sgpd );
-            group->assignment = isom_add_group_assignment_entry( sbgp, 1, sgpd->list->entry_count );
+            group->assignment    = isom_add_group_assignment_entry( sbgp, 1, sgpd->list->entry_count );
         }
         else
         {
             /* The first sample is not always random access point. */
             group->random_access = NULL;
-            group->assignment = isom_add_group_assignment_entry( sbgp, 1, 0 );
+            group->assignment    = isom_add_group_assignment_entry( sbgp, 1, 0 );
         }
         if( !group->assignment )
         {
             free( group );
             return -1;
         }
-        /* No need checking if group->assignment exists from here. */
-        group->is_prev_rap = is_rap;
-        trak->cache->rap = group;
+        group->prev_assignment = NULL;
+        group->is_prev_rap     = is_rap;
+        trak->cache->rap       = group;
         return 0;
     }
     if( group->is_prev_rap )
@@ -8574,7 +8610,8 @@ static int isom_group_random_access( isom_trak_entry_t *trak, lsmash_sample_prop
         {
             /* This sample isn't a member of 'rap ' and the previous sample is.
              * So we create a new group and set 0 on its group_description_index. */
-            group->assignment = isom_add_group_assignment_entry( sbgp, 1, 0 );
+            group->prev_assignment = group->assignment;
+            group->assignment      = isom_add_group_assignment_entry( sbgp, 1, 0 );
             if( !group->assignment )
             {
                 free( group );
@@ -8585,10 +8622,11 @@ static int isom_group_random_access( isom_trak_entry_t *trak, lsmash_sample_prop
         {
             /* Create a new group since there is the possibility the next sample is a leading sample.
              * This sample is a member of 'rap ', so we set appropriate value on its group_description_index. */
-            if( group->random_access )
-                group->random_access->num_leading_samples_known = 1;
-            group->random_access = isom_add_rap_group_entry( sgpd );
-            group->assignment = isom_add_group_assignment_entry( sbgp, 1, sgpd->list->entry_count );
+            if( isom_rap_grouping_established( group, 1, sgpd ) )
+                return -1;
+            group->random_access   = isom_add_rap_group_entry( sgpd );
+            group->prev_assignment = group->assignment;
+            group->assignment      = isom_add_group_assignment_entry( sbgp, 1, sgpd->list->entry_count );
             if( !group->assignment )
             {
                 free( group );
@@ -8602,10 +8640,11 @@ static int isom_group_random_access( isom_trak_entry_t *trak, lsmash_sample_prop
     {
         /* This sample is a member of 'rap ' and the previous sample isn't.
          * So we create a new group and set appropriate value on its group_description_index. */
-        if( group->random_access )
-            group->random_access->num_leading_samples_known = 1;
-        group->random_access = isom_add_rap_group_entry( sgpd );
-        group->assignment = isom_add_group_assignment_entry( sbgp, 1, sgpd->list->entry_count );
+        if( isom_rap_grouping_established( group, 1, sgpd ) )
+            return -1;
+        group->random_access   = isom_add_rap_group_entry( sgpd );
+        group->prev_assignment = group->assignment;
+        group->assignment      = isom_add_group_assignment_entry( sbgp, 1, sgpd->list->entry_count );
         if( !group->assignment )
         {
             free( group );
@@ -8620,19 +8659,16 @@ static int isom_group_random_access( isom_trak_entry_t *trak, lsmash_sample_prop
         if( prop->leading == ISOM_SAMPLE_LEADING_UNKNOWN )
         {
             /* We can no longer know num_leading_samples in this group. */
-            group->random_access->num_leading_samples_known = 0;
-            group->random_access = NULL;
+            if( isom_rap_grouping_established( group, 0, sgpd ) )
+                return -1;
         }
         else
         {
             if( prop->leading == ISOM_SAMPLE_IS_UNDECODABLE_LEADING || prop->leading == ISOM_SAMPLE_IS_DECODABLE_LEADING )
                 ++ group->random_access->num_leading_samples;
-            else
-            {
-                /* no more consecutive leading samples in this group */
-                group->random_access->num_leading_samples_known = 1;
-                group->random_access = NULL;
-            }
+            /* no more consecutive leading samples in this group */
+            else if( isom_rap_grouping_established( group, 1, sgpd ) )
+                return -1;
         }
     }
     group->is_prev_rap = is_rap;
