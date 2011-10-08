@@ -3233,6 +3233,10 @@ static void isom_remove_udta( isom_udta_t *udta )
         return;
     isom_remove_chpl( udta->chpl );
     isom_remove_meta( udta->meta );
+    free( udta->WLOC );
+    free( udta->LOOP );
+    free( udta->SelO );
+    free( udta->AllF );
     if( udta->parent )
     {
         if( udta->parent->type == ISOM_BOX_TYPE_MOOV )

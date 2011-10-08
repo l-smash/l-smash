@@ -1173,6 +1173,36 @@ typedef struct
     isom_ilst_t *ilst;      /* Metadata Item List Box only defined in Apple MPEG-4 and QTFF */
 } isom_meta_t;
 
+/* Window Location Box */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    /* default window location for movie */
+    uint16_t x;     
+    uint16_t y;
+} isom_WLOC_t;
+
+/* Looping Box */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    uint32_t looping_mode;      /* 0 for none, 1 for looping, 2 for palindromic looping */
+} isom_LOOP_t;
+
+/* Play Selection Only Box */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    uint8_t selection_only;     /* whether only the selected area of the movie should be played */
+} isom_SelO_t;
+
+/* Play All Frames Box */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    uint8_t play_all_frames;    /* whether all frames of video should be played, regardless of timing */
+} isom_AllF_t;
+
 /* User Data Box
  * This box is a container box for informative user-data.
  * This user data is formatted as a set of boxes with more specific box types, which declare more precisely their content.
@@ -1182,6 +1212,10 @@ typedef struct
     ISOM_BASEBOX_COMMON;
     isom_chpl_t *chpl;      /* Chapter List Box */
     isom_meta_t *meta;      /* Meta Box extended by Apple for iTunes movie */
+    isom_WLOC_t *WLOC;      /* Window Location Box */
+    isom_LOOP_t *LOOP;      /* Looping Box */
+    isom_SelO_t *SelO;      /* Play Selection Only Box */
+    isom_AllF_t *AllF;      /* Play All Frames Box */
 } isom_udta_t;
 
 /** Caches for handling tracks **/
@@ -1701,6 +1735,7 @@ enum isom_box_type
 enum qt_box_type
 {
     QT_BOX_TYPE_ALAC    = LSMASH_4CC( 'a', 'l', 'a', 'c' ),
+    QT_BOX_TYPE_ALLF    = LSMASH_4CC( 'A', 'l', 'l', 'F' ),
     QT_BOX_TYPE_CHAN    = LSMASH_4CC( 'c', 'h', 'a', 'n' ),
     QT_BOX_TYPE_CLEF    = LSMASH_4CC( 'c', 'l', 'e', 'f' ),
     QT_BOX_TYPE_CLIP    = LSMASH_4CC( 'c', 'l', 'i', 'p' ),
@@ -1716,15 +1751,18 @@ enum qt_box_type
     QT_BOX_TYPE_KEYS    = LSMASH_4CC( 'k', 'e', 'y', 's' ),
     QT_BOX_TYPE_KMAT    = LSMASH_4CC( 'k', 'm', 'a', 't' ),
     QT_BOX_TYPE_LOAD    = LSMASH_4CC( 'l', 'o', 'a', 'd' ),
+    QT_BOX_TYPE_LOOP    = LSMASH_4CC( 'L', 'O', 'O', 'P' ),
     QT_BOX_TYPE_MATT    = LSMASH_4CC( 'm', 'a', 't', 't' ),
     QT_BOX_TYPE_META    = LSMASH_4CC( 'm', 'e', 't', 'a' ),
     QT_BOX_TYPE_MP4A    = LSMASH_4CC( 'm', 'p', '4', 'a' ),
     QT_BOX_TYPE_PNOT    = LSMASH_4CC( 'p', 'n', 'o', 't' ),
     QT_BOX_TYPE_PROF    = LSMASH_4CC( 'p', 'r', 'o', 'f' ),
+    QT_BOX_TYPE_SELO    = LSMASH_4CC( 'S', 'e', 'l', 'O' ),
     QT_BOX_TYPE_STPS    = LSMASH_4CC( 's', 't', 'p', 's' ),
     QT_BOX_TYPE_TAPT    = LSMASH_4CC( 't', 'a', 'p', 't' ),
     QT_BOX_TYPE_TEXT    = LSMASH_4CC( 't', 'e', 'x', 't' ),
     QT_BOX_TYPE_WAVE    = LSMASH_4CC( 'w', 'a', 'v', 'e' ),
+    QT_BOX_TYPE_WLOC    = LSMASH_4CC( 'W', 'L', 'O', 'C' ),
 
     QT_BOX_TYPE_TERMINATOR  = 0x00000000,
 };

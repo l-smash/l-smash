@@ -2496,6 +2496,71 @@ static int isom_read_data( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     return isom_add_print_func( root, data, level );
 }
 
+static int isom_read_WLOC( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_UDTA )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_WLOC_t *WLOC = lsmash_malloc_zero( sizeof(isom_WLOC_t) );
+    if( !WLOC )
+        return -1;
+    ((isom_udta_t *)parent)->WLOC = WLOC;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    WLOC->x = lsmash_bs_get_be16( bs );
+    WLOC->y = lsmash_bs_get_be16( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( WLOC, box );
+    return isom_add_print_func( root, WLOC, level );
+}
+
+static int isom_read_LOOP( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_UDTA )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_LOOP_t *LOOP = lsmash_malloc_zero( sizeof(isom_LOOP_t) );
+    if( !LOOP )
+        return -1;
+    ((isom_udta_t *)parent)->LOOP = LOOP;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    LOOP->looping_mode = lsmash_bs_get_be32( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( LOOP, box );
+    return isom_add_print_func( root, LOOP, level );
+}
+
+static int isom_read_SelO( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_UDTA )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_SelO_t *SelO = lsmash_malloc_zero( sizeof(isom_SelO_t) );
+    if( !SelO )
+        return -1;
+    ((isom_udta_t *)parent)->SelO = SelO;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    SelO->selection_only = lsmash_bs_get_byte( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( SelO, box );
+    return isom_add_print_func( root, SelO, level );
+}
+
+static int isom_read_AllF( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_UDTA )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_AllF_t *AllF = lsmash_malloc_zero( sizeof(isom_AllF_t) );
+    if( !AllF )
+        return -1;
+    ((isom_udta_t *)parent)->AllF = AllF;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    AllF->play_all_frames = lsmash_bs_get_byte( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( AllF, box );
+    return isom_add_print_func( root, AllF, level );
+}
+
 static int isom_read_mfra( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( !!parent->type )
@@ -2890,6 +2955,14 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
             return isom_read_udta( root, box, parent, level );
         case ISOM_BOX_TYPE_CHPL :
             return isom_read_chpl( root, box, parent, level );
+        case QT_BOX_TYPE_WLOC :
+            return isom_read_WLOC( root, box, parent, level );
+        case QT_BOX_TYPE_LOOP :
+            return isom_read_LOOP( root, box, parent, level );
+        case QT_BOX_TYPE_SELO :
+            return isom_read_SelO( root, box, parent, level );
+        case QT_BOX_TYPE_ALLF :
+            return isom_read_AllF( root, box, parent, level );
         case ISOM_BOX_TYPE_MVEX :
             return isom_read_mvex( root, box, parent, level );
         case ISOM_BOX_TYPE_MEHD :

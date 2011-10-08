@@ -1641,6 +1641,62 @@ static int isom_print_data( lsmash_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
+static int isom_print_WLOC( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_WLOC_t *WLOC = (isom_WLOC_t *)box;
+    int indent = level;
+    isom_print_box_common( indent++, box, "Window Location Box" );
+    isom_iprintf( indent, "x = %"PRIu16"\n", WLOC->x );
+    isom_iprintf( indent, "y = %"PRIu16"\n", WLOC->y );
+    return 0;
+}
+
+static int isom_print_LOOP( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_LOOP_t *LOOP = (isom_LOOP_t *)box;
+    int indent = level;
+    isom_print_box_common( indent++, box, "Looping Box" );
+    isom_iprintf( indent, "looping_mode = %"PRIu32, LOOP->looping_mode );
+    switch( LOOP->looping_mode )
+    {
+        case 0 :
+            printf( " (none)\n" );
+        case 1 :
+            printf( " (looping)\n" );
+        case 2 :
+            printf( " (palindromic looping)\n" );
+        default :
+            printf( "\n" );
+    }
+    return 0;
+}
+
+static int isom_print_SelO( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_SelO_t *SelO = (isom_SelO_t *)box;
+    int indent = level;
+    isom_print_box_common( indent++, box, "Play Selection Only Box" );
+    isom_iprintf( indent, "selection_only = %"PRIu8"\n", SelO->selection_only );
+    return 0;
+}
+
+static int isom_print_AllF( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_AllF_t *AllF = (isom_AllF_t *)box;
+    int indent = level;
+    isom_print_box_common( indent++, box, "Play All Frames Box" );
+    isom_iprintf( indent, "play_all_frames = %"PRIu8"\n", AllF->play_all_frames );
+    return 0;
+}
+
 static int isom_print_mvex( lsmash_root_t *root, isom_box_t *box, int level )
 {
     return isom_print_simple( box, level, "Movie Extends Box" );
@@ -2095,6 +2151,14 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
             return isom_print_udta;
         case ISOM_BOX_TYPE_CHPL :
             return isom_print_chpl;
+        case QT_BOX_TYPE_WLOC :
+            return isom_print_WLOC;
+        case QT_BOX_TYPE_LOOP :
+            return isom_print_LOOP;
+        case QT_BOX_TYPE_SELO :
+            return isom_print_SelO;
+        case QT_BOX_TYPE_ALLF :
+            return isom_print_AllF;
         case ISOM_BOX_TYPE_MVEX :
             return isom_print_mvex;
         case ISOM_BOX_TYPE_MEHD :
