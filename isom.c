@@ -3140,24 +3140,6 @@ static void isom_remove_chpl( isom_chpl_t *chpl )
     isom_remove_box( chpl, isom_udta_t );
 }
 
-static void isom_remove_udta( isom_udta_t *udta )
-{
-    if( !udta )
-        return;
-    isom_remove_chpl( udta->chpl );
-    if( udta->parent )
-    {
-        if( udta->parent->type == ISOM_BOX_TYPE_MOOV )
-            isom_remove_box( udta, isom_moov_t );
-        else if( udta->parent->type == ISOM_BOX_TYPE_TRAK )
-            isom_remove_box( udta, isom_trak_entry_t );
-        else
-            assert( 0 );
-        return;
-    }
-    free( udta );
-}
-
 static void isom_remove_keys_entry( isom_keys_entry_t *data )
 {
     if( !data )
@@ -3243,6 +3225,25 @@ static void isom_remove_meta( isom_meta_t *meta )
         return;
     }
     free( meta );
+}
+
+static void isom_remove_udta( isom_udta_t *udta )
+{
+    if( !udta )
+        return;
+    isom_remove_chpl( udta->chpl );
+    isom_remove_meta( udta->meta );
+    if( udta->parent )
+    {
+        if( udta->parent->type == ISOM_BOX_TYPE_MOOV )
+            isom_remove_box( udta, isom_moov_t );
+        else if( udta->parent->type == ISOM_BOX_TYPE_TRAK )
+            isom_remove_box( udta, isom_trak_entry_t );
+        else
+            assert( 0 );
+        return;
+    }
+    free( udta );
 }
 
 static void isom_remove_sample_pool( isom_sample_pool_t *pool );

@@ -1181,7 +1181,7 @@ typedef struct
 {
     ISOM_BASEBOX_COMMON;
     isom_chpl_t *chpl;      /* Chapter List Box */
-    isom_meta_t *meta;      /* Meta Box extended by Apple */
+    isom_meta_t *meta;      /* Meta Box extended by Apple for iTunes movie */
 } isom_udta_t;
 
 /** Caches for handling tracks **/
