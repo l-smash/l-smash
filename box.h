@@ -1178,7 +1178,7 @@ typedef struct
 {
     ISOM_BASEBOX_COMMON;
     /* default window location for movie */
-    uint16_t x;     
+    uint16_t x;
     uint16_t y;
 } isom_WLOC_t;
 

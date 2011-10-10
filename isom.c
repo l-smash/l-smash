@@ -8674,6 +8674,31 @@ static int isom_group_random_access( isom_trak_entry_t *trak, lsmash_sample_prop
     return 0;
 }
 
+static int isom_roll_grouping_established( isom_roll_group_t *group, int16_t roll_distance, isom_sgpd_entry_t *sgpd )
+{
+    /* Avoid duplication of sample group descriptions. */
+    uint32_t group_description_index = 1;
+    for( lsmash_entry_t *entry = sgpd->list->head; entry; entry = entry->next )
+    {
+        isom_roll_entry_t *data = (isom_roll_entry_t *)entry->data;
+        if( !data )
+            return -1;
+        if( roll_distance == data->roll_distance )
+        {
+            /* The same description already exists.
+             * Set the group_description_index corresponding the same description. */
+            group->assignment->group_description_index = group_description_index;
+            return 0;
+        }
+        ++group_description_index;
+    }
+    /* Add a new roll recovery description. */
+    if( !isom_add_roll_group_entry( sgpd, roll_distance ) )
+        return -1;
+    group->assignment->group_description_index = sgpd->list->entry_count;
+    return 0;
+}
+
 static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_property_t *prop )
 {
     if( !trak->root->avc_extensions )
@@ -8741,9 +8766,8 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_prop
             if( distance )
             {
                 /* Now, this group is a 'roll'. */
-                if( !isom_add_roll_group_entry( sgpd, distance ) )
+                if( isom_roll_grouping_established( group, distance, sgpd ) )
                     return -1;
-                group->assignment->group_description_index = sgpd->list->entry_count;
                 /* All groups before the current group are described. */
                 lsmash_entry_t *current = entry;
                 for( entry = pool->head; entry != current; entry = entry->next )
