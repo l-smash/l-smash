@@ -1073,7 +1073,7 @@ static lsmash_audio_summary_t *ac3_create_summary( mp4sys_ac3_info_t *info )
     summary->exdata                 = dac3;
     summary->exdata_length          = AC3_DAC3_BOX_LENGTH;
     summary->sample_type            = ISOM_CODEC_TYPE_AC_3_AUDIO;
-    summary->object_type_indication = MP4SYS_OBJECT_TYPE_NONE;
+    summary->object_type_indication = MP4SYS_OBJECT_TYPE_AC_3_AUDIO;        /* forbidden to use for ISO Base Media */
     summary->max_au_length          = AC3_MAX_AU_LENGTH;
     summary->aot                    = MP4A_AUDIO_OBJECT_TYPE_NULL; /* no effect */
     summary->frequency              = ac3_sample_rate_table[ info->fscod ];
@@ -1565,7 +1565,7 @@ static lsmash_audio_summary_t *eac3_create_summary( mp4sys_eac3_info_t *info )
         return NULL;
     }
     summary->sample_type            = ISOM_CODEC_TYPE_EC_3_AUDIO;
-    summary->object_type_indication = MP4SYS_OBJECT_TYPE_NONE;
+    summary->object_type_indication = MP4SYS_OBJECT_TYPE_EC_3_AUDIO;        /* forbidden to use for ISO Base Media */
     summary->max_au_length          = info->syncframe_count_in_au * EAC3_MAX_SYNCFRAME_LENGTH;
     summary->aot                    = MP4A_AUDIO_OBJECT_TYPE_NULL; /* no effect */
     summary->bit_depth              = 16;       /* no effect */
