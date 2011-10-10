@@ -2430,7 +2430,9 @@ static int h264_parse_pps_nalu( lsmash_bits_t *bits, h264_sps_t *sps, h264_pps_t
         else if( slice_group_map_type == 6 )
         {
             uint64_t pic_size_in_map_units_minus1 = h264_get_exp_golomb_ue( bits );
-            uint64_t slice_group_id_length = ceil( log( num_slice_groups_minus1 + 1 ) / 0.693147180559945 );
+            /* slice_group_id_length = ceil( log2( num_slice_groups_minus1 + 1 ) ); */
+            uint64_t slice_group_id_length;
+            for( slice_group_id_length = 1; num_slice_groups_minus1 >> slice_group_id_length; slice_group_id_length++ );
             for( uint64_t i = 0; i <= pic_size_in_map_units_minus1; i++ )
                 /* slice_group_id */
                 IF_INVALID_VALUE( lsmash_bits_get( bits, slice_group_id_length ) > num_slice_groups_minus1 )
