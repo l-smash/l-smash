@@ -1832,19 +1832,11 @@ static int isom_add_tkhd( isom_trak_entry_t *trak, uint32_t handler_type )
     if( !trak->tkhd )
     {
         isom_create_box( tkhd, trak, ISOM_BOX_TYPE_TKHD );
-        switch( handler_type )
-        {
-            case ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK :
-                tkhd->matrix[0] = 0x00010000;
-                tkhd->matrix[4] = 0x00010000;
-                tkhd->matrix[8] = 0x40000000;
-                break;
-            case ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK :
-                tkhd->volume = 0x0100;
-                break;
-            default :
-                break;
-        }
+        if( handler_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK )
+            tkhd->volume = 0x0100;
+        tkhd->matrix[0] = 0x00010000;
+        tkhd->matrix[4] = 0x00010000;
+        tkhd->matrix[8] = 0x40000000;
         tkhd->duration = 0xffffffff;
         tkhd->track_ID = trak->root->moov->mvhd->next_track_ID;
         ++ trak->root->moov->mvhd->next_track_ID;
