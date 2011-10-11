@@ -228,7 +228,7 @@ static lsmash_audio_summary_t *mp4sys_adts_create_summary( mp4sys_adts_fixed_hea
     summary->sample_type            = ISOM_CODEC_TYPE_MP4A_AUDIO;
     summary->object_type_indication = MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3;
     summary->max_au_length          = MP4SYS_ADTS_MAX_FRAME_LENGTH;
-    summary->frequency              = mp4a_AAC_frequency_table[header->sampling_frequency_index][1];
+    summary->frequency              = mp4a_sampling_frequency_table[header->sampling_frequency_index][1];
     summary->channels               = header->channel_configuration + ( header->channel_configuration == 0x07 ); /* 0x07 means 7.1ch */
     summary->bit_depth              = 16;
     summary->samples_in_frame       = 1024;
@@ -1766,6 +1766,333 @@ const static mp4sys_importer_functions mp4sys_eac3_importer =
     mp4sys_eac3_probe,
     mp4sys_eac3_get_accessunit,
     mp4sys_eac3_cleanup
+};
+
+/***************************************************************************
+    MPEG-4 ALS importer
+***************************************************************************/
+#define ALSSC_TWELVE_LENGTH 22
+
+typedef struct
+{
+    uint32_t size;
+    uint32_t samp_freq;
+    uint32_t samples;
+    uint32_t channels;
+    uint16_t frame_length;
+    uint8_t  resolution;
+    uint8_t  random_access;
+    uint8_t  ra_flag;
+    uint32_t access_unit_size;
+    uint32_t number_of_ra_units;
+    uint32_t *ra_unit_size;
+    uint8_t  *sc_data;
+} als_specific_config_t;
+
+typedef struct
+{
+    mp4sys_importer_status status;
+    als_specific_config_t alssc;
+    uint32_t samples_in_frame;
+    uint32_t au_number;
+} mp4sys_als_info_t;
+
+typedef struct
+{
+    FILE    *stream;
+    uint32_t pos;
+    uint32_t buffer_size;
+    uint8_t *buffer;
+    uint8_t *end;
+} als_stream_manager;
+
+static void mp4sys_remove_als_info( mp4sys_als_info_t *info )
+{
+    if( info->alssc.ra_unit_size )
+        free( info->alssc.ra_unit_size );
+    if( info->alssc.sc_data )
+        free( info->alssc.sc_data );
+    free( info );
+}
+
+static void mp4sys_als_cleanup( mp4sys_importer_t *importer )
+{
+    debug_if( importer && importer->info )
+        mp4sys_remove_als_info( importer->info );
+}
+
+static int als_stream_read( als_stream_manager *manager, uint32_t read_size )
+{
+    if( manager->buffer + manager->buffer_size >= manager->end )
+    {
+        uint8_t *temp = realloc( manager->buffer, manager->buffer_size + read_size );
+        if( !temp )
+            return -1;
+        manager->buffer = temp;
+        manager->buffer_size += read_size;
+    }
+    uint32_t actual_read_size = fread( manager->buffer + manager->pos, 1, read_size, manager->stream );
+    if( actual_read_size == 0 )
+        return -1;
+    manager->end = manager->buffer + manager->pos + actual_read_size;
+    return 0;
+}
+
+static int als_cleanup_stream_manager( als_stream_manager *manager )
+{
+    free( manager->buffer );
+    return -1;
+}
+
+static uint32_t als_get_be32( als_stream_manager *manager )
+{
+    uint32_t value = (manager->buffer[ manager->pos     ] << 24)
+                   | (manager->buffer[ manager->pos + 1 ] << 16)
+                   | (manager->buffer[ manager->pos + 2 ] <<  8)
+                   |  manager->buffer[ manager->pos + 3 ];
+    manager->pos += 4;
+    return value;
+}
+
+static int als_parse_specific_config( mp4sys_importer_t *importer, uint8_t *buf, als_specific_config_t *alssc )
+{
+    alssc->samp_freq     = (buf[4] << 24) | (buf[5] << 16) | (buf[6] << 8) | buf[7];
+    alssc->samples       = (buf[8] << 24) | (buf[9] << 16) | (buf[10] << 8) | buf[11];
+    if( alssc->samples == 0xffffffff )
+        return -1;      /* We don't support this case. */
+    alssc->channels      = (buf[12] << 8) | buf[13];
+    alssc->resolution    = (buf[14] & 0x1c) >> 2;
+    if( alssc->resolution > 3 )
+        return -1;      /* reserved */
+    alssc->frame_length  = (buf[15] << 8) | buf[16];
+    alssc->random_access = buf[17];
+    if( alssc->random_access == 0 )
+        return -1;      /* We don't support this case since importer can't handle the last sample duration yet. */
+    alssc->ra_flag       = (buf[18] & 0xc0) >> 6;
+    if( alssc->ra_flag == 0 )
+        return -1;      /* We don't support this case. */
+    buf[18] &= 0x3f;    /* Set 0 to ra_flag. We will remove ra_unit_size in each access unit. */
+#if 0
+    if( alssc->samples == 0xffffffff && alssc->ra_flag == 2 )
+        return -1;
+#endif
+    int chan_sort = !!(buf[20] & 0x1);
+    if( alssc->channels == 0 )
+    {
+        if( buf[20] & 0x8 )
+            return -1;      /* If channels = 0 (mono), joint_stereo = 0. */
+        else if( buf[20] & 0x4 )
+            return -1;      /* If channels = 0 (mono), mc_coding = 0. */
+        else if( chan_sort )
+            return -1;      /* If channels = 0 (mono), chan_sort = 0. */
+    }
+    int chan_config      = !!(buf[20] & 0x2);
+    int crc_enabled      = !!(buf[21] & 0x80);
+    int aux_data_enabled = !!(buf[21] & 0x1);
+    uint32_t read_size = 0;
+    if( chan_config )
+        read_size += 2;     /* chan_config_info */
+    if( chan_sort )
+    {
+        uint32_t ChBits;
+        for( ChBits = 1; alssc->channels >> ChBits; ChBits++ );
+        uint32_t chan_pos_length = (alssc->channels + 1) * ChBits;
+        read_size += chan_pos_length / 8 + !!(chan_pos_length % 8);
+    }
+    /* Set up stream manager. */
+    als_stream_manager manager;
+    manager.stream = importer->stream;
+    manager.buffer_size = ALSSC_TWELVE_LENGTH;
+    manager.buffer = malloc( manager.buffer_size );
+    if( !manager.buffer )
+        return -1;
+    manager.pos = ALSSC_TWELVE_LENGTH + read_size;
+    manager.end = manager.buffer + manager.buffer_size;
+    memcpy( manager.buffer, buf, ALSSC_TWELVE_LENGTH );
+    /* Continue to read and parse. */
+    read_size += 8;     /* header_size and trailer_size */
+    if( als_stream_read( &manager, read_size ) )
+        return als_cleanup_stream_manager( &manager );
+    uint32_t header_size  = als_get_be32( &manager );
+    uint32_t trailer_size = als_get_be32( &manager );
+    read_size = header_size * (header_size != 0xffffffff) + trailer_size * (trailer_size != 0xffffffff) + 4 * crc_enabled;
+    if( als_stream_read( &manager, read_size ) )
+        return -1;
+    manager.pos += read_size;   /* Skip orig_header, orig_trailer and crc. */
+    /* Random access unit */
+    uint32_t number_of_frames = (alssc->samples / (alssc->frame_length + 1)) + !!(alssc->samples % (alssc->frame_length + 1));
+    if( alssc->random_access != 0 )
+        alssc->number_of_ra_units = number_of_frames / alssc->random_access + !!(number_of_frames % alssc->random_access);
+    else
+        alssc->number_of_ra_units = 0;
+    if( alssc->ra_flag == 2 && alssc->random_access != 0 )
+    {
+        uint32_t pos = manager.pos;
+        read_size = alssc->number_of_ra_units * 4;
+        if( als_stream_read( &manager, read_size ) )
+            return als_cleanup_stream_manager( &manager );
+        alssc->ra_unit_size = malloc( alssc->number_of_ra_units * sizeof(uint32_t) );
+        if( !alssc->ra_unit_size )
+            return als_cleanup_stream_manager( &manager );
+        for( uint32_t i = 0; i < alssc->number_of_ra_units; i++ )
+            alssc->ra_unit_size[i] = als_get_be32( &manager );
+        manager.pos = pos;      /* Remove ra_unit_size. */
+    }
+    else
+        alssc->ra_unit_size = NULL;
+    /* auxiliary data */
+    if( aux_data_enabled )
+    {
+        if( als_stream_read( &manager, 4 ) )
+            return als_cleanup_stream_manager( &manager );
+        uint32_t aux_size = als_get_be32( &manager );
+        read_size = aux_size * (aux_size != 0xffffffff);
+        if( als_stream_read( &manager, read_size ) )
+            return als_cleanup_stream_manager( &manager );
+        manager.pos += read_size;
+    }
+    /* Copy ALSSpecificConfig. */
+    alssc->size = manager.pos;
+    alssc->sc_data = malloc( alssc->size );
+    if( !alssc->sc_data )
+        return als_cleanup_stream_manager( &manager );
+    memcpy( alssc->sc_data, manager.buffer, alssc->size );
+    als_cleanup_stream_manager( &manager );
+    return 0;
+}
+
+static int mp4sys_als_get_accessunit( mp4sys_importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
+{
+    debug_if( !importer || !importer->info || !buffered_sample->data || !buffered_sample->length )
+        return -1;
+    if( !importer->info || track_number != 1 )
+        return -1;
+    lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_get_entry_data( importer->summaries, track_number );
+    if( !summary )
+        return -1;
+    mp4sys_als_info_t *info = (mp4sys_als_info_t *)importer->info;
+    mp4sys_importer_status current_status = info->status;
+    if( current_status == MP4SYS_IMPORTER_EOF )
+    {
+        buffered_sample->length = 0;
+        return 0;
+    }
+    als_specific_config_t *alssc = &info->alssc;
+    if( alssc->number_of_ra_units == 0 )
+    {
+        if( fread( buffered_sample->data, 1, alssc->access_unit_size, importer->stream ) != alssc->access_unit_size )
+            return -1;
+        buffered_sample->length = alssc->access_unit_size;
+        buffered_sample->cts = buffered_sample->dts = 0;
+        buffered_sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+        info->status = MP4SYS_IMPORTER_EOF;
+        return 0;
+    }
+    uint32_t au_length;
+    if( alssc->ra_flag == 2 )
+    {
+        au_length = alssc->ra_unit_size[info->au_number];
+        if( fread( buffered_sample->data, 1, au_length, importer->stream ) != au_length )
+            return -1;
+    }
+    else /* if( alssc->ra_flag == 1 ) */
+    {
+        uint8_t temp[4];
+        if( fread( temp, 1, 4, importer->stream ) != 4 )
+            return -1;
+        au_length = (temp[0] << 24) | (temp[1] << 16) | (temp[2] << 8) | temp[3];     /* We remove ra_unit_size. */
+        if( fread( buffered_sample->data, 1, au_length, importer->stream ) != au_length )
+            return -1;
+    }
+    buffered_sample->length = au_length;
+    buffered_sample->dts = info->au_number++ * info->samples_in_frame;
+    buffered_sample->cts = buffered_sample->dts;
+    buffered_sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+    if( info->au_number == alssc->number_of_ra_units )
+        info->status = MP4SYS_IMPORTER_EOF;
+    return 0;
+}
+
+static lsmash_audio_summary_t *als_create_summary( mp4sys_importer_t *importer, als_specific_config_t *alssc )
+{
+    lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_create_summary( MP4SYS_STREAM_TYPE_AudioStream );
+    if( !summary )
+        return NULL;
+    summary->exdata = lsmash_memdup( alssc->sc_data, alssc->size );
+    if( !summary->exdata )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        return NULL;
+    }
+    summary->exdata_length          = alssc->size;
+    summary->sample_type            = ISOM_CODEC_TYPE_MP4A_AUDIO;
+    summary->object_type_indication = MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3;
+    summary->aot                    = MP4A_AUDIO_OBJECT_TYPE_ALS;
+    summary->frequency              = alssc->samp_freq;
+    summary->channels               = alssc->channels + 1;
+    summary->bit_depth              = (alssc->resolution + 1) * 8;
+    summary->sbr_mode               = MP4A_AAC_SBR_NOT_SPECIFIED; /* no effect */
+    if( alssc->random_access != 0 )
+    {
+        summary->samples_in_frame = (alssc->frame_length + 1) * alssc->random_access;
+        summary->max_au_length    = summary->channels * (summary->bit_depth / 8) * summary->samples_in_frame * alssc->random_access;
+    }
+    else
+    {
+        uint64_t pos = lsmash_ftell( importer->stream );
+        lsmash_fseek( importer->stream, 0, SEEK_END );
+        summary->max_au_length = alssc->access_unit_size = lsmash_ftell( importer->stream ) - pos;
+        lsmash_fseek( importer->stream, pos, SEEK_SET );
+    }
+    if( lsmash_setup_AudioSpecificConfig( summary ) )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        return NULL;
+    }
+    return summary;
+}
+
+static int mp4sys_als_probe( mp4sys_importer_t *importer )
+{
+    uint8_t buf[ALSSC_TWELVE_LENGTH];
+    if( fread( buf, 1, ALSSC_TWELVE_LENGTH, importer->stream ) != ALSSC_TWELVE_LENGTH )
+        return -1;
+    /* Check ALS identifier( = 0x414C5300). */
+    if( buf[0] != 0x41 || buf[1] != 0x4C || buf[2] != 0x53 || buf[3] != 0x00 )
+        return -1;
+    als_specific_config_t alssc;
+    if( als_parse_specific_config( importer, buf, &alssc ) )
+        return -1;
+    lsmash_audio_summary_t *summary = als_create_summary( importer, &alssc );
+    if( !summary )
+        return -1;
+    /* importer status */
+    mp4sys_als_info_t *info = lsmash_malloc_zero( sizeof(mp4sys_als_info_t) );
+    if( !info )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        return -1;
+    }
+    info->status = MP4SYS_IMPORTER_OK;
+    info->alssc = alssc;
+    info->samples_in_frame = summary->samples_in_frame;
+    if( lsmash_add_entry( importer->summaries, summary ) )
+    {
+        free( info );
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        return -1;
+    }
+    importer->info = info;
+    return 0;
+}
+
+const static mp4sys_importer_functions mp4sys_als_importer =
+{
+    "als",
+    1,
+    mp4sys_als_probe,
+    mp4sys_als_get_accessunit,
+    mp4sys_als_cleanup
 };
 
 /***************************************************************************
@@ -3796,6 +4123,7 @@ const static mp4sys_importer_functions* mp4sys_importer_tbl[] = {
     &mp4sys_amr_importer,
     &mp4sys_ac3_importer,
     &mp4sys_eac3_importer,
+    &mp4sys_als_importer,
     &mp4sys_h264_importer,
     NULL,
 };
