@@ -2073,22 +2073,27 @@ static void h264_remove_emulation_prevention( uint8_t *src, uint64_t src_length,
 static int h264_check_more_rbsp_data( lsmash_bits_t *bits )
 {
     lsmash_bs_t *bs = bits->bs;
-    if( bs->pos + 1 < bs->store )
-        return 1;       /* rbsp_trailing_bits is placed at next or later byte. */
-    if( bs->pos + 1 > bs->store )
+    if( bs->pos < bs->store )
+        return 1;       /* rbsp_trailing_bits will be placed at the next or later byte.
+                         * Note: bs->pos points at the next byte if bits->store isn't empty. */
+    if( bits->store == 0 )
     {
+        /* No rbsp_trailing_bits is present in RBSP data. */
         bs->error = 1;
         return 0;
     }
-    return (uint8_t)(bits->cache & ~(~0U << bits->store)) != (uint8_t)(1U << bits->store);
+    /* Check whether remainder of bits is identical to rbsp_trailing_bits. */
+    uint8_t remainder_bits = bits->cache & ~(~0U << bits->store);
+    uint8_t rbsp_trailing_bits = 1U << (bits->store - 1);
+    return remainder_bits != rbsp_trailing_bits;
 }
 
 static int h264_check_nalu_header( h264_nalu_header_t *nalu_header, uint8_t **p_buf_pos, int use_long_start_code )
 {
     uint8_t *buf_pos = *p_buf_pos;
-    uint8_t forbidden_zero_bit =                                   (*buf_pos >> 7) & 0x01;
-    uint8_t nal_ref_idc        = nalu_header->nal_ref_idc        = (*buf_pos >> 5) & 0x03;
-    uint8_t nal_unit_type      = nalu_header->nal_unit_type      =  *buf_pos       & 0x1f;
+    uint8_t forbidden_zero_bit =                              (*buf_pos >> 7) & 0x01;
+    uint8_t nal_ref_idc        = nalu_header->nal_ref_idc   = (*buf_pos >> 5) & 0x03;
+    uint8_t nal_unit_type      = nalu_header->nal_unit_type =  *buf_pos       & 0x1f;
     nalu_header->length = 1;
     *p_buf_pos = buf_pos + nalu_header->length;
     if( nal_unit_type == 14 || nal_unit_type == 20 )
