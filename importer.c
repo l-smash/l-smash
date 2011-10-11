@@ -2035,7 +2035,7 @@ static lsmash_audio_summary_t *als_create_summary( mp4sys_importer_t *importer, 
     if( alssc->random_access != 0 )
     {
         summary->samples_in_frame = (alssc->frame_length + 1) * alssc->random_access;
-        summary->max_au_length    = summary->channels * (summary->bit_depth / 8) * summary->samples_in_frame * alssc->random_access;
+        summary->max_au_length    = summary->channels * (summary->bit_depth / 8) * summary->samples_in_frame;
     }
     else
     {
