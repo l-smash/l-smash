@@ -313,6 +313,7 @@ int mp4sys_add_DecoderConfigDescriptor(
     dcd->header.tag = MP4SYS_DESCRIPTOR_TAG_DecoderConfigDescrTag;
     dcd->objectTypeIndication = objectTypeIndication;
     dcd->streamType = streamType;
+    dcd->reserved = 1;
     dcd->bufferSizeDB = bufferSizeDB;
     dcd->maxBitrate = maxBitrate;
     dcd->avgBitrate = avgBitrate;
