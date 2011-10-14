@@ -231,8 +231,9 @@ static int set_movie_parameters( movie_io_t *io )
     output->movie_param.brands           = output_brands;
     if( io->chap_file )
         for( uint32_t i = 0; i < output->movie_param.number_of_brands; i++ )
-            if( output->movie_param.brands[i] == ISOM_BRAND_TYPE_QT || output->movie_param.brands[i] == ISOM_BRAND_TYPE_M4A
-             || output->movie_param.brands[i] == ISOM_BRAND_TYPE_M4B )
+            if( output->movie_param.brands[i] == ISOM_BRAND_TYPE_QT  || output->movie_param.brands[i] == ISOM_BRAND_TYPE_M4A
+             || output->movie_param.brands[i] == ISOM_BRAND_TYPE_M4B || output->movie_param.brands[i] == ISOM_BRAND_TYPE_M4P
+             || output->movie_param.brands[i] == ISOM_BRAND_TYPE_M4V )
             {
                 io->ref_chap_available = 1;
                 break;

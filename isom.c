@@ -5037,7 +5037,6 @@ int isom_check_compatibility( lsmash_root_t *root )
                 break;
             case ISOM_BRAND_TYPE_M4A :
             case ISOM_BRAND_TYPE_M4B :
-                root->itunes_audio = 1;
             case ISOM_BRAND_TYPE_M4P :
             case ISOM_BRAND_TYPE_M4V :
                 root->itunes_movie = 1;
@@ -6721,7 +6720,7 @@ uint32_t lsmash_create_track( lsmash_root_t *root, lsmash_media_type media_type 
                 return 0;
             break;
         case ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK :
-            if( root->qt_compatible || root->itunes_audio )
+            if( root->qt_compatible || root->itunes_movie )
             {
                 if( isom_add_gmhd( trak->mdia->minf )
                  || isom_add_gmin( trak->mdia->minf->gmhd )
@@ -6787,8 +6786,8 @@ int lsmash_set_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
      * And when a file is read as an MPEG-4 file, these values shall be ignored.
      * If a file complies with other specifications, then those fields may have non-default values
      * as required by those other specifications. */
-    tkhd->alternate_group = root->qt_compatible || root->itunes_audio || root->max_3gpp_version >= 4 ? param->alternate_group : 0;
-    if( root->qt_compatible || root->itunes_audio )
+    tkhd->alternate_group = root->qt_compatible || root->itunes_movie || root->max_3gpp_version >= 4 ? param->alternate_group : 0;
+    if( root->qt_compatible || root->itunes_movie )
     {
         tkhd->layer  = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? param->video_layer  : 0;
         tkhd->volume = media_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK ? param->audio_volume : 0;
@@ -7273,7 +7272,7 @@ int lsmash_set_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t 
     root->max_chunk_size      = param->max_chunk_size;
     root->max_read_size       = param->max_read_size;
     mvhd->timescale           = param->timescale;
-    if( root->qt_compatible || root->itunes_audio )
+    if( root->qt_compatible || root->itunes_movie )
     {
         mvhd->rate            = param->playback_rate;
         mvhd->volume          = param->playback_volume;
@@ -9581,7 +9580,7 @@ fail:
 
 int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_ID, char *file_name )
 {
-    if( !root || (!root->qt_compatible && !root->itunes_audio) || !root->moov || !root->moov->mvhd )
+    if( !root || (!root->qt_compatible && !root->itunes_movie) || !root->moov || !root->moov->mvhd )
         return -1;
     FILE *chapter = NULL;       /* shut up 'uninitialized' warning */
     /* Create a Track Reference Box. */
@@ -9613,12 +9612,12 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     lsmash_media_parameters_t media_param;
     lsmash_initialize_media_parameters( &media_param );
     media_param.timescale = media_timescale;
-    media_param.ISO_language = root->max_3gpp_version >= 6 || root->itunes_audio ? ISOM_LANGUAGE_CODE_UNDEFINED : 0;
+    media_param.ISO_language = root->max_3gpp_version >= 6 || root->itunes_movie ? ISOM_LANGUAGE_CODE_UNDEFINED : 0;
     media_param.MAC_language = 0;
     if( lsmash_set_media_parameters( root, chapter_track_ID, &media_param ) )
         goto fail;
     /* Create a sample description. */
-    uint32_t sample_type = root->max_3gpp_version >= 6 || root->itunes_audio ? ISOM_CODEC_TYPE_TX3G_TEXT : QT_CODEC_TYPE_TEXT_TEXT;
+    uint32_t sample_type = root->max_3gpp_version >= 6 || root->itunes_movie ? ISOM_CODEC_TYPE_TX3G_TEXT : QT_CODEC_TYPE_TEXT_TEXT;
     uint32_t sample_entry = lsmash_add_sample_entry( root, chapter_track_ID, sample_type, NULL );
     if( !sample_entry )
         goto fail;

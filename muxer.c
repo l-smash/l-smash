@@ -43,12 +43,12 @@ typedef struct
     int      help;
     int      isom;
     int      isom_version;
+    int      itunes_movie;
     int      qtff;
     int      brand_3gx;
     int      optimize_pd;
     int      timeline_shift;
     char    *chap_file;
-    int      ref_chap_available;
     uint32_t chap_track;
     uint32_t interleave;
     uint32_t num_of_brands;
@@ -273,9 +273,10 @@ static int decide_brands( option_t *opt )
             case ISOM_BRAND_TYPE_QT :
                 opt->qtff = 1;
                 break;
-            case ISOM_BRAND_TYPE_MP42 :
             case ISOM_BRAND_TYPE_M4A :
             case ISOM_BRAND_TYPE_M4V :
+                opt->itunes_movie = 1;
+            case ISOM_BRAND_TYPE_MP42 :
                 add_brand( opt, ISOM_BRAND_TYPE_MP42 );
                 add_brand( opt, ISOM_BRAND_TYPE_MP41 );
                 break;
@@ -294,7 +295,7 @@ static int decide_brands( option_t *opt )
         case ISOM_BRAND_TYPE_M4A :
         case ISOM_BRAND_TYPE_M4V :
             opt->minor_version = 0x00000000;
-            eprintf( "Apple MP4 muxing mode\n" );
+            eprintf( "iTunes MP4 muxing mode\n" );
             break;
         case ISOM_BRAND_TYPE_3GP6 :
             opt->minor_version = 0x00000000;    /* means, 3gp(3gp6) 6.0.0 : "6" is not included in minor_version. */
@@ -316,13 +317,6 @@ static int decide_brands( option_t *opt )
         setup_isom_version( opt );
     if( opt->num_of_brands > MAX_NUM_OF_BRANDS )
         return ERROR_MSG( "exceed the maximum number of brands we can deal with.\n" );
-    if( opt->chap_file )
-        for( uint32_t i = 0; i < opt->num_of_brands; i++ )
-            if( opt->brands[i] == ISOM_BRAND_TYPE_QT || opt->brands[i] == ISOM_BRAND_TYPE_M4A )
-            {
-                opt->ref_chap_available = 1;
-                break;
-            }
     return 0;
 }
 
@@ -546,6 +540,16 @@ static void display_codec_name( uint32_t codec_type, uint32_t track_number )
 #undef DISPLAY_CODEC_NAME
 }
 
+static void set_reference_chapter_track( output_t *output, option_t *opt )
+{
+    if( !opt->chap_file || !opt->qtff || !opt->itunes_movie )
+        return;
+    if( opt->chap_track > output->num_of_tracks )
+        ERROR_MSG( "Warning: the track number specified in --chapter-track is larger than the number of the actual output tracks. Reference chapter will not be set.\n" );
+    else if( lsmash_create_reference_chapter_track( output->root, opt->chap_track, opt->chap_file ) )
+        ERROR_MSG( "Warning: failed to set reference chapter.\n" );
+}
+
 int main( int argc, char *argv[] )
 {
     if( argc < 3 )
@@ -764,16 +768,9 @@ int main( int argc, char *argv[] )
         }
         input->current_track_number = 1;
     }
-    /* Set reference chapter */
-    if( opt->ref_chap_available )
-    {
-        if( opt->chap_track > output->num_of_tracks )
-            ERROR_MSG( "Warning: the track number specified in --chapter-track is larger than the number of the actual output tracks. Reference chapter will not be set.\n" );
-        else if( lsmash_create_reference_chapter_track( output->root, opt->chap_track, opt->chap_file ) )
-            ERROR_MSG( "Warning: failed to set reference chapter.\n" );
-    }
     output->current_track_number = 1;
     muxer.current_input_number = 1;
+    set_reference_chapter_track( output, opt );
     /* Start muxing. */
     double   largest_dts = 0;
     uint32_t num_consecutive_sample_skip = 0;
@@ -877,10 +874,10 @@ int main( int argc, char *argv[] )
         if( lsmash_create_explicit_timeline_map( output->root, out_track->track_ID, 0, out_track->start_offset, ISOM_EDIT_MODE_NORMAL ) )
             ERROR_MSG( "failed to set timeline map                                                    .\n" );
     }
-    /* Set tyrant chapter */
+    /* Set chapter list. */
     if( opt->chap_file )
         if( lsmash_set_tyrant_chapter( output->root, opt->chap_file ) )
-            ERROR_MSG( "Warning: failed to set tyrant chapter.\n" );
+            ERROR_MSG( "Warning: failed to set chapter list.\n" );
     /* Close movie. */
     lsmash_adhoc_remux_t *finalize;
     if( opt->optimize_pd )
