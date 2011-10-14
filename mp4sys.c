@@ -621,7 +621,7 @@ static int mp4sys_write_SLConfigDescriptor( lsmash_bs_t *bs, mp4sys_SLConfigDesc
         temp16 |= slcd->AU_seqNumLength           << 7;
         temp16 |= slcd->packetSeqNumLength        << 2;
         temp16 |= slcd->reserved;
-        lsmash_bs_put_be32( bs, temp16 );
+        lsmash_bs_put_be16( bs, temp16 );
     }
     if( slcd->durationFlag )
     {
