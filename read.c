@@ -2436,7 +2436,7 @@ static int isom_read_metaitem( lsmash_root_t *root, isom_box_t *box, isom_box_t 
 
 static int isom_read_mean( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != LSMASH_4CC( '-', '-', '-', '-' ) )
+    if( parent->type != ITUNES_METADATA_TYPE_CUSTOM )
         return isom_read_unknown_box( root, box, parent, level );
     isom_mean_t *mean = lsmash_malloc_zero( sizeof(isom_mean_t) );
     if( !mean )
@@ -2455,7 +2455,7 @@ static int isom_read_mean( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_name( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != LSMASH_4CC( '-', '-', '-', '-' ) )
+    if( parent->type != ITUNES_METADATA_TYPE_CUSTOM )
         return isom_read_unknown_box( root, box, parent, level );
     isom_name_t *name = lsmash_malloc_zero( sizeof(isom_name_t) );
     if( !name )

@@ -2280,6 +2280,19 @@ static int isom_add_chpl( isom_moov_t *moov )
     return 0;
 }
 
+static int isom_add_metaitem( isom_ilst_t *ilst, uint32_t type )
+{
+    if( !ilst || !ilst->item_list )
+        return -1;
+    isom_create_box( metaitem, ilst, type );
+    if( lsmash_add_entry( ilst->item_list, metaitem ) )
+    {
+        free( metaitem );
+        return -1;
+    }
+    return 0;
+}
+
 #ifdef LSMASH_DEMUXER_ENABLED
 static int isom_add_mean( isom_metaitem_t *metaitem )
 {
@@ -2298,6 +2311,7 @@ static int isom_add_name( isom_metaitem_t *metaitem )
     metaitem->name = name;
     return 0;
 }
+#endif /* LSMASH_DEMUXER_ENABLED */
 
 static int isom_add_data( isom_metaitem_t *metaitem )
 {
@@ -2358,7 +2372,6 @@ static int isom_add_meta( isom_box_t *parent )
     }
     return 0;
 }
-#endif /* LSMASH_DEMUXER_ENABLED */
 
 static int isom_add_udta( lsmash_root_t *root, uint32_t track_ID )
 {
@@ -9707,6 +9720,163 @@ void lsmash_delete_tyrant_chapter( lsmash_root_t *root )
         return;
     isom_remove_chpl( root->moov->udta->chpl );
     root->moov->udta->chpl = NULL;
+}
+
+static isom_data_t *isom_add_metadata( lsmash_root_t *root, uint32_t type )
+{
+    assert( root && root->moov );
+    if( (!root->moov->udta             && isom_add_udta( root, 0 ))
+     || (!root->moov->udta->meta       && isom_add_meta( (isom_box_t *)root->moov->udta ))
+     || (!root->moov->udta->meta->hdlr && isom_add_hdlr( NULL, root->moov->udta->meta, NULL, ISOM_META_HANDLER_TYPE_ITUNES_METADATA ))
+     || (!root->moov->udta->meta->ilst && isom_add_ilst( root->moov )) )
+        return NULL;
+    isom_ilst_t *ilst = root->moov->udta->meta->ilst;
+    if( isom_add_metaitem( ilst, type ) )
+        return NULL;
+    isom_metaitem_t *metaitem = (isom_metaitem_t *)ilst->item_list->tail->data;
+    if( isom_add_data( metaitem ) )
+    {
+        lsmash_remove_entry_direct( ilst->item_list, ilst->item_list->tail, isom_remove_metaitem );
+        return NULL;
+    }
+    return metaitem->data;
+}
+
+int lsmash_set_itunes_metadata_string( lsmash_root_t *root, lsmash_itunes_metadata_type type, char *value )
+{
+    static const lsmash_itunes_metadata_type metadata_type_table[] =
+        {
+            ITUNES_METADATA_TYPE_ALBUM_NAME,
+            ITUNES_METADATA_TYPE_ARTIST,
+            ITUNES_METADATA_TYPE_USER_COMMENT,
+            ITUNES_METADATA_TYPE_RELEASE_DATE,
+            ITUNES_METADATA_TYPE_ENCODED_BY,
+            ITUNES_METADATA_TYPE_USER_GENRE,
+            ITUNES_METADATA_TYPE_0XA9_GROUPING,
+            ITUNES_METADATA_TYPE_LYRICS,
+            ITUNES_METADATA_TYPE_TITLE,
+            ITUNES_METADATA_TYPE_TRACK_SUBTITLE,
+            ITUNES_METADATA_TYPE_ENCODING_TOOL,
+            ITUNES_METADATA_TYPE_COMPOSER,
+            ITUNES_METADATA_TYPE_ALBUM_ARTIST,
+            ITUNES_METADATA_TYPE_PODCAST_CATEGORY,
+            ITUNES_METADATA_TYPE_COPYRIGHT,
+            ITUNES_METADATA_TYPE_DESCRIPTION,
+            ITUNES_METADATA_TYPE_GROUPING,
+            ITUNES_METADATA_TYPE_PODCAST_KEYWORD,
+            ITUNES_METADATA_TYPE_LONG_DESCRIPTION,
+            ITUNES_METADATA_TYPE_PURCHASE_DATE,
+            ITUNES_METADATA_TYPE_TV_EPISODE_ID,
+            ITUNES_METADATA_TYPE_TV_NETWORK,
+            ITUNES_METADATA_TYPE_TV_SHOW_NAME,
+            ITUNES_METADATA_TYPE_ITUNES_PURCHASE_ACCOUNT_ID,
+            0
+        };
+    int i;
+    for( i = 0; metadata_type_table[i]; i++ )
+        if( type == metadata_type_table[i] )
+            break;
+    if( !metadata_type_table[i] )
+        return -1;
+    uint32_t value_length = strlen( value );
+    if( type == ITUNES_METADATA_TYPE_DESCRIPTION && value_length > 255 )
+        type = ITUNES_METADATA_TYPE_LONG_DESCRIPTION;
+    isom_data_t *data = isom_add_metadata( root, type );
+    if( !data )
+        return -1;
+    data->type_code = 1;
+    data->value_length = value_length;      /* No null terminator */
+    data->value = lsmash_memdup( value, data->value_length );
+    if( !data->value )
+    {
+        isom_ilst_t *ilst = root->moov->udta->meta->ilst;
+        lsmash_remove_entry_direct( ilst->item_list, ilst->item_list->tail, isom_remove_metaitem );
+        return -1;
+    }
+    return 0;
+}
+
+int lsmash_set_itunes_metadata_integer( lsmash_root_t *root, lsmash_itunes_metadata_type type, uint64_t value )
+{
+    static const struct
+    {
+        lsmash_itunes_metadata_type type;
+        int                         length;
+    } metadata_code_type_table[] =
+        {
+            { ITUNES_METADATA_TYPE_EPISODE_GLOBAL_ID,          1 },
+            { ITUNES_METADATA_TYPE_PREDEFINED_GENRE,           4 },
+            { ITUNES_METADATA_TYPE_CONTENT_RATING,             1 },
+            { ITUNES_METADATA_TYPE_MEDIA_TYPE,                 1 },
+            { ITUNES_METADATA_TYPE_BEATS_PER_MINUTE,           4 },
+            { ITUNES_METADATA_TYPE_TV_EPISODE,                 4 },
+            { ITUNES_METADATA_TYPE_TV_SEASON,                  4 },
+            { ITUNES_METADATA_TYPE_ITUNES_ACCOUNT_TYPE,        1 },
+            { ITUNES_METADATA_TYPE_ITUNES_ARTIST_ID,           4 },
+            { ITUNES_METADATA_TYPE_ITUNES_COMPOSER_ID,         4 },
+            { ITUNES_METADATA_TYPE_ITUNES_CATALOG_ID,          4 },
+            { ITUNES_METADATA_TYPE_ITUNES_TV_GENRE_ID,         4 },
+            { ITUNES_METADATA_TYPE_ITUNES_PLAYLIST_ID,         8 },
+            { ITUNES_METADATA_TYPE_ITUNES_COUNTRY_CODE,        4 },
+            { 0 }
+        };
+    int i;
+    for( i = 0; metadata_code_type_table[i].type; i++ )
+        if( type == metadata_code_type_table[i].type )
+            break;
+    if( !metadata_code_type_table[i].type )
+        return -1;
+    isom_data_t *data = isom_add_metadata( root, type );
+    if( !data )
+        return -1;
+    data->type_code = 21;
+    data->value_length = metadata_code_type_table[i].length;
+    uint8_t temp[8];
+    for( i = 0; i < data->value_length; i++ )
+    {
+        int shift = (data->value_length - i - 1) * 8;
+        temp[i] = (value >> shift) & 0xff;
+    }
+    data->value = lsmash_memdup( temp, data->value_length );
+    if( !data->value )
+    {
+        isom_ilst_t *ilst = root->moov->udta->meta->ilst;
+        lsmash_remove_entry_direct( ilst->item_list, ilst->item_list->tail, isom_remove_metaitem );
+        return -1;
+    }
+    return 0;
+}
+
+int lsmash_set_itunes_metadata_boolean( lsmash_root_t *root, lsmash_itunes_metadata_type type, lsmash_boolean_t value )
+{
+    static const lsmash_itunes_metadata_type metadata_type_table[] =
+        {
+            ITUNES_METADATA_TYPE_DISC_COMPILATION,
+            ITUNES_METADATA_TYPE_HIGH_DEFINITION_VIDEO,
+            ITUNES_METADATA_TYPE_PODCAST,
+            ITUNES_METADATA_TYPE_GAPLESS_PLAYBACK,
+            0
+        };
+    int i;
+    for( i = 0; metadata_type_table[i]; i++ )
+        if( type == metadata_type_table[i] )
+            break;
+    if( !metadata_type_table[i] )
+        return -1;
+    isom_data_t *data = isom_add_metadata( root, type );
+    if( !data )
+        return -1;
+    data->type_code = 21;
+    data->value_length = 1;
+    uint8_t temp = (uint8_t)value;
+    data->value = lsmash_memdup( &temp, 1 );
+    if( !data->value )
+    {
+        isom_ilst_t *ilst = root->moov->udta->meta->ilst;
+        lsmash_remove_entry_direct( ilst->item_list, ilst->item_list->tail, isom_remove_metaitem );
+        return -1;
+    }
+    return 0;
 }
 
 #ifdef LSMASH_DEMUXER_ENABLED

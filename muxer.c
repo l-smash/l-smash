@@ -40,6 +40,24 @@
 
 typedef struct
 {
+    char    *album_name;
+    char    *artist;
+    char    *comment;
+    char    *release_date;
+    char    *encoder;
+    char    *genre;
+    char    *lyrics;
+    char    *title;
+    char    *composer;
+    char    *album_artist;
+    char    *copyright;
+    char    *description;
+    char    *grouping;
+    uint32_t beats_per_minute;
+} itunes_metadata_t;
+
+typedef struct
+{
     int      help;
     int      isom;
     int      isom_version;
@@ -56,6 +74,7 @@ typedef struct
     uint32_t major_brand;
     uint32_t minor_version;
     uint32_t num_of_inputs;
+    itunes_metadata_t itunes_metadata;
 } option_t;
 
 typedef struct
@@ -194,13 +213,30 @@ static void display_help( void )
              "                              If this option is not used, it defaults to 1.\n"
              "Output file formats:\n"
              "    mp4, mov, 3gp, 3g2, m4a, m4v\n"
+             "\n"
              "Track options:\n"
              "    fps=<int/int>             Specify video framerate\n"
              "    language=<string>         Specify media language\n"
              "    alternate-group=<integer> Specify alternate group\n"
              "    sbr                       Enable backward-compatible SBR explicit signaling mode\n"
              "How to use track options:\n"
-             "    -i input?[track_option1],[track_option2]...\n" );
+             "    -i input?[track_option1],[track_option2]...\n"
+             "\n"
+             "iTunes Metadata:\n"
+             "    --album-name <string>     Album name\n"
+             "    --artist <string>         Artist\n"
+             "    --comment <string>        User comment\n"
+             "    --release-date <string>   Release date\n"
+             "    --encoder <string>        Person or company that encoded the recording\n"
+             "    --genre <string>          Genre\n"
+             "    --lyrics <string>         Lyrics\n"
+             "    --title <string>          Title or song name\n"
+             "    --composer <string>       Composer\n"
+             "    --album-artist <string>   Artist for the whole album (if different than the individual tracks)\n"
+             "    --copyright <string>      Copyright\n"
+             "    --description <string>    Description\n"
+             "    --grouing <string>        Grouping\n"
+             "    --tempo <integer>         Beats per minute\n" );
 }
 
 static int muxer_usage_error( void )
@@ -432,6 +468,77 @@ static int parse_global_options( int argc, char **argv, muxer_t *muxer )
             if( !opt->chap_track )
                 return ERROR_MSG( "%s is an invalid track number.\n", argv[i] );
         }
+        /* iTunes metadata */
+        else if( !strcasecmp( argv[i], "--album-name" ) )
+        {
+            CHECK_NEXT_ARG;
+            opt->itunes_metadata.album_name = argv[i];
+        }
+        else if( !strcasecmp( argv[i], "--artist" ) )
+        {
+            CHECK_NEXT_ARG;
+            opt->itunes_metadata.artist = argv[i];
+        }
+        else if( !strcasecmp( argv[i], "--comment" ) )
+        {
+            CHECK_NEXT_ARG;
+            opt->itunes_metadata.comment = argv[i];
+        }
+        else if( !strcasecmp( argv[i], "--release-date" ) )
+        {
+            CHECK_NEXT_ARG;
+            opt->itunes_metadata.release_date = argv[i];
+        }
+        else if( !strcasecmp( argv[i], "--encoder" ) )
+        {
+            CHECK_NEXT_ARG;
+            opt->itunes_metadata.encoder = argv[i];
+        }
+        else if( !strcasecmp( argv[i], "--genre" ) )
+        {
+            CHECK_NEXT_ARG;
+            opt->itunes_metadata.genre = argv[i];
+        }
+        else if( !strcasecmp( argv[i], "--lyrics" ) )
+        {
+            CHECK_NEXT_ARG;
+            opt->itunes_metadata.lyrics = argv[i];
+        }
+        else if( !strcasecmp( argv[i], "--title" ) )
+        {
+            CHECK_NEXT_ARG;
+            opt->itunes_metadata.title = argv[i];
+        }
+        else if( !strcasecmp( argv[i], "--composer" ) )
+        {
+            CHECK_NEXT_ARG;
+            opt->itunes_metadata.composer = argv[i];
+        }
+        else if( !strcasecmp( argv[i], "--album-artist" ) )
+        {
+            CHECK_NEXT_ARG;
+            opt->itunes_metadata.album_artist = argv[i];
+        }
+        else if( !strcasecmp( argv[i], "--copyright" ) )
+        {
+            CHECK_NEXT_ARG;
+            opt->itunes_metadata.copyright = argv[i];
+        }
+        else if( !strcasecmp( argv[i], "--description" ) )
+        {
+            CHECK_NEXT_ARG;
+            opt->itunes_metadata.description = argv[i];
+        }
+        else if( !strcasecmp( argv[i], "--grouping" ) )
+        {
+            CHECK_NEXT_ARG;
+            opt->itunes_metadata.grouping = argv[i];
+        }
+        else if( !strcasecmp( argv[i], "--tempo" ) )
+        {
+            CHECK_NEXT_ARG;
+            opt->itunes_metadata.beats_per_minute = atoi( argv[i] );
+        }
         else
             return ERROR_MSG( "you specified invalid option: %s.\n", argv[i] );
         ++i;
@@ -550,6 +657,37 @@ static void set_reference_chapter_track( output_t *output, option_t *opt )
         ERROR_MSG( "Warning: failed to set reference chapter.\n" );
 }
 
+static int set_itunes_metadata( output_t *output, option_t *opt )
+{
+    if( !opt->itunes_movie )
+        return 0;
+    itunes_metadata_t *metadata = &opt->itunes_metadata;
+    if( lsmash_set_itunes_metadata_string( output->root, ITUNES_METADATA_TYPE_ENCODING_TOOL, "L-SMASH" ) )
+        return -1;
+#define SET_USER_ITUNES_METADATA_STRING( type, value ) \
+    if( metadata->value \
+     && lsmash_set_itunes_metadata_string( output->root, type, metadata->value ) ) \
+        return -1
+    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_ALBUM_NAME,   album_name );
+    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_ARTIST,       artist );
+    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_USER_COMMENT, comment );
+    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_RELEASE_DATE, release_date );
+    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_ENCODED_BY,   encoder );
+    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_USER_GENRE,   genre );
+    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_LYRICS,       lyrics );
+    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_TITLE,        title );
+    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_COMPOSER,     composer );
+    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_ALBUM_ARTIST, album_artist );
+    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_COPYRIGHT,    copyright );
+    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_DESCRIPTION,  description );
+    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_GROUPING,     grouping );
+#undef SET_USER_ITUNES_METADATA
+    if( metadata->beats_per_minute
+     && lsmash_set_itunes_metadata_integer( output->root, ITUNES_METADATA_TYPE_BEATS_PER_MINUTE, metadata->beats_per_minute ) )
+        return -1;
+    return 0;
+}
+
 int main( int argc, char *argv[] )
 {
     if( argc < 3 )
@@ -648,6 +786,8 @@ int main( int argc, char *argv[] )
         movie_param.max_chunk_duration = opt->interleave * 1e-3;
     if( lsmash_set_movie_parameters( output->root, &movie_param ) )
         return MUXER_ERR( "failed to set movie parameters.\n" );
+    if( set_itunes_metadata( output, opt ) )
+        return MUXER_ERR( "failed to set iTunes metadata.\n" );
     output->current_track_number = 1;
     for( muxer.current_input_number = 1;
          muxer.current_input_number <= muxer.num_of_inputs;
