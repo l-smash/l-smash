@@ -1696,6 +1696,21 @@ static int isom_print_AllF( lsmash_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
+static int isom_print_cprt( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_cprt_t *cprt = (isom_cprt_t *)box;
+    int indent = level;
+    char str[cprt->notice_length + 1];
+    memcpy( str, cprt->notice, cprt->notice_length );
+    str[cprt->notice_length] = 0;
+    isom_print_box_common( indent++, box, "Copyright Box" );
+    isom_iprintf( indent, "language = %s\n", isom_unpack_iso_language( cprt->language ) );
+    isom_iprintf( indent, "notice = %s\n", str );
+    return 0;
+}
+
 static int isom_print_mvex( lsmash_root_t *root, isom_box_t *box, int level )
 {
     return isom_print_simple( box, level, "Movie Extends Box" );
@@ -2158,6 +2173,8 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
             return isom_print_SelO;
         case QT_BOX_TYPE_ALLF :
             return isom_print_AllF;
+        case ISOM_BOX_TYPE_CPRT :
+            return isom_print_cprt;
         case ISOM_BOX_TYPE_MVEX :
             return isom_print_mvex;
         case ISOM_BOX_TYPE_MEHD :

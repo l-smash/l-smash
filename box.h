@@ -226,7 +226,7 @@ typedef struct
     uint32_t timescale;             /* media timescale: timescale for this media */
     uint64_t duration;              /* the duration of this media expressed in the timescale indicated in this box */
     /* */
-    uint16_t language;              /* ISOM: ISO-639-2/T language codes. The first bit is 0.
+    uint16_t language;              /* ISOM: ISO-639-2/T language codes. Most significant 1-bit is 0.
                                      *       Each character is packed as the difference between its ASCII value and 0x60.
                                      * QTFF: Macintosh language codes is usually used.
                                      *       Mac's value is less than 0x800 while ISO's value is 0x800 or greater. */
@@ -1203,6 +1203,21 @@ typedef struct
     uint8_t play_all_frames;    /* whether all frames of video should be played, regardless of timing */
 } isom_AllF_t;
 
+/* Copyright Box
+ * The Copyright box contains a copyright declaration which applies to the entire presentation,
+ * when contained within the Movie Box, or, when contained in a track, to that entire track.
+ * There may be multiple copyright boxes using different language codes. */
+typedef struct
+{
+    ISOM_FULLBOX_COMMON;
+    uint16_t language;              /* ISO-639-2/T language codes. Most significant 1-bit is 0.
+                                     * Each character is packed as the difference between its ASCII value and 0x60. */
+    uint8_t *notice;                /* a null-terminated string in either UTF-8 or UTF-16 characters, giving a copyright notice.
+                                     * If UTF-16 is used, the string shall start with the BYTE ORDER MARK (0xFEFF), to distinguish it from a UTF-8 string.
+                                     * This mark does not form part of the final string. */
+        uint32_t notice_length;
+} isom_cprt_t;
+
 /* User Data Box
  * This box is a container box for informative user-data.
  * This user data is formatted as a set of boxes with more specific box types, which declare more precisely their content.
@@ -1212,10 +1227,13 @@ typedef struct
     ISOM_BASEBOX_COMMON;
     isom_chpl_t *chpl;      /* Chapter List Box */
     isom_meta_t *meta;      /* Meta Box extended by Apple for iTunes movie */
+    /* QuickTime user data */
     isom_WLOC_t *WLOC;      /* Window Location Box */
     isom_LOOP_t *LOOP;      /* Looping Box */
     isom_SelO_t *SelO;      /* Play Selection Only Box */
     isom_AllF_t *AllF;      /* Play All Frames Box */
+    /* Copyright Box List */
+    lsmash_entry_list_t *cprt_list;     /* Copyright Boxes is defined in ISO Base Media and 3GPP file format */
 } isom_udta_t;
 
 /** Caches for handling tracks **/

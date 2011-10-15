@@ -1239,6 +1239,9 @@ int lsmash_create_fragment_empty_duration( lsmash_root_t *root, uint32_t track_I
 void lsmash_delete_track( lsmash_root_t *root, uint32_t track_ID );
 void lsmash_delete_tyrant_chapter( lsmash_root_t *root );
 
+/* track_ID == 0 means copyright declaration applies to the entire presentation, not an entire track. */
+int lsmash_set_copyright( lsmash_root_t *root, uint32_t track_ID, uint16_t ISO_language, char *notice );
+
 /* When type is specified as ITUNES_METADATA_TYPE_CUSTOM, meaning is mandatory while name is optionally valid.
  * Otherwise, meaning and name are just ignored. */
 int lsmash_set_itunes_metadata_string( lsmash_root_t *root, lsmash_itunes_metadata_type type, char *value, char *meaning, char *name );

@@ -2561,6 +2561,45 @@ static int isom_read_AllF( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     return isom_add_print_func( root, AllF, level );
 }
 
+static int isom_read_cprt( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_UDTA )
+        return isom_read_unknown_box( root, box, parent, level );
+    lsmash_entry_list_t *list = ((isom_udta_t *)parent)->cprt_list;
+    if( !list )
+    {
+        list = lsmash_create_entry_list();
+        if( !list )
+            return -1;
+        ((isom_udta_t *)parent)->cprt_list = list;
+    }
+    isom_cprt_t *cprt = lsmash_malloc_zero( sizeof(isom_cprt_t) );
+    if( !cprt )
+        return -1;
+    if( lsmash_add_entry( list, cprt ) )
+    {
+        free( cprt );
+        return -1;
+    }
+    box->parent = parent;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    cprt->language = lsmash_bs_get_be16( bs );
+    cprt->notice_length = box->size - (ISOM_FULLBOX_COMMON_SIZE + 2);
+    if( cprt->notice_length )
+    {
+        cprt->notice = lsmash_bs_get_bytes( bs, cprt->notice_length );
+        if( !cprt->notice )
+        {
+            cprt->notice_length = 0;
+            return -1;
+        }
+    }
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( cprt, box );
+    return isom_add_print_func( root, cprt, level );
+}
+
 static int isom_read_mfra( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( !!parent->type )
@@ -3010,6 +3049,8 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
     }
     if( parent->type == ISOM_BOX_TYPE_ILST )
         return isom_read_metaitem( root, box, parent, level );
+    else if( box->type == ISOM_BOX_TYPE_CPRT )      /* Avoid confusing udta.cprt with ilst.cprt. */
+        return isom_read_cprt( root, box, parent, level );
     if( parent->type == ISOM_CODEC_TYPE_AC_3_AUDIO
      || parent->type == ISOM_CODEC_TYPE_ALAC_AUDIO
      || parent->type == ISOM_CODEC_TYPE_EC_3_AUDIO

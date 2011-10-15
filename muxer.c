@@ -66,14 +66,16 @@ typedef struct
     int      brand_3gx;
     int      optimize_pd;
     int      timeline_shift;
-    char    *chap_file;
-    uint32_t chap_track;
     uint32_t interleave;
     uint32_t num_of_brands;
     uint32_t brands[MAX_NUM_OF_BRANDS];
     uint32_t major_brand;
     uint32_t minor_version;
     uint32_t num_of_inputs;
+    uint32_t chap_track;
+    char    *chap_file;
+    char    *copyright_notice;
+    uint16_t copyright_language;
     itunes_metadata_t itunes_metadata;
 } option_t;
 
@@ -86,6 +88,8 @@ typedef struct
     uint32_t fps_den;
     int16_t  alternate_group;
     uint16_t ISO_language;
+    uint16_t copyright_language;
+    char    *copyright_notice;
 } input_track_option_t;
 
 typedef struct
@@ -212,13 +216,18 @@ static void display_help( void )
              "                              This option takes effect only when reference\n"
              "                              chapter is available.\n"
              "                              If this option is not used, it defaults to 1.\n"
+             "    --copyright-notice <arg>  Specify copyright notice with or without language (latter string)\n"
+             "                                  <arg> is <string> or <string>/<string>\n"
              "Output file formats:\n"
              "    mp4, mov, 3gp, 3g2, m4a, m4v\n"
              "\n"
              "Track options:\n"
-             "    fps=<int/int>             Specify video framerate\n"
+             "    fps=<arg>                 Specify video framerate\n"
+             "                                  <arg> is <integer> or <integer>/<integer>\n"
              "    language=<string>         Specify media language\n"
              "    alternate-group=<integer> Specify alternate group\n"
+             "    copyright=<arg>           Specify copyright notice with or without language (latter string)\n"
+             "                                  <arg> is <string> or <string>/<string>\n"
              "    sbr                       Enable backward-compatible SBR explicit signaling mode\n"
              "How to use track options:\n"
              "    -i input?[track_option1],[track_option2]...\n"
@@ -469,6 +478,24 @@ static int parse_global_options( int argc, char **argv, muxer_t *muxer )
             if( !opt->chap_track )
                 return ERROR_MSG( "%s is an invalid track number.\n", argv[i] );
         }
+        else if( !strcasecmp( argv[i], "--copyright-notice" ) )
+        {
+            CHECK_NEXT_ARG;
+            if( opt->copyright_notice )
+                return ERROR_MSG( "you specified --copyright-notice twice.\n" );
+            opt->copyright_notice = argv[i];
+            char *language = opt->copyright_notice;
+            while( *language )
+            {
+                if( *language == '/' )
+                {
+                    *language++ = '\0';
+                    break;
+                }
+                ++language;
+            }
+            opt->copyright_language = language ? lsmash_pack_iso_language( language ) : ISOM_LANGUAGE_CODE_UNDEFINED;
+        }
         /* iTunes metadata */
 #define CHECK_ITUNES_METADATA_ARG_STRING( argument, value ) \
         else if( !strcasecmp( argv[i], "--"#argument ) ) \
@@ -562,6 +589,21 @@ static int parse_track_options( input_t *input )
                     track_opt->fps_den = 1;
                 }
                 track_opt->user_fps = 1;
+            }
+            else if( strstr( track_option, "copyright=" ) )
+            {
+                char *track_parameter = strchr( track_option, '=' ) + 1;
+                track_opt->copyright_notice = track_parameter;
+                while( *track_parameter )
+                {
+                    if( *track_parameter == '/' )
+                    {
+                        *track_parameter++ = '\0';
+                        break;
+                    }
+                    ++track_parameter;
+                }
+                track_opt->copyright_language = track_parameter ? lsmash_pack_iso_language( track_parameter ) : ISOM_LANGUAGE_CODE_UNDEFINED;
             }
             else if( strstr( track_option, "sbr" ) )
                 track_opt->sbr = 1;
@@ -747,6 +789,9 @@ int main( int argc, char *argv[] )
         movie_param.max_chunk_duration = opt->interleave * 1e-3;
     if( lsmash_set_movie_parameters( output->root, &movie_param ) )
         return MUXER_ERR( "failed to set movie parameters.\n" );
+    if( opt->copyright_notice
+     && lsmash_set_copyright( output->root, 0, opt->copyright_language, opt->copyright_notice ) )
+        return MUXER_ERR( "failed to set a copyright notice for the entire movie.\n" );
     if( set_itunes_metadata( output, opt ) )
         return MUXER_ERR( "failed to set iTunes metadata.\n" );
     output->current_track_number = 1;
@@ -856,6 +901,9 @@ int main( int argc, char *argv[] )
                 default :
                     return MUXER_ERR( "not supported stream type.\n" );
             }
+            if( track_opt->copyright_notice
+             && lsmash_set_copyright( output->root, out_track->track_ID, track_opt->copyright_language, track_opt->copyright_notice ) )
+                return MUXER_ERR( "failed to set a copyright notice.\n" );
             if( lsmash_set_track_parameters( output->root, out_track->track_ID, &track_param ) )
                 return MUXER_ERR( "failed to set track parameters.\n" );
             if( lsmash_set_media_parameters( output->root, out_track->track_ID, &media_param ) )
