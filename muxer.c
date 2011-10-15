@@ -196,7 +196,8 @@ static int error_message( const char *message, ... )
 }
 static void display_help( void )
 {
-    eprintf( "Usage: muxer [global_options] -i input1 [-i input2 -i input3 ...] -o output\n"
+    eprintf( "\n"
+             "Usage: muxer [global_options] -i input1 [-i input2 -i input3 ...] -o output\n"
              "Global options:\n"
              "    --help                    Display help\n"
              "    --optimize-pd             Optimize for progressive download\n"
@@ -226,7 +227,7 @@ static void display_help( void )
              "    --album-name <string>     Album name\n"
              "    --artist <string>         Artist\n"
              "    --comment <string>        User comment\n"
-             "    --release-date <string>   Release date\n"
+             "    --release-date <string>   Release date (YYYY-MM-DD)\n"
              "    --encoder <string>        Person or company that encoded the recording\n"
              "    --genre <string>          Genre\n"
              "    --lyrics <string>         Lyrics\n"
@@ -358,13 +359,13 @@ static int decide_brands( option_t *opt )
 
 static int parse_global_options( int argc, char **argv, muxer_t *muxer )
 {
-#define CHECK_NEXT_ARG if( argc == ++i ) return -1
     if( argc < 5 )
         return -1;
     uint32_t i = 1;
     option_t *opt = &muxer->opt;
     while( argc > i && *argv[i] == '-' )
     {
+#define CHECK_NEXT_ARG if( argc == ++i ) return -1
         if( !strcasecmp( argv[i], "-i" ) || !strcasecmp( argv[i], "--input" ) )
         {
             CHECK_NEXT_ARG;
@@ -451,7 +452,7 @@ static int parse_global_options( int argc, char **argv, muxer_t *muxer )
         {
             CHECK_NEXT_ARG;
             if( opt->isom_version )
-                return ERROR_MSG( "you specified ISO Base Media version twice.\n" );
+                return ERROR_MSG( "you specified --isom-version twice.\n" );
             opt->isom_version = atoi( argv[i] );
         }
         else if( !strcasecmp( argv[i], "--shift-timeline" ) )
@@ -469,76 +470,36 @@ static int parse_global_options( int argc, char **argv, muxer_t *muxer )
                 return ERROR_MSG( "%s is an invalid track number.\n", argv[i] );
         }
         /* iTunes metadata */
-        else if( !strcasecmp( argv[i], "--album-name" ) )
-        {
-            CHECK_NEXT_ARG;
-            opt->itunes_metadata.album_name = argv[i];
+#define CHECK_ITUNES_METADATA_ARG_STRING( argument, value ) \
+        else if( !strcasecmp( argv[i], "--"#argument ) ) \
+        { \
+            CHECK_NEXT_ARG; \
+            if( opt->itunes_metadata.value ) \
+                return ERROR_MSG( "you specified --"#argument" twice.\n" ); \
+            opt->itunes_metadata.value = argv[i]; \
         }
-        else if( !strcasecmp( argv[i], "--artist" ) )
-        {
-            CHECK_NEXT_ARG;
-            opt->itunes_metadata.artist = argv[i];
-        }
-        else if( !strcasecmp( argv[i], "--comment" ) )
-        {
-            CHECK_NEXT_ARG;
-            opt->itunes_metadata.comment = argv[i];
-        }
-        else if( !strcasecmp( argv[i], "--release-date" ) )
-        {
-            CHECK_NEXT_ARG;
-            opt->itunes_metadata.release_date = argv[i];
-        }
-        else if( !strcasecmp( argv[i], "--encoder" ) )
-        {
-            CHECK_NEXT_ARG;
-            opt->itunes_metadata.encoder = argv[i];
-        }
-        else if( !strcasecmp( argv[i], "--genre" ) )
-        {
-            CHECK_NEXT_ARG;
-            opt->itunes_metadata.genre = argv[i];
-        }
-        else if( !strcasecmp( argv[i], "--lyrics" ) )
-        {
-            CHECK_NEXT_ARG;
-            opt->itunes_metadata.lyrics = argv[i];
-        }
-        else if( !strcasecmp( argv[i], "--title" ) )
-        {
-            CHECK_NEXT_ARG;
-            opt->itunes_metadata.title = argv[i];
-        }
-        else if( !strcasecmp( argv[i], "--composer" ) )
-        {
-            CHECK_NEXT_ARG;
-            opt->itunes_metadata.composer = argv[i];
-        }
-        else if( !strcasecmp( argv[i], "--album-artist" ) )
-        {
-            CHECK_NEXT_ARG;
-            opt->itunes_metadata.album_artist = argv[i];
-        }
-        else if( !strcasecmp( argv[i], "--copyright" ) )
-        {
-            CHECK_NEXT_ARG;
-            opt->itunes_metadata.copyright = argv[i];
-        }
-        else if( !strcasecmp( argv[i], "--description" ) )
-        {
-            CHECK_NEXT_ARG;
-            opt->itunes_metadata.description = argv[i];
-        }
-        else if( !strcasecmp( argv[i], "--grouping" ) )
-        {
-            CHECK_NEXT_ARG;
-            opt->itunes_metadata.grouping = argv[i];
-        }
+        CHECK_ITUNES_METADATA_ARG_STRING( album-name,   album_name )
+        CHECK_ITUNES_METADATA_ARG_STRING( artist,       artist )
+        CHECK_ITUNES_METADATA_ARG_STRING( comment,      comment )
+        CHECK_ITUNES_METADATA_ARG_STRING( release-date, release_date )
+        CHECK_ITUNES_METADATA_ARG_STRING( encoder,      encoder )
+        CHECK_ITUNES_METADATA_ARG_STRING( genre,        genre )
+        CHECK_ITUNES_METADATA_ARG_STRING( lyrics,       lyrics )
+        CHECK_ITUNES_METADATA_ARG_STRING( title,        title )
+        CHECK_ITUNES_METADATA_ARG_STRING( composer,     composer )
+        CHECK_ITUNES_METADATA_ARG_STRING( album-artist, album_artist )
+        CHECK_ITUNES_METADATA_ARG_STRING( copyright,    copyright )
+        CHECK_ITUNES_METADATA_ARG_STRING( description,  description )
+        CHECK_ITUNES_METADATA_ARG_STRING( grouping,     grouping )
+#undef CHECK_ITUNES_METADATA_ARG_STRING
         else if( !strcasecmp( argv[i], "--tempo" ) )
         {
             CHECK_NEXT_ARG;
+            if( opt->itunes_metadata.beats_per_minute )
+                return ERROR_MSG( "you specified --tempo twice.\n" );
             opt->itunes_metadata.beats_per_minute = atoi( argv[i] );
         }
+#undef CHECK_NEXT_ARG
         else
             return ERROR_MSG( "you specified invalid option: %s.\n", argv[i] );
         ++i;
@@ -550,7 +511,6 @@ static int parse_global_options( int argc, char **argv, muxer_t *muxer )
     if( opt->timeline_shift && !opt->qtff && opt->isom_version < 4 )
         return ERROR_MSG( "timeline shift requires --file-format mov, or --isom-version 4 or later.\n" );
     return 0;
-#undef CHECK_NEXT_ARG
 }
 
 static int parse_track_options( input_t *input )
@@ -652,7 +612,8 @@ static void set_reference_chapter_track( output_t *output, option_t *opt )
     if( !opt->chap_file || !opt->qtff || !opt->itunes_movie )
         return;
     if( opt->chap_track > output->num_of_tracks )
-        ERROR_MSG( "Warning: the track number specified in --chapter-track is larger than the number of the actual output tracks. Reference chapter will not be set.\n" );
+        ERROR_MSG( "Warning: the track number specified in --chapter-track is larger than the number of the actual output tracks. "
+                   "Reference chapter will not be set.\n" );
     else if( lsmash_create_reference_chapter_track( output->root, opt->chap_track, opt->chap_file ) )
         ERROR_MSG( "Warning: failed to set reference chapter.\n" );
 }
@@ -662,11 +623,11 @@ static int set_itunes_metadata( output_t *output, option_t *opt )
     if( !opt->itunes_movie )
         return 0;
     itunes_metadata_t *metadata = &opt->itunes_metadata;
-    if( lsmash_set_itunes_metadata_string( output->root, ITUNES_METADATA_TYPE_ENCODING_TOOL, "L-SMASH" ) )
+    if( lsmash_set_itunes_metadata_string( output->root, ITUNES_METADATA_TYPE_ENCODING_TOOL, "L-SMASH", NULL, NULL ) )
         return -1;
 #define SET_USER_ITUNES_METADATA_STRING( type, value ) \
     if( metadata->value \
-     && lsmash_set_itunes_metadata_string( output->root, type, metadata->value ) ) \
+     && lsmash_set_itunes_metadata_string( output->root, type, metadata->value, NULL, NULL ) ) \
         return -1
     SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_ALBUM_NAME,   album_name );
     SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_ARTIST,       artist );
@@ -683,7 +644,7 @@ static int set_itunes_metadata( output_t *output, option_t *opt )
     SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_GROUPING,     grouping );
 #undef SET_USER_ITUNES_METADATA
     if( metadata->beats_per_minute
-     && lsmash_set_itunes_metadata_integer( output->root, ITUNES_METADATA_TYPE_BEATS_PER_MINUTE, metadata->beats_per_minute ) )
+     && lsmash_set_itunes_metadata_integer( output->root, ITUNES_METADATA_TYPE_BEATS_PER_MINUTE, metadata->beats_per_minute, NULL, NULL ) )
         return -1;
     return 0;
 }

@@ -2293,7 +2293,6 @@ static int isom_add_metaitem( isom_ilst_t *ilst, uint32_t type )
     return 0;
 }
 
-#ifdef LSMASH_DEMUXER_ENABLED
 static int isom_add_mean( isom_metaitem_t *metaitem )
 {
     if( !metaitem || metaitem->mean )
@@ -2311,7 +2310,6 @@ static int isom_add_name( isom_metaitem_t *metaitem )
     metaitem->name = name;
     return 0;
 }
-#endif /* LSMASH_DEMUXER_ENABLED */
 
 static int isom_add_data( isom_metaitem_t *metaitem )
 {
@@ -9722,10 +9720,11 @@ void lsmash_delete_tyrant_chapter( lsmash_root_t *root )
     root->moov->udta->chpl = NULL;
 }
 
-static isom_data_t *isom_add_metadata( lsmash_root_t *root, uint32_t type )
+static isom_data_t *isom_add_metadata( lsmash_root_t *root, uint32_t type, char *meaning_string, char *name_string )
 {
     assert( root && root->moov );
-    if( (!root->moov->udta             && isom_add_udta( root, 0 ))
+    if( ((type == ITUNES_METADATA_TYPE_CUSTOM) && (!meaning_string || !meaning_string[0]) )
+     || (!root->moov->udta             && isom_add_udta( root, 0 ))
      || (!root->moov->udta->meta       && isom_add_meta( (isom_box_t *)root->moov->udta ))
      || (!root->moov->udta->meta->hdlr && isom_add_hdlr( NULL, root->moov->udta->meta, NULL, ISOM_META_HANDLER_TYPE_ITUNES_METADATA ))
      || (!root->moov->udta->meta->ilst && isom_add_ilst( root->moov )) )
@@ -9734,15 +9733,35 @@ static isom_data_t *isom_add_metadata( lsmash_root_t *root, uint32_t type )
     if( isom_add_metaitem( ilst, type ) )
         return NULL;
     isom_metaitem_t *metaitem = (isom_metaitem_t *)ilst->item_list->tail->data;
-    if( isom_add_data( metaitem ) )
+    if( type == ITUNES_METADATA_TYPE_CUSTOM )
     {
-        lsmash_remove_entry_direct( ilst->item_list, ilst->item_list->tail, isom_remove_metaitem );
-        return NULL;
+        if( isom_add_mean( metaitem ) )
+            goto fail;
+        isom_mean_t *mean = metaitem->mean;
+        mean->meaning_string_length = strlen( meaning_string );    /* No null terminator */
+        mean->meaning_string = lsmash_memdup( meaning_string, mean->meaning_string_length );
+        if( !mean->meaning_string )
+            goto fail;
+        if( name_string && name_string[0] )
+        {
+            if( isom_add_name( metaitem ) )
+                goto fail;
+            isom_name_t *name = metaitem->name;
+            name->name_length = strlen( name_string );    /* No null terminator */
+            name->name = lsmash_memdup( name_string, name->name_length );
+            if( !name->name )
+                goto fail;
+        }
     }
+    if( isom_add_data( metaitem ) )
+        goto fail;
     return metaitem->data;
+fail:
+    lsmash_remove_entry_direct( ilst->item_list, ilst->item_list->tail, isom_remove_metaitem );
+    return NULL;
 }
 
-int lsmash_set_itunes_metadata_string( lsmash_root_t *root, lsmash_itunes_metadata_type type, char *value )
+int lsmash_set_itunes_metadata_string( lsmash_root_t *root, lsmash_itunes_metadata_type type, char *value, char *meaning, char *name )
 {
     static const lsmash_itunes_metadata_type metadata_type_table[] =
         {
@@ -9770,6 +9789,7 @@ int lsmash_set_itunes_metadata_string( lsmash_root_t *root, lsmash_itunes_metada
             ITUNES_METADATA_TYPE_TV_NETWORK,
             ITUNES_METADATA_TYPE_TV_SHOW_NAME,
             ITUNES_METADATA_TYPE_ITUNES_PURCHASE_ACCOUNT_ID,
+            ITUNES_METADATA_TYPE_CUSTOM,
             0
         };
     int i;
@@ -9781,7 +9801,7 @@ int lsmash_set_itunes_metadata_string( lsmash_root_t *root, lsmash_itunes_metada
     uint32_t value_length = strlen( value );
     if( type == ITUNES_METADATA_TYPE_DESCRIPTION && value_length > 255 )
         type = ITUNES_METADATA_TYPE_LONG_DESCRIPTION;
-    isom_data_t *data = isom_add_metadata( root, type );
+    isom_data_t *data = isom_add_metadata( root, type, meaning, name );
     if( !data )
         return -1;
     data->type_code = 1;
@@ -9796,7 +9816,7 @@ int lsmash_set_itunes_metadata_string( lsmash_root_t *root, lsmash_itunes_metada
     return 0;
 }
 
-int lsmash_set_itunes_metadata_integer( lsmash_root_t *root, lsmash_itunes_metadata_type type, uint64_t value )
+int lsmash_set_itunes_metadata_integer( lsmash_root_t *root, lsmash_itunes_metadata_type type, uint64_t value, char *meaning, char *name )
 {
     static const struct
     {
@@ -9818,6 +9838,7 @@ int lsmash_set_itunes_metadata_integer( lsmash_root_t *root, lsmash_itunes_metad
             { ITUNES_METADATA_TYPE_ITUNES_TV_GENRE_ID,         4 },
             { ITUNES_METADATA_TYPE_ITUNES_PLAYLIST_ID,         8 },
             { ITUNES_METADATA_TYPE_ITUNES_COUNTRY_CODE,        4 },
+            { ITUNES_METADATA_TYPE_CUSTOM,                     8 },
             { 0 }
         };
     int i;
@@ -9826,7 +9847,7 @@ int lsmash_set_itunes_metadata_integer( lsmash_root_t *root, lsmash_itunes_metad
             break;
     if( !metadata_code_type_table[i].type )
         return -1;
-    isom_data_t *data = isom_add_metadata( root, type );
+    isom_data_t *data = isom_add_metadata( root, type, meaning, name );
     if( !data )
         return -1;
     data->type_code = 21;
@@ -9847,7 +9868,7 @@ int lsmash_set_itunes_metadata_integer( lsmash_root_t *root, lsmash_itunes_metad
     return 0;
 }
 
-int lsmash_set_itunes_metadata_boolean( lsmash_root_t *root, lsmash_itunes_metadata_type type, lsmash_boolean_t value )
+int lsmash_set_itunes_metadata_boolean( lsmash_root_t *root, lsmash_itunes_metadata_type type, lsmash_boolean_t value, char *meaning, char *name )
 {
     static const lsmash_itunes_metadata_type metadata_type_table[] =
         {
@@ -9855,6 +9876,7 @@ int lsmash_set_itunes_metadata_boolean( lsmash_root_t *root, lsmash_itunes_metad
             ITUNES_METADATA_TYPE_HIGH_DEFINITION_VIDEO,
             ITUNES_METADATA_TYPE_PODCAST,
             ITUNES_METADATA_TYPE_GAPLESS_PLAYBACK,
+            ITUNES_METADATA_TYPE_CUSTOM,
             0
         };
     int i;
@@ -9863,7 +9885,7 @@ int lsmash_set_itunes_metadata_boolean( lsmash_root_t *root, lsmash_itunes_metad
             break;
     if( !metadata_type_table[i] )
         return -1;
-    isom_data_t *data = isom_add_metadata( root, type );
+    isom_data_t *data = isom_add_metadata( root, type, meaning, name );
     if( !data )
         return -1;
     data->type_code = 21;
