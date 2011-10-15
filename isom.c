@@ -9808,7 +9808,7 @@ int lsmash_set_itunes_metadata_integer( lsmash_root_t *root, lsmash_itunes_metad
             { ITUNES_METADATA_TYPE_PREDEFINED_GENRE,           4 },
             { ITUNES_METADATA_TYPE_CONTENT_RATING,             1 },
             { ITUNES_METADATA_TYPE_MEDIA_TYPE,                 1 },
-            { ITUNES_METADATA_TYPE_BEATS_PER_MINUTE,           4 },
+            { ITUNES_METADATA_TYPE_BEATS_PER_MINUTE,           2 },
             { ITUNES_METADATA_TYPE_TV_EPISODE,                 4 },
             { ITUNES_METADATA_TYPE_TV_SEASON,                  4 },
             { ITUNES_METADATA_TYPE_ITUNES_ACCOUNT_TYPE,        1 },

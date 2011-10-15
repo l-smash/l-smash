@@ -939,7 +939,7 @@ typedef enum
     ITUNES_METADATA_TYPE_PODCAST_URL                = LSMASH_4CC( 'p', 'u', 'r', 'l' ),     /* (?) Podcast URL */
     ITUNES_METADATA_TYPE_CONTENT_RATING             = LSMASH_4CC( 'r', 't', 'n', 'g' ),     /* (1) Content Rating / Does song have explicit content? 0: none, 2: clean, 4: explicit */
     ITUNES_METADATA_TYPE_MEDIA_TYPE                 = LSMASH_4CC( 's', 't', 'i', 'k' ),     /* (1) Media Type */
-    ITUNES_METADATA_TYPE_BEATS_PER_MINUTE           = LSMASH_4CC( 't', 'm', 'p', 'o' ),     /* (4) Beats Per Minute */
+    ITUNES_METADATA_TYPE_BEATS_PER_MINUTE           = LSMASH_4CC( 't', 'm', 'p', 'o' ),     /* (2) Beats Per Minute */
     ITUNES_METADATA_TYPE_TV_EPISODE                 = LSMASH_4CC( 't', 'v', 'e', 's' ),     /* (4) TV Episode */
     ITUNES_METADATA_TYPE_TV_SEASON                  = LSMASH_4CC( 't', 'v', 's', 'n' ),     /* (4) TV Season */
     ITUNES_METADATA_TYPE_ITUNES_ACCOUNT_TYPE        = LSMASH_4CC( 'a', 'k', 'I', 'D' ),     /* (1) iTunes Account Type / 0: iTunes, 1: AOL */
