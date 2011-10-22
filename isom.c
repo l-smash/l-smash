@@ -8845,7 +8845,7 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_prop
     }
     else
     {
-        /* Check post-roll distance. */
+        /* Check pre-roll distance. */
         isom_roll_entry_t *roll = (isom_roll_entry_t *)lsmash_get_entry_data( sgpd->list, sgpd->list->entry_count );
         int new_group = 0;
         if( prop->pre_roll.distance )
