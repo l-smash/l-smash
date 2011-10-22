@@ -322,9 +322,9 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
             return ERROR_MSG( "Failed to alloc timecodes\n" );
         timecode_array[0] = 0;
         num_sequences = 0;
-        for( uint32_t i = 0; i < sample_count - 1; )
+        uint32_t i = 0;
+        while( i < sample_count - 1 && fgets( buff, sizeof(buff), timecode->file ) )
         {
-            fgets( buff, sizeof(buff), timecode->file );
             if( SKIP_LINE_CHARACTER( buff[0] ) )
                 continue;
             ret = sscanf( buff, "%"SCNd64",%"SCNd64",%lf", &start, &end, &sequence_fps );
@@ -346,6 +346,8 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
                     timecode_array[i + 1] = timecode_array[i] + 1 / sequence_fps;
             }
         }
+        for( ; i < sample_count - 1; i++ )
+            timecode_array[i + 1] = timecode_array[i] + 1 / corrected_assume_fps;
         if( timecode->auto_media_timescale || timecode->auto_media_timebase )
             fps_array[num_sequences] = assume_fps;
         /* Assume matroska timebase if automatic timescale generation isn't done yet. */
@@ -361,9 +363,8 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
             fseek( timecode->file, file_pos, SEEK_SET );
             assume_fps_sig = sigexp10( assume_fps, &exponent );
             corrected_assume_fps = MATROSKA_TIMESCALE / ( round( MATROSKA_TIMESCALE / assume_fps_sig ) / exponent );
-            for( uint32_t i = 0; i < sample_count - 1; )
+            for( i = 0; i < sample_count - 1 && fgets( buff, sizeof(buff), timecode->file ); )
             {
-                fgets( buff, sizeof(buff), timecode->file );
                 if( SKIP_LINE_CHARACTER( buff[0] ) )
                     continue;
                 ret = sscanf( buff, "%"SCNd64",%"SCNd64",%lf", &start, &end, &sequence_fps );
@@ -376,6 +377,8 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
                 for( i = start; i <= end && i < sample_count - 1; i++ )
                     timecode_array[i + 1] = timecode_array[i] + 1 / sequence_fps;
             }
+            for( ; i < sample_count - 1; i++ )
+                timecode_array[i + 1] = timecode_array[i] + 1 / corrected_assume_fps;
         }
     }
     else    /* tcfv == 2 */
@@ -400,33 +403,40 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
         timecode_array = malloc( sample_count * sizeof(uint64_t) );
         if( !timecode_array )
             return ERROR_MSG( "Failed to alloc timecodes.\n" );
-        fgets( buff, sizeof(buff), timecode->file );
-        ret = sscanf( buff, "%lf", &timecode_array[0] );
-        if( ret != 1 )
+        uint32_t i = 0;
+        if( fgets( buff, sizeof(buff), timecode->file ) )
         {
-            free( timecode_array );
-            return ERROR_MSG( "Invalid timecode number: 0\n" );
-        }
-        timecode_array[0] *= 1e-3;      /* Timescale of timecode format v2 is 1000. */
-        for( uint32_t i = 1; i < sample_count; )
-        {
-            fgets( buff, sizeof(buff), timecode->file );
-            if( SKIP_LINE_CHARACTER( buff[0] ) )
-                continue;
-            ret = sscanf( buff, "%lf", &timecode_array[i] );
-            timecode_array[i] *= 1e-3;      /* Timescale of timecode format v2 is 1000. */
-            if( ret != 1 || timecode_array[i] <= timecode_array[i - 1] )
+            ret = sscanf( buff, "%lf", &timecode_array[0] );
+            if( ret != 1 )
             {
                 free( timecode_array );
-                return ERROR_MSG( "Invalid input timecode.\n" );
+                return ERROR_MSG( "Invalid timecode number: 0\n" );
             }
-            ++i;
+            timecode_array[i++] *= 1e-3;        /* Timescale of timecode format v2 is 1000. */
+            while( i < sample_count && fgets( buff, sizeof(buff), timecode->file ) )
+            {
+                if( SKIP_LINE_CHARACTER( buff[0] ) )
+                    continue;
+                ret = sscanf( buff, "%lf", &timecode_array[i] );
+                timecode_array[i] *= 1e-3;      /* Timescale of timecode format v2 is 1000. */
+                if( ret != 1 || timecode_array[i] <= timecode_array[i - 1] )
+                {
+                    free( timecode_array );
+                    return ERROR_MSG( "Invalid input timecode.\n" );
+                }
+                ++i;
+            }
+        }
+        if( i < sample_count )
+        {
+            free( timecode_array );
+            return ERROR_MSG( "Failed to get timecodes.\n" );
         }
         /* Generate media timescale automatically if needed. */
         if( sample_count != 1 && timecode->auto_media_timescale )
         {
             double fps_array[sample_count - 1];
-            for( uint32_t i = 0; i < sample_count - 1; i++ )
+            for( i = 0; i < sample_count - 1; i++ )
             {
                 fps_array[i] = 1 / (timecode_array[i + 1] - timecode_array[i]);
                 if( timecode->auto_media_timescale )
