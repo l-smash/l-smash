@@ -965,6 +965,9 @@ int main( int argc, char *argv[] )
                     lsmash_delete_sample( sample );
                     sample = NULL;
                     out_track->active = 0;
+                    out_track->last_delta = mp4sys_importer_get_last_delta( input->importer, input->current_track_number );
+                    if( out_track->last_delta == 0 )
+                        ERROR_MSG( "failed to get the last sample delta.\n" );
                     if( --num_active_input_tracks == 0 )
                         break;      /* Reached the end of whole tracks. */
                 }
@@ -994,7 +997,7 @@ int main( int argc, char *argv[] )
                     if( out_track->current_sample_number == 0 )
                         out_track->start_offset = sample->cts;
                     else
-                        out_track->last_delta = sample->dts - out_track->prev_dts;
+                        out_track->last_delta = sample->dts - out_track->prev_dts;      /* for any changes in stream's properties */
                     largest_dts = LSMASH_MAX( largest_dts, (double)sample->dts / out_track->timescale );
                     out_track->prev_dts = sample->dts;
                     out_track->sample = NULL;

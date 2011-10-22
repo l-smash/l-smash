@@ -39,17 +39,19 @@
 ***************************************************************************/
 struct mp4sys_importer_tag;
 
-typedef void ( *mp4sys_importer_cleanup )( struct mp4sys_importer_tag* importer );
-typedef int ( *mp4sys_importer_get_accessunit )( struct mp4sys_importer_tag*, uint32_t track_number, lsmash_sample_t *buffered_sample );
-typedef int ( *mp4sys_importer_probe )( struct mp4sys_importer_tag* importer );
+typedef void     ( *mp4sys_importer_cleanup )          ( struct mp4sys_importer_tag * );
+typedef int      ( *mp4sys_importer_get_accessunit )   ( struct mp4sys_importer_tag *, uint32_t, lsmash_sample_t * );
+typedef int      ( *mp4sys_importer_probe )            ( struct mp4sys_importer_tag * );
+typedef uint32_t ( *mp4sys_importer_get_last_duration )( struct mp4sys_importer_tag *, uint32_t );
 
 typedef struct
 {
-    const char*                    name;
-    int                            detectable;
-    mp4sys_importer_probe          probe;
-    mp4sys_importer_get_accessunit get_accessunit;
-    mp4sys_importer_cleanup        cleanup;
+    const char*                       name;
+    int                               detectable;
+    mp4sys_importer_probe             probe;
+    mp4sys_importer_get_accessunit    get_accessunit;
+    mp4sys_importer_get_last_duration get_last_delta;
+    mp4sys_importer_cleanup           cleanup;
 } mp4sys_importer_functions;
 
 typedef struct mp4sys_importer_tag
@@ -465,11 +467,23 @@ static int mp4sys_adts_probe( mp4sys_importer_t* importer )
     return 0;
 }
 
-const static mp4sys_importer_functions mp4sys_adts_importer = {
+static uint32_t mp4sys_adts_get_last_delta( mp4sys_importer_t* importer, uint32_t track_number )
+{
+    debug_if( !importer || !importer->info )
+        return 0;
+    mp4sys_adts_info_t *info = (mp4sys_adts_info_t *)importer->info;
+    if( !info || track_number != 1 || info->status != MP4SYS_IMPORTER_EOF )
+        return 0;
+    return info->samples_in_frame;
+}
+
+const static mp4sys_importer_functions mp4sys_adts_importer =
+{
     "adts",
     1,
     mp4sys_adts_probe,
     mp4sys_adts_get_accessunit,
+    mp4sys_adts_get_last_delta,
     mp4sys_adts_cleanup
 };
 
@@ -734,11 +748,23 @@ static int mp4sys_mp3_probe( mp4sys_importer_t* importer )
     return 0;
 }
 
-const static mp4sys_importer_functions mp4sys_mp3_importer = {
+static uint32_t mp4sys_mp3_get_last_delta( mp4sys_importer_t* importer, uint32_t track_number )
+{
+    debug_if( !importer || !importer->info )
+        return 0;
+    mp4sys_mp3_info_t *info = (mp4sys_mp3_info_t *)importer->info;
+    if( !info || track_number != 1 || info->status != MP4SYS_IMPORTER_EOF )
+        return 0;
+    return info->samples_in_frame;
+}
+
+const static mp4sys_importer_functions mp4sys_mp3_importer =
+{
     "MPEG-1/2BC_Audio_Legacy",
     1,
     mp4sys_mp3_probe,
     mp4sys_mp3_get_accessunit,
+    mp4sys_mp3_get_last_delta,
     mp4sys_mp3_cleanup
 };
 
@@ -883,19 +909,32 @@ static int mp4sys_amr_probe( mp4sys_importer_t* importer )
     return 0;
 }
 
-const static mp4sys_importer_functions mp4sys_amr_importer = {
+static uint32_t mp4sys_amr_get_last_delta( mp4sys_importer_t* importer, uint32_t track_number )
+{
+    debug_if( !importer || !importer->info )
+        return 0;
+    mp4sys_amr_info_t *info = (mp4sys_amr_info_t *)importer->info;
+    if( !info || track_number != 1 )
+        return 0;
+    return info->samples_in_frame;
+}
+
+const static mp4sys_importer_functions mp4sys_amr_importer =
+{
     "amr",
     1,
     mp4sys_amr_probe,
     mp4sys_amr_get_accessunit,
+    mp4sys_amr_get_last_delta,
     mp4sys_amr_cleanup
 };
 
 /***************************************************************************
     AC-3 importer
 ***************************************************************************/
-#define AC3_MAX_AU_LENGTH 3840
-#define AC3_MIN_AU_LENGTH 128
+#define AC3_MAX_AU_LENGTH   3840
+#define AC3_MIN_AU_LENGTH   128
+#define AC3_SAMPLE_DURATION 1536    /* 256 (samples per audio block) * 6 (audio blocks) */
 
 typedef struct
 {
@@ -1082,7 +1121,7 @@ static lsmash_audio_summary_t *ac3_create_summary( mp4sys_ac3_info_t *info )
     summary->frequency              = ac3_sample_rate_table[ info->fscod ];
     summary->channels               = ac3_channel_count_table[ info->acmod ] + info->lfeon;
     summary->bit_depth              = 16;       /* no effect */
-    summary->samples_in_frame       = 1536;     /* 256 (samples per audio block) * 6 (audio blocks) */
+    summary->samples_in_frame       = AC3_SAMPLE_DURATION;
     summary->sbr_mode               = MP4A_AAC_SBR_NOT_SPECIFIED; /* no effect */
     summary->layout_tag             = ac3_channel_layout_table[ info->acmod ][ info->lfeon ];
     return summary;
@@ -1185,12 +1224,23 @@ static int mp4sys_ac3_probe( mp4sys_importer_t* importer )
     return 0;
 }
 
+static uint32_t mp4sys_ac3_get_last_delta( mp4sys_importer_t* importer, uint32_t track_number )
+{
+    debug_if( !importer || !importer->info )
+        return 0;
+    mp4sys_ac3_info_t *info = (mp4sys_ac3_info_t *)importer->info;
+    if( !info || track_number != 1 || info->status != MP4SYS_IMPORTER_EOF )
+        return 0;
+    return AC3_SAMPLE_DURATION;
+}
+
 const static mp4sys_importer_functions mp4sys_ac3_importer =
 {
     "ac3",
     1,
     mp4sys_ac3_probe,
     mp4sys_ac3_get_accessunit,
+    mp4sys_ac3_get_last_delta,
     mp4sys_ac3_cleanup
 };
 
@@ -1198,7 +1248,8 @@ const static mp4sys_importer_functions mp4sys_ac3_importer =
     Enhanced AC-3 importer
 ***************************************************************************/
 #define EAC3_MAX_SYNCFRAME_LENGTH 4096
-#define EAC3_FIRST_FIVE_BYTES 5
+#define EAC3_FIRST_FIVE_BYTES     5
+#define EAC3_MIN_SAMPLE_DURATION  256
 
 typedef struct
 {
@@ -1573,7 +1624,7 @@ static lsmash_audio_summary_t *eac3_create_summary( mp4sys_eac3_info_t *info )
     summary->max_au_length          = info->syncframe_count_in_au * EAC3_MAX_SYNCFRAME_LENGTH;
     summary->aot                    = MP4A_AUDIO_OBJECT_TYPE_NULL; /* no effect */
     summary->bit_depth              = 16;       /* no effect */
-    summary->samples_in_frame       = 1536;     /* 256 (samples per audio block) * 6 (audio blocks) */
+    summary->samples_in_frame       = EAC3_MIN_SAMPLE_DURATION * 6;     /* 256 (samples per audio block) * 6 (audio blocks) */
     summary->sbr_mode               = MP4A_AAC_SBR_NOT_SPECIFIED; /* no effect */
     eac3_update_sample_rate( summary, info );
     eac3_update_channel_info( summary, info );
@@ -1764,12 +1815,24 @@ static int mp4sys_eac3_probe( mp4sys_importer_t* importer )
     return 0;
 }
 
+static uint32_t mp4sys_eac3_get_last_delta( mp4sys_importer_t* importer, uint32_t track_number )
+{
+    debug_if( !importer || !importer->info )
+        return 0;
+    mp4sys_eac3_info_t *info = (mp4sys_eac3_info_t *)importer->info;
+    if( !info || track_number != 1
+     || info->status != MP4SYS_IMPORTER_EOF || info->au_length != 0 )
+        return 0;
+    return EAC3_MIN_SAMPLE_DURATION * info->number_of_audio_blocks;
+}
+
 const static mp4sys_importer_functions mp4sys_eac3_importer =
 {
     "eac3",
     1,
     mp4sys_eac3_probe,
     mp4sys_eac3_get_accessunit,
+    mp4sys_eac3_get_last_delta,
     mp4sys_eac3_cleanup
 };
 
@@ -1871,8 +1934,6 @@ static int als_parse_specific_config( mp4sys_importer_t *importer, uint8_t *buf,
         return -1;      /* reserved */
     alssc->frame_length  = (buf[15] << 8) | buf[16];
     alssc->random_access = buf[17];
-    if( alssc->random_access == 0 )
-        return -1;      /* We don't support this case since importer can't handle the last sample duration yet. */
     alssc->ra_flag       = (buf[18] & 0xc0) >> 6;
     if( alssc->ra_flag == 0 )
         return -1;      /* We don't support this case. */
@@ -2044,6 +2105,7 @@ static lsmash_audio_summary_t *als_create_summary( mp4sys_importer_t *importer, 
     }
     else
     {
+        summary->samples_in_frame = 0;      /* hack for mp4sys_als_get_last_delta */
         uint64_t pos = lsmash_ftell( importer->stream );
         lsmash_fseek( importer->stream, 0, SEEK_END );
         summary->max_au_length = alssc->access_unit_size = lsmash_ftell( importer->stream ) - pos;
@@ -2091,12 +2153,26 @@ static int mp4sys_als_probe( mp4sys_importer_t *importer )
     return 0;
 }
 
+static uint32_t mp4sys_als_get_last_delta( mp4sys_importer_t* importer, uint32_t track_number )
+{
+    debug_if( !importer || !importer->info )
+        return 0;
+    mp4sys_als_info_t *info = (mp4sys_als_info_t *)importer->info;
+    if( !info || track_number != 1 || info->status != MP4SYS_IMPORTER_EOF )
+        return 0;
+    als_specific_config_t *alssc = &info->alssc;
+    /* If alssc->number_of_ra_units == 0, then the last sample duration is just alssc->samples
+     * since als_create_summary sets 0 to summary->samples_in_frame i.e. info->samples_in_frame. */
+    return alssc->samples - (alssc->number_of_ra_units - 1) * info->samples_in_frame;
+}
+
 const static mp4sys_importer_functions mp4sys_als_importer =
 {
     "als",
     1,
     mp4sys_als_probe,
     mp4sys_als_get_accessunit,
+    mp4sys_als_get_last_delta,
     mp4sys_als_cleanup
 };
 
@@ -4108,11 +4184,24 @@ fail:
     return -1;
 }
 
+static uint32_t mp4sys_h264_get_last_delta( mp4sys_importer_t* importer, uint32_t track_number )
+{
+    debug_if( !importer || !importer->info )
+        return 0;
+    mp4sys_h264_info_t *info = (mp4sys_h264_info_t *)importer->info;
+    if( !info || track_number != 1 || info->status != MP4SYS_IMPORTER_EOF )
+        return 0;
+    return info->ts_list.sample_count > 1
+         ? 1
+         : UINT32_MAX;    /* arbitrary */
+}
+
 const static mp4sys_importer_functions mp4sys_h264_importer = {
     "H.264",
     1,
     mp4sys_h264_probe,
     mp4sys_h264_get_accessunit,
+    mp4sys_h264_get_last_delta,
     mp4sys_h264_cleanup
 };
 
@@ -4219,6 +4308,14 @@ int mp4sys_importer_get_access_unit( mp4sys_importer_t* importer, uint32_t track
     if( !importer || !importer->funcs.get_accessunit || !buffered_sample->data || buffered_sample->length == 0 )
         return -1;
     return importer->funcs.get_accessunit( importer, track_number, buffered_sample );
+}
+
+/* Return 0 if failed, otherwise succeeded. */
+uint32_t mp4sys_importer_get_last_delta( mp4sys_importer_t *importer, uint32_t track_number )
+{
+    if( !importer || !importer->funcs.get_last_delta )
+        return -1;
+    return importer->funcs.get_last_delta( importer, track_number );
 }
 
 uint32_t mp4sys_importer_get_track_count( mp4sys_importer_t *importer )

@@ -33,9 +33,10 @@
 typedef void mp4sys_importer_t;
 
 /* importing functions */
-mp4sys_importer_t* mp4sys_importer_open( const char* identifier, const char* format );
-void mp4sys_importer_close( mp4sys_importer_t* importer );
-int mp4sys_importer_get_access_unit( mp4sys_importer_t* importer, uint32_t track_number, lsmash_sample_t *buffered_sample );
+mp4sys_importer_t *mp4sys_importer_open( const char *identifier, const char *format );
+void mp4sys_importer_close( mp4sys_importer_t *importer );
+int mp4sys_importer_get_access_unit( mp4sys_importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample );
+uint32_t mp4sys_importer_get_last_delta( mp4sys_importer_t *importer, uint32_t track_number );
 uint32_t mp4sys_importer_get_track_count( mp4sys_importer_t *importer );
 lsmash_summary_t *mp4sys_duplicate_summary( mp4sys_importer_t *importer, uint32_t track_number );
 
