@@ -941,7 +941,8 @@ typedef struct
 {
     /* grouping_type is 'roll' */
     uint32_t description_length;        /* This field is available only if version == 1 and default_length == 0. */
-    int16_t roll_distance;              /* the number of samples that must be decoded in order for a sample to be decoded correctly
+    int16_t  roll_distance;             /* the number of samples that must be decoded in order for a sample to be decoded correctly
+                                         * A positive value indicates post-roll, and a negative value indicates pre-roll.
                                          * The value zero must not be used. */
 } isom_roll_entry_t;
 
@@ -978,8 +979,8 @@ typedef struct
     isom_stsc_t *stsc;      /* Sample To Chunk Box */
     isom_stsz_t *stsz;      /* Sample Size Box */
     isom_stco_t *stco;      /* Chunk Offset Box */
-    lsmash_entry_list_t *sgpd_list;      /* ISOM: Sample Group Description Boxes / QTFF: null */
-    lsmash_entry_list_t *sbgp_list;      /* ISOM: Sample To Group Boxes / QTFF: null */
+    lsmash_entry_list_t *sgpd_list;      /* Sample Group Description Boxes */
+    lsmash_entry_list_t *sbgp_list;      /* Sample To Group Boxes */
 } isom_stbl_t;
 
 /* Media Information Box */

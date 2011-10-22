@@ -7083,7 +7083,7 @@ static int isom_create_grouping( isom_trak_entry_t *trak, isom_grouping_type gro
             assert( root->max_isom_version >= 6 );
             break;
         case ISOM_GROUP_TYPE_ROLL :
-            assert( root->avc_extensions );
+            assert( root->avc_extensions || root->qt_compatible );
             break;
         default :
             assert( 0 );
@@ -7115,7 +7115,7 @@ int lsmash_set_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     if( root->qt_compatible && param->data_handler_name
      && isom_set_data_handler_name( root, track_ID, param->data_handler_name ) )
         return -1;
-    if( root->avc_extensions && param->roll_grouping
+    if( (root->avc_extensions || root->qt_compatible) && param->roll_grouping
      && isom_create_grouping( trak, ISOM_GROUP_TYPE_ROLL ) )
         return -1;
     if( (root->max_isom_version >= 6) && param->rap_grouping
@@ -8564,7 +8564,7 @@ static int isom_add_partial_sync( isom_trak_entry_t *trak, uint32_t sample_numbe
     if( !trak->root->qt_compatible )
         return 0;
     if( prop->random_access_type != QT_SAMPLE_RANDOM_ACCESS_TYPE_PARTIAL_SYNC
-     && !(prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY && prop->recovery.identifier == prop->recovery.complete) )
+     && !(prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY && prop->post_roll.identifier == prop->post_roll.complete) )
         return 0;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     if( !stbl->stps && isom_add_stps( stbl ) )
@@ -8641,7 +8641,7 @@ static int isom_group_random_access( isom_trak_entry_t *trak, lsmash_sample_prop
     uint8_t is_rap = prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_CLOSED_RAP
                   || prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_OPEN_RAP
                   || prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_UNKNOWN_RAP
-                  || (prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY && prop->recovery.identifier == prop->recovery.complete);
+                  || (prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY && prop->post_roll.identifier == prop->post_roll.complete);
     isom_rap_group_t *group = trak->cache->rap;
     if( !group )
     {
@@ -8768,10 +8768,40 @@ static int isom_roll_grouping_established( isom_roll_group_t *group, int16_t rol
     return 0;
 }
 
+/* Remove pooled caches that has become unnecessary. */
+static int isom_clean_roll_pool( lsmash_entry_list_t *pool )
+{
+    for( lsmash_entry_t *entry = pool->head; entry; entry = pool->head )
+    {
+        isom_roll_group_t *group = (isom_roll_group_t *)entry->data;
+        if( !group )
+            return -1;
+        if( !group->delimited || !group->described )
+            break;
+        if( lsmash_remove_entry_direct( pool, entry, NULL ) )
+            return -1;
+    }
+    return 0;
+}
+
+static int isom_all_recovery_described( lsmash_entry_list_t *pool )
+{
+    for( lsmash_entry_t *entry = pool->head; entry; entry = entry->next )
+    {
+        isom_roll_group_t *group = (isom_roll_group_t *)entry->data;
+        if( !group )
+            return -1;
+        group->described = 1;
+    }
+    return isom_clean_roll_pool( pool );
+}
+
 static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_property_t *prop )
 {
-    if( !trak->root->avc_extensions )
+    if( !trak->root->avc_extensions && !trak->root->qt_compatible )
         return 0;
+    if( prop->pre_roll.distance > -INT16_MIN )
+        return -1;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     isom_sbgp_entry_t *sbgp = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_ROLL );
     isom_sgpd_entry_t *sgpd = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_ROLL );
@@ -8787,7 +8817,7 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_prop
     }
     isom_roll_group_t *group = (isom_roll_group_t *)lsmash_get_entry_data( pool, pool->entry_count );
     uint32_t sample_count = isom_get_sample_count( trak );
-    if( !group || prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY )
+    if( !group || (prop->pre_roll.distance == 0 && prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY) )
     {
         if( group )
             group->delimited = 1;
@@ -8797,29 +8827,59 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_prop
         group = lsmash_malloc_zero( sizeof(isom_roll_group_t) );
         if( !group )
             return -1;
-        group->first_sample = sample_count;
-        group->recovery_point = prop->recovery.complete;
+        if( prop->pre_roll.distance )
+            group->described = 1;
+        else
+        {
+            group->first_sample   = sample_count;
+            group->recovery_point = prop->post_roll.complete;
+        }
         group->assignment = isom_add_group_assignment_entry( sbgp, 1, 0 );
         if( !group->assignment || lsmash_add_entry( pool, group ) )
         {
             free( group );
             return -1;
         }
+        if( prop->pre_roll.distance )
+            return isom_roll_grouping_established( group, -prop->pre_roll.distance, sgpd );
     }
     else
-        ++ group->assignment->sample_count;
-    /* If encountered a sync sample, all recoveries are completed here. */
-    if( prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_CLOSED_RAP )
     {
-        for( lsmash_entry_t *entry = pool->head; entry; entry = entry->next )
+        /* Check post-roll distance. */
+        isom_roll_entry_t *roll = (isom_roll_entry_t *)lsmash_get_entry_data( sgpd->list, sgpd->list->entry_count );
+        int new_group;
+        if( prop->pre_roll.distance && !roll )
+            new_group = 1;      /* Create the first pre-roll group. */
+        else if( roll && prop->pre_roll.distance != -roll->roll_distance )
         {
-            group = (isom_roll_group_t *)entry->data;
+            /* Pre-roll distance is different from the previous. */
+            group->delimited = 1;
+            group->described = 1;
+            new_group = 1;
+        }
+        else
+            new_group = 0;
+        if( new_group )
+        {
+            /* Create a new pre-roll group. */
+            group = lsmash_malloc_zero( sizeof(isom_roll_group_t) );
             if( !group )
                 return -1;
-            group->described = 1;
+            group->assignment = isom_add_group_assignment_entry( sbgp, 1, 0 );
+            if( !group->assignment || lsmash_add_entry( pool, group ) )
+            {
+                free( group );
+                return -1;
+            }
+            if( prop->pre_roll.distance && isom_roll_grouping_established( group, -prop->pre_roll.distance, sgpd ) )
+                return -1;
+            return isom_all_recovery_described( pool );
         }
-        return 0;
+        ++ group->assignment->sample_count;
     }
+    /* If encountered a sync sample, all recovery is completed here. */
+    if( prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_CLOSED_RAP )
+        return isom_all_recovery_described( pool );
     for( lsmash_entry_t *entry = pool->head; entry; entry = entry->next )
     {
         group = (isom_roll_group_t *)entry->data;
@@ -8827,7 +8887,7 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_prop
             return -1;
         if( group->described )
             continue;
-        if( prop->recovery.identifier == group->recovery_point )
+        if( prop->post_roll.identifier == group->recovery_point )
         {
             group->described = 1;
             int16_t distance = sample_count - group->first_sample;
@@ -8850,18 +8910,7 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_prop
             break;      /* Avoid evaluating groups, in the pool, having the same identifier for recovery point again. */
         }
     }
-    /* Remove pooled caches that has become unnecessary. */
-    for( lsmash_entry_t *entry = pool->head; entry; entry = pool->head )
-    {
-        group = (isom_roll_group_t *)entry->data;
-        if( !group )
-            return -1;
-        if( !group->delimited || !group->described )
-            break;
-        if( lsmash_remove_entry_direct( pool, entry, NULL ) )
-            return -1;
-    }
-    return 0;
+    return isom_clean_roll_pool( pool );
 }
 
 /* returns 1 if pooled samples must be flushed. */

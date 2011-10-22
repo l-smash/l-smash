@@ -308,6 +308,7 @@ static int mp4sys_adts_get_accessunit( mp4sys_importer_t* importer, uint32_t tra
     buffered_sample->dts = info->au_number++ * info->samples_in_frame;
     buffered_sample->cts = buffered_sample->dts;
     buffered_sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+    buffered_sample->prop.pre_roll.distance = 1;    /* MDCT */
 
     /* now we succeeded to read current frame, so "return" takes 0 always below. */
 
@@ -529,6 +530,7 @@ static int mp4sys_mp3_parse_header( uint8_t* buf, mp4sys_mp3_header_t* header )
 #define MP4SYS_MP3_MAX_FRAME_LENGTH (1152*(16/8)*2)
 #define MP4SYS_MP3_HEADER_LENGTH    4
 #define MP4SYS_MODE_IS_2CH( mode )  (!!~(mode))
+#define MP4SYS_LAYER_III            0x1
 #define MP4SYS_LAYER_I              0x3
 
 static const uint32_t mp4sys_mp3_frequency_tbl[2][3] = {
@@ -644,6 +646,7 @@ static int mp4sys_mp3_get_accessunit( mp4sys_importer_t* importer, uint32_t trac
     buffered_sample->dts = info->au_number++ * info->samples_in_frame;
     buffered_sample->cts = buffered_sample->dts;
     buffered_sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+    buffered_sample->prop.pre_roll.distance = header->layer == MP4SYS_LAYER_III ? 1 : 0;    /* Layer III uses MDCT */
 
     /* now we succeeded to read current frame, so "return" takes 0 always below. */
     /* preparation for next frame */
@@ -1123,6 +1126,7 @@ static int mp4sys_ac3_get_accessunit( mp4sys_importer_t *importer, uint32_t trac
     buffered_sample->dts = info->au_number++ * summary->samples_in_frame;
     buffered_sample->cts = buffered_sample->dts;
     buffered_sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+    buffered_sample->prop.pre_roll.distance = 1;    /* MDCT */
     if( fread( info->buffer, 1, AC3_MIN_AU_LENGTH, importer->stream ) != AC3_MIN_AU_LENGTH )
         info->status = MP4SYS_IMPORTER_EOF;
     else
@@ -1697,6 +1701,7 @@ static int mp4sys_eac3_get_accessunit( mp4sys_importer_t *importer, uint32_t tra
     buffered_sample->dts = info->au_number++ * summary->samples_in_frame;
     buffered_sample->cts = buffered_sample->dts;
     buffered_sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+    buffered_sample->prop.pre_roll.distance = 1;    /* MDCT */
     if( info->status == MP4SYS_IMPORTER_EOF )
     {
         info->au_length = 0;
@@ -3904,7 +3909,7 @@ static int mp4sys_h264_get_accessunit( mp4sys_importer_t *importer, uint32_t tra
     buffered_sample->prop.independent = picture->independent    ? ISOM_SAMPLE_IS_INDEPENDENT : ISOM_SAMPLE_IS_NOT_INDEPENDENT;
     buffered_sample->prop.disposable  = picture->disposable     ? ISOM_SAMPLE_IS_DISPOSABLE  : ISOM_SAMPLE_IS_NOT_DISPOSABLE;
     buffered_sample->prop.redundant   = picture->has_redundancy ? ISOM_SAMPLE_HAS_REDUNDANCY : ISOM_SAMPLE_HAS_NO_REDUNDANCY;
-    buffered_sample->prop.recovery.identifier = picture->frame_num;
+    buffered_sample->prop.post_roll.identifier = picture->frame_num;
     if( picture->random_accessible )
     {
         if( picture->idr )
@@ -3912,7 +3917,7 @@ static int mp4sys_h264_get_accessunit( mp4sys_importer_t *importer, uint32_t tra
         else if( picture->recovery_frame_cnt )
         {
             buffered_sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY;
-            buffered_sample->prop.recovery.complete = (picture->frame_num + picture->recovery_frame_cnt) % sps->MaxFrameNum;
+            buffered_sample->prop.post_roll.complete = (picture->frame_num + picture->recovery_frame_cnt) % sps->MaxFrameNum;
         }
         else
             buffered_sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_OPEN_RAP;

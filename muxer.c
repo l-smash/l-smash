@@ -86,6 +86,7 @@ typedef struct
     int      user_fps;
     uint32_t fps_num;
     uint32_t fps_den;
+    uint32_t encoder_delay;
     int16_t  alternate_group;
     uint16_t ISO_language;
     uint16_t copyright_language;
@@ -127,6 +128,7 @@ typedef struct
     uint32_t          sample_entry;
     uint32_t          current_sample_number;
     uint32_t          ctd_shift;
+    uint32_t          priming_samples;
     uint32_t          last_delta;
     uint64_t          prev_dts;
     int64_t           start_offset;
@@ -226,6 +228,7 @@ static void display_help( void )
              "                                  <arg> is <integer> or <integer>/<integer>\n"
              "    language=<string>         Specify media language\n"
              "    alternate-group=<integer> Specify alternate group\n"
+             "    encoder-delay=<integer>   Represent audio encoder delay (priming samples) explicitly\n"
              "    copyright=<arg>           Specify copyright notice with or without language (latter string)\n"
              "                                  <arg> is <string> or <string>/<string>\n"
              "    sbr                       Enable backward-compatible SBR explicit signaling mode\n"
@@ -575,6 +578,11 @@ static int parse_track_options( input_t *input )
                 char *track_parameter = strchr( track_option, '=' ) + 1;
                 track_opt->alternate_group = atoi( track_parameter );
             }
+            if( strstr( track_option, "encoder-delay=" ) )
+            {
+                char *track_parameter = strchr( track_option, '=' ) + 1;
+                track_opt->encoder_delay = atoi( track_parameter );
+            }
             else if( strstr( track_option, "language=" ) )
             {
                 char *track_parameter = strchr( track_option, '=' ) + 1;
@@ -894,8 +902,10 @@ int main( int argc, char *argv[] )
                     }
                     media_param.timescale          = summary->frequency;
                     media_param.media_handler_name = "L-SMASH Audio Handler";
-                    out_track->timescale = summary->frequency;
-                    out_track->timebase  = 1;
+                    media_param.roll_grouping      = track_opt->encoder_delay && (opt->isom_version >= 2 || opt->qtff);
+                    out_track->priming_samples = track_opt->encoder_delay;
+                    out_track->timescale       = summary->frequency;
+                    out_track->timebase        = 1;
                     break;
                 }
                 default :
@@ -961,8 +971,8 @@ int main( int argc, char *argv[] )
                 else
                 {
                     sample->index = out_track->sample_entry;
-                    sample->dts *= out_track->timebase;
-                    sample->cts *= out_track->timebase;
+                    sample->dts  *= out_track->timebase;
+                    sample->cts  *= out_track->timebase;
                     if( opt->timeline_shift )
                     {
                         if( out_track->current_sample_number == 0 )
@@ -1019,8 +1029,12 @@ int main( int argc, char *argv[] )
         if( lsmash_flush_pooled_samples( output->root, out_track->track_ID, out_track->last_delta ) )
             ERROR_MSG( "failed to flush the rest of samples.                                           \n" );
         /* Create edit list.
-         * segment_duration == 0 means an appropriate one will be applied. */
-        if( lsmash_create_explicit_timeline_map( output->root, out_track->track_ID, 0, out_track->start_offset, ISOM_EDIT_MODE_NORMAL ) )
+         * Don't trust media duration. It's just duration of media, not duration of track presentation.
+         * Calculation of presentation duration by DTS is reliable since this muxer handles CFR only. */
+        uint64_t actual_duration  = out_track->prev_dts + out_track->last_delta - out_track->priming_samples;
+        uint64_t segment_duration = actual_duration * ((double)lsmash_get_movie_timescale( output->root ) / out_track->timescale);
+        int64_t  media_time       = out_track->priming_samples + out_track->start_offset;
+        if( lsmash_create_explicit_timeline_map( output->root, out_track->track_ID, segment_duration, media_time, ISOM_EDIT_MODE_NORMAL ) )
             ERROR_MSG( "failed to set timeline map                                                    .\n" );
     }
     /* Set chapter list. */
@@ -1032,9 +1046,9 @@ int main( int argc, char *argv[] )
     if( opt->optimize_pd )
     {
         lsmash_adhoc_remux_t moov_to_front;
-        moov_to_front.func = moov_to_front_callback;
+        moov_to_front.func        = moov_to_front_callback;
         moov_to_front.buffer_size = 4*1024*1024;
-        moov_to_front.param = NULL;
+        moov_to_front.param       = NULL;
         finalize = &moov_to_front;
     }
     else

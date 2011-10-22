@@ -972,7 +972,17 @@ typedef struct
     uint32_t identifier;    /* the identifier for samples
                              * If this identifier equals a certain identifier of recovery point,
                              * then this sample is the recovery point of the earliest group in the pool. */
-} lsmash_recovery_t;
+} lsmash_post_roll_t;
+
+typedef struct
+{
+    uint16_t distance;      /* pre-roll distance for representing audio decoder delay derived from composition
+                             * For example, typical AAC encoding uses a transform over consecutive sets of 2048 audio samples,
+                             * applied every 1024 audio samples (MDCTs are overlapped).
+                             * For correct audio to be decoded, both transforms for any period of 1024 audio samples are needed.
+                             * For this AAC stream, therefore, shall be set to 1 (one AAC access unit).
+                             * Note: the number of priming audio sample i.e. encoder delay shall be represented by media_time in edit. */
+} lsmash_pre_roll_t;
 
 typedef struct
 {
@@ -982,7 +992,8 @@ typedef struct
     uint8_t disposable;
     uint8_t redundant;
     lsmash_random_access_type random_access_type;
-    lsmash_recovery_t recovery;
+    lsmash_post_roll_t        post_roll;
+    lsmash_pre_roll_t         pre_roll;
 } lsmash_sample_property_t;
 
 typedef struct
@@ -1086,9 +1097,9 @@ typedef struct
     uint32_t timescale;                 /* media timescale: timescale for this media */
     uint64_t duration;                  /* the duration of this media, expressed in the media timescale
                                          * You can't set this parameter manually. */
-    uint8_t roll_grouping;              /* roll recovery grouping present
-                                         * Require 'avc1' brand or ISO Base Media File Format version 2 or later. */
-    uint8_t rap_grouping;               /* random access point grouping present
+    uint8_t  roll_grouping;             /* roll recovery grouping present
+                                         * Require 'avc1' brand, or ISO Base Media File Format version 2 or later. */
+    uint8_t  rap_grouping;              /* random access point grouping present
                                          * Require ISO Base Media File Format version 6 or later. */
     /* Use either type of language code. */
     uint16_t MAC_language;              /* Macintosh language code for this media */
