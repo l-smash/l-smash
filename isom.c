@@ -6871,12 +6871,12 @@ int lsmash_set_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     else
     {
         tkhd->layer     = 0;
-        tkhd->volume    = media_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK ? 0x0100     : 0;
-        tkhd->matrix[0] = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? 0x00010000 : 0;
+        tkhd->volume    = media_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK ? 0x0100 : 0;
+        tkhd->matrix[0] = 0x00010000;
         tkhd->matrix[1] = tkhd->matrix[2] = tkhd->matrix[3] = 0;
-        tkhd->matrix[4] = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? 0x00010000 : 0;
+        tkhd->matrix[4] = 0x00010000;
         tkhd->matrix[5] = tkhd->matrix[6] = tkhd->matrix[7] = 0;
-        tkhd->matrix[8] = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? 0x40000000 : 0;
+        tkhd->matrix[8] = 0x40000000;
     }
     /* visual presentation size */
     tkhd->width  = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? param->display_width  : 0;
