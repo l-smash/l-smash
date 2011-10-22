@@ -8847,18 +8847,19 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_prop
     {
         /* Check post-roll distance. */
         isom_roll_entry_t *roll = (isom_roll_entry_t *)lsmash_get_entry_data( sgpd->list, sgpd->list->entry_count );
-        int new_group;
-        if( prop->pre_roll.distance && !roll )
-            new_group = 1;      /* Create the first pre-roll group. */
-        else if( roll && prop->pre_roll.distance != -roll->roll_distance )
+        int new_group = 0;
+        if( prop->pre_roll.distance )
         {
-            /* Pre-roll distance is different from the previous. */
-            group->delimited = 1;
-            group->described = 1;
-            new_group = 1;
+            if( !roll )
+                new_group = 1;      /* Create the first pre-roll group. */
+            else if( prop->pre_roll.distance != -roll->roll_distance )
+            {
+                /* Pre-roll distance is different from the previous. */
+                group->delimited = 1;
+                group->described = 1;
+                new_group = 1;
+            }
         }
-        else
-            new_group = 0;
         if( new_group )
         {
             /* Create a new pre-roll group. */
