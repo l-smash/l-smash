@@ -968,6 +968,7 @@ int main( int argc, char *argv[] )
                     out_track->last_delta = mp4sys_importer_get_last_delta( input->importer, input->current_track_number );
                     if( out_track->last_delta == 0 )
                         ERROR_MSG( "failed to get the last sample delta.\n" );
+                    out_track->last_delta *= out_track->timebase;
                     if( --num_active_input_tracks == 0 )
                         break;      /* Reached the end of whole tracks. */
                 }
