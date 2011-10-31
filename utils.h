@@ -141,6 +141,19 @@ double lsmash_int2float64( uint64_t value );
 void *lsmash_malloc_zero( size_t size );
 void *lsmash_memdup( void *src, size_t size );
 
+typedef struct
+{
+    uint32_t number_of_buffers;
+    uint32_t buffer_size;
+    void    *buffers;
+} lsmash_multiple_buffers_t;
+
+lsmash_multiple_buffers_t *lsmash_create_multiple_buffers( uint32_t number_of_buffers, uint32_t buffer_size );
+void *lsmash_withdraw_buffer( lsmash_multiple_buffers_t *multiple_buffer, uint32_t buffer_number );
+lsmash_multiple_buffers_t *lsmash_resize_multiple_buffers( lsmash_multiple_buffers_t *multiple_buffer, uint32_t buffer_size );
+void lsmash_destroy_multiple_buffers( lsmash_multiple_buffers_t *multiple_buffer );
+
+/*---- others ----*/
 typedef enum
 {
     LSMASH_LOG_ERROR,
@@ -148,7 +161,6 @@ typedef enum
     LSMASH_LOG_INFO,
 } lsmash_log_level;
 
-/*---- others ----*/
 void lsmash_log( lsmash_log_level level, const char* message, ... );
 int lsmash_compare_dts( const lsmash_media_ts_t *a, const lsmash_media_ts_t *b );
 int lsmash_compare_cts( const lsmash_media_ts_t *a, const lsmash_media_ts_t *b );
