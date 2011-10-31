@@ -3691,28 +3691,26 @@ static void h264_check_buffer_shortage( uint32_t anticipation_bytes, uint32_t bu
     assert( anticipation_bytes < buffer_size );
     if( *no_more_read )
         return;
-    for( uint32_t i = 0; i <= anticipation_bytes; i++ )
+    uint8_t *buf_pos = *p_buf_pos;
+    uint8_t *buf_end = *p_buf_end;
+    assert( buf_end >= buf_pos );
+    uint32_t remainder_bytes = buf_end - buf_pos;
+    if( remainder_bytes <= anticipation_bytes )
     {
-        uint8_t *buf     = *p_buf;
-        uint8_t *buf_pos = *p_buf_pos;
-        uint8_t *buf_end = *p_buf_end;
-        if( (buf_pos + i) >= buf_end )
-        {
-            /* Move unused data to the head of buffer. */
-            for( uint32_t j = 0; j < i; j++ )
-                buf[j] = buf_pos[j];
-            /* Read and store the next data into the buffer.
-             * Move the position of buffer on the head. */
-            uint32_t read_size = fread( buf + i, 1, buffer_size - i, stream );
-            buf_pos = buf;
-            *valid_length = i + read_size;
-            buf_end = buf + *valid_length;
-            *no_more_read = read_size == 0 ? feof( stream ) : 0;
-            *p_buf     = buf;
-            *p_buf_pos = buf_pos;
-            *p_buf_end = buf_end;
-            break;
-        }
+        uint8_t *buf = *p_buf;
+        /* Move unused data to the head of buffer. */
+        for( uint32_t i = 0; i < remainder_bytes; i++ )
+            buf[i] = buf_pos[i];
+        /* Read and store the next data into the buffer.
+         * Move the position of buffer on the head. */
+        uint32_t read_size = fread( buf + remainder_bytes, 1, buffer_size - remainder_bytes, stream );
+        buf_pos = buf;
+        *valid_length = remainder_bytes + read_size;
+        buf_end = buf + *valid_length;
+        *no_more_read = read_size == 0 ? feof( stream ) : 0;
+        *p_buf     = buf;
+        *p_buf_pos = buf_pos;
+        *p_buf_end = buf_end;
     }
 }
 
