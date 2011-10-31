@@ -2385,14 +2385,8 @@ static void mp4sys_remove_h264_info( mp4sys_h264_info_t *info )
     lsmash_remove_list( info->avcC.pictureParameterSets,    isom_remove_avcC_ps );
     lsmash_remove_list( info->avcC.sequenceParameterSetExt, isom_remove_avcC_ps );
     lsmash_bits_adhoc_cleanup( info->bits );
-    if( info->stream_buffer )
-        free( info->stream_buffer );
-    if( info->picture.au )
-        free( info->picture.au );
-    if( info->picture.incomplete_au )
-        free( info->picture.incomplete_au );
-    if( info->rbsp_buffer )
-        free( info->rbsp_buffer );
+    if( info->buffer )
+        free( info->buffer );
     if( info->ts_list.timestamp )
         free( info->ts_list.timestamp );
     free( info );
