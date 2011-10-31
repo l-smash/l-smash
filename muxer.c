@@ -159,13 +159,15 @@ static void cleanup_muxer( muxer_t *muxer )
     output_t *output = &muxer->output;
     if( output->root )
         lsmash_destroy_root( output->root );
-    for( uint32_t i = 0; i < output->num_of_tracks; i++ )
-    {
-        output_track_t *out_track = &output->track[i];
-        lsmash_delete_sample( out_track->sample );
-    }
     if( output->track )
+    {
+        for( uint32_t i = 0; i < output->num_of_tracks; i++ )
+        {
+            output_track_t *out_track = &output->track[i];
+            lsmash_delete_sample( out_track->sample );
+        }
         free( output->track );
+    }
     for( uint32_t i = 0; i < muxer->num_of_inputs; i++ )
     {
         input_t *input = &muxer->input[i];
