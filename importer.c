@@ -3686,7 +3686,7 @@ static inline void h264_complete_au( h264_picture_info_t *picture, int probe )
 #define CHECK_NEXT_LONG_START_CODE( x ) (!(x)[0] && !(x)[1] && !(x)[2] && ((x)[3] == 0x01))
 
 static void h264_check_buffer_shortage( uint32_t anticipation_bytes, uint32_t buffer_size, uint32_t *valid_length, uint8_t *no_more_read,
-                                        uint8_t **p_buf, uint8_t **p_buf_pos, uint8_t **p_buf_end, FILE *stream )
+                                        uint8_t *buf, uint8_t **p_buf_pos, uint8_t **p_buf_end, FILE *stream )
 {
     assert( anticipation_bytes < buffer_size );
     if( *no_more_read )
@@ -3697,20 +3697,16 @@ static void h264_check_buffer_shortage( uint32_t anticipation_bytes, uint32_t bu
     uint32_t remainder_bytes = buf_end - buf_pos;
     if( remainder_bytes <= anticipation_bytes )
     {
-        uint8_t *buf = *p_buf;
         /* Move unused data to the head of buffer. */
         for( uint32_t i = 0; i < remainder_bytes; i++ )
             buf[i] = buf_pos[i];
         /* Read and store the next data into the buffer.
          * Move the position of buffer on the head. */
         uint32_t read_size = fread( buf + remainder_bytes, 1, buffer_size - remainder_bytes, stream );
-        buf_pos = buf;
+        *p_buf_pos = buf;
         *valid_length = remainder_bytes + read_size;
-        buf_end = buf + *valid_length;
+        *p_buf_end = buf + *valid_length;
         *no_more_read = read_size == 0 ? feof( stream ) : 0;
-        *p_buf     = buf;
-        *p_buf_pos = buf_pos;
-        *p_buf_end = buf_end;
     }
 }
 
@@ -3742,7 +3738,7 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_h2
     picture->has_redundancy    = 0;
     while( 1 )
     {
-        h264_check_buffer_shortage( 2, info->buffer_size, &valid_length, &no_more_read, &buf, &buf_pos, &buf_end, importer->stream );
+        h264_check_buffer_shortage( 2, info->buffer_size, &valid_length, &no_more_read, buf, &buf_pos, &buf_end, importer->stream );
         no_more_buf = buf_pos >= buf_end;
         int no_more = no_more_read && no_more_buf;
         if( (((buf_pos + 2) < buf_end) && CHECK_NEXT_SHORT_START_CODE( buf_pos )) || no_more )
@@ -3921,7 +3917,7 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_h2
             else
                 buf_pos = backup_pos + H264_SHORT_START_CODE_LENGTH;
             prev_nalu_type = nalu_type;
-            h264_check_buffer_shortage( 0, info->buffer_size, &valid_length, &no_more_read, &buf, &buf_pos, &buf_end, importer->stream );
+            h264_check_buffer_shortage( 0, info->buffer_size, &valid_length, &no_more_read, buf, &buf_pos, &buf_end, importer->stream );
             no_more_buf = buf_pos >= buf_end;
             ebsp_length = 0;
             no_more = no_more_read && no_more_buf;
@@ -4065,7 +4061,7 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
     if( !found_start_code )
         return -1;
     buf_pos += H264_LONG_START_CODE_LENGTH;
-    h264_check_buffer_shortage( 0, MP4SYS_H264_DEFAULT_BUFFER_SIZE, &valid_length, &no_more_read, (uint8_t **)(&buf), &buf_pos, &buf_end, importer->stream );
+    h264_check_buffer_shortage( 0, MP4SYS_H264_DEFAULT_BUFFER_SIZE, &valid_length, &no_more_read, buf, &buf_pos, &buf_end, importer->stream );
     h264_nalu_header_t first_nalu_header;
     if( h264_check_nalu_header( &first_nalu_header, &buf_pos, 1 ) )
         return -1;
