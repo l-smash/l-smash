@@ -3528,7 +3528,7 @@ fail:
     return NULL;
 }
 
-static inline int h264_update_picture_type( h264_picture_info_t *picture, h264_slice_info_t *slice )
+static inline void h264_update_picture_type( h264_picture_info_t *picture, h264_slice_info_t *slice )
 {
     if( picture->type == H264_PICTURE_TYPE_I_P )
     {
@@ -3604,28 +3604,18 @@ static inline int h264_update_picture_type( h264_picture_info_t *picture, h264_s
                                           : picture->type == H264_PICTURE_TYPE_I_SI       ? "SI"
                                           :                                                 "SP" );
 #endif
-    return 0;
 }
 
-static int h264_update_picture_info_partially( h264_picture_info_t *picture, h264_slice_info_t *slice, h264_sei_t *sei )
+/* Shall be called at least once per picture. */
+static void h264_update_picture_info_for_slice( h264_picture_info_t *picture, h264_slice_info_t *slice )
 {
-    picture->random_accessible |= slice->IdrPicFlag;
-    picture->has_mmco5         |= slice->has_mmco5;
-    picture->has_redundancy    |= slice->has_redundancy;
-    if( h264_update_picture_type( picture, slice ) )
-        return -1;
-    picture->independent      = picture->type == H264_PICTURE_TYPE_I || picture->type == H264_PICTURE_TYPE_I_SI;
-    picture->non_bipredictive = picture->type != H264_PICTURE_TYPE_I_P_B && picture->type != H264_PICTURE_TYPE_I_SI_P_SP_B;
-    if( sei->present )
-    {
-        picture->random_accessible |= sei->random_accessible;
-        picture->recovery_frame_cnt = sei->recovery_frame_cnt;
-        sei->present = 0;
-    }
-    return 0;
+    picture->has_mmco5      |= slice->has_mmco5;
+    picture->has_redundancy |= slice->has_redundancy;
+    h264_update_picture_type( picture, slice );
 }
 
-static int h264_update_picture_info( h264_picture_info_t *picture, h264_slice_info_t *slice, h264_sei_t *sei )
+/* Shall be called exactly once per picture. */
+static void h264_update_picture_info( h264_picture_info_t *picture, h264_slice_info_t *slice, h264_sei_t *sei )
 {
     picture->frame_num                  = slice->frame_num;
     picture->pic_order_cnt_lsb          = slice->pic_order_cnt_lsb;
@@ -3637,7 +3627,16 @@ static int h264_update_picture_info( h264_picture_info_t *picture, h264_slice_in
     picture->idr                        = slice->IdrPicFlag;
     picture->pic_parameter_set_id       = slice->pic_parameter_set_id;
     picture->disposable                 = (slice->nal_ref_idc == 0);
-    return h264_update_picture_info_partially( picture, slice, sei );
+    picture->random_accessible          = slice->IdrPicFlag;
+    h264_update_picture_info_for_slice( picture, slice );
+    picture->independent      = picture->type == H264_PICTURE_TYPE_I || picture->type == H264_PICTURE_TYPE_I_SI;
+    picture->non_bipredictive = picture->type != H264_PICTURE_TYPE_I_P_B && picture->type != H264_PICTURE_TYPE_I_SI_P_SP_B;
+    if( sei->present )
+    {
+        picture->random_accessible |= sei->random_accessible;
+        picture->recovery_frame_cnt = sei->recovery_frame_cnt;
+        sei->present = 0;
+    }
 }
 
 static inline int h264_find_au_delimit_by_slice_info( h264_slice_info_t *slice, h264_slice_info_t *prev_slice )
@@ -3835,12 +3834,11 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_h2
                         {
                             /* The current NALU is the first VCL NALU of the primary coded picture of an new AU.
                              * Therefore, the previous slice belongs to the AU you want at this time. */
-                            if( h264_update_picture_info( picture, &prev_slice, &info->sei ) )
-                                break;
+                            h264_update_picture_info( picture, &prev_slice, &info->sei );
                             complete_au = 1;
                         }
-                        else if( h264_update_picture_info_partially( picture, &prev_slice, &info->sei ) )
-                            break;
+                        else
+                            h264_update_picture_info_for_slice( picture, &prev_slice );
                         prev_slice.present = 0;     /* Discard the previous slice info. */
                     }
                     slice->present = 1;
@@ -3848,8 +3846,7 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_h2
                 else if( h264_find_au_delimit_by_nalu_type( nalu_type, info->prev_nalu_type ) )
                 {
                     /* The last slice belongs to the AU you want at this time. */
-                    if( h264_update_picture_info( picture, slice, &info->sei ) )
-                        break;
+                    h264_update_picture_info( picture, slice, &info->sei );
                     slice->present = 0;     /* Discard the current slice info. */
                     complete_au = 1;
                 }
@@ -3936,8 +3933,7 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_h2
                 /* If there is no data in the stream, and flushed chunk of NALUs, flush it as complete AU here. */
                 if( no_more && picture->incomplete_au_length && picture->au_length == 0 )
                 {
-                    if( h264_update_picture_info( picture, slice, &info->sei ) )
-                        break;
+                    h264_update_picture_info( picture, slice, &info->sei );
                     slice->present = 0;     /* redundant */
                     h264_complete_au( picture, probe );
                 }
