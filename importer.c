@@ -3668,6 +3668,8 @@ static inline int h264_find_au_delimit_by_nalu_type( uint8_t nalu_type, uint8_t 
 
 static int h264_supplement_buffer( mp4sys_h264_info_t *info, uint32_t size )
 {
+    uint32_t buffer_pos_offset   = info->stream_buffer_pos - info->stream_buffer;
+    uint32_t buffer_valid_length = info->stream_buffer_end - info->stream_buffer;
     lsmash_multiple_buffers_t *temp = lsmash_resize_multiple_buffers( info->buffers, size );
     if( !temp )
         return -1;
@@ -3676,6 +3678,8 @@ static int h264_supplement_buffer( mp4sys_h264_info_t *info, uint32_t size )
     info->rbsp_buffer           = lsmash_withdraw_buffer( info->buffers, 2 );
     info->picture.au            = lsmash_withdraw_buffer( info->buffers, 3 );
     info->picture.incomplete_au = lsmash_withdraw_buffer( info->buffers, 4 );
+    info->stream_buffer_pos = info->stream_buffer + buffer_pos_offset;
+    info->stream_buffer_end = info->stream_buffer + buffer_valid_length;
     return 0;
 }
 
@@ -3688,39 +3692,29 @@ static inline void h264_complete_au( h264_picture_info_t *picture, int probe )
     picture->incomplete_au_has_primary = 0;
 }
 
-#define H264_SHORT_START_CODE_LENGTH 3
-#define H264_LONG_START_CODE_LENGTH  4
-#define CHECK_NEXT_LONG_START_CODE( x ) (!(x)[0] && !(x)[1] && !(x)[2] && ((x)[3] == 0x01))
-
 static inline int h264_check_next_short_start_code( uint8_t *buf_pos, uint8_t *buf_end )
 {
     return ((buf_pos + 2) < buf_end) && !buf_pos[0] && !buf_pos[1] && (buf_pos[2] == 0x01);
 }
 
-static void h264_check_buffer_shortage( uint32_t anticipation_bytes, uint32_t buffer_size,
-                                        uint32_t *valid_length, uint8_t *no_more_read,
-                                        FILE *stream, uint8_t *buf,
-                                        uint8_t **p_buf_pos, uint8_t **p_buf_end )
+static void h264_check_buffer_shortage( mp4sys_importer_t *importer, uint32_t anticipation_bytes )
 {
-    assert( anticipation_bytes < buffer_size );
-    if( *no_more_read )
+    mp4sys_h264_info_t *info = (mp4sys_h264_info_t *)importer->info;
+    assert( anticipation_bytes < info->buffers->buffer_size );
+    if( info->no_more_read )
         return;
-    uint8_t *buf_pos = *p_buf_pos;
-    uint8_t *buf_end = *p_buf_end;
-    assert( buf_end >= buf_pos );
-    uint32_t remainder_bytes = buf_end - buf_pos;
+    uint32_t remainder_bytes = info->stream_buffer_end - info->stream_buffer_pos;
     if( remainder_bytes <= anticipation_bytes )
     {
         /* Move unused data to the head of buffer. */
         for( uint32_t i = 0; i < remainder_bytes; i++ )
-            buf[i] = buf_pos[i];
+            *(info->stream_buffer + i) = *(info->stream_buffer_pos + i);
         /* Read and store the next data into the buffer.
          * Move the position of buffer on the head. */
-        uint32_t read_size = fread( buf + remainder_bytes, 1, buffer_size - remainder_bytes, stream );
-        *no_more_read = read_size == 0 ? feof( stream ) : 0;
-        *valid_length = remainder_bytes + read_size;
-        *p_buf_pos = buf;
-        *p_buf_end = buf + *valid_length;
+        uint32_t read_size = fread( info->stream_buffer + remainder_bytes, 1, info->buffers->buffer_size - remainder_bytes, importer->stream );
+        info->stream_buffer_pos = info->stream_buffer;
+        info->stream_buffer_end = info->stream_buffer + remainder_bytes + read_size;
+        info->no_more_read = read_size == 0 ? feof( importer->stream ) : 0;
     }
 }
 
@@ -3728,11 +3722,11 @@ static void h264_check_buffer_shortage( uint32_t anticipation_bytes, uint32_t bu
  * Currently, you can get AU of AVC video elemental stream only, not AVC parameter set elemental stream defined in 14496-15. */
 static int h264_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_h264_info_t *info, uint32_t track_number, int probe )
 {
+#define H264_SHORT_START_CODE_LENGTH 3
     h264_slice_info_t *slice           = &info->slice;
     h264_picture_info_t *picture       = &info->picture;
     lsmash_video_summary_t *summary    = info->summary;
     h264_nalu_header_t nalu_header     = info->nalu_header;
-    uint32_t valid_length = info->stream_buffer_end - info->stream_buffer;
     uint64_t consecutive_zero_byte_count = 0;
     uint64_t ebsp_length = 0;
     int      no_more_buf = 0;
@@ -3746,14 +3740,14 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_h2
     picture->has_redundancy     = 0;
     while( 1 )
     {
-        h264_check_buffer_shortage( 2, info->buffers->buffer_size, &valid_length, &info->no_more_read,
-                                    importer->stream, info->stream_buffer, &info->stream_buffer_pos, &info->stream_buffer_end );
+        h264_check_buffer_shortage( importer, 2 );
         no_more_buf = info->stream_buffer_pos >= info->stream_buffer_end;
         int no_more = info->no_more_read && no_more_buf;
         if( h264_check_next_short_start_code( info->stream_buffer_pos, info->stream_buffer_end ) || no_more )
         {
             uint64_t next_nalu_head_pos = info->ebsp_head_pos + ebsp_length + !no_more * H264_SHORT_START_CODE_LENGTH;
-            uint8_t *next_short_start_code_pos = info->stream_buffer_pos;   /* Remember position of short start code of the next NALU. */
+            uint8_t *next_short_start_code_pos = info->stream_buffer_pos;   /* Memorize position of short start code of the next NALU in buffer.
+                                                                             * This is used when backward reading of stream doesn't occur. */
             uint8_t nalu_type = nalu_header.nal_unit_type;
             int is_vcl_nalu = nalu_type >= 1 && nalu_type <= 5;
             int read_back = 0;
@@ -3791,24 +3785,20 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_h2
                  * We don't support SVC and MVC elemental stream defined in 14496-15 yet. */
                 ebsp_length -= consecutive_zero_byte_count;     /* Any EBSP doesn't have zero bytes at the end. */
                 uint64_t nalu_length = nalu_header.length + ebsp_length;
-                uint32_t buf_distance = info->stream_buffer_pos - info->stream_buffer;
                 if( info->buffers->buffer_size < nalu_length )
                 {
                     if( h264_supplement_buffer( info, 2 * nalu_length ) )
                         break;
-                    info->stream_buffer_pos   = info->stream_buffer + buf_distance;
-                    info->stream_buffer_end   = info->stream_buffer + valid_length;
                     next_short_start_code_pos = info->stream_buffer_pos;
                 }
                 /* Move to the first byte of the current NALU. */
-                read_back = buf_distance < (nalu_length + consecutive_zero_byte_count);
+                read_back = (info->stream_buffer_pos - info->stream_buffer) < (nalu_length + consecutive_zero_byte_count);
                 if( read_back )
                 {
                     lsmash_fseek( importer->stream, info->ebsp_head_pos - nalu_header.length, SEEK_SET );
                     int read_fail = fread( info->stream_buffer, 1, nalu_length, importer->stream ) != nalu_length;
-                    valid_length = nalu_length;
                     info->stream_buffer_pos = info->stream_buffer;
-                    info->stream_buffer_end = info->stream_buffer + valid_length;
+                    info->stream_buffer_end = info->stream_buffer + nalu_length;
                     if( read_fail )
                         break;
 #if 0
@@ -3883,13 +3873,10 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_h2
                     uint64_t needed_au_length = picture->incomplete_au_length + 4 + nalu_length;
                     if( info->buffers->buffer_size < needed_au_length )
                     {
-                        uint32_t next_start_code_distance = next_short_start_code_pos - info->stream_buffer;
-                        buf_distance = info->stream_buffer_pos - info->stream_buffer;
+                        uint32_t next_short_start_code_pos_offset = next_short_start_code_pos - info->stream_buffer;
                         if( h264_supplement_buffer( info, 2 * needed_au_length ) )
                             break;
-                        info->stream_buffer_pos   = info->stream_buffer + buf_distance;
-                        info->stream_buffer_end   = info->stream_buffer + valid_length;
-                        next_short_start_code_pos = info->stream_buffer + next_start_code_distance;
+                        next_short_start_code_pos = info->stream_buffer + next_short_start_code_pos_offset;
                     }
                     if( !probe )
                     {
@@ -3909,15 +3896,13 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_h2
             if( read_back )
             {
                 lsmash_fseek( importer->stream, next_nalu_head_pos, SEEK_SET );
-                valid_length = fread( info->stream_buffer, 1, info->buffers->buffer_size, importer->stream );
                 info->stream_buffer_pos = info->stream_buffer;
-                info->stream_buffer_end = info->stream_buffer + valid_length;
+                info->stream_buffer_end = info->stream_buffer + fread( info->stream_buffer, 1, info->buffers->buffer_size, importer->stream );
             }
             else
                 info->stream_buffer_pos = next_short_start_code_pos + H264_SHORT_START_CODE_LENGTH;
             info->prev_nalu_type = nalu_type;
-            h264_check_buffer_shortage( 0, info->buffers->buffer_size, &valid_length, &info->no_more_read,
-                                        importer->stream, info->stream_buffer, &info->stream_buffer_pos, &info->stream_buffer_end );
+            h264_check_buffer_shortage( importer, 0 );
             no_more_buf = info->stream_buffer_pos >= info->stream_buffer_end;
             ebsp_length = 0;
             no_more = info->no_more_read && no_more_buf;
@@ -3957,6 +3942,7 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_h2
     info->nalu_header   = nalu_header;
     picture->au_number += 1;
     return (!success || picture->au_length == 0) ? -1 : 0;
+#undef H264_SHORT_START_CODE_LENGTH
 }
 
 static int mp4sys_h264_get_accessunit( mp4sys_importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
@@ -4028,47 +4014,45 @@ static int mp4sys_h264_get_accessunit( mp4sys_importer_t *importer, uint32_t tra
 
 static int mp4sys_h264_probe( mp4sys_importer_t *importer )
 {
+#define H264_LONG_START_CODE_LENGTH  4
+#define CHECK_NEXT_LONG_START_CODE( x ) (!(x)[0] && !(x)[1] && !(x)[2] && ((x)[3] == 0x01))
     /* Find the first start code. */
-    uint8_t buf[MP4SYS_H264_DEFAULT_BUFFER_SIZE];
-    int found_start_code = 0;
-    uint32_t valid_length = fread( buf, 1, MP4SYS_H264_DEFAULT_BUFFER_SIZE, importer->stream );
-    uint8_t *buf_pos = buf;
-    uint8_t *buf_end = buf + valid_length;
-    uint8_t no_more_read = buf >= buf_end ? feof( importer->stream ) : 0;
-    while( 1 )
-    {
-        /* Invalid if encountered any value of non-zero before the first start code. */
-        IF_INVALID_VALUE( *buf_pos )
-            return -1;
-        /* The first NALU of an AU in decoding order shall have long start code (0x00000001). */
-        if( CHECK_NEXT_LONG_START_CODE( buf_pos ) )
-        {
-            found_start_code = 1;
-            break;
-        }
-        if( (buf_pos + H264_LONG_START_CODE_LENGTH) == buf_end )
-            break;
-        ++buf_pos;
-    }
-    /* If the first trial of finding long start code failed, we assume this stream is not byte stream format of H.264. */
-    if( !found_start_code )
-        return -1;
-    buf_pos += H264_LONG_START_CODE_LENGTH;
-    h264_check_buffer_shortage( 0, MP4SYS_H264_DEFAULT_BUFFER_SIZE, &valid_length, &no_more_read, importer->stream, buf, &buf_pos, &buf_end );
-    h264_nalu_header_t first_nalu_header;
-    if( h264_check_nalu_header( &first_nalu_header, &buf_pos, 1 ) )
-        return -1;
-    uint64_t first_ebsp_head_pos = buf_pos - buf;       /* EBSP doesn't include NALU header. */
-    /* Check existence of a complete AU. */
     mp4sys_h264_info_t *info = mp4sys_create_h264_info();
     if( !info )
         return -1;
-    info->status        = no_more_read ? MP4SYS_IMPORTER_EOF : MP4SYS_IMPORTER_OK;
+    info->stream_buffer_pos = info->stream_buffer;
+    info->stream_buffer_end = info->stream_buffer + fread( info->stream_buffer, 1, info->buffers->buffer_size, importer->stream );
+    info->no_more_read = info->stream_buffer >= info->stream_buffer_end ? feof( importer->stream ) : 0;
+    while( 1 )
+    {
+        /* Invalid if encountered any value of non-zero before the first start code. */
+        IF_INVALID_VALUE( *info->stream_buffer_pos )
+        {
+            mp4sys_remove_h264_info( info );
+            goto fail;
+        }
+        /* The first NALU of an AU in decoding order shall have long start code (0x00000001). */
+        if( CHECK_NEXT_LONG_START_CODE( info->stream_buffer_pos ) )
+            break;
+        /* If the first trial of finding long start code failed, we assume this stream is not byte stream format of H.264. */
+        if( (info->stream_buffer_pos + H264_LONG_START_CODE_LENGTH) == info->stream_buffer_end )
+        {
+            mp4sys_remove_h264_info( info );
+            goto fail;
+        }
+        ++info->stream_buffer_pos;
+    }
+    /* OK. It seems the stream has a long start code of H.264. */
+    importer->info = info;
+    info->stream_buffer_pos += H264_LONG_START_CODE_LENGTH;
+    h264_check_buffer_shortage( importer, 0 );
+    h264_nalu_header_t first_nalu_header;
+    if( h264_check_nalu_header( &first_nalu_header, &info->stream_buffer_pos, 1 ) )
+        goto fail;
+    uint64_t first_ebsp_head_pos = info->stream_buffer_pos - info->stream_buffer;   /* EBSP doesn't include NALU header. */
+    info->status        = info->no_more_read ? MP4SYS_IMPORTER_EOF : MP4SYS_IMPORTER_OK;
     info->nalu_header   = first_nalu_header;
     info->ebsp_head_pos = first_ebsp_head_pos;
-    memcpy( info->stream_buffer, buf, valid_length );
-    info->stream_buffer_pos = info->stream_buffer + (buf_pos - buf);
-    info->stream_buffer_end = info->stream_buffer + valid_length;
     /* Parse all NALU in the stream for preparation of calculating timestamps. */
     uint32_t poc_alloc = (1 << 12) * sizeof(uint64_t);
     uint64_t *poc = malloc( poc_alloc );
@@ -4176,7 +4160,6 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
     info->composition_reordering_present = !!max_composition_delay;
     /* Go back to EBSP of the first NALU. */
     lsmash_fseek( importer->stream, first_ebsp_head_pos, SEEK_SET );
-    valid_length = fread( info->stream_buffer, 1, info->buffers->buffer_size, importer->stream );
     info->status                 = MP4SYS_IMPORTER_OK;
     info->nalu_header            = first_nalu_header;
     info->prev_nalu_type         = 0;
@@ -4185,7 +4168,7 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
     info->summary->max_au_length = info->max_au_length;
     info->summary                = NULL;
     info->stream_buffer_pos      = info->stream_buffer;
-    info->stream_buffer_end      = info->stream_buffer + valid_length;
+    info->stream_buffer_end      = info->stream_buffer + fread( info->stream_buffer, 1, info->buffers->buffer_size, importer->stream );
     info->ebsp_head_pos          = first_ebsp_head_pos;
     uint8_t *temp_au             = info->picture.au;
     uint8_t *temp_incomplete_au  = info->picture.incomplete_au;
@@ -4204,6 +4187,8 @@ fail:
     mp4sys_remove_h264_info( info );
     lsmash_remove_entries( importer->summaries, lsmash_cleanup_summary );
     return -1;
+#undef H264_LONG_START_CODE_LENGTH
+#undef CHECK_NEXT_LONG_START_CODE
 }
 
 static uint32_t mp4sys_h264_get_last_delta( mp4sys_importer_t* importer, uint32_t track_number )
