@@ -158,7 +158,7 @@ for opt; do
         --extra-libs=*)
             XLIBS="$optarg"
             ;;
-        # "--disable-demuxer" is the special option only for deveroppers
+        # "--disable-demuxer" is the special option only for developpers.
         --disable-demuxer)
             DEMUXER=""
             ;;
@@ -262,8 +262,8 @@ fi
 
 
 #=============================================================================
-# notation for developpers.
-# be sure to modified this block when you add/delete source files.
+# Notation for developpers.
+# Be sure to modified this block when you add/delete source files.
 SRCS="isom.c utils.c mp4sys.c mp4a.c importer.c \
       summary.c print.c read.c timeline.c"
 TOOLS_ALL="muxer remuxer boxdumper timelineeditor"

@@ -1,7 +1,7 @@
 # Makefile for L-SMASH
 
 # note:
-#  This Makefile is not tested except GNU make.
+# Currently, this Makefile is not tested except GNU make.
 
 include config.mak
 
@@ -57,7 +57,7 @@ else
 endif
 endif
 
-#All objects should be deleted regardless of configure when uninstall/clean/distclean
+#All objects should be deleted regardless of configure when uninstall/clean/distclean.
 uninstall:
 	$(RM) $(DESTDIR)$(INCDIR)/lsmash.h
 	$(RM) $(addprefix $(DESTDIR)$(LIBDIR)/, liblsmash.a liblsmash.dll.a liblsmash.so)
