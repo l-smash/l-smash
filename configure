@@ -1,0 +1,343 @@
+#!/bin/bash
+
+#----------------------------------------------------------------------------
+#  configure script for L-SMASH
+#
+#  Currently, this script is considering only GCC.
+#  If you want to use other compiler based on C99 standerd (e.g. llvm),
+#  we just say to you "patches welcome."
+#----------------------------------------------------------------------------
+
+if test x"$1" = x"-h" -o x"$1" = x"--help" ; then
+cat << EOF
+Usage: ./configure [options]
+
+options:
+  -h, --help               print this message
+
+  --prefix=PREFIX          install architecture-independent files into PREFIX
+                           [/usr/local]
+  --exec-prefix=EPREFIX    install architecture-dependent files into EPREFIX
+                           [PREFIX]
+  --bindir=DIR             install binaries in DIR [EPREFIX/bin]
+  --libdir=DIR             install libs in DIR [EPREFIX/lib]
+  --includedir=DIR         install headers in DIR [PREFIX/include]
+
+  --target-os=OS           build programs to run on OS [auto]
+  --cross-prefix=PREFIX    use PREFIX for compilation tools [none]
+  --sysroot=DIR            specify toolchain's directory [none]
+  --disable-static         compile only shared library
+  --disable-shared         compile only static library
+  --enable-debug           compile with debug symbols and never strip
+
+  --extra-cflags=XCFLAGS   add XCFLAGS to CFLAGS
+  --extra-ldflags=XLDFLAGS add XLDFLAGS to LDFLAGS
+  --extra-libs=XLIBS       add XLIBS to LIBS
+EOF
+exit 1
+fi
+
+#-----------------------------------------------------------------------------
+
+error_exit()
+{
+    echo error: $1
+    exit 1
+}
+
+#Currently, this is used only for the flag check of compiler.
+cc_check()
+{
+    echo 'int main(void){return 0;}' > conftest.c
+    $CC conftest.c $1 $2 -o conftest 2> /dev/null
+    ret=$?
+    rm -f conftest*
+    return $ret
+}
+
+#-----------------------------------------------------------------------------
+
+rm -f config.mak* .depend conftest*
+
+
+echo
+echo generating config.mak ...
+echo
+
+
+SRCDIR="$(cd $(dirname $0); pwd)"
+test "$SRCDIR" = "$(pwd)" && SRCDIR=.
+test -n "$(echo $SRCDIR | grep ' ')" && \
+    error_exit "out-of-tree builds are impossible with whitespace in source path"
+
+PREFIX=""
+EPREFIX=""
+BINDIR=""
+LIBDIR=""
+INCDIR=""
+DESTDIR=""
+
+TARGET_OS=""
+CROSS=""
+
+SYSROOT=""
+CC="gcc"
+AR="ar"
+LD="gcc"
+RANLIB="ranlib"
+STRIP="strip"
+
+DEBUG="disabled"
+
+EXT=""
+
+STATIC_NAME="liblsmash"
+STATIC_EXT=".a"
+STATICLIB="enabled"
+
+SHARED_NAME="liblsmash"
+SHARED_EXT=".so"
+SHAREDLIB="enabled"
+IMPLIB=""
+
+TOOLS=""
+
+CFLAGS="-Wshadow -Wall -std=gnu99 -I$SRCDIR"
+LDFLAGS="-L."
+SO_LDFLAGS='-shared -Wl,-soname,$@'
+LIBS="-lm"
+
+DEMUXER="enabled"
+
+for opt; do
+    optarg="${opt#*=}"
+    case "$opt" in
+        --prefix=*)
+            PREFIX="$optarg"
+            ;;
+        --exec-prefix=*)
+            EPREFIX="$optarg"
+            ;;
+        --bindir=*)
+            BINDIR="$optarg"
+            ;;
+        --libdir=*)
+            LIBDIR="$optarg"
+            ;;
+        --includedir=*)
+            INCDIR="$optarg"
+            ;;
+        --destdir=*)
+            DESTDIR="$optarg"
+            ;;
+        --target-os=*)
+            TARGET_OS="$optarg"
+            ;;
+        --cross-prefix=*)
+            CROSS="$optarg"
+            ;;
+        --sysroot=*)
+            CFLAGS="$CFLAGS --sysroot=$optarg"
+            LDFLAGS="$LDFLAGS --sysroot=$optarg"
+            ;;
+        --disable-static)
+            STATICLIB=""
+            ;;
+        --disable-shared)
+            SHAREDLIB=""
+            ;;
+        --enable-debug)
+            DEBUG="enabled"
+            ;;
+        --extra-cflags=*)
+            XCFLAGS="$optarg"
+            ;;
+        --extra-ldflags=*)
+            XLDFLAGS="$optarg"
+            ;;
+        --extra-libs=*)
+            XLIBS="$optarg"
+            ;;
+        # "--disable-demuxer" is the special option only for deveroppers
+        --disable-demuxer)
+            DEMUXER=""
+            ;;
+        *)
+            error_exit "unknown option $opt"
+            ;;
+    esac
+done
+
+test -n "$PREFIX" || PREFIX="/usr/local"
+test -n "$EPREFIX" || EPREFIX='$(PREFIX)'
+test -n "$BINDIR" || BINDIR='$(EPREFIX)/bin'
+test -n "$LIBDIR" || LIBDIR='$(EPREFIX)/lib'
+test -n "$INCDIR" || INCDIR='$(PREFIX)/include'
+
+
+CC="${CROSS}${CC}"
+AR="${CROSS}${AR}"
+LD="${CROSS}${LD}"
+RANLIB="${CROSS}${RANLIB}"
+STRIP="${CROSS}${STRIP}"
+for f in "$CC" "$AR" "$LD" "$RANLIB" "$STRIP"; do
+    test -n "$(which $f 2> /dev/null)" || error_exit "$f is not executable"
+done
+
+
+if test -n "$TARGET_OS"; then
+    TARGET_OS=$(echo $TARGET_OS | tr '[A-Z]' '[a-z]')
+else
+    TARGET_OS=$($CC -dumpmachine | tr '[A-Z]' '[a-z]')
+fi
+case "$TARGET_OS" in
+    *mingw*)
+        EXT=".exe"
+        SHARED_EXT=".dll"
+        IMPLIB="liblsmash.dll.a"
+        SO_LDFLAGS="-shared -Wl,--out-implib,$IMPLIB"
+        ;;
+    *cygwin*)
+        EXT=".exe"
+        SHARED_NAME="cyglsmash"
+        SHARED_EXT=".dll"
+        IMPLIB="liblsmash.dll.a"
+        SO_LDFLAGS="-shared -Wl,--out-implib,$IMPLIB"
+        ;;
+    *darwin*)
+        #patches welcome
+        SHAREDLIB=""
+        ;;
+    *solaris*)
+        #patches welcome
+        SHAREDLIB=""
+        ;;
+    *)
+        if test -n "$SHAREDLIB"; then
+            CFLAGS="$CFLAGS -fPIC"
+            LDFLAGS="$LDFLAGS -fPIC"
+        fi
+        ;;
+esac
+
+
+STATICLIBNAME="${STATIC_NAME}${STATIC_EXT}"
+SHAREDLIBNAME="${SHARED_NAME}${SHARED_EXT}"
+test -n "$STATICLIB" && STATICLIB="$STATICLIBNAME"
+test -n "$SHAREDLIB" && SHAREDLIB="$SHAREDLIBNAME"
+test -z "$STATICLIB" -a -z "$SHAREDLIB" && \
+    error_exit "both --disable-static and --disable-shared were specified"
+test -z "$SHAREDLIB" && SO_LDFLAGS=""
+
+
+CFLAGS="$CFLAGS $XCFLAGS"
+LDFLAGS="$LDFLAGS $XLDFLAGS"
+LIBS="$LIBS $XLIBS"
+
+
+# In order to avoid some compiler bugs, we don't use "-O3" for the default.
+# "-Os" unites "-O2" and "-finline-funtions" on x86/x86_64 in the latest GCC.
+# As a result of taking these into consideration, we make "-Os" a rated value.
+# And, we don't care about architecture related options.
+# If you want them, set up by yourself like --extra-cflags="-O3 -march=native".
+if test x"$DEBUG" = x"enabled"; then
+    CFLAGS="$CFLAGS -g3 -O0"
+    STRIP=""
+else
+    CFLAGS="-Os -ffast-math $CFLAGS"
+fi
+
+
+if ! cc_check "$CFLAGS" "$LDFLAGS"; then
+    error_exit "invalid CFLAGS/LDFLAGS"
+fi
+
+if cc_check "$CFLAGS -fexcess-precision=fast" "$LDFLAGS"; then
+    CFLAGS="$CFLAGS -fexcess-precision=fast"
+fi
+
+if cc_check "$CFLAGS" "$LDFLAGS -Wl,--large-address-aware"; then
+    LDFLAGS="$LDFLAGS -Wl,--large-address-aware"
+fi
+
+
+#=============================================================================
+# notation for developpers.
+# be sure to modified this block when you add/delete source files.
+SRCS="isom.c utils.c mp4sys.c mp4a.c importer.c \
+      summary.c print.c read.c timeline.c"
+TOOLS_ALL="muxer remuxer boxdumper timelineeditor"
+TOOLS_NAME=""
+SRC_TOOLS=""
+if test -n "$DEMUXER"; then
+    CFLAGS="$CFLAGS -DLSMASH_DEMUXER_ENABLED"
+    TOOLS="$TOOLS_ALL"
+else
+    TOOLS="muxer"
+fi
+for tool in $TOOLS; do
+    SRC_TOOLS="$SRC_TOOLS ${tool}.c"
+    TOOLS_NAME="$TOOLS_NAME ${tool}${EXT}"
+done
+#=============================================================================
+
+
+cat >> config.mak << EOF
+SRCDIR = $SRCDIR
+DESTDIR = $DESTDIR
+PREFIX = $PREFIX
+EPREFIX = $EPREFIX
+BINDIR = $BINDIR
+LIBDIR = $LIBDIR
+INCDIR = $INCDIR
+CC = $CC
+AR = $AR
+LD = $LD
+RANLIB = $RANLIB
+STRIP = $STRIP
+STATICLIBNAME = $STATICLIBNAME
+STATICLIB = $STATICLIB
+SHAREDLIBNAME = $SHAREDLIBNAME
+SHAREDLIB = $SHAREDLIB
+IMPLIB = $IMPLIB
+CFLAGS = $CFLAGS
+LDFLAGS = $LDFLAGS
+SO_LDFLAGS = $SO_LDFLAGS
+LIBS = $LIBS
+EOF
+
+cat config.mak
+
+cat >> config.mak << EOF
+SRCS = $SRCS
+SRC_TOOLS = $SRC_TOOLS
+TOOLS_ALL = $TOOLS_ALL
+TOOLS = $TOOLS_NAME
+EOF
+
+
+for tool in $TOOLS; do
+    cat >> config.mak2 << EOF
+${tool}${EXT}: ${tool}.o $STATICLIB $SHAREDLIB
+	\$(CC) \$(CFLAGS) \$(LDFLAGS) -o \$@ \$< \$(LIBS) -llsmash
+	-@ \$(if \$(STRIP), \$(STRIP) -s \$@)
+
+EOF
+done
+
+
+test "$SRCDIR" = "." || cp -fp ${SRCDIR}/Makefile .
+
+
+cat << EOF
+
+configure finished
+
+  type 'make'             : compile library and tools
+  type 'make install'     : install all into system
+  type 'make lib'         : compile library only
+  type 'make lib-install' : install libraries and headers into system
+
+EOF
+
+exit 0
