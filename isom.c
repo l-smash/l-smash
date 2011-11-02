@@ -7881,6 +7881,19 @@ static int isom_finish_fragment_initial_movie( lsmash_root_t *root )
     return isom_output_fragment_media_data( root );
 }
 
+/* Return 1 if there is diffrence, otherwise return 0. */
+static int isom_compare_sample_flags( isom_sample_flags_t *a, isom_sample_flags_t *b )
+{
+    return (a->reserved                    != b->reserved)
+        || (a->is_leading                  != b->is_leading)
+        || (a->sample_depends_on           != b->sample_depends_on)
+        || (a->sample_is_depended_on       != b->sample_is_depended_on)
+        || (a->sample_has_redundancy       != b->sample_has_redundancy)
+        || (a->sample_padding_value        != b->sample_padding_value)
+        || (a->sample_is_non_sync_sample   != b->sample_is_non_sync_sample)
+        || (a->sample_degradation_priority != b->sample_degradation_priority);
+}
+
 static int isom_finish_fragment_movie( lsmash_root_t *root )
 {
     if( !root->moov || !root->moov->trak_list || !root->fragment || !root->fragment->pool )
@@ -7966,7 +7979,7 @@ static int isom_finish_fragment_movie( lsmash_root_t *root )
                 /* It is enough to check only if first_sample_flags equals default_sample_flags or not.
                  * If it is equal, just use default_sample_flags.
                  * If not, just use first_sample_flags of this run. */
-                if( !memcmp( &trun->first_sample_flags, &tfhd->default_sample_flags, sizeof(isom_sample_flags_t) ) )
+                if( !isom_compare_sample_flags( &trun->first_sample_flags, &tfhd->default_sample_flags ) )
                     useful_first_sample_flags = 0;
             }
             else if( trun->optional && trun->optional->head )
@@ -7974,15 +7987,15 @@ static int isom_finish_fragment_movie( lsmash_root_t *root )
                 lsmash_entry_t *optional_entry = trun->optional->head->next;
                 isom_trun_optional_row_t *row = (isom_trun_optional_row_t *)optional_entry->data;
                 isom_sample_flags_t representative_sample_flags = row->sample_flags;
-                if( memcmp( &tfhd->default_sample_flags, &representative_sample_flags, sizeof(isom_sample_flags_t) ) )
+                if( isom_compare_sample_flags( &tfhd->default_sample_flags, &representative_sample_flags ) )
                     useful_default_sample_flags = 0;
-                if( !memcmp( &trun->first_sample_flags, &representative_sample_flags, sizeof(isom_sample_flags_t) ) )
+                if( !isom_compare_sample_flags( &trun->first_sample_flags, &representative_sample_flags ) )
                     useful_first_sample_flags = 0;
                 if( useful_default_sample_flags )
                     for( optional_entry = optional_entry->next; optional_entry; optional_entry = optional_entry->next )
                     {
                         row = (isom_trun_optional_row_t *)optional_entry->data;
-                        if( memcmp( &representative_sample_flags, &row->sample_flags, sizeof(isom_sample_flags_t) ) )
+                        if( isom_compare_sample_flags( &representative_sample_flags, &row->sample_flags ) )
                         {
                             useful_default_sample_flags = 0;
                             break;
@@ -8012,7 +8025,7 @@ static int isom_finish_fragment_movie( lsmash_root_t *root )
             tfhd->default_sample_size = trex->default_sample_size;              /* This might be redundant, but is to be more natural. */
         if( !(tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT) )
             tfhd->default_sample_flags = trex->default_sample_flags;            /* This might be redundant, but is to be more natural. */
-        else if( !memcmp( &tfhd->default_sample_flags, &trex->default_sample_flags, sizeof(isom_sample_flags_t) ) )
+        else if( !isom_compare_sample_flags( &tfhd->default_sample_flags, &trex->default_sample_flags ) )
             tfhd->flags &= ~ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT;
     }
     /* When using for live streaming, setting explicit base_data_offset is not preferable.
@@ -9415,7 +9428,7 @@ static int isom_update_fragment_sample_tables( isom_traf_entry_t *traf, lsmash_s
     /* Update the optional rows in the current track run except for sample_duration if needed. */
     if( sample->length != tfhd->default_sample_size )
         trun->flags |= ISOM_TR_FLAGS_SAMPLE_SIZE_PRESENT;
-    if( memcmp( &sample_flags, &tfhd->default_sample_flags, sizeof(isom_sample_flags_t) ) )
+    if( isom_compare_sample_flags( &sample_flags, &tfhd->default_sample_flags ) )
         trun->flags |= ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT;
     if( sample_composition_time_offset )
         trun->flags |= ISOM_TR_FLAGS_SAMPLE_COMPOSITION_TIME_OFFSET_PRESENT;
