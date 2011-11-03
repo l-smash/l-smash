@@ -1,7 +1,7 @@
 /*****************************************************************************
  * importer.h:
  *****************************************************************************
- * Copyright (C) 2010 L-SMASH project
+ * Copyright (C) 2010-2011 L-SMASH project
  *
  * Authors: Takashi Hirata <silverfilain@gmail.com>
  * Contributors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
