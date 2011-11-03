@@ -31,14 +31,22 @@
 #include <fcntl.h>
 #endif
 
+#include "config.h"
+
 #define eprintf( ... ) fprintf( stderr, __VA_ARGS__ )
 
 static int print_help( int ret )
 {
-    eprintf( "Usage: boxdumper [option] input\n"
+    eprintf( "\n"
+             "L-SMASH isom/mov structual analyzer rev%s  %s\n"
+             "Built on %s %s\n"
+             "Copyright (C) 2010-2011 L-SMASH project\n"
+             "\n"
+             "Usage: boxdumper [option] input\n"
              "  options:\n"
              "    --box          Dump box structure\n"
-             "    --timestamp    Dump media timestamps\n" );
+             "    --timestamp    Dump media timestamps\n",
+             LSMASH_REV, LSMASH_GIT_HASH, __DATE__, __TIME__ );
     return ret;
 }
 

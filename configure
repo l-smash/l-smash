@@ -57,7 +57,7 @@ cc_check()
 
 #-----------------------------------------------------------------------------
 
-rm -f config.mak* .depend conftest*
+rm -f config.* .depend conftest*
 
 
 echo
@@ -102,7 +102,7 @@ IMPLIB=""
 
 TOOLS=""
 
-CFLAGS="-Wshadow -Wall -std=gnu99 -I$SRCDIR"
+CFLAGS="-Wshadow -Wall -std=gnu99 -I. -I$SRCDIR"
 LDFLAGS="-L."
 SO_LDFLAGS='-shared -Wl,-soname,$@'
 LIBS="-lm"
@@ -280,6 +280,15 @@ for tool in $TOOLS; do
     TOOLS_NAME="$TOOLS_NAME ${tool}${EXT}"
 done
 #=============================================================================
+
+pushd $SRCDIR
+REV="\"$(git rev-list HEAD 2> /dev/null | wc -l)\""
+HASH="\"$(git describe --always 2> /dev/null)\""
+popd
+cat >> config.h << EOF
+#define LSMASH_REV $REV
+#define LSMASH_GIT_HASH $HASH
+EOF
 
 
 cat >> config.mak << EOF

@@ -30,6 +30,8 @@
 #include "lsmash.h"
 #include "importer.h"
 
+#include "config.h"
+
 #define LSMASH_MAX( a, b ) ((a) > (b) ? (a) : (b))
 
 #define eprintf( ... ) fprintf( stderr, __VA_ARGS__ )
@@ -205,6 +207,10 @@ static int error_message( const char *message, ... )
 static void display_help( void )
 {
     eprintf( "\n"
+             "L-SMASH isom/mov multiplexer rev%s  %s\n"
+             "Built on %s %s\n"
+             "Copyright (C) 2011 L-SMASH project\n"
+             "\n"
              "Usage: muxer [global_options] -i input1 [-i input2 -i input3 ...] -o output\n"
              "Global options:\n"
              "    --help                    Display help\n"
@@ -251,7 +257,8 @@ static void display_help( void )
              "    --copyright <string>      Copyright\n"
              "    --description <string>    Description\n"
              "    --grouing <string>        Grouping\n"
-             "    --tempo <integer>         Beats per minute\n" );
+             "    --tempo <integer>         Beats per minute\n",
+             LSMASH_REV, LSMASH_GIT_HASH, __DATE__, __TIME__ );
 }
 
 static int muxer_usage_error( void )

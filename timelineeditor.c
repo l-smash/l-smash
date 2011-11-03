@@ -28,6 +28,8 @@
 #include <inttypes.h>
 #include <math.h>
 
+#include "config.h"
+
 #define LSMASH_MAX( a, b ) ((a) > (b) ? (a) : (b))
 
 #define eprintf( ... ) fprintf( stderr, __VA_ARGS__ )
@@ -665,7 +667,12 @@ static int moov_to_front_callback( void *param, uint64_t written_movie_size, uin
 
 static void print_help( void )
 {
-    eprintf( "Usage: timelineeditor [options] input output\n"
+    eprintf( "\n"
+             "L-SMASH isom/mov timeline editor rev%s  %s\n"
+             "Built on %s %s\n"
+             "Copyright (C) 2011 L-SMASH project\n"
+             "\n"
+             "Usage: timelineeditor [options] input output\n"
              "  options:\n"
              "    --track           <integer>  Specify track number to edit [1]\n"
              "    --timecode        <string>   Specify timecode file to edit timeline\n"
@@ -674,7 +681,8 @@ static void print_help( void )
              "    --skip            <integer>  Skip start of media presentation in milliseconds\n"
              "    --delay           <integer>  Insert blank clip before actual media presentation in milliseconds\n"
              "    --dts-compression            Eliminate composition delay with DTS hack\n"
-             "                                 Multiply media timescale and timebase automatically\n" );
+             "                                 Multiply media timescale and timebase automatically\n",
+             LSMASH_REV, LSMASH_GIT_HASH, __DATE__, __TIME__ );
 }
 
 int main( int argc, char *argv[] )

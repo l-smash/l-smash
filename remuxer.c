@@ -28,6 +28,8 @@
 #include <inttypes.h>
 #include <stdarg.h>
 
+#include "config.h"
+
 #define LSMASH_MAX( a, b ) ((a) > (b) ? (a) : (b))
 
 #define eprintf( ... ) fprintf( stderr, __VA_ARGS__ )
@@ -369,7 +371,12 @@ static int parse_cli_option( int argc, char **argv, movie_io_t *io )
 
 static void display_help( void )
 {
-    eprintf( "Usage: remuxer -i input1 [-i input2 -i input3 ...] -o output\n"
+    eprintf( "\n"
+             "L-SMASH isom/mov re-muliplexer rev%s  %s\n"
+             "Built on %s %s\n"
+             "Copyright (C) 2011 L-SMASH project\n"
+             "\n"
+             "Usage: remuxer -i input1 [-i input2 -i input3 ...] -o output\n"
              "Global options:\n"
              "    --help                    Display help.\n"
              "    --chapter <string>        Set chapters from the file.\n"
@@ -383,7 +390,8 @@ static void display_help( void )
              "How to use track options:\n"
              "    -i input?[track_number1]:[track_option1],[track_option2]?[track_number2]:...\n"
              "For example:\n"
-             "    remuxer -i input1 -i input2?2:alternate-group=1?3:language=jpn,alternate-group=1 -o output\n" );
+             "    remuxer -i input1 -i input2?2:alternate-group=1?3:language=jpn,alternate-group=1 -o output\n",
+             LSMASH_REV, LSMASH_GIT_HASH, __DATE__, __TIME__ );
 }
 
 int main( int argc, char *argv[] )

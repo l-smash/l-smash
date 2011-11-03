@@ -33,7 +33,7 @@ $(SHAREDLIBNAME): $(OBJS)
 # The reason for having config.mak2 is for makeing this Makefile easy to read.
 include config.mak2
 
-%.o: %.c .depend
+%.o: %.c .depend config.h
 	$(CC) -c $(CFLAGS) -o $@ $<
 
 install: all install-lib
@@ -67,7 +67,7 @@ clean:
 	$(RM) *.o *.a *.so *.dll *.exe $(TOOLS_ALL) .depend
 
 distclean: clean
-	$(RM) config.mak*
+	$(RM) config.*
 
 dep: .depend
 
@@ -82,8 +82,11 @@ endif
 	@$(RM) .depend
 	@$(foreach SRC, $(SRC_ALL:%=$(SRCDIR)/%), $(CC) $(SRC) $(CFLAGS) -g0 -MT $(SRC:$(SRCDIR)/%.c=%.o) -MM >> .depend;)
 
-config.mak2: config.mak
+config.h:
+	./configure
+
+config.mak2:
+	./configure
 
 config.mak:
 	./configure
-
