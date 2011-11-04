@@ -2495,11 +2495,13 @@ static void h264_remove_emulation_prevention( uint8_t *src, uint64_t src_length,
 static int h264_check_more_rbsp_data( lsmash_bits_t *bits )
 {
     lsmash_bs_t *bs = bits->bs;
-    if( bs->pos < bs->store )
+    if( bs->pos < bs->store && !(bits->store == 0 && (bs->store == bs->pos + 1)) )
         return 1;       /* rbsp_trailing_bits will be placed at the next or later byte.
                          * Note: bs->pos points at the next byte if bits->store isn't empty. */
     if( bits->store == 0 )
     {
+        if( bs->store == bs->pos + 1 )
+            return bs->data[ bs->pos ] != 0x80;
         /* No rbsp_trailing_bits is present in RBSP data. */
         bs->error = 1;
         return 0;
