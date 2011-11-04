@@ -2957,16 +2957,8 @@ static int h264_parse_sei_nalu( lsmash_bits_t *bits, h264_sei_t *sei, h264_nalu_
 }
 
 static int h264_parse_slice_header( lsmash_bits_t *bits, h264_sps_t *sps, h264_pps_t *pps,
-                                    h264_slice_info_t *slice, h264_nalu_header_t *nalu_header,
-                                    uint8_t *rbsp_buffer, uint8_t *ebsp, uint64_t ebsp_size )
+                                    h264_slice_info_t *slice, h264_nalu_header_t *nalu_header )
 {
-    if( !sps || !pps )
-        return -1;      /* This would occur when the stream starts from non-IDR picture. */
-    uint8_t *rbsp_start = rbsp_buffer;
-    h264_remove_emulation_prevention( ebsp, ebsp_size, &rbsp_buffer );
-    uint64_t rbsp_length = rbsp_buffer - rbsp_start;
-    if( lsmash_bits_import_data( bits, rbsp_start, rbsp_length ) )
-        return -1;
     memset( slice, 0, sizeof(h264_slice_info_t) );
     slice->pic_order_cnt_type = sps->pic_order_cnt_type;
     slice->nal_ref_idc = nalu_header->nal_ref_idc;
@@ -3157,7 +3149,8 @@ static int h264_parse_slice_header( lsmash_bits_t *bits, h264_sps_t *sps, h264_p
             } while( memory_management_control_operation );
         }
     }
-#if 0   /* We needn't read more. */
+#if 0   /* We needn't read more.
+         * Skip slice_id (only in slice_data_partition_a_layer_rbsp( )), slice_data() and rbsp_slice_trailing_bits(). */
     if( pps->entropy_coding_mode_flag && slice_type != H264_SLICE_TYPE_I && slice_type != H264_SLICE_TYPE_SI )
         h264_get_exp_golomb_ue( bits );     /* cabac_init_idc */
     h264_get_exp_golomb_se( bits );         /* slice_qp_delta */
@@ -3186,6 +3179,35 @@ static int h264_parse_slice_header( lsmash_bits_t *bits, h264_sps_t *sps, h264_p
             return -1;
     }
 #endif
+    lsmash_bits_empty( bits );
+    return bits->bs->error ? -1 : 0;
+}
+
+static int h264_parse_slice( lsmash_bits_t *bits, h264_sps_t *sps, h264_pps_t *pps,
+                             h264_slice_info_t *slice, h264_nalu_header_t *nalu_header,
+                             uint8_t *rbsp_buffer, uint8_t *ebsp, uint64_t ebsp_size )
+{
+    if( !sps || !pps )
+        return -1;      /* This would occur when the stream starts from non-IDR picture. */
+    uint8_t *rbsp_start = rbsp_buffer;
+    h264_remove_emulation_prevention( ebsp, ebsp_size, &rbsp_buffer );
+    uint64_t rbsp_length = rbsp_buffer - rbsp_start;
+    if( lsmash_bits_import_data( bits, rbsp_start, rbsp_length ) )
+        return -1;
+    if( nalu_header->nal_unit_type != 3 && nalu_header->nal_unit_type != 4 )
+        return h264_parse_slice_header( bits, sps, pps, slice, nalu_header );
+    /* slice_data_partition_b_layer_rbsp() or slice_data_partition_c_layer_rbsp() */
+    h264_get_exp_golomb_ue( bits );     /* slice_id */
+    if( sps->separate_colour_plane_flag )
+        lsmash_bits_get( bits, 2 );     /* colour_plane_id */
+    if( pps->redundant_pic_cnt_present_flag )
+    {
+        uint64_t redundant_pic_cnt = h264_get_exp_golomb_ue( bits );
+        IF_INVALID_VALUE( redundant_pic_cnt > 127 )
+            return -1;
+        slice->has_redundancy = !!redundant_pic_cnt;
+    }
+    /* Skip slice_data() and rbsp_slice_trailing_bits(). */
     lsmash_bits_empty( bits );
     return bits->bs->error ? -1 : 0;
 }
@@ -3817,10 +3839,9 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_h2
                 {
                     /* VCL NALU (slice) */
                     h264_slice_info_t prev_slice = *slice;
-                    memset( slice, 0, sizeof(h264_slice_info_t) );
-                    if( h264_parse_slice_header( info->bits, &info->sps, &info->pps,
-                                                 slice, &nalu_header, info->rbsp_buffer,
-                                                 info->stream_buffer_pos + nalu_header.length, ebsp_length ) )
+                    if( h264_parse_slice( info->bits, &info->sps, &info->pps,
+                                          slice, &nalu_header, info->rbsp_buffer,
+                                          info->stream_buffer_pos + nalu_header.length, ebsp_length ) )
                         break;
                     if( prev_slice.present || last_nalu )
                     {
@@ -4014,7 +4035,7 @@ static int mp4sys_h264_get_accessunit( mp4sys_importer_t *importer, uint32_t tra
 static int mp4sys_h264_probe( mp4sys_importer_t *importer )
 {
 #define H264_LONG_START_CODE_LENGTH  4
-#define CHECK_NEXT_LONG_START_CODE( x ) (!(x)[0] && !(x)[1] && !(x)[2] && ((x)[3] == 0x01))
+#define H264_CHECK_NEXT_LONG_START_CODE( x ) (!(x)[0] && !(x)[1] && !(x)[2] && ((x)[3] == 0x01))
     /* Find the first start code. */
     mp4sys_h264_info_t *info = mp4sys_create_h264_info();
     if( !info )
@@ -4031,7 +4052,7 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
             goto fail;
         }
         /* The first NALU of an AU in decoding order shall have long start code (0x00000001). */
-        if( CHECK_NEXT_LONG_START_CODE( info->stream_buffer_pos ) )
+        if( H264_CHECK_NEXT_LONG_START_CODE( info->stream_buffer_pos ) )
             break;
         /* If the first trial of finding long start code failed, we assume this stream is not byte stream format of H.264. */
         if( (info->stream_buffer_pos + H264_LONG_START_CODE_LENGTH) == info->stream_buffer_end )
@@ -4187,7 +4208,7 @@ fail:
     lsmash_remove_entries( importer->summaries, lsmash_cleanup_summary );
     return -1;
 #undef H264_LONG_START_CODE_LENGTH
-#undef CHECK_NEXT_LONG_START_CODE
+#undef H264_CHECK_NEXT_LONG_START_CODE
 }
 
 static uint32_t mp4sys_h264_get_last_delta( mp4sys_importer_t* importer, uint32_t track_number )

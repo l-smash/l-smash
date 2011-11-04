@@ -30,7 +30,7 @@ $(SHAREDLIBNAME): $(OBJS)
 	-@ $(if $(STRIP), $(STRIP) -s $@)
 
 # $(TOOLS) is automatically generated as config.mak2 by configure.
-# The reason for having config.mak2 is for makeing this Makefile easy to read.
+# The reason for having config.mak2 is for making this Makefile easy to read.
 include config.mak2
 
 %.o: %.c .depend config.h
