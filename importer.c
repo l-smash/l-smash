@@ -2378,8 +2378,6 @@ enum
     H264_PICTURE_TYPE_NONE        = 8,
 } h264_picture_type;
 
-#define MP4SYS_H264_DEFAULT_BUFFER_SIZE (1<<16)
-
 static void mp4sys_remove_h264_info( mp4sys_h264_info_t *info )
 {
     if( !info )
@@ -2396,6 +2394,7 @@ static void mp4sys_remove_h264_info( mp4sys_h264_info_t *info )
 
 static mp4sys_h264_info_t *mp4sys_create_h264_info( void )
 {
+#define H264_DEFAULT_BUFFER_SIZE (1<<16)
     mp4sys_h264_info_t *info = lsmash_malloc_zero( sizeof(mp4sys_h264_info_t) );
     if( !info )
         return NULL;
@@ -2419,7 +2418,7 @@ static mp4sys_h264_info_t *mp4sys_create_h264_info( void )
         mp4sys_remove_h264_info( info );
         return NULL;
     }
-    info->buffers = lsmash_create_multiple_buffers( 4, MP4SYS_H264_DEFAULT_BUFFER_SIZE );
+    info->buffers = lsmash_create_multiple_buffers( 4, H264_DEFAULT_BUFFER_SIZE );
     if( !info->buffers )
     {
         mp4sys_remove_h264_info( info );
@@ -2430,6 +2429,7 @@ static mp4sys_h264_info_t *mp4sys_create_h264_info( void )
     info->picture.au            = lsmash_withdraw_buffer( info->buffers, 3 );
     info->picture.incomplete_au = lsmash_withdraw_buffer( info->buffers, 4 );
     return info;
+#undef H264_DEFAULT_BUFFER_SIZE
 }
 
 static void mp4sys_h264_cleanup( mp4sys_importer_t *importer )
@@ -3355,6 +3355,8 @@ static inline void h264_compare_parameter_set( lsmash_entry_list_t *parameter_se
         *same_ps = !memcmp( ps->parameterSetNALUnit, ps_nalu, ps_nalu_length );
 }
 
+#define H264_NALU_LENGTH_SIZE 4     /* We always use 4 bytes length. */
+
 static lsmash_video_summary_t *h264_create_summary( mp4sys_h264_info_t *info, uint8_t *rbsp_buffer, int probe,
                                                     h264_nalu_header_t *sps_nalu_header,
                                                     uint8_t *sps_nalu, uint16_t sps_nalu_length,
@@ -3380,7 +3382,7 @@ static lsmash_video_summary_t *h264_create_summary( mp4sys_h264_info_t *info, ui
                 avcC->AVCProfileIndication       = sps->profile_idc;
                 avcC->profile_compatibility      = sps->constraint_set_flags;
                 avcC->AVCLevelIndication         = sps->level_idc;
-                avcC->lengthSizeMinusOne         = 3;       /* We always use 4 bytes length. */
+                avcC->lengthSizeMinusOne         = H264_NALU_LENGTH_SIZE - 1;
                 avcC->numOfSequenceParameterSets = 1;
                 avcC->chroma_format              = sps->chroma_format_idc;
                 avcC->bit_depth_luma_minus8      = sps->bit_depth_luma_minus8;
@@ -3755,7 +3757,7 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_h2
             if( no_more && ebsp_length == 0 )
             {
                 /* For the last NALU. */
-                ebsp_length = picture->incomplete_au_length - nalu_header.length - 4;
+                ebsp_length = picture->incomplete_au_length - (H264_NALU_LENGTH_SIZE + nalu_header.length);
                 consecutive_zero_byte_count = 0;
                 last_nalu = 1;
             }
@@ -3774,7 +3776,7 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_h2
             if( nalu_type == 12 )
             {
                 /* We don't support streams with both filler and HRD yet.
-                 * Otherwise, just skip filler because elemental streams defined in 14496-15 is forbidden to use filler. */
+                 * Otherwise, just skip filler because elemental streams defined in 14496-15 are forbidden to use filler. */
                 if( info->sps.hrd_present )
                     return -1;
             }
@@ -3785,9 +3787,10 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_h2
                  * We don't support SVC and MVC elemental stream defined in 14496-15 yet. */
                 ebsp_length -= consecutive_zero_byte_count;     /* Any EBSP doesn't have zero bytes at the end. */
                 uint64_t nalu_length = nalu_header.length + ebsp_length;
-                if( info->buffers->buffer_size < nalu_length )
+                uint64_t possible_au_length = picture->incomplete_au_length + H264_NALU_LENGTH_SIZE + nalu_length;
+                if( info->buffers->buffer_size < possible_au_length )
                 {
-                    if( h264_supplement_buffer( info, 2 * nalu_length ) )
+                    if( h264_supplement_buffer( info, 2 * possible_au_length ) )
                         break;
                     next_short_start_code_pos = info->stream_buffer_pos;
                 }
@@ -3870,24 +3873,16 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_h2
                  || (nalu_type >= 9 && nalu_type <= 11) || nalu_type == 19 )
                 {
                     /* Append this NALU into access unit. */
-                    uint64_t needed_au_length = picture->incomplete_au_length + 4 + nalu_length;
-                    if( info->buffers->buffer_size < needed_au_length )
-                    {
-                        uint32_t next_short_start_code_pos_offset = next_short_start_code_pos - info->stream_buffer;
-                        if( h264_supplement_buffer( info, 2 * needed_au_length ) )
-                            break;
-                        next_short_start_code_pos = info->stream_buffer + next_short_start_code_pos_offset;
-                    }
                     if( !probe )
                     {
-                        uint8_t *nalu = picture->incomplete_au + picture->incomplete_au_length + 4;
-                        *(nalu - 4) = (nalu_length >> 24) & 0xff;
-                        *(nalu - 3) = (nalu_length >> 16) & 0xff;
-                        *(nalu - 2) = (nalu_length >>  8) & 0xff;
-                        *(nalu - 1) =  nalu_length        & 0xff;
+                        uint8_t *nalu = picture->incomplete_au + picture->incomplete_au_length + H264_NALU_LENGTH_SIZE;
+                        for( int i = H264_NALU_LENGTH_SIZE; i; i-- )
+                            *(nalu - i) = (nalu_length >> ((i - 1) * 8)) & 0xff;
                         memcpy( nalu, info->stream_buffer_pos, nalu_length );
                     }
-                    picture->incomplete_au_length = needed_au_length;
+                    /* Note: picture->incomplete_au_length shall be 0 immediately after AU has completed.
+                     * Therefore, possible_au_length can't be used here to avoid increasing AU length monotonously through the entire stream. */
+                    picture->incomplete_au_length = picture->incomplete_au_length + H264_NALU_LENGTH_SIZE + nalu_length;
                     if( is_vcl_nalu )
                         picture->incomplete_au_has_primary |= !slice->has_redundancy;
                 }
@@ -3944,6 +3939,8 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_h2
     return (!success || picture->au_length == 0) ? -1 : 0;
 #undef H264_SHORT_START_CODE_LENGTH
 }
+
+#undef H264_NALU_LENGTH_SIZE
 
 static int mp4sys_h264_get_accessunit( mp4sys_importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
 {
