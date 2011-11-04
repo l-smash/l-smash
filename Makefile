@@ -37,37 +37,38 @@ include config.mak2
 	$(CC) -c $(CFLAGS) -o $@ $<
 
 install: all install-lib
-	install -d $(DESTDIR)$(BINDIR)
-	install -m 755 $(TOOLS) $(DESTDIR)$(BINDIR)
+	install -d $(DESTDIR)$(bindir)
+	install -m 755 $(TOOLS) $(DESTDIR)$(bindir)
 
-install-lib: lib
-	install -d $(DESTDIR)$(INCDIR)
-	install -m 644 $(SRCDIR)/lsmash.h $(DESTDIR)$(INCDIR)
-	install -d $(DESTDIR)$(LIBDIR)
+install-lib: liblsmash.pc lib
+	install -d $(DESTDIR)$(includedir)
+	install -m 644 $(SRCDIR)/lsmash.h $(DESTDIR)$(includedir)
+	install -d $(DESTDIR)$(libdir)/pkgconfig
+	install -m 644 liblsmash.pc $(DESTDIR)$(libdir)/pkgconfig
 ifneq ($(STATICLIB),)
-	install -m644 $(STATICLIB) $(DESTDIR)$(LIBDIR)
+	install -m644 $(STATICLIB) $(DESTDIR)$(libdir)
 endif
 ifneq ($(SHAREDLIB),)
 ifneq ($(IMPLIB),)
-	install -m 644 $(IMPLIB) $(DESTDIR)$(LIBDIR)
-	install -d $(DESTDIR)$(BINDIR)
-	install -m 755 $(SHAREDLIB) $(DESTDIR)$(BINDIR)
+	install -m 644 $(IMPLIB) $(DESTDIR)$(libdir)
+	install -d $(DESTDIR)$(bindir)
+	install -m 755 $(SHAREDLIB) $(DESTDIR)$(bindir)
 else
-	install -m 755 $(SHAREDLIB) $(DESTDIR)$(LIBDIR)
+	install -m 755 $(SHAREDLIB) $(DESTDIR)$(libdir)
 endif
 endif
 
 #All objects should be deleted regardless of configure when uninstall/clean/distclean.
 uninstall:
-	$(RM) $(DESTDIR)$(INCDIR)/lsmash.h
-	$(RM) $(addprefix $(DESTDIR)$(LIBDIR)/, liblsmash.a liblsmash.dll.a liblsmash.so)
-	$(RM) $(addprefix $(DESTDIR)$(BINDIR)/, $(TOOLS_ALL) $(TOOLS_ALL:%=%.exe) liblsmash.dll cyglsmash.dll)
+	$(RM) $(DESTDIR)$(includedir)/lsmash.h
+	$(RM) $(addprefix $(DESTDIR)$(libdir)/, liblsmash.a liblsmash.dll.a liblsmash.so pkgconfig/liblsmash.pc)
+	$(RM) $(addprefix $(DESTDIR)$(bindir)/, $(TOOLS_ALL) $(TOOLS_ALL:%=%.exe) liblsmash.dll cyglsmash.dll)
 
 clean:
 	$(RM) *.o *.a *.so *.dll *.exe $(TOOLS_ALL) .depend
 
 distclean: clean
-	$(RM) config.*
+	$(RM) config.* *.pc
 
 dep: .depend
 
@@ -81,6 +82,9 @@ endif
 .depend: config.mak
 	@$(RM) .depend
 	@$(foreach SRC, $(SRC_ALL:%=$(SRCDIR)/%), $(CC) $(SRC) $(CFLAGS) -g0 -MT $(SRC:$(SRCDIR)/%.c=%.o) -MM >> .depend;)
+
+liblsmash.pc:
+	./configure
 
 config.h:
 	./configure

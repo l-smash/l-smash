@@ -57,7 +57,7 @@ cc_check()
 
 #-----------------------------------------------------------------------------
 
-rm -f config.* .depend conftest*
+rm -f config.* .depend conftest* liblsmash.pc
 
 
 echo
@@ -70,11 +70,11 @@ test "$SRCDIR" = "$(pwd)" && SRCDIR=.
 test -n "$(echo $SRCDIR | grep ' ')" && \
     error_exit "out-of-tree builds are impossible with whitespace in source path"
 
-PREFIX=""
-EPREFIX=""
-BINDIR=""
-LIBDIR=""
-INCDIR=""
+prefix=""
+exec_prefix=""
+bindir=""
+libdir=""
+includedir=""
 DESTDIR=""
 
 TARGET_OS=""
@@ -113,19 +113,19 @@ for opt; do
     optarg="${opt#*=}"
     case "$opt" in
         --prefix=*)
-            PREFIX="$optarg"
+            prefix="$optarg"
             ;;
         --exec-prefix=*)
-            EPREFIX="$optarg"
+            exec_prefix="$optarg"
             ;;
         --bindir=*)
-            BINDIR="$optarg"
+            bindir="$optarg"
             ;;
         --libdir=*)
-            LIBDIR="$optarg"
+            libdir="$optarg"
             ;;
         --includedir=*)
-            INCDIR="$optarg"
+            includedir="$optarg"
             ;;
         --destdir=*)
             DESTDIR="$optarg"
@@ -168,11 +168,11 @@ for opt; do
     esac
 done
 
-test -n "$PREFIX" || PREFIX="/usr/local"
-test -n "$EPREFIX" || EPREFIX='$(PREFIX)'
-test -n "$BINDIR" || BINDIR='$(EPREFIX)/bin'
-test -n "$LIBDIR" || LIBDIR='$(EPREFIX)/lib'
-test -n "$INCDIR" || INCDIR='$(PREFIX)/include'
+test -n "$prefix" || prefix="/usr/local"
+test -n "$exec_prefix" || exec_prefix='${prefix}'
+test -n "$bindir" || bindir='${exec_prefix}/bin'
+test -n "$libdir" || libdir='${exec_prefix}/lib'
+test -n "$includedir" || includedir='${prefix}/include'
 
 
 CC="${CROSS}${CC}"
@@ -282,23 +282,40 @@ done
 #=============================================================================
 
 pushd $SRCDIR
-REV="\"$(git rev-list HEAD 2> /dev/null | wc -l)\""
-HASH="\"$(git describe --always 2> /dev/null)\""
+REV="$(git rev-list HEAD 2> /dev/null | wc -l)"
+HASH="$(git describe --always 2> /dev/null)"
 popd
 cat >> config.h << EOF
-#define LSMASH_REV $REV
-#define LSMASH_GIT_HASH $HASH
+#define LSMASH_REV "$REV"
+#define LSMASH_GIT_HASH "$HASH"
+EOF
+
+
+cat >> liblsmash.pc << EOF
+prefix=$prefix
+exec_prefix=$exec_prefix
+libdir=$libdir
+includedir=$includedir
+
+Name: liblsmash
+Description: Loyal to Spec of MPEG4, and Ad-hock Simple Hackwork
+Version: rev.$REV
+Requires:
+URL: http://code.google.com/p/l-smash/
+Libs: -L${libdir} -llsmash $LIBS
+Libs.private:
+Cflags: -I${includedir}
 EOF
 
 
 cat >> config.mak << EOF
 SRCDIR = $SRCDIR
 DESTDIR = $DESTDIR
-PREFIX = $PREFIX
-EPREFIX = $EPREFIX
-BINDIR = $BINDIR
-LIBDIR = $LIBDIR
-INCDIR = $INCDIR
+prefix = $prefix
+exec_prefix = $exec_prefix
+bindir = $bindir
+libdir = $libdir
+includedir = $includedir
 CC = $CC
 AR = $AR
 LD = $LD
@@ -335,7 +352,7 @@ EOF
 done
 
 
-test "$SRCDIR" = "." || cp -fp ${SRCDIR}/Makefile .
+test "$SRCDIR" = "." || ln -sf ${SRCDIR}/Makefile .
 
 
 cat << EOF
