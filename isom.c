@@ -9641,8 +9641,10 @@ static int isom_read_minimum_chapter( FILE *chapter, isom_chapter_entry_t *data 
     char buff[CHAPTER_BUFSIZE];
     int len;
 
-    if( isom_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) /* read newline */
-        || isom_get_start_time( buff, data ) ) /* get start_time */
+    if( isom_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) ) /* read newline */
+        return -1;
+    char *p_buff = !memcmp( buff, "\xEF\xBB\xBF", 3 ) ? &buff[3] : &buff[0]; /* BOM detection */
+    if( isom_get_start_time( p_buff, data ) ) /* get start_time */
         return -1;
     /* get chapter_name */
     char *chapter_name = strchr( buff, ' ' );   /* find separator */
@@ -9668,11 +9670,14 @@ static fn_get_chapter_data isom_check_chap_line( char *file_name )
     fn_get_chapter_data fnc = NULL;
     if( fgets( buff, CHAPTER_BUFSIZE, fp ) != NULL )
     {
-        if( strncmp( buff, "CHAPTER", 7 ) == 0 )
+        char *p_buff = !memcmp( buff, "\xEF\xBB\xBF", 3 ) ? &buff[3] : &buff[0];   /* BOM detection */
+        if( !strncmp( p_buff, "CHAPTER", 7 ) )
             fnc = isom_read_simple_chapter;
-        else if( isdigit( buff[0] ) && isdigit( buff[1] ) && buff[2] == ':'
-             && isdigit( buff[3] ) && isdigit( buff[4] ) && buff[5] == ':' )
+        else if( isdigit( p_buff[0] ) && isdigit( p_buff[1] ) && p_buff[2] == ':'
+             && isdigit( p_buff[3] ) && isdigit( p_buff[4] ) && p_buff[5] == ':' )
             fnc = isom_read_minimum_chapter;
+        else
+            lsmash_log( LSMASH_LOG_WARNING, "The chapter file is malformed.\n" );
     }
     fclose( fp );
     return fnc;
