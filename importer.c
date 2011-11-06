@@ -3813,11 +3813,6 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_h2
         int no_more = info->no_more_read && no_more_buf;
         if( h264_check_next_short_start_code( info->stream_buffer_pos, info->stream_buffer_end ) || no_more )
         {
-            uint64_t next_nalu_head_pos = info->ebsp_head_pos + ebsp_length + !no_more * H264_SHORT_START_CODE_LENGTH;
-            uint8_t *next_short_start_code_pos = info->stream_buffer_pos;   /* Memorize position of short start code of the next NALU in buffer.
-                                                                             * This is used when backward reading of stream doesn't occur. */
-            uint8_t nalu_type = nalu_header.nal_unit_type;
-            int read_back = 0;
             if( no_more && ebsp_length == 0 )
             {
                 /* For the last NALU.
@@ -3828,6 +3823,11 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_h2
                 h264_complete_au( picture, probe );
                 return h264_get_au_internal_succeeded( info, picture, &nalu_header, no_more_buf );
             }
+            uint64_t next_nalu_head_pos = info->ebsp_head_pos + ebsp_length + !no_more * H264_SHORT_START_CODE_LENGTH;
+            uint8_t *next_short_start_code_pos = info->stream_buffer_pos;   /* Memorize position of short start code of the next NALU in buffer.
+                                                                             * This is used when backward reading of stream doesn't occur. */
+            uint8_t nalu_type = nalu_header.nal_unit_type;
+            int read_back = 0;
 #if 0
             if( probe )
             {
@@ -3924,6 +3924,8 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_h2
                                                                  NULL, NULL, 0,
                                                                  &nalu_header, info->stream_buffer_pos, nalu_length );
                             break;
+                        case 9 :    /* We drop access unit delimiters. */
+                            break;
                         case 13 :   /* We don't support sequence parameter set extension yet. */
                             return h264_get_au_internal_failed( info, picture, &nalu_header, no_more_buf, complete_au );
                         case 6 :    /* SEI */
@@ -3959,7 +3961,7 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_h2
                     return h264_get_au_internal_failed( info, picture, &nalu_header, no_more_buf, complete_au );
                 info->ebsp_head_pos = next_nalu_head_pos + nalu_header.length;
             }
-            /* If there is no data in the stream, and flushed chunk of NALUs, flush it as complete AU here. */
+            /* If there is no more data in the stream, and flushed chunk of NALUs, flush it as complete AU here. */
             else if( picture->incomplete_au_length && picture->au_length == 0 )
             {
                 h264_update_picture_info( picture, slice, &info->sei );
