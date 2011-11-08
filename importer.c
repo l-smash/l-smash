@@ -3761,7 +3761,7 @@ static void h264_append_nalu_to_au( h264_picture_info_t *picture, uint8_t *src_n
     /* Note: picture->incomplete_au_length shall be 0 immediately after AU has completed.
      * Therefore, possible_au_length in h264_get_access_unit_internal() can't be used here
      * to avoid increasing AU length monotonously through the entire stream. */
-    picture->incomplete_au_length = picture->incomplete_au_length + H264_NALU_LENGTH_SIZE + nalu_length;
+    picture->incomplete_au_length += H264_NALU_LENGTH_SIZE + nalu_length;
 }
 
 static inline void h264_get_au_internal_end( mp4sys_h264_info_t *info, h264_picture_info_t *picture, h264_nalu_header_t *nalu_header, int no_more_buf )
@@ -4069,19 +4069,13 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
     {
         /* Invalid if encountered any value of non-zero before the first start code. */
         IF_INVALID_VALUE( *info->stream_buffer_pos )
-        {
-            mp4sys_remove_h264_info( info );
             goto fail;
-        }
         /* The first NALU of an AU in decoding order shall have long start code (0x00000001). */
         if( H264_CHECK_NEXT_LONG_START_CODE( info->stream_buffer_pos ) )
             break;
         /* If the first trial of finding long start code failed, we assume this stream is not byte stream format of H.264. */
         if( (info->stream_buffer_pos + H264_LONG_START_CODE_LENGTH) == info->stream_buffer_end )
-        {
-            mp4sys_remove_h264_info( info );
             goto fail;
-        }
         ++info->stream_buffer_pos;
     }
     /* OK. It seems the stream has a long start code of H.264. */
@@ -4245,7 +4239,8 @@ static uint32_t mp4sys_h264_get_last_delta( mp4sys_importer_t* importer, uint32_
          : UINT32_MAX;    /* arbitrary */
 }
 
-const static mp4sys_importer_functions mp4sys_h264_importer = {
+const static mp4sys_importer_functions mp4sys_h264_importer =
+{
     "H.264",
     1,
     mp4sys_h264_probe,
