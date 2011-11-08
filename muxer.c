@@ -645,6 +645,9 @@ static void display_codec_name( uint32_t codec_type, uint32_t track_number )
         case ISOM_CODEC_TYPE_AVC1_VIDEO :
             DISPLAY_CODEC_NAME( H.264 Advanced Video Coding );
             break;
+        case ISOM_CODEC_TYPE_VC_1_VIDEO :
+            DISPLAY_CODEC_NAME( VC-1 Advanced Profile );
+            break;
         case ISOM_CODEC_TYPE_MP4A_AUDIO :
             DISPLAY_CODEC_NAME( MPEG-4 Audio );
             break;
@@ -758,6 +761,7 @@ int main( int argc, char *argv[] )
                 case ISOM_CODEC_TYPE_AVC1_VIDEO :
                     if( opt->isom )
                         add_brand( opt, ISOM_BRAND_TYPE_AVC1 );
+                case ISOM_CODEC_TYPE_VC_1_VIDEO :
                 case ISOM_CODEC_TYPE_MP4A_AUDIO :
                     break;
                 case ISOM_CODEC_TYPE_AC_3_AUDIO :
@@ -866,26 +870,34 @@ int main( int argc, char *argv[] )
                     }
                     else if( !summary->vfr )
                     {
-                        /* H.264 maximum_fps = ceil(timescale / (2 * timebase) */
-                        uint32_t compare_timescale = (summary->timescale >> 1) + (summary->timescale & 1);
-                        uint32_t compare_timebase  = summary->timebase;
-                        static const struct
+                        if( summary->sample_type == ISOM_CODEC_TYPE_AVC1_VIDEO )
                         {
-                            uint32_t timescale;
-                            uint32_t timebase;
-                        } well_known_fps[]
-                            = {
-                                { 24000, 1001 }, { 30000, 1001 }, { 60000, 1001 }, { 120000, 1001 }, { 72000, 1001 },
-                                { 25, 1 }, { 50, 1 }, { 24, 1 }, { 30, 1 }, { 60, 1 }, { 120, 1 }, { 72, 1 }, { 0, 0 }
-                              };
-                        for( int i = 0; well_known_fps[i].timescale; i++ )
-                            if( well_known_fps[i].timescale == compare_timescale
-                             && well_known_fps[i].timebase  == compare_timebase )
+                            /* H.264 maximum_fps = ceil(timescale / (2 * timebase) */
+                            uint32_t compare_timescale = (summary->timescale >> 1) + (summary->timescale & 1);
+                            uint32_t compare_timebase  = summary->timebase;
+                            static const struct
                             {
-                                timescale = well_known_fps[i].timescale;
-                                timebase  = well_known_fps[i].timebase;
-                                break;
-                            }
+                                uint32_t timescale;
+                                uint32_t timebase;
+                            } well_known_fps[]
+                                = {
+                                    { 24000, 1001 }, { 30000, 1001 }, { 60000, 1001 }, { 120000, 1001 }, { 72000, 1001 },
+                                    { 25, 1 }, { 50, 1 }, { 24, 1 }, { 30, 1 }, { 60, 1 }, { 120, 1 }, { 72, 1 }, { 0, 0 }
+                                  };
+                            for( int i = 0; well_known_fps[i].timescale; i++ )
+                                if( well_known_fps[i].timescale == compare_timescale
+                                 && well_known_fps[i].timebase  == compare_timebase )
+                                {
+                                    timescale = well_known_fps[i].timescale;
+                                    timebase  = well_known_fps[i].timebase;
+                                    break;
+                                }
+                        }
+                        else
+                        {
+                            timescale = summary->timescale;
+                            timebase  = summary->timebase;
+                        }
                     }
                     media_param.timescale          = timescale;
                     media_param.media_handler_name = "L-SMASH Video Handler";

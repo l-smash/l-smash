@@ -596,7 +596,7 @@ static int isom_add_visual_extensions( isom_visual_entry_t *visual, lsmash_video
         else if( matrix > UINT16_MAX )
             colr->matrix_index = isom_color_parameter_tbl[matrix - UINT16_MAX_PLUS_ONE].matrix;
         else
-            colr->matrix_index = (matrix == 1 || matrix == 6 || matrix == 7 ) ? matrix : 2;
+            colr->matrix_index = (matrix == 1 || matrix == 6 || matrix == 7) ? matrix : 2;
     }
     /* Set up Sample Scaling. */
     if( !qt_compatible && summary->scaling_method )
@@ -610,23 +610,31 @@ static int isom_add_visual_extensions( isom_visual_entry_t *visual, lsmash_video
         stsl->constraint_flag = 1;
         stsl->scale_method = summary->scaling_method;
     }
-    /* Set up AVC Decoder Configuration. */
-    static const uint32_t avc_type[] =
+    /* Set up Decoder Specific Information. */
+    static const struct
+    {
+        uint32_t codec_type;
+        uint32_t minimum_length;
+        uint32_t fourcc;
+        int (*add_func)( isom_visual_entry_t * );
+    } dsi_table[] =
         {
-            ISOM_CODEC_TYPE_AVC1_VIDEO,
-            ISOM_CODEC_TYPE_AVC2_VIDEO,
-            ISOM_CODEC_TYPE_AVCP_VIDEO
+            { ISOM_CODEC_TYPE_AVC1_VIDEO, 15, ISOM_BOX_TYPE_AVCC, isom_add_avcC },
+            { ISOM_CODEC_TYPE_AVC2_VIDEO, 15, ISOM_BOX_TYPE_AVCC, isom_add_avcC },
+            { ISOM_CODEC_TYPE_AVCP_VIDEO, 15, ISOM_BOX_TYPE_AVCC, isom_add_avcC },
+            { ISOM_CODEC_TYPE_VC_1_VIDEO, 11, ISOM_BOX_TYPE_DVC1, NULL },
+            { 0 }
         };
-    for( int i = 0; i < sizeof(avc_type)/sizeof(avc_type[0]); i++ )
-        if( visual->type == avc_type[i] )
+    for( int i = 0; dsi_table[i].codec_type; i++ )
+        if( visual->type == dsi_table[i].codec_type )
         {
-            if( summary->exdata_length >= 15 )
+            if( summary->exdata_length >= dsi_table[i].minimum_length )
             {
-                /* Chech if avcC is constructed as exdata. */
+                /* Chech if Decoder Specific Information is constructed as exdata. */
                 uint8_t *exdata = (uint8_t *)summary->exdata;
                 uint32_t length = (exdata[0] << 24) | (exdata[1] << 16) | (exdata[2] << 8) | exdata[3];
                 if( length == summary->exdata_length
-                 && LSMASH_4CC( exdata[4], exdata[5], exdata[6], exdata[7] ) == ISOM_BOX_TYPE_AVCC )
+                 && LSMASH_4CC( exdata[4], exdata[5], exdata[6], exdata[7] ) == dsi_table[i].fourcc )
                 {
                     visual->exdata = lsmash_memdup( summary->exdata, summary->exdata_length );
                     if( !visual->exdata )
@@ -635,7 +643,7 @@ static int isom_add_visual_extensions( isom_visual_entry_t *visual, lsmash_video
                     break;
                 }
             }
-            if( isom_add_avcC( visual ) )
+            if( dsi_table[i].add_func && dsi_table[i].add_func( visual ) )
                 return -1;
             break;
         }
@@ -1125,6 +1133,7 @@ int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t sa
     switch( sample_type )
     {
         case ISOM_CODEC_TYPE_AVC1_VIDEO :
+        case ISOM_CODEC_TYPE_VC_1_VIDEO :
 #if 0
         case ISOM_CODEC_TYPE_AVC2_VIDEO :
         case ISOM_CODEC_TYPE_AVCP_VIDEO :
@@ -1136,7 +1145,6 @@ int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t sa
         case ISOM_CODEC_TYPE_ENCV_VIDEO :
         case ISOM_CODEC_TYPE_MJP2_VIDEO :
         case ISOM_CODEC_TYPE_S263_VIDEO :
-        case ISOM_CODEC_TYPE_VC_1_VIDEO :
 #endif
             ret = isom_add_visual_entry( stsd, sample_type, (lsmash_video_summary_t *)summary );
             break;
@@ -1712,6 +1720,9 @@ static int isom_scan_trak_profileLevelIndication( isom_trak_entry_t* trak, mp4a_
                 if( *visual_pli == MP4SYS_VISUAL_PLI_NONE_REQUIRED )
                     *visual_pli = MP4SYS_VISUAL_PLI_H264_AVC;
                 break;
+            case ISOM_CODEC_TYPE_VC_1_VIDEO :
+                *visual_pli = MP4SYS_VISUAL_PLI_NOT_SPECIFIED;
+                break;
             case ISOM_CODEC_TYPE_MP4A_AUDIO :
             {
                 isom_audio_entry_t *audio = (isom_audio_entry_t *)sample_entry;
@@ -1730,7 +1741,6 @@ static int isom_scan_trak_profileLevelIndication( isom_trak_entry_t* trak, mp4a_
             case ISOM_CODEC_TYPE_ENCV_VIDEO :
             case ISOM_CODEC_TYPE_MJP2_VIDEO :
             case ISOM_CODEC_TYPE_S263_VIDEO :
-            case ISOM_CODEC_TYPE_VC_1_VIDEO :
                 /* FIXME: Do we have to arbitrate like audio? */
                 if( *visual_pli == MP4SYS_VISUAL_PLI_NONE_REQUIRED )
                     *visual_pli = MP4SYS_VISUAL_PLI_NOT_SPECIFIED;
@@ -4128,6 +4138,7 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
         switch( sample->type )
         {
             case ISOM_CODEC_TYPE_AVC1_VIDEO :
+            case ISOM_CODEC_TYPE_VC_1_VIDEO :
 #ifdef LSMASH_DEMUXER_ENABLED
             case ISOM_CODEC_TYPE_MP4V_VIDEO :
 #endif
@@ -4141,7 +4152,6 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
             case ISOM_CODEC_TYPE_ENCV_VIDEO :
             case ISOM_CODEC_TYPE_MJP2_VIDEO :
             case ISOM_CODEC_TYPE_S263_VIDEO :
-            case ISOM_CODEC_TYPE_VC_1_VIDEO :
 #endif
                 ret = isom_write_visual_entry( bs, entry );
                 break;
@@ -6193,6 +6203,7 @@ static uint64_t isom_update_stsd_size( isom_stsd_t *stsd )
         switch( data->type )
         {
             case ISOM_CODEC_TYPE_AVC1_VIDEO :
+            case ISOM_CODEC_TYPE_VC_1_VIDEO :
 #ifdef LSMASH_DEMUXER_ENABLED
             case ISOM_CODEC_TYPE_MP4V_VIDEO :
 #endif
@@ -6206,7 +6217,6 @@ static uint64_t isom_update_stsd_size( isom_stsd_t *stsd )
             case ISOM_CODEC_TYPE_ENCV_VIDEO :
             case ISOM_CODEC_TYPE_MJP2_VIDEO :
             case ISOM_CODEC_TYPE_S263_VIDEO :
-            case ISOM_CODEC_TYPE_VC_1_VIDEO :
 #endif
                 size += isom_update_visual_entry_size( (isom_visual_entry_t *)data );
                 break;
