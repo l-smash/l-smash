@@ -9859,7 +9859,7 @@ void lsmash_delete_tyrant_chapter( lsmash_root_t *root )
 
 int lsmash_set_copyright( lsmash_root_t *root, uint32_t track_ID, uint16_t ISO_language, char *notice )
 {
-    if( !root || !root->moov || !root->isom_compatible || ISO_language < 0x800 || !notice )
+    if( !root || !root->moov || !root->isom_compatible || (ISO_language && ISO_language < 0x800) || !notice )
         return -1;
     isom_udta_t *udta;
     if( track_ID )
