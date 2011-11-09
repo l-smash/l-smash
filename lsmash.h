@@ -1287,6 +1287,9 @@ int lsmash_set_itunes_metadata_boolean( lsmash_root_t *root, lsmash_itunes_metad
 #ifdef LSMASH_DEMUXER_ENABLED
 int lsmash_print_movie( lsmash_root_t *root );
 
+/* This function might output BOM on Windows. Make sure that this is the first function that outputs something to stdout. */
+int lsmash_print_chapter_list( lsmash_root_t *root );
+
 int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_root_t *src, uint32_t src_track_ID );
 int lsmash_copy_decoder_specific_info( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_root_t *src, uint32_t src_track_ID );
 int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID );

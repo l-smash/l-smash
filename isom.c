@@ -9839,6 +9839,49 @@ fail:
     return -1;
 }
 
+int lsmash_print_chapter_list( lsmash_root_t *root )
+{
+    if( !root || !(root->flags & LSMASH_FILE_MODE_READ) )
+        return -1;
+    if( root->moov && root->moov->udta && root->moov->udta->chpl )
+    {
+        isom_chpl_t *chpl = root->moov->udta->chpl;
+        uint32_t timescale;
+        if( !chpl->version )
+        {
+            if( !root->moov && !root->moov->mvhd )
+                return -1;
+            timescale = root->moov->mvhd->timescale;
+        }
+        else
+            timescale = 10000000;
+        uint32_t i = 1;
+        for( lsmash_entry_t *entry = chpl->list->head; entry; entry = entry->next )
+        {
+            isom_chpl_entry_t *data = (isom_chpl_entry_t *)entry->data;
+            int64_t start_time = data->start_time / timescale;
+            int hh =  start_time / 3600;
+            int mm = (start_time /   60) % 60;
+            int ss =  start_time         % 60;
+            int ms = ((data->start_time / (double)timescale) - hh * 3600 - mm * 60 - ss) * 1e3 + 0.5;
+            if( !memcmp( data->chapter_name, "\xEF\xBB\xBF", 3 ) )    /* detect BOM */
+            {
+                data->chapter_name += 3;
+#ifdef _WIN32
+                if( i == 1 )
+                    printf( "\xEF\xBB\xBF" );    /* add BOM on Windows */
+#endif
+            }
+            printf( "CHAPTER%02"PRIu32"=%02d:%02d:%02d.%03d\n", i, hh, mm, ss, ms );
+            printf( "CHAPTER%02"PRIu32"NAME=%s\n", i++, data->chapter_name );
+        }
+        return 0;
+    }
+    else
+        lsmash_log( LSMASH_LOG_WARNING, "This file doesn't have a chapter list.\n" );
+    return -1;
+}
+
 int lsmash_delete_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID )
 {
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );

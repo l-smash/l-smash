@@ -45,6 +45,7 @@ static int print_help( int ret )
              "Usage: boxdumper [option] input\n"
              "  options:\n"
              "    --box          Dump box structure\n"
+             "    --chapter      Extract chapter list\n"
              "    --timestamp    Dump media timestamps\n",
              LSMASH_REV, LSMASH_GIT_HASH, __DATE__, __TIME__ );
     return ret;
@@ -62,14 +63,17 @@ static int boxdumper_error( lsmash_root_t *root, char* message )
 
 int main( int argc, char *argv[] )
 {
-    if( argc < 2 || argc > 3 )
+    if( argc < 2 )
         return print_help( -1 );
     int dump_box = 1;
+    int chapter = 0;
     char *filename;
     if( argc > 2 )
     {
         if( !strcasecmp( argv[1], "--box" ) )
             DO_NOTHING;
+        else if( !strcasecmp( argv[1], "--chapter" ) )
+            chapter = 1;
         else if( !strcasecmp( argv[1], "--timestamp" ) )
             dump_box = 0;
         else
@@ -92,7 +96,12 @@ int main( int argc, char *argv[] )
         fprintf( stderr, "Failed to open input file.\n" );
         return -1;
     }
-    if( dump_box )
+    if( chapter )
+    {
+        if( lsmash_print_chapter_list( root ) )
+            return BOXDUMPER_ERR( "Failed to extract chapter.\n" );
+    }
+    else if( dump_box )
     {
         if( lsmash_print_movie( root ) )
             return BOXDUMPER_ERR( "Failed to dump box structure.\n" );

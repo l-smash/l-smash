@@ -1335,12 +1335,11 @@ static int isom_print_chpl( lsmash_root_t *root, isom_box_t *box, int level )
         int mm = (start_time /   60) % 60;
         int ss =  start_time         % 60;
         int ms = ((data->start_time / (double)timescale) - hh * 3600 - mm * 60 - ss) * 1e3 + 0.5;
-        char str[256];
-        memset( str, 0, sizeof(str) );
-        memcpy( str, data->chapter_name, data->chapter_name_length );
+        if( !memcmp( data->chapter_name, "\xEF\xBB\xBF", 3 ) )    /* detect BOM */
+            data->chapter_name += 3;
         isom_iprintf( indent++, "chapter[%"PRIu32"]\n", i++ );
         isom_iprintf( indent, "start_time = %02d:%02d:%02d.%03d\n", hh, mm, ss, ms );
-        isom_iprintf( indent--, "chapter_name = %s\n", str );
+        isom_iprintf( indent--, "chapter_name = %s\n", data->chapter_name );
     }
     return 0;
 }
