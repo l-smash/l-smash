@@ -4112,8 +4112,7 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
             uint64_t *temp = realloc( poc, alloc );
             if( !temp )
             {
-                if( poc )
-                    free( poc );
+                free( poc );
                 goto fail;
             }
             poc = temp;
@@ -4320,10 +4319,14 @@ typedef struct
     lsmash_video_summary_t *summary;
     uint8_t bdu_type;
     uint8_t prev_bdu_type;
-    uint8_t composition_reordering_present;
     uint8_t no_more_read;
-    uint8_t first_summary;
+    uint8_t composition_reordering_present;
+    uint8_t slice_present;
+    uint8_t multiple_sequence;
+    uint8_t multiple_entry_point;
+    vc1_sequence_header_t first_sequence;
     vc1_sequence_header_t sequence;
+    vc1_entry_point_t first_entry_point;
     vc1_entry_point_t entry_point;
     vc1_picture_info_t next_picture;
     vc1_access_unit_t access_unit;
@@ -4456,10 +4459,11 @@ static void vc1_parse_hrd_param( lsmash_bits_t *bits, vc1_hrd_param_t *hrd_param
     }
 }
 
-static int vc1_parse_sequence_header( lsmash_bits_t *bits, vc1_sequence_header_t *sequence,
-                                      uint8_t *rbdu_buffer, uint8_t *ebdu, uint64_t ebdu_length )
+static int vc1_parse_sequence_header( mp4sys_vc1_info_t *info, uint8_t *ebdu, uint64_t ebdu_length, int probe )
 {
-    if( vc1_bits_import_rbdu_from_ebdu( bits, rbdu_buffer, ebdu, ebdu_length ) )
+    lsmash_bits_t *bits = info->bits;
+    vc1_sequence_header_t *sequence = &info->sequence;
+    if( vc1_bits_import_rbdu_from_ebdu( bits, info->rbdu_buffer, ebdu, ebdu_length ) )
         return -1;
     memset( sequence, 0, sizeof(vc1_sequence_header_t) );
     sequence->profile          = lsmash_bits_get( bits, 2 );
@@ -4553,14 +4557,32 @@ static int vc1_parse_sequence_header( lsmash_bits_t *bits, vc1_sequence_header_t
     IF_INVALID_VALUE( !lsmash_bits_get( bits, 1 ) )
         return -1;
     lsmash_bits_empty( bits );
+    /* Preparation for creating VC1SpecificBox */
+    if( probe )
+    {
+        vc1_sequence_header_t *first_sequence = &info->first_sequence;
+        if( !first_sequence->present )
+        {
+            sequence->ebdu = malloc( ebdu_length );
+            if( !sequence->ebdu )
+                return -1;
+            memcpy( sequence->ebdu, ebdu, ebdu_length );
+            sequence->length = ebdu_length;
+            sequence->present = 1;
+            *first_sequence = *sequence;
+        }
+        else if( first_sequence->ebdu && (first_sequence->length == ebdu_length) )
+            info->multiple_sequence |= !!memcmp( ebdu, first_sequence->ebdu, ebdu_length );
+    }
     return bits->bs->error ? -1 : 0;
 }
 
-static int vc1_parse_entry_point_header( lsmash_bits_t *bits,
-                                         vc1_sequence_header_t *sequence, vc1_entry_point_t *entry_point,
-                                         uint8_t *rbdu_buffer, uint8_t *ebdu, uint64_t ebdu_length )
+static int vc1_parse_entry_point_header( mp4sys_vc1_info_t *info, uint8_t *ebdu, uint64_t ebdu_length, int probe )
 {
-    if( vc1_bits_import_rbdu_from_ebdu( bits, rbdu_buffer, ebdu, ebdu_length ) )
+    lsmash_bits_t *bits = info->bits;
+    vc1_sequence_header_t *sequence = &info->sequence;
+    vc1_entry_point_t *entry_point = &info->entry_point;
+    if( vc1_bits_import_rbdu_from_ebdu( bits, info->rbdu_buffer, ebdu, ebdu_length ) )
         return -1;
     memset( entry_point, 0, sizeof(vc1_entry_point_t) );
     uint8_t broken_link_flag = lsmash_bits_get( bits, 1 );          /* 0: no concatenation between the current and the previous entry points
@@ -4613,10 +4635,27 @@ static int vc1_parse_entry_point_header( lsmash_bits_t *bits,
     IF_INVALID_VALUE( !lsmash_bits_get( bits, 1 ) )
         return -1;
     lsmash_bits_empty( bits );
-    return 0;
+    /* Preparation for creating VC1SpecificBox */
+    if( probe )
+    {
+        vc1_entry_point_t *first_entry_point = &info->first_entry_point;
+        if( !first_entry_point->present )
+        {
+            entry_point->ebdu = malloc( ebdu_length );
+            if( !entry_point->ebdu )
+                return -1;
+            memcpy( entry_point->ebdu, ebdu, ebdu_length );
+            entry_point->length = ebdu_length;
+            entry_point->present = 1;
+            *first_entry_point = *entry_point;
+        }
+        else if( first_entry_point->ebdu && (first_entry_point->length == ebdu_length) )
+            info->multiple_entry_point |= !!memcmp( ebdu, first_entry_point->ebdu, ebdu_length );
+    }
+    return bits->bs->error ? -1 : 0;
 }
 
-static inline uint64_t vc1_get_vlc( lsmash_bits_t *bits, int length )
+static inline uint8_t vc1_get_vlc( lsmash_bits_t *bits, int length )
 {
     uint8_t value = 0;
     for( int i = 0; i < length; i++ )
@@ -4648,147 +4687,7 @@ static int vc1_parse_advanced_picture( lsmash_bits_t *bits,
         picture->type = lsmash_bits_get( bits, 3 );     /* fptype (3) */
     picture->present = 1;
     lsmash_bits_empty( bits );
-    return 0;
-}
-
-static uint8_t *vc1_create_dvc1( mp4sys_vc1_info_t *info, uint32_t *dvc1_length )
-{
-    lsmash_bits_t *bits = info->bits;
-    vc1_sequence_header_t *sequence = &info->sequence;
-    lsmash_bits_put( bits, 0, 32 );                     /* box size */
-    lsmash_bits_put( bits, ISOM_BOX_TYPE_DVC1, 32 );    /* box type = 'dvc1' */
-    lsmash_bits_put( bits, sequence->profile << 2, 4 ); /* profile */
-    lsmash_bits_put( bits, sequence->level, 3 );        /* level */
-    lsmash_bits_put( bits, 0, 1 );                      /* reserved */
-    /* VC1AdvDecSpecStruc (for Advanced Profile) */
-    lsmash_bits_put( bits, sequence->level, 3 );        /* level (identical to the previous level field) */
-    lsmash_bits_put( bits, 0, 1 );                      /* cbr */
-    lsmash_bits_put( bits, 0, 6 );                      /* reserved */
-    lsmash_bits_put( bits, !sequence->interlace, 1 );   /* no_interlace */
-    lsmash_bits_put( bits, 1, 1 );                      /* no_multiple_seq */
-    lsmash_bits_put( bits, 1, 1 );                      /* no_multiple_entry */
-    lsmash_bits_put( bits, 0, 1 );                      /* no_slice_code */
-    lsmash_bits_put( bits, 0, 1 );                      /* no_bframe */
-    lsmash_bits_put( bits, 0, 1 );                      /* reserved */
-    uint32_t framerate = sequence->framerate_flag
-                       ? ((double)sequence->framerate_numerator / sequence->framerate_denominator) + 0.5
-                       : 0xffffffff;    /* 0xffffffff means framerate is unknown or unspecified. */
-    lsmash_bits_put( bits, framerate, 32 );             /* framerate */
-    /* seqhdr_ephdr[] */
-    uint8_t *ebdu = sequence->ebdu;
-    for( uint32_t i = 0; i < sequence->length; i++ )
-        lsmash_bits_put( bits, *ebdu++, 8 );
-    ebdu = info->entry_point.ebdu;
-    for( uint32_t i = 0; i < info->entry_point.length; i++ )
-        lsmash_bits_put( bits, *ebdu++, 8 );
-    /* */
-    uint8_t *dvc1 = lsmash_bits_export_data( bits, dvc1_length );
-    lsmash_bits_empty( bits );
-    /* Update box size. */
-    dvc1[0] = ((*dvc1_length) >> 24) & 0xff;
-    dvc1[1] = ((*dvc1_length) >> 16) & 0xff;
-    dvc1[2] = ((*dvc1_length) >>  8) & 0xff;
-    dvc1[3] =  (*dvc1_length)        & 0xff;
-    return dvc1;
-}
-
-static int vc1_create_summary( mp4sys_vc1_info_t *info, uint8_t bdu_type,
-                               uint8_t *rbdu_buffer, uint8_t *ebdu, uint32_t ebdu_length, int probe )
-{
-    int same_sequence    = 0;
-    int same_entry_point = 0;
-    int sequence_ebdu    = bdu_type == 0x0F;
-    int entry_point_ebdu = bdu_type == 0x0E;
-    if( sequence_ebdu )
-    {
-        vc1_sequence_header_t *sequence = &info->sequence;
-        if( sequence->ebdu && (sequence->length == ebdu_length) )
-            same_sequence = !memcmp( ebdu, sequence->ebdu, ebdu_length );
-        if( !same_sequence )
-        {
-            if( vc1_parse_sequence_header( info->bits, sequence, rbdu_buffer, ebdu, ebdu_length ) )
-                return -1;
-            if( !probe || !sequence->present )
-            {
-                if( sequence->length < ebdu_length )
-                {
-                    uint8_t *temp = realloc( sequence->ebdu, ebdu_length );
-                    if( !temp )
-                        return -1;
-                    sequence->ebdu = temp;
-                }
-                memcpy( sequence->ebdu, ebdu, ebdu_length );
-                sequence->length = ebdu_length;
-                sequence->present = 1;
-            }
-        }
-    }
-    else if( entry_point_ebdu )
-    {
-        vc1_entry_point_t *entry_point = &info->entry_point;
-        if( entry_point->ebdu && (entry_point->length == ebdu_length) )
-            same_entry_point = !memcmp( ebdu, entry_point->ebdu, ebdu_length );
-        if( !same_entry_point )
-        {
-            if( vc1_parse_entry_point_header( info->bits, &info->sequence, entry_point, rbdu_buffer, ebdu, ebdu_length ) )
-                return -1;
-            if( !probe || !entry_point->present )
-            {
-                if( entry_point->length < ebdu_length )
-                {
-                    uint8_t *temp = realloc( entry_point->ebdu, ebdu_length );
-                    if( !temp )
-                        return -1;
-                    entry_point->ebdu = temp;
-                }
-                memcpy( entry_point->ebdu, ebdu, ebdu_length );
-                entry_point->length = ebdu_length;
-                entry_point->present = 1;
-            }
-        }
-    }
-    else
-        return -1;
-    /* Create summary when sequence header, entry-point and no summary are present even if probe is true.
-     * Skip to create a new summary when detecting the first summary if probe is true, i.e. we hold the first summary. */
-    if( !info->sequence.present || !info->entry_point.present || (probe && info->summary) )
-        return 0;
-    if( !probe && ((!sequence_ebdu && entry_point_ebdu && same_entry_point) || (!entry_point_ebdu && sequence_ebdu && same_sequence)) )
-        return 0;
-    lsmash_video_summary_t *summary;
-    if( info->summary )
-    {
-        summary = info->summary;
-        if( summary->exdata )
-            free( summary->exdata );
-        summary->exdata = NULL;
-        info->first_summary = 0;
-    }
-    else
-    {
-        summary = (lsmash_video_summary_t *)lsmash_create_summary( MP4SYS_STREAM_TYPE_VisualStream );
-        if( !summary )
-            return -1;
-        info->first_summary = 1;
-    }
-    summary->exdata = vc1_create_dvc1( info, &summary->exdata_length );
-    if( !summary->exdata )
-        return -1;
-    vc1_sequence_header_t *sequence = &info->sequence;
-    summary->sample_type            = ISOM_CODEC_TYPE_VC_1_VIDEO;
-    summary->object_type_indication = MP4SYS_OBJECT_TYPE_VC_1_VIDEO;
-    summary->timescale              = sequence->framerate_numerator;
-    summary->timebase               = sequence->framerate_denominator;
-    summary->vfr                    = !sequence->framerate_flag;
-    summary->width                  = sequence->disp_horiz_size;
-    summary->height                 = sequence->disp_vert_size;
-    summary->par_h                  = sequence->aspect_width;
-    summary->par_v                  = sequence->aspect_height;
-    summary->primaries              = sequence->color_prim;
-    summary->transfer               = sequence->transfer_char;
-    summary->matrix                 = sequence->matrix_coef;
-    info->summary = summary;
-    return 0;
+    return bits->bs->error ? -1 : 0;
 }
 
 static int vc1_supplement_buffer( mp4sys_vc1_info_t *info, uint32_t size )
@@ -5024,16 +4923,18 @@ static int vc1_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_vc1
                         if( vc1_parse_advanced_picture( info->bits, &info->sequence, &info->next_picture, info->rbdu_buffer,
                                                         info->stream_buffer_pos, ebdu_length ) )
                             return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
-                    case 0x0B : /* Slice
-                                 * Shall not be used for start code of the first slice of a frame.
-                                 * Shall not be used for start code of the first slice of an interlace field coded picture.
-                                 * [FRM_SC][PIC_L][[FLD_SC][PIC_L] (optional)][SLC_SC][SLC_L][[SLC_SC][SLC_L] (optional)] ...
-                                 * Slice layer may repeat frame header. We just ignore it. */
                     case 0x0C : /* Field
                                  * Shall only be used for Field Interlaced frames
                                  * and shall only be used to signal the beginning of the second field of the frame.
                                  * [FRM_SC][PIC_L][FLD_SC][PIC_L][[SLC_SC][SLC_L] (optional)] ...
                                  * Field start code is followed by INTERLACE_FIELD_PICTURE_FIELD2() which doesn't have info of its field picture type.*/
+                        break;
+                    case 0x0B : /* Slice
+                                 * Shall not be used for start code of the first slice of a frame.
+                                 * Shall not be used for start code of the first slice of an interlace field coded picture.
+                                 * [FRM_SC][PIC_L][[FLD_SC][PIC_L] (optional)][SLC_SC][SLC_L][[SLC_SC][SLC_L] (optional)] ...
+                                 * Slice layer may repeat frame header. We just ignore it. */
+                        info->slice_present = 1;
                         break;
                     case 0x0E : /* Entry-point header
                                  * Entry-point indicates the direct followed frame is a random access point.
@@ -5041,14 +4942,14 @@ static int vc1_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_vc1
                                  *   1. I-picture - progressive or frame interlace
                                  *   2. I/I-picture, I/P-picture, or P/I-picture - field interlace
                                  * [[SEQ_SC][SEQ_L] (optional)][EP_SC][EP_L][FRM_SC][PIC_L] ... */
-                        if( vc1_create_summary( info, bdu_type, info->rbdu_buffer, info->stream_buffer_pos, ebdu_length, probe ) )
+                        if( vc1_parse_entry_point_header( info, info->stream_buffer_pos, ebdu_length, probe ) )
                             return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
-                        info->next_picture.random_accessible = 1;   /* We don't support multiple sequence headers yet. */
+                        info->next_picture.random_accessible = 1;
                         info->next_picture.closed_rap        = info->entry_point.closed_entry_point;
                         break;
                     case 0x0F : /* Sequence header
                                  * [SEQ_SC][SEQ_L][EP_SC][EP_L][FRM_SC][PIC_L] ... */
-                        if( vc1_create_summary( info, bdu_type, info->rbdu_buffer, info->stream_buffer_pos, ebdu_length, probe ) )
+                        if( vc1_parse_sequence_header( info, info->stream_buffer_pos, ebdu_length, probe ) )
                             return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
                         break;
                     default :   /* End-of-sequence (0x0A) */
@@ -5116,18 +5017,6 @@ static int mp4sys_vc1_get_accessunit( mp4sys_importer_t *importer, uint32_t trac
         buffered_sample->length = 0;
         return 0;
     }
-    if( info->summary && !info->first_summary )
-    {
-        current_status = MP4SYS_IMPORTER_CHANGE;
-        /* Summaries may be not active immediately because we can't get any corresponding AU at once.
-         * The first summary will be an only exception of this. */
-        lsmash_entry_t* entry = lsmash_get_entry( importer->summaries, track_number );
-        if( !entry || !entry->data )
-            return -1;
-        lsmash_cleanup_summary( entry->data );
-        entry->data = info->summary;
-        info->summary = NULL;
-    }
     if( vc1_get_access_unit_internal( importer, info, track_number, 0 ) )
     {
         info->status = MP4SYS_IMPORTER_ERROR;
@@ -5152,6 +5041,76 @@ static int mp4sys_vc1_get_accessunit( mp4sys_importer_t *importer, uint32_t trac
     buffered_sample->length = access_unit->data_length;
     memcpy( buffered_sample->data, access_unit->data, access_unit->data_length );
     return current_status;
+}
+
+static uint8_t *vc1_create_dvc1( mp4sys_vc1_info_t *info, uint32_t *dvc1_length )
+{
+    lsmash_bits_t *bits = info->bits;
+    vc1_sequence_header_t *sequence = &info->first_sequence;
+    lsmash_bits_put( bits, 0, 32 );                                     /* box size */
+    lsmash_bits_put( bits, ISOM_BOX_TYPE_DVC1, 32 );                    /* box type = 'dvc1' */
+    lsmash_bits_put( bits, sequence->profile << 2, 4 );                 /* profile */
+    lsmash_bits_put( bits, sequence->level, 3 );                        /* level */
+    lsmash_bits_put( bits, 0, 1 );                                      /* reserved */
+    /* VC1AdvDecSpecStruc (for Advanced Profile) */
+    lsmash_bits_put( bits, sequence->level, 3 );                        /* level (identical to the previous level field) */
+    lsmash_bits_put( bits, 0, 1 );                                      /* cbr */
+    lsmash_bits_put( bits, 0, 6 );                                      /* reserved */
+    lsmash_bits_put( bits, !sequence->interlace, 1 );                   /* no_interlace */
+    lsmash_bits_put( bits, !info->multiple_sequence, 1 );               /* no_multiple_seq */
+    lsmash_bits_put( bits, !info->multiple_entry_point, 1 );            /* no_multiple_entry */
+    lsmash_bits_put( bits, !info->slice_present, 1 );                   /* no_slice_code */
+    lsmash_bits_put( bits, !info->composition_reordering_present, 1 );  /* no_bframe */
+    lsmash_bits_put( bits, 0, 1 );                                      /* reserved */
+    uint32_t framerate = sequence->framerate_flag
+                       ? ((double)sequence->framerate_numerator / sequence->framerate_denominator) + 0.5
+                       : 0xffffffff;    /* 0xffffffff means framerate is unknown or unspecified. */
+    lsmash_bits_put( bits, framerate, 32 );                             /* framerate */
+    /* seqhdr_ephdr[] */
+    uint8_t *ebdu = sequence->ebdu;
+    for( uint32_t i = 0; i < sequence->length; i++ )
+        lsmash_bits_put( bits, *ebdu++, 8 );
+    ebdu = info->first_entry_point.ebdu;
+    for( uint32_t i = 0; i < info->first_entry_point.length; i++ )
+        lsmash_bits_put( bits, *ebdu++, 8 );
+    /* */
+    uint8_t *dvc1 = lsmash_bits_export_data( bits, dvc1_length );
+    lsmash_bits_empty( bits );
+    /* Update box size. */
+    dvc1[0] = ((*dvc1_length) >> 24) & 0xff;
+    dvc1[1] = ((*dvc1_length) >> 16) & 0xff;
+    dvc1[2] = ((*dvc1_length) >>  8) & 0xff;
+    dvc1[3] =  (*dvc1_length)        & 0xff;
+    return dvc1;
+}
+
+static lsmash_video_summary_t *vc1_create_summary( mp4sys_vc1_info_t *info )
+{
+    if( !info->first_sequence.present || !info->first_entry_point.present )
+        return NULL;
+    lsmash_video_summary_t *summary = (lsmash_video_summary_t *)lsmash_create_summary( MP4SYS_STREAM_TYPE_VisualStream );
+    if( !summary )
+        return NULL;
+    summary->exdata = vc1_create_dvc1( info, &summary->exdata_length );
+    if( !summary->exdata )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary);
+        return NULL;
+    }
+    vc1_sequence_header_t *sequence = &info->first_sequence;
+    summary->sample_type            = ISOM_CODEC_TYPE_VC_1_VIDEO;
+    summary->object_type_indication = MP4SYS_OBJECT_TYPE_VC_1_VIDEO;
+    summary->timescale              = sequence->framerate_numerator;
+    summary->timebase               = sequence->framerate_denominator;
+    summary->vfr                    = !sequence->framerate_flag;
+    summary->width                  = sequence->disp_horiz_size;
+    summary->height                 = sequence->disp_vert_size;
+    summary->par_h                  = sequence->aspect_width;
+    summary->par_v                  = sequence->aspect_height;
+    summary->primaries              = sequence->color_prim;
+    summary->transfer               = sequence->transfer_char;
+    summary->matrix                 = sequence->matrix_coef;
+    return summary;
 }
 
 static int mp4sys_vc1_probe( mp4sys_importer_t *importer )
@@ -5230,8 +5189,7 @@ static int mp4sys_vc1_probe( mp4sys_importer_t *importer )
             uint64_t *temp = realloc( cts, alloc );
             if( !temp )
             {
-                if( cts )
-                    free( cts );
+                free( cts );
                 goto fail;
             }
             cts = temp;
@@ -5243,10 +5201,11 @@ static int mp4sys_vc1_probe( mp4sys_importer_t *importer )
     if( num_access_units > num_consecutive_b )
         cts[ num_access_units - num_consecutive_b - 1 ] = num_access_units;
     else
+    {
+        free( cts );
         goto fail;
+    }
     fprintf( stderr, "                                                                               \r" );
-    if( !info->summary || lsmash_add_entry( importer->summaries, info->summary ) )
-        goto fail;
     /* Construct timestamps. */
     lsmash_media_ts_t *timestamp = malloc( num_access_units * sizeof(lsmash_media_ts_t) );
     if( !timestamp )
@@ -5274,6 +5233,9 @@ static int mp4sys_vc1_probe( mp4sys_importer_t *importer )
     for( uint32_t i = 0; i < num_access_units; i++ )
         fprintf( stderr, "Timestamp[%"PRIu32"]: DTS=%"PRIu64", CTS=%"PRIu64"\n", i, timestamp[i].dts, timestamp[i].cts );
 #endif
+    info->summary = vc1_create_summary( info );
+    if( !info->summary || lsmash_add_entry( importer->summaries, info->summary ) )
+        goto fail;
     info->ts_list.sample_count           = num_access_units;
     info->ts_list.timestamp              = timestamp;
     /* Go back to layer of the first EBDU. */
@@ -5282,7 +5244,6 @@ static int mp4sys_vc1_probe( mp4sys_importer_t *importer )
     info->bdu_type                       = first_bdu_type;
     info->prev_bdu_type                  = 0;
     info->no_more_read                   = 0;
-    info->first_summary                  = 0;
     info->summary->max_au_length         = info->max_au_length;
     info->summary                        = NULL;
     info->stream_buffer_pos              = info->stream_buffer + VC1_START_CODE_LENGTH;
@@ -5294,10 +5255,6 @@ static int mp4sys_vc1_probe( mp4sys_importer_t *importer )
     info->access_unit.data               = temp_access_unit;
     info->access_unit.incomplete_data    = temp_incomplete_access_unit;
     memset( &info->next_picture, 0, sizeof(vc1_picture_info_t) );
-    free( info->sequence.ebdu );
-    memset( &info->sequence, 0, sizeof(vc1_sequence_header_t) );
-    free( info->entry_point.ebdu );
-    memset( &info->entry_point, 0, sizeof(vc1_entry_point_t) );
     importer->info = info;
     return 0;
 fail:
