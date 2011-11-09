@@ -4657,7 +4657,7 @@ static uint8_t *vc1_create_dvc1( mp4sys_vc1_info_t *info, uint32_t *dvc1_length 
     vc1_sequence_header_t *sequence = &info->sequence;
     lsmash_bits_put( bits, 0, 32 );                     /* box size */
     lsmash_bits_put( bits, ISOM_BOX_TYPE_DVC1, 32 );    /* box type = 'dvc1' */
-    lsmash_bits_put( bits, sequence->profile, 4 );      /* profile */
+    lsmash_bits_put( bits, sequence->profile << 2, 4 ); /* profile */
     lsmash_bits_put( bits, sequence->level, 3 );        /* level */
     lsmash_bits_put( bits, 0, 1 );                      /* reserved */
     /* VC1AdvDecSpecStruc (for Advanced Profile) */
