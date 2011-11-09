@@ -1257,6 +1257,46 @@ fail:
     return -1;
 }
 
+static int isom_read_visual_specific( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_CODEC_TYPE_VC_1_VIDEO || box->type != ISOM_BOX_TYPE_DVC1 )
+        return isom_read_unknown_box( root, box, parent, level );
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    uint32_t exdata_length;
+    void *exdata = lsmash_bs_export_data( bs, &exdata_length );
+    if( !exdata )
+        return -1;
+    isom_visual_entry_t *visual = (isom_visual_entry_t *)parent;
+    if( visual->exdata )
+    {
+        /* Append exdata. */
+        void *temp = realloc( visual->exdata, visual->exdata_length + exdata_length );
+        if( !temp )
+            free( exdata );
+        visual->exdata = temp;
+        memcpy( visual->exdata + visual->exdata_length, exdata, exdata_length );
+        visual->exdata_length += exdata_length;
+        free( exdata );
+    }
+    else
+    {
+        visual->exdata_length = exdata_length;
+        visual->exdata = exdata;
+    }
+    isom_box_t *specific = lsmash_malloc_zero( sizeof(isom_box_t) );
+    if( !specific )
+        return -1;
+    box->manager |= LSMASH_ABSENT_IN_ROOT;
+    isom_box_common_copy( specific, box );
+    if( isom_add_print_func( root, specific, level ) )
+    {
+        free( specific );
+        return -1;
+    }
+    return 0;
+}
+
 static int isom_read_audio_description( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_STSD )
@@ -3057,6 +3097,8 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
      || parent->type == ISOM_CODEC_TYPE_SAMR_AUDIO
      || parent->type == ISOM_CODEC_TYPE_SAWB_AUDIO )
         return isom_read_audio_specific( root, box, parent, level );
+    else if( parent->type == ISOM_CODEC_TYPE_VC_1_VIDEO )
+        return isom_read_visual_specific( root, box, parent, level );
     return isom_read_unknown_box( root, box, parent, level );
 }
 

@@ -176,6 +176,21 @@ static lsmash_video_summary_t *isom_create_video_summary_from_description( isom_
 }
 #endif
 
+#define COPY_EXDATA( dst, src ) \
+    do \
+    { \
+        if( src->exdata && src->exdata_length ) \
+        { \
+            dst->exdata = lsmash_memdup( src->exdata, src->exdata_length ); \
+            if( !dst->exdata ) \
+            { \
+                isom_remove_sample_description( (isom_sample_entry_t *)dst ); \
+                return NULL; \
+            } \
+            dst->exdata_length = src->exdata_length; \
+        } \
+    } while( 0 )
+
 static isom_esds_t *isom_duplicate_esds( isom_box_t *dst_parent, isom_esds_t *src )
 {
     if( !src || !src->ES )
@@ -322,6 +337,7 @@ static isom_visual_entry_t *isom_duplicate_visual_description( isom_visual_entry
     dst->esds = NULL;
     dst->avcC = NULL;
     dst->btrt = NULL;
+    COPY_EXDATA( dst, src );
     /* Copy children. */
     dst->esds = isom_duplicate_esds( (isom_box_t *)dst, src->esds );
     if( (src->esds && !dst->esds)   /* Check if copying failed. */
@@ -477,16 +493,7 @@ static isom_audio_entry_t *isom_duplicate_audio_description( isom_audio_entry_t 
         else if( src->version == 1 )
             dst->constBytesPerAudioPacket = src->bytesPerFrame;
     }
-    if( src->exdata && src->exdata_length )
-    {
-        dst->exdata = lsmash_memdup( src->exdata, src->exdata_length );
-        if( !dst->exdata )
-        {
-            isom_remove_sample_description( (isom_sample_entry_t *)dst );
-            return NULL;
-        }
-        dst->exdata_length = src->exdata_length;
-    }
+    COPY_EXDATA( dst, src );
     /* Copy children. */
     dst->esds = isom_duplicate_esds( (isom_box_t *)dst, src->esds );
     if( (src->esds && !dst->esds)   /* Check if copying failed. */
@@ -565,6 +572,8 @@ static isom_text_entry_t *isom_duplicate_text_description( isom_text_entry_t *sr
     return dst;
 }
 
+#undef COPY_EXDATA
+
 static isom_sample_entry_t *isom_duplicate_description( isom_sample_entry_t *entry, isom_stsd_t *dst_parent )
 {
     if( !entry )
@@ -574,6 +583,7 @@ static isom_sample_entry_t *isom_duplicate_description( isom_sample_entry_t *ent
     {
         case ISOM_CODEC_TYPE_AVC1_VIDEO :
         case ISOM_CODEC_TYPE_MP4V_VIDEO :
+        case ISOM_CODEC_TYPE_VC_1_VIDEO :
             description = isom_duplicate_visual_description( (isom_visual_entry_t *)entry );
             break;
         case ISOM_CODEC_TYPE_MP4A_AUDIO :
