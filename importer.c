@@ -4285,7 +4285,7 @@ typedef struct
 typedef struct
 {
     uint8_t  present;
-    uint8_t  closed_entry_point;    /* 0: Open RAP, 1: Closed RAP */
+    uint8_t  closed_entry_point;
     uint8_t *ebdu;
     uint32_t length;
 } vc1_entry_point_t;
@@ -4295,14 +4295,15 @@ typedef struct
     uint8_t present;
     uint8_t frame_coding_mode;
     uint8_t type;
+    uint8_t closed_gop;
+    uint8_t start_of_sequence;
     uint8_t random_accessible;
-    uint8_t closed_rap;
 } vc1_picture_info_t;
 
 typedef struct
 {
     uint8_t  random_accessible;
-    uint8_t  closed_rap;
+    uint8_t  closed_gop;
     uint8_t  independent;
     uint8_t  non_bipredictive;
     uint8_t  disposable;
@@ -4754,7 +4755,7 @@ static inline int vc1_find_au_delimit_by_bdu_type( uint8_t bdu_type, uint8_t pre
 static inline void vc1_update_au_property( vc1_access_unit_t *access_unit, vc1_picture_info_t *picture )
 {
     access_unit->random_accessible = picture->random_accessible;
-    access_unit->closed_rap        = picture->closed_rap;
+    access_unit->closed_gop        = picture->closed_gop;
     /* I-picture
      *      Be coded using information only from itself. (independent)
      *      All the macroblocks in an I-picture are intra-coded.
@@ -4783,8 +4784,9 @@ static inline void vc1_update_au_property( vc1_access_unit_t *access_unit, vc1_p
     }
     picture->present           = 0;
     picture->type              = 0;
+    picture->closed_gop        = 0;
+    picture->start_of_sequence = 0;
     picture->random_accessible = 0;
-    picture->closed_rap        = 0;
 }
 
 static inline int vc1_complete_au( vc1_access_unit_t *access_unit, vc1_picture_info_t *next_picture, int probe )
@@ -4937,20 +4939,23 @@ static int vc1_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_vc1
                         info->slice_present = 1;
                         break;
                     case 0x0E : /* Entry-point header
-                                 * Entry-point indicates the direct followed frame is a random access point.
+                                 * Entry-point indicates the direct followed frame is a start of group of frames.
+                                 * Entry-point doesn't indicates the frame is a random access point when multiple sequence headers are present,
+                                 * since it is necessary to decode sequence header which subsequent frames belong to for decoding them.
                                  * Entry point shall be followed by
                                  *   1. I-picture - progressive or frame interlace
                                  *   2. I/I-picture, I/P-picture, or P/I-picture - field interlace
                                  * [[SEQ_SC][SEQ_L] (optional)][EP_SC][EP_L][FRM_SC][PIC_L] ... */
                         if( vc1_parse_entry_point_header( info, info->stream_buffer_pos, ebdu_length, probe ) )
                             return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
-                        info->next_picture.random_accessible = 1;
-                        info->next_picture.closed_rap        = info->entry_point.closed_entry_point;
+                        info->next_picture.closed_gop        = info->entry_point.closed_entry_point;
+                        info->next_picture.random_accessible = info->multiple_sequence ? info->next_picture.start_of_sequence : 1;
                         break;
                     case 0x0F : /* Sequence header
                                  * [SEQ_SC][SEQ_L][EP_SC][EP_L][FRM_SC][PIC_L] ... */
                         if( vc1_parse_sequence_header( info, info->stream_buffer_pos, ebdu_length, probe ) )
                             return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
+                        info->next_picture.start_of_sequence = 1;
                         break;
                     default :   /* End-of-sequence (0x0A) */
                         break;
@@ -5031,7 +5036,7 @@ static int mp4sys_vc1_get_accessunit( mp4sys_importer_t *importer, uint32_t trac
                                                                : ISOM_SAMPLE_IS_UNDECODABLE_LEADING;
     if( access_unit->independent && !access_unit->disposable )
         info->last_ref_intra_cts = buffered_sample->cts;
-    if( info->composition_reordering_present && !access_unit->disposable && !access_unit->closed_rap )
+    if( info->composition_reordering_present && !access_unit->disposable && !access_unit->closed_gop )
         buffered_sample->prop.allow_earlier = QT_SAMPLE_EARLIER_PTS_ALLOWED;
     buffered_sample->prop.independent = access_unit->independent ? ISOM_SAMPLE_IS_INDEPENDENT : ISOM_SAMPLE_IS_NOT_INDEPENDENT;
     buffered_sample->prop.disposable  = access_unit->disposable  ? ISOM_SAMPLE_IS_DISPOSABLE  : ISOM_SAMPLE_IS_NOT_DISPOSABLE;
