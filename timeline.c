@@ -683,7 +683,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     isom_sample_entry_t *description = stsd_entry ? (isom_sample_entry_t *)stsd_entry->data : NULL;
     isom_sample_info_t *info = NULL;        /* shut up 'uninitialized' warning */
     isom_portable_chunk_t *chunk = NULL;    /* shut up 'uninitialized' warning */
-    if( !description || !stts_entry || !stsc_entry || !stco_entry || !stco_entry->data )
+    if( !description || !stts_entry || !stsc_entry || !stco_entry || !stco_entry->data || (next_stsc_entry && !next_stsc_entry->data) )
         goto fail;
     chunk = malloc( sizeof(isom_portable_chunk_t) );
     if( !chunk || lsmash_add_entry( timeline->chunk_list, chunk ) )
@@ -894,7 +894,8 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
         {
             /* Move the next chunk. */
             sample_number_in_chunk = 1;
-            stco_entry = stco_entry->next;
+            if( stco_entry )
+                stco_entry = stco_entry->next;
             if( stco_entry && stco_entry->data )
                 data_offset = large_presentation
                             ? ((isom_co64_entry_t *)stco_entry->data)->chunk_offset
@@ -909,12 +910,21 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
             offset_from_chunk = 0;
             if( lsmash_add_entry( timeline->chunk_list, chunk ) )
                 goto fail;
-            if( next_stsc_entry
-             && chunk_number == ((isom_stsc_entry_t *)next_stsc_entry->data)->first_chunk )
+            /* Check if the next entry is broken. */
+            while( next_stsc_entry && chunk_number > ((isom_stsc_entry_t *)next_stsc_entry->data)->first_chunk )
+            {
+                /* Just skip broken next entry. */
+                lsmash_log( LSMASH_LOG_WARNING, "Ignore broken entry in Sample To Chunk Box. Timeline might be corrupted.\n" );
+                next_stsc_entry = next_stsc_entry->next;
+                if( next_stsc_entry && !next_stsc_entry->data )
+                    goto fail;
+            }
+            /* Check if the next chunk belongs to the next sequence of chunks. */
+            if( next_stsc_entry && chunk_number == ((isom_stsc_entry_t *)next_stsc_entry->data)->first_chunk )
             {
                 stsc_entry = next_stsc_entry;
                 next_stsc_entry = stsc_entry->next;
-                if( !stsc_entry->data )
+                if( next_stsc_entry && !next_stsc_entry->data )
                     goto fail;
                 stsc_data = (isom_stsc_entry_t *)stsc_entry->data;
                 /* Update sample description. */
