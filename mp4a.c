@@ -519,7 +519,7 @@ void mp4a_put_AudioSpecificConfig( lsmash_bs_t* bs, mp4a_AudioSpecificConfig_t* 
 
 static int mp4a_get_GASpecificConfig( lsmash_bits_t *bits, mp4a_AudioSpecificConfig_t *asc )
 {
-    mp4a_GASpecificConfig_t *gasc = (mp4a_GASpecificConfig_t *)malloc( sizeof(mp4a_GASpecificConfig_t) );
+    mp4a_GASpecificConfig_t *gasc = (mp4a_GASpecificConfig_t *)lsmash_malloc_zero( sizeof(mp4a_GASpecificConfig_t) );
     if( !gasc )
         return -1;
     asc->deepAudioSpecificConfig = gasc;
@@ -539,7 +539,7 @@ static int mp4a_get_MPEG_1_2_SpecificConfig( lsmash_bits_t *bits, mp4a_AudioSpec
 
 static int mp4a_get_ALSSpecificConfig( lsmash_bits_t *bits, mp4a_AudioSpecificConfig_t *asc )
 {
-    mp4a_ALSSpecificConfig_t *alssc = (mp4a_ALSSpecificConfig_t *)malloc( sizeof(mp4a_ALSSpecificConfig_t) );
+    mp4a_ALSSpecificConfig_t *alssc = (mp4a_ALSSpecificConfig_t *)lsmash_malloc_zero( sizeof(mp4a_ALSSpecificConfig_t) );
     if( !alssc )
         return -1;
     asc->deepAudioSpecificConfig = alssc;
