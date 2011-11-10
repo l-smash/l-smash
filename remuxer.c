@@ -68,6 +68,7 @@ typedef struct
     int num_input;
     track_media_option **track_option;
     char *chap_file;
+    int add_bom_to_chpl;
     int ref_chap_available;
     uint32_t chap_track;
 } movie_io_t;
@@ -330,6 +331,8 @@ static int parse_cli_option( int argc, char **argv, movie_io_t *io )
                 return ERROR_MSG( "Error: --chapter requires an argument.\n" );
             io->chap_file = argv[i];
         }
+        else if( !strcasecmp( argv[i], "--chpl-with-bom" ) )
+            io->add_bom_to_chpl = 1;
         else if( !strcasecmp( argv[i], "--chapter-track" ) )    /* track to apply reference chapter to */
         {
             if( ++i == argc )
@@ -380,6 +383,8 @@ static void display_help( void )
              "Global options:\n"
              "    --help                    Display help.\n"
              "    --chapter <string>        Set chapters from the file.\n"
+             "    --chpl-with-bom           Add UTF-8 BOM to the chapter strings\n"
+             "                              in the chapter list. (experimental)\n"
              "    --chapter-track <integer> Set which track the chapter applies to.\n"
              "                              This option takes effect only when reference\n"
              "                              chapter is available.\n"
@@ -408,7 +413,7 @@ int main( int argc, char *argv[] )
     movie_t output = { 0 };
     movie_t input[ num_input ];
     track_media_option *track_option[num_input];
-    movie_io_t io = { &output, input, num_input, track_option, NULL, 0, 1 };
+    movie_io_t io = { &output, input, num_input, track_option, NULL, 0, 0, 1 };
     memset( input, 0, num_input * sizeof(movie_t) );
     memset( track_option, 0, num_input * sizeof(track_media_option *) );
     if( !num_input )
@@ -557,7 +562,7 @@ int main( int argc, char *argv[] )
         }
     /* Set tyrant chapter */
     if( io.chap_file )
-        if( lsmash_set_tyrant_chapter( output.root, io.chap_file ) )
+        if( lsmash_set_tyrant_chapter( output.root, io.chap_file, io.add_bom_to_chpl ) )
             ERROR_MSG( "Warning: failed to set tyrant chapter.\n" );
     /* Finish muxing. */
     lsmash_adhoc_remux_t moov_to_front;

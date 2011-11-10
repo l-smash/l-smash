@@ -9592,6 +9592,8 @@ int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_
 /*---- misc functions ----*/
 
 #define CHAPTER_BUFSIZE 512 /* for chapter handling */
+#define UTF8_BOM "\xEF\xBB\xBF"
+#define UTF8_BOM_LENGTH 3
 
 static int isom_get_start_time( char *chap_time, isom_chapter_entry_t *data )
 {
@@ -9653,7 +9655,7 @@ static int isom_read_minimum_chapter( FILE *chapter, isom_chapter_entry_t *data 
 
     if( isom_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) ) /* read newline */
         return -1;
-    char *p_buff = !memcmp( buff, "\xEF\xBB\xBF", 3 ) ? &buff[3] : &buff[0]; /* BOM detection */
+    char *p_buff = !memcmp( buff, UTF8_BOM, UTF8_BOM_LENGTH ) ? &buff[UTF8_BOM_LENGTH] : &buff[0]; /* BOM detection */
     if( isom_get_start_time( p_buff, data ) ) /* get start_time */
         return -1;
     /* get chapter_name */
@@ -9680,7 +9682,7 @@ static fn_get_chapter_data isom_check_chap_line( char *file_name )
     fn_get_chapter_data fnc = NULL;
     if( fgets( buff, CHAPTER_BUFSIZE, fp ) != NULL )
     {
-        char *p_buff = !memcmp( buff, "\xEF\xBB\xBF", 3 ) ? &buff[3] : &buff[0];   /* BOM detection */
+        char *p_buff = !memcmp( buff, UTF8_BOM, UTF8_BOM_LENGTH ) ? &buff[UTF8_BOM_LENGTH] : &buff[0];   /* BOM detection */
         if( !strncmp( p_buff, "CHAPTER", 7 ) )
             fnc = isom_read_simple_chapter;
         else if( isdigit( p_buff[0] ) && isdigit( p_buff[1] ) && p_buff[2] == ':'
@@ -9693,7 +9695,7 @@ static fn_get_chapter_data isom_check_chap_line( char *file_name )
     return fnc;
 }
 
-int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name )
+int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom )
 {
     /* This function should be called after updating of the latest movie duration. */
     if( !root || !root->moov || !root->moov->mvhd || !root->moov->mvhd->timescale || !root->moov->mvhd->duration )
@@ -9710,6 +9712,15 @@ int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name )
     isom_chapter_entry_t data;
     while( !fnc( chapter, &data ) )
     {
+        if( add_bom )
+        {
+            char *chapter_name_with_bom = (char *)malloc( strlen( data.chapter_name ) + 1 + UTF8_BOM_LENGTH );
+            if( !chapter_name_with_bom )
+                goto fail;
+            sprintf( chapter_name_with_bom, "%s%s", UTF8_BOM, data.chapter_name );
+            free( data.chapter_name );
+            data.chapter_name = chapter_name_with_bom;
+        }
         data.start_time = (data.start_time + 50) / 100;    /* convert to 100ns unit */
         if( data.start_time / 1e7 > (double)root->moov->mvhd->duration / root->moov->mvhd->timescale
             || isom_add_chpl_entry( root->moov->udta->chpl, &data ) )
@@ -9864,12 +9875,12 @@ int lsmash_print_chapter_list( lsmash_root_t *root )
             int mm = (start_time /   60) % 60;
             int ss =  start_time         % 60;
             int ms = ((data->start_time / (double)timescale) - hh * 3600 - mm * 60 - ss) * 1e3 + 0.5;
-            if( !memcmp( data->chapter_name, "\xEF\xBB\xBF", 3 ) )    /* detect BOM */
+            if( !memcmp( data->chapter_name, UTF8_BOM, UTF8_BOM_LENGTH ) )    /* detect BOM */
             {
-                data->chapter_name += 3;
+                data->chapter_name += UTF8_BOM_LENGTH;
 #ifdef _WIN32
                 if( i == 1 )
-                    printf( "\xEF\xBB\xBF" );    /* add BOM on Windows */
+                    printf( UTF8_BOM );    /* add BOM on Windows */
 #endif
             }
             printf( "CHAPTER%02"PRIu32"=%02d:%02d:%02d.%03d\n", i, hh, mm, ss, ms );

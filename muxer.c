@@ -76,6 +76,7 @@ typedef struct
     uint32_t num_of_inputs;
     uint32_t chap_track;
     char    *chap_file;
+    int      add_bom_to_chpl;
     char    *copyright_notice;
     uint16_t copyright_language;
     itunes_metadata_t itunes_metadata;
@@ -222,6 +223,8 @@ static void display_help( void )
              "    --isom-version <integer>  Specify maximum compatible ISO Base Media version\n"
              "    --shift-timeline          Enable composition to decode timeline shift\n"
              "    --chapter <string>        Set chapters from the file.\n"
+             "    --chpl-with-bom           Add UTF-8 BOM to the chapter strings\n"
+             "                              in the chapter list. (experimental)\n"
              "    --chapter-track <integer> Set which track the chapter applies to.\n"
              "                              This option takes effect only when reference\n"
              "                              chapter is available.\n"
@@ -490,6 +493,8 @@ static int parse_global_options( int argc, char **argv, muxer_t *muxer )
             if( !opt->chap_track )
                 return ERROR_MSG( "%s is an invalid track number.\n", argv[i] );
         }
+        else if( !strcasecmp( argv[i], "--chpl-with-bom" ) )
+            opt->add_bom_to_chpl = 1;
         else if( !strcasecmp( argv[i], "--copyright-notice" ) )
         {
             CHECK_NEXT_ARG;
@@ -719,6 +724,7 @@ int main( int argc, char *argv[] )
     muxer_t muxer = { { 0 } };
     option_t *opt = &muxer.opt;
     opt->chap_track = 1;
+    opt->add_bom_to_chpl = 0;
     if( parse_global_options( argc, argv, &muxer ) )
         return MUXER_USAGE_ERR();
     if( opt->help )
@@ -1064,7 +1070,7 @@ int main( int argc, char *argv[] )
     }
     /* Set chapter list. */
     if( opt->chap_file )
-        if( lsmash_set_tyrant_chapter( output->root, opt->chap_file ) )
+        if( lsmash_set_tyrant_chapter( output->root, opt->chap_file, opt->add_bom_to_chpl ) )
             ERROR_MSG( "Warning: failed to set chapter list.\n" );
     /* Close movie. */
     lsmash_adhoc_remux_t *finalize;

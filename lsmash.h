@@ -1232,7 +1232,7 @@ int lsmash_set_avc_config( lsmash_root_t *root, uint32_t track_ID, uint32_t entr
                            uint8_t chroma_format, uint8_t bit_depth_luma_minus8, uint8_t bit_depth_chroma_minus8 );
 int lsmash_set_last_sample_delta( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_delta );
 int lsmash_set_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length );
-int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name );
+int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom );
 
 int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_ID, char *file_name );
 int lsmash_create_object_descriptor( lsmash_root_t *root );
