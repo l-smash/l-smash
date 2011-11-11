@@ -362,7 +362,7 @@ configure finished
   type 'make'             : compile library and tools
   type 'make install'     : install all into system
   type 'make lib'         : compile library only
-  type 'make lib-install' : install libraries and headers into system
+  type 'make install-lib' : install library and header into system
 
 EOF
 
