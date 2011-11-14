@@ -9678,7 +9678,10 @@ static fn_get_chapter_data isom_check_chap_line( char *file_name )
     char buff[CHAPTER_BUFSIZE];
     FILE *fp = fopen( file_name, "rb" );
     if( !fp )
+    {
+        lsmash_log( LSMASH_LOG_ERROR, "failed to open the chapter file \"%s\".\n", file_name );
         return NULL;
+    }
     fn_get_chapter_data fnc = NULL;
     if( fgets( buff, CHAPTER_BUFSIZE, fp ) != NULL )
     {
@@ -9689,7 +9692,7 @@ static fn_get_chapter_data isom_check_chap_line( char *file_name )
              && isdigit( p_buff[3] ) && isdigit( p_buff[4] ) && p_buff[5] == ':' )
             fnc = isom_read_minimum_chapter;
         else
-            lsmash_log( LSMASH_LOG_WARNING, "The chapter file is malformed.\n" );
+            lsmash_log( LSMASH_LOG_ERROR, "the chapter file is malformed.\n" );
     }
     fclose( fp );
     return fnc;
@@ -9699,65 +9702,85 @@ int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom
 {
     /* This function should be called after updating of the latest movie duration. */
     if( !root || !root->moov || !root->moov->mvhd || !root->moov->mvhd->timescale || !root->moov->mvhd->duration )
-        return -1;
+        goto error_message;
     /* check each line format */
     fn_get_chapter_data fnc = isom_check_chap_line( file_name );
     if( !fnc )
-        return -1;
+        goto error_message;
     FILE *chapter = fopen( file_name, "rb" );
     if( !chapter )
-        return -1;
+    {
+        lsmash_log( LSMASH_LOG_ERROR, "failed to open the chapter file \"%s\".\n", file_name );
+        goto error_message;
+    }
     if( isom_add_udta( root, 0 ) || isom_add_chpl( root->moov ) )
         goto fail;
-    isom_chapter_entry_t data;
+    isom_chapter_entry_t data = {0};
     while( !fnc( chapter, &data ) )
     {
         if( add_bom )
         {
             char *chapter_name_with_bom = (char *)malloc( strlen( data.chapter_name ) + 1 + UTF8_BOM_LENGTH );
             if( !chapter_name_with_bom )
-                goto fail;
+                goto fail2;
             sprintf( chapter_name_with_bom, "%s%s", UTF8_BOM, data.chapter_name );
             free( data.chapter_name );
             data.chapter_name = chapter_name_with_bom;
         }
         data.start_time = (data.start_time + 50) / 100;    /* convert to 100ns unit */
-        if( data.start_time / 1e7 > (double)root->moov->mvhd->duration / root->moov->mvhd->timescale
-            || isom_add_chpl_entry( root->moov->udta->chpl, &data ) )
-            goto fail;
+        if( data.start_time / 1e7 > (double)root->moov->mvhd->duration / root->moov->mvhd->timescale )
+        {
+            lsmash_log( LSMASH_LOG_ERROR, "at least one chapter time is larger than the actual duration.\n" );
+            goto fail2;
+        }
+        if( isom_add_chpl_entry( root->moov->udta->chpl, &data ) )
+            goto fail2;
         free( data.chapter_name );
         data.chapter_name = NULL;
     }
     fclose( chapter );
     return 0;
-fail:
+fail2:
     if( data.chapter_name )
         free( data.chapter_name );
+fail:
     fclose( chapter );
+error_message:
+    lsmash_log( LSMASH_LOG_ERROR, "failed to set chapter list.\n" );
     return -1;
 }
 
 int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_ID, char *file_name )
 {
-    if( !root || (!root->qt_compatible && !root->itunes_movie) || !root->moov || !root->moov->mvhd )
-        return -1;
+    if( !root || !root->moov || !root->moov->mvhd || !root->moov->trak_list )
+        goto error_message;
+    if( !root->qt_compatible && !root->itunes_movie )
+    {
+        lsmash_log( LSMASH_LOG_ERROR, "reference chapter is not available for this file.\n" );
+        goto error_message;
+    }
     FILE *chapter = NULL;       /* shut up 'uninitialized' warning */
     /* Create a Track Reference Box. */
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || isom_add_tref( trak ) )
-        return -1;
+    if( !trak )
+    {
+        lsmash_log( LSMASH_LOG_ERROR, "the specified track ID to apply the chapter doesn't exist.\n" );
+        goto error_message;
+    }
+    if( isom_add_tref( trak ) )
+        goto error_message;
     /* Create a track_ID for a new chapter track. */
     uint32_t *id = (uint32_t *)malloc( sizeof(uint32_t) );
     if( !id )
-        return -1;
+        goto error_message;
     uint32_t chapter_track_ID = *id = root->moov->mvhd->next_track_ID;
     /* Create a Track Reference Type Box. */
     isom_tref_type_t *chap = isom_add_track_reference_type( trak->tref, QT_TREF_TYPE_CHAP, 1, id );
     if( !chap )
-        return -1;      /* no need to free id */
+        goto error_message;      /* no need to free id */
     /* Create a reference chapter track. */
     if( chapter_track_ID != lsmash_create_track( root, ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK ) )
-        return -1;
+        goto error_message;
     /* Set track parameters. */
     lsmash_track_parameters_t track_param;
     lsmash_initialize_track_parameters( &track_param );
@@ -9787,7 +9810,10 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     /* Open chapter format file. */
     chapter = fopen( file_name, "rb" );
     if( !chapter )
+    {
+        lsmash_log( LSMASH_LOG_ERROR, "failed to open the chapter file \"%s\".\n", file_name );
         goto fail;
+    }
     /* Parse the file and write text samples. */
     isom_chapter_entry_t data;
     while( !fnc( chapter, &data ) )
@@ -9847,6 +9873,8 @@ fail:
         isom_remove_tref( trak->tref );
     /* Remove the reference chapter track attached at tail of the list. */
     lsmash_remove_entry_direct( root->moov->trak_list, root->moov->trak_list->tail, isom_remove_trak );
+error_message:
+    lsmash_log( LSMASH_LOG_ERROR, "failed to set reference chapter.\n" );
     return -1;
 }
 
@@ -9889,7 +9917,7 @@ int lsmash_print_chapter_list( lsmash_root_t *root )
         return 0;
     }
     else
-        lsmash_log( LSMASH_LOG_WARNING, "This file doesn't have a chapter list.\n" );
+        lsmash_log( LSMASH_LOG_ERROR, "this file doesn't have a chapter list.\n" );
     return -1;
 }
 

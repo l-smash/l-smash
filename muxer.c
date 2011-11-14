@@ -678,11 +678,7 @@ static void set_reference_chapter_track( output_t *output, option_t *opt )
 {
     if( !opt->chap_file || !opt->qtff || !opt->itunes_movie )
         return;
-    if( opt->chap_track > output->num_of_tracks )
-        ERROR_MSG( "Warning: the track number specified in --chapter-track is larger than the number of the actual output tracks. "
-                   "Reference chapter will not be set.\n" );
-    else if( lsmash_create_reference_chapter_track( output->root, opt->chap_track, opt->chap_file ) )
-        ERROR_MSG( "Warning: failed to set reference chapter.\n" );
+    lsmash_create_reference_chapter_track( output->root, opt->chap_track, opt->chap_file );
 }
 
 static int set_itunes_metadata( output_t *output, option_t *opt )
@@ -1070,8 +1066,7 @@ int main( int argc, char *argv[] )
     }
     /* Set chapter list. */
     if( opt->chap_file )
-        if( lsmash_set_tyrant_chapter( output->root, opt->chap_file, opt->add_bom_to_chpl ) )
-            ERROR_MSG( "Warning: failed to set chapter list.\n" );
+        lsmash_set_tyrant_chapter( output->root, opt->chap_file, opt->add_bom_to_chpl );
     /* Close movie. */
     lsmash_adhoc_remux_t *finalize;
     if( opt->optimize_pd )

@@ -469,12 +469,7 @@ int main( int argc, char *argv[] )
     }
     /* Set reference chapter */
     if( io.ref_chap_available )
-    {
-        if( io.chap_track > output.num_tracks )
-            ERROR_MSG( "Warning: the track number specified in --chapter-track is larger than the number of the output tracks. Reference chapter will not be set.\n" );
-        else if( lsmash_create_reference_chapter_track( output.root, io.chap_track, io.chap_file ) )
-            ERROR_MSG( "Warning: failed to set reference chapter.\n" );
-    }
+        lsmash_create_reference_chapter_track( output.root, io.chap_track, io.chap_file );
     output.current_track_number = 1;
     /* Start muxing. */
     double   largest_dts = 0;
@@ -560,10 +555,9 @@ int main( int argc, char *argv[] )
             if( lsmash_copy_timeline_map( output.root, out_track->track_ID, input[i].root, input[i].track[j].track_ID ) )
                 return REMUXER_ERR( "Failed to copy a timeline map.\n" );
         }
-    /* Set tyrant chapter */
+    /* Set chapter list */
     if( io.chap_file )
-        if( lsmash_set_tyrant_chapter( output.root, io.chap_file, io.add_bom_to_chpl ) )
-            ERROR_MSG( "Warning: failed to set tyrant chapter.\n" );
+        lsmash_set_tyrant_chapter( output.root, io.chap_file, io.add_bom_to_chpl );
     /* Finish muxing. */
     lsmash_adhoc_remux_t moov_to_front;
     moov_to_front.func = moov_to_front_callback;
