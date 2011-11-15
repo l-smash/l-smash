@@ -205,8 +205,8 @@ case "$TARGET_OS" in
         SO_LDFLAGS="-shared -Wl,--out-implib,$IMPLIB"
         ;;
     *darwin*)
-        #patches welcome
-        SHAREDLIB=""
+        SHARED_EXT=".dylib"
+        SO_LDFLAGS="-dynamiclib -Wl,-undefined,suppress -Wl,-read_only_relocs,suppress -Wl,-flat_namespace"
         ;;
     *solaris*)
         #patches welcome
