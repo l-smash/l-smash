@@ -9730,8 +9730,9 @@ int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom
         data.start_time = (data.start_time + 50) / 100;    /* convert to 100ns unit */
         if( data.start_time / 1e7 > (double)root->moov->mvhd->duration / root->moov->mvhd->timescale )
         {
-            lsmash_log( LSMASH_LOG_ERROR, "at least one chapter time is larger than the actual duration.\n" );
-            goto fail2;
+            lsmash_log( LSMASH_LOG_WARNING, "a chapter point exceeding the actual duration detected. This chapter point and the following ones (if any) will be cut off.\n" );
+            free( data.chapter_name );
+            break;
         }
         if( isom_add_chpl_entry( root->moov->udta->chpl, &data ) )
             goto fail2;
