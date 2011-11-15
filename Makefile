@@ -27,7 +27,7 @@ $(STATICLIBNAME): $(OBJS)
 
 $(SHAREDLIBNAME): $(OBJS)
 	$(LD) $(SO_LDFLAGS) $(LDFLAGS) -o $@ $^ $(LIBS)
-	-@ $(if $(STRIP), $(STRIP) -s $@)
+	-@ $(if $(STRIP), $(STRIP) $@)
 
 # $(TOOLS) is automatically generated as config.mak2 by configure.
 # The reason for having config.mak2 is for making this Makefile easy to read.

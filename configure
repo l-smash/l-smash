@@ -346,7 +346,7 @@ for tool in $TOOLS; do
     cat >> config.mak2 << EOF
 ${tool}${EXT}: ${tool}.o $STATICLIB $SHAREDLIB
 	\$(CC) \$(CFLAGS) \$(LDFLAGS) -o \$@ \$< \$(LIBS) -llsmash
-	-@ \$(if \$(STRIP), \$(STRIP) -s \$@)
+	-@ \$(if \$(STRIP), \$(STRIP) \$@)
 
 EOF
 done
