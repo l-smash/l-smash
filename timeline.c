@@ -914,7 +914,8 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
             while( next_stsc_entry && chunk_number > ((isom_stsc_entry_t *)next_stsc_entry->data)->first_chunk )
             {
                 /* Just skip broken next entry. */
-                lsmash_log( LSMASH_LOG_WARNING, "Ignore broken entry in Sample To Chunk Box. Timeline might be corrupted.\n" );
+                lsmash_log( LSMASH_LOG_WARNING, "ignore broken entry in Sample To Chunk Box.\n" );
+                lsmash_log( LSMASH_LOG_WARNING, "timeline might be corrupted.\n" );
                 next_stsc_entry = next_stsc_entry->next;
                 if( next_stsc_entry && !next_stsc_entry->data )
                     goto fail;
@@ -923,7 +924,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
             if( next_stsc_entry && chunk_number == ((isom_stsc_entry_t *)next_stsc_entry->data)->first_chunk )
             {
                 stsc_entry = next_stsc_entry;
-                next_stsc_entry = stsc_entry->next;
+                next_stsc_entry = next_stsc_entry->next;
                 if( next_stsc_entry && !next_stsc_entry->data )
                     goto fail;
                 stsc_data = (isom_stsc_entry_t *)stsc_entry->data;

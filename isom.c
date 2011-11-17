@@ -5482,33 +5482,116 @@ int lsmash_set_avc_config( lsmash_root_t *root, uint32_t track_ID, uint32_t entr
     return 0;
 }
 
-static int isom_update_bitrate_info( isom_mdia_t *mdia )
+static inline int isom_increment_sample_number_in_entry( uint32_t *sample_number_in_entry, uint32_t sample_count_in_entry, lsmash_entry_t **entry )
 {
-    if( !mdia || !mdia->mdhd || !mdia->minf || !mdia->minf->stbl
-     || !mdia->minf->stbl->stsd || !mdia->minf->stbl->stsd->list
-     || !mdia->minf->stbl->stsz || !mdia->minf->stbl->stts || !mdia->minf->stbl->stts->list )
-        return -1;
-    /* Not supporting multi sample entries yet. */
-    isom_sample_entry_t *sample_entry = (isom_sample_entry_t *)lsmash_get_entry_data( mdia->minf->stbl->stsd->list, 1 );
-    if( !sample_entry )
-        return -1;
-    struct bitrate_info_t
+    if( *sample_number_in_entry != sample_count_in_entry )
     {
-        uint32_t bufferSizeDB;
-        uint32_t maxBitrate;
-        uint32_t avgBitrate;
-    } info = { 0, 0, 0 };
-    uint32_t i = 0;
-    uint32_t rate = 0;
-    uint32_t time_wnd = 0;
-    uint32_t timescale = mdia->mdhd->timescale;
-    uint64_t dts = 0;
-    isom_stsz_t *stsz = mdia->minf->stbl->stsz;
-    lsmash_entry_t *stsz_entry = stsz->list ? stsz->list->head : NULL;
-    lsmash_entry_t *stts_entry = mdia->minf->stbl->stts->list->head;
-    isom_stts_entry_t *stts_data = NULL;
+        *sample_number_in_entry += 1;
+        return 0;
+    }
+    /* Precede the next entry. */
+    *sample_number_in_entry = 1;
+    if( *entry )
+    {
+        *entry = (*entry)->next;
+        if( *entry && !(*entry)->data )
+            return -1;
+    }
+    return 0;
+}
+
+static int isom_calculate_bitrate_description( isom_mdia_t *mdia, uint32_t *bufferSizeDB, uint32_t *maxBitrate, uint32_t *avgBitrate, uint32_t sample_description_index )
+{
+    isom_stsz_t *stsz               = mdia->minf->stbl->stsz;
+    lsmash_entry_t *stsz_entry      = stsz->list ? stsz->list->head : NULL;
+    lsmash_entry_t *stts_entry      = mdia->minf->stbl->stts->list->head;
+    lsmash_entry_t *stsc_entry      = NULL;
+    lsmash_entry_t *next_stsc_entry = mdia->minf->stbl->stsc->list->head;
+    isom_stts_entry_t *stts_data    = NULL;
+    isom_stsc_entry_t *stsc_data    = NULL;
+    if( next_stsc_entry && !next_stsc_entry->data )
+        return -1;
+    uint32_t rate                   = 0;
+    uint64_t dts                    = 0;
+    uint32_t time_wnd               = 0;
+    uint32_t timescale              = mdia->mdhd->timescale;
+    uint32_t chunk_number           = 0;
+    uint32_t sample_number_in_stts  = 1;
+    uint32_t sample_number_in_chunk = 1;
+    *bufferSizeDB = 0;
+    *maxBitrate   = 0;
+    *avgBitrate   = 0;
     while( stts_entry )
     {
+        if( !stsc_data || sample_number_in_chunk == stsc_data->samples_per_chunk )
+        {
+            /* Move the next chunk. */
+            sample_number_in_chunk = 1;
+            ++chunk_number;
+            /* Check if the next entry is broken. */
+            while( next_stsc_entry && ((isom_stsc_entry_t *)next_stsc_entry->data)->first_chunk < chunk_number )
+            {
+                /* Just skip broken next entry. */
+                next_stsc_entry = next_stsc_entry->next;
+                if( next_stsc_entry && !next_stsc_entry->data )
+                    return -1;
+            }
+            /* Check if the next chunk belongs to the next sequence of chunks. */
+            if( next_stsc_entry && ((isom_stsc_entry_t *)next_stsc_entry->data)->first_chunk == chunk_number )
+            {
+                stsc_entry = next_stsc_entry;
+                next_stsc_entry = next_stsc_entry->next;
+                if( next_stsc_entry && !next_stsc_entry->data )
+                    return -1;
+                stsc_data = (isom_stsc_entry_t *)stsc_entry->data;
+                /* Check if the next contiguous chunks belong to given sample description. */
+                if( stsc_data->sample_description_index != sample_description_index )
+                {
+                    /* Skip chunks which don't belong to given sample description. */
+                    uint32_t number_of_skips   = 0;
+                    uint32_t first_chunk       = stsc_data->first_chunk;
+                    uint32_t samples_per_chunk = stsc_data->samples_per_chunk;
+                    while( next_stsc_entry )
+                    {
+                        if( ((isom_stsc_entry_t *)next_stsc_entry->data)->sample_description_index != sample_description_index )
+                        {
+                            stsc_data = (isom_stsc_entry_t *)next_stsc_entry->data;
+                            number_of_skips  += (stsc_data->first_chunk - first_chunk) * samples_per_chunk;
+                            first_chunk       = stsc_data->first_chunk;
+                            samples_per_chunk = stsc_data->samples_per_chunk;
+                        }
+                        else if( ((isom_stsc_entry_t *)next_stsc_entry->data)->first_chunk <= first_chunk )
+                            ;   /* broken entry */
+                        else
+                            break;
+                        /* Just skip the next entry. */
+                        next_stsc_entry = next_stsc_entry->next;
+                        if( next_stsc_entry && !next_stsc_entry->data )
+                            return -1;
+                    }
+                    if( !next_stsc_entry )
+                        break;      /* There is no more chunks which don't belong to given sample description. */
+                    number_of_skips += (((isom_stsc_entry_t *)next_stsc_entry->data)->first_chunk - first_chunk) * samples_per_chunk;
+                    for( uint32_t i = 0; i < number_of_skips; i++ )
+                    {
+                        if( stsz->list )
+                        {
+                            if( !stsz_entry )
+                                break;
+                            stsz_entry = stsz_entry->next;
+                        }
+                        if( !stts_entry )
+                            break;
+                        if( isom_increment_sample_number_in_entry( &sample_number_in_stts, ((isom_stts_entry_t *)stts_entry->data)->sample_count, &stts_entry ) )
+                            return -1;
+                    }
+                    chunk_number = stsc_data->first_chunk;
+                }
+            }
+        }
+        else
+            ++sample_number_in_chunk;
+        /* Get current sample's size. */
         uint32_t size;
         if( stsz->list )
         {
@@ -5522,126 +5605,162 @@ static int isom_update_bitrate_info( isom_mdia_t *mdia )
         }
         else
             size = stsz->sample_size;
+        /* Get current sample's DTS. */
         if( stts_data )
             dts += stts_data->sample_delta;
         stts_data = (isom_stts_entry_t *)stts_entry->data;
-        if( ++i == stts_data->sample_count )
-        {
-            stts_entry = stts_entry->next;
-            i = 0;
-        }
-        if( info.bufferSizeDB < size )
-            info.bufferSizeDB = size;
-        info.avgBitrate += size;
+        if( !stts_data )
+            return -1;
+        isom_increment_sample_number_in_entry( &sample_number_in_stts, stts_data->sample_count, &stts_entry );
+        /* Calculate bitrate description. */
+        if( *bufferSizeDB < size )
+            *bufferSizeDB = size;
+        *avgBitrate += size;
         rate += size;
         if( dts > time_wnd + timescale )
         {
-            if( rate > info.maxBitrate )
-                info.maxBitrate = rate;
+            if( rate > *maxBitrate )
+                *maxBitrate = rate;
             time_wnd = dts;
             rate = 0;
         }
     }
     double duration = (double)mdia->mdhd->duration / timescale;
-    info.avgBitrate = (uint32_t)(info.avgBitrate / duration);
-    if( !info.maxBitrate )
-        info.maxBitrate = info.avgBitrate;
-    /* move to bps */
-    info.maxBitrate *= 8;
-    info.avgBitrate *= 8;
-    /* set bitrate info */
-    switch( sample_entry->type )
+    *avgBitrate = (uint32_t)(*avgBitrate / duration);
+    if( !*maxBitrate )
+        *maxBitrate = *avgBitrate;
+    /* Convert to bits per second. */
+    *maxBitrate *= 8;
+    *avgBitrate *= 8;
+    return 0;
+}
+
+static int isom_update_bitrate_description( isom_mdia_t *mdia )
+{
+    if( !mdia || !mdia->mdhd || !mdia->minf || !mdia->minf->stbl )
+        return -1;
+    isom_stbl_t *stbl = mdia->minf->stbl;
+    if( !stbl->stsd || !stbl->stsd->list
+     || !stbl->stsz
+     || !stbl->stsc || !stbl->stsc->list
+     || !stbl->stts || !stbl->stts->list )
+        return -1;
+    uint32_t sample_description_index = 0;
+    for( lsmash_entry_t *entry = stbl->stsd->list->head; entry; entry = entry->next )
     {
-        case ISOM_CODEC_TYPE_AVC1_VIDEO :
-        case ISOM_CODEC_TYPE_AVC2_VIDEO :
-        case ISOM_CODEC_TYPE_AVCP_VIDEO :
+        isom_sample_entry_t *sample_entry = (isom_sample_entry_t *)entry->data;
+        if( !sample_entry )
+            return -1;
+        ++sample_description_index;
+        uint32_t bufferSizeDB;
+        uint32_t maxBitrate;
+        uint32_t avgBitrate;
+        /* set bitrate info */
+        switch( sample_entry->type )
         {
-            isom_visual_entry_t *stsd_data = (isom_visual_entry_t *)sample_entry;
-            if( !stsd_data )
-                return -1;
-            isom_btrt_t *btrt = stsd_data->btrt;
-            if( btrt )
+            case ISOM_CODEC_TYPE_AVC1_VIDEO :
+            case ISOM_CODEC_TYPE_AVC2_VIDEO :
+            case ISOM_CODEC_TYPE_AVCP_VIDEO :
             {
-                btrt->bufferSizeDB = info.bufferSizeDB;
-                btrt->maxBitrate   = info.maxBitrate;
-                btrt->avgBitrate   = info.avgBitrate;
-            }
-            break;
-        }
-        case ISOM_CODEC_TYPE_MP4V_VIDEO :
-        {
-            isom_visual_entry_t *stsd_data = (isom_visual_entry_t *)sample_entry;
-            if( !stsd_data || !stsd_data->esds || !stsd_data->esds->ES )
-                return -1;
-            isom_esds_t *esds = stsd_data->esds;
-            /* FIXME: avgBitrate is 0 only if VBR in proper. */
-            if( mp4sys_update_DecoderConfigDescriptor( esds->ES, info.bufferSizeDB, info.maxBitrate, 0 ) )
-                return -1;
-            break;
-        }
-        case ISOM_CODEC_TYPE_MP4A_AUDIO :
-        {
-            isom_esds_t *esds = NULL;
-            if( ((isom_audio_entry_t *)sample_entry)->version )
-            {
-                /* MPEG-4 Audio in QTFF */
-                isom_audio_entry_t *stsd_data = (isom_audio_entry_t *)sample_entry;
-                if( !stsd_data || !stsd_data->wave || !stsd_data->wave->esds || !stsd_data->wave->esds->ES )
+                isom_visual_entry_t *stsd_data = (isom_visual_entry_t *)sample_entry;
+                if( !stsd_data )
                     return -1;
-                esds = stsd_data->wave->esds;
+                isom_btrt_t *btrt = stsd_data->btrt;
+                if( btrt )
+                {
+                    if( isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index ) )
+                        return -1;
+                    btrt->bufferSizeDB = bufferSizeDB;
+                    btrt->maxBitrate   = maxBitrate;
+                    btrt->avgBitrate   = avgBitrate;
+                }
+                break;
             }
-            else
+            case ISOM_CODEC_TYPE_MP4V_VIDEO :
             {
-                isom_audio_entry_t *stsd_data = (isom_audio_entry_t *)sample_entry;
+                isom_visual_entry_t *stsd_data = (isom_visual_entry_t *)sample_entry;
                 if( !stsd_data || !stsd_data->esds || !stsd_data->esds->ES )
                     return -1;
-                esds = stsd_data->esds;
-            }
-            /* FIXME: avgBitrate is 0 only if VBR in proper. */
-            if( mp4sys_update_DecoderConfigDescriptor( esds->ES, info.bufferSizeDB, info.maxBitrate, 0 ) )
-                return -1;
-            break;
-        }
-        case ISOM_CODEC_TYPE_ALAC_AUDIO :
-        {
-            isom_audio_entry_t *alac = (isom_audio_entry_t *)sample_entry;
-            if( !alac )
-                return -1;
-            if( alac->exdata_length < 36 || !alac->exdata )
-            {
-                isom_wave_t *wave = alac->wave;
-                if( !wave || wave->exdata_length < 36 || !wave->exdata )
+                isom_esds_t *esds = stsd_data->esds;
+                if( isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index ) )
                     return -1;
-                break;      /* Apparently, average bitrate field is 0. */
+                /* FIXME: avgBitrate is 0 only if VBR in proper. */
+                if( mp4sys_update_DecoderConfigDescriptor( esds->ES, bufferSizeDB, maxBitrate, 0 ) )
+                    return -1;
+                break;
             }
-            uint8_t *exdata = (uint8_t *)alac->exdata + 28;
-            exdata[0] = (info.avgBitrate >> 24) & 0xff;
-            exdata[1] = (info.avgBitrate >> 16) & 0xff;
-            exdata[2] = (info.avgBitrate >>  8) & 0xff;
-            exdata[3] =  info.avgBitrate        & 0xff;
-            break;
+            case ISOM_CODEC_TYPE_MP4A_AUDIO :
+            {
+                isom_esds_t *esds = NULL;
+                if( ((isom_audio_entry_t *)sample_entry)->version )
+                {
+                    /* MPEG-4 Audio in QTFF */
+                    isom_audio_entry_t *stsd_data = (isom_audio_entry_t *)sample_entry;
+                    if( !stsd_data || !stsd_data->wave || !stsd_data->wave->esds || !stsd_data->wave->esds->ES )
+                        return -1;
+                    esds = stsd_data->wave->esds;
+                }
+                else
+                {
+                    isom_audio_entry_t *stsd_data = (isom_audio_entry_t *)sample_entry;
+                    if( !stsd_data || !stsd_data->esds || !stsd_data->esds->ES )
+                        return -1;
+                    esds = stsd_data->esds;
+                }
+                if( isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index ) )
+                    return -1;
+                /* FIXME: avgBitrate is 0 only if VBR in proper. */
+                if( mp4sys_update_DecoderConfigDescriptor( esds->ES, bufferSizeDB, maxBitrate, 0 ) )
+                    return -1;
+                break;
+            }
+            case ISOM_CODEC_TYPE_ALAC_AUDIO :
+            {
+                isom_audio_entry_t *alac = (isom_audio_entry_t *)sample_entry;
+                if( !alac )
+                    return -1;
+                if( alac->exdata_length < 36 || !alac->exdata )
+                {
+                    isom_wave_t *wave = alac->wave;
+                    if( !wave || wave->exdata_length < 36 || !wave->exdata )
+                        return -1;
+                    break;      /* Apparently, average bitrate field is 0. */
+                }
+                if( isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index ) )
+                    return -1;
+                uint8_t *exdata = (uint8_t *)alac->exdata + 28;
+                exdata[0] = (avgBitrate >> 24) & 0xff;
+                exdata[1] = (avgBitrate >> 16) & 0xff;
+                exdata[2] = (avgBitrate >>  8) & 0xff;
+                exdata[3] =  avgBitrate        & 0xff;
+                break;
+            }
+            case ISOM_CODEC_TYPE_EC_3_AUDIO :
+            {
+                isom_audio_entry_t *eac3 = (isom_audio_entry_t *)sample_entry;
+                if( !eac3 )
+                    return -1;
+                if( eac3->exdata_length < 10 || !eac3->exdata )
+                    return -1;
+                uint16_t bitrate;
+                if( stbl->stsz->list )
+                {
+                    if( isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index ) )
+                        return -1;
+                    bitrate = maxBitrate / 1000;    /* Use maximum bitrate if VBR. */
+                }
+                else
+                    bitrate = stbl->stsz->sample_size * (eac3->samplerate >> 16) / 192000;      /* 192000 == 1536 * 1000 / 8 */
+                uint8_t *exdata = (uint8_t *)eac3->exdata + 8;
+                exdata[0] = (bitrate >> 5) & 0xff;
+                exdata[1] = (bitrate & 0x1f) << 3;
+                break;
+            }
+            default :
+                break;
         }
-        case ISOM_CODEC_TYPE_EC_3_AUDIO :
-        {
-            isom_audio_entry_t *eac3 = (isom_audio_entry_t *)sample_entry;
-            if( !eac3 )
-                return -1;
-            if( eac3->exdata_length < 10 || !eac3->exdata )
-                return -1;
-            uint16_t bitrate;
-            if( stsz->list )
-                bitrate = info.maxBitrate / 1000;   /* Use maximum bitrate if VBR. */
-            else
-                bitrate = stsz->sample_size * (eac3->samplerate >> 16) / 192000;    /* 192000 == 1536 * 1000 / 8 */
-            uint8_t *exdata = (uint8_t *)eac3->exdata + 8;
-            exdata[0] = (bitrate >> 5) & 0xff;
-            exdata[1] = (bitrate & 0x1f) << 3;
-            break;
-        }
-        default :
-            break;
     }
-    return 0;
+    return sample_description_index ? 0 : -1;
 }
 
 static int isom_check_mandatory_boxes( lsmash_root_t *root )
@@ -7600,7 +7719,7 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
         isom_stbl_t *stbl = trak->mdia->minf->stbl;
         if( !trak->cache->all_sync && !stbl->stss && isom_add_stss( stbl ) )
             return -1;
-        if( isom_update_bitrate_info( trak->mdia ) )
+        if( isom_update_bitrate_description( trak->mdia ) )
             return -1;
     }
     if( root->mp4_version1 == 1 && isom_add_iods( moov ) )
@@ -7837,7 +7956,7 @@ static int isom_finish_fragment_initial_movie( lsmash_root_t *root )
         }
         else
             trak->tkhd->duration = 0;
-        if( isom_update_bitrate_info( trak->mdia ) )
+        if( isom_update_bitrate_description( trak->mdia ) )
             return -1;
     }
     if( root->mp4_version1 == 1 && isom_add_iods( moov ) )
