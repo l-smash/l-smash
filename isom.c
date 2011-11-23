@@ -2866,6 +2866,45 @@ void isom_remove_sample_description( isom_sample_entry_t *sample )
         case ISOM_CODEC_TYPE_MJP2_VIDEO :
         case ISOM_CODEC_TYPE_S263_VIDEO :
         case ISOM_CODEC_TYPE_VC_1_VIDEO :
+        case QT_CODEC_TYPE_CFHD_VIDEO :
+        case QT_CODEC_TYPE_DV10_VIDEO :
+        case QT_CODEC_TYPE_DVOO_VIDEO :
+        case QT_CODEC_TYPE_DVOR_VIDEO :
+        case QT_CODEC_TYPE_DVTV_VIDEO :
+        case QT_CODEC_TYPE_DVVT_VIDEO :
+        case QT_CODEC_TYPE_HD10_VIDEO :
+        case QT_CODEC_TYPE_M105_VIDEO :
+        case QT_CODEC_TYPE_PNTG_VIDEO :
+        case QT_CODEC_TYPE_SVQ1_VIDEO :
+        case QT_CODEC_TYPE_SVQ3_VIDEO :
+        case QT_CODEC_TYPE_SHR0_VIDEO :
+        case QT_CODEC_TYPE_SHR1_VIDEO :
+        case QT_CODEC_TYPE_SHR2_VIDEO :
+        case QT_CODEC_TYPE_SHR3_VIDEO :
+        case QT_CODEC_TYPE_SHR4_VIDEO :
+        case QT_CODEC_TYPE_WRLE_VIDEO :
+        case QT_CODEC_TYPE_APCH_VIDEO :
+        case QT_CODEC_TYPE_APCN_VIDEO :
+        case QT_CODEC_TYPE_APCS_VIDEO :
+        case QT_CODEC_TYPE_APCO_VIDEO :
+        case QT_CODEC_TYPE_AP4H_VIDEO :
+        case QT_CODEC_TYPE_CIVD_VIDEO :
+        //case QT_CODEC_TYPE_DRAC_VIDEO :
+        case QT_CODEC_TYPE_DVH5_VIDEO :
+        case QT_CODEC_TYPE_DVH6_VIDEO :
+        case QT_CODEC_TYPE_DVHP_VIDEO :
+        case QT_CODEC_TYPE_FLIC_VIDEO :
+        case QT_CODEC_TYPE_GIF_VIDEO :
+        case QT_CODEC_TYPE_H261_VIDEO :
+        case QT_CODEC_TYPE_H263_VIDEO :
+        case QT_CODEC_TYPE_JPEG_VIDEO :
+        case QT_CODEC_TYPE_MJPA_VIDEO :
+        case QT_CODEC_TYPE_MJPB_VIDEO :
+        case QT_CODEC_TYPE_PNG_VIDEO :
+        case QT_CODEC_TYPE_RLE_VIDEO :
+        case QT_CODEC_TYPE_RPZA_VIDEO :
+        case QT_CODEC_TYPE_TGA_VIDEO :
+        case QT_CODEC_TYPE_TIFF_VIDEO :
         {
             isom_visual_entry_t *visual = (isom_visual_entry_t *)sample;
             isom_remove_visual_extensions( (isom_visual_entry_t *)visual );
