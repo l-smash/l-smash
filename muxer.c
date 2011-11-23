@@ -32,10 +32,6 @@
 
 #include "config.h"
 
-#define LSMASH_MAX( a, b ) ((a) > (b) ? (a) : (b))
-
-#define eprintf( ... ) fprintf( stderr, __VA_ARGS__ )
-
 #define MAX_NUM_OF_BRANDS 50
 #define MAX_NUM_OF_INPUTS 10
 #define MAX_NUM_OF_TRACKS 1
@@ -152,7 +148,6 @@ typedef struct
     output_t output;
     input_t  input[MAX_NUM_OF_INPUTS];
     uint32_t num_of_inputs;
-    uint32_t current_input_number;
 } muxer_t;
 
 static void cleanup_muxer( muxer_t *muxer )
@@ -185,9 +180,13 @@ static void cleanup_muxer( muxer_t *muxer )
     }
 }
 
+#define eprintf( ... ) fprintf( stderr, __VA_ARGS__ )
+#define REFRESH_CONSOLE eprintf( "                                                                               \r" )
+
 static int muxer_error( muxer_t *muxer, const char *message, ... )
 {
     cleanup_muxer( muxer );
+    REFRESH_CONSOLE;
     eprintf( "Error: " );
     va_list args;
     va_start( args, message );
@@ -198,6 +197,7 @@ static int muxer_error( muxer_t *muxer, const char *message, ... )
 
 static int error_message( const char *message, ... )
 {
+    REFRESH_CONSOLE;
     eprintf( "Error: " );
     va_list args;
     va_start( args, message );
@@ -273,7 +273,6 @@ static int muxer_usage_error( void )
 #define MUXER_ERR( ... ) muxer_error( &muxer, __VA_ARGS__ )
 #define ERROR_MSG( ... ) error_message( __VA_ARGS__ )
 #define MUXER_USAGE_ERR() muxer_usage_error();
-#define REFRESH_CONSOLE eprintf( "                                                                               \r" )
 
 static int add_brand( option_t *opt, uint32_t brand )
 {
@@ -387,6 +386,8 @@ static int parse_global_options( int argc, char **argv, muxer_t *muxer )
         return -1;
     uint32_t i = 1;
     option_t *opt = &muxer->opt;
+    opt->chap_track = 1;
+    opt->add_bom_to_chpl = 0;
     while( argc > i && *argv[i] == '-' )
     {
 #define CHECK_NEXT_ARG if( argc == ++i ) return -1
@@ -554,6 +555,7 @@ static int parse_global_options( int argc, char **argv, muxer_t *muxer )
         return ERROR_MSG( "failed to set up output file format.\n" );
     if( opt->timeline_shift && !opt->qtff && opt->isom_version < 4 )
         return ERROR_MSG( "timeline shift requires --file-format mov, or --isom-version 4 or later.\n" );
+    muxer->num_of_inputs = opt->num_of_inputs;
     return 0;
 }
 
@@ -636,12 +638,6 @@ static int parse_track_options( input_t *input )
     return 0;
 }
 
-static int moov_to_front_callback( void *param, uint64_t written_movie_size, uint64_t total_movie_size )
-{
-    eprintf( "Finalizing: [%5.2lf%%]\r", ((double)written_movie_size / total_movie_size) * 100.0 );
-    return 0;
-}
-
 static void display_codec_name( uint32_t codec_type, uint32_t track_number )
 {
 #define DISPLAY_CODEC_NAME( CODEC_NAME ) eprintf( "Track %"PRIu32": "#CODEC_NAME"\n", track_number )
@@ -651,7 +647,7 @@ static void display_codec_name( uint32_t codec_type, uint32_t track_number )
             DISPLAY_CODEC_NAME( H.264 Advanced Video Coding );
             break;
         case ISOM_CODEC_TYPE_VC_1_VIDEO :
-            DISPLAY_CODEC_NAME( VC-1 Advanced Profile );
+            DISPLAY_CODEC_NAME( SMPTE VC-1 Advanced Profile );
             break;
         case ISOM_CODEC_TYPE_MP4A_AUDIO :
             DISPLAY_CODEC_NAME( MPEG-4 Audio );
@@ -674,11 +670,70 @@ static void display_codec_name( uint32_t codec_type, uint32_t track_number )
 #undef DISPLAY_CODEC_NAME
 }
 
-static void set_reference_chapter_track( output_t *output, option_t *opt )
+static int open_input_files( muxer_t *muxer )
 {
-    if( !opt->chap_file || !opt->qtff || !opt->itunes_movie )
-        return;
-    lsmash_create_reference_chapter_track( output->root, opt->chap_track, opt->chap_file );
+    output_t *output = &muxer->output;
+    option_t *opt = &muxer->opt;
+    for( uint32_t current_input_number = 1; current_input_number <= muxer->num_of_inputs; current_input_number++ )
+    {
+        input_t *input = &muxer->input[current_input_number - 1];
+        /* Initialize importer framework. */
+        input->importer = mp4sys_importer_open( input->file_name, "auto" );
+        if( !input->importer )
+            return ERROR_MSG( "failed to open input file.\n" );
+        input->num_of_tracks = mp4sys_importer_get_track_count( input->importer );
+        if( input->num_of_tracks == 0 )
+            return ERROR_MSG( "there is no valid track in input file.\n" );
+        /* Parse track options */
+        if( parse_track_options( input ) )
+            return ERROR_MSG( "failed to parse track options.\n" );
+        /* Activate tracks by CODEC type. */
+        for( input->current_track_number = 1;
+             input->current_track_number <= input->num_of_tracks;
+             input->current_track_number ++ )
+        {
+            input_track_t *in_track = &input->track[input->current_track_number - 1];
+            in_track->summary = mp4sys_duplicate_summary( input->importer, input->current_track_number );
+            if( !in_track->summary )
+                return ERROR_MSG( "failed to get input summary.\n" );
+            /* Check codec type. */
+            lsmash_codec_type codec_type = in_track->summary->sample_type;
+            in_track->active = 1;
+            switch( codec_type )
+            {
+                case ISOM_CODEC_TYPE_AVC1_VIDEO :
+                    if( opt->isom )
+                        add_brand( opt, ISOM_BRAND_TYPE_AVC1 );
+                case ISOM_CODEC_TYPE_VC_1_VIDEO :
+                case ISOM_CODEC_TYPE_MP4A_AUDIO :
+                    break;
+                case ISOM_CODEC_TYPE_AC_3_AUDIO :
+                case ISOM_CODEC_TYPE_EC_3_AUDIO :
+                    if( !opt->isom && opt->qtff )
+                        return ERROR_MSG( "the input seems (Enhanced) AC-3, at present available only for ISO Base Media file format.\n" );
+                    break;
+                case ISOM_CODEC_TYPE_SAWB_AUDIO :
+                case ISOM_CODEC_TYPE_SAMR_AUDIO :
+                    if( !opt->brand_3gx )
+                        return ERROR_MSG( "the input seems AMR-NB/WB, available for 3GPP(2) file format.\n" );
+                    break;
+                default :
+                    lsmash_cleanup_summary( in_track->summary );
+                    in_track->summary = NULL;
+                    in_track->active = 0;
+                    break;
+            }
+            if( in_track->active )
+            {
+                ++ input->num_of_active_tracks;
+                display_codec_name( codec_type, output->num_of_tracks + input->num_of_active_tracks );
+            }
+        }
+        output->num_of_tracks += input->num_of_active_tracks;
+    }
+    if( output->num_of_tracks == 0 )
+        return ERROR_MSG( "there is no media that can be stored in output movie.\n" );
+    return 0;
 }
 
 static int set_itunes_metadata( output_t *output, option_t *opt )
@@ -712,95 +767,19 @@ static int set_itunes_metadata( output_t *output, option_t *opt )
     return 0;
 }
 
-int main( int argc, char *argv[] )
+static int prepare_output( muxer_t *muxer )
 {
-    if( argc < 3 )
-        return MUXER_USAGE_ERR();
-    /* Parse options */
-    muxer_t muxer = { { 0 } };
-    option_t *opt = &muxer.opt;
-    opt->chap_track = 1;
-    opt->add_bom_to_chpl = 0;
-    if( parse_global_options( argc, argv, &muxer ) )
-        return MUXER_USAGE_ERR();
-    if( opt->help )
-    {
-        display_help();
-        cleanup_muxer( &muxer );
-        return 0;
-    }
-    muxer.num_of_inputs = opt->num_of_inputs;
-    output_t *output = &muxer.output;
-    for( muxer.current_input_number = 1;
-         muxer.current_input_number <= muxer.num_of_inputs;
-         muxer.current_input_number ++ )
-    {
-        input_t *input = &muxer.input[muxer.current_input_number - 1];
-        /* Initialize importer framework */
-        input->importer = mp4sys_importer_open( input->file_name, "auto" );
-        if( !input->importer )
-            return MUXER_ERR( "failed to open input file.\n" );
-        input->num_of_tracks = mp4sys_importer_get_track_count( input->importer );
-        if( input->num_of_tracks == 0 )
-            return MUXER_ERR( "there is no valid track in input file.\n" );
-        /* Parse track options */
-        if( parse_track_options( input ) )
-            return ERROR_MSG( "failed to parse track options.\n" );
-        /* Activate tracks by CODEC type. */
-        for( input->current_track_number = 1;
-             input->current_track_number <= input->num_of_tracks;
-             input->current_track_number ++ )
-        {
-            input_track_t *in_track = &input->track[input->current_track_number - 1];
-            in_track->summary = mp4sys_duplicate_summary( input->importer, input->current_track_number );
-            if( !in_track->summary )
-                return MUXER_ERR( "failed to get input summary.\n" );
-            /* check codec type. */
-            lsmash_codec_type codec_type = in_track->summary->sample_type;
-            in_track->active = 1;
-            switch( codec_type )
-            {
-                case ISOM_CODEC_TYPE_AVC1_VIDEO :
-                    if( opt->isom )
-                        add_brand( opt, ISOM_BRAND_TYPE_AVC1 );
-                case ISOM_CODEC_TYPE_VC_1_VIDEO :
-                case ISOM_CODEC_TYPE_MP4A_AUDIO :
-                    break;
-                case ISOM_CODEC_TYPE_AC_3_AUDIO :
-                case ISOM_CODEC_TYPE_EC_3_AUDIO :
-                    if( !opt->isom && opt->qtff )
-                        return MUXER_ERR( "the input seems (Enhanced) AC-3, at present available only for ISO Base Media file format.\n" );
-                    break;
-                case ISOM_CODEC_TYPE_SAWB_AUDIO :
-                case ISOM_CODEC_TYPE_SAMR_AUDIO :
-                    if( !opt->brand_3gx )
-                        return MUXER_ERR( "the input seems AMR-NB/WB, available for 3GPP(2) file format.\n" );
-                    break;
-                default :
-                    lsmash_cleanup_summary( in_track->summary );
-                    in_track->summary = NULL;
-                    in_track->active = 0;
-                    break;
-            }
-            if( in_track->active )
-            {
-                ++ input->num_of_active_tracks;
-                display_codec_name( codec_type, output->num_of_tracks + input->num_of_active_tracks );
-            }
-        }
-        output->num_of_tracks += input->num_of_active_tracks;
-    }
-    if( output->num_of_tracks == 0 )
-        return MUXER_ERR( "there is no media that can be stored in output movie.\n" );
+    output_t *output = &muxer->output;
+    option_t *opt = &muxer->opt;
     /* Allocate output tracks. */
     output->track = malloc( output->num_of_tracks * sizeof(output_track_t) );
     if( !output->track )
-        return MUXER_ERR( "failed to allocate output tracks.\n" );
+        return ERROR_MSG( "failed to allocate output tracks.\n" );
     memset( output->track, 0, output->num_of_tracks * sizeof(output_track_t) );
     /* Initialize L-SMASH muxer */
     output->root = lsmash_open_movie( output->file_name, LSMASH_FILE_MODE_WRITE );
     if( !output->root )
-        return MUXER_ERR( "failed to create root.\n" );
+        return ERROR_MSG( "failed to create root.\n" );
     /* Initialize movie */
     lsmash_movie_parameters_t movie_param;
     lsmash_initialize_movie_parameters( &movie_param );
@@ -811,18 +790,16 @@ int main( int argc, char *argv[] )
     if( opt->interleave )
         movie_param.max_chunk_duration = opt->interleave * 1e-3;
     if( lsmash_set_movie_parameters( output->root, &movie_param ) )
-        return MUXER_ERR( "failed to set movie parameters.\n" );
+        return ERROR_MSG( "failed to set movie parameters.\n" );
     if( opt->copyright_notice
      && lsmash_set_copyright( output->root, 0, opt->copyright_language, opt->copyright_notice ) )
-        return MUXER_ERR( "failed to set a copyright notice for the entire movie.\n" );
+        return ERROR_MSG( "failed to set a copyright notice for the entire movie.\n" );
     if( set_itunes_metadata( output, opt ) )
-        return MUXER_ERR( "failed to set iTunes metadata.\n" );
+        return ERROR_MSG( "failed to set iTunes metadata.\n" );
     output->current_track_number = 1;
-    for( muxer.current_input_number = 1;
-         muxer.current_input_number <= muxer.num_of_inputs;
-         muxer.current_input_number ++ )
+    for( uint32_t current_input_number = 1; current_input_number <= muxer->num_of_inputs; current_input_number++ )
     {
-        input_t *input = &muxer.input[muxer.current_input_number - 1];
+        input_t *input = &muxer->input[current_input_number - 1];
         for( input->current_track_number = 1;
              input->current_track_number <= input->num_of_tracks;
              input->current_track_number ++ )
@@ -848,7 +825,7 @@ int main( int argc, char *argv[] )
                 {
                     out_track->track_ID = lsmash_create_track( output->root, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK );
                     if( !out_track->track_ID )
-                        return MUXER_ERR( "failed to create a track.\n" );
+                        return ERROR_MSG( "failed to create a track.\n" );
                     lsmash_video_summary_t *summary = (lsmash_video_summary_t *)in_track->summary;
                     uint64_t display_width  = summary->width  << 16;
                     uint64_t display_height = summary->height << 16;
@@ -913,15 +890,15 @@ int main( int argc, char *argv[] )
                 {
                     out_track->track_ID = lsmash_create_track( output->root, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK );
                     if( !out_track->track_ID )
-                        return MUXER_ERR( "failed to create a track.\n" );
+                        return ERROR_MSG( "failed to create a track.\n" );
                     lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)in_track->summary;
                     if( track_opt->sbr )
                     {
                         if( summary->object_type_indication != MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3 )
-                            return MUXER_ERR( "--sbr is only valid with MPEG-4 Audio.\n" );
+                            return ERROR_MSG( "--sbr is only valid with MPEG-4 Audio.\n" );
                         summary->sbr_mode = MP4A_AAC_SBR_BACKWARD_COMPATIBLE;
                         if( lsmash_setup_AudioSpecificConfig( summary ) )
-                            return MUXER_ERR( "failed to set SBR mode.\n" );
+                            return ERROR_MSG( "failed to set SBR mode.\n" );
                     }
                     media_param.timescale          = summary->frequency;
                     media_param.media_handler_name = "L-SMASH Audio Handler";
@@ -932,36 +909,50 @@ int main( int argc, char *argv[] )
                     break;
                 }
                 default :
-                    return MUXER_ERR( "not supported stream type.\n" );
+                    return ERROR_MSG( "not supported stream type.\n" );
             }
             if( track_opt->copyright_notice
              && lsmash_set_copyright( output->root, out_track->track_ID, track_opt->copyright_language, track_opt->copyright_notice ) )
-                return MUXER_ERR( "failed to set a copyright notice.\n" );
+                return ERROR_MSG( "failed to set a copyright notice.\n" );
             if( lsmash_set_track_parameters( output->root, out_track->track_ID, &track_param ) )
-                return MUXER_ERR( "failed to set track parameters.\n" );
+                return ERROR_MSG( "failed to set track parameters.\n" );
             if( lsmash_set_media_parameters( output->root, out_track->track_ID, &media_param ) )
-                return MUXER_ERR( "failed to set media parameters.\n" );
+                return ERROR_MSG( "failed to set media parameters.\n" );
             out_track->summary = in_track->summary;
             out_track->sample_entry = lsmash_add_sample_entry( output->root, out_track->track_ID, out_track->summary->sample_type, out_track->summary );
             if( !out_track->sample_entry )
-                return MUXER_ERR( "failed to add sample_entry.\n" );
+                return ERROR_MSG( "failed to add sample_entry.\n" );
             out_track->active = 1;
             ++ output->current_track_number;
         }
         input->current_track_number = 1;
     }
     output->current_track_number = 1;
-    muxer.current_input_number = 1;
+    return 0;
+}
+
+static void set_reference_chapter_track( output_t *output, option_t *opt )
+{
+    if( !opt->chap_file || !opt->qtff || !opt->itunes_movie )
+        return;
+    lsmash_create_reference_chapter_track( output->root, opt->chap_track, opt->chap_file );
+}
+
+static int do_mux( muxer_t *muxer )
+{
+#define LSMASH_MAX( a, b ) ((a) > (b) ? (a) : (b))
+    output_t *output = &muxer->output;
+    option_t *opt = &muxer->opt;
     set_reference_chapter_track( output, opt );
-    /* Start muxing. */
     double   largest_dts = 0;
+    uint32_t current_input_number = 1;
     uint32_t num_consecutive_sample_skip = 0;
     uint32_t num_active_input_tracks = output->num_of_tracks;
     uint64_t total_media_size = 0;
     uint8_t  sample_count = 0;
     while( 1 )
     {
-        input_t *input = &muxer.input[muxer.current_input_number - 1];
+        input_t *input = &muxer->input[current_input_number - 1];
         output_track_t *out_track = &output->track[output->current_track_number - 1];
         if( out_track->active )
         {
@@ -972,13 +963,13 @@ int main( int argc, char *argv[] )
                 /* Allocate sample buffer. */
                 sample = lsmash_create_sample( out_track->summary->max_au_length );
                 if( !sample )
-                    return MUXER_ERR( "failed to alloc memory for buffer.                                             \n" );
+                    return ERROR_MSG( "failed to alloc memory for buffer.\n" );
                 /* FIXME: mp4sys_importer_get_access_unit() returns 1 if there're any changes in stream's properties.
                  * If you want to support them, you have to retrieve summary again, and make some operation accordingly. */
                 if( mp4sys_importer_get_access_unit( input->importer, input->current_track_number, sample ) )
                 {
                     lsmash_delete_sample( sample );
-                    ERROR_MSG( "failed to get a frame from input file. Maybe corrupted.                        \n"
+                    ERROR_MSG( "failed to get a frame from input file. Maybe corrupted.\n"
                                "Aborting muxing operation and trying to let output be valid file.\n" );
                     break;
                 }
@@ -1017,7 +1008,7 @@ int main( int argc, char *argv[] )
                 {
                     uint64_t sample_size = sample->length;      /* sample might be deleted internally after appending. */
                     if( lsmash_append_sample( output->root, out_track->track_ID, sample ) )
-                        return MUXER_ERR( "failed to append a sample.                                                     \n" );
+                        return ERROR_MSG( "failed to append a sample.\n" );
                     if( out_track->current_sample_number == 0 )
                         out_track->start_offset = sample->cts;
                     else
@@ -1030,7 +1021,10 @@ int main( int argc, char *argv[] )
                     num_consecutive_sample_skip = 0;
                     /* Print, per 256 samples, total size of imported media. */
                     if( ++sample_count == 0 )
+                    {
+                        REFRESH_CONSOLE;
                         eprintf( "Importing: %"PRIu64" bytes\r", total_media_size );
+                    }
                 }
                 else
                     ++num_consecutive_sample_skip;      /* Skip appendig sample. */
@@ -1043,8 +1037,8 @@ int main( int argc, char *argv[] )
         {
             /* Move the next input movie. */
             input->current_track_number = 1;
-            if( ++ muxer.current_input_number > muxer.num_of_inputs )
-                muxer.current_input_number = 1;        /* Back the first input movie. */
+            if( ++ current_input_number > muxer->num_of_inputs )
+                current_input_number = 1;       /* Back the first input movie. */
         }
     }
     for( output->current_track_number = 1;
@@ -1054,7 +1048,7 @@ int main( int argc, char *argv[] )
         /* Close track. */
         output_track_t *out_track = &output->track[output->current_track_number - 1];
         if( lsmash_flush_pooled_samples( output->root, out_track->track_ID, out_track->last_delta ) )
-            ERROR_MSG( "failed to flush the rest of samples.                                           \n" );
+            ERROR_MSG( "failed to flush the rest of samples.\n" );
         /* Create edit list.
          * Don't trust media duration. It's just duration of media, not duration of track presentation.
          * Calculation of presentation duration by DTS is reliable since this muxer handles CFR only. */
@@ -1062,8 +1056,21 @@ int main( int argc, char *argv[] )
         uint64_t segment_duration = actual_duration * ((double)lsmash_get_movie_timescale( output->root ) / out_track->timescale);
         int64_t  media_time       = out_track->priming_samples + out_track->start_offset;
         if( lsmash_create_explicit_timeline_map( output->root, out_track->track_ID, segment_duration, media_time, ISOM_EDIT_MODE_NORMAL ) )
-            ERROR_MSG( "failed to set timeline map                                                    .\n" );
+            ERROR_MSG( "failed to set timeline map.\n" );
     }
+    return 0;
+#undef LSMASH_MAX
+}
+
+static int moov_to_front_callback( void *param, uint64_t written_movie_size, uint64_t total_movie_size )
+{
+    REFRESH_CONSOLE;
+    eprintf( "Finalizing: [%5.2lf%%]\r", ((double)written_movie_size / total_movie_size) * 100.0 );
+    return 0;
+}
+
+static int finish_movie( output_t *output, option_t *opt )
+{
     /* Set chapter list. */
     if( opt->chap_file )
         lsmash_set_tyrant_chapter( output->root, opt->chap_file, opt->add_bom_to_chpl );
@@ -1073,16 +1080,39 @@ int main( int argc, char *argv[] )
     {
         lsmash_adhoc_remux_t moov_to_front;
         moov_to_front.func        = moov_to_front_callback;
-        moov_to_front.buffer_size = 4*1024*1024;
+        moov_to_front.buffer_size = 4*1024*1024;    /* 4MiB */
         moov_to_front.param       = NULL;
         finalize = &moov_to_front;
     }
     else
         finalize = NULL;
     REFRESH_CONSOLE;
-    if( lsmash_finish_movie( output->root, finalize ) )
-        ERROR_MSG( "failed to finish movie.                                                        \n" );
+    return lsmash_finish_movie( output->root, finalize );
+}
+
+int main( int argc, char *argv[] )
+{
+    if( argc < 3 )
+        return MUXER_USAGE_ERR();
+    muxer_t muxer = { { 0 } };
+    if( parse_global_options( argc, argv, &muxer ) )
+        return MUXER_USAGE_ERR();
+    if( muxer.opt.help )
+    {
+        display_help();
+        cleanup_muxer( &muxer );
+        return 0;
+    }
+    if( open_input_files( &muxer ) )
+        return MUXER_ERR( "failed to open input files.\n" );
+    if( prepare_output( &muxer ) )
+        return MUXER_ERR( "failed to set up preparation for output.\n" );
+    if( do_mux( &muxer ) )
+        return MUXER_ERR( "failed to do muxing.\n" );
+    if( finish_movie( &muxer.output, &muxer.opt ) )
+        return MUXER_ERR( "failed to finish movie.\n" );
+    REFRESH_CONSOLE;
+    eprintf( "Muxing completed!\n" );
     cleanup_muxer( &muxer );        /* including lsmash_destroy_root() */
-    eprintf( "Muxing completed!                                                              \n" );
     return 0;
 }

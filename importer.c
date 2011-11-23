@@ -4249,7 +4249,7 @@ const static mp4sys_importer_functions mp4sys_h264_importer =
 };
 
 /***************************************************************************
-    VC-1 importer (only for Advanced Profile)
+    SMPTE VC-1 importer (only for Advanced Profile)
 ***************************************************************************/
 
 typedef struct
