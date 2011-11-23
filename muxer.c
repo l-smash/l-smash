@@ -155,8 +155,7 @@ static void cleanup_muxer( muxer_t *muxer )
     if( !muxer )
         return;
     output_t *output = &muxer->output;
-    if( output->root )
-        lsmash_destroy_root( output->root );
+    lsmash_destroy_root( output->root );
     if( output->track )
     {
         for( uint32_t i = 0; i < output->num_of_tracks; i++ )
@@ -169,14 +168,9 @@ static void cleanup_muxer( muxer_t *muxer )
     for( uint32_t i = 0; i < muxer->num_of_inputs; i++ )
     {
         input_t *input = &muxer->input[i];
-        if( input->importer )
-            mp4sys_importer_close( input->importer );
+        mp4sys_importer_close( input->importer );
         for( uint32_t j = 0; j < input->num_of_tracks; j++ )
-        {
-            input_track_t *in_track = &input->track[j];
-            if( in_track->summary )
-                lsmash_cleanup_summary( in_track->summary );
-        }
+            lsmash_cleanup_summary( input->track[j].summary );
     }
 }
 
@@ -921,7 +915,7 @@ static int prepare_output( muxer_t *muxer )
             out_track->summary = in_track->summary;
             out_track->sample_entry = lsmash_add_sample_entry( output->root, out_track->track_ID, out_track->summary->sample_type, out_track->summary );
             if( !out_track->sample_entry )
-                return ERROR_MSG( "failed to add sample_entry.\n" );
+                return ERROR_MSG( "failed to add sample description entry.\n" );
             out_track->active = 1;
             ++ output->current_track_number;
         }
@@ -964,14 +958,27 @@ static int do_mux( muxer_t *muxer )
                 sample = lsmash_create_sample( out_track->summary->max_au_length );
                 if( !sample )
                     return ERROR_MSG( "failed to alloc memory for buffer.\n" );
-                /* FIXME: mp4sys_importer_get_access_unit() returns 1 if there're any changes in stream's properties.
-                 * If you want to support them, you have to retrieve summary again, and make some operation accordingly. */
-                if( mp4sys_importer_get_access_unit( input->importer, input->current_track_number, sample ) )
+                /* mp4sys_importer_get_access_unit() returns 1 if there're any changes in stream's properties. */
+                int ret = mp4sys_importer_get_access_unit( input->importer, input->current_track_number, sample );
+                if( ret == -1 || (ret == 1 && out_track->summary->sample_type == ISOM_CODEC_TYPE_AVC1_VIDEO) )
                 {
+                    /* If you want to support them, you have to retrieve summary again, and make some operation accordingly. */
                     lsmash_delete_sample( sample );
                     ERROR_MSG( "failed to get a frame from input file. Maybe corrupted.\n"
                                "Aborting muxing operation and trying to let output be valid file.\n" );
                     break;
+                }
+                else if( ret == 1 )
+                {
+                    input_track_t *in_track = &input->track[input->current_track_number - 1];
+                    lsmash_cleanup_summary( in_track->summary );
+                    out_track->summary = in_track->summary = mp4sys_duplicate_summary( input->importer, input->current_track_number );
+                    out_track->sample_entry = lsmash_add_sample_entry( output->root, out_track->track_ID, out_track->summary->sample_type, out_track->summary );
+                    if( !out_track->sample_entry )
+                    {
+                        ERROR_MSG( "failed to add sample description entry.\n" );
+                        break;
+                    }
                 }
                 if( sample->length == 0 )
                 {
