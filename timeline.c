@@ -995,13 +995,14 @@ static int isom_get_dts_from_media_timeline_internal( isom_timeline_t *timeline,
             isom_sample_info_t *info = (isom_sample_info_t *)entry->data;
             if( !info )
                 return -1;
-            if( distance-- )
+            if( distance-- == 0 )
                 break;
             *dts += info->duration;
         }
         if( !entry )
             return -1;
     }
+    /* Note: last_accessed_sample_number is always updated together with last_accessed_sample_dts, and vice versa. */
     timeline->last_accessed_sample_dts    = *dts;
     timeline->last_accessed_sample_number = sample_number;
     return 0;
