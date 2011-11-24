@@ -49,6 +49,8 @@ typedef struct
 
 typedef struct
 {
+    lsmash_sample_t          *sample;
+    double                    dts;
     int                       reach_end_of_media_timeline;
     uint32_t                  track_ID;
     uint32_t                  last_sample_delta;
@@ -195,6 +197,8 @@ static int get_movie( input_movie_t *input, char *input_name )
         if( lsmash_get_last_sample_delta_from_media_timeline( input->root, in_track[i].track_ID, &in_track[i].last_sample_delta ) )
             return ERROR_MSG( "failed to get the last sample delta.\n" );
         in_track[i].current_sample_number = 1;
+        in_track[i].sample                = NULL;
+        in_track[i].dts                   = 0;
     }
     lsmash_discard_boxes( input->root );
     return 0;
@@ -511,48 +515,52 @@ static int do_remux( remuxer_t *remuxer )
         /* Try append a sample in an input track where we didn't reach the end of media timeline. */
         if( !in_track->reach_end_of_media_timeline )
         {
-            output_track_t *out_track = &out_movie->track[out_movie->current_track_number - 1];
-            uint32_t in_track_ID = in_track->track_ID;
-            uint32_t out_track_ID = out_track->track_ID;
-            uint32_t input_media_timescale = in_track->media_param.timescale;
-            /* Get a DTS from a track in an input movie. */
-            uint64_t dts;
-            if( lsmash_get_dts_from_media_timeline( in_movie->root, in_track_ID, in_track->current_sample_number, &dts ) )
+            lsmash_sample_t *sample = in_track->sample;
+            /* Get a new sample data if the track doesn't hold any one. */
+            if( !sample )
             {
-                if( lsmash_check_sample_existence_in_media_timeline( in_movie->root, in_track_ID, in_track->current_sample_number ) )
-                    return ERROR_MSG( "failed to get the DTS.\n" );
+                sample = lsmash_get_sample_from_media_timeline( in_movie->root, in_track->track_ID, in_track->current_sample_number );
+                if( sample )
+                {
+                    in_track->sample = sample;
+                    in_track->dts = (double)sample->dts / in_track->media_param.timescale;
+                }
                 else
                 {
+                    if( lsmash_check_sample_existence_in_media_timeline( in_movie->root, in_track->track_ID, in_track->current_sample_number ) )
+                        return ERROR_MSG( "failed to get a sample.\n" );
+                    /* No more appendable samples in this track. */
+                    in_track->sample = NULL;
                     in_track->reach_end_of_media_timeline = 1;
                     if( --num_active_input_tracks == 0 )
                         break;      /* end of muxing */
                 }
             }
-            /* Get and append a sample if it's good time. */
-            else if( ((double)dts / input_media_timescale) <= largest_dts
-             || num_consecutive_sample_skip == num_active_input_tracks )
+            if( sample )
             {
-                /* Get an actual sample data from a track in an input movie. */
-                lsmash_sample_t *sample = lsmash_get_sample_from_media_timeline( in_movie->root, in_track_ID, in_track->current_sample_number );
-                if( !sample )
-                    return ERROR_MSG( "failed to get sample.\n" );
-                /* Append sample into output movie. */
-                uint64_t sample_size = sample->length;      /* sample might be deleted internally after appending. */
-                if( lsmash_append_sample( out_movie->root, out_track_ID, sample ) )
+                /* Append a sample if meeting a condition. */
+                if( in_track->dts <= largest_dts || num_consecutive_sample_skip == num_active_input_tracks )
                 {
-                    lsmash_delete_sample( sample );
-                    return ERROR_MSG( "failed to append a sample.\n" );
+                    /* Append a sample into output movie. */
+                    uint64_t sample_size = sample->length;      /* sample might be deleted internally after appending. */
+                    output_track_t *out_track = &out_movie->track[out_movie->current_track_number - 1];
+                    if( lsmash_append_sample( out_movie->root, out_track->track_ID, sample ) )
+                    {
+                        lsmash_delete_sample( sample );
+                        return ERROR_MSG( "failed to append a sample.\n" );
+                    }
+                    largest_dts = LSMASH_MAX( largest_dts, in_track->dts );
+                    in_track->sample = NULL;
+                    ++ in_track->current_sample_number;
+                    num_consecutive_sample_skip = 0;
+                    total_media_size += sample_size;
+                    /* Print, per 256 samples, total size of imported media. */
+                    if( ++sample_count == 0 )
+                        eprintf( "Importing: %"PRIu64" bytes\r", total_media_size );
                 }
-                largest_dts = LSMASH_MAX( largest_dts, (double)dts / input_media_timescale );
-                total_media_size += sample_size;
-                ++ in_track->current_sample_number;
-                num_consecutive_sample_skip = 0;
-                /* Print, per 256 samples, total size of imported media. */
-                if( ++sample_count == 0 )
-                    eprintf( "Importing: %"PRIu64" bytes\r", total_media_size );
+                else
+                    ++num_consecutive_sample_skip;      /* Skip appendig sample. */
             }
-            else
-                ++num_consecutive_sample_skip;      /* Skip appendig sample. */
         }
         /* Move the next track. */
         ++ in_movie->current_track_number;
