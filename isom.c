@@ -7160,9 +7160,9 @@ uint32_t lsmash_get_last_sample_delta( lsmash_root_t *root, uint32_t track_ID )
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl
      || !trak->mdia->minf->stbl->stts || !trak->mdia->minf->stbl->stts->list
-     || !trak->mdia->minf->stbl->stts->list->head || !trak->mdia->minf->stbl->stts->list->head->data )
+     || !trak->mdia->minf->stbl->stts->list->tail || !trak->mdia->minf->stbl->stts->list->tail->data )
         return 0;
-    return ((isom_stts_entry_t *)trak->mdia->minf->stbl->stts->list->head->data)->sample_delta;
+    return ((isom_stts_entry_t *)trak->mdia->minf->stbl->stts->list->tail->data)->sample_delta;
 }
 
 uint32_t lsmash_get_start_time_offset( lsmash_root_t *root, uint32_t track_ID )
