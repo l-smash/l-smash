@@ -57,6 +57,7 @@ typedef struct
     uint32_t track_ID;
     uint32_t movie_timescale;
     uint32_t media_timescale;
+    uint32_t sample_count;
     int32_t  ctd_shift;     /* shift from composition to decode timeline */
     uint32_t last_accessed_sample_number;
     uint32_t last_accessed_chunk_number;
@@ -951,6 +952,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
         isom_destruct_timeline_direct( timeline );
         return -1;
     }
+    timeline->sample_count = stsz->sample_count;
     return 0;
 fail:
     isom_destruct_timeline_direct( timeline );
@@ -1159,6 +1161,14 @@ int lsmash_get_last_sample_delta_from_media_timeline( lsmash_root_t *root, uint3
         return -1;
     *last_sample_delta = ((isom_sample_info_t *)timeline->info_list->tail->data)->duration;
     return 0;
+}
+
+uint32_t lsmash_get_sample_count_in_media_timeline( lsmash_root_t *root, uint32_t track_ID )
+{
+    isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
+    if( !timeline )
+        return 0;
+    return timeline->sample_count;
 }
 
 int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_root_t *src, uint32_t src_track_ID )
