@@ -34,6 +34,9 @@ typedef struct
 {
     uint32_t                  track_ID;
     uint32_t                  last_sample_delta;
+    uint32_t                  current_sample_number;
+    uint64_t                  skip_dt_interval;
+    uint64_t                  last_sample_dts;
     lsmash_track_parameters_t track_param;
     lsmash_media_parameters_t media_param;
 } output_track_t;
@@ -51,6 +54,8 @@ typedef struct
 {
     lsmash_sample_t          *sample;
     double                    dts;
+    uint64_t                  composition_delay;
+    uint64_t                  skip_duration;
     int                       reach_end_of_media_timeline;
     uint32_t                  track_ID;
     uint32_t                  last_sample_delta;
@@ -74,6 +79,8 @@ typedef struct
     char    *raw_track_option;
     int16_t  alternate_group;
     uint16_t ISO_language;
+    uint32_t seek;
+    int      consider_rap;
 } track_media_option;
 
 typedef struct
@@ -155,8 +162,50 @@ static int error_message( const char* message, ... )
     return -1;
 }
 
+static int warning_message( const char* message, ... )
+{
+    REFRESH_CONSOLE;
+    eprintf( "Warning: " );
+    va_list args;
+    va_start( args, message );
+    vfprintf( stderr, message, args );
+    va_end( args );
+    return -1;
+}
+
 #define REMUXER_ERR( ... ) remuxer_error( &remuxer, __VA_ARGS__ )
 #define ERROR_MSG( ... ) error_message( __VA_ARGS__ )
+#define WARNING_MSG( ... ) warning_message( __VA_ARGS__ )
+
+static void display_help( void )
+{
+    eprintf( "\n"
+             "L-SMASH isom/mov re-muliplexer rev%s  %s\n"
+             "Built on %s %s\n"
+             "Copyright (C) 2011 L-SMASH project\n"
+             "\n"
+             "Usage: remuxer -i input1 [-i input2 -i input3 ...] -o output\n"
+             "Global options:\n"
+             "    --help                    Display help.\n"
+             "    --chapter <string>        Set chapters from the file.\n"
+             "    --chpl-with-bom           Add UTF-8 BOM to the chapter strings\n"
+             "                              in the chapter list. (experimental)\n"
+             "    --chapter-track <integer> Set which track the chapter applies to.\n"
+             "                              This option takes effect only when reference\n"
+             "                              chapter is available.\n"
+             "                              If this option is not used, it defaults to 1.\n"
+             "Track options:\n"
+             "    language=<string>         Specify media language\n"
+             "    alternate-group=<integer> Specify alternate group\n"
+             "    seek=<integer>            Specify starting point in media\n"
+             "    safe-seek=<integer>       Same as seek except for considering random accessible point\n"
+             "                              Media starts from the closest random accessible point\n"
+             "How to use track options:\n"
+             "    -i input?[track_number1]:[track_option1],[track_option2]?[track_number2]:...\n"
+             "For example:\n"
+             "    remuxer -i input1 -i input2?2:alternate-group=1?3:language=jpn,alternate-group=1 -o output\n",
+             LSMASH_REV, LSMASH_GIT_HASH, __DATE__, __TIME__ );
+}
 
 static int get_movie( input_movie_t *input, char *input_name )
 {
@@ -199,6 +248,8 @@ static int get_movie( input_movie_t *input, char *input_name )
         in_track[i].current_sample_number = 1;
         in_track[i].sample                = NULL;
         in_track[i].dts                   = 0;
+        in_track[i].composition_delay     = 0;
+        in_track[i].skip_duration         = 0;
     }
     lsmash_discard_boxes( input->root );
     return 0;
@@ -237,6 +288,17 @@ static int parse_track_option( remuxer_t *remuxer )
                 {
                     char *track_parameter = strchr( track_option, '=' ) + 1;
                     track[i][track_number - 1].ISO_language = lsmash_pack_iso_language( track_parameter );
+                }
+                else if( strstr( track_option, "safe-seek=" ) )
+                {
+                    char *track_parameter = strchr( track_option, '=' ) + 1;
+                    track[i][track_number - 1].seek = atoi( track_parameter );
+                    track[i][track_number - 1].consider_rap = 1;
+                }
+                else if( strstr( track_option, "seek=" ) )
+                {
+                    char *track_parameter = strchr( track_option, '=' ) + 1;
+                    track[i][track_number - 1].seek = atoi( track_parameter );
                 }
                 else
                     return ERROR_MSG( "unknown track option %s\n", track_option );
@@ -328,33 +390,6 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
     return 0;
 }
 
-static void display_help( void )
-{
-    eprintf( "\n"
-             "L-SMASH isom/mov re-muliplexer rev%s  %s\n"
-             "Built on %s %s\n"
-             "Copyright (C) 2011 L-SMASH project\n"
-             "\n"
-             "Usage: remuxer -i input1 [-i input2 -i input3 ...] -o output\n"
-             "Global options:\n"
-             "    --help                    Display help.\n"
-             "    --chapter <string>        Set chapters from the file.\n"
-             "    --chpl-with-bom           Add UTF-8 BOM to the chapter strings\n"
-             "                              in the chapter list. (experimental)\n"
-             "    --chapter-track <integer> Set which track the chapter applies to.\n"
-             "                              This option takes effect only when reference\n"
-             "                              chapter is available.\n"
-             "                              If this option is not used, it defaults to 1.\n"
-             "Track options:\n"
-             "    language=<string>\n"
-             "    alternate-group=<integer>\n"
-             "How to use track options:\n"
-             "    -i input?[track_number1]:[track_option1],[track_option2]?[track_number2]:...\n"
-             "For example:\n"
-             "    remuxer -i input1 -i input2?2:alternate-group=1?3:language=jpn,alternate-group=1 -o output\n",
-             LSMASH_REV, LSMASH_GIT_HASH, __DATE__, __TIME__ );
-}
-
 static int set_movie_parameters( remuxer_t *remuxer )
 {
     int             num_input = remuxer->num_input;
@@ -442,6 +477,57 @@ static int set_itunes_metadata( output_movie_t *output, input_movie_t *input, in
     return 0;
 }
 
+static int set_starting_point( input_movie_t *input, input_track_t *in_track, uint32_t seek_point, int consider_rap )
+{
+    if( seek_point == 0 )
+        return 0;
+    uint32_t rap_number;
+    if( lsmash_get_closest_random_accessible_point_from_media_timeline( input->root, in_track->track_ID, 1, &rap_number ) )
+    {
+        if( consider_rap )
+            return ERROR_MSG( "failed to get the first random accessible point.\n" );
+        else
+        {
+            WARNING_MSG( "no random access point!\n" );
+            /* Set number of the first sample to be muxed. */
+            in_track->current_sample_number = seek_point;
+            return 0;
+        }
+    }
+    /* Get composition delay. */
+    uint64_t rap_dts;
+    uint64_t rap_cts;
+    uint32_t ctd_shift;
+    if( lsmash_get_dts_from_media_timeline( input->root, in_track->track_ID, rap_number, &rap_dts ) )
+        return ERROR_MSG( "failed to get CTS of the first random accessible sample of seek point.\n" );
+    if( lsmash_get_cts_from_media_timeline( input->root, in_track->track_ID, rap_number, &rap_cts ) )
+        return ERROR_MSG( "failed to get CTS of the first random accessible sample of seek point.\n" );
+    if( lsmash_get_composition_to_decode_shift_from_media_timeline( input->root, in_track->track_ID, &ctd_shift ) )
+        return ERROR_MSG( "failed to get composition to decode timeline shfit.\n" );
+    in_track->composition_delay = rap_cts - rap_dts + ctd_shift;
+    /* Check if starting point is random accessible. */
+    if( lsmash_get_closest_random_accessible_point_from_media_timeline( input->root, in_track->track_ID, seek_point, &rap_number ) )
+        return ERROR_MSG( "failed to get a random accessible point.\n" );
+    if( rap_number != seek_point )
+    {
+        WARNING_MSG( "Warning: starting point you specified is not a random accessible point.\n" );
+        if( consider_rap )
+        {
+            /* Get duration that should be skipped. */
+            if( lsmash_get_cts_from_media_timeline( input->root, in_track->track_ID, rap_number, &rap_cts ) )
+                return ERROR_MSG( "failed to get CTS of the closest and past random accessible sample of starting point.\n" );
+            uint64_t seek_cts;
+            if( lsmash_get_cts_from_media_timeline( input->root, in_track->track_ID, seek_point, &seek_cts ) )
+                return ERROR_MSG( "failed to get CTS of starting point.\n" );
+            if( rap_cts < seek_cts )
+                in_track->skip_duration = seek_cts - rap_cts;
+        }
+    }
+    /* Set number of the first sample to be muxed. */
+    in_track->current_sample_number = consider_rap ? rap_number : seek_point;
+    return 0;
+}
+
 static int prepare_output( remuxer_t *remuxer )
 {
     if( set_movie_parameters( remuxer ) )
@@ -459,7 +545,6 @@ static int prepare_output( remuxer_t *remuxer )
     track_media_option **track_option = remuxer->track_option;
     output->current_track_number = 1;
     for( int i = 0; i < remuxer->num_input; i++ )
-    {
         for( uint32_t j = 0; j < input[i].num_tracks; j++ )
         {
             input_track_t  *in_track  = &input[i].track[j];
@@ -482,10 +567,12 @@ static int prepare_output( remuxer_t *remuxer )
                 return ERROR_MSG( "failed to copy a Decoder Specific Info.\n" );
             out_track->last_sample_delta = in_track->last_sample_delta;
             ++ output->current_track_number;
+            if( set_starting_point( input, in_track, track_option[i][j].seek, track_option[i][j].consider_rap ) )
+                return ERROR_MSG( "failed to set starting point.\n" );
+            out_track->current_sample_number = 1;
+            out_track->skip_dt_interval      = 0;
+            out_track->last_sample_dts       = 0;
         }
-        free( track_option[i] );
-        remuxer->track_option[i] = NULL;
-    }
     output->current_track_number = 1;
     return 0;
 }
@@ -541,19 +628,30 @@ static int do_remux( remuxer_t *remuxer )
                 /* Append a sample if meeting a condition. */
                 if( in_track->dts <= largest_dts || num_consecutive_sample_skip == num_active_input_tracks )
                 {
-                    /* Append a sample into output movie. */
-                    uint64_t sample_size = sample->length;      /* sample might be deleted internally after appending. */
+                    /* The first DTS must be 0. */
                     output_track_t *out_track = &out_movie->track[out_movie->current_track_number - 1];
+                    if( out_track->current_sample_number == 1 )
+                        out_track->skip_dt_interval = sample->dts;
+                    if( out_track->skip_dt_interval )
+                    {
+                        sample->dts -= out_track->skip_dt_interval;
+                        sample->cts -= out_track->skip_dt_interval;
+                    }
+                    uint64_t sample_size     = sample->length;      /* sample might be deleted internally after appending. */
+                    uint64_t last_sample_dts = sample->dts;         /* same as above */
+                    /* Append a sample into output movie. */
                     if( lsmash_append_sample( out_movie->root, out_track->track_ID, sample ) )
                     {
                         lsmash_delete_sample( sample );
                         return ERROR_MSG( "failed to append a sample.\n" );
                     }
-                    largest_dts = LSMASH_MAX( largest_dts, in_track->dts );
-                    in_track->sample = NULL;
-                    ++ in_track->current_sample_number;
-                    num_consecutive_sample_skip = 0;
-                    total_media_size += sample_size;
+                    largest_dts                       = LSMASH_MAX( largest_dts, in_track->dts );
+                    in_track->sample                  = NULL;
+                    in_track->current_sample_number  += 1;
+                    out_track->current_sample_number += 1;
+                    out_track->last_sample_dts        = last_sample_dts;
+                    num_consecutive_sample_skip       = 0;
+                    total_media_size                 += sample_size;
                     /* Print, per 256 samples, total size of imported media. */
                     if( ++sample_count == 0 )
                         eprintf( "Importing: %"PRIu64" bytes\r", total_media_size );
@@ -583,15 +681,41 @@ static int do_remux( remuxer_t *remuxer )
 #undef LSMASH_MAX
 }
 
-static int copy_timeline_maps( output_movie_t *output, input_movie_t *input, int num_input )
+static int construct_timeline_maps( remuxer_t *remuxer )
 {
+    output_movie_t      *output       = remuxer->output;
+    input_movie_t       *input        = remuxer->input;
+    track_media_option **track_option = remuxer->track_option;
     output->current_track_number = 1;
-    for( int i = 0; i < num_input; i++ )
+    for( int i = 0; i < remuxer->num_input; i++ )
         for( uint32_t j = 0; j < input[i].num_tracks; j++ )
         {
             output_track_t *out_track = &output->track[output->current_track_number ++ - 1];
-            if( lsmash_copy_timeline_map( output->root, out_track->track_ID, input[i].root, input[i].track[j].track_ID ) )
-                return -1;
+            input_track_t  *in_track  = &input[i].track[j];
+            if( track_option[i][j].seek )
+            {
+                /* Reconstruct timeline maps. */
+                if( lsmash_delete_explicit_timeline_map( output->root, out_track->track_ID ) )
+                    return ERROR_MSG( "failed to delete explicit timeline maps.\n" );
+                uint32_t movie_timescale = lsmash_get_movie_timescale( output->root );
+                uint32_t media_timescale = lsmash_get_media_timescale( output->root, out_track->track_ID );
+                if( !media_timescale )
+                    return ERROR_MSG( "media timescale is broken.\n" );
+                double timescale_convert_multiplier = (double)movie_timescale / media_timescale;
+                uint64_t start_time = in_track->composition_delay + in_track->skip_duration;
+                if( start_time )
+                {
+                    uint64_t empty_duration = start_time + lsmash_get_composition_to_decode_shift( output->root, out_track->track_ID );
+                    empty_duration  = empty_duration * timescale_convert_multiplier + 0.5;
+                    if( lsmash_create_explicit_timeline_map( output->root, out_track->track_ID, empty_duration, ISOM_EDIT_MODE_EMPTY, ISOM_EDIT_MODE_NORMAL ) )
+                        return ERROR_MSG( "failed to create a empty duration.\n" );
+                }
+                uint64_t duration = (out_track->last_sample_dts + out_track->last_sample_delta - in_track->skip_duration) * timescale_convert_multiplier;
+                if( lsmash_create_explicit_timeline_map( output->root, out_track->track_ID, duration, start_time, ISOM_EDIT_MODE_NORMAL ) )
+                    return ERROR_MSG( "failed to create a explicit timeline map.\n" );
+            }
+            else if( lsmash_copy_timeline_map( output->root, out_track->track_ID, input[i].root, in_track->track_ID ) )
+                return ERROR_MSG( "failed to copy timeline maps.\n" );
         }
     return 0;
 }
@@ -643,8 +767,8 @@ int main( int argc, char *argv[] )
         return REMUXER_ERR( "failed to set up preparation for output.\n" );
     if( do_remux( &remuxer ) )
         return REMUXER_ERR( "failed to remux movies.\n" );
-    if( copy_timeline_maps( &output, input, num_input ) )
-        return REMUXER_ERR( "failed to copy a timeline map.\n" );
+    if( construct_timeline_maps( &remuxer ) )
+        return REMUXER_ERR( "failed to construct timeline maps.\n" );
     if( finish_movie( &remuxer ) )
         return REMUXER_ERR( "failed to finish output movie.\n" );
     REFRESH_CONSOLE;
