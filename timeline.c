@@ -1036,6 +1036,45 @@ int lsmash_get_composition_to_decode_shift_from_media_timeline( lsmash_root_t *r
     return 0;
 }
 
+static int isom_get_closest_past_random_accessible_point_from_media_timeline( isom_timeline_t *timeline, uint32_t sample_number, uint32_t *rap_number )
+{
+    isom_sample_info_t *info;
+    do
+    {
+        info = (isom_sample_info_t *)lsmash_get_entry_data( timeline->info_list, sample_number-- );
+        if( !info )
+            return -1;
+    } while( info->prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE );
+    *rap_number = sample_number + 1;
+    return 0;
+}
+
+static int isom_get_closest_future_random_accessible_point_from_media_timeline( isom_timeline_t *timeline, uint32_t sample_number, uint32_t *rap_number )
+{
+    isom_sample_info_t *info;
+    do
+    {
+        info = (isom_sample_info_t *)lsmash_get_entry_data( timeline->info_list, sample_number++ );
+        if( !info )
+            return -1;
+    } while( info->prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE );
+    *rap_number = sample_number - 1;
+    return 0;
+}
+
+int lsmash_get_closest_random_accessible_point_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number, uint32_t *rap_number )
+{
+    if( sample_number == 0 )
+        return -1;
+    isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
+    if( !timeline )
+        return -1;
+    if( isom_get_closest_past_random_accessible_point_from_media_timeline( timeline, sample_number, rap_number )
+     && isom_get_closest_future_random_accessible_point_from_media_timeline( timeline, sample_number, rap_number ) )
+        return -1;
+    return 0;
+}
+
 lsmash_sample_t *lsmash_get_sample_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number )
 {
     uint64_t dts;
