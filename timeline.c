@@ -1014,6 +1014,15 @@ int lsmash_get_dts_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, 
     return isom_get_dts_from_media_timeline_internal( timeline, sample_number, dts );
 }
 
+int lsmash_get_composition_to_decode_shift_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t *ctd_shift )
+{
+    isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
+    if( !timeline )
+        return -1;
+    *ctd_shift = timeline->ctd_shift;
+    return 0;
+}
+
 lsmash_sample_t *lsmash_get_sample_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number )
 {
     uint64_t dts;
