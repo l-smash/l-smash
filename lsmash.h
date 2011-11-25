@@ -1219,11 +1219,12 @@ int lsmash_add_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length );
 
 int lsmash_write_free( lsmash_root_t *root );
 
-uint32_t lsmash_get_media_timescale( lsmash_root_t *root, uint32_t track_ID );
 uint64_t lsmash_get_media_duration( lsmash_root_t *root, uint32_t track_ID );
 uint64_t lsmash_get_track_duration( lsmash_root_t *root, uint32_t track_ID );
 uint32_t lsmash_get_last_sample_delta( lsmash_root_t *root, uint32_t track_ID );
 uint32_t lsmash_get_start_time_offset( lsmash_root_t *root, uint32_t track_ID );
+uint32_t lsmash_get_composition_to_decode_shift( lsmash_root_t *root, uint32_t track_ID );
+uint32_t lsmash_get_media_timescale( lsmash_root_t *root, uint32_t track_ID );
 uint32_t lsmash_get_movie_timescale( lsmash_root_t *root );
 
 int lsmash_set_avc_config( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number,

@@ -7175,6 +7175,56 @@ uint32_t lsmash_get_start_time_offset( lsmash_root_t *root, uint32_t track_ID )
     return ((isom_ctts_entry_t *)trak->mdia->minf->stbl->ctts->list->head->data)->sample_offset;
 }
 
+uint32_t lsmash_get_composition_to_decode_shift( lsmash_root_t *root, uint32_t track_ID )
+{
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl )
+        return 0;
+    uint32_t sample_count = isom_get_sample_count( trak );
+    if( sample_count == 0 )
+        return 0;
+    isom_stbl_t *stbl = trak->mdia->minf->stbl;
+    if( !stbl->stts || !stbl->stts->list || !stbl->ctts || !stbl->ctts->list )
+        return 0;
+    if( !(root->max_isom_version >= 4 && stbl->ctts->version == 1) && !root->qt_compatible )
+        return 0;   /* This movie shall not have composition to decode timeline shift. */
+    lsmash_entry_t *stts_entry = stbl->stts->list->head;
+    lsmash_entry_t *ctts_entry = stbl->ctts->list->head;
+    if( !stts_entry || !ctts_entry )
+        return 0;
+    uint64_t dts = 0;
+    uint64_t cts = 0;
+    uint32_t ctd_shift = 0;
+    uint32_t i = 0;
+    uint32_t j = 0;
+    for( uint32_t k = 0; k < sample_count; i++ )
+    {
+        isom_stts_entry_t *stts_data = (isom_stts_entry_t *)stts_entry->data;
+        isom_ctts_entry_t *ctts_data = (isom_ctts_entry_t *)ctts_entry->data;
+        if( !stts_data || !ctts_data )
+            return 0;
+        cts = dts + (int32_t)ctts_data->sample_offset;
+        if( dts > cts + ctd_shift )
+            ctd_shift = dts - cts;
+        dts += stts_data->sample_delta;
+        if( ++i == stts_data->sample_count )
+        {
+            stts_entry = stts_entry->next;
+            if( !stts_entry )
+                return 0;
+            i = 0;
+        }
+        if( ++j == ctts_data->sample_count )
+        {
+            ctts_entry = ctts_entry->next;
+            if( !ctts_entry )
+                return 0;
+            j = 0;
+        }
+    }
+    return ctd_shift;
+}
+
 uint16_t lsmash_pack_iso_language( char *iso_language )
 {
     if( !iso_language || strlen( iso_language ) != 3 )
