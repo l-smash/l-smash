@@ -479,6 +479,15 @@ static int isom_copy_chan( isom_audio_entry_t *dst, isom_audio_entry_t *src )
     return 0;
 }
 
+static uint32_t isom_get_lpcm_sample_size( isom_audio_entry_t *audio )
+{
+    if( audio->version == 0 )
+        return (audio->samplesize * audio->channelcount) / 8;
+    else if( audio->version == 1 )
+        return audio->bytesPerFrame;
+    return audio->constBytesPerAudioPacket;
+}
+
 static isom_audio_entry_t *isom_duplicate_audio_description( isom_audio_entry_t *src )
 {
     isom_audio_entry_t *dst = lsmash_memdup( src, sizeof(isom_audio_entry_t) );
@@ -488,12 +497,7 @@ static isom_audio_entry_t *isom_duplicate_audio_description( isom_audio_entry_t 
     dst->wave = NULL;
     dst->chan = NULL;
     if( isom_is_lpcm_audio( src->type ) )
-    {
-        if( !src->version )
-            dst->constBytesPerAudioPacket = (src->samplesize * src->channelcount) / 8;
-        else if( src->version == 1 )
-            dst->constBytesPerAudioPacket = src->bytesPerFrame;
-    }
+        dst->constBytesPerAudioPacket = isom_get_lpcm_sample_size( src );
     COPY_EXDATA( dst, src );
     /* Copy children. */
     dst->esds = isom_duplicate_esds( (isom_box_t *)dst, src->esds );
@@ -716,7 +720,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                          ? ((isom_co64_entry_t *)stco_entry->data)->chunk_offset
                          : ((isom_stco_entry_t *)stco_entry->data)->chunk_offset;
     uint32_t constant_sample_size = is_lpcm_audio
-                                  ? ((isom_audio_entry_t *)description)->constBytesPerAudioPacket
+                                  ? isom_get_lpcm_sample_size( (isom_audio_entry_t *)description )
                                   : stsz->sample_size;
     /* Copy edits. */
     while( elst_entry )
@@ -938,7 +942,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                 description = (isom_sample_entry_t *)lsmash_get_entry_data( stsd->list, stsc_data->sample_description_index );
                 is_lpcm_audio = isom_is_lpcm_audio( description->type );
                 if( is_lpcm_audio )
-                    constant_sample_size = ((isom_audio_entry_t *)description)->constBytesPerAudioPacket;
+                    constant_sample_size = isom_get_lpcm_sample_size( (isom_audio_entry_t *)description );
             }
         }
         else
