@@ -615,7 +615,10 @@ static int do_remux( remuxer_t *remuxer )
                 else
                 {
                     if( lsmash_check_sample_existence_in_media_timeline( in_movie->root, in_track->track_ID, in_track->current_sample_number ) )
-                        return ERROR_MSG( "failed to get a sample.\n" );
+                    {
+                        ERROR_MSG( "failed to get a sample.\n" );
+                        break;
+                    }
                     /* No more appendable samples in this track. */
                     in_track->sample = NULL;
                     in_track->reach_end_of_media_timeline = 1;
