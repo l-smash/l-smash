@@ -585,6 +585,11 @@ static isom_sample_entry_t *isom_duplicate_description( isom_sample_entry_t *ent
         case ISOM_CODEC_TYPE_AVC1_VIDEO :
         case ISOM_CODEC_TYPE_MP4V_VIDEO :
         case ISOM_CODEC_TYPE_VC_1_VIDEO :
+        case QT_CODEC_TYPE_APCH_VIDEO :
+        case QT_CODEC_TYPE_APCN_VIDEO :
+        case QT_CODEC_TYPE_APCS_VIDEO :
+        case QT_CODEC_TYPE_APCO_VIDEO :
+        case QT_CODEC_TYPE_AP4H_VIDEO :
             description = isom_duplicate_visual_description( (isom_visual_entry_t *)entry );
             break;
         case ISOM_CODEC_TYPE_MP4A_AUDIO :

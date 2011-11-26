@@ -4178,6 +4178,11 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
         {
             case ISOM_CODEC_TYPE_AVC1_VIDEO :
             case ISOM_CODEC_TYPE_VC_1_VIDEO :
+            case QT_CODEC_TYPE_APCH_VIDEO :
+            case QT_CODEC_TYPE_APCN_VIDEO :
+            case QT_CODEC_TYPE_APCS_VIDEO :
+            case QT_CODEC_TYPE_APCO_VIDEO :
+            case QT_CODEC_TYPE_AP4H_VIDEO :
 #ifdef LSMASH_DEMUXER_ENABLED
             case ISOM_CODEC_TYPE_MP4V_VIDEO :
 #endif
@@ -6362,6 +6367,11 @@ static uint64_t isom_update_stsd_size( isom_stsd_t *stsd )
         {
             case ISOM_CODEC_TYPE_AVC1_VIDEO :
             case ISOM_CODEC_TYPE_VC_1_VIDEO :
+            case QT_CODEC_TYPE_APCH_VIDEO :
+            case QT_CODEC_TYPE_APCN_VIDEO :
+            case QT_CODEC_TYPE_APCS_VIDEO :
+            case QT_CODEC_TYPE_APCO_VIDEO :
+            case QT_CODEC_TYPE_AP4H_VIDEO :
 #ifdef LSMASH_DEMUXER_ENABLED
             case ISOM_CODEC_TYPE_MP4V_VIDEO :
 #endif
