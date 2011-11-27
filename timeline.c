@@ -58,6 +58,7 @@ typedef struct
     uint32_t movie_timescale;
     uint32_t media_timescale;
     uint32_t sample_count;
+    uint32_t max_sample_size;
     int32_t  ctd_shift;     /* shift from composition to decode timeline */
     uint32_t last_accessed_sample_number;
     uint32_t last_accessed_chunk_number;
@@ -92,6 +93,7 @@ static isom_timeline_t *isom_create_timeline( void )
     if( !timeline )
         return NULL;
     timeline->track_ID                    = 0;
+    timeline->max_sample_size             = 0;
     timeline->ctd_shift                   = 0;
     timeline->last_accessed_sample_number = 0;
     timeline->last_accessed_chunk_number  = 0;
@@ -895,6 +897,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
             info->length = ((isom_stsz_entry_t *)stsz_entry->data)->entry_size;
             stsz_entry = stsz_entry->next;
         }
+        timeline->max_sample_size = LSMASH_MAX( timeline->max_sample_size, info->length );
         /* Get chunk info. */
         info->pos = data_offset;
         info->index = stsc_data->sample_description_index;
@@ -1178,6 +1181,14 @@ uint32_t lsmash_get_sample_count_in_media_timeline( lsmash_root_t *root, uint32_
     if( !timeline )
         return 0;
     return timeline->sample_count;
+}
+
+uint32_t lsmash_get_max_sample_size_in_media_timeline( lsmash_root_t *root, uint32_t track_ID )
+{
+    isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
+    if( !timeline )
+        return 0;
+    return timeline->max_sample_size;
 }
 
 int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_root_t *src, uint32_t src_track_ID )
