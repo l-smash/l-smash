@@ -1050,7 +1050,7 @@ int lsmash_get_composition_to_decode_shift_from_media_timeline( lsmash_root_t *r
     return 0;
 }
 
-static int isom_get_closest_past_random_accessible_point_from_media_timeline( isom_timeline_t *timeline, uint32_t sample_number, uint32_t *rap_number )
+static inline int isom_get_closest_past_random_accessible_point_from_media_timeline( isom_timeline_t *timeline, uint32_t sample_number, uint32_t *rap_number )
 {
     isom_sample_info_t *info;
     do
@@ -1063,7 +1063,7 @@ static int isom_get_closest_past_random_accessible_point_from_media_timeline( is
     return 0;
 }
 
-static int isom_get_closest_future_random_accessible_point_from_media_timeline( isom_timeline_t *timeline, uint32_t sample_number, uint32_t *rap_number )
+static inline int isom_get_closest_future_random_accessible_point_from_media_timeline( isom_timeline_t *timeline, uint32_t sample_number, uint32_t *rap_number )
 {
     isom_sample_info_t *info;
     do
@@ -1076,17 +1076,160 @@ static int isom_get_closest_future_random_accessible_point_from_media_timeline( 
     return 0;
 }
 
+static int isom_get_closest_random_accessible_point_from_media_timeline_internal( isom_timeline_t *timeline, uint32_t sample_number, uint32_t *rap_number )
+{
+    if( !timeline )
+        return -1;
+    if( isom_get_closest_past_random_accessible_point_from_media_timeline( timeline, sample_number, rap_number )
+     && isom_get_closest_future_random_accessible_point_from_media_timeline( timeline, sample_number + 1, rap_number ) )
+        return -1;
+    return 0;
+}
+
 int lsmash_get_closest_random_accessible_point_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number, uint32_t *rap_number )
 {
     if( sample_number == 0 )
         return -1;
     isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
-    if( !timeline )
+    return isom_get_closest_random_accessible_point_from_media_timeline_internal( timeline, sample_number, rap_number );
+}
+
+int lsmash_get_closest_random_accessible_point_detail_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number,
+                                                                           uint32_t *rap_number, lsmash_random_access_type *type, uint32_t *leading, uint32_t *distance )
+{
+    if( sample_number == 0 )
         return -1;
-    if( isom_get_closest_past_random_accessible_point_from_media_timeline( timeline, sample_number, rap_number )
-     && isom_get_closest_future_random_accessible_point_from_media_timeline( timeline, sample_number, rap_number ) )
+    isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
+    if( isom_get_closest_random_accessible_point_from_media_timeline_internal( timeline, sample_number, rap_number ) )
         return -1;
-    return 0;
+    isom_sample_info_t *info = (isom_sample_info_t *)lsmash_get_entry_data( timeline->info_list, *rap_number );
+    if( !info )
+        return -1;
+    if( type )
+        *type = info->prop.random_access_type;
+    if( leading )
+        *leading  = 0;
+    if( distance )
+        *distance = 0;
+    if( sample_number < *rap_number )
+        /* Impossible to desire to decode the sample of given number correctly. */
+        return 0;
+    else if( info->prop.random_access_type != ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY )
+    {
+        if( leading )
+        {
+            /* Count leading samples. */
+            sample_number = *rap_number + 1;
+            uint64_t dts;
+            if( isom_get_dts_from_media_timeline_internal( timeline, *rap_number, &dts ) )
+                return -1;
+            uint64_t rap_cts = timeline->ctd_shift ? (dts + (int32_t)info->offset + timeline->ctd_shift) : (dts + info->offset);
+            do
+            {
+                info = (isom_sample_info_t *)lsmash_get_entry_data( timeline->info_list, sample_number );
+                if( !info )
+                    break;
+                if( isom_get_dts_from_media_timeline_internal( timeline, sample_number++, &dts ) )
+                    return -1;
+                if( rap_cts <= dts )
+                    break;  /* leading samples of this random accessible point must not be present more. */
+                uint64_t cts = timeline->ctd_shift ? (dts + (int32_t)info->offset + timeline->ctd_shift) : (dts + info->offset);
+                if( rap_cts > cts )
+                    ++ *leading;
+            } while( 1 );
+        }
+        if( !distance )
+            return 0;
+        /* Measure distance from the first closest non-recovery random accessible point to the second. */
+        uint32_t prev_rap_number = *rap_number;
+        do
+        {
+            if( isom_get_closest_past_random_accessible_point_from_media_timeline( timeline, prev_rap_number - 1, &prev_rap_number ) )
+                /* The previous random accessible point is not present. */
+                return 0;
+            info = (isom_sample_info_t *)lsmash_get_entry_data( timeline->info_list, prev_rap_number );
+            if( !info )
+                return -1;
+            if( info->prop.random_access_type != ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY )
+            {
+                /* Decode shall already complete at the first closest non-recovery random accessible point if starting to decode from the second. */
+                *distance = *rap_number - prev_rap_number;
+                return 0;
+            }
+        } while( 1 );
+    }
+    if( !distance )
+        return 0;
+    /* Calculate roll-distance. */
+    if( info->prop.pre_roll.distance )
+    {
+        /* Pre-roll recovery */
+        uint32_t prev_rap_number = *rap_number;
+        do
+        {
+            if( isom_get_closest_past_random_accessible_point_from_media_timeline( timeline, prev_rap_number - 1, &prev_rap_number )
+             && *rap_number < info->prop.pre_roll.distance )
+            {
+                /* The previous random accessible point is not present.
+                 * And sample of given number might be not able to decoded correctly. */
+                *distance = 0;
+                return 0;
+            }
+            if( prev_rap_number + info->prop.pre_roll.distance <= *rap_number )
+            {
+                /*
+                 *                                          |<---- pre-roll distance ---->|
+                 *                                          |<--------- distance -------->|
+                 * media +++++++++++++++++++++++++ *** +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+                 *                  ^                       ^                             ^                    ^
+                 *       random accessible point         starting point        random accessible point   given sample
+                 *                                                                   (complete)
+                 */
+                *distance = info->prop.pre_roll.distance;
+                return 0;
+            }
+            else if( info->prop.random_access_type != ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY )
+            {
+                /*
+                 *            |<------------ pre-roll distance ------------------>|
+                 *                                      |<------ distance ------->|
+                 * media ++++++++++++++++ *** ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+                 *            ^                         ^                         ^                     ^
+                 *                            random accessible point   random accessible point   given sample
+                 *                                (starting point)            (complete)
+                 */
+                *distance = *rap_number - prev_rap_number;
+                return 0;
+            }
+        } while( 1 );
+    }
+    /* Post-roll recovery */
+    if( sample_number >= *rap_number + info->prop.post_roll.complete )
+        /*
+         *                  |<----- post-roll distance ----->|
+         *            (distance = 0)
+         * media +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+         *                  ^                                ^            ^
+         *       random accessible point                 complete     given sample
+         *          (starting point)
+         */
+        return 0;
+    uint32_t prev_rap_number = *rap_number;
+    do
+    {
+        if( isom_get_closest_past_random_accessible_point_from_media_timeline( timeline, prev_rap_number - 1, &prev_rap_number ) )
+            /* The previous random accessible point is not present. */
+            return 0;
+        info = (isom_sample_info_t *)lsmash_get_entry_data( timeline->info_list, prev_rap_number );
+        if( !info )
+            return -1;
+        if( info->prop.random_access_type != ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY
+         || sample_number >= prev_rap_number + info->prop.post_roll.complete )
+        {
+            *distance = *rap_number - prev_rap_number;
+            return 0;
+        }
+    } while( 1 );
 }
 
 lsmash_sample_t *lsmash_get_sample_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number )
