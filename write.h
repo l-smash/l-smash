@@ -1,5 +1,5 @@
 /*****************************************************************************
- * isom.h:
+ * write.h:
  *****************************************************************************
  * Copyright (C) 2011 L-SMASH project
  *
@@ -20,16 +20,20 @@
 
 /* This file is available under an ISC license. */
 
-#ifndef LSMASH_ISOM_H
-#define LSMASH_ISOM_H
+#ifndef LSMASH_WRITE_H
+#define LSMASH_WRITE_H
 
-isom_tref_type_t *isom_add_track_reference_type( isom_tref_t *tref, isom_track_reference_type type, uint32_t ref_count, uint32_t *track_ID );
-int isom_add_chpl_entry( isom_chpl_t *chpl, isom_chapter_entry_t *chap_data );
-int isom_add_tref( isom_trak_entry_t *trak );
-int isom_add_chpl( isom_moov_t *moov );
-int isom_add_udta( lsmash_root_t *root, uint32_t track_ID );
-void isom_remove_track_reference_type( isom_tref_type_t *ref );
-void isom_remove_tref( isom_tref_t *tref );
-void isom_remove_trak( isom_trak_entry_t *trak );
+int isom_write_meta( lsmash_bs_t *bs, isom_meta_t *meta );
+int isom_write_udta( lsmash_bs_t *bs, isom_moov_t *moov, isom_trak_entry_t *trak );
+int isom_write_trak( lsmash_bs_t *bs, isom_trak_entry_t *trak );
+int isom_write_iods( lsmash_root_t *root );
+int isom_write_mvhd( lsmash_root_t *root );
+int isom_write_mehd( lsmash_bs_t *bs, isom_mehd_t *mehd );
+int isom_write_moof( lsmash_bs_t *bs, isom_moof_entry_t *moof );
+int isom_write_mfra( lsmash_bs_t *bs, isom_mfra_t *mfra );
+int isom_write_mdat_header( lsmash_root_t *root, uint64_t media_size );
+int isom_write_mdat_size( lsmash_root_t *root );
+int isom_write_ftyp( lsmash_root_t *root );
+int isom_write_moov( lsmash_root_t *root );
 
 #endif

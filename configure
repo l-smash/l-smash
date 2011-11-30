@@ -265,7 +265,7 @@ fi
 # Notation for developpers.
 # Be sure to modified this block when you add/delete source files.
 SRCS="isom.c utils.c mp4sys.c mp4a.c importer.c \
-      summary.c print.c read.c timeline.c chapter.c"
+      summary.c print.c read.c timeline.c chapter.c write.c"
 TOOLS_ALL="muxer remuxer boxdumper timelineeditor"
 TOOLS_NAME=""
 SRC_TOOLS=""
