@@ -1204,7 +1204,7 @@ int lsmash_get_closest_random_accessible_point_detail_from_media_timeline( lsmas
         } while( 1 );
     }
     /* Post-roll recovery */
-    if( sample_number >= *rap_number + info->prop.post_roll.complete )
+    if( sample_number >= info->prop.post_roll.complete )
         /*
          *                  |<----- post-roll distance ----->|
          *            (distance = 0)
@@ -1224,7 +1224,7 @@ int lsmash_get_closest_random_accessible_point_detail_from_media_timeline( lsmas
         if( !info )
             return -1;
         if( info->prop.random_access_type != ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY
-         || sample_number >= prev_rap_number + info->prop.post_roll.complete )
+         || sample_number >= info->prop.post_roll.complete )
         {
             *distance = *rap_number - prev_rap_number;
             return 0;
