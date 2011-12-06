@@ -31,11 +31,11 @@
 #include "isom.h"
 #include "mp4a.h"
 #include "mp4sys.h"
+#include "write.h"
 #ifdef LSMASH_DEMUXER_ENABLED
 #include "read.h"
 #include "print.h"
 #include "timeline.h"
-#include "write.h"
 #endif
 
 
