@@ -1596,6 +1596,18 @@ int lsmash_get_media_timestamps( lsmash_root_t *root, uint32_t track_ID, lsmash_
     return 0;
 }
 
+void lsmash_delete_media_timestamps( lsmash_media_ts_list_t *ts_list )
+{
+    if( !ts_list )
+        return;
+    if( ts_list->timestamp )
+    {
+        free( ts_list->timestamp );
+        ts_list->timestamp = NULL;
+    }
+    ts_list->sample_count = 0;
+}
+
 int lsmash_get_media_timeline_shift( lsmash_root_t *root, uint32_t track_ID, int32_t *timeline_shift )
 {
     if( !timeline_shift )

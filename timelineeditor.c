@@ -656,7 +656,10 @@ static int edit_media_timeline( movie_t *input, timecode_t *timecode, opt_t *opt
     else    /* still image */
         timecode->duration = in_track->last_sample_delta = UINT32_MAX;
     in_track->media_param.timescale = timescale;
-    return lsmash_set_media_timestamps( input->root, track_ID, &ts_list );
+    if( lsmash_set_media_timestamps( input->root, track_ID, &ts_list ) )
+        return ERROR_MSG( "Failed to set media timestamps.\n" );
+    lsmash_delete_media_timestamps( &ts_list );
+    return 0;
 }
 
 static int moov_to_front_callback( void *param, uint64_t written_movie_size, uint64_t total_movie_size )
