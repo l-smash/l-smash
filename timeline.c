@@ -1088,7 +1088,7 @@ static int isom_get_closest_random_accessible_point_from_media_timeline_internal
 
 int lsmash_get_closest_random_accessible_point_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number, uint32_t *rap_number )
 {
-    if( sample_number == 0 )
+    if( sample_number == 0 || !rap_number )
         return -1;
     isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
     return isom_get_closest_random_accessible_point_from_media_timeline_internal( timeline, sample_number, rap_number );
