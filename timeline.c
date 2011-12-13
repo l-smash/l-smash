@@ -59,7 +59,7 @@ typedef struct
     uint32_t media_timescale;
     uint32_t sample_count;
     uint32_t max_sample_size;
-    int32_t  ctd_shift;     /* shift from composition to decode timeline */
+    uint32_t ctd_shift;     /* shift from composition to decode timeline */
     uint32_t last_accessed_sample_number;
     uint32_t last_accessed_chunk_number;
     uint64_t last_accessed_sample_dts;
@@ -89,18 +89,9 @@ static isom_timeline_t *isom_get_timeline( lsmash_root_t *root, uint32_t track_I
 
 static isom_timeline_t *isom_create_timeline( void )
 {
-    isom_timeline_t *timeline = malloc( sizeof(isom_timeline_t) );
+    isom_timeline_t *timeline = lsmash_malloc_zero( sizeof(isom_timeline_t) );
     if( !timeline )
         return NULL;
-    timeline->track_ID                    = 0;
-    timeline->max_sample_size             = 0;
-    timeline->ctd_shift                   = 0;
-    timeline->last_accessed_sample_number = 0;
-    timeline->last_accessed_chunk_number  = 0;
-    timeline->last_accessed_sample_dts    = 0;
-    timeline->last_accessed_offset        = 0;
-    timeline->last_read_size              = 0;
-    timeline->last_accessed_chunk_data    = NULL;
     lsmash_init_entry_list( timeline->edit_list );
     lsmash_init_entry_list( timeline->description_list );
     lsmash_init_entry_list( timeline->chunk_list );
@@ -1043,6 +1034,8 @@ int lsmash_get_cts_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, 
 
 int lsmash_get_composition_to_decode_shift_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t *ctd_shift )
 {
+    if( !ctd_shift )
+        return -1;
     isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
     if( !timeline )
         return -1;
@@ -1652,17 +1645,6 @@ void lsmash_sort_timestamps_composition_order( lsmash_media_ts_list_t *ts_list )
     if( !ts_list )
         return;
     qsort( ts_list->timestamp, ts_list->sample_count, sizeof(lsmash_media_ts_t), (int(*)( const void *, const void * ))isom_compare_cts );
-}
-
-int lsmash_get_media_timeline_shift( lsmash_root_t *root, uint32_t track_ID, int32_t *timeline_shift )
-{
-    if( !timeline_shift )
-        return -1;
-    isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
-    if( !timeline )
-        return -1;
-    *timeline_shift = timeline->ctd_shift;
-    return 0;
 }
 
 #endif /* LSMASH_DEMUXER_ENABLED */

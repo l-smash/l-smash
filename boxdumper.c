@@ -123,8 +123,8 @@ int main( int argc, char *argv[] )
                 return BOXDUMPER_ERR( "Failed to get media parameters.\n" );
             if( lsmash_construct_timeline( root, track_ID ) )
                 return BOXDUMPER_ERR( "Failed to construct timeline.\n" );
-            int32_t timeline_shift;
-            if( lsmash_get_media_timeline_shift( root, track_ID, &timeline_shift ) )
+            uint32_t timeline_shift;
+            if( lsmash_get_composition_to_decode_shift_from_media_timeline( root, track_ID, &timeline_shift ) )
                 return BOXDUMPER_ERR( "Failed to get timestamps.\n" );
             lsmash_media_ts_list_t ts_list;
             if( lsmash_get_media_timestamps( root, track_ID, &ts_list ) )

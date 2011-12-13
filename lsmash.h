@@ -1315,7 +1315,6 @@ void lsmash_destroy_itunes_metadata( lsmash_itunes_metadata_list_t *list );
 int lsmash_set_media_timestamps( lsmash_root_t *root, uint32_t track_ID, lsmash_media_ts_list_t *ts_list );
 int lsmash_get_media_timestamps( lsmash_root_t *root, uint32_t track_ID, lsmash_media_ts_list_t *ts_list );
 void lsmash_delete_media_timestamps( lsmash_media_ts_list_t *ts_list );
-int lsmash_get_media_timeline_shift( lsmash_root_t *root, uint32_t track_ID, int32_t *timeline_shift );
 int lsmash_get_max_sample_delay( lsmash_media_ts_list_t *ts_list, uint32_t *max_sample_delay );
 void lsmash_sort_timestamps_decoding_order( lsmash_media_ts_list_t *ts_list );
 void lsmash_sort_timestamps_composition_order( lsmash_media_ts_list_t *ts_list );
