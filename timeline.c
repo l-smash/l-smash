@@ -1608,6 +1608,52 @@ void lsmash_delete_media_timestamps( lsmash_media_ts_list_t *ts_list )
     ts_list->sample_count = 0;
 }
 
+int lsmash_get_max_sample_delay( lsmash_media_ts_list_t *ts_list, uint32_t *max_sample_delay )
+{
+    if( !ts_list || !max_sample_delay )
+        return -1;
+    *max_sample_delay = 0;
+    uint32_t sample_delay = 0;
+    lsmash_media_ts_t *ts = ts_list->timestamp;
+    for( uint32_t i = 1; i < ts_list->sample_count; i++ )
+    {
+        if( ts[i].cts < ts[i - 1].cts )
+        {
+            ++sample_delay;
+            *max_sample_delay = LSMASH_MAX( *max_sample_delay, sample_delay );
+        }
+        else
+            sample_delay = 0;
+    }
+    return 0;
+}
+
+static int isom_compare_dts( const lsmash_media_ts_t *a, const lsmash_media_ts_t *b )
+{
+    int64_t diff = (int64_t)(a->dts - b->dts);
+    return diff > 0 ? 1 : (diff == 0 ? 0 : -1);
+}
+
+void lsmash_sort_timestamps_decoding_order( lsmash_media_ts_list_t *ts_list )
+{
+    if( !ts_list )
+        return;
+    qsort( ts_list->timestamp, ts_list->sample_count, sizeof(lsmash_media_ts_t), (int(*)( const void *, const void * ))isom_compare_dts );
+}
+
+static int isom_compare_cts( const lsmash_media_ts_t *a, const lsmash_media_ts_t *b )
+{
+    int64_t diff = (int64_t)(a->cts - b->cts);
+    return diff > 0 ? 1 : (diff == 0 ? 0 : -1);
+}
+
+void lsmash_sort_timestamps_composition_order( lsmash_media_ts_list_t *ts_list )
+{
+    if( !ts_list )
+        return;
+    qsort( ts_list->timestamp, ts_list->sample_count, sizeof(lsmash_media_ts_t), (int(*)( const void *, const void * ))isom_compare_cts );
+}
+
 int lsmash_get_media_timeline_shift( lsmash_root_t *root, uint32_t track_ID, int32_t *timeline_shift )
 {
     if( !timeline_shift )

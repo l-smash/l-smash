@@ -516,36 +516,6 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
 #undef MATROSKA_TIMESCALE
 #undef SKIP_LINE_CHARACTER
 
-static uint32_t get_max_sample_delay( lsmash_media_ts_list_t *ts_list )
-{
-    uint32_t sample_delay = 0;
-    uint32_t max_sample_delay = 0;
-    lsmash_media_ts_t *ts = ts_list->timestamp;
-    for( uint32_t i = 1; i < ts_list->sample_count; i++ )
-    {
-        if( ts[i].cts < ts[i - 1].cts )
-        {
-            ++sample_delay;
-            max_sample_delay = LSMASH_MAX( max_sample_delay, sample_delay );
-        }
-        else
-            sample_delay = 0;
-    }
-    return max_sample_delay;
-}
-
-static int compare_cts( const lsmash_media_ts_t *a, const lsmash_media_ts_t *b )
-{
-    int64_t diff = (int64_t)(a->cts - b->cts);
-    return diff > 0 ? 1 : (diff == 0 ? 0 : -1);
-}
-
-static int compare_dts( const lsmash_media_ts_t *a, const lsmash_media_ts_t *b )
-{
-    int64_t diff = (int64_t)(a->dts - b->dts);
-    return diff > 0 ? 1 : (diff == 0 ? 0 : -1);
-}
-
 static int edit_media_timeline( movie_t *input, timecode_t *timecode, opt_t *opt )
 {
     if( !timecode->file && !opt->media_timescale && !opt->media_timebase && !opt->dts_compression )
@@ -594,9 +564,11 @@ static int edit_media_timeline( movie_t *input, timecode_t *timecode, opt_t *opt
         timebase  = timecode->media_timebase;
     }
     /* Get maximum composition sample delay for DTS generation. */
-    uint32_t sample_delay = get_max_sample_delay( &ts_list );
+    uint32_t sample_delay;
+    if( lsmash_get_max_sample_delay( &ts_list, &sample_delay ) )
+        return ERROR_MSG( "Failed to get maximum composition sample delay.\n" );
     if( sample_delay )      /* Reorder composition order. */
-        qsort( timestamp, sample_count, sizeof(lsmash_media_ts_t), (int(*)( const void *, const void * ))compare_cts );
+        lsmash_sort_timestamps_composition_order( &ts_list );
     if( !timecode->file )
     {
         /* Genarate timestamps timescale converted. */
@@ -625,7 +597,7 @@ static int edit_media_timeline( movie_t *input, timecode_t *timecode, opt_t *opt
         for( uint32_t i = 0; i < sample_count; i++ )
             timestamp[i].cts = timecode->ts[i] + sample_delay_time;
         /* Reorder decode order and generate new DTS from CTS. */
-        qsort( timestamp, sample_count, sizeof(lsmash_media_ts_t), (int(*)( const void *, const void * ))compare_dts );
+        lsmash_sort_timestamps_decoding_order( &ts_list );
         uint64_t prev_reordered_cts[sample_delay];
         for( uint32_t i = 0; i <= sample_delay; i++ )
         {
