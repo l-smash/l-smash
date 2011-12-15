@@ -838,7 +838,7 @@ static void *isom_sample_description_alloc( uint32_t sample_type )
         case QT_CODEC_TYPE_V408_VIDEO :
         case QT_CODEC_TYPE_V410_VIDEO :
         case QT_CODEC_TYPE_YUV2_VIDEO :
-            return malloc( sizeof(isom_visual_entry_t) );
+            return lsmash_malloc_zero( sizeof(isom_visual_entry_t) );
         case ISOM_CODEC_TYPE_AC_3_AUDIO :
         case ISOM_CODEC_TYPE_ALAC_AUDIO :
         case ISOM_CODEC_TYPE_DRA1_AUDIO :
@@ -891,141 +891,13 @@ static void *isom_sample_description_alloc( uint32_t sample_type )
         case QT_CODEC_TYPE_ADPCM17_AUDIO :
         case QT_CODEC_TYPE_GSM49_AUDIO :
         case QT_CODEC_TYPE_NOT_SPECIFIED :
-            return malloc( sizeof(isom_audio_entry_t) );
+            return lsmash_malloc_zero( sizeof(isom_audio_entry_t) );
         case ISOM_CODEC_TYPE_TX3G_TEXT :
-            return malloc( sizeof(isom_tx3g_entry_t) );
+            return lsmash_malloc_zero( sizeof(isom_tx3g_entry_t) );
         case QT_CODEC_TYPE_TEXT_TEXT :
-            return malloc( sizeof(isom_text_entry_t) );
+            return lsmash_malloc_zero( sizeof(isom_text_entry_t) );
         default :
             return NULL;
-    }
-}
-
-static void isom_sample_description_init( void *sample, uint32_t sample_type )
-{
-    switch( sample_type )
-    {
-        case ISOM_CODEC_TYPE_AVC1_VIDEO :
-        case ISOM_CODEC_TYPE_AVC2_VIDEO :
-        case ISOM_CODEC_TYPE_AVCP_VIDEO :
-        case ISOM_CODEC_TYPE_MVC1_VIDEO :
-        case ISOM_CODEC_TYPE_MVC2_VIDEO :
-        case ISOM_CODEC_TYPE_MP4V_VIDEO :
-        case ISOM_CODEC_TYPE_DRAC_VIDEO :
-        case ISOM_CODEC_TYPE_ENCV_VIDEO :
-        case ISOM_CODEC_TYPE_MJP2_VIDEO :
-        case ISOM_CODEC_TYPE_S263_VIDEO :
-        case ISOM_CODEC_TYPE_SVC1_VIDEO :
-        case ISOM_CODEC_TYPE_VC_1_VIDEO :
-        case QT_CODEC_TYPE_CFHD_VIDEO :
-        case QT_CODEC_TYPE_DV10_VIDEO :
-        case QT_CODEC_TYPE_DVOO_VIDEO :
-        case QT_CODEC_TYPE_DVOR_VIDEO :
-        case QT_CODEC_TYPE_DVTV_VIDEO :
-        case QT_CODEC_TYPE_DVVT_VIDEO :
-        case QT_CODEC_TYPE_HD10_VIDEO :
-        case QT_CODEC_TYPE_M105_VIDEO :
-        case QT_CODEC_TYPE_PNTG_VIDEO :
-        case QT_CODEC_TYPE_SVQ1_VIDEO :
-        case QT_CODEC_TYPE_SVQ3_VIDEO :
-        case QT_CODEC_TYPE_SHR0_VIDEO :
-        case QT_CODEC_TYPE_SHR1_VIDEO :
-        case QT_CODEC_TYPE_SHR2_VIDEO :
-        case QT_CODEC_TYPE_SHR3_VIDEO :
-        case QT_CODEC_TYPE_SHR4_VIDEO :
-        case QT_CODEC_TYPE_WRLE_VIDEO :
-        case QT_CODEC_TYPE_APCH_VIDEO :
-        case QT_CODEC_TYPE_APCN_VIDEO :
-        case QT_CODEC_TYPE_APCS_VIDEO :
-        case QT_CODEC_TYPE_APCO_VIDEO :
-        case QT_CODEC_TYPE_AP4H_VIDEO :
-        case QT_CODEC_TYPE_CIVD_VIDEO :
-        //case QT_CODEC_TYPE_DRAC_VIDEO :
-        case QT_CODEC_TYPE_DVH5_VIDEO :
-        case QT_CODEC_TYPE_DVH6_VIDEO :
-        case QT_CODEC_TYPE_DVHP_VIDEO :
-        case QT_CODEC_TYPE_FLIC_VIDEO :
-        case QT_CODEC_TYPE_GIF_VIDEO :
-        case QT_CODEC_TYPE_H261_VIDEO :
-        case QT_CODEC_TYPE_H263_VIDEO :
-        case QT_CODEC_TYPE_JPEG_VIDEO :
-        case QT_CODEC_TYPE_MJPA_VIDEO :
-        case QT_CODEC_TYPE_MJPB_VIDEO :
-        case QT_CODEC_TYPE_PNG_VIDEO :
-        case QT_CODEC_TYPE_RLE_VIDEO :
-        case QT_CODEC_TYPE_RPZA_VIDEO :
-        case QT_CODEC_TYPE_TGA_VIDEO :
-        case QT_CODEC_TYPE_TIFF_VIDEO :
-        case QT_CODEC_TYPE_V210_VIDEO :
-        case QT_CODEC_TYPE_V216_VIDEO :
-        case QT_CODEC_TYPE_V308_VIDEO :
-        case QT_CODEC_TYPE_V408_VIDEO :
-        case QT_CODEC_TYPE_V410_VIDEO :
-        case QT_CODEC_TYPE_YUV2_VIDEO :
-            memset( sample, 0, sizeof(isom_visual_entry_t) );
-            break;
-        case ISOM_CODEC_TYPE_AC_3_AUDIO :
-        case ISOM_CODEC_TYPE_ALAC_AUDIO :
-        case ISOM_CODEC_TYPE_DRA1_AUDIO :
-        case ISOM_CODEC_TYPE_DTSC_AUDIO :
-        case ISOM_CODEC_TYPE_DTSH_AUDIO :
-        case ISOM_CODEC_TYPE_DTSL_AUDIO :
-        case ISOM_CODEC_TYPE_DTSE_AUDIO :
-        case ISOM_CODEC_TYPE_EC_3_AUDIO :
-        case ISOM_CODEC_TYPE_ENCA_AUDIO :
-        case ISOM_CODEC_TYPE_G719_AUDIO :
-        case ISOM_CODEC_TYPE_G726_AUDIO :
-        case ISOM_CODEC_TYPE_M4AE_AUDIO :
-        case ISOM_CODEC_TYPE_MLPA_AUDIO :
-        case ISOM_CODEC_TYPE_MP4A_AUDIO :
-        //case ISOM_CODEC_TYPE_RAW_AUDIO  :
-        case ISOM_CODEC_TYPE_SAMR_AUDIO :
-        case ISOM_CODEC_TYPE_SAWB_AUDIO :
-        case ISOM_CODEC_TYPE_SAWP_AUDIO :
-        case ISOM_CODEC_TYPE_SEVC_AUDIO :
-        case ISOM_CODEC_TYPE_SQCP_AUDIO :
-        case ISOM_CODEC_TYPE_SSMV_AUDIO :
-        //case ISOM_CODEC_TYPE_TWOS_AUDIO :
-        case QT_CODEC_TYPE_23NI_AUDIO :
-        case QT_CODEC_TYPE_MAC3_AUDIO :
-        case QT_CODEC_TYPE_MAC6_AUDIO :
-        case QT_CODEC_TYPE_NONE_AUDIO :
-        case QT_CODEC_TYPE_QDM2_AUDIO :
-        case QT_CODEC_TYPE_QDMC_AUDIO :
-        case QT_CODEC_TYPE_QCLP_AUDIO :
-        case QT_CODEC_TYPE_AGSM_AUDIO :
-        case QT_CODEC_TYPE_ALAW_AUDIO :
-        case QT_CODEC_TYPE_CDX2_AUDIO :
-        case QT_CODEC_TYPE_CDX4_AUDIO :
-        case QT_CODEC_TYPE_DVCA_AUDIO :
-        case QT_CODEC_TYPE_DVI_AUDIO :
-        case QT_CODEC_TYPE_FL32_AUDIO :
-        case QT_CODEC_TYPE_FL64_AUDIO :
-        case QT_CODEC_TYPE_IMA4_AUDIO :
-        case QT_CODEC_TYPE_IN24_AUDIO :
-        case QT_CODEC_TYPE_IN32_AUDIO :
-        case QT_CODEC_TYPE_LPCM_AUDIO :
-        case QT_CODEC_TYPE_RAW_AUDIO :
-        case QT_CODEC_TYPE_SOWT_AUDIO :
-        case QT_CODEC_TYPE_TWOS_AUDIO :
-        case QT_CODEC_TYPE_ULAW_AUDIO :
-        case QT_CODEC_TYPE_VDVA_AUDIO :
-        case QT_CODEC_TYPE_FULLMP3_AUDIO :
-        case QT_CODEC_TYPE_MP3_AUDIO :
-        case QT_CODEC_TYPE_ADPCM2_AUDIO :
-        case QT_CODEC_TYPE_ADPCM17_AUDIO :
-        case QT_CODEC_TYPE_GSM49_AUDIO :
-        case QT_CODEC_TYPE_NOT_SPECIFIED :
-            memset( sample, 0, sizeof(isom_audio_entry_t) );
-            break;
-        case ISOM_CODEC_TYPE_TX3G_TEXT :
-            memset( sample, 0, sizeof(isom_tx3g_entry_t) );
-            break;
-        case QT_CODEC_TYPE_TEXT_TEXT :
-            memset( sample, 0, sizeof(isom_text_entry_t) );
-            break;
-        default :
-            break;
     }
 }
 
@@ -1036,7 +908,6 @@ static void *isom_add_description( uint32_t sample_type, lsmash_entry_list_t *li
     void *sample = isom_sample_description_alloc( sample_type );
     if( !sample )
         return NULL;
-    isom_sample_description_init( sample, sample_type );
     if( !list->head )
         list->entry_count = 0;      /* discard entry_count gotten from the file */
     if( lsmash_add_entry( list, sample ) )
