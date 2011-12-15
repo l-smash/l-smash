@@ -778,6 +778,12 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
             case QT_CODEC_TYPE_APCS_VIDEO :
             case QT_CODEC_TYPE_APCO_VIDEO :
             case QT_CODEC_TYPE_AP4H_VIDEO :
+            case QT_CODEC_TYPE_V210_VIDEO :
+            case QT_CODEC_TYPE_V216_VIDEO :
+            case QT_CODEC_TYPE_V308_VIDEO :
+            case QT_CODEC_TYPE_V408_VIDEO :
+            case QT_CODEC_TYPE_V410_VIDEO :
+            case QT_CODEC_TYPE_YUV2_VIDEO :
 #ifdef LSMASH_DEMUXER_ENABLED
             case ISOM_CODEC_TYPE_MP4V_VIDEO :
 #endif

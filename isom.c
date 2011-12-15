@@ -1092,6 +1092,12 @@ int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t sa
     {
         case ISOM_CODEC_TYPE_AVC1_VIDEO :
         case ISOM_CODEC_TYPE_VC_1_VIDEO :
+        case QT_CODEC_TYPE_V210_VIDEO :
+        case QT_CODEC_TYPE_V216_VIDEO :
+        case QT_CODEC_TYPE_V308_VIDEO :
+        case QT_CODEC_TYPE_V408_VIDEO :
+        case QT_CODEC_TYPE_V410_VIDEO :
+        case QT_CODEC_TYPE_YUV2_VIDEO :
 #if 0
         case ISOM_CODEC_TYPE_AVC2_VIDEO :
         case ISOM_CODEC_TYPE_AVCP_VIDEO :
@@ -2863,6 +2869,12 @@ void isom_remove_sample_description( isom_sample_entry_t *sample )
         case QT_CODEC_TYPE_RPZA_VIDEO :
         case QT_CODEC_TYPE_TGA_VIDEO :
         case QT_CODEC_TYPE_TIFF_VIDEO :
+        case QT_CODEC_TYPE_V210_VIDEO :
+        case QT_CODEC_TYPE_V216_VIDEO :
+        case QT_CODEC_TYPE_V308_VIDEO :
+        case QT_CODEC_TYPE_V408_VIDEO :
+        case QT_CODEC_TYPE_V410_VIDEO :
+        case QT_CODEC_TYPE_YUV2_VIDEO :
         {
             isom_visual_entry_t *visual = (isom_visual_entry_t *)sample;
             isom_remove_visual_extensions( (isom_visual_entry_t *)visual );
@@ -4734,6 +4746,12 @@ static uint64_t isom_update_stsd_size( isom_stsd_t *stsd )
             case QT_CODEC_TYPE_APCS_VIDEO :
             case QT_CODEC_TYPE_APCO_VIDEO :
             case QT_CODEC_TYPE_AP4H_VIDEO :
+            case QT_CODEC_TYPE_V210_VIDEO :
+            case QT_CODEC_TYPE_V216_VIDEO :
+            case QT_CODEC_TYPE_V308_VIDEO :
+            case QT_CODEC_TYPE_V408_VIDEO :
+            case QT_CODEC_TYPE_V410_VIDEO :
+            case QT_CODEC_TYPE_YUV2_VIDEO :
 #ifdef LSMASH_DEMUXER_ENABLED
             case ISOM_CODEC_TYPE_MP4V_VIDEO :
 #endif

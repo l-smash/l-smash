@@ -832,6 +832,12 @@ static void *isom_sample_description_alloc( uint32_t sample_type )
         case QT_CODEC_TYPE_RPZA_VIDEO :
         case QT_CODEC_TYPE_TGA_VIDEO :
         case QT_CODEC_TYPE_TIFF_VIDEO :
+        case QT_CODEC_TYPE_V210_VIDEO :
+        case QT_CODEC_TYPE_V216_VIDEO :
+        case QT_CODEC_TYPE_V308_VIDEO :
+        case QT_CODEC_TYPE_V408_VIDEO :
+        case QT_CODEC_TYPE_V410_VIDEO :
+        case QT_CODEC_TYPE_YUV2_VIDEO :
             return malloc( sizeof(isom_visual_entry_t) );
         case ISOM_CODEC_TYPE_AC_3_AUDIO :
         case ISOM_CODEC_TYPE_ALAC_AUDIO :
@@ -950,6 +956,12 @@ static void isom_sample_description_init( void *sample, uint32_t sample_type )
         case QT_CODEC_TYPE_RPZA_VIDEO :
         case QT_CODEC_TYPE_TGA_VIDEO :
         case QT_CODEC_TYPE_TIFF_VIDEO :
+        case QT_CODEC_TYPE_V210_VIDEO :
+        case QT_CODEC_TYPE_V216_VIDEO :
+        case QT_CODEC_TYPE_V308_VIDEO :
+        case QT_CODEC_TYPE_V408_VIDEO :
+        case QT_CODEC_TYPE_V410_VIDEO :
+        case QT_CODEC_TYPE_YUV2_VIDEO :
             memset( sample, 0, sizeof(isom_visual_entry_t) );
             break;
         case ISOM_CODEC_TYPE_AC_3_AUDIO :
@@ -2850,6 +2862,12 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
             case QT_CODEC_TYPE_RPZA_VIDEO :
             case QT_CODEC_TYPE_TGA_VIDEO :
             case QT_CODEC_TYPE_TIFF_VIDEO :
+            case QT_CODEC_TYPE_V210_VIDEO :
+            case QT_CODEC_TYPE_V216_VIDEO :
+            case QT_CODEC_TYPE_V308_VIDEO :
+            case QT_CODEC_TYPE_V408_VIDEO :
+            case QT_CODEC_TYPE_V410_VIDEO :
+            case QT_CODEC_TYPE_YUV2_VIDEO :
                 return isom_read_visual_description( root, box, parent, level );
             case ISOM_CODEC_TYPE_AC_3_AUDIO :
             case ISOM_CODEC_TYPE_ALAC_AUDIO :

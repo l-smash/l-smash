@@ -1965,6 +1965,12 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
                 case QT_CODEC_TYPE_RPZA_VIDEO :
                 case QT_CODEC_TYPE_TGA_VIDEO :
                 case QT_CODEC_TYPE_TIFF_VIDEO :
+                case QT_CODEC_TYPE_V210_VIDEO :
+                case QT_CODEC_TYPE_V216_VIDEO :
+                case QT_CODEC_TYPE_V308_VIDEO :
+                case QT_CODEC_TYPE_V408_VIDEO :
+                case QT_CODEC_TYPE_V410_VIDEO :
+                case QT_CODEC_TYPE_YUV2_VIDEO :
                     return isom_print_visual_description;
                 case ISOM_CODEC_TYPE_AC_3_AUDIO :
                 case ISOM_CODEC_TYPE_ALAC_AUDIO :
