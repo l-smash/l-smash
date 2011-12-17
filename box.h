@@ -442,6 +442,8 @@ typedef struct
 /* Color Parameter Box
  * This box is used to map the numerical values of pixels in the file to a common representation of color
  * in which images can be correctly compared, combined, and displayed.
+ * The box ('colr') supersedes the Gamma Level Box ('gama').
+ * Writers of QTFF should never write both into an Image Description, and readers of QTFF should ignore 'gama' if 'colr' is present.
  * This box is defined in QuickTime file format. */
 typedef struct
 {
@@ -452,6 +454,15 @@ typedef struct
     uint16_t transfer_function_index;       /* nonlinear transfer function from RGB to ErEgEb */
     uint16_t matrix_index;                  /* matrix from ErEgEb to EyEcbEcr */
 } isom_colr_t;
+
+/* Gamma Level Box
+ * This box is used to indicate that the decompressor corrects gamma level at display time.
+ * This box is defined in QuickTime file format. */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    uint32_t level;     /* A fixed-point 16.16 number indicating the gamma level at which the image was captured. */
+} isom_gama_t;
 
 /* Sample Scale Box
  * If this box is present and can be interpreted by the decoder,
@@ -522,6 +533,7 @@ typedef struct
     isom_esds_t *esds;          /* ES Descriptor Box */
     /* QuickTime specific extension */
     isom_colr_t *colr;          /* Color Parameter Box @ optional */
+    isom_gama_t *gama;          /* Gamma Level Box @ optional */
     /* ISO Base Media extension */
     isom_stsl_t *stsl;          /* Sample Scale Box @ optional */
     /* common extensions
@@ -1765,6 +1777,7 @@ enum qt_box_type
     QT_BOX_TYPE_ENDA    = LSMASH_4CC( 'e', 'n', 'd', 'a' ),
     QT_BOX_TYPE_ENOF    = LSMASH_4CC( 'e', 'n', 'o', 'f' ),
     QT_BOX_TYPE_FRMA    = LSMASH_4CC( 'f', 'r', 'm', 'a' ),
+    QT_BOX_TYPE_GAMA    = LSMASH_4CC( 'g', 'a', 'm', 'a' ),
     QT_BOX_TYPE_GMHD    = LSMASH_4CC( 'g', 'm', 'h', 'd' ),
     QT_BOX_TYPE_GMIN    = LSMASH_4CC( 'g', 'm', 'i', 'n' ),
     QT_BOX_TYPE_IMAP    = LSMASH_4CC( 'i', 'm', 'a', 'p' ),
@@ -2061,6 +2074,7 @@ int isom_add_elst( isom_edts_t *edts );
 int isom_add_clap( isom_visual_entry_t *visual );
 int isom_add_pasp( isom_visual_entry_t *visual );
 int isom_add_colr( isom_visual_entry_t *visual );
+int isom_add_gama( isom_visual_entry_t *visual );
 int isom_add_stsl( isom_visual_entry_t *visual );
 int isom_add_avcC( isom_visual_entry_t *visual );
 int isom_add_btrt( isom_visual_entry_t *visual );
@@ -2076,6 +2090,7 @@ void isom_remove_tapt( isom_tapt_t *tapt );
 void isom_remove_clap( isom_clap_t *clap );
 void isom_remove_pasp( isom_pasp_t *pasp );
 void isom_remove_colr( isom_colr_t *colr );
+void isom_remove_gama( isom_gama_t *gama );
 void isom_remove_stsl( isom_stsl_t *stsl );
 void isom_remove_avcC( isom_avcC_t *avcC );
 void isom_remove_btrt( isom_btrt_t *btrt );

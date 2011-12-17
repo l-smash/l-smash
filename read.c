@@ -1053,6 +1053,18 @@ static int isom_read_colr( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     return isom_add_print_func( root, colr, level );
 }
 
+static int isom_read_gama( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    isom_create_box( gama, parent, box->type );
+    ((isom_visual_entry_t *)parent)->gama = gama;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    gama->level = lsmash_bs_get_be32( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( gama, box );
+    return isom_add_print_func( root, gama, level );
+}
+
 static int isom_read_stsl( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( stsl, parent, box->type );
@@ -2886,6 +2898,8 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
             return isom_read_pasp( root, box, parent, level );
         case QT_BOX_TYPE_COLR :
             return isom_read_colr( root, box, parent, level );
+        case QT_BOX_TYPE_GAMA :
+            return isom_read_gama( root, box, parent, level );
         case ISOM_BOX_TYPE_STSL :
             return isom_read_stsl( root, box, parent, level );
         case ISOM_BOX_TYPE_AVCC :

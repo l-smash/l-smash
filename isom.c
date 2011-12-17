@@ -454,6 +454,16 @@ int isom_add_colr( isom_visual_entry_t *visual )
     return 0;
 }
 
+int isom_add_gama( isom_visual_entry_t *visual )
+{
+    if( !visual || visual->gama )
+        return -1;
+    isom_create_box( gama, visual, QT_BOX_TYPE_GAMA );
+    gama->level = 0;    /* platform's standard gamma */
+    visual->gama = gama;
+    return 0;
+}
+
 int isom_add_stsl( isom_visual_entry_t *visual )
 {
     if( !visual || visual->stsl )
@@ -2677,6 +2687,13 @@ void isom_remove_colr( isom_colr_t *colr )
     isom_remove_box( colr, isom_visual_entry_t );
 }
 
+void isom_remove_gama( isom_gama_t *gama )
+{
+    if( !gama )
+        return;
+    isom_remove_box( gama, isom_visual_entry_t );
+}
+
 void isom_remove_stsl( isom_stsl_t *stsl )
 {
     if( !stsl )
@@ -2739,6 +2756,7 @@ static void isom_remove_visual_extensions( isom_visual_entry_t *visual )
     isom_remove_btrt( visual->btrt );
     isom_remove_esds( visual->esds );
     isom_remove_colr( visual->colr );
+    isom_remove_gama( visual->gama );
     isom_remove_stsl( visual->stsl );
     isom_remove_clap( visual->clap );
     isom_remove_pasp( visual->pasp );
@@ -4536,6 +4554,17 @@ static uint64_t isom_update_colr_size( isom_colr_t *colr )
     return colr->size;
 }
 
+static uint64_t isom_update_gama_size( isom_gama_t *gama )
+{
+    /* Note: 'gama' box is superseded by 'colr' box.
+     * Therefore, writers of QTFF should never write both 'colr' and 'gama' box into an Image Description. */
+    if( !gama || (gama->parent && ((isom_visual_entry_t *)gama->parent)->colr) )
+        return 0;
+    gama->size = ISOM_BASEBOX_COMMON_SIZE + 4;
+    CHECK_LARGESIZE( gama->size );
+    return gama->size;
+}
+
 static uint64_t isom_update_stsl_size( isom_stsl_t *stsl )
 {
     if( !stsl )
@@ -4601,6 +4630,7 @@ static uint64_t isom_update_visual_entry_size( isom_visual_entry_t *visual )
         + isom_update_btrt_size( visual->btrt )
         + isom_update_esds_size( visual->esds )
         + isom_update_colr_size( visual->colr )
+        + isom_update_gama_size( visual->gama )
         + isom_update_stsl_size( visual->stsl )
         + isom_update_clap_size( visual->clap )
         + isom_update_pasp_size( visual->pasp )

@@ -735,6 +735,27 @@ static int isom_print_colr( lsmash_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
+static int isom_print_gama( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_gama_t *gama = (isom_gama_t *)box;
+    int indent = level;
+    isom_print_box_common( indent++, box, "Gamma Level Box" );
+    if( gama->level == 0x00023333 )
+        isom_iprintf( indent, "level = 2.2 (standard television video gamma)\n" );
+    else
+    {
+        isom_iprintf( indent, "level = %f", lsmash_fixed2double( gama->level, 16 ) );
+        if( gama->level == 0 )
+            printf( " (platform's standard gamma)" );
+        else if( gama->level == 0xffffffff )
+            printf( " (no gamma-correction)" );
+        printf( "\n" );
+    }
+    return 0;
+}
+
 static int isom_print_stsl( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
@@ -2133,6 +2154,8 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
             return isom_print_pasp;
         case QT_BOX_TYPE_COLR :
             return isom_print_colr;
+        case QT_BOX_TYPE_GAMA :
+            return isom_print_gama;
         case ISOM_BOX_TYPE_STSL :
             return isom_print_stsl;
         case ISOM_BOX_TYPE_AVCC :

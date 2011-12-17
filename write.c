@@ -408,6 +408,17 @@ static int isom_write_colr( lsmash_bs_t *bs, isom_colr_t *colr )
     return lsmash_bs_write_data( bs );
 }
 
+static int isom_write_gama( lsmash_bs_t *bs, isom_gama_t *gama )
+{
+    /* Note: 'gama' box is superseded by 'colr' box.
+     * Therefore, writers of QTFF should never write both 'colr' and 'gama' box into an Image Description. */
+    if( !gama || (gama->parent && ((isom_visual_entry_t *)gama->parent)->colr) )
+        return 0;
+    isom_bs_put_box_common( bs, gama );
+    lsmash_bs_put_be32( bs, gama->level );
+    return lsmash_bs_write_data( bs );
+}
+
 static int isom_write_stsl( lsmash_bs_t *bs, isom_stsl_t *stsl )
 {
     if( !stsl )
@@ -490,6 +501,7 @@ static int isom_write_visual_extensions( lsmash_bs_t *bs, isom_visual_entry_t *v
      || isom_write_btrt( bs, visual->btrt )
      || isom_write_esds( bs, visual->esds )
      || isom_write_colr( bs, visual->colr )
+     || isom_write_gama( bs, visual->gama )
      || isom_write_stsl( bs, visual->stsl )
      || isom_write_clap( bs, visual->clap )
      || isom_write_pasp( bs, visual->pasp ) )
