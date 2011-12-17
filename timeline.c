@@ -262,6 +262,21 @@ static int isom_copy_gama( isom_visual_entry_t *dst, isom_visual_entry_t *src )
     return 0;
 }
 
+static int isom_copy_fiel( isom_visual_entry_t *dst, isom_visual_entry_t *src )
+{
+    if( !dst )
+        return 0;
+    if( !src || !src->fiel )
+    {
+        isom_remove_fiel( dst->fiel );
+        return 0;
+    }
+    if( !dst->fiel && isom_add_fiel( dst ) )
+        return -1;
+    isom_copy_fields( dst, src, fiel );
+    return 0;
+}
+
 static int isom_copy_stsl( isom_visual_entry_t *dst, isom_visual_entry_t *src )
 {
     if( !dst )
@@ -343,6 +358,7 @@ static isom_visual_entry_t *isom_duplicate_visual_description( isom_visual_entry
     dst->pasp = NULL;
     dst->colr = NULL;
     dst->gama = NULL;
+    dst->fiel = NULL;
     dst->stsl = NULL;
     dst->esds = NULL;
     dst->avcC = NULL;
@@ -355,6 +371,7 @@ static isom_visual_entry_t *isom_duplicate_visual_description( isom_visual_entry
      || isom_copy_pasp( dst, src )
      || isom_copy_colr( dst, src )
      || isom_copy_gama( dst, src )
+     || isom_copy_fiel( dst, src )
      || isom_copy_stsl( dst, src )
      || isom_copy_avcC( dst, src )
      || isom_copy_btrt( dst, src ) )

@@ -756,6 +756,38 @@ static int isom_print_gama( lsmash_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
+static int isom_print_fiel( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_fiel_t *fiel = (isom_fiel_t *)box;
+    int indent = level;
+    isom_print_box_common( indent++, box, "Field/Frame Information Box" );
+    isom_iprintf( indent, "fields = %"PRIu8" (%s)\n", fiel->fields, fiel->fields > 1 ? "interlaced" : "progressive scan" );
+    isom_iprintf( indent, "detail = %"PRIu8, fiel->detail );
+    if( fiel->fields > 1 )
+    {
+        static const char *field_orderings[5] =
+            { "unknown", "temporal top first", "temporal bottom first", "spatial first line early", "spatial first line late" };
+        int ordering = 0;
+        if( fiel->fields == 2 )
+        {
+            if( fiel->detail == 1 )
+                ordering = 1;
+            else if( fiel->detail == 6 )
+                ordering = 2;
+            else if( fiel->detail == 9 )
+                ordering = 3;
+            else if( fiel->detail == 14 )
+                ordering = 4;
+        }
+        printf( " (%s)\n", field_orderings[ordering] );
+    }
+    else
+        printf( "\n" );
+    return 0;
+}
+
 static int isom_print_stsl( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
@@ -2156,6 +2188,8 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
             return isom_print_colr;
         case QT_BOX_TYPE_GAMA :
             return isom_print_gama;
+        case QT_BOX_TYPE_FIEL :
+            return isom_print_fiel;
         case ISOM_BOX_TYPE_STSL :
             return isom_print_stsl;
         case ISOM_BOX_TYPE_AVCC :

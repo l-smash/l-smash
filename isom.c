@@ -464,6 +464,16 @@ int isom_add_gama( isom_visual_entry_t *visual )
     return 0;
 }
 
+int isom_add_fiel( isom_visual_entry_t *visual )
+{
+    if( !visual || visual->fiel )
+        return -1;
+    isom_create_box( fiel, visual, QT_BOX_TYPE_FIEL );
+    fiel->fields = 1;
+    visual->fiel = fiel;
+    return 0;
+}
+
 int isom_add_stsl( isom_visual_entry_t *visual )
 {
     if( !visual || visual->stsl )
@@ -2694,6 +2704,13 @@ void isom_remove_gama( isom_gama_t *gama )
     isom_remove_box( gama, isom_visual_entry_t );
 }
 
+void isom_remove_fiel( isom_fiel_t *fiel )
+{
+    if( !fiel )
+        return;
+    isom_remove_box( fiel, isom_visual_entry_t );
+}
+
 void isom_remove_stsl( isom_stsl_t *stsl )
 {
     if( !stsl )
@@ -2757,6 +2774,7 @@ static void isom_remove_visual_extensions( isom_visual_entry_t *visual )
     isom_remove_esds( visual->esds );
     isom_remove_colr( visual->colr );
     isom_remove_gama( visual->gama );
+    isom_remove_fiel( visual->fiel );
     isom_remove_stsl( visual->stsl );
     isom_remove_clap( visual->clap );
     isom_remove_pasp( visual->pasp );
@@ -4565,6 +4583,15 @@ static uint64_t isom_update_gama_size( isom_gama_t *gama )
     return gama->size;
 }
 
+static uint64_t isom_update_fiel_size( isom_fiel_t *fiel )
+{
+    if( !fiel )
+        return 0;
+    fiel->size = ISOM_BASEBOX_COMMON_SIZE + 2;
+    CHECK_LARGESIZE( fiel->size );
+    return fiel->size;
+}
+
 static uint64_t isom_update_stsl_size( isom_stsl_t *stsl )
 {
     if( !stsl )
@@ -4631,6 +4658,7 @@ static uint64_t isom_update_visual_entry_size( isom_visual_entry_t *visual )
         + isom_update_esds_size( visual->esds )
         + isom_update_colr_size( visual->colr )
         + isom_update_gama_size( visual->gama )
+        + isom_update_fiel_size( visual->fiel )
         + isom_update_stsl_size( visual->stsl )
         + isom_update_clap_size( visual->clap )
         + isom_update_pasp_size( visual->pasp )

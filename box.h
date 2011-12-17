@@ -464,6 +464,18 @@ typedef struct
     uint32_t level;     /* A fixed-point 16.16 number indicating the gamma level at which the image was captured. */
 } isom_gama_t;
 
+/* Field/Frame Information Box
+ * This box is used by applications to modify decompressed image data or by decompressor components to determine field display order.
+ * This box is defined in QuickTime file format. */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    uint8_t fields;     /* the number of fields per frame
+                         * 1: progressive scan
+                         * 2: 2:1 interlaced */
+    uint8_t detail;     /* field ordering */
+} isom_fiel_t;
+
 /* Sample Scale Box
  * If this box is present and can be interpreted by the decoder,
  * all samples shall be displayed according to the scaling behaviour that is specified in this box.
@@ -534,6 +546,7 @@ typedef struct
     /* QuickTime specific extension */
     isom_colr_t *colr;          /* Color Parameter Box @ optional */
     isom_gama_t *gama;          /* Gamma Level Box @ optional */
+    isom_fiel_t *fiel;          /* Field/Frame Information Box @ optional */
     /* ISO Base Media extension */
     isom_stsl_t *stsl;          /* Sample Scale Box @ optional */
     /* common extensions
@@ -1776,6 +1789,7 @@ enum qt_box_type
     QT_BOX_TYPE_CTAB    = LSMASH_4CC( 'c', 't', 'a', 'b' ),
     QT_BOX_TYPE_ENDA    = LSMASH_4CC( 'e', 'n', 'd', 'a' ),
     QT_BOX_TYPE_ENOF    = LSMASH_4CC( 'e', 'n', 'o', 'f' ),
+    QT_BOX_TYPE_FIEL    = LSMASH_4CC( 'f', 'i', 'e', 'l' ),
     QT_BOX_TYPE_FRMA    = LSMASH_4CC( 'f', 'r', 'm', 'a' ),
     QT_BOX_TYPE_GAMA    = LSMASH_4CC( 'g', 'a', 'm', 'a' ),
     QT_BOX_TYPE_GMHD    = LSMASH_4CC( 'g', 'm', 'h', 'd' ),
@@ -2075,6 +2089,7 @@ int isom_add_clap( isom_visual_entry_t *visual );
 int isom_add_pasp( isom_visual_entry_t *visual );
 int isom_add_colr( isom_visual_entry_t *visual );
 int isom_add_gama( isom_visual_entry_t *visual );
+int isom_add_fiel( isom_visual_entry_t *visual );
 int isom_add_stsl( isom_visual_entry_t *visual );
 int isom_add_avcC( isom_visual_entry_t *visual );
 int isom_add_btrt( isom_visual_entry_t *visual );
@@ -2091,6 +2106,7 @@ void isom_remove_clap( isom_clap_t *clap );
 void isom_remove_pasp( isom_pasp_t *pasp );
 void isom_remove_colr( isom_colr_t *colr );
 void isom_remove_gama( isom_gama_t *gama );
+void isom_remove_fiel( isom_fiel_t *fiel );
 void isom_remove_stsl( isom_stsl_t *stsl );
 void isom_remove_avcC( isom_avcC_t *avcC );
 void isom_remove_btrt( isom_btrt_t *btrt );
