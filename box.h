@@ -414,7 +414,8 @@ typedef struct
  *  pcY = vertOff + (height - 1)/2;
  * The leftmost/rightmost pixel and the topmost/bottommost line of the clean aperture fall at:
  *  pcX +/- (cleanApertureWidth - 1)/2;
- *  pcY +/- (cleanApertureHeight - 1)/2; */
+ *  pcY +/- (cleanApertureHeight - 1)/2;
+ * QTFF: this box is a mandatory extension for all uncompressed Y'CbCr data formats. */
 typedef struct
 {
     ISOM_BASEBOX_COMMON;
@@ -444,7 +445,8 @@ typedef struct
  * in which images can be correctly compared, combined, and displayed.
  * The box ('colr') supersedes the Gamma Level Box ('gama').
  * Writers of QTFF should never write both into an Image Description, and readers of QTFF should ignore 'gama' if 'colr' is present.
- * This box is defined in QuickTime file format. */
+ * This box is defined in QuickTime file format.
+ * Note: this box is a mandatory extension for all uncompressed Y'CbCr data formats. */
 typedef struct
 {
     ISOM_BASEBOX_COMMON;
@@ -466,7 +468,8 @@ typedef struct
 
 /* Field/Frame Information Box
  * This box is used by applications to modify decompressed image data or by decompressor components to determine field display order.
- * This box is defined in QuickTime file format. */
+ * This box is defined in QuickTime file format.
+ * Note: this box is a mandatory extension for all uncompressed Y'CbCr data formats. */
 typedef struct
 {
     ISOM_BASEBOX_COMMON;
@@ -2069,6 +2072,7 @@ typedef enum
 
 int isom_is_fullbox( void *box );
 int isom_is_lpcm_audio( uint32_t type );
+int isom_is_uncompressed_ycbcr( uint32_t type );
 
 void isom_init_box_common( void *box, void *parent, uint32_t type );
 

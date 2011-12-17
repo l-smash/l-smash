@@ -1495,11 +1495,19 @@ int lsmash_copy_decoder_specific_info( lsmash_root_t *dst, uint32_t dst_track_ID
         }
         src_entry = src_entry->next;
     }
-    /* Check if needed Track Aperture Modes. */
+    /* Check if needed Track Aperture Modes, and mandatory extensions for specific formats. */
     if( dst_trak->mdia->minf->vmhd )
     {
-        isom_tapt_t *tapt = dst_trak->tapt;
         isom_visual_entry_t *visual = (isom_visual_entry_t *)dst_stsd->list->head->data;
+        if( isom_is_uncompressed_ycbcr( visual->type ) )
+        {
+            /* Create mandatory boxes if absent. */
+            if( (!visual->colr && isom_add_colr( visual ))
+             || (!visual->fiel && isom_add_fiel( visual ))
+             || (!visual->clap && isom_add_clap( visual )) )
+                return -1;
+        }
+        isom_tapt_t *tapt = dst_trak->tapt;
         if( dst_trak->root->qt_compatible                       /* Track Aperture Modes is only available under QuickTime file format. */
          && !visual->stsl                                       /* Sample scaling method might conflict with this feature. */
          && visual->clap && visual->pasp                        /* Check if required boxes exist. */

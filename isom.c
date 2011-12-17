@@ -114,6 +114,17 @@ int isom_is_lpcm_audio( uint32_t type )
         || type == QT_CODEC_TYPE_NOT_SPECIFIED;
 }
 
+/* Return 1 if the sample type is uncompressed Y'CbCr video, Otherwise return 0. */
+int isom_is_uncompressed_ycbcr( uint32_t type )
+{
+    return type == QT_CODEC_TYPE_V210_VIDEO
+        || type == QT_CODEC_TYPE_V216_VIDEO
+        || type == QT_CODEC_TYPE_V308_VIDEO
+        || type == QT_CODEC_TYPE_V408_VIDEO
+        || type == QT_CODEC_TYPE_V410_VIDEO
+        || type == QT_CODEC_TYPE_YUV2_VIDEO;
+}
+
 char *isom_4cc2str( uint32_t fourcc )
 {
     static char str[5];
@@ -500,8 +511,9 @@ static int isom_add_visual_extensions( isom_visual_entry_t *visual, lsmash_video
                                                                  * Note: this sample description isn't added yet here. */
     if( !set_aperture_modes )
         isom_remove_tapt( trak->tapt );
+    int uncompressed_ycbcr = qt_compatible && isom_is_uncompressed_ycbcr( visual->type );
     /* Set up Clean Aperture. */
-    if( set_aperture_modes || summary->crop_top || summary->crop_left || summary->crop_bottom || summary->crop_right )
+    if( set_aperture_modes || uncompressed_ycbcr || summary->crop_top || summary->crop_left || summary->crop_bottom || summary->crop_right )
     {
         if( isom_add_clap( visual ) )
         {
@@ -541,7 +553,7 @@ static int isom_add_visual_extensions( isom_visual_entry_t *visual, lsmash_video
         pasp->vSpacing = summary->par_v;
     }
     /* Set up Color Parameter. */
-    if( qt_compatible && (summary->primaries || summary->transfer || summary->matrix) )
+    if( qt_compatible && (uncompressed_ycbcr || summary->primaries || summary->transfer || summary->matrix) )
     {
         if( isom_add_colr( visual ) )
         {
@@ -550,8 +562,8 @@ static int isom_add_visual_extensions( isom_visual_entry_t *visual, lsmash_video
         }
         isom_colr_t *colr = visual->colr;
         uint16_t primaries = summary->primaries;
-        uint16_t transfer = summary->transfer;
-        uint16_t matrix = summary->matrix;
+        uint16_t transfer  = summary->transfer;
+        uint16_t matrix    = summary->matrix;
         /* Set 'nclc' to parameter type, we don't support 'prof'. */
         colr->color_parameter_type = QT_COLOR_PARAMETER_TYPE_NCLC;
         /* primaries */
@@ -575,6 +587,12 @@ static int isom_add_visual_extensions( isom_visual_entry_t *visual, lsmash_video
             colr->matrix_index = isom_color_parameter_tbl[matrix - UINT16_MAX_PLUS_ONE].matrix;
         else
             colr->matrix_index = (matrix == 1 || matrix == 6 || matrix == 7) ? matrix : 2;
+    }
+    /* Set up Field/Frame Information. */
+    if( uncompressed_ycbcr && isom_add_fiel( visual ) )
+    {
+        isom_remove_visual_extensions( visual );
+        return -1;
     }
     /* Set up Sample Scaling. */
     if( !qt_compatible && summary->scaling_method )
