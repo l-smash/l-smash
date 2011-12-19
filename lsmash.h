@@ -996,6 +996,15 @@ typedef enum
     ITUNES_METADATA_TYPE_CUSTOM                     = LSMASH_4CC( '-', '-', '-', '-' ),     /* Custom */
 } lsmash_itunes_metadata_type;
 
+typedef enum
+{
+    FIELD_ORDERINGS_UNKNOWN                     = 0,
+    FIELD_ORDERINGS_TEMPORAL_TOP_FIRST          = 1,
+    FIELD_ORDERINGS_TEMPORAL_BOTTOM_FIRST       = 6,
+    FIELD_ORDERINGS_SPATIAL_FIRST_LINE_EARLY    = 9,
+    FIELD_ORDERINGS_SPATIAL_FIRST_LINE_LATE     = 14
+} lsmash_field_orderings;
+
 /* public data types */
 typedef struct
 {
@@ -1107,6 +1116,8 @@ typedef struct
     uint8_t vfr;                                /* whether a stream is assumed as variable frame rate
                                                  * User can't set this parameter manually. */
     uint8_t full_range;
+    uint8_t interlaced;                         /* 0: progressive scan, 1: interlaced */
+    lsmash_field_orderings field_orderings;     /* only available if the stream is interlaced */
     uint32_t width;                             /* pixel counts of width samples have */
     uint32_t height;                            /* pixel counts of height samples have */
     uint32_t crop_top;

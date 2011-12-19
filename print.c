@@ -772,13 +772,13 @@ static int isom_print_fiel( lsmash_root_t *root, isom_box_t *box, int level )
         int ordering = 0;
         if( fiel->fields == 2 )
         {
-            if( fiel->detail == 1 )
+            if( fiel->detail == FIELD_ORDERINGS_TEMPORAL_TOP_FIRST )
                 ordering = 1;
-            else if( fiel->detail == 6 )
+            else if( fiel->detail == FIELD_ORDERINGS_TEMPORAL_BOTTOM_FIRST )
                 ordering = 2;
-            else if( fiel->detail == 9 )
+            else if( fiel->detail == FIELD_ORDERINGS_SPATIAL_FIRST_LINE_EARLY )
                 ordering = 3;
-            else if( fiel->detail == 14 )
+            else if( fiel->detail == FIELD_ORDERINGS_SPATIAL_FIRST_LINE_LATE )
                 ordering = 4;
         }
         printf( " (%s)\n", field_orderings[ordering] );
