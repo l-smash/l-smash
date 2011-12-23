@@ -428,9 +428,9 @@ int isom_add_clap( isom_visual_entry_t *visual )
     if( !visual || visual->clap )
         return -1;
     isom_create_box( clap, visual, ISOM_BOX_TYPE_CLAP );
-    clap->cleanApertureWidthN = 1;
+    clap->cleanApertureWidthN = visual->width;
     clap->cleanApertureWidthD = 1;
-    clap->cleanApertureHeightN = 1;
+    clap->cleanApertureHeightN = visual->height;
     clap->cleanApertureHeightD = 1;
     clap->horizOffN = 0;
     clap->horizOffD = 1;
