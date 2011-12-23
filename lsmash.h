@@ -998,7 +998,7 @@ typedef enum
 
 typedef enum
 {
-    FIELD_ORDERINGS_UNKNOWN                     = 0,
+    FIELD_ORDERINGS_PROGRESSIVE                 = 0,
     FIELD_ORDERINGS_TEMPORAL_TOP_FIRST          = 1,
     FIELD_ORDERINGS_TEMPORAL_BOTTOM_FIRST       = 6,
     FIELD_ORDERINGS_SPATIAL_FIRST_LINE_EARLY    = 9,
@@ -1116,8 +1116,6 @@ typedef struct
     uint8_t vfr;                                /* whether a stream is assumed as variable frame rate
                                                  * User can't set this parameter manually. */
     uint8_t full_range;
-    uint8_t interlaced;                         /* 0: progressive scan, 1: interlaced */
-    lsmash_field_orderings field_orderings;     /* only available if the stream is interlaced */
     uint32_t width;                             /* pixel counts of width samples have */
     uint32_t height;                            /* pixel counts of height samples have */
     uint32_t crop_top;
@@ -1130,6 +1128,7 @@ typedef struct
     lsmash_color_parameter primaries;
     lsmash_color_parameter transfer;
     lsmash_color_parameter matrix;
+    lsmash_field_orderings field_orderings;     /* field ordering for interlaced material */
 } lsmash_video_summary_t;
 
 typedef struct

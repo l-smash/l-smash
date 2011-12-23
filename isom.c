@@ -589,14 +589,14 @@ static int isom_add_visual_extensions( isom_visual_entry_t *visual, lsmash_video
             colr->matrix_index = (matrix == 1 || matrix == 6 || matrix == 7) ? matrix : 2;
     }
     /* Set up Field/Frame Information. */
-    if( qt_compatible && (uncompressed_ycbcr || summary->interlaced) )
+    if( qt_compatible && (uncompressed_ycbcr || summary->field_orderings != FIELD_ORDERINGS_PROGRESSIVE) )
     {
         if( isom_add_fiel( visual ) )
         {
             isom_remove_visual_extensions( visual );
             return -1;
         }
-        visual->fiel->fields = summary->interlaced ? 2 : 1;
+        visual->fiel->fields = summary->field_orderings == FIELD_ORDERINGS_PROGRESSIVE ? 1 : 2;
         visual->fiel->detail = summary->field_orderings;
     }
     /* Set up Sample Scaling. */
