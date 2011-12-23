@@ -195,7 +195,7 @@ static void display_help( void )
              "                              This option takes effect only when reference\n"
              "                              chapter is available.\n"
              "                              If this option is not used, it defaults to 1.\n"
-             "    --language=<string>       Specify the default language for the all the output tracks.\n"
+             "    --language=<string>       Specify the default language for all the output tracks.\n"
              "                              This option is overridden by the track options.\n"
              "Track options:\n"
              "    language=<string>         Specify media language\n"
