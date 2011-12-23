@@ -277,6 +277,21 @@ static int isom_copy_fiel( isom_visual_entry_t *dst, isom_visual_entry_t *src )
     return 0;
 }
 
+static int isom_copy_sgbt( isom_visual_entry_t *dst, isom_visual_entry_t *src )
+{
+    if( !dst )
+        return 0;
+    if( !src || !src->sgbt )
+    {
+        isom_remove_sgbt( dst->sgbt );
+        return 0;
+    }
+    if( !dst->sgbt && isom_add_sgbt( dst ) )
+        return -1;
+    isom_copy_fields( dst, src, sgbt );
+    return 0;
+}
+
 static int isom_copy_stsl( isom_visual_entry_t *dst, isom_visual_entry_t *src )
 {
     if( !dst )
@@ -359,6 +374,7 @@ static isom_visual_entry_t *isom_duplicate_visual_description( isom_visual_entry
     dst->colr = NULL;
     dst->gama = NULL;
     dst->fiel = NULL;
+    dst->sgbt = NULL;
     dst->stsl = NULL;
     dst->esds = NULL;
     dst->avcC = NULL;
@@ -372,6 +388,7 @@ static isom_visual_entry_t *isom_duplicate_visual_description( isom_visual_entry
      || isom_copy_colr( dst, src )
      || isom_copy_gama( dst, src )
      || isom_copy_fiel( dst, src )
+     || isom_copy_sgbt( dst, src )
      || isom_copy_stsl( dst, src )
      || isom_copy_avcC( dst, src )
      || isom_copy_btrt( dst, src ) )
@@ -1504,7 +1521,8 @@ int lsmash_copy_decoder_specific_info( lsmash_root_t *dst, uint32_t dst_track_ID
             /* Create mandatory boxes if absent. */
             if( (!visual->colr && isom_add_colr( visual ))
              || (!visual->fiel && isom_add_fiel( visual ))
-             || (!visual->clap && isom_add_clap( visual )) )
+             || (!visual->clap && isom_add_clap( visual ))
+             || (visual->type == QT_CODEC_TYPE_V216_VIDEO && !visual->sgbt && isom_add_sgbt( visual )) )
                 return -1;
         }
         isom_tapt_t *tapt = dst_trak->tapt;

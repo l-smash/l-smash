@@ -1078,6 +1078,18 @@ static int isom_read_fiel( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     return isom_add_print_func( root, fiel, level );
 }
 
+static int isom_read_sgbt( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    isom_create_box( sgbt, parent, box->type );
+    ((isom_visual_entry_t *)parent)->sgbt = sgbt;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    sgbt->significantBits = lsmash_bs_get_byte( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( sgbt, box );
+    return isom_add_print_func( root, sgbt, level );
+}
+
 static int isom_read_stsl( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( stsl, parent, box->type );
@@ -2915,6 +2927,8 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
             return isom_read_gama( root, box, parent, level );
         case QT_BOX_TYPE_FIEL :
             return isom_read_fiel( root, box, parent, level );
+        case QT_BOX_TYPE_SGBT :
+            return isom_read_sgbt( root, box, parent, level );
         case ISOM_BOX_TYPE_STSL :
             return isom_read_stsl( root, box, parent, level );
         case ISOM_BOX_TYPE_AVCC :

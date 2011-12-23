@@ -485,6 +485,16 @@ int isom_add_fiel( isom_visual_entry_t *visual )
     return 0;
 }
 
+int isom_add_sgbt( isom_visual_entry_t *visual )
+{
+    if( !visual || visual->sgbt )
+        return -1;
+    isom_create_box( sgbt, visual, QT_BOX_TYPE_SGBT );
+    sgbt->significantBits = 8;
+    visual->sgbt = sgbt;
+    return 0;
+}
+
 int isom_add_stsl( isom_visual_entry_t *visual )
 {
     if( !visual || visual->stsl )
@@ -598,6 +608,16 @@ static int isom_add_visual_extensions( isom_visual_entry_t *visual, lsmash_video
         }
         visual->fiel->fields = summary->field_orderings == FIELD_ORDERINGS_PROGRESSIVE ? 1 : 2;
         visual->fiel->detail = summary->field_orderings;
+    }
+    /* Set up the number of significant bits per component. */
+    if( qt_compatible && (visual->type == QT_CODEC_TYPE_V216_VIDEO || summary->significant_bits) )
+    {
+        if( summary->significant_bits == 0 || isom_add_sgbt( visual ) )
+        {
+            isom_remove_visual_extensions( visual );
+            return -1;
+        }
+        visual->sgbt->significantBits = summary->significant_bits;
     }
     /* Set up Sample Scaling. */
     if( !qt_compatible && summary->scaling_method )
@@ -2739,6 +2759,13 @@ void isom_remove_fiel( isom_fiel_t *fiel )
     isom_remove_box( fiel, isom_visual_entry_t );
 }
 
+void isom_remove_sgbt( isom_sgbt_t *sgbt )
+{
+    if( !sgbt )
+        return;
+    isom_remove_box( sgbt, isom_visual_entry_t );
+}
+
 void isom_remove_stsl( isom_stsl_t *stsl )
 {
     if( !stsl )
@@ -2803,6 +2830,7 @@ static void isom_remove_visual_extensions( isom_visual_entry_t *visual )
     isom_remove_colr( visual->colr );
     isom_remove_gama( visual->gama );
     isom_remove_fiel( visual->fiel );
+    isom_remove_sgbt( visual->sgbt );
     isom_remove_stsl( visual->stsl );
     isom_remove_clap( visual->clap );
     isom_remove_pasp( visual->pasp );
@@ -4620,6 +4648,15 @@ static uint64_t isom_update_fiel_size( isom_fiel_t *fiel )
     return fiel->size;
 }
 
+static uint64_t isom_update_sgbt_size( isom_sgbt_t *sgbt )
+{
+    if( !sgbt )
+        return 0;
+    sgbt->size = ISOM_BASEBOX_COMMON_SIZE + 1;
+    CHECK_LARGESIZE( sgbt->size );
+    return sgbt->size;
+}
+
 static uint64_t isom_update_stsl_size( isom_stsl_t *stsl )
 {
     if( !stsl )
@@ -4687,6 +4724,7 @@ static uint64_t isom_update_visual_entry_size( isom_visual_entry_t *visual )
         + isom_update_colr_size( visual->colr )
         + isom_update_gama_size( visual->gama )
         + isom_update_fiel_size( visual->fiel )
+        + isom_update_sgbt_size( visual->sgbt )
         + isom_update_stsl_size( visual->stsl )
         + isom_update_clap_size( visual->clap )
         + isom_update_pasp_size( visual->pasp )

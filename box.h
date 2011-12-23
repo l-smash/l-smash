@@ -479,6 +479,15 @@ typedef struct
     uint8_t detail;     /* field ordering */
 } isom_fiel_t;
 
+/* Significant Bits Box
+ * This box is defined in QuickTime file format.
+ * Note: this box is a mandatory extension for 'v216' (Uncompressed Y'CbCr, 10, 12, 14, or 16-bit-per-component 4:2:2). */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    uint8_t significantBits;    /* the number of significant bits per component */
+} isom_sgbt_t;
+
 /* Sample Scale Box
  * If this box is present and can be interpreted by the decoder,
  * all samples shall be displayed according to the scaling behaviour that is specified in this box.
@@ -550,6 +559,7 @@ typedef struct
     isom_colr_t *colr;          /* Color Parameter Box @ optional */
     isom_gama_t *gama;          /* Gamma Level Box @ optional */
     isom_fiel_t *fiel;          /* Field/Frame Information Box @ optional */
+    isom_sgbt_t *sgbt;          /* Significant Bits Box @ optional */
     /* ISO Base Media extension */
     isom_stsl_t *stsl;          /* Sample Scale Box @ optional */
     /* common extensions
@@ -1808,6 +1818,7 @@ enum qt_box_type
     QT_BOX_TYPE_PNOT    = LSMASH_4CC( 'p', 'n', 'o', 't' ),
     QT_BOX_TYPE_PROF    = LSMASH_4CC( 'p', 'r', 'o', 'f' ),
     QT_BOX_TYPE_SELO    = LSMASH_4CC( 'S', 'e', 'l', 'O' ),
+    QT_BOX_TYPE_SGBT    = LSMASH_4CC( 's', 'g', 'b', 't' ),
     QT_BOX_TYPE_STPS    = LSMASH_4CC( 's', 't', 'p', 's' ),
     QT_BOX_TYPE_TAPT    = LSMASH_4CC( 't', 'a', 'p', 't' ),
     QT_BOX_TYPE_TEXT    = LSMASH_4CC( 't', 'e', 'x', 't' ),
@@ -2094,6 +2105,7 @@ int isom_add_pasp( isom_visual_entry_t *visual );
 int isom_add_colr( isom_visual_entry_t *visual );
 int isom_add_gama( isom_visual_entry_t *visual );
 int isom_add_fiel( isom_visual_entry_t *visual );
+int isom_add_sgbt( isom_visual_entry_t *visual );
 int isom_add_stsl( isom_visual_entry_t *visual );
 int isom_add_avcC( isom_visual_entry_t *visual );
 int isom_add_btrt( isom_visual_entry_t *visual );
@@ -2111,6 +2123,7 @@ void isom_remove_pasp( isom_pasp_t *pasp );
 void isom_remove_colr( isom_colr_t *colr );
 void isom_remove_gama( isom_gama_t *gama );
 void isom_remove_fiel( isom_fiel_t *fiel );
+void isom_remove_sgbt( isom_sgbt_t *sgbt );
 void isom_remove_stsl( isom_stsl_t *stsl );
 void isom_remove_avcC( isom_avcC_t *avcC );
 void isom_remove_btrt( isom_btrt_t *btrt );

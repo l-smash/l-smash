@@ -788,6 +788,17 @@ static int isom_print_fiel( lsmash_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
+static int isom_print_sgbt( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_sgbt_t *sgbt = (isom_sgbt_t *)box;
+    int indent = level;
+    isom_print_box_common( indent++, box, "Significant Bits Box" );
+    isom_iprintf( indent, "significantBits = %"PRIu8"\n", sgbt->significantBits );
+    return 0;
+}
+
 static int isom_print_stsl( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
@@ -2194,6 +2205,8 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
             return isom_print_gama;
         case QT_BOX_TYPE_FIEL :
             return isom_print_fiel;
+        case QT_BOX_TYPE_SGBT :
+            return isom_print_sgbt;
         case ISOM_BOX_TYPE_STSL :
             return isom_print_stsl;
         case ISOM_BOX_TYPE_AVCC :

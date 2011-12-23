@@ -429,6 +429,15 @@ static int isom_write_fiel( lsmash_bs_t *bs, isom_fiel_t *fiel )
     return lsmash_bs_write_data( bs );
 }
 
+static int isom_write_sgbt( lsmash_bs_t *bs, isom_sgbt_t *sgbt )
+{
+    if( !sgbt )
+        return 0;
+    isom_bs_put_box_common( bs, sgbt );
+    lsmash_bs_put_byte( bs, sgbt->significantBits );
+    return lsmash_bs_write_data( bs );
+}
+
 static int isom_write_stsl( lsmash_bs_t *bs, isom_stsl_t *stsl )
 {
     if( !stsl )
@@ -513,6 +522,7 @@ static int isom_write_visual_extensions( lsmash_bs_t *bs, isom_visual_entry_t *v
      || isom_write_colr( bs, visual->colr )
      || isom_write_gama( bs, visual->gama )
      || isom_write_fiel( bs, visual->fiel )
+     || isom_write_sgbt( bs, visual->sgbt )
      || isom_write_stsl( bs, visual->stsl )
      || isom_write_clap( bs, visual->clap )
      || isom_write_pasp( bs, visual->pasp ) )

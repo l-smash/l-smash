@@ -1116,6 +1116,8 @@ typedef struct
     uint8_t vfr;                                /* whether a stream is assumed as variable frame rate
                                                  * User can't set this parameter manually. */
     uint8_t full_range;
+    uint8_t significant_bits;                   /* the number of significant bits per component
+                                                 * Only available for QuickTime file formats */
     uint32_t width;                             /* pixel counts of width samples have */
     uint32_t height;                            /* pixel counts of height samples have */
     uint32_t crop_top;
