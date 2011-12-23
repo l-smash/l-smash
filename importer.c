@@ -3858,7 +3858,7 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_h2
                 if( info->buffers->buffer_size < possible_au_length )
                 {
                     if( h264_supplement_buffer( info, 2 * possible_au_length ) )
-                        h264_get_au_internal_failed( info, picture, &nalu_header, no_more_buf, complete_au );
+                        return h264_get_au_internal_failed( info, picture, &nalu_header, no_more_buf, complete_au );
                     next_short_start_code_pos = info->stream_buffer_pos;
                 }
                 /* Move to the first byte of the current NALU. */
@@ -3870,7 +3870,7 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_h2
                     info->stream_buffer_pos = info->stream_buffer;
                     info->stream_buffer_end = info->stream_buffer + nalu_length;
                     if( read_fail )
-                        h264_get_au_internal_failed( info, picture, &nalu_header, no_more_buf, complete_au );
+                        return h264_get_au_internal_failed( info, picture, &nalu_header, no_more_buf, complete_au );
 #if 0
                     if( probe )
                         fprintf( stderr, "    ----Read Back\n" );
@@ -4882,7 +4882,7 @@ static int vc1_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_vc1
                 if( info->buffers->buffer_size < possible_au_length )
                 {
                     if( vc1_supplement_buffer( info, 2 * possible_au_length ) )
-                        vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
+                        return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
                     next_ebdu_pos = info->stream_buffer_pos;
                 }
                 /* Move to the first byte of the current EBDU. */
@@ -4894,7 +4894,7 @@ static int vc1_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_vc1
                     info->stream_buffer_pos = info->stream_buffer;
                     info->stream_buffer_end = info->stream_buffer + ebdu_length;
                     if( read_fail )
-                        vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
+                        return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
 #if 0
                     if( probe )
                         fprintf( stderr, "    ----Read Back\n" );
