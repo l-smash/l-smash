@@ -76,6 +76,7 @@ typedef struct
     char    *copyright_notice;
     uint16_t copyright_language;
     itunes_metadata_t itunes_metadata;
+    uint16_t default_language;
 } option_t;
 
 typedef struct
@@ -225,6 +226,8 @@ static void display_help( void )
              "                              If this option is not used, it defaults to 1.\n"
              "    --copyright-notice <arg>  Specify copyright notice with or without language (latter string)\n"
              "                                  <arg> is <string> or <string>/<string>\n"
+             "    --language=<string>       Specify the default language for the all the output tracks.\n"
+             "                              This option is overridden by the track options.\n"
              "Output file formats:\n"
              "    mp4, mov, 3gp, 3g2, m4a, m4v\n"
              "\n"
@@ -538,6 +541,11 @@ static int parse_global_options( int argc, char **argv, muxer_t *muxer )
                 return ERROR_MSG( "you specified --tempo twice.\n" );
             opt->itunes_metadata.beats_per_minute = atoi( argv[i] );
         }
+        else if( !strcasecmp( argv[i], "--language" ) )    /* chapter file */
+        {
+            CHECK_NEXT_ARG;
+            opt->default_language = lsmash_pack_iso_language( argv[i] );
+        }
 #undef CHECK_NEXT_ARG
         else
             return ERROR_MSG( "you specified invalid option: %s.\n", argv[i] );
@@ -678,6 +686,9 @@ static int open_input_files( muxer_t *muxer )
         input->num_of_tracks = mp4sys_importer_get_track_count( input->importer );
         if( input->num_of_tracks == 0 )
             return ERROR_MSG( "there is no valid track in input file.\n" );
+        if( opt->default_language )
+             for( int i = 0; i < input->num_of_tracks; i ++ )
+                 input->track[i].opt.ISO_language = opt->default_language;
         /* Parse track options */
         if( parse_track_options( input ) )
             return ERROR_MSG( "failed to parse track options.\n" );

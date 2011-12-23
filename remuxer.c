@@ -93,6 +93,7 @@ typedef struct
     int                  ref_chap_available;
     uint32_t             chap_track;
     char                *chap_file;
+    uint16_t             default_language;
 } remuxer_t;
 
 typedef struct
@@ -194,6 +195,8 @@ static void display_help( void )
              "                              This option takes effect only when reference\n"
              "                              chapter is available.\n"
              "                              If this option is not used, it defaults to 1.\n"
+             "    --language=<string>       Specify the default language for the all the output tracks.\n"
+             "                              This option is overridden by the track options.\n"
              "Track options:\n"
              "    language=<string>         Specify media language\n"
              "    alternate-group=<integer> Specify alternate group\n"
@@ -359,13 +362,19 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
             if( !remuxer->chap_track )
                 return ERROR_MSG( "%s is an invalid track number.\n", argv[i] );
         }
+        else if( !strcasecmp( argv[i], "--language" ) )    /* chapter file */
+        {
+            if( ++i == argc )
+                return ERROR_MSG( "--chapter requires an argument.\n" );
+            remuxer->default_language = lsmash_pack_iso_language( argv[i] );
+        }
         else
             return ERROR_MSG( "unkown option found: %s\n", argv[i] );
     }
     if( !remuxer->output->root )
         return ERROR_MSG( "output file name is not specified.\n" );
     /* Parse track options */
-    /* Get current track and media parameters */
+    /* Get the current track and media parameters */
     for( int i = 0; i < remuxer->num_input; i++ )
         for( uint32_t j = 0; j < input[i].num_tracks; j++ )
         {
@@ -373,7 +382,12 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
             track_option[i][j].alternate_group = in_track->track_param.alternate_group;
             track_option[i][j].ISO_language = in_track->media_param.ISO_language;
         }
-    /* Get track and media parameters specified by users */
+    /* Set the default language */
+    if( remuxer->default_language )
+        for( int i = 0; i < remuxer->num_input; i++ )
+            for( uint32_t j = 0; j < input[i].num_tracks; j++ )
+                track_option[i][j].ISO_language = remuxer->default_language;
+    /* Get the track and media parameters specified by users */
     for( int i = 0; i < remuxer->num_input; i++ )
     {
         if( input_file_option[i].num_track_delimiter > input[i].num_tracks )
@@ -761,7 +775,7 @@ int main( int argc, char *argv[] )
     output_movie_t      output = { 0 };
     input_movie_t       input[ num_input ];
     track_media_option *track_option[ num_input ];
-    remuxer_t           remuxer = { &output, input, track_option, num_input, 0, 0, 1, NULL };
+    remuxer_t           remuxer = { &output, input, track_option, num_input, 0, 0, 1, NULL, 0 };
     memset( input, 0, num_input * sizeof(input_movie_t) );
     memset( track_option, 0, num_input * sizeof(track_media_option *) );
     if( parse_cli_option( argc, argv, &remuxer ) )
