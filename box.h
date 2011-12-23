@@ -608,7 +608,7 @@ typedef struct
         void *exdata;
 } isom_wave_t;
 
-/* Channel Compositor Box */
+/* Audio Channel Layout Box */
 typedef struct
 {
     uint32_t channelLabel;          /* the channelLabel that describes the channel */
@@ -669,7 +669,7 @@ typedef struct
      *              For compressed audio, an AudioPacket is the natural compressed access unit of that format. */
     uint32_t sizeOfStructOnly;                  /* offset to extensions */
     uint64_t audioSampleRate;                   /* 64-bit floating point */
-    uint32_t numAudioChannels;                  /* any channel assignment info will be in Channel Compositor Box. */
+    uint32_t numAudioChannels;                  /* any channel assignment info will be in Audio Channel Layout Box. */
     int32_t  always7F000000;                    /* always 0x7F000000 */
     uint32_t constBitsPerChannel;               /* only set if constant (and only for uncompressed audio) */
     uint32_t formatSpecificFlags;
@@ -678,7 +678,7 @@ typedef struct
     /* extensions */
     isom_esds_t *esds;      /* ISOM: ES Descriptor Box / QTFF: null */
     isom_wave_t *wave;      /* ISOM: null / QTFF: Sound Information Decompression Parameters Box */
-    isom_chan_t *chan;      /* ISOM: null / QTFF: Channel Compositor Box @ optional */
+    isom_chan_t *chan;      /* ISOM: null / QTFF: Audio Channel Layout Box @ optional */
 
         uint32_t exdata_length;
         void *exdata;

@@ -965,7 +965,7 @@ static int isom_print_chan( lsmash_root_t *root, isom_box_t *box, int level )
         return -1;
     isom_chan_t *chan = (isom_chan_t *)box;
     int indent = level;
-    isom_print_box_common( indent++, box, "Channel Compositor Box" );
+    isom_print_box_common( indent++, box, "Audio Channel Layout Box" );
     isom_iprintf( indent, "channelLayoutTag = 0x%08"PRIx32"\n", chan->channelLayoutTag );
     isom_iprintf( indent, "channelBitmap = 0x%08"PRIx32"\n", chan->channelBitmap );
     isom_iprintf( indent, "numberChannelDescriptions = %"PRIu32"\n", chan->numberChannelDescriptions );
