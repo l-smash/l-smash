@@ -788,6 +788,42 @@ static int isom_print_fiel( lsmash_root_t *root, isom_box_t *box, int level )
     return 0;
 }
 
+static int isom_print_cspc( lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_cspc_t *cspc = (isom_cspc_t *)box;
+    int indent = level;
+    isom_print_box_common( indent++, box, "Colorspace Box" );
+    static const struct
+    {
+        lsmash_pixel_format pixel_format;
+        char *description;
+    } unprintable_pixel_format_table[] =
+        {
+            { QT_PIXEL_FORMAT_TYPE_1_MONOCHROME,                 "1 bit indexed"                     },
+            { QT_PIXEL_FORMAT_TYPE_2_INDEXED,                    "2 bit indexed"                     },
+            { QT_PIXEL_FORMAT_TYPE_4_INDEXED,                    "4 bit indexed"                     },
+            { QT_PIXEL_FORMAT_TYPE_8_INDEXED,                    "8 bit indexed"                     },
+            { QT_PIXEL_FORMAT_TYPE_1_INDEXED_GRAY_WHITE_IS_ZERO, "1 bit indexed gray, white is zero" },
+            { QT_PIXEL_FORMAT_TYPE_2_INDEXED_GRAY_WHITE_IS_ZERO, "2 bit indexed gray, white is zero" },
+            { QT_PIXEL_FORMAT_TYPE_4_INDEXED_GRAY_WHITE_IS_ZERO, "4 bit indexed gray, white is zero" },
+            { QT_PIXEL_FORMAT_TYPE_8_INDEXED_GRAY_WHITE_IS_ZERO, "8 bit indexed gray, white is zero" },
+            { QT_PIXEL_FORMAT_TYPE_16BE555,                      "16 bit BE RGB 555"                 },
+            { QT_PIXEL_FORMAT_TYPE_24RGB,                        "24 bit RGB"                        },
+            { QT_PIXEL_FORMAT_TYPE_32ARGB,                       "32 bit ARGB"                       },
+            { 0, NULL }
+        };
+    for( int i = 0; unprintable_pixel_format_table[i].pixel_format; i++ )
+        if( cspc->pixel_format == unprintable_pixel_format_table[i].pixel_format )
+        {
+            isom_iprintf( indent, "pixel_format = 0x%08"PRIx32" (%s)\n", cspc->pixel_format, unprintable_pixel_format_table[i].description );
+            return 0;
+        }
+    isom_iprintf( indent, "pixel_format = %s\n", isom_4cc2str( cspc->pixel_format ) );
+    return 0;
+}
+
 static int isom_print_sgbt( lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
@@ -2205,6 +2241,8 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
             return isom_print_gama;
         case QT_BOX_TYPE_FIEL :
             return isom_print_fiel;
+        case QT_BOX_TYPE_CSPC :
+            return isom_print_cspc;
         case QT_BOX_TYPE_SGBT :
             return isom_print_sgbt;
         case ISOM_BOX_TYPE_STSL :

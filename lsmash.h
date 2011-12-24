@@ -1005,6 +1005,50 @@ typedef enum
     QT_FIELD_ORDERINGS_SPATIAL_FIRST_LINE_LATE  = 14
 } lsmash_field_orderings;
 
+typedef enum
+{
+    QT_PIXEL_FORMAT_TYPE_1_MONOCHROME                       = 0x00000001,                           /* 1 bit indexed */
+    QT_PIXEL_FORMAT_TYPE_2_INDEXED                          = 0x00000002,                           /* 2 bit indexed */
+    QT_PIXEL_FORMAT_TYPE_4_INDEXED                          = 0x00000004,                           /* 4 bit indexed */
+    QT_PIXEL_FORMAT_TYPE_8_INDEXED                          = 0x00000008,                           /* 8 bit indexed */
+    QT_PIXEL_FORMAT_TYPE_1_INDEXED_GRAY_WHITE_IS_ZERO       = 0x00000021,                           /* 1 bit indexed gray, white is zero */
+    QT_PIXEL_FORMAT_TYPE_2_INDEXED_GRAY_WHITE_IS_ZERO       = 0x00000022,                           /* 2 bit indexed gray, white is zero */
+    QT_PIXEL_FORMAT_TYPE_4_INDEXED_GRAY_WHITE_IS_ZERO       = 0x00000024,                           /* 4 bit indexed gray, white is zero */
+    QT_PIXEL_FORMAT_TYPE_8_INDEXED_GRAY_WHITE_IS_ZERO       = 0x00000028,                           /* 8 bit indexed gray, white is zero */
+    QT_PIXEL_FORMAT_TYPE_16BE555                            = 0x00000010,                           /* 16 bit BE RGB 555 */
+    QT_PIXEL_FORMAT_TYPE_16LE555                            = LSMASH_4CC( 'L', '5', '5', '5' ),     /* 16 bit LE RGB 555 */
+    QT_PIXEL_FORMAT_TYPE_16LE5551                           = LSMASH_4CC( '5', '5', '5', '1' ),     /* 16 bit LE RGB 5551 */
+    QT_PIXEL_FORMAT_TYPE_16BE565                            = LSMASH_4CC( 'B', '5', '6', '5' ),     /* 16 bit BE RGB 565 */
+    QT_PIXEL_FORMAT_TYPE_16LE565                            = LSMASH_4CC( 'L', '5', '6', '5' ),     /* 16 bit LE RGB 565 */
+    QT_PIXEL_FORMAT_TYPE_24RGB                              = 0x00000018,                           /* 24 bit RGB */
+    QT_PIXEL_FORMAT_TYPE_24BGR                              = LSMASH_4CC( '2', '4', 'B', 'G' ),     /* 24 bit BGR */
+    QT_PIXEL_FORMAT_TYPE_32ARGB                             = 0x00000020,                           /* 32 bit ARGB */
+    QT_PIXEL_FORMAT_TYPE_32BGRA                             = LSMASH_4CC( 'B', 'G', 'R', 'A' ),     /* 32 bit BGRA */
+    QT_PIXEL_FORMAT_TYPE_32ABGR                             = LSMASH_4CC( 'A', 'B', 'G', 'R' ),     /* 32 bit ABGR */
+    QT_PIXEL_FORMAT_TYPE_32RGBA                             = LSMASH_4CC( 'R', 'G', 'B', 'A' ),     /* 32 bit RGBA */
+    QT_PIXEL_FORMAT_TYPE_64ARGB                             = LSMASH_4CC( 'b', '6', '4', 'a' ),     /* 64 bit ARGB, 16-bit big-endian samples */
+    QT_PIXEL_FORMAT_TYPE_48RGB                              = LSMASH_4CC( 'b', '4', '8', 'r' ),     /* 48 bit RGB, 16-bit big-endian samples */
+    QT_PIXEL_FORMAT_TYPE_32_ALPHA_GRAY                      = LSMASH_4CC( 'b', '3', '2', 'a' ),     /* 32 bit AlphaGray, 16-bit big-endian samples, black is zero */
+    QT_PIXEL_FORMAT_TYPE_16_GRAY                            = LSMASH_4CC( 'b', '1', '6', 'g' ),     /* 16 bit Grayscale, 16-bit big-endian samples, black is zero */
+    QT_PIXEL_FORMAT_TYPE_30RGB                              = LSMASH_4CC( 'R', '1', '0', 'k' ),     /* 30 bit RGB, 10-bit big-endian samples, 2 unused padding bits (at least significant end) */
+    QT_PIXEL_FORMAT_TYPE_422YpCbCr8                         = LSMASH_4CC( '2', 'v', 'u', 'y' ),     /* Component Y'CbCr 8-bit 4:2:2, ordered Cb Y'0 Cr Y'1 */
+    QT_PIXEL_FORMAT_TYPE_4444YpCbCrA8                       = LSMASH_4CC( 'v', '4', '0', '8' ),     /* Component Y'CbCrA 8-bit 4:4:4:4, ordered Cb Y' Cr A */
+    QT_PIXEL_FORMAT_TYPE_4444YpCbCrA8R                      = LSMASH_4CC( 'r', '4', '0', '8' ),     /* Component Y'CbCrA 8-bit 4:4:4:4, rendering format. full range alpha, zero biased YUV, ordered A Y' Cb Cr */
+    QT_PIXEL_FORMAT_TYPE_4444AYpCbCr8                       = LSMASH_4CC( 'y', '4', '0', '8' ),     /* Component Y'CbCrA 8-bit 4:4:4:4, ordered A Y' Cb Cr, full range alpha, video range Y'CbCr */
+    QT_PIXEL_FORMAT_TYPE_4444AYpCbCr16                      = LSMASH_4CC( 'y', '4', '1', '6' ),     /* Component Y'CbCrA 16-bit 4:4:4:4, ordered A Y' Cb Cr, full range alpha, video range Y'CbCr, 16-bit little-endian samples */
+    QT_PIXEL_FORMAT_TYPE_444YpCbCr8                         = LSMASH_4CC( 'v', '3', '0', '8' ),     /* Component Y'CbCr 8-bit 4:4:4 */
+    QT_PIXEL_FORMAT_TYPE_422YpCbCr16                        = LSMASH_4CC( 'v', '2', '1', '6' ),     /* Component Y'CbCr 10,12,14,16-bit 4:2:2 */
+    QT_PIXEL_FORMAT_TYPE_422YpCbCr10                        = LSMASH_4CC( 'v', '2', '1', '0' ),     /* Component Y'CbCr 10-bit 4:2:2 */
+    QT_PIXEL_FORMAT_TYPE_444YpCbCr10                        = LSMASH_4CC( 'v', '4', '1', '0' ),     /* Component Y'CbCr 10-bit 4:4:4 */
+    QT_PIXEL_FORMAT_TYPE_420YpCbCr8_PLANAR                  = LSMASH_4CC( 'y', '4', '2', '0' ),     /* Planar Component Y'CbCr 8-bit 4:2:0 */
+    QT_PIXEL_FORMAT_TYPE_420YpCbCr8_PLANAR_FULL_RANGE       = LSMASH_4CC( 'f', '4', '2', '0' ),     /* Planar Component Y'CbCr 8-bit 4:2:0, full range */
+    QT_PIXEL_FORMAT_TYPE_422YpCbCr_4A_8_BIPLANAR            = LSMASH_4CC( 'a', '2', 'v', 'y' ),     /* First plane: Video-range Component Y'CbCr 8-bit 4:2:2, ordered Cb Y'0 Cr Y'1; second plane: alpha 8-bit 0-255 */
+    QT_PIXEL_FORMAT_TYPE_420YpCbCr8_BIPLANAR_VIDEO_RANGE    = LSMASH_4CC( '4', '2', '0', 'v' ),     /* Bi-Planar Component Y'CbCr 8-bit 4:2:0, video-range (luma=[16,235] chroma=[16,240]) */
+    QT_PIXEL_FORMAT_TYPE_420YpCbCr8_BIPLANAR_FULL_RANGE     = LSMASH_4CC( '4', '2', '0', 'f' ),     /* Bi-Planar Component Y'CbCr 8-bit 4:2:0, full-range (luma=[0,255] chroma=[1,255]) */ 
+    QT_PIXEL_FORMAT_TYPE_422YpCbCr8_YUVS                    = LSMASH_4CC( 'y', 'u', 'v', 's' ),     /* Component Y'CbCr 8-bit 4:2:2, ordered Y'0 Cb Y'1 Cr */
+    QT_PIXEL_FORMAT_TYPE_422YpCbCr8_FULL_RANGE              = LSMASH_4CC( 'y', 'u', 'v', 'f' ),     /* Component Y'CbCr 8-bit 4:2:2, full range, ordered Y'0 Cb Y'1 Cr */
+} lsmash_pixel_format;
+
 /* public data types */
 typedef struct
 {
@@ -1116,8 +1160,6 @@ typedef struct
     uint8_t vfr;                                /* whether a stream is assumed as variable frame rate
                                                  * User can't set this parameter manually. */
     uint8_t full_range;
-    uint8_t significant_bits;                   /* the number of significant bits per component
-                                                 * Only available for QuickTime file formats */
     uint32_t width;                             /* pixel counts of width samples have */
     uint32_t height;                            /* pixel counts of height samples have */
     uint32_t crop_top;
@@ -1127,10 +1169,13 @@ typedef struct
     uint32_t par_h;                             /* horizontal factor of pixel aspect ratio */
     uint32_t par_v;                             /* vertical factor of pixel aspect ratio */
     lsmash_scaling_method scaling_method;       /* If not set, video samples are scaled into the visual presentation region to fill it. */
+    /* The folowing parameters are only available for QuickTime file formats. */
     lsmash_color_parameter primaries;
     lsmash_color_parameter transfer;
     lsmash_color_parameter matrix;
     lsmash_field_orderings field_orderings;     /* field ordering for interlaced material */
+    lsmash_pixel_format pixel_format;           /* the native pixel format */
+    uint8_t significant_bits;                   /* the number of significant bits per component */
 } lsmash_video_summary_t;
 
 typedef struct

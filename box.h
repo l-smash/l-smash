@@ -479,6 +479,14 @@ typedef struct
     uint8_t detail;     /* field ordering */
 } isom_fiel_t;
 
+/* Colorspace Box
+ * This box is defined in QuickTime file format. */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    uint32_t pixel_format;      /* the native pixel format of an image */
+} isom_cspc_t;
+
 /* Significant Bits Box
  * This box is defined in QuickTime file format.
  * Note: this box is a mandatory extension for 'v216' (Uncompressed Y'CbCr, 10, 12, 14, or 16-bit-per-component 4:2:2). */
@@ -559,6 +567,7 @@ typedef struct
     isom_colr_t *colr;          /* Color Parameter Box @ optional */
     isom_gama_t *gama;          /* Gamma Level Box @ optional */
     isom_fiel_t *fiel;          /* Field/Frame Information Box @ optional */
+    isom_cspc_t *cspc;          /* Colorspace Box @ optional */
     isom_sgbt_t *sgbt;          /* Significant Bits Box @ optional */
     /* ISO Base Media extension */
     isom_stsl_t *stsl;          /* Sample Scale Box @ optional */
@@ -1799,6 +1808,7 @@ enum qt_box_type
     QT_BOX_TYPE_CLIP    = LSMASH_4CC( 'c', 'l', 'i', 'p' ),
     QT_BOX_TYPE_COLR    = LSMASH_4CC( 'c', 'o', 'l', 'r' ),
     QT_BOX_TYPE_CRGN    = LSMASH_4CC( 'c', 'r', 'g', 'n' ),
+    QT_BOX_TYPE_CSPC    = LSMASH_4CC( 'c', 's', 'p', 'c' ),
     QT_BOX_TYPE_CTAB    = LSMASH_4CC( 'c', 't', 'a', 'b' ),
     QT_BOX_TYPE_ENDA    = LSMASH_4CC( 'e', 'n', 'd', 'a' ),
     QT_BOX_TYPE_ENOF    = LSMASH_4CC( 'e', 'n', 'o', 'f' ),
@@ -2105,6 +2115,7 @@ int isom_add_pasp( isom_visual_entry_t *visual );
 int isom_add_colr( isom_visual_entry_t *visual );
 int isom_add_gama( isom_visual_entry_t *visual );
 int isom_add_fiel( isom_visual_entry_t *visual );
+int isom_add_cspc( isom_visual_entry_t *visual );
 int isom_add_sgbt( isom_visual_entry_t *visual );
 int isom_add_stsl( isom_visual_entry_t *visual );
 int isom_add_avcC( isom_visual_entry_t *visual );
@@ -2122,6 +2133,7 @@ void isom_remove_clap( isom_clap_t *clap );
 void isom_remove_pasp( isom_pasp_t *pasp );
 void isom_remove_colr( isom_colr_t *colr );
 void isom_remove_gama( isom_gama_t *gama );
+void isom_remove_cspc( isom_cspc_t *cspc );
 void isom_remove_fiel( isom_fiel_t *fiel );
 void isom_remove_sgbt( isom_sgbt_t *sgbt );
 void isom_remove_stsl( isom_stsl_t *stsl );

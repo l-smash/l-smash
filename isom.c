@@ -485,6 +485,15 @@ int isom_add_fiel( isom_visual_entry_t *visual )
     return 0;
 }
 
+int isom_add_cspc( isom_visual_entry_t *visual )
+{
+    if( !visual || visual->cspc )
+        return -1;
+    isom_create_box( cspc, visual, QT_BOX_TYPE_CSPC );
+    visual->cspc = cspc;
+    return 0;
+}
+
 int isom_add_sgbt( isom_visual_entry_t *visual )
 {
     if( !visual || visual->sgbt )
@@ -608,6 +617,16 @@ static int isom_add_visual_extensions( isom_visual_entry_t *visual, lsmash_video
         }
         visual->fiel->fields = summary->field_orderings == QT_FIELD_ORDERINGS_PROGRESSIVE ? 1 : 2;
         visual->fiel->detail = summary->field_orderings;
+    }
+    /* Set up the pixel format type. */
+    if( qt_compatible && summary->pixel_format )
+    {
+        if( isom_add_cspc( visual ) )
+        {
+            isom_remove_visual_extensions( visual );
+            return -1;
+        }
+        visual->cspc->pixel_format = summary->pixel_format;
     }
     /* Set up the number of significant bits per component. */
     if( qt_compatible && (visual->type == QT_CODEC_TYPE_V216_VIDEO || summary->significant_bits) )
@@ -2759,6 +2778,13 @@ void isom_remove_fiel( isom_fiel_t *fiel )
     isom_remove_box( fiel, isom_visual_entry_t );
 }
 
+void isom_remove_cspc( isom_cspc_t *cspc )
+{
+    if( !cspc )
+        return;
+    isom_remove_box( cspc, isom_visual_entry_t );
+}
+
 void isom_remove_sgbt( isom_sgbt_t *sgbt )
 {
     if( !sgbt )
@@ -2830,6 +2856,7 @@ static void isom_remove_visual_extensions( isom_visual_entry_t *visual )
     isom_remove_colr( visual->colr );
     isom_remove_gama( visual->gama );
     isom_remove_fiel( visual->fiel );
+    isom_remove_cspc( visual->cspc );
     isom_remove_sgbt( visual->sgbt );
     isom_remove_stsl( visual->stsl );
     isom_remove_clap( visual->clap );
@@ -4648,6 +4675,15 @@ static uint64_t isom_update_fiel_size( isom_fiel_t *fiel )
     return fiel->size;
 }
 
+static uint64_t isom_update_cspc_size( isom_cspc_t *cspc )
+{
+    if( !cspc )
+        return 0;
+    cspc->size = ISOM_BASEBOX_COMMON_SIZE + 4;
+    CHECK_LARGESIZE( cspc->size );
+    return cspc->size;
+}
+
 static uint64_t isom_update_sgbt_size( isom_sgbt_t *sgbt )
 {
     if( !sgbt )
@@ -4724,6 +4760,7 @@ static uint64_t isom_update_visual_entry_size( isom_visual_entry_t *visual )
         + isom_update_colr_size( visual->colr )
         + isom_update_gama_size( visual->gama )
         + isom_update_fiel_size( visual->fiel )
+        + isom_update_cspc_size( visual->cspc )
         + isom_update_sgbt_size( visual->sgbt )
         + isom_update_stsl_size( visual->stsl )
         + isom_update_clap_size( visual->clap )
