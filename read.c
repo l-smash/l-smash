@@ -1825,6 +1825,8 @@ static int isom_read_stco( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
             data->chunk_offset = lsmash_bs_get_be32( bs );
         }
     else
+    {
+        stco->large_presentation = 1;
         for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
         {
             isom_co64_entry_t *data = malloc( sizeof(isom_co64_entry_t) );
@@ -1837,6 +1839,7 @@ static int isom_read_stco( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
             }
             data->chunk_offset = lsmash_bs_get_be64( bs );
         }
+    }
     if( entry_count != stco->list->entry_count || box->size < pos )
         printf( "[%s] box has extra bytes: %"PRId64"\n", isom_4cc2str( box->type ), pos - box->size );
     box->size = pos;
