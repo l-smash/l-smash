@@ -1119,26 +1119,36 @@ int lsmash_get_composition_to_decode_shift_from_media_timeline( lsmash_root_t *r
 
 static inline int isom_get_closest_past_random_accessible_point_from_media_timeline( isom_timeline_t *timeline, uint32_t sample_number, uint32_t *rap_number )
 {
-    isom_sample_info_t *info;
-    do
+    lsmash_entry_t *entry = lsmash_get_entry( timeline->info_list, sample_number-- );
+    if( !entry || !entry->data )
+        return -1;
+    isom_sample_info_t *info = (isom_sample_info_t *)entry->data;
+    while( info->prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE )
     {
-        info = (isom_sample_info_t *)lsmash_get_entry_data( timeline->info_list, sample_number-- );
-        if( !info )
+        entry = entry->prev;
+        if( !entry || !entry->data )
             return -1;
-    } while( info->prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE );
+        info = (isom_sample_info_t *)entry->data;
+        --sample_number;
+    }
     *rap_number = sample_number + 1;
     return 0;
 }
 
 static inline int isom_get_closest_future_random_accessible_point_from_media_timeline( isom_timeline_t *timeline, uint32_t sample_number, uint32_t *rap_number )
 {
-    isom_sample_info_t *info;
-    do
+    lsmash_entry_t *entry = lsmash_get_entry( timeline->info_list, sample_number++ );
+    if( !entry || !entry->data )
+        return -1;
+    isom_sample_info_t *info = (isom_sample_info_t *)entry->data;
+    while( info->prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE )
     {
-        info = (isom_sample_info_t *)lsmash_get_entry_data( timeline->info_list, sample_number++ );
-        if( !info )
+        entry = entry->next;
+        if( !entry || !entry->data )
             return -1;
-    } while( info->prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE );
+        info = (isom_sample_info_t *)entry->data;
+        ++sample_number;
+    }
     *rap_number = sample_number - 1;
     return 0;
 }
