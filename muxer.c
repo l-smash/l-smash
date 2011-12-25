@@ -226,7 +226,7 @@ static void display_help( void )
              "                              If this option is not used, it defaults to 1.\n"
              "    --copyright-notice <arg>  Specify copyright notice with or without language (latter string)\n"
              "                                  <arg> is <string> or <string>/<string>\n"
-             "    --language=<string>       Specify the default language for all the output tracks.\n"
+             "    --language <string>       Specify the default language for all the output tracks.\n"
              "                              This option is overridden by the track options.\n"
              "Output file formats:\n"
              "    mp4, mov, 3gp, 3g2, m4a, m4v\n"
