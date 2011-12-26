@@ -2008,8 +2008,12 @@ int lsmash_print_movie( lsmash_root_t *root, const char *filename )
     {
         isom_print_entry_t *data = (isom_print_entry_t *)entry->data;
         if( !data || data->func( destination, root, data->box, data->level ) )
+        {
+            fflush( destination );
             return -1;
+        }
     }
+    fflush( destination );
     return 0;
 }
 
