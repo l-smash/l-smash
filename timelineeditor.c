@@ -20,13 +20,13 @@
 
 /* This file is available under an ISC license. */
 
-#include "lsmash.h"
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
 #include <math.h>
+
+#include "lsmash.h"
 
 #include "config.h"
 

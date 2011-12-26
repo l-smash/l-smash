@@ -20,8 +20,6 @@
 
 /* This file is available under an ISC license. */
 
-#include "lsmash.h"
-
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -30,6 +28,8 @@
 #include <io.h>
 #include <fcntl.h>
 #endif
+
+#include "lsmash.h"
 
 #include "config.h"
 
@@ -103,7 +103,7 @@ int main( int argc, char *argv[] )
     }
     else if( dump_box )
     {
-        if( lsmash_print_movie( root ) )
+        if( lsmash_print_movie( root, "-" ) )
             return BOXDUMPER_ERR( "Failed to dump box structure.\n" );
     }
     else

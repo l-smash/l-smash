@@ -1349,7 +1349,7 @@ int lsmash_set_itunes_metadata_integer( lsmash_root_t *root, lsmash_itunes_metad
 int lsmash_set_itunes_metadata_boolean( lsmash_root_t *root, lsmash_itunes_metadata_type type, lsmash_boolean_t value, char *meaning, char *name );
 
 #ifdef LSMASH_DEMUXER_ENABLED
-int lsmash_print_movie( lsmash_root_t *root );
+int lsmash_print_movie( lsmash_root_t *root, const char *filename );
 
 /* This function might output BOM on Windows. Make sure that this is the first function that outputs something to stdout. */
 int lsmash_print_chapter_list( lsmash_root_t *root );
