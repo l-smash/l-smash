@@ -2063,9 +2063,17 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
                 case QT_CODEC_TYPE_AP4H_VIDEO :
                 case QT_CODEC_TYPE_CIVD_VIDEO :
                 //case QT_CODEC_TYPE_DRAC_VIDEO :
+                case QT_CODEC_TYPE_DVC_VIDEO :
+                case QT_CODEC_TYPE_DVCP_VIDEO :
+                case QT_CODEC_TYPE_DVPP_VIDEO :
+                case QT_CODEC_TYPE_DV5N_VIDEO :
+                case QT_CODEC_TYPE_DV5P_VIDEO :
+                case QT_CODEC_TYPE_DVH2_VIDEO :
+                case QT_CODEC_TYPE_DVH3_VIDEO :
                 case QT_CODEC_TYPE_DVH5_VIDEO :
                 case QT_CODEC_TYPE_DVH6_VIDEO :
                 case QT_CODEC_TYPE_DVHP_VIDEO :
+                case QT_CODEC_TYPE_DVHQ_VIDEO :
                 case QT_CODEC_TYPE_FLIC_VIDEO :
                 case QT_CODEC_TYPE_GIF_VIDEO :
                 case QT_CODEC_TYPE_H261_VIDEO :

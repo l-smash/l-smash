@@ -1179,6 +1179,17 @@ int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t sa
         case QT_CODEC_TYPE_APCS_VIDEO :
         case QT_CODEC_TYPE_APCO_VIDEO :
         case QT_CODEC_TYPE_AP4H_VIDEO :
+        case QT_CODEC_TYPE_DVC_VIDEO :
+        case QT_CODEC_TYPE_DVCP_VIDEO :
+        case QT_CODEC_TYPE_DVPP_VIDEO :
+        case QT_CODEC_TYPE_DV5N_VIDEO :
+        case QT_CODEC_TYPE_DV5P_VIDEO :
+        case QT_CODEC_TYPE_DVH2_VIDEO :
+        case QT_CODEC_TYPE_DVH3_VIDEO :
+        case QT_CODEC_TYPE_DVH5_VIDEO :
+        case QT_CODEC_TYPE_DVH6_VIDEO :
+        case QT_CODEC_TYPE_DVHP_VIDEO :
+        case QT_CODEC_TYPE_DVHQ_VIDEO :
         case QT_CODEC_TYPE_V210_VIDEO :
         case QT_CODEC_TYPE_V216_VIDEO :
         case QT_CODEC_TYPE_V308_VIDEO :
@@ -2973,9 +2984,17 @@ void isom_remove_sample_description( isom_sample_entry_t *sample )
         case QT_CODEC_TYPE_AP4H_VIDEO :
         case QT_CODEC_TYPE_CIVD_VIDEO :
         //case QT_CODEC_TYPE_DRAC_VIDEO :
+        case QT_CODEC_TYPE_DVC_VIDEO :
+        case QT_CODEC_TYPE_DVCP_VIDEO :
+        case QT_CODEC_TYPE_DVPP_VIDEO :
+        case QT_CODEC_TYPE_DV5N_VIDEO :
+        case QT_CODEC_TYPE_DV5P_VIDEO :
+        case QT_CODEC_TYPE_DVH2_VIDEO :
+        case QT_CODEC_TYPE_DVH3_VIDEO :
         case QT_CODEC_TYPE_DVH5_VIDEO :
         case QT_CODEC_TYPE_DVH6_VIDEO :
         case QT_CODEC_TYPE_DVHP_VIDEO :
+        case QT_CODEC_TYPE_DVHQ_VIDEO :
         case QT_CODEC_TYPE_FLIC_VIDEO :
         case QT_CODEC_TYPE_GIF_VIDEO :
         case QT_CODEC_TYPE_H261_VIDEO :
@@ -4907,6 +4926,17 @@ static uint64_t isom_update_stsd_size( isom_stsd_t *stsd )
             case QT_CODEC_TYPE_APCS_VIDEO :
             case QT_CODEC_TYPE_APCO_VIDEO :
             case QT_CODEC_TYPE_AP4H_VIDEO :
+            case QT_CODEC_TYPE_DVC_VIDEO :
+            case QT_CODEC_TYPE_DVCP_VIDEO :
+            case QT_CODEC_TYPE_DVPP_VIDEO :
+            case QT_CODEC_TYPE_DV5N_VIDEO :
+            case QT_CODEC_TYPE_DV5P_VIDEO :
+            case QT_CODEC_TYPE_DVH2_VIDEO :
+            case QT_CODEC_TYPE_DVH3_VIDEO :
+            case QT_CODEC_TYPE_DVH5_VIDEO :
+            case QT_CODEC_TYPE_DVH6_VIDEO :
+            case QT_CODEC_TYPE_DVHP_VIDEO :
+            case QT_CODEC_TYPE_DVHQ_VIDEO :
             case QT_CODEC_TYPE_V210_VIDEO :
             case QT_CODEC_TYPE_V216_VIDEO :
             case QT_CODEC_TYPE_V308_VIDEO :
