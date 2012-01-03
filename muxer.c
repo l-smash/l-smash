@@ -913,7 +913,7 @@ static int prepare_output( muxer_t *muxer )
                             return ERROR_MSG( "failed to set SBR mode.\n" );
                     }
                     media_param.timescale          = summary->frequency;
-                    media_param.media_handler_name = track_opt->handler_name ? track_opt->handler_name : "L-SMASH Video Handler";
+                    media_param.media_handler_name = track_opt->handler_name ? track_opt->handler_name : "L-SMASH Audio Handler";
                     media_param.roll_grouping      = track_opt->encoder_delay && (opt->isom_version >= 2 || opt->qtff);
                     out_track->priming_samples = track_opt->encoder_delay;
                     out_track->timescale       = summary->frequency;
