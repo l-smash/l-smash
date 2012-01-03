@@ -91,6 +91,7 @@ typedef struct
     uint16_t ISO_language;
     uint16_t copyright_language;
     char    *copyright_notice;
+    char    *handler_name;
 } input_track_option_t;
 
 typedef struct
@@ -239,6 +240,7 @@ static void display_help( void )
              "    encoder-delay=<integer>   Represent audio encoder delay (priming samples) explicitly\n"
              "    copyright=<arg>           Specify copyright notice with or without language (latter string)\n"
              "                                  <arg> is <string> or <string>/<string>\n"
+             "    handler=<string>          Set media handler name\n"
              "    sbr                       Enable backward-compatible SBR explicit signaling mode\n"
              "How to use track options:\n"
              "    -i input?[track_option1],[track_option2]...\n"
@@ -256,7 +258,7 @@ static void display_help( void )
              "    --album-artist <string>   Artist for the whole album (if different than the individual tracks)\n"
              "    --copyright <string>      Copyright\n"
              "    --description <string>    Description\n"
-             "    --grouing <string>        Grouping\n"
+             "    --grouping <string>       Grouping\n"
              "    --tempo <integer>         Beats per minute\n",
              LSMASH_REV, LSMASH_GIT_HASH, __DATE__, __TIME__ );
 }
@@ -541,7 +543,7 @@ static int parse_global_options( int argc, char **argv, muxer_t *muxer )
                 return ERROR_MSG( "you specified --tempo twice.\n" );
             opt->itunes_metadata.beats_per_minute = atoi( argv[i] );
         }
-        else if( !strcasecmp( argv[i], "--language" ) )    /* chapter file */
+        else if( !strcasecmp( argv[i], "--language" ) )
         {
             CHECK_NEXT_ARG;
             opt->default_language = lsmash_pack_iso_language( argv[i] );
@@ -630,6 +632,11 @@ static int parse_track_options( input_t *input )
                     ++track_parameter;
                 }
                 track_opt->copyright_language = track_parameter ? lsmash_pack_iso_language( track_parameter ) : ISOM_LANGUAGE_CODE_UNDEFINED;
+            }
+            else if( strstr( track_option, "handler=" ) )
+            {
+                char *track_parameter = strchr( track_option, '=' ) + 1;
+                track_opt->handler_name = track_parameter;
             }
             else if( strstr( track_option, "sbr" ) )
                 track_opt->sbr = 1;
@@ -884,7 +891,7 @@ static int prepare_output( muxer_t *muxer )
                         }
                     }
                     media_param.timescale          = timescale;
-                    media_param.media_handler_name = "L-SMASH Video Handler";
+                    media_param.media_handler_name = track_opt->handler_name ? track_opt->handler_name : "L-SMASH Video Handler";
                     media_param.roll_grouping      = 1;
                     media_param.rap_grouping       = opt->isom_version >= 6;
                     out_track->timescale = timescale;
@@ -906,7 +913,7 @@ static int prepare_output( muxer_t *muxer )
                             return ERROR_MSG( "failed to set SBR mode.\n" );
                     }
                     media_param.timescale          = summary->frequency;
-                    media_param.media_handler_name = "L-SMASH Audio Handler";
+                    media_param.media_handler_name = track_opt->handler_name ? track_opt->handler_name : "L-SMASH Video Handler";
                     media_param.roll_grouping      = track_opt->encoder_delay && (opt->isom_version >= 2 || opt->qtff);
                     out_track->priming_samples = track_opt->encoder_delay;
                     out_track->timescale       = summary->frequency;
