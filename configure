@@ -26,8 +26,8 @@ options:
   --target-os=OS           build programs to run on OS [auto]
   --cross-prefix=PREFIX    use PREFIX for compilation tools [none]
   --sysroot=DIR            specify toolchain's directory [none]
-  --disable-static         compile only shared library
-  --disable-shared         compile only static library
+  --disable-static         doesn't compile static library
+  --enable-shared          also compile shared library besides static library
   --enable-debug           compile with debug symbols and never strip
 
   --extra-cflags=XCFLAGS   add XCFLAGS to CFLAGS
@@ -87,7 +87,7 @@ LD="gcc"
 RANLIB="ranlib"
 STRIP="strip"
 
-DEBUG="disabled"
+DEBUG=""
 
 EXT=""
 
@@ -97,7 +97,7 @@ STATICLIB="enabled"
 
 SHARED_NAME="liblsmash"
 SHARED_EXT=".so"
-SHAREDLIB="enabled"
+SHAREDLIB=""
 IMPLIB=""
 
 TOOLS=""
@@ -142,9 +142,10 @@ for opt; do
             ;;
         --disable-static)
             STATICLIB=""
+            SHAREDLIB="enabled"
             ;;
-        --disable-shared)
-            SHAREDLIB=""
+        --enable-shared)
+            SHAREDLIB="enabled"
             ;;
         --enable-debug)
             DEBUG="enabled"
@@ -226,7 +227,7 @@ SHAREDLIBNAME="${SHARED_NAME}${SHARED_EXT}"
 test -n "$STATICLIB" && STATICLIB="$STATICLIBNAME"
 test -n "$SHAREDLIB" && SHAREDLIB="$SHAREDLIBNAME"
 test -z "$STATICLIB" -a -z "$SHAREDLIB" && \
-    error_exit "both --disable-static and --disable-shared were specified"
+    error_exit "--disable-static requires --enable-shared were specified"
 test -z "$SHAREDLIB" && SO_LDFLAGS=""
 
 
@@ -240,7 +241,7 @@ LIBS="$LIBS $XLIBS"
 # As a result of taking these into consideration, we make "-Os" a rated value.
 # And, we don't care about architecture related options.
 # If you want them, set up by yourself like --extra-cflags="-O3 -march=native".
-if test x"$DEBUG" = x"enabled"; then
+if test -n "$DEBUG"; then
     CFLAGS="$CFLAGS -g3 -O0"
     STRIP=""
 else
