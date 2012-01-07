@@ -707,6 +707,34 @@ static isom_sample_entry_t *isom_duplicate_description( isom_sample_entry_t *ent
     return (isom_sample_entry_t *)description;
 }
 
+static int isom_add_sample_info_entry( isom_timeline_t *timeline, isom_sample_info_t *src_info )
+{
+    isom_sample_info_t *dst_info = malloc( sizeof(isom_sample_info_t) );
+    if( !dst_info )
+        return -1;
+    if( lsmash_add_entry( timeline->info_list, dst_info ) )
+    {
+        free( dst_info );
+        return -1;
+    }
+    *dst_info = *src_info;
+    return 0;
+}
+
+static int isom_add_portable_chunk_entry( isom_timeline_t *timeline, isom_portable_chunk_t *src_chunk )
+{
+    isom_portable_chunk_t *dst_chunk = malloc( sizeof(isom_portable_chunk_t) );
+    if( !dst_chunk )
+        return -1;
+    if( lsmash_add_entry( timeline->chunk_list, dst_chunk ) )
+    {
+        free( dst_chunk );
+        return -1;
+    }
+    *dst_chunk = *src_chunk;
+    return 0;
+}
+
 #define INCREMENT_SAMPLE_NUMBER_IN_ENTRY( sample_number_in_entry, entry, entry_data ) \
     if( sample_number_in_entry == entry_data->sample_count ) \
     { \
@@ -769,15 +797,8 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     lsmash_entry_t *next_stsc_entry = stsc_entry ? stsc_entry->next : NULL;
     isom_stsc_entry_t *stsc_data = stsc_entry ? (isom_stsc_entry_t *)stsc_entry->data : NULL;
     isom_sample_entry_t *description = stsd_entry ? (isom_sample_entry_t *)stsd_entry->data : NULL;
-    isom_sample_info_t *info = NULL;        /* shut up 'uninitialized' warning */
-    isom_portable_chunk_t *chunk = NULL;    /* shut up 'uninitialized' warning */
     if( !description || !stts_entry || !stsc_entry || !stco_entry || !stco_entry->data || (next_stsc_entry && !next_stsc_entry->data) )
         goto fail;
-    chunk = malloc( sizeof(isom_portable_chunk_t) );
-    if( !chunk || lsmash_add_entry( timeline->chunk_list, chunk ) )
-        goto fail;
-    chunk->number = 1;
-    chunk->data = NULL;
     int all_sync = !stss;
     int large_presentation = stco->large_presentation || stco->type == ISOM_BOX_TYPE_CO64;
     int is_lpcm_audio = isom_is_lpcm_audio( description->type );
@@ -793,8 +814,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     uint64_t cts = 0;
     uint32_t chunk_number = 1;
     uint64_t offset_from_chunk = 0;
-    uint64_t data_offset = chunk->data_offset
-                         = large_presentation
+    uint64_t data_offset = large_presentation
                          ? ((isom_co64_entry_t *)stco_entry->data)->chunk_offset
                          : ((isom_stco_entry_t *)stco_entry->data)->chunk_offset;
     uint32_t constant_sample_size = is_lpcm_audio
@@ -842,36 +862,41 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
         sdtp_entry = sdtp->list->head;
     }
     /* Construct media timeline. */
+    isom_portable_chunk_t chunk;
+    chunk.data_offset = data_offset;
+    chunk.length      = 0;
+    chunk.data        = NULL;
+    chunk.number = chunk_number;
+    if( isom_add_portable_chunk_entry( timeline, &chunk ) )
+        goto fail;
     while( sample_number <= stsz->sample_count )
     {
-        info = lsmash_malloc_zero( sizeof(isom_sample_info_t) );
-        if( !info )
-            goto fail;
+        isom_sample_info_t info = { 0 };
         /* Get sample duration and sample offset. */
         isom_stts_entry_t *stts_data = (isom_stts_entry_t *)stts_entry->data;
         if( !stts_data )
             goto fail;
         INCREMENT_SAMPLE_NUMBER_IN_ENTRY( sample_number_in_stts_entry, stts_entry, stts_data );
-        info->duration = stts_data->sample_delta;
+        info.duration = stts_data->sample_delta;
         if( ctts_entry )
         {
             isom_ctts_entry_t *ctts_data = (isom_ctts_entry_t *)ctts_entry->data;
             if( !ctts_data )
                 goto fail;
             INCREMENT_SAMPLE_NUMBER_IN_ENTRY( sample_number_in_ctts_entry, ctts_entry, ctts_data );
-            info->offset = ctts_data->sample_offset;
+            info.offset = ctts_data->sample_offset;
         }
         else
-            info->offset = 0;
+            info.offset = 0;
         if( allow_negative_sample_offset )
         {
-            cts = dts + (int32_t)info->offset;
+            cts = dts + (int32_t)info.offset;
             if( (cts + timeline->ctd_shift) < dts )
                 timeline->ctd_shift = dts - cts;
         }
         else
-            cts = dts + info->offset;
-        dts += info->duration;
+            cts = dts + info.offset;
+        dts += info.duration;
         if( !is_lpcm_audio )
         {
             /* Check whether sync sample or not. */
@@ -882,12 +907,12 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                     goto fail;
                 if( sample_number == stss_data->sample_number )
                 {
-                    info->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+                    info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
                     stss_entry = stss_entry->next;
                 }
             }
             else if( all_sync )
-                info->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+                info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
             /* Check whether partial sync sample or not. */
             if( stps_entry )
             {
@@ -896,7 +921,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                     goto fail;
                 if( sample_number == stps_data->sample_number )
                 {
-                    info->prop.random_access_type = QT_SAMPLE_RANDOM_ACCESS_TYPE_PARTIAL_SYNC;
+                    info.prop.random_access_type = QT_SAMPLE_RANDOM_ACCESS_TYPE_PARTIAL_SYNC;
                     stps_entry = stps_entry->next;
                 }
             }
@@ -907,12 +932,12 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                 if( !sdtp_data )
                     goto fail;
                 if( iso_sdtp )
-                    info->prop.leading       = sdtp_data->is_leading;
+                    info.prop.leading       = sdtp_data->is_leading;
                 else
-                    info->prop.allow_earlier = sdtp_data->is_leading;
-                info->prop.independent = sdtp_data->sample_depends_on;
-                info->prop.disposable  = sdtp_data->sample_is_depended_on;
-                info->prop.redundant   = sdtp_data->sample_has_redundancy;
+                    info.prop.allow_earlier = sdtp_data->is_leading;
+                info.prop.independent = sdtp_data->sample_depends_on;
+                info.prop.disposable  = sdtp_data->sample_is_depended_on;
+                info.prop.redundant   = sdtp_data->sample_has_redundancy;
                 sdtp_entry = sdtp_entry->next;
             }
             /* Get roll recovery grouping info. */
@@ -931,56 +956,59 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                         /* post-roll */
                         if( sample_number_in_sbgp_roll_entry == 1 )
                         {
-                            info->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY;
-                            info->prop.post_roll.complete = sample_number + roll_data->roll_distance;
+                            info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY;
+                            info.prop.post_roll.complete = sample_number + roll_data->roll_distance;
                         }
                     }
                     else
                         /* pre-roll */
-                        info->prop.pre_roll.distance = -roll_data->roll_distance;
+                        info.prop.pre_roll.distance = -roll_data->roll_distance;
                 }
                 INCREMENT_SAMPLE_NUMBER_IN_ENTRY( sample_number_in_sbgp_roll_entry, sbgp_roll_entry, assignment );
             }
-            info->prop.post_roll.identifier = sample_number;
+            info.prop.post_roll.identifier = sample_number;
             /* Get random access point grouping info. */
             if( sbgp_rap_entry )
             {
                 isom_group_assignment_entry_t *assignment = (isom_group_assignment_entry_t *)sbgp_rap_entry->data;
                 if( !assignment )
                     goto fail;
-                if( assignment->group_description_index && (info->prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE) )
+                if( assignment->group_description_index && (info.prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE) )
                 {
                     isom_rap_entry_t *rap_data = (isom_rap_entry_t *)lsmash_get_entry_data( sgpd_rap->list, assignment->group_description_index );
                     if( !rap_data )
                         goto fail;
                     /* If this is not an open RAP, we treat it as an unknown RAP since non-IDR sample could make a closed GOP. */
-                    info->prop.random_access_type = (rap_data->num_leading_samples_known && !!rap_data->num_leading_samples)
-                                                  ? ISOM_SAMPLE_RANDOM_ACCESS_TYPE_OPEN_RAP
-                                                  : ISOM_SAMPLE_RANDOM_ACCESS_TYPE_UNKNOWN_RAP;
+                    info.prop.random_access_type = (rap_data->num_leading_samples_known && !!rap_data->num_leading_samples)
+                                                 ? ISOM_SAMPLE_RANDOM_ACCESS_TYPE_OPEN_RAP
+                                                 : ISOM_SAMPLE_RANDOM_ACCESS_TYPE_UNKNOWN_RAP;
                 }
                 INCREMENT_SAMPLE_NUMBER_IN_ENTRY( sample_number_in_sbgp_rap_entry, sbgp_rap_entry, assignment );
             }
         }
         else    /* All LPCMFrame is sync sample. */
-            info->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+            info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
         /* Get size of sample in the stream. */
         if( is_lpcm_audio || !stsz_entry )
-            info->length = constant_sample_size;
+            info.length = constant_sample_size;
         else
         {
             if( !stsz_entry->data )
                 goto fail;
-            info->length = ((isom_stsz_entry_t *)stsz_entry->data)->entry_size;
+            info.length = ((isom_stsz_entry_t *)stsz_entry->data)->entry_size;
             stsz_entry = stsz_entry->next;
         }
-        timeline->max_sample_size = LSMASH_MAX( timeline->max_sample_size, info->length );
+        timeline->max_sample_size = LSMASH_MAX( timeline->max_sample_size, info.length );
         /* Get chunk info. */
-        info->pos = data_offset;
-        info->index = stsc_data->sample_description_index;
-        info->chunk = chunk;
-        offset_from_chunk += info->length;
+        info.pos = data_offset;
+        info.index = stsc_data->sample_description_index;
+        info.chunk = (isom_portable_chunk_t *)timeline->chunk_list->tail->data;
+        offset_from_chunk += info.length;
         if( sample_number_in_chunk == stsc_data->samples_per_chunk )
         {
+            /* Set the length of the last chunk. */
+            if( info.chunk )
+                info.chunk->length = offset_from_chunk;
             /* Move the next chunk. */
             sample_number_in_chunk = 1;
             if( stco_entry )
@@ -989,16 +1017,13 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                 data_offset = large_presentation
                             ? ((isom_co64_entry_t *)stco_entry->data)->chunk_offset
                             : ((isom_stco_entry_t *)stco_entry->data)->chunk_offset;
-            chunk->length = offset_from_chunk;      /* the length of the previous chunk */
-            chunk = malloc( sizeof(isom_portable_chunk_t) );
-            if( !chunk )
+            chunk.data_offset = data_offset;
+            chunk.length      = 0;
+            chunk.data        = NULL;
+            chunk.number      = ++chunk_number;
+            if( isom_add_portable_chunk_entry( timeline, &chunk ) )
                 goto fail;
-            chunk->number = ++chunk_number;
-            chunk->data_offset = data_offset;
-            chunk->data = NULL;
             offset_from_chunk = 0;
-            if( lsmash_add_entry( timeline->chunk_list, chunk ) )
-                goto fail;
             /* Check if the next entry is broken. */
             while( next_stsc_entry && chunk_number > ((isom_stsc_entry_t *)next_stsc_entry->data)->first_chunk )
             {
@@ -1027,14 +1052,16 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
         else
         {
             ++sample_number_in_chunk;
-            data_offset += info->length;
+            data_offset += info.length;
         }
         /* OK. Let's add its info. */
-        if( lsmash_add_entry( timeline->info_list, info ) )
+        if( isom_add_sample_info_entry( timeline, &info ) )
             goto fail;
         ++sample_number;
     }
-    chunk->length = offset_from_chunk;
+    isom_portable_chunk_t *last_chunk = lsmash_get_entry_data( timeline->chunk_list, timeline->chunk_list->entry_count );
+    if( last_chunk )
+        last_chunk->length = offset_from_chunk;
     if( lsmash_add_entry( root->timeline, timeline ) )
     {
         isom_destruct_timeline_direct( timeline );
@@ -1044,10 +1071,6 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     return 0;
 fail:
     isom_destruct_timeline_direct( timeline );
-    if( info )
-        free( info );
-    if( chunk )
-        free( chunk );
     return -1;
 }
 
