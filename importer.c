@@ -4123,7 +4123,10 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
     }
     fprintf( stderr, "                                                                               \r" );
     if( !info->summary || lsmash_add_entry( importer->summaries, info->summary ) )
+    {
+        free( poc );
         goto fail;
+    }
     lsmash_media_ts_t *timestamp = malloc( num_access_units * sizeof(lsmash_media_ts_t) );
     if( !timestamp )
     {

@@ -2611,7 +2611,10 @@ static int isom_read_tfra( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     if( !tfra )
         return -1;
     if( lsmash_add_entry( list, tfra ) )
-        goto fail;
+    {
+        free( tfra );
+        return -1;
+    }
     box->parent = parent;
     lsmash_bs_t *bs = root->bs;
     isom_read_box_rest( bs, box );
@@ -2626,7 +2629,7 @@ static int isom_read_tfra( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     {
         tfra->list = lsmash_create_entry_list();
         if( !tfra->list )
-            goto fail;
+            return -1;
         uint64_t (*bs_get_funcs[5])( lsmash_bs_t * ) =
             {
               lsmash_bs_get_byte_to_64,
@@ -2648,7 +2651,7 @@ static int isom_read_tfra( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
             if( lsmash_add_entry( tfra->list, data ) )
             {
                 free( data );
-                goto fail;
+                return -1;
             }
             data->time          = bs_put_time         ( bs );
             data->moof_offset   = bs_put_moof_offset  ( bs );
@@ -2663,11 +2666,6 @@ static int isom_read_tfra( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     box->size = lsmash_bs_get_pos( bs );
     isom_box_common_copy( tfra, box );
     return isom_add_print_func( root, tfra, level );
-fail:
-    if( tfra->list )
-        free( tfra->list );
-    free( tfra );
-    return -1;
 }
 
 static int isom_read_mfro( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )

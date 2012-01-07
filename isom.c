@@ -875,7 +875,10 @@ static int isom_set_qtff_mp4a_description( isom_audio_entry_t *audio )
     esd_param.dsi_payload_length = summary->exdata_length;
     esds->ES = mp4sys_setup_ES_Descriptor( &esd_param );
     if( !esds->ES )
+    {
+        free( esds );
         return -1;
+    }
     audio->wave->esds = esds;
     return 0;
 }
@@ -8157,7 +8160,10 @@ static int isom_update_fragment_sample_tables( isom_traf_entry_t *traf, lsmash_s
                 rap->trun_number   = traf->trun_list->entry_count;
                 rap->sample_number = trun->sample_count;
                 if( lsmash_add_entry( tfra->list, rap ) )
+                {
+                    free( rap );
                     return -1;
+                }
                 tfra->number_of_entry = tfra->list->entry_count;
                 int length;
                 for( length = 1; rap->traf_number >> (length * 8); length++ );

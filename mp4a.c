@@ -262,7 +262,10 @@ static mp4a_ALSSpecificConfig_t *mp4a_create_ALSSpecificConfig( uint8_t *exdata,
         return NULL;
     alssc->data = lsmash_memdup( exdata, exdata_length );
     if( !alssc->data )
+    {
+        free( alssc );
         return NULL;
+    }
     alssc->size = exdata_length;
     return alssc;
 }
@@ -613,7 +616,12 @@ static mp4a_AudioSpecificConfig_t * mp4a_get_AudioSpecificConfig( lsmash_bits_t 
         default :
             break;
     }
-    return ret ? NULL : asc;
+    if( ret )
+    {
+        free( asc );
+        return NULL;
+    }
+    return asc;
 }
 
 int mp4a_setup_summary_from_AudioSpecificConfig( lsmash_audio_summary_t *summary, uint8_t *dsi_payload, uint32_t dsi_payload_length )
