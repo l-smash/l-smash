@@ -780,8 +780,11 @@ static int isom_read_stsd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         return -1;
     int ret = 0;
     uint64_t stsd_pos = lsmash_bs_get_pos( bs );
-    while( stsd->list->entry_count < entry_count && !(ret = isom_read_box( root, box, (isom_box_t *)stsd, stsd_pos, level )) )
+    for( uint32_t i = 0; i < entry_count; i++ )
     {
+        ret = isom_read_box( root, box, (isom_box_t *)stsd, stsd_pos, level );
+        if( ret )
+            break;
         stsd_pos += box->size;
         if( stsd->size <= stsd_pos || bs->error )
             break;
@@ -791,6 +794,7 @@ static int isom_read_stsd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         printf( "[stsd] box has extra bytes: %"PRId64"\n", stsd_pos - stsd->size );
         stsd->size = stsd_pos;
     }
+    box->size = stsd->size;
     return ret;
 }
 
