@@ -51,7 +51,7 @@ static int isom_bs_read_box_common( lsmash_bs_t *bs, isom_box_t *box, uint32_t r
             return -1;
         box->size = lsmash_bs_get_be64( bs );
     }
-    if( !box->size )
+    if( box->size == 0 )
         box->size = UINT64_MAX;
     if( isom_is_fullbox( box ) )
     {
@@ -404,7 +404,7 @@ static int isom_read_elst( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     isom_read_box_rest( bs, box );
     uint32_t entry_count = lsmash_bs_get_be32( bs );
     uint64_t pos;
-    for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+    for( pos = lsmash_bs_get_pos( bs ); pos < box->size && elst->list->entry_count < entry_count; pos = lsmash_bs_get_pos( bs ) )
     {
         isom_elst_entry_t *data = malloc( sizeof(isom_elst_entry_t) );
         if( !data )
@@ -426,7 +426,7 @@ static int isom_read_elst( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         }
         data->media_rate = lsmash_bs_get_be32( bs );
     }
-    if( entry_count != elst->list->entry_count || box->size < pos )
+    if( box->size < pos )
         printf( "[elst] box has extra bytes: %"PRId64"\n", pos - box->size );
     box->size = pos;
     isom_box_common_copy( elst, box );
@@ -1549,7 +1549,7 @@ static int isom_read_ftab( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     isom_read_box_rest( bs, box );
     uint32_t entry_count = lsmash_bs_get_be16( bs );
     uint64_t pos;
-    for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+    for( pos = lsmash_bs_get_pos( bs ); pos < box->size && ftab->list->entry_count < entry_count; pos = lsmash_bs_get_pos( bs ) )
     {
         isom_font_record_t *data = lsmash_malloc_zero( sizeof(isom_font_record_t) );
         if( !data )
@@ -1571,7 +1571,7 @@ static int isom_read_ftab( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
             data->font_name[data->font_name_length] = '\0';
         }
     }
-    if( entry_count != ftab->list->entry_count || box->size < pos )
+    if( box->size < pos )
         printf( "[ftab] box has extra bytes: %"PRId64"\n", pos - box->size );
     box->size = pos;
     isom_box_common_copy( ftab, box );
@@ -1588,7 +1588,7 @@ static int isom_read_stts( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     isom_read_box_rest( bs, box );
     uint32_t entry_count = lsmash_bs_get_be32( bs );
     uint64_t pos;
-    for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+    for( pos = lsmash_bs_get_pos( bs ); pos < box->size && stts->list->entry_count < entry_count; pos = lsmash_bs_get_pos( bs ) )
     {
         isom_stts_entry_t *data = malloc( sizeof(isom_stts_entry_t) );
         if( !data )
@@ -1601,7 +1601,7 @@ static int isom_read_stts( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         data->sample_count = lsmash_bs_get_be32( bs );
         data->sample_delta = lsmash_bs_get_be32( bs );
     }
-    if( entry_count != stts->list->entry_count || box->size < pos )
+    if( box->size < pos )
         printf( "[stts] box has extra bytes: %"PRId64"\n", pos - box->size );
     box->size = pos;
     isom_box_common_copy( stts, box );
@@ -1618,7 +1618,7 @@ static int isom_read_ctts( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     isom_read_box_rest( bs, box );
     uint32_t entry_count = lsmash_bs_get_be32( bs );
     uint64_t pos;
-    for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+    for( pos = lsmash_bs_get_pos( bs ); pos < box->size && ctts->list->entry_count < entry_count; pos = lsmash_bs_get_pos( bs ) )
     {
         isom_ctts_entry_t *data = malloc( sizeof(isom_ctts_entry_t) );
         if( !data )
@@ -1631,7 +1631,7 @@ static int isom_read_ctts( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         data->sample_count  = lsmash_bs_get_be32( bs );
         data->sample_offset = lsmash_bs_get_be32( bs );
     }
-    if( entry_count != ctts->list->entry_count || box->size < pos )
+    if( box->size < pos )
         printf( "[ctts] box has extra bytes: %"PRId64"\n", pos - box->size );
     box->size = pos;
     isom_box_common_copy( ctts, box );
@@ -1666,7 +1666,7 @@ static int isom_read_stss( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     isom_read_box_rest( bs, box );
     uint32_t entry_count = lsmash_bs_get_be32( bs );
     uint64_t pos;
-    for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+    for( pos = lsmash_bs_get_pos( bs ); pos < box->size && stss->list->entry_count < entry_count; pos = lsmash_bs_get_pos( bs ) )
     {
         isom_stss_entry_t *data = malloc( sizeof(isom_stss_entry_t) );
         if( !data )
@@ -1678,7 +1678,7 @@ static int isom_read_stss( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         }
         data->sample_number = lsmash_bs_get_be32( bs );
     }
-    if( entry_count != stss->list->entry_count || box->size < pos )
+    if( box->size < pos )
         printf( "[stss] box has extra bytes: %"PRId64"\n", pos - box->size );
     box->size = pos;
     isom_box_common_copy( stss, box );
@@ -1695,7 +1695,7 @@ static int isom_read_stps( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     isom_read_box_rest( bs, box );
     uint32_t entry_count = lsmash_bs_get_be32( bs );
     uint64_t pos;
-    for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+    for( pos = lsmash_bs_get_pos( bs ); pos < box->size && stps->list->entry_count < entry_count; pos = lsmash_bs_get_pos( bs ) )
     {
         isom_stps_entry_t *data = malloc( sizeof(isom_stps_entry_t) );
         if( !data )
@@ -1707,7 +1707,7 @@ static int isom_read_stps( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         }
         data->sample_number = lsmash_bs_get_be32( bs );
     }
-    if( entry_count != stps->list->entry_count || box->size < pos )
+    if( box->size < pos )
         printf( "[stps] box has extra bytes: %"PRId64"\n", pos - box->size );
     box->size = pos;
     isom_box_common_copy( stps, box );
@@ -1754,7 +1754,7 @@ static int isom_read_stsc( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     isom_read_box_rest( bs, box );
     uint32_t entry_count = lsmash_bs_get_be32( bs );
     uint64_t pos;
-    for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+    for( pos = lsmash_bs_get_pos( bs ); pos < box->size && stsc->list->entry_count < entry_count; pos = lsmash_bs_get_pos( bs ) )
     {
         isom_stsc_entry_t *data = malloc( sizeof(isom_stsc_entry_t) );
         if( !data )
@@ -1768,7 +1768,7 @@ static int isom_read_stsc( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         data->samples_per_chunk        = lsmash_bs_get_be32( bs );
         data->sample_description_index = lsmash_bs_get_be32( bs );
     }
-    if( entry_count != stsc->list->entry_count || box->size < pos )
+    if( box->size < pos )
         printf( "[stsc] box has extra bytes: %"PRId64"\n", pos - box->size );
     box->size = pos;
     isom_box_common_copy( stsc, box );
@@ -1791,7 +1791,7 @@ static int isom_read_stsz( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         stsz->list = lsmash_create_entry_list();
         if( !stsz->list )
             return -1;
-        for( ; pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+        for( ; pos < box->size && stsz->list->entry_count < stsz->sample_count; pos = lsmash_bs_get_pos( bs ) )
         {
             isom_stsz_entry_t *data = malloc( sizeof(isom_stsz_entry_t) );
             if( !data )
@@ -1804,7 +1804,7 @@ static int isom_read_stsz( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
             data->entry_size = lsmash_bs_get_be32( bs );
         }
     }
-    if( (stsz->list && stsz->sample_count != stsz->list->entry_count) || box->size < pos )
+    if( box->size < pos )
         printf( "[stsz] box has extra bytes: %"PRId64"\n", pos - box->size );
     box->size = pos;
     isom_box_common_copy( stsz, box );
@@ -1822,7 +1822,7 @@ static int isom_read_stco( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     uint32_t entry_count = lsmash_bs_get_be32( bs );
     uint64_t pos;
     if( box->type == ISOM_BOX_TYPE_STCO )
-        for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+        for( pos = lsmash_bs_get_pos( bs ); pos < box->size && stco->list->entry_count < entry_count; pos = lsmash_bs_get_pos( bs ) )
         {
             isom_stco_entry_t *data = malloc( sizeof(isom_stco_entry_t) );
             if( !data )
@@ -1837,7 +1837,7 @@ static int isom_read_stco( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     else
     {
         stco->large_presentation = 1;
-        for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+        for( pos = lsmash_bs_get_pos( bs ); pos < box->size && stco->list->entry_count < entry_count; pos = lsmash_bs_get_pos( bs ) )
         {
             isom_co64_entry_t *data = malloc( sizeof(isom_co64_entry_t) );
             if( !data )
@@ -1850,7 +1850,7 @@ static int isom_read_stco( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
             data->chunk_offset = lsmash_bs_get_be64( bs );
         }
     }
-    if( entry_count != stco->list->entry_count || box->size < pos )
+    if( box->size < pos )
         printf( "[%s] box has extra bytes: %"PRId64"\n", isom_4cc2str( box->type ), pos - box->size );
     box->size = pos;
     isom_box_common_copy( stco, box );
@@ -1890,7 +1890,7 @@ static int isom_read_sgpd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         case ISOM_GROUP_TYPE_RAP :
         {
             uint64_t pos;
-            for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+            for( pos = lsmash_bs_get_pos( bs ); pos < box->size && sgpd->list->entry_count < entry_count; pos = lsmash_bs_get_pos( bs ) )
             {
                 isom_rap_entry_t *data = malloc( sizeof(isom_rap_entry_t) );
                 if( !data )
@@ -1911,7 +1911,7 @@ static int isom_read_sgpd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
                     data->num_leading_samples       =  temp       & 0x7f;
                 }
             }
-            if( entry_count != sgpd->list->entry_count || box->size < pos )
+            if( box->size < pos )
                 printf( "[sgpd] box has extra bytes: %"PRId64"\n", pos - box->size );
             box->size = pos;
             break;
@@ -1919,7 +1919,7 @@ static int isom_read_sgpd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         case ISOM_GROUP_TYPE_ROLL :
         {
             uint64_t pos;
-            for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+            for( pos = lsmash_bs_get_pos( bs ); pos < box->size && sgpd->list->entry_count < entry_count; pos = lsmash_bs_get_pos( bs ) )
             {
                 isom_roll_entry_t *data = malloc( sizeof(isom_roll_entry_t) );
                 if( !data )
@@ -1936,7 +1936,7 @@ static int isom_read_sgpd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
                 else
                     data->roll_distance      = lsmash_bs_get_be16( bs );
             }
-            if( entry_count != sgpd->list->entry_count || box->size < pos )
+            if( box->size < pos )
                 printf( "[sgpd] box has extra bytes: %"PRId64"\n", pos - box->size );
             box->size = pos;
             break;
@@ -1977,7 +1977,7 @@ static int isom_read_sbgp( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         sbgp->grouping_type_parameter = lsmash_bs_get_be32( bs );
     uint32_t entry_count = lsmash_bs_get_be32( bs );
     uint64_t pos;
-    for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+    for( pos = lsmash_bs_get_pos( bs ); pos < box->size && sbgp->list->entry_count < entry_count; pos = lsmash_bs_get_pos( bs ) )
     {
         isom_group_assignment_entry_t *data = malloc( sizeof(isom_group_assignment_entry_t) );
         if( !data )
@@ -1990,7 +1990,7 @@ static int isom_read_sbgp( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         data->sample_count            = lsmash_bs_get_be32( bs );
         data->group_description_index = lsmash_bs_get_be32( bs );
     }
-    if( entry_count != sbgp->list->entry_count || box->size < pos )
+    if( box->size < pos )
         printf( "[sbgp] box has extra bytes: %"PRId64"\n", pos - box->size );
     box->size = pos;
     isom_box_common_copy( sbgp, box );
@@ -2029,7 +2029,7 @@ static int isom_read_chpl( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     else
         entry_count   = lsmash_bs_get_byte( bs );
     uint64_t pos;
-    for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+    for( pos = lsmash_bs_get_pos( bs ); pos < box->size && chpl->list->entry_count < entry_count; pos = lsmash_bs_get_pos( bs ) )
     {
         isom_chpl_entry_t *data = malloc( sizeof(isom_chpl_entry_t) );
         if( !data )
@@ -2051,7 +2051,7 @@ static int isom_read_chpl( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
             data->chapter_name[i] = lsmash_bs_get_byte( bs );
         data->chapter_name[data->chapter_name_length] = '\0';
     }
-    if( entry_count != chpl->list->entry_count || box->size < pos )
+    if( box->size < pos )
         printf( "[chpl] box has extra bytes: %"PRId64"\n", pos - box->size );
     box->size = pos;
     isom_box_common_copy( chpl, box );
@@ -2352,7 +2352,7 @@ static int isom_read_keys( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     isom_read_box_rest( bs, box );
     uint32_t entry_count = lsmash_bs_get_be32( bs );
     uint64_t pos;
-    for( pos = lsmash_bs_get_pos( bs ); pos < box->size; pos = lsmash_bs_get_pos( bs ) )
+    for( pos = lsmash_bs_get_pos( bs ); pos < box->size && keys->list->entry_count < entry_count; pos = lsmash_bs_get_pos( bs ) )
     {
         isom_keys_entry_t *data = malloc( sizeof(isom_keys_entry_t) );
         if( !data )
@@ -2373,7 +2373,7 @@ static int isom_read_keys( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         else
             data->key_value = NULL;
     }
-    if( entry_count != keys->list->entry_count || box->size < pos )
+    if( box->size < pos )
         printf( "[keys] box has extra bytes: %"PRId64"\n", pos - box->size );
     box->size = pos;
     isom_box_common_copy( keys, box );
