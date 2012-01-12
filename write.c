@@ -863,7 +863,6 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
             case QT_CODEC_TYPE_23NI_AUDIO :
             case QT_CODEC_TYPE_NONE_AUDIO :
             case QT_CODEC_TYPE_LPCM_AUDIO :
-            case QT_CODEC_TYPE_RAW_AUDIO :
             case QT_CODEC_TYPE_SOWT_AUDIO :
             case QT_CODEC_TYPE_TWOS_AUDIO :
             case QT_CODEC_TYPE_FL32_AUDIO :
@@ -920,6 +919,12 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
                 break;
             case QT_CODEC_TYPE_TEXT_TEXT :
                 ret = isom_write_text_entry( bs, entry );
+                break;
+            case LSMASH_CODEC_TYPE_RAW :
+                if( sample->manager & LSMASH_VIDEO_DESCRIPTION )
+                    ret = isom_write_visual_entry( bs, entry );
+                else if( sample->manager & LSMASH_AUDIO_DESCRIPTION )
+                    ret = isom_write_audio_entry( bs, entry );
                 break;
             default :
                 break;

@@ -724,6 +724,7 @@ static int isom_add_visual_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmas
     if( !visual )
         return -1;
     isom_init_box_common( visual, stsd, sample_type );
+    visual->manager |= LSMASH_VIDEO_DESCRIPTION;
     visual->data_reference_index = 1;
     visual->width = (uint16_t)summary->width;
     visual->height = (uint16_t)summary->height;
@@ -1062,6 +1063,7 @@ static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash
     if( !audio )
         return -1;
     isom_init_box_common( audio, stsd, sample_type );
+    audio->manager |= LSMASH_AUDIO_DESCRIPTION;
     memcpy( &audio->summary, summary, sizeof(lsmash_audio_summary_t) );
     int ret = 0;
     lsmash_root_t *root = stsd->root;
@@ -1227,7 +1229,6 @@ int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t sa
         case QT_CODEC_TYPE_23NI_AUDIO :
         case QT_CODEC_TYPE_NONE_AUDIO :
         case QT_CODEC_TYPE_LPCM_AUDIO :
-        case QT_CODEC_TYPE_RAW_AUDIO :
         case QT_CODEC_TYPE_SOWT_AUDIO :
         case QT_CODEC_TYPE_TWOS_AUDIO :
         case QT_CODEC_TYPE_FL32_AUDIO :
@@ -1259,6 +1260,12 @@ int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t sa
             break;
         case QT_CODEC_TYPE_TEXT_TEXT :
             ret = isom_add_text_entry( stsd );
+            break;
+        case LSMASH_CODEC_TYPE_RAW :
+            if( trak->mdia->minf->vmhd )
+                ret = isom_add_visual_entry( stsd, sample_type, (lsmash_video_summary_t *)summary );
+            else if( trak->mdia->minf->smhd )
+                ret = isom_add_audio_entry( stsd, sample_type, (lsmash_audio_summary_t *)summary );
             break;
         default :
             return 0;
@@ -2945,6 +2952,22 @@ void isom_remove_chan( isom_chan_t *chan )
     isom_remove_box( chan, isom_audio_entry_t );
 }
 
+static void isom_remove_visual_description( isom_visual_entry_t *visual )
+{
+    isom_remove_visual_extensions( visual );
+    free( visual );
+}
+
+static void isom_remove_audio_description( isom_audio_entry_t *audio )
+{
+    isom_remove_esds( audio->esds );
+    isom_remove_wave( audio->wave );
+    isom_remove_chan( audio->chan );
+    if( audio->exdata )
+        free( audio->exdata );
+    free( audio );
+}
+
 void isom_remove_sample_description( isom_sample_entry_t *sample )
 {
     if( !sample )
@@ -3016,12 +3039,8 @@ void isom_remove_sample_description( isom_sample_entry_t *sample )
         case QT_CODEC_TYPE_V408_VIDEO :
         case QT_CODEC_TYPE_V410_VIDEO :
         case QT_CODEC_TYPE_YUV2_VIDEO :
-        {
-            isom_visual_entry_t *visual = (isom_visual_entry_t *)sample;
-            isom_remove_visual_extensions( (isom_visual_entry_t *)visual );
-            free( visual );
+            isom_remove_visual_description( (isom_visual_entry_t *)sample );
             break;
-        }
         case ISOM_CODEC_TYPE_MP4A_AUDIO :
         case ISOM_CODEC_TYPE_AC_3_AUDIO :
         case ISOM_CODEC_TYPE_ALAC_AUDIO :
@@ -3030,7 +3049,6 @@ void isom_remove_sample_description( isom_sample_entry_t *sample )
         case QT_CODEC_TYPE_23NI_AUDIO :
         case QT_CODEC_TYPE_NONE_AUDIO :
         case QT_CODEC_TYPE_LPCM_AUDIO :
-        case QT_CODEC_TYPE_RAW_AUDIO :
         case QT_CODEC_TYPE_SOWT_AUDIO :
         case QT_CODEC_TYPE_TWOS_AUDIO :
         case QT_CODEC_TYPE_FL32_AUDIO :
@@ -3048,22 +3066,13 @@ void isom_remove_sample_description( isom_sample_entry_t *sample )
         case ISOM_CODEC_TYPE_G726_AUDIO :
         case ISOM_CODEC_TYPE_M4AE_AUDIO :
         case ISOM_CODEC_TYPE_MLPA_AUDIO :
-        //case ISOM_CODEC_TYPE_RAW_AUDIO :
         case ISOM_CODEC_TYPE_SAWP_AUDIO :
         case ISOM_CODEC_TYPE_SEVC_AUDIO :
         case ISOM_CODEC_TYPE_SQCP_AUDIO :
         case ISOM_CODEC_TYPE_SSMV_AUDIO :
         //case ISOM_CODEC_TYPE_TWOS_AUDIO :
-        {
-            isom_audio_entry_t *audio = (isom_audio_entry_t *)sample;
-            isom_remove_esds( audio->esds );
-            isom_remove_wave( audio->wave );
-            isom_remove_chan( audio->chan );
-            if( audio->exdata )
-                free( audio->exdata );
-            free( audio );
+            isom_remove_audio_description( (isom_audio_entry_t *)sample );
             break;
-        }
         case ISOM_CODEC_TYPE_FDP_HINT :
         case ISOM_CODEC_TYPE_M2TS_HINT :
         case ISOM_CODEC_TYPE_PM2T_HINT :
@@ -3118,6 +3127,12 @@ void isom_remove_sample_description( isom_sample_entry_t *sample )
             free( mp4s );
             break;
         }
+        case LSMASH_CODEC_TYPE_RAW :
+            if( sample->manager & LSMASH_VIDEO_DESCRIPTION )
+                isom_remove_visual_description( (isom_visual_entry_t *)sample );
+            else if( sample->manager & LSMASH_AUDIO_DESCRIPTION )
+                isom_remove_audio_description( (isom_audio_entry_t *)sample );
+            break;
         default :
             break;
     }
@@ -4976,7 +4991,6 @@ static uint64_t isom_update_stsd_size( isom_stsd_t *stsd )
             case QT_CODEC_TYPE_23NI_AUDIO :
             case QT_CODEC_TYPE_NONE_AUDIO :
             case QT_CODEC_TYPE_LPCM_AUDIO :
-            case QT_CODEC_TYPE_RAW_AUDIO :
             case QT_CODEC_TYPE_SOWT_AUDIO :
             case QT_CODEC_TYPE_TWOS_AUDIO :
             case QT_CODEC_TYPE_FL32_AUDIO :
@@ -5008,6 +5022,12 @@ static uint64_t isom_update_stsd_size( isom_stsd_t *stsd )
                 break;
             case QT_CODEC_TYPE_TEXT_TEXT :
                 size += isom_update_text_entry_size( (isom_text_entry_t *)data );
+                break;
+            case LSMASH_CODEC_TYPE_RAW :
+                if( data->manager & LSMASH_VIDEO_DESCRIPTION )
+                    size += isom_update_visual_entry_size( (isom_visual_entry_t *)data );
+                else if( data->manager & LSMASH_AUDIO_DESCRIPTION )
+                    size += isom_update_audio_entry_size( (isom_audio_entry_t *)data );
                 break;
             default :
                 break;

@@ -2107,7 +2107,6 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
                 case ISOM_CODEC_TYPE_M4AE_AUDIO :
                 case ISOM_CODEC_TYPE_MLPA_AUDIO :
                 case ISOM_CODEC_TYPE_MP4A_AUDIO :
-                //case ISOM_CODEC_TYPE_RAW_AUDIO  :
                 case ISOM_CODEC_TYPE_SAMR_AUDIO :
                 case ISOM_CODEC_TYPE_SAWB_AUDIO :
                 case ISOM_CODEC_TYPE_SAWP_AUDIO :
@@ -2134,7 +2133,6 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
                 case QT_CODEC_TYPE_IN24_AUDIO :
                 case QT_CODEC_TYPE_IN32_AUDIO :
                 case QT_CODEC_TYPE_LPCM_AUDIO :
-                case QT_CODEC_TYPE_RAW_AUDIO :
                 case QT_CODEC_TYPE_SOWT_AUDIO :
                 case QT_CODEC_TYPE_TWOS_AUDIO :
                 case QT_CODEC_TYPE_ULAW_AUDIO :
@@ -2150,6 +2148,11 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
                     return isom_print_text_description;
                 case ISOM_CODEC_TYPE_TX3G_TEXT :
                     return isom_print_tx3g_description;
+                case LSMASH_CODEC_TYPE_RAW :
+                    if( box->manager & LSMASH_VIDEO_DESCRIPTION )
+                        return isom_print_visual_description;
+                    if( box->manager & LSMASH_AUDIO_DESCRIPTION )
+                        return isom_print_audio_description;
                 default :
                     return isom_print_unknown;
             }

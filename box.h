@@ -54,9 +54,12 @@ typedef struct isom_box_tag isom_box_t;
 #define ISOM_FULLBOX_COMMON_SIZE      12
 #define ISOM_LIST_FULLBOX_COMMON_SIZE 16
 
-#define LSMASH_UNKNOWN_BOX    0x01
-#define LSMASH_ABSENT_IN_ROOT 0x02
-#define LSMASH_QTFF_BASE      0x04
+#define LSMASH_UNKNOWN_BOX       0x01
+#define LSMASH_ABSENT_IN_ROOT    0x02
+#define LSMASH_QTFF_BASE         0x04
+#define LSMASH_VIDEO_DESCRIPTION 0x08
+#define LSMASH_AUDIO_DESCRIPTION 0x10
+
 
 struct isom_box_tag
 {

@@ -955,6 +955,7 @@ static int isom_read_visual_description( lsmash_root_t *root, isom_box_t *box, i
     visual->depth                 = lsmash_bs_get_be16( bs );
     visual->color_table_ID        = lsmash_bs_get_be16( bs );
     box->parent = parent;
+    box->manager |= LSMASH_VIDEO_DESCRIPTION;
     isom_box_common_copy( visual, box );
     if( isom_add_print_func( root, visual, level ) )
         return -1;
@@ -1281,6 +1282,7 @@ static int isom_read_audio_description( lsmash_root_t *root, isom_box_t *box, is
         audio->constLPCMFramesPerAudioPacket = lsmash_bs_get_be32( bs );
     }
     box->parent = parent;
+    box->manager |= LSMASH_AUDIO_DESCRIPTION;
     isom_box_common_copy( audio, box );
     if( isom_add_print_func( root, audio, level ) )
         return -1;
@@ -2820,7 +2822,6 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
             case ISOM_CODEC_TYPE_M4AE_AUDIO :
             case ISOM_CODEC_TYPE_MLPA_AUDIO :
             case ISOM_CODEC_TYPE_MP4A_AUDIO :
-            //case ISOM_CODEC_TYPE_RAW_AUDIO  :
             case ISOM_CODEC_TYPE_SAMR_AUDIO :
             case ISOM_CODEC_TYPE_SAWB_AUDIO :
             case ISOM_CODEC_TYPE_SAWP_AUDIO :
@@ -2847,7 +2848,6 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
             case QT_CODEC_TYPE_IN24_AUDIO :
             case QT_CODEC_TYPE_IN32_AUDIO :
             case QT_CODEC_TYPE_LPCM_AUDIO :
-            case QT_CODEC_TYPE_RAW_AUDIO :
             case QT_CODEC_TYPE_SOWT_AUDIO :
             case QT_CODEC_TYPE_TWOS_AUDIO :
             case QT_CODEC_TYPE_ULAW_AUDIO :
@@ -2863,6 +2863,11 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
                 return isom_read_text_description( root, box, parent, level );
             case ISOM_CODEC_TYPE_TX3G_TEXT :
                 return isom_read_tx3g_description( root, box, parent, level );
+            case LSMASH_CODEC_TYPE_RAW :
+                if( ((isom_minf_t *)parent->parent->parent)->vmhd )
+                    return isom_read_visual_description( root, box, parent, level );
+                if( ((isom_minf_t *)parent->parent->parent)->smhd )
+                    return isom_read_audio_description( root, box, parent, level );
             default :
                 return isom_read_unknown_box( root, box, parent, level );
         }

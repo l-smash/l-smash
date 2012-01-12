@@ -683,7 +683,6 @@ static isom_sample_entry_t *isom_duplicate_description( isom_sample_entry_t *ent
         case QT_CODEC_TYPE_23NI_AUDIO :
         case QT_CODEC_TYPE_NONE_AUDIO :
         case QT_CODEC_TYPE_LPCM_AUDIO :
-        case QT_CODEC_TYPE_RAW_AUDIO :
         case QT_CODEC_TYPE_SOWT_AUDIO :
         case QT_CODEC_TYPE_TWOS_AUDIO :
         case QT_CODEC_TYPE_FL32_AUDIO :
@@ -698,6 +697,12 @@ static isom_sample_entry_t *isom_duplicate_description( isom_sample_entry_t *ent
             break;
         case QT_CODEC_TYPE_TEXT_TEXT :
             description = isom_duplicate_text_description( (isom_text_entry_t *)entry );
+            break;
+        case LSMASH_CODEC_TYPE_RAW :
+            if( entry->manager & LSMASH_VIDEO_DESCRIPTION )
+                description = isom_duplicate_visual_description( (isom_visual_entry_t *)entry );
+            else if( entry->manager & LSMASH_AUDIO_DESCRIPTION )
+                description = isom_duplicate_audio_description( (isom_audio_entry_t *)entry );
             break;
         default :
             return NULL;
