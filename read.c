@@ -120,6 +120,15 @@ static void isom_skip_box_rest( lsmash_bs_t *bs, isom_box_t *box )
                 break;
 }
 
+static void isom_check_box_size( lsmash_bs_t *bs, isom_box_t *box )
+{
+    uint64_t pos = lsmash_bs_get_pos( bs );
+    if( box->size >= pos )
+        return;
+    printf( "[%s] box has extra bytes: %"PRId64"\n", isom_4cc2str( box->type ), pos - box->size );
+    box->size = pos;
+}
+
 static int isom_read_children( lsmash_root_t *root, isom_box_t *box, void *parent, int level )
 {
     int ret;
@@ -426,9 +435,7 @@ static int isom_read_elst( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         }
         data->media_rate = lsmash_bs_get_be32( bs );
     }
-    if( box->size < pos )
-        printf( "[elst] box has extra bytes: %"PRId64"\n", pos - box->size );
-    box->size = pos;
+    isom_check_box_size( bs, box );
     isom_box_common_copy( elst, box );
     return isom_add_print_func( root, elst, level );
 }
@@ -480,10 +487,7 @@ static int isom_read_track_reference_type( lsmash_root_t *root, isom_box_t *box,
         for( uint32_t i = 0; i < ref->ref_count; i++ )
             ref->track_ID[i] = lsmash_bs_get_be32( bs );
     }
-    uint64_t pos = lsmash_bs_get_pos( bs );
-    if( box->size != pos )
-        printf( "[%s] box has extra bytes: %"PRId64"\n", isom_4cc2str( box->type ), box->size - pos );
-    box->size = pos;
+    isom_check_box_size( bs, box );
     isom_box_common_copy( ref, box );
     return isom_add_print_func( root, ref, level );
 }
@@ -781,6 +785,11 @@ static int isom_read_stsd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         stsd_pos += box->size;
         if( stsd->size <= stsd_pos || bs->error )
             break;
+    }
+    if( stsd->size < stsd_pos )
+    {
+        printf( "[stsd] box has extra bytes: %"PRId64"\n", stsd_pos - stsd->size );
+        stsd->size = stsd_pos;
     }
     return ret;
 }
@@ -1577,9 +1586,7 @@ static int isom_read_ftab( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
             data->font_name[data->font_name_length] = '\0';
         }
     }
-    if( box->size < pos )
-        printf( "[ftab] box has extra bytes: %"PRId64"\n", pos - box->size );
-    box->size = pos;
+    isom_check_box_size( bs, box );
     isom_box_common_copy( ftab, box );
     return isom_add_print_func( root, ftab, level );
 }
@@ -1607,9 +1614,7 @@ static int isom_read_stts( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         data->sample_count = lsmash_bs_get_be32( bs );
         data->sample_delta = lsmash_bs_get_be32( bs );
     }
-    if( box->size < pos )
-        printf( "[stts] box has extra bytes: %"PRId64"\n", pos - box->size );
-    box->size = pos;
+    isom_check_box_size( bs, box );
     isom_box_common_copy( stts, box );
     return isom_add_print_func( root, stts, level );
 }
@@ -1637,9 +1642,7 @@ static int isom_read_ctts( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         data->sample_count  = lsmash_bs_get_be32( bs );
         data->sample_offset = lsmash_bs_get_be32( bs );
     }
-    if( box->size < pos )
-        printf( "[ctts] box has extra bytes: %"PRId64"\n", pos - box->size );
-    box->size = pos;
+    isom_check_box_size( bs, box );
     isom_box_common_copy( ctts, box );
     return isom_add_print_func( root, ctts, level );
 }
@@ -1684,9 +1687,7 @@ static int isom_read_stss( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         }
         data->sample_number = lsmash_bs_get_be32( bs );
     }
-    if( box->size < pos )
-        printf( "[stss] box has extra bytes: %"PRId64"\n", pos - box->size );
-    box->size = pos;
+    isom_check_box_size( bs, box );
     isom_box_common_copy( stss, box );
     return isom_add_print_func( root, stss, level );
 }
@@ -1713,9 +1714,7 @@ static int isom_read_stps( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         }
         data->sample_number = lsmash_bs_get_be32( bs );
     }
-    if( box->size < pos )
-        printf( "[stps] box has extra bytes: %"PRId64"\n", pos - box->size );
-    box->size = pos;
+    isom_check_box_size( bs, box );
     isom_box_common_copy( stps, box );
     return isom_add_print_func( root, stps, level );
 }
@@ -1745,7 +1744,6 @@ static int isom_read_sdtp( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         data->sample_is_depended_on = (temp >> 2) & 0x3;
         data->sample_has_redundancy =  temp       & 0x3;
     }
-    box->size = pos;
     isom_box_common_copy( sdtp, box );
     return isom_add_print_func( root, sdtp, level );
 }
@@ -1774,9 +1772,7 @@ static int isom_read_stsc( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         data->samples_per_chunk        = lsmash_bs_get_be32( bs );
         data->sample_description_index = lsmash_bs_get_be32( bs );
     }
-    if( box->size < pos )
-        printf( "[stsc] box has extra bytes: %"PRId64"\n", pos - box->size );
-    box->size = pos;
+    isom_check_box_size( bs, box );
     isom_box_common_copy( stsc, box );
     return isom_add_print_func( root, stsc, level );
 }
@@ -1810,9 +1806,7 @@ static int isom_read_stsz( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
             data->entry_size = lsmash_bs_get_be32( bs );
         }
     }
-    if( box->size < pos )
-        printf( "[stsz] box has extra bytes: %"PRId64"\n", pos - box->size );
-    box->size = pos;
+    isom_check_box_size( bs, box );
     isom_box_common_copy( stsz, box );
     return isom_add_print_func( root, stsz, level );
 }
@@ -1856,9 +1850,7 @@ static int isom_read_stco( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
             data->chunk_offset = lsmash_bs_get_be64( bs );
         }
     }
-    if( box->size < pos )
-        printf( "[%s] box has extra bytes: %"PRId64"\n", isom_4cc2str( box->type ), pos - box->size );
-    box->size = pos;
+    isom_check_box_size( bs, box );
     isom_box_common_copy( stco, box );
     return isom_add_print_func( root, stco, level );
 }
@@ -1917,9 +1909,7 @@ static int isom_read_sgpd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
                     data->num_leading_samples       =  temp       & 0x7f;
                 }
             }
-            if( box->size < pos )
-                printf( "[sgpd] box has extra bytes: %"PRId64"\n", pos - box->size );
-            box->size = pos;
+            isom_check_box_size( bs, box );
             break;
         }
         case ISOM_GROUP_TYPE_ROLL :
@@ -1942,9 +1932,7 @@ static int isom_read_sgpd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
                 else
                     data->roll_distance      = lsmash_bs_get_be16( bs );
             }
-            if( box->size < pos )
-                printf( "[sgpd] box has extra bytes: %"PRId64"\n", pos - box->size );
-            box->size = pos;
+            isom_check_box_size( bs, box );
             break;
         }
         default :
@@ -1996,9 +1984,7 @@ static int isom_read_sbgp( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         data->sample_count            = lsmash_bs_get_be32( bs );
         data->group_description_index = lsmash_bs_get_be32( bs );
     }
-    if( box->size < pos )
-        printf( "[sbgp] box has extra bytes: %"PRId64"\n", pos - box->size );
-    box->size = pos;
+    isom_check_box_size( bs, box );
     isom_box_common_copy( sbgp, box );
     return isom_add_print_func( root, sbgp, level );
 }
@@ -2057,9 +2043,7 @@ static int isom_read_chpl( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
             data->chapter_name[i] = lsmash_bs_get_byte( bs );
         data->chapter_name[data->chapter_name_length] = '\0';
     }
-    if( box->size < pos )
-        printf( "[chpl] box has extra bytes: %"PRId64"\n", pos - box->size );
-    box->size = pos;
+    isom_check_box_size( bs, box );
     isom_box_common_copy( chpl, box );
     return isom_add_print_func( root, chpl, level );
 }
@@ -2222,10 +2206,7 @@ static int isom_read_tfhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     if( box->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_DURATION_PRESENT  ) tfhd->default_sample_duration  = lsmash_bs_get_be32( bs );
     if( box->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_SIZE_PRESENT      ) tfhd->default_sample_size      = lsmash_bs_get_be32( bs );
     if( box->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT     ) tfhd->default_sample_flags     = isom_bs_get_sample_flags( bs );
-    uint32_t pos = lsmash_bs_get_pos( bs );
-    if( box->size < pos )
-        printf( "[tfhd] box has extra bytes: %"PRId64"\n", pos - box->size );
-    box->size = pos;
+    isom_check_box_size( bs, box );
     isom_box_common_copy( tfhd, box );
     return isom_add_print_func( root, tfhd, level );
 }
@@ -2282,10 +2263,7 @@ static int isom_read_trun( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
             if( box->flags & ISOM_TR_FLAGS_SAMPLE_COMPOSITION_TIME_OFFSET_PRESENT ) data->sample_composition_time_offset = lsmash_bs_get_be32( bs );
         }
     }
-    uint32_t pos = lsmash_bs_get_pos( bs );
-    if( box->size < pos )
-        printf( "[trun] box has extra bytes: %"PRId64"\n", pos - box->size );
-    box->size = pos;
+    isom_check_box_size( bs, box );
     isom_box_common_copy( trun, box );
     return isom_add_print_func( root, trun, level );
 }
@@ -2379,9 +2357,7 @@ static int isom_read_keys( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         else
             data->key_value = NULL;
     }
-    if( box->size < pos )
-        printf( "[keys] box has extra bytes: %"PRId64"\n", pos - box->size );
-    box->size = pos;
+    isom_check_box_size( bs, box );
     isom_box_common_copy( keys, box );
     return isom_add_print_func( root, keys, level );
 }
@@ -2668,10 +2644,7 @@ static int isom_read_tfra( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
             data->sample_number = bs_put_sample_number( bs );
         }
     }
-    uint32_t pos = lsmash_bs_get_pos( bs );
-    if( (tfra->list && tfra->number_of_entry != tfra->list->entry_count) || box->size < pos )
-        printf( "[tfra] box has extra bytes: %"PRId64"\n", pos - box->size );
-    box->size = lsmash_bs_get_pos( bs );
+    isom_check_box_size( bs, box );
     isom_box_common_copy( tfra, box );
     return isom_add_print_func( root, tfra, level );
 }
