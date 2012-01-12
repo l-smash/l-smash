@@ -770,11 +770,19 @@ static int isom_read_stsd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     lsmash_bs_t *bs = root->bs;
     if( lsmash_bs_read_data( bs, sizeof(uint32_t) ) )
         return -1;
-    stsd->list->entry_count = lsmash_bs_get_be32( bs );
+    uint32_t entry_count = lsmash_bs_get_be32( bs );
     isom_box_common_copy( stsd, box );
     if( isom_add_print_func( root, stsd, level ) )
         return -1;
-    return isom_read_children( root, box, stsd, level );
+    int ret = 0;
+    uint64_t stsd_pos = lsmash_bs_get_pos( bs );
+    while( stsd->list->entry_count < entry_count && !(ret = isom_read_box( root, box, (isom_box_t *)stsd, stsd_pos, level )) )
+    {
+        stsd_pos += box->size;
+        if( stsd->size <= stsd_pos || bs->error )
+            break;
+    }
+    return ret;
 }
 
 static void *isom_sample_description_alloc( uint32_t sample_type )
@@ -916,8 +924,6 @@ static void *isom_add_description( uint32_t sample_type, lsmash_entry_list_t *li
     void *sample = isom_sample_description_alloc( sample_type );
     if( !sample )
         return NULL;
-    if( !list->head )
-        list->entry_count = 0;      /* discard entry_count gotten from the file */
     if( lsmash_add_entry( list, sample ) )
     {
         free( sample );
