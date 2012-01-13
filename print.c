@@ -417,9 +417,6 @@ static int isom_print_track_reference_type( FILE *fp, lsmash_root_t *root, isom_
     for( uint32_t i = 0; i < ref->ref_count; i++ )
         isom_ifprintf( fp, indent, "track_ID[%"PRIu32"] = %"PRIu32"\n", i, ref->track_ID[i] );
     return 0;
-
-
-    return isom_print_simple( fp, box, level, "Track Reference Type Box" );
 }
 
 static int isom_print_mdia( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
