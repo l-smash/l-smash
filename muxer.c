@@ -664,6 +664,18 @@ static void display_codec_name( uint32_t codec_type, uint32_t track_number )
         case ISOM_CODEC_TYPE_AC_3_AUDIO :
             DISPLAY_CODEC_NAME( AC-3 );
             break;
+        case ISOM_CODEC_TYPE_DTSC_AUDIO :
+            DISPLAY_CODEC_NAME( DTS );
+            break;
+        case ISOM_CODEC_TYPE_DTSE_AUDIO :
+            DISPLAY_CODEC_NAME( DTS LBR );
+            break;
+        case ISOM_CODEC_TYPE_DTSH_AUDIO :
+            DISPLAY_CODEC_NAME( DTS-HD );
+            break;
+        case ISOM_CODEC_TYPE_DTSL_AUDIO :
+            DISPLAY_CODEC_NAME( DTS-HD Lossless );
+            break;
         case ISOM_CODEC_TYPE_EC_3_AUDIO :
             DISPLAY_CODEC_NAME( Enhanced AC-3 );
             break;
