@@ -1265,6 +1265,7 @@ const static mp4sys_importer_functions mp4sys_ac3_importer =
 
 /***************************************************************************
     Enhanced AC-3 importer
+    ETSI TS 102 366 V1.2.1 (2008-08)
 ***************************************************************************/
 #define EAC3_MAX_SYNCFRAME_LENGTH 4096
 #define EAC3_FIRST_FIVE_BYTES     5
@@ -1755,6 +1756,8 @@ static int mp4sys_eac3_get_accessunit( mp4sys_importer_t *importer, uint32_t tra
         return -1;
     mp4sys_eac3_info_t *info = (mp4sys_eac3_info_t *)importer->info;
     mp4sys_importer_status current_status = info->status;
+    if( current_status == MP4SYS_IMPORTER_ERROR || buffered_sample->length < info->au_length )
+        return -1;
     if( current_status == MP4SYS_IMPORTER_EOF && info->au_length == 0 )
     {
         buffered_sample->length = 0;
@@ -1782,13 +1785,19 @@ static int mp4sys_eac3_get_accessunit( mp4sys_importer_t *importer, uint32_t tra
     }
     uint32_t old_syncframe_count_in_au = info->syncframe_count_in_au;
     if( eac3_get_next_accessunit_internal( importer ) )
-        return -1;
+    {
+        info->status = MP4SYS_IMPORTER_ERROR;
+        return current_status;
+    }
     if( info->syncframe_count_in_au )
     {
         uint32_t new_length;
         uint8_t *dec3 = eac3_create_dec3( info, &new_length );
         if( !dec3 )
-            return -1;
+        {
+            info->status = MP4SYS_IMPORTER_ERROR;
+            return current_status;
+        }
         if( (info->syncframe_count_in_au > old_syncframe_count_in_au)
          || (new_length != summary->exdata_length || memcmp( dec3, summary->exdata, summary->exdata_length )) )
         {
@@ -1850,7 +1859,7 @@ static uint32_t mp4sys_eac3_get_last_delta( mp4sys_importer_t* importer, uint32_
 
 const static mp4sys_importer_functions mp4sys_eac3_importer =
 {
-    "eac3",
+    "Enhanced AC-3",
     1,
     mp4sys_eac3_probe,
     mp4sys_eac3_get_accessunit,
