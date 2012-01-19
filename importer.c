@@ -1880,6 +1880,7 @@ const static mp4sys_importer_functions mp4sys_eac3_importer =
 
 /***************************************************************************
     MPEG-4 ALS importer
+    ISO/IEC 14496-3 2009 Fourth edition
 ***************************************************************************/
 #define ALSSC_TWELVE_LENGTH 22
 
@@ -2098,20 +2099,18 @@ static int mp4sys_als_get_accessunit( mp4sys_importer_t *importer, uint32_t trac
     }
     uint32_t au_length;
     if( alssc->ra_flag == 2 )
-    {
         au_length = alssc->ra_unit_size[info->au_number];
-        if( fread( buffered_sample->data, 1, au_length, importer->stream ) != au_length )
-            return -1;
-    }
     else /* if( alssc->ra_flag == 1 ) */
     {
         uint8_t temp[4];
         if( fread( temp, 1, 4, importer->stream ) != 4 )
             return -1;
         au_length = (temp[0] << 24) | (temp[1] << 16) | (temp[2] << 8) | temp[3];     /* We remove ra_unit_size. */
-        if( fread( buffered_sample->data, 1, au_length, importer->stream ) != au_length )
-            return -1;
     }
+    if( buffered_sample->length < au_length )
+        return -1;
+    if( fread( buffered_sample->data, 1, au_length, importer->stream ) != au_length )
+        return -1;
     buffered_sample->length = au_length;
     buffered_sample->dts = info->au_number++ * info->samples_in_frame;
     buffered_sample->cts = buffered_sample->dts;
@@ -2210,7 +2209,7 @@ static uint32_t mp4sys_als_get_last_delta( mp4sys_importer_t* importer, uint32_t
 
 const static mp4sys_importer_functions mp4sys_als_importer =
 {
-    "als",
+    "MPEG-4 ALS",
     1,
     mp4sys_als_probe,
     mp4sys_als_get_accessunit,
