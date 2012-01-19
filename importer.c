@@ -2857,7 +2857,7 @@ static uint16_t dts_generate_channel_layout_from_core( int channel_arrangement )
     return channel_arrangement < 16 ? channel_layout_map_table[channel_arrangement] : 0;
 }
 
-static uint8_t *dts_create_ddts( mp4sys_dts_info_t *info, uint32_t *ddts_length, uint32_t *DTSSamplingFrequency )
+static uint8_t *dts_create_ddts( mp4sys_dts_info_t *info, uint32_t *ddts_length, uint32_t *DTSSamplingFrequency, uint8_t *pcmSampleDepth )
 {
     lsmash_bits_t *bits = info->bits;
     lsmash_bits_empty( bits );
@@ -2874,12 +2874,12 @@ static uint8_t *dts_create_ddts( mp4sys_dts_info_t *info, uint32_t *ddts_length,
     /* avgBitrate */
     lsmash_bits_put( bits, 0, 32 );
     /* pcmSampleDepth */
-    uint8_t pcmSampleDepth = info->core.pcm_resolution;
-    pcmSampleDepth = LSMASH_MAX( pcmSampleDepth, info->extension.bit_resolution );
-    pcmSampleDepth = LSMASH_MAX( pcmSampleDepth, info->lbr.sample_size );
-    pcmSampleDepth = LSMASH_MAX( pcmSampleDepth, info->lossless.bit_width );
-    pcmSampleDepth = pcmSampleDepth > 16 ? 24 : 16;
-    lsmash_bits_put( bits, pcmSampleDepth, 8 );
+    *pcmSampleDepth = info->core.pcm_resolution;
+    *pcmSampleDepth = LSMASH_MAX( *pcmSampleDepth, info->extension.bit_resolution );
+    *pcmSampleDepth = LSMASH_MAX( *pcmSampleDepth, info->lbr.sample_size );
+    *pcmSampleDepth = LSMASH_MAX( *pcmSampleDepth, info->lossless.bit_width );
+    *pcmSampleDepth = *pcmSampleDepth > 16 ? 24 : 16;
+    lsmash_bits_put( bits, *pcmSampleDepth, 8 );
     /* FrameDuration: 0 = 512, 1 = 1024, 2 = 2048, 3 = 4096 */
     uint8_t FrameDuration = 0;
     for( uint32_t audio_samples = info->frame_duration >> 10; audio_samples; audio_samples >>= 1 )
@@ -2986,7 +2986,8 @@ static lsmash_audio_summary_t *dts_create_summary( mp4sys_dts_info_t *info )
     if( !summary )
         return NULL;
     uint32_t DTSSamplingFrequency;
-    summary->exdata = dts_create_ddts( info, &summary->exdata_length, &DTSSamplingFrequency );
+    uint8_t pcmSampleDepth;
+    summary->exdata = dts_create_ddts( info, &summary->exdata_length, &DTSSamplingFrequency, &pcmSampleDepth );
     if( !summary->exdata )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
@@ -3016,7 +3017,7 @@ static lsmash_audio_summary_t *dts_create_summary( mp4sys_dts_info_t *info )
             return NULL;
     }
     summary->aot              = MP4A_AUDIO_OBJECT_TYPE_NULL;    /* no effect */
-    summary->bit_depth        = 16;                             /* shall be set to 16 */
+    summary->bit_depth        = pcmSampleDepth;
     summary->samples_in_frame = info->frame_duration;
     summary->sbr_mode         = MP4A_AAC_SBR_NOT_SPECIFIED;     /* no effect */
     switch( DTSSamplingFrequency )
