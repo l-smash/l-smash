@@ -931,6 +931,7 @@ const static mp4sys_importer_functions mp4sys_amr_importer =
 
 /***************************************************************************
     AC-3 importer
+    ETSI TS 102 366 V1.2.1 (2008-08)
 ***************************************************************************/
 #define AC3_MAX_AU_LENGTH   3840
 #define AC3_MIN_AU_LENGTH   128
@@ -1156,12 +1157,19 @@ static int mp4sys_ac3_get_accessunit( mp4sys_importer_t *importer, uint32_t trac
         return -1;
     mp4sys_ac3_info_t *info = (mp4sys_ac3_info_t *)importer->info;
     mp4sys_importer_status current_status = info->status;
+    if( current_status == MP4SYS_IMPORTER_ERROR )
+        return -1;
     if( current_status == MP4SYS_IMPORTER_EOF )
     {
         buffered_sample->length = 0;
         return 0;
     }
     ac3_dac3_element_t *element = &info->dac3_element;
+    uint32_t frame_size = ac3_frame_size_table[ element->frmsizecod >> 1 ][ element->fscod ];
+    if( element->fscod == 0x1 && element->frmsizecod & 0x1 )
+        frame_size += 2;
+    if( buffered_sample->length < frame_size )
+        return -1;
     if( current_status == MP4SYS_IMPORTER_CHANGE )
     {
         free( summary->exdata );
@@ -1170,9 +1178,6 @@ static int mp4sys_ac3_get_accessunit( mp4sys_importer_t *importer, uint32_t trac
         summary->channels   = ac3_channel_count_table[ element->acmod ] + element->lfeon;
         summary->layout_tag = ac3_channel_layout_table[ element->acmod ][ element->lfeon ];
     }
-    uint32_t frame_size = ac3_frame_size_table[ element->frmsizecod >> 1 ][ element->fscod ];
-    if( element->fscod == 0x1 && element->frmsizecod & 0x1 )
-        frame_size += 2;
     if( frame_size > AC3_MIN_AU_LENGTH )
     {
         uint32_t read_size = frame_size - AC3_MIN_AU_LENGTH;
@@ -1191,14 +1196,20 @@ static int mp4sys_ac3_get_accessunit( mp4sys_importer_t *importer, uint32_t trac
     {
         /* Parse the next syncframe header. */
         IF_AC3_SYNCWORD( info->buffer )
-            return -1;
+        {
+            info->status = MP4SYS_IMPORTER_ERROR;
+            return current_status;
+        }
         ac3_dac3_element_t current_element = info->dac3_element;
         ac3_parse_syncframe_header( info, info->buffer );
         if( ac3_compare_dac3_elements( &current_element, &info->dac3_element ) )
         {
             uint8_t *dac3 = ac3_create_dac3( info );
             if( !dac3 )
-                return -1;
+            {
+                info->status = MP4SYS_IMPORTER_ERROR;
+                return current_status;
+            }
             info->status = MP4SYS_IMPORTER_CHANGE;
             info->next_dac3 = dac3;
         }
@@ -1255,7 +1266,7 @@ static uint32_t mp4sys_ac3_get_last_delta( mp4sys_importer_t* importer, uint32_t
 
 const static mp4sys_importer_functions mp4sys_ac3_importer =
 {
-    "ac3",
+    "AC-3",
     1,
     mp4sys_ac3_probe,
     mp4sys_ac3_get_accessunit,
