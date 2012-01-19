@@ -2094,9 +2094,9 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
                 case ISOM_CODEC_TYPE_ALAC_AUDIO :
                 case ISOM_CODEC_TYPE_DRA1_AUDIO :
                 case ISOM_CODEC_TYPE_DTSC_AUDIO :
+                case ISOM_CODEC_TYPE_DTSE_AUDIO :
                 case ISOM_CODEC_TYPE_DTSH_AUDIO :
                 case ISOM_CODEC_TYPE_DTSL_AUDIO :
-                case ISOM_CODEC_TYPE_DTSE_AUDIO :
                 case ISOM_CODEC_TYPE_EC_3_AUDIO :
                 case ISOM_CODEC_TYPE_ENCA_AUDIO :
                 case ISOM_CODEC_TYPE_G719_AUDIO :

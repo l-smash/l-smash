@@ -49,7 +49,6 @@ lsmash_bs_t* lsmash_bs_create( char* filename );
 void lsmash_bs_cleanup( lsmash_bs_t *bs );
 
 /*---- bytestream writer ----*/
-
 void lsmash_bs_put_byte( lsmash_bs_t *bs, uint8_t value );
 void lsmash_bs_put_bytes( lsmash_bs_t *bs, void *value, uint32_t size );
 void lsmash_bs_put_be16( lsmash_bs_t *bs, uint16_t value );
@@ -65,6 +64,7 @@ int lsmash_bs_write_data( lsmash_bs_t *bs );
 void* lsmash_bs_export_data( lsmash_bs_t *bs, uint32_t* length );
 
 /*---- bytestream reader ----*/
+uint8_t lsmash_bs_show_byte( lsmash_bs_t *bs, uint32_t offset );
 uint8_t lsmash_bs_get_byte( lsmash_bs_t *bs );
 uint8_t *lsmash_bs_get_bytes( lsmash_bs_t *bs, uint32_t size );
 uint16_t lsmash_bs_get_be16( lsmash_bs_t *bs );
@@ -162,6 +162,7 @@ typedef enum
 } lsmash_log_level;
 
 void lsmash_log( lsmash_log_level level, const char* message, ... );
+uint32_t lsmash_count_bits( uint32_t bits );
 int lsmash_compare_dts( const lsmash_media_ts_t *a, const lsmash_media_ts_t *b );
 int lsmash_compare_cts( const lsmash_media_ts_t *a, const lsmash_media_ts_t *b );
 

@@ -857,6 +857,10 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
             case ISOM_CODEC_TYPE_MP4A_AUDIO :
             case ISOM_CODEC_TYPE_AC_3_AUDIO :
             case ISOM_CODEC_TYPE_ALAC_AUDIO :
+            case ISOM_CODEC_TYPE_DTSC_AUDIO :
+            case ISOM_CODEC_TYPE_DTSE_AUDIO :
+            case ISOM_CODEC_TYPE_DTSH_AUDIO :
+            case ISOM_CODEC_TYPE_DTSL_AUDIO :
             case ISOM_CODEC_TYPE_EC_3_AUDIO :
             case ISOM_CODEC_TYPE_SAMR_AUDIO :
             case ISOM_CODEC_TYPE_SAWB_AUDIO :
@@ -872,9 +876,6 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
             case QT_CODEC_TYPE_NOT_SPECIFIED :
 #if 0
             case ISOM_CODEC_TYPE_DRA1_AUDIO :
-            case ISOM_CODEC_TYPE_DTSC_AUDIO :
-            case ISOM_CODEC_TYPE_DTSH_AUDIO :
-            case ISOM_CODEC_TYPE_DTSL_AUDIO :
             case ISOM_CODEC_TYPE_ENCA_AUDIO :
             case ISOM_CODEC_TYPE_G719_AUDIO :
             case ISOM_CODEC_TYPE_G726_AUDIO :

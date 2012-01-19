@@ -872,9 +872,9 @@ static void *isom_sample_description_alloc( uint32_t sample_type )
         case ISOM_CODEC_TYPE_ALAC_AUDIO :
         case ISOM_CODEC_TYPE_DRA1_AUDIO :
         case ISOM_CODEC_TYPE_DTSC_AUDIO :
+        case ISOM_CODEC_TYPE_DTSE_AUDIO :
         case ISOM_CODEC_TYPE_DTSH_AUDIO :
         case ISOM_CODEC_TYPE_DTSL_AUDIO :
-        case ISOM_CODEC_TYPE_DTSE_AUDIO :
         case ISOM_CODEC_TYPE_EC_3_AUDIO :
         case ISOM_CODEC_TYPE_ENCA_AUDIO :
         case ISOM_CODEC_TYPE_G719_AUDIO :
@@ -1356,6 +1356,10 @@ static int isom_read_audio_specific( lsmash_root_t *root, isom_box_t *box, isom_
         {
             { ISOM_CODEC_TYPE_AC_3_AUDIO, ISOM_BOX_TYPE_DAC3 },
             { ISOM_CODEC_TYPE_ALAC_AUDIO, ISOM_BOX_TYPE_ALAC },
+            { ISOM_CODEC_TYPE_DTSC_AUDIO, ISOM_BOX_TYPE_DDTS },
+            { ISOM_CODEC_TYPE_DTSE_AUDIO, ISOM_BOX_TYPE_DDTS },
+            { ISOM_CODEC_TYPE_DTSH_AUDIO, ISOM_BOX_TYPE_DDTS },
+            { ISOM_CODEC_TYPE_DTSL_AUDIO, ISOM_BOX_TYPE_DDTS },
             { ISOM_CODEC_TYPE_EC_3_AUDIO, ISOM_BOX_TYPE_DEC3 },
             { ISOM_CODEC_TYPE_SAMR_AUDIO, ISOM_BOX_TYPE_DAMR },
             { ISOM_CODEC_TYPE_SAWB_AUDIO, ISOM_BOX_TYPE_DAMR },
@@ -2795,9 +2799,9 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
             case ISOM_CODEC_TYPE_ALAC_AUDIO :
             case ISOM_CODEC_TYPE_DRA1_AUDIO :
             case ISOM_CODEC_TYPE_DTSC_AUDIO :
+            case ISOM_CODEC_TYPE_DTSE_AUDIO :
             case ISOM_CODEC_TYPE_DTSH_AUDIO :
             case ISOM_CODEC_TYPE_DTSL_AUDIO :
-            case ISOM_CODEC_TYPE_DTSE_AUDIO :
             case ISOM_CODEC_TYPE_EC_3_AUDIO :
             case ISOM_CODEC_TYPE_ENCA_AUDIO :
             case ISOM_CODEC_TYPE_G719_AUDIO :
@@ -3044,6 +3048,10 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
         return isom_read_cprt( root, box, parent, level );
     if( parent->type == ISOM_CODEC_TYPE_AC_3_AUDIO
      || parent->type == ISOM_CODEC_TYPE_ALAC_AUDIO
+     || parent->type == ISOM_CODEC_TYPE_DTSC_AUDIO
+     || parent->type == ISOM_CODEC_TYPE_DTSE_AUDIO
+     || parent->type == ISOM_CODEC_TYPE_DTSH_AUDIO
+     || parent->type == ISOM_CODEC_TYPE_DTSL_AUDIO
      || parent->type == ISOM_CODEC_TYPE_EC_3_AUDIO
      || parent->type == ISOM_CODEC_TYPE_SAMR_AUDIO
      || parent->type == ISOM_CODEC_TYPE_SAWB_AUDIO )

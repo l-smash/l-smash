@@ -724,6 +724,13 @@ static int open_input_files( muxer_t *muxer )
                     if( !opt->isom && opt->qtff )
                         return ERROR_MSG( "the input seems (Enhanced) AC-3, at present available only for ISO Base Media file format.\n" );
                     break;
+                case ISOM_CODEC_TYPE_DTSC_AUDIO :
+                case ISOM_CODEC_TYPE_DTSE_AUDIO :
+                case ISOM_CODEC_TYPE_DTSH_AUDIO :
+                case ISOM_CODEC_TYPE_DTSL_AUDIO :
+                    if( !opt->isom && opt->qtff )
+                        return ERROR_MSG( "the input seems DTS(-HD) Audio, at present available only for ISO Base Media file format.\n" );
+                    break;
                 case ISOM_CODEC_TYPE_SAWB_AUDIO :
                 case ISOM_CODEC_TYPE_SAMR_AUDIO :
                     if( !opt->brand_3gx )

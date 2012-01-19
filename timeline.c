@@ -677,6 +677,10 @@ static isom_sample_entry_t *isom_duplicate_description( isom_sample_entry_t *ent
         case ISOM_CODEC_TYPE_MP4A_AUDIO :
         case ISOM_CODEC_TYPE_AC_3_AUDIO :
         case ISOM_CODEC_TYPE_ALAC_AUDIO :
+        case ISOM_CODEC_TYPE_DTSC_AUDIO :
+        case ISOM_CODEC_TYPE_DTSE_AUDIO :
+        case ISOM_CODEC_TYPE_DTSH_AUDIO :
+        case ISOM_CODEC_TYPE_DTSL_AUDIO :
         case ISOM_CODEC_TYPE_EC_3_AUDIO :
         case ISOM_CODEC_TYPE_SAMR_AUDIO :
         case ISOM_CODEC_TYPE_SAWB_AUDIO :

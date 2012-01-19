@@ -1797,6 +1797,7 @@ enum isom_box_type
     ISOM_BOX_TYPE_AVCC  = LSMASH_4CC( 'a', 'v', 'c', 'C' ),
     ISOM_BOX_TYPE_DAC3  = LSMASH_4CC( 'd', 'a', 'c', '3' ),
     ISOM_BOX_TYPE_DAMR  = LSMASH_4CC( 'd', 'a', 'm', 'r' ),
+    ISOM_BOX_TYPE_DDTS  = LSMASH_4CC( 'd', 'd', 't', 's' ),
     ISOM_BOX_TYPE_DEC3  = LSMASH_4CC( 'd', 'e', 'c', '3' ),
     ISOM_BOX_TYPE_DVC1  = LSMASH_4CC( 'd', 'v', 'c', '1' ),
     ISOM_BOX_TYPE_ESDS  = LSMASH_4CC( 'e', 's', 'd', 's' ),
