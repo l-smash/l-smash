@@ -2350,7 +2350,7 @@ typedef struct
     dts_lbr_info_t       lbr;
     uint32_t coding_name;
     uint8_t  type;
-    uint8_t  prev_type;
+    uint8_t  extension_index;
     uint8_t  extension_substream_count;
     uint32_t frame_duration;
     uint32_t frame_size;
@@ -3071,22 +3071,31 @@ static int dts_read_frame( mp4sys_importer_t *importer )
     mp4sys_dts_info_t *info = (mp4sys_dts_info_t *)importer->info;
     uint32_t read_size = fread( info->buffer, 1, DTS_FIRST_TEN_BYTES, importer->stream );
     if( read_size < DTS_FIRST_TEN_BYTES )
-        return 1;       /* No more DTS frame; EOF */
+        return 2;       /* No more DTS frame; EOF */
     lsmash_bits_t *bits = info->bits;
+    int complete_au = 0;
     uint32_t sync_word = LSMASH_4CC( info->buffer[0], info->buffer[1], info->buffer[2], info->buffer[3] );
     switch( sync_word )
     {
         case DTS_SYNCWORD_CORE :
+            if( info->type != DTS_TYPE_NONE )
+                complete_au = 1;
             info->type   = DTS_TYPE_CORE;
             info->flags |= CORE_SUBSTREAM_CORE_FLAG;
             break;
         case DTS_SYNCWORD_SUBSTREAM :
-            info->type   = DTS_TYPE_EXTENSION;
+        {
+            uint8_t extension_index = info->buffer[5] >> 6;
+            if( info->type == DTS_TYPE_EXTENSION && extension_index <= info->extension_index )
+                complete_au = 1;
+            info->extension_index = extension_index;
+            info->type = DTS_TYPE_EXTENSION;
             break;
+        }
         default :
             return -1;
     }
-    if( !info->summary && info->prev_type != DTS_TYPE_NONE && info->type == DTS_TYPE_CORE )
+    if( !info->summary && complete_au )
         info->summary = dts_create_summary( info );
     if( lsmash_bits_import_data( bits, info->buffer, DTS_FIRST_TEN_BYTES ) )
         return -1;
@@ -3205,14 +3214,15 @@ static int dts_read_frame( mp4sys_importer_t *importer )
         else
             info->extension_substream_count = 1;
         uint64_t bits_pos = 0;
-        dts_bits_get( bits, 40, &bits_pos );                                                    /* SYNCEXTSSH                    (32)
-                                                                                                 * UserDefinedBits               (8) */
-        int nExtSSIndex     = dts_bits_get( bits, 2, &bits_pos );                               /* nExtSSIndex                   (2) */
+        dts_bits_get( bits, 42, &bits_pos );                                                    /* SYNCEXTSSH                    (32)
+                                                                                                 * UserDefinedBits               (8)
+                                                                                                 * nExtSSIndex                   (2) */
+        int nExtSSIndex = info->extension_index;
         int bHeaderSizeType = dts_bits_get( bits, 1, &bits_pos );                               /* bHeaderSizeType               (1) */
         int nuBits4Header    =  8 + bHeaderSizeType * 4;
         int nuBits4ExSSFsize = 16 + bHeaderSizeType * 4;
         uint32_t nuExtSSHeaderSize = dts_bits_get( bits, nuBits4Header, &bits_pos ) + 1;        /* nuExtSSHeaderSize             (8 or 12) */
-        info->frame_size           = dts_bits_get( bits, nuBits4ExSSFsize, &bits_pos ) + 1;     /* nuExtSSFsize                  (16 or 20) */
+        info->frame_size = dts_bits_get( bits, nuBits4ExSSFsize, &bits_pos ) + 1;               /* nuExtSSFsize                  (16 or 20) */
         lsmash_bits_empty( bits );
         read_size = info->frame_size - DTS_FIRST_TEN_BYTES;
         if( fread( info->buffer + DTS_FIRST_TEN_BYTES, 1, read_size, importer->stream ) != read_size )
@@ -3307,7 +3317,7 @@ static int dts_read_frame( mp4sys_importer_t *importer )
         }
     }
     lsmash_bits_empty( bits );
-    return bits->bs->error ? -1 : 0;
+    return complete_au;
 read_fail:
     lsmash_bits_empty( bits );
     return -1;
@@ -3323,12 +3333,12 @@ static int dts_get_next_accessunit_internal( mp4sys_importer_t *importer )
         if( ret == -1 )
             return -1;
         else if( ret == 1 )
+            complete_au = 1;
+        else if( ret == 2 )
         {
             info->status = MP4SYS_IMPORTER_EOF;
             complete_au = 1;
         }
-        else if( info->prev_type != DTS_TYPE_NONE && info->type == DTS_TYPE_CORE )
-            complete_au = 1;
         if( complete_au )
         {
             memcpy( info->au, info->incomplete_au, info->incomplete_au_length );
@@ -3353,11 +3363,10 @@ static int dts_get_next_accessunit_internal( mp4sys_importer_t *importer )
         }
         memcpy( info->incomplete_au + info->incomplete_au_length, info->buffer, info->frame_size );
         info->incomplete_au_length += info->frame_size;
-        info->prev_type = info->type;
         if( complete_au )
             break;
     }
-    return 0;
+    return info->bits->bs->error ? -1 : 0;
 }
 
 static int mp4sys_dts_get_accessunit( mp4sys_importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
