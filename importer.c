@@ -3071,7 +3071,11 @@ static int dts_read_frame( mp4sys_importer_t *importer )
     mp4sys_dts_info_t *info = (mp4sys_dts_info_t *)importer->info;
     uint32_t read_size = fread( info->buffer, 1, DTS_FIRST_TEN_BYTES, importer->stream );
     if( read_size < DTS_FIRST_TEN_BYTES )
+    {
+        if( !info->summary )
+            info->summary = dts_create_summary( info );
         return 2;       /* No more DTS frame; EOF */
+    }
     lsmash_bits_t *bits = info->bits;
     int complete_au = 0;
     uint32_t sync_word = LSMASH_4CC( info->buffer[0], info->buffer[1], info->buffer[2], info->buffer[3] );
