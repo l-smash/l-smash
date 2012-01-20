@@ -1,7 +1,7 @@
 /*****************************************************************************
  * isom.h:
  *****************************************************************************
- * Copyright (C) 2011 L-SMASH project
+ * Copyright (C) 2011-2012 L-SMASH project
  *
  * Authors: Hiroki Taniura <boiled.sugar@gmail.com>
  *

@@ -1,7 +1,7 @@
 /*****************************************************************************
  * remuxer.c:
  *****************************************************************************
- * Copyright (C) 2011 L-SMASH project
+ * Copyright (C) 2011-2012 L-SMASH project
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -184,7 +184,7 @@ static void display_help( void )
     eprintf( "\n"
              "L-SMASH isom/mov re-muliplexer rev%s  %s\n"
              "Built on %s %s\n"
-             "Copyright (C) 2011 L-SMASH project\n"
+             "Copyright (C) 2011-2012 L-SMASH project\n"
              "\n"
              "Usage: remuxer -i input1 [-i input2 -i input3 ...] -o output\n"
              "Global options:\n"

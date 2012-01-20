@@ -1,7 +1,7 @@
 /*****************************************************************************
  * timelineeditor.c:
  *****************************************************************************
- * Copyright (C) 2011 L-SMASH project
+ * Copyright (C) 2011-2012 L-SMASH project
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -645,7 +645,7 @@ static void print_help( void )
     eprintf( "\n"
              "L-SMASH isom/mov timeline editor rev%s  %s\n"
              "Built on %s %s\n"
-             "Copyright (C) 2011 L-SMASH project\n"
+             "Copyright (C) 2011-2012 L-SMASH project\n"
              "\n"
              "Usage: timelineeditor [options] input output\n"
              "  options:\n"
