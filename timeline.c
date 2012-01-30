@@ -156,7 +156,10 @@ void lsmash_destruct_timeline( lsmash_root_t *root, uint32_t track_ID )
         if( !timeline )
             continue;
         if( timeline->track_ID == track_ID )
+        {
             lsmash_remove_entry_direct( root->timeline, entry, isom_destruct_timeline_direct );
+            break;
+        }
     }
 }
 
