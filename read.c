@@ -1975,7 +1975,7 @@ static int isom_read_sbgp( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     lsmash_bs_t *bs = root->bs;
     isom_read_box_rest( bs, box );
     sbgp->grouping_type  = lsmash_bs_get_be32( bs );
-    if( sbgp->version == 1 )
+    if( box->version == 1 )
         sbgp->grouping_type_parameter = lsmash_bs_get_be32( bs );
     uint32_t entry_count = lsmash_bs_get_be32( bs );
     uint64_t pos;
@@ -2630,8 +2630,8 @@ static int isom_read_tfra( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
               lsmash_bs_get_be32_to_64,
               lsmash_bs_get_be64
             };
-        uint64_t (*bs_put_time)         ( lsmash_bs_t * ) = bs_get_funcs[ 3 + (tfra->version == 1)        ];
-        uint64_t (*bs_put_moof_offset)  ( lsmash_bs_t * ) = bs_get_funcs[ 3 + (tfra->version == 1)        ];
+        uint64_t (*bs_put_time)         ( lsmash_bs_t * ) = bs_get_funcs[ 3 + (box->version == 1)         ];
+        uint64_t (*bs_put_moof_offset)  ( lsmash_bs_t * ) = bs_get_funcs[ 3 + (box->version == 1)         ];
         uint64_t (*bs_put_traf_number)  ( lsmash_bs_t * ) = bs_get_funcs[ tfra->length_size_of_traf_num   ];
         uint64_t (*bs_put_trun_number)  ( lsmash_bs_t * ) = bs_get_funcs[ tfra->length_size_of_trun_num   ];
         uint64_t (*bs_put_sample_number)( lsmash_bs_t * ) = bs_get_funcs[ tfra->length_size_of_sample_num ];
