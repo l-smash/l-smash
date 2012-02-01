@@ -568,8 +568,8 @@ static int isom_add_visual_extensions( isom_visual_entry_t *visual, lsmash_video
             return -1;
         }
         isom_pasp_t *pasp = visual->pasp;
-        pasp->hSpacing = summary->par_h;
-        pasp->vSpacing = summary->par_v;
+        pasp->hSpacing = LSMASH_MAX( summary->par_h, 1 );
+        pasp->vSpacing = LSMASH_MAX( summary->par_v, 1 );
     }
     /* Set up Color Parameter. */
     if( qt_compatible && (uncompressed_ycbcr || summary->primaries || summary->transfer || summary->matrix) )
