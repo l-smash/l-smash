@@ -5601,6 +5601,15 @@ typedef struct
 
 typedef struct
 {
+    lsmash_multiple_buffers_t *bank;
+    uint8_t *rbdu;
+    uint8_t *start;
+    uint8_t *end;
+    uint8_t *pos;
+} vc1_stream_buffer_t;
+
+typedef struct
+{
     mp4sys_importer_status status;
     lsmash_video_summary_t *summary;
     uint8_t bdu_type;
@@ -5617,11 +5626,7 @@ typedef struct
     vc1_picture_info_t next_picture;
     vc1_access_unit_t access_unit;
     lsmash_bits_t *bits;
-    lsmash_multiple_buffers_t *buffers;
-    uint8_t *rbdu_buffer;
-    uint8_t *stream_buffer;
-    uint8_t *stream_buffer_pos;
-    uint8_t *stream_buffer_end;
+    vc1_stream_buffer_t buffer;
     uint64_t ebdu_head_pos;
     uint32_t max_au_length;
     uint32_t num_undecodable;
@@ -5635,9 +5640,9 @@ typedef struct
 
 enum
 {
-    VC1_ADVANCED_PICTURE_TYPE_I       = 0x6,        /* 0b110 */
     VC1_ADVANCED_PICTURE_TYPE_P       = 0x0,        /* 0b0 */
     VC1_ADVANCED_PICTURE_TYPE_B       = 0x2,        /* 0b10 */
+    VC1_ADVANCED_PICTURE_TYPE_I       = 0x6,        /* 0b110 */
     VC1_ADVANCED_PICTURE_TYPE_BI      = 0xE,        /* 0b1110 */
     VC1_ADVANCED_PICTURE_TYPE_SKIPPED = 0xF,        /* 0b1111 */
 } vc1_picture_type;
@@ -5668,7 +5673,7 @@ static void mp4sys_remove_vc1_info( mp4sys_vc1_info_t *info )
     if( !info )
         return;
     lsmash_bits_adhoc_cleanup( info->bits );
-    lsmash_destroy_multiple_buffers( info->buffers );
+    lsmash_destroy_multiple_buffers( info->buffer.bank );
     if( info->ts_list.timestamp )
         free( info->ts_list.timestamp );
     if( info->sequence.ebdu )
@@ -5689,16 +5694,17 @@ static mp4sys_vc1_info_t *mp4sys_create_vc1_info( void )
         mp4sys_remove_vc1_info( info );
         return NULL;
     }
-    info->buffers = lsmash_create_multiple_buffers( 4, MP4SYS_VC1_DEFAULT_BUFFER_SIZE );
-    if( !info->buffers )
+    vc1_stream_buffer_t *buffer = &info->buffer;
+    buffer->bank = lsmash_create_multiple_buffers( 4, MP4SYS_VC1_DEFAULT_BUFFER_SIZE );
+    if( !buffer->bank )
     {
         mp4sys_remove_vc1_info( info );
         return NULL;
     }
-    info->stream_buffer               = lsmash_withdraw_buffer( info->buffers, 1 );
-    info->rbdu_buffer                 = lsmash_withdraw_buffer( info->buffers, 2 );
-    info->access_unit.data            = lsmash_withdraw_buffer( info->buffers, 3 );
-    info->access_unit.incomplete_data = lsmash_withdraw_buffer( info->buffers, 4 );
+    buffer->start                     = lsmash_withdraw_buffer( buffer->bank, 1 );
+    buffer->rbdu                      = lsmash_withdraw_buffer( buffer->bank, 2 );
+    info->access_unit.data            = lsmash_withdraw_buffer( buffer->bank, 3 );
+    info->access_unit.incomplete_data = lsmash_withdraw_buffer( buffer->bank, 4 );
     return info;
 }
 
@@ -5749,7 +5755,7 @@ static int vc1_parse_sequence_header( mp4sys_vc1_info_t *info, uint8_t *ebdu, ui
 {
     lsmash_bits_t *bits = info->bits;
     vc1_sequence_header_t *sequence = &info->sequence;
-    if( vc1_bits_import_rbdu_from_ebdu( bits, info->rbdu_buffer, ebdu, ebdu_length ) )
+    if( vc1_bits_import_rbdu_from_ebdu( bits, info->buffer.rbdu, ebdu, ebdu_length ) )
         return -1;
     memset( sequence, 0, sizeof(vc1_sequence_header_t) );
     sequence->profile          = lsmash_bits_get( bits, 2 );
@@ -5868,7 +5874,7 @@ static int vc1_parse_entry_point_header( mp4sys_vc1_info_t *info, uint8_t *ebdu,
     lsmash_bits_t *bits = info->bits;
     vc1_sequence_header_t *sequence = &info->sequence;
     vc1_entry_point_t *entry_point = &info->entry_point;
-    if( vc1_bits_import_rbdu_from_ebdu( bits, info->rbdu_buffer, ebdu, ebdu_length ) )
+    if( vc1_bits_import_rbdu_from_ebdu( bits, info->buffer.rbdu, ebdu, ebdu_length ) )
         return -1;
     memset( entry_point, 0, sizeof(vc1_entry_point_t) );
     uint8_t broken_link_flag = lsmash_bits_get( bits, 1 );          /* 0: no concatenation between the current and the previous entry points
@@ -5945,7 +5951,6 @@ static inline uint8_t vc1_get_vlc( lsmash_bits_t *bits, int length )
 {
     uint8_t value = 0;
     for( int i = 0; i < length; i++ )
-    {
         if( lsmash_bits_get( bits, 1 ) )
             value = (value << 1) | 1;
         else
@@ -5953,7 +5958,6 @@ static inline uint8_t vc1_get_vlc( lsmash_bits_t *bits, int length )
             value = value << 1;
             break;
         }
-    }
     return value;
 }
 
@@ -5976,20 +5980,20 @@ static int vc1_parse_advanced_picture( lsmash_bits_t *bits,
     return bits->bs->error ? -1 : 0;
 }
 
-static int vc1_supplement_buffer( mp4sys_vc1_info_t *info, uint32_t size )
+static int vc1_supplement_buffer( vc1_stream_buffer_t *buffer, vc1_access_unit_t *access_unit, uint32_t size )
 {
-    uint32_t buffer_pos_offset   = info->stream_buffer_pos - info->stream_buffer;
-    uint32_t buffer_valid_length = info->stream_buffer_end - info->stream_buffer;
-    lsmash_multiple_buffers_t *temp = lsmash_resize_multiple_buffers( info->buffers, size );
-    if( !temp )
+    uint32_t buffer_pos_offset   = buffer->pos - buffer->start;
+    uint32_t buffer_valid_length = buffer->end - buffer->start;
+    lsmash_multiple_buffers_t *bank = lsmash_resize_multiple_buffers( buffer->bank, size );
+    if( !bank )
         return -1;
-    info->buffers                     = temp;
-    info->stream_buffer               = lsmash_withdraw_buffer( info->buffers, 1 );
-    info->rbdu_buffer                 = lsmash_withdraw_buffer( info->buffers, 2 );
-    info->access_unit.data            = lsmash_withdraw_buffer( info->buffers, 3 );
-    info->access_unit.incomplete_data = lsmash_withdraw_buffer( info->buffers, 4 );
-    info->stream_buffer_pos = info->stream_buffer + buffer_pos_offset;
-    info->stream_buffer_end = info->stream_buffer + buffer_valid_length;
+    buffer->bank                 = bank;
+    buffer->start                = lsmash_withdraw_buffer( bank, 1 );
+    buffer->rbdu                 = lsmash_withdraw_buffer( bank, 2 );
+    access_unit->data            = lsmash_withdraw_buffer( bank, 3 );
+    access_unit->incomplete_data = lsmash_withdraw_buffer( bank, 4 );
+    buffer->pos = buffer->start + buffer_pos_offset;
+    buffer->end = buffer->start + buffer_valid_length;
     return 0;
 }
 
@@ -6008,24 +6012,24 @@ static inline int vc1_check_next_start_code_suffix( uint8_t *p_bdu_type, uint8_t
     return 0;
 }
 
-static void vc1_check_buffer_shortage( mp4sys_importer_t *importer, uint32_t anticipation_bytes )
+static void vc1_check_buffer_shortage( mp4sys_vc1_info_t *info, FILE *stream, uint32_t anticipation_bytes )
 {
-    mp4sys_vc1_info_t *info = (mp4sys_vc1_info_t *)importer->info;
-    assert( anticipation_bytes < info->buffers->buffer_size );
+    vc1_stream_buffer_t *buffer = &info->buffer;
+    assert( anticipation_bytes < buffer->bank->buffer_size );
     if( info->no_more_read )
         return;
-    uint32_t remainder_bytes = info->stream_buffer_end - info->stream_buffer_pos;
+    uint32_t remainder_bytes = buffer->end - buffer->pos;
     if( remainder_bytes <= anticipation_bytes )
     {
         /* Move unused data to the head of buffer. */
         for( uint32_t i = 0; i < remainder_bytes; i++ )
-            *(info->stream_buffer + i) = *(info->stream_buffer_pos + i);
+            *(buffer->start + i) = *(buffer->pos + i);
         /* Read and store the next data into the buffer.
          * Move the position of buffer on the head. */
-        uint32_t read_size = fread( info->stream_buffer + remainder_bytes, 1, info->buffers->buffer_size - remainder_bytes, importer->stream );
-        info->stream_buffer_pos = info->stream_buffer;
-        info->stream_buffer_end = info->stream_buffer + remainder_bytes + read_size;
-        info->no_more_read = read_size == 0 ? feof( importer->stream ) : 0;
+        uint32_t read_size = fread( buffer->start + remainder_bytes, 1, buffer->bank->buffer_size - remainder_bytes, stream );
+        buffer->pos = buffer->start;
+        buffer->end = buffer->start + remainder_bytes + read_size;
+        info->no_more_read = read_size == 0 ? feof( stream ) : 0;
     }
 }
 
@@ -6121,7 +6125,8 @@ static int vc1_get_au_internal_failed( mp4sys_vc1_info_t *info, vc1_access_unit_
 
 static int vc1_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_vc1_info_t *info, uint32_t track_number, int probe )
 {
-    vc1_access_unit_t *access_unit  = &info->access_unit;
+    vc1_stream_buffer_t *buffer       = &info->buffer;
+    vc1_access_unit_t   *access_unit  = &info->access_unit;
     uint8_t  bdu_type = info->bdu_type;
     uint64_t consecutive_zero_byte_count = 0;
     uint64_t ebdu_length = 0;
@@ -6130,10 +6135,10 @@ static int vc1_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_vc1
     access_unit->data_length = 0;
     while( 1 )
     {
-        vc1_check_buffer_shortage( importer, 2 );
-        no_more_buf = info->stream_buffer_pos >= info->stream_buffer_end;
+        vc1_check_buffer_shortage( info, importer->stream, 2 );
+        no_more_buf = buffer->pos >= buffer->end;
         int no_more = info->no_more_read && no_more_buf;
-        if( vc1_check_next_start_code_prefix( info->stream_buffer_pos, info->stream_buffer_end ) || no_more )
+        if( vc1_check_next_start_code_prefix( buffer->pos, buffer->end ) || no_more )
         {
             if( no_more && ebdu_length == 0 )
             {
@@ -6145,8 +6150,8 @@ static int vc1_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_vc1
             }
             ebdu_length += VC1_START_CODE_LENGTH;
             uint64_t next_scs_file_offset = info->ebdu_head_pos + ebdu_length + !no_more * VC1_START_CODE_PREFIX_LENGTH;
-            uint8_t *next_ebdu_pos = info->stream_buffer_pos;   /* Memorize position of beginning of the next EBDU in buffer.
-                                                                 * This is used when backward reading of stream doesn't occur. */
+            uint8_t *next_ebdu_pos = buffer->pos;       /* Memorize position of beginning of the next EBDU in buffer.
+                                                         * This is used when backward reading of stream doesn't occur. */
             int read_back = 0;
 #if 0
             if( probe )
@@ -6164,20 +6169,20 @@ static int vc1_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_vc1
                 /* Get the current EBDU here. */
                 ebdu_length -= consecutive_zero_byte_count;     /* Any EBDU doesn't have zero bytes at the end. */
                 uint64_t possible_au_length = access_unit->incomplete_data_length + ebdu_length;
-                if( info->buffers->buffer_size < possible_au_length )
+                if( buffer->bank->buffer_size < possible_au_length )
                 {
-                    if( vc1_supplement_buffer( info, 2 * possible_au_length ) )
+                    if( vc1_supplement_buffer( buffer, access_unit, 2 * possible_au_length ) )
                         return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
-                    next_ebdu_pos = info->stream_buffer_pos;
+                    next_ebdu_pos = buffer->pos;
                 }
                 /* Move to the first byte of the current EBDU. */
-                read_back = (info->stream_buffer_pos - info->stream_buffer) < (ebdu_length + consecutive_zero_byte_count);
+                read_back = (buffer->pos - buffer->start) < (ebdu_length + consecutive_zero_byte_count);
                 if( read_back )
                 {
                     lsmash_fseek( importer->stream, info->ebdu_head_pos, SEEK_SET );
-                    int read_fail = fread( info->stream_buffer, 1, ebdu_length, importer->stream ) != ebdu_length;
-                    info->stream_buffer_pos = info->stream_buffer;
-                    info->stream_buffer_end = info->stream_buffer + ebdu_length;
+                    int read_fail = fread( buffer->start, 1, ebdu_length, importer->stream ) != ebdu_length;
+                    buffer->pos = buffer->start;
+                    buffer->end = buffer->start + ebdu_length;
                     if( read_fail )
                         return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
 #if 0
@@ -6186,7 +6191,7 @@ static int vc1_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_vc1
 #endif
                 }
                 else
-                    info->stream_buffer_pos -= ebdu_length + consecutive_zero_byte_count;
+                    buffer->pos -= ebdu_length + consecutive_zero_byte_count;
                 /* Complete the current access unit if encountered delimiter of current access unit. */
                 if( vc1_find_au_delimit_by_bdu_type( bdu_type, info->prev_bdu_type ) )
                     /* The last video coded EBDU belongs to the access unit you want at this time. */
@@ -6207,8 +6212,8 @@ static int vc1_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_vc1
                                  * For the Progressive or Frame Interlace mode, shall signal the beginning of a new video frame.
                                  * For the Field Interlace mode, shall signal the beginning of a sequence of two independently coded video fields.
                                  * [FRM_SC][PIC_L][[FLD_SC][PIC_L] (optional)][[SLC_SC][SLC_L] (optional)] ...  */
-                        if( vc1_parse_advanced_picture( info->bits, &info->sequence, &info->next_picture, info->rbdu_buffer,
-                                                        info->stream_buffer_pos, ebdu_length ) )
+                        if( vc1_parse_advanced_picture( info->bits, &info->sequence, &info->next_picture, buffer->rbdu,
+                                                        buffer->pos, ebdu_length ) )
                             return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
                     case 0x0C : /* Field
                                  * Shall only be used for Field Interlaced frames
@@ -6231,21 +6236,21 @@ static int vc1_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_vc1
                                  *   1. I-picture - progressive or frame interlace
                                  *   2. I/I-picture, I/P-picture, or P/I-picture - field interlace
                                  * [[SEQ_SC][SEQ_L] (optional)][EP_SC][EP_L][FRM_SC][PIC_L] ... */
-                        if( vc1_parse_entry_point_header( info, info->stream_buffer_pos, ebdu_length, probe ) )
+                        if( vc1_parse_entry_point_header( info, buffer->pos, ebdu_length, probe ) )
                             return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
                         info->next_picture.closed_gop        = info->entry_point.closed_entry_point;
                         info->next_picture.random_accessible = info->multiple_sequence ? info->next_picture.start_of_sequence : 1;
                         break;
                     case 0x0F : /* Sequence header
                                  * [SEQ_SC][SEQ_L][EP_SC][EP_L][FRM_SC][PIC_L] ... */
-                        if( vc1_parse_sequence_header( info, info->stream_buffer_pos, ebdu_length, probe ) )
+                        if( vc1_parse_sequence_header( info, buffer->pos, ebdu_length, probe ) )
                             return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
                         info->next_picture.start_of_sequence = 1;
                         break;
                     default :   /* End-of-sequence (0x0A) */
                         break;
                 }
-                vc1_append_ebdu_to_au( access_unit, info->stream_buffer_pos, ebdu_length, probe );
+                vc1_append_ebdu_to_au( access_unit, buffer->pos, ebdu_length, probe );
             }
             else    /* We don't support other BDU types such as user data yet. */
                 return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
@@ -6253,20 +6258,20 @@ static int vc1_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_vc1
             if( read_back )
             {
                 lsmash_fseek( importer->stream, next_scs_file_offset, SEEK_SET );
-                info->stream_buffer_pos = info->stream_buffer;
-                info->stream_buffer_end = info->stream_buffer + fread( info->stream_buffer, 1, info->buffers->buffer_size, importer->stream );
+                buffer->pos = buffer->start;
+                buffer->end = buffer->start + fread( buffer->start, 1, buffer->bank->buffer_size, importer->stream );
             }
             else
-                info->stream_buffer_pos = next_ebdu_pos + VC1_START_CODE_PREFIX_LENGTH;
+                buffer->pos = next_ebdu_pos + VC1_START_CODE_PREFIX_LENGTH;
             info->prev_bdu_type = bdu_type;
-            vc1_check_buffer_shortage( importer, 0 );
-            no_more_buf = info->stream_buffer_pos >= info->stream_buffer_end;
+            vc1_check_buffer_shortage( info, importer->stream, 0 );
+            no_more_buf = buffer->pos >= buffer->end;
             ebdu_length = 0;
             no_more = info->no_more_read && no_more_buf;
             if( !no_more )
             {
                 /* Check the next BDU type. */
-                if( vc1_check_next_start_code_suffix( &bdu_type, &info->stream_buffer_pos ) )
+                if( vc1_check_next_start_code_suffix( &bdu_type, &buffer->pos ) )
                     return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
                 info->ebdu_head_pos = next_scs_file_offset - VC1_START_CODE_PREFIX_LENGTH;
             }
@@ -6283,7 +6288,7 @@ static int vc1_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_vc1
         }
         else if( !no_more )
         {
-            if( *info->stream_buffer_pos ++ )
+            if( *(buffer->pos ++) )
                 consecutive_zero_byte_count = 0;
             else
                 ++consecutive_zero_byte_count;
@@ -6410,28 +6415,29 @@ static int mp4sys_vc1_probe( mp4sys_importer_t *importer )
     mp4sys_vc1_info_t *info = mp4sys_create_vc1_info();
     if( !info )
         return -1;
-    info->stream_buffer_pos = info->stream_buffer;
-    info->stream_buffer_end = info->stream_buffer + fread( info->stream_buffer, 1, info->buffers->buffer_size, importer->stream );
-    info->no_more_read = info->stream_buffer >= info->stream_buffer_end ? feof( importer->stream ) : 0;
+    vc1_stream_buffer_t *buffer = &info->buffer;
+    buffer->pos = buffer->start;
+    buffer->end = buffer->start + fread( buffer->start, 1, buffer->bank->buffer_size, importer->stream );
+    info->no_more_read = buffer->start >= buffer->end ? feof( importer->stream ) : 0;
     while( 1 )
     {
         /* Invalid if encountered any value of non-zero before the first start code. */
-        IF_INVALID_VALUE( *info->stream_buffer_pos )
+        IF_INVALID_VALUE( *buffer->pos )
             goto fail;
         /* The first EBDU in decoding order of the stream shall have start code (0x000001). */
-        if( VC1_CHECK_FIRST_START_CODE( info->stream_buffer_pos ) )
+        if( VC1_CHECK_FIRST_START_CODE( buffer->pos ) )
             break;
         /* If the first trial of finding start code of sequence header failed, we assume this stream is not byte stream format of VC-1. */
-        if( (info->stream_buffer_pos + VC1_START_CODE_LENGTH) == info->stream_buffer_end )
+        if( (buffer->pos + VC1_START_CODE_LENGTH) == buffer->end )
             goto fail;
-        ++info->stream_buffer_pos;
+        ++ buffer->pos;
     }
     /* OK. It seems the stream has a sequence header of VC-1. */
     importer->info = info;
-    uint64_t first_ebdu_head_pos = info->stream_buffer_pos - info->stream_buffer;
-    info->stream_buffer_pos += VC1_START_CODE_PREFIX_LENGTH;
-    vc1_check_buffer_shortage( importer, 0 );
-    uint8_t first_bdu_type = *info->stream_buffer_pos ++;
+    uint64_t first_ebdu_head_pos = buffer->pos - buffer->start;
+    buffer->pos += VC1_START_CODE_PREFIX_LENGTH;
+    vc1_check_buffer_shortage( info, importer->stream, 0 );
+    uint8_t first_bdu_type = *(buffer->pos ++);
     info->status        = info->no_more_read ? MP4SYS_IMPORTER_EOF : MP4SYS_IMPORTER_OK;
     info->bdu_type      = first_bdu_type;
     info->ebdu_head_pos = first_ebdu_head_pos;
@@ -6536,8 +6542,8 @@ static int mp4sys_vc1_probe( mp4sys_importer_t *importer )
     info->no_more_read                   = 0;
     info->summary->max_au_length         = info->max_au_length;
     info->summary                        = NULL;
-    info->stream_buffer_pos              = info->stream_buffer + VC1_START_CODE_LENGTH;
-    info->stream_buffer_end              = info->stream_buffer + fread( info->stream_buffer, 1, info->buffers->buffer_size, importer->stream );
+    buffer->pos                          = buffer->start + VC1_START_CODE_LENGTH;
+    buffer->end                          = buffer->start + fread( buffer->start, 1, buffer->bank->buffer_size, importer->stream );
     info->ebdu_head_pos                  = first_ebdu_head_pos;
     uint8_t *temp_access_unit            = info->access_unit.data;
     uint8_t *temp_incomplete_access_unit = info->access_unit.incomplete_data;
