@@ -384,7 +384,7 @@ static inline uint8_t lsmash_bits_mask_lsb8( uint32_t value, uint32_t width )
 }
 
 /* We can change value's type to unsigned int for 64-bit operation if needed. */
-void lsmash_bits_put( lsmash_bits_t *bits, uint32_t value, uint32_t width )
+void lsmash_bits_put( lsmash_bits_t *bits, uint32_t width, uint32_t value )
 {
     debug_if( !bits || !width )
         return;

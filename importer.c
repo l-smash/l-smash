@@ -1025,15 +1025,15 @@ static uint8_t *ac3_create_dac3( mp4sys_ac3_info_t *info )
 {
     lsmash_bits_t *bits = info->bits;
     ac3_dac3_element_t *element = &info->dac3_element;
-    lsmash_bits_put( bits, AC3_DAC3_BOX_LENGTH, 32 );
-    lsmash_bits_put( bits, ISOM_BOX_TYPE_DAC3, 32 );
-    lsmash_bits_put( bits, element->fscod, 2 );
-    lsmash_bits_put( bits, element->bsid, 5 );
-    lsmash_bits_put( bits, element->bsmod, 3 );
-    lsmash_bits_put( bits, element->acmod, 3 );
-    lsmash_bits_put( bits, element->lfeon, 1 );
-    lsmash_bits_put( bits, element->frmsizecod >> 1, 5 );
-    lsmash_bits_put( bits, 0, 5 );
+    lsmash_bits_put( bits, 32, AC3_DAC3_BOX_LENGTH );
+    lsmash_bits_put( bits, 32, ISOM_BOX_TYPE_DAC3 );
+    lsmash_bits_put( bits, 2, element->fscod );
+    lsmash_bits_put( bits, 5, element->bsid );
+    lsmash_bits_put( bits, 3, element->bsmod );
+    lsmash_bits_put( bits, 3, element->acmod );
+    lsmash_bits_put( bits, 1, element->lfeon );
+    lsmash_bits_put( bits, 5, element->frmsizecod >> 1 );
+    lsmash_bits_put( bits, 5, 0 );
     uint8_t *dac3 = lsmash_bits_export_data( bits, NULL );
     lsmash_bits_empty( bits );
     return dac3;
@@ -1524,25 +1524,25 @@ static uint8_t *eac3_create_dec3( mp4sys_eac3_info_t *info, uint32_t *dec3_lengt
     if( info->number_of_independent_substreams > 8 )
         return NULL;
     lsmash_bits_t *bits = info->bits;
-    lsmash_bits_put( bits, 0, 32 );     /* box size */
-    lsmash_bits_put( bits, ISOM_BOX_TYPE_DEC3, 32 );
-    lsmash_bits_put( bits, 0, 13 );     /* data_rate will be calculated by isom_update_bitrate_info */
-    lsmash_bits_put( bits, info->number_of_independent_substreams - 1, 3 );     /* num_ind_sub */
+    lsmash_bits_put( bits, 32, 0 );     /* box size */
+    lsmash_bits_put( bits, 32, ISOM_BOX_TYPE_DEC3 );
+    lsmash_bits_put( bits, 13, 0 );     /* data_rate will be calculated by isom_update_bitrate_info */
+    lsmash_bits_put( bits, 3, info->number_of_independent_substreams - 1 );     /* num_ind_sub */
     /* Apparently, the condition of this loop defined in ETSI TS 102 366 V1.2.1 (2008-08) is wrong. */
     for( int i = 0; i < info->number_of_independent_substreams; i++ )
     {
         eac3_substream_info_t *independent_info = i ? &info->independent_info[i] : &info->independent_info_0;
-        lsmash_bits_put( bits, independent_info->fscod, 2 );
-        lsmash_bits_put( bits, independent_info->bsid, 5 );
-        lsmash_bits_put( bits, independent_info->bsmod, 5 );
-        lsmash_bits_put( bits, independent_info->acmod, 3 );
-        lsmash_bits_put( bits, independent_info->lfeon, 1 );
-        lsmash_bits_put( bits, 0, 3 );      /* reserved */
-        lsmash_bits_put( bits, independent_info->num_dep_sub, 4 );
+        lsmash_bits_put( bits, 2, independent_info->fscod );
+        lsmash_bits_put( bits, 5, independent_info->bsid );
+        lsmash_bits_put( bits, 5, independent_info->bsmod );
+        lsmash_bits_put( bits, 3, independent_info->acmod );
+        lsmash_bits_put( bits, 1, independent_info->lfeon );
+        lsmash_bits_put( bits, 3, 0 );      /* reserved */
+        lsmash_bits_put( bits, 4, independent_info->num_dep_sub );
         if( independent_info->num_dep_sub > 0 )
-            lsmash_bits_put( bits, independent_info->chan_loc, 9 );
+            lsmash_bits_put( bits, 9, independent_info->chan_loc );
         else
-            lsmash_bits_put( bits, 0, 1 );      /* reserved */
+            lsmash_bits_put( bits, 1, 0 );      /* reserved */
     }
     uint8_t *dec3 = lsmash_bits_export_data( bits, dec3_length );
     lsmash_bits_empty( bits );
@@ -2868,30 +2868,30 @@ static uint8_t *dts_create_ddts( mp4sys_dts_info_t *info, uint32_t *ddts_length,
 {
     lsmash_bits_t *bits = info->bits;
     lsmash_bits_empty( bits );
-    lsmash_bits_put( bits, 0, 32 );                                     /* box size */
-    lsmash_bits_put( bits, ISOM_BOX_TYPE_DDTS, 32 );
+    lsmash_bits_put( bits, 32, 0 );                                     /* box size */
+    lsmash_bits_put( bits, 32, ISOM_BOX_TYPE_DDTS );
     /* DTSSamplingFrequency */
     *DTSSamplingFrequency = info->core.sampling_frequency;
     *DTSSamplingFrequency = LSMASH_MAX( *DTSSamplingFrequency, info->extension.sampling_frequency );
     *DTSSamplingFrequency = LSMASH_MAX( *DTSSamplingFrequency, info->lbr.sampling_frequency );
     *DTSSamplingFrequency = LSMASH_MAX( *DTSSamplingFrequency, info->lossless.sampling_frequency );
-    lsmash_bits_put( bits, *DTSSamplingFrequency, 32 );
+    lsmash_bits_put( bits, 32, *DTSSamplingFrequency );
     /* maxBitrate */
-    lsmash_bits_put( bits, 0, 32 );
+    lsmash_bits_put( bits, 32, 0 );
     /* avgBitrate */
-    lsmash_bits_put( bits, 0, 32 );
+    lsmash_bits_put( bits, 32, 0 );
     /* pcmSampleDepth */
     *pcmSampleDepth = info->core.pcm_resolution;
     *pcmSampleDepth = LSMASH_MAX( *pcmSampleDepth, info->extension.bit_resolution );
     *pcmSampleDepth = LSMASH_MAX( *pcmSampleDepth, info->lbr.sample_size );
     *pcmSampleDepth = LSMASH_MAX( *pcmSampleDepth, info->lossless.bit_width );
     *pcmSampleDepth = *pcmSampleDepth > 16 ? 24 : 16;
-    lsmash_bits_put( bits, *pcmSampleDepth, 8 );
+    lsmash_bits_put( bits, 8, *pcmSampleDepth );
     /* FrameDuration: 0 = 512, 1 = 1024, 2 = 2048, 3 = 4096 */
     uint8_t FrameDuration = 0;
     for( uint32_t audio_samples = info->frame_duration >> 10; audio_samples; audio_samples >>= 1 )
         ++FrameDuration;
-    lsmash_bits_put( bits, FrameDuration, 2 );
+    lsmash_bits_put( bits, 2, FrameDuration );
     /* StreamConstruction */
     static const struct
     {
@@ -2935,9 +2935,9 @@ static uint8_t *dts_create_ddts( mp4sys_dts_info_t *info, uint32_t *ddts_length,
     }
     else
         info->coding_name = stream_info_table[StreamConstruction].coding_name;
-    lsmash_bits_put( bits, ++StreamConstruction, 5 );
+    lsmash_bits_put( bits, 5, ++StreamConstruction );
     /* CoreLFEPresent */
-    lsmash_bits_put( bits, info->core.channel_layout & DTS_CHANNEL_LAYOUT_LFE1, 1 );
+    lsmash_bits_put( bits, 1, info->core.channel_layout & DTS_CHANNEL_LAYOUT_LFE1 );
     /* CoreLayout */
     int CoreLayout;
     if( StreamConstruction == 0 || StreamConstruction >= 19 )
@@ -2951,32 +2951,32 @@ static uint8_t *dts_create_ddts( mp4sys_dts_info_t *info, uint32_t *ddts_length,
         else
             CoreLayout = 31;    /* Use ChannelLayout. */
     }
-    lsmash_bits_put( bits, CoreLayout, 6 );
+    lsmash_bits_put( bits, 6, CoreLayout );
     /* CoreSize
      * The specification says this field is the size of a core substream AU in bytes.
      * If we don't assume CoreSize is the copy of FSIZE, when FSIZE equals 0x3FFF, this field overflows and becomes 0. */
-    lsmash_bits_put( bits, info->core.frame_size, 14 );
+    lsmash_bits_put( bits, 14, info->core.frame_size );
     /* StereoDownmix */
-    lsmash_bits_put( bits, info->extension.stereo_downmix | info->lbr.stereo_downmix, 1 );
+    lsmash_bits_put( bits, 1, info->extension.stereo_downmix | info->lbr.stereo_downmix );
     /* RepresentationType */
-    lsmash_bits_put( bits, info->extension.representation_type, 3 );
+    lsmash_bits_put( bits, 3, info->extension.representation_type );
     /* ChannelLayout */
-    lsmash_bits_put( bits, info->core.channel_layout | info->extension.channel_layout | info->lbr.channel_layout | info->lossless.channel_layout, 16 );
+    lsmash_bits_put( bits, 16, info->core.channel_layout | info->extension.channel_layout | info->lbr.channel_layout | info->lossless.channel_layout );
     /* MultiAssetFlag
      * When multiple assets exist, the remaining parameters in the DTSSpecificBox only reflect the coding parameters of the first asset.
      * Multiple asset streams shall use the 'dtsh' coding_name. */
     int MultiAssetFlag = 1 < info->extension.number_of_assets;
     if( MultiAssetFlag )
         info->coding_name = ISOM_CODEC_TYPE_DTSH_AUDIO;
-    lsmash_bits_put( bits, MultiAssetFlag, 1 );
+    lsmash_bits_put( bits, 1, MultiAssetFlag );
     /* LBRDurationMod
      * If set to 1, LBR frame duration is 50 % larger than indicated in FrameDuration */
     int LBRDurationMod = MultiAssetFlag
                        ? info->lbr.duration_modifier && !(info->flags & CORE_SUBSTREAM_CORE_FLAG)
                        : info->lbr.duration_modifier;
-    lsmash_bits_put( bits, LBRDurationMod, 1 );
+    lsmash_bits_put( bits, 1, LBRDurationMod );
     /* Reserved */
-    lsmash_bits_put( bits, 0, 6 );
+    lsmash_bits_put( bits, 6, 0 );
     uint8_t *ddts = lsmash_bits_export_data( bits, ddts_length );
     lsmash_bits_empty( bits );
     /* Update box size. */
@@ -6343,32 +6343,32 @@ static uint8_t *vc1_create_dvc1( mp4sys_vc1_info_t *info, uint32_t *dvc1_length 
 {
     lsmash_bits_t *bits = info->bits;
     vc1_sequence_header_t *sequence = &info->first_sequence;
-    lsmash_bits_put( bits, 0, 32 );                                     /* box size */
-    lsmash_bits_put( bits, ISOM_BOX_TYPE_DVC1, 32 );                    /* box type = 'dvc1' */
-    lsmash_bits_put( bits, sequence->profile << 2, 4 );                 /* profile */
-    lsmash_bits_put( bits, sequence->level, 3 );                        /* level */
-    lsmash_bits_put( bits, 0, 1 );                                      /* reserved */
+    lsmash_bits_put( bits, 32, 0 );                                     /* box size */
+    lsmash_bits_put( bits, 32, ISOM_BOX_TYPE_DVC1 );                    /* box type = 'dvc1' */
+    lsmash_bits_put( bits, 4, sequence->profile << 2 );                 /* profile */
+    lsmash_bits_put( bits, 3, sequence->level );                        /* level */
+    lsmash_bits_put( bits, 1, 0 );                                      /* reserved */
     /* VC1AdvDecSpecStruc (for Advanced Profile) */
-    lsmash_bits_put( bits, sequence->level, 3 );                        /* level (identical to the previous level field) */
-    lsmash_bits_put( bits, 0, 1 );                                      /* cbr */
-    lsmash_bits_put( bits, 0, 6 );                                      /* reserved */
-    lsmash_bits_put( bits, !sequence->interlace, 1 );                   /* no_interlace */
-    lsmash_bits_put( bits, !info->multiple_sequence, 1 );               /* no_multiple_seq */
-    lsmash_bits_put( bits, !info->multiple_entry_point, 1 );            /* no_multiple_entry */
-    lsmash_bits_put( bits, !info->slice_present, 1 );                   /* no_slice_code */
-    lsmash_bits_put( bits, !info->composition_reordering_present, 1 );  /* no_bframe */
-    lsmash_bits_put( bits, 0, 1 );                                      /* reserved */
+    lsmash_bits_put( bits, 3, sequence->level );                        /* level (identical to the previous level field) */
+    lsmash_bits_put( bits, 1, 0 );                                      /* cbr */
+    lsmash_bits_put( bits, 6, 0 );                                      /* reserved */
+    lsmash_bits_put( bits, 1, !sequence->interlace );                   /* no_interlace */
+    lsmash_bits_put( bits, 1, !info->multiple_sequence );               /* no_multiple_seq */
+    lsmash_bits_put( bits, 1, !info->multiple_entry_point );            /* no_multiple_entry */
+    lsmash_bits_put( bits, 1, !info->slice_present );                   /* no_slice_code */
+    lsmash_bits_put( bits, 1, !info->composition_reordering_present );  /* no_bframe */
+    lsmash_bits_put( bits, 1, 0 );                                      /* reserved */
     uint32_t framerate = sequence->framerate_flag
                        ? ((double)sequence->framerate_numerator / sequence->framerate_denominator) + 0.5
                        : 0xffffffff;    /* 0xffffffff means framerate is unknown or unspecified. */
-    lsmash_bits_put( bits, framerate, 32 );                             /* framerate */
+    lsmash_bits_put( bits, 32, framerate );                             /* framerate */
     /* seqhdr_ephdr[] */
     uint8_t *ebdu = sequence->ebdu;
     for( uint32_t i = 0; i < sequence->length; i++ )
-        lsmash_bits_put( bits, *ebdu++, 8 );
+        lsmash_bits_put( bits, 8, *ebdu++ );
     ebdu = info->first_entry_point.ebdu;
     for( uint32_t i = 0; i < info->first_entry_point.length; i++ )
-        lsmash_bits_put( bits, *ebdu++, 8 );
+        lsmash_bits_put( bits, 8, *ebdu++ );
     /* */
     uint8_t *dvc1 = lsmash_bits_export_data( bits, dvc1_length );
     lsmash_bits_empty( bits );

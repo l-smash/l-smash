@@ -634,8 +634,8 @@ static int mp4sys_write_SLConfigDescriptor( lsmash_bs_t *bs, mp4sys_SLConfigDesc
         lsmash_bits_t *bits = lsmash_bits_create( bs );
         if( !bits )
             return -1;
-        lsmash_bits_put( bits, slcd->startDecodingTimeStamp,    slcd->timeStampLength );
-        lsmash_bits_put( bits, slcd->startCompositionTimeStamp, slcd->timeStampLength );
+        lsmash_bits_put( bits, slcd->timeStampLength, slcd->startDecodingTimeStamp );
+        lsmash_bits_put( bits, slcd->timeStampLength, slcd->startCompositionTimeStamp );
         lsmash_bits_put_align( bits );
         lsmash_bits_cleanup( bits );
     }

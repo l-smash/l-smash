@@ -410,23 +410,23 @@ static void mp4a_put_GASpecificConfig( lsmash_bits_t* bits, mp4a_GASpecificConfi
 {
     debug_if( !bits || !gasc )
         return;
-    lsmash_bits_put( bits, gasc->frameLengthFlag, 1 );
-    lsmash_bits_put( bits, gasc->dependsOnCoreCoder, 1 );
-    lsmash_bits_put( bits, gasc->extensionFlag, 1 );
+    lsmash_bits_put( bits, 1, gasc->frameLengthFlag );
+    lsmash_bits_put( bits, 1, gasc->dependsOnCoreCoder );
+    lsmash_bits_put( bits, 1, gasc->extensionFlag );
 }
 
 static void mp4a_put_MPEG_1_2_SpecificConfig( lsmash_bits_t* bits, mp4a_MPEG_1_2_SpecificConfig_t* mpeg_1_2_sc )
 {
     debug_if( !bits || !mpeg_1_2_sc )
         return;
-    lsmash_bits_put( bits, mpeg_1_2_sc->extension, 1 ); /* shall be 0 */
+    lsmash_bits_put( bits, 1, mpeg_1_2_sc->extension ); /* shall be 0 */
 }
 
 static void mp4a_put_ALSSpecificConfig( lsmash_bits_t *bits, mp4a_ALSSpecificConfig_t *alssc )
 {
     debug_if( !bits || !alssc )
         return;
-    lsmash_bits_put( bits, 0, 5 );      /* fillBits for byte alignment */
+    lsmash_bits_put( bits, 5, 0 );      /* fillBits for byte alignment */
     lsmash_bits_import_data( bits, alssc->data, alssc->size );
 }
 
@@ -434,18 +434,18 @@ static inline void mp4a_put_AudioObjectType( lsmash_bits_t* bits, lsmash_mp4a_Au
 {
     if( aot > MP4A_AUDIO_OBJECT_TYPE_ESCAPE )
     {
-        lsmash_bits_put( bits, MP4A_AUDIO_OBJECT_TYPE_ESCAPE, 5 );
-        lsmash_bits_put( bits, aot - MP4A_AUDIO_OBJECT_TYPE_ESCAPE - 1, 6 );
+        lsmash_bits_put( bits, 5, MP4A_AUDIO_OBJECT_TYPE_ESCAPE );
+        lsmash_bits_put( bits, 6, aot - MP4A_AUDIO_OBJECT_TYPE_ESCAPE - 1 );
     }
     else
-        lsmash_bits_put( bits, aot, 5 );
+        lsmash_bits_put( bits, 5, aot );
 }
 
 static inline void mp4a_put_SamplingFrequencyIndex( lsmash_bits_t* bits, uint8_t samplingFrequencyIndex, uint32_t samplingFrequency )
 {
-    lsmash_bits_put( bits, samplingFrequencyIndex, 4 );
+    lsmash_bits_put( bits, 4, samplingFrequencyIndex );
     if( samplingFrequencyIndex == 0xF )
-        lsmash_bits_put( bits, samplingFrequency, 24 );
+        lsmash_bits_put( bits, 24, samplingFrequency );
 }
 
 /* Currently, only normal AAC, MPEG_1_2 are supported.
@@ -463,7 +463,7 @@ void mp4a_put_AudioSpecificConfig( lsmash_bs_t* bs, mp4a_AudioSpecificConfig_t* 
     else
         mp4a_put_AudioObjectType( &bits, asc->audioObjectType );
     mp4a_put_SamplingFrequencyIndex( &bits, asc->samplingFrequencyIndex, asc->samplingFrequency );
-    lsmash_bits_put( &bits, asc->channelConfiguration, 4 );
+    lsmash_bits_put( &bits, 4, asc->channelConfiguration );
     if( asc->sbr_mode == MP4A_AAC_SBR_HIERARCHICAL )
     {
         mp4a_put_SamplingFrequencyIndex( &bits, asc->extensionSamplingFrequencyIndex, asc->extensionSamplingFrequency );
@@ -503,16 +503,16 @@ void mp4a_put_AudioSpecificConfig( lsmash_bs_t* bs, mp4a_AudioSpecificConfig_t* 
 
     if( asc->sbr_mode == MP4A_AAC_SBR_BACKWARD_COMPATIBLE || asc->sbr_mode == MP4A_AAC_SBR_NONE )
     {
-        lsmash_bits_put( &bits, 0x2b7, 11 );
+        lsmash_bits_put( &bits, 11, 0x2b7 );
         mp4a_put_AudioObjectType( &bits, asc->extensionAudioObjectType ); /* puts MP4A_AUDIO_OBJECT_TYPE_SBR */
         if( asc->extensionAudioObjectType == MP4A_AUDIO_OBJECT_TYPE_SBR ) /* this is always true, due to current spec */
         {
             /* sbrPresentFlag */
             if( asc->sbr_mode == MP4A_AAC_SBR_NONE )
-                lsmash_bits_put( &bits, 0x0, 1 );
+                lsmash_bits_put( &bits, 1, 0x0 );
             else
             {
-                lsmash_bits_put( &bits, 0x1, 1 );
+                lsmash_bits_put( &bits, 1, 0x1 );
                 mp4a_put_SamplingFrequencyIndex( &bits, asc->extensionSamplingFrequencyIndex, asc->extensionSamplingFrequency );
             }
         }

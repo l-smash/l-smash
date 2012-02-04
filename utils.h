@@ -92,7 +92,7 @@ void lsmash_bits_get_align( lsmash_bits_t *bits );
 void lsmash_bits_cleanup( lsmash_bits_t *bits );
 
 /*---- bitstream writer ----*/
-void lsmash_bits_put( lsmash_bits_t *bits, uint32_t value, uint32_t width );
+void lsmash_bits_put( lsmash_bits_t *bits, uint32_t width, uint32_t value );
 uint32_t lsmash_bits_get( lsmash_bits_t *bits, uint32_t width );
 lsmash_bits_t* lsmash_bits_adhoc_create();
 void lsmash_bits_adhoc_cleanup( lsmash_bits_t* bits );
