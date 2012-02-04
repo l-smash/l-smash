@@ -3459,6 +3459,8 @@ const static mp4sys_importer_functions mp4sys_dts_importer =
 
 /***************************************************************************
     H.264 importer
+    ITU-T Recommendation H.264 (03/10)
+    ISO/IEC 14496-15:2010
 ***************************************************************************/
 typedef struct
 {
@@ -5090,178 +5092,175 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_h2
         h264_check_buffer_shortage( info, importer->stream, 2 );
         no_more_buf = buffer->pos >= buffer->end;
         int no_more = info->no_more_read && no_more_buf;
-        if( h264_check_next_short_start_code( buffer->pos, buffer->end ) || no_more )
-        {
-            if( no_more && ebsp_length == 0 )
-            {
-                /* For the last NALU.
-                 * This NALU already has been appended into the latest access unit and parsed. */
-                ebsp_length = picture->incomplete_au_length - (H264_NALU_LENGTH_SIZE + nalu_header.length);
-                consecutive_zero_byte_count = 0;
-                h264_update_picture_info( picture, slice, &info->sei );
-                h264_complete_au( picture, probe );
-                return h264_get_au_internal_succeeded( info, picture, &nalu_header, no_more_buf );
-            }
-            uint64_t next_nalu_head_pos = info->ebsp_head_pos + ebsp_length + !no_more * H264_SHORT_START_CODE_LENGTH;
-            uint8_t *next_short_start_code_pos = buffer->pos;       /* Memorize position of short start code of the next NALU in buffer.
-                                                                     * This is used when backward reading of stream doesn't occur. */
-            uint8_t nalu_type = nalu_header.nal_unit_type;
-            int read_back = 0;
-#if 0
-            if( probe )
-            {
-                fprintf( stderr, "NALU type: %"PRIu8"\n", nalu_type );
-                fprintf( stderr, "    NALU header position: %"PRIx64"\n", info->ebsp_head_pos - nalu_header.length );
-                fprintf( stderr, "    EBSP position: %"PRIx64"\n", info->ebsp_head_pos );
-                fprintf( stderr, "    EBSP length: %"PRIx64" (%"PRIu64")\n", ebsp_length - consecutive_zero_byte_count,
-                                                                             ebsp_length - consecutive_zero_byte_count );
-                fprintf( stderr, "    consecutive_zero_byte_count: %"PRIx64"\n", consecutive_zero_byte_count );
-                fprintf( stderr, "    Next NALU header position: %"PRIx64"\n", next_nalu_head_pos );
-            }
-#endif
-            if( nalu_type == 12 )
-            {
-                /* We don't support streams with both filler and HRD yet.
-                 * Otherwise, just skip filler because elemental streams defined in 14496-15 are forbidden to use filler. */
-                if( info->sps.hrd_present )
-                    return h264_get_au_internal_failed( info, picture, &nalu_header, no_more_buf, complete_au );
-            }
-            else if( (nalu_type >= 1 && nalu_type <= 13) || nalu_type == 19 )
-            {
-                /* Get the EBSP of the current NALU here.
-                 * AVC elemental stream defined in 14496-15 can recognizes from 0 to 13, and 19 of nal_unit_type.
-                 * We don't support SVC and MVC elemental stream defined in 14496-15 yet. */
-                ebsp_length -= consecutive_zero_byte_count;     /* Any EBSP doesn't have zero bytes at the end. */
-                uint64_t nalu_length = nalu_header.length + ebsp_length;
-                uint64_t possible_au_length = picture->incomplete_au_length + H264_NALU_LENGTH_SIZE + nalu_length;
-                if( buffer->bank->buffer_size < possible_au_length )
-                {
-                    if( h264_supplement_buffer( &info->buffer, &info->picture, 2 * possible_au_length ) )
-                        return h264_get_au_internal_failed( info, picture, &nalu_header, no_more_buf, complete_au );
-                    next_short_start_code_pos = buffer->pos;
-                }
-                /* Move to the first byte of the current NALU. */
-                read_back = (buffer->pos - buffer->start) < (nalu_length + consecutive_zero_byte_count);
-                if( read_back )
-                {
-                    lsmash_fseek( importer->stream, info->ebsp_head_pos - nalu_header.length, SEEK_SET );
-                    int read_fail = fread( buffer->start, 1, nalu_length, importer->stream ) != nalu_length;
-                    buffer->pos = buffer->start;
-                    buffer->end = buffer->start + nalu_length;
-                    if( read_fail )
-                        return h264_get_au_internal_failed( info, picture, &nalu_header, no_more_buf, complete_au );
-#if 0
-                    if( probe )
-                        fprintf( stderr, "    ----Read Back\n" );
-#endif
-                }
-                else
-                    buffer->pos -= nalu_length + consecutive_zero_byte_count;
-                if( nalu_type >= 1 && nalu_type <= 5 )
-                {
-                    /* VCL NALU (slice) */
-                    h264_slice_info_t prev_slice = *slice;
-                    if( h264_parse_slice( info->bits, &info->sps, &info->pps,
-                                          slice, &nalu_header, buffer->rbsp,
-                                          buffer->pos + nalu_header.length, ebsp_length ) )
-                        return h264_get_au_internal_failed( info, picture, &nalu_header, no_more_buf, complete_au );
-                    if( prev_slice.present )
-                    {
-                        /* Check whether the AU that contains the previous VCL NALU completed or not. */
-                        if( h264_find_au_delimit_by_slice_info( slice, &prev_slice ) )
-                        {
-                            /* The current NALU is the first VCL NALU of the primary coded picture of an new AU.
-                             * Therefore, the previous slice belongs to the AU you want at this time. */
-                            h264_update_picture_info( picture, &prev_slice, &info->sei );
-                            complete_au = h264_complete_au( picture, probe );
-                        }
-                        else
-                            h264_update_picture_info_for_slice( picture, &prev_slice );
-                    }
-                    h264_append_nalu_to_au( picture, buffer->pos, nalu_length, probe );
-                    slice->present = 1;
-                }
-                else
-                {
-                    if( h264_find_au_delimit_by_nalu_type( nalu_type, info->prev_nalu_type ) )
-                    {
-                        /* The last slice belongs to the AU you want at this time. */
-                        h264_update_picture_info( picture, slice, &info->sei );
-                        complete_au = h264_complete_au( picture, probe );
-                    }
-                    else if( no_more )
-                        complete_au = h264_complete_au( picture, probe );
-                    switch( nalu_type )
-                    {
-                        case 6 :    /* SEI */
-                            if( h264_parse_sei_nalu( info->bits, &info->sei, &nalu_header,
-                                                     buffer->rbsp, buffer->pos + nalu_header.length, ebsp_length ) )
-                                return h264_get_au_internal_failed( info, picture, &nalu_header, no_more_buf, complete_au );
-                            h264_append_nalu_to_au( picture, buffer->pos, nalu_length, probe );
-                            break;
-                        case 7 :    /* SPS */
-                            if( h264_create_summary( info, buffer->rbsp, probe,
-                                                     &nalu_header, buffer->pos, nalu_length,
-                                                     NULL, NULL, 0 ) )
-                                return h264_get_au_internal_failed( info, picture, &nalu_header, no_more_buf, complete_au );
-                            break;
-                        case 8 :    /* PPS */
-                            if( h264_create_summary( info, buffer->rbsp, probe,
-                                                     NULL, NULL, 0,
-                                                     &nalu_header, buffer->pos, nalu_length ) )
-                                return h264_get_au_internal_failed( info, picture, &nalu_header, no_more_buf, complete_au );
-                            break;
-                        case 9 :    /* We drop access unit delimiters. */
-                            break;
-                        case 13 :   /* We don't support sequence parameter set extension yet. */
-                            return h264_get_au_internal_failed( info, picture, &nalu_header, no_more_buf, complete_au );
-                        default :
-                            h264_append_nalu_to_au( picture, buffer->pos, nalu_length, probe );
-                            break;
-                    }
-                }
-            }
-            /* Move to the first byte of the next NALU. */
-            if( read_back )
-            {
-                lsmash_fseek( importer->stream, next_nalu_head_pos, SEEK_SET );
-                buffer->pos = buffer->start;
-                buffer->end = buffer->start + fread( buffer->start, 1, buffer->bank->buffer_size, importer->stream );
-            }
-            else
-                buffer->pos = next_short_start_code_pos + H264_SHORT_START_CODE_LENGTH;
-            info->prev_nalu_type = nalu_type;
-            h264_check_buffer_shortage( info, importer->stream, 0 );
-            no_more_buf = buffer->pos >= buffer->end;
-            ebsp_length = 0;
-            no_more = info->no_more_read && no_more_buf;
-            if( !no_more )
-            {
-                /* Check the next NALU header. */
-                if( h264_check_nalu_header( &nalu_header, &buffer->pos, !!consecutive_zero_byte_count ) )
-                    return h264_get_au_internal_failed( info, picture, &nalu_header, no_more_buf, complete_au );
-                info->ebsp_head_pos = next_nalu_head_pos + nalu_header.length;
-            }
-            /* If there is no more data in the stream, and flushed chunk of NALUs, flush it as complete AU here. */
-            else if( picture->incomplete_au_length && picture->au_length == 0 )
-            {
-                h264_update_picture_info( picture, slice, &info->sei );
-                h264_complete_au( picture, probe );
-                return h264_get_au_internal_succeeded( info, picture, &nalu_header, no_more_buf );
-            }
-            if( complete_au )
-                return h264_get_au_internal_succeeded( info, picture, &nalu_header, no_more_buf );
-            consecutive_zero_byte_count = 0;
-            continue;       /* Avoid increment of ebsp_length. */
-        }
-        else if( !no_more )
+        if( !h264_check_next_short_start_code( buffer->pos, buffer->end ) && !no_more )
         {
             if( *(buffer->pos ++) )
                 consecutive_zero_byte_count = 0;
             else
                 ++consecutive_zero_byte_count;
+            ++ebsp_length;
+            continue;
         }
-        ++ebsp_length;
+        if( no_more && ebsp_length == 0 )
+        {
+            /* For the last NALU.
+             * This NALU already has been appended into the latest access unit and parsed. */
+            ebsp_length = picture->incomplete_au_length - (H264_NALU_LENGTH_SIZE + nalu_header.length);
+            consecutive_zero_byte_count = 0;
+            h264_update_picture_info( picture, slice, &info->sei );
+            h264_complete_au( picture, probe );
+            return h264_get_au_internal_succeeded( info, picture, &nalu_header, no_more_buf );
+        }
+        uint64_t next_nalu_head_pos = info->ebsp_head_pos + ebsp_length + !no_more * H264_SHORT_START_CODE_LENGTH;
+        uint8_t *next_short_start_code_pos = buffer->pos;       /* Memorize position of short start code of the next NALU in buffer.
+                                                                 * This is used when backward reading of stream doesn't occur. */
+        uint8_t nalu_type = nalu_header.nal_unit_type;
+        int read_back = 0;
+#if 0
+        if( probe )
+        {
+            fprintf( stderr, "NALU type: %"PRIu8"\n", nalu_type );
+            fprintf( stderr, "    NALU header position: %"PRIx64"\n", info->ebsp_head_pos - nalu_header.length );
+            fprintf( stderr, "    EBSP position: %"PRIx64"\n", info->ebsp_head_pos );
+            fprintf( stderr, "    EBSP length: %"PRIx64" (%"PRIu64")\n", ebsp_length - consecutive_zero_byte_count,
+                                                                         ebsp_length - consecutive_zero_byte_count );
+            fprintf( stderr, "    consecutive_zero_byte_count: %"PRIx64"\n", consecutive_zero_byte_count );
+            fprintf( stderr, "    Next NALU header position: %"PRIx64"\n", next_nalu_head_pos );
+        }
+#endif
+        if( nalu_type == 12 )
+        {
+            /* We don't support streams with both filler and HRD yet.
+             * Otherwise, just skip filler because elemental streams defined in 14496-15 are forbidden to use filler. */
+            if( info->sps.hrd_present )
+                return h264_get_au_internal_failed( info, picture, &nalu_header, no_more_buf, complete_au );
+        }
+        else if( (nalu_type >= 1 && nalu_type <= 13) || nalu_type == 19 )
+        {
+            /* Get the EBSP of the current NALU here.
+             * AVC elemental stream defined in 14496-15 can recognizes from 0 to 13, and 19 of nal_unit_type.
+             * We don't support SVC and MVC elemental stream defined in 14496-15 yet. */
+            ebsp_length -= consecutive_zero_byte_count;     /* Any EBSP doesn't have zero bytes at the end. */
+            uint64_t nalu_length = nalu_header.length + ebsp_length;
+            uint64_t possible_au_length = picture->incomplete_au_length + H264_NALU_LENGTH_SIZE + nalu_length;
+            if( buffer->bank->buffer_size < possible_au_length )
+            {
+                if( h264_supplement_buffer( buffer, picture, 2 * possible_au_length ) )
+                    return h264_get_au_internal_failed( info, picture, &nalu_header, no_more_buf, complete_au );
+                next_short_start_code_pos = buffer->pos;
+            }
+            /* Move to the first byte of the current NALU. */
+            read_back = (buffer->pos - buffer->start) < (nalu_length + consecutive_zero_byte_count);
+            if( read_back )
+            {
+                lsmash_fseek( importer->stream, info->ebsp_head_pos - nalu_header.length, SEEK_SET );
+                int read_fail = fread( buffer->start, 1, nalu_length, importer->stream ) != nalu_length;
+                buffer->pos = buffer->start;
+                buffer->end = buffer->start + nalu_length;
+                if( read_fail )
+                    return h264_get_au_internal_failed( info, picture, &nalu_header, no_more_buf, complete_au );
+#if 0
+                if( probe )
+                    fprintf( stderr, "    ----Read Back\n" );
+#endif
+            }
+            else
+                buffer->pos -= nalu_length + consecutive_zero_byte_count;
+            if( nalu_type >= 1 && nalu_type <= 5 )
+            {
+                /* VCL NALU (slice) */
+                h264_slice_info_t prev_slice = *slice;
+                if( h264_parse_slice( info->bits, &info->sps, &info->pps,
+                                      slice, &nalu_header, buffer->rbsp,
+                                      buffer->pos + nalu_header.length, ebsp_length ) )
+                    return h264_get_au_internal_failed( info, picture, &nalu_header, no_more_buf, complete_au );
+                if( prev_slice.present )
+                {
+                    /* Check whether the AU that contains the previous VCL NALU completed or not. */
+                    if( h264_find_au_delimit_by_slice_info( slice, &prev_slice ) )
+                    {
+                        /* The current NALU is the first VCL NALU of the primary coded picture of an new AU.
+                         * Therefore, the previous slice belongs to the AU you want at this time. */
+                        h264_update_picture_info( picture, &prev_slice, &info->sei );
+                        complete_au = h264_complete_au( picture, probe );
+                    }
+                    else
+                        h264_update_picture_info_for_slice( picture, &prev_slice );
+                }
+                h264_append_nalu_to_au( picture, buffer->pos, nalu_length, probe );
+                slice->present = 1;
+            }
+            else
+            {
+                if( h264_find_au_delimit_by_nalu_type( nalu_type, info->prev_nalu_type ) )
+                {
+                    /* The last slice belongs to the AU you want at this time. */
+                    h264_update_picture_info( picture, slice, &info->sei );
+                    complete_au = h264_complete_au( picture, probe );
+                }
+                else if( no_more )
+                    complete_au = h264_complete_au( picture, probe );
+                switch( nalu_type )
+                {
+                    case 6 :    /* SEI */
+                        if( h264_parse_sei_nalu( info->bits, &info->sei, &nalu_header,
+                                                 buffer->rbsp, buffer->pos + nalu_header.length, ebsp_length ) )
+                            return h264_get_au_internal_failed( info, picture, &nalu_header, no_more_buf, complete_au );
+                        h264_append_nalu_to_au( picture, buffer->pos, nalu_length, probe );
+                        break;
+                    case 7 :    /* SPS */
+                        if( h264_create_summary( info, buffer->rbsp, probe,
+                                                 &nalu_header, buffer->pos, nalu_length,
+                                                 NULL, NULL, 0 ) )
+                            return h264_get_au_internal_failed( info, picture, &nalu_header, no_more_buf, complete_au );
+                        break;
+                    case 8 :    /* PPS */
+                        if( h264_create_summary( info, buffer->rbsp, probe,
+                                                 NULL, NULL, 0,
+                                                 &nalu_header, buffer->pos, nalu_length ) )
+                            return h264_get_au_internal_failed( info, picture, &nalu_header, no_more_buf, complete_au );
+                        break;
+                    case 9 :    /* We drop access unit delimiters. */
+                        break;
+                    case 13 :   /* We don't support sequence parameter set extension yet. */
+                        return h264_get_au_internal_failed( info, picture, &nalu_header, no_more_buf, complete_au );
+                    default :
+                        h264_append_nalu_to_au( picture, buffer->pos, nalu_length, probe );
+                        break;
+                }
+            }
+        }
+        /* Move to the first byte of the next NALU. */
+        if( read_back )
+        {
+            lsmash_fseek( importer->stream, next_nalu_head_pos, SEEK_SET );
+            buffer->pos = buffer->start;
+            buffer->end = buffer->start + fread( buffer->start, 1, buffer->bank->buffer_size, importer->stream );
+        }
+        else
+            buffer->pos = next_short_start_code_pos + H264_SHORT_START_CODE_LENGTH;
+        info->prev_nalu_type = nalu_type;
+        h264_check_buffer_shortage( info, importer->stream, 0 );
+        no_more_buf = buffer->pos >= buffer->end;
+        ebsp_length = 0;
+        no_more = info->no_more_read && no_more_buf;
+        if( !no_more )
+        {
+            /* Check the next NALU header. */
+            if( h264_check_nalu_header( &nalu_header, &buffer->pos, !!consecutive_zero_byte_count ) )
+                return h264_get_au_internal_failed( info, picture, &nalu_header, no_more_buf, complete_au );
+            info->ebsp_head_pos = next_nalu_head_pos + nalu_header.length;
+        }
+        /* If there is no more data in the stream, and flushed chunk of NALUs, flush it as complete AU here. */
+        else if( picture->incomplete_au_length && picture->au_length == 0 )
+        {
+            h264_update_picture_info( picture, slice, &info->sei );
+            h264_complete_au( picture, probe );
+            return h264_get_au_internal_succeeded( info, picture, &nalu_header, no_more_buf );
+        }
+        if( complete_au )
+            return h264_get_au_internal_succeeded( info, picture, &nalu_header, no_more_buf );
+        consecutive_zero_byte_count = 0;
     }
 #undef H264_SHORT_START_CODE_LENGTH
 }
