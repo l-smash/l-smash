@@ -5534,6 +5534,8 @@ const static mp4sys_importer_functions mp4sys_h264_importer =
 
 /***************************************************************************
     SMPTE VC-1 importer (only for Advanced Profile)
+    SMPTE 421M-2006
+    SMPTE RP 2025-2007
 ***************************************************************************/
 
 typedef struct
@@ -6137,162 +6139,159 @@ static int vc1_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_vc1
         vc1_check_buffer_shortage( info, importer->stream, 2 );
         no_more_buf = buffer->pos >= buffer->end;
         int no_more = info->no_more_read && no_more_buf;
-        if( vc1_check_next_start_code_prefix( buffer->pos, buffer->end ) || no_more )
-        {
-            if( no_more && ebdu_length == 0 )
-            {
-                /* For the last EBDU.
-                 * This EBDU already has been appended into the latest access unit and parsed. */
-                ebdu_length = access_unit->incomplete_data_length;
-                vc1_complete_au( access_unit, &info->next_picture, probe );
-                return vc1_get_au_internal_succeeded( info, access_unit, bdu_type, no_more_buf );
-            }
-            ebdu_length += VC1_START_CODE_LENGTH;
-            uint64_t next_scs_file_offset = info->ebdu_head_pos + ebdu_length + !no_more * VC1_START_CODE_PREFIX_LENGTH;
-            uint8_t *next_ebdu_pos = buffer->pos;       /* Memorize position of beginning of the next EBDU in buffer.
-                                                         * This is used when backward reading of stream doesn't occur. */
-            int read_back = 0;
-#if 0
-            if( probe )
-            {
-                fprintf( stderr, "BDU type: %"PRIu8"                            \n", bdu_type );
-                fprintf( stderr, "    EBDU position: %"PRIx64"                  \n", info->ebdu_head_pos );
-                fprintf( stderr, "    EBDU length: %"PRIx64" (%"PRIu64")        \n", ebdu_length - consecutive_zero_byte_count,
-                                                                                     ebdu_length - consecutive_zero_byte_count );
-                fprintf( stderr, "    consecutive_zero_byte_count: %"PRIx64"    \n", consecutive_zero_byte_count );
-                fprintf( stderr, "    Next start code suffix position: %"PRIx64"\n", next_scs_file_offset );
-            }
-#endif
-            if( bdu_type >= 0x0A && bdu_type <= 0x0F )
-            {
-                /* Get the current EBDU here. */
-                ebdu_length -= consecutive_zero_byte_count;     /* Any EBDU doesn't have zero bytes at the end. */
-                uint64_t possible_au_length = access_unit->incomplete_data_length + ebdu_length;
-                if( buffer->bank->buffer_size < possible_au_length )
-                {
-                    if( vc1_supplement_buffer( buffer, access_unit, 2 * possible_au_length ) )
-                        return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
-                    next_ebdu_pos = buffer->pos;
-                }
-                /* Move to the first byte of the current EBDU. */
-                read_back = (buffer->pos - buffer->start) < (ebdu_length + consecutive_zero_byte_count);
-                if( read_back )
-                {
-                    lsmash_fseek( importer->stream, info->ebdu_head_pos, SEEK_SET );
-                    int read_fail = fread( buffer->start, 1, ebdu_length, importer->stream ) != ebdu_length;
-                    buffer->pos = buffer->start;
-                    buffer->end = buffer->start + ebdu_length;
-                    if( read_fail )
-                        return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
-#if 0
-                    if( probe )
-                        fprintf( stderr, "    ----Read Back\n" );
-#endif
-                }
-                else
-                    buffer->pos -= ebdu_length + consecutive_zero_byte_count;
-                /* Complete the current access unit if encountered delimiter of current access unit. */
-                if( vc1_find_au_delimit_by_bdu_type( bdu_type, info->prev_bdu_type ) )
-                    /* The last video coded EBDU belongs to the access unit you want at this time. */
-                    complete_au = vc1_complete_au( access_unit, &info->next_picture, probe );
-                /* Process EBDU by its BDU type and append it to access unit. */
-                switch( bdu_type )
-                {
-                    /* FRM_SC: Frame start code
-                     * FLD_SC: Field start code
-                     * SLC_SC: Slice start code
-                     * SEQ_SC: Sequence header start code
-                     * EP_SC:  Entry-point start code
-                     * PIC_L:  Picture layer
-                     * SLC_L:  Slice layer
-                     * SEQ_L:  Sequence layer
-                     * EP_L:   Entry-point layer */
-                    case 0x0D : /* Frame
-                                 * For the Progressive or Frame Interlace mode, shall signal the beginning of a new video frame.
-                                 * For the Field Interlace mode, shall signal the beginning of a sequence of two independently coded video fields.
-                                 * [FRM_SC][PIC_L][[FLD_SC][PIC_L] (optional)][[SLC_SC][SLC_L] (optional)] ...  */
-                        if( vc1_parse_advanced_picture( info->bits, &info->sequence, &info->next_picture, buffer->rbdu,
-                                                        buffer->pos, ebdu_length ) )
-                            return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
-                    case 0x0C : /* Field
-                                 * Shall only be used for Field Interlaced frames
-                                 * and shall only be used to signal the beginning of the second field of the frame.
-                                 * [FRM_SC][PIC_L][FLD_SC][PIC_L][[SLC_SC][SLC_L] (optional)] ...
-                                 * Field start code is followed by INTERLACE_FIELD_PICTURE_FIELD2() which doesn't have info of its field picture type.*/
-                        break;
-                    case 0x0B : /* Slice
-                                 * Shall not be used for start code of the first slice of a frame.
-                                 * Shall not be used for start code of the first slice of an interlace field coded picture.
-                                 * [FRM_SC][PIC_L][[FLD_SC][PIC_L] (optional)][SLC_SC][SLC_L][[SLC_SC][SLC_L] (optional)] ...
-                                 * Slice layer may repeat frame header. We just ignore it. */
-                        info->slice_present = 1;
-                        break;
-                    case 0x0E : /* Entry-point header
-                                 * Entry-point indicates the direct followed frame is a start of group of frames.
-                                 * Entry-point doesn't indicates the frame is a random access point when multiple sequence headers are present,
-                                 * since it is necessary to decode sequence header which subsequent frames belong to for decoding them.
-                                 * Entry point shall be followed by
-                                 *   1. I-picture - progressive or frame interlace
-                                 *   2. I/I-picture, I/P-picture, or P/I-picture - field interlace
-                                 * [[SEQ_SC][SEQ_L] (optional)][EP_SC][EP_L][FRM_SC][PIC_L] ... */
-                        if( vc1_parse_entry_point_header( info, buffer->pos, ebdu_length, probe ) )
-                            return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
-                        info->next_picture.closed_gop        = info->entry_point.closed_entry_point;
-                        info->next_picture.random_accessible = info->multiple_sequence ? info->next_picture.start_of_sequence : 1;
-                        break;
-                    case 0x0F : /* Sequence header
-                                 * [SEQ_SC][SEQ_L][EP_SC][EP_L][FRM_SC][PIC_L] ... */
-                        if( vc1_parse_sequence_header( info, buffer->pos, ebdu_length, probe ) )
-                            return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
-                        info->next_picture.start_of_sequence = 1;
-                        break;
-                    default :   /* End-of-sequence (0x0A) */
-                        break;
-                }
-                vc1_append_ebdu_to_au( access_unit, buffer->pos, ebdu_length, probe );
-            }
-            else    /* We don't support other BDU types such as user data yet. */
-                return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
-            /* Move to the first byte of the next start code suffix. */
-            if( read_back )
-            {
-                lsmash_fseek( importer->stream, next_scs_file_offset, SEEK_SET );
-                buffer->pos = buffer->start;
-                buffer->end = buffer->start + fread( buffer->start, 1, buffer->bank->buffer_size, importer->stream );
-            }
-            else
-                buffer->pos = next_ebdu_pos + VC1_START_CODE_PREFIX_LENGTH;
-            info->prev_bdu_type = bdu_type;
-            vc1_check_buffer_shortage( info, importer->stream, 0 );
-            no_more_buf = buffer->pos >= buffer->end;
-            ebdu_length = 0;
-            no_more = info->no_more_read && no_more_buf;
-            if( !no_more )
-            {
-                /* Check the next BDU type. */
-                if( vc1_check_next_start_code_suffix( &bdu_type, &buffer->pos ) )
-                    return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
-                info->ebdu_head_pos = next_scs_file_offset - VC1_START_CODE_PREFIX_LENGTH;
-            }
-            /* If there is no more data in the stream, and flushed chunk of EBDUs, flush it as complete AU here. */
-            else if( access_unit->incomplete_data_length && access_unit->data_length == 0 )
-            {
-                vc1_complete_au( access_unit, &info->next_picture, probe );
-                return vc1_get_au_internal_succeeded( info, access_unit, bdu_type, no_more_buf );
-            }
-            if( complete_au )
-                return vc1_get_au_internal_succeeded( info, access_unit, bdu_type, no_more_buf );
-            consecutive_zero_byte_count = 0;
-            continue;       /* Avoid increment of ebdu_length. */
-        }
-        else if( !no_more )
+        if( !vc1_check_next_start_code_prefix( buffer->pos, buffer->end ) && !no_more )
         {
             if( *(buffer->pos ++) )
                 consecutive_zero_byte_count = 0;
             else
                 ++consecutive_zero_byte_count;
+            ++ebdu_length;
+            continue;
         }
-        ++ebdu_length;
+        if( no_more && ebdu_length == 0 )
+        {
+            /* For the last EBDU.
+             * This EBDU already has been appended into the latest access unit and parsed. */
+            ebdu_length = access_unit->incomplete_data_length;
+            vc1_complete_au( access_unit, &info->next_picture, probe );
+            return vc1_get_au_internal_succeeded( info, access_unit, bdu_type, no_more_buf );
+        }
+        ebdu_length += VC1_START_CODE_LENGTH;
+        uint64_t next_scs_file_offset = info->ebdu_head_pos + ebdu_length + !no_more * VC1_START_CODE_PREFIX_LENGTH;
+        uint8_t *next_ebdu_pos = buffer->pos;       /* Memorize position of beginning of the next EBDU in buffer.
+                                                     * This is used when backward reading of stream doesn't occur. */
+        int read_back = 0;
+#if 0
+        if( probe )
+        {
+            fprintf( stderr, "BDU type: %"PRIu8"                            \n", bdu_type );
+            fprintf( stderr, "    EBDU position: %"PRIx64"                  \n", info->ebdu_head_pos );
+            fprintf( stderr, "    EBDU length: %"PRIx64" (%"PRIu64")        \n", ebdu_length - consecutive_zero_byte_count,
+                                                                                 ebdu_length - consecutive_zero_byte_count );
+            fprintf( stderr, "    consecutive_zero_byte_count: %"PRIx64"    \n", consecutive_zero_byte_count );
+            fprintf( stderr, "    Next start code suffix position: %"PRIx64"\n", next_scs_file_offset );
+        }
+#endif
+        if( bdu_type >= 0x0A && bdu_type <= 0x0F )
+        {
+            /* Get the current EBDU here. */
+            ebdu_length -= consecutive_zero_byte_count;     /* Any EBDU doesn't have zero bytes at the end. */
+            uint64_t possible_au_length = access_unit->incomplete_data_length + ebdu_length;
+            if( buffer->bank->buffer_size < possible_au_length )
+            {
+                if( vc1_supplement_buffer( buffer, access_unit, 2 * possible_au_length ) )
+                    return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
+                next_ebdu_pos = buffer->pos;
+            }
+            /* Move to the first byte of the current EBDU. */
+            read_back = (buffer->pos - buffer->start) < (ebdu_length + consecutive_zero_byte_count);
+            if( read_back )
+            {
+                lsmash_fseek( importer->stream, info->ebdu_head_pos, SEEK_SET );
+                int read_fail = fread( buffer->start, 1, ebdu_length, importer->stream ) != ebdu_length;
+                buffer->pos = buffer->start;
+                buffer->end = buffer->start + ebdu_length;
+                if( read_fail )
+                    return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
+#if 0
+                if( probe )
+                    fprintf( stderr, "    ----Read Back\n" );
+#endif
+            }
+            else
+                buffer->pos -= ebdu_length + consecutive_zero_byte_count;
+            /* Complete the current access unit if encountered delimiter of current access unit. */
+            if( vc1_find_au_delimit_by_bdu_type( bdu_type, info->prev_bdu_type ) )
+                /* The last video coded EBDU belongs to the access unit you want at this time. */
+                complete_au = vc1_complete_au( access_unit, &info->next_picture, probe );
+            /* Process EBDU by its BDU type and append it to access unit. */
+            switch( bdu_type )
+            {
+                /* FRM_SC: Frame start code
+                 * FLD_SC: Field start code
+                 * SLC_SC: Slice start code
+                 * SEQ_SC: Sequence header start code
+                 * EP_SC:  Entry-point start code
+                 * PIC_L:  Picture layer
+                 * SLC_L:  Slice layer
+                 * SEQ_L:  Sequence layer
+                 * EP_L:   Entry-point layer */
+                case 0x0D : /* Frame
+                             * For the Progressive or Frame Interlace mode, shall signal the beginning of a new video frame.
+                             * For the Field Interlace mode, shall signal the beginning of a sequence of two independently coded video fields.
+                             * [FRM_SC][PIC_L][[FLD_SC][PIC_L] (optional)][[SLC_SC][SLC_L] (optional)] ...  */
+                    if( vc1_parse_advanced_picture( info->bits, &info->sequence, &info->next_picture, buffer->rbdu,
+                                                    buffer->pos, ebdu_length ) )
+                        return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
+                case 0x0C : /* Field
+                             * Shall only be used for Field Interlaced frames
+                             * and shall only be used to signal the beginning of the second field of the frame.
+                             * [FRM_SC][PIC_L][FLD_SC][PIC_L][[SLC_SC][SLC_L] (optional)] ...
+                             * Field start code is followed by INTERLACE_FIELD_PICTURE_FIELD2() which doesn't have info of its field picture type.*/
+                    break;
+                case 0x0B : /* Slice
+                             * Shall not be used for start code of the first slice of a frame.
+                             * Shall not be used for start code of the first slice of an interlace field coded picture.
+                             * [FRM_SC][PIC_L][[FLD_SC][PIC_L] (optional)][SLC_SC][SLC_L][[SLC_SC][SLC_L] (optional)] ...
+                             * Slice layer may repeat frame header. We just ignore it. */
+                    info->slice_present = 1;
+                    break;
+                case 0x0E : /* Entry-point header
+                             * Entry-point indicates the direct followed frame is a start of group of frames.
+                             * Entry-point doesn't indicates the frame is a random access point when multiple sequence headers are present,
+                             * since it is necessary to decode sequence header which subsequent frames belong to for decoding them.
+                             * Entry point shall be followed by
+                             *   1. I-picture - progressive or frame interlace
+                             *   2. I/I-picture, I/P-picture, or P/I-picture - field interlace
+                             * [[SEQ_SC][SEQ_L] (optional)][EP_SC][EP_L][FRM_SC][PIC_L] ... */
+                    if( vc1_parse_entry_point_header( info, buffer->pos, ebdu_length, probe ) )
+                        return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
+                    info->next_picture.closed_gop        = info->entry_point.closed_entry_point;
+                    info->next_picture.random_accessible = info->multiple_sequence ? info->next_picture.start_of_sequence : 1;
+                    break;
+                case 0x0F : /* Sequence header
+                             * [SEQ_SC][SEQ_L][EP_SC][EP_L][FRM_SC][PIC_L] ... */
+                    if( vc1_parse_sequence_header( info, buffer->pos, ebdu_length, probe ) )
+                        return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
+                    info->next_picture.start_of_sequence = 1;
+                    break;
+                default :   /* End-of-sequence (0x0A) */
+                    break;
+            }
+            vc1_append_ebdu_to_au( access_unit, buffer->pos, ebdu_length, probe );
+        }
+        else    /* We don't support other BDU types such as user data yet. */
+            return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
+        /* Move to the first byte of the next start code suffix. */
+        if( read_back )
+        {
+            lsmash_fseek( importer->stream, next_scs_file_offset, SEEK_SET );
+            buffer->pos = buffer->start;
+            buffer->end = buffer->start + fread( buffer->start, 1, buffer->bank->buffer_size, importer->stream );
+        }
+        else
+            buffer->pos = next_ebdu_pos + VC1_START_CODE_PREFIX_LENGTH;
+        info->prev_bdu_type = bdu_type;
+        vc1_check_buffer_shortage( info, importer->stream, 0 );
+        no_more_buf = buffer->pos >= buffer->end;
+        ebdu_length = 0;
+        no_more = info->no_more_read && no_more_buf;
+        if( !no_more )
+        {
+            /* Check the next BDU type. */
+            if( vc1_check_next_start_code_suffix( &bdu_type, &buffer->pos ) )
+                return vc1_get_au_internal_failed( info, access_unit, bdu_type, no_more_buf, complete_au );
+            info->ebdu_head_pos = next_scs_file_offset - VC1_START_CODE_PREFIX_LENGTH;
+        }
+        /* If there is no more data in the stream, and flushed chunk of EBDUs, flush it as complete AU here. */
+        else if( access_unit->incomplete_data_length && access_unit->data_length == 0 )
+        {
+            vc1_complete_au( access_unit, &info->next_picture, probe );
+            return vc1_get_au_internal_succeeded( info, access_unit, bdu_type, no_more_buf );
+        }
+        if( complete_au )
+            return vc1_get_au_internal_succeeded( info, access_unit, bdu_type, no_more_buf );
+        consecutive_zero_byte_count = 0;
     }
 }
 
