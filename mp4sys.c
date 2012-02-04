@@ -562,7 +562,7 @@ static int mp4sys_write_DecoderSpecificInfo( lsmash_bs_t *bs, mp4sys_DecoderSpec
     debug_if( mp4sys_put_descriptor_header( bs, &dsi->header ) )
         return -1;
     if( dsi->data && dsi->header.size != 0 )
-        lsmash_bs_put_bytes( bs, dsi->data, dsi->header.size );
+        lsmash_bs_put_bytes( bs, dsi->header.size, dsi->data );
     return lsmash_bs_write_data( bs );
 }
 
@@ -660,7 +660,7 @@ int mp4sys_write_ES_Descriptor( lsmash_bs_t *bs, mp4sys_ES_Descriptor_t* esd )
     if( esd->URL_Flag )
     {
         lsmash_bs_put_byte( bs, esd->URLlength );
-        lsmash_bs_put_bytes( bs, esd->URLstring, esd->URLlength );
+        lsmash_bs_put_bytes( bs, esd->URLlength, esd->URLstring );
     }
     if( esd->OCRstreamFlag )
         lsmash_bs_put_be16( bs, esd->OCR_ES_Id );

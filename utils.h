@@ -50,7 +50,7 @@ void lsmash_bs_cleanup( lsmash_bs_t *bs );
 
 /*---- bytestream writer ----*/
 void lsmash_bs_put_byte( lsmash_bs_t *bs, uint8_t value );
-void lsmash_bs_put_bytes( lsmash_bs_t *bs, void *value, uint32_t size );
+void lsmash_bs_put_bytes( lsmash_bs_t *bs, uint32_t size, void *value );
 void lsmash_bs_put_be16( lsmash_bs_t *bs, uint16_t value );
 void lsmash_bs_put_be24( lsmash_bs_t *bs, uint32_t value );
 void lsmash_bs_put_be32( lsmash_bs_t *bs, uint32_t value );

@@ -4671,7 +4671,7 @@ static uint8_t *h264_create_avcC( isom_avcC_t *avcC, uint32_t *exdata_length )
         return NULL;
     }
     lsmash_bs_put_be16( bs, ps->parameterSetLength );
-    lsmash_bs_put_bytes( bs, ps->parameterSetNALUnit, ps->parameterSetLength );
+    lsmash_bs_put_bytes( bs, ps->parameterSetLength, ps->parameterSetNALUnit );
     lsmash_bs_put_byte( bs, avcC->numOfPictureParameterSets );
     ps = (isom_avcC_ps_entry_t *)avcC->pictureParameterSets->head->data;
     if( !ps )
@@ -4680,7 +4680,7 @@ static uint8_t *h264_create_avcC( isom_avcC_t *avcC, uint32_t *exdata_length )
         return NULL;
     }
     lsmash_bs_put_be16( bs, ps->parameterSetLength );
-    lsmash_bs_put_bytes( bs, ps->parameterSetNALUnit, ps->parameterSetLength );
+    lsmash_bs_put_bytes( bs, ps->parameterSetLength, ps->parameterSetNALUnit );
     if( ISOM_REQUIRES_AVCC_EXTENSION( avcC->AVCProfileIndication ) )
     {
         lsmash_bs_put_byte( bs, avcC->chroma_format | 0xfc );

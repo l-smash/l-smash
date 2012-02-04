@@ -6606,7 +6606,7 @@ static int isom_output_fragment_media_data( lsmash_root_t *root )
         isom_sample_pool_t *pool = (isom_sample_pool_t *)entry->data;
         if( !pool )
             return -1;
-        lsmash_bs_put_bytes( root->bs, pool->data, pool->size );
+        lsmash_bs_put_bytes( root->bs, pool->size, pool->data );
     }
     if( lsmash_bs_write_data( root->bs ) )
         return -1;
@@ -7793,7 +7793,7 @@ static int isom_write_pooled_samples( lsmash_root_t *root, isom_sample_pool_t *p
 {
     if( !root || !root->mdat || !root->bs || !root->bs->stream )
         return -1;
-    lsmash_bs_put_bytes( root->bs, pool->data, pool->size );
+    lsmash_bs_put_bytes( root->bs, pool->size, pool->data );
     if( lsmash_bs_write_data( root->bs ) )
         return -1;
     root->mdat->size  += pool->size;
