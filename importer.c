@@ -2357,12 +2357,11 @@ typedef struct
     lsmash_audio_summary_t *summary;
     lsmash_bits_t *bits;
     uint8_t  buffer[DTS_HD_MAX_FRAME_SIZE];
+    lsmash_multiple_buffers_t *au_buffers;
     uint8_t *au;
     uint32_t au_length;
     uint8_t *incomplete_au;
     uint32_t incomplete_au_length;
-    uint8_t *au_buffer;
-    uint32_t au_buffer_size;
     uint32_t au_number;
 } mp4sys_dts_info_t;
 
@@ -2370,8 +2369,7 @@ static void mp4sys_remove_dts_info( mp4sys_dts_info_t *info )
 {
     if( !info )
         return;
-    if( info->au_buffer )
-        free( info->au_buffer );
+    lsmash_destroy_multiple_buffers( info->au_buffers );
     lsmash_bits_adhoc_cleanup( info->bits );
     free( info );
 }
@@ -2388,6 +2386,15 @@ static mp4sys_dts_info_t *mp4sys_create_dts_info( void )
         free( info );
         return NULL;
     }
+    info->au_buffers = lsmash_create_multiple_buffers( 2, DTS_HD_MAX_FRAME_SIZE );
+    if( !info->au_buffers )
+    {
+        lsmash_bits_adhoc_cleanup( info->bits );
+        free( info );
+        return NULL;
+    }
+    info->au            = lsmash_withdraw_buffer( info->au_buffers, 1 );
+    info->incomplete_au = lsmash_withdraw_buffer( info->au_buffers, 2 );
     return info;
 }
 
@@ -3351,19 +3358,15 @@ static int dts_get_next_accessunit_internal( mp4sys_importer_t *importer )
             if( info->status == MP4SYS_IMPORTER_EOF )
                 break;
         }
-        if( info->incomplete_au_length + info->frame_size > info->au_buffer_size )
+        if( info->incomplete_au_length + info->frame_size > info->au_buffers->buffer_size )
         {
             /* Increase buffer size to store AU. */
-            uint32_t old_au_buffer_size = info->au_buffer_size;
-            uint32_t new_au_buffer_size = 2 * info->frame_size;
-            uint8_t *temp = realloc( info->au_buffer, 2 * new_au_buffer_size );
+            lsmash_multiple_buffers_t *temp = lsmash_resize_multiple_buffers( info->au_buffers, info->au_buffers->buffer_size + DTS_HD_MAX_FRAME_SIZE );
             if( !temp )
                 return -1;
-            info->au_buffer      = temp;
-            info->au_buffer_size = new_au_buffer_size;
-            info->au             = info->au_buffer;
-            info->incomplete_au  = info->au_buffer + new_au_buffer_size;
-            memmove( info->incomplete_au, info->au_buffer + old_au_buffer_size, info->incomplete_au_length );
+            info->au_buffers    = temp;
+            info->au            = lsmash_withdraw_buffer( info->au_buffers, 1 );
+            info->incomplete_au = lsmash_withdraw_buffer( info->au_buffers, 2 );
         }
         memcpy( info->incomplete_au + info->incomplete_au_length, info->buffer, info->frame_size );
         info->incomplete_au_length += info->frame_size;
