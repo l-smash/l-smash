@@ -4484,6 +4484,10 @@ static int h264_parse_slice( lsmash_bits_t *bits, h264_sps_t *sps, h264_pps_t *p
 
 static int h264_calculate_poc( h264_sps_t *sps, h264_picture_info_t *picture, h264_picture_info_t *prev_picture )
 {
+#define H264_POC_DEBUG 0
+#if H264_POC_DEBUG
+        fprintf( stderr, "PictureOrderCount\n" );
+#endif
     int64_t TopFieldOrderCnt    = 0;
     int64_t BottomFieldOrderCnt = 0;
     if( sps->pic_order_cnt_type == 0 )
@@ -4518,29 +4522,13 @@ static int h264_calculate_poc( h264_sps_t *sps, h264_picture_info_t *picture, h2
             PicOrderCntMsb = prevPicOrderCntMsb;
         IF_EXCEED_INT32( PicOrderCntMsb )
             return -1;
+        BottomFieldOrderCnt = TopFieldOrderCnt = PicOrderCntMsb + pic_order_cnt_lsb;
         if( !picture->field_pic_flag )
-        {
-            TopFieldOrderCnt    = PicOrderCntMsb + pic_order_cnt_lsb;
-            BottomFieldOrderCnt = TopFieldOrderCnt + picture->delta_pic_order_cnt_bottom;
-        }
-        else if( picture->bottom_field_flag )
-            BottomFieldOrderCnt = PicOrderCntMsb + pic_order_cnt_lsb;
-        else
-            TopFieldOrderCnt    = PicOrderCntMsb + pic_order_cnt_lsb;
+            BottomFieldOrderCnt += picture->delta_pic_order_cnt_bottom;
         IF_EXCEED_INT32( TopFieldOrderCnt )
             return -1;
         IF_EXCEED_INT32( BottomFieldOrderCnt )
             return -1;
-#if 0
-        fprintf( stderr, "PictureOrderCount\n" );
-        fprintf( stderr, "    prevPicOrderCntMsb: %"PRId32"\n", prevPicOrderCntMsb );
-        fprintf( stderr, "    prevPicOrderCntLsb: %"PRId32"\n", prevPicOrderCntLsb );
-        fprintf( stderr, "    PicOrderCntMsb: %"PRId64"\n", PicOrderCntMsb );
-        fprintf( stderr, "    pic_order_cnt_lsb: %"PRId32"\n", pic_order_cnt_lsb );
-        fprintf( stderr, "    MaxPicOrderCntLsb: %"PRIu64"\n", MaxPicOrderCntLsb );
-        fprintf( stderr, "    TopFieldOrderCnt: %"PRId64"\n", TopFieldOrderCnt );
-        fprintf( stderr, "    BottomFieldOrderCnt: %"PRId64"\n", BottomFieldOrderCnt );
-#endif
         if( !picture->disposable )
         {
             picture->ref_pic_has_mmco5         = picture->has_mmco5;
@@ -4549,6 +4537,13 @@ static int h264_calculate_poc( h264_sps_t *sps, h264_picture_info_t *picture, h2
             picture->ref_pic_PicOrderCntMsb    = PicOrderCntMsb;
             picture->ref_pic_PicOrderCntLsb    = pic_order_cnt_lsb;
         }
+#if H264_POC_DEBUG
+        fprintf( stderr, "    prevPicOrderCntMsb: %"PRId32"\n", prevPicOrderCntMsb );
+        fprintf( stderr, "    prevPicOrderCntLsb: %"PRId32"\n", prevPicOrderCntLsb );
+        fprintf( stderr, "    PicOrderCntMsb: %"PRId64"\n", PicOrderCntMsb );
+        fprintf( stderr, "    pic_order_cnt_lsb: %"PRId32"\n", pic_order_cnt_lsb );
+        fprintf( stderr, "    MaxPicOrderCntLsb: %"PRIu64"\n", MaxPicOrderCntLsb );
+#endif
     }
     else if( sps->pic_order_cnt_type == 1 )
     {
@@ -4582,15 +4577,10 @@ static int h264_calculate_poc( h264_sps_t *sps, h264_picture_info_t *picture, h2
         }
         if( picture->disposable )
             expectedPicOrderCnt += sps->offset_for_non_ref_pic;
+        TopFieldOrderCnt    = expectedPicOrderCnt + picture->delta_pic_order_cnt[0];
+        BottomFieldOrderCnt = TopFieldOrderCnt + sps->offset_for_top_to_bottom_field;
         if( !picture->field_pic_flag )
-        {
-            TopFieldOrderCnt    = expectedPicOrderCnt + picture->delta_pic_order_cnt[0];
-            BottomFieldOrderCnt = TopFieldOrderCnt    + sps->offset_for_top_to_bottom_field + picture->delta_pic_order_cnt[1];
-        }
-        else if( picture->bottom_field_flag )
-            BottomFieldOrderCnt = expectedPicOrderCnt + sps->offset_for_top_to_bottom_field + picture->delta_pic_order_cnt[0];
-        else
-            TopFieldOrderCnt    = expectedPicOrderCnt + picture->delta_pic_order_cnt[0];
+            BottomFieldOrderCnt += picture->delta_pic_order_cnt[1];
         IF_EXCEED_INT32( TopFieldOrderCnt )
             return -1;
         IF_EXCEED_INT32( BottomFieldOrderCnt )
@@ -4612,29 +4602,26 @@ static int h264_calculate_poc( h264_sps_t *sps, h264_picture_info_t *picture, h2
         {
             FrameNumOffset  = prevFrameNumOffset + (prevFrameNum > frame_num ? sps->MaxFrameNum : 0);
             tempPicOrderCnt = 2 * (FrameNumOffset + frame_num) - picture->disposable;
+            IF_EXCEED_INT32( FrameNumOffset )
+                return -1;
+            IF_EXCEED_INT32( tempPicOrderCnt )
+                return -1;
         }
-        IF_EXCEED_INT32( FrameNumOffset )
-            return -1;
-        if( !picture->field_pic_flag )
-        {
-            TopFieldOrderCnt    = tempPicOrderCnt;
-            BottomFieldOrderCnt = tempPicOrderCnt;
-        }
-        else if( picture->bottom_field_flag )
-            BottomFieldOrderCnt = tempPicOrderCnt;
-        else
-            TopFieldOrderCnt    = tempPicOrderCnt;
-        IF_EXCEED_INT32( TopFieldOrderCnt )
-            return -1;
-        IF_EXCEED_INT32( BottomFieldOrderCnt )
-            return -1;
+        BottomFieldOrderCnt = TopFieldOrderCnt = tempPicOrderCnt;
         picture->FrameNumOffset = FrameNumOffset;
     }
     if( !picture->field_pic_flag )
         picture->PicOrderCnt = LSMASH_MIN( TopFieldOrderCnt, BottomFieldOrderCnt );
     else
         picture->PicOrderCnt = picture->bottom_field_flag ? BottomFieldOrderCnt : TopFieldOrderCnt;
-#if 0
+#if H264_POC_DEBUG
+    if( picture->field_pic_flag )
+    {
+        if( !picture->bottom_field_flag )
+            fprintf( stderr, "    TopFieldOrderCnt: %"PRId64"\n", TopFieldOrderCnt );
+        else
+            fprintf( stderr, "    BottomFieldOrderCnt: %"PRId64"\n", BottomFieldOrderCnt );
+    }
     fprintf( stderr, "    POC: %"PRId32"\n", picture->PicOrderCnt );
 #endif
     return 0;
