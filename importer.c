@@ -3581,10 +3581,10 @@ typedef struct
     int32_t  delta_pic_order_cnt_bottom;
     int32_t  delta_pic_order_cnt[2];
     int32_t  PicOrderCnt;
+    uint32_t FrameNumOffset;
     /* */
     uint32_t recovery_frame_cnt;
     uint32_t frame_num;
-    uint32_t FrameNumOffset;
     uint8_t *au;
     uint32_t au_length;
     uint8_t *incomplete_au;
@@ -4585,6 +4585,7 @@ static int h264_calculate_poc( h264_sps_t *sps, h264_picture_info_t *picture, h2
             return -1;
         IF_EXCEED_INT32( BottomFieldOrderCnt )
             return -1;
+        picture->FrameNumOffset = FrameNumOffset;
     }
     else if( sps->pic_order_cnt_type == 2 )
     {
