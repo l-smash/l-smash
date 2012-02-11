@@ -133,6 +133,7 @@ typedef struct
     uint32_t          last_delta;
     uint64_t          prev_dts;
     int64_t           start_offset;
+    double            dts;
 } output_track_t;
 
 typedef struct
@@ -1041,25 +1042,27 @@ static int do_mux( muxer_t *muxer )
                             out_track->ctd_shift = sample->cts;
                         sample->cts -= out_track->ctd_shift;
                     }
+                    out_track->dts = (double)sample->dts / out_track->timescale;
                     out_track->sample = sample;
                 }
             }
             if( sample )
             {
                 /* Append a sample if meeting a condition. */
-                if( ((double)sample->dts / out_track->timescale) <= largest_dts
-                 || num_consecutive_sample_skip == num_active_input_tracks )
+                if( out_track->dts <= largest_dts || num_consecutive_sample_skip == num_active_input_tracks )
                 {
                     uint64_t sample_size = sample->length;      /* sample might be deleted internally after appending. */
+                    uint64_t sample_dts  = sample->dts;         /* same as above */
+                    uint64_t sample_cts  = sample->cts;         /* same as above */
                     if( lsmash_append_sample( output->root, out_track->track_ID, sample ) )
                         return ERROR_MSG( "failed to append a sample.\n" );
                     if( out_track->current_sample_number == 0 )
-                        out_track->start_offset = sample->cts;
+                        out_track->start_offset = sample_cts;
                     else
-                        out_track->last_delta = sample->dts - out_track->prev_dts;      /* for any changes in stream's properties */
-                    largest_dts = LSMASH_MAX( largest_dts, (double)sample->dts / out_track->timescale );
-                    out_track->prev_dts = sample->dts;
+                        out_track->last_delta = sample_dts - out_track->prev_dts;       /* for any changes in stream's properties */
+                    out_track->prev_dts = sample_dts;
                     out_track->sample = NULL;
+                    largest_dts = LSMASH_MAX( largest_dts, out_track->dts );
                     total_media_size += sample_size;
                     ++ out_track->current_sample_number;
                     num_consecutive_sample_skip = 0;
