@@ -4486,7 +4486,7 @@ static int h264_calculate_poc( h264_sps_t *sps, h264_picture_info_t *picture, h2
 {
 #define H264_POC_DEBUG 0
 #if H264_POC_DEBUG
-        fprintf( stderr, "PictureOrderCount\n" );
+    fprintf( stderr, "PictureOrderCount\n" );
 #endif
     int64_t TopFieldOrderCnt    = 0;
     int64_t BottomFieldOrderCnt = 0;
@@ -5363,7 +5363,7 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
     info->ebsp_head_pos = first_ebsp_head_pos;
     /* Parse all NALU in the stream for preparation of calculating timestamps. */
     uint32_t poc_alloc = (1 << 12) * sizeof(uint64_t);
-    uint64_t *poc = malloc( poc_alloc );
+    int64_t *poc = malloc( poc_alloc );
     if( !poc )
         goto fail;
     uint32_t num_access_units = 0;
@@ -5378,10 +5378,10 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
             goto fail;
         if( h264_calculate_poc( &info->sps, &info->picture, &prev_picture ) )
             goto fail;
-        if( poc_alloc <= num_access_units * sizeof(uint64_t) )
+        if( poc_alloc <= num_access_units * sizeof(int64_t) )
         {
-            uint32_t alloc = 2 * num_access_units * sizeof(uint64_t);
-            uint64_t *temp = realloc( poc, alloc );
+            uint32_t alloc = 2 * num_access_units * sizeof(int64_t);
+            int64_t *temp = realloc( poc, alloc );
             if( !temp )
             {
                 free( poc );
@@ -5405,33 +5405,59 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
         free( poc );
         goto fail;
     }
-    /* Make zero-origin. */
-    int32_t min_poc = poc[0];
-    for( uint32_t i = 1; i < num_access_units; i++ )
-        min_poc = LSMASH_MIN( (int32_t)poc[i], min_poc );
-    if( min_poc )
-        for( uint32_t i = 0; i < num_access_units; i++ )
-            poc[i] -= min_poc;
-    /* Deduplicate POCs. */
-    uint64_t poc_offset = 0;
-    uint64_t poc_max = 0;
-    for( uint32_t i = 1; i < num_access_units; i++ )
-    {
-        if( poc[i] == 0 )
-        {
-            poc_offset += poc_max + 1;
-            poc_max = 0;
-        }
-        else
-            poc_max = LSMASH_MAX( poc[i], poc_max );
-        poc[i] += poc_offset;
-    }
     /* Count leading samples that are undecodable. */
     for( uint32_t i = 0; i < num_access_units; i++ )
     {
         if( poc[i] == 0 )
             break;
-        ++info->num_undecodable;
+        ++ info->num_undecodable;
+    }
+    /* Deduplicate POCs. */
+    int64_t poc_offset = 0;
+    int64_t poc_max = 0;
+    int64_t poc_min = 0;
+    int sequence_has_negative_poc = 0;
+    uint32_t negative_poc_start = 0;
+    for( uint32_t i = 0; i < num_access_units; i++ )
+    {
+        if( poc[i] > 0 )
+        {
+            poc_max = LSMASH_MAX( poc[i], poc_max );
+            poc[i] += poc_offset;
+            continue;
+        }
+        else if( poc[i] < 0 )
+        {
+            /* Negative POCs indicate pictures having them shall be composited
+             * both before the next IDR-picture and after the current one. */
+            if( !sequence_has_negative_poc )
+            {
+                sequence_has_negative_poc = 1;
+                negative_poc_start = i;
+            }
+            poc_min = LSMASH_MIN( poc[i], poc_min );
+            continue;
+        }
+        /* poc[i] == 0; IDR-picture */
+        poc_offset += poc_max + 1;
+        poc_max = 0;
+        if( sequence_has_negative_poc )
+        {
+            /* Give offset to negative POCs. */
+            poc_offset -= poc_min;
+            for( uint32_t j = negative_poc_start; j < i; j++ )
+                if( poc[j] < 0 )
+                {
+                    poc[j] += poc_offset;
+                    poc_max = LSMASH_MAX( poc[j], poc_max );
+                }
+            poc_offset = poc_max + 1;
+            poc_max = 0;
+            poc_min = 0;
+            sequence_has_negative_poc = 0;
+            negative_poc_start = 0;
+        }
+        poc[i] = poc_offset;
     }
     /* Get max composition delay. */
     uint32_t composition_delay = 0;
@@ -5449,8 +5475,8 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
     {
         for( uint32_t i = 0; i < num_access_units; i++ )
         {
-            timestamp[i].cts = poc[i];
-            timestamp[i].dts = i;
+            timestamp[i].cts = (uint64_t)poc[i];
+            timestamp[i].dts = (uint64_t)i;
         }
         qsort( timestamp, num_access_units, sizeof(lsmash_media_ts_t), (int(*)( const void *, const void * ))lsmash_compare_cts );
         for( uint32_t i = 0; i < num_access_units; i++ )
