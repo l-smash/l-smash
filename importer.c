@@ -1279,36 +1279,46 @@ const static mp4sys_importer_functions mp4sys_ac3_importer =
     ETSI TS 102 366 V1.2.1 (2008-08)
 ***************************************************************************/
 #define EAC3_MAX_SYNCFRAME_LENGTH 4096
-#define EAC3_FIRST_FIVE_BYTES     5
 #define EAC3_MIN_SAMPLE_DURATION  256
 
 typedef struct
 {
-    uint8_t fscod;
-    uint8_t fscod2;
-    uint8_t bsid;
-    uint8_t bsmod;
-    uint8_t acmod;
-    uint8_t lfeon;
-    uint8_t num_dep_sub;
+    uint8_t  fscod;
+    uint8_t  fscod2;
+    uint8_t  bsid;
+    uint8_t  bsmod;
+    uint8_t  acmod;
+    uint8_t  lfeon;
+    uint8_t  num_dep_sub;
     uint16_t chan_loc;
 } eac3_substream_info_t;
 
 typedef struct
 {
+    uint16_t              data_rate;
+    uint8_t               num_ind_sub;
+    eac3_substream_info_t independent_info[8];
+} eac3_specific_parameters_t;
+
+typedef struct
+{
     mp4sys_importer_status status;
+    eac3_substream_info_t independent_info[8];
+    eac3_substream_info_t dependent_info;
+    eac3_specific_parameters_t dec3_param;
+    uint8_t dec3_param_initialized;
     uint8_t strmtyp;
     uint8_t substreamid;
     uint8_t current_independent_substream_id;
-    eac3_substream_info_t independent_info_0;   /* mirror for creating summary */
-    eac3_substream_info_t independent_info[8];
-    eac3_substream_info_t dependent_info;
     uint8_t numblkscod;
     uint8_t number_of_audio_blocks;
     uint8_t frmsizecod;
     uint8_t number_of_independent_substreams;
+    uint8_t no_more_read;
+    uint8_t  buffer[2 * EAC3_MAX_SYNCFRAME_LENGTH];
+    uint8_t *buffer_pos;
+    uint8_t *buffer_end;
     lsmash_bits_t *bits;
-    uint8_t buffer[EAC3_MAX_SYNCFRAME_LENGTH];
     uint8_t *next_dec3;
     uint32_t next_dec3_length;
     uint32_t syncframe_count;
@@ -1336,6 +1346,8 @@ static mp4sys_eac3_info_t *mp4sys_create_eac3_info( void )
     mp4sys_eac3_info_t *info = (mp4sys_eac3_info_t *)lsmash_malloc_zero( sizeof(mp4sys_eac3_info_t) );
     if( !info )
         return NULL;
+    info->buffer_pos = info->buffer;
+    info->buffer_end = info->buffer;
     info->bits = lsmash_bits_adhoc_create();
     if( !info->bits )
     {
@@ -1364,180 +1376,190 @@ static int eac3_check_syncframe_header( mp4sys_eac3_info_t *info )
 {
     if( info->strmtyp == 0x3 )
         return -1;      /* unknown Stream type */
-    eac3_substream_info_t *independent_info;
+    eac3_substream_info_t *substream_info;
     if( info->strmtyp != 0x1 )
-        independent_info = &info->independent_info[ info->current_independent_substream_id ];
+        substream_info = &info->independent_info[ info->current_independent_substream_id ];
     else
-        independent_info = &info->dependent_info;
-    if( independent_info->fscod == 0x3 && independent_info->fscod2 == 0x3 )
+        substream_info = &info->dependent_info;
+    if( substream_info->fscod == 0x3 && substream_info->fscod2 == 0x3 )
         return -1;      /* unknown Sample Rate Code */
-    if( independent_info->bsid < 10 || independent_info->bsid > 16 )
+    if( substream_info->bsid < 10 || substream_info->bsid > 16 )
         return -1;      /* not EAC-3 */
     return 0;
 }
 
-static int eac3_parse_syncframe_header( mp4sys_importer_t *importer )
+static void eac3_update_specific_param( mp4sys_eac3_info_t *info )
 {
-    mp4sys_eac3_info_t *info = (mp4sys_eac3_info_t *)importer->info;
+    eac3_specific_parameters_t *param = &info->dec3_param;
+    param->data_rate = 0;
+    param->num_ind_sub = info->number_of_independent_substreams - 1;
+    for( uint8_t i = 0; i <= param->num_ind_sub; i++ )
+        param->independent_info[i] = info->independent_info[i];
+    info->dec3_param_initialized = 1;
+}
+
+static int eac3_parse_syncframe( mp4sys_eac3_info_t *info, uint8_t *data, uint32_t data_length )
+{
     lsmash_bits_t *bits = info->bits;
-    if( lsmash_bits_import_data( bits, info->buffer, EAC3_FIRST_FIVE_BYTES ) )
+    if( lsmash_bits_import_data( bits, data, data_length ) )
         return -1;
-    lsmash_bits_get( bits, 16 );    /* syncword */
-    info->strmtyp     = lsmash_bits_get( bits, 2 );
-    info->substreamid = lsmash_bits_get( bits, 3 );
+    lsmash_bits_get( bits, 16 );                                                    /* syncword           (16) */
+    info->strmtyp     = lsmash_bits_get( bits, 2 );                                 /* strmtyp            (2) */
+    info->substreamid = lsmash_bits_get( bits, 3 );                                 /* substreamid        (3) */
     eac3_substream_info_t *substream_info;
     if( info->strmtyp != 0x1 )
     {
+        if( info->substreamid == 0x0 && info->number_of_independent_substreams )
+            eac3_update_specific_param( info );
         info->current_independent_substream_id = info->substreamid;
         substream_info = &info->independent_info[ info->current_independent_substream_id ];
-        if( info->substreamid == 0x0 )
-            info->independent_info_0 = *substream_info;     /* backup */
         substream_info->chan_loc = 0;
     }
     else
         substream_info = &info->dependent_info;
-    uint16_t frmsiz = lsmash_bits_get( bits, 11 );
-    substream_info->fscod = lsmash_bits_get( bits, 2 );
+    info->frame_size = 2 * (lsmash_bits_get( bits, 11 ) + 1);                       /* frmsiz             (11) */
+    substream_info->fscod = lsmash_bits_get( bits, 2 );                             /* fscod              (2) */
     if( substream_info->fscod == 0x3 )
     {
-        substream_info->fscod2 = lsmash_bits_get( bits, 2 );
+        substream_info->fscod2 = lsmash_bits_get( bits, 2 );                        /* fscod2             (2) */
         info->numblkscod = 0x3;
     }
     else
-        info->numblkscod = lsmash_bits_get( bits, 2 );
-    substream_info->acmod = lsmash_bits_get( bits, 3 );
-    substream_info->lfeon = lsmash_bits_get( bits, 1 );
-    lsmash_bits_empty( bits );
-    /* Read up to the end of the current syncframe. */
-    info->frame_size = 2 * (frmsiz + 1);
-    uint32_t read_size = info->frame_size - EAC3_FIRST_FIVE_BYTES;
-    if( fread( info->buffer + EAC3_FIRST_FIVE_BYTES, 1, read_size, importer->stream ) != read_size )
-        return -1;
-    if( lsmash_bits_import_data( bits, info->buffer + EAC3_FIRST_FIVE_BYTES, read_size ) )
-        return -1;
-    /* Continue to parse header. */
-    substream_info->bsid = lsmash_bits_get( bits, 5 );
-    lsmash_bits_get( bits, 5 );         /* dialnorm */
-    if( lsmash_bits_get( bits, 1 ) )    /* compre */
-        lsmash_bits_get( bits, 8 );     /* compr */
+        info->numblkscod = lsmash_bits_get( bits, 2 );                              /* numblkscod         (2) */
+    substream_info->acmod = lsmash_bits_get( bits, 3 );                             /* acmod              (3) */
+    substream_info->lfeon = lsmash_bits_get( bits, 1 );                             /* lfeon              (1) */
+    substream_info->bsid = lsmash_bits_get( bits, 5 );                              /* bsid               (5) */
+    lsmash_bits_get( bits, 5 );                                                     /* dialnorm           (5) */
+    if( lsmash_bits_get( bits, 1 ) )                                                /* compre             (1) */
+        lsmash_bits_get( bits, 8 );                                                 /* compr              (8) */
     if( substream_info->acmod == 0x0 )
     {
-        lsmash_bits_get( bits, 5 );         /* dialnorm2 */
-        if( lsmash_bits_get( bits, 1 ) )    /* compre2 */
-            lsmash_bits_get( bits, 8 );     /* compr2 */
+        lsmash_bits_get( bits, 5 );                                                 /* dialnorm2          (5) */
+        if( lsmash_bits_get( bits, 1 ) )                                            /* compre2            (1) */
+            lsmash_bits_get( bits, 8 );                                             /* compr2             (8) */
     }
-    if( info->strmtyp == 0x1 && lsmash_bits_get( bits, 1 ) )    /* chanmape */
+    if( info->strmtyp == 0x1 && lsmash_bits_get( bits, 1 ) )                        /* chanmape           (1) */
     {
-        uint16_t chanmap = lsmash_bits_get( bits, 16 );
-        uint16_t chan_loc = chanmap >> 5;
-        chan_loc = (chan_loc & 0xff ) | ((chan_loc & 0x200) >> 1);
+        uint16_t chan_loc = lsmash_bits_get( bits, 16 ) >> 5;                       /* chanmap            (16) */
+        chan_loc = (chan_loc & 0xff) | ((chan_loc & 0x200) >> 1);
         info->independent_info[ info->current_independent_substream_id ].chan_loc |= chan_loc;
     }
-    if( lsmash_bits_get( bits, 1 ) )    /* mixmdate */
+    if( lsmash_bits_get( bits, 1 ) )                                                /* mixmdate           (1) */
     {
         if( substream_info->acmod > 0x2 )
-            lsmash_bits_get( bits, 2 );     /* dmixmod */
+            lsmash_bits_get( bits, 2 );                                             /* dmixmod            (2) */
         if( ((substream_info->acmod & 0x1) && (substream_info->acmod > 0x2)) || (substream_info->acmod & 0x4) )
-            lsmash_bits_get( bits, 6 );     /* ltrt[c/sur]mixlev + loro[c/sur]mixlev */
-        if( substream_info->lfeon && lsmash_bits_get( bits, 1 ) )   /* lfemixlevcode */
-            lsmash_bits_get( bits, 5 );     /* lfemixlevcod */
+            lsmash_bits_get( bits, 6 );                                             /* ltrt[c/sur]mixlev  (3)
+                                                                                     * loro[c/sur]mixlev  (3) */
+        if( substream_info->lfeon && lsmash_bits_get( bits, 1 ) )                   /* lfemixlevcode      (1) */
+            lsmash_bits_get( bits, 5 );                                             /* lfemixlevcod       (5) */
         if( info->strmtyp == 0x0 )
         {
-            if( lsmash_bits_get( bits, 1 ) )    /* pgmscle*/
-                lsmash_bits_get( bits, 6 );         /* pgmscl */
-            if( substream_info->acmod == 0x0 && lsmash_bits_get( bits, 1 ) )    /* pgmscle2 */
-                lsmash_bits_get( bits, 6 );         /* pgmscl2 */
-            if( lsmash_bits_get( bits, 1 ) )    /* extpgmscle */
-                lsmash_bits_get( bits, 6 );         /* extpgmscl */
-            uint8_t mixdef = lsmash_bits_get( bits, 2 );
+            if( lsmash_bits_get( bits, 1 ) )                                        /* pgmscle            (1) */
+                lsmash_bits_get( bits, 6 );                                         /* pgmscl             (6) */
+            if( substream_info->acmod == 0x0 && lsmash_bits_get( bits, 1 ) )        /* pgmscle2           (1) */
+                lsmash_bits_get( bits, 6 );                                         /* pgmscl2            (6) */
+            if( lsmash_bits_get( bits, 1 ) )                                        /* extpgmscle         (1) */
+                lsmash_bits_get( bits, 6 );                                         /* extpgmscl          (6) */
+            uint8_t mixdef = lsmash_bits_get( bits, 2 );                            /* mixdef             (2) */
             if( mixdef == 0x1 )
-                lsmash_bits_get( bits, 5 );     /* premixcmpsel + drcsrc + premixcmpscl */
+                lsmash_bits_get( bits, 5 );                                         /* premixcmpsel       (1)
+                                                                                     * drcsrc             (1)
+                                                                                     * premixcmpscl       (3) */
             else if( mixdef == 0x2 )
-                lsmash_bits_get( bits, 12 );    /* mixdata */
+                lsmash_bits_get( bits, 12 );                                        /* mixdata            (12) */
             else if( mixdef == 0x3 )
             {
-                uint8_t mixdeflen = lsmash_bits_get( bits, 5 );
-                lsmash_bits_get( bits, 8 * (mixdeflen + 2) );     /* mixdata */
+                uint8_t mixdeflen = lsmash_bits_get( bits, 5 );                     /* mixdeflen          (5) */
+                lsmash_bits_get( bits, 8 * (mixdeflen + 2) );                       /* mixdata            (8 * (mixdeflen + 2))
+                                                                                     * mixdatafill        (0-7) */
             }
             if( substream_info->acmod < 0x2 )
             {
-                if( lsmash_bits_get( bits, 1 ) )    /* paninfoe */
-                    lsmash_bits_get( bits, 14 );        /* paninfo */
-                if( substream_info->acmod == 0x0 && lsmash_bits_get( bits, 1 ) )    /* paninfo2e */
-                    lsmash_bits_get( bits, 14 );        /* paninfo2 */
+                if( lsmash_bits_get( bits, 1 ) )                                    /* paninfoe           (1) */
+                    lsmash_bits_get( bits, 14 );                                    /* panmean            (8)
+                                                                                     * paninfo            (6) */
+                if( substream_info->acmod == 0x0 && lsmash_bits_get( bits, 1 ) )    /* paninfo2e          (1) */
+                    lsmash_bits_get( bits, 14 );                                    /* panmean2           (8)
+                                                                                     * paninfo2           (6) */
             }
-            if( lsmash_bits_get( bits, 1 ) )        /* frmmixcfginfoe */
+            if( lsmash_bits_get( bits, 1 ) )                                        /* frmmixcfginfoe     (1) */
             {
                 if( info->numblkscod == 0x0 )
-                    lsmash_bits_get( bits, 5 );         /* blkmixcfginfo[0] */
+                    lsmash_bits_get( bits, 5 );                                     /* blkmixcfginfo[0]   (5) */
                 else
                 {
                     int number_of_blocks_per_syncframe = ((int []){ 1, 2, 3, 6 })[ info->numblkscod ];
                     for( int blk = 0; blk < number_of_blocks_per_syncframe; blk++ )
-                        if( lsmash_bits_get( bits, 1 ) )    /* blkmixcfginfoe */
-                            lsmash_bits_get( bits, 5 );         /* blkmixcfginfo[blk] */
+                        if( lsmash_bits_get( bits, 1 ) )                            /* blkmixcfginfoe     (1)*/
+                            lsmash_bits_get( bits, 5 );                             /* blkmixcfginfo[blk] (5) */
                 }
             }
         }
     }
-    if( lsmash_bits_get( bits, 1 ) )    /* infomdate */
+    if( lsmash_bits_get( bits, 1 ) )                                                /* infomdate          (1) */
     {
-        substream_info->bsmod = lsmash_bits_get( bits, 3 );
-        lsmash_bits_get( bits, 1 );         /* copyrightb */
-        lsmash_bits_get( bits, 1 );         /* origbs */
+        substream_info->bsmod = lsmash_bits_get( bits, 3 );                         /* bsmod              (3) */
+        lsmash_bits_get( bits, 1 );                                                 /* copyrightb         (1) */
+        lsmash_bits_get( bits, 1 );                                                 /* origbs             (1) */
         if( substream_info->acmod == 0x2 )
-            lsmash_bits_get( bits, 4 );         /* dsurmod + dheadphonmod */
+            lsmash_bits_get( bits, 4 );                                             /* dsurmod            (2)
+                                                                                     * dheadphonmod       (2) */
         else if( substream_info->acmod >= 0x6 )
-            lsmash_bits_get( bits, 2 );         /* dsurexmod */
-        if( lsmash_bits_get( bits, 1 ) )    /* audprodie */
-            lsmash_bits_get( bits, 8 );         /* mixlevel + roomtyp + adconvtyp */
-        if( substream_info->acmod == 0x0 && lsmash_bits_get( bits, 1 ) )    /* audprodie2 */
-            lsmash_bits_get( bits, 8 );         /* mixlevel2 + roomtyp2 + adconvtyp2 */
+            lsmash_bits_get( bits, 2 );                                             /* dsurexmod          (2) */
+        if( lsmash_bits_get( bits, 1 ) )                                            /* audprodie          (1) */
+            lsmash_bits_get( bits, 8 );                                             /* mixlevel           (5)
+                                                                                     * roomtyp            (2)
+                                                                                     * adconvtyp          (1) */
+        if( substream_info->acmod == 0x0 && lsmash_bits_get( bits, 1 ) )            /* audprodie2         (1) */
+            lsmash_bits_get( bits, 8 );                                             /* mixlevel2          (5)
+                                                                                     * roomtyp2           (2)
+                                                                                     * adconvtyp2         (1) */
         if( substream_info->fscod < 0x3 )
-            lsmash_bits_get( bits, 1 );     /* sourcefscod */
+            lsmash_bits_get( bits, 1 );                                             /* sourcefscod        (1) */
     }
     else
         substream_info->bsmod = 0;
     if( info->strmtyp == 0x0 && info->numblkscod != 0x3 )
-        lsmash_bits_get( bits, 1 );     /* convsync */
+        lsmash_bits_get( bits, 1 );                                                 /* convsync           (1) */
     if( info->strmtyp == 0x2 )
     {
         int blkid;
         if( info->numblkscod == 0x3 )
             blkid = 1;
         else
-            blkid = lsmash_bits_get( bits, 1 );
+            blkid = lsmash_bits_get( bits, 1 );                                     /* blkid              (1) */
         if( blkid )
-            lsmash_bits_get( bits, 6 );     /* frmsizecod */
+            lsmash_bits_get( bits, 6 );                                             /* frmsizecod         (6) */
     }
-    if( lsmash_bits_get( bits, 1 ) )    /* addbsie */
+    if( lsmash_bits_get( bits, 1 ) )                                                /* addbsie            (1) */
     {
-        uint8_t addbsil = lsmash_bits_get( bits, 6 );
-        lsmash_bits_get( bits, (addbsil + 1) * 8 );     /* addbsi */
+        uint8_t addbsil = lsmash_bits_get( bits, 6 );                               /* addbsil            (6) */
+        lsmash_bits_get( bits, (addbsil + 1) * 8 );                                 /* addbsi             ((addbsil + 1) * 8) */
     }
     lsmash_bits_empty( bits );
     return eac3_check_syncframe_header( info );
 }
 
-static uint8_t *eac3_create_dec3( mp4sys_eac3_info_t *info, uint32_t *dec3_length )
+static uint8_t *eac3_create_dec3( lsmash_bits_t *bits, eac3_specific_parameters_t *param, uint32_t *dec3_length )
 {
-    if( info->number_of_independent_substreams > 8 )
+    if( param->num_ind_sub > 7 )
         return NULL;
-    lsmash_bits_t *bits = info->bits;
-    lsmash_bits_put( bits, 32, 0 );     /* box size */
+    lsmash_bits_empty( bits );
+    lsmash_bits_put( bits, 32, 0 );                     /* box size */
     lsmash_bits_put( bits, 32, ISOM_BOX_TYPE_DEC3 );
-    lsmash_bits_put( bits, 13, 0 );     /* data_rate will be calculated by isom_update_bitrate_info */
-    lsmash_bits_put( bits, 3, info->number_of_independent_substreams - 1 );     /* num_ind_sub */
+    lsmash_bits_put( bits, 13, param->data_rate );      /* data_rate will be calculated by isom_update_bitrate_info */
+    lsmash_bits_put( bits, 3, param->num_ind_sub );
     /* Apparently, the condition of this loop defined in ETSI TS 102 366 V1.2.1 (2008-08) is wrong. */
-    for( int i = 0; i < info->number_of_independent_substreams; i++ )
+    for( int i = 0; i <= param->num_ind_sub; i++ )
     {
-        eac3_substream_info_t *independent_info = i ? &info->independent_info[i] : &info->independent_info_0;
+        eac3_substream_info_t *independent_info = &param->independent_info[i];
         lsmash_bits_put( bits, 2, independent_info->fscod );
         lsmash_bits_put( bits, 5, independent_info->bsid );
         lsmash_bits_put( bits, 5, independent_info->bsmod );
         lsmash_bits_put( bits, 3, independent_info->acmod );
         lsmash_bits_put( bits, 1, independent_info->lfeon );
-        lsmash_bits_put( bits, 3, 0 );      /* reserved */
+        lsmash_bits_put( bits, 3, 0 );          /* reserved */
         lsmash_bits_put( bits, 4, independent_info->num_dep_sub );
         if( independent_info->num_dep_sub > 0 )
             lsmash_bits_put( bits, 9, independent_info->chan_loc );
@@ -1556,14 +1578,14 @@ static uint8_t *eac3_create_dec3( mp4sys_eac3_info_t *info, uint32_t *dec3_lengt
 
 #define IF_EAC3_SYNCWORD( x ) IF_AC3_SYNCWORD( x )
 
-static void eac3_update_sample_rate( lsmash_audio_summary_t *summary, mp4sys_eac3_info_t *info )
+static void eac3_update_sample_rate( lsmash_audio_summary_t *summary, eac3_specific_parameters_t *dec3_param )
 {
     /* Additional independent substreams 1 to 7 must be encoded at the same sample rate as independent substream 0. */
-    summary->frequency = ac3_sample_rate_table[ info->independent_info_0.fscod ];
+    summary->frequency = ac3_sample_rate_table[ dec3_param->independent_info[0].fscod ];
     if( summary->frequency == 0 )
     {
         static const uint32_t eac3_reduced_sample_rate_table[4] = { 24000, 22050, 16000, 0 };
-        summary->frequency = eac3_reduced_sample_rate_table[ info->independent_info_0.fscod2 ];
+        summary->frequency = eac3_reduced_sample_rate_table[ dec3_param->independent_info[0].fscod2 ];
     }
 }
 
@@ -1619,13 +1641,13 @@ static void eac3_update_channel_layout( lsmash_audio_summary_t *summary, eac3_su
     summary->layout_tag = QT_CHANNEL_LAYOUT_UNKNOWN;
 }
 
-static void eac3_update_channel_info( lsmash_audio_summary_t *summary, mp4sys_eac3_info_t *info )
+static void eac3_update_channel_info( lsmash_audio_summary_t *summary, eac3_specific_parameters_t *dec3_param )
 {
     summary->channels = 0;
-    for( int i = 0; i < info->number_of_independent_substreams; i++ )
+    for( int i = 0; i <= dec3_param->num_ind_sub; i++ )
     {
         int channel_count = 0;
-        eac3_substream_info_t *independent_info = i ? &info->independent_info[i] : &info->independent_info_0;
+        eac3_substream_info_t *independent_info = &dec3_param->independent_info[i];
         channel_count = ac3_channel_count_table[ independent_info->acmod ]  /* L/C/R/Ls/Rs combination */
                       + 2 * !!(independent_info->chan_loc & 0x1)            /* Lc/Rc pair */
                       + 2 * !!(independent_info->chan_loc & 0x2)            /* Lrs/Rrs pair */
@@ -1651,60 +1673,69 @@ static lsmash_audio_summary_t *eac3_create_summary( mp4sys_eac3_info_t *info )
     lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_create_summary( MP4SYS_STREAM_TYPE_AudioStream );
     if( !summary )
         return NULL;
-    summary->exdata = eac3_create_dec3( info, &summary->exdata_length );
+    summary->exdata = eac3_create_dec3( info->bits, &info->dec3_param, &summary->exdata_length );
     if( !summary->exdata )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         return NULL;
     }
     summary->sample_type            = ISOM_CODEC_TYPE_EC_3_AUDIO;
-    summary->object_type_indication = MP4SYS_OBJECT_TYPE_EC_3_AUDIO;        /* forbidden to use for ISO Base Media */
+    summary->object_type_indication = MP4SYS_OBJECT_TYPE_EC_3_AUDIO;    /* forbidden to use for ISO Base Media */
     summary->max_au_length          = info->syncframe_count_in_au * EAC3_MAX_SYNCFRAME_LENGTH;
-    summary->aot                    = MP4A_AUDIO_OBJECT_TYPE_NULL; /* no effect */
-    summary->bit_depth              = 16;       /* no effect */
+    summary->aot                    = MP4A_AUDIO_OBJECT_TYPE_NULL;      /* no effect */
+    summary->bit_depth              = 16;                               /* no effect */
     summary->samples_in_frame       = EAC3_MIN_SAMPLE_DURATION * 6;     /* 256 (samples per audio block) * 6 (audio blocks) */
-    summary->sbr_mode               = MP4A_AAC_SBR_NOT_SPECIFIED; /* no effect */
-    eac3_update_sample_rate( summary, info );
-    eac3_update_channel_info( summary, info );
+    summary->sbr_mode               = MP4A_AAC_SBR_NOT_SPECIFIED;       /* no effect */
+    eac3_update_sample_rate( summary, &info->dec3_param );
+    eac3_update_channel_info( summary, &info->dec3_param );
     return summary;
-}
-
-static int eac3_read_syncframe( mp4sys_importer_t *importer )
-{
-    mp4sys_eac3_info_t *info = (mp4sys_eac3_info_t *)importer->info;
-    uint32_t read_size = fread( info->buffer, 1, EAC3_FIRST_FIVE_BYTES, importer->stream );
-    if( read_size == 0 )
-        return 1;       /* EOF */
-    else if( read_size != EAC3_FIRST_FIVE_BYTES )
-        return -1;
-    IF_EAC3_SYNCWORD( info->buffer )
-        return -1;
-    if( eac3_parse_syncframe_header( importer ) )
-        return -1;
-    return 0;
 }
 
 static int eac3_get_next_accessunit_internal( mp4sys_importer_t *importer )
 {
-    static const uint8_t audio_block_table[4] = { 1, 2, 3, 6 };
     int complete_au = 0;
     mp4sys_eac3_info_t *info = (mp4sys_eac3_info_t *)importer->info;
-    while( 1 )
+    while( !complete_au )
     {
-        int ret = eac3_read_syncframe( importer );
-        if( ret == -1 )
-            return -1;
-        else if( ret == 1 )
+        /* Read data from the stream if needed. */
+        uint32_t remainder_length = info->buffer_end - info->buffer_pos;
+        if( !info->no_more_read && remainder_length < EAC3_MAX_SYNCFRAME_LENGTH )
         {
-            /* According to ETSI TS 102 366 V1.2.1 (2008-08),
+            if( remainder_length )
+                memmove( info->buffer, info->buffer_pos, remainder_length );
+            uint32_t read_size = fread( info->buffer + remainder_length, 1, EAC3_MAX_SYNCFRAME_LENGTH, importer->stream );
+            remainder_length += read_size;
+            info->buffer_pos = info->buffer;
+            info->buffer_end = info->buffer + remainder_length;
+            info->no_more_read = read_size == 0 ? feof( importer->stream ) : 0;
+        }
+        /* Check the remainder length of the buffer.
+         * If there is enough length, then parse the syncframe in it.
+         * The length 5 is the required byte length to get frame size. */
+        if( remainder_length < 5 )
+        {
+            /* Reached the end of stream.
+             * According to ETSI TS 102 366 V1.2.1 (2008-08),
              * one access unit consists of 6 audio blocks and begins with independent substream 0.
              * The specification doesn't mention the case where a enhanced AC-3 stream ends at non-mod6 audio blocks.
              * At the end of the stream, therefore, we might make an access unit which has less than 6 audio blocks anyway. */
             info->status = MP4SYS_IMPORTER_EOF;
-            complete_au = 1;
+            complete_au = !!info->incomplete_au_length;
+            if( !complete_au )
+                return remainder_length ? -1 : 0;   /* No more access units in the stream. */
+            if( !info->dec3_param_initialized )
+                eac3_update_specific_param( info );
         }
         else
         {
+            /* Parse syncframe. */
+            IF_EAC3_SYNCWORD( info->buffer_pos )
+                return -1;
+            info->frame_size = 0;
+            if( eac3_parse_syncframe( info, info->buffer_pos, LSMASH_MIN( remainder_length, EAC3_MAX_SYNCFRAME_LENGTH ) ) )
+                return -1;
+            if( remainder_length < info->frame_size )
+                return -1;
             int independent = info->strmtyp != 0x1;
             if( independent && info->substreamid == 0x0 )
             {
@@ -1716,8 +1747,9 @@ static int eac3_get_next_accessunit_internal( mp4sys_importer_t *importer )
                 }
                 else if( info->number_of_audio_blocks > 6 )
                     return -1;
-                info->number_of_independent_substreams = 0;
+                static const uint8_t audio_block_table[4] = { 1, 2, 3, 6 };
                 info->number_of_audio_blocks += audio_block_table[ info->numblkscod ];
+                info->number_of_independent_substreams = 0;
             }
             else if( info->syncframe_count == 0 )
                 /* The first syncframe in an AU must be independent and assigned substream ID 0. */
@@ -1737,9 +1769,9 @@ static int eac3_get_next_accessunit_internal( mp4sys_importer_t *importer )
             if( info->status == MP4SYS_IMPORTER_EOF )
                 break;
         }
+        /* Increase buffer size to store AU if short. */
         if( info->incomplete_au_length + info->frame_size > info->au_buffers->buffer_size )
         {
-            /* Increase buffer size to store AU. */
             lsmash_multiple_buffers_t *temp = lsmash_resize_multiple_buffers( info->au_buffers, info->au_buffers->buffer_size + EAC3_MAX_SYNCFRAME_LENGTH );
             if( !temp )
                 return -1;
@@ -1747,13 +1779,13 @@ static int eac3_get_next_accessunit_internal( mp4sys_importer_t *importer )
             info->au            = lsmash_withdraw_buffer( info->au_buffers, 1 );
             info->incomplete_au = lsmash_withdraw_buffer( info->au_buffers, 2 );
         }
-        memcpy( info->incomplete_au + info->incomplete_au_length, info->buffer, info->frame_size );
+        /* Append syncframe data. */
+        memcpy( info->incomplete_au + info->incomplete_au_length, info->buffer_pos, info->frame_size );
         info->incomplete_au_length += info->frame_size;
-        ++info->syncframe_count;
-        if( complete_au )
-            break;
+        info->buffer_pos           += info->frame_size;
+        ++ info->syncframe_count;
     }
-    return 0;
+    return info->bits->bs->error ? -1 : 0;
 }
 
 static int mp4sys_eac3_get_accessunit( mp4sys_importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
@@ -1780,8 +1812,8 @@ static int mp4sys_eac3_get_accessunit( mp4sys_importer_t *importer, uint32_t tra
         summary->exdata = info->next_dec3;
         summary->exdata_length = info->next_dec3_length;
         summary->max_au_length = info->syncframe_count_in_au * EAC3_MAX_SYNCFRAME_LENGTH;
-        eac3_update_sample_rate( summary, info );
-        eac3_update_channel_info( summary, info );
+        eac3_update_sample_rate( summary, &info->dec3_param );
+        eac3_update_channel_info( summary, &info->dec3_param );
     }
     memcpy( buffered_sample->data, info->au, info->au_length );
     buffered_sample->length = info->au_length;
@@ -1802,8 +1834,9 @@ static int mp4sys_eac3_get_accessunit( mp4sys_importer_t *importer, uint32_t tra
     }
     if( info->syncframe_count_in_au )
     {
+        /* Check sample description change. */
         uint32_t new_length;
-        uint8_t *dec3 = eac3_create_dec3( info, &new_length );
+        uint8_t *dec3 = eac3_create_dec3( info->bits, &info->dec3_param, &new_length );
         if( !dec3 )
         {
             info->status = MP4SYS_IMPORTER_ERROR;
@@ -1818,7 +1851,8 @@ static int mp4sys_eac3_get_accessunit( mp4sys_importer_t *importer, uint32_t tra
         }
         else
         {
-            info->status = MP4SYS_IMPORTER_OK;
+            if( info->status != MP4SYS_IMPORTER_EOF )
+                info->status = MP4SYS_IMPORTER_OK;
             free( dec3 );
         }
     }
