@@ -2937,7 +2937,7 @@ static uint8_t *dts_create_ddts( mp4sys_dts_info_t *info, uint32_t *ddts_length,
         info->coding_name = stream_info_table[StreamConstruction].coding_name;
     lsmash_bits_put( bits, 5, ++StreamConstruction );
     /* CoreLFEPresent */
-    lsmash_bits_put( bits, 1, info->core.channel_layout & DTS_CHANNEL_LAYOUT_LFE1 );
+    lsmash_bits_put( bits, 1, !!(info->core.channel_layout & DTS_CHANNEL_LAYOUT_LFE1) );
     /* CoreLayout */
     int CoreLayout;
     if( StreamConstruction == 0 || StreamConstruction >= 19 )
