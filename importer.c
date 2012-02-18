@@ -1440,8 +1440,8 @@ static int eac3_parse_syncframe( mp4sys_eac3_info_t *info, uint8_t *data, uint32
     }
     if( info->strmtyp == 0x1 && lsmash_bits_get( bits, 1 ) )                        /* chanmape           (1) */
     {
-        uint16_t chan_loc = lsmash_bits_get( bits, 16 ) >> 5;                       /* chanmap            (16) */
-        chan_loc = (chan_loc & 0xff) | ((chan_loc & 0x200) >> 1);
+        uint16_t chanmap = lsmash_bits_get( bits, 16 );                             /* chanmap            (16) */
+        uint16_t chan_loc = ((chanmap & 0x7f8) >> 2) | ((chanmap & 0x2) >> 1);
         info->independent_info[ info->current_independent_substream_id ].chan_loc |= chan_loc;
     }
     if( lsmash_bits_get( bits, 1 ) )                                                /* mixmdate           (1) */
@@ -1604,9 +1604,9 @@ static void eac3_update_channel_layout( lsmash_audio_summary_t *summary, eac3_su
     /* OK. All L, C, R, Ls and Rs exsist. */
     if( !independent_info->lfeon )
     {
-        if( independent_info->chan_loc == 0x2 )
+        if( independent_info->chan_loc == 0x80 )
             summary->layout_tag = QT_CHANNEL_LAYOUT_EAC_7_0_A;
-        else if( independent_info->chan_loc == 0x4 )
+        else if( independent_info->chan_loc == 0x40 )
             summary->layout_tag = QT_CHANNEL_LAYOUT_EAC_6_0_A;
         else
             summary->layout_tag = QT_CHANNEL_LAYOUT_UNKNOWN;
@@ -1619,17 +1619,17 @@ static void eac3_update_channel_layout( lsmash_audio_summary_t *summary, eac3_su
         lsmash_channel_layout_tag tag;
     } eac3_channel_layout_table[]
         = {
-            { 0x1,   QT_CHANNEL_LAYOUT_EAC3_7_1_B },
-            { 0x2,   QT_CHANNEL_LAYOUT_EAC3_7_1_A },
-            { 0x4,   QT_CHANNEL_LAYOUT_EAC3_6_1_A },
-            { 0x8,   QT_CHANNEL_LAYOUT_EAC3_6_1_B },
+            { 0x100, QT_CHANNEL_LAYOUT_EAC3_7_1_B },
+            { 0x80,  QT_CHANNEL_LAYOUT_EAC3_7_1_A },
+            { 0x40,  QT_CHANNEL_LAYOUT_EAC3_6_1_A },
+            { 0x20,  QT_CHANNEL_LAYOUT_EAC3_6_1_B },
             { 0x10,  QT_CHANNEL_LAYOUT_EAC3_7_1_C },
             { 0x10,  QT_CHANNEL_LAYOUT_EAC3_7_1_D },
-            { 0x40,  QT_CHANNEL_LAYOUT_EAC3_7_1_E },
-            { 0x80,  QT_CHANNEL_LAYOUT_EAC3_6_1_C },
-            { 0xc,   QT_CHANNEL_LAYOUT_EAC3_7_1_F },
-            { 0x84,  QT_CHANNEL_LAYOUT_EAC3_7_1_G },
-            { 0x88,  QT_CHANNEL_LAYOUT_EAC3_7_1_H },
+            { 0x4,   QT_CHANNEL_LAYOUT_EAC3_7_1_E },
+            { 0x2,   QT_CHANNEL_LAYOUT_EAC3_6_1_C },
+            { 0x60,  QT_CHANNEL_LAYOUT_EAC3_7_1_F },
+            { 0x42,  QT_CHANNEL_LAYOUT_EAC3_7_1_G },
+            { 0x22,  QT_CHANNEL_LAYOUT_EAC3_7_1_H },
             { 0 }
           };
     for( int i = 0; eac3_channel_layout_table[i].chan_loc; i++ )
@@ -1649,15 +1649,15 @@ static void eac3_update_channel_info( lsmash_audio_summary_t *summary, eac3_spec
         int channel_count = 0;
         eac3_substream_info_t *independent_info = &dec3_param->independent_info[i];
         channel_count = ac3_channel_count_table[ independent_info->acmod ]  /* L/C/R/Ls/Rs combination */
-                      + 2 * !!(independent_info->chan_loc & 0x1)            /* Lc/Rc pair */
-                      + 2 * !!(independent_info->chan_loc & 0x2)            /* Lrs/Rrs pair */
-                      +     !!(independent_info->chan_loc & 0x4)            /* Cs */
-                      +     !!(independent_info->chan_loc & 0x8)            /* Ts */
+                      + 2 * !!(independent_info->chan_loc & 0x100)          /* Lc/Rc pair */
+                      + 2 * !!(independent_info->chan_loc & 0x80)           /* Lrs/Rrs pair */
+                      +     !!(independent_info->chan_loc & 0x40)           /* Cs */
+                      +     !!(independent_info->chan_loc & 0x20)           /* Ts */
                       + 2 * !!(independent_info->chan_loc & 0x10)           /* Lsd/Rsd pair */
-                      + 2 * !!(independent_info->chan_loc & 0x20)           /* Lw/Rw pair */
-                      + 2 * !!(independent_info->chan_loc & 0x40)           /* Lvh/Rvh pair */
-                      +     !!(independent_info->chan_loc & 0x80)           /* Cvh */
-                      +     !!(independent_info->chan_loc & 0x100)          /* LFE2 */
+                      + 2 * !!(independent_info->chan_loc & 0x8)            /* Lw/Rw pair */
+                      + 2 * !!(independent_info->chan_loc & 0x4)            /* Lvh/Rvh pair */
+                      +     !!(independent_info->chan_loc & 0x2)            /* Cvh */
+                      +     !!(independent_info->chan_loc & 0x1)            /* LFE2 */
                       + independent_info->lfeon;                            /* LFE */
         if( channel_count > summary->channels )
         {
