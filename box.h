@@ -1486,6 +1486,7 @@ typedef struct
     isom_tfhd_t         *tfhd;          /* Track Fragment Header Box */
     lsmash_entry_list_t *trun_list;     /* Track Fragment Run Box List
                                          * If the duration-is-empty flag is set in the tf_flags, there are no track runs. */
+    isom_sdtp_t         *sdtp;          /* Independent and Disposable Samples Box */
 
         isom_cache_t *cache;
 } isom_traf_entry_t;

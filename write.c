@@ -1045,9 +1045,8 @@ static int isom_write_stps( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_sdtp( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_sdtp( lsmash_bs_t *bs, isom_sdtp_t *sdtp )
 {
-    isom_sdtp_t *sdtp = trak->mdia->minf->stbl->sdtp;
     if( !sdtp )
         return 0;
     if( !sdtp->list )
@@ -1194,7 +1193,7 @@ static int isom_write_stbl( lsmash_bs_t *bs, isom_trak_entry_t *trak )
      || isom_write_cslg( bs, trak )
      || isom_write_stss( bs, trak )
      || isom_write_stps( bs, trak )
-     || isom_write_sdtp( bs, trak )
+     || isom_write_sdtp( bs, trak->mdia->minf->stbl->sdtp )
      || isom_write_stsc( bs, trak )
      || isom_write_stsz( bs, trak )
      || isom_write_stco( bs, trak ) )
@@ -1594,6 +1593,8 @@ static int isom_write_traf( lsmash_bs_t *bs, isom_traf_entry_t *traf )
         for( lsmash_entry_t *entry = traf->trun_list->head; entry; entry = entry->next )
             if( isom_write_trun( bs, (isom_trun_entry_t *)entry->data ) )
                 return -1;
+    if( isom_write_sdtp( bs, traf->sdtp ) )
+        return -1;
     return 0;
 }
 

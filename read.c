@@ -1729,10 +1729,13 @@ static int isom_read_stps( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_sdtp( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_STBL )
+    if( parent->type != ISOM_BOX_TYPE_STBL && parent->type != ISOM_BOX_TYPE_TRAF )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_list_box( sdtp, parent, box->type );
-    ((isom_stbl_t *)parent)->sdtp = sdtp;
+    if( parent->type == ISOM_BOX_TYPE_STBL )
+        ((isom_stbl_t *)parent)->sdtp = sdtp;
+    else
+        ((isom_traf_entry_t *)parent)->sdtp = sdtp;
     lsmash_bs_t *bs = root->bs;
     isom_read_box_rest( bs, box );
     uint64_t pos;
