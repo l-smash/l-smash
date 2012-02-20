@@ -3308,12 +3308,12 @@ static void dts_update_specific_param( mp4sys_dts_info_t *info )
         param->DTSSamplingFrequency = info->extension.sampling_frequency;
         info->frame_duration        = info->extension.frame_duration;
     }
-    if( param->DTSSamplingFrequency < info->lbr.sampling_frequency )
+    if( param->DTSSamplingFrequency <= info->lbr.sampling_frequency )
     {
         param->DTSSamplingFrequency = info->lbr.sampling_frequency;
         info->frame_duration        = info->lbr.frame_duration;
     }
-    if( param->DTSSamplingFrequency < info->lossless.sampling_frequency )
+    if( param->DTSSamplingFrequency <= info->lossless.sampling_frequency )
     {
         param->DTSSamplingFrequency = info->lossless.sampling_frequency;
         info->frame_duration        = info->lossless.frame_duration;
