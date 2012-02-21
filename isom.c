@@ -1025,14 +1025,46 @@ static int isom_set_extra_description( isom_audio_entry_t *audio )
 {
     lsmash_audio_summary_t *summary = &audio->summary;
     audio->data_reference_index = 1;
-    audio->samplerate = summary->frequency <= UINT16_MAX ? summary->frequency << 16 : 0;
     if( audio->type == ISOM_CODEC_TYPE_DTSC_AUDIO
      || audio->type == ISOM_CODEC_TYPE_DTSE_AUDIO
      || audio->type == ISOM_CODEC_TYPE_DTSH_AUDIO
      || audio->type == ISOM_CODEC_TYPE_DTSL_AUDIO )
+    {
+        switch( summary->frequency )
+        {
+            case 12000 :    /* Invalid? (No reference in the spec) */
+            case 24000 :
+            case 48000 :
+            case 96000 :
+            case 192000 :
+            case 384000 :   /* Invalid? (No reference in the spec) */
+                audio->samplerate = 48000 << 16;
+                break;
+            case 22050 :
+            case 44100 :
+            case 88200 :
+            case 176400 :
+            case 352800 :   /* Invalid? (No reference in the spec) */
+                audio->samplerate = 44100 << 16;
+                break;
+            case 8000 :     /* Invalid? (No reference in the spec) */
+            case 16000 :
+            case 32000 :
+            case 64000 :
+            case 128000 :
+                audio->samplerate = 32000 << 16;
+                break;
+            default :
+                audio->samplerate = 0;
+                break;
+        }
         audio->channelcount = summary->channels;
+    }
     else
+    {
+        audio->samplerate = summary->frequency <= UINT16_MAX ? summary->frequency << 16 : 0;
         audio->channelcount = 2;
+    }
     audio->samplesize = 16;
     if( summary->exdata )
     {

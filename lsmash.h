@@ -1060,7 +1060,56 @@ typedef enum
     QT_PIXEL_FORMAT_TYPE_422YpCbCr8_FULL_RANGE              = LSMASH_4CC( 'y', 'u', 'v', 'f' ),     /* Component Y'CbCr 8-bit 4:2:2, full range, ordered Y'0 Cb Y'1 Cr */
 } lsmash_pixel_format;
 
-/* public data types */
+typedef enum
+{
+    DTS_CORE_SUBSTREAM_CORE_FLAG = 0x00000001,
+    DTS_CORE_SUBSTREAM_XXCH_FLAG = 0x00000002,
+    DTS_CORE_SUBSTREAM_X96_FLAG  = 0x00000004,
+    DTS_CORE_SUBSTREAM_XCH_FLAG  = 0x00000008,
+    DTS_EXT_SUBSTREAM_CORE_FLAG  = 0x00000010,
+    DTS_EXT_SUBSTREAM_XBR_FLAG   = 0x00000020,
+    DTS_EXT_SUBSTREAM_XXCH_FLAG  = 0x00000040,
+    DTS_EXT_SUBSTREAM_X96_FLAG   = 0x00000080,
+    DTS_EXT_SUBSTREAM_LBR_FLAG   = 0x00000100,
+    DTS_EXT_SUBSTREAM_XLL_FLAG   = 0x00000200,
+} lsmash_dts_construction_flag;
+
+/* CODEC specific data types */
+typedef struct
+{
+    uint32_t DTSSamplingFrequency;  /* the maximum sampling frequency stored in the compressed audio stream */
+    uint8_t  pcmSampleDepth;        /* the bit depth of the rendered audio
+                                     * The value is 16 or 24 bits. */
+    uint8_t  FrameDuration;         /* the number of audio samples decoded in a complete audio access unit at DTSSamplingFrequency
+                                     *   0: 512, 1: 1024, 2: 2048, 3: 4096 */
+    uint8_t  StreamConstruction;    /* complete information on the existence and of location of extensions in any synchronized frame */
+    uint8_t  CoreLFEPresent;        /* the presence of an LFE channel in the core
+                                     *   0: none
+                                     *   1: LFE exists */
+    uint8_t  CoreLayout;            /* the channel layout of the core within the core substream
+                                     * If no core substream exists, this parameter shall be ignored and ChannelLayout or
+                                     * RepresentationType shall be used to determine channel configuration. */
+    uint16_t CoreSize;              /* The size of a core substream AU in bytes.
+                                     * If no core substream exists, CoreSize = 0. */
+    uint8_t  StereoDownmix;         /* the presence of an embedded stereo downmix in the stream
+                                     *   0: none
+                                     *   1: embedded downmix present */
+    uint8_t  RepresentationType;    /* This indicates special properties of the audio presentation.
+                                     *   0: Audio asset designated for mixing with another audio asset
+                                     *   2: Lt/Rt Encoded for matrix surround decoding
+                                     *   3: Audio processed for headphone playback
+                                     *   otherwise: Reserved
+                                     * If ChannelLayout != 0, this value shall be ignored. */
+    uint16_t ChannelLayout;         /* complete information on channels coded in the audio stream including core and extensions */
+    uint8_t  MultiAssetFlag;        /* This flag shall set if the stream contains more than one asset.
+                                     *   0: single asset
+                                     *   1: multiple asset
+                                     * When multiple assets exist, the remaining parameters only reflect the coding parameters of the first asset. */
+    uint8_t  LBRDurationMod;        /* This flag indicates a special case of the LBR coding bandwidth, resulting in 1/3 or 2/3 band limiting.
+                                     * If set to 1, LBR frame duration is 50 % larger than indicated in FrameDuration */
+} lsmash_dts_specific_parameters_t;
+
+/* sample data types */
 typedef struct
 {
     uint32_t complete;      /* recovery point: the identifier necessary for the recovery from its starting point to be completed */
@@ -1400,6 +1449,12 @@ int lsmash_summary_add_exdata( lsmash_summary_t *summary, void* exdata, uint32_t
 
 lsmash_summary_t *lsmash_create_summary( lsmash_mp4sys_stream_type stream_type );
 void lsmash_cleanup_summary( lsmash_summary_t *summary );
+
+/* DTS audio tools to make exdata (DTS specific info). */
+int lsmash_setup_dts_specific_parameters_from_frame( lsmash_dts_specific_parameters_t *param, uint8_t *data, uint32_t data_length );
+uint8_t lsmash_dts_get_stream_construction( lsmash_dts_construction_flag flags );
+uint32_t lsmash_dts_get_codingname( lsmash_dts_specific_parameters_t *param );
+uint8_t *lsmash_create_dts_specific_info( lsmash_dts_specific_parameters_t *param, uint32_t *data_length );
 
 #undef PRIVATE
 
