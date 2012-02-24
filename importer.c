@@ -4564,13 +4564,12 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
                 if( poc_max < poc[j] )
                     poc_max = poc[j];
             }
-        poc_offset += poc_max + 1;
+        poc_offset = poc_max + 1;
         if( invalid_poc_present )
         {
             /* Pictures with invalid negative POC is probably supposed to be composited
              * both before the next coded video sequence and after the current one. */
             poc_offset -= invalid_poc_min;
-            poc_max = 0;
             for( uint32_t j = invalid_poc_start; j < i; j++ )
                 if( poc[j] < 0 )
                 {
