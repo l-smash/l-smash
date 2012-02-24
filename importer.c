@@ -4431,7 +4431,8 @@ static int mp4sys_h264_get_accessunit( mp4sys_importer_t *importer, uint32_t tra
 
 static int mp4sys_h264_probe( mp4sys_importer_t *importer )
 {
-#define H264_LONG_START_CODE_LENGTH  4
+#define H264_MAX_NUM_REORDER_FRAMES 16
+#define H264_LONG_START_CODE_LENGTH 4
 #define H264_CHECK_NEXT_LONG_START_CODE( x ) (!(x)[0] && !(x)[1] && !(x)[2] && ((x)[3] == 0x01))
     /* Find the first start code. */
     mp4sys_h264_info_t *info = mp4sys_create_h264_info();
@@ -4517,55 +4518,81 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
         ++ info->num_undecodable;
     }
     /* Deduplicate POCs. */
-    int64_t poc_offset = 0;
-    int64_t poc_max = 0;
-    int64_t poc_min = 0;
-    int sequence_has_negative_poc = 0;
-    uint32_t negative_poc_start = 0;
-    for( uint32_t i = 0; i < num_access_units; i++ )
+    int64_t  poc_offset            = 0;
+    int64_t  poc_min               = 0;
+    int64_t  invalid_poc_min       = 0;
+    uint32_t last_idr              = 0;
+    uint32_t invalid_poc_start     = 0;
+    uint32_t max_composition_delay = 0;
+    int      invalid_poc_present   = 0;
+    for( uint32_t i = 0; ; i++ )
     {
-        if( poc[i] > 0 )
+        if( i < num_access_units && poc[i] != 0 )
         {
-            poc_max = LSMASH_MAX( poc[i], poc_max );
-            poc[i] += poc_offset;
-            continue;
-        }
-        else if( poc[i] < 0 )
-        {
-            /* Negative POCs indicate pictures having them shall be composited
-             * both before the next IDR-picture and after the current one. */
-            if( !sequence_has_negative_poc )
+            /* poc_offset is not added to each POC here.
+             * It is done when we encounter the next coded video sequence. */
+            if( poc[i] < 0 )
             {
-                sequence_has_negative_poc = 1;
-                negative_poc_start = i;
+                /* Pictures with negative POC shall precede IDR-picture in composition order.
+                 * The minimum POC is added to poc_offset when we encounter the next coded video sequence. */
+                if( i > last_idr + H264_MAX_NUM_REORDER_FRAMES )
+                {
+                    if( !invalid_poc_present )
+                    {
+                        invalid_poc_present = 1;
+                        invalid_poc_start   = i;
+                    }
+                    if( invalid_poc_min > poc[i] )
+                        invalid_poc_min = poc[i];
+                }
+                else if( poc_min > poc[i] )
+                {
+                    poc_min = poc[i];
+                    max_composition_delay = LSMASH_MAX( max_composition_delay, i - last_idr );
+                }
             }
-            poc_min = LSMASH_MIN( poc[i], poc_min );
             continue;
         }
-        /* poc[i] == 0; IDR-picture */
+        /* Encountered a new coded video sequence or no more POCs.
+         * Add poc_offset to each POC of the previous coded video sequence. */
+        poc_offset -= poc_min;
+        int64_t poc_max = 0;
+        for( uint32_t j = last_idr; j < i; j++ )
+            if( poc[j] >= 0 || (j <= last_idr + H264_MAX_NUM_REORDER_FRAMES) )
+            {
+                poc[j] += poc_offset;
+                if( poc_max < poc[j] )
+                    poc_max = poc[j];
+            }
         poc_offset += poc_max + 1;
-        poc_max = 0;
-        if( sequence_has_negative_poc )
+        if( invalid_poc_present )
         {
-            /* Give offset to negative POCs. */
-            poc_offset -= poc_min;
-            for( uint32_t j = negative_poc_start; j < i; j++ )
+            /* Pictures with invalid negative POC is probably supposed to be composited
+             * both before the next coded video sequence and after the current one. */
+            poc_offset -= invalid_poc_min;
+            poc_max = 0;
+            for( uint32_t j = invalid_poc_start; j < i; j++ )
                 if( poc[j] < 0 )
                 {
                     poc[j] += poc_offset;
-                    poc_max = LSMASH_MAX( poc[j], poc_max );
+                    if( poc_max < poc[j] )
+                        poc_max = poc[j];
                 }
+            invalid_poc_present = 0;
+            invalid_poc_start   = 0;
+            invalid_poc_min     = 0;
             poc_offset = poc_max + 1;
-            poc_max = 0;
-            poc_min = 0;
-            sequence_has_negative_poc = 0;
-            negative_poc_start = 0;
         }
-        poc[i] = poc_offset;
+        if( i < num_access_units )
+        {
+            poc_min = 0;
+            last_idr = i;
+        }
+        else
+            break;      /* no more POCs */
     }
-    /* Get max composition delay. */
+    /* Get max composition delay derived from reordering. */
     uint32_t composition_delay = 0;
-    uint32_t max_composition_delay = 0;
     for( uint32_t i = 1; i < num_access_units; i++ )
         if( poc[i] < poc[i - 1] )
         {
@@ -4590,11 +4617,12 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
     else
         for( uint32_t i = 0; i < num_access_units; i++ )
             timestamp[i].cts = timestamp[i].dts = i;
-    free( poc );
 #if 0
     for( uint32_t i = 0; i < num_access_units; i++ )
-        fprintf( stderr, "Timestamp[%"PRIu32"]: DTS=%"PRIu64", CTS=%"PRIu64"\n", i, timestamp[i].dts, timestamp[i].cts );
+        fprintf( stderr, "Timestamp[%"PRIu32"]: POC=%"PRId64", DTS=%"PRIu64", CTS=%"PRIu64"\n",
+                 i, poc[i], timestamp[i].dts, timestamp[i].cts );
 #endif
+    free( poc );
     info->ts_list.sample_count           = num_access_units;
     info->ts_list.timestamp              = timestamp;
     info->composition_reordering_present = !!max_composition_delay;
@@ -4627,6 +4655,7 @@ fail:
     mp4sys_remove_h264_info( info );
     lsmash_remove_entries( importer->summaries, lsmash_cleanup_summary );
     return -1;
+#undef H264_MAX_NUM_REORDER_FRAMES
 #undef H264_LONG_START_CODE_LENGTH
 #undef H264_CHECK_NEXT_LONG_START_CODE
 }
