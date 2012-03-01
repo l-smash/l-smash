@@ -1154,7 +1154,6 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     uint32_t sample_number_in_sbgp_rap_entry  = 1;
     uint32_t sample_number_in_chunk = 1;
     uint64_t dts = 0;
-    uint64_t cts = 0;
     uint32_t chunk_number = 1;
     uint64_t offset_from_chunk = 0;
     uint64_t data_offset = large_presentation
@@ -1181,8 +1180,6 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
             goto fail;
         stsd_entry = stsd_entry->next;
     }
-    stsd_entry = stsd->list->head;
-    description = (isom_sample_entry_t *)stsd_entry->data;
     /* Check what the first 2-bits of sample dependency means.
      * This check is for chimera of ISO Base Media and QTFF. */
     if( iso_sdtp && sdtp_entry )
@@ -1234,12 +1231,10 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
             info.offset = 0;
         if( allow_negative_sample_offset )
         {
-            cts = dts + (int32_t)info.offset;
+            uint64_t cts = dts + (int32_t)info.offset;
             if( (cts + timeline->ctd_shift) < dts )
                 timeline->ctd_shift = dts - cts;
         }
-        else
-            cts = dts + info.offset;
         dts += info.duration;
         if( !is_lpcm_audio )
         {
