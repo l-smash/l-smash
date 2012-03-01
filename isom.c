@@ -2493,7 +2493,7 @@ static int isom_add_meta( isom_box_t *parent )
     isom_create_box( meta, parent, ISOM_BOX_TYPE_META );
     if( !parent->type )
     {
-        lsmash_root_t *root = (lsmash_root_t *)root;
+        lsmash_root_t *root = (lsmash_root_t *)parent;
         if( root->meta )
             return -1;
         root->meta = meta;
@@ -2507,7 +2507,7 @@ static int isom_add_meta( isom_box_t *parent )
     }
     else if( parent->type == ISOM_BOX_TYPE_TRAK )
     {
-        isom_trak_entry_t *trak = (isom_trak_entry_t *)trak;
+        isom_trak_entry_t *trak = (isom_trak_entry_t *)parent;
         if( trak->meta )
             return -1;
         trak->meta = meta;
