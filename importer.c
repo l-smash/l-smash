@@ -3657,11 +3657,10 @@ static int h264_calculate_poc( h264_sps_t *sps, h264_picture_info_t *picture, h2
         uint64_t FrameNumOffset = picture->idr ? 0 : prevFrameNumOffset + (prevFrameNum > frame_num ? sps->MaxFrameNum : 0);
         IF_INVALID_VALUE( FrameNumOffset > INT32_MAX )
             return -1;
-        uint64_t absFrameNum;
         int64_t expectedPicOrderCnt;
         if( sps->num_ref_frames_in_pic_order_cnt_cycle )
         {
-            absFrameNum  = FrameNumOffset + frame_num;
+            uint64_t absFrameNum = FrameNumOffset + frame_num;
             absFrameNum -= picture->disposable && absFrameNum > 0;
             if( absFrameNum )
             {
@@ -3675,10 +3674,7 @@ static int h264_calculate_poc( h264_sps_t *sps, h264_picture_info_t *picture, h2
                 expectedPicOrderCnt = 0;
         }
         else
-        {
-            absFrameNum = 0;
             expectedPicOrderCnt = 0;
-        }
         if( picture->disposable )
             expectedPicOrderCnt += sps->offset_for_non_ref_pic;
         TopFieldOrderCnt    = expectedPicOrderCnt + picture->delta_pic_order_cnt[0];
@@ -4200,8 +4196,6 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_h2
         {
             /* For the last NALU.
              * This NALU already has been appended into the latest access unit and parsed. */
-            ebsp_length = picture->incomplete_au_length - (H264_NALU_LENGTH_SIZE + nalu_header.length);
-            consecutive_zero_byte_count = 0;
             h264_update_picture_info( picture, slice, &info->sei );
             h264_complete_au( picture, probe );
             return h264_get_au_internal_succeeded( info, picture, &nalu_header, no_more_buf );
