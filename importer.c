@@ -5299,7 +5299,6 @@ static int vc1_get_access_unit_internal( mp4sys_importer_t *importer, mp4sys_vc1
         {
             /* For the last EBDU.
              * This EBDU already has been appended into the latest access unit and parsed. */
-            ebdu_length = access_unit->incomplete_data_length;
             vc1_complete_au( access_unit, &info->next_picture, probe );
             return vc1_get_au_internal_succeeded( info, access_unit, bdu_type, no_more_buf );
         }
