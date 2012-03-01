@@ -5589,7 +5589,9 @@ static int mp4sys_vc1_probe( mp4sys_importer_t *importer )
     buffer->pos += VC1_START_CODE_PREFIX_LENGTH;
     vc1_check_buffer_shortage( info, importer->stream, 0 );
     uint8_t first_bdu_type = *(buffer->pos ++);
-    info->status        = info->no_more_read ? MP4SYS_IMPORTER_EOF : MP4SYS_IMPORTER_OK;
+    if( buffer->pos >= buffer->end )
+        goto fail;  /* It seems the stream ends at the first incomplete access unit. */
+    info->status        = MP4SYS_IMPORTER_OK;
     info->bdu_type      = first_bdu_type;
     info->ebdu_head_pos = first_ebdu_head_pos;
     /* Parse all EBDU in the stream for preparation of calculating timestamps. */
