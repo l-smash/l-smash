@@ -4238,6 +4238,8 @@ static int isom_calculate_bitrate_description( isom_mdia_t *mdia, uint32_t *buff
                         if( isom_increment_sample_number_in_entry( &sample_number_in_stts, ((isom_stts_entry_t *)stts_entry->data)->sample_count, &stts_entry ) )
                             return -1;
                     }
+                    if( (stsz->list && !stsz_entry) || !stts_entry )
+                        break;
                     chunk_number = stsc_data->first_chunk;
                 }
             }
