@@ -4462,8 +4462,10 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
     h264_nalu_header_t first_nalu_header;
     if( h264_check_nalu_header( &first_nalu_header, &buffer->pos, 1 ) )
         goto fail;
+    if( buffer->pos >= buffer->end )
+        goto fail;  /* It seems the stream ends at the first incomplete access unit. */
     uint64_t first_ebsp_head_pos = buffer->pos - buffer->start;     /* EBSP doesn't include NALU header. */
-    info->status        = info->no_more_read ? MP4SYS_IMPORTER_EOF : MP4SYS_IMPORTER_OK;
+    info->status        = MP4SYS_IMPORTER_OK;
     info->nalu_header   = first_nalu_header;
     info->ebsp_head_pos = first_ebsp_head_pos;
     /* Parse all NALU in the stream for preparation of calculating timestamps. */
