@@ -5604,7 +5604,10 @@ static int mp4sys_vc1_probe( mp4sys_importer_t *importer )
         fprintf( stderr, "Analyzing stream as VC-1: %"PRIu32"\n", num_access_units + 1 );
 #endif
         if( vc1_get_access_unit_internal( importer, info, 0, 1 ) )
+        {
+            free( cts );
             goto fail;
+        }
         /* In the case where B-pictures exist
          * Decode order
          *      I[0]P[1]P[2]B[3]B[4]P[5]...
