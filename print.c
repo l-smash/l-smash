@@ -1408,7 +1408,7 @@ static int isom_print_chpl( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
     uint32_t timescale;
     if( !chpl->version )
     {
-        if( !root->moov && !root->moov->mvhd )
+        if( !root || !root->moov || !root->moov->mvhd )
             return -1;
         timescale = root->moov->mvhd->timescale;
     }
