@@ -4479,10 +4479,12 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
         fprintf( stderr, "Analyzing stream as H.264: %"PRIu32"\n", num_access_units + 1 );
 #endif
         h264_picture_info_t prev_picture = info->picture;
-        if( h264_get_access_unit_internal( importer, info, 0, 1 ) )
+        if( h264_get_access_unit_internal( importer, info, 0, 1 )
+         || h264_calculate_poc( &info->sps, &info->picture, &prev_picture ) )
+        {
+            free( poc );
             goto fail;
-        if( h264_calculate_poc( &info->sps, &info->picture, &prev_picture ) )
-            goto fail;
+        }
         if( poc_alloc <= num_access_units * sizeof(int64_t) )
         {
             uint32_t alloc = 2 * num_access_units * sizeof(int64_t);
