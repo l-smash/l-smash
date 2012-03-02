@@ -5680,7 +5680,10 @@ static int mp4sys_vc1_probe( mp4sys_importer_t *importer )
 #endif
     info->summary = vc1_create_summary( info );
     if( !info->summary || lsmash_add_entry( importer->summaries, info->summary ) )
+    {
+        free( timestamp );
         goto fail;
+    }
     info->ts_list.sample_count           = num_access_units;
     info->ts_list.timestamp              = timestamp;
     /* Go back to layer of the first EBDU. */
