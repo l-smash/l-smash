@@ -872,7 +872,6 @@ int dts_parse_extension_substream( dts_info_t *info, uint8_t *data, uint32_t dat
     info->frame_size = dts_bits_get( bits, nuBits4ExSSFsize, &bits_pos ) + 1;               /* nuExtSSFsize                  (16 or 20) */
     if( info->frame_size < 10 )
         return -1;
-    int nuNumAudioPresnt;
     int nuNumAssets;
     info->extension.bStaticFieldsPresent = dts_bits_get( bits, 1, &bits_pos );              /* bStaticFieldsPresent          (1) */
     if( info->extension.bStaticFieldsPresent )
@@ -882,8 +881,8 @@ int dts_parse_extension_substream( dts_info_t *info, uint8_t *data, uint32_t dat
         if( dts_bits_get( bits, 1, &bits_pos ) )                                            /* bTimeStampFlag                (1) */
             dts_bits_get( bits, 36, &bits_pos );                                            /* nuTimeStamp                   (32)
                                                                                              * nLSB                          (4) */
-        nuNumAudioPresnt = dts_bits_get( bits, 3, &bits_pos ) + 1;                          /* nuNumAudioPresnt              (3) */
-        nuNumAssets      = dts_bits_get( bits, 3, &bits_pos ) + 1;                          /* nuNumAssets                   (3) */
+        int nuNumAudioPresnt = dts_bits_get( bits, 3, &bits_pos ) + 1;                      /* nuNumAudioPresnt              (3) */
+        nuNumAssets = dts_bits_get( bits, 3, &bits_pos ) + 1;                               /* nuNumAssets                   (3) */
         int nuActiveExSSMask[nuNumAudioPresnt];
         for( int nAuPr = 0; nAuPr < nuNumAudioPresnt; nAuPr++ )
             nuActiveExSSMask[nAuPr] = dts_bits_get( bits, nExtSSIndex + 1, &bits_pos );     /* nuActiveExSSMask[nAuPr]       (nExtSSIndex + 1) */
@@ -909,8 +908,7 @@ int dts_parse_extension_substream( dts_info_t *info, uint8_t *data, uint32_t dat
     }
     else
     {
-        nuNumAudioPresnt = 1;
-        nuNumAssets      = 1;
+        nuNumAssets = 1;
         info->extension.bMixMetadataEnbl   = 0;
         info->extension.nuNumMixOutConfigs = 0;
     }
