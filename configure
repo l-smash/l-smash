@@ -23,6 +23,7 @@ options:
   --libdir=DIR             install libs in DIR [EPREFIX/lib]
   --includedir=DIR         install headers in DIR [PREFIX/include]
 
+  --cc=CC                  use a defined compiler for compilation and linking [gcc]
   --target-os=OS           build programs to run on OS [auto]
   --cross-prefix=PREFIX    use PREFIX for compilation tools [none]
   --sysroot=DIR            specify toolchain's directory [none]
@@ -129,6 +130,10 @@ for opt; do
             ;;
         --destdir=*)
             DESTDIR="$optarg"
+            ;;
+        --cc=*)
+            CC="$optarg"
+            LD="$optarg"
             ;;
         --target-os=*)
             TARGET_OS="$optarg"
