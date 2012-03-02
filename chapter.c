@@ -298,12 +298,12 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     }
     if( lsmash_flush_pooled_samples( root, chapter_track_ID, 0 ) )
         goto fail;
-    trak = isom_get_trak( root, chapter_track_ID );
-    if( !trak )
+    isom_trak_entry_t *chapter_trak = isom_get_trak( root, chapter_track_ID );
+    if( !chapter_trak )
         goto fail;
     fclose( chapter );
-    trak->is_chapter = 1;
-    trak->related_track_ID = track_ID;
+    chapter_trak->is_chapter = 1;
+    chapter_trak->related_track_ID = track_ID;
     return 0;
 fail:
     if( chapter )
