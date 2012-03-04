@@ -1384,6 +1384,7 @@ int lsmash_create_object_descriptor( lsmash_root_t *root );
 
 int lsmash_create_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, lsmash_edit_t edit );
 int lsmash_modify_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint32_t edit_number, lsmash_edit_t edit );
+int lsmash_get_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint32_t edit_number, lsmash_edit_t *edit );
 int lsmash_delete_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID );
 
 int lsmash_update_media_modification_time( lsmash_root_t *root, uint32_t track_ID );

@@ -7201,6 +7201,30 @@ int lsmash_create_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID,
     return isom_update_tkhd_duration( trak );
 }
 
+int lsmash_get_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint32_t edit_number, lsmash_edit_t *edit )
+{
+    if( !edit )
+        return -1;
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    if( !trak )
+        return -1;
+    if( !trak->edts || !trak->edts->elst )
+    {
+        /* no edits */
+        edit->duration   = 0;
+        edit->start_time = 0;
+        edit->rate       = 0;
+        return 0;
+    }
+    isom_elst_entry_t *elst = (isom_elst_entry_t *)lsmash_get_entry_data( trak->edts->elst->list, edit_number );
+    if( !elst )
+        return -1;
+    edit->duration   = elst->segment_duration;
+    edit->start_time = elst->media_time;
+    edit->rate       = elst->media_rate;
+    return 0;
+}
+
 /*---- create / modification time fields manipulators ----*/
 
 int lsmash_update_media_modification_time( lsmash_root_t *root, uint32_t track_ID )
