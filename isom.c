@@ -7174,7 +7174,7 @@ int lsmash_modify_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID,
     }
     else
     {
-        lsmash_bs_put_be32( bs, (uint32_t)data->segment_duration );
+        lsmash_bs_put_be32( bs, (uint32_t)LSMASH_MIN( data->segment_duration, UINT32_MAX ) );
         lsmash_bs_put_be32( bs, (uint32_t)data->media_time );
     }
     lsmash_bs_put_be32( bs, data->media_rate );
