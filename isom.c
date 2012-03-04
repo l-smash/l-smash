@@ -6460,8 +6460,11 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
         if( trak->is_chapter && related_track_ID )
         {
             /* In order that the track duration of the chapter track doesn't exceed that of the related track. */
-            uint64_t track_duration = LSMASH_MIN( trak->tkhd->duration, lsmash_get_track_duration( root, related_track_ID ) );
-            if( lsmash_create_explicit_timeline_map( root, track_ID, track_duration, 0, ISOM_EDIT_MODE_NORMAL ) )
+            lsmash_edit_t edit;
+            edit.duration   = LSMASH_MIN( trak->tkhd->duration, lsmash_get_track_duration( root, related_track_ID ) );
+            edit.start_time = 0;
+            edit.rate       = ISOM_EDIT_MODE_NORMAL;
+            if( lsmash_create_explicit_timeline_map( root, track_ID, edit ) )
                 return -1;
         }
         /* Add stss box if any samples aren't sync sample. */
@@ -7141,20 +7144,20 @@ void lsmash_destroy_root( lsmash_root_t *root )
 
 /*---- timeline manipulator ----*/
 
-int lsmash_modify_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint64_t segment_duration, int64_t media_time, int32_t media_rate )
+int lsmash_modify_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint32_t edit_number, lsmash_edit_t edit )
 {
-    if( !segment_duration || media_time < -1 )
+    if( !edit.duration || edit.start_time < -1 )
         return -1;
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->edts || !trak->edts->elst || !trak->edts->elst->list )
         return -1;
     isom_elst_t *elst = trak->edts->elst;
-    isom_elst_entry_t *data = (isom_elst_entry_t *)lsmash_get_entry_data( elst->list, entry_number );
+    isom_elst_entry_t *data = (isom_elst_entry_t *)lsmash_get_entry_data( elst->list, edit_number );
     if( !data )
         return -1;
-    data->segment_duration = segment_duration;
-    data->media_time = media_time;
-    data->media_rate = media_rate;
+    data->segment_duration = edit.duration;
+    data->media_time       = edit.start_time;
+    data->media_rate       = edit.rate;
     if( !elst->pos || !root->fragment || root->bs->stream == stdout )
         return isom_update_tkhd_duration( trak );
     /* Rewrite the specified entry.
@@ -7162,7 +7165,7 @@ int lsmash_modify_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID,
     lsmash_bs_t *bs = root->bs;
     FILE *stream = bs->stream;
     uint64_t current_pos = lsmash_ftell( stream );
-    uint64_t entry_pos = elst->pos + ISOM_LIST_FULLBOX_COMMON_SIZE + ((uint64_t)entry_number - 1) * (elst->version == 1 ? 20 : 12);
+    uint64_t entry_pos = elst->pos + ISOM_LIST_FULLBOX_COMMON_SIZE + ((uint64_t)edit_number - 1) * (elst->version == 1 ? 20 : 12);
     lsmash_fseek( stream, entry_pos, SEEK_SET );
     if( elst->version )
     {
@@ -7180,20 +7183,20 @@ int lsmash_modify_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID,
     return ret;
 }
 
-int lsmash_create_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint64_t segment_duration, int64_t media_time, int32_t media_rate )
+int lsmash_create_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, lsmash_edit_t edit )
 {
-    if( media_time < -1 )
+    if( edit.start_time < -1 )
         return -1;
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->tkhd )
         return -1;
-    segment_duration = (segment_duration || root->fragment) ? segment_duration
-                     : trak->tkhd->duration ? trak->tkhd->duration
-                     : isom_update_tkhd_duration( trak ) ? 0
-                     : trak->tkhd->duration;
+    edit.duration = (edit.duration || root->fragment) ? edit.duration
+                  : trak->tkhd->duration ? trak->tkhd->duration
+                  : isom_update_tkhd_duration( trak ) ? 0
+                  : trak->tkhd->duration;
     if( isom_add_edts( trak )
      || isom_add_elst( trak->edts )
-     || isom_add_elst_entry( trak->edts->elst, segment_duration, media_time, media_rate ) )
+     || isom_add_elst_entry( trak->edts->elst, edit.duration, edit.start_time, edit.rate ) )
         return -1;
     return isom_update_tkhd_duration( trak );
 }

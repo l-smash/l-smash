@@ -857,22 +857,28 @@ int main( int argc, char *argv[] )
         uint32_t track_ID        = out_track->track_ID;
         uint32_t movie_timescale = lsmash_get_movie_timescale( output.root );
         uint32_t media_timescale = lsmash_get_media_timescale( output.root, track_ID );
-        uint32_t empty_delay     = timecode.empty_delay + (uint64_t)(opt.empty_delay * (1e-3 * media_timescale) + 0.5);
-        uint32_t duration        = timecode.duration + empty_delay;
+        uint64_t empty_delay     = timecode.empty_delay + (uint64_t)(opt.empty_delay * (1e-3 * media_timescale) + 0.5);
+        uint64_t duration        = timecode.duration + empty_delay;
         if( lsmash_delete_explicit_timeline_map( output.root, track_ID ) )
             return TIMELINEEDITOR_ERR( "Failed to delete explicit timeline maps.\n" );
         if( timecode.empty_delay )
         {
-            uint32_t empty_duration = ((double)timecode.empty_delay / media_timescale) * movie_timescale;
-            if( lsmash_create_explicit_timeline_map( output.root, track_ID, empty_duration, ISOM_EDIT_MODE_EMPTY, ISOM_EDIT_MODE_NORMAL ) )
+            lsmash_edit_t empty_edit;
+            empty_edit.duration   = ((double)timecode.empty_delay / media_timescale) * movie_timescale;
+            empty_edit.start_time = ISOM_EDIT_MODE_EMPTY;
+            empty_edit.rate       = ISOM_EDIT_MODE_NORMAL;
+            if( lsmash_create_explicit_timeline_map( output.root, track_ID, empty_edit ) )
                 return TIMELINEEDITOR_ERR( "Failed to create a empty duration.\n" );
             duration  = ((double)duration / media_timescale) * movie_timescale;
-            duration -= empty_duration;
+            duration -= empty_edit.duration;
         }
         else
             duration  = ((double)duration / media_timescale) * movie_timescale;
-        uint64_t start_time = timecode.composition_delay + (uint64_t)(opt.skip_duration * (1e-3 * media_timescale) + 0.5);
-        if( lsmash_create_explicit_timeline_map( output.root, track_ID, duration, start_time, ISOM_EDIT_MODE_NORMAL ) )
+        lsmash_edit_t edit;
+        edit.duration   = duration;
+        edit.start_time = timecode.composition_delay + (uint64_t)(opt.skip_duration * (1e-3 * media_timescale) + 0.5);
+        edit.rate       = ISOM_EDIT_MODE_NORMAL;
+        if( lsmash_create_explicit_timeline_map( output.root, track_ID, edit ) )
             return TIMELINEEDITOR_ERR( "Failed to create a explicit timeline map.\n" );
     }
     /* Finish muxing. */

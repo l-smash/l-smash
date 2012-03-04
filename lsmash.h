@@ -757,13 +757,6 @@ typedef enum
 
 typedef enum
 {
-    ISOM_EDIT_MODE_NORMAL   = 1<<16,
-    ISOM_EDIT_MODE_DWELL    = 0,
-    ISOM_EDIT_MODE_EMPTY    = -1,
-} lsmash_edit_mode;
-
-typedef enum
-{
     /* allow_ealier */
     QT_SAMPLE_EARLIER_PTS_ALLOWED       = 1,
     /* leading */
@@ -1125,7 +1118,7 @@ typedef struct
                              * applied every 1024 audio samples (MDCTs are overlapped).
                              * For correct audio to be decoded, both transforms for any period of 1024 audio samples are needed.
                              * For this AAC stream, therefore, shall be set to 1 (one AAC access unit).
-                             * Note: the number of priming audio sample i.e. encoder delay shall be represented by media_time in edit. */
+                             * Note: the number of priming audio sample i.e. encoder delay shall be represented by start_time in an edit. */
 } lsmash_pre_roll_t;
 
 typedef struct
@@ -1161,6 +1154,34 @@ typedef struct
     uint32_t sample_count;
     lsmash_media_ts_t *timestamp;
 } lsmash_media_ts_list_t;
+
+/* explicit timeline map (edit)
+ * There are two types of timeline; one is the media timeline, the other is the presentation timeline (or the movie timeline).
+ * An edit maps the presentation timeline to the media timeline.
+ * Therefore, an edit can select any portion within the media and specify its playback speed.
+ * The media within the track is played through the presentation timeline, so you can construct any complex presentation from a media by edits.
+ * In the absence of any edit, there is an implicit one-to-one mapping of these timelines, and the presentation of a track starts at the beginning of the presentation.
+ * Note: any edit doesn't restrict decoding and composition. So, if a sample in an edit need to decode from a sample in outside of that edit,
+ *       the decoder shall start to decode from there but player shall not display any sample in outside of that edit. */
+#define ISOM_EDIT_MODE_NORMAL        (1<<16)
+#define ISOM_EDIT_MODE_DWELL         0
+#define ISOM_EDIT_MODE_EMPTY         -1
+#define ISOM_EDIT_DURATION_UNKNOWN32 0xffffffff
+#define ISOM_EDIT_DURATION_UNKNOWN64 0xffffffffffffffff
+
+typedef struct
+{
+    uint64_t duration;      /* the duration of this edit expressed in the movie timescale units
+                             * An edit can be used to the media within fragmented tracks.
+                             * The duration is unknown at the time of creating the initial movie because of real-time creation such as live streaming,
+                             * it is recomended the duration is set to ISOM_EDIT_DURATION_UNKNOWN32 (the maximum 32-bit unsigned integer)
+                             * or ISOM_EDIT_DURATION_UNKNOWN64 (the maximum 64-bit unsigned integer). */
+    int64_t  start_time;    /* the starting composition time within the media of this edit
+                             * If set to ISOM_EDIT_MODE_EMPTY (-1), it construct an empty edit, which doesn't select any portion within the media. */
+    int32_t  rate;          /* the relative rate at which to play the media corresponding to this edit, expressed as 16.16 fixed-point number
+                             * If set to ISOM_EDIT_MODE_NORMAL (0x00010000), there is no rate change for timeline mapping.
+                             * If set to ISOM_EDIT_MODE_DWELL (0), the media at start_time is presented for the duration. */
+} lsmash_edit_t;
 
 /* */
 typedef int (*lsmash_adhoc_remux_callback)( void* param, uint64_t done, uint64_t total );
@@ -1361,8 +1382,8 @@ int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom
 int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_ID, char *file_name );
 int lsmash_create_object_descriptor( lsmash_root_t *root );
 
-int lsmash_create_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint64_t segment_duration, int64_t media_time, int32_t media_rate );
-int lsmash_modify_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint64_t segment_duration, int64_t media_time, int32_t media_rate );
+int lsmash_create_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, lsmash_edit_t edit );
+int lsmash_modify_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint32_t edit_number, lsmash_edit_t edit );
 int lsmash_delete_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID );
 
 int lsmash_update_media_modification_time( lsmash_root_t *root, uint32_t track_ID );

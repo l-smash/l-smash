@@ -1100,9 +1100,11 @@ static int do_mux( muxer_t *muxer )
          * Don't trust media duration. It's just duration of media, not duration of track presentation.
          * Calculation of presentation duration by DTS is reliable since this muxer handles CFR only. */
         uint64_t actual_duration  = out_track->prev_dts + out_track->last_delta - out_track->priming_samples;
-        uint64_t segment_duration = actual_duration * ((double)lsmash_get_movie_timescale( output->root ) / out_track->timescale);
-        int64_t  media_time       = out_track->priming_samples + out_track->start_offset;
-        if( lsmash_create_explicit_timeline_map( output->root, out_track->track_ID, segment_duration, media_time, ISOM_EDIT_MODE_NORMAL ) )
+        lsmash_edit_t edit;
+        edit.duration   = actual_duration * ((double)lsmash_get_movie_timescale( output->root ) / out_track->timescale);
+        edit.start_time = out_track->priming_samples + out_track->start_offset;
+        edit.rate       = ISOM_EDIT_MODE_NORMAL;
+        if( lsmash_create_explicit_timeline_map( output->root, out_track->track_ID, edit ) )
             ERROR_MSG( "failed to set timeline map.\n" );
     }
     return 0;

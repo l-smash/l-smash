@@ -728,16 +728,21 @@ static int construct_timeline_maps( remuxer_t *remuxer )
                 if( !media_timescale )
                     return ERROR_MSG( "media timescale is broken.\n" );
                 double timescale_convert_multiplier = (double)movie_timescale / media_timescale;
-                uint64_t start_time = in_track->composition_delay + in_track->skip_duration;
-                if( start_time )
+                lsmash_edit_t edit;
+                edit.start_time = in_track->composition_delay + in_track->skip_duration;
+                if( edit.start_time )
                 {
-                    uint64_t empty_duration = start_time + lsmash_get_composition_to_decode_shift( output->root, out_track->track_ID );
-                    empty_duration  = empty_duration * timescale_convert_multiplier + 0.5;
-                    if( lsmash_create_explicit_timeline_map( output->root, out_track->track_ID, empty_duration, ISOM_EDIT_MODE_EMPTY, ISOM_EDIT_MODE_NORMAL ) )
+                    uint64_t empty_duration = edit.start_time + lsmash_get_composition_to_decode_shift( output->root, out_track->track_ID );
+                    lsmash_edit_t empty_edit;
+                    empty_edit.duration   = empty_duration * timescale_convert_multiplier + 0.5;
+                    empty_edit.start_time = ISOM_EDIT_MODE_EMPTY;
+                    empty_edit.rate       = ISOM_EDIT_MODE_NORMAL;
+                    if( lsmash_create_explicit_timeline_map( output->root, out_track->track_ID, empty_edit ) )
                         return ERROR_MSG( "failed to create a empty duration.\n" );
                 }
-                uint64_t duration = (out_track->last_sample_dts + out_track->last_sample_delta - in_track->skip_duration) * timescale_convert_multiplier;
-                if( lsmash_create_explicit_timeline_map( output->root, out_track->track_ID, duration, start_time, ISOM_EDIT_MODE_NORMAL ) )
+                edit.duration = (out_track->last_sample_dts + out_track->last_sample_delta - in_track->skip_duration) * timescale_convert_multiplier;
+                edit.rate     = ISOM_EDIT_MODE_NORMAL;
+                if( lsmash_create_explicit_timeline_map( output->root, out_track->track_ID, edit ) )
                     return ERROR_MSG( "failed to create a explicit timeline map.\n" );
             }
             else if( lsmash_copy_timeline_map( output->root, out_track->track_ID, input[i].root, in_track->track_ID ) )
