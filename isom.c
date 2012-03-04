@@ -7225,6 +7225,14 @@ int lsmash_get_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, ui
     return 0;
 }
 
+uint32_t lsmash_count_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID )
+{
+    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    if( !trak || !trak->edts || !trak->edts->elst || !trak->edts->elst->list )
+        return 0;
+    return trak->edts->elst->list->entry_count;
+}
+
 /*---- create / modification time fields manipulators ----*/
 
 int lsmash_update_media_modification_time( lsmash_root_t *root, uint32_t track_ID )
