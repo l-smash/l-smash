@@ -1113,7 +1113,7 @@ typedef struct
 
 typedef struct
 {
-    uint16_t distance;      /* pre-roll distance for representing audio decoder delay derived from composition
+    uint32_t distance;      /* pre-roll distance for representing audio decoder delay derived from composition
                              * For example, typical AAC encoding uses a transform over consecutive sets of 2048 audio samples,
                              * applied every 1024 audio samples (MDCTs are overlapped).
                              * For correct audio to be decoded, both transforms for any period of 1024 audio samples are needed.

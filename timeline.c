@@ -1289,17 +1289,13 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                     if( !roll_data )
                         goto fail;
                     if( roll_data->roll_distance > 0 )
-                    {
                         /* post-roll */
-                        if( sample_number_in_sbgp_roll_entry == 1 )
-                        {
-                            info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY;
-                            info.prop.post_roll.complete = sample_number + roll_data->roll_distance;
-                        }
-                    }
+                        info.prop.post_roll.complete = sample_number + roll_data->roll_distance;
                     else
                         /* pre-roll */
                         info.prop.pre_roll.distance = -roll_data->roll_distance;
+                    if( info.prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE )
+                        info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY;
                 }
                 INCREMENT_SAMPLE_NUMBER_IN_ENTRY( sample_number_in_sbgp_roll_entry, sbgp_roll_entry, assignment );
             }

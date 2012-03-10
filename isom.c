@@ -7694,8 +7694,40 @@ static int isom_roll_grouping_established( isom_roll_group_t *group, int16_t rol
     return 0;
 }
 
+static int isom_deduplicate_roll_group( isom_sbgp_entry_t *sbgp, lsmash_entry_list_t *pool )
+{
+    /* Deduplication */
+    uint32_t current_group_number = sbgp->list->entry_count - pool->entry_count + 1;
+    isom_group_assignment_entry_t *prev_assignment = (isom_group_assignment_entry_t *)lsmash_get_entry_data( sbgp->list, current_group_number - 1 );
+    for( lsmash_entry_t *entry = pool->head; entry; )
+    {
+        isom_roll_group_t *group = (isom_roll_group_t *)entry->data;
+        if( !group || !group->assignment )
+            return -1;
+        if( !group->delimited || !group->described )
+            return 0;
+        if( prev_assignment && prev_assignment->group_description_index == group->assignment->group_description_index )
+        {
+            /* Merge the current group with the previous. */
+            lsmash_entry_t *next_entry = entry->next;
+            prev_assignment->sample_count += group->assignment->sample_count;
+            if( lsmash_remove_entry( sbgp->list, current_group_number, NULL )
+             || lsmash_remove_entry_direct( pool, entry, NULL ) )
+                return -1;
+            entry = next_entry;
+        }
+        else
+        {
+            entry = entry->next;
+            prev_assignment = group->assignment;
+            ++current_group_number;
+        }
+    }
+    return 0;
+}
+
 /* Remove pooled caches that has become unnecessary. */
-static int isom_clean_roll_pool( lsmash_entry_list_t *pool )
+static int isom_clean_roll_pool( isom_sbgp_entry_t *sbgp, lsmash_entry_list_t *pool )
 {
     for( lsmash_entry_t *entry = pool->head; entry; entry = pool->head )
     {
@@ -7703,14 +7735,21 @@ static int isom_clean_roll_pool( lsmash_entry_list_t *pool )
         if( !group )
             return -1;
         if( !group->delimited || !group->described )
-            break;
+            return 0;
         if( lsmash_remove_entry_direct( pool, entry, NULL ) )
             return -1;
     }
     return 0;
 }
 
-static int isom_all_recovery_described( lsmash_entry_list_t *pool )
+static int isom_flush_roll_pool( isom_sbgp_entry_t *sbgp, lsmash_entry_list_t *pool )
+{
+    if( isom_deduplicate_roll_group( sbgp, pool ) )
+        return -1;
+    return isom_clean_roll_pool( sbgp, pool );
+}
+
+static int isom_all_recovery_described( isom_sbgp_entry_t *sbgp, lsmash_entry_list_t *pool )
 {
     for( lsmash_entry_t *entry = pool->head; entry; entry = entry->next )
     {
@@ -7719,15 +7758,13 @@ static int isom_all_recovery_described( lsmash_entry_list_t *pool )
             return -1;
         group->described = 1;
     }
-    return isom_clean_roll_pool( pool );
+    return isom_flush_roll_pool( sbgp, pool );
 }
 
 static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_property_t *prop )
 {
     if( !trak->root->avc_extensions && !trak->root->qt_compatible )
         return 0;
-    if( prop->pre_roll.distance > -INT16_MIN )
-        return -1;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     isom_sbgp_entry_t *sbgp = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_ROLL );
     isom_sgpd_entry_t *sgpd = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_ROLL );
@@ -7743,70 +7780,78 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_prop
     }
     isom_roll_group_t *group = (isom_roll_group_t *)lsmash_get_entry_data( pool, pool->entry_count );
     uint32_t sample_count = isom_get_sample_count( trak );
-    if( !group || (prop->pre_roll.distance == 0 && prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY) )
+    int is_recovery_start = prop->pre_roll.distance == 0 && prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY;
+    if( !group || is_recovery_start || group->is_prev_recovery_start != is_recovery_start )
     {
         if( group )
             group->delimited = 1;
         else
             assert( sample_count == 1 );
-        /* Create a new group. This group is not 'roll' yet, so we set 0 on its group_description_index. */
+        /* Create a new group. */
         group = lsmash_malloc_zero( sizeof(isom_roll_group_t) );
         if( !group )
             return -1;
-        if( prop->pre_roll.distance )
+        group->is_prev_recovery_start = is_recovery_start;
+        if( prop->pre_roll.distance || !is_recovery_start )
             group->described = 1;
         else
         {
+            /* post-roll */
             group->first_sample   = sample_count;
             group->recovery_point = prop->post_roll.complete;
         }
+        /* We can't decide this sample is a member of which roll-group here,
+         * so we set 0 on its group_description_index at this time. */
         group->assignment = isom_add_group_assignment_entry( sbgp, 1, 0 );
         if( !group->assignment || lsmash_add_entry( pool, group ) )
         {
             free( group );
             return -1;
         }
-        if( prop->pre_roll.distance )
+        if( prop->pre_roll.distance && prop->pre_roll.distance <= -INT16_MIN )
             return isom_roll_grouping_established( group, -prop->pre_roll.distance, sgpd );
     }
     else
     {
         /* Check pre-roll distance. */
-        isom_roll_entry_t *roll = (isom_roll_entry_t *)lsmash_get_entry_data( sgpd->list, sgpd->list->entry_count );
+        if( !group->assignment )
+            return -1;
+        isom_roll_entry_t *prev_roll = (isom_roll_entry_t *)lsmash_get_entry_data( sgpd->list, group->assignment->group_description_index );
         int new_group = 0;
-        if( prop->pre_roll.distance )
+        if( !prev_roll )
+            new_group = !!prop->pre_roll.distance;
+        else if( prop->pre_roll.distance != -prev_roll->roll_distance )
         {
-            if( !roll )
-                new_group = 1;      /* Create the first pre-roll group. */
-            else if( prop->pre_roll.distance != -roll->roll_distance )
-            {
-                /* Pre-roll distance is different from the previous. */
-                group->delimited = 1;
-                group->described = 1;
-                new_group = 1;
-            }
+            /* Pre-roll distance is different from the previous. */
+            group->delimited = 1;
+            group->described = 1;
+            new_group = 1;
         }
         if( new_group )
         {
-            /* Create a new pre-roll group. */
+            /* Create a new pre-roll or non-roll group. */
             group = lsmash_malloc_zero( sizeof(isom_roll_group_t) );
             if( !group )
                 return -1;
+            group->is_prev_recovery_start = is_recovery_start;
             group->assignment = isom_add_group_assignment_entry( sbgp, 1, 0 );
             if( !group->assignment || lsmash_add_entry( pool, group ) )
             {
                 free( group );
                 return -1;
             }
-            if( prop->pre_roll.distance && isom_roll_grouping_established( group, -prop->pre_roll.distance, sgpd ) )
+            if( prop->random_access_type != ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE
+             && prop->pre_roll.distance && prop->pre_roll.distance <= -INT16_MIN
+             && isom_roll_grouping_established( group, -prop->pre_roll.distance, sgpd ) )
                 return -1;
-            return isom_all_recovery_described( pool );
+            return isom_all_recovery_described( sbgp, pool );
         }
+        group->is_prev_recovery_start = is_recovery_start;
         ++ group->assignment->sample_count;
     }
     /* If encountered a sync sample, all recovery is completed here. */
     if( prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_CLOSED_RAP )
-        return isom_all_recovery_described( pool );
+        return isom_all_recovery_described( sbgp, pool );
     for( lsmash_entry_t *entry = pool->head; entry; entry = entry->next )
     {
         group = (isom_roll_group_t *)entry->data;
@@ -7837,7 +7882,7 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_prop
             break;      /* Avoid evaluating groups, in the pool, having the same identifier for recovery point again. */
         }
     }
-    return isom_clean_roll_pool( pool );
+    return isom_flush_roll_pool( sbgp, pool );
 }
 
 /* returns 1 if pooled samples must be flushed. */
@@ -8138,7 +8183,11 @@ static int isom_output_cache( isom_trak_entry_t *trak )
                     if( !group )
                         return -1;
                     group->described = 1;
+                    group->delimited = 1;
                 }
+                isom_sbgp_entry_t *sbgp = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_ROLL );
+                if( isom_flush_roll_pool( sbgp, trak->cache->roll.pool ) )
+                    return -1;
                 break;
             default :
                 break;
