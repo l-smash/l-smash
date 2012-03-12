@@ -1326,7 +1326,7 @@ typedef struct
     uint32_t recovery_point;                        /* the identifier necessary for the recovery from its starting point to be completed */
     uint8_t  delimited;                             /* the flag if the sample_count is determined */
     uint8_t  described;                             /* the flag if the group description is determined */
-    uint8_t  is_prev_recovery_start;                /* whether the previous sample is a starting point of recovery or not */
+    uint8_t  prev_is_recovery_start;                /* whether the previous sample is a starting point of recovery or not */
 } isom_roll_group_t;
 
 typedef struct
