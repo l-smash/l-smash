@@ -32,6 +32,7 @@
 #include "mp4a.h"
 #include "mp4sys.h"
 
+#define NO_RANDOM_ACCESS_POINT 0xffffffff
 
 typedef struct
 {
@@ -1207,6 +1208,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     chunk.number = chunk_number;
     if( isom_add_portable_chunk_entry( timeline, &chunk ) )
         goto fail;
+    uint32_t distance = NO_RANDOM_ACCESS_POINT;
     isom_lpcm_bunch_t bunch = { 0 };
     while( sample_number <= stsz->sample_count )
     {
@@ -1246,9 +1248,12 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                 {
                     info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
                     stss_entry = stss_entry->next;
+                    distance = 0;
                 }
             }
             else if( all_sync )
+                /* Don't reset distance as 0 since MDCT-based audio frames need pre-roll for correct presentation
+                 * though all of them could be marked as a sync sample. */
                 info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
             /* Check whether partial sync sample or not. */
             if( stps_entry )
@@ -1260,6 +1265,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                 {
                     info.prop.random_access_type = QT_SAMPLE_RANDOM_ACCESS_TYPE_PARTIAL_SYNC;
                     stps_entry = stps_entry->next;
+                    distance = 0;
                 }
             }
             /* Get sample dependency info. */
@@ -1315,11 +1321,19 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                     info.prop.random_access_type = (rap_data->num_leading_samples_known && !!rap_data->num_leading_samples)
                                                  ? ISOM_SAMPLE_RANDOM_ACCESS_TYPE_OPEN_RAP
                                                  : ISOM_SAMPLE_RANDOM_ACCESS_TYPE_UNKNOWN_RAP;
+                    distance = 0;
                 }
                 INCREMENT_SAMPLE_NUMBER_IN_ENTRY( sample_number_in_sbgp_rap_entry, sbgp_rap_entry, assignment );
             }
+            if( distance != NO_RANDOM_ACCESS_POINT )
+            {
+                if( info.prop.pre_roll.distance == 0 && info.prop.post_roll.complete == 0 )
+                    info.prop.pre_roll.distance = distance;
+                ++distance;
+            }
         }
-        else    /* All LPCMFrame is sync sample. */
+        else
+            /* All LPCMFrame is sync sample. */
             info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
         /* Get size of sample in the stream. */
         if( is_lpcm_audio || !stsz_entry )

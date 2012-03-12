@@ -930,13 +930,13 @@ typedef enum
     ISOM_SAMPLE_RANDOM_ACCESS_TYPE_CLOSED_RAP   = 1,        /* the first sample of a closed GOP */
     ISOM_SAMPLE_RANDOM_ACCESS_TYPE_OPEN_RAP     = 2,        /* the first sample of an open GOP */
     ISOM_SAMPLE_RANDOM_ACCESS_TYPE_UNKNOWN_RAP  = 3,        /* the first sample of an open or closed GOP */
-    ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY     = 4,        /* starting point of gradual decoder refresh */
+    ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY     = 4,        /* the post/pre-roll starting point of random access recovery */
 
-    QT_SAMPLE_RANDOM_ACCESS_TYPE_NONE           = 0,        /* not random access point */
-    QT_SAMPLE_RANDOM_ACCESS_TYPE_SYNC           = 1,        /* sync sample */
+    QT_SAMPLE_RANDOM_ACCESS_TYPE_NONE           = 0,        /* alias of ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE */
+    QT_SAMPLE_RANDOM_ACCESS_TYPE_SYNC           = 1,        /* alias of ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC */
     QT_SAMPLE_RANDOM_ACCESS_TYPE_PARTIAL_SYNC   = 2,        /* partial sync sample */
-    QT_SAMPLE_RANDOM_ACCESS_TYPE_CLOSED_RAP     = 1,        /* the first sample of a closed GOP */
-    QT_SAMPLE_RANDOM_ACCESS_TYPE_OPEN_RAP       = 2,        /* the first sample of an open GOP */
+    QT_SAMPLE_RANDOM_ACCESS_TYPE_CLOSED_RAP     = 1,        /* alias of ISOM_SAMPLE_RANDOM_ACCESS_TYPE_CLOSED_RAP */
+    QT_SAMPLE_RANDOM_ACCESS_TYPE_OPEN_RAP       = 2,        /* alias of ISOM_SAMPLE_RANDOM_ACCESS_TYPE_OPEN_RAP */
 } lsmash_random_access_type;
 
 typedef enum
@@ -1105,20 +1105,31 @@ typedef struct
 /* sample data types */
 typedef struct
 {
-    uint32_t complete;      /* recovery point: the identifier necessary for the recovery from its starting point to be completed */
-    uint32_t identifier;    /* the identifier for samples
-                             * If this identifier equals a certain identifier of recovery point,
-                             * then this sample is the recovery point of the earliest group in the pool. */
+    uint32_t identifier;    /* the identifier of sample
+                             * If this identifier equals a certain identifier of random access recovery point,
+                             * then this sample is the random access recovery point of the earliest unestablished post-roll group. */
+    uint32_t complete;      /* the identifier of future random access recovery point, which is necessary for the recovery from its starting point to be completed
+                             * For muxing, this value is used only if both random_access_type is set to ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY
+                             * and pre-roll 'distance' is set to 0.
+                             * The following is an example of use for gradual decoder refresh of H.264/AVC.
+                             *   For each sample, set 'frame_num' to the 'identifier'.
+                             *   For samples with recovery point SEI message, set ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY to random_access_type,
+                             *   set 0 to pre-roll 'distance', and set '(frame_num + recovery_frame_cnt) % MaxFrameNum' to the 'complete'.
+                             *   The above-mentioned values are set appropriately, then L-SMASH will establish appropriate post-roll grouping. */
 } lsmash_post_roll_t;
 
 typedef struct
 {
-    uint32_t distance;      /* pre-roll distance for representing audio decoder delay derived from composition
-                             * For example, typical AAC encoding uses a transform over consecutive sets of 2048 audio samples,
-                             * applied every 1024 audio samples (MDCTs are overlapped).
-                             * For correct audio to be decoded, both transforms for any period of 1024 audio samples are needed.
-                             * For this AAC stream, therefore, shall be set to 1 (one AAC access unit).
-                             * Note: the number of priming audio sample i.e. encoder delay shall be represented by start_time in an edit. */
+    uint32_t distance;      /* the distance from the previous random access point or pre-roll starting point
+                             * of the random access recovery point to this sample.
+                             * For muxing, this value is used only if random_access_type is not set to ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE,
+                             * and some derived specifications forbid using pre-roll settings and use post-roll settings instead (e.g. AVC uses only post-roll).
+                             * The following is an example of pre-roll distance for representing audio decoder delay derived from composition.
+                             *   Typical AAC encoding uses a transform over consecutive sets of 2048 audio samples,
+                             *   applied every 1024 audio samples (MDCTs are overlapped).
+                             *   For correct audio to be decoded, both transforms for any period of 1024 audio samples are needed.
+                             *   For this AAC stream, therefore, shall be set to 1 (one AAC access unit).
+                             *   Note: the number of priming audio sample i.e. encoder delay shall be represented by start_time in an edit. */
 } lsmash_pre_roll_t;
 
 typedef struct
