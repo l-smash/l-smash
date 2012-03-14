@@ -4411,7 +4411,7 @@ static int mp4sys_h264_get_accessunit( mp4sys_importer_t *importer, uint32_t tra
             buffered_sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
         else if( picture->recovery_frame_cnt )
         {
-            buffered_sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY;
+            buffered_sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_POST_ROLL;
             buffered_sample->prop.post_roll.complete = (picture->frame_num + picture->recovery_frame_cnt) % sps->MaxFrameNum;
         }
         else

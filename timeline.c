@@ -1295,13 +1295,19 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                     if( !roll_data )
                         goto fail;
                     if( roll_data->roll_distance > 0 )
+                    {
                         /* post-roll */
                         info.prop.post_roll.complete = sample_number + roll_data->roll_distance;
-                    else
+                        if( info.prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE )
+                            info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_POST_ROLL;
+                    }
+                    else if( roll_data->roll_distance < 0 )
+                    {
                         /* pre-roll */
                         info.prop.pre_roll.distance = -roll_data->roll_distance;
-                    if( info.prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE )
-                        info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY;
+                        if( info.prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE )
+                            info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_PRE_ROLL;
+                    }
                 }
                 INCREMENT_SAMPLE_NUMBER_IN_ENTRY( sample_number_in_sbgp_roll_entry, sbgp_roll_entry, assignment );
             }
@@ -1327,7 +1333,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
             }
             if( distance != NO_RANDOM_ACCESS_POINT )
             {
-                if( info.prop.pre_roll.distance == 0 && info.prop.post_roll.complete == 0 )
+                if( info.prop.pre_roll.distance == 0 )
                     info.prop.pre_roll.distance = distance;
                 ++distance;
             }
@@ -1563,6 +1569,7 @@ int lsmash_get_closest_random_accessible_point_from_media_timeline( lsmash_root_
 int lsmash_get_closest_random_accessible_point_detail_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number,
                                                                            uint32_t *rap_number, lsmash_random_access_type *type, uint32_t *leading, uint32_t *distance )
 {
+#define IS_RECOVERY( x ) (((x) == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_POST_ROLL) || ((x) == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_PRE_ROLL))
     if( sample_number == 0 )
         return -1;
     isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
@@ -1592,7 +1599,7 @@ int lsmash_get_closest_random_accessible_point_detail_from_media_timeline( lsmas
     if( sample_number < *rap_number )
         /* Impossible to desire to decode the sample of given number correctly. */
         return 0;
-    else if( info->prop.random_access_type != ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY )
+    else if( !IS_RECOVERY( info->prop.random_access_type ) )
     {
         if( leading )
         {
@@ -1628,7 +1635,7 @@ int lsmash_get_closest_random_accessible_point_detail_from_media_timeline( lsmas
             info = (isom_sample_info_t *)lsmash_get_entry_data( timeline->info_list, prev_rap_number );
             if( !info )
                 return -1;
-            if( info->prop.random_access_type != ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY )
+            if( !IS_RECOVERY( info->prop.random_access_type ) )
             {
                 /* Decode shall already complete at the first closest non-recovery random accessible point if starting to decode from the second. */
                 *distance = *rap_number - prev_rap_number;
@@ -1666,7 +1673,7 @@ int lsmash_get_closest_random_accessible_point_detail_from_media_timeline( lsmas
                 *distance = info->prop.pre_roll.distance;
                 return 0;
             }
-            else if( info->prop.random_access_type != ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY )
+            else if( !IS_RECOVERY( info->prop.random_access_type ) )
             {
                 /*
                  *            |<------------ pre-roll distance ------------------>|
@@ -1701,13 +1708,13 @@ int lsmash_get_closest_random_accessible_point_detail_from_media_timeline( lsmas
         info = (isom_sample_info_t *)lsmash_get_entry_data( timeline->info_list, prev_rap_number );
         if( !info )
             return -1;
-        if( info->prop.random_access_type != ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY
-         || sample_number >= info->prop.post_roll.complete )
+        if( !IS_RECOVERY( info->prop.random_access_type ) || sample_number >= info->prop.post_roll.complete )
         {
             *distance = *rap_number - prev_rap_number;
             return 0;
         }
     } while( 1 );
+#undef IS_RECOVERY
 }
 
 int lsmash_check_sample_existence_in_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number )

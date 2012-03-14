@@ -7490,7 +7490,7 @@ static int isom_add_partial_sync( isom_trak_entry_t *trak, uint32_t sample_numbe
     if( !trak->root->qt_compatible )
         return 0;
     if( prop->random_access_type != QT_SAMPLE_RANDOM_ACCESS_TYPE_PARTIAL_SYNC
-     && !(prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY && prop->post_roll.identifier == prop->post_roll.complete) )
+     && !(prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_POST_ROLL && prop->post_roll.identifier == prop->post_roll.complete) )
         return 0;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     if( !stbl->stps && isom_add_stps( stbl ) )
@@ -7567,7 +7567,7 @@ static int isom_group_random_access( isom_trak_entry_t *trak, lsmash_sample_prop
     uint8_t is_rap = prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_CLOSED_RAP
                   || prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_OPEN_RAP
                   || prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_UNKNOWN_RAP
-                  || (prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY && prop->post_roll.identifier == prop->post_roll.complete);
+                  || (prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_POST_ROLL && prop->post_roll.identifier == prop->post_roll.complete);
     isom_rap_group_t *group = trak->cache->rap;
     if( !group )
     {
@@ -7782,10 +7782,9 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_prop
     }
     isom_roll_group_t *group = (isom_roll_group_t *)lsmash_get_entry_data( pool, pool->entry_count );
     uint32_t sample_count = isom_get_sample_count( trak );
-    int valid_pre_roll = (prop->pre_roll.distance > 0)
-                      && (prop->pre_roll.distance <= -INT16_MIN)
-                      && (prop->random_access_type != ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE);
-    int is_recovery_start = !valid_pre_roll && (prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_RECOVERY);
+    int is_recovery_start = (prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_POST_ROLL);
+    int valid_pre_roll = !is_recovery_start && (prop->random_access_type != ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE)
+                      && (prop->pre_roll.distance > 0) && (prop->pre_roll.distance <= -INT16_MIN);
     int new_group = !group || is_recovery_start || (group->prev_is_recovery_start != is_recovery_start);
     if( !new_group )
     {
@@ -7816,8 +7815,6 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_prop
             free( group );
             return -1;
         }
-        if( !group )
-            return -1;
         if( is_recovery_start )
         {
             /* a member of non-roll or post-roll group */
