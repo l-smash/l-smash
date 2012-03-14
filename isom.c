@@ -1941,11 +1941,20 @@ static int isom_add_iods( isom_moov_t *moov )
     {
         isom_trak_entry_t* trak = (isom_trak_entry_t*)entry->data;
         if( !trak || !trak->tkhd )
+        {
+            free( iods );
             return -1;
+        }
         if( isom_scan_trak_profileLevelIndication( trak, &audio_pli, &visual_pli ) )
+        {
+            free( iods );
             return -1;
+        }
         if( mp4sys_add_ES_ID_Inc( iods->OD, trak->tkhd->track_ID ) )
+        {
+            free( iods );
             return -1;
+        }
     }
     if( mp4sys_to_InitialObjectDescriptor( iods->OD,
                                            0, /* FIXME: I'm not quite sure what the spec says. */
@@ -2120,7 +2129,10 @@ static int isom_add_hdlr( isom_mdia_t *mdia, isom_meta_t *meta, isom_minf_t *min
     uint32_t name_length = 15 + subtype_name_length + type_name_length + root->isom_compatible + root->qt_compatible;
     uint8_t *name = malloc( name_length );
     if( !name )
+    {
+        free( hdlr );
         return -1;
+    }
     if( root->qt_compatible )
         name[0] = name_length & 0xff;
     memcpy( name + root->qt_compatible, "L-SMASH ", 8 );
@@ -2495,28 +2507,40 @@ static int isom_add_meta( isom_box_t *parent )
     {
         lsmash_root_t *root = (lsmash_root_t *)parent;
         if( root->meta )
+        {
+            free( meta );
             return -1;
+        }
         root->meta = meta;
     }
     else if( parent->type == ISOM_BOX_TYPE_MOOV )
     {
         isom_moov_t *moov = (isom_moov_t *)parent;
         if( moov->meta )
+        {
+            free( meta );
             return -1;
+        }
         moov->meta = meta;
     }
     else if( parent->type == ISOM_BOX_TYPE_TRAK )
     {
         isom_trak_entry_t *trak = (isom_trak_entry_t *)parent;
         if( trak->meta )
+        {
+            free( meta );
             return -1;
+        }
         trak->meta = meta;
     }
     else
     {
         isom_udta_t *udta = (isom_udta_t *)parent;
         if( udta->meta )
+        {
+            free( meta );
             return -1;
+        }
         udta->meta = meta;
     }
     return 0;
