@@ -93,7 +93,7 @@ struct isom_timeline_tag
     lsmash_entry_list_t bunch_list      [1];    /* list of LPCM bunch */
     int (*get_dts)( isom_timeline_t *timeline, uint32_t sample_number, uint64_t *dts );
     int (*get_cts)( isom_timeline_t *timeline, uint32_t sample_number, uint64_t *cts );
-    int (*get_last_sample_delta)( isom_timeline_t *timeline, uint32_t *last_sample_delta );
+    int (*get_sample_duration)( isom_timeline_t *timeline, uint32_t sample_number, uint32_t *sample_duration );
     lsmash_sample_t *(*get_sample)( lsmash_root_t *root, isom_timeline_t *timeline, uint32_t sample_number );
     int (*get_sample_info)( isom_timeline_t *timeline, uint32_t sample_number, lsmash_sample_t *sample );
     int (*check_sample_existence)( isom_timeline_t *timeline, uint32_t sample_number );
@@ -925,19 +925,21 @@ static int isom_get_cts_from_bunch_list( isom_timeline_t *timeline, uint32_t sam
     return 0;
 }
 
-static int isom_get_last_sample_delta_from_info_list( isom_timeline_t *timeline, uint32_t *last_sample_delta )
+static int isom_get_sample_duration_from_info_list( isom_timeline_t *timeline, uint32_t sample_number, uint32_t *sample_duration )
 {
-    if( !timeline->info_list->tail || !timeline->info_list->tail->data )
+    isom_sample_info_t *info = (isom_sample_info_t *)lsmash_get_entry_data( timeline->info_list, sample_number );
+    if( !info )
         return -1;
-    *last_sample_delta = ((isom_sample_info_t *)timeline->info_list->tail->data)->duration;
+    *sample_duration = info->duration;
     return 0;
 }
 
-static int isom_get_last_sample_delta_from_bunch_list( isom_timeline_t *timeline, uint32_t *last_sample_delta )
+static int isom_get_sample_duration_from_bunch_list( isom_timeline_t *timeline, uint32_t sample_number, uint32_t *sample_duration )
 {
-    if( !timeline->bunch_list->tail || !timeline->bunch_list->tail->data )
+    isom_lpcm_bunch_t *bunch = isom_get_bunch( timeline, sample_number );
+    if( !bunch )
         return -1;
-    *last_sample_delta = ((isom_sample_info_t *)timeline->bunch_list->tail->data)->duration;
+    *sample_duration = bunch->duration;
     return 0;
 }
 
@@ -1442,7 +1444,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     {
         timeline->get_dts                = isom_get_dts_from_info_list;
         timeline->get_cts                = isom_get_cts_from_info_list;
-        timeline->get_last_sample_delta  = isom_get_last_sample_delta_from_info_list;
+        timeline->get_sample_duration    = isom_get_sample_duration_from_info_list;
         timeline->check_sample_existence = isom_check_sample_existence_in_info_list;
         timeline->get_sample             = isom_get_sample_from_media_timeline;
         timeline->get_sample_info        = isom_get_sample_info_from_media_timeline;
@@ -1451,7 +1453,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     {
         timeline->get_dts                = isom_get_dts_from_bunch_list;
         timeline->get_cts                = isom_get_cts_from_bunch_list;
-        timeline->get_last_sample_delta  = isom_get_last_sample_delta_from_bunch_list;
+        timeline->get_sample_duration    = isom_get_sample_duration_from_bunch_list;
         timeline->check_sample_existence = isom_check_sample_existence_in_bunch_list;
         timeline->get_sample             = isom_get_lpcm_sample_from_media_timeline;
         timeline->get_sample_info        = isom_get_lpcm_sample_info_from_media_timeline;
@@ -1728,7 +1730,7 @@ int lsmash_get_last_sample_delta_from_media_timeline( lsmash_root_t *root, uint3
     if( !last_sample_delta )
         return -1;
     isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
-    return timeline ? timeline->get_last_sample_delta( timeline, last_sample_delta ) : -1;
+    return timeline ? timeline->get_sample_duration( timeline, timeline->sample_count, last_sample_delta ) : -1;
 }
 
 int lsmash_get_sample_delta_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number, uint32_t *sample_delta )
@@ -1736,15 +1738,7 @@ int lsmash_get_sample_delta_from_media_timeline( lsmash_root_t *root, uint32_t t
     if( !sample_delta )
         return -1;
     isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
-    if( sample_number >= timeline->sample_count )
-        return timeline->get_last_sample_delta( timeline, sample_delta );
-    uint64_t dts;
-    uint64_t next_dts;
-    if( timeline->get_dts( timeline, sample_number, &dts )
-     || timeline->get_dts( timeline, sample_number + 1, &next_dts ) )
-        return -1;
-    *sample_delta = next_dts - dts;
-    return 0;
+    return timeline ? timeline->get_sample_duration( timeline, sample_number, sample_delta ) : -1;
 }
 
 uint32_t lsmash_get_sample_count_in_media_timeline( lsmash_root_t *root, uint32_t track_ID )
