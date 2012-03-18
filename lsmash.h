@@ -1110,11 +1110,11 @@ typedef struct
                              * If this identifier equals a certain identifier of random access recovery point,
                              * then this sample is the random access recovery point of the earliest unestablished post-roll group. */
     uint32_t complete;      /* the identifier of future random access recovery point, which is necessary for the recovery from its starting point to be completed
-                             * For muxing, this value is used only if both random_access_type is set to ISOM_SAMPLE_RANDOM_ACCESS_TYPE_POST_ROLL.
+                             * For muxing, this value is used only if random_access_type is set to ISOM_SAMPLE_RANDOM_ACCESS_TYPE_POST_ROLL.
                              * The following is an example of use for gradual decoder refresh of H.264/AVC.
                              *   For each sample, set 'frame_num' to the 'identifier'.
-                             *   For samples with recovery point SEI message, set ISOM_SAMPLE_RANDOM_ACCESS_TYPE_POST_ROLL to random_access_type,
-                             *   set 0 to pre-roll 'distance', and set '(frame_num + recovery_frame_cnt) % MaxFrameNum' to the 'complete'.
+                             *   For samples with recovery point SEI message, set ISOM_SAMPLE_RANDOM_ACCESS_TYPE_POST_ROLL to random_access_type
+                             *   and set '(frame_num + recovery_frame_cnt) % MaxFrameNum' to the 'complete'.
                              *   The above-mentioned values are set appropriately, then L-SMASH will establish appropriate post-roll grouping. */
 } lsmash_post_roll_t;
 
