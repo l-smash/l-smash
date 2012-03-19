@@ -5028,7 +5028,7 @@ static int vc1_parse_entry_point_header( mp4sys_vc1_info_t *info, uint8_t *ebdu,
     uint8_t broken_link_flag = lsmash_bits_get( bits, 1 );          /* 0: no concatenation between the current and the previous entry points
                                                                      * 1: concatenated and needed to discard B-pictures */
     entry_point->closed_entry_point = lsmash_bits_get( bits, 1 );   /* 0: Open RAP, 1: Closed RAP */
-    if( !broken_link_flag && entry_point->closed_entry_point )
+    if( broken_link_flag && entry_point->closed_entry_point )
         return -1;  /* invalid combination */
     lsmash_bits_get( bits, 4 );         /* panscan_flag (1)
                                          * refdist_flag (1)
