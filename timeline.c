@@ -1613,13 +1613,12 @@ int lsmash_get_closest_random_accessible_point_detail_from_media_timeline( lsmas
             uint64_t rap_cts = timeline->ctd_shift ? (dts + (int32_t)info->offset + timeline->ctd_shift) : (dts + info->offset);
             do
             {
-                info = (isom_sample_info_t *)lsmash_get_entry_data( timeline->info_list, sample_number );
-                if( !info )
-                    break;
-                if( isom_get_dts_from_info_list( timeline, sample_number++, &dts ) )
-                    return -1;
+                dts += info->duration;
                 if( rap_cts <= dts )
                     break;  /* leading samples of this random accessible point must not be present more. */
+                info = (isom_sample_info_t *)lsmash_get_entry_data( timeline->info_list, sample_number++ );
+                if( !info )
+                    break;
                 uint64_t cts = timeline->ctd_shift ? (dts + (int32_t)info->offset + timeline->ctd_shift) : (dts + info->offset);
                 if( rap_cts > cts )
                     ++ *leading;
