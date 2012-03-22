@@ -96,6 +96,7 @@ struct isom_timeline_tag
     int (*get_sample_duration)( isom_timeline_t *timeline, uint32_t sample_number, uint32_t *sample_duration );
     lsmash_sample_t *(*get_sample)( lsmash_root_t *root, isom_timeline_t *timeline, uint32_t sample_number );
     int (*get_sample_info)( isom_timeline_t *timeline, uint32_t sample_number, lsmash_sample_t *sample );
+    int (*get_sample_property)( isom_timeline_t *timeline, uint32_t sample_number, lsmash_sample_property_t *prop );
     int (*check_sample_existence)( isom_timeline_t *timeline, uint32_t sample_number );
 };
 
@@ -1079,6 +1080,22 @@ int isom_get_sample_info_from_media_timeline( isom_timeline_t *timeline, uint32_
     return 0;
 }
 
+static int isom_get_lpcm_sample_property_from_media_timeline( isom_timeline_t *timeline, uint32_t sample_number, lsmash_sample_property_t *prop )
+{
+    memset( prop, 0, sizeof(lsmash_sample_property_t) );
+    prop->random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+    return 0;
+}
+
+static int isom_get_sample_property_from_media_timeline( isom_timeline_t *timeline, uint32_t sample_number, lsmash_sample_property_t *prop )
+{
+    isom_sample_info_t *info = (isom_sample_info_t *)lsmash_get_entry_data( timeline->info_list, sample_number );
+    if( !info )
+        return -1;
+    *prop = info->prop;
+    return 0;
+}
+
 #define INCREMENT_SAMPLE_NUMBER_IN_ENTRY( sample_number_in_entry, entry, entry_data ) \
     if( sample_number_in_entry == entry_data->sample_count ) \
     { \
@@ -1448,6 +1465,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
         timeline->check_sample_existence = isom_check_sample_existence_in_info_list;
         timeline->get_sample             = isom_get_sample_from_media_timeline;
         timeline->get_sample_info        = isom_get_sample_info_from_media_timeline;
+        timeline->get_sample_property    = isom_get_sample_property_from_media_timeline;
     }
     else
     {
@@ -1457,6 +1475,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
         timeline->check_sample_existence = isom_check_sample_existence_in_bunch_list;
         timeline->get_sample             = isom_get_lpcm_sample_from_media_timeline;
         timeline->get_sample_info        = isom_get_lpcm_sample_info_from_media_timeline;
+        timeline->get_sample_property    = isom_get_lpcm_sample_property_from_media_timeline;
     }
     return 0;
 fail:
@@ -1496,6 +1515,14 @@ int lsmash_get_sample_info_from_media_timeline( lsmash_root_t *root, uint32_t tr
         return -1;
     isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
     return timeline ? timeline->get_sample_info( timeline, sample_number, sample ) : -1;
+}
+
+int lsmash_get_sample_property_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number, lsmash_sample_property_t *prop )
+{
+    if( !prop )
+        return -1;
+    isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
+    return timeline ? timeline->get_sample_property( timeline, sample_number, prop ) : -1;
 }
 
 int lsmash_get_composition_to_decode_shift_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t *ctd_shift )
