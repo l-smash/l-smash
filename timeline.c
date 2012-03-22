@@ -812,7 +812,7 @@ static void isom_update_bunch( isom_lpcm_bunch_t *bunch, isom_sample_info_t *inf
     bunch->sample_count = 1;
 }
 
-isom_lpcm_bunch_t *isom_get_bunch( isom_timeline_t *timeline, uint32_t sample_number )
+static isom_lpcm_bunch_t *isom_get_bunch( isom_timeline_t *timeline, uint32_t sample_number )
 {
     if( sample_number >= timeline->last_accessed_lpcm_bunch_first_sample_number
      && sample_number < timeline->last_accessed_lpcm_bunch_first_sample_number + timeline->last_accessed_lpcm_bunch_sample_count )
@@ -1007,7 +1007,7 @@ static lsmash_sample_t *isom_read_sample_data_from_stream( lsmash_root_t *root, 
     return sample;
 }
 
-lsmash_sample_t *isom_get_lpcm_sample_from_media_timeline( lsmash_root_t *root, isom_timeline_t *timeline, uint32_t sample_number )
+static lsmash_sample_t *isom_get_lpcm_sample_from_media_timeline( lsmash_root_t *root, isom_timeline_t *timeline, uint32_t sample_number )
 {
     isom_lpcm_bunch_t *bunch = isom_get_bunch( timeline, sample_number );
     if( !bunch )
@@ -1028,7 +1028,7 @@ lsmash_sample_t *isom_get_lpcm_sample_from_media_timeline( lsmash_root_t *root, 
     return sample;
 }
 
-lsmash_sample_t *isom_get_sample_from_media_timeline( lsmash_root_t *root, isom_timeline_t *timeline, uint32_t sample_number )
+static lsmash_sample_t *isom_get_sample_from_media_timeline( lsmash_root_t *root, isom_timeline_t *timeline, uint32_t sample_number )
 {
     uint64_t dts;
     if( isom_get_dts_from_info_list( timeline, sample_number, &dts ) )
@@ -1050,7 +1050,7 @@ lsmash_sample_t *isom_get_sample_from_media_timeline( lsmash_root_t *root, isom_
     return sample;
 }
 
-int isom_get_lpcm_sample_info_from_media_timeline( isom_timeline_t *timeline, uint32_t sample_number, lsmash_sample_t *sample )
+static int isom_get_lpcm_sample_info_from_media_timeline( isom_timeline_t *timeline, uint32_t sample_number, lsmash_sample_t *sample )
 {
     isom_lpcm_bunch_t *bunch = isom_get_bunch( timeline, sample_number );
     if( !bunch )
@@ -1064,7 +1064,7 @@ int isom_get_lpcm_sample_info_from_media_timeline( isom_timeline_t *timeline, ui
     return 0;
 }
 
-int isom_get_sample_info_from_media_timeline( isom_timeline_t *timeline, uint32_t sample_number, lsmash_sample_t *sample )
+static int isom_get_sample_info_from_media_timeline( isom_timeline_t *timeline, uint32_t sample_number, lsmash_sample_t *sample )
 {
     uint64_t dts;
     if( isom_get_dts_from_info_list( timeline, sample_number, &dts ) )
