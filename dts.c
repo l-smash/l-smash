@@ -223,7 +223,7 @@ int lsmash_setup_dts_specific_parameters_from_frame( lsmash_dts_specific_paramet
     while( 1 )
     {
         /* Check the remainder length of the buffer.
-         * If there is enough length, then continuet to parse the frame in it.
+         * If there is enough length, then continue to parse the frame in it.
          * The length 10 is the required byte length to get frame size. */
         uint32_t remainder_length = info->buffer_end - info->buffer_pos;
         if( remainder_length < 10 )
@@ -1054,4 +1054,5 @@ void dts_update_specific_param( dts_info_t *info )
     param->LBRDurationMod = param->MultiAssetFlag
                           ? info->lbr.duration_modifier && !(info->flags & DTS_CORE_SUBSTREAM_CORE_FLAG)
                           : info->lbr.duration_modifier;
+    info->ddts_param_initialized = 1;
 }
