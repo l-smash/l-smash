@@ -215,9 +215,9 @@ int lsmash_setup_dts_specific_parameters_from_frame( lsmash_dts_specific_paramet
     bs.alloc = DTS_MAX_EXTENSION_SIZE;
     dts_info_t  handler = { 0 };
     dts_info_t *info    = &handler;
-    memcpy( info->buffer, data, data_length );
+    uint32_t overall_wasted_data_length = 0;
     info->buffer_pos = info->buffer;
-    info->buffer_end = info->buffer + data_length;
+    info->buffer_end = info->buffer;
     info->bits = &bits;
     lsmash_bits_init( &bits, &bs );
     while( 1 )
@@ -226,8 +226,21 @@ int lsmash_setup_dts_specific_parameters_from_frame( lsmash_dts_specific_paramet
          * If there is enough length, then continue to parse the frame in it.
          * The length 10 is the required byte length to get frame size. */
         uint32_t remainder_length = info->buffer_end - info->buffer_pos;
-        if( remainder_length < 10 )
-            goto setup_param;   /* No more access units in the buffer. */
+        if( !info->no_more_read && remainder_length < DTS_MAX_EXTENSION_SIZE )
+        {
+            if( remainder_length )
+                memmove( info->buffer, info->buffer_pos, remainder_length );
+            uint32_t wasted_data_length = LSMASH_MIN( data_length, DTS_MAX_EXTENSION_SIZE );
+            memcpy( info->buffer + remainder_length, data + overall_wasted_data_length, wasted_data_length );
+            data_length                -= wasted_data_length;
+            overall_wasted_data_length += wasted_data_length;
+            remainder_length           += wasted_data_length;
+            info->buffer_pos = info->buffer;
+            info->buffer_end = info->buffer + remainder_length;
+            info->no_more_read = (data_length < 10);
+        }
+        if( remainder_length < 10 && info->no_more_read )
+            goto setup_param;   /* No more valid data. */
         /* Parse substream frame. */
         dts_substream_type prev_substream_type = info->substream_type;
         info->substream_type = dts_get_substream_type( info );
