@@ -41,7 +41,6 @@ uint32_t mp4sys_importer_get_track_count( mp4sys_importer_t *importer );
 lsmash_summary_t *mp4sys_duplicate_summary( mp4sys_importer_t *importer, uint32_t track_number );
 
 int mp4sys_amr_create_damr( lsmash_audio_summary_t *summary );
-int mp4sys_create_dac3_from_syncframe( lsmash_audio_summary_t *summary, uint8_t *data, uint32_t data_length );
 
 #endif /* #ifndef LSMASH_IMPORTER_INTERNAL */
 

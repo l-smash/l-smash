@@ -1071,6 +1071,40 @@ typedef enum
 /* CODEC specific data types */
 typedef struct
 {
+    uint8_t fscod;          /* the same value as the fscod field in the AC-3 bitstream */
+    uint8_t bsid;           /* the same value as the bsid field in the AC-3 bitstream */
+    uint8_t bsmod;          /* the same value as the bsmod field in the AC-3 bitstream */
+    uint8_t acmod;          /* the same value as the acmod field in the AC-3 bitstream */
+    uint8_t lfeon;          /* the same value as the lfeon field in the AC-3 bitstream */
+    uint8_t frmsizecod;     /* the same value as the frmsizecod field in the AC-3 bitstream */
+} lsmash_ac3_specific_parameters_t;
+
+typedef struct
+{
+    uint8_t  fscod;         /* the same value as the fscod field in the independent substream */
+    uint8_t  fscod2;        /* Any user must not use this. */
+    uint8_t  bsid;          /* the same value as the bsid field in the independent substream */
+    uint8_t  bsmod;         /* the same value as the bsmod field in the independent substream
+                             * If the bsmod field is not present in the independent substream, this field shall be set to 0. */
+    uint8_t  acmod;         /* the same value as the acmod field in the independent substream */
+    uint8_t  lfeon;         /* the same value as the lfeon field in the independent substream */
+    uint8_t  num_dep_sub;   /* the number of dependent substreams that are associated with the independent substream */
+    uint16_t chan_loc;      /* channel locations of dependent substreams associated with the independent substream
+                             * This information is extracted from the chanmap field of each dependent substream. */
+} lsmash_eac3_substream_info_t;
+
+typedef struct
+{
+    uint16_t data_rate;     /* the data rate of the Enhanced AC-3 bitstream in kbit/s
+                             * If the Enhanced AC-3 stream is variable bitrate, then this value indicates the maximum data rate of the stream. */
+    uint8_t  num_ind_sub;   /* the number of independent substreams that are present in the Enhanced AC-3 bitstream
+                             * The value of this field is one less than the number of independent substreams present
+                             * and shall be in the range of 0 to 7, inclusive. */
+    lsmash_eac3_substream_info_t independent_info[8];
+} lsmash_eac3_specific_parameters_t;
+
+typedef struct
+{
     uint32_t DTSSamplingFrequency;  /* the maximum sampling frequency stored in the compressed audio stream */
     uint8_t  pcmSampleDepth;        /* the bit depth of the rendered audio
                                      * The value is 16 or 24 bits. */
@@ -1486,6 +1520,15 @@ int lsmash_summary_add_exdata( lsmash_summary_t *summary, void* exdata, uint32_t
 
 lsmash_summary_t *lsmash_create_summary( lsmash_mp4sys_stream_type stream_type );
 void lsmash_cleanup_summary( lsmash_summary_t *summary );
+
+/* AC-3 tools to make exdata (AC-3 specific info). */
+int lsmash_setup_ac3_specific_parameters_from_syncframe( lsmash_ac3_specific_parameters_t *param, uint8_t *data, uint32_t data_length );
+uint8_t *lsmash_create_ac3_specific_info( lsmash_ac3_specific_parameters_t *param, uint32_t *data_length );
+
+/* Eanhanced AC-3 tools to make exdata (Enhanced AC-3 specific info). */
+int lsmash_setup_eac3_specific_parameters_from_frame( lsmash_eac3_specific_parameters_t *param, uint8_t *data, uint32_t data_length );
+uint16_t lsmash_eac3_get_chan_loc_from_chanmap( uint16_t chanmap );
+uint8_t *lsmash_create_eac3_specific_info( lsmash_eac3_specific_parameters_t *param, uint32_t *data_length );
 
 /* DTS audio tools to make exdata (DTS specific info). */
 int lsmash_setup_dts_specific_parameters_from_frame( lsmash_dts_specific_parameters_t *param, uint8_t *data, uint32_t data_length );
