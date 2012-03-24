@@ -183,8 +183,8 @@ uint8_t *lsmash_create_dts_specific_info( lsmash_dts_specific_parameters_t *para
     lsmash_bits_put( &bits, 32, 0 );                            /* box size */
     lsmash_bits_put( &bits, 32, ISOM_BOX_TYPE_DDTS );           /* box type: 'ddts' */
     lsmash_bits_put( &bits, 32, param->DTSSamplingFrequency );
-    lsmash_bits_put( &bits, 32, 0 );                            /* maxBitrate; setup by isom_update_bitrate_description */
-    lsmash_bits_put( &bits, 32, 0 );                            /* avgBitrate; setup by isom_update_bitrate_description */
+    lsmash_bits_put( &bits, 32, param->maxBitrate );            /* maxBitrate; setup by isom_update_bitrate_description */
+    lsmash_bits_put( &bits, 32, param->avgBitrate );            /* avgBitrate; setup by isom_update_bitrate_description */
     lsmash_bits_put( &bits, 8, param->pcmSampleDepth );
     lsmash_bits_put( &bits, 2, param->FrameDuration );
     lsmash_bits_put( &bits, 5, param->StreamConstruction );

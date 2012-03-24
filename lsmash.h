@@ -1106,6 +1106,12 @@ typedef struct
 typedef struct
 {
     uint32_t DTSSamplingFrequency;  /* the maximum sampling frequency stored in the compressed audio stream */
+    uint32_t maxBitrate;            /* the peak bit rate, in bits per second, of the audio elementary stream for the duration of the track,
+                                     * including the core substream (if present) and all extension substreams.
+                                     * If the stream is a constant bit rate, this parameter shall have the same value as avgBitrate.
+                                     * If the maximum bit rate is unknown, this parameter shall be set to 0. */
+    uint32_t avgBitrate;            /* the average bit rate, in bits per second, of the audio elementary stream for the duration of the track,
+                                     * including the core substream and any extension substream that may be present. */
     uint8_t  pcmSampleDepth;        /* the bit depth of the rendered audio
                                      * The value is 16 or 24 bits. */
     uint8_t  FrameDuration;         /* the number of audio samples decoded in a complete audio access unit at DTSSamplingFrequency
