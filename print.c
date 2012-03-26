@@ -927,7 +927,7 @@ static int isom_print_audio_description( FILE *fp, lsmash_root_t *root, isom_box
         isom_ifprintf( fp, indent, "always7F000000 = 0x%08"PRIx32"\n", audio->always7F000000 );
         isom_ifprintf( fp, indent, "constBitsPerChannel = %"PRIu32"\n", audio->constBitsPerChannel );
         isom_ifprintf( fp, indent++, "formatSpecificFlags = 0x%08"PRIx32"\n", audio->formatSpecificFlags );
-        if( isom_is_lpcm_audio( audio->type ) )
+        if( isom_is_lpcm_audio( audio ) )
         {
             isom_ifprintf( fp, indent, "sample format: " );
             if( audio->formatSpecificFlags & QT_LPCM_FORMAT_FLAG_FLOAT )

@@ -590,7 +590,7 @@ static isom_audio_entry_t *isom_duplicate_audio_description( isom_audio_entry_t 
     dst->esds = NULL;
     dst->wave = NULL;
     dst->chan = NULL;
-    if( isom_is_lpcm_audio( src->type ) )
+    if( isom_is_lpcm_audio( src ) )
         dst->constBytesPerAudioPacket = isom_get_lpcm_sample_size( src );
     COPY_EXDATA( dst, src );
     /* Copy children. */
@@ -1162,7 +1162,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
         goto fail;
     int all_sync = !stss;
     int large_presentation = stco->large_presentation || stco->type == ISOM_BOX_TYPE_CO64;
-    int is_lpcm_audio = isom_is_lpcm_audio( description->type );
+    int is_lpcm_audio = isom_is_lpcm_audio( description );
     int iso_sdtp = root->max_isom_version >= 2 || root->avc_extensions;
     int allow_negative_sample_offset = ctts && ((root->max_isom_version >= 4 && ctts->version == 1) || root->qt_compatible);
     uint32_t sample_number = 1;
@@ -1416,7 +1416,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                 stsc_data = (isom_stsc_entry_t *)stsc_entry->data;
                 /* Update sample description. */
                 description = (isom_sample_entry_t *)lsmash_get_entry_data( stsd->list, stsc_data->sample_description_index );
-                is_lpcm_audio = isom_is_lpcm_audio( description->type );
+                is_lpcm_audio = isom_is_lpcm_audio( description );
                 if( is_lpcm_audio )
                     constant_sample_size = isom_get_lpcm_sample_size( (isom_audio_entry_t *)description );
             }

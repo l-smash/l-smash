@@ -2100,7 +2100,7 @@ typedef enum
 } isom_grouping_type;
 
 int isom_is_fullbox( void *box );
-int isom_is_lpcm_audio( uint32_t type );
+int isom_is_lpcm_audio( void *box );
 int isom_is_uncompressed_ycbcr( uint32_t type );
 
 void isom_init_box_common( void *box, void *parent, uint32_t type );

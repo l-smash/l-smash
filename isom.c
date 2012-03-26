@@ -99,19 +99,21 @@ int isom_is_fullbox( void *box )
 }
 
 /* Return 1 if the sample type is LPCM audio, Otherwise return 0. */
-int isom_is_lpcm_audio( uint32_t type )
+int isom_is_lpcm_audio( void *box )
 {
+    isom_box_t *current = (isom_box_t *)box;
+    uint32_t type = current->type;
     return type == QT_CODEC_TYPE_23NI_AUDIO
         || type == QT_CODEC_TYPE_NONE_AUDIO
         || type == QT_CODEC_TYPE_LPCM_AUDIO
-        || type == QT_CODEC_TYPE_RAW_AUDIO
         || type == QT_CODEC_TYPE_SOWT_AUDIO
         || type == QT_CODEC_TYPE_TWOS_AUDIO
         || type == QT_CODEC_TYPE_FL32_AUDIO
         || type == QT_CODEC_TYPE_FL64_AUDIO
         || type == QT_CODEC_TYPE_IN24_AUDIO
         || type == QT_CODEC_TYPE_IN32_AUDIO
-        || type == QT_CODEC_TYPE_NOT_SPECIFIED;
+        || type == QT_CODEC_TYPE_NOT_SPECIFIED
+        || (type == QT_CODEC_TYPE_RAW_AUDIO && (current->manager & LSMASH_AUDIO_DESCRIPTION));
 }
 
 /* Return 1 if the sample type is uncompressed Y'CbCr video, Otherwise return 0. */
@@ -1116,7 +1118,7 @@ static int isom_add_audio_entry( isom_stsd_t *stsd, uint32_t sample_type, lsmash
         else
             ret = isom_set_isom_mp4a_description( audio );
     }
-    else if( isom_is_lpcm_audio( sample_type ) )
+    else if( isom_is_lpcm_audio( audio ) )
         ret = isom_set_qtff_lpcm_description( audio );
     else
         ret = isom_set_extra_description( audio );
@@ -8123,7 +8125,7 @@ static int isom_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sa
     isom_sample_entry_t *sample_entry = (isom_sample_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->stsd->list, sample->index );
     if( !sample_entry )
         return -1;
-    if( isom_is_lpcm_audio( sample_entry->type ) )
+    if( isom_is_lpcm_audio( sample_entry ) )
     {
         uint32_t frame_size = ((isom_audio_entry_t *)sample_entry)->constBytesPerAudioPacket;
         if( sample->length == frame_size )
@@ -8513,7 +8515,7 @@ static int isom_append_fragment_sample( lsmash_root_t *root, uint32_t track_ID, 
     isom_sample_entry_t *sample_entry = (isom_sample_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->stsd->list, sample->index );
     if( !sample_entry )
         return -1;
-    if( isom_is_lpcm_audio( sample_entry->type ) )
+    if( isom_is_lpcm_audio( sample_entry ) )
     {
         uint32_t frame_size = ((isom_audio_entry_t *)sample_entry)->constBytesPerAudioPacket;
         if( sample->length == frame_size )
