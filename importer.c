@@ -5114,10 +5114,8 @@ static int mp4sys_vc1_get_accessunit( mp4sys_importer_t *importer, uint32_t trac
     vc1_access_unit_t *access_unit = &info->access_unit;
     buffered_sample->dts = info->ts_list.timestamp[access_unit->number - 1].dts;
     buffered_sample->cts = info->ts_list.timestamp[access_unit->number - 1].cts;
-    buffered_sample->prop.leading = access_unit->non_bipredictive || buffered_sample->cts >= info->last_ref_intra_cts
-                                  ? ISOM_SAMPLE_IS_NOT_LEADING : access_unit->independent
-                                                               ? ISOM_SAMPLE_IS_DECODABLE_LEADING
-                                                               : ISOM_SAMPLE_IS_UNDECODABLE_LEADING;
+    buffered_sample->prop.leading = access_unit->independent || access_unit->non_bipredictive || buffered_sample->cts >= info->last_ref_intra_cts
+                                  ? ISOM_SAMPLE_IS_NOT_LEADING : ISOM_SAMPLE_IS_UNDECODABLE_LEADING;
     if( access_unit->independent && !access_unit->disposable )
         info->last_ref_intra_cts = buffered_sample->cts;
     if( info->composition_reordering_present && !access_unit->disposable && !access_unit->closed_gop )
