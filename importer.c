@@ -2318,7 +2318,6 @@ typedef struct
     uint8_t  type;
     uint8_t  idr;
     uint8_t  random_accessible;
-    uint8_t  non_bipredictive;
     uint8_t  independent;
     uint8_t  disposable;        /* 0: nal_ref_idc != 0, 1: otherwise */
     uint8_t  has_redundancy;
@@ -3681,7 +3680,6 @@ static void h264_update_picture_info( h264_picture_info_t *picture, h264_slice_i
     picture->random_accessible          = slice->IdrPicFlag;
     h264_update_picture_info_for_slice( picture, slice );
     picture->independent      = picture->type == H264_PICTURE_TYPE_I || picture->type == H264_PICTURE_TYPE_I_SI;
-    picture->non_bipredictive = picture->type != H264_PICTURE_TYPE_I_P_B && picture->type != H264_PICTURE_TYPE_I_SI_P_SP_B;
     if( sei->present )
     {
         picture->random_accessible |= sei->random_accessible;
@@ -4047,7 +4045,7 @@ static int mp4sys_h264_get_accessunit( mp4sys_importer_t *importer, uint32_t tra
     if( picture->au_number < info->num_undecodable )
         buffered_sample->prop.leading = ISOM_SAMPLE_IS_UNDECODABLE_LEADING;
     else
-        buffered_sample->prop.leading = picture->non_bipredictive || buffered_sample->cts >= info->last_intra_cts
+        buffered_sample->prop.leading = picture->independent || buffered_sample->cts >= info->last_intra_cts
                                       ? ISOM_SAMPLE_IS_NOT_LEADING : ISOM_SAMPLE_IS_UNDECODABLE_LEADING;
     if( picture->independent )
         info->last_intra_cts = buffered_sample->cts;
