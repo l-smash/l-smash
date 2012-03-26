@@ -52,7 +52,7 @@ static int isom_bs_read_box_common( lsmash_bs_t *bs, isom_box_t *box, uint32_t r
         box->size = lsmash_bs_get_be64( bs );
     }
     if( box->size == 0 )
-        box->size = UINT64_MAX;
+        box->manager |= LSMASH_LAST_BOX;
     if( isom_is_fullbox( box ) )
     {
         /* read version and flags */
@@ -60,6 +60,7 @@ static int isom_bs_read_box_common( lsmash_bs_t *bs, isom_box_t *box, uint32_t r
             return -1;
         box->version = lsmash_bs_get_byte( bs );
         box->flags   = lsmash_bs_get_be24( bs );
+        box->manager |= LSMASH_FULLBOX;
     }
     return 0;
 }
@@ -103,6 +104,17 @@ static void isom_box_common_copy( void *dst, void *src )
 
 static void isom_read_box_rest( lsmash_bs_t *bs, isom_box_t *box )
 {
+    if( box->manager & LSMASH_LAST_BOX )
+    {
+        uint64_t prev_bs_store = bs->store;
+        while( lsmash_bs_read_data( bs, 1 ) == 0 )
+        {
+            if( bs->store == prev_bs_store )
+                return;     /* No more data in the stream. */
+            prev_bs_store = bs->store;
+        }
+        return;
+    }
     if( lsmash_bs_read_data( bs, box->size - lsmash_bs_get_pos( bs ) ) )
         return;
     if( box->size != bs->store )  /* not match size */
@@ -111,17 +123,37 @@ static void isom_read_box_rest( lsmash_bs_t *bs, isom_box_t *box )
 
 static void isom_skip_box_rest( lsmash_bs_t *bs, isom_box_t *box )
 {
+    if( box->manager & LSMASH_LAST_BOX )
+    {
+        box->size = (box->manager & LSMASH_FULLBOX) ? ISOM_FULLBOX_COMMON_SIZE : ISOM_BASEBOX_COMMON_SIZE;
+        if( bs->stream != stdin )
+        {
+            uint64_t start = lsmash_ftell( bs->stream );
+            lsmash_fseek( bs->stream, 0, SEEK_END );
+            uint64_t end   = lsmash_ftell( bs->stream );
+            box->size += end - start;
+        }
+        else
+            while( fgetc( bs->stream ) != EOF )
+                ++ box->size;
+        return;
+    }
     uint64_t skip_bytes = box->size - lsmash_bs_get_pos( bs );
     if( bs->stream != stdin )
         lsmash_fseek( bs->stream, skip_bytes, SEEK_CUR );
     else
         for( uint64_t i = 0; i < skip_bytes; i++ )
-            if( fgetc( stdin ) == EOF )
+            if( fgetc( bs->stream ) == EOF )
                 break;
 }
 
 static void isom_check_box_size( lsmash_bs_t *bs, isom_box_t *box )
 {
+    if( box->manager & LSMASH_LAST_BOX )
+    {
+        box->size = bs->store;
+        return;
+    }
     uint64_t pos = lsmash_bs_get_pos( bs );
     if( box->size >= pos )
         return;
@@ -2710,6 +2742,7 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
         /* 'meta' box of QTFF is not extended from FullBox.
          * Reuse the last 4 bytes as the size of the current box. */
         parent->manager |= LSMASH_QTFF_BASE;    /* identifier of 'meta' box of QTFF */
+        parent->manager &= ~LSMASH_FULLBOX;
         parent->version = 0;
         parent->flags   = 0;
         memcpy( bs->data, bs->data + bs->store - 4, 4 );

@@ -59,6 +59,8 @@ typedef struct isom_box_tag isom_box_t;
 #define LSMASH_QTFF_BASE         0x04
 #define LSMASH_VIDEO_DESCRIPTION 0x08
 #define LSMASH_AUDIO_DESCRIPTION 0x10
+#define LSMASH_FULLBOX           0x20
+#define LSMASH_LAST_BOX          0x40
 
 
 struct isom_box_tag
