@@ -77,6 +77,8 @@ int h264_setup_parser( h264_info_t *info, int parse_only, uint32_t (*update)( h2
 {
     if( !info )
         return -1;
+    memset( info, 0, sizeof(h264_info_t) );
+    info->avcC_param.lengthSizeMinusOne = H264_DEFALUT_NALU_LENGTH_SIZE - 1;
     h264_stream_buffer_t *buffer = &info->buffer;
     buffer->bank = lsmash_create_multiple_buffers( parse_only ? 2 : 4, H264_DEFAULT_BUFFER_SIZE );
     if( !buffer->bank )
@@ -1221,6 +1223,8 @@ uint8_t *lsmash_create_h264_specific_info( lsmash_h264_specific_parameters_t *pa
 {
     if( !param || !data_length )
         return NULL;
+    if( param->lengthSizeMinusOne != 0 && param->lengthSizeMinusOne != 1 && param->lengthSizeMinusOne != 3 )
+        return NULL;
     static const uint32_t max_ps_count[3] = { 31, 255, 255 };
     lsmash_entry_list_t *ps_list[3] =
         {
@@ -1261,7 +1265,7 @@ uint8_t *lsmash_create_h264_specific_info( lsmash_h264_specific_parameters_t *pa
     lsmash_bs_put_byte( &bs, param->AVCProfileIndication );                                     /* AVCProfileIndication */
     lsmash_bs_put_byte( &bs, param->profile_compatibility );                                    /* profile_compatibility */
     lsmash_bs_put_byte( &bs, param->AVCLevelIndication );                                       /* AVCLevelIndication */
-    lsmash_bs_put_byte( &bs, (H264_NALU_LENGTH_SIZE - 1) | 0xfc );                              /* lengthSizeMinusOne */
+    lsmash_bs_put_byte( &bs, param->lengthSizeMinusOne | 0xfc );                                /* lengthSizeMinusOne */
     lsmash_bs_put_byte( &bs, LSMASH_MIN( ps_list[0]->entry_count, max_ps_count[0] ) | 0xe0 );   /* numOfSequenceParameterSets */
     h264_bs_put_parameter_sets( &bs, ps_list[0], max_ps_count[0] );                             /* sequenceParameterSetLength
                                                                                                  * sequenceParameterSetNALUnit */
@@ -1566,9 +1570,9 @@ int lsmash_setup_h264_specific_parameters_from_access_unit( lsmash_h264_specific
              * We don't support SVC and MVC elemental stream defined in 14496-15 yet. */
             ebsp_length -= consecutive_zero_byte_count;     /* Any EBSP doesn't have zero bytes at the end. */
             uint64_t nalu_length = nalu_header.length + ebsp_length;
-            if( buffer->bank->buffer_size < (H264_NALU_LENGTH_SIZE + nalu_length) )
+            if( buffer->bank->buffer_size < (H264_DEFALUT_NALU_LENGTH_SIZE + nalu_length) )
             {
-                if( h264_supplement_buffer( buffer, NULL, 2 * (H264_NALU_LENGTH_SIZE + nalu_length) ) )
+                if( h264_supplement_buffer( buffer, NULL, 2 * (H264_DEFALUT_NALU_LENGTH_SIZE + nalu_length) ) )
                     return h264_parse_failed( info );
                 next_short_start_code_pos = buffer->pos;
             }

@@ -1157,6 +1157,12 @@ typedef struct
     uint8_t AVCProfileIndication;                           /* profile_idc in sequence parameter sets */
     uint8_t profile_compatibility;                          /* constraint_set_flags in sequence parameter sets */
     uint8_t AVCLevelIndication;                             /* maximum level_idc in sequence parameter sets */
+    uint8_t lengthSizeMinusOne;                             /* the length in bytes of the NALUnitLength field prior to NAL unit
+                                                             * The value of this field shall be one of 0, 1, or 3
+                                                             * corresponding to a length encoded with 1, 2, or 4 bytes, respectively.
+                                                             * NALUnitLength indicates the size of a NAL unit measured in bytes,
+                                                             * and includes the size of both the one byte NAL header and the EBSP payload
+                                                             * but does not include the length field itself. */
     uint8_t chroma_format;                                  /* chroma_format_idc in sequence parameter sets */
     uint8_t bit_depth_luma_minus8;                          /* bit_depth_luma_minus8 in sequence parameter sets */
     uint8_t bit_depth_chroma_minus8;                        /* bit_depth_chroma_minus8 in sequence parameter sets */
