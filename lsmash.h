@@ -1068,6 +1068,13 @@ typedef enum
     DTS_EXT_SUBSTREAM_XLL_FLAG   = 0x00000200,
 } lsmash_dts_construction_flag;
 
+typedef enum
+{
+    H264_PARAMETER_SET_TYPE_SPS    = 0,
+    H264_PARAMETER_SET_TYPE_PPS    = 1,
+    H264_PARAMETER_SET_TYPE_SPSEXT = 2,
+} lsmash_h264_parameter_set_type;
+
 /* CODEC specific data types */
 typedef struct
 {
@@ -1142,6 +1149,21 @@ typedef struct
     uint8_t  LBRDurationMod;        /* This flag indicates a special case of the LBR coding bandwidth, resulting in 1/3 or 2/3 band limiting.
                                      * If set to 1, LBR frame duration is 50 % larger than indicated in FrameDuration */
 } lsmash_dts_specific_parameters_t;
+
+typedef void lsmash_h264_parameter_sets_t;
+
+typedef struct
+{
+    uint8_t AVCProfileIndication;                           /* profile_idc in sequence parameter sets */
+    uint8_t profile_compatibility;                          /* constraint_set_flags in sequence parameter sets */
+    uint8_t AVCLevelIndication;                             /* maximum level_idc in sequence parameter sets */
+    uint8_t chroma_format;                                  /* chroma_format_idc in sequence parameter sets */
+    uint8_t bit_depth_luma_minus8;                          /* bit_depth_luma_minus8 in sequence parameter sets */
+    uint8_t bit_depth_chroma_minus8;                        /* bit_depth_chroma_minus8 in sequence parameter sets */
+    lsmash_h264_parameter_sets_t *sequenceParameterSets;    /* sequence parameter sets */
+    lsmash_h264_parameter_sets_t *pictureParameterSets;     /* picture paramter sets */
+    lsmash_h264_parameter_sets_t *sequenceParameterSetExt;  /* sequence parameter set extensions */
+} lsmash_h264_specific_parameters_t;
 
 /* sample data types */
 typedef struct
@@ -1541,6 +1563,13 @@ int lsmash_setup_dts_specific_parameters_from_frame( lsmash_dts_specific_paramet
 uint8_t lsmash_dts_get_stream_construction( lsmash_dts_construction_flag flags );
 uint32_t lsmash_dts_get_codingname( lsmash_dts_specific_parameters_t *param );
 uint8_t *lsmash_create_dts_specific_info( lsmash_dts_specific_parameters_t *param, uint32_t *data_length );
+
+/* H.264 tools to make exdata (AVC specific info). */
+int lsmash_setup_h264_specific_parameters_from_access_unit( lsmash_h264_specific_parameters_t *param, uint8_t *data, uint32_t data_length );
+void lsmash_destroy_h264_parameter_sets( lsmash_h264_specific_parameters_t *param );
+int lsmash_check_h264_parameter_set_appendable( lsmash_h264_specific_parameters_t *param, lsmash_h264_parameter_set_type ps_type, void *ps_data, uint32_t ps_length );
+int lsmash_append_h264_parameter_set( lsmash_h264_specific_parameters_t *param, lsmash_h264_parameter_set_type ps_type, void *ps_data, uint32_t ps_length );
+uint8_t *lsmash_create_h264_specific_info( lsmash_h264_specific_parameters_t *param, uint32_t *data_length );
 
 #undef PRIVATE
 
