@@ -5759,11 +5759,23 @@ int lsmash_set_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     tkhd->track_ID = param->track_ID ? param->track_ID : tkhd->track_ID;
     tkhd->duration = !trak->edts || !trak->edts->elst ? param->duration : tkhd->duration;
     /* Template fields
+     *   alternate_group, layer, volume and matrix
      * According to 14496-14, these value are all set to defaut values in 14496-12.
      * And when a file is read as an MPEG-4 file, these values shall be ignored.
      * If a file complies with other specifications, then those fields may have non-default values
      * as required by those other specifications. */
-    tkhd->alternate_group = root->qt_compatible || root->itunes_movie || root->max_3gpp_version >= 4 ? param->alternate_group : 0;
+    if( param->alternate_group )
+    {
+        if( root->qt_compatible || root->itunes_movie || root->max_3gpp_version >= 4 )
+            tkhd->alternate_group = param->alternate_group;
+        else
+        {
+            tkhd->alternate_group = 0;
+            lsmash_log( LSMASH_LOG_WARNING, "alternate_group is specified but not compatible with any of the brands. It won't be set.\n" );
+        }
+    }
+    else
+        tkhd->alternate_group = 0;
     if( root->qt_compatible || root->itunes_movie )
     {
         tkhd->layer  = media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK ? param->video_layer  : 0;
