@@ -1171,6 +1171,39 @@ typedef struct
     lsmash_h264_parameter_sets_t *sequenceParameterSetExt;  /* sequence parameter set extensions */
 } lsmash_h264_specific_parameters_t;
 
+typedef void lsmash_vc1_header_t;
+
+typedef struct
+{
+    /* Note: multiple_sequence, multiple_entry, slice_present and bframe_present shall be decided through overall VC-1 bitstream. */
+    uint8_t  profile;               /* the encoding profile used in the VC-1 bitstream
+                                     *   0: simple profile (not supported)
+                                     *   4: main profile   (not supported)
+                                     *  12: advanced profile
+                                     * Currently, only 12 for advanced profile is available. */
+    uint8_t  level;                 /* the highest encoding level used in the VC-1 bitstream */
+    uint8_t  cbr;                   /* 0: non-constant bitrate model
+                                     * 1: constant bitrate model */
+    uint8_t  interlaced;            /* 0: interlaced coding of frames is not used.
+                                     * 1: frames may use interlaced coding. */
+    uint8_t  multiple_sequence;     /* 0: the track contains no sequence headers (stored only in VC-1 specific info structure),
+                                     *    or
+                                     *    all sequence headers in the track are identical to the sequence header that is specified in the seqhdr field.
+                                     *    In this case, random access points are samples that contain an entry-point header.
+                                     * 1: the track may contain Sequence headers that are different from the sequence header specified in the seqhdr field.
+                                     *    In this case, random access points are samples that contain both a sequence Header and an entry-point header. */
+    uint8_t  multiple_entry;        /* 0: all entry-point headers in the track are identical to the entry-point header that is specified in the ephdr field.
+                                     * 1: the track may contain Entry-point headers that are different from the entry-point header specified in the ephdr field. */
+    uint8_t  slice_present;         /* 0: frames are not coded as multiple slices.
+                                     * 1: frames may be coded as multiple slices. */
+    uint8_t  bframe_present;        /* 0: neither B-frames nor BI-frames are present in the track.
+                                     * 1: B-frames or BI-frames may be present in the track. */
+    uint32_t framerate;             /* the rounded frame rate (frames per second) of the track
+                                     * Should be set to 0xffffffff if the frame rate is not known, unspecified, or non-constant. */
+    lsmash_vc1_header_t *seqhdr;    /* a sequence header EBDU (mandatory) */
+    lsmash_vc1_header_t *ephdr;     /* an entry-point header EBDU (mandatory) */
+} lsmash_vc1_specific_parameters_t;
+
 /* sample data types */
 typedef struct
 {
@@ -1576,6 +1609,12 @@ void lsmash_destroy_h264_parameter_sets( lsmash_h264_specific_parameters_t *para
 int lsmash_check_h264_parameter_set_appendable( lsmash_h264_specific_parameters_t *param, lsmash_h264_parameter_set_type ps_type, void *ps_data, uint32_t ps_length );
 int lsmash_append_h264_parameter_set( lsmash_h264_specific_parameters_t *param, lsmash_h264_parameter_set_type ps_type, void *ps_data, uint32_t ps_length );
 uint8_t *lsmash_create_h264_specific_info( lsmash_h264_specific_parameters_t *param, uint32_t *data_length );
+
+/* VC-1 tools to make exdata (VC-1 specific info). */
+int lsmash_setup_vc1_specific_parameters_from_access_unit( lsmash_vc1_specific_parameters_t *param, uint8_t *data, uint32_t data_length );
+void lsmash_destroy_vc1_headers( lsmash_vc1_specific_parameters_t *param );
+int lsmash_put_vc1_header( lsmash_vc1_specific_parameters_t *param, void *hdr_data, uint32_t hdr_length );
+uint8_t *lsmash_create_vc1_specific_info( lsmash_vc1_specific_parameters_t *param, uint32_t *data_length );
 
 #undef PRIVATE
 
