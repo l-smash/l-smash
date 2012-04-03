@@ -599,7 +599,7 @@ static int parse_track_options( input_t *input )
                 char *track_parameter = strchr( track_option, '=' ) + 1;
                 track_opt->alternate_group = atoi( track_parameter );
             }
-            if( strstr( track_option, "encoder-delay=" ) )
+            else if( strstr( track_option, "encoder-delay=" ) )
             {
                 char *track_parameter = strchr( track_option, '=' ) + 1;
                 track_opt->encoder_delay = atoi( track_parameter );
