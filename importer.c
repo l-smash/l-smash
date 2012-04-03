@@ -2227,6 +2227,7 @@ typedef struct
 {
     mp4sys_importer_status status;
     h264_info_t            info;
+    h264_sps_t             first_sps;
     lsmash_media_ts_list_t ts_list;
     uint32_t max_au_length;
     uint32_t num_undecodable;
@@ -2358,9 +2359,10 @@ static int h264_get_au_internal_failed( mp4sys_h264_info_t *info, h264_picture_i
 
 /* If probe equals 0, don't get the actual data (EBPS) of an access unit and only parse NALU.
  * Currently, you can get AU of AVC video elemental stream only, not AVC parameter set elemental stream defined in 14496-15. */
-static int h264_get_access_unit_internal( mp4sys_importer_t *importer, uint32_t track_number, int probe )
+static int h264_get_access_unit_internal( mp4sys_importer_t *importer, int probe )
 {
-    h264_info_t          *info     = &((mp4sys_h264_info_t *)importer->info)->info;
+    mp4sys_h264_info_t *importer_info = (mp4sys_h264_info_t *)importer->info;
+    h264_info_t          *info     = &importer_info->info;
     h264_slice_info_t    *slice    = &info->slice;
     h264_picture_info_t  *picture  = &info->picture;
     h264_stream_buffer_t *buffer   = &info->buffer;
@@ -2496,6 +2498,8 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, uint32_t 
                     case 7 :    /* Sequence Parameter Set */
                         if( h264_process_parameter_set( info, H264_PARAMETER_SET_TYPE_SPS, nalu_header.length, ebsp_length, probe ) )
                             return h264_get_au_internal_failed( importer->info, picture, &nalu_header, no_more_buf, complete_au );
+                        if( probe && !importer_info->first_sps.present )
+                            importer_info->first_sps = info->sps;
                         break;
                     case 8 :    /* Picture Parameter Set */
                         if( h264_process_parameter_set( info, H264_PARAMETER_SET_TYPE_PPS, nalu_header.length, ebsp_length, probe ) )
@@ -2563,7 +2567,7 @@ static int mp4sys_h264_get_accessunit( mp4sys_importer_t *importer, uint32_t tra
         buffered_sample->length = 0;
         return 0;
     }
-    if( h264_get_access_unit_internal( importer, track_number, 0 ) )
+    if( h264_get_access_unit_internal( importer, 0 ) )
     {
         importer_info->status = MP4SYS_IMPORTER_ERROR;
         return -1;
@@ -2602,7 +2606,7 @@ static int mp4sys_h264_get_accessunit( mp4sys_importer_t *importer, uint32_t tra
     return current_status;
 }
 
-static lsmash_video_summary_t *h264_create_summary( h264_info_t *info, uint32_t max_au_length )
+static lsmash_video_summary_t *h264_create_summary( h264_info_t *info, h264_sps_t *sps, uint32_t max_au_length )
 {
     lsmash_h264_specific_parameters_t *param = &info->avcC_param;
     if( !info->sps.present || !info->pps.present )
@@ -2618,7 +2622,6 @@ static lsmash_video_summary_t *h264_create_summary( h264_info_t *info, uint32_t 
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         return NULL;
     }
-    h264_sps_t *sps = &info->sps;
     summary->sample_type            = ISOM_CODEC_TYPE_AVC1_VIDEO;
     summary->object_type_indication = MP4SYS_OBJECT_TYPE_Visual_H264_ISO_14496_10;
     summary->max_au_length          = max_au_length;
@@ -2689,7 +2692,7 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
         fprintf( stderr, "Analyzing stream as H.264: %"PRIu32"\n", num_access_units + 1 );
 #endif
         h264_picture_info_t prev_picture = info->picture;
-        if( h264_get_access_unit_internal( importer, 0, 1 )
+        if( h264_get_access_unit_internal( importer, 1 )
          || h264_calculate_poc( &info->sps, &info->picture, &prev_picture ) )
         {
             free( poc );
@@ -2711,7 +2714,7 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
         importer_info->max_au_length = LSMASH_MAX( info->picture.au_length, importer_info->max_au_length );
     }
     fprintf( stderr, "                                                                               \r" );
-    lsmash_video_summary_t *summary = h264_create_summary( info, importer_info->max_au_length );
+    lsmash_video_summary_t *summary = h264_create_summary( info, &importer_info->first_sps, importer_info->max_au_length );
     if( !summary || lsmash_add_entry( importer->summaries, summary ) )
     {
         free( poc );

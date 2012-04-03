@@ -1548,8 +1548,7 @@ int lsmash_setup_h264_specific_parameters_from_access_unit( lsmash_h264_specific
             continue;
         }
         if( no_more && ebsp_length == 0 )
-            /* For the last NALU.
-             * This NALU already has been appended into the latest access unit and parsed. */
+            /* For the last NALU. This NALU already has been parsed. */
             return h264_parse_succeeded( info, param );
         uint64_t next_nalu_head_pos = info->ebsp_head_pos + ebsp_length + !no_more * H264_SHORT_START_CODE_LENGTH;
         uint8_t *next_short_start_code_pos = buffer->pos;       /* Memorize position of short start code of the next NALU in buffer.
