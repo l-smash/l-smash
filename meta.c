@@ -27,20 +27,22 @@
 
 #include "box.h"
 
-static isom_data_t *isom_add_metadata( lsmash_root_t *root, uint32_t type, char *meaning_string, char *name_string )
+static isom_data_t *isom_add_metadata( lsmash_root_t *root,
+                                       lsmash_itunes_metadata_item item,
+                                       char *meaning_string, char *name_string )
 {
     assert( root && root->moov );
-    if( ((type == ITUNES_METADATA_TYPE_CUSTOM) && (!meaning_string || !meaning_string[0]) )
+    if( ((item == ITUNES_METADATA_ITEM_CUSTOM) && (!meaning_string || !meaning_string[0]) )
      || (!root->moov->udta             && isom_add_udta( root, 0 ))
      || (!root->moov->udta->meta       && isom_add_meta( (isom_box_t *)root->moov->udta ))
      || (!root->moov->udta->meta->hdlr && isom_add_hdlr( NULL, root->moov->udta->meta, NULL, ISOM_META_HANDLER_TYPE_ITUNES_METADATA ))
      || (!root->moov->udta->meta->ilst && isom_add_ilst( root->moov )) )
         return NULL;
     isom_ilst_t *ilst = root->moov->udta->meta->ilst;
-    if( isom_add_metaitem( ilst, type ) )
+    if( isom_add_metaitem( ilst, item ) )
         return NULL;
     isom_metaitem_t *metaitem = (isom_metaitem_t *)ilst->item_list->tail->data;
-    if( type == ITUNES_METADATA_TYPE_CUSTOM )
+    if( item == ITUNES_METADATA_ITEM_CUSTOM )
     {
         if( isom_add_mean( metaitem ) )
             goto fail;
@@ -68,52 +70,19 @@ fail:
     return NULL;
 }
 
-int lsmash_set_itunes_metadata_string( lsmash_root_t *root, lsmash_itunes_metadata_type type, char *value, char *meaning, char *name )
+static int isom_set_itunes_metadata_string( lsmash_root_t *root,
+                                            lsmash_itunes_metadata_item item,
+                                            lsmash_itunes_metadata_t value, char *meaning, char *name )
 {
-    static const lsmash_itunes_metadata_type metadata_type_table[] =
-        {
-            ITUNES_METADATA_TYPE_ALBUM_NAME,
-            ITUNES_METADATA_TYPE_ARTIST,
-            ITUNES_METADATA_TYPE_USER_COMMENT,
-            ITUNES_METADATA_TYPE_RELEASE_DATE,
-            ITUNES_METADATA_TYPE_ENCODED_BY,
-            ITUNES_METADATA_TYPE_USER_GENRE,
-            ITUNES_METADATA_TYPE_0XA9_GROUPING,
-            ITUNES_METADATA_TYPE_LYRICS,
-            ITUNES_METADATA_TYPE_TITLE,
-            ITUNES_METADATA_TYPE_TRACK_SUBTITLE,
-            ITUNES_METADATA_TYPE_ENCODING_TOOL,
-            ITUNES_METADATA_TYPE_COMPOSER,
-            ITUNES_METADATA_TYPE_ALBUM_ARTIST,
-            ITUNES_METADATA_TYPE_PODCAST_CATEGORY,
-            ITUNES_METADATA_TYPE_COPYRIGHT,
-            ITUNES_METADATA_TYPE_DESCRIPTION,
-            ITUNES_METADATA_TYPE_GROUPING,
-            ITUNES_METADATA_TYPE_PODCAST_KEYWORD,
-            ITUNES_METADATA_TYPE_LONG_DESCRIPTION,
-            ITUNES_METADATA_TYPE_PURCHASE_DATE,
-            ITUNES_METADATA_TYPE_TV_EPISODE_ID,
-            ITUNES_METADATA_TYPE_TV_NETWORK,
-            ITUNES_METADATA_TYPE_TV_SHOW_NAME,
-            ITUNES_METADATA_TYPE_ITUNES_PURCHASE_ACCOUNT_ID,
-            ITUNES_METADATA_TYPE_CUSTOM,
-            0
-        };
-    int i;
-    for( i = 0; metadata_type_table[i]; i++ )
-        if( type == metadata_type_table[i] )
-            break;
-    if( !metadata_type_table[i] )
-        return -1;
-    uint32_t value_length = strlen( value );
-    if( type == ITUNES_METADATA_TYPE_DESCRIPTION && value_length > 255 )
-        type = ITUNES_METADATA_TYPE_LONG_DESCRIPTION;
-    isom_data_t *data = isom_add_metadata( root, type, meaning, name );
+    uint32_t value_length = strlen( value.string );
+    if( item == ITUNES_METADATA_ITEM_DESCRIPTION && value_length > 255 )
+        item = ITUNES_METADATA_ITEM_LONG_DESCRIPTION;
+    isom_data_t *data = isom_add_metadata( root, item, meaning, name );
     if( !data )
         return -1;
     data->type_code = 1;
     data->value_length = value_length;      /* No null terminator */
-    data->value = lsmash_memdup( value, data->value_length );
+    data->value = lsmash_memdup( value.string, data->value_length );
     if( !data->value )
     {
         isom_ilst_t *ilst = root->moov->udta->meta->ilst;
@@ -123,38 +92,40 @@ int lsmash_set_itunes_metadata_string( lsmash_root_t *root, lsmash_itunes_metada
     return 0;
 }
 
-int lsmash_set_itunes_metadata_integer( lsmash_root_t *root, lsmash_itunes_metadata_type type, uint64_t value, char *meaning, char *name )
+static int isom_set_itunes_metadata_integer( lsmash_root_t *root,
+                                             lsmash_itunes_metadata_item item,
+                                             lsmash_itunes_metadata_t value, char *meaning, char *name )
 {
     static const struct
     {
-        lsmash_itunes_metadata_type type;
+        lsmash_itunes_metadata_item item;
         int                         length;
     } metadata_code_type_table[] =
         {
-            { ITUNES_METADATA_TYPE_EPISODE_GLOBAL_ID,          1 },
-            { ITUNES_METADATA_TYPE_PREDEFINED_GENRE,           4 },
-            { ITUNES_METADATA_TYPE_CONTENT_RATING,             1 },
-            { ITUNES_METADATA_TYPE_MEDIA_TYPE,                 1 },
-            { ITUNES_METADATA_TYPE_BEATS_PER_MINUTE,           2 },
-            { ITUNES_METADATA_TYPE_TV_EPISODE,                 4 },
-            { ITUNES_METADATA_TYPE_TV_SEASON,                  4 },
-            { ITUNES_METADATA_TYPE_ITUNES_ACCOUNT_TYPE,        1 },
-            { ITUNES_METADATA_TYPE_ITUNES_ARTIST_ID,           4 },
-            { ITUNES_METADATA_TYPE_ITUNES_COMPOSER_ID,         4 },
-            { ITUNES_METADATA_TYPE_ITUNES_CATALOG_ID,          4 },
-            { ITUNES_METADATA_TYPE_ITUNES_TV_GENRE_ID,         4 },
-            { ITUNES_METADATA_TYPE_ITUNES_PLAYLIST_ID,         8 },
-            { ITUNES_METADATA_TYPE_ITUNES_COUNTRY_CODE,        4 },
-            { ITUNES_METADATA_TYPE_CUSTOM,                     8 },
-            { 0 }
+            { ITUNES_METADATA_ITEM_EPISODE_GLOBAL_ID,          1 },
+            { ITUNES_METADATA_ITEM_PREDEFINED_GENRE,           4 },
+            { ITUNES_METADATA_ITEM_CONTENT_RATING,             1 },
+            { ITUNES_METADATA_ITEM_MEDIA_TYPE,                 1 },
+            { ITUNES_METADATA_ITEM_BEATS_PER_MINUTE,           2 },
+            { ITUNES_METADATA_ITEM_TV_EPISODE,                 4 },
+            { ITUNES_METADATA_ITEM_TV_SEASON,                  4 },
+            { ITUNES_METADATA_ITEM_ITUNES_ACCOUNT_TYPE,        1 },
+            { ITUNES_METADATA_ITEM_ITUNES_ARTIST_ID,           4 },
+            { ITUNES_METADATA_ITEM_ITUNES_COMPOSER_ID,         4 },
+            { ITUNES_METADATA_ITEM_ITUNES_CATALOG_ID,          4 },
+            { ITUNES_METADATA_ITEM_ITUNES_TV_GENRE_ID,         4 },
+            { ITUNES_METADATA_ITEM_ITUNES_PLAYLIST_ID,         8 },
+            { ITUNES_METADATA_ITEM_ITUNES_COUNTRY_CODE,        4 },
+            { ITUNES_METADATA_ITEM_CUSTOM,                     8 },
+            { 0,                                               0 }
         };
     int i;
-    for( i = 0; metadata_code_type_table[i].type; i++ )
-        if( type == metadata_code_type_table[i].type )
+    for( i = 0; metadata_code_type_table[i].item; i++ )
+        if( item == metadata_code_type_table[i].item )
             break;
-    if( !metadata_code_type_table[i].type )
+    if( metadata_code_type_table[i].length == 0 )
         return -1;
-    isom_data_t *data = isom_add_metadata( root, type, meaning, name );
+    isom_data_t *data = isom_add_metadata( root, item, meaning, name );
     if( !data )
         return -1;
     data->type_code = 21;
@@ -163,7 +134,7 @@ int lsmash_set_itunes_metadata_integer( lsmash_root_t *root, lsmash_itunes_metad
     for( i = 0; i < data->value_length; i++ )
     {
         int shift = (data->value_length - i - 1) * 8;
-        temp[i] = (value >> shift) & 0xff;
+        temp[i] = (value.integer >> shift) & 0xff;
     }
     data->value = lsmash_memdup( temp, data->value_length );
     if( !data->value )
@@ -175,29 +146,16 @@ int lsmash_set_itunes_metadata_integer( lsmash_root_t *root, lsmash_itunes_metad
     return 0;
 }
 
-int lsmash_set_itunes_metadata_boolean( lsmash_root_t *root, lsmash_itunes_metadata_type type, lsmash_boolean_t value, char *meaning, char *name )
+static int isom_set_itunes_metadata_boolean( lsmash_root_t *root,
+                                             lsmash_itunes_metadata_item item,
+                                             lsmash_itunes_metadata_t value, char *meaning, char *name )
 {
-    static const lsmash_itunes_metadata_type metadata_type_table[] =
-        {
-            ITUNES_METADATA_TYPE_DISC_COMPILATION,
-            ITUNES_METADATA_TYPE_HIGH_DEFINITION_VIDEO,
-            ITUNES_METADATA_TYPE_PODCAST,
-            ITUNES_METADATA_TYPE_GAPLESS_PLAYBACK,
-            ITUNES_METADATA_TYPE_CUSTOM,
-            0
-        };
-    int i;
-    for( i = 0; metadata_type_table[i]; i++ )
-        if( type == metadata_type_table[i] )
-            break;
-    if( !metadata_type_table[i] )
-        return -1;
-    isom_data_t *data = isom_add_metadata( root, type, meaning, name );
+    isom_data_t *data = isom_add_metadata( root, item, meaning, name );
     if( !data )
         return -1;
     data->type_code = 21;
     data->value_length = 1;
-    uint8_t temp = (uint8_t)value;
+    uint8_t temp = (uint8_t)value.boolean;
     data->value = lsmash_memdup( &temp, 1 );
     if( !data->value )
     {
@@ -206,6 +164,78 @@ int lsmash_set_itunes_metadata_boolean( lsmash_root_t *root, lsmash_itunes_metad
         return -1;
     }
     return 0;
+}
+
+int lsmash_set_itunes_metadata( lsmash_root_t *root,
+                                lsmash_itunes_metadata_item item, lsmash_itunes_metadata_type type,
+                                lsmash_itunes_metadata_t value, char *meaning, char *name )
+{
+    static const struct
+    {
+        lsmash_itunes_metadata_item item;
+        int (*func_set_itunes_metadata)( lsmash_root_t *, lsmash_itunes_metadata_item, lsmash_itunes_metadata_t, char *, char * );
+    } itunes_metadata_function_mapping[] =
+        {
+            { ITUNES_METADATA_ITEM_ALBUM_NAME,                 isom_set_itunes_metadata_string },
+            { ITUNES_METADATA_ITEM_ARTIST,                     isom_set_itunes_metadata_string },
+            { ITUNES_METADATA_ITEM_USER_COMMENT,               isom_set_itunes_metadata_string },
+            { ITUNES_METADATA_ITEM_RELEASE_DATE,               isom_set_itunes_metadata_string },
+            { ITUNES_METADATA_ITEM_ENCODED_BY,                 isom_set_itunes_metadata_string },
+            { ITUNES_METADATA_ITEM_USER_GENRE,                 isom_set_itunes_metadata_string },
+            { ITUNES_METADATA_ITEM_0XA9_GROUPING,              isom_set_itunes_metadata_string },
+            { ITUNES_METADATA_ITEM_LYRICS,                     isom_set_itunes_metadata_string },
+            { ITUNES_METADATA_ITEM_TITLE,                      isom_set_itunes_metadata_string },
+            { ITUNES_METADATA_ITEM_TRACK_SUBTITLE,             isom_set_itunes_metadata_string },
+            { ITUNES_METADATA_ITEM_ENCODING_TOOL,              isom_set_itunes_metadata_string },
+            { ITUNES_METADATA_ITEM_COMPOSER,                   isom_set_itunes_metadata_string },
+            { ITUNES_METADATA_ITEM_ALBUM_ARTIST,               isom_set_itunes_metadata_string },
+            { ITUNES_METADATA_ITEM_PODCAST_CATEGORY,           isom_set_itunes_metadata_string },
+            { ITUNES_METADATA_ITEM_COPYRIGHT,                  isom_set_itunes_metadata_string },
+            { ITUNES_METADATA_ITEM_DESCRIPTION,                isom_set_itunes_metadata_string },
+            { ITUNES_METADATA_ITEM_GROUPING,                   isom_set_itunes_metadata_string },
+            { ITUNES_METADATA_ITEM_PODCAST_KEYWORD,            isom_set_itunes_metadata_string },
+            { ITUNES_METADATA_ITEM_LONG_DESCRIPTION,           isom_set_itunes_metadata_string },
+            { ITUNES_METADATA_ITEM_PURCHASE_DATE,              isom_set_itunes_metadata_string },
+            { ITUNES_METADATA_ITEM_TV_EPISODE_ID,              isom_set_itunes_metadata_string },
+            { ITUNES_METADATA_ITEM_TV_NETWORK,                 isom_set_itunes_metadata_string },
+            { ITUNES_METADATA_ITEM_TV_SHOW_NAME,               isom_set_itunes_metadata_string },
+            { ITUNES_METADATA_ITEM_ITUNES_PURCHASE_ACCOUNT_ID, isom_set_itunes_metadata_string },
+            { ITUNES_METADATA_ITEM_EPISODE_GLOBAL_ID,          isom_set_itunes_metadata_integer },
+            { ITUNES_METADATA_ITEM_PREDEFINED_GENRE,           isom_set_itunes_metadata_integer },
+            { ITUNES_METADATA_ITEM_CONTENT_RATING,             isom_set_itunes_metadata_integer },
+            { ITUNES_METADATA_ITEM_MEDIA_TYPE,                 isom_set_itunes_metadata_integer },
+            { ITUNES_METADATA_ITEM_BEATS_PER_MINUTE,           isom_set_itunes_metadata_integer },
+            { ITUNES_METADATA_ITEM_TV_EPISODE,                 isom_set_itunes_metadata_integer },
+            { ITUNES_METADATA_ITEM_TV_SEASON,                  isom_set_itunes_metadata_integer },
+            { ITUNES_METADATA_ITEM_ITUNES_ACCOUNT_TYPE,        isom_set_itunes_metadata_integer },
+            { ITUNES_METADATA_ITEM_ITUNES_ARTIST_ID,           isom_set_itunes_metadata_integer },
+            { ITUNES_METADATA_ITEM_ITUNES_COMPOSER_ID,         isom_set_itunes_metadata_integer },
+            { ITUNES_METADATA_ITEM_ITUNES_CATALOG_ID,          isom_set_itunes_metadata_integer },
+            { ITUNES_METADATA_ITEM_ITUNES_TV_GENRE_ID,         isom_set_itunes_metadata_integer },
+            { ITUNES_METADATA_ITEM_ITUNES_PLAYLIST_ID,         isom_set_itunes_metadata_integer },
+            { ITUNES_METADATA_ITEM_ITUNES_COUNTRY_CODE,        isom_set_itunes_metadata_integer },
+            { ITUNES_METADATA_ITEM_DISC_COMPILATION,           isom_set_itunes_metadata_boolean },
+            { ITUNES_METADATA_ITEM_HIGH_DEFINITION_VIDEO,      isom_set_itunes_metadata_boolean },
+            { ITUNES_METADATA_ITEM_PODCAST,                    isom_set_itunes_metadata_boolean },
+            { ITUNES_METADATA_ITEM_GAPLESS_PLAYBACK,           isom_set_itunes_metadata_boolean },
+            { 0,                                               NULL }
+        };
+    for( int i = 0; itunes_metadata_function_mapping[i].func_set_itunes_metadata; i++ )
+        if( item == itunes_metadata_function_mapping[i].item )
+            return itunes_metadata_function_mapping[i].func_set_itunes_metadata( root, item, value, meaning, name );
+    if( item == ITUNES_METADATA_ITEM_CUSTOM )
+        switch( type )
+        {
+            case ITUNES_METADATA_TYPE_STRING :
+                return isom_set_itunes_metadata_string( root, item, value, meaning, name );
+            case ITUNES_METADATA_TYPE_INTEGER :
+                return isom_set_itunes_metadata_integer( root, item, value, meaning, name );
+            case ITUNES_METADATA_TYPE_BOOLEAN :
+                return isom_set_itunes_metadata_boolean( root, item, value, meaning, name );
+            default :
+                break;
+        }
+    return -1;
 }
 
 #ifdef LSMASH_DEMUXER_ENABLED

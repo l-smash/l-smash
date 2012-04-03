@@ -943,62 +943,70 @@ typedef enum
 typedef enum
 {
     /* UTF String type */
-    ITUNES_METADATA_TYPE_ALBUM_NAME                 = LSMASH_4CC( 0xA9, 'a', 'l', 'b' ),    /* Album Name */
-    ITUNES_METADATA_TYPE_ARTIST                     = LSMASH_4CC( 0xA9, 'A', 'R', 'T' ),    /* Artist */
-    ITUNES_METADATA_TYPE_USER_COMMENT               = LSMASH_4CC( 0xA9, 'c', 'm', 't' ),    /* User Comment */
-    ITUNES_METADATA_TYPE_RELEASE_DATE               = LSMASH_4CC( 0xA9, 'd', 'a', 'y' ),    /* YYYY-MM-DD format string (may be incomplete, i.e. only year) */
-    ITUNES_METADATA_TYPE_ENCODED_BY                 = LSMASH_4CC( 0xA9, 'e', 'n', 'c' ),    /* Person or company that encoded the recording */
-    ITUNES_METADATA_TYPE_USER_GENRE                 = LSMASH_4CC( 0xA9, 'g', 'e', 'n' ),    /* User Genre user-specified string */
-    ITUNES_METADATA_TYPE_0XA9_GROUPING              = LSMASH_4CC( 0xA9, 'g', 'r', 'p' ),    /* Grouping */
-    ITUNES_METADATA_TYPE_LYRICS                     = LSMASH_4CC( 0xA9, 'l', 'y', 'r' ),    /* Lyrics */
-    ITUNES_METADATA_TYPE_TITLE                      = LSMASH_4CC( 0xA9, 'n', 'a', 'm' ),    /* Title / Song Name */
-    ITUNES_METADATA_TYPE_TRACK_SUBTITLE             = LSMASH_4CC( 0xA9, 's', 't', '3' ),    /* Track Sub-Title */
-    ITUNES_METADATA_TYPE_ENCODING_TOOL              = LSMASH_4CC( 0xA9, 't', 'o', 'o' ),    /* Software which encoded the recording */
-    ITUNES_METADATA_TYPE_COMPOSER                   = LSMASH_4CC( 0xA9, 'w', 'r', 't' ),    /* Composer */
-    ITUNES_METADATA_TYPE_ALBUM_ARTIST               = LSMASH_4CC( 'a', 'A', 'R', 'T' ),     /* Artist for the whole album (if different than the individual tracks) */
-    ITUNES_METADATA_TYPE_PODCAST_CATEGORY           = LSMASH_4CC( 'c', 'a', 't', 'g' ),     /* Podcast Category */
-    ITUNES_METADATA_TYPE_COPYRIGHT                  = LSMASH_4CC( 'c', 'p', 'r', 't' ),     /* Copyright */
-    ITUNES_METADATA_TYPE_DESCRIPTION                = LSMASH_4CC( 'd', 'e', 's', 'c' ),     /* Description (limited to 255 bytes) */
-    ITUNES_METADATA_TYPE_GROUPING                   = LSMASH_4CC( 'g', 'r', 'u', 'p' ),     /* Grouping */
-    ITUNES_METADATA_TYPE_PODCAST_KEYWORD            = LSMASH_4CC( 'k', 'e', 'y', 'w' ),     /* Podcast Keywords */
-    ITUNES_METADATA_TYPE_LONG_DESCRIPTION           = LSMASH_4CC( 'l', 'd', 'e', 's' ),     /* Long Description */
-    ITUNES_METADATA_TYPE_PURCHASE_DATE              = LSMASH_4CC( 'p', 'u', 'r', 'd' ),     /* Purchase Date */
-    ITUNES_METADATA_TYPE_TV_EPISODE_ID              = LSMASH_4CC( 't', 'v', 'e', 'n' ),     /* TV Episode ID */
-    ITUNES_METADATA_TYPE_TV_NETWORK                 = LSMASH_4CC( 't', 'v', 'n', 'n' ),     /* TV Network Name */
-    ITUNES_METADATA_TYPE_TV_SHOW_NAME               = LSMASH_4CC( 't', 'v', 's', 'h' ),     /* TV Show Name */
-    ITUNES_METADATA_TYPE_ITUNES_PURCHASE_ACCOUNT_ID = LSMASH_4CC( 'a', 'p', 'I', 'D' ),     /* iTunes Account Used for Purchase */
+    ITUNES_METADATA_ITEM_ALBUM_NAME                 = LSMASH_4CC( 0xA9, 'a', 'l', 'b' ),    /* Album Name */
+    ITUNES_METADATA_ITEM_ARTIST                     = LSMASH_4CC( 0xA9, 'A', 'R', 'T' ),    /* Artist */
+    ITUNES_METADATA_ITEM_USER_COMMENT               = LSMASH_4CC( 0xA9, 'c', 'm', 't' ),    /* User Comment */
+    ITUNES_METADATA_ITEM_RELEASE_DATE               = LSMASH_4CC( 0xA9, 'd', 'a', 'y' ),    /* YYYY-MM-DD format string (may be incomplete, i.e. only year) */
+    ITUNES_METADATA_ITEM_ENCODED_BY                 = LSMASH_4CC( 0xA9, 'e', 'n', 'c' ),    /* Person or company that encoded the recording */
+    ITUNES_METADATA_ITEM_USER_GENRE                 = LSMASH_4CC( 0xA9, 'g', 'e', 'n' ),    /* User Genre user-specified string */
+    ITUNES_METADATA_ITEM_0XA9_GROUPING              = LSMASH_4CC( 0xA9, 'g', 'r', 'p' ),    /* Grouping */
+    ITUNES_METADATA_ITEM_LYRICS                     = LSMASH_4CC( 0xA9, 'l', 'y', 'r' ),    /* Lyrics */
+    ITUNES_METADATA_ITEM_TITLE                      = LSMASH_4CC( 0xA9, 'n', 'a', 'm' ),    /* Title / Song Name */
+    ITUNES_METADATA_ITEM_TRACK_SUBTITLE             = LSMASH_4CC( 0xA9, 's', 't', '3' ),    /* Track Sub-Title */
+    ITUNES_METADATA_ITEM_ENCODING_TOOL              = LSMASH_4CC( 0xA9, 't', 'o', 'o' ),    /* Software which encoded the recording */
+    ITUNES_METADATA_ITEM_COMPOSER                   = LSMASH_4CC( 0xA9, 'w', 'r', 't' ),    /* Composer */
+    ITUNES_METADATA_ITEM_ALBUM_ARTIST               = LSMASH_4CC( 'a', 'A', 'R', 'T' ),     /* Artist for the whole album (if different than the individual tracks) */
+    ITUNES_METADATA_ITEM_PODCAST_CATEGORY           = LSMASH_4CC( 'c', 'a', 't', 'g' ),     /* Podcast Category */
+    ITUNES_METADATA_ITEM_COPYRIGHT                  = LSMASH_4CC( 'c', 'p', 'r', 't' ),     /* Copyright */
+    ITUNES_METADATA_ITEM_DESCRIPTION                = LSMASH_4CC( 'd', 'e', 's', 'c' ),     /* Description (limited to 255 bytes) */
+    ITUNES_METADATA_ITEM_GROUPING                   = LSMASH_4CC( 'g', 'r', 'u', 'p' ),     /* Grouping */
+    ITUNES_METADATA_ITEM_PODCAST_KEYWORD            = LSMASH_4CC( 'k', 'e', 'y', 'w' ),     /* Podcast Keywords */
+    ITUNES_METADATA_ITEM_LONG_DESCRIPTION           = LSMASH_4CC( 'l', 'd', 'e', 's' ),     /* Long Description */
+    ITUNES_METADATA_ITEM_PURCHASE_DATE              = LSMASH_4CC( 'p', 'u', 'r', 'd' ),     /* Purchase Date */
+    ITUNES_METADATA_ITEM_TV_EPISODE_ID              = LSMASH_4CC( 't', 'v', 'e', 'n' ),     /* TV Episode ID */
+    ITUNES_METADATA_ITEM_TV_NETWORK                 = LSMASH_4CC( 't', 'v', 'n', 'n' ),     /* TV Network Name */
+    ITUNES_METADATA_ITEM_TV_SHOW_NAME               = LSMASH_4CC( 't', 'v', 's', 'h' ),     /* TV Show Name */
+    ITUNES_METADATA_ITEM_ITUNES_PURCHASE_ACCOUNT_ID = LSMASH_4CC( 'a', 'p', 'I', 'D' ),     /* iTunes Account Used for Purchase */
 
     /* Integer type
      * (X): X means length of bytes */
-    ITUNES_METADATA_TYPE_EPISODE_GLOBAL_ID          = LSMASH_4CC( 'e', 'g', 'i', 'd' ),     /* (1) Episode Global Unique ID */
-    ITUNES_METADATA_TYPE_PREDEFINED_GENRE           = LSMASH_4CC( 'g', 'n', 'r', 'e' ),     /* (4) Pre-defined Genre / Enumerated value from ID3 tag set, plus 1 */
-    ITUNES_METADATA_TYPE_PODCAST_URL                = LSMASH_4CC( 'p', 'u', 'r', 'l' ),     /* (?) Podcast URL */
-    ITUNES_METADATA_TYPE_CONTENT_RATING             = LSMASH_4CC( 'r', 't', 'n', 'g' ),     /* (1) Content Rating / Does song have explicit content? 0: none, 2: clean, 4: explicit */
-    ITUNES_METADATA_TYPE_MEDIA_TYPE                 = LSMASH_4CC( 's', 't', 'i', 'k' ),     /* (1) Media Type */
-    ITUNES_METADATA_TYPE_BEATS_PER_MINUTE           = LSMASH_4CC( 't', 'm', 'p', 'o' ),     /* (2) Beats Per Minute */
-    ITUNES_METADATA_TYPE_TV_EPISODE                 = LSMASH_4CC( 't', 'v', 'e', 's' ),     /* (4) TV Episode */
-    ITUNES_METADATA_TYPE_TV_SEASON                  = LSMASH_4CC( 't', 'v', 's', 'n' ),     /* (4) TV Season */
-    ITUNES_METADATA_TYPE_ITUNES_ACCOUNT_TYPE        = LSMASH_4CC( 'a', 'k', 'I', 'D' ),     /* (1) iTunes Account Type / 0: iTunes, 1: AOL */
-    ITUNES_METADATA_TYPE_ITUNES_ARTIST_ID           = LSMASH_4CC( 'a', 't', 'I', 'D' ),     /* (4) iTunes Artist ID */
-    ITUNES_METADATA_TYPE_ITUNES_COMPOSER_ID         = LSMASH_4CC( 'c', 'm', 'I', 'D' ),     /* (4) iTunes Composer ID */
-    ITUNES_METADATA_TYPE_ITUNES_CATALOG_ID          = LSMASH_4CC( 'c', 'n', 'I', 'D' ),     /* (4) iTunes Catalog ID */
-    ITUNES_METADATA_TYPE_ITUNES_TV_GENRE_ID         = LSMASH_4CC( 'g', 'e', 'I', 'D' ),     /* (4) iTunes TV Genre ID */
-    ITUNES_METADATA_TYPE_ITUNES_PLAYLIST_ID         = LSMASH_4CC( 'p', 'l', 'I', 'D' ),     /* (8) iTunes Playlist ID */
-    ITUNES_METADATA_TYPE_ITUNES_COUNTRY_CODE        = LSMASH_4CC( 's', 'f', 'I', 'D' ),     /* (4) iTunes Country Code */
+    ITUNES_METADATA_ITEM_EPISODE_GLOBAL_ID          = LSMASH_4CC( 'e', 'g', 'i', 'd' ),     /* (1) Episode Global Unique ID */
+    ITUNES_METADATA_ITEM_PREDEFINED_GENRE           = LSMASH_4CC( 'g', 'n', 'r', 'e' ),     /* (4) Pre-defined Genre / Enumerated value from ID3 tag set, plus 1 */
+    ITUNES_METADATA_ITEM_PODCAST_URL                = LSMASH_4CC( 'p', 'u', 'r', 'l' ),     /* (?) Podcast URL */
+    ITUNES_METADATA_ITEM_CONTENT_RATING             = LSMASH_4CC( 'r', 't', 'n', 'g' ),     /* (1) Content Rating / Does song have explicit content? 0: none, 2: clean, 4: explicit */
+    ITUNES_METADATA_ITEM_MEDIA_TYPE                 = LSMASH_4CC( 's', 't', 'i', 'k' ),     /* (1) Media Type */
+    ITUNES_METADATA_ITEM_BEATS_PER_MINUTE           = LSMASH_4CC( 't', 'm', 'p', 'o' ),     /* (2) Beats Per Minute */
+    ITUNES_METADATA_ITEM_TV_EPISODE                 = LSMASH_4CC( 't', 'v', 'e', 's' ),     /* (4) TV Episode */
+    ITUNES_METADATA_ITEM_TV_SEASON                  = LSMASH_4CC( 't', 'v', 's', 'n' ),     /* (4) TV Season */
+    ITUNES_METADATA_ITEM_ITUNES_ACCOUNT_TYPE        = LSMASH_4CC( 'a', 'k', 'I', 'D' ),     /* (1) iTunes Account Type / 0: iTunes, 1: AOL */
+    ITUNES_METADATA_ITEM_ITUNES_ARTIST_ID           = LSMASH_4CC( 'a', 't', 'I', 'D' ),     /* (4) iTunes Artist ID */
+    ITUNES_METADATA_ITEM_ITUNES_COMPOSER_ID         = LSMASH_4CC( 'c', 'm', 'I', 'D' ),     /* (4) iTunes Composer ID */
+    ITUNES_METADATA_ITEM_ITUNES_CATALOG_ID          = LSMASH_4CC( 'c', 'n', 'I', 'D' ),     /* (4) iTunes Catalog ID */
+    ITUNES_METADATA_ITEM_ITUNES_TV_GENRE_ID         = LSMASH_4CC( 'g', 'e', 'I', 'D' ),     /* (4) iTunes TV Genre ID */
+    ITUNES_METADATA_ITEM_ITUNES_PLAYLIST_ID         = LSMASH_4CC( 'p', 'l', 'I', 'D' ),     /* (8) iTunes Playlist ID */
+    ITUNES_METADATA_ITEM_ITUNES_COUNTRY_CODE        = LSMASH_4CC( 's', 'f', 'I', 'D' ),     /* (4) iTunes Country Code */
 
     /* Boolean type */
-    ITUNES_METADATA_TYPE_DISC_COMPILATION           = LSMASH_4CC( 'c', 'p', 'i', 'l' ),     /* Disc Compilation / Is disc part of a compilation? 0: No, 1: Yes */
-    ITUNES_METADATA_TYPE_HIGH_DEFINITION_VIDEO      = LSMASH_4CC( 'h', 'd', 'v', 'd' ),     /* High Definition Video / 0: No, 1: Yes */
-    ITUNES_METADATA_TYPE_PODCAST                    = LSMASH_4CC( 'p', 'c', 's', 't' ),     /* Podcast / 0: No, 1: Yes */
-    ITUNES_METADATA_TYPE_GAPLESS_PLAYBACK           = LSMASH_4CC( 'p', 'g', 'a', 'p' ),     /* Gapless Playback / 0: insert gap, 1: no gap */
+    ITUNES_METADATA_ITEM_DISC_COMPILATION           = LSMASH_4CC( 'c', 'p', 'i', 'l' ),     /* Disc Compilation / Is disc part of a compilation? 0: No, 1: Yes */
+    ITUNES_METADATA_ITEM_HIGH_DEFINITION_VIDEO      = LSMASH_4CC( 'h', 'd', 'v', 'd' ),     /* High Definition Video / 0: No, 1: Yes */
+    ITUNES_METADATA_ITEM_PODCAST                    = LSMASH_4CC( 'p', 'c', 's', 't' ),     /* Podcast / 0: No, 1: Yes */
+    ITUNES_METADATA_ITEM_GAPLESS_PLAYBACK           = LSMASH_4CC( 'p', 'g', 'a', 'p' ),     /* Gapless Playback / 0: insert gap, 1: no gap */
 
     /* Binary type */
-    ITUNES_METADATA_TYPE_COVER_ART                  = LSMASH_4CC( 'c', 'o', 'v', 'r' ),     /* One or more cover art images */
-    ITUNES_METADATA_TYPE_DISC_NUMBER                = LSMASH_4CC( 'd', 'i', 's', 'k' ),     /* Disc Number */
-    ITUNES_METADATA_TYPE_TRACH_NUMBER               = LSMASH_4CC( 't', 'r', 'k', 'n' ),     /* Track Number */
+    ITUNES_METADATA_ITEM_COVER_ART                  = LSMASH_4CC( 'c', 'o', 'v', 'r' ),     /* One or more cover art images */
+    ITUNES_METADATA_ITEM_DISC_NUMBER                = LSMASH_4CC( 'd', 'i', 's', 'k' ),     /* Disc Number */
+    ITUNES_METADATA_ITEM_TRACH_NUMBER               = LSMASH_4CC( 't', 'r', 'k', 'n' ),     /* Track Number */
 
     /* Custom type */
-    ITUNES_METADATA_TYPE_CUSTOM                     = LSMASH_4CC( '-', '-', '-', '-' ),     /* Custom */
+    ITUNES_METADATA_ITEM_CUSTOM                     = LSMASH_4CC( '-', '-', '-', '-' ),     /* Custom */
+} lsmash_itunes_metadata_item;
+
+typedef enum
+{
+    ITUNES_METADATA_TYPE_NONE    = 0,
+    ITUNES_METADATA_TYPE_STRING  = 1,
+    ITUNES_METADATA_TYPE_INTEGER = 2,
+    ITUNES_METADATA_TYPE_BOOLEAN = 3,
 } lsmash_itunes_metadata_type;
 
 typedef enum
@@ -1462,6 +1470,13 @@ typedef enum
     LSMASH_BOOLEAN_TRUE  = 1
 } lsmash_boolean_t;
 
+typedef union
+{
+    char            *string;
+    uint64_t         integer;
+    lsmash_boolean_t boolean;
+} lsmash_itunes_metadata_t;
+
 typedef struct lsmash_root_tag lsmash_root_t;
 typedef void lsmash_itunes_metadata_list_t;
 
@@ -1538,11 +1553,11 @@ void lsmash_delete_tyrant_chapter( lsmash_root_t *root );
 /* track_ID == 0 means copyright declaration applies to the entire presentation, not an entire track. */
 int lsmash_set_copyright( lsmash_root_t *root, uint32_t track_ID, uint16_t ISO_language, char *notice );
 
-/* When type is specified as ITUNES_METADATA_TYPE_CUSTOM, meaning is mandatory while name is optionally valid.
- * Otherwise, meaning and name are just ignored. */
-int lsmash_set_itunes_metadata_string( lsmash_root_t *root, lsmash_itunes_metadata_type type, char *value, char *meaning, char *name );
-int lsmash_set_itunes_metadata_integer( lsmash_root_t *root, lsmash_itunes_metadata_type type, uint64_t value, char *meaning, char *name );
-int lsmash_set_itunes_metadata_boolean( lsmash_root_t *root, lsmash_itunes_metadata_type type, lsmash_boolean_t value, char *meaning, char *name );
+/* When 'item' is specified as ITUNES_METADATA_ITEM_CUSTOM, 'type' and 'meaning' is mandatory while 'name' is optionally valid.
+ * Otherwise 'type', 'meaning' and 'name' are just ignored. */
+int lsmash_set_itunes_metadata( lsmash_root_t *root,
+                                lsmash_itunes_metadata_item item, lsmash_itunes_metadata_type type,
+                                lsmash_itunes_metadata_t value, char *meaning, char *name );
 
 #ifdef LSMASH_DEMUXER_ENABLED
 int lsmash_print_movie( lsmash_root_t *root, const char *filename );

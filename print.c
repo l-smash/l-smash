@@ -1506,66 +1506,66 @@ static int isom_print_metaitem( FILE *fp, lsmash_root_t *root, isom_box_t *box, 
     char *name;
     static const struct
     {
-        lsmash_itunes_metadata_type type;
+        lsmash_itunes_metadata_item item;
         char                       *name;
     } metaitem_table[] =
         {
-            { ITUNES_METADATA_TYPE_ALBUM_NAME,                 "Album Name" },
-            { ITUNES_METADATA_TYPE_ARTIST,                     "Artist" },
-            { ITUNES_METADATA_TYPE_USER_COMMENT,               "User Comment" },
-            { ITUNES_METADATA_TYPE_RELEASE_DATE,               "Release Date" },
-            { ITUNES_METADATA_TYPE_ENCODED_BY,                 "Encoded By" },
-            { ITUNES_METADATA_TYPE_USER_GENRE,                 "User Genre" },
-            { ITUNES_METADATA_TYPE_0XA9_GROUPING,              "Grouping" },
-            { ITUNES_METADATA_TYPE_LYRICS,                     "Lyrics" },
-            { ITUNES_METADATA_TYPE_TITLE,                      "Title" },
-            { ITUNES_METADATA_TYPE_ENCODING_TOOL,              "Encoding Tool" },
-            { ITUNES_METADATA_TYPE_COMPOSER,                   "Composer" },
-            { ITUNES_METADATA_TYPE_ALBUM_ARTIST,               "Album Artist" },
-            { ITUNES_METADATA_TYPE_PODCAST_CATEGORY,           "Podcast Category" },
-            { ITUNES_METADATA_TYPE_COVER_ART,                  "Cover Art" },
-            { ITUNES_METADATA_TYPE_DISC_COMPILATION,           "Disc Compilation" },
-            { ITUNES_METADATA_TYPE_COPYRIGHT,                  "Copyright" },
-            { ITUNES_METADATA_TYPE_DESCRIPTION,                "Description" },
-            { ITUNES_METADATA_TYPE_DISC_NUMBER,                "Disc Number" },
-            { ITUNES_METADATA_TYPE_EPISODE_GLOBAL_ID,          "Episode Global Unique ID" },
-            { ITUNES_METADATA_TYPE_PREDEFINED_GENRE,           "Pre-defined Genre" },
-            { ITUNES_METADATA_TYPE_GROUPING,                   "Grouping" },
-            { ITUNES_METADATA_TYPE_HIGH_DEFINITION_VIDEO,      "High Definition Video" },
-            { ITUNES_METADATA_TYPE_PODCAST_KEYWORD,            "Podcast Keyword" },
-            { ITUNES_METADATA_TYPE_LONG_DESCRIPTION,           "Long Description" },
-            { ITUNES_METADATA_TYPE_PODCAST,                    "Podcast" },
-            { ITUNES_METADATA_TYPE_GAPLESS_PLAYBACK,           "Gapless Playback" },
-            { ITUNES_METADATA_TYPE_PURCHASE_DATE,              "Purchase Date" },
-            { ITUNES_METADATA_TYPE_PODCAST_URL,                "Podcast URL" },
-            { ITUNES_METADATA_TYPE_CONTENT_RATING,             "Content Rating" },
-            { ITUNES_METADATA_TYPE_MEDIA_TYPE,                 "Media Type" },
-            { ITUNES_METADATA_TYPE_BEATS_PER_MINUTE,           "Beats Per Minute" },
-            { ITUNES_METADATA_TYPE_TRACH_NUMBER,               "Track Number" },
-            { ITUNES_METADATA_TYPE_TV_EPISODE_ID,              "TV Episode ID" },
-            { ITUNES_METADATA_TYPE_TV_EPISODE,                 "TV Episode" },
-            { ITUNES_METADATA_TYPE_TV_NETWORK,                 "TV Network" },
-            { ITUNES_METADATA_TYPE_TV_SHOW_NAME,               "TV Show Name" },
-            { ITUNES_METADATA_TYPE_TV_SEASON,                  "TV Season" },
-            { ITUNES_METADATA_TYPE_ITUNES_PURCHASE_ACCOUNT_ID, "iTunes Account Used for Purchase" },
-            { ITUNES_METADATA_TYPE_ITUNES_ACCOUNT_TYPE,        "iTunes Account Type" },
-            { ITUNES_METADATA_TYPE_ITUNES_ARTIST_ID,           "iTunes Artist ID" },
-            { ITUNES_METADATA_TYPE_ITUNES_COMPOSER_ID,         "iTunes Composer ID" },
-            { ITUNES_METADATA_TYPE_ITUNES_CATALOG_ID,          "iTunes Catalog ID" },
-            { ITUNES_METADATA_TYPE_ITUNES_TV_GENRE_ID,         "iTunes TV Genre ID" },
-            { ITUNES_METADATA_TYPE_ITUNES_PLAYLIST_ID,         "iTunes Playlist ID" },
-            { ITUNES_METADATA_TYPE_ITUNES_COUNTRY_CODE,        "iTunes Country Code" },
-            { ITUNES_METADATA_TYPE_CUSTOM,                     "Custom Metadata Item" },
-            { 0 }
+            { ITUNES_METADATA_ITEM_ALBUM_NAME,                 "Album Name" },
+            { ITUNES_METADATA_ITEM_ARTIST,                     "Artist" },
+            { ITUNES_METADATA_ITEM_USER_COMMENT,               "User Comment" },
+            { ITUNES_METADATA_ITEM_RELEASE_DATE,               "Release Date" },
+            { ITUNES_METADATA_ITEM_ENCODED_BY,                 "Encoded By" },
+            { ITUNES_METADATA_ITEM_USER_GENRE,                 "User Genre" },
+            { ITUNES_METADATA_ITEM_0XA9_GROUPING,              "Grouping" },
+            { ITUNES_METADATA_ITEM_LYRICS,                     "Lyrics" },
+            { ITUNES_METADATA_ITEM_TITLE,                      "Title" },
+            { ITUNES_METADATA_ITEM_ENCODING_TOOL,              "Encoding Tool" },
+            { ITUNES_METADATA_ITEM_COMPOSER,                   "Composer" },
+            { ITUNES_METADATA_ITEM_ALBUM_ARTIST,               "Album Artist" },
+            { ITUNES_METADATA_ITEM_PODCAST_CATEGORY,           "Podcast Category" },
+            { ITUNES_METADATA_ITEM_COVER_ART,                  "Cover Art" },
+            { ITUNES_METADATA_ITEM_DISC_COMPILATION,           "Disc Compilation" },
+            { ITUNES_METADATA_ITEM_COPYRIGHT,                  "Copyright" },
+            { ITUNES_METADATA_ITEM_DESCRIPTION,                "Description" },
+            { ITUNES_METADATA_ITEM_DISC_NUMBER,                "Disc Number" },
+            { ITUNES_METADATA_ITEM_EPISODE_GLOBAL_ID,          "Episode Global Unique ID" },
+            { ITUNES_METADATA_ITEM_PREDEFINED_GENRE,           "Pre-defined Genre" },
+            { ITUNES_METADATA_ITEM_GROUPING,                   "Grouping" },
+            { ITUNES_METADATA_ITEM_HIGH_DEFINITION_VIDEO,      "High Definition Video" },
+            { ITUNES_METADATA_ITEM_PODCAST_KEYWORD,            "Podcast Keyword" },
+            { ITUNES_METADATA_ITEM_LONG_DESCRIPTION,           "Long Description" },
+            { ITUNES_METADATA_ITEM_PODCAST,                    "Podcast" },
+            { ITUNES_METADATA_ITEM_GAPLESS_PLAYBACK,           "Gapless Playback" },
+            { ITUNES_METADATA_ITEM_PURCHASE_DATE,              "Purchase Date" },
+            { ITUNES_METADATA_ITEM_PODCAST_URL,                "Podcast URL" },
+            { ITUNES_METADATA_ITEM_CONTENT_RATING,             "Content Rating" },
+            { ITUNES_METADATA_ITEM_MEDIA_TYPE,                 "Media Type" },
+            { ITUNES_METADATA_ITEM_BEATS_PER_MINUTE,           "Beats Per Minute" },
+            { ITUNES_METADATA_ITEM_TRACH_NUMBER,               "Track Number" },
+            { ITUNES_METADATA_ITEM_TV_EPISODE_ID,              "TV Episode ID" },
+            { ITUNES_METADATA_ITEM_TV_EPISODE,                 "TV Episode" },
+            { ITUNES_METADATA_ITEM_TV_NETWORK,                 "TV Network" },
+            { ITUNES_METADATA_ITEM_TV_SHOW_NAME,               "TV Show Name" },
+            { ITUNES_METADATA_ITEM_TV_SEASON,                  "TV Season" },
+            { ITUNES_METADATA_ITEM_ITUNES_PURCHASE_ACCOUNT_ID, "iTunes Account Used for Purchase" },
+            { ITUNES_METADATA_ITEM_ITUNES_ACCOUNT_TYPE,        "iTunes Account Type" },
+            { ITUNES_METADATA_ITEM_ITUNES_ARTIST_ID,           "iTunes Artist ID" },
+            { ITUNES_METADATA_ITEM_ITUNES_COMPOSER_ID,         "iTunes Composer ID" },
+            { ITUNES_METADATA_ITEM_ITUNES_CATALOG_ID,          "iTunes Catalog ID" },
+            { ITUNES_METADATA_ITEM_ITUNES_TV_GENRE_ID,         "iTunes TV Genre ID" },
+            { ITUNES_METADATA_ITEM_ITUNES_PLAYLIST_ID,         "iTunes Playlist ID" },
+            { ITUNES_METADATA_ITEM_ITUNES_COUNTRY_CODE,        "iTunes Country Code" },
+            { ITUNES_METADATA_ITEM_CUSTOM,                     "Custom Metadata Item" },
+            { 0,                                               NULL }
         };
     int i;
-    for( i = 0; metaitem_table[i].type; i++ )
-        if( metaitem->type == metaitem_table[i].type )
+    for( i = 0; metaitem_table[i].name; i++ )
+        if( metaitem->type == metaitem_table[i].item )
         {
             name = metaitem_table[i].name;
             break;
         }
-    if( !metaitem_table[i].type )
+    if( !metaitem_table[i].item )
         name = "Unknown";
     uint32_t name_length = strlen( name );
     uint32_t display_name_length = name_length + 20;

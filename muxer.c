@@ -773,28 +773,31 @@ static int set_itunes_metadata( output_t *output, option_t *opt )
     if( !opt->itunes_movie )
         return 0;
     itunes_metadata_t *metadata = &opt->itunes_metadata;
-    if( lsmash_set_itunes_metadata_string( output->root, ITUNES_METADATA_TYPE_ENCODING_TOOL, "L-SMASH", NULL, NULL ) )
+    if( lsmash_set_itunes_metadata( output->root, ITUNES_METADATA_ITEM_ENCODING_TOOL, ITUNES_METADATA_TYPE_NONE,
+                                   (lsmash_itunes_metadata_t){ .string = "L-SMASH" }, NULL, NULL ) )
         return -1;
-#define SET_USER_ITUNES_METADATA_STRING( type, value ) \
+#define SET_USER_ITUNES_METADATA_STRING( item, value ) \
     if( metadata->value \
-     && lsmash_set_itunes_metadata_string( output->root, type, metadata->value, NULL, NULL ) ) \
+     && lsmash_set_itunes_metadata( output->root, item, ITUNES_METADATA_TYPE_NONE, \
+                                    (lsmash_itunes_metadata_t){ .string = metadata->value }, NULL, NULL ) ) \
         return -1
-    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_ALBUM_NAME,   album_name );
-    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_ARTIST,       artist );
-    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_USER_COMMENT, comment );
-    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_RELEASE_DATE, release_date );
-    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_ENCODED_BY,   encoder );
-    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_USER_GENRE,   genre );
-    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_LYRICS,       lyrics );
-    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_TITLE,        title );
-    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_COMPOSER,     composer );
-    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_ALBUM_ARTIST, album_artist );
-    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_COPYRIGHT,    copyright );
-    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_DESCRIPTION,  description );
-    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_TYPE_GROUPING,     grouping );
+    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_ITEM_ALBUM_NAME,   album_name );
+    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_ITEM_ARTIST,       artist );
+    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_ITEM_USER_COMMENT, comment );
+    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_ITEM_RELEASE_DATE, release_date );
+    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_ITEM_ENCODED_BY,   encoder );
+    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_ITEM_USER_GENRE,   genre );
+    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_ITEM_LYRICS,       lyrics );
+    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_ITEM_TITLE,        title );
+    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_ITEM_COMPOSER,     composer );
+    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_ITEM_ALBUM_ARTIST, album_artist );
+    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_ITEM_COPYRIGHT,    copyright );
+    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_ITEM_DESCRIPTION,  description );
+    SET_USER_ITUNES_METADATA_STRING( ITUNES_METADATA_ITEM_GROUPING,     grouping );
 #undef SET_USER_ITUNES_METADATA
     if( metadata->beats_per_minute
-     && lsmash_set_itunes_metadata_integer( output->root, ITUNES_METADATA_TYPE_BEATS_PER_MINUTE, metadata->beats_per_minute, NULL, NULL ) )
+     && lsmash_set_itunes_metadata( output->root, ITUNES_METADATA_ITEM_BEATS_PER_MINUTE, ITUNES_METADATA_TYPE_NONE,
+                                   (lsmash_itunes_metadata_t){ .integer = metadata->beats_per_minute }, NULL, NULL ) )
         return -1;
     return 0;
 }
