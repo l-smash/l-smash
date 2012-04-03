@@ -1481,9 +1481,6 @@ typedef struct lsmash_root_tag lsmash_root_t;
 typedef void lsmash_itunes_metadata_list_t;
 
 /* public functions */
-int lsmash_add_sps_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *sps, uint32_t sps_size );
-int lsmash_add_pps_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *pps, uint32_t pps_size );
-int lsmash_add_spsext_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *spsext, uint32_t spsext_size );
 int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_type, void* summary );
 
 int lsmash_add_btrt( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number );
@@ -1499,10 +1496,6 @@ uint32_t lsmash_get_composition_to_decode_shift( lsmash_root_t *root, uint32_t t
 uint32_t lsmash_get_media_timescale( lsmash_root_t *root, uint32_t track_ID );
 uint32_t lsmash_get_movie_timescale( lsmash_root_t *root );
 
-int lsmash_set_avc_config( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number,
-                           uint8_t configurationVersion, uint8_t AVCProfileIndication, uint8_t profile_compatibility,
-                           uint8_t AVCLevelIndication, uint8_t lengthSizeMinusOne,
-                           uint8_t chroma_format, uint8_t bit_depth_luma_minus8, uint8_t bit_depth_chroma_minus8 );
 int lsmash_set_last_sample_delta( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_delta );
 int lsmash_set_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length );
 int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom );

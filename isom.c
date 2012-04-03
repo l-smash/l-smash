@@ -335,69 +335,6 @@ void isom_remove_avcC_ps( isom_avcC_ps_entry_t *ps )
     free( ps );
 }
 
-int lsmash_add_sps_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *sps, uint32_t sps_size )
-{
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
-        return -1;
-    isom_visual_entry_t *data = (isom_visual_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
-    if( !data || !data->avcC )
-        return -1;
-    isom_avcC_t *avcC = (isom_avcC_t *)data->avcC;
-    isom_avcC_ps_entry_t *ps = isom_create_ps_entry( sps, sps_size );
-    if( !ps )
-        return -1;
-    if( lsmash_add_entry( avcC->sequenceParameterSets, ps ) )
-    {
-        isom_remove_avcC_ps( ps );
-        return -1;
-    }
-    avcC->numOfSequenceParameterSets = avcC->sequenceParameterSets->entry_count;
-    return 0;
-}
-
-int lsmash_add_pps_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *pps, uint32_t pps_size )
-{
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
-        return -1;
-    isom_visual_entry_t *data = (isom_visual_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
-    if( !data || !data->avcC )
-        return -1;
-    isom_avcC_t *avcC = (isom_avcC_t *)data->avcC;
-    isom_avcC_ps_entry_t *ps = isom_create_ps_entry( pps, pps_size );
-    if( !ps )
-        return -1;
-    if( lsmash_add_entry( avcC->pictureParameterSets, ps ) )
-    {
-        isom_remove_avcC_ps( ps );
-        return -1;
-    }
-    avcC->numOfPictureParameterSets = avcC->pictureParameterSets->entry_count;
-    return 0;
-}
-
-int lsmash_add_spsext_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number, uint8_t *spsext, uint32_t spsext_size )
-{
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
-        return -1;
-    isom_visual_entry_t *data = (isom_visual_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
-    if( !data || !data->avcC )
-        return -1;
-    isom_avcC_t *avcC = (isom_avcC_t *)data->avcC;
-    isom_avcC_ps_entry_t *ps = isom_create_ps_entry( spsext, spsext_size );
-    if( !ps )
-        return -1;
-    if( lsmash_add_entry( avcC->sequenceParameterSetExt, ps ) )
-    {
-        isom_remove_avcC_ps( ps );
-        return -1;
-    }
-    avcC->numOfSequenceParameterSetExt = avcC->sequenceParameterSetExt->entry_count;
-    return 0;
-}
-
 int isom_add_avcC( isom_visual_entry_t *visual )
 {
     if( !visual )
@@ -4132,33 +4069,6 @@ int lsmash_update_track_duration( lsmash_root_t *root, uint32_t track_ID, uint32
     return (!root->fragment && trak->edts && trak->edts->elst)
          ? isom_update_mvhd_duration( root->moov )  /* Only update movie duration. */
          : isom_update_tkhd_duration( trak );       /* Also update movie duration internally. */
-}
-
-int lsmash_set_avc_config( lsmash_root_t *root, uint32_t track_ID, uint32_t entry_number,
-    uint8_t configurationVersion, uint8_t AVCProfileIndication, uint8_t profile_compatibility, uint8_t AVCLevelIndication, uint8_t lengthSizeMinusOne,
-    uint8_t chroma_format, uint8_t bit_depth_luma_minus8, uint8_t bit_depth_chroma_minus8 )
-{
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
-        return -1;
-    isom_visual_entry_t *data = (isom_visual_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->stsd->list, entry_number );
-    if( !data )
-        return -1;
-    isom_avcC_t *avcC = (isom_avcC_t *)data->avcC;
-    if( !avcC )
-        return -1;
-    avcC->configurationVersion = configurationVersion;
-    avcC->AVCProfileIndication = AVCProfileIndication;
-    avcC->profile_compatibility = profile_compatibility;
-    avcC->AVCLevelIndication = AVCLevelIndication;
-    avcC->lengthSizeMinusOne = lengthSizeMinusOne;
-    if( ISOM_REQUIRES_AVCC_EXTENSION( AVCProfileIndication ) )
-    {
-        avcC->chroma_format = chroma_format;
-        avcC->bit_depth_luma_minus8 = bit_depth_luma_minus8;
-        avcC->bit_depth_chroma_minus8 = bit_depth_chroma_minus8;
-    }
-    return 0;
 }
 
 static inline int isom_increment_sample_number_in_entry( uint32_t *sample_number_in_entry, uint32_t sample_count_in_entry, lsmash_entry_t **entry )
