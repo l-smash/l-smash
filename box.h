@@ -2135,6 +2135,14 @@ int isom_add_mp4a( isom_wave_t *wave );
 int isom_add_terminator( isom_wave_t *wave );
 int isom_add_chan( isom_audio_entry_t *audio );
 int isom_add_ftab( isom_tx3g_entry_t *tx3g );
+int isom_add_hdlr( isom_mdia_t *mdia, isom_meta_t *meta, isom_minf_t *minf, uint32_t media_type );
+int isom_add_metaitem( isom_ilst_t *ilst, uint32_t type );
+int isom_add_mean( isom_metaitem_t *metaitem );
+int isom_add_name( isom_metaitem_t *metaitem );
+int isom_add_data( isom_metaitem_t *metaitem );
+int isom_add_ilst( isom_moov_t *moov );
+int isom_add_meta( isom_box_t *parent );
+int isom_add_udta( lsmash_root_t *root, uint32_t track_ID );
 
 void isom_remove_tapt( isom_tapt_t *tapt );
 void isom_remove_clap( isom_clap_t *clap );
@@ -2154,6 +2162,11 @@ void isom_remove_terminator( isom_terminator_t *terminator );
 void isom_remove_wave( isom_wave_t *wave );
 void isom_remove_chan( isom_chan_t *chan );
 void isom_remove_ftab( isom_ftab_t *ftab );
+void isom_remove_mean( isom_mean_t *mean );
+void isom_remove_name( isom_name_t *name );
+void isom_remove_data( isom_data_t *data );
+void isom_remove_metaitem( isom_metaitem_t *metaitem );
+void isom_remove_ilst( isom_ilst_t *ilst );
 void isom_remove_sample_description( isom_sample_entry_t *sample );
 
 #define isom_create_box( box_name, parent_name, box_4cc ) \
