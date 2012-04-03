@@ -1062,156 +1062,6 @@ typedef enum
     QT_PIXEL_FORMAT_TYPE_422YpCbCr8_FULL_RANGE              = LSMASH_4CC( 'y', 'u', 'v', 'f' ),     /* Component Y'CbCr 8-bit 4:2:2, full range, ordered Y'0 Cb Y'1 Cr */
 } lsmash_pixel_format;
 
-typedef enum
-{
-    DTS_CORE_SUBSTREAM_CORE_FLAG = 0x00000001,
-    DTS_CORE_SUBSTREAM_XXCH_FLAG = 0x00000002,
-    DTS_CORE_SUBSTREAM_X96_FLAG  = 0x00000004,
-    DTS_CORE_SUBSTREAM_XCH_FLAG  = 0x00000008,
-    DTS_EXT_SUBSTREAM_CORE_FLAG  = 0x00000010,
-    DTS_EXT_SUBSTREAM_XBR_FLAG   = 0x00000020,
-    DTS_EXT_SUBSTREAM_XXCH_FLAG  = 0x00000040,
-    DTS_EXT_SUBSTREAM_X96_FLAG   = 0x00000080,
-    DTS_EXT_SUBSTREAM_LBR_FLAG   = 0x00000100,
-    DTS_EXT_SUBSTREAM_XLL_FLAG   = 0x00000200,
-} lsmash_dts_construction_flag;
-
-typedef enum
-{
-    H264_PARAMETER_SET_TYPE_SPS    = 0,
-    H264_PARAMETER_SET_TYPE_PPS    = 1,
-    H264_PARAMETER_SET_TYPE_SPSEXT = 2,
-} lsmash_h264_parameter_set_type;
-
-/* CODEC specific data types */
-typedef struct
-{
-    uint8_t fscod;          /* the same value as the fscod field in the AC-3 bitstream */
-    uint8_t bsid;           /* the same value as the bsid field in the AC-3 bitstream */
-    uint8_t bsmod;          /* the same value as the bsmod field in the AC-3 bitstream */
-    uint8_t acmod;          /* the same value as the acmod field in the AC-3 bitstream */
-    uint8_t lfeon;          /* the same value as the lfeon field in the AC-3 bitstream */
-    uint8_t frmsizecod;     /* the same value as the frmsizecod field in the AC-3 bitstream */
-} lsmash_ac3_specific_parameters_t;
-
-typedef struct
-{
-    uint8_t  fscod;         /* the same value as the fscod field in the independent substream */
-    uint8_t  fscod2;        /* Any user must not use this. */
-    uint8_t  bsid;          /* the same value as the bsid field in the independent substream */
-    uint8_t  bsmod;         /* the same value as the bsmod field in the independent substream
-                             * If the bsmod field is not present in the independent substream, this field shall be set to 0. */
-    uint8_t  acmod;         /* the same value as the acmod field in the independent substream */
-    uint8_t  lfeon;         /* the same value as the lfeon field in the independent substream */
-    uint8_t  num_dep_sub;   /* the number of dependent substreams that are associated with the independent substream */
-    uint16_t chan_loc;      /* channel locations of dependent substreams associated with the independent substream
-                             * This information is extracted from the chanmap field of each dependent substream. */
-} lsmash_eac3_substream_info_t;
-
-typedef struct
-{
-    uint16_t data_rate;     /* the data rate of the Enhanced AC-3 bitstream in kbit/s
-                             * If the Enhanced AC-3 stream is variable bitrate, then this value indicates the maximum data rate of the stream. */
-    uint8_t  num_ind_sub;   /* the number of independent substreams that are present in the Enhanced AC-3 bitstream
-                             * The value of this field is one less than the number of independent substreams present
-                             * and shall be in the range of 0 to 7, inclusive. */
-    lsmash_eac3_substream_info_t independent_info[8];
-} lsmash_eac3_specific_parameters_t;
-
-typedef struct
-{
-    uint32_t DTSSamplingFrequency;  /* the maximum sampling frequency stored in the compressed audio stream */
-    uint32_t maxBitrate;            /* the peak bit rate, in bits per second, of the audio elementary stream for the duration of the track,
-                                     * including the core substream (if present) and all extension substreams.
-                                     * If the stream is a constant bit rate, this parameter shall have the same value as avgBitrate.
-                                     * If the maximum bit rate is unknown, this parameter shall be set to 0. */
-    uint32_t avgBitrate;            /* the average bit rate, in bits per second, of the audio elementary stream for the duration of the track,
-                                     * including the core substream and any extension substream that may be present. */
-    uint8_t  pcmSampleDepth;        /* the bit depth of the rendered audio
-                                     * The value is 16 or 24 bits. */
-    uint8_t  FrameDuration;         /* the number of audio samples decoded in a complete audio access unit at DTSSamplingFrequency
-                                     *   0: 512, 1: 1024, 2: 2048, 3: 4096 */
-    uint8_t  StreamConstruction;    /* complete information on the existence and of location of extensions in any synchronized frame */
-    uint8_t  CoreLFEPresent;        /* the presence of an LFE channel in the core
-                                     *   0: none
-                                     *   1: LFE exists */
-    uint8_t  CoreLayout;            /* the channel layout of the core within the core substream
-                                     * If no core substream exists, this parameter shall be ignored and ChannelLayout or
-                                     * RepresentationType shall be used to determine channel configuration. */
-    uint16_t CoreSize;              /* The size of a core substream AU in bytes.
-                                     * If no core substream exists, CoreSize = 0. */
-    uint8_t  StereoDownmix;         /* the presence of an embedded stereo downmix in the stream
-                                     *   0: none
-                                     *   1: embedded downmix present */
-    uint8_t  RepresentationType;    /* This indicates special properties of the audio presentation.
-                                     *   0: Audio asset designated for mixing with another audio asset
-                                     *   2: Lt/Rt Encoded for matrix surround decoding
-                                     *   3: Audio processed for headphone playback
-                                     *   otherwise: Reserved
-                                     * If ChannelLayout != 0, this value shall be ignored. */
-    uint16_t ChannelLayout;         /* complete information on channels coded in the audio stream including core and extensions */
-    uint8_t  MultiAssetFlag;        /* This flag shall set if the stream contains more than one asset.
-                                     *   0: single asset
-                                     *   1: multiple asset
-                                     * When multiple assets exist, the remaining parameters only reflect the coding parameters of the first asset. */
-    uint8_t  LBRDurationMod;        /* This flag indicates a special case of the LBR coding bandwidth, resulting in 1/3 or 2/3 band limiting.
-                                     * If set to 1, LBR frame duration is 50 % larger than indicated in FrameDuration */
-} lsmash_dts_specific_parameters_t;
-
-typedef void lsmash_h264_parameter_sets_t;
-
-typedef struct
-{
-    uint8_t AVCProfileIndication;                           /* profile_idc in sequence parameter sets */
-    uint8_t profile_compatibility;                          /* constraint_set_flags in sequence parameter sets */
-    uint8_t AVCLevelIndication;                             /* maximum level_idc in sequence parameter sets */
-    uint8_t lengthSizeMinusOne;                             /* the length in bytes of the NALUnitLength field prior to NAL unit
-                                                             * The value of this field shall be one of 0, 1, or 3
-                                                             * corresponding to a length encoded with 1, 2, or 4 bytes, respectively.
-                                                             * NALUnitLength indicates the size of a NAL unit measured in bytes,
-                                                             * and includes the size of both the one byte NAL header and the EBSP payload
-                                                             * but does not include the length field itself. */
-    uint8_t chroma_format;                                  /* chroma_format_idc in sequence parameter sets */
-    uint8_t bit_depth_luma_minus8;                          /* bit_depth_luma_minus8 in sequence parameter sets */
-    uint8_t bit_depth_chroma_minus8;                        /* bit_depth_chroma_minus8 in sequence parameter sets */
-    lsmash_h264_parameter_sets_t *sequenceParameterSets;    /* sequence parameter sets */
-    lsmash_h264_parameter_sets_t *pictureParameterSets;     /* picture paramter sets */
-    lsmash_h264_parameter_sets_t *sequenceParameterSetExt;  /* sequence parameter set extensions */
-} lsmash_h264_specific_parameters_t;
-
-typedef void lsmash_vc1_header_t;
-
-typedef struct
-{
-    /* Note: multiple_sequence, multiple_entry, slice_present and bframe_present shall be decided through overall VC-1 bitstream. */
-    uint8_t  profile;               /* the encoding profile used in the VC-1 bitstream
-                                     *   0: simple profile (not supported)
-                                     *   4: main profile   (not supported)
-                                     *  12: advanced profile
-                                     * Currently, only 12 for advanced profile is available. */
-    uint8_t  level;                 /* the highest encoding level used in the VC-1 bitstream */
-    uint8_t  cbr;                   /* 0: non-constant bitrate model
-                                     * 1: constant bitrate model */
-    uint8_t  interlaced;            /* 0: interlaced coding of frames is not used.
-                                     * 1: frames may use interlaced coding. */
-    uint8_t  multiple_sequence;     /* 0: the track contains no sequence headers (stored only in VC-1 specific info structure),
-                                     *    or
-                                     *    all sequence headers in the track are identical to the sequence header that is specified in the seqhdr field.
-                                     *    In this case, random access points are samples that contain an entry-point header.
-                                     * 1: the track may contain Sequence headers that are different from the sequence header specified in the seqhdr field.
-                                     *    In this case, random access points are samples that contain both a sequence Header and an entry-point header. */
-    uint8_t  multiple_entry;        /* 0: all entry-point headers in the track are identical to the entry-point header that is specified in the ephdr field.
-                                     * 1: the track may contain Entry-point headers that are different from the entry-point header specified in the ephdr field. */
-    uint8_t  slice_present;         /* 0: frames are not coded as multiple slices.
-                                     * 1: frames may be coded as multiple slices. */
-    uint8_t  bframe_present;        /* 0: neither B-frames nor BI-frames are present in the track.
-                                     * 1: B-frames or BI-frames may be present in the track. */
-    uint32_t framerate;             /* the rounded frame rate (frames per second) of the track
-                                     * Should be set to 0xffffffff if the frame rate is not known, unspecified, or non-constant. */
-    lsmash_vc1_header_t *seqhdr;    /* a sequence header EBDU (mandatory) */
-    lsmash_vc1_header_t *ephdr;     /* an entry-point header EBDU (mandatory) */
-} lsmash_vc1_specific_parameters_t;
-
 /* sample data types */
 typedef struct
 {
@@ -1597,21 +1447,137 @@ lsmash_summary_t *lsmash_create_summary( lsmash_mp4sys_stream_type stream_type )
 void lsmash_cleanup_summary( lsmash_summary_t *summary );
 
 /* AC-3 tools to make exdata (AC-3 specific info). */
+typedef struct
+{
+    uint8_t fscod;          /* the same value as the fscod field in the AC-3 bitstream */
+    uint8_t bsid;           /* the same value as the bsid field in the AC-3 bitstream */
+    uint8_t bsmod;          /* the same value as the bsmod field in the AC-3 bitstream */
+    uint8_t acmod;          /* the same value as the acmod field in the AC-3 bitstream */
+    uint8_t lfeon;          /* the same value as the lfeon field in the AC-3 bitstream */
+    uint8_t frmsizecod;     /* the same value as the frmsizecod field in the AC-3 bitstream */
+} lsmash_ac3_specific_parameters_t;
+
 int lsmash_setup_ac3_specific_parameters_from_syncframe( lsmash_ac3_specific_parameters_t *param, uint8_t *data, uint32_t data_length );
 uint8_t *lsmash_create_ac3_specific_info( lsmash_ac3_specific_parameters_t *param, uint32_t *data_length );
 
-/* Eanhanced AC-3 tools to make exdata (Enhanced AC-3 specific info). */
+/* Enhanced AC-3 tools to make exdata (Enhanced AC-3 specific info). */
+typedef struct
+{
+    uint8_t  fscod;         /* the same value as the fscod field in the independent substream */
+    uint8_t  fscod2;        /* Any user must not use this. */
+    uint8_t  bsid;          /* the same value as the bsid field in the independent substream */
+    uint8_t  bsmod;         /* the same value as the bsmod field in the independent substream
+                             * If the bsmod field is not present in the independent substream, this field shall be set to 0. */
+    uint8_t  acmod;         /* the same value as the acmod field in the independent substream */
+    uint8_t  lfeon;         /* the same value as the lfeon field in the independent substream */
+    uint8_t  num_dep_sub;   /* the number of dependent substreams that are associated with the independent substream */
+    uint16_t chan_loc;      /* channel locations of dependent substreams associated with the independent substream
+                             * This information is extracted from the chanmap field of each dependent substream. */
+} lsmash_eac3_substream_info_t;
+
+typedef struct
+{
+    uint16_t data_rate;     /* the data rate of the Enhanced AC-3 bitstream in kbit/s
+                             * If the Enhanced AC-3 stream is variable bitrate, then this value indicates the maximum data rate of the stream. */
+    uint8_t  num_ind_sub;   /* the number of independent substreams that are present in the Enhanced AC-3 bitstream
+                             * The value of this field is one less than the number of independent substreams present
+                             * and shall be in the range of 0 to 7, inclusive. */
+    lsmash_eac3_substream_info_t independent_info[8];
+} lsmash_eac3_specific_parameters_t;
+
 int lsmash_setup_eac3_specific_parameters_from_frame( lsmash_eac3_specific_parameters_t *param, uint8_t *data, uint32_t data_length );
 uint16_t lsmash_eac3_get_chan_loc_from_chanmap( uint16_t chanmap );
 uint8_t *lsmash_create_eac3_specific_info( lsmash_eac3_specific_parameters_t *param, uint32_t *data_length );
 
 /* DTS audio tools to make exdata (DTS specific info). */
+typedef enum
+{
+    DTS_CORE_SUBSTREAM_CORE_FLAG = 0x00000001,
+    DTS_CORE_SUBSTREAM_XXCH_FLAG = 0x00000002,
+    DTS_CORE_SUBSTREAM_X96_FLAG  = 0x00000004,
+    DTS_CORE_SUBSTREAM_XCH_FLAG  = 0x00000008,
+    DTS_EXT_SUBSTREAM_CORE_FLAG  = 0x00000010,
+    DTS_EXT_SUBSTREAM_XBR_FLAG   = 0x00000020,
+    DTS_EXT_SUBSTREAM_XXCH_FLAG  = 0x00000040,
+    DTS_EXT_SUBSTREAM_X96_FLAG   = 0x00000080,
+    DTS_EXT_SUBSTREAM_LBR_FLAG   = 0x00000100,
+    DTS_EXT_SUBSTREAM_XLL_FLAG   = 0x00000200,
+} lsmash_dts_construction_flag;
+
+typedef struct
+{
+    uint32_t DTSSamplingFrequency;  /* the maximum sampling frequency stored in the compressed audio stream */
+    uint32_t maxBitrate;            /* the peak bit rate, in bits per second, of the audio elementary stream for the duration of the track,
+                                     * including the core substream (if present) and all extension substreams.
+                                     * If the stream is a constant bit rate, this parameter shall have the same value as avgBitrate.
+                                     * If the maximum bit rate is unknown, this parameter shall be set to 0. */
+    uint32_t avgBitrate;            /* the average bit rate, in bits per second, of the audio elementary stream for the duration of the track,
+                                     * including the core substream and any extension substream that may be present. */
+    uint8_t  pcmSampleDepth;        /* the bit depth of the rendered audio
+                                     * The value is 16 or 24 bits. */
+    uint8_t  FrameDuration;         /* the number of audio samples decoded in a complete audio access unit at DTSSamplingFrequency
+                                     *   0: 512, 1: 1024, 2: 2048, 3: 4096 */
+    uint8_t  StreamConstruction;    /* complete information on the existence and of location of extensions in any synchronized frame */
+    uint8_t  CoreLFEPresent;        /* the presence of an LFE channel in the core
+                                     *   0: none
+                                     *   1: LFE exists */
+    uint8_t  CoreLayout;            /* the channel layout of the core within the core substream
+                                     * If no core substream exists, this parameter shall be ignored and ChannelLayout or
+                                     * RepresentationType shall be used to determine channel configuration. */
+    uint16_t CoreSize;              /* The size of a core substream AU in bytes.
+                                     * If no core substream exists, CoreSize = 0. */
+    uint8_t  StereoDownmix;         /* the presence of an embedded stereo downmix in the stream
+                                     *   0: none
+                                     *   1: embedded downmix present */
+    uint8_t  RepresentationType;    /* This indicates special properties of the audio presentation.
+                                     *   0: Audio asset designated for mixing with another audio asset
+                                     *   2: Lt/Rt Encoded for matrix surround decoding
+                                     *   3: Audio processed for headphone playback
+                                     *   otherwise: Reserved
+                                     * If ChannelLayout != 0, this value shall be ignored. */
+    uint16_t ChannelLayout;         /* complete information on channels coded in the audio stream including core and extensions */
+    uint8_t  MultiAssetFlag;        /* This flag shall set if the stream contains more than one asset.
+                                     *   0: single asset
+                                     *   1: multiple asset
+                                     * When multiple assets exist, the remaining parameters only reflect the coding parameters of the first asset. */
+    uint8_t  LBRDurationMod;        /* This flag indicates a special case of the LBR coding bandwidth, resulting in 1/3 or 2/3 band limiting.
+                                     * If set to 1, LBR frame duration is 50 % larger than indicated in FrameDuration */
+} lsmash_dts_specific_parameters_t;
+
 int lsmash_setup_dts_specific_parameters_from_frame( lsmash_dts_specific_parameters_t *param, uint8_t *data, uint32_t data_length );
 uint8_t lsmash_dts_get_stream_construction( lsmash_dts_construction_flag flags );
 uint32_t lsmash_dts_get_codingname( lsmash_dts_specific_parameters_t *param );
 uint8_t *lsmash_create_dts_specific_info( lsmash_dts_specific_parameters_t *param, uint32_t *data_length );
 
 /* H.264 tools to make exdata (AVC specific info). */
+typedef enum
+{
+    H264_PARAMETER_SET_TYPE_SPS    = 0,
+    H264_PARAMETER_SET_TYPE_PPS    = 1,
+    H264_PARAMETER_SET_TYPE_SPSEXT = 2,
+} lsmash_h264_parameter_set_type;
+
+typedef void lsmash_h264_parameter_sets_t;
+
+typedef struct
+{
+    uint8_t AVCProfileIndication;                           /* profile_idc in sequence parameter sets */
+    uint8_t profile_compatibility;                          /* constraint_set_flags in sequence parameter sets */
+    uint8_t AVCLevelIndication;                             /* maximum level_idc in sequence parameter sets */
+    uint8_t lengthSizeMinusOne;                             /* the length in bytes of the NALUnitLength field prior to NAL unit
+                                                             * The value of this field shall be one of 0, 1, or 3
+                                                             * corresponding to a length encoded with 1, 2, or 4 bytes, respectively.
+                                                             * NALUnitLength indicates the size of a NAL unit measured in bytes,
+                                                             * and includes the size of both the one byte NAL header and the EBSP payload
+                                                             * but does not include the length field itself. */
+    uint8_t chroma_format;                                  /* chroma_format_idc in sequence parameter sets */
+    uint8_t bit_depth_luma_minus8;                          /* bit_depth_luma_minus8 in sequence parameter sets */
+    uint8_t bit_depth_chroma_minus8;                        /* bit_depth_chroma_minus8 in sequence parameter sets */
+    lsmash_h264_parameter_sets_t *sequenceParameterSets;    /* sequence parameter sets */
+    lsmash_h264_parameter_sets_t *pictureParameterSets;     /* picture paramter sets */
+    lsmash_h264_parameter_sets_t *sequenceParameterSetExt;  /* sequence parameter set extensions */
+} lsmash_h264_specific_parameters_t;
+
 int lsmash_setup_h264_specific_parameters_from_access_unit( lsmash_h264_specific_parameters_t *param, uint8_t *data, uint32_t data_length );
 void lsmash_destroy_h264_parameter_sets( lsmash_h264_specific_parameters_t *param );
 int lsmash_check_h264_parameter_set_appendable( lsmash_h264_specific_parameters_t *param, lsmash_h264_parameter_set_type ps_type, void *ps_data, uint32_t ps_length );
@@ -1619,6 +1585,39 @@ int lsmash_append_h264_parameter_set( lsmash_h264_specific_parameters_t *param, 
 uint8_t *lsmash_create_h264_specific_info( lsmash_h264_specific_parameters_t *param, uint32_t *data_length );
 
 /* VC-1 tools to make exdata (VC-1 specific info). */
+typedef void lsmash_vc1_header_t;
+
+typedef struct
+{
+    /* Note: multiple_sequence, multiple_entry, slice_present and bframe_present shall be decided through overall VC-1 bitstream. */
+    uint8_t  profile;               /* the encoding profile used in the VC-1 bitstream
+                                     *   0: simple profile (not supported)
+                                     *   4: main profile   (not supported)
+                                     *  12: advanced profile
+                                     * Currently, only 12 for advanced profile is available. */
+    uint8_t  level;                 /* the highest encoding level used in the VC-1 bitstream */
+    uint8_t  cbr;                   /* 0: non-constant bitrate model
+                                     * 1: constant bitrate model */
+    uint8_t  interlaced;            /* 0: interlaced coding of frames is not used.
+                                     * 1: frames may use interlaced coding. */
+    uint8_t  multiple_sequence;     /* 0: the track contains no sequence headers (stored only in VC-1 specific info structure),
+                                     *    or
+                                     *    all sequence headers in the track are identical to the sequence header that is specified in the seqhdr field.
+                                     *    In this case, random access points are samples that contain an entry-point header.
+                                     * 1: the track may contain Sequence headers that are different from the sequence header specified in the seqhdr field.
+                                     *    In this case, random access points are samples that contain both a sequence Header and an entry-point header. */
+    uint8_t  multiple_entry;        /* 0: all entry-point headers in the track are identical to the entry-point header that is specified in the ephdr field.
+                                     * 1: the track may contain entry-point headers that are different from the entry-point header specified in the ephdr field. */
+    uint8_t  slice_present;         /* 0: frames are not coded as multiple slices.
+                                     * 1: frames may be coded as multiple slices. */
+    uint8_t  bframe_present;        /* 0: neither B-frames nor BI-frames are present in the track.
+                                     * 1: B-frames or BI-frames may be present in the track. */
+    uint32_t framerate;             /* the rounded frame rate (frames per second) of the track
+                                     * Should be set to 0xffffffff if the frame rate is not known, unspecified, or non-constant. */
+    lsmash_vc1_header_t *seqhdr;    /* a sequence header EBDU (mandatory) */
+    lsmash_vc1_header_t *ephdr;     /* an entry-point header EBDU (mandatory) */
+} lsmash_vc1_specific_parameters_t;
+
 int lsmash_setup_vc1_specific_parameters_from_access_unit( lsmash_vc1_specific_parameters_t *param, uint8_t *data, uint32_t data_length );
 void lsmash_destroy_vc1_headers( lsmash_vc1_specific_parameters_t *param );
 int lsmash_put_vc1_header( lsmash_vc1_specific_parameters_t *param, void *hdr_data, uint32_t hdr_length );
