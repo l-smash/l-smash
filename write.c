@@ -521,6 +521,16 @@ static int isom_write_btrt( lsmash_bs_t *bs, isom_btrt_t *btrt )
     return lsmash_bs_write_data( bs );
 }
 
+static int isom_write_glbl( lsmash_bs_t *bs, isom_glbl_t *glbl )
+{
+    if( !glbl )
+        return 0;
+    isom_bs_put_box_common( bs, glbl );
+    if( glbl->header_data && glbl->header_size )
+        lsmash_bs_put_bytes( bs, glbl->header_size, glbl->header_data );
+    return lsmash_bs_write_data( bs );
+}
+
 static int isom_write_visual_extensions( lsmash_bs_t *bs, isom_visual_entry_t *visual )
 {
     if( !visual )
@@ -528,6 +538,7 @@ static int isom_write_visual_extensions( lsmash_bs_t *bs, isom_visual_entry_t *v
     if( isom_write_avcC( bs, visual->avcC )
      || isom_write_btrt( bs, visual->btrt )
      || isom_write_esds( bs, visual->esds )
+     || isom_write_glbl( bs, visual->glbl )
      || isom_write_colr( bs, visual->colr )
      || isom_write_gama( bs, visual->gama )
      || isom_write_fiel( bs, visual->fiel )
@@ -832,6 +843,10 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
             case QT_CODEC_TYPE_DVH6_VIDEO :
             case QT_CODEC_TYPE_DVHP_VIDEO :
             case QT_CODEC_TYPE_DVHQ_VIDEO :
+            case QT_CODEC_TYPE_ULRA_VIDEO :
+            case QT_CODEC_TYPE_ULRG_VIDEO :
+            case QT_CODEC_TYPE_ULY2_VIDEO :
+            case QT_CODEC_TYPE_ULY0_VIDEO :
             case QT_CODEC_TYPE_V210_VIDEO :
             case QT_CODEC_TYPE_V216_VIDEO :
             case QT_CODEC_TYPE_V308_VIDEO :

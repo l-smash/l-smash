@@ -390,6 +390,15 @@ int isom_add_pasp( isom_visual_entry_t *visual )
     return 0;
 }
 
+int isom_add_glbl( isom_visual_entry_t *visual )
+{
+    if( !visual || visual->glbl )
+        return -1;
+    isom_create_box( glbl, visual, QT_BOX_TYPE_GLBL );
+    visual->glbl = glbl;
+    return 0;
+}
+
 int isom_add_colr( isom_visual_entry_t *visual )
 {
     if( !visual || visual->colr )
@@ -1176,6 +1185,10 @@ int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t sa
         case QT_CODEC_TYPE_DVH6_VIDEO :
         case QT_CODEC_TYPE_DVHP_VIDEO :
         case QT_CODEC_TYPE_DVHQ_VIDEO :
+        case QT_CODEC_TYPE_ULRA_VIDEO :
+        case QT_CODEC_TYPE_ULRG_VIDEO :
+        case QT_CODEC_TYPE_ULY2_VIDEO :
+        case QT_CODEC_TYPE_ULY0_VIDEO :
         case QT_CODEC_TYPE_V210_VIDEO :
         case QT_CODEC_TYPE_V216_VIDEO :
         case QT_CODEC_TYPE_V308_VIDEO :
@@ -2808,6 +2821,15 @@ void isom_remove_pasp( isom_pasp_t *pasp )
     isom_remove_box( pasp, isom_visual_entry_t );
 }
 
+void isom_remove_glbl( isom_glbl_t *glbl )
+{
+    if( !glbl )
+        return;
+    if( glbl->header_data )
+        free( glbl->header_data );
+    isom_remove_box( glbl, isom_visual_entry_t );
+}
+
 void isom_remove_colr( isom_colr_t *colr )
 {
     if( !colr )
@@ -2904,6 +2926,7 @@ static void isom_remove_visual_extensions( isom_visual_entry_t *visual )
     isom_remove_avcC( visual->avcC );
     isom_remove_btrt( visual->btrt );
     isom_remove_esds( visual->esds );
+    isom_remove_glbl( visual->glbl );
     isom_remove_colr( visual->colr );
     isom_remove_gama( visual->gama );
     isom_remove_fiel( visual->fiel );
@@ -3063,6 +3086,10 @@ void isom_remove_sample_description( isom_sample_entry_t *sample )
         case QT_CODEC_TYPE_RPZA_VIDEO :
         case QT_CODEC_TYPE_TGA_VIDEO :
         case QT_CODEC_TYPE_TIFF_VIDEO :
+        case QT_CODEC_TYPE_ULRA_VIDEO :
+        case QT_CODEC_TYPE_ULRG_VIDEO :
+        case QT_CODEC_TYPE_ULY2_VIDEO :
+        case QT_CODEC_TYPE_ULY0_VIDEO :
         case QT_CODEC_TYPE_V210_VIDEO :
         case QT_CODEC_TYPE_V216_VIDEO :
         case QT_CODEC_TYPE_V308_VIDEO :
@@ -4725,6 +4752,15 @@ static uint64_t isom_update_clap_size( isom_clap_t *clap )
     return clap->size;
 }
 
+static uint64_t isom_update_glbl_size( isom_glbl_t *glbl )
+{
+    if( !glbl )
+        return 0;
+    glbl->size = ISOM_BASEBOX_COMMON_SIZE + (uint64_t)glbl->header_size;
+    CHECK_LARGESIZE( glbl->size );
+    return glbl->size;
+}
+
 static uint64_t isom_update_colr_size( isom_colr_t *colr )
 {
     if( !colr || colr->color_parameter_type == QT_COLOR_PARAMETER_TYPE_PROF )
@@ -4836,6 +4872,7 @@ static uint64_t isom_update_visual_entry_size( isom_visual_entry_t *visual )
         + isom_update_avcC_size( visual->avcC )
         + isom_update_btrt_size( visual->btrt )
         + isom_update_esds_size( visual->esds )
+        + isom_update_glbl_size( visual->glbl )
         + isom_update_colr_size( visual->colr )
         + isom_update_gama_size( visual->gama )
         + isom_update_fiel_size( visual->fiel )
@@ -4997,6 +5034,10 @@ static uint64_t isom_update_stsd_size( isom_stsd_t *stsd )
             case QT_CODEC_TYPE_DVH6_VIDEO :
             case QT_CODEC_TYPE_DVHP_VIDEO :
             case QT_CODEC_TYPE_DVHQ_VIDEO :
+            case QT_CODEC_TYPE_ULRA_VIDEO :
+            case QT_CODEC_TYPE_ULRG_VIDEO :
+            case QT_CODEC_TYPE_ULY2_VIDEO :
+            case QT_CODEC_TYPE_ULY0_VIDEO :
             case QT_CODEC_TYPE_V210_VIDEO :
             case QT_CODEC_TYPE_V216_VIDEO :
             case QT_CODEC_TYPE_V308_VIDEO :

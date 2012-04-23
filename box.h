@@ -410,6 +410,14 @@ typedef struct
     uint32_t avgBitrate;    /* the average rate in bits/second over the entire presentation */
 } isom_btrt_t;
 
+/* Global Header Box */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    uint32_t header_size;
+    uint8_t *header_data;
+} isom_glbl_t;
+
 /* Clean Aperture Box
  * There are notionally four values in this box and these parameters are represented as a fraction N/D.
  * Here, we refer to the pair of parameters fooN and fooD as foo.
@@ -569,6 +577,7 @@ typedef struct
     /* MP4 specific extension */
     isom_esds_t *esds;          /* ES Descriptor Box */
     /* QuickTime specific extension */
+    isom_glbl_t *glbl;          /* Global Header Box */
     isom_colr_t *colr;          /* Color Parameter Box @ optional */
     isom_gama_t *gama;          /* Gamma Level Box @ optional */
     isom_fiel_t *fiel;          /* Field/Frame Information Box @ optional */
@@ -1823,6 +1832,7 @@ enum qt_box_type
     QT_BOX_TYPE_FIEL    = LSMASH_4CC( 'f', 'i', 'e', 'l' ),
     QT_BOX_TYPE_FRMA    = LSMASH_4CC( 'f', 'r', 'm', 'a' ),
     QT_BOX_TYPE_GAMA    = LSMASH_4CC( 'g', 'a', 'm', 'a' ),
+    QT_BOX_TYPE_GLBL    = LSMASH_4CC( 'g', 'l', 'b', 'l' ),
     QT_BOX_TYPE_GMHD    = LSMASH_4CC( 'g', 'm', 'h', 'd' ),
     QT_BOX_TYPE_GMIN    = LSMASH_4CC( 'g', 'm', 'i', 'n' ),
     QT_BOX_TYPE_IMAP    = LSMASH_4CC( 'i', 'm', 'a', 'p' ),
@@ -2120,6 +2130,7 @@ int isom_add_edts( isom_trak_entry_t *trak );
 int isom_add_elst( isom_edts_t *edts );
 int isom_add_clap( isom_visual_entry_t *visual );
 int isom_add_pasp( isom_visual_entry_t *visual );
+int isom_add_glbl( isom_visual_entry_t *visual );
 int isom_add_colr( isom_visual_entry_t *visual );
 int isom_add_gama( isom_visual_entry_t *visual );
 int isom_add_fiel( isom_visual_entry_t *visual );
@@ -2147,6 +2158,7 @@ int isom_add_udta( lsmash_root_t *root, uint32_t track_ID );
 void isom_remove_tapt( isom_tapt_t *tapt );
 void isom_remove_clap( isom_clap_t *clap );
 void isom_remove_pasp( isom_pasp_t *pasp );
+void isom_remove_glbl( isom_glbl_t *glbl );
 void isom_remove_colr( isom_colr_t *colr );
 void isom_remove_gama( isom_gama_t *gama );
 void isom_remove_cspc( isom_cspc_t *cspc );

@@ -896,6 +896,10 @@ static void *isom_sample_description_alloc( uint32_t sample_type )
         case QT_CODEC_TYPE_RPZA_VIDEO :
         case QT_CODEC_TYPE_TGA_VIDEO :
         case QT_CODEC_TYPE_TIFF_VIDEO :
+        case QT_CODEC_TYPE_ULRA_VIDEO :
+        case QT_CODEC_TYPE_ULRG_VIDEO :
+        case QT_CODEC_TYPE_ULY2_VIDEO :
+        case QT_CODEC_TYPE_ULY0_VIDEO :
         case QT_CODEC_TYPE_V210_VIDEO :
         case QT_CODEC_TYPE_V216_VIDEO :
         case QT_CODEC_TYPE_V308_VIDEO :
@@ -1066,6 +1070,29 @@ static int isom_read_btrt( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     box->size = lsmash_bs_get_pos( bs );
     isom_box_common_copy( btrt, box );
     return isom_add_print_func( root, btrt, level );
+}
+
+static int isom_read_glbl( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( ((isom_visual_entry_t *)parent)->glbl )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( glbl, parent, box->type );
+    ((isom_visual_entry_t *)parent)->glbl = glbl;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    uint32_t header_size = box->size - ISOM_BASEBOX_COMMON_SIZE;
+    if( header_size )
+    {
+        glbl->header_data = malloc( header_size );
+        if( !glbl->header_data )
+            return -1;
+        for( uint32_t i = 0; i < header_size; i++ )
+            glbl->header_data[i] = lsmash_bs_get_byte( bs );
+    }
+    glbl->header_size = header_size;
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( glbl, box );
+    return isom_add_print_func( root, glbl, level );
 }
 
 static int isom_read_clap( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
@@ -2858,6 +2885,10 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
             case QT_CODEC_TYPE_RPZA_VIDEO :
             case QT_CODEC_TYPE_TGA_VIDEO :
             case QT_CODEC_TYPE_TIFF_VIDEO :
+            case QT_CODEC_TYPE_ULRA_VIDEO :
+            case QT_CODEC_TYPE_ULRG_VIDEO :
+            case QT_CODEC_TYPE_ULY2_VIDEO :
+            case QT_CODEC_TYPE_ULY0_VIDEO :
             case QT_CODEC_TYPE_V210_VIDEO :
             case QT_CODEC_TYPE_V216_VIDEO :
             case QT_CODEC_TYPE_V308_VIDEO :
@@ -3012,6 +3043,8 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
             return isom_read_clap( root, box, parent, level );
         case ISOM_BOX_TYPE_PASP :
             return isom_read_pasp( root, box, parent, level );
+        case QT_BOX_TYPE_GLBL :
+            return isom_read_glbl( root, box, parent, level );
         case QT_BOX_TYPE_COLR :
             return isom_read_colr( root, box, parent, level );
         case QT_BOX_TYPE_GAMA :

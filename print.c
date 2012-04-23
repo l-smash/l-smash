@@ -685,6 +685,24 @@ static int isom_print_btrt( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
     return 0;
 }
 
+static int isom_print_glbl( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_glbl_t *glbl = (isom_glbl_t *)box;
+    int indent = level;
+    isom_print_box_common( fp, indent++, box, "Global Header Box" );
+    if( glbl->header_data )
+        for( uint32_t i = 0; i < glbl->header_size; i += 8 )
+        {
+            isom_ifprintf( fp, indent + 1, "" );
+            for( uint32_t j = 0; j < 8; j++ )
+                fprintf( fp, "0x%02"PRIx8"%s", glbl->header_data[i + j], j != 8 ? " " : "" );
+            fprintf( fp, "\n" );
+        }
+    return 0;
+}
+
 static int isom_print_clap( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
@@ -2083,6 +2101,10 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
                 case QT_CODEC_TYPE_RPZA_VIDEO :
                 case QT_CODEC_TYPE_TGA_VIDEO :
                 case QT_CODEC_TYPE_TIFF_VIDEO :
+                case QT_CODEC_TYPE_ULRA_VIDEO :
+                case QT_CODEC_TYPE_ULRG_VIDEO :
+                case QT_CODEC_TYPE_ULY2_VIDEO :
+                case QT_CODEC_TYPE_ULY0_VIDEO :
                 case QT_CODEC_TYPE_V210_VIDEO :
                 case QT_CODEC_TYPE_V216_VIDEO :
                 case QT_CODEC_TYPE_V308_VIDEO :
@@ -2252,6 +2274,8 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
             return isom_print_clap;
         case ISOM_BOX_TYPE_PASP :
             return isom_print_pasp;
+        case QT_BOX_TYPE_GLBL :
+            return isom_print_glbl;
         case QT_BOX_TYPE_COLR :
             return isom_print_colr;
         case QT_BOX_TYPE_GAMA :

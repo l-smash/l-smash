@@ -412,6 +412,25 @@ static int isom_copy_btrt( isom_visual_entry_t *dst, isom_visual_entry_t *src )
     return 0;
 }
 
+static int isom_copy_glbl( isom_visual_entry_t *dst, isom_visual_entry_t *src )
+{
+    if( !dst )
+        return 0;
+    isom_remove_glbl( dst->glbl );
+    if( !src || !src->glbl )
+        return 0;
+    if( isom_add_glbl( dst ) )
+        return -1;
+    if( src->glbl->header_data && src->glbl->header_size )
+    {
+        dst->glbl->header_data = lsmash_memdup( src->glbl->header_data, src->glbl->header_size );
+        if( !dst->glbl->header_data )
+            return -1;
+        dst->glbl->header_size = src->glbl->header_size;
+    }
+    return 0;
+}
+
 static isom_visual_entry_t *isom_duplicate_visual_description( isom_visual_entry_t *src )
 {
     isom_visual_entry_t *dst = lsmash_memdup( src, sizeof(isom_visual_entry_t) );
@@ -428,6 +447,7 @@ static isom_visual_entry_t *isom_duplicate_visual_description( isom_visual_entry
     dst->esds = NULL;
     dst->avcC = NULL;
     dst->btrt = NULL;
+    dst->glbl = NULL;
     COPY_EXDATA( dst, src );
     /* Copy children. */
     dst->esds = isom_duplicate_esds( (isom_box_t *)dst, src->esds );
@@ -441,7 +461,8 @@ static isom_visual_entry_t *isom_duplicate_visual_description( isom_visual_entry
      || isom_copy_sgbt( dst, src )
      || isom_copy_stsl( dst, src )
      || isom_copy_avcC( dst, src )
-     || isom_copy_btrt( dst, src ) )
+     || isom_copy_btrt( dst, src )
+     || isom_copy_glbl( dst, src ) )
     {
         isom_remove_sample_description( (isom_sample_entry_t *)dst );
         return NULL;
@@ -699,6 +720,10 @@ static isom_sample_entry_t *isom_duplicate_description( isom_sample_entry_t *ent
         case QT_CODEC_TYPE_DVH6_VIDEO :
         case QT_CODEC_TYPE_DVHP_VIDEO :
         case QT_CODEC_TYPE_DVHQ_VIDEO :
+        case QT_CODEC_TYPE_ULRA_VIDEO :
+        case QT_CODEC_TYPE_ULRG_VIDEO :
+        case QT_CODEC_TYPE_ULY2_VIDEO :
+        case QT_CODEC_TYPE_ULY0_VIDEO :
         case QT_CODEC_TYPE_V210_VIDEO :
         case QT_CODEC_TYPE_V216_VIDEO :
         case QT_CODEC_TYPE_V308_VIDEO :

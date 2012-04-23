@@ -252,6 +252,10 @@ typedef enum
     QT_CODEC_TYPE_RPZA_VIDEO    = LSMASH_4CC( 'r', 'p', 'z', 'a' ),   /* Apple simple video 'road pizza' compression */
     QT_CODEC_TYPE_TGA_VIDEO     = LSMASH_4CC( 't', 'g', 'a', ' ' ),   /* Truvision Targa video format */
     QT_CODEC_TYPE_TIFF_VIDEO    = LSMASH_4CC( 't', 'i', 'f', 'f' ),   /* Tagged Image File Format (Adobe) */
+    QT_CODEC_TYPE_ULRA_VIDEO    = LSMASH_4CC( 'U', 'L', 'R', 'A' ),   /* Ut Video RGBA 4:4:4:4 8bit full-range */
+    QT_CODEC_TYPE_ULRG_VIDEO    = LSMASH_4CC( 'U', 'L', 'R', 'G' ),   /* Ut Video RGB 4:4:4 8bit full-range */
+    QT_CODEC_TYPE_ULY0_VIDEO    = LSMASH_4CC( 'U', 'L', 'Y', '0' ),   /* Ut Video YCbCr 4:2:0 8bit limited */
+    QT_CODEC_TYPE_ULY2_VIDEO    = LSMASH_4CC( 'U', 'L', 'Y', '2' ),   /* Ut Video YCbCr 4:2:2 8bit limited */
     QT_CODEC_TYPE_V210_VIDEO    = LSMASH_4CC( 'v', '2', '1', '0' ),   /* Uncompressed Y'CbCr, 10-bit-per-component 4:2:2 */
     QT_CODEC_TYPE_V216_VIDEO    = LSMASH_4CC( 'v', '2', '1', '6' ),   /* Uncompressed Y'CbCr, 10, 12, 14, or 16-bit-per-component 4:2:2 */
     QT_CODEC_TYPE_V308_VIDEO    = LSMASH_4CC( 'v', '3', '0', '8' ),   /* Uncompressed Y'CbCr, 8-bit-per-component 4:4:4 */
