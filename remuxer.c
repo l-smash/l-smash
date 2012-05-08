@@ -52,6 +52,7 @@ typedef struct
 
 typedef struct
 {
+    int                       active;
     lsmash_sample_t          *sample;
     double                    dts;
     uint64_t                  composition_delay;
@@ -219,6 +220,9 @@ static int get_movie( input_movie_t *input, char *input_name )
     input->root = lsmash_open_movie( input_name, LSMASH_FILE_MODE_READ );
     if( !input->root )
         return ERROR_MSG( "failed to open input file.\n" );
+    input->itunes_meta_list = lsmash_export_itunes_metadata( input->root );
+    if( !input->itunes_meta_list )
+        return ERROR_MSG( "failed to get iTunes metadata.\n" );
     input->current_track_number = 1;
     lsmash_movie_parameters_t *movie_param = &input->movie_param;
     lsmash_initialize_movie_parameters( movie_param );
@@ -237,19 +241,29 @@ static int get_movie( input_movie_t *input, char *input_name )
     }
     for( uint32_t i = 0; i < num_tracks; i++ )
     {
-        input->itunes_meta_list = lsmash_export_itunes_metadata( input->root );
-        if( !input->itunes_meta_list )
-            return ERROR_MSG( "failed to get iTunes metadata.\n" );
         lsmash_initialize_track_parameters( &in_track[i].track_param );
         if( lsmash_get_track_parameters( input->root, in_track[i].track_ID, &in_track[i].track_param ) )
-            return ERROR_MSG( "failed to get track parameters.\n" );
+        {
+            WARNING_MSG( "failed to get track parameters.\n" );
+            continue;
+        }
         lsmash_initialize_media_parameters( &in_track[i].media_param );
         if( lsmash_get_media_parameters( input->root, in_track[i].track_ID, &in_track[i].media_param ) )
-            return ERROR_MSG( "failed to get media parameters.\n" );
+        {
+            WARNING_MSG( "failed to get media parameters.\n" );
+            continue;
+        }
         if( lsmash_construct_timeline( input->root, in_track[i].track_ID ) )
-            return ERROR_MSG( "failed to construct timeline.\n" );
+        {
+            WARNING_MSG( "failed to construct timeline.\n" );
+            continue;
+        }
         if( lsmash_get_last_sample_delta_from_media_timeline( input->root, in_track[i].track_ID, &in_track[i].last_sample_delta ) )
-            return ERROR_MSG( "failed to get the last sample delta.\n" );
+        {
+            WARNING_MSG( "failed to get the last sample delta.\n" );
+            continue;
+        }
+        in_track[i].active                = 1;
         in_track[i].current_sample_number = 1;
         in_track[i].sample                = NULL;
         in_track[i].dts                   = 0;
@@ -386,6 +400,8 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
         for( uint32_t j = 0; j < input[i].num_tracks; j++ )
         {
             input_track_t *in_track = &input[i].track[j];
+            if( !in_track->active )
+                continue;
             track_option[i][j].alternate_group = in_track->track_param.alternate_group;
             track_option[i][j].ISO_language = in_track->media_param.ISO_language;
             track_option[i][j].handler_name = in_track->media_param.media_handler_name;
@@ -569,7 +585,12 @@ static int prepare_output( remuxer_t *remuxer )
     for( int i = 0; i < remuxer->num_input; i++ )
         for( uint32_t j = 0; j < input[i].num_tracks; j++ )
         {
-            input_track_t  *in_track  = &input[i].track[j];
+            input_track_t *in_track = &input[i].track[j];
+            if( !in_track->active )
+            {
+                -- output->num_tracks;
+                continue;
+            }
             output_track_t *out_track = &output->track[output->current_track_number - 1];
             out_track->track_ID = lsmash_create_track( output->root, in_track->media_param.handler_type );
             if( !out_track->track_ID )
@@ -583,18 +604,42 @@ static int prepare_output( remuxer_t *remuxer )
             out_track->media_param.media_handler_name = track_option[i][j].handler_name;
             out_track->track_param.track_ID           = out_track->track_ID;
             if( lsmash_set_track_parameters( output->root, out_track->track_ID, &out_track->track_param ) )
-                return ERROR_MSG( "failed to set track parameters.\n" );
+            {
+                WARNING_MSG( "failed to set track parameters.\n" );
+                lsmash_delete_track( output->root, out_track->track_ID );
+                in_track->active = 0;
+                -- output->num_tracks;
+                continue;
+            }
             if( lsmash_set_media_parameters( output->root, out_track->track_ID, &out_track->media_param ) )
-                return ERROR_MSG( "failed to set media parameters.\n" );
+            {
+                WARNING_MSG( "failed to set media parameters.\n" );
+                lsmash_delete_track( output->root, out_track->track_ID );
+                in_track->active = 0;
+                -- output->num_tracks;
+                continue;
+            }
             if( lsmash_copy_decoder_specific_info( output->root, out_track->track_ID, input[i].root, in_track->track_ID ) )
-                return ERROR_MSG( "failed to copy a Decoder Specific Info.\n" );
+            {
+                WARNING_MSG( "failed to copy a Decoder Specific Info.\n" );
+                lsmash_delete_track( output->root, out_track->track_ID );
+                in_track->active = 0;
+                -- output->num_tracks;
+                continue;
+            }
             out_track->last_sample_delta = in_track->last_sample_delta;
-            ++ output->current_track_number;
             if( set_starting_point( input, in_track, track_option[i][j].seek, track_option[i][j].consider_rap ) )
-                return ERROR_MSG( "failed to set starting point.\n" );
+            {
+                WARNING_MSG( "failed to set starting point.\n" );
+                lsmash_delete_track( output->root, out_track->track_ID );
+                in_track->active = 0;
+                -- output->num_tracks;
+                continue;
+            }
             out_track->current_sample_number = 1;
             out_track->skip_dt_interval      = 0;
             out_track->last_sample_dts       = 0;
+            ++ output->current_track_number;
         }
     output->current_track_number = 1;
     return 0;
@@ -622,6 +667,19 @@ static int do_remux( remuxer_t *remuxer )
     {
         input_movie_t *in_movie = &inputs[input_movie_number - 1];
         input_track_t *in_track = &in_movie->track[in_movie->current_track_number - 1];
+        if( !in_track->active )
+        {
+            /* Move the next track. */
+            if( ++ in_movie->current_track_number > in_movie->num_tracks )
+            {
+                /* Move the next input movie. */
+                in_movie->current_track_number = 1;
+                ++input_movie_number;
+            }
+            if( input_movie_number > remuxer->num_input )
+                input_movie_number = 1;                 /* Back the first input movie. */
+            continue;
+        }
         /* Try append a sample in an input track where we didn't reach the end of media timeline. */
         if( !in_track->reach_end_of_media_timeline )
         {
@@ -687,9 +745,7 @@ static int do_remux( remuxer_t *remuxer )
             }
         }
         /* Move the next track. */
-        ++ in_movie->current_track_number;
-        ++ out_movie->current_track_number;
-        if( in_movie->current_track_number > in_movie->num_tracks )
+        if( ++ in_movie->current_track_number > in_movie->num_tracks )
         {
             /* Move the next input movie. */
             in_movie->current_track_number = 1;
@@ -697,7 +753,7 @@ static int do_remux( remuxer_t *remuxer )
         }
         if( input_movie_number > remuxer->num_input )
             input_movie_number = 1;                 /* Back the first input movie. */
-        if( out_movie->current_track_number > out_movie->num_tracks )
+        if( ++ out_movie->current_track_number > out_movie->num_tracks )
             out_movie->current_track_number = 1;    /* Back the first track in the output movie. */
     }
     for( uint32_t i = 0; i < out_movie->num_tracks; i++ )
@@ -716,8 +772,10 @@ static int construct_timeline_maps( remuxer_t *remuxer )
     for( int i = 0; i < remuxer->num_input; i++ )
         for( uint32_t j = 0; j < input[i].num_tracks; j++ )
         {
+            input_track_t *in_track  = &input[i].track[j];
+            if( !in_track->active )
+                continue;
             output_track_t *out_track = &output->track[output->current_track_number ++ - 1];
-            input_track_t  *in_track  = &input[i].track[j];
             if( track_option[i][j].seek )
             {
                 /* Reconstruct timeline maps. */
