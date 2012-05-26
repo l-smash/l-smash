@@ -1729,7 +1729,7 @@ static int isom_read_ctts( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         if( !data )
             return -1;
         if( lsmash_add_entry( ctts->list, data ) )
-        {    
+        {
             free( data );
             return -1;
         }

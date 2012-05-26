@@ -6901,7 +6901,7 @@ static int isom_finish_fragment_movie( lsmash_root_t *root )
     /* When using for live streaming, setting explicit base_data_offset is not preferable.
      * However, it's OK because we haven't supported this yet.
      * Implicit base_data_offsets that originate in the first byte of each Movie Fragment Box will be implemented
-     * by the feature of ISO Base Media File Format version 5 or later. 
+     * by the feature of ISO Base Media File Format version 5 or later.
      * Media Data Box starts immediately after Movie Fragment Box. */
     for( lsmash_entry_t *entry = moof->traf_list->head; entry; entry = entry->next )
     {
@@ -8059,7 +8059,7 @@ static int isom_append_sample_internal( isom_trak_entry_t *trak, lsmash_sample_t
          * even if the conditional expression of '-diff > tolerance' meets.
          * That's useless because appending a sample to another track would be a good equivalent.
          * It's even harmful because it causes excess chunk division by calling
-         * isom_output_cached_chunk() which always generates a new chunk. 
+         * isom_output_cached_chunk() which always generates a new chunk.
          * Anyway some excess chunk division will be there, but rather less without it.
          * To completely avoid this, we need to observe at least whether the current sample will be placed
          * right next to the previous chunk of the same track or not. */

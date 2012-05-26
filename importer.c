@@ -2323,15 +2323,15 @@ static void h264_append_nalu_to_au( h264_picture_info_t *picture, uint8_t *src_n
 {
     if( !probe )
     {
-        uint8_t *dst_nalu = picture->incomplete_au + picture->incomplete_au_length + H264_DEFALUT_NALU_LENGTH_SIZE;
-        for( int i = H264_DEFALUT_NALU_LENGTH_SIZE; i; i-- )
+        uint8_t *dst_nalu = picture->incomplete_au + picture->incomplete_au_length + H264_DEFAULT_NALU_LENGTH_SIZE;
+        for( int i = H264_DEFAULT_NALU_LENGTH_SIZE; i; i-- )
             *(dst_nalu - i) = (nalu_length >> ((i - 1) * 8)) & 0xff;
         memcpy( dst_nalu, src_nalu, nalu_length );
     }
     /* Note: picture->incomplete_au_length shall be 0 immediately after AU has completed.
      * Therefore, possible_au_length in h264_get_access_unit_internal() can't be used here
      * to avoid increasing AU length monotonously through the entire stream. */
-    picture->incomplete_au_length += H264_DEFALUT_NALU_LENGTH_SIZE + nalu_length;
+    picture->incomplete_au_length += H264_DEFAULT_NALU_LENGTH_SIZE + nalu_length;
 }
 
 static inline void h264_get_au_internal_end( mp4sys_h264_info_t *info, h264_picture_info_t *picture, h264_nalu_header_t *nalu_header, int no_more_buf )
@@ -2430,7 +2430,7 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, int probe
              * We don't support SVC and MVC elemental stream defined in 14496-15 yet. */
             ebsp_length -= consecutive_zero_byte_count;     /* Any EBSP doesn't have zero bytes at the end. */
             uint64_t nalu_length = nalu_header.length + ebsp_length;
-            uint64_t possible_au_length = picture->incomplete_au_length + H264_DEFALUT_NALU_LENGTH_SIZE + nalu_length;
+            uint64_t possible_au_length = picture->incomplete_au_length + H264_DEFAULT_NALU_LENGTH_SIZE + nalu_length;
             if( buffer->bank->buffer_size < possible_au_length )
             {
                 if( h264_supplement_buffer( buffer, picture, 2 * possible_au_length ) )

@@ -1521,7 +1521,6 @@ static int isom_print_metaitem( FILE *fp, lsmash_root_t *root, isom_box_t *box, 
         isom_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
         return 0;
     }
-    char *name;
     static const struct
     {
         lsmash_itunes_metadata_item item;
@@ -1576,6 +1575,7 @@ static int isom_print_metaitem( FILE *fp, lsmash_root_t *root, isom_box_t *box, 
             { ITUNES_METADATA_ITEM_CUSTOM,                     "Custom Metadata Item" },
             { 0,                                               NULL }
         };
+    char *name = NULL;
     int i;
     for( i = 0; metaitem_table[i].name; i++ )
         if( metaitem->type == metaitem_table[i].item )
@@ -1583,7 +1583,7 @@ static int isom_print_metaitem( FILE *fp, lsmash_root_t *root, isom_box_t *box, 
             name = metaitem_table[i].name;
             break;
         }
-    if( !metaitem_table[i].item )
+    if( !name )
         name = "Unknown";
     uint32_t name_length = strlen( name );
     uint32_t display_name_length = name_length + 20;

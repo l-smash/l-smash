@@ -48,7 +48,7 @@ typedef struct
     uint32_t ebdu_size;
 } vc1_header_t;
 
-enum
+typedef enum
 {
     VC1_ADVANCED_PICTURE_TYPE_P       = 0x0,        /* 0b0 */
     VC1_ADVANCED_PICTURE_TYPE_B       = 0x2,        /* 0b10 */
@@ -57,7 +57,7 @@ enum
     VC1_ADVANCED_PICTURE_TYPE_SKIPPED = 0xF,        /* 0b1111 */
 } vc1_picture_type;
 
-enum
+typedef enum
 {
     VC1_ADVANCED_FIELD_PICTURE_TYPE_II   = 0x0,     /* 0b000 */
     VC1_ADVANCED_FIELD_PICTURE_TYPE_IP   = 0x1,     /* 0b001 */
@@ -69,7 +69,7 @@ enum
     VC1_ADVANCED_FIELD_PICTURE_TYPE_BIBI = 0x7,     /* 0b111 */
 } vc1_field_picture_type;
 
-enum
+typedef enum
 {
     VC1_FRAME_CODING_MODE_PROGRESSIVE     = 0x0,    /* 0b0 */
     VC1_FRAME_CODING_MODE_FRAME_INTERLACE = 0x2,    /* 0b10 */

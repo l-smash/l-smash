@@ -44,7 +44,7 @@ typedef struct
     uint32_t overall_wasted_length;
 } h264_data_stream_handler_t;
 
-enum
+typedef enum
 {
     H264_SLICE_TYPE_P    = 0,
     H264_SLICE_TYPE_B    = 1,
@@ -78,7 +78,7 @@ int h264_setup_parser( h264_info_t *info, int parse_only, uint32_t (*update)( h2
     if( !info )
         return -1;
     memset( info, 0, sizeof(h264_info_t) );
-    info->avcC_param.lengthSizeMinusOne = H264_DEFALUT_NALU_LENGTH_SIZE - 1;
+    info->avcC_param.lengthSizeMinusOne = H264_DEFAULT_NALU_LENGTH_SIZE - 1;
     h264_stream_buffer_t *buffer = &info->buffer;
     buffer->bank = lsmash_create_multiple_buffers( parse_only ? 2 : 4, H264_DEFAULT_BUFFER_SIZE );
     if( !buffer->bank )
@@ -1569,9 +1569,9 @@ int lsmash_setup_h264_specific_parameters_from_access_unit( lsmash_h264_specific
              * We don't support SVC and MVC elemental stream defined in 14496-15 yet. */
             ebsp_length -= consecutive_zero_byte_count;     /* Any EBSP doesn't have zero bytes at the end. */
             uint64_t nalu_length = nalu_header.length + ebsp_length;
-            if( buffer->bank->buffer_size < (H264_DEFALUT_NALU_LENGTH_SIZE + nalu_length) )
+            if( buffer->bank->buffer_size < (H264_DEFAULT_NALU_LENGTH_SIZE + nalu_length) )
             {
-                if( h264_supplement_buffer( buffer, NULL, 2 * (H264_DEFALUT_NALU_LENGTH_SIZE + nalu_length) ) )
+                if( h264_supplement_buffer( buffer, NULL, 2 * (H264_DEFAULT_NALU_LENGTH_SIZE + nalu_length) ) )
                     return h264_parse_failed( info );
                 next_short_start_code_pos = buffer->pos;
             }

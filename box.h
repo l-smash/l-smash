@@ -167,7 +167,7 @@ typedef struct
 
 /* Edit List Box
  * This box contains an explicit timeline map.
- * Each entry defines part of the track timeline: by mapping part of the media timeline, or by indicating 'empty' time, 
+ * Each entry defines part of the track timeline: by mapping part of the media timeline, or by indicating 'empty' time,
  * or by defining a 'dwell', where a single time-point in the media is held for a period.
  * The last edit in a track shall never be an empty edit.
  * Any difference between the duration in the Movie Header Box, and the track's duration is expressed as an implicit empty edit at the end.
@@ -1431,7 +1431,7 @@ typedef struct
     isom_mehd_t         *mehd;          /* Movie Extends Header Box / omitted when used in live streaming */
     lsmash_entry_list_t *trex_list;     /* Track Extends Box */
 
-        uint64_t placeholder_pos;       /* placeholder position for Movie Extends Header Box */ 
+        uint64_t placeholder_pos;       /* placeholder position for Movie Extends Header Box */
 } isom_mvex_t;
 
 /* Movie Fragment Header Box
@@ -1454,7 +1454,7 @@ typedef struct
     /* all the following are optional fields */
     uint64_t            base_data_offset;           /* an explicit anchor for the data offsets in each track run
                                                      * Offsets are file offsets as like as chunk_offset in Chunk Offset Box.
-                                                     * If not provided, the base_data_offset for the first track in the movie fragment is the position 
+                                                     * If not provided, the base_data_offset for the first track in the movie fragment is the position
                                                      * of the first byte of the enclosing Movie Fragment Box, and for second and subsequent track fragments,
                                                      * the default is the end of the data defined by the preceding fragment.
                                                      * To avoid the case this field might overflow, e.g. semi-permanent live streaming and broadcasting,
@@ -1566,7 +1566,7 @@ typedef struct
     isom_mfro_t         *mfro;          /* Movie Fragment Random Access Offset Box */
 } isom_mfra_t;
 
-/* Movie fragment manager 
+/* Movie fragment manager
  * The presence of this means we use the structure of movie fragments. */
 typedef struct
 {
@@ -1593,7 +1593,7 @@ typedef struct
 /* ROOT */
 struct lsmash_root_tag
 {
-    ISOM_FULLBOX_COMMON;                /* the size field expresses total file size 
+    ISOM_FULLBOX_COMMON;                /* the size field expresses total file size
                                          * the flags field expresses file mode */
     isom_ftyp_t         *ftyp;          /* File Type Box */
     isom_moov_t         *moov;          /* Movie Box */
