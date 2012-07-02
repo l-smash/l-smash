@@ -1007,7 +1007,7 @@ void dts_update_specific_param( dts_info_t *info )
         param->DTSSamplingFrequency = info->core.sampling_frequency;
         info->frame_duration        = info->core.frame_duration;
     }
-    else
+    if( param->DTSSamplingFrequency <= info->extension.sampling_frequency )
     {
         param->DTSSamplingFrequency = info->extension.sampling_frequency;
         info->frame_duration        = info->extension.frame_duration;
