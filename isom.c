@@ -3714,9 +3714,10 @@ int isom_check_compatibility( lsmash_root_t *root )
             root->qt_compatible = 1;
         return 0;
     }
-    for( uint32_t i = 0; i < root->ftyp->brand_count; i++ )
+    for( uint32_t i = 0; i <= root->ftyp->brand_count; i++ )
     {
-        switch( root->ftyp->compatible_brands[i] )
+        uint32_t brand = (i == root->ftyp->brand_count ? root->ftyp->major_brand : root->ftyp->compatible_brands[i]);
+        switch( brand )
         {
             case ISOM_BRAND_TYPE_QT :
                 root->qt_compatible = 1;
@@ -3768,7 +3769,7 @@ int isom_check_compatibility( lsmash_root_t *root )
             default :
                 break;
         }
-        switch( root->ftyp->compatible_brands[i] )
+        switch( brand )
         {
             case ISOM_BRAND_TYPE_AVC1 :
             case ISOM_BRAND_TYPE_ISO2 :
