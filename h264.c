@@ -1481,6 +1481,9 @@ int h264_try_to_append_parameter_set( h264_info_t *info, lsmash_h264_parameter_s
                     break;
                 }
                 case H264_PARAMETER_SET_TYPE_PPS :
+                    /* Parse PPS. */
+                    if( h264_parse_pps_nalu( info->bits, &info->sps, &info->pps, info->buffer.rbsp, ps_data + 1, ps_length - 1 ) )
+                        return -1;
                     info->pps.present = 1;
                     break;
                 default :
