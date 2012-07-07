@@ -2233,6 +2233,7 @@ typedef struct
     uint32_t num_undecodable;
     uint64_t last_intra_cts;
     uint8_t  composition_reordering_present;
+    uint8_t  field_pic_present;
 } mp4sys_h264_info_t;
 
 static void mp4sys_remove_h264_info( mp4sys_h264_info_t *info )
@@ -2606,7 +2607,7 @@ static int mp4sys_h264_get_accessunit( mp4sys_importer_t *importer, uint32_t tra
     return current_status;
 }
 
-static lsmash_video_summary_t *h264_create_summary( h264_info_t *info, h264_sps_t *sps, uint32_t max_au_length )
+static lsmash_video_summary_t *h264_create_summary( h264_info_t *info, h264_sps_t *sps, uint8_t field_pic_present, uint32_t max_au_length )
 {
     lsmash_h264_specific_parameters_t *param = &info->avcC_param;
     if( !info->sps.present || !info->pps.present )
@@ -2625,7 +2626,7 @@ static lsmash_video_summary_t *h264_create_summary( h264_info_t *info, h264_sps_
     summary->sample_type            = ISOM_CODEC_TYPE_AVC1_VIDEO;
     summary->object_type_indication = MP4SYS_OBJECT_TYPE_Visual_H264_ISO_14496_10;
     summary->max_au_length          = max_au_length;
-    summary->timescale              = sps->vui.time_scale;
+    summary->timescale              = sps->vui.time_scale >> (sps->vui.time_scale > 1 && !field_pic_present);
     summary->timebase               = sps->vui.num_units_in_tick;
     summary->full_range             = sps->vui.video_full_range_flag;
     summary->vfr                    = !sps->vui.fixed_frame_rate_flag;
@@ -2710,11 +2711,12 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
             poc = temp;
             poc_alloc = alloc;
         }
+        importer_info->field_pic_present |= info->picture.field_pic_flag;
         poc[num_access_units++] = info->picture.PicOrderCnt;
         importer_info->max_au_length = LSMASH_MAX( info->picture.au_length, importer_info->max_au_length );
     }
     fprintf( stderr, "                                                                               \r" );
-    lsmash_video_summary_t *summary = h264_create_summary( info, &importer_info->first_sps, importer_info->max_au_length );
+    lsmash_video_summary_t *summary = h264_create_summary( info, &importer_info->first_sps, importer_info->field_pic_present, importer_info->max_au_length );
     if( !summary || lsmash_add_entry( importer->summaries, summary ) )
     {
         free( poc );

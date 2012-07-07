@@ -886,8 +886,7 @@ static int prepare_output( muxer_t *muxer )
                     {
                         if( summary->sample_type == ISOM_CODEC_TYPE_AVC1_VIDEO )
                         {
-                            /* H.264 maximum_fps = ceil(timescale / (2 * timebase) */
-                            uint32_t compare_timescale = (summary->timescale >> 1) + (summary->timescale & 1);
+                            uint32_t compare_timescale = summary->timescale;
                             uint32_t compare_timebase  = summary->timebase;
                             static const struct
                             {
