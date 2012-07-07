@@ -2093,26 +2093,6 @@ void lsmash_delete_media_timestamps( lsmash_media_ts_list_t *ts_list )
     ts_list->sample_count = 0;
 }
 
-int lsmash_get_max_sample_delay( lsmash_media_ts_list_t *ts_list, uint32_t *max_sample_delay )
-{
-    if( !ts_list || !max_sample_delay )
-        return -1;
-    *max_sample_delay = 0;
-    uint32_t sample_delay = 0;
-    lsmash_media_ts_t *ts = ts_list->timestamp;
-    for( uint32_t i = 1; i < ts_list->sample_count; i++ )
-    {
-        if( ts[i].cts < ts[i - 1].cts )
-        {
-            ++sample_delay;
-            *max_sample_delay = LSMASH_MAX( *max_sample_delay, sample_delay );
-        }
-        else
-            sample_delay = 0;
-    }
-    return 0;
-}
-
 static int isom_compare_dts( const lsmash_media_ts_t *a, const lsmash_media_ts_t *b )
 {
     int64_t diff = (int64_t)(a->dts - b->dts);
@@ -2137,6 +2117,30 @@ void lsmash_sort_timestamps_composition_order( lsmash_media_ts_list_t *ts_list )
     if( !ts_list )
         return;
     qsort( ts_list->timestamp, ts_list->sample_count, sizeof(lsmash_media_ts_t), (int(*)( const void *, const void * ))isom_compare_cts );
+}
+
+int lsmash_get_max_sample_delay( lsmash_media_ts_list_t *ts_list, uint32_t *max_sample_delay )
+{
+    if( !ts_list || !max_sample_delay )
+        return -1;
+    *max_sample_delay = 0;
+    lsmash_media_ts_t *orig_ts = ts_list->timestamp;
+    lsmash_media_ts_t ts[ ts_list->sample_count ];
+    ts_list->timestamp = ts;
+    for( uint32_t i = 0; i < ts_list->sample_count; i++ )
+    {
+        ts[i].cts = orig_ts[i].cts;
+        ts[i].dts = i;
+    }
+    lsmash_sort_timestamps_composition_order( ts_list );
+    for( uint32_t i = 0; i < ts_list->sample_count; i++ )
+        if( i < ts[i].dts )
+        {
+            uint32_t sample_delay = ts[i].dts - i;
+            *max_sample_delay = LSMASH_MAX( *max_sample_delay, sample_delay );
+        }
+    ts_list->timestamp = orig_ts;
+    return 0;
 }
 
 #endif /* LSMASH_DEMUXER_ENABLED */
