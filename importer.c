@@ -2806,25 +2806,37 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
         else
             break;      /* no more POCs */
     }
-    /* Get max composition delay derived from reordering. */
-    uint32_t composition_delay = 0;
-    for( uint32_t i = 1; i < num_access_units; i++ )
-        if( poc[i] < poc[i - 1] )
-        {
-            ++composition_delay;
-            max_composition_delay = LSMASH_MAX( max_composition_delay, composition_delay );
-        }
-        else
-            composition_delay = 0;
-    /* Generate timestamps. */
-    if( max_composition_delay )
+    /* Check if composition delay derived from reordering is present. */
+    if( max_composition_delay == 0 )
     {
+        for( uint32_t i = 1; i < num_access_units; i++ )
+            if( poc[i] < poc[i - 1] )
+            {
+                importer_info->composition_reordering_present = 1;
+                break;
+            }
+    }
+    else
+        importer_info->composition_reordering_present = 1;
+    /* Generate timestamps. */
+    if( importer_info->composition_reordering_present )
+    {
+        /* Generate DTSs.
+         * Here, CTSs are temporary values for sort. */
         for( uint32_t i = 0; i < num_access_units; i++ )
         {
             timestamp[i].cts = (uint64_t)poc[i];
             timestamp[i].dts = (uint64_t)i;
         }
         qsort( timestamp, num_access_units, sizeof(lsmash_media_ts_t), (int(*)( const void *, const void * ))lsmash_compare_cts );
+        /* Get the maximum composition delay derived from reordering. */
+        for( uint32_t i = 0; i < num_access_units; i++ )
+            if( i < timestamp[i].dts )
+            {
+                uint32_t composition_delay = timestamp[i].dts - i;
+                max_composition_delay = LSMASH_MAX( max_composition_delay, composition_delay );
+            }
+        /* Generate CTSs. */
         for( uint32_t i = 0; i < num_access_units; i++ )
             timestamp[i].cts = i + max_composition_delay;
         qsort( timestamp, num_access_units, sizeof(lsmash_media_ts_t), (int(*)( const void *, const void * ))lsmash_compare_dts );
@@ -2838,9 +2850,8 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
                  i, poc[i], timestamp[i].dts, timestamp[i].cts );
 #endif
     free( poc );
-    importer_info->ts_list.sample_count           = num_access_units;
-    importer_info->ts_list.timestamp              = timestamp;
-    importer_info->composition_reordering_present = !!max_composition_delay;
+    importer_info->ts_list.sample_count = num_access_units;
+    importer_info->ts_list.timestamp    = timestamp;
     /* Go back to EBSP of the first NALU. */
     lsmash_fseek( importer->stream, first_ebsp_head_pos, SEEK_SET );
     importer_info->status       = MP4SYS_IMPORTER_OK;
