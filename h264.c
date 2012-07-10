@@ -1759,36 +1759,13 @@ int lsmash_append_h264_parameter_set( lsmash_h264_specific_parameters_t *param,
         default :
             return -1;
     }
-    /* Add a new parameter set in order of ascending parameter set identifier. */
+    /* Check if the same parameter set identifier already exists. */
     uint8_t ps_id;
     if( h264_get_ps_id( ps_data + 1, ps_length - 1, &ps_id, ps_type ) )
         return -1;
     lsmash_entry_t *entry = h264_get_ps_entry_from_param( param, ps_type, ps_id );
     if( entry )
         return -1;  /* The same parameter set identifier already exists. */
-    int append_head = 0;
-    if( ps_id )
-    {
-        for( int i = ps_id - 1; i; i-- )
-        {
-            entry = h264_get_ps_entry_from_param( param, ps_type, i );
-            if( entry )
-                break;
-        }
-        if( !entry )
-        {
-            /* Couldn't find parameter set with lower identifier.
-             * Next, find parameter set with upper identifier. */
-            for( int i = ps_id + 1; i < 256; i++ )
-            {
-                entry = h264_get_ps_entry_from_param( param, ps_type, i );
-                if( entry )
-                    break;
-            }
-            if( entry )
-                append_head = 1;
-        }
-    }
     isom_avcC_ps_entry_t *ps = isom_create_ps_entry( ps_data, ps_length );
     if( !ps )
         return -1;
@@ -1821,6 +1798,28 @@ int lsmash_append_h264_parameter_set( lsmash_h264_specific_parameters_t *param,
         param->chroma_format           = sps.chroma_format_idc;
         param->bit_depth_luma_minus8   = sps.bit_depth_luma_minus8;
         param->bit_depth_chroma_minus8 = sps.bit_depth_chroma_minus8;
+    }
+    /* Add a new parameter set in order of ascending parameter set identifier. */
+    int append_head = 0;
+    if( ps_id )
+        for( int i = ps_id - 1; i; i-- )
+        {
+            entry = h264_get_ps_entry_from_param( param, ps_type, i );
+            if( entry )
+                break;
+        }
+    if( ps_id == 0 || !entry )
+    {
+        /* Couldn't find parameter set with lower identifier.
+         * Next, find parameter set with upper identifier. */
+        for( int i = ps_id + 1; i < 256; i++ )
+        {
+            entry = h264_get_ps_entry_from_param( param, ps_type, i );
+            if( entry )
+                break;
+        }
+        if( entry )
+            append_head = 1;
     }
     if( !entry )
         return 0;   /* The new entry was appended to tail. */
