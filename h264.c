@@ -1812,7 +1812,8 @@ int lsmash_append_h264_parameter_set( lsmash_h264_specific_parameters_t *param,
     {
         /* Couldn't find parameter set with lower identifier.
          * Next, find parameter set with upper identifier. */
-        for( int i = ps_id + 1; i < 256; i++ )
+        int max_ps_id = ps_type == H264_PARAMETER_SET_TYPE_SPS ? 31 : 255;
+        for( int i = ps_id + 1; i <= max_ps_id; i++ )
         {
             entry = h264_get_ps_entry_from_param( param, ps_type, i );
             if( entry )
