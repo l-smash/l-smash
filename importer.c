@@ -2298,9 +2298,9 @@ static int h264_process_parameter_set( h264_info_t *info, lsmash_h264_parameter_
     switch( ps_type )
     {
         case H264_PARAMETER_SET_TYPE_SPS :
-            return h264_parse_sps_nalu( info->bits, &info->sps, buffer->rbsp, buffer->pos + nalu_header_length, ebsp_length, 0 );
+            return h264_parse_sps( info, buffer->rbsp, buffer->pos + nalu_header_length, ebsp_length );
         case H264_PARAMETER_SET_TYPE_PPS :
-            return h264_parse_pps_nalu( info->bits, &info->sps, &info->pps, buffer->rbsp, buffer->pos + nalu_header_length, ebsp_length );
+            return h264_parse_pps( info, buffer->rbsp, buffer->pos + nalu_header_length, ebsp_length );
         case H264_PARAMETER_SET_TYPE_SPSEXT :
             return 0;
         default :
@@ -2459,8 +2459,7 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, int probe
             {
                 /* VCL NALU (slice) */
                 h264_slice_info_t prev_slice = *slice;
-                if( h264_parse_slice( info->bits, &info->sps, &info->pps,
-                                      slice, &nalu_header, buffer->rbsp,
+                if( h264_parse_slice( info, &nalu_header, buffer->rbsp,
                                       buffer->pos + nalu_header.length, ebsp_length ) )
                     return h264_get_au_internal_failed( importer->info, picture, &nalu_header, no_more_buf, complete_au );
                 if( prev_slice.present )
@@ -2492,7 +2491,7 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, int probe
                 switch( nalu_type )
                 {
                     case 6 :    /* Supplemental Enhancement Information */
-                        if( h264_parse_sei_nalu( info->bits, &info->sei, buffer->rbsp, buffer->pos + nalu_header.length, ebsp_length ) )
+                        if( h264_parse_sei( info->bits, &info->sei, buffer->rbsp, buffer->pos + nalu_header.length, ebsp_length ) )
                             return h264_get_au_internal_failed( importer->info, picture, &nalu_header, no_more_buf, complete_au );
                         h264_append_nalu_to_au( picture, buffer->pos, nalu_length, probe );
                         break;
@@ -2694,7 +2693,7 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
 #endif
         h264_picture_info_t prev_picture = info->picture;
         if( h264_get_access_unit_internal( importer, 1 )
-         || h264_calculate_poc( &info->sps, &info->picture, &prev_picture ) )
+         || h264_calculate_poc( info, &info->picture, &prev_picture ) )
         {
             free( poc );
             goto fail;
