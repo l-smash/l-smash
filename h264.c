@@ -1457,12 +1457,150 @@ uint8_t *lsmash_create_h264_specific_info( lsmash_h264_specific_parameters_t *pa
     return data;
 }
 
-static lsmash_entry_list_t *h264_get_parameter_set_list( lsmash_h264_specific_parameters_t *param, lsmash_h264_parameter_set_type ps_type )
+static int h264_get_sps_id( uint8_t *ps_ebsp, uint32_t ps_ebsp_length, uint8_t *ps_id )
+{
+    /* max number of bits of sps_id = 11: 0b000001XXXXX
+     * (24 + 11 - 1) / 8 + 1 = 5 bytes
+     * Why +1? Because there might be an emulation_prevention_three_byte. */
+    lsmash_bits_t bits = { 0 };
+    lsmash_bs_t   bs   = { 0 };
+    uint8_t rbsp_buffer[6];
+    uint8_t buffer     [6];
+    bs.data  = buffer;
+    bs.alloc = 6;
+    lsmash_bits_init( &bits, &bs );
+    if( h264_import_rbsp_from_ebsp( &bits, rbsp_buffer, ps_ebsp, LSMASH_MIN( ps_ebsp_length, 6 ) ) )
+        return -1;
+    lsmash_bits_get( &bits, 24 );   /* profile_idc, constraint_set_flags and level_idc */
+    uint64_t sec_parameter_set_id = h264_get_exp_golomb_ue( &bits );
+    IF_INVALID_VALUE( sec_parameter_set_id > 31 )
+        return -1;
+    *ps_id = sec_parameter_set_id;
+    return bs.error ? -1 : 0;
+}
+
+static int h264_get_pps_id( uint8_t *ps_ebsp, uint32_t ps_ebsp_length, uint8_t *ps_id )
+{
+    /* max number of bits of pps_id = 17: 0b000000001XXXXXXXX
+     * (17 - 1) / 8 + 1 = 3 bytes
+     * Why +1? Because there might be an emulation_prevention_three_byte. */
+    lsmash_bits_t bits = { 0 };
+    lsmash_bs_t   bs   = { 0 };
+    uint8_t rbsp_buffer[4];
+    uint8_t buffer     [4];
+    bs.data  = buffer;
+    bs.alloc = 4;
+    lsmash_bits_init( &bits, &bs );
+    if( h264_import_rbsp_from_ebsp( &bits, rbsp_buffer, ps_ebsp, LSMASH_MIN( ps_ebsp_length, 4 ) ) )
+        return -1;
+    uint64_t pic_parameter_set_id = h264_get_exp_golomb_ue( &bits );
+    IF_INVALID_VALUE( pic_parameter_set_id > 255 )
+        return -1;
+    *ps_id = pic_parameter_set_id;
+    return bs.error ? -1 : 0;
+}
+
+static inline int h264_get_ps_id( uint8_t *ps_ebsp, uint32_t ps_ebsp_length,
+                                  uint8_t *ps_id, lsmash_h264_parameter_set_type ps_type )
+{
+    int (*get_ps_id)( uint8_t *ps_ebsp, uint32_t ps_ebsp_length, uint8_t *ps_id )
+        = ps_type == H264_PARAMETER_SET_TYPE_SPS ? h264_get_sps_id
+        : ps_type == H264_PARAMETER_SET_TYPE_PPS ? h264_get_pps_id
+        :                                          NULL;
+    return get_ps_id ? get_ps_id( ps_ebsp, ps_ebsp_length, ps_id ) : -1;
+}
+
+static inline lsmash_entry_list_t *h264_get_parameter_set_list( lsmash_h264_specific_parameters_t *param,
+                                                                lsmash_h264_parameter_set_type ps_type )
 {
     return ps_type == H264_PARAMETER_SET_TYPE_SPS    ? (lsmash_entry_list_t *)param->sequenceParameterSets
          : ps_type == H264_PARAMETER_SET_TYPE_PPS    ? (lsmash_entry_list_t *)param->pictureParameterSets
          : ps_type == H264_PARAMETER_SET_TYPE_SPSEXT ? (lsmash_entry_list_t *)param->sequenceParameterSetExt
          : NULL;
+}
+
+static lsmash_entry_t *h264_get_ps_entry_from_param( lsmash_h264_specific_parameters_t *param,
+                                                     lsmash_h264_parameter_set_type ps_type,
+                                                     uint8_t ps_id )
+{
+    int (*get_ps_id)( uint8_t *ps_ebsp, uint32_t ps_ebsp_length, uint8_t *ps_id )
+        = ps_type == H264_PARAMETER_SET_TYPE_SPS ? h264_get_sps_id
+        : ps_type == H264_PARAMETER_SET_TYPE_PPS ? h264_get_pps_id
+        :                                          NULL;
+    if( !get_ps_id )
+        return NULL;
+    lsmash_entry_list_t *ps_list = h264_get_parameter_set_list( param, ps_type );
+    if( !ps_list )
+        return NULL;
+    for( lsmash_entry_t *entry = ps_list->head; entry; entry = entry->next )
+    {
+        isom_avcC_ps_entry_t *ps = (isom_avcC_ps_entry_t *)entry->data;
+        if( !ps )
+            return NULL;
+        uint8_t param_ps_id;
+        if( get_ps_id( ps->parameterSetNALUnit + 1, ps->parameterSetLength - 1, &param_ps_id ) )
+            return NULL;
+        if( ps_id == param_ps_id )
+            return entry;
+    }
+    return NULL;
+}
+
+static inline int h264_get_max_ps_length( lsmash_entry_list_t *ps_list, uint32_t *max_ps_length )
+{
+    *max_ps_length = 0;
+    for( lsmash_entry_t *entry = ps_list->head; entry; entry = entry->next )
+    {
+        isom_avcC_ps_entry_t *ps = (isom_avcC_ps_entry_t *)entry->data;
+        if( !ps )
+            return -1;
+        *max_ps_length = LSMASH_MAX( *max_ps_length, ps->parameterSetLength );
+    }
+    return 0;
+}
+
+static inline int h264_get_ps_count( lsmash_entry_list_t *ps_list, uint32_t *ps_count )
+{
+    *ps_count = 0;
+    for( lsmash_entry_t *entry = ps_list->head; entry; entry = entry->next )
+    {
+        isom_avcC_ps_entry_t *ps = (isom_avcC_ps_entry_t *)entry->data;
+        if( !ps )
+            return -1;
+        ++(*ps_count);
+    }
+    return 0;
+}
+
+static inline int h264_check_same_ps_existence( lsmash_entry_list_t *ps_list, void *ps_data, uint32_t ps_length )
+{
+    for( lsmash_entry_t *entry = ps_list->head; entry; entry = entry->next )
+    {
+        isom_avcC_ps_entry_t *ps = (isom_avcC_ps_entry_t *)entry->data;
+        if( !ps )
+            return -1;
+        if( ps->parameterSetLength == ps_length && !memcmp( ps->parameterSetNALUnit, ps_data, ps_length ) )
+            return 1;   /* The same parameter set already exists. */
+    }
+    return 0;
+}
+
+static inline int h264_validate_ps_type( lsmash_h264_parameter_set_type ps_type, void *ps_data, uint32_t ps_length )
+{
+    if( !ps_data || ps_length < 2 )
+        return -1;
+    if( ps_type != H264_PARAMETER_SET_TYPE_SPS
+     && ps_type != H264_PARAMETER_SET_TYPE_PPS
+     && ps_type != H264_PARAMETER_SET_TYPE_SPSEXT )
+        return -1;
+    uint8_t nalu_type = *((uint8_t *)ps_data) & 0x1f;
+    if( nalu_type != 7 && nalu_type != 8 && nalu_type != 13 )
+        return -1;
+    if( (ps_type == H264_PARAMETER_SET_TYPE_SPS    && nalu_type != 7)
+     || (ps_type == H264_PARAMETER_SET_TYPE_PPS    && nalu_type != 8)
+     || (ps_type == H264_PARAMETER_SET_TYPE_SPSEXT && nalu_type != 13) )
+        return -1;
+    return 0;
 }
 
 /* Return 1 if a new parameter set is appendable.
@@ -1473,42 +1611,34 @@ int lsmash_check_h264_parameter_set_appendable( lsmash_h264_specific_parameters_
                                                 lsmash_h264_parameter_set_type ps_type,
                                                 void *ps_data, uint32_t ps_length )
 {
-    if( !param || !ps_data || ps_length < 2 )
+    if( !param )
         return -1;
-    if( ps_type != H264_PARAMETER_SET_TYPE_SPS && ps_type != H264_PARAMETER_SET_TYPE_PPS && ps_type != H264_PARAMETER_SET_TYPE_SPSEXT )
+    if( h264_validate_ps_type( ps_type, ps_data, ps_length ) )
         return -1;
-    uint8_t nalu_type = *((uint8_t *)ps_data) & 0x1f;
-    if( nalu_type != 7 && nalu_type != 8 && nalu_type != 13 )
-        return -1;
-    if( (ps_type == H264_PARAMETER_SET_TYPE_SPS    && nalu_type != 7)
-     || (ps_type == H264_PARAMETER_SET_TYPE_PPS    && nalu_type != 8)
-     || (ps_type == H264_PARAMETER_SET_TYPE_SPSEXT && nalu_type != 13) )
-        return -1;
-    if( nalu_type == 13 && !ISOM_REQUIRES_AVCC_EXTENSION( param->AVCProfileIndication ) )
+    if( ps_type == H264_PARAMETER_SET_TYPE_SPSEXT
+     && !ISOM_REQUIRES_AVCC_EXTENSION( param->AVCProfileIndication ) )
         return 0;
     /* Check whether the same parameter set already exsits or not. */
-    uint32_t max_ps_length = ps_length;
     lsmash_entry_list_t *ps_list = h264_get_parameter_set_list( param, ps_type );
-    if( ps_list )
-    {
-        uint32_t ps_count = 0;
-        for( lsmash_entry_t *entry = ps_list->head; entry; entry = entry->next )
-        {
-            isom_avcC_ps_entry_t *ps = (isom_avcC_ps_entry_t *)entry->data;
-            if( !ps )
-                return -1;
-            if( ps->parameterSetLength == ps_length && !memcmp( ps->parameterSetNALUnit, ps_data, ps_length ) )
-                return 0;   /* The same parameter set already exists. */
-            max_ps_length = LSMASH_MAX( max_ps_length, ps->parameterSetLength );
-            ++ps_count;
-        }
-        if( (ps_type == H264_PARAMETER_SET_TYPE_SPS    && ps_count >= 31)
-         || (ps_type == H264_PARAMETER_SET_TYPE_PPS    && ps_count >= 255)
-         || (ps_type == H264_PARAMETER_SET_TYPE_SPSEXT && ps_count >= 255) )
-            return -2;  /* No more appendable parameter sets. */
-    }
-    else
+    if( !ps_list )
         return 1;   /* No parameter set list */
+    switch( h264_check_same_ps_existence( ps_list, ps_data, ps_length ) )
+    {
+        case 0  : break;
+        case 1  : return 0;     /* The same parameter set already exists. */
+        default : return -1;    /* An error occured. */
+    }
+    uint32_t max_ps_length;
+    if( h264_get_max_ps_length( ps_list, &max_ps_length ) )
+        return -1;
+    max_ps_length = LSMASH_MAX( max_ps_length, ps_length );
+    uint32_t ps_count;
+    if( h264_get_ps_count( ps_list, &ps_count ) )
+        return -1;
+    if( (ps_type == H264_PARAMETER_SET_TYPE_SPS    && ps_count >= 31)
+     || (ps_type == H264_PARAMETER_SET_TYPE_PPS    && ps_count >= 255)
+     || (ps_type == H264_PARAMETER_SET_TYPE_SPSEXT && ps_count >= 255) )
+        return -2;  /* No more appendable parameter sets. */
     if( ps_type == H264_PARAMETER_SET_TYPE_SPSEXT )
         return 1;
     /* Check whether a new specific info is needed or not. */
@@ -1522,20 +1652,18 @@ int lsmash_check_h264_parameter_set_appendable( lsmash_h264_specific_parameters_
     if( ps_type == H264_PARAMETER_SET_TYPE_PPS )
     {
         /* PPS */
-        h264_pps_t pps;
-        if( h264_parse_pps_easy( &bits, &pps, rbsp_buffer, ps_data + 1, ps_length - 1 ) )
+        uint8_t pps_id;
+        if( h264_get_pps_id( ps_data + 1, ps_length - 1, &pps_id ) )
             return -1;
-        lsmash_bits_empty( &bits );
-        uint8_t pps_id = pps.pic_parameter_set_id;
         for( lsmash_entry_t *entry = ps_list->head; entry; entry = entry->next )
         {
             isom_avcC_ps_entry_t *ps = (isom_avcC_ps_entry_t *)entry->data;
             if( !ps )
                 return -1;
-            if( h264_parse_pps_easy( &bits, &pps, rbsp_buffer, ps->parameterSetNALUnit + 1, ps->parameterSetLength - 1 ) )
+            uint8_t param_pps_id;
+            if( h264_get_pps_id( ps->parameterSetNALUnit + 1, ps->parameterSetLength - 1, &param_pps_id ) )
                 return -1;
-            lsmash_bits_empty( &bits );
-            if( pps_id == pps.pic_parameter_set_id )
+            if( pps_id == param_pps_id )
                 return -2;  /* PPS that has the same pic_parameter_set_id already exists with different form. */
         }
         return 0;
@@ -1570,10 +1698,10 @@ int lsmash_check_h264_parameter_set_appendable( lsmash_h264_specific_parameters_
         isom_avcC_ps_entry_t *ps = (isom_avcC_ps_entry_t *)entry->data;
         if( !ps )
             return -1;
-        if( h264_parse_sps_easy( &bits, &sps, rbsp_buffer, ps->parameterSetNALUnit + 1, ps->parameterSetLength - 1 ) )
+        uint8_t param_sps_id;
+        if( h264_get_sps_id( ps->parameterSetNALUnit + 1, ps->parameterSetLength - 1, &param_sps_id ) )
             return -1;
-        lsmash_bits_empty( &bits );
-        if( sps_id == sps.seq_parameter_set_id )
+        if( sps_id == param_sps_id )
             return -2;  /* SPS that has the same seq_parameter_set_id already exists with different form. */
     }
     return 0;
@@ -1619,10 +1747,32 @@ int lsmash_append_h264_parameter_set( lsmash_h264_specific_parameters_t *param,
                     return -1;
                 ps_list = (lsmash_entry_list_t *)param->sequenceParameterSetExt;
             }
-            break;
+            isom_avcC_ps_entry_t *ps = isom_create_ps_entry( ps_data, ps_length );
+            if( !ps )
+                return -1;
+            if( lsmash_add_entry( ps_list, ps ) )
+            {
+                isom_remove_avcC_ps( ps );
+                return -1;
+            }
+            return 0;
         default :
             return -1;
     }
+    /* Add a new parameter set in order of ascending parameter set identifier. */
+    uint8_t ps_id;
+    if( h264_get_ps_id( ps_data + 1, ps_length - 1, &ps_id, ps_type ) )
+        return -1;
+    lsmash_entry_t *entry = h264_get_ps_entry_from_param( param, ps_type, ps_id );
+    if( entry )
+        return -1;  /* The same parameter set identifier already exists. */
+    if( ps_id )
+        for( uint8_t i = ps_id - 1; i; i-- )
+        {
+            entry = h264_get_ps_entry_from_param( param, ps_type, i );
+            if( entry )
+                break;
+        }
     isom_avcC_ps_entry_t *ps = isom_create_ps_entry( ps_data, ps_length );
     if( !ps )
         return -1;
@@ -1631,6 +1781,18 @@ int lsmash_append_h264_parameter_set( lsmash_h264_specific_parameters_t *param,
         isom_remove_avcC_ps( ps );
         return -1;
     }
+    if( !entry )
+        return 0;
+    /* before: entry[i < ps_id] -> next_entry -> ... -> prev_entry -> new_entry[ps_id]
+     * after:  entry[i < ps_id] -> new_entry[ps_id] -> next_entry -> ... -> prev_entry */
+    lsmash_entry_t *new_entry = ps_list->tail;
+    if( new_entry->prev )
+        new_entry->prev->next = NULL;
+    new_entry->prev = entry;
+    new_entry->next = entry->next;
+    if( entry->next )
+        entry->next->prev = new_entry;
+    entry->next = new_entry;
     return 0;
 }
 
