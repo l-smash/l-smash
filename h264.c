@@ -1766,13 +1766,29 @@ int lsmash_append_h264_parameter_set( lsmash_h264_specific_parameters_t *param,
     lsmash_entry_t *entry = h264_get_ps_entry_from_param( param, ps_type, ps_id );
     if( entry )
         return -1;  /* The same parameter set identifier already exists. */
+    int append_head = 0;
     if( ps_id )
-        for( uint8_t i = ps_id - 1; i; i-- )
+    {
+        for( int i = ps_id - 1; i; i-- )
         {
             entry = h264_get_ps_entry_from_param( param, ps_type, i );
             if( entry )
                 break;
         }
+        if( !entry )
+        {
+            /* Couldn't find parameter set with lower identifier.
+             * Next, find parameter set with upper identifier. */
+            for( int i = ps_id + 1; i < 256; i++ )
+            {
+                entry = h264_get_ps_entry_from_param( param, ps_type, i );
+                if( entry )
+                    break;
+            }
+            if( entry )
+                append_head = 1;
+        }
+    }
     isom_avcC_ps_entry_t *ps = isom_create_ps_entry( ps_data, ps_length );
     if( !ps )
         return -1;
@@ -1782,10 +1798,21 @@ int lsmash_append_h264_parameter_set( lsmash_h264_specific_parameters_t *param,
         return -1;
     }
     if( !entry )
+        return 0;   /* The new entry was appended to tail. */
+    lsmash_entry_t *new_entry = ps_list->tail;
+    if( append_head )
+    {
+        /* before: entry[i > ps_id] ... -> prev_entry -> new_entry[ps_id]
+         * after:  new_entry[ps_id] -> entry[i > ps_id] -> ... -> prev_entry */
+        if( new_entry->prev )
+            new_entry->prev->next = NULL;
+        new_entry->prev = NULL;
+        entry->prev = new_entry;
+        new_entry->next = entry;
         return 0;
+    }
     /* before: entry[i < ps_id] -> next_entry -> ... -> prev_entry -> new_entry[ps_id]
      * after:  entry[i < ps_id] -> new_entry[ps_id] -> next_entry -> ... -> prev_entry */
-    lsmash_entry_t *new_entry = ps_list->tail;
     if( new_entry->prev )
         new_entry->prev->next = NULL;
     new_entry->prev = entry;
