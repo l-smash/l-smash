@@ -1797,6 +1797,31 @@ int lsmash_append_h264_parameter_set( lsmash_h264_specific_parameters_t *param,
         isom_remove_avcC_ps( ps );
         return -1;
     }
+    if( ps_type == H264_PARAMETER_SET_TYPE_SPS )
+    {
+        /* Update specific info with SPS. */
+        lsmash_bits_t bits = { 0 };
+        lsmash_bs_t   bs   = { 0 };
+        uint8_t rbsp_buffer[ps_length];
+        uint8_t buffer     [ps_length];
+        bs.data  = buffer;
+        bs.alloc = ps_length;
+        lsmash_bits_init( &bits, &bs );
+        h264_sps_t sps;
+        if( h264_parse_sps_easy( &bits, &sps, rbsp_buffer, ps_data + 1, ps_length - 1 ) )
+        {
+            lsmash_remove_entry_direct( ps_list, ps_list->tail, isom_remove_avcC_ps );
+            return -1;
+        }
+        if( ps_list->entry_count == 1 )
+            param->profile_compatibility = 0xff;
+        param->AVCProfileIndication    = sps.profile_idc;
+        param->profile_compatibility  &= sps.constraint_set_flags;
+        param->AVCLevelIndication      = LSMASH_MAX( param->AVCLevelIndication, sps.level_idc );
+        param->chroma_format           = sps.chroma_format_idc;
+        param->bit_depth_luma_minus8   = sps.bit_depth_luma_minus8;
+        param->bit_depth_chroma_minus8 = sps.bit_depth_chroma_minus8;
+    }
     if( !entry )
         return 0;   /* The new entry was appended to tail. */
     lsmash_entry_t *new_entry = ps_list->tail;
@@ -1836,24 +1861,10 @@ int h264_try_to_append_parameter_set( h264_info_t *info, lsmash_h264_parameter_s
             switch( ps_type )
             {
                 case H264_PARAMETER_SET_TYPE_SPS :
-                {
-                    /* Parse SPS and set up the specific info. */
                     if( h264_parse_sps( info, info->buffer.rbsp, ps_data + 1, ps_length - 1 ) )
                         return -1;
-                    lsmash_entry_list_t *ps_list = h264_get_parameter_set_list( param, ps_type );
-                    if( !ps_list || ps_list->entry_count == 0 )
-                        param->profile_compatibility = 0xff;
-                    h264_sps_t *sps = &info->sps;
-                    param->AVCProfileIndication    = sps->profile_idc;
-                    param->profile_compatibility  &= sps->constraint_set_flags;
-                    param->AVCLevelIndication      = LSMASH_MAX( param->AVCLevelIndication, sps->level_idc );
-                    param->chroma_format           = sps->chroma_format_idc;
-                    param->bit_depth_luma_minus8   = sps->bit_depth_luma_minus8;
-                    param->bit_depth_chroma_minus8 = sps->bit_depth_chroma_minus8;
                     break;
-                }
                 case H264_PARAMETER_SET_TYPE_PPS :
-                    /* Parse PPS. */
                     if( h264_parse_pps( info, info->buffer.rbsp, ps_data + 1, ps_length - 1 ) )
                         return -1;
                     break;
