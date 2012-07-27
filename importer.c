@@ -269,7 +269,7 @@ typedef struct
     mp4sys_adts_variable_header_t variable_header;
     uint32_t samples_in_frame;
     uint32_t au_number;
-} mp4sys_amp4sys_dts_info_t;
+} mp4sys_adts_info_t;
 
 static int mp4sys_adts_get_accessunit( mp4sys_importer_t* importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
 {
@@ -277,7 +277,7 @@ static int mp4sys_adts_get_accessunit( mp4sys_importer_t* importer, uint32_t tra
         return -1;
     if( !importer->info || track_number != 1 )
         return -1;
-    mp4sys_amp4sys_dts_info_t* info = (mp4sys_amp4sys_dts_info_t*)importer->info;
+    mp4sys_adts_info_t* info = (mp4sys_adts_info_t*)importer->info;
     mp4sys_importer_status current_status = info->status;
     uint16_t raw_data_block_size = info->variable_header.raw_data_block_size[info->raw_data_block_idx];
     if( current_status == MP4SYS_IMPORTER_ERROR || buffered_sample->length < raw_data_block_size )
@@ -444,7 +444,7 @@ static int mp4sys_adts_probe( mp4sys_importer_t* importer )
         return -1;
 
     /* importer status */
-    mp4sys_amp4sys_dts_info_t* info = lsmash_malloc_zero( sizeof(mp4sys_amp4sys_dts_info_t) );
+    mp4sys_adts_info_t* info = lsmash_malloc_zero( sizeof(mp4sys_adts_info_t) );
     if( !info )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
@@ -471,7 +471,7 @@ static uint32_t mp4sys_adts_get_last_delta( mp4sys_importer_t* importer, uint32_
 {
     debug_if( !importer || !importer->info )
         return 0;
-    mp4sys_amp4sys_dts_info_t *info = (mp4sys_amp4sys_dts_info_t *)importer->info;
+    mp4sys_adts_info_t *info = (mp4sys_adts_info_t *)importer->info;
     if( !info || track_number != 1 || info->status != MP4SYS_IMPORTER_EOF )
         return 0;
     return info->samples_in_frame;
