@@ -997,7 +997,7 @@ typedef enum
     ITUNES_METADATA_ITEM_GAPLESS_PLAYBACK           = LSMASH_4CC( 'p', 'g', 'a', 'p' ),     /* Gapless Playback / 0: insert gap, 1: no gap */
 
     /* Binary type */
-    ITUNES_METADATA_ITEM_COVER_ART                  = LSMASH_4CC( 'c', 'o', 'v', 'r' ),     /* One or more cover art images */
+    ITUNES_METADATA_ITEM_COVER_ART                  = LSMASH_4CC( 'c', 'o', 'v', 'r' ),     /* One or more cover art images (JPEG/PNG/BMP data) */
     ITUNES_METADATA_ITEM_DISC_NUMBER                = LSMASH_4CC( 'd', 'i', 's', 'k' ),     /* Disc Number */
     ITUNES_METADATA_ITEM_TRACK_NUMBER               = LSMASH_4CC( 't', 'r', 'k', 'n' ),     /* Track Number */
 
