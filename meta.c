@@ -183,8 +183,7 @@ static int isom_set_itunes_metadata_binary( lsmash_root_t *root,
             break;
         case ITUNES_METADATA_ITEM_DISC_NUMBER :
         case ITUNES_METADATA_ITEM_TRACK_NUMBER :
-            if( value.binary.subtype != ITUNES_METADATA_SUBTYPE_IMPLICIT )
-                return -1;
+            value.binary.subtype = ITUNES_METADATA_SUBTYPE_IMPLICIT;
             break;
         default :
             break;
