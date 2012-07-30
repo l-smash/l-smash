@@ -80,7 +80,7 @@ static int isom_set_itunes_metadata_string( lsmash_root_t *root,
     isom_data_t *data = isom_add_metadata( root, item, meaning, name );
     if( !data )
         return -1;
-    data->type_code = 1;
+    data->type_code = ITUNES_METADATA_SUBTYPE_UTF8;
     data->value_length = value_length;      /* No null terminator */
     data->value = lsmash_memdup( value.string, data->value_length );
     if( !data->value )
@@ -128,7 +128,7 @@ static int isom_set_itunes_metadata_integer( lsmash_root_t *root,
     isom_data_t *data = isom_add_metadata( root, item, meaning, name );
     if( !data )
         return -1;
-    data->type_code = 21;
+    data->type_code = ITUNES_METADATA_SUBTYPE_INTEGER;
     data->value_length = metadata_code_type_table[i].length;
     uint8_t temp[8];
     for( i = 0; i < data->value_length; i++ )
@@ -153,7 +153,7 @@ static int isom_set_itunes_metadata_boolean( lsmash_root_t *root,
     isom_data_t *data = isom_add_metadata( root, item, meaning, name );
     if( !data )
         return -1;
-    data->type_code = 21;
+    data->type_code = ITUNES_METADATA_SUBTYPE_INTEGER;
     data->value_length = 1;
     uint8_t temp = (uint8_t)value.boolean;
     data->value = lsmash_memdup( &temp, 1 );
