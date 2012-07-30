@@ -999,7 +999,7 @@ typedef enum
     /* Binary type */
     ITUNES_METADATA_ITEM_COVER_ART                  = LSMASH_4CC( 'c', 'o', 'v', 'r' ),     /* One or more cover art images */
     ITUNES_METADATA_ITEM_DISC_NUMBER                = LSMASH_4CC( 'd', 'i', 's', 'k' ),     /* Disc Number */
-    ITUNES_METADATA_ITEM_TRACH_NUMBER               = LSMASH_4CC( 't', 'r', 'k', 'n' ),     /* Track Number */
+    ITUNES_METADATA_ITEM_TRACK_NUMBER               = LSMASH_4CC( 't', 'r', 'k', 'n' ),     /* Track Number */
 
     /* Custom type */
     ITUNES_METADATA_ITEM_CUSTOM                     = LSMASH_4CC( '-', '-', '-', '-' ),     /* Custom */
@@ -1011,7 +1011,32 @@ typedef enum
     ITUNES_METADATA_TYPE_STRING  = 1,
     ITUNES_METADATA_TYPE_INTEGER = 2,
     ITUNES_METADATA_TYPE_BOOLEAN = 3,
+    ITUNES_METADATA_TYPE_BINARY  = 4,
 } lsmash_itunes_metadata_type;
+
+typedef enum
+{
+    ITUNES_METADATA_SUBTYPE_IMPLICIT = 0,   /* for use with tags for which no type needs to be indicated because only one type is allowed */
+    ITUNES_METADATA_SUBTYPE_UTF8     = 1,   /* without any count or null terminator */
+    ITUNES_METADATA_SUBTYPE_UTF16    = 2,   /* also known as UTF-16BE */
+    ITUNES_METADATA_SUBTYPE_SJIS     = 3,   /* deprecated unless it is needed for special Japanese characters */
+    ITUNES_METADATA_SUBTYPE_HTML     = 6,   /* the HTML file header specifies which HTML version */
+    ITUNES_METADATA_SUBTYPE_XML      = 7,   /* the XML header must identify the DTD or schemas */
+    ITUNES_METADATA_SUBTYPE_UUID     = 8,   /* also known as GUID; stored as 16 bytes in binary (valid as an ID) */
+    ITUNES_METADATA_SUBTYPE_ISRC     = 9,   /* stored as UTF-8 text (valid as an ID) */
+    ITUNES_METADATA_SUBTYPE_MI3P     = 10,  /* stored as UTF-8 text (valid as an ID) */
+    ITUNES_METADATA_SUBTYPE_GIF      = 12,  /* (deprecated) a GIF image */
+    ITUNES_METADATA_SUBTYPE_JPEG     = 13,  /* in a JFIF wrapper */
+    ITUNES_METADATA_SUBTYPE_PNG      = 14,  /* in a PNG wrapper */
+    ITUNES_METADATA_SUBTYPE_URL      = 15,  /* absolute, in UTF-8 characters */
+    ITUNES_METADATA_SUBTYPE_DURATION = 16,  /* in milliseconds, a 32-bit integer */
+    ITUNES_METADATA_SUBTYPE_TIME     = 17,  /* in UTC, counting seconds since midnight on 1 January, 1904; 32 or 64 bits */
+    ITUNES_METADATA_SUBTYPE_GENRES   = 18,  /* a list of values from the enumerated set */
+    ITUNES_METADATA_SUBTYPE_INTEGER  = 21,  /* A signed big-endian integer in 1,2,3,4 or 8 bytes */
+    ITUNES_METADATA_SUBTYPE_RIAAPA   = 24,  /* RIAA Parental advisory; -1=no, 1=yes, 0=unspecified. 8-bit integer */
+    ITUNES_METADATA_SUBTYPE_UPC      = 25,  /* Universal Product Code, in text UTF-8 format (valid as an ID) */
+    ITUNES_METADATA_SUBTYPE_BMP      = 27,  /* Windows bitmap format graphics */
+} lsmash_itunes_metadata_subtype;
 
 typedef enum
 {
@@ -1329,6 +1354,12 @@ typedef union
     char            *string;
     uint64_t         integer;
     lsmash_boolean_t boolean;
+    struct
+    {
+        lsmash_itunes_metadata_subtype subtype;
+        uint32_t                       size;
+        uint8_t                       *data;
+    } binary;
 } lsmash_itunes_metadata_t;
 
 typedef struct lsmash_root_tag lsmash_root_t;
