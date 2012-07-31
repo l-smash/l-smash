@@ -1788,12 +1788,16 @@ static int isom_print_LOOP( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
     {
         case 0 :
             fprintf( fp, " (none)\n" );
+            break;
         case 1 :
             fprintf( fp, " (looping)\n" );
+            break;
         case 2 :
             fprintf( fp, " (palindromic looping)\n" );
+            break;
         default :
             fprintf( fp, "\n" );
+            break;
     }
     return 0;
 }
