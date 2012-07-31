@@ -971,6 +971,12 @@ typedef enum
     ITUNES_METADATA_ITEM_TV_NETWORK                 = LSMASH_4CC( 't', 'v', 'n', 'n' ),     /* TV Network Name */
     ITUNES_METADATA_ITEM_TV_SHOW_NAME               = LSMASH_4CC( 't', 'v', 's', 'h' ),     /* TV Show Name */
     ITUNES_METADATA_ITEM_ITUNES_PURCHASE_ACCOUNT_ID = LSMASH_4CC( 'a', 'p', 'I', 'D' ),     /* iTunes Account Used for Purchase */
+    ITUNES_METADATA_ITEM_ITUNES_SORT_ALBUM          = LSMASH_4CC( 's', 'o', 'a', 'l' ),     /* Sort Album */
+    ITUNES_METADATA_ITEM_ITUNES_SORT_ARTIST         = LSMASH_4CC( 's', 'o', 'a', 'r' ),     /* Sort Artist */
+    ITUNES_METADATA_ITEM_ITUNES_SORT_ALBUM_ARTIST   = LSMASH_4CC( 's', 'o', 'a', 'a' ),     /* Sort Album Artist */
+    ITUNES_METADATA_ITEM_ITUNES_SORT_COMPOSER       = LSMASH_4CC( 's', 'o', 'c', 'o' ),     /* Sort Composer */
+    ITUNES_METADATA_ITEM_ITUNES_SORT_NAME           = LSMASH_4CC( 's', 'o', 'n', 'm' ),     /* Sort Name */
+    ITUNES_METADATA_ITEM_ITUNES_SORT_SHOW           = LSMASH_4CC( 's', 'o', 's', 'n' ),     /* Sort Show */
 
     /* Integer type
      * (X): X means length of bytes */

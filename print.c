@@ -1572,6 +1572,12 @@ static int isom_print_metaitem( FILE *fp, lsmash_root_t *root, isom_box_t *box, 
             { ITUNES_METADATA_ITEM_ITUNES_TV_GENRE_ID,         "iTunes TV Genre ID" },
             { ITUNES_METADATA_ITEM_ITUNES_PLAYLIST_ID,         "iTunes Playlist ID" },
             { ITUNES_METADATA_ITEM_ITUNES_COUNTRY_CODE,        "iTunes Country Code" },
+            { ITUNES_METADATA_ITEM_ITUNES_SORT_ALBUM,          "Sort Album" },
+            { ITUNES_METADATA_ITEM_ITUNES_SORT_ARTIST,         "Sort Artist" },
+            { ITUNES_METADATA_ITEM_ITUNES_SORT_ALBUM_ARTIST,   "Sort Album Artist" },
+            { ITUNES_METADATA_ITEM_ITUNES_SORT_COMPOSER,       "Sort Composer" },
+            { ITUNES_METADATA_ITEM_ITUNES_SORT_NAME,           "Sort Name" },
+            { ITUNES_METADATA_ITEM_ITUNES_SORT_SHOW,           "Sort Show" },
             { ITUNES_METADATA_ITEM_CUSTOM,                     "Custom Metadata Item" },
             { 0,                                               NULL }
         };
