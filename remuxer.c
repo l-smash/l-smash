@@ -69,9 +69,10 @@ typedef struct
 {
     lsmash_root_t                 *root;
     input_track_t                 *track;
-    lsmash_itunes_metadata_list_t *itunes_meta_list;
+    lsmash_itunes_metadata_t      *itunes_metadata;
     lsmash_movie_parameters_t      movie_param;
     uint32_t                       num_tracks;
+    uint32_t                       num_itunes_metadata;
     uint32_t                       current_track_number;
 } input_movie_t;
 
@@ -108,13 +109,32 @@ static void cleanup_input_movie( input_movie_t *input )
 {
     if( !input )
         return;
-    lsmash_destroy_itunes_metadata( input->itunes_meta_list );
+    if( input->itunes_metadata )
+    {
+        for( uint32_t i = 0; i < input->num_itunes_metadata; i++ )
+        {
+            lsmash_itunes_metadata_t *metadata = &input->itunes_metadata[i];
+            if( metadata->type == ITUNES_METADATA_TYPE_STRING )
+            {
+                if( metadata->value.string )
+                    free( metadata->value.string );
+            }
+            else if( metadata->type == ITUNES_METADATA_TYPE_BINARY )
+                if( metadata->value.binary.data )
+                    free( metadata->value.binary.data );
+            if( metadata->meaning )
+                free( metadata->meaning );
+            if( metadata->name )
+                free( metadata->name );
+        }
+        free( input->itunes_metadata );
+    }
     if( input->track )
         free( input->track );
     lsmash_destroy_root( input->root );
-    input->root = NULL;
-    input->track = NULL;
-    input->itunes_meta_list = NULL;
+    input->root            = NULL;
+    input->track           = NULL;
+    input->itunes_metadata = NULL;
 }
 
 static void cleanup_output_movie( output_movie_t *output )
@@ -124,7 +144,7 @@ static void cleanup_output_movie( output_movie_t *output )
     if( output->track )
         free( output->track );
     lsmash_destroy_root( output->root );
-    output->root = NULL;
+    output->root  = NULL;
     output->track = NULL;
 }
 
@@ -213,6 +233,65 @@ static void display_help( void )
              LSMASH_REV, LSMASH_GIT_HASH, __DATE__, __TIME__ );
 }
 
+static char *duplicate_string( char *src )
+{
+    if( !src )
+        return NULL;
+    int dst_size = strlen( src ) + 1;
+    char *dst = malloc( dst_size );
+    if( !dst )
+        return NULL;
+    memcpy( dst, src, dst_size );
+    return dst;
+}
+
+static int get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, lsmash_itunes_metadata_t *metadata )
+{
+    memset( metadata, 0, sizeof(lsmash_itunes_metadata_t) );
+    if( lsmash_get_itunes_metadata( root, metadata_number, metadata ) )
+        return -1;
+    lsmash_itunes_metadata_t shadow = *metadata;
+    metadata->meaning = NULL;
+    metadata->name    = NULL;
+    memset( &metadata->value, 0, sizeof(lsmash_itunes_metadata_value_t) );        
+    if( shadow.meaning )
+    {
+        char *temp = duplicate_string( shadow.meaning );
+        if( !temp )
+            return -1;
+        metadata->meaning = temp;
+    }
+    if( shadow.name )
+    {
+        char *temp = duplicate_string( shadow.name );
+        if( !temp )
+            goto fail;
+        metadata->name = temp;
+    }
+    if( shadow.type == ITUNES_METADATA_TYPE_STRING )
+    {
+        char *temp = duplicate_string( shadow.value.string );
+        if( !temp )
+            goto fail;
+        metadata->value.string = temp;
+    }
+    else if( shadow.type == ITUNES_METADATA_TYPE_BINARY )
+    {
+        uint8_t *temp = malloc( shadow.value.binary.size );
+        if( !temp )
+            goto fail;
+        memcpy( temp, shadow.value.binary.data, shadow.value.binary.size );
+        metadata->value.binary.data = temp;
+    }
+    return 0;
+fail:
+    if( metadata->meaning )
+        free( metadata->meaning );
+    if( metadata->name )
+        free( metadata->name );
+    return -1;
+}
+
 static int get_movie( input_movie_t *input, char *input_name )
 {
     if( !strcmp( input_name, "-" ) )
@@ -220,13 +299,29 @@ static int get_movie( input_movie_t *input, char *input_name )
     input->root = lsmash_open_movie( input_name, LSMASH_FILE_MODE_READ );
     if( !input->root )
         return ERROR_MSG( "failed to open input file.\n" );
-    input->itunes_meta_list = lsmash_export_itunes_metadata( input->root );
-    if( !input->itunes_meta_list )
-        return ERROR_MSG( "failed to get iTunes metadata.\n" );
+    input->num_itunes_metadata = lsmash_count_itunes_metadata( input->root );
+    if( input->num_itunes_metadata )
+    {
+        input->itunes_metadata = malloc( input->num_itunes_metadata * sizeof(lsmash_itunes_metadata_t) );
+        if( !input->itunes_metadata )
+            return ERROR_MSG( "failed to alloc iTunes metadata.\n" );
+        uint32_t itunes_metadata_count = 0;
+        for( uint32_t i = 1; i <= input->num_itunes_metadata; i++ )
+        {
+            if( get_itunes_metadata( input->root, i, &input->itunes_metadata[itunes_metadata_count] ) )
+            {
+                WARNING_MSG( "failed to get an iTunes metadata.\n" );
+                continue;
+            }
+            ++itunes_metadata_count;
+        }
+        input->num_itunes_metadata = itunes_metadata_count;
+    }
     input->current_track_number = 1;
     lsmash_movie_parameters_t *movie_param = &input->movie_param;
     lsmash_initialize_movie_parameters( movie_param );
-    lsmash_get_movie_parameters( input->root, movie_param );
+    if( lsmash_get_movie_parameters( input->root, movie_param ) )
+        return ERROR_MSG( "failed to get movie parameters.\n" );
     uint32_t num_tracks = input->num_tracks = movie_param->number_of_tracks;
     /* Create tracks. */
     input_track_t *in_track = input->track = malloc( num_tracks * sizeof(input_track_t) );
@@ -507,12 +602,15 @@ static int set_movie_parameters( remuxer_t *remuxer )
     return lsmash_set_movie_parameters( output->root, &output->movie_param );
 }
 
-static int set_itunes_metadata( output_movie_t *output, input_movie_t *input, int num_input )
+static void set_itunes_metadata( output_movie_t *output, input_movie_t *input, int num_input )
 {
     for( int i = 0; i < num_input; i++ )
-        if( lsmash_import_itunes_metadata( output->root, input[i].itunes_meta_list ) )
-            return -1;
-    return 0;
+        for( uint32_t j = 0; j < input[i].num_itunes_metadata; j++ )
+            if( lsmash_set_itunes_metadata( output->root, input[i].itunes_metadata[j] ) )
+            {
+                WARNING_MSG( "failed to set an iTunes metadata.\n" );
+                continue;
+            }
 }
 
 static int set_starting_point( input_movie_t *input, input_track_t *in_track, uint32_t seek_point, int consider_rap )
@@ -572,8 +670,7 @@ static int prepare_output( remuxer_t *remuxer )
         return ERROR_MSG( "failed to set output movie parameters.\n" );
     output_movie_t *output = remuxer->output;
     input_movie_t  *input  = remuxer->input;
-    if( set_itunes_metadata( output, input, remuxer->num_input ) )
-        return ERROR_MSG( "failed to set iTunes metadata.\n" );
+    set_itunes_metadata( output, input, remuxer->num_input );
     /* Allocate output tracks. */
     for( int i = 0; i < remuxer->num_input; i++ )
         output->num_tracks += input[i].num_tracks;
