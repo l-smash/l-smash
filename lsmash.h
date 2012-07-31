@@ -407,8 +407,8 @@ typedef enum
 
 typedef enum
 {
-#define UINT16_MAX_PLUS_ONE 0x10000
-    QT_COLOR_PARAMETER_NOT_SPECIFIED = UINT16_MAX_PLUS_ONE,
+    QT_COLOR_PARAMETER_START = 1 << 16, /* User must not use this. */
+    QT_COLOR_PARAMETER_NOT_SPECIFIED = QT_COLOR_PARAMETER_START,
     QT_COLOR_PARAMETER_ITU_R_BT470_M,
     QT_COLOR_PARAMETER_ITU_R_BT470_BG,
     QT_COLOR_PARAMETER_ITU_R_BT709,
@@ -417,7 +417,7 @@ typedef enum
     QT_COLOR_PARAMETER_SMPTE_274M,
     QT_COLOR_PARAMETER_SMPTE_293M,
     QT_COLOR_PARAMETER_SMPTE_296M,
-    QT_COLOR_PARAMETER_END,
+    QT_COLOR_PARAMETER_END,             /* User must not use this. */
 } lsmash_color_parameter;
 
 typedef enum
@@ -1251,9 +1251,12 @@ typedef struct
     uint32_t par_v;                             /* vertical factor of pixel aspect ratio */
     lsmash_scaling_method scaling_method;       /* If not set, video samples are scaled into the visual presentation region to fill it. */
     /* The folowing parameters are only available for QuickTime file formats. */
-    lsmash_color_parameter primaries;
-    lsmash_color_parameter transfer;
-    lsmash_color_parameter matrix;
+    lsmash_color_parameter primaries;           /* the chromaticity coordinates of the color primaries
+                                                 * The user who is a specialist can set an actual value to this directly without enum lsmash_color_parameter. */
+    lsmash_color_parameter transfer;            /* the opto-electronic transfer characteristic of the image color components
+                                                 * The user who is a specialist can set an actual value to this directly without enum lsmash_color_parameter. */
+    lsmash_color_parameter matrix;              /* the matrix coefficients associated with derivation of luma and chroma signals from the green, blue, and red primaries
+                                                 * The user who is a specialist can set an actual value to this directly without enum lsmash_color_parameter. */
     lsmash_field_orderings field_orderings;     /* field ordering for interlaced material */
     lsmash_pixel_format pixel_format;           /* the native pixel format */
     uint8_t significant_bits;                   /* the number of significant bits per component */
