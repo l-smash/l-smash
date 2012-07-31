@@ -1444,6 +1444,7 @@ void lsmash_delete_tyrant_chapter( lsmash_root_t *root );
 int lsmash_set_copyright( lsmash_root_t *root, uint32_t track_ID, uint16_t ISO_language, char *notice );
 
 int lsmash_set_itunes_metadata( lsmash_root_t *root, lsmash_itunes_metadata_t metadata );
+int lsmash_get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, lsmash_itunes_metadata_t *metadata );
 uint32_t lsmash_count_itunes_metadata( lsmash_root_t *root );
 
 #ifdef LSMASH_DEMUXER_ENABLED
