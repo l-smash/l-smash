@@ -1351,15 +1351,27 @@ typedef enum
 
 typedef union
 {
-    char            *string;
-    uint64_t         integer;
-    lsmash_boolean_t boolean;
+    char            *string;    /* for ITUNES_METADATA_TYPE_STRING (UTF-8 string) */
+    uint64_t         integer;   /* for ITUNES_METADATA_TYPE_INTEGER */
+    lsmash_boolean_t boolean;   /* for ITUNES_METADATA_TYPE_BOOLEAN */
+    /* for ITUNES_METADATA_TYPE_BINARY */
     struct
     {
         lsmash_itunes_metadata_subtype subtype;
         uint32_t                       size;
         uint8_t                       *data;
     } binary;
+} lsmash_itunes_metadata_value_t;
+
+typedef struct
+{
+    /* When 'item' is specified as ITUNES_METADATA_ITEM_CUSTOM, 'type' and 'meaning' is mandatory while 'name' is optionally valid.
+     * Otherwise 'type', 'meaning' and 'name' are just ignored. 'value' is always mandatory. */
+    lsmash_itunes_metadata_item    item;
+    lsmash_itunes_metadata_type    type;
+    lsmash_itunes_metadata_value_t value;
+    char                          *meaning;
+    char                          *name;
 } lsmash_itunes_metadata_t;
 
 typedef struct lsmash_root_tag lsmash_root_t;
@@ -1431,11 +1443,7 @@ void lsmash_delete_tyrant_chapter( lsmash_root_t *root );
 /* track_ID == 0 means copyright declaration applies to the entire presentation, not an entire track. */
 int lsmash_set_copyright( lsmash_root_t *root, uint32_t track_ID, uint16_t ISO_language, char *notice );
 
-/* When 'item' is specified as ITUNES_METADATA_ITEM_CUSTOM, 'type' and 'meaning' is mandatory while 'name' is optionally valid.
- * Otherwise 'type', 'meaning' and 'name' are just ignored. */
-int lsmash_set_itunes_metadata( lsmash_root_t *root,
-                                lsmash_itunes_metadata_item item, lsmash_itunes_metadata_type type,
-                                lsmash_itunes_metadata_t value, char *meaning, char *name );
+int lsmash_set_itunes_metadata( lsmash_root_t *root, lsmash_itunes_metadata_t metadata );
 
 #ifdef LSMASH_DEMUXER_ENABLED
 int lsmash_print_movie( lsmash_root_t *root, const char *filename );

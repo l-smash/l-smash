@@ -72,7 +72,7 @@ fail:
 
 static int isom_set_itunes_metadata_string( lsmash_root_t *root,
                                             lsmash_itunes_metadata_item item,
-                                            lsmash_itunes_metadata_t value, char *meaning, char *name )
+                                            lsmash_itunes_metadata_value_t value, char *meaning, char *name )
 {
     uint32_t value_length = strlen( value.string );
     if( item == ITUNES_METADATA_ITEM_DESCRIPTION && value_length > 255 )
@@ -94,7 +94,7 @@ static int isom_set_itunes_metadata_string( lsmash_root_t *root,
 
 static int isom_set_itunes_metadata_integer( lsmash_root_t *root,
                                              lsmash_itunes_metadata_item item,
-                                             lsmash_itunes_metadata_t value, char *meaning, char *name )
+                                             lsmash_itunes_metadata_value_t value, char *meaning, char *name )
 {
     static const struct
     {
@@ -148,7 +148,7 @@ static int isom_set_itunes_metadata_integer( lsmash_root_t *root,
 
 static int isom_set_itunes_metadata_boolean( lsmash_root_t *root,
                                              lsmash_itunes_metadata_item item,
-                                             lsmash_itunes_metadata_t value, char *meaning, char *name )
+                                             lsmash_itunes_metadata_value_t value, char *meaning, char *name )
 {
     isom_data_t *data = isom_add_metadata( root, item, meaning, name );
     if( !data )
@@ -168,7 +168,7 @@ static int isom_set_itunes_metadata_boolean( lsmash_root_t *root,
 
 static int isom_set_itunes_metadata_binary( lsmash_root_t *root,
                                             lsmash_itunes_metadata_item item,
-                                            lsmash_itunes_metadata_t value, char *meaning, char *name )
+                                            lsmash_itunes_metadata_value_t value, char *meaning, char *name )
 {
     isom_data_t *data = isom_add_metadata( root, item, meaning, name );
     if( !data )
@@ -227,14 +227,12 @@ static int isom_set_itunes_metadata_binary( lsmash_root_t *root,
     return 0;
 }
 
-int lsmash_set_itunes_metadata( lsmash_root_t *root,
-                                lsmash_itunes_metadata_item item, lsmash_itunes_metadata_type type,
-                                lsmash_itunes_metadata_t value, char *meaning, char *name )
+int lsmash_set_itunes_metadata( lsmash_root_t *root, lsmash_itunes_metadata_t metadata )
 {
     static const struct
     {
         lsmash_itunes_metadata_item item;
-        int (*func_set_itunes_metadata)( lsmash_root_t *, lsmash_itunes_metadata_item, lsmash_itunes_metadata_t, char *, char * );
+        int (*func_set_itunes_metadata)( lsmash_root_t *, lsmash_itunes_metadata_item, lsmash_itunes_metadata_value_t, char *, char * );
     } itunes_metadata_function_mapping[] =
         {
             { ITUNES_METADATA_ITEM_ALBUM_NAME,                 isom_set_itunes_metadata_string },
@@ -285,19 +283,19 @@ int lsmash_set_itunes_metadata( lsmash_root_t *root,
             { 0,                                               NULL }
         };
     for( int i = 0; itunes_metadata_function_mapping[i].func_set_itunes_metadata; i++ )
-        if( item == itunes_metadata_function_mapping[i].item )
-            return itunes_metadata_function_mapping[i].func_set_itunes_metadata( root, item, value, meaning, name );
-    if( item == ITUNES_METADATA_ITEM_CUSTOM )
-        switch( type )
+        if( metadata.item == itunes_metadata_function_mapping[i].item )
+            return itunes_metadata_function_mapping[i].func_set_itunes_metadata( root, metadata.item, metadata.value, metadata.meaning, metadata.name );
+    if( metadata.item == ITUNES_METADATA_ITEM_CUSTOM )
+        switch( metadata.type )
         {
             case ITUNES_METADATA_TYPE_STRING :
-                return isom_set_itunes_metadata_string( root, item, value, meaning, name );
+                return isom_set_itunes_metadata_string( root, metadata.item, metadata.value, metadata.meaning, metadata.name );
             case ITUNES_METADATA_TYPE_INTEGER :
-                return isom_set_itunes_metadata_integer( root, item, value, meaning, name );
+                return isom_set_itunes_metadata_integer( root, metadata.item, metadata.value, metadata.meaning, metadata.name );
             case ITUNES_METADATA_TYPE_BOOLEAN :
-                return isom_set_itunes_metadata_boolean( root, item, value, meaning, name );
+                return isom_set_itunes_metadata_boolean( root, metadata.item, metadata.value, metadata.meaning, metadata.name );
             case ITUNES_METADATA_TYPE_BINARY :
-                return isom_set_itunes_metadata_binary( root, item, value, meaning, name );
+                return isom_set_itunes_metadata_binary( root, metadata.item, metadata.value, metadata.meaning, metadata.name );
             default :
                 break;
         }
