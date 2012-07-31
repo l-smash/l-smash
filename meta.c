@@ -302,6 +302,13 @@ int lsmash_set_itunes_metadata( lsmash_root_t *root, lsmash_itunes_metadata_t me
     return -1;
 }
 
+uint32_t lsmash_count_itunes_metadata( lsmash_root_t *root )
+{
+    if( !root || !root->moov || !root->moov->udta->meta || !root->moov->udta->meta->ilst || !root->moov->udta->meta->ilst->item_list )
+        return -1;
+    return root->moov->udta->meta->ilst->item_list->entry_count;
+}
+
 #ifdef LSMASH_DEMUXER_ENABLED
 static int isom_copy_mean( isom_metaitem_t *dst, isom_metaitem_t *src )
 {
