@@ -418,8 +418,15 @@ int lsmash_get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, l
     switch( metadata->type )
     {
         case ITUNES_METADATA_TYPE_STRING :
-            metadata->value.string = (char *)data->value;
+        {
+            uint8_t *temp = realloc( data->value, data->value_length + 1 );
+            if( !temp )
+                return -1;
+            temp[ data->value_length ] = 0;
+            data->value = temp;
+            metadata->value.string = (char *)temp;
             break;
+        }
         case ITUNES_METADATA_TYPE_INTEGER :
             if( data->value_length > 8 )
                 return -1;
