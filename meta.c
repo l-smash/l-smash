@@ -448,7 +448,7 @@ int lsmash_get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, l
 uint32_t lsmash_count_itunes_metadata( lsmash_root_t *root )
 {
     if( !root || !root->moov || !root->moov->udta->meta || !root->moov->udta->meta->ilst || !root->moov->udta->meta->ilst->item_list )
-        return -1;
+        return 0;
     return root->moov->udta->meta->ilst->item_list->entry_count;
 }
 
