@@ -256,32 +256,28 @@ static int get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, l
     memset( &metadata->value, 0, sizeof(lsmash_itunes_metadata_value_t) );        
     if( shadow.meaning )
     {
-        char *temp = duplicate_string( shadow.meaning );
-        if( !temp )
+        metadata->meaning = duplicate_string( shadow.meaning );
+        if( !metadata->meaning )
             return -1;
-        metadata->meaning = temp;
     }
     if( shadow.name )
     {
-        char *temp = duplicate_string( shadow.name );
-        if( !temp )
+        metadata->name = duplicate_string( shadow.name );
+        if( !metadata->name )
             goto fail;
-        metadata->name = temp;
     }
     if( shadow.type == ITUNES_METADATA_TYPE_STRING )
     {
-        char *temp = duplicate_string( shadow.value.string );
-        if( !temp )
+        metadata->value.string = duplicate_string( shadow.value.string );
+        if( !metadata->value.string )
             goto fail;
-        metadata->value.string = temp;
     }
     else if( shadow.type == ITUNES_METADATA_TYPE_BINARY )
     {
-        uint8_t *temp = malloc( shadow.value.binary.size );
-        if( !temp )
+        metadata->value.binary.data = malloc( shadow.value.binary.size );
+        if( !metadata->value.binary.data )
             goto fail;
-        memcpy( temp, shadow.value.binary.data, shadow.value.binary.size );
-        metadata->value.binary.data = temp;
+        memcpy( metadata->value.binary.data, shadow.value.binary.data, shadow.value.binary.size );
     }
     return 0;
 fail:
