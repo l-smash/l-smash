@@ -187,7 +187,7 @@ isom_trak_entry_t *isom_get_trak( lsmash_root_t *root, uint32_t track_ID )
     return NULL;
 }
 
-static isom_trex_entry_t *isom_get_trex( isom_mvex_t *mvex, uint32_t track_ID )
+isom_trex_entry_t *isom_get_trex( isom_mvex_t *mvex, uint32_t track_ID )
 {
     if( !track_ID || !mvex || !mvex->trex_list )
         return NULL;

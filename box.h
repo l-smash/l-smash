@@ -2120,6 +2120,7 @@ int isom_check_compatibility( lsmash_root_t *root );
 char *isom_4cc2str( uint32_t fourcc );
 
 isom_trak_entry_t *isom_get_trak( lsmash_root_t *root, uint32_t track_ID );
+isom_trex_entry_t *isom_get_trex( isom_mvex_t *mvex, uint32_t track_ID );
 isom_sgpd_entry_t *isom_get_sample_group_description( isom_stbl_t *stbl, uint32_t grouping_type );
 isom_sbgp_entry_t *isom_get_sample_to_group( isom_stbl_t *stbl, uint32_t grouping_type );
 

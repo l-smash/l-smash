@@ -1476,12 +1476,173 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     }
     isom_portable_chunk_t *last_chunk = lsmash_get_entry_data( timeline->chunk_list, timeline->chunk_list->entry_count );
     if( last_chunk )
-        last_chunk->length = offset_from_chunk;
+    {
+        if( offset_from_chunk )
+            last_chunk->length = offset_from_chunk;
+        else if( timeline->chunk_list->entry_count == 1 )
+            /* Empty initial movie */
+            lsmash_remove_entries( timeline->chunk_list, NULL );
+    }
+    uint32_t sample_count = sample_number - 1;
+    if( root->moov->mvex && root->moof_list && root->moof_list->head )
+    {
+        /* Movie fragments */
+        for( lsmash_entry_t *moof_entry = root->moof_list->head; moof_entry; moof_entry = moof_entry->next )
+        {
+            isom_moof_entry_t *moof = (isom_moof_entry_t *)moof_entry->data;
+            if( !moof || !moof->traf_list )
+                goto fail;
+            uint64_t last_sample_end_pos = 0;
+            /* Track fragments */
+            for( lsmash_entry_t *traf_entry = moof->traf_list->head; traf_entry; traf_entry = traf_entry->next )
+            {
+                isom_traf_entry_t *traf = (isom_traf_entry_t *)traf_entry->data;
+                if( !traf )
+                    goto fail;
+                isom_tfhd_t *tfhd = traf->tfhd;
+                if( !tfhd )
+                    goto fail;
+                isom_trex_entry_t *trex = isom_get_trex( root->moov->mvex, tfhd->track_ID );
+                if( !trex )
+                    goto fail;
+                /* Ignore ISOM_TF_FLAGS_DURATION_IS_EMPTY flag even if set. */
+                if( !traf->trun_list )
+                    continue;
+                /* Get base_data_offset. */
+                uint64_t base_data_offset;
+                if( tfhd->flags & ISOM_TF_FLAGS_BASE_DATA_OFFSET_PRESENT )
+                    base_data_offset = tfhd->base_data_offset;
+                else if( traf_entry == moof->traf_list->head )
+                    base_data_offset = moof->pos;
+                else
+                    base_data_offset = last_sample_end_pos;
+                int need_data_offset_only = tfhd->track_ID != track_ID;
+                /* Track runs */
+                for( lsmash_entry_t *trun_entry = traf->trun_list->head; trun_entry; trun_entry = trun_entry->next )
+                {
+                    isom_trun_entry_t *trun = (isom_trun_entry_t *)trun_entry->data;
+                    if( !trun )
+                        goto fail;
+                    if( trun->sample_count == 0 )
+                        break;
+                    /* Get data_offset. */
+                    if( trun->flags & ISOM_TR_FLAGS_DATA_OFFSET_PRESENT )
+                        data_offset = trun->data_offset + base_data_offset;
+                    else if( trun_entry == traf->trun_list->head )
+                        data_offset = base_data_offset;
+                    else
+                        data_offset = last_sample_end_pos;
+                    /* */
+                    uint32_t sample_description_index = 0;
+                    if( !need_data_offset_only )
+                    {
+                        /* Each track run can be considered as a chunk. */
+                        chunk.data_offset = data_offset;
+                        chunk.length      = 0;
+                        chunk.data        = NULL;
+                        chunk.number      = ++chunk_number;
+                        if( isom_add_portable_chunk_entry( timeline, &chunk ) )
+                            goto fail;
+                        /* Get sample_description_index of this track fragment. */
+                        if( tfhd->flags & ISOM_TF_FLAGS_SAMPLE_DESCRIPTION_INDEX_PRESENT )
+                            sample_description_index = tfhd->sample_description_index;
+                        else
+                            sample_description_index = trex->default_sample_description_index;
+                        description = (isom_sample_entry_t *)lsmash_get_entry_data( stsd->list, sample_description_index );
+                        is_lpcm_audio = isom_is_lpcm_audio( description );
+                        if( is_lpcm_audio )
+                            constant_sample_size = isom_get_lpcm_sample_size( (isom_audio_entry_t *)description );
+                    }
+                    /* Get info of each sample. */
+                    lsmash_entry_t *row_entry = trun->optional && trun->optional->head ? trun->optional->head : NULL;
+                    sample_number = 1;
+                    while( sample_number <= trun->sample_count )
+                    {
+                        isom_sample_info_t info = { 0 };
+                        isom_trun_optional_row_t *row = row_entry && row_entry->data ? (isom_trun_optional_row_t *)row_entry->data : NULL;
+                        /* Get sample_size */
+                        if( row && (trun->flags & ISOM_TR_FLAGS_SAMPLE_SIZE_PRESENT) )
+                            info.length = row->sample_size;
+                        else if( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_SIZE_PRESENT )
+                            info.length = tfhd->default_sample_size;
+                        else
+                            info.length = trex->default_sample_size;
+                        if( !need_data_offset_only )
+                        {
+                            info.pos = data_offset;
+                            info.index = sample_description_index;
+                            info.chunk = (isom_portable_chunk_t *)timeline->chunk_list->tail->data;
+                            info.chunk->length += info.length;
+                            /* Get sample_flags. */
+                            isom_sample_flags_t sample_flags;
+                            if( sample_number == 1 && (trun->flags & ISOM_TR_FLAGS_FIRST_SAMPLE_FLAGS_PRESENT) )
+                                sample_flags = trun->first_sample_flags;
+                            else if( row && (trun->flags & ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT) )
+                                sample_flags = row->sample_flags;
+                            else if( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT )
+                                sample_flags = tfhd->default_sample_flags;
+                            else
+                                sample_flags = trex->default_sample_flags;
+                            if( !sample_flags.sample_is_non_sync_sample )
+                                info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+                            info.prop.leading     = sample_flags.is_leading;
+                            info.prop.independent = sample_flags.sample_depends_on;
+                            info.prop.disposable  = sample_flags.sample_is_depended_on;
+                            info.prop.redundant   = sample_flags.sample_has_redundancy;
+                            /* Get sample_duration. */
+                            if( row && (trun->flags & ISOM_TR_FLAGS_SAMPLE_DURATION_PRESENT) )
+                                info.duration = row->sample_duration;
+                            else if( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_DURATION_PRESENT )
+                                info.duration = tfhd->default_sample_duration;
+                            else
+                                info.duration = trex->default_sample_duration;
+                            /* Get composition time offset. */
+                            if( row && (trun->flags & ISOM_TR_FLAGS_SAMPLE_COMPOSITION_TIME_OFFSET_PRESENT) )
+                                info.offset = row->sample_composition_time_offset;
+                            else
+                                info.offset = 0;
+                            /* OK. Let's add its info. */
+                            if( is_lpcm_audio )
+                            {
+                                if( sample_count == 0 && sample_number == 1 )
+                                    isom_update_bunch( &bunch, &info );
+                                else if( isom_compare_lpcm_sample_info( &bunch, &info ) )
+                                {
+                                    if( isom_add_lpcm_bunch_entry( timeline, &bunch ) )
+                                        goto fail;
+                                    isom_update_bunch( &bunch, &info );
+                                }
+                                else
+                                    ++ bunch.sample_count;
+                            }
+                            else if( isom_add_sample_info_entry( timeline, &info ) )
+                                goto fail;
+                            if( timeline->info_list->entry_count && timeline->bunch_list->entry_count )
+                            {
+                                lsmash_log( LSMASH_LOG_ERROR, "LPCM + non-LPCM track is not supported.\n" );
+                                goto fail;
+                            }
+                        }
+                        data_offset += info.length;
+                        last_sample_end_pos = data_offset;
+                        if( row_entry )
+                            row_entry = row_entry->next;
+                        ++sample_number;
+                    }
+                    if( !need_data_offset_only )
+                        sample_count += sample_number - 1;
+                }   /* Track run */
+            }   /* Track fragment */
+        }   /* Movie fragment */
+    }
+    else if( timeline->chunk_list->entry_count == 0 )
+        goto fail;  /* No samples in this track. */
     if( bunch.sample_count && isom_add_lpcm_bunch_entry( timeline, &bunch ) )
         goto fail;
     if( lsmash_add_entry( root->timeline, timeline ) )
         goto fail;
-    timeline->sample_count = sample_number - 1;
+    /* Finish timeline construction. */
+    timeline->sample_count = sample_count;
     if( timeline->info_list->entry_count )
     {
         timeline->get_dts                = isom_get_dts_from_info_list;
