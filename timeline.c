@@ -1600,7 +1600,10 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                             else
                                 sample_flags = trex->default_sample_flags;
                             if( !sample_flags.sample_is_non_sync_sample )
+                            {
                                 info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+                                distance = 0;
+                            }
                             info.prop.leading     = sample_flags.is_leading;
                             info.prop.independent = sample_flags.sample_depends_on;
                             info.prop.disposable  = sample_flags.sample_is_depended_on;
@@ -1634,6 +1637,13 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                                         tfra_entry = tfra_entry->next;
                                     rap = tfra_entry ? (isom_tfra_location_time_entry_t *)tfra_entry->data : NULL;
                                 }
+                            }
+                            /* Set up pre-roll distance. */
+                            if( distance != NO_RANDOM_ACCESS_POINT )
+                            {
+                                if( info.prop.pre_roll.distance == 0 )
+                                    info.prop.pre_roll.distance = distance;
+                                ++distance;
                             }
                             /* Update media duration and maximun sample size. */
                             timeline->media_duration += info.duration;
