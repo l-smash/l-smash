@@ -75,6 +75,7 @@ struct isom_timeline_tag
     uint32_t sample_count;
     uint32_t max_sample_size;
     uint32_t ctd_shift;     /* shift from composition to decode timeline */
+    uint64_t media_duration;
     uint32_t last_accessed_sample_number;
     uint32_t last_accessed_chunk_number;
     uint64_t last_accessed_sample_dts;
@@ -1263,6 +1264,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
             goto fail;
         INCREMENT_SAMPLE_NUMBER_IN_ENTRY( sample_number_in_stts_entry, stts_entry, stts_data );
         info.duration = stts_data->sample_delta;
+        timeline->media_duration += info.duration;
         if( ctts_entry )
         {
             isom_ctts_entry_t *ctts_data = (isom_ctts_entry_t *)ctts_entry->data;
@@ -1572,7 +1574,6 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                             info.length = trex->default_sample_size;
                         if( !need_data_offset_only )
                         {
-                            timeline->max_sample_size = LSMASH_MAX( timeline->max_sample_size, info.length );
                             info.pos = data_offset;
                             info.index = sample_description_index;
                             info.chunk = (isom_portable_chunk_t *)timeline->chunk_list->tail->data;
@@ -1605,6 +1606,9 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                                 info.offset = row->sample_composition_time_offset;
                             else
                                 info.offset = 0;
+                            /* Update media duration and maximun sample size. */
+                            timeline->media_duration += info.duration;
+                            timeline->max_sample_size = LSMASH_MAX( timeline->max_sample_size, info.length );
                             /* OK. Let's add its info. */
                             if( is_lpcm_audio )
                             {
@@ -1971,6 +1975,14 @@ uint32_t lsmash_get_max_sample_size_in_media_timeline( lsmash_root_t *root, uint
     if( !timeline )
         return 0;
     return timeline->max_sample_size;
+}
+
+uint64_t lsmash_get_media_duration_from_media_timeline( lsmash_root_t *root, uint32_t track_ID )
+{
+    isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
+    if( !timeline )
+        return 0;
+    return timeline->media_duration;
 }
 
 int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_root_t *src, uint32_t src_track_ID )
