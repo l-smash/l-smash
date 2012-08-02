@@ -1589,25 +1589,31 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                             info.index = sample_description_index;
                             info.chunk = (isom_portable_chunk_t *)timeline->chunk_list->tail->data;
                             info.chunk->length += info.length;
-                            /* Get sample_flags. */
-                            isom_sample_flags_t sample_flags;
-                            if( sample_number == 1 && (trun->flags & ISOM_TR_FLAGS_FIRST_SAMPLE_FLAGS_PRESENT) )
-                                sample_flags = trun->first_sample_flags;
-                            else if( row && (trun->flags & ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT) )
-                                sample_flags = row->sample_flags;
-                            else if( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT )
-                                sample_flags = tfhd->default_sample_flags;
-                            else
-                                sample_flags = trex->default_sample_flags;
-                            if( !sample_flags.sample_is_non_sync_sample )
+                            if( !is_lpcm_audio )
                             {
-                                info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
-                                distance = 0;
+                                /* Get sample_flags. */
+                                isom_sample_flags_t sample_flags;
+                                if( sample_number == 1 && (trun->flags & ISOM_TR_FLAGS_FIRST_SAMPLE_FLAGS_PRESENT) )
+                                    sample_flags = trun->first_sample_flags;
+                                else if( row && (trun->flags & ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT) )
+                                    sample_flags = row->sample_flags;
+                                else if( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT )
+                                    sample_flags = tfhd->default_sample_flags;
+                                else
+                                    sample_flags = trex->default_sample_flags;
+                                if( !sample_flags.sample_is_non_sync_sample )
+                                {
+                                    info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+                                    distance = 0;
+                                }
+                                info.prop.leading     = sample_flags.is_leading;
+                                info.prop.independent = sample_flags.sample_depends_on;
+                                info.prop.disposable  = sample_flags.sample_is_depended_on;
+                                info.prop.redundant   = sample_flags.sample_has_redundancy;
                             }
-                            info.prop.leading     = sample_flags.is_leading;
-                            info.prop.independent = sample_flags.sample_depends_on;
-                            info.prop.disposable  = sample_flags.sample_is_depended_on;
-                            info.prop.redundant   = sample_flags.sample_has_redundancy;
+                            else
+                                /* All LPCMFrame is sync sample. */
+                                info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
                             /* Get sample_duration. */
                             if( row && (trun->flags & ISOM_TR_FLAGS_SAMPLE_DURATION_PRESENT) )
                                 info.duration = row->sample_duration;
@@ -1638,7 +1644,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                                     rap = tfra_entry ? (isom_tfra_location_time_entry_t *)tfra_entry->data : NULL;
                                 }
                             }
-                            /* Set up pre-roll distance. */
+                            /* Set up distance from the previous random access point. */
                             if( distance != NO_RANDOM_ACCESS_POINT )
                             {
                                 if( info.prop.pre_roll.distance == 0 )
