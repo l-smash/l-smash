@@ -217,7 +217,7 @@ static isom_traf_entry_t *isom_get_traf( isom_moof_entry_t *moof, uint32_t track
     return NULL;
 }
 
-static isom_tfra_entry_t *isom_get_tfra( isom_mfra_t *mfra, uint32_t track_ID )
+isom_tfra_entry_t *isom_get_tfra( isom_mfra_t *mfra, uint32_t track_ID )
 {
     if( !track_ID || !mfra || !mfra->tfra_list )
         return NULL;

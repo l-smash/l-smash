@@ -1491,6 +1491,9 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     uint32_t sample_count = sample_number - 1;
     if( root->moov->mvex && root->moof_list && root->moof_list->head )
     {
+        isom_tfra_entry_t *tfra = isom_get_tfra( root->mfra, track_ID );
+        lsmash_entry_t *tfra_entry = tfra && tfra->list ? tfra->list->head : NULL;
+        isom_tfra_location_time_entry_t *rap = tfra_entry ? (isom_tfra_location_time_entry_t *)tfra_entry->data : NULL;
         /* Movie fragments */
         for( lsmash_entry_t *moof_entry = root->moof_list->head; moof_entry; moof_entry = moof_entry->next )
         {
@@ -1499,6 +1502,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                 goto fail;
             uint64_t last_sample_end_pos = 0;
             /* Track fragments */
+            uint32_t traf_number = 1;
             for( lsmash_entry_t *traf_entry = moof->traf_list->head; traf_entry; traf_entry = traf_entry->next )
             {
                 isom_traf_entry_t *traf = (isom_traf_entry_t *)traf_entry->data;
@@ -1511,8 +1515,11 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                 if( !trex )
                     goto fail;
                 /* Ignore ISOM_TF_FLAGS_DURATION_IS_EMPTY flag even if set. */
-                if( !traf->trun_list )
+                if( !traf->trun_list || !traf->trun_list->head )
+                {
+                    ++traf_number;
                     continue;
+                }
                 /* Get base_data_offset. */
                 uint64_t base_data_offset;
                 if( tfhd->flags & ISOM_TF_FLAGS_BASE_DATA_OFFSET_PRESENT )
@@ -1521,15 +1528,19 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                     base_data_offset = moof->pos;
                 else
                     base_data_offset = last_sample_end_pos;
-                int need_data_offset_only = tfhd->track_ID != track_ID;
+                int need_data_offset_only = (tfhd->track_ID != track_ID);
                 /* Track runs */
+                uint32_t trun_number = 1;
                 for( lsmash_entry_t *trun_entry = traf->trun_list->head; trun_entry; trun_entry = trun_entry->next )
                 {
                     isom_trun_entry_t *trun = (isom_trun_entry_t *)trun_entry->data;
                     if( !trun )
                         goto fail;
                     if( trun->sample_count == 0 )
-                        break;
+                    {
+                        ++trun_number;
+                        continue;
+                    }
                     /* Get data_offset. */
                     if( trun->flags & ISOM_TR_FLAGS_DATA_OFFSET_PRESENT )
                         data_offset = trun->data_offset + base_data_offset;
@@ -1606,6 +1617,24 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                                 info.offset = row->sample_composition_time_offset;
                             else
                                 info.offset = 0;
+                            /* Get random accessible info from 'tfra' if it is not set up yet.
+                             * Note: there is no guarantee that its entries are placed in a specific order. */
+                            if( info.prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE )
+                            {
+                                /* FIXME: We defined ISOM_SAMPLE_RANDOM_ACCESS_TYPE_UNKNOWN_RAP for closed or open RAP.
+                                 *        It is not for gradual decoder refresh but 'tfra' can also indicate for it.
+                                 *        Therefore, we should define more vague and abstract type of random access. */
+                                if( tfra->number_of_entry == 0 )
+                                    info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_UNKNOWN_RAP;
+                                else if( rap && rap->moof_offset == moof->pos && rap->traf_number == traf_number
+                                 && rap->trun_number == trun_number && rap->sample_number == sample_number )
+                                {
+                                    info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_UNKNOWN_RAP;
+                                    if( tfra_entry )
+                                        tfra_entry = tfra_entry->next;
+                                    rap = tfra_entry ? (isom_tfra_location_time_entry_t *)tfra_entry->data : NULL;
+                                }
+                            }
                             /* Update media duration and maximun sample size. */
                             timeline->media_duration += info.duration;
                             timeline->max_sample_size = LSMASH_MAX( timeline->max_sample_size, info.length );
@@ -1639,7 +1668,9 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                     }
                     if( !need_data_offset_only )
                         sample_count += sample_number - 1;
+                    ++trun_number;
                 }   /* Track run */
+                ++traf_number;
             }   /* Track fragment */
         }   /* Movie fragment */
     }
