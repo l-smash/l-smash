@@ -1572,6 +1572,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                             info.length = trex->default_sample_size;
                         if( !need_data_offset_only )
                         {
+                            timeline->max_sample_size = LSMASH_MAX( timeline->max_sample_size, info.length );
                             info.pos = data_offset;
                             info.index = sample_description_index;
                             info.chunk = (isom_portable_chunk_t *)timeline->chunk_list->tail->data;
