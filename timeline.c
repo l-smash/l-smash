@@ -1479,9 +1479,12 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     {
         if( offset_from_chunk )
             last_chunk->length = offset_from_chunk;
-        else if( timeline->chunk_list->entry_count == 1 )
-            /* Empty initial movie */
-            lsmash_remove_entries( timeline->chunk_list, NULL );
+        else
+        {
+            /* Remove the last invalid chunk. */
+            lsmash_remove_entry( timeline->chunk_list, timeline->chunk_list->entry_count, NULL );
+            --chunk_number;
+        }
     }
     uint32_t sample_count = sample_number - 1;
     if( root->moov->mvex && root->moof_list && root->moof_list->head )
