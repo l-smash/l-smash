@@ -1184,7 +1184,10 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     lsmash_entry_t *next_stsc_entry = stsc_entry ? stsc_entry->next : NULL;
     isom_stsc_entry_t *stsc_data = stsc_entry ? (isom_stsc_entry_t *)stsc_entry->data : NULL;
     isom_sample_entry_t *description = stsd_entry ? (isom_sample_entry_t *)stsd_entry->data : NULL;
-    if( !description || !stts_entry || !stsc_entry || !stco_entry || !stco_entry->data || (next_stsc_entry && !next_stsc_entry->data) )
+    int movie_framemts_present = (root->moov->mvex && root->moof_list && root->moof_list->head);
+    if( !description )
+        goto fail;
+    if( !movie_framemts_present && (!stts_entry || !stsc_entry || !stco_entry || !stco_entry->data || (next_stsc_entry && !next_stsc_entry->data)) )
         goto fail;
     int all_sync = !stss;
     int large_presentation = stco->large_presentation || stco->type == ISOM_BOX_TYPE_CO64;
@@ -1200,9 +1203,11 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     uint64_t dts = 0;
     uint32_t chunk_number = 1;
     uint64_t offset_from_chunk = 0;
-    uint64_t data_offset = large_presentation
-                         ? ((isom_co64_entry_t *)stco_entry->data)->chunk_offset
-                         : ((isom_stco_entry_t *)stco_entry->data)->chunk_offset;
+    uint64_t data_offset = stco_entry && stco_entry->data
+                         ? large_presentation
+                             ? ((isom_co64_entry_t *)stco_entry->data)->chunk_offset
+                             : ((isom_stco_entry_t *)stco_entry->data)->chunk_offset
+                         : 0;
     uint32_t constant_sample_size = is_lpcm_audio
                                   ? isom_get_lpcm_sample_size( (isom_audio_entry_t *)description )
                                   : stsz->sample_size;
@@ -1489,7 +1494,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
         }
     }
     uint32_t sample_count = sample_number - 1;
-    if( root->moov->mvex && root->moof_list && root->moof_list->head )
+    if( movie_framemts_present )
     {
         isom_tfra_entry_t *tfra = isom_get_tfra( root->mfra, track_ID );
         lsmash_entry_t *tfra_entry = tfra && tfra->list ? tfra->list->head : NULL;
