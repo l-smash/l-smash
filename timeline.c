@@ -1390,7 +1390,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
             }
         }
         else
-            /* All LPCMFrame is sync sample. */
+            /* All LPCMFrame is a sync sample. */
             info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
         /* Get size of sample in the stream. */
         if( is_lpcm_audio || !stsz_entry )
@@ -1598,6 +1598,21 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                             info.index = sample_description_index;
                             info.chunk = (isom_portable_chunk_t *)timeline->chunk_list->tail->data;
                             info.chunk->length += info.length;
+                            /* Get sample_duration. */
+                            if( row && (trun->flags & ISOM_TR_FLAGS_SAMPLE_DURATION_PRESENT) )
+                                info.duration = row->sample_duration;
+                            else if( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_DURATION_PRESENT )
+                                info.duration = tfhd->default_sample_duration;
+                            else
+                                info.duration = trex->default_sample_duration;
+                            /* Get composition time offset. */
+                            if( row && (trun->flags & ISOM_TR_FLAGS_SAMPLE_COMPOSITION_TIME_OFFSET_PRESENT) )
+                                info.offset = row->sample_composition_time_offset;
+                            else
+                                info.offset = 0;
+                            /* Update media duration and maximun sample size. */
+                            timeline->media_duration += info.duration;
+                            timeline->max_sample_size = LSMASH_MAX( timeline->max_sample_size, info.length );
                             if( !is_lpcm_audio )
                             {
                                 /* Get sample_flags. */
@@ -1639,55 +1654,42 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                                     info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
                                     distance = 0;
                                 }
-                            }
-                            else
-                                /* All LPCMFrame is sync sample. */
-                                info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
-                            /* Get sample_duration. */
-                            if( row && (trun->flags & ISOM_TR_FLAGS_SAMPLE_DURATION_PRESENT) )
-                                info.duration = row->sample_duration;
-                            else if( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_DURATION_PRESENT )
-                                info.duration = tfhd->default_sample_duration;
-                            else
-                                info.duration = trex->default_sample_duration;
-                            /* Get composition time offset. */
-                            if( row && (trun->flags & ISOM_TR_FLAGS_SAMPLE_COMPOSITION_TIME_OFFSET_PRESENT) )
-                                info.offset = row->sample_composition_time_offset;
-                            else
-                                info.offset = 0;
-                            /* Get random accessible info from 'tfra' if it is not set up yet.
-                             * Note: there is no guarantee that its entries are placed in a specific order. */
-                            if( tfra )
-                            {
-                                /* FIXME: We defined ISOM_SAMPLE_RANDOM_ACCESS_TYPE_UNKNOWN_RAP for closed or open RAP.
-                                 *        It is not for gradual decoder refresh but 'tfra' can also indicate for it.
-                                 *        Therefore, we should define more vague and abstract type of random access. */
-                                if( tfra->number_of_entry == 0
-                                 && info.prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE )
-                                    info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_UNKNOWN_RAP;
-                                if( rap && rap->moof_offset == moof->pos && rap->traf_number == traf_number
-                                 && rap->trun_number == trun_number && rap->sample_number == sample_number )
+                                /* Get random accessible info from 'tfra' if it is not set up yet.
+                                 * Note: there is no guarantee that its entries are placed in a specific order. */
+                                if( tfra )
                                 {
-                                    if( info.prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE )
+                                    /* FIXME: We defined ISOM_SAMPLE_RANDOM_ACCESS_TYPE_UNKNOWN_RAP for closed or open RAP.
+                                     *        It is not for gradual decoder refresh but 'tfra' can also indicate for it.
+                                     *        Therefore, we should define more vague and abstract type of random access. */
+                                    if( tfra->number_of_entry == 0
+                                     && info.prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE )
                                         info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_UNKNOWN_RAP;
-                                    if( tfra_entry )
-                                        tfra_entry = tfra_entry->next;
-                                    rap = tfra_entry ? (isom_tfra_location_time_entry_t *)tfra_entry->data : NULL;
+                                    if( rap && rap->moof_offset == moof->pos && rap->traf_number == traf_number
+                                     && rap->trun_number == trun_number && rap->sample_number == sample_number )
+                                    {
+                                        if( info.prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE )
+                                            info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_UNKNOWN_RAP;
+                                        if( tfra_entry )
+                                            tfra_entry = tfra_entry->next;
+                                        rap = tfra_entry ? (isom_tfra_location_time_entry_t *)tfra_entry->data : NULL;
+                                    }
                                 }
+                                /* Set up distance from the previous random access point. */
+                                if( distance != NO_RANDOM_ACCESS_POINT )
+                                {
+                                    if( info.prop.pre_roll.distance == 0 )
+                                        info.prop.pre_roll.distance = distance;
+                                    ++distance;
+                                }
+                                /* OK. Let's add its info. */
+                                if( isom_add_sample_info_entry( timeline, &info ) )
+                                    goto fail;
                             }
-                            /* Set up distance from the previous random access point. */
-                            if( distance != NO_RANDOM_ACCESS_POINT )
+                            else
                             {
-                                if( info.prop.pre_roll.distance == 0 )
-                                    info.prop.pre_roll.distance = distance;
-                                ++distance;
-                            }
-                            /* Update media duration and maximun sample size. */
-                            timeline->media_duration += info.duration;
-                            timeline->max_sample_size = LSMASH_MAX( timeline->max_sample_size, info.length );
-                            /* OK. Let's add its info. */
-                            if( is_lpcm_audio )
-                            {
+                                /* All LPCMFrame is a sync sample. */
+                                info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+                                /* OK. Let's add its info. */
                                 if( sample_count == 0 && sample_number == 1 )
                                     isom_update_bunch( &bunch, &info );
                                 else if( isom_compare_lpcm_sample_info( &bunch, &info ) )
@@ -1699,8 +1701,6 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                                 else
                                     ++ bunch.sample_count;
                             }
-                            else if( isom_add_sample_info_entry( timeline, &info ) )
-                                goto fail;
                             if( timeline->info_list->entry_count && timeline->bunch_list->entry_count )
                             {
                                 lsmash_log( LSMASH_LOG_ERROR, "LPCM + non-LPCM track is not supported.\n" );
