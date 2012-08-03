@@ -1555,6 +1555,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                         data_offset = last_sample_end_pos;
                     /* */
                     uint32_t sample_description_index = 0;
+                    isom_sdtp_entry_t *sdtp_data = NULL;
                     if( !need_data_offset_only )
                     {
                         /* Each track run can be considered as a chunk. */
@@ -1573,6 +1574,9 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                         is_lpcm_audio = isom_is_lpcm_audio( description );
                         if( is_lpcm_audio )
                             constant_sample_size = isom_get_lpcm_sample_size( (isom_audio_entry_t *)description );
+                        /* Get dependency info for this track fragment. */
+                        sdtp_entry = traf->sdtp && traf->sdtp->list ? traf->sdtp->list->head : NULL;
+                        sdtp_data = sdtp_entry && sdtp_entry->data ? (isom_sdtp_entry_t *)sdtp_entry->data : NULL;
                     }
                     /* Get info of each sample. */
                     lsmash_entry_t *row_entry = trun->optional && trun->optional->head ? trun->optional->head : NULL;
@@ -1606,15 +1610,35 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                                     sample_flags = tfhd->default_sample_flags;
                                 else
                                     sample_flags = trex->default_sample_flags;
-                                if( !sample_flags.sample_is_non_sync_sample )
+                                if( sdtp_data )
+                                {
+                                    /* Independent and Disposable Samples Box overrides the information from sample_flags.
+                                     * There is no description in the specification about this, but the intention should be such a thing.
+                                     * The ground is that sample_flags is placed in media layer
+                                     * while Independent and Disposable Samples Box is placed in track or presentation layer. */
+                                    info.prop.leading     = sdtp_data->is_leading;
+                                    info.prop.independent = sdtp_data->sample_depends_on;
+                                    info.prop.disposable  = sdtp_data->sample_is_depended_on;
+                                    info.prop.redundant   = sdtp_data->sample_has_redundancy;
+                                    if( sdtp_entry )
+                                        sdtp_entry = sdtp_entry->next;
+                                    sdtp_data = sdtp_entry ? (isom_sdtp_entry_t *)sdtp_entry->data : NULL;
+                                }
+                                else
+                                {
+                                    info.prop.leading     = sample_flags.is_leading;
+                                    info.prop.independent = sample_flags.sample_depends_on;
+                                    info.prop.disposable  = sample_flags.sample_is_depended_on;
+                                    info.prop.redundant   = sample_flags.sample_has_redundancy;
+                                }
+                                /* Check this sample is a sync sample or not.
+                                 * Note: all sync sample shall be independent. */
+                                if( !sample_flags.sample_is_non_sync_sample
+                                 && info.prop.independent != ISOM_SAMPLE_IS_NOT_INDEPENDENT )
                                 {
                                     info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
                                     distance = 0;
                                 }
-                                info.prop.leading     = sample_flags.is_leading;
-                                info.prop.independent = sample_flags.sample_depends_on;
-                                info.prop.disposable  = sample_flags.sample_is_depended_on;
-                                info.prop.redundant   = sample_flags.sample_has_redundancy;
                             }
                             else
                                 /* All LPCMFrame is sync sample. */
