@@ -1499,6 +1499,8 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
         isom_tfra_entry_t *tfra = isom_get_tfra( root->mfra, track_ID );
         lsmash_entry_t *tfra_entry = tfra && tfra->list ? tfra->list->head : NULL;
         isom_tfra_location_time_entry_t *rap = tfra_entry ? (isom_tfra_location_time_entry_t *)tfra_entry->data : NULL;
+        chunk.data_offset = 0;
+        chunk.length      = 0;
         /* Movie fragments */
         for( lsmash_entry_t *moof_entry = root->moof_list->head; moof_entry; moof_entry = moof_entry->next )
         {
@@ -1558,13 +1560,17 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                     isom_sdtp_entry_t *sdtp_data = NULL;
                     if( !need_data_offset_only )
                     {
-                        /* Each track run can be considered as a chunk. */
-                        chunk.data_offset = data_offset;
-                        chunk.length      = 0;
-                        chunk.data        = NULL;
-                        chunk.number      = ++chunk_number;
-                        if( isom_add_portable_chunk_entry( timeline, &chunk ) )
-                            goto fail;
+                        /* Each track run can be considered as a chunk.
+                         * Here, we consider physically consecutive track runs as one chunk. */
+                        if( chunk.data_offset + chunk.length != data_offset )
+                        {
+                            chunk.data_offset = data_offset;
+                            chunk.length      = 0;
+                            chunk.data        = NULL;
+                            chunk.number      = ++chunk_number;
+                            if( isom_add_portable_chunk_entry( timeline, &chunk ) )
+                                goto fail;
+                        }
                         /* Get sample_description_index of this track fragment. */
                         if( tfhd->flags & ISOM_TF_FLAGS_SAMPLE_DESCRIPTION_INDEX_PRESENT )
                             sample_description_index = tfhd->sample_description_index;
