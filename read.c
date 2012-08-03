@@ -809,13 +809,13 @@ static int isom_read_stsd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     lsmash_bs_t *bs = root->bs;
     if( lsmash_bs_read_data( bs, sizeof(uint32_t) ) )
         return -1;
-    uint32_t entry_count = lsmash_bs_get_be32( bs );
+    stsd->entry_count = lsmash_bs_get_be32( bs );
     isom_box_common_copy( stsd, box );
     if( isom_add_print_func( root, stsd, level ) )
         return -1;
     int ret = 0;
     uint64_t stsd_pos = lsmash_bs_get_pos( bs );
-    for( uint32_t i = 0; i < entry_count; i++ )
+    for( uint32_t i = 0; i < stsd->entry_count; i++ )
     {
         ret = isom_read_box( root, box, (isom_box_t *)stsd, stsd_pos, level );
         if( ret )

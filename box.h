@@ -809,6 +809,7 @@ typedef struct
 typedef struct
 {
     ISOM_FULLBOX_COMMON;
+    uint32_t entry_count;   /* print only */
     lsmash_entry_list_t *list;
 } isom_stsd_t;
 /** **/

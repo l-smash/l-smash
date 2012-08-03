@@ -604,7 +604,7 @@ static int isom_print_stsd( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
     isom_stsd_t *stsd = (isom_stsd_t *)box;
     int indent = level;
     isom_print_box_common( fp, indent++, box, "Sample Description Box" );
-    isom_ifprintf( fp, indent, "entry_count = %"PRIu16"\n", stsd->list->entry_count );
+    isom_ifprintf( fp, indent, "entry_count = %"PRIu32"\n", stsd->entry_count );
     return 0;
 }
 
