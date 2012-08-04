@@ -1189,6 +1189,19 @@ typedef struct
                              * If set to ISOM_EDIT_MODE_DWELL (0), the media at start_time is presented for the duration. */
 } lsmash_edit_t;
 
+/* rational types */
+typedef struct
+{
+    uint32_t n;     /* numerator */
+    uint32_t d;     /* denominator */
+} lsmash_rational_u32_t;
+
+typedef struct
+{
+    int32_t  n;     /* numerator */
+    uint32_t d;     /* denominator */
+} lsmash_rational_s32_t;
+
 /* */
 typedef int (*lsmash_adhoc_remux_callback)( void* param, uint64_t done, uint64_t total );
 typedef struct {
@@ -1237,6 +1250,22 @@ typedef struct
 
 typedef struct
 {
+    lsmash_rational_u32_t top;
+    lsmash_rational_u32_t left;
+    lsmash_rational_u32_t bottom;
+    lsmash_rational_u32_t right;
+} lsmash_crop_t;
+
+typedef struct
+{
+    lsmash_rational_u32_t width;
+    lsmash_rational_u32_t height;
+    lsmash_rational_s32_t horizontal_offset;
+    lsmash_rational_s32_t vertical_offset;
+} lsmash_clap_t;
+
+typedef struct
+{
     LSMASH_BASE_SUMMARY
     // mp4sys_visualProfileLevelIndication pli;    /* I wonder we should have this or not. */
     // lsmash_mp4v_VideoObjectType vot;            /* Detailed codec type. If not mp4v, just ignored. */
@@ -1249,10 +1278,7 @@ typedef struct
     uint8_t full_range;
     uint32_t width;                             /* pixel counts of width samples have */
     uint32_t height;                            /* pixel counts of height samples have */
-    uint32_t crop_top;
-    uint32_t crop_left;
-    uint32_t crop_bottom;
-    uint32_t crop_right;
+    lsmash_clap_t clap;
     uint32_t par_h;                             /* horizontal factor of pixel aspect ratio */
     uint32_t par_v;                             /* vertical factor of pixel aspect ratio */
     lsmash_scaling_method scaling_method;       /* If not set, video samples are scaled into the visual presentation region to fill it. */
@@ -1455,6 +1481,9 @@ int lsmash_set_copyright( lsmash_root_t *root, uint32_t track_ID, uint16_t ISO_l
 int lsmash_set_itunes_metadata( lsmash_root_t *root, lsmash_itunes_metadata_t metadata );
 int lsmash_get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, lsmash_itunes_metadata_t *metadata );
 uint32_t lsmash_count_itunes_metadata( lsmash_root_t *root );
+
+int lsmash_convert_crop_into_clap( lsmash_crop_t crop, uint32_t width, uint32_t height, lsmash_clap_t *clap );
+int lsmash_convert_clap_into_crop( lsmash_clap_t clap, uint32_t width, uint32_t height, lsmash_crop_t *crop );
 
 #ifdef LSMASH_DEMUXER_ENABLED
 int lsmash_print_movie( lsmash_root_t *root, const char *filename );

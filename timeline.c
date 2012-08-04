@@ -167,43 +167,6 @@ void lsmash_destruct_timeline( lsmash_root_t *root, uint32_t track_ID )
     }
 }
 
-#if 0
-static lsmash_video_summary_t *isom_create_video_summary_from_description( isom_visual_entry_t *visual )
-{
-    isom_visual_entry_t *visual;
-    lsmash_video_summary_t *summary = lsmash_malloc_zero( sizeof(lsmash_video_summary_t) );
-    if( !summary )
-        return NULL;
-    summary->width  = visual->width;
-    summary->height = visual->height;
-    if( visual->clap )
-    {
-        double cleanApertureWidth  = (double)clap->cleanApertureWidthN  / cleanApertureWidthD;
-        double cleanApertureHeight = (double)clap->cleanApertureHeightN / cleanApertureHeightD;
-        double horizOff = (double)clap->horizOffN / clap->horizOffD;
-        double vertOff  = (double)clap->vertOffN  / clap->vertOffD;
-        summary->crop_top    = (summary->height - cleanApertureHeight + vertOff)  / 2;
-        summary->crop_left   = (summary->width  - cleanApertureWidth  + horizOff) / 2;
-        summary->crop_bottom = (summary->height - cleanApertureHeight - vertOff)  / 2;
-        summary->crop_right  = (summary->width  - cleanApertureWidth  - horizOff) / 2;
-    }
-    if( visual->pasp )
-    {
-        summary->par_h = visual->pasp->hSpacing;
-        summary->par_v = visual->pasp->vSpacing;
-    }
-    if( visual->stsl )
-        summary->scaling_method = visual->stsl->scale_method;
-    if( visual->colr )
-    {
-        summary->primaries = visual->colr->primaries_index;
-        summary->transfer  = visual->colr->transfer_function_index;
-        summary->matrix    = visual->colr->matrix_index;
-    }
-    return summary;
-}
-#endif
-
 #define COPY_EXDATA( dst, src ) \
     do \
     { \

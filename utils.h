@@ -161,6 +161,18 @@ typedef enum
     LSMASH_LOG_INFO,
 } lsmash_log_level;
 
+typedef struct
+{
+    uint64_t n;
+    uint64_t d;
+} lsmash_rational_u64_t;
+
+typedef struct
+{
+    int64_t  n;
+    uint64_t d;
+} lsmash_rational_s64_t;
+
 void lsmash_log( lsmash_log_level level, const char* message, ... );
 uint32_t lsmash_count_bits( uint32_t bits );
 int lsmash_compare_dts( const lsmash_media_ts_t *a, const lsmash_media_ts_t *b );
@@ -185,6 +197,32 @@ static inline uint64_t lsmash_get_lcm( uint64_t a, uint64_t b )
     if( !a )
         return 0;
     return (a / lsmash_get_gcd( a, b )) * b;
+}
+
+static inline void lsmash_reduce_fraction( uint64_t *a, uint64_t *b )
+{
+    if( !a || !b )
+        return;
+    uint64_t gcd = lsmash_get_gcd( *a, *b );
+    if( gcd )
+    {
+        *a /= gcd;
+        *b /= gcd;
+    }
+}
+
+static inline void lsmash_reduce_fraction_su( int64_t *a, uint64_t *b )
+{
+    if( !a || !b )
+        return;
+    uint64_t c = *a > 0 ? *a : -(*a);
+    uint64_t gcd = lsmash_get_gcd( c, *b );
+    if( gcd )
+    {
+        c /= gcd;
+        *b /= gcd;
+        *a = *a > 0 ? c : -c;
+    }
 }
 
 #endif

@@ -480,7 +480,8 @@ static int isom_add_visual_extensions( isom_visual_entry_t *visual, lsmash_video
         isom_remove_tapt( trak->tapt );
     int uncompressed_ycbcr = qt_compatible && isom_is_uncompressed_ycbcr( visual->type );
     /* Set up Clean Aperture. */
-    if( set_aperture_modes || uncompressed_ycbcr || summary->crop_top || summary->crop_left || summary->crop_bottom || summary->crop_right )
+    if( set_aperture_modes || uncompressed_ycbcr
+     || (summary->clap.width.d && summary->clap.height.d && summary->clap.horizontal_offset.d && summary->clap.vertical_offset.d) )
     {
         if( isom_add_clap( visual ) )
         {
@@ -488,24 +489,14 @@ static int isom_add_visual_extensions( isom_visual_entry_t *visual, lsmash_video
             return -1;
         }
         isom_clap_t *clap = visual->clap;
-        clap->cleanApertureWidthN = summary->width - (summary->crop_left + summary->crop_right);
-        clap->cleanApertureHeightN = summary->height - (summary->crop_top + summary->crop_bottom);
-        clap->horizOffN = (int64_t)summary->crop_left - summary->crop_right;
-        clap->vertOffN = (int64_t)summary->crop_top - summary->crop_bottom;
-        if( !(clap->horizOffN & 0x1) )
-        {
-            clap->horizOffN /= 2;
-            clap->horizOffD = 1;
-        }
-        else
-            clap->horizOffD = 2;
-        if( !(clap->vertOffN & 0x1) )
-        {
-            clap->vertOffN /= 2;
-            clap->vertOffD = 1;
-        }
-        else
-            clap->vertOffD = 2;
+        clap->cleanApertureWidthN  = summary->clap.width.n;
+        clap->cleanApertureWidthD  = summary->clap.width.d;
+        clap->cleanApertureHeightN = summary->clap.height.n;
+        clap->cleanApertureHeightD = summary->clap.height.d;
+        clap->horizOffN            = summary->clap.horizontal_offset.n;
+        clap->horizOffD            = summary->clap.horizontal_offset.d;
+        clap->vertOffN             = summary->clap.vertical_offset.n;
+        clap->vertOffD             = summary->clap.vertical_offset.d;
     }
     /* Set up Pixel Aspect Ratio. */
     if( set_aperture_modes || (summary->par_h && summary->par_v) )
