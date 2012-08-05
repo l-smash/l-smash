@@ -1456,7 +1456,6 @@ typedef struct
 } lsmash_itunes_metadata_t;
 
 typedef struct lsmash_root_tag lsmash_root_t;
-typedef void lsmash_itunes_metadata_list_t;
 
 /* public functions */
 int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_type, void* summary );
@@ -1556,10 +1555,6 @@ lsmash_sample_t *lsmash_get_sample_from_media_timeline( lsmash_root_t *root, uin
 int lsmash_get_sample_info_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number, lsmash_sample_t *sample );
 int lsmash_get_sample_property_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number, lsmash_sample_property_t *prop );
 int lsmash_check_sample_existence_in_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number );
-
-lsmash_itunes_metadata_list_t *lsmash_export_itunes_metadata( lsmash_root_t *root );
-int lsmash_import_itunes_metadata( lsmash_root_t *root, lsmash_itunes_metadata_list_t *list );
-void lsmash_destroy_itunes_metadata( lsmash_itunes_metadata_list_t *list );
 
 int lsmash_set_media_timestamps( lsmash_root_t *root, uint32_t track_ID, lsmash_media_ts_list_t *ts_list );
 int lsmash_get_media_timestamps( lsmash_root_t *root, uint32_t track_ID, lsmash_media_ts_list_t *ts_list );
