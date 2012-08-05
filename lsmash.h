@@ -405,20 +405,65 @@ typedef enum
     ISOM_LANGUAGE_CODE_UNDEFINED        = LSMASH_PACK_ISO_LANGUAGE( 'u', 'n', 'd' ),
 } lsmash_iso_language_code;
 
-typedef enum
+/* Index for the chromaticity coordinates of the color primaries */
+enum
 {
-    QT_COLOR_PARAMETER_START = 1 << 16, /* User must not use this. */
-    QT_COLOR_PARAMETER_NOT_SPECIFIED = QT_COLOR_PARAMETER_START,
-    QT_COLOR_PARAMETER_ITU_R_BT470_M,
-    QT_COLOR_PARAMETER_ITU_R_BT470_BG,
-    QT_COLOR_PARAMETER_ITU_R_BT709,
-    QT_COLOR_PARAMETER_SMPTE_170M,
-    QT_COLOR_PARAMETER_SMPTE_240M,
-    QT_COLOR_PARAMETER_SMPTE_274M,
-    QT_COLOR_PARAMETER_SMPTE_293M,
-    QT_COLOR_PARAMETER_SMPTE_296M,
-    QT_COLOR_PARAMETER_END,             /* User must not use this. */
-} lsmash_color_parameter;
+    QT_PRIMARIES_INDEX_ITU_R709_2  = 1,    /* ITU-R BT.709-2, ITU-R BT.1361,
+                                            * SMPTE 274M-1995, SMPTE 296M-1997,
+                                            * IEC 61966-2-1 (sRGB or sYCC), IEC 61966-2-4 (xvYCC),
+                                            * SMPTE RP 177M-1993 Annex B
+                                            *   green x = 0.300  y = 0.600
+                                            *   blue  x = 0.150  y = 0.060
+                                            *   red   x = 0.640  y = 0.330
+                                            *   white x = 0.3127 y = 0.3290 (CIE III. D65) */
+    QT_PRIMARIES_INDEX_UNSPECIFIED = 2,    /* Unspecified */
+    QT_PRIMARIES_INDEX_EBU_3213    = 5,    /* EBU Tech. 3213 (1981), ITU-R BT.470-6 System B, G,
+                                            * ITU-R BT.601-6 625, ITU-R BT.1358 625,
+                                            * ITU-R BT.1700 625 PAL and 625 SECAM
+                                            *   green x = 0.29   y = 0.60
+                                            *   blue  x = 0.15   y = 0.06
+                                            *   red   x = 0.64   y = 0.33
+                                            *   white x = 0.3127 y = 0.3290 (CIE III. D65) */
+    QT_PRIMARIES_INDEX_SMPTE_C     = 6,    /* SMPTE C Primaries from SMPTE RP 145-1993, SMPYE 170M-2004,
+                                            * ITU-R BT.601-6 525, ITU-R BT.1358 525,
+                                            * ITU-R BT.1700 NTSC, SMPTE 170M-2004
+                                            *   green x = 0.310  y = 0.595
+                                            *   blue  x = 0.155  y = 0.070
+                                            *   red   x = 0.630  y = 0.340
+                                            *   white x = 0.3127 y = 0.3290 (CIE III. D65) */
+};
+
+/* Index for the opto-electronic transfer characteristic of the image color components */
+enum
+{
+    QT_TRANSFER_INDEX_ITU_R709_2      = 1,  /* ITU-R BT.709-2, ITU-R BT.1361
+                                             * SMPTE 274M-1995, SMPTE 296M-1997,
+                                             * SMPTE 293M-1996, SMPTE 170M-1994
+                                             *   vV = 1.099 * vLc^0.45 - 0.099 for 1 >= vLc >= 0.018
+                                             *   vV = 4.500 * vLc              for 0.018 > vLc >= 0 */
+    QT_TRANSFER_INDEX_UNSPECIFIED     = 2,  /* Unspecified */
+    QT_TRANSFER_INDEX_SMPTE_240M_1995 = 7,  /* SMPTE 240M-1995, interim color implementation of SMPTE 274M-1995
+                                             *   vV = 1.1115 * vLc^0.45 - 0.1115 for 1 >= vLc >= 0.0228
+                                             *   vV = 4.0 * vLc                  for 0.0228 > vLc >= 0 */
+};
+
+/* Index for the matrix coefficients associated with derivation of luma and chroma signals from the green, blue, and red primaries */
+enum
+{
+    QT_MATRIX_INDEX_ITU_R_709_2     = 1,    /* ITU-R BT.709-2, ITU-R BT.1361,
+                                             * SMPTE 274M-1995, SMPTE 296M-1997
+                                             * IEC 61966-2-1 (sYCC), IEC 61966-2-4 xvYCC_709,
+                                             * SMPTE RP 177M-1993 Annex B
+                                             *   vKr = 0.2126; vKb = 0.0722 */
+    QT_MATRIX_INDEX_UNSPECIFIED     = 2,    /* Unspecified */
+    QT_MATRIX_INDEX_ITU_R_601_4     = 6,    /* ITU-R BT.470-4 System B and G,
+                                             * ITU-R BT.601-4 525, ITU-R BT.1358 525,
+                                             * ITU-R BT.1700 NTSC,
+                                             * SMPTE 170M-1994, SMPTE 293M-1996
+                                             *   vKr = 0.299; vKb = 0.114 */
+    QT_MATRIX_INDEX_SMPTE_240M_1995 = 7     /* SMPTE 240M-1995, interim color implementation of SMPTE 274M-1995
+                                             *   vKr = 0.212; vKb = 0.087 */
+};
 
 typedef enum
 {
@@ -1275,20 +1320,21 @@ typedef struct
                                                  * User can't set this parameter manually. */
     uint8_t vfr;                                /* whether a stream is assumed as variable frame rate
                                                  * User can't set this parameter manually. */
-    uint8_t full_range;
     uint32_t width;                             /* pixel counts of width samples have */
     uint32_t height;                            /* pixel counts of height samples have */
     lsmash_clap_t clap;
     uint32_t par_h;                             /* horizontal factor of pixel aspect ratio */
     uint32_t par_v;                             /* vertical factor of pixel aspect ratio */
     lsmash_scaling_method scaling_method;       /* If not set, video samples are scaled into the visual presentation region to fill it. */
+    struct
+    {
+        /* To omit to write these field, set zero value to all them. */
+        uint16_t primaries_index;               /* the chromaticity coordinates of the color primaries */
+        uint16_t transfer_index;                /* the opto-electronic transfer characteristic of the image color components */
+        uint16_t matrix_index;                  /* the matrix coefficients associated with derivation of luma and chroma signals from the green, blue, and red primaries */
+        uint8_t  full_range;
+    } color;
     /* The folowing parameters are only available for QuickTime file formats. */
-    lsmash_color_parameter primaries;           /* the chromaticity coordinates of the color primaries
-                                                 * The user who is a specialist can set an actual value to this directly without enum lsmash_color_parameter. */
-    lsmash_color_parameter transfer;            /* the opto-electronic transfer characteristic of the image color components
-                                                 * The user who is a specialist can set an actual value to this directly without enum lsmash_color_parameter. */
-    lsmash_color_parameter matrix;              /* the matrix coefficients associated with derivation of luma and chroma signals from the green, blue, and red primaries
-                                                 * The user who is a specialist can set an actual value to this directly without enum lsmash_color_parameter. */
     lsmash_field_orderings field_orderings;     /* field ordering for interlaced material */
     lsmash_pixel_format pixel_format;           /* the native pixel format */
     uint8_t significant_bits;                   /* the number of significant bits per component */

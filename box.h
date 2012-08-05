@@ -2019,29 +2019,9 @@ static const isom_language_t isom_languages[] =
 };
 
 /* Color parameters */
-typedef struct
-{
-    uint16_t primaries;
-    uint16_t transfer;
-    uint16_t matrix;
-} isom_color_parameter_t;
-
-static const isom_color_parameter_t isom_color_parameter_tbl[] =
-{
-    { 2, 2, 2 },        /* Not specified */
-    { 2, 2, 2 },        /* ITU-R BT.470 System M */
-    { 5, 2, 6 },        /* ITU-R BT.470 System B, G */
-    { 1, 1, 1 },        /* ITU-R BT.709 */
-    { 6, 1, 6 },        /* SMPTE 170M */
-    { 6, 7, 7 },        /* SMPTE 240M */
-    { 1, 1, 1 },        /* SMPTE 274M */
-    { 5, 1, 6 },        /* SMPTE 293M */
-    { 1, 1, 1 },        /* SMPTE 296M */
-};
-
 enum qt_color_patameter_type
 {
-    QT_COLOR_PARAMETER_TYPE_NCLC = LSMASH_4CC( 'n', 'c', 'l', 'c' ),      /* nonconstant luminance coding */
+    QT_COLOR_PARAMETER_TYPE_NCLC = LSMASH_4CC( 'n', 'c', 'l', 'c' ),      /* NonConstant Luminance Coding */
     QT_COLOR_PARAMETER_TYPE_PROF = LSMASH_4CC( 'p', 'r', 'o', 'f' ),      /* ICC profile */
 };
 

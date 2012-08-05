@@ -2627,15 +2627,15 @@ static lsmash_video_summary_t *h264_create_summary( h264_info_t *info, h264_sps_
     summary->max_au_length          = max_au_length;
     summary->timescale              = sps->vui.time_scale >> (sps->vui.time_scale > 1 && !field_pic_present);
     summary->timebase               = sps->vui.num_units_in_tick;
-    summary->full_range             = sps->vui.video_full_range_flag;
     summary->vfr                    = !sps->vui.fixed_frame_rate_flag;
     summary->width                  = sps->cropped_width;
     summary->height                 = sps->cropped_height;
     summary->par_h                  = sps->vui.sar_width;
     summary->par_v                  = sps->vui.sar_height;
-    summary->primaries              = sps->vui.colour_primaries;
-    summary->transfer               = sps->vui.transfer_characteristics;
-    summary->matrix                 = sps->vui.matrix_coefficients;
+    summary->color.primaries_index  = sps->vui.colour_primaries;
+    summary->color.transfer_index   = sps->vui.transfer_characteristics;
+    summary->color.matrix_index     = sps->vui.matrix_coefficients;
+    summary->color.full_range       = sps->vui.video_full_range_flag;
     return summary;
 }
 
@@ -3262,9 +3262,9 @@ static lsmash_video_summary_t *vc1_create_summary( vc1_info_t *info, vc1_sequenc
     summary->height                 = sequence->disp_vert_size;
     summary->par_h                  = sequence->aspect_width;
     summary->par_v                  = sequence->aspect_height;
-    summary->primaries              = sequence->color_prim;
-    summary->transfer               = sequence->transfer_char;
-    summary->matrix                 = sequence->matrix_coef;
+    summary->color.primaries_index  = sequence->color_prim;
+    summary->color.transfer_index   = sequence->transfer_char;
+    summary->color.matrix_index     = sequence->matrix_coef;
     return summary;
 }
 

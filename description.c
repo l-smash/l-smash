@@ -123,9 +123,9 @@ static lsmash_video_summary_t *isom_create_video_summary_from_description( isom_
         summary->scaling_method = visual->stsl->scale_method;
     if( visual->colr )
     {
-        summary->primaries = visual->colr->primaries_index;
-        summary->transfer  = visual->colr->transfer_function_index;
-        summary->matrix    = visual->colr->matrix_index;
+        summary->color.primaries_index = visual->colr->primaries_index;
+        summary->color.transfer_index  = visual->colr->transfer_function_index;
+        summary->color.matrix_index    = visual->colr->matrix_index;
     }
     return summary;
 }
