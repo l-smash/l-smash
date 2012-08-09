@@ -24,6 +24,13 @@
 #define H264_DEFAULT_NALU_LENGTH_SIZE 4     /* We always use 4 bytes length. */
 #define H264_SHORT_START_CODE_LENGTH  3
 
+struct lsmash_h264_parameter_sets_tag
+{
+    lsmash_entry_list_t sps_list[1];
+    lsmash_entry_list_t pps_list[1];
+    lsmash_entry_list_t spsext_list[1];
+};
+
 typedef struct
 {
     uint8_t  nal_ref_idc;

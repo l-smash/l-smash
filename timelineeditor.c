@@ -891,8 +891,10 @@ int main( int argc, char *argv[] )
             return TIMELINEEDITOR_ERR( "Failed to set track parameters.\n" );
         if( lsmash_set_media_parameters( output.root, out_track->track_ID, &out_track->media_param ) )
             return TIMELINEEDITOR_ERR( "Failed to set media parameters.\n" );
+/*
         if( lsmash_copy_decoder_specific_info( output.root, out_track->track_ID, input.root, in_track->track_ID ) )
             return TIMELINEEDITOR_ERR( "Failed to copy a Decoder Specific Info.\n" );
+*/
         out_track->last_sample_delta = in_track->last_sample_delta;
         out_track->current_sample_number = 1;
         out_track->reach_end_of_media_timeline = 0;

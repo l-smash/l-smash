@@ -33,9 +33,10 @@
 ***************************************************************************/
 #include "a52.h"
 
+#define AC3_SPECIFIC_BOX_LENGTH 11
+
 uint8_t *lsmash_create_ac3_specific_info( lsmash_ac3_specific_parameters_t *param, uint32_t *data_length )
 {
-#define AC3_SPECIFIC_BOX_LENGTH 11
     lsmash_bits_t bits = { 0 };
     lsmash_bs_t   bs   = { 0 };
     lsmash_bits_init( &bits, &bs );
@@ -54,7 +55,6 @@ uint8_t *lsmash_create_ac3_specific_info( lsmash_ac3_specific_parameters_t *para
     uint8_t *data = lsmash_bits_export_data( &bits, data_length );
     lsmash_bits_empty( &bits );
     return data;
-#undef AC3_SPECIFIC_BOX_LENGTH
 }
 
 int lsmash_setup_ac3_specific_parameters_from_syncframe( lsmash_ac3_specific_parameters_t *param, uint8_t *data, uint32_t data_length )
@@ -112,6 +112,35 @@ int ac3_parse_syncframe_header( ac3_info_t *info, uint8_t *data )
     lsmash_bits_empty( bits );
     return ac3_check_syncframe_header( param );
 }
+
+int ac3_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
+{
+    assert( dst && dst->data.structured && src && src->data.unstructured );
+    if( src->size < AC3_SPECIFIC_BOX_LENGTH )
+        return -1;
+    lsmash_ac3_specific_parameters_t *param = (lsmash_ac3_specific_parameters_t *)dst->data.structured;
+    uint8_t *data = src->data.unstructured;
+    uint64_t size = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+    data += ISOM_BASEBOX_COMMON_SIZE;
+    if( size == 1 )
+    {
+        size = ((uint64_t)data[0] << 56) | ((uint64_t)data[1] << 48) | ((uint64_t)data[2] << 40) | ((uint64_t)data[3] << 32)
+             | ((uint64_t)data[4] << 24) | ((uint64_t)data[5] << 16) | ((uint64_t)data[6] <<  8) |  (uint64_t)data[7];
+        data += 8;
+    }
+    if( size != src->size )
+        return -1;
+    param->fscod      = (data[0] >> 6) & 0x03;                                  /* XXxx xxxx xxxx xxxx xxxx xxxx */
+    param->bsid       = (data[0] >> 1) & 0x1F;                                  /* xxXX XXXx xxxx xxxx xxxx xxxx */
+    param->bsmod      = ((data[0] & 0x01) << 2) | ((data[2] >> 6) & 0x03);      /* xxxx xxxX XXxx xxxx xxxx xxxx */
+    param->acmod      = (data[1] >> 3) & 0x07;                                  /* xxxx xxxx xxXX Xxxx xxxx xxxx */
+    param->lfeon      = (data[1] >> 2) & 0x01;                                  /* xxxx xxxx xxxx xXxx xxxx xxxx */
+    param->frmsizecod = ((data[1] & 0x03) << 3) | ((data[3] >> 5) & 0x07);      /* xxxx xxxx xxxx xxXX XXXx xxxx */
+    param->frmsizecod <<= 1;
+    return 0;
+}
+
+#undef AC3_SPECIFIC_BOX_LENGTH
 
 /***************************************************************************
     Enhanced AC-3 tools
@@ -410,4 +439,52 @@ void eac3_update_specific_param( eac3_info_t *info )
     for( uint8_t i = 0; i <= param->num_ind_sub; i++ )
         param->independent_info[i] = info->independent_info[i];
     info->dec3_param_initialized = 1;
+}
+
+int eac3_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
+{
+#define EAC3_SPECIFIC_BOX_MIN_LENGTH 13
+    assert( dst && dst->data.structured && src && src->data.unstructured );
+    if( src->size < EAC3_SPECIFIC_BOX_MIN_LENGTH )
+        return -1;
+    lsmash_eac3_specific_parameters_t *param = (lsmash_eac3_specific_parameters_t *)dst->data.structured;
+    uint8_t *data = src->data.unstructured;
+    uint64_t size = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+    data += ISOM_BASEBOX_COMMON_SIZE;
+    if( size == 1 )
+    {
+        size = ((uint64_t)data[0] << 56) | ((uint64_t)data[1] << 48) | ((uint64_t)data[2] << 40) | ((uint64_t)data[3] << 32)
+             | ((uint64_t)data[4] << 24) | ((uint64_t)data[5] << 16) | ((uint64_t)data[6] <<  8) |  (uint64_t)data[7];
+        data += 8;
+    }
+    if( size != src->size )
+        return -1;
+    param->data_rate   = (data[0] << 5) | ((data[1] >> 3) & 0x1F);  /* XXXX XXXX XXXX Xxxx */
+    param->num_ind_sub = data[1] & 0x07;                            /* xxxx xxxx xxxx xXXX */
+    data += 2;
+    size -= 2;
+    for( int i = 0; i <= param->num_ind_sub; i++ )
+    {
+        if( size < 3 )
+            return -1;
+        lsmash_eac3_substream_info_t *independent_info = &param->independent_info[i];
+        independent_info->fscod       = (data[0] >> 6) & 0x03;                              /* XXxx xxxx xxxx xxxx xxxx xxxx */
+        independent_info->bsid        = (data[0] >> 1) & 0x1F;                              /* xxXX XXXx xxxx xxxx xxxx xxxx */
+        independent_info->bsmod       = ((data[0] & 0x01) << 4) | ((data[1] >> 4) & 0x0F);  /* xxxx xxxX XXXX xxxx xxxx xxxx */
+        independent_info->acmod       = (data[1] >> 1) & 0x07;                              /* xxxx xxxx xxxx XXXx xxxx xxxx */
+        independent_info->lfeon       = data[1] & 0x01;                                     /* xxxx xxxx xxxx xxxX xxxx xxxx */
+        independent_info->num_dep_sub = (data[2] >> 1) & 0x0F;                              /* xxxx xxxx xxxx xxxx xxxX XXXx */
+        data += 3;
+        size -= 3;
+        if( independent_info->num_dep_sub > 0 )
+        {
+            if( size < 1 )
+                return -1;
+            independent_info->chan_loc = ((data[-1] & 0x01) << 8) | data[0];    /* xxxx xxxX XXXX XXXX */
+            data += 1;
+            size -= 1;
+        }
+    }
+    return 0;
+#undef EAC3_SPECIFIC_BOX_MIN_LENGTH
 }

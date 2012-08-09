@@ -35,7 +35,7 @@
 
 #define DTS_MIN_CORE_SIZE           96
 #define DTS_MAX_STREAM_CONSTRUCTION 21
-#define DTS_SPECIFIC_BOX_LENGTH     28
+#define DTS_SPECIFIC_BOX_MIN_LENGTH 28
 
 typedef enum
 {
@@ -101,6 +101,48 @@ typedef enum
     DTS_CHANNEL_LAYOUT_CHR     = 0x4000,    /* Centre height in rear */
     DTS_CHANNEL_LAYOUT_LHR_RHR = 0x8000,    /* Left/Right height in rear */
 } dts_channel_layout;
+
+struct lsmash_dts_reserved_box_tag
+{
+    uint32_t size;
+    uint8_t *data;
+};
+
+int lsmash_append_dts_reserved_box( lsmash_dts_specific_parameters_t *param, uint8_t *box_data, uint32_t box_size )
+{
+    if( !param || !box_data || box_size == 0 )
+        return -1;
+    param->box = malloc( sizeof(lsmash_dts_reserved_box_t) );
+    if( !param->box )
+        return -1;
+    param->box->data = lsmash_memdup( box_data, box_size );
+    if( !param->box->data )
+    {
+        free( param->box );
+        param->box = NULL;
+        return -1;
+    }
+    param->box->size = box_size;
+    return 0;
+}
+
+void lsmash_destroy_dts_parameter_sets( lsmash_dts_specific_parameters_t *param )
+{
+    if( !param->box )
+        return;
+    if( param->box->data )
+        free( param->box->data );
+    free( param->box );
+    param->box = NULL;
+}
+
+void dts_destruct_specific_data( void *data )
+{
+    if( !data )
+        return;
+    lsmash_destroy_dts_parameter_sets( data );
+    free( data );
+}
 
 uint8_t lsmash_dts_get_stream_construction( lsmash_dts_construction_flag flags )
 {
@@ -176,9 +218,12 @@ uint8_t *lsmash_create_dts_specific_info( lsmash_dts_specific_parameters_t *para
     lsmash_bits_t bits = { 0 };
     lsmash_bs_t   bs   = { 0 };
     lsmash_bits_init( &bits, &bs );
-    uint8_t buffer[DTS_SPECIFIC_BOX_LENGTH] = { 0 };
+    int reserved_box_present = (param->box && param->box->data && param->box->size);
+    uint32_t buffer_length = DTS_SPECIFIC_BOX_MIN_LENGTH + (reserved_box_present ? param->box->size : 0);
+    uint8_t buffer[buffer_length];
+    memset( buffer, 0, buffer_length );
     bs.data  = buffer;
-    bs.alloc = DTS_SPECIFIC_BOX_LENGTH;
+    bs.alloc = buffer_length;
     /* Create a DTSSpecificBox. */
     lsmash_bits_put( &bits, 32, 0 );                            /* box size */
     lsmash_bits_put( &bits, 32, ISOM_BOX_TYPE_DDTS );           /* box type: 'ddts' */
@@ -196,7 +241,13 @@ uint8_t *lsmash_create_dts_specific_info( lsmash_dts_specific_parameters_t *para
     lsmash_bits_put( &bits, 16, param->ChannelLayout );
     lsmash_bits_put( &bits, 1, param->MultiAssetFlag );
     lsmash_bits_put( &bits, 1, param->LBRDurationMod );
-    lsmash_bits_put( &bits, 6, 0 );                             /* Reserved */
+    lsmash_bits_put( &bits, 1, reserved_box_present );
+    lsmash_bits_put( &bits, 5, 0 );                             /* Reserved */
+    /* ReservedBox */
+    if( reserved_box_present )
+        for( uint32_t i = 0; i < param->box->size; i++ )
+            lsmash_bits_put( &bits, 8, param->box->data[i] );
+    /* */
     uint8_t *data = lsmash_bits_export_data( &bits, data_length );
     /* Update box size. */
     data[0] = ((*data_length) >> 24) & 0xff;
@@ -1068,4 +1119,43 @@ void dts_update_specific_param( dts_info_t *info )
                           ? info->lbr.duration_modifier && !(info->flags & DTS_CORE_SUBSTREAM_CORE_FLAG)
                           : info->lbr.duration_modifier;
     info->ddts_param_initialized = 1;
+}
+
+int dts_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
+{
+    assert( dst && dst->data.structured && src && src->data.unstructured );
+    if( src->size < DTS_SPECIFIC_BOX_MIN_LENGTH )
+        return -1;
+    lsmash_dts_specific_parameters_t *param = (lsmash_dts_specific_parameters_t *)dst->data.structured;
+    uint8_t *data = src->data.unstructured;
+    uint64_t size = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+    int dts_specific_box_min_length = DTS_SPECIFIC_BOX_MIN_LENGTH;
+    data += ISOM_BASEBOX_COMMON_SIZE;
+    if( size == 1 )
+    {
+        size = ((uint64_t)data[0] << 56) | ((uint64_t)data[1] << 48) | ((uint64_t)data[2] << 40) | ((uint64_t)data[3] << 32)
+             | ((uint64_t)data[4] << 24) | ((uint64_t)data[5] << 16) | ((uint64_t)data[6] <<  8) |  (uint64_t)data[7];
+        dts_specific_box_min_length += 8;
+        data += 8;
+    }
+    if( size != src->size )
+        return -1;
+    param->DTSSamplingFrequency = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+    param->maxBitrate           = (data[4] << 24) | (data[5] << 16) | (data[6] << 8) | data[7];
+    param->avgBitrate           = (data[8] << 24) | (data[9] << 16) | (data[10] << 8) | data[11];
+    param->pcmSampleDepth       = data[12];
+    param->FrameDuration        = (data[13] >> 6) & 0x03;
+    param->StreamConstruction   = (data[13] >> 1) & 0x1F;
+    param->CoreLFEPresent       = data[13] & 0x01;
+    param->CoreLayout           = (data[14] >> 2) & 0x3F;
+    param->CoreSize             = ((data[14] & 0x03) << 12) | (data[15] << 4) | ((data[16] >> 4) & 0x0F);
+    param->StereoDownmix        = (data[16] >> 3) & 0x01;
+    param->RepresentationType   = data[16] & 0x07;
+    param->ChannelLayout        = (data[17] << 8) | data[18];
+    param->MultiAssetFlag       = (data[19] >> 7) & 0x01;
+    param->LBRDurationMod       = (data[19] >> 6) & 0x01;
+    int reserved_box_present    = ((data[19] >> 5) & 0x01) && (size > DTS_SPECIFIC_BOX_MIN_LENGTH);
+    if( reserved_box_present )
+        lsmash_append_dts_reserved_box( param, data + 20, size - DTS_SPECIFIC_BOX_MIN_LENGTH );
+    return 0;
 }

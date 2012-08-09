@@ -35,6 +35,7 @@ typedef struct
     uint32_t                  track_ID;
     uint32_t                  last_sample_delta;
     uint32_t                  current_sample_number;
+    uint32_t                 *summary_remap;
     uint64_t                  skip_dt_interval;
     uint64_t                  last_sample_dts;
     lsmash_track_parameters_t track_param;
@@ -52,6 +53,12 @@ typedef struct
 
 typedef struct
 {
+    int               active;
+    lsmash_summary_t *summary;
+} input_summary_t;
+
+typedef struct
+{
     int                       active;
     lsmash_sample_t          *sample;
     double                    dts;
@@ -61,6 +68,8 @@ typedef struct
     uint32_t                  track_ID;
     uint32_t                  last_sample_delta;
     uint32_t                  current_sample_number;
+    uint32_t                  num_summaries;
+    input_summary_t          *summaries;
     lsmash_track_parameters_t track_param;
     lsmash_media_parameters_t media_param;
 } input_track_t;
@@ -130,7 +139,15 @@ static void cleanup_input_movie( input_movie_t *input )
         free( input->itunes_metadata );
     }
     if( input->track )
+    {
+        if( input->track->summaries )
+        {
+            for( uint32_t i = 0; i < input->track->num_summaries; i++ )
+                lsmash_cleanup_summary( input->track->summaries[i].summary );
+            free( input->track->summaries );
+        }
         free( input->track );
+    }
     lsmash_destroy_root( input->root );
     input->root            = NULL;
     input->track           = NULL;
@@ -142,7 +159,11 @@ static void cleanup_output_movie( output_movie_t *output )
     if( !output )
         return;
     if( output->track )
+    {
+        if( output->track->summary_remap )
+            free( output->track->summary_remap );
         free( output->track );
+    }
     lsmash_destroy_root( output->root );
     output->root  = NULL;
     output->track = NULL;
@@ -353,6 +374,28 @@ static int get_movie( input_movie_t *input, char *input_name )
         {
             WARNING_MSG( "failed to get the last sample delta.\n" );
             continue;
+        }
+        in_track[i].num_summaries = lsmash_count_summary( input->root, in_track[i].track_ID );
+        if( in_track[i].num_summaries == 0 )
+        {
+            WARNING_MSG( "failed to find valid summaries.\n" );
+            continue;
+        }
+        in_track[i].summaries = malloc( in_track[i].num_summaries * sizeof(input_summary_t) );
+        if( !in_track[i].summaries )
+            return ERROR_MSG( "failed to alloc input summaries.\n" );
+        memset( in_track[i].summaries, 0, in_track[i].num_summaries * sizeof(input_summary_t) );
+        for( uint32_t j = 0; j < in_track[i].num_summaries; j++ )
+        {
+            lsmash_summary_t *summary = lsmash_get_summary( input->root, in_track[i].track_ID, j + 1 );
+            if( !summary )
+            {
+                free( summary );
+                WARNING_MSG( "failed to get a summaries.\n" );
+                continue;
+            }
+            in_track[i].summaries[j].summary = summary;
+            in_track[i].summaries[j].active  = 1;
         }
         in_track[i].active                = 1;
         in_track[i].current_sample_number = 1;
@@ -685,6 +728,10 @@ static int prepare_output( remuxer_t *remuxer )
                 continue;
             }
             output_track_t *out_track = &output->track[output->current_track_number - 1];
+            out_track->summary_remap = malloc( in_track->num_summaries * sizeof(uint32_t) );
+            if( !out_track->summary_remap )
+                return ERROR_MSG( "failed to create summary mapping for a track.\n" );
+            memset( out_track->summary_remap, 0, in_track->num_summaries * sizeof(uint32_t) );
             out_track->track_ID = lsmash_create_track( output->root, in_track->media_param.handler_type );
             if( !out_track->track_ID )
                 return ERROR_MSG( "failed to create a track.\n" );
@@ -712,14 +759,28 @@ static int prepare_output( remuxer_t *remuxer )
                 -- output->num_tracks;
                 continue;
             }
-            if( lsmash_copy_decoder_specific_info( output->root, out_track->track_ID, input[i].root, in_track->track_ID ) )
+            uint32_t valid_summary_count = 0;
+            for( uint32_t k = 0; k < in_track->num_summaries; k++ )
             {
-                WARNING_MSG( "failed to copy a Decoder Specific Info.\n" );
-                lsmash_delete_track( output->root, out_track->track_ID );
-                in_track->active = 0;
-                -- output->num_tracks;
-                continue;
+                if( !in_track->summaries[k].active )
+                {
+                    out_track->summary_remap[k] = 0;
+                    continue;
+                }
+                lsmash_summary_t *summary = in_track->summaries[k].summary;
+                if( lsmash_add_sample_entry( output->root, out_track->track_ID, summary->sample_type, summary ) == 0 )
+                {
+                    WARNING_MSG( "failed to append a summary.\n" );
+                    lsmash_cleanup_summary( summary );
+                    in_track->summaries[k].summary = NULL;
+                    in_track->summaries[k].active  = 0;
+                    out_track->summary_remap[k] = 0;
+                    continue;
+                }
+                out_track->summary_remap[k] = ++valid_summary_count;
             }
+            if( valid_summary_count == 0 )
+                return ERROR_MSG( "failed to append all summaries.\n" );
             out_track->last_sample_delta = in_track->last_sample_delta;
             if( set_starting_point( input, in_track, track_option[i][j].seek, track_option[i][j].consider_rap ) )
             {
@@ -805,33 +866,46 @@ static int do_remux( remuxer_t *remuxer )
                 /* Append a sample if meeting a condition. */
                 if( in_track->dts <= largest_dts || num_consecutive_sample_skip == num_active_input_tracks )
                 {
-                    /* The first DTS must be 0. */
                     output_track_t *out_track = &out_movie->track[out_movie->current_track_number - 1];
-                    if( out_track->current_sample_number == 1 )
-                        out_track->skip_dt_interval = sample->dts;
-                    if( out_track->skip_dt_interval )
+                    sample->index = sample->index > in_track->num_summaries ? in_track->num_summaries
+                                  : sample->index == 0 ? 1
+                                  : sample->index;
+                    sample->index = out_track->summary_remap[ sample->index - 1 ];
+                    if( sample->index )
                     {
-                        sample->dts -= out_track->skip_dt_interval;
-                        sample->cts -= out_track->skip_dt_interval;
+                        /* The first DTS must be 0. */
+                        if( out_track->current_sample_number == 1 )
+                            out_track->skip_dt_interval = sample->dts;
+                        if( out_track->skip_dt_interval )
+                        {
+                            sample->dts -= out_track->skip_dt_interval;
+                            sample->cts -= out_track->skip_dt_interval;
+                        }
+                        uint64_t sample_size     = sample->length;      /* sample might be deleted internally after appending. */
+                        uint64_t last_sample_dts = sample->dts;         /* same as above */
+                        /* Append a sample into output movie. */
+                        if( lsmash_append_sample( out_movie->root, out_track->track_ID, sample ) )
+                        {
+                            lsmash_delete_sample( sample );
+                            return ERROR_MSG( "failed to append a sample.\n" );
+                        }
+                        largest_dts                       = LSMASH_MAX( largest_dts, in_track->dts );
+                        in_track->sample                  = NULL;
+                        in_track->current_sample_number  += 1;
+                        out_track->current_sample_number += 1;
+                        out_track->last_sample_dts        = last_sample_dts;
+                        num_consecutive_sample_skip       = 0;
+                        total_media_size                 += sample_size;
+                        /* Print, per 256 samples, total size of imported media. */
+                        if( ++sample_count == 0 )
+                            eprintf( "Importing: %"PRIu64" bytes\r", total_media_size );
                     }
-                    uint64_t sample_size     = sample->length;      /* sample might be deleted internally after appending. */
-                    uint64_t last_sample_dts = sample->dts;         /* same as above */
-                    /* Append a sample into output movie. */
-                    if( lsmash_append_sample( out_movie->root, out_track->track_ID, sample ) )
+                    else
                     {
                         lsmash_delete_sample( sample );
-                        return ERROR_MSG( "failed to append a sample.\n" );
+                        in_track->sample = NULL;
+                        in_track->current_sample_number  += 1;
                     }
-                    largest_dts                       = LSMASH_MAX( largest_dts, in_track->dts );
-                    in_track->sample                  = NULL;
-                    in_track->current_sample_number  += 1;
-                    out_track->current_sample_number += 1;
-                    out_track->last_sample_dts        = last_sample_dts;
-                    num_consecutive_sample_skip       = 0;
-                    total_media_size                 += sample_size;
-                    /* Print, per 256 samples, total size of imported media. */
-                    if( ++sample_count == 0 )
-                        eprintf( "Importing: %"PRIu64" bytes\r", total_media_size );
                 }
                 else
                     ++num_consecutive_sample_skip;      /* Skip appendig sample. */

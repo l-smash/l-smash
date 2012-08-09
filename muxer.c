@@ -899,6 +899,11 @@ static int prepare_output( muxer_t *muxer )
                                     timebase  = well_known_fps[i].timebase;
                                     break;
                                 }
+                            lsmash_codec_specific_t *bitrate = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264_BITRATE,
+                                                                                                  LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+                            if( bitrate )
+                                lsmash_add_codec_specific_data( in_track->summary, bitrate );
+                            lsmash_destroy_codec_specific_data( bitrate );
                         }
                         else
                         {

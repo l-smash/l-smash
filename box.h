@@ -37,12 +37,13 @@ typedef struct isom_box_tag isom_box_t;
  * If size is 0, then this box is the last one in the file.
  * usertype is for uuid. */
 #define ISOM_BASEBOX_COMMON \
-        lsmash_root_t *root;    /* pointer of root */ \
-        isom_box_t *parent;     /* pointer of the parent box of this box */ \
-        uint8_t  manager;       /* flags for L-SMASH */ \
-        uint64_t pos;           /* starting position of this box in the file */ \
-    uint64_t size;              /* the number of bytes in this box */ \
-    uint32_t type;              /* four characters codes that identify box type */ \
+        lsmash_root_t      *root;       /* pointer of root */ \
+        isom_box_t         *parent;     /* pointer of the parent box of this box */ \
+        uint8_t             manager;    /* flags for L-SMASH */ \
+        uint64_t            pos;        /* starting position of this box in the file */ \
+        lsmash_entry_list_t extensions; /* extension boxes */ \
+    uint64_t size;                      /* the number of bytes in this box */ \
+    uint32_t type;                      /* four characters codes that identify box type */ \
     uint8_t  *usertype
 
 #define ISOM_FULLBOX_COMMON \
@@ -67,6 +68,37 @@ struct isom_box_tag
 {
     ISOM_FULLBOX_COMMON;
 };
+
+/* Unknown Box
+ * This structure is for boxes we don't know or define yet.
+ * This box must be always appended as an extension box. */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    uint32_t unknown_size;
+    uint8_t *unknown_field;
+} isom_unknown_box_t;
+
+/* Extension structure */
+typedef enum
+{
+    EXTENSION_FORMAT_BINARY = 0,
+    EXTENSION_FORMAT_BOX    = 1
+} isom_extension_format;
+
+typedef void (*isom_extension_destructor_t)( void *extension_data );
+
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    isom_extension_format       format;
+    isom_extension_destructor_t destruct;
+    union
+    {
+        uint8_t *binary;
+        void    *box;
+    } form;
+} isom_extension_box_t;
 
 /* File Type Box
  * This box identifies the specifications to which this file complies.
@@ -476,7 +508,8 @@ typedef struct
 typedef struct
 {
     ISOM_BASEBOX_COMMON;
-    uint32_t level;     /* A fixed-point 16.16 number indicating the gamma level at which the image was captured. */
+    uint32_t level;     /* A fixed-point 16.16 number indicating the gamma level at which the image was captured.
+                         * Zero value indicates platform's standard gamma. */
 } isom_gama_t;
 
 /* Field/Frame Information Box
@@ -528,7 +561,7 @@ typedef struct
 #define ISOM_SAMPLE_ENTRY \
     ISOM_BASEBOX_COMMON; \
     uint8_t reserved[6]; \
-    uint16_t data_reference_index;
+    uint16_t data_reference_index
 
 typedef struct
 {
@@ -539,10 +572,14 @@ typedef struct
 typedef struct
 {
     ISOM_SAMPLE_ENTRY;
-    isom_esds_t *esds;      /* ES Descriptor Box */
 } isom_mp4s_entry_t;
 
-/* ISOM: Visual Sample Entry / QTFF: Image Description */
+/* ISOM: Visual Sample Entry / QTFF: Image Description
+ * For maximum compatibility, the following extension boxes should follow, not precede,
+ * any extension boxes defined in or required by derived specifications.
+ *   Clean Aperture Box
+ *   Pixel Aspect Ratio Box
+ *   Colorspace Box */
 typedef struct
 {
     ISOM_SAMPLE_ENTRY;
@@ -571,27 +608,6 @@ typedef struct
                                  *       If this field is set to 0, the default color table should be used for the specified depth
                                  *       If the color table ID is set to 0, a color table is contained within the sample description itself.
                                  *       The color table immediately follows the color table ID field. */
-    /* AVC specific extensions */
-    isom_avcC_t *avcC;          /* AVCDecoderConfigurationRecord */
-    isom_btrt_t *btrt;          /* MPEG-4 Bit Rate Box @ optional */
-    /* MP4 specific extension */
-    isom_esds_t *esds;          /* ES Descriptor Box */
-    /* QuickTime specific extension */
-    isom_glbl_t *glbl;          /* Global Header Box */
-    isom_colr_t *colr;          /* Color Parameter Box @ optional */
-    isom_gama_t *gama;          /* Gamma Level Box @ optional */
-    isom_fiel_t *fiel;          /* Field/Frame Information Box @ optional */
-    isom_cspc_t *cspc;          /* Colorspace Box @ optional */
-    isom_sgbt_t *sgbt;          /* Significant Bits Box @ optional */
-    /* ISO Base Media extension */
-    isom_stsl_t *stsl;          /* Sample Scale Box @ optional */
-    /* common extensions
-     * For maximum compatibility, these boxes should follow, not precede, any boxes defined in or required by derived specifications. */
-    isom_clap_t *clap;          /* Clean Aperture Box @ optional */
-    isom_pasp_t *pasp;          /* Pixel Aspect Ratio Box @ optional */
-
-        uint32_t exdata_length;
-        void *exdata;
 } isom_visual_entry_t;
 
 /* Format Box
@@ -626,6 +642,7 @@ typedef struct
 } isom_terminator_t;
 
 /* Sound Information Decompression Parameters Box
+ * This box is defined in QuickTime file format.
  * This box provides the ability to store data specific to a given audio decompressor in the sound description.
  * The contents of this box are dependent on the audio decompressor. */
 typedef struct
@@ -634,14 +651,11 @@ typedef struct
     isom_frma_t       *frma;            /* Format Box */
     isom_enda_t       *enda;            /* Audio Endian Box */
     isom_mp4a_t       *mp4a;            /* MPEG-4 Audio Box */
-    isom_esds_t       *esds;            /* ES Descriptor Box */
     isom_terminator_t *terminator;      /* Terminator Box */
-
-        uint32_t exdata_length;
-        void *exdata;
 } isom_wave_t;
 
-/* Audio Channel Layout Box */
+/* Audio Channel Layout Box
+ * This box is defined in QuickTime file format or Apple Lossless Audio inside ISO Base Media. */
 typedef struct
 {
     uint32_t channelLabel;          /* the channelLabel that describes the channel */
@@ -708,13 +722,7 @@ typedef struct
     uint32_t formatSpecificFlags;
     uint32_t constBytesPerAudioPacket;          /* only set if constant */
     uint32_t constLPCMFramesPerAudioPacket;     /* only set if constant */
-    /* extensions */
-    isom_esds_t *esds;      /* ISOM: ES Descriptor Box / QTFF: null */
-    isom_wave_t *wave;      /* ISOM: null / QTFF: Sound Information Decompression Parameters Box */
-    isom_chan_t *chan;      /* ISOM: null / QTFF: Audio Channel Layout Box @ optional */
 
-        uint32_t exdata_length;
-        void *exdata;
         lsmash_audio_summary_t summary;
 } isom_audio_entry_t;
 
@@ -2025,53 +2033,6 @@ enum qt_color_patameter_type
     QT_COLOR_PARAMETER_TYPE_PROF = LSMASH_4CC( 'p', 'r', 'o', 'f' ),      /* ICC profile */
 };
 
-/* QuickTime Audio flags */
-enum qt_compression_id
-{
-    QT_COMPRESSION_ID_NOT_COMPRESSED            = 0,
-    QT_COMPRESSION_ID_FIXED_COMPRESSION         = -1,
-    QT_COMPRESSION_ID_VARIABLE_COMPRESSION      = -2,
-    QT_COMPRESSION_ID_TWO_TO_ONE                = 1,
-    QT_COMPRESSION_ID_EIGHT_TO_THREE            = 2,
-    QT_COMPRESSION_ID_THREE_TO_ONE              = 3,
-    QT_COMPRESSION_ID_SIX_TO_ONE                = 4,
-    QT_COMPRESSION_ID_SIX_TO_ONE_PACKET_SIZE    = 8,
-    QT_COMPRESSION_ID_THREE_TO_ONE_PACKET_SIZE  = 16,
-};
-
-enum qt_audio_format_flags
-{
-    QT_AUDIO_FORMAT_FLAG_FLOAT            = 1,      /* Set for floating point, clear for integer. */
-    QT_AUDIO_FORMAT_FLAG_BIG_ENDIAN       = 1<<1,   /* Set for big endian, clear for little endian. */
-    QT_AUDIO_FORMAT_FLAG_SIGNED_INTEGER   = 1<<2,   /* Set for signed integer, clear for unsigned integer.
-                                                     * This is only valid if QT_AUDIO_FORMAT_FLAG_FLOAT is clear. */
-    QT_AUDIO_FORMAT_FLAG_PACKED           = 1<<3,   /* Set if the sample bits occupy the entire available bits for the channel,
-                                                     * clear if they are high or low aligned within the channel. */
-    QT_AUDIO_FORMAT_FLAG_ALIGNED_HIGH     = 1<<4,   /* Set if the sample bits are placed into the high bits of the channel, clear for low bit placement.
-                                                     * This is only valid if QT_AUDIO_FORMAT_FLAG_PACKED is clear. */
-    QT_AUDIO_FORMAT_FLAG_NON_INTERLEAVED  = 1<<5,   /* Set if the samples for each channel are located contiguously and the channels are layed out end to end,
-                                                     * clear if the samples for each frame are layed out contiguously and the frames layed out end to end. */
-    QT_AUDIO_FORMAT_FLAG_NON_MIXABLE      = 1<<6,   /* Set to indicate when a format is non-mixable.
-                                                     * Note that this flag is only used when interacting with the HAL's stream format information.
-                                                     * It is not a valid flag for any other uses. */
-    QT_AUDIO_FORMAT_FLAG_ALL_CLEAR        = 1<<31,  /* Set if all the flags would be clear in order to preserve 0 as the wild card value. */
-
-    QT_LPCM_FORMAT_FLAG_FLOAT             = QT_AUDIO_FORMAT_FLAG_FLOAT,
-    QT_LPCM_FORMAT_FLAG_BIG_ENDIAN        = QT_AUDIO_FORMAT_FLAG_BIG_ENDIAN,
-    QT_LPCM_FORMAT_FLAG_SIGNED_INTEGER    = QT_AUDIO_FORMAT_FLAG_SIGNED_INTEGER,
-    QT_LPCM_FORMAT_FLAG_PACKED            = QT_AUDIO_FORMAT_FLAG_PACKED,
-    QT_LPCM_FORMAT_FLAG_ALIGNED_HIGH      = QT_AUDIO_FORMAT_FLAG_ALIGNED_HIGH,
-    QT_LPCM_FORMAT_FLAG_NON_INTERLEAVED   = QT_AUDIO_FORMAT_FLAG_NON_INTERLEAVED,
-    QT_LPCM_FORMAT_FLAG_NON_MIXABLE       = QT_AUDIO_FORMAT_FLAG_NON_MIXABLE,
-    QT_LPCM_FORMAT_FLAG_ALL_CLEAR         = QT_AUDIO_FORMAT_FLAG_ALL_CLEAR,
-
-    /* These flags are set for Apple Lossless data that was sourced from N bit native endian signed integer data. */
-    QT_ALAC_FORMAT_FLAG_16BIT_SOURCE_DATA = 1,
-    QT_ALAC_FORMAT_FLAG_20BIT_SOURCE_DATA = 2,
-    QT_ALAC_FORMAT_FLAG_24BIT_SOURCE_DATA = 3,
-    QT_ALAC_FORMAT_FLAG_32BIT_SOURCE_DATA = 4,
-};
-
 /* Sample grouping types */
 typedef enum
 {
@@ -2148,6 +2109,7 @@ void isom_remove_cspc( isom_cspc_t *cspc );
 void isom_remove_fiel( isom_fiel_t *fiel );
 void isom_remove_sgbt( isom_sgbt_t *sgbt );
 void isom_remove_stsl( isom_stsl_t *stsl );
+void isom_remove_esds( isom_esds_t *esds );
 void isom_remove_avcC( isom_avcC_t *avcC );
 void isom_remove_btrt( isom_btrt_t *btrt );
 void isom_remove_frma( isom_frma_t *frma );
@@ -2163,12 +2125,12 @@ void isom_remove_data( isom_data_t *data );
 void isom_remove_metaitem( isom_metaitem_t *metaitem );
 void isom_remove_ilst( isom_ilst_t *ilst );
 void isom_remove_sample_description( isom_sample_entry_t *sample );
+void isom_remove_unknown_box( isom_unknown_box_t *unknown_box );
 
 #define isom_create_box( box_name, parent_name, box_4cc ) \
-    isom_##box_name##_t *(box_name) = malloc( sizeof(isom_##box_name##_t) ); \
+    isom_##box_name##_t *(box_name) = lsmash_malloc_zero( sizeof(isom_##box_name##_t) ); \
     if( !box_name ) \
         return -1; \
-    memset( box_name, 0, sizeof(isom_##box_name##_t) ); \
     isom_init_box_common( box_name, parent_name, box_4cc )
 
 #define isom_create_list_box( box_name, parent_name, box_4cc ) \

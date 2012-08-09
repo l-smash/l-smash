@@ -573,7 +573,7 @@ static int mp4a_get_ALSSpecificConfig( lsmash_bits_t *bits, mp4a_AudioSpecificCo
     return 0;
 }
 
-static mp4a_AudioSpecificConfig_t * mp4a_get_AudioSpecificConfig( lsmash_bits_t *bits, uint8_t *dsi_payload, uint32_t dsi_payload_length )
+static mp4a_AudioSpecificConfig_t *mp4a_get_AudioSpecificConfig( lsmash_bits_t *bits, uint8_t *dsi_payload, uint32_t dsi_payload_length )
 {
     if( lsmash_bits_import_data( bits, dsi_payload, dsi_payload_length ) )
         return NULL;
@@ -635,8 +635,6 @@ int mp4a_setup_summary_from_AudioSpecificConfig( lsmash_audio_summary_t *summary
     summary->sample_type            = ISOM_CODEC_TYPE_MP4A_AUDIO;
     summary->object_type_indication = MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3;
     summary->stream_type            = MP4SYS_STREAM_TYPE_AudioStream;
-    summary->exdata                 = NULL;
-    summary->exdata_length          = 0;
     summary->aot                    = asc->audioObjectType;
     switch( asc->audioObjectType )
     {
@@ -676,7 +674,7 @@ int mp4a_setup_summary_from_AudioSpecificConfig( lsmash_audio_summary_t *summary
                 summary->channels = asc->channelConfiguration != 7 ? asc->channelConfiguration : 8;
             else
                 summary->channels = 0;      /* reserved */
-            summary->bit_depth = 16;
+            summary->sample_size = 16;
             switch( asc->audioObjectType )
             {
                 case MP4A_AUDIO_OBJECT_TYPE_AAC_SSR :
@@ -699,7 +697,7 @@ int mp4a_setup_summary_from_AudioSpecificConfig( lsmash_audio_summary_t *summary
             mp4a_ALSSpecificConfig_t *alssc = (mp4a_ALSSpecificConfig_t *)asc->deepAudioSpecificConfig;
             summary->frequency        = alssc->samp_freq;
             summary->channels         = alssc->channels + 1;
-            summary->bit_depth        = (alssc->resolution + 1) * 8;
+            summary->sample_size      = (alssc->resolution + 1) * 8;
             summary->samples_in_frame = alssc->frame_length + 1;
             break;
         }
@@ -759,7 +757,7 @@ mp4a_audioProfileLevelIndication mp4a_get_audioProfileLevelIndication( lsmash_au
         break;
     case MP4A_AUDIO_OBJECT_TYPE_ALS:
         /* FIXME: this is not stricly. Summary shall carry max_order, block_switching, bgmc_mode and RLSLMS. */
-        if( summary->channels <= 2 && summary->frequency <= 48000 && summary->bit_depth <= 16 && summary->samples_in_frame <= 4096 )
+        if( summary->channels <= 2 && summary->frequency <= 48000 && summary->sample_size <= 16 && summary->samples_in_frame <= 4096 )
             pli = MP4A_AUDIO_PLI_ALS_Simple_L1;
         else
             pli = MP4A_AUDIO_PLI_NOT_SPECIFIED;

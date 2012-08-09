@@ -553,7 +553,7 @@ static int mp4sys_put_descriptor_header( lsmash_bs_t *bs, mp4sys_descriptor_head
     return 0;
 }
 
-static int mp4sys_write_DecoderSpecificInfo( lsmash_bs_t *bs, mp4sys_DecoderSpecificInfo_t* dsi )
+static int mp4sys_put_DecoderSpecificInfo( lsmash_bs_t *bs, mp4sys_DecoderSpecificInfo_t* dsi )
 {
     debug_if( !bs )
         return -1;
@@ -563,10 +563,10 @@ static int mp4sys_write_DecoderSpecificInfo( lsmash_bs_t *bs, mp4sys_DecoderSpec
         return -1;
     if( dsi->data && dsi->header.size != 0 )
         lsmash_bs_put_bytes( bs, dsi->header.size, dsi->data );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
-static int mp4sys_write_DecoderConfigDescriptor( lsmash_bs_t *bs, mp4sys_DecoderConfigDescriptor_t* dcd )
+static int mp4sys_put_DecoderConfigDescriptor( lsmash_bs_t *bs, mp4sys_DecoderConfigDescriptor_t* dcd )
 {
     debug_if( !bs )
         return -1;
@@ -583,13 +583,11 @@ static int mp4sys_write_DecoderConfigDescriptor( lsmash_bs_t *bs, mp4sys_Decoder
     lsmash_bs_put_be24( bs, dcd->bufferSizeDB );
     lsmash_bs_put_be32( bs, dcd->maxBitrate );
     lsmash_bs_put_be32( bs, dcd->avgBitrate );
-    if( lsmash_bs_write_data( bs ) )
-        return -1;
-    return mp4sys_write_DecoderSpecificInfo( bs, dcd->decSpecificInfo );
+    return mp4sys_put_DecoderSpecificInfo( bs, dcd->decSpecificInfo );
     /* here, profileLevelIndicationIndexDescriptor is omitted */
 }
 
-static int mp4sys_write_SLConfigDescriptor( lsmash_bs_t *bs, mp4sys_SLConfigDescriptor_t* slcd )
+static int mp4sys_put_SLConfigDescriptor( lsmash_bs_t *bs, mp4sys_SLConfigDescriptor_t* slcd )
 {
     debug_if( !bs )
         return -1;
@@ -639,10 +637,10 @@ static int mp4sys_write_SLConfigDescriptor( lsmash_bs_t *bs, mp4sys_SLConfigDesc
         lsmash_bits_put_align( bits );
         lsmash_bits_cleanup( bits );
     }
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
-int mp4sys_write_ES_Descriptor( lsmash_bs_t *bs, mp4sys_ES_Descriptor_t* esd )
+int mp4sys_put_ES_Descriptor( lsmash_bs_t *bs, mp4sys_ES_Descriptor_t *esd )
 {
     if( !bs || !esd )
         return -1;
@@ -665,11 +663,16 @@ int mp4sys_write_ES_Descriptor( lsmash_bs_t *bs, mp4sys_ES_Descriptor_t* esd )
     if( esd->OCRstreamFlag )
         lsmash_bs_put_be16( bs, esd->OCR_ES_Id );
     /* here, some syntax elements are omitted due to previous flags (all 0) */
-    if( lsmash_bs_write_data( bs ) )
+    if( mp4sys_put_DecoderConfigDescriptor( bs, esd->decConfigDescr ) )
         return -1;
-    if( mp4sys_write_DecoderConfigDescriptor( bs, esd->decConfigDescr ) )
+    return mp4sys_put_SLConfigDescriptor( bs, esd->slConfigDescr );
+}
+
+int mp4sys_write_ES_Descriptor( lsmash_bs_t *bs, mp4sys_ES_Descriptor_t *esd )
+{
+    if( mp4sys_put_ES_Descriptor( bs, esd ) )
         return -1;
-    return mp4sys_write_SLConfigDescriptor( bs, esd->slConfigDescr );
+    return lsmash_bs_write_data( bs );
 }
 
 static int mp4sys_put_ES_ID_Inc( lsmash_bs_t *bs, mp4sys_ES_ID_Inc_t* es_id_inc )

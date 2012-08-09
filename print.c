@@ -812,7 +812,7 @@ static int isom_print_cspc( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
     isom_print_box_common( fp, indent++, box, "Colorspace Box" );
     static const struct
     {
-        lsmash_pixel_format pixel_format;
+        lsmash_qt_pixel_format pixel_format;
         char *description;
     } unprintable_pixel_format_table[] =
         {
@@ -859,15 +859,15 @@ static int isom_print_stsl( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
     isom_print_box_common( fp, indent++, box, "Sample Scale Box" );
     isom_ifprintf( fp, indent, "constraint_flag = %s\n", (stsl->constraint_flag & 0x01) ? "on" : "off" );
     isom_ifprintf( fp, indent, "scale_method = " );
-    if( stsl->scale_method == ISOM_SCALING_METHOD_FILL )
+    if( stsl->scale_method == ISOM_SCALE_METHOD_FILL )
         fprintf( fp, "'fill'\n" );
-    else if( stsl->scale_method == ISOM_SCALING_METHOD_HIDDEN )
+    else if( stsl->scale_method == ISOM_SCALE_METHOD_HIDDEN )
         fprintf( fp, "'hidden'\n" );
-    else if( stsl->scale_method == ISOM_SCALING_METHOD_MEET )
+    else if( stsl->scale_method == ISOM_SCALE_METHOD_MEET )
         fprintf( fp, "'meet'\n" );
-    else if( stsl->scale_method == ISOM_SCALING_METHOD_SLICE_X )
+    else if( stsl->scale_method == ISOM_SCALE_METHOD_SLICE_X )
         fprintf( fp, "'slice' in the x-coodinate\n" );
-    else if( stsl->scale_method == ISOM_SCALING_METHOD_SLICE_Y )
+    else if( stsl->scale_method == ISOM_SCALE_METHOD_SLICE_Y )
         fprintf( fp, "'slice' in the y-coodinate\n" );
     isom_ifprintf( fp, indent, "display_center_x = %"PRIu16"\n", stsl->display_center_x );
     isom_ifprintf( fp, indent, "display_center_y = %"PRIu16"\n", stsl->display_center_y );
