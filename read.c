@@ -855,6 +855,32 @@ static int isom_read_stsd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     return ret;
 }
 
+static int isom_read_codec_specific( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    uint32_t exdata_length;
+    void *exdata = lsmash_bs_export_data( bs, &exdata_length );
+    if( (!exdata && exdata_length) || exdata_length != box->size )
+        return -1;
+    isom_extension_box_t *ext = malloc( sizeof(isom_extension_box_t) );
+    if( !ext )
+    {
+        free( exdata );
+        return -1;
+    }
+    ext->format      = EXTENSION_FORMAT_BINARY;
+    ext->form.binary = exdata;
+    ext->destruct    = exdata ? free : NULL;
+    isom_basebox_common_copy( (isom_box_t *)ext, box );
+    if( lsmash_add_entry( &parent->extensions, ext ) )
+    {
+        isom_remove_sample_description_extension( ext );
+        return -1;
+    }
+    return isom_add_print_func( root, ext, level );
+}
+
 static void *isom_sample_description_alloc( uint32_t sample_type )
 {
     switch( sample_type )
@@ -1252,108 +1278,6 @@ static int isom_read_stsl( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     box->size = lsmash_bs_get_pos( bs );
     isom_box_common_copy( stsl, box );
     return isom_add_print_func( root, stsl, level );
-}
-
-#if 0
-static int isom_read_avcC_ps( lsmash_bs_t *bs, lsmash_entry_list_t *list, uint8_t entry_count )
-{
-    if( !list )
-        return -1;
-    for( uint8_t i = 0; i < entry_count; i++ )
-    {
-        isom_avcC_ps_entry_t *data = malloc( sizeof(isom_avcC_ps_entry_t) );
-        if( !data || lsmash_add_entry( list, data ) )
-            return -1;      /* don't free list, here */
-        data->parameterSetLength  = lsmash_bs_get_be16( bs );
-        data->parameterSetNALUnit = lsmash_bs_get_bytes( bs, data->parameterSetLength );
-        if( !data->parameterSetNALUnit )
-            return -1;      /* don't free list, here */
-    }
-    return 0;
-}
-
-static int isom_read_avcC( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
-{
-    if( ((isom_visual_entry_t *)parent)->avcC )
-        return isom_read_unknown_box( root, box, parent, level );
-    isom_create_box( avcC, parent, box->type );
-    isom_visual_entry_t *visual = (isom_visual_entry_t *)parent;
-    visual->avcC = avcC;
-    lsmash_bs_t *bs = root->bs;
-    isom_read_box_rest( bs, box );
-    avcC->configurationVersion       = lsmash_bs_get_byte( bs );
-    avcC->AVCProfileIndication       = lsmash_bs_get_byte( bs );
-    avcC->profile_compatibility      = lsmash_bs_get_byte( bs );
-    avcC->AVCLevelIndication         = lsmash_bs_get_byte( bs );
-    avcC->lengthSizeMinusOne         = lsmash_bs_get_byte( bs );
-    avcC->numOfSequenceParameterSets = lsmash_bs_get_byte( bs );
-    if( avcC->numOfSequenceParameterSets & 0x1f )
-    {
-        avcC->sequenceParameterSets = lsmash_create_entry_list();
-        if( !avcC->sequenceParameterSets ||
-            isom_read_avcC_ps( bs, avcC->sequenceParameterSets, avcC->numOfSequenceParameterSets & 0x1f ) )
-            goto fail;
-    }
-    avcC->numOfPictureParameterSets  = lsmash_bs_get_byte( bs );
-    if( avcC->numOfPictureParameterSets )
-    {
-        avcC->pictureParameterSets = lsmash_create_entry_list();
-        if( !avcC->pictureParameterSets ||
-            isom_read_avcC_ps( bs, avcC->pictureParameterSets, avcC->numOfPictureParameterSets ) )
-            goto fail;
-    }
-    /* Note: there are too many files, in the world, that don't contain the following fields.*/
-    if( ISOM_REQUIRES_AVCC_EXTENSION( avcC->AVCProfileIndication ) && lsmash_bs_get_pos( bs ) < box->size )
-    {
-        avcC->chroma_format                = lsmash_bs_get_byte( bs );
-        avcC->bit_depth_luma_minus8        = lsmash_bs_get_byte( bs );
-        avcC->bit_depth_chroma_minus8      = lsmash_bs_get_byte( bs );
-        avcC->numOfSequenceParameterSetExt = lsmash_bs_get_byte( bs );
-        if( avcC->numOfSequenceParameterSetExt )
-        {
-            avcC->sequenceParameterSetExt = lsmash_create_entry_list();
-            if( !avcC->sequenceParameterSetExt ||
-                isom_read_avcC_ps( bs, avcC->sequenceParameterSetExt, avcC->numOfSequenceParameterSetExt ) )
-                goto fail;
-        }
-    }
-    box->size = lsmash_bs_get_pos( bs );
-    isom_box_common_copy( avcC, box );
-    return isom_add_print_func( root, avcC, level );
-fail:
-    lsmash_remove_list( avcC->sequenceParameterSets,   isom_remove_avcC_ps );
-    lsmash_remove_list( avcC->pictureParameterSets,    isom_remove_avcC_ps );
-    lsmash_remove_list( avcC->sequenceParameterSetExt, isom_remove_avcC_ps );
-    free( avcC );
-    visual->avcC = NULL;
-    return -1;
-}
-#endif
-
-static int isom_read_codec_specific( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
-{
-    lsmash_bs_t *bs = root->bs;
-    isom_read_box_rest( bs, box );
-    uint32_t exdata_length;
-    void *exdata = lsmash_bs_export_data( bs, &exdata_length );
-    if( (!exdata && exdata_length) || exdata_length != box->size )
-        return -1;
-    isom_extension_box_t *ext = malloc( sizeof(isom_extension_box_t) );
-    if( !ext )
-    {
-        free( exdata );
-        return -1;
-    }
-    ext->format      = EXTENSION_FORMAT_BINARY;
-    ext->form.binary = exdata;
-    ext->destruct    = exdata ? free : NULL;
-    isom_basebox_common_copy( (isom_box_t *)ext, box );
-    if( lsmash_add_entry( &parent->extensions, ext ) )
-    {
-        isom_remove_sample_description_extension( ext );
-        return -1;
-    }
-    return isom_add_print_func( root, ext, level );
 }
 
 static int isom_read_audio_description( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
@@ -2897,6 +2821,8 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
                 return isom_read_enda( root, box, parent, level );
             case ISOM_BOX_TYPE_ESDS :
                 return isom_read_esds( root, box, parent, level );
+            case QT_BOX_TYPE_CHAN :
+                return isom_read_chan( root, box, parent, level );
             case QT_BOX_TYPE_TERMINATOR :
                 return isom_read_terminator( root, box, parent, level );
             default :

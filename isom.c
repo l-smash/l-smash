@@ -173,6 +173,22 @@ void isom_init_box_common( void *box, void *parent, uint32_t type )
         isom_init_basebox_common( (isom_box_t *)box, (isom_box_t *)parent, type );
 }
 
+uint32_t isom_skip_box_common( uint8_t **p_data )
+{
+    uint8_t *orig = *p_data;
+    uint8_t *data = *p_data;
+    uint64_t size = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+    data += ISOM_BASEBOX_COMMON_SIZE;
+    if( size == 1 )
+    {
+        size = ((uint64_t)data[0] << 56) | ((uint64_t)data[1] << 48) | ((uint64_t)data[2] << 40) | ((uint64_t)data[3] << 32)
+             | ((uint64_t)data[4] << 24) | ((uint64_t)data[5] << 16) | ((uint64_t)data[6] <<  8) |  (uint64_t)data[7];
+        data += 8;
+    }
+    *p_data = data;
+    return data - orig;
+}
+
 isom_trak_entry_t *isom_get_trak( lsmash_root_t *root, uint32_t track_ID )
 {
     if( !track_ID || !root || !root->moov || !root->moov->trak_list )

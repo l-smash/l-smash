@@ -1002,8 +1002,6 @@ static void mp4sys_ac3_cleanup( mp4sys_importer_t *importer )
         mp4sys_remove_ac3_info( importer->info );
 }
 
-static const uint32_t ac3_sample_rate_table[4] = { 48000, 44100, 32000, 0 };
-
 static const uint32_t ac3_frame_size_table[19][3] =
 {
     /*  48,  44.1,    32 */

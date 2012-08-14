@@ -24,8 +24,44 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h>
 
 #include "box.h"
+
+static const char *bit_stream_mode[] =
+    {
+        "Main audio service: complete main (CM)",
+        "Main audio service: music and effects (ME)",
+        "Associated service: visually impaired (VI)",
+        "Associated service: hearing impaired (HI)",
+        "Associated service: dialogue (D)",
+        "Associated service: commentary (C)",
+        "Associated service: emergency (E)",
+        "Undefined service",
+        "Associated service: voice over (VO)",  /* only if acmod == 0b001 */
+        "Main audio service: karaoke"
+    };
+
+/* For karaoke mode, C->M, S->V1, SL->V1 and SR->V2. */
+static const char *audio_coding_mode[] =
+    {
+        "1 + 1: Dual mono",
+        "1/0: C",
+        "2/0: L, R",
+        "3/0: L, C, R",
+        "2/1: L, R, S",
+        "3/1: L, C, R, S",
+        "2/2: L, R, SL, SR",
+        "3/2: L, C, R, SL, SR",
+        "Undefined audio coding mode",
+        "Undefined audio coding mode",
+        "2/0: L, R",
+        "3/0: L, M, R",
+        "2/1: L, R, V1",
+        "3/1: L, M, R, V1",
+        "2/2: L, R, V1, V2",
+        "3/2: L, M, R, V1, V2"
+    };
 
 /***************************************************************************
     AC-3 tools
@@ -137,6 +173,44 @@ int ac3_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_code
     param->lfeon      = (data[1] >> 2) & 0x01;                                  /* xxxx xxxx xxxx xXxx xxxx xxxx */
     param->frmsizecod = ((data[1] & 0x03) << 3) | ((data[3] >> 5) & 0x07);      /* xxxx xxxx xxxx xxXX XXXx xxxx */
     param->frmsizecod <<= 1;
+    return 0;
+}
+
+int ac3_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
+{
+    assert( fp && root && box );
+    int indent = level;
+    lsmash_ifprintf( fp, indent++, "[%s: AC3 Specific Box]\n", isom_4cc2str( box->type ) );
+    lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
+    lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
+    if( box->size < AC3_SPECIFIC_BOX_LENGTH )
+        return -1;
+    isom_extension_box_t *ext = (isom_extension_box_t *)box;
+    assert( ext->format == EXTENSION_FORMAT_BINARY );
+    uint8_t *data = ext->form.binary;
+    isom_skip_box_common( &data );
+    uint8_t fscod         = (data[0] >> 6) & 0x03;
+    uint8_t bsid          = (data[0] >> 1) & 0x1F;
+    uint8_t bsmod         = ((data[0] & 0x01) << 2) | ((data[1] >> 6) & 0x03);
+    uint8_t acmod         = (data[1] >> 3) & 0x07;
+    uint8_t lfeon         = (data[1] >> 2) & 0x01;
+    uint8_t bit_rate_code = ((data[1] & 0x03) << 3) | ((data[2] >> 5) & 0x07);
+    if( fscod != 0x03 )
+        lsmash_ifprintf( fp, indent, "fscod = %"PRIu8" (%"PRIu32" Hz)\n", fscod, ac3_sample_rate_table[fscod] );
+    else
+        lsmash_ifprintf( fp, indent, "fscod = 0x03 (reserved)\n" );
+    lsmash_ifprintf( fp, indent, "bsid = %"PRIu8"\n", bsid );
+    lsmash_ifprintf( fp, indent, "bsmod = %"PRIu8" (%s)\n", bsmod, bit_stream_mode[bsmod + (acmod == 0x01 ? 1 : acmod > 0x01 ? 2 : 0)] );
+    lsmash_ifprintf( fp, indent, "acmod = %"PRIu8" (%s)\n", acmod, audio_coding_mode[acmod + (bsmod == 0x07 ? 8 : 0)] );
+    lsmash_ifprintf( fp, indent, "lfeon = %s\n", lfeon ? "1 (LFE)" : "0" );
+    static const uint32_t bit_rate[] =
+        {
+            32,   40,  48,  56,  64,  80,  96, 112, 128,
+            160, 192, 224, 256, 320, 384, 448, 512, 576, 640,
+            0   /* undefined */
+        };
+    lsmash_ifprintf( fp, indent, "bit_rate_code = 0x%02"PRIx8" (%"PRIu32" kbit/s)\n", bit_rate_code, bit_rate[bit_rate_code] );
+    lsmash_ifprintf( fp, indent, "reserved = 0x%02"PRIx8"\n", data[2] & 0x1F );
     return 0;
 }
 
@@ -441,9 +515,10 @@ void eac3_update_specific_param( eac3_info_t *info )
     info->dec3_param_initialized = 1;
 }
 
+#define EAC3_SPECIFIC_BOX_MIN_LENGTH 13
+
 int eac3_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
 {
-#define EAC3_SPECIFIC_BOX_MIN_LENGTH 13
     assert( dst && dst->data.structured && src && src->data.unstructured );
     if( src->size < EAC3_SPECIFIC_BOX_MIN_LENGTH )
         return -1;
@@ -486,5 +561,73 @@ int eac3_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_cod
         }
     }
     return 0;
-#undef EAC3_SPECIFIC_BOX_MIN_LENGTH
 }
+
+int eac3_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
+{
+    assert( fp && root && box );
+    int indent = level;
+    lsmash_ifprintf( fp, indent++, "[%s: EC3 Specific Box]\n", isom_4cc2str( box->type ) );
+    lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
+    lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
+    if( box->size < EAC3_SPECIFIC_BOX_MIN_LENGTH )
+        return -1;
+    isom_extension_box_t *ext = (isom_extension_box_t *)box;
+    assert( ext->format == EXTENSION_FORMAT_BINARY );
+    uint8_t *data = ext->form.binary;
+    isom_skip_box_common( &data );
+    lsmash_ifprintf( fp, indent, "data_rate = %"PRIu16" kbit/s\n", (data[0] << 5) | ((data[1] >> 3) & 0x1F) );
+    uint8_t num_ind_sub = data[1] & 0x07;
+    lsmash_ifprintf( fp, indent, "num_ind_sub = %"PRIu8"\n", num_ind_sub );
+    data += 2;
+    for( int i = 0; i <= num_ind_sub; i++ )
+    {
+        lsmash_ifprintf( fp, indent, "independent_substream[%d]\n", i );
+        int sub_indent = indent + 1;
+        uint8_t fscod       = (data[0] >> 6) & 0x03;
+        uint8_t bsid        = (data[0] >> 1) & 0x1F;
+        uint8_t bsmod       = ((data[0] & 0x01) << 4) | ((data[1] >> 4) & 0x0F);
+        uint8_t acmod       = (data[1] >> 1) & 0x07;
+        uint8_t lfeon       = data[1] & 0x01;
+        uint8_t num_dep_sub = (data[2] >> 1) & 0x0F;
+        if( fscod != 0x03 )
+            lsmash_ifprintf( fp, sub_indent, "fscod = %"PRIu8" (%"PRIu32" Hz)\n", fscod, ac3_sample_rate_table[fscod] );
+        else
+            lsmash_ifprintf( fp, sub_indent, "fscod = 0x03 (reduced sample rate)\n" );
+        lsmash_ifprintf( fp, sub_indent, "bsid = %"PRIu8"\n", bsid );
+        if( bsmod < 0x08 )
+            lsmash_ifprintf( fp, sub_indent, "bsmod = %"PRIu8" (%s)\n", bsmod, bit_stream_mode[bsmod + (acmod == 0x01 ? 1 : acmod > 0x01 ? 2 : 0)] );
+        else
+            lsmash_ifprintf( fp, sub_indent, "bsmod = %"PRIu8" (Undefined service)\n" );
+        lsmash_ifprintf( fp, sub_indent, "acmod = %"PRIu8" (%s)\n", acmod, audio_coding_mode[acmod + (bsmod == 0x07 ? 8 : 0)] );
+        lsmash_ifprintf( fp, sub_indent, "lfeon = %s\n", lfeon ? "1 (LFE)" : "0" );
+        lsmash_ifprintf( fp, sub_indent, "num_dep_sub = %"PRIu8"\n", num_dep_sub );
+        data += 3;
+        if( num_dep_sub > 0 )
+        {
+            static const char *channel_location[] =
+                {
+                    "LFE2",
+                    "Cvh",
+                    "Lvh/Rvh pair",
+                    "Lw/Rw pair",
+                    "Lsd/Rsd pair",
+                    "Ts",
+                    "Cs",
+                    "Lrs/Rrs pair",
+                    "Lc/Rc pair"
+                };
+            uint16_t chan_loc = ((data[-1] & 0x01) << 8) | data[0];
+            lsmash_ifprintf( fp, sub_indent, "chan_loc = 0x%04"PRIu16"\n", chan_loc );
+            for( int j = 0; j < 9; j++ )
+                if( (chan_loc >> j & 0x01) )
+                    lsmash_ifprintf( fp, sub_indent + 1, "%s\n", channel_location[j] );
+            data += 1;
+        }
+        else
+            lsmash_ifprintf( fp, sub_indent, "reserved = %"PRIu8"\n", data[2] & 0x01 );
+    }
+    return 0;
+}
+
+#undef EAC3_SPECIFIC_BOX_MIN_LENGTH

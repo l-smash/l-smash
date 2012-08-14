@@ -2056,6 +2056,7 @@ int isom_is_lpcm_audio( void *box );
 int isom_is_uncompressed_ycbcr( uint32_t type );
 
 void isom_init_box_common( void *box, void *parent, uint32_t type );
+uint32_t isom_skip_box_common( uint8_t **p_data );
 
 int isom_check_compatibility( lsmash_root_t *root );
 

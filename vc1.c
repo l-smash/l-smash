@@ -24,6 +24,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <inttypes.h>
 
 #include "box.h"
 
@@ -880,6 +881,57 @@ int vc1_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_code
         ephdr->ebdu = lsmash_memdup( data, ephdr->ebdu_size );
         if( !ephdr->ebdu )
             return -1;
+    }
+    return 0;
+}
+
+int vc1_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
+{
+    assert( fp && root && box );
+    int indent = level;
+    lsmash_ifprintf( fp, indent++, "[%s: VC1 Specific Box]\n", isom_4cc2str( box->type ) );
+    lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
+    lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
+    if( box->size < ISOM_BASEBOX_COMMON_SIZE + 7 )
+        return -1;
+    isom_extension_box_t *ext = (isom_extension_box_t *)box;
+    assert( ext->format == EXTENSION_FORMAT_BINARY );
+    uint8_t *data = ext->form.binary;
+    isom_skip_box_common( &data );
+    uint8_t profile = (data[0] >> 4) & 0x0F;
+    if( profile != 12 )
+        return 0;   /* We don't support profile other than 12 (Advanced profile). */
+    lsmash_ifprintf( fp, indent, "profile = %"PRIu8"\n", profile );
+    lsmash_ifprintf( fp, indent, "level = %"PRIu8"\n", (data[0] >> 1) & 0x07 );
+    lsmash_ifprintf( fp, indent, "reserved = %"PRIu8"\n", data[0] & 0x01 );
+    lsmash_ifprintf( fp, indent, "level = %"PRIu8"\n", (data[1] >> 5) & 0x07 );
+    lsmash_ifprintf( fp, indent, "cbr = %"PRIu8"\n", (data[1] >> 4) & 0x01 );
+    lsmash_ifprintf( fp, indent, "reserved1 = 0x%02"PRIx8"\n", (data[1] & 0x0F) | ((data[2] >> 6) & 0x03) );
+    lsmash_ifprintf( fp, indent, "no_interlace = %"PRIu8"\n", (data[2] >> 5) & 0x01 );
+    lsmash_ifprintf( fp, indent, "no_multiple_seq = %"PRIu8"\n", (data[2] >> 4) & 0x01 );
+    lsmash_ifprintf( fp, indent, "no_multiple_entry = %"PRIu8"\n", (data[2] >> 3) & 0x01 );
+    lsmash_ifprintf( fp, indent, "no_slice_code = %"PRIu8"\n", (data[2] >> 2) & 0x01 );
+    lsmash_ifprintf( fp, indent, "no_bframe = %"PRIu8"\n", (data[2] >> 1) & 0x01 );
+    lsmash_ifprintf( fp, indent, "reserved2 = %"PRIu8"\n", data[2] & 0x01 );
+    uint32_t framerate = (data[3] << 24) | (data[4] << 16) | (data[5] << 8) | data[6];
+    lsmash_ifprintf( fp, indent, "framerate = %"PRIu32"\n", framerate );
+    uint32_t seqhdr_ephdr_size = box->size - (data - ext->form.binary + 7);
+    if( seqhdr_ephdr_size )
+    {
+        lsmash_ifprintf( fp, indent, "seqhdr_ephdr[]\n" );
+        data += 7;
+        for( uint32_t i = 0; i < seqhdr_ephdr_size; i += 8 )
+        {
+            lsmash_ifprintf( fp, indent + 1, "" );
+            for( uint32_t j = 0; ; j++ )
+                if( j == 7 || (i + j == seqhdr_ephdr_size - 1) )
+                {
+                    fprintf( fp, "0x%02"PRIx8"\n", data[i + j] );
+                    break;
+                }
+                else
+                    fprintf( fp, "0x%02"PRIx8" ", data[i + j] );
+        }
     }
     return 0;
 }

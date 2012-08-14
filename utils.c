@@ -800,6 +800,35 @@ uint32_t lsmash_count_bits( uint32_t bits )
     return (bits & 0x0000ffff) + ((bits >> 16) & 0x0000ffff);
 }
 
+void lsmash_ifprintf( FILE *fp, int indent, const char *format, ... )
+{
+    va_list args;
+    va_start( args, format );
+    if( indent <= 10 )
+    {
+        static const char *indent_string[] =
+            {
+                "",
+                "    ",
+                "        ",
+                "            ",
+                "                ",
+                "                    ",
+                "                        ",
+                "                            ",
+                "                                ",
+                "                                    ",
+                "                                        "
+            };
+        fprintf( fp, indent_string[indent] );
+    }
+    else
+        for( int i = 0; i < indent; i++ )
+            fprintf( fp, "    " );
+    vfprintf( fp, format, args );
+    va_end( args );
+}
+
 /* for qsort function */
 int lsmash_compare_dts( const lsmash_media_ts_t *a, const lsmash_media_ts_t *b )
 {

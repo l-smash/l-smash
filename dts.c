@@ -24,12 +24,18 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h>
 
 #include "box.h"
 
 /***************************************************************************
     ETSI TS 102 114 V1.2.1 (2002-12)
     ETSI TS 102 114 V1.3.1 (2011-08)
+
+    IMPLEMENTATION OF DTS AUDIO IN MEDIA FILES BASED ON ISO/IEC 14496
+        Document No.: 9302J81100
+        Revision: E
+        Version: 1.3
 ***************************************************************************/
 #include "dts.h"
 
@@ -102,6 +108,32 @@ typedef enum
     DTS_CHANNEL_LAYOUT_LHR_RHR = 0x8000,    /* Left/Right height in rear */
 } dts_channel_layout;
 
+static const lsmash_dts_construction_flag construction_info[DTS_MAX_STREAM_CONSTRUCTION + 1] =
+    {
+        0,
+        DTS_CORE_SUBSTREAM_CORE_FLAG,
+        DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_CORE_SUBSTREAM_XCH_FLAG,
+        DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_CORE_SUBSTREAM_XXCH_FLAG,
+        DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_CORE_SUBSTREAM_X96_FLAG,
+        DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_EXT_SUBSTREAM_XXCH_FLAG,
+        DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_EXT_SUBSTREAM_XBR_FLAG,
+        DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_CORE_SUBSTREAM_XCH_FLAG  | DTS_EXT_SUBSTREAM_XBR_FLAG,
+        DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_CORE_SUBSTREAM_XXCH_FLAG | DTS_EXT_SUBSTREAM_XBR_FLAG,
+        DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_EXT_SUBSTREAM_XXCH_FLAG  | DTS_EXT_SUBSTREAM_XBR_FLAG,
+        DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_EXT_SUBSTREAM_X96_FLAG,
+        DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_CORE_SUBSTREAM_XCH_FLAG  | DTS_EXT_SUBSTREAM_X96_FLAG,
+        DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_CORE_SUBSTREAM_XXCH_FLAG | DTS_EXT_SUBSTREAM_X96_FLAG,
+        DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_EXT_SUBSTREAM_XXCH_FLAG  | DTS_EXT_SUBSTREAM_X96_FLAG,
+        DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_EXT_SUBSTREAM_XLL_FLAG,
+        DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_CORE_SUBSTREAM_XCH_FLAG  | DTS_EXT_SUBSTREAM_XLL_FLAG,
+        DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_CORE_SUBSTREAM_X96_FLAG  | DTS_EXT_SUBSTREAM_XLL_FLAG,
+        DTS_EXT_SUBSTREAM_XLL_FLAG,
+        DTS_EXT_SUBSTREAM_LBR_FLAG,
+        DTS_EXT_SUBSTREAM_CORE_FLAG,
+        DTS_EXT_SUBSTREAM_CORE_FLAG  | DTS_EXT_SUBSTREAM_XXCH_FLAG,
+        DTS_EXT_SUBSTREAM_CORE_FLAG  | DTS_EXT_SUBSTREAM_XLL_FLAG ,
+    };
+
 struct lsmash_dts_reserved_box_tag
 {
     uint32_t size;
@@ -146,31 +178,6 @@ void dts_destruct_specific_data( void *data )
 
 uint8_t lsmash_dts_get_stream_construction( lsmash_dts_construction_flag flags )
 {
-    static const lsmash_dts_construction_flag construction_info[DTS_MAX_STREAM_CONSTRUCTION + 1] =
-        {
-            0,
-            DTS_CORE_SUBSTREAM_CORE_FLAG,
-            DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_CORE_SUBSTREAM_XCH_FLAG,
-            DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_CORE_SUBSTREAM_XXCH_FLAG,
-            DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_CORE_SUBSTREAM_X96_FLAG,
-            DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_EXT_SUBSTREAM_XXCH_FLAG,
-            DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_EXT_SUBSTREAM_XBR_FLAG,
-            DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_CORE_SUBSTREAM_XCH_FLAG  | DTS_EXT_SUBSTREAM_XBR_FLAG,
-            DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_CORE_SUBSTREAM_XXCH_FLAG | DTS_EXT_SUBSTREAM_XBR_FLAG,
-            DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_EXT_SUBSTREAM_XXCH_FLAG  | DTS_EXT_SUBSTREAM_XBR_FLAG,
-            DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_EXT_SUBSTREAM_X96_FLAG,
-            DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_CORE_SUBSTREAM_XCH_FLAG  | DTS_EXT_SUBSTREAM_X96_FLAG,
-            DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_CORE_SUBSTREAM_XXCH_FLAG | DTS_EXT_SUBSTREAM_X96_FLAG,
-            DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_EXT_SUBSTREAM_XXCH_FLAG  | DTS_EXT_SUBSTREAM_X96_FLAG,
-            DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_EXT_SUBSTREAM_XLL_FLAG,
-            DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_CORE_SUBSTREAM_XCH_FLAG  | DTS_EXT_SUBSTREAM_XLL_FLAG,
-            DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_CORE_SUBSTREAM_X96_FLAG  | DTS_EXT_SUBSTREAM_XLL_FLAG,
-            DTS_EXT_SUBSTREAM_XLL_FLAG,
-            DTS_EXT_SUBSTREAM_LBR_FLAG,
-            DTS_EXT_SUBSTREAM_CORE_FLAG,
-            DTS_EXT_SUBSTREAM_CORE_FLAG  | DTS_EXT_SUBSTREAM_XXCH_FLAG,
-            DTS_EXT_SUBSTREAM_CORE_FLAG  | DTS_EXT_SUBSTREAM_XLL_FLAG ,
-        };
     uint8_t StreamConstruction;
     for( StreamConstruction = 1; StreamConstruction <= DTS_MAX_STREAM_CONSTRUCTION; StreamConstruction++ )
         if( flags == construction_info[StreamConstruction] )
@@ -1157,5 +1164,141 @@ int dts_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_code
     int reserved_box_present    = ((data[19] >> 5) & 0x01) && (size > DTS_SPECIFIC_BOX_MIN_LENGTH);
     if( reserved_box_present )
         lsmash_append_dts_reserved_box( param, data + 20, size - DTS_SPECIFIC_BOX_MIN_LENGTH );
+    return 0;
+}
+
+int dts_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
+{
+    assert( fp && root && box );
+    int indent = level;
+    lsmash_ifprintf( fp, indent++, "[%s: DTS Specific Box]\n", isom_4cc2str( box->type ) );
+    lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
+    lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
+    if( box->size < DTS_SPECIFIC_BOX_MIN_LENGTH )
+        return -1;
+    isom_extension_box_t *ext = (isom_extension_box_t *)box;
+    assert( ext->format == EXTENSION_FORMAT_BINARY );
+    uint8_t *data = ext->form.binary;
+    isom_skip_box_common( &data );
+    uint32_t DTSSamplingFrequency = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+    uint32_t maxBitrate           = (data[4] << 24) | (data[5] << 16) | (data[6] << 8) | data[7];
+    uint32_t avgBitrate           = (data[8] << 24) | (data[9] << 16) | (data[10] << 8) | data[11];
+    uint8_t  pcmSampleDepth       = data[12];
+    uint8_t  FrameDuration        = (data[13] >> 6) & 0x03;
+    uint8_t  StreamConstruction   = (data[13] >> 1) & 0x1F;
+    uint8_t  CoreLFEPresent       = data[13] & 0x01;
+    uint8_t  CoreLayout           = (data[14] >> 2) & 0x3F;
+    uint16_t CoreSize             = ((data[14] & 0x03) << 12) | (data[15] << 4) | ((data[16] >> 4) & 0x0F);
+    uint8_t  StereoDownmix        = (data[16] >> 3) & 0x01;
+    uint8_t  RepresentationType   = data[16] & 0x07;
+    uint16_t ChannelLayout        = (data[17] << 8) | data[18];
+    uint8_t  MultiAssetFlag       = (data[19] >> 7) & 0x01;
+    uint8_t  LBRDurationMod       = (data[19] >> 6) & 0x01;
+    uint8_t  ReservedBoxPresent   = (data[19] >> 5) & 0x01;
+    uint8_t  Reserved             = data[19] & 0x1F;
+    uint32_t frame_duration       = 512 << FrameDuration;
+    int      construction_flags   = StreamConstruction <= DTS_MAX_STREAM_CONSTRUCTION ? construction_info[StreamConstruction] : 0;
+    static const char *core_layout_description[64] =
+        {
+            "Mono (1/0)",
+            "Undefined",
+            "Stereo (2/0)",
+            "Undefined",
+            "LT,RT (2/0)",
+            "L, C, R (3/0)",
+            "L, R, S (2/1)",
+            "L, C, R, S (3/1)",
+            "L, R, LS, RS (2/2)",
+            "L, C, R, LS, RS (3/2)",
+            [31] = "use ChannelLayout"
+        };
+    static const char *representation_type_description[8] =
+        {
+            "Audio asset designated for mixing with another audio asset",
+            "Reserved",
+            "Lt/Rt Encoded for matrix surround decoding",
+            "Audio processed for headphone playback",
+            "Reserved",
+            "Reserved",
+            "Reserved",
+            "Reserved"
+        };
+    static const char *channel_layout_description[16] =
+        {
+            "Center in front of listener",
+            "Left/Right in front",
+            "Left/Right surround on side in rear",
+            "Low frequency effects subwoofer",
+            "Center surround in rear",
+            "Left/Right height in front",
+            "Left/Right surround in rear",
+            "Center Height in front",
+            "Over the listenerfs head",
+            "Between left/right and center in front",
+            "Left/Right on side in front",
+            "Left/Right surround on side",
+            "Second low frequency effects subwoofer",
+            "Left/Right height on side",
+            "Center height in rear",
+            "Left/Right height in rear"
+        };
+    lsmash_ifprintf( fp, indent, "DTSSamplingFrequency = %"PRIu32" Hz\n", DTSSamplingFrequency );
+    lsmash_ifprintf( fp, indent, "maxBitrate = %"PRIu32" bit/s\n", maxBitrate );
+    lsmash_ifprintf( fp, indent, "avgBitrate = %"PRIu32" bit/s\n", avgBitrate );
+    lsmash_ifprintf( fp, indent, "pcmSampleDepth = %"PRIu8" bits\n", pcmSampleDepth );
+    lsmash_ifprintf( fp, indent, "FrameDuration = %"PRIu8" (%"PRIu32" samples)\n", FrameDuration, frame_duration );
+    lsmash_ifprintf( fp, indent, "StreamConstruction = 0x%02"PRIx8"\n", StreamConstruction );
+    if( construction_flags & (DTS_CORE_SUBSTREAM_CORE_FLAG | DTS_CORE_SUBSTREAM_XCH_FLAG | DTS_CORE_SUBSTREAM_X96_FLAG | DTS_CORE_SUBSTREAM_XXCH_FLAG) )
+    {
+        lsmash_ifprintf( fp, indent + 1, "Core substream\n" );
+        if( construction_flags & DTS_CORE_SUBSTREAM_CORE_FLAG )
+            lsmash_ifprintf( fp, indent + 2, "Core\n" );
+        if( construction_flags & DTS_CORE_SUBSTREAM_XCH_FLAG )
+            lsmash_ifprintf( fp, indent + 2, "XCH\n" );
+        if( construction_flags & DTS_CORE_SUBSTREAM_X96_FLAG )
+            lsmash_ifprintf( fp, indent + 2, "X96\n" );
+        if( construction_flags & DTS_CORE_SUBSTREAM_XXCH_FLAG )
+            lsmash_ifprintf( fp, indent + 2, "XXCH\n" );
+    }
+    if( construction_flags & (DTS_EXT_SUBSTREAM_CORE_FLAG | DTS_EXT_SUBSTREAM_XXCH_FLAG | DTS_EXT_SUBSTREAM_X96_FLAG
+                            | DTS_EXT_SUBSTREAM_XBR_FLAG | DTS_EXT_SUBSTREAM_XLL_FLAG | DTS_EXT_SUBSTREAM_LBR_FLAG) )
+    {
+        lsmash_ifprintf( fp, indent + 1, "Extension substream\n" );
+        if( construction_flags & DTS_EXT_SUBSTREAM_CORE_FLAG )
+            lsmash_ifprintf( fp, indent + 2, "Core\n" );
+        if( construction_flags & DTS_EXT_SUBSTREAM_XXCH_FLAG )
+            lsmash_ifprintf( fp, indent + 2, "XXCH\n" );
+        if( construction_flags & DTS_EXT_SUBSTREAM_X96_FLAG )
+            lsmash_ifprintf( fp, indent + 2, "X96\n" );
+        if( construction_flags & DTS_EXT_SUBSTREAM_XBR_FLAG )
+            lsmash_ifprintf( fp, indent + 2, "XBR\n" );
+        if( construction_flags & DTS_EXT_SUBSTREAM_XLL_FLAG )
+            lsmash_ifprintf( fp, indent + 2, "XLL\n" );
+        if( construction_flags & DTS_EXT_SUBSTREAM_LBR_FLAG )
+            lsmash_ifprintf( fp, indent + 2, "LBR\n" );
+    }
+    lsmash_ifprintf( fp, indent, "CoreLFEPresent = %s\n", CoreLFEPresent ? "1 (LFE exists)" : "0 (no LFE)" );
+    if( core_layout_description[CoreLayout] )
+        lsmash_ifprintf( fp, indent, "CoreLayout = %"PRIu8" (%s)\n", CoreLayout, core_layout_description[CoreLayout] );
+    else
+        lsmash_ifprintf( fp, indent, "CoreLayout = %"PRIu8" (Undefined)\n", CoreLayout );
+    if( CoreSize )
+        lsmash_ifprintf( fp, indent, "CoreSize = %"PRIu16"\n", CoreSize );
+    else
+        lsmash_ifprintf( fp, indent, "CoreSize = 0 (no core substream exists)\n" );
+    lsmash_ifprintf( fp, indent, "StereoDownmix = %s\n", StereoDownmix ? "1 (embedded downmix present)" : "0 (no embedded downmix)" );
+    lsmash_ifprintf( fp, indent, "RepresentationType = %"PRIu8" (%s)\n", RepresentationType, representation_type_description[RepresentationType] );
+    lsmash_ifprintf( fp, indent, "ChannelLayout = 0x%04"PRIx16"\n", ChannelLayout );
+    if( ChannelLayout )
+        for( int i = 0; i < 16; i++ )
+            if( (ChannelLayout >> i) & 0x01 )
+                lsmash_ifprintf( fp, indent + 1, "%s\n", channel_layout_description[i] );
+    lsmash_ifprintf( fp, indent, "MultiAssetFlag = %s\n", MultiAssetFlag ? "1 (multiple asset)" : "0 (single asset)" );
+    if( LBRDurationMod )
+        lsmash_ifprintf( fp, indent, "LBRDurationMod = 1 (%"PRIu32" -> %"PRIu32" samples)\n", frame_duration, (frame_duration * 3) / 2 );
+    else
+        lsmash_ifprintf( fp, indent, "LBRDurationMod = 0 (no LBR duration modifier)\n" );
+    lsmash_ifprintf( fp, indent, "ReservedBoxPresent = %s\n", ReservedBoxPresent ? "1 (ReservedBox present)" : "0 (no ReservedBox)" );
+    lsmash_ifprintf( fp, indent, "Reserved = 0x%02"PRIx8"\n", Reserved );
     return 0;
 }

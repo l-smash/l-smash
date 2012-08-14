@@ -175,6 +175,7 @@ typedef struct
 
 void lsmash_log( lsmash_log_level level, const char* message, ... );
 uint32_t lsmash_count_bits( uint32_t bits );
+void lsmash_ifprintf( FILE *fp, int indent, const char *format, ... );
 int lsmash_compare_dts( const lsmash_media_ts_t *a, const lsmash_media_ts_t *b );
 int lsmash_compare_cts( const lsmash_media_ts_t *a, const lsmash_media_ts_t *b );
 

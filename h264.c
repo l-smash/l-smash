@@ -2119,3 +2119,79 @@ fail:
     lsmash_bs_cleanup( bs );
     return -1;
 }
+
+int h264_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
+{
+    assert( fp && root && box );
+    int indent = level;
+    lsmash_ifprintf( fp, indent++, "[%s: AVC Configuration Box]\n", isom_4cc2str( box->type ) );
+    lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
+    lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
+    isom_extension_box_t *ext = (isom_extension_box_t *)box;
+    assert( ext->format == EXTENSION_FORMAT_BINARY );
+    uint8_t *data = ext->form.binary;
+    uint32_t offset = isom_skip_box_common( &data );
+    lsmash_bs_t *bs = lsmash_bs_create( NULL );
+    if( !bs )
+        return -1;
+    if( lsmash_bs_import_data( bs, data, ext->size - offset ) )
+    {
+        lsmash_bs_cleanup( bs );
+        return -1;
+    }
+    lsmash_ifprintf( fp, indent, "configurationVersion = %"PRIu8"\n", lsmash_bs_get_byte( bs ) );
+    uint8_t AVCProfileIndication = lsmash_bs_get_byte( bs );
+    lsmash_ifprintf( fp, indent, "AVCProfileIndication = %"PRIu8"\n", AVCProfileIndication );
+    lsmash_ifprintf( fp, indent, "profile_compatibility = 0x%02"PRIx8"\n", lsmash_bs_get_byte( bs ) );
+    lsmash_ifprintf( fp, indent, "AVCLevelIndication = %"PRIu8"\n", lsmash_bs_get_byte( bs ) );
+    uint8_t temp8 = lsmash_bs_get_byte( bs );
+    lsmash_ifprintf( fp, indent, "reserved = 0x%02"PRIx8"\n", (temp8 >> 2) & 0x3F );
+    lsmash_ifprintf( fp, indent, "lengthSizeMinusOne = %"PRIu8"\n", temp8 & 0x03 );
+    temp8 = lsmash_bs_get_byte( bs );
+    lsmash_ifprintf( fp, indent, "reserved = 0x%02"PRIx8"\n", (temp8 >> 5) & 0x07 );
+    uint8_t numOfSequenceParameterSets = temp8 & 0x1f;
+    lsmash_ifprintf( fp, indent, "numOfSequenceParameterSets = %"PRIu8"\n", numOfSequenceParameterSets );
+    for( uint8_t i = 0; i < numOfSequenceParameterSets; i++ )
+    {
+        uint16_t parameterSetLength = lsmash_bs_get_be16( bs );
+        lsmash_bs_get_bytes( bs, parameterSetLength );
+    }
+    uint8_t numOfPictureParameterSets = lsmash_bs_get_byte( bs );
+    lsmash_ifprintf( fp, indent, "numOfPictureParameterSets = %"PRIu8"\n", numOfPictureParameterSets );
+    for( uint8_t i = 0; i < numOfPictureParameterSets; i++ )
+    {
+        uint16_t parameterSetLength = lsmash_bs_get_be16( bs );
+        lsmash_bs_get_bytes( bs, parameterSetLength );
+    }
+    /* Note: there are too many files, in the world, that don't contain the following fields. */
+    if( ISOM_REQUIRES_AVCC_EXTENSION( AVCProfileIndication )
+     && (lsmash_bs_get_pos( bs ) < (ext->size - offset)) )
+    {
+        temp8 = lsmash_bs_get_byte( bs );
+        lsmash_ifprintf( fp, indent, "reserved = 0x%02"PRIx8"\n", (temp8 >> 2) & 0x3F );
+        lsmash_ifprintf( fp, indent, "chroma_format = %"PRIu8"\n", temp8 & 0x03 );
+        temp8 = lsmash_bs_get_byte( bs );
+        lsmash_ifprintf( fp, indent, "reserved = 0x%02"PRIx8"\n", (temp8 >> 3) & 0x1F );
+        lsmash_ifprintf( fp, indent, "bit_depth_luma_minus8 = %"PRIu8"\n", temp8 & 0x7 );
+        temp8 = lsmash_bs_get_byte( bs );
+        lsmash_ifprintf( fp, indent, "reserved = 0x%02"PRIx8"\n", (temp8 >> 3) & 0x1F );
+        lsmash_ifprintf( fp, indent, "bit_depth_chroma_minus8 = %"PRIu8"\n", temp8 & 0x7 );
+        lsmash_ifprintf( fp, indent, "numOfSequenceParameterSetExt = %"PRIu8"\n", lsmash_bs_get_byte( bs ) );
+    }
+    lsmash_bs_cleanup( bs );
+    return 0;
+}
+
+int h264_print_bitrate( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
+{
+    assert( fp && root && box );
+    int indent = level;
+    lsmash_ifprintf( fp, indent++, "[%s: MPEG-4 Bit Rate Box]\n", isom_4cc2str( box->type ) );
+    lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
+    lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
+    isom_btrt_t *btrt = (isom_btrt_t *)box;
+    lsmash_ifprintf( fp, indent, "bufferSizeDB = %"PRIu32"\n", btrt->bufferSizeDB );
+    lsmash_ifprintf( fp, indent, "maxBitrate = %"PRIu32"\n", btrt->maxBitrate );
+    lsmash_ifprintf( fp, indent, "avgBitrate = %"PRIu32"\n", btrt->avgBitrate );
+    return 0;
+}
