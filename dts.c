@@ -643,6 +643,7 @@ static int dts_parse_exsub_xll( dts_info_t *info, uint64_t *bits_pos )
     int sum_nChSetLLChannel = 0;
     uint32_t nFs1 = 0;
     int nNumFreqBands1 = 0;
+    info->lossless.channel_layout = 0;
     for( int nChSet = 0; nChSet < nNumChSetsInFrame; nChSet++ )
     {
         /* Channel Set Sub-Header */
@@ -665,7 +666,6 @@ static int dts_parse_exsub_xll( dts_info_t *info, uint64_t *bits_pos )
         int nReplacementSet = dts_bits_get( bits, 2, bits_pos );                                /* nReplacementSet                (2) */
         if( nReplacementSet > 0 )
             dts_bits_get( bits, 1, bits_pos );                                                  /* bActiveReplaceSet              (1) */
-        info->lossless.channel_layout = 0;
         if( info->extension.bOne2OneMapChannels2Speakers )
         {
             int bPrimaryChSet = dts_bits_get( bits, 1, bits_pos );                              /* bPrimaryChSet                  (1) */
