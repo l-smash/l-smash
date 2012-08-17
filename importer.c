@@ -2203,7 +2203,10 @@ static uint32_t mp4sys_dts_get_last_delta( mp4sys_importer_t* importer, uint32_t
     mp4sys_dts_info_t *info = (mp4sys_dts_info_t *)importer->info;
     if( !info || track_number != 1 || info->status != MP4SYS_IMPORTER_EOF || info->info.au_length )
         return 0;
-    return info->info.frame_duration;
+    lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_get_entry_data( importer->summaries, track_number );
+    if( !summary )
+        return 0;
+    return (summary->frequency * info->info.frame_duration) / info->info.ddts_param.DTSSamplingFrequency;
 }
 
 const static mp4sys_importer_functions mp4sys_dts_importer =
