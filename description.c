@@ -30,10 +30,6 @@
 #include "mp4sys.h"
 #include "description.h"
 
-extern lsmash_codec_specific_destructor_t h264_destruct_specific_data;
-extern lsmash_codec_specific_destructor_t vc1_destruct_specific_data;
-extern lsmash_codec_specific_destructor_t dts_destruct_specific_data;
-
 static void global_destruct_specific_data( void *data )
 {
     if( !data )
@@ -191,6 +187,9 @@ static void isom_destruct_nothing( void *data )
 
 static int isom_initialize_structured_codec_specific_data( lsmash_codec_specific_t *specific )
 {
+    extern void h264_destruct_specific_data( void * );
+    extern void vc1_destruct_specific_data( void * );
+    extern void dts_destruct_specific_data( void * );
     switch( specific->type )
     {
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264 :

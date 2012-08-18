@@ -779,6 +779,7 @@ mp4sys_ES_Descriptor_t *mp4sys_duplicate_ES_Descriptor( mp4sys_ES_Descriptor_t *
     }
     return dst;
 }
+#endif /* LSMASH_DEMUXER_ENABLED */
 
 static void mp4sys_get_descriptor_header( lsmash_bs_t *bs, mp4sys_descriptor_head_t* header )
 {
@@ -958,7 +959,6 @@ int mp4sys_setup_summary_from_DecoderSpecificInfo( lsmash_audio_summary_t *summa
     }
     return 0;
 }
-#endif /* LSMASH_DEMUXER_ENABLED */
 
 /**** following functions are for facilitation purpose ****/
 
