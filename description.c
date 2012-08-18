@@ -322,10 +322,13 @@ lsmash_codec_specific_t *lsmash_create_codec_specific_data( lsmash_codec_specifi
 
 static int isom_duplicate_structured_specific_data( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
 {
+    extern int h264_copy_codec_specific( lsmash_codec_specific_t *, lsmash_codec_specific_t * );
     void *src_data = src->data.structured;
     void *dst_data = dst->data.structured;
     switch( src->type )
     {
+        case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264 :
+            return h264_copy_codec_specific( dst, src );
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3 :
             *(lsmash_ac3_specific_parameters_t *)dst_data = *(lsmash_ac3_specific_parameters_t *)src_data;
             return 0;

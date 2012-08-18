@@ -2182,6 +2182,45 @@ int h264_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, i
     return 0;
 }
 
+int h264_copy_codec_specific( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
+{
+    assert( src->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED && dst->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+    lsmash_h264_specific_parameters_t *src_data = (lsmash_h264_specific_parameters_t *)src->data.structured;
+    lsmash_h264_specific_parameters_t *dst_data = (lsmash_h264_specific_parameters_t *)dst->data.structured;
+    lsmash_destroy_h264_parameter_sets( dst_data );
+    *dst_data = *src_data;
+    if( !src_data->parameter_sets )
+        return 0;
+    dst_data->parameter_sets = lsmash_malloc_zero( sizeof(lsmash_h264_parameter_sets_t) );
+    if( !dst_data->parameter_sets )
+        return -1;
+    for( int i = 0; i < 3; i++ )
+    {
+        lsmash_entry_list_t *src_ps_list = h264_get_parameter_set_list( src_data, i );
+        lsmash_entry_list_t *dst_ps_list = h264_get_parameter_set_list( dst_data, i );
+        assert( src_ps_list && dst_ps_list );
+        for( lsmash_entry_t *entry = src_ps_list->head; entry; entry = entry->next )
+        {
+            isom_avcC_ps_entry_t *src_ps = (isom_avcC_ps_entry_t *)entry->data;
+            if( !src_ps )
+                continue;
+            isom_avcC_ps_entry_t *dst_ps = isom_create_ps_entry( src_ps->parameterSetNALUnit, src_ps->parameterSetLength );
+            if( !dst_ps )
+            {
+                lsmash_destroy_h264_parameter_sets( dst_data );
+                return -1;
+            }
+            if( lsmash_add_entry( dst_ps_list, dst_ps ) )
+            {
+                lsmash_destroy_h264_parameter_sets( dst_data );
+                isom_remove_avcC_ps( dst_ps );
+                return -1;
+            }
+        }
+    }
+    return 0;
+}
+
 int h264_print_bitrate( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
 {
     assert( fp && root && box );
