@@ -885,6 +885,54 @@ int vc1_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_code
     return 0;
 }
 
+int vc1_copy_codec_specific( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
+{
+    assert( src && src->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED && src->data.structured );
+    assert( dst && dst->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED && dst->data.structured );
+    lsmash_vc1_specific_parameters_t *src_data = (lsmash_vc1_specific_parameters_t *)src->data.structured;
+    lsmash_vc1_specific_parameters_t *dst_data = (lsmash_vc1_specific_parameters_t *)dst->data.structured;
+    lsmash_destroy_vc1_headers( dst_data );
+    *dst_data = *src_data;
+    if( !src_data->seqhdr && !src_data->ephdr )
+        return 0;
+    if( src_data->seqhdr )
+    {
+        dst_data->seqhdr = lsmash_malloc_zero( sizeof(lsmash_vc1_header_t) );
+        if( !dst_data->seqhdr )
+            return -1;
+        if( src_data->seqhdr->ebdu_size )
+        {
+            dst_data->seqhdr->ebdu = lsmash_memdup( src_data->seqhdr->ebdu, src_data->seqhdr->ebdu_size );
+            if( !dst_data->seqhdr->ebdu )
+            {
+                lsmash_destroy_vc1_headers( dst_data );
+                return -1;
+            }
+        }
+        dst_data->seqhdr->ebdu_size = src_data->seqhdr->ebdu_size;
+    }
+    if( src_data->ephdr )
+    {
+        dst_data->ephdr = lsmash_malloc_zero( sizeof(lsmash_vc1_header_t) );
+        if( !dst_data->ephdr )
+        {
+            lsmash_destroy_vc1_headers( dst_data );
+            return -1;
+        }
+        if( src_data->ephdr->ebdu_size )
+        {
+            dst_data->ephdr->ebdu = lsmash_memdup( src_data->ephdr->ebdu, src_data->ephdr->ebdu_size );
+            if( !dst_data->ephdr->ebdu )
+            {
+                lsmash_destroy_vc1_headers( dst_data );
+                return -1;
+            }
+        }
+        dst_data->ephdr->ebdu_size = src_data->ephdr->ebdu_size;
+    }
+    return 0;
+}
+
 int vc1_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
 {
     assert( fp && root && box );

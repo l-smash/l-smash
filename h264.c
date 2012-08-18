@@ -2184,7 +2184,8 @@ int h264_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, i
 
 int h264_copy_codec_specific( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
 {
-    assert( src->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED && dst->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+    assert( src && src->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED && src->data.structured );
+    assert( dst && dst->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED && dst->data.structured );
     lsmash_h264_specific_parameters_t *src_data = (lsmash_h264_specific_parameters_t *)src->data.structured;
     lsmash_h264_specific_parameters_t *dst_data = (lsmash_h264_specific_parameters_t *)dst->data.structured;
     lsmash_destroy_h264_parameter_sets( dst_data );
