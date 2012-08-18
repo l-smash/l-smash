@@ -158,7 +158,7 @@ int lsmash_append_dts_reserved_box( lsmash_dts_specific_parameters_t *param, uin
     return 0;
 }
 
-void lsmash_destroy_dts_parameter_sets( lsmash_dts_specific_parameters_t *param )
+void lsmash_remove_dts_reserved_box( lsmash_dts_specific_parameters_t *param )
 {
     if( !param->box )
         return;
@@ -172,7 +172,7 @@ void dts_destruct_specific_data( void *data )
 {
     if( !data )
         return;
-    lsmash_destroy_dts_parameter_sets( data );
+    lsmash_remove_dts_reserved_box( data );
     free( data );
 }
 
@@ -1165,6 +1165,19 @@ int dts_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_code
     if( reserved_box_present )
         lsmash_append_dts_reserved_box( param, data + 20, size - DTS_SPECIFIC_BOX_MIN_LENGTH );
     return 0;
+}
+
+int dts_copy_codec_specific( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
+{
+    assert( src && src->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED && src->data.structured );
+    assert( dst && dst->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED && dst->data.structured );
+    lsmash_dts_specific_parameters_t *src_data = (lsmash_dts_specific_parameters_t *)src->data.structured;
+    lsmash_dts_specific_parameters_t *dst_data = (lsmash_dts_specific_parameters_t *)dst->data.structured;
+    lsmash_remove_dts_reserved_box( dst_data );
+    *dst_data = *src_data;
+    if( !src_data->box && src_data->box->data && src_data->box->size )
+        return 0;
+    return lsmash_append_dts_reserved_box( dst_data, src_data->box->data, src_data->box->size );
 }
 
 int dts_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )

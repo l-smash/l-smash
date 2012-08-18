@@ -324,6 +324,7 @@ static int isom_duplicate_structured_specific_data( lsmash_codec_specific_t *dst
 {
     extern int h264_copy_codec_specific( lsmash_codec_specific_t *, lsmash_codec_specific_t * );
     extern int vc1_copy_codec_specific( lsmash_codec_specific_t *, lsmash_codec_specific_t * );
+    extern int dts_copy_codec_specific( lsmash_codec_specific_t *, lsmash_codec_specific_t * );
     void *src_data = src->data.structured;
     void *dst_data = dst->data.structured;
     switch( src->type )
@@ -339,8 +340,7 @@ static int isom_duplicate_structured_specific_data( lsmash_codec_specific_t *dst
             *(lsmash_eac3_specific_parameters_t *)dst_data = *(lsmash_eac3_specific_parameters_t *)src_data;
             return 0;
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_DTS :
-            *(lsmash_dts_specific_parameters_t *)dst_data = *(lsmash_dts_specific_parameters_t *)src_data;
-            return 0;
+            return dts_copy_codec_specific( dst, src );
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_SAMPLE_SCALE :
             *(lsmash_isom_sample_scale_t *)dst_data = *(lsmash_isom_sample_scale_t *)src_data;
             return 0;
