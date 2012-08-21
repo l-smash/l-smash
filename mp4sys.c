@@ -26,7 +26,9 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h>
 
+#include "box.h"
 #include "mp4a.h"
 #define MP4SYS_INTERNAL
 #include "mp4sys.h"
@@ -144,7 +146,7 @@ typedef struct {
 } mp4sys_SLConfigDescriptor_t;
 
 /* ES_Descriptor */
-typedef struct
+typedef struct mp4sys_ES_Descriptor_t
 {
     mp4sys_descriptor_head_t header;
     uint16_t ES_ID;
@@ -170,6 +172,7 @@ typedef struct
     ExtensionDescriptor extDescr[0 .. 255];        // abstract class, actually defined no subclass, maybe useless
     */
 } mp4sys_ES_Descriptor_t;
+
 
 /* 14496-14 Object Descriptors (ES_ID_Inc) */
 typedef struct {
@@ -359,9 +362,8 @@ int mp4sys_add_SLConfigDescriptor( mp4sys_ES_Descriptor_t* esd )
     return 0;
 }
 
-/* ES_ID might be usually 0 or lower 16 bits of the TrackID
-   14496-14 says, "set to 0 as stored; when built into a stream, the lower 16 bits of the TrackID are used."
-   I'm not sure about actual meaning of "stored" and "built into a stream", but maybe 0 will do in stsd(esds). */
+/* ES_ID of the ES Descriptor is stored as 0 when the ES Descriptor is built into sample descriptions in MP4 file
+ * since the lower 16 bits of the track_ID is used, instead of ES_ID, for the identifier of the elemental stream within the track. */
 mp4sys_ES_Descriptor_t* mp4sys_create_ES_Descriptor( uint16_t ES_ID )
 {
     mp4sys_ES_Descriptor_t *esd = (mp4sys_ES_Descriptor_t *)lsmash_malloc_zero( sizeof(mp4sys_ES_Descriptor_t) );
@@ -372,7 +374,7 @@ mp4sys_ES_Descriptor_t* mp4sys_create_ES_Descriptor( uint16_t ES_ID )
     return esd;
 }
 
-/* NOTE: This is only for MP4_IOD and MP4_OD, not for Iso Base Media's ObjectDescriptor and InitialObjectDescriptor */
+/* NOTE: This is only for MP4_IOD and MP4_OD, not for ISO Base Media's ObjectDescriptor and InitialObjectDescriptor */
 int mp4sys_add_ES_ID_Inc( mp4sys_ObjectDescriptor_t* od, uint32_t Track_ID )
 {
     if( !od )
@@ -392,7 +394,7 @@ int mp4sys_add_ES_ID_Inc( mp4sys_ObjectDescriptor_t* od, uint32_t Track_ID )
     return 0;
 }
 
-/* NOTE: This is only for MP4_OD, not for Iso Base Media's ObjectDescriptor */
+/* NOTE: This is only for MP4_OD, not for ISO Base Media's ObjectDescriptor */
 mp4sys_ObjectDescriptor_t* mp4sys_create_ObjectDescriptor( uint16_t ObjectDescriptorID )
 {
     mp4sys_ObjectDescriptor_t *od = (mp4sys_ObjectDescriptor_t *)lsmash_malloc_zero( sizeof(mp4sys_ObjectDescriptor_t) );
@@ -778,6 +780,189 @@ mp4sys_ES_Descriptor_t *mp4sys_duplicate_ES_Descriptor( mp4sys_ES_Descriptor_t *
         return NULL;
     }
     return dst;
+}
+
+static void mp4sys_print_descriptor_header( FILE *fp, mp4sys_descriptor_head_t *header, int indent )
+{
+    static const char *descriptor_names_table[256] =
+        {
+            "Forbidden",
+            "ObjectDescriptor",
+            "InitialObjectDescriptor",
+            "ES_Descriptor",
+            "DecoderConfigDescriptor",
+            "DecoderSpecificInfo",
+            "SLConfigDescriptor",
+            [0x0E] = "ES_ID_Inc",
+            [0x0F] = "ES_ID_Ref",
+            [0x10] = "MP4_IOD",
+            [0x11] = "MP4_OD"
+        };
+    if( descriptor_names_table[ header->tag ] )
+        lsmash_ifprintf( fp, indent, "[tag = 0x%02"PRIx8": %s]\n", header->tag, descriptor_names_table[ header->tag ] );
+    else
+        lsmash_ifprintf( fp, indent, "[tag = 0x%02"PRIx8"]\n", header->tag );
+    lsmash_ifprintf( fp, ++indent, "expandableClassSize = %"PRIu32"\n", header->size );
+}
+
+static void mp4sys_print_DecoderConfigDescriptor( FILE *fp, mp4sys_DecoderConfigDescriptor_t *dcd, int indent )
+{
+    static const char *object_type_indication_descriptions_table[256] =
+        {
+            "Forbidden",
+            "Systems ISO/IEC 14496-1 (a)",
+            "Systems ISO/IEC 14496-1 (b)",
+            "Interaction Stream",
+            "Systems ISO/IEC 14496-1 Extended BIFS Configuration",
+            "Systems ISO/IEC 14496-1 AFX",
+            "Font Data Stream",
+            "Synthesized Texture Stream",
+            "Streaming Text Stream",
+            "LASeR Stream",
+            "Simple Aggregation Format (SAF) Stream",
+            [0x20] = "Visual ISO/IEC 14496-2",
+            [0x21] = "Visual ITU-T Recommendation H.264 | ISO/IEC 14496-10",
+            [0x22] = "Parameter Sets for ITU-T Recommendation H.264 | ISO/IEC 14496-10",
+            [0x40] = "Audio ISO/IEC 14496-3",
+            [0x60] = "Visual ISO/IEC 13818-2 Simple Profile",
+            [0x61] = "Visual ISO/IEC 13818-2 Main Profile",
+            [0x62] = "Visual ISO/IEC 13818-2 SNR Profile",
+            [0x63] = "Visual ISO/IEC 13818-2 Spatial Profile",
+            [0x64] = "Visual ISO/IEC 13818-2 High Profile",
+            [0x65] = "Visual ISO/IEC 13818-2 422 Profile",
+            [0x66] = "Audio ISO/IEC 13818-7 Main Profile",
+            [0x67] = "Audio ISO/IEC 13818-7 LowComplexity Profile",
+            [0x68] = "Audio ISO/IEC 13818-7 Scaleable Sampling Rate Profile",
+            [0x69] = "Audio ISO/IEC 13818-3",
+            [0x6A] = "Visual ISO/IEC 11172-2",
+            [0x6B] = "Audio ISO/IEC 11172-3",
+            [0x6C] = "Visual ISO/IEC 10918-1",
+            [0x6D] = "Portable Network Graphics",
+            [0x6E] = "Visual ISO/IEC 15444-1 (JPEG 2000)",
+            [0xA0] = "EVRC Voice",
+            [0xA1] = "SMV Voice",
+            [0xA2] = "3GPP2 Compact Multimedia Format (CMF)",
+            [0xA3] = "SMPTE VC-1 Video",
+            [0xA4] = "Dirac Video Coder",
+            [0xA5] = "AC-3 Audio",
+            [0xA6] = "Enhanced AC-3 audio",
+            [0xA7] = "DRA Audio",
+            [0xA8] = "ITU G.719 Audio",
+            [0xA9] = "DTS Coherent Acoustics audio",
+            [0xAA] = "DTS-HD High Resolution Audio",
+            [0xAB] = "DTS-HD Master Audio",
+            [0xAC] = "DTS Express low bit rate audio",
+            [0xE1] = "13K Voice",
+            [0xFF] = "no object type specified"
+        };
+    static const char *stream_type_descriptions_table[64] =
+        {
+            "Forbidden",
+            "ObjectDescriptorStream",
+            "ClockReferenceStream",
+            "SceneDescriptionStream",
+            "VisualStream",
+            "AudioStream",
+            "MPEG7Stream",
+            "IPMPStream",
+            "ObjectContentInfoStream",
+            "MPEGJStream",
+            "Interaction Stream",
+            "IPMPToolStream",
+            "FontDataStream",
+            "StreamingText"
+        };
+    mp4sys_print_descriptor_header( fp, &dcd->header, indent++ );
+    if( object_type_indication_descriptions_table[ dcd->objectTypeIndication ] )
+        lsmash_ifprintf( fp, indent, "objectTypeIndication = 0x%02"PRIx8" (%s)\n", dcd->objectTypeIndication, object_type_indication_descriptions_table[ dcd->objectTypeIndication ] );
+    else
+        lsmash_ifprintf( fp, indent, "objectTypeIndication = 0x%02"PRIx8"\n", dcd->objectTypeIndication );
+    if( stream_type_descriptions_table[ dcd->streamType ] )
+        lsmash_ifprintf( fp, indent, "streamType = 0x%02"PRIx8" (%s)\n", dcd->streamType, stream_type_descriptions_table[ dcd->streamType ] );
+    else
+        lsmash_ifprintf( fp, indent, "streamType = 0x%02"PRIx8"\n", dcd->streamType );
+    lsmash_ifprintf( fp, indent, "upStream = %"PRIu8"\n", dcd->upStream );
+    lsmash_ifprintf( fp, indent, "reserved = %"PRIu8"\n", dcd->reserved );
+    lsmash_ifprintf( fp, indent, "bufferSizeDB = %"PRIu32"\n", dcd->bufferSizeDB );
+    lsmash_ifprintf( fp, indent, "maxBitrate = %"PRIu32"\n", dcd->maxBitrate );
+    lsmash_ifprintf( fp, indent, "avgBitrate = %"PRIu32"%s\n", dcd->avgBitrate, dcd->avgBitrate ? "" : " (variable bitrate)" );
+}
+
+static void mp4sys_print_SLConfigDescriptor( FILE *fp, mp4sys_SLConfigDescriptor_t *slcd, int indent )
+{
+    mp4sys_print_descriptor_header( fp, &slcd->header, indent++ );
+    lsmash_ifprintf( fp, indent, "predefined = %"PRIu8"\n", slcd->predefined );
+    if( slcd->predefined == 0 )
+    {
+        lsmash_ifprintf( fp, indent, "useAccessUnitStartFlag = %"PRIu8"\n", slcd->useAccessUnitStartFlag );
+        lsmash_ifprintf( fp, indent, "useAccessUnitEndFlag = %"PRIu8"\n", slcd->useAccessUnitEndFlag );
+        lsmash_ifprintf( fp, indent, "useRandomAccessPointFlag = %"PRIu8"\n", slcd->useRandomAccessPointFlag );
+        lsmash_ifprintf( fp, indent, "hasRandomAccessUnitsOnlyFlag = %"PRIu8"\n", slcd->hasRandomAccessUnitsOnlyFlag );
+        lsmash_ifprintf( fp, indent, "usePaddingFlag = %"PRIu8"\n", slcd->usePaddingFlag );
+        lsmash_ifprintf( fp, indent, "useTimeStampsFlag = %"PRIu8"\n", slcd->useTimeStampsFlag );
+        lsmash_ifprintf( fp, indent, "useIdleFlag = %"PRIu8"\n", slcd->useIdleFlag );
+        lsmash_ifprintf( fp, indent, "durationFlag = %"PRIu8"\n", slcd->durationFlag );
+        lsmash_ifprintf( fp, indent, "timeStampResolution = %"PRIu32"\n", slcd->timeStampResolution );
+        lsmash_ifprintf( fp, indent, "OCRResolution = %"PRIu32"\n", slcd->OCRResolution );
+        lsmash_ifprintf( fp, indent, "timeStampLength = %"PRIu8"\n", slcd->timeStampLength );
+        lsmash_ifprintf( fp, indent, "OCRLength = %"PRIu8"\n", slcd->OCRLength );
+        lsmash_ifprintf( fp, indent, "AU_Length = %"PRIu8"\n", slcd->AU_Length );
+        lsmash_ifprintf( fp, indent, "instantBitrateLength = %"PRIu8"\n", slcd->instantBitrateLength );
+        lsmash_ifprintf( fp, indent, "degradationPriorityLength = %"PRIu8"\n", slcd->degradationPriorityLength );
+        lsmash_ifprintf( fp, indent, "AU_seqNumLength = %"PRIu8"\n", slcd->AU_seqNumLength );
+        lsmash_ifprintf( fp, indent, "packetSeqNumLength = %"PRIu8"\n", slcd->packetSeqNumLength );
+        lsmash_ifprintf( fp, indent, "reserved = 0x%01"PRIx8"\n", slcd->reserved );
+    }
+    if( slcd->durationFlag )
+    {
+        lsmash_ifprintf( fp, indent, "timeScale = %"PRIu32"\n", slcd->timeScale );
+        lsmash_ifprintf( fp, indent, "accessUnitDuration = %"PRIu16"\n", slcd->accessUnitDuration );
+        lsmash_ifprintf( fp, indent, "compositionUnitDuration = %"PRIu16"\n", slcd->compositionUnitDuration );
+    }
+    if( !slcd->useTimeStampsFlag )
+    {
+        lsmash_ifprintf( fp, indent, "startDecodingTimeStamp = %"PRIu64"\n", slcd->startDecodingTimeStamp );
+        lsmash_ifprintf( fp, indent, "startCompositionTimeStamp = %"PRIu64"\n", slcd->startCompositionTimeStamp );
+    }
+}
+
+static void mp4sys_print_ES_Descriptor( FILE *fp, mp4sys_ES_Descriptor_t *esd, int indent )
+{
+    mp4sys_print_descriptor_header( fp, &esd->header, indent++ );
+    lsmash_ifprintf( fp, indent, "ES_ID = %"PRIu16"\n", esd->ES_ID );
+    lsmash_ifprintf( fp, indent, "streamDependenceFlag = %"PRIu8"\n", esd->streamDependenceFlag );
+    lsmash_ifprintf( fp, indent, "URL_Flag = %"PRIu8"\n", esd->URL_Flag );
+    lsmash_ifprintf( fp, indent, "OCRstreamFlag = %"PRIu8"\n", esd->OCRstreamFlag );
+    lsmash_ifprintf( fp, indent, "streamPriority = %"PRIu8"\n", esd->streamPriority );
+    if( esd->streamDependenceFlag )
+        lsmash_ifprintf( fp, indent, "dependsOn_ES_ID = %"PRIu16"\n", esd->dependsOn_ES_ID );
+    if( esd->URL_Flag )
+    {
+        lsmash_ifprintf( fp, indent, "URLlength = %"PRIu8"\n", esd->URLlength );
+        char URLstring[256] = { 0 };
+        memcpy( URLstring, esd->URLstring, esd->URLlength );
+        lsmash_ifprintf( fp, indent, "URLlength = %s\n", URLstring );
+    }
+    if( esd->OCRstreamFlag )
+        lsmash_ifprintf( fp, indent, "OCR_ES_Id = %"PRIu16"\n", esd->OCR_ES_Id );
+    mp4sys_print_DecoderConfigDescriptor( fp, esd->decConfigDescr, indent );
+    mp4sys_print_SLConfigDescriptor( fp, esd->slConfigDescr, indent );
+}
+
+int mp4sys_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
+{
+    assert( fp && root && box );
+    isom_extension_box_t *ext = (isom_extension_box_t *)box;
+    assert( ext->format == EXTENSION_FORMAT_BOX && ext->form.box );
+    isom_esds_t *esds = (isom_esds_t *)ext->form.box;
+    int indent = level;
+    lsmash_ifprintf( fp, indent++, "[%s: Elemental Stream Descriptor Box]\n", isom_4cc2str( esds->type ) );
+    lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", esds->pos );
+    lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", esds->size );
+    lsmash_ifprintf( fp, indent, "version = %"PRIu8"\n", esds->version );
+    lsmash_ifprintf( fp, indent, "flags = 0x%06"PRIx32"\n", esds->flags & 0x00ffffff );
+    mp4sys_print_ES_Descriptor( fp, esds->ES, indent );
+    return 0;
 }
 #endif /* LSMASH_DEMUXER_ENABLED */
 

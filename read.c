@@ -1077,18 +1077,27 @@ static int isom_read_esds( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
      && parent->type != QT_BOX_TYPE_WAVE )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( esds, parent, box->type );
-    if( isom_add_extension_box( &parent->extensions, esds, isom_remove_esds ) )
-    {
-        free( esds );
-        return -1;
-    }
     lsmash_bs_t *bs = root->bs;
     isom_read_box_rest( bs, box );
     esds->ES = mp4sys_get_ES_Descriptor( bs );
     if( !esds->ES )
         return -1;
-    isom_box_common_copy( esds, box );
-    return isom_add_print_func( root, esds, level );
+    isom_extension_box_t *ext = malloc( sizeof(isom_extension_box_t) );
+    if( !ext )
+    {
+        isom_remove_esds( esds );
+        return -1;
+    }
+    ext->format   = EXTENSION_FORMAT_BOX;
+    ext->form.box = esds;
+    ext->destruct = (void (*)(void *))isom_remove_esds;
+    isom_basebox_common_copy( (isom_box_t *)ext, box );
+    if( lsmash_add_entry( &parent->extensions, ext ) )
+    {
+        isom_remove_sample_description_extension( ext );
+        return -1;
+    }
+    return isom_add_print_func( root, ext, level );
 }
 
 static int isom_read_btrt( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )

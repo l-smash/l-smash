@@ -1095,6 +1095,7 @@ static int isom_print_sample_description_extesion( FILE *fp, lsmash_root_t *root
 {
     if( !box )
         return -1;
+    extern int mp4sys_print_codec_specific( FILE *, lsmash_root_t *, isom_box_t *, int );
     extern int h264_print_codec_specific( FILE *, lsmash_root_t *, isom_box_t *, int );
     extern int h264_print_bitrate( FILE *, lsmash_root_t *, isom_box_t *, int );
     extern int vc1_print_codec_specific( FILE *, lsmash_root_t *, isom_box_t *, int );
@@ -1118,6 +1119,7 @@ static int isom_print_sample_description_extesion( FILE *fp, lsmash_root_t *root
             { QT_BOX_TYPE_GLBL,   isom_print_glbl },
             { QT_BOX_TYPE_WAVE,   isom_print_wave },
             { QT_BOX_TYPE_CHAN,   isom_print_chan },
+            { ISOM_BOX_TYPE_ESDS, mp4sys_print_codec_specific },
             { ISOM_BOX_TYPE_AVCC, h264_print_codec_specific },
             { ISOM_BOX_TYPE_BTRT, h264_print_bitrate },
             { ISOM_BOX_TYPE_DVC1, vc1_print_codec_specific },
