@@ -1082,6 +1082,7 @@ static int isom_read_esds( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     esds->ES = mp4sys_get_ES_Descriptor( bs );
     if( !esds->ES )
         return -1;
+    isom_box_common_copy( esds, box );
     isom_extension_box_t *ext = malloc( sizeof(isom_extension_box_t) );
     if( !ext )
     {
