@@ -229,8 +229,6 @@ static lsmash_audio_summary_t *mp4sys_adts_create_summary( mp4sys_adts_fixed_hea
     if( !summary )
         return NULL;
     summary->sample_type            = ISOM_CODEC_TYPE_MP4A_AUDIO;
-    summary->stream_type            = MP4SYS_STREAM_TYPE_AudioStream;
-    summary->object_type_indication = MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3;
     summary->max_au_length          = MP4SYS_ADTS_MAX_FRAME_LENGTH;
     summary->frequency              = mp4a_sampling_frequency_table[header->sampling_frequency_index][1];
     summary->channels               = header->channel_configuration + ( header->channel_configuration == 0x07 ); /* 0x07 means 7.1ch */
@@ -256,24 +254,33 @@ static lsmash_audio_summary_t *mp4sys_adts_create_summary( mp4sys_adts_fixed_hea
     }
 #endif
     uint32_t data_length;
-    uint8_t *data = lsmash_create_mp4sys_specific_info( summary, NULL, 0, &data_length );
+    uint8_t *data = mp4a_export_AudioSpecificConfig( header->profile_ObjectType + MP4A_AUDIO_OBJECT_TYPE_AAC_MAIN,
+                                                     summary->frequency, summary->channels, summary->sbr_mode,
+                                                     NULL, 0, &data_length );
     if( !data )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         return NULL;
     }
-    lsmash_codec_specific_t *specific = lsmash_malloc_zero( sizeof(lsmash_codec_specific_t) );
+    lsmash_codec_specific_t *specific = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG,
+                                                                           LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
     if( !specific )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         free( data );
         return NULL;
     }
-    specific->type              = LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_ES_DESCRIPTOR;
-    specific->format            = LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED;
-    specific->destruct          = (lsmash_codec_specific_destructor_t)free;
-    specific->data.unstructured = data;
-    specific->size              = data_length;
+    lsmash_mp4sys_decoder_parameters_t *param = (lsmash_mp4sys_decoder_parameters_t *)specific->data.structured;
+    param->objectTypeIndication = MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3;
+    param->streamType           = MP4SYS_STREAM_TYPE_AudioStream;
+    if( lsmash_set_mp4sys_decoder_specific_info( param, data, data_length ) )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        lsmash_destroy_codec_specific_data( specific );
+        free( data );
+        return NULL;
+    }
+    free( data );
     if( lsmash_add_entry( &summary->opaque->list, specific ) )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
@@ -580,8 +587,6 @@ static lsmash_audio_summary_t *mp4sys_mp3_create_summary( mp4sys_mp3_header_t *h
     if( !summary )
         return NULL;
     summary->sample_type            = ISOM_CODEC_TYPE_MP4A_AUDIO;
-    summary->stream_type            = MP4SYS_STREAM_TYPE_AudioStream;
-    summary->object_type_indication = header->ID ? MP4SYS_OBJECT_TYPE_Audio_ISO_11172_3 : MP4SYS_OBJECT_TYPE_Audio_ISO_13818_3;
     summary->max_au_length          = MP4SYS_MP3_MAX_FRAME_LENGTH;
     summary->frequency              = mp4sys_mp3_frequency_tbl[header->ID][header->sampling_frequency];
     summary->channels               = MP4SYS_MODE_IS_2CH( header->mode ) + 1;
@@ -600,6 +605,40 @@ static lsmash_audio_summary_t *mp4sys_mp3_create_summary( mp4sys_mp3_header_t *h
         }
     }
 #endif
+    uint32_t data_length;
+    uint8_t *data = mp4a_export_AudioSpecificConfig( MP4A_AUDIO_OBJECT_TYPE_Layer_1 + (MP4SYS_LAYER_I - header->layer),
+                                                     summary->frequency, summary->channels, summary->sbr_mode,
+                                                     NULL, 0, &data_length );
+    if( !data )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        return NULL;
+    }
+    lsmash_codec_specific_t *specific = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG,
+                                                                           LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+    if( !specific )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        free( data );
+        return NULL;
+    }
+    lsmash_mp4sys_decoder_parameters_t *param = (lsmash_mp4sys_decoder_parameters_t *)specific->data.structured;
+    param->objectTypeIndication = header->ID ? MP4SYS_OBJECT_TYPE_Audio_ISO_11172_3 : MP4SYS_OBJECT_TYPE_Audio_ISO_13818_3;
+    param->streamType           = MP4SYS_STREAM_TYPE_AudioStream;
+    if( lsmash_set_mp4sys_decoder_specific_info( param, data, data_length ) )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        lsmash_destroy_codec_specific_data( specific );
+        free( data );
+        return NULL;
+    }
+    free( data );
+    if( lsmash_add_entry( &summary->opaque->list, specific ) )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        lsmash_destroy_codec_specific_data( specific );
+        return NULL;
+    }
     return summary;
 }
 
@@ -911,8 +950,6 @@ static int mp4sys_amr_probe( mp4sys_importer_t* importer )
     if( !summary )
         return -1;
     summary->sample_type            = wb ? ISOM_CODEC_TYPE_SAWB_AUDIO : ISOM_CODEC_TYPE_SAMR_AUDIO;
-    summary->stream_type            = MP4SYS_STREAM_TYPE_AudioStream;   /* no effect */
-    summary->object_type_indication = MP4SYS_OBJECT_TYPE_NONE; /* AMR is not defined in ISO/IEC 14496-3 */
     summary->max_au_length          = wb ? 61 : 32;
     summary->aot                    = MP4A_AUDIO_OBJECT_TYPE_NULL; /* no effect */
     summary->frequency              = (8000 << wb);
@@ -1062,8 +1099,6 @@ static lsmash_audio_summary_t *ac3_create_summary( ac3_info_t *info )
         return NULL;
     }
     summary->sample_type            = ISOM_CODEC_TYPE_AC_3_AUDIO;
-    summary->stream_type            = MP4SYS_STREAM_TYPE_AudioStream;
-    summary->object_type_indication = MP4SYS_OBJECT_TYPE_AC_3_AUDIO;        /* forbidden to use for ISO Base Media */
     summary->max_au_length          = AC3_MAX_SYNCFRAME_LENGTH;
     summary->aot                    = MP4A_AUDIO_OBJECT_TYPE_NULL;          /* no effect */
     summary->frequency              = ac3_sample_rate_table[ param->fscod ];
@@ -1554,8 +1589,6 @@ static lsmash_audio_summary_t *eac3_create_summary( eac3_info_t *info )
         return NULL;
     }
     summary->sample_type            = ISOM_CODEC_TYPE_EC_3_AUDIO;
-    summary->stream_type            = MP4SYS_STREAM_TYPE_AudioStream;
-    summary->object_type_indication = MP4SYS_OBJECT_TYPE_EC_3_AUDIO;    /* forbidden to use for ISO Base Media */
     summary->max_au_length          = info->syncframe_count_in_au * EAC3_MAX_SYNCFRAME_LENGTH;
     summary->aot                    = MP4A_AUDIO_OBJECT_TYPE_NULL;      /* no effect */
     summary->sample_size            = 16;                               /* no effect */
@@ -1866,8 +1899,6 @@ static lsmash_audio_summary_t *als_create_summary( mp4sys_importer_t *importer, 
     if( !summary )
         return NULL;
     summary->sample_type            = ISOM_CODEC_TYPE_MP4A_AUDIO;
-    summary->stream_type            = MP4SYS_STREAM_TYPE_AudioStream;
-    summary->object_type_indication = MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3;
     summary->aot                    = MP4A_AUDIO_OBJECT_TYPE_ALS;
     summary->frequency              = alssc->samp_freq;
     summary->channels               = alssc->channels + 1;
@@ -1887,24 +1918,33 @@ static lsmash_audio_summary_t *als_create_summary( mp4sys_importer_t *importer, 
         lsmash_fseek( importer->stream, pos, SEEK_SET );
     }
     uint32_t data_length;
-    uint8_t *data = lsmash_create_mp4sys_specific_info( summary, alssc->sc_data, alssc->size, &data_length );
+    uint8_t *data = mp4a_export_AudioSpecificConfig( MP4A_AUDIO_OBJECT_TYPE_ALS,
+                                                     summary->frequency, summary->channels, summary->sbr_mode,
+                                                     alssc->sc_data, alssc->size, &data_length );
     if( !data )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         return NULL;
     }
-    lsmash_codec_specific_t *specific = lsmash_malloc_zero( sizeof(lsmash_codec_specific_t) );
+    lsmash_codec_specific_t *specific = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG,
+                                                                           LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
     if( !specific )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         free( data );
         return NULL;
     }
-    specific->type              = LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_ES_DESCRIPTOR;
-    specific->format            = LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED;
-    specific->destruct          = (lsmash_codec_specific_destructor_t)free;
-    specific->data.unstructured = data;
-    specific->size              = data_length;
+    lsmash_mp4sys_decoder_parameters_t *param = (lsmash_mp4sys_decoder_parameters_t *)specific->data.structured;
+    param->objectTypeIndication = MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3;
+    param->streamType           = MP4SYS_STREAM_TYPE_AudioStream;
+    if( lsmash_set_mp4sys_decoder_specific_info( param, data, data_length ) )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        lsmash_destroy_codec_specific_data( specific );
+        free( data );
+        return NULL;
+    }
+    free( data );
     if( lsmash_add_entry( &summary->opaque->list, specific ) )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
@@ -2172,26 +2212,7 @@ static lsmash_audio_summary_t *dts_create_summary( dts_info_t *info )
     }
     summary->aot         = MP4A_AUDIO_OBJECT_TYPE_NULL;     /* no effect */
     summary->sbr_mode    = MP4A_AAC_SBR_NOT_SPECIFIED;      /* no effect */
-    summary->stream_type = MP4SYS_STREAM_TYPE_AudioStream;
     summary->sample_type = lsmash_dts_get_codingname( param );
-    switch( summary->sample_type )
-    {
-        case ISOM_CODEC_TYPE_DTSC_AUDIO :
-            summary->object_type_indication = MP4SYS_OBJECT_TYPE_DTSC_AUDIO;
-            break;
-        case ISOM_CODEC_TYPE_DTSH_AUDIO :
-            summary->object_type_indication = MP4SYS_OBJECT_TYPE_DTSH_AUDIO;
-            break;
-        case ISOM_CODEC_TYPE_DTSL_AUDIO :
-            summary->object_type_indication = MP4SYS_OBJECT_TYPE_DTSL_AUDIO;
-            break;
-        case ISOM_CODEC_TYPE_DTSE_AUDIO :
-            summary->object_type_indication = MP4SYS_OBJECT_TYPE_DTSE_AUDIO;
-            break;
-        default :
-            lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-            return NULL;
-    }
     switch( param->DTSSamplingFrequency )
     {
         case 12000 :    /* Invalid? (No reference in the spec) */
@@ -2700,8 +2721,6 @@ static lsmash_video_summary_t *h264_create_summary( h264_info_t *info, h264_sps_
         return NULL;
     }
     summary->sample_type            = ISOM_CODEC_TYPE_AVC1_VIDEO;
-    summary->stream_type            = MP4SYS_STREAM_TYPE_VisualStream;
-    summary->object_type_indication = MP4SYS_OBJECT_TYPE_Visual_H264_ISO_14496_10;
     summary->max_au_length          = max_au_length;
     summary->timescale              = sps->vui.time_scale >> (sps->vui.time_scale > 1 && !field_pic_present);
     summary->timebase               = sps->vui.num_units_in_tick;
@@ -3335,8 +3354,6 @@ static lsmash_video_summary_t *vc1_create_summary( vc1_info_t *info, vc1_sequenc
         return NULL;
     }
     summary->sample_type            = ISOM_CODEC_TYPE_VC_1_VIDEO;
-    summary->stream_type            = MP4SYS_STREAM_TYPE_VisualStream;
-    summary->object_type_indication = MP4SYS_OBJECT_TYPE_VC_1_VIDEO;
     summary->max_au_length          = max_au_length;
     summary->timescale              = sequence->framerate_numerator;
     summary->timebase               = sequence->framerate_denominator;

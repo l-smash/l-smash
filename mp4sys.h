@@ -131,6 +131,12 @@ typedef struct {
     uint32_t dsi_payload_length ;   /* size of dsi_payload */
 } mp4sys_ES_Descriptor_params_t;
 
+struct lsmash_mp4sys_decoder_specific_info_tag
+{
+    uint8_t *payload;
+    uint32_t payload_length;
+};
+
 #ifndef MP4SYS_INTERNAL
 
 #include "utils.h"

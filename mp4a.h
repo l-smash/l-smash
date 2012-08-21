@@ -112,6 +112,14 @@ mp4a_AudioSpecificConfig_t *mp4a_create_AudioSpecificConfig(
 void mp4a_put_AudioSpecificConfig( lsmash_bs_t* bs, mp4a_AudioSpecificConfig_t* asc );
 void mp4a_remove_AudioSpecificConfig( mp4a_AudioSpecificConfig_t* asc );
 
+uint8_t *mp4a_export_AudioSpecificConfig( lsmash_mp4a_AudioObjectType aot,
+                                          uint32_t frequency,
+                                          uint32_t channels,
+                                          lsmash_mp4a_aac_sbr_mode sbr_mode,
+                                          uint8_t *exdata,
+                                          uint32_t exdata_length,
+                                          uint32_t *data_length );
+
 /* export for importer */
 extern const uint32_t mp4a_sampling_frequency_table[13][5];
 

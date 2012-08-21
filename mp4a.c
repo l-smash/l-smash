@@ -24,6 +24,8 @@
 
 #define MP4A_INTERNAL
 #include "mp4a.h"
+#include "box.h"
+#include "description.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -632,10 +634,8 @@ int mp4a_setup_summary_from_AudioSpecificConfig( lsmash_audio_summary_t *summary
     mp4a_AudioSpecificConfig_t *asc = mp4a_get_AudioSpecificConfig( bits, dsi_payload, dsi_payload_length );
     if( !asc )
         goto fail;
-    summary->sample_type            = ISOM_CODEC_TYPE_MP4A_AUDIO;
-    summary->object_type_indication = MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3;
-    summary->stream_type            = MP4SYS_STREAM_TYPE_AudioStream;
-    summary->aot                    = asc->audioObjectType;
+    summary->sample_type = ISOM_CODEC_TYPE_MP4A_AUDIO;
+    summary->aot         = asc->audioObjectType;
     switch( asc->audioObjectType )
     {
         case MP4A_AUDIO_OBJECT_TYPE_AAC_MAIN :
@@ -713,6 +713,33 @@ fail:
     return -1;
 }
 
+/* This function is very ad-hoc. */
+uint8_t *mp4a_export_AudioSpecificConfig( lsmash_mp4a_AudioObjectType aot,
+                                          uint32_t frequency,
+                                          uint32_t channels,
+                                          lsmash_mp4a_aac_sbr_mode sbr_mode,
+                                          uint8_t *exdata,
+                                          uint32_t exdata_length,
+                                          uint32_t *data_length )
+{
+    lsmash_bs_t *bs = lsmash_bs_create( NULL );
+    if( !bs )
+        return NULL;
+    mp4a_AudioSpecificConfig_t *asc = mp4a_create_AudioSpecificConfig( aot, frequency, channels, sbr_mode, exdata, exdata_length );
+    if( !asc )
+    {
+        lsmash_bs_cleanup( bs );
+        return NULL;
+    }
+    mp4a_put_AudioSpecificConfig( bs, asc );
+    uint8_t *data = lsmash_bs_export_data( bs, data_length );
+    mp4a_remove_AudioSpecificConfig( asc );
+    lsmash_bs_cleanup( bs );
+    if( !data )
+        return NULL;
+    return data;
+}
+
 /***************************************************************************
     audioProfileLevelIndication
 ***************************************************************************/
@@ -720,56 +747,69 @@ fail:
    The spec of audioProfileLevelIndication is too much complicated. */
 mp4a_audioProfileLevelIndication mp4a_get_audioProfileLevelIndication( lsmash_audio_summary_t *summary )
 {
-    if( !summary || summary->stream_type != MP4SYS_STREAM_TYPE_AudioStream )
-        return MP4A_AUDIO_PLI_NONE_REQUIRED; /* means error. */
-    if( summary->object_type_indication != MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3 )
-        return MP4A_AUDIO_PLI_NOT_SPECIFIED; /* This is of audio stream, but not described in ISO/IEC 14496-3. */
+    if( !summary || summary->summary_type != LSMASH_SUMMARY_TYPE_AUDIO )
+        return MP4A_AUDIO_PLI_NONE_REQUIRED;    /* means error. */
+    lsmash_codec_specific_t *src = isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG );
+    if( !src )
+        return MP4A_AUDIO_PLI_NONE_REQUIRED;    /* means error. */
+    lsmash_mp4sys_object_type_indication objectTypeIndication;
+    if( src->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED )
+        objectTypeIndication = ((lsmash_mp4sys_decoder_parameters_t *)src->data.structured)->objectTypeIndication;
+    else
+    {
+        lsmash_codec_specific_t *dst = lsmash_convert_codec_specific_format( src, LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+        if( !dst )
+            return MP4A_AUDIO_PLI_NONE_REQUIRED; /* means error. */
+        objectTypeIndication = ((lsmash_mp4sys_decoder_parameters_t *)dst->data.structured)->objectTypeIndication;
+        lsmash_destroy_codec_specific_data( dst );
+    }
+    if( objectTypeIndication != MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3 )
+        return MP4A_AUDIO_PLI_NOT_SPECIFIED;    /* This is of audio stream, but not described in ISO/IEC 14496-3. */
     if( summary->channels == 0 || summary->frequency == 0 )
-        return MP4A_AUDIO_PLI_NONE_REQUIRED; /* means error. */
-
+        return MP4A_AUDIO_PLI_NONE_REQUIRED;    /* means error. */
     mp4a_audioProfileLevelIndication pli = MP4A_AUDIO_PLI_NOT_SPECIFIED;
     switch( summary->aot )
     {
-    case MP4A_AUDIO_OBJECT_TYPE_AAC_LC:
-        if( summary->sbr_mode == MP4A_AAC_SBR_HIERARCHICAL )
-        {
-            /* NOTE: This is not strictly preferable, but accurate; just possibly over-estimated.
-               We do not expect to use MP4A_AAC_SBR_HIERARCHICAL mode without SBR, nor downsampled mode with SBR. */
-            if( summary->channels <= 2 && summary->frequency <= 24000 )
-                pli = MP4A_AUDIO_PLI_HE_AAC_L2;
-            else if( summary->channels <= 5 && summary->frequency <= 48000 )
-                pli = MP4A_AUDIO_PLI_HE_AAC_L5;
+        case MP4A_AUDIO_OBJECT_TYPE_AAC_LC:
+            if( summary->sbr_mode == MP4A_AAC_SBR_HIERARCHICAL )
+            {
+                /* NOTE: This is not strictly preferable, but accurate; just possibly over-estimated.
+                   We do not expect to use MP4A_AAC_SBR_HIERARCHICAL mode without SBR, nor downsampled mode with SBR. */
+                if( summary->channels <= 2 && summary->frequency <= 24000 )
+                    pli = MP4A_AUDIO_PLI_HE_AAC_L2;
+                else if( summary->channels <= 5 && summary->frequency <= 48000 )
+                    pli = MP4A_AUDIO_PLI_HE_AAC_L5;
+                else
+                    pli = MP4A_AUDIO_PLI_NOT_SPECIFIED;
+                break;
+            }
+            /* pretending plain AAC-LC, if actually HE-AAC. */
+            static const uint32_t mp4sys_aac_pli_table[5][3] = {
+                /* channels, frequency,    audioProfileLevelIndication */
+                {         6,     96000,        MP4A_AUDIO_PLI_AAC_L5 }, /* FIXME: 6ch is not strictly correct, but works in many case. */
+                {         6,     48000,        MP4A_AUDIO_PLI_AAC_L4 }, /* FIXME: 6ch is not strictly correct, but works in many case. */
+                {         2,     48000,        MP4A_AUDIO_PLI_AAC_L2 },
+                {         2,     24000,        MP4A_AUDIO_PLI_AAC_L1 },
+                {         0,         0, MP4A_AUDIO_PLI_NOT_SPECIFIED }
+            };
+            for( int i = 0; summary->channels <= mp4sys_aac_pli_table[i][0] && summary->frequency <= mp4sys_aac_pli_table[i][1] ; i++ )
+                pli = mp4sys_aac_pli_table[i][2];
+            break;
+        case MP4A_AUDIO_OBJECT_TYPE_ALS:
+            /* FIXME: this is not stricly. Summary shall carry max_order, block_switching, bgmc_mode and RLSLMS. */
+            if( summary->channels <= 2 && summary->frequency <= 48000 && summary->sample_size <= 16 && summary->samples_in_frame <= 4096 )
+                pli = MP4A_AUDIO_PLI_ALS_Simple_L1;
             else
                 pli = MP4A_AUDIO_PLI_NOT_SPECIFIED;
             break;
-        }
-        /* pretending plain AAC-LC, if actually HE-AAC. */
-        static const uint32_t mp4sys_aac_pli_table[5][3] = {
-            /* channels, frequency,    audioProfileLevelIndication */
-            {         6,     96000,        MP4A_AUDIO_PLI_AAC_L5 }, /* FIXME: 6ch is not strictly correct, but works in many case. */
-            {         6,     48000,        MP4A_AUDIO_PLI_AAC_L4 }, /* FIXME: 6ch is not strictly correct, but works in many case. */
-            {         2,     48000,        MP4A_AUDIO_PLI_AAC_L2 },
-            {         2,     24000,        MP4A_AUDIO_PLI_AAC_L1 },
-            {         0,         0, MP4A_AUDIO_PLI_NOT_SPECIFIED }
-        };
-        for( int i = 0; summary->channels <= mp4sys_aac_pli_table[i][0] && summary->frequency <= mp4sys_aac_pli_table[i][1] ; i++ )
-            pli = mp4sys_aac_pli_table[i][2];
-        break;
-    case MP4A_AUDIO_OBJECT_TYPE_ALS:
-        /* FIXME: this is not stricly. Summary shall carry max_order, block_switching, bgmc_mode and RLSLMS. */
-        if( summary->channels <= 2 && summary->frequency <= 48000 && summary->sample_size <= 16 && summary->samples_in_frame <= 4096 )
-            pli = MP4A_AUDIO_PLI_ALS_Simple_L1;
-        else
-            pli = MP4A_AUDIO_PLI_NOT_SPECIFIED;
-        break;
-    case MP4A_AUDIO_OBJECT_TYPE_Layer_1:
-    case MP4A_AUDIO_OBJECT_TYPE_Layer_2:
-    case MP4A_AUDIO_OBJECT_TYPE_Layer_3:
-        pli = MP4A_AUDIO_PLI_NOT_SPECIFIED; /* 14496-3, Audio profiles and levels, does not allow any pli. */
-        break;
-    default:
-        pli = MP4A_AUDIO_PLI_NOT_SPECIFIED; /* something we don't know/support, or what the spec never covers. */
-        break;
+        case MP4A_AUDIO_OBJECT_TYPE_Layer_1:
+        case MP4A_AUDIO_OBJECT_TYPE_Layer_2:
+        case MP4A_AUDIO_OBJECT_TYPE_Layer_3:
+            pli = MP4A_AUDIO_PLI_NOT_SPECIFIED; /* 14496-3, Audio profiles and levels, does not allow any pli. */
+            break;
+        default:
+            pli = MP4A_AUDIO_PLI_NOT_SPECIFIED; /* something we don't know/support, or what the spec never covers. */
+            break;
     }
     return pli;
 }

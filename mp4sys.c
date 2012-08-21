@@ -350,8 +350,9 @@ int mp4sys_add_SLConfigDescriptor( mp4sys_ES_Descriptor_t* esd )
     mp4sys_SLConfigDescriptor_t *slcd = (mp4sys_SLConfigDescriptor_t *)lsmash_malloc_zero( sizeof(mp4sys_SLConfigDescriptor_t) );
     if( !slcd )
         return -1;
-    slcd->header.tag = MP4SYS_DESCRIPTOR_TAG_SLConfigDescrTag;
-    slcd->predefined = 0x02; /* MP4 file which does not use URL_Flag shall have constant value 0x02 */
+    slcd->header.tag        = MP4SYS_DESCRIPTOR_TAG_SLConfigDescrTag;
+    slcd->predefined        = 0x02;     /* MP4 file which does not use URL_Flag shall have constant value 0x02 */
+    slcd->useTimeStampsFlag = 1;
     debug_if( mp4sys_remove_SLConfigDescriptor( esd ) )
     {
         free( slcd );
@@ -1146,19 +1147,166 @@ int mp4sys_setup_summary_from_DecoderSpecificInfo( lsmash_audio_summary_t *summa
 
 /**** following functions are for facilitation purpose ****/
 
-mp4sys_ES_Descriptor_t* mp4sys_setup_ES_Descriptor( mp4sys_ES_Descriptor_params_t* params )
+mp4sys_ES_Descriptor_t *mp4sys_setup_ES_Descriptor( mp4sys_ES_Descriptor_params_t *params )
 {
     if( !params )
         return NULL;
-    mp4sys_ES_Descriptor_t* esd = mp4sys_create_ES_Descriptor( params->ES_ID );
+    mp4sys_ES_Descriptor_t *esd = mp4sys_create_ES_Descriptor( params->ES_ID );
     if( !esd )
         return NULL;
     if( mp4sys_add_SLConfigDescriptor( esd )
-        || mp4sys_add_DecoderConfigDescriptor( esd, params->objectTypeIndication, params->streamType, params->bufferSizeDB, params->maxBitrate, params->avgBitrate )
-        || ( params->dsi_payload && params->dsi_payload_length != 0 && mp4sys_add_DecoderSpecificInfo( esd, params->dsi_payload, params->dsi_payload_length ) )
-    ){
+     || mp4sys_add_DecoderConfigDescriptor( esd, params->objectTypeIndication, params->streamType, params->bufferSizeDB, params->maxBitrate, params->avgBitrate )
+     || (params->dsi_payload && params->dsi_payload_length != 0 && mp4sys_add_DecoderSpecificInfo( esd, params->dsi_payload, params->dsi_payload_length )) )
+    {
         mp4sys_remove_ES_Descriptor( esd );
         return NULL;
     }
     return esd;
+}
+
+int lsmash_set_mp4sys_decoder_specific_info( lsmash_mp4sys_decoder_parameters_t *param, uint8_t *payload, uint32_t payload_length )
+{
+    if( !param || !payload || payload_length == 0 )
+        return -1;
+    if( !param->dsi )
+    {
+        param->dsi = lsmash_malloc_zero( sizeof(lsmash_mp4sys_decoder_specific_info_t) );
+        if( !param->dsi )
+            return -1;
+    }
+    else
+    {
+        if( param->dsi->payload )
+        {
+            free( param->dsi->payload );
+            param->dsi->payload = NULL;
+        }
+        param->dsi->payload_length = 0;
+    }
+    param->dsi->payload = lsmash_memdup( payload, payload_length );
+    if( !param->dsi->payload )
+        return -1;
+    param->dsi->payload_length = payload_length;
+    return 0;
+}
+
+void lsmash_destroy_mp4sys_decoder_specific_info( lsmash_mp4sys_decoder_parameters_t *param )
+{
+    if( !param || !param->dsi )
+        return;
+    if( param->dsi->payload )
+        free( param->dsi->payload );
+    free( param->dsi );
+    param->dsi = NULL;
+}
+
+void mp4sys_destruct_decoder_config( void *data )
+{
+    if( !data )
+        return;
+    lsmash_destroy_mp4sys_decoder_specific_info( data );
+    free( data );
+}
+
+uint8_t *lsmash_create_mp4sys_decoder_config( lsmash_mp4sys_decoder_parameters_t *param, uint32_t *data_length )
+{
+    if( !param || !data_length )
+        return NULL;
+    mp4sys_ES_Descriptor_params_t esd_param = { 0 };
+    esd_param.ES_ID                = 0; /* Within sample description, ES_ID is stored as 0. */
+    esd_param.objectTypeIndication = param->objectTypeIndication;
+    esd_param.streamType           = param->streamType;
+    esd_param.bufferSizeDB         = param->bufferSizeDB;
+    esd_param.maxBitrate           = param->maxBitrate;
+    esd_param.avgBitrate           = param->avgBitrate;
+    if( param->dsi && param->dsi->payload && param->dsi->payload_length )
+    {
+        esd_param.dsi_payload        = param->dsi->payload;
+        esd_param.dsi_payload_length = param->dsi->payload_length;
+    }
+    mp4sys_ES_Descriptor_t *esd = mp4sys_setup_ES_Descriptor( &esd_param );
+    if( !esd )
+        return NULL;
+    lsmash_bs_t *bs = lsmash_bs_create( NULL );
+    if( !bs )
+    {
+        mp4sys_remove_ES_Descriptor( esd );
+        return NULL;
+    }
+    lsmash_bs_put_be32( bs, ISOM_FULLBOX_COMMON_SIZE + mp4sys_update_ES_Descriptor_size( esd ) );
+    lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_ESDS );
+    lsmash_bs_put_be32( bs, 0 );
+    mp4sys_put_ES_Descriptor( bs, esd );
+    mp4sys_remove_ES_Descriptor( esd );
+    uint8_t *data = lsmash_bs_export_data( bs, data_length );
+    lsmash_bs_cleanup( bs );
+    if( !data )
+        return NULL;
+    /* Update box size. */
+    data[0] = ((*data_length) >> 24) & 0xff;
+    data[1] = ((*data_length) >> 16) & 0xff;
+    data[2] = ((*data_length) >>  8) & 0xff;
+    data[3] =  (*data_length)        & 0xff;
+    return data;
+}
+
+int mp4sys_construct_decoder_config( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
+{
+    assert( dst && dst->data.structured && src && src->data.unstructured );
+    if( src->size < ISOM_FULLBOX_COMMON_SIZE + 23 )
+        return -1;
+    lsmash_mp4sys_decoder_parameters_t *param = (lsmash_mp4sys_decoder_parameters_t *)dst->data.structured;
+    uint8_t *data = src->data.unstructured;
+    uint64_t size = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+    data += ISOM_BASEBOX_COMMON_SIZE;
+    if( size == 1 )
+    {
+        size = ((uint64_t)data[0] << 56) | ((uint64_t)data[1] << 48) | ((uint64_t)data[2] << 40) | ((uint64_t)data[3] << 32)
+             | ((uint64_t)data[4] << 24) | ((uint64_t)data[5] << 16) | ((uint64_t)data[6] <<  8) |  (uint64_t)data[7];
+        data += 8;
+    }
+    if( size != src->size )
+        return -1;
+    data += 4;  /* Skip version and flags. */
+    lsmash_bs_t *bs = lsmash_bs_create( NULL );
+    if( !bs )
+        return -1;
+    if( lsmash_bs_import_data( bs, data, src->size - (src->data.unstructured - data) ) )
+    {
+        lsmash_bs_cleanup( bs );
+        return -1;
+    }
+    mp4sys_ES_Descriptor_t *esd = mp4sys_get_ES_Descriptor( bs );
+    lsmash_bs_cleanup( bs );
+    if( !esd || !esd->decConfigDescr )
+        return -1;
+    mp4sys_DecoderConfigDescriptor_t *dcd = esd->decConfigDescr;
+    param->objectTypeIndication = dcd->objectTypeIndication;
+    param->streamType           = dcd->streamType;
+    param->bufferSizeDB         = dcd->bufferSizeDB;
+    param->maxBitrate           = dcd->maxBitrate;
+    param->avgBitrate           = dcd->avgBitrate;
+    mp4sys_DecoderSpecificInfo_t *dsi = dcd->decSpecificInfo;
+    if( dsi && dsi->header.size && dsi->data
+     && lsmash_set_mp4sys_decoder_specific_info( param, dsi->data, dsi->header.size ) )
+    {
+        mp4sys_remove_ES_Descriptor( esd );
+        return -1;
+    }
+    mp4sys_remove_ES_Descriptor( esd );
+    return 0;
+}
+
+int mp4sys_copy_decoder_config( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
+{
+    assert( src && src->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED && src->data.structured );
+    assert( dst && dst->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED && dst->data.structured );
+    lsmash_mp4sys_decoder_parameters_t *src_data = (lsmash_mp4sys_decoder_parameters_t *)src->data.structured;
+    lsmash_mp4sys_decoder_parameters_t *dst_data = (lsmash_mp4sys_decoder_parameters_t *)dst->data.structured;
+    lsmash_destroy_mp4sys_decoder_specific_info( dst_data );
+    *dst_data = *src_data;
+    dst_data->dsi = NULL;
+    if( !src_data->dsi || !src_data->dsi->payload || src_data->dsi->payload_length == 0 )
+        return 0;
+    return lsmash_set_mp4sys_decoder_specific_info( dst_data, src_data->dsi->payload, src_data->dsi->payload_length );
 }

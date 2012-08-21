@@ -267,6 +267,7 @@ typedef enum
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_DTS,
 
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_ES_DESCRIPTOR,
+    LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG,
 
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_SAMPLE_SCALE,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264_BITRATE,
@@ -405,8 +406,6 @@ typedef enum {
     lsmash_summary_type summary_type; \
     lsmash_codec_type sample_type; \
     lsmash_codec_specific_list_t *opaque; \
-    lsmash_mp4sys_object_type_indication object_type_indication; \
-    lsmash_mp4sys_stream_type stream_type; \
     uint32_t max_au_length;     /* buffer length for 1 access unit, typically max size of 1 audio/video frame */
 
 typedef struct
@@ -1183,6 +1182,26 @@ void lsmash_cleanup_summary( lsmash_summary_t *summary );
 /****************************************************************************
  * Tools for creating CODEC Specific Information Extensions (Magic Cookies)
  ****************************************************************************/
+/* MPEG-4 streams
+ * Note: bufferSizeDB, maxBitrate and avgBitrate are calculated internally when calling lsmash_finish_movie().
+ *       You need not to set up them manually when muxing streams by L-SMASH. */
+typedef struct lsmash_mp4sys_decoder_specific_info_tag lsmash_mp4sys_decoder_specific_info_t;
+typedef struct
+{
+    lsmash_mp4sys_object_type_indication   objectTypeIndication;
+    lsmash_mp4sys_stream_type              streamType;
+    uint32_t                               bufferSizeDB;    /* the size of the decoding buffer for this elementary stream in byte */
+    uint32_t                               maxBitrate;      /* the maximum bitrate in bits per second of the elementary stream in
+                                                             * any time window of one second duration */
+    uint32_t                               avgBitrate;      /* the average bitrate in bits per second of the elementary stream
+                                                             * Set to 0 if the stream is encoded as variable bitrate. */
+    lsmash_mp4sys_decoder_specific_info_t *dsi;             /* zero or one decoder specific information */
+} lsmash_mp4sys_decoder_parameters_t;
+
+int lsmash_set_mp4sys_decoder_specific_info( lsmash_mp4sys_decoder_parameters_t *param, uint8_t *payload, uint32_t payload_length );
+void lsmash_destroy_mp4sys_decoder_specific_info( lsmash_mp4sys_decoder_parameters_t *param );
+uint8_t *lsmash_create_mp4sys_decoder_config( lsmash_mp4sys_decoder_parameters_t *param, uint32_t *data_length );
+
 /* AC-3 tools to make exdata (AC-3 specific info). */
 typedef struct
 {

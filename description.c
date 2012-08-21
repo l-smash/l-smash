@@ -187,11 +187,16 @@ static void isom_destruct_nothing( void *data )
 
 static int isom_initialize_structured_codec_specific_data( lsmash_codec_specific_t *specific )
 {
+    extern void mp4sys_destruct_decoder_config( void * );
     extern void h264_destruct_specific_data( void * );
     extern void vc1_destruct_specific_data( void * );
     extern void dts_destruct_specific_data( void * );
     switch( specific->type )
     {
+        case LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG :
+            specific->size     = sizeof(lsmash_mp4sys_decoder_parameters_t);
+            specific->destruct = mp4sys_destruct_decoder_config;
+            break;
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264 :
             specific->size     = sizeof(lsmash_h264_specific_parameters_t);
             specific->destruct = h264_destruct_specific_data;
@@ -322,6 +327,7 @@ lsmash_codec_specific_t *lsmash_create_codec_specific_data( lsmash_codec_specifi
 
 static int isom_duplicate_structured_specific_data( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
 {
+    extern int mp4sys_copy_decoder_config( lsmash_codec_specific_t *, lsmash_codec_specific_t * );
     extern int h264_copy_codec_specific( lsmash_codec_specific_t *, lsmash_codec_specific_t * );
     extern int vc1_copy_codec_specific( lsmash_codec_specific_t *, lsmash_codec_specific_t * );
     extern int dts_copy_codec_specific( lsmash_codec_specific_t *, lsmash_codec_specific_t * );
@@ -329,6 +335,8 @@ static int isom_duplicate_structured_specific_data( lsmash_codec_specific_t *dst
     void *dst_data = dst->data.structured;
     switch( src->type )
     {
+        case LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG :
+            return mp4sys_copy_decoder_config( dst, src );
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264 :
             return h264_copy_codec_specific( dst, src );
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_VC_1 :
@@ -594,6 +602,11 @@ lsmash_codec_specific_t *lsmash_convert_codec_specific_format( lsmash_codec_spec
         /* structured -> unstructured */
         switch( specific->type )
         {
+            case LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG :
+                dst->data.unstructured = lsmash_create_mp4sys_decoder_config( (lsmash_mp4sys_decoder_parameters_t *)specific->data.structured, &dst->size );
+                if( !dst->data.unstructured )
+                    goto fail;
+                return dst;
             case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264 :
                 dst->data.unstructured = lsmash_create_h264_specific_info( (lsmash_h264_specific_parameters_t *)specific->data.structured, &dst->size );
                 if( !dst->data.unstructured )
@@ -640,6 +653,7 @@ lsmash_codec_specific_t *lsmash_convert_codec_specific_format( lsmash_codec_spec
     else
     {
         /* unstructured -> structured */
+        extern int mp4sys_construct_decoder_config( lsmash_codec_specific_t *, lsmash_codec_specific_t * );
         extern int h264_construct_specific_parameters( lsmash_codec_specific_t *, lsmash_codec_specific_t * );
         extern int vc1_construct_specific_parameters( lsmash_codec_specific_t *, lsmash_codec_specific_t * );
         extern int ac3_construct_specific_parameters( lsmash_codec_specific_t *, lsmash_codec_specific_t * );
@@ -651,13 +665,14 @@ lsmash_codec_specific_t *lsmash_convert_codec_specific_format( lsmash_codec_spec
             int (*constructor)( lsmash_codec_specific_t *, lsmash_codec_specific_t * );
         } codec_specific_format_constructor_table[] =
             {
-                { LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264,     h264_construct_specific_parameters },
-                { LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_VC_1,     vc1_construct_specific_parameters },
-                { LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3,     ac3_construct_specific_parameters },
-                { LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3,     eac3_construct_specific_parameters },
-                { LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_DTS,      dts_construct_specific_parameters },
-                { LSMASH_CODEC_SPECIFIC_DATA_TYPE_CODEC_GLOBAL_HEADER, isom_construct_global_specific_header },
-                { LSMASH_CODEC_SPECIFIC_DATA_TYPE_UNKNOWN,             NULL }
+                { LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG, mp4sys_construct_decoder_config },
+                { LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264,       h264_construct_specific_parameters },
+                { LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_VC_1,       vc1_construct_specific_parameters },
+                { LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3,       ac3_construct_specific_parameters },
+                { LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3,       eac3_construct_specific_parameters },
+                { LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_DTS,        dts_construct_specific_parameters },
+                { LSMASH_CODEC_SPECIFIC_DATA_TYPE_CODEC_GLOBAL_HEADER,   isom_construct_global_specific_header },
+                { LSMASH_CODEC_SPECIFIC_DATA_TYPE_UNKNOWN,               NULL }
             };
         int (*constructor)( lsmash_codec_specific_t *, lsmash_codec_specific_t * ) = NULL;
         for( int i = 0; codec_specific_format_constructor_table[i].constructor; i++ )
@@ -838,8 +853,14 @@ static int isom_check_valid_summary( lsmash_summary_t *summary )
             if( isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_SIGNIFICANT_BITS ) )
                 return 0;
             break;
+        case ISOM_CODEC_TYPE_MP4V_VIDEO :
+            if( isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG ) )
+                return 0;
+            break;
         case ISOM_CODEC_TYPE_MP4A_AUDIO :
             if( isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_ES_DESCRIPTOR ) )
+                return 0;
+            if( isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG ) )
                 return 0;
             lsmash_codec_specific_t *specific = isom_get_codec_specific_by_box_type( summary->opaque, QT_BOX_TYPE_WAVE );
             if( !specific )
@@ -1243,7 +1264,7 @@ static int isom_append_audio_es_descriptor_extension( isom_box_t *box, lsmash_au
 {
     uint32_t esds_size = 0;
     uint8_t *esds_data = NULL;
-    lsmash_codec_specific_t *specific = isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_ES_DESCRIPTOR );
+    lsmash_codec_specific_t *specific = isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG );
     if( specific )
     {
         if( specific->format == LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED )
@@ -1255,25 +1276,9 @@ static int isom_append_audio_es_descriptor_extension( isom_box_t *box, lsmash_au
         }
         else
         {
-            isom_esds_t *esds = (isom_esds_t *)specific->data.structured;
-            if( !esds )
-                return -1;
-            lsmash_bs_t *bs = lsmash_bs_create( NULL );
-            if( !bs )
-                return -1;
-            lsmash_bs_put_be32( bs, 0 );
-            lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_ESDS );
-            lsmash_bs_put_be32( bs, 0 );
-            mp4sys_put_ES_Descriptor( bs, esds->ES );
-            esds_data = lsmash_bs_export_data( bs, &esds_size );
-            lsmash_bs_cleanup( bs );
+            esds_data = lsmash_create_mp4sys_decoder_config( (lsmash_mp4sys_decoder_parameters_t *)specific->data.structured, &esds_size );
             if( !esds_data )
                 return -1;
-            /* Update box size. */
-            esds_data[0] = ((esds_size) >> 24) & 0xff;
-            esds_data[1] = ((esds_size) >> 16) & 0xff;
-            esds_data[2] = ((esds_size) >>  8) & 0xff;
-            esds_data[3] =  (esds_size)        & 0xff;
         }
     }
     else
@@ -1400,9 +1405,24 @@ static int isom_set_qtff_mp4a_description( isom_audio_entry_t *audio, lsmash_aud
 
 static int isom_set_isom_mp4a_description( isom_audio_entry_t *audio, lsmash_audio_summary_t *summary )
 {
-    if( summary->stream_type != MP4SYS_STREAM_TYPE_AudioStream )
+    if( summary->summary_type != LSMASH_SUMMARY_TYPE_AUDIO )
         return -1;
-    switch( summary->object_type_indication )
+    /* Check objectTypeIndication. */
+    lsmash_codec_specific_t *src = isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG );
+    if( !src )
+        return -1;
+    lsmash_mp4sys_object_type_indication objectTypeIndication;
+    if( src->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED )
+        objectTypeIndication = ((lsmash_mp4sys_decoder_parameters_t *)src->data.structured)->objectTypeIndication;
+    else
+    {
+        lsmash_codec_specific_t *dst = lsmash_convert_codec_specific_format( src, LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+        if( !dst )
+            return -1;
+        objectTypeIndication = ((lsmash_mp4sys_decoder_parameters_t *)dst->data.structured)->objectTypeIndication;
+        lsmash_destroy_codec_specific_data( dst );
+    }
+    switch( objectTypeIndication )
     {
         case MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3:
         case MP4SYS_OBJECT_TYPE_Audio_ISO_13818_7_Main_Profile:
@@ -1888,6 +1908,7 @@ int isom_setup_audio_description( isom_stsd_t *stsd, uint32_t sample_type, lsmas
             }
             case LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_FORMAT_SPECIFIC_FLAGS :
             case LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_ES_DESCRIPTOR :
+            case LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG :
                 break;
             default :
             {
@@ -1977,7 +1998,7 @@ static lsmash_codec_specific_data_type isom_get_codec_specific_data_type( uint32
             { ISOM_BOX_TYPE_DAC3, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3 },
             { ISOM_BOX_TYPE_DEC3, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3 },
             { ISOM_BOX_TYPE_DDTS, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_DTS },
-            { ISOM_BOX_TYPE_ESDS, LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_ES_DESCRIPTOR },
+            { ISOM_BOX_TYPE_ESDS, LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG },
             { ISOM_BOX_TYPE_STSL, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_SAMPLE_SCALE },
             { ISOM_BOX_TYPE_BTRT, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264_BITRATE },
             { QT_BOX_TYPE_FIEL,   LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_FIELD_INFO },

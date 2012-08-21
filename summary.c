@@ -116,8 +116,8 @@ uint8_t *lsmash_create_mp4sys_specific_info( lsmash_audio_summary_t *summary, ui
     }
     mp4sys_ES_Descriptor_params_t esd_param;
     esd_param.ES_ID                = 0;     /* This is esds internal, so 0 is allowed. */
-    esd_param.objectTypeIndication = summary->object_type_indication;
-    esd_param.streamType           = summary->stream_type;
+    //esd_param.objectTypeIndication = summary->object_type_indication;
+    //esd_param.streamType           = summary->stream_type;
     esd_param.bufferSizeDB         = 0;     /* NOTE: ISO/IEC 14496-3 does not mention this, so we use 0. */
     esd_param.maxBitrate           = 0;     /* This will be updated later if needed. or... I think this can be arbitrary value. */
     esd_param.avgBitrate           = 0;     /* FIXME: 0 if VBR. */
@@ -149,20 +149,16 @@ uint8_t *lsmash_create_mp4sys_specific_info( lsmash_audio_summary_t *summary, ui
 lsmash_summary_t *lsmash_create_summary( lsmash_summary_type summary_type )
 {
     size_t summary_size;
-    lsmash_mp4sys_stream_type stream_type;
     switch( summary_type )
     {
         case LSMASH_SUMMARY_TYPE_VIDEO :
             summary_size = sizeof(lsmash_video_summary_t);
-            stream_type = MP4SYS_STREAM_TYPE_VisualStream;
             break;
         case LSMASH_SUMMARY_TYPE_AUDIO :
             summary_size = sizeof(lsmash_audio_summary_t);
-            stream_type = MP4SYS_STREAM_TYPE_AudioStream;
             break;
         default :
             summary_size = sizeof(lsmash_summary_t);
-            stream_type = MP4SYS_STREAM_TYPE_Forbidden;
             return NULL;
     }
     lsmash_summary_t *summary = (lsmash_summary_t *)lsmash_malloc_zero( summary_size );
@@ -175,7 +171,6 @@ lsmash_summary_t *lsmash_create_summary( lsmash_summary_type summary_type )
         return NULL;
     }
     summary->summary_type = summary_type;
-    summary->stream_type  = stream_type;
     return summary;
 }
 
