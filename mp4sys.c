@@ -173,7 +173,6 @@ typedef struct mp4sys_ES_Descriptor_t
     */
 } mp4sys_ES_Descriptor_t;
 
-
 /* 14496-14 Object Descriptors (ES_ID_Inc) */
 typedef struct {
     mp4sys_descriptor_head_t header;
@@ -362,7 +361,7 @@ int mp4sys_add_SLConfigDescriptor( mp4sys_ES_Descriptor_t* esd )
     return 0;
 }
 
-/* ES_ID of the ES Descriptor is stored as 0 when the ES Descriptor is built into sample descriptions in MP4 file
+/* ES_ID of the ES Descriptor is stored as 0 when the ES Descriptor is built into sample descriptions in MP4 file format
  * since the lower 16 bits of the track_ID is used, instead of ES_ID, for the identifier of the elemental stream within the track. */
 mp4sys_ES_Descriptor_t* mp4sys_create_ES_Descriptor( uint16_t ES_ID )
 {

@@ -418,12 +418,11 @@ void lsmash_bits_put( lsmash_bits_t *bits, uint32_t width, uint32_t value )
     }
 }
 
-/* We can change value's type to unsigned int for 64-bit operation if needed. */
-uint32_t lsmash_bits_get( lsmash_bits_t *bits, uint32_t width )
+uint64_t lsmash_bits_get( lsmash_bits_t *bits, uint32_t width )
 {
     debug_if( !bits || !width )
         return 0;
-    uint32_t value = 0;
+    uint64_t value = 0;
     if( bits->store )
     {
         if( bits->store >= width )
