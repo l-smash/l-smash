@@ -858,8 +858,6 @@ static int isom_check_valid_summary( lsmash_summary_t *summary )
                 return 0;
             break;
         case ISOM_CODEC_TYPE_MP4A_AUDIO :
-            if( isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_ES_DESCRIPTOR ) )
-                return 0;
             if( isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG ) )
                 return 0;
             lsmash_codec_specific_t *specific = isom_get_codec_specific_by_box_type( summary->opaque, QT_BOX_TYPE_WAVE );
@@ -1907,9 +1905,8 @@ int isom_setup_audio_description( isom_stsd_t *stsd, uint32_t sample_type, lsmas
                 break;
             }
             case LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_FORMAT_SPECIFIC_FLAGS :
-            case LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_ES_DESCRIPTOR :
             case LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG :
-                break;
+                break;  /* shall be set up already */
             default :
             {
                 lsmash_codec_specific_t *cs = lsmash_convert_codec_specific_format( specific, LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );

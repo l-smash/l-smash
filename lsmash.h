@@ -260,14 +260,13 @@ typedef enum
 {
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_UNKNOWN = 0,
 
+    LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG,
+
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_VC_1,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_DTS,
-
-    LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_ES_DESCRIPTOR,
-    LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG,
 
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_SAMPLE_SCALE,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264_BITRATE,
@@ -308,99 +307,6 @@ typedef struct
 } lsmash_codec_specific_t;
 
 typedef struct lsmash_codec_specific_list_tag lsmash_codec_specific_list_t;
-
-/* objectTypeIndication */
-typedef enum {
-    MP4SYS_OBJECT_TYPE_Forbidden                          = 0x00,   /* Forbidden */
-    MP4SYS_OBJECT_TYPE_Systems_ISO_14496_1                = 0x01,   /* Systems ISO/IEC 14496-1 */
-    /* For all 14496-1 streams unless specifically indicated to the contrary.
-       Scene Description scenes, which are identified with StreamType=0x03, using
-       this object type value shall use the BIFSConfig. */
-    MP4SYS_OBJECT_TYPE_Systems_ISO_14496_1_BIFSv2         = 0x02,   /* Systems ISO/IEC 14496-1 */
-    /* This object type shall be used, with StreamType=0x03, for Scene
-       Description streams that use the BIFSv2Config.
-       Its use with other StreamTypes is reserved. */
-
-    MP4SYS_OBJECT_TYPE_Interaction_Stream                 = 0x03,   /* Interaction Stream */
-    MP4SYS_OBJECT_TYPE_Extended_BIFS                      = 0x04,   /* Extended BIFS */
-    /* Used, with StreamType=0x03, for Scene Description streams that use the BIFSConfigEx; its use with
-       other StreamTypes is reserved. (Was previously reserved for MUCommandStream but not used for that purpose.) */
-    MP4SYS_OBJECT_TYPE_AFX_Stream                         = 0x05,   /* AFX Stream */
-    /* Used, with StreamType=0x03, for Scene Description streams that use the AFXConfig;
-       its use with other StreamTypes is reserved. */
-    MP4SYS_OBJECT_TYPE_Font_Data_Stream                   = 0x06,   /* Font Data Stream */
-    MP4SYS_OBJECT_TYPE_Synthetised_Texture                = 0x07,   /* Synthetised Texture */
-    MP4SYS_OBJECT_TYPE_Text_Stream                        = 0x08,   /* Text Stream */
-
-    MP4SYS_OBJECT_TYPE_Visual_ISO_14496_2                 = 0x20,   /* Visual ISO/IEC 14496-2 */
-    MP4SYS_OBJECT_TYPE_Visual_H264_ISO_14496_10           = 0x21,   /* Visual ITU-T Recommendation H.264 | ISO/IEC 14496-10 */
-    /* The actual object types are within the DecoderSpecificInfo and defined in H.264 | 14496-10. */
-    MP4SYS_OBJECT_TYPE_Parameter_Sets_H_264_ISO_14496_10  = 0x22,   /* Parameter Sets for ITU-T Recommendation H.264 | ISO/IEC 14496-10 */
-    /* The actual object types are within the DecoderSpecificInfo and defined in 14496-2. */
-
-    MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3                  = 0x40,   /* Audio ISO/IEC 14496-3 (MPEG-4 Audio) */
-    //MP4SYS_OBJECT_TYPE_MP4A_AUDIO = 0x40,
-    /* The actual object types are defined in 14496-3 and are in the DecoderSpecificInfo as specified in 14496-3. */
-
-    MP4SYS_OBJECT_TYPE_Visual_ISO_13818_2_Simple_Profile  = 0x60,   /* Visual ISO/IEC 13818-2 Simple Profile (MPEG-2 Video) */
-    MP4SYS_OBJECT_TYPE_Visual_ISO_13818_2_Main_Profile    = 0x61,   /* Visual ISO/IEC 13818-2 Main Profile */
-    MP4SYS_OBJECT_TYPE_Visual_ISO_13818_2_SNR_Profile     = 0x62,   /* Visual ISO/IEC 13818-2 SNR Profile */
-    MP4SYS_OBJECT_TYPE_Visual_ISO_13818_2_Spatial_Profile = 0x63,   /* Visual ISO/IEC 13818-2 Spatial Profile */
-    MP4SYS_OBJECT_TYPE_Visual_ISO_13818_2_High_Profile    = 0x64,   /* Visual ISO/IEC 13818-2 High Profile */
-    MP4SYS_OBJECT_TYPE_Visual_ISO_13818_2_422_Profile     = 0x65,   /* Visual ISO/IEC 13818-2 422 Profile */
-    MP4SYS_OBJECT_TYPE_Audio_ISO_13818_7_Main_Profile     = 0x66,   /* Audio ISO/IEC 13818-7 Main Profile (MPEG-2 Audio)(AAC) */
-    MP4SYS_OBJECT_TYPE_Audio_ISO_13818_7_LC_Profile       = 0x67,   /* Audio ISO/IEC 13818-7 LowComplexity Profile */
-    MP4SYS_OBJECT_TYPE_Audio_ISO_13818_7_SSR_Profile      = 0x68,   /* Audio ISO/IEC 13818-7 Scaleable Sampling Rate Profile */
-    /* For streams kinda 13818-7 the decoder specific information consists of the ADIF header if present
-       (or none if not present) and an access unit is a "raw_data_block()" as defined in 13818-7. */
-    MP4SYS_OBJECT_TYPE_Audio_ISO_13818_3                  = 0x69,   /* Audio ISO/IEC 13818-3 (MPEG-2 BC-Audio)(redefined MPEG-1 Audio in MPEG-2) */
-    /* For streams kinda 13818-3 the decoder specific information is empty since all necessary data is in the bitstream frames itself.
-       The access units in this case are the "frame()" bitstream element as is defined in 11172-3. */
-    MP4SYS_OBJECT_TYPE_Visual_ISO_11172_2                 = 0x6A,   /* Visual ISO/IEC 11172-2 (MPEG-1 Video) */
-    MP4SYS_OBJECT_TYPE_Audio_ISO_11172_3                  = 0x6B,   /* Audio ISO/IEC 11172-3 (MPEG-1 Audio) */
-    MP4SYS_OBJECT_TYPE_Visual_ISO_10918_1                 = 0x6C,   /* Visual ISO/IEC 10918-1 (JPEG) */
-    MP4SYS_OBJECT_TYPE_PNG                                = 0x6D,   /* Portable Network Graphics */
-    MP4SYS_OBJECT_TYPE_Visual_ISO_15444_1_JPEG2000        = 0x6E,   /* Visual ISO/IEC 15444-1 (JPEG 2000) */
-
-    /* FIXME: rename these symbols to be explaining, rather than based on four cc */
-    MP4SYS_OBJECT_TYPE_EVRC_AUDIO                         = 0xA0,   /* EVRC Voice */
-    MP4SYS_OBJECT_TYPE_SSMV_AUDIO                         = 0xA1,   /* SMV Voice */
-    MP4SYS_OBJECT_TYPE_3GPP2_CMF                          = 0xA2,   /* 3GPP2 Compact Multimedia Format (CMF) */
-    MP4SYS_OBJECT_TYPE_VC_1_VIDEO                         = 0xA3,   /* SMPTE VC-1 Video */
-    MP4SYS_OBJECT_TYPE_DRAC_VIDEO                         = 0xA4,   /* Dirac Video Coder */
-    MP4SYS_OBJECT_TYPE_AC_3_AUDIO                         = 0xA5,   /* AC-3 Audio */
-    MP4SYS_OBJECT_TYPE_EC_3_AUDIO                         = 0xA6,   /* Enhanced AC-3 audio */
-    MP4SYS_OBJECT_TYPE_DRA1_AUDIO                         = 0xA7,   /* DRA Audio */
-    MP4SYS_OBJECT_TYPE_G719_AUDIO                         = 0xA8,   /* ITU G.719 Audio */
-    MP4SYS_OBJECT_TYPE_DTSC_AUDIO                         = 0xA9,   /* DTS Coherent Acoustics audio */
-    MP4SYS_OBJECT_TYPE_DTSH_AUDIO                         = 0xAA,   /* DTS-HD High Resolution Audio */
-    MP4SYS_OBJECT_TYPE_DTSL_AUDIO                         = 0xAB,   /* DTS-HD Master Audio */
-    MP4SYS_OBJECT_TYPE_DTSE_AUDIO                         = 0xAC,   /* DTS Express low bit rate audio, also known as DTS LBR */
-
-    MP4SYS_OBJECT_TYPE_SQCP_AUDIO                         = 0xE1,   /* 13K Voice */
-
-    MP4SYS_OBJECT_TYPE_NONE                               = 0xFF,   /* no object type specified */
-    /* Streams with this value with a StreamType indicating a systems stream (values 1,2,3,6,7,8,9)
-       shall be treated as if the ObjectTypeIndication had been set to 0x01. */
-} lsmash_mp4sys_object_type_indication;
-
-/* streamType */
-typedef enum {
-    MP4SYS_STREAM_TYPE_Forbidden               = 0x00,  /* Forbidden */
-    MP4SYS_STREAM_TYPE_ObjectDescriptorStream  = 0x01,  /* ObjectDescriptorStream */
-    MP4SYS_STREAM_TYPE_ClockReferenceStream    = 0x02,  /* ClockReferenceStream */
-    MP4SYS_STREAM_TYPE_SceneDescriptionStream  = 0x03,  /* SceneDescriptionStream */
-    MP4SYS_STREAM_TYPE_VisualStream            = 0x04,  /* VisualStream */
-    MP4SYS_STREAM_TYPE_AudioStream             = 0x05,  /* AudioStream */
-    MP4SYS_STREAM_TYPE_MPEG7Stream             = 0x06,  /* MPEG7Stream */
-    MP4SYS_STREAM_TYPE_IPMPStream              = 0x07,  /* IPMPStream */
-    MP4SYS_STREAM_TYPE_ObjectContentInfoStream = 0x08,  /* ObjectContentInfoStream */
-    MP4SYS_STREAM_TYPE_MPEGJStream             = 0x09,  /* MPEGJStream */
-    MP4SYS_STREAM_TYPE_InteractionStream       = 0x0A,  /* Interaction Stream */
-    MP4SYS_STREAM_TYPE_IPMPToolStream          = 0x0B,  /* IPMPToolStream */
-    MP4SYS_STREAM_TYPE_FontDataStream          = 0x0C,  /* FontDataStream */
-    MP4SYS_STREAM_TYPE_StreamingText           = 0x0D,  /* StreamingText */
-} lsmash_mp4sys_stream_type;
 
 #define LSMASH_BASE_SUMMARY \
     lsmash_summary_type summary_type; \
@@ -1181,10 +1087,102 @@ void lsmash_cleanup_summary( lsmash_summary_t *summary );
 /****************************************************************************
  * Tools for creating CODEC Specific Information Extensions (Magic Cookies)
  ****************************************************************************/
-/* MPEG-4 streams
- * Note: bufferSizeDB, maxBitrate and avgBitrate are calculated internally when calling lsmash_finish_movie().
- *       You need not to set up them manually when muxing streams by L-SMASH. */
+/** MPEG-4 stream tools **/
+/* objectTypeIndication */
+typedef enum {
+    MP4SYS_OBJECT_TYPE_Forbidden                          = 0x00,   /* Forbidden */
+    MP4SYS_OBJECT_TYPE_Systems_ISO_14496_1                = 0x01,   /* Systems ISO/IEC 14496-1
+                                                                     * For all 14496-1 streams unless specifically indicated to the contrary.
+                                                                     * Scene Description scenes, which are identified with StreamType=0x03, using
+                                                                     * this object type value shall use the BIFSConfig. */
+    MP4SYS_OBJECT_TYPE_Systems_ISO_14496_1_BIFSv2         = 0x02,   /* Systems ISO/IEC 14496-1
+                                                                     * This object type shall be used, with StreamType=0x03, for Scene
+                                                                     * Description streams that use the BIFSv2Config.
+                                                                     * Its use with other StreamTypes is reserved. */
+    MP4SYS_OBJECT_TYPE_Interaction_Stream                 = 0x03,   /* Interaction Stream */
+    MP4SYS_OBJECT_TYPE_Extended_BIFS                      = 0x04,   /* Extended BIFS
+                                                                     * Used, with StreamType=0x03, for Scene Description streams that use the BIFSConfigEx;
+                                                                     * its use with other StreamTypes is reserved.
+                                                                     * (Was previously reserved for MUCommandStream but not used for that purpose.) */
+    MP4SYS_OBJECT_TYPE_AFX_Stream                         = 0x05,   /* AFX Stream
+                                                                     * Used, with StreamType=0x03, for Scene Description streams that use the AFXConfig;
+                                                                     * its use with other StreamTypes is reserved. */
+    MP4SYS_OBJECT_TYPE_Font_Data_Stream                   = 0x06,   /* Font Data Stream */
+    MP4SYS_OBJECT_TYPE_Synthetised_Texture                = 0x07,   /* Synthetised Texture */
+    MP4SYS_OBJECT_TYPE_Text_Stream                        = 0x08,   /* Text Stream */
+    MP4SYS_OBJECT_TYPE_Visual_ISO_14496_2                 = 0x20,   /* Visual ISO/IEC 14496-2 */
+    MP4SYS_OBJECT_TYPE_Visual_H264_ISO_14496_10           = 0x21,   /* Visual ITU-T Recommendation H.264 | ISO/IEC 14496-10
+                                                                     * The actual object types are within the DecoderSpecificInfo and defined in H.264 | 14496-10. */
+    MP4SYS_OBJECT_TYPE_Parameter_Sets_H_264_ISO_14496_10  = 0x22,   /* Parameter Sets for ITU-T Recommendation H.264 | ISO/IEC 14496-10
+                                                                     * The actual object types are within the DecoderSpecificInfo and defined in 14496-2. */
+    MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3                  = 0x40,   /* Audio ISO/IEC 14496-3 (MPEG-4 Audio)
+                                                                     * The actual object types are defined in 14496-3 and are in the DecoderSpecificInfo as specified in 14496-3. */
+    MP4SYS_OBJECT_TYPE_Visual_ISO_13818_2_Simple_Profile  = 0x60,   /* Visual ISO/IEC 13818-2 Simple Profile (MPEG-2 Video) */
+    MP4SYS_OBJECT_TYPE_Visual_ISO_13818_2_Main_Profile    = 0x61,   /* Visual ISO/IEC 13818-2 Main Profile */
+    MP4SYS_OBJECT_TYPE_Visual_ISO_13818_2_SNR_Profile     = 0x62,   /* Visual ISO/IEC 13818-2 SNR Profile */
+    MP4SYS_OBJECT_TYPE_Visual_ISO_13818_2_Spatial_Profile = 0x63,   /* Visual ISO/IEC 13818-2 Spatial Profile */
+    MP4SYS_OBJECT_TYPE_Visual_ISO_13818_2_High_Profile    = 0x64,   /* Visual ISO/IEC 13818-2 High Profile */
+    MP4SYS_OBJECT_TYPE_Visual_ISO_13818_2_422_Profile     = 0x65,   /* Visual ISO/IEC 13818-2 422 Profile */
+    MP4SYS_OBJECT_TYPE_Audio_ISO_13818_7_Main_Profile     = 0x66,   /* Audio ISO/IEC 13818-7 Main Profile (MPEG-2 Audio)(AAC) */
+    MP4SYS_OBJECT_TYPE_Audio_ISO_13818_7_LC_Profile       = 0x67,   /* Audio ISO/IEC 13818-7 LowComplexity Profile */
+    MP4SYS_OBJECT_TYPE_Audio_ISO_13818_7_SSR_Profile      = 0x68,   /* Audio ISO/IEC 13818-7 Scaleable Sampling Rate Profile
+                                                                     * For streams kinda 13818-7 the decoder specific information consists of the ADIF header if present
+                                                                     * (or none if not present) and an access unit is a "raw_data_block()" as defined in 13818-7. */
+    MP4SYS_OBJECT_TYPE_Audio_ISO_13818_3                  = 0x69,   /* Audio ISO/IEC 13818-3 (MPEG-2 BC-Audio)(redefined MPEG-1 Audio in MPEG-2)
+                                                                     * For streams kinda 13818-3 the decoder specific information is empty since all necessary data is in the bitstream frames itself.
+                                                                     * The access units in this case are the "frame()" bitstream element as is defined in 11172-3. */
+    MP4SYS_OBJECT_TYPE_Visual_ISO_11172_2                 = 0x6A,   /* Visual ISO/IEC 11172-2 (MPEG-1 Video) */
+    MP4SYS_OBJECT_TYPE_Audio_ISO_11172_3                  = 0x6B,   /* Audio ISO/IEC 11172-3 (MPEG-1 Audio) */
+    MP4SYS_OBJECT_TYPE_Visual_ISO_10918_1                 = 0x6C,   /* Visual ISO/IEC 10918-1 (JPEG) */
+    MP4SYS_OBJECT_TYPE_PNG                                = 0x6D,   /* Portable Network Graphics */
+    MP4SYS_OBJECT_TYPE_Visual_ISO_15444_1_JPEG2000        = 0x6E,   /* Visual ISO/IEC 15444-1 (JPEG 2000) */
+
+    /* FIXME: rename these symbols to be explaining, rather than based on four cc */
+    MP4SYS_OBJECT_TYPE_EVRC_AUDIO                         = 0xA0,   /* EVRC Voice */
+    MP4SYS_OBJECT_TYPE_SSMV_AUDIO                         = 0xA1,   /* SMV Voice */
+    MP4SYS_OBJECT_TYPE_3GPP2_CMF                          = 0xA2,   /* 3GPP2 Compact Multimedia Format (CMF) */
+    MP4SYS_OBJECT_TYPE_VC_1_VIDEO                         = 0xA3,   /* SMPTE VC-1 Video */
+    MP4SYS_OBJECT_TYPE_DRAC_VIDEO                         = 0xA4,   /* Dirac Video Coder */
+    MP4SYS_OBJECT_TYPE_AC_3_AUDIO                         = 0xA5,   /* AC-3 Audio */
+    MP4SYS_OBJECT_TYPE_EC_3_AUDIO                         = 0xA6,   /* Enhanced AC-3 audio */
+    MP4SYS_OBJECT_TYPE_DRA1_AUDIO                         = 0xA7,   /* DRA Audio */
+    MP4SYS_OBJECT_TYPE_G719_AUDIO                         = 0xA8,   /* ITU G.719 Audio */
+    MP4SYS_OBJECT_TYPE_DTSC_AUDIO                         = 0xA9,   /* DTS Coherent Acoustics audio */
+    MP4SYS_OBJECT_TYPE_DTSH_AUDIO                         = 0xAA,   /* DTS-HD High Resolution Audio */
+    MP4SYS_OBJECT_TYPE_DTSL_AUDIO                         = 0xAB,   /* DTS-HD Master Audio */
+    MP4SYS_OBJECT_TYPE_DTSE_AUDIO                         = 0xAC,   /* DTS Express low bit rate audio, also known as DTS LBR */
+    MP4SYS_OBJECT_TYPE_SQCP_AUDIO                         = 0xE1,   /* 13K Voice */
+
+    MP4SYS_OBJECT_TYPE_NONE                               = 0xFF,   /* no object type specified
+                                                                     * Streams with this value with a StreamType indicating a systems stream (values 1,2,3,6,7,8,9)
+                                                                     * shall be treated as if the ObjectTypeIndication had been set to 0x01. */
+} lsmash_mp4sys_object_type_indication;
+
+/* streamType */
+typedef enum {
+    MP4SYS_STREAM_TYPE_Forbidden               = 0x00,  /* Forbidden */
+    MP4SYS_STREAM_TYPE_ObjectDescriptorStream  = 0x01,  /* ObjectDescriptorStream */
+    MP4SYS_STREAM_TYPE_ClockReferenceStream    = 0x02,  /* ClockReferenceStream */
+    MP4SYS_STREAM_TYPE_SceneDescriptionStream  = 0x03,  /* SceneDescriptionStream */
+    MP4SYS_STREAM_TYPE_VisualStream            = 0x04,  /* VisualStream */
+    MP4SYS_STREAM_TYPE_AudioStream             = 0x05,  /* AudioStream */
+    MP4SYS_STREAM_TYPE_MPEG7Stream             = 0x06,  /* MPEG7Stream */
+    MP4SYS_STREAM_TYPE_IPMPStream              = 0x07,  /* IPMPStream */
+    MP4SYS_STREAM_TYPE_ObjectContentInfoStream = 0x08,  /* ObjectContentInfoStream */
+    MP4SYS_STREAM_TYPE_MPEGJStream             = 0x09,  /* MPEGJStream */
+    MP4SYS_STREAM_TYPE_InteractionStream       = 0x0A,  /* Interaction Stream */
+    MP4SYS_STREAM_TYPE_IPMPToolStream          = 0x0B,  /* IPMPToolStream */
+    MP4SYS_STREAM_TYPE_FontDataStream          = 0x0C,  /* FontDataStream */
+    MP4SYS_STREAM_TYPE_StreamingText           = 0x0D,  /* StreamingText */
+} lsmash_mp4sys_stream_type;
+
+/* Decoder Specific Information
+ * an opaque container with information for a specific media decoder
+ * The existence and semantics of decoder specific information depends on the values of streamType and objectTypeIndication. */
 typedef struct lsmash_mp4sys_decoder_specific_info_tag lsmash_mp4sys_decoder_specific_info_t;
+
+/* Note: bufferSizeDB, maxBitrate and avgBitrate are calculated internally when calling lsmash_finish_movie().
+ *       You need not to set up them manually when muxing streams by L-SMASH. */
 typedef struct
 {
     lsmash_mp4sys_object_type_indication   objectTypeIndication;
