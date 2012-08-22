@@ -751,21 +751,7 @@ mp4a_audioProfileLevelIndication mp4a_get_audioProfileLevelIndication( lsmash_au
 {
     if( !summary || summary->summary_type != LSMASH_SUMMARY_TYPE_AUDIO )
         return MP4A_AUDIO_PLI_NONE_REQUIRED;    /* means error. */
-    lsmash_codec_specific_t *src = isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG );
-    if( !src )
-        return MP4A_AUDIO_PLI_NONE_REQUIRED;    /* means error. */
-    lsmash_mp4sys_object_type_indication objectTypeIndication;
-    if( src->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED )
-        objectTypeIndication = ((lsmash_mp4sys_decoder_parameters_t *)src->data.structured)->objectTypeIndication;
-    else
-    {
-        lsmash_codec_specific_t *dst = lsmash_convert_codec_specific_format( src, LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
-        if( !dst )
-            return MP4A_AUDIO_PLI_NONE_REQUIRED; /* means error. */
-        objectTypeIndication = ((lsmash_mp4sys_decoder_parameters_t *)dst->data.structured)->objectTypeIndication;
-        lsmash_destroy_codec_specific_data( dst );
-    }
-    if( objectTypeIndication != MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3 )
+    if( lsmash_mp4sys_get_object_type_indication( (lsmash_summary_t *)summary ) != MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3 )
         return MP4A_AUDIO_PLI_NOT_SPECIFIED;    /* This is of audio stream, but not described in ISO/IEC 14496-3. */
     if( summary->channels == 0 || summary->frequency == 0 )
         return MP4A_AUDIO_PLI_NONE_REQUIRED;    /* means error. */

@@ -29,6 +29,7 @@
 #include <inttypes.h>
 
 #include "box.h"
+#include "description.h"
 #include "mp4a.h"
 #define MP4SYS_INTERNAL
 #include "mp4sys.h"
@@ -1309,4 +1310,27 @@ int mp4sys_copy_decoder_config( lsmash_codec_specific_t *dst, lsmash_codec_speci
     if( !src_data->dsi || !src_data->dsi->payload || src_data->dsi->payload_length == 0 )
         return 0;
     return lsmash_set_mp4sys_decoder_specific_info( dst_data, src_data->dsi->payload, src_data->dsi->payload_length );
+}
+
+lsmash_mp4sys_object_type_indication lsmash_mp4sys_get_object_type_indication( lsmash_summary_t *summary )
+{
+    if( !summary )
+        return MP4SYS_OBJECT_TYPE_Forbidden;
+    lsmash_codec_specific_t *orig = isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG );
+    if( !orig )
+        return MP4SYS_OBJECT_TYPE_Forbidden;
+    /* Found decoder configuration.
+     * Let's get objectTypeIndication. */
+    lsmash_mp4sys_object_type_indication objectTypeIndication;
+    if( orig->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED )
+        objectTypeIndication = ((lsmash_mp4sys_decoder_parameters_t *)orig->data.structured)->objectTypeIndication;
+    else
+    {
+        lsmash_codec_specific_t *conv = lsmash_convert_codec_specific_format( orig, LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+        if( !conv )
+            return MP4SYS_OBJECT_TYPE_Forbidden;
+        objectTypeIndication = ((lsmash_mp4sys_decoder_parameters_t *)conv->data.structured)->objectTypeIndication;
+        lsmash_destroy_codec_specific_data( conv );
+    }
+    return objectTypeIndication;
 }

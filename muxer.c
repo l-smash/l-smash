@@ -928,36 +928,11 @@ static int prepare_output( muxer_t *muxer )
                     if( track_opt->sbr )
                     {
                         /* Check if explicit SBR is valid or not. */
-                        int valid = 0;
-                        uint32_t num_extensions = lsmash_count_codec_specific_data( (lsmash_summary_t *)summary );
-                        for( uint32_t i = 1; i <= num_extensions; i++ )
-                        {
-                            lsmash_codec_specific_t *orig = lsmash_get_codec_specific_data( (lsmash_summary_t *)summary, i );
-                            if( !orig || orig->type != LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG )
-                                continue;
-                            /* Found decoder configuration. */
-                            lsmash_mp4sys_object_type_indication objectTypeIndication;
-                            if( orig->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED )
-                                objectTypeIndication = ((lsmash_mp4sys_decoder_parameters_t *)orig->data.structured)->objectTypeIndication;
-                            else
-                            {
-                                lsmash_codec_specific_t *conv = lsmash_convert_codec_specific_format( orig, LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
-                                if( !conv )
-                                    return ERROR_MSG( "failed to convert format of CODEC specific info.\n" );
-                                objectTypeIndication = ((lsmash_mp4sys_decoder_parameters_t *)conv->data.structured)->objectTypeIndication;
-                                lsmash_destroy_codec_specific_data( conv );
-                            }
-                            if( objectTypeIndication != MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3 )
-                                return ERROR_MSG( "--sbr is only valid with MPEG-4 Audio.\n" );
-                            valid = 1;
-                            break;
-                        }
-                        if( valid )
-                        {
-                            summary->sbr_mode = MP4A_AAC_SBR_BACKWARD_COMPATIBLE;
-                            if( lsmash_setup_AudioSpecificConfig( summary ) )
-                                return ERROR_MSG( "failed to set SBR mode.\n" );
-                        }
+                        if( lsmash_mp4sys_get_object_type_indication( (lsmash_summary_t *)summary ) != MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3 )
+                            return ERROR_MSG( "--sbr is only valid with MPEG-4 Audio.\n" );
+                        summary->sbr_mode = MP4A_AAC_SBR_BACKWARD_COMPATIBLE;
+                        if( lsmash_setup_AudioSpecificConfig( summary ) )
+                            return ERROR_MSG( "failed to set SBR mode.\n" );
                     }
                     media_param.timescale          = summary->frequency;
                     media_param.media_handler_name = track_opt->handler_name ? track_opt->handler_name : "L-SMASH Audio Handler";

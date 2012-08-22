@@ -1420,20 +1420,7 @@ static int isom_set_isom_mp4a_description( isom_audio_entry_t *audio, lsmash_aud
     if( summary->summary_type != LSMASH_SUMMARY_TYPE_AUDIO )
         return -1;
     /* Check objectTypeIndication. */
-    lsmash_codec_specific_t *src = isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG );
-    if( !src )
-        return -1;
-    lsmash_mp4sys_object_type_indication objectTypeIndication;
-    if( src->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED )
-        objectTypeIndication = ((lsmash_mp4sys_decoder_parameters_t *)src->data.structured)->objectTypeIndication;
-    else
-    {
-        lsmash_codec_specific_t *dst = lsmash_convert_codec_specific_format( src, LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
-        if( !dst )
-            return -1;
-        objectTypeIndication = ((lsmash_mp4sys_decoder_parameters_t *)dst->data.structured)->objectTypeIndication;
-        lsmash_destroy_codec_specific_data( dst );
-    }
+    lsmash_mp4sys_object_type_indication objectTypeIndication = lsmash_mp4sys_get_object_type_indication( (lsmash_summary_t *)summary );
     switch( objectTypeIndication )
     {
         case MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3:

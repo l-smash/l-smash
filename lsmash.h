@@ -1198,6 +1198,8 @@ typedef struct
 int lsmash_set_mp4sys_decoder_specific_info( lsmash_mp4sys_decoder_parameters_t *param, uint8_t *payload, uint32_t payload_length );
 void lsmash_destroy_mp4sys_decoder_specific_info( lsmash_mp4sys_decoder_parameters_t *param );
 uint8_t *lsmash_create_mp4sys_decoder_config( lsmash_mp4sys_decoder_parameters_t *param, uint32_t *data_length );
+/* Return MP4SYS_OBJECT_TYPE_Forbidden if objectTypeIndication is not found or there is an error to find it. */
+lsmash_mp4sys_object_type_indication lsmash_mp4sys_get_object_type_indication( lsmash_summary_t *summary );
 
 /* AC-3 tools to make exdata (AC-3 specific info). */
 typedef struct
