@@ -1089,7 +1089,8 @@ void lsmash_cleanup_summary( lsmash_summary_t *summary );
  ****************************************************************************/
 /** MPEG-4 stream tools **/
 /* objectTypeIndication */
-typedef enum {
+typedef enum
+{
     MP4SYS_OBJECT_TYPE_Forbidden                          = 0x00,   /* Forbidden */
     MP4SYS_OBJECT_TYPE_Systems_ISO_14496_1                = 0x01,   /* Systems ISO/IEC 14496-1
                                                                      * For all 14496-1 streams unless specifically indicated to the contrary.
@@ -1159,7 +1160,8 @@ typedef enum {
 } lsmash_mp4sys_object_type_indication;
 
 /* streamType */
-typedef enum {
+typedef enum
+{
     MP4SYS_STREAM_TYPE_Forbidden               = 0x00,  /* Forbidden */
     MP4SYS_STREAM_TYPE_ObjectDescriptorStream  = 0x01,  /* ObjectDescriptorStream */
     MP4SYS_STREAM_TYPE_ClockReferenceStream    = 0x02,  /* ClockReferenceStream */
@@ -1200,6 +1202,9 @@ void lsmash_destroy_mp4sys_decoder_specific_info( lsmash_mp4sys_decoder_paramete
 uint8_t *lsmash_create_mp4sys_decoder_config( lsmash_mp4sys_decoder_parameters_t *param, uint32_t *data_length );
 /* Return MP4SYS_OBJECT_TYPE_Forbidden if objectTypeIndication is not found or there is an error to find it. */
 lsmash_mp4sys_object_type_indication lsmash_mp4sys_get_object_type_indication( lsmash_summary_t *summary );
+/* Return -1 if any error.
+ * Even if the decoder specific information is not found, it is not an error since no decoder specific information is allowed for some stream formats. */
+int lsmash_get_mp4sys_decoder_specific_info( lsmash_mp4sys_decoder_parameters_t *param, uint8_t **payload, uint32_t *payload_length );
 
 /* AC-3 tools to make exdata (AC-3 specific info). */
 typedef struct

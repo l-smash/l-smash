@@ -1334,3 +1334,21 @@ lsmash_mp4sys_object_type_indication lsmash_mp4sys_get_object_type_indication( l
     }
     return objectTypeIndication;
 }
+
+int lsmash_get_mp4sys_decoder_specific_info( lsmash_mp4sys_decoder_parameters_t *param, uint8_t **payload, uint32_t *payload_length )
+{
+    if( !param || !payload || !payload_length )
+        return -1;
+    if( !param->dsi || !param->dsi->payload || param->dsi->payload_length == 0 )
+    {
+        *payload = NULL;
+        *payload_length = 0;
+        return 0;
+    }
+    uint8_t *temp = lsmash_memdup( param->dsi->payload, param->dsi->payload_length );
+    if( !temp )
+        return -1;
+    *payload = temp;
+    *payload_length = param->dsi->payload_length;
+    return 0;
+}
