@@ -38,10 +38,20 @@
 
 typedef struct
 {
-    uint32_t track_ID;
-    uint32_t last_sample_delta;
-    uint32_t current_sample_number;
-    int      reach_end_of_media_timeline;
+    int               active;
+    lsmash_summary_t *summary;
+} summary_t;
+
+typedef struct
+{
+    int                       active;
+    uint32_t                  track_ID;
+    uint32_t                  last_sample_delta;
+    uint32_t                  current_sample_number;
+    int                       reach_end_of_media_timeline;
+    uint32_t                 *summary_remap;
+    uint32_t                  num_summaries;
+    summary_t                *summaries;
     lsmash_track_parameters_t track_param;
     lsmash_media_parameters_t media_param;
 } track_t;
@@ -52,7 +62,9 @@ typedef struct
     lsmash_itunes_metadata_t *itunes_metadata;
     track_t                  *track;
     lsmash_movie_parameters_t movie_param;
+    uint32_t                  num_tracks;
     uint32_t                  num_itunes_metadata;
+    uint32_t                  current_track_number;
 } movie_t;
 
 typedef struct
@@ -223,7 +235,30 @@ fail:
     return -1;
 }
 
-static int get_movie( movie_t *input, char *input_name, uint32_t *num_tracks )
+static int get_summaries( movie_t *input, track_t *track )
+{
+    track->num_summaries = lsmash_count_summary( input->root, track->track_ID );
+    if( track->num_summaries == 0 )
+        return ERROR_MSG( "Failed to get find valid summaries.\n" );
+    track->summaries = malloc( track->num_summaries * sizeof(summary_t) );
+    if( !track->summaries )
+        return ERROR_MSG( "failed to alloc input summaries.\n" );
+    memset( track->summaries, 0, track->num_summaries * sizeof(summary_t) );
+    for( uint32_t j = 0; j < track->num_summaries; j++ )
+    {
+        lsmash_summary_t *summary = lsmash_get_summary( input->root, track->track_ID, j + 1 );
+        if( !summary )
+        {
+            WARNING_MSG( "failed to get a summary.\n" );
+            continue;
+        }
+        track->summaries[j].summary = summary;
+        track->summaries[j].active  = 1;
+    }
+    return 0;
+}
+
+static int get_movie( movie_t *input, char *input_name )
 {
     if( !strcmp( input_name, "-" ) )
         return ERROR_MSG( "Standard input not supported.\n" );
@@ -248,33 +283,52 @@ static int get_movie( movie_t *input, char *input_name, uint32_t *num_tracks )
         }
         input->num_itunes_metadata = itunes_metadata_count;
     }
+    input->current_track_number = 1;
     lsmash_movie_parameters_t *movie_param = &input->movie_param;
     lsmash_initialize_movie_parameters( movie_param );
     lsmash_get_movie_parameters( input->root, movie_param );
-    *num_tracks = movie_param->number_of_tracks;
+    input->num_tracks = movie_param->number_of_tracks;
     /* Create tracks. */
-    track_t *track = input->track = malloc( *num_tracks * sizeof(track_t) );
+    track_t *track = input->track = malloc( input->num_tracks * sizeof(track_t) );
     if( !track )
         return ERROR_MSG( "Failed to alloc input tracks.\n" );
-    memset( track, 0, *num_tracks * sizeof(track_t) );
-    for( uint32_t i = 0; i < *num_tracks; i++ )
+    memset( track, 0, input->num_tracks * sizeof(track_t) );
+    for( uint32_t i = 0; i < input->num_tracks; i++ )
     {
         track[i].track_ID = lsmash_get_track_ID( input->root, i + 1 );
         if( !track[i].track_ID )
             return ERROR_MSG( "Failed to get track_ID.\n" );
     }
-    for( uint32_t i = 0; i < *num_tracks; i++ )
+    for( uint32_t i = 0; i < input->num_tracks; i++ )
     {
         lsmash_initialize_track_parameters( &track[i].track_param );
         if( lsmash_get_track_parameters( input->root, track[i].track_ID, &track[i].track_param ) )
-            return ERROR_MSG( "Failed to get track parameters.\n" );
+        {
+            WARNING_MSG( "failed to get track parameters.\n" );
+            continue;
+        }
         lsmash_initialize_media_parameters( &track[i].media_param );
         if( lsmash_get_media_parameters( input->root, track[i].track_ID, &track[i].media_param ) )
-            return ERROR_MSG( "Failed to get media parameters.\n" );
+        {
+            WARNING_MSG( "failed to get media parameters.\n" );
+            continue;
+        }
         if( lsmash_construct_timeline( input->root, track[i].track_ID ) )
-            return ERROR_MSG( "Failed to construct timeline.\n" );
+        {
+            WARNING_MSG( "failed to construct timeline.\n" );
+            continue;
+        }
         if( lsmash_get_last_sample_delta_from_media_timeline( input->root, track[i].track_ID, &track[i].last_sample_delta ) )
-            return ERROR_MSG( "Failed to get the last sample delta.\n" );
+        {
+            WARNING_MSG( "failed to get the last sample delta.\n" );
+            continue;
+        }
+        if( get_summaries( input, &track[i] ) )
+        {
+            WARNING_MSG( "failed to get valid summaries.\n" );
+            continue;
+        }
+        track[i].active                = 1;
         track[i].current_sample_number = 1;
     }
     lsmash_discard_boxes( input->root );
@@ -844,11 +898,10 @@ int main( int argc, char *argv[] )
     }
     if( argn > argc - 2 )
         return TIMELINEEDITOR_ERR( "Invalid arguments.\n" );
-    uint32_t num_tracks;
     /* Get input movies. */
-    if( get_movie( &input, argv[argn++], &num_tracks ) )
+    if( get_movie( &input, argv[argn++] ) )
         return TIMELINEEDITOR_ERR( "Failed to get input movie.\n" );
-    if( opt.track_number && (opt.track_number > num_tracks) )
+    if( opt.track_number && (opt.track_number > input.num_tracks) )
         return TIMELINEEDITOR_ERR( "Invalid track number.\n" );
     /* Create output movie. */
     output.root = lsmash_open_movie( argv[argn], LSMASH_FILE_MODE_WRITE );
@@ -869,18 +922,28 @@ int main( int argc, char *argv[] )
             continue;
         }
     /* Create tracks of the output movie. */
-    output.track = malloc( num_tracks * sizeof(track_t) );
+    output.track = malloc( input.num_tracks * sizeof(track_t) );
     if( !output.track )
         return TIMELINEEDITOR_ERR( "Failed to alloc output tracks.\n" );
     /* Edit timeline. */
     if( edit_media_timeline( &input, &timecode, &opt ) )
         return TIMELINEEDITOR_ERR( "Failed to edit timeline.\n" );
-    for( uint32_t i = 0; i < num_tracks; i++ )
+    output.num_tracks = input.num_tracks;
+    output.current_track_number = 1;
+    for( uint32_t i = 0; i < input.num_tracks; i++ )
     {
         track_t *in_track = &input.track[i];
+        if( !in_track->active )
+        {
+            -- output.num_tracks;
+            continue;
+        }
         track_t *out_track = &output.track[i];
-        uint32_t handler_type = in_track->media_param.handler_type;
-        out_track->track_ID = lsmash_create_track( output.root, handler_type );
+        out_track->summary_remap = malloc( in_track->num_summaries * sizeof(uint32_t) );
+        if( !out_track->summary_remap )
+            return TIMELINEEDITOR_ERR( "failed to create summary mapping for a track.\n" );
+        memset( out_track->summary_remap, 0, in_track->num_summaries * sizeof(uint32_t) );
+        out_track->track_ID = lsmash_create_track( output.root, in_track->media_param.handler_type );
         if( !out_track->track_ID )
             return TIMELINEEDITOR_ERR( "Failed to create a track.\n" );
         /* Copy track and media parameters except for track_ID. */
@@ -891,28 +954,45 @@ int main( int argc, char *argv[] )
             return TIMELINEEDITOR_ERR( "Failed to set track parameters.\n" );
         if( lsmash_set_media_parameters( output.root, out_track->track_ID, &out_track->media_param ) )
             return TIMELINEEDITOR_ERR( "Failed to set media parameters.\n" );
-/*
-        if( lsmash_copy_decoder_specific_info( output.root, out_track->track_ID, input.root, in_track->track_ID ) )
-            return TIMELINEEDITOR_ERR( "Failed to copy a Decoder Specific Info.\n" );
-*/
-        out_track->last_sample_delta = in_track->last_sample_delta;
-        out_track->current_sample_number = 1;
+        uint32_t valid_summary_count = 0;
+        for( uint32_t k = 0; k < in_track->num_summaries; k++ )
+        {
+            if( !in_track->summaries[k].active )
+            {
+                out_track->summary_remap[k] = 0;
+                continue;
+            }
+            lsmash_summary_t *summary = in_track->summaries[k].summary;
+            if( lsmash_add_sample_entry( output.root, out_track->track_ID, summary ) == 0 )
+            {
+                WARNING_MSG( "failed to append a summary.\n" );
+                lsmash_cleanup_summary( summary );
+                in_track->summaries[k].summary = NULL;
+                in_track->summaries[k].active  = 0;
+                out_track->summary_remap[k] = 0;
+                continue;
+            }
+            out_track->summary_remap[k] = ++valid_summary_count;
+        }
+        if( valid_summary_count == 0 )
+            return TIMELINEEDITOR_ERR( "failed to append all summaries.\n" );
+        out_track->last_sample_delta           = in_track->last_sample_delta;
+        out_track->current_sample_number       = 1;
         out_track->reach_end_of_media_timeline = 0;
     }
     /* Start muxing. */
     double   largest_dts = 0;
-    uint32_t current_track_number = 1;
     uint32_t num_consecutive_sample_skip = 0;
-    uint32_t num_active_input_tracks = num_tracks;
+    uint32_t num_active_input_tracks = output.num_tracks;
     uint64_t total_media_size = 0;
     uint8_t  sample_count = 0;
     while( 1 )
     {
-        track_t *in_track = &input.track[current_track_number - 1];
+        track_t *in_track = &input.track[input.current_track_number - 1];
         /* Try append a sample in an input track where we didn't reach the end of media timeline. */
         if( !in_track->reach_end_of_media_timeline )
         {
-            track_t *out_track = &output.track[current_track_number - 1];
+            track_t *out_track = &output.track[output.current_track_number - 1];
             uint32_t in_track_ID = in_track->track_ID;
             uint32_t out_track_ID = out_track->track_ID;
             uint32_t input_media_timescale = in_track->media_param.timescale;
@@ -937,34 +1017,42 @@ int main( int argc, char *argv[] )
                 lsmash_sample_t *sample = lsmash_get_sample_from_media_timeline( input.root, in_track_ID, in_track->current_sample_number );
                 if( !sample )
                     return TIMELINEEDITOR_ERR( "Failed to get sample.\n" );
-                /* Append sample into output movie. */
-                uint64_t sample_size = sample->length;      /* sample will be deleted internally after appending. */
-                if( lsmash_append_sample( output.root, out_track_ID, sample ) )
+                sample->index = sample->index > in_track->num_summaries ? in_track->num_summaries
+                              : sample->index == 0 ? 1
+                              : sample->index;
+                sample->index = out_track->summary_remap[ sample->index - 1 ];
+                if( sample->index )
                 {
-                    lsmash_delete_sample( sample );
-                    return TIMELINEEDITOR_ERR( "Failed to append a sample.\n" );
+                    /* Append sample into output movie. */
+                    uint64_t sample_size = sample->length;      /* sample will be deleted internally after appending. */
+                    if( lsmash_append_sample( output.root, out_track_ID, sample ) )
+                    {
+                        lsmash_delete_sample( sample );
+                        return TIMELINEEDITOR_ERR( "Failed to append a sample.\n" );
+                    }
+                    largest_dts = LSMASH_MAX( largest_dts, (double)dts / input_media_timescale );
+                    total_media_size += sample_size;
+                    ++ in_track->current_sample_number;
+                    num_consecutive_sample_skip = 0;
+                    /* Print, per 256 samples, total size of imported media. */
+                    if( ++sample_count == 0 )
+                        eprintf( "Importing: %"PRIu64" bytes\r", total_media_size );
                 }
-                largest_dts = LSMASH_MAX( largest_dts, (double)dts / input_media_timescale );
-                total_media_size += sample_size;
-                ++ in_track->current_sample_number;
-                num_consecutive_sample_skip = 0;
-                /* Print, per 256 samples, total size of imported media. */
-                if( ++sample_count == 0 )
-                    eprintf( "Importing: %"PRIu64" bytes\r", total_media_size );
             }
             else
                 ++num_consecutive_sample_skip;      /* Skip appendig sample. */
         }
         /* Move the next track. */
-        ++current_track_number;
-        if( current_track_number > num_tracks )
-            current_track_number = 1;   /* Back the first track. */
+        if( ++ input.current_track_number > input.num_tracks )
+            input.current_track_number = 1;     /* Back the first track. */
+        if( ++ output.current_track_number > output.num_tracks )
+            output.current_track_number = 1;    /* Back the first track in the output movie. */
     }
-    for( uint32_t i = 0; i < num_tracks; i++ )
+    for( uint32_t i = 0; i < output.num_tracks; i++ )
         if( lsmash_flush_pooled_samples( output.root, output.track[i].track_ID, output.track[i].last_sample_delta ) )
             return TIMELINEEDITOR_ERR( "Failed to flush samples.\n" );
     /* Copy timeline maps. */
-    for( uint32_t i = 0; i < num_tracks; i++ )
+    for( uint32_t i = 0; i < output.num_tracks; i++ )
         if( lsmash_copy_timeline_map( output.root, output.track[i].track_ID, input.root, input.track[i].track_ID ) )
             return TIMELINEEDITOR_ERR( "Failed to copy a timeline map.\n" );
     /* Edit timeline map. */

@@ -390,8 +390,7 @@ static int get_movie( input_movie_t *input, char *input_name )
             lsmash_summary_t *summary = lsmash_get_summary( input->root, in_track[i].track_ID, j + 1 );
             if( !summary )
             {
-                free( summary );
-                WARNING_MSG( "failed to get a summaries.\n" );
+                WARNING_MSG( "failed to get a summary.\n" );
                 continue;
             }
             in_track[i].summaries[j].summary = summary;
