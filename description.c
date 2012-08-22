@@ -1169,14 +1169,28 @@ int isom_setup_visual_description( isom_stsd_t *stsd, uint32_t sample_type, lsma
         if( !box )
             goto fail;
         isom_init_box_common( box, visual, ISOM_BOX_TYPE_CLAP );
-        box->cleanApertureWidthN  = summary->clap.width.n;
-        box->cleanApertureWidthD  = summary->clap.width.d;
-        box->cleanApertureHeightN = summary->clap.height.n;
-        box->cleanApertureHeightD = summary->clap.height.d;
-        box->horizOffN            = summary->clap.horizontal_offset.n;
-        box->horizOffD            = summary->clap.horizontal_offset.d;
-        box->vertOffN             = summary->clap.vertical_offset.n;
-        box->vertOffD             = summary->clap.vertical_offset.d;
+        if( summary->clap.width.d && summary->clap.height.d && summary->clap.horizontal_offset.d && summary->clap.vertical_offset.d )
+        {
+            box->cleanApertureWidthN  = summary->clap.width.n;
+            box->cleanApertureWidthD  = summary->clap.width.d;
+            box->cleanApertureHeightN = summary->clap.height.n;
+            box->cleanApertureHeightD = summary->clap.height.d;
+            box->horizOffN            = summary->clap.horizontal_offset.n;
+            box->horizOffD            = summary->clap.horizontal_offset.d;
+            box->vertOffN             = summary->clap.vertical_offset.n;
+            box->vertOffD             = summary->clap.vertical_offset.d;
+        }
+        else
+        {
+            box->cleanApertureWidthN  = summary->width;
+            box->cleanApertureWidthD  = 1;
+            box->cleanApertureHeightN = summary->height;
+            box->cleanApertureHeightD = 1;
+            box->horizOffN            = 0;
+            box->horizOffD            = 1;
+            box->vertOffN             = 0;
+            box->vertOffD             = 1;
+        }
         if( isom_add_extension_box( &visual->extensions, box, isom_remove_clap ) )
         {
             free( box );
