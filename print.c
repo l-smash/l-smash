@@ -277,11 +277,6 @@ static int isom_print_iods( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
     return isom_print_simple( fp, box, level, "Object Descriptor Box" );
 }
 
-static int isom_print_esds( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
-{
-    return isom_print_simple( fp, box, level, "ES Descriptor Box" );
-}
-
 static int isom_print_trak( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
 {
     return isom_print_simple( fp, box, level, "Track Box" );
@@ -2197,14 +2192,10 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
                     return isom_print_frma;
                 case QT_BOX_TYPE_ENDA :
                     return isom_print_enda;
-                case ISOM_BOX_TYPE_ESDS :
-                    return isom_print_esds;
-                case QT_BOX_TYPE_CHAN :
-                    return isom_print_chan;
                 case QT_BOX_TYPE_TERMINATOR :
                     return isom_print_terminator;
                 default :
-                    return isom_print_unknown;
+                    return isom_print_sample_description_extesion;
             }
         if( parent->type == ISOM_BOX_TYPE_TREF )
             return isom_print_track_reference_type;
@@ -2238,8 +2229,6 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
             return isom_print_mvhd;
         case ISOM_BOX_TYPE_IODS :
             return isom_print_iods;
-        case ISOM_BOX_TYPE_ESDS :
-            return isom_print_esds;
         case ISOM_BOX_TYPE_TRAK :
             return isom_print_trak;
         case ISOM_BOX_TYPE_TKHD :
