@@ -84,68 +84,6 @@ int lsmash_setup_AudioSpecificConfig( lsmash_audio_summary_t *summary )
     return 0;
 }
 
-uint8_t *lsmash_create_mp4sys_specific_info( lsmash_audio_summary_t *summary, uint8_t *exdata, uint32_t exdata_length, uint32_t *data_length )
-{
-    if( !summary )
-        return NULL;
-    lsmash_bs_t* bs = lsmash_bs_create( NULL ); /* no file writing */
-    if( !bs )
-        return NULL;
-    mp4a_AudioSpecificConfig_t *asc =
-        mp4a_create_AudioSpecificConfig( summary->aot,
-                                         summary->frequency,
-                                         summary->channels,
-                                         summary->sbr_mode,
-                                         exdata,
-                                         exdata_length );
-    if( !asc )
-    {
-        lsmash_bs_cleanup( bs );
-        return NULL;
-    }
-    mp4a_put_AudioSpecificConfig( bs, asc );
-    void *new_asc;
-    uint32_t new_length;
-    new_asc = lsmash_bs_export_data( bs, &new_length );
-    mp4a_remove_AudioSpecificConfig( asc );
-    lsmash_bs_empty( bs );
-    if( !new_asc )
-    {
-        lsmash_bs_cleanup( bs );
-        return NULL;
-    }
-    mp4sys_ES_Descriptor_params_t esd_param;
-    esd_param.ES_ID                = 0;     /* This is esds internal, so 0 is allowed. */
-    //esd_param.objectTypeIndication = summary->object_type_indication;
-    //esd_param.streamType           = summary->stream_type;
-    esd_param.bufferSizeDB         = 0;     /* NOTE: ISO/IEC 14496-3 does not mention this, so we use 0. */
-    esd_param.maxBitrate           = 0;     /* This will be updated later if needed. or... I think this can be arbitrary value. */
-    esd_param.avgBitrate           = 0;     /* FIXME: 0 if VBR. */
-    esd_param.dsi_payload          = new_asc;
-    esd_param.dsi_payload_length   = new_length;
-    mp4sys_ES_Descriptor_t *ES = mp4sys_setup_ES_Descriptor( &esd_param );
-    if( !ES )
-    {
-        lsmash_bs_cleanup( bs );
-        return NULL;
-    }
-    lsmash_bs_put_be32( bs, ISOM_FULLBOX_COMMON_SIZE + mp4sys_update_ES_Descriptor_size( ES ) );
-    lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_ESDS );
-    lsmash_bs_put_be32( bs, 0 );
-    mp4sys_put_ES_Descriptor( bs, ES );
-    mp4sys_remove_ES_Descriptor( ES );
-    uint8_t *data = lsmash_bs_export_data( bs, data_length );
-    lsmash_bs_cleanup( bs );
-    if( !data )
-        return NULL;
-    /* Update box size. */
-    data[0] = ((*data_length) >> 24) & 0xff;
-    data[1] = ((*data_length) >> 16) & 0xff;
-    data[2] = ((*data_length) >>  8) & 0xff;
-    data[3] =  (*data_length)        & 0xff;
-    return data;
-}
-
 lsmash_summary_t *lsmash_create_summary( lsmash_summary_type summary_type )
 {
     size_t summary_size;

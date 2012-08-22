@@ -1174,7 +1174,6 @@ void lsmash_sort_timestamps_composition_order( lsmash_media_ts_list_t *ts_list )
 
 /* to facilitate to make exdata (typically DecoderSpecificInfo or AudioSpecificConfig). */
 int lsmash_setup_AudioSpecificConfig( lsmash_audio_summary_t* summary );
-uint8_t *lsmash_create_mp4sys_specific_info( lsmash_audio_summary_t *summary, uint8_t *exdata, uint32_t exdata_length, uint32_t *data_length );
 
 lsmash_summary_t *lsmash_create_summary( lsmash_summary_type summary_type );
 void lsmash_cleanup_summary( lsmash_summary_t *summary );

@@ -288,8 +288,8 @@ mp4a_AudioSpecificConfig_t *mp4a_create_AudioSpecificConfig(
 )
 {
     if( aot != MP4A_AUDIO_OBJECT_TYPE_AAC_MAIN && aot != MP4A_AUDIO_OBJECT_TYPE_AAC_LC
-        && aot != MP4A_AUDIO_OBJECT_TYPE_AAC_SSR && aot != MP4A_AUDIO_OBJECT_TYPE_AAC_LTP
-        && aot != MP4A_AUDIO_OBJECT_TYPE_TwinVQ && aot != MP4A_AUDIO_OBJECT_TYPE_ALS )
+     && aot != MP4A_AUDIO_OBJECT_TYPE_AAC_SSR && aot != MP4A_AUDIO_OBJECT_TYPE_AAC_LTP
+     && aot != MP4A_AUDIO_OBJECT_TYPE_TwinVQ && aot != MP4A_AUDIO_OBJECT_TYPE_ALS )
         return NULL;
     if( frequency == 0 )
         return NULL;
