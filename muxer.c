@@ -953,7 +953,7 @@ static int prepare_output( muxer_t *muxer )
             if( lsmash_set_media_parameters( output->root, out_track->track_ID, &media_param ) )
                 return ERROR_MSG( "failed to set media parameters.\n" );
             out_track->summary = in_track->summary;
-            out_track->sample_entry = lsmash_add_sample_entry( output->root, out_track->track_ID, out_track->summary->sample_type, out_track->summary );
+            out_track->sample_entry = lsmash_add_sample_entry( output->root, out_track->track_ID, out_track->summary );
             if( !out_track->sample_entry )
                 return ERROR_MSG( "failed to add sample description entry.\n" );
             out_track->active = 1;
@@ -1013,7 +1013,7 @@ static int do_mux( muxer_t *muxer )
                     input_track_t *in_track = &input->track[input->current_track_number - 1];
                     lsmash_cleanup_summary( in_track->summary );
                     out_track->summary = in_track->summary = mp4sys_duplicate_summary( input->importer, input->current_track_number );
-                    out_track->sample_entry = lsmash_add_sample_entry( output->root, out_track->track_ID, out_track->summary->sample_type, out_track->summary );
+                    out_track->sample_entry = lsmash_add_sample_entry( output->root, out_track->track_ID, out_track->summary );
                     if( !out_track->sample_entry )
                     {
                         ERROR_MSG( "failed to add sample description entry.\n" );

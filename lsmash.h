@@ -1007,7 +1007,7 @@ void lsmash_initialize_track_parameters( lsmash_track_parameters_t *param );
 int lsmash_set_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_track_parameters_t *param );
 void lsmash_initialize_media_parameters( lsmash_media_parameters_t *param );
 int lsmash_set_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_media_parameters_t *param );
-int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_type, void *summary );
+int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, void *summary );
 lsmash_sample_t *lsmash_create_sample( uint32_t size );
 int lsmash_sample_alloc( lsmash_sample_t *sample, uint32_t size );
 void lsmash_delete_sample( lsmash_sample_t *sample );

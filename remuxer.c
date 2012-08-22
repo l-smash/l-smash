@@ -768,7 +768,7 @@ static int prepare_output( remuxer_t *remuxer )
                     continue;
                 }
                 lsmash_summary_t *summary = in_track->summaries[k].summary;
-                if( lsmash_add_sample_entry( output->root, out_track->track_ID, summary->sample_type, summary ) == 0 )
+                if( lsmash_add_sample_entry( output->root, out_track->track_ID, summary ) == 0 )
                 {
                     WARNING_MSG( "failed to append a summary.\n" );
                     lsmash_cleanup_summary( summary );

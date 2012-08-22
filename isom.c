@@ -461,8 +461,10 @@ static int isom_add_tx3g_entry( isom_stsd_t *stsd )
 }
 
 /* This function returns 0 if failed, sample_entry_number if succeeded. */
-int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_type, void *summary )
+int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, void *summary )
 {
+    if( !summary )
+        return 0;
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->root || !trak->root->ftyp || !trak->mdia || !trak->mdia->minf
      || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd || !trak->mdia->minf->stbl->stsd->list )
@@ -470,6 +472,7 @@ int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, uint32_t sa
     isom_stsd_t *stsd = trak->mdia->minf->stbl->stsd;
     lsmash_entry_list_t *list = stsd->list;
     int ret = -1;
+    lsmash_codec_type sample_type = ((lsmash_summary_t *)summary)->sample_type;
     switch( sample_type )
     {
         case ISOM_CODEC_TYPE_AVC1_VIDEO :
