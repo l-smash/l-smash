@@ -837,12 +837,17 @@ int dts_parse_core_substream( dts_info_t *info, uint8_t *data, uint32_t data_len
     int frame_type = dts_bits_get( bits, 1, &bits_pos );                        /* FTYPE           (1) */
     int deficit_sample_count = dts_bits_get( bits, 5, &bits_pos );              /* SHORT           (5) */
     if( frame_type == 1 && deficit_sample_count != 31 )
-        goto parse_fail;    /* A normal frame (FTYPE == 1) must have SHORT == 31. */
+        goto parse_fail;    /* Any normal frame (FTYPE == 1) must have SHORT == 31. */
     int crc_present_flag = dts_bits_get( bits, 1, &bits_pos );                  /* CPF             (1) */
     int num_of_pcm_sample_blocks = dts_bits_get( bits, 7, &bits_pos ) + 1;      /* NBLKS           (7) */
     if( num_of_pcm_sample_blocks <= 5 )
         goto parse_fail;
     info->core.frame_duration = 32 * num_of_pcm_sample_blocks;
+    if( frame_type == 1 && info->core.frame_duration != 256
+     && info->core.frame_duration != 512 && info->core.frame_duration != 1024
+     && info->core.frame_duration != 2048 && info->core.frame_duration != 4096 )
+        goto parse_fail;    /* For any normal frame, the actual number of PCM core samples per channel must be
+                             * either 4096, 2048, 1024, 512, or 256 samples per channel. */
     info->core.frame_size = dts_bits_get( bits, 14, &bits_pos );                /* FSIZE           (14) */
     info->frame_size = info->core.frame_size + 1;
     if( info->frame_size < DTS_MIN_CORE_SIZE )
