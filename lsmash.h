@@ -267,6 +267,7 @@ typedef enum
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_DTS,
+    LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_ALAC,
 
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_SAMPLE_SCALE,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264_BITRATE,
@@ -1318,6 +1319,25 @@ uint32_t lsmash_dts_get_codingname( lsmash_dts_specific_parameters_t *param );
 uint8_t *lsmash_create_dts_specific_info( lsmash_dts_specific_parameters_t *param, uint32_t *data_length );
 int lsmash_append_dts_reserved_box( lsmash_dts_specific_parameters_t *param, uint8_t *box_data, uint32_t box_size );
 void lsmash_remove_dts_reserved_box( lsmash_dts_specific_parameters_t *param );
+
+/* Apple Lossless Audio tools */
+typedef struct
+{
+    uint32_t frameLength;       /* the frames per packet when no explicit frames per packet setting is present in the packet header
+                                 * The encoder frames per packet can be explicitly set but for maximum compatibility,
+                                 * the default encoder setting of 4096 should be used. */
+    uint8_t  bitDepth;          /* the bit depth of the source PCM data (maximum value = 32) */
+    uint8_t  numChannels;       /* the channel count (1 = mono, 2 = stereo, etc...)
+                                 * When channel layout info is not provided in the Channel Layout extension,
+                                 * a channel count > 2 describes a set of discreet channels with no specific ordering. */
+    uint32_t maxFrameBytes;     /* the maximum size of an Apple Lossless packet within the encoded stream
+                                 * Value of 0 indicates unknown. */
+    uint32_t avgBitrate;        /* the average bit rate in bits per second of the Apple Lossless stream
+                                 * Value of 0 indicates unknown. */
+    uint32_t sampleRate;        /* sample rate of the encoded stream */
+} lsmash_alac_specific_parameters_t;
+
+uint8_t *lsmash_create_alac_specific_info( lsmash_alac_specific_parameters_t *param, uint32_t *data_length );
 
 /* H.264 tools to make exdata (AVC specific info). */
 typedef enum

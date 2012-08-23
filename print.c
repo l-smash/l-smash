@@ -1097,6 +1097,7 @@ static int isom_print_sample_description_extesion( FILE *fp, lsmash_root_t *root
     extern int ac3_print_codec_specific( FILE *, lsmash_root_t *, isom_box_t *, int );
     extern int eac3_print_codec_specific( FILE *, lsmash_root_t *, isom_box_t *, int );
     extern int dts_print_codec_specific( FILE *, lsmash_root_t *, isom_box_t *, int );
+    extern int alac_print_codec_specific( FILE *, lsmash_root_t *, isom_box_t *, int );
     static const struct
     {
         uint32_t type;
@@ -1121,6 +1122,7 @@ static int isom_print_sample_description_extesion( FILE *fp, lsmash_root_t *root
             { ISOM_BOX_TYPE_DAC3, ac3_print_codec_specific },
             { ISOM_BOX_TYPE_DEC3, eac3_print_codec_specific },
             { ISOM_BOX_TYPE_DDTS, dts_print_codec_specific },
+            { ISOM_BOX_TYPE_ALAC, alac_print_codec_specific },
             { ISOM_BOX_TYPE_FTAB, isom_print_ftab },
             { 0, NULL }
         };
