@@ -2490,12 +2490,9 @@ lsmash_audio_summary_t *isom_create_audio_summary_from_description( isom_audio_e
                 specific = lsmash_convert_codec_specific_format( specific, LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
                 if( !specific )
                     goto fail;
-                lsmash_dts_specific_parameters_t *dts = (lsmash_dts_specific_parameters_t *)specific->data.structured;
-                summary->frequency        = dts->DTSSamplingFrequency;
-                summary->sample_size      = dts->pcmSampleDepth;
-                summary->samples_in_frame = 512 << dts->FrameDuration;
-                if( dts->LBRDurationMod )
-                    summary->samples_in_frame = (summary->samples_in_frame * 3) / 2;
+                lsmash_dts_specific_parameters_t *param = (lsmash_dts_specific_parameters_t *)specific->data.structured;
+                summary->sample_size      = param->pcmSampleDepth;
+                summary->samples_in_frame = (summary->frequency * (512 << param->FrameDuration)) / param->DTSSamplingFrequency;
                 lsmash_destroy_codec_specific_data( specific );
             }
         }

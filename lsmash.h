@@ -380,13 +380,14 @@ typedef struct
     LSMASH_BASE_SUMMARY
     // mp4a_audioProfileLevelIndication pli;   /* I wonder we should have this or not. */
     lsmash_mp4a_AudioObjectType aot;        /* Detailed codec type. If not mp4a, just ignored. */
-    uint32_t frequency;                     /* the audio sampling rate
-                                             * Even if the stream is HE-AAC v1/SBR, this is base AAC's one. */
+    uint32_t frequency;                     /* the audio sampling rate (Hz)
+                                             * For some audio, this field is used as a nominal value.
+                                             * For instance, even if the stream is HE-AAC v1/SBR, this is base AAC's one. */
     uint32_t channels;                      /* the number of audio channels
                                              * Even if the stream is HE-AAC v2/SBR+PS, this is base AAC's one. */
     uint32_t sample_size;                   /* For uncompressed audio, the number of bits in each uncompressed sample for a single channel
-                                             * If AAC, AAC stream itself does not mention to accuracy (bit_depth of decoded PCM data), we assume 16bit. */
-    uint32_t samples_in_frame;              /* the number of decoded PCM samples in an audio frame.
+                                             * For some compressed audio, such as audio that uses MDCT, this field shall be nonsense and then set to 16. */
+    uint32_t samples_in_frame;              /* the number of decoded PCM samples in an audio frame at 'frequency'.
                                              * Even if the stream is HE-AAC/aacPlus/SBR(+PS), this is base AAC's one, so 1024. */
     lsmash_mp4a_aac_sbr_mode sbr_mode;      /* SBR treatment. Currently we always set this as mp4a_AAC_SBR_NOT_SPECIFIED(Implicit signaling).
                                              * User can set this for treatment in other way. */
@@ -1268,7 +1269,11 @@ typedef struct lsmash_dts_reserved_box_tag lsmash_dts_reserved_box_t;
 
 typedef struct
 {
-    uint32_t DTSSamplingFrequency;  /* the maximum sampling frequency stored in the compressed audio stream */
+    uint32_t DTSSamplingFrequency;  /* the maximum sampling frequency stored in the compressed audio stream
+                                     * 'frequency', which is a member of lsmash_audio_summary_t, shall be set according to DTSSamplingFrequency of either:
+                                     *   48000 for original sampling frequencies of 24000Hz, 48000Hz, 96000Hz or 192000Hz;
+                                     *   44100 for original sampling frequencies of 22050Hz, 44100Hz, 88200Hz or 176400Hz;
+                                     *   32000 for original sampling frequencies of 16000Hz, 32000Hz, 64000Hz or 128000Hz. */
     uint32_t maxBitrate;            /* the peak bit rate, in bits per second, of the audio elementary stream for the duration of the track,
                                      * including the core substream (if present) and all extension substreams.
                                      * If the stream is a constant bit rate, this parameter shall have the same value as avgBitrate.
