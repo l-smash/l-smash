@@ -271,7 +271,7 @@ isom_tref_type_t *isom_add_track_reference_type( isom_tref_t *tref, isom_track_r
 {
     if( !tref || !tref->ref_list )
         return NULL;
-    isom_tref_type_t *ref = malloc( sizeof(isom_tref_type_t) );
+    isom_tref_type_t *ref = lsmash_malloc_zero( sizeof(isom_tref_type_t) );
     if( !ref )
         return NULL;
     isom_init_basebox_common( (isom_box_t *)ref, (isom_box_t *)tref, type );
