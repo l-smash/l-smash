@@ -4907,17 +4907,7 @@ void lsmash_delete_track( lsmash_root_t *root, uint32_t track_ID )
             return;
         if( trak->tkhd->track_ID == track_ID )
         {
-            lsmash_entry_t *next = entry->next;
-            lsmash_entry_t *prev = entry->prev;
-            isom_remove_trak( trak );
-            free( entry );
-            entry = next;
-            if( entry )
-            {
-                if( prev )
-                    prev->next = entry;
-                entry->prev = prev;
-            }
+            lsmash_remove_entry_direct( root->moov->trak_list, entry, isom_remove_trak );
             return;
         }
     }
