@@ -33,49 +33,6 @@
 #include "write.h"
 #include "description.h"
 
-static void isom_bs_put_basebox_common( lsmash_bs_t *bs, isom_box_t *box )
-{
-    if( box->size > UINT32_MAX )
-    {
-        lsmash_bs_put_be32( bs, 1 );
-        lsmash_bs_put_be32( bs, box->type );
-        lsmash_bs_put_be64( bs, box->size );    /* largesize */
-    }
-    else
-    {
-        lsmash_bs_put_be32( bs, (uint32_t)box->size );
-        lsmash_bs_put_be32( bs, box->type );
-    }
-    if( box->type == ISOM_BOX_TYPE_UUID )
-        lsmash_bs_put_bytes( bs, 16, box->usertype );
-}
-
-static void isom_bs_put_fullbox_common( lsmash_bs_t *bs, isom_box_t *box )
-{
-    isom_bs_put_basebox_common( bs, box );
-    lsmash_bs_put_byte( bs, box->version );
-    lsmash_bs_put_be24( bs, box->flags );
-}
-
-static void isom_bs_put_box_common( lsmash_bs_t *bs, void *box )
-{
-    if( !box )
-    {
-        bs->error = 1;
-        return;
-    }
-    isom_box_t *parent = ((isom_box_t *)box)->parent;
-    if( parent && parent->type == ISOM_BOX_TYPE_STSD )
-    {
-        isom_bs_put_basebox_common( bs, (isom_box_t *)box );
-        return;
-    }
-    if( isom_is_fullbox( box ) )
-        isom_bs_put_fullbox_common( bs, (isom_box_t *)box );
-    else
-        isom_bs_put_basebox_common( bs, (isom_box_t *)box );
-}
-
 static int isom_write_unknown_box( lsmash_bs_t *bs, isom_unknown_box_t *unknown_box )
 {
     if( !unknown_box )

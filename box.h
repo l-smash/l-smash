@@ -2061,6 +2061,10 @@ int isom_is_uncompressed_ycbcr( uint32_t type );
 void isom_init_box_common( void *box, void *parent, uint32_t type );
 uint32_t isom_skip_box_common( uint8_t **p_data );
 
+void isom_bs_put_basebox_common( lsmash_bs_t *bs, isom_box_t *box );
+void isom_bs_put_fullbox_common( lsmash_bs_t *bs, isom_box_t *box );
+void isom_bs_put_box_common( lsmash_bs_t *bs, void *box );
+
 int isom_check_compatibility( lsmash_root_t *root );
 
 char *isom_4cc2str( uint32_t fourcc );
