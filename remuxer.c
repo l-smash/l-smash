@@ -80,6 +80,7 @@ typedef struct
     input_track_t                 *track;
     lsmash_itunes_metadata_t      *itunes_metadata;
     lsmash_movie_parameters_t      movie_param;
+    uint32_t                       movie_ID;
     uint32_t                       num_tracks;
     uint32_t                       num_itunes_metadata;
     uint32_t                       current_track_number;
@@ -183,11 +184,11 @@ static void cleanup_remuxer( remuxer_t *remuxer )
 #define eprintf( ... ) fprintf( stderr, __VA_ARGS__ )
 #define REFRESH_CONSOLE eprintf( "                                                                               \r" )
 
-static int remuxer_error( remuxer_t *remuxer, const char* message, ... )
+static int remuxer_error( remuxer_t *remuxer, const char *message, ... )
 {
     cleanup_remuxer( remuxer );
     REFRESH_CONSOLE;
-    eprintf( "Error: " );
+    eprintf( "[Error] " );
     va_list args;
     va_start( args, message );
     vfprintf( stderr, message, args );
@@ -195,10 +196,10 @@ static int remuxer_error( remuxer_t *remuxer, const char* message, ... )
     return -1;
 }
 
-static int error_message( const char* message, ... )
+static int error_message( const char *message, ... )
 {
     REFRESH_CONSOLE;
-    eprintf( "Error: " );
+    eprintf( "[Error] " );
     va_list args;
     va_start( args, message );
     vfprintf( stderr, message, args );
@@ -206,10 +207,10 @@ static int error_message( const char* message, ... )
     return -1;
 }
 
-static int warning_message( const char* message, ... )
+static int warning_message( const char *message, ... )
 {
     REFRESH_CONSOLE;
-    eprintf( "Warning: " );
+    eprintf( "[Warning] " );
     va_list args;
     va_start( args, message );
     vfprintf( stderr, message, args );
@@ -489,7 +490,8 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
                 return ERROR_MSG( "couldn't allocate memory.\n" );
             memset( track_option[input_movie_number], 0, num_tracks * sizeof(track_media_option) );
             input_file_option[input_movie_number].whole_track_option = strtok( NULL, "" );
-            input_movie_number++;
+            input[input_movie_number].movie_ID = input_movie_number + 1;
+            ++input_movie_number;
         }
         /* Create output movie. */
         else if( !strcasecmp( argv[i], "-o" ) || !strcasecmp( argv[i], "--output" ) )    /* output file */
@@ -684,7 +686,7 @@ static int set_starting_point( input_movie_t *input, input_track_t *in_track, ui
         return ERROR_MSG( "failed to get a random accessible point.\n" );
     if( rap_number != seek_point )
     {
-        WARNING_MSG( "Warning: starting point you specified is not a random accessible point.\n" );
+        WARNING_MSG( "starting point you specified is not a random accessible point.\n" );
         if( consider_rap )
         {
             /* Get duration that should be skipped. */
@@ -700,6 +702,21 @@ static int set_starting_point( input_movie_t *input, input_track_t *in_track, ui
     /* Set number of the first sample to be muxed. */
     in_track->current_sample_number = consider_rap ? rap_number : seek_point;
     return 0;
+}
+
+static void exclude_invalid_output_track( output_movie_t *output, output_track_t *out_track,
+                                          input_movie_t *input, input_track_t *in_track,
+                                          const char *message, ... )
+{
+    REFRESH_CONSOLE;
+    eprintf( "[Warning] in %"PRIu32"/%"PRIu32" -> out %"PRIu32": ", input->movie_ID, in_track->track_ID, out_track->track_ID );
+    va_list args;
+    va_start( args, message );
+    vfprintf( stderr, message, args );
+    va_end( args );
+    lsmash_delete_track( output->root, out_track->track_ID );
+    -- output->num_tracks;
+    in_track->active = 0;
 }
 
 static int prepare_output( remuxer_t *remuxer )
@@ -744,18 +761,12 @@ static int prepare_output( remuxer_t *remuxer )
             out_track->track_param.track_ID           = out_track->track_ID;
             if( lsmash_set_track_parameters( output->root, out_track->track_ID, &out_track->track_param ) )
             {
-                WARNING_MSG( "failed to set track parameters.\n" );
-                lsmash_delete_track( output->root, out_track->track_ID );
-                in_track->active = 0;
-                -- output->num_tracks;
+                exclude_invalid_output_track( output, out_track, &input[i], in_track, "failed to set track parameters.\n" );
                 continue;
             }
             if( lsmash_set_media_parameters( output->root, out_track->track_ID, &out_track->media_param ) )
             {
-                WARNING_MSG( "failed to set media parameters.\n" );
-                lsmash_delete_track( output->root, out_track->track_ID );
-                in_track->active = 0;
-                -- output->num_tracks;
+                exclude_invalid_output_track( output, out_track, &input[i], in_track, "failed to set media parameters.\n" );
                 continue;
             }
             uint32_t valid_summary_count = 0;
@@ -779,14 +790,14 @@ static int prepare_output( remuxer_t *remuxer )
                 out_track->summary_remap[k] = ++valid_summary_count;
             }
             if( valid_summary_count == 0 )
-                return ERROR_MSG( "failed to append all summaries.\n" );
+            {
+                exclude_invalid_output_track( output, out_track, &input[i], in_track, "failed to append all summaries.\n" );
+                continue;
+            }
             out_track->last_sample_delta = in_track->last_sample_delta;
             if( set_starting_point( input, in_track, track_option[i][j].seek, track_option[i][j].consider_rap ) )
             {
-                WARNING_MSG( "failed to set starting point.\n" );
-                lsmash_delete_track( output->root, out_track->track_ID );
-                in_track->active = 0;
-                -- output->num_tracks;
+                exclude_invalid_output_track( output, out_track, &input[i], in_track, "failed to set starting point.\n" );
                 continue;
             }
             out_track->current_sample_number = 1;
@@ -794,6 +805,8 @@ static int prepare_output( remuxer_t *remuxer )
             out_track->last_sample_dts       = 0;
             ++ output->current_track_number;
         }
+    if( output->num_tracks == 0 )
+        return ERROR_MSG( "failed to create the output movie.\n" );
     output->current_track_number = 1;
     return 0;
 }
