@@ -1219,24 +1219,27 @@ int isom_setup_visual_description( isom_stsd_t *stsd, uint32_t sample_type, lsma
         }
     }
     /* Set up Color Parameter. */
-    if( qt_compatible
-     && (uncompressed_ycbcr
-      || summary->color.primaries_index
-      || summary->color.transfer_index
-      || summary->color.matrix_index) )
+    if( uncompressed_ycbcr
+     || summary->color.primaries_index
+     || summary->color.transfer_index
+     || summary->color.matrix_index
+     || (trak->root->isom_compatible && summary->color.full_range) )
     {
         isom_colr_t *box = lsmash_malloc_zero( sizeof(isom_colr_t) );
         if( !box )
             goto fail;
-        isom_init_box_common( box, visual, QT_BOX_TYPE_COLR );
+        isom_init_box_common( box, visual, ISOM_BOX_TYPE_COLR );
         /* Set 'nclc' to parameter type, we don't support 'prof'. */
         uint16_t primaries = summary->color.primaries_index;
         uint16_t transfer  = summary->color.transfer_index;
         uint16_t matrix    = summary->color.matrix_index;
-        box->color_parameter_type    = QT_COLOR_PARAMETER_TYPE_NCLC;
+        if( qt_compatible && !trak->root->isom_compatible )
+            box->manager |= LSMASH_QTFF_BASE;
+        box->color_parameter_type    = box->manager & LSMASH_QTFF_BASE ? QT_COLOR_PARAMETER_TYPE_NCLC : ISOM_COLOR_PARAMETER_TYPE_NCLX;
         box->primaries_index         = (primaries == 1 || primaries == 5 || primaries == 6) ? primaries : QT_PRIMARIES_INDEX_UNSPECIFIED;
         box->transfer_function_index = (transfer == 1 || transfer == 7)                     ? transfer  : QT_TRANSFER_INDEX_UNSPECIFIED;
         box->matrix_index            = (matrix == 1 || matrix == 6 || matrix == 7)          ? matrix    : QT_MATRIX_INDEX_UNSPECIFIED;
+        box->full_range_flag         = summary->color.full_range;
         if( isom_add_extension_box( &visual->extensions, box, isom_remove_colr ) )
         {
             free( box );
@@ -2098,6 +2101,7 @@ lsmash_video_summary_t *isom_create_video_summary_from_description( isom_visual_
                     summary->color.primaries_index = colr->primaries_index;
                     summary->color.transfer_index  = colr->transfer_function_index;
                     summary->color.matrix_index    = colr->matrix_index;
+                    summary->color.full_range      = colr->full_range_flag;
                     continue;
                 }
                 case ISOM_BOX_TYPE_STSL :

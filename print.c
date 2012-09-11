@@ -719,13 +719,19 @@ static int isom_print_colr( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
         return -1;
     isom_colr_t *colr = (isom_colr_t *)box;
     int indent = level;
-    isom_print_box_common( fp, indent++, box, "Color Parameter Box" );
+    isom_print_box_common( fp, indent++, box, colr->manager & LSMASH_QTFF_BASE ? "Color Parameter Box" : "Colour Information Box" );
     lsmash_ifprintf( fp, indent, "color_parameter_type = %s\n", isom_4cc2str( colr->color_parameter_type ) );
-    if( colr->color_parameter_type == QT_COLOR_PARAMETER_TYPE_NCLC )
+    if( colr->color_parameter_type == QT_COLOR_PARAMETER_TYPE_NCLC
+     || colr->color_parameter_type == ISOM_COLOR_PARAMETER_TYPE_NCLX )
     {
         lsmash_ifprintf( fp, indent, "primaries_index = %"PRIu16"\n", colr->primaries_index );
         lsmash_ifprintf( fp, indent, "transfer_function_index = %"PRIu16"\n", colr->transfer_function_index );
         lsmash_ifprintf( fp, indent, "matrix_index = %"PRIu16"\n", colr->matrix_index );
+        if( colr->color_parameter_type == ISOM_COLOR_PARAMETER_TYPE_NCLX )
+        {
+            lsmash_ifprintf( fp, indent, "full_range_flag = %"PRIu8"\n", colr->full_range_flag );
+            lsmash_ifprintf( fp, indent, "reserved = 0x%08"PRIx8"\n", colr->reserved );
+        }
     }
     return 0;
 }
@@ -2281,14 +2287,14 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
             return isom_print_stbl;
         case ISOM_BOX_TYPE_STSD :
             return isom_print_stsd;
+        case ISOM_BOX_TYPE_COLR :
+            return isom_print_colr;
         case ISOM_BOX_TYPE_CLAP :
             return isom_print_clap;
         case ISOM_BOX_TYPE_PASP :
             return isom_print_pasp;
         case QT_BOX_TYPE_GLBL :
             return isom_print_glbl;
-        case QT_BOX_TYPE_COLR :
-            return isom_print_colr;
         case QT_BOX_TYPE_GAMA :
             return isom_print_gama;
         case QT_BOX_TYPE_FIEL :

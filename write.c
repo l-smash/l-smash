@@ -366,13 +366,17 @@ static int isom_write_clap( lsmash_bs_t *bs, isom_clap_t *clap )
 
 static int isom_write_colr( lsmash_bs_t *bs, isom_colr_t *colr )
 {
-    if( !colr || colr->color_parameter_type == QT_COLOR_PARAMETER_TYPE_PROF )
+    if( !colr
+     || colr->color_parameter_type == ISOM_COLOR_PARAMETER_TYPE_RICC
+     || colr->color_parameter_type == ISOM_COLOR_PARAMETER_TYPE_PROF )
         return 0;
     isom_bs_put_box_common( bs, colr );
     lsmash_bs_put_be32( bs, colr->color_parameter_type );
     lsmash_bs_put_be16( bs, colr->primaries_index );
     lsmash_bs_put_be16( bs, colr->transfer_function_index );
     lsmash_bs_put_be16( bs, colr->matrix_index );
+    if( colr->color_parameter_type == ISOM_COLOR_PARAMETER_TYPE_NCLX )
+        lsmash_bs_put_byte( bs, (colr->full_range_flag << 7) | colr->reserved );
     return lsmash_bs_write_data( bs );
 }
 
@@ -549,10 +553,10 @@ static int isom_write_visual_extensions( lsmash_bs_t *bs, isom_visual_entry_t *v
                 return -1;
         }
     }
-    if( isom_write_clap( bs, isom_get_extension_box( &visual->extensions, ISOM_BOX_TYPE_CLAP ) )
-     || isom_write_pasp( bs, isom_get_extension_box( &visual->extensions, ISOM_BOX_TYPE_PASP ) )
-     || isom_write_colr( bs, isom_get_extension_box( &visual->extensions, QT_BOX_TYPE_COLR ) ) )
-        return -1;
+    if( isom_write_colr( bs, isom_get_extension_box( &visual->extensions, ISOM_BOX_TYPE_COLR ) )
+     || isom_write_clap( bs, isom_get_extension_box( &visual->extensions, ISOM_BOX_TYPE_CLAP ) )
+     || isom_write_pasp( bs, isom_get_extension_box( &visual->extensions, ISOM_BOX_TYPE_PASP ) ) )
+        return -1;  /* FIXME: multiple 'colr' boxes can be present. */
     return 0;
 }
 

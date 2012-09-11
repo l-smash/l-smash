@@ -485,21 +485,31 @@ typedef struct
     uint32_t vSpacing;      /* vertical spacing */
 } isom_pasp_t;
 
-/* Color Parameter Box
+/* ISOM: Colour Information Box / QTFF: Color Parameter Box
  * This box is used to map the numerical values of pixels in the file to a common representation of color
  * in which images can be correctly compared, combined, and displayed.
- * The box ('colr') supersedes the Gamma Level Box ('gama').
- * Writers of QTFF should never write both into an Image Description, and readers of QTFF should ignore 'gama' if 'colr' is present.
- * This box is defined in QuickTime file format.
- * Note: this box is a mandatory extension for all uncompressed Y'CbCr data formats. */
+ * If colour information is supplied in both this box, and also in the video bitstream,
+ * this box takes precedence, and over-rides the information in the bitstream.
+ * For QuickTime file format:
+ *   This box ('colr') supersedes the Gamma Level Box ('gama').
+ *   Writers of QTFF should never write both into an Image Description, and readers of QTFF should ignore 'gama' if 'colr' is present.
+ *   Note: this box is a mandatory extension for all uncompressed Y'CbCr data formats.
+ * For ISO Base Media file format:
+ *   Colour information may be supplied in one or more Colour Information Boxes placed in a VisualSampleEntry.
+ *   These should be placed in order in the sample entry starting with the most accurate (and potentially the most difficult to process), in progression to the least.
+ *   These are advisory and concern rendering and colour conversion, and there is no normative behaviour associated with them; a reader may choose to use the most suitable. */
 typedef struct
 {
     ISOM_BASEBOX_COMMON;
-    uint32_t color_parameter_type;          /* 'nclc' or 'prof' */
-    /* for 'nclc' */
+    uint32_t color_parameter_type;          /* QTFF: 'nclc' or 'prof'
+                                             * ISOM: 'nclx', 'rICC' or 'prof' */
+    /* for 'nclc' and 'nclx' */
     uint16_t primaries_index;               /* CIE 1931 xy chromaticity coordinates */
     uint16_t transfer_function_index;       /* nonlinear transfer function from RGB to ErEgEb */
     uint16_t matrix_index;                  /* matrix from ErEgEb to EyEcbEcr */
+    /* for 'nclx' */
+    unsigned full_range_flag : 1;
+    unsigned reserved        : 7;
 } isom_colr_t;
 
 /* Gamma Level Box
@@ -2030,10 +2040,14 @@ static const isom_language_t isom_languages[] =
 };
 
 /* Color parameters */
-enum qt_color_patameter_type
+enum isom_color_patameter_type
 {
-    QT_COLOR_PARAMETER_TYPE_NCLC = LSMASH_4CC( 'n', 'c', 'l', 'c' ),      /* NonConstant Luminance Coding */
-    QT_COLOR_PARAMETER_TYPE_PROF = LSMASH_4CC( 'p', 'r', 'o', 'f' ),      /* ICC profile */
+    ISOM_COLOR_PARAMETER_TYPE_NCLX = LSMASH_4CC( 'n', 'c', 'l', 'x' ),      /* on-screen colours */
+    ISOM_COLOR_PARAMETER_TYPE_RICC = LSMASH_4CC( 'r', 'I', 'C', 'C' ),      /* restricted ICC profile */
+    ISOM_COLOR_PARAMETER_TYPE_PROF = LSMASH_4CC( 'p', 'r', 'o', 'f' ),      /* unrestricted ICC profile */
+
+    QT_COLOR_PARAMETER_TYPE_NCLC   = LSMASH_4CC( 'n', 'c', 'l', 'c' ),      /* NonConstant Luminance Coding */
+    QT_COLOR_PARAMETER_TYPE_PROF   = LSMASH_4CC( 'p', 'r', 'o', 'f' ),      /* ICC profile */
 };
 
 /* Sample grouping types */

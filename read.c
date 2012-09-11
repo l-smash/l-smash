@@ -1195,11 +1195,20 @@ static int isom_read_colr( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     lsmash_bs_t *bs = root->bs;
     isom_read_box_rest( bs, box );
     colr->color_parameter_type = lsmash_bs_get_be32( bs );
-    if( colr->color_parameter_type == QT_COLOR_PARAMETER_TYPE_NCLC )
+    if( colr->color_parameter_type == QT_COLOR_PARAMETER_TYPE_NCLC
+     || colr->color_parameter_type == ISOM_COLOR_PARAMETER_TYPE_NCLX )
     {
         colr->primaries_index         = lsmash_bs_get_be16( bs );
         colr->transfer_function_index = lsmash_bs_get_be16( bs );
         colr->matrix_index            = lsmash_bs_get_be16( bs );
+        if( colr->color_parameter_type == ISOM_COLOR_PARAMETER_TYPE_NCLX )
+        {
+            uint8_t temp8 = lsmash_bs_get_byte( bs );
+            colr->full_range_flag = (temp8 >> 7) & 0x01;
+            colr->reserved        =  temp8       & 0x7f;
+        }
+        else
+            colr->manager |= LSMASH_QTFF_BASE;
     }
     box->size = lsmash_bs_get_pos( bs );
     isom_box_common_copy( colr, box );
@@ -2904,14 +2913,14 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
             return isom_read_stsd( root, box, parent, level );
         case ISOM_BOX_TYPE_BTRT :
             return isom_read_btrt( root, box, parent, level );
+        case ISOM_BOX_TYPE_COLR :
+            return isom_read_colr( root, box, parent, level );
         case ISOM_BOX_TYPE_CLAP :
             return isom_read_clap( root, box, parent, level );
         case ISOM_BOX_TYPE_PASP :
             return isom_read_pasp( root, box, parent, level );
         case QT_BOX_TYPE_GLBL :
             return isom_read_glbl( root, box, parent, level );
-        case QT_BOX_TYPE_COLR :
-            return isom_read_colr( root, box, parent, level );
         case QT_BOX_TYPE_GAMA :
             return isom_read_gama( root, box, parent, level );
         case QT_BOX_TYPE_FIEL :
