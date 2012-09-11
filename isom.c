@@ -6775,11 +6775,10 @@ static int isom_add_timestamp( isom_trak_entry_t *trak, uint64_t dts, uint64_t c
     {
         if( (root->max_isom_version < 4 && !root->qt_compatible)        /* Negative sample offset is not supported. */
          || (root->max_isom_version >= 4 && trak->root->qt_compatible)  /* ctts version 1 is not defined in QTFF. */
-         || root->fragment                                              /* Composition time offset is positive. */
          || ((dts - cts) > INT32_MAX) )                                 /* Overflow */
             return -1;
         ts_cache->ctd_shift = dts - cts;
-        if( !stbl->ctts->version && !trak->root->qt_compatible )
+        if( stbl->ctts->version == 0 && !trak->root->qt_compatible )
             stbl->ctts->version = 1;
     }
     if( trak->cache->fragment )
@@ -7657,7 +7656,6 @@ static int isom_update_fragment_sample_tables( isom_traf_entry_t *traf, lsmash_s
             return -1;
         trun = (isom_trun_entry_t *)traf->trun_list->tail->data;
     }
-    uint32_t sample_composition_time_offset = sample->cts - sample->dts;
     isom_sample_flags_t sample_flags = isom_generate_fragment_sample_flags( sample );
     if( ++trun->sample_count == 1 )
     {
@@ -7723,8 +7721,23 @@ static int isom_update_fragment_sample_tables( isom_traf_entry_t *traf, lsmash_s
         trun->flags |= ISOM_TR_FLAGS_SAMPLE_SIZE_PRESENT;
     if( isom_compare_sample_flags( &sample_flags, &tfhd->default_sample_flags ) )
         trun->flags |= ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT;
+    uint32_t sample_composition_time_offset = sample->cts - sample->dts;
     if( sample_composition_time_offset )
+    {
         trun->flags |= ISOM_TR_FLAGS_SAMPLE_COMPOSITION_TIME_OFFSET_PRESENT;
+        /* Check if negative composition time offset is present. */
+        isom_timestamp_t *ts_cache = &cache->timestamp;
+        if( (sample->cts + ts_cache->ctd_shift) < sample->dts )
+        {
+            if( root->max_isom_version < 6 )
+                return -1;  /* Negative composition time offset is not supported. */
+            if( (sample->dts - sample->cts) > INT32_MAX )
+                return -1;  /* Overflow */
+            ts_cache->ctd_shift = sample->dts - sample->cts;
+            if( trun->version == 0 && root->max_isom_version >= 6 )
+                trun->version = 1;
+        }
+    }
     if( trun->flags )
     {
         isom_trun_optional_row_t *row = isom_request_trun_optional_row( trun, tfhd, trun->sample_count );

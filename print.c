@@ -1172,7 +1172,7 @@ static int isom_print_ctts( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
             isom_ctts_entry_t *data = (isom_ctts_entry_t *)entry->data;
             lsmash_ifprintf( fp, indent++, "entry[%"PRIu32"]\n", i++ );
             lsmash_ifprintf( fp, indent, "sample_count = %"PRIu32"\n", data->sample_count );
-            lsmash_ifprintf( fp, indent--, "sample_offset = %"PRId32"\n", (union {uint32_t ui; int32_t si;}){data->sample_offset}.si );
+            lsmash_ifprintf( fp, indent--, "sample_offset = %"PRId32"\n", (union {uint32_t ui; int32_t si;}){ data->sample_offset }.si );
         }
     else
         for( lsmash_entry_t *entry = ctts->list->head; entry; entry = entry->next )
@@ -1962,7 +1962,14 @@ static int isom_print_trun( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
             if( trun->flags & ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT )
                 isom_ifprintf_sample_flags( fp, indent, "sample_flags", &row->sample_flags );
             if( trun->flags & ISOM_TR_FLAGS_SAMPLE_COMPOSITION_TIME_OFFSET_PRESENT )
-                lsmash_ifprintf( fp, indent, "sample_composition_time_offset = %"PRIu32"\n", row->sample_composition_time_offset );
+            {
+                if( trun->version == 0 )
+                    lsmash_ifprintf( fp, indent, "sample_composition_time_offset = %"PRIu32"\n",
+                                     row->sample_composition_time_offset );
+                else
+                    lsmash_ifprintf( fp, indent, "sample_composition_time_offset = %"PRId32"\n",
+                                     (union {uint32_t ui; int32_t si;}){ row->sample_composition_time_offset }.si );
+            }
             --indent;
         }
     }

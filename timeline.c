@@ -1003,9 +1003,19 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                                 info.duration = trex->default_sample_duration;
                             /* Get composition time offset. */
                             if( row && (trun->flags & ISOM_TR_FLAGS_SAMPLE_COMPOSITION_TIME_OFFSET_PRESENT) )
+                            {
                                 info.offset = row->sample_composition_time_offset;
+                                /* Check composition to decode timeline shift. */
+                                if( root->max_isom_version >= 6 && trun->version != 0 )
+                                {
+                                    uint64_t cts = dts + (int32_t)info.offset;
+                                    if( (cts + timeline->ctd_shift) < dts )
+                                        timeline->ctd_shift = dts - cts;
+                                }
+                            }
                             else
                                 info.offset = 0;
+                            dts += info.duration;
                             /* Update media duration and maximun sample size. */
                             timeline->media_duration += info.duration;
                             timeline->max_sample_size = LSMASH_MAX( timeline->max_sample_size, info.length );
