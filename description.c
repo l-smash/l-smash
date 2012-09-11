@@ -1234,12 +1234,27 @@ int isom_setup_visual_description( isom_stsd_t *stsd, uint32_t sample_type, lsma
         uint16_t transfer  = summary->color.transfer_index;
         uint16_t matrix    = summary->color.matrix_index;
         if( qt_compatible && !trak->root->isom_compatible )
-            box->manager |= LSMASH_QTFF_BASE;
-        box->color_parameter_type    = box->manager & LSMASH_QTFF_BASE ? QT_COLOR_PARAMETER_TYPE_NCLC : ISOM_COLOR_PARAMETER_TYPE_NCLX;
-        box->primaries_index         = (primaries == 1 || primaries == 5 || primaries == 6) ? primaries : QT_PRIMARIES_INDEX_UNSPECIFIED;
-        box->transfer_function_index = (transfer == 1 || transfer == 7)                     ? transfer  : QT_TRANSFER_INDEX_UNSPECIFIED;
-        box->matrix_index            = (matrix == 1 || matrix == 6 || matrix == 7)          ? matrix    : QT_MATRIX_INDEX_UNSPECIFIED;
-        box->full_range_flag         = summary->color.full_range;
+        {
+            box->manager                |= LSMASH_QTFF_BASE;
+            box->color_parameter_type    = QT_COLOR_PARAMETER_TYPE_NCLC;
+            box->primaries_index         = (primaries == 1 || primaries == 5 || primaries == 6)
+                                         ? primaries : QT_PRIMARIES_INDEX_UNSPECIFIED;
+            box->transfer_function_index = (transfer == 1 || transfer == 7)
+                                         ? transfer : QT_TRANSFER_INDEX_UNSPECIFIED;
+            box->matrix_index            = (matrix == 1 || matrix == 6 || matrix == 7)
+                                         ? matrix : QT_MATRIX_INDEX_UNSPECIFIED;
+        }
+        else
+        {
+            box->color_parameter_type    = ISOM_COLOR_PARAMETER_TYPE_NCLX;
+            box->primaries_index         = (primaries == 1 || (primaries >= 4 && primaries <= 7))
+                                         ? primaries : ISOM_PRIMARIES_INDEX_UNSPECIFIED;
+            box->transfer_function_index = (transfer == 1 || (transfer >= 4 && transfer <= 8) || (transfer >= 11 && transfer <= 13))
+                                         ? transfer : ISOM_TRANSFER_INDEX_UNSPECIFIED;
+            box->matrix_index            = (matrix == 1 || (matrix >= 4 && matrix <= 8))
+                                         ? matrix : ISOM_MATRIX_INDEX_UNSPECIFIED;
+            box->full_range_flag         = summary->color.full_range;
+        }
         if( isom_add_extension_box( &visual->extensions, box, isom_remove_colr ) )
         {
             free( box );
@@ -2095,7 +2110,7 @@ lsmash_video_summary_t *isom_create_video_summary_from_description( isom_visual_
                     summary->par_v = pasp->vSpacing;
                     continue;
                 }
-                case QT_BOX_TYPE_COLR :
+                case ISOM_BOX_TYPE_COLR :
                 {
                     isom_colr_t *colr = (isom_colr_t *)ext->form.box;
                     summary->color.primaries_index = colr->primaries_index;
