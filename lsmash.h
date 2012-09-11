@@ -443,61 +443,118 @@ typedef enum
 /* Index for the chromaticity coordinates of the color primaries */
 enum
 {
-    QT_PRIMARIES_INDEX_ITU_R709_2  = 1,    /* ITU-R BT.709-2, ITU-R BT.1361,
-                                            * SMPTE 274M-1995, SMPTE 296M-1997,
-                                            * IEC 61966-2-1 (sRGB or sYCC), IEC 61966-2-4 (xvYCC),
-                                            * SMPTE RP 177M-1993 Annex B
-                                            *   green x = 0.300  y = 0.600
-                                            *   blue  x = 0.150  y = 0.060
-                                            *   red   x = 0.640  y = 0.330
-                                            *   white x = 0.3127 y = 0.3290 (CIE III. D65) */
-    QT_PRIMARIES_INDEX_UNSPECIFIED = 2,    /* Unspecified */
-    QT_PRIMARIES_INDEX_EBU_3213    = 5,    /* EBU Tech. 3213 (1981), ITU-R BT.470-6 System B, G,
-                                            * ITU-R BT.601-6 625, ITU-R BT.1358 625,
-                                            * ITU-R BT.1700 625 PAL and 625 SECAM
-                                            *   green x = 0.29   y = 0.60
-                                            *   blue  x = 0.15   y = 0.06
-                                            *   red   x = 0.64   y = 0.33
-                                            *   white x = 0.3127 y = 0.3290 (CIE III. D65) */
-    QT_PRIMARIES_INDEX_SMPTE_C     = 6,    /* SMPTE C Primaries from SMPTE RP 145-1993, SMPYE 170M-2004,
-                                            * ITU-R BT.601-6 525, ITU-R BT.1358 525,
-                                            * ITU-R BT.1700 NTSC, SMPTE 170M-2004
-                                            *   green x = 0.310  y = 0.595
-                                            *   blue  x = 0.155  y = 0.070
-                                            *   red   x = 0.630  y = 0.340
-                                            *   white x = 0.3127 y = 0.3290 (CIE III. D65) */
+    /* for ISO Base Media file format */
+    ISOM_PRIMARIES_INDEX_ITU_R709_5      = 1,   /* ITU-R BT.709-2/5, ITU-R BT.1361,
+                                                 * SMPTE 274M-1995, SMPTE 296M-1997,
+                                                 * IEC 61966-2-1 (sRGB or sYCC), IEC 61966-2-4 (xvYCC),
+                                                 * SMPTE RP 177M-1993 Annex B
+                                                 *   green x = 0.300  y = 0.600
+                                                 *   blue  x = 0.150  y = 0.060
+                                                 *   red   x = 0.640  y = 0.330
+                                                 *   white x = 0.3127 y = 0.3290 (CIE III. D65) */
+    ISOM_PRIMARIES_INDEX_UNSPECIFIED     = 2,   /* Unspecified */
+    ISOM_PRIMARIES_INDEX_ITU_R470M       = 4,   /* ITU-R BT.470-6 System M
+                                                 *   green x = 0.21  y = 0.71
+                                                 *   blue  x = 0.14  y = 0.08
+                                                 *   red   x = 0.67  y = 0.33
+                                                 *   white x = 0.310 y = 0.316 */
+    ISOM_PRIMARIES_INDEX_ITU_R470BG      = 5,   /* EBU Tech. 3213 (1981), ITU-R BT.470-6 System B, G,
+                                                 * ITU-R BT.601-6 625, ITU-R BT.1358 625,
+                                                 * ITU-R BT.1700 625 PAL and 625 SECAM
+                                                 *   green x = 0.29   y = 0.60
+                                                 *   blue  x = 0.15   y = 0.06
+                                                 *   red   x = 0.64   y = 0.33
+                                                 *   white x = 0.3127 y = 0.3290 (CIE III. D65) */
+    ISOM_PRIMARIES_INDEX_SMPTE_170M_2004 = 6,   /* SMPTE C Primaries from SMPTE RP 145-1993, SMPTE 170M-2004,
+                                                 * ITU-R BT.601-6 525, ITU-R BT.1358 525,
+                                                 * ITU-R BT.1700 NTSC, SMPTE 170M-2004
+                                                 *   green x = 0.310  y = 0.595
+                                                 *   blue  x = 0.155  y = 0.070
+                                                 *   red   x = 0.630  y = 0.340
+                                                 *   white x = 0.3127 y = 0.3290 (CIE III. D65) */
+    ISOM_PRIMARIES_INDEX_SMPTE_240M_1999 = 7,   /* SMPTE 240M-1999
+                                                 * functionally the same as the value ISOM_PRIMARIES_INDEX_SMPTE_170M_2004 */
+
+    /* for QuickTime file format */
+    QT_PRIMARIES_INDEX_ITU_R709_2        = 1,   /* the same as the value ISOM_PRIMARIES_INDEX_ITU_R709_5 */
+    QT_PRIMARIES_INDEX_UNSPECIFIED       = 2,   /* Unspecified */
+    QT_PRIMARIES_INDEX_EBU_3213          = 5,   /* the same as the value ISOM_PRIMARIES_INDEX_ITU_R470BG */
+    QT_PRIMARIES_INDEX_SMPTE_C           = 6,   /* the same as the value ISOM_PRIMARIES_INDEX_SMPTE_170M_2004 */
 };
 
 /* Index for the opto-electronic transfer characteristic of the image color components */
 enum
 {
-    QT_TRANSFER_INDEX_ITU_R709_2      = 1,  /* ITU-R BT.709-2, ITU-R BT.1361
-                                             * SMPTE 274M-1995, SMPTE 296M-1997,
-                                             * SMPTE 293M-1996, SMPTE 170M-1994
-                                             *   vV = 1.099 * vLc^0.45 - 0.099 for 1 >= vLc >= 0.018
-                                             *   vV = 4.500 * vLc              for 0.018 > vLc >= 0 */
-    QT_TRANSFER_INDEX_UNSPECIFIED     = 2,  /* Unspecified */
-    QT_TRANSFER_INDEX_SMPTE_240M_1995 = 7,  /* SMPTE 240M-1995, interim color implementation of SMPTE 274M-1995
-                                             *   vV = 1.1115 * vLc^0.45 - 0.1115 for 1 >= vLc >= 0.0228
-                                             *   vV = 4.0 * vLc                  for 0.0228 > vLc >= 0 */
+    /* for ISO Base Media file format */
+    ISOM_TRANSFER_INDEX_ITU_R709_5      = 1,    /* ITU-R BT.709-2/5, ITU-R BT.1361
+                                                 * SMPTE 274M-1995, SMPTE 296M-1997,
+                                                 * SMPTE 293M-1996, SMPTE 170M-1994
+                                                 *   vV = 1.099 * vLc^0.45 - 0.099 for 1 >= vLc >= 0.018
+                                                 *   vV = 4.500 * vLc              for 0.018 > vLc >= 0 */
+    ISOM_TRANSFER_INDEX_UNSPECIFIED     = 2,    /* Unspecified */
+    ISOM_TRANSFER_INDEX_ITU_R470M       = 4,    /* ITU-R BT.470-6 System M, ITU-R BT.1700 625 PAL and 625 SECAM
+                                                 *   Assumed display gamma 2.2 */
+    ISOM_TRANSFER_INDEX_ITU_R470BG      = 5,    /* ITU-R BT.470-6 System B, G
+                                                 *   Assumed display gamma 2.8 */
+    ISOM_TRANSFER_INDEX_SMPTE_170M_2004 = 6,    /* ITU-R BT.601-6 525 or 625, ITU-R BT.1358 525 or 625,
+                                                 * ITU-R BT.1700 NTSC, SMPTE 170M-2004
+                                                 * functionally the same as the value ISOM_TRANSFER_INDEX_ITU_R709_5
+                                                 *   vV = 1.099 * vLc^0.45 - 0.099 for 1 >= vLc >= 0.018
+                                                 *   vV = 4.500 * vLc              for 0.018 > vLc >= 0 */
+    ISOM_TRANSFER_INDEX_SMPTE_240M_1999 = 7,    /* SMPTE 240M-1995/1999, interim color implementation of SMPTE 274M-1995
+                                                 *   vV = 1.1115 * vLc^0.45 - 0.1115 for 1 >= vLc >= 0.0228
+                                                 *   vV = 4.0 * vLc                  for 0.0228 > vLc >= 0 */
+    ISOM_TRANSFER_INDEX_LINEAR          = 8,    /* Linear transfer characteristics */
+    ISOM_TRANSFER_INDEX_XVYCC           = 11,   /* IEC 61966-2-4 (xvYCC)
+                                                 *   vV = 1.099 * vLc^0.45 - 0.099     for vLc >= 0.018
+                                                 *   vV = 4.500 * vLc                  for 0.018 > vLc > -0.018
+                                                 *   vV = -1.099 * (-vLc)^0.45 + 0.099 for -0.018 >= vLc */
+    ISOM_TRANSFER_INDEX_ITU_R1361       = 12,   /* ITU-R BT.1361
+                                                 *   vV = 1.099 * vLc^0.45 - 0.099               for 1.33 > vLc >= 0.018
+                                                 *   vV = 4.500 * vLc                            for 0.018 > vLc >= -0.0045
+                                                 *   vV = -(1.099 * (-4 * vLc)^0.45 + 0.099) / 4 for -0.0045 > vLc >= -0.25 */
+    ISOM_TRANSFER_INDEX_SRGB            = 13,   /* IEC 61966-2-1 (sRGB or sYCC)
+                                                 *   vV = 1.055 * vLc^(1/2.4) - 0.055 for 1 > vLc >= 0.0031308
+                                                 *   vV = 12.92 * vLc                 for 0.0031308 > vLc >= 0 */
+
+    /* for QuickTime file format */
+    QT_TRANSFER_INDEX_ITU_R709_2        = 1,    /* the same as the value ISOM_TRANSFER_INDEX_ITU_R709_5 */
+    QT_TRANSFER_INDEX_UNSPECIFIED       = 2,    /* Unspecified */
+    QT_TRANSFER_INDEX_SMPTE_240M_1995   = 7,    /* the same as the value ISOM_TRANSFER_INDEX_SMPTE_240M_1999 */
 };
 
 /* Index for the matrix coefficients associated with derivation of luma and chroma signals from the green, blue, and red primaries */
 enum
 {
-    QT_MATRIX_INDEX_ITU_R_709_2     = 1,    /* ITU-R BT.709-2, ITU-R BT.1361,
+    /* for ISO Base Media file format */
+    ISOM_MATRIX_INDEX_NO_MATRIX       = 0,  /* No matrix transformation
+                                             * IEC 61966-2-1 (sRGB) */
+    ISOM_MATRIX_INDEX_ITU_R_709_5     = 1,  /* ITU-R BT.709-2/5, ITU-R BT.1361,
                                              * SMPTE 274M-1995, SMPTE 296M-1997
                                              * IEC 61966-2-1 (sYCC), IEC 61966-2-4 xvYCC_709,
                                              * SMPTE RP 177M-1993 Annex B
                                              *   vKr = 0.2126; vKb = 0.0722 */
-    QT_MATRIX_INDEX_UNSPECIFIED     = 2,    /* Unspecified */
-    QT_MATRIX_INDEX_ITU_R_601_4     = 6,    /* ITU-R BT.470-4 System B and G,
-                                             * ITU-R BT.601-4 525, ITU-R BT.1358 525,
+    ISOM_MATRIX_INDEX_UNSPECIFIED     = 2,  /* Unspecified */
+    ISOM_MATRIX_INDEX_USFCCT_47_CFR   = 4,  /* United States Federal Communications Commission Title 47 Code of Federal Regulations
+                                             *   vKr = 0.30; vKb = 0.11 */
+    ISOM_MATRIX_INDEX_ITU_R470BG      = 5,  /* ITU-R BT.470-6 System B, G,
+                                             * ITU-R BT.601-4/6 625, ITU-R BT.1358 625,
+                                             * ITU-R BT.1700 625 PAL and 625 SECAM, IEC 61966-2-4 xvYCC601
+                                             *   vKr = 0.299; vKb = 0.114 */
+    ISOM_MATRIX_INDEX_SMPTE_170M_2004 = 6,  /* ITU-R BT.601-4/6 525, ITU-R BT.1358 525,
                                              * ITU-R BT.1700 NTSC,
                                              * SMPTE 170M-1994, SMPTE 293M-1996
+                                             * functionally the same as the value ISOM_MATRIX_INDEX_ITU_R470BG
                                              *   vKr = 0.299; vKb = 0.114 */
-    QT_MATRIX_INDEX_SMPTE_240M_1995 = 7     /* SMPTE 240M-1995, interim color implementation of SMPTE 274M-1995
+    ISOM_MATRIX_INDEX_SMPTE_240M_1999 = 7,  /* SMPTE 240M-1995, interim color implementation of SMPTE 274M-1995
                                              *   vKr = 0.212; vKb = 0.087 */
+    ISOM_MATRIX_INDEX_YCGCO           = 8,  /* YCoCg */
+
+    /* for QuickTime file format */
+    QT_MATRIX_INDEX_ITU_R_709_2       = 1,  /* the same as the value ISOM_MATRIX_INDEX_ITU_R_709_5 */
+    QT_MATRIX_INDEX_UNSPECIFIED       = 2,  /* Unspecified */
+    QT_MATRIX_INDEX_ITU_R_601_4       = 6,  /* the same as the value ISOM_MATRIX_INDEX_SMPTE_170M_2004 */
+    QT_MATRIX_INDEX_SMPTE_240M_1995   = 7   /* the same as the value ISOM_MATRIX_INDEX_SMPTE_240M_1999 */
 };
 
 typedef struct
