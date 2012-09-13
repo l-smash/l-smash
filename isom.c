@@ -6750,7 +6750,7 @@ isom_sample_pool_t *isom_create_sample_pool( uint64_t size )
     isom_sample_pool_t *pool = lsmash_malloc_zero( sizeof(isom_sample_pool_t) );
     if( !pool )
         return NULL;
-    if( !size )
+    if( size == 0 )
         return pool;
     pool->data = malloc( size );
     if( !pool->data )
@@ -7706,6 +7706,13 @@ static int isom_update_fragment_sample_tables( isom_traf_entry_t *traf, lsmash_s
     lsmash_root_t *root   = traf->root;
     isom_cache_t *cache   = traf->cache;
     isom_chunk_t *current = &cache->chunk;
+    if( !current->pool )
+    {
+        /* Very initial settings, just once per track */
+        current->pool = isom_create_sample_pool( 0 );
+        if( !current->pool )
+            return -1;
+    }
     /* Create a new track run if the duration exceeds max_chunk_duration.
      * Old one will be appended to the pool of this movie fragment. */
     int delimit = (root->max_chunk_duration < ((double)(sample->dts - current->first_dts) / lsmash_get_media_timescale( root, tfhd->track_ID )))
@@ -7725,13 +7732,6 @@ static int isom_update_fragment_sample_tables( isom_traf_entry_t *traf, lsmash_s
         trun = isom_add_trun( traf );
         if( !trun )
             return -1;
-        if( !current->pool )
-        {
-            /* Very initial settings, just once per track */
-            current->pool = isom_create_sample_pool( 0 );
-            if( !current->pool )
-                return -1;
-        }
     }
     else
     {
