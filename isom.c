@@ -5712,8 +5712,6 @@ int lsmash_create_object_descriptor( lsmash_root_t *root )
 
 static int isom_set_fragment_overall_duration( lsmash_root_t *root )
 {
-    if( root->bs->stream == stdout )
-        return 0;
     isom_mvex_t *mvex = root->moov->mvex;
     if( isom_add_mehd( mvex ) )
         return -1;
@@ -5760,10 +5758,93 @@ static int isom_set_fragment_overall_duration( lsmash_root_t *root )
 
 static int isom_write_fragment_random_access_info( lsmash_root_t *root )
 {
-    if( root->bs->stream == stdout )
+    if( !root->moov->mvex || !root->moov->mvex->trex_list )
         return 0;
+    /* Reconstruct the Movie Fragment Random Access Box.
+     * All 'time' field in the Track Fragment Random Access Boxes shall reflect edit list. */
+    uint32_t movie_timescale = lsmash_get_movie_timescale( root );
+    if( movie_timescale == 0 )
+        return -1;  /* Division by zero will occur. */
+    for( lsmash_entry_t *trex_entry = root->moov->mvex->trex_list->head; trex_entry; trex_entry = trex_entry->next )
+    {
+        isom_trex_entry_t *trex = (isom_trex_entry_t *)trex_entry->data;
+        if( !trex )
+            return -1;
+        /* Get the edit list of the track associated with the trex->track_ID.
+         * If failed or absent, implicit timeline mapping edit is used, and skip this operation for the track. */
+        isom_trak_entry_t *trak = isom_get_trak( root, trex->track_ID );
+        if( !trak )
+            return -1;
+        if( !trak->edts || !trak->edts->elst || !trak->edts->elst->list
+         || !trak->edts->elst->list->head || !trak->edts->elst->list->head->data )
+            continue;
+        isom_elst_t *elst = trak->edts->elst;
+        /* Get the Track Fragment Random Access Boxes of the track associated with the trex->track_ID.
+         * If failed or absent, skip reconstructing the Track Fragment Random Access Box of the track. */
+        isom_tfra_entry_t *tfra = isom_get_tfra( root->mfra, trex->track_ID );
+        if( !tfra )
+            continue;
+        /* Reconstruct the Track Fragment Random Access Box. */
+        lsmash_entry_t    *edit_entry      = elst->list->head;
+        isom_elst_entry_t *edit            = edit_entry->data;
+        uint64_t           edit_offset     = 0;     /* units in media timescale */
+        uint32_t           media_timescale = lsmash_get_media_timescale( root, trex->track_ID );
+        for( lsmash_entry_t *rap_entry = tfra->list->head; rap_entry; )
+        {
+            isom_tfra_location_time_entry_t *rap = (isom_tfra_location_time_entry_t *)rap_entry->data;
+            if( !rap )
+            {
+                /* Irregular case. Drop this entry. */
+                lsmash_entry_t *next = rap_entry->next;
+                lsmash_remove_entry_direct( tfra->list, rap_entry, NULL );
+                rap_entry = next;
+                continue;
+            }
+            uint64_t composition_time = rap->time;
+            /* Drop this entry if not included in the presentation. */
+            if( edit->media_time > composition_time )
+            {
+                lsmash_entry_t *next = rap_entry->next;
+                lsmash_remove_entry_direct( tfra->list, rap_entry, NULL );
+                rap_entry = next;
+                continue;
+            }
+            /* Skip edits that doesn't include any random access point indicated in the Track Fragment Random Access Box. */
+            while( edit )
+            {
+                uint64_t segment_duration = ((edit->segment_duration - 1) / movie_timescale + 1) * media_timescale;
+                if( edit->media_time != ISOM_EDIT_MODE_EMPTY
+                 && composition_time >= edit->media_time
+                 && composition_time < edit->media_time + segment_duration )
+                    break;  /* This Timeline Mapping Edit includes the current random access point. */
+                edit_offset += segment_duration;
+                edit_entry = edit_entry->next;
+                if( !edit_entry )
+                {
+                    /* No more presentation. */
+                    edit = NULL;
+                    break;
+                }
+                edit = edit_entry->data;
+            }
+            if( !edit )
+            {
+                /* No more presentation.
+                 * Drop the rest of random access points since they are generally absent in the whole presentation.
+                 * Though the exceptions are random access points with earlier composition time, we ignore them.
+                 * To support this exception, we need sorting entries of the list by composition times. */
+                for( ; rap_entry; rap_entry = rap_entry->next )
+                    lsmash_remove_entry_direct( tfra->list, rap_entry, NULL );
+                break;
+            }
+            rap->time = (composition_time - edit->media_time) + edit_offset;
+            rap_entry = rap_entry->next;
+        }
+    }
+    /* Decide the size of the Movie Fragment Random Access Box. */
     if( isom_update_mfra_size( root->mfra ) )
         return -1;
+    /* Write the Movie Fragment Random Access Box. */
     return isom_write_mfra( root->bs, root->mfra );
 }
 
@@ -5776,6 +5857,8 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
         /* Output the final movie fragment. */
         if( isom_finish_fragment_movie( root ) )
             return -1;
+        if( root->bs->stream == stdout )
+            return 0;
         /* Write the overall random access information at the tail of the movie. */
         if( isom_write_fragment_random_access_info( root ) )
             return -1;
@@ -7693,7 +7776,8 @@ static int isom_update_fragment_sample_tables( isom_traf_entry_t *traf, lsmash_s
                 isom_tfra_location_time_entry_t *rap = malloc( sizeof(isom_tfra_location_time_entry_t) );
                 if( !rap )
                     return -1;
-                rap->time          = sample->cts;   /* If this is wrong, blame vague descriptions of 'presentation time' in the spec. */
+                rap->time          = sample->cts;   /* Set composition timestamp temporally.
+                                                     * At the end of the whole movie, this will be reset as presentation time. */
                 rap->moof_offset   = root->size;    /* We place Movie Fragment Box in the head of each movie fragment. */
                 rap->traf_number   = cache->fragment->traf_number;
                 rap->trun_number   = traf->trun_list->entry_count;

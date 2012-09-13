@@ -208,7 +208,8 @@ typedef struct
  * correspond to the value of the CTS the first sample has or more not to exceed the largest CTS in this track. */
 typedef struct
 {
-    /* version == 0: 64bits -> 32bits */
+    /* This entry is called Timeline Mapping Edit (TME) entry in UltraViolet Common File Format.
+     * version == 0: 64bits -> 32bits */
     uint64_t segment_duration;  /* the duration of this edit expressed in the movie timescale units */
     int64_t  media_time;        /* the starting composition time within the media of this edit segment
                                  * If this field is set to -1, it is an empty edit. */
@@ -854,13 +855,13 @@ typedef struct
 /* Composition Time to Sample Box
  * This box provides the offset between decoding time and composition time.
  * CTS is an abbreviation of 'composition time stamp'.
- * This box is optional and must only be present if DTS and CTS differ for any samples.
- * ISOM: if version is set to 1, sample_offset is signed 32-bit integer.
- * QTFF: sample_offset is always signed 32-bit integer. */
+ * This box is optional and must only be present if DTS and CTS differ for any samples. */
 typedef struct
 {
     uint32_t sample_count;      /* number of consecutive samples that have the given sample_offset */
-    uint32_t sample_offset;     /* CTS[n] = DTS[n] + sample_offset[n]; */
+    uint32_t sample_offset;     /* CTS[n] = DTS[n] + sample_offset[n];
+                                 * ISOM: if version is set to 1, sample_offset is signed 32-bit integer.
+                                 * QTFF: sample_offset is always signed 32-bit integer. */
 } isom_ctts_entry_t;
 
 typedef struct
@@ -1366,7 +1367,7 @@ typedef struct
 
 typedef struct
 {
-    uint8_t has_samples;
+    uint8_t  has_samples;
     uint32_t traf_number;
     uint32_t last_duration;     /* the last sample duration in this track fragment */
     uint64_t largest_cts;       /* the largest CTS in this track fragments */
@@ -1374,12 +1375,12 @@ typedef struct
 
 typedef struct
 {
-    uint8_t all_sync;       /* if all samples are sync sample */
-    isom_chunk_t chunk;
-    isom_timestamp_t timestamp;
-    isom_grouping_t roll;
+    uint8_t           all_sync;     /* if all samples are sync sample */
+    isom_chunk_t      chunk;
+    isom_timestamp_t  timestamp;
+    isom_grouping_t   roll;
     isom_rap_group_t *rap;
-    isom_fragment_t *fragment;
+    isom_fragment_t  *fragment;
 } isom_cache_t;
 
 /** Movie Fragments Boxes **/
@@ -1507,7 +1508,9 @@ typedef struct
     uint32_t            sample_size;                        /* override default_sample_size */
     isom_sample_flags_t sample_flags;                       /* override default_sample_flags */
     /* */
-    uint32_t            sample_composition_time_offset;     /* composition time offset */
+    uint32_t            sample_composition_time_offset;     /* composition time offset
+                                                             *   If version == 0, unsigned 32-bit integer.
+                                                             *   Otherwise, signed 32-bit integer. */
 } isom_trun_optional_row_t;
 
 /* Track Fragment Box */
@@ -1551,7 +1554,12 @@ typedef struct
 {
     /* version == 0: 64bits -> 32bits */
     uint64_t time;              /* the presentation time of the random access sample in units defined in the Media Header Box of the associated track
-                                 * According to 14496-12:2008/FPDAM 3, presentation times are composition times. */
+                                 * For segments based on movie sample tables or movie fragments, presentation times are in the movie timeline,
+                                 * that is they are composition times after the application of any edit list for the track.
+                                 * Note: the definition of segment is portion of an ISO base media file format file, consisting of either
+                                 *       (a) a movie box, with its associated media data (if any) and other associated boxes
+                                 *        or
+                                 *       (b) one or more movie fragment boxes, with their associated media data, and other associated boxes. */
     uint64_t moof_offset;       /* the offset of the Movie Fragment Box used in this entry
                                  * Offset is the byte-offset between the beginning of the file and the beginning of the Movie Fragment Box. */
     /* */
