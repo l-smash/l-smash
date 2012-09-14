@@ -2184,6 +2184,23 @@ static int isom_read_tfhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     return isom_add_print_func( root, tfhd, level );
 }
 
+static int isom_read_tfdt( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( parent->type != ISOM_BOX_TYPE_TRAF || ((isom_traf_entry_t *)parent)->tfdt )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_create_box( tfdt, parent, box->type );
+    ((isom_traf_entry_t *)parent)->tfdt = tfdt;
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    if( box->version == 1 )
+        tfdt->baseMediaDecodeTime = lsmash_bs_get_be64( bs );
+    else
+        tfdt->baseMediaDecodeTime = lsmash_bs_get_be32( bs );
+    isom_check_box_size( bs, box );
+    isom_box_common_copy( tfdt, box );
+    return isom_add_print_func( root, tfdt, level );
+}
+
 static int isom_read_trun( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_TRAF )
@@ -2986,6 +3003,8 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
             return isom_read_traf( root, box, parent, level );
         case ISOM_BOX_TYPE_TFHD :
             return isom_read_tfhd( root, box, parent, level );
+        case ISOM_BOX_TYPE_TFDT :
+            return isom_read_tfdt( root, box, parent, level );
         case ISOM_BOX_TYPE_TRUN :
             return isom_read_trun( root, box, parent, level );
         case ISOM_BOX_TYPE_FREE :

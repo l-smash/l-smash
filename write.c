@@ -1652,6 +1652,18 @@ static int isom_write_tfhd( lsmash_bs_t *bs, isom_tfhd_t *tfhd )
     return lsmash_bs_write_data( bs );
 }
 
+static int isom_write_tfdt( lsmash_bs_t *bs, isom_tfdt_t *tfdt )
+{
+    if( !tfdt )
+        return -1;
+    isom_bs_put_box_common( bs, tfdt );
+    if( tfdt->version == 1 )
+        lsmash_bs_put_be64( bs, tfdt->baseMediaDecodeTime );
+    else
+        lsmash_bs_put_be32( bs, tfdt->baseMediaDecodeTime );
+    return lsmash_bs_write_data( bs );
+}
+
 static int isom_write_trun( lsmash_bs_t *bs, isom_trun_entry_t *trun )
 {
     if( !trun )
@@ -1681,7 +1693,8 @@ static int isom_write_traf( lsmash_bs_t *bs, isom_traf_entry_t *traf )
     isom_bs_put_box_common( bs, traf );
     if( lsmash_bs_write_data( bs ) )
         return -1;
-    if( isom_write_tfhd( bs, traf->tfhd ) )
+    if( isom_write_tfhd( bs, traf->tfhd )
+     || isom_write_tfdt( bs, traf->tfdt ) )
         return -1;
     if( traf->trun_list )
         for( lsmash_entry_t *entry = traf->trun_list->head; entry; entry = entry->next )

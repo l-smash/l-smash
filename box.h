@@ -1485,6 +1485,22 @@ typedef struct
     isom_sample_flags_t default_sample_flags;       /* override default_sample_flags in Track Extends Box */
 } isom_tfhd_t;
 
+/* Track Fragment Base Media Decode Time Box
+ * This box provides the absolute decode time, measured on the media timeline, of the first sample in decode order in the track fragment.
+ * This can be useful, for example, when performing random access in a file;
+ * it is not necessary to sum the sample durations of all preceding samples in previous fragments to find this value
+ * (where the sample durations are the deltas in the Decoding Time to Sample Box and the sample_durations in the preceding track runs).
+ * This box, if present, shall be positioned after the Track Fragment Header Box and before the first Track Fragment Run box. */
+typedef struct
+{
+    ISOM_FULLBOX_COMMON;    /* version is either 0 or 1 */
+    /* version == 0: 64bits -> 32bits */
+    uint64_t baseMediaDecodeTime;   /* an integer equal to the sum of the decode durations of all earlier samples in the media, expressed in the media's timescale
+                                     * It does not include the samples added in the enclosing track fragment.
+                                     * NOTE: the decode timeline is a media timeline, established before any explicit or implied mapping of media time to presentation time,
+                                     *       for example by an edit list or similar structure. */
+} isom_tfdt_t;
+
 /* Track Fragment Run Box
  * Within the Track Fragment Box, there are zero or more Track Fragment Run Boxes.
  * If the duration-is-empty flag is set in the tf_flags, there are no track runs.
@@ -1518,6 +1534,7 @@ typedef struct
 {
     ISOM_BASEBOX_COMMON;
     isom_tfhd_t         *tfhd;          /* Track Fragment Header Box */
+    isom_tfdt_t         *tfdt;          /* Track Fragment Base Media Decode Time Box */
     lsmash_entry_list_t *trun_list;     /* Track Fragment Run Box List
                                          * If the duration-is-empty flag is set in the tf_flags, there are no track runs. */
     isom_sdtp_t         *sdtp;          /* Independent and Disposable Samples Box */
@@ -1795,6 +1812,7 @@ enum isom_box_type
     ISOM_BOX_TYPE_SUBS  = LSMASH_4CC( 's', 'u', 'b', 's' ),
     ISOM_BOX_TYPE_SWTC  = LSMASH_4CC( 's', 'w', 't', 'c' ),
     ISOM_BOX_TYPE_TFHD  = LSMASH_4CC( 't', 'f', 'h', 'd' ),
+    ISOM_BOX_TYPE_TFDT  = LSMASH_4CC( 't', 'f', 'd', 't' ),
     ISOM_BOX_TYPE_TFRA  = LSMASH_4CC( 't', 'f', 'r', 'a' ),
     ISOM_BOX_TYPE_TIBR  = LSMASH_4CC( 't', 'i', 'b', 'r' ),
     ISOM_BOX_TYPE_TIRI  = LSMASH_4CC( 't', 'i', 'r', 'i' ),

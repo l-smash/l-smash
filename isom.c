@@ -88,6 +88,7 @@ int isom_is_fullbox( void *box )
         ISOM_BOX_TYPE_TREX,
         ISOM_BOX_TYPE_MFHD,
         ISOM_BOX_TYPE_TFHD,
+        ISOM_BOX_TYPE_TFDT,
         ISOM_BOX_TYPE_TRUN,
         ISOM_BOX_TYPE_TFRA,
         ISOM_BOX_TYPE_MFRO,
@@ -1946,6 +1947,15 @@ static int isom_add_tfhd( isom_traf_entry_t *traf )
     return 0;
 }
 
+static int isom_add_tfdt( isom_traf_entry_t *traf )
+{
+    if( !traf || traf->tfdt )
+        return -1;
+    isom_create_box( tfdt, traf, ISOM_BOX_TYPE_TFDT );
+    traf->tfdt = tfdt;
+    return 0;
+}
+
 static int isom_add_mfhd( isom_moof_entry_t *moof )
 {
     if( !moof || moof->mfhd )
@@ -2905,6 +2915,13 @@ static void isom_remove_tfhd( isom_tfhd_t *tfhd )
     isom_remove_box( tfhd, isom_traf_entry_t );
 }
 
+static void isom_remove_tfdt( isom_tfdt_t *tfdt )
+{
+    if( !tfdt )
+        return;
+    isom_remove_box( tfdt, isom_traf_entry_t );
+}
+
 static void isom_remove_trun( isom_trun_entry_t *trun )
 {
     if( !trun )
@@ -2918,6 +2935,7 @@ static void isom_remove_traf( isom_traf_entry_t *traf )
     if( !traf )
         return;
     isom_remove_tfhd( traf->tfhd );
+    isom_remove_tfdt( traf->tfdt );
     lsmash_remove_list( traf->trun_list, isom_remove_trun );
     isom_remove_sdtp( traf->sdtp );
     free( traf );   /* Note: the list that contains this traf still has the address of the entry. */
@@ -4790,6 +4808,15 @@ static uint64_t isom_update_tfhd_size( isom_tfhd_t *tfhd )
     return tfhd->size;
 }
 
+static uint64_t isom_update_tfdt_size( isom_tfdt_t *tfdt )
+{
+    if( !tfdt )
+        return 0;
+    tfdt->size = ISOM_FULLBOX_COMMON_SIZE + 4 * (1 + (tfdt->version == 1));
+    CHECK_LARGESIZE( tfdt );
+    return tfdt->size;
+}
+
 static uint64_t isom_update_trun_entry_size( isom_trun_entry_t *trun )
 {
     if( !trun )
@@ -4813,6 +4840,7 @@ static uint64_t isom_update_traf_entry_size( isom_traf_entry_t *traf )
         return 0;
     traf->size = ISOM_BASEBOX_COMMON_SIZE
                + isom_update_tfhd_size( traf->tfhd )
+               + isom_update_tfdt_size( traf->tfdt )
                + isom_update_sdtp_size( traf->sdtp );
     if( traf->trun_list )
         for( lsmash_entry_t *entry = traf->trun_list->head; entry; entry = entry->next )
@@ -7794,6 +7822,17 @@ static int isom_update_fragment_sample_tables( isom_traf_entry_t *traf, lsmash_s
                 tfra->length_size_of_trun_num = LSMASH_MAX( length - 1, tfra->length_size_of_trun_num );
                 for( length = 1; rap->sample_number >> (length * 8); length++ );
                 tfra->length_size_of_sample_num = LSMASH_MAX( length - 1, tfra->length_size_of_sample_num );
+            }
+            /* Set up the base media decode time of this track fragment.
+             * This feature is available under ISO Base Media version 6 or later. */
+            if( root->max_isom_version >= 6 )
+            {
+                assert( !traf->tfdt );
+                if( isom_add_tfdt( traf ) )
+                    return -1;
+                if( sample->dts > UINT32_MAX )
+                    traf->tfdt->version = 1;
+                traf->tfdt->baseMediaDecodeTime = sample->dts;
             }
         }
         trun->first_sample_flags = sample_flags;

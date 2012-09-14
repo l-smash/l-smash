@@ -1929,6 +1929,17 @@ static int isom_print_tfhd( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
     return 0;
 }
 
+static int isom_print_tfdt( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_tfdt_t *tfdt = (isom_tfdt_t *)box;
+    int indent = level;
+    isom_print_box_common( fp, indent++, box, "Track Fragment Base Media Decode Time Box" );
+    lsmash_ifprintf( fp, indent, "baseMediaDecodeTime = %"PRIu64"\n", tfdt->baseMediaDecodeTime );
+    return 0;
+}
+
 static int isom_print_trun( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
@@ -2369,6 +2380,8 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
             return isom_print_traf;
         case ISOM_BOX_TYPE_TFHD :
             return isom_print_tfhd;
+        case ISOM_BOX_TYPE_TFDT :
+            return isom_print_tfdt;
         case ISOM_BOX_TYPE_TRUN :
             return isom_print_trun;
         case ISOM_BOX_TYPE_FREE :
