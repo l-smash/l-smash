@@ -1655,7 +1655,7 @@ static int isom_write_tfhd( lsmash_bs_t *bs, isom_tfhd_t *tfhd )
 static int isom_write_tfdt( lsmash_bs_t *bs, isom_tfdt_t *tfdt )
 {
     if( !tfdt )
-        return -1;
+        return 0;
     isom_bs_put_box_common( bs, tfdt );
     if( tfdt->version == 1 )
         lsmash_bs_put_be64( bs, tfdt->baseMediaDecodeTime );
