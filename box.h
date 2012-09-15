@@ -1551,8 +1551,8 @@ typedef struct
 } isom_moof_entry_t;
 
 /* Track Fragment Random Access Box
- * Each entry in this box contains the location and the presentation time of the random accessible sample.
- * Note that not every random accessible sample in the track needs to be listed in the table.
+ * Each entry in this box contains the location and the presentation time of the sync sample.
+ * Note that not every sync sample in the track needs to be listed in the table.
  * The absence of this box does not mean that all the samples are sync samples. */
 typedef struct
 {
@@ -1563,14 +1563,14 @@ typedef struct
     unsigned int length_size_of_trun_num   : 2;     /* the length in byte of the trun_number field minus one */
     unsigned int length_size_of_sample_num : 2;     /* the length in byte of the sample_number field minus one */
     uint32_t number_of_entry;                       /* the number of the entries for this track
-                                                     * Value zero indicates that every sample is a random access point and no table entry follows. */
+                                                     * Value zero indicates that every sample is a sync sample and no table entry follows. */
     lsmash_entry_list_t *list;                      /* entry_count corresponds to number_of_entry. */
 } isom_tfra_entry_t;
 
 typedef struct
 {
     /* version == 0: 64bits -> 32bits */
-    uint64_t time;              /* the presentation time of the random access sample in units defined in the Media Header Box of the associated track
+    uint64_t time;              /* the presentation time of the sync sample in units defined in the Media Header Box of the associated track
                                  * For segments based on movie sample tables or movie fragments, presentation times are in the movie timeline,
                                  * that is they are composition times after the application of any edit list for the track.
                                  * Note: the definition of segment is portion of an ISO base media file format file, consisting of either
@@ -1580,11 +1580,11 @@ typedef struct
     uint64_t moof_offset;       /* the offset of the Movie Fragment Box used in this entry
                                  * Offset is the byte-offset between the beginning of the file and the beginning of the Movie Fragment Box. */
     /* */
-    uint32_t traf_number;       /* the Track Fragment Box ('traf') number that contains the random accessible sample
+    uint32_t traf_number;       /* the Track Fragment Box ('traf') number that contains the sync sample
                                  * The number ranges from 1 in each Movie Fragment Box ('moof'). */
-    uint32_t trun_number;       /* the Track Fragment Run Box ('trun') number that contains the random accessible sample
+    uint32_t trun_number;       /* the Track Fragment Run Box ('trun') number that contains the sync sample
                                  * The number ranges from 1 in each Track Fragment Box ('traf'). */
-    uint32_t sample_number;     /* the sample number that contains the random accessible sample
+    uint32_t sample_number;     /* the sample number that contains the sync sample
                                  * The number ranges from 1 in each Track Fragment Run Box ('trun'). */
 } isom_tfra_location_time_entry_t;
 
@@ -1599,7 +1599,7 @@ typedef struct
 } isom_mfro_t;
 
 /* Movie Fragment Random Access Box
- * This box provides a table which may assist readers in finding random access points in a file using movie fragments,
+ * This box provides a table which may assist readers in finding sync samples in a file using movie fragments,
  * and is usually placed at or near the end of the file.
  * The last box within the Movie Fragment Random Access Box, which is called Movie Fragment Random Access Offset Box,
  * provides a copy of the length field from the Movie Fragment Random Access Box. */

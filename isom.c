@@ -5829,17 +5829,17 @@ static int isom_write_fragment_random_access_info( lsmash_root_t *root )
                 continue;
             }
             uint64_t composition_time = rap->time;
-            /* Skip edits that doesn't need the current random accessible sample indicated in the Track Fragment Random Access Box. */
+            /* Skip edits that doesn't need the current sync sample indicated in the Track Fragment Random Access Box. */
             while( edit )
             {
                 uint64_t segment_duration = ((edit->segment_duration - 1) / movie_timescale + 1) * media_timescale;
                 if( edit->media_time != ISOM_EDIT_MODE_EMPTY
                  && composition_time < edit->media_time + segment_duration )
-                    break;  /* This Timeline Mapping Edit might require the current random access point.
+                    break;  /* This Timeline Mapping Edit might require the current sync sample.
                              * Note: this condition doesn't cover all cases.
                              *       For instance, matching the both following conditions
-                             *         1. An IDR-picture isn't in the presentation.
-                             *         2. The other pictures, which precede it in the composition timeline, is in the presentation. */
+                             *         1. A sync sample isn't in the presentation.
+                             *         2. The other samples, which precede it in the composition timeline, is in the presentation. */
                 edit_offset += segment_duration;
                 edit_entry = edit_entry->next;
                 if( !edit_entry )
@@ -5853,14 +5853,14 @@ static int isom_write_fragment_random_access_info( lsmash_root_t *root )
             if( !edit )
             {
                 /* No more presentation.
-                 * Drop the rest of random accessible points since they are generally absent in the whole presentation.
-                 * Though the exceptions are random access points with earlier composition time, we ignore them.
+                 * Drop the rest of sync samples since they are generally absent in the whole presentation.
+                 * Though the exceptions are sync samples with earlier composition time, we ignore them. (SAP type 2: TEPT = TDEC = TSAP < TPTF)
                  * To support this exception, we need sorting entries of the list by composition times. */
                 for( ; rap_entry; rap_entry = rap_entry->next )
                     lsmash_remove_entry_direct( tfra->list, rap_entry, NULL );
                 break;
             }
-            /* If the random accessible sample isn't in the presentation,
+            /* If the sync sample isn't in the presentation,
              * we pick the earliest presentation time of the current edit as its presentation time. */
             rap->time = edit_offset;
             if( composition_time >= edit->media_time )
@@ -7782,9 +7782,9 @@ static int isom_update_fragment_sample_tables( isom_traf_entry_t *traf, lsmash_s
             /* Set up default_sample_flags used in this track fragment.
              * Note: we decide an appropriate default value at the end of this movie fragment. */
             tfhd->default_sample_flags = sample_flags;
-            /* Set up random access information if this sample is random accessible sample.
+            /* Set up random access information if this sample is a sync sample.
              * We inform only the first sample in each movie fragment. */
-            if( root->bs->stream != stdout && sample->prop.random_access_type )
+            if( root->bs->stream != stdout && sample->prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC )
             {
                 isom_tfra_entry_t *tfra = isom_get_tfra( root->mfra, tfhd->track_ID );
                 if( !tfra )

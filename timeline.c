@@ -1060,21 +1060,18 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                                     info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
                                     distance = 0;
                                 }
-                                /* Get random accessible info from 'tfra' if it is not set up yet.
+                                /* Get the location of the sync sample from 'tfra' if it is not set up yet.
                                  * Note: there is no guarantee that its entries are placed in a specific order. */
                                 if( tfra )
                                 {
-                                    /* FIXME: We defined ISOM_SAMPLE_RANDOM_ACCESS_TYPE_UNKNOWN_RAP for closed or open RAP.
-                                     *        It is not for gradual decoder refresh but 'tfra' can also indicate for it.
-                                     *        Therefore, we should define more vague and abstract type of random access. */
                                     if( tfra->number_of_entry == 0
                                      && info.prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE )
-                                        info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_UNKNOWN_RAP;
+                                        info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
                                     if( rap && rap->moof_offset == moof->pos && rap->traf_number == traf_number
                                      && rap->trun_number == trun_number && rap->sample_number == sample_number )
                                     {
                                         if( info.prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE )
-                                            info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_UNKNOWN_RAP;
+                                            info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
                                         if( tfra_entry )
                                             tfra_entry = tfra_entry->next;
                                         rap = tfra_entry ? (isom_tfra_location_time_entry_t *)tfra_entry->data : NULL;
