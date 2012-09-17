@@ -235,3 +235,46 @@ lsmash_summary_t *lsmash_get_summary( lsmash_root_t *root, uint32_t track_ID, ui
     }
     return NULL;
 }
+
+int lsmash_compare_summary( lsmash_summary_t *a, lsmash_summary_t *b )
+{
+    if( !a || !b )
+        return -1;
+    if( a->summary_type != b->summary_type
+     || a->sample_type  != b->sample_type )
+        return 1;
+    if( a->summary_type == LSMASH_SUMMARY_TYPE_VIDEO )
+    {
+        lsmash_video_summary_t *in_video  = (lsmash_video_summary_t *)a;
+        lsmash_video_summary_t *out_video = (lsmash_video_summary_t *)b;
+        if( in_video->width  != out_video->width
+         || in_video->height != out_video->height
+         || in_video->depth  != out_video->depth
+         || in_video->par_h  != out_video->par_h
+         || memcmp( in_video->compressorname, out_video->compressorname, strlen( in_video->compressorname ) )
+         || in_video->clap.width.n             != out_video->clap.width.n
+         || in_video->clap.width.d             != out_video->clap.width.d
+         || in_video->clap.height.n            != out_video->clap.height.n
+         || in_video->clap.height.d            != out_video->clap.height.d
+         || in_video->clap.horizontal_offset.n != out_video->clap.horizontal_offset.n
+         || in_video->clap.horizontal_offset.d != out_video->clap.horizontal_offset.d
+         || in_video->clap.vertical_offset.n   != out_video->clap.vertical_offset.n
+         || in_video->clap.vertical_offset.d   != out_video->clap.vertical_offset.d
+         || in_video->color.primaries_index != out_video->color.primaries_index
+         || in_video->color.transfer_index  != out_video->color.transfer_index
+         || in_video->color.matrix_index    != out_video->color.matrix_index
+         || in_video->color.full_range      != out_video->color.full_range )
+            return 1;
+    }
+    else if( a->summary_type == LSMASH_SUMMARY_TYPE_AUDIO )
+    {
+        lsmash_audio_summary_t *in_audio  = (lsmash_audio_summary_t *)a;
+        lsmash_audio_summary_t *out_audio = (lsmash_audio_summary_t *)b;
+        if( in_audio->frequency        != out_audio->frequency
+         || in_audio->channels         != out_audio->channels
+         || in_audio->sample_size      != out_audio->sample_size
+         || in_audio->samples_in_frame != out_audio->samples_in_frame )
+            return 1;
+    }
+    return isom_compare_opaque_extensions( a, b );
+}

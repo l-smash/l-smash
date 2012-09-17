@@ -1105,6 +1105,11 @@ uint32_t lsmash_count_summary( lsmash_root_t *root, uint32_t track_ID );
 lsmash_codec_specific_t *lsmash_get_codec_specific_data( lsmash_summary_t *summary, uint32_t extension_number );
 uint32_t lsmash_count_codec_specific_data( lsmash_summary_t *summary );
 
+/* Return 0 if the two summaries are identical.
+ * Return 1 if the two summaries are different.
+ * Return -1 if there is any error. */
+int lsmash_compare_summary( lsmash_summary_t *a, lsmash_summary_t *b );
+
 #ifdef LSMASH_DEMUXER_ENABLED
 int lsmash_print_movie( lsmash_root_t *root, const char *filename );
 

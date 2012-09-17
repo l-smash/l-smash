@@ -37,3 +37,4 @@ int isom_setup_visual_description( isom_stsd_t *stsd, uint32_t sample_type, lsma
 int isom_setup_audio_description( isom_stsd_t *stsd, uint32_t sample_type, lsmash_audio_summary_t *summary );
 lsmash_video_summary_t *isom_create_video_summary_from_description( isom_visual_entry_t *visual );
 lsmash_audio_summary_t *isom_create_audio_summary_from_description( isom_audio_entry_t *audio );
+int isom_compare_opaque_extensions( lsmash_summary_t *a, lsmash_summary_t *b );

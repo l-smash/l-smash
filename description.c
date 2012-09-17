@@ -2591,3 +2591,106 @@ uint32_t lsmash_count_codec_specific_data( lsmash_summary_t *summary )
         return 0;
     return summary->opaque->list.entry_count;
 }
+
+int isom_compare_opaque_extensions( lsmash_summary_t *a, lsmash_summary_t *b )
+{
+    assert( a && b );
+    uint32_t in_number_of_extensions  = lsmash_count_codec_specific_data( a );
+    uint32_t out_number_of_extensions = lsmash_count_codec_specific_data( b );
+    if( out_number_of_extensions != in_number_of_extensions )
+        return 1;
+    uint32_t active_number_of_extensions = in_number_of_extensions;
+    uint32_t identical_count = 0;
+    for( uint32_t j = 1; j <= in_number_of_extensions; j++ )
+    {
+        lsmash_codec_specific_t *in_cs_orig = lsmash_get_codec_specific_data( a, j );
+        lsmash_codec_specific_t *in_cs;
+        lsmash_codec_specific_format compare_format = LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED;
+        if( in_cs_orig->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED )
+        {
+            if( in_cs_orig->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_COMMON
+             || in_cs_orig->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_COMMON
+             || in_cs_orig->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_FORMAT_SPECIFIC_FLAGS )
+            {
+                compare_format = LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED;
+                in_cs = in_cs_orig;
+            }
+            else
+            {
+                in_cs = lsmash_convert_codec_specific_format( in_cs_orig, LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
+                if( !in_cs )
+                {
+                    /* We don't support the format converter of this data type. */
+                    --active_number_of_extensions;
+                    continue;
+                }
+            }
+        }
+        else
+            in_cs = in_cs_orig;
+        for( uint32_t k = 1; k <= out_number_of_extensions; k++ )
+        {
+            lsmash_codec_specific_t *out_cs_orig = lsmash_get_codec_specific_data( b, k );
+            if( out_cs_orig->type != in_cs_orig->type )
+                continue;
+            lsmash_codec_specific_t *out_cs;
+            if( out_cs_orig->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED )
+            {
+                if( compare_format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED )
+                    out_cs = out_cs_orig;
+                else
+                {
+                    out_cs = lsmash_convert_codec_specific_format( out_cs_orig, LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
+                    if( !out_cs )
+                        continue;
+                }
+            }
+            else
+                out_cs = out_cs_orig;
+            int identical;
+            if( compare_format == LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED )
+                identical = out_cs->size == in_cs->size && !memcmp( out_cs->data.unstructured, in_cs->data.unstructured, in_cs->size );
+            else
+            {
+                if( in_cs->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_COMMON )
+                {
+                    lsmash_qt_video_common_t *in_data  = (lsmash_qt_video_common_t *)in_cs->data.structured;
+                    lsmash_qt_video_common_t *out_data = (lsmash_qt_video_common_t *)out_cs->data.structured;
+                    identical = in_data->revision_level        == out_data->revision_level
+                             && in_data->vendor                == out_data->vendor
+                             && in_data->temporalQuality       == out_data->temporalQuality
+                             && in_data->spatialQuality        == out_data->spatialQuality
+                             && in_data->horizontal_resolution == out_data->horizontal_resolution
+                             && in_data->vertical_resolution   == out_data->vertical_resolution
+                             && in_data->dataSize              == out_data->dataSize
+                             && in_data->frame_count           == out_data->frame_count
+                             && in_data->color_table_ID        == out_data->color_table_ID;
+                }
+                else if( in_cs->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_COMMON )
+                {
+                    lsmash_qt_audio_common_t *in_data  = (lsmash_qt_audio_common_t *)in_cs->data.structured;
+                    lsmash_qt_audio_common_t *out_data = (lsmash_qt_audio_common_t *)out_cs->data.structured;
+                    identical = in_data->revision_level == out_data->revision_level
+                             && in_data->vendor         == out_data->vendor
+                             && in_data->compression_ID == out_data->compression_ID;
+                }
+                else
+                {
+                    lsmash_qt_audio_format_specific_flags_t *in_data  = (lsmash_qt_audio_format_specific_flags_t *)in_cs->data.structured;
+                    lsmash_qt_audio_format_specific_flags_t *out_data = (lsmash_qt_audio_format_specific_flags_t *)out_cs->data.structured;
+                    identical = (in_data->format_flags == out_data->format_flags);
+                }
+            }
+            if( out_cs != out_cs_orig )
+                lsmash_destroy_codec_specific_data( out_cs );
+            if( identical )
+            {
+                ++identical_count;
+                break;
+            }
+        }
+        if( in_cs != in_cs_orig )
+            lsmash_destroy_codec_specific_data( in_cs );
+    }
+    return (identical_count != active_number_of_extensions);
+}
