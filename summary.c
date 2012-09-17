@@ -251,6 +251,7 @@ int lsmash_compare_summary( lsmash_summary_t *a, lsmash_summary_t *b )
          || in_video->height != out_video->height
          || in_video->depth  != out_video->depth
          || in_video->par_h  != out_video->par_h
+         || in_video->par_v  != out_video->par_v
          || memcmp( in_video->compressorname, out_video->compressorname, strlen( in_video->compressorname ) )
          || in_video->clap.width.n             != out_video->clap.width.n
          || in_video->clap.width.d             != out_video->clap.width.d
