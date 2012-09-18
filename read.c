@@ -179,13 +179,14 @@ static int isom_read_children( lsmash_root_t *root, isom_box_t *box, void *paren
 
 static int isom_read_unknown_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    isom_unknown_box_t *unknown = lsmash_malloc_zero( sizeof(isom_box_t) );
-    if( !unknown )
-        return -1;
     lsmash_bs_t *bs = root->bs;
     isom_read_box_rest( bs, box );
-    uint64_t pos = lsmash_bs_get_pos( bs );
-    unknown->unknown_size = box->size - pos;
+    if( bs->error && feof( bs->stream ) )
+        return -1;  /* This box ends incompletely at the end of the stream. */
+    isom_unknown_box_t *unknown = lsmash_malloc_zero( sizeof(isom_unknown_box_t) );
+    if( !unknown )
+        return -1;
+    unknown->unknown_size = box->size - lsmash_bs_get_pos( bs );
     if( unknown->unknown_size )
     {
         unknown->unknown_field = lsmash_malloc_zero( unknown->unknown_size );
@@ -194,8 +195,8 @@ static int isom_read_unknown_box( lsmash_root_t *root, isom_box_t *box, isom_box
             free( unknown );
             return -1;
         }
-        for( uint32_t i = 0; pos < box->size; pos = lsmash_bs_get_pos( bs ) )
-            unknown->unknown_field[i++] = lsmash_bs_get_byte( bs );
+        for( uint32_t i = 0; i < unknown->unknown_size; i++ )
+            unknown->unknown_field[i] = lsmash_bs_get_byte( bs );
     }
     isom_box_common_copy( unknown, box );
     unknown->manager |= LSMASH_UNKNOWN_BOX;
