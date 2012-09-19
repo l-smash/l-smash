@@ -35,7 +35,7 @@
 
 static int isom_write_unknown_box( lsmash_bs_t *bs, isom_unknown_box_t *unknown_box )
 {
-    if( !unknown_box )
+    if( !unknown_box || (unknown_box->manager & LSMASH_INCOMPLETE_BOX) )
         return 0;
     isom_bs_put_box_common( bs, unknown_box );
     if( unknown_box->unknown_field && unknown_box->unknown_size )

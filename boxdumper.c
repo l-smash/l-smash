@@ -89,7 +89,9 @@ int main( int argc, char *argv[] )
 #ifdef _WIN32
     _setmode( _fileno(stdin), _O_BINARY );
 #endif
-    lsmash_file_mode mode = dump_box ? (LSMASH_FILE_MODE_READ | LSMASH_FILE_MODE_DUMP) : LSMASH_FILE_MODE_READ;
+    lsmash_file_mode mode = LSMASH_FILE_MODE_READ;
+    if( dump_box )
+        mode |= LSMASH_FILE_MODE_DUMP;
     lsmash_root_t *root = lsmash_open_movie( filename, mode );
     if( !root )
     {

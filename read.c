@@ -117,8 +117,8 @@ static void isom_read_box_rest( lsmash_bs_t *bs, isom_box_t *box )
     }
     if( lsmash_bs_read_data( bs, box->size - lsmash_bs_get_pos( bs ) ) )
         return;
-    if( box->size != bs->store )  /* not match size */
-        bs->error = 1;
+    if( box->size != bs->store )
+        bs->error = 1;  /* not match size */
 }
 
 static void isom_skip_box_rest( lsmash_bs_t *bs, isom_box_t *box )
@@ -140,11 +140,29 @@ static void isom_skip_box_rest( lsmash_bs_t *bs, isom_box_t *box )
     }
     uint64_t skip_bytes = box->size - lsmash_bs_get_pos( bs );
     if( bs->stream != stdin )
+    {
+        uint64_t start = lsmash_ftell( bs->stream );
         lsmash_fseek( bs->stream, skip_bytes, SEEK_CUR );
-    else
-        for( uint64_t i = 0; i < skip_bytes; i++ )
-            if( fgetc( bs->stream ) == EOF )
-                break;
+        if( fgetc( bs->stream ) == EOF )
+        {
+            lsmash_fseek( bs->stream, 0, SEEK_END );
+            uint64_t end = lsmash_ftell( bs->stream );
+            if( end - start != skip_bytes )
+                bs->error = 1;  /* not match size */
+            fgetc( bs->stream );    /* Set EOF flag.
+                                     * FIXME: I think lsmash_bs_t should have its own EOF flag. */
+            return;
+        }
+        lsmash_fseek( bs->stream, -1, SEEK_CUR );
+        return;
+    }
+    for( uint64_t i = 0; i < skip_bytes; i++ )
+        if( fgetc( bs->stream ) == EOF )
+        {
+            /* not match size */
+            bs->error = 1;
+            return;
+        }
 }
 
 static void isom_check_box_size( lsmash_bs_t *bs, isom_box_t *box )
@@ -180,26 +198,18 @@ static int isom_read_children( lsmash_root_t *root, isom_box_t *box, void *paren
 static int isom_read_unknown_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     lsmash_bs_t *bs = root->bs;
-    isom_read_box_rest( bs, box );
+    isom_skip_box_rest( bs, box );
     if( bs->error && feof( bs->stream ) )
-        return -1;  /* This box ends incompletely at the end of the stream. */
+    {
+        /* This box ends incompletely at the end of the stream. */
+        box->manager |= LSMASH_INCOMPLETE_BOX;
+        return -1;
+    }
     isom_unknown_box_t *unknown = lsmash_malloc_zero( sizeof(isom_unknown_box_t) );
     if( !unknown )
         return -1;
-    unknown->unknown_size = box->size - lsmash_bs_get_pos( bs );
-    if( unknown->unknown_size )
-    {
-        unknown->unknown_field = lsmash_malloc_zero( unknown->unknown_size );
-        if( !unknown->unknown_field )
-        {
-            free( unknown );
-            return -1;
-        }
-        for( uint32_t i = 0; i < unknown->unknown_size; i++ )
-            unknown->unknown_field[i] = lsmash_bs_get_byte( bs );
-    }
     isom_box_common_copy( unknown, box );
-    unknown->manager |= LSMASH_UNKNOWN_BOX;
+    unknown->manager |= LSMASH_UNKNOWN_BOX | LSMASH_INCOMPLETE_BOX;
     if( isom_add_extension_box( &parent->extensions, unknown, isom_remove_unknown_box ) )
     {
         isom_remove_unknown_box( unknown );
@@ -207,14 +217,15 @@ static int isom_read_unknown_box( lsmash_root_t *root, isom_box_t *box, isom_box
     }
     if( !(root->flags & LSMASH_FILE_MODE_DUMP) )
         return 0;
-    isom_box_t *specific = lsmash_malloc_zero( sizeof(isom_box_t) );
-    if( !specific )
+    /* Create a dummy for dump. */
+    isom_box_t *dummy = lsmash_malloc_zero( sizeof(isom_box_t) );
+    if( !dummy )
         return -1;
     box->manager |= LSMASH_ABSENT_IN_ROOT;
-    isom_box_common_copy( specific, box );
-    if( isom_add_print_func( root, specific, level ) )
+    isom_box_common_copy( dummy, box );
+    if( isom_add_print_func( root, dummy, level ) )
     {
-        free( specific );
+        free( dummy );
         return -1;
     }
     return 0;

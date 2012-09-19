@@ -39,7 +39,7 @@ typedef struct isom_box_tag isom_box_t;
 #define ISOM_BASEBOX_COMMON \
         lsmash_root_t      *root;       /* pointer of root */ \
         isom_box_t         *parent;     /* pointer of the parent box of this box */ \
-        uint8_t             manager;    /* flags for L-SMASH */ \
+        uint32_t            manager;    /* flags for L-SMASH */ \
         uint64_t            pos;        /* starting position of this box in the file */ \
         lsmash_entry_list_t extensions; /* extension boxes */ \
     uint64_t size;                      /* the number of bytes in this box */ \
@@ -62,6 +62,7 @@ typedef struct isom_box_tag isom_box_t;
 #define LSMASH_AUDIO_DESCRIPTION 0x10
 #define LSMASH_FULLBOX           0x20
 #define LSMASH_LAST_BOX          0x40
+#define LSMASH_INCOMPLETE_BOX    0x80
 
 
 struct isom_box_tag
