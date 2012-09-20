@@ -27,7 +27,7 @@ struct lsmash_codec_specific_list_tag
 
 lsmash_codec_specific_t *isom_duplicate_codec_specific_data( lsmash_codec_specific_t *specific );
 isom_extension_box_t *isom_get_sample_description_extension( lsmash_entry_list_t *extensions, uint32_t box_type );
-lsmash_codec_specific_t *isom_get_codec_specific( lsmash_codec_specific_list_t *opaque, uint32_t type );
+lsmash_codec_specific_t *isom_get_codec_specific( lsmash_codec_specific_list_t *opaque, lsmash_codec_specific_data_type type );
 uint8_t *isom_get_child_box_position( uint8_t *parent_data, uint32_t parent_size, uint32_t child_type, uint32_t *child_size );
 void *isom_get_extension_box( lsmash_entry_list_t *exetnsion, uint32_t box_type );
 int isom_add_extension_box( lsmash_entry_list_t *extensions, void *box, void *eliminator );

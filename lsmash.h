@@ -258,7 +258,10 @@ typedef enum
 
 typedef enum
 {
-    LSMASH_CODEC_SPECIFIC_DATA_TYPE_UNKNOWN = 0,                        /* must be LSMASH_CODEC_SPECIFIC_FORM_UNSTRUCTURED */
+    LSMASH_CODEC_SPECIFIC_DATA_TYPE_UNSPECIFIED = -1,                   /* neither LSMASH_CODEC_SPECIFIC_FORM_STRUCTURED
+                                                                         *      or LSMASH_CODEC_SPECIFIC_FORM_UNSTRUCTURED */
+
+    LSMASH_CODEC_SPECIFIC_DATA_TYPE_UNKNOWN     = 0,                    /* must be LSMASH_CODEC_SPECIFIC_FORM_UNSTRUCTURED */
 
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG,
 
