@@ -187,6 +187,13 @@ uint8_t lsmash_dts_get_stream_construction( lsmash_dts_construction_flag flags )
     return StreamConstruction <= DTS_MAX_STREAM_CONSTRUCTION ? StreamConstruction : 0;
 }
 
+lsmash_dts_construction_flag lsmash_dts_get_construction_flags( uint8_t stream_construction )
+{
+    if( stream_construction <= DTS_MAX_STREAM_CONSTRUCTION )
+        return construction_info[stream_construction];
+    return 0;
+}
+
 uint32_t lsmash_dts_get_codingname( lsmash_dts_specific_parameters_t *param )
 {
     assert( param->StreamConstruction <= DTS_MAX_STREAM_CONSTRUCTION );
