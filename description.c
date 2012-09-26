@@ -623,7 +623,7 @@ static int codec_construct_qt_audio_decompression_info( lsmash_codec_specific_t 
  * since structured formats we defined don't always have all contents included in unstructured data. */
 lsmash_codec_specific_t *lsmash_convert_codec_specific_format( lsmash_codec_specific_t *specific, lsmash_codec_specific_format format )
 {
-    if( !specific )
+    if( !specific || format == LSMASH_CODEC_SPECIFIC_FORMAT_UNSPECIFIED )
         return NULL;
     if( format == specific->format )
         return isom_duplicate_codec_specific_data( specific );
@@ -685,7 +685,7 @@ lsmash_codec_specific_t *lsmash_convert_codec_specific_format( lsmash_codec_spec
             default :
                 break;
         }
-    else
+    else if( format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED )
     {
         /* unstructured -> structured */
         extern int mp4sys_construct_decoder_config( lsmash_codec_specific_t *, lsmash_codec_specific_t * );
