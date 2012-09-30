@@ -184,6 +184,8 @@ lsmash_summary_t *lsmash_get_summary( lsmash_root_t *root, uint32_t track_ID, ui
                 case QT_CODEC_TYPE_APCS_VIDEO :
                 case QT_CODEC_TYPE_APCO_VIDEO :
                 case QT_CODEC_TYPE_AP4H_VIDEO :
+                case QT_CODEC_TYPE_DV10_VIDEO :
+                case QT_CODEC_TYPE_DVOO_VIDEO :
                 case QT_CODEC_TYPE_DVC_VIDEO :
                 case QT_CODEC_TYPE_DVCP_VIDEO :
                 case QT_CODEC_TYPE_DVPP_VIDEO :
@@ -195,6 +197,18 @@ lsmash_summary_t *lsmash_get_summary( lsmash_root_t *root, uint32_t track_ID, ui
                 case QT_CODEC_TYPE_DVH6_VIDEO :
                 case QT_CODEC_TYPE_DVHP_VIDEO :
                 case QT_CODEC_TYPE_DVHQ_VIDEO :
+                case QT_CODEC_TYPE_FLIC_VIDEO :
+                case QT_CODEC_TYPE_H261_VIDEO :
+                case QT_CODEC_TYPE_H263_VIDEO :
+                case QT_CODEC_TYPE_JPEG_VIDEO :
+                case QT_CODEC_TYPE_MJPA_VIDEO :
+                case QT_CODEC_TYPE_MJPB_VIDEO :
+                case QT_CODEC_TYPE_PNG_VIDEO :
+                case QT_CODEC_TYPE_RAW_VIDEO :
+                case QT_CODEC_TYPE_RLE_VIDEO :
+                case QT_CODEC_TYPE_RPZA_VIDEO :
+                case QT_CODEC_TYPE_TGA_VIDEO :
+                case QT_CODEC_TYPE_TIFF_VIDEO :
                 case QT_CODEC_TYPE_ULRA_VIDEO :
                 case QT_CODEC_TYPE_ULRG_VIDEO :
                 case QT_CODEC_TYPE_ULY2_VIDEO :
