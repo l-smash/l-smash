@@ -277,12 +277,13 @@ static void isom_pring_qt_color_table( FILE *fp, int indent, isom_qt_color_table
     isom_qt_color_array_t *array = color_table->array;
     if( !array )
         return;
-    lsmash_ifprintf( fp, indent, "seed = %"PRIu32"\n", color_table->seed );
-    lsmash_ifprintf( fp, indent, "flags = 0x%04"PRIx16"\n", color_table->flags );
-    lsmash_ifprintf( fp, indent, "size = %"PRIu16"\n", color_table->size );
+    lsmash_ifprintf( fp, indent, "ctSeed = %"PRIu32"\n", color_table->seed );
+    lsmash_ifprintf( fp, indent, "ctFlags = 0x%04"PRIx16"\n", color_table->flags );
+    lsmash_ifprintf( fp, indent, "ctSize = %"PRIu16"\n", color_table->size );
+    lsmash_ifprintf( fp, indent++, "ctTable\n" );
     for( uint16_t i = 0; i <= color_table->size; i++ )
         lsmash_ifprintf( fp, indent,
-                         "color[%"PRIu16"] = { 0x%04"PRIx16", 0x%04"PRIx16", 0x%04"PRIx16", 0x%04"PRIx16"\n",
+                         "color[%"PRIu16"] = { 0x%04"PRIx16", 0x%04"PRIx16", 0x%04"PRIx16", 0x%04"PRIx16" }\n",
                          i, array[i].value, array[i].r, array[i].g, array[i].b );
 }
 
