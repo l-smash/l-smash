@@ -894,7 +894,7 @@ static int isom_read_stsd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         return -1;
     int ret = 0;
     uint64_t stsd_pos = lsmash_bs_get_pos( bs );
-    for( uint32_t i = 0; i < stsd->entry_count; i++ )
+    for( uint32_t i = 0; i < stsd->entry_count || (stsd_pos + ISOM_BASEBOX_COMMON_SIZE) <= stsd->size; i++ )
     {
         ret = isom_read_box( root, box, (isom_box_t *)stsd, stsd_pos, level );
         if( ret )
