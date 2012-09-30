@@ -43,6 +43,32 @@ static int isom_write_unknown_box( lsmash_bs_t *bs, isom_unknown_box_t *unknown_
     return lsmash_bs_write_data( bs );
 }
 
+static void isom_bs_put_qt_color_table( lsmash_bs_t *bs, isom_qt_color_table_t *color_table )
+{
+    lsmash_bs_put_be32( bs, color_table->seed );
+    lsmash_bs_put_be16( bs, color_table->flags );
+    lsmash_bs_put_be16( bs, color_table->size );
+    isom_qt_color_array_t *array = color_table->array;
+    if( array )
+        for( uint16_t i = 0; i <= color_table->size; i++ )
+        {
+            lsmash_bs_put_be16( bs, array[i].value );
+            lsmash_bs_put_be16( bs, array[i].r );
+            lsmash_bs_put_be16( bs, array[i].g );
+            lsmash_bs_put_be16( bs, array[i].b );
+        }
+}
+
+static int isom_write_ctab( lsmash_bs_t *bs, isom_moov_t *moov )
+{
+    isom_ctab_t *ctab = moov->ctab;
+    if( !ctab )
+        return 0;
+    isom_bs_put_box_common( bs, ctab );
+    isom_bs_put_qt_color_table( bs, &ctab->color_table );
+    return lsmash_bs_write_data( bs );
+}
+
 static int isom_write_tkhd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
 {
     isom_tkhd_t *tkhd = trak->tkhd;
@@ -742,6 +768,8 @@ static int isom_write_visual_entry( lsmash_bs_t *bs, lsmash_entry_t *entry )
     lsmash_bs_put_bytes( bs, 32, data->compressorname );
     lsmash_bs_put_be16( bs, data->depth );
     lsmash_bs_put_be16( bs, data->color_table_ID );
+    if( data->color_table_ID == 0 )
+        isom_bs_put_qt_color_table( bs, &data->color_table );
     if( lsmash_bs_write_data( bs ) )
         return -1;
     return isom_write_visual_extensions( bs, data );
@@ -1879,6 +1907,7 @@ int isom_write_moov( lsmash_root_t *root )
             if( isom_write_trak( bs, (isom_trak_entry_t *)entry->data ) )
                 return -1;
     if( isom_write_udta( bs, moov, NULL )
+     || isom_write_ctab( bs, moov )
      || isom_write_meta( bs, moov->meta ) )
         return -1;
     return isom_write_mvex( bs, moov->mvex );

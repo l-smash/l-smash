@@ -272,6 +272,31 @@ static int isom_print_mvhd( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
     return 0;
 }
 
+static void isom_pring_qt_color_table( FILE *fp, int indent, isom_qt_color_table_t *color_table )
+{
+    isom_qt_color_array_t *array = color_table->array;
+    if( !array )
+        return;
+    lsmash_ifprintf( fp, indent, "seed = %"PRIu32"\n", color_table->seed );
+    lsmash_ifprintf( fp, indent, "flags = 0x%04"PRIx16"\n", color_table->flags );
+    lsmash_ifprintf( fp, indent, "size = %"PRIu16"\n", color_table->size );
+    for( uint16_t i = 0; i <= color_table->size; i++ )
+        lsmash_ifprintf( fp, indent,
+                         "color[%"PRIu16"] = { 0x%04"PRIx16", 0x%04"PRIx16", 0x%04"PRIx16", 0x%04"PRIx16"\n",
+                         i, array[i].value, array[i].r, array[i].g, array[i].b );
+}
+
+static int isom_print_ctab( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_ctab_t *ctab = (isom_ctab_t *)box;
+    int indent = level;
+    isom_print_box_common( fp, indent, box, "Color Table Box" );
+    isom_pring_qt_color_table( fp, indent + 1, &ctab->color_table );
+    return 0;
+}
+
 static int isom_print_iods( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
 {
     return isom_print_simple( fp, box, level, "Object Descriptor Box" );
@@ -627,6 +652,8 @@ static int isom_print_visual_description( FILE *fp, lsmash_root_t *root, isom_bo
         else
             fprintf( fp, "\n" );
         lsmash_ifprintf( fp, indent, "color_table_ID = %"PRId16"\n", visual->color_table_ID );
+        if( visual->color_table_ID == 0 )
+            isom_pring_qt_color_table( fp, indent, &visual->color_table );
     }
     else
     {
@@ -1118,6 +1145,7 @@ static int isom_print_sample_description_extesion( FILE *fp, lsmash_root_t *root
             { QT_BOX_TYPE_FIEL,   isom_print_fiel },
             { QT_BOX_TYPE_CSPC,   isom_print_cspc },
             { QT_BOX_TYPE_SGBT,   isom_print_sgbt },
+            { QT_BOX_TYPE_CTAB,   isom_print_ctab },
             { QT_BOX_TYPE_GLBL,   isom_print_glbl },
             { QT_BOX_TYPE_WAVE,   isom_print_wave },
             { QT_BOX_TYPE_CHAN,   isom_print_chan },
@@ -2255,6 +2283,8 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
             return isom_print_mvhd;
         case ISOM_BOX_TYPE_IODS :
             return isom_print_iods;
+        case QT_BOX_TYPE_CTAB :
+            return isom_print_ctab;
         case ISOM_BOX_TYPE_TRAK :
             return isom_print_trak;
         case ISOM_BOX_TYPE_TKHD :

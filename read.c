@@ -325,6 +325,51 @@ static int isom_read_iods( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     return 0;
 }
 
+static int isom_read_qt_color_table( lsmash_bs_t *bs, isom_qt_color_table_t *color_table )
+{
+    if( lsmash_bs_read_data( bs, 8 ) )
+        return -1;
+    color_table->seed  = lsmash_bs_get_be32( bs );
+    color_table->flags = lsmash_bs_get_be16( bs );
+    color_table->size  = lsmash_bs_get_be16( bs );
+    if( lsmash_bs_read_data( bs, (color_table->size + 1) * 8 ) )
+        return -1;
+    isom_qt_color_array_t *array = lsmash_malloc_zero( (color_table->size + 1) * sizeof(isom_qt_color_array_t) );
+    if( !array )
+        return -1;
+    color_table->array = array;
+    for( uint16_t i = 0; i <= color_table->size; i++ )
+    {
+        uint64_t color = lsmash_bs_get_be64( bs );
+        array[i].value = (color >> 48) & 0xffff;
+        array[i].r     = (color >> 32) & 0xffff;
+        array[i].g     = (color >> 16) & 0xffff;
+        array[i].b     =  color        & 0xffff;
+    }
+    return 0;
+}
+
+static int isom_read_ctab( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    /* According to QuickTime File Format Specification, this box is placed inside Movie Box if present.
+     * However, sometimes this box occurs inside an image description entry or the end of Sample Description Box. */
+    isom_create_box( ctab, parent, box->type );
+    if( parent->type == ISOM_BOX_TYPE_MOOV )
+        ((isom_moov_t *)parent)->ctab = ctab;
+    else
+        if( isom_add_extension_box( &parent->extensions, ctab, isom_remove_ctab ) )
+        {
+            free( ctab );
+            return -1;
+        }
+    lsmash_bs_t *bs = root->bs;
+    if( isom_read_qt_color_table( bs, &ctab->color_table ) )
+        return -1;
+    box->parent = parent;
+    isom_box_common_copy( ctab, box );
+    return isom_add_print_func( root, ctab, level );
+}
+
 static int isom_read_trak( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( parent->type != ISOM_BOX_TYPE_MOOV )
@@ -1072,6 +1117,10 @@ static int isom_read_visual_description( lsmash_root_t *root, isom_box_t *box, i
         visual->compressorname[i] = lsmash_bs_get_byte( bs );
     visual->depth                 = lsmash_bs_get_be16( bs );
     visual->color_table_ID        = lsmash_bs_get_be16( bs );
+    if( visual->color_table_ID == 0
+     && lsmash_bs_get_pos( bs ) < box->size
+     && isom_read_qt_color_table( bs, &visual->color_table ) )
+        return -1;
     box->parent = parent;
     box->manager |= LSMASH_VIDEO_DESCRIPTION;
     isom_box_common_copy( visual, box );
@@ -2888,6 +2937,8 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
             return isom_read_mvhd( root, box, parent, level );
         case ISOM_BOX_TYPE_IODS :
             return isom_read_iods( root, box, parent, level );
+        case QT_BOX_TYPE_CTAB :
+            return isom_read_ctab( root, box, parent, level );
         case ISOM_BOX_TYPE_ESDS :
             return isom_read_esds( root, box, parent, level );
         case ISOM_BOX_TYPE_TRAK :

@@ -118,6 +118,41 @@ typedef struct
         uint32_t brand_count;       /* the number of factors in compatible_brands array */
 } isom_ftyp_t;
 
+/* Color Table Box
+ * This box defines a list of preferred colors for displaying the movie on devices that support only 256 colors.
+ * The list may contain up to 256 colors. This box contains a Macintosh color table data structure.
+ * This box is defined in QuickTime File Format Specification.
+ * The color table structure is also defined in struct ColorTable defined in Quickdraw.h. */
+typedef struct
+{
+    /* An array of colors.
+     * Each color is made of four unsigned 16-bit integers. */
+    uint16_t value;     /* index or other value
+                         * Must be set to 0. */
+    /* true color */
+    uint16_t r;         /* magnitude of red component */
+    uint16_t g;         /* magnitude of green component */
+    uint16_t b;         /* magnitude of blue component */
+} isom_qt_color_array_t;
+
+typedef struct
+{
+    uint32_t seed;          /* unique identifier for table
+                             * Must be set to 0. */
+    uint16_t flags;         /* high bit: 0 = PixMap; 1 = device
+                             * Must be set to 0x8000. */
+    uint16_t size;          /* the number of colors in the following color array
+                             * This is a zero-relative value;
+                             * setting this field to 0 means that there is one color in the array. */
+    isom_qt_color_array_t *array;
+} isom_qt_color_table_t;
+
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    isom_qt_color_table_t color_table;
+} isom_ctab_t;
+
 /* Track Header Box
  * This box specifies the characteristics of a single track. */
 typedef struct
@@ -516,7 +551,7 @@ typedef struct
 
 /* Gamma Level Box
  * This box is used to indicate that the decompressor corrects gamma level at display time.
- * This box is defined in QuickTime file format. */
+ * This box is defined in QuickTime File Format Specification and ImageCompression.h. */
 typedef struct
 {
     ISOM_BASEBOX_COMMON;
@@ -526,7 +561,7 @@ typedef struct
 
 /* Field/Frame Information Box
  * This box is used by applications to modify decompressed image data or by decompressor components to determine field display order.
- * This box is defined in QuickTime file format.
+ * This box is defined in QuickTime File Format Specification, dispatch019 and ImageCodec.h.
  * Note: this box is a mandatory extension for all uncompressed Y'CbCr data formats. */
 typedef struct
 {
@@ -538,7 +573,7 @@ typedef struct
 } isom_fiel_t;
 
 /* Colorspace Box
- * This box is defined in QuickTime file format. */
+ * This box is defined in ImageCompression.h. */
 typedef struct
 {
     ISOM_BASEBOX_COMMON;
@@ -546,7 +581,7 @@ typedef struct
 } isom_cspc_t;
 
 /* Significant Bits Box
- * This box is defined in QuickTime file format.
+ * This box is defined in Letters from the Ice Floe dispatch019. 
  * Note: this box is a mandatory extension for 'v216' (Uncompressed Y'CbCr, 10, 12, 14, or 16-bit-per-component 4:2:2). */
 typedef struct
 {
@@ -557,7 +592,8 @@ typedef struct
 /* Sample Scale Box
  * If this box is present and can be interpreted by the decoder,
  * all samples shall be displayed according to the scaling behaviour that is specified in this box.
- * Otherwise, all samples are scaled to the size that is indicated by the width and height field in the Track Header Box. */
+ * Otherwise, all samples are scaled to the size that is indicated by the width and height field in the Track Header Box.
+ * This box is defined in ISO Base Media file format. */
 typedef struct
 {
     ISOM_FULLBOX_COMMON;
@@ -590,8 +626,7 @@ typedef struct
  * For maximum compatibility, the following extension boxes should follow, not precede,
  * any extension boxes defined in or required by derived specifications.
  *   Clean Aperture Box
- *   Pixel Aspect Ratio Box
- *   Colorspace Box */
+ *   Pixel Aspect Ratio Box */
 typedef struct
 {
     ISOM_SAMPLE_ENTRY;
@@ -617,9 +652,11 @@ typedef struct
                                  * QTFF: depth of this data (1-32) or (33-40 grayscale) */
     int16_t color_table_ID;     /* ISOM: template: pre_defined = -1
                                  * QTFF: color table ID
-                                 *       If this field is set to 0, the default color table should be used for the specified depth
+                                 *       If this field is set to -1, the default color table should be used for the specified depth
                                  *       If the color table ID is set to 0, a color table is contained within the sample description itself.
                                  *       The color table immediately follows the color table ID field. */
+    /* Color table follows color_table_ID only when color_table_ID is set to 0. */
+    isom_qt_color_table_t color_table;  /* a list of preferred colors for displaying the movie on devices that support only 256 colors */
 } isom_visual_entry_t;
 
 /* Format Box
@@ -1631,6 +1668,7 @@ typedef struct
     isom_iods_t         *iods;          /* ISOM: Object Descriptor Box / QTFF: null */
     lsmash_entry_list_t *trak_list;     /* Track Box List */
     isom_udta_t         *udta;          /* User Data Box */
+    isom_ctab_t         *ctab;          /* ISOM: null / QTFF: Color Table Box */
     isom_meta_t         *meta;          /* Meta Box */
     isom_mvex_t         *mvex;          /* Movie Extends Box */
 } isom_moov_t;
@@ -2148,6 +2186,7 @@ int isom_add_ilst( isom_moov_t *moov );
 int isom_add_meta( isom_box_t *parent );
 int isom_add_udta( lsmash_root_t *root, uint32_t track_ID );
 
+void isom_remove_ctab( isom_ctab_t *ctab );
 void isom_remove_tapt( isom_tapt_t *tapt );
 void isom_remove_clap( isom_clap_t *clap );
 void isom_remove_pasp( isom_pasp_t *pasp );

@@ -49,6 +49,8 @@ static int isom_is_qt_video( uint32_t type )
         || type == QT_CODEC_TYPE_APCS_VIDEO
         || type == QT_CODEC_TYPE_APCO_VIDEO
         || type == QT_CODEC_TYPE_AP4H_VIDEO
+        || type == QT_CODEC_TYPE_CFHD_VIDEO
+        || type == QT_CODEC_TYPE_CIVD_VIDEO
         || type == QT_CODEC_TYPE_DVC_VIDEO
         || type == QT_CODEC_TYPE_DVCP_VIDEO
         || type == QT_CODEC_TYPE_DVPP_VIDEO
@@ -60,6 +62,34 @@ static int isom_is_qt_video( uint32_t type )
         || type == QT_CODEC_TYPE_DVH6_VIDEO
         || type == QT_CODEC_TYPE_DVHP_VIDEO
         || type == QT_CODEC_TYPE_DVHQ_VIDEO
+        || type == QT_CODEC_TYPE_DV10_VIDEO
+        || type == QT_CODEC_TYPE_DVOO_VIDEO
+        || type == QT_CODEC_TYPE_DVOR_VIDEO
+        || type == QT_CODEC_TYPE_DVTV_VIDEO
+        || type == QT_CODEC_TYPE_DVVT_VIDEO
+        || type == QT_CODEC_TYPE_FLIC_VIDEO
+        || type == QT_CODEC_TYPE_GIF_VIDEO
+        || type == QT_CODEC_TYPE_H261_VIDEO
+        || type == QT_CODEC_TYPE_H263_VIDEO
+        || type == QT_CODEC_TYPE_HD10_VIDEO
+        || type == QT_CODEC_TYPE_JPEG_VIDEO
+        || type == QT_CODEC_TYPE_M105_VIDEO
+        || type == QT_CODEC_TYPE_MJPA_VIDEO
+        || type == QT_CODEC_TYPE_MJPB_VIDEO
+        || type == QT_CODEC_TYPE_PNG_VIDEO
+        || type == QT_CODEC_TYPE_PNTG_VIDEO
+        || type == QT_CODEC_TYPE_RAW_VIDEO
+        || type == QT_CODEC_TYPE_RLE_VIDEO
+        || type == QT_CODEC_TYPE_RPZA_VIDEO
+        || type == QT_CODEC_TYPE_SHR0_VIDEO
+        || type == QT_CODEC_TYPE_SHR1_VIDEO
+        || type == QT_CODEC_TYPE_SHR2_VIDEO
+        || type == QT_CODEC_TYPE_SHR3_VIDEO
+        || type == QT_CODEC_TYPE_SHR4_VIDEO
+        || type == QT_CODEC_TYPE_SVQ1_VIDEO
+        || type == QT_CODEC_TYPE_SVQ3_VIDEO
+        || type == QT_CODEC_TYPE_TGA_VIDEO
+        || type == QT_CODEC_TYPE_TIFF_VIDEO
         || type == QT_CODEC_TYPE_ULRA_VIDEO
         || type == QT_CODEC_TYPE_ULRG_VIDEO
         || type == QT_CODEC_TYPE_ULY2_VIDEO
@@ -69,7 +99,8 @@ static int isom_is_qt_video( uint32_t type )
         || type == QT_CODEC_TYPE_V308_VIDEO
         || type == QT_CODEC_TYPE_V408_VIDEO
         || type == QT_CODEC_TYPE_V410_VIDEO
-        || type == QT_CODEC_TYPE_YUV2_VIDEO;
+        || type == QT_CODEC_TYPE_YUV2_VIDEO
+        || type == QT_CODEC_TYPE_WRLE_VIDEO;
 }
 
 static int isom_is_qt_audio( uint32_t type )
@@ -963,6 +994,26 @@ int isom_setup_visual_description( isom_stsd_t *stsd, uint32_t sample_type, lsma
                 visual->dataSize        = data->dataSize;
                 visual->frame_count     = data->frame_count;
                 visual->color_table_ID  = data->color_table_ID;
+                if( data->color_table_ID == 0 )
+                {
+                    lsmash_qt_color_table_t *src_ct = &data->color_table;
+                    uint16_t element_count = LSMASH_MIN( src_ct->size + 1, 256 );
+                    isom_qt_color_array_t *dst_array = lsmash_malloc_zero( element_count * sizeof(isom_qt_color_array_t) );
+                    if( !dst_array )
+                        goto fail;
+                    isom_qt_color_table_t *dst_ct = &visual->color_table;
+                    dst_ct->array = dst_array;
+                    dst_ct->seed  = src_ct->seed;
+                    dst_ct->flags = src_ct->flags;
+                    dst_ct->size  = src_ct->size;
+                    for( uint16_t i = 0; i < element_count; i++ )
+                    {
+                        dst_array[i].value = src_ct->array[i].unused;
+                        dst_array[i].r     = src_ct->array[i].r;
+                        dst_array[i].g     = src_ct->array[i].g;
+                        dst_array[i].b     = src_ct->array[i].b;
+                    }
+                }
                 break;
             }
             case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_SAMPLE_SCALE :
@@ -2072,6 +2123,24 @@ lsmash_video_summary_t *isom_create_video_summary_from_description( isom_visual_
         data->dataSize              = visual->dataSize;
         data->frame_count           = visual->frame_count;
         data->color_table_ID        = visual->color_table_ID;
+        if( visual->color_table_ID == 0 )
+        {
+            isom_qt_color_table_t *src_ct = &visual->color_table;
+            if( !src_ct->array )
+                goto fail;
+            uint16_t element_count = LSMASH_MIN( src_ct->size + 1, 256 );
+            lsmash_qt_color_table_t *dst_ct = &data->color_table;
+            dst_ct->seed  = src_ct->seed;
+            dst_ct->flags = src_ct->flags;
+            dst_ct->size  = src_ct->size;
+            for( uint16_t i = 0; i < element_count; i++ )
+            {
+                dst_ct->array[i].unused = src_ct->array[i].value;
+                dst_ct->array[i].r      = src_ct->array[i].r;
+                dst_ct->array[i].g      = src_ct->array[i].g;
+                dst_ct->array[i].b      = src_ct->array[i].b;
+            }
+        }
         if( lsmash_add_entry( &summary->opaque->list, specific ) )
         {
             lsmash_destroy_codec_specific_data( specific );

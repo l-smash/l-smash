@@ -442,6 +442,11 @@ typedef enum
     QT_VIDEO_DEPTH_GRAYSCALE_2  = 0x0022,
     QT_VIDEO_DEPTH_GRAYSCALE_4  = 0x0024,
     QT_VIDEO_DEPTH_GRAYSCALE_8  = 0x0028,
+
+    /* QuickTime Uncompressed RGB */
+    QT_VIDEO_DEPTH_555RGB = 0x0010,
+    QT_VIDEO_DEPTH_24RGB  = 0x0018,
+    QT_VIDEO_DEPTH_32ARGB = 0x0020,
 } lsmash_video_depth;
 
 /* Index for the chromaticity coordinates of the color primaries */
@@ -1524,6 +1529,26 @@ typedef enum
 
 typedef struct
 {
+    uint32_t seed;          /* Must be set to 0. */
+    uint16_t flags;         /* Must be set to 0x8000. */
+    uint16_t size;          /* the number of colors in the following color array
+                             * This is a zero-relative value;
+                             * setting this field to 0 means that there is one color in the array. */
+    /* Color array
+     * An array of colors. Each color is made of four unsigned 16-bit integers.
+     * We support up to 256 elements. */
+    struct
+    {
+        uint16_t unused;    /* Must be set to 0. */
+        /* true color */
+        uint16_t r;         /* magnitude of red component */
+        uint16_t g;         /* magnitude of green component */
+        uint16_t b;         /* magnitude of blue component */
+    } array[256];
+} lsmash_qt_color_table_t;
+
+typedef struct
+{
     int16_t                         revision_level;             /* version of the CODEC */
     int32_t                         vendor;                     /* whose CODEC */
     lsmash_qt_compression_quality   temporalQuality;            /* the temporal quality factor (0-1023) */
@@ -1533,9 +1558,10 @@ typedef struct
     uint32_t                        dataSize;                   /* if known, the size of data for this descriptor */
     uint16_t                        frame_count;                /* frame per sample */
     int16_t                         color_table_ID;             /* color table ID
-                                                                 * If this field is set to 0, the default color table should be used for the specified depth
+                                                                 * If this field is set to -1, the default color table should be used for the specified depth
                                                                  * If the color table ID is set to 0, a color table is contained within the sample description itself.
                                                                  * The color table immediately follows the color table ID field. */
+    lsmash_qt_color_table_t         color_table;                /* a list of preferred colors for displaying the movie on devices that support only 256 colors */
 } lsmash_qt_video_common_t;
 
 typedef struct

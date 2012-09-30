@@ -2869,6 +2869,18 @@ static void isom_remove_iods( isom_iods_t *iods )
     isom_remove_box( iods, isom_moov_t );
 }
 
+void isom_remove_ctab( isom_ctab_t *ctab )
+{
+    if( !ctab )
+        return;
+    if( ctab->color_table.array )
+        free( ctab->color_table.array );
+    if( ctab->parent && ctab->parent->type == ISOM_BOX_TYPE_MOOV )
+        isom_remove_box( ctab, isom_moov_t );
+    else
+        free( ctab );
+}
+
 static void isom_remove_mehd( isom_mehd_t *mehd )
 {
     if( !mehd )
@@ -2895,6 +2907,7 @@ static void isom_remove_moov( lsmash_root_t *root )
     isom_remove_iods( moov->iods );
     lsmash_remove_list( moov->trak_list, isom_remove_trak );
     isom_remove_udta( moov->udta );
+    isom_remove_ctab( moov->ctab );
     isom_remove_meta( moov->meta );
     isom_remove_mvex( moov->mvex );
     free( moov );
@@ -3887,6 +3900,15 @@ static uint64_t isom_update_iods_size( isom_iods_t *iods )
     return iods->size;
 }
 
+static uint64_t isom_update_ctab_size( isom_ctab_t *ctab )
+{
+    if( !ctab )
+        return 0;
+    ctab->size = ISOM_BASEBOX_COMMON_SIZE + (uint64_t)(1 + ctab->color_table.size + !!ctab->color_table.array) * 8;
+    CHECK_LARGESIZE( ctab );
+    return ctab->size;
+}
+
 static uint64_t isom_update_tkhd_size( isom_tkhd_t *tkhd )
 {
     if( !tkhd )
@@ -4210,6 +4232,8 @@ static uint64_t isom_update_visual_entry_size( isom_visual_entry_t *visual )
     if( !visual )
         return 0;
     visual->size = ISOM_BASEBOX_COMMON_SIZE + 78;
+    if( visual->color_table_ID == 0 )
+        visual->size += (uint64_t)(1 + visual->color_table.size + !!visual->color_table.array) * 8;
     CHECK_LARGESIZE( visual );
     return visual->size;
 }
@@ -4772,6 +4796,7 @@ static int isom_update_moov_size( isom_moov_t *moov )
         + isom_update_mvhd_size( moov->mvhd )
         + isom_update_iods_size( moov->iods )
         + isom_update_udta_size( moov->udta, NULL )
+        + isom_update_ctab_size( moov->ctab )
         + isom_update_meta_size( moov->meta )
         + isom_update_mvex_size( moov->mvex );
     if( moov->trak_list )
