@@ -2318,6 +2318,8 @@ void isom_remove_chan( isom_chan_t *chan )
 static void isom_remove_visual_description( isom_visual_entry_t *visual )
 {
     isom_remove_sample_description_extensions( &visual->extensions );
+    if( visual->color_table.array )
+        free( visual->color_table.array );
     free( visual );
 }
 
