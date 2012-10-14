@@ -7383,9 +7383,11 @@ static int isom_add_chunk( isom_trak_entry_t *trak, lsmash_sample_t *sample )
     /* NOTE: chunk relative stuff must be pushed into root after a chunk is fully determined with its contents. */
     /* now current cached chunk is fixed, actually add chunk relative properties to root accordingly. */
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
-    lsmash_entry_t *last_stsc_entry = stbl->stsc->list->tail;
+    isom_stsc_entry_t *last_stsc_data = stbl->stsc->list->tail ? (isom_stsc_entry_t *)stbl->stsc->list->tail->data : NULL;
     /* Create a new chunk sequence in this track if needed. */
-    if( (!last_stsc_entry || current->pool->sample_count != ((isom_stsc_entry_t *)last_stsc_entry->data)->samples_per_chunk)
+    if( (!last_stsc_data
+      || current->pool->sample_count       != last_stsc_data->samples_per_chunk
+      || current->sample_description_index != last_stsc_data->sample_description_index)
      && isom_add_stsc_entry( stbl, current->chunk_number, current->pool->sample_count, current->sample_description_index ) )
         return -1;
     /* Add a new chunk offset in this track. */
@@ -7465,9 +7467,11 @@ static int isom_output_cached_chunk( isom_trak_entry_t *trak )
     lsmash_root_t *root = trak->root;
     isom_chunk_t *chunk = &trak->cache->chunk;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
-    lsmash_entry_t *last_stsc_entry = stbl->stsc->list->tail;
+    isom_stsc_entry_t *last_stsc_data = stbl->stsc->list->tail ? (isom_stsc_entry_t *)stbl->stsc->list->tail->data : NULL;
     /* Create a new chunk sequence in this track if needed. */
-    if( (!last_stsc_entry || chunk->pool->sample_count != ((isom_stsc_entry_t *)last_stsc_entry->data)->samples_per_chunk)
+    if( (!last_stsc_data
+      || chunk->pool->sample_count       != last_stsc_data->samples_per_chunk
+      || chunk->sample_description_index != last_stsc_data->sample_description_index)
      && isom_add_stsc_entry( stbl, chunk->chunk_number, chunk->pool->sample_count, chunk->sample_description_index ) )
         return -1;
     if( root->fragment )
