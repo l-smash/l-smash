@@ -1116,7 +1116,7 @@ static int do_mux( muxer_t *muxer )
 static int moov_to_front_callback( void *param, uint64_t written_movie_size, uint64_t total_movie_size )
 {
     REFRESH_CONSOLE;
-    eprintf( "Finalizing: [%5.2lf%%]\r", ((double)written_movie_size / total_movie_size) * 100.0 );
+    eprintf( "Finalizing: [%5.2lf%%]\r", total_movie_size ? ((double)written_movie_size / total_movie_size) * 100.0 : 0 );
     return 0;
 }
 
@@ -1126,19 +1126,16 @@ static int finish_movie( output_t *output, option_t *opt )
     if( opt->chap_file )
         lsmash_set_tyrant_chapter( output->root, opt->chap_file, opt->add_bom_to_chpl );
     /* Close movie. */
-    lsmash_adhoc_remux_t *finalize;
+    REFRESH_CONSOLE;
     if( opt->optimize_pd )
     {
         lsmash_adhoc_remux_t moov_to_front;
         moov_to_front.func        = moov_to_front_callback;
         moov_to_front.buffer_size = 4*1024*1024;    /* 4MiB */
         moov_to_front.param       = NULL;
-        finalize = &moov_to_front;
+        return lsmash_finish_movie( output->root, &moov_to_front );
     }
-    else
-        finalize = NULL;
-    REFRESH_CONSOLE;
-    return lsmash_finish_movie( output->root, finalize );
+    return lsmash_finish_movie( output->root, NULL );
 }
 
 int main( int argc, char *argv[] )
