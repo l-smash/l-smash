@@ -31,20 +31,34 @@
 
 #include "utils.h"
 
+/* An UUID structure for extended box type */
+typedef struct
+{
+    uint32_t type;      /* four characters codes that identify extended box type partially
+                         * If the box is not an UUID box, this field shall be the same as the box type.
+                         * Note: characters in this field aren't always printable. */
+    uint8_t  id[12];    /* If the box is not an UUID box, this field shall be set to 12-byte ISO reserved value
+                         *   { 0x00, 0x11, 0x00, 0x10, 0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71 }
+                         * and shall not be written into the stream together with above-defined four characters codes. */
+} lsmash_box_uuid_t;
+
+/* 12-byte ISO reserved value */
+static const uint8_t iso_12_bytes[12] = { 0x00, 0x11, 0x00, 0x10, 0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71 };
+#define ISO_12_BYTES iso_12_bytes
+
 typedef struct isom_box_tag isom_box_t;
 
 /* If size is 1, then largesize is actual size.
- * If size is 0, then this box is the last one in the file.
- * usertype is for uuid. */
+ * If size is 0, then this box is the last one in the file. */
 #define ISOM_BASEBOX_COMMON \
         lsmash_root_t      *root;       /* pointer of root */ \
         isom_box_t         *parent;     /* pointer of the parent box of this box */ \
         uint32_t            manager;    /* flags for L-SMASH */ \
         uint64_t            pos;        /* starting position of this box in the file */ \
         lsmash_entry_list_t extensions; /* extension boxes */ \
-    uint64_t size;                      /* the number of bytes in this box */ \
-    uint32_t type;                      /* four characters codes that identify box type */ \
-    uint8_t  *usertype
+    uint64_t          size;             /* the number of bytes in this box */ \
+    uint32_t          type;             /* four characters codes that identify box type */ \
+    lsmash_box_uuid_t user              /* Universal Unique IDentifier, i.e. UUID */
 
 #define ISOM_FULLBOX_COMMON \
     ISOM_BASEBOX_COMMON; \
@@ -2136,6 +2150,8 @@ typedef enum
 int isom_is_fullbox( void *box );
 int isom_is_lpcm_audio( void *box );
 int isom_is_uncompressed_ycbcr( uint32_t type );
+
+lsmash_box_uuid_t isom_form_box_uuid( uint32_t type, const uint8_t id[12] );
 
 void isom_init_box_common( void *box, void *parent, uint32_t type );
 uint32_t isom_skip_box_common( uint8_t **p_data );

@@ -38,26 +38,49 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
 
 static int isom_bs_read_box_common( lsmash_bs_t *bs, isom_box_t *box, uint32_t read_size )
 {
-    /* read size and type */
+    /* Read size and type. */
     if( lsmash_bs_read_data( bs, read_size ) )
         return -1;
     if( feof( bs->stream ) )
         return 1;
     box->size = lsmash_bs_get_be32( bs );
     box->type = lsmash_bs_get_be32( bs );
+    /* Read more bytes if needed. */
+    int uuidbox = (box->type == ISOM_BOX_TYPE_UUID);
+    int fullbox = isom_is_fullbox( box );
+    int more_read_size = 8 * (box->size == 1) + 16 * uuidbox + 4 * fullbox;
+    if( more_read_size > 0 && lsmash_bs_read_data( bs, more_read_size ) )
+        return -1;
+    /* If size is set to 1, the actual size is repersented in the next 8 bytes.
+     * If size is set to 0, this box ends at the end of the stream. */
     if( box->size == 1 )
-    {
-        if( lsmash_bs_read_data( bs, sizeof(uint64_t) ) )
-            return -1;
         box->size = lsmash_bs_get_be64( bs );
-    }
-    if( box->size == 0 )
+    else if( box->size == 0 )
         box->manager |= LSMASH_LAST_BOX;
-    if( isom_is_fullbox( box ) )
+    if( uuidbox )
     {
-        /* read version and flags */
-        if( lsmash_bs_read_data( bs, sizeof(uint32_t) ) )
-            return -1;
+        /* Get UUID. */
+        uint64_t temp64 = lsmash_bs_get_be64( bs );
+        box->user.type  = (temp64 >> 32) & 0xffffffff;
+        box->user.id[0] = (temp64 >> 24) & 0xff;
+        box->user.id[1] = (temp64 >> 16) & 0xff;
+        box->user.id[2] = (temp64 >>  8) & 0xff;
+        box->user.id[3] =  temp64        & 0xff;
+        temp64 = lsmash_bs_get_be64( bs );
+        box->user.id[4]  = (temp64 >> 56) & 0xff;
+        box->user.id[5]  = (temp64 >> 48) & 0xff;
+        box->user.id[6]  = (temp64 >> 40) & 0xff;
+        box->user.id[7]  = (temp64 >> 32) & 0xff;
+        box->user.id[8]  = (temp64 >> 24) & 0xff;
+        box->user.id[9]  = (temp64 >> 16) & 0xff;
+        box->user.id[10] = (temp64 >>  8) & 0xff;
+        box->user.id[11] =  temp64        & 0xff;
+    }
+    else
+        box->user = isom_form_box_uuid( box->type, ISO_12_BYTES );
+    if( fullbox )
+    {
+        /* Get version and flags. */
         box->version = lsmash_bs_get_byte( bs );
         box->flags   = lsmash_bs_get_be24( bs );
         box->manager |= LSMASH_FULLBOX;
@@ -67,26 +90,26 @@ static int isom_bs_read_box_common( lsmash_bs_t *bs, isom_box_t *box, uint32_t r
 
 static void isom_basebox_common_copy( isom_box_t *dst, isom_box_t *src )
 {
-    dst->root     = src->root;
-    dst->parent   = src->parent;
-    dst->manager  = src->manager;
-    dst->pos      = src->pos;
-    dst->size     = src->size;
-    dst->type     = src->type;
-    dst->usertype = src->usertype;
+    dst->root    = src->root;
+    dst->parent  = src->parent;
+    dst->manager = src->manager;
+    dst->pos     = src->pos;
+    dst->size    = src->size;
+    dst->type    = src->type;
+    dst->user    = src->user;
 }
 
 static void isom_fullbox_common_copy( isom_box_t *dst, isom_box_t *src )
 {
-    dst->root     = src->root;
-    dst->parent   = src->parent;
-    dst->manager  = src->manager;
-    dst->pos      = src->pos;
-    dst->size     = src->size;
-    dst->type     = src->type;
-    dst->usertype = src->usertype;
-    dst->version  = src->version;
-    dst->flags    = src->flags;
+    dst->root    = src->root;
+    dst->parent  = src->parent;
+    dst->manager = src->manager;
+    dst->pos     = src->pos;
+    dst->size    = src->size;
+    dst->type    = src->type;
+    dst->user    = src->user;
+    dst->version = src->version;
+    dst->flags   = src->flags;
 }
 
 static void isom_box_common_copy( void *dst, void *src )

@@ -163,9 +163,26 @@ static inline int isom_print_simple( FILE *fp, isom_box_t *box, int level, char 
     if( !box )
         return -1;
     int indent = level;
-    lsmash_ifprintf( fp, indent++, "[%s: %s]\n", isom_4cc2str( box->type ), name );
-    lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
-    lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
+    if( box->type != ISOM_BOX_TYPE_UUID )
+    {
+        lsmash_ifprintf( fp, indent++, "[%s: %s]\n", isom_4cc2str( box->type ), name );
+        lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
+        lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
+    }
+    else
+    {
+        lsmash_ifprintf( fp, indent++, "[uuid: UUID Box]\n" );
+        lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
+        lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
+        lsmash_ifprintf( fp, indent++, "usertype\n" );
+        lsmash_ifprintf( fp, indent, "type = %s\n", isom_4cc2str( box->user.type ) );
+        lsmash_ifprintf( fp, indent, "name = %s\n", name );
+        lsmash_ifprintf( fp, indent, "uuid = 0x%08"PRIx32"-%04"PRIx16"-%04"PRIx16"-%04"PRIx16"-%04"PRIx16"0x%08"PRIx32"\n",
+                         box->user.type,
+                         (box->user.id[0] << 8) | box->user.id[1], (box->user.id[2] << 8) | box->user.id[3],
+                         (box->user.id[4] << 8) | box->user.id[5], (box->user.id[6] << 8) | box->user.id[7],
+                         (box->user.id[8] << 24) | (box->user.id[9] << 16) | (box->user.id[10] << 8) | box->user.id[11] );
+    }
     return 0;
 }
 
@@ -202,9 +219,25 @@ static int isom_print_unknown( FILE *fp, lsmash_root_t *root, isom_box_t *box, i
     if( !box )
         return -1;
     int indent = level;
-    lsmash_ifprintf( fp, indent++, "[%s]\n", isom_4cc2str( box->type ) );
-    lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
-    lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
+    if( box->type != ISOM_BOX_TYPE_UUID )
+    {
+        lsmash_ifprintf( fp, indent++, "[%s]\n", isom_4cc2str( box->type ) );
+        lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
+        lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
+    }
+    else
+    {
+        lsmash_ifprintf( fp, indent++, "[uuid: UUID Box]\n" );
+        lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
+        lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
+        lsmash_ifprintf( fp, indent++, "usertype\n" );
+        lsmash_ifprintf( fp, indent, "type = %s\n", isom_4cc2str( box->user.type ) );
+        lsmash_ifprintf( fp, indent, "uuid = 0x%08"PRIx32"-%04"PRIx16"-%04"PRIx16"-%04"PRIx16"-%04"PRIx16"%08"PRIx32"\n",
+                         box->user.type,
+                         (box->user.id[0] << 8) | box->user.id[1], (box->user.id[2] << 8) | box->user.id[3],
+                         (box->user.id[4] << 8) | box->user.id[5], (box->user.id[6] << 8) | box->user.id[7],
+                         (box->user.id[8] << 24) | (box->user.id[9] << 16) | (box->user.id[10] << 8) | box->user.id[11] );
+    }
     return 0;
 }
 

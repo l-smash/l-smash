@@ -140,24 +140,29 @@ char *isom_4cc2str( uint32_t fourcc )
     return str;
 }
 
+lsmash_box_uuid_t isom_form_box_uuid( uint32_t type, const uint8_t id[12] )
+{
+    return (lsmash_box_uuid_t){ type, { id[0], id[1], id[2], id[3], id[4],  id[5],
+                                        id[6], id[7], id[8], id[9], id[10], id[11] } };
+}
+
 static inline void isom_init_basebox_common( isom_box_t *box, isom_box_t *parent, uint32_t type )
 {
-    box->root     = parent->root;
-    box->parent   = parent;
-    box->size     = 0;
-    box->type     = type;
-    box->usertype = NULL;
+    box->root   = parent->root;
+    box->parent = parent;
+    box->size   = 0;
+    box->type   = type;
+    box->user   = isom_form_box_uuid( type, ISO_12_BYTES );
 }
 
 static inline void isom_init_fullbox_common( isom_box_t *box, isom_box_t *parent, uint32_t type )
 {
-    box->root     = parent->root;
-    box->parent   = parent;
-    box->size     = 0;
-    box->type     = type;
-    box->usertype = NULL;
-    box->version  = 0;
-    box->flags    = 0;
+    box->root    = parent->root;
+    box->parent  = parent;
+    box->size    = 0;
+    box->user    = isom_form_box_uuid( type, ISO_12_BYTES );
+    box->version = 0;
+    box->flags   = 0;
 }
 
 void isom_init_box_common( void *box, void *parent, uint32_t type )
@@ -204,7 +209,10 @@ void isom_bs_put_basebox_common( lsmash_bs_t *bs, isom_box_t *box )
         lsmash_bs_put_be32( bs, box->type );
     }
     if( box->type == ISOM_BOX_TYPE_UUID )
-        lsmash_bs_put_bytes( bs, 16, box->usertype );
+    {
+        lsmash_bs_put_be32( bs, box->user.type );
+        lsmash_bs_put_bytes( bs, 12, box->user.id );
+    }
 }
 
 void isom_bs_put_fullbox_common( lsmash_bs_t *bs, isom_box_t *box )
