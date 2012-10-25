@@ -146,37 +146,20 @@ lsmash_box_uuid_t isom_form_box_uuid( uint32_t type, const uint8_t id[12] )
                                         id[6], id[7], id[8], id[9], id[10], id[11] } };
 }
 
-static inline void isom_init_basebox_common( isom_box_t *box, isom_box_t *parent, uint32_t type )
-{
-    box->root   = parent->root;
-    box->parent = parent;
-    box->size   = 0;
-    box->type   = type;
-    box->user   = isom_form_box_uuid( type, ISO_12_BYTES );
-}
-
-static inline void isom_init_fullbox_common( isom_box_t *box, isom_box_t *parent, uint32_t type )
-{
-    box->root    = parent->root;
-    box->parent  = parent;
-    box->size    = 0;
-    box->user    = isom_form_box_uuid( type, ISO_12_BYTES );
-    box->version = 0;
-    box->flags   = 0;
-}
-
 void isom_init_box_common( void *box, void *parent, uint32_t type )
 {
-    assert( parent && ((isom_box_t *)parent)->root );
-    if( ((isom_box_t *)parent)->type == ISOM_BOX_TYPE_STSD )
-    {
-        isom_init_basebox_common( (isom_box_t *)box, (isom_box_t *)parent, type );
+    assert( box && parent && ((isom_box_t *)parent)->root );
+    isom_box_t *_box    = (isom_box_t *)box;
+    isom_box_t *_parent = (isom_box_t *)parent;
+    _box->root   = _parent->root;
+    _box->parent = _parent;
+    _box->size   = 0;
+    _box->type   = type;
+    _box->user   = isom_form_box_uuid( type, ISO_12_BYTES );
+    if( _parent->type == ISOM_BOX_TYPE_STSD || !isom_is_fullbox( _box ) )
         return;
-    }
-    if( isom_is_fullbox( box ) )
-        isom_init_fullbox_common( (isom_box_t *)box, (isom_box_t *)parent, type );
-    else
-        isom_init_basebox_common( (isom_box_t *)box, (isom_box_t *)parent, type );
+    _box->version = 0;
+    _box->flags   = 0;
 }
 
 uint32_t isom_skip_box_common( uint8_t **p_data )
@@ -326,9 +309,15 @@ isom_tref_type_t *isom_add_track_reference_type( isom_tref_t *tref, isom_track_r
     isom_tref_type_t *ref = lsmash_malloc_zero( sizeof(isom_tref_type_t) );
     if( !ref )
         return NULL;
-    isom_init_basebox_common( (isom_box_t *)ref, (isom_box_t *)tref, type );
+    /* Initialize common fields. */
+    ref->root   = tref->root;
+    ref->parent = (isom_box_t *)tref;
+    ref->size   = 0;
+    ref->type   = type;
+    ref->user   = isom_form_box_uuid( type, ISO_12_BYTES );
+    /* */
     ref->ref_count = ref_count;
-    ref->track_ID = track_ID;
+    ref->track_ID  = track_ID;
     if( lsmash_add_entry( tref->ref_list, ref ) )
     {
         free( ref );
