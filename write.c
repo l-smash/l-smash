@@ -575,9 +575,9 @@ static int isom_write_visual_extensions( lsmash_bs_t *bs, isom_visual_entry_t *v
                 break;
             default :
                 continue;
-            if( ret )
-                return -1;
         }
+        if( ret )
+            return -1;
     }
     if( isom_write_colr( bs, isom_get_extension_box( &visual->extensions, ISOM_BOX_TYPE_COLR ) )
      || isom_write_clap( bs, isom_get_extension_box( &visual->extensions, ISOM_BOX_TYPE_CLAP ) )
