@@ -27,7 +27,6 @@ isom_tref_type_t *isom_add_track_reference_type( isom_tref_t *tref, isom_track_r
 int isom_add_chpl_entry( isom_chpl_t *chpl, isom_chapter_entry_t *chap_data );
 int isom_add_tref( isom_trak_entry_t *trak );
 int isom_add_chpl( isom_moov_t *moov );
-int isom_add_udta( lsmash_root_t *root, uint32_t track_ID );
 void isom_remove_track_reference_type( isom_tref_type_t *ref );
 void isom_remove_tref( isom_tref_t *tref );
 void isom_remove_trak( isom_trak_entry_t *trak );
