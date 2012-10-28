@@ -167,85 +167,95 @@ lsmash_summary_t *lsmash_get_summary( lsmash_root_t *root, uint32_t track_ID, ui
      || !trak->mdia->minf->stbl->stsd->list )
         return NULL;
     isom_stsd_t *stsd = trak->mdia->minf->stbl->stsd;
-    uint32_t i = 1;
+    uint32_t j = 1;
     for( lsmash_entry_t *entry = stsd->list->head; entry; entry = entry->next )
     {
-        if( i == description_number )
+        if( j++ != description_number )
+            continue;
+        isom_sample_entry_t *sample_entry = entry->data;
+        if( !sample_entry )
+            return NULL;
+        lsmash_codec_type_t sample_type = sample_entry->type;
+        static struct create_summary_table_tag
         {
-            isom_sample_entry_t *sample_entry = entry->data;
-            if( !sample_entry )
-                return NULL;
-            switch( sample_entry->type )
-            {
-                case ISOM_CODEC_TYPE_AVC1_VIDEO :
-                case ISOM_CODEC_TYPE_VC_1_VIDEO :
-                case QT_CODEC_TYPE_APCH_VIDEO :
-                case QT_CODEC_TYPE_APCN_VIDEO :
-                case QT_CODEC_TYPE_APCS_VIDEO :
-                case QT_CODEC_TYPE_APCO_VIDEO :
-                case QT_CODEC_TYPE_AP4H_VIDEO :
-                case QT_CODEC_TYPE_DV10_VIDEO :
-                case QT_CODEC_TYPE_DVOO_VIDEO :
-                case QT_CODEC_TYPE_DVC_VIDEO :
-                case QT_CODEC_TYPE_DVCP_VIDEO :
-                case QT_CODEC_TYPE_DVPP_VIDEO :
-                case QT_CODEC_TYPE_DV5N_VIDEO :
-                case QT_CODEC_TYPE_DV5P_VIDEO :
-                case QT_CODEC_TYPE_DVH2_VIDEO :
-                case QT_CODEC_TYPE_DVH3_VIDEO :
-                case QT_CODEC_TYPE_DVH5_VIDEO :
-                case QT_CODEC_TYPE_DVH6_VIDEO :
-                case QT_CODEC_TYPE_DVHP_VIDEO :
-                case QT_CODEC_TYPE_DVHQ_VIDEO :
-                case QT_CODEC_TYPE_FLIC_VIDEO :
-                case QT_CODEC_TYPE_H261_VIDEO :
-                case QT_CODEC_TYPE_H263_VIDEO :
-                case QT_CODEC_TYPE_JPEG_VIDEO :
-                case QT_CODEC_TYPE_MJPA_VIDEO :
-                case QT_CODEC_TYPE_MJPB_VIDEO :
-                case QT_CODEC_TYPE_PNG_VIDEO :
-                case QT_CODEC_TYPE_RAW_VIDEO :
-                case QT_CODEC_TYPE_RLE_VIDEO :
-                case QT_CODEC_TYPE_RPZA_VIDEO :
-                case QT_CODEC_TYPE_TGA_VIDEO :
-                case QT_CODEC_TYPE_TIFF_VIDEO :
-                case QT_CODEC_TYPE_ULRA_VIDEO :
-                case QT_CODEC_TYPE_ULRG_VIDEO :
-                case QT_CODEC_TYPE_ULY2_VIDEO :
-                case QT_CODEC_TYPE_ULY0_VIDEO :
-                case QT_CODEC_TYPE_V210_VIDEO :
-                case QT_CODEC_TYPE_V216_VIDEO :
-                case QT_CODEC_TYPE_V308_VIDEO :
-                case QT_CODEC_TYPE_V408_VIDEO :
-                case QT_CODEC_TYPE_V410_VIDEO :
-                case QT_CODEC_TYPE_YUV2_VIDEO :
-                    return (lsmash_summary_t *)isom_create_video_summary_from_description( (isom_visual_entry_t *)sample_entry );
-                case ISOM_CODEC_TYPE_MP4A_AUDIO :
-                case ISOM_CODEC_TYPE_AC_3_AUDIO :
-                case ISOM_CODEC_TYPE_ALAC_AUDIO :
-                case ISOM_CODEC_TYPE_EC_3_AUDIO :
-                case ISOM_CODEC_TYPE_SAMR_AUDIO :
-                case ISOM_CODEC_TYPE_SAWB_AUDIO :
-                case ISOM_CODEC_TYPE_DTSC_AUDIO :
-                case ISOM_CODEC_TYPE_DTSE_AUDIO :
-                case ISOM_CODEC_TYPE_DTSH_AUDIO :
-                case ISOM_CODEC_TYPE_DTSL_AUDIO :
-                case QT_CODEC_TYPE_23NI_AUDIO :
-                case QT_CODEC_TYPE_NONE_AUDIO :
-                case QT_CODEC_TYPE_LPCM_AUDIO :
-                case QT_CODEC_TYPE_SOWT_AUDIO :
-                case QT_CODEC_TYPE_TWOS_AUDIO :
-                case QT_CODEC_TYPE_FL32_AUDIO :
-                case QT_CODEC_TYPE_FL64_AUDIO :
-                case QT_CODEC_TYPE_IN24_AUDIO :
-                case QT_CODEC_TYPE_IN32_AUDIO :
-                case QT_CODEC_TYPE_NOT_SPECIFIED :
-                    return (lsmash_summary_t *)isom_create_audio_summary_from_description( (isom_audio_entry_t *)sample_entry );
-                default :
-                    return NULL;
-            }
+            lsmash_codec_type_t type;
+            lsmash_summary_t *(*func)( isom_sample_entry_t * );
+        } create_summary_table[128] = { { LSMASH_CODEC_TYPE_INITIALIZER, NULL } };
+        if( !create_summary_table[0].func )
+        {
+            /* Initialize the table. */
+            int i = 0;
+#define ADD_CREATE_SUMMARY_TABLE_ELEMENT( type, func ) \
+    create_summary_table[i++] = (struct create_summary_table_tag){ type, func }
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC1_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( ISOM_CODEC_TYPE_VC_1_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_APCH_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_APCN_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_APCS_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_APCO_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_AP4H_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_DV10_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_DVOO_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_DVC_VIDEO,  isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_DVCP_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_DVPP_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_DV5N_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_DV5P_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_DVH2_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_DVH3_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_DVH5_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_DVH6_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_DVHP_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_DVHQ_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_FLIC_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_H261_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_H263_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_JPEG_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_MJPA_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_MJPB_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_PNG_VIDEO,  isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_RAW_VIDEO,  isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_RLE_VIDEO,  isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_RPZA_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_TGA_VIDEO,  isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_TIFF_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_ULRA_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_ULRG_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_ULY2_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_ULY0_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_V210_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_V216_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_V308_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_V408_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_V410_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_YUV2_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( ISOM_CODEC_TYPE_MP4A_AUDIO, isom_create_audio_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( ISOM_CODEC_TYPE_AC_3_AUDIO, isom_create_audio_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( ISOM_CODEC_TYPE_ALAC_AUDIO, isom_create_audio_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( ISOM_CODEC_TYPE_EC_3_AUDIO, isom_create_audio_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAMR_AUDIO, isom_create_audio_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAWB_AUDIO, isom_create_audio_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSC_AUDIO, isom_create_audio_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSE_AUDIO, isom_create_audio_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSH_AUDIO, isom_create_audio_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSL_AUDIO, isom_create_audio_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_MP4A_AUDIO, isom_create_audio_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_23NI_AUDIO, isom_create_audio_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_NONE_AUDIO, isom_create_audio_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_LPCM_AUDIO, isom_create_audio_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_SOWT_AUDIO, isom_create_audio_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_TWOS_AUDIO, isom_create_audio_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_FL32_AUDIO, isom_create_audio_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_FL64_AUDIO, isom_create_audio_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_IN24_AUDIO, isom_create_audio_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_IN32_AUDIO, isom_create_audio_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_NOT_SPECIFIED, isom_create_audio_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( LSMASH_CODEC_TYPE_UNSPECIFIED, NULL );
         }
-        ++i;
+        for( int i = 0; create_summary_table[i].func; i++ )
+            if( lsmash_check_codec_type_identical( sample_type, create_summary_table[i].type ) )
+                return create_summary_table[i].func( sample_entry );
+        return NULL;
     }
     return NULL;
 }
@@ -255,7 +265,7 @@ int lsmash_compare_summary( lsmash_summary_t *a, lsmash_summary_t *b )
     if( !a || !b )
         return -1;
     if( a->summary_type != b->summary_type
-     || a->sample_type  != b->sample_type )
+     || !lsmash_check_box_type_identical( a->sample_type, b->sample_type ) )
         return 1;
     if( a->summary_type == LSMASH_SUMMARY_TYPE_VIDEO )
     {

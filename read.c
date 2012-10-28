@@ -38,17 +38,17 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
 
 static int isom_bs_read_box_common( lsmash_bs_t *bs, isom_box_t *box, uint32_t read_size )
 {
+    assert( bs && box && box->root );
     /* Read size and type. */
     if( lsmash_bs_read_data( bs, read_size ) )
         return -1;
     if( feof( bs->stream ) )
         return 1;
-    box->size = lsmash_bs_get_be32( bs );
-    box->type = lsmash_bs_get_be32( bs );
+    box->size        = lsmash_bs_get_be32( bs );
+    box->type.fourcc = lsmash_bs_get_be32( bs );
     /* Read more bytes if needed. */
-    int uuidbox = (box->type == ISOM_BOX_TYPE_UUID);
-    int fullbox = isom_is_fullbox( box );
-    int more_read_size = 8 * (box->size == 1) + 16 * uuidbox + 4 * fullbox;
+    int uuidbox = (box->type.fourcc == ISOM_BOX_TYPE_UUID.fourcc);
+    int more_read_size = 8 * (box->size == 1) + 16 * uuidbox;
     if( more_read_size > 0 && lsmash_bs_read_data( bs, more_read_size ) )
         return -1;
     /* If size is set to 1, the actual size is repersented in the next 8 bytes.
@@ -57,34 +57,40 @@ static int isom_bs_read_box_common( lsmash_bs_t *bs, isom_box_t *box, uint32_t r
         box->size = lsmash_bs_get_be64( bs );
     else if( box->size == 0 )
         box->manager |= LSMASH_LAST_BOX;
+    /* Here, we don't set up extended box type fields if this box is not a UUID Box. */
     if( uuidbox )
     {
         /* Get UUID. */
+        lsmash_box_type_t *type = &box->type;
         uint64_t temp64 = lsmash_bs_get_be64( bs );
-        box->user.type  = (temp64 >> 32) & 0xffffffff;
-        box->user.id[0] = (temp64 >> 24) & 0xff;
-        box->user.id[1] = (temp64 >> 16) & 0xff;
-        box->user.id[2] = (temp64 >>  8) & 0xff;
-        box->user.id[3] =  temp64        & 0xff;
+        type->user.fourcc = (temp64 >> 32) & 0xffffffff;
+        type->user.id[0]  = (temp64 >> 24) & 0xff;
+        type->user.id[1]  = (temp64 >> 16) & 0xff;
+        type->user.id[2]  = (temp64 >>  8) & 0xff;
+        type->user.id[3]  =  temp64        & 0xff;
         temp64 = lsmash_bs_get_be64( bs );
-        box->user.id[4]  = (temp64 >> 56) & 0xff;
-        box->user.id[5]  = (temp64 >> 48) & 0xff;
-        box->user.id[6]  = (temp64 >> 40) & 0xff;
-        box->user.id[7]  = (temp64 >> 32) & 0xff;
-        box->user.id[8]  = (temp64 >> 24) & 0xff;
-        box->user.id[9]  = (temp64 >> 16) & 0xff;
-        box->user.id[10] = (temp64 >>  8) & 0xff;
-        box->user.id[11] =  temp64        & 0xff;
+        type->user.id[4]  = (temp64 >> 56) & 0xff;
+        type->user.id[5]  = (temp64 >> 48) & 0xff;
+        type->user.id[6]  = (temp64 >> 40) & 0xff;
+        type->user.id[7]  = (temp64 >> 32) & 0xff;
+        type->user.id[8]  = (temp64 >> 24) & 0xff;
+        type->user.id[9]  = (temp64 >> 16) & 0xff;
+        type->user.id[10] = (temp64 >>  8) & 0xff;
+        type->user.id[11] =  temp64        & 0xff;
     }
-    else
-        box->user = isom_form_box_uuid( box->type, ISO_12_BYTES );
-    if( fullbox )
-    {
-        /* Get version and flags. */
-        box->version = lsmash_bs_get_byte( bs );
-        box->flags   = lsmash_bs_get_be24( bs );
-        box->manager |= LSMASH_FULLBOX;
-    }
+    return 0;
+}
+
+static int isom_read_fullbox_common_extension( lsmash_bs_t *bs, isom_box_t *box )
+{
+    if( !isom_is_fullbox( box ) )
+        return 0;
+    /* Get version and flags. */
+    if( lsmash_bs_read_data( bs, 4 ) )
+        return -1;
+    box->version = lsmash_bs_get_byte( bs );
+    box->flags   = lsmash_bs_get_be24( bs );
+    box->manager |= LSMASH_FULLBOX;
     return 0;
 }
 
@@ -96,7 +102,6 @@ static void isom_basebox_common_copy( isom_box_t *dst, isom_box_t *src )
     dst->pos     = src->pos;
     dst->size    = src->size;
     dst->type    = src->type;
-    dst->user    = src->user;
 }
 
 static void isom_fullbox_common_copy( isom_box_t *dst, isom_box_t *src )
@@ -107,14 +112,13 @@ static void isom_fullbox_common_copy( isom_box_t *dst, isom_box_t *src )
     dst->pos     = src->pos;
     dst->size    = src->size;
     dst->type    = src->type;
-    dst->user    = src->user;
     dst->version = src->version;
     dst->flags   = src->flags;
 }
 
 static void isom_box_common_copy( void *dst, void *src )
 {
-    if( src && ((isom_box_t *)src)->type == ISOM_BOX_TYPE_STSD )
+    if( src && lsmash_check_box_type_identical( ((isom_box_t *)src)->type, ISOM_BOX_TYPE_STSD ) )
     {
         isom_basebox_common_copy( (isom_box_t *)dst, (isom_box_t *)src );
         return;
@@ -198,7 +202,7 @@ static void isom_check_box_size( lsmash_bs_t *bs, isom_box_t *box )
     uint64_t pos = lsmash_bs_get_pos( bs );
     if( box->size >= pos )
         return;
-    printf( "[%s] box has extra bytes: %"PRId64"\n", isom_4cc2str( box->type ), pos - box->size );
+    printf( "[%s] box has extra bytes: %"PRId64"\n", isom_4cc2str( box->type.fourcc ), pos - box->size );
     box->size = pos;
 }
 
@@ -256,7 +260,7 @@ static int isom_read_unknown_box( lsmash_root_t *root, isom_box_t *box, isom_box
 
 static int isom_read_ftyp( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( !!parent->type || ((lsmash_root_t *)parent)->ftyp )
+    if( !lsmash_check_box_type_identical( parent->type, LSMASH_BOX_TYPE_UNSPECIFIED ) || ((lsmash_root_t *)parent)->ftyp )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( ftyp, parent, box->type );
     ((lsmash_root_t *)parent)->ftyp = ftyp;
@@ -278,7 +282,7 @@ static int isom_read_ftyp( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_moov( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( !!parent->type || ((lsmash_root_t *)parent)->moov )
+    if( !lsmash_check_box_type_identical( parent->type, LSMASH_BOX_TYPE_UNSPECIFIED ) || ((lsmash_root_t *)parent)->moov )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( moov, parent, box->type );
     ((lsmash_root_t *)parent)->moov = moov;
@@ -290,7 +294,7 @@ static int isom_read_moov( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_mvhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_MOOV || ((isom_moov_t *)parent)->mvhd )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV ) || ((isom_moov_t *)parent)->mvhd )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( mvhd, parent, box->type );
     ((isom_moov_t *)parent)->mvhd = mvhd;
@@ -331,7 +335,7 @@ static int isom_read_mvhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_iods( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_MOOV )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV ) )
         return isom_read_unknown_box( root, box, parent, level );
     isom_box_t *iods = lsmash_malloc_zero( sizeof(isom_box_t) );
     if( !iods )
@@ -377,7 +381,7 @@ static int isom_read_ctab( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     /* According to QuickTime File Format Specification, this box is placed inside Movie Box if present.
      * However, sometimes this box occurs inside an image description entry or the end of Sample Description Box. */
     isom_create_box( ctab, parent, box->type );
-    if( parent->type == ISOM_BOX_TYPE_MOOV )
+    if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV ) )
         ((isom_moov_t *)parent)->ctab = ctab;
     else
         if( isom_add_extension_box( &parent->extensions, ctab, isom_remove_ctab ) )
@@ -395,7 +399,7 @@ static int isom_read_ctab( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_trak( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_MOOV )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV ) )
         return isom_read_unknown_box( root, box, parent, level );
     lsmash_entry_list_t *list = ((isom_moov_t *)parent)->trak_list;
     if( !list )
@@ -431,7 +435,7 @@ static int isom_read_trak( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_tkhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_TRAK || ((isom_trak_entry_t *)parent)->tkhd )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAK ) || ((isom_trak_entry_t *)parent)->tkhd )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( tkhd, parent, box->type );
     ((isom_trak_entry_t *)parent)->tkhd = tkhd;
@@ -470,7 +474,7 @@ static int isom_read_tkhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_tapt( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_TRAK || ((isom_trak_entry_t *)parent)->tapt )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAK ) || ((isom_trak_entry_t *)parent)->tapt )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( tapt, parent, box->type );
     ((isom_trak_entry_t *)parent)->tapt = tapt;
@@ -482,7 +486,7 @@ static int isom_read_tapt( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_clef( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != QT_BOX_TYPE_TAPT || ((isom_tapt_t *)parent)->clef )
+    if( !lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_TAPT ) || ((isom_tapt_t *)parent)->clef )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( clef, parent, box->type );
     ((isom_tapt_t *)parent)->clef = clef;
@@ -497,7 +501,7 @@ static int isom_read_clef( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_prof( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != QT_BOX_TYPE_TAPT || ((isom_tapt_t *)parent)->prof )
+    if( !lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_TAPT ) || ((isom_tapt_t *)parent)->prof )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( prof, parent, box->type );
     ((isom_tapt_t *)parent)->prof = prof;
@@ -512,7 +516,7 @@ static int isom_read_prof( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_enof( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != QT_BOX_TYPE_TAPT || ((isom_tapt_t *)parent)->enof )
+    if( !lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_TAPT ) || ((isom_tapt_t *)parent)->enof )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( enof, parent, box->type );
     ((isom_tapt_t *)parent)->enof = enof;
@@ -527,7 +531,7 @@ static int isom_read_enof( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_edts( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_TRAK || ((isom_trak_entry_t *)parent)->edts )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAK ) || ((isom_trak_entry_t *)parent)->edts )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( edts, parent, box->type );
     ((isom_trak_entry_t *)parent)->edts = edts;
@@ -539,7 +543,7 @@ static int isom_read_edts( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_elst( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_EDTS || ((isom_edts_t *)parent)->elst )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_EDTS ) || ((isom_edts_t *)parent)->elst )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_list_box( elst, parent, box->type );
     ((isom_edts_t *)parent)->elst = elst;
@@ -576,7 +580,7 @@ static int isom_read_elst( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_tref( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_TRAK || ((isom_trak_entry_t *)parent)->tref )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAK ) || ((isom_trak_entry_t *)parent)->tref )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( tref, parent, box->type );
     ((isom_trak_entry_t *)parent)->tref = tref;
@@ -588,7 +592,7 @@ static int isom_read_tref( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_track_reference_type( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_TREF )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TREF ) )
         return isom_read_unknown_box( root, box, parent, level );
     isom_tref_t *tref = (isom_tref_t *)parent;
     lsmash_entry_list_t *list = tref->ref_list;
@@ -628,7 +632,7 @@ static int isom_read_track_reference_type( lsmash_root_t *root, isom_box_t *box,
 
 static int isom_read_mdia( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_TRAK || ((isom_trak_entry_t *)parent)->mdia )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAK ) || ((isom_trak_entry_t *)parent)->mdia )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( mdia, parent, box->type );
     ((isom_trak_entry_t *)parent)->mdia = mdia;
@@ -640,7 +644,7 @@ static int isom_read_mdia( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_mdhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_MDIA || ((isom_mdia_t *)parent)->mdhd )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MDIA ) || ((isom_mdia_t *)parent)->mdhd )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( mdhd, parent, box->type );
     ((isom_mdia_t *)parent)->mdhd = mdhd;
@@ -669,15 +673,20 @@ static int isom_read_mdhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_hdlr( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( (parent->type != ISOM_BOX_TYPE_MDIA && parent->type != ISOM_BOX_TYPE_META && parent->type != ISOM_BOX_TYPE_MINF)
-     || (parent->type == ISOM_BOX_TYPE_MDIA && ((isom_mdia_t *)parent)->hdlr)
-     || (parent->type == ISOM_BOX_TYPE_META && ((isom_meta_t *)parent)->hdlr)
-     || (parent->type == ISOM_BOX_TYPE_MINF && ((isom_minf_t *)parent)->hdlr) )
+    if( (!lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MDIA )
+      && !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_META )
+      && !lsmash_check_box_type_identical( parent->type,   QT_BOX_TYPE_META )
+      && !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MINF ))
+     || (lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MDIA ) && ((isom_mdia_t *)parent)->hdlr)
+     || (lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_META ) && ((isom_meta_t *)parent)->hdlr)
+     || (lsmash_check_box_type_identical( parent->type,   QT_BOX_TYPE_META ) && ((isom_meta_t *)parent)->hdlr)
+     || (lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MINF ) && ((isom_minf_t *)parent)->hdlr) )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( hdlr, parent, box->type );
-    if( parent->type == ISOM_BOX_TYPE_MDIA )
+    if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MDIA ) )
         ((isom_mdia_t *)parent)->hdlr = hdlr;
-    else if( parent->type == ISOM_BOX_TYPE_META )
+    else if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_META )
+          || lsmash_check_box_type_identical( parent->type,   QT_BOX_TYPE_META ) )
         ((isom_meta_t *)parent)->hdlr = hdlr;
     else
         ((isom_minf_t *)parent)->hdlr = hdlr;
@@ -705,7 +714,7 @@ static int isom_read_hdlr( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_minf( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_MDIA || ((isom_mdia_t *)parent)->minf )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MDIA ) || ((isom_mdia_t *)parent)->minf )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( minf, parent, box->type );
     ((isom_mdia_t *)parent)->minf = minf;
@@ -717,7 +726,7 @@ static int isom_read_minf( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_vmhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_MINF || ((isom_minf_t *)parent)->vmhd )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MINF ) || ((isom_minf_t *)parent)->vmhd )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( vmhd, parent, box->type );
     ((isom_minf_t *)parent)->vmhd = vmhd;
@@ -733,7 +742,7 @@ static int isom_read_vmhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_smhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_MINF || ((isom_minf_t *)parent)->smhd )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MINF ) || ((isom_minf_t *)parent)->smhd )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( smhd, parent, box->type );
     ((isom_minf_t *)parent)->smhd = smhd;
@@ -748,7 +757,7 @@ static int isom_read_smhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_hmhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_MINF || ((isom_minf_t *)parent)->hmhd )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MINF ) || ((isom_minf_t *)parent)->hmhd )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( hmhd, parent, box->type );
     ((isom_minf_t *)parent)->hmhd = hmhd;
@@ -766,7 +775,7 @@ static int isom_read_hmhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_nmhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_MINF || ((isom_minf_t *)parent)->nmhd )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MINF ) || ((isom_minf_t *)parent)->nmhd )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( nmhd, parent, box->type );
     ((isom_minf_t *)parent)->nmhd = nmhd;
@@ -779,7 +788,7 @@ static int isom_read_nmhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_gmhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_MINF || ((isom_minf_t *)parent)->gmhd )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MINF ) || ((isom_minf_t *)parent)->gmhd )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( gmhd, parent, box->type );
     ((isom_minf_t *)parent)->gmhd = gmhd;
@@ -791,7 +800,7 @@ static int isom_read_gmhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_gmin( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != QT_BOX_TYPE_GMHD || ((isom_gmhd_t *)parent)->gmin )
+    if( !lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_GMHD ) || ((isom_gmhd_t *)parent)->gmin )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( gmin, parent, box->type );
     ((isom_gmhd_t *)parent)->gmin = gmin;
@@ -809,7 +818,7 @@ static int isom_read_gmin( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_text( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != QT_BOX_TYPE_GMHD || ((isom_gmhd_t *)parent)->text )
+    if( !lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_GMHD ) || ((isom_gmhd_t *)parent)->text )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( text, parent, box->type );
     ((isom_gmhd_t *)parent)->text = text;
@@ -824,12 +833,15 @@ static int isom_read_text( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_dinf( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( (parent->type != ISOM_BOX_TYPE_MINF && parent->type != ISOM_BOX_TYPE_META)
-     || (parent->type == ISOM_BOX_TYPE_MINF && ((isom_minf_t *)parent)->dinf)
-     || (parent->type == ISOM_BOX_TYPE_META && ((isom_meta_t *)parent)->dinf) )
+    if( (!lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MINF )
+      && !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_META )
+      && !lsmash_check_box_type_identical( parent->type,   QT_BOX_TYPE_META ))
+     || (lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MINF ) && ((isom_minf_t *)parent)->dinf)
+     || (lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_META ) && ((isom_meta_t *)parent)->dinf)
+     || (lsmash_check_box_type_identical( parent->type,   QT_BOX_TYPE_META ) && ((isom_meta_t *)parent)->dinf) )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( dinf, parent, box->type );
-    if( parent->type == ISOM_BOX_TYPE_MINF )
+    if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MINF ) )
         ((isom_minf_t *)parent)->dinf = dinf;
     else
         ((isom_meta_t *)parent)->dinf = dinf;
@@ -841,7 +853,7 @@ static int isom_read_dinf( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_dref( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_DINF || ((isom_dinf_t *)parent)->dref )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_DINF ) || ((isom_dinf_t *)parent)->dref )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_list_box( dref, parent, box->type );
     ((isom_dinf_t *)parent)->dref = dref;
@@ -857,7 +869,7 @@ static int isom_read_dref( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_url( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_DREF )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_DREF ) )
         return isom_read_unknown_box( root, box, parent, level );
     lsmash_entry_list_t *list = ((isom_dref_t *)parent)->list;
     if( !list )
@@ -892,7 +904,7 @@ static int isom_read_url( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
 
 static int isom_read_stbl( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_MINF || ((isom_minf_t *)parent)->stbl )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MINF ) || ((isom_minf_t *)parent)->stbl )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( stbl, parent, box->type );
     ((isom_minf_t *)parent)->stbl = stbl;
@@ -904,7 +916,7 @@ static int isom_read_stbl( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_stsd( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_STBL || ((isom_stbl_t *)parent)->stsd )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) || ((isom_stbl_t *)parent)->stsd )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_list_box( stsd, parent, box->type );
     ((isom_stbl_t *)parent)->stsd = stsd;
@@ -961,143 +973,153 @@ static int isom_read_codec_specific( lsmash_root_t *root, isom_box_t *box, isom_
     return isom_add_print_func( root, ext, level );
 }
 
-static void *isom_sample_description_alloc( uint32_t sample_type )
+static void *isom_sample_description_alloc( lsmash_codec_type_t sample_type )
 {
-    switch( sample_type )
+    static struct description_alloc_table_tag
     {
-        case ISOM_CODEC_TYPE_AVC1_VIDEO :
-        case ISOM_CODEC_TYPE_AVC2_VIDEO :
-        case ISOM_CODEC_TYPE_AVCP_VIDEO :
-        case ISOM_CODEC_TYPE_MVC1_VIDEO :
-        case ISOM_CODEC_TYPE_MVC2_VIDEO :
-        case ISOM_CODEC_TYPE_MP4V_VIDEO :
-        case ISOM_CODEC_TYPE_DRAC_VIDEO :
-        case ISOM_CODEC_TYPE_ENCV_VIDEO :
-        case ISOM_CODEC_TYPE_MJP2_VIDEO :
-        case ISOM_CODEC_TYPE_S263_VIDEO :
-        case ISOM_CODEC_TYPE_SVC1_VIDEO :
-        case ISOM_CODEC_TYPE_VC_1_VIDEO :
-        case QT_CODEC_TYPE_CFHD_VIDEO :
-        case QT_CODEC_TYPE_DV10_VIDEO :
-        case QT_CODEC_TYPE_DVOO_VIDEO :
-        case QT_CODEC_TYPE_DVOR_VIDEO :
-        case QT_CODEC_TYPE_DVTV_VIDEO :
-        case QT_CODEC_TYPE_DVVT_VIDEO :
-        case QT_CODEC_TYPE_HD10_VIDEO :
-        case QT_CODEC_TYPE_M105_VIDEO :
-        case QT_CODEC_TYPE_PNTG_VIDEO :
-        case QT_CODEC_TYPE_SVQ1_VIDEO :
-        case QT_CODEC_TYPE_SVQ3_VIDEO :
-        case QT_CODEC_TYPE_SHR0_VIDEO :
-        case QT_CODEC_TYPE_SHR1_VIDEO :
-        case QT_CODEC_TYPE_SHR2_VIDEO :
-        case QT_CODEC_TYPE_SHR3_VIDEO :
-        case QT_CODEC_TYPE_SHR4_VIDEO :
-        case QT_CODEC_TYPE_WRLE_VIDEO :
-        case QT_CODEC_TYPE_APCH_VIDEO :
-        case QT_CODEC_TYPE_APCN_VIDEO :
-        case QT_CODEC_TYPE_APCS_VIDEO :
-        case QT_CODEC_TYPE_APCO_VIDEO :
-        case QT_CODEC_TYPE_AP4H_VIDEO :
-        case QT_CODEC_TYPE_CIVD_VIDEO :
-        //case QT_CODEC_TYPE_DRAC_VIDEO :
-        case QT_CODEC_TYPE_DVC_VIDEO :
-        case QT_CODEC_TYPE_DVCP_VIDEO :
-        case QT_CODEC_TYPE_DVPP_VIDEO :
-        case QT_CODEC_TYPE_DV5N_VIDEO :
-        case QT_CODEC_TYPE_DV5P_VIDEO :
-        case QT_CODEC_TYPE_DVH2_VIDEO :
-        case QT_CODEC_TYPE_DVH3_VIDEO :
-        case QT_CODEC_TYPE_DVH5_VIDEO :
-        case QT_CODEC_TYPE_DVH6_VIDEO :
-        case QT_CODEC_TYPE_DVHP_VIDEO :
-        case QT_CODEC_TYPE_DVHQ_VIDEO :
-        case QT_CODEC_TYPE_FLIC_VIDEO :
-        case QT_CODEC_TYPE_GIF_VIDEO :
-        case QT_CODEC_TYPE_H261_VIDEO :
-        case QT_CODEC_TYPE_H263_VIDEO :
-        case QT_CODEC_TYPE_JPEG_VIDEO :
-        case QT_CODEC_TYPE_MJPA_VIDEO :
-        case QT_CODEC_TYPE_MJPB_VIDEO :
-        case QT_CODEC_TYPE_PNG_VIDEO :
-        case QT_CODEC_TYPE_RLE_VIDEO :
-        case QT_CODEC_TYPE_RPZA_VIDEO :
-        case QT_CODEC_TYPE_TGA_VIDEO :
-        case QT_CODEC_TYPE_TIFF_VIDEO :
-        case QT_CODEC_TYPE_ULRA_VIDEO :
-        case QT_CODEC_TYPE_ULRG_VIDEO :
-        case QT_CODEC_TYPE_ULY2_VIDEO :
-        case QT_CODEC_TYPE_ULY0_VIDEO :
-        case QT_CODEC_TYPE_V210_VIDEO :
-        case QT_CODEC_TYPE_V216_VIDEO :
-        case QT_CODEC_TYPE_V308_VIDEO :
-        case QT_CODEC_TYPE_V408_VIDEO :
-        case QT_CODEC_TYPE_V410_VIDEO :
-        case QT_CODEC_TYPE_YUV2_VIDEO :
-            return lsmash_malloc_zero( sizeof(isom_visual_entry_t) );
-        case ISOM_CODEC_TYPE_AC_3_AUDIO :
-        case ISOM_CODEC_TYPE_ALAC_AUDIO :
-        case ISOM_CODEC_TYPE_DRA1_AUDIO :
-        case ISOM_CODEC_TYPE_DTSC_AUDIO :
-        case ISOM_CODEC_TYPE_DTSE_AUDIO :
-        case ISOM_CODEC_TYPE_DTSH_AUDIO :
-        case ISOM_CODEC_TYPE_DTSL_AUDIO :
-        case ISOM_CODEC_TYPE_EC_3_AUDIO :
-        case ISOM_CODEC_TYPE_ENCA_AUDIO :
-        case ISOM_CODEC_TYPE_G719_AUDIO :
-        case ISOM_CODEC_TYPE_G726_AUDIO :
-        case ISOM_CODEC_TYPE_M4AE_AUDIO :
-        case ISOM_CODEC_TYPE_MLPA_AUDIO :
-        case ISOM_CODEC_TYPE_MP4A_AUDIO :
-        //case ISOM_CODEC_TYPE_RAW_AUDIO  :
-        case ISOM_CODEC_TYPE_SAMR_AUDIO :
-        case ISOM_CODEC_TYPE_SAWB_AUDIO :
-        case ISOM_CODEC_TYPE_SAWP_AUDIO :
-        case ISOM_CODEC_TYPE_SEVC_AUDIO :
-        case ISOM_CODEC_TYPE_SQCP_AUDIO :
-        case ISOM_CODEC_TYPE_SSMV_AUDIO :
-        //case ISOM_CODEC_TYPE_TWOS_AUDIO :
-        case QT_CODEC_TYPE_23NI_AUDIO :
-        case QT_CODEC_TYPE_MAC3_AUDIO :
-        case QT_CODEC_TYPE_MAC6_AUDIO :
-        case QT_CODEC_TYPE_NONE_AUDIO :
-        case QT_CODEC_TYPE_QDM2_AUDIO :
-        case QT_CODEC_TYPE_QDMC_AUDIO :
-        case QT_CODEC_TYPE_QCLP_AUDIO :
-        case QT_CODEC_TYPE_AGSM_AUDIO :
-        case QT_CODEC_TYPE_ALAW_AUDIO :
-        case QT_CODEC_TYPE_CDX2_AUDIO :
-        case QT_CODEC_TYPE_CDX4_AUDIO :
-        case QT_CODEC_TYPE_DVCA_AUDIO :
-        case QT_CODEC_TYPE_DVI_AUDIO :
-        case QT_CODEC_TYPE_FL32_AUDIO :
-        case QT_CODEC_TYPE_FL64_AUDIO :
-        case QT_CODEC_TYPE_IMA4_AUDIO :
-        case QT_CODEC_TYPE_IN24_AUDIO :
-        case QT_CODEC_TYPE_IN32_AUDIO :
-        case QT_CODEC_TYPE_LPCM_AUDIO :
-        case QT_CODEC_TYPE_RAW_AUDIO :
-        case QT_CODEC_TYPE_SOWT_AUDIO :
-        case QT_CODEC_TYPE_TWOS_AUDIO :
-        case QT_CODEC_TYPE_ULAW_AUDIO :
-        case QT_CODEC_TYPE_VDVA_AUDIO :
-        case QT_CODEC_TYPE_FULLMP3_AUDIO :
-        case QT_CODEC_TYPE_MP3_AUDIO :
-        case QT_CODEC_TYPE_ADPCM2_AUDIO :
-        case QT_CODEC_TYPE_ADPCM17_AUDIO :
-        case QT_CODEC_TYPE_GSM49_AUDIO :
-        case QT_CODEC_TYPE_NOT_SPECIFIED :
-            return lsmash_malloc_zero( sizeof(isom_audio_entry_t) );
-        case ISOM_CODEC_TYPE_TX3G_TEXT :
-            return lsmash_malloc_zero( sizeof(isom_tx3g_entry_t) );
-        case QT_CODEC_TYPE_TEXT_TEXT :
-            return lsmash_malloc_zero( sizeof(isom_text_entry_t) );
-        default :
-            return NULL;
+        lsmash_codec_type_t type;
+        size_t              alloc_size;
+    } description_alloc_table[128] = { { LSMASH_CODEC_TYPE_INITIALIZER, 0 } };
+    if( description_alloc_table[0].alloc_size == 0 )
+    {
+        /* Initialize the table. */
+        int i = 0;
+#define ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( type, alloc_size ) \
+    description_alloc_table[i++] = (struct description_alloc_table_tag){ type, alloc_size }
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC1_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC2_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVCP_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_MVC1_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_MVC2_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_MP4V_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_DRAC_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_ENCV_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_MJP2_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_S263_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_SVC1_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_VC_1_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_CFHD_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_DV10_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_DVOO_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_DVOR_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_DVTV_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_DVVT_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_HD10_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_M105_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_PNTG_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_SVQ1_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_SVQ3_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_SHR0_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_SHR1_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_SHR2_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_SHR3_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_SHR4_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_WRLE_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_APCH_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_APCN_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_APCS_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_APCO_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_AP4H_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_CIVD_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_DRAC_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_DVC_VIDEO,  sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_DVCP_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_DVPP_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_DV5N_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_DV5P_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_DVH2_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_DVH3_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_DVH5_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_DVH6_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_DVHP_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_DVHQ_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_FLIC_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_GIF_VIDEO,  sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_H261_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_H263_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_JPEG_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_MJPA_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_MJPB_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_PNG_VIDEO,  sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_RLE_VIDEO,  sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_RPZA_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_TGA_VIDEO,  sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_TIFF_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_ULRA_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_ULRG_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_ULY2_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_ULY0_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_V210_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_V216_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_V308_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_V408_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_V410_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_YUV2_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_AC_3_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_ALAC_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_DRA1_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSC_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSE_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSH_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSL_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_EC_3_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_ENCA_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_G719_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_G726_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_M4AE_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_MLPA_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_MP4A_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_RAW_AUDIO , sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAMR_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAWB_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAWP_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_SEVC_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_SQCP_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_SSMV_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_TWOS_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_MP4A_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_23NI_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_MAC3_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_MAC6_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_NONE_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_QDM2_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_QDMC_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_QCLP_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_AGSM_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_ALAW_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_CDX2_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_CDX4_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_DVCA_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_DVI_AUDIO,  sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_FL32_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_FL64_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_IMA4_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_IN24_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_IN32_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_LPCM_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_RAW_AUDIO,  sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_SOWT_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_TWOS_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_ULAW_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_VDVA_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_FULLMP3_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_MP3_AUDIO,     sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_ADPCM2_AUDIO,  sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_ADPCM17_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_GSM49_AUDIO,   sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_NOT_SPECIFIED, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_TX3G_TEXT, sizeof(isom_tx3g_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_TEXT_TEXT,   sizeof(isom_text_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( LSMASH_CODEC_TYPE_UNSPECIFIED, 0 );
+#undef ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT
     }
+    for( int i = 0; description_alloc_table[i].alloc_size; i++ )
+        if( lsmash_check_codec_type_identical( sample_type, description_alloc_table[i].type ) )
+            return lsmash_malloc_zero( description_alloc_table[i].alloc_size );
+    return NULL;
 }
 
-static void *isom_add_description( uint32_t sample_type, lsmash_entry_list_t *list )
+static void *isom_add_description( lsmash_codec_type_t sample_type, lsmash_entry_list_t *list )
 {
     if( !list )
         return NULL;
@@ -1114,9 +1136,9 @@ static void *isom_add_description( uint32_t sample_type, lsmash_entry_list_t *li
 
 static int isom_read_visual_description( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_STSD )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) )
         return isom_read_unknown_box( root, box, parent, level );
-    isom_visual_entry_t *visual = (isom_visual_entry_t *)isom_add_description( box->type, ((isom_stsd_t *)parent)->list );
+    isom_visual_entry_t *visual = (isom_visual_entry_t *)isom_add_description( (lsmash_codec_type_t)box->type, ((isom_stsd_t *)parent)->list );
     if( !visual )
         return -1;
     lsmash_bs_t *bs = root->bs;
@@ -1154,12 +1176,20 @@ static int isom_read_visual_description( lsmash_root_t *root, isom_box_t *box, i
 
 static int isom_read_esds( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_CODEC_TYPE_MP4V_VIDEO
-     && parent->type != ISOM_CODEC_TYPE_MP4A_AUDIO
-     && parent->type != ISOM_CODEC_TYPE_M4AE_AUDIO
-     && parent->type != ISOM_CODEC_TYPE_MP4S_SYSTEM
-     && parent->type != QT_BOX_TYPE_WAVE )
+    if( !lsmash_check_box_type_identical( parent->type, (lsmash_box_type_t)ISOM_CODEC_TYPE_MP4V_VIDEO )
+     && !lsmash_check_box_type_identical( parent->type, (lsmash_box_type_t)ISOM_CODEC_TYPE_MP4A_AUDIO )
+     && !lsmash_check_box_type_identical( parent->type, (lsmash_box_type_t)ISOM_CODEC_TYPE_M4AE_AUDIO )
+     && !lsmash_check_box_type_identical( parent->type, (lsmash_box_type_t)ISOM_CODEC_TYPE_MP4S_SYSTEM )
+     && !lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_WAVE ) )
         return isom_read_unknown_box( root, box, parent, level );
+    if( lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_WAVE ) )
+    {
+        box->type = QT_BOX_TYPE_ESDS;
+        if( parent->parent && lsmash_check_box_type_identical( parent->parent->type, (lsmash_box_type_t)ISOM_CODEC_TYPE_MP4A_AUDIO ) )
+            parent->parent->type = QT_CODEC_TYPE_MP4A_AUDIO;
+    }
+    else
+        box->type = ISOM_BOX_TYPE_ESDS;
     isom_create_box( esds, parent, box->type );
     lsmash_bs_t *bs = root->bs;
     isom_read_box_rest( bs, box );
@@ -1295,6 +1325,7 @@ static int isom_read_colr( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
             colr->manager |= LSMASH_QTFF_BASE;
     }
     box->size = lsmash_bs_get_pos( bs );
+    box->type = (colr->manager & LSMASH_QTFF_BASE) ? QT_BOX_TYPE_COLR : ISOM_BOX_TYPE_COLR;
     isom_box_common_copy( colr, box );
     return isom_add_print_func( root, colr, level );
 }
@@ -1385,7 +1416,7 @@ static int isom_read_stsl( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_audio_description( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_STSD )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) )
         return isom_read_unknown_box( root, box, parent, level );
     isom_audio_entry_t *audio = (isom_audio_entry_t *)isom_add_description( box->type, ((isom_stsd_t *)parent)->list );
     if( !audio )
@@ -1450,7 +1481,7 @@ static int isom_read_wave( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_frma( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != QT_BOX_TYPE_WAVE || ((isom_wave_t *)parent)->frma )
+    if( !lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_WAVE ) || ((isom_wave_t *)parent)->frma )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( frma, parent, box->type );
     ((isom_wave_t *)parent)->frma = frma;
@@ -1464,7 +1495,7 @@ static int isom_read_frma( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_enda( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != QT_BOX_TYPE_WAVE || ((isom_wave_t *)parent)->enda )
+    if( !lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_WAVE ) || ((isom_wave_t *)parent)->enda )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( enda, parent, box->type );
     ((isom_wave_t *)parent)->enda = enda;
@@ -1478,7 +1509,7 @@ static int isom_read_enda( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_terminator( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != QT_BOX_TYPE_WAVE || ((isom_wave_t *)parent)->terminator )
+    if( !lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_WAVE ) || ((isom_wave_t *)parent)->terminator )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( terminator, parent, box->type );
     ((isom_wave_t *)parent)->terminator = terminator;
@@ -1522,7 +1553,7 @@ static int isom_read_chan( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_text_description( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_STSD )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) )
         return isom_read_unknown_box( root, box, parent, level );
     isom_text_entry_t *text = (isom_text_entry_t *)isom_add_description( box->type, ((isom_stsd_t *)parent)->list );
     if( !text )
@@ -1570,7 +1601,7 @@ static int isom_read_text_description( lsmash_root_t *root, isom_box_t *box, iso
 
 static int isom_read_tx3g_description( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_STSD )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) )
         return isom_read_unknown_box( root, box, parent, level );
     isom_tx3g_entry_t *tx3g = (isom_tx3g_entry_t *)isom_add_description( box->type, ((isom_stsd_t *)parent)->list );
     if( !tx3g )
@@ -1606,7 +1637,8 @@ static int isom_read_tx3g_description( lsmash_root_t *root, isom_box_t *box, iso
 
 static int isom_read_ftab( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_CODEC_TYPE_TX3G_TEXT || ((isom_tx3g_entry_t *)parent)->ftab )
+    if( !lsmash_check_box_type_identical( parent->type, (lsmash_box_type_t)ISOM_CODEC_TYPE_TX3G_TEXT )
+     || ((isom_tx3g_entry_t *)parent)->ftab )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_list_box( ftab, parent, box->type );
     ((isom_tx3g_entry_t *)parent)->ftab = ftab;
@@ -1643,7 +1675,7 @@ static int isom_read_ftab( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_stts( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_STBL || ((isom_stbl_t *)parent)->stts )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) || ((isom_stbl_t *)parent)->stts )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_list_box( stts, parent, box->type );
     ((isom_stbl_t *)parent)->stts = stts;
@@ -1671,7 +1703,7 @@ static int isom_read_stts( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_ctts( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_STBL || ((isom_stbl_t *)parent)->ctts )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) || ((isom_stbl_t *)parent)->ctts )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_list_box( ctts, parent, box->type );
     ((isom_stbl_t *)parent)->ctts = ctts;
@@ -1699,7 +1731,7 @@ static int isom_read_ctts( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_cslg( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_STBL || ((isom_stbl_t *)parent)->cslg )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) || ((isom_stbl_t *)parent)->cslg )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( cslg, parent, box->type );
     ((isom_stbl_t *)parent)->cslg = cslg;
@@ -1717,7 +1749,7 @@ static int isom_read_cslg( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_stss( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_STBL || ((isom_stbl_t *)parent)->stss )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) || ((isom_stbl_t *)parent)->stss )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_list_box( stss, parent, box->type );
     ((isom_stbl_t *)parent)->stss = stss;
@@ -1744,7 +1776,7 @@ static int isom_read_stss( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_stps( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_STBL || ((isom_stbl_t *)parent)->stps )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) || ((isom_stbl_t *)parent)->stps )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_list_box( stps, parent, box->type );
     ((isom_stbl_t *)parent)->stps = stps;
@@ -1771,12 +1803,13 @@ static int isom_read_stps( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_sdtp( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( (parent->type != ISOM_BOX_TYPE_STBL && parent->type != ISOM_BOX_TYPE_TRAF)
-     || (parent->type == ISOM_BOX_TYPE_STBL && ((isom_stbl_t *)parent)->sdtp)
-     || (parent->type == ISOM_BOX_TYPE_TRAF && ((isom_traf_entry_t *)parent)->sdtp))
+    if( (!lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL )
+      && !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAF ))
+     || (lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) && ((isom_stbl_t *)parent)->sdtp)
+     || (lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAF ) && ((isom_traf_entry_t *)parent)->sdtp))
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_list_box( sdtp, parent, box->type );
-    if( parent->type == ISOM_BOX_TYPE_STBL )
+    if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) )
         ((isom_stbl_t *)parent)->sdtp = sdtp;
     else
         ((isom_traf_entry_t *)parent)->sdtp = sdtp;
@@ -1805,7 +1838,7 @@ static int isom_read_sdtp( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_stsc( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_STBL || ((isom_stbl_t *)parent)->stsc )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) || ((isom_stbl_t *)parent)->stsc )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_list_box( stsc, parent, box->type );
     ((isom_stbl_t *)parent)->stsc = stsc;
@@ -1834,7 +1867,7 @@ static int isom_read_stsc( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_stsz( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_STBL || ((isom_stbl_t *)parent)->stsz )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) || ((isom_stbl_t *)parent)->stsz )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( stsz, parent, box->type );
     ((isom_stbl_t *)parent)->stsz = stsz;
@@ -1868,15 +1901,16 @@ static int isom_read_stsz( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_stco( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_STBL || ((isom_stbl_t *)parent)->stco )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) || ((isom_stbl_t *)parent)->stco )
         return isom_read_unknown_box( root, box, parent, level );
+    box->type = lsmash_form_iso_box_type( box->type.fourcc );
     isom_create_list_box( stco, parent, box->type );
     ((isom_stbl_t *)parent)->stco = stco;
     lsmash_bs_t *bs = root->bs;
     isom_read_box_rest( bs, box );
     uint32_t entry_count = lsmash_bs_get_be32( bs );
     uint64_t pos;
-    if( box->type == ISOM_BOX_TYPE_STCO )
+    if( lsmash_check_box_type_identical( box->type, ISOM_BOX_TYPE_STCO ) )
         for( pos = lsmash_bs_get_pos( bs ); pos < box->size && stco->list->entry_count < entry_count; pos = lsmash_bs_get_pos( bs ) )
         {
             isom_stco_entry_t *data = malloc( sizeof(isom_stco_entry_t) );
@@ -1912,7 +1946,7 @@ static int isom_read_stco( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_sgpd( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_STBL )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) )
         return isom_read_unknown_box( root, box, parent, level );
     isom_stbl_t *stbl = (isom_stbl_t *)parent;
     lsmash_entry_list_t *list = stbl->sgpd_list;
@@ -1999,7 +2033,8 @@ static int isom_read_sgpd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_sbgp( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_STBL && parent->type != ISOM_BOX_TYPE_TRAF )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL )
+     && !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAF ) )
         return isom_read_unknown_box( root, box, parent, level );
     isom_stbl_t *stbl = (isom_stbl_t *)parent;
     lsmash_entry_list_t *list = stbl->sbgp_list;
@@ -2046,12 +2081,13 @@ static int isom_read_sbgp( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_udta( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( (parent->type != ISOM_BOX_TYPE_MOOV && parent->type != ISOM_BOX_TYPE_TRAK)
-     || (parent->type == ISOM_BOX_TYPE_MOOV && ((isom_moov_t *)parent)->udta)
-     || (parent->type == ISOM_BOX_TYPE_TRAK && ((isom_trak_entry_t *)parent)->udta) )
+    if( (!lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV )
+      && !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAK ))
+     || (lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV ) && ((isom_moov_t *)parent)->udta)
+     || (lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAK ) && ((isom_trak_entry_t *)parent)->udta) )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( udta, parent, box->type );
-    if( parent->type == ISOM_BOX_TYPE_MOOV )
+    if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV ) )
         ((isom_moov_t *)parent)->udta = udta;
     else
         ((isom_trak_entry_t *)parent)->udta = udta;
@@ -2063,7 +2099,7 @@ static int isom_read_udta( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_chpl( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_UDTA || ((isom_udta_t *)parent)->chpl )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_UDTA ) || ((isom_udta_t *)parent)->chpl )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_list_box( chpl, parent, box->type );
     ((isom_udta_t *)parent)->chpl = chpl;
@@ -2107,7 +2143,7 @@ static int isom_read_chpl( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_mvex( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_MOOV || ((isom_moov_t *)parent)->mvex )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV ) || ((isom_moov_t *)parent)->mvex )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( mvex, parent, box->type );
     ((isom_moov_t *)parent)->mvex = mvex;
@@ -2119,7 +2155,7 @@ static int isom_read_mvex( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_mehd( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_MVEX || ((isom_mvex_t *)parent)->mehd )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MVEX ) || ((isom_mvex_t *)parent)->mehd )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( mehd, parent, box->type );
     ((isom_mvex_t *)parent)->mehd = mehd;
@@ -2151,7 +2187,7 @@ static isom_sample_flags_t isom_bs_get_sample_flags( lsmash_bs_t *bs )
 
 static int isom_read_trex( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_MVEX )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MVEX ) )
         return isom_read_unknown_box( root, box, parent, level );
     lsmash_entry_list_t *list = ((isom_mvex_t *)parent)->trex_list;
     if( !list )
@@ -2183,7 +2219,7 @@ static int isom_read_trex( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_moof( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( !!parent->type )
+    if( !lsmash_check_box_type_identical( parent->type, LSMASH_BOX_TYPE_UNSPECIFIED ) )
         return isom_read_unknown_box( root, box, parent, level );
     lsmash_entry_list_t *list = ((lsmash_root_t *)parent)->moof_list;
     if( !list )
@@ -2210,7 +2246,7 @@ static int isom_read_moof( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_mfhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_MOOF || ((isom_moof_entry_t *)parent)->mfhd )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOF ) || ((isom_moof_entry_t *)parent)->mfhd )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( mfhd, parent, box->type );
     ((isom_moof_entry_t *)parent)->mfhd = mfhd;
@@ -2224,7 +2260,7 @@ static int isom_read_mfhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_traf( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_MOOF )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOF ) )
         return isom_read_unknown_box( root, box, parent, level );
     lsmash_entry_list_t *list = ((isom_moof_entry_t *)parent)->traf_list;
     if( !list )
@@ -2251,7 +2287,7 @@ static int isom_read_traf( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_tfhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_TRAF || ((isom_traf_entry_t *)parent)->tfhd )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAF ) || ((isom_traf_entry_t *)parent)->tfhd )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( tfhd, parent, box->type );
     ((isom_traf_entry_t *)parent)->tfhd = tfhd;
@@ -2270,7 +2306,7 @@ static int isom_read_tfhd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_tfdt( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_TRAF || ((isom_traf_entry_t *)parent)->tfdt )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAF ) || ((isom_traf_entry_t *)parent)->tfdt )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( tfdt, parent, box->type );
     ((isom_traf_entry_t *)parent)->tfdt = tfdt;
@@ -2287,7 +2323,7 @@ static int isom_read_tfdt( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_trun( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_TRAF )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAF ) )
         return isom_read_unknown_box( root, box, parent, level );
     lsmash_entry_list_t *list = ((isom_traf_entry_t *)parent)->trun_list;
     if( !list )
@@ -2361,7 +2397,7 @@ static int isom_read_free( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_mdat( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( !!parent->type )
+    if( !lsmash_check_box_type_identical( parent->type, LSMASH_BOX_TYPE_UNSPECIFIED ) )
         return isom_read_unknown_box( root, box, parent, level );
     isom_box_t *mdat = lsmash_malloc_zero( sizeof(isom_box_t) );
     if( !mdat )
@@ -2380,18 +2416,21 @@ static int isom_read_mdat( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_meta( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( (!!parent->type && parent->type != ISOM_BOX_TYPE_MOOV && parent->type != ISOM_BOX_TYPE_TRAK && parent->type != ISOM_BOX_TYPE_UDTA)
-     || (!parent->type && ((lsmash_root_t *)parent)->meta)
-     || (parent->type == ISOM_BOX_TYPE_MOOV && ((isom_moov_t *)parent)->meta)
-     || (parent->type == ISOM_BOX_TYPE_TRAK && ((isom_trak_entry_t *)parent)->meta)
-     || (parent->type == ISOM_BOX_TYPE_UDTA && ((isom_udta_t *)parent)->meta) )
+    if( (!lsmash_check_box_type_identical( parent->type, LSMASH_BOX_TYPE_UNSPECIFIED )
+      && !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV )
+      && !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAK )
+      && !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_UDTA ))
+     || (lsmash_check_box_type_identical( parent->type, LSMASH_BOX_TYPE_UNSPECIFIED ) && ((lsmash_root_t *)parent)->meta)
+     || (lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV ) && ((isom_moov_t *)parent)->meta)
+     || (lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAK ) && ((isom_trak_entry_t *)parent)->meta)
+     || (lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_UDTA ) && ((isom_udta_t *)parent)->meta) )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( meta, parent, box->type );
-    if( !parent->type )
+    if( lsmash_check_box_type_identical( parent->type, LSMASH_BOX_TYPE_UNSPECIFIED ) )
         ((lsmash_root_t *)parent)->meta = meta;
-    else if( parent->type == ISOM_BOX_TYPE_MOOV )
+    else if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV ) )
         ((isom_moov_t *)parent)->meta = meta;
-    else if( parent->type == ISOM_BOX_TYPE_TRAK )
+    else if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAK ) )
         ((isom_trak_entry_t *)parent)->meta = meta;
     else
         ((isom_udta_t *)parent)->meta = meta;
@@ -2403,7 +2442,8 @@ static int isom_read_meta( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_keys( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( (parent->type != QT_BOX_TYPE_META && !(parent->manager & LSMASH_QTFF_BASE)) || ((isom_meta_t *)parent)->keys )
+    if( (!lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_META ) && !(parent->manager & LSMASH_QTFF_BASE))
+     || ((isom_meta_t *)parent)->keys )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_list_box( keys, parent, box->type );
     ((isom_meta_t *)parent)->keys = keys;
@@ -2439,7 +2479,9 @@ static int isom_read_keys( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_ilst( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_META || ((isom_meta_t *)parent)->ilst )
+    if( (!lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_META )
+      && !lsmash_check_box_type_identical( parent->type,   QT_BOX_TYPE_META ))
+     || ((isom_meta_t *)parent)->ilst )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( ilst, parent, box->type );
     ((isom_meta_t *)parent)->ilst = ilst;
@@ -2451,7 +2493,7 @@ static int isom_read_ilst( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_metaitem( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_ILST )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_ILST ) )
         return isom_read_unknown_box( root, box, parent, level );
     lsmash_entry_list_t *list = ((isom_ilst_t *)parent)->item_list;
     if( !list )
@@ -2478,7 +2520,7 @@ static int isom_read_metaitem( lsmash_root_t *root, isom_box_t *box, isom_box_t 
 
 static int isom_read_mean( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ITUNES_METADATA_ITEM_CUSTOM || ((isom_metaitem_t *)parent)->mean )
+    if( parent->type.fourcc != ITUNES_METADATA_ITEM_CUSTOM || ((isom_metaitem_t *)parent)->mean )
         return isom_read_unknown_box( root, box, parent, level );
     isom_mean_t *mean = lsmash_malloc_zero( sizeof(isom_mean_t) );
     if( !mean )
@@ -2497,7 +2539,7 @@ static int isom_read_mean( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_name( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ITUNES_METADATA_ITEM_CUSTOM || ((isom_metaitem_t *)parent)->name )
+    if( parent->type.fourcc != ITUNES_METADATA_ITEM_CUSTOM || ((isom_metaitem_t *)parent)->name )
         return isom_read_unknown_box( root, box, parent, level );
     isom_name_t *name = lsmash_malloc_zero( sizeof(isom_name_t) );
     if( !name )
@@ -2542,7 +2584,7 @@ static int isom_read_data( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_WLOC( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_UDTA || ((isom_udta_t *)parent)->WLOC )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_UDTA ) || ((isom_udta_t *)parent)->WLOC )
         return isom_read_unknown_box( root, box, parent, level );
     isom_WLOC_t *WLOC = lsmash_malloc_zero( sizeof(isom_WLOC_t) );
     if( !WLOC )
@@ -2559,7 +2601,7 @@ static int isom_read_WLOC( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_LOOP( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_UDTA || ((isom_udta_t *)parent)->LOOP )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_UDTA ) || ((isom_udta_t *)parent)->LOOP )
         return isom_read_unknown_box( root, box, parent, level );
     isom_LOOP_t *LOOP = lsmash_malloc_zero( sizeof(isom_LOOP_t) );
     if( !LOOP )
@@ -2575,7 +2617,7 @@ static int isom_read_LOOP( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_SelO( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_UDTA || ((isom_udta_t *)parent)->SelO )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_UDTA ) || ((isom_udta_t *)parent)->SelO )
         return isom_read_unknown_box( root, box, parent, level );
     isom_SelO_t *SelO = lsmash_malloc_zero( sizeof(isom_SelO_t) );
     if( !SelO )
@@ -2591,7 +2633,7 @@ static int isom_read_SelO( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_AllF( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_UDTA || ((isom_udta_t *)parent)->AllF )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_UDTA ) || ((isom_udta_t *)parent)->AllF )
         return isom_read_unknown_box( root, box, parent, level );
     isom_AllF_t *AllF = lsmash_malloc_zero( sizeof(isom_AllF_t) );
     if( !AllF )
@@ -2607,7 +2649,7 @@ static int isom_read_AllF( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_cprt( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_UDTA )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_UDTA ) )
         return isom_read_unknown_box( root, box, parent, level );
     lsmash_entry_list_t *list = ((isom_udta_t *)parent)->cprt_list;
     if( !list )
@@ -2646,7 +2688,7 @@ static int isom_read_cprt( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_mfra( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( !!parent->type || ((lsmash_root_t *)parent)->mfra )
+    if( !lsmash_check_box_type_identical( parent->type, LSMASH_BOX_TYPE_UNSPECIFIED ) || ((lsmash_root_t *)parent)->mfra )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( mfra, parent, box->type );
     ((lsmash_root_t *)parent)->mfra = mfra;
@@ -2658,7 +2700,7 @@ static int isom_read_mfra( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_tfra( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_MFRA )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MFRA ) )
         return isom_read_unknown_box( root, box, parent, level );
     lsmash_entry_list_t *list = ((isom_mfra_t *)parent)->tfra_list;
     if( !list )
@@ -2728,7 +2770,7 @@ static int isom_read_tfra( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_mfro( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( parent->type != ISOM_BOX_TYPE_MFRA || ((isom_mfra_t *)parent)->mfro )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MFRA ) || ((isom_mfra_t *)parent)->mfro )
         return isom_read_unknown_box( root, box, parent, level );
     isom_create_box( mfro, parent, box->type );
     ((isom_mfra_t *)parent)->mfro = mfro;
@@ -2743,7 +2785,7 @@ static int isom_read_mfro( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 static int isom_check_qtff_meta( lsmash_bs_t *bs )
 {
     if( bs->store < ISOM_FULLBOX_COMMON_SIZE
-     || LSMASH_4CC( bs->data[4], bs->data[5], bs->data[6], bs->data[7] ) != ISOM_BOX_TYPE_META )
+     || LSMASH_4CC( bs->data[4], bs->data[5], bs->data[6], bs->data[7] ) != ISOM_BOX_TYPE_META.fourcc )
         return 0;   /* Obviously, not 'meta' box */
     if( !((bs->data[8] << 24) | (bs->data[9] << 16) | (bs->data[10] << 8) | bs->data[11]) )
         return 0;   /* If this field is 0, this shall be 'meta' box of ISO. */
@@ -2777,6 +2819,7 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
          * Reuse the last 4 bytes as the size of the current box. */
         parent->manager |= LSMASH_QTFF_BASE;    /* identifier of 'meta' box of QTFF */
         parent->manager &= ~LSMASH_FULLBOX;
+        parent->type    = QT_BOX_TYPE_META;
         parent->version = 0;
         parent->flags   = 0;
         memcpy( bs->data, bs->data + bs->store - 4, 4 );
@@ -2796,339 +2839,371 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
     if( !!(ret = isom_bs_read_box_common( bs, box, read_size )) )
         return ret;     /* return if reached EOF */
     ++level;
-    if( parent->type == ISOM_BOX_TYPE_STSD )
-        switch( box->type )
-        {
-            case ISOM_CODEC_TYPE_AVC1_VIDEO :
-            case ISOM_CODEC_TYPE_AVC2_VIDEO :
-            case ISOM_CODEC_TYPE_AVCP_VIDEO :
-            case ISOM_CODEC_TYPE_DRAC_VIDEO :
-            case ISOM_CODEC_TYPE_ENCV_VIDEO :
-            case ISOM_CODEC_TYPE_MJP2_VIDEO :
-            case ISOM_CODEC_TYPE_MP4V_VIDEO :
-            case ISOM_CODEC_TYPE_MVC1_VIDEO :
-            case ISOM_CODEC_TYPE_MVC2_VIDEO :
-            case ISOM_CODEC_TYPE_S263_VIDEO :
-            case ISOM_CODEC_TYPE_SVC1_VIDEO :
-            case ISOM_CODEC_TYPE_VC_1_VIDEO :
-            case QT_CODEC_TYPE_CFHD_VIDEO :
-            case QT_CODEC_TYPE_DV10_VIDEO :
-            case QT_CODEC_TYPE_DVOO_VIDEO :
-            case QT_CODEC_TYPE_DVOR_VIDEO :
-            case QT_CODEC_TYPE_DVTV_VIDEO :
-            case QT_CODEC_TYPE_DVVT_VIDEO :
-            case QT_CODEC_TYPE_HD10_VIDEO :
-            case QT_CODEC_TYPE_M105_VIDEO :
-            case QT_CODEC_TYPE_PNTG_VIDEO :
-            case QT_CODEC_TYPE_SVQ1_VIDEO :
-            case QT_CODEC_TYPE_SVQ3_VIDEO :
-            case QT_CODEC_TYPE_SHR0_VIDEO :
-            case QT_CODEC_TYPE_SHR1_VIDEO :
-            case QT_CODEC_TYPE_SHR2_VIDEO :
-            case QT_CODEC_TYPE_SHR3_VIDEO :
-            case QT_CODEC_TYPE_SHR4_VIDEO :
-            case QT_CODEC_TYPE_WRLE_VIDEO :
-            case QT_CODEC_TYPE_APCH_VIDEO :
-            case QT_CODEC_TYPE_APCN_VIDEO :
-            case QT_CODEC_TYPE_APCS_VIDEO :
-            case QT_CODEC_TYPE_APCO_VIDEO :
-            case QT_CODEC_TYPE_AP4H_VIDEO :
-            case QT_CODEC_TYPE_CIVD_VIDEO :
-            //case QT_CODEC_TYPE_DRAC_VIDEO :
-            case QT_CODEC_TYPE_DVC_VIDEO :
-            case QT_CODEC_TYPE_DVCP_VIDEO :
-            case QT_CODEC_TYPE_DVPP_VIDEO :
-            case QT_CODEC_TYPE_DV5N_VIDEO :
-            case QT_CODEC_TYPE_DV5P_VIDEO :
-            case QT_CODEC_TYPE_DVH2_VIDEO :
-            case QT_CODEC_TYPE_DVH3_VIDEO :
-            case QT_CODEC_TYPE_DVH5_VIDEO :
-            case QT_CODEC_TYPE_DVH6_VIDEO :
-            case QT_CODEC_TYPE_DVHP_VIDEO :
-            case QT_CODEC_TYPE_DVHQ_VIDEO :
-            case QT_CODEC_TYPE_FLIC_VIDEO :
-            case QT_CODEC_TYPE_GIF_VIDEO :
-            case QT_CODEC_TYPE_H261_VIDEO :
-            case QT_CODEC_TYPE_H263_VIDEO :
-            case QT_CODEC_TYPE_JPEG_VIDEO :
-            case QT_CODEC_TYPE_MJPA_VIDEO :
-            case QT_CODEC_TYPE_MJPB_VIDEO :
-            case QT_CODEC_TYPE_PNG_VIDEO :
-            case QT_CODEC_TYPE_RLE_VIDEO :
-            case QT_CODEC_TYPE_RPZA_VIDEO :
-            case QT_CODEC_TYPE_TGA_VIDEO :
-            case QT_CODEC_TYPE_TIFF_VIDEO :
-            case QT_CODEC_TYPE_ULRA_VIDEO :
-            case QT_CODEC_TYPE_ULRG_VIDEO :
-            case QT_CODEC_TYPE_ULY2_VIDEO :
-            case QT_CODEC_TYPE_ULY0_VIDEO :
-            case QT_CODEC_TYPE_V210_VIDEO :
-            case QT_CODEC_TYPE_V216_VIDEO :
-            case QT_CODEC_TYPE_V308_VIDEO :
-            case QT_CODEC_TYPE_V408_VIDEO :
-            case QT_CODEC_TYPE_V410_VIDEO :
-            case QT_CODEC_TYPE_YUV2_VIDEO :
-                return isom_read_visual_description( root, box, parent, level );
-            case ISOM_CODEC_TYPE_AC_3_AUDIO :
-            case ISOM_CODEC_TYPE_ALAC_AUDIO :
-            case ISOM_CODEC_TYPE_DRA1_AUDIO :
-            case ISOM_CODEC_TYPE_DTSC_AUDIO :
-            case ISOM_CODEC_TYPE_DTSE_AUDIO :
-            case ISOM_CODEC_TYPE_DTSH_AUDIO :
-            case ISOM_CODEC_TYPE_DTSL_AUDIO :
-            case ISOM_CODEC_TYPE_EC_3_AUDIO :
-            case ISOM_CODEC_TYPE_ENCA_AUDIO :
-            case ISOM_CODEC_TYPE_G719_AUDIO :
-            case ISOM_CODEC_TYPE_G726_AUDIO :
-            case ISOM_CODEC_TYPE_M4AE_AUDIO :
-            case ISOM_CODEC_TYPE_MLPA_AUDIO :
-            case ISOM_CODEC_TYPE_MP4A_AUDIO :
-            case ISOM_CODEC_TYPE_SAMR_AUDIO :
-            case ISOM_CODEC_TYPE_SAWB_AUDIO :
-            case ISOM_CODEC_TYPE_SAWP_AUDIO :
-            case ISOM_CODEC_TYPE_SEVC_AUDIO :
-            case ISOM_CODEC_TYPE_SQCP_AUDIO :
-            case ISOM_CODEC_TYPE_SSMV_AUDIO :
-            //case ISOM_CODEC_TYPE_TWOS_AUDIO :
-            case QT_CODEC_TYPE_23NI_AUDIO :
-            case QT_CODEC_TYPE_MAC3_AUDIO :
-            case QT_CODEC_TYPE_MAC6_AUDIO :
-            case QT_CODEC_TYPE_NONE_AUDIO :
-            case QT_CODEC_TYPE_QDM2_AUDIO :
-            case QT_CODEC_TYPE_QDMC_AUDIO :
-            case QT_CODEC_TYPE_QCLP_AUDIO :
-            case QT_CODEC_TYPE_AGSM_AUDIO :
-            case QT_CODEC_TYPE_ALAW_AUDIO :
-            case QT_CODEC_TYPE_CDX2_AUDIO :
-            case QT_CODEC_TYPE_CDX4_AUDIO :
-            case QT_CODEC_TYPE_DVCA_AUDIO :
-            case QT_CODEC_TYPE_DVI_AUDIO :
-            case QT_CODEC_TYPE_FL32_AUDIO :
-            case QT_CODEC_TYPE_FL64_AUDIO :
-            case QT_CODEC_TYPE_IMA4_AUDIO :
-            case QT_CODEC_TYPE_IN24_AUDIO :
-            case QT_CODEC_TYPE_IN32_AUDIO :
-            case QT_CODEC_TYPE_LPCM_AUDIO :
-            case QT_CODEC_TYPE_SOWT_AUDIO :
-            case QT_CODEC_TYPE_TWOS_AUDIO :
-            case QT_CODEC_TYPE_ULAW_AUDIO :
-            case QT_CODEC_TYPE_VDVA_AUDIO :
-            case QT_CODEC_TYPE_FULLMP3_AUDIO :
-            case QT_CODEC_TYPE_MP3_AUDIO :
-            case QT_CODEC_TYPE_ADPCM2_AUDIO :
-            case QT_CODEC_TYPE_ADPCM17_AUDIO :
-            case QT_CODEC_TYPE_GSM49_AUDIO :
-            case QT_CODEC_TYPE_NOT_SPECIFIED :
-                return isom_read_audio_description( root, box, parent, level );
-            case QT_CODEC_TYPE_TEXT_TEXT :
-                return isom_read_text_description( root, box, parent, level );
-            case ISOM_CODEC_TYPE_TX3G_TEXT :
-                return isom_read_tx3g_description( root, box, parent, level );
-            case LSMASH_CODEC_TYPE_RAW :
-                if( ((isom_minf_t *)parent->parent->parent)->vmhd )
-                    return isom_read_visual_description( root, box, parent, level );
-                if( ((isom_minf_t *)parent->parent->parent)->smhd )
-                    return isom_read_audio_description( root, box, parent, level );
-            default :
-                return isom_read_unknown_box( root, box, parent, level );
-        }
-    if( parent->type == QT_BOX_TYPE_WAVE )
-        switch( box->type )
-        {
-            case QT_BOX_TYPE_FRMA :
-                return isom_read_frma( root, box, parent, level );
-            case QT_BOX_TYPE_ENDA :
-                return isom_read_enda( root, box, parent, level );
-            case ISOM_BOX_TYPE_ESDS :
-                return isom_read_esds( root, box, parent, level );
-            case QT_BOX_TYPE_CHAN :
-                return isom_read_chan( root, box, parent, level );
-            case QT_BOX_TYPE_TERMINATOR :
-                return isom_read_terminator( root, box, parent, level );
-            default :
-                return isom_read_codec_specific( root, box, parent, level );
-        }
-    if( parent->type == ISOM_BOX_TYPE_TREF )
-        return isom_read_track_reference_type( root, box, parent, level );
-    switch( box->type )
+    lsmash_box_type_t (*form_box_type_func)( lsmash_compact_box_type_t )   = NULL;
+    int (*reader_func)( lsmash_root_t *, isom_box_t *, isom_box_t *, int ) = NULL;
+    if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) )
     {
-        case ISOM_BOX_TYPE_FTYP :
-            return isom_read_ftyp( root, box, parent, level );
-        case ISOM_BOX_TYPE_MOOV :
-            return isom_read_moov( root, box, parent, level );
-        case ISOM_BOX_TYPE_MVHD :
-            return isom_read_mvhd( root, box, parent, level );
-        case ISOM_BOX_TYPE_IODS :
-            return isom_read_iods( root, box, parent, level );
-        case QT_BOX_TYPE_CTAB :
-            return isom_read_ctab( root, box, parent, level );
-        case ISOM_BOX_TYPE_ESDS :
-            return isom_read_esds( root, box, parent, level );
-        case ISOM_BOX_TYPE_TRAK :
-            return isom_read_trak( root, box, parent, level );
-        case ISOM_BOX_TYPE_TKHD :
-            return isom_read_tkhd( root, box, parent, level );
-        case QT_BOX_TYPE_TAPT :
-            return isom_read_tapt( root, box, parent, level );
-        case QT_BOX_TYPE_CLEF :
-            return isom_read_clef( root, box, parent, level );
-        case QT_BOX_TYPE_PROF :
-            return isom_read_prof( root, box, parent, level );
-        case QT_BOX_TYPE_ENOF :
-            return isom_read_enof( root, box, parent, level );
-        case ISOM_BOX_TYPE_EDTS :
-            return isom_read_edts( root, box, parent, level );
-        case ISOM_BOX_TYPE_ELST :
-            return isom_read_elst( root, box, parent, level );
-        case ISOM_BOX_TYPE_TREF :
-            return isom_read_tref( root, box, parent, level );
-        case ISOM_BOX_TYPE_MDIA :
-            return isom_read_mdia( root, box, parent, level );
-        case ISOM_BOX_TYPE_MDHD :
-            return isom_read_mdhd( root, box, parent, level );
-        case ISOM_BOX_TYPE_HDLR :
-            return isom_read_hdlr( root, box, parent, level );
-        case ISOM_BOX_TYPE_MINF :
-            return isom_read_minf( root, box, parent, level );
-        case ISOM_BOX_TYPE_VMHD :
-            return isom_read_vmhd( root, box, parent, level );
-        case ISOM_BOX_TYPE_SMHD :
-            return isom_read_smhd( root, box, parent, level );
-        case ISOM_BOX_TYPE_HMHD :
-            return isom_read_hmhd( root, box, parent, level );
-        case ISOM_BOX_TYPE_NMHD :
-            return isom_read_nmhd( root, box, parent, level );
-        case QT_BOX_TYPE_GMHD :
-            return isom_read_gmhd( root, box, parent, level );
-        case QT_BOX_TYPE_GMIN :
-            return isom_read_gmin( root, box, parent, level );
-        case QT_BOX_TYPE_TEXT :
-            return isom_read_text( root, box, parent, level );
-        case ISOM_BOX_TYPE_DINF :
-            return isom_read_dinf( root, box, parent, level );
-        case ISOM_BOX_TYPE_DREF :
-            return isom_read_dref( root, box, parent, level );
-        case ISOM_BOX_TYPE_URL  :
-            return isom_read_url ( root, box, parent, level );
-        case ISOM_BOX_TYPE_STBL :
-            return isom_read_stbl( root, box, parent, level );
-        case ISOM_BOX_TYPE_STSD :
-            return isom_read_stsd( root, box, parent, level );
-        case ISOM_BOX_TYPE_BTRT :
-            return isom_read_btrt( root, box, parent, level );
-        case ISOM_BOX_TYPE_COLR :
-            return isom_read_colr( root, box, parent, level );
-        case ISOM_BOX_TYPE_CLAP :
-            return isom_read_clap( root, box, parent, level );
-        case ISOM_BOX_TYPE_PASP :
-            return isom_read_pasp( root, box, parent, level );
-        case QT_BOX_TYPE_GLBL :
-            return isom_read_glbl( root, box, parent, level );
-        case QT_BOX_TYPE_GAMA :
-            return isom_read_gama( root, box, parent, level );
-        case QT_BOX_TYPE_FIEL :
-            return isom_read_fiel( root, box, parent, level );
-        case QT_BOX_TYPE_CSPC :
-            return isom_read_cspc( root, box, parent, level );
-        case QT_BOX_TYPE_SGBT :
-            return isom_read_sgbt( root, box, parent, level );
-        case ISOM_BOX_TYPE_STSL :
-            return isom_read_stsl( root, box, parent, level );
-        case QT_BOX_TYPE_WAVE :
-            return isom_read_wave( root, box, parent, level );
-        case QT_BOX_TYPE_CHAN :
-            return isom_read_chan( root, box, parent, level );
-        case ISOM_BOX_TYPE_FTAB :
-            return isom_read_ftab( root, box, parent, level );
-        case ISOM_BOX_TYPE_STTS :
-            return isom_read_stts( root, box, parent, level );
-        case ISOM_BOX_TYPE_CTTS :
-            return isom_read_ctts( root, box, parent, level );
-        case ISOM_BOX_TYPE_CSLG :
-            return isom_read_cslg( root, box, parent, level );
-        case ISOM_BOX_TYPE_STSS :
-            return isom_read_stss( root, box, parent, level );
-        case QT_BOX_TYPE_STPS :
-            return isom_read_stps( root, box, parent, level );
-        case ISOM_BOX_TYPE_SDTP :
-            return isom_read_sdtp( root, box, parent, level );
-        case ISOM_BOX_TYPE_STSC :
-            return isom_read_stsc( root, box, parent, level );
-        case ISOM_BOX_TYPE_STSZ :
-            return isom_read_stsz( root, box, parent, level );
-        case ISOM_BOX_TYPE_STCO :
-        case ISOM_BOX_TYPE_CO64 :
-            return isom_read_stco( root, box, parent, level );
-        case ISOM_BOX_TYPE_SGPD :
-            return isom_read_sgpd( root, box, parent, level );
-        case ISOM_BOX_TYPE_SBGP :
-            return isom_read_sbgp( root, box, parent, level );
-        case ISOM_BOX_TYPE_UDTA :
-            return isom_read_udta( root, box, parent, level );
-        case ISOM_BOX_TYPE_CHPL :
-            return isom_read_chpl( root, box, parent, level );
-        case QT_BOX_TYPE_WLOC :
-            return isom_read_WLOC( root, box, parent, level );
-        case QT_BOX_TYPE_LOOP :
-            return isom_read_LOOP( root, box, parent, level );
-        case QT_BOX_TYPE_SELO :
-            return isom_read_SelO( root, box, parent, level );
-        case QT_BOX_TYPE_ALLF :
-            return isom_read_AllF( root, box, parent, level );
-        case ISOM_BOX_TYPE_MVEX :
-            return isom_read_mvex( root, box, parent, level );
-        case ISOM_BOX_TYPE_MEHD :
-            return isom_read_mehd( root, box, parent, level );
-        case ISOM_BOX_TYPE_TREX :
-            return isom_read_trex( root, box, parent, level );
-        case ISOM_BOX_TYPE_MOOF :
-            return isom_read_moof( root, box, parent, level );
-        case ISOM_BOX_TYPE_MFHD :
-            return isom_read_mfhd( root, box, parent, level );
-        case ISOM_BOX_TYPE_TRAF :
-            return isom_read_traf( root, box, parent, level );
-        case ISOM_BOX_TYPE_TFHD :
-            return isom_read_tfhd( root, box, parent, level );
-        case ISOM_BOX_TYPE_TFDT :
-            return isom_read_tfdt( root, box, parent, level );
-        case ISOM_BOX_TYPE_TRUN :
-            return isom_read_trun( root, box, parent, level );
-        case ISOM_BOX_TYPE_FREE :
-        case ISOM_BOX_TYPE_SKIP :
-            return isom_read_free( root, box, parent, level );
-        case ISOM_BOX_TYPE_MDAT :
-            return isom_read_mdat( root, box, parent, level );
-        case ISOM_BOX_TYPE_META :
-            return isom_read_meta( root, box, parent, level );
-        case QT_BOX_TYPE_KEYS :
-            return isom_read_keys( root, box, parent, level );
-        case ISOM_BOX_TYPE_ILST :
-            return isom_read_ilst( root, box, parent, level );
-        case ISOM_BOX_TYPE_MFRA :
-            return isom_read_mfra( root, box, parent, level );
-        case ISOM_BOX_TYPE_TFRA :
-            return isom_read_tfra( root, box, parent, level );
-        case ISOM_BOX_TYPE_MFRO :
-            return isom_read_mfro( root, box, parent, level );
-        default :
-            break;
+        /* Check whether CODEC is RAW Video/Audio encapsulated in QTFF. */
+        if( box->type.fourcc == LSMASH_CODEC_TYPE_RAW.fourcc )
+        {
+            if( ((isom_minf_t *)parent->parent->parent)->vmhd )
+            {
+                form_box_type_func = lsmash_form_qtff_box_type;
+                reader_func        = isom_read_visual_description;
+            }
+            else if( ((isom_minf_t *)parent->parent->parent)->smhd )
+            {
+                form_box_type_func = lsmash_form_qtff_box_type;
+                reader_func        = isom_read_audio_description;
+            }
+            goto read_box;
+        }
+        static struct description_reader_table_tag
+        {
+            lsmash_compact_box_type_t fourcc;
+            lsmash_box_type_t (*form_box_type_func)( lsmash_compact_box_type_t );
+            int (*reader_func)( lsmash_root_t *, isom_box_t *, isom_box_t *, int );
+        } description_reader_table[128] = { { 0, NULL, NULL } };
+        if( !description_reader_table[0].reader_func )
+        {
+            /* Initialize the table. */
+            int i = 0;
+#define ADD_DESCRIPTION_READER_TABLE_ELEMENT( type, form_box_type_func, reader_func ) \
+    description_reader_table[i++] = (struct description_reader_table_tag){ type.fourcc, form_box_type_func, reader_func }
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC1_VIDEO, lsmash_form_iso_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC2_VIDEO, lsmash_form_iso_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVCP_VIDEO, lsmash_form_iso_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_DRAC_VIDEO, lsmash_form_iso_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_ENCV_VIDEO, lsmash_form_iso_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_MJP2_VIDEO, lsmash_form_iso_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_MP4V_VIDEO, lsmash_form_iso_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_MVC1_VIDEO, lsmash_form_iso_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_MVC2_VIDEO, lsmash_form_iso_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_S263_VIDEO, lsmash_form_iso_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_SVC1_VIDEO, lsmash_form_iso_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_VC_1_VIDEO, lsmash_form_iso_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_CFHD_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_DV10_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_DVOO_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_DVOR_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_DVTV_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_DVVT_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_HD10_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_M105_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_PNTG_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_SVQ1_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_SVQ3_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_SHR0_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_SHR1_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_SHR2_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_SHR3_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_SHR4_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_WRLE_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_APCH_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_APCN_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_APCS_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_APCO_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_AP4H_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_CIVD_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            //ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_DRAC_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_DVC_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_DVCP_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_DVPP_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_DV5N_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_DV5P_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_DVH2_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_DVH3_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_DVH5_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_DVH6_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_DVHP_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_DVHQ_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_FLIC_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_GIF_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_H261_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_H263_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_JPEG_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_MJPA_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_MJPB_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_PNG_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_RLE_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_RPZA_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_TGA_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_TIFF_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_ULRA_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_ULRG_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_ULY2_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_ULY0_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_V210_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_V216_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_V308_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_V408_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_V410_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_YUV2_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_AC_3_AUDIO, lsmash_form_iso_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_ALAC_AUDIO, lsmash_form_iso_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_DRA1_AUDIO, lsmash_form_iso_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSC_AUDIO, lsmash_form_iso_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSE_AUDIO, lsmash_form_iso_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSH_AUDIO, lsmash_form_iso_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSL_AUDIO, lsmash_form_iso_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_EC_3_AUDIO, lsmash_form_iso_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_ENCA_AUDIO, lsmash_form_iso_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_G719_AUDIO, lsmash_form_iso_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_G726_AUDIO, lsmash_form_iso_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_M4AE_AUDIO, lsmash_form_iso_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_MLPA_AUDIO, lsmash_form_iso_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_MP4A_AUDIO, lsmash_form_iso_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAMR_AUDIO, lsmash_form_iso_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAWB_AUDIO, lsmash_form_iso_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAWP_AUDIO, lsmash_form_iso_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_SEVC_AUDIO, lsmash_form_iso_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_SQCP_AUDIO, lsmash_form_iso_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_SSMV_AUDIO, lsmash_form_iso_box_type, isom_read_audio_description );
+            //ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_TWOS_AUDIO, lsmash_form_iso_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_23NI_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_MAC3_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_MAC6_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_NONE_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_QDM2_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_QDMC_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_QCLP_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_AGSM_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_ALAW_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_CDX2_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_CDX4_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_DVCA_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_DVI_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_FL32_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_FL64_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_IMA4_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_IN24_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_IN32_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_LPCM_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_SOWT_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_TWOS_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_ULAW_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_VDVA_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_FULLMP3_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_MP3_AUDIO,     lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_ADPCM2_AUDIO,  lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_ADPCM17_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_GSM49_AUDIO,   lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_NOT_SPECIFIED, lsmash_form_qtff_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_TEXT_TEXT,   lsmash_form_qtff_box_type, isom_read_text_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_TX3G_TEXT, lsmash_form_iso_box_type,  isom_read_tx3g_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( LSMASH_CODEC_TYPE_UNSPECIFIED, NULL, NULL );
+#undef ADD_DESCRIPTION_READER_TABLE_ELEMENT
+        }
+        for( int i = 0; description_reader_table[i].reader_func; i++ )
+            if( box->type.fourcc == description_reader_table[i].fourcc )
+            {
+                form_box_type_func = description_reader_table[i].form_box_type_func;
+                reader_func        = description_reader_table[i].reader_func;
+                goto read_box;
+            }
+        goto read_box;
     }
-    if( parent->parent && parent->parent->type == ISOM_BOX_TYPE_ILST )
+    if( lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_WAVE ) )
     {
-        if( box->type == ISOM_BOX_TYPE_MEAN )
-            return isom_read_mean( root, box, parent, level );
-        if( box->type == ISOM_BOX_TYPE_NAME )
-            return isom_read_name( root, box, parent, level );
-        if( box->type == ISOM_BOX_TYPE_DATA )
-            return isom_read_data( root, box, parent, level );
+             if( box->type.fourcc == QT_BOX_TYPE_FRMA.fourcc )       reader_func = isom_read_frma;
+        else if( box->type.fourcc == QT_BOX_TYPE_ENDA.fourcc )       reader_func = isom_read_enda;
+        else if( box->type.fourcc == QT_BOX_TYPE_ESDS.fourcc )       reader_func = isom_read_esds;
+        else if( box->type.fourcc == QT_BOX_TYPE_CHAN.fourcc )       reader_func = isom_read_chan;
+        else if( box->type.fourcc == QT_BOX_TYPE_TERMINATOR.fourcc ) reader_func = isom_read_terminator;
+        else                                                         reader_func = isom_read_codec_specific;
+        if( reader_func != isom_read_codec_specific )
+            form_box_type_func = lsmash_form_qtff_box_type;
+        goto read_box;
     }
-    if( parent->type == ISOM_BOX_TYPE_ILST )
-        return isom_read_metaitem( root, box, parent, level );
-    else if( box->type == ISOM_BOX_TYPE_CPRT )      /* Avoid confusing udta.cprt with ilst.cprt. */
-        return isom_read_cprt( root, box, parent, level );
-    if( parent->parent && parent->parent->type == ISOM_BOX_TYPE_STSD )
-        return isom_read_codec_specific( root, box, parent, level );
-    return isom_read_unknown_box( root, box, parent, level );
+    if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TREF ) )
+    {
+        form_box_type_func = lsmash_form_iso_box_type;
+        reader_func        = isom_read_track_reference_type;
+        goto read_box;
+    }
+    static struct box_reader_table_tag
+    {
+        lsmash_compact_box_type_t fourcc;
+        lsmash_box_type_t (*form_box_type_func)( lsmash_compact_box_type_t );
+        int (*reader_func)( lsmash_root_t *, isom_box_t *, isom_box_t *, int );
+    } box_reader_table[128] = { { 0, NULL, NULL } };
+    if( !box_reader_table[0].reader_func )
+    {
+        /* Initialize the table. */
+        int i = 0;
+#define ADD_BOX_READER_TABLE_ELEMENT( type, form_box_type_func, reader_func ) \
+    box_reader_table[i++] = (struct box_reader_table_tag){ type.fourcc, form_box_type_func, reader_func }
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_FTYP, lsmash_form_iso_box_type,  isom_read_ftyp );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_MOOV, lsmash_form_iso_box_type,  isom_read_moov );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_MVHD, lsmash_form_iso_box_type,  isom_read_mvhd );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_IODS, lsmash_form_iso_box_type,  isom_read_iods );
+        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_CTAB, lsmash_form_qtff_box_type, isom_read_ctab );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_ESDS, lsmash_form_iso_box_type,  isom_read_esds );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_TRAK, lsmash_form_iso_box_type,  isom_read_trak );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_TKHD, lsmash_form_iso_box_type,  isom_read_tkhd );
+        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_TAPT, lsmash_form_qtff_box_type, isom_read_tapt );
+        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_CLEF, lsmash_form_qtff_box_type, isom_read_clef );
+        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_PROF, lsmash_form_qtff_box_type, isom_read_prof );
+        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_ENOF, lsmash_form_qtff_box_type, isom_read_enof );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_EDTS, lsmash_form_iso_box_type,  isom_read_edts );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_ELST, lsmash_form_iso_box_type,  isom_read_elst );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_TREF, lsmash_form_iso_box_type,  isom_read_tref );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_MDIA, lsmash_form_iso_box_type,  isom_read_mdia );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_MDHD, lsmash_form_iso_box_type,  isom_read_mdhd );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_HDLR, lsmash_form_iso_box_type,  isom_read_hdlr );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_MINF, lsmash_form_iso_box_type,  isom_read_minf );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_VMHD, lsmash_form_iso_box_type,  isom_read_vmhd );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_SMHD, lsmash_form_iso_box_type,  isom_read_smhd );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_HMHD, lsmash_form_iso_box_type,  isom_read_hmhd );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_NMHD, lsmash_form_iso_box_type,  isom_read_nmhd );
+        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_GMHD, lsmash_form_qtff_box_type, isom_read_gmhd );
+        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_GMIN, lsmash_form_qtff_box_type, isom_read_gmin );
+        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_TEXT, lsmash_form_qtff_box_type, isom_read_text );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_DINF, lsmash_form_iso_box_type,  isom_read_dinf );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_DREF, lsmash_form_iso_box_type,  isom_read_dref );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_URL,  lsmash_form_iso_box_type,  isom_read_url  );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_STBL, lsmash_form_iso_box_type,  isom_read_stbl );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSD, lsmash_form_iso_box_type,  isom_read_stsd );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_BTRT, lsmash_form_iso_box_type,  isom_read_btrt );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_COLR, lsmash_form_iso_box_type,  isom_read_colr );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_CLAP, lsmash_form_iso_box_type,  isom_read_clap );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_PASP, lsmash_form_iso_box_type,  isom_read_pasp );
+        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_GLBL, lsmash_form_qtff_box_type, isom_read_glbl );
+        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_GAMA, lsmash_form_qtff_box_type, isom_read_gama );
+        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_FIEL, lsmash_form_qtff_box_type, isom_read_fiel );
+        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_CSPC, lsmash_form_qtff_box_type, isom_read_cspc );
+        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_SGBT, lsmash_form_qtff_box_type, isom_read_sgbt );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSL, lsmash_form_iso_box_type,  isom_read_stsl );
+        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_WAVE, lsmash_form_qtff_box_type, isom_read_wave );
+        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_CHAN, lsmash_form_qtff_box_type, isom_read_chan );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_FTAB, lsmash_form_iso_box_type,  isom_read_ftab );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_STTS, lsmash_form_iso_box_type,  isom_read_stts );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_CTTS, lsmash_form_iso_box_type,  isom_read_ctts );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_CSLG, lsmash_form_iso_box_type,  isom_read_cslg );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSS, lsmash_form_iso_box_type,  isom_read_stss );
+        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_STPS, lsmash_form_qtff_box_type, isom_read_stps );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_SDTP, lsmash_form_iso_box_type,  isom_read_sdtp );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSC, lsmash_form_iso_box_type,  isom_read_stsc );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSZ, lsmash_form_iso_box_type,  isom_read_stsz );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_STCO, lsmash_form_iso_box_type,  isom_read_stco );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_CO64, lsmash_form_iso_box_type,  isom_read_stco );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_SGPD, lsmash_form_iso_box_type,  isom_read_sgpd );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_SBGP, lsmash_form_iso_box_type,  isom_read_sbgp );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_UDTA, lsmash_form_iso_box_type,  isom_read_udta );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_CHPL, lsmash_form_iso_box_type,  isom_read_chpl );
+        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_WLOC, lsmash_form_qtff_box_type, isom_read_WLOC );
+        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_LOOP, lsmash_form_qtff_box_type, isom_read_LOOP );
+        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_SELO, lsmash_form_qtff_box_type, isom_read_SelO );
+        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_ALLF, lsmash_form_qtff_box_type, isom_read_AllF );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_MVEX, lsmash_form_iso_box_type,  isom_read_mvex );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_MEHD, lsmash_form_iso_box_type,  isom_read_mehd );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_TREX, lsmash_form_iso_box_type,  isom_read_trex );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_MOOF, lsmash_form_iso_box_type,  isom_read_moof );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_MFHD, lsmash_form_iso_box_type,  isom_read_mfhd );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_TRAF, lsmash_form_iso_box_type,  isom_read_traf );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_TFHD, lsmash_form_iso_box_type,  isom_read_tfhd );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_TFDT, lsmash_form_iso_box_type,  isom_read_tfdt );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_TRUN, lsmash_form_iso_box_type,  isom_read_trun );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_FREE, lsmash_form_iso_box_type,  isom_read_free );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_SKIP, lsmash_form_iso_box_type,  isom_read_free );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_MDAT, lsmash_form_iso_box_type,  isom_read_mdat );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_META, lsmash_form_iso_box_type,  isom_read_meta );
+        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_KEYS, lsmash_form_qtff_box_type, isom_read_keys );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_MFRA, lsmash_form_iso_box_type,  isom_read_mfra );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_TFRA, lsmash_form_iso_box_type,  isom_read_tfra );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_MFRO, lsmash_form_iso_box_type,  isom_read_mfro );
+        ADD_BOX_READER_TABLE_ELEMENT( LSMASH_BOX_TYPE_UNSPECIFIED, NULL,  NULL );
+#undef ADD_BOX_READER_TABLE_ELEMENT
+    }
+    for( int i = 0; box_reader_table[i].reader_func; i++ )
+        if( box->type.fourcc == box_reader_table[i].fourcc )
+        {
+            form_box_type_func = box_reader_table[i].form_box_type_func;
+            reader_func        = box_reader_table[i].reader_func;
+            goto read_box;
+        }
+    if( box->type.fourcc == ISOM_BOX_TYPE_ILST.fourcc )
+    {
+        if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_META ) )
+            form_box_type_func = lsmash_form_iso_box_type;
+        else if( lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_META ) )
+            form_box_type_func = lsmash_form_qtff_box_type;
+        if( form_box_type_func )
+        {
+            reader_func = isom_read_ilst;
+            goto read_box;
+        }
+    }
+    if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_ILST ) )
+        form_box_type_func = lsmash_form_iso_box_type;
+    else if( lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_ILST ) )
+        form_box_type_func = lsmash_form_qtff_box_type;
+    if( form_box_type_func )
+    {
+        reader_func = isom_read_metaitem;
+        goto read_box;
+    }
+    if( parent->parent && parent->parent->type.fourcc == ISOM_BOX_TYPE_ILST.fourcc )
+    {
+        if( box->type.fourcc == ISOM_BOX_TYPE_MEAN.fourcc )
+            reader_func = isom_read_mean;
+        else if( box->type.fourcc == ISOM_BOX_TYPE_NAME.fourcc )
+            reader_func = isom_read_name;
+        else if( box->type.fourcc == ISOM_BOX_TYPE_DATA.fourcc )
+            reader_func = isom_read_data;
+        if( reader_func )
+        {
+            form_box_type_func = lsmash_form_iso_box_type;
+            goto read_box;
+        }
+    }
+    else if( box->type.fourcc == ISOM_BOX_TYPE_CPRT.fourcc )
+    {
+        /* Avoid confusing udta.cprt with ilst.cprt. */
+        form_box_type_func = lsmash_form_iso_box_type;
+        reader_func        = isom_read_cprt;
+        goto read_box;
+    }
+    if( parent->parent && lsmash_check_box_type_identical( parent->parent->type, ISOM_BOX_TYPE_STSD ) )
+    {
+        static struct codec_specific_marker_table_tag
+        {
+            lsmash_compact_box_type_t fourcc;
+            lsmash_box_type_t (*form_box_type_func)( lsmash_compact_box_type_t );
+        } codec_specific_marker_table[16] = { { 0, NULL } };
+        if( !codec_specific_marker_table[0].form_box_type_func )
+        {
+            /* Initialize the table. */
+            int i = 0;
+#define ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( type, form_box_type_func ) \
+    codec_specific_marker_table[i++] = (struct codec_specific_marker_table_tag){ type.fourcc, form_box_type_func }
+            ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( ISOM_BOX_TYPE_ALAC, lsmash_form_iso_box_type );
+            ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( ISOM_BOX_TYPE_AVCC, lsmash_form_iso_box_type );
+            ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( ISOM_BOX_TYPE_DAC3, lsmash_form_iso_box_type );
+            ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( ISOM_BOX_TYPE_DAMR, lsmash_form_iso_box_type );
+            ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( ISOM_BOX_TYPE_DDTS, lsmash_form_iso_box_type );
+            ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( ISOM_BOX_TYPE_DEC3, lsmash_form_iso_box_type );
+            ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( ISOM_BOX_TYPE_DVC1, lsmash_form_iso_box_type );
+            ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT(   QT_BOX_TYPE_GLBL, lsmash_form_qtff_box_type );
+            ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( LSMASH_BOX_TYPE_UNSPECIFIED, NULL );
+#undef ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT
+        }
+        for( int i = 0; codec_specific_marker_table[i].form_box_type_func; i++ )
+            if( box->type.fourcc == codec_specific_marker_table[i].fourcc )
+            {
+                form_box_type_func = codec_specific_marker_table[i].form_box_type_func;
+                break;
+            }
+        reader_func = isom_read_codec_specific;
+    }
+read_box:
+    if( form_box_type_func )
+        box->type = form_box_type_func( box->type.fourcc );
+    if( isom_read_fullbox_common_extension( bs, box ) )
+        return -1;
+    return reader_func
+         ? reader_func( root, box, parent, level )
+         : isom_read_unknown_box( root, box, parent, level );
 }
 
 int isom_read_root( lsmash_root_t *root )

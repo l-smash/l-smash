@@ -36,8 +36,8 @@ typedef int (*isom_print_box_t)( FILE *, lsmash_root_t *, isom_box_t *, int );
 
 typedef struct
 {
-    int level;
-    isom_box_t *box;
+    int              level;
+    isom_box_t      *box;
     isom_print_box_t func;
 } isom_print_entry_t;
 
@@ -163,9 +163,9 @@ static inline int isom_print_simple( FILE *fp, isom_box_t *box, int level, char 
     if( !box )
         return -1;
     int indent = level;
-    if( box->type != ISOM_BOX_TYPE_UUID )
+    if( box->type.fourcc != ISOM_BOX_TYPE_UUID.fourcc )
     {
-        lsmash_ifprintf( fp, indent++, "[%s: %s]\n", isom_4cc2str( box->type ), name );
+        lsmash_ifprintf( fp, indent++, "[%s: %s]\n", isom_4cc2str( box->type.fourcc ), name );
         lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
         lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     }
@@ -175,13 +175,13 @@ static inline int isom_print_simple( FILE *fp, isom_box_t *box, int level, char 
         lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
         lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
         lsmash_ifprintf( fp, indent++, "usertype\n" );
-        lsmash_ifprintf( fp, indent, "type = %s\n", isom_4cc2str( box->user.type ) );
+        lsmash_ifprintf( fp, indent, "type = %s\n", isom_4cc2str( box->type.user.fourcc ) );
         lsmash_ifprintf( fp, indent, "name = %s\n", name );
         lsmash_ifprintf( fp, indent, "uuid = 0x%08"PRIx32"-%04"PRIx16"-%04"PRIx16"-%04"PRIx16"-%04"PRIx16"0x%08"PRIx32"\n",
-                         box->user.type,
-                         (box->user.id[0] << 8) | box->user.id[1], (box->user.id[2] << 8) | box->user.id[3],
-                         (box->user.id[4] << 8) | box->user.id[5], (box->user.id[6] << 8) | box->user.id[7],
-                         (box->user.id[8] << 24) | (box->user.id[9] << 16) | (box->user.id[10] << 8) | box->user.id[11] );
+                         box->type.user.fourcc,
+                         (box->type.user.id[0] << 8) | box->type.user.id[1], (box->type.user.id[2] << 8) | box->type.user.id[3],
+                         (box->type.user.id[4] << 8) | box->type.user.id[5], (box->type.user.id[6] << 8) | box->type.user.id[7],
+                         (box->type.user.id[8] << 24) | (box->type.user.id[9] << 16) | (box->type.user.id[10] << 8) | box->type.user.id[11] );
     }
     return 0;
 }
@@ -193,9 +193,7 @@ static void isom_print_basebox_common( FILE *fp, int indent, isom_box_t *box, ch
 
 static void isom_print_fullbox_common( FILE *fp, int indent, isom_box_t *box, char *name )
 {
-    lsmash_ifprintf( fp, indent++, "[%s: %s]\n", isom_4cc2str( box->type ), name );
-    lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
-    lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
+    isom_print_simple( fp, box, indent++, name );
     lsmash_ifprintf( fp, indent, "version = %"PRIu8"\n", box->version );
     lsmash_ifprintf( fp, indent, "flags = 0x%06"PRIx32"\n", box->flags & 0x00ffffff );
 }
@@ -203,7 +201,7 @@ static void isom_print_fullbox_common( FILE *fp, int indent, isom_box_t *box, ch
 static void isom_print_box_common( FILE *fp, int indent, isom_box_t *box, char *name )
 {
     isom_box_t *parent = box->parent;
-    if( parent && parent->type == ISOM_BOX_TYPE_STSD )
+    if( parent && lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) )
     {
         isom_print_basebox_common( fp, indent, box, name );
         return;
@@ -219,9 +217,9 @@ static int isom_print_unknown( FILE *fp, lsmash_root_t *root, isom_box_t *box, i
     if( !box )
         return -1;
     int indent = level;
-    if( box->type != ISOM_BOX_TYPE_UUID )
+    if( box->type.fourcc != ISOM_BOX_TYPE_UUID.fourcc )
     {
-        lsmash_ifprintf( fp, indent++, "[%s]\n", isom_4cc2str( box->type ) );
+        lsmash_ifprintf( fp, indent++, "[%s]\n", isom_4cc2str( box->type.fourcc ) );
         lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
         lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     }
@@ -231,12 +229,12 @@ static int isom_print_unknown( FILE *fp, lsmash_root_t *root, isom_box_t *box, i
         lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
         lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
         lsmash_ifprintf( fp, indent++, "usertype\n" );
-        lsmash_ifprintf( fp, indent, "type = %s\n", isom_4cc2str( box->user.type ) );
+        lsmash_ifprintf( fp, indent, "type = %s\n", isom_4cc2str( box->type.user.fourcc ) );
         lsmash_ifprintf( fp, indent, "uuid = 0x%08"PRIx32"-%04"PRIx16"-%04"PRIx16"-%04"PRIx16"-%04"PRIx16"%08"PRIx32"\n",
-                         box->user.type,
-                         (box->user.id[0] << 8) | box->user.id[1], (box->user.id[2] << 8) | box->user.id[3],
-                         (box->user.id[4] << 8) | box->user.id[5], (box->user.id[6] << 8) | box->user.id[7],
-                         (box->user.id[8] << 24) | (box->user.id[9] << 16) | (box->user.id[10] << 8) | box->user.id[11] );
+                         box->type.user.fourcc,
+                         (box->type.user.id[0] << 8) | box->type.user.id[1], (box->type.user.id[2] << 8) | box->type.user.id[3],
+                         (box->type.user.id[4] << 8) | box->type.user.id[5], (box->type.user.id[6] << 8) | box->type.user.id[7],
+                         (box->type.user.id[8] << 24) | (box->type.user.id[9] << 16) | (box->type.user.id[10] << 8) | box->type.user.id[11] );
     }
     return 0;
 }
@@ -658,7 +656,7 @@ static int isom_print_visual_description( FILE *fp, lsmash_root_t *root, isom_bo
         return -1;
     isom_visual_entry_t *visual = (isom_visual_entry_t *)box;
     int indent = level;
-    lsmash_ifprintf( fp, indent++, "[%s: Visual Description]\n", isom_4cc2str( visual->type ) );
+    lsmash_ifprintf( fp, indent++, "[%s: Visual Description]\n", isom_4cc2str( visual->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", visual->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", visual->size );
     isom_ifprintf_sample_description_common_reserved( fp, indent, visual->reserved );
@@ -927,7 +925,7 @@ static int isom_print_audio_description( FILE *fp, lsmash_root_t *root, isom_box
         return -1;
     isom_audio_entry_t *audio = (isom_audio_entry_t *)box;
     int indent = level;
-    lsmash_ifprintf( fp, indent++, "[%s: Audio Description]\n", isom_4cc2str( audio->type ) );
+    lsmash_ifprintf( fp, indent++, "[%s: Audio Description]\n", isom_4cc2str( audio->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", audio->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", audio->size );
     isom_ifprintf_sample_description_common_reserved( fp, indent, audio->reserved );
@@ -1165,38 +1163,47 @@ static int isom_print_sample_description_extesion( FILE *fp, lsmash_root_t *root
     extern int eac3_print_codec_specific( FILE *, lsmash_root_t *, isom_box_t *, int );
     extern int dts_print_codec_specific( FILE *, lsmash_root_t *, isom_box_t *, int );
     extern int alac_print_codec_specific( FILE *, lsmash_root_t *, isom_box_t *, int );
-    static const struct
+    static struct print_description_extension_table_tag
     {
-        uint32_t type;
+        lsmash_box_type_t type;
         int (*print_func)( FILE *, lsmash_root_t *, isom_box_t *, int );
-    } sample_description_extesion_print_func_table[] =
-        {
-            { ISOM_BOX_TYPE_CLAP, isom_print_clap },
-            { ISOM_BOX_TYPE_PASP, isom_print_pasp },
-            { ISOM_BOX_TYPE_STSL, isom_print_stsl },
-            { QT_BOX_TYPE_COLR,   isom_print_colr },
-            { QT_BOX_TYPE_GAMA,   isom_print_gama },
-            { QT_BOX_TYPE_FIEL,   isom_print_fiel },
-            { QT_BOX_TYPE_CSPC,   isom_print_cspc },
-            { QT_BOX_TYPE_SGBT,   isom_print_sgbt },
-            { QT_BOX_TYPE_CTAB,   isom_print_ctab },
-            { QT_BOX_TYPE_GLBL,   isom_print_glbl },
-            { QT_BOX_TYPE_WAVE,   isom_print_wave },
-            { QT_BOX_TYPE_CHAN,   isom_print_chan },
-            { ISOM_BOX_TYPE_ESDS, mp4sys_print_codec_specific },
-            { ISOM_BOX_TYPE_AVCC, h264_print_codec_specific },
-            { ISOM_BOX_TYPE_BTRT, h264_print_bitrate },
-            { ISOM_BOX_TYPE_DVC1, vc1_print_codec_specific },
-            { ISOM_BOX_TYPE_DAC3, ac3_print_codec_specific },
-            { ISOM_BOX_TYPE_DEC3, eac3_print_codec_specific },
-            { ISOM_BOX_TYPE_DDTS, dts_print_codec_specific },
-            { ISOM_BOX_TYPE_ALAC, alac_print_codec_specific },
-            { ISOM_BOX_TYPE_FTAB, isom_print_ftab },
-            { 0, NULL }
-        };
-    for( int i = 0; sample_description_extesion_print_func_table[i].print_func; i++ )
-        if( box->type == sample_description_extesion_print_func_table[i].type )
-            return sample_description_extesion_print_func_table[i].print_func( fp, root, box, level );
+    } print_description_extension_table[32] = { { LSMASH_BOX_TYPE_INITIALIZER, NULL } };
+    if( !print_description_extension_table[0].print_func )
+    {
+        /* Initialize the table. */
+        int i = 0;
+#define ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( type, func ) \
+    print_description_extension_table[i++] = (struct print_description_extension_table_tag){ type, func }
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_CLAP, isom_print_clap );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_PASP, isom_print_pasp );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_STSL, isom_print_stsl );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_COLR, isom_print_colr );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_COLR, isom_print_colr );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_GAMA, isom_print_gama );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_FIEL, isom_print_fiel );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_CSPC, isom_print_cspc );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_SGBT, isom_print_sgbt );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_CTAB, isom_print_ctab );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_GLBL, isom_print_glbl );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_WAVE, isom_print_wave );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_CHAN, isom_print_chan );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_ESDS, mp4sys_print_codec_specific );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_AVCC, h264_print_codec_specific );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_BTRT, h264_print_bitrate );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DVC1, vc1_print_codec_specific );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DAC3, ac3_print_codec_specific );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DEC3, eac3_print_codec_specific );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DDTS, dts_print_codec_specific );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_ALAC, alac_print_codec_specific );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_FTAB, isom_print_ftab );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_ESDS, mp4sys_print_codec_specific );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_ALAC, alac_print_codec_specific );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( LSMASH_BOX_TYPE_UNSPECIFIED, NULL );
+#undef ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT
+    }
+    for( int i = 0; print_description_extension_table[i].print_func; i++ )
+        if( lsmash_check_box_type_identical( box->type, print_description_extension_table[i].type ) )
+            return print_description_extension_table[i].print_func( fp, root, box, level );
     return isom_print_unknown( fp, root, box, level );
 }
 
@@ -1398,7 +1405,7 @@ static int isom_print_stco( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
     uint32_t i = 0;
     isom_print_box_common( fp, indent++, box, "Chunk Offset Box" );
     lsmash_ifprintf( fp, indent, "entry_count = %"PRIu32"\n", stco->list->entry_count );
-    if( stco->type == ISOM_BOX_TYPE_STCO )
+    if( lsmash_check_box_type_identical( stco->type, ISOM_BOX_TYPE_STCO ) )
     {
         for( lsmash_entry_t *entry = stco->list->head; entry; entry = entry->next )
             lsmash_ifprintf( fp, indent, "chunk_offset[%"PRIu32"] = %"PRIu32"\n", i++, ((isom_stco_entry_t *)entry->data)->chunk_offset );
@@ -1586,7 +1593,7 @@ static int isom_print_metaitem( FILE *fp, lsmash_root_t *root, isom_box_t *box, 
     if( box->parent && box->parent->parent && (box->parent->parent->manager & LSMASH_QTFF_BASE) )
     {
         int indent = level;
-        lsmash_ifprintf( fp, indent++, "[key_index %"PRIu32": Metadata Item Box]\n", box->type );
+        lsmash_ifprintf( fp, indent++, "[key_index %"PRIu32": Metadata Item Box]\n", box->type.fourcc );
         lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
         lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
         return 0;
@@ -1654,7 +1661,7 @@ static int isom_print_metaitem( FILE *fp, lsmash_root_t *root, isom_box_t *box, 
     char *name = NULL;
     int i;
     for( i = 0; metaitem_table[i].name; i++ )
-        if( metaitem->type == metaitem_table[i].item )
+        if( metaitem->type.fourcc == metaitem_table[i].item )
         {
             name = metaitem_table[i].name;
             break;
@@ -2137,337 +2144,287 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
     if( box->parent )
     {
         isom_box_t *parent = box->parent;
-        if( parent->type == ISOM_BOX_TYPE_STSD )
-            switch( box->type )
+        if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) )
+        {
+            lsmash_codec_type_t sample_type = (lsmash_codec_type_t)box->type;
+            if( lsmash_check_codec_type_identical( sample_type, LSMASH_CODEC_TYPE_RAW ) )
             {
-                case ISOM_CODEC_TYPE_AVC1_VIDEO :
-                case ISOM_CODEC_TYPE_AVC2_VIDEO :
-                case ISOM_CODEC_TYPE_AVCP_VIDEO :
-                case ISOM_CODEC_TYPE_DRAC_VIDEO :
-                case ISOM_CODEC_TYPE_ENCV_VIDEO :
-                case ISOM_CODEC_TYPE_MJP2_VIDEO :
-                case ISOM_CODEC_TYPE_MP4V_VIDEO :
-                case ISOM_CODEC_TYPE_MVC1_VIDEO :
-                case ISOM_CODEC_TYPE_MVC2_VIDEO :
-                case ISOM_CODEC_TYPE_S263_VIDEO :
-                case ISOM_CODEC_TYPE_SVC1_VIDEO :
-                case ISOM_CODEC_TYPE_VC_1_VIDEO :
-                case QT_CODEC_TYPE_CFHD_VIDEO :
-                case QT_CODEC_TYPE_DV10_VIDEO :
-                case QT_CODEC_TYPE_DVOO_VIDEO :
-                case QT_CODEC_TYPE_DVOR_VIDEO :
-                case QT_CODEC_TYPE_DVTV_VIDEO :
-                case QT_CODEC_TYPE_DVVT_VIDEO :
-                case QT_CODEC_TYPE_HD10_VIDEO :
-                case QT_CODEC_TYPE_M105_VIDEO :
-                case QT_CODEC_TYPE_PNTG_VIDEO :
-                case QT_CODEC_TYPE_SVQ1_VIDEO :
-                case QT_CODEC_TYPE_SVQ3_VIDEO :
-                case QT_CODEC_TYPE_SHR0_VIDEO :
-                case QT_CODEC_TYPE_SHR1_VIDEO :
-                case QT_CODEC_TYPE_SHR2_VIDEO :
-                case QT_CODEC_TYPE_SHR3_VIDEO :
-                case QT_CODEC_TYPE_SHR4_VIDEO :
-                case QT_CODEC_TYPE_WRLE_VIDEO :
-                case QT_CODEC_TYPE_APCH_VIDEO :
-                case QT_CODEC_TYPE_APCN_VIDEO :
-                case QT_CODEC_TYPE_APCS_VIDEO :
-                case QT_CODEC_TYPE_APCO_VIDEO :
-                case QT_CODEC_TYPE_AP4H_VIDEO :
-                case QT_CODEC_TYPE_CIVD_VIDEO :
-                //case QT_CODEC_TYPE_DRAC_VIDEO :
-                case QT_CODEC_TYPE_DVC_VIDEO :
-                case QT_CODEC_TYPE_DVCP_VIDEO :
-                case QT_CODEC_TYPE_DVPP_VIDEO :
-                case QT_CODEC_TYPE_DV5N_VIDEO :
-                case QT_CODEC_TYPE_DV5P_VIDEO :
-                case QT_CODEC_TYPE_DVH2_VIDEO :
-                case QT_CODEC_TYPE_DVH3_VIDEO :
-                case QT_CODEC_TYPE_DVH5_VIDEO :
-                case QT_CODEC_TYPE_DVH6_VIDEO :
-                case QT_CODEC_TYPE_DVHP_VIDEO :
-                case QT_CODEC_TYPE_DVHQ_VIDEO :
-                case QT_CODEC_TYPE_FLIC_VIDEO :
-                case QT_CODEC_TYPE_GIF_VIDEO :
-                case QT_CODEC_TYPE_H261_VIDEO :
-                case QT_CODEC_TYPE_H263_VIDEO :
-                case QT_CODEC_TYPE_JPEG_VIDEO :
-                case QT_CODEC_TYPE_MJPA_VIDEO :
-                case QT_CODEC_TYPE_MJPB_VIDEO :
-                case QT_CODEC_TYPE_PNG_VIDEO :
-                case QT_CODEC_TYPE_RLE_VIDEO :
-                case QT_CODEC_TYPE_RPZA_VIDEO :
-                case QT_CODEC_TYPE_TGA_VIDEO :
-                case QT_CODEC_TYPE_TIFF_VIDEO :
-                case QT_CODEC_TYPE_ULRA_VIDEO :
-                case QT_CODEC_TYPE_ULRG_VIDEO :
-                case QT_CODEC_TYPE_ULY2_VIDEO :
-                case QT_CODEC_TYPE_ULY0_VIDEO :
-                case QT_CODEC_TYPE_V210_VIDEO :
-                case QT_CODEC_TYPE_V216_VIDEO :
-                case QT_CODEC_TYPE_V308_VIDEO :
-                case QT_CODEC_TYPE_V408_VIDEO :
-                case QT_CODEC_TYPE_V410_VIDEO :
-                case QT_CODEC_TYPE_YUV2_VIDEO :
+                if( box->manager & LSMASH_VIDEO_DESCRIPTION )
                     return isom_print_visual_description;
-                case ISOM_CODEC_TYPE_AC_3_AUDIO :
-                case ISOM_CODEC_TYPE_ALAC_AUDIO :
-                case ISOM_CODEC_TYPE_DRA1_AUDIO :
-                case ISOM_CODEC_TYPE_DTSC_AUDIO :
-                case ISOM_CODEC_TYPE_DTSE_AUDIO :
-                case ISOM_CODEC_TYPE_DTSH_AUDIO :
-                case ISOM_CODEC_TYPE_DTSL_AUDIO :
-                case ISOM_CODEC_TYPE_EC_3_AUDIO :
-                case ISOM_CODEC_TYPE_ENCA_AUDIO :
-                case ISOM_CODEC_TYPE_G719_AUDIO :
-                case ISOM_CODEC_TYPE_G726_AUDIO :
-                case ISOM_CODEC_TYPE_M4AE_AUDIO :
-                case ISOM_CODEC_TYPE_MLPA_AUDIO :
-                case ISOM_CODEC_TYPE_MP4A_AUDIO :
-                case ISOM_CODEC_TYPE_SAMR_AUDIO :
-                case ISOM_CODEC_TYPE_SAWB_AUDIO :
-                case ISOM_CODEC_TYPE_SAWP_AUDIO :
-                case ISOM_CODEC_TYPE_SEVC_AUDIO :
-                case ISOM_CODEC_TYPE_SQCP_AUDIO :
-                case ISOM_CODEC_TYPE_SSMV_AUDIO :
-                //case ISOM_CODEC_TYPE_TWOS_AUDIO :
-                case QT_CODEC_TYPE_23NI_AUDIO :
-                case QT_CODEC_TYPE_MAC3_AUDIO :
-                case QT_CODEC_TYPE_MAC6_AUDIO :
-                case QT_CODEC_TYPE_NONE_AUDIO :
-                case QT_CODEC_TYPE_QDM2_AUDIO :
-                case QT_CODEC_TYPE_QDMC_AUDIO :
-                case QT_CODEC_TYPE_QCLP_AUDIO :
-                case QT_CODEC_TYPE_AGSM_AUDIO :
-                case QT_CODEC_TYPE_ALAW_AUDIO :
-                case QT_CODEC_TYPE_CDX2_AUDIO :
-                case QT_CODEC_TYPE_CDX4_AUDIO :
-                case QT_CODEC_TYPE_DVCA_AUDIO :
-                case QT_CODEC_TYPE_DVI_AUDIO :
-                case QT_CODEC_TYPE_FL32_AUDIO :
-                case QT_CODEC_TYPE_FL64_AUDIO :
-                case QT_CODEC_TYPE_IMA4_AUDIO :
-                case QT_CODEC_TYPE_IN24_AUDIO :
-                case QT_CODEC_TYPE_IN32_AUDIO :
-                case QT_CODEC_TYPE_LPCM_AUDIO :
-                case QT_CODEC_TYPE_SOWT_AUDIO :
-                case QT_CODEC_TYPE_TWOS_AUDIO :
-                case QT_CODEC_TYPE_ULAW_AUDIO :
-                case QT_CODEC_TYPE_VDVA_AUDIO :
-                case QT_CODEC_TYPE_FULLMP3_AUDIO :
-                case QT_CODEC_TYPE_MP3_AUDIO :
-                case QT_CODEC_TYPE_ADPCM2_AUDIO :
-                case QT_CODEC_TYPE_ADPCM17_AUDIO :
-                case QT_CODEC_TYPE_GSM49_AUDIO :
-                case QT_CODEC_TYPE_NOT_SPECIFIED :
+                else if( box->manager & LSMASH_AUDIO_DESCRIPTION )
                     return isom_print_audio_description;
-                case QT_CODEC_TYPE_TEXT_TEXT :
-                    return isom_print_text_description;
-                case ISOM_CODEC_TYPE_TX3G_TEXT :
-                    return isom_print_tx3g_description;
-                case LSMASH_CODEC_TYPE_RAW :
-                    if( box->manager & LSMASH_VIDEO_DESCRIPTION )
-                        return isom_print_visual_description;
-                    if( box->manager & LSMASH_AUDIO_DESCRIPTION )
-                        return isom_print_audio_description;
-                default :
-                    return isom_print_unknown;
             }
-        if( parent->type == QT_BOX_TYPE_WAVE )
-            switch( box->type )
+            static struct print_description_table_tag
             {
-                case QT_BOX_TYPE_FRMA :
-                    return isom_print_frma;
-                case QT_BOX_TYPE_ENDA :
-                    return isom_print_enda;
-                case QT_BOX_TYPE_TERMINATOR :
-                    return isom_print_terminator;
-                default :
-                    return isom_print_sample_description_extesion;
+                lsmash_codec_type_t type;
+                isom_print_box_t    func;
+            } print_description_table[128] = { { LSMASH_CODEC_TYPE_INITIALIZER, NULL } };
+            if( !print_description_table[0].func )
+            {
+                /* Initialize the table. */
+                int i = 0;
+#define ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( type, func ) print_description_table[i++] = (struct print_description_table_tag){ type, func }
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC1_VIDEO, isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC2_VIDEO, isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVCP_VIDEO, isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_DRAC_VIDEO, isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_ENCV_VIDEO, isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_MJP2_VIDEO, isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_MP4V_VIDEO, isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_MVC1_VIDEO, isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_MVC2_VIDEO, isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_S263_VIDEO, isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_SVC1_VIDEO, isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_VC_1_VIDEO, isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_CFHD_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DV10_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVOO_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVOR_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVTV_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVVT_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_HD10_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_M105_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_PNTG_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_SVQ1_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_SVQ3_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_SHR0_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_SHR1_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_SHR2_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_SHR3_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_SHR4_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_WRLE_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_APCH_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_APCN_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_APCS_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_APCO_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_AP4H_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_CIVD_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DRAC_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVC_VIDEO,    isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVCP_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVPP_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DV5N_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DV5P_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVH2_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVH3_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVH5_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVH6_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVHP_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVHQ_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_FLIC_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_GIF_VIDEO,    isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_H261_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_H263_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_JPEG_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_MJPA_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_MJPB_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_PNG_VIDEO,    isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_RLE_VIDEO,    isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_RPZA_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_TGA_VIDEO,    isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_TIFF_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_ULRA_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_ULRG_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_ULY2_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_ULY0_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_V210_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_V216_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_V308_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_V408_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_V410_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_YUV2_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_AC_3_AUDIO,  isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_ALAC_AUDIO,  isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_DRA1_AUDIO,  isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSC_AUDIO,  isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSE_AUDIO,  isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSH_AUDIO,  isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSL_AUDIO,  isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_EC_3_AUDIO,  isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_ENCA_AUDIO,  isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_G719_AUDIO,  isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_G726_AUDIO,  isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_M4AE_AUDIO,  isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_MLPA_AUDIO,  isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_MP4A_AUDIO,  isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAMR_AUDIO,  isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAWB_AUDIO,  isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAWP_AUDIO,  isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_SEVC_AUDIO,  isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_SQCP_AUDIO,  isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_SSMV_AUDIO,  isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_TWOS_AUDIO,  isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_MP4A_AUDIO,    isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_23NI_AUDIO,    isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_MAC3_AUDIO,    isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_MAC6_AUDIO,    isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_NONE_AUDIO,    isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_QDM2_AUDIO,    isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_QDMC_AUDIO,    isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_QCLP_AUDIO,    isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_AGSM_AUDIO,    isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_ALAW_AUDIO,    isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_CDX2_AUDIO,    isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_CDX4_AUDIO,    isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVCA_AUDIO,    isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVI_AUDIO,     isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_FL32_AUDIO,    isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_FL64_AUDIO,    isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_IMA4_AUDIO,    isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_IN24_AUDIO,    isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_IN32_AUDIO,    isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_LPCM_AUDIO,    isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_SOWT_AUDIO,    isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_TWOS_AUDIO,    isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_ULAW_AUDIO,    isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_VDVA_AUDIO,    isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_FULLMP3_AUDIO, isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_MP3_AUDIO,     isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_ADPCM2_AUDIO,  isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_ADPCM17_AUDIO, isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_GSM49_AUDIO,   isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_NOT_SPECIFIED, isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_TEXT_TEXT,     isom_print_text_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_TX3G_TEXT,   isom_print_tx3g_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( LSMASH_CODEC_TYPE_UNSPECIFIED, NULL );
+#undef ADD_PRINT_DESCRIPTION_TABLE_ELEMENT
             }
-        if( parent->type == ISOM_BOX_TYPE_TREF )
+            for( int i = 0; print_description_table[i].func; i++ )
+                if( lsmash_check_codec_type_identical( sample_type, print_description_table[i].type ) )
+                    return print_description_table[i].func;
+            return isom_print_unknown;
+        }
+        if( lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_WAVE ) )
+        {
+            if( lsmash_check_box_type_identical( box->type, QT_BOX_TYPE_FRMA ) )
+                return isom_print_frma;
+            else if( lsmash_check_box_type_identical( box->type, QT_BOX_TYPE_ENDA ) )
+                return isom_print_enda;
+            else if( lsmash_check_box_type_identical( box->type, QT_BOX_TYPE_TERMINATOR ) )
+                return isom_print_terminator;
+            else
+                return isom_print_sample_description_extesion;
+        }
+        if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TREF ) )
             return isom_print_track_reference_type;
         if( parent->parent )
         {
-            if( parent->parent->type == ISOM_BOX_TYPE_STSD )
+            if( lsmash_check_box_type_identical( parent->parent->type, ISOM_BOX_TYPE_STSD ) )
                 return isom_print_sample_description_extesion;
-            else if( parent->parent->type == ISOM_BOX_TYPE_ILST )
+            else if( lsmash_check_box_type_identical( parent->parent->type, ISOM_BOX_TYPE_ILST ) )
             {
-                if( parent->type == LSMASH_4CC( '-', '-', '-', '-' ) )
+                if( parent->type.fourcc == LSMASH_4CC( '-', '-', '-', '-' ) )
                 {
-                    if( box->type == ISOM_BOX_TYPE_MEAN )
+                    if( lsmash_check_box_type_identical( box->type, ISOM_BOX_TYPE_MEAN ) )
                         return isom_print_mean;
-                    if( box->type == ISOM_BOX_TYPE_NAME )
+                    if( lsmash_check_box_type_identical( box->type, ISOM_BOX_TYPE_NAME ) )
                         return isom_print_name;
                 }
-                if( box->type == ISOM_BOX_TYPE_DATA )
+                if( lsmash_check_box_type_identical( box->type, ISOM_BOX_TYPE_DATA ) )
                     return isom_print_data;
             }
         }
-        if( parent->type == ISOM_BOX_TYPE_ILST )
+        if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_ILST ) )
             return isom_print_metaitem;
     }
-    switch( box->type )
+    static struct print_box_table_tag
     {
-        case ISOM_BOX_TYPE_FTYP :
-            return isom_print_ftyp;
-        case ISOM_BOX_TYPE_MOOV :
-            return isom_print_moov;
-        case ISOM_BOX_TYPE_MVHD :
-            return isom_print_mvhd;
-        case ISOM_BOX_TYPE_IODS :
-            return isom_print_iods;
-        case QT_BOX_TYPE_CTAB :
-            return isom_print_ctab;
-        case ISOM_BOX_TYPE_TRAK :
-            return isom_print_trak;
-        case ISOM_BOX_TYPE_TKHD :
-            return isom_print_tkhd;
-        case QT_BOX_TYPE_TAPT :
-            return isom_print_tapt;
-        case QT_BOX_TYPE_CLEF :
-            return isom_print_clef;
-        case QT_BOX_TYPE_PROF :
-            return isom_print_prof;
-        case QT_BOX_TYPE_ENOF :
-            return isom_print_enof;
-        case ISOM_BOX_TYPE_EDTS :
-            return isom_print_edts;
-        case ISOM_BOX_TYPE_ELST :
-            return isom_print_elst;
-        case ISOM_BOX_TYPE_TREF :
-            return isom_print_tref;
-        case ISOM_BOX_TYPE_MDIA :
-            return isom_print_mdia;
-        case ISOM_BOX_TYPE_MDHD :
-            return isom_print_mdhd;
-        case ISOM_BOX_TYPE_HDLR :
-            return isom_print_hdlr;
-        case ISOM_BOX_TYPE_MINF :
-            return isom_print_minf;
-        case ISOM_BOX_TYPE_VMHD :
-            return isom_print_vmhd;
-        case ISOM_BOX_TYPE_SMHD :
-            return isom_print_smhd;
-        case ISOM_BOX_TYPE_HMHD :
-            return isom_print_hmhd;
-        case ISOM_BOX_TYPE_NMHD :
-            return isom_print_nmhd;
-        case QT_BOX_TYPE_GMHD :
-            return isom_print_gmhd;
-        case QT_BOX_TYPE_GMIN :
-            return isom_print_gmin;
-        case QT_BOX_TYPE_TEXT :
-            return isom_print_text;
-        case ISOM_BOX_TYPE_DINF :
-            return isom_print_dinf;
-        case ISOM_BOX_TYPE_DREF :
-            return isom_print_dref;
-        case ISOM_BOX_TYPE_URL  :
-            return isom_print_url;
-        case ISOM_BOX_TYPE_STBL :
-            return isom_print_stbl;
-        case ISOM_BOX_TYPE_STSD :
-            return isom_print_stsd;
-        case ISOM_BOX_TYPE_COLR :
-            return isom_print_colr;
-        case ISOM_BOX_TYPE_CLAP :
-            return isom_print_clap;
-        case ISOM_BOX_TYPE_PASP :
-            return isom_print_pasp;
-        case QT_BOX_TYPE_GLBL :
-            return isom_print_glbl;
-        case QT_BOX_TYPE_GAMA :
-            return isom_print_gama;
-        case QT_BOX_TYPE_FIEL :
-            return isom_print_fiel;
-        case QT_BOX_TYPE_CSPC :
-            return isom_print_cspc;
-        case QT_BOX_TYPE_SGBT :
-            return isom_print_sgbt;
-        case ISOM_BOX_TYPE_STSL :
-            return isom_print_stsl;
-        case QT_BOX_TYPE_WAVE :
-            return isom_print_wave;
-        case QT_BOX_TYPE_CHAN :
-            return isom_print_chan;
-        case ISOM_BOX_TYPE_FTAB :
-            return isom_print_ftab;
-        case ISOM_BOX_TYPE_STTS :
-            return isom_print_stts;
-        case ISOM_BOX_TYPE_CTTS :
-            return isom_print_ctts;
-        case ISOM_BOX_TYPE_CSLG :
-            return isom_print_cslg;
-        case ISOM_BOX_TYPE_STSS :
-            return isom_print_stss;
-        case QT_BOX_TYPE_STPS :
-            return isom_print_stps;
-        case ISOM_BOX_TYPE_SDTP :
-            return isom_print_sdtp;
-        case ISOM_BOX_TYPE_STSC :
-            return isom_print_stsc;
-        case ISOM_BOX_TYPE_STSZ :
-            return isom_print_stsz;
-        case ISOM_BOX_TYPE_STCO :
-        case ISOM_BOX_TYPE_CO64 :
-            return isom_print_stco;
-        case ISOM_BOX_TYPE_SGPD :
-            return isom_print_sgpd;
-        case ISOM_BOX_TYPE_SBGP :
-            return isom_print_sbgp;
-        case ISOM_BOX_TYPE_UDTA :
-            return isom_print_udta;
-        case ISOM_BOX_TYPE_CHPL :
-            return isom_print_chpl;
-        case QT_BOX_TYPE_WLOC :
-            return isom_print_WLOC;
-        case QT_BOX_TYPE_LOOP :
-            return isom_print_LOOP;
-        case QT_BOX_TYPE_SELO :
-            return isom_print_SelO;
-        case QT_BOX_TYPE_ALLF :
-            return isom_print_AllF;
-        case ISOM_BOX_TYPE_CPRT :
-            return isom_print_cprt;
-        case ISOM_BOX_TYPE_MVEX :
-            return isom_print_mvex;
-        case ISOM_BOX_TYPE_MEHD :
-            return isom_print_mehd;
-        case ISOM_BOX_TYPE_TREX :
-            return isom_print_trex;
-        case ISOM_BOX_TYPE_MOOF :
-            return isom_print_moof;
-        case ISOM_BOX_TYPE_MFHD :
-            return isom_print_mfhd;
-        case ISOM_BOX_TYPE_TRAF :
-            return isom_print_traf;
-        case ISOM_BOX_TYPE_TFHD :
-            return isom_print_tfhd;
-        case ISOM_BOX_TYPE_TFDT :
-            return isom_print_tfdt;
-        case ISOM_BOX_TYPE_TRUN :
-            return isom_print_trun;
-        case ISOM_BOX_TYPE_FREE :
-        case ISOM_BOX_TYPE_SKIP :
-            return isom_print_free;
-        case ISOM_BOX_TYPE_MDAT :
-            return isom_print_mdat;
-        case QT_BOX_TYPE_KEYS :
-            return isom_print_keys;
-        case ISOM_BOX_TYPE_META :
-            return isom_print_meta;
-        case ISOM_BOX_TYPE_ILST :
-            return isom_print_ilst;
-        case ISOM_BOX_TYPE_MFRA :
-            return isom_print_mfra;
-        case ISOM_BOX_TYPE_TFRA :
-            return isom_print_tfra;
-        case ISOM_BOX_TYPE_MFRO :
-            return isom_print_mfro;
-        default :
-            return isom_print_unknown;
+        lsmash_box_type_t type;
+        isom_print_box_t  func;
+    } print_box_table[128] = { { LSMASH_BOX_TYPE_INITIALIZER, NULL } };
+    if( !print_box_table[0].func )
+    {
+        /* Initialize the table. */
+        int i = 0;
+#define ADD_PRINT_BOX_TABLE_ELEMENT( type, func ) print_box_table[i++] = (struct print_box_table_tag){ type, func }
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_FTYP, isom_print_ftyp );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_MOOV, isom_print_moov );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_MVHD, isom_print_mvhd );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_IODS, isom_print_iods );
+        ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_CTAB, isom_print_ctab );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_TRAK, isom_print_trak );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_TKHD, isom_print_tkhd );
+        ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_TAPT, isom_print_tapt );
+        ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_CLEF, isom_print_clef );
+        ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_PROF, isom_print_prof );
+        ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_ENOF, isom_print_enof );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_EDTS, isom_print_edts );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_ELST, isom_print_elst );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_TREF, isom_print_tref );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_MDIA, isom_print_mdia );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_MDHD, isom_print_mdhd );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_HDLR, isom_print_hdlr );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_MINF, isom_print_minf );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_VMHD, isom_print_vmhd );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_SMHD, isom_print_smhd );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_HMHD, isom_print_hmhd );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_NMHD, isom_print_nmhd );
+        ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_GMHD, isom_print_gmhd );
+        ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_GMIN, isom_print_gmin );
+        ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_TEXT, isom_print_text );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_DINF, isom_print_dinf );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_DREF, isom_print_dref );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_URL,  isom_print_url );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_STBL, isom_print_stbl );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_STSD, isom_print_stsd );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_CLAP, isom_print_clap );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_PASP, isom_print_pasp );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_COLR, isom_print_colr );
+        ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_COLR, isom_print_colr );
+        ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_GLBL, isom_print_glbl );
+        ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_GAMA, isom_print_gama );
+        ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_FIEL, isom_print_fiel );
+        ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_CSPC, isom_print_cspc );
+        ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_SGBT, isom_print_sgbt );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_STSL, isom_print_stsl );
+        ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_WAVE, isom_print_wave );
+        ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_CHAN, isom_print_chan );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_FTAB, isom_print_ftab );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_STTS, isom_print_stts );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_CTTS, isom_print_ctts );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_CSLG, isom_print_cslg );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_STSS, isom_print_stss );
+        ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_STPS, isom_print_stps );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_SDTP, isom_print_sdtp );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_STSC, isom_print_stsc );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_STSZ, isom_print_stsz );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_STCO, isom_print_stco );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_CO64, isom_print_stco );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_SGPD, isom_print_sgpd );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_SBGP, isom_print_sbgp );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_UDTA, isom_print_udta );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_CHPL, isom_print_chpl );
+        ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_WLOC, isom_print_WLOC );
+        ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_LOOP, isom_print_LOOP );
+        ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_SELO, isom_print_SelO );
+        ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_ALLF, isom_print_AllF );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_CPRT, isom_print_cprt );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_MVEX, isom_print_mvex );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_MEHD, isom_print_mehd );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_TREX, isom_print_trex );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_MOOF, isom_print_moof );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_MFHD, isom_print_mfhd );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_TRAF, isom_print_traf );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_TFHD, isom_print_tfhd );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_TFDT, isom_print_tfdt );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_TRUN, isom_print_trun );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_FREE, isom_print_free );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_SKIP, isom_print_free );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_MDAT, isom_print_mdat );
+        ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_KEYS, isom_print_keys );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_META, isom_print_meta );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_ILST, isom_print_ilst );
+        ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_ILST, isom_print_ilst );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_MFRA, isom_print_mfra );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_TFRA, isom_print_tfra );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_MFRO, isom_print_mfro );
+        ADD_PRINT_BOX_TABLE_ELEMENT( LSMASH_BOX_TYPE_UNSPECIFIED, NULL );
+#undef ADD_PRINT_BOX_TABLE_ELEMENT
     }
+    for( int i = 0; print_box_table[i].func; i++ )
+        if( lsmash_check_box_type_identical( box->type, print_box_table[i].type ) )
+            return print_box_table[i].func;
+    return isom_print_unknown;
 }
 
 int isom_add_print_func( lsmash_root_t *root, void *box, int level )

@@ -384,7 +384,7 @@ int lsmash_get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, l
     if( !metaitem || !metaitem->data || !metaitem->data->value || metaitem->data->value_length == 0 )
         return -1;
     /* Get 'item'. */
-    metadata->item = metaitem->type;
+    metadata->item = metaitem->type.fourcc;
     /* Get 'type'. */
     metadata->type = isom_get_itunes_metadata_type( metadata->item );
     /* Get 'meaning'. */

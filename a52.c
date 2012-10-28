@@ -79,8 +79,8 @@ uint8_t *lsmash_create_ac3_specific_info( lsmash_ac3_specific_parameters_t *para
     uint8_t buffer[AC3_SPECIFIC_BOX_LENGTH] = { 0 };
     bs.data  = buffer;
     bs.alloc = AC3_SPECIFIC_BOX_LENGTH;
-    lsmash_bits_put( &bits, 32, AC3_SPECIFIC_BOX_LENGTH );  /* box size */
-    lsmash_bits_put( &bits, 32, ISOM_BOX_TYPE_DAC3 );       /* box type: 'dac3' */
+    lsmash_bits_put( &bits, 32, AC3_SPECIFIC_BOX_LENGTH );      /* box size */
+    lsmash_bits_put( &bits, 32, ISOM_BOX_TYPE_DAC3.fourcc );    /* box type: 'dac3' */
     lsmash_bits_put( &bits, 2, param->fscod );
     lsmash_bits_put( &bits, 5, param->bsid );
     lsmash_bits_put( &bits, 3, param->bsmod );
@@ -180,7 +180,7 @@ int ac3_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, in
 {
     assert( fp && root && box );
     int indent = level;
-    lsmash_ifprintf( fp, indent++, "[%s: AC3 Specific Box]\n", isom_4cc2str( box->type ) );
+    lsmash_ifprintf( fp, indent++, "[%s: AC3 Specific Box]\n", isom_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     if( box->size < AC3_SPECIFIC_BOX_LENGTH )
@@ -232,9 +232,9 @@ uint8_t *lsmash_create_eac3_specific_info( lsmash_eac3_specific_parameters_t *pa
     uint8_t buffer[EAC3_SPECIFIC_BOX_MAX_LENGTH] = { 0 };
     bs.data  = buffer;
     bs.alloc = EAC3_SPECIFIC_BOX_MAX_LENGTH;
-    lsmash_bits_put( &bits, 32, 0 );                    /* box size */
-    lsmash_bits_put( &bits, 32, ISOM_BOX_TYPE_DEC3 );   /* box type: 'dec3' */
-    lsmash_bits_put( &bits, 13, param->data_rate );     /* data_rate; setup by isom_update_bitrate_description */
+    lsmash_bits_put( &bits, 32, 0 );                            /* box size */
+    lsmash_bits_put( &bits, 32, ISOM_BOX_TYPE_DEC3.fourcc );    /* box type: 'dec3' */
+    lsmash_bits_put( &bits, 13, param->data_rate );             /* data_rate; setup by isom_update_bitrate_description */
     lsmash_bits_put( &bits, 3, param->num_ind_sub );
     /* Apparently, the condition of this loop defined in ETSI TS 102 366 V1.2.1 (2008-08) is wrong. */
     for( int i = 0; i <= param->num_ind_sub; i++ )
@@ -567,7 +567,7 @@ int eac3_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, i
 {
     assert( fp && root && box );
     int indent = level;
-    lsmash_ifprintf( fp, indent++, "[%s: EC3 Specific Box]\n", isom_4cc2str( box->type ) );
+    lsmash_ifprintf( fp, indent++, "[%s: EC3 Specific Box]\n", isom_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     if( box->size < EAC3_SPECIFIC_BOX_MIN_LENGTH )

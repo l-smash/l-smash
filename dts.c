@@ -194,36 +194,38 @@ lsmash_dts_construction_flag lsmash_dts_get_construction_flags( uint8_t stream_c
     return 0;
 }
 
-uint32_t lsmash_dts_get_codingname( lsmash_dts_specific_parameters_t *param )
+lsmash_codec_type_t lsmash_dts_get_codingname( lsmash_dts_specific_parameters_t *param )
 {
     assert( param->StreamConstruction <= DTS_MAX_STREAM_CONSTRUCTION );
     if( param->MultiAssetFlag )
         return ISOM_CODEC_TYPE_DTSH_AUDIO;  /* Multiple asset streams shall use the 'dtsh' coding_name. */
-    static const uint32_t codingname_table[DTS_MAX_STREAM_CONSTRUCTION + 1] =
-        {
-            ISOM_CODEC_TYPE_DTSH_AUDIO,     /* Undefined stream types shall be set to 0 and the codingname shall default to 'dtsh'. */
-            ISOM_CODEC_TYPE_DTSC_AUDIO,
-            ISOM_CODEC_TYPE_DTSC_AUDIO,
-            ISOM_CODEC_TYPE_DTSH_AUDIO,
-            ISOM_CODEC_TYPE_DTSC_AUDIO,
-            ISOM_CODEC_TYPE_DTSH_AUDIO,
-            ISOM_CODEC_TYPE_DTSH_AUDIO,
-            ISOM_CODEC_TYPE_DTSH_AUDIO,
-            ISOM_CODEC_TYPE_DTSH_AUDIO,
-            ISOM_CODEC_TYPE_DTSH_AUDIO,
-            ISOM_CODEC_TYPE_DTSH_AUDIO,
-            ISOM_CODEC_TYPE_DTSH_AUDIO,
-            ISOM_CODEC_TYPE_DTSH_AUDIO,
-            ISOM_CODEC_TYPE_DTSH_AUDIO,
-            ISOM_CODEC_TYPE_DTSL_AUDIO,
-            ISOM_CODEC_TYPE_DTSL_AUDIO,
-            ISOM_CODEC_TYPE_DTSL_AUDIO,
-            ISOM_CODEC_TYPE_DTSL_AUDIO,
-            ISOM_CODEC_TYPE_DTSE_AUDIO,
-            ISOM_CODEC_TYPE_DTSH_AUDIO,
-            ISOM_CODEC_TYPE_DTSH_AUDIO,
-            ISOM_CODEC_TYPE_DTSL_AUDIO,
-        };
+    static lsmash_codec_type_t codingname_table[DTS_MAX_STREAM_CONSTRUCTION + 1] = { LSMASH_CODEC_TYPE_INITIALIZER };
+    if( lsmash_check_codec_type_identical( codingname_table[0], LSMASH_CODEC_TYPE_UNSPECIFIED ) )
+    {
+        int i = 0;
+        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO; /* Undefined stream types shall be set to 0 and the codingname shall default to 'dtsh'. */
+        codingname_table[i++] = ISOM_CODEC_TYPE_DTSC_AUDIO;
+        codingname_table[i++] = ISOM_CODEC_TYPE_DTSC_AUDIO;
+        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
+        codingname_table[i++] = ISOM_CODEC_TYPE_DTSC_AUDIO;
+        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
+        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
+        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
+        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
+        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
+        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
+        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
+        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
+        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
+        codingname_table[i++] = ISOM_CODEC_TYPE_DTSL_AUDIO;
+        codingname_table[i++] = ISOM_CODEC_TYPE_DTSL_AUDIO;
+        codingname_table[i++] = ISOM_CODEC_TYPE_DTSL_AUDIO;
+        codingname_table[i++] = ISOM_CODEC_TYPE_DTSL_AUDIO;
+        codingname_table[i++] = ISOM_CODEC_TYPE_DTSE_AUDIO;
+        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
+        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
+        codingname_table[i++] = ISOM_CODEC_TYPE_DTSL_AUDIO;
+    }
     return codingname_table[ param->StreamConstruction ];
 }
 
@@ -240,7 +242,7 @@ uint8_t *lsmash_create_dts_specific_info( lsmash_dts_specific_parameters_t *para
     bs.alloc = buffer_length;
     /* Create a DTSSpecificBox. */
     lsmash_bits_put( &bits, 32, 0 );                            /* box size */
-    lsmash_bits_put( &bits, 32, ISOM_BOX_TYPE_DDTS );           /* box type: 'ddts' */
+    lsmash_bits_put( &bits, 32, ISOM_BOX_TYPE_DDTS.fourcc );    /* box type: 'ddts' */
     lsmash_bits_put( &bits, 32, param->DTSSamplingFrequency );
     lsmash_bits_put( &bits, 32, param->maxBitrate );            /* maxBitrate; setup by isom_update_bitrate_description */
     lsmash_bits_put( &bits, 32, param->avgBitrate );            /* avgBitrate; setup by isom_update_bitrate_description */
@@ -1196,7 +1198,7 @@ int dts_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, in
 {
     assert( fp && root && box );
     int indent = level;
-    lsmash_ifprintf( fp, indent++, "[%s: DTS Specific Box]\n", isom_4cc2str( box->type ) );
+    lsmash_ifprintf( fp, indent++, "[%s: DTS Specific Box]\n", isom_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     if( box->size < DTS_SPECIFIC_BOX_MIN_LENGTH )

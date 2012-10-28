@@ -893,7 +893,7 @@ int mp4sys_amr_create_damr( lsmash_audio_summary_t *summary )
     if( !bs )
         return -1;
     lsmash_bs_put_be32( bs, MP4SYS_DAMR_LENGTH );
-    lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_DAMR );
+    lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_DAMR.fourcc );
     /* NOTE: These are specific to each codec vendor, but we're surely not a vendor.
               Using dummy data. */
     lsmash_bs_put_be32( bs, 0x20202020 ); /* vendor */

@@ -31,38 +31,22 @@
 
 #include "utils.h"
 
-/* An UUID structure for extended box type */
-typedef struct
-{
-    uint32_t type;      /* four characters codes that identify extended box type partially
-                         * If the box is not an UUID box, this field shall be the same as the box type.
-                         * Note: characters in this field aren't always printable. */
-    uint8_t  id[12];    /* If the box is not an UUID box, this field shall be set to 12-byte ISO reserved value
-                         *   { 0x00, 0x11, 0x00, 0x10, 0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71 }
-                         * and shall not be written into the stream together with above-defined four characters codes. */
-} lsmash_box_uuid_t;
-
-/* 12-byte ISO reserved value */
-static const uint8_t iso_12_bytes[12] = { 0x00, 0x11, 0x00, 0x10, 0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71 };
-#define ISO_12_BYTES iso_12_bytes
-
 typedef struct isom_box_tag isom_box_t;
 
 /* If size is 1, then largesize is actual size.
  * If size is 0, then this box is the last one in the file. */
-#define ISOM_BASEBOX_COMMON \
-        lsmash_root_t      *root;       /* pointer of root */ \
-        isom_box_t         *parent;     /* pointer of the parent box of this box */ \
-        uint32_t            manager;    /* flags for L-SMASH */ \
+#define ISOM_BASEBOX_COMMON                                                             \
+        lsmash_root_t      *root;       /* pointer of root */                           \
+        isom_box_t         *parent;     /* pointer of the parent box of this box */     \
+        uint32_t            manager;    /* flags for L-SMASH */                         \
         uint64_t            pos;        /* starting position of this box in the file */ \
-        lsmash_entry_list_t extensions; /* extension boxes */ \
-    uint64_t          size;             /* the number of bytes in this box */ \
-    uint32_t          type;             /* four characters codes that identify box type */ \
-    lsmash_box_uuid_t user              /* Universal Unique IDentifier, i.e. UUID */
+        lsmash_entry_list_t extensions; /* extension boxes */                           \
+    uint64_t          size;             /* the number of bytes in this box */           \
+    lsmash_box_type_t type
 
-#define ISOM_FULLBOX_COMMON \
-    ISOM_BASEBOX_COMMON; \
-    uint8_t  version;   /* Basically, version is either 0 or 1 */ \
+#define ISOM_FULLBOX_COMMON                                         \
+    ISOM_BASEBOX_COMMON;                                            \
+    uint8_t  version;   /* Basically, version is either 0 or 1 */   \
     uint32_t flags      /* In the actual structure of box, flags is 24 bits. */
 
 #define ISOM_BASEBOX_COMMON_SIZE       8
@@ -78,6 +62,17 @@ typedef struct isom_box_tag isom_box_t;
 #define LSMASH_LAST_BOX          0x40
 #define LSMASH_INCOMPLETE_BOX    0x80
 
+/* 12-byte ISO reserved value:
+ * 0xXXXXXXXX-0011-0010-8000-00AA00389B71 */
+static const uint8_t static_lsmash_iso_12_bytes[12]
+    = { 0x00, 0x11, 0x00, 0x10, 0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71 };
+#define LSMASH_ISO_12_BYTES static_lsmash_iso_12_bytes
+
+/* L-SMASH original 12-byte QuickTime file format value for CODEC discrimination mainly:
+ * 0xXXXXXXXX-0F11-4DA5-BF4E-F2C48C6AA11E */
+static const uint8_t static_lsmash_qtff_12_bytes[12]
+    = { 0x0F, 0x11, 0x4D, 0xA5, 0xBF, 0x4E, 0xF2, 0xC4, 0x8C, 0x6A, 0xA1, 0x1E };
+#define LSMASH_QTFF_12_BYTES static_lsmash_qtff_12_bytes
 
 struct isom_box_tag
 {
@@ -1738,224 +1733,221 @@ typedef struct
 /** **/
 
 /* Box types */
-enum isom_box_type
-{
-    ISOM_BOX_TYPE_ID32  = LSMASH_4CC( 'I', 'D', '3', '2' ),
-    ISOM_BOX_TYPE_ALBM  = LSMASH_4CC( 'a', 'l', 'b', 'm' ),
-    ISOM_BOX_TYPE_AUTH  = LSMASH_4CC( 'a', 'u', 't', 'h' ),
-    ISOM_BOX_TYPE_BPCC  = LSMASH_4CC( 'b', 'p', 'c', 'c' ),
-    ISOM_BOX_TYPE_BUFF  = LSMASH_4CC( 'b', 'u', 'f', 'f' ),
-    ISOM_BOX_TYPE_BXML  = LSMASH_4CC( 'b', 'x', 'm', 'l' ),
-    ISOM_BOX_TYPE_CCID  = LSMASH_4CC( 'c', 'c', 'i', 'd' ),
-    ISOM_BOX_TYPE_CDEF  = LSMASH_4CC( 'c', 'd', 'e', 'f' ),
-    ISOM_BOX_TYPE_CLSF  = LSMASH_4CC( 'c', 'l', 's', 'f' ),
-    ISOM_BOX_TYPE_CMAP  = LSMASH_4CC( 'c', 'm', 'a', 'p' ),
-    ISOM_BOX_TYPE_CO64  = LSMASH_4CC( 'c', 'o', '6', '4' ),
-    ISOM_BOX_TYPE_COLR  = LSMASH_4CC( 'c', 'o', 'l', 'r' ),
-    ISOM_BOX_TYPE_CPRT  = LSMASH_4CC( 'c', 'p', 'r', 't' ),
-    ISOM_BOX_TYPE_CSLG  = LSMASH_4CC( 'c', 's', 'l', 'g' ),
-    ISOM_BOX_TYPE_CTTS  = LSMASH_4CC( 'c', 't', 't', 's' ),
-    ISOM_BOX_TYPE_CVRU  = LSMASH_4CC( 'c', 'v', 'r', 'u' ),
-    ISOM_BOX_TYPE_DCFD  = LSMASH_4CC( 'd', 'c', 'f', 'D' ),
-    ISOM_BOX_TYPE_DINF  = LSMASH_4CC( 'd', 'i', 'n', 'f' ),
-    ISOM_BOX_TYPE_DREF  = LSMASH_4CC( 'd', 'r', 'e', 'f' ),
-    ISOM_BOX_TYPE_DSCP  = LSMASH_4CC( 'd', 's', 'c', 'p' ),
-    ISOM_BOX_TYPE_DSGD  = LSMASH_4CC( 'd', 's', 'g', 'd' ),
-    ISOM_BOX_TYPE_DSTG  = LSMASH_4CC( 'd', 's', 't', 'g' ),
-    ISOM_BOX_TYPE_EDTS  = LSMASH_4CC( 'e', 'd', 't', 's' ),
-    ISOM_BOX_TYPE_ELST  = LSMASH_4CC( 'e', 'l', 's', 't' ),
-    ISOM_BOX_TYPE_FECI  = LSMASH_4CC( 'f', 'e', 'c', 'i' ),
-    ISOM_BOX_TYPE_FECR  = LSMASH_4CC( 'f', 'e', 'c', 'r' ),
-    ISOM_BOX_TYPE_FIIN  = LSMASH_4CC( 'f', 'i', 'i', 'n' ),
-    ISOM_BOX_TYPE_FIRE  = LSMASH_4CC( 'f', 'i', 'r', 'e' ),
-    ISOM_BOX_TYPE_FPAR  = LSMASH_4CC( 'f', 'p', 'a', 'r' ),
-    ISOM_BOX_TYPE_FREE  = LSMASH_4CC( 'f', 'r', 'e', 'e' ),
-    ISOM_BOX_TYPE_FRMA  = LSMASH_4CC( 'f', 'r', 'm', 'a' ),
-    ISOM_BOX_TYPE_FTYP  = LSMASH_4CC( 'f', 't', 'y', 'p' ),
-    ISOM_BOX_TYPE_GITN  = LSMASH_4CC( 'g', 'i', 't', 'n' ),
-    ISOM_BOX_TYPE_GNRE  = LSMASH_4CC( 'g', 'n', 'r', 'e' ),
-    ISOM_BOX_TYPE_GRPI  = LSMASH_4CC( 'g', 'r', 'p', 'i' ),
-    ISOM_BOX_TYPE_HDLR  = LSMASH_4CC( 'h', 'd', 'l', 'r' ),
-    ISOM_BOX_TYPE_HMHD  = LSMASH_4CC( 'h', 'm', 'h', 'd' ),
-    ISOM_BOX_TYPE_ICNU  = LSMASH_4CC( 'i', 'c', 'n', 'u' ),
-    ISOM_BOX_TYPE_IDAT  = LSMASH_4CC( 'i', 'd', 'a', 't' ),
-    ISOM_BOX_TYPE_IHDR  = LSMASH_4CC( 'i', 'h', 'd', 'r' ),
-    ISOM_BOX_TYPE_IINF  = LSMASH_4CC( 'i', 'i', 'n', 'f' ),
-    ISOM_BOX_TYPE_ILOC  = LSMASH_4CC( 'i', 'l', 'o', 'c' ),
-    ISOM_BOX_TYPE_IMIF  = LSMASH_4CC( 'i', 'm', 'i', 'f' ),
-    ISOM_BOX_TYPE_INFU  = LSMASH_4CC( 'i', 'n', 'f', 'u' ),
-    ISOM_BOX_TYPE_IODS  = LSMASH_4CC( 'i', 'o', 'd', 's' ),
-    ISOM_BOX_TYPE_IPHD  = LSMASH_4CC( 'i', 'p', 'h', 'd' ),
-    ISOM_BOX_TYPE_IPMC  = LSMASH_4CC( 'i', 'p', 'm', 'c' ),
-    ISOM_BOX_TYPE_IPRO  = LSMASH_4CC( 'i', 'p', 'r', 'o' ),
-    ISOM_BOX_TYPE_IREF  = LSMASH_4CC( 'i', 'r', 'e', 'f' ),
-    ISOM_BOX_TYPE_JP    = LSMASH_4CC( 'j', 'p', ' ', ' ' ),
-    ISOM_BOX_TYPE_JP2C  = LSMASH_4CC( 'j', 'p', '2', 'c' ),
-    ISOM_BOX_TYPE_JP2H  = LSMASH_4CC( 'j', 'p', '2', 'h' ),
-    ISOM_BOX_TYPE_JP2I  = LSMASH_4CC( 'j', 'p', '2', 'i' ),
-    ISOM_BOX_TYPE_KYWD  = LSMASH_4CC( 'k', 'y', 'w', 'd' ),
-    ISOM_BOX_TYPE_LOCI  = LSMASH_4CC( 'l', 'o', 'c', 'i' ),
-    ISOM_BOX_TYPE_LRCU  = LSMASH_4CC( 'l', 'r', 'c', 'u' ),
-    ISOM_BOX_TYPE_MDAT  = LSMASH_4CC( 'm', 'd', 'a', 't' ),
-    ISOM_BOX_TYPE_MDHD  = LSMASH_4CC( 'm', 'd', 'h', 'd' ),
-    ISOM_BOX_TYPE_MDIA  = LSMASH_4CC( 'm', 'd', 'i', 'a' ),
-    ISOM_BOX_TYPE_MDRI  = LSMASH_4CC( 'm', 'd', 'r', 'i' ),
-    ISOM_BOX_TYPE_MECO  = LSMASH_4CC( 'm', 'e', 'c', 'o' ),
-    ISOM_BOX_TYPE_MEHD  = LSMASH_4CC( 'm', 'e', 'h', 'd' ),
-    ISOM_BOX_TYPE_M7HD  = LSMASH_4CC( 'm', '7', 'h', 'd' ),
-    ISOM_BOX_TYPE_MERE  = LSMASH_4CC( 'm', 'e', 'r', 'e' ),
-    ISOM_BOX_TYPE_META  = LSMASH_4CC( 'm', 'e', 't', 'a' ),
-    ISOM_BOX_TYPE_MFHD  = LSMASH_4CC( 'm', 'f', 'h', 'd' ),
-    ISOM_BOX_TYPE_MFRA  = LSMASH_4CC( 'm', 'f', 'r', 'a' ),
-    ISOM_BOX_TYPE_MFRO  = LSMASH_4CC( 'm', 'f', 'r', 'o' ),
-    ISOM_BOX_TYPE_MINF  = LSMASH_4CC( 'm', 'i', 'n', 'f' ),
-    ISOM_BOX_TYPE_MJHD  = LSMASH_4CC( 'm', 'j', 'h', 'd' ),
-    ISOM_BOX_TYPE_MOOF  = LSMASH_4CC( 'm', 'o', 'o', 'f' ),
-    ISOM_BOX_TYPE_MOOV  = LSMASH_4CC( 'm', 'o', 'o', 'v' ),
-    ISOM_BOX_TYPE_MVCG  = LSMASH_4CC( 'm', 'v', 'c', 'g' ),
-    ISOM_BOX_TYPE_MVCI  = LSMASH_4CC( 'm', 'v', 'c', 'i' ),
-    ISOM_BOX_TYPE_MVEX  = LSMASH_4CC( 'm', 'v', 'e', 'x' ),
-    ISOM_BOX_TYPE_MVHD  = LSMASH_4CC( 'm', 'v', 'h', 'd' ),
-    ISOM_BOX_TYPE_MVRA  = LSMASH_4CC( 'm', 'v', 'r', 'a' ),
-    ISOM_BOX_TYPE_NMHD  = LSMASH_4CC( 'n', 'm', 'h', 'd' ),
-    ISOM_BOX_TYPE_OCHD  = LSMASH_4CC( 'o', 'c', 'h', 'd' ),
-    ISOM_BOX_TYPE_ODAF  = LSMASH_4CC( 'o', 'd', 'a', 'f' ),
-    ISOM_BOX_TYPE_ODDA  = LSMASH_4CC( 'o', 'd', 'd', 'a' ),
-    ISOM_BOX_TYPE_ODHD  = LSMASH_4CC( 'o', 'd', 'h', 'd' ),
-    ISOM_BOX_TYPE_ODHE  = LSMASH_4CC( 'o', 'd', 'h', 'e' ),
-    ISOM_BOX_TYPE_ODRB  = LSMASH_4CC( 'o', 'd', 'r', 'b' ),
-    ISOM_BOX_TYPE_ODRM  = LSMASH_4CC( 'o', 'd', 'r', 'm' ),
-    ISOM_BOX_TYPE_ODTT  = LSMASH_4CC( 'o', 'd', 't', 't' ),
-    ISOM_BOX_TYPE_OHDR  = LSMASH_4CC( 'o', 'h', 'd', 'r' ),
-    ISOM_BOX_TYPE_PADB  = LSMASH_4CC( 'p', 'a', 'd', 'b' ),
-    ISOM_BOX_TYPE_PAEN  = LSMASH_4CC( 'p', 'a', 'e', 'n' ),
-    ISOM_BOX_TYPE_PCLR  = LSMASH_4CC( 'p', 'c', 'l', 'r' ),
-    ISOM_BOX_TYPE_PDIN  = LSMASH_4CC( 'p', 'd', 'i', 'n' ),
-    ISOM_BOX_TYPE_PERF  = LSMASH_4CC( 'p', 'e', 'r', 'f' ),
-    ISOM_BOX_TYPE_PITM  = LSMASH_4CC( 'p', 'i', 't', 'm' ),
-    ISOM_BOX_TYPE_RES   = LSMASH_4CC( 'r', 'e', 's', ' ' ),
-    ISOM_BOX_TYPE_RESC  = LSMASH_4CC( 'r', 'e', 's', 'c' ),
-    ISOM_BOX_TYPE_RESD  = LSMASH_4CC( 'r', 'e', 's', 'd' ),
-    ISOM_BOX_TYPE_RTNG  = LSMASH_4CC( 'r', 't', 'n', 'g' ),
-    ISOM_BOX_TYPE_SBGP  = LSMASH_4CC( 's', 'b', 'g', 'p' ),
-    ISOM_BOX_TYPE_SCHI  = LSMASH_4CC( 's', 'c', 'h', 'i' ),
-    ISOM_BOX_TYPE_SCHM  = LSMASH_4CC( 's', 'c', 'h', 'm' ),
-    ISOM_BOX_TYPE_SDEP  = LSMASH_4CC( 's', 'd', 'e', 'p' ),
-    ISOM_BOX_TYPE_SDHD  = LSMASH_4CC( 's', 'd', 'h', 'd' ),
-    ISOM_BOX_TYPE_SDTP  = LSMASH_4CC( 's', 'd', 't', 'p' ),
-    ISOM_BOX_TYPE_SDVP  = LSMASH_4CC( 's', 'd', 'v', 'p' ),
-    ISOM_BOX_TYPE_SEGR  = LSMASH_4CC( 's', 'e', 'g', 'r' ),
-    ISOM_BOX_TYPE_SGPD  = LSMASH_4CC( 's', 'g', 'p', 'd' ),
-    ISOM_BOX_TYPE_SINF  = LSMASH_4CC( 's', 'i', 'n', 'f' ),
-    ISOM_BOX_TYPE_SKIP  = LSMASH_4CC( 's', 'k', 'i', 'p' ),
-    ISOM_BOX_TYPE_SMHD  = LSMASH_4CC( 's', 'm', 'h', 'd' ),
-    ISOM_BOX_TYPE_SRMB  = LSMASH_4CC( 's', 'r', 'm', 'b' ),
-    ISOM_BOX_TYPE_SRMC  = LSMASH_4CC( 's', 'r', 'm', 'c' ),
-    ISOM_BOX_TYPE_SRPP  = LSMASH_4CC( 's', 'r', 'p', 'p' ),
-    ISOM_BOX_TYPE_STBL  = LSMASH_4CC( 's', 't', 'b', 'l' ),
-    ISOM_BOX_TYPE_STCO  = LSMASH_4CC( 's', 't', 'c', 'o' ),
-    ISOM_BOX_TYPE_STDP  = LSMASH_4CC( 's', 't', 'd', 'p' ),
-    ISOM_BOX_TYPE_STSC  = LSMASH_4CC( 's', 't', 's', 'c' ),
-    ISOM_BOX_TYPE_STSD  = LSMASH_4CC( 's', 't', 's', 'd' ),
-    ISOM_BOX_TYPE_STSH  = LSMASH_4CC( 's', 't', 's', 'h' ),
-    ISOM_BOX_TYPE_STSS  = LSMASH_4CC( 's', 't', 's', 's' ),
-    ISOM_BOX_TYPE_STSZ  = LSMASH_4CC( 's', 't', 's', 'z' ),
-    ISOM_BOX_TYPE_STTS  = LSMASH_4CC( 's', 't', 't', 's' ),
-    ISOM_BOX_TYPE_STZ2  = LSMASH_4CC( 's', 't', 'z', '2' ),
-    ISOM_BOX_TYPE_SUBS  = LSMASH_4CC( 's', 'u', 'b', 's' ),
-    ISOM_BOX_TYPE_SWTC  = LSMASH_4CC( 's', 'w', 't', 'c' ),
-    ISOM_BOX_TYPE_TFHD  = LSMASH_4CC( 't', 'f', 'h', 'd' ),
-    ISOM_BOX_TYPE_TFDT  = LSMASH_4CC( 't', 'f', 'd', 't' ),
-    ISOM_BOX_TYPE_TFRA  = LSMASH_4CC( 't', 'f', 'r', 'a' ),
-    ISOM_BOX_TYPE_TIBR  = LSMASH_4CC( 't', 'i', 'b', 'r' ),
-    ISOM_BOX_TYPE_TIRI  = LSMASH_4CC( 't', 'i', 'r', 'i' ),
-    ISOM_BOX_TYPE_TITL  = LSMASH_4CC( 't', 'i', 't', 'l' ),
-    ISOM_BOX_TYPE_TKHD  = LSMASH_4CC( 't', 'k', 'h', 'd' ),
-    ISOM_BOX_TYPE_TRAF  = LSMASH_4CC( 't', 'r', 'a', 'f' ),
-    ISOM_BOX_TYPE_TRAK  = LSMASH_4CC( 't', 'r', 'a', 'k' ),
-    ISOM_BOX_TYPE_TREF  = LSMASH_4CC( 't', 'r', 'e', 'f' ),
-    ISOM_BOX_TYPE_TREX  = LSMASH_4CC( 't', 'r', 'e', 'x' ),
-    ISOM_BOX_TYPE_TRGR  = LSMASH_4CC( 't', 'r', 'g', 'r' ),
-    ISOM_BOX_TYPE_TRUN  = LSMASH_4CC( 't', 'r', 'u', 'n' ),
-    ISOM_BOX_TYPE_TSEL  = LSMASH_4CC( 't', 's', 'e', 'l' ),
-    ISOM_BOX_TYPE_UDTA  = LSMASH_4CC( 'u', 'd', 't', 'a' ),
-    ISOM_BOX_TYPE_UINF  = LSMASH_4CC( 'u', 'i', 'n', 'f' ),
-    ISOM_BOX_TYPE_ULST  = LSMASH_4CC( 'u', 'l', 's', 't' ),
-    ISOM_BOX_TYPE_URL   = LSMASH_4CC( 'u', 'r', 'l', ' ' ),
-    ISOM_BOX_TYPE_URN   = LSMASH_4CC( 'u', 'r', 'n', ' ' ),
-    ISOM_BOX_TYPE_UUID  = LSMASH_4CC( 'u', 'u', 'i', 'd' ),
-    ISOM_BOX_TYPE_VMHD  = LSMASH_4CC( 'v', 'm', 'h', 'd' ),
-    ISOM_BOX_TYPE_VWDI  = LSMASH_4CC( 'v', 'w', 'd', 'i' ),
-    ISOM_BOX_TYPE_XML   = LSMASH_4CC( 'x', 'm', 'l', ' ' ),
-    ISOM_BOX_TYPE_YRRC  = LSMASH_4CC( 'y', 'r', 'r', 'c' ),
+#define ISOM_BOX_TYPE_ID32 lsmash_form_iso_box_type( LSMASH_4CC( 'I', 'D', '3', '2' ) )
+#define ISOM_BOX_TYPE_ALBM lsmash_form_iso_box_type( LSMASH_4CC( 'a', 'l', 'b', 'm' ) )
+#define ISOM_BOX_TYPE_AUTH lsmash_form_iso_box_type( LSMASH_4CC( 'a', 'u', 't', 'h' ) )
+#define ISOM_BOX_TYPE_BPCC lsmash_form_iso_box_type( LSMASH_4CC( 'b', 'p', 'c', 'c' ) )
+#define ISOM_BOX_TYPE_BUFF lsmash_form_iso_box_type( LSMASH_4CC( 'b', 'u', 'f', 'f' ) )
+#define ISOM_BOX_TYPE_BXML lsmash_form_iso_box_type( LSMASH_4CC( 'b', 'x', 'm', 'l' ) )
+#define ISOM_BOX_TYPE_CCID lsmash_form_iso_box_type( LSMASH_4CC( 'c', 'c', 'i', 'd' ) )
+#define ISOM_BOX_TYPE_CDEF lsmash_form_iso_box_type( LSMASH_4CC( 'c', 'd', 'e', 'f' ) )
+#define ISOM_BOX_TYPE_CLSF lsmash_form_iso_box_type( LSMASH_4CC( 'c', 'l', 's', 'f' ) )
+#define ISOM_BOX_TYPE_CMAP lsmash_form_iso_box_type( LSMASH_4CC( 'c', 'm', 'a', 'p' ) )
+#define ISOM_BOX_TYPE_CO64 lsmash_form_iso_box_type( LSMASH_4CC( 'c', 'o', '6', '4' ) )
+#define ISOM_BOX_TYPE_COLR lsmash_form_iso_box_type( LSMASH_4CC( 'c', 'o', 'l', 'r' ) )
+#define ISOM_BOX_TYPE_CPRT lsmash_form_iso_box_type( LSMASH_4CC( 'c', 'p', 'r', 't' ) )
+#define ISOM_BOX_TYPE_CSLG lsmash_form_iso_box_type( LSMASH_4CC( 'c', 's', 'l', 'g' ) )
+#define ISOM_BOX_TYPE_CTTS lsmash_form_iso_box_type( LSMASH_4CC( 'c', 't', 't', 's' ) )
+#define ISOM_BOX_TYPE_CVRU lsmash_form_iso_box_type( LSMASH_4CC( 'c', 'v', 'r', 'u' ) )
+#define ISOM_BOX_TYPE_DCFD lsmash_form_iso_box_type( LSMASH_4CC( 'd', 'c', 'f', 'D' ) )
+#define ISOM_BOX_TYPE_DINF lsmash_form_iso_box_type( LSMASH_4CC( 'd', 'i', 'n', 'f' ) )
+#define ISOM_BOX_TYPE_DREF lsmash_form_iso_box_type( LSMASH_4CC( 'd', 'r', 'e', 'f' ) )
+#define ISOM_BOX_TYPE_DSCP lsmash_form_iso_box_type( LSMASH_4CC( 'd', 's', 'c', 'p' ) )
+#define ISOM_BOX_TYPE_DSGD lsmash_form_iso_box_type( LSMASH_4CC( 'd', 's', 'g', 'd' ) )
+#define ISOM_BOX_TYPE_DSTG lsmash_form_iso_box_type( LSMASH_4CC( 'd', 's', 't', 'g' ) )
+#define ISOM_BOX_TYPE_EDTS lsmash_form_iso_box_type( LSMASH_4CC( 'e', 'd', 't', 's' ) )
+#define ISOM_BOX_TYPE_ELST lsmash_form_iso_box_type( LSMASH_4CC( 'e', 'l', 's', 't' ) )
+#define ISOM_BOX_TYPE_FECI lsmash_form_iso_box_type( LSMASH_4CC( 'f', 'e', 'c', 'i' ) )
+#define ISOM_BOX_TYPE_FECR lsmash_form_iso_box_type( LSMASH_4CC( 'f', 'e', 'c', 'r' ) )
+#define ISOM_BOX_TYPE_FIIN lsmash_form_iso_box_type( LSMASH_4CC( 'f', 'i', 'i', 'n' ) )
+#define ISOM_BOX_TYPE_FIRE lsmash_form_iso_box_type( LSMASH_4CC( 'f', 'i', 'r', 'e' ) )
+#define ISOM_BOX_TYPE_FPAR lsmash_form_iso_box_type( LSMASH_4CC( 'f', 'p', 'a', 'r' ) )
+#define ISOM_BOX_TYPE_FREE lsmash_form_iso_box_type( LSMASH_4CC( 'f', 'r', 'e', 'e' ) )
+#define ISOM_BOX_TYPE_FRMA lsmash_form_iso_box_type( LSMASH_4CC( 'f', 'r', 'm', 'a' ) )
+#define ISOM_BOX_TYPE_FTYP lsmash_form_iso_box_type( LSMASH_4CC( 'f', 't', 'y', 'p' ) )
+#define ISOM_BOX_TYPE_GITN lsmash_form_iso_box_type( LSMASH_4CC( 'g', 'i', 't', 'n' ) )
+#define ISOM_BOX_TYPE_GNRE lsmash_form_iso_box_type( LSMASH_4CC( 'g', 'n', 'r', 'e' ) )
+#define ISOM_BOX_TYPE_GRPI lsmash_form_iso_box_type( LSMASH_4CC( 'g', 'r', 'p', 'i' ) )
+#define ISOM_BOX_TYPE_HDLR lsmash_form_iso_box_type( LSMASH_4CC( 'h', 'd', 'l', 'r' ) )
+#define ISOM_BOX_TYPE_HMHD lsmash_form_iso_box_type( LSMASH_4CC( 'h', 'm', 'h', 'd' ) )
+#define ISOM_BOX_TYPE_ICNU lsmash_form_iso_box_type( LSMASH_4CC( 'i', 'c', 'n', 'u' ) )
+#define ISOM_BOX_TYPE_IDAT lsmash_form_iso_box_type( LSMASH_4CC( 'i', 'd', 'a', 't' ) )
+#define ISOM_BOX_TYPE_IHDR lsmash_form_iso_box_type( LSMASH_4CC( 'i', 'h', 'd', 'r' ) )
+#define ISOM_BOX_TYPE_IINF lsmash_form_iso_box_type( LSMASH_4CC( 'i', 'i', 'n', 'f' ) )
+#define ISOM_BOX_TYPE_ILOC lsmash_form_iso_box_type( LSMASH_4CC( 'i', 'l', 'o', 'c' ) )
+#define ISOM_BOX_TYPE_IMIF lsmash_form_iso_box_type( LSMASH_4CC( 'i', 'm', 'i', 'f' ) )
+#define ISOM_BOX_TYPE_INFU lsmash_form_iso_box_type( LSMASH_4CC( 'i', 'n', 'f', 'u' ) )
+#define ISOM_BOX_TYPE_IODS lsmash_form_iso_box_type( LSMASH_4CC( 'i', 'o', 'd', 's' ) )
+#define ISOM_BOX_TYPE_IPHD lsmash_form_iso_box_type( LSMASH_4CC( 'i', 'p', 'h', 'd' ) )
+#define ISOM_BOX_TYPE_IPMC lsmash_form_iso_box_type( LSMASH_4CC( 'i', 'p', 'm', 'c' ) )
+#define ISOM_BOX_TYPE_IPRO lsmash_form_iso_box_type( LSMASH_4CC( 'i', 'p', 'r', 'o' ) )
+#define ISOM_BOX_TYPE_IREF lsmash_form_iso_box_type( LSMASH_4CC( 'i', 'r', 'e', 'f' ) )
+#define ISOM_BOX_TYPE_JP   lsmash_form_iso_box_type( LSMASH_4CC( 'j', 'p', ' ', ' ' ) )
+#define ISOM_BOX_TYPE_JP2C lsmash_form_iso_box_type( LSMASH_4CC( 'j', 'p', '2', 'c' ) )
+#define ISOM_BOX_TYPE_JP2H lsmash_form_iso_box_type( LSMASH_4CC( 'j', 'p', '2', 'h' ) )
+#define ISOM_BOX_TYPE_JP2I lsmash_form_iso_box_type( LSMASH_4CC( 'j', 'p', '2', 'i' ) )
+#define ISOM_BOX_TYPE_KYWD lsmash_form_iso_box_type( LSMASH_4CC( 'k', 'y', 'w', 'd' ) )
+#define ISOM_BOX_TYPE_LOCI lsmash_form_iso_box_type( LSMASH_4CC( 'l', 'o', 'c', 'i' ) )
+#define ISOM_BOX_TYPE_LRCU lsmash_form_iso_box_type( LSMASH_4CC( 'l', 'r', 'c', 'u' ) )
+#define ISOM_BOX_TYPE_MDAT lsmash_form_iso_box_type( LSMASH_4CC( 'm', 'd', 'a', 't' ) )
+#define ISOM_BOX_TYPE_MDHD lsmash_form_iso_box_type( LSMASH_4CC( 'm', 'd', 'h', 'd' ) )
+#define ISOM_BOX_TYPE_MDIA lsmash_form_iso_box_type( LSMASH_4CC( 'm', 'd', 'i', 'a' ) )
+#define ISOM_BOX_TYPE_MDRI lsmash_form_iso_box_type( LSMASH_4CC( 'm', 'd', 'r', 'i' ) )
+#define ISOM_BOX_TYPE_MECO lsmash_form_iso_box_type( LSMASH_4CC( 'm', 'e', 'c', 'o' ) )
+#define ISOM_BOX_TYPE_MEHD lsmash_form_iso_box_type( LSMASH_4CC( 'm', 'e', 'h', 'd' ) )
+#define ISOM_BOX_TYPE_M7HD lsmash_form_iso_box_type( LSMASH_4CC( 'm', '7', 'h', 'd' ) )
+#define ISOM_BOX_TYPE_MERE lsmash_form_iso_box_type( LSMASH_4CC( 'm', 'e', 'r', 'e' ) )
+#define ISOM_BOX_TYPE_META lsmash_form_iso_box_type( LSMASH_4CC( 'm', 'e', 't', 'a' ) )
+#define ISOM_BOX_TYPE_MFHD lsmash_form_iso_box_type( LSMASH_4CC( 'm', 'f', 'h', 'd' ) )
+#define ISOM_BOX_TYPE_MFRA lsmash_form_iso_box_type( LSMASH_4CC( 'm', 'f', 'r', 'a' ) )
+#define ISOM_BOX_TYPE_MFRO lsmash_form_iso_box_type( LSMASH_4CC( 'm', 'f', 'r', 'o' ) )
+#define ISOM_BOX_TYPE_MINF lsmash_form_iso_box_type( LSMASH_4CC( 'm', 'i', 'n', 'f' ) )
+#define ISOM_BOX_TYPE_MJHD lsmash_form_iso_box_type( LSMASH_4CC( 'm', 'j', 'h', 'd' ) )
+#define ISOM_BOX_TYPE_MOOF lsmash_form_iso_box_type( LSMASH_4CC( 'm', 'o', 'o', 'f' ) )
+#define ISOM_BOX_TYPE_MOOV lsmash_form_iso_box_type( LSMASH_4CC( 'm', 'o', 'o', 'v' ) )
+#define ISOM_BOX_TYPE_MVCG lsmash_form_iso_box_type( LSMASH_4CC( 'm', 'v', 'c', 'g' ) )
+#define ISOM_BOX_TYPE_MVCI lsmash_form_iso_box_type( LSMASH_4CC( 'm', 'v', 'c', 'i' ) )
+#define ISOM_BOX_TYPE_MVEX lsmash_form_iso_box_type( LSMASH_4CC( 'm', 'v', 'e', 'x' ) )
+#define ISOM_BOX_TYPE_MVHD lsmash_form_iso_box_type( LSMASH_4CC( 'm', 'v', 'h', 'd' ) )
+#define ISOM_BOX_TYPE_MVRA lsmash_form_iso_box_type( LSMASH_4CC( 'm', 'v', 'r', 'a' ) )
+#define ISOM_BOX_TYPE_NMHD lsmash_form_iso_box_type( LSMASH_4CC( 'n', 'm', 'h', 'd' ) )
+#define ISOM_BOX_TYPE_OCHD lsmash_form_iso_box_type( LSMASH_4CC( 'o', 'c', 'h', 'd' ) )
+#define ISOM_BOX_TYPE_ODAF lsmash_form_iso_box_type( LSMASH_4CC( 'o', 'd', 'a', 'f' ) )
+#define ISOM_BOX_TYPE_ODDA lsmash_form_iso_box_type( LSMASH_4CC( 'o', 'd', 'd', 'a' ) )
+#define ISOM_BOX_TYPE_ODHD lsmash_form_iso_box_type( LSMASH_4CC( 'o', 'd', 'h', 'd' ) )
+#define ISOM_BOX_TYPE_ODHE lsmash_form_iso_box_type( LSMASH_4CC( 'o', 'd', 'h', 'e' ) )
+#define ISOM_BOX_TYPE_ODRB lsmash_form_iso_box_type( LSMASH_4CC( 'o', 'd', 'r', 'b' ) )
+#define ISOM_BOX_TYPE_ODRM lsmash_form_iso_box_type( LSMASH_4CC( 'o', 'd', 'r', 'm' ) )
+#define ISOM_BOX_TYPE_ODTT lsmash_form_iso_box_type( LSMASH_4CC( 'o', 'd', 't', 't' ) )
+#define ISOM_BOX_TYPE_OHDR lsmash_form_iso_box_type( LSMASH_4CC( 'o', 'h', 'd', 'r' ) )
+#define ISOM_BOX_TYPE_PADB lsmash_form_iso_box_type( LSMASH_4CC( 'p', 'a', 'd', 'b' ) )
+#define ISOM_BOX_TYPE_PAEN lsmash_form_iso_box_type( LSMASH_4CC( 'p', 'a', 'e', 'n' ) )
+#define ISOM_BOX_TYPE_PCLR lsmash_form_iso_box_type( LSMASH_4CC( 'p', 'c', 'l', 'r' ) )
+#define ISOM_BOX_TYPE_PDIN lsmash_form_iso_box_type( LSMASH_4CC( 'p', 'd', 'i', 'n' ) )
+#define ISOM_BOX_TYPE_PERF lsmash_form_iso_box_type( LSMASH_4CC( 'p', 'e', 'r', 'f' ) )
+#define ISOM_BOX_TYPE_PITM lsmash_form_iso_box_type( LSMASH_4CC( 'p', 'i', 't', 'm' ) )
+#define ISOM_BOX_TYPE_RES  lsmash_form_iso_box_type( LSMASH_4CC( 'r', 'e', 's', ' ' ) )
+#define ISOM_BOX_TYPE_RESC lsmash_form_iso_box_type( LSMASH_4CC( 'r', 'e', 's', 'c' ) )
+#define ISOM_BOX_TYPE_RESD lsmash_form_iso_box_type( LSMASH_4CC( 'r', 'e', 's', 'd' ) )
+#define ISOM_BOX_TYPE_RTNG lsmash_form_iso_box_type( LSMASH_4CC( 'r', 't', 'n', 'g' ) )
+#define ISOM_BOX_TYPE_SBGP lsmash_form_iso_box_type( LSMASH_4CC( 's', 'b', 'g', 'p' ) )
+#define ISOM_BOX_TYPE_SCHI lsmash_form_iso_box_type( LSMASH_4CC( 's', 'c', 'h', 'i' ) )
+#define ISOM_BOX_TYPE_SCHM lsmash_form_iso_box_type( LSMASH_4CC( 's', 'c', 'h', 'm' ) )
+#define ISOM_BOX_TYPE_SDEP lsmash_form_iso_box_type( LSMASH_4CC( 's', 'd', 'e', 'p' ) )
+#define ISOM_BOX_TYPE_SDHD lsmash_form_iso_box_type( LSMASH_4CC( 's', 'd', 'h', 'd' ) )
+#define ISOM_BOX_TYPE_SDTP lsmash_form_iso_box_type( LSMASH_4CC( 's', 'd', 't', 'p' ) )
+#define ISOM_BOX_TYPE_SDVP lsmash_form_iso_box_type( LSMASH_4CC( 's', 'd', 'v', 'p' ) )
+#define ISOM_BOX_TYPE_SEGR lsmash_form_iso_box_type( LSMASH_4CC( 's', 'e', 'g', 'r' ) )
+#define ISOM_BOX_TYPE_SGPD lsmash_form_iso_box_type( LSMASH_4CC( 's', 'g', 'p', 'd' ) )
+#define ISOM_BOX_TYPE_SINF lsmash_form_iso_box_type( LSMASH_4CC( 's', 'i', 'n', 'f' ) )
+#define ISOM_BOX_TYPE_SKIP lsmash_form_iso_box_type( LSMASH_4CC( 's', 'k', 'i', 'p' ) )
+#define ISOM_BOX_TYPE_SMHD lsmash_form_iso_box_type( LSMASH_4CC( 's', 'm', 'h', 'd' ) )
+#define ISOM_BOX_TYPE_SRMB lsmash_form_iso_box_type( LSMASH_4CC( 's', 'r', 'm', 'b' ) )
+#define ISOM_BOX_TYPE_SRMC lsmash_form_iso_box_type( LSMASH_4CC( 's', 'r', 'm', 'c' ) )
+#define ISOM_BOX_TYPE_SRPP lsmash_form_iso_box_type( LSMASH_4CC( 's', 'r', 'p', 'p' ) )
+#define ISOM_BOX_TYPE_STBL lsmash_form_iso_box_type( LSMASH_4CC( 's', 't', 'b', 'l' ) )
+#define ISOM_BOX_TYPE_STCO lsmash_form_iso_box_type( LSMASH_4CC( 's', 't', 'c', 'o' ) )
+#define ISOM_BOX_TYPE_STDP lsmash_form_iso_box_type( LSMASH_4CC( 's', 't', 'd', 'p' ) )
+#define ISOM_BOX_TYPE_STSC lsmash_form_iso_box_type( LSMASH_4CC( 's', 't', 's', 'c' ) )
+#define ISOM_BOX_TYPE_STSD lsmash_form_iso_box_type( LSMASH_4CC( 's', 't', 's', 'd' ) )
+#define ISOM_BOX_TYPE_STSH lsmash_form_iso_box_type( LSMASH_4CC( 's', 't', 's', 'h' ) )
+#define ISOM_BOX_TYPE_STSS lsmash_form_iso_box_type( LSMASH_4CC( 's', 't', 's', 's' ) )
+#define ISOM_BOX_TYPE_STSZ lsmash_form_iso_box_type( LSMASH_4CC( 's', 't', 's', 'z' ) )
+#define ISOM_BOX_TYPE_STTS lsmash_form_iso_box_type( LSMASH_4CC( 's', 't', 't', 's' ) )
+#define ISOM_BOX_TYPE_STZ2 lsmash_form_iso_box_type( LSMASH_4CC( 's', 't', 'z', '2' ) )
+#define ISOM_BOX_TYPE_SUBS lsmash_form_iso_box_type( LSMASH_4CC( 's', 'u', 'b', 's' ) )
+#define ISOM_BOX_TYPE_SWTC lsmash_form_iso_box_type( LSMASH_4CC( 's', 'w', 't', 'c' ) )
+#define ISOM_BOX_TYPE_TFHD lsmash_form_iso_box_type( LSMASH_4CC( 't', 'f', 'h', 'd' ) )
+#define ISOM_BOX_TYPE_TFDT lsmash_form_iso_box_type( LSMASH_4CC( 't', 'f', 'd', 't' ) )
+#define ISOM_BOX_TYPE_TFRA lsmash_form_iso_box_type( LSMASH_4CC( 't', 'f', 'r', 'a' ) )
+#define ISOM_BOX_TYPE_TIBR lsmash_form_iso_box_type( LSMASH_4CC( 't', 'i', 'b', 'r' ) )
+#define ISOM_BOX_TYPE_TIRI lsmash_form_iso_box_type( LSMASH_4CC( 't', 'i', 'r', 'i' ) )
+#define ISOM_BOX_TYPE_TITL lsmash_form_iso_box_type( LSMASH_4CC( 't', 'i', 't', 'l' ) )
+#define ISOM_BOX_TYPE_TKHD lsmash_form_iso_box_type( LSMASH_4CC( 't', 'k', 'h', 'd' ) )
+#define ISOM_BOX_TYPE_TRAF lsmash_form_iso_box_type( LSMASH_4CC( 't', 'r', 'a', 'f' ) )
+#define ISOM_BOX_TYPE_TRAK lsmash_form_iso_box_type( LSMASH_4CC( 't', 'r', 'a', 'k' ) )
+#define ISOM_BOX_TYPE_TREF lsmash_form_iso_box_type( LSMASH_4CC( 't', 'r', 'e', 'f' ) )
+#define ISOM_BOX_TYPE_TREX lsmash_form_iso_box_type( LSMASH_4CC( 't', 'r', 'e', 'x' ) )
+#define ISOM_BOX_TYPE_TRGR lsmash_form_iso_box_type( LSMASH_4CC( 't', 'r', 'g', 'r' ) )
+#define ISOM_BOX_TYPE_TRUN lsmash_form_iso_box_type( LSMASH_4CC( 't', 'r', 'u', 'n' ) )
+#define ISOM_BOX_TYPE_TSEL lsmash_form_iso_box_type( LSMASH_4CC( 't', 's', 'e', 'l' ) )
+#define ISOM_BOX_TYPE_UDTA lsmash_form_iso_box_type( LSMASH_4CC( 'u', 'd', 't', 'a' ) )
+#define ISOM_BOX_TYPE_UINF lsmash_form_iso_box_type( LSMASH_4CC( 'u', 'i', 'n', 'f' ) )
+#define ISOM_BOX_TYPE_ULST lsmash_form_iso_box_type( LSMASH_4CC( 'u', 'l', 's', 't' ) )
+#define ISOM_BOX_TYPE_URL  lsmash_form_iso_box_type( LSMASH_4CC( 'u', 'r', 'l', ' ' ) )
+#define ISOM_BOX_TYPE_URN  lsmash_form_iso_box_type( LSMASH_4CC( 'u', 'r', 'n', ' ' ) )
+#define ISOM_BOX_TYPE_UUID lsmash_form_iso_box_type( LSMASH_4CC( 'u', 'u', 'i', 'd' ) )
+#define ISOM_BOX_TYPE_VMHD lsmash_form_iso_box_type( LSMASH_4CC( 'v', 'm', 'h', 'd' ) )
+#define ISOM_BOX_TYPE_VWDI lsmash_form_iso_box_type( LSMASH_4CC( 'v', 'w', 'd', 'i' ) )
+#define ISOM_BOX_TYPE_XML  lsmash_form_iso_box_type( LSMASH_4CC( 'x', 'm', 'l', ' ' ) )
+#define ISOM_BOX_TYPE_YRRC lsmash_form_iso_box_type( LSMASH_4CC( 'y', 'r', 'r', 'c' ) )
 
-    ISOM_BOX_TYPE_BTRT  = LSMASH_4CC( 'b', 't', 'r', 't' ),
-    ISOM_BOX_TYPE_CLAP  = LSMASH_4CC( 'c', 'l', 'a', 'p' ),
-    ISOM_BOX_TYPE_PASP  = LSMASH_4CC( 'p', 'a', 's', 'p' ),
-    ISOM_BOX_TYPE_STSL  = LSMASH_4CC( 's', 't', 's', 'l' ),
+#define ISOM_BOX_TYPE_BTRT lsmash_form_iso_box_type( LSMASH_4CC( 'b', 't', 'r', 't' ) )
+#define ISOM_BOX_TYPE_CLAP lsmash_form_iso_box_type( LSMASH_4CC( 'c', 'l', 'a', 'p' ) )
+#define ISOM_BOX_TYPE_PASP lsmash_form_iso_box_type( LSMASH_4CC( 'p', 'a', 's', 'p' ) )
+#define ISOM_BOX_TYPE_STSL lsmash_form_iso_box_type( LSMASH_4CC( 's', 't', 's', 'l' ) )
 
-    ISOM_BOX_TYPE_FTAB  = LSMASH_4CC( 'f', 't', 'a', 'b' ),
+#define ISOM_BOX_TYPE_FTAB lsmash_form_iso_box_type( LSMASH_4CC( 'f', 't', 'a', 'b' ) )
 
-    ISOM_BOX_TYPE_DATA  = LSMASH_4CC( 'd', 'a', 't', 'a' ),
-    ISOM_BOX_TYPE_ILST  = LSMASH_4CC( 'i', 'l', 's', 't' ),
-    ISOM_BOX_TYPE_MEAN  = LSMASH_4CC( 'm', 'e', 'a', 'n' ),
-    ISOM_BOX_TYPE_NAME  = LSMASH_4CC( 'n', 'a', 'm', 'e' ),
+/* iTunes Metadata */
+#define ISOM_BOX_TYPE_DATA lsmash_form_iso_box_type( LSMASH_4CC( 'd', 'a', 't', 'a' ) )
+#define ISOM_BOX_TYPE_ILST lsmash_form_iso_box_type( LSMASH_4CC( 'i', 'l', 's', 't' ) )
+#define ISOM_BOX_TYPE_MEAN lsmash_form_iso_box_type( LSMASH_4CC( 'm', 'e', 'a', 'n' ) )
+#define ISOM_BOX_TYPE_NAME lsmash_form_iso_box_type( LSMASH_4CC( 'n', 'a', 'm', 'e' ) )
 
-    ISOM_BOX_TYPE_CHPL  = LSMASH_4CC( 'c', 'h', 'p', 'l' ),
+/* Tyrant extension */
+#define ISOM_BOX_TYPE_CHPL lsmash_form_iso_box_type( LSMASH_4CC( 'c', 'h', 'p', 'l' ) )
 
-    /* Decoder Specific Info */
-    ISOM_BOX_TYPE_ALAC  = LSMASH_4CC( 'a', 'l', 'a', 'c' ),
-    ISOM_BOX_TYPE_AVCC  = LSMASH_4CC( 'a', 'v', 'c', 'C' ),
-    ISOM_BOX_TYPE_DAC3  = LSMASH_4CC( 'd', 'a', 'c', '3' ),
-    ISOM_BOX_TYPE_DAMR  = LSMASH_4CC( 'd', 'a', 'm', 'r' ),
-    ISOM_BOX_TYPE_DDTS  = LSMASH_4CC( 'd', 'd', 't', 's' ),
-    ISOM_BOX_TYPE_DEC3  = LSMASH_4CC( 'd', 'e', 'c', '3' ),
-    ISOM_BOX_TYPE_DVC1  = LSMASH_4CC( 'd', 'v', 'c', '1' ),
-    ISOM_BOX_TYPE_ESDS  = LSMASH_4CC( 'e', 's', 'd', 's' ),
-};
+/* Decoder Specific Info */
+#define ISOM_BOX_TYPE_ALAC lsmash_form_iso_box_type( LSMASH_4CC( 'a', 'l', 'a', 'c' ) )
+#define ISOM_BOX_TYPE_AVCC lsmash_form_iso_box_type( LSMASH_4CC( 'a', 'v', 'c', 'C' ) )
+#define ISOM_BOX_TYPE_DAC3 lsmash_form_iso_box_type( LSMASH_4CC( 'd', 'a', 'c', '3' ) )
+#define ISOM_BOX_TYPE_DAMR lsmash_form_iso_box_type( LSMASH_4CC( 'd', 'a', 'm', 'r' ) )
+#define ISOM_BOX_TYPE_DDTS lsmash_form_iso_box_type( LSMASH_4CC( 'd', 'd', 't', 's' ) )
+#define ISOM_BOX_TYPE_DEC3 lsmash_form_iso_box_type( LSMASH_4CC( 'd', 'e', 'c', '3' ) )
+#define ISOM_BOX_TYPE_DVC1 lsmash_form_iso_box_type( LSMASH_4CC( 'd', 'v', 'c', '1' ) )
+#define ISOM_BOX_TYPE_ESDS lsmash_form_iso_box_type( LSMASH_4CC( 'e', 's', 'd', 's' ) )
 
-enum qt_box_type
-{
-    QT_BOX_TYPE_ALLF    = LSMASH_4CC( 'A', 'l', 'l', 'F' ),
-    QT_BOX_TYPE_CLEF    = LSMASH_4CC( 'c', 'l', 'e', 'f' ),
-    QT_BOX_TYPE_CLIP    = LSMASH_4CC( 'c', 'l', 'i', 'p' ),
-    QT_BOX_TYPE_CRGN    = LSMASH_4CC( 'c', 'r', 'g', 'n' ),
-    QT_BOX_TYPE_CTAB    = LSMASH_4CC( 'c', 't', 'a', 'b' ),
-    QT_BOX_TYPE_ENOF    = LSMASH_4CC( 'e', 'n', 'o', 'f' ),
-    QT_BOX_TYPE_GMHD    = LSMASH_4CC( 'g', 'm', 'h', 'd' ),
-    QT_BOX_TYPE_GMIN    = LSMASH_4CC( 'g', 'm', 'i', 'n' ),
-    QT_BOX_TYPE_IMAP    = LSMASH_4CC( 'i', 'm', 'a', 'p' ),
-    QT_BOX_TYPE_KEYS    = LSMASH_4CC( 'k', 'e', 'y', 's' ),
-    QT_BOX_TYPE_KMAT    = LSMASH_4CC( 'k', 'm', 'a', 't' ),
-    QT_BOX_TYPE_LOAD    = LSMASH_4CC( 'l', 'o', 'a', 'd' ),
-    QT_BOX_TYPE_LOOP    = LSMASH_4CC( 'L', 'O', 'O', 'P' ),
-    QT_BOX_TYPE_MATT    = LSMASH_4CC( 'm', 'a', 't', 't' ),
-    QT_BOX_TYPE_META    = LSMASH_4CC( 'm', 'e', 't', 'a' ),
-    QT_BOX_TYPE_PNOT    = LSMASH_4CC( 'p', 'n', 'o', 't' ),
-    QT_BOX_TYPE_PROF    = LSMASH_4CC( 'p', 'r', 'o', 'f' ),
-    QT_BOX_TYPE_SELO    = LSMASH_4CC( 'S', 'e', 'l', 'O' ),
-    QT_BOX_TYPE_STPS    = LSMASH_4CC( 's', 't', 'p', 's' ),
-    QT_BOX_TYPE_TAPT    = LSMASH_4CC( 't', 'a', 'p', 't' ),
-    QT_BOX_TYPE_TEXT    = LSMASH_4CC( 't', 'e', 'x', 't' ),
-    QT_BOX_TYPE_WLOC    = LSMASH_4CC( 'W', 'L', 'O', 'C' ),
+#define QT_BOX_TYPE_ALLF lsmash_form_qtff_box_type( LSMASH_4CC( 'A', 'l', 'l', 'F' ) )
+#define QT_BOX_TYPE_CLEF lsmash_form_qtff_box_type( LSMASH_4CC( 'c', 'l', 'e', 'f' ) )
+#define QT_BOX_TYPE_CLIP lsmash_form_qtff_box_type( LSMASH_4CC( 'c', 'l', 'i', 'p' ) )
+#define QT_BOX_TYPE_CRGN lsmash_form_qtff_box_type( LSMASH_4CC( 'c', 'r', 'g', 'n' ) )
+#define QT_BOX_TYPE_CTAB lsmash_form_qtff_box_type( LSMASH_4CC( 'c', 't', 'a', 'b' ) )
+#define QT_BOX_TYPE_ENOF lsmash_form_qtff_box_type( LSMASH_4CC( 'e', 'n', 'o', 'f' ) )
+#define QT_BOX_TYPE_GMHD lsmash_form_qtff_box_type( LSMASH_4CC( 'g', 'm', 'h', 'd' ) )
+#define QT_BOX_TYPE_GMIN lsmash_form_qtff_box_type( LSMASH_4CC( 'g', 'm', 'i', 'n' ) )
+#define QT_BOX_TYPE_ILST lsmash_form_qtff_box_type( LSMASH_4CC( 'i', 'l', 's', 't' ) )
+#define QT_BOX_TYPE_IMAP lsmash_form_qtff_box_type( LSMASH_4CC( 'i', 'm', 'a', 'p' ) )
+#define QT_BOX_TYPE_KEYS lsmash_form_qtff_box_type( LSMASH_4CC( 'k', 'e', 'y', 's' ) )
+#define QT_BOX_TYPE_KMAT lsmash_form_qtff_box_type( LSMASH_4CC( 'k', 'm', 'a', 't' ) )
+#define QT_BOX_TYPE_LOAD lsmash_form_qtff_box_type( LSMASH_4CC( 'l', 'o', 'a', 'd' ) )
+#define QT_BOX_TYPE_LOOP lsmash_form_qtff_box_type( LSMASH_4CC( 'L', 'O', 'O', 'P' ) )
+#define QT_BOX_TYPE_MATT lsmash_form_qtff_box_type( LSMASH_4CC( 'm', 'a', 't', 't' ) )
+#define QT_BOX_TYPE_META lsmash_form_qtff_box_type( LSMASH_4CC( 'm', 'e', 't', 'a' ) )
+#define QT_BOX_TYPE_PNOT lsmash_form_qtff_box_type( LSMASH_4CC( 'p', 'n', 'o', 't' ) )
+#define QT_BOX_TYPE_PROF lsmash_form_qtff_box_type( LSMASH_4CC( 'p', 'r', 'o', 'f' ) )
+#define QT_BOX_TYPE_SELO lsmash_form_qtff_box_type( LSMASH_4CC( 'S', 'e', 'l', 'O' ) )
+#define QT_BOX_TYPE_STPS lsmash_form_qtff_box_type( LSMASH_4CC( 's', 't', 'p', 's' ) )
+#define QT_BOX_TYPE_TAPT lsmash_form_qtff_box_type( LSMASH_4CC( 't', 'a', 'p', 't' ) )
+#define QT_BOX_TYPE_TEXT lsmash_form_qtff_box_type( LSMASH_4CC( 't', 'e', 'x', 't' ) )
+#define QT_BOX_TYPE_WLOC lsmash_form_qtff_box_type( LSMASH_4CC( 'W', 'L', 'O', 'C' ) )
 
-    QT_BOX_TYPE_CHAN    = LSMASH_4CC( 'c', 'h', 'a', 'n' ),
-    QT_BOX_TYPE_COLR    = LSMASH_4CC( 'c', 'o', 'l', 'r' ),
-    QT_BOX_TYPE_CSPC    = LSMASH_4CC( 'c', 's', 'p', 'c' ),
-    QT_BOX_TYPE_ENDA    = LSMASH_4CC( 'e', 'n', 'd', 'a' ),
-    QT_BOX_TYPE_FIEL    = LSMASH_4CC( 'f', 'i', 'e', 'l' ),
-    QT_BOX_TYPE_FRMA    = LSMASH_4CC( 'f', 'r', 'm', 'a' ),
-    QT_BOX_TYPE_GAMA    = LSMASH_4CC( 'g', 'a', 'm', 'a' ),
-    QT_BOX_TYPE_SGBT    = LSMASH_4CC( 's', 'g', 'b', 't' ),
-    QT_BOX_TYPE_WAVE    = LSMASH_4CC( 'w', 'a', 'v', 'e' ),
-    QT_BOX_TYPE_TERMINATOR  = 0x00000000,
+#define QT_BOX_TYPE_CHAN lsmash_form_qtff_box_type( LSMASH_4CC( 'c', 'h', 'a', 'n' ) )
+#define QT_BOX_TYPE_COLR lsmash_form_qtff_box_type( LSMASH_4CC( 'c', 'o', 'l', 'r' ) )
+#define QT_BOX_TYPE_CSPC lsmash_form_qtff_box_type( LSMASH_4CC( 'c', 's', 'p', 'c' ) )
+#define QT_BOX_TYPE_ENDA lsmash_form_qtff_box_type( LSMASH_4CC( 'e', 'n', 'd', 'a' ) )
+#define QT_BOX_TYPE_FIEL lsmash_form_qtff_box_type( LSMASH_4CC( 'f', 'i', 'e', 'l' ) )
+#define QT_BOX_TYPE_FRMA lsmash_form_qtff_box_type( LSMASH_4CC( 'f', 'r', 'm', 'a' ) )
+#define QT_BOX_TYPE_GAMA lsmash_form_qtff_box_type( LSMASH_4CC( 'g', 'a', 'm', 'a' ) )
+#define QT_BOX_TYPE_SGBT lsmash_form_qtff_box_type( LSMASH_4CC( 's', 'g', 'b', 't' ) )
+#define QT_BOX_TYPE_WAVE lsmash_form_qtff_box_type( LSMASH_4CC( 'w', 'a', 'v', 'e' ) )
+#define QT_BOX_TYPE_TERMINATOR lsmash_form_qtff_box_type( 0x00000000 )
 
-    /* Decoder Specific Info */
-    QT_BOX_TYPE_ALAC    = LSMASH_4CC( 'a', 'l', 'a', 'c' ),
-    QT_BOX_TYPE_ESDS    = LSMASH_4CC( 'e', 's', 'd', 's' ),
-    QT_BOX_TYPE_GLBL    = LSMASH_4CC( 'g', 'l', 'b', 'l' ),
-    QT_BOX_TYPE_MP4A    = LSMASH_4CC( 'm', 'p', '4', 'a' ),
-};
+/* Decoder Specific Info */
+#define QT_BOX_TYPE_ALAC   lsmash_form_qtff_box_type( LSMASH_4CC( 'a', 'l', 'a', 'c' ) )
+#define QT_BOX_TYPE_ESDS   lsmash_form_qtff_box_type( LSMASH_4CC( 'e', 's', 'd', 's' ) )
+#define QT_BOX_TYPE_GLBL   lsmash_form_qtff_box_type( LSMASH_4CC( 'g', 'l', 'b', 'l' ) )
+#define QT_BOX_TYPE_MP4A   lsmash_form_qtff_box_type( LSMASH_4CC( 'm', 'p', '4', 'a' ) )
 
 /* Track reference types */
 typedef enum
@@ -2149,12 +2141,10 @@ typedef enum
 
 int isom_is_fullbox( void *box );
 int isom_is_lpcm_audio( void *box );
-int isom_is_uncompressed_ycbcr( uint32_t type );
+int isom_is_uncompressed_ycbcr( lsmash_box_type_t type );
 
-lsmash_box_uuid_t isom_form_box_uuid( uint32_t type, const uint8_t id[12] );
-
-void isom_init_box_common( void *box, void *parent, uint32_t type );
-uint32_t isom_skip_box_common( uint8_t **p_data );
+void isom_init_box_common( void *box, void *parent, lsmash_box_type_t box_type );
+size_t isom_skip_box_common( uint8_t **p_data );
 
 void isom_bs_put_basebox_common( lsmash_bs_t *bs, isom_box_t *box );
 void isom_bs_put_fullbox_common( lsmash_bs_t *bs, isom_box_t *box );
@@ -2194,7 +2184,7 @@ int isom_add_terminator( isom_wave_t *wave );
 int isom_add_chan( isom_audio_entry_t *audio );
 int isom_add_ftab( isom_tx3g_entry_t *tx3g );
 int isom_add_hdlr( isom_mdia_t *mdia, isom_meta_t *meta, isom_minf_t *minf, uint32_t media_type );
-int isom_add_metaitem( isom_ilst_t *ilst, uint32_t type );
+int isom_add_metaitem( isom_ilst_t *ilst, lsmash_itunes_metadata_item item );
 int isom_add_mean( isom_metaitem_t *metaitem );
 int isom_add_name( isom_metaitem_t *metaitem );
 int isom_add_data( isom_metaitem_t *metaitem );
@@ -2231,14 +2221,14 @@ void isom_remove_ilst( isom_ilst_t *ilst );
 void isom_remove_sample_description( isom_sample_entry_t *sample );
 void isom_remove_unknown_box( isom_unknown_box_t *unknown_box );
 
-#define isom_create_box( box_name, parent_name, box_4cc ) \
+#define isom_create_box( box_name, parent_name, box_type ) \
     isom_##box_name##_t *(box_name) = lsmash_malloc_zero( sizeof(isom_##box_name##_t) ); \
     if( !box_name ) \
         return -1; \
-    isom_init_box_common( box_name, parent_name, box_4cc )
+    isom_init_box_common( box_name, parent_name, box_type )
 
-#define isom_create_list_box( box_name, parent_name, box_4cc ) \
-    isom_create_box( box_name, parent_name, box_4cc ); \
+#define isom_create_list_box( box_name, parent_name, box_type ) \
+    isom_create_box( box_name, parent_name, box_type ); \
     box_name->list = lsmash_create_entry_list(); \
     if( !box_name->list ) \
     { \

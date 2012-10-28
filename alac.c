@@ -37,7 +37,7 @@ uint8_t *lsmash_create_alac_specific_info( lsmash_alac_specific_parameters_t *pa
     bs.data  = buffer;
     bs.alloc = ALAC_SPECIFIC_BOX_LENGTH;
     lsmash_bs_put_be32( &bs, ALAC_SPECIFIC_BOX_LENGTH );    /* box size */
-    lsmash_bs_put_be32( &bs, ISOM_BOX_TYPE_ALAC );          /* box type: 'alac' */
+    lsmash_bs_put_be32( &bs, ISOM_BOX_TYPE_ALAC.fourcc );   /* box type: 'alac' */
     lsmash_bs_put_be32( &bs, 0 );                           /* version + flags */
     lsmash_bs_put_be32( &bs, param->frameLength );
     lsmash_bs_put_byte( &bs, 0 );                           /* compatibleVersion */
@@ -84,7 +84,7 @@ int alac_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, i
 {
     assert( fp && root && box );
     int indent = level;
-    lsmash_ifprintf( fp, indent++, "[%s: ALAC Specific Box]\n", isom_4cc2str( box->type ) );
+    lsmash_ifprintf( fp, indent++, "[%s: ALAC Specific Box]\n", isom_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     if( box->size < ALAC_SPECIFIC_BOX_LENGTH )

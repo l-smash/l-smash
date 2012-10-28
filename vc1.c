@@ -544,7 +544,7 @@ uint8_t *lsmash_create_vc1_specific_info( lsmash_vc1_specific_parameters_t *para
     lsmash_bits_init( &bits, &bs );
     /* Create a VC1SpecificBox */
     lsmash_bits_put( &bits, 32, 0 );                                    /* box size */
-    lsmash_bits_put( &bits, 32, ISOM_BOX_TYPE_DVC1 );                   /* box type: 'dvc1' */
+    lsmash_bits_put( &bits, 32, ISOM_BOX_TYPE_DVC1.fourcc );            /* box type: 'dvc1' */
     lsmash_bits_put( &bits, 4, param->profile );                        /* profile */
     lsmash_bits_put( &bits, 3, param->level );                          /* level */
     lsmash_bits_put( &bits, 1, 0 );                                     /* reserved */
@@ -937,7 +937,7 @@ int vc1_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, in
 {
     assert( fp && root && box );
     int indent = level;
-    lsmash_ifprintf( fp, indent++, "[%s: VC1 Specific Box]\n", isom_4cc2str( box->type ) );
+    lsmash_ifprintf( fp, indent++, "[%s: VC1 Specific Box]\n", isom_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     if( box->size < ISOM_BASEBOX_COMMON_SIZE + 7 )

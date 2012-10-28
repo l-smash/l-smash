@@ -1432,7 +1432,7 @@ uint8_t *lsmash_create_h264_specific_info( lsmash_h264_specific_parameters_t *pa
     bs.alloc = buffer_size;
     /* Create an AVCConfigurationBox */
     lsmash_bs_put_be32( &bs, 0 );                                                               /* box size */
-    lsmash_bs_put_be32( &bs, ISOM_BOX_TYPE_AVCC );                                              /* box type: 'avcC' */
+    lsmash_bs_put_be32( &bs, ISOM_BOX_TYPE_AVCC.fourcc );                                       /* box type: 'avcC' */
     lsmash_bs_put_byte( &bs, 1 );                                                               /* configurationVersion */
     lsmash_bs_put_byte( &bs, param->AVCProfileIndication );                                     /* AVCProfileIndication */
     lsmash_bs_put_byte( &bs, param->profile_compatibility );                                    /* profile_compatibility */
@@ -2124,7 +2124,7 @@ int h264_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, i
 {
     assert( fp && root && box );
     int indent = level;
-    lsmash_ifprintf( fp, indent++, "[%s: AVC Configuration Box]\n", isom_4cc2str( box->type ) );
+    lsmash_ifprintf( fp, indent++, "[%s: AVC Configuration Box]\n", isom_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     isom_extension_box_t *ext = (isom_extension_box_t *)box;
@@ -2226,7 +2226,7 @@ int h264_print_bitrate( FILE *fp, lsmash_root_t *root, isom_box_t *box, int leve
 {
     assert( fp && root && box );
     int indent = level;
-    lsmash_ifprintf( fp, indent++, "[%s: MPEG-4 Bit Rate Box]\n", isom_4cc2str( box->type ) );
+    lsmash_ifprintf( fp, indent++, "[%s: MPEG-4 Bit Rate Box]\n", isom_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     isom_btrt_t *btrt = (isom_btrt_t *)box;

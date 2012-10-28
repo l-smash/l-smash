@@ -589,7 +589,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     if( !movie_framemts_present && (!stts_entry || !stsc_entry || !stco_entry || !stco_entry->data || (next_stsc_entry && !next_stsc_entry->data)) )
         goto fail;
     int all_sync = !stss;
-    int large_presentation = stco->large_presentation || stco->type == ISOM_BOX_TYPE_CO64;
+    int large_presentation = stco->large_presentation || lsmash_check_box_type_identical( stco->type, ISOM_BOX_TYPE_CO64 );
     int is_lpcm_audio = isom_is_lpcm_audio( description );
     int iso_sdtp = root->max_isom_version >= 2 || root->avc_extensions;
     int allow_negative_sample_offset = ctts && ((root->max_isom_version >= 4 && ctts->version == 1) || root->qt_compatible);

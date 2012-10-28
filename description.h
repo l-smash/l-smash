@@ -26,15 +26,15 @@ struct lsmash_codec_specific_list_tag
 };
 
 lsmash_codec_specific_t *isom_duplicate_codec_specific_data( lsmash_codec_specific_t *specific );
-isom_extension_box_t *isom_get_sample_description_extension( lsmash_entry_list_t *extensions, uint32_t box_type );
+isom_extension_box_t *isom_get_sample_description_extension( lsmash_entry_list_t *extensions, lsmash_box_type_t box_type );
 lsmash_codec_specific_t *isom_get_codec_specific( lsmash_codec_specific_list_t *opaque, lsmash_codec_specific_data_type type );
-uint8_t *isom_get_child_box_position( uint8_t *parent_data, uint32_t parent_size, uint32_t child_type, uint32_t *child_size );
-void *isom_get_extension_box( lsmash_entry_list_t *exetnsion, uint32_t box_type );
+uint8_t *isom_get_child_box_position( uint8_t *parent_data, uint32_t parent_size, lsmash_box_type_t child_type, uint32_t *child_size );
+void *isom_get_extension_box( lsmash_entry_list_t *exetnsion, lsmash_box_type_t box_type );
 int isom_add_extension_box( lsmash_entry_list_t *extensions, void *box, void *eliminator );
 void isom_remove_sample_description_extensions( lsmash_entry_list_t *extensions );
 void isom_remove_sample_description_extension( isom_extension_box_t *ext );
-int isom_setup_visual_description( isom_stsd_t *stsd, uint32_t sample_type, lsmash_video_summary_t *summary );
-int isom_setup_audio_description( isom_stsd_t *stsd, uint32_t sample_type, lsmash_audio_summary_t *summary );
-lsmash_video_summary_t *isom_create_video_summary_from_description( isom_visual_entry_t *visual );
-lsmash_audio_summary_t *isom_create_audio_summary_from_description( isom_audio_entry_t *audio );
+int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_type, lsmash_video_summary_t *summary );
+int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_type, lsmash_audio_summary_t *summary );
+lsmash_summary_t *isom_create_video_summary_from_description( isom_sample_entry_t *sample_entry );
+lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_t *sample_entry );
 int isom_compare_opaque_extensions( lsmash_summary_t *a, lsmash_summary_t *b );

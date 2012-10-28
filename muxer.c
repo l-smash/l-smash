@@ -648,47 +648,24 @@ static int parse_track_options( input_t *input )
     return 0;
 }
 
-static void display_codec_name( uint32_t codec_type, uint32_t track_number )
+static void display_codec_name( lsmash_codec_type_t codec_type, uint32_t track_number )
 {
-#define DISPLAY_CODEC_NAME( CODEC_NAME ) eprintf( "Track %"PRIu32": "#CODEC_NAME"\n", track_number )
-    switch( codec_type )
-    {
-        case ISOM_CODEC_TYPE_AVC1_VIDEO :
-            DISPLAY_CODEC_NAME( H.264 Advanced Video Coding );
-            break;
-        case ISOM_CODEC_TYPE_VC_1_VIDEO :
-            DISPLAY_CODEC_NAME( SMPTE VC-1 Advanced Profile );
-            break;
-        case ISOM_CODEC_TYPE_MP4A_AUDIO :
-            DISPLAY_CODEC_NAME( MPEG-4 Audio );
-            break;
-        case ISOM_CODEC_TYPE_AC_3_AUDIO :
-            DISPLAY_CODEC_NAME( AC-3 );
-            break;
-        case ISOM_CODEC_TYPE_DTSC_AUDIO :
-            DISPLAY_CODEC_NAME( DTS );
-            break;
-        case ISOM_CODEC_TYPE_DTSE_AUDIO :
-            DISPLAY_CODEC_NAME( DTS LBR );
-            break;
-        case ISOM_CODEC_TYPE_DTSH_AUDIO :
-            DISPLAY_CODEC_NAME( DTS-HD );
-            break;
-        case ISOM_CODEC_TYPE_DTSL_AUDIO :
-            DISPLAY_CODEC_NAME( DTS-HD Lossless );
-            break;
-        case ISOM_CODEC_TYPE_EC_3_AUDIO :
-            DISPLAY_CODEC_NAME( Enhanced AC-3 );
-            break;
-        case ISOM_CODEC_TYPE_SAWB_AUDIO :
-            DISPLAY_CODEC_NAME( Wideband AMR voice );
-            break;
-        case ISOM_CODEC_TYPE_SAMR_AUDIO :
-            DISPLAY_CODEC_NAME( Narrowband AMR voice );
-            break;
-        default :
-            break;
-    }
+#define DISPLAY_CODEC_NAME( codec, codec_name ) \
+    else if( lsmash_check_codec_type_identical( codec_type, codec ) ) \
+        eprintf( "Track %"PRIu32": "#codec_name"\n", track_number )
+    if( 0 );
+    DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_AVC1_VIDEO, H.264 Advanced Video Coding );
+    DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_VC_1_VIDEO, SMPTE VC-1 Advanced Profile );
+    DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_MP4A_AUDIO, MPEG-4 Audio );
+    DISPLAY_CODEC_NAME(   QT_CODEC_TYPE_MP4A_AUDIO, MPEG-4 Audio );
+    DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_AC_3_AUDIO, AC-3 );
+    DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_EC_3_AUDIO, Enhanced AC-3 );
+    DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_DTSC_AUDIO, DTS );
+    DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_DTSE_AUDIO, DTS LBR );
+    DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_DTSH_AUDIO, DTS-HD );
+    DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_DTSL_AUDIO, DTS-HD Lossless );
+    DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_SAWB_AUDIO, Wideband AMR voice );
+    DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_SAMR_AUDIO, Narrowband AMR voice );
 #undef DISPLAY_CODEC_NAME
 }
 
@@ -722,38 +699,46 @@ static int open_input_files( muxer_t *muxer )
             if( !in_track->summary )
                 return ERROR_MSG( "failed to get input summary.\n" );
             /* Check codec type. */
-            lsmash_codec_type codec_type = in_track->summary->sample_type;
+            lsmash_codec_type_t codec_type = in_track->summary->sample_type;
             in_track->active = 1;
-            switch( codec_type )
+            if( lsmash_check_codec_type_identical( codec_type, ISOM_CODEC_TYPE_AVC1_VIDEO ) )
             {
-                case ISOM_CODEC_TYPE_AVC1_VIDEO :
-                    if( opt->isom )
-                        add_brand( opt, ISOM_BRAND_TYPE_AVC1 );
-                case ISOM_CODEC_TYPE_VC_1_VIDEO :
-                case ISOM_CODEC_TYPE_MP4A_AUDIO :
-                    break;
-                case ISOM_CODEC_TYPE_AC_3_AUDIO :
-                case ISOM_CODEC_TYPE_EC_3_AUDIO :
-                    if( !opt->isom && opt->qtff )
-                        return ERROR_MSG( "the input seems (Enhanced) AC-3, at present available only for ISO Base Media file format.\n" );
-                    break;
-                case ISOM_CODEC_TYPE_DTSC_AUDIO :
-                case ISOM_CODEC_TYPE_DTSE_AUDIO :
-                case ISOM_CODEC_TYPE_DTSH_AUDIO :
-                case ISOM_CODEC_TYPE_DTSL_AUDIO :
-                    if( !opt->isom && opt->qtff )
-                        return ERROR_MSG( "the input seems DTS(-HD) Audio, at present available only for ISO Base Media file format.\n" );
-                    break;
-                case ISOM_CODEC_TYPE_SAWB_AUDIO :
-                case ISOM_CODEC_TYPE_SAMR_AUDIO :
-                    if( !opt->brand_3gx )
-                        return ERROR_MSG( "the input seems AMR-NB/WB, available for 3GPP(2) file format.\n" );
-                    break;
-                default :
-                    lsmash_cleanup_summary( in_track->summary );
-                    in_track->summary = NULL;
-                    in_track->active = 0;
-                    break;
+                if( opt->isom )
+                    add_brand( opt, ISOM_BRAND_TYPE_AVC1 );
+            }
+            else if( lsmash_check_codec_type_identical( codec_type, ISOM_CODEC_TYPE_VC_1_VIDEO ) )
+            {
+                if( !opt->isom && opt->qtff )
+                    return ERROR_MSG( "the input seems VC-1, at present available only for ISO Base Media file format.\n" );
+            }
+            else if( lsmash_check_codec_type_identical( codec_type, ISOM_CODEC_TYPE_MP4A_AUDIO )
+                  || lsmash_check_codec_type_identical( codec_type,   QT_CODEC_TYPE_MP4A_AUDIO ) )
+                /* Do nothing. */;
+            else if( lsmash_check_codec_type_identical( codec_type, ISOM_CODEC_TYPE_AC_3_AUDIO )
+                  || lsmash_check_codec_type_identical( codec_type, ISOM_CODEC_TYPE_EC_3_AUDIO ) )
+            {
+                if( !opt->isom && opt->qtff )
+                    return ERROR_MSG( "the input seems (Enhanced) AC-3, at present available only for ISO Base Media file format.\n" );
+            }
+            else if( lsmash_check_codec_type_identical( codec_type, ISOM_CODEC_TYPE_DTSC_AUDIO )
+                  || lsmash_check_codec_type_identical( codec_type, ISOM_CODEC_TYPE_DTSE_AUDIO )
+                  || lsmash_check_codec_type_identical( codec_type, ISOM_CODEC_TYPE_DTSH_AUDIO )
+                  || lsmash_check_codec_type_identical( codec_type, ISOM_CODEC_TYPE_DTSL_AUDIO ) )
+            {
+                if( !opt->isom && opt->qtff )
+                    return ERROR_MSG( "the input seems DTS(-HD) Audio, at present available only for ISO Base Media file format.\n" );
+            }
+            else if( lsmash_check_codec_type_identical( codec_type, ISOM_CODEC_TYPE_SAWB_AUDIO )
+                  || lsmash_check_codec_type_identical( codec_type, ISOM_CODEC_TYPE_SAMR_AUDIO ) )
+            {
+                if( !opt->brand_3gx )
+                    return ERROR_MSG( "the input seems AMR-NB/WB, available for 3GPP(2) file format.\n" );
+            }
+            else
+            {
+                lsmash_cleanup_summary( in_track->summary );
+                in_track->summary = NULL;
+                in_track->active = 0;
             }
             if( in_track->active )
             {
@@ -878,7 +863,7 @@ static int prepare_output( muxer_t *muxer )
                     }
                     else if( !summary->vfr )
                     {
-                        if( summary->sample_type == ISOM_CODEC_TYPE_AVC1_VIDEO )
+                        if( lsmash_check_codec_type_identical( summary->sample_type, ISOM_CODEC_TYPE_AVC1_VIDEO ) )
                         {
                             uint32_t compare_timescale = summary->timescale;
                             uint32_t compare_timebase  = summary->timebase;
@@ -1000,7 +985,7 @@ static int do_mux( muxer_t *muxer )
                     return ERROR_MSG( "failed to alloc memory for buffer.\n" );
                 /* mp4sys_importer_get_access_unit() returns 1 if there're any changes in stream's properties. */
                 int ret = mp4sys_importer_get_access_unit( input->importer, input->current_track_number, sample );
-                if( ret == -1 || (ret == 1 && out_track->summary->sample_type == ISOM_CODEC_TYPE_AVC1_VIDEO) )
+                if( ret == -1 || (ret == 1 && lsmash_check_codec_type_identical( out_track->summary->sample_type, ISOM_CODEC_TYPE_AVC1_VIDEO )) )
                 {
                     /* If you want to support them, you have to retrieve summary again, and make some operation accordingly. */
                     lsmash_delete_sample( sample );

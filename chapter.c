@@ -240,7 +240,9 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     if( lsmash_set_media_parameters( root, chapter_track_ID, &media_param ) )
         goto fail;
     /* Create a sample description. */
-    uint32_t sample_type = root->max_3gpp_version >= 6 || root->itunes_movie ? ISOM_CODEC_TYPE_TX3G_TEXT : QT_CODEC_TYPE_TEXT_TEXT;
+    lsmash_codec_type_t sample_type = root->max_3gpp_version >= 6 || root->itunes_movie
+                                    ? ISOM_CODEC_TYPE_TX3G_TEXT
+                                    : QT_CODEC_TYPE_TEXT_TEXT;
     lsmash_summary_t summary = { .sample_type = sample_type };
     uint32_t sample_entry = lsmash_add_sample_entry( root, chapter_track_ID, &summary );
     if( !sample_entry )
@@ -263,8 +265,9 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
         /* set start_time */
         data.start_time = data.start_time * 1e-9 * media_timescale + 0.5;
         /* write a text sample here */
+        int is_qt_text = lsmash_check_codec_type_identical( sample_type, QT_CODEC_TYPE_TEXT_TEXT );
         uint16_t name_length = strlen( data.chapter_name );
-        lsmash_sample_t *sample = lsmash_create_sample( 2 + name_length + 12 * (sample_type == QT_CODEC_TYPE_TEXT_TEXT) );
+        lsmash_sample_t *sample = lsmash_create_sample( 2 + name_length + 12 * is_qt_text );
         if( !sample )
         {
             free( data.chapter_name );
@@ -273,7 +276,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
         sample->data[0] = (name_length >> 8) & 0xff;
         sample->data[1] =  name_length       & 0xff;
         memcpy( sample->data + 2, data.chapter_name, name_length );
-        if( sample_type == QT_CODEC_TYPE_TEXT_TEXT )
+        if( is_qt_text )
         {
             /* QuickTime Player requires Text Encoding Attribute Box ('encd') if media language is ISO language codes : undefined.
              * Also this box can avoid garbling if the QuickTime text sample is encoded by Unicode characters.
