@@ -2125,7 +2125,7 @@ typedef enum
     ITUNES_METADATA_ITEM_RELEASE_DATE               = LSMASH_4CC( 0xA9, 'd', 'a', 'y' ),    /* YYYY-MM-DD format string (may be incomplete, i.e. only year) */
     ITUNES_METADATA_ITEM_ENCODED_BY                 = LSMASH_4CC( 0xA9, 'e', 'n', 'c' ),    /* Person or company that encoded the recording */
     ITUNES_METADATA_ITEM_USER_GENRE                 = LSMASH_4CC( 0xA9, 'g', 'e', 'n' ),    /* User Genre user-specified string */
-    ITUNES_METADATA_ITEM_0XA9_GROUPING              = LSMASH_4CC( 0xA9, 'g', 'r', 'p' ),    /* Grouping */
+    ITUNES_METADATA_ITEM_GROUPING                   = LSMASH_4CC( 0xA9, 'g', 'r', 'p' ),    /* Grouping */
     ITUNES_METADATA_ITEM_LYRICS                     = LSMASH_4CC( 0xA9, 'l', 'y', 'r' ),    /* Lyrics */
     ITUNES_METADATA_ITEM_TITLE                      = LSMASH_4CC( 0xA9, 'n', 'a', 'm' ),    /* Title / Song Name */
     ITUNES_METADATA_ITEM_TRACK_SUBTITLE             = LSMASH_4CC( 0xA9, 's', 't', '3' ),    /* Track Sub-Title */
@@ -2135,7 +2135,11 @@ typedef enum
     ITUNES_METADATA_ITEM_PODCAST_CATEGORY           = LSMASH_4CC( 'c', 'a', 't', 'g' ),     /* Podcast Category */
     ITUNES_METADATA_ITEM_COPYRIGHT                  = LSMASH_4CC( 'c', 'p', 'r', 't' ),     /* Copyright */
     ITUNES_METADATA_ITEM_DESCRIPTION                = LSMASH_4CC( 'd', 'e', 's', 'c' ),     /* Description (limited to 255 bytes) */
-    ITUNES_METADATA_ITEM_GROUPING                   = LSMASH_4CC( 'g', 'r', 'u', 'p' ),     /* Grouping */
+    ITUNES_METADATA_ITEM_GROUPING_DRAFT             = LSMASH_4CC( 'g', 'r', 'u', 'p' ),     /* Grouping
+                                                                                             * Note: This identifier is defined in
+                                                                                             *       iTunes Metadata Format Specification (Preliminary draft),
+                                                                                             *       but not used by iTunes actually it seems.
+                                                                                             *       We recommend you use ITUNES_METADATA_ITEM_GROUPING instead of this. */
     ITUNES_METADATA_ITEM_PODCAST_KEYWORD            = LSMASH_4CC( 'k', 'e', 'y', 'w' ),     /* Podcast Keywords */
     ITUNES_METADATA_ITEM_LONG_DESCRIPTION           = LSMASH_4CC( 'l', 'd', 'e', 's' ),     /* Long Description */
     ITUNES_METADATA_ITEM_PURCHASE_DATE              = LSMASH_4CC( 'p', 'u', 'r', 'd' ),     /* Purchase Date */
