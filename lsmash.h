@@ -635,6 +635,8 @@ typedef struct
                                              * User can't set this parameter manually. */
     uint8_t            vfr;                 /* whether a stream is assumed as variable frame rate
                                              * User can't set this parameter manually. */
+    uint8_t            sample_per_field;    /* whether a stream may have a sample per field
+                                             * User can't set this parameter manually. */
     uint32_t           width;               /* pixel counts of width samples have */
     uint32_t           height;              /* pixel counts of height samples have */
     char               compressorname[33];  /* a 32-byte Pascal string containing the name of the compressor that created the image */

@@ -2725,6 +2725,7 @@ static lsmash_video_summary_t *h264_create_summary( h264_info_t *info, h264_sps_
     summary->timescale              = sps->vui.time_scale >> (sps->vui.time_scale > 1 && !field_pic_present);
     summary->timebase               = sps->vui.num_units_in_tick;
     summary->vfr                    = !sps->vui.fixed_frame_rate_flag;
+    summary->sample_per_field       = field_pic_present;
     summary->width                  = sps->cropped_width;
     summary->height                 = sps->cropped_height;
     summary->par_h                  = sps->vui.sar_width;
@@ -3359,6 +3360,7 @@ static lsmash_video_summary_t *vc1_create_summary( vc1_info_t *info, vc1_sequenc
     summary->timescale              = sequence->framerate_numerator;
     summary->timebase               = sequence->framerate_denominator;
     summary->vfr                    = !sequence->framerate_flag;
+    summary->sample_per_field       = 0;
     summary->width                  = sequence->disp_horiz_size;
     summary->height                 = sequence->disp_vert_size;
     summary->par_h                  = sequence->aspect_width;
