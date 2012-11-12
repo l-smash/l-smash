@@ -680,20 +680,58 @@ typedef enum
 
 typedef enum
 {
-    ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE         = 0,        /* not random access point */
-    ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC         = 1,        /* sync sample */
-    ISOM_SAMPLE_RANDOM_ACCESS_TYPE_CLOSED_RAP   = 1,        /* the first sample of a closed GOP */
-    ISOM_SAMPLE_RANDOM_ACCESS_TYPE_OPEN_RAP     = 2,        /* the first sample of an open GOP */
-    ISOM_SAMPLE_RANDOM_ACCESS_TYPE_UNKNOWN_RAP  = 3,        /* the first sample of an open or closed GOP */
-    ISOM_SAMPLE_RANDOM_ACCESS_TYPE_POST_ROLL    = 4,        /* the post-roll starting point of random access recovery */
-    ISOM_SAMPLE_RANDOM_ACCESS_TYPE_PRE_ROLL     = 5,        /* the pre-roll ending point of random access recovery */
+    /* flags for ISO Base Media file format */
+    ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE         = 0,
+    ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC         = 1 << 0,   /* a sync sample */
+    ISOM_SAMPLE_RANDOM_ACCESS_FLAG_RAP          = 1 << 2,   /* the first sample of a closed or an open GOP */
+    ISOM_SAMPLE_RANDOM_ACCESS_FLAG_CLOSED       = 1 << 3,   /* a sample in a closed GOP
+                                                             * This flag shall be set together with ISOM_SAMPLE_RANDOM_ACCESS_FLAG_RAP. */
+    ISOM_SAMPLE_RANDOM_ACCESS_FLAG_OPEN         = 1 << 4,   /* a sample in an open GOP
+                                                             * This flag shall be set together with ISOM_SAMPLE_RANDOM_ACCESS_FLAG_RAP. */
+    ISOM_SAMPLE_RANDOM_ACCESS_FLAG_GDR          = 1 << 5,   /* a sample on gradual decoder refresh or random access recovery */
+    ISOM_SAMPLE_RANDOM_ACCESS_FLAG_GDR_START    = 1 << 6,   /* a sample that is the starting point of gradual decoder refresh or random access recovery
+                                                             * This flag shall be set together with ISOM_SAMPLE_RANDOM_ACCESS_FLAG_GDR. */
+    ISOM_SAMPLE_RANDOM_ACCESS_FLAG_GDR_END      = 1 << 7,   /* a sample that is the ending point of gradual decoder refresh or random access recovery
+                                                             * This flag shall be set together with ISOM_SAMPLE_RANDOM_ACCESS_FLAG_GDR. */
 
-    QT_SAMPLE_RANDOM_ACCESS_TYPE_NONE           = 0,        /* alias of ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE */
-    QT_SAMPLE_RANDOM_ACCESS_TYPE_SYNC           = 1,        /* alias of ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC */
-    QT_SAMPLE_RANDOM_ACCESS_TYPE_PARTIAL_SYNC   = 2,        /* partial sync sample */
-    QT_SAMPLE_RANDOM_ACCESS_TYPE_CLOSED_RAP     = 1,        /* alias of ISOM_SAMPLE_RANDOM_ACCESS_TYPE_CLOSED_RAP */
-    QT_SAMPLE_RANDOM_ACCESS_TYPE_OPEN_RAP       = 2,        /* alias of ISOM_SAMPLE_RANDOM_ACCESS_TYPE_OPEN_RAP */
-} lsmash_random_access_type;
+    ISOM_SAMPLE_RANDOM_ACCESS_FLAG_CLOSED_RAP               /* the first sample of a closed GOP */
+        = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_RAP
+        | ISOM_SAMPLE_RANDOM_ACCESS_FLAG_CLOSED,
+    ISOM_SAMPLE_RANDOM_ACCESS_FLAG_OPEN_RAP                 /* the first sample of an open GOP */
+        = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_RAP
+        | ISOM_SAMPLE_RANDOM_ACCESS_FLAG_OPEN,
+    ISOM_SAMPLE_RANDOM_ACCESS_FLAG_POST_ROLL_START          /* the post-roll starting point of random access recovery */
+        = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_GDR
+        | ISOM_SAMPLE_RANDOM_ACCESS_FLAG_GDR_START,
+    ISOM_SAMPLE_RANDOM_ACCESS_FLAG_PRE_ROLL_END             /* the pre-roll ending point of random access recovery */
+        = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_GDR
+        | ISOM_SAMPLE_RANDOM_ACCESS_FLAG_GDR_END,
+
+    /* flags for QuickTime file format */
+    QT_SAMPLE_RANDOM_ACCESS_FLAG_NONE           = 0,        /* alias of ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE */
+    QT_SAMPLE_RANDOM_ACCESS_FLAG_SYNC           = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC,
+    QT_SAMPLE_RANDOM_ACCESS_FLAG_PARTIAL_SYNC   = 1 << 1,   /* partial sync sample
+                                                             * Partial sync sample is a sample
+                                                             * such that this sample and samples following in decoding order can be correctly decoded
+                                                             * using the first sample of the previous GOP and samples following in decoding order,
+                                                             * in addition, this sample and non-leading samples following in decoding order can be correctly decoded from this. */
+    QT_SAMPLE_RANDOM_ACCESS_FLAG_RAP            = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_RAP,
+    QT_SAMPLE_RANDOM_ACCESS_FLAG_CLOSED         = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_CLOSED,
+    QT_SAMPLE_RANDOM_ACCESS_FLAG_OPEN           = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_OPEN,
+
+    QT_SAMPLE_RANDOM_ACCESS_FLAG_CLOSED_RAP                 /* the first sample of a closed GOP */
+        = QT_SAMPLE_RANDOM_ACCESS_FLAG_RAP
+        | QT_SAMPLE_RANDOM_ACCESS_FLAG_CLOSED,
+    QT_SAMPLE_RANDOM_ACCESS_FLAG_OPEN_RAP                   /* the first sample of an open GOP */
+        = QT_SAMPLE_RANDOM_ACCESS_FLAG_RAP
+        | QT_SAMPLE_RANDOM_ACCESS_FLAG_OPEN,
+} lsmash_random_access_flag;
+
+#define LSMASH_FLAGS_SATISFIED( x, y ) (((x) & (y)) == (y))
+#define LSMASH_IS_CLOSED_RAP( x )      LSMASH_FLAGS_SATISFIED( (x), ISOM_SAMPLE_RANDOM_ACCESS_FLAG_CLOSED_RAP )
+#define LSMASH_IS_OPEN_RAP( x )        LSMASH_FLAGS_SATISFIED( (x), ISOM_SAMPLE_RANDOM_ACCESS_FLAG_OPEN_RAP )
+#define LSMASH_IS_POST_ROLL_START( x ) LSMASH_FLAGS_SATISFIED( (x), ISOM_SAMPLE_RANDOM_ACCESS_FLAG_POST_ROLL_START )
+#define LSMASH_IS_PRE_ROLL_END( x )    LSMASH_FLAGS_SATISFIED( (x), ISOM_SAMPLE_RANDOM_ACCESS_FLAG_PRE_ROLL_END )
 
 typedef struct
 {
@@ -701,10 +739,10 @@ typedef struct
                              * If this identifier equals a certain identifier of random access recovery point,
                              * then this sample is the random access recovery point of the earliest unestablished post-roll group. */
     uint32_t complete;      /* the identifier of future random access recovery point, which is necessary for the recovery from its starting point to be completed
-                             * For muxing, this value is used only if random_access_type is set to ISOM_SAMPLE_RANDOM_ACCESS_TYPE_POST_ROLL.
+                             * For muxing, this value is used only if (ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_TYPE_POST_ROLL_START) is true.
                              * The following is an example of use for gradual decoder refresh of H.264/AVC.
                              *   For each sample, set 'frame_num' to the 'identifier'.
-                             *   For samples with recovery point SEI message, set ISOM_SAMPLE_RANDOM_ACCESS_TYPE_POST_ROLL to random_access_type
+                             *   For samples with recovery point SEI message, add ISOM_SAMPLE_RANDOM_ACCESS_TYPE_POST_ROLL_START to ra_flags
                              *   and set '(frame_num + recovery_frame_cnt) % MaxFrameNum' to the 'complete'.
                              *   The above-mentioned values are set appropriately, then L-SMASH will establish appropriate post-roll grouping. */
 } lsmash_post_roll_t;
@@ -713,8 +751,8 @@ typedef struct
 {
     uint32_t distance;      /* the distance from the previous random access point or pre-roll starting point
                              * of the random access recovery point to this sample.
-                             * For muxing, this value is used only if random_access_type is not set to ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE
-                             * or ISOM_SAMPLE_RANDOM_ACCESS_TYPE_POST_ROLL.
+                             * For muxing, this value is used only if ra_flags is not set to ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE
+                             * and LSMASH_IS_POST_ROLL_START( ra_flags ) is false.
                              * Some derived specifications forbid using pre-roll settings and use post-roll settings instead (e.g. AVC uses only post-roll).
                              * The following is an example of pre-roll distance for representing audio decoder delay derived from composition.
                              *   Typical AAC encoding uses a transform over consecutive sets of 2048 audio samples,
@@ -731,7 +769,7 @@ typedef struct
     uint8_t independent;
     uint8_t disposable;
     uint8_t redundant;
-    lsmash_random_access_type random_access_type;
+    lsmash_random_access_flag ra_flags;
     lsmash_post_roll_t        post_roll;
     lsmash_pre_roll_t         pre_roll;
 } lsmash_sample_property_t;
@@ -1079,7 +1117,7 @@ typedef struct
                                              * You can't set this parameter manually. */
     uint32_t number_of_tracks;              /* the number of tracks in the movie
                                              * You can't set this parameter manually. */
-    /* The following parameters are recognized only when a file is read as an Apple MPEG-4 or QuickTime file fromat. */
+    /* The following parameters are recognized only when a file is read as an Apple MPEG-4 or QuickTime file format. */
     int32_t  playback_rate;                 /* fixed point 16.16 number. 0x00010000 is normal forward playback and default value. */
     int32_t  playback_volume;               /* fixed point 8.8 number. 0x0100 is full volume and default value. */
     int32_t  preview_time;                  /* the time value in the movie at which the preview begins */
@@ -1193,7 +1231,7 @@ int lsmash_get_cts_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, 
 int lsmash_get_composition_to_decode_shift_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t *ctd_shift );
 int lsmash_get_closest_random_accessible_point_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number, uint32_t *rap_number );
 int lsmash_get_closest_random_accessible_point_detail_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number,
-                                                                           uint32_t *rap_number, lsmash_random_access_type *type, uint32_t *leading, uint32_t *distance );
+                                                                           uint32_t *rap_number, lsmash_random_access_flag *ra_flags, uint32_t *leading, uint32_t *distance );
 uint32_t lsmash_get_sample_count_in_media_timeline( lsmash_root_t *root, uint32_t track_ID );
 uint32_t lsmash_get_max_sample_size_in_media_timeline( lsmash_root_t *root, uint32_t track_ID );
 uint64_t lsmash_get_media_duration_from_media_timeline( lsmash_root_t *root, uint32_t track_ID );

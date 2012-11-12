@@ -290,7 +290,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
             memcpy( sample->data + 2 + name_length, encd, 12 );
         }
         sample->dts = sample->cts = data.start_time;
-        sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+        sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
         sample->index = sample_entry;
         if( lsmash_append_sample( root, chapter_track_ID, sample ) )
         {

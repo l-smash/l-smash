@@ -508,7 +508,7 @@ static int isom_get_sample_info_from_media_timeline( isom_timeline_t *timeline, 
 static int isom_get_lpcm_sample_property_from_media_timeline( isom_timeline_t *timeline, uint32_t sample_number, lsmash_sample_property_t *prop )
 {
     memset( prop, 0, sizeof(lsmash_sample_property_t) );
-    prop->random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+    prop->ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
     return 0;
 }
 
@@ -687,7 +687,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                     goto fail;
                 if( sample_number == stss_data->sample_number )
                 {
-                    info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+                    info.prop.ra_flags |= ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
                     stss_entry = stss_entry->next;
                     distance = 0;
                 }
@@ -695,7 +695,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
             else if( all_sync )
                 /* Don't reset distance as 0 since MDCT-based audio frames need pre-roll for correct presentation
                  * though all of them could be marked as a sync sample. */
-                info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+                info.prop.ra_flags |= ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
             /* Check whether partial sync sample or not. */
             if( stps_entry )
             {
@@ -704,7 +704,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                     goto fail;
                 if( sample_number == stps_data->sample_number )
                 {
-                    info.prop.random_access_type = QT_SAMPLE_RANDOM_ACCESS_TYPE_PARTIAL_SYNC;
+                    info.prop.ra_flags |= QT_SAMPLE_RANDOM_ACCESS_FLAG_PARTIAL_SYNC | QT_SAMPLE_RANDOM_ACCESS_FLAG_RAP;
                     stps_entry = stps_entry->next;
                     distance = 0;
                 }
@@ -739,15 +739,15 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                     {
                         /* post-roll */
                         info.prop.post_roll.complete = sample_number + roll_data->roll_distance;
-                        if( info.prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE )
-                            info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_POST_ROLL;
+                        if( info.prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE )
+                            info.prop.ra_flags |= ISOM_SAMPLE_RANDOM_ACCESS_FLAG_POST_ROLL_START;
                     }
                     else if( roll_data->roll_distance < 0 )
                     {
                         /* pre-roll */
                         info.prop.pre_roll.distance = -roll_data->roll_distance;
-                        if( info.prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE )
-                            info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_PRE_ROLL;
+                        if( info.prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE )
+                            info.prop.ra_flags |= ISOM_SAMPLE_RANDOM_ACCESS_FLAG_PRE_ROLL_END;
                     }
                 }
                 INCREMENT_SAMPLE_NUMBER_IN_ENTRY( sample_number_in_sbgp_roll_entry, sbgp_roll_entry, assignment );
@@ -759,15 +759,15 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                 isom_group_assignment_entry_t *assignment = (isom_group_assignment_entry_t *)sbgp_rap_entry->data;
                 if( !assignment )
                     goto fail;
-                if( assignment->group_description_index && (info.prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE) )
+                if( assignment->group_description_index && (info.prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE) )
                 {
                     isom_rap_entry_t *rap_data = (isom_rap_entry_t *)lsmash_get_entry_data( sgpd_rap->list, assignment->group_description_index );
                     if( !rap_data )
                         goto fail;
                     /* If this is not an open RAP, we treat it as an unknown RAP since non-IDR sample could make a closed GOP. */
-                    info.prop.random_access_type = (rap_data->num_leading_samples_known && !!rap_data->num_leading_samples)
-                                                 ? ISOM_SAMPLE_RANDOM_ACCESS_TYPE_OPEN_RAP
-                                                 : ISOM_SAMPLE_RANDOM_ACCESS_TYPE_UNKNOWN_RAP;
+                    info.prop.ra_flags |= (rap_data->num_leading_samples_known && !!rap_data->num_leading_samples)
+                                        ? ISOM_SAMPLE_RANDOM_ACCESS_FLAG_OPEN_RAP
+                                        : ISOM_SAMPLE_RANDOM_ACCESS_FLAG_RAP;
                     distance = 0;
                 }
                 INCREMENT_SAMPLE_NUMBER_IN_ENTRY( sample_number_in_sbgp_rap_entry, sbgp_rap_entry, assignment );
@@ -781,7 +781,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
         }
         else
             /* All LPCMFrame is a sync sample. */
-            info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+            info.prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
         /* Get size of sample in the stream. */
         if( is_lpcm_audio || !stsz_entry )
             info.length = constant_sample_size;
@@ -1057,7 +1057,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                                 if( !sample_flags.sample_is_non_sync_sample
                                  && info.prop.independent != ISOM_SAMPLE_IS_NOT_INDEPENDENT )
                                 {
-                                    info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+                                    info.prop.ra_flags |= ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
                                     distance = 0;
                                 }
                                 /* Get the location of the sync sample from 'tfra' if it is not set up yet.
@@ -1065,13 +1065,13 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                                 if( tfra )
                                 {
                                     if( tfra->number_of_entry == 0
-                                     && info.prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE )
-                                        info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+                                     && info.prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE )
+                                        info.prop.ra_flags |= ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
                                     if( rap && rap->moof_offset == moof->pos && rap->traf_number == traf_number
                                      && rap->trun_number == trun_number && rap->sample_number == sample_number )
                                     {
-                                        if( info.prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE )
-                                            info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+                                        if( info.prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE )
+                                            info.prop.ra_flags |= ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
                                         if( tfra_entry )
                                             tfra_entry = tfra_entry->next;
                                         rap = tfra_entry ? (isom_tfra_location_time_entry_t *)tfra_entry->data : NULL;
@@ -1091,7 +1091,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                             else
                             {
                                 /* All LPCMFrame is a sync sample. */
-                                info.prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+                                info.prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
                                 /* OK. Let's add its info. */
                                 if( sample_count == 0 && sample_number == 1 )
                                     isom_update_bunch( &bunch, &info );
@@ -1217,7 +1217,7 @@ static inline int isom_get_closest_past_random_accessible_point_from_media_timel
     if( !entry || !entry->data )
         return -1;
     isom_sample_info_t *info = (isom_sample_info_t *)entry->data;
-    while( info->prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE )
+    while( info->prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE )
     {
         entry = entry->prev;
         if( !entry || !entry->data )
@@ -1235,7 +1235,7 @@ static inline int isom_get_closest_future_random_accessible_point_from_media_tim
     if( !entry || !entry->data )
         return -1;
     isom_sample_info_t *info = (isom_sample_info_t *)entry->data;
-    while( info->prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE )
+    while( info->prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE )
     {
         entry = entry->next;
         if( !entry || !entry->data )
@@ -1271,9 +1271,8 @@ int lsmash_get_closest_random_accessible_point_from_media_timeline( lsmash_root_
 }
 
 int lsmash_get_closest_random_accessible_point_detail_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number,
-                                                                           uint32_t *rap_number, lsmash_random_access_type *type, uint32_t *leading, uint32_t *distance )
+                                                                           uint32_t *rap_number, lsmash_random_access_flag *ra_flags, uint32_t *leading, uint32_t *distance )
 {
-#define IS_RECOVERY( x ) (((x) == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_POST_ROLL) || ((x) == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_PRE_ROLL))
     if( sample_number == 0 )
         return -1;
     isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
@@ -1281,8 +1280,8 @@ int lsmash_get_closest_random_accessible_point_detail_from_media_timeline( lsmas
     {
         /* All LPCM is sync sample. */
         *rap_number = sample_number;
-        if( type )
-            *type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+        if( ra_flags )
+            *ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
         if( leading )
             *leading  = 0;
         if( distance )
@@ -1294,8 +1293,8 @@ int lsmash_get_closest_random_accessible_point_detail_from_media_timeline( lsmas
     isom_sample_info_t *info = (isom_sample_info_t *)lsmash_get_entry_data( timeline->info_list, *rap_number );
     if( !info )
         return -1;
-    if( type )
-        *type = info->prop.random_access_type;
+    if( ra_flags )
+        *ra_flags = info->prop.ra_flags;
     if( leading )
         *leading  = 0;
     if( distance )
@@ -1303,7 +1302,7 @@ int lsmash_get_closest_random_accessible_point_detail_from_media_timeline( lsmas
     if( sample_number < *rap_number )
         /* Impossible to desire to decode the sample of given number correctly. */
         return 0;
-    else if( !IS_RECOVERY( info->prop.random_access_type ) )
+    else if( !(info->prop.ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_GDR) )
     {
         if( leading )
         {
@@ -1338,7 +1337,7 @@ int lsmash_get_closest_random_accessible_point_detail_from_media_timeline( lsmas
             info = (isom_sample_info_t *)lsmash_get_entry_data( timeline->info_list, prev_rap_number );
             if( !info )
                 return -1;
-            if( !IS_RECOVERY( info->prop.random_access_type ) )
+            if( !(info->prop.ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_GDR) )
             {
                 /* Decode shall already complete at the first closest non-recovery random accessible point if starting to decode from the second. */
                 *distance = *rap_number - prev_rap_number;
@@ -1376,7 +1375,7 @@ int lsmash_get_closest_random_accessible_point_detail_from_media_timeline( lsmas
                 *distance = info->prop.pre_roll.distance;
                 return 0;
             }
-            else if( !IS_RECOVERY( info->prop.random_access_type ) )
+            else if( !(info->prop.ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_GDR) )
             {
                 /*
                  *            |<------------ pre-roll distance ------------------>|
@@ -1411,13 +1410,12 @@ int lsmash_get_closest_random_accessible_point_detail_from_media_timeline( lsmas
         info = (isom_sample_info_t *)lsmash_get_entry_data( timeline->info_list, prev_rap_number );
         if( !info )
             return -1;
-        if( !IS_RECOVERY( info->prop.random_access_type ) || sample_number >= info->prop.post_roll.complete )
+        if( !(info->prop.ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_GDR) || sample_number >= info->prop.post_roll.complete )
         {
             *distance = *rap_number - prev_rap_number;
             return 0;
         }
     } while( 1 );
-#undef IS_RECOVERY
 }
 
 int lsmash_check_sample_existence_in_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number )

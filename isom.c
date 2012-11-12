@@ -6748,7 +6748,7 @@ static int isom_add_sync_point( isom_trak_entry_t *trak, uint32_t sample_number,
 {
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     isom_cache_t *cache = trak->cache;
-    if( prop->random_access_type != ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC )       /* no null check for prop */
+    if( !(prop->ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC) )   /* no null check for prop */
     {
         if( !cache->all_sync )
             return 0;
@@ -6778,9 +6778,10 @@ static int isom_add_partial_sync( isom_trak_entry_t *trak, uint32_t sample_numbe
 {
     if( !trak->root->qt_compatible )
         return 0;
-    if( prop->random_access_type != QT_SAMPLE_RANDOM_ACCESS_TYPE_PARTIAL_SYNC
-     && !(prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_POST_ROLL && prop->post_roll.identifier == prop->post_roll.complete) )
+    if( !(prop->ra_flags & QT_SAMPLE_RANDOM_ACCESS_FLAG_PARTIAL_SYNC)
+     && !(LSMASH_IS_POST_ROLL_START( prop->ra_flags ) && prop->post_roll.identifier == prop->post_roll.complete) )
         return 0;
+    /* This sample is a partial sync sample. */
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     if( !stbl->stps && isom_add_stps( stbl ) )
         return -1;
@@ -6853,10 +6854,10 @@ static int isom_group_random_access( isom_trak_entry_t *trak, lsmash_sample_prop
     isom_sgpd_entry_t *sgpd = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_RAP );
     if( !sbgp || !sgpd )
         return 0;
-    uint8_t is_rap = prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_CLOSED_RAP
-                  || prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_OPEN_RAP
-                  || prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_UNKNOWN_RAP
-                  || (prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_POST_ROLL && prop->post_roll.identifier == prop->post_roll.complete);
+    uint8_t is_rap = (prop->ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC)
+                  || (prop->ra_flags & QT_SAMPLE_RANDOM_ACCESS_FLAG_PARTIAL_SYNC)
+                  || (prop->ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_RAP)
+                  || (LSMASH_IS_POST_ROLL_START( prop->ra_flags ) && prop->post_roll.identifier == prop->post_roll.complete);
     isom_rap_group_t *group = trak->cache->rap;
     if( !group )
     {
@@ -6901,7 +6902,7 @@ static int isom_group_random_access( isom_trak_entry_t *trak, lsmash_sample_prop
                 return -1;
             }
         }
-        else if( prop->random_access_type != ISOM_SAMPLE_RANDOM_ACCESS_TYPE_CLOSED_RAP )
+        else if( !LSMASH_IS_CLOSED_RAP( prop->ra_flags ) )
         {
             /* Create a new group since there is the possibility the next sample is a leading sample.
              * This sample is a member of 'rap ', so we set appropriate value on its group_description_index. */
@@ -7071,8 +7072,8 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_prop
     }
     isom_roll_group_t *group = (isom_roll_group_t *)lsmash_get_entry_data( pool, pool->entry_count );
     uint32_t sample_count = isom_get_sample_count( trak );
-    int is_recovery_start = (prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_POST_ROLL);
-    int valid_pre_roll = !is_recovery_start && (prop->random_access_type != ISOM_SAMPLE_RANDOM_ACCESS_TYPE_NONE)
+    int is_recovery_start = LSMASH_IS_POST_ROLL_START( prop->ra_flags );
+    int valid_pre_roll = !is_recovery_start && (prop->ra_flags != ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE)
                       && (prop->pre_roll.distance > 0) && (prop->pre_roll.distance <= -INT16_MIN);
     int new_group = !group || is_recovery_start || (group->prev_is_recovery_start != is_recovery_start);
     if( !new_group )
@@ -7129,7 +7130,7 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_prop
         ++ group->assignment->sample_count;
     }
     /* If encountered a sync sample, all recovery is completed here. */
-    if( prop->random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_CLOSED_RAP )
+    if( prop->ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC )
         return isom_all_recovery_described( sbgp, pool );
     /* Check whether this sample is a random access recovery point or not. */
     for( lsmash_entry_t *entry = pool->head; entry; entry = entry->next )
@@ -7567,7 +7568,7 @@ static isom_sample_flags_t isom_generate_fragment_sample_flags( lsmash_sample_t 
     flags.sample_is_depended_on       = sample->prop.disposable  & 0x3;
     flags.sample_has_redundancy       = sample->prop.redundant   & 0x3;
     flags.sample_padding_value        = 0;
-    flags.sample_is_non_sync_sample   = sample->prop.random_access_type != ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+    flags.sample_is_non_sync_sample   = !(sample->prop.ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC);
     flags.sample_degradation_priority = 0;
     return flags;
 }
@@ -7632,7 +7633,7 @@ static int isom_update_fragment_sample_tables( isom_traf_entry_t *traf, lsmash_s
             tfhd->default_sample_flags = sample_flags;
             /* Set up random access information if this sample is a sync sample.
              * We inform only the first sample in each movie fragment. */
-            if( root->bs->stream != stdout && sample->prop.random_access_type == ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC )
+            if( root->bs->stream != stdout && (sample->prop.ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC) )
             {
                 isom_tfra_entry_t *tfra = isom_get_tfra( root->mfra, tfhd->track_ID );
                 if( !tfra )

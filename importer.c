@@ -338,7 +338,7 @@ static int mp4sys_adts_get_accessunit( mp4sys_importer_t* importer, uint32_t tra
     buffered_sample->length = raw_data_block_size;
     buffered_sample->dts = info->au_number++ * info->samples_in_frame;
     buffered_sample->cts = buffered_sample->dts;
-    buffered_sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+    buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
     buffered_sample->prop.pre_roll.distance = 1;    /* MDCT */
 
     /* now we succeeded to read current frame, so "return" takes 0 always below. */
@@ -719,7 +719,7 @@ static int mp4sys_mp3_get_accessunit( mp4sys_importer_t* importer, uint32_t trac
     buffered_sample->length = MP4SYS_MP3_HEADER_LENGTH + frame_size;
     buffered_sample->dts = info->au_number++ * info->samples_in_frame;
     buffered_sample->cts = buffered_sample->dts;
-    buffered_sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+    buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
     buffered_sample->prop.pre_roll.distance = header->layer == MP4SYS_LAYER_III ? 1 : 0;    /* Layer III uses MDCT */
 
     /* now we succeeded to read current frame, so "return" takes 0 always below. */
@@ -881,7 +881,7 @@ static int mp4sys_amr_get_accessunit( mp4sys_importer_t* importer, uint32_t trac
     }
     buffered_sample->dts = info->au_number++ * info->samples_in_frame;
     buffered_sample->cts = buffered_sample->dts;
-    buffered_sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+    buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
     return 0;
 }
 
@@ -1166,7 +1166,7 @@ static int mp4sys_ac3_get_accessunit( mp4sys_importer_t *importer, uint32_t trac
     buffered_sample->length = frame_size;
     buffered_sample->dts = info->au_number++ * summary->samples_in_frame;
     buffered_sample->cts = buffered_sample->dts;
-    buffered_sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+    buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
     buffered_sample->prop.pre_roll.distance = 1;    /* MDCT */
     if( fread( info->buffer, 1, AC3_MIN_SYNCFRAME_LENGTH, importer->stream ) != AC3_MIN_SYNCFRAME_LENGTH )
         importer_info->status = MP4SYS_IMPORTER_EOF;
@@ -1532,7 +1532,7 @@ static int mp4sys_eac3_get_accessunit( mp4sys_importer_t *importer, uint32_t tra
     buffered_sample->length = info->au_length;
     buffered_sample->dts = info->au_number++ * summary->samples_in_frame;
     buffered_sample->cts = buffered_sample->dts;
-    buffered_sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+    buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
     buffered_sample->prop.pre_roll.distance = 1;    /* MDCT */
     if( importer_info->status == MP4SYS_IMPORTER_EOF )
     {
@@ -1866,7 +1866,7 @@ static int mp4sys_als_get_accessunit( mp4sys_importer_t *importer, uint32_t trac
             return -1;
         buffered_sample->length = alssc->access_unit_size;
         buffered_sample->cts = buffered_sample->dts = 0;
-        buffered_sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+        buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
         info->status = MP4SYS_IMPORTER_EOF;
         return 0;
     }
@@ -1887,7 +1887,7 @@ static int mp4sys_als_get_accessunit( mp4sys_importer_t *importer, uint32_t trac
     buffered_sample->length = au_length;
     buffered_sample->dts = info->au_number++ * info->samples_in_frame;
     buffered_sample->cts = buffered_sample->dts;
-    buffered_sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+    buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
     if( info->au_number == alssc->number_of_ra_units )
         info->status = MP4SYS_IMPORTER_EOF;
     return 0;
@@ -2182,7 +2182,7 @@ static int mp4sys_dts_get_accessunit( mp4sys_importer_t *importer, uint32_t trac
     buffered_sample->length = info->au_length;
     buffered_sample->dts = info->au_number++ * summary->samples_in_frame;
     buffered_sample->cts = buffered_sample->dts;
-    buffered_sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+    buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
     buffered_sample->prop.pre_roll.distance = !!(info->flags & DTS_EXT_SUBSTREAM_LBR_FLAG);     /* MDCT */
     if( importer_info->status == MP4SYS_IMPORTER_EOF )
     {
@@ -2686,14 +2686,14 @@ static int mp4sys_h264_get_accessunit( mp4sys_importer_t *importer, uint32_t tra
     if( picture->random_accessible )
     {
         if( picture->idr )
-            buffered_sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+            buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
         else if( picture->recovery_frame_cnt )
         {
-            buffered_sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_POST_ROLL;
+            buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_POST_ROLL_START;
             buffered_sample->prop.post_roll.complete = (picture->frame_num + picture->recovery_frame_cnt) % sps->MaxFrameNum;
         }
         else
-            buffered_sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_OPEN_RAP;
+            buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_RAP | QT_SAMPLE_RANDOM_ACCESS_FLAG_PARTIAL_SYNC;
     }
     buffered_sample->length = picture->au_length;
     memcpy( buffered_sample->data, picture->au, picture->au_length );
@@ -3330,7 +3330,8 @@ static int mp4sys_vc1_get_accessunit( mp4sys_importer_t *importer, uint32_t trac
     buffered_sample->prop.disposable  = access_unit->disposable  ? ISOM_SAMPLE_IS_DISPOSABLE  : ISOM_SAMPLE_IS_NOT_DISPOSABLE;
     buffered_sample->prop.redundant   = ISOM_SAMPLE_HAS_NO_REDUNDANCY;
     if( access_unit->random_accessible )
-        buffered_sample->prop.random_access_type = ISOM_SAMPLE_RANDOM_ACCESS_TYPE_SYNC;
+        /* All random access point is a sync sample even if it's an open RAP. */
+        buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
     buffered_sample->length = access_unit->data_length;
     memcpy( buffered_sample->data, access_unit->data, access_unit->data_length );
     return current_status;
