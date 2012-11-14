@@ -858,15 +858,15 @@ static int prepare_output( muxer_t *muxer )
                     uint32_t timebase  = 1;     /* default value */
                     if( track_opt->user_fps )
                     {
-                        timescale = track_opt->fps_num;
+                        timescale = track_opt->fps_num << (!!summary->sample_per_field);
                         timebase  = track_opt->fps_den;
                     }
                     else if( !summary->vfr )
                     {
                         if( lsmash_check_codec_type_identical( summary->sample_type, ISOM_CODEC_TYPE_AVC1_VIDEO ) )
                         {
-                            uint32_t compare_timescale = summary->timescale;
-                            uint32_t compare_timebase  = summary->timebase;
+                            uint32_t compare_timebase  = summary->timebase  << (!summary->sample_per_field && (summary->timescale & 1) != 0);
+                            uint32_t compare_timescale = summary->timescale >> (!summary->sample_per_field && (summary->timescale & 1) == 0);
                             static const struct
                             {
                                 uint32_t timescale;

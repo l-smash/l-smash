@@ -2722,7 +2722,7 @@ static lsmash_video_summary_t *h264_create_summary( h264_info_t *info, h264_sps_
     }
     summary->sample_type            = ISOM_CODEC_TYPE_AVC1_VIDEO;
     summary->max_au_length          = max_au_length;
-    summary->timescale              = sps->vui.time_scale >> (sps->vui.time_scale > 1 && !field_pic_present);
+    summary->timescale              = sps->vui.time_scale;
     summary->timebase               = sps->vui.num_units_in_tick;
     summary->vfr                    = !sps->vui.fixed_frame_rate_flag;
     summary->sample_per_field       = field_pic_present;
