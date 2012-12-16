@@ -788,8 +788,16 @@ static int isom_print_colr( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
         lsmash_ifprintf( fp, indent, "matrix_index = %"PRIu16"\n", colr->matrix_index );
         if( colr->color_parameter_type == ISOM_COLOR_PARAMETER_TYPE_NCLX )
         {
-            lsmash_ifprintf( fp, indent, "full_range_flag = %"PRIu8"\n", colr->full_range_flag );
-            lsmash_ifprintf( fp, indent, "reserved = 0x%08"PRIx8"\n", colr->reserved );
+            if( colr->manager & LSMASH_INCOMPLETE_BOX )
+            {
+                lsmash_ifprintf( fp, indent, "full_range_flag = N/A\n" );
+                lsmash_ifprintf( fp, indent, "reserved = N/A\n" );
+            }
+            else
+            {
+                lsmash_ifprintf( fp, indent, "full_range_flag = %"PRIu8"\n", colr->full_range_flag );
+                lsmash_ifprintf( fp, indent, "reserved = 0x%08"PRIx8"\n", colr->reserved );
+            }
         }
     }
     return 0;
