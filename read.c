@@ -1332,10 +1332,10 @@ static int isom_read_colr( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
             }
         }
         else
-            colr->manager |= LSMASH_QTFF_BASE;
+            box->manager |= LSMASH_QTFF_BASE;
     }
     box->size = lsmash_bs_get_pos( bs );
-    box->type = (colr->manager & LSMASH_QTFF_BASE) ? QT_BOX_TYPE_COLR : ISOM_BOX_TYPE_COLR;
+    box->type = (box->manager & LSMASH_QTFF_BASE) ? QT_BOX_TYPE_COLR : ISOM_BOX_TYPE_COLR;
     isom_box_common_copy( colr, box );
     return isom_add_print_func( root, colr, level );
 }
