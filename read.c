@@ -1317,7 +1317,7 @@ static int isom_read_colr( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         colr->matrix_index            = lsmash_bs_get_be16( bs );
         if( colr->color_parameter_type == ISOM_COLOR_PARAMETER_TYPE_NCLX )
         {
-            if( box->size < lsmash_bs_get_pos( bs ) )
+            if( lsmash_bs_get_pos( bs ) < box->size )
             {
                 uint8_t temp8 = lsmash_bs_get_byte( bs );
                 colr->full_range_flag = (temp8 >> 7) & 0x01;
