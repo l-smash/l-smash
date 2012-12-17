@@ -393,8 +393,8 @@ static int isom_write_clap( lsmash_bs_t *bs, isom_clap_t *clap )
 static int isom_write_colr( lsmash_bs_t *bs, isom_colr_t *colr )
 {
     if( !colr
-     || colr->color_parameter_type == ISOM_COLOR_PARAMETER_TYPE_RICC
-     || colr->color_parameter_type == ISOM_COLOR_PARAMETER_TYPE_PROF )
+     || (colr->color_parameter_type != ISOM_COLOR_PARAMETER_TYPE_NCLX
+      && colr->color_parameter_type !=   QT_COLOR_PARAMETER_TYPE_NCLC) )
         return 0;
     isom_bs_put_box_common( bs, colr );
     lsmash_bs_put_be32( bs, colr->color_parameter_type );

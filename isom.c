@@ -3953,8 +3953,8 @@ static uint64_t isom_update_glbl_size( isom_glbl_t *glbl )
 static uint64_t isom_update_colr_size( isom_colr_t *colr )
 {
     if( !colr
-     || colr->color_parameter_type == ISOM_COLOR_PARAMETER_TYPE_RICC
-     || colr->color_parameter_type == ISOM_COLOR_PARAMETER_TYPE_PROF )
+     || (colr->color_parameter_type != ISOM_COLOR_PARAMETER_TYPE_NCLX
+      && colr->color_parameter_type !=   QT_COLOR_PARAMETER_TYPE_NCLC) )
         return 0;
     colr->size = ISOM_BASEBOX_COMMON_SIZE + 10 + (colr->color_parameter_type == ISOM_COLOR_PARAMETER_TYPE_NCLX);
     CHECK_LARGESIZE( colr );
