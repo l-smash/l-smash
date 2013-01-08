@@ -1272,7 +1272,7 @@ int mp4sys_construct_decoder_config( lsmash_codec_specific_t *dst, lsmash_codec_
     lsmash_bs_t *bs = lsmash_bs_create( NULL );
     if( !bs )
         return -1;
-    if( lsmash_bs_import_data( bs, data, src->size - (src->data.unstructured - data) ) )
+    if( lsmash_bs_import_data( bs, data, src->size - (data - src->data.unstructured) ) )
     {
         lsmash_bs_cleanup( bs );
         return -1;
