@@ -3664,7 +3664,7 @@ int mp4sys_importer_get_access_unit( mp4sys_importer_t* importer, uint32_t track
 uint32_t mp4sys_importer_get_last_delta( mp4sys_importer_t *importer, uint32_t track_number )
 {
     if( !importer || !importer->funcs.get_last_delta )
-        return -1;
+        return 0;
     return importer->funcs.get_last_delta( importer, track_number );
 }
 
