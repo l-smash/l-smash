@@ -2989,7 +2989,7 @@ static uint32_t mp4sys_h264_get_last_delta( mp4sys_importer_t* importer, uint32_
     mp4sys_h264_info_t *info = (mp4sys_h264_info_t *)importer->info;
     if( !info || track_number != 1 || info->status != MP4SYS_IMPORTER_EOF )
         return 0;
-    return info->ts_list.sample_count > 1
+    return info->ts_list.sample_count
          ? 1
          : UINT32_MAX;    /* arbitrary */
 }
@@ -3538,7 +3538,7 @@ static uint32_t mp4sys_vc1_get_last_delta( mp4sys_importer_t* importer, uint32_t
     mp4sys_vc1_info_t *info = (mp4sys_vc1_info_t *)importer->info;
     if( !info || track_number != 1 || info->status != MP4SYS_IMPORTER_EOF )
         return 0;
-    return info->ts_list.sample_count > 1
+    return info->ts_list.sample_count
          ? 1
          : UINT32_MAX;    /* arbitrary */
 }
