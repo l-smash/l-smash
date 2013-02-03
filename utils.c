@@ -818,7 +818,7 @@ void lsmash_ifprintf( FILE *fp, int indent, const char *format, ... )
                 "                                    ",
                 "                                        "
             };
-        fprintf( fp, indent_string[indent] );
+        fprintf( fp, "%s", indent_string[indent] );
     }
     else
         for( int i = 0; i < indent; i++ )

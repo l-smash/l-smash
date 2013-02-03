@@ -54,7 +54,7 @@ static int print_help( int ret )
 static int boxdumper_error( lsmash_root_t *root, char* message )
 {
     lsmash_destroy_root( root );
-    eprintf( message );
+    eprintf( "%s", message );
     return -1;
 }
 
