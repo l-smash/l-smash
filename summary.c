@@ -189,6 +189,7 @@ lsmash_summary_t *lsmash_get_summary( lsmash_root_t *root, uint32_t track_ID, ui
     create_summary_table[i++] = (struct create_summary_table_tag){ type, func }
             ADD_CREATE_SUMMARY_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC1_VIDEO, isom_create_video_summary_from_description );
             ADD_CREATE_SUMMARY_TABLE_ELEMENT( ISOM_CODEC_TYPE_VC_1_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_2VUY_VIDEO, isom_create_video_summary_from_description );
             ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_APCH_VIDEO, isom_create_video_summary_from_description );
             ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_APCN_VIDEO, isom_create_video_summary_from_description );
             ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_APCS_VIDEO, isom_create_video_summary_from_description );

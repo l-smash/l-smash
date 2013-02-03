@@ -44,7 +44,8 @@ static void global_destruct_specific_data( void *data )
 
 static int isom_is_qt_video( lsmash_codec_type_t type )
 {
-    return lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_APCH_VIDEO )
+    return lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_2VUY_VIDEO )
+        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_APCH_VIDEO )
         || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_APCN_VIDEO )
         || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_APCS_VIDEO )
         || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_APCO_VIDEO )

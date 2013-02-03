@@ -225,7 +225,8 @@ int isom_is_lpcm_audio( void *box )
 /* Return 1 if the sample type is uncompressed Y'CbCr video, Otherwise return 0. */
 int isom_is_uncompressed_ycbcr( lsmash_box_type_t type )
 {
-    return lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_V210_VIDEO )
+    return lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_2VUY_VIDEO )
+        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_V210_VIDEO )
         || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_V216_VIDEO )
         || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_V308_VIDEO )
         || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_V408_VIDEO )

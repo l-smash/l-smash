@@ -219,6 +219,8 @@ DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_S263_VIDEO,  LSMASH_4CC( 's', '2', '6', 
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_SVC1_VIDEO,  LSMASH_4CC( 's', 'v', 'c', '1' ) );    /* Scalable Video Coding */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_VC_1_VIDEO,  LSMASH_4CC( 'v', 'c', '-', '1' ) );    /* SMPTE VC-1 */
 
+DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_2VUY_VIDEO,    LSMASH_4CC( '2', 'v', 'u', 'y' ) );    /* Uncompressed Y'CbCr, 8-bit-per-component 4:2:2
+                                                                                             *      |Cb(8)|Y'0(8)|Cr(8)|Y'1(8)| */
 DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_CFHD_VIDEO,    LSMASH_4CC( 'C', 'F', 'H', 'D' ) );    /* CineForm High-Definition (HD) wavelet codec */
 DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_DV10_VIDEO,    LSMASH_4CC( 'D', 'V', '1', '0' ) );    /* Digital Voodoo 10 bit Uncompressed 4:2:2 codec */
 DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_DVOO_VIDEO,    LSMASH_4CC( 'D', 'V', 'O', 'O' ) );    /* Digital Voodoo 8 bit Uncompressed 4:2:2 codec */
@@ -271,12 +273,21 @@ DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_ULRA_VIDEO,    LSMASH_4CC( 'U', 'L', 'R', 
 DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_ULRG_VIDEO,    LSMASH_4CC( 'U', 'L', 'R', 'G' ) );    /* Ut Video RGB 4:4:4 8bit full-range */
 DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_ULY0_VIDEO,    LSMASH_4CC( 'U', 'L', 'Y', '0' ) );    /* Ut Video YCbCr 4:2:0 8bit limited */
 DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_ULY2_VIDEO,    LSMASH_4CC( 'U', 'L', 'Y', '2' ) );    /* Ut Video YCbCr 4:2:2 8bit limited */
-DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_V210_VIDEO,    LSMASH_4CC( 'v', '2', '1', '0' ) );    /* Uncompressed Y'CbCr, 10-bit-per-component 4:2:2 */
-DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_V216_VIDEO,    LSMASH_4CC( 'v', '2', '1', '6' ) );    /* Uncompressed Y'CbCr, 10, 12, 14, or 16-bit-per-component 4:2:2 */
-DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_V308_VIDEO,    LSMASH_4CC( 'v', '3', '0', '8' ) );    /* Uncompressed Y'CbCr, 8-bit-per-component 4:4:4 */
-DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_V408_VIDEO,    LSMASH_4CC( 'v', '4', '0', '8' ) );    /* Uncompressed Y'CbCr, 8-bit-per-component 4:4:4:4 */
-DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_V410_VIDEO,    LSMASH_4CC( 'v', '4', '1', '0' ) );    /* Uncompressed Y'CbCr, 10-bit-per-component 4:4:4 */
-DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_YUV2_VIDEO,    LSMASH_4CC( 'y', 'u', 'v', '2' ) );    /* Uncompressed Y'CbCr, 8-bit-per-component 4:2:2 */
+DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_V210_VIDEO,    LSMASH_4CC( 'v', '2', '1', '0' ) );    /* Uncompressed Y'CbCr, 10-bit-per-component 4:2:2
+                                                                                             *      |Cb0(10)|Y'0(10)|Cr0(10)|XX(2)|
+                                                                                             *      |Y'1(10)|Cb1(10)|Y'2(10)|XX(2)|
+                                                                                             *      |Cr1(10)|Y'3(10)|Cb2(10)|XX(2)|
+                                                                                             *      |Y'4(10)|Cr2(10)|Y'5(10)|XX(2)| (X is a zero bit) */
+DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_V216_VIDEO,    LSMASH_4CC( 'v', '2', '1', '6' ) );    /* Uncompressed Y'CbCr, 10, 12, 14, or 16-bit-per-component 4:2:2
+                                                                                             *      |Cb(16 LE)|Y'0(16 LE)|Cr(16 LE)|Y'1(16 LE)| */
+DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_V308_VIDEO,    LSMASH_4CC( 'v', '3', '0', '8' ) );    /* Uncompressed Y'CbCr, 8-bit-per-component 4:4:4
+                                                                                             *      |Cr(8)|Y'(8)|Cb(8)| */
+DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_V408_VIDEO,    LSMASH_4CC( 'v', '4', '0', '8' ) );    /* Uncompressed Y'CbCrA, 8-bit-per-component 4:4:4:4
+                                                                                             *      |Cb(8)|Y'(8)|Cr(8)|A(8)| */
+DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_V410_VIDEO,    LSMASH_4CC( 'v', '4', '1', '0' ) );    /* Uncompressed Y'CbCr, 10-bit-per-component 4:4:4
+                                                                                             *      |XX(2)|Cb(10)|Y'(10)|Cr(10)| (X is a zero bit) */
+DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_YUV2_VIDEO,    LSMASH_4CC( 'y', 'u', 'v', '2' ) );    /* Uncompressed Y'CbCr, 8-bit-per-component 4:2:2
+                                                                                             *      |Y'0(8)|Cb(8)|Y'1(8)|Cr(8)| */
 
 /* Text CODEC identifiers */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_ENCT_TEXT,   LSMASH_4CC( 'e', 'n', 'c', 't' ) );    /* Encrypted Text */
