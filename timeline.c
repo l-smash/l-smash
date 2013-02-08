@@ -39,7 +39,6 @@ typedef struct
 {
     uint64_t data_offset;
     uint64_t length;
-    void    *data;
     uint32_t number;
 } isom_portable_chunk_t;
 
@@ -87,7 +86,8 @@ struct isom_timeline_tag
     uint32_t last_accessed_lpcm_bunch_first_sample_number;
     uint64_t last_accessed_lpcm_bunch_dts;
     uint64_t last_read_size;
-    void    *last_accessed_chunk_data;
+    uint32_t last_accessed_chunk_alloc_size;
+    void    *last_accessed_chunk_data;  /* may not contain all of a chunk */
     lsmash_entry_list_t edit_list [1];  /* list of edits */
     lsmash_entry_list_t chunk_list[1];  /* list of chunks */
     lsmash_entry_list_t info_list [1];  /* list of sample info */
@@ -386,44 +386,49 @@ static lsmash_sample_t *isom_read_sample_data_from_stream( lsmash_root_t *root, 
      || (timeline->last_accessed_offset > sample_pos)
      || (timeline->last_read_size < (sample_pos + sample_length - timeline->last_accessed_offset)) )
     {
+        /* Realloc if an update of max_read_size exceeds the current allocated data size. */
+        if( root->max_read_size > timeline->last_accessed_chunk_alloc_size )
+        {
+            void *temp = realloc( timeline->last_accessed_chunk_data, root->max_read_size );
+            if( temp )
+                timeline->last_accessed_chunk_data = temp;
+            else
+            {
+                root->max_read_size = timeline->last_accessed_chunk_alloc_size;
+                lsmash_log( LSMASH_LOG_WARNING, "Memory re-allocation by the new max_read_size failed.\n" );
+            }
+        }
         /* Read data of a chunk in the stream. */
         uint64_t read_size;
         uint64_t seek_pos;
         if( root->max_read_size >= chunk->length )
         {
+            /* Read by a chunk size. */
             read_size = chunk->length;
-            seek_pos = chunk->data_offset;
+            seek_pos  = chunk->data_offset;
         }
         else
         {
+            /* Read by a sample size. */
             read_size = LSMASH_MAX( root->max_read_size, sample_length );
-            seek_pos = sample_pos;
+            seek_pos  = sample_pos;
         }
         lsmash_bs_t *bs = root->bs;
         lsmash_fseek( bs->stream, seek_pos, SEEK_SET );
         lsmash_bs_empty( bs );
         if( lsmash_bs_read_data( bs, read_size ) )
             return NULL;
-        void *temp = lsmash_bs_export_data( bs, NULL );
-        lsmash_bs_empty( bs );
-        if( !temp )
-            return NULL;
-        chunk->data = temp;
-        if( timeline->last_accessed_chunk_data )
-        {
-            free( timeline->last_accessed_chunk_data );
-            timeline->last_accessed_chunk_data = NULL;
-        }
         timeline->last_accessed_chunk_number = chunk->number;
-        timeline->last_accessed_chunk_data   = chunk->data;
         timeline->last_accessed_offset       = seek_pos;
-        timeline->last_read_size             = read_size;
+        timeline->last_read_size             = LSMASH_MIN( read_size, bs->store );
+        memcpy( timeline->last_accessed_chunk_data, bs->data, timeline->last_read_size );
+        lsmash_bs_empty( bs );
     }
     lsmash_sample_t *sample = lsmash_create_sample( 0 );
     if( !sample )
         return NULL;
     uint64_t offset_from_seek = sample_pos - timeline->last_accessed_offset;
-    sample->data = lsmash_memdup( chunk->data + offset_from_seek, sample_length );
+    sample->data = lsmash_memdup( timeline->last_accessed_chunk_data + offset_from_seek, sample_length );
     if( !sample->data )
     {
         lsmash_delete_sample( sample );
@@ -644,7 +649,6 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     isom_portable_chunk_t chunk;
     chunk.data_offset = data_offset;
     chunk.length      = 0;
-    chunk.data        = NULL;
     chunk.number = chunk_number;
     if( isom_add_portable_chunk_entry( timeline, &chunk ) )
         goto fail;
@@ -813,7 +817,6 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                             : ((isom_stco_entry_t *)stco_entry->data)->chunk_offset;
             chunk.data_offset = data_offset;
             chunk.length      = 0;
-            chunk.data        = NULL;
             chunk.number      = ++chunk_number;
             if( isom_add_portable_chunk_entry( timeline, &chunk ) )
                 goto fail;
@@ -956,7 +959,6 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                         {
                             chunk.data_offset = data_offset;
                             chunk.length      = 0;
-                            chunk.data        = NULL;
                             chunk.number      = ++chunk_number;
                             if( isom_add_portable_chunk_entry( timeline, &chunk ) )
                                 goto fail;
@@ -1129,6 +1131,10 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     if( bunch.sample_count && isom_add_lpcm_bunch_entry( timeline, &bunch ) )
         goto fail;
     if( lsmash_add_entry( root->timeline, timeline ) )
+        goto fail;
+    timeline->last_accessed_chunk_alloc_size = LSMASH_MAX( root->max_read_size, timeline->max_sample_size );
+    timeline->last_accessed_chunk_data       = lsmash_malloc_zero( timeline->last_accessed_chunk_alloc_size );
+    if( !timeline->last_accessed_chunk_data )
         goto fail;
     /* Finish timeline construction. */
     timeline->sample_count = sample_count;

@@ -39,17 +39,17 @@ void lsmash_bs_empty( lsmash_bs_t *bs )
         return;
     memset( bs->data, 0, bs->alloc );
     bs->store = 0;
-    bs->pos = 0;
+    bs->pos   = 0;
 }
 
 void lsmash_bs_free( lsmash_bs_t *bs )
 {
     if( bs->data )
         free( bs->data );
-    bs->data = NULL;
+    bs->data  = NULL;
     bs->alloc = 0;
     bs->store = 0;
-    bs->pos = 0;
+    bs->pos   = 0;
 }
 
 void lsmash_bs_alloc( lsmash_bs_t *bs, uint64_t size )
@@ -176,7 +176,7 @@ void lsmash_bs_cleanup( lsmash_bs_t *bs )
     free( bs );
 }
 
-void* lsmash_bs_export_data( lsmash_bs_t *bs, uint32_t* length )
+void *lsmash_bs_export_data( lsmash_bs_t *bs, uint32_t *length )
 {
     if( !bs || !bs->data || bs->store == 0 || bs->error )
         return NULL;
@@ -285,7 +285,7 @@ int lsmash_bs_read_data( lsmash_bs_t *bs, uint32_t size )
 {
     if( !bs )
         return -1;
-    if( !size )
+    if( size == 0 )
         return 0;
     lsmash_bs_alloc( bs, bs->store + size );
     if( bs->error || !bs->stream )
@@ -325,7 +325,7 @@ void lsmash_bits_init( lsmash_bits_t *bits, lsmash_bs_t *bs )
 {
     debug_if( !bits || !bs )
         return;
-    bits->bs = bs;
+    bits->bs    = bs;
     bits->store = 0;
     bits->cache = 0;
 }
