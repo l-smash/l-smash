@@ -96,7 +96,7 @@ static void isom_ifprintf_matrix( FILE *fp, int indent, int32_t *matrix )
     lsmash_ifprintf( fp, indent, "| c, d, v | = | %f, %f, %f |\n", lsmash_fixed2double( matrix[3], 16 ),
                                                             lsmash_fixed2double( matrix[4], 16 ),
                                                             lsmash_fixed2double( matrix[5], 30 ) );
-    lsmash_ifprintf( fp, indent, "| x, y, z |   | %f, %f, %f |\n", lsmash_fixed2double( matrix[6], 16 ),
+    lsmash_ifprintf( fp, indent, "| x, y, w |   | %f, %f, %f |\n", lsmash_fixed2double( matrix[6], 16 ),
                                                             lsmash_fixed2double( matrix[7], 16 ),
                                                             lsmash_fixed2double( matrix[8], 30 ) );
 }
