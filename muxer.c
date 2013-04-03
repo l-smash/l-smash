@@ -952,7 +952,7 @@ static int prepare_output( muxer_t *muxer )
 
 static void set_reference_chapter_track( output_t *output, option_t *opt )
 {
-    if( !opt->chap_file || !opt->qtff || !opt->itunes_movie )
+    if( !opt->chap_file || (!opt->qtff && !opt->itunes_movie) )
         return;
     lsmash_create_reference_chapter_track( output->root, opt->chap_track, opt->chap_file );
 }
