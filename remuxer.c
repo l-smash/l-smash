@@ -90,6 +90,7 @@ typedef struct
 {
     char    *raw_track_option;
     int      remove;
+    int      disable;
     int16_t  alternate_group;
     uint16_t ISO_language;
     uint32_t seek;
@@ -244,6 +245,7 @@ static void display_help( void )
              "                              This option is overridden by the track options.\n"
              "Track options:\n"
              "    remove                    Remove this track\n"
+             "    disable                   Disable this track\n"
              "    language=<string>         Specify media language\n"
              "    alternate-group=<integer> Specify alternate group\n"
              "    handler=<string>          Set media handler name\n"
@@ -441,6 +443,8 @@ static int parse_track_option( remuxer_t *remuxer )
                     /* No need to parse track options for this track anymore. */
                     break;
                 }
+                else if( strstr( track_option, "disable" ) )
+                    current_track_opt->disable = 1;
                 else if( strstr( track_option, "alternate-group=" ) )
                 {
                     char *track_parameter = strchr( track_option, '=' ) + 1;
@@ -770,6 +774,8 @@ static int prepare_output( remuxer_t *remuxer )
             out_track->media_param.ISO_language       = current_track_opt->ISO_language;
             out_track->media_param.media_handler_name = current_track_opt->handler_name;
             out_track->track_param.track_ID           = out_track->track_ID;
+            if( current_track_opt->disable )
+                out_track->track_param.mode &= ~ISOM_TRACK_ENABLED;
             if( lsmash_set_track_parameters( output->root, out_track->track_ID, &out_track->track_param ) )
             {
                 exclude_invalid_output_track( output, out_track, &input[i], in_track, "failed to set track parameters.\n" );
