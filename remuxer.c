@@ -1,7 +1,7 @@
 /*****************************************************************************
  * remuxer.c:
  *****************************************************************************
- * Copyright (C) 2011-2012 L-SMASH project
+ * Copyright (C) 2011-2013 L-SMASH project
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
