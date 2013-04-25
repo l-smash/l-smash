@@ -82,6 +82,7 @@ typedef struct
 typedef struct
 {
     char    *raws;
+    int      disable;
     int      sbr;
     int      user_fps;
     uint32_t fps_num;
@@ -234,6 +235,7 @@ static void display_help( void )
              "    mp4, mov, 3gp, 3g2, m4a, m4v\n"
              "\n"
              "Track options:\n"
+             "    disable                   Disable this track\n"
              "    fps=<arg>                 Specify video framerate\n"
              "                                  <arg> is <integer> or <integer>/<integer>\n"
              "    language=<string>         Specify media language\n"
@@ -594,7 +596,9 @@ static int parse_track_options( input_t *input )
         {
             if( strchr( track_option, '=' ) != strrchr( track_option, '=' ) )
                 return ERROR_MSG( "multiple equal signs inside one track option in %s\n", track_option );
-            if( strstr( track_option, "alternate-group=" ) )
+            if( strstr( track_option, "disable" ) )
+                track_opt->disable = 1;
+            else if( strstr( track_option, "alternate-group=" ) )
             {
                 char *track_parameter = strchr( track_option, '=' ) + 1;
                 track_opt->alternate_group = atoi( track_parameter );
@@ -826,7 +830,9 @@ static int prepare_output( muxer_t *muxer )
             /* Set up track parameters. */
             lsmash_track_parameters_t track_param;
             lsmash_initialize_track_parameters( &track_param );
-            track_param.mode = ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE | ISOM_TRACK_IN_PREVIEW;
+            track_param.mode = ISOM_TRACK_IN_MOVIE | ISOM_TRACK_IN_PREVIEW;
+            if( !track_opt->disable )
+                track_param.mode |= ISOM_TRACK_ENABLED;
             if( opt->qtff )
                 track_param.mode |= QT_TRACK_IN_POSTER;
             track_param.alternate_group = track_opt->alternate_group;
