@@ -53,6 +53,10 @@ typedef struct {
     void* param;
 } lsmash_adhoc_remux_t;
 
+lsmash_root_t *lsmash_open_movie( const char *filename, lsmash_file_mode mode );
+void lsmash_destroy_root( lsmash_root_t *root );
+void lsmash_discard_boxes( lsmash_root_t *root );
+
 /****************************************************************************
  * Basic Types
  ****************************************************************************/
@@ -394,6 +398,26 @@ typedef struct
     LSMASH_BASE_SUMMARY
 } lsmash_summary_t;
 
+lsmash_summary_t *lsmash_create_summary( lsmash_summary_type summary_type );
+void lsmash_cleanup_summary( lsmash_summary_t *summary );
+int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, void *summary );
+
+uint32_t lsmash_count_summary( lsmash_root_t *root, uint32_t track_ID );
+lsmash_summary_t *lsmash_get_summary( lsmash_root_t *root, uint32_t track_ID, uint32_t description_number );
+
+/* functions to set up or get CODEC specific info */
+lsmash_codec_specific_t *lsmash_create_codec_specific_data( lsmash_codec_specific_data_type type, lsmash_codec_specific_format format );
+void lsmash_destroy_codec_specific_data( lsmash_codec_specific_t *specific );
+int lsmash_add_codec_specific_data( lsmash_summary_t *summary, lsmash_codec_specific_t *specific );
+uint32_t lsmash_count_codec_specific_data( lsmash_summary_t *summary );
+lsmash_codec_specific_t *lsmash_get_codec_specific_data( lsmash_summary_t *summary, uint32_t extension_number );
+lsmash_codec_specific_t *lsmash_convert_codec_specific_format( lsmash_codec_specific_t *specific, lsmash_codec_specific_format format );
+
+/* Return 0 if the two summaries are identical.
+ * Return 1 if the two summaries are different.
+ * Return -1 if there is any error. */
+int lsmash_compare_summary( lsmash_summary_t *a, lsmash_summary_t *b );
+
 /****************************************************************************
  * Audio Description Layer
  *   NOTE: Currently assuming AAC-LC.
@@ -467,6 +491,9 @@ typedef struct
     lsmash_mp4a_aac_sbr_mode sbr_mode;      /* SBR treatment. Currently we always set this as mp4a_AAC_SBR_NOT_SPECIFIED(Implicit signaling).
                                              * User can set this for treatment in other way. */
 } lsmash_audio_summary_t;
+
+/* to facilitate to make exdata (typically DecoderSpecificInfo or AudioSpecificConfig). */
+int lsmash_setup_AudioSpecificConfig( lsmash_audio_summary_t* summary );
 
 /****************************************************************************
  * Video Description Layer
@@ -665,6 +692,9 @@ typedef struct
     } color;
 } lsmash_video_summary_t;
 
+int lsmash_convert_crop_into_clap( lsmash_crop_t crop, uint32_t width, uint32_t height, lsmash_clap_t *clap );
+int lsmash_convert_clap_into_crop( lsmash_clap_t clap, uint32_t width, uint32_t height, lsmash_crop_t *crop );
+
 /****************************************************************************
  * Media Sample
  ****************************************************************************/
@@ -808,6 +838,11 @@ typedef struct
     uint32_t sample_count;
     lsmash_media_ts_t *timestamp;
 } lsmash_media_ts_list_t;
+
+lsmash_sample_t *lsmash_create_sample( uint32_t size );
+int lsmash_sample_alloc( lsmash_sample_t *sample, uint32_t size );
+void lsmash_delete_sample( lsmash_sample_t *sample );
+int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_t *sample );
 
 /****************************************************************************
  * Media Layer
@@ -971,6 +1006,22 @@ typedef struct
     PRIVATE char data_handler_name_shadow[256];
 } lsmash_media_parameters_t;
 
+void lsmash_initialize_media_parameters( lsmash_media_parameters_t *param );
+int lsmash_set_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_media_parameters_t *param );
+int lsmash_set_last_sample_delta( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_delta );
+int lsmash_flush_pooled_samples( lsmash_root_t *root, uint32_t track_ID, uint32_t last_sample_delta );
+
+int lsmash_update_media_modification_time( lsmash_root_t *root, uint32_t track_ID );
+
+int lsmash_get_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_media_parameters_t *param );
+uint64_t lsmash_get_media_duration( lsmash_root_t *root, uint32_t track_ID );
+uint32_t lsmash_get_media_timescale( lsmash_root_t *root, uint32_t track_ID );
+uint32_t lsmash_get_last_sample_delta( lsmash_root_t *root, uint32_t track_ID );
+uint32_t lsmash_get_start_time_offset( lsmash_root_t *root, uint32_t track_ID );
+uint32_t lsmash_get_composition_to_decode_shift( lsmash_root_t *root, uint32_t track_ID );
+
+uint16_t lsmash_pack_iso_language( char *iso_language );
+
 /****************************************************************************
  * Track Layer
  ****************************************************************************/
@@ -1050,6 +1101,25 @@ typedef struct
                              * If set to ISOM_EDIT_MODE_NORMAL (0x00010000), there is no rate change for timeline mapping.
                              * If set to ISOM_EDIT_MODE_DWELL (0), the media at start_time is presented for the duration. */
 } lsmash_edit_t;
+
+uint32_t lsmash_create_track( lsmash_root_t *root, lsmash_media_type media_type );
+void lsmash_delete_track( lsmash_root_t *root, uint32_t track_ID );
+void lsmash_initialize_track_parameters( lsmash_track_parameters_t *param );
+int lsmash_set_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_track_parameters_t *param );
+
+int lsmash_update_track_duration( lsmash_root_t *root, uint32_t track_ID, uint32_t last_sample_delta );
+int lsmash_update_track_modification_time( lsmash_root_t *root, uint32_t track_ID );
+
+uint32_t lsmash_get_track_ID( lsmash_root_t *root, uint32_t track_number );
+int lsmash_get_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_track_parameters_t *param );
+uint64_t lsmash_get_track_duration( lsmash_root_t *root, uint32_t track_ID );
+
+/* explicit timeline map (edit) */
+int lsmash_create_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, lsmash_edit_t edit );
+int lsmash_modify_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint32_t edit_number, lsmash_edit_t edit );
+int lsmash_get_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint32_t edit_number, lsmash_edit_t *edit );
+int lsmash_delete_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID );
+uint32_t lsmash_count_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID );
 
 /****************************************************************************
  * Movie Layer
@@ -1140,100 +1210,41 @@ typedef struct
     PRIVATE lsmash_brand_type brands_shadow[50];
 } lsmash_movie_parameters_t;
 
-/****************************************************************************
- * Basic Public Functions
- ****************************************************************************/
-int lsmash_add_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length );
-
-int lsmash_write_free( lsmash_root_t *root );
-
-uint64_t lsmash_get_media_duration( lsmash_root_t *root, uint32_t track_ID );
-uint64_t lsmash_get_track_duration( lsmash_root_t *root, uint32_t track_ID );
-uint32_t lsmash_get_last_sample_delta( lsmash_root_t *root, uint32_t track_ID );
-uint32_t lsmash_get_start_time_offset( lsmash_root_t *root, uint32_t track_ID );
-uint32_t lsmash_get_composition_to_decode_shift( lsmash_root_t *root, uint32_t track_ID );
-uint32_t lsmash_get_media_timescale( lsmash_root_t *root, uint32_t track_ID );
-uint32_t lsmash_get_movie_timescale( lsmash_root_t *root );
-
-int lsmash_set_last_sample_delta( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_delta );
-int lsmash_set_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length );
-int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom );
-
-int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_ID, char *file_name );
-int lsmash_create_object_descriptor( lsmash_root_t *root );
-
-/* explicit timeline map (edit) */
-int lsmash_create_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, lsmash_edit_t edit );
-int lsmash_modify_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint32_t edit_number, lsmash_edit_t edit );
-int lsmash_get_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint32_t edit_number, lsmash_edit_t *edit );
-int lsmash_delete_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID );
-uint32_t lsmash_count_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID );
-
-/* modification time */
-int lsmash_update_media_modification_time( lsmash_root_t *root, uint32_t track_ID );
-int lsmash_update_track_modification_time( lsmash_root_t *root, uint32_t track_ID );
-int lsmash_update_movie_modification_time( lsmash_root_t *root );
-
-uint16_t lsmash_pack_iso_language( char *iso_language );
-
 /* fundamental functions to create and/or read movie */
-lsmash_root_t *lsmash_open_movie( const char *filename, lsmash_file_mode mode );
 void lsmash_initialize_movie_parameters( lsmash_movie_parameters_t *param );
 int lsmash_set_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t *param );
-uint32_t lsmash_create_track( lsmash_root_t *root, lsmash_media_type media_type );
-void lsmash_initialize_track_parameters( lsmash_track_parameters_t *param );
-int lsmash_set_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_track_parameters_t *param );
-void lsmash_initialize_media_parameters( lsmash_media_parameters_t *param );
-int lsmash_set_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_media_parameters_t *param );
-int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, void *summary );
-lsmash_sample_t *lsmash_create_sample( uint32_t size );
-int lsmash_sample_alloc( lsmash_sample_t *sample, uint32_t size );
-void lsmash_delete_sample( lsmash_sample_t *sample );
-int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_t *sample );
-int lsmash_flush_pooled_samples( lsmash_root_t *root, uint32_t track_ID, uint32_t last_sample_delta );
-int lsmash_update_track_duration( lsmash_root_t *root, uint32_t track_ID, uint32_t last_sample_delta );
 int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux );
-void lsmash_destroy_root( lsmash_root_t *root );
-int lsmash_get_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t *param );
-uint32_t lsmash_get_track_ID( lsmash_root_t *root, uint32_t track_number );
-int lsmash_get_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_track_parameters_t *param );
-int lsmash_get_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_media_parameters_t *param );
 
+int lsmash_update_movie_modification_time( lsmash_root_t *root );
+
+int lsmash_get_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t *param );
+uint32_t lsmash_get_movie_timescale( lsmash_root_t *root );
+
+/****************************************************************************
+ * Chapter
+ ****************************************************************************/
+int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_ID, char *file_name );
+int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom );
+void lsmash_delete_tyrant_chapter( lsmash_root_t *root );
+
+/****************************************************************************
+ * Fragments
+ ****************************************************************************/
 int lsmash_create_fragment_movie( lsmash_root_t *root );
 int lsmash_create_fragment_empty_duration( lsmash_root_t *root, uint32_t track_ID, uint32_t duration );
 
-void lsmash_discard_boxes( lsmash_root_t *root );
-
-void lsmash_delete_track( lsmash_root_t *root, uint32_t track_ID );
-void lsmash_delete_tyrant_chapter( lsmash_root_t *root );
-
-/* track_ID == 0 means copyright declaration applies to the entire presentation, not an entire track. */
-int lsmash_set_copyright( lsmash_root_t *root, uint32_t track_ID, uint16_t ISO_language, char *notice );
-
-int lsmash_convert_crop_into_clap( lsmash_crop_t crop, uint32_t width, uint32_t height, lsmash_clap_t *clap );
-int lsmash_convert_clap_into_crop( lsmash_clap_t clap, uint32_t width, uint32_t height, lsmash_crop_t *crop );
-
-/* functions to set up or get CODEC specific info */
-lsmash_codec_specific_t *lsmash_create_codec_specific_data( lsmash_codec_specific_data_type type, lsmash_codec_specific_format format );
-void lsmash_destroy_codec_specific_data( lsmash_codec_specific_t *specific );
-int lsmash_add_codec_specific_data( lsmash_summary_t *summary, lsmash_codec_specific_t *specific );
-lsmash_codec_specific_t *lsmash_convert_codec_specific_format( lsmash_codec_specific_t *specific, lsmash_codec_specific_format format );
-lsmash_summary_t *lsmash_get_summary( lsmash_root_t *root, uint32_t track_ID, uint32_t description_number );
-uint32_t lsmash_count_summary( lsmash_root_t *root, uint32_t track_ID );
-lsmash_codec_specific_t *lsmash_get_codec_specific_data( lsmash_summary_t *summary, uint32_t extension_number );
-uint32_t lsmash_count_codec_specific_data( lsmash_summary_t *summary );
-
-/* Return 0 if the two summaries are identical.
- * Return 1 if the two summaries are different.
- * Return -1 if there is any error. */
-int lsmash_compare_summary( lsmash_summary_t *a, lsmash_summary_t *b );
-
 #ifdef LSMASH_DEMUXER_ENABLED
+/****************************************************************************
+ * Dump / Print
+ ****************************************************************************/
 int lsmash_print_movie( lsmash_root_t *root, const char *filename );
 
 /* This function might output BOM on Windows. Make sure that this is the first function that outputs something to stdout. */
 int lsmash_print_chapter_list( lsmash_root_t *root );
 
+/****************************************************************************
+ * Timeline
+ ****************************************************************************/
 int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_root_t *src, uint32_t src_track_ID );
 int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID );
 void lsmash_destruct_timeline( lsmash_root_t *root, uint32_t track_ID );
@@ -1260,12 +1271,6 @@ int lsmash_get_max_sample_delay( lsmash_media_ts_list_t *ts_list, uint32_t *max_
 void lsmash_sort_timestamps_decoding_order( lsmash_media_ts_list_t *ts_list );
 void lsmash_sort_timestamps_composition_order( lsmash_media_ts_list_t *ts_list );
 #endif
-
-/* to facilitate to make exdata (typically DecoderSpecificInfo or AudioSpecificConfig). */
-int lsmash_setup_AudioSpecificConfig( lsmash_audio_summary_t* summary );
-
-lsmash_summary_t *lsmash_create_summary( lsmash_summary_type summary_type );
-void lsmash_cleanup_summary( lsmash_summary_t *summary );
 
 /****************************************************************************
  * Tools for creating CODEC Specific Information Extensions (Magic Cookies)
@@ -2299,6 +2304,18 @@ typedef struct
 int lsmash_set_itunes_metadata( lsmash_root_t *root, lsmash_itunes_metadata_t metadata );
 int lsmash_get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, lsmash_itunes_metadata_t *metadata );
 uint32_t lsmash_count_itunes_metadata( lsmash_root_t *root );
+
+/****************************************************************************
+ * Others
+ ****************************************************************************/
+/* track_ID == 0 means copyright declaration applies to the entire presentation, not an entire track. */
+int lsmash_set_copyright( lsmash_root_t *root, uint32_t track_ID, uint16_t ISO_language, char *notice );
+
+int lsmash_create_object_descriptor( lsmash_root_t *root );
+
+int lsmash_add_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length );
+int lsmash_set_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length );
+int lsmash_write_free( lsmash_root_t *root );
 
 #undef PRIVATE
 
