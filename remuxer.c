@@ -89,6 +89,7 @@ typedef struct
 typedef struct
 {
     char    *raw_track_option;
+    int      remove;
     int16_t  alternate_group;
     uint16_t ISO_language;
     uint32_t seek;
@@ -242,6 +243,7 @@ static void display_help( void )
              "    --language <string>       Specify the default language for all the output tracks.\n"
              "                              This option is overridden by the track options.\n"
              "Track options:\n"
+             "    remove                    Remove this track\n"
              "    language=<string>         Specify media language\n"
              "    alternate-group=<integer> Specify alternate group\n"
              "    handler=<string>          Set media handler name\n"
@@ -432,31 +434,38 @@ static int parse_track_option( remuxer_t *remuxer )
             {
                 if( strchr( track_option, '=' ) != strrchr( track_option, '=' ) )
                     return ERROR_MSG( "multiple equal signs inside one track option in %s\n", track_option );
-                if( strstr( track_option, "alternate-group=" ) )
+                current_track_opt = &track[i][track_number - 1];
+                if( strstr( track_option, "remove" ) )
+                {
+                    current_track_opt->remove = 1;
+                    /* No need to parse track options for this track anymore. */
+                    break;
+                }
+                else if( strstr( track_option, "alternate-group=" ) )
                 {
                     char *track_parameter = strchr( track_option, '=' ) + 1;
-                    track[i][track_number - 1].alternate_group = atoi( track_parameter );
+                    current_track_opt->alternate_group = atoi( track_parameter );
                 }
                 else if( strstr( track_option, "language=" ) )
                 {
                     char *track_parameter = strchr( track_option, '=' ) + 1;
-                    track[i][track_number - 1].ISO_language = lsmash_pack_iso_language( track_parameter );
+                    current_track_opt->ISO_language = lsmash_pack_iso_language( track_parameter );
                 }
                 else if( strstr( track_option, "handler=" ) )
                 {
                     char *track_parameter = strchr( track_option, '=' ) + 1;
-                    track[i][track_number - 1].handler_name = track_parameter;
+                    current_track_opt->handler_name = track_parameter;
                 }
                 else if( strstr( track_option, "safe-seek=" ) )
                 {
                     char *track_parameter = strchr( track_option, '=' ) + 1;
-                    track[i][track_number - 1].seek = atoi( track_parameter );
-                    track[i][track_number - 1].consider_rap = 1;
+                    current_track_opt->seek = atoi( track_parameter );
+                    current_track_opt->consider_rap = 1;
                 }
                 else if( strstr( track_option, "seek=" ) )
                 {
                     char *track_parameter = strchr( track_option, '=' ) + 1;
-                    track[i][track_number - 1].seek = atoi( track_parameter );
+                    current_track_opt->seek = atoi( track_parameter );
                 }
                 else
                     return ERROR_MSG( "unknown track option %s\n", track_option );
@@ -732,12 +741,14 @@ static int prepare_output( remuxer_t *remuxer )
     output->track = malloc( output->num_tracks * sizeof(output_track_t) );
     if( !output->track )
         return ERROR_MSG( "failed to alloc output tracks.\n" );
-    track_media_option **track_option = remuxer->track_option;
     output->current_track_number = 1;
     for( int i = 0; i < remuxer->num_input; i++ )
         for( uint32_t j = 0; j < input[i].num_tracks; j++ )
         {
+            track_media_option *current_track_opt = &remuxer->track_option[i][j];
             input_track_t *in_track = &input[i].track[j];
+            if( current_track_opt->remove )
+                in_track->active = 0;
             if( !in_track->active )
             {
                 -- output->num_tracks;
@@ -755,9 +766,9 @@ static int prepare_output( remuxer_t *remuxer )
             out_track->track_param = in_track->track_param;
             out_track->media_param = in_track->media_param;
             /* Set track and media parameters specified by users */
-            out_track->track_param.alternate_group    = track_option[i][j].alternate_group;
-            out_track->media_param.ISO_language       = track_option[i][j].ISO_language;
-            out_track->media_param.media_handler_name = track_option[i][j].handler_name;
+            out_track->track_param.alternate_group    = current_track_opt->alternate_group;
+            out_track->media_param.ISO_language       = current_track_opt->ISO_language;
+            out_track->media_param.media_handler_name = current_track_opt->handler_name;
             out_track->track_param.track_ID           = out_track->track_ID;
             if( lsmash_set_track_parameters( output->root, out_track->track_ID, &out_track->track_param ) )
             {
@@ -795,7 +806,7 @@ static int prepare_output( remuxer_t *remuxer )
                 continue;
             }
             out_track->last_sample_delta = in_track->last_sample_delta;
-            if( set_starting_point( input, in_track, track_option[i][j].seek, track_option[i][j].consider_rap ) )
+            if( set_starting_point( input, in_track, current_track_opt->seek, current_track_opt->consider_rap ) )
             {
                 exclude_invalid_output_track( output, out_track, &input[i], in_track, "failed to set starting point.\n" );
                 continue;
