@@ -25,7 +25,7 @@
 
 #include <stdint.h>
 
-#define PRIVATE     /* If this declaration is placed at a variable, any user shouldn't use it. */
+#define PRIVATE     /* If this declaration is placed at a variable, any user shall NOT use it. */
 
 #define LSMASH_4CC( a, b, c, d ) (((a)<<24) | ((b)<<16) | ((c)<<8) | (d))
 #define LSMASH_PACK_ISO_LANGUAGE( a, b, c ) ((((a-0x60)&0x1f)<<10) | (((b-0x60)&0x1f)<<5) | ((c-0x60)&0x1f))
@@ -46,16 +46,34 @@ typedef enum
     //LSMASH_FILE_MODE_READ_FRAGMENTED   = LSMASH_FILE_MODE_READ  | LSMASH_FILE_MODE_FRAGMENTED,
 } lsmash_file_mode;
 
-typedef int (*lsmash_adhoc_remux_callback)( void* param, uint64_t done, uint64_t total );
-typedef struct {
-    uint64_t buffer_size;
-    lsmash_adhoc_remux_callback func;
-    void* param;
-} lsmash_adhoc_remux_t;
+/* Open the movie file to which the path is given, and allocate and set up the ROOT of the file.
+ * The allocated ROOT can be deallocated by lsmash_destroy_root().
+ *
+ * Users can specify "-" for 'filename'.
+ * In this case,
+ *   (1) read from stdin when 'mode' contains LSMASH_FILE_MODE_READ,
+ * or
+ *   (2) write into stdout when 'mode' contains LSMASH_FILE_MODE_WRITE_FRAGMENTED.
+ *
+ * Return the address of an allocated ROOT of the file if successful.
+ * Return NULL otherwise. */
+lsmash_root_t *lsmash_open_movie
+(
+    const char       *filename,     /* the path of a file you want to open. */
+    lsmash_file_mode  mode          /* mode for opening file */
+);
 
-lsmash_root_t *lsmash_open_movie( const char *filename, lsmash_file_mode mode );
-void lsmash_destroy_root( lsmash_root_t *root );
-void lsmash_discard_boxes( lsmash_root_t *root );
+/* Deallocate a given ROOT. */
+void lsmash_destroy_root
+(
+    lsmash_root_t *root     /* the address of a ROOT you want to deallocate */
+);
+
+/* Deallocate all boxes in a given ROOT. */
+void lsmash_discard_boxes
+(
+    lsmash_root_t *root     /* the address of a ROOT you want to deallocate all boxes in it */
+);
 
 /****************************************************************************
  * Basic Types
@@ -111,21 +129,42 @@ typedef struct
 static const lsmash_box_type_t static_lsmash_box_type_unspecified = LSMASH_BOX_TYPE_INITIALIZER;
 
 /* Return extended box type that consists of combination of given FourCC and 12-byte ID. */
-lsmash_extended_box_type_t lsmash_form_extended_box_type( uint32_t fourcc, const uint8_t id[12] );
+lsmash_extended_box_type_t lsmash_form_extended_box_type
+(
+    uint32_t      fourcc,
+    const uint8_t id[12]
+);
 
 /* Return box type that consists of combination of given compact and extended box type. */
-lsmash_box_type_t lsmash_form_box_type( lsmash_compact_box_type_t type, lsmash_extended_box_type_t user );
+lsmash_box_type_t lsmash_form_box_type
+(
+    lsmash_compact_box_type_t  type,
+    lsmash_extended_box_type_t user
+);
 
 #define LSMASH_ISO_BOX_TYPE_INITIALIZER( x )  { x, { x, { 0x00, 0x11, 0x00, 0x10, 0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71 } } }
 #define LSMASH_QTFF_BOX_TYPE_INITIALIZER( x ) { x, { x, { 0x0F, 0x11, 0x4D, 0xA5, 0xBF, 0x4E, 0xF2, 0xC4, 0x8C, 0x6A, 0xA1, 0x1E } } }
 lsmash_box_type_t lsmash_form_iso_box_type( lsmash_compact_box_type_t type );
 lsmash_box_type_t lsmash_form_qtff_box_type( lsmash_compact_box_type_t type );
 
-/* Return 1 if the both box types are identical. Otherwise return 0. */
-int lsmash_check_box_type_identical( lsmash_box_type_t a, lsmash_box_type_t b );
+/* Check if the type of two boxes is identical or not.
+ *
+ * Return 1 if the both box types are identical.
+ * Return 0 otherwise. */
+int lsmash_check_box_type_identical
+(
+    lsmash_box_type_t a,
+    lsmash_box_type_t b
+);
 
-/* Return 1 if the box type is specified. Otherwise, i.e. LSMASH_BOX_TYPE_UNSPECIFIED, return 0. */
-int lsmash_check_box_type_specified( lsmash_box_type_t *box_type );
+/* Check if the type of a given box is already specified or not.
+ *
+ * Return 1 if the box type is specified.
+ * Return 0 otherwise, i.e. LSMASH_BOX_TYPE_UNSPECIFIED. */
+int lsmash_check_box_type_specified
+(
+    lsmash_box_type_t *box_type
+);
 
 /****************************************************************************
  * Summary of Stream Configuration
@@ -398,25 +437,122 @@ typedef struct
     LSMASH_BASE_SUMMARY
 } lsmash_summary_t;
 
-lsmash_summary_t *lsmash_create_summary( lsmash_summary_type summary_type );
-void lsmash_cleanup_summary( lsmash_summary_t *summary );
-int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, void *summary );
+/* Allocate a summary by 'summary_type'.
+ * The allocated summary can be deallocated by lsmash_cleanup_summary().
+ *
+ * Return the address of an allocated summary if successful.
+ * Return NULL otherwise. */
+lsmash_summary_t *lsmash_create_summary
+(
+    lsmash_summary_type summary_type    /* a type of summary you want */
+);
 
-uint32_t lsmash_count_summary( lsmash_root_t *root, uint32_t track_ID );
-lsmash_summary_t *lsmash_get_summary( lsmash_root_t *root, uint32_t track_ID, uint32_t description_number );
+/* Deallocate a given summary. */
+void lsmash_cleanup_summary
+(
+    lsmash_summary_t *summary   /* the address of a summary you want to deallocate */
+);
 
-/* functions to set up or get CODEC specific info */
-lsmash_codec_specific_t *lsmash_create_codec_specific_data( lsmash_codec_specific_data_type type, lsmash_codec_specific_format format );
-void lsmash_destroy_codec_specific_data( lsmash_codec_specific_t *specific );
-int lsmash_add_codec_specific_data( lsmash_summary_t *summary, lsmash_codec_specific_t *specific );
-uint32_t lsmash_count_codec_specific_data( lsmash_summary_t *summary );
-lsmash_codec_specific_t *lsmash_get_codec_specific_data( lsmash_summary_t *summary, uint32_t extension_number );
-lsmash_codec_specific_t *lsmash_convert_codec_specific_format( lsmash_codec_specific_t *specific, lsmash_codec_specific_format format );
+/* Allocate and append a new sample description to a track by 'summary'.
+ *
+ * Return the index of an allocated and appended sample description if successful.
+ * Return 0 otherwise. */
+int lsmash_add_sample_entry
+(
+    lsmash_root_t *root,        /* the address of the ROOT containing a track to which you want to append a new sample description */
+    uint32_t       track_ID,    /* the track_ID of a track to which you want to append a new sample description */
+    void          *summary      /* the summary of a sample description you want to append */
+);
 
-/* Return 0 if the two summaries are identical.
+/* Count the number of summaries in a track.
+ *
+ * Return the number of summaries in a track if no error.
+ * Return 0 otherwise. */
+uint32_t lsmash_count_summary
+(
+    lsmash_root_t *root,        /* the address of the ROOT containing a track in which you want to count the number of summaries */
+    uint32_t       track_ID     /* the track_ID of a track in which you want to count the number of summaries */
+);
+
+/* Get the summary of a sample description you want in a track.
+ *
+ * Return the address of a summary you want if successful.
+ * Return NULL otherwise. */
+lsmash_summary_t *lsmash_get_summary
+(
+    lsmash_root_t *root,                /* the address of the ROOT containing a track which contains a sample description you want */
+    uint32_t       track_ID,            /* the track_ID of a track containing a sample description you want */
+    uint32_t       description_number   /* the index of a sample description you want */
+);
+
+/* Allocate and initialize a CODEC specific configuration by 'type' and 'format'.
+ * The allocated CODEC specific configuration can be deallocated by lsmash_destroy_codec_specific_data().
+ *
+ * Return the address of an allocated and initialized CODEC specific configuration if successful.
+ * Return NULL otherwise. */
+lsmash_codec_specific_t *lsmash_create_codec_specific_data
+(
+    lsmash_codec_specific_data_type type,
+    lsmash_codec_specific_format    format
+);
+
+/* Deallocate a CODEC specific configuration. */
+void lsmash_destroy_codec_specific_data
+(
+    lsmash_codec_specific_t *specific   /* the address of a CODEC specific configuration you want to deallocate */
+);
+
+/* Allocate a CODEC specific configuration which is a copy of 'specific', and append it to 'summary'.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_add_codec_specific_data
+(
+    lsmash_summary_t        *summary,
+    lsmash_codec_specific_t *specific
+);
+
+/* Count the number of CODEC specific configuration in a summary.
+ *
+ * Return the number of CODEC specific configuration in a summary if successful.
+ * Return 0 otherwise. */
+uint32_t lsmash_count_codec_specific_data
+(
+    lsmash_summary_t *summary   /* the address of a summary in which you want to count the number of CODEC specific configuration */
+);
+
+/* Get a CODEC specific configuration you want in a summary.
+ *
+ * Return the address of a CODEC specific configuration if successful.
+ * Return NULL otherwise. */
+lsmash_codec_specific_t *lsmash_get_codec_specific_data
+(
+    lsmash_summary_t *summary,
+    uint32_t          extension_number
+);
+
+/* Convert a data format of CODEC specific configuration into another.
+ * User can specify the same data format for the destination.
+ * If so, a returned CODEC specific configuration is a copy of the source.
+ *
+ * Return an allocated CODEC specific configuration by specified 'format' from 'specific' if successful.
+ * Return NULL otherwise. */
+lsmash_codec_specific_t *lsmash_convert_codec_specific_format
+(
+    lsmash_codec_specific_t     *specific,  /* the address of a CODEC specific configuration as the source */
+    lsmash_codec_specific_format format     /* a data format of the destination */
+);
+
+/* Compare two summaries.
+ *
+ * Return 0 if the two summaries are identical.
  * Return 1 if the two summaries are different.
- * Return -1 if there is any error. */
-int lsmash_compare_summary( lsmash_summary_t *a, lsmash_summary_t *b );
+ * Return a negative value if there is any error. */
+int lsmash_compare_summary
+(
+    lsmash_summary_t *a,
+    lsmash_summary_t *b
+);
 
 /****************************************************************************
  * Audio Description Layer
@@ -492,8 +628,11 @@ typedef struct
                                              * User can set this for treatment in other way. */
 } lsmash_audio_summary_t;
 
-/* to facilitate to make exdata (typically DecoderSpecificInfo or AudioSpecificConfig). */
-int lsmash_setup_AudioSpecificConfig( lsmash_audio_summary_t* summary );
+/* Facilitate to make exdata (typically DecoderSpecificInfo or AudioSpecificConfig). */
+int lsmash_setup_AudioSpecificConfig
+(
+    lsmash_audio_summary_t* summary
+);
 
 /****************************************************************************
  * Video Description Layer
@@ -692,8 +831,21 @@ typedef struct
     } color;
 } lsmash_video_summary_t;
 
-int lsmash_convert_crop_into_clap( lsmash_crop_t crop, uint32_t width, uint32_t height, lsmash_clap_t *clap );
-int lsmash_convert_clap_into_crop( lsmash_clap_t clap, uint32_t width, uint32_t height, lsmash_crop_t *crop );
+int lsmash_convert_crop_into_clap
+(
+    lsmash_crop_t  crop,
+    uint32_t       width,
+    uint32_t       height,
+    lsmash_clap_t *clap
+);
+
+int lsmash_convert_clap_into_crop
+(
+    lsmash_clap_t  clap,
+    uint32_t       width,
+    uint32_t       height,
+    lsmash_crop_t *crop
+);
 
 /****************************************************************************
  * Media Sample
@@ -807,11 +959,11 @@ typedef struct
 
 typedef struct
 {
-    uint8_t allow_earlier;
-    uint8_t leading;
-    uint8_t independent;
-    uint8_t disposable;
-    uint8_t redundant;
+    uint8_t                   allow_earlier;
+    uint8_t                   leading;
+    uint8_t                   independent;
+    uint8_t                   disposable;
+    uint8_t                   redundant;
     lsmash_random_access_flag ra_flags;
     lsmash_post_roll_t        post_roll;
     lsmash_pre_roll_t         pre_roll;
@@ -819,30 +971,68 @@ typedef struct
 
 typedef struct
 {
-    uint32_t length;
-    uint8_t *data;
-    uint64_t dts;
-    uint64_t cts;
-    uint32_t index;
+    uint32_t                 length;    /* size of sample data
+                                         * Note: this is NOT always an allocated size. */
+    uint8_t                 *data;      /* sample data */
+    uint64_t                 dts;       /* Decoding TimeStamp in units of media timescale */
+    uint64_t                 cts;       /* Composition TimeStamp in units of media timescale */
+    uint32_t                 index;
     lsmash_sample_property_t prop;
 } lsmash_sample_t;
 
 typedef struct
 {
-    uint64_t dts;
-    uint64_t cts;
+    uint64_t dts;   /* Decoding TimeStamp in units of media timescale */
+    uint64_t cts;   /* Composition TimeStamp in units of media timescale */
 } lsmash_media_ts_t;
 
 typedef struct
 {
-    uint32_t sample_count;
+    uint32_t           sample_count;
     lsmash_media_ts_t *timestamp;
 } lsmash_media_ts_list_t;
 
-lsmash_sample_t *lsmash_create_sample( uint32_t size );
-int lsmash_sample_alloc( lsmash_sample_t *sample, uint32_t size );
-void lsmash_delete_sample( lsmash_sample_t *sample );
-int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_t *sample );
+/* Allocate a sample and then allocate data of the allocated sample by 'size'.
+ * If 'size' is set to 0, data of the allocated sample won't be allocated and will be set to NULL instead.
+ * The allocated sample can be deallocated by lsmash_delete_sample().
+ *
+ * Return the address of an allocated sample if successful.
+ * Return NULL otherwise. */
+lsmash_sample_t *lsmash_create_sample
+(
+    uint32_t size   /* size of sample data you request */
+);
+
+/* Allocate data of a given allocated sample by 'size'.
+ * If the sample data is already allocated, reallocate it by 'size'.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_sample_alloc
+(
+    lsmash_sample_t *sample,    /* the address of a sample you want to allocate its sample data */
+    uint32_t         size       /* size of sample data you request */
+);
+
+/* Deallocate a given sample. */
+void lsmash_delete_sample
+(
+    lsmash_sample_t *sample     /* the address of a sample you want to deallocate */
+);
+
+/* Append a sample to a track.
+ * Note:
+ *   The appended sample will be deleted by lsmash_delete_sample() internally.
+ *   Users shall not deallocate the sample by lsmash_delete_sample() if successful to append the sample.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_append_sample
+(
+    lsmash_root_t   *root,
+    uint32_t         track_ID,
+    lsmash_sample_t *sample
+);
 
 /****************************************************************************
  * Media Layer
@@ -1006,21 +1196,127 @@ typedef struct
     PRIVATE char data_handler_name_shadow[256];
 } lsmash_media_parameters_t;
 
-void lsmash_initialize_media_parameters( lsmash_media_parameters_t *param );
-int lsmash_set_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_media_parameters_t *param );
-int lsmash_set_last_sample_delta( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_delta );
-int lsmash_flush_pooled_samples( lsmash_root_t *root, uint32_t track_ID, uint32_t last_sample_delta );
+/* Set all the given media parameters to default. */
+void lsmash_initialize_media_parameters
+(
+    lsmash_media_parameters_t *param    /* the address of the media parameters to which you want to set default value */
+);
 
-int lsmash_update_media_modification_time( lsmash_root_t *root, uint32_t track_ID );
+/* Set media parameters to a track.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_set_media_parameters
+(
+    lsmash_root_t             *root,        /* the address of a ROOT containing a track to which you want to set the media parameters */
+    uint32_t                   track_ID,    /* the track_ID of a track to which you want to set the media parameters */
+    lsmash_media_parameters_t *param        /* the address of the media parameters you want to set to a track. */
+);
 
-int lsmash_get_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_media_parameters_t *param );
-uint64_t lsmash_get_media_duration( lsmash_root_t *root, uint32_t track_ID );
-uint32_t lsmash_get_media_timescale( lsmash_root_t *root, uint32_t track_ID );
-uint32_t lsmash_get_last_sample_delta( lsmash_root_t *root, uint32_t track_ID );
-uint32_t lsmash_get_start_time_offset( lsmash_root_t *root, uint32_t track_ID );
-uint32_t lsmash_get_composition_to_decode_shift( lsmash_root_t *root, uint32_t track_ID );
+/* Set the duration of the last sample to a track.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_set_last_sample_delta
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID,
+    uint32_t       sample_delta
+);
 
-uint16_t lsmash_pack_iso_language( char *iso_language );
+/* Flush samples in the internal pool in a track.
+ * Users shall call this function for each track before calling lsmash_finish_movie() or lsmash_create_fragment_movie().
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_flush_pooled_samples
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID,
+    uint32_t       last_sample_delta
+);
+
+/* Update the modification time of a media to the most recent.
+ * If the creation time of that media is larger than the modification time,
+ * then override the creation one with the modification one.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_update_media_modification_time
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID
+);
+
+/* Get the media parameters in a track.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_get_media_parameters
+(
+    lsmash_root_t             *root,
+    uint32_t                   track_ID,
+    lsmash_media_parameters_t *param
+);
+
+/* Get the duration of a media.
+ *
+ * Return the duration of a media if successful.
+ * Return 0 otherwise. */
+uint64_t lsmash_get_media_duration
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID
+);
+
+/* Get the timescale of a media.
+ *
+ * Return the timescale of a media if successful.
+ * Return 0 otherwise. */
+uint32_t lsmash_get_media_timescale
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID
+);
+
+/* Get the duration of the last sample in a track.
+ *
+ * Return the duration of the last sample in a track if successful.
+ * Return 0 otherwise. */
+uint32_t lsmash_get_last_sample_delta
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID
+);
+
+/* Get the composition time offset of the first sample in a track.
+ *
+ * Return the composition time offset of the first sample in a track if successful.
+ * Return 0 otherwise. */
+uint32_t lsmash_get_start_time_offset
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID
+);
+
+/* Get the shift of composition timeline to decode timeline in a track.
+ *
+ * Return the shift of composition timeline to decode timeline in a track. if successful.
+ * Return 0 otherwise. */
+uint32_t lsmash_get_composition_to_decode_shift
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID
+);
+
+/* Pack a string of ISO 639-2/T language code into 16-bit data.
+ *
+ * Return a packed 16-bit ISO 639-2/T language if successful.
+ * Return 0 otherwise. */
+uint16_t lsmash_pack_iso_language
+(
+    char *iso_language      /* a string of ISO 639-2/T language code */
+);
 
 /****************************************************************************
  * Track Layer
@@ -1102,24 +1398,157 @@ typedef struct
                              * If set to ISOM_EDIT_MODE_DWELL (0), the media at start_time is presented for the duration. */
 } lsmash_edit_t;
 
-uint32_t lsmash_create_track( lsmash_root_t *root, lsmash_media_type media_type );
-void lsmash_delete_track( lsmash_root_t *root, uint32_t track_ID );
-void lsmash_initialize_track_parameters( lsmash_track_parameters_t *param );
-int lsmash_set_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_track_parameters_t *param );
+/* Create a track in a movie.
+ * Users can destroy the created track by lsmash_delete_track().
+ * When a track is created, its track_ID is assigned automatically so that any duplication of track_ID may be avoided.
+ *
+ * Return the current track_ID of a track created by this function if successful.
+ * Return 0 otherwise. */
+uint32_t lsmash_create_track
+(
+    lsmash_root_t    *root,
+    lsmash_media_type media_type
+);
 
-int lsmash_update_track_duration( lsmash_root_t *root, uint32_t track_ID, uint32_t last_sample_delta );
-int lsmash_update_track_modification_time( lsmash_root_t *root, uint32_t track_ID );
+/* Destroy the track of a given track_ID in a movie. */
+void lsmash_delete_track
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID
+);
 
-uint32_t lsmash_get_track_ID( lsmash_root_t *root, uint32_t track_number );
-int lsmash_get_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_track_parameters_t *param );
-uint64_t lsmash_get_track_duration( lsmash_root_t *root, uint32_t track_ID );
+/* Set all the given track parameters to default. */
+void lsmash_initialize_track_parameters
+(
+    lsmash_track_parameters_t *param
+);
 
-/* explicit timeline map (edit) */
-int lsmash_create_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, lsmash_edit_t edit );
-int lsmash_modify_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint32_t edit_number, lsmash_edit_t edit );
-int lsmash_get_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, uint32_t edit_number, lsmash_edit_t *edit );
-int lsmash_delete_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID );
-uint32_t lsmash_count_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID );
+/* Set track parameters to a track.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_set_track_parameters
+(
+    lsmash_root_t             *root,
+    uint32_t                   track_ID,
+    lsmash_track_parameters_t *param
+);
+
+/* Update the duration of a track with a new duration of its last sample.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_update_track_duration
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID,
+    uint32_t       last_sample_delta
+);
+
+/* Update the modification time of a track to the most recent.
+ * If the creation time of that track is larger than the modification time,
+ * then override the creation one with the modification one.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_update_track_modification_time
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID
+);
+
+/* Get a track_ID by a track number.
+ * A track number is given in created order in a movie.
+ * If a track is removed, the track number of tracks with higher track number than one of just removed track will be decremented.
+ *
+ * Return a track_ID if successful.
+ * Return 0 otherwise. */
+uint32_t lsmash_get_track_ID
+(
+    lsmash_root_t *root,
+    uint32_t       track_number
+);
+
+/* Get the track parameters in a track.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_get_track_parameters
+(
+    lsmash_root_t             *root,
+    uint32_t                   track_ID,
+    lsmash_track_parameters_t *param
+);
+
+/* Get the duration of a track.
+ *
+ * Return the duration of a track if successful.
+ * Return 0 otherwise. */
+uint64_t lsmash_get_track_duration
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID
+);
+
+/* Create an explicit timeline map (edit) and append it into a track.
+ * Users can destroy ALL created edits in a track by lsmash_delete_explicit_timeline_map().
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_create_explicit_timeline_map
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID,
+    lsmash_edit_t  edit
+);
+
+/* Destroy ALL created edits in a track.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_delete_explicit_timeline_map
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID
+);
+
+/* Count the number of edits in a track.
+ *
+ * Return the number of edits in a track if successful.
+ * Return 0 otherwise. */
+uint32_t lsmash_count_explicit_timeline_map
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID
+);
+
+/* Get an edit in a track by an edit number.
+ * An edit number is given in created order in a track.
+ * If an edit is removed, the edit number of edits with higher edit number than one of just removed edit will be decremented.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_get_explicit_timeline_map
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID,
+    uint32_t       edit_number,
+    lsmash_edit_t *edit
+);
+
+/* Modify an edit in a track by an edit number.
+ * An edit number is given in created order in a track.
+ * If an edit is removed, the edit number of edits with higher edit number than one of just removed edit will be decremented.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_modify_explicit_timeline_map
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID,
+    uint32_t       edit_number,
+    lsmash_edit_t  edit
+);
 
 /****************************************************************************
  * Movie Layer
@@ -1210,66 +1639,412 @@ typedef struct
     PRIVATE lsmash_brand_type brands_shadow[50];
 } lsmash_movie_parameters_t;
 
-/* fundamental functions to create and/or read movie */
-void lsmash_initialize_movie_parameters( lsmash_movie_parameters_t *param );
-int lsmash_set_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t *param );
-int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux );
+typedef int (*lsmash_adhoc_remux_callback)( void *param, uint64_t done, uint64_t total );
+typedef struct {
+    uint64_t                    buffer_size;
+    lsmash_adhoc_remux_callback func;
+    void                       *param;
+} lsmash_adhoc_remux_t;
 
-int lsmash_update_movie_modification_time( lsmash_root_t *root );
+/* Set all the given movie parameters to default. */
+void lsmash_initialize_movie_parameters
+(
+    lsmash_movie_parameters_t *param
+);
 
-int lsmash_get_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t *param );
-uint32_t lsmash_get_movie_timescale( lsmash_root_t *root );
+/* Set movie parameters to a movie.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_set_movie_parameters
+(
+    lsmash_root_t             *root,
+    lsmash_movie_parameters_t *param
+);
+
+/* Finalize a movie.
+ * If the movie is not fragmented and 'remux' is set to non-NULL,
+ * move overall necessary data to access and decode samples into the very front of the file at the end.
+ * This is useful for progressive downloading.
+ * Users shall call lsmash_flush_pooled_samples() for each track before calling this function.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_finish_movie
+(
+    lsmash_root_t        *root,
+    lsmash_adhoc_remux_t *remux
+);
+
+/* Update the modification time of a movie to the most recent.
+ * If the creation time of that movie is larger than the modification time,
+ * then override the creation one with the modification one.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_update_movie_modification_time
+(
+    lsmash_root_t *root
+);
+
+/* Get the movie parameters in a movie.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_get_movie_parameters
+(
+    lsmash_root_t             *root,
+    lsmash_movie_parameters_t *param
+);
+
+/* Get the timescale of a movie.
+ *
+ * Return the timescale of a movie if successful.
+ * Return 0 otherwise. */
+uint32_t lsmash_get_movie_timescale
+(
+    lsmash_root_t *root
+);
 
 /****************************************************************************
- * Chapter
+ * Chapter list
  ****************************************************************************/
-int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_ID, char *file_name );
-int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom );
-void lsmash_delete_tyrant_chapter( lsmash_root_t *root );
+/* Create a track as a chapter list referenced by another track.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_create_reference_chapter_track
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID,
+    char          *file_name
+);
+
+/* Create and set a chapter list as a user data to a movie.
+ * The created chapter list in a movie can be destroyed by lsmash_delete_tyrant_chapter().
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_set_tyrant_chapter
+(
+    lsmash_root_t *root,
+    char          *file_name,
+    int            add_bom
+);
+
+/* Destroy a chapter list as a user data in a movie. */
+void lsmash_delete_tyrant_chapter
+(
+    lsmash_root_t *root
+);
 
 /****************************************************************************
  * Fragments
  ****************************************************************************/
-int lsmash_create_fragment_movie( lsmash_root_t *root );
-int lsmash_create_fragment_empty_duration( lsmash_root_t *root, uint32_t track_ID, uint32_t duration );
+/* Flush the current movie fragment and create a new movie fragment.
+ * Users shall call lsmash_flush_pooled_samples() for each track before calling this function.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_create_fragment_movie
+(
+    lsmash_root_t *root
+);
+
+/* Create an empty duration track in the current movie fragment.
+ * Don't specify track_ID any track fragment in the current movie fragment has.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_create_fragment_empty_duration
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID,
+    uint32_t       duration
+);
 
 #ifdef LSMASH_DEMUXER_ENABLED
 /****************************************************************************
  * Dump / Print
  ****************************************************************************/
-int lsmash_print_movie( lsmash_root_t *root, const char *filename );
+/* Dump and print box structure of ROOT into the destination.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_print_movie
+(
+    lsmash_root_t *root,        /* the address of ROOT you want to dump and print */
+    const char    *filename     /* the path of a file as the destination */
+);
 
-/* This function might output BOM on Windows. Make sure that this is the first function that outputs something to stdout. */
-int lsmash_print_chapter_list( lsmash_root_t *root );
+/* Print a chapter list written as a user data on stdout.
+ * This function might output BOM on Windows.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_print_chapter_list
+(
+    lsmash_root_t *root
+);
 
 /****************************************************************************
  * Timeline
  ****************************************************************************/
-int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_root_t *src, uint32_t src_track_ID );
-int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID );
-void lsmash_destruct_timeline( lsmash_root_t *root, uint32_t track_ID );
-int lsmash_get_last_sample_delta_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t *last_sample_delta );
-int lsmash_get_sample_delta_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number, uint32_t *sample_delta );
-int lsmash_get_dts_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number, uint64_t *dts );
-int lsmash_get_cts_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number, uint64_t *cts );
-int lsmash_get_composition_to_decode_shift_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t *ctd_shift );
-int lsmash_get_closest_random_accessible_point_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number, uint32_t *rap_number );
-int lsmash_get_closest_random_accessible_point_detail_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number,
-                                                                           uint32_t *rap_number, lsmash_random_access_flag *ra_flags, uint32_t *leading, uint32_t *distance );
-uint32_t lsmash_get_sample_count_in_media_timeline( lsmash_root_t *root, uint32_t track_ID );
-uint32_t lsmash_get_max_sample_size_in_media_timeline( lsmash_root_t *root, uint32_t track_ID );
-uint64_t lsmash_get_media_duration_from_media_timeline( lsmash_root_t *root, uint32_t track_ID );
-lsmash_sample_t *lsmash_get_sample_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number );
-int lsmash_get_sample_info_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number, lsmash_sample_t *sample );
-int lsmash_get_sample_property_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number, lsmash_sample_property_t *prop );
-int lsmash_check_sample_existence_in_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number );
+/* Copy all edits from the source track to the destination track.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_copy_timeline_map
+(
+    lsmash_root_t *dst,
+    uint32_t       dst_track_ID,
+    lsmash_root_t *src,
+    uint32_t       src_track_ID
+);
 
-int lsmash_set_media_timestamps( lsmash_root_t *root, uint32_t track_ID, lsmash_media_ts_list_t *ts_list );
-int lsmash_get_media_timestamps( lsmash_root_t *root, uint32_t track_ID, lsmash_media_ts_list_t *ts_list );
-void lsmash_delete_media_timestamps( lsmash_media_ts_list_t *ts_list );
-int lsmash_get_max_sample_delay( lsmash_media_ts_list_t *ts_list, uint32_t *max_sample_delay );
-void lsmash_sort_timestamps_decoding_order( lsmash_media_ts_list_t *ts_list );
-void lsmash_sort_timestamps_composition_order( lsmash_media_ts_list_t *ts_list );
+/* Construct the timeline for a track.
+ * The constructed timeline can be destructed by lsmash_destruct_timeline().
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_construct_timeline
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID
+);
+
+/* Destruct the timeline for a given track. */
+void lsmash_destruct_timeline
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID
+);
+
+/* Get the duration of the last sample from the media timeline for a track.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_get_last_sample_delta_from_media_timeline
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID,
+    uint32_t      *last_sample_delta    /* the address of a variable to which the duration of the last sample will be set */
+);
+
+/* Get the duration of a sample from the media timeline for a track.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_get_sample_delta_from_media_timeline
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID,
+    uint32_t       sample_number,
+    uint32_t      *sample_delta     /* the address of a variable to which the duration of a sample will be set */
+);
+
+/* Get the decoding timestamp of a sample from the media timeline for a track.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_get_dts_from_media_timeline
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID,
+    uint32_t       sample_number,
+    uint64_t      *dts              /* the address of a variable to which a decoding timestamp will be set */
+);
+
+/* Get the composition timestamp of a sample from the media timeline for a track.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_get_cts_from_media_timeline
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID,
+    uint32_t       sample_number,
+    uint64_t      *cts              /* the address of a variable to which a composition timestamp will be set */
+);
+
+/* Get the shift of composition timeline to decode timeline from the media timeline for a track.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_get_composition_to_decode_shift_from_media_timeline
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID,
+    uint32_t      *ctd_shift    /* the address of a variable to which the shift of composition timeline to decode timeline will be set */
+);
+
+/* Get the sample number which is the closest random accessible point to the sample
+ * corresponding to a given sample number from the media timeline for a track.
+ * This function tries to find the closest random accessible point from the past at the first.
+ * If not found, try to find it from the future.
+ * Note:
+ *   the closest random accessible point doesn't always guarantee that
+ *   the sample corresponding to a given number can be decodable correctly by decoding from there.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_get_closest_random_accessible_point_from_media_timeline
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID,
+    uint32_t       sample_number,
+    uint32_t      *rap_number       /* the address of a variable to which the sample number of the closest random accessible point will be set */
+);
+
+/* Get the detailed information of the closest random accessible point to the sample
+ * corresponding to a given sample number from the media timeline for a track.
+ * Note:
+ *   the closest random accessible point doesn't always guarantee that
+ *   the sample corresponding to a given number can be decodable correctly by decoding from there.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_get_closest_random_accessible_point_detail_from_media_timeline
+(
+    lsmash_root_t             *root,
+    uint32_t                   track_ID,
+    uint32_t                   sample_number,
+    uint32_t                  *rap_number,      /* the address of a variable to which the sample number of the closest random accessible point will be set */
+    lsmash_random_access_flag *ra_flags,        /* the address of a variable to which the flags of the closest random accessible point will be set */
+    uint32_t                  *leading,         /* the address of a variable to which the number of leading samples will be set */
+    uint32_t                  *distance         /* the address of a variable to which a distance from the closest random accessible point to a point which guarantees
+                                                 * that the sample corresponding to a given number can be decodable correctly by decoding from there will be set */
+);
+
+/* Get the number of samples in the media timeline for a track.
+ *
+ * Return the number of samples in a track if successful.
+ * Return 0 otherwise. */
+uint32_t lsmash_get_sample_count_in_media_timeline
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID
+);
+
+/* Get the maximum size of sample in the media timeline for a track.
+ *
+ * Return the maximum size of the samples in a track if successful.
+ * Return 0 otherwise. */
+uint32_t lsmash_get_max_sample_size_in_media_timeline
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID
+);
+
+/* Get the duration of the media from the media timeline for a track.
+ *
+ * Return the duration of the media in a track if successful.
+ * Return 0 otherwise. */
+uint64_t lsmash_get_media_duration_from_media_timeline
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID
+);
+
+/* Allocate and get the sample corresponding to a given sample number from the media timeline for a track.
+ * The allocated sample can be deallocated by lsmash_delete_sample().
+ *
+ * Return the address of an allocated and gotten sample if successful.
+ * Return NULL otherwise. */
+lsmash_sample_t *lsmash_get_sample_from_media_timeline
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID,
+    uint32_t       sample_number
+);
+
+/* Get the information of the sample correspondint to a given sample number from the media timeline for a track.
+ * The information includes the size, timestamps and properties of the sample.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_get_sample_info_from_media_timeline
+(
+    lsmash_root_t   *root,
+    uint32_t         track_ID,
+    uint32_t         sample_number,
+    lsmash_sample_t *sample
+);
+
+/* Get the properties of the sample correspondint to a given sample number from the media timeline for a track.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_get_sample_property_from_media_timeline
+(
+    lsmash_root_t            *root,
+    uint32_t                  track_ID,
+    uint32_t                  sample_number,
+    lsmash_sample_property_t *prop
+);
+
+/* Check if the sample corresponding to a given sample number exists in the media timeline for a track.
+ *
+ * Return 1 if the sample exists.
+ * Return 0 otherwise. */
+int lsmash_check_sample_existence_in_media_timeline
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID,
+    uint32_t       sample_number
+);
+
+/* Set or change the decoding and composition timestamps in the media timeline for a track.
+ * This function doesn't support for any LPCM track currently.
+ *
+ * Return 0 if successful.
+ * Return a negative value othewise. */
+int lsmash_set_media_timestamps
+(
+    lsmash_root_t          *root,
+    uint32_t                track_ID,
+    lsmash_media_ts_list_t *ts_list
+);
+
+/* Allocate and get the decoding and composition timestamps from the media timeline for a track.
+ * The allocated decoding and composition timestamps can be deallocated by lsmash_delete_media_timestamps().
+ *
+ * Return 0 if successful.
+ * Return a negative value othewise. */
+int lsmash_get_media_timestamps
+(
+    lsmash_root_t          *root,
+    uint32_t                track_ID,
+    lsmash_media_ts_list_t *ts_list
+);
+
+/* Deallocate the decoding and composition timestamps in a given media timestamp list. */
+void lsmash_delete_media_timestamps
+(
+    lsmash_media_ts_list_t *ts_list
+);
+
+/* Get the maximum composition delay derived from composition reordering.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_get_max_sample_delay
+(
+    lsmash_media_ts_list_t *ts_list,
+    uint32_t               *max_sample_delay
+);
+
+/* Sort decoding and composition timestamps in decoding order. */
+void lsmash_sort_timestamps_decoding_order
+(
+    lsmash_media_ts_list_t *ts_list
+);
+
+/* Sort decoding and composition timestamps in composition order. */
+void lsmash_sort_timestamps_composition_order
+(
+    lsmash_media_ts_list_t *ts_list
+);
 #endif
 
 /****************************************************************************
@@ -1385,14 +2160,38 @@ typedef struct
     lsmash_mp4sys_decoder_specific_info_t *dsi;             /* zero or one decoder specific information */
 } lsmash_mp4sys_decoder_parameters_t;
 
-int lsmash_set_mp4sys_decoder_specific_info( lsmash_mp4sys_decoder_parameters_t *param, uint8_t *payload, uint32_t payload_length );
-void lsmash_destroy_mp4sys_decoder_specific_info( lsmash_mp4sys_decoder_parameters_t *param );
-uint8_t *lsmash_create_mp4sys_decoder_config( lsmash_mp4sys_decoder_parameters_t *param, uint32_t *data_length );
+int lsmash_set_mp4sys_decoder_specific_info
+(
+    lsmash_mp4sys_decoder_parameters_t *param,
+    uint8_t                            *payload,
+    uint32_t                            payload_length
+);
+
+void lsmash_destroy_mp4sys_decoder_specific_info
+(
+    lsmash_mp4sys_decoder_parameters_t *param
+);
+
+uint8_t *lsmash_create_mp4sys_decoder_config
+(
+    lsmash_mp4sys_decoder_parameters_t *param,
+    uint32_t                           *data_length
+);
+
 /* Return MP4SYS_OBJECT_TYPE_Forbidden if objectTypeIndication is not found or there is an error to find it. */
-lsmash_mp4sys_object_type_indication lsmash_mp4sys_get_object_type_indication( lsmash_summary_t *summary );
+lsmash_mp4sys_object_type_indication lsmash_mp4sys_get_object_type_indication
+(
+    lsmash_summary_t *summary
+);
+
 /* Return -1 if any error.
  * Even if the decoder specific information is not found, it is not an error since no decoder specific information is allowed for some stream formats. */
-int lsmash_get_mp4sys_decoder_specific_info( lsmash_mp4sys_decoder_parameters_t *param, uint8_t **payload, uint32_t *payload_length );
+int lsmash_get_mp4sys_decoder_specific_info
+(
+    lsmash_mp4sys_decoder_parameters_t *param,
+    uint8_t                           **payload,
+    uint32_t                           *payload_length
+);
 
 /* AC-3 tools to make exdata (AC-3 specific info). */
 typedef struct
@@ -1405,8 +2204,18 @@ typedef struct
     uint8_t frmsizecod;     /* the same value as the frmsizecod field in the AC-3 bitstream */
 } lsmash_ac3_specific_parameters_t;
 
-int lsmash_setup_ac3_specific_parameters_from_syncframe( lsmash_ac3_specific_parameters_t *param, uint8_t *data, uint32_t data_length );
-uint8_t *lsmash_create_ac3_specific_info( lsmash_ac3_specific_parameters_t *param, uint32_t *data_length );
+int lsmash_setup_ac3_specific_parameters_from_syncframe
+(
+    lsmash_ac3_specific_parameters_t *param,
+    uint8_t                          *data,
+    uint32_t                          data_length
+);
+
+uint8_t *lsmash_create_ac3_specific_info
+(
+    lsmash_ac3_specific_parameters_t *param,
+    uint32_t                         *data_length
+);
 
 /* Enhanced AC-3 tools to make exdata (Enhanced AC-3 specific info). */
 typedef struct
@@ -1433,9 +2242,23 @@ typedef struct
     lsmash_eac3_substream_info_t independent_info[8];
 } lsmash_eac3_specific_parameters_t;
 
-int lsmash_setup_eac3_specific_parameters_from_frame( lsmash_eac3_specific_parameters_t *param, uint8_t *data, uint32_t data_length );
-uint16_t lsmash_eac3_get_chan_loc_from_chanmap( uint16_t chanmap );
-uint8_t *lsmash_create_eac3_specific_info( lsmash_eac3_specific_parameters_t *param, uint32_t *data_length );
+int lsmash_setup_eac3_specific_parameters_from_frame
+(
+    lsmash_eac3_specific_parameters_t *param,
+    uint8_t                           *data,
+    uint32_t                           data_length
+);
+
+uint16_t lsmash_eac3_get_chan_loc_from_chanmap
+(
+    uint16_t chanmap
+);
+
+uint8_t *lsmash_create_eac3_specific_info
+(
+    lsmash_eac3_specific_parameters_t *param,
+    uint32_t                          *data_length
+);
 
 /* DTS audio tools to make exdata (DTS specific info). */
 typedef enum
@@ -1499,13 +2322,45 @@ typedef struct
     lsmash_dts_reserved_box_t *box;
 } lsmash_dts_specific_parameters_t;
 
-int lsmash_setup_dts_specific_parameters_from_frame( lsmash_dts_specific_parameters_t *param, uint8_t *data, uint32_t data_length );
-uint8_t lsmash_dts_get_stream_construction( lsmash_dts_construction_flag flags );
-lsmash_dts_construction_flag lsmash_dts_get_construction_flags( uint8_t stream_construction );
-lsmash_codec_type_t lsmash_dts_get_codingname( lsmash_dts_specific_parameters_t *param );
-uint8_t *lsmash_create_dts_specific_info( lsmash_dts_specific_parameters_t *param, uint32_t *data_length );
-int lsmash_append_dts_reserved_box( lsmash_dts_specific_parameters_t *param, uint8_t *box_data, uint32_t box_size );
-void lsmash_remove_dts_reserved_box( lsmash_dts_specific_parameters_t *param );
+int lsmash_setup_dts_specific_parameters_from_frame
+(
+    lsmash_dts_specific_parameters_t *param,
+    uint8_t                          *data,
+    uint32_t                          data_length
+);
+
+uint8_t lsmash_dts_get_stream_construction
+(
+    lsmash_dts_construction_flag flags
+);
+
+lsmash_dts_construction_flag lsmash_dts_get_construction_flags
+(
+    uint8_t stream_construction
+);
+
+lsmash_codec_type_t lsmash_dts_get_codingname
+(
+    lsmash_dts_specific_parameters_t *param
+);
+
+uint8_t *lsmash_create_dts_specific_info
+(
+    lsmash_dts_specific_parameters_t *param,
+    uint32_t                         *data_length
+);
+
+int lsmash_append_dts_reserved_box
+(
+    lsmash_dts_specific_parameters_t *param,
+    uint8_t                          *box_data,
+    uint32_t                          box_size
+);
+
+void lsmash_remove_dts_reserved_box
+(
+    lsmash_dts_specific_parameters_t *param
+);
 
 /* Apple Lossless Audio tools */
 typedef struct
@@ -1524,7 +2379,11 @@ typedef struct
     uint32_t sampleRate;        /* sample rate of the encoded stream */
 } lsmash_alac_specific_parameters_t;
 
-uint8_t *lsmash_create_alac_specific_info( lsmash_alac_specific_parameters_t *param, uint32_t *data_length );
+uint8_t *lsmash_create_alac_specific_info
+(
+    lsmash_alac_specific_parameters_t *param,
+    uint32_t                          *data_length
+);
 
 /* H.264 tools to make exdata (AVC specific info). */
 typedef enum
@@ -1564,11 +2423,39 @@ typedef struct
     uint32_t avgBitrate;    /* the average rate in bits/second over the entire presentation */
 } lsmash_h264_bitrate_t;
 
-int lsmash_setup_h264_specific_parameters_from_access_unit( lsmash_h264_specific_parameters_t *param, uint8_t *data, uint32_t data_length );
-void lsmash_destroy_h264_parameter_sets( lsmash_h264_specific_parameters_t *param );
-int lsmash_check_h264_parameter_set_appendable( lsmash_h264_specific_parameters_t *param, lsmash_h264_parameter_set_type ps_type, void *ps_data, uint32_t ps_length );
-int lsmash_append_h264_parameter_set( lsmash_h264_specific_parameters_t *param, lsmash_h264_parameter_set_type ps_type, void *ps_data, uint32_t ps_length );
-uint8_t *lsmash_create_h264_specific_info( lsmash_h264_specific_parameters_t *param, uint32_t *data_length );
+int lsmash_setup_h264_specific_parameters_from_access_unit
+(
+    lsmash_h264_specific_parameters_t *param,
+    uint8_t                           *data,
+    uint32_t                           data_length
+);
+
+void lsmash_destroy_h264_parameter_sets
+(
+    lsmash_h264_specific_parameters_t *param
+);
+
+int lsmash_check_h264_parameter_set_appendable
+(
+    lsmash_h264_specific_parameters_t *param,
+    lsmash_h264_parameter_set_type     ps_type,
+    void                              *ps_data,
+    uint32_t                           ps_length
+);
+
+int lsmash_append_h264_parameter_set
+(
+    lsmash_h264_specific_parameters_t *param,
+    lsmash_h264_parameter_set_type     ps_type,
+    void                              *ps_data,
+    uint32_t                           ps_length
+);
+
+uint8_t *lsmash_create_h264_specific_info
+(
+    lsmash_h264_specific_parameters_t *param,
+    uint32_t                          *data_length
+);
 
 /* VC-1 tools to make exdata (VC-1 specific info). */
 typedef struct lsmash_vc1_header_tag lsmash_vc1_header_t;
@@ -1604,10 +2491,30 @@ typedef struct
     lsmash_vc1_header_t *ephdr;     /* an entry-point header EBDU (mandatory) */
 } lsmash_vc1_specific_parameters_t;
 
-int lsmash_setup_vc1_specific_parameters_from_access_unit( lsmash_vc1_specific_parameters_t *param, uint8_t *data, uint32_t data_length );
-void lsmash_destroy_vc1_headers( lsmash_vc1_specific_parameters_t *param );
-int lsmash_put_vc1_header( lsmash_vc1_specific_parameters_t *param, void *hdr_data, uint32_t hdr_length );
-uint8_t *lsmash_create_vc1_specific_info( lsmash_vc1_specific_parameters_t *param, uint32_t *data_length );
+int lsmash_setup_vc1_specific_parameters_from_access_unit
+(
+    lsmash_vc1_specific_parameters_t *param,
+    uint8_t                          *data,
+    uint32_t                          data_length
+);
+
+void lsmash_destroy_vc1_headers
+(
+    lsmash_vc1_specific_parameters_t *param
+);
+
+int lsmash_put_vc1_header
+(
+    lsmash_vc1_specific_parameters_t *param,
+    void                             *hdr_data,
+    uint32_t                          hdr_length
+);
+
+uint8_t *lsmash_create_vc1_specific_info
+(
+    lsmash_vc1_specific_parameters_t *param,
+    uint32_t                         *data_length
+);
 
 /* Sample scaling
  * Without this extension, video samples are scaled into the visual presentation region to fill it. */
@@ -2301,21 +3208,75 @@ typedef struct
     char                          *name;
 } lsmash_itunes_metadata_t;
 
-int lsmash_set_itunes_metadata( lsmash_root_t *root, lsmash_itunes_metadata_t metadata );
-int lsmash_get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, lsmash_itunes_metadata_t *metadata );
-uint32_t lsmash_count_itunes_metadata( lsmash_root_t *root );
+/* Append an iTunes metadata to a movie.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_set_itunes_metadata
+(
+    lsmash_root_t           *root,
+    lsmash_itunes_metadata_t metadata
+);
+
+/* Count the number of iTunes metadata in a movie.
+ *
+ * Return the number of iTunes metadata in a movie if successful.
+ * Return 0 otherwise. */
+uint32_t lsmash_count_itunes_metadata
+(
+    lsmash_root_t *root
+);
+
+/* Get an iTunes metadata in a movie.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_get_itunes_metadata
+(
+    lsmash_root_t            *root,
+    uint32_t                  metadata_number,
+    lsmash_itunes_metadata_t *metadata
+);
 
 /****************************************************************************
  * Others
  ****************************************************************************/
-/* track_ID == 0 means copyright declaration applies to the entire presentation, not an entire track. */
-int lsmash_set_copyright( lsmash_root_t *root, uint32_t track_ID, uint16_t ISO_language, char *notice );
+/* Set a copyright declaration to a track.
+ * track_ID == 0 means copyright declaration applies to the entire presentation, not an entire track.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_set_copyright
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID,
+    uint16_t       ISO_language,
+    char          *notice
+);
 
-int lsmash_create_object_descriptor( lsmash_root_t *root );
+int lsmash_create_object_descriptor
+(
+    lsmash_root_t *root
+);
 
-int lsmash_add_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length );
-int lsmash_set_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length );
-int lsmash_write_free( lsmash_root_t *root );
+int lsmash_add_free
+(
+    lsmash_root_t *root,
+    uint8_t       *data,
+    uint64_t       data_length
+);
+
+int lsmash_set_free
+(
+    lsmash_root_t *root,
+    uint8_t       *data,
+    uint64_t       data_length
+);
+
+int lsmash_write_free
+(
+    lsmash_root_t *root
+);
 
 #undef PRIVATE
 
