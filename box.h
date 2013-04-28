@@ -2221,6 +2221,12 @@ void isom_remove_ilst( isom_ilst_t *ilst );
 void isom_remove_sample_description( isom_sample_entry_t *sample );
 void isom_remove_unknown_box( isom_unknown_box_t *unknown_box );
 
+int isom_add_extension_box( lsmash_entry_list_t *extensions, void *box, void *eliminator );
+void isom_remove_extension_box( isom_extension_box_t *ext );
+void isom_remove_all_extension_boxes( lsmash_entry_list_t *extensions );
+isom_extension_box_t *isom_get_extension_box( lsmash_entry_list_t *extensions, lsmash_box_type_t box_type );
+void *isom_get_extension_box_format( lsmash_entry_list_t *extensions, lsmash_box_type_t box_type );
+
 #define isom_create_box( box_name, parent_name, box_type ) \
     isom_##box_name##_t *(box_name) = lsmash_malloc_zero( sizeof(isom_##box_name##_t) ); \
     if( !box_name ) \

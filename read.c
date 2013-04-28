@@ -967,7 +967,7 @@ static int isom_read_codec_specific( lsmash_root_t *root, isom_box_t *box, isom_
     isom_basebox_common_copy( (isom_box_t *)ext, box );
     if( lsmash_add_entry( &parent->extensions, ext ) )
     {
-        isom_remove_sample_description_extension( ext );
+        isom_remove_extension_box( ext );
         return -1;
     }
     return isom_add_print_func( root, ext, level );
@@ -1210,7 +1210,7 @@ static int isom_read_esds( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     isom_basebox_common_copy( (isom_box_t *)ext, box );
     if( lsmash_add_entry( &parent->extensions, ext ) )
     {
-        isom_remove_sample_description_extension( ext );
+        isom_remove_extension_box( ext );
         return -1;
     }
     return isom_add_print_func( root, ext, level );

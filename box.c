@@ -22,6 +22,8 @@
 
 #include "internal.h" /* must be placed first */
 
+#include <stdlib.h>
+
 #include "box.h"
 
 lsmash_extended_box_type_t lsmash_form_extended_box_type( uint32_t fourcc, const uint8_t id[12] )
@@ -248,4 +250,74 @@ size_t isom_skip_box_common( uint8_t **p_data )
     }
     *p_data = data;
     return data - orig;
+}
+
+int isom_add_extension_box( lsmash_entry_list_t *extensions, void *box, void *eliminator )
+{
+    if( !box )
+        return -1;
+    isom_extension_box_t *ext = lsmash_malloc_zero( sizeof(isom_extension_box_t) );
+    if( !ext )
+        return -1;
+    ext->type     = ((isom_box_t *)box)->type;
+    ext->format   = EXTENSION_FORMAT_BOX;
+    ext->form.box = box;
+    ext->destruct = eliminator ? eliminator : free;
+    if( lsmash_add_entry( extensions, ext ) )
+    {
+        /* Don't free 'box' here. */
+        ext->destruct( ext );
+        return -1;
+    }
+    return 0;
+}
+
+void isom_remove_extension_box( isom_extension_box_t *ext )
+{
+    if( !ext )
+        return;
+    if( ext->destruct )
+    {
+        if( ext->format == EXTENSION_FORMAT_BINARY )
+        {
+            if( ext->form.binary )
+                ext->destruct( ext->form.binary );
+        }
+        else
+        {
+            if( ext->form.box )
+                ext->destruct( ext->form.box );
+        }
+    }
+    free( ext );
+}
+
+void isom_remove_all_extension_boxes( lsmash_entry_list_t *extensions )
+{
+    lsmash_remove_entries( extensions, isom_remove_extension_box );
+}
+
+isom_extension_box_t *isom_get_extension_box( lsmash_entry_list_t *extensions, lsmash_box_type_t box_type )
+{
+    for( lsmash_entry_t *entry = extensions->head; entry; entry = entry->next )
+    {
+        isom_extension_box_t *ext = (isom_extension_box_t *)entry->data;
+        if( !ext )
+            continue;
+        if( lsmash_check_box_type_identical( ext->type, box_type ) )
+            return ext;
+    }
+    return NULL;
+}
+
+void *isom_get_extension_box_format( lsmash_entry_list_t *extensions, lsmash_box_type_t box_type )
+{
+    for( lsmash_entry_t *entry = extensions->head; entry; entry = entry->next )
+    {
+        isom_extension_box_t *ext = (isom_extension_box_t *)entry->data;
+        if( !ext || ext->format != EXTENSION_FORMAT_BOX || !lsmash_check_box_type_identical( ext->type, box_type ) )
+            continue;
+        return ext->form.box;
+    }
+    return NULL;
 }

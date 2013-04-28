@@ -764,31 +764,6 @@ fail:
     return NULL;
 }
 
-void isom_remove_sample_description_extension( isom_extension_box_t *ext )
-{
-    if( !ext )
-        return;
-    if( ext->destruct )
-    {
-        if( ext->format == EXTENSION_FORMAT_BINARY )
-        {
-            if( ext->form.binary )
-                ext->destruct( ext->form.binary );
-        }
-        else
-        {
-            if( ext->form.box )
-                ext->destruct( ext->form.box );
-        }
-    }
-    free( ext );
-}
-
-void isom_remove_sample_description_extensions( lsmash_entry_list_t *extensions )
-{
-    lsmash_remove_entries( extensions, isom_remove_sample_description_extension );
-}
-
 static inline void isom_set_default_compressorname( char *compressorname, lsmash_codec_type_t sample_type )
 {
     static struct compressorname_table_tag
@@ -834,25 +809,6 @@ static inline void isom_set_default_compressorname( char *compressorname, lsmash
             strcpy( compressorname, compressorname_table[i].name );
             return;
         }
-}
-
-int isom_add_extension_box( lsmash_entry_list_t *extensions, void *box, void *eliminator )
-{
-    if( !box )
-        return -1;
-    isom_extension_box_t *ext = lsmash_malloc_zero( sizeof(isom_extension_box_t) );
-    if( !ext )
-        return -1;
-    ext->type     = ((isom_box_t *)box)->type;
-    ext->format   = EXTENSION_FORMAT_BOX;
-    ext->form.box = box;
-    ext->destruct = eliminator ? eliminator : free;
-    if( lsmash_add_entry( extensions, ext ) )
-    {
-        ext->destruct( ext );
-        return -1;
-    }
-    return 0;
 }
 
 lsmash_codec_specific_t *isom_get_codec_specific( lsmash_codec_specific_list_t *opaque, lsmash_codec_specific_data_type type )
@@ -1225,7 +1181,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
     isom_trak_entry_t *trak = (isom_trak_entry_t *)visual->parent->parent->parent->parent->parent;
     int qt_compatible = trak->root->qt_compatible;
     isom_tapt_t *tapt = trak->tapt;
-    isom_stsl_t *stsl = (isom_stsl_t *)isom_get_extension_box( &visual->extensions, ISOM_BOX_TYPE_STSL );
+    isom_stsl_t *stsl = (isom_stsl_t *)isom_get_extension_box_format( &visual->extensions, ISOM_BOX_TYPE_STSL );
     int set_aperture_modes = qt_compatible                      /* Track Aperture Modes is only available under QuickTime file format. */
         && (!stsl || stsl->scale_method == 0)                   /* Sample scaling method might conflict with this feature. */
         && tapt && tapt->clef && tapt->prof && tapt->enof       /* Check if required boxes exist. */
@@ -1333,8 +1289,8 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
     {
         uint32_t width  = visual->width  << 16;
         uint32_t height = visual->height << 16;
-        isom_clap_t *clap = (isom_clap_t *)isom_get_extension_box( &visual->extensions, ISOM_BOX_TYPE_CLAP );
-        isom_pasp_t *pasp = (isom_pasp_t *)isom_get_extension_box( &visual->extensions, ISOM_BOX_TYPE_PASP );
+        isom_clap_t *clap = (isom_clap_t *)isom_get_extension_box_format( &visual->extensions, ISOM_BOX_TYPE_CLAP );
+        isom_pasp_t *pasp = (isom_pasp_t *)isom_get_extension_box_format( &visual->extensions, ISOM_BOX_TYPE_PASP );
         double clap_width  = ((double)clap->cleanApertureWidthN  / clap->cleanApertureWidthD)  * (1<<16);
         double clap_height = ((double)clap->cleanApertureHeightN / clap->cleanApertureHeightD) * (1<<16);
         double par = (double)pasp->hSpacing / pasp->vSpacing;
@@ -1358,7 +1314,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
     if( !lsmash_add_entry( list, visual ) )
         return 0;   /* successed */
 fail:
-    isom_remove_sample_description_extensions( &visual->extensions );
+    isom_remove_all_extension_boxes( &visual->extensions );
     free( visual );
     return -1;
 }
@@ -1412,7 +1368,7 @@ static int isom_append_audio_es_descriptor_extension( isom_box_t *box, lsmash_au
 static int isom_append_channel_layout_extension( lsmash_codec_specific_t *specific, void *parent, uint32_t channels )
 {
     assert( parent );
-    if( isom_get_sample_description_extension( &((isom_box_t *)parent)->extensions, QT_BOX_TYPE_CHAN ) )
+    if( isom_get_extension_box( &((isom_box_t *)parent)->extensions, QT_BOX_TYPE_CHAN ) )
         return 0;   /* Audio Channel Layout Box is already present. */
     lsmash_codec_specific_t *cs = lsmash_convert_codec_specific_format( specific, LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
     if( !cs )
@@ -1894,7 +1850,7 @@ static int isom_set_qtff_template_audio_description( isom_audio_entry_t *audio, 
             }
             else
             {
-                isom_extension_box_t *ext = isom_get_sample_description_extension( &audio->extensions, QT_BOX_TYPE_WAVE );
+                isom_extension_box_t *ext = isom_get_extension_box( &audio->extensions, QT_BOX_TYPE_WAVE );
                 assert( ext && ext->format == EXTENSION_FORMAT_BINARY );
                 uint32_t enda_size;
                 uint8_t *enda = isom_get_child_box_position( ext->form.binary, ext->size, QT_BOX_TYPE_ENDA, &enda_size );
@@ -2099,34 +2055,9 @@ int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_
     if( !lsmash_add_entry( list, audio ) )
         return 0;   /* successed */
 fail:
-    isom_remove_sample_description_extensions( &audio->extensions );
+    isom_remove_all_extension_boxes( &audio->extensions );
     free( audio );
     return -1;
-}
-
-isom_extension_box_t *isom_get_sample_description_extension( lsmash_entry_list_t *extensions, lsmash_box_type_t box_type )
-{
-    for( lsmash_entry_t *entry = extensions->head; entry; entry = entry->next )
-    {
-        isom_extension_box_t *ext = (isom_extension_box_t *)entry->data;
-        if( !ext )
-            continue;
-        if( lsmash_check_box_type_identical( ext->type, box_type ) )
-            return ext;
-    }
-    return NULL;
-}
-
-void *isom_get_extension_box( lsmash_entry_list_t *extensions, lsmash_box_type_t box_type )
-{
-    for( lsmash_entry_t *entry = extensions->head; entry; entry = entry->next )
-    {
-        isom_extension_box_t *ext = (isom_extension_box_t *)entry->data;
-        if( !ext || ext->format != EXTENSION_FORMAT_BOX || !lsmash_check_box_type_identical( ext->type, box_type ) )
-            continue;
-        return ext->form.box;
-    }
-    return NULL;
 }
 
 static lsmash_codec_specific_data_type isom_get_codec_specific_data_type( lsmash_compact_box_type_t extension_fourcc )
@@ -2484,7 +2415,7 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
                         data->format_flags = QT_LPCM_FORMAT_FLAG_BIG_ENDIAN;
                 }
             }
-            isom_wave_t *wave = (isom_wave_t *)isom_get_extension_box( &audio->extensions, QT_BOX_TYPE_WAVE );
+            isom_wave_t *wave = (isom_wave_t *)isom_get_extension_box_format( &audio->extensions, QT_BOX_TYPE_WAVE );
             if( wave && wave->enda && !wave->enda->littleEndian )
                 data->format_flags |= QT_LPCM_FORMAT_FLAG_BIG_ENDIAN;
             if( lsmash_add_entry( &summary->opaque->list, specific ) )

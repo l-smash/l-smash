@@ -412,7 +412,7 @@ static int isom_write_gama( lsmash_bs_t *bs, isom_gama_t *gama )
         return 0;
     /* Note: 'gama' box is superseded by 'colr' box.
      * Therefore, writers of QTFF should never write both 'colr' and 'gama' box into an Image Description. */
-    if( isom_get_extension_box( &((isom_visual_entry_t *)gama->parent)->extensions, QT_BOX_TYPE_COLR ) )
+    if( isom_get_extension_box_format( &((isom_visual_entry_t *)gama->parent)->extensions, QT_BOX_TYPE_COLR ) )
         return 0;
     isom_bs_put_box_common( bs, gama );
     lsmash_bs_put_be32( bs, gama->level );
@@ -569,9 +569,9 @@ static int isom_write_visual_extensions( lsmash_bs_t *bs, isom_visual_entry_t *v
         if( ret )
             return -1;
     }
-    if( isom_write_colr( bs, isom_get_extension_box( &visual->extensions, ISOM_BOX_TYPE_COLR ) )
-     || isom_write_clap( bs, isom_get_extension_box( &visual->extensions, ISOM_BOX_TYPE_CLAP ) )
-     || isom_write_pasp( bs, isom_get_extension_box( &visual->extensions, ISOM_BOX_TYPE_PASP ) ) )
+    if( isom_write_colr( bs, isom_get_extension_box_format( &visual->extensions, ISOM_BOX_TYPE_COLR ) )
+     || isom_write_clap( bs, isom_get_extension_box_format( &visual->extensions, ISOM_BOX_TYPE_CLAP ) )
+     || isom_write_pasp( bs, isom_get_extension_box_format( &visual->extensions, ISOM_BOX_TYPE_PASP ) ) )
         return -1;  /* FIXME: multiple 'colr' boxes can be present. */
     return 0;
 }
@@ -674,11 +674,11 @@ static int isom_write_wave( lsmash_bs_t *bs, isom_wave_t *wave )
         }
     }
     if( isom_write_mp4a( bs, wave->mp4a )
-     || isom_write_esds( bs, isom_get_extension_box( &wave->extensions, ISOM_BOX_TYPE_ESDS ) )
-     || isom_write_glbl( bs, isom_get_extension_box( &wave->extensions, QT_BOX_TYPE_GLBL ) ) )
+     || isom_write_esds( bs, isom_get_extension_box_format( &wave->extensions, ISOM_BOX_TYPE_ESDS ) )
+     || isom_write_glbl( bs, isom_get_extension_box_format( &wave->extensions, QT_BOX_TYPE_GLBL ) ) )
         return -1;
     /* Write Channel Layout Box if present. */
-    isom_extension_box_t *ext = isom_get_sample_description_extension( &wave->extensions, QT_BOX_TYPE_CHAN );
+    isom_extension_box_t *ext = isom_get_extension_box( &wave->extensions, QT_BOX_TYPE_CHAN );
     if( ext )
     {
         if( ext->format == EXTENSION_FORMAT_BINARY )
@@ -691,7 +691,7 @@ static int isom_write_wave( lsmash_bs_t *bs, isom_wave_t *wave )
             return -1;
     }
     /* Write Terminator Box. */
-    isom_terminator_t *terminator = isom_get_extension_box( &wave->extensions, QT_BOX_TYPE_TERMINATOR );
+    isom_terminator_t *terminator = isom_get_extension_box_format( &wave->extensions, QT_BOX_TYPE_TERMINATOR );
     return isom_write_terminator( bs, terminator ? terminator : wave->terminator );
 }
 
@@ -717,12 +717,12 @@ static int isom_write_audio_extensions( lsmash_bs_t *bs, isom_audio_entry_t *aud
          && isom_write_glbl( bs, ext->form.box ) )
             return -1;
     }
-    if( isom_write_esds( bs, isom_get_extension_box( &audio->extensions, ISOM_BOX_TYPE_ESDS ) )
-     || isom_write_wave( bs, isom_get_extension_box( &audio->extensions, QT_BOX_TYPE_WAVE ) )
-     || isom_write_glbl( bs, isom_get_extension_box( &audio->extensions, QT_BOX_TYPE_GLBL ) ) )
+    if( isom_write_esds( bs, isom_get_extension_box_format( &audio->extensions, ISOM_BOX_TYPE_ESDS ) )
+     || isom_write_wave( bs, isom_get_extension_box_format( &audio->extensions, QT_BOX_TYPE_WAVE ) )
+     || isom_write_glbl( bs, isom_get_extension_box_format( &audio->extensions, QT_BOX_TYPE_GLBL ) ) )
         return -1;
     /* Write Channel Layout Box if present. */
-    isom_extension_box_t *ext = isom_get_sample_description_extension( &audio->extensions, QT_BOX_TYPE_CHAN );
+    isom_extension_box_t *ext = isom_get_extension_box( &audio->extensions, QT_BOX_TYPE_CHAN );
     if( !ext )
         return 0;
     if( ext->format == EXTENSION_FORMAT_BINARY )
