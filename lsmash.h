@@ -167,23 +167,12 @@ int lsmash_check_box_type_specified
 );
 
 /****************************************************************************
- * Summary of Stream Configuration
- *   This is L-SMASH's original structure.
+ * CODEC identifiers
  ****************************************************************************/
-typedef enum
-{
-    LSMASH_SUMMARY_TYPE_UNKOWN = 0,
-    LSMASH_SUMMARY_TYPE_VIDEO,
-    LSMASH_SUMMARY_TYPE_AUDIO,
-} lsmash_summary_type;
-
 typedef lsmash_box_type_t lsmash_codec_type_t;
 
 #define LSMASH_CODEC_TYPE_INITIALIZER LSMASH_BOX_TYPE_INITIALIZER
 #define LSMASH_CODEC_TYPE_UNSPECIFIED ((lsmash_codec_type_t)static_lsmash_box_type_unspecified)
-
-/* Return 1 if the both CODEC identifiers are identical. Otherwise return 0. */
-int lsmash_check_codec_type_identical( lsmash_codec_type_t a, lsmash_codec_type_t b );
 
 #define DEFINE_ISOM_CODEC_TYPE( BOX_TYPE_NAME, BOX_TYPE_FOURCC ) \
     static const lsmash_codec_type_t BOX_TYPE_NAME = LSMASH_ISO_BOX_TYPE_INITIALIZER( BOX_TYPE_FOURCC )
@@ -367,6 +356,23 @@ DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_ENCS_SYSTEM, LSMASH_4CC( 'e', 'n', 'c', 
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_MP4S_SYSTEM, LSMASH_4CC( 'm', 'p', '4', 's' ) );    /* MPEG-4 Systems */
 
 DEFINE_QTFF_CODEC_TYPE( LSMASH_CODEC_TYPE_RAW,       LSMASH_4CC( 'r', 'a', 'w', ' ' ) );    /* Either video or audio */
+
+/* Check if the identifier of two CODECs is identical or not.
+ *
+ * Return 1 if the both CODEC identifiers are identical.
+ * Return 0 otherwise. */
+int lsmash_check_codec_type_identical( lsmash_codec_type_t a, lsmash_codec_type_t b );
+
+/****************************************************************************
+ * Summary of Stream Configuration
+ *   This is L-SMASH's original structure.
+ ****************************************************************************/
+typedef enum
+{
+    LSMASH_SUMMARY_TYPE_UNKOWN = 0,
+    LSMASH_SUMMARY_TYPE_VIDEO,
+    LSMASH_SUMMARY_TYPE_AUDIO,
+} lsmash_summary_type;
 
 typedef enum
 {
