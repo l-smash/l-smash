@@ -38,39 +38,39 @@
 /***************************************************************************
     importer framework
 ***************************************************************************/
-struct mp4sys_importer_tag;
+struct importer_tag;
 
-typedef void     ( *mp4sys_importer_cleanup )          ( struct mp4sys_importer_tag * );
-typedef int      ( *mp4sys_importer_get_accessunit )   ( struct mp4sys_importer_tag *, uint32_t, lsmash_sample_t * );
-typedef int      ( *mp4sys_importer_probe )            ( struct mp4sys_importer_tag * );
-typedef uint32_t ( *mp4sys_importer_get_last_duration )( struct mp4sys_importer_tag *, uint32_t );
+typedef void     ( *importer_cleanup )          ( struct importer_tag * );
+typedef int      ( *importer_get_accessunit )   ( struct importer_tag *, uint32_t, lsmash_sample_t * );
+typedef int      ( *importer_probe )            ( struct importer_tag * );
+typedef uint32_t ( *importer_get_last_duration )( struct importer_tag *, uint32_t );
 
 typedef struct
 {
-    const char*                       name;
-    int                               detectable;
-    mp4sys_importer_probe             probe;
-    mp4sys_importer_get_accessunit    get_accessunit;
-    mp4sys_importer_get_last_duration get_last_delta;
-    mp4sys_importer_cleanup           cleanup;
-} mp4sys_importer_functions;
+    const char*                name;
+    int                        detectable;
+    importer_probe             probe;
+    importer_get_accessunit    get_accessunit;
+    importer_get_last_duration get_last_delta;
+    importer_cleanup           cleanup;
+} importer_functions;
 
-typedef struct mp4sys_importer_tag
+typedef struct importer_tag
 {
-    FILE*                     stream;
-    int                       is_stdin;
-    void*                     info; /* importer internal status information. */
-    mp4sys_importer_functions funcs;
-    lsmash_entry_list_t*      summaries;
-} mp4sys_importer_t;
+    FILE                *stream;
+    int                  is_stdin;
+    void                *info; /* importer internal status information. */
+    importer_functions   funcs;
+    lsmash_entry_list_t *summaries;
+} importer_t;
 
 typedef enum
 {
-    MP4SYS_IMPORTER_ERROR  = -1,
-    MP4SYS_IMPORTER_OK     = 0,
-    MP4SYS_IMPORTER_CHANGE = 1,
-    MP4SYS_IMPORTER_EOF    = 2,
-} mp4sys_importer_status;
+    IMPORTER_ERROR  = -1,
+    IMPORTER_OK     = 0,
+    IMPORTER_CHANGE = 1,
+    IMPORTER_EOF    = 2,
+} importer_status;
 
 /***************************************************************************
     ADTS importer
@@ -292,31 +292,31 @@ static lsmash_audio_summary_t *mp4sys_adts_create_summary( mp4sys_adts_fixed_hea
 
 typedef struct
 {
-    mp4sys_importer_status status;
-    unsigned int raw_data_block_idx;
-    mp4sys_adts_fixed_header_t header;
+    importer_status               status;
+    unsigned int                  raw_data_block_idx;
+    mp4sys_adts_fixed_header_t    header;
     mp4sys_adts_variable_header_t variable_header;
-    uint32_t samples_in_frame;
-    uint32_t au_number;
+    uint32_t                      samples_in_frame;
+    uint32_t                      au_number;
 } mp4sys_adts_info_t;
 
-static int mp4sys_adts_get_accessunit( mp4sys_importer_t* importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
+static int mp4sys_adts_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
 {
     debug_if( !importer || !importer->info || !buffered_sample->data || !buffered_sample->length )
         return -1;
     if( !importer->info || track_number != 1 )
         return -1;
     mp4sys_adts_info_t* info = (mp4sys_adts_info_t*)importer->info;
-    mp4sys_importer_status current_status = info->status;
+    importer_status current_status = info->status;
     uint16_t raw_data_block_size = info->variable_header.raw_data_block_size[info->raw_data_block_idx];
-    if( current_status == MP4SYS_IMPORTER_ERROR || buffered_sample->length < raw_data_block_size )
+    if( current_status == IMPORTER_ERROR || buffered_sample->length < raw_data_block_size )
         return -1;
-    if( current_status == MP4SYS_IMPORTER_EOF )
+    if( current_status == IMPORTER_EOF )
     {
         buffered_sample->length = 0;
         return 0;
     }
-    if( current_status == MP4SYS_IMPORTER_CHANGE )
+    if( current_status == IMPORTER_CHANGE )
     {
         lsmash_audio_summary_t* summary = mp4sys_adts_create_summary( &info->header );
         if( !summary )
@@ -332,7 +332,7 @@ static int mp4sys_adts_get_accessunit( mp4sys_importer_t* importer, uint32_t tra
     /* read a raw_data_block(), typically == payload of a ADTS frame */
     if( fread( buffered_sample->data, 1, raw_data_block_size, importer->stream ) != raw_data_block_size )
     {
-        info->status = MP4SYS_IMPORTER_ERROR;
+        info->status = IMPORTER_ERROR;
         return -1;
     }
     buffered_sample->length = raw_data_block_size;
@@ -348,14 +348,14 @@ static int mp4sys_adts_get_accessunit( mp4sys_importer_t* importer, uint32_t tra
         && info->variable_header.number_of_raw_data_blocks_in_frame != 0
         && fread( buffered_sample->data, 1, 2, importer->stream ) != 2 )
     {
-        info->status = MP4SYS_IMPORTER_ERROR;
+        info->status = IMPORTER_ERROR;
         return 0;
     }
     /* current adts_frame() has any more raw_data_block()? */
     if( info->raw_data_block_idx < info->variable_header.number_of_raw_data_blocks_in_frame )
     {
         info->raw_data_block_idx++;
-        info->status = MP4SYS_IMPORTER_OK;
+        info->status = IMPORTER_OK;
         return 0;
     }
     info->raw_data_block_idx = 0;
@@ -366,12 +366,12 @@ static int mp4sys_adts_get_accessunit( mp4sys_importer_t* importer, uint32_t tra
     size_t ret = fread( buf, 1, MP4SYS_ADTS_BASIC_HEADER_LENGTH, importer->stream );
     if( ret == 0 )
     {
-        info->status = MP4SYS_IMPORTER_EOF;
+        info->status = IMPORTER_EOF;
         return 0;
     }
     if( ret != MP4SYS_ADTS_BASIC_HEADER_LENGTH )
     {
-        info->status = MP4SYS_IMPORTER_ERROR;
+        info->status = IMPORTER_ERROR;
         return 0;
     }
     /*
@@ -398,7 +398,7 @@ static int mp4sys_adts_get_accessunit( mp4sys_importer_t* importer, uint32_t tra
     mp4sys_adts_variable_header_t variable_header = {0};
     if( mp4sys_adts_parse_headers( importer->stream, buf, &header, &variable_header ) )
     {
-        info->status = MP4SYS_IMPORTER_ERROR;
+        info->status = IMPORTER_ERROR;
         return 0;
     }
     info->variable_header = variable_header;
@@ -419,7 +419,7 @@ static int mp4sys_adts_get_accessunit( mp4sys_importer_t* importer, uint32_t tra
         || info->header.ID != header.ID /* In strict, this means change of object_type_indication. */
         || info->header.sampling_frequency_index != header.sampling_frequency_index ) /* This may change timebase. */
     {
-        info->status = MP4SYS_IMPORTER_ERROR;
+        info->status = IMPORTER_ERROR;
         return 0;
     }
     /* currently supported "change(s)". */
@@ -440,22 +440,22 @@ static int mp4sys_adts_get_accessunit( mp4sys_importer_t* importer, uint32_t tra
          * and that should be of current, before change, one.
          */
         info->header = header;
-        info->status = MP4SYS_IMPORTER_CHANGE;
+        info->status = IMPORTER_CHANGE;
         return 0;
     }
     /* no change which matters to mp4 muxing was found */
-    info->status = MP4SYS_IMPORTER_OK;
+    info->status = IMPORTER_OK;
     return 0;
 }
 
-static void mp4sys_adts_cleanup( mp4sys_importer_t* importer )
+static void mp4sys_adts_cleanup( importer_t *importer )
 {
     debug_if( importer && importer->info )
         free( importer->info );
 }
 
 /* returns 0 if it seems adts. */
-static int mp4sys_adts_probe( mp4sys_importer_t* importer )
+static int mp4sys_adts_probe( importer_t *importer )
 {
     uint8_t buf[MP4SYS_ADTS_MAX_FRAME_LENGTH];
     if( fread( buf, 1, MP4SYS_ADTS_BASIC_HEADER_LENGTH, importer->stream ) != MP4SYS_ADTS_BASIC_HEADER_LENGTH )
@@ -479,7 +479,7 @@ static int mp4sys_adts_probe( mp4sys_importer_t* importer )
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         return -1;
     }
-    info->status = MP4SYS_IMPORTER_OK;
+    info->status = IMPORTER_OK;
     info->raw_data_block_idx = 0;
     info->header = header;
     info->variable_header = variable_header;
@@ -496,17 +496,17 @@ static int mp4sys_adts_probe( mp4sys_importer_t* importer )
     return 0;
 }
 
-static uint32_t mp4sys_adts_get_last_delta( mp4sys_importer_t* importer, uint32_t track_number )
+static uint32_t mp4sys_adts_get_last_delta( importer_t *importer, uint32_t track_number )
 {
     debug_if( !importer || !importer->info )
         return 0;
     mp4sys_adts_info_t *info = (mp4sys_adts_info_t *)importer->info;
-    if( !info || track_number != 1 || info->status != MP4SYS_IMPORTER_EOF )
+    if( !info || track_number != 1 || info->status != IMPORTER_EOF )
         return 0;
     return info->samples_in_frame;
 }
 
-const static mp4sys_importer_functions mp4sys_adts_importer =
+const static importer_functions mp4sys_adts_importer =
 {
     "adts",
     1,
@@ -520,7 +520,7 @@ const static mp4sys_importer_functions mp4sys_adts_importer =
     mp3 (Legacy Interface) importer
 ***************************************************************************/
 
-static void mp4sys_mp3_cleanup( mp4sys_importer_t* importer )
+static void mp4sys_mp3_cleanup( importer_t *importer )
 {
     debug_if( importer && importer->info )
         free( importer->info );
@@ -644,22 +644,22 @@ static lsmash_audio_summary_t *mp4sys_mp3_create_summary( mp4sys_mp3_header_t *h
 
 typedef struct
 {
-    mp4sys_importer_status status;
-    mp4sys_mp3_header_t    header;
-    uint8_t                raw_header[MP4SYS_MP3_HEADER_LENGTH];
-    uint32_t               samples_in_frame;
-    uint32_t               au_number;
+    importer_status     status;
+    mp4sys_mp3_header_t header;
+    uint8_t             raw_header[MP4SYS_MP3_HEADER_LENGTH];
+    uint32_t            samples_in_frame;
+    uint32_t            au_number;
 } mp4sys_mp3_info_t;
 
-static int mp4sys_mp3_get_accessunit( mp4sys_importer_t* importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
+static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
 {
     debug_if( !importer || !importer->info || !buffered_sample->data || !buffered_sample->length )
         return -1;
     if( !importer->info || track_number != 1 )
         return -1;
-    mp4sys_mp3_info_t* info = (mp4sys_mp3_info_t*)importer->info;
-    mp4sys_mp3_header_t* header = (mp4sys_mp3_header_t*)&info->header;
-    mp4sys_importer_status current_status = info->status;
+    mp4sys_mp3_info_t   *info           = (mp4sys_mp3_info_t *)importer->info;
+    mp4sys_mp3_header_t *header         = (mp4sys_mp3_header_t *)&info->header;
+    importer_status      current_status = info->status;
 
     const uint32_t bitrate_tbl[2][3][16] = {
         {   /* MPEG-2 BC audio */
@@ -689,14 +689,14 @@ static int mp4sys_mp3_get_accessunit( mp4sys_importer_t* importer, uint32_t trac
         frame_size = 144 * 1000 * bitrate / frequency + header->padding_bit;
     }
 
-    if( current_status == MP4SYS_IMPORTER_ERROR || frame_size <= 4 || buffered_sample->length < frame_size )
+    if( current_status == IMPORTER_ERROR || frame_size <= 4 || buffered_sample->length < frame_size )
         return -1;
-    if( current_status == MP4SYS_IMPORTER_EOF )
+    if( current_status == IMPORTER_EOF )
     {
         buffered_sample->length = 0;
         return 0;
     }
-    if( current_status == MP4SYS_IMPORTER_CHANGE )
+    if( current_status == IMPORTER_CHANGE )
     {
         lsmash_audio_summary_t* summary = mp4sys_mp3_create_summary( header, 1 ); /* FIXME: use legacy mode. */
         if( !summary )
@@ -713,7 +713,7 @@ static int mp4sys_mp3_get_accessunit( mp4sys_importer_t* importer, uint32_t trac
     frame_size -= MP4SYS_MP3_HEADER_LENGTH;
     if( fread( ((uint8_t*)buffered_sample->data)+MP4SYS_MP3_HEADER_LENGTH, 1, frame_size, importer->stream ) != frame_size )
     {
-        info->status = MP4SYS_IMPORTER_ERROR;
+        info->status = IMPORTER_ERROR;
         return -1;
     }
     buffered_sample->length = MP4SYS_MP3_HEADER_LENGTH + frame_size;
@@ -729,25 +729,25 @@ static int mp4sys_mp3_get_accessunit( mp4sys_importer_t* importer, uint32_t trac
     size_t ret = fread( buf, 1, MP4SYS_MP3_HEADER_LENGTH, importer->stream );
     if( ret == 0 )
     {
-        info->status = MP4SYS_IMPORTER_EOF;
+        info->status = IMPORTER_EOF;
         return 0;
     }
     if( ret == 1 && *buf == 0x00 )
     {
         /* NOTE: ugly hack for mp1 stream created with SCMPX. */
-        info->status = MP4SYS_IMPORTER_EOF;
+        info->status = IMPORTER_EOF;
         return 0;
     }
     if( ret != MP4SYS_MP3_HEADER_LENGTH )
     {
-        info->status = MP4SYS_IMPORTER_ERROR;
+        info->status = IMPORTER_ERROR;
         return 0;
     }
 
     mp4sys_mp3_header_t new_header = {0};
     if( mp4sys_mp3_parse_header( buf, &new_header ) )
     {
-        info->status = MP4SYS_IMPORTER_ERROR;
+        info->status = IMPORTER_ERROR;
         return 0;
     }
     memcpy( info->raw_header, buf, MP4SYS_MP3_HEADER_LENGTH );
@@ -756,20 +756,20 @@ static int mp4sys_mp3_get_accessunit( mp4sys_importer_t* importer, uint32_t trac
     if( header->layer != new_header.layer /* This means change of object_type_indication with Legacy Interface. */
         || header->sampling_frequency != new_header.sampling_frequency ) /* This may change timescale. */
     {
-        info->status = MP4SYS_IMPORTER_ERROR;
+        info->status = IMPORTER_ERROR;
         return 0;
     }
 
     /* currently supported "change(s)". */
     if( MP4SYS_MODE_IS_2CH( header->mode ) != MP4SYS_MODE_IS_2CH( new_header.mode ) )
-        info->status = MP4SYS_IMPORTER_CHANGE;
+        info->status = IMPORTER_CHANGE;
     else
-        info->status = MP4SYS_IMPORTER_OK; /* no change which matters to mp4 muxing was found */
+        info->status = IMPORTER_OK; /* no change which matters to mp4 muxing was found */
     info->header = new_header;
     return 0;
 }
 
-static int mp4sys_mp3_probe( mp4sys_importer_t* importer )
+static int mp4sys_mp3_probe( importer_t *importer )
 {
     uint8_t buf[MP4SYS_MP3_HEADER_LENGTH];
     if( fread( buf, 1, MP4SYS_MP3_HEADER_LENGTH, importer->stream ) != MP4SYS_MP3_HEADER_LENGTH )
@@ -792,7 +792,7 @@ static int mp4sys_mp3_probe( mp4sys_importer_t* importer )
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         return -1;
     }
-    info->status = MP4SYS_IMPORTER_OK;
+    info->status = IMPORTER_OK;
     info->header = header;
     info->samples_in_frame = summary->samples_in_frame;
     memcpy( info->raw_header, buf, MP4SYS_MP3_HEADER_LENGTH );
@@ -808,17 +808,17 @@ static int mp4sys_mp3_probe( mp4sys_importer_t* importer )
     return 0;
 }
 
-static uint32_t mp4sys_mp3_get_last_delta( mp4sys_importer_t* importer, uint32_t track_number )
+static uint32_t mp4sys_mp3_get_last_delta( importer_t *importer, uint32_t track_number )
 {
     debug_if( !importer || !importer->info )
         return 0;
     mp4sys_mp3_info_t *info = (mp4sys_mp3_info_t *)importer->info;
-    if( !info || track_number != 1 || info->status != MP4SYS_IMPORTER_EOF )
+    if( !info || track_number != 1 || info->status != IMPORTER_EOF )
         return 0;
     return info->samples_in_frame;
 }
 
-const static mp4sys_importer_functions mp4sys_mp3_importer =
+const static importer_functions mp4sys_mp3_importer =
 {
     "MPEG-1/2BC_Audio_Legacy",
     1,
@@ -833,7 +833,7 @@ const static mp4sys_importer_functions mp4sys_mp3_importer =
     http://www.ietf.org/rfc/rfc3267.txt (Obsoleted)
     http://www.ietf.org/rfc/rfc4867.txt
 ***************************************************************************/
-static void mp4sys_amr_cleanup( mp4sys_importer_t* importer )
+static void amr_cleanup( importer_t* importer )
 {
     debug_if( importer && importer->info )
         free( importer->info );
@@ -844,15 +844,15 @@ typedef struct
     uint8_t  wb;
     uint32_t samples_in_frame;
     uint32_t au_number;
-} mp4sys_amr_info_t;
+} amr_importer_info_t;
 
-static int mp4sys_amr_get_accessunit( mp4sys_importer_t* importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
+static int amr_get_accessunit( importer_t* importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
 {
     debug_if( !importer || !importer->info || !buffered_sample->data || !buffered_sample->length )
         return -1;
     if( track_number != 1 )
         return -1;
-    mp4sys_amr_info_t *info = (mp4sys_amr_info_t *)importer->info;
+    amr_importer_info_t *info = (amr_importer_info_t *)importer->info;
 
     uint8_t* buf = buffered_sample->data;
     if( fread( buf, 1, 1, importer->stream ) == 0 )
@@ -928,7 +928,7 @@ int mp4sys_amr_create_damr( lsmash_audio_summary_t *summary )
 #define MP4SYS_AMR_STORAGE_MAGIC_LENGTH 6
 #define MP4SYS_AMRWB_EX_MAGIC_LENGTH 3
 
-static int mp4sys_amr_probe( mp4sys_importer_t* importer )
+static int amr_probe( importer_t* importer )
 {
     uint8_t buf[MP4SYS_AMR_STORAGE_MAGIC_LENGTH];
     uint8_t wb = 0;
@@ -957,7 +957,7 @@ static int mp4sys_amr_probe( mp4sys_importer_t* importer )
     summary->sample_size            = 16;
     summary->samples_in_frame       = (160 << wb);
     summary->sbr_mode               = MP4A_AAC_SBR_NOT_SPECIFIED; /* no effect */
-    mp4sys_amr_info_t *info = malloc( sizeof(mp4sys_amr_info_t) );
+    amr_importer_info_t *info = malloc( sizeof(amr_importer_info_t) );
     if( !info )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
@@ -977,24 +977,24 @@ static int mp4sys_amr_probe( mp4sys_importer_t* importer )
     return 0;
 }
 
-static uint32_t mp4sys_amr_get_last_delta( mp4sys_importer_t* importer, uint32_t track_number )
+static uint32_t amr_get_last_delta( importer_t* importer, uint32_t track_number )
 {
     debug_if( !importer || !importer->info )
         return 0;
-    mp4sys_amr_info_t *info = (mp4sys_amr_info_t *)importer->info;
+    amr_importer_info_t *info = (amr_importer_info_t *)importer->info;
     if( !info || track_number != 1 )
         return 0;
     return info->samples_in_frame;
 }
 
-const static mp4sys_importer_functions mp4sys_amr_importer =
+const static importer_functions amr_importer =
 {
     "amr",
     1,
-    mp4sys_amr_probe,
-    mp4sys_amr_get_accessunit,
-    mp4sys_amr_get_last_delta,
-    mp4sys_amr_cleanup
+    amr_probe,
+    amr_get_accessunit,
+    amr_get_last_delta,
+    amr_cleanup
 };
 
 /***************************************************************************
@@ -1007,11 +1007,11 @@ const static mp4sys_importer_functions mp4sys_amr_importer =
 
 typedef struct
 {
-    mp4sys_importer_status status;
-    ac3_info_t             info;
-} mp4sys_ac3_info_t;
+    importer_status status;
+    ac3_info_t      info;
+} ac3_importer_info_t;
 
-static void mp4sys_remove_ac3_info( mp4sys_ac3_info_t *info )
+static void remove_ac3_importer_info( ac3_importer_info_t *info )
 {
     if( !info )
         return;
@@ -1019,9 +1019,9 @@ static void mp4sys_remove_ac3_info( mp4sys_ac3_info_t *info )
     free( info );
 }
 
-static mp4sys_ac3_info_t *mp4sys_create_ac3_info( void )
+static ac3_importer_info_t *create_ac3_importer_info( void )
 {
-    mp4sys_ac3_info_t *info = (mp4sys_ac3_info_t *)lsmash_malloc_zero( sizeof(mp4sys_ac3_info_t) );
+    ac3_importer_info_t *info = (ac3_importer_info_t *)lsmash_malloc_zero( sizeof(ac3_importer_info_t) );
     if( !info )
         return NULL;
     info->info.bits = lsmash_bits_adhoc_create();
@@ -1033,10 +1033,10 @@ static mp4sys_ac3_info_t *mp4sys_create_ac3_info( void )
     return info;
 }
 
-static void mp4sys_ac3_cleanup( mp4sys_importer_t *importer )
+static void ac3_importer_cleanup( importer_t *importer )
 {
     debug_if( importer && importer->info )
-        mp4sys_remove_ac3_info( importer->info );
+        remove_ac3_importer_info( importer->info );
 }
 
 static const uint32_t ac3_frame_size_table[19][3] =
@@ -1119,7 +1119,7 @@ static int ac3_compare_specific_param( lsmash_ac3_specific_parameters_t *a, lsma
         || ((a->frmsizecod >> 1) != (b->frmsizecod >> 1));
 }
 
-static int mp4sys_ac3_get_accessunit( mp4sys_importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
+static int ac3_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
 {
     debug_if( !importer || !importer->info || !buffered_sample->data || !buffered_sample->length )
         return -1;
@@ -1128,12 +1128,12 @@ static int mp4sys_ac3_get_accessunit( mp4sys_importer_t *importer, uint32_t trac
     lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_get_entry_data( importer->summaries, track_number );
     if( !summary )
         return -1;
-    mp4sys_ac3_info_t *importer_info = (mp4sys_ac3_info_t *)importer->info;
+    ac3_importer_info_t *importer_info = (ac3_importer_info_t *)importer->info;
     ac3_info_t *info = &importer_info->info;
-    mp4sys_importer_status current_status = importer_info->status;
-    if( current_status == MP4SYS_IMPORTER_ERROR )
+    importer_status current_status = importer_info->status;
+    if( current_status == IMPORTER_ERROR )
         return -1;
-    if( current_status == MP4SYS_IMPORTER_EOF )
+    if( current_status == IMPORTER_EOF )
     {
         buffered_sample->length = 0;
         return 0;
@@ -1144,7 +1144,7 @@ static int mp4sys_ac3_get_accessunit( mp4sys_importer_t *importer, uint32_t trac
         frame_size += 2;
     if( buffered_sample->length < frame_size )
         return -1;
-    if( current_status == MP4SYS_IMPORTER_CHANGE )
+    if( current_status == IMPORTER_CHANGE )
     {
         lsmash_codec_specific_t *specific = isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3 );
         if( specific )
@@ -1169,13 +1169,13 @@ static int mp4sys_ac3_get_accessunit( mp4sys_importer_t *importer, uint32_t trac
     buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
     buffered_sample->prop.pre_roll.distance = 1;    /* MDCT */
     if( fread( info->buffer, 1, AC3_MIN_SYNCFRAME_LENGTH, importer->stream ) != AC3_MIN_SYNCFRAME_LENGTH )
-        importer_info->status = MP4SYS_IMPORTER_EOF;
+        importer_info->status = IMPORTER_EOF;
     else
     {
         /* Parse the next syncframe header. */
         IF_A52_SYNCWORD( info->buffer )
         {
-            importer_info->status = MP4SYS_IMPORTER_ERROR;
+            importer_info->status = IMPORTER_ERROR;
             return current_status;
         }
         lsmash_ac3_specific_parameters_t current_param = info->dac3_param;
@@ -1186,71 +1186,71 @@ static int mp4sys_ac3_get_accessunit( mp4sys_importer_t *importer, uint32_t trac
             uint8_t *dac3 = lsmash_create_ac3_specific_info( &info->dac3_param, &dummy );
             if( !dac3 )
             {
-                importer_info->status = MP4SYS_IMPORTER_ERROR;
+                importer_info->status = IMPORTER_ERROR;
                 return current_status;
             }
-            importer_info->status = MP4SYS_IMPORTER_CHANGE;
+            importer_info->status = IMPORTER_CHANGE;
             info->next_dac3 = dac3;
         }
         else
-            importer_info->status = MP4SYS_IMPORTER_OK;
+            importer_info->status = IMPORTER_OK;
     }
     return current_status;
 }
 
-static int mp4sys_ac3_probe( mp4sys_importer_t* importer )
+static int ac3_importer_probe( importer_t* importer )
 {
     uint8_t buf[AC3_MIN_SYNCFRAME_LENGTH];
     if( fread( buf, 1, AC3_MIN_SYNCFRAME_LENGTH, importer->stream ) != AC3_MIN_SYNCFRAME_LENGTH )
         return -1;
     IF_A52_SYNCWORD( buf )
         return -1;
-    mp4sys_ac3_info_t *info = mp4sys_create_ac3_info();
+    ac3_importer_info_t *info = create_ac3_importer_info();
     if( !info )
         return -1;
     if( ac3_parse_syncframe_header( &info->info, buf ) )
     {
-        mp4sys_remove_ac3_info( info );
+        remove_ac3_importer_info( info );
         return -1;
     }
     lsmash_audio_summary_t *summary = ac3_create_summary( &info->info );
     if( !summary )
     {
-        mp4sys_remove_ac3_info( info );
+        remove_ac3_importer_info( info );
         return -1;
     }
-    info->status = MP4SYS_IMPORTER_OK;
+    info->status = IMPORTER_OK;
     info->info.au_number = 0;
     memcpy( info->info.buffer, buf, AC3_MIN_SYNCFRAME_LENGTH );
     importer->info = info;
     if( lsmash_add_entry( importer->summaries, summary ) )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-        mp4sys_remove_ac3_info( importer->info );
+        remove_ac3_importer_info( importer->info );
         importer->info = NULL;
         return -1;
     }
     return 0;
 }
 
-static uint32_t mp4sys_ac3_get_last_delta( mp4sys_importer_t* importer, uint32_t track_number )
+static uint32_t ac3_importer_get_last_delta( importer_t *importer, uint32_t track_number )
 {
     debug_if( !importer || !importer->info )
         return 0;
-    mp4sys_ac3_info_t *info = (mp4sys_ac3_info_t *)importer->info;
-    if( !info || track_number != 1 || info->status != MP4SYS_IMPORTER_EOF )
+    ac3_importer_info_t *info = (ac3_importer_info_t *)importer->info;
+    if( !info || track_number != 1 || info->status != IMPORTER_EOF )
         return 0;
     return AC3_SAMPLE_DURATION;
 }
 
-const static mp4sys_importer_functions mp4sys_ac3_importer =
+const static importer_functions ac3_importer =
 {
     "AC-3",
     1,
-    mp4sys_ac3_probe,
-    mp4sys_ac3_get_accessunit,
-    mp4sys_ac3_get_last_delta,
-    mp4sys_ac3_cleanup
+    ac3_importer_probe,
+    ac3_importer_get_accessunit,
+    ac3_importer_get_last_delta,
+    ac3_importer_cleanup
 };
 
 /***************************************************************************
@@ -1261,11 +1261,11 @@ const static mp4sys_importer_functions mp4sys_ac3_importer =
 
 typedef struct
 {
-    mp4sys_importer_status status;
-    eac3_info_t            info;
-} mp4sys_eac3_info_t;
+    importer_status status;
+    eac3_info_t     info;
+} eac3_importer_info_t;
 
-static void mp4sys_remove_eac3_info( mp4sys_eac3_info_t *info )
+static void remove_eac3_importer_info( eac3_importer_info_t *info )
 {
     if( !info )
         return;
@@ -1274,9 +1274,9 @@ static void mp4sys_remove_eac3_info( mp4sys_eac3_info_t *info )
     free( info );
 }
 
-static mp4sys_eac3_info_t *mp4sys_create_eac3_info( void )
+static eac3_importer_info_t *create_eac3_importer_info( void )
 {
-    mp4sys_eac3_info_t *info = (mp4sys_eac3_info_t *)lsmash_malloc_zero( sizeof(mp4sys_eac3_info_t) );
+    eac3_importer_info_t *info = (eac3_importer_info_t *)lsmash_malloc_zero( sizeof(eac3_importer_info_t) );
     if( !info )
         return NULL;
     eac3_info_t *eac3_info = &info->info;
@@ -1300,10 +1300,10 @@ static mp4sys_eac3_info_t *mp4sys_create_eac3_info( void )
     return info;
 }
 
-static void mp4sys_eac3_cleanup( mp4sys_importer_t *importer )
+static void eac3_importer_cleanup( importer_t *importer )
 {
     debug_if( importer && importer->info )
-        mp4sys_remove_eac3_info( importer->info );
+        remove_eac3_importer_info( importer->info );
 }
 
 static void eac3_update_sample_rate( lsmash_audio_summary_t *summary, lsmash_eac3_specific_parameters_t *dec3_param )
@@ -1399,10 +1399,10 @@ static void eac3_update_channel_info( lsmash_audio_summary_t *summary, lsmash_ea
     }
 }
 
-static int eac3_get_next_accessunit_internal( mp4sys_importer_t *importer )
+static int eac3_importer_get_next_accessunit_internal( importer_t *importer )
 {
     int complete_au = 0;
-    mp4sys_eac3_info_t *importer_info = (mp4sys_eac3_info_t *)importer->info;
+    eac3_importer_info_t *importer_info = (eac3_importer_info_t *)importer->info;
     eac3_info_t *info = &importer_info->info;
     while( !complete_au )
     {
@@ -1428,7 +1428,7 @@ static int eac3_get_next_accessunit_internal( mp4sys_importer_t *importer )
              * one access unit consists of 6 audio blocks and begins with independent substream 0.
              * The specification doesn't mention the case where a enhanced AC-3 stream ends at non-mod6 audio blocks.
              * At the end of the stream, therefore, we might make an access unit which has less than 6 audio blocks anyway. */
-            importer_info->status = MP4SYS_IMPORTER_EOF;
+            importer_info->status = IMPORTER_EOF;
             complete_au = !!info->incomplete_au_length;
             if( !complete_au )
                 return remainder_length ? -1 : 0;   /* No more access units in the stream. */
@@ -1474,7 +1474,7 @@ static int eac3_get_next_accessunit_internal( mp4sys_importer_t *importer )
             info->incomplete_au_length = 0;
             info->syncframe_count_in_au = info->syncframe_count;
             info->syncframe_count = 0;
-            if( importer_info->status == MP4SYS_IMPORTER_EOF )
+            if( importer_info->status == IMPORTER_EOF )
                 break;
         }
         /* Increase buffer size to store AU if short. */
@@ -1496,7 +1496,7 @@ static int eac3_get_next_accessunit_internal( mp4sys_importer_t *importer )
     return info->bits->bs->error ? -1 : 0;
 }
 
-static int mp4sys_eac3_get_accessunit( mp4sys_importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
+static int eac3_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
 {
     debug_if( !importer || !importer->info || !buffered_sample->data || !buffered_sample->length )
         return -1;
@@ -1505,17 +1505,17 @@ static int mp4sys_eac3_get_accessunit( mp4sys_importer_t *importer, uint32_t tra
     lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_get_entry_data( importer->summaries, track_number );
     if( !summary )
         return -1;
-    mp4sys_eac3_info_t *importer_info = (mp4sys_eac3_info_t *)importer->info;
+    eac3_importer_info_t *importer_info = (eac3_importer_info_t *)importer->info;
     eac3_info_t *info = &importer_info->info;
-    mp4sys_importer_status current_status = importer_info->status;
-    if( current_status == MP4SYS_IMPORTER_ERROR || buffered_sample->length < info->au_length )
+    importer_status current_status = importer_info->status;
+    if( current_status == IMPORTER_ERROR || buffered_sample->length < info->au_length )
         return -1;
-    if( current_status == MP4SYS_IMPORTER_EOF && info->au_length == 0 )
+    if( current_status == IMPORTER_EOF && info->au_length == 0 )
     {
         buffered_sample->length = 0;
         return 0;
     }
-    if( current_status == MP4SYS_IMPORTER_CHANGE )
+    if( current_status == IMPORTER_CHANGE )
     {
         lsmash_codec_specific_t *specific = isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3 );
         if( specific )
@@ -1534,15 +1534,15 @@ static int mp4sys_eac3_get_accessunit( mp4sys_importer_t *importer, uint32_t tra
     buffered_sample->cts = buffered_sample->dts;
     buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
     buffered_sample->prop.pre_roll.distance = 1;    /* MDCT */
-    if( importer_info->status == MP4SYS_IMPORTER_EOF )
+    if( importer_info->status == IMPORTER_EOF )
     {
         info->au_length = 0;
         return 0;
     }
     uint32_t old_syncframe_count_in_au = info->syncframe_count_in_au;
-    if( eac3_get_next_accessunit_internal( importer ) )
+    if( eac3_importer_get_next_accessunit_internal( importer ) )
     {
-        importer_info->status = MP4SYS_IMPORTER_ERROR;
+        importer_info->status = IMPORTER_ERROR;
         return current_status;
     }
     if( info->syncframe_count_in_au )
@@ -1552,21 +1552,21 @@ static int mp4sys_eac3_get_accessunit( mp4sys_importer_t *importer, uint32_t tra
         uint8_t *dec3 = lsmash_create_eac3_specific_info( &info->dec3_param, &new_length );
         if( !dec3 )
         {
-            importer_info->status = MP4SYS_IMPORTER_ERROR;
+            importer_info->status = IMPORTER_ERROR;
             return current_status;
         }
         lsmash_codec_specific_t *specific = isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3 );
         if( (info->syncframe_count_in_au > old_syncframe_count_in_au)
          || (specific && (new_length != specific->size || memcmp( dec3, specific->data.unstructured, specific->size ))) )
         {
-            importer_info->status = MP4SYS_IMPORTER_CHANGE;
+            importer_info->status = IMPORTER_CHANGE;
             info->next_dec3 = dec3;
             info->next_dec3_length = new_length;
         }
         else
         {
-            if( importer_info->status != MP4SYS_IMPORTER_EOF )
-                importer_info->status = MP4SYS_IMPORTER_OK;
+            if( importer_info->status != IMPORTER_EOF )
+                importer_info->status = IMPORTER_OK;
             free( dec3 );
         }
     }
@@ -1599,56 +1599,56 @@ static lsmash_audio_summary_t *eac3_create_summary( eac3_info_t *info )
     return summary;
 }
 
-static int mp4sys_eac3_probe( mp4sys_importer_t* importer )
+static int eac3_importer_probe( importer_t *importer )
 {
-    mp4sys_eac3_info_t *info = mp4sys_create_eac3_info();
+    eac3_importer_info_t *info = create_eac3_importer_info();
     if( !info )
         return -1;
     importer->info = info;
-    if( eac3_get_next_accessunit_internal( importer ) )
+    if( eac3_importer_get_next_accessunit_internal( importer ) )
     {
-        mp4sys_remove_eac3_info( importer->info );
+        remove_eac3_importer_info( importer->info );
         importer->info = NULL;
         return -1;
     }
     lsmash_audio_summary_t *summary = eac3_create_summary( &info->info );
     if( !summary )
     {
-        mp4sys_remove_eac3_info( importer->info );
+        remove_eac3_importer_info( importer->info );
         importer->info = NULL;
         return -1;
     }
-    if( info->status != MP4SYS_IMPORTER_EOF )
-        info->status = MP4SYS_IMPORTER_OK;
+    if( info->status != IMPORTER_EOF )
+        info->status = IMPORTER_OK;
     info->info.au_number = 0;
     if( lsmash_add_entry( importer->summaries, summary ) )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-        mp4sys_remove_eac3_info( importer->info );
+        remove_eac3_importer_info( importer->info );
         importer->info = NULL;
         return -1;
     }
     return 0;
 }
 
-static uint32_t mp4sys_eac3_get_last_delta( mp4sys_importer_t* importer, uint32_t track_number )
+static uint32_t eac3_importer_get_last_delta( importer_t *importer, uint32_t track_number )
 {
     debug_if( !importer || !importer->info )
         return 0;
-    mp4sys_eac3_info_t *info = (mp4sys_eac3_info_t *)importer->info;
-    if( !info || track_number != 1 || info->status != MP4SYS_IMPORTER_EOF || info->info.au_length )
+    eac3_importer_info_t *info = (eac3_importer_info_t *)importer->info;
+    if( !info || track_number != 1 || info->status != IMPORTER_EOF || info->info.au_length )
         return 0;
     return EAC3_MIN_SAMPLE_DURATION * info->info.number_of_audio_blocks;
 }
 
-const static mp4sys_importer_functions mp4sys_eac3_importer =
+const static importer_functions eac3_importer =
 {
     "Enhanced AC-3",
     1,
-    mp4sys_eac3_probe,
-    mp4sys_eac3_get_accessunit,
-    mp4sys_eac3_get_last_delta,
-    mp4sys_eac3_cleanup
+    eac3_importer_probe,
+    eac3_importer_get_accessunit,
+    eac3_importer_get_last_delta,
+    eac3_importer_cleanup
 };
 
 /***************************************************************************
@@ -1675,10 +1675,10 @@ typedef struct
 
 typedef struct
 {
-    mp4sys_importer_status status;
+    importer_status       status;
     als_specific_config_t alssc;
-    uint32_t samples_in_frame;
-    uint32_t au_number;
+    uint32_t              samples_in_frame;
+    uint32_t              au_number;
 } mp4sys_als_info_t;
 
 typedef struct
@@ -1699,7 +1699,7 @@ static void mp4sys_remove_als_info( mp4sys_als_info_t *info )
     free( info );
 }
 
-static void mp4sys_als_cleanup( mp4sys_importer_t *importer )
+static void mp4sys_als_importer_cleanup( importer_t *importer )
 {
     debug_if( importer && importer->info )
         mp4sys_remove_als_info( importer->info );
@@ -1738,7 +1738,7 @@ static uint32_t als_get_be32( als_stream_manager *manager )
     return value;
 }
 
-static int als_parse_specific_config( mp4sys_importer_t *importer, uint8_t *buf, als_specific_config_t *alssc )
+static int als_parse_specific_config( importer_t *importer, uint8_t *buf, als_specific_config_t *alssc )
 {
     alssc->samp_freq     = (buf[4] << 24) | (buf[5] << 16) | (buf[6] << 8) | buf[7];
     alssc->samples       = (buf[8] << 24) | (buf[9] << 16) | (buf[10] << 8) | buf[11];
@@ -1843,7 +1843,7 @@ static int als_parse_specific_config( mp4sys_importer_t *importer, uint8_t *buf,
     return 0;
 }
 
-static int mp4sys_als_get_accessunit( mp4sys_importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
+static int mp4sys_als_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
 {
     debug_if( !importer || !importer->info || !buffered_sample->data || !buffered_sample->length )
         return -1;
@@ -1853,8 +1853,8 @@ static int mp4sys_als_get_accessunit( mp4sys_importer_t *importer, uint32_t trac
     if( !summary )
         return -1;
     mp4sys_als_info_t *info = (mp4sys_als_info_t *)importer->info;
-    mp4sys_importer_status current_status = info->status;
-    if( current_status == MP4SYS_IMPORTER_EOF )
+    importer_status current_status = info->status;
+    if( current_status == IMPORTER_EOF )
     {
         buffered_sample->length = 0;
         return 0;
@@ -1867,7 +1867,7 @@ static int mp4sys_als_get_accessunit( mp4sys_importer_t *importer, uint32_t trac
         buffered_sample->length = alssc->access_unit_size;
         buffered_sample->cts = buffered_sample->dts = 0;
         buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
-        info->status = MP4SYS_IMPORTER_EOF;
+        info->status = IMPORTER_EOF;
         return 0;
     }
     uint32_t au_length;
@@ -1889,11 +1889,11 @@ static int mp4sys_als_get_accessunit( mp4sys_importer_t *importer, uint32_t trac
     buffered_sample->cts = buffered_sample->dts;
     buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
     if( info->au_number == alssc->number_of_ra_units )
-        info->status = MP4SYS_IMPORTER_EOF;
+        info->status = IMPORTER_EOF;
     return 0;
 }
 
-static lsmash_audio_summary_t *als_create_summary( mp4sys_importer_t *importer, als_specific_config_t *alssc )
+static lsmash_audio_summary_t *als_create_summary( importer_t *importer, als_specific_config_t *alssc )
 {
     lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_AUDIO );
     if( !summary )
@@ -1954,7 +1954,7 @@ static lsmash_audio_summary_t *als_create_summary( mp4sys_importer_t *importer, 
     return summary;
 }
 
-static int mp4sys_als_probe( mp4sys_importer_t *importer )
+static int mp4sys_als_importer_probe( importer_t *importer )
 {
     uint8_t buf[ALSSC_TWELVE_LENGTH];
     if( fread( buf, 1, ALSSC_TWELVE_LENGTH, importer->stream ) != ALSSC_TWELVE_LENGTH )
@@ -1975,7 +1975,7 @@ static int mp4sys_als_probe( mp4sys_importer_t *importer )
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         return -1;
     }
-    info->status = MP4SYS_IMPORTER_OK;
+    info->status = IMPORTER_OK;
     info->alssc = alssc;
     info->samples_in_frame = summary->samples_in_frame;
     if( lsmash_add_entry( importer->summaries, summary ) )
@@ -1988,12 +1988,12 @@ static int mp4sys_als_probe( mp4sys_importer_t *importer )
     return 0;
 }
 
-static uint32_t mp4sys_als_get_last_delta( mp4sys_importer_t* importer, uint32_t track_number )
+static uint32_t mp4sys_als_importer_get_last_delta( importer_t *importer, uint32_t track_number )
 {
     debug_if( !importer || !importer->info )
         return 0;
     mp4sys_als_info_t *info = (mp4sys_als_info_t *)importer->info;
-    if( !info || track_number != 1 || info->status != MP4SYS_IMPORTER_EOF )
+    if( !info || track_number != 1 || info->status != IMPORTER_EOF )
         return 0;
     als_specific_config_t *alssc = &info->alssc;
     /* If alssc->number_of_ra_units == 0, then the last sample duration is just alssc->samples
@@ -2001,14 +2001,14 @@ static uint32_t mp4sys_als_get_last_delta( mp4sys_importer_t* importer, uint32_t
     return alssc->samples - (alssc->number_of_ra_units - 1) * info->samples_in_frame;
 }
 
-const static mp4sys_importer_functions mp4sys_als_importer =
+const static importer_functions mp4sys_als_importer =
 {
     "MPEG-4 ALS",
     1,
-    mp4sys_als_probe,
-    mp4sys_als_get_accessunit,
-    mp4sys_als_get_last_delta,
-    mp4sys_als_cleanup
+    mp4sys_als_importer_probe,
+    mp4sys_als_importer_get_accessunit,
+    mp4sys_als_importer_get_last_delta,
+    mp4sys_als_importer_cleanup
 };
 
 /***************************************************************************
@@ -2020,11 +2020,11 @@ const static mp4sys_importer_functions mp4sys_als_importer =
 
 typedef struct
 {
-    mp4sys_importer_status status;
-    dts_info_t             info;
-} mp4sys_dts_info_t;
+    importer_status status;
+    dts_info_t      info;
+} dts_importer_info_t;
 
-static void mp4sys_remove_dts_info( mp4sys_dts_info_t *info )
+static void remove_dts_importer_info( dts_importer_info_t *info )
 {
     if( !info )
         return;
@@ -2033,9 +2033,9 @@ static void mp4sys_remove_dts_info( mp4sys_dts_info_t *info )
     free( info );
 }
 
-static mp4sys_dts_info_t *mp4sys_create_dts_info( void )
+static dts_importer_info_t *create_dts_importer_info( void )
 {
-    mp4sys_dts_info_t *info = (mp4sys_dts_info_t *)lsmash_malloc_zero( sizeof(mp4sys_dts_info_t) );
+    dts_importer_info_t *info = (dts_importer_info_t *)lsmash_malloc_zero( sizeof(dts_importer_info_t) );
     if( !info )
         return NULL;
     dts_info_t *dts_info = &info->info;
@@ -2059,16 +2059,16 @@ static mp4sys_dts_info_t *mp4sys_create_dts_info( void )
     return info;
 }
 
-static void mp4sys_dts_cleanup( mp4sys_importer_t *importer )
+static void dts_importer_cleanup( importer_t *importer )
 {
     debug_if( importer && importer->info )
-        mp4sys_remove_dts_info( importer->info );
+        remove_dts_importer_info( importer->info );
 }
 
-static int dts_get_next_accessunit_internal( mp4sys_importer_t *importer )
+static int dts_importer_get_next_accessunit_internal( importer_t *importer )
 {
     int complete_au = 0;
-    mp4sys_dts_info_t *importer_info = (mp4sys_dts_info_t *)importer->info;
+    dts_importer_info_t *importer_info = (dts_importer_info_t *)importer->info;
     dts_info_t *info = &importer_info->info;
     while( !complete_au )
     {
@@ -2090,7 +2090,7 @@ static int dts_get_next_accessunit_internal( mp4sys_importer_t *importer )
         if( remainder_length < 10 )
         {
             /* Reached the end of stream. */
-            importer_info->status = MP4SYS_IMPORTER_EOF;
+            importer_info->status = IMPORTER_EOF;
             complete_au = !!info->incomplete_au_length;
             if( !complete_au )
                 return remainder_length ? -1 : 0;   /* No more access units in the stream. */
@@ -2136,7 +2136,7 @@ static int dts_get_next_accessunit_internal( mp4sys_importer_t *importer )
             info->au_length = info->incomplete_au_length;
             info->incomplete_au_length = 0;
             info->extension_substream_count = (info->substream_type == DTS_SUBSTREAM_TYPE_EXTENSION);
-            if( importer_info->status == MP4SYS_IMPORTER_EOF )
+            if( importer_info->status == IMPORTER_EOF )
                 break;
         }
         /* Increase buffer size to store AU if short. */
@@ -2157,7 +2157,7 @@ static int dts_get_next_accessunit_internal( mp4sys_importer_t *importer )
     return info->bits->bs->error ? -1 : 0;
 }
 
-static int mp4sys_dts_get_accessunit( mp4sys_importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
+static int dts_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
 {
     debug_if( !importer || !importer->info || !buffered_sample->data || !buffered_sample->length )
         return -1;
@@ -2166,17 +2166,17 @@ static int mp4sys_dts_get_accessunit( mp4sys_importer_t *importer, uint32_t trac
     lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_get_entry_data( importer->summaries, track_number );
     if( !summary )
         return -1;
-    mp4sys_dts_info_t *importer_info = (mp4sys_dts_info_t *)importer->info;
+    dts_importer_info_t *importer_info = (dts_importer_info_t *)importer->info;
     dts_info_t *info = &importer_info->info;
-    mp4sys_importer_status current_status = importer_info->status;
-    if( current_status == MP4SYS_IMPORTER_ERROR || buffered_sample->length < info->au_length )
+    importer_status current_status = importer_info->status;
+    if( current_status == IMPORTER_ERROR || buffered_sample->length < info->au_length )
         return -1;
-    if( current_status == MP4SYS_IMPORTER_EOF && info->au_length == 0 )
+    if( current_status == IMPORTER_EOF && info->au_length == 0 )
     {
         buffered_sample->length = 0;
         return 0;
     }
-    if( current_status == MP4SYS_IMPORTER_CHANGE )
+    if( current_status == IMPORTER_CHANGE )
         summary->max_au_length = 0;
     memcpy( buffered_sample->data, info->au, info->au_length );
     buffered_sample->length = info->au_length;
@@ -2184,13 +2184,13 @@ static int mp4sys_dts_get_accessunit( mp4sys_importer_t *importer, uint32_t trac
     buffered_sample->cts = buffered_sample->dts;
     buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
     buffered_sample->prop.pre_roll.distance = !!(info->flags & DTS_EXT_SUBSTREAM_LBR_FLAG);     /* MDCT */
-    if( importer_info->status == MP4SYS_IMPORTER_EOF )
+    if( importer_info->status == IMPORTER_EOF )
     {
         info->au_length = 0;
         return 0;
     }
-    if( dts_get_next_accessunit_internal( importer ) )
-        importer_info->status = MP4SYS_IMPORTER_ERROR;
+    if( dts_importer_get_next_accessunit_internal( importer ) )
+        importer_info->status = IMPORTER_ERROR;
     return current_status;
 }
 
@@ -2255,44 +2255,44 @@ static lsmash_audio_summary_t *dts_create_summary( dts_info_t *info )
     return summary;
 }
 
-static int mp4sys_dts_probe( mp4sys_importer_t* importer )
+static int dts_importer_probe( importer_t *importer )
 {
-    mp4sys_dts_info_t *info = mp4sys_create_dts_info();
+    dts_importer_info_t *info = create_dts_importer_info();
     if( !info )
         return -1;
     importer->info = info;
-    if( dts_get_next_accessunit_internal( importer ) )
+    if( dts_importer_get_next_accessunit_internal( importer ) )
     {
-        mp4sys_remove_dts_info( importer->info );
+        remove_dts_importer_info( importer->info );
         importer->info = NULL;
         return -1;
     }
     lsmash_audio_summary_t *summary = dts_create_summary( &info->info );
     if( !summary )
     {
-        mp4sys_remove_dts_info( importer->info );
+        remove_dts_importer_info( importer->info );
         importer->info = NULL;
         return -1;
     }
-    if( info->status != MP4SYS_IMPORTER_EOF )
-        info->status = MP4SYS_IMPORTER_OK;
+    if( info->status != IMPORTER_EOF )
+        info->status = IMPORTER_OK;
     info->info.au_number = 0;
     if( lsmash_add_entry( importer->summaries, summary ) )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-        mp4sys_remove_dts_info( importer->info );
+        remove_dts_importer_info( importer->info );
         importer->info = NULL;
         return -1;
     }
     return 0;
 }
 
-static uint32_t mp4sys_dts_get_last_delta( mp4sys_importer_t* importer, uint32_t track_number )
+static uint32_t dts_importer_get_last_delta( importer_t* importer, uint32_t track_number )
 {
     debug_if( !importer || !importer->info )
         return 0;
-    mp4sys_dts_info_t *info = (mp4sys_dts_info_t *)importer->info;
-    if( !info || track_number != 1 || info->status != MP4SYS_IMPORTER_EOF || info->info.au_length )
+    dts_importer_info_t *info = (dts_importer_info_t *)importer->info;
+    if( !info || track_number != 1 || info->status != IMPORTER_EOF || info->info.au_length )
         return 0;
     lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_get_entry_data( importer->summaries, track_number );
     if( !summary )
@@ -2300,14 +2300,14 @@ static uint32_t mp4sys_dts_get_last_delta( mp4sys_importer_t* importer, uint32_t
     return (summary->frequency * info->info.frame_duration) / info->info.ddts_param.DTSSamplingFrequency;
 }
 
-const static mp4sys_importer_functions mp4sys_dts_importer =
+const static importer_functions dts_importer =
 {
     "DTS Coherent Acoustics",
     1,
-    mp4sys_dts_probe,
-    mp4sys_dts_get_accessunit,
-    mp4sys_dts_get_last_delta,
-    mp4sys_dts_cleanup
+    dts_importer_probe,
+    dts_importer_get_accessunit,
+    dts_importer_get_last_delta,
+    dts_importer_cleanup
 };
 
 /***************************************************************************
@@ -2319,7 +2319,7 @@ const static mp4sys_importer_functions mp4sys_dts_importer =
 
 typedef struct
 {
-    mp4sys_importer_status status;
+    importer_status        status;
     h264_info_t            info;
     h264_sps_t             first_sps;
     lsmash_media_ts_list_t ts_list;
@@ -2328,9 +2328,9 @@ typedef struct
     uint64_t last_intra_cts;
     uint8_t  composition_reordering_present;
     uint8_t  field_pic_present;
-} mp4sys_h264_info_t;
+} h264_importer_info_t;
 
-static void mp4sys_remove_h264_info( mp4sys_h264_info_t *info )
+static void remove_h264_importer_info( h264_importer_info_t *info )
 {
     if( !info )
         return;
@@ -2340,10 +2340,10 @@ static void mp4sys_remove_h264_info( mp4sys_h264_info_t *info )
     free( info );
 }
 
-static void mp4sys_h264_cleanup( mp4sys_importer_t *importer )
+static void h264_importer_cleanup( importer_t *importer )
 {
     debug_if( importer && importer->info )
-        mp4sys_remove_h264_info( importer->info );
+        remove_h264_importer_info( importer->info );
 }
 
 static uint32_t h264_update_buffer_from_stream( h264_info_t *info, void *src, uint32_t anticipation_bytes )
@@ -2370,14 +2370,14 @@ static uint32_t h264_update_buffer_from_stream( h264_info_t *info, void *src, ui
     return remainder_bytes;
 }
 
-static mp4sys_h264_info_t *mp4sys_create_h264_info( void )
+static h264_importer_info_t *create_h264_importer_info( void )
 {
-    mp4sys_h264_info_t *info = lsmash_malloc_zero( sizeof(mp4sys_h264_info_t) );
+    h264_importer_info_t *info = lsmash_malloc_zero( sizeof(h264_importer_info_t) );
     if( !info )
         return NULL;
     if( h264_setup_parser( &info->info, 0, h264_update_buffer_from_stream ) )
     {
-        mp4sys_remove_h264_info( info );
+        remove_h264_importer_info( info );
         return NULL;
     }
     return info;
@@ -2429,22 +2429,22 @@ static void h264_append_nalu_to_au( h264_picture_info_t *picture, uint8_t *src_n
     picture->incomplete_au_length += H264_DEFAULT_NALU_LENGTH_SIZE + nalu_length;
 }
 
-static inline void h264_get_au_internal_end( mp4sys_h264_info_t *info, h264_picture_info_t *picture, h264_nalu_header_t *nalu_header, int no_more_buf )
+static inline void h264_get_au_internal_end( h264_importer_info_t *info, h264_picture_info_t *picture, h264_nalu_header_t *nalu_header, int no_more_buf )
 {
     info->status = info->info.no_more_read && no_more_buf && (picture->incomplete_au_length == 0)
-                 ? MP4SYS_IMPORTER_EOF
-                 : MP4SYS_IMPORTER_OK;
+                 ? IMPORTER_EOF
+                 : IMPORTER_OK;
     info->info.nalu_header = *nalu_header;
 }
 
-static int h264_get_au_internal_succeeded( mp4sys_h264_info_t *info, h264_picture_info_t *picture, h264_nalu_header_t *nalu_header, int no_more_buf )
+static int h264_get_au_internal_succeeded( h264_importer_info_t *info, h264_picture_info_t *picture, h264_nalu_header_t *nalu_header, int no_more_buf )
 {
     h264_get_au_internal_end( info, picture, nalu_header, no_more_buf );
     picture->au_number += 1;
     return 0;
 }
 
-static int h264_get_au_internal_failed( mp4sys_h264_info_t *info, h264_picture_info_t *picture, h264_nalu_header_t *nalu_header, int no_more_buf, int complete_au )
+static int h264_get_au_internal_failed( h264_importer_info_t *info, h264_picture_info_t *picture, h264_nalu_header_t *nalu_header, int no_more_buf, int complete_au )
 {
     h264_get_au_internal_end( info, picture, nalu_header, no_more_buf );
     if( complete_au )
@@ -2454,9 +2454,9 @@ static int h264_get_au_internal_failed( mp4sys_h264_info_t *info, h264_picture_i
 
 /* If probe equals 0, don't get the actual data (EBPS) of an access unit and only parse NALU.
  * Currently, you can get AU of AVC video elemental stream only, not AVC parameter set elemental stream defined in 14496-15. */
-static int h264_get_access_unit_internal( mp4sys_importer_t *importer, int probe )
+static int h264_get_access_unit_internal( importer_t *importer, int probe )
 {
-    mp4sys_h264_info_t *importer_info = (mp4sys_h264_info_t *)importer->info;
+    h264_importer_info_t *importer_info = (h264_importer_info_t *)importer->info;
     h264_info_t          *info     = &importer_info->info;
     h264_slice_info_t    *slice    = &info->slice;
     h264_picture_info_t  *picture  = &info->picture;
@@ -2645,25 +2645,25 @@ static int h264_get_access_unit_internal( mp4sys_importer_t *importer, int probe
     }
 }
 
-static int mp4sys_h264_get_accessunit( mp4sys_importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
+static int h264_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
 {
     debug_if( !importer || !importer->info || !buffered_sample->data || !buffered_sample->length )
         return -1;
     if( !importer->info || track_number != 1 )
         return -1;
-    mp4sys_h264_info_t *importer_info = (mp4sys_h264_info_t *)importer->info;
+    h264_importer_info_t *importer_info = (h264_importer_info_t *)importer->info;
     h264_info_t *info = &importer_info->info;
-    mp4sys_importer_status current_status = importer_info->status;
-    if( current_status == MP4SYS_IMPORTER_ERROR || buffered_sample->length < importer_info->max_au_length )
+    importer_status current_status = importer_info->status;
+    if( current_status == IMPORTER_ERROR || buffered_sample->length < importer_info->max_au_length )
         return -1;
-    if( current_status == MP4SYS_IMPORTER_EOF )
+    if( current_status == IMPORTER_EOF )
     {
         buffered_sample->length = 0;
         return 0;
     }
     if( h264_get_access_unit_internal( importer, 0 ) )
     {
-        importer_info->status = MP4SYS_IMPORTER_ERROR;
+        importer_info->status = IMPORTER_ERROR;
         return -1;
     }
     h264_sps_t *sps = &info->sps;
@@ -2737,13 +2737,13 @@ static lsmash_video_summary_t *h264_create_summary( h264_info_t *info, h264_sps_
     return summary;
 }
 
-static int mp4sys_h264_probe( mp4sys_importer_t *importer )
+static int h264_importer_probe( importer_t *importer )
 {
 #define H264_MAX_NUM_REORDER_FRAMES 16
 #define H264_LONG_START_CODE_LENGTH 4
 #define H264_CHECK_NEXT_LONG_START_CODE( x ) (!(x)[0] && !(x)[1] && !(x)[2] && ((x)[3] == 0x01))
     /* Find the first start code. */
-    mp4sys_h264_info_t *importer_info = mp4sys_create_h264_info();
+    h264_importer_info_t *importer_info = create_h264_importer_info();
     if( !importer_info )
         return -1;
     h264_info_t *info = &importer_info->info;
@@ -2774,7 +2774,7 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
     if( buffer->pos >= buffer->end )
         goto fail;  /* It seems the stream ends at the first incomplete access unit. */
     uint64_t first_ebsp_head_pos = buffer->pos - buffer->start;     /* EBSP doesn't include NALU header. */
-    importer_info->status = MP4SYS_IMPORTER_OK;
+    importer_info->status = IMPORTER_OK;
     info->nalu_header   = first_nalu_header;
     info->ebsp_head_pos = first_ebsp_head_pos;
     /* Parse all NALU in the stream for preparation of calculating timestamps. */
@@ -2784,7 +2784,7 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
         goto fail;
     uint32_t num_access_units = 0;
     fprintf( stderr, "Analyzing stream as H.264\r" );
-    while( importer_info->status != MP4SYS_IMPORTER_EOF )
+    while( importer_info->status != IMPORTER_EOF )
     {
 #if 0
         fprintf( stderr, "Analyzing stream as H.264: %"PRIu32"\n", num_access_units + 1 );
@@ -2953,7 +2953,7 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
     importer_info->ts_list.timestamp    = timestamp;
     /* Go back to EBSP of the first NALU. */
     lsmash_fseek( importer->stream, first_ebsp_head_pos, SEEK_SET );
-    importer_info->status       = MP4SYS_IMPORTER_OK;
+    importer_info->status       = IMPORTER_OK;
     info->nalu_header           = first_nalu_header;
     info->prev_nalu_type        = 0;
     info->no_more_read          = 0;
@@ -2973,7 +2973,7 @@ static int mp4sys_h264_probe( mp4sys_importer_t *importer )
     lsmash_remove_entries( info->avcC_param.parameter_sets->spsext_list, isom_remove_avcC_ps );
     return 0;
 fail:
-    mp4sys_remove_h264_info( importer_info );
+    remove_h264_importer_info( importer_info );
     importer->info = NULL;
     lsmash_remove_entries( importer->summaries, lsmash_cleanup_summary );
     return -1;
@@ -2982,26 +2982,26 @@ fail:
 #undef H264_CHECK_NEXT_LONG_START_CODE
 }
 
-static uint32_t mp4sys_h264_get_last_delta( mp4sys_importer_t* importer, uint32_t track_number )
+static uint32_t h264_importer_get_last_delta( importer_t *importer, uint32_t track_number )
 {
     debug_if( !importer || !importer->info )
         return 0;
-    mp4sys_h264_info_t *info = (mp4sys_h264_info_t *)importer->info;
-    if( !info || track_number != 1 || info->status != MP4SYS_IMPORTER_EOF )
+    h264_importer_info_t *info = (h264_importer_info_t *)importer->info;
+    if( !info || track_number != 1 || info->status != IMPORTER_EOF )
         return 0;
     return info->ts_list.sample_count
          ? 1
          : UINT32_MAX;    /* arbitrary */
 }
 
-const static mp4sys_importer_functions mp4sys_h264_importer =
+const static importer_functions h264_importer =
 {
     "H.264",
     1,
-    mp4sys_h264_probe,
-    mp4sys_h264_get_accessunit,
-    mp4sys_h264_get_last_delta,
-    mp4sys_h264_cleanup
+    h264_importer_probe,
+    h264_importer_get_accessunit,
+    h264_importer_get_last_delta,
+    h264_importer_cleanup
 };
 
 /***************************************************************************
@@ -3013,7 +3013,7 @@ const static mp4sys_importer_functions mp4sys_h264_importer =
 
 typedef struct
 {
-    mp4sys_importer_status status;
+    importer_status        status;
     vc1_info_t             info;
     vc1_sequence_header_t  first_sequence;
     lsmash_media_ts_list_t ts_list;
@@ -3021,9 +3021,9 @@ typedef struct
     uint32_t max_au_length;
     uint32_t num_undecodable;
     uint64_t last_ref_intra_cts;
-} mp4sys_vc1_info_t;
+} vc1_importer_info_t;
 
-static void mp4sys_remove_vc1_info( mp4sys_vc1_info_t *info )
+static void remove_vc1_importer_info( vc1_importer_info_t *info )
 {
     if( !info )
         return;
@@ -3033,10 +3033,10 @@ static void mp4sys_remove_vc1_info( mp4sys_vc1_info_t *info )
     free( info );
 }
 
-static void mp4sys_vc1_cleanup( mp4sys_importer_t *importer )
+static void vc1_importer_cleanup( importer_t *importer )
 {
     debug_if( importer && importer->info )
-        mp4sys_remove_vc1_info( importer->info );
+        remove_vc1_importer_info( importer->info );
 }
 
 static uint32_t vc1_update_buffer_from_stream( vc1_info_t *info, void *src, uint32_t anticipation_bytes )
@@ -3063,14 +3063,14 @@ static uint32_t vc1_update_buffer_from_stream( vc1_info_t *info, void *src, uint
     return remainder_bytes;
 }
 
-static mp4sys_vc1_info_t *mp4sys_create_vc1_info( void )
+static vc1_importer_info_t *create_vc1_importer_info( void )
 {
-    mp4sys_vc1_info_t *info = lsmash_malloc_zero( sizeof(mp4sys_vc1_info_t) );
+    vc1_importer_info_t *info = lsmash_malloc_zero( sizeof(vc1_importer_info_t) );
     if( !info )
         return NULL;
     if( vc1_setup_parser( &info->info, 0, vc1_update_buffer_from_stream ) )
     {
-        mp4sys_remove_vc1_info( info );
+        remove_vc1_importer_info( info );
         return NULL;
     }
     return info;
@@ -3098,22 +3098,22 @@ static inline void vc1_append_ebdu_to_au( vc1_access_unit_t *access_unit, uint8_
     access_unit->incomplete_data_length += ebdu_length;
 }
 
-static inline void vc1_get_au_internal_end( mp4sys_vc1_info_t *info, vc1_access_unit_t *access_unit, uint8_t bdu_type, int no_more_buf )
+static inline void vc1_get_au_internal_end( vc1_importer_info_t *info, vc1_access_unit_t *access_unit, uint8_t bdu_type, int no_more_buf )
 {
     info->status = info->info.no_more_read && no_more_buf && (access_unit->incomplete_data_length == 0)
-                 ? MP4SYS_IMPORTER_EOF
-                 : MP4SYS_IMPORTER_OK;
+                 ? IMPORTER_EOF
+                 : IMPORTER_OK;
     info->info.bdu_type = bdu_type;
 }
 
-static int vc1_get_au_internal_succeeded( mp4sys_vc1_info_t *info, vc1_access_unit_t *access_unit, uint8_t bdu_type, int no_more_buf )
+static int vc1_get_au_internal_succeeded( vc1_importer_info_t *info, vc1_access_unit_t *access_unit, uint8_t bdu_type, int no_more_buf )
 {
     vc1_get_au_internal_end( info, access_unit, bdu_type, no_more_buf );
     access_unit->number += 1;
     return 0;
 }
 
-static int vc1_get_au_internal_failed( mp4sys_vc1_info_t *info, vc1_access_unit_t *access_unit, uint8_t bdu_type, int no_more_buf, int complete_au )
+static int vc1_get_au_internal_failed( vc1_importer_info_t *info, vc1_access_unit_t *access_unit, uint8_t bdu_type, int no_more_buf, int complete_au )
 {
     vc1_get_au_internal_end( info, access_unit, bdu_type, no_more_buf );
     if( complete_au )
@@ -3121,9 +3121,9 @@ static int vc1_get_au_internal_failed( mp4sys_vc1_info_t *info, vc1_access_unit_
     return -1;
 }
 
-static int vc1_get_access_unit_internal( mp4sys_importer_t *importer, int probe )
+static int vc1_importer_get_access_unit_internal( importer_t *importer, int probe )
 {
-    mp4sys_vc1_info_t   *importer_info = (mp4sys_vc1_info_t *)importer->info;
+    vc1_importer_info_t *importer_info = (vc1_importer_info_t *)importer->info;
     vc1_info_t          *info          = &importer_info->info;
     vc1_stream_buffer_t *buffer        = &info->buffer;
     vc1_access_unit_t   *access_unit   = &info->access_unit;
@@ -3297,25 +3297,25 @@ static int vc1_get_access_unit_internal( mp4sys_importer_t *importer, int probe 
     }
 }
 
-static int mp4sys_vc1_get_accessunit( mp4sys_importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
+static int vc1_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
 {
     debug_if( !importer || !importer->info || !buffered_sample->data || !buffered_sample->length )
         return -1;
     if( !importer->info || track_number != 1 )
         return -1;
-    mp4sys_vc1_info_t *importer_info = (mp4sys_vc1_info_t *)importer->info;
+    vc1_importer_info_t *importer_info = (vc1_importer_info_t *)importer->info;
     vc1_info_t *info = &importer_info->info;
-    mp4sys_importer_status current_status = importer_info->status;
-    if( current_status == MP4SYS_IMPORTER_ERROR || buffered_sample->length < importer_info->max_au_length )
+    importer_status current_status = importer_info->status;
+    if( current_status == IMPORTER_ERROR || buffered_sample->length < importer_info->max_au_length )
         return -1;
-    if( current_status == MP4SYS_IMPORTER_EOF )
+    if( current_status == IMPORTER_EOF )
     {
         buffered_sample->length = 0;
         return 0;
     }
-    if( vc1_get_access_unit_internal( importer, 0 ) )
+    if( vc1_importer_get_access_unit_internal( importer, 0 ) )
     {
-        importer_info->status = MP4SYS_IMPORTER_ERROR;
+        importer_info->status = IMPORTER_ERROR;
         return -1;
     }
     vc1_access_unit_t *access_unit = &info->access_unit;
@@ -3371,11 +3371,11 @@ static lsmash_video_summary_t *vc1_create_summary( vc1_info_t *info, vc1_sequenc
     return summary;
 }
 
-static int mp4sys_vc1_probe( mp4sys_importer_t *importer )
+static int vc1_importer_probe( importer_t *importer )
 {
 #define VC1_CHECK_FIRST_START_CODE( x ) (!(x)[0] && !(x)[1] && ((x)[2] == 0x01))
     /* Find the first start code. */
-    mp4sys_vc1_info_t *importer_info = mp4sys_create_vc1_info();
+    vc1_importer_info_t *importer_info = create_vc1_importer_info();
     if( !importer_info )
         return -1;
     vc1_info_t *info = &importer_info->info;
@@ -3404,7 +3404,7 @@ static int mp4sys_vc1_probe( mp4sys_importer_t *importer )
     uint8_t first_bdu_type = *(buffer->pos ++);
     if( buffer->pos >= buffer->end )
         goto fail;  /* It seems the stream ends at the first incomplete access unit. */
-    importer_info->status = MP4SYS_IMPORTER_OK;
+    importer_info->status = IMPORTER_OK;
     info->bdu_type        = first_bdu_type;
     info->ebdu_head_pos   = first_ebdu_head_pos;
     /* Parse all EBDU in the stream for preparation of calculating timestamps. */
@@ -3415,12 +3415,12 @@ static int mp4sys_vc1_probe( mp4sys_importer_t *importer )
     uint32_t num_access_units = 0;
     uint32_t num_consecutive_b = 0;
     fprintf( stderr, "Analyzing stream as VC-1\r" );
-    while( importer_info->status != MP4SYS_IMPORTER_EOF )
+    while( importer_info->status != IMPORTER_EOF )
     {
 #if 0
         fprintf( stderr, "Analyzing stream as VC-1: %"PRIu32"\n", num_access_units + 1 );
 #endif
-        if( vc1_get_access_unit_internal( importer, 1 ) )
+        if( vc1_importer_get_access_unit_internal( importer, 1 ) )
         {
             free( cts );
             goto fail;
@@ -3509,7 +3509,7 @@ static int mp4sys_vc1_probe( mp4sys_importer_t *importer )
     importer_info->ts_list.timestamp    = timestamp;
     /* Go back to layer of the first EBDU. */
     lsmash_fseek( importer->stream, first_ebdu_head_pos, SEEK_SET );
-    importer_info->status                = MP4SYS_IMPORTER_OK;
+    importer_info->status                = IMPORTER_OK;
     info->bdu_type                       = first_bdu_type;
     info->prev_bdu_type                  = 0;
     info->no_more_read                   = 0;
@@ -3524,33 +3524,33 @@ static int mp4sys_vc1_probe( mp4sys_importer_t *importer )
     memset( &info->picture, 0, sizeof(vc1_picture_info_t) );
     return 0;
 fail:
-    mp4sys_remove_vc1_info( importer_info );
+    remove_vc1_importer_info( importer_info );
     importer->info = NULL;
     lsmash_remove_entries( importer->summaries, lsmash_cleanup_summary );
     return -1;
 #undef VC1_CHECK_FIRST_START_CODE
 }
 
-static uint32_t mp4sys_vc1_get_last_delta( mp4sys_importer_t* importer, uint32_t track_number )
+static uint32_t vc1_importer_get_last_delta( importer_t *importer, uint32_t track_number )
 {
     debug_if( !importer || !importer->info )
         return 0;
-    mp4sys_vc1_info_t *info = (mp4sys_vc1_info_t *)importer->info;
-    if( !info || track_number != 1 || info->status != MP4SYS_IMPORTER_EOF )
+    vc1_importer_info_t *info = (vc1_importer_info_t *)importer->info;
+    if( !info || track_number != 1 || info->status != IMPORTER_EOF )
         return 0;
     return info->ts_list.sample_count
          ? 1
          : UINT32_MAX;    /* arbitrary */
 }
 
-const static mp4sys_importer_functions mp4sys_vc1_importer =
+const static importer_functions vc1_importer =
 {
     "VC-1",
     1,
-    mp4sys_vc1_probe,
-    mp4sys_vc1_get_accessunit,
-    mp4sys_vc1_get_last_delta,
-    mp4sys_vc1_cleanup
+    vc1_importer_probe,
+    vc1_importer_get_accessunit,
+    vc1_importer_get_last_delta,
+    vc1_importer_cleanup
 };
 
 /***************************************************************************
@@ -3559,22 +3559,22 @@ const static mp4sys_importer_functions mp4sys_vc1_importer =
 
 
 /******** importer listing table ********/
-const static mp4sys_importer_functions* mp4sys_importer_tbl[] = {
+const static importer_functions *importer_func_table[] = {
     &mp4sys_adts_importer,
     &mp4sys_mp3_importer,
-    &mp4sys_amr_importer,
-    &mp4sys_ac3_importer,
-    &mp4sys_eac3_importer,
+    &amr_importer,
+    &ac3_importer,
+    &eac3_importer,
     &mp4sys_als_importer,
-    &mp4sys_dts_importer,
-    &mp4sys_h264_importer,
-    &mp4sys_vc1_importer,
+    &dts_importer,
+    &h264_importer,
+    &vc1_importer,
     NULL,
 };
 
 /******** importer public functions ********/
 
-void mp4sys_importer_close( mp4sys_importer_t* importer )
+void lsmash_importer_close( importer_t *importer )
 {
     if( !importer )
         return;
@@ -3586,13 +3586,13 @@ void mp4sys_importer_close( mp4sys_importer_t* importer )
     free( importer );
 }
 
-mp4sys_importer_t *mp4sys_importer_open( const char *identifier, const char *format )
+importer_t *lsmash_importer_open( const char *identifier, const char *format )
 {
     if( identifier == NULL )
         return NULL;
 
     int auto_detect = ( format == NULL || !strcmp( format, "auto" ) );
-    mp4sys_importer_t *importer = (mp4sys_importer_t *)lsmash_malloc_zero( sizeof(mp4sys_importer_t) );
+    importer_t *importer = (importer_t *)lsmash_malloc_zero( sizeof(importer_t) );
     if( !importer )
         return NULL;
 
@@ -3609,21 +3609,21 @@ mp4sys_importer_t *mp4sys_importer_open( const char *identifier, const char *for
     }
     else if( (importer->stream = fopen( identifier, "rb" )) == NULL )
     {
-        mp4sys_importer_close( importer );
+        lsmash_importer_close( importer );
         return NULL;
     }
     importer->summaries = lsmash_create_entry_list();
     if( !importer->summaries )
     {
-        mp4sys_importer_close( importer );
+        lsmash_importer_close( importer );
         return NULL;
     }
     /* find importer */
-    const mp4sys_importer_functions *funcs;
+    const importer_functions *funcs;
     if( auto_detect )
     {
         /* just rely on detector. */
-        for( int i = 0; (funcs = mp4sys_importer_tbl[i]) != NULL; i++ )
+        for( int i = 0; (funcs = importer_func_table[i]) != NULL; i++ )
         {
             if( !funcs->detectable )
                 continue;
@@ -3634,7 +3634,7 @@ mp4sys_importer_t *mp4sys_importer_open( const char *identifier, const char *for
     else
     {
         /* needs name matching. */
-        for( int i = 0; (funcs = mp4sys_importer_tbl[i]) != NULL; i++ )
+        for( int i = 0; (funcs = importer_func_table[i]) != NULL; i++ )
         {
             if( strcmp( funcs->name, format ) )
                 continue;
@@ -3645,7 +3645,7 @@ mp4sys_importer_t *mp4sys_importer_open( const char *identifier, const char *for
     }
     if( !funcs )
     {
-        mp4sys_importer_close( importer );
+        lsmash_importer_close( importer );
         return NULL;
     }
     importer->funcs = *funcs;
@@ -3653,7 +3653,7 @@ mp4sys_importer_t *mp4sys_importer_open( const char *identifier, const char *for
 }
 
 /* 0 if success, positive if changed, negative if failed */
-int mp4sys_importer_get_access_unit( mp4sys_importer_t* importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
+int lsmash_importer_get_access_unit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
 {
     if( !importer || !importer->funcs.get_accessunit || !buffered_sample->data || buffered_sample->length == 0 )
         return -1;
@@ -3661,21 +3661,21 @@ int mp4sys_importer_get_access_unit( mp4sys_importer_t* importer, uint32_t track
 }
 
 /* Return 0 if failed, otherwise succeeded. */
-uint32_t mp4sys_importer_get_last_delta( mp4sys_importer_t *importer, uint32_t track_number )
+uint32_t lsmash_importer_get_last_delta( importer_t *importer, uint32_t track_number )
 {
     if( !importer || !importer->funcs.get_last_delta )
         return 0;
     return importer->funcs.get_last_delta( importer, track_number );
 }
 
-uint32_t mp4sys_importer_get_track_count( mp4sys_importer_t *importer )
+uint32_t lsmash_importer_get_track_count( importer_t *importer )
 {
     if( !importer || !importer->summaries )
         return 0;
     return importer->summaries->entry_count;
 }
 
-lsmash_summary_t *mp4sys_duplicate_summary( mp4sys_importer_t *importer, uint32_t track_number )
+lsmash_summary_t *lsmash_duplicate_summary( importer_t *importer, uint32_t track_number )
 {
     if( !importer )
         return NULL;

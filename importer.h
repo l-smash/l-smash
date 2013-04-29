@@ -30,15 +30,15 @@
 
 #ifndef LSMASH_IMPORTER_INTERNAL
 
-typedef void mp4sys_importer_t;
+typedef void importer_t;
 
 /* importing functions */
-mp4sys_importer_t *mp4sys_importer_open( const char *identifier, const char *format );
-void mp4sys_importer_close( mp4sys_importer_t *importer );
-int mp4sys_importer_get_access_unit( mp4sys_importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample );
-uint32_t mp4sys_importer_get_last_delta( mp4sys_importer_t *importer, uint32_t track_number );
-uint32_t mp4sys_importer_get_track_count( mp4sys_importer_t *importer );
-lsmash_summary_t *mp4sys_duplicate_summary( mp4sys_importer_t *importer, uint32_t track_number );
+importer_t *lsmash_importer_open( const char *identifier, const char *format );
+void lsmash_importer_close( importer_t *importer );
+int lsmash_importer_get_access_unit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample );
+uint32_t lsmash_importer_get_last_delta( importer_t *importer, uint32_t track_number );
+uint32_t lsmash_importer_get_track_count( importer_t *importer );
+lsmash_summary_t *lsmash_duplicate_summary( importer_t *importer, uint32_t track_number );
 
 int mp4sys_amr_create_damr( lsmash_audio_summary_t *summary );
 

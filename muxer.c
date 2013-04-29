@@ -112,7 +112,7 @@ typedef struct
 {
     input_option_t     opt;
     char              *file_name;
-    mp4sys_importer_t *importer;
+    importer_t        *importer;
     input_track_t      track[MAX_NUM_OF_TRACKS];
     uint32_t           num_of_tracks;
     uint32_t           num_of_active_tracks;
@@ -172,7 +172,7 @@ static void cleanup_muxer( muxer_t *muxer )
     for( uint32_t i = 0; i < muxer->num_of_inputs; i++ )
     {
         input_t *input = &muxer->input[i];
-        mp4sys_importer_close( input->importer );
+        lsmash_importer_close( input->importer );
         for( uint32_t j = 0; j < input->num_of_tracks; j++ )
             lsmash_cleanup_summary( input->track[j].summary );
     }
@@ -681,10 +681,10 @@ static int open_input_files( muxer_t *muxer )
     {
         input_t *input = &muxer->input[current_input_number - 1];
         /* Initialize importer framework. */
-        input->importer = mp4sys_importer_open( input->file_name, "auto" );
+        input->importer = lsmash_importer_open( input->file_name, "auto" );
         if( !input->importer )
             return ERROR_MSG( "failed to open input file.\n" );
-        input->num_of_tracks = mp4sys_importer_get_track_count( input->importer );
+        input->num_of_tracks = lsmash_importer_get_track_count( input->importer );
         if( input->num_of_tracks == 0 )
             return ERROR_MSG( "there is no valid track in input file.\n" );
         if( opt->default_language )
@@ -699,7 +699,7 @@ static int open_input_files( muxer_t *muxer )
              input->current_track_number ++ )
         {
             input_track_t *in_track = &input->track[input->current_track_number - 1];
-            in_track->summary = mp4sys_duplicate_summary( input->importer, input->current_track_number );
+            in_track->summary = lsmash_duplicate_summary( input->importer, input->current_track_number );
             if( !in_track->summary )
                 return ERROR_MSG( "failed to get input summary.\n" );
             /* Check codec type. */
@@ -990,7 +990,7 @@ static int do_mux( muxer_t *muxer )
                 if( !sample )
                     return ERROR_MSG( "failed to alloc memory for buffer.\n" );
                 /* mp4sys_importer_get_access_unit() returns 1 if there're any changes in stream's properties. */
-                int ret = mp4sys_importer_get_access_unit( input->importer, input->current_track_number, sample );
+                int ret = lsmash_importer_get_access_unit( input->importer, input->current_track_number, sample );
                 if( ret == -1 || (ret == 1 && lsmash_check_codec_type_identical( out_track->summary->sample_type, ISOM_CODEC_TYPE_AVC1_VIDEO )) )
                 {
                     /* If you want to support them, you have to retrieve summary again, and make some operation accordingly. */
@@ -1003,7 +1003,7 @@ static int do_mux( muxer_t *muxer )
                 {
                     input_track_t *in_track = &input->track[input->current_track_number - 1];
                     lsmash_cleanup_summary( in_track->summary );
-                    out_track->summary = in_track->summary = mp4sys_duplicate_summary( input->importer, input->current_track_number );
+                    out_track->summary = in_track->summary = lsmash_duplicate_summary( input->importer, input->current_track_number );
                     out_track->sample_entry = lsmash_add_sample_entry( output->root, out_track->track_ID, out_track->summary );
                     if( !out_track->sample_entry )
                     {
@@ -1017,7 +1017,7 @@ static int do_mux( muxer_t *muxer )
                     lsmash_delete_sample( sample );
                     sample = NULL;
                     out_track->active = 0;
-                    out_track->last_delta = mp4sys_importer_get_last_delta( input->importer, input->current_track_number );
+                    out_track->last_delta = lsmash_importer_get_last_delta( input->importer, input->current_track_number );
                     if( out_track->last_delta == 0 )
                         ERROR_MSG( "failed to get the last sample delta.\n" );
                     out_track->last_delta *= out_track->timebase;
