@@ -150,6 +150,50 @@ void *lsmash_withdraw_buffer( lsmash_multiple_buffers_t *multiple_buffer, uint32
 lsmash_multiple_buffers_t *lsmash_resize_multiple_buffers( lsmash_multiple_buffers_t *multiple_buffer, uint32_t buffer_size );
 void lsmash_destroy_multiple_buffers( lsmash_multiple_buffers_t *multiple_buffer );
 
+typedef enum
+{
+    LSMASH_STREAM_BUFFERS_TYPE_NONE = 0,
+    LSMASH_STREAM_BUFFERS_TYPE_FILE,            /* -> FILE */
+    LSMASH_STREAM_BUFFERS_TYPE_DATA_STRING,     /* -> lsmash_data_string_handler_t */
+} lsmash_stream_buffers_type;
+
+typedef struct lsmash_stream_buffers_tag lsmash_stream_buffers_t;
+struct lsmash_stream_buffers_tag
+{
+    lsmash_stream_buffers_type type;
+    void                      *stream;
+    lsmash_multiple_buffers_t *bank;
+    uint8_t                   *start;
+    uint8_t                   *end;
+    uint8_t                   *pos;
+    size_t (*update)( lsmash_stream_buffers_t *, uint32_t );
+    int                        no_more_read;
+};
+
+typedef struct
+{
+    uint8_t *data;
+    uint32_t data_length;
+    uint32_t remainder_length;
+    uint32_t consumed_length;   /* overall consumed length */
+} lsmash_data_string_handler_t;
+
+void lsmash_stream_buffers_setup( lsmash_stream_buffers_t *sb, lsmash_stream_buffers_type type, void *stream );
+void lsmash_stream_buffers_cleanup( lsmash_stream_buffers_t *sb );  /* 'type' and 'stream' are not touched. */
+size_t lsmash_stream_buffers_update( lsmash_stream_buffers_t *sb, uint32_t anticipation_bytes );
+int lsmash_stream_buffers_is_eos( lsmash_stream_buffers_t *sb );
+uint32_t lsmash_stream_buffers_get_buffer_size( lsmash_stream_buffers_t *sb );
+size_t lsmash_stream_buffers_get_valid_size( lsmash_stream_buffers_t *sb );
+uint8_t lsmash_stream_buffers_get_byte( lsmash_stream_buffers_t *sb );
+void lsmash_stream_buffers_seek( lsmash_stream_buffers_t *sb, intptr_t offset, int whence );
+void lsmash_stream_buffers_set_pos( lsmash_stream_buffers_t *sb, uint8_t *pos );
+uint8_t *lsmash_stream_buffers_get_pos( lsmash_stream_buffers_t *sb );
+size_t lsmash_stream_buffers_get_offset( lsmash_stream_buffers_t *sb );
+size_t lsmash_stream_buffers_get_remainder( lsmash_stream_buffers_t *sb );
+size_t lsmash_stream_buffers_read( lsmash_stream_buffers_t *sb, size_t read_size );
+void lsmash_stream_buffers_memcpy( uint8_t *data, lsmash_stream_buffers_t *sb, size_t size );
+void lsmash_data_string_copy( lsmash_stream_buffers_t *sb, lsmash_data_string_handler_t *dsh, size_t size, uint32_t pos );
+
 /*---- others ----*/
 typedef enum
 {

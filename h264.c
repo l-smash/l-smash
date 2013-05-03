@@ -39,13 +39,6 @@
 #define IF_EXCEED_INT32( x ) if( (x) < INT32_MIN || (x) > INT32_MAX )
 #define H264_POC_DEBUG_PRINT 0
 
-typedef struct
-{
-    uint8_t *data;
-    uint32_t remainder_length;
-    uint32_t overall_wasted_length;
-} h264_data_stream_handler_t;
-
 typedef enum
 {
     H264_SLICE_TYPE_P    = 0,
@@ -82,37 +75,44 @@ void h264_cleanup_parser( h264_info_t *info )
     lsmash_remove_entries( info->pps_list,   NULL );
     lsmash_remove_entries( info->slice_list, NULL );
     lsmash_destroy_h264_parameter_sets( &info->avcC_param );
-    lsmash_destroy_multiple_buffers( info->buffer.bank );
+    lsmash_stream_buffers_cleanup( info->buffer.sb );
     lsmash_bits_adhoc_cleanup( info->bits );
-    info->buffer.bank = NULL;
     info->bits = NULL;
 }
 
-int h264_setup_parser( h264_info_t *info, int parse_only, uint32_t (*update)( h264_info_t *, void *, uint32_t ) )
+int h264_setup_parser
+(
+    h264_info_t               *info,
+    lsmash_stream_buffers_t   *sb,
+    int                        parse_only,
+    lsmash_stream_buffers_type type,
+    void                      *stream
+)
 {
+    assert( sb );
     if( !info )
         return -1;
     memset( info, 0, sizeof(h264_info_t) );
     info->avcC_param.lengthSizeMinusOne = H264_DEFAULT_NALU_LENGTH_SIZE - 1;
-    h264_stream_buffer_t *buffer = &info->buffer;
-    buffer->bank = lsmash_create_multiple_buffers( parse_only ? 2 : 4, H264_DEFAULT_BUFFER_SIZE );
-    if( !buffer->bank )
+    h264_stream_buffer_t *hb = &info->buffer;
+    hb->sb = sb;
+    lsmash_stream_buffers_setup( sb, type, stream );
+    sb->bank = lsmash_create_multiple_buffers( parse_only ? 2 : 4, H264_DEFAULT_BUFFER_SIZE );
+    if( !sb->bank )
         return -1;
-    buffer->start  = lsmash_withdraw_buffer( buffer->bank, 1 );
-    buffer->rbsp   = lsmash_withdraw_buffer( buffer->bank, 2 );
-    buffer->pos    = buffer->start;
-    buffer->end    = buffer->start;
-    buffer->update = update;
+    sb->start = lsmash_withdraw_buffer( sb->bank, 1 );
+    hb->rbsp  = lsmash_withdraw_buffer( sb->bank, 2 );
+    sb->pos   = sb->start;
+    sb->end   = sb->start;
     if( !parse_only )
     {
-        info->picture.au            = lsmash_withdraw_buffer( buffer->bank, 3 );
-        info->picture.incomplete_au = lsmash_withdraw_buffer( buffer->bank, 4 );
+        info->picture.au            = lsmash_withdraw_buffer( sb->bank, 3 );
+        info->picture.incomplete_au = lsmash_withdraw_buffer( sb->bank, 4 );
     }
     info->bits = lsmash_bits_adhoc_create();
     if( !info->bits )
     {
-        lsmash_destroy_multiple_buffers( info->buffer.bank );
-        info->buffer.bank = NULL;
+        lsmash_stream_buffers_cleanup( sb );
         return -1;
     }
     lsmash_init_entry_list( info->sps_list );
@@ -340,14 +340,13 @@ int h264_calculate_poc( h264_info_t *info, h264_picture_info_t *picture, h264_pi
     return 0;
 }
 
-int h264_check_nalu_header( h264_nalu_header_t *nalu_header, uint8_t **p_buf_pos, int use_long_start_code )
+int h264_check_nalu_header( h264_nalu_header_t *nalu_header, lsmash_stream_buffers_t *sb, int use_long_start_code )
 {
-    uint8_t *buf_pos = *p_buf_pos;
-    uint8_t forbidden_zero_bit =                              (*buf_pos >> 7) & 0x01;
-    uint8_t nal_ref_idc        = nalu_header->nal_ref_idc   = (*buf_pos >> 5) & 0x03;
-    uint8_t nal_unit_type      = nalu_header->nal_unit_type =  *buf_pos       & 0x1f;
+    uint8_t forbidden_zero_bit =                              (*sb->pos >> 7) & 0x01;
+    uint8_t nal_ref_idc        = nalu_header->nal_ref_idc   = (*sb->pos >> 5) & 0x03;
+    uint8_t nal_unit_type      = nalu_header->nal_unit_type =  *sb->pos       & 0x1f;
     nalu_header->length = 1;
-    *p_buf_pos = buf_pos + nalu_header->length;
+    sb->pos += nalu_header->length;
     if( nal_unit_type == 14 || nal_unit_type == 20 )
         return -1;      /* We don't support yet. */
     IF_INVALID_VALUE( forbidden_zero_bit )
@@ -1327,51 +1326,25 @@ int h264_find_au_delimit_by_nalu_type( uint8_t nalu_type, uint8_t prev_nalu_type
         && ((prev_nalu_type >= 1 && prev_nalu_type <= 5) || prev_nalu_type == 12 || prev_nalu_type == 19);
 }
 
-int h264_supplement_buffer( h264_stream_buffer_t *buffer, h264_picture_info_t *picture, uint32_t size )
+int h264_supplement_buffer( h264_stream_buffer_t *hb, h264_picture_info_t *picture, uint32_t size )
 {
-    uint32_t buffer_pos_offset   = buffer->pos - buffer->start;
-    uint32_t buffer_valid_length = buffer->end - buffer->start;
-    lsmash_multiple_buffers_t *bank = lsmash_resize_multiple_buffers( buffer->bank, size );
+    lsmash_stream_buffers_t *sb = hb->sb;
+    uint32_t buffer_pos_offset   = sb->pos - sb->start;
+    uint32_t buffer_valid_length = sb->end - sb->start;
+    lsmash_multiple_buffers_t *bank = lsmash_resize_multiple_buffers( sb->bank, size );
     if( !bank )
         return -1;
-    buffer->bank  = bank;
-    buffer->start = lsmash_withdraw_buffer( bank, 1 );
-    buffer->rbsp  = lsmash_withdraw_buffer( bank, 2 );
-    buffer->pos = buffer->start + buffer_pos_offset;
-    buffer->end = buffer->start + buffer_valid_length;
+    sb->bank  = bank;
+    sb->start = lsmash_withdraw_buffer( bank, 1 );
+    hb->rbsp  = lsmash_withdraw_buffer( bank, 2 );
+    sb->pos = sb->start + buffer_pos_offset;
+    sb->end = sb->start + buffer_valid_length;
     if( picture && bank->number_of_buffers == 4 )
     {
         picture->au            = lsmash_withdraw_buffer( bank, 3 );
         picture->incomplete_au = lsmash_withdraw_buffer( bank, 4 );
     }
     return 0;
-}
-
-uint32_t h264_update_buffer_from_access_unit( h264_info_t *info, void *src, uint32_t anticipation_bytes )
-{
-    h264_stream_buffer_t *buffer = &info->buffer;
-    assert( anticipation_bytes < buffer->bank->buffer_size );
-    uint32_t remainder_bytes = buffer->end - buffer->pos;
-    if( info->no_more_read )
-        return remainder_bytes;
-    if( remainder_bytes <= anticipation_bytes )
-    {
-        /* Move unused data to the head of buffer. */
-        for( uint32_t i = 0; i < remainder_bytes; i++ )
-            *(buffer->start + i) = *(buffer->pos + i);
-        /* Read and store the next data into the buffer.
-         * Move the position of buffer on the head. */
-        h264_data_stream_handler_t *stream = (h264_data_stream_handler_t *)src;
-        uint32_t wasted_data_length = LSMASH_MIN( stream->remainder_length, buffer->bank->buffer_size - remainder_bytes );
-        memcpy( buffer->start + remainder_bytes, stream->data + stream->overall_wasted_length, wasted_data_length );
-        stream->remainder_length      -= wasted_data_length;
-        stream->overall_wasted_length += wasted_data_length;
-        remainder_bytes               += wasted_data_length;
-        buffer->pos = buffer->start;
-        buffer->end = buffer->start + remainder_bytes;
-        info->no_more_read = (stream->remainder_length == 0);
-    }
-    return remainder_bytes;
 }
 
 static void h264_bs_put_parameter_sets( lsmash_bs_t *bs, lsmash_entry_list_t *ps_list, uint32_t max_ps_count )
@@ -1898,13 +1871,16 @@ int lsmash_setup_h264_specific_parameters_from_access_unit( lsmash_h264_specific
         return -1;
     h264_info_t  handler = { { 0 } };
     h264_info_t *info    = &handler;
-    if( h264_setup_parser( info, 1, h264_update_buffer_from_access_unit ) )
-        return h264_parse_failed( info );
-    h264_stream_buffer_t *buffer = &info->buffer;
-    h264_slice_info_t    *slice  = &info->slice;
-    h264_data_stream_handler_t stream = { 0 };
+    lsmash_stream_buffers_t _sb = { LSMASH_STREAM_BUFFERS_TYPE_NONE };
+    lsmash_stream_buffers_t *sb = &_sb;
+    lsmash_data_string_handler_t stream = { 0 };
     stream.data             = data;
+    stream.data_length      = data_length;
     stream.remainder_length = data_length;
+    if( h264_setup_parser( info, sb, 1, LSMASH_STREAM_BUFFERS_TYPE_DATA_STRING, &stream ) )
+        return h264_parse_failed( info );
+    h264_stream_buffer_t *hb    = &info->buffer;
+    h264_slice_info_t    *slice = &info->slice;
     h264_nalu_header_t nalu_header = { 0 };
     uint64_t consecutive_zero_byte_count = 0;
     uint64_t ebsp_length = 0;
@@ -1912,12 +1888,12 @@ int lsmash_setup_h264_specific_parameters_from_access_unit( lsmash_h264_specific
     int      complete_au = 0;
     while( 1 )
     {
-        buffer->update( info, &stream, 2 );
-        no_more_buf = buffer->pos >= buffer->end;
-        int no_more = info->no_more_read && no_more_buf;
-        if( !h264_check_next_short_start_code( buffer->pos, buffer->end ) && !no_more )
+        lsmash_stream_buffers_update( sb, 2 );
+        no_more_buf = (lsmash_stream_buffers_get_remainder( sb ) == 0);
+        int no_more = lsmash_stream_buffers_is_eos( sb ) && no_more_buf;
+        if( !h264_check_next_short_start_code( sb->pos, sb->end ) && !no_more )
         {
-            if( *(buffer->pos ++) )
+            if( lsmash_stream_buffers_get_byte( sb ) )
                 consecutive_zero_byte_count = 0;
             else
                 ++consecutive_zero_byte_count;
@@ -1928,8 +1904,9 @@ int lsmash_setup_h264_specific_parameters_from_access_unit( lsmash_h264_specific
             /* For the last NALU. This NALU already has been parsed. */
             return h264_parse_succeeded( info, param );
         uint64_t next_nalu_head_pos = info->ebsp_head_pos + ebsp_length + !no_more * H264_SHORT_START_CODE_LENGTH;
-        uint8_t *next_short_start_code_pos = buffer->pos;       /* Memorize position of short start code of the next NALU in buffer.
-                                                                 * This is used when backward reading of stream doesn't occur. */
+        /* Memorize position of short start code of the next NALU in buffer.
+         * This is used when backward reading of stream doesn't occur. */
+        uint8_t *next_short_start_code_pos = lsmash_stream_buffers_get_pos( sb );
         uint8_t nalu_type = nalu_header.nal_unit_type;
         int read_back = 0;
         if( nalu_type == 12 )
@@ -1946,28 +1923,27 @@ int lsmash_setup_h264_specific_parameters_from_access_unit( lsmash_h264_specific
              * We don't support SVC and MVC elemental stream defined in 14496-15 yet. */
             ebsp_length -= consecutive_zero_byte_count;     /* Any EBSP doesn't have zero bytes at the end. */
             uint64_t nalu_length = nalu_header.length + ebsp_length;
-            if( buffer->bank->buffer_size < (H264_DEFAULT_NALU_LENGTH_SIZE + nalu_length) )
+            if( lsmash_stream_buffers_get_buffer_size( sb ) < (H264_DEFAULT_NALU_LENGTH_SIZE + nalu_length) )
             {
-                if( h264_supplement_buffer( buffer, NULL, 2 * (H264_DEFAULT_NALU_LENGTH_SIZE + nalu_length) ) )
+                if( h264_supplement_buffer( hb, NULL, 2 * (H264_DEFAULT_NALU_LENGTH_SIZE + nalu_length) ) )
                     return h264_parse_failed( info );
-                next_short_start_code_pos = buffer->pos;
+                next_short_start_code_pos = lsmash_stream_buffers_get_pos( sb );
             }
             /* Move to the first byte of the current NALU. */
-            read_back = (buffer->pos - buffer->start) < (nalu_length + consecutive_zero_byte_count);
+            read_back = (lsmash_stream_buffers_get_offset( sb ) < (nalu_length + consecutive_zero_byte_count));
             if( read_back )
             {
-                memcpy( buffer->start, stream.data + info->ebsp_head_pos - nalu_header.length, nalu_length );
-                buffer->pos = buffer->start;
-                buffer->end = buffer->start + nalu_length;
+                lsmash_stream_buffers_seek( sb, 0, SEEK_SET );
+                lsmash_data_string_copy( sb, &stream, nalu_length, info->ebsp_head_pos - nalu_header.length );
             }
             else
-                buffer->pos -= nalu_length + consecutive_zero_byte_count;
+                lsmash_stream_buffers_seek( sb, -(nalu_length + consecutive_zero_byte_count), SEEK_CUR );
             if( nalu_type >= 1 && nalu_type <= 5 )
             {
                 /* VCL NALU (slice) */
                 h264_slice_info_t prev_slice = *slice;
-                if( h264_parse_slice( info, &nalu_header, buffer->rbsp,
-                                      buffer->pos + nalu_header.length, ebsp_length ) )
+                if( h264_parse_slice( info, &nalu_header, hb->rbsp,
+                                      lsmash_stream_buffers_get_pos( sb ) + nalu_header.length, ebsp_length ) )
                     return h264_parse_failed( info );
                 if( prev_slice.present )
                 {
@@ -1992,15 +1968,18 @@ int lsmash_setup_h264_specific_parameters_from_access_unit( lsmash_h264_specific
                 switch( nalu_type )
                 {
                     case 7 :    /* Sequence Parameter Set */
-                        if( h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_SPS, buffer->pos, nalu_length ) )
+                        if( h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_SPS,
+                                                              lsmash_stream_buffers_get_pos( sb ), nalu_length ) )
                             return h264_parse_failed( info );
                         break;
                     case 8 :    /* Picture Parameter Set */
-                        if( h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_PPS, buffer->pos, nalu_length ) )
+                        if( h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_PPS,
+                                                              lsmash_stream_buffers_get_pos( sb ), nalu_length ) )
                             return h264_parse_failed( info );
                         break;
                     case 13 :   /* Sequence Parameter Set Extension */
-                        if( h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_SPSEXT, buffer->pos, nalu_length ) )
+                        if( h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_SPSEXT,
+                                                              lsmash_stream_buffers_get_pos( sb ), nalu_length ) )
                             return h264_parse_failed( info );
                         break;
                     default :
@@ -2011,24 +1990,21 @@ int lsmash_setup_h264_specific_parameters_from_access_unit( lsmash_h264_specific
         /* Move to the first byte of the next NALU. */
         if( read_back )
         {
-            uint64_t wasted_data_length = LSMASH_MIN( stream.remainder_length, buffer->bank->buffer_size );
-            memcpy( buffer->start, stream.data + next_nalu_head_pos, wasted_data_length );
-            stream.overall_wasted_length = next_nalu_head_pos + wasted_data_length;
-            stream.remainder_length      = data_length - stream.overall_wasted_length;
-            buffer->pos = buffer->start;
-            buffer->end = buffer->start + wasted_data_length;
+            uint64_t consumed_data_length = LSMASH_MIN( stream.remainder_length, lsmash_stream_buffers_get_buffer_size( sb ) );
+            lsmash_stream_buffers_seek( sb, 0, SEEK_SET );
+            lsmash_data_string_copy( sb, &stream, consumed_data_length, next_nalu_head_pos );
         }
         else
-            buffer->pos = next_short_start_code_pos + H264_SHORT_START_CODE_LENGTH;
+            lsmash_stream_buffers_set_pos( sb, next_short_start_code_pos + H264_SHORT_START_CODE_LENGTH );
         info->prev_nalu_type = nalu_type;
-        buffer->update( info, &stream, 0 );
-        no_more_buf = buffer->pos >= buffer->end;
+        lsmash_stream_buffers_update( sb, 0 );
+        no_more_buf = (lsmash_stream_buffers_get_remainder( sb ) == 0);
         ebsp_length = 0;
-        no_more = info->no_more_read && no_more_buf;
+        no_more = lsmash_stream_buffers_is_eos( sb ) && no_more_buf;
         if( !no_more && !complete_au )
         {
             /* Check the next NALU header. */
-            if( h264_check_nalu_header( &nalu_header, &buffer->pos, !!consecutive_zero_byte_count ) )
+            if( h264_check_nalu_header( &nalu_header, sb, !!consecutive_zero_byte_count ) )
                 return h264_parse_failed( info );
             info->ebsp_head_pos = next_nalu_head_pos + nalu_header.length;
         }

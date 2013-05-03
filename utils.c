@@ -788,6 +788,176 @@ void lsmash_destroy_multiple_buffers( lsmash_multiple_buffers_t *multiple_buffer
         free( multiple_buffer->buffers );
     free( multiple_buffer );
 }
+
+void lsmash_stream_buffers_cleanup( lsmash_stream_buffers_t *sb )
+{
+    if( !sb )
+        return;
+    lsmash_destroy_multiple_buffers( sb->bank );
+    sb->bank         = NULL;
+    sb->start        = NULL;
+    sb->end          = NULL;
+    sb->pos          = NULL;
+    sb->update       = NULL;
+    sb->no_more_read = 0;
+}
+
+size_t lsmash_stream_buffers_update( lsmash_stream_buffers_t *sb, uint32_t anticipation_bytes )
+{
+    assert( sb && sb->update );
+    return sb->update( sb, anticipation_bytes );
+}
+
+int lsmash_stream_buffers_is_eos( lsmash_stream_buffers_t *sb )
+{
+    assert( sb );
+    return sb->no_more_read;
+}
+
+uint32_t lsmash_stream_buffers_get_buffer_size( lsmash_stream_buffers_t *sb )
+{
+    assert( sb );
+    return sb->bank ? sb->bank->buffer_size : 0;
+}
+
+size_t lsmash_stream_buffers_get_valid_size( lsmash_stream_buffers_t *sb )
+{
+    assert( sb && sb->start && sb->end );
+    return (uintptr_t)sb->end - (uintptr_t)sb->start;
+}
+
+uint8_t lsmash_stream_buffers_get_byte( lsmash_stream_buffers_t *sb )
+{
+    assert( sb && sb->pos );
+    return *(sb->pos ++);
+}
+
+void lsmash_stream_buffers_seek( lsmash_stream_buffers_t *sb, intptr_t offset, int whence )
+{
+    assert( sb && sb->pos );
+    if( whence == SEEK_SET )
+    {
+        assert( sb->start && offset >= 0 );
+        sb->pos = sb->start + offset;
+    }
+    else if( whence == SEEK_CUR )
+        sb->pos += offset;
+    else if( whence == SEEK_END )
+    {
+        assert( sb->end && offset <= 0 );
+        sb->pos = sb->end + offset;
+    }
+}
+
+void lsmash_stream_buffers_set_pos( lsmash_stream_buffers_t *sb, uint8_t *pos )
+{
+    assert( sb && sb->pos );
+    sb->pos = pos;
+}
+
+uint8_t *lsmash_stream_buffers_get_pos( lsmash_stream_buffers_t *sb )
+{
+    assert( sb && sb->pos );
+    return sb->pos;
+}
+
+size_t lsmash_stream_buffers_get_offset( lsmash_stream_buffers_t *sb )
+{
+    assert( sb && sb->pos && sb->start );
+    return (uintptr_t)sb->pos - (uintptr_t)sb->start;
+}
+
+size_t lsmash_stream_buffers_get_remainder( lsmash_stream_buffers_t *sb )
+{
+    assert( sb && sb->pos && sb->end );
+    return sb->end > sb->pos ? (uintptr_t)sb->end - (uintptr_t)sb->pos : 0;
+}
+
+size_t lsmash_stream_buffers_read( lsmash_stream_buffers_t *sb, size_t read_size )
+{
+    assert( sb && sb->pos && sb->bank && sb->stream && sb->type == LSMASH_STREAM_BUFFERS_TYPE_FILE );
+    if( read_size == 0 )
+        read_size = sb->bank->buffer_size;
+    size_t size = fread( sb->pos, 1, read_size, sb->stream );
+    sb->end = sb->pos + size;
+    sb->no_more_read = size == 0 ? feof( sb->stream ) : 0;
+    return size;
+}
+
+void lsmash_data_string_copy( lsmash_stream_buffers_t *sb, lsmash_data_string_handler_t *dsh, size_t size, uint32_t pos )
+{
+    assert( sb && sb->pos && dsh && dsh->data );
+    if( pos + size > dsh->data_length )
+        size = dsh->data_length - pos;
+    if( size > 0 )
+        memcpy( sb->pos, dsh->data + pos, size );
+    dsh->consumed_length  = pos + size;
+    dsh->remainder_length = dsh->data_length - dsh->consumed_length;
+    sb->end = sb->pos + size;
+    sb->no_more_read = (dsh->remainder_length == 0);
+}
+
+void lsmash_stream_buffers_memcpy( uint8_t *data, lsmash_stream_buffers_t *sb, size_t size )
+{
+    assert( sb && sb->pos && sb->end );
+    if( sb->pos + size > sb->end )
+        size = sb->end - sb->pos;
+    if( size == 0 )
+        return;
+    memcpy( data, sb->pos, size );
+    sb->pos += size;
+}
+
+static size_t stream_buffers_update_file( lsmash_stream_buffers_t *sb, uint32_t anticipation_bytes )
+{
+    assert( anticipation_bytes < sb->bank->buffer_size );
+    uint32_t remainder_bytes = sb->end - sb->pos;
+    if( sb->no_more_read || remainder_bytes > anticipation_bytes )
+        return remainder_bytes;
+    if( sb->start != sb->pos )
+        /* Move unused data to the head of buffer. */
+        for( uint32_t i = 0; i < remainder_bytes; i++ )
+            *(sb->start + i) = *(sb->pos + i);
+    /* Read and store the next data into the buffer.
+     * Move the position of buffer on the head. */
+    lsmash_stream_buffers_seek( sb, remainder_bytes, SEEK_SET );
+    size_t read_size = lsmash_stream_buffers_read( sb, sb->bank->buffer_size - remainder_bytes );
+    lsmash_stream_buffers_seek( sb, 0, SEEK_SET );
+    sb->no_more_read = read_size == 0 ? feof( sb->stream ) : 0;
+    return lsmash_stream_buffers_get_remainder( sb );
+}
+
+static size_t stream_buffers_update_data_string( lsmash_stream_buffers_t *sb, uint32_t anticipation_bytes )
+{
+    assert( anticipation_bytes < sb->bank->buffer_size );
+    uint32_t remainder_bytes = sb->end - sb->pos;
+    if( sb->no_more_read || remainder_bytes > anticipation_bytes )
+        return remainder_bytes;
+    if( sb->start != sb->pos )
+        /* Move unused data to the head of buffer. */
+        for( uint32_t i = 0; i < remainder_bytes; i++ )
+            *(sb->start + i) = *(sb->pos + i);
+    /* Read and store the next data into the buffer.
+     * Move the position of buffer on the head. */
+    lsmash_data_string_handler_t *dsh = (lsmash_data_string_handler_t *)sb->stream;
+    uint32_t consumed_data_length = LSMASH_MIN( dsh->remainder_length, sb->bank->buffer_size - remainder_bytes );
+    lsmash_stream_buffers_seek( sb, remainder_bytes, SEEK_SET );
+    lsmash_data_string_copy( sb, dsh, consumed_data_length, dsh->consumed_length );
+    lsmash_stream_buffers_seek( sb, 0, SEEK_SET );
+    sb->no_more_read = (dsh->remainder_length == 0);
+    return lsmash_stream_buffers_get_remainder( sb );
+}
+
+void lsmash_stream_buffers_setup( lsmash_stream_buffers_t *sb, lsmash_stream_buffers_type type, void *stream )
+{
+    assert( sb );
+    sb->type   = type;
+    sb->stream = stream;
+    if( type == LSMASH_STREAM_BUFFERS_TYPE_FILE )
+        sb->update = stream_buffers_update_file;
+    else if( type == LSMASH_STREAM_BUFFERS_TYPE_DATA_STRING )
+        sb->update = stream_buffers_update_data_string;
+}
 /*---- ----*/
 
 /*---- others ----*/

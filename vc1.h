@@ -87,12 +87,8 @@ typedef struct vc1_info_tag vc1_info_t;
 
 typedef struct
 {
-    lsmash_multiple_buffers_t *bank;
-    uint8_t *rbdu;
-    uint8_t *start;
-    uint8_t *end;
-    uint8_t *pos;
-    uint32_t (*update)( vc1_info_t *, void *, uint32_t );
+    lsmash_stream_buffers_t *sb;
+    uint8_t                 *rbdu;
 } vc1_stream_buffer_t;
 
 struct vc1_info_tag
@@ -102,16 +98,23 @@ struct vc1_info_tag
     vc1_entry_point_t     entry_point;
     vc1_picture_info_t    picture;
     vc1_access_unit_t     access_unit;
-    uint8_t  bdu_type;
-    uint8_t  prev_bdu_type;
-    uint8_t  no_more_read;
-    uint64_t ebdu_head_pos;
-    lsmash_bits_t *bits;
-    vc1_stream_buffer_t buffer;
+    uint8_t               bdu_type;
+    uint8_t               prev_bdu_type;
+    uint64_t              ebdu_head_pos;
+    lsmash_bits_t        *bits;
+    vc1_stream_buffer_t   buffer;
 };
 
+int vc1_setup_parser
+(
+    vc1_info_t                *info,
+    lsmash_stream_buffers_t   *sb,
+    int                        parse_only,
+    lsmash_stream_buffers_type type,
+    void                      *stream
+);
+
 void vc1_cleanup_parser( vc1_info_t *info );
-int vc1_setup_parser( vc1_info_t *info, int parse_only, uint32_t (*update)( vc1_info_t *, void *, uint32_t ) );
 int vc1_parse_sequence_header( vc1_info_t *info, uint8_t *ebdu, uint64_t ebdu_size, int probe );
 int vc1_parse_entry_point_header( vc1_info_t *info, uint8_t *ebdu, uint64_t ebdu_size, int probe );
 int vc1_parse_advanced_picture( lsmash_bits_t *bits,
