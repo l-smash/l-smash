@@ -2504,7 +2504,8 @@ static int isom_read_ilst( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_metaitem( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_ILST ) )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_ILST )
+     && !lsmash_check_box_type_identical( parent->type,   QT_BOX_TYPE_ILST ) )
         return isom_read_unknown_box( root, box, parent, level );
     lsmash_entry_list_t *list = ((isom_ilst_t *)parent)->item_list;
     if( !list )
