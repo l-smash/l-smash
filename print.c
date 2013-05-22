@@ -2320,7 +2320,8 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
         {
             if( lsmash_check_box_type_identical( parent->parent->type, ISOM_BOX_TYPE_STSD ) )
                 return isom_print_sample_description_extesion;
-            else if( lsmash_check_box_type_identical( parent->parent->type, ISOM_BOX_TYPE_ILST ) )
+            else if( lsmash_check_box_type_identical( parent->parent->type, ISOM_BOX_TYPE_ILST )
+                  || lsmash_check_box_type_identical( parent->parent->type,   QT_BOX_TYPE_ILST ) )
             {
                 if( parent->type.fourcc == LSMASH_4CC( '-', '-', '-', '-' ) )
                 {
@@ -2333,7 +2334,8 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
                     return isom_print_data;
             }
         }
-        if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_ILST ) )
+        if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_ILST )
+         || lsmash_check_box_type_identical( parent->type,   QT_BOX_TYPE_ILST ) )
             return isom_print_metaitem;
     }
     static struct print_box_table_tag
