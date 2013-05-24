@@ -304,7 +304,11 @@ static int get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, l
         if( !metadata->value.binary.data )
             goto fail;
         memcpy( metadata->value.binary.data, shadow.value.binary.data, shadow.value.binary.size );
+        metadata->value.binary.size    = shadow.value.binary.size;
+        metadata->value.binary.subtype = shadow.value.binary.subtype;
     }
+    else
+        metadata->value = shadow.value;
     return 0;
 fail:
     if( metadata->meaning )
