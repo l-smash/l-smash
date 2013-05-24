@@ -1733,12 +1733,12 @@ static int isom_print_data( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
             char    *name;
         } well_known_type_table[] =
             {
-                { 0,  "reserved" },
-                { 1,  "UTF-8" },
-                { 2,  "UTF-16 BE" },
-                { 3,  "S/JIS" },
-                { 4,  "UTF-8 sort" },
-                { 5,  "UTF-16 sort" },
+                { 0,   "reserved" },
+                { 1,   "UTF-8" },
+                { 2,   "UTF-16 BE" },
+                { 3,   "S/JIS" },
+                { 4,   "UTF-8 sort" },
+                { 5,   "UTF-16 sort" },
                 { 13,  "JPEG in a JFIF wrapper" },
                 { 14,  "PNG in a PNG wrapper" },
                 { 21,  "BE Signed Integer" },
@@ -1761,6 +1761,11 @@ static int isom_print_data( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
         lsmash_ifprintf( fp, indent, "type_set_indicator = %"PRIu8"\n", type_set_indicator );
         lsmash_ifprintf( fp, indent, "well_known_type = %"PRIu32" (%s)\n", well_known_type, well_known_type_name );
         lsmash_ifprintf( fp, indent, "locale_indicator = %"PRIu32"\n", data->the_locale );
+        if( data->value_length == 0 )
+        {
+            lsmash_ifprintf( fp, indent, "value = (null)\n" );
+            return 0;
+        }
         if( well_known_type == 1 )
         {
             /* UTF-8 without any count or null terminator */
@@ -1771,19 +1776,10 @@ static int isom_print_data( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
         }
         else if( well_known_type == 13 || well_known_type == 14 || well_known_type == 27 )
             lsmash_ifprintf( fp, indent, "value = (binary data)\n" );
-        else if( well_known_type == 21 && data->value_length && data->value_length <= 4 )
-        {
+        else if( well_known_type == 21 && data->value_length <= 4 )
             /* a big-endian signed integer in 1,2,3 or 4 bytes */
-            uint32_t integer   = data->value[0];
-            uint32_t max_value = 0xff;
-            for( uint32_t i = 1; i < data->value_length; i++ )
-            {
-                integer   = (integer   << 8) | data->value[i];
-                max_value = (max_value << 8) | 0xff;
-            }
-            lsmash_ifprintf( fp, indent, "value = %"PRId32"\n", (int32_t)(integer | (integer > (max_value >> 1) ? ~max_value : 0)) );
-        }
-        else if( well_known_type == 22 && data->value_length && data->value_length <= 4 )
+            goto show_in_signed_integer;
+        else if( well_known_type == 22 && data->value_length <= 4 )
         {
             /* a big-endian unsigned integer in 1,2,3 or 4 bytes */
             uint32_t integer = data->value[0];
@@ -1807,45 +1803,138 @@ static int isom_print_data( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
             lsmash_ifprintf( fp, indent, "value = %lf\n", lsmash_int2float64( float64 ) );
         }
         else
-        {
-            lsmash_ifprintf( fp, indent, "value = " );
-            if( data->value_length )
-            {
-                fprintf( fp, "0x" );
-                for( uint32_t i = 0; i < data->value_length; i++ )
-                    fprintf( fp, "%02"PRIx8, data->value[i] );
-            }
-            fprintf( fp, "\n" );
-        }
+            goto show_in_binary;
     }
     else
     {
+        char *basic_data_type_name;
+        static const struct
+        {
+            uint32_t type;
+            char    *name;
+        } basic_data_type_table[] =
+            {
+                { 0,   "Implicit" },
+                { 1,   "UTF-8" },
+                { 2,   "UTF-16 BE" },
+                { 3,   "S/JIS" },
+                { 6,   "HTML" },
+                { 7,   "XML" },
+                { 8,   "UUID" },
+                { 9,   "ISRC" },
+                { 10,  "MI3P" },
+                { 12,  "GIF" },
+                { 13,  "JPEG in a JFIF wrapper" },
+                { 14,  "PNG in a PNG wrapper" },
+                { 15,  "URL" },
+                { 16,  "duration" },
+                { 17,  "date/time" },
+                { 18,  "Genres" },
+                { 21,  "BE Signed Integer" },
+                { 24,  "RIAA-PA (RIAA Parental advisory)" },
+                { 25,  "UPC (Universal Product Code)" },
+                { 27,  "BMP (Windows bitmap format graphics)" },
+                { UINT32_MAX }
+            };
+        int table_index;
+        for( table_index = 0; basic_data_type_table[table_index].type != UINT32_MAX; table_index++ )
+            if( data->type_code == basic_data_type_table[table_index].type )
+            {
+                basic_data_type_name = basic_data_type_table[table_index].name;
+                break;
+            }
+        if( basic_data_type_table[table_index].type == UINT32_MAX )
+            basic_data_type_name = "Unknown";
         lsmash_ifprintf( fp, indent, "reserved = %"PRIu16"\n", data->reserved );
         lsmash_ifprintf( fp, indent, "type_set_identifier = %"PRIu8"%s\n",
-                      data->type_set_identifier,
-                      data->type_set_identifier ? "" : " (basic type set)" );
-        lsmash_ifprintf( fp, indent, "type_code = %"PRIu8"\n", data->type_code );
+                         data->type_set_identifier,
+                         data->type_set_identifier ? "" : " (basic type set)" );
+        lsmash_ifprintf( fp, indent, "type_code = %"PRIu8" (%s)\n", data->type_code, basic_data_type_name );
         lsmash_ifprintf( fp, indent, "the_locale = %"PRIu32"\n", data->the_locale );
-        if( data->type_code == 21 )
+        if( data->value_length == 0 )
         {
-            /* integer type */
-            lsmash_ifprintf( fp, indent, "value = " );
-            if( data->value_length )
+            lsmash_ifprintf( fp, indent, "value = (null)\n" );
+            return 0;
+        }
+        if( data->type_code == 6  || data->type_code == 7
+         || data->type_code == 12 || data->type_code == 13
+         || data->type_code == 14 || data->type_code == 27 )
+            lsmash_ifprintf( fp, indent, "value = (binary data)\n" );
+        else if( data->type_code == 8 && data->value_length == 16 )
+            /* UUID */
+            lsmash_ifprintf( fp, indent, "value = 0x%08"PRIx32"-%04"PRIx16"-%04"PRIx16"-%04"PRIx16"-%04"PRIx16"0x%08"PRIx32"\n",
+                             (data->value[ 0] << 24) | (data->value[ 1] << 16) | (data->value[ 2] << 8) | data->value[ 3],
+                             (data->value[ 4] <<  8) |  data->value[ 5],
+                             (data->value[ 6] <<  8) |  data->value[ 7],
+                             (data->value[ 8] <<  8) |  data->value[ 9],
+                             (data->value[10] <<  8) |  data->value[11],
+                             (data->value[12] << 24) | (data->value[13] << 16) | (data->value[14] << 8) | data->value[15] );
+        else if( data->type_code == 16 && data->value_length == 4 )
+        {
+            /* duration in milliseconds */
+            uint32_t duration = (data->value[0] << 24) | (data->value[1] << 16) | (data->value[2] << 8) | data->value[3];
+            lsmash_ifprintf( fp, indent, "value = %"PRIu32" milliseconds\n", duration );
+        }
+        else if( data->type_code == 17 && (data->value_length == 4 || data->value_length == 8) )
+        {
+            /* UTC, counting seconds since midnight on 1 January, 1904 */
+            uint64_t mp4time = (data->value[0] << 24) | (data->value[1] << 16) | (data->value[2] << 8) | data->value[3];
+            if( data->value_length == 8 )
             {
-                fprintf( fp, "0x" );
-                for( uint32_t i = 0; i < data->value_length; i++ )
-                    fprintf( fp, "%02"PRIx8, data->value[i] );
+                /* 64bit */
+                mp4time <<= 32;
+                mp4time  |= (data->value[4] << 24) | (data->value[5] << 16) | (data->value[6] << 8) | data->value[7];
             }
+            isom_mp4time2utc( mp4time );
+        }
+        else if( data->type_code == 21 && data->value_length <= 8 )
+            /* a big-endian signed integer in 1,2,3,4 or 8 bytes */
+            goto show_in_signed_integer;
+        else if( data->type_code == 24 )
+        {
+            /* RIAA-PA (RIAA Parental advisory) 8-bit integer */
+            lsmash_ifprintf( fp, indent, "value = %"PRIu8, data->value[0] );
+            if( data->value[0] == -1 )
+                fprintf( fp, " (no)" );
+            else if( data->value[0] == 1 )
+                fprintf( fp, " (yes)" );
+            else if( data->value[0] == 0 )
+                fprintf( fp, " (unspecified)" );
             fprintf( fp, "\n" );
         }
-        else
+        else if( data->type_code == 1  || data->type_code == 2  || data->type_code == 3
+              || data->type_code == 9  || data->type_code == 10 || data->type_code == 15
+              || data->type_code == 25 )
         {
+            /* String */
             char str[data->value_length + 1];
             memcpy( str, data->value, data->value_length );
             str[data->value_length] = 0;
             lsmash_ifprintf( fp, indent, "value = %s\n", str );
         }
+        else
+            goto show_in_binary;
     }
+    return 0;
+show_in_signed_integer:;
+    uint64_t integer   = data->value[0];
+    uint64_t max_value = 0xff;
+    for( uint32_t i = 1; i < data->value_length; i++ )
+    {
+        integer   = (integer   << 8) | data->value[i];
+        max_value = (max_value << 8) | 0xff;
+    }
+    lsmash_ifprintf( fp, indent, "value = %"PRId64"\n", (int64_t)(integer | (integer > (max_value >> 1) ? ~max_value : 0)) );
+    return 0;
+show_in_binary:
+    lsmash_ifprintf( fp, indent, "value = " );
+    if( data->value_length )
+    {
+        fprintf( fp, "0x" );
+        for( uint32_t i = 0; i < data->value_length; i++ )
+            fprintf( fp, "%02"PRIx8, data->value[i] );
+    }
+    fprintf( fp, "\n" );
     return 0;
 }
 
