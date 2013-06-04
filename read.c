@@ -1050,6 +1050,8 @@ static void *isom_sample_description_alloc( lsmash_codec_type_t sample_type )
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_ULRG_VIDEO, sizeof(isom_visual_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_ULY2_VIDEO, sizeof(isom_visual_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_ULY0_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_ULH2_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_ULH0_VIDEO, sizeof(isom_visual_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_V210_VIDEO, sizeof(isom_visual_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_V216_VIDEO, sizeof(isom_visual_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( QT_CODEC_TYPE_V308_VIDEO, sizeof(isom_visual_entry_t) );
@@ -2946,6 +2948,8 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_ULRG_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_ULY2_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_ULY0_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_ULH2_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_ULH0_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_V210_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_V216_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_V308_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );

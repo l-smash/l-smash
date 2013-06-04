@@ -944,6 +944,8 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
         ADD_WRITE_TABLE_ELEMENT( QT_CODEC_TYPE_ULRG_VIDEO,   isom_write_visual_entry );
         ADD_WRITE_TABLE_ELEMENT( QT_CODEC_TYPE_ULY2_VIDEO,   isom_write_visual_entry );
         ADD_WRITE_TABLE_ELEMENT( QT_CODEC_TYPE_ULY0_VIDEO,   isom_write_visual_entry );
+        ADD_WRITE_TABLE_ELEMENT( QT_CODEC_TYPE_ULH2_VIDEO,   isom_write_visual_entry );
+        ADD_WRITE_TABLE_ELEMENT( QT_CODEC_TYPE_ULH0_VIDEO,   isom_write_visual_entry );
         ADD_WRITE_TABLE_ELEMENT( QT_CODEC_TYPE_V210_VIDEO,   isom_write_visual_entry );
         ADD_WRITE_TABLE_ELEMENT( QT_CODEC_TYPE_V216_VIDEO,   isom_write_visual_entry );
         ADD_WRITE_TABLE_ELEMENT( QT_CODEC_TYPE_V308_VIDEO,   isom_write_visual_entry );

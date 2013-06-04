@@ -303,8 +303,10 @@ DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_TGA_VIDEO,     LSMASH_4CC( 't', 'g', 'a', 
 DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_TIFF_VIDEO,    LSMASH_4CC( 't', 'i', 'f', 'f' ) );    /* Tagged Image File Format (Adobe) */
 DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_ULRA_VIDEO,    LSMASH_4CC( 'U', 'L', 'R', 'A' ) );    /* Ut Video RGBA 4:4:4:4 8bit full-range */
 DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_ULRG_VIDEO,    LSMASH_4CC( 'U', 'L', 'R', 'G' ) );    /* Ut Video RGB 4:4:4 8bit full-range */
-DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_ULY0_VIDEO,    LSMASH_4CC( 'U', 'L', 'Y', '0' ) );    /* Ut Video YCbCr 4:2:0 8bit limited */
-DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_ULY2_VIDEO,    LSMASH_4CC( 'U', 'L', 'Y', '2' ) );    /* Ut Video YCbCr 4:2:2 8bit limited */
+DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_ULY0_VIDEO,    LSMASH_4CC( 'U', 'L', 'Y', '0' ) );    /* Ut Video YCbCr (BT.601) 4:2:0 8bit limited */
+DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_ULY2_VIDEO,    LSMASH_4CC( 'U', 'L', 'Y', '2' ) );    /* Ut Video YCbCr (BT.601) 4:2:2 8bit limited */
+DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_ULH0_VIDEO,    LSMASH_4CC( 'U', 'L', 'H', '0' ) );    /* Ut Video YCbCr (BT.709) 4:2:0 8bit limited */
+DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_ULH2_VIDEO,    LSMASH_4CC( 'U', 'L', 'H', '2' ) );    /* Ut Video YCbCr (BT.709) 4:2:2 8bit limited */
 DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_V210_VIDEO,    LSMASH_4CC( 'v', '2', '1', '0' ) );    /* Uncompressed Y'CbCr, 10-bit-per-component 4:2:2
                                                                                              *      |Cb0(10)|Y'0(10)|Cr0(10)|XX(2)|
                                                                                              *      |Y'1(10)|Cb1(10)|Y'2(10)|XX(2)|

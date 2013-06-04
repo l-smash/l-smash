@@ -394,6 +394,8 @@ int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, void *summa
         ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_ULRG_VIDEO, isom_setup_visual_description );
         ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_ULY2_VIDEO, isom_setup_visual_description );
         ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_ULY0_VIDEO, isom_setup_visual_description );
+        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_ULH2_VIDEO, isom_setup_visual_description );
+        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_ULH0_VIDEO, isom_setup_visual_description );
         ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_V210_VIDEO, isom_setup_visual_description );
         ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_V216_VIDEO, isom_setup_visual_description );
         ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_V308_VIDEO, isom_setup_visual_description );
@@ -2249,6 +2251,8 @@ void isom_remove_sample_description( isom_sample_entry_t *sample )
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_ULRG_VIDEO, isom_remove_visual_description );
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_ULY2_VIDEO, isom_remove_visual_description );
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_ULY0_VIDEO, isom_remove_visual_description );
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_ULH2_VIDEO, isom_remove_visual_description );
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_ULH0_VIDEO, isom_remove_visual_description );
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_V210_VIDEO, isom_remove_visual_description );
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_V216_VIDEO, isom_remove_visual_description );
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_V308_VIDEO, isom_remove_visual_description );
@@ -4225,6 +4229,8 @@ static uint64_t isom_update_stsd_size( isom_stsd_t *stsd )
             ADD_DESCRIPTION_UPDATE_SIZE_TABLE_ELEMENT( QT_CODEC_TYPE_ULRG_VIDEO, isom_update_visual_entry_size );
             ADD_DESCRIPTION_UPDATE_SIZE_TABLE_ELEMENT( QT_CODEC_TYPE_ULY2_VIDEO, isom_update_visual_entry_size );
             ADD_DESCRIPTION_UPDATE_SIZE_TABLE_ELEMENT( QT_CODEC_TYPE_ULY0_VIDEO, isom_update_visual_entry_size );
+            ADD_DESCRIPTION_UPDATE_SIZE_TABLE_ELEMENT( QT_CODEC_TYPE_ULH2_VIDEO, isom_update_visual_entry_size );
+            ADD_DESCRIPTION_UPDATE_SIZE_TABLE_ELEMENT( QT_CODEC_TYPE_ULH0_VIDEO, isom_update_visual_entry_size );
             ADD_DESCRIPTION_UPDATE_SIZE_TABLE_ELEMENT( QT_CODEC_TYPE_V210_VIDEO, isom_update_visual_entry_size );
             ADD_DESCRIPTION_UPDATE_SIZE_TABLE_ELEMENT( QT_CODEC_TYPE_V216_VIDEO, isom_update_visual_entry_size );
             ADD_DESCRIPTION_UPDATE_SIZE_TABLE_ELEMENT( QT_CODEC_TYPE_V308_VIDEO, isom_update_visual_entry_size );

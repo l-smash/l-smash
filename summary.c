@@ -224,6 +224,8 @@ lsmash_summary_t *lsmash_get_summary( lsmash_root_t *root, uint32_t track_ID, ui
             ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_ULRG_VIDEO, isom_create_video_summary_from_description );
             ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_ULY2_VIDEO, isom_create_video_summary_from_description );
             ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_ULY0_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_ULH2_VIDEO, isom_create_video_summary_from_description );
+            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_ULH0_VIDEO, isom_create_video_summary_from_description );
             ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_V210_VIDEO, isom_create_video_summary_from_description );
             ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_V216_VIDEO, isom_create_video_summary_from_description );
             ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_V308_VIDEO, isom_create_video_summary_from_description );
