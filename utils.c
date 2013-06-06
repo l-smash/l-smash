@@ -714,12 +714,11 @@ void lsmash_free( void *ptr )
 
 void lsmash_freep( void *ptrptr )
 {
+    if( !ptrptr )
+        return;
     void **ptr = (void **)ptrptr;
-    if( ptr )
-    {
-        free( *ptr );
-        *ptr = NULL;
-    }
+    free( *ptr );
+    *ptr = NULL;
 }
 
 lsmash_multiple_buffers_t *lsmash_create_multiple_buffers( uint32_t number_of_buffers, uint32_t buffer_size )

@@ -156,7 +156,13 @@ void lsmash_free
 );
 
 /* Deallocate a given memory block.
- * If the given address to a memory block is NULL, this function does nothing. */
+ * If the given address to a memory block is NULL, this function does nothing.
+ * Set NULL to the pointer to the memory block after deallocating.
+ *
+ * As an example of usage.
+ *   Let's say you allocate a memory block and set the address to the beginning of it to the pointer 'ptr'.
+ *   You can deallocate the memory block and set NULL to 'ptr' by lsmash_freep( &ptr ).
+ */
 void lsmash_freep
 (
     void *ptrptr    /* the address to a pointer to a memory block previously allocated with
