@@ -463,3 +463,15 @@ uint32_t lsmash_count_itunes_metadata( lsmash_root_t *root )
         return 0;
     return root->moov->udta->meta->ilst->item_list->entry_count;
 }
+
+void lsmash_cleanup_itunes_metadata( lsmash_itunes_metadata_t *metadata )
+{
+    if( !metadata )
+        return;
+    lsmash_freep( &metadata->meaning );
+    lsmash_freep( &metadata->name );
+    if( metadata->type == ITUNES_METADATA_TYPE_STRING )
+        lsmash_freep( &metadata->value.string );
+    else if( metadata->type == ITUNES_METADATA_TYPE_BINARY )
+        lsmash_freep( &metadata->value.binary.data );
+}

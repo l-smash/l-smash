@@ -124,15 +124,7 @@ static void cleanup_input_movie( input_movie_t *input )
     if( input->itunes_metadata )
     {
         for( uint32_t i = 0; i < input->num_itunes_metadata; i++ )
-        {
-            lsmash_itunes_metadata_t *metadata = &input->itunes_metadata[i];
-            if( metadata->type == ITUNES_METADATA_TYPE_STRING )
-                lsmash_free( metadata->value.string );
-            else if( metadata->type == ITUNES_METADATA_TYPE_BINARY )
-                lsmash_free( metadata->value.binary.data );
-            lsmash_free( metadata->meaning );
-            lsmash_free( metadata->name );
-        }
+            lsmash_cleanup_itunes_metadata( &input->itunes_metadata[i] );
         free( input->itunes_metadata );
     }
     if( input->track )

@@ -3309,7 +3309,8 @@ uint32_t lsmash_count_itunes_metadata
 
 /* Get an iTunes metadata in a movie.
  * String and/or binary fields in 'metadata' are allocated if successful.
- * The allocated fields can be deallocated by lsmash_free().
+ * You can deallocate the allocated fields by lsmash_free().
+ * Also you can deallocate all of the allocated fields by lsmash_cleanup_itunes_metadata() at a time.
  *
  * Return 0 if successful.
  * Return a negative value otherwise. */
@@ -3317,6 +3318,14 @@ int lsmash_get_itunes_metadata
 (
     lsmash_root_t            *root,
     uint32_t                  metadata_number,
+    lsmash_itunes_metadata_t *metadata
+);
+
+/* Deallocate all of allocated fields in a given iTunes metadata at a time.
+ * The deallocated fields are set to NULL.
+ * Note: the given iTunes metadata itself is NOT deallocated by this function. */
+void lsmash_cleanup_itunes_metadata
+(
     lsmash_itunes_metadata_t *metadata
 );
 
