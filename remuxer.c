@@ -127,17 +127,11 @@ static void cleanup_input_movie( input_movie_t *input )
         {
             lsmash_itunes_metadata_t *metadata = &input->itunes_metadata[i];
             if( metadata->type == ITUNES_METADATA_TYPE_STRING )
-            {
-                if( metadata->value.string )
-                    free( metadata->value.string );
-            }
+                lsmash_free( metadata->value.string );
             else if( metadata->type == ITUNES_METADATA_TYPE_BINARY )
-                if( metadata->value.binary.data )
-                    free( metadata->value.binary.data );
-            if( metadata->meaning )
-                free( metadata->meaning );
-            if( metadata->name )
-                free( metadata->name );
+                lsmash_free( metadata->value.binary.data );
+            lsmash_free( metadata->meaning );
+            lsmash_free( metadata->name );
         }
         free( input->itunes_metadata );
     }
@@ -264,7 +258,7 @@ static char *duplicate_string( char *src )
     if( !src )
         return NULL;
     int dst_size = strlen( src ) + 1;
-    char *dst = malloc( dst_size );
+    char *dst = lsmash_malloc( dst_size );
     if( !dst )
         return NULL;
     memcpy( dst, src, dst_size );
@@ -311,10 +305,8 @@ static int get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, l
         metadata->value = shadow.value;
     return 0;
 fail:
-    if( metadata->meaning )
-        free( metadata->meaning );
-    if( metadata->name )
-        free( metadata->name );
+    lsmash_freep( &metadata->meaning );
+    lsmash_freep( &metadata->name );
     return -1;
 }
 

@@ -3302,6 +3302,8 @@ uint32_t lsmash_count_itunes_metadata
 );
 
 /* Get an iTunes metadata in a movie.
+ * String and/or binary fields in 'metadata' are allocated if successful.
+ * The allocated fields can be deallocated by lsmash_free().
  *
  * Return 0 if successful.
  * Return a negative value otherwise. */

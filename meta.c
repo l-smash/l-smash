@@ -48,7 +48,7 @@ static isom_data_t *isom_add_metadata( lsmash_root_t *root,
             goto fail;
         isom_mean_t *mean = metaitem->mean;
         mean->meaning_string_length = strlen( meaning_string );    /* No null terminator */
-        mean->meaning_string = lsmash_memdup( meaning_string, mean->meaning_string_length );
+        mean->meaning_string        = lsmash_memdup( meaning_string, mean->meaning_string_length );
         if( !mean->meaning_string )
             goto fail;
         if( name_string && name_string[0] )
@@ -57,7 +57,7 @@ static isom_data_t *isom_add_metadata( lsmash_root_t *root,
                 goto fail;
             isom_name_t *name = metaitem->name;
             name->name_length = strlen( name_string );    /* No null terminator */
-            name->name = lsmash_memdup( name_string, name->name_length );
+            name->name        = lsmash_memdup( name_string, name->name_length );
             if( !name->name )
                 goto fail;
         }
@@ -80,9 +80,9 @@ static int isom_set_itunes_metadata_string( lsmash_root_t *root,
     isom_data_t *data = isom_add_metadata( root, item, meaning, name );
     if( !data )
         return -1;
-    data->type_code = ITUNES_METADATA_SUBTYPE_UTF8;
+    data->type_code    = ITUNES_METADATA_SUBTYPE_UTF8;
     data->value_length = value_length;      /* No null terminator */
-    data->value = lsmash_memdup( value.string, data->value_length );
+    data->value        = lsmash_memdup( value.string, data->value_length );
     if( !data->value )
     {
         isom_ilst_t *ilst = root->moov->udta->meta->ilst;
@@ -215,9 +215,9 @@ static int isom_set_itunes_metadata_binary( lsmash_root_t *root,
         default :
             break;
     }
-    data->type_code = value.binary.subtype;
+    data->type_code    = value.binary.subtype;
     data->value_length = value.binary.size;
-    data->value = lsmash_memdup( value.binary.data, value.binary.size );
+    data->value        = lsmash_memdup( value.binary.data, value.binary.size );
     if( !data->value )
     {
         isom_ilst_t *ilst = root->moov->udta->meta->ilst;
@@ -391,11 +391,11 @@ int lsmash_get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, l
     isom_mean_t *mean = metaitem->mean;
     if( mean )
     {
-        uint8_t *temp = realloc( mean->meaning_string, mean->meaning_string_length + 1 );
+        uint8_t *temp = lsmash_malloc( mean->meaning_string_length + 1 );
         if( !temp )
-            return -1;
+            goto fail;
+        memcpy( temp, mean->meaning_string, mean->meaning_string_length );
         temp[ mean->meaning_string_length ] = 0;
-        mean->meaning_string = temp;
         metadata->meaning = (char *)temp;
     }
     else
@@ -404,11 +404,11 @@ int lsmash_get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, l
     isom_name_t *name = metaitem->name;
     if( name )
     {
-        uint8_t *temp = realloc( name->name, name->name_length + 1 );
+        uint8_t *temp = lsmash_malloc( name->name_length + 1 );
         if( !temp )
-            return -1;
+            goto fail;
+        memcpy( temp, name->name, name->name_length );
         temp[ name->name_length ] = 0;
-        name->name = temp;
         metadata->name = (char *)temp;
     }
     else
@@ -419,11 +419,11 @@ int lsmash_get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, l
     {
         case ITUNES_METADATA_TYPE_STRING :
         {
-            uint8_t *temp = realloc( data->value, data->value_length + 1 );
+            uint8_t *temp = lsmash_malloc( data->value_length + 1 );
             if( !temp )
-                return -1;
+                goto fail;
+            memcpy( temp, data->value, data->value_length );
             temp[ data->value_length ] = 0;
-            data->value = temp;
             metadata->value.string = (char *)temp;
             break;
         }
@@ -444,12 +444,16 @@ int lsmash_get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, l
             metadata->type                 = ITUNES_METADATA_TYPE_BINARY;
             metadata->value.binary.subtype = data->type_code;
             metadata->value.binary.size    = data->value_length;
-            metadata->value.binary.data    = data->value;
+            metadata->value.binary.data    = lsmash_memdup( data->value, data->value_length );
             if( !metadata->value.binary.data )
-                return -1;
+                goto fail;
             break;
     }
     return 0;
+fail:
+    lsmash_freep( &metadata->meaning );
+    lsmash_freep( &metadata->name );
+    return -1;
 }
 
 uint32_t lsmash_count_itunes_metadata( lsmash_root_t *root )
