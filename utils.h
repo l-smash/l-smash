@@ -138,9 +138,6 @@ float lsmash_int2float32( uint32_t value );
 double lsmash_int2float64( uint64_t value );
 
 /*---- allocator ----*/
-void *lsmash_malloc_zero( size_t size );
-void *lsmash_memdup( void *src, size_t size );
-
 typedef struct
 {
     uint32_t number_of_buffers;

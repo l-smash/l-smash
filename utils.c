@@ -674,6 +674,11 @@ double lsmash_int2float64( uint64_t value )
 /*---- ----*/
 
 /*---- allocator ----*/
+void *lsmash_malloc( size_t size )
+{
+    return malloc( size );
+}
+
 void *lsmash_malloc_zero( size_t size )
 {
     if( !size )
@@ -685,15 +690,36 @@ void *lsmash_malloc_zero( size_t size )
     return p;
 }
 
-void *lsmash_memdup( void *src, size_t size )
+void *lsmash_realloc( void *ptr, size_t size )
+{
+    return realloc( ptr, size );
+}
+
+void *lsmash_memdup( void *ptr, size_t size )
 {
     if( !size )
         return NULL;
     void *dst = malloc( size );
     if( !dst )
         return NULL;
-    memcpy( dst, src, size );
+    memcpy( dst, ptr, size );
     return dst;
+}
+
+void lsmash_free( void *ptr )
+{
+    /* free() shall do nothing if a given address is NULL. */
+    free( ptr );
+}
+
+void lsmash_freep( void *ptrptr )
+{
+    void **ptr = (void **)ptrptr;
+    if( ptr )
+    {
+        free( *ptr );
+        *ptr = NULL;
+    }
 }
 
 lsmash_multiple_buffers_t *lsmash_create_multiple_buffers( uint32_t number_of_buffers, uint32_t buffer_size )

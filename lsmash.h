@@ -98,6 +98,72 @@ typedef enum
 } lsmash_boolean_t;
 
 /****************************************************************************
+ * Allocation
+ ****************************************************************************/
+/* Allocate a memory block.
+ * The allocated memory block can be deallocate by lsmash_free().
+ *
+ * Return the address to the beginning of a memory block if successful.
+ * Return NULL otherwise. */
+void *lsmash_malloc
+(
+    size_t size     /* size of a memory block, in bytes */
+);
+
+/* Allocate a memory block.
+ * The allocated memory block shall be initialized to all bits 0.
+ * The allocated memory block can be deallocate by lsmash_free().
+ *
+ * Return the address to the beginning of a memory block if successful.
+ * Return NULL otherwise. */
+void *lsmash_malloc_zero
+(
+    size_t size     /* size of a memory block, in bytes */
+);
+
+/* Reallocate a memory block.
+ * The reallocated memory block can be deallocate by lsmash_free().
+ * If this function succeed, the given memory block is deallocated and the address is invalid.
+ * If this function fails, the address to the given memory block is still valid and the memory block is unchanged.
+ *
+ * Return the address to the beginning of a memory block if successful.
+ * Return NULL otherwise. */
+void *lsmash_realloc
+(
+    void  *ptr,     /* an address to a memory block previously allocated with
+                     * lsmash_malloc(), lsmash_malloc_zero(), lsmash_realloc() or lsmash_memdup()
+                     * Alternatively, NULL makes this function to allocate a new memory block. */
+    size_t size     /* size of a memory block, in bytes */
+);
+
+/* Allocate a memory block and copy all bits from a given memory block.
+ * The allocated memory block can be deallocate by lsmash_free().
+ *
+ * Return the address to the beginning of an allocated memory block if successful.
+ * Return NULL otherwise. */
+void *lsmash_memdup
+(
+    void  *ptr,     /* an address to the source of data to be copied */
+    size_t size     /* number of bytes to copy */
+);
+
+/* Deallocate a given memory block.
+ * If the given address to a memory block is NULL, this function does nothing. */
+void lsmash_free
+(
+    void *ptr       /* an address to a memory block previously allocated with
+                     * lsmash_malloc(), lsmash_malloc_zero(), lsmash_realloc() or lsmash_memdup() */
+);
+
+/* Deallocate a given memory block.
+ * If the given address to a memory block is NULL, this function does nothing. */
+void lsmash_freep
+(
+    void *ptrptr    /* the address to a pointer to a memory block previously allocated with
+                     * lsmash_malloc(), lsmash_malloc_zero(), lsmash_realloc() or lsmash_memdup() */
+);
+
+/****************************************************************************
  * Box
  ****************************************************************************/
 typedef uint32_t lsmash_compact_box_type_t;
