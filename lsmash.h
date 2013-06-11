@@ -506,6 +506,16 @@ typedef struct
 
 typedef struct lsmash_codec_specific_list_tag lsmash_codec_specific_list_t;
 
+typedef enum
+{
+    LSMASH_CODEC_SUPPORT_FLAG_NONE  = 0,
+    LSMASH_CODEC_SUPPORT_FLAG_MUX   = 1 << 0,   /* It's expected that L-SMASH can mux CODEC stream properly.
+                                                 * If not flagged, L-SMASH may recognize and/or handle CODEC specific info incorrectly when muxing. */
+    LSMASH_CODEC_SUPPORT_FLAG_DEMUX = 1 << 1,   /* It's expected that L-SMASH can demux CODEC stream properly.
+                                                 * If not flagged, L-SMASH may recognize and/or handle CODEC specific info incorrectly when demuxing. */
+    LSMASH_CODEC_SUPPORT_FLAG_REMUX = LSMASH_CODEC_SUPPORT_FLAG_MUX | LSMASH_CODEC_SUPPORT_FLAG_DEMUX,
+} lsmash_codec_support_flag;
+
 #define LSMASH_BASE_SUMMARY                     \
     lsmash_summary_type           summary_type; \
     lsmash_codec_type_t           sample_type;  \
@@ -632,6 +642,14 @@ int lsmash_compare_summary
 (
     lsmash_summary_t *a,
     lsmash_summary_t *b
+);
+
+/* Check status of CODEC support.
+ *
+ * Return support flags of a given CODEC. */
+lsmash_codec_support_flag lsmash_check_codec_support
+(
+    lsmash_codec_type_t codec_type
 );
 
 /****************************************************************************
