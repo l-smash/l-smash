@@ -921,7 +921,6 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
 #define ADD_WRITE_TABLE_ELEMENT( type, func ) write_table[i++] = (struct write_table_tag){ type, func }
         ADD_WRITE_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC1_VIDEO, isom_write_visual_entry );
         ADD_WRITE_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC2_VIDEO, isom_write_visual_entry );
-        ADD_WRITE_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC1_VIDEO, isom_write_visual_entry );
         ADD_WRITE_TABLE_ELEMENT( ISOM_CODEC_TYPE_VC_1_VIDEO, isom_write_visual_entry );
         ADD_WRITE_TABLE_ELEMENT( QT_CODEC_TYPE_2VUY_VIDEO,   isom_write_visual_entry );
         ADD_WRITE_TABLE_ELEMENT( QT_CODEC_TYPE_APCH_VIDEO,   isom_write_visual_entry );
@@ -956,7 +955,6 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
         ADD_WRITE_TABLE_ELEMENT( ISOM_CODEC_TYPE_MP4V_VIDEO, isom_write_visual_entry );
 #endif
 #if 0
-        ADD_WRITE_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC2_VIDEO, isom_write_visual_entry );
         ADD_WRITE_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVCP_VIDEO, isom_write_visual_entry );
         ADD_WRITE_TABLE_ELEMENT( ISOM_CODEC_TYPE_SVC1_VIDEO, isom_write_visual_entry );
         ADD_WRITE_TABLE_ELEMENT( ISOM_CODEC_TYPE_MVC1_VIDEO, isom_write_visual_entry );
