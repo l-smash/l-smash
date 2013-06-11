@@ -386,6 +386,12 @@ static int get_movie( input_movie_t *input, char *input_name )
                 WARNING_MSG( "failed to get a summary.\n" );
                 continue;
             }
+            if( !LSMASH_FLAGS_SATISFIED( lsmash_check_codec_support( summary->sample_type ), LSMASH_CODEC_SUPPORT_FLAG_REMUX ) )
+            {
+                lsmash_cleanup_summary( summary );
+                WARNING_MSG( "no support to remux this stream.\n" );
+                continue;
+            }
             in_track[i].summaries[j].summary = summary;
             in_track[i].summaries[j].active  = 1;
         }

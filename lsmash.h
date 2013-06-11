@@ -565,8 +565,9 @@ uint32_t lsmash_count_summary
 );
 
 /* Get the summary of a sample description you want in a track.
+ * The summary returned by this function is allocated internally, and can be deallocate by lsmash_cleanup_summary().
  *
- * Return the address of a summary you want if successful.
+ * Return the address of an allocated summary you want if successful.
  * Return NULL otherwise. */
 lsmash_summary_t *lsmash_get_summary
 (
