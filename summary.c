@@ -162,103 +162,32 @@ lsmash_summary_t *lsmash_get_summary( lsmash_root_t *root, uint32_t track_ID, ui
     if( !root || track_ID == 0 || description_number == 0 )
         return NULL;
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->hdlr
-     || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd
+    if( !trak
+     || !trak->mdia
+     || !trak->mdia->mdhd || !trak->mdia->hdlr || !trak->mdia->minf
+     || !trak->mdia->minf->stbl
+     || !trak->mdia->minf->stbl->stsd
      || !trak->mdia->minf->stbl->stsd->list )
         return NULL;
-    isom_stsd_t *stsd = trak->mdia->minf->stbl->stsd;
-    uint32_t j = 1;
+    isom_minf_t *minf = trak->mdia->minf;
+    isom_stsd_t *stsd = minf->stbl->stsd;
+    uint32_t i = 1;
     for( lsmash_entry_t *entry = stsd->list->head; entry; entry = entry->next )
     {
-        if( j++ != description_number )
+        if( i != description_number )
+        {
+            ++i;
             continue;
+        }
         isom_sample_entry_t *sample_entry = entry->data;
         if( !sample_entry )
             return NULL;
-        lsmash_codec_type_t sample_type = sample_entry->type;
-        static struct create_summary_table_tag
-        {
-            lsmash_codec_type_t type;
-            lsmash_summary_t *(*func)( isom_sample_entry_t * );
-        } create_summary_table[128] = { { LSMASH_CODEC_TYPE_INITIALIZER, NULL } };
-        if( !create_summary_table[0].func )
-        {
-            /* Initialize the table. */
-            int i = 0;
-#define ADD_CREATE_SUMMARY_TABLE_ELEMENT( type, func ) \
-    create_summary_table[i++] = (struct create_summary_table_tag){ type, func }
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC1_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( ISOM_CODEC_TYPE_VC_1_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_2VUY_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_APCH_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_APCN_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_APCS_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_APCO_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_AP4H_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_DV10_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_DVOO_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_DVC_VIDEO,  isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_DVCP_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_DVPP_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_DV5N_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_DV5P_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_DVH2_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_DVH3_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_DVH5_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_DVH6_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_DVHP_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_DVHQ_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_FLIC_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_H261_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_H263_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_JPEG_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_MJPA_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_MJPB_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_PNG_VIDEO,  isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_RAW_VIDEO,  isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_RLE_VIDEO,  isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_RPZA_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_TGA_VIDEO,  isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_TIFF_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_ULRA_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_ULRG_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_ULY2_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_ULY0_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_ULH2_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_ULH0_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_V210_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_V216_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_V308_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_V408_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_V410_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_YUV2_VIDEO, isom_create_video_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( ISOM_CODEC_TYPE_MP4A_AUDIO, isom_create_audio_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( ISOM_CODEC_TYPE_AC_3_AUDIO, isom_create_audio_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( ISOM_CODEC_TYPE_ALAC_AUDIO, isom_create_audio_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( ISOM_CODEC_TYPE_EC_3_AUDIO, isom_create_audio_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAMR_AUDIO, isom_create_audio_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAWB_AUDIO, isom_create_audio_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSC_AUDIO, isom_create_audio_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSE_AUDIO, isom_create_audio_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSH_AUDIO, isom_create_audio_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSL_AUDIO, isom_create_audio_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_MP4A_AUDIO, isom_create_audio_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_23NI_AUDIO, isom_create_audio_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_NONE_AUDIO, isom_create_audio_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_LPCM_AUDIO, isom_create_audio_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_SOWT_AUDIO, isom_create_audio_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_TWOS_AUDIO, isom_create_audio_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_FL32_AUDIO, isom_create_audio_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_FL64_AUDIO, isom_create_audio_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_IN24_AUDIO, isom_create_audio_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_IN32_AUDIO, isom_create_audio_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( QT_CODEC_TYPE_NOT_SPECIFIED, isom_create_audio_summary_from_description );
-            ADD_CREATE_SUMMARY_TABLE_ELEMENT( LSMASH_CODEC_TYPE_UNSPECIFIED, NULL );
-        }
-        for( int i = 0; create_summary_table[i].func; i++ )
-            if( lsmash_check_codec_type_identical( sample_type, create_summary_table[i].type ) )
-                return create_summary_table[i].func( sample_entry );
-        return NULL;
+        if( minf->vmhd )
+            return isom_create_video_summary_from_description( sample_entry );
+        else if( minf->smhd )
+            return isom_create_audio_summary_from_description( sample_entry );
+        else
+            return NULL;
     }
     return NULL;
 }
