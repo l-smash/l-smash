@@ -357,7 +357,7 @@ lsmash_codec_specific_t *lsmash_create_codec_specific_data( lsmash_codec_specifi
     lsmash_codec_specific_t *specific = malloc( sizeof(lsmash_codec_specific_t) );
     if( !specific )
         return NULL;
-    if( isom_initialize_codec_specific_data( specific, type, format  ) )
+    if( isom_initialize_codec_specific_data( specific, type, format ) )
     {
         lsmash_destroy_codec_specific_data( specific );
         return NULL;
@@ -1156,8 +1156,13 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
             default :
             {
                 lsmash_codec_specific_t *cs = lsmash_convert_codec_specific_format( specific, LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
-                if( !cs || cs->size < ISOM_BASEBOX_COMMON_SIZE )
+                if( !cs )
                     goto fail;
+                if( cs->size < ISOM_BASEBOX_COMMON_SIZE )
+                {
+                    lsmash_destroy_codec_specific_data( cs );
+                    goto fail;
+                }
                 isom_extension_box_t *extension = malloc( sizeof(isom_extension_box_t) );
                 if( !extension )
                 {
@@ -1385,25 +1390,22 @@ static int isom_append_channel_layout_extension( lsmash_codec_specific_t *specif
     if( channelLayoutTag == QT_CHANNEL_LAYOUT_USE_CHANNEL_DESCRIPTIONS    /* We don't support the feature of Channel Descriptions. */
      || (channelLayoutTag == QT_CHANNEL_LAYOUT_USE_CHANNEL_BITMAP && (!channelBitmap || channelBitmap > QT_CHANNEL_BIT_FULL)) )
     {
-        channelLayoutTag = data->channelLayoutTag = QT_CHANNEL_LAYOUT_UNKNOWN | channels;
-        channelBitmap    = data->channelBitmap    = 0;
+        channelLayoutTag = QT_CHANNEL_LAYOUT_UNKNOWN | channels;
+        channelBitmap    = 0;
     }
+    lsmash_destroy_codec_specific_data( cs );
     /* Don't create Audio Channel Layout Box if the channel layout is unknown. */
     if( (channelLayoutTag ^ QT_CHANNEL_LAYOUT_UNKNOWN) >> 16 )
     {
         isom_chan_t *box = lsmash_malloc_zero( sizeof(isom_chan_t) );
         if( !box )
-        {
-            lsmash_destroy_codec_specific_data( cs );
             return -1;
-        }
         isom_box_t *parent_box = parent;
         isom_init_box_common( box, parent_box, QT_BOX_TYPE_CHAN );
         box->channelLayoutTag          = channelLayoutTag;
         box->channelBitmap             = channelBitmap;
         box->numberChannelDescriptions = 0;
         box->channelDescriptions       = NULL;
-        lsmash_destroy_codec_specific_data( cs );
         if( isom_add_extension_box( &parent_box->extensions, box, isom_remove_chan ) )
         {
             free( box );
@@ -1753,7 +1755,10 @@ static int isom_set_qtff_template_audio_description( isom_audio_entry_t *audio, 
                 if( !cs )
                     return -1;
                 if( cs->size < ISOM_BASEBOX_COMMON_SIZE )
+                {
+                    lsmash_destroy_codec_specific_data( cs );
                     continue;
+                }
                 uint8_t *box_data = cs->data.unstructured;
                 uint64_t box_size = cs->size;
                 lsmash_compact_box_type_t fourcc = LSMASH_4CC( box_data[4], box_data[5], box_data[6], box_data[7] );
@@ -2020,7 +2025,10 @@ int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_
                 if( !cs )
                     goto fail;
                 if( cs->size < ISOM_BASEBOX_COMMON_SIZE )
+                {
+                    lsmash_destroy_codec_specific_data( cs );
                     continue;
+                }
                 uint8_t *box_data = cs->data.unstructured;
                 uint64_t box_size = cs->size;
                 lsmash_compact_box_type_t fourcc = LSMASH_4CC( box_data[4], box_data[5], box_data[6], box_data[7] );
