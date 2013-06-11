@@ -3239,6 +3239,7 @@ int isom_read_root( lsmash_root_t *root )
     int ret = isom_read_children( root, &box, root, 0 );
     root->size = box.size;
     lsmash_bs_empty( bs );
+    bs->error = 0;  /* Clear error flag. */
     if( ret < 0 )
         return ret;
     return isom_check_compatibility( root );
