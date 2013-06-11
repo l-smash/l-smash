@@ -3025,14 +3025,13 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
     }
     if( lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_WAVE ) )
     {
+        form_box_type_func = lsmash_form_qtff_box_type;
              if( box->type.fourcc == QT_BOX_TYPE_FRMA.fourcc )       reader_func = isom_read_frma;
         else if( box->type.fourcc == QT_BOX_TYPE_ENDA.fourcc )       reader_func = isom_read_enda;
         else if( box->type.fourcc == QT_BOX_TYPE_ESDS.fourcc )       reader_func = isom_read_esds;
         else if( box->type.fourcc == QT_BOX_TYPE_CHAN.fourcc )       reader_func = isom_read_chan;
         else if( box->type.fourcc == QT_BOX_TYPE_TERMINATOR.fourcc ) reader_func = isom_read_terminator;
         else                                                         reader_func = isom_read_codec_specific;
-        if( reader_func != isom_read_codec_specific )
-            form_box_type_func = lsmash_form_qtff_box_type;
         goto read_box;
     }
     if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TREF ) )
