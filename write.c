@@ -976,6 +976,7 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
         ADD_WRITE_TABLE_ELEMENT( ISOM_CODEC_TYPE_EC_3_AUDIO, isom_write_audio_entry );
         ADD_WRITE_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAMR_AUDIO, isom_write_audio_entry );
         ADD_WRITE_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAWB_AUDIO, isom_write_audio_entry );
+        ADD_WRITE_TABLE_ELEMENT( QT_CODEC_TYPE_ALAC_AUDIO,   isom_write_audio_entry );
         ADD_WRITE_TABLE_ELEMENT( QT_CODEC_TYPE_MP4A_AUDIO,   isom_write_audio_entry );
         ADD_WRITE_TABLE_ELEMENT( QT_CODEC_TYPE_23NI_AUDIO,   isom_write_audio_entry );
         ADD_WRITE_TABLE_ELEMENT( QT_CODEC_TYPE_NONE_AUDIO,   isom_write_audio_entry );
