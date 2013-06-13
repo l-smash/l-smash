@@ -23,6 +23,7 @@
 #ifndef LSMASH_H
 #define LSMASH_H
 
+#include <stddef.h>
 #include <stdint.h>
 
 #define PRIVATE     /* If this declaration is placed at a variable, any user shall NOT use it. */
