@@ -1260,7 +1260,7 @@ int dts_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, in
             "Left/Right height in front",
             "Left/Right surround in rear",
             "Center Height in front",
-            "Over the listenerÅfs head",
+            "Over the listener's head",
             "Between left/right and center in front",
             "Left/Right on side in front",
             "Left/Right surround on side",
