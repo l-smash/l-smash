@@ -29,7 +29,13 @@
 #define PRIVATE     /* If this declaration is placed at a variable, any user shall NOT use it. */
 
 #define LSMASH_4CC( a, b, c, d ) (((a)<<24) | ((b)<<16) | ((c)<<8) | (d))
-#define LSMASH_PACK_ISO_LANGUAGE( a, b, c ) ((((a-0x60)&0x1f)<<10) | (((b-0x60)&0x1f)<<5) | ((c-0x60)&0x1f))
+
+/****************************************************************************
+ * Version
+ ****************************************************************************/
+#define LSMASH_VERSION_MAJOR  0
+#define LSMASH_VERSION_MINOR  0
+#define LSMASH_VERSION_MICRO  0
 
 /****************************************************************************
  * ROOT
@@ -1170,6 +1176,7 @@ typedef enum
 /* ISO language codes */
 typedef enum
 {
+#define LSMASH_PACK_ISO_LANGUAGE( a, b, c ) ((((a-0x60)&0x1f)<<10) | (((b-0x60)&0x1f)<<5) | ((c-0x60)&0x1f))
     ISOM_LANGUAGE_CODE_ENGLISH          = LSMASH_PACK_ISO_LANGUAGE( 'e', 'n', 'g' ),
     ISOM_LANGUAGE_CODE_FRENCH           = LSMASH_PACK_ISO_LANGUAGE( 'f', 'r', 'a' ),
     ISOM_LANGUAGE_CODE_GERMAN           = LSMASH_PACK_ISO_LANGUAGE( 'd', 'e', 'u' ),
