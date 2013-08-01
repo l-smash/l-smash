@@ -26,6 +26,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 #include "box.h"
 #include "isom.h"
@@ -5372,6 +5375,16 @@ lsmash_root_t *lsmash_open_movie( const char *filename, lsmash_file_mode mode )
     }
     else
         root->bs->stream = fopen( filename, open_mode );
+#ifdef _WIN32
+    if( !root->bs->stream )
+    {
+        wchar_t filename_wc[FILENAME_MAX * 2];
+        wchar_t open_mode_wc[4];
+        MultiByteToWideChar( CP_UTF8, 0, filename, -1, filename_wc, FILENAME_MAX * 2 );
+        MultiByteToWideChar( CP_UTF8, 0, open_mode, -1, open_mode_wc, 4 );
+        root->bs->stream = _wfopen( filename_wc, open_mode_wc );
+    }
+#endif
     if( !root->bs->stream )
         goto fail;
     root->flags = mode;
