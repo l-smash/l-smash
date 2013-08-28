@@ -62,6 +62,8 @@ typedef enum
  * or
  *   (2) write into stdout when 'mode' contains LSMASH_FILE_MODE_WRITE_FRAGMENTED.
  *
+ * Note that 'filename' must be encoded by UTF-8 if 'mode' contains LSMASH_FILE_MODE_WRITE.
+ *
  * Return the address of an allocated ROOT of the file if successful.
  * Return NULL otherwise. */
 lsmash_root_t *lsmash_open_movie

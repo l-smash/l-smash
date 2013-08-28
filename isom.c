@@ -5374,16 +5374,18 @@ lsmash_root_t *lsmash_open_movie( const char *filename, lsmash_file_mode mode )
             root->bs->stream = stdout;
     }
     else
-        root->bs->stream = fopen( filename, open_mode );
 #ifdef _WIN32
-    if( !root->bs->stream )
     {
         wchar_t filename_wc[FILENAME_MAX * 2];
         wchar_t open_mode_wc[4];
         MultiByteToWideChar( CP_UTF8, 0, filename, -1, filename_wc, FILENAME_MAX * 2 );
         MultiByteToWideChar( CP_UTF8, 0, open_mode, -1, open_mode_wc, 4 );
         root->bs->stream = _wfopen( filename_wc, open_mode_wc );
+        if( !root->bs->stream )
+            root->bs->stream = fopen( filename, open_mode );
     }
+#else
+        root->bs->stream = fopen( filename, open_mode );
 #endif
     if( !root->bs->stream )
         goto fail;
