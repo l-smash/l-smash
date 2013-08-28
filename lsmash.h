@@ -34,7 +34,7 @@
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  0
-#define LSMASH_VERSION_MINOR  0
+#define LSMASH_VERSION_MINOR  1
 #define LSMASH_VERSION_MICRO  0
 
 /****************************************************************************
@@ -63,6 +63,7 @@ typedef enum
  *   (2) write into stdout when 'mode' contains LSMASH_FILE_MODE_WRITE_FRAGMENTED.
  *
  * Note that 'filename' must be encoded by UTF-8 if 'mode' contains LSMASH_FILE_MODE_WRITE.
+ * On Windows, lsmash_convert_ansi_to_utf8() may help you.
  *
  * Return the address of an allocated ROOT of the file if successful.
  * Return NULL otherwise. */
@@ -3397,6 +3398,19 @@ int lsmash_write_free
 (
     lsmash_root_t *root
 );
+
+#ifdef _WIN32
+/* Convert string encoded by ACP (ANSI CODE PAGE) to UTF-8.
+ *
+ * Return the size of converted string (bytes) if successful.
+ * Return 0 otherwise. */
+int lsmash_convert_ansi_to_utf8
+(
+    const char *string_ansi,    /* string encoded by ACP */
+    char       *string_utf8,    /* buffer for converted string from ACP */
+    int         max_length      /* size of 'string_utf8' */
+);
+#endif
 
 #undef PRIVATE
 

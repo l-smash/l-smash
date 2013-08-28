@@ -25,6 +25,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
 
 #include "utils.h"
 
@@ -864,3 +868,27 @@ int lsmash_compare_cts( const lsmash_media_ts_t *a, const lsmash_media_ts_t *b )
     int64_t diff = (int64_t)(a->cts - b->cts);
     return diff > 0 ? 1 : (diff == 0 ? 0 : -1);
 }
+
+#ifdef _WIN32
+int lsmash_convert_ansi_to_utf8( const char *ansi, char *utf8, int length )
+{
+    int len0 = MultiByteToWideChar( CP_THREAD_ACP, 0, ansi, -1, 0, 0 );
+    wchar_t *buff = malloc( len0 * sizeof(wchar_t) );
+    if( !buff )
+        return 0;
+    int len1 = MultiByteToWideChar( CP_THREAD_ACP, 0, ansi, -1, buff, len0 );
+    if( len0 != len1 )
+        goto convert_fail;
+    len0 = WideCharToMultiByte( CP_UTF8, 0, buff, -1, 0, 0, 0, 0 );
+    if( len0 > length - 1 )
+        goto convert_fail;
+    len1 = WideCharToMultiByte( CP_UTF8, 0, buff, -1, utf8, length, 0, 0 );
+    free( buff );
+    if( len0 != len1 )
+        return 0;
+    return len1;
+convert_fail:
+    free( buff );
+    return 0;
+}
+#endif
