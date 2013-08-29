@@ -2863,7 +2863,7 @@ static int h264_importer_probe( importer_t *importer )
             {
                 /* Pictures with negative POC shall precede IDR-picture in composition order.
                  * The minimum POC is added to poc_offset when we encounter the next coded video sequence. */
-                if( last_idr == UINT32_MAX || i > last_idr + H264_MAX_NUM_REORDER_FRAMES )
+                if( last_idr == UINT32_MAX || i > last_idr + 2 * H264_MAX_NUM_REORDER_FRAMES )
                 {
                     if( !invalid_poc_present )
                     {
@@ -2886,7 +2886,7 @@ static int h264_importer_probe( importer_t *importer )
         poc_offset -= poc_min;
         int64_t poc_max = 0;
         for( uint32_t j = last_idr; j < i; j++ )
-            if( poc[j] >= 0 || (j <= last_idr + H264_MAX_NUM_REORDER_FRAMES) )
+            if( poc[j] >= 0 || (j <= last_idr + 2 * H264_MAX_NUM_REORDER_FRAMES) )
             {
                 poc[j] += poc_offset;
                 if( poc_max < poc[j] )
