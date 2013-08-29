@@ -2849,7 +2849,7 @@ static int h264_importer_probe( importer_t *importer )
     int64_t  poc_offset            = 0;
     int64_t  poc_min               = 0;
     int64_t  invalid_poc_min       = 0;
-    uint32_t last_idr              = 0;
+    uint32_t last_idr              = UINT32_MAX;
     uint32_t invalid_poc_start     = 0;
     uint32_t max_composition_delay = 0;
     int      invalid_poc_present   = 0;
@@ -2863,7 +2863,7 @@ static int h264_importer_probe( importer_t *importer )
             {
                 /* Pictures with negative POC shall precede IDR-picture in composition order.
                  * The minimum POC is added to poc_offset when we encounter the next coded video sequence. */
-                if( i > last_idr + H264_MAX_NUM_REORDER_FRAMES )
+                if( last_idr == UINT32_MAX || i > last_idr + H264_MAX_NUM_REORDER_FRAMES )
                 {
                     if( !invalid_poc_present )
                     {
