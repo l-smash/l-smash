@@ -994,25 +994,29 @@ static int h264_parse_slice_header( h264_info_t *info, h264_nalu_header_t *nalu_
         /* ref_pic_list_mvc_modification() */
         if( slice_type == H264_SLICE_TYPE_P || slice_type == H264_SLICE_TYPE_B || slice_type == H264_SLICE_TYPE_SP )
         {
-            if( lsmash_bits_get( bits, 1 ) )        /* (S)P: ref_pic_list_modification_flag_l0
-                                                     *    B: ref_pic_list_modification_flag_l1 */
+            for( int i = 0; i < 1 + (slice_type == H264_SLICE_TYPE_B); i++ )
             {
-                uint64_t modification_of_pic_nums_idc;
-                do
+                if( lsmash_bits_get( bits, 1 ) )        /* (S)P and B: ref_pic_list_modification_flag_l0
+                                                         *          B: ref_pic_list_modification_flag_l1 */
                 {
-                    modification_of_pic_nums_idc = h264_get_exp_golomb_ue( bits );
+                    uint64_t modification_of_pic_nums_idc;
+                    do
+                    {
+                        modification_of_pic_nums_idc = h264_get_exp_golomb_ue( bits );
 #if 0
-                    if( modification_of_pic_nums_idc == 0 || modification_of_pic_nums_idc == 1 )
-                        h264_get_exp_golomb_ue( bits );     /* abs_diff_pic_num_minus1 */
-                    else if( modification_of_pic_nums_idc == 2 )
-                        h264_get_exp_golomb_ue( bits );     /* long_term_pic_num */
-                    else if( modification_of_pic_nums_idc == 4 || modification_of_pic_nums_idc == 5 )
-                        h264_get_exp_golomb_ue( bits );     /* abs_diff_view_idx_minus1 */
+                        if( modification_of_pic_nums_idc == 0 || modification_of_pic_nums_idc == 1 )
+                            h264_get_exp_golomb_ue( bits );     /* abs_diff_pic_num_minus1 */
+                        else if( modification_of_pic_nums_idc == 2 )
+                            h264_get_exp_golomb_ue( bits );     /* long_term_pic_num */
+                        else if( modification_of_pic_nums_idc == 4 || modification_of_pic_nums_idc == 5 )
+                            h264_get_exp_golomb_ue( bits );     /* abs_diff_view_idx_minus1 */
 #else
-                    if( modification_of_pic_nums_idc != 3 )
-                        h264_get_exp_golomb_ue( bits );     /* abs_diff_pic_num_minus1, long_term_pic_num or abs_diff_view_idx_minus1 */
+                        if( modification_of_pic_nums_idc != 3 )
+                            h264_get_exp_golomb_ue( bits );     /* abs_diff_pic_num_minus1, long_term_pic_num or abs_diff_view_idx_minus1 */
 #endif
-                } while( modification_of_pic_nums_idc != 3 );
+                    } while( modification_of_pic_nums_idc != 3 );
+                }
+            }
         }
 #endif
     }
@@ -1021,23 +1025,26 @@ static int h264_parse_slice_header( h264_info_t *info, h264_nalu_header_t *nalu_
         /* ref_pic_list_modification() */
         if( slice_type == H264_SLICE_TYPE_P || slice_type == H264_SLICE_TYPE_B || slice_type == H264_SLICE_TYPE_SP )
         {
-            if( lsmash_bits_get( bits, 1 ) )        /* (S)P: ref_pic_list_modification_flag_l0
-                                                     *    B: ref_pic_list_modification_flag_l1 */
+            for( int i = 0; i < 1 + (slice_type == H264_SLICE_TYPE_B); i++ )
             {
-                uint64_t modification_of_pic_nums_idc;
-                do
+                if( lsmash_bits_get( bits, 1 ) )        /* (S)P and B: ref_pic_list_modification_flag_l0
+                                                         *          B: ref_pic_list_modification_flag_l1 */
                 {
-                    modification_of_pic_nums_idc = h264_get_exp_golomb_ue( bits );
+                    uint64_t modification_of_pic_nums_idc;
+                    do
+                    {
+                        modification_of_pic_nums_idc = h264_get_exp_golomb_ue( bits );
 #if 0
-                    if( modification_of_pic_nums_idc == 0 || modification_of_pic_nums_idc == 1 )
-                        h264_get_exp_golomb_ue( bits );     /* abs_diff_pic_num_minus1 */
-                    else if( modification_of_pic_nums_idc == 2 )
-                        h264_get_exp_golomb_ue( bits );     /* long_term_pic_num */
+                        if( modification_of_pic_nums_idc == 0 || modification_of_pic_nums_idc == 1 )
+                            h264_get_exp_golomb_ue( bits );     /* abs_diff_pic_num_minus1 */
+                        else if( modification_of_pic_nums_idc == 2 )
+                            h264_get_exp_golomb_ue( bits );     /* long_term_pic_num */
 #else
-                    if( modification_of_pic_nums_idc != 3 )
-                        h264_get_exp_golomb_ue( bits );     /* abs_diff_pic_num_minus1 or long_term_pic_num */
+                        if( modification_of_pic_nums_idc != 3 )
+                            h264_get_exp_golomb_ue( bits );     /* abs_diff_pic_num_minus1 or long_term_pic_num */
 #endif
-                } while( modification_of_pic_nums_idc != 3 );
+                    } while( modification_of_pic_nums_idc != 3 );
+                }
             }
         }
     }
