@@ -1080,7 +1080,7 @@ static int h264_parse_slice_header( h264_info_t *info, h264_nalu_header_t *nalu_
                     }
             }
     }
-    if( !nalu_header->nal_ref_idc )
+    if( nalu_header->nal_ref_idc )
     {
         /* dec_ref_pic_marking() */
         if( slice->IdrPicFlag )
