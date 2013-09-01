@@ -809,10 +809,10 @@ int h264_parse_pps( h264_info_t *info, uint8_t *rbsp_buffer, uint8_t *ebsp, uint
                     return -1;
         }
     }
-    h264_get_exp_golomb_ue( bits );     /* num_ref_idx_l0_default_active_minus1 */
-    h264_get_exp_golomb_ue( bits );     /* num_ref_idx_l1_default_active_minus1 */
-    pps->weighted_pred_flag  = lsmash_bits_get( bits, 1 );
-    pps->weighted_bipred_idc = lsmash_bits_get( bits, 2 );
+    pps->num_ref_idx_l0_default_active_minus1 = h264_get_exp_golomb_ue( bits );
+    pps->num_ref_idx_l1_default_active_minus1 = h264_get_exp_golomb_ue( bits );
+    pps->weighted_pred_flag                   = lsmash_bits_get( bits, 1 );
+    pps->weighted_bipred_idc                  = lsmash_bits_get( bits, 2 );
     h264_get_exp_golomb_se( bits );     /* pic_init_qp_minus26 */
     h264_get_exp_golomb_se( bits );     /* pic_init_qs_minus26 */
     h264_get_exp_golomb_se( bits );     /* chroma_qp_index_offset */
@@ -970,8 +970,8 @@ static int h264_parse_slice_header( h264_info_t *info, h264_nalu_header_t *nalu_
     }
     if( slice_type == H264_SLICE_TYPE_B )
         lsmash_bits_get( bits, 1 );
-    uint64_t num_ref_idx_l0_active_minus1 = 0;
-    uint64_t num_ref_idx_l1_active_minus1 = 0;
+    uint64_t num_ref_idx_l0_active_minus1 = pps->num_ref_idx_l0_default_active_minus1;
+    uint64_t num_ref_idx_l1_active_minus1 = pps->num_ref_idx_l1_default_active_minus1;
     if( slice_type == H264_SLICE_TYPE_P || slice_type == H264_SLICE_TYPE_SP || slice_type == H264_SLICE_TYPE_B )
     {
         if( lsmash_bits_get( bits, 1 ) )            /* num_ref_idx_active_override_flag */

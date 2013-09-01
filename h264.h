@@ -92,6 +92,8 @@ typedef struct
     uint8_t  bottom_field_pic_order_in_frame_present_flag;
     uint8_t  num_slice_groups_minus1;
     uint8_t  slice_group_map_type;
+    uint8_t  num_ref_idx_l0_default_active_minus1;
+    uint8_t  num_ref_idx_l1_default_active_minus1;
     uint8_t  weighted_pred_flag;
     uint8_t  weighted_bipred_idc;
     uint8_t  deblocking_filter_control_present_flag;
