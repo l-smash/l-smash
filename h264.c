@@ -1105,7 +1105,12 @@ static int h264_parse_slice_header( h264_info_t *info, h264_nalu_header_t *nalu_
                 {
                     if( memory_management_control_operation == 5 )
                         slice->has_mmco5 = 1;
-                    h264_get_exp_golomb_ue( bits );
+                    else
+                    {
+                        h264_get_exp_golomb_ue( bits );
+                        if( memory_management_control_operation == 3 )
+                            h264_get_exp_golomb_ue( bits );
+                    }
                 }
             } while( memory_management_control_operation );
         }
