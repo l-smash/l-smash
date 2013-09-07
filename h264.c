@@ -2142,14 +2142,14 @@ int h264_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, i
     for( uint8_t i = 0; i < numOfSequenceParameterSets; i++ )
     {
         uint16_t parameterSetLength = lsmash_bs_get_be16( bs );
-        lsmash_bs_get_bytes( bs, parameterSetLength );
+        lsmash_bs_skip_bytes( bs, parameterSetLength );
     }
     uint8_t numOfPictureParameterSets = lsmash_bs_get_byte( bs );
     lsmash_ifprintf( fp, indent, "numOfPictureParameterSets = %"PRIu8"\n", numOfPictureParameterSets );
     for( uint8_t i = 0; i < numOfPictureParameterSets; i++ )
     {
         uint16_t parameterSetLength = lsmash_bs_get_be16( bs );
-        lsmash_bs_get_bytes( bs, parameterSetLength );
+        lsmash_bs_skip_bytes( bs, parameterSetLength );
     }
     /* Note: there are too many files, in the world, that don't contain the following fields. */
     if( ISOM_REQUIRES_AVCC_EXTENSION( AVCProfileIndication )
