@@ -2075,7 +2075,7 @@ int h264_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_cod
     lsmash_bs_t *bs = lsmash_bs_create( NULL );
     if( !bs )
         return -1;
-    if( lsmash_bs_import_data( bs, data, src->size - (src->data.unstructured - data) ) )
+    if( lsmash_bs_import_data( bs, data, src->size - (data - src->data.unstructured) ) )
         goto fail;
     if( lsmash_bs_get_byte( bs ) != 1 )
         goto fail;  /* We don't support configurationVersion other than 1. */
