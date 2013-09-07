@@ -220,9 +220,22 @@ uint8_t lsmash_bs_get_byte( lsmash_bs_t *bs )
     return bs->data[bs->pos ++];
 }
 
+void lsmash_bs_skip_bytes( lsmash_bs_t *bs, uint32_t size )
+{
+    if( bs->error || size == 0 )
+        return;
+    if( bs->pos + size > bs->store )
+    {
+        lsmash_bs_free( bs );
+        bs->error = 1;
+        return;
+    }
+    bs->pos += size;
+}
+
 uint8_t *lsmash_bs_get_bytes( lsmash_bs_t *bs, uint32_t size )
 {
-    if( bs->error || !size )
+    if( bs->error || size == 0 )
         return NULL;
     if( bs->pos + size > bs->store )
     {
