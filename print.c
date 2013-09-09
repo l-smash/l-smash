@@ -1165,6 +1165,7 @@ static int isom_print_sample_description_extesion( FILE *fp, lsmash_root_t *root
         return -1;
     extern int mp4sys_print_codec_specific( FILE *, lsmash_root_t *, isom_box_t *, int );
     extern int h264_print_codec_specific( FILE *, lsmash_root_t *, isom_box_t *, int );
+    extern int hevc_print_codec_specific( FILE *, lsmash_root_t *, isom_box_t *, int );
     extern int h264_print_bitrate( FILE *, lsmash_root_t *, isom_box_t *, int );
     extern int vc1_print_codec_specific( FILE *, lsmash_root_t *, isom_box_t *, int );
     extern int ac3_print_codec_specific( FILE *, lsmash_root_t *, isom_box_t *, int );
@@ -1198,6 +1199,7 @@ static int isom_print_sample_description_extesion( FILE *fp, lsmash_root_t *root
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_ESDS, mp4sys_print_codec_specific );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_AVCC, h264_print_codec_specific );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_BTRT, h264_print_bitrate );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_HVCC, hevc_print_codec_specific );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DVC1, vc1_print_codec_specific );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DAC3, ac3_print_codec_specific );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DEC3, eac3_print_codec_specific );
@@ -2255,7 +2257,7 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
             {
                 lsmash_codec_type_t type;
                 isom_print_box_t    func;
-            } print_description_table[128] = { { LSMASH_CODEC_TYPE_INITIALIZER, NULL } };
+            } print_description_table[160] = { { LSMASH_CODEC_TYPE_INITIALIZER, NULL } };
             if( !print_description_table[0].func )
             {
                 /* Initialize the table. */
@@ -2263,9 +2265,13 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
 #define ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( type, func ) print_description_table[i++] = (struct print_description_table_tag){ type, func }
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC1_VIDEO, isom_print_visual_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC2_VIDEO, isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC3_VIDEO, isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC4_VIDEO, isom_print_visual_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVCP_VIDEO, isom_print_visual_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_DRAC_VIDEO, isom_print_visual_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_ENCV_VIDEO, isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_HVC1_VIDEO, isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_HEV1_VIDEO, isom_print_visual_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_MJP2_VIDEO, isom_print_visual_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_MP4V_VIDEO, isom_print_visual_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_MVC1_VIDEO, isom_print_visual_description );

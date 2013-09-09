@@ -1907,6 +1907,7 @@ typedef struct
 #define ISOM_BOX_TYPE_DEC3 lsmash_form_iso_box_type( LSMASH_4CC( 'd', 'e', 'c', '3' ) )
 #define ISOM_BOX_TYPE_DVC1 lsmash_form_iso_box_type( LSMASH_4CC( 'd', 'v', 'c', '1' ) )
 #define ISOM_BOX_TYPE_ESDS lsmash_form_iso_box_type( LSMASH_4CC( 'e', 's', 'd', 's' ) )
+#define ISOM_BOX_TYPE_HVCC lsmash_form_iso_box_type( LSMASH_4CC( 'h', 'v', 'c', 'C' ) )
 
 #define QT_BOX_TYPE_ALLF lsmash_form_qtff_box_type( LSMASH_4CC( 'A', 'l', 'l', 'F' ) )
 #define QT_BOX_TYPE_CLEF lsmash_form_qtff_box_type( LSMASH_4CC( 'c', 'l', 'e', 'f' ) )

@@ -34,7 +34,7 @@
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  0
-#define LSMASH_VERSION_MINOR  1
+#define LSMASH_VERSION_MINOR  2
 #define LSMASH_VERSION_MICRO  0
 
 /****************************************************************************
@@ -320,11 +320,26 @@ DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_GSM49_AUDIO,   0x6D730031 );              
 DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_NOT_SPECIFIED, 0x00000000 );                          /* either 'raw ' or 'twos' */
 
 /* Video CODEC identifiers */
-DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_AVC1_VIDEO,  LSMASH_4CC( 'a', 'v', 'c', '1' ) );    /* Advanced Video Coding */
-DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_AVC2_VIDEO,  LSMASH_4CC( 'a', 'v', 'c', '2' ) );    /* Advanced Video Coding */
+DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_AVC1_VIDEO,  LSMASH_4CC( 'a', 'v', 'c', '1' ) );    /* Advanced Video Coding
+                                                                                             *   Any sample must not contain any paramerter set and filler data. */
+DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_AVC2_VIDEO,  LSMASH_4CC( 'a', 'v', 'c', '2' ) );    /* Advanced Video Coding
+                                                                                             *   Any sample must not contain any paramerter set and filler data.
+                                                                                             *   May only be used when Extractors or Aggregators are required to be supported. */
+DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_AVC3_VIDEO,  LSMASH_4CC( 'a', 'v', 'c', '3' ) );    /* Advanced Video Coding
+                                                                                             *   It is allowed that sample contains parameter sets and filler data. */
+DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_AVC4_VIDEO,  LSMASH_4CC( 'a', 'v', 'c', '4' ) );    /* Advanced Video Coding
+                                                                                             *   It is allowed that sample contains parameter sets and filler data.
+                                                                                             *   May only be used when Extractors or Aggregators are required to be supported. */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_AVCP_VIDEO,  LSMASH_4CC( 'a', 'v', 'c', 'p' ) );    /* Advanced Video Coding Parameters */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_DRAC_VIDEO,  LSMASH_4CC( 'd', 'r', 'a', 'c' ) );    /* Dirac Video Coder */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_ENCV_VIDEO,  LSMASH_4CC( 'e', 'n', 'c', 'v' ) );    /* Encrypted/protected video */
+DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_HVC1_VIDEO,  LSMASH_4CC( 'h', 'v', 'c', '1' ) );    /* High Efficiency Video Coding
+                                                                                             *   The default and mandatory value of array_completeness is 1 for arrays of
+                                                                                             *   all types of parameter sets, and 0 for all other arrays.
+                                                                                             *   This means any sample must not contain any paramerter set and filler data. */
+DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_HEV1_VIDEO,  LSMASH_4CC( 'h', 'e', 'v', '1' ) );    /* High Efficiency Video Coding
+                                                                                             *   The default value of array_completeness is 0 for all arrays.
+                                                                                             *   It is allowed that sample contains parameter sets and filler data. */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_MJP2_VIDEO,  LSMASH_4CC( 'm', 'j', 'p', '2' ) );    /* Motion JPEG 2000 */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_MP4V_VIDEO,  LSMASH_4CC( 'm', 'p', '4', 'v' ) );    /* MPEG-4 Visual */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_MVC1_VIDEO,  LSMASH_4CC( 'm', 'v', 'c', '1' ) );    /* Multiview coding */
@@ -467,6 +482,7 @@ typedef enum
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG,
 
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264,
+    LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_HEVC,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_VC_1,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3,
@@ -2184,11 +2200,12 @@ typedef enum
     MP4SYS_OBJECT_TYPE_Font_Data_Stream                   = 0x06,   /* Font Data Stream */
     MP4SYS_OBJECT_TYPE_Synthetised_Texture                = 0x07,   /* Synthetised Texture */
     MP4SYS_OBJECT_TYPE_Text_Stream                        = 0x08,   /* Text Stream */
-    MP4SYS_OBJECT_TYPE_Visual_ISO_14496_2                 = 0x20,   /* Visual ISO/IEC 14496-2 */
+    MP4SYS_OBJECT_TYPE_Visual_ISO_14496_2                 = 0x20,   /* Visual ISO/IEC 14496-2
+                                                                     * The actual object types are within the DecoderSpecificInfo and defined in 14496-2. */
     MP4SYS_OBJECT_TYPE_Visual_H264_ISO_14496_10           = 0x21,   /* Visual ITU-T Recommendation H.264 | ISO/IEC 14496-10
                                                                      * The actual object types are within the DecoderSpecificInfo and defined in H.264 | 14496-10. */
     MP4SYS_OBJECT_TYPE_Parameter_Sets_H_264_ISO_14496_10  = 0x22,   /* Parameter Sets for ITU-T Recommendation H.264 | ISO/IEC 14496-10
-                                                                     * The actual object types are within the DecoderSpecificInfo and defined in 14496-2. */
+                                                                     * The actual object types are within the DecoderSpecificInfo and defined in H.264 | 14496-10. */
     MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3                  = 0x40,   /* Audio ISO/IEC 14496-3 (MPEG-4 Audio)
                                                                      * The actual object types are defined in 14496-3 and are in the DecoderSpecificInfo as specified in 14496-3. */
     MP4SYS_OBJECT_TYPE_Visual_ISO_13818_2_Simple_Profile  = 0x60,   /* Visual ISO/IEC 13818-2 Simple Profile (MPEG-2 Video) */
@@ -2495,6 +2512,17 @@ uint8_t *lsmash_create_alac_specific_info
     uint32_t                          *data_length
 );
 
+/* MPEG-4 Bitrate information.
+ *   Though you need not to set these fields manually since lsmash_finish_movie() calls the function
+ *   that calculates these values internally, these fields are optional.
+ *   Therefore, if you want to add this info, append this as an extension via LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264_BITRATE at least. */
+typedef struct
+{
+    uint32_t bufferSizeDB;  /* the size of the decoding buffer for the elementary stream in bytes */
+    uint32_t maxBitrate;    /* the maximum rate in bits/second over any window of one second */
+    uint32_t avgBitrate;    /* the average rate in bits/second over the entire presentation */
+} lsmash_h264_bitrate_t;
+
 /* H.264 tools to make exdata (AVC specific info).
  *   All members in lsmash_h264_specific_parameters_t except for lengthSizeMinusOne shall be automatically set up
  *   when appending SPS NAL units by calling lsmash_append_h264_parameter_set(). */
@@ -2521,11 +2549,11 @@ typedef struct
                                          *   This field must indicate a level of capability equal to or greater than
                                          *   the highest level indicated in the included parameter sets. */
     uint8_t lengthSizeMinusOne;         /* the length in bytes of the NALUnitLength field prior to NAL unit
-                                         * The value of this field shall be one of 0, 1, or 3
-                                         * corresponding to a length encoded with 1, 2, or 4 bytes, respectively.
-                                         * NALUnitLength indicates the size of a NAL unit measured in bytes,
-                                         * and includes the size of both the one byte NAL header and the EBSP payload
-                                         * but does not include the length field itself. */
+                                         *   The value of this field shall be one of 0, 1, or 3
+                                         *   corresponding to a length encoded with 1, 2, or 4 bytes, respectively.
+                                         *   NALUnitLength indicates the size of a NAL unit measured in bytes,
+                                         *   and includes the size of both the one byte NAL header and the EBSP payload
+                                         *   but does not include the length field itself. */
     /* chroma format and bit depth information
      * These fields must be identical in all the parameter sets. */
     uint8_t chroma_format;              /* chroma_format_idc in sequence parameter sets */
@@ -2535,17 +2563,6 @@ typedef struct
      * The NAL unit types are restricted to indicate SPS, PPS and SPS Ext NAL units only. */
     lsmash_h264_parameter_sets_t *parameter_sets;
 } lsmash_h264_specific_parameters_t;
-
-/* H.264 Bitrate information.
- * Though you need not to set these fields manually since lsmash_finish_movie() calls the function
- * that calculates these values internally, these fields are optional.
- * Therefore, if you want to add this info, append this as an extension via LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264_BITRATE at least. */
-typedef struct
-{
-    uint32_t bufferSizeDB;  /* the size of the decoding buffer for the elementary stream in bytes */
-    uint32_t maxBitrate;    /* the maximum rate in bits/second over any window of one second */
-    uint32_t avgBitrate;    /* the average rate in bits/second over the entire presentation */
-} lsmash_h264_bitrate_t;
 
 int lsmash_setup_h264_specific_parameters_from_access_unit
 (
@@ -2578,6 +2595,154 @@ int lsmash_append_h264_parameter_set
 uint8_t *lsmash_create_h264_specific_info
 (
     lsmash_h264_specific_parameters_t *param,
+    uint32_t                          *data_length
+);
+
+/* HEVC tools to make exdata (HEVC specific info).
+ *   All members in lsmash_hevc_specific_parameters_t except for avgFrameRate and lengthSizeMinusOne shall be
+ *   automatically set up when appending VPS and SPS NAL units by calling lsmash_append_hevc_dcr_nalu().
+ *   It is recommended that you should append VPS, SPS and PPS in this order so that a parameter set can reference
+ *   another parameter set. */
+typedef enum
+{
+    /* Parameter sets
+     *   When the CODEC identifier ISOM_CODEC_TYPE_HVC1_VIDEO is used, at least one parameter set for each array
+     *   of parameter set shall be in the configuration record. */
+    HEVC_DCR_NALU_TYPE_VPS        = 0,      /* VPS (Video Parameter Set) */
+    HEVC_DCR_NALU_TYPE_SPS        = 1,      /* SPS (Sequence Parameter Set) */
+    HEVC_DCR_NALU_TYPE_PPS        = 2,      /* PPS (Picture Parameter Set) */
+    /* SEI (Supplemental Enhancement Information)
+     *   Only the 'declarative' SEI messages that provide information about the stream as
+     *   a whole are allowed because SEIs themselves basically have no identifier and
+     *   no one can reference dynamically in a configuration record. */
+    HEVC_DCR_NALU_TYPE_PREFIX_SEI = 3,      /* Prefix SEI */
+    HEVC_DCR_NALU_TYPE_SUFFIX_SEI = 4,      /* Suffix SEI */
+    /* The number of the NAL unit types defined for HEVC Decoder Configuration Record */
+    HEVC_DCR_NALU_TYPE_NUM
+} lsmash_hevc_dcr_nalu_type;
+
+typedef struct lsmash_hevc_parameter_arrays_tag lsmash_hevc_parameter_arrays_t;
+
+typedef struct
+{
+    /* general profile, tier and level from VPS and/or SPS */
+    uint8_t  general_profile_space;                 /* general_profile_space
+                                                     *   The value in all the parameter sets must be identical. */
+    uint8_t  general_tier_flag;                     /* general_tier_flag
+                                                     *   The value must indicate a tier equal to or greater than the highest
+                                                     *   tier indicated in all the parameter sets. */
+    uint8_t  general_profile_idc;                   /* general_profile_idc
+                                                     *   The value must indicate a profile to which the stream associated with
+                                                     *   this configuration record conforms.
+                                                     *   Note: there is no profile to which the entire stream conforms, then
+                                                     *         the entire stream must be split into two or more sub-streams with
+                                                     *         separate configuration records in which these rules can be met. */
+    uint32_t general_profile_compatibility_flags;   /* general_profile_compatibility_flag[j] for j from 0 to 31
+                                                     *   The each bit may only be set if all the parameter sets set that bit. */
+    uint64_t general_constraint_indicator_flags;    /* the 6 bytes starting with the byte containing the general_progressive_source_flag
+                                                     *   The each bit may only be set if all the parameter sets set that bit. */
+    uint8_t  general_level_idc;                     /* general_level_idc
+                                                     *   The value must indicate a level of capability equal to or greater
+                                                     *   than the highest level indicated for the highest tier in all the
+                                                     *   parameter sets. */
+    /* */
+    uint16_t min_spatial_segmentation_idc;          /* min_spatial_segmentation_idc in VUI (Video Usability Information)
+                                                     *   The value must indicate a level of spatial segmentation equal to
+                                                     *   or less than the lowest level of spatial segmentation indicated in
+                                                     *   all the parameter sets. */
+    uint8_t  parallelismType;                       /* parallelismType indicates the type of parallelism that is used to meet the
+                                                     * restrictions imposed by min_spatial_segmentation_idc when the value of
+                                                     * min_spatial_segmentation_idc is greater than 0.
+                                                     *   For the stream to which this configuration record applies,
+                                                     *     0: mixed types of parallel decoding or parallelism type is unknown
+                                                     *     1: slice based parallel decoding
+                                                     *     2: tile based parallel decoding
+                                                     *     3: entropy coding synchronization based parallel decoding
+                                                     *        (WPP: Wavefront Parallel Processing) */
+    /* chroma format and bit depth information
+     * These fields must be identical in all the parameter sets. */
+    uint8_t  chromaFormat;                          /* chroma_format_idc in sequence parameter sets */
+    uint8_t  bitDepthLumaMinus8;                    /* bit_depth_luma_minus8 in sequence parameter sets */
+    uint8_t  bitDepthChromaMinus8;                  /* bit_depth_chroma_minus8 in sequence parameter sets */
+    /* miscellaneous */
+    uint16_t avgFrameRate;                          /* the average frame rate in units of frames/(256 seconds)
+                                                     *   Value 0 indicates an unspecified average frame rate. */
+    uint8_t  constantFrameRate;                     /* 0: the stream may or may not be of constant frame rate.
+                                                     * 1: that the stream to which this configuration record applies is of
+                                                     *    constant frame rate
+                                                     * 2: the representation of each temporal layer in the stream is of
+                                                     *    constant frame rate. */
+    uint8_t  numTemporalLayers;                     /* 0: it is unknown whether the stream is temporally scalable.
+                                                     * 1: the stream is not temporally scalable.
+                                                     * otherwise: the stream to which this configuration record applies is
+                                                     *            temporally scalable and the contained number of temporal layers
+                                                     *            (also referred to as temporal sublayer or sub-layer) is equal
+                                                     *            is equal to numTemporalLayers. */
+    uint8_t  temporalIdNested;                      /* 0: at least one of the SPSs that are activated when the stream to which
+                                                     *    this configuration record applies is decoded has sps_temporal_id_nesting_flag
+                                                     *    equal to 0.
+                                                     * 1: all SPSs that are activated when the stream to which this configuration
+                                                     *    record applies is decoded have sps_temporal_id_nesting_flag equal to 1
+                                                     *    and temporal sub-layer up-switching to any higher temporal layer can be
+                                                     *    performed at any sample.
+                                                     *    Any step-wise temporal sub-layer access picture shall not be present in
+                                                     *    the sequences to which this configuration record applies. */
+    uint8_t  lengthSizeMinusOne;                    /* the length in bytes of the NALUnitLength field prior to NAL unit
+                                                     *   The value of this field shall be one of 0, 1, or 3
+                                                     *   corresponding to a length encoded with 1, 2, or 4 bytes, respectively.
+                                                     *   NALUnitLength indicates the size of a NAL unit measured in bytes,
+                                                     *   and includes the size of both the one byte NAL header and the EBSP payload
+                                                     *   but does not include the length field itself. */
+    /* a set of arrays to carry initialization NAL units
+     * The NAL unit types are restricted to indicate VPS, SPS, PPS, and SEI NAL units only. */
+    lsmash_hevc_parameter_arrays_t *parameter_arrays;
+} lsmash_hevc_specific_parameters_t;
+
+int lsmash_setup_hevc_specific_parameters_from_access_unit
+(
+    lsmash_hevc_specific_parameters_t *param,
+    uint8_t                           *data,
+    uint32_t                           data_length
+);
+
+void lsmash_destroy_hevc_parameter_arrays
+(
+    lsmash_hevc_specific_parameters_t *param
+);
+
+int lsmash_check_hevc_dcr_nalu_appendable
+(
+    lsmash_hevc_specific_parameters_t *param,
+    lsmash_hevc_dcr_nalu_type          ps_type,
+    void                              *ps_data,
+    uint32_t                           ps_length
+);
+
+int lsmash_append_hevc_dcr_nalu
+(
+    lsmash_hevc_specific_parameters_t *param,
+    lsmash_hevc_dcr_nalu_type          ps_type,
+    void                              *ps_data,
+    uint32_t                           ps_length
+);
+
+int lsmash_set_hevc_array_completeness
+(
+    lsmash_hevc_specific_parameters_t *param,
+    lsmash_hevc_dcr_nalu_type          ps_type,
+    int                                array_completeness
+);
+
+int lsmash_get_hevc_array_completeness
+(
+    lsmash_hevc_specific_parameters_t *param,
+    lsmash_hevc_dcr_nalu_type          ps_type,
+    int                               *array_completeness
+);
+
+uint8_t *lsmash_create_hevc_specific_info
+(
+    lsmash_hevc_specific_parameters_t *param,
     uint32_t                          *data_length
 );
 

@@ -356,15 +356,19 @@ int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, void *summa
     {
         lsmash_codec_type_t type;
         void *func;
-    } description_setup_table[128] = { { LSMASH_CODEC_TYPE_INITIALIZER, NULL } };
+    } description_setup_table[160] = { { LSMASH_CODEC_TYPE_INITIALIZER, NULL } };
     if( !description_setup_table[0].func )
     {
         int i = 0;
 #define ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( type, func ) \
     description_setup_table[i++] = (struct description_setup_table_tag){ type, func }
         ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC1_VIDEO, isom_setup_visual_description );
-#if 0
         ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC2_VIDEO, isom_setup_visual_description );
+        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC3_VIDEO, isom_setup_visual_description );
+        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC4_VIDEO, isom_setup_visual_description );
+        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( ISOM_CODEC_TYPE_HVC1_VIDEO, isom_setup_visual_description );
+        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( ISOM_CODEC_TYPE_HEV1_VIDEO, isom_setup_visual_description );
+#if 0
         ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVCP_VIDEO, isom_setup_visual_description );
         ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( ISOM_CODEC_TYPE_SVC1_VIDEO, isom_setup_visual_description );
         ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( ISOM_CODEC_TYPE_MVC1_VIDEO, isom_setup_visual_description );
@@ -979,6 +983,8 @@ static int isom_scan_trak_profileLevelIndication( isom_trak_entry_t *trak, mp4a_
         {
             if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_AVC1_VIDEO )
              || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_AVC2_VIDEO )
+             || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_AVC3_VIDEO )
+             || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_AVC4_VIDEO )
              || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_AVCP_VIDEO )
              || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_SVC1_VIDEO )
              || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_MVC1_VIDEO )
@@ -986,7 +992,9 @@ static int isom_scan_trak_profileLevelIndication( isom_trak_entry_t *trak, mp4a_
             {
                 /* FIXME: Do we have to arbitrate like audio? */
                 if( *visual_pli == MP4SYS_VISUAL_PLI_NONE_REQUIRED )
-                    *visual_pli = MP4SYS_VISUAL_PLI_H264_AVC;
+                    *visual_pli = lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_AVCP_VIDEO )
+                                ? MP4SYS_OBJECT_TYPE_Parameter_Sets_H_264_ISO_14496_10
+                                : MP4SYS_VISUAL_PLI_H264_AVC;
             }
             else
                 *visual_pli = MP4SYS_VISUAL_PLI_NOT_SPECIFIED;
@@ -2183,7 +2191,7 @@ void isom_remove_sample_description( isom_sample_entry_t *sample )
     {
         lsmash_codec_type_t type;
         void (*func)( isom_sample_entry_t * );
-    } description_remover_table[128] = { { LSMASH_CODEC_TYPE_INITIALIZER, NULL } };
+    } description_remover_table[160] = { { LSMASH_CODEC_TYPE_INITIALIZER, NULL } };
     if( !description_remover_table[0].func )
     {
         /* Initialize the table. */
@@ -2192,7 +2200,11 @@ void isom_remove_sample_description( isom_sample_entry_t *sample )
     description_remover_table[i++] = (struct description_remover_table_tag){ type, func }
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC1_VIDEO, isom_remove_visual_description );
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC2_VIDEO, isom_remove_visual_description );
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC3_VIDEO, isom_remove_visual_description );
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC4_VIDEO, isom_remove_visual_description );
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVCP_VIDEO, isom_remove_visual_description );
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_HVC1_VIDEO, isom_remove_visual_description );
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_HEV1_VIDEO, isom_remove_visual_description );
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_SVC1_VIDEO, isom_remove_visual_description );
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_MVC1_VIDEO, isom_remove_visual_description );
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_MVC2_VIDEO, isom_remove_visual_description );
@@ -3428,7 +3440,10 @@ static int isom_update_bitrate_description( isom_mdia_t *mdia )
         lsmash_codec_type_t sample_type = (lsmash_codec_type_t)sample_entry->type;
         if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_AVC1_VIDEO )
          || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_AVC2_VIDEO )
-         || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_AVCP_VIDEO ) )
+         || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_AVC3_VIDEO )
+         || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_AVC4_VIDEO )
+         || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_HVC1_VIDEO )
+         || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_HEV1_VIDEO ) )
         {
             isom_visual_entry_t *stsd_data = (isom_visual_entry_t *)sample_entry;
             if( !stsd_data )
@@ -4188,7 +4203,7 @@ static uint64_t isom_update_stsd_size( isom_stsd_t *stsd )
         {
             lsmash_codec_type_t type;
             uint64_t (*func)( isom_sample_entry_t * );
-        } description_update_size_table[128] = { { LSMASH_CODEC_TYPE_INITIALIZER, NULL } };
+        } description_update_size_table[160] = { { LSMASH_CODEC_TYPE_INITIALIZER, NULL } };
         if( !description_update_size_table[0].func )
         {
             /* Initialize the table. */
@@ -4196,11 +4211,15 @@ static uint64_t isom_update_stsd_size( isom_stsd_t *stsd )
 #define ADD_DESCRIPTION_UPDATE_SIZE_TABLE_ELEMENT( type, func ) \
     description_update_size_table[i++] = (struct description_update_size_table_tag){ type, func }
             ADD_DESCRIPTION_UPDATE_SIZE_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC1_VIDEO, isom_update_visual_entry_size );
+            ADD_DESCRIPTION_UPDATE_SIZE_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC2_VIDEO, isom_update_visual_entry_size );
+            ADD_DESCRIPTION_UPDATE_SIZE_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC3_VIDEO, isom_update_visual_entry_size );
+            ADD_DESCRIPTION_UPDATE_SIZE_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC4_VIDEO, isom_update_visual_entry_size );
+            ADD_DESCRIPTION_UPDATE_SIZE_TABLE_ELEMENT( ISOM_CODEC_TYPE_HVC1_VIDEO, isom_update_visual_entry_size );
+            ADD_DESCRIPTION_UPDATE_SIZE_TABLE_ELEMENT( ISOM_CODEC_TYPE_HEV1_VIDEO, isom_update_visual_entry_size );
 #ifdef LSMASH_DEMUXER_ENABLED
             ADD_DESCRIPTION_UPDATE_SIZE_TABLE_ELEMENT( ISOM_CODEC_TYPE_MP4V_VIDEO, isom_update_visual_entry_size );
 #endif
 #if 0
-            ADD_DESCRIPTION_UPDATE_SIZE_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC2_VIDEO, isom_update_visual_entry_size );
             ADD_DESCRIPTION_UPDATE_SIZE_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVCP_VIDEO, isom_update_visual_entry_size );
             ADD_DESCRIPTION_UPDATE_SIZE_TABLE_ELEMENT( ISOM_CODEC_TYPE_SVC1_VIDEO, isom_update_visual_entry_size );
             ADD_DESCRIPTION_UPDATE_SIZE_TABLE_ELEMENT( ISOM_CODEC_TYPE_MVC1_VIDEO, isom_update_visual_entry_size );

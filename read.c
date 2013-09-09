@@ -979,7 +979,7 @@ static void *isom_sample_description_alloc( lsmash_codec_type_t sample_type )
     {
         lsmash_codec_type_t type;
         size_t              alloc_size;
-    } description_alloc_table[128] = { { LSMASH_CODEC_TYPE_INITIALIZER, 0 } };
+    } description_alloc_table[160] = { { LSMASH_CODEC_TYPE_INITIALIZER, 0 } };
     if( description_alloc_table[0].alloc_size == 0 )
     {
         /* Initialize the table. */
@@ -988,7 +988,11 @@ static void *isom_sample_description_alloc( lsmash_codec_type_t sample_type )
     description_alloc_table[i++] = (struct description_alloc_table_tag){ type, alloc_size }
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC1_VIDEO, sizeof(isom_visual_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC2_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC3_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC4_VIDEO, sizeof(isom_visual_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVCP_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_HVC1_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_HEV1_VIDEO, sizeof(isom_visual_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_MVC1_VIDEO, sizeof(isom_visual_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_MVC2_VIDEO, sizeof(isom_visual_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_MP4V_VIDEO, sizeof(isom_visual_entry_t) );
@@ -2880,7 +2884,7 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
             lsmash_compact_box_type_t fourcc;
             lsmash_box_type_t (*form_box_type_func)( lsmash_compact_box_type_t );
             int (*reader_func)( lsmash_root_t *, isom_box_t *, isom_box_t *, int );
-        } description_reader_table[128] = { { 0, NULL, NULL } };
+        } description_reader_table[160] = { { 0, NULL, NULL } };
         if( !description_reader_table[0].reader_func )
         {
             /* Initialize the table. */
@@ -2889,9 +2893,13 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
     description_reader_table[i++] = (struct description_reader_table_tag){ type.fourcc, form_box_type_func, reader_func }
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC1_VIDEO, lsmash_form_iso_box_type, isom_read_visual_description );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC2_VIDEO, lsmash_form_iso_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC3_VIDEO, lsmash_form_iso_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC4_VIDEO, lsmash_form_iso_box_type, isom_read_visual_description );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVCP_VIDEO, lsmash_form_iso_box_type, isom_read_visual_description );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_DRAC_VIDEO, lsmash_form_iso_box_type, isom_read_visual_description );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_ENCV_VIDEO, lsmash_form_iso_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_HVC1_VIDEO, lsmash_form_iso_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_HEV1_VIDEO, lsmash_form_iso_box_type, isom_read_visual_description );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_MJP2_VIDEO, lsmash_form_iso_box_type, isom_read_visual_description );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_MP4V_VIDEO, lsmash_form_iso_box_type, isom_read_visual_description );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_MVC1_VIDEO, lsmash_form_iso_box_type, isom_read_visual_description );
@@ -3203,6 +3211,7 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
             ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( ISOM_BOX_TYPE_DDTS, lsmash_form_iso_box_type );
             ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( ISOM_BOX_TYPE_DEC3, lsmash_form_iso_box_type );
             ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( ISOM_BOX_TYPE_DVC1, lsmash_form_iso_box_type );
+            ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( ISOM_BOX_TYPE_HVCC, lsmash_form_iso_box_type );
             ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT(   QT_BOX_TYPE_GLBL, lsmash_form_qtff_box_type );
             ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( LSMASH_BOX_TYPE_UNSPECIFIED, NULL );
 #undef ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT

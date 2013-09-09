@@ -143,11 +143,15 @@ static int isom_is_qt_audio( lsmash_codec_type_t type )
         || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_NOT_SPECIFIED );
 }
 
-static int isom_is_avc( lsmash_codec_type_t type )
+static int isom_is_nalff( lsmash_codec_type_t type )
 {
     return lsmash_check_codec_type_identical( type, ISOM_CODEC_TYPE_AVC1_VIDEO )
         || lsmash_check_codec_type_identical( type, ISOM_CODEC_TYPE_AVC2_VIDEO )
-        || lsmash_check_codec_type_identical( type, ISOM_CODEC_TYPE_AVCP_VIDEO );
+        || lsmash_check_codec_type_identical( type, ISOM_CODEC_TYPE_AVC3_VIDEO )
+        || lsmash_check_codec_type_identical( type, ISOM_CODEC_TYPE_AVC4_VIDEO )
+        || lsmash_check_codec_type_identical( type, ISOM_CODEC_TYPE_AVCP_VIDEO )
+        || lsmash_check_codec_type_identical( type, ISOM_CODEC_TYPE_HVC1_VIDEO )
+        || lsmash_check_codec_type_identical( type, ISOM_CODEC_TYPE_HEV1_VIDEO );
 }
 
 int lsmash_convert_crop_into_clap( lsmash_crop_t crop, uint32_t width, uint32_t height, lsmash_clap_t *clap )
@@ -225,6 +229,7 @@ static int isom_initialize_structured_codec_specific_data( lsmash_codec_specific
 {
     extern void mp4sys_destruct_decoder_config( void * );
     extern void h264_destruct_specific_data( void * );
+    extern void hevc_destruct_specific_data( void * );
     extern void vc1_destruct_specific_data( void * );
     extern void dts_destruct_specific_data( void * );
     switch( specific->type )
@@ -236,6 +241,10 @@ static int isom_initialize_structured_codec_specific_data( lsmash_codec_specific
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264 :
             specific->size     = sizeof(lsmash_h264_specific_parameters_t);
             specific->destruct = h264_destruct_specific_data;
+            break;
+        case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_HEVC :
+            specific->size     = sizeof(lsmash_hevc_specific_parameters_t);
+            specific->destruct = hevc_destruct_specific_data;
             break;
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_VC_1 :
             specific->size     = sizeof(lsmash_vc1_specific_parameters_t);
@@ -369,6 +378,7 @@ static int isom_duplicate_structured_specific_data( lsmash_codec_specific_t *dst
 {
     extern int mp4sys_copy_decoder_config( lsmash_codec_specific_t *, lsmash_codec_specific_t * );
     extern int h264_copy_codec_specific( lsmash_codec_specific_t *, lsmash_codec_specific_t * );
+    extern int hevc_copy_codec_specific( lsmash_codec_specific_t *, lsmash_codec_specific_t * );
     extern int vc1_copy_codec_specific( lsmash_codec_specific_t *, lsmash_codec_specific_t * );
     extern int dts_copy_codec_specific( lsmash_codec_specific_t *, lsmash_codec_specific_t * );
     void *src_data = src->data.structured;
@@ -379,6 +389,8 @@ static int isom_duplicate_structured_specific_data( lsmash_codec_specific_t *dst
             return mp4sys_copy_decoder_config( dst, src );
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264 :
             return h264_copy_codec_specific( dst, src );
+        case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_HEVC :
+            return hevc_copy_codec_specific( dst, src );
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_VC_1 :
             return vc1_copy_codec_specific( dst, src );
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3 :
@@ -681,6 +693,11 @@ lsmash_codec_specific_t *lsmash_convert_codec_specific_format( lsmash_codec_spec
                 if( !dst->data.unstructured )
                     goto fail;
                 return dst;
+            case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_HEVC :
+                dst->data.unstructured = lsmash_create_hevc_specific_info( (lsmash_hevc_specific_parameters_t *)specific->data.structured, &dst->size );
+                if( !dst->data.unstructured )
+                    goto fail;
+                return dst;
             case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_VC_1 :
                 dst->data.unstructured = lsmash_create_vc1_specific_info( (lsmash_vc1_specific_parameters_t *)specific->data.structured, &dst->size );
                 if( !dst->data.unstructured )
@@ -729,6 +746,7 @@ lsmash_codec_specific_t *lsmash_convert_codec_specific_format( lsmash_codec_spec
         /* unstructured -> structured */
         extern int mp4sys_construct_decoder_config( lsmash_codec_specific_t *, lsmash_codec_specific_t * );
         extern int h264_construct_specific_parameters( lsmash_codec_specific_t *, lsmash_codec_specific_t * );
+        extern int hevc_construct_specific_parameters( lsmash_codec_specific_t *, lsmash_codec_specific_t * );
         extern int vc1_construct_specific_parameters( lsmash_codec_specific_t *, lsmash_codec_specific_t * );
         extern int ac3_construct_specific_parameters( lsmash_codec_specific_t *, lsmash_codec_specific_t * );
         extern int eac3_construct_specific_parameters( lsmash_codec_specific_t *, lsmash_codec_specific_t * );
@@ -742,6 +760,7 @@ lsmash_codec_specific_t *lsmash_convert_codec_specific_format( lsmash_codec_spec
             {
                 { LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG,   mp4sys_construct_decoder_config },
                 { LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264,         h264_construct_specific_parameters },
+                { LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_HEVC,         hevc_construct_specific_parameters },
                 { LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_VC_1,         vc1_construct_specific_parameters },
                 { LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3,         ac3_construct_specific_parameters },
                 { LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3,         eac3_construct_specific_parameters },
@@ -778,9 +797,12 @@ static inline void isom_set_default_compressorname( char *compressorname, lsmash
         int i = 0;
 #define ADD_COMPRESSORNAME_TABLE( type, name ) compressorname_table[i++] = (struct compressorname_table_tag){ type, name }
         ADD_COMPRESSORNAME_TABLE( ISOM_CODEC_TYPE_AVC1_VIDEO, "\012AVC Coding" );
-        ADD_COMPRESSORNAME_TABLE( ISOM_CODEC_TYPE_AVC1_VIDEO, "\012AVC Coding" );
         ADD_COMPRESSORNAME_TABLE( ISOM_CODEC_TYPE_AVC2_VIDEO, "\012AVC Coding" );
+        ADD_COMPRESSORNAME_TABLE( ISOM_CODEC_TYPE_AVC3_VIDEO, "\012AVC Coding" );
+        ADD_COMPRESSORNAME_TABLE( ISOM_CODEC_TYPE_AVC4_VIDEO, "\012AVC Coding" );
         ADD_COMPRESSORNAME_TABLE( ISOM_CODEC_TYPE_AVCP_VIDEO, "\016AVC Parameters" );
+        ADD_COMPRESSORNAME_TABLE( ISOM_CODEC_TYPE_HVC1_VIDEO, "\013HEVC Coding" );
+        ADD_COMPRESSORNAME_TABLE( ISOM_CODEC_TYPE_HEV1_VIDEO, "\013HEVC Coding" );
         ADD_COMPRESSORNAME_TABLE( ISOM_CODEC_TYPE_SVC1_VIDEO, "\012SVC Coding" );
         ADD_COMPRESSORNAME_TABLE( ISOM_CODEC_TYPE_MVC1_VIDEO, "\012MVC Coding" );
         ADD_COMPRESSORNAME_TABLE( ISOM_CODEC_TYPE_MVC2_VIDEO, "\012MVC Coding" );
@@ -852,8 +874,14 @@ static int isom_check_valid_summary( lsmash_summary_t *summary )
     }
     lsmash_codec_type_t             sample_type        = summary->sample_type;
     lsmash_codec_specific_data_type required_data_type = LSMASH_CODEC_SPECIFIC_DATA_TYPE_UNSPECIFIED;
-    if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_AVC1_VIDEO ) )
+    if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_AVC1_VIDEO )
+     || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_AVC2_VIDEO )
+     || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_AVC3_VIDEO )
+     || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_AVC4_VIDEO ) )
         required_data_type = LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264;
+    else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_HVC1_VIDEO )
+          || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_HEV1_VIDEO ) )
+        required_data_type = LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_HEVC;
     else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_VC_1_VIDEO ) )
         required_data_type = LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_VC_1 ;
     else if( lsmash_check_codec_type_identical( sample_type, QT_CODEC_TYPE_ULRA_VIDEO )
@@ -898,7 +926,11 @@ static lsmash_box_type_t isom_guess_video_codec_specific_box_type( lsmash_codec_
     if( 0 );
     GUESS_VIDEO_CODEC_SPECIFIC_BOX_TYPE( ISOM_CODEC_TYPE_AVC1_VIDEO,    ISOM_BOX_TYPE_AVCC );
     GUESS_VIDEO_CODEC_SPECIFIC_BOX_TYPE( ISOM_CODEC_TYPE_AVC2_VIDEO,    ISOM_BOX_TYPE_AVCC );
+    GUESS_VIDEO_CODEC_SPECIFIC_BOX_TYPE( ISOM_CODEC_TYPE_AVC3_VIDEO,    ISOM_BOX_TYPE_AVCC );
+    GUESS_VIDEO_CODEC_SPECIFIC_BOX_TYPE( ISOM_CODEC_TYPE_AVC4_VIDEO,    ISOM_BOX_TYPE_AVCC );
     GUESS_VIDEO_CODEC_SPECIFIC_BOX_TYPE( ISOM_CODEC_TYPE_AVCP_VIDEO,    ISOM_BOX_TYPE_AVCC );
+    GUESS_VIDEO_CODEC_SPECIFIC_BOX_TYPE( ISOM_CODEC_TYPE_HVC1_VIDEO,    ISOM_BOX_TYPE_HVCC );
+    GUESS_VIDEO_CODEC_SPECIFIC_BOX_TYPE( ISOM_CODEC_TYPE_HEV1_VIDEO,    ISOM_BOX_TYPE_HVCC );
     GUESS_VIDEO_CODEC_SPECIFIC_BOX_TYPE( ISOM_CODEC_TYPE_VC_1_VIDEO,    ISOM_BOX_TYPE_DVC1 );
     GUESS_VIDEO_CODEC_SPECIFIC_BOX_TYPE( ISOM_CODEC_TYPE_MP4V_VIDEO,    ISOM_BOX_TYPE_ESDS );
     GUESS_VIDEO_CODEC_SPECIFIC_BOX_TYPE( LSMASH_CODEC_TYPE_UNSPECIFIED, ISOM_BOX_TYPE_BTRT );
@@ -936,7 +968,8 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
     visual->vertresolution       = 0x00480000;
     visual->dataSize             = 0;
     visual->frame_count          = 1;
-    visual->depth                = isom_is_qt_video( summary->sample_type ) || isom_is_avc( summary->sample_type ) ? summary->depth : 0x0018;
+    visual->depth                = isom_is_qt_video( summary->sample_type ) || isom_is_nalff( summary->sample_type )
+                                 ? summary->depth : 0x0018;
     visual->color_table_ID       = -1;
     if( summary->compressorname[0] == '\0' )
         isom_set_default_compressorname( visual->compressorname, sample_type );
@@ -2087,6 +2120,7 @@ static lsmash_codec_specific_data_type isom_get_codec_specific_data_type( lsmash
 #define ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT( extension_type, data_type ) \
     codec_specific_data_type_table[i++] = (struct codec_specific_data_type_table_tag){ extension_type.fourcc, data_type }
         ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT( ISOM_BOX_TYPE_AVCC, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264 );
+        ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT( ISOM_BOX_TYPE_HVCC, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_HEVC );
         ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT( ISOM_BOX_TYPE_DVC1, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_VC_1 );
         ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT( ISOM_BOX_TYPE_DAC3, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3 );
         ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT( ISOM_BOX_TYPE_DEC3, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3 );
