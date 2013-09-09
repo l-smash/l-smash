@@ -26,8 +26,9 @@
 
 struct lsmash_h264_parameter_sets_tag
 {
-    lsmash_entry_list_t sps_list[1];
-    lsmash_entry_list_t pps_list[1];
+    /* Each list contains entries as isom_avcC_ps_entry_t. */
+    lsmash_entry_list_t sps_list   [1];
+    lsmash_entry_list_t pps_list   [1];
     lsmash_entry_list_t spsext_list[1];
 };
 
@@ -174,8 +175,8 @@ struct h264_info_tag
 {
     lsmash_h264_specific_parameters_t avcC_param;
     h264_nalu_header_t   nalu_header;
-    lsmash_entry_list_t  sps_list[1];
-    lsmash_entry_list_t  pps_list[1];
+    lsmash_entry_list_t  sps_list  [1]; /* contains as h264_sps_t */
+    lsmash_entry_list_t  pps_list  [1]; /* contains as h264_pps_t */
     lsmash_entry_list_t  slice_list[1]; /* for slice data partition */
     h264_sps_t           sps;           /* active SPS */
     h264_pps_t           pps;           /* active PPS */

@@ -2495,31 +2495,45 @@ uint8_t *lsmash_create_alac_specific_info
     uint32_t                          *data_length
 );
 
-/* H.264 tools to make exdata (AVC specific info). */
+/* H.264 tools to make exdata (AVC specific info).
+ *   All members in lsmash_h264_specific_parameters_t except for lengthSizeMinusOne shall be automatically set up
+ *   when appending SPS NAL units by calling lsmash_append_h264_parameter_set(). */
 typedef enum
 {
-    H264_PARAMETER_SET_TYPE_SPS    = 0,
-    H264_PARAMETER_SET_TYPE_PPS    = 1,
-    H264_PARAMETER_SET_TYPE_SPSEXT = 2,
+    H264_PARAMETER_SET_TYPE_SPS    = 0,     /* SPS (Sequence Parameter Set) */
+    H264_PARAMETER_SET_TYPE_PPS    = 1,     /* PPS (Picture Parameter Set) */
+    H264_PARAMETER_SET_TYPE_SPSEXT = 2,     /* SPS Ext (Sequence Parameter Set Extension) */
 } lsmash_h264_parameter_set_type;
 
 typedef struct lsmash_h264_parameter_sets_tag lsmash_h264_parameter_sets_t;
 
 typedef struct
 {
-    uint8_t                       AVCProfileIndication;     /* profile_idc in sequence parameter sets */
-    uint8_t                       profile_compatibility;    /* constraint_set_flags in sequence parameter sets */
-    uint8_t                       AVCLevelIndication;       /* maximum level_idc in sequence parameter sets */
-    uint8_t                       lengthSizeMinusOne;       /* the length in bytes of the NALUnitLength field prior to NAL unit
-                                                             * The value of this field shall be one of 0, 1, or 3
-                                                             * corresponding to a length encoded with 1, 2, or 4 bytes, respectively.
-                                                             * NALUnitLength indicates the size of a NAL unit measured in bytes,
-                                                             * and includes the size of both the one byte NAL header and the EBSP payload
-                                                             * but does not include the length field itself. */
-    uint8_t                       chroma_format;            /* chroma_format_idc in sequence parameter sets */
-    uint8_t                       bit_depth_luma_minus8;    /* bit_depth_luma_minus8 in sequence parameter sets */
-    uint8_t                       bit_depth_chroma_minus8;  /* bit_depth_chroma_minus8 in sequence parameter sets */
-    lsmash_h264_parameter_sets_t *parameter_sets;           /* sequence parameter sets */
+    uint8_t AVCProfileIndication;       /* profile_idc in sequence parameter sets
+                                         *   This field must indicate a profile to which the stream associated with
+                                         *   this configuration record conforms.
+                                         *   Note: there is no profile to which the entire stream conforms, then
+                                         *         the entire stream must be split into two or more sub-streams with
+                                         *         separate configuration records in which these rules can be met. */
+    uint8_t profile_compatibility;      /* constraint_set_flags in sequence parameter sets
+                                         *   The each bit may only be set if all the included parameter sets set that flag. */
+    uint8_t AVCLevelIndication;         /* level_idc in sequence parameter sets
+                                         *   This field must indicate a level of capability equal to or greater than
+                                         *   the highest level indicated in the included parameter sets. */
+    uint8_t lengthSizeMinusOne;         /* the length in bytes of the NALUnitLength field prior to NAL unit
+                                         * The value of this field shall be one of 0, 1, or 3
+                                         * corresponding to a length encoded with 1, 2, or 4 bytes, respectively.
+                                         * NALUnitLength indicates the size of a NAL unit measured in bytes,
+                                         * and includes the size of both the one byte NAL header and the EBSP payload
+                                         * but does not include the length field itself. */
+    /* chroma format and bit depth information
+     * These fields must be identical in all the parameter sets. */
+    uint8_t chroma_format;              /* chroma_format_idc in sequence parameter sets */
+    uint8_t bit_depth_luma_minus8;      /* bit_depth_luma_minus8 in sequence parameter sets */
+    uint8_t bit_depth_chroma_minus8;    /* bit_depth_chroma_minus8 in sequence parameter sets */
+    /* a set of arrays to carry initialization NAL units
+     * The NAL unit types are restricted to indicate SPS, PPS and SPS Ext NAL units only. */
+    lsmash_h264_parameter_sets_t *parameter_sets;
 } lsmash_h264_specific_parameters_t;
 
 /* H.264 Bitrate information.
