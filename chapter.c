@@ -116,7 +116,7 @@ typedef int (*fn_get_chapter_data)( FILE *, isom_chapter_entry_t * );
 static fn_get_chapter_data isom_check_chap_line( char *file_name )
 {
     char buff[CHAPTER_BUFSIZE];
-    FILE *fp = fopen( file_name, "rb" );
+    FILE *fp = lsmash_fopen( file_name, "rb" );
     if( !fp )
     {
         lsmash_log( LSMASH_LOG_ERROR, "failed to open the chapter file \"%s\".\n", file_name );
@@ -147,7 +147,7 @@ int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom
     fn_get_chapter_data fnc = isom_check_chap_line( file_name );
     if( !fnc )
         goto error_message;
-    FILE *chapter = fopen( file_name, "rb" );
+    FILE *chapter = lsmash_fopen( file_name, "rb" );
     if( !chapter )
     {
         lsmash_log( LSMASH_LOG_ERROR, "failed to open the chapter file \"%s\".\n", file_name );
@@ -252,7 +252,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     if( !fnc )
         goto fail;
     /* Open chapter format file. */
-    chapter = fopen( file_name, "rb" );
+    chapter = lsmash_fopen( file_name, "rb" );
     if( !chapter )
     {
         lsmash_log( LSMASH_LOG_ERROR, "failed to open the chapter file \"%s\".\n", file_name );

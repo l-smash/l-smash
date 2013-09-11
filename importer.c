@@ -3596,7 +3596,7 @@ importer_t *lsmash_importer_open( const char *identifier, const char *format )
         importer->stream = stdin;
         importer->is_stdin = 1;
     }
-    else if( (importer->stream = fopen( identifier, "rb" )) == NULL )
+    else if( (importer->stream = lsmash_fopen( identifier, "rb" )) == NULL )
     {
         lsmash_importer_close( importer );
         return NULL;

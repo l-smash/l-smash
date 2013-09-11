@@ -1,10 +1,9 @@
 /*****************************************************************************
- * osdep.h:
+ * cli.c:
  *****************************************************************************
- * Copyright (C) 2010-2013 L-SMASH project
+ * Copyright (C) 2013 L-SMASH project
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
- *          Takashi Hirata <silverfilain@gmail.com>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -21,28 +20,25 @@
 
 /* This file is available under an ISC license. */
 
-#ifndef OSDEP_H
-#define OSDEP_H
+#include "internal.h" /* must be placed first */
 
-#define _FILE_OFFSET_BITS 64
-
-#ifdef __MINGW32__
-#define lsmash_fseek fseeko64
-#define lsmash_ftell ftello64
+#include <stdlib.h>
+#include <string.h>
+#include <stdarg.h>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #endif
 
 #ifdef _WIN32
-#  include <stdio.h>
-   FILE *lsmash_win32_fopen( const char *name, const char *mode );
-#  define lsmash_fopen lsmash_win32_fopen
-#else
-#  define lsmash_fopen fopen
-#endif
-
-#ifdef _WIN32
-#  include <wchar.h>
-   int lsmash_string_to_wchar( int cp, const char *from, wchar_t **to );
-   int lsmash_string_from_wchar( int cp, const wchar_t *from, char **to );
-#endif
-
+void lsmash_get_mainargs( int *argc, char ***argv )
+{
+    struct SI { int newmode; } si = { 0 };
+    int __wgetmainargs( int *, wchar_t ***, wchar_t ***, int, struct SI * );
+    wchar_t **wargv, **envp;
+    __wgetmainargs( argc, &wargv, &envp, 1, &si );
+    *argv = calloc( *argc + 1, sizeof(char*) );
+    for( int i = 0; i < *argc; ++i )
+        lsmash_string_from_wchar( CP_UTF8, wargv[i], &(*argv)[i] );
+}
 #endif

@@ -29,6 +29,7 @@
 
 #include "lsmash.h"
 #include "importer.h"
+#include "cli.h"
 
 #include "config.h"
 
@@ -1134,6 +1135,7 @@ int main( int argc, char *argv[] )
     if( argc < 3 )
         return MUXER_USAGE_ERR();
     muxer_t muxer = { { 0 } };
+    lsmash_get_mainargs( &argc, &argv );
     if( parse_global_options( argc, argv, &muxer ) )
         return MUXER_USAGE_ERR();
     if( muxer.opt.help )

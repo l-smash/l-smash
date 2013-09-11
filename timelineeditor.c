@@ -20,6 +20,8 @@
 
 /* This file is available under an ISC license. */
 
+#include "internal.h"
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -28,6 +30,7 @@
 #include <stdarg.h>
 
 #include "lsmash.h"
+#include "cli.h"
 
 #include "config.h"
 
@@ -843,6 +846,7 @@ int main( int argc, char *argv[] )
     movie_io_t io = { &output, &input, &timecode };
     opt_t opt = { 1, 0, 0, 0, 0, 0 };
     /* Parse options. */
+    lsmash_get_mainargs( &argc, &argv );
     int argn = 1;
     while( argn < argc - 2 )
     {
@@ -855,7 +859,7 @@ int main( int argc, char *argv[] )
         }
         else if( !strcasecmp( argv[argn], "--timecode" ) )
         {
-            timecode.file = fopen( argv[++argn], "rb" );
+            timecode.file = lsmash_fopen( argv[++argn], "rb" );
             if( !timecode.file )
                 return TIMELINEEDITOR_ERR( "Failed to open timecode file.\n" );
             ++argn;

@@ -271,10 +271,10 @@ fi
 # Notation for developpers.
 # Be sure to modified this block when you add/delete source files.
 SRCS="isom.c utils.c mp4sys.c mp4a.c dts.c a52.c h264.c vc1.c alac.c importer.c \
-      summary.c print.c read.c timeline.c chapter.c meta.c write.c description.c box.c"
+      summary.c print.c read.c timeline.c chapter.c meta.c write.c description.c box.c osdep.c"
 TOOLS_ALL="muxer remuxer boxdumper timelineeditor"
 TOOLS_NAME=""
-SRC_TOOLS=""
+SRC_TOOLS="cli.c"
 if test -n "$DEMUXER"; then
     CFLAGS="$CFLAGS -DLSMASH_DEMUXER_ENABLED"
     TOOLS="$TOOLS_ALL"
@@ -350,8 +350,8 @@ EOF
 
 for tool in $TOOLS; do
     cat >> config.mak2 << EOF
-${tool}${EXT}: ${tool}.o $STATICLIB $SHAREDLIB
-	\$(CC) \$(CFLAGS) \$(LDFLAGS) -o \$@ \$< -llsmash \$(LIBS)
+${tool}${EXT}: ${tool}.o cli.o $STATICLIB $SHAREDLIB
+	\$(CC) \$(CFLAGS) \$(LDFLAGS) -o \$@ \$< cli.o -llsmash \$(LIBS)
 	-@ \$(if \$(STRIP), \$(STRIP) \$@)
 
 EOF

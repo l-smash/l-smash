@@ -27,6 +27,7 @@
 #include <stdarg.h>
 
 #include "lsmash.h"
+#include "cli.h"
 
 #include "config.h"
 
@@ -1028,6 +1029,7 @@ int main( int argc, char *argv[] )
         display_help();
         return argc < 5 ? -1 : 0;
     }
+    lsmash_get_mainargs( &argc, &argv );
     int num_input = 0;
     for( int i = 1 ; i < argc ; i++ )
         if( !strcasecmp( argv[i], "-i" ) || !strcasecmp( argv[i], "--input" ) )

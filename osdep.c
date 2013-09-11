@@ -1,10 +1,9 @@
 /*****************************************************************************
- * osdep.h:
+ * osdep.c:
  *****************************************************************************
- * Copyright (C) 2010-2013 L-SMASH project
+ * Copyright (C) 2013 L-SMASH project
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
- *          Takashi Hirata <silverfilain@gmail.com>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -21,28 +20,48 @@
 
 /* This file is available under an ISC license. */
 
-#ifndef OSDEP_H
-#define OSDEP_H
+#include "common/osdep.h"
+#include <stdio.h>
+#include <stdlib.h>
 
-#define _FILE_OFFSET_BITS 64
-
-#ifdef __MINGW32__
-#define lsmash_fseek fseeko64
-#define lsmash_ftell ftello64
+#ifdef _WIN32
+#include <windows.h>
 #endif
 
 #ifdef _WIN32
-#  include <stdio.h>
-   FILE *lsmash_win32_fopen( const char *name, const char *mode );
-#  define lsmash_fopen lsmash_win32_fopen
-#else
-#  define lsmash_fopen fopen
+
+int lsmash_string_to_wchar( int cp, const char *from, wchar_t **to )
+{
+    int nc = MultiByteToWideChar( cp, 0, from, -1, 0, 0 );
+    if( nc == 0 )
+        return 0;
+    *to = malloc( nc * sizeof(wchar_t) );
+    MultiByteToWideChar( cp, 0, from, -1, *to, nc );
+    return nc;
+}
+
+int lsmash_string_from_wchar( int cp, const wchar_t *from, char **to )
+{
+    int nc = WideCharToMultiByte( cp, 0, from, -1, 0, 0, 0, 0 );
+    if( nc == 0 )
+        return 0;
+    *to = malloc( nc * sizeof(char) );
+    WideCharToMultiByte( cp, 0, from, -1, *to, nc, 0, 0 );
+    return nc;
+}
+
+FILE *lsmash_win32_fopen( const char *name, const char *mode )
+{
+    wchar_t *wname, *wmode;
+    lsmash_string_to_wchar( CP_UTF8, name, &wname );
+    lsmash_string_to_wchar( CP_UTF8, mode, &wmode );
+    FILE *fp = _wfopen( wname, wmode );
+    if( !fp )
+        fp = fopen( name, mode );
+    free( wname );
+    free( wmode );
+    return fp;
+}
+
 #endif
 
-#ifdef _WIN32
-#  include <wchar.h>
-   int lsmash_string_to_wchar( int cp, const char *from, wchar_t **to );
-   int lsmash_string_from_wchar( int cp, const wchar_t *from, char **to );
-#endif
-
-#endif

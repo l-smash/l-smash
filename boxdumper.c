@@ -30,6 +30,7 @@
 #endif
 
 #include "lsmash.h"
+#include "cli.h"
 
 #include "config.h"
 
@@ -68,6 +69,7 @@ int main( int argc, char *argv[] )
     int dump_box = 1;
     int chapter = 0;
     char *filename;
+    lsmash_get_mainargs( &argc, &argv );
     if( argc > 2 )
     {
         if( !strcasecmp( argv[1], "--box" ) )
