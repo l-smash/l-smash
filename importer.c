@@ -2981,9 +2981,9 @@ static int h264_importer_probe( importer_t *importer )
     memset( &info->slice, 0, sizeof(h264_slice_info_t) );
     memset( &info->sps, 0, sizeof(h264_sps_t) );
     memset( &info->pps, 0, sizeof(h264_pps_t) );
-    lsmash_remove_entries( info->avcC_param.parameter_sets->sps_list,    isom_remove_avcC_ps );
-    lsmash_remove_entries( info->avcC_param.parameter_sets->pps_list,    isom_remove_avcC_ps );
-    lsmash_remove_entries( info->avcC_param.parameter_sets->spsext_list, isom_remove_avcC_ps );
+    lsmash_remove_entries( info->avcC_param.parameter_sets->sps_list,    isom_remove_dcr_ps );
+    lsmash_remove_entries( info->avcC_param.parameter_sets->pps_list,    isom_remove_dcr_ps );
+    lsmash_remove_entries( info->avcC_param.parameter_sets->spsext_list, isom_remove_dcr_ps );
     return 0;
 fail:
     remove_h264_importer_info( importer_info );

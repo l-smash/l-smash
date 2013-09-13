@@ -471,12 +471,12 @@ typedef struct
     /* */
 } isom_avcC_t;
 
-/* Parameter Set Entry */
+/* Parameter Set Entry within Decoder Configuration Record */
 typedef struct
 {
-    uint16_t parameterSetLength;
-    uint8_t *parameterSetNALUnit;
-} isom_avcC_ps_entry_t;
+    uint16_t nalUnitLength;
+    uint8_t *nalUnit;
+} isom_dcr_ps_entry_t;
 
 /* MPEG-4 Bit Rate Box
  * This box signals the bit rate information of the AVC video stream. */
@@ -2160,8 +2160,8 @@ isom_tfra_entry_t *isom_get_tfra( isom_mfra_t *mfra, uint32_t track_ID );
 isom_sgpd_entry_t *isom_get_sample_group_description( isom_stbl_t *stbl, uint32_t grouping_type );
 isom_sbgp_entry_t *isom_get_sample_to_group( isom_stbl_t *stbl, uint32_t grouping_type );
 
-isom_avcC_ps_entry_t *isom_create_ps_entry( uint8_t *ps, uint32_t ps_size );
-void isom_remove_avcC_ps( isom_avcC_ps_entry_t *ps );
+isom_dcr_ps_entry_t *isom_create_ps_entry( uint8_t *ps, uint32_t ps_size );
+void isom_remove_dcr_ps( isom_dcr_ps_entry_t *ps );
 
 int isom_add_edts( isom_trak_entry_t *trak );
 int isom_add_elst( isom_edts_t *edts );

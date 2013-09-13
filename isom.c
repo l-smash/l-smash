@@ -199,27 +199,27 @@ static int isom_add_dref_entry( isom_dref_t *dref, uint32_t flags, char *name, c
     return 0;
 }
 
-isom_avcC_ps_entry_t *isom_create_ps_entry( uint8_t *ps, uint32_t ps_size )
+isom_dcr_ps_entry_t *isom_create_ps_entry( uint8_t *ps, uint32_t ps_size )
 {
-    isom_avcC_ps_entry_t *entry = malloc( sizeof(isom_avcC_ps_entry_t) );
+    isom_dcr_ps_entry_t *entry = malloc( sizeof(isom_dcr_ps_entry_t) );
     if( !entry )
         return NULL;
-    entry->parameterSetNALUnit = lsmash_memdup( ps, ps_size );
-    if( !entry->parameterSetNALUnit )
+    entry->nalUnit = lsmash_memdup( ps, ps_size );
+    if( !entry->nalUnit )
     {
         free( entry );
         return NULL;
     }
-    entry->parameterSetLength = ps_size;
+    entry->nalUnitLength = ps_size;
     return entry;
 }
 
-void isom_remove_avcC_ps( isom_avcC_ps_entry_t *ps )
+void isom_remove_dcr_ps( isom_dcr_ps_entry_t *ps )
 {
     if( !ps )
         return;
-    if( ps->parameterSetNALUnit )
-        free( ps->parameterSetNALUnit );
+    if( ps->nalUnit )
+        free( ps->nalUnit );
     free( ps );
 }
 
@@ -2026,9 +2026,9 @@ void isom_remove_avcC( isom_avcC_t *avcC )
 {
     if( !avcC )
         return;
-    lsmash_remove_list( avcC->sequenceParameterSets,   isom_remove_avcC_ps );
-    lsmash_remove_list( avcC->pictureParameterSets,    isom_remove_avcC_ps );
-    lsmash_remove_list( avcC->sequenceParameterSetExt, isom_remove_avcC_ps );
+    lsmash_remove_list( avcC->sequenceParameterSets,   isom_remove_dcr_ps );
+    lsmash_remove_list( avcC->pictureParameterSets,    isom_remove_dcr_ps );
+    lsmash_remove_list( avcC->sequenceParameterSetExt, isom_remove_dcr_ps );
     free( avcC );
 }
 
