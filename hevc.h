@@ -127,6 +127,7 @@ typedef struct
     uint8_t    max_sub_layers_minus1;
     uint8_t    temporal_id_nesting_flag;
     uint8_t    timing_info_present_flag;
+    uint8_t    frame_field_info_present_flag;
     uint16_t   num_hrd_parameters;
     hevc_ptl_t ptl;
     hevc_hrd_t hrd[2];

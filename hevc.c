@@ -722,6 +722,8 @@ static int hevc_parse_vps_minimally
     if( lsmash_bits_get( bits, 16 ) != 0xFFFF )
         return -1;
     hevc_parse_profile_tier_level( bits, &vps->ptl, vps->max_sub_layers_minus1 );
+    vps->frame_field_info_present_flag = vps->ptl.general.progressive_source_flag
+                                      && vps->ptl.general.interlaced_source_flag;
     int sub_layer_ordering_info_present_flag = lsmash_bits_get( bits, 1 );
     for( int i = sub_layer_ordering_info_present_flag ? 0 : vps->max_sub_layers_minus1; i <= vps->max_sub_layers_minus1; i++ )
     {
@@ -1231,15 +1233,17 @@ int hevc_parse_sei
             if( payloadType == 1 )
             {
                 /* pic_timing */
+                hevc_hrd_t *hrd = sps ? &sps->vui.hrd : vps ? &vps->hrd[0] : NULL;
+                if( !hrd )
+                    goto skip_sei_message;  /* Any active VPS or SPS is not found. */
                 sei->pic_timing.present = 1;
-                if( sps->vui.frame_field_info_present_flag )
+                if( (sps && sps->vui.frame_field_info_present_flag) || vps->frame_field_info_present_flag )
                 {
                     sei->pic_timing.pic_struct = lsmash_bits_get( bits, 4 );
                     lsmash_bits_get( bits, 2 );     /* source_scan_type */
                     lsmash_bits_get( bits, 1 );     /* duplicate_flag */
                 }
-                hevc_hrd_t *hrd = sps ? &sps->vui.hrd : vps ? &vps->hrd[0] : NULL;
-                if( hrd && hrd->CpbDpbDelaysPresentFlag )
+                if( hrd->CpbDpbDelaysPresentFlag )
                 {
                     lsmash_bits_get( bits, hrd->au_cpb_removal_delay_length );      /* au_cpb_removal_delay_minus1 */
                     lsmash_bits_get( bits, hrd->dpb_output_delay_length );          /* pic_dpb_output_delay */
@@ -1272,9 +1276,9 @@ int hevc_parse_sei
                 sei->recovery_point.broken_link_flag = lsmash_bits_get( bits, 1 );
             }
             else
-                lsmash_bits_get( bits, payloadSize * 8 );
+                goto skip_sei_message;
         }
-        else    /* if( nalu_header->nal_unit_type == HEVC_NALU_TYPE_SUFFIX_SEI ) */
+        else if( nalu_header->nal_unit_type == HEVC_NALU_TYPE_SUFFIX_SEI )
         {
             if( payloadType == 3 )
             {
@@ -1283,7 +1287,12 @@ int hevc_parse_sei
                 return -1;
             }
             else
-                lsmash_bits_get( bits, payloadSize * 8 );
+                goto skip_sei_message;
+        }
+        else
+        {
+skip_sei_message:
+            lsmash_bits_get( bits, payloadSize * 8 );
         }
         lsmash_bits_get_align( bits );
         rbsp_pos += payloadSize;
