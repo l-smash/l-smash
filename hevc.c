@@ -1267,6 +1267,12 @@ int hevc_parse_sei
                     }
                 }
             }
+            else if( payloadType == 3 )
+            {
+                /* filler_payload
+                 * FIXME: remove if array_completeness equal to 1. */
+                return -1;
+            }
             else if( payloadType == 6 )
             {
                 /* recovery_point */
@@ -1283,7 +1289,7 @@ int hevc_parse_sei
             if( payloadType == 3 )
             {
                 /* filler_payload
-                 * NAL file format is forbidden to contain this. */
+                 * FIXME: remove if array_completeness equal to 1. */
                 return -1;
             }
             else
