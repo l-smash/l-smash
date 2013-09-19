@@ -1957,12 +1957,7 @@ static inline int hevc_validate_dcr_nalu_type
     return 0;
 }
 
-/* Return 1 if a new parameter set is appendable.
- * Return 0 if no need to append a new parameter set.
- * Return -1 if there is error.
- * Return -2 if a new specific info is needed.
- * Return -3 if a new sample description entry is needed because visual presentation size changes */
-int lsmash_check_hevc_dcr_nalu_appendable
+lsmash_dcr_nalu_appendable lsmash_check_hevc_dcr_nalu_appendable
 (
     lsmash_hevc_specific_parameters_t *param,
     lsmash_hevc_dcr_nalu_type          ps_type,
@@ -1971,36 +1966,36 @@ int lsmash_check_hevc_dcr_nalu_appendable
 )
 {
     if( !param )
-        return -1;
+        return DCR_NALU_APPEND_ERROR;
     if( hevc_validate_dcr_nalu_type( ps_type, ps_data, ps_length ) )
-        return -1;
+        return DCR_NALU_APPEND_ERROR;
     /* Check whether the same parameter set already exsits or not. */
     lsmash_entry_list_t *ps_list = hevc_get_parameter_set_list( param, ps_type );
     if( !ps_list || !ps_list->head )
-        return 1;   /* No parameter set */
+        return DCR_NALU_APPEND_POSSIBLE;    /* No parameter set */
     switch( hevc_check_same_ps_existence( ps_list, ps_data, ps_length ) )
     {
         case 0  : break;
-        case 1  : return 0;     /* The same parameter set already exists. */
-        default : return -1;    /* An error occured. */
+        case 1  : return DCR_NALU_APPEND_DUPLICATED;    /* The same parameter set already exists. */
+        default : return DCR_NALU_APPEND_ERROR;         /* An error occured. */
     }
     /* Check the number of parameter sets in HEVC Decoder Configuration Record. */
     uint32_t ps_count;
     if( hevc_get_ps_count( ps_list, &ps_count ) )
-        return -1;
+        return DCR_NALU_APPEND_ERROR;
     if( (ps_type == HEVC_DCR_NALU_TYPE_VPS        && ps_count > HEVC_MAX_VPS_ID)
      || (ps_type == HEVC_DCR_NALU_TYPE_SPS        && ps_count > HEVC_MAX_SPS_ID)
      || (ps_type == HEVC_DCR_NALU_TYPE_PPS        && ps_count > HEVC_MAX_PPS_ID)
      || (ps_type == HEVC_DCR_NALU_TYPE_PREFIX_SEI && ps_count > ((1 << 16) - 1))
      || (ps_type == HEVC_DCR_NALU_TYPE_SUFFIX_SEI && ps_count > ((1 << 16) - 1)) )
-        return -2;  /* No more appendable parameter sets. */
+        return DCR_NALU_APPEND_NEW_DCR_REQUIRED;    /* No more appendable parameter sets. */
     if( ps_type == HEVC_DCR_NALU_TYPE_PREFIX_SEI
      || ps_type == HEVC_DCR_NALU_TYPE_SUFFIX_SEI )
-        return 1;
+        return DCR_NALU_APPEND_POSSIBLE;
     /* Check the maximum length of parameter sets in HEVC Decoder Configuration Record. */
     uint32_t max_ps_length;
     if( hevc_get_max_ps_length( ps_list, &max_ps_length ) )
-        return -1;
+        return DCR_NALU_APPEND_ERROR;
     max_ps_length = LSMASH_MAX( max_ps_length, ps_length );
     /* Check whether a new specific info is needed or not. */
     lsmash_bits_t bits = { 0 };
@@ -2016,20 +2011,21 @@ int lsmash_check_hevc_dcr_nalu_appendable
         uint8_t pps_id;
         if( hevc_get_pps_id( ps_data   + HEVC_MIN_NALU_HEADER_LENGTH,
                              ps_length - HEVC_MIN_NALU_HEADER_LENGTH, &pps_id ) )
-            return -1;
+            return DCR_NALU_APPEND_ERROR;
         for( lsmash_entry_t *entry = ps_list->head; entry; entry = entry->next )
         {
             isom_dcr_ps_entry_t *ps = (isom_dcr_ps_entry_t *)entry->data;
             if( !ps )
-                return -1;
+                return DCR_NALU_APPEND_ERROR;
             uint8_t param_pps_id;
             if( hevc_get_pps_id( ps->nalUnit       + HEVC_MIN_NALU_HEADER_LENGTH,
                                  ps->nalUnitLength - HEVC_MIN_NALU_HEADER_LENGTH, &param_pps_id ) )
-                return -1;
+                return DCR_NALU_APPEND_ERROR;
             if( pps_id == param_pps_id )
-                return -2;  /* PPS that has the same pic_parameter_set_id already exists with different form. */
+                /* PPS that has the same pic_parameter_set_id already exists with different form. */
+                return DCR_NALU_APPEND_NEW_DCR_REQUIRED;
         }
-        return 0;
+        return DCR_NALU_APPEND_POSSIBLE;
     }
     else if( ps_type == HEVC_DCR_NALU_TYPE_VPS )
     {
@@ -2038,33 +2034,34 @@ int lsmash_check_hevc_dcr_nalu_appendable
         if( hevc_parse_vps_minimally( &bits, &vps, rbsp_buffer,
                                       ps_data   + HEVC_MIN_NALU_HEADER_LENGTH,
                                       ps_length - HEVC_MIN_NALU_HEADER_LENGTH ) )
-            return -1;
+            return DCR_NALU_APPEND_ERROR;
         /* The value of profile_space must be identical in all the parameter sets in a single HEVC Decoder Configuration Record. */
         if( vps.ptl.general.profile_space != param->general_profile_space )
-            return -2;
+            return DCR_NALU_APPEND_NEW_DCR_REQUIRED;
         /* FIXME */
         if( vps.ptl.general.profile_idc != param->general_profile_idc )
-            return -2;
+            return DCR_NALU_APPEND_NEW_DCR_REQUIRED;
         for( lsmash_entry_t *entry = ps_list->head; entry; entry = entry->next )
         {
             isom_dcr_ps_entry_t *ps = (isom_dcr_ps_entry_t *)entry->data;
             if( !ps )
-                return -1;
+                return DCR_NALU_APPEND_ERROR;
             uint8_t param_vps_id;
             if( hevc_get_vps_id( ps->nalUnit       + HEVC_MIN_NALU_HEADER_LENGTH,
                                  ps->nalUnitLength - HEVC_MIN_NALU_HEADER_LENGTH, &param_vps_id ) )
-                return -1;
+                return DCR_NALU_APPEND_ERROR;
             if( param_vps_id == vps.video_parameter_set_id )
-                return -2;  /* VPS that has the same video_parameter_set_id already exists with different form. */
+                /* VPS that has the same video_parameter_set_id already exists with different form. */
+                return DCR_NALU_APPEND_NEW_DCR_REQUIRED;
         }
-        return 0;
+        return DCR_NALU_APPEND_POSSIBLE;
     }
     /* SPS */
     hevc_sps_t sps;
     if( hevc_parse_sps_minimally( &bits, &sps, rbsp_buffer,
                                   ps_data   + HEVC_MIN_NALU_HEADER_LENGTH,
                                   ps_length - HEVC_MIN_NALU_HEADER_LENGTH ) )
-        return -1;
+        return DCR_NALU_APPEND_ERROR;
     lsmash_bits_empty( &bits );
     /* The values of profile_space, chromaFormat, bitDepthLumaMinus8 and bitDepthChromaMinus8
      * must be identical in all the parameter sets in a single HEVC Decoder Configuration Record. */
@@ -2072,7 +2069,7 @@ int lsmash_check_hevc_dcr_nalu_appendable
      || sps.chroma_format_idc         != param->chromaFormat
      || sps.bit_depth_luma_minus8     != param->bitDepthLumaMinus8
      || sps.bit_depth_chroma_minus8   != param->bitDepthChromaMinus8 )
-        return -2;
+        return DCR_NALU_APPEND_NEW_DCR_REQUIRED;
     /* FIXME; If the sequence parameter sets are marked with different profiles,
      * and the relevant profile compatibility flags are all zero,
      * then the stream may need examination to determine which profile, if any, the stream conforms to.
@@ -2084,19 +2081,20 @@ int lsmash_check_hevc_dcr_nalu_appendable
 #else
     if( sps.ptl.general.profile_idc != param->general_profile_idc )
 #endif
-        return -2;
+        return DCR_NALU_APPEND_NEW_DCR_REQUIRED;
     /* Forbidden to duplicate SPS that has the same seq_parameter_set_id with different form within the same configuration record. */
     for( lsmash_entry_t *entry = ps_list->head; entry; entry = entry->next )
     {
         isom_dcr_ps_entry_t *ps = (isom_dcr_ps_entry_t *)entry->data;
         if( !ps )
-            return -1;
+            return DCR_NALU_APPEND_ERROR;
         uint8_t param_sps_id;
         if( hevc_get_sps_id( ps->nalUnit       + HEVC_MIN_NALU_HEADER_LENGTH,
                              ps->nalUnitLength - HEVC_MIN_NALU_HEADER_LENGTH, &param_sps_id ) )
-            return -1;
+            return DCR_NALU_APPEND_ERROR;
         if( param_sps_id == sps.seq_parameter_set_id )
-            return -2;  /* SPS that has the same seq_parameter_set_id already exists with different form. */
+            /* SPS that has the same seq_parameter_set_id already exists with different form. */
+            return DCR_NALU_APPEND_NEW_DCR_REQUIRED;
         if( entry == ps_list->head )
         {
             /* Check if the visual presentation sizes are different. */
@@ -2104,13 +2102,13 @@ int lsmash_check_hevc_dcr_nalu_appendable
             if( hevc_parse_sps_minimally( &bits, &first_sps, rbsp_buffer,
                                           ps->nalUnit       + HEVC_MIN_NALU_HEADER_LENGTH,
                                           ps->nalUnitLength - HEVC_MIN_NALU_HEADER_LENGTH ) )
-                return -1;
+                return DCR_NALU_APPEND_ERROR;
             if( sps.cropped_width  != first_sps.cropped_width
              || sps.cropped_height != first_sps.cropped_height )
-                return -3;
+                return DCR_NALU_APPEND_NEW_SAMPLE_ENTRY_REQUIRED;
         }
     }
-    return 0;
+    return DCR_NALU_APPEND_POSSIBLE;
 }
 
 static inline void hevc_specific_parameters_ready
@@ -2449,10 +2447,11 @@ int hevc_try_to_append_dcr_nalu
     int ret = lsmash_check_hevc_dcr_nalu_appendable( param, ps_type, ps_data, ps_length );
     switch( ret )
     {
-        case -1 :   /* Error */
-        case -2 :   /* Mulitiple sample description is needed. */
+        case DCR_NALU_APPEND_ERROR                     :    /* Error */
+        case DCR_NALU_APPEND_NEW_DCR_REQUIRED          :    /* Mulitiple sample description is needed. */
+        case DCR_NALU_APPEND_NEW_SAMPLE_ENTRY_REQUIRED :    /* Mulitiple sample description is needed. */
             return ret;
-        case 1 :    /* Appendable */
+        case DCR_NALU_APPEND_POSSIBLE :                     /* Appendable */
             switch( ps_type )
             {
                 case HEVC_DCR_NALU_TYPE_VPS :
@@ -2478,7 +2477,7 @@ int hevc_try_to_append_dcr_nalu
             }
             return lsmash_append_hevc_dcr_nalu( param, ps_type, ps_data, ps_length );
         default :   /* No need to append */
-            return 0;
+            return DCR_NALU_APPEND_DUPLICATED;
     }
 }
 

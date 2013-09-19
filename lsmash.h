@@ -34,7 +34,7 @@
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  0
-#define LSMASH_VERSION_MINOR  2
+#define LSMASH_VERSION_MINOR  3
 #define LSMASH_VERSION_MICRO  0
 
 /****************************************************************************
@@ -2523,6 +2523,16 @@ typedef struct
     uint32_t avgBitrate;    /* the average rate in bits/second over the entire presentation */
 } lsmash_h264_bitrate_t;
 
+/* Appendability of NAL unit into Decoder Configuration Record */
+typedef enum
+{
+    DCR_NALU_APPEND_NEW_SAMPLE_ENTRY_REQUIRED = -3, /* A new sample description entry is needed because e.g. visual presentation size changes. */
+    DCR_NALU_APPEND_NEW_DCR_REQUIRED          = -2, /* A new Decoder Configuration Record is needed. */
+    DCR_NALU_APPEND_ERROR                     = -1, /* something of errors */
+    DCR_NALU_APPEND_DUPLICATED                = 0,  /* The same NAL unit is in the Decoder Configuration Record. */
+    DCR_NALU_APPEND_POSSIBLE                  = 1,  /* It is possible to append the NAL unit into the Decoder Configuration Record. */
+} lsmash_dcr_nalu_appendable;
+
 /* H.264 tools to make exdata (AVC specific info).
  *   All members in lsmash_h264_specific_parameters_t except for lengthSizeMinusOne shall be automatically set up
  *   when appending SPS NAL units by calling lsmash_append_h264_parameter_set(). */
@@ -2576,7 +2586,7 @@ void lsmash_destroy_h264_parameter_sets
     lsmash_h264_specific_parameters_t *param
 );
 
-int lsmash_check_h264_parameter_set_appendable
+lsmash_dcr_nalu_appendable lsmash_check_h264_parameter_set_appendable
 (
     lsmash_h264_specific_parameters_t *param,
     lsmash_h264_parameter_set_type     ps_type,
@@ -2710,7 +2720,7 @@ void lsmash_destroy_hevc_parameter_arrays
     lsmash_hevc_specific_parameters_t *param
 );
 
-int lsmash_check_hevc_dcr_nalu_appendable
+lsmash_dcr_nalu_appendable lsmash_check_hevc_dcr_nalu_appendable
 (
     lsmash_hevc_specific_parameters_t *param,
     lsmash_hevc_dcr_nalu_type          ps_type,

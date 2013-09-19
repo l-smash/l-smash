@@ -1600,44 +1600,44 @@ static inline int h264_validate_ps_type( lsmash_h264_parameter_set_type ps_type,
     return 0;
 }
 
-/* Return 1 if a new parameter set is appendable.
- * Return 0 if no need to append a new parameter set.
- * Return -1 if there is error.
- * Return -2 if a new specific info is needed. */
-int lsmash_check_h264_parameter_set_appendable( lsmash_h264_specific_parameters_t *param,
-                                                lsmash_h264_parameter_set_type ps_type,
-                                                void *ps_data, uint32_t ps_length )
+lsmash_dcr_nalu_appendable lsmash_check_h264_parameter_set_appendable
+(
+    lsmash_h264_specific_parameters_t *param,
+    lsmash_h264_parameter_set_type     ps_type,
+    void                              *ps_data,
+    uint32_t                           ps_length
+)
 {
     if( !param )
-        return -1;
+        return DCR_NALU_APPEND_ERROR;
     if( h264_validate_ps_type( ps_type, ps_data, ps_length ) )
-        return -1;
+        return DCR_NALU_APPEND_ERROR;
     if( ps_type == H264_PARAMETER_SET_TYPE_SPSEXT
      && !ISOM_REQUIRES_AVCC_EXTENSION( param->AVCProfileIndication ) )
-        return 0;
+        return DCR_NALU_APPEND_ERROR;
     /* Check whether the same parameter set already exsits or not. */
     lsmash_entry_list_t *ps_list = h264_get_parameter_set_list( param, ps_type );
     if( !ps_list || !ps_list->head )
-        return 1;   /* No parameter set */
+        return DCR_NALU_APPEND_POSSIBLE;    /* No parameter set */
     switch( h264_check_same_ps_existence( ps_list, ps_data, ps_length ) )
     {
         case 0  : break;
-        case 1  : return 0;     /* The same parameter set already exists. */
-        default : return -1;    /* An error occured. */
+        case 1  : return DCR_NALU_APPEND_DUPLICATED;    /* The same parameter set already exists. */
+        default : return DCR_NALU_APPEND_ERROR;         /* An error occured. */
     }
     uint32_t max_ps_length;
     if( h264_get_max_ps_length( ps_list, &max_ps_length ) )
-        return -1;
+        return DCR_NALU_APPEND_ERROR;
     max_ps_length = LSMASH_MAX( max_ps_length, ps_length );
     uint32_t ps_count;
     if( h264_get_ps_count( ps_list, &ps_count ) )
-        return -1;
+        return DCR_NALU_APPEND_ERROR;
     if( (ps_type == H264_PARAMETER_SET_TYPE_SPS    && ps_count >= 31)
      || (ps_type == H264_PARAMETER_SET_TYPE_PPS    && ps_count >= 255)
      || (ps_type == H264_PARAMETER_SET_TYPE_SPSEXT && ps_count >= 255) )
-        return -2;  /* No more appendable parameter sets. */
+        return DCR_NALU_APPEND_NEW_DCR_REQUIRED;    /* No more appendable parameter sets. */
     if( ps_type == H264_PARAMETER_SET_TYPE_SPSEXT )
-        return 1;
+        return DCR_NALU_APPEND_POSSIBLE;
     /* Check whether a new specific info is needed or not. */
     lsmash_bits_t bits = { 0 };
     lsmash_bs_t   bs   = { 0 };
@@ -1651,24 +1651,25 @@ int lsmash_check_h264_parameter_set_appendable( lsmash_h264_specific_parameters_
         /* PPS */
         uint8_t pps_id;
         if( h264_get_pps_id( ps_data + 1, ps_length - 1, &pps_id ) )
-            return -1;
+            return DCR_NALU_APPEND_ERROR;
         for( lsmash_entry_t *entry = ps_list->head; entry; entry = entry->next )
         {
             isom_dcr_ps_entry_t *ps = (isom_dcr_ps_entry_t *)entry->data;
             if( !ps )
-                return -1;
+                return DCR_NALU_APPEND_ERROR;
             uint8_t param_pps_id;
             if( h264_get_pps_id( ps->nalUnit + 1, ps->nalUnitLength - 1, &param_pps_id ) )
-                return -1;
+                return DCR_NALU_APPEND_ERROR;
             if( pps_id == param_pps_id )
-                return -2;  /* PPS that has the same pic_parameter_set_id already exists with different form. */
+                /* PPS that has the same pic_parameter_set_id already exists with different form. */
+                return DCR_NALU_APPEND_NEW_DCR_REQUIRED;
         }
-        return 0;
+        return DCR_NALU_APPEND_POSSIBLE;
     }
     /* SPS */
     h264_sps_t sps;
     if( h264_parse_sps_easy( &bits, &sps, rbsp_buffer, ps_data + 1, ps_length - 1 ) )
-        return -1;
+        return DCR_NALU_APPEND_ERROR;
     lsmash_bits_empty( &bits );
     /* FIXME; If the sequence parameter sets are marked with different profiles,
      * and the relevant profile compatibility flags are all zero,
@@ -1680,28 +1681,41 @@ int lsmash_check_h264_parameter_set_appendable( lsmash_h264_specific_parameters_
 #else
     if( sps.profile_idc != param->AVCProfileIndication )
 #endif
-        return -2;
+        return DCR_NALU_APPEND_NEW_DCR_REQUIRED;
     /* The values of chroma_format_idc, bit_depth_luma_minus8 and bit_depth_chroma_minus8
      * must be identical in all SPSs in a single AVC configuration record. */
     if( ISOM_REQUIRES_AVCC_EXTENSION( param->AVCProfileIndication )
      && (sps.chroma_format_idc       != param->chroma_format
      ||  sps.bit_depth_luma_minus8   != param->bit_depth_luma_minus8
      ||  sps.bit_depth_chroma_minus8 != param->bit_depth_chroma_minus8) )
-        return -2;
+        return DCR_NALU_APPEND_NEW_DCR_REQUIRED;
     /* Forbidden to duplicate SPS that has the same seq_parameter_set_id with different form within the same configuration record. */
     uint8_t sps_id = sps.seq_parameter_set_id;
     for( lsmash_entry_t *entry = ps_list->head; entry; entry = entry->next )
     {
         isom_dcr_ps_entry_t *ps = (isom_dcr_ps_entry_t *)entry->data;
         if( !ps )
-            return -1;
+            return DCR_NALU_APPEND_ERROR;
         uint8_t param_sps_id;
         if( h264_get_sps_id( ps->nalUnit + 1, ps->nalUnitLength - 1, &param_sps_id ) )
-            return -1;
+            return DCR_NALU_APPEND_ERROR;
         if( sps_id == param_sps_id )
-            return -2;  /* SPS that has the same seq_parameter_set_id already exists with different form. */
+            /* SPS that has the same seq_parameter_set_id already exists with different form. */
+            return DCR_NALU_APPEND_NEW_DCR_REQUIRED;
+        if( entry == ps_list->head )
+        {
+            /* Check if the visual presentation sizes are different. */
+            h264_sps_t first_sps;
+            if( h264_parse_sps_easy( &bits, &first_sps, rbsp_buffer,
+                                     ps->nalUnit       + 1,
+                                     ps->nalUnitLength - 1 ) )
+                return DCR_NALU_APPEND_ERROR;
+            if( sps.cropped_width  != first_sps.cropped_width
+             || sps.cropped_height != first_sps.cropped_height )
+                return DCR_NALU_APPEND_NEW_SAMPLE_ENTRY_REQUIRED;
+        }
     }
-    return 0;
+    return DCR_NALU_APPEND_POSSIBLE;
 }
 
 static inline void h264_reorder_parameter_set_ascending_id
@@ -1848,10 +1862,11 @@ int h264_try_to_append_parameter_set( h264_info_t *info, lsmash_h264_parameter_s
     int ret = lsmash_check_h264_parameter_set_appendable( param, ps_type, ps_data, ps_length );
     switch( ret )
     {
-        case -1 :   /* Error */
-        case -2 :   /* Mulitiple sample description is needed. */
+        case DCR_NALU_APPEND_ERROR                     :    /* Error */
+        case DCR_NALU_APPEND_NEW_DCR_REQUIRED          :    /* Mulitiple sample description is needed. */
+        case DCR_NALU_APPEND_NEW_SAMPLE_ENTRY_REQUIRED :    /* Mulitiple sample description is needed. */
             return ret;
-        case 1 :    /* Appendable */
+        case DCR_NALU_APPEND_POSSIBLE :                     /* Appendable */
             switch( ps_type )
             {
                 case H264_PARAMETER_SET_TYPE_SPS :
@@ -1867,7 +1882,7 @@ int h264_try_to_append_parameter_set( h264_info_t *info, lsmash_h264_parameter_s
             }
             return lsmash_append_h264_parameter_set( param, ps_type, ps_data, ps_length );
         default :   /* No need to append */
-            return 0;
+            return DCR_NALU_APPEND_DUPLICATED;
     }
 }
 
