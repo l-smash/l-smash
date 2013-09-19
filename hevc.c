@@ -1463,6 +1463,7 @@ void hevc_update_picture_info
 (
     hevc_picture_info_t *picture,
     hevc_slice_info_t   *slice,
+    hevc_sps_t          *sps,
     hevc_sei_t          *sei
 )
 {
@@ -1479,6 +1480,7 @@ void hevc_update_picture_info
     picture->poc_lsb              = slice->pic_order_cnt_lsb;
     hevc_update_picture_info_for_slice( picture, slice );
     picture->independent = (picture->type == HEVC_PICTURE_TYPE_I);
+#if 0
     if( sei->pic_timing.present )
     {
         picture->field_coded = sei->pic_timing.pic_struct == 1  || sei->pic_timing.pic_struct == 2
@@ -1486,6 +1488,11 @@ void hevc_update_picture_info
                             || sei->pic_timing.pic_struct == 11 || sei->pic_timing.pic_struct == 12;
         sei->pic_timing.present = 0;
     }
+    else
+        picture->field_coded = 0;
+#else
+    picture->field_coded = sps->vui.field_seq_flag;
+#endif
     if( sei->recovery_point.present )
     {
         picture->random_accessible |= sei->recovery_point.present;
@@ -1493,6 +1500,8 @@ void hevc_update_picture_info
         picture->broken_link       |= sei->recovery_point.broken_link_flag;
         sei->recovery_point.present = 0;
     }
+    else
+        picture->recovery_poc_cnt = 0;
 }
 
 static uint64_t hevc_get_ctb_address_in_tile_scan

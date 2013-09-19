@@ -349,6 +349,7 @@ void hevc_update_picture_info
 (
     hevc_picture_info_t *picture,
     hevc_slice_info_t   *slice,
+    hevc_sps_t          *sps,
     hevc_sei_t          *sei
 );
 

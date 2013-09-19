@@ -3180,7 +3180,7 @@ static int hevc_get_access_unit_internal( hevc_importer_info_t *importer_info, i
         {
             /* For the last NALU.
              * This NALU already has been appended into the latest access unit and parsed. */
-            hevc_update_picture_info( picture, slice, &info->sei );
+            hevc_update_picture_info( picture, slice, &info->sps, &info->sei );
             hevc_complete_au( au, probe );
             return hevc_get_au_internal_succeeded( importer_info, au, &nalu_header, no_more_buf );
         }
@@ -3253,7 +3253,7 @@ static int hevc_get_access_unit_internal( hevc_importer_info_t *importer_info, i
                     {
                         /* The current NALU is the first VCL NALU of the primary coded picture of a new AU.
                          * Therefore, the previous slice belongs to the AU you want at this time. */
-                        hevc_update_picture_info( picture, &prev_slice, &info->sei );
+                        hevc_update_picture_info( picture, &prev_slice, &info->sps, &info->sei );
                         complete_au = hevc_complete_au( au, probe );
                     }
                     else
@@ -3267,7 +3267,7 @@ static int hevc_get_access_unit_internal( hevc_importer_info_t *importer_info, i
                 if( hevc_find_au_delimit_by_nalu_type( nalu_type, info->prev_nalu_type ) )
                 {
                     /* The last slice belongs to the AU you want at this time. */
-                    hevc_update_picture_info( picture, slice, &info->sei );
+                    hevc_update_picture_info( picture, slice, &info->sps, &info->sei );
                     complete_au = hevc_complete_au( au, probe );
                 }
                 else if( no_more )
@@ -3330,7 +3330,7 @@ static int hevc_get_access_unit_internal( hevc_importer_info_t *importer_info, i
         /* If there is no more data in the stream, and flushed chunk of NALUs, flush it as complete AU here. */
         else if( au->incomplete_length && au->length == 0 )
         {
-            hevc_update_picture_info( picture, slice, &info->sei );
+            hevc_update_picture_info( picture, slice, &info->sps, &info->sei );
             hevc_complete_au( au, probe );
             return hevc_get_au_internal_succeeded( importer_info, au, &nalu_header, no_more_buf );
         }
