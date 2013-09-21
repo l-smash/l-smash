@@ -355,8 +355,7 @@ void hevc_update_picture_info
 
 int hevc_find_au_delimit_by_slice_info
 (
-    hevc_sps_t        *sps,
-    hevc_pps_t        *pps,
+    hevc_info_t       *info,
     hevc_slice_info_t *slice,
     hevc_slice_info_t *prev_slice
 );

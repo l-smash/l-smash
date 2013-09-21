@@ -1540,8 +1540,7 @@ static uint64_t hevc_get_ctb_address_in_tile_scan
 
 int hevc_find_au_delimit_by_slice_info
 (
-    hevc_sps_t        *sps,
-    hevc_pps_t        *pps,
+    hevc_info_t       *info,
     hevc_slice_info_t *slice,
     hevc_slice_info_t *prev_slice
 )
@@ -1558,10 +1557,16 @@ int hevc_find_au_delimit_by_slice_info
      *     ||         CtbAddrRsToTs[ slice->segment_address ]   <=         CtbAddrRsToTs[ prev_slice->segment_address ] )
      *        return 1;
      */
+    hevc_pps_t *prev_pps = hevc_get_pps( info->pps_list, prev_slice->pic_parameter_set_id );
+    if( !prev_pps )
+        return 0;
+    hevc_sps_t *prev_sps = hevc_get_sps( info->sps_list, prev_pps->seq_parameter_set_id );
+    if( !prev_sps )
+        return 0;
     uint64_t currTileId;
     uint64_t prevTileId;
-    uint64_t currCtbAddrInTs = hevc_get_ctb_address_in_tile_scan( sps, pps,      slice->segment_address, &currTileId );
-    uint64_t prevCtbAddrInTs = hevc_get_ctb_address_in_tile_scan( sps, pps, prev_slice->segment_address, &prevTileId );
+    uint64_t currCtbAddrInTs = hevc_get_ctb_address_in_tile_scan( &info->sps, &info->pps,      slice->segment_address, &currTileId );
+    uint64_t prevCtbAddrInTs = hevc_get_ctb_address_in_tile_scan(   prev_sps,   prev_pps, prev_slice->segment_address, &prevTileId );
     if( currTileId      <= prevTileId
      || currCtbAddrInTs <= prevCtbAddrInTs )
         return 1;
@@ -2632,7 +2637,7 @@ int lsmash_setup_hevc_specific_parameters_from_access_unit
                 if( prev_slice.present )
                 {
                     /* Check whether the AU that contains the previous VCL NALU completed or not. */
-                    if( hevc_find_au_delimit_by_slice_info( &info->sps, &info->pps, slice, &prev_slice ) )
+                    if( hevc_find_au_delimit_by_slice_info( info, slice, &prev_slice ) )
                         /* The current NALU is the first VCL NALU of the primary coded picture of a new AU.
                          * Therefore, the previous slice belongs to that new AU. */
                         complete_au = 1;

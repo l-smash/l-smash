@@ -3249,7 +3249,7 @@ static int hevc_get_access_unit_internal( hevc_importer_info_t *importer_info, i
                 if( prev_slice.present )
                 {
                     /* Check whether the AU that contains the previous VCL NALU completed or not. */
-                    if( hevc_find_au_delimit_by_slice_info( &info->sps, &info->pps, slice, &prev_slice ) )
+                    if( hevc_find_au_delimit_by_slice_info( info, slice, &prev_slice ) )
                     {
                         /* The current NALU is the first VCL NALU of the primary coded picture of a new AU.
                          * Therefore, the previous slice belongs to the AU you want at this time. */
