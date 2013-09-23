@@ -431,12 +431,3 @@ int hevc_try_to_append_dcr_nalu
     void                     *ps_data,
     uint32_t                  ps_length
 );
-
-static inline int hevc_check_next_short_start_code
-(
-    uint8_t *buf_pos,
-    uint8_t *buf_end
-)
-{
-    return ((buf_pos + 2) < buf_end) && !buf_pos[0] && !buf_pos[1] && (buf_pos[2] == 0x01);
-}

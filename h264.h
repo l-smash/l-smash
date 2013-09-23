@@ -211,22 +211,95 @@ int h264_setup_parser
     void                      *stream
 );
 
-void h264_cleanup_parser( h264_info_t *info );
-int h264_calculate_poc( h264_info_t *info, h264_picture_info_t *picture, h264_picture_info_t *prev_picture );
-void h264_update_picture_info_for_slice( h264_picture_info_t *picture, h264_slice_info_t *slice );
-void h264_update_picture_info( h264_picture_info_t *picture, h264_slice_info_t *slice, h264_sei_t *sei );
-int h264_find_au_delimit_by_slice_info( h264_slice_info_t *slice, h264_slice_info_t *prev_slice );
-int h264_find_au_delimit_by_nalu_type( uint8_t nalu_type, uint8_t prev_nalu_type );
-int h264_supplement_buffer( h264_stream_buffer_t *buffer, h264_picture_info_t *picture, uint32_t size );
-int h264_check_nalu_header( h264_nalu_header_t *nalu_header, lsmash_stream_buffers_t *sb, int use_long_start_code );
-int h264_parse_sps( h264_info_t *info, uint8_t *rbsp_buffer, uint8_t *ebsp, uint64_t ebsp_size );
-int h264_parse_pps( h264_info_t *info, uint8_t *rbsp_buffer, uint8_t *ebsp, uint64_t ebsp_size );
-int h264_parse_sei( lsmash_bits_t *bits, h264_sei_t *sei, uint8_t *rbsp_buffer, uint8_t *ebsp, uint64_t ebsp_size );
-int h264_parse_slice( h264_info_t *info, h264_nalu_header_t *nalu_header,
-                      uint8_t *rbsp_buffer, uint8_t *ebsp, uint64_t ebsp_size );
-int h264_try_to_append_parameter_set( h264_info_t *info, lsmash_h264_parameter_set_type ps_type, void *ps_data, uint32_t ps_length );
+void h264_cleanup_parser
+(
+    h264_info_t *info
+);
 
-static inline int h264_check_next_short_start_code( uint8_t *buf_pos, uint8_t *buf_end )
-{
-    return ((buf_pos + 2) < buf_end) && !buf_pos[0] && !buf_pos[1] && (buf_pos[2] == 0x01);
-}
+int h264_calculate_poc
+(
+    h264_info_t         *info,
+    h264_picture_info_t *picture,
+    h264_picture_info_t *prev_picture
+);
+
+void h264_update_picture_info_for_slice
+(
+    h264_picture_info_t *picture,
+    h264_slice_info_t   *slice
+);
+
+void h264_update_picture_info
+(
+    h264_picture_info_t *picture,
+    h264_slice_info_t   *slice,
+    h264_sei_t          *sei
+);
+
+int h264_find_au_delimit_by_slice_info
+(
+    h264_slice_info_t *slice,
+    h264_slice_info_t *prev_slice
+);
+
+int h264_find_au_delimit_by_nalu_type
+(
+    uint8_t nalu_type,
+    uint8_t prev_nalu_type
+);
+
+int h264_supplement_buffer
+(
+    h264_stream_buffer_t *buffer,
+    h264_picture_info_t  *picture,
+    uint32_t              size
+);
+
+int h264_check_nalu_header
+(
+    h264_nalu_header_t      *nalu_header,
+    lsmash_stream_buffers_t *sb,
+    int                      use_long_start_code
+);
+
+int h264_parse_sps
+(
+    h264_info_t *info,
+    uint8_t     *rbsp_buffer,
+    uint8_t     *ebsp,
+    uint64_t     ebsp_size
+);
+
+int h264_parse_pps
+(
+    h264_info_t *info,
+    uint8_t     *rbsp_buffer,
+    uint8_t     *ebsp,
+    uint64_t     ebsp_size
+);
+
+int h264_parse_sei
+(
+    lsmash_bits_t *bits,
+    h264_sei_t    *sei,
+    uint8_t       *rbsp_buffer,
+    uint8_t       *ebsp,
+    uint64_t       ebsp_size
+);
+
+int h264_parse_slice
+(
+    h264_info_t        *info,
+    h264_nalu_header_t *nalu_header,
+    uint8_t            *rbsp_buffer,
+    uint8_t            *ebsp,
+    uint64_t            ebsp_size
+);
+
+int h264_try_to_append_parameter_set
+(
+    h264_info_t                   *info,
+    lsmash_h264_parameter_set_type ps_type,
+    void                          *ps_data,
+    uint32_t                       ps_length
+);

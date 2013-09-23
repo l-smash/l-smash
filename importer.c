@@ -2349,6 +2349,7 @@ const static importer_functions dts_importer =
     ISO/IEC 14496-15:2010
 ***************************************************************************/
 #include "h264.h"
+#include "nalu.h"
 
 typedef struct
 {
@@ -2487,7 +2488,7 @@ static int h264_get_access_unit_internal( h264_importer_info_t *importer_info, i
         lsmash_stream_buffers_update( sb, 2 );
         no_more_buf = (lsmash_stream_buffers_get_remainder( sb ) == 0);
         int no_more = lsmash_stream_buffers_is_eos( sb ) && no_more_buf;
-        if( !h264_check_next_short_start_code( sb->pos, sb->end ) && !no_more )
+        if( !nalu_check_next_short_start_code( sb->pos, sb->end ) && !no_more )
         {
             if( lsmash_stream_buffers_get_byte( sb ) )
                 consecutive_zero_byte_count = 0;
@@ -2750,6 +2751,142 @@ static lsmash_video_summary_t *h264_create_summary( h264_info_t *info, h264_sps_
     return summary;
 }
 
+static void nalu_deduplicate_poc
+(
+    int64_t  *poc,
+    uint32_t *max_composition_delay,
+    uint32_t  num_access_units,
+    uint32_t  max_num_reorder_pictures
+)
+{
+    /* Deduplicate POCs. */
+    int64_t  poc_offset            = 0;
+    int64_t  poc_min               = 0;
+    int64_t  invalid_poc_min       = 0;
+    uint32_t last_idr              = UINT32_MAX;
+    uint32_t invalid_poc_start     = 0;
+    int      invalid_poc_present   = 0;
+    for( uint32_t i = 0; ; i++ )
+    {
+        if( i < num_access_units && poc[i] != 0 )
+        {
+            /* poc_offset is not added to each POC here.
+             * It is done when we encounter the next coded video sequence. */
+            if( poc[i] < 0 )
+            {
+                /* Pictures with negative POC shall precede IDR-picture in composition order.
+                 * The minimum POC is added to poc_offset when we encounter the next coded video sequence. */
+                if( last_idr == UINT32_MAX || i > last_idr + max_num_reorder_pictures )
+                {
+                    if( !invalid_poc_present )
+                    {
+                        invalid_poc_present = 1;
+                        invalid_poc_start   = i;
+                    }
+                    if( invalid_poc_min > poc[i] )
+                        invalid_poc_min = poc[i];
+                }
+                else if( poc_min > poc[i] )
+                {
+                    poc_min = poc[i];
+                    *max_composition_delay = LSMASH_MAX( *max_composition_delay, i - last_idr );
+                }
+            }
+            continue;
+        }
+        /* Encountered a new coded video sequence or no more POCs.
+         * Add poc_offset to each POC of the previous coded video sequence. */
+        poc_offset -= poc_min;
+        int64_t poc_max = 0;
+        for( uint32_t j = last_idr; j < i; j++ )
+            if( poc[j] >= 0 || (j <= last_idr + max_num_reorder_pictures) )
+            {
+                poc[j] += poc_offset;
+                if( poc_max < poc[j] )
+                    poc_max = poc[j];
+            }
+        poc_offset = poc_max + 1;
+        if( invalid_poc_present )
+        {
+            /* Pictures with invalid negative POC is probably supposed to be composited
+             * both before the next coded video sequence and after the current one. */
+            poc_offset -= invalid_poc_min;
+            for( uint32_t j = invalid_poc_start; j < i; j++ )
+                if( poc[j] < 0 )
+                {
+                    poc[j] += poc_offset;
+                    if( poc_max < poc[j] )
+                        poc_max = poc[j];
+                }
+            invalid_poc_present = 0;
+            invalid_poc_start   = 0;
+            invalid_poc_min     = 0;
+            poc_offset = poc_max + 1;
+        }
+        if( i < num_access_units )
+        {
+            poc_min = 0;
+            last_idr = i;
+        }
+        else
+            break;      /* no more POCs */
+    }
+}
+
+static void nalu_generate_timestamps_from_poc
+(
+    lsmash_media_ts_t *timestamp,
+    int64_t           *poc,
+    uint8_t           *composition_reordering_present,
+    uint32_t           max_composition_delay,
+    uint32_t           num_access_units
+)
+{
+    /* Check if composition delay derived from reordering is present. */
+    if( max_composition_delay == 0 )
+    {
+        for( uint32_t i = 1; i < num_access_units; i++ )
+            if( poc[i] < poc[i - 1] )
+            {
+                *composition_reordering_present = 1;
+                break;
+            }
+    }
+    else
+        *composition_reordering_present = 1;
+    /* Generate timestamps. */
+    if( *composition_reordering_present )
+    {
+        /* Generate DTSs.
+         * Here, CTSs are temporary values for sort. */
+        for( uint32_t i = 0; i < num_access_units; i++ )
+        {
+            timestamp[i].cts = (uint64_t)poc[i];
+            timestamp[i].dts = (uint64_t)i;
+        }
+        qsort( timestamp, num_access_units, sizeof(lsmash_media_ts_t), (int(*)( const void *, const void * ))lsmash_compare_cts );
+        /* Get the maximum composition delay derived from reordering. */
+        for( uint32_t i = 0; i < num_access_units; i++ )
+            if( i < timestamp[i].dts )
+            {
+                uint32_t composition_delay = timestamp[i].dts - i;
+                max_composition_delay = LSMASH_MAX( max_composition_delay, composition_delay );
+            }
+        /* Generate CTSs. */
+        for( uint32_t i = 0; i < num_access_units; i++ )
+            timestamp[i].cts = i + max_composition_delay;
+        qsort( timestamp, num_access_units, sizeof(lsmash_media_ts_t), (int(*)( const void *, const void * ))lsmash_compare_dts );
+    }
+    else
+        for( uint32_t i = 0; i < num_access_units; i++ )
+            timestamp[i].cts = timestamp[i].dts = i;
+#if 0
+    for( uint32_t i = 0; i < num_access_units; i++ )
+        fprintf( stderr, "Timestamp[%"PRIu32"]: POC=%"PRId64", DTS=%"PRIu64", CTS=%"PRIu64"\n",
+                 i, poc[i], timestamp[i].dts, timestamp[i].cts );
+#endif
+}
+
 static int h264_importer_probe( importer_t *importer )
 {
 #define H264_MAX_NUM_REORDER_FRAMES 16
@@ -2846,121 +2983,10 @@ static int h264_importer_probe( importer_t *importer )
         ++ importer_info->num_undecodable;
     }
     /* Deduplicate POCs. */
-    int64_t  poc_offset            = 0;
-    int64_t  poc_min               = 0;
-    int64_t  invalid_poc_min       = 0;
-    uint32_t last_idr              = UINT32_MAX;
-    uint32_t invalid_poc_start     = 0;
     uint32_t max_composition_delay = 0;
-    int      invalid_poc_present   = 0;
-    for( uint32_t i = 0; ; i++ )
-    {
-        if( i < num_access_units && poc[i] != 0 )
-        {
-            /* poc_offset is not added to each POC here.
-             * It is done when we encounter the next coded video sequence. */
-            if( poc[i] < 0 )
-            {
-                /* Pictures with negative POC shall precede IDR-picture in composition order.
-                 * The minimum POC is added to poc_offset when we encounter the next coded video sequence. */
-                if( last_idr == UINT32_MAX || i > last_idr + 2 * H264_MAX_NUM_REORDER_FRAMES )
-                {
-                    if( !invalid_poc_present )
-                    {
-                        invalid_poc_present = 1;
-                        invalid_poc_start   = i;
-                    }
-                    if( invalid_poc_min > poc[i] )
-                        invalid_poc_min = poc[i];
-                }
-                else if( poc_min > poc[i] )
-                {
-                    poc_min = poc[i];
-                    max_composition_delay = LSMASH_MAX( max_composition_delay, i - last_idr );
-                }
-            }
-            continue;
-        }
-        /* Encountered a new coded video sequence or no more POCs.
-         * Add poc_offset to each POC of the previous coded video sequence. */
-        poc_offset -= poc_min;
-        int64_t poc_max = 0;
-        for( uint32_t j = last_idr; j < i; j++ )
-            if( poc[j] >= 0 || (j <= last_idr + 2 * H264_MAX_NUM_REORDER_FRAMES) )
-            {
-                poc[j] += poc_offset;
-                if( poc_max < poc[j] )
-                    poc_max = poc[j];
-            }
-        poc_offset = poc_max + 1;
-        if( invalid_poc_present )
-        {
-            /* Pictures with invalid negative POC is probably supposed to be composited
-             * both before the next coded video sequence and after the current one. */
-            poc_offset -= invalid_poc_min;
-            for( uint32_t j = invalid_poc_start; j < i; j++ )
-                if( poc[j] < 0 )
-                {
-                    poc[j] += poc_offset;
-                    if( poc_max < poc[j] )
-                        poc_max = poc[j];
-                }
-            invalid_poc_present = 0;
-            invalid_poc_start   = 0;
-            invalid_poc_min     = 0;
-            poc_offset = poc_max + 1;
-        }
-        if( i < num_access_units )
-        {
-            poc_min = 0;
-            last_idr = i;
-        }
-        else
-            break;      /* no more POCs */
-    }
-    /* Check if composition delay derived from reordering is present. */
-    if( max_composition_delay == 0 )
-    {
-        for( uint32_t i = 1; i < num_access_units; i++ )
-            if( poc[i] < poc[i - 1] )
-            {
-                importer_info->composition_reordering_present = 1;
-                break;
-            }
-    }
-    else
-        importer_info->composition_reordering_present = 1;
+    nalu_deduplicate_poc( poc, &max_composition_delay, num_access_units, 2 * H264_MAX_NUM_REORDER_FRAMES );
     /* Generate timestamps. */
-    if( importer_info->composition_reordering_present )
-    {
-        /* Generate DTSs.
-         * Here, CTSs are temporary values for sort. */
-        for( uint32_t i = 0; i < num_access_units; i++ )
-        {
-            timestamp[i].cts = (uint64_t)poc[i];
-            timestamp[i].dts = (uint64_t)i;
-        }
-        qsort( timestamp, num_access_units, sizeof(lsmash_media_ts_t), (int(*)( const void *, const void * ))lsmash_compare_cts );
-        /* Get the maximum composition delay derived from reordering. */
-        for( uint32_t i = 0; i < num_access_units; i++ )
-            if( i < timestamp[i].dts )
-            {
-                uint32_t composition_delay = timestamp[i].dts - i;
-                max_composition_delay = LSMASH_MAX( max_composition_delay, composition_delay );
-            }
-        /* Generate CTSs. */
-        for( uint32_t i = 0; i < num_access_units; i++ )
-            timestamp[i].cts = i + max_composition_delay;
-        qsort( timestamp, num_access_units, sizeof(lsmash_media_ts_t), (int(*)( const void *, const void * ))lsmash_compare_dts );
-    }
-    else
-        for( uint32_t i = 0; i < num_access_units; i++ )
-            timestamp[i].cts = timestamp[i].dts = i;
-#if 0
-    for( uint32_t i = 0; i < num_access_units; i++ )
-        fprintf( stderr, "Timestamp[%"PRIu32"]: POC=%"PRId64", DTS=%"PRIu64", CTS=%"PRIu64"\n",
-                 i, poc[i], timestamp[i].dts, timestamp[i].cts );
-#endif
+    nalu_generate_timestamps_from_poc( timestamp, poc, &importer_info->composition_reordering_present, max_composition_delay, num_access_units );
     free( poc );
     importer_info->ts_list.sample_count = num_access_units;
     importer_info->ts_list.timestamp    = timestamp;
@@ -3167,7 +3193,7 @@ static int hevc_get_access_unit_internal( hevc_importer_info_t *importer_info, i
         lsmash_stream_buffers_update( sb, 2 );
         no_more_buf = (lsmash_stream_buffers_get_remainder( sb ) == 0);
         int no_more = lsmash_stream_buffers_is_eos( sb ) && no_more_buf;
-        if( !hevc_check_next_short_start_code( sb->pos, sb->end ) && !no_more )
+        if( !nalu_check_next_short_start_code( sb->pos, sb->end ) && !no_more )
         {
             if( lsmash_stream_buffers_get_byte( sb ) )
                 consecutive_zero_byte_count = 0;
@@ -3554,121 +3580,10 @@ static int hevc_importer_probe( importer_t *importer )
         ++ importer_info->num_undecodable;
     }
     /* Deduplicate POCs. */
-    int64_t  poc_offset            = 0;
-    int64_t  poc_min               = 0;
-    int64_t  invalid_poc_min       = 0;
-    uint32_t last_idr              = UINT32_MAX;
-    uint32_t invalid_poc_start     = 0;
     uint32_t max_composition_delay = 0;
-    int      invalid_poc_present   = 0;
-    for( uint32_t i = 0; ; i++ )
-    {
-        if( i < num_access_units && poc[i] != 0 )
-        {
-            /* poc_offset is not added to each POC here.
-             * It is done when we encounter the next coded video sequence. */
-            if( poc[i] < 0 )
-            {
-                /* Pictures with negative POC shall precede IDR-picture in composition order.
-                 * The minimum POC is added to poc_offset when we encounter the next coded video sequence. */
-                if( last_idr == UINT32_MAX || i > last_idr + 2 * HEVC_MAX_NUM_REORDER_FRAMES )
-                {
-                    if( !invalid_poc_present )
-                    {
-                        invalid_poc_present = 1;
-                        invalid_poc_start   = i;
-                    }
-                    if( invalid_poc_min > poc[i] )
-                        invalid_poc_min = poc[i];
-                }
-                else if( poc_min > poc[i] )
-                {
-                    poc_min = poc[i];
-                    max_composition_delay = LSMASH_MAX( max_composition_delay, i - last_idr );
-                }
-            }
-            continue;
-        }
-        /* Encountered a new coded video sequence or no more POCs.
-         * Add poc_offset to each POC of the previous coded video sequence. */
-        poc_offset -= poc_min;
-        int64_t poc_max = 0;
-        for( uint32_t j = last_idr; j < i; j++ )
-            if( poc[j] >= 0 || (j <= last_idr + 2 * HEVC_MAX_NUM_REORDER_FRAMES) )
-            {
-                poc[j] += poc_offset;
-                if( poc_max < poc[j] )
-                    poc_max = poc[j];
-            }
-        poc_offset = poc_max + 1;
-        if( invalid_poc_present )
-        {
-            /* Pictures with invalid negative POC is probably supposed to be composited
-             * both before the next coded video sequence and after the current one. */
-            poc_offset -= invalid_poc_min;
-            for( uint32_t j = invalid_poc_start; j < i; j++ )
-                if( poc[j] < 0 )
-                {
-                    poc[j] += poc_offset;
-                    if( poc_max < poc[j] )
-                        poc_max = poc[j];
-                }
-            invalid_poc_present = 0;
-            invalid_poc_start   = 0;
-            invalid_poc_min     = 0;
-            poc_offset = poc_max + 1;
-        }
-        if( i < num_access_units )
-        {
-            poc_min = 0;
-            last_idr = i;
-        }
-        else
-            break;      /* no more POCs */
-    }
-    /* Check if composition delay derived from reordering is present. */
-    if( max_composition_delay == 0 )
-    {
-        for( uint32_t i = 1; i < num_access_units; i++ )
-            if( poc[i] < poc[i - 1] )
-            {
-                importer_info->composition_reordering_present = 1;
-                break;
-            }
-    }
-    else
-        importer_info->composition_reordering_present = 1;
+    nalu_deduplicate_poc( poc, &max_composition_delay, num_access_units, 2 * HEVC_MAX_NUM_REORDER_FRAMES );
     /* Generate timestamps. */
-    if( importer_info->composition_reordering_present )
-    {
-        /* Generate DTSs.
-         * Here, CTSs are temporary values for sort. */
-        for( uint32_t i = 0; i < num_access_units; i++ )
-        {
-            timestamp[i].cts = (uint64_t)poc[i];
-            timestamp[i].dts = (uint64_t)i;
-        }
-        qsort( timestamp, num_access_units, sizeof(lsmash_media_ts_t), (int(*)( const void *, const void * ))lsmash_compare_cts );
-        /* Get the maximum composition delay derived from reordering. */
-        for( uint32_t i = 0; i < num_access_units; i++ )
-            if( i < timestamp[i].dts )
-            {
-                uint32_t composition_delay = timestamp[i].dts - i;
-                max_composition_delay = LSMASH_MAX( max_composition_delay, composition_delay );
-            }
-        /* Generate CTSs. */
-        for( uint32_t i = 0; i < num_access_units; i++ )
-            timestamp[i].cts = i + max_composition_delay;
-        qsort( timestamp, num_access_units, sizeof(lsmash_media_ts_t), (int(*)( const void *, const void * ))lsmash_compare_dts );
-    }
-    else
-        for( uint32_t i = 0; i < num_access_units; i++ )
-            timestamp[i].cts = timestamp[i].dts = i;
-#if 0
-    for( uint32_t i = 0; i < num_access_units; i++ )
-        fprintf( stderr, "Timestamp[%"PRIu32"]: POC=%"PRId64", DTS=%"PRIu64", CTS=%"PRIu64"\n",
-                 i, poc[i], timestamp[i].dts, timestamp[i].cts );
-#endif
+    nalu_generate_timestamps_from_poc( timestamp, poc, &importer_info->composition_reordering_present, max_composition_delay, num_access_units );
     free( poc );
     importer_info->ts_list.sample_count = num_access_units;
     importer_info->ts_list.timestamp    = timestamp;
