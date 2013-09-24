@@ -25,7 +25,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <inttypes.h>
-#include <math.h>
 
 #include "box.h"
 
@@ -787,12 +786,10 @@ int h264_parse_pps
         else if( slice_group_map_type == 6 )
         {
             uint64_t pic_size_in_map_units_minus1 = nalu_get_exp_golomb_ue( bits );
-            /* slice_group_id_length = ceil( log2( num_slice_groups_minus1 + 1 ) ); */
-            uint64_t slice_group_id_length;
-            for( slice_group_id_length = 1; num_slice_groups_minus1 >> slice_group_id_length; slice_group_id_length++ );
+            int length = lsmash_ceil_log2( num_slice_groups_minus1 + 1 );
             for( uint64_t i = 0; i <= pic_size_in_map_units_minus1; i++ )
                 /* slice_group_id */
-                IF_INVALID_VALUE( lsmash_bits_get( bits, slice_group_id_length ) > num_slice_groups_minus1 )
+                IF_INVALID_VALUE( lsmash_bits_get( bits, length ) > num_slice_groups_minus1 )
                     return -1;
         }
     }
@@ -1136,12 +1133,11 @@ static int h264_parse_slice_header
                 return -1;
         }
         if( pps->num_slice_groups_minus1
-        && (pps->slice_group_map_type == 3 || pps->slice_group_map_type == 4 || pps->slice_group_map_type == 5) )
+         && (pps->slice_group_map_type == 3 || pps->slice_group_map_type == 4 || pps->slice_group_map_type == 5) )
         {
-            double temp = (double)sps->PicSizeInMapUnits / pps->SliceGroupChangeRate;
-            uint64_t slice_group_change_cycle_length = ceil( log( temp + 1 ) / 0.693147180559945 );
-            uint64_t slice_group_change_cycle = lsmash_bits_get( bits, slice_group_change_cycle_length );
-            IF_INVALID_VALUE( slice_group_change_cycle > (uint64_t)ceil( temp ) )
+            uint64_t temp = ((uint64_t)sps->PicSizeInMapUnits - 1) / pps->SliceGroupChangeRate + 1;
+            uint64_t slice_group_change_cycle = lsmash_bits_get( bits, lsmash_ceil_log2( temp + 1 ) );
+            IF_INVALID_VALUE( slice_group_change_cycle > temp )
                 return -1;
         }
         /* end of slice_header() */

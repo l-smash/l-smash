@@ -25,7 +25,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <inttypes.h>
-#include <math.h>
 
 #include "box.h"
 
@@ -1257,10 +1256,7 @@ int hevc_parse_slice_segment_header
     if( !slice->first_slice_segment_in_pic_flag )
     {
         slice->dependent_slice_segment_flag = pps->dependent_slice_segments_enabled_flag ? lsmash_bits_get( bits, 1 ) : 0;
-        int slice_segment_address_length = 0;
-        while( sps->PicSizeInCtbsY > (1ULL << slice_segment_address_length) )
-            ++slice_segment_address_length;
-        slice->segment_address = lsmash_bits_get( bits, slice_segment_address_length );
+        slice->segment_address              = lsmash_bits_get( bits, lsmash_ceil_log2( sps->PicSizeInCtbsY ) );
     }
     else
     {
@@ -1288,28 +1284,23 @@ int hevc_parse_slice_segment_header
                 if( hevc_short_term_ref_pic_set( bits, sps, sps->num_short_term_ref_pic_sets ) < 0 )
                     return -1;
             }
-            else if( sps->num_short_term_ref_pic_sets > 1 )
+            else
             {
-                int short_term_ref_pic_set_idx_length = 0;
-                if( sps->num_short_term_ref_pic_sets > 1 )
-                    while( sps->num_short_term_ref_pic_sets > (1UL << short_term_ref_pic_set_idx_length) )
-                        ++short_term_ref_pic_set_idx_length;
-                lsmash_bits_get( bits, short_term_ref_pic_set_idx_length );         /* short_term_ref_pic_set_idx */
+                int length = lsmash_ceil_log2( sps->num_short_term_ref_pic_sets );
+                if( length > 0 )
+                    lsmash_bits_get( bits, length );                                /* short_term_ref_pic_set_idx */
             }
             if( sps->long_term_ref_pics_present_flag )
             {
                 uint64_t num_long_term_sps  = sps->num_long_term_ref_pics_sps > 0 ? nalu_get_exp_golomb_ue( bits ) : 0;
                 uint64_t num_long_term_pics = nalu_get_exp_golomb_ue( bits );
-                int lt_idx_sps_length = 0;
-                if( sps->num_long_term_ref_pics_sps > 1 )
-                    while( sps->num_long_term_ref_pics_sps > (1UL << lt_idx_sps_length) )
-                        ++lt_idx_sps_length;
                 for( uint64_t i = 0; i < num_long_term_sps + num_long_term_pics; i++ )
                 {
                     if( i < num_long_term_sps )
                     {
-                        if( sps->num_long_term_ref_pics_sps > 1 )
-                            lsmash_bits_get( bits, lt_idx_sps_length );             /* slice->lt_idx_sps[i] */
+                        int length = lsmash_ceil_log2( sps->num_long_term_ref_pics_sps );
+                        if( length > 0 )
+                            lsmash_bits_get( bits, length );                        /* slice->lt_idx_sps[i] */
                     }
                     else
                     {

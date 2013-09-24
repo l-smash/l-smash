@@ -215,13 +215,46 @@ typedef struct
     uint64_t d;
 } lsmash_rational_s64_t;
 
-void lsmash_log( lsmash_log_level level, const char* message, ... );
-uint32_t lsmash_count_bits( uint32_t bits );
-void lsmash_ifprintf( FILE *fp, int indent, const char *format, ... );
-int lsmash_compare_dts( const lsmash_media_ts_t *a, const lsmash_media_ts_t *b );
-int lsmash_compare_cts( const lsmash_media_ts_t *a, const lsmash_media_ts_t *b );
+void lsmash_log
+(
+    lsmash_log_level level,
+    const char *message, ...
+);
 
-static inline uint64_t lsmash_get_gcd( uint64_t a, uint64_t b )
+uint32_t lsmash_count_bits
+(
+    uint32_t bits
+);
+
+void lsmash_ifprintf
+(
+    FILE       *fp,
+    int         indent,
+    const char *format, ...
+);
+
+int lsmash_ceil_log2
+(
+    uint64_t value
+);
+
+int lsmash_compare_dts
+(
+    const lsmash_media_ts_t *a,
+    const lsmash_media_ts_t *b
+);
+
+int lsmash_compare_cts
+(
+    const lsmash_media_ts_t *a,
+    const lsmash_media_ts_t *b
+);
+
+static inline uint64_t lsmash_get_gcd
+(
+    uint64_t a,
+    uint64_t b
+)
 {
     if( !b )
         return a;
@@ -235,14 +268,22 @@ static inline uint64_t lsmash_get_gcd( uint64_t a, uint64_t b )
     }
 }
 
-static inline uint64_t lsmash_get_lcm( uint64_t a, uint64_t b )
+static inline uint64_t lsmash_get_lcm
+(
+    uint64_t a,
+    uint64_t b
+)
 {
     if( !a )
         return 0;
     return (a / lsmash_get_gcd( a, b )) * b;
 }
 
-static inline void lsmash_reduce_fraction( uint64_t *a, uint64_t *b )
+static inline void lsmash_reduce_fraction
+(
+    uint64_t *a,
+    uint64_t *b
+)
 {
     if( !a || !b )
         return;
@@ -254,7 +295,11 @@ static inline void lsmash_reduce_fraction( uint64_t *a, uint64_t *b )
     }
 }
 
-static inline void lsmash_reduce_fraction_su( int64_t *a, uint64_t *b )
+static inline void lsmash_reduce_fraction_su
+(
+    int64_t  *a,
+    uint64_t *b
+)
 {
     if( !a || !b )
         return;

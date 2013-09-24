@@ -974,7 +974,11 @@ void lsmash_stream_buffers_setup( lsmash_stream_buffers_t *sb, lsmash_stream_buf
 /*---- ----*/
 
 /*---- others ----*/
-void lsmash_log( lsmash_log_level level, const char* message, ... )
+void lsmash_log
+(
+    lsmash_log_level level,
+    const char *message, ...
+)
 {
     char *prefix;
     va_list args;
@@ -1001,7 +1005,10 @@ void lsmash_log( lsmash_log_level level, const char* message, ... )
     va_end( args );
 }
 
-uint32_t lsmash_count_bits( uint32_t bits )
+uint32_t lsmash_count_bits
+(
+    uint32_t bits
+)
 {
     bits = (bits & 0x55555555) + ((bits >>  1) & 0x55555555);
     bits = (bits & 0x33333333) + ((bits >>  2) & 0x33333333);
@@ -1010,7 +1017,12 @@ uint32_t lsmash_count_bits( uint32_t bits )
     return (bits & 0x0000ffff) + ((bits >> 16) & 0x0000ffff);
 }
 
-void lsmash_ifprintf( FILE *fp, int indent, const char *format, ... )
+void lsmash_ifprintf
+(
+    FILE       *fp,
+    int         indent,
+    const char *format, ...
+)
 {
     va_list args;
     va_start( args, format );
@@ -1039,14 +1051,33 @@ void lsmash_ifprintf( FILE *fp, int indent, const char *format, ... )
     va_end( args );
 }
 
+int lsmash_ceil_log2
+(
+    uint64_t value
+)
+{
+    int length = 0;
+    while( value > (1ULL << length) )
+        ++length;
+    return length;
+}
+
 /* for qsort function */
-int lsmash_compare_dts( const lsmash_media_ts_t *a, const lsmash_media_ts_t *b )
+int lsmash_compare_dts
+(
+    const lsmash_media_ts_t *a,
+    const lsmash_media_ts_t *b
+)
 {
     int64_t diff = (int64_t)(a->dts - b->dts);
     return diff > 0 ? 1 : (diff == 0 ? 0 : -1);
 }
 
-int lsmash_compare_cts( const lsmash_media_ts_t *a, const lsmash_media_ts_t *b )
+int lsmash_compare_cts
+(
+    const lsmash_media_ts_t *a,
+    const lsmash_media_ts_t *b
+)
 {
     int64_t diff = (int64_t)(a->cts - b->cts);
     return diff > 0 ? 1 : (diff == 0 ? 0 : -1);
