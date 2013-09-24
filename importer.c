@@ -2345,7 +2345,7 @@ const static importer_functions dts_importer =
 
 /***************************************************************************
     H.264 importer
-    ITU-T Recommendation H.264 (03/10)
+    ITU-T Recommendation H.264 (04/13)
     ISO/IEC 14496-15:2010
 ***************************************************************************/
 #include "h264.h"
@@ -2523,14 +2523,15 @@ static int h264_get_access_unit_internal( h264_importer_info_t *importer_info, i
             fprintf( stderr, "    Next NALU header position: %"PRIx64"\n", next_nalu_head_pos );
         }
 #endif
-        if( nalu_type == 12 )
+        if( nalu_type == H264_NALU_TYPE_FD )
         {
             /* We don't support streams with both filler and HRD yet.
              * Otherwise, just skip filler because elemental streams defined in 14496-15 are forbidden to use filler. */
             if( info->sps.hrd_present )
                 return h264_get_au_internal_failed( importer_info, picture, &nalu_header, no_more_buf, complete_au );
         }
-        else if( (nalu_type >= 1 && nalu_type <= 13) || nalu_type == 19 )
+        else if( (nalu_type >= H264_NALU_TYPE_SLICE_N_IDR && nalu_type <= H264_NALU_TYPE_SPS_EXT)
+              || nalu_type == H264_NALU_TYPE_SLICE_AUX )
         {
             /* Get the EBSP of the current NALU here.
              * AVC elemental stream defined in 14496-15 can recognizes from 0 to 13, and 19 of nal_unit_type.
@@ -2560,7 +2561,7 @@ static int h264_get_access_unit_internal( h264_importer_info_t *importer_info, i
             }
             else
                 lsmash_stream_buffers_seek( sb, -(nalu_length + consecutive_zero_byte_count), SEEK_CUR );
-            if( nalu_type >= 1 && nalu_type <= 5 )
+            if( nalu_type >= H264_NALU_TYPE_SLICE_N_IDR && nalu_type <= H264_NALU_TYPE_SLICE_IDR )
             {
                 /* VCL NALU (slice) */
                 h264_slice_info_t prev_slice = *slice;
@@ -2595,7 +2596,7 @@ static int h264_get_access_unit_internal( h264_importer_info_t *importer_info, i
                     complete_au = h264_complete_au( picture, probe );
                 switch( nalu_type )
                 {
-                    case 6 :    /* Supplemental Enhancement Information */
+                    case H264_NALU_TYPE_SEI :
                     {
                         uint8_t *sei_pos = lsmash_stream_buffers_get_pos( sb );
                         if( h264_parse_sei( info->bits, &info->sei, hb->rbsp, sei_pos + nalu_header.length, ebsp_length ) )
@@ -2603,19 +2604,19 @@ static int h264_get_access_unit_internal( h264_importer_info_t *importer_info, i
                         h264_append_nalu_to_au( picture, sei_pos, nalu_length, probe );
                         break;
                     }
-                    case 7 :    /* Sequence Parameter Set */
+                    case H264_NALU_TYPE_SPS :
                         if( h264_process_parameter_set( info, H264_PARAMETER_SET_TYPE_SPS, nalu_header.length, ebsp_length, probe ) )
                             return h264_get_au_internal_failed( importer_info, picture, &nalu_header, no_more_buf, complete_au );
                         if( probe && !importer_info->first_sps.present )
                             importer_info->first_sps = info->sps;
                         break;
-                    case 8 :    /* Picture Parameter Set */
+                    case H264_NALU_TYPE_PPS :
                         if( h264_process_parameter_set( info, H264_PARAMETER_SET_TYPE_PPS, nalu_header.length, ebsp_length, probe ) )
                             return h264_get_au_internal_failed( importer_info, picture, &nalu_header, no_more_buf, complete_au );
                         break;
-                    case 9 :    /* We drop access unit delimiters. */
+                    case H264_NALU_TYPE_AUD :   /* We drop access unit delimiters. */
                         break;
-                    case 13 :   /* Sequence Parameter Set Extension */
+                    case H264_NALU_TYPE_SPS_EXT :
                         if( h264_process_parameter_set( info, H264_PARAMETER_SET_TYPE_SPSEXT, nalu_header.length, ebsp_length, probe ) )
                             return h264_get_au_internal_failed( importer_info, picture, &nalu_header, no_more_buf, complete_au );
                         break;

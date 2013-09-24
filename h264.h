@@ -24,6 +24,37 @@
 #define H264_DEFAULT_NALU_LENGTH_SIZE 4     /* We always use 4 bytes length. */
 #define H264_SHORT_START_CODE_LENGTH  3
 
+
+enum
+{
+    H264_NALU_TYPE_UNSPECIFIED0  = 0,   /* Unspecified */
+    H264_NALU_TYPE_SLICE_N_IDR   = 1,   /* Coded slice of a non-IDR picture */
+    H264_NALU_TYPE_SLICE_DP_A    = 2,   /* Coded slice data partition A */
+    H264_NALU_TYPE_SLICE_DP_B    = 3,   /* Coded slice data partition B */
+    H264_NALU_TYPE_SLICE_DP_C    = 4,   /* Coded slice data partition C */
+    H264_NALU_TYPE_SLICE_IDR     = 5,   /* Coded slice of an IDR picture */
+    H264_NALU_TYPE_SEI           = 6,   /* Supplemental Enhancement Information */
+    H264_NALU_TYPE_SPS           = 7,   /* Sequence Parameter Set */
+    H264_NALU_TYPE_PPS           = 8,   /* Picture Parameter Set */
+    H264_NALU_TYPE_AUD           = 9,   /* Access Unit Delimiter */
+    H264_NALU_TYPE_EOS           = 10,  /* End of Sequence */
+    H264_NALU_TYPE_EOB           = 11,  /* End of Bitstream */
+    H264_NALU_TYPE_FD            = 12,  /* Filler Data */
+    H264_NALU_TYPE_SPS_EXT       = 13,  /* Sequence Parameter Set Extension */
+    H264_NALU_TYPE_PREFIX        = 14,  /* Prefix NAL unit */
+    H264_NALU_TYPE_SUBSET_SPS    = 15,  /* Subset Sequence Parameter Set */
+    H264_NALU_TYPE_RSV_NVCL16    = 16,  /* Reserved */
+    H264_NALU_TYPE_RSV_NVCL17    = 17,  /* Reserved */
+    H264_NALU_TYPE_RSV_NVCL18    = 18,  /* Reserved */
+    H264_NALU_TYPE_SLICE_AUX     = 19,  /* Coded slice of an auxiliary coded picture without partitioning */
+    H264_NALU_TYPE_SLICE_EXT     = 20,  /* Coded slice extension */
+    H264_NALU_TYPE_SLICE_EXT_DVC = 21,  /* Coded slice extension for depth view components */
+    H264_NALU_TYPE_RSV22         = 22,  /* Reserved */
+    H264_NALU_TYPE_RSV23         = 23,  /* Reserved */
+    H264_NALU_TYPE_UNSPECIFIED24 = 24,  /* Unspecified */
+    H264_NALU_TYPE_UNSPECIFIED31 = 31,  /* Unspecified */
+};
+
 struct lsmash_h264_parameter_sets_tag
 {
     /* Each list contains entries as isom_dcr_ps_entry_t. */

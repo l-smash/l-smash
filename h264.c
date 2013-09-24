@@ -29,7 +29,7 @@
 #include "box.h"
 
 /***************************************************************************
-    ITU-T Recommendation H.264 (03/10)
+    ITU-T Recommendation H.264 (04/13)
     ISO/IEC 14496-15:2010
 ***************************************************************************/
 #include "h264.h"
@@ -378,23 +378,31 @@ int h264_check_nalu_header
     uint8_t nal_unit_type      = nalu_header->nal_unit_type =  *sb->pos       & 0x1f;
     nalu_header->length = 1;
     sb->pos += nalu_header->length;
-    if( nal_unit_type == 14 || nal_unit_type == 20 )
+    if( nal_unit_type == H264_NALU_TYPE_PREFIX
+     || nal_unit_type >= H264_NALU_TYPE_SLICE_EXT )
         return -1;      /* We don't support yet. */
     IF_INVALID_VALUE( forbidden_zero_bit )
         return -1;
     /* SPS and PPS require long start code (0x00000001).
      * Also AU delimiter requires it too because this type of NALU shall be the first NALU of any AU if present. */
-    IF_INVALID_VALUE( !use_long_start_code && (nal_unit_type == 7 || nal_unit_type == 8 || nal_unit_type == 9) )
+    IF_INVALID_VALUE( !use_long_start_code
+                   && (nal_unit_type == H264_NALU_TYPE_SPS
+                    || nal_unit_type == H264_NALU_TYPE_PPS
+                    || nal_unit_type == H264_NALU_TYPE_AUD) )
         return -1;
     if( nal_ref_idc )
     {
         /* nal_ref_idc shall be equal to 0 for all NALUs having nal_unit_type equal to 6, 9, 10, 11, or 12. */
-        IF_INVALID_VALUE( nal_unit_type == 6 || nal_unit_type == 9 || nal_unit_type == 10 || nal_unit_type == 11 || nal_unit_type == 12 )
+        IF_INVALID_VALUE( nal_unit_type == H264_NALU_TYPE_SEI
+                       || nal_unit_type == H264_NALU_TYPE_AUD
+                       || nal_unit_type == H264_NALU_TYPE_EOS
+                       || nal_unit_type == H264_NALU_TYPE_EOB
+                       || nal_unit_type == H264_NALU_TYPE_FD )
             return -1;
     }
     else
         /* nal_ref_idc shall not be equal to 0 for NALUs with nal_unit_type equal to 5. */
-        IF_INVALID_VALUE( nal_unit_type == 5 )
+        IF_INVALID_VALUE( nal_unit_type == H264_NALU_TYPE_SLICE_IDR )
             return -1;
     return 0;
 }
@@ -464,7 +472,8 @@ static int h264_parse_sps_minimally
     sps->seq_parameter_set_id = seq_parameter_set_id;
     if( sps->profile_idc == 100 || sps->profile_idc == 110 || sps->profile_idc == 122
      || sps->profile_idc == 244 || sps->profile_idc == 44  || sps->profile_idc == 83
-     || sps->profile_idc == 86  || sps->profile_idc == 118 || sps->profile_idc == 128 )
+     || sps->profile_idc == 86  || sps->profile_idc == 118 || sps->profile_idc == 128
+     || sps->profile_idc == 138 )
     {
         sps->chroma_format_idc = nalu_get_exp_golomb_ue( bits );
         if( sps->chroma_format_idc == 3 )
@@ -917,7 +926,7 @@ static int h264_parse_slice_header
     if( !sps )
         return -1;
     slice->nal_ref_idc = nalu_header->nal_ref_idc;
-    slice->IdrPicFlag = (nalu_header->nal_unit_type == 5);
+    slice->IdrPicFlag = (nalu_header->nal_unit_type == H264_NALU_TYPE_SLICE_IDR);
     slice->pic_order_cnt_type = sps->pic_order_cnt_type;
     IF_INVALID_VALUE( (slice->IdrPicFlag || sps->max_num_ref_frames == 0) && slice_type != 2 && slice_type != 4 )
         return -1;
@@ -981,7 +990,8 @@ static int h264_parse_slice_header
             }
         }
     }
-    if( nalu_header->nal_unit_type == 20 )
+    if( nalu_header->nal_unit_type == H264_NALU_TYPE_SLICE_EXT
+     || nalu_header->nal_unit_type == H264_NALU_TYPE_SLICE_EXT_DVC )
     {
         return -1;      /* No support of MVC yet */
 #if 0
@@ -1111,7 +1121,7 @@ static int h264_parse_slice_header
     }
     /* We needn't read more if not slice data partition A.
      * Skip slice_data() and rbsp_slice_trailing_bits(). */
-    if( nalu_header->nal_unit_type == 2 )
+    if( nalu_header->nal_unit_type == H264_NALU_TYPE_SLICE_DP_A )
     {
         if( pps->entropy_coding_mode_flag && slice_type != H264_SLICE_TYPE_I && slice_type != H264_SLICE_TYPE_SI )
             nalu_get_exp_golomb_ue( bits );     /* cabac_init_idc */
@@ -1167,7 +1177,8 @@ int h264_parse_slice
     lsmash_bits_t *bits = info->bits;
     if( nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, ebsp_size ) )
         return -1;
-    if( nalu_header->nal_unit_type != 3 && nalu_header->nal_unit_type != 4 )
+    if( nalu_header->nal_unit_type != H264_NALU_TYPE_SLICE_DP_B
+     && nalu_header->nal_unit_type != H264_NALU_TYPE_SLICE_DP_C )
         return h264_parse_slice_header( info, nalu_header );
     /* slice_data_partition_b_layer_rbsp() or slice_data_partition_c_layer_rbsp() */
     uint64_t slice_id = nalu_get_exp_golomb_ue( bits );
@@ -1354,8 +1365,10 @@ int h264_find_au_delimit_by_nalu_type
     uint8_t prev_nalu_type
 )
 {
-    return ((nalu_type >= 6 && nalu_type <= 9) || (nalu_type >= 14 && nalu_type <= 18))
-        && ((prev_nalu_type >= 1 && prev_nalu_type <= 5) || prev_nalu_type == 12 || prev_nalu_type == 19);
+    return ((nalu_type >= H264_NALU_TYPE_SEI    && nalu_type <= H264_NALU_TYPE_AUD)
+         || (nalu_type >= H264_NALU_TYPE_PREFIX && nalu_type <= H264_NALU_TYPE_RSV_NVCL18))
+        && ((prev_nalu_type >= H264_NALU_TYPE_SLICE_N_IDR && prev_nalu_type <= H264_NALU_TYPE_SLICE_IDR)
+         || prev_nalu_type == H264_NALU_TYPE_FD || prev_nalu_type == H264_NALU_TYPE_SLICE_AUX);
 }
 
 int h264_supplement_buffer
@@ -1612,11 +1625,13 @@ static inline int h264_validate_ps_type
      && ps_type != H264_PARAMETER_SET_TYPE_SPSEXT )
         return -1;
     uint8_t nalu_type = *((uint8_t *)ps_data) & 0x1f;
-    if( nalu_type != 7 && nalu_type != 8 && nalu_type != 13 )
+    if( nalu_type != H264_NALU_TYPE_SPS
+     && nalu_type != H264_NALU_TYPE_PPS
+     && nalu_type != H264_NALU_TYPE_SPS_EXT )
         return -1;
-    if( (ps_type == H264_PARAMETER_SET_TYPE_SPS    && nalu_type != 7)
-     || (ps_type == H264_PARAMETER_SET_TYPE_PPS    && nalu_type != 8)
-     || (ps_type == H264_PARAMETER_SET_TYPE_SPSEXT && nalu_type != 13) )
+    if( (ps_type == H264_PARAMETER_SET_TYPE_SPS    && nalu_type != H264_NALU_TYPE_SPS)
+     || (ps_type == H264_PARAMETER_SET_TYPE_PPS    && nalu_type != H264_NALU_TYPE_PPS)
+     || (ps_type == H264_PARAMETER_SET_TYPE_SPSEXT && nalu_type != H264_NALU_TYPE_SPS_EXT) )
         return -1;
     return 0;
 }
@@ -1991,14 +2006,15 @@ int lsmash_setup_h264_specific_parameters_from_access_unit
         uint8_t *next_short_start_code_pos = lsmash_stream_buffers_get_pos( sb );
         uint8_t nalu_type = nalu_header.nal_unit_type;
         int read_back = 0;
-        if( nalu_type == 12 )
+        if( nalu_type == H264_NALU_TYPE_FD )
         {
             /* We don't support streams with both filler and HRD yet.
              * Otherwise, just skip filler because elemental streams defined in 14496-15 are forbidden to use filler. */
             if( info->sps.hrd_present )
                 return h264_parse_failed( info );
         }
-        else if( (nalu_type >= 1 && nalu_type <= 13) || nalu_type == 19 )
+        else if( (nalu_type >= H264_NALU_TYPE_SLICE_N_IDR && nalu_type <= H264_NALU_TYPE_SPS_EXT)
+              || nalu_type == H264_NALU_TYPE_SLICE_AUX )
         {
             /* Get the EBSP of the current NALU here.
              * AVC elemental stream defined in 14496-15 can recognize from 0 to 13, and 19 of nal_unit_type.
@@ -2020,7 +2036,7 @@ int lsmash_setup_h264_specific_parameters_from_access_unit
             }
             else
                 lsmash_stream_buffers_seek( sb, -(nalu_length + consecutive_zero_byte_count), SEEK_CUR );
-            if( nalu_type >= 1 && nalu_type <= 5 )
+            if( nalu_type >= H264_NALU_TYPE_SLICE_N_IDR && nalu_type <= H264_NALU_TYPE_SLICE_IDR )
             {
                 /* VCL NALU (slice) */
                 h264_slice_info_t prev_slice = *slice;
@@ -2049,17 +2065,17 @@ int lsmash_setup_h264_specific_parameters_from_access_unit
                     complete_au = 1;
                 switch( nalu_type )
                 {
-                    case 7 :    /* Sequence Parameter Set */
+                    case H264_NALU_TYPE_SPS :
                         if( h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_SPS,
                                                               lsmash_stream_buffers_get_pos( sb ), nalu_length ) )
                             return h264_parse_failed( info );
                         break;
-                    case 8 :    /* Picture Parameter Set */
+                    case H264_NALU_TYPE_PPS :
                         if( h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_PPS,
                                                               lsmash_stream_buffers_get_pos( sb ), nalu_length ) )
                             return h264_parse_failed( info );
                         break;
-                    case 13 :   /* Sequence Parameter Set Extension */
+                    case H264_NALU_TYPE_SPS_EXT :
                         if( h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_SPSEXT,
                                                               lsmash_stream_buffers_get_pos( sb ), nalu_length ) )
                             return h264_parse_failed( info );
