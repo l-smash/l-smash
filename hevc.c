@@ -1844,11 +1844,11 @@ lsmash_dcr_nalu_appendable lsmash_check_hevc_dcr_nalu_appendable
     uint32_t ps_count;
     if( nalu_get_ps_count( ps_list, &ps_count ) )
         return DCR_NALU_APPEND_ERROR;
-    if( (ps_type == HEVC_DCR_NALU_TYPE_VPS        && ps_count > HEVC_MAX_VPS_ID)
-     || (ps_type == HEVC_DCR_NALU_TYPE_SPS        && ps_count > HEVC_MAX_SPS_ID)
-     || (ps_type == HEVC_DCR_NALU_TYPE_PPS        && ps_count > HEVC_MAX_PPS_ID)
-     || (ps_type == HEVC_DCR_NALU_TYPE_PREFIX_SEI && ps_count > ((1 << 16) - 1))
-     || (ps_type == HEVC_DCR_NALU_TYPE_SUFFIX_SEI && ps_count > ((1 << 16) - 1)) )
+    if( (ps_type == HEVC_DCR_NALU_TYPE_VPS        && ps_count >= HEVC_MAX_VPS_ID)
+     || (ps_type == HEVC_DCR_NALU_TYPE_SPS        && ps_count >= HEVC_MAX_SPS_ID)
+     || (ps_type == HEVC_DCR_NALU_TYPE_PPS        && ps_count >= HEVC_MAX_PPS_ID)
+     || (ps_type == HEVC_DCR_NALU_TYPE_PREFIX_SEI && ps_count >= ((1 << 16) - 1))
+     || (ps_type == HEVC_DCR_NALU_TYPE_SUFFIX_SEI && ps_count >= ((1 << 16) - 1)) )
         return DCR_NALU_APPEND_NEW_DCR_REQUIRED;    /* No more appendable parameter sets. */
     if( ps_type == HEVC_DCR_NALU_TYPE_PREFIX_SEI
      || ps_type == HEVC_DCR_NALU_TYPE_SUFFIX_SEI )
