@@ -148,6 +148,7 @@ typedef struct
     uint8_t  pic_order_cnt_type;
     uint8_t  nal_ref_idc;
     uint8_t  IdrPicFlag;
+    uint8_t  seq_parameter_set_id;
     uint8_t  pic_parameter_set_id;
     uint8_t  field_pic_flag;
     uint8_t  bottom_field_flag;
@@ -205,6 +206,7 @@ typedef struct
 struct h264_info_tag
 {
     lsmash_h264_specific_parameters_t avcC_param;
+    lsmash_h264_specific_parameters_t avcC_param_next;
     h264_nalu_header_t   nalu_header;
     lsmash_entry_list_t  sps_list  [1]; /* contains entries as h264_sps_t */
     lsmash_entry_list_t  pps_list  [1]; /* contains entries as h264_pps_t */
@@ -215,6 +217,7 @@ struct h264_info_tag
     h264_slice_info_t    slice;         /* active slice */
     h264_picture_info_t  picture;
     uint8_t              prev_nalu_type;
+    uint8_t              avcC_pending;
     uint64_t             ebsp_head_pos;
     lsmash_bits_t       *bits;
     h264_stream_buffer_t buffer;
@@ -256,12 +259,14 @@ int h264_calculate_poc
 
 void h264_update_picture_info_for_slice
 (
+    h264_info_t         *info,
     h264_picture_info_t *picture,
     h264_slice_info_t   *slice
 );
 
 void h264_update_picture_info
 (
+    h264_info_t         *info,
     h264_picture_info_t *picture,
     h264_slice_info_t   *slice,
     h264_sei_t          *sei
@@ -333,4 +338,9 @@ int h264_try_to_append_parameter_set
     lsmash_h264_parameter_set_type ps_type,
     void                          *ps_data,
     uint32_t                       ps_length
+);
+
+int h264_move_pending_avcC_param
+(
+    h264_info_t *info
 );

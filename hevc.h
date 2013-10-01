@@ -237,6 +237,8 @@ typedef struct
     uint8_t  nalu_type;
     uint8_t  TemporalId;
     uint8_t  type;
+    uint8_t  video_parameter_set_id;
+    uint8_t  seq_parameter_set_id;
     uint8_t  pic_parameter_set_id;
     uint8_t  first_slice_segment_in_pic_flag;
     uint8_t  dependent_slice_segment_flag;
@@ -294,6 +296,7 @@ typedef struct
 struct hevc_info_tag
 {
     lsmash_hevc_specific_parameters_t hvcC_param;
+    lsmash_hevc_specific_parameters_t hvcC_param_next;
     hevc_nalu_header_t   nalu_header;
     lsmash_entry_list_t  vps_list[1];
     lsmash_entry_list_t  sps_list[1];
@@ -305,6 +308,7 @@ struct hevc_info_tag
     hevc_slice_info_t    slice;         /* active slice */
     hevc_access_unit_t   au;
     uint8_t              prev_nalu_type;
+    uint8_t              hvcC_pending;
     uint64_t             ebsp_head_pos;
     lsmash_bits_t       *bits;
     hevc_stream_buffer_t buffer;
@@ -341,12 +345,14 @@ int hevc_calculate_poc
 
 void hevc_update_picture_info_for_slice
 (
+    hevc_info_t         *info,
     hevc_picture_info_t *picture,
     hevc_slice_info_t   *slice
 );
 
 void hevc_update_picture_info
 (
+    hevc_info_t         *info,
     hevc_picture_info_t *picture,
     hevc_slice_info_t   *slice,
     hevc_sps_t          *sps,
@@ -430,4 +436,9 @@ int hevc_try_to_append_dcr_nalu
     lsmash_hevc_dcr_nalu_type ps_type,
     void                     *ps_data,
     uint32_t                  ps_length
+);
+
+int hevc_move_pending_hvcC_param
+(
+    hevc_info_t *info
 );

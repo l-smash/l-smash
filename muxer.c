@@ -997,12 +997,10 @@ static int do_mux( muxer_t *muxer )
                 sample = lsmash_create_sample( out_track->summary->max_au_length );
                 if( !sample )
                     return ERROR_MSG( "failed to alloc memory for buffer.\n" );
-                /* mp4sys_importer_get_access_unit() returns 1 if there're any changes in stream's properties. */
+                /* lsmash_importer_get_access_unit() returns 1 if there're any changes in stream's properties. */
                 int ret = lsmash_importer_get_access_unit( input->importer, input->current_track_number, sample );
-                if( ret == -1 || (ret == 1 && (lsmash_check_codec_type_identical( out_track->summary->sample_type, ISOM_CODEC_TYPE_AVC1_VIDEO )
-                                            || lsmash_check_codec_type_identical( out_track->summary->sample_type, ISOM_CODEC_TYPE_HVC1_VIDEO ))) )
+                if( ret == -1 )
                 {
-                    /* If you want to support them, you have to retrieve summary again, and make some operation accordingly. */
                     lsmash_delete_sample( sample );
                     ERROR_MSG( "failed to get a frame from input file. Maybe corrupted.\n"
                                "Aborting muxing operation and trying to let output be valid file.\n" );
@@ -1012,7 +1010,8 @@ static int do_mux( muxer_t *muxer )
                 {
                     input_track_t *in_track = &input->track[input->current_track_number - 1];
                     lsmash_cleanup_summary( in_track->summary );
-                    out_track->summary = in_track->summary = lsmash_duplicate_summary( input->importer, input->current_track_number );
+                    in_track->summary = lsmash_duplicate_summary( input->importer, input->current_track_number );
+                    out_track->summary      = in_track->summary;
                     out_track->sample_entry = lsmash_add_sample_entry( output->root, out_track->track_ID, out_track->summary );
                     if( !out_track->sample_entry )
                     {

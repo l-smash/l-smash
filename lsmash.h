@@ -34,7 +34,7 @@
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  0
-#define LSMASH_VERSION_MINOR  3
+#define LSMASH_VERSION_MINOR  4
 #define LSMASH_VERSION_MICRO  0
 
 /****************************************************************************
@@ -2541,6 +2541,8 @@ typedef enum
     H264_PARAMETER_SET_TYPE_SPS    = 0,     /* SPS (Sequence Parameter Set) */
     H264_PARAMETER_SET_TYPE_PPS    = 1,     /* PPS (Picture Parameter Set) */
     H264_PARAMETER_SET_TYPE_SPSEXT = 2,     /* SPS Ext (Sequence Parameter Set Extension) */
+    /* The number of the NAL unit types defined for AVC Decoder Configuration Record */
+    H264_PARAMETER_SET_TYPE_NUM
 } lsmash_h264_parameter_set_type;
 
 typedef struct lsmash_h264_parameter_sets_tag lsmash_h264_parameter_sets_t;

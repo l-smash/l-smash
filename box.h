@@ -476,6 +476,8 @@ typedef struct
 {
     uint16_t nalUnitLength;
     uint8_t *nalUnit;
+    /* */
+    int      unused;
 } isom_dcr_ps_entry_t;
 
 /* MPEG-4 Bit Rate Box

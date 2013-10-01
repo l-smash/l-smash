@@ -211,6 +211,7 @@ isom_dcr_ps_entry_t *isom_create_ps_entry( uint8_t *ps, uint32_t ps_size )
         return NULL;
     }
     entry->nalUnitLength = ps_size;
+    entry->unused        = 0;
     return entry;
 }
 

@@ -139,6 +139,8 @@ static inline int nalu_get_max_ps_length
         isom_dcr_ps_entry_t *ps = (isom_dcr_ps_entry_t *)entry->data;
         if( !ps )
             return -1;
+        if( ps->unused )
+            continue;
         *max_ps_length = LSMASH_MAX( *max_ps_length, ps->nalUnitLength );
     }
     return 0;
@@ -151,11 +153,13 @@ static inline int nalu_get_ps_count
 )
 {
     *ps_count = 0;
-    for( lsmash_entry_t *entry = ps_list->head; entry; entry = entry->next )
+    for( lsmash_entry_t *entry = ps_list ? ps_list->head : NULL; entry; entry = entry->next )
     {
         isom_dcr_ps_entry_t *ps = (isom_dcr_ps_entry_t *)entry->data;
         if( !ps )
             return -1;
+        if( ps->unused )
+            continue;
         ++(*ps_count);
     }
     return 0;
@@ -173,6 +177,8 @@ static inline int nalu_check_same_ps_existence
         isom_dcr_ps_entry_t *ps = (isom_dcr_ps_entry_t *)entry->data;
         if( !ps )
             return -1;
+        if( ps->unused )
+            continue;
         if( ps->nalUnitLength == ps_length && !memcmp( ps->nalUnit, ps_data, ps_length ) )
             return 1;   /* The same parameter set already exists. */
     }

@@ -2355,10 +2355,11 @@ typedef struct
 {
     importer_status        status;
     h264_info_t            info;
-    h264_sps_t             first_sps;
+    lsmash_entry_list_t    avcC_list[1];    /* stored as lsmash_codec_specific_t */
     lsmash_media_ts_list_t ts_list;
     uint32_t max_au_length;
     uint32_t num_undecodable;
+    uint32_t avcC_number;
     uint64_t last_intra_cts;
     uint8_t  composition_reordering_present;
     uint8_t  field_pic_present;
@@ -2368,6 +2369,7 @@ static void remove_h264_importer_info( h264_importer_info_t *info )
 {
     if( !info )
         return;
+    lsmash_remove_entries( info->avcC_list, lsmash_destroy_codec_specific_data );
     h264_cleanup_parser( &info->info );
     if( info->ts_list.timestamp )
         free( info->ts_list.timestamp );
@@ -2390,27 +2392,8 @@ static h264_importer_info_t *create_h264_importer_info( importer_t *importer )
         remove_h264_importer_info( info );
         return NULL;
     }
+    lsmash_init_entry_list( info->avcC_list );
     return info;
-}
-
-static int h264_process_parameter_set( h264_info_t *info, lsmash_h264_parameter_set_type ps_type,
-                                       uint16_t nalu_header_length, uint64_t ebsp_length, int probe )
-{
-    h264_stream_buffer_t    *hb = &info->buffer;
-    lsmash_stream_buffers_t *sb = hb->sb;
-    if( probe )
-        return h264_try_to_append_parameter_set( info, ps_type, sb->pos, nalu_header_length + ebsp_length );
-    switch( ps_type )
-    {
-        case H264_PARAMETER_SET_TYPE_SPS :
-            return h264_parse_sps( info, hb->rbsp, sb->pos + nalu_header_length, ebsp_length );
-        case H264_PARAMETER_SET_TYPE_PPS :
-            return h264_parse_pps( info, hb->rbsp, sb->pos + nalu_header_length, ebsp_length );
-        case H264_PARAMETER_SET_TYPE_SPSEXT :
-            return 0;
-        default :
-            return -1;
-    }
 }
 
 static inline int h264_complete_au( h264_picture_info_t *picture, int probe )
@@ -2442,9 +2425,10 @@ static void h264_append_nalu_to_au( h264_picture_info_t *picture, uint8_t *src_n
 
 static inline void h264_get_au_internal_end( h264_importer_info_t *info, h264_picture_info_t *picture, h264_nalu_header_t *nalu_header, int no_more_buf )
 {
-    info->status = info->info.buffer.sb->no_more_read && no_more_buf && (picture->incomplete_au_length == 0)
-                 ? IMPORTER_EOF
-                 : IMPORTER_OK;
+    if( info->info.buffer.sb->no_more_read && no_more_buf && (picture->incomplete_au_length == 0) )
+        info->status = IMPORTER_EOF;
+    else if( info->status != IMPORTER_CHANGE )
+        info->status = IMPORTER_OK;
     info->info.nalu_header = *nalu_header;
 }
 
@@ -2463,9 +2447,75 @@ static int h264_get_au_internal_failed( h264_importer_info_t *info, h264_picture
     return -1;
 }
 
+static lsmash_video_summary_t *h264_create_summary
+(
+    lsmash_h264_specific_parameters_t *param,
+    h264_sps_t                        *sps,
+    uint32_t                           max_au_length
+)
+{
+    lsmash_video_summary_t *summary = (lsmash_video_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_VIDEO );
+    if( !summary )
+        return NULL;
+    /* Update summary here.
+     * max_au_length is set at the last of mp4sys_h264_probe function. */
+    lsmash_codec_specific_t *specific = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264,
+                                                                           LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
+    specific->data.unstructured = lsmash_create_h264_specific_info( param, &specific->size );
+    if( !specific->data.unstructured
+     || lsmash_add_entry( &summary->opaque->list, specific ) )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        lsmash_destroy_codec_specific_data( specific );
+        return NULL;
+    }
+    summary->sample_type            = ISOM_CODEC_TYPE_AVC1_VIDEO;
+    summary->max_au_length          = max_au_length;
+    summary->timescale              = sps->vui.time_scale;
+    summary->timebase               = sps->vui.num_units_in_tick;
+    summary->vfr                    = !sps->vui.fixed_frame_rate_flag;
+    summary->sample_per_field       = 0;
+    summary->width                  = sps->cropped_width;
+    summary->height                 = sps->cropped_height;
+    summary->par_h                  = sps->vui.sar_width;
+    summary->par_v                  = sps->vui.sar_height;
+    summary->color.primaries_index  = sps->vui.colour_primaries;
+    summary->color.transfer_index   = sps->vui.transfer_characteristics;
+    summary->color.matrix_index     = sps->vui.matrix_coefficients;
+    summary->color.full_range       = sps->vui.video_full_range_flag;
+    return summary;
+}
+
+static int h264_store_codec_specific
+(
+    h264_importer_info_t              *info,
+    lsmash_h264_specific_parameters_t *avcC_param
+)
+{
+    lsmash_codec_specific_t *src_cs = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264,
+                                                                         LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+    if( !src_cs )
+        return -1;
+    lsmash_h264_specific_parameters_t *src_param = (lsmash_h264_specific_parameters_t *)src_cs->data.structured;
+    *src_param = *avcC_param;
+    lsmash_codec_specific_t *dst_cs = lsmash_convert_codec_specific_format( src_cs, LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+    src_param->parameter_sets = NULL;   /* Avoid freeing parameter sets within avcC_param. */
+    lsmash_destroy_codec_specific_data( src_cs );
+    if( !dst_cs || lsmash_add_entry( info->avcC_list, dst_cs ) )
+    {
+        lsmash_destroy_codec_specific_data( dst_cs );
+        return -1;
+    }
+    return 0;
+}
+
 /* If probe equals 0, don't get the actual data (EBPS) of an access unit and only parse NALU.
  * Currently, you can get AU of AVC video elemental stream only, not AVC parameter set elemental stream defined in 14496-15. */
-static int h264_get_access_unit_internal( h264_importer_info_t *importer_info, int probe )
+static int h264_get_access_unit_internal
+(
+    h264_importer_info_t *importer_info,
+    int                   probe
+)
 {
     h264_info_t             *info     = &importer_info->info;
     h264_slice_info_t       *slice    = &info->slice;
@@ -2501,7 +2551,7 @@ static int h264_get_access_unit_internal( h264_importer_info_t *importer_info, i
         {
             /* For the last NALU.
              * This NALU already has been appended into the latest access unit and parsed. */
-            h264_update_picture_info( picture, slice, &info->sei );
+            h264_update_picture_info( info, picture, slice, &info->sei );
             h264_complete_au( picture, probe );
             return h264_get_au_internal_succeeded( importer_info, picture, &nalu_header, no_more_buf );
         }
@@ -2568,6 +2618,14 @@ static int h264_get_access_unit_internal( h264_importer_info_t *importer_info, i
                 if( h264_parse_slice( info, &nalu_header, hb->rbsp,
                                       lsmash_stream_buffers_get_pos( sb ) + nalu_header.length, ebsp_length ) )
                     return h264_get_au_internal_failed( importer_info, picture, &nalu_header, no_more_buf, complete_au );
+                if( probe && info->avcC_pending )
+                {
+                    /* Copy and append a Codec Specific info. */
+                    if( h264_store_codec_specific( importer_info, &info->avcC_param ) < 0 )
+                        return -1;
+                }
+                if( h264_move_pending_avcC_param( info ) < 0 )
+                    return -1;
                 if( prev_slice.present )
                 {
                     /* Check whether the AU that contains the previous VCL NALU completed or not. */
@@ -2575,11 +2633,11 @@ static int h264_get_access_unit_internal( h264_importer_info_t *importer_info, i
                     {
                         /* The current NALU is the first VCL NALU of the primary coded picture of an new AU.
                          * Therefore, the previous slice belongs to the AU you want at this time. */
-                        h264_update_picture_info( picture, &prev_slice, &info->sei );
+                        h264_update_picture_info( info, picture, &prev_slice, &info->sei );
                         complete_au = h264_complete_au( picture, probe );
                     }
                     else
-                        h264_update_picture_info_for_slice( picture, &prev_slice );
+                        h264_update_picture_info_for_slice( info, picture, &prev_slice );
                 }
                 h264_append_nalu_to_au( picture, lsmash_stream_buffers_get_pos( sb ), nalu_length, probe );
                 slice->present = 1;
@@ -2589,7 +2647,7 @@ static int h264_get_access_unit_internal( h264_importer_info_t *importer_info, i
                 if( h264_find_au_delimit_by_nalu_type( nalu_type, info->prev_nalu_type ) )
                 {
                     /* The last slice belongs to the AU you want at this time. */
-                    h264_update_picture_info( picture, slice, &info->sei );
+                    h264_update_picture_info( info, picture, slice, &info->sei );
                     complete_au = h264_complete_au( picture, probe );
                 }
                 else if( no_more )
@@ -2599,31 +2657,31 @@ static int h264_get_access_unit_internal( h264_importer_info_t *importer_info, i
                     case H264_NALU_TYPE_SEI :
                     {
                         uint8_t *sei_pos = lsmash_stream_buffers_get_pos( sb );
-                        if( h264_parse_sei( info->bits, &info->sei, hb->rbsp, sei_pos + nalu_header.length, ebsp_length ) )
+                        if( h264_parse_sei( info->bits, &info->sei, hb->rbsp, sei_pos + nalu_header.length, ebsp_length ) < 0 )
                             return h264_get_au_internal_failed( importer_info, picture, &nalu_header, no_more_buf, complete_au );
                         h264_append_nalu_to_au( picture, sei_pos, nalu_length, probe );
                         break;
                     }
                     case H264_NALU_TYPE_SPS :
-                        if( h264_process_parameter_set( info, H264_PARAMETER_SET_TYPE_SPS, nalu_header.length, ebsp_length, probe ) )
+                        if( h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_SPS, sb->pos, nalu_header.length + ebsp_length ) < 0 )
                             return h264_get_au_internal_failed( importer_info, picture, &nalu_header, no_more_buf, complete_au );
-                        if( probe && !importer_info->first_sps.present )
-                            importer_info->first_sps = info->sps;
                         break;
                     case H264_NALU_TYPE_PPS :
-                        if( h264_process_parameter_set( info, H264_PARAMETER_SET_TYPE_PPS, nalu_header.length, ebsp_length, probe ) )
+                        if( h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_PPS, sb->pos, nalu_header.length + ebsp_length ) < 0 )
                             return h264_get_au_internal_failed( importer_info, picture, &nalu_header, no_more_buf, complete_au );
                         break;
                     case H264_NALU_TYPE_AUD :   /* We drop access unit delimiters. */
                         break;
                     case H264_NALU_TYPE_SPS_EXT :
-                        if( h264_process_parameter_set( info, H264_PARAMETER_SET_TYPE_SPSEXT, nalu_header.length, ebsp_length, probe ) )
+                        if( h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_SPSEXT, sb->pos, nalu_header.length + ebsp_length ) < 0 )
                             return h264_get_au_internal_failed( importer_info, picture, &nalu_header, no_more_buf, complete_au );
                         break;
                     default :
                         h264_append_nalu_to_au( picture, lsmash_stream_buffers_get_pos( sb ), nalu_length, probe );
                         break;
                 }
+                if( info->avcC_pending )
+                    importer_info->status = IMPORTER_CHANGE;
             }
         }
         /* Move to the first byte of the next NALU. */
@@ -2650,7 +2708,7 @@ static int h264_get_access_unit_internal( h264_importer_info_t *importer_info, i
         /* If there is no more data in the stream, and flushed chunk of NALUs, flush it as complete AU here. */
         else if( picture->incomplete_au_length && picture->au_length == 0 )
         {
-            h264_update_picture_info( picture, slice, &info->sei );
+            h264_update_picture_info( info, picture, slice, &info->sei );
             h264_complete_au( picture, probe );
             return h264_get_au_internal_succeeded( importer_info, picture, &nalu_header, no_more_buf );
         }
@@ -2660,7 +2718,12 @@ static int h264_get_access_unit_internal( h264_importer_info_t *importer_info, i
     }
 }
 
-static int h264_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
+static int h264_importer_get_accessunit
+(
+    importer_t      *importer,
+    uint32_t         track_number,
+    lsmash_sample_t *buffered_sample
+)
 {
     debug_if( !importer || !importer->info || !buffered_sample->data || !buffered_sample->length )
         return -1;
@@ -2680,6 +2743,26 @@ static int h264_importer_get_accessunit( importer_t *importer, uint32_t track_nu
     {
         importer_info->status = IMPORTER_ERROR;
         return -1;
+    }
+    if( importer_info->status == IMPORTER_CHANGE && !info->avcC_pending )
+        current_status = IMPORTER_CHANGE;
+    if( current_status == IMPORTER_CHANGE )
+    {
+        /* Update the active summary. */
+        lsmash_codec_specific_t *cs = (lsmash_codec_specific_t *)lsmash_get_entry_data( importer_info->avcC_list, ++ importer_info->avcC_number );
+        if( !cs )
+            return -1;
+        lsmash_h264_specific_parameters_t *avcC_param = (lsmash_h264_specific_parameters_t *)cs->data.structured;
+        lsmash_video_summary_t *summary = h264_create_summary( avcC_param, &info->sps, importer_info->max_au_length );
+        if( !summary )
+            return -1;
+        lsmash_remove_entry( importer->summaries, track_number, lsmash_cleanup_summary );
+        if( lsmash_add_entry( importer->summaries, summary ) )
+        {
+            lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+            return -1;
+        }
+        importer_info->status = IMPORTER_OK;
     }
     h264_sps_t *sps = &info->sps;
     h264_picture_info_t *picture = &info->picture;
@@ -2713,43 +2796,6 @@ static int h264_importer_get_accessunit( importer_t *importer, uint32_t track_nu
     buffered_sample->length = picture->au_length;
     memcpy( buffered_sample->data, picture->au, picture->au_length );
     return current_status;
-}
-
-static lsmash_video_summary_t *h264_create_summary( h264_info_t *info, h264_sps_t *sps, uint8_t field_pic_present, uint32_t max_au_length )
-{
-    lsmash_h264_specific_parameters_t *param = &info->avcC_param;
-    if( !info->sps.present || !info->pps.present )
-        return NULL;
-    lsmash_video_summary_t *summary = (lsmash_video_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_VIDEO );
-    if( !summary )
-        return NULL;
-    /* Update summary here.
-     * max_au_length is set at the last of mp4sys_h264_probe function. */
-    lsmash_codec_specific_t *specific = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264,
-                                                                           LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
-    specific->data.unstructured = lsmash_create_h264_specific_info( param, &specific->size );
-    if( !specific->data.unstructured
-     || lsmash_add_entry( &summary->opaque->list, specific ) )
-    {
-        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-        lsmash_destroy_codec_specific_data( specific );
-        return NULL;
-    }
-    summary->sample_type            = ISOM_CODEC_TYPE_AVC1_VIDEO;
-    summary->max_au_length          = max_au_length;
-    summary->timescale              = sps->vui.time_scale;
-    summary->timebase               = sps->vui.num_units_in_tick;
-    summary->vfr                    = !sps->vui.fixed_frame_rate_flag;
-    summary->sample_per_field       = field_pic_present;
-    summary->width                  = sps->cropped_width;
-    summary->height                 = sps->cropped_height;
-    summary->par_h                  = sps->vui.sar_width;
-    summary->par_v                  = sps->vui.sar_height;
-    summary->color.primaries_index  = sps->vui.colour_primaries;
-    summary->color.transfer_index   = sps->vui.transfer_characteristics;
-    summary->color.matrix_index     = sps->vui.matrix_coefficients;
-    summary->color.full_range       = sps->vui.video_full_range_flag;
-    return summary;
 }
 
 static void nalu_deduplicate_poc
@@ -2964,12 +3010,27 @@ static int h264_importer_probe( importer_t *importer )
         importer_info->max_au_length = LSMASH_MAX( info->picture.au_length, importer_info->max_au_length );
     }
     fprintf( stderr, "                                                                               \r" );
-    lsmash_video_summary_t *summary = h264_create_summary( info, &importer_info->first_sps, importer_info->field_pic_present, importer_info->max_au_length );
-    if( !summary || lsmash_add_entry( importer->summaries, summary ) )
+    /* Copy and append the last Codec Specific info. */
+    if( h264_store_codec_specific( importer_info, &info->avcC_param ) < 0 )
+        return -1;
+    /* Set up the first summary. */
+    lsmash_codec_specific_t *cs = (lsmash_codec_specific_t *)lsmash_get_entry_data( importer_info->avcC_list, ++ importer_info->avcC_number );
+    if( !cs || !cs->data.structured )
     {
         free( poc );
         goto fail;
     }
+    lsmash_h264_specific_parameters_t *avcC_param = (lsmash_h264_specific_parameters_t *)cs->data.structured;
+    lsmash_video_summary_t *summary = h264_create_summary( avcC_param, &info->sps, importer_info->max_au_length );
+    if( !summary || lsmash_add_entry( importer->summaries, summary ) )
+    {
+        if( summary )
+            lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        free( poc );
+        goto fail;
+    }
+    summary->sample_per_field = importer_info->field_pic_present;
+    /* */
     lsmash_media_ts_t *timestamp = malloc( num_access_units * sizeof(lsmash_media_ts_t) );
     if( !timestamp )
     {
@@ -3011,6 +3072,7 @@ static int h264_importer_probe( importer_t *importer )
     lsmash_remove_entries( info->avcC_param.parameter_sets->sps_list,    isom_remove_dcr_ps );
     lsmash_remove_entries( info->avcC_param.parameter_sets->pps_list,    isom_remove_dcr_ps );
     lsmash_remove_entries( info->avcC_param.parameter_sets->spsext_list, isom_remove_dcr_ps );
+    lsmash_destroy_h264_parameter_sets( &info->avcC_param_next );
     return 0;
 fail:
     remove_h264_importer_info( importer_info );
@@ -3055,10 +3117,11 @@ typedef struct
 {
     importer_status        status;
     hevc_info_t            info;
-    hevc_sps_t             first_sps;
+    lsmash_entry_list_t    hvcC_list[1];    /* stored as lsmash_codec_specific_t */
     lsmash_media_ts_list_t ts_list;
     uint32_t max_au_length;
     uint32_t num_undecodable;
+    uint32_t hvcC_number;
     uint64_t last_intra_cts;
     uint8_t  composition_reordering_present;
     uint8_t  field_pic_present;
@@ -3069,6 +3132,7 @@ static void remove_hevc_importer_info( hevc_importer_info_t *info )
 {
     if( !info )
         return;
+    lsmash_remove_entries( info->hvcC_list, lsmash_destroy_codec_specific_data );
     hevc_cleanup_parser( &info->info );
     if( info->ts_list.timestamp )
         free( info->ts_list.timestamp );
@@ -3091,33 +3155,8 @@ static hevc_importer_info_t *create_hevc_importer_info( importer_t *importer )
         remove_hevc_importer_info( info );
         return NULL;
     }
+    lsmash_init_entry_list( info->hvcC_list );
     return info;
-}
-
-static int hevc_process_parameter_set
-(
-    hevc_info_t              *info,
-    lsmash_hevc_dcr_nalu_type ps_type,
-    uint16_t                  nalu_header_length,
-    uint64_t                  ebsp_length,
-    int                       probe
-)
-{
-    hevc_stream_buffer_t    *hb = &info->buffer;
-    lsmash_stream_buffers_t *sb = hb->sb;
-    if( probe )
-        return hevc_try_to_append_dcr_nalu( info, ps_type, sb->pos, nalu_header_length + ebsp_length );
-    switch( ps_type )
-    {
-        case HEVC_DCR_NALU_TYPE_VPS :
-            return hevc_parse_vps( info, hb->rbsp, sb->pos + nalu_header_length, ebsp_length );
-        case HEVC_DCR_NALU_TYPE_SPS :
-            return hevc_parse_sps( info, hb->rbsp, sb->pos + nalu_header_length, ebsp_length );
-        case HEVC_DCR_NALU_TYPE_PPS :
-            return hevc_parse_pps( info, hb->rbsp, sb->pos + nalu_header_length, ebsp_length );
-        default :
-            return -1;
-    }
 }
 
 static inline int hevc_complete_au( hevc_access_unit_t *au, int probe )
@@ -3150,9 +3189,10 @@ static void hevc_append_nalu_to_au( hevc_access_unit_t *au, uint8_t *src_nalu, u
 
 static inline void hevc_get_au_internal_end( hevc_importer_info_t *info, hevc_access_unit_t *au, hevc_nalu_header_t *nalu_header, int no_more_buf )
 {
-    info->status = info->info.buffer.sb->no_more_read && no_more_buf && (au->incomplete_length == 0)
-                 ? IMPORTER_EOF
-                 : IMPORTER_OK;
+    if( info->info.buffer.sb->no_more_read && no_more_buf && (au->incomplete_length == 0) )
+        info->status = IMPORTER_EOF;
+    else if( info->status != IMPORTER_CHANGE )
+        info->status = IMPORTER_OK;
     info->info.nalu_header = *nalu_header;
 }
 
@@ -3171,8 +3211,75 @@ static int hevc_get_au_internal_failed( hevc_importer_info_t *info, hevc_access_
     return -1;
 }
 
+static lsmash_video_summary_t *hevc_create_summary
+(
+    lsmash_hevc_specific_parameters_t *param,
+    hevc_sps_t                        *sps,
+    uint32_t                           max_au_length
+)
+{
+    lsmash_video_summary_t *summary = (lsmash_video_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_VIDEO );
+    if( !summary )
+        return NULL;
+    /* Update summary here.
+     * max_au_length is set at the last of hevc_importer_probe function. */
+    lsmash_codec_specific_t *specific = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_HEVC,
+                                                                           LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
+    specific->data.unstructured = lsmash_create_hevc_specific_info( param, &specific->size );
+    if( !specific->data.unstructured
+     || lsmash_add_entry( &summary->opaque->list, specific ) )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        lsmash_destroy_codec_specific_data( specific );
+        return NULL;
+    }
+    summary->sample_type            = ISOM_CODEC_TYPE_HVC1_VIDEO;
+    summary->max_au_length          = max_au_length;
+    summary->timescale              = sps->vui.time_scale;
+    summary->timebase               = sps->vui.num_units_in_tick;
+    summary->vfr                    = (param->constantFrameRate == 0);
+    summary->sample_per_field       = 0;
+    summary->width                  = sps->cropped_width;
+    summary->height                 = sps->cropped_height;
+    summary->par_h                  = sps->vui.sar_width;
+    summary->par_v                  = sps->vui.sar_height;
+    summary->color.primaries_index  = sps->vui.colour_primaries         != 2 ? sps->vui.colour_primaries         : 0;
+    summary->color.transfer_index   = sps->vui.transfer_characteristics != 2 ? sps->vui.transfer_characteristics : 0;
+    summary->color.matrix_index     = sps->vui.matrix_coeffs            != 2 ? sps->vui.matrix_coeffs            : 0;
+    summary->color.full_range       = sps->vui.video_full_range_flag;
+    lsmash_convert_crop_into_clap( sps->vui.def_disp_win_offset, summary->width, summary->height, &summary->clap );
+    return summary;
+}
+
+static int hevc_store_codec_specific
+(
+    hevc_importer_info_t              *info,
+    lsmash_hevc_specific_parameters_t *hvcC_param
+)
+{
+    lsmash_codec_specific_t *src_cs = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_HEVC,
+                                                                         LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+    if( !src_cs )
+        return -1;
+    lsmash_hevc_specific_parameters_t *src_param = (lsmash_hevc_specific_parameters_t *)src_cs->data.structured;
+    *src_param = *hvcC_param;
+    lsmash_codec_specific_t *dst_cs = lsmash_convert_codec_specific_format( src_cs, LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+    src_param->parameter_arrays = NULL;     /* Avoid freeing parameter arrays within hvcC_param. */
+    lsmash_destroy_codec_specific_data( src_cs );
+    if( !dst_cs || lsmash_add_entry( info->hvcC_list, dst_cs ) )
+    {
+        lsmash_destroy_codec_specific_data( dst_cs );
+        return -1;
+    }
+    return 0;
+}
+
 /* If probe equals 0, don't get the actual data (EBPS) of an access unit and only parse NALU. */
-static int hevc_get_access_unit_internal( hevc_importer_info_t *importer_info, int probe )
+static int hevc_get_access_unit_internal
+(
+    hevc_importer_info_t *importer_info,
+    int                   probe
+)
 {
     hevc_info_t             *info     = &importer_info->info;
     hevc_slice_info_t       *slice    = &info->slice;
@@ -3207,7 +3314,7 @@ static int hevc_get_access_unit_internal( hevc_importer_info_t *importer_info, i
         {
             /* For the last NALU.
              * This NALU already has been appended into the latest access unit and parsed. */
-            hevc_update_picture_info( picture, slice, &info->sps, &info->sei );
+            hevc_update_picture_info( info, picture, slice, &info->sps, &info->sei );
             hevc_complete_au( au, probe );
             return hevc_get_au_internal_succeeded( importer_info, au, &nalu_header, no_more_buf );
         }
@@ -3273,6 +3380,14 @@ static int hevc_get_access_unit_internal( hevc_importer_info_t *importer_info, i
                 if( hevc_parse_slice_segment_header( info, &nalu_header, hb->rbsp,
                                                      lsmash_stream_buffers_get_pos( sb ) + nalu_header.length, ebsp_length ) )
                     return hevc_get_au_internal_failed( importer_info, au, &nalu_header, no_more_buf, complete_au );
+                if( probe && info->hvcC_pending )
+                {
+                    /* Copy and append a Codec Specific info. */
+                    if( hevc_store_codec_specific( importer_info, &info->hvcC_param ) < 0 )
+                        return -1;
+                }
+                if( hevc_move_pending_hvcC_param( info ) < 0 )
+                    return -1;
                 if( prev_slice.present )
                 {
                     /* Check whether the AU that contains the previous VCL NALU completed or not. */
@@ -3280,11 +3395,11 @@ static int hevc_get_access_unit_internal( hevc_importer_info_t *importer_info, i
                     {
                         /* The current NALU is the first VCL NALU of the primary coded picture of a new AU.
                          * Therefore, the previous slice belongs to the AU you want at this time. */
-                        hevc_update_picture_info( picture, &prev_slice, &info->sps, &info->sei );
+                        hevc_update_picture_info( info, picture, &prev_slice, &info->sps, &info->sei );
                         complete_au = hevc_complete_au( au, probe );
                     }
                     else
-                        hevc_update_picture_info_for_slice( picture, &prev_slice );
+                        hevc_update_picture_info_for_slice( info, picture, &prev_slice );
                 }
                 hevc_append_nalu_to_au( au, lsmash_stream_buffers_get_pos( sb ), nalu_length, probe );
                 slice->present = 1;
@@ -3294,7 +3409,7 @@ static int hevc_get_access_unit_internal( hevc_importer_info_t *importer_info, i
                 if( hevc_find_au_delimit_by_nalu_type( nalu_type, info->prev_nalu_type ) )
                 {
                     /* The last slice belongs to the AU you want at this time. */
-                    hevc_update_picture_info( picture, slice, &info->sps, &info->sei );
+                    hevc_update_picture_info( info, picture, slice, &info->sps, &info->sei );
                     complete_au = hevc_complete_au( au, probe );
                 }
                 else if( no_more )
@@ -3312,17 +3427,15 @@ static int hevc_get_access_unit_internal( hevc_importer_info_t *importer_info, i
                         break;
                     }
                     case HEVC_NALU_TYPE_VPS :
-                        if( hevc_process_parameter_set( info, HEVC_DCR_NALU_TYPE_VPS, nalu_header.length, ebsp_length, probe ) < 0 )
+                        if( hevc_try_to_append_dcr_nalu( info, HEVC_DCR_NALU_TYPE_VPS, sb->pos, nalu_header.length + ebsp_length ) < 0 )
                             return hevc_get_au_internal_failed( importer_info, au, &nalu_header, no_more_buf, complete_au );
                         break;
                     case HEVC_NALU_TYPE_SPS :
-                        if( hevc_process_parameter_set( info, HEVC_DCR_NALU_TYPE_SPS, nalu_header.length, ebsp_length, probe ) < 0 )
+                        if( hevc_try_to_append_dcr_nalu( info, HEVC_DCR_NALU_TYPE_SPS, sb->pos, nalu_header.length + ebsp_length ) < 0 )
                             return hevc_get_au_internal_failed( importer_info, au, &nalu_header, no_more_buf, complete_au );
-                        if( probe && !importer_info->first_sps.present )
-                            importer_info->first_sps = info->sps;
                         break;
                     case HEVC_NALU_TYPE_PPS :
-                        if( hevc_process_parameter_set( info, HEVC_DCR_NALU_TYPE_PPS, nalu_header.length, ebsp_length, probe ) < 0 )
+                        if( hevc_try_to_append_dcr_nalu( info, HEVC_DCR_NALU_TYPE_PPS, sb->pos, nalu_header.length + ebsp_length ) < 0 )
                             return hevc_get_au_internal_failed( importer_info, au, &nalu_header, no_more_buf, complete_au );
                         break;
                     case HEVC_NALU_TYPE_AUD :   /* We drop access unit delimiters. */
@@ -3331,6 +3444,8 @@ static int hevc_get_access_unit_internal( hevc_importer_info_t *importer_info, i
                         hevc_append_nalu_to_au( au, lsmash_stream_buffers_get_pos( sb ), nalu_length, probe );
                         break;
                 }
+                if( info->hvcC_pending )
+                    importer_info->status = IMPORTER_CHANGE;
             }
         }
         /* Move to the first byte of the next NALU. */
@@ -3357,7 +3472,7 @@ static int hevc_get_access_unit_internal( hevc_importer_info_t *importer_info, i
         /* If there is no more data in the stream, and flushed chunk of NALUs, flush it as complete AU here. */
         else if( au->incomplete_length && au->length == 0 )
         {
-            hevc_update_picture_info( picture, slice, &info->sps, &info->sei );
+            hevc_update_picture_info( info, picture, slice, &info->sps, &info->sei );
             hevc_complete_au( au, probe );
             return hevc_get_au_internal_succeeded( importer_info, au, &nalu_header, no_more_buf );
         }
@@ -3387,6 +3502,26 @@ static int hevc_importer_get_accessunit( importer_t *importer, uint32_t track_nu
     {
         importer_info->status = IMPORTER_ERROR;
         return -1;
+    }
+    if( importer_info->status == IMPORTER_CHANGE && !info->hvcC_pending )
+        current_status = IMPORTER_CHANGE;
+    if( current_status == IMPORTER_CHANGE )
+    {
+        /* Update the active summary. */
+        lsmash_codec_specific_t *cs = (lsmash_codec_specific_t *)lsmash_get_entry_data( importer_info->hvcC_list, ++ importer_info->hvcC_number );
+        if( !cs )
+            return -1;
+        lsmash_hevc_specific_parameters_t *hvcC_param = (lsmash_hevc_specific_parameters_t *)cs->data.structured;
+        lsmash_video_summary_t *summary = hevc_create_summary( hvcC_param, &info->sps, importer_info->max_au_length );
+        if( !summary )
+            return -1;
+        lsmash_remove_entry( importer->summaries, track_number, lsmash_cleanup_summary );
+        if( lsmash_add_entry( importer->summaries, summary ) )
+        {
+            lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+            return -1;
+        }
+        importer_info->status = IMPORTER_OK;
     }
     //hevc_sps_t *sps = &info->sps;
     hevc_access_unit_t  *au      = &info->au;
@@ -3442,44 +3577,6 @@ static int hevc_importer_get_accessunit( importer_t *importer, uint32_t track_nu
     buffered_sample->length = au->length;
     memcpy( buffered_sample->data, au->data, au->length );
     return current_status;
-}
-
-static lsmash_video_summary_t *hevc_create_summary( hevc_info_t *info, hevc_sps_t *sps, uint8_t field_pic_present, uint32_t max_au_length )
-{
-    lsmash_hevc_specific_parameters_t *param = &info->hvcC_param;
-    if( !info->sps.present || !info->pps.present )
-        return NULL;
-    lsmash_video_summary_t *summary = (lsmash_video_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_VIDEO );
-    if( !summary )
-        return NULL;
-    /* Update summary here.
-     * max_au_length is set at the last of hevc_importer_probe function. */
-    lsmash_codec_specific_t *specific = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_HEVC,
-                                                                           LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
-    specific->data.unstructured = lsmash_create_hevc_specific_info( param, &specific->size );
-    if( !specific->data.unstructured
-     || lsmash_add_entry( &summary->opaque->list, specific ) )
-    {
-        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-        lsmash_destroy_codec_specific_data( specific );
-        return NULL;
-    }
-    summary->sample_type            = ISOM_CODEC_TYPE_HVC1_VIDEO;
-    summary->max_au_length          = max_au_length;
-    summary->timescale              = sps->vui.time_scale;
-    summary->timebase               = sps->vui.num_units_in_tick;
-    summary->vfr                    = (param->constantFrameRate == 0);
-    summary->sample_per_field       = field_pic_present;
-    summary->width                  = sps->cropped_width;
-    summary->height                 = sps->cropped_height;
-    summary->par_h                  = sps->vui.sar_width;
-    summary->par_v                  = sps->vui.sar_height;
-    summary->color.primaries_index  = sps->vui.colour_primaries         != 2 ? sps->vui.colour_primaries         : 0;
-    summary->color.transfer_index   = sps->vui.transfer_characteristics != 2 ? sps->vui.transfer_characteristics : 0;
-    summary->color.matrix_index     = sps->vui.matrix_coeffs            != 2 ? sps->vui.matrix_coeffs            : 0;
-    summary->color.full_range       = sps->vui.video_full_range_flag;
-    lsmash_convert_crop_into_clap( sps->vui.def_disp_win_offset, summary->width, summary->height, &summary->clap );
-    return summary;
 }
 
 static int hevc_importer_probe( importer_t *importer )
@@ -3561,12 +3658,27 @@ static int hevc_importer_probe( importer_t *importer )
         importer_info->max_TemporalId = LSMASH_MAX( importer_info->max_TemporalId, info->au.TemporalId );
     }
     fprintf( stderr, "                                                                               \r" );
-    lsmash_video_summary_t *summary = hevc_create_summary( info, &importer_info->first_sps, importer_info->field_pic_present, importer_info->max_au_length );
-    if( !summary || lsmash_add_entry( importer->summaries, summary ) )
+    /* Copy and append the last Codec Specific info. */
+    if( hevc_store_codec_specific( importer_info, &info->hvcC_param ) < 0 )
+        return -1;
+    /* Set up the first summary. */
+    lsmash_codec_specific_t *cs = (lsmash_codec_specific_t *)lsmash_get_entry_data( importer_info->hvcC_list, ++ importer_info->hvcC_number );
+    if( !cs || !cs->data.structured )
     {
         free( poc );
         goto fail;
     }
+    lsmash_hevc_specific_parameters_t *hvcC_param = (lsmash_hevc_specific_parameters_t *)cs->data.structured;
+    lsmash_video_summary_t *summary = hevc_create_summary( hvcC_param, &info->sps, importer_info->max_au_length );
+    if( !summary || lsmash_add_entry( importer->summaries, summary ) )
+    {
+        if( summary )
+            lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        free( poc );
+        goto fail;
+    }
+    summary->sample_per_field = importer_info->field_pic_present;
+    /* */
     lsmash_media_ts_t *timestamp = malloc( num_access_units * sizeof(lsmash_media_ts_t) );
     if( !timestamp )
     {
@@ -3608,6 +3720,7 @@ static int hevc_importer_probe( importer_t *importer )
     memset( &info->pps,   0, sizeof(hevc_pps_t) );
     for( int i = 0; i < HEVC_DCR_NALU_TYPE_NUM; i++ )
         lsmash_remove_entries( info->hvcC_param.parameter_arrays->ps_array[i].list, isom_remove_dcr_ps );
+    lsmash_destroy_hevc_parameter_arrays( &info->hvcC_param_next );
     return 0;
 fail:
     remove_hevc_importer_info( importer_info );

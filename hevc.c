@@ -102,6 +102,7 @@ void hevc_cleanup_parser
     lsmash_remove_entries( info->sps_list, NULL );
     lsmash_remove_entries( info->pps_list, hevc_remove_pps );
     lsmash_destroy_hevc_parameter_arrays( &info->hvcC_param );
+    lsmash_destroy_hevc_parameter_arrays( &info->hvcC_param_next );
     lsmash_stream_buffers_cleanup( info->buffer.sb );
     lsmash_bits_adhoc_cleanup( info->bits );
     info->bits = NULL;
@@ -120,7 +121,8 @@ int hevc_setup_parser
     if( !info )
         return -1;
     memset( info, 0, sizeof(hevc_info_t) );
-    info->hvcC_param.lengthSizeMinusOne = HEVC_DEFAULT_NALU_LENGTH_SIZE - 1;
+    info->hvcC_param     .lengthSizeMinusOne = HEVC_DEFAULT_NALU_LENGTH_SIZE - 1;
+    info->hvcC_param_next.lengthSizeMinusOne = HEVC_DEFAULT_NALU_LENGTH_SIZE - 1;
     hevc_stream_buffer_t *hb = &info->buffer;
     hb->sb = sb;
     lsmash_stream_buffers_setup( sb, type, stream );
@@ -1253,6 +1255,8 @@ int hevc_parse_slice_segment_header
     hevc_sps_t *sps = hevc_get_sps( info->sps_list, pps->seq_parameter_set_id );
     if( !sps )
         return -1;
+    slice->video_parameter_set_id = sps->video_parameter_set_id;
+    slice->seq_parameter_set_id   = pps->seq_parameter_set_id;
     if( !slice->first_slice_segment_in_pic_flag )
     {
         slice->dependent_slice_segment_flag = pps->dependent_slice_segments_enabled_flag ? lsmash_bits_get( bits, 1 ) : 0;
@@ -1324,323 +1328,6 @@ int hevc_parse_slice_segment_header
     info->sps = *sps;
     info->pps = *pps;
     return 0;
-}
-
-static inline void  hevc_update_picture_type
-(
-    hevc_picture_info_t *picture,
-    hevc_slice_info_t   *slice
-)
-{
-    if( picture->type == HEVC_PICTURE_TYPE_I_P )
-    {
-        if( slice->type == HEVC_SLICE_TYPE_B )
-            picture->type = HEVC_PICTURE_TYPE_I_P_B;
-    }
-    else if( picture->type == HEVC_PICTURE_TYPE_I )
-    {
-        if( slice->type == HEVC_SLICE_TYPE_P )
-            picture->type = HEVC_PICTURE_TYPE_I_P;
-        else if( slice->type == HEVC_SLICE_TYPE_B )
-            picture->type = HEVC_PICTURE_TYPE_I_P_B;
-    }
-    else if( picture->type == HEVC_PICTURE_TYPE_NONE )
-    {
-        if( slice->type == HEVC_SLICE_TYPE_P )
-            picture->type = HEVC_PICTURE_TYPE_I_P;
-        else if( slice->type == HEVC_SLICE_TYPE_B )
-            picture->type = HEVC_PICTURE_TYPE_I_P_B;
-        else if( slice->type == HEVC_SLICE_TYPE_I )
-            picture->type = HEVC_PICTURE_TYPE_I;
-    }
-#if 0
-    fprintf( stderr, "Picture type = %s\n", picture->type == HEVC_PICTURE_TYPE_I_P   ? "P"
-                                          : picture->type == HEVC_PICTURE_TYPE_I_P_B ? "B"
-                                          : picture->type == HEVC_PICTURE_TYPE_I     ? "I" );
-#endif
-}
-
-/* Shall be called at least once per picture. */
-void hevc_update_picture_info_for_slice
-(
-    hevc_picture_info_t *picture,
-    hevc_slice_info_t   *slice
-)
-{
-    picture->has_primary |= !slice->dependent_slice_segment_flag;
-    hevc_update_picture_type( picture, slice );
-    slice->present = 0;     /* Discard this slice info. */
-}
-
-/* Shall be called exactly once per picture. */
-void hevc_update_picture_info
-(
-    hevc_picture_info_t *picture,
-    hevc_slice_info_t   *slice,
-    hevc_sps_t          *sps,
-    hevc_sei_t          *sei
-)
-{
-    picture->irap                 = slice->nalu_type >= HEVC_NALU_TYPE_BLA_W_LP    && slice->nalu_type <= HEVC_NALU_TYPE_CRA;
-    picture->idr                  = slice->nalu_type == HEVC_NALU_TYPE_IDR_W_RADL  || slice->nalu_type == HEVC_NALU_TYPE_IDR_N_LP;
-    picture->broken_link          = slice->nalu_type >= HEVC_NALU_TYPE_BLA_W_LP    && slice->nalu_type <= HEVC_NALU_TYPE_BLA_N_LP;
-    picture->radl                 = slice->nalu_type == HEVC_NALU_TYPE_RADL_N      || slice->nalu_type == HEVC_NALU_TYPE_RADL_R;
-    picture->rasl                 = slice->nalu_type == HEVC_NALU_TYPE_RASL_N      || slice->nalu_type == HEVC_NALU_TYPE_RASL_R;
-    picture->sublayer_nonref      = slice->nalu_type <= HEVC_NALU_TYPE_RSV_VCL_R15 && ((slice->nalu_type & 0x01) == 0);
-    picture->closed_rap           = slice->nalu_type >= HEVC_NALU_TYPE_BLA_W_RADL  && slice->nalu_type <= HEVC_NALU_TYPE_IDR_N_LP;
-    picture->random_accessible    = picture->irap;
-    picture->TemporalId           = slice->TemporalId;
-    picture->pic_parameter_set_id = slice->pic_parameter_set_id;
-    picture->poc_lsb              = slice->pic_order_cnt_lsb;
-    hevc_update_picture_info_for_slice( picture, slice );
-    picture->independent = (picture->type == HEVC_PICTURE_TYPE_I);
-#if 0
-    if( sei->pic_timing.present )
-    {
-        picture->field_coded = sei->pic_timing.pic_struct == 1  || sei->pic_timing.pic_struct == 2
-                            || sei->pic_timing.pic_struct == 9  || sei->pic_timing.pic_struct == 10
-                            || sei->pic_timing.pic_struct == 11 || sei->pic_timing.pic_struct == 12;
-        sei->pic_timing.present = 0;
-    }
-    else
-        picture->field_coded = 0;
-#else
-    picture->field_coded = sps->vui.field_seq_flag;
-#endif
-    if( sei->recovery_point.present )
-    {
-        picture->random_accessible |= sei->recovery_point.present;
-        picture->recovery_poc_cnt   = sei->recovery_point.recovery_poc_cnt;
-        picture->broken_link       |= sei->recovery_point.broken_link_flag;
-        sei->recovery_point.present = 0;
-    }
-    else
-        picture->recovery_poc_cnt = 0;
-}
-
-static uint64_t hevc_get_ctb_address_in_tile_scan
-(
-    hevc_sps_t *sps,
-    hevc_pps_t *pps,
-    uint64_t    segment_address,
-    uint64_t   *TileId
-)
-{
-    uint64_t tbX = segment_address % sps->PicWidthInCtbsY;
-    uint64_t tbY = segment_address / sps->PicWidthInCtbsY;
-    uint32_t tileX = pps->num_tile_columns_minus1;
-    for( uint32_t i = 0; i <= pps->num_tile_columns_minus1; i++ )
-        if( tbX >= pps->colBd[i] )
-            tileX = i;
-    uint32_t tileY = pps->num_tile_rows_minus1;
-    for( uint32_t j = 0; j <= pps->num_tile_rows_minus1; j++ )
-        if( tbY >= pps->rowBd[j] )
-            tileY = j;
-    uint64_t CtbAddrInTs = 0;
-    for( uint32_t i = 0; i < tileX; i++ )
-        CtbAddrInTs += pps->rowHeight[tileY] * pps->colWidth[i];
-    for( uint32_t j = 0; j < tileY; j++ )
-        CtbAddrInTs += sps->PicWidthInCtbsY * pps->rowHeight[j];
-    CtbAddrInTs += (tbY - pps->rowBd[tileY]) * pps->colWidth[tileX] + tbX - pps->colBd[tileX];
-    *TileId = (uint64_t)tileY * (pps->num_tile_columns_minus1 + 1) + tileX;
-    return CtbAddrInTs;
-}
-
-int hevc_find_au_delimit_by_slice_info
-(
-    hevc_info_t       *info,
-    hevc_slice_info_t *slice,
-    hevc_slice_info_t *prev_slice
-)
-{
-    /* 7.4.2.4.5 Order of VCL NAL units and association to coded pictures
-     *  - The first VCL NAL unit of the coded picture shall have first_slice_segment_in_pic_flag equal to 1. */
-    if( slice->first_slice_segment_in_pic_flag )
-        return 1;
-    /* The value of TemporalId shall be the same for all VCL NAL units of an access unit. */
-    if( slice->TemporalId != prev_slice->TemporalId )
-        return 1;
-    /* 7.4.2.4.5 Order of VCL NAL units and association to coded pictures
-     *  - if( TileId[ CtbAddrRsToTs[ slice->segment_address ] ] <= TileId[ CtbAddrRsToTs[ prev_slice->segment_address ] ]
-     *     ||         CtbAddrRsToTs[ slice->segment_address ]   <=         CtbAddrRsToTs[ prev_slice->segment_address ] )
-     *        return 1;
-     */
-    hevc_pps_t *prev_pps = hevc_get_pps( info->pps_list, prev_slice->pic_parameter_set_id );
-    if( !prev_pps )
-        return 0;
-    hevc_sps_t *prev_sps = hevc_get_sps( info->sps_list, prev_pps->seq_parameter_set_id );
-    if( !prev_sps )
-        return 0;
-    uint64_t currTileId;
-    uint64_t prevTileId;
-    uint64_t currCtbAddrInTs = hevc_get_ctb_address_in_tile_scan( &info->sps, &info->pps,      slice->segment_address, &currTileId );
-    uint64_t prevCtbAddrInTs = hevc_get_ctb_address_in_tile_scan(   prev_sps,   prev_pps, prev_slice->segment_address, &prevTileId );
-    if( currTileId      <= prevTileId
-     || currCtbAddrInTs <= prevCtbAddrInTs )
-        return 1;
-    return 0;
-}
-
-int hevc_find_au_delimit_by_nalu_type
-(
-    uint8_t nalu_type,
-    uint8_t prev_nalu_type
-)
-{
-    return (prev_nalu_type <= HEVC_NALU_TYPE_RSV_VCL31)
-        && ((nalu_type >= HEVC_NALU_TYPE_VPS        && nalu_type <= HEVC_NALU_TYPE_AUD)
-         ||  nalu_type == HEVC_NALU_TYPE_PREFIX_SEI
-         || (nalu_type >= HEVC_NALU_TYPE_RSV_NVCL41 && nalu_type <= HEVC_NALU_TYPE_RSV_NVCL44)
-         || (nalu_type >= HEVC_NALU_TYPE_UNSPEC48   && nalu_type <= HEVC_NALU_TYPE_UNSPEC55));
-}
-
-int hevc_supplement_buffer
-(
-    hevc_stream_buffer_t *hb,
-    hevc_access_unit_t   *au,
-    uint32_t              size
-)
-{
-    lsmash_stream_buffers_t *sb = hb->sb;
-    uint32_t buffer_pos_offset   = sb->pos - sb->start;
-    uint32_t buffer_valid_length = sb->end - sb->start;
-    lsmash_multiple_buffers_t *bank = lsmash_resize_multiple_buffers( sb->bank, size );
-    if( !bank )
-        return -1;
-    sb->bank  = bank;
-    sb->start = lsmash_withdraw_buffer( bank, 1 );
-    hb->rbsp  = lsmash_withdraw_buffer( bank, 2 );
-    sb->pos = sb->start + buffer_pos_offset;
-    sb->end = sb->start + buffer_valid_length;
-    if( au && bank->number_of_buffers == 4 )
-    {
-        au->data            = lsmash_withdraw_buffer( bank, 3 );
-        au->incomplete_data = lsmash_withdraw_buffer( bank, 4 );
-    }
-    return 0;
-}
-
-static void hevc_bs_put_parameter_sets
-(
-    lsmash_bs_t         *bs,
-    lsmash_entry_list_t *dcr_ps_list,
-    uint32_t             max_dcr_ps_count
-)
-{
-    uint32_t dcr_ps_count = 0;
-    for( lsmash_entry_t *entry = dcr_ps_list->head; entry && dcr_ps_count < max_dcr_ps_count; entry = entry->next )
-    {
-        isom_dcr_ps_entry_t *ps = (isom_dcr_ps_entry_t *)entry->data;
-        if( ps )
-        {
-            lsmash_bs_put_be16( bs, ps->nalUnitLength );
-            lsmash_bs_put_bytes( bs, ps->nalUnitLength, ps->nalUnit );
-        }
-        else
-            lsmash_bs_put_be16( bs, 0 );
-        ++dcr_ps_count;
-    }
-}
-
-uint8_t *lsmash_create_hevc_specific_info
-(
-    lsmash_hevc_specific_parameters_t *param,
-    uint32_t                          *data_length
-)
-{
-    if( !param || !param->parameter_arrays || !data_length )
-        return NULL;
-    if( param->lengthSizeMinusOne != 0
-     && param->lengthSizeMinusOne != 1
-     && param->lengthSizeMinusOne != 3 )
-        return NULL;
-    hevc_parameter_array_t *param_arrays[HEVC_DCR_NALU_TYPE_NUM];
-    lsmash_entry_list_t    *dcr_ps_list [HEVC_DCR_NALU_TYPE_NUM];
-    for( int i = 0; i < HEVC_DCR_NALU_TYPE_NUM; i++ )
-    {
-        param_arrays[i] = &param->parameter_arrays->ps_array[i];
-        dcr_ps_list [i] = param_arrays[i]->list;
-    }
-    /* VPS, SPS and PPS are mandatory. */
-    if( !dcr_ps_list[0] || !dcr_ps_list[0]->head || dcr_ps_list[0]->entry_count == 0
-     || !dcr_ps_list[1] || !dcr_ps_list[1]->head || dcr_ps_list[1]->entry_count == 0
-     || !dcr_ps_list[2] || !dcr_ps_list[2]->head || dcr_ps_list[2]->entry_count == 0 )
-        return NULL;
-    /* Calculate enough buffer size. */
-    static const uint32_t max_dcr_ps_count[HEVC_DCR_NALU_TYPE_NUM] =
-        {
-            HEVC_MAX_VPS_ID + 1,
-            HEVC_MAX_SPS_ID + 1,
-            HEVC_MAX_PPS_ID + 1,
-            (1 << 16) - 1,
-            (1 << 16) - 1
-        };
-    uint32_t buffer_size = ISOM_BASEBOX_COMMON_SIZE + 23;
-    for( int i = 0; i < HEVC_DCR_NALU_TYPE_NUM; i++ )
-        if( dcr_ps_list[i] )
-        {
-            uint32_t ps_count = 0;
-            for( lsmash_entry_t *entry = dcr_ps_list[i]->head; entry && ps_count < max_dcr_ps_count[i]; entry = entry->next )
-            {
-                isom_dcr_ps_entry_t *ps = (isom_dcr_ps_entry_t *)entry->data;
-                if( !ps )
-                    return NULL;
-                buffer_size += 2 + ps->nalUnitLength;
-                ++ps_count;
-            }
-            if( dcr_ps_list[i]->entry_count <= max_dcr_ps_count[i]
-             && dcr_ps_list[i]->entry_count != ps_count )
-                return NULL;    /* Created specific info will be broken. */
-            buffer_size += 3;
-        }
-    /* Set up bytestream writer. */
-    uint8_t buffer[buffer_size];
-    lsmash_bs_t bs = { 0 };
-    bs.data  = buffer;
-    bs.alloc = buffer_size;
-    /* Create an HEVCConfigurationBox */
-    lsmash_bs_put_be32( &bs, 0 );                           /* box size */
-    lsmash_bs_put_be32( &bs, ISOM_BOX_TYPE_HVCC.fourcc );   /* box type: 'hvcC' */
-    lsmash_bs_put_byte( &bs, HVCC_CONFIGURATION_VERSION );  /* configurationVersion */
-    uint8_t temp8 = (param->general_profile_space << 6)
-                  | (param->general_tier_flag     << 5)
-                  |  param->general_profile_idc;
-    lsmash_bs_put_byte( &bs, temp8 );
-    lsmash_bs_put_be32( &bs, param->general_profile_compatibility_flags );
-    lsmash_bs_put_be32( &bs, param->general_constraint_indicator_flags >> 16 );
-    lsmash_bs_put_be16( &bs, param->general_constraint_indicator_flags );
-    lsmash_bs_put_byte( &bs, param->general_level_idc );
-    lsmash_bs_put_be16( &bs, param->min_spatial_segmentation_idc | 0xF000 );
-    lsmash_bs_put_byte( &bs, param->parallelismType              | 0xFC );
-    lsmash_bs_put_byte( &bs, param->chromaFormat                 | 0xFC );
-    lsmash_bs_put_byte( &bs, param->bitDepthLumaMinus8           | 0xF8 );
-    lsmash_bs_put_byte( &bs, param->bitDepthChromaMinus8         | 0xF8 );
-    lsmash_bs_put_be16( &bs, param->avgFrameRate );
-    temp8 = (param->constantFrameRate << 6)
-          | (param->numTemporalLayers << 3)
-          | (param->temporalIdNested  << 2)
-          |  param->lengthSizeMinusOne;
-    lsmash_bs_put_byte( &bs, temp8 );
-    uint8_t numOfArrays = !!dcr_ps_list[0]->head
-                        + !!dcr_ps_list[1]->head
-                        + !!dcr_ps_list[2]->head
-                        + !!dcr_ps_list[3]->head
-                        + !!dcr_ps_list[4]->head;
-    lsmash_bs_put_byte( &bs, numOfArrays );
-    for( uint8_t i = 0; i < numOfArrays; i++ )
-    {
-        temp8 = (param_arrays[i]->array_completeness << 7) | param_arrays[i]->NAL_unit_type;
-        lsmash_bs_put_byte( &bs, temp8 );
-        lsmash_bs_put_be16( &bs, dcr_ps_list[i]->entry_count );
-        hevc_bs_put_parameter_sets( &bs, dcr_ps_list[i], max_dcr_ps_count[i] );
-    }
-    uint8_t *data = lsmash_bs_export_data( &bs, data_length );
-    /* Update box size. */
-    data[0] = ((*data_length) >> 24) & 0xff;
-    data[1] = ((*data_length) >> 16) & 0xff;
-    data[2] = ((*data_length) >>  8) & 0xff;
-    data[3] =  (*data_length)        & 0xff;
-    return data;
 }
 
 static int hevc_get_vps_id
@@ -1787,6 +1474,339 @@ static lsmash_entry_t *hevc_get_ps_entry_from_param
     return NULL;
 }
 
+static inline void  hevc_update_picture_type
+(
+    hevc_picture_info_t *picture,
+    hevc_slice_info_t   *slice
+)
+{
+    if( picture->type == HEVC_PICTURE_TYPE_I_P )
+    {
+        if( slice->type == HEVC_SLICE_TYPE_B )
+            picture->type = HEVC_PICTURE_TYPE_I_P_B;
+    }
+    else if( picture->type == HEVC_PICTURE_TYPE_I )
+    {
+        if( slice->type == HEVC_SLICE_TYPE_P )
+            picture->type = HEVC_PICTURE_TYPE_I_P;
+        else if( slice->type == HEVC_SLICE_TYPE_B )
+            picture->type = HEVC_PICTURE_TYPE_I_P_B;
+    }
+    else if( picture->type == HEVC_PICTURE_TYPE_NONE )
+    {
+        if( slice->type == HEVC_SLICE_TYPE_P )
+            picture->type = HEVC_PICTURE_TYPE_I_P;
+        else if( slice->type == HEVC_SLICE_TYPE_B )
+            picture->type = HEVC_PICTURE_TYPE_I_P_B;
+        else if( slice->type == HEVC_SLICE_TYPE_I )
+            picture->type = HEVC_PICTURE_TYPE_I;
+    }
+#if 0
+    fprintf( stderr, "Picture type = %s\n", picture->type == HEVC_PICTURE_TYPE_I_P   ? "P"
+                                          : picture->type == HEVC_PICTURE_TYPE_I_P_B ? "B"
+                                          : picture->type == HEVC_PICTURE_TYPE_I     ? "I" );
+#endif
+}
+
+/* Shall be called at least once per picture. */
+void hevc_update_picture_info_for_slice
+(
+    hevc_info_t         *info,
+    hevc_picture_info_t *picture,
+    hevc_slice_info_t   *slice
+)
+{
+    assert( info );
+    picture->has_primary |= !slice->dependent_slice_segment_flag;
+    hevc_update_picture_type( picture, slice );
+    /* Mark 'used' on active parameter sets. */
+    uint8_t ps_id[3] = { slice->video_parameter_set_id, slice->seq_parameter_set_id, slice->pic_parameter_set_id };
+    for( int i = 0; i < 3; i++ )
+    {
+        lsmash_hevc_dcr_nalu_type ps_type = (lsmash_hevc_dcr_nalu_type)i;
+        lsmash_entry_t *entry = hevc_get_ps_entry_from_param( &info->hvcC_param, ps_type, ps_id[i] );
+        if( entry && entry->data )
+        {
+            isom_dcr_ps_entry_t *ps = (isom_dcr_ps_entry_t *)entry->data;
+            if( ps->unused )
+                lsmash_append_hevc_dcr_nalu( &info->hvcC_param, ps_type, ps->nalUnit, ps->nalUnitLength );
+        }
+    }
+    /* Discard this slice info. */
+    slice->present = 0;
+}
+
+/* Shall be called exactly once per picture. */
+void hevc_update_picture_info
+(
+    hevc_info_t         *info,
+    hevc_picture_info_t *picture,
+    hevc_slice_info_t   *slice,
+    hevc_sps_t          *sps,
+    hevc_sei_t          *sei
+)
+{
+    picture->irap                 = slice->nalu_type >= HEVC_NALU_TYPE_BLA_W_LP    && slice->nalu_type <= HEVC_NALU_TYPE_CRA;
+    picture->idr                  = slice->nalu_type == HEVC_NALU_TYPE_IDR_W_RADL  || slice->nalu_type == HEVC_NALU_TYPE_IDR_N_LP;
+    picture->broken_link          = slice->nalu_type >= HEVC_NALU_TYPE_BLA_W_LP    && slice->nalu_type <= HEVC_NALU_TYPE_BLA_N_LP;
+    picture->radl                 = slice->nalu_type == HEVC_NALU_TYPE_RADL_N      || slice->nalu_type == HEVC_NALU_TYPE_RADL_R;
+    picture->rasl                 = slice->nalu_type == HEVC_NALU_TYPE_RASL_N      || slice->nalu_type == HEVC_NALU_TYPE_RASL_R;
+    picture->sublayer_nonref      = slice->nalu_type <= HEVC_NALU_TYPE_RSV_VCL_R15 && ((slice->nalu_type & 0x01) == 0);
+    picture->closed_rap           = slice->nalu_type >= HEVC_NALU_TYPE_BLA_W_RADL  && slice->nalu_type <= HEVC_NALU_TYPE_IDR_N_LP;
+    picture->random_accessible    = picture->irap;
+    picture->TemporalId           = slice->TemporalId;
+    picture->pic_parameter_set_id = slice->pic_parameter_set_id;
+    picture->poc_lsb              = slice->pic_order_cnt_lsb;
+    hevc_update_picture_info_for_slice( info, picture, slice );
+    picture->independent = (picture->type == HEVC_PICTURE_TYPE_I);
+#if 0
+    if( sei->pic_timing.present )
+    {
+        picture->field_coded = sei->pic_timing.pic_struct == 1  || sei->pic_timing.pic_struct == 2
+                            || sei->pic_timing.pic_struct == 9  || sei->pic_timing.pic_struct == 10
+                            || sei->pic_timing.pic_struct == 11 || sei->pic_timing.pic_struct == 12;
+        sei->pic_timing.present = 0;
+    }
+    else
+        picture->field_coded = 0;
+#else
+    picture->field_coded = sps->vui.field_seq_flag;
+#endif
+    if( sei->recovery_point.present )
+    {
+        picture->random_accessible |= sei->recovery_point.present;
+        picture->recovery_poc_cnt   = sei->recovery_point.recovery_poc_cnt;
+        picture->broken_link       |= sei->recovery_point.broken_link_flag;
+        sei->recovery_point.present = 0;
+    }
+    else
+        picture->recovery_poc_cnt = 0;
+}
+
+static uint64_t hevc_get_ctb_address_in_tile_scan
+(
+    hevc_sps_t *sps,
+    hevc_pps_t *pps,
+    uint64_t    segment_address,
+    uint64_t   *TileId
+)
+{
+    uint64_t tbX = segment_address % sps->PicWidthInCtbsY;
+    uint64_t tbY = segment_address / sps->PicWidthInCtbsY;
+    uint32_t tileX = pps->num_tile_columns_minus1;
+    for( uint32_t i = 0; i <= pps->num_tile_columns_minus1; i++ )
+        if( tbX >= pps->colBd[i] )
+            tileX = i;
+    uint32_t tileY = pps->num_tile_rows_minus1;
+    for( uint32_t j = 0; j <= pps->num_tile_rows_minus1; j++ )
+        if( tbY >= pps->rowBd[j] )
+            tileY = j;
+    uint64_t CtbAddrInTs = 0;
+    for( uint32_t i = 0; i < tileX; i++ )
+        CtbAddrInTs += pps->rowHeight[tileY] * pps->colWidth[i];
+    for( uint32_t j = 0; j < tileY; j++ )
+        CtbAddrInTs += sps->PicWidthInCtbsY * pps->rowHeight[j];
+    CtbAddrInTs += (tbY - pps->rowBd[tileY]) * pps->colWidth[tileX] + tbX - pps->colBd[tileX];
+    *TileId = (uint64_t)tileY * (pps->num_tile_columns_minus1 + 1) + tileX;
+    return CtbAddrInTs;
+}
+
+int hevc_find_au_delimit_by_slice_info
+(
+    hevc_info_t       *info,
+    hevc_slice_info_t *slice,
+    hevc_slice_info_t *prev_slice
+)
+{
+    /* 7.4.2.4.5 Order of VCL NAL units and association to coded pictures
+     *  - The first VCL NAL unit of the coded picture shall have first_slice_segment_in_pic_flag equal to 1. */
+    if( slice->first_slice_segment_in_pic_flag )
+        return 1;
+    /* The value of TemporalId shall be the same for all VCL NAL units of an access unit. */
+    if( slice->TemporalId != prev_slice->TemporalId )
+        return 1;
+    /* 7.4.2.4.5 Order of VCL NAL units and association to coded pictures
+     *  - if( TileId[ CtbAddrRsToTs[ slice->segment_address ] ] <= TileId[ CtbAddrRsToTs[ prev_slice->segment_address ] ]
+     *     ||         CtbAddrRsToTs[ slice->segment_address ]   <=         CtbAddrRsToTs[ prev_slice->segment_address ] )
+     *        return 1;
+     */
+    hevc_pps_t *prev_pps = hevc_get_pps( info->pps_list, prev_slice->pic_parameter_set_id );
+    if( !prev_pps )
+        return 0;
+    hevc_sps_t *prev_sps = hevc_get_sps( info->sps_list, prev_pps->seq_parameter_set_id );
+    if( !prev_sps )
+        return 0;
+    uint64_t currTileId;
+    uint64_t prevTileId;
+    uint64_t currCtbAddrInTs = hevc_get_ctb_address_in_tile_scan( &info->sps, &info->pps,      slice->segment_address, &currTileId );
+    uint64_t prevCtbAddrInTs = hevc_get_ctb_address_in_tile_scan(   prev_sps,   prev_pps, prev_slice->segment_address, &prevTileId );
+    if( currTileId      <= prevTileId
+     || currCtbAddrInTs <= prevCtbAddrInTs )
+        return 1;
+    return 0;
+}
+
+int hevc_find_au_delimit_by_nalu_type
+(
+    uint8_t nalu_type,
+    uint8_t prev_nalu_type
+)
+{
+    return (prev_nalu_type <= HEVC_NALU_TYPE_RSV_VCL31)
+        && ((nalu_type >= HEVC_NALU_TYPE_VPS        && nalu_type <= HEVC_NALU_TYPE_AUD)
+         ||  nalu_type == HEVC_NALU_TYPE_PREFIX_SEI
+         || (nalu_type >= HEVC_NALU_TYPE_RSV_NVCL41 && nalu_type <= HEVC_NALU_TYPE_RSV_NVCL44)
+         || (nalu_type >= HEVC_NALU_TYPE_UNSPEC48   && nalu_type <= HEVC_NALU_TYPE_UNSPEC55));
+}
+
+int hevc_supplement_buffer
+(
+    hevc_stream_buffer_t *hb,
+    hevc_access_unit_t   *au,
+    uint32_t              size
+)
+{
+    lsmash_stream_buffers_t *sb = hb->sb;
+    uint32_t buffer_pos_offset   = sb->pos - sb->start;
+    uint32_t buffer_valid_length = sb->end - sb->start;
+    lsmash_multiple_buffers_t *bank = lsmash_resize_multiple_buffers( sb->bank, size );
+    if( !bank )
+        return -1;
+    sb->bank  = bank;
+    sb->start = lsmash_withdraw_buffer( bank, 1 );
+    hb->rbsp  = lsmash_withdraw_buffer( bank, 2 );
+    sb->pos = sb->start + buffer_pos_offset;
+    sb->end = sb->start + buffer_valid_length;
+    if( au && bank->number_of_buffers == 4 )
+    {
+        au->data            = lsmash_withdraw_buffer( bank, 3 );
+        au->incomplete_data = lsmash_withdraw_buffer( bank, 4 );
+    }
+    return 0;
+}
+
+static void hevc_bs_put_parameter_sets
+(
+    lsmash_bs_t         *bs,
+    lsmash_entry_list_t *dcr_ps_list,
+    uint32_t             max_dcr_ps_count
+)
+{
+    uint32_t dcr_ps_count = 0;
+    for( lsmash_entry_t *entry = dcr_ps_list->head; entry && dcr_ps_count < max_dcr_ps_count; entry = entry->next )
+    {
+        isom_dcr_ps_entry_t *ps = (isom_dcr_ps_entry_t *)entry->data;
+        if( ps && !ps->unused )
+        {
+            lsmash_bs_put_be16( bs, ps->nalUnitLength );
+            lsmash_bs_put_bytes( bs, ps->nalUnitLength, ps->nalUnit );
+        }
+        else
+            continue;
+        ++dcr_ps_count;
+    }
+}
+
+uint8_t *lsmash_create_hevc_specific_info
+(
+    lsmash_hevc_specific_parameters_t *param,
+    uint32_t                          *data_length
+)
+{
+    if( !param || !param->parameter_arrays || !data_length )
+        return NULL;
+    if( param->lengthSizeMinusOne != 0
+     && param->lengthSizeMinusOne != 1
+     && param->lengthSizeMinusOne != 3 )
+        return NULL;
+    hevc_parameter_array_t *param_arrays[HEVC_DCR_NALU_TYPE_NUM];
+    lsmash_entry_list_t    *dcr_ps_list [HEVC_DCR_NALU_TYPE_NUM];
+    for( int i = 0; i < HEVC_DCR_NALU_TYPE_NUM; i++ )
+    {
+        param_arrays[i] = &param->parameter_arrays->ps_array[i];
+        dcr_ps_list [i] = param_arrays[i]->list;
+    }
+    /* VPS, SPS and PPS are mandatory. */
+    if( !dcr_ps_list[0] || !dcr_ps_list[0]->head || dcr_ps_list[0]->entry_count == 0
+     || !dcr_ps_list[1] || !dcr_ps_list[1]->head || dcr_ps_list[1]->entry_count == 0
+     || !dcr_ps_list[2] || !dcr_ps_list[2]->head || dcr_ps_list[2]->entry_count == 0 )
+        return NULL;
+    /* Calculate enough buffer size. */
+    static const uint32_t max_dcr_ps_count[HEVC_DCR_NALU_TYPE_NUM] =
+        {
+            HEVC_MAX_VPS_ID + 1,
+            HEVC_MAX_SPS_ID + 1,
+            HEVC_MAX_PPS_ID + 1,
+            (1 << 16) - 1,
+            (1 << 16) - 1
+        };
+    uint32_t ps_count[HEVC_DCR_NALU_TYPE_NUM] = { 0 };
+    uint32_t buffer_size = ISOM_BASEBOX_COMMON_SIZE + 23;
+    for( int i = 0; i < HEVC_DCR_NALU_TYPE_NUM; i++ )
+        if( dcr_ps_list[i] )
+        {
+            for( lsmash_entry_t *entry = dcr_ps_list[i]->head; entry && ps_count[i] < max_dcr_ps_count[i]; entry = entry->next )
+            {
+                isom_dcr_ps_entry_t *ps = (isom_dcr_ps_entry_t *)entry->data;
+                if( !ps )
+                    return NULL;
+                if( ps->unused )
+                    continue;
+                buffer_size += 2 + ps->nalUnitLength;
+                ++ps_count[i];
+            }
+            buffer_size += 3;
+        }
+    /* Set up bytestream writer. */
+    uint8_t buffer[buffer_size];
+    lsmash_bs_t bs = { 0 };
+    bs.data  = buffer;
+    bs.alloc = buffer_size;
+    /* Create an HEVCConfigurationBox */
+    lsmash_bs_put_be32( &bs, 0 );                           /* box size */
+    lsmash_bs_put_be32( &bs, ISOM_BOX_TYPE_HVCC.fourcc );   /* box type: 'hvcC' */
+    lsmash_bs_put_byte( &bs, HVCC_CONFIGURATION_VERSION );  /* configurationVersion */
+    uint8_t temp8 = (param->general_profile_space << 6)
+                  | (param->general_tier_flag     << 5)
+                  |  param->general_profile_idc;
+    lsmash_bs_put_byte( &bs, temp8 );
+    lsmash_bs_put_be32( &bs, param->general_profile_compatibility_flags );
+    lsmash_bs_put_be32( &bs, param->general_constraint_indicator_flags >> 16 );
+    lsmash_bs_put_be16( &bs, param->general_constraint_indicator_flags );
+    lsmash_bs_put_byte( &bs, param->general_level_idc );
+    lsmash_bs_put_be16( &bs, param->min_spatial_segmentation_idc | 0xF000 );
+    lsmash_bs_put_byte( &bs, param->parallelismType              | 0xFC );
+    lsmash_bs_put_byte( &bs, param->chromaFormat                 | 0xFC );
+    lsmash_bs_put_byte( &bs, param->bitDepthLumaMinus8           | 0xF8 );
+    lsmash_bs_put_byte( &bs, param->bitDepthChromaMinus8         | 0xF8 );
+    lsmash_bs_put_be16( &bs, param->avgFrameRate );
+    temp8 = (param->constantFrameRate << 6)
+          | (param->numTemporalLayers << 3)
+          | (param->temporalIdNested  << 2)
+          |  param->lengthSizeMinusOne;
+    lsmash_bs_put_byte( &bs, temp8 );
+    uint8_t numOfArrays = !!ps_count[0]
+                        + !!ps_count[1]
+                        + !!ps_count[2]
+                        + !!ps_count[3]
+                        + !!ps_count[4];
+    lsmash_bs_put_byte( &bs, numOfArrays );
+    for( uint8_t i = 0; i < numOfArrays; i++ )
+    {
+        temp8 = (param_arrays[i]->array_completeness << 7) | param_arrays[i]->NAL_unit_type;
+        lsmash_bs_put_byte( &bs, temp8 );
+        lsmash_bs_put_be16( &bs, ps_count[i] );
+        hevc_bs_put_parameter_sets( &bs, dcr_ps_list[i], ps_count[i] );
+    }
+    uint8_t *data = lsmash_bs_export_data( &bs, data_length );
+    /* Update box size. */
+    data[0] = ((*data_length) >> 24) & 0xff;
+    data[1] = ((*data_length) >> 16) & 0xff;
+    data[2] = ((*data_length) >>  8) & 0xff;
+    data[3] =  (*data_length)        & 0xff;
+    return data;
+}
+
 static inline int hevc_validate_dcr_nalu_type
 (
     lsmash_hevc_dcr_nalu_type ps_type,
@@ -1878,6 +1898,8 @@ lsmash_dcr_nalu_appendable lsmash_check_hevc_dcr_nalu_appendable
             isom_dcr_ps_entry_t *ps = (isom_dcr_ps_entry_t *)entry->data;
             if( !ps )
                 return DCR_NALU_APPEND_ERROR;
+            if( ps->unused )
+                continue;
             uint8_t param_pps_id;
             if( hevc_get_pps_id( ps->nalUnit       + HEVC_MIN_NALU_HEADER_LENGTH,
                                  ps->nalUnitLength - HEVC_MIN_NALU_HEADER_LENGTH, &param_pps_id ) )
@@ -1907,6 +1929,8 @@ lsmash_dcr_nalu_appendable lsmash_check_hevc_dcr_nalu_appendable
             isom_dcr_ps_entry_t *ps = (isom_dcr_ps_entry_t *)entry->data;
             if( !ps )
                 return DCR_NALU_APPEND_ERROR;
+            if( ps->unused )
+                continue;
             uint8_t param_vps_id;
             if( hevc_get_vps_id( ps->nalUnit       + HEVC_MIN_NALU_HEADER_LENGTH,
                                  ps->nalUnitLength - HEVC_MIN_NALU_HEADER_LENGTH, &param_vps_id ) )
@@ -1949,6 +1973,8 @@ lsmash_dcr_nalu_appendable lsmash_check_hevc_dcr_nalu_appendable
         isom_dcr_ps_entry_t *ps = (isom_dcr_ps_entry_t *)entry->data;
         if( !ps )
             return DCR_NALU_APPEND_ERROR;
+        if( ps->unused )
+            continue;
         uint8_t param_sps_id;
         if( hevc_get_sps_id( ps->nalUnit       + HEVC_MIN_NALU_HEADER_LENGTH,
                              ps->nalUnitLength - HEVC_MIN_NALU_HEADER_LENGTH, &param_sps_id ) )
@@ -2127,17 +2153,40 @@ int lsmash_append_hevc_dcr_nalu
                         ps_length - HEVC_MIN_NALU_HEADER_LENGTH, &ps_id, ps_type ) )
         return -1;
     lsmash_entry_t *entry = hevc_get_ps_entry_from_param( param, ps_type, ps_id );
-    if( entry )
-        return -1;  /* The same parameter set identifier already exists. */
-    /* Append a new parameter set. */
-    isom_dcr_ps_entry_t *ps = isom_create_ps_entry( ps_data, ps_length );
-    if( !ps )
+    isom_dcr_ps_entry_t *ps = entry ? (isom_dcr_ps_entry_t *)entry->data : NULL;
+    if( ps && !ps->unused )
+        /* The same parameter set identifier already exists. */
         return -1;
-    if( lsmash_add_entry( ps_list, ps ) )
+    int invoke_reorder;
+    if( ps )
     {
-        isom_remove_dcr_ps( ps );
-        return -1;
+        /* Reuse an already existed parameter set in the list. */
+        ps->unused = 0;
+        if( ps->nalUnit != ps_data )
+        {
+            /* The same address could be given when called by hevc_update_picture_info_for_slice(). */
+            free( ps->nalUnit );
+            ps->nalUnit = ps_data;
+        }
+        ps->nalUnitLength = ps_length;
+        invoke_reorder = 0;
     }
+    else
+    {
+        /* Create a new parameter set and append it into the list. */
+        ps = isom_create_ps_entry( ps_data, ps_length );
+        if( !ps )
+            return -1;
+        if( lsmash_add_entry( ps_list, ps ) )
+        {
+            isom_remove_dcr_ps( ps );
+            return -1;
+        }
+        invoke_reorder = 1;
+    }
+    uint32_t ps_count;
+    if( nalu_get_ps_count( ps_list, &ps_count ) < 0 )
+        goto fail;
     /* Update specific info with VPS, SPS or PPS. */
     {
         lsmash_bits_t bits = { 0 };
@@ -2153,15 +2202,15 @@ int lsmash_append_hevc_dcr_nalu
             if( hevc_parse_vps_minimally( &bits, &vps, rbsp_buffer,
                                           ps_data   + HEVC_MIN_NALU_HEADER_LENGTH,
                                           ps_length - HEVC_MIN_NALU_HEADER_LENGTH ) < 0 )
-            {
-                lsmash_remove_entry_direct( ps_list, ps_list->tail, isom_remove_dcr_ps );
-                return -1;
-            }
-            if( ps_list->entry_count == 1 )
+                goto fail;
+            if( ps_count == 1 )
             {
                 /* Initialize if not initialized yet. */
                 lsmash_entry_list_t *sps_list = hevc_get_parameter_set_list( param, HEVC_DCR_NALU_TYPE_SPS );
-                if( !sps_list || sps_list->entry_count == 0 )
+                uint32_t sps_count;
+                if( nalu_get_ps_count( sps_list, &sps_count ) < 0 )
+                    goto fail;
+                if( sps_count == 0 )
                     hevc_specific_parameters_ready( param );
             }
             hevc_specific_parameters_update_ptl( param, &vps.ptl );
@@ -2174,15 +2223,15 @@ int lsmash_append_hevc_dcr_nalu
             if( hevc_parse_sps_minimally( &bits, &sps, rbsp_buffer,
                                           ps_data   + HEVC_MIN_NALU_HEADER_LENGTH,
                                           ps_length - HEVC_MIN_NALU_HEADER_LENGTH ) < 0 )
-            {
-                lsmash_remove_entry_direct( ps_list, ps_list->tail, isom_remove_dcr_ps );
-                return -1;
-            }
-            if( ps_list->entry_count == 1 )
+                goto fail;
+            if( ps_count == 1 )
             {
                 /* Initialize if not initialized yet. */
                 lsmash_entry_list_t *vps_list = hevc_get_parameter_set_list( param, HEVC_DCR_NALU_TYPE_VPS );
-                if( !vps_list || vps_list->entry_count == 0 )
+                uint32_t vps_count;
+                if( nalu_get_ps_count( vps_list, &vps_count ) < 0 )
+                    goto fail;
+                if( vps_count == 0 )
                     hevc_specific_parameters_ready( param );
             }
             hevc_specific_parameters_update_ptl( param, &sps.ptl );
@@ -2238,10 +2287,7 @@ int lsmash_append_hevc_dcr_nalu
             if( hevc_parse_pps_minimally( &bits, &pps, rbsp_buffer,
                                           ps_data   + HEVC_MIN_NALU_HEADER_LENGTH,
                                           ps_length - HEVC_MIN_NALU_HEADER_LENGTH ) < 0 )
-            {
-                lsmash_remove_entry_direct( ps_list, ps_list->tail, isom_remove_dcr_ps );
-                return -1;
-            }
+                goto fail;
             uint8_t parallelismType = 0;
 #if 1   /* Replace 1 with 0 if parallelismType shall be set to 0 when min_spatial_segmentation_idc equal to 0. */
 
@@ -2285,15 +2331,21 @@ int lsmash_append_hevc_dcr_nalu
                 }
             }
 #endif
-            if( ps_list->entry_count == 1 )
+            if( ps_count == 1 )
                 param->parallelismType = parallelismType;
             else if( param->parallelismType != parallelismType )
                 param->parallelismType = 0;
         }
     }
-    /* Add a new parameter set in order of ascending parameter set identifier. */
-    hevc_reorder_parameter_set_ascending_id( param, ps_type, ps_list, ps_id );
+    if( invoke_reorder )
+        /* Add a new parameter set in order of ascending parameter set identifier. */
+        hevc_reorder_parameter_set_ascending_id( param, ps_type, ps_list, ps_id );
     return 0;
+fail:
+    ps = (isom_dcr_ps_entry_t *)lsmash_get_entry_data( ps_list, ps_list->entry_count );
+    if( ps )
+        ps->unused = 1;
+    return -1;
 }
 
 int hevc_try_to_append_dcr_nalu
@@ -2304,42 +2356,138 @@ int hevc_try_to_append_dcr_nalu
     uint32_t                  ps_length
 )
 {
-    lsmash_hevc_specific_parameters_t *param = &info->hvcC_param;
-    int ret = lsmash_check_hevc_dcr_nalu_appendable( param, ps_type, ps_data, ps_length );
+    lsmash_dcr_nalu_appendable ret = lsmash_check_hevc_dcr_nalu_appendable( &info->hvcC_param, ps_type, ps_data, ps_length );
+    lsmash_hevc_specific_parameters_t *param;
     switch( ret )
     {
         case DCR_NALU_APPEND_ERROR                     :    /* Error */
+            return -1;
         case DCR_NALU_APPEND_NEW_DCR_REQUIRED          :    /* Mulitiple sample description is needed. */
         case DCR_NALU_APPEND_NEW_SAMPLE_ENTRY_REQUIRED :    /* Mulitiple sample description is needed. */
-            return ret;
+            param = &info->hvcC_param_next;
+            info->hvcC_pending = 1;
+            break;
         case DCR_NALU_APPEND_POSSIBLE :                     /* Appendable */
-            switch( ps_type )
-            {
-                case HEVC_DCR_NALU_TYPE_VPS :
-                    if( hevc_parse_vps( info, info->buffer.rbsp,
-                                        ps_data   + HEVC_MIN_NALU_HEADER_LENGTH,
-                                        ps_length - HEVC_MIN_NALU_HEADER_LENGTH ) )
-                        return -1;
-                    break;
-                case HEVC_DCR_NALU_TYPE_SPS :
-                    if( hevc_parse_sps( info, info->buffer.rbsp,
-                                        ps_data   + HEVC_MIN_NALU_HEADER_LENGTH,
-                                        ps_length - HEVC_MIN_NALU_HEADER_LENGTH ) )
-                        return -1;
-                    break;
-                case HEVC_DCR_NALU_TYPE_PPS :
-                    if( hevc_parse_pps( info, info->buffer.rbsp,
-                                        ps_data   + HEVC_MIN_NALU_HEADER_LENGTH,
-                                        ps_length - HEVC_MIN_NALU_HEADER_LENGTH ) )
-                        return -1;
-                    break;
-                default :
-                    break;
-            }
-            return lsmash_append_hevc_dcr_nalu( param, ps_type, ps_data, ps_length );
+            param = info->hvcC_pending ? &info->hvcC_param_next : &info->hvcC_param;
+            break;
         default :   /* No need to append */
             return DCR_NALU_APPEND_DUPLICATED;
     }
+    switch( ps_type )
+    {
+        case HEVC_DCR_NALU_TYPE_VPS :
+            if( hevc_parse_vps( info, info->buffer.rbsp,
+                                ps_data   + HEVC_MIN_NALU_HEADER_LENGTH,
+                                ps_length - HEVC_MIN_NALU_HEADER_LENGTH ) )
+                return -1;
+            break;
+        case HEVC_DCR_NALU_TYPE_SPS :
+            if( hevc_parse_sps( info, info->buffer.rbsp,
+                                ps_data   + HEVC_MIN_NALU_HEADER_LENGTH,
+                                ps_length - HEVC_MIN_NALU_HEADER_LENGTH ) )
+                return -1;
+            break;
+        case HEVC_DCR_NALU_TYPE_PPS :
+            if( hevc_parse_pps( info, info->buffer.rbsp,
+                                ps_data   + HEVC_MIN_NALU_HEADER_LENGTH,
+                                ps_length - HEVC_MIN_NALU_HEADER_LENGTH ) )
+                return -1;
+            break;
+        default :
+            break;
+    }
+    return lsmash_append_hevc_dcr_nalu( param, ps_type, ps_data, ps_length );
+}
+
+static int hevc_move_dcr_nalu_entry
+(
+    lsmash_hevc_specific_parameters_t *dst_data,
+    lsmash_hevc_specific_parameters_t *src_data,
+    lsmash_hevc_dcr_nalu_type          ps_type
+)
+{
+    lsmash_entry_list_t *src_ps_list = hevc_get_parameter_set_list( src_data, ps_type );
+    lsmash_entry_list_t *dst_ps_list = hevc_get_parameter_set_list( dst_data, ps_type );
+    assert( src_ps_list && dst_ps_list );
+    for( lsmash_entry_t *src_entry = src_ps_list->head; src_entry; src_entry = src_entry->next )
+    {
+        isom_dcr_ps_entry_t *src_ps = (isom_dcr_ps_entry_t *)src_entry->data;
+        if( !src_ps )
+            continue;
+        uint8_t src_ps_id;
+        if( hevc_get_ps_id( src_ps->nalUnit       + HEVC_MIN_NALU_HEADER_LENGTH,
+                            src_ps->nalUnitLength - HEVC_MIN_NALU_HEADER_LENGTH,
+                            &src_ps_id, ps_type ) < 0 )
+            return -1;
+        lsmash_entry_t *dst_entry;
+        for( dst_entry = dst_ps_list->head; dst_entry; dst_entry = dst_entry->next )
+        {
+            isom_dcr_ps_entry_t *dst_ps = (isom_dcr_ps_entry_t *)dst_entry->data;
+            if( !dst_ps )
+                continue;
+            uint8_t dst_ps_id;
+            if( hevc_get_ps_id( dst_ps->nalUnit       + HEVC_MIN_NALU_HEADER_LENGTH,
+                                dst_ps->nalUnitLength - HEVC_MIN_NALU_HEADER_LENGTH,
+                                &dst_ps_id, ps_type ) < 0 )
+                return -1;
+            if( dst_ps_id == src_ps_id )
+            {
+                /* Replace the old parameter set with the new one. */
+                assert( dst_entry->data != src_entry->data );
+                isom_remove_dcr_ps( dst_ps );
+                dst_entry->data = src_entry->data;
+                src_entry->data = NULL;
+                break;
+            }
+        }
+        if( !dst_entry )
+        {
+            /* Move the parameter set. */
+            if( lsmash_add_entry( dst_ps_list, src_ps ) )
+                return -1;
+            src_entry->data = NULL;
+        }
+    }
+    return 0;
+}
+
+int hevc_move_pending_hvcC_param
+(
+    hevc_info_t *info
+)
+{
+    assert( info );
+    if( !info->hvcC_pending )
+        return 0;
+    /* Mark 'unused' on parameter sets within the decoder configuration record. */
+    for( int i = 0; i < HEVC_DCR_NALU_TYPE_NUM; i++ )
+    {
+        lsmash_entry_list_t *ps_list = hevc_get_parameter_set_list( &info->hvcC_param, i );
+        assert( ps_list );
+        for( lsmash_entry_t *entry = ps_list->head; entry; entry = entry->next )
+        {
+            isom_dcr_ps_entry_t *ps = (isom_dcr_ps_entry_t *)entry->data;
+            if( !ps )
+                continue;
+            ps->unused = 1;
+        }
+    }
+    /* Move the new parameter sets. */
+    if( hevc_move_dcr_nalu_entry( &info->hvcC_param, &info->hvcC_param_next, HEVC_DCR_NALU_TYPE_VPS        ) < 0
+     || hevc_move_dcr_nalu_entry( &info->hvcC_param, &info->hvcC_param_next, HEVC_DCR_NALU_TYPE_SPS        ) < 0
+     || hevc_move_dcr_nalu_entry( &info->hvcC_param, &info->hvcC_param_next, HEVC_DCR_NALU_TYPE_PPS        ) < 0
+     || hevc_move_dcr_nalu_entry( &info->hvcC_param, &info->hvcC_param_next, HEVC_DCR_NALU_TYPE_PREFIX_SEI ) < 0
+     || hevc_move_dcr_nalu_entry( &info->hvcC_param, &info->hvcC_param_next, HEVC_DCR_NALU_TYPE_SUFFIX_SEI ) < 0 )
+        return -1;
+    /* Move to the pending. */
+    lsmash_hevc_parameter_arrays_t *parameter_arrays = info->hvcC_param.parameter_arrays; /* Back up parameter arrays. */
+    info->hvcC_param                  = info->hvcC_param_next;
+    info->hvcC_param.parameter_arrays = parameter_arrays;
+    /* No pending hvcC. */
+    lsmash_destroy_hevc_parameter_arrays( &info->hvcC_param_next );
+    memset( &info->hvcC_param_next, 0, sizeof(lsmash_hevc_specific_parameters_t) );
+    info->hvcC_pending = 0;
+    return 0;
 }
 
 int lsmash_set_hevc_array_completeness
@@ -2773,7 +2921,7 @@ static inline int hevc_copy_dcr_nalu_array
     for( lsmash_entry_t *entry = src_ps_list->head; entry; entry = entry->next )
     {
         isom_dcr_ps_entry_t *src_ps = (isom_dcr_ps_entry_t *)entry->data;
-        if( !src_ps )
+        if( !src_ps || src_ps->unused )
             continue;
         isom_dcr_ps_entry_t *dst_ps = isom_create_ps_entry( src_ps->nalUnit, src_ps->nalUnitLength );
         if( !dst_ps )
