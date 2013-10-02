@@ -431,7 +431,8 @@ static int h264_parse_scaling_list
 
 static int h264_parse_hrd_parameters
 (
-    lsmash_bits_t *bits
+    lsmash_bits_t *bits,
+    h264_hrd_t    *hrd
 )
 {
     /* hrd_parameters() */
@@ -447,8 +448,8 @@ static int h264_parse_hrd_parameters
         lsmash_bits_get( bits, 1 );         /* cbr_flag             [ SchedSelIdx ] */
     }
     lsmash_bits_get( bits, 5 );     /* initial_cpb_removal_delay_length_minus1 */
-    lsmash_bits_get( bits, 5 );     /* cpb_removal_delay_length_minus1 */
-    lsmash_bits_get( bits, 5 );     /* dpb_output_delay_length_minus1 */
+    hrd->cpb_removal_delay_length = lsmash_bits_get( bits, 5 ) + 1;
+    hrd->dpb_output_delay_length  = lsmash_bits_get( bits, 5 ) + 1;
     lsmash_bits_get( bits, 5 );     /* time_offset_length */
     return 0;
 }
@@ -678,18 +679,19 @@ int h264_parse_sps
         }
         int nal_hrd_parameters_present_flag = lsmash_bits_get( bits, 1 );
         if( nal_hrd_parameters_present_flag
-         && h264_parse_hrd_parameters( bits ) )
+         && h264_parse_hrd_parameters( bits, &sps->vui.hrd ) )
             return -1;
         int vcl_hrd_parameters_present_flag = lsmash_bits_get( bits, 1 );
         if( vcl_hrd_parameters_present_flag
-         && h264_parse_hrd_parameters( bits ) )
+         && h264_parse_hrd_parameters( bits, &sps->vui.hrd ) )
             return -1;
         if( nal_hrd_parameters_present_flag || vcl_hrd_parameters_present_flag )
         {
-            sps->hrd_present = 1;
+            sps->vui.hrd.present                 = 1;
+            sps->vui.hrd.CpbDpbDelaysPresentFlag = 1;
             lsmash_bits_get( bits, 1 );         /* low_delay_hrd_flag */
         }
-        lsmash_bits_get( bits, 1 );             /* pic_struct_present_flag */
+        sps->vui.pic_struct_present_flag = lsmash_bits_get( bits, 1 );
         if( lsmash_bits_get( bits, 1 ) )        /* bitstream_restriction_flag */
         {
             lsmash_bits_get( bits, 1 );         /* motion_vectors_over_pic_boundaries_flag */
@@ -842,6 +844,7 @@ int h264_parse_pps
 int h264_parse_sei
 (
     lsmash_bits_t *bits,
+    h264_sps_t    *sps,
     h264_sei_t    *sei,
     uint8_t       *rbsp_buffer,
     uint8_t       *ebsp,
@@ -875,7 +878,26 @@ int h264_parse_sei
             if( temp != 0xff )
                 break;
         }
-        if( payloadType == 3 )
+        if( payloadType == 1 )
+        {
+            /* pic_timing */
+            h264_hrd_t *hrd = sps ? &sps->vui.hrd : NULL;
+            if( !hrd )
+                goto skip_sei_message;  /* Any active SPS is not found. */
+            sei->pic_timing.present = 1;
+            if( hrd->CpbDpbDelaysPresentFlag )
+            {
+                lsmash_bits_get( bits, hrd->cpb_removal_delay_length );     /* cpb_removal_delay */
+                lsmash_bits_get( bits, hrd->dpb_output_delay_length );      /* dpb_output_delay */
+            }
+            if( sps->vui.pic_struct_present_flag )
+            {
+                sei->pic_timing.pic_struct = lsmash_bits_get( bits, 4 );
+                /* Skip the remaining bits. */
+                lsmash_bits_get( bits, payloadSize * 8 - 4 );
+            }
+        }
+        else if( payloadType == 3 )
         {
             /* filler_payload
              * AVC file format is forbidden to contain this. */
@@ -884,15 +906,18 @@ int h264_parse_sei
         else if( payloadType == 6 )
         {
             /* recovery_point */
-            sei->present            = 1;
-            sei->random_accessible  = 1;
-            sei->recovery_frame_cnt = nalu_get_exp_golomb_ue( bits );
+            sei->recovery_point.present            = 1;
+            sei->recovery_point.random_accessible  = 1;
+            sei->recovery_point.recovery_frame_cnt = nalu_get_exp_golomb_ue( bits );
             lsmash_bits_get( bits, 1 );     /* exact_match_flag */
             lsmash_bits_get( bits, 1 );     /* broken_link_flag */
             lsmash_bits_get( bits, 2 );     /* changing_slice_group_idc */
         }
         else
+        {
+skip_sei_message:
             lsmash_bits_get( bits, payloadSize * 8 );
+        }
         lsmash_bits_get_align( bits );
         rbsp_pos += payloadSize;
     } while( *(rbsp_start + rbsp_pos) != 0x80 );        /* All SEI messages are byte aligned at their end.
@@ -1458,12 +1483,26 @@ void h264_update_picture_info
     picture->disposable                 = (slice->nal_ref_idc == 0);
     picture->random_accessible          = slice->IdrPicFlag;
     h264_update_picture_info_for_slice( info, picture, slice );
-    picture->independent      = picture->type == H264_PICTURE_TYPE_I || picture->type == H264_PICTURE_TYPE_I_SI;
-    if( sei->present )
+    picture->independent = picture->type == H264_PICTURE_TYPE_I || picture->type == H264_PICTURE_TYPE_I_SI;
+    if( sei->pic_timing.present )
     {
-        picture->random_accessible |= sei->random_accessible;
-        picture->recovery_frame_cnt = sei->recovery_frame_cnt;
-        sei->present = 0;
+        if( sei->pic_timing.pic_struct < 9 )
+        {
+            static const uint8_t DeltaTfiDivisor[9] = { 2, 1, 1, 2, 2, 3, 3, 4, 6 };
+            picture->delta = DeltaTfiDivisor[ sei->pic_timing.pic_struct ];
+        }
+        else
+            /* Reserved values in the spec we refer to. */
+            picture->delta = picture->field_pic_flag ? 1 : 2;
+        sei->pic_timing.present = 0;
+    }
+    else
+        picture->delta = picture->field_pic_flag ? 1 : 2;
+    if( sei->recovery_point.present )
+    {
+        picture->random_accessible |= sei->recovery_point.random_accessible;
+        picture->recovery_frame_cnt = sei->recovery_point.recovery_frame_cnt;
+        sei->recovery_point.present = 0;
     }
 }
 
@@ -2144,7 +2183,7 @@ int lsmash_setup_h264_specific_parameters_from_access_unit
         {
             /* We don't support streams with both filler and HRD yet.
              * Otherwise, just skip filler because elemental streams defined in 14496-15 are forbidden to use filler. */
-            if( info->sps.hrd_present )
+            if( info->sps.vui.hrd.present )
                 return h264_parse_failed( info );
         }
         else if( (nalu_type >= H264_NALU_TYPE_SLICE_N_IDR && nalu_type <= H264_NALU_TYPE_SPS_EXT)

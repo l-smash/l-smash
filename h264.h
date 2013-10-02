@@ -72,6 +72,14 @@ typedef struct
 
 typedef struct
 {
+    uint8_t present;
+    uint8_t CpbDpbDelaysPresentFlag;
+    uint8_t cpb_removal_delay_length;
+    uint8_t dpb_output_delay_length;
+} h264_hrd_t;
+
+typedef struct
+{
     uint16_t sar_width;
     uint16_t sar_height;
     uint8_t  video_full_range_flag;
@@ -81,6 +89,8 @@ typedef struct
     uint32_t num_units_in_tick;
     uint32_t time_scale;
     uint8_t  fixed_frame_rate_flag;
+    uint8_t  pic_struct_present_flag;
+    h264_hrd_t hrd;
 } h264_vui_t;
 
 typedef struct
@@ -99,7 +109,6 @@ typedef struct
     uint8_t  delta_pic_order_always_zero_flag;
     uint8_t  num_ref_frames_in_pic_order_cnt_cycle;
     uint8_t  frame_mbs_only_flag;
-    uint8_t  hrd_present;
     int32_t  offset_for_non_ref_pic;
     int32_t  offset_for_top_to_bottom_field;
     int32_t  offset_for_ref_frame[255];
@@ -135,9 +144,21 @@ typedef struct
 
 typedef struct
 {
+    uint8_t present;
+    uint8_t pic_struct;
+} h264_pic_timing_t;
+
+typedef struct
+{
     uint8_t  present;
     uint8_t  random_accessible;
     uint32_t recovery_frame_cnt;
+} h264_recovery_point_t;
+
+typedef struct
+{
+    h264_pic_timing_t     pic_timing;
+    h264_recovery_point_t recovery_point;
 } h264_sei_t;
 
 typedef struct
@@ -173,6 +194,7 @@ typedef struct
     uint8_t  pic_parameter_set_id;
     uint8_t  field_pic_flag;
     uint8_t  bottom_field_flag;
+    uint8_t  delta;
     /* POC */
     uint8_t  has_mmco5;
     uint8_t  ref_pic_has_mmco5;
@@ -317,6 +339,7 @@ int h264_parse_pps
 int h264_parse_sei
 (
     lsmash_bits_t *bits,
+    h264_sps_t    *sps,
     h264_sei_t    *sei,
     uint8_t       *rbsp_buffer,
     uint8_t       *ebsp,

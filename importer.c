@@ -2360,10 +2360,17 @@ typedef struct
     uint32_t max_au_length;
     uint32_t num_undecodable;
     uint32_t avcC_number;
+    uint32_t last_delta;
     uint64_t last_intra_cts;
     uint8_t  composition_reordering_present;
     uint8_t  field_pic_present;
 } h264_importer_info_t;
+
+typedef struct
+{
+    int64_t  poc;
+    uint64_t delta;
+} nal_pic_timing_t;
 
 static void remove_h264_importer_info( h264_importer_info_t *info )
 {
@@ -2577,7 +2584,7 @@ static int h264_get_access_unit_internal
         {
             /* We don't support streams with both filler and HRD yet.
              * Otherwise, just skip filler because elemental streams defined in 14496-15 are forbidden to use filler. */
-            if( info->sps.hrd_present )
+            if( info->sps.vui.hrd.present )
                 return h264_get_au_internal_failed( importer_info, picture, &nalu_header, no_more_buf, complete_au );
         }
         else if( (nalu_type >= H264_NALU_TYPE_SLICE_N_IDR && nalu_type <= H264_NALU_TYPE_SPS_EXT)
@@ -2657,7 +2664,7 @@ static int h264_get_access_unit_internal
                     case H264_NALU_TYPE_SEI :
                     {
                         uint8_t *sei_pos = lsmash_stream_buffers_get_pos( sb );
-                        if( h264_parse_sei( info->bits, &info->sei, hb->rbsp, sei_pos + nalu_header.length, ebsp_length ) < 0 )
+                        if( h264_parse_sei( info->bits, &info->sps, &info->sei, hb->rbsp, sei_pos + nalu_header.length, ebsp_length ) < 0 )
                             return h264_get_au_internal_failed( importer_info, picture, &nalu_header, no_more_buf, complete_au );
                         h264_append_nalu_to_au( picture, sei_pos, nalu_length, probe );
                         break;
@@ -2800,10 +2807,10 @@ static int h264_importer_get_accessunit
 
 static void nalu_deduplicate_poc
 (
-    int64_t  *poc,
-    uint32_t *max_composition_delay,
-    uint32_t  num_access_units,
-    uint32_t  max_num_reorder_pictures
+    nal_pic_timing_t *npt,
+    uint32_t         *max_composition_delay,
+    uint32_t          num_access_units,
+    uint32_t          max_num_reorder_pictures
 )
 {
     /* Deduplicate POCs. */
@@ -2815,11 +2822,11 @@ static void nalu_deduplicate_poc
     int      invalid_poc_present   = 0;
     for( uint32_t i = 0; ; i++ )
     {
-        if( i < num_access_units && poc[i] != 0 )
+        if( i < num_access_units && npt[i].poc != 0 )
         {
             /* poc_offset is not added to each POC here.
              * It is done when we encounter the next coded video sequence. */
-            if( poc[i] < 0 )
+            if( npt[i].poc < 0 )
             {
                 /* Pictures with negative POC shall precede IDR-picture in composition order.
                  * The minimum POC is added to poc_offset when we encounter the next coded video sequence. */
@@ -2830,12 +2837,12 @@ static void nalu_deduplicate_poc
                         invalid_poc_present = 1;
                         invalid_poc_start   = i;
                     }
-                    if( invalid_poc_min > poc[i] )
-                        invalid_poc_min = poc[i];
+                    if( invalid_poc_min > npt[i].poc )
+                        invalid_poc_min = npt[i].poc;
                 }
-                else if( poc_min > poc[i] )
+                else if( poc_min > npt[i].poc )
                 {
-                    poc_min = poc[i];
+                    poc_min = npt[i].poc;
                     *max_composition_delay = LSMASH_MAX( *max_composition_delay, i - last_idr );
                 }
             }
@@ -2846,11 +2853,11 @@ static void nalu_deduplicate_poc
         poc_offset -= poc_min;
         int64_t poc_max = 0;
         for( uint32_t j = last_idr; j < i; j++ )
-            if( poc[j] >= 0 || (j <= last_idr + max_num_reorder_pictures) )
+            if( npt[j].poc >= 0 || (j <= last_idr + max_num_reorder_pictures) )
             {
-                poc[j] += poc_offset;
-                if( poc_max < poc[j] )
-                    poc_max = poc[j];
+                npt[j].poc += poc_offset;
+                if( poc_max < npt[j].poc )
+                    poc_max = npt[j].poc;
             }
         poc_offset = poc_max + 1;
         if( invalid_poc_present )
@@ -2859,11 +2866,11 @@ static void nalu_deduplicate_poc
              * both before the next coded video sequence and after the current one. */
             poc_offset -= invalid_poc_min;
             for( uint32_t j = invalid_poc_start; j < i; j++ )
-                if( poc[j] < 0 )
+                if( npt[j].poc < 0 )
                 {
-                    poc[j] += poc_offset;
-                    if( poc_max < poc[j] )
-                        poc_max = poc[j];
+                    npt[j].poc += poc_offset;
+                    if( poc_max < npt[j].poc )
+                        poc_max = npt[j].poc;
                 }
             invalid_poc_present = 0;
             invalid_poc_start   = 0;
@@ -2883,8 +2890,9 @@ static void nalu_deduplicate_poc
 static void nalu_generate_timestamps_from_poc
 (
     lsmash_media_ts_t *timestamp,
-    int64_t           *poc,
+    nal_pic_timing_t  *npt,
     uint8_t           *composition_reordering_present,
+    uint32_t          *last_delta,
     uint32_t           max_composition_delay,
     uint32_t           num_access_units
 )
@@ -2893,7 +2901,7 @@ static void nalu_generate_timestamps_from_poc
     if( max_composition_delay == 0 )
     {
         for( uint32_t i = 1; i < num_access_units; i++ )
-            if( poc[i] < poc[i - 1] )
+            if( npt[i].poc < npt[i - 1].poc )
             {
                 *composition_reordering_present = 1;
                 break;
@@ -2904,11 +2912,11 @@ static void nalu_generate_timestamps_from_poc
     /* Generate timestamps. */
     if( *composition_reordering_present )
     {
-        /* Generate DTSs.
-         * Here, CTSs are temporary values for sort. */
+        /* Generate timestamps.
+         * Here, DTSs and CTSs are temporary values for sort. */
         for( uint32_t i = 0; i < num_access_units; i++ )
         {
-            timestamp[i].cts = (uint64_t)poc[i];
+            timestamp[i].cts = (uint64_t)npt[i].poc;
             timestamp[i].dts = (uint64_t)i;
         }
         qsort( timestamp, num_access_units, sizeof(lsmash_media_ts_t), (int(*)( const void *, const void * ))lsmash_compare_cts );
@@ -2919,18 +2927,84 @@ static void nalu_generate_timestamps_from_poc
                 uint32_t composition_delay = timestamp[i].dts - i;
                 max_composition_delay = LSMASH_MAX( max_composition_delay, composition_delay );
             }
+        uint64_t *ts_buffer = (uint64_t *)malloc( (num_access_units + max_composition_delay) * sizeof(uint64_t) );
+        if( !ts_buffer )
+        {
+            /* It seems that there is no enough memory to generate more appropriate timestamps.
+             * Anyway, generate CTSs and DTSs. */
+            for( uint32_t i = 0; i < num_access_units; i++ )
+                timestamp[i].cts = i + max_composition_delay;
+            qsort( timestamp, num_access_units, sizeof(lsmash_media_ts_t), (int(*)( const void *, const void * ))lsmash_compare_dts );
+            *last_delta = 1;
+            return;
+        }
+        uint64_t *reorder_cts      = ts_buffer;
+        uint64_t *prev_reorder_cts = ts_buffer + num_access_units;
+        *last_delta = npt[num_access_units - 1].delta;
         /* Generate CTSs. */
+        timestamp[0].cts = 0;
+        for( uint32_t i = 1; i < num_access_units; i++ )
+            timestamp[i].cts = timestamp[i - 1].cts + npt[i - 1].delta;
+        int64_t composition_delay_time = timestamp[max_composition_delay].cts;
         for( uint32_t i = 0; i < num_access_units; i++ )
-            timestamp[i].cts = i + max_composition_delay;
+        {
+            timestamp[i].cts += composition_delay_time;
+            reorder_cts[i] = timestamp[i].cts;
+        }
+        /* Generate DTSs. */
         qsort( timestamp, num_access_units, sizeof(lsmash_media_ts_t), (int(*)( const void *, const void * ))lsmash_compare_dts );
+        for( uint32_t i = 0; i < num_access_units; i++ )
+        {
+            timestamp[i].dts = i <= max_composition_delay
+                             ? reorder_cts[i] - composition_delay_time
+                             : prev_reorder_cts[(i - max_composition_delay) % max_composition_delay];
+            prev_reorder_cts[i % max_composition_delay] = reorder_cts[i];
+        }
+        free( ts_buffer );
+#if 0
+        fprintf( stderr, "max_composition_delay=%"PRIu32", composition_delay_time=%"PRIu64"\n",
+                          max_composition_delay, composition_delay_time );
+#endif
     }
     else
+    {
+        timestamp[0].dts = 0;
+        timestamp[0].cts = 0;
+        for( uint32_t i = 1; i < num_access_units; i++ )
+        {
+            timestamp[i].dts = timestamp[i - 1].dts + npt[i - 1].delta;
+            timestamp[i].cts = timestamp[i - 1].cts + npt[i - 1].delta;
+        }
+        *last_delta = npt[num_access_units - 1].delta;
+    }
+}
+
+static void nalu_reduce_timescale
+(
+    lsmash_media_ts_t *timestamp,
+    nal_pic_timing_t  *npt,
+    uint32_t          *last_delta,
+    uint32_t          *timescale,
+    uint32_t           num_access_units
+)
+{
+    uint64_t gcd_delta = *timescale;
+    for( uint32_t i = 0; i < num_access_units && gcd_delta > 1; i++ )
+        gcd_delta = lsmash_get_gcd( gcd_delta, npt[i].delta );
+    if( gcd_delta > 1 )
+    {
         for( uint32_t i = 0; i < num_access_units; i++ )
-            timestamp[i].cts = timestamp[i].dts = i;
+        {
+            timestamp[i].dts /= gcd_delta;
+            timestamp[i].cts /= gcd_delta;
+        }
+        *last_delta /= gcd_delta;
+        *timescale  /= gcd_delta;
+    }
 #if 0
     for( uint32_t i = 0; i < num_access_units; i++ )
         fprintf( stderr, "Timestamp[%"PRIu32"]: POC=%"PRId64", DTS=%"PRIu64", CTS=%"PRIu64"\n",
-                 i, poc[i], timestamp[i].dts, timestamp[i].cts );
+                 i, npt[i].poc, timestamp[i].dts, timestamp[i].cts );
 #endif
 }
 
@@ -2975,9 +3049,9 @@ static int h264_importer_probe( importer_t *importer )
     info->nalu_header   = first_nalu_header;
     info->ebsp_head_pos = first_ebsp_head_pos;
     /* Parse all NALU in the stream for preparation of calculating timestamps. */
-    uint32_t poc_alloc = (1 << 12) * sizeof(uint64_t);
-    int64_t *poc = malloc( poc_alloc );
-    if( !poc )
+    uint32_t npt_alloc = (1 << 12) * sizeof(nal_pic_timing_t);
+    nal_pic_timing_t *npt = malloc( npt_alloc );
+    if( !npt )
         goto fail;
     uint32_t num_access_units = 0;
     fprintf( stderr, "Analyzing stream as H.264\r" );
@@ -2990,23 +3064,25 @@ static int h264_importer_probe( importer_t *importer )
         if( h264_get_access_unit_internal( importer_info, 1 )
          || h264_calculate_poc( info, &info->picture, &prev_picture ) )
         {
-            free( poc );
+            free( npt );
             goto fail;
         }
-        if( poc_alloc <= num_access_units * sizeof(int64_t) )
+        if( npt_alloc <= num_access_units * sizeof(nal_pic_timing_t) )
         {
-            uint32_t alloc = 2 * num_access_units * sizeof(int64_t);
-            int64_t *temp = realloc( poc, alloc );
+            uint32_t alloc = 2 * num_access_units * sizeof(nal_pic_timing_t);
+            nal_pic_timing_t *temp = (nal_pic_timing_t *)realloc( npt, alloc );
             if( !temp )
             {
-                free( poc );
+                free( npt );
                 goto fail;
             }
-            poc = temp;
-            poc_alloc = alloc;
+            npt = temp;
+            npt_alloc = alloc;
         }
         importer_info->field_pic_present |= info->picture.field_pic_flag;
-        poc[num_access_units++] = info->picture.PicOrderCnt;
+        npt[num_access_units].poc   = info->picture.PicOrderCnt;
+        npt[num_access_units].delta = info->picture.delta;
+        ++num_access_units;
         importer_info->max_au_length = LSMASH_MAX( info->picture.au_length, importer_info->max_au_length );
     }
     fprintf( stderr, "                                                                               \r" );
@@ -3017,7 +3093,7 @@ static int h264_importer_probe( importer_t *importer )
     lsmash_codec_specific_t *cs = (lsmash_codec_specific_t *)lsmash_get_entry_data( importer_info->avcC_list, ++ importer_info->avcC_number );
     if( !cs || !cs->data.structured )
     {
-        free( poc );
+        free( npt );
         goto fail;
     }
     lsmash_h264_specific_parameters_t *avcC_param = (lsmash_h264_specific_parameters_t *)cs->data.structured;
@@ -3026,7 +3102,7 @@ static int h264_importer_probe( importer_t *importer )
     {
         if( summary )
             lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-        free( poc );
+        free( npt );
         goto fail;
     }
     summary->sample_per_field = importer_info->field_pic_present;
@@ -3034,22 +3110,26 @@ static int h264_importer_probe( importer_t *importer )
     lsmash_media_ts_t *timestamp = malloc( num_access_units * sizeof(lsmash_media_ts_t) );
     if( !timestamp )
     {
-        free( poc );
+        free( npt );
         goto fail;
     }
     /* Count leading samples that are undecodable. */
     for( uint32_t i = 0; i < num_access_units; i++ )
     {
-        if( poc[i] == 0 )
+        if( npt[i].poc == 0 )
             break;
         ++ importer_info->num_undecodable;
     }
     /* Deduplicate POCs. */
     uint32_t max_composition_delay = 0;
-    nalu_deduplicate_poc( poc, &max_composition_delay, num_access_units, 2 * H264_MAX_NUM_REORDER_FRAMES );
+    nalu_deduplicate_poc( npt, &max_composition_delay, num_access_units, 2 * H264_MAX_NUM_REORDER_FRAMES );
     /* Generate timestamps. */
-    nalu_generate_timestamps_from_poc( timestamp, poc, &importer_info->composition_reordering_present, max_composition_delay, num_access_units );
-    free( poc );
+    nalu_generate_timestamps_from_poc( timestamp, npt,
+                                       &importer_info->composition_reordering_present,
+                                       &importer_info->last_delta,
+                                       max_composition_delay, num_access_units );
+    nalu_reduce_timescale( timestamp, npt, &importer_info->last_delta, &summary->timescale, num_access_units );
+    free( npt );
     importer_info->ts_list.sample_count = num_access_units;
     importer_info->ts_list.timestamp    = timestamp;
     /* Go back to EBSP of the first NALU. */
@@ -3092,7 +3172,7 @@ static uint32_t h264_importer_get_last_delta( importer_t *importer, uint32_t tra
     if( !info || track_number != 1 || info->status != IMPORTER_EOF )
         return 0;
     return info->ts_list.sample_count
-         ? 1
+         ? info->last_delta
          : UINT32_MAX;    /* arbitrary */
 }
 
@@ -3122,6 +3202,7 @@ typedef struct
     uint32_t max_au_length;
     uint32_t num_undecodable;
     uint32_t hvcC_number;
+    uint32_t last_delta;
     uint64_t last_intra_cts;
     uint8_t  composition_reordering_present;
     uint8_t  field_pic_present;
@@ -3621,9 +3702,9 @@ static int hevc_importer_probe( importer_t *importer )
     info->ebsp_head_pos  = first_ebsp_head_pos;
     info->prev_nalu_type = HEVC_NALU_TYPE_UNKNOWN;
     /* Parse all NALU in the stream for preparation of calculating timestamps. */
-    uint32_t poc_alloc = (1 << 12) * sizeof(uint64_t);
-    int64_t *poc = malloc( poc_alloc );
-    if( !poc )
+    uint32_t npt_alloc = (1 << 12) * sizeof(nal_pic_timing_t);
+    nal_pic_timing_t *npt = (nal_pic_timing_t *)malloc( npt_alloc );
+    if( !npt )
         goto fail;
     uint32_t num_access_units = 0;
     fprintf( stderr, "Analyzing stream as HEVC\r" );
@@ -3637,23 +3718,25 @@ static int hevc_importer_probe( importer_t *importer )
         if( hevc_get_access_unit_internal( importer_info, 1 )
          || hevc_calculate_poc( info, &info->au.picture, &prev_picture ) )
         {
-            free( poc );
+            free( npt );
             goto fail;
         }
-        if( poc_alloc <= num_access_units * sizeof(int64_t) )
+        if( npt_alloc <= num_access_units * sizeof(nal_pic_timing_t) )
         {
-            uint32_t alloc = 2 * num_access_units * sizeof(int64_t);
-            int64_t *temp = realloc( poc, alloc );
+            uint32_t alloc = 2 * num_access_units * sizeof(nal_pic_timing_t);
+            nal_pic_timing_t *temp = (nal_pic_timing_t *)realloc( npt, alloc );
             if( !temp )
             {
-                free( poc );
+                free( npt );
                 goto fail;
             }
-            poc = temp;
-            poc_alloc = alloc;
+            npt = temp;
+            npt_alloc = alloc;
         }
         importer_info->field_pic_present |= info->au.picture.field_coded;
-        poc[num_access_units++] = info->au.picture.poc;
+        npt[num_access_units].poc   = info->au.picture.poc;
+        npt[num_access_units].delta = info->au.picture.delta;
+        ++num_access_units;
         importer_info->max_au_length  = LSMASH_MAX( importer_info->max_au_length,  info->au.length );
         importer_info->max_TemporalId = LSMASH_MAX( importer_info->max_TemporalId, info->au.TemporalId );
     }
@@ -3665,7 +3748,7 @@ static int hevc_importer_probe( importer_t *importer )
     lsmash_codec_specific_t *cs = (lsmash_codec_specific_t *)lsmash_get_entry_data( importer_info->hvcC_list, ++ importer_info->hvcC_number );
     if( !cs || !cs->data.structured )
     {
-        free( poc );
+        free( npt );
         goto fail;
     }
     lsmash_hevc_specific_parameters_t *hvcC_param = (lsmash_hevc_specific_parameters_t *)cs->data.structured;
@@ -3674,7 +3757,7 @@ static int hevc_importer_probe( importer_t *importer )
     {
         if( summary )
             lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-        free( poc );
+        free( npt );
         goto fail;
     }
     summary->sample_per_field = importer_info->field_pic_present;
@@ -3682,22 +3765,26 @@ static int hevc_importer_probe( importer_t *importer )
     lsmash_media_ts_t *timestamp = malloc( num_access_units * sizeof(lsmash_media_ts_t) );
     if( !timestamp )
     {
-        free( poc );
+        free( npt );
         goto fail;
     }
     /* Count leading samples that are undecodable. */
     for( uint32_t i = 0; i < num_access_units; i++ )
     {
-        if( poc[i] == 0 )
+        if( npt[i].poc == 0 )
             break;
         ++ importer_info->num_undecodable;
     }
     /* Deduplicate POCs. */
     uint32_t max_composition_delay = 0;
-    nalu_deduplicate_poc( poc, &max_composition_delay, num_access_units, 2 * HEVC_MAX_NUM_REORDER_FRAMES );
+    nalu_deduplicate_poc( npt, &max_composition_delay, num_access_units, 2 * HEVC_MAX_NUM_REORDER_FRAMES );
     /* Generate timestamps. */
-    nalu_generate_timestamps_from_poc( timestamp, poc, &importer_info->composition_reordering_present, max_composition_delay, num_access_units );
-    free( poc );
+    nalu_generate_timestamps_from_poc( timestamp, npt,
+                                       &importer_info->composition_reordering_present,
+                                       &importer_info->last_delta,
+                                       max_composition_delay, num_access_units );
+    nalu_reduce_timescale( timestamp, npt, &importer_info->last_delta, &summary->timescale, num_access_units );
+    free( npt );
     importer_info->ts_list.sample_count = num_access_units;
     importer_info->ts_list.timestamp    = timestamp;
     /* Go back to EBSP of the first NALU. */
@@ -3740,7 +3827,7 @@ static uint32_t hevc_importer_get_last_delta( importer_t *importer, uint32_t tra
     if( !info || track_number != 1 || info->status != IMPORTER_EOF )
         return 0;
     return info->ts_list.sample_count
-         ? 1
+         ? info->last_delta
          : UINT32_MAX;    /* arbitrary */
 }
 

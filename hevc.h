@@ -264,6 +264,7 @@ typedef struct
     uint8_t  field_coded;
     uint8_t  pic_parameter_set_id;
     uint8_t  has_primary;
+    uint8_t  delta;
     /* POC */
     uint16_t poc_lsb;
     int32_t  poc;

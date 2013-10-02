@@ -1412,7 +1412,7 @@ static inline int hevc_get_ps_id
         = ps_type == HEVC_DCR_NALU_TYPE_VPS ? hevc_get_vps_id
         : ps_type == HEVC_DCR_NALU_TYPE_SPS ? hevc_get_sps_id
         : ps_type == HEVC_DCR_NALU_TYPE_PPS ? hevc_get_pps_id
-        :                                          NULL;
+        :                                     NULL;
     return get_ps_id ? get_ps_id( ps_ebsp, ps_ebsp_length, ps_id ) : -1;
 }
 
@@ -1453,7 +1453,7 @@ static lsmash_entry_t *hevc_get_ps_entry_from_param
         = ps_type == HEVC_DCR_NALU_TYPE_VPS ? hevc_get_vps_id
         : ps_type == HEVC_DCR_NALU_TYPE_SPS ? hevc_get_sps_id
         : ps_type == HEVC_DCR_NALU_TYPE_PPS ? hevc_get_pps_id
-        :                                          NULL;
+        :                                     NULL;
     if( !get_ps_id )
         return NULL;
     lsmash_entry_list_t *list = hevc_get_parameter_set_list( param, ps_type );
@@ -1559,19 +1559,21 @@ void hevc_update_picture_info
     picture->poc_lsb              = slice->pic_order_cnt_lsb;
     hevc_update_picture_info_for_slice( info, picture, slice );
     picture->independent = (picture->type == HEVC_PICTURE_TYPE_I);
-#if 0
+    picture->field_coded = sps->vui.field_seq_flag;
     if( sei->pic_timing.present )
     {
-        picture->field_coded = sei->pic_timing.pic_struct == 1  || sei->pic_timing.pic_struct == 2
-                            || sei->pic_timing.pic_struct == 9  || sei->pic_timing.pic_struct == 10
-                            || sei->pic_timing.pic_struct == 11 || sei->pic_timing.pic_struct == 12;
+        if( sei->pic_timing.pic_struct < 13 )
+        {
+            static const uint8_t delta[13] = { 2, 1, 1, 2, 2, 3, 3, 4, 6, 1, 1, 1, 1 };
+            picture->delta = delta[ sei->pic_timing.pic_struct ];
+        }
+        else
+            /* Reserved values in the spec we refer to. */
+            picture->delta = picture->field_coded ? 1 : 2;
         sei->pic_timing.present = 0;
     }
     else
-        picture->field_coded = 0;
-#else
-    picture->field_coded = sps->vui.field_seq_flag;
-#endif
+        picture->delta = picture->field_coded ? 1 : 2;
     if( sei->recovery_point.present )
     {
         picture->random_accessible |= sei->recovery_point.present;
@@ -1737,8 +1739,8 @@ uint8_t *lsmash_create_hevc_specific_info
             HEVC_MAX_VPS_ID + 1,
             HEVC_MAX_SPS_ID + 1,
             HEVC_MAX_PPS_ID + 1,
-            (1 << 16) - 1,
-            (1 << 16) - 1
+            UINT16_MAX,
+            UINT16_MAX
         };
     uint32_t ps_count[HEVC_DCR_NALU_TYPE_NUM] = { 0 };
     uint32_t buffer_size = ISOM_BASEBOX_COMMON_SIZE + 23;
@@ -1867,8 +1869,8 @@ lsmash_dcr_nalu_appendable lsmash_check_hevc_dcr_nalu_appendable
     if( (ps_type == HEVC_DCR_NALU_TYPE_VPS        && ps_count >= HEVC_MAX_VPS_ID)
      || (ps_type == HEVC_DCR_NALU_TYPE_SPS        && ps_count >= HEVC_MAX_SPS_ID)
      || (ps_type == HEVC_DCR_NALU_TYPE_PPS        && ps_count >= HEVC_MAX_PPS_ID)
-     || (ps_type == HEVC_DCR_NALU_TYPE_PREFIX_SEI && ps_count >= ((1 << 16) - 1))
-     || (ps_type == HEVC_DCR_NALU_TYPE_SUFFIX_SEI && ps_count >= ((1 << 16) - 1)) )
+     || (ps_type == HEVC_DCR_NALU_TYPE_PREFIX_SEI && ps_count >= UINT16_MAX)
+     || (ps_type == HEVC_DCR_NALU_TYPE_SUFFIX_SEI && ps_count >= UINT16_MAX) )
         return DCR_NALU_APPEND_NEW_DCR_REQUIRED;    /* No more appendable parameter sets. */
     if( ps_type == HEVC_DCR_NALU_TYPE_PREFIX_SEI
      || ps_type == HEVC_DCR_NALU_TYPE_SUFFIX_SEI )
@@ -2053,7 +2055,7 @@ static inline void hevc_reorder_parameter_set_ascending_id
          * Next, find parameter set with upper identifier. */
         int max_ps_id = ps_type == HEVC_DCR_NALU_TYPE_VPS ? HEVC_MAX_VPS_ID
                       : ps_type == HEVC_DCR_NALU_TYPE_SPS ? HEVC_MAX_SPS_ID
-                      :                                          HEVC_MAX_PPS_ID;
+                      :                                     HEVC_MAX_PPS_ID;
         for( int i = ps_id + 1; i <= max_ps_id; i++ )
         {
             entry = hevc_get_ps_entry_from_param( param, ps_type, i );
