@@ -1313,7 +1313,7 @@ int lsmash_get_closest_random_accessible_point_detail_from_media_timeline( lsmas
         if( leading )
         {
             /* Count leading samples. */
-            sample_number = *rap_number + 1;
+            uint32_t current_sample_number = *rap_number + 1;
             uint64_t dts;
             if( isom_get_dts_from_info_list( timeline, *rap_number, &dts ) )
                 return -1;
@@ -1323,7 +1323,7 @@ int lsmash_get_closest_random_accessible_point_detail_from_media_timeline( lsmas
                 dts += info->duration;
                 if( rap_cts <= dts )
                     break;  /* leading samples of this random accessible point must not be present more. */
-                info = (isom_sample_info_t *)lsmash_get_entry_data( timeline->info_list, sample_number++ );
+                info = (isom_sample_info_t *)lsmash_get_entry_data( timeline->info_list, current_sample_number++ );
                 if( !info )
                     break;
                 uint64_t cts = timeline->ctd_shift ? (dts + (int32_t)info->offset + timeline->ctd_shift) : (dts + info->offset);
@@ -1331,7 +1331,7 @@ int lsmash_get_closest_random_accessible_point_detail_from_media_timeline( lsmas
                     ++ *leading;
             } while( 1 );
         }
-        if( !distance )
+        if( !distance || sample_number == *rap_number )
             return 0;
         /* Measure distance from the first closest non-recovery random accessible point to the second. */
         uint32_t prev_rap_number = *rap_number;
