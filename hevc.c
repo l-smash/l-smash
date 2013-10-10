@@ -1986,14 +1986,25 @@ lsmash_dcr_nalu_appendable lsmash_check_hevc_dcr_nalu_appendable
             return DCR_NALU_APPEND_NEW_DCR_REQUIRED;
         if( entry == ps_list->head )
         {
-            /* Check if the visual presentation sizes are different. */
+            /* Check if the cropped visual presentation sizes, the sample aspect ratios, the colour descriptions and
+             * the default display windows are different. */
             hevc_sps_t first_sps;
             if( hevc_parse_sps_minimally( &bits, &first_sps, rbsp_buffer,
                                           ps->nalUnit       + HEVC_MIN_NALU_HEADER_LENGTH,
                                           ps->nalUnitLength - HEVC_MIN_NALU_HEADER_LENGTH ) )
                 return DCR_NALU_APPEND_ERROR;
-            if( sps.cropped_width  != first_sps.cropped_width
-             || sps.cropped_height != first_sps.cropped_height )
+            if( sps.cropped_width                    != first_sps.cropped_width
+             || sps.cropped_height                   != first_sps.cropped_height
+             || sps.vui.sar_width                    != first_sps.vui.sar_width
+             || sps.vui.sar_height                   != first_sps.vui.sar_height
+             || sps.vui.colour_primaries             != first_sps.vui.colour_primaries
+             || sps.vui.transfer_characteristics     != first_sps.vui.transfer_characteristics
+             || sps.vui.matrix_coeffs                != first_sps.vui.matrix_coeffs
+             || sps.vui.video_full_range_flag        != first_sps.vui.video_full_range_flag
+             || sps.vui.def_disp_win_offset.left  .n != first_sps.vui.def_disp_win_offset.left  .n
+             || sps.vui.def_disp_win_offset.right .n != first_sps.vui.def_disp_win_offset.right .n
+             || sps.vui.def_disp_win_offset.top   .n != first_sps.vui.def_disp_win_offset.top   .n
+             || sps.vui.def_disp_win_offset.bottom.n != first_sps.vui.def_disp_win_offset.bottom.n )
                 return DCR_NALU_APPEND_NEW_SAMPLE_ENTRY_REQUIRED;
         }
     }
