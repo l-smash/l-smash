@@ -291,10 +291,10 @@ int h264_calculate_poc
     }
     else if( sps->pic_order_cnt_type == 1 )
     {
-        uint32_t frame_num = picture->frame_num;
-        uint32_t prevFrameNum = prev_picture->frame_num;
+        uint32_t frame_num          = picture->frame_num;
+        uint32_t prevFrameNum       = prev_picture->has_mmco5 ? 0 : prev_picture->frame_num;
         uint32_t prevFrameNumOffset = prev_picture->has_mmco5 ? 0 : prev_picture->FrameNumOffset;
-        uint64_t FrameNumOffset = picture->idr ? 0 : prevFrameNumOffset + (prevFrameNum > frame_num ? sps->MaxFrameNum : 0);
+        uint64_t FrameNumOffset     = picture->idr ? 0 : prevFrameNumOffset + (prevFrameNum > frame_num ? sps->MaxFrameNum : 0);
         IF_INVALID_VALUE( FrameNumOffset > INT32_MAX )
             return -1;
         int64_t expectedPicOrderCnt;
@@ -329,11 +329,11 @@ int h264_calculate_poc
     }
     else if( sps->pic_order_cnt_type == 2 )
     {
-        uint32_t frame_num = picture->frame_num;
-        uint32_t prevFrameNum = prev_picture->frame_num;
-        int32_t prevFrameNumOffset = prev_picture->has_mmco5 ? 0 : prev_picture->FrameNumOffset;
-        int64_t FrameNumOffset;
-        int64_t tempPicOrderCnt;
+        uint32_t frame_num          = picture->frame_num;
+        uint32_t prevFrameNum       = prev_picture->has_mmco5 ? 0 : prev_picture->frame_num;
+        int32_t  prevFrameNumOffset = prev_picture->has_mmco5 ? 0 : prev_picture->FrameNumOffset;
+        int64_t  FrameNumOffset;
+        int64_t  tempPicOrderCnt;
         if( picture->idr )
         {
             FrameNumOffset  = 0;
@@ -348,7 +348,8 @@ int h264_calculate_poc
             IF_EXCEED_INT32( tempPicOrderCnt )
                 return -1;
         }
-        BottomFieldOrderCnt = TopFieldOrderCnt = tempPicOrderCnt;
+        TopFieldOrderCnt    = tempPicOrderCnt;
+        BottomFieldOrderCnt = tempPicOrderCnt;
         picture->FrameNumOffset = FrameNumOffset;
     }
     if( !picture->field_pic_flag )
