@@ -2369,7 +2369,8 @@ typedef struct
 typedef struct
 {
     int64_t  poc;
-    uint64_t delta;
+    uint32_t delta;
+    uint32_t reset;
 } nal_pic_timing_t;
 
 static void remove_h264_importer_info( h264_importer_info_t *info )
@@ -2817,12 +2818,12 @@ static void nalu_deduplicate_poc
     int64_t  poc_offset            = 0;
     int64_t  poc_min               = 0;
     int64_t  invalid_poc_min       = 0;
-    uint32_t last_idr              = UINT32_MAX;
+    uint32_t last_poc_reset        = UINT32_MAX;
     uint32_t invalid_poc_start     = 0;
     int      invalid_poc_present   = 0;
     for( uint32_t i = 0; ; i++ )
     {
-        if( i < num_access_units && npt[i].poc != 0 )
+        if( i < num_access_units && npt[i].poc != 0 && !npt[i].reset )
         {
             /* poc_offset is not added to each POC here.
              * It is done when we encounter the next coded video sequence. */
@@ -2830,7 +2831,7 @@ static void nalu_deduplicate_poc
             {
                 /* Pictures with negative POC shall precede IDR-picture in composition order.
                  * The minimum POC is added to poc_offset when we encounter the next coded video sequence. */
-                if( last_idr == UINT32_MAX || i > last_idr + max_num_reorder_pictures )
+                if( last_poc_reset == UINT32_MAX || i > last_poc_reset + max_num_reorder_pictures )
                 {
                     if( !invalid_poc_present )
                     {
@@ -2843,7 +2844,7 @@ static void nalu_deduplicate_poc
                 else if( poc_min > npt[i].poc )
                 {
                     poc_min = npt[i].poc;
-                    *max_composition_delay = LSMASH_MAX( *max_composition_delay, i - last_idr );
+                    *max_composition_delay = LSMASH_MAX( *max_composition_delay, i - last_poc_reset );
                 }
             }
             continue;
@@ -2852,8 +2853,8 @@ static void nalu_deduplicate_poc
          * Add poc_offset to each POC of the previous coded video sequence. */
         poc_offset -= poc_min;
         int64_t poc_max = 0;
-        for( uint32_t j = last_idr; j < i; j++ )
-            if( npt[j].poc >= 0 || (j <= last_idr + max_num_reorder_pictures) )
+        for( uint32_t j = last_poc_reset; j < i + !!npt[i].reset; j++ )
+            if( npt[j].poc >= 0 || (j <= last_poc_reset + max_num_reorder_pictures) )
             {
                 npt[j].poc += poc_offset;
                 if( poc_max < npt[j].poc )
@@ -2865,7 +2866,7 @@ static void nalu_deduplicate_poc
             /* Pictures with invalid negative POC is probably supposed to be composited
              * both before the next coded video sequence and after the current one. */
             poc_offset -= invalid_poc_min;
-            for( uint32_t j = invalid_poc_start; j < i; j++ )
+            for( uint32_t j = invalid_poc_start; j < i + !!npt[i].reset; j++ )
                 if( npt[j].poc < 0 )
                 {
                     npt[j].poc += poc_offset;
@@ -2879,8 +2880,10 @@ static void nalu_deduplicate_poc
         }
         if( i < num_access_units )
         {
-            poc_min = 0;
-            last_idr = i;
+            if( npt[i].reset )
+                npt[i].poc = 0;
+            poc_min        = 0;
+            last_poc_reset = i;
         }
         else
             break;      /* no more POCs */
@@ -3082,6 +3085,7 @@ static int h264_importer_probe( importer_t *importer )
         importer_info->field_pic_present |= info->picture.field_pic_flag;
         npt[num_access_units].poc   = info->picture.PicOrderCnt;
         npt[num_access_units].delta = info->picture.delta;
+        npt[num_access_units].reset = info->picture.has_mmco5;
         ++num_access_units;
         importer_info->max_au_length = LSMASH_MAX( info->picture.au_length, importer_info->max_au_length );
     }
@@ -3736,6 +3740,7 @@ static int hevc_importer_probe( importer_t *importer )
         importer_info->field_pic_present |= info->au.picture.field_coded;
         npt[num_access_units].poc   = info->au.picture.poc;
         npt[num_access_units].delta = info->au.picture.delta;
+        npt[num_access_units].reset = 0;
         ++num_access_units;
         importer_info->max_au_length  = LSMASH_MAX( importer_info->max_au_length,  info->au.length );
         importer_info->max_TemporalId = LSMASH_MAX( importer_info->max_TemporalId, info->au.TemporalId );
