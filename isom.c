@@ -6810,8 +6810,7 @@ static int isom_add_partial_sync( isom_trak_entry_t *trak, uint32_t sample_numbe
 {
     if( !trak->root->qt_compatible )
         return 0;
-    if( !(prop->ra_flags & QT_SAMPLE_RANDOM_ACCESS_FLAG_PARTIAL_SYNC)
-     && !(LSMASH_IS_POST_ROLL_START( prop->ra_flags ) && prop->post_roll.identifier == prop->post_roll.complete) )
+    if( !(prop->ra_flags & QT_SAMPLE_RANDOM_ACCESS_FLAG_PARTIAL_SYNC) )
         return 0;
     /* This sample is a partial sync sample. */
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
