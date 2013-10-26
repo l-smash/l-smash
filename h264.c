@@ -911,7 +911,7 @@ int h264_parse_sei
             sei->recovery_point.random_accessible  = 1;
             sei->recovery_point.recovery_frame_cnt = nalu_get_exp_golomb_ue( bits );
             lsmash_bits_get( bits, 1 );     /* exact_match_flag */
-            lsmash_bits_get( bits, 1 );     /* broken_link_flag */
+            sei->recovery_point.broken_link_flag   = lsmash_bits_get( bits, 1 );
             lsmash_bits_get( bits, 2 );     /* changing_slice_group_idc */
         }
         else
@@ -1502,6 +1502,7 @@ void h264_update_picture_info
     if( sei->recovery_point.present )
     {
         picture->random_accessible |= sei->recovery_point.random_accessible;
+        picture->broken_link_flag  |= sei->recovery_point.broken_link_flag;
         picture->recovery_frame_cnt = sei->recovery_point.recovery_frame_cnt;
         sei->recovery_point.present = 0;
     }
