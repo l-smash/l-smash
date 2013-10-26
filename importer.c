@@ -2542,6 +2542,7 @@ static int h264_get_access_unit_internal
     picture->recovery_frame_cnt = 0;
     picture->has_mmco5          = 0;
     picture->has_redundancy     = 0;
+    picture->broken_link_flag   = 0;
     while( 1 )
     {
         lsmash_stream_buffers_update( sb, 2 );
@@ -2800,7 +2801,11 @@ static int h264_importer_get_accessunit
             buffered_sample->prop.post_roll.complete = (picture->frame_num + picture->recovery_frame_cnt) % sps->MaxFrameNum;
         }
         else
-            buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_RAP | QT_SAMPLE_RANDOM_ACCESS_FLAG_PARTIAL_SYNC;
+        {
+            buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_RAP;
+            if( !picture->broken_link_flag )
+                buffered_sample->prop.ra_flags |= QT_SAMPLE_RANDOM_ACCESS_FLAG_PARTIAL_SYNC;
+        }
     }
     buffered_sample->length = picture->au_length;
     memcpy( buffered_sample->data, picture->au, picture->au_length );

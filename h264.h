@@ -152,6 +152,7 @@ typedef struct
 {
     uint8_t  present;
     uint8_t  random_accessible;
+    uint8_t  broken_link_flag;
     uint32_t recovery_frame_cnt;
 } h264_recovery_point_t;
 
@@ -195,6 +196,7 @@ typedef struct
     uint8_t  field_pic_flag;
     uint8_t  bottom_field_flag;
     uint8_t  delta;
+    uint8_t  broken_link_flag;
     /* POC */
     uint8_t  has_mmco5;
     uint8_t  ref_pic_has_mmco5;
