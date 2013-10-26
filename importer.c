@@ -2370,7 +2370,8 @@ typedef struct
 {
     int64_t  poc;
     uint32_t delta;
-    uint32_t reset;
+    uint16_t poc_delta;
+    uint16_t reset;
 } nal_pic_timing_t;
 
 static void remove_h264_importer_info( h264_importer_info_t *info )
@@ -2923,6 +2924,10 @@ static void nalu_generate_timestamps_from_poc
             timestamp[i].dts = (uint64_t)i;
         }
         qsort( timestamp, num_access_units, sizeof(lsmash_media_ts_t), (int(*)( const void *, const void * ))lsmash_compare_cts );
+        /* Check POC gap in output order. */
+        for( uint32_t i = 1; i < num_access_units; i++ )
+            if( timestamp[i].cts > timestamp[i - 1].cts + npt[i - 1].poc_delta )
+                fprintf( stderr, "POC gap is detected at picture %"PRIu64". Maybe some pictures are lost.\n", timestamp[i].dts );
         /* Get the maximum composition delay derived from reordering. */
         for( uint32_t i = 0; i < num_access_units; i++ )
             if( i < timestamp[i].dts )
@@ -3083,9 +3088,10 @@ static int h264_importer_probe( importer_t *importer )
             npt_alloc = alloc;
         }
         importer_info->field_pic_present |= info->picture.field_pic_flag;
-        npt[num_access_units].poc   = info->picture.PicOrderCnt;
-        npt[num_access_units].delta = info->picture.delta;
-        npt[num_access_units].reset = info->picture.has_mmco5;
+        npt[num_access_units].poc       = info->picture.PicOrderCnt;
+        npt[num_access_units].delta     = info->picture.delta;
+        npt[num_access_units].poc_delta = info->picture.field_pic_flag ? 1 : 2;
+        npt[num_access_units].reset     = info->picture.has_mmco5;
         ++num_access_units;
         importer_info->max_au_length = LSMASH_MAX( info->picture.au_length, importer_info->max_au_length );
     }
@@ -3738,9 +3744,10 @@ static int hevc_importer_probe( importer_t *importer )
             npt_alloc = alloc;
         }
         importer_info->field_pic_present |= info->au.picture.field_coded;
-        npt[num_access_units].poc   = info->au.picture.poc;
-        npt[num_access_units].delta = info->au.picture.delta;
-        npt[num_access_units].reset = 0;
+        npt[num_access_units].poc       = info->au.picture.poc;
+        npt[num_access_units].delta     = info->au.picture.delta;
+        npt[num_access_units].poc_delta = 1;
+        npt[num_access_units].reset     = 0;
         ++num_access_units;
         importer_info->max_au_length  = LSMASH_MAX( importer_info->max_au_length,  info->au.length );
         importer_info->max_TemporalId = LSMASH_MAX( importer_info->max_TemporalId, info->au.TemporalId );
