@@ -2817,7 +2817,7 @@ static void nalu_deduplicate_poc
     nal_pic_timing_t *npt,
     uint32_t         *max_composition_delay,
     uint32_t          num_access_units,
-    uint32_t          max_num_reorder_pictures
+    uint32_t          max_num_reorder_pics
 )
 {
     /* Deduplicate POCs. */
@@ -2837,7 +2837,7 @@ static void nalu_deduplicate_poc
             {
                 /* Pictures with negative POC shall precede IDR-picture in composition order.
                  * The minimum POC is added to poc_offset when we encounter the next coded video sequence. */
-                if( last_poc_reset == UINT32_MAX || i > last_poc_reset + max_num_reorder_pictures )
+                if( last_poc_reset == UINT32_MAX || i > last_poc_reset + max_num_reorder_pics )
                 {
                     if( !invalid_poc_present )
                     {
@@ -2860,7 +2860,7 @@ static void nalu_deduplicate_poc
         poc_offset -= poc_min;
         int64_t poc_max = 0;
         for( uint32_t j = last_poc_reset; j < i + !!npt[i].reset; j++ )
-            if( npt[j].poc >= 0 || (j <= last_poc_reset + max_num_reorder_pictures) )
+            if( npt[j].poc >= 0 || (j <= last_poc_reset + max_num_reorder_pics) )
             {
                 npt[j].poc += poc_offset;
                 if( poc_max < npt[j].poc )
@@ -3023,7 +3023,6 @@ static void nalu_reduce_timescale
 
 static int h264_importer_probe( importer_t *importer )
 {
-#define H264_MAX_NUM_REORDER_FRAMES 16
 #define H264_LONG_START_CODE_LENGTH 4
 #define H264_CHECK_NEXT_LONG_START_CODE( x ) (!(x)[0] && !(x)[1] && !(x)[2] && ((x)[3] == 0x01))
     h264_importer_info_t *importer_info = create_h264_importer_info( importer );
@@ -3137,7 +3136,7 @@ static int h264_importer_probe( importer_t *importer )
     }
     /* Deduplicate POCs. */
     uint32_t max_composition_delay = 0;
-    nalu_deduplicate_poc( npt, &max_composition_delay, num_access_units, 2 * H264_MAX_NUM_REORDER_FRAMES );
+    nalu_deduplicate_poc( npt, &max_composition_delay, num_access_units, 32 );
     /* Generate timestamps. */
     nalu_generate_timestamps_from_poc( timestamp, npt,
                                        &importer_info->composition_reordering_present,
@@ -3174,7 +3173,6 @@ fail:
     importer->info = NULL;
     lsmash_remove_entries( importer->summaries, lsmash_cleanup_summary );
     return -1;
-#undef H264_MAX_NUM_REORDER_FRAMES
 #undef H264_LONG_START_CODE_LENGTH
 #undef H264_CHECK_NEXT_LONG_START_CODE
 }
@@ -3677,7 +3675,6 @@ static int hevc_importer_get_accessunit( importer_t *importer, uint32_t track_nu
 
 static int hevc_importer_probe( importer_t *importer )
 {
-#define HEVC_MAX_NUM_REORDER_FRAMES 16
 #define HEVC_LONG_START_CODE_LENGTH 4
 #define HEVC_CHECK_NEXT_LONG_START_CODE( x ) (!(x)[0] && !(x)[1] && !(x)[2] && ((x)[3] == 0x01))
     hevc_importer_info_t *importer_info = create_hevc_importer_info( importer );
@@ -3794,7 +3791,7 @@ static int hevc_importer_probe( importer_t *importer )
     }
     /* Deduplicate POCs. */
     uint32_t max_composition_delay = 0;
-    nalu_deduplicate_poc( npt, &max_composition_delay, num_access_units, 2 * HEVC_MAX_NUM_REORDER_FRAMES );
+    nalu_deduplicate_poc( npt, &max_composition_delay, num_access_units, 15 );
     /* Generate timestamps. */
     nalu_generate_timestamps_from_poc( timestamp, npt,
                                        &importer_info->composition_reordering_present,
@@ -3831,7 +3828,6 @@ fail:
     importer->info = NULL;
     lsmash_remove_entries( importer->summaries, lsmash_cleanup_summary );
     return -1;
-#undef HEVC_MAX_NUM_REORDER_FRAMES
 #undef HEVC_LONG_START_CODE_LENGTH
 #undef HEVC_CHECK_NEXT_LONG_START_CODE
 }
