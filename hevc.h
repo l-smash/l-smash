@@ -247,31 +247,40 @@ typedef struct
 } hevc_slice_info_t;
 
 /* Picture */
+typedef enum
+{
+    HEVC_PICTURE_TYPE_IDR   = 0,
+    HEVC_PICTURE_TYPE_I     = 1,
+    HEVC_PICTURE_TYPE_I_P   = 2,
+    HEVC_PICTURE_TYPE_I_P_B = 3,
+    HEVC_PICTURE_TYPE_NONE  = 4,
+} hevc_picture_type;
+
 typedef struct
 {
-    uint8_t  type;
-    uint8_t  irap;
-    uint8_t  idr;
-    uint8_t  broken_link;
-    uint8_t  radl;
-    uint8_t  rasl;
-    uint8_t  sublayer_nonref;
-    uint8_t  closed_rap;
-    uint8_t  first;
-    uint8_t  random_accessible;
-    uint8_t  TemporalId;
-    uint8_t  independent;
-    uint8_t  field_coded;
-    uint8_t  pic_parameter_set_id;
-    uint8_t  has_primary;
-    uint8_t  delta;
+    hevc_picture_type type;
+    uint8_t           irap;
+    uint8_t           idr;
+    uint8_t           broken_link;
+    uint8_t           radl;
+    uint8_t           rasl;
+    uint8_t           sublayer_nonref;
+    uint8_t           closed_rap;
+    uint8_t           first;
+    uint8_t           random_accessible;
+    uint8_t           TemporalId;
+    uint8_t           independent;
+    uint8_t           field_coded;
+    uint8_t           pic_parameter_set_id;
+    uint8_t           has_primary;
+    uint8_t           delta;
     /* POC */
-    uint16_t poc_lsb;
-    int32_t  poc;
-    int32_t  tid0_poc_msb;
-    int32_t  tid0_poc_lsb;
+    uint16_t          poc_lsb;
+    int32_t           poc;
+    int32_t           tid0_poc_msb;
+    int32_t           tid0_poc_lsb;
     /* */
-    uint32_t recovery_poc_cnt;
+    uint32_t          recovery_poc_cnt;
 } hevc_picture_info_t;
 
 /* Access unit */
@@ -314,14 +323,6 @@ struct hevc_info_tag
     lsmash_bits_t       *bits;
     hevc_stream_buffer_t buffer;
 };
-
-typedef enum
-{
-    HEVC_PICTURE_TYPE_I     = 0,
-    HEVC_PICTURE_TYPE_I_P   = 1,
-    HEVC_PICTURE_TYPE_I_P_B = 2,
-    HEVC_PICTURE_TYPE_NONE  = 3,
-} hevc_picture_type;
 
 int hevc_setup_parser
 (

@@ -3718,6 +3718,7 @@ static int hevc_importer_probe( importer_t *importer )
     nal_pic_timing_t *npt = (nal_pic_timing_t *)malloc( npt_alloc );
     if( !npt )
         goto fail;
+    uint32_t picture_stats[HEVC_PICTURE_TYPE_NONE + 1] = { 0 };
     uint32_t num_access_units = 0;
     fprintf( stderr, "Analyzing stream as HEVC\r" );
     while( importer_info->status != IMPORTER_EOF )
@@ -3725,8 +3726,9 @@ static int hevc_importer_probe( importer_t *importer )
 #if 0
         fprintf( stderr, "Analyzing stream as HEVC: %"PRIu32"\n", num_access_units + 1 );
 #endif
-        hevc_picture_info_t prev_picture = info->au.picture;
-        info->au.picture.first = (num_access_units == 0);
+        hevc_picture_info_t     *picture = &info->au.picture;
+        hevc_picture_info_t prev_picture = *picture;
+        picture->first = (num_access_units == 0);
         if( hevc_get_access_unit_internal( importer_info, 1 )
          || hevc_calculate_poc( info, &info->au.picture, &prev_picture ) )
         {
@@ -3745,16 +3747,26 @@ static int hevc_importer_probe( importer_t *importer )
             npt = temp;
             npt_alloc = alloc;
         }
-        importer_info->field_pic_present |= info->au.picture.field_coded;
-        npt[num_access_units].poc       = info->au.picture.poc;
-        npt[num_access_units].delta     = info->au.picture.delta;
+        importer_info->field_pic_present |= picture->field_coded;
+        npt[num_access_units].poc       = picture->poc;
+        npt[num_access_units].delta     = picture->delta;
         npt[num_access_units].poc_delta = 1;
         npt[num_access_units].reset     = 0;
         ++num_access_units;
         importer_info->max_au_length  = LSMASH_MAX( importer_info->max_au_length,  info->au.length );
         importer_info->max_TemporalId = LSMASH_MAX( importer_info->max_TemporalId, info->au.TemporalId );
+        if( picture->idr )
+            ++picture_stats[HEVC_PICTURE_TYPE_IDR];
+        else if( picture->type >= HEVC_PICTURE_TYPE_NONE )
+            ++picture_stats[HEVC_PICTURE_TYPE_NONE];
+        else
+            ++picture_stats[ picture->type ];
     }
     fprintf( stderr, "                                                                               \r" );
+    fprintf( stderr, "IDR: %"PRIu32", I: %"PRIu32", P: %"PRIu32", B: %"PRIu32", Unknown: %"PRIu32"\n",
+             picture_stats[HEVC_PICTURE_TYPE_IDR], picture_stats[HEVC_PICTURE_TYPE_I],
+             picture_stats[HEVC_PICTURE_TYPE_I_P], picture_stats[HEVC_PICTURE_TYPE_I_P_B],
+             picture_stats[HEVC_PICTURE_TYPE_NONE]);
     /* Copy and append the last Codec Specific info. */
     if( hevc_store_codec_specific( importer_info, &info->hvcC_param ) < 0 )
         return -1;
