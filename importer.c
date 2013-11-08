@@ -3065,6 +3065,7 @@ static int h264_importer_probe( importer_t *importer )
     nal_pic_timing_t *npt = malloc( npt_alloc );
     if( !npt )
         goto fail;
+    uint32_t picture_stats[H264_PICTURE_TYPE_NONE + 1] = { 0 };
     uint32_t num_access_units = 0;
     fprintf( stderr, "Analyzing stream as H.264\r" );
     while( importer_info->status != IMPORTER_EOF )
@@ -3072,9 +3073,10 @@ static int h264_importer_probe( importer_t *importer )
 #if 0
         fprintf( stderr, "Analyzing stream as H.264: %"PRIu32"\n", num_access_units + 1 );
 #endif
-        h264_picture_info_t prev_picture = info->picture;
+        h264_picture_info_t     *picture = &info->picture;
+        h264_picture_info_t prev_picture = *picture;
         if( h264_get_access_unit_internal( importer_info, 1 )
-         || h264_calculate_poc( info, &info->picture, &prev_picture ) )
+         || h264_calculate_poc( info, picture, &prev_picture ) )
         {
             free( npt );
             goto fail;
@@ -3092,14 +3094,32 @@ static int h264_importer_probe( importer_t *importer )
             npt_alloc = alloc;
         }
         importer_info->field_pic_present |= info->picture.field_pic_flag;
-        npt[num_access_units].poc       = info->picture.PicOrderCnt;
-        npt[num_access_units].delta     = info->picture.delta;
-        npt[num_access_units].poc_delta = info->picture.field_pic_flag ? 1 : 2;
-        npt[num_access_units].reset     = info->picture.has_mmco5;
+        npt[num_access_units].poc       = picture->PicOrderCnt;
+        npt[num_access_units].delta     = picture->delta;
+        npt[num_access_units].poc_delta = picture->field_pic_flag ? 1 : 2;
+        npt[num_access_units].reset     = picture->has_mmco5;
         ++num_access_units;
         importer_info->max_au_length = LSMASH_MAX( info->picture.au_length, importer_info->max_au_length );
+        if( picture->idr )
+            ++picture_stats[H264_PICTURE_TYPE_IDR];
+        else if( picture->type >= H264_PICTURE_TYPE_NONE )
+            ++picture_stats[H264_PICTURE_TYPE_NONE];
+        else
+            ++picture_stats[ picture->type ];
     }
     fprintf( stderr, "                                                                               \r" );
+    fprintf( stderr, "IDR: %"PRIu32", I: %"PRIu32", P: %"PRIu32", B: %"PRIu32", "
+                     "SI: %"PRIu32", SP: %"PRIu32", Unknown: %"PRIu32"\n",
+             picture_stats[H264_PICTURE_TYPE_IDR        ],
+             picture_stats[H264_PICTURE_TYPE_I          ],
+             picture_stats[H264_PICTURE_TYPE_I_P        ],
+             picture_stats[H264_PICTURE_TYPE_I_P_B      ],
+             picture_stats[H264_PICTURE_TYPE_SI         ]
+           + picture_stats[H264_PICTURE_TYPE_I_SI       ],
+             picture_stats[H264_PICTURE_TYPE_SI_SP      ]
+           + picture_stats[H264_PICTURE_TYPE_I_SI_P_SP  ]
+           + picture_stats[H264_PICTURE_TYPE_I_SI_P_SP_B],
+             picture_stats[H264_PICTURE_TYPE_NONE       ] );
     /* Copy and append the last Codec Specific info. */
     if( h264_store_codec_specific( importer_info, &info->avcC_param ) < 0 )
         return -1;

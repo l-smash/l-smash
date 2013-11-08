@@ -183,40 +183,54 @@ typedef struct
     int32_t  delta_pic_order_cnt[2];
 } h264_slice_info_t;
 
+typedef enum
+{
+    H264_PICTURE_TYPE_IDR         = 0,
+    H264_PICTURE_TYPE_I           = 1,
+    H264_PICTURE_TYPE_I_P         = 2,
+    H264_PICTURE_TYPE_I_P_B       = 3,
+    H264_PICTURE_TYPE_SI          = 4,
+    H264_PICTURE_TYPE_SI_SP       = 5,
+    H264_PICTURE_TYPE_I_SI        = 6,
+    H264_PICTURE_TYPE_I_SI_P_SP   = 7,
+    H264_PICTURE_TYPE_I_SI_P_SP_B = 8,
+    H264_PICTURE_TYPE_NONE        = 9,
+} h264_picture_type;
+
 typedef struct
 {
-    uint8_t  type;
-    uint8_t  idr;
-    uint8_t  random_accessible;
-    uint8_t  independent;
-    uint8_t  disposable;        /* 1: nal_ref_idc == 0, 0: otherwise */
-    uint8_t  has_redundancy;
-    uint8_t  incomplete_au_has_primary;
-    uint8_t  pic_parameter_set_id;
-    uint8_t  field_pic_flag;
-    uint8_t  bottom_field_flag;
-    uint8_t  delta;
-    uint8_t  broken_link_flag;
+    h264_picture_type type;
+    uint8_t           idr;
+    uint8_t           random_accessible;
+    uint8_t           independent;
+    uint8_t           disposable;   /* 1: nal_ref_idc == 0, 0: otherwise */
+    uint8_t           has_redundancy;
+    uint8_t           incomplete_au_has_primary;
+    uint8_t           pic_parameter_set_id;
+    uint8_t           field_pic_flag;
+    uint8_t           bottom_field_flag;
+    uint8_t           delta;
+    uint8_t           broken_link_flag;
     /* POC */
-    uint8_t  has_mmco5;
-    uint8_t  ref_pic_has_mmco5;
-    uint8_t  ref_pic_bottom_field_flag;
-    int32_t  ref_pic_TopFieldOrderCnt;
-    int32_t  ref_pic_PicOrderCntMsb;
-    int32_t  ref_pic_PicOrderCntLsb;
-    int32_t  pic_order_cnt_lsb;
-    int32_t  delta_pic_order_cnt_bottom;
-    int32_t  delta_pic_order_cnt[2];
-    int32_t  PicOrderCnt;
-    uint32_t FrameNumOffset;
+    uint8_t           has_mmco5;
+    uint8_t           ref_pic_has_mmco5;
+    uint8_t           ref_pic_bottom_field_flag;
+    int32_t           ref_pic_TopFieldOrderCnt;
+    int32_t           ref_pic_PicOrderCntMsb;
+    int32_t           ref_pic_PicOrderCntLsb;
+    int32_t           pic_order_cnt_lsb;
+    int32_t           delta_pic_order_cnt_bottom;
+    int32_t           delta_pic_order_cnt[2];
+    int32_t           PicOrderCnt;
+    uint32_t          FrameNumOffset;
     /* */
-    uint32_t recovery_frame_cnt;
-    uint32_t frame_num;
-    uint8_t *au;
-    uint32_t au_length;
-    uint8_t *incomplete_au;
-    uint32_t incomplete_au_length;
-    uint32_t au_number;
+    uint32_t          recovery_frame_cnt;
+    uint32_t          frame_num;
+    uint8_t          *au;
+    uint32_t          au_length;
+    uint8_t          *incomplete_au;
+    uint32_t          incomplete_au_length;
+    uint32_t          au_number;
 } h264_picture_info_t;
 
 typedef struct h264_info_tag h264_info_t;
@@ -246,19 +260,6 @@ struct h264_info_tag
     lsmash_bits_t       *bits;
     h264_stream_buffer_t buffer;
 };
-
-typedef enum
-{
-    H264_PICTURE_TYPE_I           = 0,
-    H264_PICTURE_TYPE_I_P         = 1,
-    H264_PICTURE_TYPE_I_P_B       = 2,
-    H264_PICTURE_TYPE_SI          = 3,
-    H264_PICTURE_TYPE_SI_SP       = 4,
-    H264_PICTURE_TYPE_I_SI        = 5,
-    H264_PICTURE_TYPE_I_SI_P_SP   = 6,
-    H264_PICTURE_TYPE_I_SI_P_SP_B = 7,
-    H264_PICTURE_TYPE_NONE        = 8,
-} h264_picture_type;
 
 int h264_setup_parser
 (
