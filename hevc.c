@@ -1003,7 +1003,7 @@ static int hevc_parse_pps_minimally
     nalu_get_exp_golomb_se( bits );     /* init_qp_minus26 */
     lsmash_bits_get( bits, 1 );         /* constrained_intra_pred_flag */
     lsmash_bits_get( bits, 1 );         /* transform_skip_enabled_flag */
-    if( lsmash_bits_get( bits, 1 ) )    /* pps->cu_qp_delta_enabled_flag */
+    if( lsmash_bits_get( bits, 1 ) )    /* cu_qp_delta_enabled_flag */
         nalu_get_exp_golomb_ue( bits ); /* diff_cu_qp_delta_depth */
     nalu_get_exp_golomb_se( bits );     /* cb_qp_offset */
     nalu_get_exp_golomb_se( bits );     /* cr_qp_offset */
@@ -1236,7 +1236,7 @@ int hevc_parse_slice_segment_header
 )
 {
     lsmash_bits_t *bits = info->bits;
-    if( nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, ebsp_size ) )
+    if( nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, LSMASH_MIN( ebsp_size, 50 ) ) )
         return -1;
     hevc_slice_info_t *slice = &info->slice;
     memset( slice, 0, sizeof(hevc_slice_info_t) );
@@ -1304,15 +1304,15 @@ int hevc_parse_slice_segment_header
                     {
                         int length = lsmash_ceil_log2( sps->num_long_term_ref_pics_sps );
                         if( length > 0 )
-                            lsmash_bits_get( bits, length );                        /* slice->lt_idx_sps[i] */
+                            lsmash_bits_get( bits, length );                        /* lt_idx_sps[i] */
                     }
                     else
                     {
-                        lsmash_bits_get( bits, sps->log2_max_pic_order_cnt_lsb );   /* slice->poc_lsb_lt              [i] */
-                        lsmash_bits_get( bits, 1 );                                 /* slice->used_by_curr_pic_lt_flag[i] */
+                        lsmash_bits_get( bits, sps->log2_max_pic_order_cnt_lsb );   /* poc_lsb_lt              [i] */
+                        lsmash_bits_get( bits, 1 );                                 /* used_by_curr_pic_lt_flag[i] */
                     }
                     if( lsmash_bits_get( bits, 1 ) )                                /* delta_poc_msb_present_flag[i] */
-                        nalu_get_exp_golomb_ue( bits );                             /* slice->delta_poc_msb_cycle_lt[i] */
+                        nalu_get_exp_golomb_ue( bits );                             /* delta_poc_msb_cycle_lt    [i] */
                 }
             }
             if( sps->temporal_mvp_enabled_flag )
