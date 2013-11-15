@@ -893,7 +893,7 @@ size_t lsmash_stream_buffers_read( lsmash_stream_buffers_t *sb, size_t read_size
         read_size = sb->bank->buffer_size;
     size_t size = fread( sb->pos, 1, read_size, sb->stream );
     sb->end = sb->pos + size;
-    sb->no_more_read = size == 0 ? feof( sb->stream ) : 0;
+    sb->no_more_read = size == 0 ? feof( (FILE *)sb->stream ) : 0;
     return size;
 }
 
@@ -936,7 +936,7 @@ static size_t stream_buffers_update_file( lsmash_stream_buffers_t *sb, uint32_t 
     lsmash_stream_buffers_seek( sb, remainder_bytes, SEEK_SET );
     size_t read_size = lsmash_stream_buffers_read( sb, sb->bank->buffer_size - remainder_bytes );
     lsmash_stream_buffers_seek( sb, 0, SEEK_SET );
-    sb->no_more_read = read_size == 0 ? feof( sb->stream ) : 0;
+    sb->no_more_read = read_size == 0 ? feof( (FILE *)sb->stream ) : 0;
     return lsmash_stream_buffers_get_remainder( sb );
 }
 
