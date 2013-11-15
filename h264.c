@@ -1204,7 +1204,10 @@ int h264_parse_slice
 )
 {
     lsmash_bits_t *bits = info->bits;
-    if( nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, ebsp_size ) )
+    uint64_t size = nalu_header->nal_unit_type == H264_NALU_TYPE_SLICE_IDR || nalu_header->nal_ref_idc == 0
+                  ? LSMASH_MIN( ebsp_size, 100 )
+                  : LSMASH_MIN( ebsp_size, 1000 );
+    if( nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, size ) )
         return -1;
     if( nalu_header->nal_unit_type != H264_NALU_TYPE_SLICE_DP_B
      && nalu_header->nal_unit_type != H264_NALU_TYPE_SLICE_DP_C )
