@@ -1544,7 +1544,7 @@ static int isom_set_qtff_lpcm_description( isom_audio_entry_t *audio, lsmash_aud
         lsmash_codec_specific_t *specific = (lsmash_codec_specific_t *)entry->data;
         if( !specific )
             continue;
-        if( specific->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_FORMAT_SPECIFIC_FLAGS
+        if( specific->type   == LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_FORMAT_SPECIFIC_FLAGS
          && specific->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED )
         {
             lpcm = (lsmash_qt_audio_format_specific_flags_t *)specific->data.structured;
@@ -1727,17 +1727,23 @@ static lsmash_box_type_t isom_guess_audio_codec_specific_box_type( lsmash_codec_
 
 static int isom_set_qtff_template_audio_description( isom_audio_entry_t *audio, lsmash_audio_summary_t *summary )
 {
-    audio->type = lsmash_form_qtff_box_type( audio->type.fourcc );
-    lsmash_qt_audio_format_specific_flags_t *specific_data = NULL;
+    audio->type    = lsmash_form_qtff_box_type( audio->type.fourcc );
+    audio->version = (summary->channels > 2 || summary->frequency > UINT16_MAX) ? 2 : 1;
+    /* Try to get QuickTime audio format specific flags. */
+    lsmash_qt_audio_format_specific_flag format_flags = QT_AUDIO_FORMAT_FLAG_BIG_ENDIAN;
     for( lsmash_entry_t *entry = summary->opaque->list.head; entry; entry = entry->next )
     {
         lsmash_codec_specific_t *specific = (lsmash_codec_specific_t *)entry->data;
-        if( !specific )
+        if( !specific
+         || !specific->data.structured )
             continue;
-        if( specific->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_FORMAT_SPECIFIC_FLAGS
+        if( specific->type   == LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_FORMAT_SPECIFIC_FLAGS
          && specific->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED )
         {
-            specific_data = (lsmash_qt_audio_format_specific_flags_t *)specific->data.structured;
+            /* A format specific flags is found.
+             * Force audio sample description version == 2. */
+            format_flags   = ((lsmash_qt_audio_format_specific_flags_t *)specific->data.structured)->format_flags;
+            audio->version = 2;
             break;
         }
     }
@@ -1761,7 +1767,7 @@ static int isom_set_qtff_template_audio_description( isom_audio_entry_t *audio, 
         lsmash_codec_specific_t *specific = (lsmash_codec_specific_t *)entry->data;
         if( !specific )
             return -1;
-        if( specific->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_UNKNOWN
+        if( specific->type   == LSMASH_CODEC_SPECIFIC_DATA_TYPE_UNKNOWN
          && specific->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED )
             continue;   /* LSMASH_CODEC_SPECIFIC_DATA_TYPE_UNKNOWN + LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED is not supported. */
         switch( specific->type )
@@ -1783,7 +1789,8 @@ static int isom_set_qtff_template_audio_description( isom_audio_entry_t *audio, 
 #endif
             default :
             {
-                assert( specific->format == LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED || specific->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_DECOMPRESSION_PARAMETERS );
+                assert( specific->format == LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED
+                     || specific->type   == LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_DECOMPRESSION_PARAMETERS );
                 lsmash_codec_specific_t *cs = lsmash_convert_codec_specific_format( specific, LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
                 if( !cs )
                     return -1;
@@ -1795,6 +1802,21 @@ static int isom_set_qtff_template_audio_description( isom_audio_entry_t *audio, 
                 uint8_t *box_data = cs->data.unstructured;
                 uint64_t box_size = cs->size;
                 lsmash_compact_box_type_t fourcc = LSMASH_4CC( box_data[4], box_data[5], box_data[6], box_data[7] );
+                if( audio->version == 2 && fourcc == QT_BOX_TYPE_ENDA.fourcc )
+                {
+                    /* Don't append a 'enda' extension if version == 2.
+                     * Endianness is indicated in QuickTime audio format specific flags. */
+                    if( box_size >= ISOM_BASEBOX_COMMON_SIZE + 2 )
+                    {
+                        /* Override endianness indicated in format specific flags. */
+                        if( box_data[9] == 1 )
+                            format_flags &= ~QT_AUDIO_FORMAT_FLAG_BIG_ENDIAN;
+                        else
+                            format_flags |=  QT_AUDIO_FORMAT_FLAG_BIG_ENDIAN;
+                    }
+                    lsmash_destroy_codec_specific_data( cs );
+                    continue;
+                }
                 lsmash_box_type_t box_type = isom_guess_audio_codec_specific_box_type( (lsmash_codec_type_t)audio->type, fourcc );
                 if( lsmash_check_box_type_identical( box_type, QT_BOX_TYPE_WAVE ) )
                 {
@@ -1802,16 +1824,17 @@ static int isom_set_qtff_template_audio_description( isom_audio_entry_t *audio, 
                     lsmash_destroy_codec_specific_data( cs );
                     continue;
                 }
+                /* Append the extension. */
                 isom_extension_box_t *extension = lsmash_malloc_zero( sizeof(isom_extension_box_t) );
                 if( !extension )
                 {
                     lsmash_destroy_codec_specific_data( cs );
                     return -1;
                 }
-                extension->size        = box_size;
+                extension->size        = box_size;  /* == cs->size */
                 extension->type        = box_type;
                 extension->format      = EXTENSION_FORMAT_BINARY;
-                extension->form.binary = box_data;
+                extension->form.binary = box_data;  /* == cs->data.unstructured */
                 extension->destruct    = free;
                 cs->data.unstructured = NULL;   /* Avoid freeing the binary data of the extension. */
                 lsmash_destroy_codec_specific_data( cs );
@@ -1825,7 +1848,6 @@ static int isom_set_qtff_template_audio_description( isom_audio_entry_t *audio, 
         }
     }
     /* Set up common audio description fields. */
-    audio->version        = (summary->channels > 2 || summary->frequency > UINT16_MAX) ? 2 : 1;
     audio->channelcount   = audio->version == 2 ? 3 : LSMASH_MIN( summary->channels, 2 );
     audio->samplesize     = 16;
     audio->compression_ID = QT_AUDIO_COMPRESSION_ID_VARIABLE_COMPRESSION;
@@ -1864,16 +1886,11 @@ static int isom_set_qtff_template_audio_description( isom_audio_entry_t *audio, 
         }
         else
         {
-            if( specific_data )
-            {
-                audio->formatSpecificFlags = specific_data->format_flags;
-                if( specific_data->format_flags & QT_AUDIO_FORMAT_FLAG_FLOAT )
-                    audio->formatSpecificFlags &= ~QT_AUDIO_FORMAT_FLAG_SIGNED_INTEGER;
-                if( specific_data->format_flags & QT_AUDIO_FORMAT_FLAG_PACKED )
-                    audio->formatSpecificFlags &= ~QT_AUDIO_FORMAT_FLAG_ALIGNED_HIGH;
-            }
-            else
-                audio->formatSpecificFlags = 0;
+            if( format_flags & QT_AUDIO_FORMAT_FLAG_FLOAT )
+                format_flags &= ~QT_AUDIO_FORMAT_FLAG_SIGNED_INTEGER;
+            if( format_flags & QT_AUDIO_FORMAT_FLAG_PACKED )
+                format_flags &= ~QT_AUDIO_FORMAT_FLAG_ALIGNED_HIGH;
+            audio->formatSpecificFlags = format_flags;
         }
     }
     else    /* if( audio->version == 1 ) */
@@ -1884,58 +1901,6 @@ static int isom_set_qtff_template_audio_description( isom_audio_entry_t *audio, 
         audio->bytesPerPacket   = summary->sample_size / 8;
         audio->bytesPerFrame    = audio->bytesPerPacket * summary->channels;    /* sample_size field in stsz box is NOT used. */
         audio->bytesPerSample   = 1 + (summary->sample_size != 8);
-        if( specific_data )
-        {
-            if( wave )
-            {
-                if( isom_add_enda( wave ) )
-                    return -1;
-                wave->enda->littleEndian = !(specific_data->format_flags & QT_LPCM_FORMAT_FLAG_BIG_ENDIAN);
-            }
-            else
-            {
-                isom_extension_box_t *ext = isom_get_extension_box( &audio->extensions, QT_BOX_TYPE_WAVE );
-                assert( ext && ext->format == EXTENSION_FORMAT_BINARY );
-                uint32_t enda_size;
-                uint8_t *enda = isom_get_child_box_position( ext->form.binary, ext->size, QT_BOX_TYPE_ENDA, &enda_size );
-                if( !enda )
-                {
-                    uint32_t wave_size = ext->size;
-                    uint8_t *wave_data = ext->form.binary;
-                    uint32_t frma_size;
-                    uint8_t *frma_data = isom_get_child_box_position( ext->form.binary, ext->size, QT_BOX_TYPE_FRMA, &frma_size );
-                    uint8_t *frma_end = frma_data + frma_size;
-                    uint32_t remainder_size = ext->size - (frma_end - wave_data);
-                    uint32_t enda_offset = wave_data - frma_end;
-                    enda_size = ISOM_BASEBOX_COMMON_SIZE + 2;
-                    wave_data = lsmash_memdup( wave_data, wave_size + enda_size );
-                    enda = wave_data + enda_offset;
-                    enda[0] = (enda_size >> 24) & 0xff;
-                    enda[1] = (enda_size >> 16) & 0xff;
-                    enda[2] = (enda_size >>  8) & 0xff;
-                    enda[3] =  enda_size        & 0xff;
-                    enda[4] = 'e';
-                    enda[5] = 'n';
-                    enda[6] = 'd';
-                    enda[7] = 'a';
-                    enda[8] = 0;
-                    enda[9] = !(specific_data->format_flags & QT_LPCM_FORMAT_FLAG_BIG_ENDIAN);
-                    memcpy( wave_data + enda_offset + enda_size, frma_end, remainder_size );
-                    free( ext->form.binary );
-                    ext->form.binary = wave_data;
-                    ext->size       += enda_size;
-                }
-                else
-                {
-                    if( enda_size < ISOM_BASEBOX_COMMON_SIZE + 2 )
-                        return -1;
-                    if( specific_data->format_flags & QT_LPCM_FORMAT_FLAG_BIG_ENDIAN )
-                        enda[9] &= ~0x01;
-                    else
-                        enda[9] |= 0x01;
-                }
-            }
-        }
     }
     return 0;
 }
