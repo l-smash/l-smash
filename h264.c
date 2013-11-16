@@ -895,7 +895,11 @@ int h264_parse_sei
             {
                 sei->pic_timing.pic_struct = lsmash_bits_get( bits, 4 );
                 /* Skip the remaining bits. */
-                lsmash_bits_get( bits, payloadSize * 8 - 4 );
+                uint32_t remaining_bits = payloadSize * 8 - 4;
+                if( hrd->CpbDpbDelaysPresentFlag )
+                    remaining_bits -= hrd->cpb_removal_delay_length
+                                    + hrd->dpb_output_delay_length;
+                lsmash_bits_get( bits, remaining_bits );
             }
         }
         else if( payloadType == 3 )
