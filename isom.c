@@ -4973,7 +4973,8 @@ int lsmash_set_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
         else
         {
             tkhd->alternate_group = 0;
-            lsmash_log( LSMASH_LOG_WARNING, "alternate_group is specified but not compatible with any of the brands. It won't be set.\n" );
+            lsmash_log( NULL, LSMASH_LOG_WARNING,
+                        "alternate_group is specified but not compatible with any of the brands. It won't be set.\n" );
         }
     }
     else

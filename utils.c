@@ -976,13 +976,14 @@ void lsmash_stream_buffers_setup( lsmash_stream_buffers_t *sb, lsmash_stream_buf
 /*---- others ----*/
 void lsmash_log
 (
+    void            *hp,
     lsmash_log_level level,
-    const char *message, ...
+    const char      *message,
+    ...
 )
 {
     char *prefix;
     va_list args;
-
     va_start( args, message );
     switch( level )
     {
@@ -999,8 +1000,12 @@ void lsmash_log
             prefix = "Unknown";
             break;
     }
-
-    fprintf( stderr, "[%s]: ", prefix );
+    /* Dereference lsmash_class_t pointer if hp is non-NULL. */
+    lsmash_class_t *class = hp ? (lsmash_class_t *)*(intptr_t *)hp : NULL;
+    if( class )
+        fprintf( stderr, "[%s: %s]: ", class->name, prefix );
+    else
+        fprintf( stderr, "[%s]: ", prefix );
     vfprintf( stderr, message, args );
     va_end( args );
 }

@@ -28,6 +28,11 @@
 #define LSMASH_MAX( a, b ) ((a) > (b) ? (a) : (b))
 #define LSMASH_MIN( a, b ) ((a) < (b) ? (a) : (b))
 
+typedef struct
+{
+    char *name;
+} lsmash_class_t;
+
 /*---- bytestream ----*/
 
 typedef struct
@@ -217,8 +222,10 @@ typedef struct
 
 void lsmash_log
 (
+    void            *hp,
     lsmash_log_level level,
-    const char *message, ...
+    const char      *message,
+    ...
 );
 
 uint32_t lsmash_count_bits

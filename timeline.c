@@ -65,10 +65,16 @@ typedef struct
     uint32_t sample_count;          /* number of samples in this bunch */
 } isom_lpcm_bunch_t;
 
+static const lsmash_class_t lsmash_timeline_class =
+{
+    "timeline"
+};
+
 typedef struct isom_timeline_tag isom_timeline_t;
 
 struct isom_timeline_tag
 {
+    const lsmash_class_t *class;
     uint32_t track_ID;
     uint32_t movie_timescale;
     uint32_t media_timescale;
@@ -121,6 +127,7 @@ static isom_timeline_t *isom_create_timeline( void )
     isom_timeline_t *timeline = lsmash_malloc_zero( sizeof(isom_timeline_t) );
     if( !timeline )
         return NULL;
+    timeline->class = &lsmash_timeline_class;
     lsmash_init_entry_list( timeline->edit_list );
     lsmash_init_entry_list( timeline->chunk_list );
     lsmash_init_entry_list( timeline->info_list );
@@ -395,7 +402,7 @@ static lsmash_sample_t *isom_read_sample_data_from_stream( lsmash_root_t *root, 
             else
             {
                 root->max_read_size = timeline->last_accessed_chunk_alloc_size;
-                lsmash_log( LSMASH_LOG_WARNING, "Memory re-allocation by the new max_read_size failed.\n" );
+                lsmash_log( timeline, LSMASH_LOG_WARNING, "Memory re-allocation by the new max_read_size failed.\n" );
             }
         }
         /* Read data of a chunk in the stream. */
@@ -825,8 +832,8 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
             while( next_stsc_entry && chunk_number > ((isom_stsc_entry_t *)next_stsc_entry->data)->first_chunk )
             {
                 /* Just skip broken next entry. */
-                lsmash_log( LSMASH_LOG_WARNING, "ignore broken entry in Sample To Chunk Box.\n" );
-                lsmash_log( LSMASH_LOG_WARNING, "timeline might be corrupted.\n" );
+                lsmash_log( timeline, LSMASH_LOG_WARNING, "ignore broken entry in Sample To Chunk Box.\n" );
+                lsmash_log( timeline, LSMASH_LOG_WARNING, "timeline might be corrupted.\n" );
                 next_stsc_entry = next_stsc_entry->next;
                 if( next_stsc_entry && !next_stsc_entry->data )
                     goto fail;
@@ -869,7 +876,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
             goto fail;
         if( timeline->info_list->entry_count && timeline->bunch_list->entry_count )
         {
-            lsmash_log( LSMASH_LOG_ERROR, "LPCM + non-LPCM track is not supported.\n" );
+            lsmash_log( timeline, LSMASH_LOG_ERROR, "LPCM + non-LPCM track is not supported.\n" );
             goto fail;
         }
         ++sample_number;
@@ -1108,7 +1115,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                             }
                             if( timeline->info_list->entry_count && timeline->bunch_list->entry_count )
                             {
-                                lsmash_log( LSMASH_LOG_ERROR, "LPCM + non-LPCM track is not supported.\n" );
+                                lsmash_log( timeline, LSMASH_LOG_ERROR, "LPCM + non-LPCM track is not supported.\n" );
                                 goto fail;
                             }
                         }
@@ -1548,7 +1555,7 @@ int lsmash_set_media_timestamps( lsmash_root_t *root, uint32_t track_ID, lsmash_
         return -1;
     if( timeline->info_list->entry_count == 0 )
     {
-        lsmash_log( LSMASH_LOG_ERROR, "Changing timestamps of LPCM track is not supported.\n" );
+        lsmash_log( timeline, LSMASH_LOG_ERROR, "Changing timestamps of LPCM track is not supported.\n" );
         return -1;
     }
     if( ts_list->sample_count != timeline->info_list->entry_count )

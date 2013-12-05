@@ -119,7 +119,7 @@ static fn_get_chapter_data isom_check_chap_line( char *file_name )
     FILE *fp = lsmash_fopen( file_name, "rb" );
     if( !fp )
     {
-        lsmash_log( LSMASH_LOG_ERROR, "failed to open the chapter file \"%s\".\n", file_name );
+        lsmash_log( NULL, LSMASH_LOG_ERROR, "failed to open the chapter file \"%s\".\n", file_name );
         return NULL;
     }
     fn_get_chapter_data fnc = NULL;
@@ -132,7 +132,7 @@ static fn_get_chapter_data isom_check_chap_line( char *file_name )
              && isdigit( p_buff[3] ) && isdigit( p_buff[4] ) && p_buff[5] == ':' )
             fnc = isom_read_minimum_chapter;
         else
-            lsmash_log( LSMASH_LOG_ERROR, "the chapter file is malformed.\n" );
+            lsmash_log( NULL, LSMASH_LOG_ERROR, "the chapter file is malformed.\n" );
     }
     fclose( fp );
     return fnc;
@@ -150,7 +150,7 @@ int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom
     FILE *chapter = lsmash_fopen( file_name, "rb" );
     if( !chapter )
     {
-        lsmash_log( LSMASH_LOG_ERROR, "failed to open the chapter file \"%s\".\n", file_name );
+        lsmash_log( NULL, LSMASH_LOG_ERROR, "failed to open the chapter file \"%s\".\n", file_name );
         goto error_message;
     }
     if( isom_add_udta( root, 0 ) || isom_add_chpl( root->moov ) )
@@ -170,7 +170,9 @@ int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom
         data.start_time = (data.start_time + 50) / 100;    /* convert to 100ns unit */
         if( data.start_time / 1e7 > (double)root->moov->mvhd->duration / root->moov->mvhd->timescale )
         {
-            lsmash_log( LSMASH_LOG_WARNING, "a chapter point exceeding the actual duration detected. This chapter point and the following ones (if any) will be cut off.\n" );
+            lsmash_log( NULL, LSMASH_LOG_WARNING,
+                        "a chapter point exceeding the actual duration detected."
+                        "This chapter point and the following ones (if any) will be cut off.\n" );
             free( data.chapter_name );
             break;
         }
@@ -187,7 +189,7 @@ fail2:
 fail:
     fclose( chapter );
 error_message:
-    lsmash_log( LSMASH_LOG_ERROR, "failed to set chapter list.\n" );
+    lsmash_log( NULL, LSMASH_LOG_ERROR, "failed to set chapter list.\n" );
     return -1;
 }
 
@@ -197,7 +199,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
         goto error_message;
     if( !root->qt_compatible && !root->itunes_movie )
     {
-        lsmash_log( LSMASH_LOG_ERROR, "reference chapter is not available for this file.\n" );
+        lsmash_log( NULL, LSMASH_LOG_ERROR, "reference chapter is not available for this file.\n" );
         goto error_message;
     }
     FILE *chapter = NULL;       /* shut up 'uninitialized' warning */
@@ -205,7 +207,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
     if( !trak )
     {
-        lsmash_log( LSMASH_LOG_ERROR, "the specified track ID to apply the chapter doesn't exist.\n" );
+        lsmash_log( NULL, LSMASH_LOG_ERROR, "the specified track ID to apply the chapter doesn't exist.\n" );
         goto error_message;
     }
     if( isom_add_tref( trak ) )
@@ -255,7 +257,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     chapter = lsmash_fopen( file_name, "rb" );
     if( !chapter )
     {
-        lsmash_log( LSMASH_LOG_ERROR, "failed to open the chapter file \"%s\".\n", file_name );
+        lsmash_log( NULL, LSMASH_LOG_ERROR, "failed to open the chapter file \"%s\".\n", file_name );
         goto fail;
     }
     /* Parse the file and write text samples. */
@@ -319,7 +321,7 @@ fail:
     /* Remove the reference chapter track attached at tail of the list. */
     lsmash_remove_entry_direct( root->moov->trak_list, root->moov->trak_list->tail, isom_remove_trak );
 error_message:
-    lsmash_log( LSMASH_LOG_ERROR, "failed to set reference chapter.\n" );
+    lsmash_log( NULL, LSMASH_LOG_ERROR, "failed to set reference chapter.\n" );
     return -1;
 }
 
@@ -362,6 +364,6 @@ int lsmash_print_chapter_list( lsmash_root_t *root )
         return 0;
     }
     else
-        lsmash_log( LSMASH_LOG_ERROR, "this file doesn't have a chapter list.\n" );
+        lsmash_log( NULL, LSMASH_LOG_ERROR, "this file doesn't have a chapter list.\n" );
     return -1;
 }

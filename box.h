@@ -31,17 +31,23 @@
 
 #include "utils.h"
 
+static const lsmash_class_t lsmash_box_class =
+{
+    "box"
+};
+
 typedef struct isom_box_tag isom_box_t;
 
 /* If size is 1, then largesize is actual size.
  * If size is 0, then this box is the last one in the file. */
-#define ISOM_BASEBOX_COMMON                                                             \
-        lsmash_root_t      *root;       /* pointer of root */                           \
-        isom_box_t         *parent;     /* pointer of the parent box of this box */     \
-        uint32_t            manager;    /* flags for L-SMASH */                         \
-        uint64_t            pos;        /* starting position of this box in the file */ \
-        lsmash_entry_list_t extensions; /* extension boxes */                           \
-    uint64_t          size;             /* the number of bytes in this box */           \
+#define ISOM_BASEBOX_COMMON                                                               \
+        const lsmash_class_t *class;                                                      \
+        lsmash_root_t        *root;       /* pointer of root */                           \
+        isom_box_t           *parent;     /* pointer of the parent box of this box */     \
+        uint32_t              manager;    /* flags for L-SMASH */                         \
+        uint64_t              pos;        /* starting position of this box in the file */ \
+        lsmash_entry_list_t   extensions; /* extension boxes */                           \
+    uint64_t          size;               /* the number of bytes in this box */           \
     lsmash_box_type_t type
 
 #define ISOM_FULLBOX_COMMON                                         \
@@ -2230,28 +2236,28 @@ void isom_remove_all_extension_boxes( lsmash_entry_list_t *extensions );
 isom_extension_box_t *isom_get_extension_box( lsmash_entry_list_t *extensions, lsmash_box_type_t box_type );
 void *isom_get_extension_box_format( lsmash_entry_list_t *extensions, lsmash_box_type_t box_type );
 
-#define isom_create_box( box_name, parent_name, box_type ) \
+#define isom_create_box( box_name, parent_name, box_type )                               \
     isom_##box_name##_t *(box_name) = lsmash_malloc_zero( sizeof(isom_##box_name##_t) ); \
-    if( !box_name ) \
-        return -1; \
+    if( !box_name )                                                                      \
+        return -1;                                                                       \
     isom_init_box_common( box_name, parent_name, box_type )
 
 #define isom_create_list_box( box_name, parent_name, box_type ) \
-    isom_create_box( box_name, parent_name, box_type ); \
-    box_name->list = lsmash_create_entry_list(); \
-    if( !box_name->list ) \
-    { \
-        free( box_name ); \
-        return -1; \
+    isom_create_box( box_name, parent_name, box_type );         \
+    box_name->list = lsmash_create_entry_list();                \
+    if( !box_name->list )                                       \
+    {                                                           \
+        free( box_name );                                       \
+        return -1;                                              \
     }
 
-#define isom_copy_fields( dst, src, box_name ) \
-    lsmash_root_t *root   = dst->box_name->root; \
-    isom_box_t *parent    = dst->box_name->parent; \
-    uint64_t pos          = dst->box_name->pos; \
-    *dst->box_name        = *src->box_name; \
-    dst->box_name->root   = root; \
-    dst->box_name->parent = parent; \
+#define isom_copy_fields( dst, src, box_name )      \
+    lsmash_root_t *root   = dst->box_name->root;    \
+    isom_box_t *parent    = dst->box_name->parent;  \
+    uint64_t pos          = dst->box_name->pos;     \
+    *dst->box_name        = *src->box_name;         \
+    dst->box_name->root   = root;                   \
+    dst->box_name->parent = parent;                 \
     dst->box_name->pos    = pos
 
 #endif

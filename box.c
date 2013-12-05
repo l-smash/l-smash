@@ -85,6 +85,7 @@ void isom_init_box_common( void *_box, void *_parent, lsmash_box_type_t box_type
     isom_box_t *box    = (isom_box_t *)_box;
     isom_box_t *parent = (isom_box_t *)_parent;
     assert( box && parent && parent->root );
+    box->class  = &lsmash_box_class;
     box->root   = parent->root;
     box->parent = parent;
     box->size   = 0;
