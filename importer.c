@@ -40,6 +40,11 @@
 ***************************************************************************/
 struct importer_tag;
 
+static const lsmash_class_t lsmash_importer_class =
+{
+    "importer"
+};
+
 typedef void     ( *importer_cleanup )          ( struct importer_tag * );
 typedef int      ( *importer_get_accessunit )   ( struct importer_tag *, uint32_t, lsmash_sample_t * );
 typedef int      ( *importer_probe )            ( struct importer_tag * );
@@ -47,7 +52,7 @@ typedef uint32_t ( *importer_get_last_duration )( struct importer_tag *, uint32_
 
 typedef struct
 {
-    const char*                name;
+    lsmash_class_t             class;
     int                        detectable;
     importer_probe             probe;
     importer_get_accessunit    get_accessunit;
@@ -57,6 +62,7 @@ typedef struct
 
 typedef struct importer_tag
 {
+    const lsmash_class_t   *class;
     lsmash_stream_buffers_t sb;
     FILE                   *stream;    /* will be deprecated */
     int                     is_stdin;
@@ -509,7 +515,7 @@ static uint32_t mp4sys_adts_get_last_delta( importer_t *importer, uint32_t track
 
 const static importer_functions mp4sys_adts_importer =
 {
-    "adts",
+    { "adts" },
     1,
     mp4sys_adts_probe,
     mp4sys_adts_get_accessunit,
@@ -821,7 +827,7 @@ static uint32_t mp4sys_mp3_get_last_delta( importer_t *importer, uint32_t track_
 
 const static importer_functions mp4sys_mp3_importer =
 {
-    "MPEG-1/2BC_Audio_Legacy",
+    { "MPEG-1/2BC_Audio_Legacy" },
     1,
     mp4sys_mp3_probe,
     mp4sys_mp3_get_accessunit,
@@ -990,7 +996,7 @@ static uint32_t amr_get_last_delta( importer_t* importer, uint32_t track_number 
 
 const static importer_functions amr_importer =
 {
-    "amr",
+    { "amr" },
     1,
     amr_probe,
     amr_get_accessunit,
@@ -1246,7 +1252,7 @@ static uint32_t ac3_importer_get_last_delta( importer_t *importer, uint32_t trac
 
 const static importer_functions ac3_importer =
 {
-    "AC-3",
+    { "AC-3" },
     1,
     ac3_importer_probe,
     ac3_importer_get_accessunit,
@@ -1644,7 +1650,7 @@ static uint32_t eac3_importer_get_last_delta( importer_t *importer, uint32_t tra
 
 const static importer_functions eac3_importer =
 {
-    "Enhanced AC-3",
+    { "Enhanced AC-3" },
     1,
     eac3_importer_probe,
     eac3_importer_get_accessunit,
@@ -2036,7 +2042,7 @@ static uint32_t mp4sys_als_importer_get_last_delta( importer_t *importer, uint32
 
 const static importer_functions mp4sys_als_importer =
 {
-    "MPEG-4 ALS",
+    { "MPEG-4 ALS" },
     1,
     mp4sys_als_importer_probe,
     mp4sys_als_importer_get_accessunit,
@@ -2335,7 +2341,7 @@ static uint32_t dts_importer_get_last_delta( importer_t* importer, uint32_t trac
 
 const static importer_functions dts_importer =
 {
-    "DTS Coherent Acoustics",
+    { "DTS Coherent Acoustics" },
     1,
     dts_importer_probe,
     dts_importer_get_accessunit,
@@ -2898,6 +2904,7 @@ static void nalu_deduplicate_poc
 
 static void nalu_generate_timestamps_from_poc
 (
+    importer_t        *importer,
     lsmash_media_ts_t *timestamp,
     nal_pic_timing_t  *npt,
     uint8_t           *composition_reordering_present,
@@ -2932,7 +2939,8 @@ static void nalu_generate_timestamps_from_poc
         /* Check POC gap in output order. */
         for( uint32_t i = 1; i < num_access_units; i++ )
             if( timestamp[i].cts > timestamp[i - 1].cts + npt[i - 1].poc_delta )
-                fprintf( stderr, "POC gap is detected at picture %"PRIu64". Maybe some pictures are lost.\n", timestamp[i].dts );
+                lsmash_log( importer, LSMASH_LOG_WARNING,
+                            "POC gap is detected at picture %"PRIu64". Maybe some pictures are lost.\n", timestamp[i].dts );
         /* Get the maximum composition delay derived from reordering. */
         for( uint32_t i = 0; i < num_access_units; i++ )
             if( i < timestamp[i].dts )
@@ -3067,11 +3075,11 @@ static int h264_importer_probe( importer_t *importer )
         goto fail;
     uint32_t picture_stats[H264_PICTURE_TYPE_NONE + 1] = { 0 };
     uint32_t num_access_units = 0;
-    fprintf( stderr, "Analyzing stream as H.264\r" );
+    lsmash_log( importer, LSMASH_LOG_INFO, "Analyzing stream as H.264\r" );
     while( importer_info->status != IMPORTER_EOF )
     {
 #if 0
-        fprintf( stderr, "Analyzing stream as H.264: %"PRIu32"\n", num_access_units + 1 );
+        lsmash_log( importer, LSMASH_LOG_INFO, "Analyzing stream as H.264: %"PRIu32"\n", num_access_units + 1 );
 #endif
         h264_picture_info_t     *picture = &info->picture;
         h264_picture_info_t prev_picture = *picture;
@@ -3108,18 +3116,19 @@ static int h264_importer_probe( importer_t *importer )
             ++picture_stats[ picture->type ];
     }
     fprintf( stderr, "                                                                               \r" );
-    fprintf( stderr, "IDR: %"PRIu32", I: %"PRIu32", P: %"PRIu32", B: %"PRIu32", "
-                     "SI: %"PRIu32", SP: %"PRIu32", Unknown: %"PRIu32"\n",
-             picture_stats[H264_PICTURE_TYPE_IDR        ],
-             picture_stats[H264_PICTURE_TYPE_I          ],
-             picture_stats[H264_PICTURE_TYPE_I_P        ],
-             picture_stats[H264_PICTURE_TYPE_I_P_B      ],
-             picture_stats[H264_PICTURE_TYPE_SI         ]
-           + picture_stats[H264_PICTURE_TYPE_I_SI       ],
-             picture_stats[H264_PICTURE_TYPE_SI_SP      ]
-           + picture_stats[H264_PICTURE_TYPE_I_SI_P_SP  ]
-           + picture_stats[H264_PICTURE_TYPE_I_SI_P_SP_B],
-             picture_stats[H264_PICTURE_TYPE_NONE       ] );
+    lsmash_log( importer, LSMASH_LOG_INFO,
+                "IDR: %"PRIu32", I: %"PRIu32", P: %"PRIu32", B: %"PRIu32", "
+                "SI: %"PRIu32", SP: %"PRIu32", Unknown: %"PRIu32"\n",
+                picture_stats[H264_PICTURE_TYPE_IDR        ],
+                picture_stats[H264_PICTURE_TYPE_I          ],
+                picture_stats[H264_PICTURE_TYPE_I_P        ],
+                picture_stats[H264_PICTURE_TYPE_I_P_B      ],
+                picture_stats[H264_PICTURE_TYPE_SI         ]
+              + picture_stats[H264_PICTURE_TYPE_I_SI       ],
+                picture_stats[H264_PICTURE_TYPE_SI_SP      ]
+              + picture_stats[H264_PICTURE_TYPE_I_SI_P_SP  ]
+              + picture_stats[H264_PICTURE_TYPE_I_SI_P_SP_B],
+                picture_stats[H264_PICTURE_TYPE_NONE       ] );
     /* Copy and append the last Codec Specific info. */
     if( h264_store_codec_specific( importer_info, &info->avcC_param ) < 0 )
         return -1;
@@ -3158,7 +3167,7 @@ static int h264_importer_probe( importer_t *importer )
     uint32_t max_composition_delay = 0;
     nalu_deduplicate_poc( npt, &max_composition_delay, num_access_units, 32 );
     /* Generate timestamps. */
-    nalu_generate_timestamps_from_poc( timestamp, npt,
+    nalu_generate_timestamps_from_poc( importer, timestamp, npt,
                                        &importer_info->composition_reordering_present,
                                        &importer_info->last_delta,
                                        max_composition_delay, num_access_units );
@@ -3211,7 +3220,7 @@ static uint32_t h264_importer_get_last_delta( importer_t *importer, uint32_t tra
 
 const static importer_functions h264_importer =
 {
-    "H.264",
+    { "H.264" },
     1,
     h264_importer_probe,
     h264_importer_get_accessunit,
@@ -3228,6 +3237,7 @@ const static importer_functions h264_importer =
 
 typedef struct
 {
+    const lsmash_class_t  *class;
     importer_status        status;
     hevc_info_t            info;
     lsmash_entry_list_t    hvcC_list[1];    /* stored as lsmash_codec_specific_t */
@@ -3740,11 +3750,11 @@ static int hevc_importer_probe( importer_t *importer )
         goto fail;
     uint32_t picture_stats[HEVC_PICTURE_TYPE_NONE + 1] = { 0 };
     uint32_t num_access_units = 0;
-    fprintf( stderr, "Analyzing stream as HEVC\r" );
+    lsmash_log( importer, LSMASH_LOG_INFO, "Analyzing stream as HEVC\r" );
     while( importer_info->status != IMPORTER_EOF )
     {
 #if 0
-        fprintf( stderr, "Analyzing stream as HEVC: %"PRIu32"\n", num_access_units + 1 );
+        lsmash_log( importer, LSMASH_LOG_INFO, "Analyzing stream as HEVC: %"PRIu32"\n", num_access_units + 1 );
 #endif
         hevc_picture_info_t     *picture = &info->au.picture;
         hevc_picture_info_t prev_picture = *picture;
@@ -3783,10 +3793,11 @@ static int hevc_importer_probe( importer_t *importer )
             ++picture_stats[ picture->type ];
     }
     fprintf( stderr, "                                                                               \r" );
-    fprintf( stderr, "IDR: %"PRIu32", I: %"PRIu32", P: %"PRIu32", B: %"PRIu32", Unknown: %"PRIu32"\n",
-             picture_stats[HEVC_PICTURE_TYPE_IDR], picture_stats[HEVC_PICTURE_TYPE_I],
-             picture_stats[HEVC_PICTURE_TYPE_I_P], picture_stats[HEVC_PICTURE_TYPE_I_P_B],
-             picture_stats[HEVC_PICTURE_TYPE_NONE]);
+    lsmash_log( importer, LSMASH_LOG_INFO,
+                "IDR: %"PRIu32", I: %"PRIu32", P: %"PRIu32", B: %"PRIu32", Unknown: %"PRIu32"\n",
+                picture_stats[HEVC_PICTURE_TYPE_IDR], picture_stats[HEVC_PICTURE_TYPE_I],
+                picture_stats[HEVC_PICTURE_TYPE_I_P], picture_stats[HEVC_PICTURE_TYPE_I_P_B],
+                picture_stats[HEVC_PICTURE_TYPE_NONE]);
     /* Copy and append the last Codec Specific info. */
     if( hevc_store_codec_specific( importer_info, &info->hvcC_param ) < 0 )
         return -1;
@@ -3825,7 +3836,7 @@ static int hevc_importer_probe( importer_t *importer )
     uint32_t max_composition_delay = 0;
     nalu_deduplicate_poc( npt, &max_composition_delay, num_access_units, 15 );
     /* Generate timestamps. */
-    nalu_generate_timestamps_from_poc( timestamp, npt,
+    nalu_generate_timestamps_from_poc( importer, timestamp, npt,
                                        &importer_info->composition_reordering_present,
                                        &importer_info->last_delta,
                                        max_composition_delay, num_access_units );
@@ -3878,7 +3889,7 @@ static uint32_t hevc_importer_get_last_delta( importer_t *importer, uint32_t tra
 
 const static importer_functions hevc_importer =
 {
-    "HEVC",
+    { "HEVC" },
     1,
     hevc_importer_probe,
     hevc_importer_get_accessunit,
@@ -4271,11 +4282,11 @@ static int vc1_importer_probe( importer_t *importer )
         goto fail;
     uint32_t num_access_units = 0;
     uint32_t num_consecutive_b = 0;
-    fprintf( stderr, "Analyzing stream as VC-1\r" );
+    lsmash_log( importer, LSMASH_LOG_INFO, "Analyzing stream as VC-1\r" );
     while( importer_info->status != IMPORTER_EOF )
     {
 #if 0
-        fprintf( stderr, "Analyzing stream as VC-1: %"PRIu32"\n", num_access_units + 1 );
+        lsmash_log( importer, LSMASH_LOG_INFO, "Analyzing stream as VC-1: %"PRIu32"\n", num_access_units + 1 );
 #endif
         if( vc1_importer_get_access_unit_internal( importer_info, 1 ) )
         {
@@ -4403,7 +4414,7 @@ static uint32_t vc1_importer_get_last_delta( importer_t *importer, uint32_t trac
 
 const static importer_functions vc1_importer =
 {
-    "VC-1",
+    { "VC-1" },
     1,
     vc1_importer_probe,
     vc1_importer_get_accessunit,
@@ -4449,12 +4460,10 @@ importer_t *lsmash_importer_open( const char *identifier, const char *format )
 {
     if( identifier == NULL )
         return NULL;
-
     int auto_detect = ( format == NULL || !strcmp( format, "auto" ) );
     importer_t *importer = (importer_t *)lsmash_malloc_zero( sizeof(importer_t) );
     if( !importer )
         return NULL;
-
     if( !strcmp( identifier, "-" ) )
     {
         /* special treatment for stdin */
@@ -4484,6 +4493,7 @@ importer_t *lsmash_importer_open( const char *identifier, const char *format )
         /* just rely on detector. */
         for( int i = 0; (funcs = importer_func_table[i]) != NULL; i++ )
         {
+            importer->class = &funcs->class;
             if( !funcs->detectable )
                 continue;
             if( !funcs->probe( importer ) || lsmash_fseek( importer->stream, 0, SEEK_SET ) )
@@ -4495,7 +4505,8 @@ importer_t *lsmash_importer_open( const char *identifier, const char *format )
         /* needs name matching. */
         for( int i = 0; (funcs = importer_func_table[i]) != NULL; i++ )
         {
-            if( strcmp( funcs->name, format ) )
+            importer->class = &funcs->class;
+            if( strcmp( importer->class->name, format ) )
                 continue;
             if( funcs->probe( importer ) )
                 funcs = NULL;
