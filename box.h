@@ -2213,7 +2213,6 @@ void isom_remove_fiel( isom_fiel_t *fiel );
 void isom_remove_sgbt( isom_sgbt_t *sgbt );
 void isom_remove_stsl( isom_stsl_t *stsl );
 void isom_remove_esds( isom_esds_t *esds );
-void isom_remove_avcC( isom_avcC_t *avcC );
 void isom_remove_btrt( isom_btrt_t *btrt );
 void isom_remove_frma( isom_frma_t *frma );
 void isom_remove_enda( isom_enda_t *enda );

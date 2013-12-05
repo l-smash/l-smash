@@ -2031,16 +2031,6 @@ void isom_remove_esds( isom_esds_t *esds )
     free( esds );
 }
 
-void isom_remove_avcC( isom_avcC_t *avcC )
-{
-    if( !avcC )
-        return;
-    lsmash_remove_list( avcC->sequenceParameterSets,   isom_remove_dcr_ps );
-    lsmash_remove_list( avcC->pictureParameterSets,    isom_remove_dcr_ps );
-    lsmash_remove_list( avcC->sequenceParameterSetExt, isom_remove_dcr_ps );
-    free( avcC );
-}
-
 void isom_remove_btrt( isom_btrt_t *btrt )
 {
     if( !btrt )
