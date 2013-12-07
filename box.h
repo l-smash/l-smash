@@ -59,14 +59,16 @@ typedef struct isom_box_tag isom_box_t;
 #define ISOM_FULLBOX_COMMON_SIZE      12
 #define ISOM_LIST_FULLBOX_COMMON_SIZE 16
 
-#define LSMASH_UNKNOWN_BOX       0x01
-#define LSMASH_ABSENT_IN_ROOT    0x02
-#define LSMASH_QTFF_BASE         0x04
-#define LSMASH_VIDEO_DESCRIPTION 0x08
-#define LSMASH_AUDIO_DESCRIPTION 0x10
-#define LSMASH_FULLBOX           0x20
-#define LSMASH_LAST_BOX          0x40
-#define LSMASH_INCOMPLETE_BOX    0x80
+/* flags for L-SMASH */
+#define LSMASH_UNKNOWN_BOX       0x001
+#define LSMASH_ABSENT_IN_ROOT    0x002
+#define LSMASH_QTFF_BASE         0x004
+#define LSMASH_VIDEO_DESCRIPTION 0x008
+#define LSMASH_AUDIO_DESCRIPTION 0x010
+#define LSMASH_FULLBOX           0x020
+#define LSMASH_LAST_BOX          0x040
+#define LSMASH_INCOMPLETE_BOX    0x080
+#define LSMASH_EXTENSION_BOX     0x100
 
 /* 12-byte ISO reserved value:
  * 0xXXXXXXXX-0011-0010-8000-00AA00389B71 */
@@ -2229,7 +2231,8 @@ void isom_remove_ilst( isom_ilst_t *ilst );
 void isom_remove_sample_description( isom_sample_entry_t *sample );
 void isom_remove_unknown_box( isom_unknown_box_t *unknown_box );
 
-int isom_add_extension_box( lsmash_entry_list_t *extensions, void *box, void *eliminator );
+int isom_add_extension_box( void *parent_box, void *box, void *eliminator );
+int isom_add_extension_binary( void *parent_box, lsmash_box_type_t box_type, uint8_t *box_data, uint32_t box_size );
 void isom_remove_extension_box( isom_extension_box_t *ext );
 void isom_remove_all_extension_boxes( lsmash_entry_list_t *extensions );
 isom_extension_box_t *isom_get_extension_box( lsmash_entry_list_t *extensions, lsmash_box_type_t box_type );

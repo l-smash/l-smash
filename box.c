@@ -74,10 +74,10 @@ int lsmash_check_box_type_specified( lsmash_box_type_t *box_type )
     if( !box_type )
         return 0;
     return !!(box_type->fourcc
-           |  box_type->user.fourcc
-           |  box_type->user.id[0] | box_type->user.id[1] | box_type->user.id[2]  | box_type->user.id[3]
-           |  box_type->user.id[4] | box_type->user.id[5] | box_type->user.id[6]  | box_type->user.id[7]
-           |  box_type->user.id[8] | box_type->user.id[9] | box_type->user.id[10] | box_type->user.id[11]);
+            | box_type->user.fourcc
+            | box_type->user.id[0] | box_type->user.id[1] | box_type->user.id[2]  | box_type->user.id[3]
+            | box_type->user.id[4] | box_type->user.id[5] | box_type->user.id[6]  | box_type->user.id[7]
+            | box_type->user.id[8] | box_type->user.id[9] | box_type->user.id[10] | box_type->user.id[11]);
 }
 
 void isom_init_box_common( void *_box, void *_parent, lsmash_box_type_t box_type )
@@ -253,23 +253,56 @@ size_t isom_skip_box_common( uint8_t **p_data )
     return data - orig;
 }
 
-int isom_add_extension_box( lsmash_entry_list_t *extensions, void *box, void *eliminator )
+int isom_add_extension_box( void *parent_box, void *box, void *eliminator )
 {
-    if( !box )
+    if( !parent_box || !box )
         return -1;
     isom_extension_box_t *ext = lsmash_malloc_zero( sizeof(isom_extension_box_t) );
     if( !ext )
         return -1;
-    ext->type     = ((isom_box_t *)box)->type;
-    ext->format   = EXTENSION_FORMAT_BOX;
-    ext->form.box = box;
-    ext->destruct = eliminator ? eliminator : free;
-    if( lsmash_add_entry( extensions, ext ) )
+    isom_box_t *parent = (isom_box_t *)parent_box;
+    if( lsmash_add_entry( &parent->extensions, ext ) )
     {
-        /* Don't free 'box' here. */
-        ext->destruct( ext );
+        lsmash_free( ext );
         return -1;
     }
+    isom_box_t *child = (isom_box_t *)box;
+    child->parent = parent;
+    ext->class    = &lsmash_box_class;
+    ext->root     = parent->root;
+    ext->parent   = parent;
+    ext->manager  = LSMASH_EXTENSION_BOX;
+    ext->size     = child->size;
+    ext->type     = child->type;
+    ext->format   = EXTENSION_FORMAT_BOX;
+    ext->form.box = child;
+    ext->destruct = eliminator ? eliminator : free;
+    return 0;
+}
+
+int isom_add_extension_binary( void *parent_box, lsmash_box_type_t box_type, uint8_t *box_data, uint32_t box_size )
+{
+    if( !parent_box || !box_data || box_size < ISOM_BASEBOX_COMMON_SIZE
+     || !lsmash_check_box_type_specified( &box_type ) )
+        return -1;
+    isom_extension_box_t *ext = lsmash_malloc_zero( sizeof(isom_extension_box_t) );
+    if( !ext )
+        return -1;
+    isom_box_t *parent = (isom_box_t *)parent_box;
+    if( lsmash_add_entry( &parent->extensions, ext ) )
+    {
+        lsmash_free( ext );
+        return -1;
+    }
+    ext->class       = &lsmash_box_class;
+    ext->root        = parent->root;
+    ext->parent      = parent;
+    ext->manager     = LSMASH_EXTENSION_BOX;
+    ext->size        = box_size;
+    ext->type        = box_type;
+    ext->format      = EXTENSION_FORMAT_BINARY;
+    ext->form.binary = box_data;
+    ext->destruct    = lsmash_free;
     return 0;
 }
 

@@ -656,7 +656,7 @@ static int codec_construct_qt_audio_decompression_info( lsmash_codec_specific_t 
                     free( box );
                     return -1;
                 }
-                if( isom_add_extension_box( &wave->extensions, box, isom_remove_unknown_box ) )
+                if( isom_add_extension_box( wave, box, isom_remove_unknown_box ) )
                 {
                     isom_remove_unknown_box( box );
                     return -1;
@@ -1042,7 +1042,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
                 box->display_center_x = data->display_center_x;
                 box->display_center_y = data->display_center_y;
                 lsmash_destroy_codec_specific_data( cs );
-                if( isom_add_extension_box( &visual->extensions, box, isom_remove_stsl ) )
+                if( isom_add_extension_box( visual, box, isom_remove_stsl ) )
                 {
                     free( box );
                     goto fail;
@@ -1066,7 +1066,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
                 box->maxBitrate   = data->maxBitrate;
                 box->avgBitrate   = data->avgBitrate;
                 lsmash_destroy_codec_specific_data( cs );
-                if( isom_add_extension_box( &visual->extensions, box, isom_remove_btrt ) )
+                if( isom_add_extension_box( visual, box, isom_remove_btrt ) )
                 {
                     free( box );
                     goto fail;
@@ -1089,7 +1089,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
                 box->fields = data->fields;
                 box->detail = data->detail;
                 lsmash_destroy_codec_specific_data( cs );
-                if( isom_add_extension_box( &visual->extensions, box, isom_remove_fiel ) )
+                if( isom_add_extension_box( visual, box, isom_remove_fiel ) )
                 {
                     free( box );
                     goto fail;
@@ -1111,7 +1111,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
                 isom_init_box_common( box, visual, QT_BOX_TYPE_CSPC );
                 box->pixel_format = data->pixel_format;
                 lsmash_destroy_codec_specific_data( cs );
-                if( isom_add_extension_box( &visual->extensions, box, isom_remove_cspc ) )
+                if( isom_add_extension_box( visual, box, isom_remove_cspc ) )
                 {
                     free( box );
                     goto fail;
@@ -1133,7 +1133,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
                 isom_init_box_common( box, visual, QT_BOX_TYPE_SGBT );
                 box->significantBits = data->significantBits;
                 lsmash_destroy_codec_specific_data( cs );
-                if( isom_add_extension_box( &visual->extensions, box, isom_remove_sgbt ) )
+                if( isom_add_extension_box( visual, box, isom_remove_sgbt ) )
                 {
                     free( box );
                     goto fail;
@@ -1155,7 +1155,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
                 isom_init_box_common( box, visual, QT_BOX_TYPE_GAMA );
                 box->level = data->level;
                 lsmash_destroy_codec_specific_data( cs );
-                if( isom_add_extension_box( &visual->extensions, box, isom_remove_gama ) )
+                if( isom_add_extension_box( visual, box, isom_remove_gama ) )
                 {
                     free( box );
                     goto fail;
@@ -1179,7 +1179,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
                 box->header_data = lsmash_memdup( data->header_data, data->header_size );
                 lsmash_destroy_codec_specific_data( cs );
                 if( !box->header_data
-                 || isom_add_extension_box( &visual->extensions, box, isom_remove_glbl ) )
+                 || isom_add_extension_box( visual, box, isom_remove_glbl ) )
                 {
                     free( box );
                     goto fail;
@@ -1196,28 +1196,15 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
                     lsmash_destroy_codec_specific_data( cs );
                     goto fail;
                 }
-                isom_extension_box_t *extension = malloc( sizeof(isom_extension_box_t) );
-                if( !extension )
-                {
-                    lsmash_destroy_codec_specific_data( cs );
-                    goto fail;
-                }
                 uint8_t *data = cs->data.unstructured;
-                lsmash_compact_box_type_t fourcc = LSMASH_4CC( data[4], data[5], data[6], data[7] );
-                lsmash_box_type_t box_type = isom_guess_video_codec_specific_box_type( (lsmash_codec_type_t)visual->type, fourcc );
-                /* Set up the extension. */
-                extension->size        = cs->size;
-                extension->type        = box_type;
-                extension->format      = EXTENSION_FORMAT_BINARY;
-                extension->form.binary = data;
-                extension->destruct    = free;
+                lsmash_compact_box_type_t fourcc   = LSMASH_4CC( data[4], data[5], data[6], data[7] );
+                lsmash_box_type_t         box_type = isom_guess_video_codec_specific_box_type( (lsmash_codec_type_t)visual->type, fourcc );
+                /* Append the extension. */
+                int ret = isom_add_extension_binary( visual, box_type, cs->data.unstructured, cs->size );
                 cs->data.unstructured = NULL;   /* Avoid freeing the binary data of the extension. */
                 lsmash_destroy_codec_specific_data( cs );
-                if( lsmash_add_entry( &visual->extensions, extension ) )
-                {
-                    extension->destruct( extension );
+                if( ret < 0 )
                     goto fail;
-                }
                 break;
             }
         }
@@ -1264,7 +1251,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
             box->vertOffN             = 0;
             box->vertOffD             = 1;
         }
-        if( isom_add_extension_box( &visual->extensions, box, isom_remove_clap ) )
+        if( isom_add_extension_box( visual, box, isom_remove_clap ) )
         {
             free( box );
             goto fail;
@@ -1279,7 +1266,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
         isom_init_box_common( box, visual, ISOM_BOX_TYPE_PASP );
         box->hSpacing = LSMASH_MAX( summary->par_h, 1 );
         box->vSpacing = LSMASH_MAX( summary->par_v, 1 );
-        if( isom_add_extension_box( &visual->extensions, box, isom_remove_pasp ) )
+        if( isom_add_extension_box( visual, box, isom_remove_pasp ) )
         {
             free( box );
             goto fail;
@@ -1322,7 +1309,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
                                          ? matrix : ISOM_MATRIX_INDEX_UNSPECIFIED;
             box->full_range_flag         = summary->color.full_range;
         }
-        if( isom_add_extension_box( &visual->extensions, box, isom_remove_colr ) )
+        if( isom_add_extension_box( visual, box, isom_remove_colr ) )
         {
             free( box );
             goto fail;
@@ -1401,7 +1388,7 @@ static int isom_append_audio_es_descriptor_extension( isom_box_t *box, lsmash_au
         free( esds );
         return -1;
     }
-    if( isom_add_extension_box( &box->extensions, esds, isom_remove_esds ) )
+    if( isom_add_extension_box( box, esds, isom_remove_esds ) )
     {
         isom_remove_esds( esds );
         return -1;
@@ -1439,7 +1426,7 @@ static int isom_append_channel_layout_extension( lsmash_codec_specific_t *specif
         box->channelBitmap             = channelBitmap;
         box->numberChannelDescriptions = 0;
         box->channelDescriptions       = NULL;
-        if( isom_add_extension_box( &parent_box->extensions, box, isom_remove_chan ) )
+        if( isom_add_extension_box( parent_box, box, isom_remove_chan ) )
         {
             free( box );
             return -1;
@@ -1457,7 +1444,7 @@ static int isom_set_qtff_mp4a_description( isom_audio_entry_t *audio, lsmash_aud
     if( isom_add_frma( wave )
      || isom_add_mp4a( wave )
      || isom_add_terminator( wave )
-     || isom_add_extension_box( &audio->extensions, wave, isom_remove_wave ) )
+     || isom_add_extension_box( audio, wave, isom_remove_wave ) )
     {
         isom_remove_wave( wave );
         return -1;
@@ -1639,7 +1626,7 @@ static int isom_set_qtff_lpcm_description( isom_audio_entry_t *audio, lsmash_aud
             if( isom_add_frma( wave )
              || isom_add_enda( wave )
              || isom_add_terminator( wave )
-             || isom_add_extension_box( &audio->extensions, wave, isom_remove_wave ) )
+             || isom_add_extension_box( audio, wave, isom_remove_wave ) )
             {
                 isom_remove_wave( wave );
                 return -1;
@@ -1755,7 +1742,7 @@ static int isom_set_qtff_template_audio_description( isom_audio_entry_t *audio, 
     isom_init_box_common( wave, audio, QT_BOX_TYPE_WAVE );
     if( isom_add_frma( wave )
      || isom_add_terminator( wave )
-     || isom_add_extension_box( &audio->extensions, wave, isom_remove_wave ) )
+     || isom_add_extension_box( audio, wave, isom_remove_wave ) )
     {
         isom_remove_wave( wave );
         return -1;
@@ -1825,24 +1812,11 @@ static int isom_set_qtff_template_audio_description( isom_audio_entry_t *audio, 
                     continue;
                 }
                 /* Append the extension. */
-                isom_extension_box_t *extension = lsmash_malloc_zero( sizeof(isom_extension_box_t) );
-                if( !extension )
-                {
-                    lsmash_destroy_codec_specific_data( cs );
-                    return -1;
-                }
-                extension->size        = box_size;  /* == cs->size */
-                extension->type        = box_type;
-                extension->format      = EXTENSION_FORMAT_BINARY;
-                extension->form.binary = box_data;  /* == cs->data.unstructured */
-                extension->destruct    = free;
+                int ret = isom_add_extension_binary( wave, box_type, cs->data.unstructured, cs->size );
                 cs->data.unstructured = NULL;   /* Avoid freeing the binary data of the extension. */
                 lsmash_destroy_codec_specific_data( cs );
-                if( lsmash_add_entry( &wave->extensions, extension ) )
-                {
-                    extension->destruct( extension );
-                    return -1;
-                }
+                if( ret < 0 )
+                    return ret;
                 break;
             }
         }
@@ -2003,7 +1977,7 @@ int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_
                 box->header_data = lsmash_memdup( data->header_data, data->header_size );
                 lsmash_destroy_codec_specific_data( cs );
                 if( !box->header_data
-                 || isom_add_extension_box( &audio->extensions, box, isom_remove_glbl ) )
+                 || isom_add_extension_box( audio, box, isom_remove_glbl ) )
                 {
                     free( box );
                     goto fail;
@@ -2028,34 +2002,20 @@ int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_
                     continue;
                 }
                 uint8_t *box_data = cs->data.unstructured;
-                uint64_t box_size = cs->size;
-                lsmash_compact_box_type_t fourcc = LSMASH_4CC( box_data[4], box_data[5], box_data[6], box_data[7] );
-                lsmash_box_type_t box_type = isom_guess_audio_codec_specific_box_type( (lsmash_codec_type_t)audio->type, fourcc );
+                lsmash_compact_box_type_t fourcc   = LSMASH_4CC( box_data[4], box_data[5], box_data[6], box_data[7] );
+                lsmash_box_type_t         box_type = isom_guess_audio_codec_specific_box_type( (lsmash_codec_type_t)audio->type, fourcc );
                 if( lsmash_check_box_type_identical( box_type, QT_BOX_TYPE_WAVE ) )
                 {
                     /* CODEC specific info shall be already inside 'wave' extension. */
                     lsmash_destroy_codec_specific_data( cs );
                     continue;
                 }
-                /* Set up the extension. */
-                isom_extension_box_t *extension = lsmash_malloc_zero( sizeof(isom_extension_box_t) );
-                if( !extension )
-                {
-                    lsmash_destroy_codec_specific_data( cs );
-                    goto fail;
-                }
-                extension->size        = box_size;
-                extension->type        = box_type;
-                extension->format      = EXTENSION_FORMAT_BINARY;
-                extension->form.binary = box_data;
-                extension->destruct    = free;
+                /* Append the extension. */
+                ret = isom_add_extension_binary( audio, box_type, cs->data.unstructured, cs->size );
                 cs->data.unstructured = NULL;   /* Avoid freeing the binary data of the extension. */
                 lsmash_destroy_codec_specific_data( cs );
-                if( lsmash_add_entry( &audio->extensions, extension ) )
-                {
-                    extension->destruct( extension );
+                if( ret < 0 )
                     goto fail;
-                }
                 break;
             }
         }

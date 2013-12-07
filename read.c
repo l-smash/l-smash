@@ -237,7 +237,7 @@ static int isom_read_unknown_box( lsmash_root_t *root, isom_box_t *box, isom_box
         return -1;
     isom_box_common_copy( unknown, box );
     unknown->manager |= LSMASH_UNKNOWN_BOX | LSMASH_INCOMPLETE_BOX;
-    if( isom_add_extension_box( &parent->extensions, unknown, isom_remove_unknown_box ) )
+    if( isom_add_extension_box( parent, unknown, isom_remove_unknown_box ) )
     {
         isom_remove_unknown_box( unknown );
         return -1;
@@ -384,7 +384,7 @@ static int isom_read_ctab( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV ) )
         ((isom_moov_t *)parent)->ctab = ctab;
     else
-        if( isom_add_extension_box( &parent->extensions, ctab, isom_remove_ctab ) )
+        if( isom_add_extension_box( parent, ctab, isom_remove_ctab ) )
         {
             free( ctab );
             return -1;
@@ -1228,7 +1228,7 @@ static int isom_read_esds( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 static int isom_read_btrt( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( btrt, parent, box->type );
-    if( isom_add_extension_box( &parent->extensions, btrt, isom_remove_btrt ) )
+    if( isom_add_extension_box( parent, btrt, isom_remove_btrt ) )
     {
         free( btrt );
         return -1;
@@ -1246,7 +1246,7 @@ static int isom_read_btrt( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 static int isom_read_glbl( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( glbl, parent, box->type );
-    if( isom_add_extension_box( &parent->extensions, glbl, isom_remove_glbl ) )
+    if( isom_add_extension_box( parent, glbl, isom_remove_glbl ) )
     {
         free( glbl );
         return -1;
@@ -1271,7 +1271,7 @@ static int isom_read_glbl( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 static int isom_read_clap( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( clap, parent, box->type );
-    if( isom_add_extension_box( &parent->extensions, clap, isom_remove_clap ) )
+    if( isom_add_extension_box( parent, clap, isom_remove_clap ) )
     {
         free( clap );
         return -1;
@@ -1294,7 +1294,7 @@ static int isom_read_clap( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 static int isom_read_pasp( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( pasp, parent, box->type );
-    if( isom_add_extension_box( &parent->extensions, pasp, isom_remove_pasp ) )
+    if( isom_add_extension_box( parent, pasp, isom_remove_pasp ) )
     {
         free( pasp );
         return -1;
@@ -1311,7 +1311,7 @@ static int isom_read_pasp( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 static int isom_read_colr( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( colr, parent, box->type );
-    if( isom_add_extension_box( &parent->extensions, colr, isom_remove_colr ) )
+    if( isom_add_extension_box( parent, colr, isom_remove_colr ) )
     {
         free( colr );
         return -1;
@@ -1353,7 +1353,7 @@ static int isom_read_colr( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 static int isom_read_gama( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( gama, parent, box->type );
-    if( isom_add_extension_box( &parent->extensions, gama, isom_remove_gama ) )
+    if( isom_add_extension_box( parent, gama, isom_remove_gama ) )
     {
         free( gama );
         return -1;
@@ -1369,7 +1369,7 @@ static int isom_read_gama( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 static int isom_read_fiel( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( fiel, parent, box->type );
-    if( isom_add_extension_box( &parent->extensions, fiel, isom_remove_fiel ) )
+    if( isom_add_extension_box( parent, fiel, isom_remove_fiel ) )
     {
         free( fiel );
         return -1;
@@ -1386,7 +1386,7 @@ static int isom_read_fiel( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 static int isom_read_cspc( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( cspc, parent, box->type );
-    if( isom_add_extension_box( &parent->extensions, cspc, isom_remove_cspc ) )
+    if( isom_add_extension_box( parent, cspc, isom_remove_cspc ) )
     {
         free( cspc );
         return -1;
@@ -1402,7 +1402,7 @@ static int isom_read_cspc( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 static int isom_read_sgbt( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( sgbt, parent, box->type );
-    if( isom_add_extension_box( &parent->extensions, sgbt, isom_remove_sgbt ) )
+    if( isom_add_extension_box( parent, sgbt, isom_remove_sgbt ) )
     {
         free( sgbt );
         return -1;
@@ -1418,7 +1418,7 @@ static int isom_read_sgbt( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 static int isom_read_stsl( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( stsl, parent, box->type );
-    if( isom_add_extension_box( &parent->extensions, stsl, isom_remove_stsl ) )
+    if( isom_add_extension_box( parent, stsl, isom_remove_stsl ) )
     {
         free( stsl );
         return -1;
@@ -1488,7 +1488,7 @@ static int isom_read_audio_description( lsmash_root_t *root, isom_box_t *box, is
 static int isom_read_wave( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( wave, parent, box->type );
-    if( isom_add_extension_box( &parent->extensions, wave, isom_remove_wave ) )
+    if( isom_add_extension_box( parent, wave, isom_remove_wave ) )
     {
         free( wave );
         return -1;
@@ -1543,7 +1543,7 @@ static int isom_read_terminator( lsmash_root_t *root, isom_box_t *box, isom_box_
 static int isom_read_chan( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( chan, parent, box->type );
-    if( isom_add_extension_box( &parent->extensions, chan, isom_remove_chan ) )
+    if( isom_add_extension_box( parent, chan, isom_remove_chan ) )
     {
         free( chan );
         return -1;
