@@ -165,14 +165,14 @@ static inline void mp4a_remove_GASpecificConfig( mp4a_GASpecificConfig_t* gasc )
     debug_if( !gasc )
         return;
     if( gasc->program_config_element )
-        free( gasc->program_config_element );
-    free( gasc );
+        lsmash_free( gasc->program_config_element );
+    lsmash_free( gasc );
 }
 
 static inline void mp4a_remove_MPEG_1_2_SpecificConfig( mp4a_MPEG_1_2_SpecificConfig_t* mpeg_1_2_sc )
 {
     debug_if( mpeg_1_2_sc )
-        free( mpeg_1_2_sc );
+        lsmash_free( mpeg_1_2_sc );
 }
 
 void mp4a_remove_AudioSpecificConfig( mp4a_AudioSpecificConfig_t* asc )
@@ -202,10 +202,10 @@ void mp4a_remove_AudioSpecificConfig( mp4a_AudioSpecificConfig_t* asc )
         break;
     default:
         if( asc->deepAudioSpecificConfig )
-            free( asc->deepAudioSpecificConfig );
+            lsmash_free( asc->deepAudioSpecificConfig );
         break;
     }
-    free( asc );
+    lsmash_free( asc );
 }
 
 /* ADIF/PCE(program config element) style GASpecificConfig is not not supported. */
@@ -265,7 +265,7 @@ static mp4a_ALSSpecificConfig_t *mp4a_create_ALSSpecificConfig( uint8_t *exdata,
     alssc->data = lsmash_memdup( exdata, exdata_length );
     if( !alssc->data )
     {
-        free( alssc );
+        lsmash_free( alssc );
         return NULL;
     }
     alssc->size = exdata_length;
@@ -342,7 +342,7 @@ mp4a_AudioSpecificConfig_t *mp4a_create_AudioSpecificConfig(
             /* see ISO/IEC 14496-3 Levels within the profiles / Levels for the High Efficiency AAC Profile */
             if( i < 0x3 )
             {
-                free( asc );
+                lsmash_free( asc );
                 return NULL;
             }
             asc->extensionAudioObjectType = MP4A_AUDIO_OBJECT_TYPE_SBR;
@@ -402,8 +402,9 @@ mp4a_AudioSpecificConfig_t *mp4a_create_AudioSpecificConfig(
         default:
             break; /* this case is trapped below. */
     }
-    if( !asc->deepAudioSpecificConfig ){
-        free( asc );
+    if( !asc->deepAudioSpecificConfig )
+    {
+        lsmash_free( asc );
         return NULL;
     }
     return asc;
@@ -622,7 +623,7 @@ static mp4a_AudioSpecificConfig_t *mp4a_get_AudioSpecificConfig( lsmash_bits_t *
     }
     if( ret )
     {
-        free( asc );
+        lsmash_free( asc );
         return NULL;
     }
     return asc;

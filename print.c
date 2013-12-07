@@ -2539,15 +2539,15 @@ int isom_add_print_func( lsmash_root_t *root, void *box, int level )
 {
     if( !(root->flags & LSMASH_FILE_MODE_DUMP) )
         return 0;
-    isom_print_entry_t *data = malloc( sizeof(isom_print_entry_t) );
+    isom_print_entry_t *data = lsmash_malloc( sizeof(isom_print_entry_t) );
     if( !data )
         return -1;
     data->level = level;
-    data->box = (isom_box_t *)box;
-    data->func = isom_select_print_func( (isom_box_t *)box );
+    data->box   = (isom_box_t *)box;
+    data->func  = isom_select_print_func( (isom_box_t *)box );
     if( !data->func || lsmash_add_entry( root->print, data ) )
     {
-        free( data );
+        lsmash_free( data );
         return -1;
     }
     return 0;
@@ -2558,8 +2558,8 @@ static void isom_remove_print_func( isom_print_entry_t *data )
     if( !data || !data->box )
         return;
     if( data->box->manager & LSMASH_ABSENT_IN_ROOT )
-        free( data->box );      /* free flagged box */
-    free( data );
+        lsmash_free( data->box );   /* free flagged box */
+    lsmash_free( data );
 }
 
 void isom_remove_print_funcs( lsmash_root_t *root )

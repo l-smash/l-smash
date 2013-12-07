@@ -58,7 +58,7 @@ void lsmash_destroy_h264_parameter_sets
     lsmash_remove_entries( param->parameter_sets->sps_list,    isom_remove_dcr_ps );
     lsmash_remove_entries( param->parameter_sets->pps_list,    isom_remove_dcr_ps );
     lsmash_remove_entries( param->parameter_sets->spsext_list, isom_remove_dcr_ps );
-    free( param->parameter_sets );
+    lsmash_free( param->parameter_sets );
     param->parameter_sets = NULL;
 }
 
@@ -70,7 +70,7 @@ void h264_destruct_specific_data
     if( !data )
         return;
     lsmash_destroy_h264_parameter_sets( data );
-    free( data );
+    lsmash_free( data );
 }
 
 void h264_cleanup_parser
@@ -154,7 +154,7 @@ static h264_sps_t *h264_get_sps
     sps->seq_parameter_set_id = sps_id;
     if( lsmash_add_entry( sps_list, sps ) )
     {
-        free( sps );
+        lsmash_free( sps );
         return NULL;
     }
     return sps;
@@ -182,7 +182,7 @@ static h264_pps_t *h264_get_pps
     pps->pic_parameter_set_id = pps_id;
     if( lsmash_add_entry( pps_list, pps ) )
     {
-        free( pps );
+        lsmash_free( pps );
         return NULL;
     }
     return pps;
@@ -210,7 +210,7 @@ static h264_slice_info_t *h264_get_slice_info
     slice->slice_id = slice_id;
     if( lsmash_add_entry( slice_list, slice ) )
     {
-        free( slice );
+        lsmash_free( slice );
         return NULL;
     }
     return slice;
@@ -1935,7 +1935,7 @@ int lsmash_append_h264_parameter_set
         if( ps->nalUnit != ps_data )
         {
             /* The same address could be given when called by h264_update_picture_info_for_slice(). */
-            free( ps->nalUnit );
+            lsmash_free( ps->nalUnit );
             ps->nalUnit = ps_data;
         }
         ps->nalUnitLength = ps_length;

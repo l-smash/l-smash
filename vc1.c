@@ -75,8 +75,8 @@ static void vc1_destroy_header( lsmash_vc1_header_t *hdr )
     if( !hdr )
         return;
     if( hdr->ebdu )
-        free( hdr->ebdu );
-    free( hdr );
+        lsmash_free( hdr->ebdu );
+    lsmash_free( hdr );
 }
 
 void lsmash_destroy_vc1_headers( lsmash_vc1_specific_parameters_t *param )
@@ -94,7 +94,7 @@ void vc1_destruct_specific_data( void *data )
     if( !data )
         return;
     lsmash_destroy_vc1_headers( data );
-    free( data );
+    lsmash_free( data );
 }
 
 void vc1_cleanup_parser( vc1_info_t *info )
@@ -303,13 +303,13 @@ int vc1_parse_sequence_header( vc1_info_t *info, uint8_t *ebdu, uint64_t ebdu_si
         lsmash_vc1_header_t *seqhdr = param->seqhdr;
         if( !seqhdr )
         {
-            seqhdr = malloc( sizeof(lsmash_vc1_header_t) );
+            seqhdr = lsmash_malloc( sizeof(lsmash_vc1_header_t) );
             if( !seqhdr )
                 return -1;
             seqhdr->ebdu = lsmash_memdup( ebdu, ebdu_size );
             if( !seqhdr->ebdu )
             {
-                free( seqhdr );
+                lsmash_free( seqhdr );
                 return -1;
             }
             seqhdr->ebdu_size = ebdu_size;
@@ -397,13 +397,13 @@ int vc1_parse_entry_point_header( vc1_info_t *info, uint8_t *ebdu, uint64_t ebdu
         lsmash_vc1_header_t *ephdr = param->ephdr;
         if( !ephdr )
         {
-            ephdr = malloc( sizeof(lsmash_vc1_header_t) );
+            ephdr = lsmash_malloc( sizeof(lsmash_vc1_header_t) );
             if( !ephdr )
                 return -1;
             ephdr->ebdu = lsmash_memdup( ebdu, ebdu_size );
             if( !ephdr->ebdu )
             {
-                free( ephdr );
+                lsmash_free( ephdr );
                 return -1;
             }
             ephdr->ebdu_size = ebdu_size;
@@ -845,7 +845,7 @@ int vc1_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_code
     if( seqhdr->ebdu_size )
     {
         if( seqhdr->ebdu )
-            free( seqhdr->ebdu );
+            lsmash_free( seqhdr->ebdu );
         seqhdr->ebdu = lsmash_memdup( data, seqhdr->ebdu_size );
         if( !seqhdr->ebdu )
             return -1;
@@ -853,7 +853,7 @@ int vc1_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_code
     if( ephdr->ebdu_size )
     {
         if( ephdr->ebdu )
-            free( ephdr->ebdu );
+            lsmash_free( ephdr->ebdu );
         ephdr->ebdu = lsmash_memdup( data, ephdr->ebdu_size );
         if( !ephdr->ebdu )
             return -1;

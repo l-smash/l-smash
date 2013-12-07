@@ -143,7 +143,7 @@ int main( int argc, char *argv[] )
             }
             for( uint32_t i = 0; i < ts_list.sample_count; i++ )
                 fprintf( stdout, "DTS = %"PRIu64", CTS = %"PRIu64"\n", ts_array[i].dts, ts_array[i].cts + timeline_shift );
-            free( ts_array );
+            lsmash_free( ts_array );
             fprintf( stdout, "\n" );
         }
     }

@@ -140,12 +140,12 @@ static void isom_destruct_timeline_direct( isom_timeline_t *timeline )
     if( !timeline )
         return;
     if( timeline->last_accessed_chunk_data )
-        free( timeline->last_accessed_chunk_data );
+        lsmash_free( timeline->last_accessed_chunk_data );
     lsmash_remove_entries( timeline->edit_list,        NULL );
     lsmash_remove_entries( timeline->chunk_list,       NULL );     /* chunk data must be already freed. */
     lsmash_remove_entries( timeline->info_list,        NULL );
     lsmash_remove_entries( timeline->bunch_list,       NULL );
-    free( timeline );
+    lsmash_free( timeline );
 }
 
 void isom_remove_timelines( lsmash_root_t *root )
@@ -186,12 +186,12 @@ static uint32_t isom_get_lpcm_sample_size( isom_audio_entry_t *audio )
 
 static int isom_add_sample_info_entry( isom_timeline_t *timeline, isom_sample_info_t *src_info )
 {
-    isom_sample_info_t *dst_info = malloc( sizeof(isom_sample_info_t) );
+    isom_sample_info_t *dst_info = lsmash_malloc( sizeof(isom_sample_info_t) );
     if( !dst_info )
         return -1;
     if( lsmash_add_entry( timeline->info_list, dst_info ) )
     {
-        free( dst_info );
+        lsmash_free( dst_info );
         return -1;
     }
     *dst_info = *src_info;
@@ -200,12 +200,12 @@ static int isom_add_sample_info_entry( isom_timeline_t *timeline, isom_sample_in
 
 static int isom_add_lpcm_bunch_entry( isom_timeline_t *timeline, isom_lpcm_bunch_t *src_bunch )
 {
-    isom_lpcm_bunch_t *dst_bunch = malloc( sizeof(isom_lpcm_bunch_t) );
+    isom_lpcm_bunch_t *dst_bunch = lsmash_malloc( sizeof(isom_lpcm_bunch_t) );
     if( !dst_bunch )
         return -1;
     if( lsmash_add_entry( timeline->bunch_list, dst_bunch ) )
     {
-        free( dst_bunch );
+        lsmash_free( dst_bunch );
         return -1;
     }
     *dst_bunch = *src_bunch;
@@ -214,12 +214,12 @@ static int isom_add_lpcm_bunch_entry( isom_timeline_t *timeline, isom_lpcm_bunch
 
 static int isom_add_portable_chunk_entry( isom_timeline_t *timeline, isom_portable_chunk_t *src_chunk )
 {
-    isom_portable_chunk_t *dst_chunk = malloc( sizeof(isom_portable_chunk_t) );
+    isom_portable_chunk_t *dst_chunk = lsmash_malloc( sizeof(isom_portable_chunk_t) );
     if( !dst_chunk )
         return -1;
     if( lsmash_add_entry( timeline->chunk_list, dst_chunk ) )
     {
-        free( dst_chunk );
+        lsmash_free( dst_chunk );
         return -1;
     }
     *dst_chunk = *src_chunk;
@@ -400,7 +400,7 @@ static lsmash_sample_t *isom_read_sample_data_from_stream( lsmash_root_t *root, 
         /* Realloc if an update of max_read_size exceeds the current allocated data size. */
         if( root->max_read_size > timeline->last_accessed_chunk_alloc_size )
         {
-            void *temp = realloc( timeline->last_accessed_chunk_data, root->max_read_size );
+            void *temp = lsmash_realloc( timeline->last_accessed_chunk_data, root->max_read_size );
             if( temp )
                 timeline->last_accessed_chunk_data = temp;
             else
@@ -1573,7 +1573,7 @@ int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_
         isom_elst_entry_t *src_data = (isom_elst_entry_t *)src_entry->data;
         if( !src_data )
             return -1;
-        isom_elst_entry_t *dst_data = (isom_elst_entry_t *)malloc( sizeof(isom_elst_entry_t) );
+        isom_elst_entry_t *dst_data = (isom_elst_entry_t *)lsmash_malloc( sizeof(isom_elst_entry_t) );
         if( !dst_data )
             return -1;
         dst_data->segment_duration = src_data->segment_duration                * ((double)dst_movie_timescale / src_movie_timescale) + 0.5;
@@ -1581,7 +1581,7 @@ int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_
         dst_data->media_rate       = src_data->media_rate;
         if( lsmash_add_entry( dst_list, dst_data ) )
         {
-            free( dst_data );
+            lsmash_free( dst_data );
             return -1;
         }
         src_entry = src_entry->next;
@@ -1667,7 +1667,7 @@ int lsmash_get_media_timestamps( lsmash_root_t *root, uint32_t track_ID, lsmash_
         ts_list->timestamp    = NULL;
         return 0;
     }
-    lsmash_media_ts_t *ts = malloc( sample_count * sizeof(lsmash_media_ts_t) );
+    lsmash_media_ts_t *ts = lsmash_malloc( sample_count * sizeof(lsmash_media_ts_t) );
     if( !ts )
         return -1;
     uint64_t dts = 0;
@@ -1678,7 +1678,7 @@ int lsmash_get_media_timestamps( lsmash_root_t *root, uint32_t track_ID, lsmash_
             isom_sample_info_t *info = (isom_sample_info_t *)entry->data;
             if( !info )
             {
-                free( ts );
+                lsmash_free( ts );
                 return -1;
             }
             ts[i].dts = dts;
@@ -1692,7 +1692,7 @@ int lsmash_get_media_timestamps( lsmash_root_t *root, uint32_t track_ID, lsmash_
             isom_lpcm_bunch_t *bunch = (isom_lpcm_bunch_t *)entry->data;
             if( !bunch )
             {
-                free( ts );
+                lsmash_free( ts );
                 return -1;
             }
             for( uint32_t j = 0; j < bunch->sample_count; j++ )
@@ -1714,7 +1714,7 @@ void lsmash_delete_media_timestamps( lsmash_media_ts_list_t *ts_list )
         return;
     if( ts_list->timestamp )
     {
-        free( ts_list->timestamp );
+        lsmash_free( ts_list->timestamp );
         ts_list->timestamp = NULL;
     }
     ts_list->sample_count = 0;
@@ -1751,7 +1751,7 @@ int lsmash_get_max_sample_delay( lsmash_media_ts_list_t *ts_list, uint32_t *max_
     if( !ts_list || !max_sample_delay )
         return -1;
     lsmash_media_ts_t *orig_ts = ts_list->timestamp;
-    lsmash_media_ts_t *ts = malloc( ts_list->sample_count * sizeof(lsmash_media_ts_t) );
+    lsmash_media_ts_t *ts = lsmash_malloc( ts_list->sample_count * sizeof(lsmash_media_ts_t) );
     if( !ts )
         return -1;
     ts_list->timestamp = ts;
@@ -1768,7 +1768,7 @@ int lsmash_get_max_sample_delay( lsmash_media_ts_list_t *ts_list, uint32_t *max_
             uint32_t sample_delay = ts[i].dts - i;
             *max_sample_delay = LSMASH_MAX( *max_sample_delay, sample_delay );
         }
-    free( ts );
+    lsmash_free( ts );
     ts_list->timestamp = orig_ts;
     return 0;
 }

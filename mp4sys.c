@@ -211,8 +211,8 @@ int mp4sys_remove_DecoderSpecificInfo( mp4sys_ES_Descriptor_t* esd )
     if( !esd->decConfigDescr->decSpecificInfo )
         return 0;
     if( esd->decConfigDescr->decSpecificInfo->data )
-        free( esd->decConfigDescr->decSpecificInfo->data );
-    free( esd->decConfigDescr->decSpecificInfo );
+        lsmash_free( esd->decConfigDescr->decSpecificInfo->data );
+    lsmash_free( esd->decConfigDescr->decSpecificInfo );
     esd->decConfigDescr->decSpecificInfo = NULL;
     return 0;
 }
@@ -224,7 +224,7 @@ int mp4sys_remove_DecoderConfigDescriptor( mp4sys_ES_Descriptor_t* esd )
     if( !esd->decConfigDescr )
         return 0;
     mp4sys_remove_DecoderSpecificInfo( esd );
-    free( esd->decConfigDescr );
+    lsmash_free( esd->decConfigDescr );
     esd->decConfigDescr = NULL;
     return 0;
 }
@@ -235,7 +235,7 @@ int mp4sys_remove_SLConfigDescriptor( mp4sys_ES_Descriptor_t* esd )
         return -1;
     if( !esd->slConfigDescr )
         return 0;
-    free( esd->slConfigDescr );
+    lsmash_free( esd->slConfigDescr );
     esd->slConfigDescr = NULL;
     return 0;
 }
@@ -246,7 +246,7 @@ int mp4sys_remove_ES_Descriptor( mp4sys_ES_Descriptor_t* esd )
         return 0;
     mp4sys_remove_DecoderConfigDescriptor( esd );
     mp4sys_remove_SLConfigDescriptor( esd );
-    free( esd );
+    lsmash_free( esd );
     return 0;
 }
 
@@ -267,7 +267,7 @@ int mp4sys_remove_ObjectDescriptor( mp4sys_ObjectDescriptor_t* od )
     if( !od )
         return 0;
     mp4sys_remove_ES_ID_Incs( od );
-    free( od );
+    lsmash_free( od );
     return 0;
 }
 
@@ -279,17 +279,17 @@ int mp4sys_add_DecoderSpecificInfo( mp4sys_ES_Descriptor_t* esd, void* dsi_paylo
     if( !dsi )
         return -1;
     dsi->header.tag = MP4SYS_DESCRIPTOR_TAG_DecSpecificInfoTag;
-    dsi->data = lsmash_memdup( dsi_payload, dsi_payload_length );
+    dsi->data       = lsmash_memdup( dsi_payload, dsi_payload_length );
     if( !dsi->data )
     {
-        free( dsi );
+        lsmash_free( dsi );
         return -1;
     }
     dsi->header.size = dsi_payload_length;
     debug_if( mp4sys_remove_DecoderSpecificInfo( esd ) )
     {
-        free( dsi->data );
-        free( dsi );
+        lsmash_free( dsi->data );
+        lsmash_free( dsi );
         return -1;
     }
     esd->decConfigDescr->decSpecificInfo = dsi;
@@ -322,7 +322,7 @@ int mp4sys_add_DecoderConfigDescriptor(
     dcd->avgBitrate = avgBitrate;
     debug_if( mp4sys_remove_DecoderConfigDescriptor( esd ) )
     {
-        free( dcd );
+        lsmash_free( dcd );
         return -1;
     }
     esd->decConfigDescr = dcd;
@@ -356,7 +356,7 @@ int mp4sys_add_SLConfigDescriptor( mp4sys_ES_Descriptor_t* esd )
     slcd->useTimeStampsFlag = 1;
     debug_if( mp4sys_remove_SLConfigDescriptor( esd ) )
     {
-        free( slcd );
+        lsmash_free( slcd );
         return -1;
     }
     esd->slConfigDescr = slcd;
@@ -389,7 +389,7 @@ int mp4sys_add_ES_ID_Inc( mp4sys_ObjectDescriptor_t* od, uint32_t Track_ID )
     es_id_inc->Track_ID = Track_ID;
     if( lsmash_add_entry( od->esDescr, es_id_inc ) )
     {
-        free( es_id_inc );
+        lsmash_free( es_id_inc );
         return -1;
     }
     return 0;
@@ -1140,7 +1140,7 @@ int mp4sys_setup_summary_from_DecoderSpecificInfo( lsmash_audio_summary_t *summa
         return -1;
     if( dsi_payload_length && mp4a_setup_summary_from_AudioSpecificConfig( summary, dsi_payload, dsi_payload_length ) )
     {
-        free( dsi_payload );
+        lsmash_free( dsi_payload );
         return -1;
     }
     return 0;
@@ -1179,7 +1179,7 @@ int lsmash_set_mp4sys_decoder_specific_info( lsmash_mp4sys_decoder_parameters_t 
     {
         if( param->dsi->payload )
         {
-            free( param->dsi->payload );
+            lsmash_free( param->dsi->payload );
             param->dsi->payload = NULL;
         }
         param->dsi->payload_length = 0;
@@ -1196,8 +1196,8 @@ void lsmash_destroy_mp4sys_decoder_specific_info( lsmash_mp4sys_decoder_paramete
     if( !param || !param->dsi )
         return;
     if( param->dsi->payload )
-        free( param->dsi->payload );
-    free( param->dsi );
+        lsmash_free( param->dsi->payload );
+    lsmash_free( param->dsi );
     param->dsi = NULL;
 }
 
@@ -1206,7 +1206,7 @@ void mp4sys_destruct_decoder_config( void *data )
     if( !data )
         return;
     lsmash_destroy_mp4sys_decoder_specific_info( data );
-    free( data );
+    lsmash_free( data );
 }
 
 uint8_t *lsmash_create_mp4sys_decoder_config( lsmash_mp4sys_decoder_parameters_t *param, uint32_t *data_length )

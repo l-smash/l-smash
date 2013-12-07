@@ -274,7 +274,7 @@ static lsmash_audio_summary_t *mp4sys_adts_create_summary( mp4sys_adts_fixed_hea
     if( !specific )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-        free( data );
+        lsmash_free( data );
         return NULL;
     }
     lsmash_mp4sys_decoder_parameters_t *param = (lsmash_mp4sys_decoder_parameters_t *)specific->data.structured;
@@ -284,10 +284,10 @@ static lsmash_audio_summary_t *mp4sys_adts_create_summary( mp4sys_adts_fixed_hea
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         lsmash_destroy_codec_specific_data( specific );
-        free( data );
+        lsmash_free( data );
         return NULL;
     }
-    free( data );
+    lsmash_free( data );
     if( lsmash_add_entry( &summary->opaque->list, specific ) )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
@@ -458,7 +458,7 @@ static int mp4sys_adts_get_accessunit( importer_t *importer, uint32_t track_numb
 static void mp4sys_adts_cleanup( importer_t *importer )
 {
     debug_if( importer && importer->info )
-        free( importer->info );
+        lsmash_free( importer->info );
 }
 
 /* returns 0 if it seems adts. */
@@ -494,7 +494,7 @@ static int mp4sys_adts_probe( importer_t *importer )
 
     if( lsmash_add_entry( importer->summaries, summary ) )
     {
-        free( info );
+        lsmash_free( info );
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         return -1;
     }
@@ -530,7 +530,7 @@ const static importer_functions mp4sys_adts_importer =
 static void mp4sys_mp3_cleanup( importer_t *importer )
 {
     debug_if( importer && importer->info )
-        free( importer->info );
+        lsmash_free( importer->info );
 }
 
 typedef struct
@@ -626,7 +626,7 @@ static lsmash_audio_summary_t *mp4sys_mp3_create_summary( mp4sys_mp3_header_t *h
     if( !specific )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-        free( data );
+        lsmash_free( data );
         return NULL;
     }
     lsmash_mp4sys_decoder_parameters_t *param = (lsmash_mp4sys_decoder_parameters_t *)specific->data.structured;
@@ -636,10 +636,10 @@ static lsmash_audio_summary_t *mp4sys_mp3_create_summary( mp4sys_mp3_header_t *h
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         lsmash_destroy_codec_specific_data( specific );
-        free( data );
+        lsmash_free( data );
         return NULL;
     }
-    free( data );
+    lsmash_free( data );
     if( lsmash_add_entry( &summary->opaque->list, specific ) )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
@@ -806,7 +806,7 @@ static int mp4sys_mp3_probe( importer_t *importer )
 
     if( lsmash_add_entry( importer->summaries, summary ) )
     {
-        free( info );
+        lsmash_free( info );
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         return -1;
     }
@@ -843,7 +843,7 @@ const static importer_functions mp4sys_mp3_importer =
 static void amr_cleanup( importer_t* importer )
 {
     debug_if( importer && importer->info )
-        free( importer->info );
+        lsmash_free( importer->info );
 }
 
 typedef struct
@@ -918,7 +918,7 @@ int mp4sys_amr_create_damr( lsmash_audio_summary_t *summary )
     }
     specific->type              = LSMASH_CODEC_SPECIFIC_DATA_TYPE_UNKNOWN;
     specific->format            = LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED;
-    specific->destruct          = (lsmash_codec_specific_destructor_t)free;
+    specific->destruct          = (lsmash_codec_specific_destructor_t)lsmash_free;
     specific->data.unstructured = lsmash_bs_export_data( bs, &specific->size );
     specific->size              = MP4SYS_DAMR_LENGTH;
     lsmash_bs_cleanup( bs );
@@ -964,19 +964,19 @@ static int amr_probe( importer_t* importer )
     summary->sample_size            = 16;
     summary->samples_in_frame       = (160 << wb);
     summary->sbr_mode               = MP4A_AAC_SBR_NOT_SPECIFIED; /* no effect */
-    amr_importer_info_t *info = malloc( sizeof(amr_importer_info_t) );
+    amr_importer_info_t *info = lsmash_malloc( sizeof(amr_importer_info_t) );
     if( !info )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         return -1;
     }
-    info->wb = wb;
+    info->wb               = wb;
     info->samples_in_frame = summary->samples_in_frame;
-    info->au_number = 0;
+    info->au_number        = 0;
     importer->info = info;
     if( mp4sys_amr_create_damr( summary ) || lsmash_add_entry( importer->summaries, summary ) )
     {
-        free( importer->info );
+        lsmash_free( importer->info );
         importer->info = NULL;
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         return -1;
@@ -1023,7 +1023,7 @@ static void remove_ac3_importer_info( ac3_importer_info_t *info )
     if( !info )
         return;
     lsmash_bits_adhoc_cleanup( info->info.bits );
-    free( info );
+    lsmash_free( info );
 }
 
 static ac3_importer_info_t *create_ac3_importer_info( void )
@@ -1034,7 +1034,7 @@ static ac3_importer_info_t *create_ac3_importer_info( void )
     info->info.bits = lsmash_bits_adhoc_create();
     if( !info->info.bits )
     {
-        free( info );
+        lsmash_free( info );
         return NULL;
     }
     return info;
@@ -1278,7 +1278,7 @@ static void remove_eac3_importer_info( eac3_importer_info_t *info )
         return;
     lsmash_destroy_multiple_buffers( info->info.au_buffers );
     lsmash_bits_adhoc_cleanup( info->info.bits );
-    free( info );
+    lsmash_free( info );
 }
 
 static eac3_importer_info_t *create_eac3_importer_info( void )
@@ -1292,14 +1292,14 @@ static eac3_importer_info_t *create_eac3_importer_info( void )
     eac3_info->bits = lsmash_bits_adhoc_create();
     if( !eac3_info->bits )
     {
-        free( info );
+        lsmash_free( info );
         return NULL;
     }
     eac3_info->au_buffers = lsmash_create_multiple_buffers( 2, EAC3_MAX_SYNCFRAME_LENGTH );
     if( !eac3_info->au_buffers )
     {
         lsmash_bits_adhoc_cleanup( eac3_info->bits );
-        free( info );
+        lsmash_free( info );
         return NULL;
     }
     eac3_info->au            = lsmash_withdraw_buffer( eac3_info->au_buffers, 1 );
@@ -1574,7 +1574,7 @@ static int eac3_importer_get_accessunit( importer_t *importer, uint32_t track_nu
         {
             if( importer_info->status != IMPORTER_EOF )
                 importer_info->status = IMPORTER_OK;
-            free( dec3 );
+            lsmash_free( dec3 );
         }
     }
     return current_status;
@@ -1693,11 +1693,11 @@ typedef struct
 static void mp4sys_remove_als_info( mp4sys_als_info_t *info )
 {
     if( info->alssc.ra_unit_size )
-        free( info->alssc.ra_unit_size );
+        lsmash_free( info->alssc.ra_unit_size );
     if( info->alssc.sc_data )
-        free( info->alssc.sc_data );
+        lsmash_free( info->alssc.sc_data );
     lsmash_stream_buffers_cleanup( info->sb );
-    free( info );
+    lsmash_free( info );
 }
 
 static void mp4sys_als_importer_cleanup( importer_t *importer )
@@ -1717,7 +1717,7 @@ static mp4sys_als_info_t *create_mp4sys_als_importer_info( importer_t *importer 
     sb->bank = lsmash_create_multiple_buffers( 1, 1 << 16 );
     if( !sb->bank )
     {
-        free( info );
+        lsmash_free( info );
         return NULL;
     }
     sb->start = lsmash_withdraw_buffer( sb->bank, 1 );
@@ -1747,7 +1747,7 @@ static void als_copy_from_buffer( als_specific_config_t *alssc, lsmash_stream_bu
     if( alssc->alloc < size )
     {
         size_t   alloc = alssc->alloc ? (alssc->alloc << 1) : (1 << 16);
-        uint8_t *temp  = realloc( alssc->sc_data, alloc );
+        uint8_t *temp  = lsmash_realloc( alssc->sc_data, alloc );
         if( !temp )
             return;
         alssc->sc_data = temp;
@@ -1842,7 +1842,7 @@ static int als_parse_specific_config( lsmash_stream_buffers_t *sb, als_specific_
         if( als_prepare_buffer_read( sb, read_size ) < 0 )
             return -1;
         CHECK_UPDATE( read_size );
-        alssc->ra_unit_size = malloc( read_size );
+        alssc->ra_unit_size = lsmash_malloc( read_size );
         if( !alssc->ra_unit_size )
             return -1;
         uint32_t max_ra_unit_size = 0;
@@ -1974,7 +1974,7 @@ static lsmash_audio_summary_t *als_create_summary( lsmash_stream_buffers_t *sb, 
     if( !specific )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-        free( data );
+        lsmash_free( data );
         return NULL;
     }
     lsmash_mp4sys_decoder_parameters_t *param = (lsmash_mp4sys_decoder_parameters_t *)specific->data.structured;
@@ -1984,10 +1984,10 @@ static lsmash_audio_summary_t *als_create_summary( lsmash_stream_buffers_t *sb, 
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         lsmash_destroy_codec_specific_data( specific );
-        free( data );
+        lsmash_free( data );
         return NULL;
     }
-    free( data );
+    lsmash_free( data );
     if( lsmash_add_entry( &summary->opaque->list, specific ) )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
@@ -2069,7 +2069,7 @@ static void remove_dts_importer_info( dts_importer_info_t *info )
         return;
     lsmash_destroy_multiple_buffers( info->info.au_buffers );
     lsmash_bits_adhoc_cleanup( info->info.bits );
-    free( info );
+    lsmash_free( info );
 }
 
 static dts_importer_info_t *create_dts_importer_info( void )
@@ -2083,14 +2083,14 @@ static dts_importer_info_t *create_dts_importer_info( void )
     dts_info->bits = lsmash_bits_adhoc_create();
     if( !dts_info->bits )
     {
-        free( info );
+        lsmash_free( info );
         return NULL;
     }
     dts_info->au_buffers = lsmash_create_multiple_buffers( 2, DTS_MAX_EXTENSION_SIZE );
     if( !dts_info->au_buffers )
     {
         lsmash_bits_adhoc_cleanup( dts_info->bits );
-        free( info );
+        lsmash_free( info );
         return NULL;
     }
     dts_info->au            = lsmash_withdraw_buffer( dts_info->au_buffers, 1 );
@@ -2387,8 +2387,8 @@ static void remove_h264_importer_info( h264_importer_info_t *info )
     lsmash_remove_entries( info->avcC_list, lsmash_destroy_codec_specific_data );
     h264_cleanup_parser( &info->info );
     if( info->ts_list.timestamp )
-        free( info->ts_list.timestamp );
-    free( info );
+        lsmash_free( info->ts_list.timestamp );
+    lsmash_free( info );
 }
 
 static void h264_importer_cleanup( importer_t *importer )
@@ -2948,7 +2948,7 @@ static void nalu_generate_timestamps_from_poc
                 uint32_t composition_delay = timestamp[i].dts - i;
                 max_composition_delay = LSMASH_MAX( max_composition_delay, composition_delay );
             }
-        uint64_t *ts_buffer = (uint64_t *)malloc( (num_access_units + max_composition_delay) * sizeof(uint64_t) );
+        uint64_t *ts_buffer = (uint64_t *)lsmash_malloc( (num_access_units + max_composition_delay) * sizeof(uint64_t) );
         if( !ts_buffer )
         {
             /* It seems that there is no enough memory to generate more appropriate timestamps.
@@ -2981,7 +2981,7 @@ static void nalu_generate_timestamps_from_poc
                              : prev_reorder_cts[(i - max_composition_delay) % max_composition_delay];
             prev_reorder_cts[i % max_composition_delay] = reorder_cts[i];
         }
-        free( ts_buffer );
+        lsmash_free( ts_buffer );
 #if 0
         fprintf( stderr, "max_composition_delay=%"PRIu32", composition_delay_time=%"PRIu64"\n",
                           max_composition_delay, composition_delay_time );
@@ -3070,7 +3070,7 @@ static int h264_importer_probe( importer_t *importer )
     info->ebsp_head_pos = first_ebsp_head_pos;
     /* Parse all NALU in the stream for preparation of calculating timestamps. */
     uint32_t npt_alloc = (1 << 12) * sizeof(nal_pic_timing_t);
-    nal_pic_timing_t *npt = malloc( npt_alloc );
+    nal_pic_timing_t *npt = lsmash_malloc( npt_alloc );
     if( !npt )
         goto fail;
     uint32_t picture_stats[H264_PICTURE_TYPE_NONE + 1] = { 0 };
@@ -3086,16 +3086,16 @@ static int h264_importer_probe( importer_t *importer )
         if( h264_get_access_unit_internal( importer_info, 1 )
          || h264_calculate_poc( info, picture, &prev_picture ) )
         {
-            free( npt );
+            lsmash_free( npt );
             goto fail;
         }
         if( npt_alloc <= num_access_units * sizeof(nal_pic_timing_t) )
         {
             uint32_t alloc = 2 * num_access_units * sizeof(nal_pic_timing_t);
-            nal_pic_timing_t *temp = (nal_pic_timing_t *)realloc( npt, alloc );
+            nal_pic_timing_t *temp = (nal_pic_timing_t *)lsmash_realloc( npt, alloc );
             if( !temp )
             {
-                free( npt );
+                lsmash_free( npt );
                 goto fail;
             }
             npt = temp;
@@ -3136,7 +3136,7 @@ static int h264_importer_probe( importer_t *importer )
     lsmash_codec_specific_t *cs = (lsmash_codec_specific_t *)lsmash_get_entry_data( importer_info->avcC_list, ++ importer_info->avcC_number );
     if( !cs || !cs->data.structured )
     {
-        free( npt );
+        lsmash_free( npt );
         goto fail;
     }
     lsmash_h264_specific_parameters_t *avcC_param = (lsmash_h264_specific_parameters_t *)cs->data.structured;
@@ -3145,15 +3145,15 @@ static int h264_importer_probe( importer_t *importer )
     {
         if( summary )
             lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-        free( npt );
+        lsmash_free( npt );
         goto fail;
     }
     summary->sample_per_field = importer_info->field_pic_present;
     /* */
-    lsmash_media_ts_t *timestamp = malloc( num_access_units * sizeof(lsmash_media_ts_t) );
+    lsmash_media_ts_t *timestamp = lsmash_malloc( num_access_units * sizeof(lsmash_media_ts_t) );
     if( !timestamp )
     {
-        free( npt );
+        lsmash_free( npt );
         goto fail;
     }
     /* Count leading samples that are undecodable. */
@@ -3172,7 +3172,7 @@ static int h264_importer_probe( importer_t *importer )
                                        &importer_info->last_delta,
                                        max_composition_delay, num_access_units );
     nalu_reduce_timescale( timestamp, npt, &importer_info->last_delta, &summary->timescale, num_access_units );
-    free( npt );
+    lsmash_free( npt );
     importer_info->ts_list.sample_count = num_access_units;
     importer_info->ts_list.timestamp    = timestamp;
     /* Go back to EBSP of the first NALU. */
@@ -3259,8 +3259,8 @@ static void remove_hevc_importer_info( hevc_importer_info_t *info )
     lsmash_remove_entries( info->hvcC_list, lsmash_destroy_codec_specific_data );
     hevc_cleanup_parser( &info->info );
     if( info->ts_list.timestamp )
-        free( info->ts_list.timestamp );
-    free( info );
+        lsmash_free( info->ts_list.timestamp );
+    lsmash_free( info );
 }
 
 static void hevc_importer_cleanup( importer_t *importer )
@@ -3745,7 +3745,7 @@ static int hevc_importer_probe( importer_t *importer )
     info->prev_nalu_type = HEVC_NALU_TYPE_UNKNOWN;
     /* Parse all NALU in the stream for preparation of calculating timestamps. */
     uint32_t npt_alloc = (1 << 12) * sizeof(nal_pic_timing_t);
-    nal_pic_timing_t *npt = (nal_pic_timing_t *)malloc( npt_alloc );
+    nal_pic_timing_t *npt = (nal_pic_timing_t *)lsmash_malloc( npt_alloc );
     if( !npt )
         goto fail;
     uint32_t picture_stats[HEVC_PICTURE_TYPE_NONE + 1] = { 0 };
@@ -3762,16 +3762,16 @@ static int hevc_importer_probe( importer_t *importer )
         if( hevc_get_access_unit_internal( importer_info, 1 )
          || hevc_calculate_poc( info, &info->au.picture, &prev_picture ) )
         {
-            free( npt );
+            lsmash_free( npt );
             goto fail;
         }
         if( npt_alloc <= num_access_units * sizeof(nal_pic_timing_t) )
         {
             uint32_t alloc = 2 * num_access_units * sizeof(nal_pic_timing_t);
-            nal_pic_timing_t *temp = (nal_pic_timing_t *)realloc( npt, alloc );
+            nal_pic_timing_t *temp = (nal_pic_timing_t *)lsmash_realloc( npt, alloc );
             if( !temp )
             {
-                free( npt );
+                lsmash_free( npt );
                 goto fail;
             }
             npt = temp;
@@ -3805,7 +3805,7 @@ static int hevc_importer_probe( importer_t *importer )
     lsmash_codec_specific_t *cs = (lsmash_codec_specific_t *)lsmash_get_entry_data( importer_info->hvcC_list, ++ importer_info->hvcC_number );
     if( !cs || !cs->data.structured )
     {
-        free( npt );
+        lsmash_free( npt );
         goto fail;
     }
     lsmash_hevc_specific_parameters_t *hvcC_param = (lsmash_hevc_specific_parameters_t *)cs->data.structured;
@@ -3814,15 +3814,15 @@ static int hevc_importer_probe( importer_t *importer )
     {
         if( summary )
             lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-        free( npt );
+        lsmash_free( npt );
         goto fail;
     }
     summary->sample_per_field = importer_info->field_pic_present;
     /* */
-    lsmash_media_ts_t *timestamp = malloc( num_access_units * sizeof(lsmash_media_ts_t) );
+    lsmash_media_ts_t *timestamp = lsmash_malloc( num_access_units * sizeof(lsmash_media_ts_t) );
     if( !timestamp )
     {
-        free( npt );
+        lsmash_free( npt );
         goto fail;
     }
     /* Count leading samples that are undecodable. */
@@ -3841,7 +3841,7 @@ static int hevc_importer_probe( importer_t *importer )
                                        &importer_info->last_delta,
                                        max_composition_delay, num_access_units );
     nalu_reduce_timescale( timestamp, npt, &importer_info->last_delta, &summary->timescale, num_access_units );
-    free( npt );
+    lsmash_free( npt );
     importer_info->ts_list.sample_count = num_access_units;
     importer_info->ts_list.timestamp    = timestamp;
     /* Go back to EBSP of the first NALU. */
@@ -3922,8 +3922,8 @@ static void remove_vc1_importer_info( vc1_importer_info_t *info )
         return;
     vc1_cleanup_parser( &info->info );
     if( info->ts_list.timestamp )
-        free( info->ts_list.timestamp );
-    free( info );
+        lsmash_free( info->ts_list.timestamp );
+    lsmash_free( info );
 }
 
 static void vc1_importer_cleanup( importer_t *importer )
@@ -4277,7 +4277,7 @@ static int vc1_importer_probe( importer_t *importer )
     info->ebdu_head_pos   = first_ebdu_head_pos;
     /* Parse all EBDU in the stream for preparation of calculating timestamps. */
     uint32_t cts_alloc = (1 << 12) * sizeof(uint64_t);
-    uint64_t *cts = malloc( cts_alloc );
+    uint64_t *cts = lsmash_malloc( cts_alloc );
     if( !cts )
         goto fail;
     uint32_t num_access_units = 0;
@@ -4290,7 +4290,7 @@ static int vc1_importer_probe( importer_t *importer )
 #endif
         if( vc1_importer_get_access_unit_internal( importer_info, 1 ) )
         {
-            free( cts );
+            lsmash_free( cts );
             goto fail;
         }
         /* In the case where B-pictures exist
@@ -4320,10 +4320,10 @@ static int vc1_importer_probe( importer_t *importer )
         if( cts_alloc <= num_access_units * sizeof(uint64_t) )
         {
             uint32_t alloc = 2 * num_access_units * sizeof(uint64_t);
-            uint64_t *temp = realloc( cts, alloc );
+            uint64_t *temp = lsmash_realloc( cts, alloc );
             if( !temp )
             {
-                free( cts );
+                lsmash_free( cts );
                 goto fail;
             }
             cts = temp;
@@ -4336,15 +4336,15 @@ static int vc1_importer_probe( importer_t *importer )
         cts[ num_access_units - num_consecutive_b - 1 ] = num_access_units;
     else
     {
-        free( cts );
+        lsmash_free( cts );
         goto fail;
     }
     fprintf( stderr, "                                                                               \r" );
     /* Construct timestamps. */
-    lsmash_media_ts_t *timestamp = malloc( num_access_units * sizeof(lsmash_media_ts_t) );
+    lsmash_media_ts_t *timestamp = lsmash_malloc( num_access_units * sizeof(lsmash_media_ts_t) );
     if( !timestamp )
     {
-        free( cts );
+        lsmash_free( cts );
         goto fail;
     }
     for( uint32_t i = 1; i < num_access_units; i++ )
@@ -4362,7 +4362,7 @@ static int vc1_importer_probe( importer_t *importer )
     else
         for( uint32_t i = 0; i < num_access_units; i++ )
             timestamp[i].cts = timestamp[i].dts = i;
-    free( cts );
+    lsmash_free( cts );
 #if 0
     for( uint32_t i = 0; i < num_access_units; i++ )
         fprintf( stderr, "Timestamp[%"PRIu32"]: DTS=%"PRIu64", CTS=%"PRIu64"\n", i, timestamp[i].dts, timestamp[i].cts );
@@ -4370,7 +4370,7 @@ static int vc1_importer_probe( importer_t *importer )
     lsmash_video_summary_t *summary = vc1_create_summary( info, &importer_info->first_sequence, importer_info->max_au_length );
     if( !summary || lsmash_add_entry( importer->summaries, summary ) )
     {
-        free( timestamp );
+        lsmash_free( timestamp );
         goto fail;
     }
     importer_info->ts_list.sample_count = num_access_units;
@@ -4453,7 +4453,7 @@ void lsmash_importer_close( importer_t *importer )
     if( importer->funcs.cleanup )
         importer->funcs.cleanup( importer );
     lsmash_remove_list( importer->summaries, lsmash_cleanup_summary );
-    free( importer );
+    lsmash_free( importer );
 }
 
 importer_t *lsmash_importer_open( const char *identifier, const char *format )
@@ -4469,7 +4469,7 @@ importer_t *lsmash_importer_open( const char *identifier, const char *format )
         /* special treatment for stdin */
         if( auto_detect )
         {
-            free( importer );
+            lsmash_free( importer );
             return NULL;
         }
         importer->stream = stdin;

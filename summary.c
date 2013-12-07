@@ -66,18 +66,18 @@ int lsmash_setup_AudioSpecificConfig( lsmash_audio_summary_t *summary )
     lsmash_codec_specific_t *specific = lsmash_malloc_zero( sizeof(lsmash_codec_specific_t) );
     if( !specific )
     {
-        free( new_asc );
+        lsmash_free( new_asc );
         return -1;
     }
     specific->type              = LSMASH_CODEC_SPECIFIC_DATA_TYPE_UNKNOWN;
     specific->format            = LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED;
-    specific->destruct          = (lsmash_codec_specific_destructor_t)free;
+    specific->destruct          = (lsmash_codec_specific_destructor_t)lsmash_free;
     specific->size              = new_length;
     specific->data.unstructured = lsmash_memdup( new_asc, new_length );
     if( !specific->data.unstructured
      || lsmash_add_entry( &summary->opaque->list, specific ) )
     {
-        free( new_asc );
+        lsmash_free( new_asc );
         lsmash_destroy_codec_specific_data( specific );
         return -1;
     }
@@ -105,7 +105,7 @@ lsmash_summary_t *lsmash_create_summary( lsmash_summary_type summary_type )
     summary->opaque = (lsmash_codec_specific_list_t *)lsmash_malloc_zero( sizeof(lsmash_codec_specific_list_t) );
     if( !summary->opaque )
     {
-        free( summary );
+        lsmash_free( summary );
         return NULL;
     }
     summary->summary_type = summary_type;
@@ -122,12 +122,12 @@ void lsmash_cleanup_summary( lsmash_summary_t *summary )
         {
             lsmash_entry_t *next = entry->next;
             lsmash_destroy_codec_specific_data( (lsmash_codec_specific_t *)entry->data );
-            free( entry );
+            lsmash_free( entry );
             entry = next;
         }
-        free( summary->opaque );
+        lsmash_free( summary->opaque );
     }
-    free( summary );
+    lsmash_free( summary );
 }
 
 int lsmash_add_codec_specific_data( lsmash_summary_t *summary, lsmash_codec_specific_t *specific )

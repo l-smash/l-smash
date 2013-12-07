@@ -194,12 +194,12 @@ static inline int nalu_get_dcr_ps
 {
     for( uint8_t i = 0; i < entry_count; i++ )
     {
-        isom_dcr_ps_entry_t *data = malloc( sizeof(isom_dcr_ps_entry_t) );
+        isom_dcr_ps_entry_t *data = lsmash_malloc( sizeof(isom_dcr_ps_entry_t) );
         if( !data )
             return -1;
         if( lsmash_add_entry( list, data ) )
         {
-            free( data );
+            lsmash_free( data );
             return -1;
         }
         data->nalUnitLength = lsmash_bs_get_be16( bs );

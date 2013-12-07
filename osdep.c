@@ -20,6 +20,8 @@
 
 /* This file is available under an ISC license. */
 
+#include "internal.h" /* must be placed first */
+
 #include "common/osdep.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,7 +37,7 @@ int lsmash_string_to_wchar( int cp, const char *from, wchar_t **to )
     int nc = MultiByteToWideChar( cp, 0, from, -1, 0, 0 );
     if( nc == 0 )
         return 0;
-    *to = malloc( nc * sizeof(wchar_t) );
+    *to = lsmash_malloc( nc * sizeof(wchar_t) );
     MultiByteToWideChar( cp, 0, from, -1, *to, nc );
     return nc;
 }
@@ -45,7 +47,7 @@ int lsmash_string_from_wchar( int cp, const wchar_t *from, char **to )
     int nc = WideCharToMultiByte( cp, 0, from, -1, 0, 0, 0, 0 );
     if( nc == 0 )
         return 0;
-    *to = malloc( nc * sizeof(char) );
+    *to = lsmash_malloc( nc * sizeof(char) );
     WideCharToMultiByte( cp, 0, from, -1, *to, nc, 0, 0 );
     return nc;
 }
@@ -58,8 +60,8 @@ FILE *lsmash_win32_fopen( const char *name, const char *mode )
     FILE *fp = _wfopen( wname, wmode );
     if( !fp )
         fp = fopen( name, mode );
-    free( wname );
-    free( wmode );
+    lsmash_free( wname );
+    lsmash_free( wmode );
     return fp;
 }
 

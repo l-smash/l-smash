@@ -168,7 +168,7 @@ static void cleanup_muxer( muxer_t *muxer )
             output_track_t *out_track = &output->track[i];
             lsmash_delete_sample( out_track->sample );
         }
-        free( output->track );
+        lsmash_free( output->track );
     }
     for( uint32_t i = 0; i < muxer->num_of_inputs; i++ )
     {
@@ -799,7 +799,7 @@ static int prepare_output( muxer_t *muxer )
     output_t *output = &muxer->output;
     option_t *opt = &muxer->opt;
     /* Allocate output tracks. */
-    output->track = malloc( output->num_of_tracks * sizeof(output_track_t) );
+    output->track = lsmash_malloc( output->num_of_tracks * sizeof(output_track_t) );
     if( !output->track )
         return ERROR_MSG( "failed to allocate output tracks.\n" );
     memset( output->track, 0, output->num_of_tracks * sizeof(output_track_t) );

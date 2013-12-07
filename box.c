@@ -276,7 +276,7 @@ int isom_add_extension_box( void *parent_box, void *box, void *eliminator )
     ext->type     = child->type;
     ext->format   = EXTENSION_FORMAT_BOX;
     ext->form.box = child;
-    ext->destruct = eliminator ? eliminator : free;
+    ext->destruct = eliminator ? eliminator : lsmash_free;
     return 0;
 }
 
@@ -323,7 +323,7 @@ void isom_remove_extension_box( isom_extension_box_t *ext )
                 ext->destruct( ext->form.box );
         }
     }
-    free( ext );
+    lsmash_free( ext );
 }
 
 void isom_remove_all_extension_boxes( lsmash_entry_list_t *extensions )

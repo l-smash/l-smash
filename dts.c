@@ -144,14 +144,13 @@ int lsmash_append_dts_reserved_box( lsmash_dts_specific_parameters_t *param, uin
 {
     if( !param || !box_data || box_size == 0 )
         return -1;
-    param->box = malloc( sizeof(lsmash_dts_reserved_box_t) );
+    param->box = lsmash_malloc( sizeof(lsmash_dts_reserved_box_t) );
     if( !param->box )
         return -1;
     param->box->data = lsmash_memdup( box_data, box_size );
     if( !param->box->data )
     {
-        free( param->box );
-        param->box = NULL;
+        lsmash_freep( &param->box );
         return -1;
     }
     param->box->size = box_size;
@@ -163,9 +162,8 @@ void lsmash_remove_dts_reserved_box( lsmash_dts_specific_parameters_t *param )
     if( !param->box )
         return;
     if( param->box->data )
-        free( param->box->data );
-    free( param->box );
-    param->box = NULL;
+        lsmash_free( param->box->data );
+    lsmash_freep( &param->box );
 }
 
 void dts_destruct_specific_data( void *data )
@@ -173,7 +171,7 @@ void dts_destruct_specific_data( void *data )
     if( !data )
         return;
     lsmash_remove_dts_reserved_box( data );
-    free( data );
+    lsmash_free( data );
 }
 
 uint8_t lsmash_dts_get_stream_construction( lsmash_dts_construction_flag flags )

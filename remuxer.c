@@ -126,7 +126,7 @@ static void cleanup_input_movie( input_movie_t *input )
     {
         for( uint32_t i = 0; i < input->num_itunes_metadata; i++ )
             lsmash_cleanup_itunes_metadata( &input->itunes_metadata[i] );
-        free( input->itunes_metadata );
+        lsmash_free( input->itunes_metadata );
     }
     if( input->track )
     {
@@ -134,9 +134,9 @@ static void cleanup_input_movie( input_movie_t *input )
         {
             for( uint32_t i = 0; i < input->track->num_summaries; i++ )
                 lsmash_cleanup_summary( input->track->summaries[i].summary );
-            free( input->track->summaries );
+            lsmash_free( input->track->summaries );
         }
-        free( input->track );
+        lsmash_free( input->track );
     }
     lsmash_destroy_root( input->root );
     input->root            = NULL;
@@ -151,8 +151,8 @@ static void cleanup_output_movie( output_movie_t *output )
     if( output->track )
     {
         if( output->track->summary_remap )
-            free( output->track->summary_remap );
-        free( output->track );
+            lsmash_free( output->track->summary_remap );
+        lsmash_free( output->track );
     }
     lsmash_destroy_root( output->root );
     output->root  = NULL;
@@ -165,7 +165,7 @@ static void cleanup_remuxer( remuxer_t *remuxer )
     {
         cleanup_input_movie( &remuxer->input[i] );
         if( remuxer->track_option[i] )
-            free( remuxer->track_option[i] );
+            lsmash_free( remuxer->track_option[i] );
     }
     cleanup_output_movie( remuxer->output );
 }
@@ -287,7 +287,7 @@ static int get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, l
     }
     else if( shadow.type == ITUNES_METADATA_TYPE_BINARY )
     {
-        metadata->value.binary.data = malloc( shadow.value.binary.size );
+        metadata->value.binary.data = lsmash_malloc( shadow.value.binary.size );
         if( !metadata->value.binary.data )
             goto fail;
         memcpy( metadata->value.binary.data, shadow.value.binary.data, shadow.value.binary.size );
@@ -313,7 +313,7 @@ static int get_movie( input_movie_t *input, char *input_name )
     input->num_itunes_metadata = lsmash_count_itunes_metadata( input->root );
     if( input->num_itunes_metadata )
     {
-        input->itunes_metadata = malloc( input->num_itunes_metadata * sizeof(lsmash_itunes_metadata_t) );
+        input->itunes_metadata = lsmash_malloc( input->num_itunes_metadata * sizeof(lsmash_itunes_metadata_t) );
         if( !input->itunes_metadata )
             return ERROR_MSG( "failed to alloc iTunes metadata.\n" );
         uint32_t itunes_metadata_count = 0;
@@ -335,7 +335,7 @@ static int get_movie( input_movie_t *input, char *input_name )
         return ERROR_MSG( "failed to get movie parameters.\n" );
     uint32_t num_tracks = input->num_tracks = movie_param->number_of_tracks;
     /* Create tracks. */
-    input_track_t *in_track = input->track = malloc( num_tracks * sizeof(input_track_t) );
+    input_track_t *in_track = input->track = lsmash_malloc( num_tracks * sizeof(input_track_t) );
     if( !in_track )
         return ERROR_MSG( "failed to alloc input tracks.\n" );
     memset( in_track, 0, num_tracks * sizeof(input_track_t) );
@@ -375,7 +375,7 @@ static int get_movie( input_movie_t *input, char *input_name )
             WARNING_MSG( "failed to find valid summaries.\n" );
             continue;
         }
-        in_track[i].summaries = malloc( in_track[i].num_summaries * sizeof(input_summary_t) );
+        in_track[i].summaries = lsmash_malloc( in_track[i].num_summaries * sizeof(input_summary_t) );
         if( !in_track[i].summaries )
             return ERROR_MSG( "failed to alloc input summaries.\n" );
         memset( in_track[i].summaries, 0, in_track[i].num_summaries * sizeof(input_summary_t) );
@@ -493,7 +493,7 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
             if( get_movie( &input[input_movie_number], strtok( argv[i], "?" ) ) )
                 return ERROR_MSG( "failed to get input movie.\n" );
             uint32_t num_tracks = input[input_movie_number].num_tracks;
-            track_option[input_movie_number] = malloc( num_tracks * sizeof(track_media_option) );
+            track_option[input_movie_number] = lsmash_malloc( num_tracks * sizeof(track_media_option) );
             if( !track_option[input_movie_number] )
                 return ERROR_MSG( "couldn't allocate memory.\n" );
             memset( track_option[input_movie_number], 0, num_tracks * sizeof(track_media_option) );
@@ -737,7 +737,7 @@ static int prepare_output( remuxer_t *remuxer )
     /* Allocate output tracks. */
     for( int i = 0; i < remuxer->num_input; i++ )
         output->num_tracks += input[i].num_tracks;
-    output->track = malloc( output->num_tracks * sizeof(output_track_t) );
+    output->track = lsmash_malloc( output->num_tracks * sizeof(output_track_t) );
     if( !output->track )
         return ERROR_MSG( "failed to alloc output tracks.\n" );
     output->current_track_number = 1;
@@ -754,7 +754,7 @@ static int prepare_output( remuxer_t *remuxer )
                 continue;
             }
             output_track_t *out_track = &output->track[output->current_track_number - 1];
-            out_track->summary_remap = malloc( in_track->num_summaries * sizeof(uint32_t) );
+            out_track->summary_remap = lsmash_malloc( in_track->num_summaries * sizeof(uint32_t) );
             if( !out_track->summary_remap )
                 return ERROR_MSG( "failed to create summary mapping for a track.\n" );
             memset( out_track->summary_remap, 0, in_track->num_summaries * sizeof(uint32_t) );

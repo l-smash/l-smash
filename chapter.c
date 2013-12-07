@@ -80,7 +80,7 @@ static int isom_read_simple_chapter( FILE *chapter, isom_chapter_entry_t *data )
     if( !chapter_name++ )
         return -1;
     len = LSMASH_MIN( 255, strlen( chapter_name ) );  /* We support length of chapter_name up to 255 */
-    data->chapter_name = (char *)malloc( len + 1 );
+    data->chapter_name = (char *)lsmash_malloc( len + 1 );
     if( !data->chapter_name )
         return -1;
     memcpy( data->chapter_name, chapter_name, len );
@@ -103,7 +103,7 @@ static int isom_read_minimum_chapter( FILE *chapter, isom_chapter_entry_t *data 
     if( !chapter_name++ )
         return -1;
     len = LSMASH_MIN( 255, strlen( chapter_name ) );  /* We support length of chapter_name up to 255 */
-    data->chapter_name = (char *)malloc( len + 1 );
+    data->chapter_name = (char *)lsmash_malloc( len + 1 );
     if( !data->chapter_name )
         return -1;
     memcpy( data->chapter_name, chapter_name, len );
@@ -160,11 +160,11 @@ int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom
     {
         if( add_bom )
         {
-            char *chapter_name_with_bom = (char *)malloc( strlen( data.chapter_name ) + 1 + UTF8_BOM_LENGTH );
+            char *chapter_name_with_bom = (char *)lsmash_malloc( strlen( data.chapter_name ) + 1 + UTF8_BOM_LENGTH );
             if( !chapter_name_with_bom )
                 goto fail2;
             sprintf( chapter_name_with_bom, "%s%s", UTF8_BOM, data.chapter_name );
-            free( data.chapter_name );
+            lsmash_free( data.chapter_name );
             data.chapter_name = chapter_name_with_bom;
         }
         data.start_time = (data.start_time + 50) / 100;    /* convert to 100ns unit */
@@ -173,19 +173,19 @@ int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom
             lsmash_log( NULL, LSMASH_LOG_WARNING,
                         "a chapter point exceeding the actual duration detected."
                         "This chapter point and the following ones (if any) will be cut off.\n" );
-            free( data.chapter_name );
+            lsmash_free( data.chapter_name );
             break;
         }
         if( isom_add_chpl_entry( root->moov->udta->chpl, &data ) )
             goto fail2;
-        free( data.chapter_name );
+        lsmash_free( data.chapter_name );
         data.chapter_name = NULL;
     }
     fclose( chapter );
     return 0;
 fail2:
     if( data.chapter_name )
-        free( data.chapter_name );
+        lsmash_free( data.chapter_name );
 fail:
     fclose( chapter );
 error_message:
@@ -213,7 +213,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     if( isom_add_tref( trak ) )
         goto error_message;
     /* Create a track_ID for a new chapter track. */
-    uint32_t *id = (uint32_t *)malloc( sizeof(uint32_t) );
+    uint32_t *id = (uint32_t *)lsmash_malloc( sizeof(uint32_t) );
     if( !id )
         goto error_message;
     uint32_t chapter_track_ID = *id = root->moov->mvhd->next_track_ID;
@@ -272,7 +272,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
         lsmash_sample_t *sample = lsmash_create_sample( 2 + name_length + 12 * is_qt_text );
         if( !sample )
         {
-            free( data.chapter_name );
+            lsmash_free( data.chapter_name );
             goto fail;
         }
         sample->data[0] = (name_length >> 8) & 0xff;
@@ -296,10 +296,10 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
         sample->index = sample_entry;
         if( lsmash_append_sample( root, chapter_track_ID, sample ) )
         {
-            free( data.chapter_name );
+            lsmash_free( data.chapter_name );
             goto fail;
         }
-        free( data.chapter_name );
+        lsmash_free( data.chapter_name );
         data.chapter_name = NULL;
     }
     if( lsmash_flush_pooled_samples( root, chapter_track_ID, 0 ) )

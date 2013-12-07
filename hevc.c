@@ -62,7 +62,7 @@ void lsmash_destroy_hevc_parameter_arrays
         return;
     for( int i = 0; i < HEVC_DCR_NALU_TYPE_NUM; i++ )
         lsmash_remove_entries( param->parameter_arrays->ps_array[i].list, isom_remove_dcr_ps );
-    free( param->parameter_arrays );
+    lsmash_free( param->parameter_arrays );
     param->parameter_arrays = NULL;
 }
 
@@ -74,7 +74,7 @@ void hevc_destruct_specific_data
     if( !data )
         return;
     lsmash_destroy_hevc_parameter_arrays( data );
-    free( data );
+    lsmash_free( data );
 }
 
 static void hevc_remove_pps
@@ -85,10 +85,10 @@ static void hevc_remove_pps
     if( !pps )
         return;
     if( pps->colWidth )
-        free( pps->colWidth );
+        lsmash_free( pps->colWidth );
     if( pps->rowHeight )
-        free( pps->rowHeight );
-    free( pps );
+        lsmash_free( pps->rowHeight );
+    lsmash_free( pps );
 }
 
 void hevc_cleanup_parser
@@ -172,7 +172,7 @@ static hevc_vps_t *hevc_get_vps
     vps->video_parameter_set_id = vps_id;
     if( lsmash_add_entry( vps_list, vps ) )
     {
-        free( vps );
+        lsmash_free( vps );
         return NULL;
     }
     return vps;
@@ -200,7 +200,7 @@ static hevc_sps_t *hevc_get_sps
     sps->seq_parameter_set_id = sps_id;
     if( lsmash_add_entry( sps_list, sps ) )
     {
-        free( sps );
+        lsmash_free( sps );
         return NULL;
     }
     return sps;
@@ -228,7 +228,7 @@ static hevc_pps_t *hevc_get_pps
     pps->pic_parameter_set_id = pps_id;
     if( lsmash_add_entry( pps_list, pps ) )
     {
-        free( pps );
+        lsmash_free( pps );
         return NULL;
     }
     return pps;
@@ -966,11 +966,11 @@ static int hevc_allocate_tile_sizes
 )
 {
     /* Allocate columns and rows of tiles. */
-    void *temp = realloc( pps->colWidth, 2 * num_tile_columns * sizeof(uint32_t) );
+    void *temp = lsmash_realloc( pps->colWidth, 2 * num_tile_columns * sizeof(uint32_t) );
     if( !temp )
         return -1;
     pps->colWidth = temp;
-    temp = realloc( pps->rowHeight, 2 * num_tile_rows * sizeof(uint32_t) );
+    temp = lsmash_realloc( pps->rowHeight, 2 * num_tile_rows * sizeof(uint32_t) );
     if( !temp )
         return -1;
     pps->rowHeight = temp;
@@ -2178,7 +2178,7 @@ int lsmash_append_hevc_dcr_nalu
         if( ps->nalUnit != ps_data )
         {
             /* The same address could be given when called by hevc_update_picture_info_for_slice(). */
-            free( ps->nalUnit );
+            lsmash_free( ps->nalUnit );
             ps->nalUnit = ps_data;
         }
         ps->nalUnitLength = ps_length;

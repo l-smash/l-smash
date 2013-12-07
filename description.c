@@ -38,8 +38,8 @@ static void global_destruct_specific_data( void *data )
         return;
     lsmash_codec_global_header_t *global = (lsmash_codec_global_header_t *)data;
     if( global->header_data )
-        free( global->header_data );
-    free( global );
+        lsmash_free( global->header_data );
+    lsmash_free( global );
 }
 
 static int isom_is_qt_video( lsmash_codec_type_t type )
@@ -252,11 +252,11 @@ static int isom_initialize_structured_codec_specific_data( lsmash_codec_specific
             break;
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3 :
             specific->size     = sizeof(lsmash_ac3_specific_parameters_t);
-            specific->destruct = free;
+            specific->destruct = lsmash_free;
             break;
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3 :
             specific->size     = sizeof(lsmash_eac3_specific_parameters_t);
-            specific->destruct = free;
+            specific->destruct = lsmash_free;
             break;
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_DTS :
             specific->size     = sizeof(lsmash_dts_specific_parameters_t);
@@ -264,27 +264,27 @@ static int isom_initialize_structured_codec_specific_data( lsmash_codec_specific
             break;
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_ALAC :
             specific->size     = sizeof(lsmash_alac_specific_parameters_t);
-            specific->destruct = free;
+            specific->destruct = lsmash_free;
             break;
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_SAMPLE_SCALE :
             specific->size     = sizeof(lsmash_isom_sample_scale_t);
-            specific->destruct = free;
+            specific->destruct = lsmash_free;
             break;
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264_BITRATE :
             specific->size     = sizeof(lsmash_h264_bitrate_t);
-            specific->destruct = free;
+            specific->destruct = lsmash_free;
             break;
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_COMMON :
             specific->size     = sizeof(lsmash_qt_video_common_t);
-            specific->destruct = free;
+            specific->destruct = lsmash_free;
             break;
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_COMMON :
             specific->size     = sizeof(lsmash_qt_audio_common_t);
-            specific->destruct = free;
+            specific->destruct = lsmash_free;
             break;
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_FORMAT_SPECIFIC_FLAGS :
             specific->size     = sizeof(lsmash_qt_audio_format_specific_flags_t);
-            specific->destruct = free;
+            specific->destruct = lsmash_free;
             break;
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_CODEC_GLOBAL_HEADER :
             specific->size     = sizeof(lsmash_codec_global_header_t);
@@ -292,19 +292,19 @@ static int isom_initialize_structured_codec_specific_data( lsmash_codec_specific
             break;
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_FIELD_INFO :
             specific->size     = sizeof(lsmash_qt_field_info_t);
-            specific->destruct = free;
+            specific->destruct = lsmash_free;
             break;
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_PIXEL_FORMAT :
             specific->size     = sizeof(lsmash_qt_pixel_format_t);
-            specific->destruct = free;
+            specific->destruct = lsmash_free;
             break;
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_SIGNIFICANT_BITS :
             specific->size     = sizeof(lsmash_qt_significant_bits_t);
-            specific->destruct = free;
+            specific->destruct = lsmash_free;
             break;
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_CHANNEL_LAYOUT :
             specific->size     = sizeof(lsmash_qt_audio_channel_layout_t);
-            specific->destruct = free;
+            specific->destruct = lsmash_free;
             break;
         default :
             specific->size     = 0;
@@ -336,7 +336,7 @@ static inline int isom_initialize_codec_specific_data( lsmash_codec_specific_t *
     {
         specific->data.unstructured = NULL;
         specific->size              = 0;
-        specific->destruct          = (lsmash_codec_specific_destructor_t)free;
+        specific->destruct          = (lsmash_codec_specific_destructor_t)lsmash_free;
     }
     return 0;
 }
@@ -358,12 +358,12 @@ void lsmash_destroy_codec_specific_data( lsmash_codec_specific_t *specific )
                 specific->destruct( specific->data.unstructured );
         }
     }
-    free( specific );
+    lsmash_free( specific );
 }
 
 lsmash_codec_specific_t *lsmash_create_codec_specific_data( lsmash_codec_specific_data_type type, lsmash_codec_specific_format format )
 {
-    lsmash_codec_specific_t *specific = malloc( sizeof(lsmash_codec_specific_t) );
+    lsmash_codec_specific_t *specific = lsmash_malloc( sizeof(lsmash_codec_specific_t) );
     if( !specific )
         return NULL;
     if( isom_initialize_codec_specific_data( specific, type, format ) )
@@ -653,7 +653,7 @@ static int codec_construct_qt_audio_decompression_info( lsmash_codec_specific_t 
                 box->unknown_field = lsmash_memdup( pos, box->unknown_size );
                 if( !box->unknown_field )
                 {
-                    free( box );
+                    lsmash_free( box );
                     return -1;
                 }
                 if( isom_add_extension_box( wave, box, isom_remove_unknown_box ) )
@@ -1044,7 +1044,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
                 lsmash_destroy_codec_specific_data( cs );
                 if( isom_add_extension_box( visual, box, isom_remove_stsl ) )
                 {
-                    free( box );
+                    lsmash_free( box );
                     goto fail;
                 }
                 break;
@@ -1068,7 +1068,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
                 lsmash_destroy_codec_specific_data( cs );
                 if( isom_add_extension_box( visual, box, isom_remove_btrt ) )
                 {
-                    free( box );
+                    lsmash_free( box );
                     goto fail;
                 }
                 break;
@@ -1091,7 +1091,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
                 lsmash_destroy_codec_specific_data( cs );
                 if( isom_add_extension_box( visual, box, isom_remove_fiel ) )
                 {
-                    free( box );
+                    lsmash_free( box );
                     goto fail;
                 }
                 break;
@@ -1113,7 +1113,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
                 lsmash_destroy_codec_specific_data( cs );
                 if( isom_add_extension_box( visual, box, isom_remove_cspc ) )
                 {
-                    free( box );
+                    lsmash_free( box );
                     goto fail;
                 }
                 break;
@@ -1135,7 +1135,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
                 lsmash_destroy_codec_specific_data( cs );
                 if( isom_add_extension_box( visual, box, isom_remove_sgbt ) )
                 {
-                    free( box );
+                    lsmash_free( box );
                     goto fail;
                 }
                 break;
@@ -1157,7 +1157,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
                 lsmash_destroy_codec_specific_data( cs );
                 if( isom_add_extension_box( visual, box, isom_remove_gama ) )
                 {
-                    free( box );
+                    lsmash_free( box );
                     goto fail;
                 }
                 break;
@@ -1181,7 +1181,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
                 if( !box->header_data
                  || isom_add_extension_box( visual, box, isom_remove_glbl ) )
                 {
-                    free( box );
+                    lsmash_free( box );
                     goto fail;
                 }
                 break;
@@ -1253,7 +1253,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
         }
         if( isom_add_extension_box( visual, box, isom_remove_clap ) )
         {
-            free( box );
+            lsmash_free( box );
             goto fail;
         }
     }
@@ -1268,7 +1268,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
         box->vSpacing = LSMASH_MAX( summary->par_v, 1 );
         if( isom_add_extension_box( visual, box, isom_remove_pasp ) )
         {
-            free( box );
+            lsmash_free( box );
             goto fail;
         }
     }
@@ -1311,7 +1311,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
         }
         if( isom_add_extension_box( visual, box, isom_remove_colr ) )
         {
-            free( box );
+            lsmash_free( box );
             goto fail;
         }
     }
@@ -1346,7 +1346,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
         return 0;   /* successed */
 fail:
     isom_remove_all_extension_boxes( &visual->extensions );
-    free( visual );
+    lsmash_free( visual );
     return -1;
 }
 
@@ -1373,7 +1373,7 @@ static int isom_append_audio_es_descriptor_extension( isom_box_t *box, lsmash_au
     isom_esds_t *esds = lsmash_malloc_zero( sizeof(isom_esds_t) );
     if( !esds )
     {
-        free( esds_data );
+        lsmash_free( esds_data );
         return -1;
     }
     isom_init_box_common( esds, box, ISOM_BOX_TYPE_ESDS );
@@ -1382,10 +1382,10 @@ static int isom_append_audio_es_descriptor_extension( isom_box_t *box, lsmash_au
     bs.alloc = esds_size - ISOM_FULLBOX_COMMON_SIZE;
     bs.store = bs.alloc;
     esds->ES = mp4sys_get_ES_Descriptor( &bs );
-    free( esds_data );
+    lsmash_free( esds_data );
     if( !esds->ES )
     {
-        free( esds );
+        lsmash_free( esds );
         return -1;
     }
     if( isom_add_extension_box( box, esds, isom_remove_esds ) )
@@ -1428,7 +1428,7 @@ static int isom_append_channel_layout_extension( lsmash_codec_specific_t *specif
         box->channelDescriptions       = NULL;
         if( isom_add_extension_box( parent_box, box, isom_remove_chan ) )
         {
-            free( box );
+            lsmash_free( box );
             return -1;
         }
     }
@@ -1979,7 +1979,7 @@ int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_
                 if( !box->header_data
                  || isom_add_extension_box( audio, box, isom_remove_glbl ) )
                 {
-                    free( box );
+                    lsmash_free( box );
                     goto fail;
                 }
                 break;
@@ -2028,7 +2028,7 @@ int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_
         return 0;   /* successed */
 fail:
     isom_remove_all_extension_boxes( &audio->extensions );
-    free( audio );
+    lsmash_free( audio );
     return -1;
 }
 
@@ -2301,7 +2301,7 @@ static int isom_append_structured_mp4sys_decoder_config( lsmash_codec_specific_l
     lsmash_codec_specific_t *specific = lsmash_create_codec_specific_data( type, LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
     if( !specific )
     {
-        free( esds_data );
+        lsmash_free( esds_data );
         return -1;
     }
     specific->data.unstructured = esds_data;

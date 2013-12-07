@@ -128,18 +128,20 @@ isom_tfra_entry_t *isom_get_tfra( isom_mfra_t *mfra, uint32_t track_ID )
 
 static int isom_add_elst_entry( isom_elst_t *elst, uint64_t segment_duration, int64_t media_time, int32_t media_rate )
 {
-    isom_elst_entry_t *data = malloc( sizeof(isom_elst_entry_t) );
+    isom_elst_entry_t *data = lsmash_malloc( sizeof(isom_elst_entry_t) );
     if( !data )
         return -1;
     data->segment_duration = segment_duration;
-    data->media_time = media_time;
-    data->media_rate = media_rate;
+    data->media_time       = media_time;
+    data->media_rate       = media_rate;
     if( lsmash_add_entry( elst->list, data ) )
     {
-        free( data );
+        lsmash_free( data );
         return -1;
     }
-    if( data->segment_duration > UINT32_MAX || data->media_time > INT32_MAX || data->media_time < INT32_MIN )
+    if( data->segment_duration > UINT32_MAX
+     || data->media_time       >  INT32_MAX
+     || data->media_time       <  INT32_MIN )
         elst->version = 1;
     return 0;
 }
@@ -162,7 +164,7 @@ isom_tref_type_t *isom_add_track_reference_type( isom_tref_t *tref, isom_track_r
     ref->track_ID  = track_ID;
     if( lsmash_add_entry( tref->ref_list, ref ) )
     {
-        free( ref );
+        lsmash_free( ref );
         return NULL;
     }
     return ref;
@@ -181,32 +183,32 @@ static int isom_add_dref_entry( isom_dref_t *dref, uint32_t flags, char *name, c
     if( location )
     {
         data->location_length = strlen( location ) + 1;
-        data->location = lsmash_memdup( location, data->location_length );
+        data->location        = lsmash_memdup( location, data->location_length );
         if( !data->location )
         {
-            free( data );
+            lsmash_free( data );
             return -1;
         }
     }
     if( name )
     {
         data->name_length = strlen( name ) + 1;
-        data->name = lsmash_memdup( name, data->name_length );
+        data->name        = lsmash_memdup( name, data->name_length );
         if( !data->name )
         {
             if( data->location )
-                free( data->location );
-            free( data );
+                lsmash_free( data->location );
+            lsmash_free( data );
             return -1;
         }
     }
     if( lsmash_add_entry( dref->list, data ) )
     {
         if( data->location )
-            free( data->location );
+            lsmash_free( data->location );
         if( data->name )
-            free( data->name );
-        free( data );
+            lsmash_free( data->name );
+        lsmash_free( data );
         return -1;
     }
     return 0;
@@ -214,13 +216,13 @@ static int isom_add_dref_entry( isom_dref_t *dref, uint32_t flags, char *name, c
 
 isom_dcr_ps_entry_t *isom_create_ps_entry( uint8_t *ps, uint32_t ps_size )
 {
-    isom_dcr_ps_entry_t *entry = malloc( sizeof(isom_dcr_ps_entry_t) );
+    isom_dcr_ps_entry_t *entry = lsmash_malloc( sizeof(isom_dcr_ps_entry_t) );
     if( !entry )
         return NULL;
     entry->nalUnit = lsmash_memdup( ps, ps_size );
     if( !entry->nalUnit )
     {
-        free( entry );
+        lsmash_free( entry );
         return NULL;
     }
     entry->nalUnitLength = ps_size;
@@ -233,8 +235,8 @@ void isom_remove_dcr_ps( isom_dcr_ps_entry_t *ps )
     if( !ps )
         return;
     if( ps->nalUnit )
-        free( ps->nalUnit );
-    free( ps );
+        lsmash_free( ps->nalUnit );
+    lsmash_free( ps );
 }
 
 #if 0
@@ -250,7 +252,7 @@ static int isom_add_mp4s_entry( isom_stsd_t *stsd )
     mp4s->data_reference_index = 1;
     if( lsmash_add_entry( stsd->list, mp4s ) )
     {
-        free( mp4s );
+        lsmash_free( mp4s );
         return -1;
     }
     return 0;
@@ -305,7 +307,7 @@ static int isom_add_text_entry( isom_stsd_t *stsd )
     text->data_reference_index = 1;
     if( lsmash_add_entry( stsd->list, text ) )
     {
-        free( text );
+        lsmash_free( text );
         return -1;
     }
     return 0;
@@ -322,7 +324,7 @@ int isom_add_ftab( isom_tx3g_entry_t *tx3g )
     ftab->list = lsmash_create_entry_list();
     if( !ftab->list )
     {
-        free( ftab );
+        lsmash_free( ftab );
         return -1;
     }
     tx3g->ftab = ftab;
@@ -342,7 +344,7 @@ static int isom_add_tx3g_entry( isom_stsd_t *stsd )
     if( isom_add_ftab( tx3g ) ||
         lsmash_add_entry( stsd->list, tx3g ) )
     {
-        free( tx3g );
+        lsmash_free( tx3g );
         return -1;
     }
     return 0;
@@ -495,14 +497,14 @@ static int isom_add_stts_entry( isom_stbl_t *stbl, uint32_t sample_delta )
      || !stbl->stts
      || !stbl->stts->list )
         return -1;
-    isom_stts_entry_t *data = malloc( sizeof(isom_stts_entry_t) );
+    isom_stts_entry_t *data = lsmash_malloc( sizeof(isom_stts_entry_t) );
     if( !data )
         return -1;
     data->sample_count = 1;
     data->sample_delta = sample_delta;
     if( lsmash_add_entry( stbl->stts->list, data ) )
     {
-        free( data );
+        lsmash_free( data );
         return -1;
     }
     return 0;
@@ -514,14 +516,14 @@ static int isom_add_ctts_entry( isom_stbl_t *stbl, uint32_t sample_offset )
      || !stbl->ctts
      || !stbl->ctts->list )
         return -1;
-    isom_ctts_entry_t *data = malloc( sizeof(isom_ctts_entry_t) );
+    isom_ctts_entry_t *data = lsmash_malloc( sizeof(isom_ctts_entry_t) );
     if( !data )
         return -1;
     data->sample_count  = 1;
     data->sample_offset = sample_offset;
     if( lsmash_add_entry( stbl->ctts->list, data ) )
     {
-        free( data );
+        lsmash_free( data );
         return -1;
     }
     return 0;
@@ -533,7 +535,7 @@ static int isom_add_stsc_entry( isom_stbl_t *stbl, uint32_t first_chunk, uint32_
      || !stbl->stsc
      || !stbl->stsc->list )
         return -1;
-    isom_stsc_entry_t *data = malloc( sizeof(isom_stsc_entry_t) );
+    isom_stsc_entry_t *data = lsmash_malloc( sizeof(isom_stsc_entry_t) );
     if( !data )
         return -1;
     data->first_chunk              = first_chunk;
@@ -541,7 +543,7 @@ static int isom_add_stsc_entry( isom_stbl_t *stbl, uint32_t first_chunk, uint32_
     data->sample_description_index = sample_description_index;
     if( lsmash_add_entry( stbl->stsc->list, data ) )
     {
-        free( data );
+        lsmash_free( data );
         return -1;
     }
     return 0;
@@ -570,25 +572,25 @@ static int isom_add_stsz_entry( isom_stbl_t *stbl, uint32_t entry_size )
             return -1;
         for( uint32_t i = 0; i < stsz->sample_count; i++ )
         {
-            isom_stsz_entry_t *data = malloc( sizeof(isom_stsz_entry_t) );
+            isom_stsz_entry_t *data = lsmash_malloc( sizeof(isom_stsz_entry_t) );
             if( !data )
                 return -1;
             data->entry_size = stsz->sample_size;
             if( lsmash_add_entry( stsz->list, data ) )
             {
-                free( data );
+                lsmash_free( data );
                 return -1;
             }
         }
         stsz->sample_size = 0;
     }
-    isom_stsz_entry_t *data = malloc( sizeof(isom_stsz_entry_t) );
+    isom_stsz_entry_t *data = lsmash_malloc( sizeof(isom_stsz_entry_t) );
     if( !data )
         return -1;
     data->entry_size = entry_size;
     if( lsmash_add_entry( stsz->list, data ) )
     {
-        free( data );
+        lsmash_free( data );
         return -1;
     }
     ++ stsz->sample_count;
@@ -601,13 +603,13 @@ static int isom_add_stss_entry( isom_stbl_t *stbl, uint32_t sample_number )
      || !stbl->stss
      || !stbl->stss->list )
         return -1;
-    isom_stss_entry_t *data = malloc( sizeof(isom_stss_entry_t) );
+    isom_stss_entry_t *data = lsmash_malloc( sizeof(isom_stss_entry_t) );
     if( !data )
         return -1;
     data->sample_number = sample_number;
     if( lsmash_add_entry( stbl->stss->list, data ) )
     {
-        free( data );
+        lsmash_free( data );
         return -1;
     }
     return 0;
@@ -619,13 +621,13 @@ static int isom_add_stps_entry( isom_stbl_t *stbl, uint32_t sample_number )
      || !stbl->stps
      || !stbl->stps->list )
         return -1;
-    isom_stps_entry_t *data = malloc( sizeof(isom_stps_entry_t) );
+    isom_stps_entry_t *data = lsmash_malloc( sizeof(isom_stps_entry_t) );
     if( !data )
         return -1;
     data->sample_number = sample_number;
     if( lsmash_add_entry( stbl->stps->list, data ) )
     {
-        free( data );
+        lsmash_free( data );
         return -1;
     }
     return 0;
@@ -645,7 +647,7 @@ static int isom_add_sdtp_entry( isom_box_t *parent, lsmash_sample_property_t *pr
     if( !sdtp
      || !sdtp->list )
         return -1;
-    isom_sdtp_entry_t *data = malloc( sizeof(isom_sdtp_entry_t) );
+    isom_sdtp_entry_t *data = lsmash_malloc( sizeof(isom_sdtp_entry_t) );
     if( !data )
         return -1;
     /* isom_sdtp_entry_t is smaller than lsmash_sample_property_t. */
@@ -655,7 +657,7 @@ static int isom_add_sdtp_entry( isom_box_t *parent, lsmash_sample_property_t *pr
     data->sample_has_redundancy = prop->redundant   & 0x03;
     if( lsmash_add_entry( sdtp->list, data ) )
     {
-        free( data );
+        lsmash_free( data );
         return -1;
     }
     return 0;
@@ -687,13 +689,13 @@ static int isom_add_co64_entry( isom_stbl_t *stbl, uint64_t chunk_offset )
      || !stbl->stco
      || !stbl->stco->list )
         return -1;
-    isom_co64_entry_t *data = malloc( sizeof(isom_co64_entry_t) );
+    isom_co64_entry_t *data = lsmash_malloc( sizeof(isom_co64_entry_t) );
     if( !data )
         return -1;
     data->chunk_offset = chunk_offset;
     if( lsmash_add_entry( stbl->stco->list, data ) )
     {
-        free( data );
+        lsmash_free( data );
         return -1;
     }
     return 0;
@@ -714,7 +716,7 @@ static int isom_convert_stco_to_co64( isom_stbl_t* stbl )
             return -1;
     }
     lsmash_remove_list( stco->list, NULL );
-    free( stco );
+    lsmash_free( stco );
     return 0;
 }
 
@@ -732,13 +734,13 @@ static int isom_add_stco_entry( isom_stbl_t *stbl, uint64_t chunk_offset )
             return -1;
         return isom_add_co64_entry( stbl, chunk_offset );
     }
-    isom_stco_entry_t *data = malloc( sizeof(isom_stco_entry_t) );
+    isom_stco_entry_t *data = lsmash_malloc( sizeof(isom_stco_entry_t) );
     if( !data )
         return -1;
     data->chunk_offset = (uint32_t)chunk_offset;
     if( lsmash_add_entry( stbl->stco->list, data ) )
     {
-        free( data );
+        lsmash_free( data );
         return -1;
     }
     return 0;
@@ -780,7 +782,7 @@ static isom_rap_entry_t *isom_add_rap_group_entry( isom_sgpd_entry_t *sgpd )
 {
     if( !sgpd )
         return NULL;
-    isom_rap_entry_t *data = malloc( sizeof(isom_rap_entry_t) );
+    isom_rap_entry_t *data = lsmash_malloc( sizeof(isom_rap_entry_t) );
      if( !data )
         return NULL;
     data->description_length        = 0;
@@ -788,7 +790,7 @@ static isom_rap_entry_t *isom_add_rap_group_entry( isom_sgpd_entry_t *sgpd )
     data->num_leading_samples       = 0;
     if( lsmash_add_entry( sgpd->list, data ) )
     {
-        free( data );
+        lsmash_free( data );
         return NULL;
     }
     return data;
@@ -798,14 +800,14 @@ static isom_roll_entry_t *isom_add_roll_group_entry( isom_sgpd_entry_t *sgpd, in
 {
     if( !sgpd )
         return NULL;
-    isom_roll_entry_t *data = malloc( sizeof(isom_roll_entry_t) );
+    isom_roll_entry_t *data = lsmash_malloc( sizeof(isom_roll_entry_t) );
      if( !data )
         return NULL;
     data->description_length = 0;
     data->roll_distance      = roll_distance;
     if( lsmash_add_entry( sgpd->list, data ) )
     {
-        free( data );
+        lsmash_free( data );
         return NULL;
     }
     return data;
@@ -815,14 +817,14 @@ static isom_group_assignment_entry_t *isom_add_group_assignment_entry( isom_sbgp
 {
     if( !sbgp )
         return NULL;
-    isom_group_assignment_entry_t *data = malloc( sizeof(isom_group_assignment_entry_t) );
+    isom_group_assignment_entry_t *data = lsmash_malloc( sizeof(isom_group_assignment_entry_t) );
     if( !data )
         return NULL;
     data->sample_count            = sample_count;
     data->group_description_index = group_description_index;
     if( lsmash_add_entry( sbgp->list, data ) )
     {
-        free( data );
+        lsmash_free( data );
         return NULL;
     }
     return data;
@@ -834,23 +836,23 @@ int isom_add_chpl_entry( isom_chpl_t *chpl, isom_chapter_entry_t *chap_data )
      || !chpl
      || !chpl->list )
         return -1;
-    isom_chpl_entry_t *data = malloc( sizeof(isom_chpl_entry_t) );
+    isom_chpl_entry_t *data = lsmash_malloc( sizeof(isom_chpl_entry_t) );
     if( !data )
         return -1;
     data->start_time          = chap_data->start_time;
     data->chapter_name_length = strlen( chap_data->chapter_name );
-    data->chapter_name        = (char *)malloc( data->chapter_name_length + 1 );
+    data->chapter_name        = (char *)lsmash_malloc( data->chapter_name_length + 1 );
     if( !data->chapter_name )
     {
-        free( data );
+        lsmash_free( data );
         return -1;
     }
     memcpy( data->chapter_name, chap_data->chapter_name, data->chapter_name_length );
     data->chapter_name[data->chapter_name_length] = '\0';
     if( lsmash_add_entry( chpl->list, data ) )
     {
-        free( data->chapter_name );
-        free( data );
+        lsmash_free( data->chapter_name );
+        lsmash_free( data );
         return -1;
     }
     return 0;
@@ -872,7 +874,7 @@ static isom_trex_entry_t *isom_add_trex( isom_mvex_t *mvex )
     isom_init_box_common( trex, mvex, ISOM_BOX_TYPE_TREX );
     if( lsmash_add_entry( mvex->trex_list, trex ) )
     {
-        free( trex );
+        lsmash_free( trex );
         return NULL;
     }
     return trex;
@@ -894,7 +896,7 @@ static isom_trun_entry_t *isom_add_trun( isom_traf_entry_t *traf )
     isom_init_box_common( trun, traf, ISOM_BOX_TYPE_TRUN );
     if( lsmash_add_entry( traf->trun_list, trun ) )
     {
-        free( trun );
+        lsmash_free( trun );
         return NULL;
     }
     return trun;
@@ -916,17 +918,17 @@ static isom_traf_entry_t *isom_add_traf( lsmash_root_t *root, isom_moof_entry_t 
     if( !traf )
         return NULL;
     isom_init_box_common( traf, moof, ISOM_BOX_TYPE_TRAF );
-    isom_cache_t *cache = malloc( sizeof(isom_cache_t) );
+    isom_cache_t *cache = lsmash_malloc( sizeof(isom_cache_t) );
     if( !cache )
     {
-        free( traf );
+        lsmash_free( traf );
         return NULL;
     }
     memset( cache, 0, sizeof(isom_cache_t) );
     if( lsmash_add_entry( moof->traf_list, traf ) )
     {
-        free( cache );
-        free( traf );
+        lsmash_free( cache );
+        lsmash_free( traf );
         return NULL;
     }
     traf->cache = cache;
@@ -949,7 +951,7 @@ static isom_moof_entry_t *isom_add_moof( lsmash_root_t *root )
     isom_init_box_common( moof, root, ISOM_BOX_TYPE_MOOF );
     if( lsmash_add_entry( root->moof_list, moof ) )
     {
-        free( moof );
+        lsmash_free( moof );
         return NULL;
     }
     return moof;
@@ -971,7 +973,7 @@ static isom_tfra_entry_t *isom_add_tfra( isom_mfra_t *mfra )
     isom_init_box_common( tfra, mfra, ISOM_BOX_TYPE_TFRA );
     if( lsmash_add_entry( mfra->tfra_list, tfra ) )
     {
-        free( tfra );
+        lsmash_free( tfra );
         return NULL;
     }
     return tfra;
@@ -1084,7 +1086,7 @@ static int isom_add_iods( isom_moov_t *moov )
     iods->OD = mp4sys_create_ObjectDescriptor( 1 ); /* NOTE: Use 1 for ObjectDescriptorID of IOD. */
     if( !iods->OD )
     {
-        free( iods );
+        lsmash_free( iods );
         return -1;
     }
     mp4a_audioProfileLevelIndication     audio_pli = MP4A_AUDIO_PLI_NONE_REQUIRED;
@@ -1095,17 +1097,17 @@ static int isom_add_iods( isom_moov_t *moov )
         if( !trak
          || !trak->tkhd )
         {
-            free( iods );
+            lsmash_free( iods );
             return -1;
         }
         if( isom_scan_trak_profileLevelIndication( trak, &audio_pli, &visual_pli ) )
         {
-            free( iods );
+            lsmash_free( iods );
             return -1;
         }
         if( mp4sys_add_ES_ID_Inc( iods->OD, trak->tkhd->track_ID ) )
         {
-            free( iods );
+            lsmash_free( iods );
             return -1;
         }
     }
@@ -1115,7 +1117,7 @@ static int isom_add_iods( isom_moov_t *moov )
                                            audio_pli, visual_pli,
                                            MP4SYS_GRAPHICS_PLI_NONE_REQUIRED ) )
     {
-        free( iods );
+        lsmash_free( iods );
         return -1;
     }
     moov->iods = iods;
@@ -1208,7 +1210,7 @@ int isom_add_tref( isom_trak_entry_t *trak )
     tref->ref_list = lsmash_create_entry_list();
     if( !tref->ref_list )
     {
-        free( tref );
+        lsmash_free( tref );
         return -1;
     }
     trak->tref = tref;
@@ -1289,10 +1291,10 @@ int isom_add_hdlr( isom_mdia_t *mdia, isom_meta_t *meta, isom_minf_t *minf, uint
             break;
         }
     uint32_t name_length = 15 + subtype_name_length + type_name_length + root->isom_compatible + root->qt_compatible;
-    uint8_t *name = malloc( name_length );
+    uint8_t *name = lsmash_malloc( name_length );
     if( !name )
     {
-        free( hdlr );
+        lsmash_free( hdlr );
         return -1;
     }
     if( root->qt_compatible )
@@ -1524,7 +1526,7 @@ static isom_sgpd_entry_t *isom_add_sgpd( isom_stbl_t *stbl, uint32_t grouping_ty
     sgpd->list = lsmash_create_entry_list();
     if( !sgpd->list || lsmash_add_entry( stbl->sgpd_list, sgpd ) )
     {
-        free( sgpd );
+        lsmash_free( sgpd );
         return NULL;
     }
     sgpd->grouping_type = grouping_type;
@@ -1561,7 +1563,7 @@ static isom_sbgp_entry_t *isom_add_sbgp( isom_stbl_t *stbl, uint32_t grouping_ty
     sbgp->list = lsmash_create_entry_list();
     if( !sbgp->list || lsmash_add_entry( stbl->sbgp_list, sbgp ) )
     {
-        free( sbgp );
+        lsmash_free( sbgp );
         return NULL;
     }
     sbgp->grouping_type = grouping_type;
@@ -1598,7 +1600,7 @@ int isom_add_metaitem( isom_ilst_t *ilst, lsmash_itunes_metadata_item item )
     isom_create_box( metaitem, ilst, type );
     if( lsmash_add_entry( ilst->item_list, metaitem ) )
     {
-        free( metaitem );
+        lsmash_free( metaitem );
         return -1;
     }
     return 0;
@@ -1642,7 +1644,7 @@ int isom_add_ilst( isom_moov_t *moov )
     ilst->item_list = lsmash_create_entry_list();
     if( !ilst->item_list )
     {
-        free( ilst );
+        lsmash_free( ilst );
         return -1;
     }
     moov->udta->meta->ilst = ilst;
@@ -1659,7 +1661,7 @@ int isom_add_meta( isom_box_t *parent )
         lsmash_root_t *root = (lsmash_root_t *)parent;
         if( root->meta )
         {
-            free( meta );
+            lsmash_free( meta );
             return -1;
         }
         root->meta = meta;
@@ -1669,7 +1671,7 @@ int isom_add_meta( isom_box_t *parent )
         isom_moov_t *moov = (isom_moov_t *)parent;
         if( moov->meta )
         {
-            free( meta );
+            lsmash_free( meta );
             return -1;
         }
         moov->meta = meta;
@@ -1679,7 +1681,7 @@ int isom_add_meta( isom_box_t *parent )
         isom_trak_entry_t *trak = (isom_trak_entry_t *)parent;
         if( trak->meta )
         {
-            free( meta );
+            lsmash_free( meta );
             return -1;
         }
         trak->meta = meta;
@@ -1689,7 +1691,7 @@ int isom_add_meta( isom_box_t *parent )
         isom_udta_t *udta = (isom_udta_t *)parent;
         if( udta->meta )
         {
-            free( meta );
+            lsmash_free( meta );
             return -1;
         }
         udta->meta = meta;
@@ -1710,7 +1712,7 @@ static int isom_add_cprt( isom_udta_t *udta )
     isom_create_box( cprt, udta, ISOM_BOX_TYPE_CPRT );
     if( lsmash_add_entry( udta->cprt_list, cprt ) )
     {
-        free( cprt );
+        lsmash_free( cprt );
         return -1;
     }
     return 0;
@@ -1759,7 +1761,7 @@ static isom_trak_entry_t *isom_add_trak( lsmash_root_t *root )
     isom_cache_t *cache = lsmash_malloc_zero( sizeof(isom_cache_t) );
     if( !cache )
     {
-        free( trak );
+        lsmash_free( trak );
         return NULL;
     }
     isom_fragment_t *fragment = NULL;
@@ -1768,8 +1770,8 @@ static isom_trak_entry_t *isom_add_trak( lsmash_root_t *root )
         fragment = lsmash_malloc_zero( sizeof(isom_fragment_t) );
         if( !fragment )
         {
-            free( cache );
-            free( trak );
+            lsmash_free( cache );
+            lsmash_free( trak );
             return NULL;
         }
         cache->fragment = fragment;
@@ -1777,9 +1779,9 @@ static isom_trak_entry_t *isom_add_trak( lsmash_root_t *root )
     if( lsmash_add_entry( moov->trak_list, trak ) )
     {
         if( fragment )
-            free( fragment );
-        free( cache );
-        free( trak );
+            lsmash_free( fragment );
+        lsmash_free( cache );
+        lsmash_free( trak );
         return NULL;
     }
     trak->cache = cache;
@@ -1853,7 +1855,7 @@ static int isom_add_mfro( isom_mfra_t *mfra )
     do \
     { \
         parent_type *parent = (parent_type *)box_name->parent; \
-        free( box_name ); \
+        lsmash_free( box_name ); \
         if( parent ) \
             parent->box_name = NULL; \
     } while( 0 )
@@ -1863,8 +1865,8 @@ void isom_remove_unknown_box( isom_unknown_box_t *unknown_box )
     if( !unknown_box )
         return;
     if( unknown_box->unknown_field )
-        free( unknown_box->unknown_field );
-    free( unknown_box );
+        lsmash_free( unknown_box->unknown_field );
+    lsmash_free( unknown_box );
 }
 
 static void isom_remove_ftyp( isom_ftyp_t *ftyp )
@@ -1872,7 +1874,7 @@ static void isom_remove_ftyp( isom_ftyp_t *ftyp )
     if( !ftyp )
         return;
     if( ftyp->compatible_brands )
-        free( ftyp->compatible_brands );
+        lsmash_free( ftyp->compatible_brands );
     isom_remove_box( ftyp, lsmash_root_t );
 }
 
@@ -1935,8 +1937,8 @@ void isom_remove_track_reference_type( isom_tref_type_t *ref )
     if( !ref )
         return;
     if( ref->track_ID )
-        free( ref->track_ID );
-    free( ref );
+        lsmash_free( ref->track_ID );
+    lsmash_free( ref );
 }
 
 void isom_remove_tref( isom_tref_t *tref )
@@ -2010,7 +2012,7 @@ static void isom_remove_hdlr( isom_hdlr_t *hdlr )
     if( !hdlr )
         return;
     if( hdlr->componentName )
-        free( hdlr->componentName );
+        lsmash_free( hdlr->componentName );
     if( hdlr->parent )
     {
         if( lsmash_check_box_type_identical( hdlr->parent->type, ISOM_BOX_TYPE_MDIA ) )
@@ -2024,21 +2026,21 @@ static void isom_remove_hdlr( isom_hdlr_t *hdlr )
             assert( 0 );
         return;
     }
-    free( hdlr );
+    lsmash_free( hdlr );
 }
 
 void isom_remove_clap( isom_clap_t *clap )
 {
     if( !clap )
         return;
-    free( clap );
+    lsmash_free( clap );
 }
 
 void isom_remove_pasp( isom_pasp_t *pasp )
 {
     if( !pasp )
         return;
-    free( pasp );
+    lsmash_free( pasp );
 }
 
 void isom_remove_glbl( isom_glbl_t *glbl )
@@ -2047,49 +2049,49 @@ void isom_remove_glbl( isom_glbl_t *glbl )
         return;
     if( glbl->header_data )
         free( glbl->header_data );
-    free( glbl );
+    lsmash_free( glbl );
 }
 
 void isom_remove_colr( isom_colr_t *colr )
 {
     if( !colr )
         return;
-    free( colr );
+    lsmash_free( colr );
 }
 
 void isom_remove_gama( isom_gama_t *gama )
 {
     if( !gama )
         return;
-    free( gama );
+    lsmash_free( gama );
 }
 
 void isom_remove_fiel( isom_fiel_t *fiel )
 {
     if( !fiel )
         return;
-    free( fiel );
+    lsmash_free( fiel );
 }
 
 void isom_remove_cspc( isom_cspc_t *cspc )
 {
     if( !cspc )
         return;
-    free( cspc );
+    lsmash_free( cspc );
 }
 
 void isom_remove_sgbt( isom_sgbt_t *sgbt )
 {
     if( !sgbt )
         return;
-    free( sgbt );
+    lsmash_free( sgbt );
 }
 
 void isom_remove_stsl( isom_stsl_t *stsl )
 {
     if( !stsl )
         return;
-    free( stsl );
+    lsmash_free( stsl );
 }
 
 void isom_remove_esds( isom_esds_t *esds )
@@ -2097,14 +2099,14 @@ void isom_remove_esds( isom_esds_t *esds )
     if( !esds )
         return;
     mp4sys_remove_ES_Descriptor( esds->ES );
-    free( esds );
+    lsmash_free( esds );
 }
 
 void isom_remove_btrt( isom_btrt_t *btrt )
 {
     if( !btrt )
         return;
-    free( btrt );
+    lsmash_free( btrt );
 }
 
 static void isom_remove_font_record( isom_font_record_t *font_record )
@@ -2112,8 +2114,8 @@ static void isom_remove_font_record( isom_font_record_t *font_record )
     if( !font_record )
         return;
     if( font_record->font_name )
-        free( font_record->font_name );
-    free( font_record );
+        lsmash_free( font_record->font_name );
+    lsmash_free( font_record );
 }
 
 void isom_remove_ftab( isom_ftab_t *ftab )
@@ -2160,7 +2162,7 @@ void isom_remove_wave( isom_wave_t *wave )
     isom_remove_enda( wave->enda );
     isom_remove_mp4a( wave->mp4a );
     isom_remove_terminator( wave->terminator );
-    free( wave );
+    lsmash_free( wave );
 }
 
 void isom_remove_chan( isom_chan_t *chan )
@@ -2168,8 +2170,8 @@ void isom_remove_chan( isom_chan_t *chan )
     if( !chan )
         return;
     if( chan->channelDescriptions )
-        free( chan->channelDescriptions );
-    free( chan );
+        lsmash_free( chan->channelDescriptions );
+    lsmash_free( chan );
 }
 
 static void isom_remove_visual_description( isom_sample_entry_t *description )
@@ -2177,15 +2179,15 @@ static void isom_remove_visual_description( isom_sample_entry_t *description )
     isom_visual_entry_t *visual = (isom_visual_entry_t *)description;
     isom_remove_all_extension_boxes( &visual->extensions );
     if( visual->color_table.array )
-        free( visual->color_table.array );
-    free( visual );
+        lsmash_free( visual->color_table.array );
+    lsmash_free( visual );
 }
 
 static void isom_remove_audio_description( isom_sample_entry_t *description )
 {
     isom_audio_entry_t *audio = (isom_audio_entry_t *)description;
     isom_remove_all_extension_boxes( &audio->extensions );
-    free( audio );
+    lsmash_free( audio );
 }
 
 static void isom_remove_hint_description( isom_sample_entry_t *description )
@@ -2193,15 +2195,15 @@ static void isom_remove_hint_description( isom_sample_entry_t *description )
     isom_hint_entry_t *hint = (isom_hint_entry_t *)description;
     isom_remove_all_extension_boxes( &hint->extensions );
     if( hint->data )
-        free( hint->data );
-    free( hint );
+        lsmash_free( hint->data );
+    lsmash_free( hint );
 }
 
 static void isom_remove_metadata_description( isom_sample_entry_t *description )
 {
     isom_metadata_entry_t *metadata = (isom_metadata_entry_t *)description;
     isom_remove_all_extension_boxes( &metadata->extensions );
-    free( metadata );
+    lsmash_free( metadata );
 }
 
 static void isom_remove_tx3g_description( isom_sample_entry_t *description )
@@ -2210,7 +2212,7 @@ static void isom_remove_tx3g_description( isom_sample_entry_t *description )
     isom_remove_all_extension_boxes( &tx3g->extensions );
     if( tx3g->ftab )
         isom_remove_ftab( tx3g->ftab );
-    free( tx3g );
+    lsmash_free( tx3g );
 }
 
 static void isom_remove_qt_text_description( isom_sample_entry_t *description )
@@ -2219,14 +2221,14 @@ static void isom_remove_qt_text_description( isom_sample_entry_t *description )
     isom_remove_all_extension_boxes( &text->extensions );
     if( text->font_name )
         free( text->font_name );
-    free( text );
+    lsmash_free( text );
 }
 
 static void isom_remove_mp4s_description( isom_sample_entry_t *description )
 {
     isom_mp4s_entry_t *mp4s = (isom_mp4s_entry_t *)description;
     isom_remove_all_extension_boxes( &mp4s->extensions );
-    free( mp4s );
+    lsmash_free( mp4s );
 }
 
 void isom_remove_sample_description( isom_sample_entry_t *sample )
@@ -2475,7 +2477,7 @@ static void isom_remove_sdtp( isom_sdtp_t *sdtp )
             assert( 0 );
         return;
     }
-    free( sdtp );
+    lsmash_free( sdtp );
 }
 
 static void isom_remove_stco( isom_stco_t *stco )
@@ -2491,7 +2493,7 @@ static void isom_remove_sgpd( isom_sgpd_entry_t *sgpd )
     if( !sgpd )
         return;
     lsmash_remove_list( sgpd->list, NULL );
-    free( sgpd );
+    lsmash_free( sgpd );
 }
 
 static void isom_remove_sbgp( isom_sbgp_entry_t *sbgp )
@@ -2499,7 +2501,7 @@ static void isom_remove_sbgp( isom_sbgp_entry_t *sbgp )
     if( !sbgp )
         return;
     lsmash_remove_list( sbgp->list, NULL );
-    free( sbgp );
+    lsmash_free( sbgp );
 }
 
 static void isom_remove_stbl( isom_stbl_t *stbl )
@@ -2527,7 +2529,7 @@ static void isom_remove_dref( isom_dref_t *dref )
         return;
     if( !dref->list )
     {
-        free( dref );
+        lsmash_free( dref );
         return;
     }
     for( lsmash_entry_t *entry = dref->list->head; entry; )
@@ -2536,16 +2538,16 @@ static void isom_remove_dref( isom_dref_t *dref )
         if( data )
         {
             if( data->name )
-                free( data->name );
+                lsmash_free( data->name );
             if( data->location )
-                free( data->location );
-            free( data );
+                lsmash_free( data->location );
+            lsmash_free( data );
         }
         lsmash_entry_t *next = entry->next;
-        free( entry );
+        lsmash_free( entry );
         entry = next;
     }
-    free( dref->list );
+    lsmash_free( dref->list );
     isom_remove_box( dref, isom_dinf_t );
 }
 
@@ -2588,7 +2590,7 @@ static void isom_remove_chpl( isom_chpl_t *chpl )
         return;
     if( !chpl->list )
     {
-        free( chpl );
+        lsmash_free( chpl );
         return;
     }
     for( lsmash_entry_t *entry = chpl->list->head; entry; )
@@ -2597,14 +2599,14 @@ static void isom_remove_chpl( isom_chpl_t *chpl )
         if( data )
         {
             if( data->chapter_name )
-                free( data->chapter_name );
-            free( data );
+                lsmash_free( data->chapter_name );
+            lsmash_free( data );
         }
         lsmash_entry_t *next = entry->next;
-        free( entry );
+        lsmash_free( entry );
         entry = next;
     }
-    free( chpl->list );
+    lsmash_free( chpl->list );
     isom_remove_box( chpl, isom_udta_t );
 }
 
@@ -2613,8 +2615,8 @@ static void isom_remove_keys_entry( isom_keys_entry_t *data )
     if( !data )
         return;
     if( data->key_value )
-        free( data->key_value );
-    free( data );
+        lsmash_free( data->key_value );
+    lsmash_free( data );
 }
 
 static void isom_remove_keys( isom_keys_t *keys )
@@ -2630,7 +2632,7 @@ void isom_remove_mean( isom_mean_t *mean )
     if( !mean )
         return;
     if( mean->meaning_string )
-        free( mean->meaning_string );
+        lsmash_free( mean->meaning_string );
     isom_remove_box( mean, isom_metaitem_t );
 }
 
@@ -2639,7 +2641,7 @@ void isom_remove_name( isom_name_t *name )
     if( !name )
         return;
     if( name->name )
-        free( name->name );
+        lsmash_free( name->name );
     isom_remove_box( name, isom_metaitem_t );
 }
 
@@ -2648,7 +2650,7 @@ void isom_remove_data( isom_data_t *data )
     if( !data )
         return;
     if( data->value )
-        free( data->value );
+        lsmash_free( data->value );
     isom_remove_box( data, isom_metaitem_t );
 }
 
@@ -2659,7 +2661,7 @@ void isom_remove_metaitem( isom_metaitem_t *metaitem )
     isom_remove_mean( metaitem->mean );
     isom_remove_name( metaitem->name );
     isom_remove_data( metaitem->data );
-    free( metaitem );
+    lsmash_free( metaitem );
 }
 
 void isom_remove_ilst( isom_ilst_t *ilst )
@@ -2692,7 +2694,7 @@ static void isom_remove_meta( isom_meta_t *meta )
             assert( 0 );
         return;
     }
-    free( meta );
+    lsmash_free( meta );
 }
 
 static void isom_remove_cprt( isom_cprt_t *cprt )
@@ -2700,8 +2702,8 @@ static void isom_remove_cprt( isom_cprt_t *cprt )
     if( !cprt )
         return;
     if( cprt->notice )
-        free( cprt->notice );
-    free( cprt );
+        lsmash_free( cprt->notice );
+    lsmash_free( cprt );
 }
 
 static void isom_remove_udta( isom_udta_t *udta )
@@ -2710,10 +2712,10 @@ static void isom_remove_udta( isom_udta_t *udta )
         return;
     isom_remove_chpl( udta->chpl );
     isom_remove_meta( udta->meta );
-    free( udta->WLOC );
-    free( udta->LOOP );
-    free( udta->SelO );
-    free( udta->AllF );
+    lsmash_free( udta->WLOC );
+    lsmash_free( udta->LOOP );
+    lsmash_free( udta->SelO );
+    lsmash_free( udta->AllF );
     lsmash_remove_list( udta->cprt_list, isom_remove_cprt );
     if( udta->parent )
     {
@@ -2725,7 +2727,7 @@ static void isom_remove_udta( isom_udta_t *udta )
             assert( 0 );
         return;
     }
-    free( udta );
+    lsmash_free( udta );
 }
 
 static void isom_remove_sample_pool( isom_sample_pool_t *pool );
@@ -2746,10 +2748,10 @@ void isom_remove_trak( isom_trak_entry_t *trak )
         isom_remove_sample_pool( trak->cache->chunk.pool );
         lsmash_remove_list( trak->cache->roll.pool, NULL );
         if( trak->cache->rap )
-            free( trak->cache->rap );
-        free( trak->cache );
+            lsmash_free( trak->cache->rap );
+        lsmash_free( trak->cache );
     }
-    free( trak );   /* Note: the list that contains this trak still has the address of the entry. */
+    lsmash_free( trak );    /* Note: the list that contains this trak still has the address of the entry. */
 }
 
 static void isom_remove_iods( isom_iods_t *iods )
@@ -2765,11 +2767,11 @@ void isom_remove_ctab( isom_ctab_t *ctab )
     if( !ctab )
         return;
     if( ctab->color_table.array )
-        free( ctab->color_table.array );
+        lsmash_free( ctab->color_table.array );
     if( ctab->parent && lsmash_check_box_type_identical( ctab->parent->type, ISOM_BOX_TYPE_MOOV ) )
         isom_remove_box( ctab, isom_moov_t );
     else
-        free( ctab );
+        lsmash_free( ctab );
 }
 
 static void isom_remove_mehd( isom_mehd_t *mehd )
@@ -2795,14 +2797,14 @@ static void isom_remove_moov( lsmash_root_t *root )
         return;
     isom_moov_t *moov = root->moov;
     if( moov->mvhd )
-        free( moov->mvhd );
+        lsmash_free( moov->mvhd );
     isom_remove_iods( moov->iods );
     lsmash_remove_list( moov->trak_list, isom_remove_trak );
     isom_remove_udta( moov->udta );
     isom_remove_ctab( moov->ctab );
     isom_remove_meta( moov->meta );
     isom_remove_mvex( moov->mvex );
-    free( moov );
+    lsmash_free( moov );
     root->moov = NULL;
 }
 
@@ -2832,7 +2834,7 @@ static void isom_remove_trun( isom_trun_entry_t *trun )
     if( !trun )
         return;
     lsmash_remove_list( trun->optional, NULL );
-    free( trun );   /* Note: the list that contains this trun still has the address of the entry. */
+    lsmash_free( trun );    /* Note: the list that contains this trun still has the address of the entry. */
 }
 
 static void isom_remove_traf( isom_traf_entry_t *traf )
@@ -2843,7 +2845,7 @@ static void isom_remove_traf( isom_traf_entry_t *traf )
     isom_remove_tfdt( traf->tfdt );
     lsmash_remove_list( traf->trun_list, isom_remove_trun );
     isom_remove_sdtp( traf->sdtp );
-    free( traf );   /* Note: the list that contains this traf still has the address of the entry. */
+    lsmash_free( traf );    /* Note: the list that contains this traf still has the address of the entry. */
 }
 
 static void isom_remove_moof( isom_moof_entry_t *moof )
@@ -2852,7 +2854,7 @@ static void isom_remove_moof( isom_moof_entry_t *moof )
         return;
     isom_remove_mfhd( moof->mfhd );
     lsmash_remove_list( moof->traf_list, isom_remove_traf );
-    free( moof );
+    lsmash_free( moof );
 }
 
 static void isom_remove_mdat( isom_mdat_t *mdat )
@@ -2867,9 +2869,9 @@ static void isom_remove_free( isom_free_t *skip )
     if( !skip )
         return;
     if( skip->data )
-        free( skip->data );
+        lsmash_free( skip->data );
     lsmash_root_t *root = (lsmash_root_t *)skip->parent;
-    free( skip );
+    lsmash_free( skip );
     root->free = NULL;
 }
 
@@ -2878,7 +2880,7 @@ static void isom_remove_tfra( isom_tfra_entry_t *tfra )
     if( !tfra )
         return;
     lsmash_remove_list( tfra->list, NULL );
-    free( tfra );
+    lsmash_free( tfra );
 }
 
 static void isom_remove_mfro( isom_mfro_t *mfro )
@@ -3272,7 +3274,7 @@ static int isom_update_mdhd_duration( isom_trak_entry_t *trak, uint32_t last_sam
             else
             {
                 if( cslg )
-                    free( cslg );
+                    lsmash_free( cslg );
                 stbl->cslg = NULL;
             }
         }
@@ -5183,9 +5185,9 @@ static int isom_set_media_handler_name( lsmash_root_t *root, uint32_t track_ID, 
     if( root->qt_compatible )
         name_length = LSMASH_MIN( name_length, 255 );
     if( name_length > hdlr->componentName_length && hdlr->componentName )
-        name = realloc( hdlr->componentName, name_length );
+        name = lsmash_realloc( hdlr->componentName, name_length );
     else if( !hdlr->componentName )
-        name = malloc( name_length );
+        name = lsmash_malloc( name_length );
     else
         name = hdlr->componentName;
     if( !name )
@@ -5214,9 +5216,9 @@ static int isom_set_data_handler_name( lsmash_root_t *root, uint32_t track_ID, c
     if( root->qt_compatible )
         name_length = LSMASH_MIN( name_length, 255 );
     if( name_length > hdlr->componentName_length && hdlr->componentName )
-        name = realloc( hdlr->componentName, name_length );
+        name = lsmash_realloc( hdlr->componentName, name_length );
     else if( !hdlr->componentName )
-        name = malloc( name_length );
+        name = lsmash_malloc( name_length );
     else
         name = hdlr->componentName;
     if( !name )
@@ -5645,8 +5647,8 @@ static int isom_set_brands( lsmash_root_t *root, lsmash_brand_type major_brand, 
         if( root->ftyp )
         {
             if( root->ftyp->compatible_brands )
-                free( root->ftyp->compatible_brands );
-            free( root->ftyp );
+                lsmash_free( root->ftyp->compatible_brands );
+            lsmash_free( root->ftyp );
             root->ftyp = NULL;
         }
         return 0;
@@ -5658,9 +5660,9 @@ static int isom_set_brands( lsmash_root_t *root, lsmash_brand_type major_brand, 
     ftyp->minor_version = minor_version;
     lsmash_brand_type *compatible_brands;
     if( !ftyp->compatible_brands )
-        compatible_brands = malloc( brand_count * sizeof(uint32_t) );
+        compatible_brands = lsmash_malloc( brand_count * sizeof(uint32_t) );
     else
-        compatible_brands = realloc( ftyp->compatible_brands, brand_count * sizeof(uint32_t) );
+        compatible_brands = lsmash_realloc( ftyp->compatible_brands, brand_count * sizeof(uint32_t) );
     if( !compatible_brands )
         return -1;
     ftyp->compatible_brands = compatible_brands;
@@ -5768,9 +5770,9 @@ int lsmash_set_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length )
     isom_free_t *skip = root->free;
     uint8_t *tmp = NULL;
     if( !skip->data )
-        tmp = malloc( data_length );
+        tmp = lsmash_malloc( data_length );
     else if( skip->length < data_length )
-        tmp = realloc( skip->data, data_length );
+        tmp = lsmash_realloc( skip->data, data_length );
     if( !tmp )
         return -1;
     memcpy( tmp, data, data_length );
@@ -6049,7 +6051,7 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
     remux->buffer_size = LSMASH_MAX( remux->buffer_size, mtf_size * 2 );
     /* Split to 2 buffers. */
     uint8_t *buf[2];
-    if( (buf[0] = (uint8_t*)malloc( remux->buffer_size )) == NULL )
+    if( (buf[0] = (uint8_t*)lsmash_malloc( remux->buffer_size )) == NULL )
         return -1; /* NOTE: i think we still can fallback to "return isom_write_moov( root );" here. */
     uint64_t size = remux->buffer_size / 2;
     buf[1] = buf[0] + size;
@@ -6104,10 +6106,10 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
     if( remux->func )
         remux->func( remux->param, total, total ); // FIXME:
     root->size += mtf_size;
-    free( buf[0] );
+    lsmash_free( buf[0] );
     return 0;
 fail:
-    free( buf[0] );
+    lsmash_free( buf[0] );
     return -1;
 }
 
@@ -6501,7 +6503,7 @@ static isom_trun_optional_row_t *isom_request_trun_optional_row( isom_trun_entry
     {
         while( trun->optional->entry_count < sample_number )
         {
-            row = malloc( sizeof(isom_trun_optional_row_t) );
+            row = lsmash_malloc( sizeof(isom_trun_optional_row_t) );
             if( !row )
                 return NULL;
             /* Copy from default. */
@@ -6511,7 +6513,7 @@ static isom_trun_optional_row_t *isom_request_trun_optional_row( isom_trun_entry
             row->sample_composition_time_offset = 0;
             if( lsmash_add_entry( trun->optional, row ) )
             {
-                free( row );
+                lsmash_free( row );
                 return NULL;
             }
         }
@@ -6699,15 +6701,15 @@ void lsmash_destroy_root( lsmash_root_t *root )
         if( root->bs->stream )
             fclose( root->bs->stream );
         if( root->bs->data )
-            free( root->bs->data );
-        free( root->bs );
+            lsmash_free( root->bs->data );
+        lsmash_free( root->bs );
     }
     if( root->fragment )
     {
         lsmash_remove_list( root->fragment->pool, lsmash_delete_sample );
-        free( root->fragment );
+        lsmash_free( root->fragment );
     }
-    free( root );
+    lsmash_free( root );
 }
 
 /*---- timeline manipulator ----*/
@@ -6862,10 +6864,10 @@ lsmash_sample_t *lsmash_create_sample( uint32_t size )
         return NULL;
     if( size == 0 )
         return sample;
-    sample->data = malloc( size );
+    sample->data = lsmash_malloc( size );
     if( !sample->data )
     {
-        free( sample );
+        lsmash_free( sample );
         return NULL;
     }
     sample->length = size;
@@ -6879,7 +6881,7 @@ int lsmash_sample_alloc( lsmash_sample_t *sample, uint32_t size )
     if( size == 0 )
     {
         if( sample->data )
-            free( sample->data );
+            lsmash_free( sample->data );
         sample->data   = NULL;
         sample->length = 0;
         return 0;
@@ -6888,9 +6890,9 @@ int lsmash_sample_alloc( lsmash_sample_t *sample, uint32_t size )
         return 0;
     uint8_t *data;
     if( !sample->data )
-        data = malloc( size );
+        data = lsmash_malloc( size );
     else
-        data = realloc( sample->data, size );
+        data = lsmash_realloc( sample->data, size );
     if( !data )
         return -1;
     sample->data   = data;
@@ -6903,8 +6905,8 @@ void lsmash_delete_sample( lsmash_sample_t *sample )
     if( !sample )
         return;
     if( sample->data )
-        free( sample->data );
-    free( sample );
+        lsmash_free( sample->data );
+    lsmash_free( sample );
 }
 
 isom_sample_pool_t *isom_create_sample_pool( uint64_t size )
@@ -6914,10 +6916,10 @@ isom_sample_pool_t *isom_create_sample_pool( uint64_t size )
         return NULL;
     if( size == 0 )
         return pool;
-    pool->data = malloc( size );
+    pool->data = lsmash_malloc( size );
     if( !pool->data )
     {
-        free( pool );
+        lsmash_free( pool );
         return NULL;
     }
     pool->alloc = size;
@@ -6929,8 +6931,8 @@ static void isom_remove_sample_pool( isom_sample_pool_t *pool )
     if( !pool )
         return;
     if( pool->data )
-        free( pool->data );
-    free( pool );
+        lsmash_free( pool->data );
+    lsmash_free( pool );
 }
 
 static uint32_t isom_add_size( isom_trak_entry_t *trak, uint32_t sample_size )
@@ -7155,7 +7157,7 @@ static int isom_group_random_access( isom_trak_entry_t *trak, lsmash_sample_prop
     {
         /* This sample is the first sample, create a grouping cache. */
         assert( isom_get_sample_count( trak ) == 1 );
-        group = malloc( sizeof(isom_rap_group_t) );
+        group = lsmash_malloc( sizeof(isom_rap_group_t) );
         if( !group )
             return -1;
         if( is_rap )
@@ -7171,7 +7173,7 @@ static int isom_group_random_access( isom_trak_entry_t *trak, lsmash_sample_prop
         }
         if( !group->assignment )
         {
-            free( group );
+            lsmash_free( group );
             return -1;
         }
         group->prev_assignment = NULL;
@@ -7190,7 +7192,7 @@ static int isom_group_random_access( isom_trak_entry_t *trak, lsmash_sample_prop
             group->assignment      = isom_add_group_assignment_entry( sbgp, 1, 0 );
             if( !group->assignment )
             {
-                free( group );
+                lsmash_free( group );
                 return -1;
             }
         }
@@ -7205,7 +7207,7 @@ static int isom_group_random_access( isom_trak_entry_t *trak, lsmash_sample_prop
             group->assignment      = isom_add_group_assignment_entry( sbgp, 1, sgpd->list->entry_count );
             if( !group->assignment )
             {
-                free( group );
+                lsmash_free( group );
                 return -1;
             }
         }
@@ -7223,7 +7225,7 @@ static int isom_group_random_access( isom_trak_entry_t *trak, lsmash_sample_prop
         group->assignment      = isom_add_group_assignment_entry( sbgp, 1, sgpd->list->entry_count );
         if( !group->assignment )
         {
-            free( group );
+            lsmash_free( group );
             return -1;
         }
     }
@@ -7397,7 +7399,7 @@ static int isom_group_roll_recovery( isom_trak_entry_t *trak, lsmash_sample_prop
         group->assignment = isom_add_group_assignment_entry( sbgp, 1, 0 );
         if( !group->assignment || lsmash_add_entry( pool, group ) )
         {
-            free( group );
+            lsmash_free( group );
             return -1;
         }
         if( is_recovery_start )
@@ -7619,9 +7621,9 @@ static int isom_pool_sample( isom_sample_pool_t *pool, lsmash_sample_t *sample )
         uint8_t *data;
         uint64_t alloc = pool_size + (1<<16);
         if( !pool->data )
-            data = malloc( alloc );
+            data = lsmash_malloc( alloc );
         else
-            data = realloc( pool->data, alloc );
+            data = lsmash_realloc( pool->data, alloc );
         if( !data )
             return -1;
         pool->data  = data;
@@ -7985,7 +7987,7 @@ static int isom_update_fragment_sample_tables( isom_traf_entry_t *traf, lsmash_s
                     if( !tfra->list )
                         return -1;
                 }
-                isom_tfra_location_time_entry_t *rap = malloc( sizeof(isom_tfra_location_time_entry_t) );
+                isom_tfra_location_time_entry_t *rap = lsmash_malloc( sizeof(isom_tfra_location_time_entry_t) );
                 if( !rap )
                     return -1;
                 rap->time          = sample->cts;   /* Set composition timestamp temporally.
@@ -7996,7 +7998,7 @@ static int isom_update_fragment_sample_tables( isom_traf_entry_t *traf, lsmash_s
                 rap->sample_number = trun->sample_count;
                 if( lsmash_add_entry( tfra->list, rap ) )
                 {
-                    free( rap );
+                    lsmash_free( rap );
                     return -1;
                 }
                 tfra->number_of_entry = tfra->list->entry_count;

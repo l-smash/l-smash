@@ -113,20 +113,20 @@ static void cleanup_movie( movie_t *movie )
             if( metadata->type == ITUNES_METADATA_TYPE_STRING )
             {
                 if( metadata->value.string )
-                    free( metadata->value.string );
+                    lsmash_free( metadata->value.string );
             }
             else if( metadata->type == ITUNES_METADATA_TYPE_BINARY )
                 if( metadata->value.binary.data )
-                    free( metadata->value.binary.data );
+                    lsmash_free( metadata->value.binary.data );
             if( metadata->meaning )
-                free( metadata->meaning );
+                lsmash_free( metadata->meaning );
             if( metadata->name )
-                free( metadata->name );
+                lsmash_free( metadata->name );
         }
-        free( movie->itunes_metadata );
+        lsmash_free( movie->itunes_metadata );
     }
     if( movie->track )
-        free( movie->track );
+        lsmash_free( movie->track );
     lsmash_destroy_root( movie->root );
     movie->root            = NULL;
     movie->track           = NULL;
@@ -140,7 +140,7 @@ static void cleanup_timecode( timecode_t *timecode )
     if( timecode->file )
         fclose( timecode->file );
     if( timecode->ts )
-        free( timecode->ts );
+        lsmash_free( timecode->ts );
     timecode->file = NULL;
     timecode->ts = NULL;
 }
@@ -188,7 +188,7 @@ static char *duplicate_string( char *src )
     if( !src )
         return NULL;
     int dst_size = strlen( src ) + 1;
-    char *dst = malloc( dst_size );
+    char *dst = lsmash_malloc( dst_size );
     if( !dst )
         return NULL;
     memcpy( dst, src, dst_size );
@@ -224,7 +224,7 @@ static int get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, l
     }
     else if( shadow.type == ITUNES_METADATA_TYPE_BINARY )
     {
-        metadata->value.binary.data = malloc( shadow.value.binary.size );
+        metadata->value.binary.data = lsmash_malloc( shadow.value.binary.size );
         if( !metadata->value.binary.data )
             goto fail;
         memcpy( metadata->value.binary.data, shadow.value.binary.data, shadow.value.binary.size );
@@ -232,9 +232,9 @@ static int get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, l
     return 0;
 fail:
     if( metadata->meaning )
-        free( metadata->meaning );
+        lsmash_free( metadata->meaning );
     if( metadata->name )
-        free( metadata->name );
+        lsmash_free( metadata->name );
     return -1;
 }
 
@@ -243,7 +243,7 @@ static int get_summaries( movie_t *input, track_t *track )
     track->num_summaries = lsmash_count_summary( input->root, track->track_ID );
     if( track->num_summaries == 0 )
         return ERROR_MSG( "Failed to get find valid summaries.\n" );
-    track->summaries = malloc( track->num_summaries * sizeof(summary_t) );
+    track->summaries = lsmash_malloc( track->num_summaries * sizeof(summary_t) );
     if( !track->summaries )
         return ERROR_MSG( "failed to alloc input summaries.\n" );
     memset( track->summaries, 0, track->num_summaries * sizeof(summary_t) );
@@ -271,7 +271,7 @@ static int get_movie( movie_t *input, char *input_name )
     input->num_itunes_metadata = lsmash_count_itunes_metadata( input->root );
     if( input->num_itunes_metadata )
     {
-        input->itunes_metadata = malloc( input->num_itunes_metadata * sizeof(lsmash_itunes_metadata_t) );
+        input->itunes_metadata = lsmash_malloc( input->num_itunes_metadata * sizeof(lsmash_itunes_metadata_t) );
         if( !input->itunes_metadata )
             return ERROR_MSG( "failed to alloc iTunes metadata.\n" );
         uint32_t itunes_metadata_count = 0;
@@ -292,7 +292,7 @@ static int get_movie( movie_t *input, char *input_name )
     lsmash_get_movie_parameters( input->root, movie_param );
     input->num_tracks = movie_param->number_of_tracks;
     /* Create tracks. */
-    track_t *track = input->track = malloc( input->num_tracks * sizeof(track_t) );
+    track_t *track = input->track = lsmash_malloc( input->num_tracks * sizeof(track_t) );
     if( !track )
         return ERROR_MSG( "Failed to alloc input tracks.\n" );
     memset( track, 0, input->num_tracks * sizeof(track_t) );
@@ -487,7 +487,7 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
         double corrected_assume_fps = correct_fps( assume_fps, timecode );
         if( corrected_assume_fps < 0 )
             return ERROR_MSG( "Failed to correct the assumed framerate\n" );
-        timecode_array = malloc( sample_count * sizeof(double) );
+        timecode_array = lsmash_malloc( sample_count * sizeof(double) );
         if( !timecode_array )
             return ERROR_MSG( "Failed to alloc timecodes\n" );
         timecode_array[0] = 0;
@@ -509,7 +509,7 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
                 sequence_fps = correct_fps( sequence_fps, timecode );
                 if( sequence_fps < 0 )
                 {
-                    free( timecode_array );
+                    lsmash_free( timecode_array );
                     return ERROR_MSG( "Failed to correct the framerate of a sequence.\n" );
                 }
                 for( i = start; i <= end && i < sample_count - 1; i++ )
@@ -527,7 +527,7 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
             double assume_fps_sig, sequence_fps_sig;
             if( try_matroska_timescale( fps_array, timecode, num_sequences + 1 ) < 0 )
             {
-                free( timecode_array );
+                lsmash_free( timecode_array );
                 return ERROR_MSG( "Failed to try matroska timescale.\n" );
             }
             fseek( timecode->file, file_pos, SEEK_SET );
@@ -570,7 +570,7 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
         if( sample_count > num_timecodes )
             return ERROR_MSG( "Lack number of timecodes.\n" );
         fseek( timecode->file, file_pos, SEEK_SET );
-        timecode_array = malloc( sample_count * sizeof(uint64_t) );
+        timecode_array = lsmash_malloc( sample_count * sizeof(uint64_t) );
         if( !timecode_array )
             return ERROR_MSG( "Failed to alloc timecodes.\n" );
         uint32_t i = 0;
@@ -579,7 +579,7 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
             ret = sscanf( buff, "%lf", &timecode_array[0] );
             if( ret != 1 )
             {
-                free( timecode_array );
+                lsmash_free( timecode_array );
                 return ERROR_MSG( "Invalid timecode number: 0\n" );
             }
             timecode_array[i++] *= 1e-3;        /* Timescale of timecode format v2 is 1000. */
@@ -591,7 +591,7 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
                 timecode_array[i] *= 1e-3;      /* Timescale of timecode format v2 is 1000. */
                 if( ret != 1 || timecode_array[i] <= timecode_array[i - 1] )
                 {
-                    free( timecode_array );
+                    lsmash_free( timecode_array );
                     return ERROR_MSG( "Invalid input timecode.\n" );
                 }
                 ++i;
@@ -599,7 +599,7 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
         }
         if( i < sample_count )
         {
-            free( timecode_array );
+            lsmash_free( timecode_array );
             return ERROR_MSG( "Failed to get timecodes.\n" );
         }
         /* Generate media timescale automatically if needed. */
@@ -637,7 +637,7 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
             if( timecode->auto_media_timebase && !timecode->auto_media_timescale
              && try_matroska_timescale( fps_array, timecode, sample_count - 1 ) < 0 )
             {
-                free( timecode_array );
+                lsmash_free( timecode_array );
                 return ERROR_MSG( "Failed to try matroska timescale.\n" );
             }
         }
@@ -650,7 +650,7 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
     }
     else if( timecode->media_timescale > UINT32_MAX || !timecode->media_timescale )
     {
-        free( timecode_array );
+        lsmash_free( timecode_array );
         return ERROR_MSG( "Failed to generate media timescale automatically.\n"
                           "Specify an appropriate media timescale manually.\n" );
     }
@@ -658,10 +658,10 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
     uint32_t timebase  = timecode->media_timebase;
     double delay_tc = timecode_array[0];
     timecode->empty_delay = ((uint64_t)(delay_tc * ((double)timescale / timebase) + 0.5)) * timebase;
-    timecode->ts = malloc( sample_count * sizeof(uint64_t) );
+    timecode->ts          = lsmash_malloc( sample_count * sizeof(uint64_t) );
     if( !timecode->ts )
     {
-        free( timecode_array );
+        lsmash_free( timecode_array );
         return ERROR_MSG( "Failed to allocate timestamps.\n" );
     }
     timecode->ts[0] = 0;
@@ -670,13 +670,13 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
         timecode->ts[i] = ((uint64_t)((timecode_array[i] - delay_tc) * ((double)timescale / timebase) + 0.5)) * timebase;
         if( timecode->ts[i] <= timecode->ts[i - 1] )
         {
-            free( timecode_array );
-            free( timecode->ts );
+            lsmash_free( timecode_array );
+            lsmash_free( timecode->ts );
             timecode->ts = NULL;
             return ERROR_MSG( "Invalid timecode.\n" );
         }
     }
-    free( timecode_array );
+    lsmash_free( timecode_array );
     return 0;
 }
 
@@ -740,7 +740,7 @@ static int edit_media_timeline( movie_t *input, timecode_t *timecode, opt_t *opt
     if( !timecode->file )
     {
         /* Genarate timestamps timescale converted. */
-        timecode->ts = malloc( sample_count * sizeof(uint64_t) );
+        timecode->ts = lsmash_malloc( sample_count * sizeof(uint64_t) );
         if( !timecode->ts )
             return ERROR_MSG( "Failed to alloc timestamps\n" );
         for( uint32_t i = 0; i < sample_count; i++ )
@@ -926,7 +926,7 @@ int main( int argc, char *argv[] )
             continue;
         }
     /* Create tracks of the output movie. */
-    output.track = malloc( input.num_tracks * sizeof(track_t) );
+    output.track = lsmash_malloc( input.num_tracks * sizeof(track_t) );
     if( !output.track )
         return TIMELINEEDITOR_ERR( "Failed to alloc output tracks.\n" );
     /* Edit timeline. */
@@ -943,7 +943,7 @@ int main( int argc, char *argv[] )
             continue;
         }
         track_t *out_track = &output.track[i];
-        out_track->summary_remap = malloc( in_track->num_summaries * sizeof(uint32_t) );
+        out_track->summary_remap = lsmash_malloc( in_track->num_summaries * sizeof(uint32_t) );
         if( !out_track->summary_remap )
             return TIMELINEEDITOR_ERR( "failed to create summary mapping for a track.\n" );
         memset( out_track->summary_remap, 0, in_track->num_summaries * sizeof(uint32_t) );

@@ -49,7 +49,7 @@ void lsmash_bs_empty( lsmash_bs_t *bs )
 void lsmash_bs_free( lsmash_bs_t *bs )
 {
     if( bs->data )
-        free( bs->data );
+        lsmash_free( bs->data );
     bs->data  = NULL;
     bs->alloc = 0;
     bs->store = 0;
@@ -63,9 +63,9 @@ void lsmash_bs_alloc( lsmash_bs_t *bs, uint64_t size )
     uint64_t alloc = size + (1<<16);
     uint8_t *data;
     if( !bs->data )
-        data = malloc( alloc );
+        data = lsmash_malloc( alloc );
     else
-        data = realloc( bs->data, alloc );
+        data = lsmash_realloc( bs->data, alloc );
     if( !data )
     {
         lsmash_bs_free( bs );
@@ -164,7 +164,7 @@ lsmash_bs_t* lsmash_bs_create( char* filename )
         return NULL;
     if( filename && (bs->stream = lsmash_fopen( filename, "wb" )) == NULL )
     {
-        free( bs );
+        lsmash_free( bs );
         return NULL;
     }
     return bs;
@@ -177,7 +177,7 @@ void lsmash_bs_cleanup( lsmash_bs_t *bs )
     if( bs->stream )
         fclose( bs->stream );
     lsmash_bs_free( bs );
-    free( bs );
+    lsmash_free( bs );
 }
 
 void *lsmash_bs_export_data( lsmash_bs_t *bs, uint32_t *length )
@@ -351,7 +351,7 @@ lsmash_bits_t *lsmash_bits_create( lsmash_bs_t *bs )
 {
     debug_if( !bs )
         return NULL;
-    lsmash_bits_t *bits = (lsmash_bits_t *)malloc( sizeof(lsmash_bits_t) );
+    lsmash_bits_t *bits = (lsmash_bits_t *)lsmash_malloc( sizeof(lsmash_bits_t) );
     if( !bits )
         return NULL;
     lsmash_bits_init( bits, bs );
@@ -386,12 +386,12 @@ void lsmash_bits_get_align( lsmash_bits_t *bits )
 }
 
 /* Must be used ONLY for bits struct created with isom_create_bits.
-   Otherwise, just free() the bits struct. */
+   Otherwise, just lsmash_free() the bits struct. */
 void lsmash_bits_cleanup( lsmash_bits_t *bits )
 {
     debug_if( !bits )
         return;
-    free( bits );
+    lsmash_free( bits );
 }
 
 /* we can change value's type to unsigned int for 64-bit operation if needed. */
@@ -522,7 +522,7 @@ void lsmash_init_entry_list( lsmash_entry_list_t *list )
 
 lsmash_entry_list_t *lsmash_create_entry_list( void )
 {
-    lsmash_entry_list_t *list = malloc( sizeof(lsmash_entry_list_t) );
+    lsmash_entry_list_t *list = lsmash_malloc( sizeof(lsmash_entry_list_t) );
     if( !list )
         return NULL;
     lsmash_init_entry_list( list );
@@ -533,7 +533,7 @@ int lsmash_add_entry( lsmash_entry_list_t *list, void *data )
 {
     if( !list )
         return -1;
-    lsmash_entry_t *entry = malloc( sizeof(lsmash_entry_t) );
+    lsmash_entry_t *entry = lsmash_malloc( sizeof(lsmash_entry_t) );
     if( !entry )
         return -1;
     entry->next = NULL;
@@ -548,12 +548,12 @@ int lsmash_add_entry( lsmash_entry_list_t *list, void *data )
     return 0;
 }
 
-int lsmash_remove_entry_direct( lsmash_entry_list_t *list, lsmash_entry_t *entry, void* eliminator )
+int lsmash_remove_entry_direct( lsmash_entry_list_t *list, lsmash_entry_t *entry, void *eliminator )
 {
     if( !entry )
         return -1;
     if( !eliminator )
-        eliminator = free;
+        eliminator = lsmash_free;
     lsmash_entry_t *next = entry->next;
     lsmash_entry_t *prev = entry->prev;
     if( entry == list->head )
@@ -588,7 +588,7 @@ int lsmash_remove_entry_direct( lsmash_entry_list_t *list, lsmash_entry_t *entry
         list->last_accessed_entry = NULL;
         list->last_accessed_number = 0;
     }
-    free( entry );
+    lsmash_free( entry );
     list->entry_count -= 1;
     return 0;
 }
@@ -604,13 +604,13 @@ void lsmash_remove_entries( lsmash_entry_list_t *list, void* eliminator )
     if( !list )
         return;
     if( !eliminator )
-        eliminator = free;
+        eliminator = lsmash_free;
     for( lsmash_entry_t *entry = list->head; entry; )
     {
         lsmash_entry_t *next = entry->next;
         if( entry->data )
             ((lsmash_entry_data_eliminator)eliminator)( entry->data );
-        free( entry );
+        lsmash_free( entry );
         entry = next;
     }
     lsmash_init_entry_list( list );
@@ -621,7 +621,7 @@ void lsmash_remove_list( lsmash_entry_list_t *list, void* eliminator )
     if( !list )
         return;
     lsmash_remove_entries( list, eliminator );
-    free( list );
+    lsmash_free( list );
 }
 
 lsmash_entry_t *lsmash_get_entry( lsmash_entry_list_t *list, uint32_t entry_number )
@@ -742,13 +742,13 @@ lsmash_multiple_buffers_t *lsmash_create_multiple_buffers( uint32_t number_of_bu
 {
     if( (uint64_t)number_of_buffers * buffer_size > UINT32_MAX )
         return NULL;
-    lsmash_multiple_buffers_t *multiple_buffer = malloc( sizeof(lsmash_multiple_buffers_t) );
+    lsmash_multiple_buffers_t *multiple_buffer = lsmash_malloc( sizeof(lsmash_multiple_buffers_t) );
     if( !multiple_buffer )
         return NULL;
-    multiple_buffer->buffers = malloc( number_of_buffers * buffer_size );
+    multiple_buffer->buffers = lsmash_malloc( number_of_buffers * buffer_size );
     if( !multiple_buffer->buffers )
     {
-        free( multiple_buffer );
+        lsmash_free( multiple_buffer );
         return NULL;
     }
     multiple_buffer->number_of_buffers = number_of_buffers;
@@ -774,7 +774,7 @@ lsmash_multiple_buffers_t *lsmash_resize_multiple_buffers( lsmash_multiple_buffe
     void *temp;
     if( buffer_size > multiple_buffer->buffer_size )
     {
-        temp = realloc( multiple_buffer->buffers, multiple_buffer->number_of_buffers * buffer_size );
+        temp = lsmash_realloc( multiple_buffer->buffers, multiple_buffer->number_of_buffers * buffer_size );
         if( !temp )
             return NULL;
         for( uint32_t i = multiple_buffer->number_of_buffers - 1; i ; i-- )
@@ -784,7 +784,7 @@ lsmash_multiple_buffers_t *lsmash_resize_multiple_buffers( lsmash_multiple_buffe
     {
         for( uint32_t i = 1; i < multiple_buffer->number_of_buffers; i++ )
             memmove( multiple_buffer->buffers + buffer_size, multiple_buffer->buffers + i * multiple_buffer->buffer_size, multiple_buffer->buffer_size );
-        temp = realloc( multiple_buffer->buffers, multiple_buffer->number_of_buffers * buffer_size );
+        temp = lsmash_realloc( multiple_buffer->buffers, multiple_buffer->number_of_buffers * buffer_size );
         if( !temp )
             return NULL;
     }
@@ -798,8 +798,8 @@ void lsmash_destroy_multiple_buffers( lsmash_multiple_buffers_t *multiple_buffer
     if( !multiple_buffer )
         return;
     if( multiple_buffer->buffers )
-        free( multiple_buffer->buffers );
-    free( multiple_buffer );
+        lsmash_free( multiple_buffer->buffers );
+    lsmash_free( multiple_buffer );
 }
 
 void lsmash_stream_buffers_cleanup( lsmash_stream_buffers_t *sb )
@@ -1092,7 +1092,7 @@ int lsmash_compare_cts
 int lsmash_convert_ansi_to_utf8( const char *ansi, char *utf8, int length )
 {
     int len0 = MultiByteToWideChar( CP_THREAD_ACP, 0, ansi, -1, 0, 0 );
-    wchar_t *buff = malloc( len0 * sizeof(wchar_t) );
+    wchar_t *buff = lsmash_malloc( len0 * sizeof(wchar_t) );
     if( !buff )
         return 0;
     int len1 = MultiByteToWideChar( CP_THREAD_ACP, 0, ansi, -1, buff, len0 );
@@ -1102,12 +1102,12 @@ int lsmash_convert_ansi_to_utf8( const char *ansi, char *utf8, int length )
     if( len0 > length - 1 )
         goto convert_fail;
     len1 = WideCharToMultiByte( CP_UTF8, 0, buff, -1, utf8, length, 0, 0 );
-    free( buff );
+    lsmash_free( buff );
     if( len0 != len1 )
         return 0;
     return len1;
 convert_fail:
-    free( buff );
+    lsmash_free( buff );
     return 0;
 }
 #endif
