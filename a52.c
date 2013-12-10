@@ -178,16 +178,14 @@ int ac3_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_code
 
 int ac3_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
 {
-    assert( fp && root && box );
+    assert( fp && root && box && (box->manager & LSMASH_BINARY_CODED_BOX) );
     int indent = level;
     lsmash_ifprintf( fp, indent++, "[%s: AC3 Specific Box]\n", isom_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     if( box->size < AC3_SPECIFIC_BOX_LENGTH )
         return -1;
-    isom_extension_box_t *ext = (isom_extension_box_t *)box;
-    assert( ext->format == EXTENSION_FORMAT_BINARY );
-    uint8_t *data = ext->form.binary;
+    uint8_t *data = box->binary;
     isom_skip_box_common( &data );
     uint8_t fscod         = (data[0] >> 6) & 0x03;
     uint8_t bsid          = (data[0] >> 1) & 0x1F;
@@ -565,16 +563,14 @@ int eac3_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_cod
 
 int eac3_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
 {
-    assert( fp && root && box );
+    assert( fp && root && box && (box->manager & LSMASH_BINARY_CODED_BOX) );
     int indent = level;
     lsmash_ifprintf( fp, indent++, "[%s: EC3 Specific Box]\n", isom_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     if( box->size < EAC3_SPECIFIC_BOX_MIN_LENGTH )
         return -1;
-    isom_extension_box_t *ext = (isom_extension_box_t *)box;
-    assert( ext->format == EXTENSION_FORMAT_BINARY );
-    uint8_t *data = ext->form.binary;
+    uint8_t *data = box->binary;
     isom_skip_box_common( &data );
     lsmash_ifprintf( fp, indent, "data_rate = %"PRIu16" kbit/s\n", (data[0] << 5) | ((data[1] >> 3) & 0x1F) );
     uint8_t num_ind_sub = data[1] & 0x07;

@@ -1194,16 +1194,14 @@ int dts_copy_codec_specific( lsmash_codec_specific_t *dst, lsmash_codec_specific
 
 int dts_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
 {
-    assert( fp && root && box );
+    assert( fp && root && box && (box->manager & LSMASH_BINARY_CODED_BOX) );
     int indent = level;
     lsmash_ifprintf( fp, indent++, "[%s: DTS Specific Box]\n", isom_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     if( box->size < DTS_SPECIFIC_BOX_MIN_LENGTH )
         return -1;
-    isom_extension_box_t *ext = (isom_extension_box_t *)box;
-    assert( ext->format == EXTENSION_FORMAT_BINARY );
-    uint8_t *data = ext->form.binary;
+    uint8_t *data = box->binary;
     isom_skip_box_common( &data );
     uint32_t DTSSamplingFrequency = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
     uint32_t maxBitrate           = (data[4] << 24) | (data[5] << 16) | (data[6] << 8) | data[7];

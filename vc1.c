@@ -911,16 +911,14 @@ int vc1_copy_codec_specific( lsmash_codec_specific_t *dst, lsmash_codec_specific
 
 int vc1_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
 {
-    assert( fp && root && box );
+    assert( fp && root && box && (box->manager & LSMASH_BINARY_CODED_BOX) );
     int indent = level;
     lsmash_ifprintf( fp, indent++, "[%s: VC1 Specific Box]\n", isom_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     if( box->size < ISOM_BASEBOX_COMMON_SIZE + 7 )
         return -1;
-    isom_extension_box_t *ext = (isom_extension_box_t *)box;
-    assert( ext->format == EXTENSION_FORMAT_BINARY );
-    uint8_t *data = ext->form.binary;
+    uint8_t *data = box->binary;
     isom_skip_box_common( &data );
     uint8_t profile = (data[0] >> 4) & 0x0F;
     if( profile != 12 )
@@ -939,7 +937,7 @@ int vc1_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, in
     lsmash_ifprintf( fp, indent, "reserved2 = %"PRIu8"\n", data[2] & 0x01 );
     uint32_t framerate = (data[3] << 24) | (data[4] << 16) | (data[5] << 8) | data[6];
     lsmash_ifprintf( fp, indent, "framerate = %"PRIu32"\n", framerate );
-    uint32_t seqhdr_ephdr_size = box->size - (data - ext->form.binary + 7);
+    uint32_t seqhdr_ephdr_size = box->size - (data - box->binary + 7);
     if( seqhdr_ephdr_size )
     {
         lsmash_ifprintf( fp, indent, "seqhdr_ephdr[]\n" );

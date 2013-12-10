@@ -2558,7 +2558,13 @@ static void isom_remove_print_func( isom_print_entry_t *data )
     if( !data || !data->box )
         return;
     if( data->box->manager & LSMASH_ABSENT_IN_ROOT )
-        lsmash_free( data->box );   /* free flagged box */
+    {
+        /* free flagged box */
+        if( data->box->destruct )
+            data->box->destruct( data->box );
+        else
+            lsmash_free( data->box );
+    }
     lsmash_free( data );
 }
 

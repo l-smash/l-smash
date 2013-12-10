@@ -539,31 +539,32 @@ static int isom_write_visual_extensions( lsmash_bs_t *bs, isom_visual_entry_t *v
         return 0;
     for( lsmash_entry_t *entry = visual->extensions.head; entry; entry = entry->next )
     {
-        isom_extension_box_t *ext = (isom_extension_box_t *)entry->data;
-        if( !ext )
+        isom_box_t *box = (isom_box_t *)entry->data;
+        if( !box )
             continue;
-        if( ext->format == EXTENSION_FORMAT_BINARY )
+        if( box->manager & LSMASH_BINARY_CODED_BOX )
         {
-            lsmash_bs_put_bytes( bs, ext->size, ext->form.binary );
+            lsmash_bs_put_bytes( bs, box->size, box->binary );
             if( lsmash_bs_write_data( bs ) )
                 return -1;
             continue;
         }
+        void *ext = entry->data;
         int ret;
-        if( lsmash_check_box_type_identical( ext->type, ISOM_BOX_TYPE_STSL ) )
-            ret = isom_write_stsl( bs, ext->form.box );
-        else if( lsmash_check_box_type_identical( ext->type, ISOM_BOX_TYPE_BTRT ) )
-            ret = isom_write_btrt( bs, ext->form.box );
-        else if( lsmash_check_box_type_identical( ext->type, QT_BOX_TYPE_GLBL ) )
-            ret = isom_write_glbl( bs, ext->form.box );
-        else if( lsmash_check_box_type_identical( ext->type, QT_BOX_TYPE_GAMA ) )
-            ret = isom_write_gama( bs, ext->form.box );
-        else if( lsmash_check_box_type_identical( ext->type, QT_BOX_TYPE_FIEL ) )
-            ret = isom_write_fiel( bs, ext->form.box );
-        else if( lsmash_check_box_type_identical( ext->type, QT_BOX_TYPE_CSPC ) )
-            ret = isom_write_cspc( bs, ext->form.box );
-        else if( lsmash_check_box_type_identical( ext->type, QT_BOX_TYPE_SGBT ) )
-            ret = isom_write_sgbt( bs, ext->form.box );
+        if( lsmash_check_box_type_identical( box->type, ISOM_BOX_TYPE_STSL ) )
+            ret = isom_write_stsl( bs, ext );
+        else if( lsmash_check_box_type_identical( box->type, ISOM_BOX_TYPE_BTRT ) )
+            ret = isom_write_btrt( bs, ext );
+        else if( lsmash_check_box_type_identical( box->type, QT_BOX_TYPE_GLBL ) )
+            ret = isom_write_glbl( bs, ext );
+        else if( lsmash_check_box_type_identical( box->type, QT_BOX_TYPE_GAMA ) )
+            ret = isom_write_gama( bs, ext );
+        else if( lsmash_check_box_type_identical( box->type, QT_BOX_TYPE_FIEL ) )
+            ret = isom_write_fiel( bs, ext );
+        else if( lsmash_check_box_type_identical( box->type, QT_BOX_TYPE_CSPC ) )
+            ret = isom_write_cspc( bs, ext );
+        else if( lsmash_check_box_type_identical( box->type, QT_BOX_TYPE_SGBT ) )
+            ret = isom_write_sgbt( bs, ext );
         else
             continue;
         if( ret )
@@ -646,30 +647,29 @@ static int isom_write_wave( lsmash_bs_t *bs, isom_wave_t *wave )
         return -1;
     for( lsmash_entry_t *entry = wave->extensions.head; entry; entry = entry->next )
     {
-        isom_extension_box_t *ext = (isom_extension_box_t *)entry->data;
-        if( !ext )
+        isom_box_t *box = (isom_box_t *)entry->data;
+        if( !box )
             continue;
-        if( lsmash_check_box_type_identical( ext->type, QT_BOX_TYPE_TERMINATOR ) )
+        if( lsmash_check_box_type_identical( box->type, QT_BOX_TYPE_TERMINATOR ) )
             continue;   /* Terminator Box must be placed at the end of this box. */
-        if( lsmash_check_box_type_identical( ext->type, QT_BOX_TYPE_CHAN ) )
+        if( lsmash_check_box_type_identical( box->type, QT_BOX_TYPE_CHAN ) )
             continue;   /* Channel Layout Box should be placed after decoder specific info. */
-        if( ext->format == EXTENSION_FORMAT_BINARY )
+        if( box->manager & LSMASH_BINARY_CODED_BOX )
         {
-            lsmash_bs_put_bytes( bs, ext->size, ext->form.binary );
+            lsmash_bs_put_bytes( bs, box->size, box->binary );
             if( lsmash_bs_write_data( bs ) )
                 return -1;
             continue;
         }
-        if( lsmash_check_box_type_identical( ext->type, QT_BOX_TYPE_GLBL ) )
+        if( lsmash_check_box_type_identical( box->type, QT_BOX_TYPE_GLBL ) )
         {
-            if( isom_write_glbl( bs, ext->form.box ) )
+            if( isom_write_glbl( bs, (void *)box ) )
                 return -1;
         }
         else
         {
-            isom_unknown_box_t *unknown = (isom_unknown_box_t *)ext->form.box;
-            if( (unknown->manager & LSMASH_UNKNOWN_BOX)
-             && isom_write_unknown_box( bs, unknown ) )
+            if( (box->manager & LSMASH_UNKNOWN_BOX)
+             && isom_write_unknown_box( bs, (void *)box ) )
                 return -1;
         }
     }
@@ -678,16 +678,16 @@ static int isom_write_wave( lsmash_bs_t *bs, isom_wave_t *wave )
      || isom_write_glbl( bs, isom_get_extension_box_format( &wave->extensions, QT_BOX_TYPE_GLBL ) ) )
         return -1;
     /* Write Channel Layout Box if present. */
-    isom_extension_box_t *ext = isom_get_extension_box( &wave->extensions, QT_BOX_TYPE_CHAN );
-    if( ext )
+    isom_box_t *box = isom_get_extension_box( &wave->extensions, QT_BOX_TYPE_CHAN );
+    if( box )
     {
-        if( ext->format == EXTENSION_FORMAT_BINARY )
+        if( box->manager & LSMASH_BINARY_CODED_BOX )
         {
-            lsmash_bs_put_bytes( bs, ext->size, ext->form.binary );
+            lsmash_bs_put_bytes( bs, box->size, box->binary );
             if( lsmash_bs_write_data( bs ) )
                 return -1;
         }
-        else if( isom_write_chan( bs, ext->form.box ) )
+        else if( isom_write_chan( bs, (void *)box ) )
             return -1;
     }
     /* Write Terminator Box. */
@@ -701,20 +701,20 @@ static int isom_write_audio_extensions( lsmash_bs_t *bs, isom_audio_entry_t *aud
         return 0;
     for( lsmash_entry_t *entry = audio->extensions.head; entry; entry = entry->next )
     {
-        isom_extension_box_t *ext = (isom_extension_box_t *)entry->data;
-        if( !ext )
+        isom_box_t *box = (isom_box_t *)entry->data;
+        if( !box )
             continue;
-        if( lsmash_check_box_type_identical( ext->type, QT_BOX_TYPE_CHAN ) )
+        if( lsmash_check_box_type_identical( box->type, QT_BOX_TYPE_CHAN ) )
             continue;   /* Channel Layout Box should be placed after decoder specific info. */
-        if( ext->format == EXTENSION_FORMAT_BINARY )
+        if( box->manager & LSMASH_BINARY_CODED_BOX )
         {
-            lsmash_bs_put_bytes( bs, ext->size, ext->form.binary );
+            lsmash_bs_put_bytes( bs, box->size, box->binary );
             if( lsmash_bs_write_data( bs ) )
                 return -1;
             continue;
         }
-        if( lsmash_check_box_type_identical( ext->type, QT_BOX_TYPE_GLBL )
-         && isom_write_glbl( bs, ext->form.box ) )
+        if( lsmash_check_box_type_identical( box->type, QT_BOX_TYPE_GLBL )
+         && isom_write_glbl( bs, (void *)box ) )
             return -1;
     }
     if( isom_write_esds( bs, isom_get_extension_box_format( &audio->extensions, ISOM_BOX_TYPE_ESDS ) )
@@ -722,15 +722,15 @@ static int isom_write_audio_extensions( lsmash_bs_t *bs, isom_audio_entry_t *aud
      || isom_write_glbl( bs, isom_get_extension_box_format( &audio->extensions, QT_BOX_TYPE_GLBL ) ) )
         return -1;
     /* Write Channel Layout Box if present. */
-    isom_extension_box_t *ext = isom_get_extension_box( &audio->extensions, QT_BOX_TYPE_CHAN );
-    if( !ext )
+    isom_box_t *box = isom_get_extension_box( &audio->extensions, QT_BOX_TYPE_CHAN );
+    if( !box )
         return 0;
-    if( ext->format == EXTENSION_FORMAT_BINARY )
+    if( box->manager & LSMASH_BINARY_CODED_BOX )
     {
-        lsmash_bs_put_bytes( bs, ext->size, ext->form.binary );
+        lsmash_bs_put_bytes( bs, box->size, box->binary );
         return lsmash_bs_write_data( bs );
     }
-    return isom_write_chan( bs, ext->form.box );
+    return isom_write_chan( bs, (void *)box );
 }
 
 static int isom_write_visual_entry( lsmash_bs_t *bs, lsmash_entry_t *entry )

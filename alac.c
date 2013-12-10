@@ -82,16 +82,14 @@ int alac_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_cod
 
 int alac_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
 {
-    assert( fp && root && box );
+    assert( fp && root && box && (box->manager & LSMASH_BINARY_CODED_BOX) );
     int indent = level;
     lsmash_ifprintf( fp, indent++, "[%s: ALAC Specific Box]\n", isom_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     if( box->size < ALAC_SPECIFIC_BOX_LENGTH )
         return -1;
-    isom_extension_box_t *ext = (isom_extension_box_t *)box;
-    assert( ext->format == EXTENSION_FORMAT_BINARY );
-    uint8_t *data = ext->form.binary;
+    uint8_t *data = box->binary;
     isom_skip_box_common( &data );
     lsmash_ifprintf( fp, indent, "version = %"PRIu8"\n", data[0] );
     lsmash_ifprintf( fp, indent, "flags = 0x%06"PRIx32"\n", (data[1] << 16) | (data[2] << 8) | data[3] );

@@ -2365,19 +2365,17 @@ int h264_print_codec_specific
     int            level
 )
 {
-    assert( fp && root && box );
+    assert( fp && root && box && (box->manager & LSMASH_BINARY_CODED_BOX) );
     int indent = level;
     lsmash_ifprintf( fp, indent++, "[%s: AVC Configuration Box]\n", isom_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
-    isom_extension_box_t *ext = (isom_extension_box_t *)box;
-    assert( ext->format == EXTENSION_FORMAT_BINARY );
-    uint8_t *data = ext->form.binary;
-    uint32_t offset = isom_skip_box_common( &data );
-    lsmash_bs_t *bs = lsmash_bs_create( NULL );
+    uint8_t     *data   = box->binary;
+    uint32_t     offset = isom_skip_box_common( &data );
+    lsmash_bs_t *bs     = lsmash_bs_create( NULL );
     if( !bs )
         return -1;
-    if( lsmash_bs_import_data( bs, data, ext->size - offset ) )
+    if( lsmash_bs_import_data( bs, data, box->size - offset ) )
     {
         lsmash_bs_cleanup( bs );
         return -1;
@@ -2408,7 +2406,7 @@ int h264_print_codec_specific
     }
     /* Note: there are too many files, in the world, that don't contain the following fields. */
     if( ISOM_REQUIRES_AVCC_EXTENSION( AVCProfileIndication )
-     && (lsmash_bs_get_pos( bs ) < (ext->size - offset)) )
+     && (lsmash_bs_get_pos( bs ) < (box->size - offset)) )
     {
         temp8 = lsmash_bs_get_byte( bs );
         lsmash_ifprintf( fp, indent, "reserved = 0x%02"PRIx8"\n", (temp8 >> 2) & 0x3F );

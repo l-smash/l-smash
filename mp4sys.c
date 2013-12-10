@@ -952,10 +952,8 @@ static void mp4sys_print_ES_Descriptor( FILE *fp, mp4sys_ES_Descriptor_t *esd, i
 
 int mp4sys_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
 {
-    assert( fp && root && box );
-    isom_extension_box_t *ext = (isom_extension_box_t *)box;
-    assert( ext->format == EXTENSION_FORMAT_BOX && ext->form.box );
-    isom_esds_t *esds = (isom_esds_t *)ext->form.box;
+    assert( fp && root && box && !(box->manager & LSMASH_BINARY_CODED_BOX) );
+    isom_esds_t *esds = (isom_esds_t *)box;
     int indent = level;
     lsmash_ifprintf( fp, indent++, "[%s: Elemental Stream Descriptor Box]\n", isom_4cc2str( esds->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", esds->pos );
