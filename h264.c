@@ -37,6 +37,7 @@
 
 #define IF_INVALID_VALUE( x ) if( x )
 #define IF_EXCEED_INT32( x ) if( (x) < INT32_MIN || (x) > INT32_MAX )
+#define H264_REQUIRES_AVCC_EXTENSION( x ) ((x) == 100 || (x) == 110 || (x) == 122 || (x) == 144)
 #define H264_POC_DEBUG_PRINT 0
 
 typedef enum
@@ -1655,7 +1656,7 @@ uint8_t *lsmash_create_h264_specific_info
     lsmash_bs_put_byte( &bs, ps_count[1] );                                                     /* numOfPictureParameterSets */
     h264_bs_put_parameter_sets( &bs, ps_list[1], ps_count[1] );                                 /* pictureParameterSetLength
                                                                                                  * pictureParameterSetNALUnit */
-    if( ISOM_REQUIRES_AVCC_EXTENSION( param->AVCProfileIndication ) )
+    if( H264_REQUIRES_AVCC_EXTENSION( param->AVCProfileIndication ) )
     {
         lsmash_bs_put_byte( &bs, param->chroma_format           | 0xfc );                       /* chroma_format */
         lsmash_bs_put_byte( &bs, param->bit_depth_luma_minus8   | 0xf8 );                       /* bit_depth_luma_minus8 */
@@ -1716,7 +1717,7 @@ lsmash_dcr_nalu_appendable lsmash_check_h264_parameter_set_appendable
     if( h264_validate_ps_type( ps_type, ps_data, ps_length ) )
         return DCR_NALU_APPEND_ERROR;
     if( ps_type == H264_PARAMETER_SET_TYPE_SPSEXT
-     && !ISOM_REQUIRES_AVCC_EXTENSION( param->AVCProfileIndication ) )
+     && !H264_REQUIRES_AVCC_EXTENSION( param->AVCProfileIndication ) )
         return DCR_NALU_APPEND_ERROR;
     /* Check whether the same parameter set already exsits or not. */
     lsmash_entry_list_t *ps_list = h264_get_parameter_set_list( param, ps_type );
@@ -1789,7 +1790,7 @@ lsmash_dcr_nalu_appendable lsmash_check_h264_parameter_set_appendable
         return DCR_NALU_APPEND_NEW_DCR_REQUIRED;
     /* The values of chroma_format_idc, bit_depth_luma_minus8 and bit_depth_chroma_minus8
      * must be identical in all SPSs in a single AVC configuration record. */
-    if( ISOM_REQUIRES_AVCC_EXTENSION( param->AVCProfileIndication )
+    if( H264_REQUIRES_AVCC_EXTENSION( param->AVCProfileIndication )
      && (sps.chroma_format_idc       != param->chroma_format
      ||  sps.bit_depth_luma_minus8   != param->bit_depth_luma_minus8
      ||  sps.bit_depth_chroma_minus8 != param->bit_depth_chroma_minus8) )
@@ -1906,7 +1907,7 @@ int lsmash_append_h264_parameter_set
         return -1;
     if( ps_type == H264_PARAMETER_SET_TYPE_SPSEXT )
     {
-        if( !ISOM_REQUIRES_AVCC_EXTENSION( param->AVCProfileIndication ) )
+        if( !H264_REQUIRES_AVCC_EXTENSION( param->AVCProfileIndication ) )
             return 0;
         isom_dcr_ps_entry_t *ps = isom_create_ps_entry( ps_data, ps_length );
         if( !ps )
@@ -2340,7 +2341,7 @@ int h264_construct_specific_parameters
     if( numOfPictureParameterSets
      && nalu_get_dcr_ps( bs, param->parameter_sets->pps_list, numOfPictureParameterSets ) )
         goto fail;
-    if( ISOM_REQUIRES_AVCC_EXTENSION( param->AVCProfileIndication ) )
+    if( H264_REQUIRES_AVCC_EXTENSION( param->AVCProfileIndication ) )
     {
         param->chroma_format           = lsmash_bs_get_byte( bs ) & 0x03;
         param->bit_depth_luma_minus8   = lsmash_bs_get_byte( bs ) & 0x07;
@@ -2405,7 +2406,7 @@ int h264_print_codec_specific
         lsmash_bs_skip_bytes( bs, nalUnitLength );
     }
     /* Note: there are too many files, in the world, that don't contain the following fields. */
-    if( ISOM_REQUIRES_AVCC_EXTENSION( AVCProfileIndication )
+    if( H264_REQUIRES_AVCC_EXTENSION( AVCProfileIndication )
      && (lsmash_bs_get_pos( bs ) < (box->size - offset)) )
     {
         temp8 = lsmash_bs_get_byte( bs );

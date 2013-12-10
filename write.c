@@ -467,51 +467,6 @@ static int isom_write_esds( lsmash_bs_t *bs, isom_esds_t *esds )
     return mp4sys_write_ES_Descriptor( bs, esds->ES );
 }
 
-#if 0
-static int isom_put_ps_entries( lsmash_bs_t *bs, lsmash_entry_list_t *list )
-{
-    for( lsmash_entry_t *entry = list->head; entry; entry = entry->next )
-    {
-        isom_avcC_ps_entry_t *data = (isom_avcC_ps_entry_t *)entry->data;
-        if( !data )
-            return -1;
-        lsmash_bs_put_be16( bs, data->parameterSetLength );
-        lsmash_bs_put_bytes( bs, data->parameterSetLength, data->parameterSetNALUnit );
-    }
-    return 0;
-}
-
-static int isom_write_avcC( lsmash_bs_t *bs, isom_avcC_t *avcC )
-{
-    if( !avcC )
-        return 0;
-    if( !avcC->sequenceParameterSets || !avcC->pictureParameterSets )
-        return -1;
-    isom_bs_put_box_common( bs, avcC );
-    lsmash_bs_put_byte( bs, avcC->configurationVersion );
-    lsmash_bs_put_byte( bs, avcC->AVCProfileIndication );
-    lsmash_bs_put_byte( bs, avcC->profile_compatibility );
-    lsmash_bs_put_byte( bs, avcC->AVCLevelIndication );
-    lsmash_bs_put_byte( bs, avcC->lengthSizeMinusOne | 0xfc );            /* upper 6-bits are reserved as 111111b */
-    lsmash_bs_put_byte( bs, avcC->numOfSequenceParameterSets | 0xe0 );    /* upper 3-bits are reserved as 111b */
-    if( isom_put_ps_entries( bs, avcC->sequenceParameterSets ) )
-        return -1;
-    lsmash_bs_put_byte( bs, avcC->numOfPictureParameterSets );
-    if( isom_put_ps_entries( bs, avcC->pictureParameterSets ) )
-        return -1;
-    if( ISOM_REQUIRES_AVCC_EXTENSION( avcC->AVCProfileIndication ) )
-    {
-        lsmash_bs_put_byte( bs, avcC->chroma_format | 0xfc );             /* upper 6-bits are reserved as 111111b */
-        lsmash_bs_put_byte( bs, avcC->bit_depth_luma_minus8 | 0xf8 );     /* upper 5-bits are reserved as 11111b */
-        lsmash_bs_put_byte( bs, avcC->bit_depth_chroma_minus8 | 0xf8 );   /* upper 5-bits are reserved as 11111b */
-        lsmash_bs_put_byte( bs, avcC->numOfSequenceParameterSetExt );
-        if( isom_put_ps_entries( bs, avcC->sequenceParameterSetExt ) )
-            return -1;
-    }
-    return lsmash_bs_write_data( bs );
-}
-#endif
-
 static int isom_write_btrt( lsmash_bs_t *bs, isom_btrt_t *btrt )
 {
     if( !btrt )

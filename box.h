@@ -438,30 +438,7 @@ typedef struct
     struct mp4sys_ES_Descriptor_t *ES;
 } isom_esds_t;
 
-/* AVCDecoderConfigurationRecord */
-typedef struct
-{
-#define ISOM_REQUIRES_AVCC_EXTENSION( x ) ((x) == 100 || (x) == 110 || (x) == 122 || (x) == 144)
-    ISOM_BASEBOX_COMMON;
-    uint8_t configurationVersion;                   /* 1 */
-    uint8_t AVCProfileIndication;                   /* profile_idc in SPS */
-    uint8_t profile_compatibility;
-    uint8_t AVCLevelIndication;                     /* level_idc in SPS */
-    uint8_t lengthSizeMinusOne;                     /* in bytes of the NALUnitLength field. upper 6-bits are reserved as 111111b */
-    uint8_t numOfSequenceParameterSets;             /* upper 3-bits are reserved as 111b */
-    lsmash_entry_list_t *sequenceParameterSets;     /* SPSs */
-    uint8_t numOfPictureParameterSets;
-    lsmash_entry_list_t *pictureParameterSets;      /* PPSs */
-    /* if( ISOM_REQUIRES_AVCC_EXTENSION( AVCProfileIndication ) ) */
-    uint8_t chroma_format;                          /* chroma_format_idc in SPS / upper 6-bits are reserved as 111111b */
-    uint8_t bit_depth_luma_minus8;                  /* shall be in the range of 0 to 4 / upper 5-bits are reserved as 11111b */
-    uint8_t bit_depth_chroma_minus8;                /* shall be in the range of 0 to 4 / upper 5-bits are reserved as 11111b */
-    uint8_t numOfSequenceParameterSetExt;
-    lsmash_entry_list_t *sequenceParameterSetExt;   /* SPSExts */
-    /* */
-} isom_avcC_t;
-
-/* Parameter Set Entry within Decoder Configuration Record */
+/* Parameter Set Entry within AVC/HEVC Decoder Configuration Record */
 typedef struct
 {
     uint16_t nalUnitLength;
