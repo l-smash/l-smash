@@ -929,8 +929,7 @@ static size_t stream_buffers_update_file( lsmash_stream_buffers_t *sb, uint32_t 
         return remainder_bytes;
     if( sb->start != sb->pos )
         /* Move unused data to the head of buffer. */
-        for( uint32_t i = 0; i < remainder_bytes; i++ )
-            *(sb->start + i) = *(sb->pos + i);
+        memmove( sb->start, sb->pos, remainder_bytes );
     /* Read and store the next data into the buffer.
      * Move the position of buffer on the head. */
     lsmash_stream_buffers_seek( sb, remainder_bytes, SEEK_SET );
@@ -948,8 +947,7 @@ static size_t stream_buffers_update_data_string( lsmash_stream_buffers_t *sb, ui
         return remainder_bytes;
     if( sb->start != sb->pos )
         /* Move unused data to the head of buffer. */
-        for( uint32_t i = 0; i < remainder_bytes; i++ )
-            *(sb->start + i) = *(sb->pos + i);
+        memmove( sb->start, sb->pos, remainder_bytes );
     /* Read and store the next data into the buffer.
      * Move the position of buffer on the head. */
     lsmash_data_string_handler_t *dsh = (lsmash_data_string_handler_t *)sb->stream;
