@@ -2284,6 +2284,10 @@ void isom_remove_ilst( isom_ilst_t *ilst );
 void isom_remove_meta( isom_meta_t *meta );
 void isom_remove_cprt( isom_cprt_t *cprt );
 void isom_remove_udta( isom_udta_t *udta );
+void isom_remove_WLOC( isom_WLOC_t *WLOC );
+void isom_remove_LOOP( isom_LOOP_t *LOOP );
+void isom_remove_SelO( isom_SelO_t *SelO );
+void isom_remove_AllF( isom_AllF_t *AllF );
 void isom_remove_ctab( isom_ctab_t *ctab );
 void isom_remove_mehd( isom_mehd_t *mehd );
 void isom_remove_trex( isom_trex_t *trex );
@@ -2295,13 +2299,14 @@ void isom_remove_trun( isom_trun_t *trun );
 void isom_remove_traf( isom_traf_t *traf );
 void isom_remove_moof( isom_moof_t *moof );
 void isom_remove_mdat( isom_mdat_t *mdat );
-void isom_remove_free( isom_free_t *skip );
 void isom_remove_tfra( isom_tfra_t *tfra );
 void isom_remove_mfro( isom_mfro_t *mfro );
 void isom_remove_mfra( isom_mfra_t *mfra );
 void isom_remove_sample_description( isom_sample_entry_t *sample );
 void isom_remove_unknown_box( isom_unknown_box_t *unknown_box );
 void isom_remove_sample_pool( isom_sample_pool_t *pool );
+void isom_remove_free( isom_free_t *skip );
+#define isom_remove_skip isom_remove_free
 
 int isom_add_extension_binary( void *parent_box, lsmash_box_type_t box_type, uint8_t *box_data, uint32_t box_size );
 void isom_remove_extension_box( isom_box_t *ext );
@@ -2309,19 +2314,19 @@ void isom_remove_all_extension_boxes( lsmash_entry_list_t *extensions );
 isom_box_t *isom_get_extension_box( lsmash_entry_list_t *extensions, lsmash_box_type_t box_type );
 void *isom_get_extension_box_format( lsmash_entry_list_t *extensions, lsmash_box_type_t box_type );
 
-#define isom_create_box( box_name, parent_name, box_type, destructor )                   \
+#define isom_create_box( box_name, parent_name, box_type )                               \
     isom_##box_name##_t *(box_name) = lsmash_malloc_zero( sizeof(isom_##box_name##_t) ); \
     if( !box_name )                                                                      \
         return -1;                                                                       \
-    isom_init_box_common( box_name, parent_name, box_type, destructor )
+    isom_init_box_common( box_name, parent_name, box_type, isom_remove_##box_name )
 
-#define isom_create_list_box( box_name, parent_name, box_type, destructor ) \
-    isom_create_box( box_name, parent_name, box_type, destructor );         \
-    box_name->list = lsmash_create_entry_list();                            \
-    if( !box_name->list )                                                   \
-    {                                                                       \
-        free( box_name );                                                   \
-        return -1;                                                          \
+#define isom_create_list_box( box_name, parent_name, box_type ) \
+    isom_create_box( box_name, parent_name, box_type );         \
+    box_name->list = lsmash_create_entry_list();                \
+    if( !box_name->list )                                       \
+    {                                                           \
+        free( box_name );                                       \
+        return -1;                                              \
     }
 
 #define isom_copy_fields( dst, src, box_name )      \

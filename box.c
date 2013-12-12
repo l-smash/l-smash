@@ -1014,10 +1014,10 @@ void isom_remove_udta( isom_udta_t *udta )
         return;
     isom_remove_chpl( udta->chpl );
     isom_remove_meta( udta->meta );
-    lsmash_free( udta->WLOC );
-    lsmash_free( udta->LOOP );
-    lsmash_free( udta->SelO );
-    lsmash_free( udta->AllF );
+    isom_remove_WLOC( udta->WLOC );
+    isom_remove_LOOP( udta->LOOP );
+    isom_remove_SelO( udta->SelO );
+    isom_remove_AllF( udta->AllF );
     lsmash_remove_list( udta->cprt_list, isom_remove_cprt );
     if( udta->parent )
     {
@@ -1031,6 +1031,34 @@ void isom_remove_udta( isom_udta_t *udta )
     }
     isom_remove_all_extension_boxes( &udta->extensions );
     lsmash_free( udta );
+}
+
+void isom_remove_WLOC( isom_WLOC_t *WLOC )
+{
+    if( !WLOC )
+        return;
+    isom_remove_box( WLOC, isom_udta_t );
+}
+
+void isom_remove_LOOP( isom_LOOP_t *LOOP )
+{
+    if( !LOOP )
+        return;
+    isom_remove_box( LOOP, isom_udta_t );
+}
+
+void isom_remove_SelO( isom_SelO_t *SelO )
+{
+    if( !SelO )
+        return;
+    isom_remove_box( SelO, isom_udta_t );
+}
+
+void isom_remove_AllF( isom_AllF_t *AllF )
+{
+    if( !AllF )
+        return;
+    isom_remove_box( AllF, isom_udta_t );
 }
 
 void isom_remove_ctab( isom_ctab_t *ctab )
@@ -1264,7 +1292,7 @@ int isom_add_frma( isom_wave_t *wave )
 {
     if( !wave || wave->frma )
         return -1;
-    isom_create_box( frma, wave, QT_BOX_TYPE_FRMA, isom_remove_frma );
+    isom_create_box( frma, wave, QT_BOX_TYPE_FRMA );
     wave->frma = frma;
     return 0;
 }
@@ -1273,7 +1301,7 @@ int isom_add_enda( isom_wave_t *wave )
 {
     if( !wave || wave->enda )
         return -1;
-    isom_create_box( enda, wave, QT_BOX_TYPE_ENDA, isom_remove_enda );
+    isom_create_box( enda, wave, QT_BOX_TYPE_ENDA );
     wave->enda = enda;
     return 0;
 }
@@ -1282,7 +1310,7 @@ int isom_add_mp4a( isom_wave_t *wave )
 {
     if( !wave || wave->mp4a )
         return -1;
-    isom_create_box( mp4a, wave, QT_BOX_TYPE_MP4A, isom_remove_mp4a );
+    isom_create_box( mp4a, wave, QT_BOX_TYPE_MP4A );
     wave->mp4a = mp4a;
     return 0;
 }
@@ -1291,7 +1319,7 @@ int isom_add_terminator( isom_wave_t *wave )
 {
     if( !wave || wave->terminator )
         return -1;
-    isom_create_box( terminator, wave, QT_BOX_TYPE_TERMINATOR, isom_remove_terminator );
+    isom_create_box( terminator, wave, QT_BOX_TYPE_TERMINATOR );
     wave->terminator = terminator;
     return 0;
 }
@@ -1300,16 +1328,7 @@ int isom_add_ftab( isom_tx3g_entry_t *tx3g )
 {
     if( !tx3g )
         return -1;
-    isom_ftab_t *ftab = lsmash_malloc_zero( sizeof(isom_ftab_t) );
-    if( !ftab )
-        return -1;
-    isom_init_box_common( ftab, tx3g, ISOM_BOX_TYPE_FTAB, isom_remove_ftab );
-    ftab->list = lsmash_create_entry_list();
-    if( !ftab->list )
-    {
-        lsmash_free( ftab );
-        return -1;
-    }
+    isom_create_list_box( ftab, tx3g, ISOM_BOX_TYPE_FTAB );
     tx3g->ftab = ftab;
     return 0;
 }
@@ -1318,7 +1337,7 @@ int isom_add_stco( isom_stbl_t *stbl )
 {
     if( !stbl || stbl->stco )
         return -1;
-    isom_create_list_box( stco, stbl, ISOM_BOX_TYPE_STCO, isom_remove_stco );
+    isom_create_list_box( stco, stbl, ISOM_BOX_TYPE_STCO );
     stco->large_presentation = 0;
     stbl->stco = stco;
     return 0;
@@ -1328,7 +1347,7 @@ int isom_add_co64( isom_stbl_t *stbl )
 {
     if( !stbl || stbl->stco )
         return -1;
-    isom_create_list_box( stco, stbl, ISOM_BOX_TYPE_CO64, isom_remove_stco );
+    isom_create_list_box( stco, stbl, ISOM_BOX_TYPE_CO64 );
     stco->large_presentation = 1;
     stbl->stco = stco;
     return 0;
@@ -1338,7 +1357,7 @@ int isom_add_ftyp( lsmash_root_t *root )
 {
     if( root->ftyp )
         return -1;
-    isom_create_box( ftyp, root, ISOM_BOX_TYPE_FTYP, isom_remove_ftyp );
+    isom_create_box( ftyp, root, ISOM_BOX_TYPE_FTYP );
     ftyp->size = ISOM_BASEBOX_COMMON_SIZE + 8;
     root->ftyp = ftyp;
     return 0;
@@ -1348,7 +1367,7 @@ int isom_add_moov( lsmash_root_t *root )
 {
     if( root->moov )
         return -1;
-    isom_create_box( moov, root, ISOM_BOX_TYPE_MOOV, isom_remove_moov );
+    isom_create_box( moov, root, ISOM_BOX_TYPE_MOOV );
     root->moov = moov;
     return 0;
 }
@@ -1357,7 +1376,7 @@ int isom_add_mvhd( isom_moov_t *moov )
 {
     if( !moov || moov->mvhd )
         return -1;
-    isom_create_box( mvhd, moov, ISOM_BOX_TYPE_MVHD, isom_remove_mvhd );
+    isom_create_box( mvhd, moov, ISOM_BOX_TYPE_MVHD );
     mvhd->rate          = 0x00010000;
     mvhd->volume        = 0x0100;
     mvhd->matrix[0]     = 0x00010000;
@@ -1437,7 +1456,7 @@ int isom_add_iods( isom_moov_t *moov )
      || !moov->trak_list
      ||  moov->iods )
         return -1;
-    isom_create_box( iods, moov, ISOM_BOX_TYPE_IODS, isom_remove_iods );
+    isom_create_box( iods, moov, ISOM_BOX_TYPE_IODS );
     iods->OD = mp4sys_create_ObjectDescriptor( 1 ); /* NOTE: Use 1 for ObjectDescriptorID of IOD. */
     if( !iods->OD )
     {
@@ -1535,7 +1554,7 @@ int isom_add_tkhd( isom_trak_t *trak, uint32_t handler_type )
         return -1;
     if( !trak->tkhd )
     {
-        isom_create_box( tkhd, trak, ISOM_BOX_TYPE_TKHD, isom_remove_tkhd );
+        isom_create_box( tkhd, trak, ISOM_BOX_TYPE_TKHD );
         if( handler_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK )
             tkhd->volume = 0x0100;
         tkhd->matrix[0] = 0x00010000;
@@ -1553,7 +1572,7 @@ int isom_add_tapt( isom_trak_t *trak )
 {
     if( trak->tapt )
         return 0;
-    isom_create_box( tapt, trak, QT_BOX_TYPE_TAPT, isom_remove_tapt );
+    isom_create_box( tapt, trak, QT_BOX_TYPE_TAPT );
     trak->tapt = tapt;
     return 0;
 }
@@ -1562,7 +1581,7 @@ int isom_add_clef( isom_tapt_t *tapt )
 {
     if( tapt->clef )
         return 0;
-    isom_create_box( clef, tapt, QT_BOX_TYPE_CLEF, isom_remove_clef );
+    isom_create_box( clef, tapt, QT_BOX_TYPE_CLEF );
     tapt->clef = clef;
     return 0;
 }
@@ -1571,7 +1590,7 @@ int isom_add_prof( isom_tapt_t *tapt )
 {
     if( tapt->prof )
         return 0;
-    isom_create_box( prof, tapt, QT_BOX_TYPE_PROF, isom_remove_prof );
+    isom_create_box( prof, tapt, QT_BOX_TYPE_PROF );
     tapt->prof = prof;
     return 0;
 }
@@ -1580,7 +1599,7 @@ int isom_add_enof( isom_tapt_t *tapt )
 {
     if( tapt->enof )
         return 0;
-    isom_create_box( enof, tapt, QT_BOX_TYPE_ENOF, isom_remove_enof );
+    isom_create_box( enof, tapt, QT_BOX_TYPE_ENOF );
     tapt->enof = enof;
     return 0;
 }
@@ -1589,7 +1608,7 @@ int isom_add_elst( isom_edts_t *edts )
 {
     if( edts->elst )
         return 0;
-    isom_create_list_box( elst, edts, ISOM_BOX_TYPE_ELST, isom_remove_elst );
+    isom_create_list_box( elst, edts, ISOM_BOX_TYPE_ELST );
     edts->elst = elst;
     return 0;
 }
@@ -1598,7 +1617,7 @@ int isom_add_edts( isom_trak_t *trak )
 {
     if( trak->edts )
         return 0;
-    isom_create_box( edts, trak, ISOM_BOX_TYPE_EDTS, isom_remove_edts );
+    isom_create_box( edts, trak, ISOM_BOX_TYPE_EDTS );
     trak->edts = edts;
     return 0;
 }
@@ -1607,7 +1626,7 @@ int isom_add_tref( isom_trak_t *trak )
 {
     if( trak->tref )
         return 0;
-    isom_create_box( tref, trak, ISOM_BOX_TYPE_TREF, isom_remove_tref );
+    isom_create_box( tref, trak, ISOM_BOX_TYPE_TREF );
     tref->ref_list = lsmash_create_entry_list();
     if( !tref->ref_list )
     {
@@ -1622,7 +1641,7 @@ int isom_add_mdia( isom_trak_t *trak )
 {
     if( !trak || trak->mdia )
         return -1;
-    isom_create_box( mdia, trak, ISOM_BOX_TYPE_MDIA, isom_remove_mdia );
+    isom_create_box( mdia, trak, ISOM_BOX_TYPE_MDIA );
     trak->mdia = mdia;
     return 0;
 }
@@ -1632,7 +1651,7 @@ int isom_add_mdhd( isom_mdia_t *mdia, uint16_t default_language )
 {
     if( !mdia || mdia->mdhd )
         return -1;
-    isom_create_box( mdhd, mdia, ISOM_BOX_TYPE_MDHD, isom_remove_mdhd );
+    isom_create_box( mdhd, mdia, ISOM_BOX_TYPE_MDHD );
     mdhd->language = default_language;
     mdia->mdhd = mdhd;
     return 0;
@@ -1650,7 +1669,7 @@ int isom_add_hdlr( isom_mdia_t *mdia, isom_meta_t *meta, isom_minf_t *minf, uint
      || (minf && minf->hdlr) )
         return -1;    /* Selected one must not have hdlr yet. */
     isom_box_t *parent = mdia ? (isom_box_t *)mdia : meta ? (isom_box_t *)meta : (isom_box_t *)minf;
-    isom_create_box( hdlr, parent, ISOM_BOX_TYPE_HDLR, isom_remove_hdlr );
+    isom_create_box( hdlr, parent, ISOM_BOX_TYPE_HDLR );
     lsmash_root_t *root = hdlr->root;
     uint32_t type    = mdia ? (root->qt_compatible ? QT_HANDLER_TYPE_MEDIA : 0) : (meta ? 0 : QT_HANDLER_TYPE_DATA);
     uint32_t subtype = media_type;
@@ -1722,7 +1741,7 @@ int isom_add_minf( isom_mdia_t *mdia )
 {
     if( !mdia || mdia->minf )
         return -1;
-    isom_create_box( minf, mdia, ISOM_BOX_TYPE_MINF, isom_remove_minf );
+    isom_create_box( minf, mdia, ISOM_BOX_TYPE_MINF );
     mdia->minf = minf;
     return 0;
 }
@@ -1731,7 +1750,7 @@ int isom_add_vmhd( isom_minf_t *minf )
 {
     if( !minf || minf->vmhd )
         return -1;
-    isom_create_box( vmhd, minf, ISOM_BOX_TYPE_VMHD, isom_remove_vmhd );
+    isom_create_box( vmhd, minf, ISOM_BOX_TYPE_VMHD );
     vmhd->flags = 0x000001;
     minf->vmhd = vmhd;
     return 0;
@@ -1741,7 +1760,7 @@ int isom_add_smhd( isom_minf_t *minf )
 {
     if( !minf || minf->smhd )
         return -1;
-    isom_create_box( smhd, minf, ISOM_BOX_TYPE_SMHD, isom_remove_smhd );
+    isom_create_box( smhd, minf, ISOM_BOX_TYPE_SMHD );
     minf->smhd = smhd;
     return 0;
 }
@@ -1750,7 +1769,7 @@ int isom_add_hmhd( isom_minf_t *minf )
 {
     if( !minf || minf->hmhd )
         return -1;
-    isom_create_box( hmhd, minf, ISOM_BOX_TYPE_HMHD, isom_remove_hmhd );
+    isom_create_box( hmhd, minf, ISOM_BOX_TYPE_HMHD );
     minf->hmhd = hmhd;
     return 0;
 }
@@ -1759,7 +1778,7 @@ int isom_add_nmhd( isom_minf_t *minf )
 {
     if( !minf || minf->nmhd )
         return -1;
-    isom_create_box( nmhd, minf, ISOM_BOX_TYPE_NMHD, isom_remove_nmhd );
+    isom_create_box( nmhd, minf, ISOM_BOX_TYPE_NMHD );
     minf->nmhd = nmhd;
     return 0;
 }
@@ -1768,7 +1787,7 @@ int isom_add_gmhd( isom_minf_t *minf )
 {
     if( !minf || minf->gmhd )
         return -1;
-    isom_create_box( gmhd, minf, QT_BOX_TYPE_GMHD, isom_remove_gmhd );
+    isom_create_box( gmhd, minf, QT_BOX_TYPE_GMHD );
     minf->gmhd = gmhd;
     return 0;
 }
@@ -1777,7 +1796,7 @@ int isom_add_gmin( isom_gmhd_t *gmhd )
 {
     if( !gmhd || gmhd->gmin )
         return -1;
-    isom_create_box( gmin, gmhd, QT_BOX_TYPE_GMIN, isom_remove_gmin );
+    isom_create_box( gmin, gmhd, QT_BOX_TYPE_GMIN );
     gmhd->gmin = gmin;
     return 0;
 }
@@ -1786,7 +1805,7 @@ int isom_add_text( isom_gmhd_t *gmhd )
 {
     if( !gmhd || gmhd->text )
         return -1;
-    isom_create_box( text, gmhd, QT_BOX_TYPE_TEXT, isom_remove_text );
+    isom_create_box( text, gmhd, QT_BOX_TYPE_TEXT );
     text->matrix[0] = 0x00010000;
     text->matrix[4] = 0x00010000;
     text->matrix[8] = 0x40000000;
@@ -1798,7 +1817,7 @@ int isom_add_dinf( isom_minf_t *minf )
 {
     if( !minf || minf->dinf )
         return -1;
-    isom_create_box( dinf, minf, ISOM_BOX_TYPE_DINF, isom_remove_dinf );
+    isom_create_box( dinf, minf, ISOM_BOX_TYPE_DINF );
     minf->dinf = dinf;
     return 0;
 }
@@ -1807,7 +1826,7 @@ int isom_add_dref( isom_dinf_t *dinf )
 {
     if( !dinf || dinf->dref )
         return -1;
-    isom_create_list_box( dref, dinf, ISOM_BOX_TYPE_DREF, isom_remove_dref );
+    isom_create_list_box( dref, dinf, ISOM_BOX_TYPE_DREF );
     dinf->dref = dref;
     if( isom_add_dref_entry( dref, 0x000001, NULL, NULL ) )
         return -1;
@@ -1818,7 +1837,7 @@ int isom_add_stbl( isom_minf_t *minf )
 {
     if( !minf || minf->stbl )
         return -1;
-    isom_create_box( stbl, minf, ISOM_BOX_TYPE_STBL, isom_remove_stbl );
+    isom_create_box( stbl, minf, ISOM_BOX_TYPE_STBL );
     minf->stbl = stbl;
     return 0;
 }
@@ -1827,7 +1846,7 @@ int isom_add_stsd( isom_stbl_t *stbl )
 {
     if( !stbl || stbl->stsd )
         return -1;
-    isom_create_list_box( stsd, stbl, ISOM_BOX_TYPE_STSD, isom_remove_stsd );
+    isom_create_list_box( stsd, stbl, ISOM_BOX_TYPE_STSD );
     stbl->stsd = stsd;
     return 0;
 }
@@ -1836,7 +1855,7 @@ int isom_add_stts( isom_stbl_t *stbl )
 {
     if( !stbl || stbl->stts )
         return -1;
-    isom_create_list_box( stts, stbl, ISOM_BOX_TYPE_STTS, isom_remove_stts );
+    isom_create_list_box( stts, stbl, ISOM_BOX_TYPE_STTS );
     stbl->stts = stts;
     return 0;
 }
@@ -1845,7 +1864,7 @@ int isom_add_ctts( isom_stbl_t *stbl )
 {
     if( !stbl || stbl->ctts )
         return -1;
-    isom_create_list_box( ctts, stbl, ISOM_BOX_TYPE_CTTS, isom_remove_ctts );
+    isom_create_list_box( ctts, stbl, ISOM_BOX_TYPE_CTTS );
     stbl->ctts = ctts;
     return 0;
 }
@@ -1854,7 +1873,7 @@ int isom_add_cslg( isom_stbl_t *stbl )
 {
     if( !stbl || stbl->cslg )
         return -1;
-    isom_create_box( cslg, stbl, ISOM_BOX_TYPE_CSLG, isom_remove_cslg );
+    isom_create_box( cslg, stbl, ISOM_BOX_TYPE_CSLG );
     stbl->cslg = cslg;
     return 0;
 }
@@ -1863,7 +1882,7 @@ int isom_add_stsc( isom_stbl_t *stbl )
 {
     if( !stbl || stbl->stsc )
         return -1;
-    isom_create_list_box( stsc, stbl, ISOM_BOX_TYPE_STSC, isom_remove_stsc );
+    isom_create_list_box( stsc, stbl, ISOM_BOX_TYPE_STSC );
     stbl->stsc = stsc;
     return 0;
 }
@@ -1872,7 +1891,7 @@ int isom_add_stsz( isom_stbl_t *stbl )
 {
     if( !stbl || stbl->stsz )
         return -1;
-    isom_create_box( stsz, stbl, ISOM_BOX_TYPE_STSZ, isom_remove_stsz );    /* We don't create a list here. */
+    isom_create_box( stsz, stbl, ISOM_BOX_TYPE_STSZ );  /* We don't create a list here. */
     stbl->stsz = stsz;
     return 0;
 }
@@ -1881,7 +1900,7 @@ int isom_add_stss( isom_stbl_t *stbl )
 {
     if( !stbl || stbl->stss )
         return -1;
-    isom_create_list_box( stss, stbl, ISOM_BOX_TYPE_STSS, isom_remove_stss );
+    isom_create_list_box( stss, stbl, ISOM_BOX_TYPE_STSS );
     stbl->stss = stss;
     return 0;
 }
@@ -1890,7 +1909,7 @@ int isom_add_stps( isom_stbl_t *stbl )
 {
     if( !stbl || stbl->stps )
         return -1;
-    isom_create_list_box( stps, stbl, QT_BOX_TYPE_STPS, isom_remove_stps );
+    isom_create_list_box( stps, stbl, QT_BOX_TYPE_STPS );
     stbl->stps = stps;
     return 0;
 }
@@ -1904,7 +1923,7 @@ int isom_add_sdtp( isom_box_t *parent )
         isom_stbl_t *stbl = (isom_stbl_t *)parent;
         if( stbl->sdtp )
             return -1;
-        isom_create_list_box( sdtp, stbl, ISOM_BOX_TYPE_SDTP, isom_remove_sdtp );
+        isom_create_list_box( sdtp, stbl, ISOM_BOX_TYPE_SDTP );
         stbl->sdtp = sdtp;
     }
     else if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAF ) )
@@ -1912,7 +1931,7 @@ int isom_add_sdtp( isom_box_t *parent )
         isom_traf_t *traf = (isom_traf_t *)parent;
         if( traf->sdtp )
             return -1;
-        isom_create_list_box( sdtp, traf, ISOM_BOX_TYPE_SDTP, isom_remove_sdtp );
+        isom_create_list_box( sdtp, traf, ISOM_BOX_TYPE_SDTP );
         traf->sdtp = sdtp;
     }
     else
@@ -1987,7 +2006,7 @@ int isom_add_chpl( isom_moov_t *moov )
      || !moov->udta
      ||  moov->udta->chpl )
         return -1;
-    isom_create_list_box( chpl, moov->udta, ISOM_BOX_TYPE_CHPL, isom_remove_chpl );
+    isom_create_list_box( chpl, moov->udta, ISOM_BOX_TYPE_CHPL );
     chpl->version = 1;      /* version = 1 is popular. */
     moov->udta->chpl = chpl;
     return 0;
@@ -1999,7 +2018,7 @@ int isom_add_metaitem( isom_ilst_t *ilst, lsmash_itunes_metadata_item item )
      || !ilst->item_list )
         return -1;
     lsmash_box_type_t type = lsmash_form_iso_box_type( item );
-    isom_create_box( metaitem, ilst, type, isom_remove_metaitem );
+    isom_create_box( metaitem, ilst, type );
     if( lsmash_add_entry( ilst->item_list, metaitem ) )
     {
         lsmash_free( metaitem );
@@ -2012,7 +2031,7 @@ int isom_add_mean( isom_metaitem_t *metaitem )
 {
     if( !metaitem || metaitem->mean )
         return -1;
-    isom_create_box( mean, metaitem, ISOM_BOX_TYPE_MEAN, isom_remove_mean );
+    isom_create_box( mean, metaitem, ISOM_BOX_TYPE_MEAN );
     metaitem->mean = mean;
     return 0;
 }
@@ -2021,7 +2040,7 @@ int isom_add_name( isom_metaitem_t *metaitem )
 {
     if( !metaitem || metaitem->name )
         return -1;
-    isom_create_box( name, metaitem, ISOM_BOX_TYPE_NAME, isom_remove_name );
+    isom_create_box( name, metaitem, ISOM_BOX_TYPE_NAME );
     metaitem->name = name;
     return 0;
 }
@@ -2030,7 +2049,7 @@ int isom_add_data( isom_metaitem_t *metaitem )
 {
     if( !metaitem || metaitem->data )
         return -1;
-    isom_create_box( data, metaitem, ISOM_BOX_TYPE_DATA, isom_remove_data );
+    isom_create_box( data, metaitem, ISOM_BOX_TYPE_DATA );
     metaitem->data = data;
     return 0;
 }
@@ -2042,7 +2061,7 @@ int isom_add_ilst( isom_moov_t *moov )
      || !moov->udta->meta
      ||  moov->udta->meta->ilst )
         return -1;
-    isom_create_box( ilst, moov->udta->meta, ISOM_BOX_TYPE_ILST, isom_remove_ilst );
+    isom_create_box( ilst, moov->udta->meta, ISOM_BOX_TYPE_ILST );
     ilst->item_list = lsmash_create_entry_list();
     if( !ilst->item_list )
     {
@@ -2057,7 +2076,7 @@ int isom_add_meta( isom_box_t *parent )
 {
     if( !parent )
         return -1;
-    isom_create_box( meta, parent, ISOM_BOX_TYPE_META, isom_remove_meta );
+    isom_create_box( meta, parent, ISOM_BOX_TYPE_META );
     if( lsmash_check_box_type_identical( parent->type, LSMASH_BOX_TYPE_UNSPECIFIED ) )
     {
         lsmash_root_t *root = (lsmash_root_t *)parent;
@@ -2111,7 +2130,7 @@ int isom_add_cprt( isom_udta_t *udta )
         if( !udta->cprt_list )
             return -1;
     }
-    isom_create_box( cprt, udta, ISOM_BOX_TYPE_CPRT, isom_remove_cprt );
+    isom_create_box( cprt, udta, ISOM_BOX_TYPE_CPRT );
     if( lsmash_add_entry( udta->cprt_list, cprt ) )
     {
         lsmash_free( cprt );
@@ -2130,7 +2149,7 @@ int isom_add_udta( lsmash_root_t *root, uint32_t track_ID )
             return -1;
         if( root->moov->udta )
             return 0;
-        isom_create_box( udta, root->moov, ISOM_BOX_TYPE_UDTA, isom_remove_udta );
+        isom_create_box( udta, root->moov, ISOM_BOX_TYPE_UDTA );
         root->moov->udta = udta;
         return 0;
     }
@@ -2139,7 +2158,7 @@ int isom_add_udta( lsmash_root_t *root, uint32_t track_ID )
         return -1;
     if( trak->udta )
         return 0;
-    isom_create_box( udta, trak, ISOM_BOX_TYPE_UDTA, isom_remove_udta );
+    isom_create_box( udta, trak, ISOM_BOX_TYPE_UDTA );
     trak->udta = udta;
     return 0;
 }
@@ -2148,7 +2167,7 @@ int isom_add_mvex( isom_moov_t *moov )
 {
     if( !moov || moov->mvex )
         return -1;
-    isom_create_box( mvex, moov, ISOM_BOX_TYPE_MVEX, isom_remove_mvex );
+    isom_create_box( mvex, moov, ISOM_BOX_TYPE_MVEX );
     moov->mvex = mvex;
     return 0;
 }
@@ -2157,7 +2176,7 @@ int isom_add_mehd( isom_mvex_t *mvex )
 {
     if( !mvex || mvex->mehd )
         return -1;
-    isom_create_box( mehd, mvex, ISOM_BOX_TYPE_MEHD, isom_remove_mehd );
+    isom_create_box( mehd, mvex, ISOM_BOX_TYPE_MEHD );
     mvex->mehd = mehd;
     return 0;
 }
@@ -2210,7 +2229,7 @@ int isom_add_mfhd( isom_moof_t *moof )
 {
     if( !moof || moof->mfhd )
         return -1;
-    isom_create_box( mfhd, moof, ISOM_BOX_TYPE_MFHD, isom_remove_mfhd );
+    isom_create_box( mfhd, moof, ISOM_BOX_TYPE_MFHD );
     moof->mfhd = mfhd;
     return 0;
 }
@@ -2252,7 +2271,7 @@ int isom_add_tfhd( isom_traf_t *traf )
 {
     if( !traf || traf->tfhd )
         return -1;
-    isom_create_box( tfhd, traf, ISOM_BOX_TYPE_TFHD, isom_remove_tfhd );
+    isom_create_box( tfhd, traf, ISOM_BOX_TYPE_TFHD );
     traf->tfhd = tfhd;
     return 0;
 }
@@ -2261,7 +2280,7 @@ int isom_add_tfdt( isom_traf_t *traf )
 {
     if( !traf || traf->tfdt )
         return -1;
-    isom_create_box( tfdt, traf, ISOM_BOX_TYPE_TFDT, isom_remove_tfdt );
+    isom_create_box( tfdt, traf, ISOM_BOX_TYPE_TFDT );
     traf->tfdt = tfdt;
     return 0;
 }
@@ -2292,7 +2311,7 @@ int isom_add_mfra( lsmash_root_t *root )
 {
     if( !root || root->mfra )
         return -1;
-    isom_create_box( mfra, root, ISOM_BOX_TYPE_MFRA, isom_remove_mfra );
+    isom_create_box( mfra, root, ISOM_BOX_TYPE_MFRA );
     root->mfra = mfra;
     return 0;
 }
@@ -2323,7 +2342,7 @@ int isom_add_mfro( isom_mfra_t *mfra )
 {
     if( !mfra || mfra->mfro )
         return -1;
-    isom_create_box( mfro, mfra, ISOM_BOX_TYPE_MFRO, isom_remove_mfro );
+    isom_create_box( mfro, mfra, ISOM_BOX_TYPE_MFRO );
     mfra->mfro = mfro;
     return 0;
 }

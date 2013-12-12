@@ -957,7 +957,7 @@ static int isom_new_mdat( lsmash_root_t *root, uint64_t media_size )
     }
     else
     {
-        isom_create_box( mdat, root, ISOM_BOX_TYPE_MDAT, isom_remove_mdat );
+        isom_create_box( mdat, root, ISOM_BOX_TYPE_MDAT );
         root->mdat = mdat;
     }
     /* Start a new Media Data Box. */
@@ -3830,7 +3830,7 @@ int lsmash_add_free( lsmash_root_t *root, uint8_t *data, uint64_t data_length )
         return -1;
     if( !root->free )
     {
-        isom_create_box( skip, root, ISOM_BOX_TYPE_FREE, isom_remove_free );
+        isom_create_box( skip, root, ISOM_BOX_TYPE_FREE );
         root->free = skip;
     }
     if( data && data_length )
