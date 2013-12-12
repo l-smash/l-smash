@@ -329,13 +329,14 @@ void *isom_get_extension_box_format( lsmash_entry_list_t *extensions, lsmash_box
     return NULL;
 }
 
-#define isom_remove_box( box_name, parent_type ) \
-    do \
-    { \
-        parent_type *parent = (parent_type *)box_name->parent; \
-        lsmash_free( box_name ); \
-        if( parent ) \
-            parent->box_name = NULL; \
+#define isom_remove_box( box_name, parent_type )                  \
+    do                                                            \
+    {                                                             \
+        parent_type *parent = (parent_type *)box_name->parent;    \
+        isom_remove_all_extension_boxes( &box_name->extensions ); \
+        lsmash_free( box_name );                                  \
+        if( parent )                                              \
+            parent->box_name = NULL;                              \
     } while( 0 )
 
 void isom_remove_unknown_box( isom_unknown_box_t *unknown_box )
@@ -344,6 +345,7 @@ void isom_remove_unknown_box( isom_unknown_box_t *unknown_box )
         return;
     if( unknown_box->unknown_field )
         lsmash_free( unknown_box->unknown_field );
+    isom_remove_all_extension_boxes( &unknown_box->extensions );
     lsmash_free( unknown_box );
 }
 
@@ -383,6 +385,7 @@ void isom_remove_trak( isom_trak_entry_t *trak )
             lsmash_free( trak->cache->rap );
         lsmash_free( trak->cache );
     }
+    isom_remove_all_extension_boxes( &trak->extensions );
     lsmash_free( trak );    /* Note: the list that contains this trak still has the address of the entry. */
 }
 
@@ -446,6 +449,7 @@ void isom_remove_track_reference_type( isom_tref_type_t *ref )
         return;
     if( ref->track_ID )
         lsmash_free( ref->track_ID );
+    isom_remove_all_extension_boxes( &ref->extensions );
     lsmash_free( ref );
 }
 
@@ -534,6 +538,7 @@ void isom_remove_hdlr( isom_hdlr_t *hdlr )
             assert( 0 );
         return;
     }
+    isom_remove_all_extension_boxes( &hdlr->extensions );
     lsmash_free( hdlr );
 }
 
@@ -541,6 +546,7 @@ void isom_remove_clap( isom_clap_t *clap )
 {
     if( !clap )
         return;
+    isom_remove_all_extension_boxes( &clap->extensions );
     lsmash_free( clap );
 }
 
@@ -548,6 +554,7 @@ void isom_remove_pasp( isom_pasp_t *pasp )
 {
     if( !pasp )
         return;
+    isom_remove_all_extension_boxes( &pasp->extensions );
     lsmash_free( pasp );
 }
 
@@ -557,6 +564,7 @@ void isom_remove_glbl( isom_glbl_t *glbl )
         return;
     if( glbl->header_data )
         free( glbl->header_data );
+    isom_remove_all_extension_boxes( &glbl->extensions );
     lsmash_free( glbl );
 }
 
@@ -564,6 +572,7 @@ void isom_remove_colr( isom_colr_t *colr )
 {
     if( !colr )
         return;
+    isom_remove_all_extension_boxes( &colr->extensions );
     lsmash_free( colr );
 }
 
@@ -571,6 +580,7 @@ void isom_remove_gama( isom_gama_t *gama )
 {
     if( !gama )
         return;
+    isom_remove_all_extension_boxes( &gama->extensions );
     lsmash_free( gama );
 }
 
@@ -578,6 +588,7 @@ void isom_remove_fiel( isom_fiel_t *fiel )
 {
     if( !fiel )
         return;
+    isom_remove_all_extension_boxes( &fiel->extensions );
     lsmash_free( fiel );
 }
 
@@ -585,6 +596,7 @@ void isom_remove_cspc( isom_cspc_t *cspc )
 {
     if( !cspc )
         return;
+    isom_remove_all_extension_boxes( &cspc->extensions );
     lsmash_free( cspc );
 }
 
@@ -592,6 +604,7 @@ void isom_remove_sgbt( isom_sgbt_t *sgbt )
 {
     if( !sgbt )
         return;
+    isom_remove_all_extension_boxes( &sgbt->extensions );
     lsmash_free( sgbt );
 }
 
@@ -599,6 +612,7 @@ void isom_remove_stsl( isom_stsl_t *stsl )
 {
     if( !stsl )
         return;
+    isom_remove_all_extension_boxes( &stsl->extensions );
     lsmash_free( stsl );
 }
 
@@ -607,6 +621,7 @@ void isom_remove_esds( isom_esds_t *esds )
     if( !esds )
         return;
     mp4sys_remove_ES_Descriptor( esds->ES );
+    isom_remove_all_extension_boxes( &esds->extensions );
     lsmash_free( esds );
 }
 
@@ -614,6 +629,7 @@ void isom_remove_btrt( isom_btrt_t *btrt )
 {
     if( !btrt )
         return;
+    isom_remove_all_extension_boxes( &btrt->extensions );
     lsmash_free( btrt );
 }
 
@@ -670,6 +686,7 @@ void isom_remove_wave( isom_wave_t *wave )
     isom_remove_enda( wave->enda );
     isom_remove_mp4a( wave->mp4a );
     isom_remove_terminator( wave->terminator );
+    isom_remove_all_extension_boxes( &wave->extensions );
     lsmash_free( wave );
 }
 
@@ -679,6 +696,7 @@ void isom_remove_chan( isom_chan_t *chan )
         return;
     if( chan->channelDescriptions )
         lsmash_free( chan->channelDescriptions );
+    isom_remove_all_extension_boxes( &chan->extensions );
     lsmash_free( chan );
 }
 
@@ -760,6 +778,7 @@ void isom_remove_sdtp( isom_sdtp_t *sdtp )
             assert( 0 );
         return;
     }
+    isom_remove_all_extension_boxes( &sdtp->extensions );
     lsmash_free( sdtp );
 }
 
@@ -776,6 +795,7 @@ void isom_remove_sgpd( isom_sgpd_entry_t *sgpd )
     if( !sgpd )
         return;
     lsmash_remove_list( sgpd->list, NULL );
+    isom_remove_all_extension_boxes( &sgpd->extensions );
     lsmash_free( sgpd );
 }
 
@@ -784,6 +804,7 @@ void isom_remove_sbgp( isom_sbgp_entry_t *sbgp )
     if( !sbgp )
         return;
     lsmash_remove_list( sbgp->list, NULL );
+    isom_remove_all_extension_boxes( &sbgp->extensions );
     lsmash_free( sbgp );
 }
 
@@ -812,6 +833,7 @@ void isom_remove_dref_entry( isom_dref_entry_t *data_entry )
         return;
     lsmash_free( data_entry->name );
     lsmash_free( data_entry->location );
+    isom_remove_all_extension_boxes( &data_entry->extensions );
     lsmash_free( data_entry );
 }
 
@@ -938,6 +960,7 @@ void isom_remove_metaitem( isom_metaitem_t *metaitem )
     isom_remove_mean( metaitem->mean );
     isom_remove_name( metaitem->name );
     isom_remove_data( metaitem->data );
+    isom_remove_all_extension_boxes( &metaitem->extensions );
     lsmash_free( metaitem );
 }
 
@@ -971,6 +994,7 @@ void isom_remove_meta( isom_meta_t *meta )
             assert( 0 );
         return;
     }
+    isom_remove_all_extension_boxes( &meta->extensions );
     lsmash_free( meta );
 }
 
@@ -980,6 +1004,7 @@ void isom_remove_cprt( isom_cprt_t *cprt )
         return;
     if( cprt->notice )
         lsmash_free( cprt->notice );
+    isom_remove_all_extension_boxes( &cprt->extensions );
     lsmash_free( cprt );
 }
 
@@ -1004,6 +1029,7 @@ void isom_remove_udta( isom_udta_t *udta )
             assert( 0 );
         return;
     }
+    isom_remove_all_extension_boxes( &udta->extensions );
     lsmash_free( udta );
 }
 
@@ -1016,7 +1042,10 @@ void isom_remove_ctab( isom_ctab_t *ctab )
     if( ctab->parent && lsmash_check_box_type_identical( ctab->parent->type, ISOM_BOX_TYPE_MOOV ) )
         isom_remove_box( ctab, isom_moov_t );
     else
+    {
+        isom_remove_all_extension_boxes( &ctab->extensions );
         lsmash_free( ctab );
+    }
 }
 
 void isom_remove_mehd( isom_mehd_t *mehd )
@@ -1028,6 +1057,7 @@ void isom_remove_mehd( isom_mehd_t *mehd )
 
 void isom_remove_trex( isom_trex_entry_t *trex )
 {
+    isom_remove_all_extension_boxes( &trex->extensions );
     lsmash_free( trex );    /* Note: the list that contains this trex still has the address of the entry.
                              *       Should not use this function solely. */
 }
@@ -1061,6 +1091,7 @@ void isom_remove_moov( lsmash_root_t *root )
     isom_remove_ctab( moov->ctab );
     isom_remove_meta( moov->meta );
     isom_remove_mvex( moov->mvex );
+    isom_remove_all_extension_boxes( &moov->extensions );
     lsmash_free( moov );
     root->moov = NULL;
 }
@@ -1091,6 +1122,7 @@ void isom_remove_trun( isom_trun_entry_t *trun )
     if( !trun )
         return;
     lsmash_remove_list( trun->optional, NULL );
+    isom_remove_all_extension_boxes( &trun->extensions );
     lsmash_free( trun );    /* Note: the list that contains this trun still has the address of the entry. */
 }
 
@@ -1102,6 +1134,7 @@ void isom_remove_traf( isom_traf_entry_t *traf )
     isom_remove_tfdt( traf->tfdt );
     lsmash_remove_list( traf->trun_list, isom_remove_trun );
     isom_remove_sdtp( traf->sdtp );
+    isom_remove_all_extension_boxes( &traf->extensions );
     lsmash_free( traf );    /* Note: the list that contains this traf still has the address of the entry. */
 }
 
@@ -1111,6 +1144,7 @@ void isom_remove_moof( isom_moof_entry_t *moof )
         return;
     isom_remove_mfhd( moof->mfhd );
     lsmash_remove_list( moof->traf_list, isom_remove_traf );
+    isom_remove_all_extension_boxes( &moof->extensions );
     lsmash_free( moof );
 }
 
@@ -1128,6 +1162,7 @@ void isom_remove_free( isom_free_t *skip )
     if( skip->data )
         lsmash_free( skip->data );
     lsmash_root_t *root = (lsmash_root_t *)skip->parent;
+    isom_remove_all_extension_boxes( &skip->extensions );
     lsmash_free( skip );
     root->free = NULL;
 }
@@ -1137,6 +1172,7 @@ void isom_remove_tfra( isom_tfra_entry_t *tfra )
     if( !tfra )
         return;
     lsmash_remove_list( tfra->list, NULL );
+    isom_remove_all_extension_boxes( &tfra->extensions );
     lsmash_free( tfra );
 }
 
