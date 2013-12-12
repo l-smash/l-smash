@@ -4244,10 +4244,10 @@ static int isom_prepare_random_access_info( lsmash_root_t *root )
 static int isom_output_fragment_media_data( lsmash_root_t *root )
 {
     isom_fragment_manager_t *fragment = root->fragment;
-    if( !fragment->pool->entry_count )
+    if( fragment->pool->entry_count == 0 )
     {
         /* no need to write media data */
-        lsmash_remove_entries( fragment->pool, lsmash_delete_sample );
+        lsmash_remove_entries( fragment->pool, isom_remove_sample_pool );
         fragment->pool_size = 0;
         return 0;
     }
@@ -4749,7 +4749,7 @@ void lsmash_destroy_root( lsmash_root_t *root )
     }
     if( root->fragment )
     {
-        lsmash_remove_list( root->fragment->pool, lsmash_delete_sample );
+        lsmash_remove_list( root->fragment->pool, isom_remove_sample_pool );
         lsmash_free( root->fragment );
     }
     lsmash_free( root );
