@@ -671,17 +671,24 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     chunk.number      = chunk_number;
     if( isom_add_portable_chunk_entry( timeline, &chunk ) )
         goto fail;
-    uint32_t distance = NO_RANDOM_ACCESS_POINT;
+    uint32_t distance      = NO_RANDOM_ACCESS_POINT;
+    uint32_t last_duration = UINT32_MAX;
     isom_lpcm_bunch_t bunch = { 0 };
     while( sample_number <= stsz->sample_count )
     {
         isom_sample_info_t info = { 0 };
         /* Get sample duration and sample offset. */
-        isom_stts_entry_t *stts_data = (isom_stts_entry_t *)stts_entry->data;
-        if( !stts_data )
-            goto fail;
-        INCREMENT_SAMPLE_NUMBER_IN_ENTRY( sample_number_in_stts_entry, stts_entry, stts_data );
-        info.duration = stts_data->sample_delta;
+        if( stts_entry )
+        {
+            isom_stts_entry_t *stts_data = (isom_stts_entry_t *)stts_entry->data;
+            if( !stts_data )
+                goto fail;
+            INCREMENT_SAMPLE_NUMBER_IN_ENTRY( sample_number_in_stts_entry, stts_entry, stts_data );
+            info.duration = stts_data->sample_delta;
+            last_duration = stts_data->sample_delta;
+        }
+        else
+            info.duration = last_duration;
         timeline->media_duration += info.duration;
         if( ctts_entry )
         {
