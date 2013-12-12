@@ -68,7 +68,7 @@ static int isom_write_ctab( lsmash_bs_t *bs, isom_moov_t *moov )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_tkhd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_tkhd( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_tkhd_t *tkhd = trak->tkhd;
     if( !tkhd )
@@ -103,7 +103,7 @@ static int isom_write_tkhd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_clef( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_clef( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_clef_t *clef = trak->tapt->clef;
     if( !clef )
@@ -114,7 +114,7 @@ static int isom_write_clef( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_prof( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_prof( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_prof_t *prof = trak->tapt->prof;
     if( !prof )
@@ -125,7 +125,7 @@ static int isom_write_prof( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_enof( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_enof( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_enof_t *enof = trak->tapt->enof;
     if( !enof )
@@ -136,7 +136,7 @@ static int isom_write_enof( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_tapt( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_tapt( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_tapt_t *tapt = trak->tapt;
     if( !tapt )
@@ -151,7 +151,7 @@ static int isom_write_tapt( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return 0;
 }
 
-static int isom_write_elst( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_elst( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_elst_t *elst = trak->edts->elst;
     if( !elst )
@@ -182,7 +182,7 @@ static int isom_write_elst( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_edts( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_edts( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_edts_t *edts = trak->edts;
     if( !edts )
@@ -193,7 +193,7 @@ static int isom_write_edts( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return isom_write_elst( bs, trak );
 }
 
-static int isom_write_tref( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_tref( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_tref_t *tref = trak->tref;
     if( !tref )
@@ -212,7 +212,7 @@ static int isom_write_tref( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_mdhd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_mdhd( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_mdhd_t *mdhd = trak->mdia->mdhd;
     if( !mdhd )
@@ -251,7 +251,7 @@ static int isom_write_hdlr( lsmash_bs_t *bs, isom_hdlr_t *hdlr, lsmash_box_type_
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_vmhd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_vmhd( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_vmhd_t *vmhd = trak->mdia->minf->vmhd;
     if( !vmhd )
@@ -263,7 +263,7 @@ static int isom_write_vmhd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_smhd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_smhd( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_smhd_t *smhd = trak->mdia->minf->smhd;
     if( !smhd )
@@ -274,7 +274,7 @@ static int isom_write_smhd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_hmhd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_hmhd( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_hmhd_t *hmhd = trak->mdia->minf->hmhd;
     if( !hmhd )
@@ -288,7 +288,7 @@ static int isom_write_hmhd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_nmhd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_nmhd( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_nmhd_t *nmhd = trak->mdia->minf->nmhd;
     if( !nmhd )
@@ -297,7 +297,7 @@ static int isom_write_nmhd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_gmin( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_gmin( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_gmin_t *gmin = trak->mdia->minf->gmhd->gmin;
     if( !gmin )
@@ -311,7 +311,7 @@ static int isom_write_gmin( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_text( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_text( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_text_t *text = trak->mdia->minf->gmhd->text;
     if( !text )
@@ -322,7 +322,7 @@ static int isom_write_text( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_gmhd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_gmhd( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_gmhd_t *gmhd = trak->mdia->minf->gmhd;
     if( !gmhd )
@@ -858,7 +858,7 @@ static int isom_write_tx3g_entry( lsmash_bs_t *bs, lsmash_entry_t *entry )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_stsd_t *stsd = trak->mdia->minf->stbl->stsd;
     if( !stsd || !stsd->list || !stsd->list->head )
@@ -1009,7 +1009,7 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return ret;
 }
 
-static int isom_write_stts( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_stts( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_stts_t *stts = trak->mdia->minf->stbl->stts;
     if( !stts || !stts->list )
@@ -1027,7 +1027,7 @@ static int isom_write_stts( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_ctts( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_ctts( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_ctts_t *ctts = trak->mdia->minf->stbl->ctts;
     if( !ctts )
@@ -1047,7 +1047,7 @@ static int isom_write_ctts( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_cslg( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_cslg( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_cslg_t *cslg = trak->mdia->minf->stbl->cslg;
     if( !cslg )
@@ -1061,7 +1061,7 @@ static int isom_write_cslg( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_stsz( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_stsz( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_stsz_t *stsz = trak->mdia->minf->stbl->stsz;
     if( !stsz )
@@ -1080,7 +1080,7 @@ static int isom_write_stsz( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_stss( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_stss( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_stss_t *stss = trak->mdia->minf->stbl->stss;
     if( !stss )
@@ -1099,7 +1099,7 @@ static int isom_write_stss( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_stps( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_stps( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_stps_t *stps = trak->mdia->minf->stbl->stps;
     if( !stps )
@@ -1139,7 +1139,7 @@ static int isom_write_sdtp( lsmash_bs_t *bs, isom_sdtp_t *sdtp )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_stsc( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_stsc( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_stsc_t *stsc = trak->mdia->minf->stbl->stsc;
     if( !stsc || !stsc->list )
@@ -1158,7 +1158,7 @@ static int isom_write_stsc( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_co64( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_co64( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_stco_t *co64 = trak->mdia->minf->stbl->stco;
     if( !co64 || !co64->list )
@@ -1175,7 +1175,7 @@ static int isom_write_co64( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_stco( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_stco( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_stco_t *stco = trak->mdia->minf->stbl->stco;
     if( !stco || !stco->list )
@@ -1194,7 +1194,7 @@ static int isom_write_stco( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_sgpd( lsmash_bs_t *bs, isom_trak_entry_t *trak, uint32_t grouping_number )
+static int isom_write_sgpd( lsmash_bs_t *bs, isom_trak_t *trak, uint32_t grouping_number )
 {
     isom_sgpd_entry_t *sgpd = (isom_sgpd_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->sgpd_list, grouping_number );
     if( !sgpd || !sgpd->list )
@@ -1231,7 +1231,7 @@ static int isom_write_sgpd( lsmash_bs_t *bs, isom_trak_entry_t *trak, uint32_t g
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_sbgp( lsmash_bs_t *bs, isom_trak_entry_t *trak, uint32_t grouping_number )
+static int isom_write_sbgp( lsmash_bs_t *bs, isom_trak_t *trak, uint32_t grouping_number )
 {
     isom_sbgp_entry_t *sbgp = (isom_sbgp_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->sbgp_list, grouping_number );
     if( !sbgp || !sbgp->list )
@@ -1252,7 +1252,7 @@ static int isom_write_sbgp( lsmash_bs_t *bs, isom_trak_entry_t *trak, uint32_t g
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_stbl( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_stbl( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     if( !stbl )
@@ -1282,7 +1282,7 @@ static int isom_write_stbl( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return 0;
 }
 
-static int isom_write_minf( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_minf( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_minf_t *minf = trak->mdia->minf;
     if( !minf )
@@ -1303,7 +1303,7 @@ static int isom_write_minf( lsmash_bs_t *bs, isom_trak_entry_t *trak )
     return 0;
 }
 
-static int isom_write_mdia( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+static int isom_write_mdia( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     isom_mdia_t *mdia = trak->mdia;
     if( !mdia )
@@ -1430,7 +1430,7 @@ static int isom_write_cprt( lsmash_bs_t *bs, isom_cprt_t *cprt )
     return lsmash_bs_write_data( bs );
 }
 
-int isom_write_udta( lsmash_bs_t *bs, isom_moov_t *moov, isom_trak_entry_t *trak )
+int isom_write_udta( lsmash_bs_t *bs, isom_moov_t *moov, isom_trak_t *trak )
 {
     /* Setting non-NULL pointer to trak means trak->udta data will be written in stream.
      * If trak is set by NULL while moov is set by non-NULL pointer, moov->udta data will be written in stream. */
@@ -1451,7 +1451,7 @@ int isom_write_udta( lsmash_bs_t *bs, isom_moov_t *moov, isom_trak_entry_t *trak
     return 0;
 }
 
-int isom_write_trak( lsmash_bs_t *bs, isom_trak_entry_t *trak )
+int isom_write_trak( lsmash_bs_t *bs, isom_trak_t *trak )
 {
     if( !trak )
         return -1;
@@ -1544,7 +1544,7 @@ int isom_write_mehd( lsmash_bs_t *bs, isom_mehd_t *mehd )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_trex( lsmash_bs_t *bs, isom_trex_entry_t *trex )
+static int isom_write_trex( lsmash_bs_t *bs, isom_trex_t *trex )
 {
     if( !trex )
         return -1;
@@ -1603,7 +1603,7 @@ static int isom_write_mvex( lsmash_bs_t *bs, isom_mvex_t *mvex )
     }
     if( mvex->trex_list )
         for( lsmash_entry_t *entry = mvex->trex_list->head; entry; entry = entry->next )
-            if( isom_write_trex( bs, (isom_trex_entry_t *)entry->data ) )
+            if( isom_write_trex( bs, (isom_trex_t *)entry->data ) )
                 return -1;
     return 0;
 }
@@ -1643,7 +1643,7 @@ static int isom_write_tfdt( lsmash_bs_t *bs, isom_tfdt_t *tfdt )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_trun( lsmash_bs_t *bs, isom_trun_entry_t *trun )
+static int isom_write_trun( lsmash_bs_t *bs, isom_trun_t *trun )
 {
     if( !trun )
         return -1;
@@ -1665,7 +1665,7 @@ static int isom_write_trun( lsmash_bs_t *bs, isom_trun_entry_t *trun )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_write_traf( lsmash_bs_t *bs, isom_traf_entry_t *traf )
+static int isom_write_traf( lsmash_bs_t *bs, isom_traf_t *traf )
 {
     if( !traf )
         return -1;
@@ -1677,14 +1677,14 @@ static int isom_write_traf( lsmash_bs_t *bs, isom_traf_entry_t *traf )
         return -1;
     if( traf->trun_list )
         for( lsmash_entry_t *entry = traf->trun_list->head; entry; entry = entry->next )
-            if( isom_write_trun( bs, (isom_trun_entry_t *)entry->data ) )
+            if( isom_write_trun( bs, (isom_trun_t *)entry->data ) )
                 return -1;
     if( isom_write_sdtp( bs, traf->sdtp ) )
         return -1;
     return 0;
 }
 
-int isom_write_moof( lsmash_bs_t *bs, isom_moof_entry_t *moof )
+int isom_write_moof( lsmash_bs_t *bs, isom_moof_t *moof )
 {
     if( !moof )
         return -1;
@@ -1695,12 +1695,12 @@ int isom_write_moof( lsmash_bs_t *bs, isom_moof_entry_t *moof )
         return -1;
     if( moof->traf_list )
         for( lsmash_entry_t *entry = moof->traf_list->head; entry; entry = entry->next )
-            if( isom_write_traf( bs, (isom_traf_entry_t *)entry->data ) )
+            if( isom_write_traf( bs, (isom_traf_t *)entry->data ) )
                 return -1;
     return 0;
 }
 
-static int isom_write_tfra( lsmash_bs_t *bs, isom_tfra_entry_t *tfra )
+static int isom_write_tfra( lsmash_bs_t *bs, isom_tfra_t *tfra )
 {
     if( !tfra )
         return -1;
@@ -1760,7 +1760,7 @@ int isom_write_mfra( lsmash_bs_t *bs, isom_mfra_t *mfra )
         return -1;
     if( mfra->tfra_list )
         for( lsmash_entry_t *entry = mfra->tfra_list->head; entry; entry = entry->next )
-            if( isom_write_tfra( bs, (isom_tfra_entry_t *)entry->data ) )
+            if( isom_write_tfra( bs, (isom_tfra_t *)entry->data ) )
                 return -1;
     return isom_write_mfro( bs, mfra->mfro );
 }
@@ -1855,7 +1855,7 @@ int isom_write_moov( lsmash_root_t *root )
         return -1;
     if( moov->trak_list )
         for( lsmash_entry_t *entry = moov->trak_list->head; entry; entry = entry->next )
-            if( isom_write_trak( bs, (isom_trak_entry_t *)entry->data ) )
+            if( isom_write_trak( bs, (isom_trak_t *)entry->data ) )
                 return -1;
     if( isom_write_udta( bs, moov, NULL )
      || isom_write_ctab( bs, moov )

@@ -2038,7 +2038,7 @@ static int isom_print_trex( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
 {
     if( !box )
         return -1;
-    isom_trex_entry_t *trex = (isom_trex_entry_t *)box;
+    isom_trex_t *trex = (isom_trex_t *)box;
     int indent = level;
     isom_print_box_common( fp, indent++, box, "Track Extends Box" );
     lsmash_ifprintf( fp, indent, "track_ID = %"PRIu32"\n", trex->track_ID );
@@ -2112,7 +2112,7 @@ static int isom_print_trun( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
 {
     if( !box )
         return -1;
-    isom_trun_entry_t *trun = (isom_trun_entry_t *)box;
+    isom_trun_t *trun = (isom_trun_t *)box;
     int indent = level;
     isom_print_box_common( fp, indent++, box, "Track Fragment Run Box" );
     ++indent;
@@ -2174,7 +2174,7 @@ static int isom_print_tfra( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
 {
     if( !box )
         return -1;
-    isom_tfra_entry_t *tfra = (isom_tfra_entry_t *)box;
+    isom_tfra_t *tfra = (isom_tfra_t *)box;
     int indent = level;
     isom_print_box_common( fp, indent++, box, "Track Fragment Random Access Box" );
     lsmash_ifprintf( fp, indent, "track_ID = %"PRIu32"\n", tfra->track_ID );

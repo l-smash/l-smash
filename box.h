@@ -1457,7 +1457,7 @@ typedef struct
     uint32_t            default_sample_duration;
     uint32_t            default_sample_size;
     isom_sample_flags_t default_sample_flags;
-} isom_trex_entry_t;
+} isom_trex_t;
 
 /* Movie Extends Box
  * This box warns readers that there might be Movie Fragment Boxes in this file. */
@@ -1531,7 +1531,7 @@ typedef struct
                                                  * or at the base_data_offset defined by the Track Fragment Header Box if this is the first run in a track fragment. */
     isom_sample_flags_t first_sample_flags;     /* a set of flags for the first sample only of this run */
     lsmash_entry_list_t *optional;              /* all fields in this array are optional. */
-} isom_trun_entry_t;
+} isom_trun_t;
 
 typedef struct
 {
@@ -1556,7 +1556,7 @@ typedef struct
     isom_sdtp_t         *sdtp;          /* Independent and Disposable Samples Box */
 
         isom_cache_t *cache;
-} isom_traf_entry_t;
+} isom_traf_t;
 
 /* Movie Fragment Box */
 typedef struct
@@ -1564,7 +1564,7 @@ typedef struct
     ISOM_BASEBOX_COMMON;
     isom_mfhd_t         *mfhd;          /* Movie Fragment Header Box */
     lsmash_entry_list_t *traf_list;     /* Track Fragment Box List */
-} isom_moof_entry_t;
+} isom_moof_t;
 
 /* Track Fragment Random Access Box
  * Each entry in this box contains the location and the presentation time of the sync sample.
@@ -1581,7 +1581,7 @@ typedef struct
     uint32_t number_of_entry;                       /* the number of the entries for this track
                                                      * Value zero indicates that every sample is a sync sample and no table entry follows. */
     lsmash_entry_list_t *list;                      /* entry_count corresponds to number_of_entry. */
-} isom_tfra_entry_t;
+} isom_tfra_t;
 
 typedef struct
 {
@@ -1630,7 +1630,7 @@ typedef struct
  * The presence of this means we use the structure of movie fragments. */
 typedef struct
 {
-    isom_moof_entry_t *movie;       /* the address corresponding to the current Movie Fragment Box */
+    isom_moof_t *movie;             /* the address corresponding to the current Movie Fragment Box */
     uint64_t fragment_count;        /* the number of movie fragments we created */
     uint64_t pool_size;
     lsmash_entry_list_t *pool;      /* samples pooled to interleave for the current movie fragment */
@@ -1698,7 +1698,7 @@ typedef struct
         isom_cache_t *cache;
         uint32_t related_track_ID;
         uint8_t is_chapter;
-} isom_trak_entry_t;
+} isom_trak_t;
 /** **/
 
 /* Box types */
@@ -2124,9 +2124,9 @@ int isom_check_compatibility( lsmash_root_t *root );
 
 char *isom_4cc2str( uint32_t fourcc );
 
-isom_trak_entry_t *isom_get_trak( lsmash_root_t *root, uint32_t track_ID );
-isom_trex_entry_t *isom_get_trex( isom_mvex_t *mvex, uint32_t track_ID );
-isom_tfra_entry_t *isom_get_tfra( isom_mfra_t *mfra, uint32_t track_ID );
+isom_trak_t *isom_get_trak( lsmash_root_t *root, uint32_t track_ID );
+isom_trex_t *isom_get_trex( isom_mvex_t *mvex, uint32_t track_ID );
+isom_tfra_t *isom_get_tfra( isom_mfra_t *mfra, uint32_t track_ID );
 isom_sgpd_entry_t *isom_get_sample_group_description( isom_stbl_t *stbl, uint32_t grouping_type );
 isom_sbgp_entry_t *isom_get_sample_to_group( isom_stbl_t *stbl, uint32_t grouping_type );
 
@@ -2137,17 +2137,17 @@ int isom_add_ftyp( lsmash_root_t *root );
 int isom_add_moov( lsmash_root_t *root );
 int isom_add_mvhd( isom_moov_t *moov );
 int isom_add_iods( isom_moov_t *moov );
-isom_trak_entry_t *isom_add_trak( lsmash_root_t *root );
-int isom_add_tkhd( isom_trak_entry_t *trak, uint32_t handler_type );
-int isom_add_tapt( isom_trak_entry_t *trak );
+isom_trak_t *isom_add_trak( lsmash_root_t *root );
+int isom_add_tkhd( isom_trak_t *trak, uint32_t handler_type );
+int isom_add_tapt( isom_trak_t *trak );
 int isom_add_clef( isom_tapt_t *tapt );
 int isom_add_prof( isom_tapt_t *tapt );
 int isom_add_enof( isom_tapt_t *tapt );
-int isom_add_edts( isom_trak_entry_t *trak );
+int isom_add_edts( isom_trak_t *trak );
 int isom_add_elst( isom_edts_t *edts );
-int isom_add_tref( isom_trak_entry_t *trak );
+int isom_add_tref( isom_trak_t *trak );
 isom_tref_type_t *isom_add_track_reference_type( isom_tref_t *tref, isom_track_reference_type type, uint32_t ref_count, uint32_t *track_ID );
-int isom_add_mdia( isom_trak_entry_t *trak );
+int isom_add_mdia( isom_trak_t *trak );
 int isom_add_mdhd( isom_mdia_t *mdia, uint16_t default_language );
 int isom_add_hdlr( isom_mdia_t *mdia, isom_meta_t *meta, isom_minf_t *minf, uint32_t media_type );
 int isom_add_minf( isom_mdia_t *mdia );
@@ -2204,22 +2204,22 @@ int isom_add_chpl( isom_moov_t *moov );
 int isom_add_chpl_entry( isom_chpl_t *chpl, isom_chapter_entry_t *chap_data );
 int isom_add_mvex( isom_moov_t *moov );
 int isom_add_mehd( isom_mvex_t *mvex );
-isom_trex_entry_t *isom_add_trex( isom_mvex_t *mvex );
-isom_moof_entry_t *isom_add_moof( lsmash_root_t *root );
-int isom_add_mfhd( isom_moof_entry_t *moof );
-isom_traf_entry_t *isom_add_traf( lsmash_root_t *root, isom_moof_entry_t *moof );
-int isom_add_tfhd( isom_traf_entry_t *traf );
-int isom_add_tfdt( isom_traf_entry_t *traf );
-isom_trun_entry_t *isom_add_trun( isom_traf_entry_t *traf );
+isom_trex_t *isom_add_trex( isom_mvex_t *mvex );
+isom_moof_t *isom_add_moof( lsmash_root_t *root );
+int isom_add_mfhd( isom_moof_t *moof );
+isom_traf_t *isom_add_traf( lsmash_root_t *root, isom_moof_t *moof );
+int isom_add_tfhd( isom_traf_t *traf );
+int isom_add_tfdt( isom_traf_t *traf );
+isom_trun_t *isom_add_trun( isom_traf_t *traf );
 int isom_add_mfra( lsmash_root_t *root );
-isom_tfra_entry_t *isom_add_tfra( isom_mfra_t *mfra );
+isom_tfra_t *isom_add_tfra( isom_mfra_t *mfra );
 int isom_add_mfro( isom_mfra_t *mfra );
 
 void isom_remove_ftyp( isom_ftyp_t *ftyp );
 void isom_remove_moov( lsmash_root_t *root );
 void isom_remove_mvhd( isom_mvhd_t *mvhd );
 void isom_remove_iods( isom_iods_t *iods );
-void isom_remove_trak( isom_trak_entry_t *trak );
+void isom_remove_trak( isom_trak_t *trak );
 void isom_remove_tkhd( isom_tkhd_t *tkhd );
 void isom_remove_tapt( isom_tapt_t *tapt );
 void isom_remove_clef( isom_clef_t *clef );
@@ -2286,17 +2286,17 @@ void isom_remove_cprt( isom_cprt_t *cprt );
 void isom_remove_udta( isom_udta_t *udta );
 void isom_remove_ctab( isom_ctab_t *ctab );
 void isom_remove_mehd( isom_mehd_t *mehd );
-void isom_remove_trex( isom_trex_entry_t *trex );
+void isom_remove_trex( isom_trex_t *trex );
 void isom_remove_mvex( isom_mvex_t *mvex );
 void isom_remove_mfhd( isom_mfhd_t *mfhd );
 void isom_remove_tfhd( isom_tfhd_t *tfhd );
 void isom_remove_tfdt( isom_tfdt_t *tfdt );
-void isom_remove_trun( isom_trun_entry_t *trun );
-void isom_remove_traf( isom_traf_entry_t *traf );
-void isom_remove_moof( isom_moof_entry_t *moof );
+void isom_remove_trun( isom_trun_t *trun );
+void isom_remove_traf( isom_traf_t *traf );
+void isom_remove_moof( isom_moof_t *moof );
 void isom_remove_mdat( isom_mdat_t *mdat );
 void isom_remove_free( isom_free_t *skip );
-void isom_remove_tfra( isom_tfra_entry_t *tfra );
+void isom_remove_tfra( isom_tfra_t *tfra );
 void isom_remove_mfro( isom_mfro_t *mfro );
 void isom_remove_mfra( isom_mfra_t *mfra );
 void isom_remove_sample_description( isom_sample_entry_t *sample );

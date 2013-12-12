@@ -366,7 +366,7 @@ void isom_remove_iods( isom_iods_t *iods )
     isom_remove_box( iods, isom_moov_t );
 }
 
-void isom_remove_trak( isom_trak_entry_t *trak )
+void isom_remove_trak( isom_trak_t *trak )
 {
     if( !trak )
         return;
@@ -393,7 +393,7 @@ void isom_remove_tkhd( isom_tkhd_t *tkhd )
 {
     if( !tkhd )
         return;
-    isom_remove_box( tkhd, isom_trak_entry_t );
+    isom_remove_box( tkhd, isom_trak_t );
 }
 
 void isom_remove_clef( isom_clef_t *clef )
@@ -424,7 +424,7 @@ void isom_remove_tapt( isom_tapt_t *tapt )
     isom_remove_clef( tapt->clef );
     isom_remove_prof( tapt->prof );
     isom_remove_enof( tapt->enof );
-    isom_remove_box( tapt, isom_trak_entry_t );
+    isom_remove_box( tapt, isom_trak_t );
 }
 
 void isom_remove_elst( isom_elst_t *elst )
@@ -440,7 +440,7 @@ void isom_remove_edts( isom_edts_t *edts )
     if( !edts )
         return;
     isom_remove_elst( edts->elst );
-    isom_remove_box( edts, isom_trak_entry_t );
+    isom_remove_box( edts, isom_trak_t );
 }
 
 void isom_remove_track_reference_type( isom_tref_type_t *ref )
@@ -458,7 +458,7 @@ void isom_remove_tref( isom_tref_t *tref )
     if( !tref )
         return;
     lsmash_remove_list( tref->ref_list, isom_remove_track_reference_type );
-    isom_remove_box( tref, isom_trak_entry_t );
+    isom_remove_box( tref, isom_trak_t );
 }
 
 void isom_remove_mdhd( isom_mdhd_t *mdhd )
@@ -773,7 +773,7 @@ void isom_remove_sdtp( isom_sdtp_t *sdtp )
         if( lsmash_check_box_type_identical( sdtp->parent->type, ISOM_BOX_TYPE_STBL ) )
             isom_remove_box( sdtp, isom_stbl_t );
         else if( lsmash_check_box_type_identical( sdtp->parent->type, ISOM_BOX_TYPE_TRAF ) )
-            isom_remove_box( sdtp, isom_traf_entry_t );
+            isom_remove_box( sdtp, isom_traf_t );
         else
             assert( 0 );
         return;
@@ -880,7 +880,7 @@ void isom_remove_mdia( isom_mdia_t *mdia )
     isom_remove_mdhd( mdia->mdhd );
     isom_remove_minf( mdia->minf );
     isom_remove_hdlr( mdia->hdlr );
-    isom_remove_box( mdia, isom_trak_entry_t );
+    isom_remove_box( mdia, isom_trak_t );
 }
 
 void isom_remove_chpl( isom_chpl_t *chpl )
@@ -987,7 +987,7 @@ void isom_remove_meta( isom_meta_t *meta )
         else if( lsmash_check_box_type_identical( meta->parent->type, ISOM_BOX_TYPE_MOOV ) )
             isom_remove_box( meta, isom_moov_t );
         else if( lsmash_check_box_type_identical( meta->parent->type, ISOM_BOX_TYPE_TRAK ) )
-            isom_remove_box( meta, isom_trak_entry_t );
+            isom_remove_box( meta, isom_trak_t );
         else if( lsmash_check_box_type_identical( meta->parent->type, ISOM_BOX_TYPE_UDTA ) )
             isom_remove_box( meta, isom_udta_t );
         else
@@ -1024,7 +1024,7 @@ void isom_remove_udta( isom_udta_t *udta )
         if( lsmash_check_box_type_identical( udta->parent->type, ISOM_BOX_TYPE_MOOV ) )
             isom_remove_box( udta, isom_moov_t );
         else if( lsmash_check_box_type_identical( udta->parent->type, ISOM_BOX_TYPE_TRAK ) )
-            isom_remove_box( udta, isom_trak_entry_t );
+            isom_remove_box( udta, isom_trak_t );
         else
             assert( 0 );
         return;
@@ -1055,7 +1055,7 @@ void isom_remove_mehd( isom_mehd_t *mehd )
     isom_remove_box( mehd, isom_mvex_t );
 }
 
-void isom_remove_trex( isom_trex_entry_t *trex )
+void isom_remove_trex( isom_trex_t *trex )
 {
     isom_remove_all_extension_boxes( &trex->extensions );
     lsmash_free( trex );    /* Note: the list that contains this trex still has the address of the entry.
@@ -1100,24 +1100,24 @@ void isom_remove_mfhd( isom_mfhd_t *mfhd )
 {
     if( !mfhd )
         return;
-    isom_remove_box( mfhd, isom_moof_entry_t );
+    isom_remove_box( mfhd, isom_moof_t );
 }
 
 void isom_remove_tfhd( isom_tfhd_t *tfhd )
 {
     if( !tfhd )
         return;
-    isom_remove_box( tfhd, isom_traf_entry_t );
+    isom_remove_box( tfhd, isom_traf_t );
 }
 
 void isom_remove_tfdt( isom_tfdt_t *tfdt )
 {
     if( !tfdt )
         return;
-    isom_remove_box( tfdt, isom_traf_entry_t );
+    isom_remove_box( tfdt, isom_traf_t );
 }
 
-void isom_remove_trun( isom_trun_entry_t *trun )
+void isom_remove_trun( isom_trun_t *trun )
 {
     if( !trun )
         return;
@@ -1126,7 +1126,7 @@ void isom_remove_trun( isom_trun_entry_t *trun )
     lsmash_free( trun );    /* Note: the list that contains this trun still has the address of the entry. */
 }
 
-void isom_remove_traf( isom_traf_entry_t *traf )
+void isom_remove_traf( isom_traf_t *traf )
 {
     if( !traf )
         return;
@@ -1138,7 +1138,7 @@ void isom_remove_traf( isom_traf_entry_t *traf )
     lsmash_free( traf );    /* Note: the list that contains this traf still has the address of the entry. */
 }
 
-void isom_remove_moof( isom_moof_entry_t *moof )
+void isom_remove_moof( isom_moof_t *moof )
 {
     if( !moof )
         return;
@@ -1167,7 +1167,7 @@ void isom_remove_free( isom_free_t *skip )
     root->free = NULL;
 }
 
-void isom_remove_tfra( isom_tfra_entry_t *tfra )
+void isom_remove_tfra( isom_tfra_t *tfra )
 {
     if( !tfra )
         return;
@@ -1368,7 +1368,7 @@ int isom_add_mvhd( isom_moov_t *moov )
     return 0;
 }
 
-static int isom_scan_trak_profileLevelIndication( isom_trak_entry_t *trak, mp4a_audioProfileLevelIndication *audio_pli, mp4sys_visualProfileLevelIndication *visual_pli )
+static int isom_scan_trak_profileLevelIndication( isom_trak_t *trak, mp4a_audioProfileLevelIndication *audio_pli, mp4sys_visualProfileLevelIndication *visual_pli )
 {
     if( !trak
      || !trak->mdia
@@ -1448,7 +1448,7 @@ int isom_add_iods( isom_moov_t *moov )
     mp4sys_visualProfileLevelIndication visual_pli = MP4SYS_VISUAL_PLI_NONE_REQUIRED;
     for( lsmash_entry_t *entry = moov->trak_list->head; entry; entry = entry->next )
     {
-        isom_trak_entry_t* trak = (isom_trak_entry_t*)entry->data;
+        isom_trak_t* trak = (isom_trak_t*)entry->data;
         if( !trak
          || !trak->tkhd )
         {
@@ -1479,7 +1479,7 @@ int isom_add_iods( isom_moov_t *moov )
     return 0;
 }
 
-isom_trak_entry_t *isom_add_trak( lsmash_root_t *root )
+isom_trak_t *isom_add_trak( lsmash_root_t *root )
 {
     if( !root
      || !root->moov )
@@ -1491,7 +1491,7 @@ isom_trak_entry_t *isom_add_trak( lsmash_root_t *root )
         if( !moov->trak_list )
             return NULL;
     }
-    isom_trak_entry_t *trak = lsmash_malloc_zero( sizeof(isom_trak_entry_t) );
+    isom_trak_t *trak = lsmash_malloc_zero( sizeof(isom_trak_t) );
     if( !trak )
         return NULL;
     isom_init_box_common( trak, moov, ISOM_BOX_TYPE_TRAK, isom_remove_trak );
@@ -1525,7 +1525,7 @@ isom_trak_entry_t *isom_add_trak( lsmash_root_t *root )
     return trak;
 }
 
-int isom_add_tkhd( isom_trak_entry_t *trak, uint32_t handler_type )
+int isom_add_tkhd( isom_trak_t *trak, uint32_t handler_type )
 {
     if( !trak
      || !trak->root
@@ -1549,7 +1549,7 @@ int isom_add_tkhd( isom_trak_entry_t *trak, uint32_t handler_type )
     return 0;
 }
 
-int isom_add_tapt( isom_trak_entry_t *trak )
+int isom_add_tapt( isom_trak_t *trak )
 {
     if( trak->tapt )
         return 0;
@@ -1594,7 +1594,7 @@ int isom_add_elst( isom_edts_t *edts )
     return 0;
 }
 
-int isom_add_edts( isom_trak_entry_t *trak )
+int isom_add_edts( isom_trak_t *trak )
 {
     if( trak->edts )
         return 0;
@@ -1603,7 +1603,7 @@ int isom_add_edts( isom_trak_entry_t *trak )
     return 0;
 }
 
-int isom_add_tref( isom_trak_entry_t *trak )
+int isom_add_tref( isom_trak_t *trak )
 {
     if( trak->tref )
         return 0;
@@ -1618,7 +1618,7 @@ int isom_add_tref( isom_trak_entry_t *trak )
     return 0;
 }
 
-int isom_add_mdia( isom_trak_entry_t *trak )
+int isom_add_mdia( isom_trak_t *trak )
 {
     if( !trak || trak->mdia )
         return -1;
@@ -1909,7 +1909,7 @@ int isom_add_sdtp( isom_box_t *parent )
     }
     else if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAF ) )
     {
-        isom_traf_entry_t *traf = (isom_traf_entry_t *)parent;
+        isom_traf_t *traf = (isom_traf_t *)parent;
         if( traf->sdtp )
             return -1;
         isom_create_list_box( sdtp, traf, ISOM_BOX_TYPE_SDTP, isom_remove_sdtp );
@@ -2080,7 +2080,7 @@ int isom_add_meta( isom_box_t *parent )
     }
     else if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAK ) )
     {
-        isom_trak_entry_t *trak = (isom_trak_entry_t *)parent;
+        isom_trak_t *trak = (isom_trak_t *)parent;
         if( trak->meta )
         {
             lsmash_free( meta );
@@ -2134,7 +2134,7 @@ int isom_add_udta( lsmash_root_t *root, uint32_t track_ID )
         root->moov->udta = udta;
         return 0;
     }
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    isom_trak_t *trak = isom_get_trak( root, track_ID );
     if( !trak )
         return -1;
     if( trak->udta )
@@ -2162,7 +2162,7 @@ int isom_add_mehd( isom_mvex_t *mvex )
     return 0;
 }
 
-isom_trex_entry_t *isom_add_trex( isom_mvex_t *mvex )
+isom_trex_t *isom_add_trex( isom_mvex_t *mvex )
 {
     if( !mvex )
         return NULL;
@@ -2172,7 +2172,7 @@ isom_trex_entry_t *isom_add_trex( isom_mvex_t *mvex )
         if( !mvex->trex_list )
             return NULL;
     }
-    isom_trex_entry_t *trex = lsmash_malloc_zero( sizeof(isom_trex_entry_t) );
+    isom_trex_t *trex = lsmash_malloc_zero( sizeof(isom_trex_t) );
     if( !trex )
         return NULL;
     isom_init_box_common( trex, mvex, ISOM_BOX_TYPE_TREX, isom_remove_trex );
@@ -2184,7 +2184,7 @@ isom_trex_entry_t *isom_add_trex( isom_mvex_t *mvex )
     return trex;
 }
 
-isom_moof_entry_t *isom_add_moof( lsmash_root_t *root )
+isom_moof_t *isom_add_moof( lsmash_root_t *root )
 {
     if( !root )
         return NULL;
@@ -2194,7 +2194,7 @@ isom_moof_entry_t *isom_add_moof( lsmash_root_t *root )
         if( !root->moof_list )
             return NULL;
     }
-    isom_moof_entry_t *moof = lsmash_malloc_zero( sizeof(isom_moof_entry_t) );
+    isom_moof_t *moof = lsmash_malloc_zero( sizeof(isom_moof_t) );
     if( !moof )
         return NULL;
     isom_init_box_common( moof, root, ISOM_BOX_TYPE_MOOF, isom_remove_moof );
@@ -2206,7 +2206,7 @@ isom_moof_entry_t *isom_add_moof( lsmash_root_t *root )
     return moof;
 }
 
-int isom_add_mfhd( isom_moof_entry_t *moof )
+int isom_add_mfhd( isom_moof_t *moof )
 {
     if( !moof || moof->mfhd )
         return -1;
@@ -2215,7 +2215,7 @@ int isom_add_mfhd( isom_moof_entry_t *moof )
     return 0;
 }
 
-isom_traf_entry_t *isom_add_traf( lsmash_root_t *root, isom_moof_entry_t *moof )
+isom_traf_t *isom_add_traf( lsmash_root_t *root, isom_moof_t *moof )
 {
     if( !root
      || !root->moof_list
@@ -2227,7 +2227,7 @@ isom_traf_entry_t *isom_add_traf( lsmash_root_t *root, isom_moof_entry_t *moof )
         if( !moof->traf_list )
             return NULL;
     }
-    isom_traf_entry_t *traf = lsmash_malloc_zero( sizeof(isom_traf_entry_t) );
+    isom_traf_t *traf = lsmash_malloc_zero( sizeof(isom_traf_t) );
     if( !traf )
         return NULL;
     isom_init_box_common( traf, moof, ISOM_BOX_TYPE_TRAF, isom_remove_traf );
@@ -2248,7 +2248,7 @@ isom_traf_entry_t *isom_add_traf( lsmash_root_t *root, isom_moof_entry_t *moof )
     return traf;
 }
 
-int isom_add_tfhd( isom_traf_entry_t *traf )
+int isom_add_tfhd( isom_traf_t *traf )
 {
     if( !traf || traf->tfhd )
         return -1;
@@ -2257,7 +2257,7 @@ int isom_add_tfhd( isom_traf_entry_t *traf )
     return 0;
 }
 
-int isom_add_tfdt( isom_traf_entry_t *traf )
+int isom_add_tfdt( isom_traf_t *traf )
 {
     if( !traf || traf->tfdt )
         return -1;
@@ -2266,7 +2266,7 @@ int isom_add_tfdt( isom_traf_entry_t *traf )
     return 0;
 }
 
-isom_trun_entry_t *isom_add_trun( isom_traf_entry_t *traf )
+isom_trun_t *isom_add_trun( isom_traf_t *traf )
 {
     if( !traf )
         return NULL;
@@ -2276,7 +2276,7 @@ isom_trun_entry_t *isom_add_trun( isom_traf_entry_t *traf )
         if( !traf->trun_list )
             return NULL;
     }
-    isom_trun_entry_t *trun = lsmash_malloc_zero( sizeof(isom_trun_entry_t) );
+    isom_trun_t *trun = lsmash_malloc_zero( sizeof(isom_trun_t) );
     if( !trun )
         return NULL;
     isom_init_box_common( trun, traf, ISOM_BOX_TYPE_TRUN, isom_remove_trun );
@@ -2297,7 +2297,7 @@ int isom_add_mfra( lsmash_root_t *root )
     return 0;
 }
 
-isom_tfra_entry_t *isom_add_tfra( isom_mfra_t *mfra )
+isom_tfra_t *isom_add_tfra( isom_mfra_t *mfra )
 {
     if( !mfra )
         return NULL;
@@ -2307,7 +2307,7 @@ isom_tfra_entry_t *isom_add_tfra( isom_mfra_t *mfra )
         if( !mfra->tfra_list )
             return NULL;
     }
-    isom_tfra_entry_t *tfra = lsmash_malloc_zero( sizeof(isom_tfra_entry_t) );
+    isom_tfra_t *tfra = lsmash_malloc_zero( sizeof(isom_tfra_t) );
     if( !tfra )
         return NULL;
     isom_init_box_common( tfra, mfra, ISOM_BOX_TYPE_TFRA, isom_remove_tfra );

@@ -149,7 +149,7 @@ uint32_t lsmash_count_summary( lsmash_root_t *root, uint32_t track_ID )
 {
     if( !root || track_ID == 0 )
         return 0;
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    isom_trak_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->hdlr
      || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd
      || !trak->mdia->minf->stbl->stsd->list )
@@ -161,7 +161,7 @@ lsmash_summary_t *lsmash_get_summary( lsmash_root_t *root, uint32_t track_ID, ui
 {
     if( !root || track_ID == 0 || description_number == 0 )
         return NULL;
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    isom_trak_t *trak = isom_get_trak( root, track_ID );
     if( !trak
      || !trak->mdia
      || !trak->mdia->mdhd || !trak->mdia->hdlr || !trak->mdia->minf

@@ -554,7 +554,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
      ||  root->moov->mvhd->timescale == 0 )
         return -1;
     /* Get track by track_ID. */
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    isom_trak_t *trak = isom_get_trak( root, track_ID );
     if( !trak
      || !trak->mdia
      || !trak->mdia->mdhd
@@ -911,7 +911,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     uint32_t sample_count = sample_number - 1;
     if( movie_framemts_present )
     {
-        isom_tfra_entry_t               *tfra       = isom_get_tfra( root->mfra, track_ID );
+        isom_tfra_t                     *tfra       = isom_get_tfra( root->mfra, track_ID );
         lsmash_entry_t                  *tfra_entry = tfra && tfra->list ? tfra->list->head : NULL;
         isom_tfra_location_time_entry_t *rap        = tfra_entry ? (isom_tfra_location_time_entry_t *)tfra_entry->data : NULL;
         chunk.data_offset = 0;
@@ -919,7 +919,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
         /* Movie fragments */
         for( lsmash_entry_t *moof_entry = root->moof_list->head; moof_entry; moof_entry = moof_entry->next )
         {
-            isom_moof_entry_t *moof = (isom_moof_entry_t *)moof_entry->data;
+            isom_moof_t *moof = (isom_moof_t *)moof_entry->data;
             if( !moof
              || !moof->traf_list )
                 goto fail;
@@ -928,13 +928,13 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
             uint32_t traf_number = 1;
             for( lsmash_entry_t *traf_entry = moof->traf_list->head; traf_entry; traf_entry = traf_entry->next )
             {
-                isom_traf_entry_t *traf = (isom_traf_entry_t *)traf_entry->data;
+                isom_traf_t *traf = (isom_traf_t *)traf_entry->data;
                 if( !traf )
                     goto fail;
                 isom_tfhd_t *tfhd = traf->tfhd;
                 if( !tfhd )
                     goto fail;
-                isom_trex_entry_t *trex = isom_get_trex( root->moov->mvex, tfhd->track_ID );
+                isom_trex_t *trex = isom_get_trex( root->moov->mvex, tfhd->track_ID );
                 if( !trex )
                     goto fail;
                 /* Ignore ISOM_TF_FLAGS_DURATION_IS_EMPTY flag even if set. */
@@ -957,7 +957,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                 uint32_t trun_number = 1;
                 for( lsmash_entry_t *trun_entry = traf->trun_list->head; trun_entry; trun_entry = trun_entry->next )
                 {
-                    isom_trun_entry_t *trun = (isom_trun_entry_t *)trun_entry->data;
+                    isom_trun_t *trun = (isom_trun_t *)trun_entry->data;
                     if( !trun )
                         goto fail;
                     if( trun->sample_count == 0 )
@@ -1504,7 +1504,7 @@ uint64_t lsmash_get_media_duration_from_media_timeline( lsmash_root_t *root, uin
 
 int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_root_t *src, uint32_t src_track_ID )
 {
-    isom_trak_entry_t *dst_trak = isom_get_trak( dst, dst_track_ID );
+    isom_trak_t *dst_trak = isom_get_trak( dst, dst_track_ID );
     if( !dst->moov
      || !dst->moov->mvhd
      ||  dst->moov->mvhd->timescale == 0
@@ -1523,7 +1523,7 @@ int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_
     int32_t  src_ctd_shift;     /* Add timeline shift difference between src and dst to each media_time.
                                  * Therefore, call this function as later as possible. */
     lsmash_entry_t *src_entry;
-    isom_trak_entry_t *src_trak = isom_get_trak( src, src_track_ID );
+    isom_trak_t *src_trak = isom_get_trak( src, src_track_ID );
     if( !src_trak
      || !src_trak->edts
      || !src_trak->edts->elst

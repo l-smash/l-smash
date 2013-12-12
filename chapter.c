@@ -203,7 +203,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     }
     FILE *chapter = NULL;       /* shut up 'uninitialized' warning */
     /* Create a Track Reference Box. */
-    isom_trak_entry_t *trak = isom_get_trak( root, track_ID );
+    isom_trak_t *trak = isom_get_trak( root, track_ID );
     if( !trak )
     {
         lsmash_log( NULL, LSMASH_LOG_ERROR, "the specified track ID to apply the chapter doesn't exist.\n" );
@@ -303,7 +303,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     }
     if( lsmash_flush_pooled_samples( root, chapter_track_ID, 0 ) )
         goto fail;
-    isom_trak_entry_t *chapter_trak = isom_get_trak( root, chapter_track_ID );
+    isom_trak_t *chapter_trak = isom_get_trak( root, chapter_track_ID );
     if( !chapter_trak )
         goto fail;
     fclose( chapter );

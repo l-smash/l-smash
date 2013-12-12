@@ -1209,7 +1209,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
             }
         }
     }
-    isom_trak_entry_t *trak = (isom_trak_entry_t *)visual->parent->parent->parent->parent->parent;
+    isom_trak_t *trak = (isom_trak_t *)visual->parent->parent->parent->parent->parent;
     int qt_compatible = trak->root->qt_compatible;
     isom_tapt_t *tapt = trak->tapt;
     isom_stsl_t *stsl = (isom_stsl_t *)isom_get_extension_box_format( &visual->extensions, ISOM_BOX_TYPE_STSL );

@@ -24,12 +24,12 @@
 #define LSMASH_WRITE_H
 
 int isom_write_meta( lsmash_bs_t *bs, isom_meta_t *meta );
-int isom_write_udta( lsmash_bs_t *bs, isom_moov_t *moov, isom_trak_entry_t *trak );
-int isom_write_trak( lsmash_bs_t *bs, isom_trak_entry_t *trak );
+int isom_write_udta( lsmash_bs_t *bs, isom_moov_t *moov, isom_trak_t *trak );
+int isom_write_trak( lsmash_bs_t *bs, isom_trak_t *trak );
 int isom_write_iods( lsmash_root_t *root );
 int isom_write_mvhd( lsmash_root_t *root );
 int isom_write_mehd( lsmash_bs_t *bs, isom_mehd_t *mehd );
-int isom_write_moof( lsmash_bs_t *bs, isom_moof_entry_t *moof );
+int isom_write_moof( lsmash_bs_t *bs, isom_moof_t *moof );
 int isom_write_mfra( lsmash_bs_t *bs, isom_mfra_t *mfra );
 int isom_write_mdat_header( lsmash_root_t *root, uint64_t media_size );
 int isom_write_mdat_size( lsmash_root_t *root );
