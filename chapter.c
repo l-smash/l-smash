@@ -29,7 +29,6 @@
 #include <ctype.h>
 
 #include "box.h"
-#include "isom.h"
 
 #define CHAPTER_BUFSIZE 512
 #define UTF8_BOM "\xEF\xBB\xBF"
