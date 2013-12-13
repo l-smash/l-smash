@@ -38,6 +38,7 @@ static const lsmash_class_t lsmash_box_class =
 
 typedef struct isom_box_tag isom_box_t;
 typedef void (*isom_extension_destructor_t)( void *extension_data );
+typedef uint64_t (*isom_extension_updater_t)( void *extension_data );
 
 /* If size is 1, then largesize is actual size.
  * If size is 0, then this box is the last one in the file. */
@@ -47,6 +48,7 @@ typedef void (*isom_extension_destructor_t)( void *extension_data );
         isom_box_t                 *parent;     /* pointer of the parent box of this box */     \
         uint8_t                    *binary;     /* used only when LSMASH_BINARY_CODED_BOX */    \
         isom_extension_destructor_t destruct;   /* box specific destructor */                   \
+        isom_extension_updater_t    update;     /* box specific size updater */                 \
         uint32_t                    manager;    /* flags for L-SMASH */                         \
         uint64_t                    pos;        /* starting position of this box in the file */ \
         lsmash_entry_list_t         extensions; /* extension boxes */                           \
@@ -2113,7 +2115,7 @@ int isom_is_fullbox( void *box );
 int isom_is_lpcm_audio( void *box );
 int isom_is_uncompressed_ycbcr( lsmash_box_type_t type );
 
-void isom_init_box_common( void *box, void *parent, lsmash_box_type_t box_type, void *destructor );
+void isom_init_box_common( void *box, void *parent, lsmash_box_type_t box_type, void *destructor, void *updater );
 size_t isom_skip_box_common( uint8_t **p_data );
 
 void isom_bs_put_basebox_common( lsmash_bs_t *bs, isom_box_t *box );
@@ -2308,6 +2310,99 @@ void isom_remove_sample_pool( isom_sample_pool_t *pool );
 void isom_remove_free( isom_free_t *skip );
 #define isom_remove_skip isom_remove_free
 
+uint64_t isom_update_unknown_box_size( isom_unknown_box_t *unknown_box );
+uint64_t isom_update_ftyp_size( isom_ftyp_t *ftyp );
+uint64_t isom_update_moov_size( isom_moov_t *moov );
+uint64_t isom_update_mvhd_size( isom_mvhd_t *mvhd );
+uint64_t isom_update_iods_size( isom_iods_t *iods );
+uint64_t isom_update_ctab_size( isom_ctab_t *ctab );
+uint64_t isom_update_trak_size( isom_trak_t *trak );
+uint64_t isom_update_tkhd_size( isom_tkhd_t *tkhd );
+uint64_t isom_update_tapt_size( isom_tapt_t *tapt );
+uint64_t isom_update_clef_size( isom_clef_t *clef );
+uint64_t isom_update_prof_size( isom_prof_t *prof );
+uint64_t isom_update_enof_size( isom_enof_t *enof );
+uint64_t isom_update_edts_size( isom_edts_t *edts );
+uint64_t isom_update_elst_size( isom_elst_t *elst );
+uint64_t isom_update_tref_size( isom_tref_t *tref );
+uint64_t isom_update_mdia_size( isom_mdia_t *mdia );
+uint64_t isom_update_mdhd_size( isom_mdhd_t *mdhd );
+uint64_t isom_update_hdlr_size( isom_hdlr_t *hdlr );
+uint64_t isom_update_minf_size( isom_minf_t *minf );
+uint64_t isom_update_dinf_size( isom_dinf_t *dinf );
+uint64_t isom_update_dref_size( isom_dref_t *dref );
+uint64_t isom_update_dref_entry_size( isom_dref_entry_t *urln );
+uint64_t isom_update_vmhd_size( isom_vmhd_t *vmhd );
+uint64_t isom_update_smhd_size( isom_smhd_t *smhd );
+uint64_t isom_update_hmhd_size( isom_hmhd_t *hmhd );
+uint64_t isom_update_nmhd_size( isom_nmhd_t *nmhd );
+uint64_t isom_update_gmhd_size( isom_gmhd_t *gmhd );
+uint64_t isom_update_gmin_size( isom_gmin_t *gmin );
+uint64_t isom_update_text_size( isom_text_t *text );
+uint64_t isom_update_stbl_size( isom_stbl_t *stbl );
+uint64_t isom_update_pasp_size( isom_pasp_t *pasp );
+uint64_t isom_update_clap_size( isom_clap_t *clap );
+uint64_t isom_update_glbl_size( isom_glbl_t *glbl );
+uint64_t isom_update_colr_size( isom_colr_t *colr );
+uint64_t isom_update_gama_size( isom_gama_t *gama );
+uint64_t isom_update_fiel_size( isom_fiel_t *fiel );
+uint64_t isom_update_cspc_size( isom_cspc_t *cspc );
+uint64_t isom_update_sgbt_size( isom_sgbt_t *sgbt );
+uint64_t isom_update_stsl_size( isom_stsl_t *stsl );
+uint64_t isom_update_esds_size( isom_esds_t *esds );
+uint64_t isom_update_btrt_size( isom_btrt_t *btrt );
+uint64_t isom_update_frma_size( isom_frma_t *frma );
+uint64_t isom_update_enda_size( isom_enda_t *enda );
+uint64_t isom_update_mp4a_size( isom_mp4a_t *mp4a );
+uint64_t isom_update_terminator_size( isom_terminator_t *terminator );
+uint64_t isom_update_wave_size( isom_wave_t *wave );
+uint64_t isom_update_chan_size( isom_chan_t *chan );
+uint64_t isom_update_ftab_size( isom_ftab_t *ftab );
+uint64_t isom_update_stsd_size( isom_stsd_t *stsd );
+uint64_t isom_update_stts_size( isom_stts_t *stts );
+uint64_t isom_update_ctts_size( isom_ctts_t *ctts );
+uint64_t isom_update_cslg_size( isom_cslg_t *cslg );
+uint64_t isom_update_stsz_size( isom_stsz_t *stsz );
+uint64_t isom_update_stss_size( isom_stss_t *stss );
+uint64_t isom_update_stps_size( isom_stps_t *stps );
+uint64_t isom_update_sdtp_size( isom_sdtp_t *sdtp );
+uint64_t isom_update_stsc_size( isom_stsc_t *stsc );
+uint64_t isom_update_stco_size( isom_stco_t *stco );
+uint64_t isom_update_sbgp_size( isom_sbgp_t *sbgp );
+uint64_t isom_update_sgpd_size( isom_sgpd_t *sgpd );
+uint64_t isom_update_chpl_size( isom_chpl_t *chpl );
+uint64_t isom_update_mean_size( isom_mean_t *mean );
+uint64_t isom_update_name_size( isom_name_t *name );
+uint64_t isom_update_data_size( isom_data_t *data );
+uint64_t isom_update_metaitem_size( isom_metaitem_t *metaitem );
+uint64_t isom_update_keys_size( isom_keys_t *keys );
+uint64_t isom_update_ilst_size( isom_ilst_t *ilst );
+uint64_t isom_update_meta_size( isom_meta_t *meta );
+uint64_t isom_update_cprt_size( isom_cprt_t *cprt );
+uint64_t isom_update_udta_size( isom_udta_t *udta );
+uint64_t isom_update_WLOC_size( isom_WLOC_t *WLOC );
+uint64_t isom_update_LOOP_size( isom_LOOP_t *LOOP );
+uint64_t isom_update_SelO_size( isom_SelO_t *SelO );
+uint64_t isom_update_AllF_size( isom_AllF_t *AllF );
+uint64_t isom_update_mvex_size( isom_mvex_t *mvex );
+uint64_t isom_update_mehd_size( isom_mehd_t *mehd );
+uint64_t isom_update_trex_size( isom_trex_t *trex );
+uint64_t isom_update_moof_size( isom_moof_t *moof );
+uint64_t isom_update_mfhd_size( isom_mfhd_t *mfhd );
+uint64_t isom_update_traf_size( isom_traf_t *traf );
+uint64_t isom_update_tfhd_size( isom_tfhd_t *tfhd );
+uint64_t isom_update_tfdt_size( isom_tfdt_t *tfdt );
+uint64_t isom_update_trun_size( isom_trun_t *trun );
+uint64_t isom_update_mfra_size( isom_mfra_t *mfra );
+uint64_t isom_update_tfra_size( isom_tfra_t *tfra );
+uint64_t isom_update_mfro_size( isom_mfro_t *mfro );
+uint64_t isom_update_mdat_size( isom_mdat_t *mdat );
+uint64_t isom_update_skip_size( isom_skip_t *skip );
+uint64_t isom_update_visual_entry_size( isom_sample_entry_t *description );
+uint64_t isom_update_audio_entry_size( isom_sample_entry_t *description );
+uint64_t isom_update_text_entry_size( isom_sample_entry_t *description );
+uint64_t isom_update_tx3g_entry_size( isom_sample_entry_t *description );
+
 int isom_add_extension_binary( void *parent_box, lsmash_box_type_t box_type, uint8_t *box_data, uint32_t box_size );
 void isom_remove_extension_box( isom_box_t *ext );
 void isom_remove_all_extension_boxes( lsmash_entry_list_t *extensions );
@@ -2318,7 +2413,7 @@ void *isom_get_extension_box_format( lsmash_entry_list_t *extensions, lsmash_box
     isom_##box_name##_t *(box_name) = lsmash_malloc_zero( sizeof(isom_##box_name##_t) ); \
     if( !box_name )                                                                      \
         return -1;                                                                       \
-    isom_init_box_common( box_name, parent_name, box_type, isom_remove_##box_name )
+    isom_init_box_common( box_name, parent_name, box_type, isom_remove_##box_name, isom_update_##box_name##_size )
 
 #define isom_create_list_box( box_name, parent_name, box_type ) \
     isom_create_box( box_name, parent_name, box_type );         \

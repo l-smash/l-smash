@@ -954,7 +954,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
     isom_visual_entry_t *visual = lsmash_malloc_zero( sizeof(isom_visual_entry_t) );
     if( !visual )
         return -1;
-    isom_init_box_common( visual, stsd, sample_type, isom_remove_sample_description );
+    isom_init_box_common( visual, stsd, sample_type, isom_remove_sample_description, isom_update_visual_entry_size );
     visual->manager             |= LSMASH_VIDEO_DESCRIPTION;
     visual->data_reference_index = 1;
     visual->version              = 0;
@@ -1036,7 +1036,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
                     lsmash_destroy_codec_specific_data( cs );
                     goto fail;
                 }
-                isom_init_box_common( stsl, visual, ISOM_BOX_TYPE_STSL, isom_remove_stsl );
+                isom_init_box_common( stsl, visual, ISOM_BOX_TYPE_STSL, isom_remove_stsl, isom_update_stsl_size );
                 stsl->constraint_flag  = data->constraint_flag;
                 stsl->scale_method     = data->scale_method;
                 stsl->display_center_x = data->display_center_x;
@@ -1061,7 +1061,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
                     lsmash_destroy_codec_specific_data( cs );
                     goto fail;
                 }
-                isom_init_box_common( btrt, visual, ISOM_BOX_TYPE_BTRT, isom_remove_btrt );
+                isom_init_box_common( btrt, visual, ISOM_BOX_TYPE_BTRT, isom_remove_btrt, isom_update_btrt_size );
                 btrt->bufferSizeDB = data->bufferSizeDB;
                 btrt->maxBitrate   = data->maxBitrate;
                 btrt->avgBitrate   = data->avgBitrate;
@@ -1085,7 +1085,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
                     lsmash_destroy_codec_specific_data( cs );
                     goto fail;
                 }
-                isom_init_box_common( fiel, visual, QT_BOX_TYPE_FIEL, isom_remove_fiel );
+                isom_init_box_common( fiel, visual, QT_BOX_TYPE_FIEL, isom_remove_fiel, isom_update_fiel_size );
                 fiel->fields = data->fields;
                 fiel->detail = data->detail;
                 lsmash_destroy_codec_specific_data( cs );
@@ -1108,7 +1108,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
                     lsmash_destroy_codec_specific_data( cs );
                     goto fail;
                 }
-                isom_init_box_common( cspc, visual, QT_BOX_TYPE_CSPC, isom_remove_cspc );
+                isom_init_box_common( cspc, visual, QT_BOX_TYPE_CSPC, isom_remove_cspc, isom_update_cspc_size );
                 cspc->pixel_format = data->pixel_format;
                 lsmash_destroy_codec_specific_data( cs );
                 if( lsmash_add_entry( &visual->extensions, cspc ) )
@@ -1130,7 +1130,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
                     lsmash_destroy_codec_specific_data( cs );
                     goto fail;
                 }
-                isom_init_box_common( sgbt, visual, QT_BOX_TYPE_SGBT, isom_remove_sgbt );
+                isom_init_box_common( sgbt, visual, QT_BOX_TYPE_SGBT, isom_remove_sgbt, isom_update_sgbt_size );
                 sgbt->significantBits = data->significantBits;
                 lsmash_destroy_codec_specific_data( cs );
                 if( lsmash_add_entry( &visual->extensions, sgbt ) )
@@ -1152,7 +1152,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
                     lsmash_destroy_codec_specific_data( cs );
                     goto fail;
                 }
-                isom_init_box_common( gama, visual, QT_BOX_TYPE_GAMA, isom_remove_gama );
+                isom_init_box_common( gama, visual, QT_BOX_TYPE_GAMA, isom_remove_gama, isom_update_gama_size );
                 gama->level = data->level;
                 lsmash_destroy_codec_specific_data( cs );
                 if( lsmash_add_entry( &visual->extensions, gama ) )
@@ -1174,7 +1174,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
                     lsmash_destroy_codec_specific_data( cs );
                     goto fail;
                 }
-                isom_init_box_common( glbl, visual, QT_BOX_TYPE_GLBL, isom_remove_glbl );
+                isom_init_box_common( glbl, visual, QT_BOX_TYPE_GLBL, isom_remove_glbl, isom_update_glbl_size );
                 glbl->header_size = data->header_size;
                 glbl->header_data = lsmash_memdup( data->header_data, data->header_size );
                 lsmash_destroy_codec_specific_data( cs );
@@ -1228,7 +1228,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
         isom_clap_t *clap = lsmash_malloc_zero( sizeof(isom_clap_t) );
         if( !clap )
             goto fail;
-        isom_init_box_common( clap, visual, ISOM_BOX_TYPE_CLAP, isom_remove_clap );
+        isom_init_box_common( clap, visual, ISOM_BOX_TYPE_CLAP, isom_remove_clap, isom_update_clap_size );
         if( summary->clap.width.d && summary->clap.height.d && summary->clap.horizontal_offset.d && summary->clap.vertical_offset.d )
         {
             clap->cleanApertureWidthN  = summary->clap.width.n;
@@ -1263,7 +1263,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
         isom_pasp_t *pasp = lsmash_malloc_zero( sizeof(isom_pasp_t) );
         if( !pasp )
             goto fail;
-        isom_init_box_common( pasp, visual, ISOM_BOX_TYPE_PASP, isom_remove_pasp );
+        isom_init_box_common( pasp, visual, ISOM_BOX_TYPE_PASP, isom_remove_pasp, isom_update_pasp_size );
         pasp->hSpacing = LSMASH_MAX( summary->par_h, 1 );
         pasp->vSpacing = LSMASH_MAX( summary->par_v, 1 );
         if( lsmash_add_entry( &visual->extensions, pasp ) )
@@ -1282,7 +1282,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
         isom_colr_t *colr = lsmash_malloc_zero( sizeof(isom_colr_t) );
         if( !colr )
             goto fail;
-        isom_init_box_common( colr, visual, ISOM_BOX_TYPE_COLR, isom_remove_colr );
+        isom_init_box_common( colr, visual, ISOM_BOX_TYPE_COLR, isom_remove_colr, isom_update_colr_size );
         /* Set 'nclc' to parameter type, we don't support 'prof'. */
         uint16_t primaries = summary->color.primaries_index;
         uint16_t transfer  = summary->color.transfer_index;
@@ -1376,7 +1376,7 @@ static int isom_append_audio_es_descriptor_extension( isom_box_t *box, lsmash_au
         lsmash_free( esds_data );
         return -1;
     }
-    isom_init_box_common( esds, box, ISOM_BOX_TYPE_ESDS, isom_remove_esds );
+    isom_init_box_common( esds, box, ISOM_BOX_TYPE_ESDS, isom_remove_esds, isom_update_esds_size );
     lsmash_bs_t bs = { 0 };
     bs.data  = esds_data + ISOM_FULLBOX_COMMON_SIZE;
     bs.alloc = esds_size - ISOM_FULLBOX_COMMON_SIZE;
@@ -1421,7 +1421,7 @@ static int isom_append_channel_layout_extension( lsmash_codec_specific_t *specif
         if( !chan )
             return -1;
         isom_box_t *parent_box = parent;
-        isom_init_box_common( chan, parent_box, QT_BOX_TYPE_CHAN, isom_remove_chan );
+        isom_init_box_common( chan, parent_box, QT_BOX_TYPE_CHAN, isom_remove_chan, isom_update_chan_size );
         chan->channelLayoutTag          = channelLayoutTag;
         chan->channelBitmap             = channelBitmap;
         chan->numberChannelDescriptions = 0;
@@ -1440,7 +1440,7 @@ static int isom_set_qtff_mp4a_description( isom_audio_entry_t *audio, lsmash_aud
     isom_wave_t *wave = lsmash_malloc_zero( sizeof(isom_wave_t) );
     if( !wave )
         return -1;
-    isom_init_box_common( wave, audio, QT_BOX_TYPE_WAVE, isom_remove_wave );
+    isom_init_box_common( wave, audio, QT_BOX_TYPE_WAVE, isom_remove_wave, isom_update_wave_size );
     if( isom_add_frma( wave )
      || isom_add_mp4a( wave )
      || isom_add_terminator( wave )
@@ -1622,7 +1622,7 @@ static int isom_set_qtff_lpcm_description( isom_audio_entry_t *audio, lsmash_aud
             isom_wave_t *wave = lsmash_malloc_zero( sizeof(isom_wave_t) );
             if( !wave )
                 return -1;
-            isom_init_box_common( wave, audio, QT_BOX_TYPE_WAVE, isom_remove_wave );
+            isom_init_box_common( wave, audio, QT_BOX_TYPE_WAVE, isom_remove_wave, isom_update_wave_size );
             if( isom_add_frma( wave )
              || isom_add_enda( wave )
              || isom_add_terminator( wave )
@@ -1739,7 +1739,7 @@ static int isom_set_qtff_template_audio_description( isom_audio_entry_t *audio, 
     isom_wave_t *wave = lsmash_malloc_zero( sizeof(isom_wave_t) );
     if( !wave )
         return -1;
-    isom_init_box_common( wave, audio, QT_BOX_TYPE_WAVE, isom_remove_wave );
+    isom_init_box_common( wave, audio, QT_BOX_TYPE_WAVE, isom_remove_wave, isom_update_wave_size );
     if( isom_add_frma( wave )
      || isom_add_terminator( wave )
      || lsmash_add_entry( &audio->extensions, wave ) )
@@ -1902,7 +1902,7 @@ int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_
     isom_audio_entry_t *audio = lsmash_malloc_zero( sizeof(isom_audio_entry_t) );
     if( !audio )
         return -1;
-    isom_init_box_common( audio, stsd, sample_type, isom_remove_sample_description );
+    isom_init_box_common( audio, stsd, sample_type, isom_remove_sample_description, isom_update_audio_entry_size );
     audio->manager             |= LSMASH_AUDIO_DESCRIPTION;
     audio->data_reference_index = 1;
     lsmash_root_t *root = stsd->root;
@@ -1972,7 +1972,7 @@ int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_
                     lsmash_destroy_codec_specific_data( cs );
                     goto fail;
                 }
-                isom_init_box_common( glbl, audio, QT_BOX_TYPE_GLBL, isom_remove_glbl );
+                isom_init_box_common( glbl, audio, QT_BOX_TYPE_GLBL, isom_remove_glbl, isom_update_glbl_size );
                 glbl->header_size = data->header_size;
                 glbl->header_data = lsmash_memdup( data->header_data, data->header_size );
                 lsmash_destroy_codec_specific_data( cs );
