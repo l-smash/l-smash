@@ -684,11 +684,9 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
             if( !stts_data )
                 goto fail;
             INCREMENT_SAMPLE_NUMBER_IN_ENTRY( sample_number_in_stts_entry, stts_entry, stts_data );
-            info.duration = stts_data->sample_delta;
             last_duration = stts_data->sample_delta;
         }
-        else
-            info.duration = last_duration;
+        info.duration = last_duration;
         timeline->media_duration += info.duration;
         if( ctts_entry )
         {
