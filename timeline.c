@@ -588,10 +588,10 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     isom_stsc_t *stsc = stbl->stsc;
     isom_stsz_t *stsz = stbl->stsz;
     isom_stco_t *stco = stbl->stco;
-    isom_sgpd_entry_t *sgpd_roll = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_ROLL );
-    isom_sgpd_entry_t *sgpd_rap  = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_RAP );
-    isom_sbgp_entry_t *sbgp_roll = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_ROLL );
-    isom_sbgp_entry_t *sbgp_rap  = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_RAP );
+    isom_sgpd_t *sgpd_roll = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_ROLL );
+    isom_sgpd_t *sgpd_rap  = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_RAP );
+    isom_sbgp_t *sbgp_roll = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_ROLL );
+    isom_sbgp_t *sbgp_rap  = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_RAP );
     lsmash_entry_t *elst_entry = elst && elst->list ? elst->list->head : NULL;
     lsmash_entry_t *stsd_entry = stsd && stsd->list ? stsd->list->head : NULL;
     lsmash_entry_t *stts_entry = stts && stts->list ? stts->list->head : NULL;

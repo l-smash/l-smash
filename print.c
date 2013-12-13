@@ -1430,9 +1430,9 @@ static int isom_print_stco( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
 
 static int isom_print_sgpd( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
 {
-    if( !box || !((isom_sgpd_entry_t *)box)->list )
+    if( !box || !((isom_sgpd_t *)box)->list )
         return -1;
-    isom_sgpd_entry_t *sgpd = (isom_sgpd_entry_t *)box;
+    isom_sgpd_t *sgpd = (isom_sgpd_t *)box;
     int indent = level;
     uint32_t i = 0;
     isom_print_box_common( fp, indent++, box, "Sample Group Description Box" );
@@ -1476,9 +1476,9 @@ static int isom_print_sgpd( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
 
 static int isom_print_sbgp( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
 {
-    if( !box || !((isom_sbgp_entry_t *)box)->list )
+    if( !box || !((isom_sbgp_t *)box)->list )
         return -1;
-    isom_sbgp_entry_t *sbgp = (isom_sbgp_entry_t *)box;
+    isom_sbgp_t *sbgp = (isom_sbgp_t *)box;
     int indent = level;
     uint32_t i = 0;
     isom_print_box_common( fp, indent++, box, "Sample to Group Box" );

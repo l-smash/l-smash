@@ -790,7 +790,7 @@ void isom_remove_stco( isom_stco_t *stco )
     isom_remove_box( stco, isom_stbl_t );
 }
 
-void isom_remove_sgpd( isom_sgpd_entry_t *sgpd )
+void isom_remove_sgpd( isom_sgpd_t *sgpd )
 {
     if( !sgpd )
         return;
@@ -799,7 +799,7 @@ void isom_remove_sgpd( isom_sgpd_entry_t *sgpd )
     lsmash_free( sgpd );
 }
 
-void isom_remove_sbgp( isom_sbgp_entry_t *sbgp )
+void isom_remove_sbgp( isom_sbgp_t *sbgp )
 {
     if( !sbgp )
         return;
@@ -1939,7 +1939,7 @@ int isom_add_sdtp( isom_box_t *parent )
     return 0;
 }
 
-isom_sgpd_entry_t *isom_add_sgpd( isom_stbl_t *stbl, uint32_t grouping_type )
+isom_sgpd_t *isom_add_sgpd( isom_stbl_t *stbl, uint32_t grouping_type )
 {
     if( !stbl )
         return NULL;
@@ -1949,7 +1949,7 @@ isom_sgpd_entry_t *isom_add_sgpd( isom_stbl_t *stbl, uint32_t grouping_type )
         if( !stbl->sgpd_list )
             return NULL;
     }
-    isom_sgpd_entry_t *sgpd = lsmash_malloc_zero( sizeof(isom_sgpd_entry_t) );
+    isom_sgpd_t *sgpd = lsmash_malloc_zero( sizeof(isom_sgpd_t) );
     if( !sgpd )
         return NULL;
     isom_init_box_common( sgpd, stbl, ISOM_BOX_TYPE_SGPD, isom_remove_sgpd );
@@ -1976,7 +1976,7 @@ isom_sgpd_entry_t *isom_add_sgpd( isom_stbl_t *stbl, uint32_t grouping_type )
     return sgpd;
 }
 
-isom_sbgp_entry_t *isom_add_sbgp( isom_stbl_t *stbl, uint32_t grouping_type )
+isom_sbgp_t *isom_add_sbgp( isom_stbl_t *stbl, uint32_t grouping_type )
 {
     if( !stbl )
         return NULL;
@@ -1986,7 +1986,7 @@ isom_sbgp_entry_t *isom_add_sbgp( isom_stbl_t *stbl, uint32_t grouping_type )
         if( !stbl->sbgp_list )
             return NULL;
     }
-    isom_sbgp_entry_t *sbgp = lsmash_malloc_zero( sizeof(isom_sbgp_entry_t) );
+    isom_sbgp_t *sbgp = lsmash_malloc_zero( sizeof(isom_sbgp_t) );
     if( !sbgp )
         return NULL;
     isom_init_box_common( sbgp, stbl, ISOM_BOX_TYPE_SBGP, isom_remove_sbgp );

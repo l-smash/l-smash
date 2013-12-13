@@ -1196,7 +1196,7 @@ static int isom_write_stco( lsmash_bs_t *bs, isom_trak_t *trak )
 
 static int isom_write_sgpd( lsmash_bs_t *bs, isom_trak_t *trak, uint32_t grouping_number )
 {
-    isom_sgpd_entry_t *sgpd = (isom_sgpd_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->sgpd_list, grouping_number );
+    isom_sgpd_t *sgpd = (isom_sgpd_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->sgpd_list, grouping_number );
     if( !sgpd || !sgpd->list )
         return -1;
     isom_bs_put_box_common( bs, sgpd );
@@ -1224,7 +1224,7 @@ static int isom_write_sgpd( lsmash_bs_t *bs, isom_trak_t *trak, uint32_t groupin
             default :
                 /* We don't consider other grouping types currently. */
                 // if( sgpd->version == 1 && !sgpd->default_length )
-                //     lsmash_bs_put_be32( bs, ((isom_sgpd_entry_t *)entry->data)->description_length );
+                //     lsmash_bs_put_be32( bs, ((isom_sgpd_t *)entry->data)->description_length );
                 break;
         }
     }
@@ -1233,7 +1233,7 @@ static int isom_write_sgpd( lsmash_bs_t *bs, isom_trak_t *trak, uint32_t groupin
 
 static int isom_write_sbgp( lsmash_bs_t *bs, isom_trak_t *trak, uint32_t grouping_number )
 {
-    isom_sbgp_entry_t *sbgp = (isom_sbgp_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->sbgp_list, grouping_number );
+    isom_sbgp_t *sbgp = (isom_sbgp_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->sbgp_list, grouping_number );
     if( !sbgp || !sbgp->list )
         return -1;
     isom_bs_put_box_common( bs, sbgp );

@@ -605,13 +605,13 @@ static int isom_add_stco_entry( isom_stbl_t *stbl, uint64_t chunk_offset )
     return 0;
 }
 
-isom_sgpd_entry_t *isom_get_sample_group_description( isom_stbl_t *stbl, uint32_t grouping_type )
+isom_sgpd_t *isom_get_sample_group_description( isom_stbl_t *stbl, uint32_t grouping_type )
 {
     if( !stbl->sgpd_list )
         return NULL;
     for( lsmash_entry_t *entry = stbl->sgpd_list->head; entry; entry = entry->next )
     {
-        isom_sgpd_entry_t *sgpd = (isom_sgpd_entry_t *)entry->data;
+        isom_sgpd_t *sgpd = (isom_sgpd_t *)entry->data;
         if( !sgpd
          || !sgpd->list )
             return NULL;
@@ -621,13 +621,13 @@ isom_sgpd_entry_t *isom_get_sample_group_description( isom_stbl_t *stbl, uint32_
     return NULL;
 }
 
-isom_sbgp_entry_t *isom_get_sample_to_group( isom_stbl_t *stbl, uint32_t grouping_type )
+isom_sbgp_t *isom_get_sample_to_group( isom_stbl_t *stbl, uint32_t grouping_type )
 {
     if( !stbl->sbgp_list )
         return NULL;
     for( lsmash_entry_t *entry = stbl->sbgp_list->head; entry; entry = entry->next )
     {
-        isom_sbgp_entry_t *sbgp = (isom_sbgp_entry_t *)entry->data;
+        isom_sbgp_t *sbgp = (isom_sbgp_t *)entry->data;
         if( !sbgp
          || !sbgp->list )
             return NULL;
@@ -637,7 +637,7 @@ isom_sbgp_entry_t *isom_get_sample_to_group( isom_stbl_t *stbl, uint32_t groupin
     return NULL;
 }
 
-static isom_rap_entry_t *isom_add_rap_group_entry( isom_sgpd_entry_t *sgpd )
+static isom_rap_entry_t *isom_add_rap_group_entry( isom_sgpd_t *sgpd )
 {
     if( !sgpd )
         return NULL;
@@ -655,7 +655,7 @@ static isom_rap_entry_t *isom_add_rap_group_entry( isom_sgpd_entry_t *sgpd )
     return data;
 }
 
-static isom_roll_entry_t *isom_add_roll_group_entry( isom_sgpd_entry_t *sgpd, int16_t roll_distance )
+static isom_roll_entry_t *isom_add_roll_group_entry( isom_sgpd_t *sgpd, int16_t roll_distance )
 {
     if( !sgpd )
         return NULL;
@@ -672,7 +672,7 @@ static isom_roll_entry_t *isom_add_roll_group_entry( isom_sgpd_entry_t *sgpd, in
     return data;
 }
 
-static isom_group_assignment_entry_t *isom_add_group_assignment_entry( isom_sbgp_entry_t *sbgp, uint32_t sample_count, uint32_t group_description_index )
+static isom_group_assignment_entry_t *isom_add_group_assignment_entry( isom_sbgp_t *sbgp, uint32_t sample_count, uint32_t group_description_index )
 {
     if( !sbgp )
         return NULL;
@@ -2567,7 +2567,7 @@ static uint64_t isom_update_stco_size( isom_stco_t *stco )
     return stco->size;
 }
 
-static uint64_t isom_update_sbgp_size( isom_sbgp_entry_t *sbgp )
+static uint64_t isom_update_sbgp_size( isom_sbgp_t *sbgp )
 {
     if( !sbgp
      || !sbgp->list )
@@ -2577,7 +2577,7 @@ static uint64_t isom_update_sbgp_size( isom_sbgp_entry_t *sbgp )
     return sbgp->size;
 }
 
-static uint64_t isom_update_sgpd_size( isom_sgpd_entry_t *sgpd )
+static uint64_t isom_update_sgpd_size( isom_sgpd_t *sgpd )
 {
     if( !sgpd
      || !sgpd->list )
@@ -2618,10 +2618,10 @@ static uint64_t isom_update_stbl_size( isom_stbl_t *stbl )
         + isom_update_stco_size( stbl->stco );
     if( stbl->sgpd_list )
         for( lsmash_entry_t *entry = stbl->sgpd_list->head; entry; entry = entry->next )
-            stbl->size += isom_update_sgpd_size( (isom_sgpd_entry_t *)entry->data );
+            stbl->size += isom_update_sgpd_size( (isom_sgpd_t *)entry->data );
     if( stbl->sbgp_list )
         for( lsmash_entry_t *entry = stbl->sbgp_list->head; entry; entry = entry->next )
-            stbl->size += isom_update_sbgp_size( (isom_sbgp_entry_t *)entry->data );
+            stbl->size += isom_update_sbgp_size( (isom_sbgp_t *)entry->data );
     CHECK_LARGESIZE( stbl );
     return stbl->size;
 }
@@ -3529,8 +3529,8 @@ int lsmash_get_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     param->duration     = mdhd->duration;
     /* Whether sample grouping present. */
     {
-        isom_sbgp_entry_t *sbgp;
-        isom_sgpd_entry_t *sgpd;
+        isom_sbgp_t *sbgp;
+        isom_sgpd_t *sgpd;
         sbgp = isom_get_sample_to_group         ( stbl, ISOM_GROUP_TYPE_ROLL );
         sgpd = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_ROLL );
         param->roll_grouping = sbgp && sgpd;
@@ -5146,7 +5146,7 @@ static int isom_add_dependency_type( isom_trak_t *trak, lsmash_sample_property_t
     return isom_add_sdtp_entry( (isom_box_t *)stbl, prop, avc_extensions );
 }
 
-static int isom_rap_grouping_established( isom_rap_group_t *group, int num_leading_samples_known, isom_sgpd_entry_t *sgpd )
+static int isom_rap_grouping_established( isom_rap_group_t *group, int num_leading_samples_known, isom_sgpd_t *sgpd )
 {
     isom_rap_entry_t *rap = group->random_access;
     if( !rap )
@@ -5187,8 +5187,8 @@ static int isom_group_random_access( isom_trak_t *trak, lsmash_sample_property_t
     if( trak->root->max_isom_version < 6 )
         return 0;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
-    isom_sbgp_entry_t *sbgp = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_RAP );
-    isom_sgpd_entry_t *sgpd = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_RAP );
+    isom_sbgp_t *sbgp = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_RAP );
+    isom_sgpd_t *sgpd = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_RAP );
     if( !sbgp || !sgpd )
         return 0;
     uint8_t is_rap = (prop->ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC)
@@ -5296,7 +5296,7 @@ static int isom_group_random_access( isom_trak_t *trak, lsmash_sample_property_t
     return 0;
 }
 
-static int isom_roll_grouping_established( isom_roll_group_t *group, int16_t roll_distance, isom_sgpd_entry_t *sgpd )
+static int isom_roll_grouping_established( isom_roll_group_t *group, int16_t roll_distance, isom_sgpd_t *sgpd )
 {
     /* Avoid duplication of sample group descriptions. */
     uint32_t group_description_index = 1;
@@ -5323,7 +5323,7 @@ static int isom_roll_grouping_established( isom_roll_group_t *group, int16_t rol
     return 0;
 }
 
-static int isom_deduplicate_roll_group( isom_sbgp_entry_t *sbgp, lsmash_entry_list_t *pool )
+static int isom_deduplicate_roll_group( isom_sbgp_t *sbgp, lsmash_entry_list_t *pool )
 {
     /* Deduplication */
     uint32_t current_group_number = sbgp->list->entry_count - pool->entry_count + 1;
@@ -5358,7 +5358,7 @@ static int isom_deduplicate_roll_group( isom_sbgp_entry_t *sbgp, lsmash_entry_li
 }
 
 /* Remove pooled caches that has become unnecessary. */
-static int isom_clean_roll_pool( isom_sbgp_entry_t *sbgp, lsmash_entry_list_t *pool )
+static int isom_clean_roll_pool( isom_sbgp_t *sbgp, lsmash_entry_list_t *pool )
 {
     for( lsmash_entry_t *entry = pool->head; entry; entry = pool->head )
     {
@@ -5374,14 +5374,14 @@ static int isom_clean_roll_pool( isom_sbgp_entry_t *sbgp, lsmash_entry_list_t *p
     return 0;
 }
 
-static int isom_flush_roll_pool( isom_sbgp_entry_t *sbgp, lsmash_entry_list_t *pool )
+static int isom_flush_roll_pool( isom_sbgp_t *sbgp, lsmash_entry_list_t *pool )
 {
     if( isom_deduplicate_roll_group( sbgp, pool ) )
         return -1;
     return isom_clean_roll_pool( sbgp, pool );
 }
 
-static int isom_all_recovery_described( isom_sbgp_entry_t *sbgp, lsmash_entry_list_t *pool )
+static int isom_all_recovery_described( isom_sbgp_t *sbgp, lsmash_entry_list_t *pool )
 {
     for( lsmash_entry_t *entry = pool->head; entry; entry = entry->next )
     {
@@ -5398,8 +5398,8 @@ static int isom_group_roll_recovery( isom_trak_t *trak, lsmash_sample_property_t
     if( !trak->root->avc_extensions && !trak->root->qt_compatible )
         return 0;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
-    isom_sbgp_entry_t *sbgp = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_ROLL );
-    isom_sgpd_entry_t *sgpd = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_ROLL );
+    isom_sbgp_t *sbgp = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_ROLL );
+    isom_sgpd_t *sgpd = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_ROLL );
     if( !sbgp || !sgpd )
         return 0;
     lsmash_entry_list_t *pool = trak->cache->roll.pool;
@@ -5798,7 +5798,7 @@ static int isom_output_cache( isom_trak_t *trak )
         return 0;
     for( lsmash_entry_t *entry = stbl->sgpd_list->head; entry; entry = entry->next )
     {
-        isom_sgpd_entry_t *sgpd = (isom_sgpd_entry_t *)entry->data;
+        isom_sgpd_t *sgpd = (isom_sgpd_t *)entry->data;
         if( !sgpd )
             return -1;
         switch( sgpd->grouping_type )
@@ -5834,7 +5834,7 @@ static int isom_output_cache( isom_trak_t *trak )
                     group->described = 1;
                     group->delimited = 1;
                 }
-                isom_sbgp_entry_t *sbgp = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_ROLL );
+                isom_sbgp_t *sbgp = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_ROLL );
                 if( isom_flush_roll_pool( sbgp, trak->cache->roll.pool ) )
                     return -1;
                 break;

@@ -1967,7 +1967,7 @@ static int isom_read_sgpd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     isom_stbl_t *stbl = (isom_stbl_t *)parent;
     if( isom_create_entry_list_if_absent( &stbl->sgpd_list ) < 0 )
         return -1;
-    isom_sgpd_entry_t *sgpd = lsmash_malloc_zero( sizeof(isom_sgpd_entry_t) );
+    isom_sgpd_t *sgpd = lsmash_malloc_zero( sizeof(isom_sgpd_t) );
     if( !sgpd )
         return -1;
     sgpd->list = lsmash_create_entry_list();
@@ -2050,7 +2050,7 @@ static int isom_read_sbgp( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     isom_stbl_t *stbl = (isom_stbl_t *)parent;
     if( isom_create_entry_list_if_absent( &stbl->sbgp_list ) < 0 )
         return -1;
-    isom_sbgp_entry_t *sbgp = lsmash_malloc_zero( sizeof(isom_sbgp_entry_t) );
+    isom_sbgp_t *sbgp = lsmash_malloc_zero( sizeof(isom_sbgp_t) );
     if( !sbgp )
         return -1;
     sbgp->list = lsmash_create_entry_list();

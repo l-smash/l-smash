@@ -1018,7 +1018,7 @@ typedef struct
     uint32_t default_length;        /* the length of every group entry (if the length is constant), or zero (if it is variable)
                                      * This field is available only if version == 1. */
     lsmash_entry_list_t *list;
-} isom_sgpd_entry_t;
+} isom_sgpd_t;
 
 /* Random Access Entry
  * Samples marked by this group must be random access points, and may also be sync points. */
@@ -1052,7 +1052,7 @@ typedef struct
     uint32_t grouping_type_parameter;   /* an indication of the sub-type of the grouping
                                          * This field is available only if version == 1. */
     lsmash_entry_list_t *list;
-} isom_sbgp_entry_t;
+} isom_sbgp_t;
 
 typedef struct
 {
@@ -2127,8 +2127,8 @@ char *isom_4cc2str( uint32_t fourcc );
 isom_trak_t *isom_get_trak( lsmash_root_t *root, uint32_t track_ID );
 isom_trex_t *isom_get_trex( isom_mvex_t *mvex, uint32_t track_ID );
 isom_tfra_t *isom_get_tfra( isom_mfra_t *mfra, uint32_t track_ID );
-isom_sgpd_entry_t *isom_get_sample_group_description( isom_stbl_t *stbl, uint32_t grouping_type );
-isom_sbgp_entry_t *isom_get_sample_to_group( isom_stbl_t *stbl, uint32_t grouping_type );
+isom_sgpd_t *isom_get_sample_group_description( isom_stbl_t *stbl, uint32_t grouping_type );
+isom_sbgp_t *isom_get_sample_to_group( isom_stbl_t *stbl, uint32_t grouping_type );
 
 isom_dcr_ps_entry_t *isom_create_ps_entry( uint8_t *ps, uint32_t ps_size );
 void isom_remove_dcr_ps( isom_dcr_ps_entry_t *ps );
@@ -2188,8 +2188,8 @@ int isom_add_stsz( isom_stbl_t *stbl );
 int isom_add_stss( isom_stbl_t *stbl );
 int isom_add_stps( isom_stbl_t *stbl );
 int isom_add_sdtp( isom_box_t *parent );
-isom_sgpd_entry_t *isom_add_sgpd( isom_stbl_t *stbl, uint32_t grouping_type );
-isom_sbgp_entry_t *isom_add_sbgp( isom_stbl_t *stbl, uint32_t grouping_type );
+isom_sgpd_t *isom_add_sgpd( isom_stbl_t *stbl, uint32_t grouping_type );
+isom_sbgp_t *isom_add_sbgp( isom_stbl_t *stbl, uint32_t grouping_type );
 int isom_add_stco( isom_stbl_t *stbl );
 int isom_add_co64( isom_stbl_t *stbl );
 int isom_add_metaitem( isom_ilst_t *ilst, lsmash_itunes_metadata_item item );
@@ -2271,8 +2271,8 @@ void isom_remove_stss( isom_stss_t *stss );
 void isom_remove_stps( isom_stps_t *stps );
 void isom_remove_sdtp( isom_sdtp_t *sdtp );
 void isom_remove_stco( isom_stco_t *stco );
-void isom_remove_sgpd( isom_sgpd_entry_t *sgpd );
-void isom_remove_sbgp( isom_sbgp_entry_t *sbgp );
+void isom_remove_sgpd( isom_sgpd_t *sgpd );
+void isom_remove_sbgp( isom_sbgp_t *sbgp );
 void isom_remove_stbl( isom_stbl_t *stbl );
 void isom_remove_chpl( isom_chpl_t *chpl );
 void isom_remove_keys( isom_keys_t *keys );
