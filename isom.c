@@ -563,20 +563,28 @@ static int isom_add_co64_entry( isom_stbl_t *stbl, uint64_t chunk_offset )
 static int isom_convert_stco_to_co64( isom_stbl_t* stbl )
 {
     /* backup stco */
+    int ret = 0;
     isom_stco_t *stco = stbl->stco;
     stbl->stco = NULL;
     if( isom_add_co64( stbl ) )
-        return -1;
+    {
+        ret = -1;
+        goto fail;
+    }
     /* move chunk_offset to co64 from stco */
     for( lsmash_entry_t *entry = stco->list->head; entry; entry = entry->next )
     {
         isom_stco_entry_t *data = (isom_stco_entry_t*)entry->data;
         if( isom_add_co64_entry( stbl, data->chunk_offset ) )
-            return -1;
+        {
+            ret = -1;
+            goto fail;
+        }
     }
+fail:
     lsmash_remove_list( stco->list, NULL );
     lsmash_free( stco );
-    return 0;
+    return ret;
 }
 
 static int isom_add_stco_entry( isom_stbl_t *stbl, uint64_t chunk_offset )
@@ -4322,7 +4330,7 @@ static int isom_finish_fragment_initial_movie( lsmash_root_t *root )
         }
         /* stco->co64 conversion */
         if( isom_convert_stco_to_co64( trak->mdia->minf->stbl )
-            || isom_update_moov_size( moov ) )
+         || isom_update_moov_size( moov ) )
             return -1;
         entry = moov->trak_list->head;  /* whenever any conversion, re-check all traks */
     }
