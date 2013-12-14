@@ -761,8 +761,6 @@ static void isom_remove_tx3g_description( isom_sample_entry_t *description )
 {
     isom_tx3g_entry_t *tx3g = (isom_tx3g_entry_t *)description;
     isom_remove_all_extension_boxes( &tx3g->extensions );
-    if( tx3g->ftab )
-        isom_remove_ftab( tx3g->ftab );
     lsmash_free( tx3g );
 }
 

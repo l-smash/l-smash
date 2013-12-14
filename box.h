@@ -2413,6 +2413,11 @@ void *isom_get_extension_box_format( lsmash_entry_list_t *extensions, lsmash_box
     isom_##box_name##_t *(box_name) = lsmash_malloc_zero( sizeof(isom_##box_name##_t) ); \
     if( !box_name )                                                                      \
         return -1;                                                                       \
+    if( lsmash_add_entry( &(parent_name)->extensions, box_name ) )                       \
+    {                                                                                    \
+        lsmash_free( box_name );                                                         \
+        return -1;                                                                       \
+    }                                                                                    \
     isom_init_box_common( box_name, parent_name, box_type, isom_remove_##box_name, isom_update_##box_name##_size )
 
 #define isom_create_list_box( box_name, parent_name, box_type ) \

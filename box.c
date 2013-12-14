@@ -92,7 +92,7 @@ void isom_init_box_common( void *_box, void *_parent, lsmash_box_type_t box_type
     box->root     = parent->root;
     box->parent   = parent;
     box->destruct = destructor ? destructor : lsmash_free;
-    box->update   = updater    ? updater    : NULL;
+    box->update   = updater;
     box->size     = 0;
     box->type     = box_type;
     if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) || !isom_is_fullbox( box ) )
@@ -289,6 +289,7 @@ int isom_add_extension_binary( void *parent_box, lsmash_box_type_t box_type, uin
     ext->type     = box_type;
     ext->binary   = box_data;
     ext->destruct = isom_destruct_extension_binary;
+    ext->update   = NULL;
     return 0;
 }
 
@@ -372,13 +373,6 @@ void isom_remove_trak( isom_trak_t *trak )
 {
     if( !trak )
         return;
-    isom_remove_tkhd( trak->tkhd );
-    isom_remove_tapt( trak->tapt );
-    isom_remove_edts( trak->edts );
-    isom_remove_tref( trak->tref );
-    isom_remove_mdia( trak->mdia );
-    isom_remove_udta( trak->udta );
-    isom_remove_meta( trak->meta );
     if( trak->cache )
     {
         isom_remove_sample_pool( trak->cache->chunk.pool );
@@ -423,9 +417,6 @@ void isom_remove_tapt( isom_tapt_t *tapt )
 {
     if( !tapt )
         return;
-    isom_remove_clef( tapt->clef );
-    isom_remove_prof( tapt->prof );
-    isom_remove_enof( tapt->enof );
     isom_remove_box( tapt, isom_trak_t );
 }
 
@@ -441,7 +432,6 @@ void isom_remove_edts( isom_edts_t *edts )
 {
     if( !edts )
         return;
-    isom_remove_elst( edts->elst );
     isom_remove_box( edts, isom_trak_t );
 }
 
@@ -516,8 +506,6 @@ void isom_remove_gmhd( isom_gmhd_t *gmhd )
 {
     if( !gmhd )
         return;
-    isom_remove_gmin( gmhd->gmin );
-    isom_remove_text( gmhd->text );
     isom_remove_box( gmhd, isom_minf_t );
 }
 
@@ -684,10 +672,6 @@ void isom_remove_wave( isom_wave_t *wave )
 {
     if( !wave )
         return;
-    isom_remove_frma( wave->frma );
-    isom_remove_enda( wave->enda );
-    isom_remove_mp4a( wave->mp4a );
-    isom_remove_terminator( wave->terminator );
     isom_remove_all_extension_boxes( &wave->extensions );
     lsmash_free( wave );
 }
@@ -814,16 +798,6 @@ void isom_remove_stbl( isom_stbl_t *stbl )
 {
     if( !stbl )
         return;
-    isom_remove_stsd( stbl->stsd );
-    isom_remove_stts( stbl->stts );
-    isom_remove_ctts( stbl->ctts );
-    isom_remove_cslg( stbl->cslg );
-    isom_remove_stsc( stbl->stsc );
-    isom_remove_stsz( stbl->stsz );
-    isom_remove_stss( stbl->stss );
-    isom_remove_stps( stbl->stps );
-    isom_remove_sdtp( stbl->sdtp );
-    isom_remove_stco( stbl->stco );
     lsmash_remove_list( stbl->sgpd_list, isom_remove_sgpd );
     lsmash_remove_list( stbl->sbgp_list, isom_remove_sbgp );
     isom_remove_box( stbl, isom_minf_t );
@@ -856,7 +830,6 @@ void isom_remove_dinf( isom_dinf_t *dinf )
 {
     if( !dinf )
         return;
-    isom_remove_dref( dinf->dref );
     isom_remove_box( dinf, isom_minf_t );
 }
 
@@ -864,14 +837,6 @@ void isom_remove_minf( isom_minf_t *minf )
 {
     if( !minf )
         return;
-    isom_remove_vmhd( minf->vmhd );
-    isom_remove_smhd( minf->smhd );
-    isom_remove_hmhd( minf->hmhd );
-    isom_remove_nmhd( minf->nmhd );
-    isom_remove_gmhd( minf->gmhd );
-    isom_remove_hdlr( minf->hdlr );
-    isom_remove_dinf( minf->dinf );
-    isom_remove_stbl( minf->stbl );
     isom_remove_box( minf, isom_mdia_t );
 }
 
@@ -879,9 +844,6 @@ void isom_remove_mdia( isom_mdia_t *mdia )
 {
     if( !mdia )
         return;
-    isom_remove_mdhd( mdia->mdhd );
-    isom_remove_minf( mdia->minf );
-    isom_remove_hdlr( mdia->hdlr );
     isom_remove_box( mdia, isom_trak_t );
 }
 
@@ -959,9 +921,6 @@ void isom_remove_metaitem( isom_metaitem_t *metaitem )
 {
     if( !metaitem )
         return;
-    isom_remove_mean( metaitem->mean );
-    isom_remove_name( metaitem->name );
-    isom_remove_data( metaitem->data );
     isom_remove_all_extension_boxes( &metaitem->extensions );
     lsmash_free( metaitem );
 }
@@ -978,10 +937,6 @@ void isom_remove_meta( isom_meta_t *meta )
 {
     if( !meta )
         return;
-    isom_remove_hdlr( meta->hdlr );
-    isom_remove_dinf( meta->dinf );
-    isom_remove_keys( meta->keys );
-    isom_remove_ilst( meta->ilst );
     if( meta->parent )
     {
         if( lsmash_check_box_type_identical( meta->parent->type, LSMASH_BOX_TYPE_UNSPECIFIED ) )
@@ -1014,12 +969,6 @@ void isom_remove_udta( isom_udta_t *udta )
 {
     if( !udta )
         return;
-    isom_remove_chpl( udta->chpl );
-    isom_remove_meta( udta->meta );
-    isom_remove_WLOC( udta->WLOC );
-    isom_remove_LOOP( udta->LOOP );
-    isom_remove_SelO( udta->SelO );
-    isom_remove_AllF( udta->AllF );
     lsmash_remove_list( udta->cprt_list, isom_remove_cprt );
     if( udta->parent )
     {
@@ -1096,7 +1045,6 @@ void isom_remove_mvex( isom_mvex_t *mvex )
 {
     if( !mvex )
         return;
-    isom_remove_mehd( mvex->mehd );
     lsmash_remove_list( mvex->trex_list, isom_remove_trex );
     isom_remove_box( mvex, isom_moov_t );
 }
@@ -1114,13 +1062,7 @@ void isom_remove_moov( lsmash_root_t *root )
      || !root->moov )
         return;
     isom_moov_t *moov = root->moov;
-    isom_remove_mvhd( moov->mvhd );
-    isom_remove_iods( moov->iods );
     lsmash_remove_list( moov->trak_list, isom_remove_trak );
-    isom_remove_udta( moov->udta );
-    isom_remove_ctab( moov->ctab );
-    isom_remove_meta( moov->meta );
-    isom_remove_mvex( moov->mvex );
     isom_remove_all_extension_boxes( &moov->extensions );
     lsmash_free( moov );
     root->moov = NULL;
@@ -1160,10 +1102,7 @@ void isom_remove_traf( isom_traf_t *traf )
 {
     if( !traf )
         return;
-    isom_remove_tfhd( traf->tfhd );
-    isom_remove_tfdt( traf->tfdt );
     lsmash_remove_list( traf->trun_list, isom_remove_trun );
-    isom_remove_sdtp( traf->sdtp );
     isom_remove_all_extension_boxes( &traf->extensions );
     lsmash_free( traf );    /* Note: the list that contains this traf still has the address of the entry. */
 }
@@ -1172,7 +1111,6 @@ void isom_remove_moof( isom_moof_t *moof )
 {
     if( !moof )
         return;
-    isom_remove_mfhd( moof->mfhd );
     lsmash_remove_list( moof->traf_list, isom_remove_traf );
     isom_remove_all_extension_boxes( &moof->extensions );
     lsmash_free( moof );
@@ -1218,7 +1156,6 @@ void isom_remove_mfra( isom_mfra_t *mfra )
     if( !mfra )
         return;
     lsmash_remove_list( mfra->tfra_list, isom_remove_tfra );
-    isom_remove_mfro( mfra->mfro );
     isom_remove_box( mfra, lsmash_root_t );
 }
 
@@ -1252,13 +1189,7 @@ uint64_t isom_update_moov_size( isom_moov_t *moov )
 {
     if( !moov )
         return 0;
-    moov->size = ISOM_BASEBOX_COMMON_SIZE
-        + isom_update_mvhd_size( moov->mvhd )
-        + isom_update_iods_size( moov->iods )
-        + isom_update_udta_size( moov->udta )
-        + isom_update_ctab_size( moov->ctab )
-        + isom_update_meta_size( moov->meta )
-        + isom_update_mvex_size( moov->mvex );
+    moov->size = ISOM_BASEBOX_COMMON_SIZE;
     if( moov->trak_list )
         for( lsmash_entry_t *entry = moov->trak_list->head; entry; entry = entry->next )
         {
@@ -1306,14 +1237,7 @@ uint64_t isom_update_trak_size( isom_trak_t *trak )
 {
     if( !trak )
         return 0;
-    trak->size = ISOM_BASEBOX_COMMON_SIZE
-        + isom_update_tkhd_size( trak->tkhd )
-        + isom_update_tapt_size( trak->tapt )
-        + isom_update_edts_size( trak->edts )
-        + isom_update_tref_size( trak->tref )
-        + isom_update_mdia_size( trak->mdia )
-        + isom_update_udta_size( trak->udta )
-        + isom_update_meta_size( trak->meta );
+    trak->size = ISOM_BASEBOX_COMMON_SIZE;
     CHECK_LARGESIZE( trak );
     return trak->size;
 }
@@ -1336,10 +1260,7 @@ uint64_t isom_update_tapt_size( isom_tapt_t *tapt )
 {
     if( !tapt )
         return 0;
-    tapt->size = ISOM_BASEBOX_COMMON_SIZE
-        + isom_update_clef_size( tapt->clef )
-        + isom_update_prof_size( tapt->prof )
-        + isom_update_enof_size( tapt->enof );
+    tapt->size = ISOM_BASEBOX_COMMON_SIZE;
     CHECK_LARGESIZE( tapt );
     return tapt->size;
 }
@@ -1375,7 +1296,7 @@ uint64_t isom_update_edts_size( isom_edts_t *edts )
 {
     if( !edts )
         return 0;
-    edts->size = ISOM_BASEBOX_COMMON_SIZE + isom_update_elst_size( edts->elst );
+    edts->size = ISOM_BASEBOX_COMMON_SIZE;
     CHECK_LARGESIZE( edts );
     return edts->size;
 }
@@ -1421,10 +1342,7 @@ uint64_t isom_update_mdia_size( isom_mdia_t *mdia )
 {
     if( !mdia )
         return 0;
-    mdia->size = ISOM_BASEBOX_COMMON_SIZE
-        + isom_update_mdhd_size( mdia->mdhd )
-        + isom_update_hdlr_size( mdia->hdlr )
-        + isom_update_minf_size( mdia->minf );
+    mdia->size = ISOM_BASEBOX_COMMON_SIZE;
     CHECK_LARGESIZE( mdia );
     return mdia->size;
 }
@@ -1456,15 +1374,7 @@ uint64_t isom_update_minf_size( isom_minf_t *minf )
 {
     if( !minf )
         return 0;
-    minf->size = ISOM_BASEBOX_COMMON_SIZE
-        + isom_update_vmhd_size( minf->vmhd )
-        + isom_update_smhd_size( minf->smhd )
-        + isom_update_hmhd_size( minf->hmhd )
-        + isom_update_nmhd_size( minf->nmhd )
-        + isom_update_gmhd_size( minf->gmhd )
-        + isom_update_hdlr_size( minf->hdlr )
-        + isom_update_dinf_size( minf->dinf )
-        + isom_update_stbl_size( minf->stbl );
+    minf->size = ISOM_BASEBOX_COMMON_SIZE;
     CHECK_LARGESIZE( minf );
     return minf->size;
 }
@@ -1509,10 +1419,8 @@ uint64_t isom_update_gmhd_size( isom_gmhd_t *gmhd )
 {
     if( !gmhd )
         return 0;
-    gmhd->size = ISOM_BASEBOX_COMMON_SIZE
-        + isom_update_gmin_size( gmhd->gmin )
-        + isom_update_text_size( gmhd->text );
-    CHECK_LARGESIZE( gmhd);
+    gmhd->size = ISOM_BASEBOX_COMMON_SIZE;
+    CHECK_LARGESIZE( gmhd );
     return gmhd->size;
 }
 
@@ -1538,7 +1446,7 @@ uint64_t isom_update_dinf_size( isom_dinf_t *dinf )
 {
     if( !dinf )
         return 0;
-    dinf->size = ISOM_BASEBOX_COMMON_SIZE + isom_update_dref_size( dinf->dref );
+    dinf->size = ISOM_BASEBOX_COMMON_SIZE;
     CHECK_LARGESIZE( dinf );
     return dinf->size;
 }
@@ -1572,17 +1480,7 @@ uint64_t isom_update_stbl_size( isom_stbl_t *stbl )
 {
     if( !stbl )
         return 0;
-    stbl->size = ISOM_BASEBOX_COMMON_SIZE
-        + isom_update_stsd_size( stbl->stsd )
-        + isom_update_stts_size( stbl->stts )
-        + isom_update_ctts_size( stbl->ctts )
-        + isom_update_cslg_size( stbl->cslg )
-        + isom_update_stsz_size( stbl->stsz )
-        + isom_update_stss_size( stbl->stss )
-        + isom_update_stps_size( stbl->stps )
-        + isom_update_sdtp_size( stbl->sdtp )
-        + isom_update_stsc_size( stbl->stsc )
-        + isom_update_stco_size( stbl->stco );
+    stbl->size = ISOM_BASEBOX_COMMON_SIZE;
     if( stbl->sgpd_list )
         for( lsmash_entry_t *entry = stbl->sgpd_list->head; entry; entry = entry->next )
             stbl->size += isom_update_sgpd_size( (isom_sgpd_t *)entry->data );
@@ -1716,7 +1614,7 @@ static uint64_t isom_update_mp4s_entry_size( isom_sample_entry_t *description )
     if( !description || !lsmash_check_box_type_identical( description->type, ISOM_CODEC_TYPE_MP4S_SYSTEM ) )
         return 0;
     isom_mp4s_entry_t *mp4s = (isom_mp4s_entry_t *)description;
-    mp4s->size = ISOM_BASEBOX_COMMON_SIZE + 8 + isom_update_esds_size( mp4s->esds );
+    mp4s->size = ISOM_BASEBOX_COMMON_SIZE + 8;
     CHECK_LARGESIZE( mp4s );
     return mp4s->size;
 }
@@ -1762,11 +1660,7 @@ uint64_t isom_update_wave_size( isom_wave_t *wave )
 {
     if( !wave )
         return 0;
-    wave->size = ISOM_BASEBOX_COMMON_SIZE
-        + isom_update_frma_size( wave->frma )
-        + isom_update_enda_size( wave->enda )
-        + isom_update_mp4a_size( wave->mp4a )
-        + isom_update_terminator_size( wave->terminator );
+    wave->size = ISOM_BASEBOX_COMMON_SIZE;
     CHECK_LARGESIZE( wave );
     return wave->size;
 }
@@ -1823,7 +1717,7 @@ uint64_t isom_update_tx3g_entry_size( isom_sample_entry_t *description )
     if( !description )
         return 0;
     isom_tx3g_entry_t *tx3g = (isom_tx3g_entry_t *)description;
-    tx3g->size = ISOM_BASEBOX_COMMON_SIZE + 38 + isom_update_ftab_size( tx3g->ftab );
+    tx3g->size = ISOM_BASEBOX_COMMON_SIZE + 38;
     CHECK_LARGESIZE( tx3g );
     return tx3g->size;
 }
@@ -2127,10 +2021,7 @@ uint64_t isom_update_metaitem_size( isom_metaitem_t *metaitem )
 {
     if( !metaitem )
         return 0;
-    metaitem->size = ISOM_BASEBOX_COMMON_SIZE
-        + isom_update_mean_size( metaitem->mean )
-        + isom_update_name_size( metaitem->name )
-        + isom_update_data_size( metaitem->data );
+    metaitem->size = ISOM_BASEBOX_COMMON_SIZE;
     CHECK_LARGESIZE( metaitem );
     return metaitem->size;
 }
@@ -2166,10 +2057,7 @@ uint64_t isom_update_meta_size( isom_meta_t *meta )
 {
     if( !meta )
         return 0;
-    meta->size = ISOM_FULLBOX_COMMON_SIZE
-        + isom_update_hdlr_size( meta->hdlr )
-        + isom_update_dinf_size( meta->dinf )
-        + isom_update_ilst_size( meta->ilst );
+    meta->size = ISOM_FULLBOX_COMMON_SIZE;
     CHECK_LARGESIZE( meta );
     return meta->size;
 }
@@ -2187,10 +2075,7 @@ uint64_t isom_update_udta_size( isom_udta_t *udta )
 {
     if( !udta || !udta->parent )
         return 0;
-    int parent_is_moov = lsmash_check_box_type_identical( udta->parent->type, ISOM_BOX_TYPE_MOOV );
-    udta->size = ISOM_BASEBOX_COMMON_SIZE
-        + (parent_is_moov ? isom_update_chpl_size( udta->chpl ) : 0)
-        + isom_update_meta_size( udta->meta );
+    udta->size = ISOM_BASEBOX_COMMON_SIZE;
     if( udta->cprt_list )
         for( lsmash_entry_t *entry = udta->cprt_list->head; entry; entry = entry->next )
             udta->size += isom_update_cprt_size( (isom_cprt_t *)entry->data );
@@ -2245,8 +2130,8 @@ uint64_t isom_update_mvex_size( isom_mvex_t *mvex )
             isom_trex_t *trex = (isom_trex_t *)entry->data;
             mvex->size += isom_update_trex_size( trex );
         }
-    if( mvex->root->bs->stream != stdout )
-        mvex->size += mvex->mehd ? isom_update_mehd_size( mvex->mehd ) : 20;    /* 20 bytes is of placeholder. */
+    if( mvex->root->bs->stream != stdout && !mvex->mehd )
+        mvex->size += 20;    /* 20 bytes is of placeholder. */
     CHECK_LARGESIZE( mvex );
     return mvex->size;
 }
@@ -2275,7 +2160,7 @@ uint64_t isom_update_moof_size( isom_moof_t *moof )
 {
     if( !moof )
         return 0;
-    moof->size = ISOM_BASEBOX_COMMON_SIZE + isom_update_mfhd_size( moof->mfhd );
+    moof->size = ISOM_BASEBOX_COMMON_SIZE;
     if( moof->traf_list )
         for( lsmash_entry_t *entry = moof->traf_list->head; entry; entry = entry->next )
         {
@@ -2299,10 +2184,7 @@ uint64_t isom_update_traf_size( isom_traf_t *traf )
 {
     if( !traf )
         return 0;
-    traf->size = ISOM_BASEBOX_COMMON_SIZE
-               + isom_update_tfhd_size( traf->tfhd )
-               + isom_update_tfdt_size( traf->tfdt )
-               + isom_update_sdtp_size( traf->sdtp );
+    traf->size = ISOM_BASEBOX_COMMON_SIZE;
     if( traf->trun_list )
         for( lsmash_entry_t *entry = traf->trun_list->head; entry; entry = entry->next )
         {
@@ -2367,10 +2249,7 @@ uint64_t isom_update_mfra_size( isom_mfra_t *mfra )
         }
     CHECK_LARGESIZE( mfra );
     if( mfra->mfro )
-    {
-        mfra->size += isom_update_mfro_size( mfra->mfro );
         mfra->mfro->length = mfra->size;
-    }
     return mfra->size;
 }
 
@@ -2426,50 +2305,12 @@ static uint64_t isom_update_extension_boxes( void *box )
         isom_box_t *ext = (isom_box_t *)entry->data;
         if( !ext )
             continue;
-        if( ext->manager & LSMASH_BINARY_CODED_BOX )
-        {
+        if( ext->update )
+            size += ext->update( ext );
+        else if( ext->manager & LSMASH_BINARY_CODED_BOX )
             size += ext->size;
-            continue;
-        }
-        static struct update_size_table_tag
-        {
-            lsmash_box_type_t type;
-            uint64_t (*func)( void * );
-        } update_size_table[32] = { { LSMASH_BOX_TYPE_INITIALIZER, NULL } };
-        if( !update_size_table[0].func )
-        {
-            /* Initialize the table. */
-            int i = 0;
-#define ADD_UPDATE_SIZE_TABLE_ELEMENT( type, func ) update_size_table[i++] = (struct update_size_table_tag){ type, (uint64_t (*)( void * ))func }
-            ADD_UPDATE_SIZE_TABLE_ELEMENT( ISOM_BOX_TYPE_ESDS, isom_update_esds_size );
-            ADD_UPDATE_SIZE_TABLE_ELEMENT( ISOM_BOX_TYPE_BTRT, isom_update_btrt_size );
-            ADD_UPDATE_SIZE_TABLE_ELEMENT( ISOM_BOX_TYPE_CLAP, isom_update_clap_size );
-            ADD_UPDATE_SIZE_TABLE_ELEMENT( ISOM_BOX_TYPE_PASP, isom_update_pasp_size );
-            ADD_UPDATE_SIZE_TABLE_ELEMENT( ISOM_BOX_TYPE_STSL, isom_update_stsl_size );
-            ADD_UPDATE_SIZE_TABLE_ELEMENT( ISOM_BOX_TYPE_COLR, isom_update_colr_size );
-            ADD_UPDATE_SIZE_TABLE_ELEMENT( QT_BOX_TYPE_CHAN,   isom_update_chan_size );
-            ADD_UPDATE_SIZE_TABLE_ELEMENT( QT_BOX_TYPE_COLR,   isom_update_colr_size );
-            ADD_UPDATE_SIZE_TABLE_ELEMENT( QT_BOX_TYPE_CSPC,   isom_update_cspc_size );
-            ADD_UPDATE_SIZE_TABLE_ELEMENT( QT_BOX_TYPE_ENDA,   isom_update_enda_size );
-            ADD_UPDATE_SIZE_TABLE_ELEMENT( QT_BOX_TYPE_ESDS,   isom_update_esds_size );
-            ADD_UPDATE_SIZE_TABLE_ELEMENT( QT_BOX_TYPE_FIEL,   isom_update_fiel_size );
-            ADD_UPDATE_SIZE_TABLE_ELEMENT( QT_BOX_TYPE_FRMA,   isom_update_frma_size );
-            ADD_UPDATE_SIZE_TABLE_ELEMENT( QT_BOX_TYPE_GAMA,   isom_update_gama_size );
-            ADD_UPDATE_SIZE_TABLE_ELEMENT( QT_BOX_TYPE_GLBL,   isom_update_glbl_size );
-            ADD_UPDATE_SIZE_TABLE_ELEMENT( QT_BOX_TYPE_SGBT,   isom_update_sgbt_size );
-            ADD_UPDATE_SIZE_TABLE_ELEMENT( QT_BOX_TYPE_WAVE,   isom_update_wave_size );
-            ADD_UPDATE_SIZE_TABLE_ELEMENT( QT_BOX_TYPE_TERMINATOR, isom_update_terminator_size );
-            ADD_UPDATE_SIZE_TABLE_ELEMENT( LSMASH_BOX_TYPE_UNSPECIFIED, NULL );
-#undef ADD_UPDATE_SIZE_TABLE_ELEMENT
-        }
-        uint64_t (*update_size_func)( void * ) = (uint64_t (*)( void * ))isom_update_unknown_box_size;
-        for( int i = 0; update_size_table[i].func; i++ )
-            if( lsmash_check_box_type_identical( ext->type, update_size_table[i].type ) )
-            {
-                update_size_func = update_size_table[i].func;
-                break;
-            }
-        size += update_size_func( (void *)ext );
+        else if( ext->manager & LSMASH_UNKNOWN_BOX )
+            size += isom_update_unknown_box_size( (isom_unknown_box_t *)ext );
     }
     return size;
 }

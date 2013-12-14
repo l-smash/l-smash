@@ -386,12 +386,6 @@ static int isom_read_ctab( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     isom_create_box( ctab, parent, box->type );
     if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV ) )
         ((isom_moov_t *)parent)->ctab = ctab;
-    else
-        if( lsmash_add_entry( &parent->extensions, ctab ) )
-        {
-            lsmash_free( ctab );
-            return -1;
-        }
     lsmash_bs_t *bs = root->bs;
     if( isom_read_qt_color_table( bs, &ctab->color_table ) )
         return -1;
@@ -1213,22 +1207,12 @@ static int isom_read_esds( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     isom_box_common_copy( esds, box );
     box->destruct = (isom_extension_destructor_t)isom_remove_esds;
     isom_basebox_common_copy( (isom_box_t *)esds, box );
-    if( lsmash_add_entry( &parent->extensions, esds ) )
-    {
-        isom_remove_esds( esds );
-        return -1;
-    }
     return isom_add_print_func( root, esds, level );
 }
 
 static int isom_read_btrt( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( btrt, parent, box->type );
-    if( lsmash_add_entry( &parent->extensions, btrt ) )
-    {
-        lsmash_free( btrt );
-        return -1;
-    }
     lsmash_bs_t *bs = root->bs;
     isom_read_box_rest( bs, box );
     btrt->bufferSizeDB = lsmash_bs_get_be32( bs );
@@ -1242,11 +1226,6 @@ static int isom_read_btrt( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 static int isom_read_glbl( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( glbl, parent, box->type );
-    if( lsmash_add_entry( &parent->extensions, glbl ) )
-    {
-        lsmash_free( glbl );
-        return -1;
-    }
     lsmash_bs_t *bs = root->bs;
     isom_read_box_rest( bs, box );
     uint32_t header_size = box->size - ISOM_BASEBOX_COMMON_SIZE;
@@ -1267,11 +1246,6 @@ static int isom_read_glbl( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 static int isom_read_clap( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( clap, parent, box->type );
-    if( lsmash_add_entry( &parent->extensions, clap ) )
-    {
-        lsmash_free( clap );
-        return -1;
-    }
     lsmash_bs_t *bs = root->bs;
     isom_read_box_rest( bs, box );
     clap->cleanApertureWidthN  = lsmash_bs_get_be32( bs );
@@ -1290,11 +1264,6 @@ static int isom_read_clap( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 static int isom_read_pasp( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( pasp, parent, box->type );
-    if( lsmash_add_entry( &parent->extensions, pasp ) )
-    {
-        lsmash_free( pasp );
-        return -1;
-    }
     lsmash_bs_t *bs = root->bs;
     isom_read_box_rest( bs, box );
     pasp->hSpacing = lsmash_bs_get_be32( bs );
@@ -1307,11 +1276,6 @@ static int isom_read_pasp( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 static int isom_read_colr( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( colr, parent, box->type );
-    if( lsmash_add_entry( &parent->extensions, colr ) )
-    {
-        lsmash_free( colr );
-        return -1;
-    }
     lsmash_bs_t *bs = root->bs;
     isom_read_box_rest( bs, box );
     colr->color_parameter_type = lsmash_bs_get_be32( bs );
@@ -1349,11 +1313,6 @@ static int isom_read_colr( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 static int isom_read_gama( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( gama, parent, box->type );
-    if( lsmash_add_entry( &parent->extensions, gama ) )
-    {
-        lsmash_free( gama );
-        return -1;
-    }
     lsmash_bs_t *bs = root->bs;
     isom_read_box_rest( bs, box );
     gama->level = lsmash_bs_get_be32( bs );
@@ -1365,11 +1324,6 @@ static int isom_read_gama( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 static int isom_read_fiel( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( fiel, parent, box->type );
-    if( lsmash_add_entry( &parent->extensions, fiel ) )
-    {
-        lsmash_free( fiel );
-        return -1;
-    }
     lsmash_bs_t *bs = root->bs;
     isom_read_box_rest( bs, box );
     fiel->fields = lsmash_bs_get_byte( bs );
@@ -1382,11 +1336,6 @@ static int isom_read_fiel( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 static int isom_read_cspc( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( cspc, parent, box->type );
-    if( lsmash_add_entry( &parent->extensions, cspc ) )
-    {
-        lsmash_free( cspc );
-        return -1;
-    }
     lsmash_bs_t *bs = root->bs;
     isom_read_box_rest( bs, box );
     cspc->pixel_format = lsmash_bs_get_be32( bs );
@@ -1398,11 +1347,6 @@ static int isom_read_cspc( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 static int isom_read_sgbt( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( sgbt, parent, box->type );
-    if( lsmash_add_entry( &parent->extensions, sgbt ) )
-    {
-        lsmash_free( sgbt );
-        return -1;
-    }
     lsmash_bs_t *bs = root->bs;
     isom_read_box_rest( bs, box );
     sgbt->significantBits = lsmash_bs_get_byte( bs );
@@ -1414,11 +1358,6 @@ static int isom_read_sgbt( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 static int isom_read_stsl( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( stsl, parent, box->type );
-    if( lsmash_add_entry( &parent->extensions, stsl ) )
-    {
-        lsmash_free( stsl );
-        return -1;
-    }
     lsmash_bs_t *bs = root->bs;
     isom_read_box_rest( bs, box );
     stsl->constraint_flag  = lsmash_bs_get_byte( bs );
@@ -1484,11 +1423,6 @@ static int isom_read_audio_description( lsmash_root_t *root, isom_box_t *box, is
 static int isom_read_wave( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( wave, parent, box->type );
-    if( lsmash_add_entry( &parent->extensions, wave ) )
-    {
-        lsmash_free( wave );
-        return -1;
-    }
     isom_box_common_copy( wave, box );
     if( isom_add_print_func( root, wave, level ) )
         return -1;
@@ -1539,11 +1473,6 @@ static int isom_read_terminator( lsmash_root_t *root, isom_box_t *box, isom_box_
 static int isom_read_chan( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     isom_create_box( chan, parent, box->type );
-    if( lsmash_add_entry( &parent->extensions, chan ) )
-    {
-        lsmash_free( chan );
-        return -1;
-    }
     lsmash_bs_t *bs = root->bs;
     isom_read_box_rest( bs, box );
     chan->channelLayoutTag          = lsmash_bs_get_be32( bs );

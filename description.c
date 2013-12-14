@@ -1417,36 +1417,23 @@ static int isom_append_channel_layout_extension( lsmash_codec_specific_t *specif
     /* Don't create Audio Channel Layout Box if the channel layout is unknown. */
     if( (channelLayoutTag ^ QT_CHANNEL_LAYOUT_UNKNOWN) >> 16 )
     {
-        isom_chan_t *chan = lsmash_malloc_zero( sizeof(isom_chan_t) );
-        if( !chan )
-            return -1;
-        isom_box_t *parent_box = parent;
-        isom_init_box_common( chan, parent_box, QT_BOX_TYPE_CHAN, isom_remove_chan, isom_update_chan_size );
+        isom_create_box( chan, (isom_box_t *)parent, QT_BOX_TYPE_CHAN );
         chan->channelLayoutTag          = channelLayoutTag;
         chan->channelBitmap             = channelBitmap;
         chan->numberChannelDescriptions = 0;
         chan->channelDescriptions       = NULL;
-        if( lsmash_add_entry( &parent_box->extensions, chan ) )
-        {
-            lsmash_free( chan );
-            return -1;
-        }
     }
     return 0;
 }
 
 static int isom_set_qtff_mp4a_description( isom_audio_entry_t *audio, lsmash_audio_summary_t *summary )
 {
-    isom_wave_t *wave = lsmash_malloc_zero( sizeof(isom_wave_t) );
-    if( !wave )
-        return -1;
-    isom_init_box_common( wave, audio, QT_BOX_TYPE_WAVE, isom_remove_wave, isom_update_wave_size );
+    isom_create_box( wave, audio, QT_BOX_TYPE_WAVE );
     if( isom_add_frma( wave )
      || isom_add_mp4a( wave )
-     || isom_add_terminator( wave )
-     || lsmash_add_entry( &audio->extensions, wave ) )
+     || isom_add_terminator( wave ) )
     {
-        isom_remove_wave( wave );
+        lsmash_remove_entry_direct( &audio->extensions, audio->extensions.tail, isom_remove_wave );
         return -1;
     }
     wave->frma->data_format = audio->type.fourcc;
@@ -1619,16 +1606,12 @@ static int isom_set_qtff_lpcm_description( isom_audio_entry_t *audio, lsmash_aud
          || lsmash_check_codec_type_identical( sample_type, QT_CODEC_TYPE_IN24_AUDIO )
          || lsmash_check_codec_type_identical( sample_type, QT_CODEC_TYPE_IN32_AUDIO ) )
         {
-            isom_wave_t *wave = lsmash_malloc_zero( sizeof(isom_wave_t) );
-            if( !wave )
-                return -1;
-            isom_init_box_common( wave, audio, QT_BOX_TYPE_WAVE, isom_remove_wave, isom_update_wave_size );
+            isom_create_box( wave, audio, QT_BOX_TYPE_WAVE );
             if( isom_add_frma( wave )
              || isom_add_enda( wave )
-             || isom_add_terminator( wave )
-             || lsmash_add_entry( &audio->extensions, wave ) )
+             || isom_add_terminator( wave ) )
             {
-                isom_remove_wave( wave );
+                lsmash_remove_entry_direct( &audio->extensions, audio->extensions.tail, isom_remove_wave );
                 return -1;
             }
             wave->frma->data_format  = sample_type.fourcc;
@@ -1736,15 +1719,11 @@ static int isom_set_qtff_template_audio_description( isom_audio_entry_t *audio, 
     }
     /* A 'wave' extension itself shall be absent in the opaque CODEC specific info list.
      * So, create a 'wave' extension here and append it as an extension to the audio sample description. */
-    isom_wave_t *wave = lsmash_malloc_zero( sizeof(isom_wave_t) );
-    if( !wave )
-        return -1;
-    isom_init_box_common( wave, audio, QT_BOX_TYPE_WAVE, isom_remove_wave, isom_update_wave_size );
+    isom_create_box( wave, audio, QT_BOX_TYPE_WAVE );
     if( isom_add_frma( wave )
-     || isom_add_terminator( wave )
-     || lsmash_add_entry( &audio->extensions, wave ) )
+     || isom_add_terminator( wave ) )
     {
-        isom_remove_wave( wave );
+        lsmash_remove_entry_direct( &audio->extensions, audio->extensions.tail, isom_remove_wave );
         return -1;
     }
     wave->frma->data_format = audio->type.fourcc;
