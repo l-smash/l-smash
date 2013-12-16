@@ -314,11 +314,13 @@ fail:
     if( chapter )
         fclose( chapter );
     /* Remove chapter track reference. */
-    lsmash_remove_entry_direct( trak->tref->ref_list, trak->tref->ref_list->tail, isom_remove_track_reference_type );
+    if( trak->tref->ref_list && trak->tref->ref_list->tail )
+        isom_remove_box_by_itself( trak->tref->ref_list->tail->data );
     if( trak->tref->ref_list->entry_count == 0 )
-        isom_remove_tref( trak->tref );
+        isom_remove_box_by_itself( trak->tref );
     /* Remove the reference chapter track attached at tail of the list. */
-    lsmash_remove_entry_direct( root->moov->trak_list, root->moov->trak_list->tail, isom_remove_trak );
+    if( root->moov->trak_list && root->moov->trak_list->tail )
+        isom_remove_box_by_itself( root->moov->trak_list->tail->data );
 error_message:
     lsmash_log( NULL, LSMASH_LOG_ERROR, "failed to set reference chapter.\n" );
     return -1;

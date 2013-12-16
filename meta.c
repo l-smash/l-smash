@@ -66,7 +66,7 @@ static isom_data_t *isom_add_metadata( lsmash_root_t *root,
         goto fail;
     return metaitem->data;
 fail:
-    lsmash_remove_entry_direct( ilst->item_list, ilst->item_list->tail, isom_remove_metaitem );
+    isom_remove_box_by_itself( metaitem );
     return NULL;
 }
 
@@ -86,7 +86,7 @@ static int isom_set_itunes_metadata_string( lsmash_root_t *root,
     if( !data->value )
     {
         isom_ilst_t *ilst = root->moov->udta->meta->ilst;
-        lsmash_remove_entry_direct( ilst->item_list, ilst->item_list->tail, isom_remove_metaitem );
+        isom_remove_box_by_itself( ilst->item_list->tail->data );
         return -1;
     }
     return 0;
@@ -140,7 +140,7 @@ static int isom_set_itunes_metadata_integer( lsmash_root_t *root,
     if( !data->value )
     {
         isom_ilst_t *ilst = root->moov->udta->meta->ilst;
-        lsmash_remove_entry_direct( ilst->item_list, ilst->item_list->tail, isom_remove_metaitem );
+        isom_remove_box_by_itself( ilst->item_list->tail->data );
         return -1;
     }
     return 0;
@@ -160,7 +160,7 @@ static int isom_set_itunes_metadata_boolean( lsmash_root_t *root,
     if( !data->value )
     {
         isom_ilst_t *ilst = root->moov->udta->meta->ilst;
-        lsmash_remove_entry_direct( ilst->item_list, ilst->item_list->tail, isom_remove_metaitem );
+        isom_remove_box_by_itself( ilst->item_list->tail->data );
         return -1;
     }
     return 0;
@@ -221,7 +221,7 @@ static int isom_set_itunes_metadata_binary( lsmash_root_t *root,
     if( !data->value )
     {
         isom_ilst_t *ilst = root->moov->udta->meta->ilst;
-        lsmash_remove_entry_direct( ilst->item_list, ilst->item_list->tail, isom_remove_metaitem );
+        isom_remove_box_by_itself( ilst->item_list->tail->data );
         return -1;
     }
     return 0;

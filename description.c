@@ -954,7 +954,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
     isom_visual_entry_t *visual = lsmash_malloc_zero( sizeof(isom_visual_entry_t) );
     if( !visual )
         return -1;
-    isom_init_box_common( visual, stsd, sample_type, isom_remove_sample_description, isom_update_visual_entry_size );
+    isom_init_box_common( visual, stsd, sample_type, isom_remove_visual_description, isom_update_visual_entry_size );
     visual->manager             |= LSMASH_VIDEO_DESCRIPTION;
     visual->data_reference_index = 1;
     visual->version              = 0;
@@ -1219,7 +1219,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
         && !((isom_stsd_t *)visual->parent)->list->entry_count; /* Multiple sample description might conflict with this, so in that case, disable this feature.
                                                                  * Note: this sample description isn't added yet here. */
     if( !set_aperture_modes )
-        isom_remove_tapt( trak->tapt );
+        isom_remove_box_by_itself( trak->tapt );
     int uncompressed_ycbcr = qt_compatible && isom_is_uncompressed_ycbcr( visual->type );
     /* Set up Clean Aperture. */
     if( set_aperture_modes || uncompressed_ycbcr
@@ -1881,7 +1881,7 @@ int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_
     isom_audio_entry_t *audio = lsmash_malloc_zero( sizeof(isom_audio_entry_t) );
     if( !audio )
         return -1;
-    isom_init_box_common( audio, stsd, sample_type, isom_remove_sample_description, isom_update_audio_entry_size );
+    isom_init_box_common( audio, stsd, sample_type, isom_remove_audio_description, isom_update_audio_entry_size );
     audio->manager             |= LSMASH_AUDIO_DESCRIPTION;
     audio->data_reference_index = 1;
     lsmash_root_t *root = stsd->root;

@@ -41,9 +41,6 @@
 #include "timeline.h"
 #endif
 
-static void isom_remove_tx3g_description( isom_sample_entry_t *description );
-static void isom_remove_qt_text_description( isom_sample_entry_t *description );
-
 /*---- ----*/
 char *isom_4cc2str( uint32_t fourcc )
 {
@@ -582,8 +579,7 @@ static int isom_convert_stco_to_co64( isom_stbl_t* stbl )
         }
     }
 fail:
-    lsmash_remove_list( stco->list, NULL );
-    lsmash_free( stco );
+    isom_remove_box_by_itself( stco );
     return ret;
 }
 
@@ -723,61 +719,6 @@ int isom_add_chpl_entry( isom_chpl_t *chpl, isom_chapter_entry_t *chap_data )
         return -1;
     }
     return 0;
-}
-
-static void isom_remove_visual_description( isom_sample_entry_t *description )
-{
-    isom_visual_entry_t *visual = (isom_visual_entry_t *)description;
-    isom_remove_all_extension_boxes( &visual->extensions );
-    if( visual->color_table.array )
-        lsmash_free( visual->color_table.array );
-    lsmash_free( visual );
-}
-
-static void isom_remove_audio_description( isom_sample_entry_t *description )
-{
-    isom_audio_entry_t *audio = (isom_audio_entry_t *)description;
-    isom_remove_all_extension_boxes( &audio->extensions );
-    lsmash_free( audio );
-}
-
-static void isom_remove_hint_description( isom_sample_entry_t *description )
-{
-    isom_hint_entry_t *hint = (isom_hint_entry_t *)description;
-    isom_remove_all_extension_boxes( &hint->extensions );
-    if( hint->data )
-        lsmash_free( hint->data );
-    lsmash_free( hint );
-}
-
-static void isom_remove_metadata_description( isom_sample_entry_t *description )
-{
-    isom_metadata_entry_t *metadata = (isom_metadata_entry_t *)description;
-    isom_remove_all_extension_boxes( &metadata->extensions );
-    lsmash_free( metadata );
-}
-
-static void isom_remove_tx3g_description( isom_sample_entry_t *description )
-{
-    isom_tx3g_entry_t *tx3g = (isom_tx3g_entry_t *)description;
-    isom_remove_all_extension_boxes( &tx3g->extensions );
-    lsmash_free( tx3g );
-}
-
-static void isom_remove_qt_text_description( isom_sample_entry_t *description )
-{
-    isom_text_entry_t *text = (isom_text_entry_t *)description;
-    isom_remove_all_extension_boxes( &text->extensions );
-    if( text->font_name )
-        free( text->font_name );
-    lsmash_free( text );
-}
-
-static void isom_remove_mp4s_description( isom_sample_entry_t *description )
-{
-    isom_mp4s_entry_t *mp4s = (isom_mp4s_entry_t *)description;
-    isom_remove_all_extension_boxes( &mp4s->extensions );
-    lsmash_free( mp4s );
 }
 
 void isom_remove_sample_description( isom_sample_entry_t *sample )
@@ -1869,7 +1810,7 @@ void lsmash_delete_track( lsmash_root_t *root, uint32_t track_ID )
             return;
         if( trak->tkhd->track_ID == track_ID )
         {
-            lsmash_remove_entry_direct( root->moov->trak_list, entry, isom_remove_trak );
+            isom_remove_box_by_itself( trak );
             return;
         }
     }
@@ -1971,7 +1912,7 @@ int lsmash_set_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
             return -1;
     }
     else
-        isom_remove_tapt( trak->tapt );
+        isom_remove_box_by_itself( trak->tapt );
     /* Set up Track Header. */
     uint32_t media_type = trak->mdia->hdlr->componentSubtype;
     isom_tkhd_t *tkhd = trak->tkhd;
@@ -2513,7 +2454,9 @@ int lsmash_create_fragment_movie( lsmash_root_t *root )
     if( root->moof_list->entry_count == 1 )
         return 0;
     /* Remove the previous movie fragment. */
-    return lsmash_remove_entry( root->moof_list, 1, isom_remove_moof );
+    if( root->moof_list->head )
+        isom_remove_box_by_itself( root->moof_list->head->data );
+    return 0;
 }
 
 static int isom_set_brands( lsmash_root_t *root, lsmash_brand_type major_brand, uint32_t minor_version, lsmash_brand_type *brands, uint32_t brand_count )
@@ -3551,19 +3494,7 @@ void lsmash_discard_boxes( lsmash_root_t *root )
 {
     if( !root )
         return;
-    isom_remove_ftyp( root->ftyp );
-    isom_remove_moov( root );
-    lsmash_remove_list( root->moof_list, isom_remove_moof );
-    isom_remove_mdat( root->mdat );
-    isom_remove_free( root->free );
-    isom_remove_meta( root->meta );
-    isom_remove_mfra( root->mfra );
-    root->ftyp = NULL;
-    root->moov = NULL;
-    root->moof_list = NULL;
-    root->mdat = NULL;
-    root->free = NULL;
-    root->mfra = NULL;
+    isom_remove_all_extension_boxes( &root->extensions );
 }
 
 void lsmash_destroy_root( lsmash_root_t *root )
@@ -5096,8 +5027,7 @@ int lsmash_delete_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID 
     isom_trak_t *trak = isom_get_trak( root, track_ID );
     if( !trak )
         return -1;
-    isom_remove_edts( trak->edts );
-    trak->edts = NULL;
+    isom_remove_box_by_itself( trak->edts );
     return isom_update_tkhd_duration( trak );
 }
 
@@ -5107,8 +5037,7 @@ void lsmash_delete_tyrant_chapter( lsmash_root_t *root )
      || !root->moov
      || !root->moov->udta )
         return;
-    isom_remove_chpl( root->moov->udta->chpl );
-    root->moov->udta->chpl = NULL;
+    isom_remove_box_by_itself( root->moov->udta->chpl );
 }
 
 int lsmash_set_copyright( lsmash_root_t *root, uint32_t track_ID, uint16_t ISO_language, char *notice )
