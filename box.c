@@ -71,7 +71,7 @@ int lsmash_check_codec_type_identical( lsmash_codec_type_t a, lsmash_codec_type_
     return CHECK_BOX_TYPE_IDENTICAL( a, b );
 }
 
-int lsmash_check_box_type_specified( lsmash_box_type_t *box_type )
+int lsmash_check_box_type_specified( const lsmash_box_type_t *box_type )
 {
     assert( box_type );
     if( !box_type )

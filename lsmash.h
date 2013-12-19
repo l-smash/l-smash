@@ -34,7 +34,7 @@
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  0
-#define LSMASH_VERSION_MINOR  4
+#define LSMASH_VERSION_MINOR  5
 #define LSMASH_VERSION_MICRO  0
 
 /****************************************************************************
@@ -245,7 +245,7 @@ int lsmash_check_box_type_identical
  * Return 0 otherwise, i.e. LSMASH_BOX_TYPE_UNSPECIFIED. */
 int lsmash_check_box_type_specified
 (
-    lsmash_box_type_t *box_type
+    const lsmash_box_type_t *box_type
 );
 
 /****************************************************************************
