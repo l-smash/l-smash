@@ -350,6 +350,8 @@ static void isom_remove_predefined_box( void *opaque_box, size_t offset_of_box )
 #define isom_remove_box( box_name, parent_type ) \
         isom_remove_predefined_box( box_name, offsetof( parent_type, box_name ) )
 
+/* We always free boxes through the extension list of the parent box.
+ * Therefore, don't free boxes through any list other than the extension list. */
 static void isom_remove_box_in_predefined_list( void *opaque_box, size_t offset_of_list )
 {
     assert( opaque_box );
@@ -358,16 +360,18 @@ static void isom_remove_box_in_predefined_list( void *opaque_box, size_t offset_
     {
         lsmash_entry_list_t *list = *(lsmash_entry_list_t **)(((int8_t *)box->parent) + offset_of_list);
         if( list )
-            /* We always free boxes through the extension list of the parent box.
-             * Therefore, don't free boxes through any list other than the extension list. */
             for( lsmash_entry_t *entry = list->head; entry; entry = entry->next )
                 if( box == entry->data )
                 {
+                    /* We don't free this box here.
+                     * Because of freeing an entry of the list here, don't pass the list to free this box.
+                     * Or double free. */
                     entry->data = NULL;
                     lsmash_remove_entry_direct( list, entry, NULL );
                     break;
                 }
     }
+    /* Free this box actually here. */
     isom_remove_all_extension_boxes( &box->extensions );
     lsmash_free( box );
 }
@@ -377,7 +381,7 @@ static void isom_remove_box_in_predefined_list( void *opaque_box, size_t offset_
 
 /* Remove a box by the pointer containing its address.
  * In addition, remove from the extension list of the parent box if possible.
- * Don't call this function within lsmash_remove_entries() by passing any extension list because of double free.
+ * Don't call this function within a function freeing one or more entries of any extension list because of double free.
  * Basically, don't use this function as a callback function. */
 void isom_remove_box_by_itself( void *opaque_box )
 {
@@ -2376,7 +2380,7 @@ isom_tref_type_t *isom_add_track_reference_type( isom_tref_t *tref, isom_track_r
     }
     if( lsmash_add_entry( tref->ref_list, ref ) )
     {
-        lsmash_remove_entry_direct( &tref->extensions, tref->extensions.tail, isom_remove_track_reference_type );
+        lsmash_remove_entry_tail( &tref->extensions, isom_remove_track_reference_type );
         return NULL;
     }
     return ref;
@@ -2576,7 +2580,7 @@ int isom_add_iods( isom_moov_t *moov )
     moov->iods = iods;
     return 0;
 fail:
-    lsmash_remove_entry_direct( &moov->extensions, moov->extensions.tail, isom_remove_iods );
+    lsmash_remove_entry_tail( &moov->extensions, isom_remove_iods );
     return -1;
 }
 
@@ -2611,7 +2615,7 @@ isom_trak_t *isom_add_trak( lsmash_root_t *root )
 fail:
     lsmash_free( fragment );
     lsmash_free( cache );
-    lsmash_remove_entry_direct( &moov->extensions, moov->extensions.tail, isom_remove_trak );
+    lsmash_remove_entry_tail( &moov->extensions, isom_remove_trak );
     return NULL;
 }
 
@@ -2786,7 +2790,7 @@ int isom_add_hdlr( isom_mdia_t *mdia, isom_meta_t *meta, isom_minf_t *minf, uint
     uint8_t *name = lsmash_malloc( name_length );
     if( !name )
     {
-        lsmash_remove_entry_direct( &parent->extensions, parent->extensions.tail, isom_remove_hdlr );
+        lsmash_remove_entry_tail( &parent->extensions, isom_remove_hdlr );
         return -1;
     }
     if( root->qt_compatible )
@@ -2927,7 +2931,7 @@ static int isom_add_dref_entry( isom_dref_t *dref, uint32_t flags, char *name, c
     }
     return 0;
 fail:
-    lsmash_remove_entry_direct( &dref->extensions, dref->extensions.tail, isom_remove_dref_entry );
+    lsmash_remove_entry_tail( &dref->extensions, isom_remove_dref_entry );
     return -1;
 }
 
@@ -3061,9 +3065,7 @@ isom_sgpd_t *isom_add_sgpd( isom_stbl_t *stbl, uint32_t grouping_type )
     isom_create_list_box_null( sgpd, stbl, ISOM_BOX_TYPE_SGPD );
     if( lsmash_add_entry( stbl->sgpd_list, sgpd ) )
     {
-        lsmash_remove_entry_direct( &stbl->extensions,
-                                     stbl->extensions.tail,
-                                    isom_remove_sgpd );
+        lsmash_remove_entry_tail( &stbl->extensions, isom_remove_sgpd );
         return NULL;
     }
     sgpd->grouping_type = grouping_type;
@@ -3096,9 +3098,7 @@ isom_sbgp_t *isom_add_sbgp( isom_stbl_t *stbl, uint32_t grouping_type )
     isom_create_list_box_null( sbgp, stbl, ISOM_BOX_TYPE_SBGP );
     if( lsmash_add_entry( stbl->sbgp_list, sbgp ) )
     {
-        lsmash_remove_entry_direct( &stbl->extensions,
-                                     stbl->extensions.tail,
-                                    isom_remove_sbgp );
+        lsmash_remove_entry_tail( &stbl->extensions, isom_remove_sbgp );
         return NULL;
     }
     sbgp->grouping_type = grouping_type;
@@ -3126,9 +3126,7 @@ int isom_add_metaitem( isom_ilst_t *ilst, lsmash_itunes_metadata_item item )
     isom_create_box( metaitem, ilst, type );
     if( lsmash_add_entry( ilst->item_list, metaitem ) )
     {
-        lsmash_remove_entry_direct( &ilst->extensions,
-                                     ilst->extensions.tail,
-                                    isom_remove_metaitem );
+        lsmash_remove_entry_tail( &ilst->extensions, isom_remove_metaitem );
         return -1;
     }
     return 0;
@@ -3172,9 +3170,7 @@ int isom_add_ilst( isom_moov_t *moov )
     ilst->item_list = lsmash_create_entry_list();
     if( !ilst->item_list )
     {
-        lsmash_remove_entry_direct( &moov->udta->meta->extensions,
-                                     moov->udta->meta->extensions.tail,
-                                     isom_remove_ilst );
+        lsmash_remove_entry_tail( &moov->udta->meta->extensions, isom_remove_ilst );
         return -1;
     }
     moov->udta->meta->ilst = ilst;
@@ -3216,7 +3212,7 @@ int isom_add_meta( isom_box_t *parent )
     }
     return 0;
 fail:
-    lsmash_remove_entry_direct( &parent->extensions, parent->extensions.tail, isom_remove_meta );
+    lsmash_remove_entry_tail( &parent->extensions, isom_remove_meta );
     return -1;
 }
 
@@ -3233,9 +3229,7 @@ int isom_add_cprt( isom_udta_t *udta )
     isom_create_box( cprt, udta, ISOM_BOX_TYPE_CPRT );
     if( lsmash_add_entry( udta->cprt_list, cprt ) )
     {
-        lsmash_remove_entry_direct( &udta->extensions,
-                                     udta->extensions.tail,
-                                    isom_remove_cprt );
+        lsmash_remove_entry_tail( &udta->extensions, isom_remove_cprt );
         return -1;
     }
     return 0;
@@ -3296,9 +3290,7 @@ isom_trex_t *isom_add_trex( isom_mvex_t *mvex )
     isom_create_box_null( trex, mvex, ISOM_BOX_TYPE_TREX );
     if( lsmash_add_entry( mvex->trex_list, trex ) )
     {
-        lsmash_remove_entry_direct( &mvex->extensions,
-                                     mvex->extensions.tail,
-                                    isom_remove_trex );
+        lsmash_remove_entry_tail( &mvex->extensions, isom_remove_trex );
         return NULL;
     }
     return trex;
@@ -3317,9 +3309,7 @@ isom_moof_t *isom_add_moof( lsmash_root_t *root )
     isom_create_box_null( moof, root, ISOM_BOX_TYPE_MOOF );
     if( lsmash_add_entry( root->moof_list, moof ) )
     {
-        lsmash_remove_entry_direct( &root->extensions,
-                                     root->extensions.tail,
-                                    isom_remove_moof );
+        lsmash_remove_entry_tail( &root->extensions, isom_remove_moof );
         return NULL;
     }
     return moof;
@@ -3349,17 +3339,13 @@ isom_traf_t *isom_add_traf( lsmash_root_t *root, isom_moof_t *moof )
     isom_create_box_null( traf, moof, ISOM_BOX_TYPE_TRAF );
     if( lsmash_add_entry( moof->traf_list, traf ) )
     {
-        lsmash_remove_entry_direct( &moof->extensions,
-                                     moof->extensions.tail,
-                                    isom_remove_traf );
+        lsmash_remove_entry_tail( &moof->extensions, isom_remove_traf );
         return NULL;
     }
     isom_cache_t *cache = lsmash_malloc( sizeof(isom_cache_t) );
     if( !cache )
     {
-        lsmash_remove_entry_direct( &moof->extensions,
-                                     moof->extensions.tail,
-                                    isom_remove_traf );
+        lsmash_remove_entry_tail( &moof->extensions, isom_remove_traf );
         return NULL;
     }
     memset( cache, 0, sizeof(isom_cache_t) );
@@ -3398,9 +3384,7 @@ isom_trun_t *isom_add_trun( isom_traf_t *traf )
     isom_create_box_null( trun, traf, ISOM_BOX_TYPE_TRUN );
     if( lsmash_add_entry( traf->trun_list, trun ) )
     {
-        lsmash_remove_entry_direct( &traf->extensions,
-                                     traf->extensions.tail,
-                                    isom_remove_trun );
+        lsmash_remove_entry_tail( &traf->extensions, isom_remove_trun );
         return NULL;
     }
     return trun;
@@ -3428,9 +3412,7 @@ isom_tfra_t *isom_add_tfra( isom_mfra_t *mfra )
     isom_create_box_null( tfra, mfra, ISOM_BOX_TYPE_TFRA );
     if( lsmash_add_entry( mfra->tfra_list, tfra ) )
     {
-        lsmash_remove_entry_direct( &mfra->extensions,
-                                     mfra->extensions.tail,
-                                    isom_remove_tfra );
+        lsmash_remove_entry_tail( &mfra->extensions, isom_remove_tfra );
         return NULL;
     }
     return tfra;

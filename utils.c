@@ -513,11 +513,11 @@ int lsmash_bits_import_data( lsmash_bits_t* bits, void* data, uint32_t length )
 /*---- list ----*/
 void lsmash_init_entry_list( lsmash_entry_list_t *list )
 {
-    list->head = NULL;
-    list->tail = NULL;
-    list->last_accessed_entry = NULL;
+    list->head                 = NULL;
+    list->tail                 = NULL;
+    list->last_accessed_entry  = NULL;
     list->last_accessed_number = 0;
-    list->entry_count = 0;
+    list->entry_count          = 0;
 }
 
 lsmash_entry_list_t *lsmash_create_entry_list( void )
@@ -550,7 +550,7 @@ int lsmash_add_entry( lsmash_entry_list_t *list, void *data )
 
 int lsmash_remove_entry_direct( lsmash_entry_list_t *list, lsmash_entry_t *entry, void *eliminator )
 {
-    if( !entry )
+    if( !list || !entry )
         return -1;
     if( !eliminator )
         eliminator = lsmash_free;
@@ -572,12 +572,12 @@ int lsmash_remove_entry_direct( lsmash_entry_list_t *list, lsmash_entry_t *entry
             list->last_accessed_entry = next;
         else if( prev )
         {
-            list->last_accessed_entry = prev;
+            list->last_accessed_entry   = prev;
             list->last_accessed_number -= 1;
         }
         else
         {
-            list->last_accessed_entry = NULL;
+            list->last_accessed_entry  = NULL;
             list->last_accessed_number = 0;
         }
     }
@@ -585,7 +585,7 @@ int lsmash_remove_entry_direct( lsmash_entry_list_t *list, lsmash_entry_t *entry
     {
         /* We can't know the current entry number immediately,
          * so discard the last accessed entry info because time is wasted to know it. */
-        list->last_accessed_entry = NULL;
+        list->last_accessed_entry  = NULL;
         list->last_accessed_number = 0;
     }
     lsmash_free( entry );
@@ -593,13 +593,18 @@ int lsmash_remove_entry_direct( lsmash_entry_list_t *list, lsmash_entry_t *entry
     return 0;
 }
 
-int lsmash_remove_entry( lsmash_entry_list_t *list, uint32_t entry_number, void* eliminator )
+int lsmash_remove_entry( lsmash_entry_list_t *list, uint32_t entry_number, void *eliminator )
 {
     lsmash_entry_t *entry = lsmash_get_entry( list, entry_number );
     return lsmash_remove_entry_direct( list, entry, eliminator );
 }
 
-void lsmash_remove_entries( lsmash_entry_list_t *list, void* eliminator )
+int lsmash_remove_entry_tail( lsmash_entry_list_t *list, void *eliminator )
+{
+    return lsmash_remove_entry_direct( list, list->tail, eliminator );
+}
+
+void lsmash_remove_entries( lsmash_entry_list_t *list, void *eliminator )
 {
     if( !list )
         return;
@@ -616,7 +621,7 @@ void lsmash_remove_entries( lsmash_entry_list_t *list, void* eliminator )
     lsmash_init_entry_list( list );
 }
 
-void lsmash_remove_list( lsmash_entry_list_t *list, void* eliminator )
+void lsmash_remove_list( lsmash_entry_list_t *list, void *eliminator )
 {
     if( !list )
         return;
@@ -660,7 +665,7 @@ lsmash_entry_t *lsmash_get_entry( lsmash_entry_list_t *list, uint32_t entry_numb
     }
     if( entry )
     {
-        list->last_accessed_entry = entry;
+        list->last_accessed_entry  = entry;
         list->last_accessed_number = entry_number;
     }
     return entry;

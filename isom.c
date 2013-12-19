@@ -1143,7 +1143,7 @@ static int isom_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_de
         else
         {
             /* Remove the last entry. */
-            if( lsmash_remove_entry( stts->list, stts->list->entry_count, NULL ) )
+            if( lsmash_remove_entry_tail( stts->list, NULL ) )
                 return -1;
             /* copy the previous sample_delta. */
             ++ ((isom_stts_entry_t *)stts->list->tail->data)->sample_count;
@@ -3932,7 +3932,7 @@ static int isom_rap_grouping_established( isom_rap_group_t *group, int num_leadi
         {
             /* The same description already exists.
              * Remove the latest random access entry. */
-            lsmash_remove_entry_direct( sgpd->list, sgpd->list->tail, NULL );
+            lsmash_remove_entry_tail( sgpd->list, NULL );
             /* Replace assigned group_description_index with the one corresponding the same description. */
             if( group->assignment->group_description_index == 0 )
             {

@@ -1433,7 +1433,7 @@ static int isom_set_qtff_mp4a_description( isom_audio_entry_t *audio, lsmash_aud
      || isom_add_mp4a( wave )
      || isom_add_terminator( wave ) )
     {
-        lsmash_remove_entry_direct( &audio->extensions, audio->extensions.tail, isom_remove_wave );
+        lsmash_remove_entry_tail( &audio->extensions, isom_remove_wave );
         return -1;
     }
     wave->frma->data_format = audio->type.fourcc;
@@ -1611,7 +1611,7 @@ static int isom_set_qtff_lpcm_description( isom_audio_entry_t *audio, lsmash_aud
              || isom_add_enda( wave )
              || isom_add_terminator( wave ) )
             {
-                lsmash_remove_entry_direct( &audio->extensions, audio->extensions.tail, isom_remove_wave );
+                lsmash_remove_entry_tail( &audio->extensions, isom_remove_wave );
                 return -1;
             }
             wave->frma->data_format  = sample_type.fourcc;
@@ -1723,7 +1723,7 @@ static int isom_set_qtff_template_audio_description( isom_audio_entry_t *audio, 
     if( isom_add_frma( wave )
      || isom_add_terminator( wave ) )
     {
-        lsmash_remove_entry_direct( &audio->extensions, audio->extensions.tail, isom_remove_wave );
+        lsmash_remove_entry_tail( &audio->extensions, isom_remove_wave );
         return -1;
     }
     wave->frma->data_format = audio->type.fourcc;

@@ -1968,7 +1968,7 @@ int lsmash_append_h264_parameter_set
         h264_sps_t sps;
         if( h264_parse_sps_minimally( &bits, &sps, rbsp_buffer, ps_data + 1, ps_length - 1 ) )
         {
-            lsmash_remove_entry_direct( ps_list, ps_list->tail, isom_remove_dcr_ps );
+            lsmash_remove_entry_tail( ps_list, isom_remove_dcr_ps );
             return -1;
         }
         if( ps_list->entry_count == 1 )
