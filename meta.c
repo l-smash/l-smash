@@ -33,11 +33,16 @@ static isom_data_t *isom_add_metadata( lsmash_root_t *root,
 {
     assert( root && root->moov );
     if( ((item == ITUNES_METADATA_ITEM_CUSTOM) && (!meaning_string || !meaning_string[0]) )
-     || (!root->moov->udta             && isom_add_udta( root, 0 ))
-     || (!root->moov->udta->meta       && isom_add_meta( (isom_box_t *)root->moov->udta ))
-     || (!root->moov->udta->meta->hdlr && isom_add_hdlr( NULL, root->moov->udta->meta, NULL, ISOM_META_HANDLER_TYPE_ITUNES_METADATA ))
-     || (!root->moov->udta->meta->ilst && isom_add_ilst( root->moov )) )
+     || (!root->moov->udta             && isom_add_udta( root->moov ))
+     || (!root->moov->udta->meta       && isom_add_meta( root->moov->udta ))
+     || (!root->moov->udta->meta->ilst && isom_add_ilst( root->moov->udta->meta )) )
         return NULL;
+    if( !root->moov->udta->meta->hdlr )
+    {
+        if( isom_add_hdlr( root->moov->udta->meta )
+         || isom_setup_handler_reference( root->moov->udta->meta->hdlr, ISOM_META_HANDLER_TYPE_ITUNES_METADATA ) )
+            return NULL;
+    }
     isom_ilst_t *ilst = root->moov->udta->meta->ilst;
     if( isom_add_metaitem( ilst, item ) )
         return NULL;

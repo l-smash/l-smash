@@ -137,6 +137,34 @@ static fn_get_chapter_data isom_check_chap_line( char *file_name )
     return fnc;
 }
 
+static int isom_add_chpl_entry( isom_chpl_t *chpl, isom_chapter_entry_t *chap_data )
+{
+    if( !chap_data->chapter_name
+     || !chpl
+     || !chpl->list )
+        return -1;
+    isom_chpl_entry_t *data = lsmash_malloc( sizeof(isom_chpl_entry_t) );
+    if( !data )
+        return -1;
+    data->start_time          = chap_data->start_time;
+    data->chapter_name_length = strlen( chap_data->chapter_name );
+    data->chapter_name        = (char *)lsmash_malloc( data->chapter_name_length + 1 );
+    if( !data->chapter_name )
+    {
+        lsmash_free( data );
+        return -1;
+    }
+    memcpy( data->chapter_name, chap_data->chapter_name, data->chapter_name_length );
+    data->chapter_name[data->chapter_name_length] = '\0';
+    if( lsmash_add_entry( chpl->list, data ) )
+    {
+        lsmash_free( data->chapter_name );
+        lsmash_free( data );
+        return -1;
+    }
+    return 0;
+}
+
 int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom )
 {
     /* This function should be called after updating of the latest movie duration. */
@@ -152,8 +180,9 @@ int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom
         lsmash_log( NULL, LSMASH_LOG_ERROR, "failed to open the chapter file \"%s\".\n", file_name );
         goto error_message;
     }
-    if( isom_add_udta( root, 0 ) || isom_add_chpl( root->moov ) )
+    if( isom_add_udta( root->moov ) || isom_add_chpl( root->moov->udta ) )
         goto fail;
+    root->moov->udta->chpl->version = 1;    /* version = 1 is popular. */
     isom_chapter_entry_t data = {0};
     while( !fnc( chapter, &data ) )
     {
@@ -217,9 +246,11 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
         goto error_message;
     uint32_t chapter_track_ID = *id = root->moov->mvhd->next_track_ID;
     /* Create a Track Reference Type Box. */
-    isom_tref_type_t *chap = isom_add_track_reference_type( trak->tref, QT_TREF_TYPE_CHAP, 1, id );
+    isom_tref_type_t *chap = isom_add_track_reference_type( trak->tref, QT_TREF_TYPE_CHAP );
     if( !chap )
         goto error_message;      /* no need to free id */
+    chap->ref_count = 1;
+    chap->track_ID  = id;
     /* Create a reference chapter track. */
     if( chapter_track_ID != lsmash_create_track( root, ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK ) )
         goto error_message;
