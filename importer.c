@@ -668,6 +668,7 @@ typedef struct
     uint32_t            samples_in_frame;
     uint32_t            au_number;
     uint16_t            main_data_size[32]; /* size of main_data of the last 32 frames, FIFO */
+    uint16_t            prev_preroll_count; /* number of dependent frames of *previous* frame */
 } mp4sys_mp3_info_t;
 
 static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
@@ -772,7 +773,8 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
                 if( info->main_data_size[i] == 0 )
                     break;
             }
-            buffered_sample->prop.pre_roll.distance += i;
+            buffered_sample->prop.pre_roll.distance += info->prev_preroll_count;
+            info->prev_preroll_count = i;
         }
         uint16_t side_info_size;
         if( header->ID == 1 )
