@@ -581,12 +581,23 @@ static int mp4sys_mp3_parse_header( uint8_t* buf, mp4sys_mp3_header_t* header )
 #define MP4SYS_MP3_HEADER_LENGTH    4
 #define MP4SYS_MODE_IS_2CH( mode )  (!!~(mode))
 #define MP4SYS_LAYER_III            0x1
+#define MP4SYS_LAYER_II             0x2
 #define MP4SYS_LAYER_I              0x3
 
 static const uint32_t mp4sys_mp3_frequency_tbl[2][3] = {
     { 22050, 24000, 16000 }, /* MPEG-2 BC audio */
     { 44100, 48000, 32000 }  /* MPEG-1 audio */
 };
+
+static unsigned mp4sys_mp3_samples_in_frame( mp4sys_mp3_header_t *header )
+{
+    if( header->layer == MP4SYS_LAYER_I )
+        return 384;
+    else if( header->ID == 0 || header->layer == MP4SYS_LAYER_II )
+        return 1152;
+    else
+        return 576;
+}
 
 static lsmash_audio_summary_t *mp4sys_mp3_create_summary( mp4sys_mp3_header_t *header, int legacy_mode )
 {
@@ -598,7 +609,7 @@ static lsmash_audio_summary_t *mp4sys_mp3_create_summary( mp4sys_mp3_header_t *h
     summary->frequency              = mp4sys_mp3_frequency_tbl[header->ID][header->sampling_frequency];
     summary->channels               = MP4SYS_MODE_IS_2CH( header->mode ) + 1;
     summary->sample_size            = 16;
-    summary->samples_in_frame       = header->layer == MP4SYS_LAYER_I ? 384 : 1152;
+    summary->samples_in_frame       = mp4sys_mp3_samples_in_frame( header );
     summary->aot                    = MP4A_AUDIO_OBJECT_TYPE_Layer_1 + (MP4SYS_LAYER_I - header->layer); /* no effect with Legacy Interface. */
     summary->sbr_mode               = MP4A_AAC_SBR_NOT_SPECIFIED; /* no effect */
 #if 0 /* FIXME: This is very unstable. Many players crash with this. */
@@ -693,7 +704,10 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
     else
     {
         /* mp2/3's 'slot' is 1 bytes unit. */
-        frame_size = 144 * 1000 * bitrate / frequency + header->padding_bit;
+        uint32_t div = frequency;
+        if( header->layer == MP4SYS_LAYER_III && header->ID == 0 )
+            div <<= 1;
+        frame_size = 144 * 1000 * bitrate / div + header->padding_bit;
     }
 
     if( current_status == IMPORTER_ERROR || frame_size <= 4 || buffered_sample->length < frame_size )
