@@ -41,7 +41,9 @@ static int isom_get_start_time( char *chap_time, isom_chapter_entry_t *data )
     if( sscanf( chap_time, "%"SCNu64":%2"SCNu64":%lf", &hh, &mm, &ss ) != 3 )
         return -1;
     /* check overflow */
-    if( hh >= 5124095 || mm >= 60 || ss >= 60 )
+    if( hh >= 5124095
+     || mm >= 60
+     || ss >= 60 )
         return -1;
     /* 1ns timescale */
     data->start_time = (hh * 3600 + mm * 60 + ss) * 1e9;
@@ -52,33 +54,32 @@ static int isom_lumber_line( char *buff, int bufsize, FILE *chapter  )
 {
     char *tail;
     /* remove newline codes and skip empty line */
-    do{
+    do
+    {
         if( fgets( buff, bufsize, chapter ) == NULL )
             return -1;
         tail = &buff[ strlen( buff ) - 1 ];
-        while( tail >= buff && ( *tail == '\n' || *tail == '\r' ) )
+        while( tail >= buff && (*tail == '\n' || *tail == '\r') )
             *tail-- = '\0';
-    }while( tail < buff );
+    } while( tail < buff );
     return 0;
 }
 
 static int isom_read_simple_chapter( FILE *chapter, isom_chapter_entry_t *data )
 {
     char buff[CHAPTER_BUFSIZE];
-    int len;
-
     /* get start_time */
     if( isom_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) )
         return -1;
     char *chapter_time = strchr( buff, '=' );   /* find separator */
     if( !chapter_time++
-        || isom_get_start_time( chapter_time, data )
-        || isom_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) ) /* get chapter_name */
+     || isom_get_start_time( chapter_time, data )
+     || isom_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) ) /* get chapter_name */
         return -1;
     char *chapter_name = strchr( buff, '=' );   /* find separator */
     if( !chapter_name++ )
         return -1;
-    len = LSMASH_MIN( 255, strlen( chapter_name ) );  /* We support length of chapter_name up to 255 */
+    int len = LSMASH_MIN( 255, strlen( chapter_name ) );    /* We support length of chapter_name up to 255 */
     data->chapter_name = (char *)lsmash_malloc( len + 1 );
     if( !data->chapter_name )
         return -1;
@@ -90,18 +91,16 @@ static int isom_read_simple_chapter( FILE *chapter, isom_chapter_entry_t *data )
 static int isom_read_minimum_chapter( FILE *chapter, isom_chapter_entry_t *data )
 {
     char buff[CHAPTER_BUFSIZE];
-    int len;
-
     if( isom_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) ) /* read newline */
         return -1;
-    char *p_buff = !memcmp( buff, UTF8_BOM, UTF8_BOM_LENGTH ) ? &buff[UTF8_BOM_LENGTH] : &buff[0]; /* BOM detection */
-    if( isom_get_start_time( p_buff, data ) ) /* get start_time */
+    char *p_buff = &buff[ !memcmp( buff, UTF8_BOM, UTF8_BOM_LENGTH ) ? UTF8_BOM_LENGTH : 0 ];   /* BOM detection */
+    if( isom_get_start_time( p_buff, data ) )   /* get start_time */
         return -1;
     /* get chapter_name */
     char *chapter_name = strchr( buff, ' ' );   /* find separator */
     if( !chapter_name++ )
         return -1;
-    len = LSMASH_MIN( 255, strlen( chapter_name ) );  /* We support length of chapter_name up to 255 */
+    int len = LSMASH_MIN( 255, strlen( chapter_name ) );    /* We support length of chapter_name up to 255 */
     data->chapter_name = (char *)lsmash_malloc( len + 1 );
     if( !data->chapter_name )
         return -1;
@@ -114,21 +113,21 @@ typedef int (*fn_get_chapter_data)( FILE *, isom_chapter_entry_t * );
 
 static fn_get_chapter_data isom_check_chap_line( char *file_name )
 {
-    char buff[CHAPTER_BUFSIZE];
     FILE *fp = lsmash_fopen( file_name, "rb" );
     if( !fp )
     {
         lsmash_log( NULL, LSMASH_LOG_ERROR, "failed to open the chapter file \"%s\".\n", file_name );
         return NULL;
     }
+    char buff[CHAPTER_BUFSIZE];
     fn_get_chapter_data fnc = NULL;
     if( fgets( buff, CHAPTER_BUFSIZE, fp ) != NULL )
     {
-        char *p_buff = !memcmp( buff, UTF8_BOM, UTF8_BOM_LENGTH ) ? &buff[UTF8_BOM_LENGTH] : &buff[0];   /* BOM detection */
+        char *p_buff = &buff[ !memcmp( buff, UTF8_BOM, UTF8_BOM_LENGTH ) ? UTF8_BOM_LENGTH : 0 ];   /* BOM detection */
         if( !strncmp( p_buff, "CHAPTER", 7 ) )
             fnc = isom_read_simple_chapter;
         else if( isdigit( p_buff[0] ) && isdigit( p_buff[1] ) && p_buff[2] == ':'
-             && isdigit( p_buff[3] ) && isdigit( p_buff[4] ) && p_buff[5] == ':' )
+              && isdigit( p_buff[3] ) && isdigit( p_buff[4] ) && p_buff[5] == ':' )
             fnc = isom_read_minimum_chapter;
         else
             lsmash_log( NULL, LSMASH_LOG_ERROR, "the chapter file is malformed.\n" );
@@ -155,7 +154,7 @@ static int isom_add_chpl_entry( isom_chpl_t *chpl, isom_chapter_entry_t *chap_da
         return -1;
     }
     memcpy( data->chapter_name, chap_data->chapter_name, data->chapter_name_length );
-    data->chapter_name[data->chapter_name_length] = '\0';
+    data->chapter_name[ data->chapter_name_length ] = '\0';
     if( lsmash_add_entry( chpl->list, data ) )
     {
         lsmash_free( data->chapter_name );
@@ -168,7 +167,11 @@ static int isom_add_chpl_entry( isom_chpl_t *chpl, isom_chapter_entry_t *chap_da
 int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom )
 {
     /* This function should be called after updating of the latest movie duration. */
-    if( !root || !root->moov || !root->moov->mvhd || !root->moov->mvhd->timescale || !root->moov->mvhd->duration )
+    if( !root
+     || !root->moov
+     || !root->moov->mvhd
+     ||  root->moov->mvhd->timescale == 0
+     ||  root->moov->mvhd->duration  == 0 )
         goto error_message;
     /* check each line format */
     fn_get_chapter_data fnc = isom_check_chap_line( file_name );
@@ -207,8 +210,7 @@ int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom
         }
         if( isom_add_chpl_entry( root->moov->udta->chpl, &data ) )
             goto fail2;
-        lsmash_free( data.chapter_name );
-        data.chapter_name = NULL;
+        lsmash_freep( &data.chapter_name );
     }
     fclose( chapter );
     return 0;
@@ -224,7 +226,10 @@ error_message:
 
 int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_ID, char *file_name )
 {
-    if( !root || !root->moov || !root->moov->mvhd || !root->moov->trak_list )
+    if( !root
+     || !root->moov
+     || !root->moov->mvhd
+     || !root->moov->trak_list )
         goto error_message;
     if( !root->qt_compatible && !root->itunes_movie )
     {
@@ -267,7 +272,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
         goto fail;
     lsmash_media_parameters_t media_param;
     lsmash_initialize_media_parameters( &media_param );
-    media_param.timescale = media_timescale;
+    media_param.timescale    = media_timescale;
     media_param.ISO_language = root->max_3gpp_version >= 6 || root->itunes_movie ? ISOM_LANGUAGE_CODE_UNDEFINED : 0;
     media_param.MAC_language = 0;
     if( lsmash_set_media_parameters( root, chapter_track_ID, &media_param ) )
@@ -322,16 +327,16 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
                 };
             memcpy( sample->data + 2 + name_length, encd, 12 );
         }
-        sample->dts = sample->cts = data.start_time;
+        sample->dts           = data.start_time;
+        sample->cts           = data.start_time;
         sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
-        sample->index = sample_entry;
+        sample->index         = sample_entry;
         if( lsmash_append_sample( root, chapter_track_ID, sample ) )
         {
             lsmash_free( data.chapter_name );
             goto fail;
         }
-        lsmash_free( data.chapter_name );
-        data.chapter_name = NULL;
+        lsmash_freep( &data.chapter_name );
     }
     if( lsmash_flush_pooled_samples( root, chapter_track_ID, 0 ) )
         goto fail;
@@ -339,7 +344,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     if( !chapter_trak )
         goto fail;
     fclose( chapter );
-    chapter_trak->is_chapter = 1;
+    chapter_trak->is_chapter       = 1;
     chapter_trak->related_track_ID = track_ID;
     return 0;
 fail:
@@ -362,13 +367,16 @@ int lsmash_print_chapter_list( lsmash_root_t *root )
 {
     if( !root || !(root->flags & LSMASH_FILE_MODE_READ) )
         return -1;
-    if( root->moov && root->moov->udta && root->moov->udta->chpl )
+    if( root->moov
+     && root->moov->udta
+     && root->moov->udta->chpl )
     {
         isom_chpl_t *chpl = root->moov->udta->chpl;
         uint32_t timescale;
         if( !chpl->version )
         {
-            if( !root->moov && !root->moov->mvhd )
+            if( !root->moov
+             && !root->moov->mvhd )
                 return -1;
             timescale = root->moov->mvhd->timescale;
         }
