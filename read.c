@@ -803,12 +803,12 @@ static int isom_read_url( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_DREF ) )
         return isom_read_unknown_box( root, box, parent, level );
-    isom_dref_t       *dref = (isom_dref_t *)parent;
+    isom_dref_t *dref = (isom_dref_t *)parent;
+    if( dref->list && !dref->list->head )
+        dref->list->entry_count = 0;    /* discard entry_count gotten from the file */
     isom_dref_entry_t *url  = isom_add_dref_entry( dref );
     if( !url )
         return -1;
-    if( dref->list && !dref->list->head )
-        dref->list->entry_count = 0;    /* discard entry_count gotten from the file */
     lsmash_bs_t *bs = root->bs;
     isom_read_box_rest( bs, box );
     uint64_t pos = lsmash_bs_get_pos( bs );
