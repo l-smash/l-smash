@@ -180,7 +180,8 @@ int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom
         lsmash_log( NULL, LSMASH_LOG_ERROR, "failed to open the chapter file \"%s\".\n", file_name );
         goto error_message;
     }
-    if( isom_add_udta( root->moov ) || isom_add_chpl( root->moov->udta ) )
+    if( (!root->moov->udta       && isom_add_udta( root->moov ))
+     || (!root->moov->udta->chpl && isom_add_chpl( root->moov->udta )) )
         goto fail;
     root->moov->udta->chpl->version = 1;    /* version = 1 is popular. */
     isom_chapter_entry_t data = {0};
@@ -238,7 +239,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
         lsmash_log( NULL, LSMASH_LOG_ERROR, "the specified track ID to apply the chapter doesn't exist.\n" );
         goto error_message;
     }
-    if( isom_add_tref( trak ) )
+    if( !trak->tref && isom_add_tref( trak ) )
         goto error_message;
     /* Create a track_ID for a new chapter track. */
     uint32_t *id = (uint32_t *)lsmash_malloc( sizeof(uint32_t) );
