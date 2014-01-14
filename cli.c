@@ -1,7 +1,7 @@
 /*****************************************************************************
  * cli.c:
  *****************************************************************************
- * Copyright (C) 2013 L-SMASH project
+ * Copyright (C) 2013-2014 L-SMASH project
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *

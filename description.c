@@ -1,7 +1,7 @@
 /*****************************************************************************
  * description.c:
  *****************************************************************************
- * Copyright (C) 2012-2013 L-SMASH project
+ * Copyright (C) 2012-2014 L-SMASH project
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
