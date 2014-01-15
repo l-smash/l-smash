@@ -860,7 +860,7 @@ static int prepare_output( muxer_t *muxer )
                     uint64_t display_height = summary->height << 16;
                     if( summary->par_h && summary->par_v )
                     {
-                        double sar = (double)summary->par_h / summary->par_h;
+                        double sar = (double)summary->par_h / summary->par_v;
                         if( sar > 1.0 )
                             display_width *= sar;
                         else
