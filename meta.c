@@ -108,7 +108,7 @@ static int isom_set_itunes_metadata_integer( lsmash_root_t *root,
     } metadata_code_type_table[] =
         {
             { ITUNES_METADATA_ITEM_EPISODE_GLOBAL_ID,          1 },
-            { ITUNES_METADATA_ITEM_PREDEFINED_GENRE,           4 },
+            { ITUNES_METADATA_ITEM_PREDEFINED_GENRE,           2 },
             { ITUNES_METADATA_ITEM_CONTENT_RATING,             1 },
             { ITUNES_METADATA_ITEM_MEDIA_TYPE,                 1 },
             { ITUNES_METADATA_ITEM_BEATS_PER_MINUTE,           2 },
@@ -133,7 +133,10 @@ static int isom_set_itunes_metadata_integer( lsmash_root_t *root,
     isom_data_t *data = isom_add_metadata( root, item, meaning, name );
     if( !data )
         return -1;
-    data->type_code = ITUNES_METADATA_SUBTYPE_INTEGER;
+    if( item == ITUNES_METADATA_ITEM_PREDEFINED_GENRE )
+        data->type_code = ITUNES_METADATA_SUBTYPE_IMPLICIT;
+    else
+        data->type_code = ITUNES_METADATA_SUBTYPE_INTEGER;
     data->value_length = metadata_code_type_table[i].length;
     uint8_t temp[8];
     for( i = 0; i < data->value_length; i++ )

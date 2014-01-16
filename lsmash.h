@@ -3421,7 +3421,7 @@ typedef enum
     /* Integer type
      * (X): X means length of bytes */
     ITUNES_METADATA_ITEM_EPISODE_GLOBAL_ID          = LSMASH_4CC( 'e', 'g', 'i', 'd' ),     /* (1) Episode Global Unique ID */
-    ITUNES_METADATA_ITEM_PREDEFINED_GENRE           = LSMASH_4CC( 'g', 'n', 'r', 'e' ),     /* (4) Pre-defined Genre / Enumerated value from ID3 tag set, plus 1 */
+    ITUNES_METADATA_ITEM_PREDEFINED_GENRE           = LSMASH_4CC( 'g', 'n', 'r', 'e' ),     /* (2) Pre-defined Genre / Enumerated value from ID3 tag set, plus 1 */
     ITUNES_METADATA_ITEM_PODCAST_URL                = LSMASH_4CC( 'p', 'u', 'r', 'l' ),     /* (?) Podcast URL */
     ITUNES_METADATA_ITEM_CONTENT_RATING             = LSMASH_4CC( 'r', 't', 'n', 'g' ),     /* (1) Content Rating / Does song have explicit content? 0: none, 2: clean, 4: explicit */
     ITUNES_METADATA_ITEM_MEDIA_TYPE                 = LSMASH_4CC( 's', 't', 'i', 'k' ),     /* (1) Media Type */
