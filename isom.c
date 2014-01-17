@@ -3768,8 +3768,8 @@ int lsmash_create_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID,
                   : trak->tkhd->duration ? trak->tkhd->duration
                   : isom_update_tkhd_duration( trak ) ? 0
                   : trak->tkhd->duration;
-    if( isom_add_edts( trak )
-     || isom_add_elst( trak->edts )
+    if( (!trak->edts       && isom_add_edts( trak ))
+     || (!trak->edts->elst && isom_add_elst( trak->edts ))
      || isom_add_elst_entry( trak->edts->elst, edit.duration, edit.start_time, edit.rate ) )
         return -1;
     return isom_update_tkhd_duration( trak );
