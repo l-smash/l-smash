@@ -959,7 +959,7 @@ static int isom_print_audio_description( FILE *fp, lsmash_root_t *root, isom_box
         lsmash_ifprintf( fp, indent, "reserved = %"PRIu16"\n", audio->packet_size );
     }
     lsmash_ifprintf( fp, indent, "samplerate = %f\n", lsmash_fixed2double( audio->samplerate, 16 ) );
-    if( audio->version == 1 )
+    if( audio->version == 1 && (audio->manager & LSMASH_QTFF_BASE) )
     {
         lsmash_ifprintf( fp, indent, "samplesPerPacket = %"PRIu32"\n", audio->samplesPerPacket );
         lsmash_ifprintf( fp, indent, "bytesPerPacket = %"PRIu32"\n", audio->bytesPerPacket );
@@ -1073,6 +1073,17 @@ static int isom_print_chan( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
             --indent;
         }
     }
+    return 0;
+}
+
+static int isom_print_srat( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_srat_t *srat = (isom_srat_t *)box;
+    int indent = level;
+    isom_print_box_common( fp, indent++, box, "Sampling Rate Box" );
+    lsmash_ifprintf( fp, indent, "sampling_rate = %"PRIu32"\n", srat->sampling_rate );
     return 0;
 }
 
@@ -2487,6 +2498,7 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
         ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_STSL, isom_print_stsl );
         ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_WAVE, isom_print_wave );
         ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_CHAN, isom_print_chan );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_SRAT, isom_print_srat );
         ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_FTAB, isom_print_ftab );
         ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_STTS, isom_print_stts );
         ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_CTTS, isom_print_ctts );

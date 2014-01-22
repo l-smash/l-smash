@@ -1322,12 +1322,19 @@ static int isom_read_audio_description( lsmash_root_t *root, isom_box_t *box, is
     audio->samplerate           = lsmash_bs_get_be32( bs );
     if( audio->version == 1 )
     {
-        if( lsmash_bs_read_data( bs, 16 ) )
-            return -1;
-        audio->samplesPerPacket = lsmash_bs_get_be32( bs );
-        audio->bytesPerPacket   = lsmash_bs_get_be32( bs );
-        audio->bytesPerFrame    = lsmash_bs_get_be32( bs );
-        audio->bytesPerSample   = lsmash_bs_get_be32( bs );
+        if( ((isom_stsd_t *)parent)->version == 0 )
+        {
+            if( lsmash_bs_read_data( bs, 16 ) )
+                return -1;
+            audio->samplesPerPacket = lsmash_bs_get_be32( bs );
+            audio->bytesPerPacket   = lsmash_bs_get_be32( bs );
+            audio->bytesPerFrame    = lsmash_bs_get_be32( bs );
+            audio->bytesPerSample   = lsmash_bs_get_be32( bs );
+            box->manager |= LSMASH_QTFF_BASE;
+        }
+        else
+            /* AudioSampleEntryV1 has no additional fields. */
+            box->manager &= ~LSMASH_QTFF_BASE;
     }
     else if( audio->version == 2 )
     {
@@ -1341,8 +1348,9 @@ static int isom_read_audio_description( lsmash_root_t *root, isom_box_t *box, is
         audio->formatSpecificFlags           = lsmash_bs_get_be32( bs );
         audio->constBytesPerAudioPacket      = lsmash_bs_get_be32( bs );
         audio->constLPCMFramesPerAudioPacket = lsmash_bs_get_be32( bs );
+        box->manager |= LSMASH_QTFF_BASE;
     }
-    box->parent = parent;
+    box->parent   = parent;
     box->manager |= LSMASH_AUDIO_DESCRIPTION;
     isom_box_common_copy( audio, box );
     if( isom_add_print_func( root, audio, level ) )
@@ -1421,6 +1429,17 @@ static int isom_read_chan( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     }
     isom_box_common_copy( chan, box );
     return isom_add_print_func( root, chan, level );
+}
+
+static int isom_read_srat( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    isom_add_box_return_pointer( srat, isom_audio_entry_t );
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    srat->sampling_rate = lsmash_bs_get_be32( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( srat, box );
+    return isom_add_print_func( root, srat, level );
 }
 
 static int isom_read_text_description( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
@@ -2773,6 +2792,7 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSL, lsmash_form_iso_box_type,  isom_read_stsl );
         ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_WAVE, lsmash_form_qtff_box_type, isom_read_wave );
         ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_CHAN, lsmash_form_qtff_box_type, isom_read_chan );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_SRAT, lsmash_form_iso_box_type,  isom_read_srat );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_FTAB, lsmash_form_iso_box_type,  isom_read_ftab );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_STTS, lsmash_form_iso_box_type,  isom_read_stts );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_CTTS, lsmash_form_iso_box_type,  isom_read_ctts );

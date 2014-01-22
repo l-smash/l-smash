@@ -178,6 +178,7 @@ int isom_is_fullbox( void *box )
         fullbox_type_table[i++] = ISOM_BOX_TYPE_STSD;
         fullbox_type_table[i++] = ISOM_BOX_TYPE_STSL;
         fullbox_type_table[i++] = QT_BOX_TYPE_CHAN;
+        fullbox_type_table[i++] = ISOM_BOX_TYPE_SRAT;
         fullbox_type_table[i++] = ISOM_BOX_TYPE_STTS;
         fullbox_type_table[i++] = ISOM_BOX_TYPE_CTTS;
         fullbox_type_table[i++] = ISOM_BOX_TYPE_CSLG;
@@ -742,6 +743,14 @@ void isom_remove_chan( isom_chan_t *chan )
         lsmash_free( chan->channelDescriptions );
     isom_remove_all_extension_boxes( &chan->extensions );
     lsmash_free( chan );
+}
+
+void isom_remove_srat( isom_srat_t *srat )
+{
+    if( !srat )
+        return;
+    isom_remove_all_extension_boxes( &srat->extensions );
+    lsmash_free( srat );
 }
 
 void isom_remove_stsd( isom_stsd_t *stsd )
@@ -1741,6 +1750,15 @@ uint64_t isom_update_chan_size( isom_chan_t *chan )
     chan->size = ISOM_FULLBOX_COMMON_SIZE + 12 + 20 * (uint64_t)chan->numberChannelDescriptions;
     CHECK_LARGESIZE( chan );
     return chan->size;
+}
+
+uint64_t isom_update_srat_size( isom_srat_t *srat )
+{
+    if( !srat )
+        return 0;
+    srat->size = ISOM_FULLBOX_COMMON_SIZE + 4;
+    CHECK_LARGESIZE( srat );
+    return srat->size;
 }
 
 uint64_t isom_update_audio_entry_size( isom_sample_entry_t *description )
@@ -2803,6 +2821,12 @@ isom_chan_t *isom_add_chan( isom_audio_entry_t *audio )
 {
     isom_create_box_pointer( chan, audio, QT_BOX_TYPE_CHAN );
     return chan;
+}
+
+isom_srat_t *isom_add_srat( isom_audio_entry_t *audio )
+{
+    isom_create_box_pointer( srat, audio, ISOM_BOX_TYPE_SRAT );
+    return srat;
 }
 
 int isom_add_stts( isom_stbl_t *stbl )

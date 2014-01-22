@@ -2228,7 +2228,7 @@ static int isom_append_structured_mp4sys_decoder_config( lsmash_codec_specific_l
 
 lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_t *sample_entry )
 {
-    if( !sample_entry || !sample_entry->root )
+    if( !sample_entry || !sample_entry->root || !sample_entry->parent )
         return NULL;
     isom_audio_entry_t *audio = (isom_audio_entry_t *)sample_entry;
     lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_AUDIO );
@@ -2238,7 +2238,8 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
     summary->sample_size = audio->samplesize;
     summary->channels    = audio->channelcount;
     summary->frequency   = audio->samplerate >> 16;
-    if( audio->root->qt_compatible
+    if( ((isom_stsd_t *)audio->parent)->version == 0
+     && audio->root->qt_compatible
      && isom_is_qt_audio( (lsmash_codec_type_t)audio->type ) )
     {
         if( audio->version == 1 )
@@ -2352,10 +2353,15 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
                   || lsmash_check_box_type_identical( box->type,   QT_BOX_TYPE_ESDS ) )
             {
                 isom_esds_t *esds = (isom_esds_t *)box;
-                if( !esds
-                 || mp4sys_setup_summary_from_DecoderSpecificInfo( summary, esds->ES )
+                if( mp4sys_setup_summary_from_DecoderSpecificInfo( summary, esds->ES )
                  || isom_append_structured_mp4sys_decoder_config( summary->opaque, esds ) )
                     goto fail;
+            }
+            else if( lsmash_check_box_type_identical( box->type, ISOM_BOX_TYPE_SRAT ) )
+            {
+                /* Set the actual sampling rate. */
+                isom_srat_t *srat = (isom_srat_t *)box;
+                summary->frequency = srat->sampling_rate;
             }
             else if( lsmash_check_box_type_identical( box->type, QT_BOX_TYPE_WAVE ) )
             {
