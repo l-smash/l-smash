@@ -1091,7 +1091,7 @@ static int isom_print_text_description( FILE *fp, lsmash_root_t *root, isom_box_
 {
     if( !box )
         return -1;
-    isom_text_entry_t *text = (isom_text_entry_t *)box;
+    isom_qt_text_entry_t *text = (isom_qt_text_entry_t *)box;
     int indent = level;
     lsmash_ifprintf( fp, indent++, "[text: QuickTime Text Description]\n" );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", text->pos );

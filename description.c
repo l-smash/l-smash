@@ -940,12 +940,9 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
         return -1;
     if( isom_check_valid_summary( (lsmash_summary_t *)summary ) )
         return -1;
-    lsmash_entry_list_t *list = stsd->list;
-    isom_visual_entry_t *visual = lsmash_malloc_zero( sizeof(isom_visual_entry_t) );
+    isom_visual_entry_t *visual = isom_add_visual_description( stsd, sample_type );
     if( !visual )
         return -1;
-    isom_init_box_common( visual, stsd, sample_type, isom_remove_visual_description, isom_update_visual_entry_size );
-    visual->manager             |= LSMASH_VIDEO_DESCRIPTION;
     visual->data_reference_index = 1;
     visual->version              = 0;
     visual->revision_level       = 0;
@@ -1165,11 +1162,10 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
     int qt_compatible = trak->root->qt_compatible;
     isom_tapt_t *tapt = trak->tapt;
     isom_stsl_t *stsl = (isom_stsl_t *)isom_get_extension_box_format( &visual->extensions, ISOM_BOX_TYPE_STSL );
-    int set_aperture_modes = qt_compatible                      /* Track Aperture Modes is only available under QuickTime file format. */
-        && (!stsl || stsl->scale_method == 0)                   /* Sample scaling method might conflict with this feature. */
-        && tapt && tapt->clef && tapt->prof && tapt->enof       /* Check if required boxes exist. */
-        && !((isom_stsd_t *)visual->parent)->list->entry_count; /* Multiple sample description might conflict with this, so in that case, disable this feature.
-                                                                 * Note: this sample description isn't added yet here. */
+    int set_aperture_modes = qt_compatible                              /* Track Aperture Modes is only available under QuickTime file format. */
+        && (!stsl || stsl->scale_method == 0)                           /* Sample scaling method might conflict with this feature. */
+        && tapt && tapt->clef && tapt->prof && tapt->enof               /* Check if required boxes exist. */
+        && ((isom_stsd_t *)visual->parent)->list->entry_count == 1;     /* Multiple sample description might conflict with this, so in that case, disable this feature. */
     if( !set_aperture_modes )
         isom_remove_box_by_itself( trak->tapt );
     int uncompressed_ycbcr = qt_compatible && isom_is_uncompressed_ycbcr( visual->type );
@@ -1278,11 +1274,9 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
         tapt->enof->width  = width;
         tapt->enof->height = height;
     }
-    if( !lsmash_add_entry( list, visual ) )
-        return 0;   /* successed */
+    return 0;
 fail:
-    isom_remove_all_extension_boxes( &visual->extensions );
-    lsmash_free( visual );
+    isom_remove_box_by_itself( visual );
     return -1;
 }
 
@@ -1809,12 +1803,9 @@ int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_
         return -1;
     if( isom_check_valid_summary( (lsmash_summary_t *)summary ) )
         return -1;
-    lsmash_entry_list_t *list = stsd->list;
-    isom_audio_entry_t *audio = lsmash_malloc_zero( sizeof(isom_audio_entry_t) );
+    isom_audio_entry_t *audio = isom_add_audio_description( stsd, sample_type );
     if( !audio )
         return -1;
-    isom_init_box_common( audio, stsd, sample_type, isom_remove_audio_description, isom_update_audio_entry_size );
-    audio->manager             |= LSMASH_AUDIO_DESCRIPTION;
     audio->data_reference_index = 1;
     lsmash_root_t *root = stsd->root;
     lsmash_codec_type_t audio_type = (lsmash_codec_type_t)audio->type;
@@ -1933,11 +1924,9 @@ int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_
         audio->compression_ID = QT_AUDIO_COMPRESSION_ID_NOT_COMPRESSED;
     else if( audio->version == 2 )
         audio->compression_ID = QT_AUDIO_COMPRESSION_ID_VARIABLE_COMPRESSION;
-    if( !lsmash_add_entry( list, audio ) )
-        return 0;   /* successed */
+    return 0;
 fail:
-    isom_remove_all_extension_boxes( &audio->extensions );
-    lsmash_free( audio );
+    isom_remove_box_by_itself( audio );
     return -1;
 }
 

@@ -423,7 +423,7 @@ DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_YUV2_VIDEO,    LSMASH_4CC( 'y', 'u', 'v', 
 /* Text CODEC identifiers */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_ENCT_TEXT,   LSMASH_4CC( 'e', 'n', 'c', 't' ) );    /* Encrypted Text */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_STPP_TEXT,   LSMASH_4CC( 's', 't', 'p', 'p' ) );    /* Sub-titles (Timed Text) */
-DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_TX3G_TEXT,   LSMASH_4CC( 't', 'x', '3', 'g' ) );    /* Timed Text stream */
+DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_TX3G_TEXT,   LSMASH_4CC( 't', 'x', '3', 'g' ) );    /* 3GPP Timed Text stream */
 
 DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_TEXT_TEXT,     LSMASH_4CC( 't', 'e', 'x', 't' ) );    /* QuickTime Text Media */
 

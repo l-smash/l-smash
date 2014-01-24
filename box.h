@@ -820,7 +820,7 @@ typedef struct
     /* defaultFontName is Pascal string */
     uint8_t font_name_length;
     char *font_name;
-} isom_text_entry_t;
+} isom_qt_text_entry_t;
 
 /* FontRecord */
 typedef struct
@@ -840,7 +840,7 @@ typedef struct
     lsmash_entry_list_t *list;
 } isom_ftab_t;
 
-/* Timed Text Sample Entry */
+/* 3GPP Timed Text Sample Entry */
 typedef struct
 {
     ISOM_SAMPLE_ENTRY;
@@ -2192,6 +2192,10 @@ int isom_add_dref( isom_dinf_t *dinf );
 isom_dref_entry_t *isom_add_dref_entry( isom_dref_t *dref );
 int isom_add_stbl( isom_minf_t *minf );
 int isom_add_stsd( isom_stbl_t *stbl );
+isom_visual_entry_t *isom_add_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_type );
+isom_audio_entry_t *isom_add_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_type );
+isom_qt_text_entry_t *isom_add_qt_text_description( isom_stsd_t *stsd );
+isom_tx3g_entry_t *isom_add_tx3g_description( isom_stsd_t *stsd );
 isom_esds_t *isom_add_esds( void *parent_box );
 isom_glbl_t *isom_add_glbl( void *parent_box );
 isom_clap_t *isom_add_clap( isom_visual_entry_t *visual );
@@ -2252,22 +2256,11 @@ int isom_add_mfro( isom_mfra_t *mfra );
 int isom_add_mdat( lsmash_root_t *root );
 int isom_add_free( void *parent_box );
 
-void isom_remove_visual_description( isom_sample_entry_t *description );
-void isom_remove_audio_description( isom_sample_entry_t *description );
-void isom_remove_hint_description( isom_sample_entry_t *description );
-void isom_remove_metadata_description( isom_sample_entry_t *description );
-void isom_remove_tx3g_description( isom_sample_entry_t *description );
-void isom_remove_qt_text_description( isom_sample_entry_t *description );
-void isom_remove_mp4s_description( isom_sample_entry_t *description );
 void isom_remove_sample_description( isom_sample_entry_t *sample );
 void isom_remove_unknown_box( isom_unknown_box_t *unknown_box );
 void isom_remove_sample_pool( isom_sample_pool_t *pool );
 
 uint64_t isom_update_unknown_box_size( isom_unknown_box_t *unknown_box );
-uint64_t isom_update_visual_entry_size( isom_sample_entry_t *description );
-uint64_t isom_update_audio_entry_size( isom_sample_entry_t *description );
-uint64_t isom_update_text_entry_size( isom_sample_entry_t *description );
-uint64_t isom_update_tx3g_entry_size( isom_sample_entry_t *description );
 
 int isom_add_extension_binary( void *parent_box, lsmash_box_type_t box_type, uint8_t *box_data, uint32_t box_size );
 void isom_remove_extension_box( isom_box_t *ext );

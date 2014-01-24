@@ -781,9 +781,9 @@ static int ( lsmash_bs_t *bs, lsmash_entry_t *entry )
 }
 #endif
 
-static int isom_write_text_entry( lsmash_bs_t *bs, lsmash_entry_t *entry )
+static int isom_write_qt_text_entry( lsmash_bs_t *bs, lsmash_entry_t *entry )
 {
-    isom_text_entry_t *data = (isom_text_entry_t *)entry->data;
+    isom_qt_text_entry_t *data = (isom_qt_text_entry_t *)entry->data;
     if( !data )
         return -1;
     isom_bs_put_box_common( bs, data );
@@ -978,7 +978,7 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_trak_t *trak )
         ADD_WRITE_TABLE_ELEMENT( ISOM_CODEC_TYPE_XML_META,  isom_write_metadata_entry );
 #endif
         ADD_WRITE_TABLE_ELEMENT( ISOM_CODEC_TYPE_TX3G_TEXT, isom_write_tx3g_entry );
-        ADD_WRITE_TABLE_ELEMENT( QT_CODEC_TYPE_TEXT_TEXT, isom_write_text_entry );
+        ADD_WRITE_TABLE_ELEMENT( QT_CODEC_TYPE_TEXT_TEXT, isom_write_qt_text_entry );
         ADD_WRITE_TABLE_ELEMENT( LSMASH_CODEC_TYPE_UNSPECIFIED, NULL );
 #undef ADD_WRITE_TABLE_ELEMENT
     }
