@@ -414,7 +414,7 @@ void isom_remove_unknown_box( isom_unknown_box_t *unknown_box )
     lsmash_free( unknown_box );
 }
 
-void isom_remove_ftyp( isom_ftyp_t *ftyp )
+static void isom_remove_ftyp( isom_ftyp_t *ftyp )
 {
     if( !ftyp )
         return;
@@ -423,7 +423,7 @@ void isom_remove_ftyp( isom_ftyp_t *ftyp )
     isom_remove_box( ftyp, lsmash_root_t );
 }
 
-void isom_remove_iods( isom_iods_t *iods )
+static void isom_remove_iods( isom_iods_t *iods )
 {
     if( !iods )
         return;
@@ -431,7 +431,7 @@ void isom_remove_iods( isom_iods_t *iods )
     isom_remove_box( iods, isom_moov_t );
 }
 
-void isom_remove_trak( isom_trak_t *trak )
+static void isom_remove_trak( isom_trak_t *trak )
 {
     if( !trak )
         return;
@@ -446,42 +446,42 @@ void isom_remove_trak( isom_trak_t *trak )
     isom_remove_box_in_list( trak, isom_moov_t );
 }
 
-void isom_remove_tkhd( isom_tkhd_t *tkhd )
+static void isom_remove_tkhd( isom_tkhd_t *tkhd )
 {
     if( !tkhd )
         return;
     isom_remove_box( tkhd, isom_trak_t );
 }
 
-void isom_remove_clef( isom_clef_t *clef )
+static void isom_remove_clef( isom_clef_t *clef )
 {
     if( !clef )
         return;
     isom_remove_box( clef, isom_tapt_t );
 }
 
-void isom_remove_prof( isom_prof_t *prof )
+static void isom_remove_prof( isom_prof_t *prof )
 {
     if( !prof )
         return;
     isom_remove_box( prof, isom_tapt_t );
 }
 
-void isom_remove_enof( isom_enof_t *enof )
+static void isom_remove_enof( isom_enof_t *enof )
 {
     if( !enof )
         return;
     isom_remove_box( enof, isom_tapt_t );
 }
 
-void isom_remove_tapt( isom_tapt_t *tapt )
+static void isom_remove_tapt( isom_tapt_t *tapt )
 {
     if( !tapt )
         return;
     isom_remove_box( tapt, isom_trak_t );
 }
 
-void isom_remove_elst( isom_elst_t *elst )
+static void isom_remove_elst( isom_elst_t *elst )
 {
     if( !elst )
         return;
@@ -489,14 +489,14 @@ void isom_remove_elst( isom_elst_t *elst )
     isom_remove_box( elst, isom_edts_t );
 }
 
-void isom_remove_edts( isom_edts_t *edts )
+static void isom_remove_edts( isom_edts_t *edts )
 {
     if( !edts )
         return;
     isom_remove_box( edts, isom_trak_t );
 }
 
-void isom_remove_track_reference_type( isom_tref_type_t *ref )
+static void isom_remove_track_reference_type( isom_tref_type_t *ref )
 {
     if( !ref )
         return;
@@ -505,70 +505,70 @@ void isom_remove_track_reference_type( isom_tref_type_t *ref )
     isom_remove_box_in_predefined_list( ref, offsetof( isom_tref_t, ref_list ) );
 }
 
-void isom_remove_tref( isom_tref_t *tref )
+static void isom_remove_tref( isom_tref_t *tref )
 {
     if( !tref )
         return;
     isom_remove_box( tref, isom_trak_t );
 }
 
-void isom_remove_mdhd( isom_mdhd_t *mdhd )
+static void isom_remove_mdhd( isom_mdhd_t *mdhd )
 {
     if( !mdhd )
         return;
     isom_remove_box( mdhd, isom_mdia_t );
 }
 
-void isom_remove_vmhd( isom_vmhd_t *vmhd )
+static void isom_remove_vmhd( isom_vmhd_t *vmhd )
 {
     if( !vmhd )
         return;
     isom_remove_box( vmhd, isom_minf_t );
 }
 
-void isom_remove_smhd( isom_smhd_t *smhd )
+static void isom_remove_smhd( isom_smhd_t *smhd )
 {
     if( !smhd )
         return;
     isom_remove_box( smhd, isom_minf_t );
 }
 
-void isom_remove_hmhd( isom_hmhd_t *hmhd )
+static void isom_remove_hmhd( isom_hmhd_t *hmhd )
 {
     if( !hmhd )
         return;
     isom_remove_box( hmhd, isom_minf_t );
 }
 
-void isom_remove_nmhd( isom_nmhd_t *nmhd )
+static void isom_remove_nmhd( isom_nmhd_t *nmhd )
 {
     if( !nmhd )
         return;
     isom_remove_box( nmhd, isom_minf_t );
 }
 
-void isom_remove_gmin( isom_gmin_t *gmin )
+static void isom_remove_gmin( isom_gmin_t *gmin )
 {
     if( !gmin )
         return;
     isom_remove_box( gmin, isom_gmhd_t );
 }
 
-void isom_remove_text( isom_text_t *text )
+static void isom_remove_text( isom_text_t *text )
 {
     if( !text )
         return;
     isom_remove_box( text, isom_gmhd_t );
 }
 
-void isom_remove_gmhd( isom_gmhd_t *gmhd )
+static void isom_remove_gmhd( isom_gmhd_t *gmhd )
 {
     if( !gmhd )
         return;
     isom_remove_box( gmhd, isom_minf_t );
 }
 
-void isom_remove_hdlr( isom_hdlr_t *hdlr )
+static void isom_remove_hdlr( isom_hdlr_t *hdlr )
 {
     if( !hdlr )
         return;
@@ -591,7 +591,7 @@ void isom_remove_hdlr( isom_hdlr_t *hdlr )
     lsmash_free( hdlr );
 }
 
-void isom_remove_clap( isom_clap_t *clap )
+static void isom_remove_clap( isom_clap_t *clap )
 {
     if( !clap )
         return;
@@ -599,7 +599,7 @@ void isom_remove_clap( isom_clap_t *clap )
     lsmash_free( clap );
 }
 
-void isom_remove_pasp( isom_pasp_t *pasp )
+static void isom_remove_pasp( isom_pasp_t *pasp )
 {
     if( !pasp )
         return;
@@ -607,7 +607,7 @@ void isom_remove_pasp( isom_pasp_t *pasp )
     lsmash_free( pasp );
 }
 
-void isom_remove_glbl( isom_glbl_t *glbl )
+static void isom_remove_glbl( isom_glbl_t *glbl )
 {
     if( !glbl )
         return;
@@ -617,7 +617,7 @@ void isom_remove_glbl( isom_glbl_t *glbl )
     lsmash_free( glbl );
 }
 
-void isom_remove_colr( isom_colr_t *colr )
+static void isom_remove_colr( isom_colr_t *colr )
 {
     if( !colr )
         return;
@@ -625,7 +625,7 @@ void isom_remove_colr( isom_colr_t *colr )
     lsmash_free( colr );
 }
 
-void isom_remove_gama( isom_gama_t *gama )
+static void isom_remove_gama( isom_gama_t *gama )
 {
     if( !gama )
         return;
@@ -633,7 +633,7 @@ void isom_remove_gama( isom_gama_t *gama )
     lsmash_free( gama );
 }
 
-void isom_remove_fiel( isom_fiel_t *fiel )
+static void isom_remove_fiel( isom_fiel_t *fiel )
 {
     if( !fiel )
         return;
@@ -641,7 +641,7 @@ void isom_remove_fiel( isom_fiel_t *fiel )
     lsmash_free( fiel );
 }
 
-void isom_remove_cspc( isom_cspc_t *cspc )
+static void isom_remove_cspc( isom_cspc_t *cspc )
 {
     if( !cspc )
         return;
@@ -649,7 +649,7 @@ void isom_remove_cspc( isom_cspc_t *cspc )
     lsmash_free( cspc );
 }
 
-void isom_remove_sgbt( isom_sgbt_t *sgbt )
+static void isom_remove_sgbt( isom_sgbt_t *sgbt )
 {
     if( !sgbt )
         return;
@@ -657,7 +657,7 @@ void isom_remove_sgbt( isom_sgbt_t *sgbt )
     lsmash_free( sgbt );
 }
 
-void isom_remove_stsl( isom_stsl_t *stsl )
+static void isom_remove_stsl( isom_stsl_t *stsl )
 {
     if( !stsl )
         return;
@@ -665,7 +665,7 @@ void isom_remove_stsl( isom_stsl_t *stsl )
     lsmash_free( stsl );
 }
 
-void isom_remove_esds( isom_esds_t *esds )
+static void isom_remove_esds( isom_esds_t *esds )
 {
     if( !esds )
         return;
@@ -674,7 +674,7 @@ void isom_remove_esds( isom_esds_t *esds )
     lsmash_free( esds );
 }
 
-void isom_remove_btrt( isom_btrt_t *btrt )
+static void isom_remove_btrt( isom_btrt_t *btrt )
 {
     if( !btrt )
         return;
@@ -691,7 +691,7 @@ static void isom_remove_font_record( isom_font_record_t *font_record )
     lsmash_free( font_record );
 }
 
-void isom_remove_ftab( isom_ftab_t *ftab )
+static void isom_remove_ftab( isom_ftab_t *ftab )
 {
     if( !ftab )
         return;
@@ -699,35 +699,35 @@ void isom_remove_ftab( isom_ftab_t *ftab )
     isom_remove_box( ftab, isom_tx3g_entry_t );
 }
 
-void isom_remove_frma( isom_frma_t *frma )
+static void isom_remove_frma( isom_frma_t *frma )
 {
     if( !frma )
         return;
     isom_remove_box( frma, isom_wave_t );
 }
 
-void isom_remove_enda( isom_enda_t *enda )
+static void isom_remove_enda( isom_enda_t *enda )
 {
     if( !enda )
         return;
     isom_remove_box( enda, isom_wave_t );
 }
 
-void isom_remove_mp4a( isom_mp4a_t *mp4a )
+static void isom_remove_mp4a( isom_mp4a_t *mp4a )
 {
     if( !mp4a )
         return;
     isom_remove_box( mp4a, isom_wave_t );
 }
 
-void isom_remove_terminator( isom_terminator_t *terminator )
+static void isom_remove_terminator( isom_terminator_t *terminator )
 {
     if( !terminator )
         return;
     isom_remove_box( terminator, isom_wave_t );
 }
 
-void isom_remove_wave( isom_wave_t *wave )
+static void isom_remove_wave( isom_wave_t *wave )
 {
     if( !wave )
         return;
@@ -735,7 +735,7 @@ void isom_remove_wave( isom_wave_t *wave )
     lsmash_free( wave );
 }
 
-void isom_remove_chan( isom_chan_t *chan )
+static void isom_remove_chan( isom_chan_t *chan )
 {
     if( !chan )
         return;
@@ -745,7 +745,7 @@ void isom_remove_chan( isom_chan_t *chan )
     lsmash_free( chan );
 }
 
-void isom_remove_srat( isom_srat_t *srat )
+static void isom_remove_srat( isom_srat_t *srat )
 {
     if( !srat )
         return;
@@ -753,14 +753,14 @@ void isom_remove_srat( isom_srat_t *srat )
     lsmash_free( srat );
 }
 
-void isom_remove_stsd( isom_stsd_t *stsd )
+static void isom_remove_stsd( isom_stsd_t *stsd )
 {
     if( !stsd )
         return;
     isom_remove_box( stsd, isom_stbl_t );
 }
 
-void isom_remove_visual_description( isom_sample_entry_t *description )
+static void isom_remove_visual_description( isom_sample_entry_t *description )
 {
     isom_visual_entry_t *visual = (isom_visual_entry_t *)description;
     isom_remove_all_extension_boxes( &visual->extensions );
@@ -769,14 +769,14 @@ void isom_remove_visual_description( isom_sample_entry_t *description )
     lsmash_free( visual );
 }
 
-void isom_remove_audio_description( isom_sample_entry_t *description )
+static void isom_remove_audio_description( isom_sample_entry_t *description )
 {
     isom_audio_entry_t *audio = (isom_audio_entry_t *)description;
     isom_remove_all_extension_boxes( &audio->extensions );
     lsmash_free( audio );
 }
 
-void isom_remove_hint_description( isom_sample_entry_t *description )
+static void isom_remove_hint_description( isom_sample_entry_t *description )
 {
     isom_hint_entry_t *hint = (isom_hint_entry_t *)description;
     isom_remove_all_extension_boxes( &hint->extensions );
@@ -785,21 +785,21 @@ void isom_remove_hint_description( isom_sample_entry_t *description )
     lsmash_free( hint );
 }
 
-void isom_remove_metadata_description( isom_sample_entry_t *description )
+static void isom_remove_metadata_description( isom_sample_entry_t *description )
 {
     isom_metadata_entry_t *metadata = (isom_metadata_entry_t *)description;
     isom_remove_all_extension_boxes( &metadata->extensions );
     lsmash_free( metadata );
 }
 
-void isom_remove_tx3g_description( isom_sample_entry_t *description )
+static void isom_remove_tx3g_description( isom_sample_entry_t *description )
 {
     isom_tx3g_entry_t *tx3g = (isom_tx3g_entry_t *)description;
     isom_remove_all_extension_boxes( &tx3g->extensions );
     lsmash_free( tx3g );
 }
 
-void isom_remove_qt_text_description( isom_sample_entry_t *description )
+static void isom_remove_qt_text_description( isom_sample_entry_t *description )
 {
     isom_qt_text_entry_t *text = (isom_qt_text_entry_t *)description;
     isom_remove_all_extension_boxes( &text->extensions );
@@ -808,7 +808,7 @@ void isom_remove_qt_text_description( isom_sample_entry_t *description )
     lsmash_free( text );
 }
 
-void isom_remove_mp4s_description( isom_sample_entry_t *description )
+static void isom_remove_mp4s_description( isom_sample_entry_t *description )
 {
     isom_mp4s_entry_t *mp4s = (isom_mp4s_entry_t *)description;
     isom_remove_all_extension_boxes( &mp4s->extensions );
@@ -983,7 +983,7 @@ void isom_remove_sample_description( isom_sample_entry_t *sample )
         }
 }
 
-void isom_remove_stts( isom_stts_t *stts )
+static void isom_remove_stts( isom_stts_t *stts )
 {
     if( !stts )
         return;
@@ -991,7 +991,7 @@ void isom_remove_stts( isom_stts_t *stts )
     isom_remove_box( stts, isom_stbl_t );
 }
 
-void isom_remove_ctts( isom_ctts_t *ctts )
+static void isom_remove_ctts( isom_ctts_t *ctts )
 {
     if( !ctts )
         return;
@@ -999,14 +999,14 @@ void isom_remove_ctts( isom_ctts_t *ctts )
     isom_remove_box( ctts, isom_stbl_t );
 }
 
-void isom_remove_cslg( isom_cslg_t *cslg )
+static void isom_remove_cslg( isom_cslg_t *cslg )
 {
     if( !cslg )
         return;
     isom_remove_box( cslg, isom_stbl_t );
 }
 
-void isom_remove_stsc( isom_stsc_t *stsc )
+static void isom_remove_stsc( isom_stsc_t *stsc )
 {
     if( !stsc )
         return;
@@ -1014,7 +1014,7 @@ void isom_remove_stsc( isom_stsc_t *stsc )
     isom_remove_box( stsc, isom_stbl_t );
 }
 
-void isom_remove_stsz( isom_stsz_t *stsz )
+static void isom_remove_stsz( isom_stsz_t *stsz )
 {
     if( !stsz )
         return;
@@ -1022,7 +1022,7 @@ void isom_remove_stsz( isom_stsz_t *stsz )
     isom_remove_box( stsz, isom_stbl_t );
 }
 
-void isom_remove_stss( isom_stss_t *stss )
+static void isom_remove_stss( isom_stss_t *stss )
 {
     if( !stss )
         return;
@@ -1030,7 +1030,7 @@ void isom_remove_stss( isom_stss_t *stss )
     isom_remove_box( stss, isom_stbl_t );
 }
 
-void isom_remove_stps( isom_stps_t *stps )
+static void isom_remove_stps( isom_stps_t *stps )
 {
     if( !stps )
         return;
@@ -1038,7 +1038,7 @@ void isom_remove_stps( isom_stps_t *stps )
     isom_remove_box( stps, isom_stbl_t );
 }
 
-void isom_remove_sdtp( isom_sdtp_t *sdtp )
+static void isom_remove_sdtp( isom_sdtp_t *sdtp )
 {
     if( !sdtp )
         return;
@@ -1057,7 +1057,7 @@ void isom_remove_sdtp( isom_sdtp_t *sdtp )
     lsmash_free( sdtp );
 }
 
-void isom_remove_stco( isom_stco_t *stco )
+static void isom_remove_stco( isom_stco_t *stco )
 {
     if( !stco )
         return;
@@ -1065,7 +1065,7 @@ void isom_remove_stco( isom_stco_t *stco )
     isom_remove_box( stco, isom_stbl_t );
 }
 
-void isom_remove_sgpd( isom_sgpd_t *sgpd )
+static void isom_remove_sgpd( isom_sgpd_t *sgpd )
 {
     if( !sgpd )
         return;
@@ -1073,7 +1073,7 @@ void isom_remove_sgpd( isom_sgpd_t *sgpd )
     isom_remove_box_in_list( sgpd, isom_stbl_t );
 }
 
-void isom_remove_sbgp( isom_sbgp_t *sbgp )
+static void isom_remove_sbgp( isom_sbgp_t *sbgp )
 {
     if( !sbgp )
         return;
@@ -1081,14 +1081,14 @@ void isom_remove_sbgp( isom_sbgp_t *sbgp )
     isom_remove_box_in_list( sbgp, isom_stbl_t );
 }
 
-void isom_remove_stbl( isom_stbl_t *stbl )
+static void isom_remove_stbl( isom_stbl_t *stbl )
 {
     if( !stbl )
         return;
     isom_remove_box( stbl, isom_minf_t );
 }
 
-void isom_remove_dref_entry( isom_dref_entry_t *data_entry )
+static void isom_remove_dref_entry( isom_dref_entry_t *data_entry )
 {
     if( !data_entry )
         return;
@@ -1097,7 +1097,7 @@ void isom_remove_dref_entry( isom_dref_entry_t *data_entry )
     isom_remove_box_in_predefined_list( data_entry, offsetof( isom_dref_t, list ) );
 }
 
-void isom_remove_dref( isom_dref_t *dref )
+static void isom_remove_dref( isom_dref_t *dref )
 {
     if( !dref )
         return;
@@ -1109,28 +1109,28 @@ void isom_remove_dref( isom_dref_t *dref )
     isom_remove_box( dref, isom_dinf_t );
 }
 
-void isom_remove_dinf( isom_dinf_t *dinf )
+static void isom_remove_dinf( isom_dinf_t *dinf )
 {
     if( !dinf )
         return;
     isom_remove_box( dinf, isom_minf_t );
 }
 
-void isom_remove_minf( isom_minf_t *minf )
+static void isom_remove_minf( isom_minf_t *minf )
 {
     if( !minf )
         return;
     isom_remove_box( minf, isom_mdia_t );
 }
 
-void isom_remove_mdia( isom_mdia_t *mdia )
+static void isom_remove_mdia( isom_mdia_t *mdia )
 {
     if( !mdia )
         return;
     isom_remove_box( mdia, isom_trak_t );
 }
 
-void isom_remove_chpl( isom_chpl_t *chpl )
+static void isom_remove_chpl( isom_chpl_t *chpl )
 {
     if( !chpl )
         return;
@@ -1165,7 +1165,7 @@ static void isom_remove_keys_entry( isom_keys_entry_t *data )
     lsmash_free( data );
 }
 
-void isom_remove_keys( isom_keys_t *keys )
+static void isom_remove_keys( isom_keys_t *keys )
 {
     if( !keys )
         return;
@@ -1173,7 +1173,7 @@ void isom_remove_keys( isom_keys_t *keys )
     isom_remove_box( keys, isom_meta_t );
 }
 
-void isom_remove_mean( isom_mean_t *mean )
+static void isom_remove_mean( isom_mean_t *mean )
 {
     if( !mean )
         return;
@@ -1182,7 +1182,7 @@ void isom_remove_mean( isom_mean_t *mean )
     isom_remove_box( mean, isom_metaitem_t );
 }
 
-void isom_remove_name( isom_name_t *name )
+static void isom_remove_name( isom_name_t *name )
 {
     if( !name )
         return;
@@ -1191,7 +1191,7 @@ void isom_remove_name( isom_name_t *name )
     isom_remove_box( name, isom_metaitem_t );
 }
 
-void isom_remove_data( isom_data_t *data )
+static void isom_remove_data( isom_data_t *data )
 {
     if( !data )
         return;
@@ -1200,21 +1200,21 @@ void isom_remove_data( isom_data_t *data )
     isom_remove_box( data, isom_metaitem_t );
 }
 
-void isom_remove_metaitem( isom_metaitem_t *metaitem )
+static void isom_remove_metaitem( isom_metaitem_t *metaitem )
 {
     if( !metaitem )
         return;
     isom_remove_box_in_predefined_list( metaitem, offsetof( isom_ilst_t, item_list ) );
 }
 
-void isom_remove_ilst( isom_ilst_t *ilst )
+static void isom_remove_ilst( isom_ilst_t *ilst )
 {
     if( !ilst )
         return;
     isom_remove_box( ilst, isom_meta_t );
 }
 
-void isom_remove_meta( isom_meta_t *meta )
+static void isom_remove_meta( isom_meta_t *meta )
 {
     if( !meta )
         return;
@@ -1236,7 +1236,7 @@ void isom_remove_meta( isom_meta_t *meta )
     lsmash_free( meta );
 }
 
-void isom_remove_cprt( isom_cprt_t *cprt )
+static void isom_remove_cprt( isom_cprt_t *cprt )
 {
     if( !cprt )
         return;
@@ -1245,7 +1245,7 @@ void isom_remove_cprt( isom_cprt_t *cprt )
     isom_remove_box_in_list( cprt, isom_udta_t );
 }
 
-void isom_remove_udta( isom_udta_t *udta )
+static void isom_remove_udta( isom_udta_t *udta )
 {
     if( !udta )
         return;
@@ -1264,35 +1264,35 @@ void isom_remove_udta( isom_udta_t *udta )
     lsmash_free( udta );
 }
 
-void isom_remove_WLOC( isom_WLOC_t *WLOC )
+static void isom_remove_WLOC( isom_WLOC_t *WLOC )
 {
     if( !WLOC )
         return;
     isom_remove_box( WLOC, isom_udta_t );
 }
 
-void isom_remove_LOOP( isom_LOOP_t *LOOP )
+static void isom_remove_LOOP( isom_LOOP_t *LOOP )
 {
     if( !LOOP )
         return;
     isom_remove_box( LOOP, isom_udta_t );
 }
 
-void isom_remove_SelO( isom_SelO_t *SelO )
+static void isom_remove_SelO( isom_SelO_t *SelO )
 {
     if( !SelO )
         return;
     isom_remove_box( SelO, isom_udta_t );
 }
 
-void isom_remove_AllF( isom_AllF_t *AllF )
+static void isom_remove_AllF( isom_AllF_t *AllF )
 {
     if( !AllF )
         return;
     isom_remove_box( AllF, isom_udta_t );
 }
 
-void isom_remove_ctab( isom_ctab_t *ctab )
+static void isom_remove_ctab( isom_ctab_t *ctab )
 {
     if( !ctab )
         return;
@@ -1307,63 +1307,63 @@ void isom_remove_ctab( isom_ctab_t *ctab )
     }
 }
 
-void isom_remove_mehd( isom_mehd_t *mehd )
+static void isom_remove_mehd( isom_mehd_t *mehd )
 {
     if( !mehd )
         return;
     isom_remove_box( mehd, isom_mvex_t );
 }
 
-void isom_remove_trex( isom_trex_t *trex )
+static void isom_remove_trex( isom_trex_t *trex )
 {
     if( !trex )
         return;
     isom_remove_box_in_list( trex, isom_mvex_t );
 }
 
-void isom_remove_mvex( isom_mvex_t *mvex )
+static void isom_remove_mvex( isom_mvex_t *mvex )
 {
     if( !mvex )
         return;
     isom_remove_box( mvex, isom_moov_t );
 }
 
-void isom_remove_mvhd( isom_mvhd_t *mvhd )
+static void isom_remove_mvhd( isom_mvhd_t *mvhd )
 {
     if( !mvhd )
         return;
     isom_remove_box( mvhd, isom_moov_t );
 }
 
-void isom_remove_moov( isom_moov_t *moov )
+static void isom_remove_moov( isom_moov_t *moov )
 {
     if( !moov )
         return;
     isom_remove_box( moov, lsmash_root_t );
 }
 
-void isom_remove_mfhd( isom_mfhd_t *mfhd )
+static void isom_remove_mfhd( isom_mfhd_t *mfhd )
 {
     if( !mfhd )
         return;
     isom_remove_box( mfhd, isom_moof_t );
 }
 
-void isom_remove_tfhd( isom_tfhd_t *tfhd )
+static void isom_remove_tfhd( isom_tfhd_t *tfhd )
 {
     if( !tfhd )
         return;
     isom_remove_box( tfhd, isom_traf_t );
 }
 
-void isom_remove_tfdt( isom_tfdt_t *tfdt )
+static void isom_remove_tfdt( isom_tfdt_t *tfdt )
 {
     if( !tfdt )
         return;
     isom_remove_box( tfdt, isom_traf_t );
 }
 
-void isom_remove_trun( isom_trun_t *trun )
+static void isom_remove_trun( isom_trun_t *trun )
 {
     if( !trun )
         return;
@@ -1371,28 +1371,28 @@ void isom_remove_trun( isom_trun_t *trun )
     isom_remove_box_in_list( trun, isom_traf_t );
 }
 
-void isom_remove_traf( isom_traf_t *traf )
+static void isom_remove_traf( isom_traf_t *traf )
 {
     if( !traf )
         return;
     isom_remove_box_in_list( traf, isom_moof_t );
 }
 
-void isom_remove_moof( isom_moof_t *moof )
+static void isom_remove_moof( isom_moof_t *moof )
 {
     if( !moof )
         return;
     isom_remove_box_in_list( moof, lsmash_root_t );
 }
 
-void isom_remove_mdat( isom_mdat_t *mdat )
+static void isom_remove_mdat( isom_mdat_t *mdat )
 {
     if( !mdat )
         return;
     isom_remove_box( mdat, lsmash_root_t );
 }
 
-void isom_remove_free( isom_free_t *skip )
+static void isom_remove_free( isom_free_t *skip )
 {
     if( !skip )
         return;
@@ -1402,7 +1402,7 @@ void isom_remove_free( isom_free_t *skip )
 }
 #define isom_remove_skip isom_remove_free
 
-void isom_remove_tfra( isom_tfra_t *tfra )
+static void isom_remove_tfra( isom_tfra_t *tfra )
 {
     if( !tfra )
         return;
@@ -1410,14 +1410,14 @@ void isom_remove_tfra( isom_tfra_t *tfra )
     isom_remove_box_in_list( tfra, isom_mfra_t );
 }
 
-void isom_remove_mfro( isom_mfro_t *mfro )
+static void isom_remove_mfro( isom_mfro_t *mfro )
 {
     if( !mfro )
         return;
     isom_remove_box( mfro, isom_mfra_t );
 }
 
-void isom_remove_mfra( isom_mfra_t *mfra )
+static void isom_remove_mfra( isom_mfra_t *mfra )
 {
     if( !mfra )
         return;
@@ -1441,7 +1441,7 @@ uint64_t isom_update_unknown_box_size( isom_unknown_box_t *unknown_box )
     return unknown_box->size;
 }
 
-uint64_t isom_update_ftyp_size( isom_ftyp_t *ftyp )
+static uint64_t isom_update_ftyp_size( isom_ftyp_t *ftyp )
 {
     if( !ftyp )
         return 0;
@@ -1450,7 +1450,7 @@ uint64_t isom_update_ftyp_size( isom_ftyp_t *ftyp )
     return ftyp->size;
 }
 
-uint64_t isom_update_moov_size( isom_moov_t *moov )
+static uint64_t isom_update_moov_size( isom_moov_t *moov )
 {
     if( !moov )
         return 0;
@@ -1459,7 +1459,7 @@ uint64_t isom_update_moov_size( isom_moov_t *moov )
     return moov->size;
 }
 
-uint64_t isom_update_mvhd_size( isom_mvhd_t *mvhd )
+static uint64_t isom_update_mvhd_size( isom_mvhd_t *mvhd )
 {
     if( !mvhd )
         return 0;
@@ -1473,7 +1473,7 @@ uint64_t isom_update_mvhd_size( isom_mvhd_t *mvhd )
     return mvhd->size;
 }
 
-uint64_t isom_update_iods_size( isom_iods_t *iods )
+static uint64_t isom_update_iods_size( isom_iods_t *iods )
 {
     if( !iods
      || !iods->OD )
@@ -1483,7 +1483,7 @@ uint64_t isom_update_iods_size( isom_iods_t *iods )
     return iods->size;
 }
 
-uint64_t isom_update_ctab_size( isom_ctab_t *ctab )
+static uint64_t isom_update_ctab_size( isom_ctab_t *ctab )
 {
     if( !ctab )
         return 0;
@@ -1492,7 +1492,7 @@ uint64_t isom_update_ctab_size( isom_ctab_t *ctab )
     return ctab->size;
 }
 
-uint64_t isom_update_trak_size( isom_trak_t *trak )
+static uint64_t isom_update_trak_size( isom_trak_t *trak )
 {
     if( !trak )
         return 0;
@@ -1501,7 +1501,7 @@ uint64_t isom_update_trak_size( isom_trak_t *trak )
     return trak->size;
 }
 
-uint64_t isom_update_tkhd_size( isom_tkhd_t *tkhd )
+static uint64_t isom_update_tkhd_size( isom_tkhd_t *tkhd )
 {
     if( !tkhd )
         return 0;
@@ -1515,7 +1515,7 @@ uint64_t isom_update_tkhd_size( isom_tkhd_t *tkhd )
     return tkhd->size;
 }
 
-uint64_t isom_update_tapt_size( isom_tapt_t *tapt )
+static uint64_t isom_update_tapt_size( isom_tapt_t *tapt )
 {
     if( !tapt )
         return 0;
@@ -1524,7 +1524,7 @@ uint64_t isom_update_tapt_size( isom_tapt_t *tapt )
     return tapt->size;
 }
 
-uint64_t isom_update_clef_size( isom_clef_t *clef )
+static uint64_t isom_update_clef_size( isom_clef_t *clef )
 {
     if( !clef )
         return 0;
@@ -1533,7 +1533,7 @@ uint64_t isom_update_clef_size( isom_clef_t *clef )
     return clef->size;
 }
 
-uint64_t isom_update_prof_size( isom_prof_t *prof )
+static uint64_t isom_update_prof_size( isom_prof_t *prof )
 {
     if( !prof )
         return 0;
@@ -1542,7 +1542,7 @@ uint64_t isom_update_prof_size( isom_prof_t *prof )
     return prof->size;
 }
 
-uint64_t isom_update_enof_size( isom_enof_t *enof )
+static uint64_t isom_update_enof_size( isom_enof_t *enof )
 {
     if( !enof )
         return 0;
@@ -1551,7 +1551,7 @@ uint64_t isom_update_enof_size( isom_enof_t *enof )
     return enof->size;
 }
 
-uint64_t isom_update_edts_size( isom_edts_t *edts )
+static uint64_t isom_update_edts_size( isom_edts_t *edts )
 {
     if( !edts )
         return 0;
@@ -1560,7 +1560,7 @@ uint64_t isom_update_edts_size( isom_edts_t *edts )
     return edts->size;
 }
 
-uint64_t isom_update_elst_size( isom_elst_t *elst )
+static uint64_t isom_update_elst_size( isom_elst_t *elst )
 {
     if( !elst
      || !elst->list )
@@ -1580,7 +1580,7 @@ uint64_t isom_update_elst_size( isom_elst_t *elst )
     return elst->size;
 }
 
-uint64_t isom_update_tref_size( isom_tref_t *tref )
+static uint64_t isom_update_tref_size( isom_tref_t *tref )
 {
     if( !tref )
         return 0;
@@ -1589,14 +1589,14 @@ uint64_t isom_update_tref_size( isom_tref_t *tref )
     return tref->size;
 }
 
-uint64_t isom_update_track_reference_type_size( isom_tref_type_t *ref )
+static uint64_t isom_update_track_reference_type_size( isom_tref_type_t *ref )
 {
     ref->size = ISOM_BASEBOX_COMMON_SIZE + (uint64_t)ref->ref_count * 4;
     CHECK_LARGESIZE( ref );
     return ref->size;
 }
 
-uint64_t isom_update_mdia_size( isom_mdia_t *mdia )
+static uint64_t isom_update_mdia_size( isom_mdia_t *mdia )
 {
     if( !mdia )
         return 0;
@@ -1605,7 +1605,7 @@ uint64_t isom_update_mdia_size( isom_mdia_t *mdia )
     return mdia->size;
 }
 
-uint64_t isom_update_mdhd_size( isom_mdhd_t *mdhd )
+static uint64_t isom_update_mdhd_size( isom_mdhd_t *mdhd )
 {
     if( !mdhd )
         return 0;
@@ -1619,7 +1619,7 @@ uint64_t isom_update_mdhd_size( isom_mdhd_t *mdhd )
     return mdhd->size;
 }
 
-uint64_t isom_update_hdlr_size( isom_hdlr_t *hdlr )
+static uint64_t isom_update_hdlr_size( isom_hdlr_t *hdlr )
 {
     if( !hdlr )
         return 0;
@@ -1628,7 +1628,7 @@ uint64_t isom_update_hdlr_size( isom_hdlr_t *hdlr )
     return hdlr->size;
 }
 
-uint64_t isom_update_minf_size( isom_minf_t *minf )
+static uint64_t isom_update_minf_size( isom_minf_t *minf )
 {
     if( !minf )
         return 0;
@@ -1637,7 +1637,7 @@ uint64_t isom_update_minf_size( isom_minf_t *minf )
     return minf->size;
 }
 
-uint64_t isom_update_vmhd_size( isom_vmhd_t *vmhd )
+static uint64_t isom_update_vmhd_size( isom_vmhd_t *vmhd )
 {
     if( !vmhd )
         return 0;
@@ -1646,7 +1646,7 @@ uint64_t isom_update_vmhd_size( isom_vmhd_t *vmhd )
     return vmhd->size;
 }
 
-uint64_t isom_update_smhd_size( isom_smhd_t *smhd )
+static uint64_t isom_update_smhd_size( isom_smhd_t *smhd )
 {
     if( !smhd )
         return 0;
@@ -1655,7 +1655,7 @@ uint64_t isom_update_smhd_size( isom_smhd_t *smhd )
     return smhd->size;
 }
 
-uint64_t isom_update_hmhd_size( isom_hmhd_t *hmhd )
+static uint64_t isom_update_hmhd_size( isom_hmhd_t *hmhd )
 {
     if( !hmhd )
         return 0;
@@ -1664,7 +1664,7 @@ uint64_t isom_update_hmhd_size( isom_hmhd_t *hmhd )
     return hmhd->size;
 }
 
-uint64_t isom_update_nmhd_size( isom_nmhd_t *nmhd )
+static uint64_t isom_update_nmhd_size( isom_nmhd_t *nmhd )
 {
     if( !nmhd )
         return 0;
@@ -1673,7 +1673,7 @@ uint64_t isom_update_nmhd_size( isom_nmhd_t *nmhd )
     return nmhd->size;
 }
 
-uint64_t isom_update_gmhd_size( isom_gmhd_t *gmhd )
+static uint64_t isom_update_gmhd_size( isom_gmhd_t *gmhd )
 {
     if( !gmhd )
         return 0;
@@ -1682,7 +1682,7 @@ uint64_t isom_update_gmhd_size( isom_gmhd_t *gmhd )
     return gmhd->size;
 }
 
-uint64_t isom_update_gmin_size( isom_gmin_t *gmin )
+static uint64_t isom_update_gmin_size( isom_gmin_t *gmin )
 {
     if( !gmin )
         return 0;
@@ -1691,7 +1691,7 @@ uint64_t isom_update_gmin_size( isom_gmin_t *gmin )
     return gmin->size;
 }
 
-uint64_t isom_update_text_size( isom_text_t *text )
+static uint64_t isom_update_text_size( isom_text_t *text )
 {
     if( !text )
         return 0;
@@ -1700,7 +1700,7 @@ uint64_t isom_update_text_size( isom_text_t *text )
     return text->size;
 }
 
-uint64_t isom_update_dinf_size( isom_dinf_t *dinf )
+static uint64_t isom_update_dinf_size( isom_dinf_t *dinf )
 {
     if( !dinf )
         return 0;
@@ -1709,7 +1709,7 @@ uint64_t isom_update_dinf_size( isom_dinf_t *dinf )
     return dinf->size;
 }
 
-uint64_t isom_update_dref_size( isom_dref_t *dref )
+static uint64_t isom_update_dref_size( isom_dref_t *dref )
 {
     if( !dref
      || !dref->list )
@@ -1719,7 +1719,7 @@ uint64_t isom_update_dref_size( isom_dref_t *dref )
     return dref->size;
 }
 
-uint64_t isom_update_dref_entry_size( isom_dref_entry_t *urln )
+static uint64_t isom_update_dref_entry_size( isom_dref_entry_t *urln )
 {
     if( !urln )
         return 0;
@@ -1728,7 +1728,7 @@ uint64_t isom_update_dref_entry_size( isom_dref_entry_t *urln )
     return urln->size;
 }
 
-uint64_t isom_update_stbl_size( isom_stbl_t *stbl )
+static uint64_t isom_update_stbl_size( isom_stbl_t *stbl )
 {
     if( !stbl )
         return 0;
@@ -1737,7 +1737,7 @@ uint64_t isom_update_stbl_size( isom_stbl_t *stbl )
     return stbl->size;
 }
 
-uint64_t isom_update_pasp_size( isom_pasp_t *pasp )
+static uint64_t isom_update_pasp_size( isom_pasp_t *pasp )
 {
     if( !pasp )
         return 0;
@@ -1746,7 +1746,7 @@ uint64_t isom_update_pasp_size( isom_pasp_t *pasp )
     return pasp->size;
 }
 
-uint64_t isom_update_clap_size( isom_clap_t *clap )
+static uint64_t isom_update_clap_size( isom_clap_t *clap )
 {
     if( !clap )
         return 0;
@@ -1755,7 +1755,7 @@ uint64_t isom_update_clap_size( isom_clap_t *clap )
     return clap->size;
 }
 
-uint64_t isom_update_glbl_size( isom_glbl_t *glbl )
+static uint64_t isom_update_glbl_size( isom_glbl_t *glbl )
 {
     if( !glbl )
         return 0;
@@ -1764,7 +1764,7 @@ uint64_t isom_update_glbl_size( isom_glbl_t *glbl )
     return glbl->size;
 }
 
-uint64_t isom_update_colr_size( isom_colr_t *colr )
+static uint64_t isom_update_colr_size( isom_colr_t *colr )
 {
     if( !colr
      || (colr->color_parameter_type != ISOM_COLOR_PARAMETER_TYPE_NCLX
@@ -1775,7 +1775,7 @@ uint64_t isom_update_colr_size( isom_colr_t *colr )
     return colr->size;
 }
 
-uint64_t isom_update_gama_size( isom_gama_t *gama )
+static uint64_t isom_update_gama_size( isom_gama_t *gama )
 {
     if( !gama || !gama->parent )
         return 0;
@@ -1788,7 +1788,7 @@ uint64_t isom_update_gama_size( isom_gama_t *gama )
     return gama->size;
 }
 
-uint64_t isom_update_fiel_size( isom_fiel_t *fiel )
+static uint64_t isom_update_fiel_size( isom_fiel_t *fiel )
 {
     if( !fiel )
         return 0;
@@ -1797,7 +1797,7 @@ uint64_t isom_update_fiel_size( isom_fiel_t *fiel )
     return fiel->size;
 }
 
-uint64_t isom_update_cspc_size( isom_cspc_t *cspc )
+static uint64_t isom_update_cspc_size( isom_cspc_t *cspc )
 {
     if( !cspc )
         return 0;
@@ -1806,7 +1806,7 @@ uint64_t isom_update_cspc_size( isom_cspc_t *cspc )
     return cspc->size;
 }
 
-uint64_t isom_update_sgbt_size( isom_sgbt_t *sgbt )
+static uint64_t isom_update_sgbt_size( isom_sgbt_t *sgbt )
 {
     if( !sgbt )
         return 0;
@@ -1815,7 +1815,7 @@ uint64_t isom_update_sgbt_size( isom_sgbt_t *sgbt )
     return sgbt->size;
 }
 
-uint64_t isom_update_stsl_size( isom_stsl_t *stsl )
+static uint64_t isom_update_stsl_size( isom_stsl_t *stsl )
 {
     if( !stsl )
         return 0;
@@ -1824,7 +1824,7 @@ uint64_t isom_update_stsl_size( isom_stsl_t *stsl )
     return stsl->size;
 }
 
-uint64_t isom_update_esds_size( isom_esds_t *esds )
+static uint64_t isom_update_esds_size( isom_esds_t *esds )
 {
     if( !esds )
         return 0;
@@ -1833,7 +1833,7 @@ uint64_t isom_update_esds_size( isom_esds_t *esds )
     return esds->size;
 }
 
-uint64_t isom_update_btrt_size( isom_btrt_t *btrt )
+static uint64_t isom_update_btrt_size( isom_btrt_t *btrt )
 {
     if( !btrt )
         return 0;
@@ -1842,7 +1842,7 @@ uint64_t isom_update_btrt_size( isom_btrt_t *btrt )
     return btrt->size;
 }
 
-uint64_t isom_update_visual_entry_size( isom_sample_entry_t *description )
+static uint64_t isom_update_visual_entry_size( isom_sample_entry_t *description )
 {
     if( !description )
         return 0;
@@ -1866,7 +1866,7 @@ static uint64_t isom_update_mp4s_entry_size( isom_sample_entry_t *description )
 }
 #endif
 
-uint64_t isom_update_frma_size( isom_frma_t *frma )
+static uint64_t isom_update_frma_size( isom_frma_t *frma )
 {
     if( !frma )
         return 0;
@@ -1875,7 +1875,7 @@ uint64_t isom_update_frma_size( isom_frma_t *frma )
     return frma->size;
 }
 
-uint64_t isom_update_enda_size( isom_enda_t *enda )
+static uint64_t isom_update_enda_size( isom_enda_t *enda )
 {
     if( !enda )
         return 0;
@@ -1884,7 +1884,7 @@ uint64_t isom_update_enda_size( isom_enda_t *enda )
     return enda->size;
 }
 
-uint64_t isom_update_mp4a_size( isom_mp4a_t *mp4a )
+static uint64_t isom_update_mp4a_size( isom_mp4a_t *mp4a )
 {
     if( !mp4a )
         return 0;
@@ -1893,7 +1893,7 @@ uint64_t isom_update_mp4a_size( isom_mp4a_t *mp4a )
     return mp4a->size;
 }
 
-uint64_t isom_update_terminator_size( isom_terminator_t *terminator )
+static uint64_t isom_update_terminator_size( isom_terminator_t *terminator )
 {
     if( !terminator )
         return 0;
@@ -1902,7 +1902,7 @@ uint64_t isom_update_terminator_size( isom_terminator_t *terminator )
     return terminator->size;
 }
 
-uint64_t isom_update_wave_size( isom_wave_t *wave )
+static uint64_t isom_update_wave_size( isom_wave_t *wave )
 {
     if( !wave )
         return 0;
@@ -1911,7 +1911,7 @@ uint64_t isom_update_wave_size( isom_wave_t *wave )
     return wave->size;
 }
 
-uint64_t isom_update_chan_size( isom_chan_t *chan )
+static uint64_t isom_update_chan_size( isom_chan_t *chan )
 {
     if( !chan )
         return 0;
@@ -1920,7 +1920,7 @@ uint64_t isom_update_chan_size( isom_chan_t *chan )
     return chan->size;
 }
 
-uint64_t isom_update_srat_size( isom_srat_t *srat )
+static uint64_t isom_update_srat_size( isom_srat_t *srat )
 {
     if( !srat )
         return 0;
@@ -1929,7 +1929,7 @@ uint64_t isom_update_srat_size( isom_srat_t *srat )
     return srat->size;
 }
 
-uint64_t isom_update_audio_entry_size( isom_sample_entry_t *description )
+static uint64_t isom_update_audio_entry_size( isom_sample_entry_t *description )
 {
     if( !description )
         return 0;
@@ -1943,7 +1943,7 @@ uint64_t isom_update_audio_entry_size( isom_sample_entry_t *description )
     return audio->size;
 }
 
-uint64_t isom_update_qt_text_entry_size( isom_sample_entry_t *description )
+static uint64_t isom_update_qt_text_entry_size( isom_sample_entry_t *description )
 {
     if( !description )
         return 0;
@@ -1953,7 +1953,7 @@ uint64_t isom_update_qt_text_entry_size( isom_sample_entry_t *description )
     return text->size;
 }
 
-uint64_t isom_update_ftab_size( isom_ftab_t *ftab )
+static uint64_t isom_update_ftab_size( isom_ftab_t *ftab )
 {
     if( !ftab || !ftab->list )
         return 0;
@@ -1967,7 +1967,7 @@ uint64_t isom_update_ftab_size( isom_ftab_t *ftab )
     return ftab->size;
 }
 
-uint64_t isom_update_tx3g_entry_size( isom_sample_entry_t *description )
+static uint64_t isom_update_tx3g_entry_size( isom_sample_entry_t *description )
 {
     if( !description )
         return 0;
@@ -1977,7 +1977,7 @@ uint64_t isom_update_tx3g_entry_size( isom_sample_entry_t *description )
     return tx3g->size;
 }
 
-uint64_t isom_update_stsd_size( isom_stsd_t *stsd )
+static uint64_t isom_update_stsd_size( isom_stsd_t *stsd )
 {
     if( !stsd
      || !stsd->list )
@@ -1987,7 +1987,7 @@ uint64_t isom_update_stsd_size( isom_stsd_t *stsd )
     return stsd->size;
 }
 
-uint64_t isom_update_stts_size( isom_stts_t *stts )
+static uint64_t isom_update_stts_size( isom_stts_t *stts )
 {
     if( !stts
      || !stts->list )
@@ -1997,7 +1997,7 @@ uint64_t isom_update_stts_size( isom_stts_t *stts )
     return stts->size;
 }
 
-uint64_t isom_update_ctts_size( isom_ctts_t *ctts )
+static uint64_t isom_update_ctts_size( isom_ctts_t *ctts )
 {
     if( !ctts
      || !ctts->list )
@@ -2007,7 +2007,7 @@ uint64_t isom_update_ctts_size( isom_ctts_t *ctts )
     return ctts->size;
 }
 
-uint64_t isom_update_cslg_size( isom_cslg_t *cslg )
+static uint64_t isom_update_cslg_size( isom_cslg_t *cslg )
 {
     if( !cslg )
         return 0;
@@ -2016,7 +2016,7 @@ uint64_t isom_update_cslg_size( isom_cslg_t *cslg )
     return cslg->size;
 }
 
-uint64_t isom_update_stsz_size( isom_stsz_t *stsz )
+static uint64_t isom_update_stsz_size( isom_stsz_t *stsz )
 {
     if( !stsz )
         return 0;
@@ -2025,7 +2025,7 @@ uint64_t isom_update_stsz_size( isom_stsz_t *stsz )
     return stsz->size;
 }
 
-uint64_t isom_update_stss_size( isom_stss_t *stss )
+static uint64_t isom_update_stss_size( isom_stss_t *stss )
 {
     if( !stss
      || !stss->list )
@@ -2035,7 +2035,7 @@ uint64_t isom_update_stss_size( isom_stss_t *stss )
     return stss->size;
 }
 
-uint64_t isom_update_stps_size( isom_stps_t *stps )
+static uint64_t isom_update_stps_size( isom_stps_t *stps )
 {
     if( !stps
      || !stps->list )
@@ -2045,7 +2045,7 @@ uint64_t isom_update_stps_size( isom_stps_t *stps )
     return stps->size;
 }
 
-uint64_t isom_update_sdtp_size( isom_sdtp_t *sdtp )
+static uint64_t isom_update_sdtp_size( isom_sdtp_t *sdtp )
 {
     if( !sdtp
      || !sdtp->list )
@@ -2055,7 +2055,7 @@ uint64_t isom_update_sdtp_size( isom_sdtp_t *sdtp )
     return sdtp->size;
 }
 
-uint64_t isom_update_stsc_size( isom_stsc_t *stsc )
+static uint64_t isom_update_stsc_size( isom_stsc_t *stsc )
 {
     if( !stsc
      || !stsc->list )
@@ -2065,7 +2065,7 @@ uint64_t isom_update_stsc_size( isom_stsc_t *stsc )
     return stsc->size;
 }
 
-uint64_t isom_update_stco_size( isom_stco_t *stco )
+static uint64_t isom_update_stco_size( isom_stco_t *stco )
 {
     if( !stco
      || !stco->list )
@@ -2075,7 +2075,7 @@ uint64_t isom_update_stco_size( isom_stco_t *stco )
     return stco->size;
 }
 
-uint64_t isom_update_sbgp_size( isom_sbgp_t *sbgp )
+static uint64_t isom_update_sbgp_size( isom_sbgp_t *sbgp )
 {
     if( !sbgp
      || !sbgp->list )
@@ -2085,7 +2085,7 @@ uint64_t isom_update_sbgp_size( isom_sbgp_t *sbgp )
     return sbgp->size;
 }
 
-uint64_t isom_update_sgpd_size( isom_sgpd_t *sgpd )
+static uint64_t isom_update_sgpd_size( isom_sgpd_t *sgpd )
 {
     if( !sgpd
      || !sgpd->list )
@@ -2109,7 +2109,7 @@ uint64_t isom_update_sgpd_size( isom_sgpd_t *sgpd )
     return sgpd->size;
 }
 
-uint64_t isom_update_chpl_size( isom_chpl_t *chpl )
+static uint64_t isom_update_chpl_size( isom_chpl_t *chpl )
 {
     if( !chpl )
         return 0;
@@ -2123,7 +2123,7 @@ uint64_t isom_update_chpl_size( isom_chpl_t *chpl )
     return chpl->size;
 }
 
-uint64_t isom_update_mean_size( isom_mean_t *mean )
+static uint64_t isom_update_mean_size( isom_mean_t *mean )
 {
     if( !mean )
         return 0;
@@ -2132,7 +2132,7 @@ uint64_t isom_update_mean_size( isom_mean_t *mean )
     return mean->size;
 }
 
-uint64_t isom_update_name_size( isom_name_t *name )
+static uint64_t isom_update_name_size( isom_name_t *name )
 {
     if( !name )
         return 0;
@@ -2141,7 +2141,7 @@ uint64_t isom_update_name_size( isom_name_t *name )
     return name->size;
 }
 
-uint64_t isom_update_data_size( isom_data_t *data )
+static uint64_t isom_update_data_size( isom_data_t *data )
 {
     if( !data )
         return 0;
@@ -2150,7 +2150,7 @@ uint64_t isom_update_data_size( isom_data_t *data )
     return data->size;
 }
 
-uint64_t isom_update_metaitem_size( isom_metaitem_t *metaitem )
+static uint64_t isom_update_metaitem_size( isom_metaitem_t *metaitem )
 {
     if( !metaitem )
         return 0;
@@ -2159,7 +2159,7 @@ uint64_t isom_update_metaitem_size( isom_metaitem_t *metaitem )
     return metaitem->size;
 }
 
-uint64_t isom_update_keys_size( isom_keys_t *keys )
+static uint64_t isom_update_keys_size( isom_keys_t *keys )
 {
     if( !keys )
         return 0;
@@ -2175,7 +2175,7 @@ uint64_t isom_update_keys_size( isom_keys_t *keys )
     return keys->size;
 }
 
-uint64_t isom_update_ilst_size( isom_ilst_t *ilst )
+static uint64_t isom_update_ilst_size( isom_ilst_t *ilst )
 {
     if( !ilst )
         return 0;
@@ -2184,7 +2184,7 @@ uint64_t isom_update_ilst_size( isom_ilst_t *ilst )
     return ilst->size;
 }
 
-uint64_t isom_update_meta_size( isom_meta_t *meta )
+static uint64_t isom_update_meta_size( isom_meta_t *meta )
 {
     if( !meta )
         return 0;
@@ -2193,7 +2193,7 @@ uint64_t isom_update_meta_size( isom_meta_t *meta )
     return meta->size;
 }
 
-uint64_t isom_update_cprt_size( isom_cprt_t *cprt )
+static uint64_t isom_update_cprt_size( isom_cprt_t *cprt )
 {
     if( !cprt )
         return 0;
@@ -2202,7 +2202,7 @@ uint64_t isom_update_cprt_size( isom_cprt_t *cprt )
     return cprt->size;
 }
 
-uint64_t isom_update_udta_size( isom_udta_t *udta )
+static uint64_t isom_update_udta_size( isom_udta_t *udta )
 {
     if( !udta || !udta->parent )
         return 0;
@@ -2211,7 +2211,7 @@ uint64_t isom_update_udta_size( isom_udta_t *udta )
     return udta->size;
 }
 
-uint64_t isom_update_WLOC_size( isom_WLOC_t *WLOC )
+static uint64_t isom_update_WLOC_size( isom_WLOC_t *WLOC )
 {
     if( !WLOC )
         return 0;
@@ -2220,7 +2220,7 @@ uint64_t isom_update_WLOC_size( isom_WLOC_t *WLOC )
     return WLOC->size;
 }
 
-uint64_t isom_update_LOOP_size( isom_LOOP_t *LOOP )
+static uint64_t isom_update_LOOP_size( isom_LOOP_t *LOOP )
 {
     if( !LOOP )
         return 0;
@@ -2229,7 +2229,7 @@ uint64_t isom_update_LOOP_size( isom_LOOP_t *LOOP )
     return LOOP->size;
 }
 
-uint64_t isom_update_SelO_size( isom_SelO_t *SelO )
+static uint64_t isom_update_SelO_size( isom_SelO_t *SelO )
 {
     if( !SelO )
         return 0;
@@ -2238,7 +2238,7 @@ uint64_t isom_update_SelO_size( isom_SelO_t *SelO )
     return SelO->size;
 }
 
-uint64_t isom_update_AllF_size( isom_AllF_t *AllF )
+static uint64_t isom_update_AllF_size( isom_AllF_t *AllF )
 {
     if( !AllF )
         return 0;
@@ -2247,7 +2247,7 @@ uint64_t isom_update_AllF_size( isom_AllF_t *AllF )
     return AllF->size;
 }
 
-uint64_t isom_update_mvex_size( isom_mvex_t *mvex )
+static uint64_t isom_update_mvex_size( isom_mvex_t *mvex )
 {
     if( !mvex )
         return 0;
@@ -2258,7 +2258,7 @@ uint64_t isom_update_mvex_size( isom_mvex_t *mvex )
     return mvex->size;
 }
 
-uint64_t isom_update_mehd_size( isom_mehd_t *mehd )
+static uint64_t isom_update_mehd_size( isom_mehd_t *mehd )
 {
     if( !mehd )
         return 0;
@@ -2269,7 +2269,7 @@ uint64_t isom_update_mehd_size( isom_mehd_t *mehd )
     return mehd->size;
 }
 
-uint64_t isom_update_trex_size( isom_trex_t *trex )
+static uint64_t isom_update_trex_size( isom_trex_t *trex )
 {
     if( !trex )
         return 0;
@@ -2278,7 +2278,7 @@ uint64_t isom_update_trex_size( isom_trex_t *trex )
     return trex->size;
 }
 
-uint64_t isom_update_moof_size( isom_moof_t *moof )
+static uint64_t isom_update_moof_size( isom_moof_t *moof )
 {
     if( !moof )
         return 0;
@@ -2287,7 +2287,7 @@ uint64_t isom_update_moof_size( isom_moof_t *moof )
     return moof->size;
 }
 
-uint64_t isom_update_mfhd_size( isom_mfhd_t *mfhd )
+static uint64_t isom_update_mfhd_size( isom_mfhd_t *mfhd )
 {
     if( !mfhd )
         return 0;
@@ -2296,7 +2296,7 @@ uint64_t isom_update_mfhd_size( isom_mfhd_t *mfhd )
     return mfhd->size;
 }
 
-uint64_t isom_update_traf_size( isom_traf_t *traf )
+static uint64_t isom_update_traf_size( isom_traf_t *traf )
 {
     if( !traf )
         return 0;
@@ -2305,7 +2305,7 @@ uint64_t isom_update_traf_size( isom_traf_t *traf )
     return traf->size;
 }
 
-uint64_t isom_update_tfhd_size( isom_tfhd_t *tfhd )
+static uint64_t isom_update_tfhd_size( isom_tfhd_t *tfhd )
 {
     if( !tfhd )
         return 0;
@@ -2320,7 +2320,7 @@ uint64_t isom_update_tfhd_size( isom_tfhd_t *tfhd )
     return tfhd->size;
 }
 
-uint64_t isom_update_tfdt_size( isom_tfdt_t *tfdt )
+static uint64_t isom_update_tfdt_size( isom_tfdt_t *tfdt )
 {
     if( !tfdt )
         return 0;
@@ -2329,7 +2329,7 @@ uint64_t isom_update_tfdt_size( isom_tfdt_t *tfdt )
     return tfdt->size;
 }
 
-uint64_t isom_update_trun_size( isom_trun_t *trun )
+static uint64_t isom_update_trun_size( isom_trun_t *trun )
 {
     if( !trun )
         return 0;
@@ -2346,7 +2346,7 @@ uint64_t isom_update_trun_size( isom_trun_t *trun )
     return trun->size;
 }
 
-uint64_t isom_update_mfra_size( isom_mfra_t *mfra )
+static uint64_t isom_update_mfra_size( isom_mfra_t *mfra )
 {
     if( !mfra )
         return 0;
@@ -2357,7 +2357,7 @@ uint64_t isom_update_mfra_size( isom_mfra_t *mfra )
     return mfra->size;
 }
 
-uint64_t isom_update_tfra_size( isom_tfra_t *tfra )
+static uint64_t isom_update_tfra_size( isom_tfra_t *tfra )
 {
     if( !tfra )
         return 0;
@@ -2371,7 +2371,7 @@ uint64_t isom_update_tfra_size( isom_tfra_t *tfra )
     return tfra->size;
 }
 
-uint64_t isom_update_mfro_size( isom_mfro_t *mfro )
+static uint64_t isom_update_mfro_size( isom_mfro_t *mfro )
 {
     if( !mfro )
         return 0;
@@ -2380,7 +2380,7 @@ uint64_t isom_update_mfro_size( isom_mfro_t *mfro )
     return mfro->size;
 }
 
-uint64_t isom_update_mdat_size( isom_mdat_t *mdat )
+static uint64_t isom_update_mdat_size( isom_mdat_t *mdat )
 {
     if( !mdat )
         return 0;
@@ -2390,7 +2390,7 @@ uint64_t isom_update_mdat_size( isom_mdat_t *mdat )
     return mdat->size;
 }
 
-uint64_t isom_update_skip_size( isom_skip_t *skip )
+static uint64_t isom_update_skip_size( isom_skip_t *skip )
 {
     if( !skip )
         return 0;
