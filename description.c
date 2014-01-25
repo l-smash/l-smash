@@ -1149,7 +1149,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
                 lsmash_compact_box_type_t fourcc   = LSMASH_4CC( data[4], data[5], data[6], data[7] );
                 lsmash_box_type_t         box_type = isom_guess_video_codec_specific_box_type( (lsmash_codec_type_t)visual->type, fourcc );
                 /* Append the extension. */
-                int ret = isom_add_extension_binary( visual, box_type, cs->data.unstructured, cs->size );
+                int ret = isom_add_extension_binary( visual, box_type, LSMASH_BOX_PRECEDENCE_HM, cs->data.unstructured, cs->size );
                 cs->data.unstructured = NULL;   /* Avoid freeing the binary data of the extension. */
                 lsmash_destroy_codec_specific_data( cs );
                 if( ret < 0 )
@@ -1716,8 +1716,22 @@ static int isom_set_qtff_template_audio_description( isom_audio_entry_t *audio, 
                     lsmash_destroy_codec_specific_data( cs );
                     continue;
                 }
+                /* Determine 'precedence'. */
+                uint64_t precedence;
+                if( lsmash_check_box_type_identical( box_type, QT_BOX_TYPE_FRMA ) )
+                    precedence = LSMASH_BOX_PRECEDENCE_QTFF_FRMA;
+                else if( lsmash_check_box_type_identical( box_type, QT_BOX_TYPE_ESDS ) )
+                    precedence = LSMASH_BOX_PRECEDENCE_QTFF_ESDS;
+                else if( lsmash_check_box_type_identical( box_type, QT_BOX_TYPE_ENDA ) )
+                    precedence = LSMASH_BOX_PRECEDENCE_QTFF_ENDA;
+                else if( lsmash_check_box_type_identical( box_type, QT_BOX_TYPE_MP4A ) )
+                    precedence = LSMASH_BOX_PRECEDENCE_QTFF_MP4A;
+                else if( lsmash_check_box_type_identical( box_type, QT_BOX_TYPE_TERMINATOR ) )
+                    precedence = LSMASH_BOX_PRECEDENCE_QTFF_TERMINATOR;
+                else
+                    precedence = LSMASH_BOX_PRECEDENCE_HM;
                 /* Append the extension. */
-                int ret = isom_add_extension_binary( wave, box_type, cs->data.unstructured, cs->size );
+                int ret = isom_add_extension_binary( wave, box_type, precedence, cs->data.unstructured, cs->size );
                 cs->data.unstructured = NULL;   /* Avoid freeing the binary data of the extension. */
                 lsmash_destroy_codec_specific_data( cs );
                 if( ret < 0 )
@@ -1911,7 +1925,7 @@ int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_
                     continue;
                 }
                 /* Append the extension. */
-                ret = isom_add_extension_binary( audio, box_type, cs->data.unstructured, cs->size );
+                ret = isom_add_extension_binary( audio, box_type, LSMASH_BOX_PRECEDENCE_HM, cs->data.unstructured, cs->size );
                 cs->data.unstructured = NULL;   /* Avoid freeing the binary data of the extension. */
                 lsmash_destroy_codec_specific_data( cs );
                 if( ret < 0 )

@@ -50,6 +50,7 @@ typedef uint64_t (*isom_extension_updater_t)( void *extension_data );
         isom_extension_destructor_t destruct;   /* box specific destructor */                   \
         isom_extension_updater_t    update;     /* box specific size updater */                 \
         uint32_t                    manager;    /* flags for L-SMASH */                         \
+        uint64_t                    precedence; /* precedence of the box position */            \
         uint64_t                    pos;        /* starting position of this box in the file */ \
         lsmash_entry_list_t         extensions; /* extension boxes */                           \
     uint64_t          size;                     /* the number of bytes in this box */           \
@@ -74,6 +75,16 @@ typedef uint64_t (*isom_extension_updater_t)( void *extension_data );
 #define LSMASH_LAST_BOX          0x040
 #define LSMASH_INCOMPLETE_BOX    0x080
 #define LSMASH_BINARY_CODED_BOX  0x100
+
+/* precedence of the box position
+ * Box with higher value will precede other boxes with lower one.
+ * The lower 32-bits are intended to determine order of boxes with the same box type. */
+#define LSMASH_BOX_PRECEDENCE_L  0x0000000000000000ULL /* Lowest */
+#define LSMASH_BOX_PRECEDENCE_LP 0x000FFFFF00000000ULL /* Lowest+ */
+#define LSMASH_BOX_PRECEDENCE_N  0x0080000000000000ULL /* Normal */
+#define LSMASH_BOX_PRECEDENCE_HM 0xFFEEEEEE00000000ULL /* Highest- */
+#define LSMASH_BOX_PRECEDENCE_H  0xFFFFFFFF00000000ULL /* Highest */
+#define LSMASH_BOX_PRECEDENCE_S  0x0000010000000000ULL /* Step */
 
 /* 12-byte ISO reserved value:
  * 0xXXXXXXXX-0011-0010-8000-00AA00389B71 */
@@ -1945,6 +1956,102 @@ typedef struct
 #define QT_BOX_TYPE_GLBL   lsmash_form_qtff_box_type( LSMASH_4CC( 'g', 'l', 'b', 'l' ) )
 #define QT_BOX_TYPE_MP4A   lsmash_form_qtff_box_type( LSMASH_4CC( 'm', 'p', '4', 'a' ) )
 
+/* Pre-defined precedence */
+#define LSMASH_BOX_PRECEDENCE_ISOM_FTYP (LSMASH_BOX_PRECEDENCE_H  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_MOOV (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_MVHD (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_IODS (LSMASH_BOX_PRECEDENCE_HM -  2 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_TRAK (LSMASH_BOX_PRECEDENCE_N  -  2 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_TKHD (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_QTFF_TAPT (LSMASH_BOX_PRECEDENCE_N  -  1 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_QTFF_CLEF (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_QTFF_PROF (LSMASH_BOX_PRECEDENCE_N  -  1 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_QTFF_ENOF (LSMASH_BOX_PRECEDENCE_N  -  2 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_EDTS (LSMASH_BOX_PRECEDENCE_N  -  2 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_ELST (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_TREF (LSMASH_BOX_PRECEDENCE_N  -  3 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_TREF_TYPE (LSMASH_BOX_PRECEDENCE_N - 0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_MDIA (LSMASH_BOX_PRECEDENCE_N  -  4 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_MDHD (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_HDLR (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_MINF (LSMASH_BOX_PRECEDENCE_N  -  1 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_VMHD (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_SMHD (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_HMHD (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_NMHD (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_QTFF_GMHD (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_QTFF_GMIN (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_QTFF_TEXT (LSMASH_BOX_PRECEDENCE_N  -  1 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_DINF (LSMASH_BOX_PRECEDENCE_N  -  1 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_DREF (LSMASH_BOX_PRECEDENCE_N  -  1 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_URL  (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_STBL (LSMASH_BOX_PRECEDENCE_N  -  2 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_STSD (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_QTFF_GLBL (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_ESDS (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_QTFF_ESDS (LSMASH_BOX_PRECEDENCE_HM -  1 * LSMASH_BOX_PRECEDENCE_S)   /* preceded by 'frma' and 'mp4a' */
+#define LSMASH_BOX_PRECEDENCE_ISOM_BTRT (LSMASH_BOX_PRECEDENCE_HM -  1 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_COLR (LSMASH_BOX_PRECEDENCE_LP +  2 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_QTFF_COLR (LSMASH_BOX_PRECEDENCE_LP +  2 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_QTFF_GAMA (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_QTFF_FIEL (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_QTFF_CSPC (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_QTFF_SGBT (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)   /* 'v216' specific */
+#define LSMASH_BOX_PRECEDENCE_ISOM_CLAP (LSMASH_BOX_PRECEDENCE_LP +  1 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_PASP (LSMASH_BOX_PRECEDENCE_LP -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_STSL (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_CHAN (LSMASH_BOX_PRECEDENCE_LP -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_QTFF_CHAN (LSMASH_BOX_PRECEDENCE_LP -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_QTFF_WAVE (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_QTFF_FRMA (LSMASH_BOX_PRECEDENCE_HM +  1 * LSMASH_BOX_PRECEDENCE_S)   /* precede any as much as possible */
+#define LSMASH_BOX_PRECEDENCE_QTFF_ENDA (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_QTFF_MP4A (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_QTFF_TERMINATOR (LSMASH_BOX_PRECEDENCE_L - 0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_SRAT (LSMASH_BOX_PRECEDENCE_LP -  1 * LSMASH_BOX_PRECEDENCE_S)   /* place at the end for maximum compatibility */
+#define LSMASH_BOX_PRECEDENCE_ISOM_FTAB (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_STTS (LSMASH_BOX_PRECEDENCE_N  -  2 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_CTTS (LSMASH_BOX_PRECEDENCE_N  -  4 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_CSLG (LSMASH_BOX_PRECEDENCE_N  -  6 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_STSS (LSMASH_BOX_PRECEDENCE_N  -  8 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_QTFF_STPS (LSMASH_BOX_PRECEDENCE_N  - 10 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_SDTP (LSMASH_BOX_PRECEDENCE_N  - 12 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_STSC (LSMASH_BOX_PRECEDENCE_N  - 14 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_STSZ (LSMASH_BOX_PRECEDENCE_N  - 16 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_STCO (LSMASH_BOX_PRECEDENCE_N  - 18 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_CO64 (LSMASH_BOX_PRECEDENCE_N  - 18 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_SGPD (LSMASH_BOX_PRECEDENCE_N  - 20 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_SBGP (LSMASH_BOX_PRECEDENCE_N  - 22 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_UDTA (LSMASH_BOX_PRECEDENCE_N  -  5 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_MEAN (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_NAME (LSMASH_BOX_PRECEDENCE_N  -  1 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_DATA (LSMASH_BOX_PRECEDENCE_N  -  2 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_QTFF_KEYS (LSMASH_BOX_PRECEDENCE_N  -  1 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_ILST (LSMASH_BOX_PRECEDENCE_N  -  2 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_METAITEM (LSMASH_BOX_PRECEDENCE_N - 0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_CHPL (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_META (LSMASH_BOX_PRECEDENCE_N  -  7 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_QTFF_WLOC (LSMASH_BOX_PRECEDENCE_N  -  8 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_QTFF_LOOP (LSMASH_BOX_PRECEDENCE_N  -  9 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_QTFF_SELO (LSMASH_BOX_PRECEDENCE_N  - 10 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_QTFF_ALLF (LSMASH_BOX_PRECEDENCE_N  - 11 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_CPRT (LSMASH_BOX_PRECEDENCE_N  - 12 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_QTFF_CTAB (LSMASH_BOX_PRECEDENCE_N  -  6 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_MVEX (LSMASH_BOX_PRECEDENCE_N  -  8 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_MEHD (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_TREX (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_MOOF (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_MFHD (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_TRAF (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_TFHD (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_TFDT (LSMASH_BOX_PRECEDENCE_HM -  1 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_TRUN (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_MFRA (LSMASH_BOX_PRECEDENCE_L  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_TFRA (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_MFRO (LSMASH_BOX_PRECEDENCE_L  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_MDAT (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_FREE (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_SKIP (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
+
 /* Track reference types */
 typedef enum
 {
@@ -2139,7 +2246,7 @@ int isom_is_fullbox( void *box );
 int isom_is_lpcm_audio( void *box );
 int isom_is_uncompressed_ycbcr( lsmash_box_type_t type );
 
-void isom_init_box_common( void *box, void *parent, lsmash_box_type_t box_type, void *destructor, void *updater );
+void isom_init_box_common( void *box, void *parent, lsmash_box_type_t box_type, uint64_t precedence, void *destructor, void *updater );
 size_t isom_skip_box_common( uint8_t **p_data );
 
 void isom_bs_put_basebox_common( lsmash_bs_t *bs, isom_box_t *box );
@@ -2262,27 +2369,28 @@ void isom_remove_sample_pool( isom_sample_pool_t *pool );
 
 uint64_t isom_update_unknown_box_size( isom_unknown_box_t *unknown_box );
 
-int isom_add_extension_binary( void *parent_box, lsmash_box_type_t box_type, uint8_t *box_data, uint32_t box_size );
+int isom_add_extension_binary( void *parent_box, lsmash_box_type_t box_type, uint64_t precedence, uint8_t *box_data, uint32_t box_size );
 void isom_remove_extension_box( isom_box_t *ext );
 void isom_remove_all_extension_boxes( lsmash_entry_list_t *extensions );
 isom_box_t *isom_get_extension_box( lsmash_entry_list_t *extensions, lsmash_box_type_t box_type );
 void *isom_get_extension_box_format( lsmash_entry_list_t *extensions, lsmash_box_type_t box_type );
 void isom_remove_box_by_itself( void *opaque_box );
 
-#define isom_create_box_base( box_name, parent, box_type, ret )                        \
+#define isom_create_box_base( box_name, parent, box_type, precedence, ret )            \
+    assert( parent );                                                                  \
     isom_##box_name##_t *box_name = lsmash_malloc_zero( sizeof(isom_##box_name##_t) ); \
     if( !box_name )                                                                    \
         return ret;                                                                    \
-    assert( parent );                                                                  \
-    if( lsmash_add_entry( &(parent)->extensions, box_name ) )                          \
+    isom_init_box_common( box_name, parent, box_type, precedence,                      \
+                          isom_remove_##box_name, isom_update_##box_name##_size );     \
+    if( isom_add_box_to_extension_list( parent, box_name ) )                           \
     {                                                                                  \
         lsmash_free( box_name );                                                       \
         return ret;                                                                    \
-    }                                                                                  \
-    isom_init_box_common( box_name, parent, box_type, isom_remove_##box_name, isom_update_##box_name##_size )
+    }
 
-#define isom_create_list_box_base( box_name, parent, box_type, ret )               \
-    isom_create_box_base( box_name, parent, box_type, ret );                       \
+#define isom_create_list_box_base( box_name, parent, box_type, precedence, ret )   \
+    isom_create_box_base( box_name, parent, box_type, precedence, ret );           \
     box_name->list = lsmash_create_entry_list();                                   \
     if( !box_name->list )                                                          \
     {                                                                              \
@@ -2290,17 +2398,17 @@ void isom_remove_box_by_itself( void *opaque_box );
         return ret;                                                                \
     }
 
-#define isom_create_box( box_name, parent, box_type ) \
-        isom_create_box_base( box_name, parent, box_type, -1 );
+#define isom_create_box( box_name, parent, box_type, precedence ) \
+        isom_create_box_base( box_name, parent, box_type, precedence, -1 );
 
-#define isom_create_box_pointer( box_name, parent, box_type ) \
-        isom_create_box_base( box_name, parent, box_type, NULL );
+#define isom_create_box_pointer( box_name, parent, box_type, precedence ) \
+        isom_create_box_base( box_name, parent, box_type, precedence, NULL );
 
-#define isom_create_list_box( box_name, parent, box_type ) \
-        isom_create_list_box_base( box_name, parent, box_type, -1 );
+#define isom_create_list_box( box_name, parent, box_type, precedence ) \
+        isom_create_list_box_base( box_name, parent, box_type, precedence, -1 );
 
-#define isom_create_list_box_null( box_name, parent, box_type ) \
-        isom_create_list_box_base( box_name, parent, box_type, NULL );
+#define isom_create_list_box_null( box_name, parent, box_type, precedence ) \
+        isom_create_list_box_base( box_name, parent, box_type, precedence, NULL );
 
 #define isom_copy_fields( dst, src, box_name )      \
     lsmash_root_t *root   = dst->box_name->root;    \
