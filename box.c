@@ -28,6 +28,7 @@
 #include "box.h"
 #include "mp4a.h"
 #include "mp4sys.h"
+#include "write.h"
 
 lsmash_extended_box_type_t lsmash_form_extended_box_type( uint32_t fourcc, const uint8_t id[12] )
 {
@@ -104,10 +105,12 @@ void isom_init_box_common
     box->update     = updater;
     box->size       = 0;
     box->type       = box_type;
-    if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) || !isom_is_fullbox( box ) )
-        return;
-    box->version = 0;
-    box->flags   = 0;
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) && isom_is_fullbox( box ) )
+    {
+        box->version = 0;
+        box->flags   = 0;
+    }
+    isom_set_box_writer( box );
 }
 
 int isom_add_box_to_extension_list( void *parent_box, void *child_box )
@@ -332,6 +335,7 @@ int isom_add_extension_binary( void *parent_box, lsmash_box_type_t box_type, uin
         lsmash_free( ext );
         return -1;
     }
+    isom_set_box_writer( ext );
     return 0;
 }
 
@@ -2293,8 +2297,6 @@ static uint64_t isom_update_mvex_size( isom_mvex_t *mvex )
     if( !mvex )
         return 0;
     mvex->size = ISOM_BASEBOX_COMMON_SIZE;
-    if( mvex->root->bs->stream != stdout && !mvex->mehd )
-        mvex->size += 20;    /* 20 bytes is of placeholder. */
     CHECK_LARGESIZE( mvex );
     return mvex->size;
 }
@@ -2303,9 +2305,14 @@ static uint64_t isom_update_mehd_size( isom_mehd_t *mehd )
 {
     if( !mehd )
         return 0;
-    if( mehd->fragment_duration > UINT32_MAX )
-        mehd->version = 1;
-    mehd->size = ISOM_FULLBOX_COMMON_SIZE + 4 * (1 + (mehd->version == 1));
+    if( mehd->manager & LSMASH_PLACEHOLDER )
+        mehd->size = ISOM_BASEBOX_COMMON_SIZE + 12;
+    else
+    {
+        if( mehd->fragment_duration > UINT32_MAX )
+            mehd->version = 1;
+        mehd->size = ISOM_FULLBOX_COMMON_SIZE + 4 * (1 + (mehd->version == 1));
+    }
     CHECK_LARGESIZE( mehd );
     return mehd->size;
 }
@@ -2489,6 +2496,7 @@ isom_tref_type_t *isom_add_track_reference_type( isom_tref_t *tref, isom_track_r
     ref->precedence = LSMASH_BOX_PRECEDENCE_ISOM_TREF_TYPE;
     ref->destruct   = (isom_extension_destructor_t)isom_remove_track_reference_type;
     ref->update     = (isom_extension_updater_t)isom_update_track_reference_type_size;
+    isom_set_box_writer( (isom_box_t *)ref );
     if( isom_add_box_to_extension_list( tref, ref ) )
     {
         lsmash_free( ref );

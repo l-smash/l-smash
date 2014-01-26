@@ -662,13 +662,13 @@ static int isom_new_mdat( lsmash_root_t *root, uint64_t media_size )
     if( root->mdat )
     {
         /* Write the actual size of the current Media Data Box. */
-        if( !root->fragment && isom_write_mdat_size( root ) )
+        if( !root->fragment && isom_write_mdat_size( root->bs, root->mdat ) )
             return -1;
     }
     else if( isom_add_mdat( root ) )
         return -1;
     /* Start a new Media Data Box. */
-    return isom_write_mdat_header( root, media_size );
+    return isom_write_mdat_header( root->bs, root->mdat, media_size );
 }
 
 int isom_check_compatibility( lsmash_root_t *root )
@@ -2612,9 +2612,6 @@ int lsmash_create_object_descriptor( lsmash_root_t *root )
 
 static int isom_set_fragment_overall_duration( lsmash_root_t *root )
 {
-    isom_mvex_t *mvex = root->moov->mvex;
-    if( isom_add_mehd( mvex ) )
-        return -1;
     /* Get the longest duration of the tracks. */
     uint64_t longest_duration = 0;
     for( lsmash_entry_t *entry = root->moov->trak_list->head; entry; entry = entry->next )
@@ -2648,17 +2645,17 @@ static int isom_set_fragment_overall_duration( lsmash_root_t *root )
         }
         longest_duration = LSMASH_MAX( duration, longest_duration );
     }
-    mvex->mehd->fragment_duration = longest_duration;
-    mvex->mehd->version           = 1;
-    mvex->mehd->update( mvex->mehd );
+    isom_mehd_t *mehd = root->moov->mvex->mehd;
+    mehd->fragment_duration = longest_duration;
+    mehd->version           = 1;
+    mehd->manager          &= ~LSMASH_PLACEHOLDER;
+    mehd->update( mehd );
     /* Write Movie Extends Header Box here. */
     lsmash_bs_t *bs = root->bs;
     FILE *stream = bs->stream;
     uint64_t current_pos = lsmash_ftell( stream );
-    lsmash_fseek( stream, mvex->placeholder_pos, SEEK_SET );
-    int ret = isom_write_mehd( bs, mvex->mehd );
-    if( ret == 0 )
-        ret = lsmash_bs_write_data( bs );
+    lsmash_fseek( stream, mehd->pos, SEEK_SET );
+    int ret = isom_write_box( bs, (isom_box_t *)mehd );
     lsmash_fseek( stream, current_pos, SEEK_SET );
     return ret;
 }
@@ -2755,7 +2752,7 @@ static int isom_write_fragment_random_access_info( lsmash_root_t *root )
     if( root->mfra->update( root->mfra ) == 0 )
         return -1;
     /* Write the Movie Fragment Random Access Box. */
-    return isom_write_mfra( root->bs, root->mfra );
+    return isom_write_box( root->bs, (isom_box_t *)root->mfra );
 }
 
 int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
@@ -2816,15 +2813,15 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
     if( isom_check_mandatory_boxes( root )
      || isom_set_movie_creation_time( root )
      || moov->update( moov ) == 0
-     || isom_write_mdat_size( root ) )
+     || isom_write_mdat_size( root->bs, root->mdat ) )
         return -1;
 
     lsmash_bs_t *bs = root->bs;
     uint64_t meta_size = root->meta ? root->meta->size : 0;
     if( !remux )
     {
-        if( isom_write_moov( root )
-         || isom_write_meta( bs, root->meta ) )
+        if( isom_write_box( bs, (isom_box_t *)root->moov )
+         || isom_write_box( bs, (isom_box_t *)root->meta ) )
             return -1;
         root->size += moov->size + meta_size;
         return 0;
@@ -2855,7 +2852,7 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
     /* Split to 2 buffers. */
     uint8_t *buf[2];
     if( (buf[0] = (uint8_t*)lsmash_malloc( remux->buffer_size )) == NULL )
-        return -1; /* NOTE: i think we still can fallback to "return isom_write_moov( root );" here. */
+        return -1; /* NOTE: i think we still can fallback to "return isom_write_moov();" here. */
     uint64_t size = remux->buffer_size / 2;
     buf[1] = buf[0] + size;
     /* now the amount of offset is fixed. apply that to stco/co64 */
@@ -2881,8 +2878,8 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
 
     /* Write moov + meta there instead. */
     if( lsmash_fseek( stream, mdat->placeholder_pos, SEEK_SET )
-     || isom_write_moov( root )
-     || isom_write_meta( bs, root->meta ) )
+     || isom_write_box( bs, (isom_box_t *)root->moov )
+     || isom_write_box( bs, (isom_box_t *)root->meta ) )
         goto fail;
     uint64_t write_pos = lsmash_ftell( stream );
 
@@ -2927,6 +2924,12 @@ static int isom_create_fragment_overall_default_settings( lsmash_root_t *root )
 {
     if( isom_add_mvex( root->moov ) )
         return -1;
+    if( root->bs->stream != stdout )
+    {
+        if( isom_add_mehd( root->moov->mvex ) )
+            return -1;
+        root->moov->mvex->mehd->manager |= LSMASH_PLACEHOLDER;
+    }
     for( lsmash_entry_t *trak_entry = root->moov->trak_list->head; trak_entry; trak_entry = trak_entry->next )
     {
         isom_trak_t *trak = (isom_trak_t *)trak_entry->data;
@@ -3099,11 +3102,16 @@ static int isom_finish_fragment_initial_movie( lsmash_root_t *root )
                 ((isom_stco_entry_t *)stco_entry->data)->chunk_offset += preceding_size;
     }
     /* Write File Type Box here if it was not written yet. */
-    if( !root->file_type_written && isom_write_ftyp( root ) )
-        return -1;
+    if( !root->file_type_written )
+    {
+        if( isom_write_box( root->bs, (isom_box_t *)root->ftyp ) )
+            return -1;
+        root->size             += root->ftyp->size;
+        root->file_type_written = 1;
+    }
     /* Write Movie Box. */
-    if( isom_write_moov( root )
-     || isom_write_meta( root->bs, root->meta ) )
+    if( isom_write_box( root->bs, (isom_box_t *)root->moov )
+     || isom_write_box( root->bs, (isom_box_t *)root->meta ) )
         return -1;
     root->size += preceding_size;
     /* Output samples. */
@@ -3284,7 +3292,7 @@ static int isom_finish_fragment_movie( lsmash_root_t *root )
         isom_traf_t *traf = (isom_traf_t *)entry->data;
         traf->tfhd->base_data_offset = root->size + moof->size + ISOM_BASEBOX_COMMON_SIZE;
     }
-    if( isom_write_moof( root->bs, moof ) )
+    if( isom_write_box( root->bs, (isom_box_t *)moof ) )
         return -1;
     root->size += moof->size;
     /* Output samples. */
@@ -4993,8 +5001,13 @@ int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_
      || root->max_async_tolerance == 0 )
         return -1;
     /* Write File Type Box here if it was not written yet. */
-    if( !root->file_type_written && isom_write_ftyp( root ) )
-        return -1;
+    if( !root->file_type_written )
+    {
+        if( isom_write_box( root->bs, (isom_box_t *)root->ftyp ) )
+            return -1;
+        root->size             += root->ftyp->size;
+        root->file_type_written = 1;
+    }
     if( root->fragment
      && root->fragment->pool )
         return isom_append_fragment_sample( root, track_ID, sample );

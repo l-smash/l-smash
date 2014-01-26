@@ -39,6 +39,7 @@ static const lsmash_class_t lsmash_box_class =
 typedef struct isom_box_tag isom_box_t;
 typedef void (*isom_extension_destructor_t)( void *extension_data );
 typedef uint64_t (*isom_extension_updater_t)( void *extension_data );
+typedef int (*isom_extension_writer_t)( lsmash_bs_t *bs, isom_box_t *box );
 
 /* If size is 1, then largesize is actual size.
  * If size is 0, then this box is the last one in the file. */
@@ -49,6 +50,7 @@ typedef uint64_t (*isom_extension_updater_t)( void *extension_data );
         uint8_t                    *binary;     /* used only when LSMASH_BINARY_CODED_BOX */    \
         isom_extension_destructor_t destruct;   /* box specific destructor */                   \
         isom_extension_updater_t    update;     /* box specific size updater */                 \
+        isom_extension_writer_t     write;      /* box specific writer */                       \
         uint32_t                    manager;    /* flags for L-SMASH */                         \
         uint64_t                    precedence; /* precedence of the box position */            \
         uint64_t                    pos;        /* starting position of this box in the file */ \
@@ -75,6 +77,7 @@ typedef uint64_t (*isom_extension_updater_t)( void *extension_data );
 #define LSMASH_LAST_BOX          0x040
 #define LSMASH_INCOMPLETE_BOX    0x080
 #define LSMASH_BINARY_CODED_BOX  0x100
+#define LSMASH_PLACEHOLDER       0x200
 
 /* precedence of the box position
  * Box with higher value will precede other boxes with lower one.
@@ -1502,8 +1505,6 @@ typedef struct
     ISOM_BASEBOX_COMMON;
     isom_mehd_t         *mehd;          /* Movie Extends Header Box / omitted when used in live streaming */
     lsmash_entry_list_t *trex_list;     /* Track Extends Box */
-
-        uint64_t placeholder_pos;       /* placeholder position for Movie Extends Header Box */
 } isom_mvex_t;
 
 /* Movie Fragment Header Box
