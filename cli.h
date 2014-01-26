@@ -29,4 +29,6 @@
 #  define lsmash_get_mainargs( argc, argv ) (void)0
 #endif
 
+int lsmash_write_lsmash_indicator( lsmash_root_t *root );
+
 #endif

@@ -1136,7 +1136,9 @@ static int finish_movie( output_t *output, option_t *opt )
         moov_to_front.param       = NULL;
         return lsmash_finish_movie( output->root, &moov_to_front );
     }
-    return lsmash_finish_movie( output->root, NULL );
+    if( lsmash_finish_movie( output->root, NULL ) )
+        return -1;
+    return lsmash_write_lsmash_indicator( output->root );
 }
 
 int main( int argc, char *argv[] )

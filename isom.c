@@ -2246,6 +2246,43 @@ int lsmash_get_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
 
 /*---- movie manipulators ----*/
 
+void lsmash_discard_boxes( lsmash_root_t *root )
+{
+    if( !root )
+        return;
+    isom_remove_all_extension_boxes( &root->extensions );
+}
+
+static void isom_remove_root( lsmash_root_t *root )
+{
+    if( !root )
+        return;
+#ifdef LSMASH_DEMUXER_ENABLED
+    isom_remove_print_funcs( root );
+    isom_remove_timelines( root );
+#endif
+    lsmash_discard_boxes( root );
+    if( root->bs )
+    {
+        if( root->bs->stream )
+            fclose( root->bs->stream );
+        if( root->bs->data )
+            lsmash_free( root->bs->data );
+        lsmash_free( root->bs );
+    }
+    if( root->fragment )
+    {
+        lsmash_remove_list( root->fragment->pool, isom_remove_sample_pool );
+        lsmash_free( root->fragment );
+    }
+    lsmash_free( root );
+}
+
+void lsmash_destroy_root( lsmash_root_t *root )
+{
+    isom_remove_box_by_itself( root );
+}
+
 lsmash_root_t *lsmash_open_movie( const char *filename, lsmash_file_mode mode )
 {
     if( !filename )
@@ -2262,8 +2299,9 @@ lsmash_root_t *lsmash_open_movie( const char *filename, lsmash_file_mode mode )
     lsmash_root_t *root = lsmash_malloc_zero( sizeof(lsmash_root_t) );
     if( !root )
         return NULL;
-    root->root = root;
-    root->bs   = lsmash_malloc_zero( sizeof(lsmash_bs_t) );
+    root->destruct = (isom_extension_destructor_t)isom_remove_root;
+    root->root     = root;
+    root->bs       = lsmash_malloc_zero( sizeof(lsmash_bs_t) );
     if( !root->bs )
         goto fail;
     if( !strcmp( filename, "-" ) )
@@ -2357,8 +2395,7 @@ static int isom_set_brands( lsmash_root_t *root, lsmash_brand_type major_brand, 
     if( brand_count == 0 )
     {
         /* Absence of File Type Box means this file is a QuickTime or MP4 version 1 format file. */
-        if( root->ftyp )
-            isom_remove_box_by_itself( root->ftyp );
+        isom_remove_box_by_itself( root->ftyp );
         return 0;
     }
     /* Add File Type Box if absent yet. */
@@ -3102,12 +3139,11 @@ static int isom_finish_fragment_initial_movie( lsmash_root_t *root )
                 ((isom_stco_entry_t *)stco_entry->data)->chunk_offset += preceding_size;
     }
     /* Write File Type Box here if it was not written yet. */
-    if( !root->file_type_written )
+    if( root->ftyp && !(root->ftyp->manager & LSMASH_WRITTEN_BOX) )
     {
         if( isom_write_box( root->bs, (isom_box_t *)root->ftyp ) )
             return -1;
-        root->size             += root->ftyp->size;
-        root->file_type_written = 1;
+        root->size += root->ftyp->size;
     }
     /* Write Movie Box. */
     if( isom_write_box( root->bs, (isom_box_t *)root->moov )
@@ -3477,38 +3513,6 @@ int lsmash_set_last_sample_delta( lsmash_root_t *root, uint32_t track_ID, uint32
     else if( sample_count == i && isom_replace_last_sample_delta( stbl, sample_delta ) )
         return -1;
     return lsmash_update_track_duration( root, track_ID, sample_delta );
-}
-
-void lsmash_discard_boxes( lsmash_root_t *root )
-{
-    if( !root )
-        return;
-    isom_remove_all_extension_boxes( &root->extensions );
-}
-
-void lsmash_destroy_root( lsmash_root_t *root )
-{
-    if( !root )
-        return;
-#ifdef LSMASH_DEMUXER_ENABLED
-    isom_remove_print_funcs( root );
-    isom_remove_timelines( root );
-#endif
-    lsmash_discard_boxes( root );
-    if( root->bs )
-    {
-        if( root->bs->stream )
-            fclose( root->bs->stream );
-        if( root->bs->data )
-            lsmash_free( root->bs->data );
-        lsmash_free( root->bs );
-    }
-    if( root->fragment )
-    {
-        lsmash_remove_list( root->fragment->pool, isom_remove_sample_pool );
-        lsmash_free( root->fragment );
-    }
-    lsmash_free( root );
 }
 
 /*---- timeline manipulator ----*/
@@ -5001,12 +5005,11 @@ int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_
      || root->max_async_tolerance == 0 )
         return -1;
     /* Write File Type Box here if it was not written yet. */
-    if( !root->file_type_written )
+    if( root->ftyp && !(root->ftyp->manager & LSMASH_WRITTEN_BOX) )
     {
         if( isom_write_box( root->bs, (isom_box_t *)root->ftyp ) )
             return -1;
-        root->size             += root->ftyp->size;
-        root->file_type_written = 1;
+        root->size += root->ftyp->size;
     }
     if( root->fragment
      && root->fragment->pool )

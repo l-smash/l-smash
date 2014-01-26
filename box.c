@@ -30,60 +30,6 @@
 #include "mp4sys.h"
 #include "write.h"
 
-lsmash_extended_box_type_t lsmash_form_extended_box_type( uint32_t fourcc, const uint8_t id[12] )
-{
-    return (lsmash_extended_box_type_t){ fourcc, { id[0], id[1], id[2], id[3], id[4],  id[5],
-                                                   id[6], id[7], id[8], id[9], id[10], id[11] } };
-}
-
-lsmash_box_type_t lsmash_form_iso_box_type( uint32_t fourcc )
-{
-    return (lsmash_box_type_t){ fourcc, lsmash_form_extended_box_type( fourcc, LSMASH_ISO_12_BYTES ) };
-}
-
-lsmash_box_type_t lsmash_form_qtff_box_type( uint32_t fourcc )
-{
-    return (lsmash_box_type_t){ fourcc, lsmash_form_extended_box_type( fourcc, LSMASH_QTFF_12_BYTES ) };
-}
-
-#define CHECK_BOX_TYPE_IDENTICAL( a, b ) \
-       a.fourcc      == b.fourcc         \
-    && a.user.fourcc == b.user.fourcc    \
-    && a.user.id[0]  == b.user.id[0]     \
-    && a.user.id[1]  == b.user.id[1]     \
-    && a.user.id[2]  == b.user.id[2]     \
-    && a.user.id[3]  == b.user.id[3]     \
-    && a.user.id[4]  == b.user.id[4]     \
-    && a.user.id[5]  == b.user.id[5]     \
-    && a.user.id[6]  == b.user.id[6]     \
-    && a.user.id[7]  == b.user.id[7]     \
-    && a.user.id[8]  == b.user.id[8]     \
-    && a.user.id[9]  == b.user.id[9]     \
-    && a.user.id[10] == b.user.id[10]    \
-    && a.user.id[11] == b.user.id[11]
-
-int lsmash_check_box_type_identical( lsmash_box_type_t a, lsmash_box_type_t b )
-{
-    return CHECK_BOX_TYPE_IDENTICAL( a, b );
-}
-
-int lsmash_check_codec_type_identical( lsmash_codec_type_t a, lsmash_codec_type_t b )
-{
-    return CHECK_BOX_TYPE_IDENTICAL( a, b );
-}
-
-int lsmash_check_box_type_specified( const lsmash_box_type_t *box_type )
-{
-    assert( box_type );
-    if( !box_type )
-        return 0;
-    return !!(box_type->fourcc
-            | box_type->user.fourcc
-            | box_type->user.id[0] | box_type->user.id[1] | box_type->user.id[2]  | box_type->user.id[3]
-            | box_type->user.id[4] | box_type->user.id[5] | box_type->user.id[6]  | box_type->user.id[7]
-            | box_type->user.id[8] | box_type->user.id[9] | box_type->user.id[10] | box_type->user.id[11]);
-}
-
 void isom_init_box_common
 (
     void             *_box,
@@ -311,7 +257,14 @@ static void isom_destruct_extension_binary( void *ext )
     lsmash_free( box );
 }
 
-int isom_add_extension_binary( void *parent_box, lsmash_box_type_t box_type, uint64_t precedence, uint8_t *box_data, uint32_t box_size )
+int isom_add_extension_binary
+(
+    void             *parent_box,
+    lsmash_box_type_t box_type,
+    uint64_t          precedence,
+    uint8_t          *box_data,
+    uint32_t          box_size
+)
 {
     if( !parent_box || !box_data || box_size < ISOM_BASEBOX_COMMON_SIZE
      || !lsmash_check_box_type_specified( &box_type ) )
@@ -377,6 +330,46 @@ void *isom_get_extension_box_format( lsmash_entry_list_t *extensions, lsmash_box
         return ext;
     }
     return NULL;
+}
+
+lsmash_entry_t *isom_get_entry_of_box
+(
+    lsmash_box_t           *parent,
+    const lsmash_box_path_t box_path[]
+)
+{
+    if( !parent )
+        return NULL;
+    lsmash_entry_t *entry = NULL;
+    const lsmash_box_path_t *path = &box_path[0];
+    while( lsmash_check_box_type_specified( &path->type ) )
+    {
+        entry = parent->extensions.head;
+        if( !entry )
+            return NULL;
+        parent = NULL;
+        uint32_t i      = 1;
+        uint32_t number = path->number ? path->number : 1;
+        while( entry )
+        {
+            isom_box_t *box = entry->data;
+            if( box && lsmash_check_box_type_identical( path->type, box->type ) )
+            {
+                if( i == number )
+                {
+                    /* Found a box. Move to a child box. */
+                    parent = box;
+                    ++path;
+                    break;
+                }
+                ++i;
+            }
+            entry = entry->next;
+        }
+        if( !parent )
+            return NULL;
+    }
+    return entry;
 }
 
 /* box destructors */
@@ -3422,5 +3415,158 @@ int isom_add_free( void *parent_box )
         return 0;
     }
     isom_create_box( skip, parent, ISOM_BOX_TYPE_FREE, LSMASH_BOX_PRECEDENCE_ISOM_FREE );
+    return 0;
+}
+
+/* Public functions */
+lsmash_extended_box_type_t lsmash_form_extended_box_type( uint32_t fourcc, const uint8_t id[12] )
+{
+    return (lsmash_extended_box_type_t){ fourcc, { id[0], id[1], id[2], id[3], id[4],  id[5],
+                                                   id[6], id[7], id[8], id[9], id[10], id[11] } };
+}
+
+lsmash_box_type_t lsmash_form_iso_box_type( uint32_t fourcc )
+{
+    return (lsmash_box_type_t){ fourcc, lsmash_form_extended_box_type( fourcc, LSMASH_ISO_12_BYTES ) };
+}
+
+lsmash_box_type_t lsmash_form_qtff_box_type( uint32_t fourcc )
+{
+    return (lsmash_box_type_t){ fourcc, lsmash_form_extended_box_type( fourcc, LSMASH_QTFF_12_BYTES ) };
+}
+
+#define CHECK_BOX_TYPE_IDENTICAL( a, b ) \
+       a.fourcc      == b.fourcc         \
+    && a.user.fourcc == b.user.fourcc    \
+    && a.user.id[0]  == b.user.id[0]     \
+    && a.user.id[1]  == b.user.id[1]     \
+    && a.user.id[2]  == b.user.id[2]     \
+    && a.user.id[3]  == b.user.id[3]     \
+    && a.user.id[4]  == b.user.id[4]     \
+    && a.user.id[5]  == b.user.id[5]     \
+    && a.user.id[6]  == b.user.id[6]     \
+    && a.user.id[7]  == b.user.id[7]     \
+    && a.user.id[8]  == b.user.id[8]     \
+    && a.user.id[9]  == b.user.id[9]     \
+    && a.user.id[10] == b.user.id[10]    \
+    && a.user.id[11] == b.user.id[11]
+
+int lsmash_check_box_type_identical( lsmash_box_type_t a, lsmash_box_type_t b )
+{
+    return CHECK_BOX_TYPE_IDENTICAL( a, b );
+}
+
+int lsmash_check_codec_type_identical( lsmash_codec_type_t a, lsmash_codec_type_t b )
+{
+    return CHECK_BOX_TYPE_IDENTICAL( a, b );
+}
+
+int lsmash_check_box_type_specified( const lsmash_box_type_t *box_type )
+{
+    assert( box_type );
+    if( !box_type )
+        return 0;
+    return !!(box_type->fourcc
+            | box_type->user.fourcc
+            | box_type->user.id[0] | box_type->user.id[1] | box_type->user.id[2]  | box_type->user.id[3]
+            | box_type->user.id[4] | box_type->user.id[5] | box_type->user.id[6]  | box_type->user.id[7]
+            | box_type->user.id[8] | box_type->user.id[9] | box_type->user.id[10] | box_type->user.id[11]);
+}
+
+lsmash_box_t *lsmash_get_box
+(
+    lsmash_box_t           *parent,
+    const lsmash_box_path_t box_path[]
+)
+{
+    lsmash_entry_t *entry = isom_get_entry_of_box( parent, box_path );
+    return (lsmash_box_t *)(entry ? entry->data : NULL);
+}
+
+lsmash_box_t *lsmash_create_box
+(
+    lsmash_box_type_t type,
+    uint8_t          *data,
+    uint32_t          size,
+    uint64_t          precedence
+)
+{
+    if( !lsmash_check_box_type_specified( &type ) || !data || size < ISOM_BASEBOX_COMMON_SIZE )
+        return NULL;
+    isom_unknown_box_t *box = lsmash_malloc_zero( sizeof(isom_unknown_box_t) );
+    if( !box )
+        return NULL;
+    box->unknown_size  = size;
+    box->unknown_field = lsmash_memdup( data, size );
+    if( !box->unknown_field )
+    {
+        lsmash_free( box );
+        return NULL;
+    }
+    box->class      = &lsmash_box_class;
+    box->root       = NULL;
+    box->parent     = NULL;
+    box->destruct   = (isom_extension_destructor_t)isom_remove_unknown_box;
+    box->update     = (isom_extension_updater_t)isom_update_unknown_box_size;
+    box->manager    = LSMASH_UNKNOWN_BOX;
+    box->precedence = precedence;
+    box->size       = ISOM_BASEBOX_COMMON_SIZE + size + (type.fourcc == ISOM_BOX_TYPE_UUID.fourcc ? 16 : 0);
+    box->type       = type;
+    isom_set_box_writer( (lsmash_box_t *)box );
+    return (lsmash_box_t *)box;
+}
+
+int lsmash_add_box
+(
+    lsmash_box_t *parent,
+    lsmash_box_t *box
+)
+{
+    if( !parent || !box || !(box->manager & LSMASH_UNKNOWN_BOX) || box->size < ISOM_BASEBOX_COMMON_SIZE )
+        return -1;
+    /* Add a box as a child box. */
+    box->root   = parent->root;
+    box->parent = parent;
+    return isom_add_box_to_extension_list( parent, box );
+}
+
+void lsmash_destroy_box
+(
+    lsmash_box_t *box
+)
+{
+    isom_remove_box_by_itself( box );
+}
+
+int lsmash_get_box_precedence
+(
+    lsmash_box_t *box,
+    uint64_t     *precedence
+)
+{
+    if( !box || !precedence )
+        return -1;
+    *precedence = box->precedence;
+    return 0;
+}
+
+lsmash_box_t *lsmash_root_as_box
+(
+    lsmash_root_t *root
+)
+{
+    return (lsmash_box_t *)root;
+}
+
+int lsmash_write_top_level_box
+(
+    lsmash_box_t *box
+)
+{
+    if( !box || (isom_box_t *)box->root != box->parent )
+        return -1;
+    if( isom_write_box( box->root->bs, box ) < 0 )
+        return -1;
+    box->root->size += box->size;
     return 0;
 }

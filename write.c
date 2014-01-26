@@ -1328,21 +1328,29 @@ int lsmash_write_free( lsmash_root_t *root )
 int isom_write_box( lsmash_bs_t *bs, isom_box_t *box )
 {
     assert( bs );
-    if( !box || !box->write || (box->manager & LSMASH_INCOMPLETE_BOX) )
+    /* Don't write any incomplete or already written box. */
+    if( !box || !box->write || (box->manager & (LSMASH_INCOMPLETE_BOX | LSMASH_WRITTEN_BOX)) )
         return 0;
     if( box->write( bs, box ) < 0 )
         return -1;
+    if( !(box->manager & LSMASH_PLACEHOLDER) )
+        box->manager |= LSMASH_WRITTEN_BOX;
     return isom_write_children( bs, box );
 }
 
 void isom_set_box_writer( isom_box_t *box )
 {
-    assert( box->parent );
     if( box->manager & LSMASH_BINARY_CODED_BOX )
     {
         box->write = isom_write_binary_coded_box;
         return;
     }
+    else if( box->manager & LSMASH_UNKNOWN_BOX )
+    {
+        box->write = isom_write_unknown_box;
+        return;
+    }
+    assert( box->parent );
     isom_box_t *parent = box->parent;
     if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) )
     {

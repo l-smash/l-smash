@@ -42,3 +42,20 @@ void lsmash_get_mainargs( int *argc, char ***argv )
         lsmash_string_from_wchar( CP_UTF8, wargv[i], &(*argv)[i] );
 }
 #endif
+
+int lsmash_write_lsmash_indicator( lsmash_root_t *root )
+{
+    /* Write a tag in a free space to indicate the output file is written by L-SMASH. */
+    char *string = "Multiplexed by L-SMASH";
+    int   length = strlen( string );
+    lsmash_box_type_t type = lsmash_form_iso_box_type( LSMASH_4CC( 'f', 'r', 'e', 'e' ) );
+    lsmash_box_t *free_box = lsmash_create_box( type, (uint8_t *)string, length, LSMASH_BOX_PRECEDENCE_N );
+    if( !free_box )
+        return 0;
+    if( lsmash_add_box( lsmash_root_as_box( root ), free_box ) )
+    {
+        lsmash_destroy_box( free_box );
+        return 0;
+    }
+    return lsmash_write_top_level_box( free_box );
+}

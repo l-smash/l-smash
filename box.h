@@ -36,7 +36,7 @@ static const lsmash_class_t lsmash_box_class =
     "box"
 };
 
-typedef struct isom_box_tag isom_box_t;
+typedef struct lsmash_box_tag isom_box_t;
 typedef void (*isom_extension_destructor_t)( void *extension_data );
 typedef uint64_t (*isom_extension_updater_t)( void *extension_data );
 typedef int (*isom_extension_writer_t)( lsmash_bs_t *bs, isom_box_t *box );
@@ -78,16 +78,7 @@ typedef int (*isom_extension_writer_t)( lsmash_bs_t *bs, isom_box_t *box );
 #define LSMASH_INCOMPLETE_BOX    0x080
 #define LSMASH_BINARY_CODED_BOX  0x100
 #define LSMASH_PLACEHOLDER       0x200
-
-/* precedence of the box position
- * Box with higher value will precede other boxes with lower one.
- * The lower 32-bits are intended to determine order of boxes with the same box type. */
-#define LSMASH_BOX_PRECEDENCE_L  0x0000000000000000ULL /* Lowest */
-#define LSMASH_BOX_PRECEDENCE_LP 0x000FFFFF00000000ULL /* Lowest+ */
-#define LSMASH_BOX_PRECEDENCE_N  0x0080000000000000ULL /* Normal */
-#define LSMASH_BOX_PRECEDENCE_HM 0xFFEEEEEE00000000ULL /* Highest- */
-#define LSMASH_BOX_PRECEDENCE_H  0xFFFFFFFF00000000ULL /* Highest */
-#define LSMASH_BOX_PRECEDENCE_S  0x0000010000000000ULL /* Step */
+#define LSMASH_WRITTEN_BOX       0x400
 
 /* 12-byte ISO reserved value:
  * 0xXXXXXXXX-0011-0010-8000-00AA00389B71 */
@@ -101,7 +92,7 @@ static const uint8_t static_lsmash_qtff_12_bytes[12]
     = { 0x0F, 0x11, 0x4D, 0xA5, 0xBF, 0x4E, 0xF2, 0xC4, 0x8C, 0x6A, 0xA1, 0x1E };
 #define LSMASH_QTFF_12_BYTES static_lsmash_qtff_12_bytes
 
-struct isom_box_tag
+struct lsmash_box_tag
 {
     ISOM_FULLBOX_COMMON;
 };
@@ -1707,7 +1698,6 @@ struct lsmash_root_tag
         double max_async_tolerance;         /* max tolerance, in seconds, for amount of interleaving asynchronization between tracks */
         uint64_t max_chunk_size;            /* max size per chunk in bytes. */
         uint64_t max_read_size;             /* max size of reading from a chunk at a time. */
-        uint8_t file_type_written;          /* whether File Type Box was written */
         uint8_t qt_compatible;              /* compatibility with QuickTime file format */
         uint8_t isom_compatible;            /* compatibility with ISO Base Media file format */
         uint8_t avc_extensions;             /* compatibility with AVC extensions */

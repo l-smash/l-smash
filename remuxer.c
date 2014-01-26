@@ -1019,7 +1019,9 @@ static int finish_movie( remuxer_t *remuxer )
     moov_to_front.buffer_size = 4*1024*1024;    /* 4MiB */
     moov_to_front.param       = NULL;
     REFRESH_CONSOLE;
-    return lsmash_finish_movie( output->root, &moov_to_front );
+    if( lsmash_finish_movie( output->root, &moov_to_front ) )
+        return -1;
+    return lsmash_write_lsmash_indicator( output->root );
 }
 
 int main( int argc, char *argv[] )

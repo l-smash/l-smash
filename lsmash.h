@@ -33,8 +33,8 @@
 /****************************************************************************
  * Version
  ****************************************************************************/
-#define LSMASH_VERSION_MAJOR  0
-#define LSMASH_VERSION_MINOR  5
+#define LSMASH_VERSION_MAJOR  1
+#define LSMASH_VERSION_MINOR  0
 #define LSMASH_VERSION_MICRO  0
 
 /****************************************************************************
@@ -182,6 +182,7 @@ void lsmash_freep
 /****************************************************************************
  * Box
  ****************************************************************************/
+typedef struct lsmash_box_tag lsmash_box_t;
 typedef uint32_t lsmash_compact_box_type_t;
 
 /* An UUID structure for extended box type */
@@ -206,6 +207,13 @@ typedef struct
                                         /* If 'fourcc' doesn't equal 'uuid', ignore this field. */
 } lsmash_box_type_t;
 
+typedef struct
+{
+    lsmash_box_type_t type;     /* box type */
+    uint32_t          number;   /* the number of box in ascending order excluding boxes unspecified by 'type' within
+                                 * the same level of the box nested structure. */
+} lsmash_box_path_t;
+
 #define LSMASH_BOX_TYPE_INITIALIZER { 0x00000000, { 0x00000000, { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 } } }
 #define LSMASH_BOX_TYPE_UNSPECIFIED static_lsmash_box_type_unspecified
 static const lsmash_box_type_t static_lsmash_box_type_unspecified = LSMASH_BOX_TYPE_INITIALIZER;
@@ -229,6 +237,16 @@ lsmash_box_type_t lsmash_form_box_type
 lsmash_box_type_t lsmash_form_iso_box_type( lsmash_compact_box_type_t type );
 lsmash_box_type_t lsmash_form_qtff_box_type( lsmash_compact_box_type_t type );
 
+/* precedence of the box position
+ * Box with higher value will precede physically other boxes with lower one.
+ * The lower 32-bits are intended to determine order of boxes with the same box type. */
+#define LSMASH_BOX_PRECEDENCE_L  0x0000000000800000ULL /* Lowest */
+#define LSMASH_BOX_PRECEDENCE_LP 0x000FFFFF00000000ULL /* Lowest+ */
+#define LSMASH_BOX_PRECEDENCE_N  0x0080000000000000ULL /* Normal */
+#define LSMASH_BOX_PRECEDENCE_HM 0xFFEEEEEE00000000ULL /* Highest- */
+#define LSMASH_BOX_PRECEDENCE_H  0xFFFFFFFF00800000ULL /* Highest */
+#define LSMASH_BOX_PRECEDENCE_S  0x0000010000000000ULL /* Step */
+
 /* Check if the type of two boxes is identical or not.
  *
  * Return 1 if the both box types are identical.
@@ -246,6 +264,73 @@ int lsmash_check_box_type_identical
 int lsmash_check_box_type_specified
 (
     const lsmash_box_type_t *box_type
+);
+
+/* Allocate a box.
+ * The allocated box can be deallocated by lsmash_destroy_box().
+ *
+ * Return the address of an allocated box if successful.
+ * Return NULL otherwise. */
+lsmash_box_t *lsmash_create_box
+(
+    lsmash_box_type_t type,
+    uint8_t          *data,
+    uint32_t          size,
+    uint64_t          precedence
+);
+
+/* Get a box under a given 'parent' box.
+ * The path of a box must be terminated by LSMASH_BOX_TYPE_UNSPECIFIED.
+ *
+ * Return the address of the box specified by 'box_path'.
+ * Return NULL otherwise. */
+lsmash_box_t *lsmash_get_box
+(
+    lsmash_box_t           *parent,
+    const lsmash_box_path_t box_path[]
+);
+
+/* Add a box into 'parent' box as a child box.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_add_box
+(
+    lsmash_box_t *parent,
+    lsmash_box_t *box
+);
+
+/* Deallocate a given box. */
+void lsmash_destroy_box
+(
+    lsmash_box_t *box
+);
+
+/* Get the precedence of a given box.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_get_box_precedence
+(
+    lsmash_box_t *box,
+    uint64_t     *precedence
+);
+
+/* Return the address of a given ROOT as lsmash_box_t. */
+lsmash_box_t *lsmash_root_as_box
+(
+    lsmash_root_t *root
+);
+
+/* Write a top level box and its children already added to ROOT.
+ * WARNING:
+ *   You should not use this function before media data is not completely written.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_write_top_level_box
+(
+    lsmash_box_t *box
 );
 
 /****************************************************************************

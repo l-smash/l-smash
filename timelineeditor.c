@@ -1096,7 +1096,8 @@ int main( int argc, char *argv[] )
     moov_to_front.buffer_size = 4*1024*1024;
     moov_to_front.param = NULL;
     eprintf( "                                                                               \r" );
-    if( lsmash_finish_movie( output.root, &moov_to_front ) )
+    if( lsmash_finish_movie( output.root, &moov_to_front )
+     || lsmash_write_lsmash_indicator( output.root ) )
         return TIMELINEEDITOR_ERR( "Failed to finish output movie.\n" );
     cleanup_movie( io.input );
     cleanup_movie( io.output );
