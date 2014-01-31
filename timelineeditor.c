@@ -916,6 +916,8 @@ int main( int argc, char *argv[] )
     output.movie_param.max_async_tolerance = 2.0;
     output.movie_param.max_chunk_size      = 4*1024*1024;
     output.movie_param.max_read_size       = 4*1024*1024;
+    if( input.num_tracks == 1 )
+        output.movie_param.timescale = input.track[0].media_param.timescale;
     if( lsmash_set_movie_parameters( output.root, &output.movie_param ) )
         return TIMELINEEDITOR_ERR( "Failed to set output movie parameters.\n" );
     /* Set iTunes metadata. */
