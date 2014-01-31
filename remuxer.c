@@ -647,6 +647,15 @@ static int set_movie_parameters( remuxer_t *remuxer )
                 remuxer->ref_chap_available = 1;
                 break;
             }
+    /* Set the movie timescale in order to match the media timescale if only one track is there. */
+    if( output->num_tracks == 1 )
+        for( int i = 0; i < remuxer->num_input; i++ )
+            for( uint32_t j = 0; j < input[i].num_tracks; j++ )
+                if( input[i].track[j].active )
+                {
+                    output->movie_param.timescale = input[i].track[j].media_param.timescale;
+                    break;
+                }
     return lsmash_set_movie_parameters( output->root, &output->movie_param );
 }
 
@@ -729,14 +738,24 @@ static void exclude_invalid_output_track( output_movie_t *output, output_track_t
 
 static int prepare_output( remuxer_t *remuxer )
 {
-    if( set_movie_parameters( remuxer ) )
-        return ERROR_MSG( "failed to set output movie parameters.\n" );
     output_movie_t *output = remuxer->output;
     input_movie_t  *input  = remuxer->input;
-    set_itunes_metadata( output, input, remuxer->num_input );
-    /* Allocate output tracks. */
+    /* Count the number of output tracks. */
     for( int i = 0; i < remuxer->num_input; i++ )
         output->num_tracks += input[i].num_tracks;
+    for( int i = 0; i < remuxer->num_input; i++ )
+        for( uint32_t j = 0; j < input[i].num_tracks; j++ )
+        {
+            /* Don't remux tracks specified as 'remove' by a user. */
+            if( remuxer->track_option[i][j].remove )
+                input[i].track[j].active = 0;
+            if( !input[i].track[j].active )
+                -- output->num_tracks;
+        }
+    if( set_movie_parameters( remuxer ) )
+        return ERROR_MSG( "failed to set output movie parameters.\n" );
+    set_itunes_metadata( output, input, remuxer->num_input );
+    /* Allocate output tracks. */
     output->track = lsmash_malloc( output->num_tracks * sizeof(output_track_t) );
     if( !output->track )
         return ERROR_MSG( "failed to alloc output tracks.\n" );
@@ -746,13 +765,8 @@ static int prepare_output( remuxer_t *remuxer )
         {
             track_media_option *current_track_opt = &remuxer->track_option[i][j];
             input_track_t *in_track = &input[i].track[j];
-            if( current_track_opt->remove )
-                in_track->active = 0;
             if( !in_track->active )
-            {
-                -- output->num_tracks;
                 continue;
-            }
             output_track_t *out_track = &output->track[output->current_track_number - 1];
             out_track->summary_remap = lsmash_malloc( in_track->num_summaries * sizeof(uint32_t) );
             if( !out_track->summary_remap )
