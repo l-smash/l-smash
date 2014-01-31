@@ -2842,6 +2842,8 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
         isom_stbl_t *stbl = trak->mdia->minf->stbl;
         if( !trak->cache->all_sync && !stbl->stss && isom_add_stss( stbl ) )
             return -1;
+        if( isom_update_tkhd_duration( trak ) )
+            return -1;
         if( isom_update_bitrate_description( trak->mdia ) )
             return -1;
     }
@@ -3092,6 +3094,8 @@ static int isom_finish_fragment_initial_movie( lsmash_root_t *root )
             /* Add stss box if any samples aren't sync sample. */
             isom_stbl_t *stbl = trak->mdia->minf->stbl;
             if( !trak->cache->all_sync && !stbl->stss && isom_add_stss( stbl ) )
+                return -1;
+            if( isom_update_tkhd_duration( trak ) )
                 return -1;
         }
         else
