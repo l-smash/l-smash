@@ -1362,13 +1362,15 @@ void isom_set_box_writer( isom_box_t *box )
                 box->write = isom_write_visual_description;
             else if( minf->smhd )
                 box->write = isom_write_audio_description;
-            return;
+            if( box->write )
+                return;
         }
         if( lsmash_check_box_type_identical( box->type, QT_CODEC_TYPE_TEXT_TEXT ) )
             box->write = isom_write_qt_text_description;
         else if( lsmash_check_box_type_identical( box->type, ISOM_CODEC_TYPE_TX3G_TEXT ) )
             box->write = isom_write_tx3g_description;
-        return;
+        if( box->write )
+            return;
     }
     if( lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_WAVE ) )
     {
