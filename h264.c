@@ -679,6 +679,12 @@ int h264_parse_sps
             sps->vui.time_scale            = lsmash_bits_get( bits, 32 );
             sps->vui.fixed_frame_rate_flag = lsmash_bits_get( bits, 1 );
         }
+        else
+        {
+            sps->vui.num_units_in_tick     = 1;     /* arbitrary */
+            sps->vui.time_scale            = 50;    /* arbitrary */
+            sps->vui.fixed_frame_rate_flag = 0;
+        }
         int nal_hrd_parameters_present_flag = lsmash_bits_get( bits, 1 );
         if( nal_hrd_parameters_present_flag
          && h264_parse_hrd_parameters( bits, &sps->vui.hrd ) )
@@ -708,8 +714,8 @@ int h264_parse_sps
     else
     {
         sps->vui.video_full_range_flag = 0;
-        sps->vui.num_units_in_tick     = 1;
-        sps->vui.time_scale            = 50;
+        sps->vui.num_units_in_tick     = 1;     /* arbitrary */
+        sps->vui.time_scale            = 50;    /* arbitrary */
         sps->vui.fixed_frame_rate_flag = 0;
     }
     /* rbsp_trailing_bits() */
