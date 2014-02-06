@@ -892,11 +892,11 @@ static int hevc_parse_sps_minimally
         {
             sps->vui.num_units_in_tick = lsmash_bits_get( bits, 32 );
             sps->vui.time_scale        = lsmash_bits_get( bits, 32 );
+            if( lsmash_bits_get( bits, 1 ) )    /* vui_poc_proportional_to_timing_flag */
+                nalu_get_exp_golomb_ue( bits ); /* vui_num_ticks_poc_diff_one_minus1 */
+            if( lsmash_bits_get( bits, 1 ) )    /* vui_hrd_parameters_present_flag */
+                hevc_parse_hrd_parameters( bits, &sps->vui.hrd, 1, sps->max_sub_layers_minus1 );
         }
-        if( lsmash_bits_get( bits, 1 ) )    /* vui_poc_proportional_to_timing_flag */
-            nalu_get_exp_golomb_ue( bits ); /* vui_num_ticks_poc_diff_one_minus1 */
-        if( lsmash_bits_get( bits, 1 ) )    /* vui_hrd_parameters_present_flag */
-            hevc_parse_hrd_parameters( bits, &sps->vui.hrd, 1, sps->max_sub_layers_minus1 );
         if( lsmash_bits_get( bits, 1 ) )    /* bitstream_restriction_flag */
         {
             lsmash_bits_get( bits, 1 );     /* tiles_fixed_structure_flag */
