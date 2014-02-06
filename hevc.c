@@ -897,6 +897,11 @@ static int hevc_parse_sps_minimally
             if( lsmash_bits_get( bits, 1 ) )    /* vui_hrd_parameters_present_flag */
                 hevc_parse_hrd_parameters( bits, &sps->vui.hrd, 1, sps->max_sub_layers_minus1 );
         }
+        else
+        {
+            sps->vui.num_units_in_tick = 1;     /* arbitrary */
+            sps->vui.time_scale        = 50;    /* arbitrary */
+        }
         if( lsmash_bits_get( bits, 1 ) )    /* bitstream_restriction_flag */
         {
             lsmash_bits_get( bits, 1 );     /* tiles_fixed_structure_flag */
@@ -921,8 +926,8 @@ static int hevc_parse_sps_minimally
         sps->vui.field_seq_flag                = 0;
         sps->vui.frame_field_info_present_flag = sps->ptl.general.progressive_source_flag
                                               && sps->ptl.general.interlaced_source_flag;
-        sps->vui.num_units_in_tick             = 1;
-        sps->vui.time_scale                    = 50;
+        sps->vui.num_units_in_tick             = 1;     /* arbitrary */
+        sps->vui.time_scale                    = 50;    /* arbitrary */
         sps->vui.min_spatial_segmentation_idc  = 0;
     }
     return bits->bs->error ? -1 : 0;
