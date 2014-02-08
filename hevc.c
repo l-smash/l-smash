@@ -2708,7 +2708,7 @@ int lsmash_setup_hevc_specific_parameters_from_access_unit
         else
             lsmash_stream_buffers_set_pos( sb, next_short_start_code_pos + HEVC_SHORT_START_CODE_LENGTH );
         info->prev_nalu_type = nalu_type;
-        lsmash_stream_buffers_update( sb, 0 );
+        lsmash_stream_buffers_update( sb, 1 );
         no_more_buf = (lsmash_stream_buffers_get_remainder( sb ) == 0);
         ebsp_length = 0;
         no_more = lsmash_stream_buffers_is_eos( sb ) && no_more_buf;
