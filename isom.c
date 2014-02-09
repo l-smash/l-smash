@@ -1582,7 +1582,7 @@ int isom_setup_handler_reference( isom_hdlr_t *hdlr, uint32_t media_type )
     } subtype_table[] =
         {
             { ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK,          "Sound ",    6 },
-            { ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK,          "Video",     6 },
+            { ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK,          "Video ",    6 },
             { ISOM_MEDIA_HANDLER_TYPE_HINT_TRACK,           "Hint ",     5 },
             { ISOM_MEDIA_HANDLER_TYPE_TIMED_METADATA_TRACK, "Metadata ", 9 },
             { ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK,           "Text ",     5 },
