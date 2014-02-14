@@ -2094,6 +2094,7 @@ static int isom_print_tfhd( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
     if( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_DURATION_PRESENT  ) lsmash_ifprintf( fp, indent, "default-sample-duration-present\n" );
     if( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_SIZE_PRESENT      ) lsmash_ifprintf( fp, indent, "default-sample-size-present\n" );
     if( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT     ) lsmash_ifprintf( fp, indent, "default-sample-flags-present\n" );
+    if( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_BASE_IS_MOOF             ) lsmash_ifprintf( fp, indent, "default-base-is-moof\n" );
     lsmash_ifprintf( fp, --indent, "track_ID = %"PRIu32"\n", tfhd->track_ID );
     if( tfhd->flags & ISOM_TF_FLAGS_BASE_DATA_OFFSET_PRESENT )
         lsmash_ifprintf( fp, indent, "base_data_offset = %"PRIu64"\n", tfhd->base_data_offset );

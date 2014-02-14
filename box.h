@@ -1433,23 +1433,47 @@ typedef struct
 /* Track Fragments Flags ('tf_flags') */
 typedef enum
 {
-    ISOM_TF_FLAGS_BASE_DATA_OFFSET_PRESENT               = 0x000001,    /* base_data_offset field exists. */
-    ISOM_TF_FLAGS_SAMPLE_DESCRIPTION_INDEX_PRESENT       = 0x000002,    /* sample_description_index field exists. */
-    ISOM_TF_FLAGS_DEFAULT_SAMPLE_DURATION_PRESENT        = 0x000008,    /* default_sample_duration field exists. */
-    ISOM_TF_FLAGS_DEFAULT_SAMPLE_SIZE_PRESENT            = 0x000010,    /* default_sample_size field exists. */
-    ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT           = 0x000020,    /* default_sample_flags field exists. */
-    ISOM_TF_FLAGS_DURATION_IS_EMPTY                      = 0x010000,    /* There are no samples for this time interval. */
+    ISOM_TF_FLAGS_BASE_DATA_OFFSET_PRESENT               = 0x000001,    /* base-data-offset-present:
+                                                                         * This flag indicates the presence of the base_data_offset field.
+                                                                         * The base_data_offset is the base offset to use when calculating data offsets.
+                                                                         * Offsets are file offsets as like as chunk_offset in Chunk Offset Box.
+                                                                         * If this flag is set and default-base-is-moof is not set, the base_data_offset
+                                                                         * for the first track in the movie fragment is the position of the first byte
+                                                                         * of the enclosing Movie Fragment Box, and for second and subsequent track
+                                                                         * fragments, the default is the end of the data defined by the preceding fragment. */
+    ISOM_TF_FLAGS_SAMPLE_DESCRIPTION_INDEX_PRESENT       = 0x000002,    /* sample-description-index-present
+                                                                         * This flag indicates the presence of the sample_description_index field. */
+    ISOM_TF_FLAGS_DEFAULT_SAMPLE_DURATION_PRESENT        = 0x000008,    /* default-sample-duration-present:
+                                                                         * This flag indicates the presence of the default_sample_duration field. */
+    ISOM_TF_FLAGS_DEFAULT_SAMPLE_SIZE_PRESENT            = 0x000010,    /* default-sample-size-present:
+                                                                         * This flag indicates the presence of the default_sample_size field. */
+    ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT           = 0x000020,    /* default-sample-flags-present:
+                                                                         * This flag indicates the presence of the default_sample_flags field. */
+    ISOM_TF_FLAGS_DURATION_IS_EMPTY                      = 0x010000,    /* duration-is-empty:
+                                                                         * This flag indicates there are no samples for this time interval. */
+    ISOM_TF_FLAGS_DEFAULT_BASE_IS_MOOF                   = 0x020000,    /* default-base-is-moof:
+                                                                         * If base-data-offset-present is not set, this flag indicates the implicit
+                                                                         * base_data_offset is always equal to the position of the first byte of the
+                                                                         * enclosing Movie Fragment BOX.
+                                                                         * This flag is only available under the 'iso5' or later brands and cannot be set
+                                                                         * when earlier brands are included in the File Type box. */
 } isom_tf_flags_code;
 
 /* Track Run Flags ('tr_flags') */
 typedef enum
 {
-    ISOM_TR_FLAGS_DATA_OFFSET_PRESENT                    = 0x000001,    /* data_offset field exists. */
-    ISOM_TR_FLAGS_FIRST_SAMPLE_FLAGS_PRESENT             = 0x000004,    /* first_sample_flags field exists. */
-    ISOM_TR_FLAGS_SAMPLE_DURATION_PRESENT                = 0x000100,    /* sample_duration field exists. */
-    ISOM_TR_FLAGS_SAMPLE_SIZE_PRESENT                    = 0x000200,    /* sample_size field exists. */
-    ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT                   = 0x000400,    /* sample_flags field exists. */
-    ISOM_TR_FLAGS_SAMPLE_COMPOSITION_TIME_OFFSET_PRESENT = 0x000800,    /* sample_composition_time_offset field exists. */
+    ISOM_TR_FLAGS_DATA_OFFSET_PRESENT                    = 0x000001,    /* data-offset-present:
+                                                                         * This flag indicates the presence of the data_offset field. */
+    ISOM_TR_FLAGS_FIRST_SAMPLE_FLAGS_PRESENT             = 0x000004,    /* first-sample-flags-present:
+                                                                         * This flag indicates the presence of the first_sample_flags field. */
+    ISOM_TR_FLAGS_SAMPLE_DURATION_PRESENT                = 0x000100,    /* sample-duration-present:
+                                                                         * This flag indicates the presence of the sample_duration field. */
+    ISOM_TR_FLAGS_SAMPLE_SIZE_PRESENT                    = 0x000200,    /* sample-size-present:
+                                                                         * This flag indicates the presence of the sample_size field. */
+    ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT                   = 0x000400,    /* sample-flags-present:
+                                                                         * This flag indicates the presence of the sample_flags field. */
+    ISOM_TR_FLAGS_SAMPLE_COMPOSITION_TIME_OFFSET_PRESENT = 0x000800,    /* sample-composition-time-offsets-present:
+                                                                         * This flag indicates the presence of the sample_composition_time_offset field. */
 } isom_tr_flags_code;
 
 /* Sample Flags */
@@ -1517,10 +1541,6 @@ typedef struct
     uint32_t            track_ID;
     /* all the following are optional fields */
     uint64_t            base_data_offset;           /* an explicit anchor for the data offsets in each track run
-                                                     * Offsets are file offsets as like as chunk_offset in Chunk Offset Box.
-                                                     * If not provided, the base_data_offset for the first track in the movie fragment is the position
-                                                     * of the first byte of the enclosing Movie Fragment Box, and for second and subsequent track fragments,
-                                                     * the default is the end of the data defined by the preceding fragment.
                                                      * To avoid the case this field might overflow, e.g. semi-permanent live streaming and broadcasting,
                                                      * you shall not use this optional field. */
     uint32_t            sample_description_index;   /* override default_sample_description_index in Track Extends Box */

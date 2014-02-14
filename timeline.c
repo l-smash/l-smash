@@ -956,7 +956,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                 uint64_t base_data_offset;
                 if( tfhd->flags & ISOM_TF_FLAGS_BASE_DATA_OFFSET_PRESENT )
                     base_data_offset = tfhd->base_data_offset;
-                else if( traf_entry == moof->traf_list->head )
+                else if( (tfhd->flags & ISOM_TF_FLAGS_DEFAULT_BASE_IS_MOOF) || traf_entry == moof->traf_list->head )
                     base_data_offset = moof->pos;
                 else
                     base_data_offset = last_sample_end_pos;
