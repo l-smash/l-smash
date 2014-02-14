@@ -82,6 +82,7 @@ struct isom_timeline_tag
     uint32_t max_sample_size;
     uint32_t ctd_shift;     /* shift from composition to decode timeline */
     uint64_t media_duration;
+    uint64_t track_duration;
     uint32_t last_accessed_sample_number;
     uint32_t last_accessed_chunk_number;
     uint64_t last_accessed_sample_dts;
@@ -556,6 +557,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     /* Get track by track_ID. */
     isom_trak_t *trak = isom_get_trak( root, track_ID );
     if( !trak
+     || !trak->tkhd
      || !trak->mdia
      || !trak->mdia->mdhd
      ||  trak->mdia->mdhd->timescale == 0
@@ -576,6 +578,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     timeline->track_ID        = track_ID;
     timeline->movie_timescale = root->moov->mvhd->timescale;
     timeline->media_timescale = trak->mdia->mdhd->timescale;
+    timeline->track_duration  = trak->tkhd->duration;
     /* Preparation for construction. */
     isom_elst_t *elst = trak->edts ? trak->edts->elst : NULL;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
@@ -1525,6 +1528,8 @@ int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_
         lsmash_remove_entries( dst_trak->edts->elst->list, NULL );
     uint32_t src_movie_timescale;
     uint32_t src_media_timescale;
+    uint64_t src_track_duration;
+    uint64_t src_media_duration;
     int32_t  src_ctd_shift;     /* Add timeline shift difference between src and dst to each media_time.
                                  * Therefore, call this function as later as possible. */
     lsmash_entry_t *src_entry;
@@ -1543,6 +1548,8 @@ int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_
             return -1;
         src_movie_timescale = src_timeline->movie_timescale;
         src_media_timescale = src_timeline->media_timescale;
+        src_track_duration  = src_timeline->track_duration;
+        src_media_duration  = src_timeline->media_duration;
         src_ctd_shift       = src_timeline->ctd_shift;
         src_entry = src_timeline->edit_list->head;
     }
@@ -1551,6 +1558,7 @@ int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_
         if( !src->moov
          || !src->moov->mvhd
          ||  src->moov->mvhd->timescale == 0
+         || !src_trak->tkhd
          || !src_trak->mdia
          || !src_trak->mdia->mdhd
          ||  src_trak->mdia->mdhd->timescale == 0
@@ -1559,6 +1567,8 @@ int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_
             return -1;
         src_movie_timescale = src->moov->mvhd->timescale;
         src_media_timescale = src_trak->mdia->mdhd->timescale;
+        src_track_duration  = src_trak->tkhd->duration;
+        src_media_duration  = src_trak->mdia->mdhd->duration;
         src_ctd_shift       = src_trak->mdia->minf->stbl->cslg ? src_trak->mdia->minf->stbl->cslg->compositionToDTSShift : 0;
         src_entry = src_trak->edts->elst->list->head;
     }
@@ -1573,15 +1583,31 @@ int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_
     int32_t  dst_ctd_shift       = dst_trak->mdia->minf->stbl->cslg ? dst_trak->mdia->minf->stbl->cslg->compositionToDTSShift : 0;
     int32_t  media_time_shift    = src_ctd_shift - dst_ctd_shift;
     lsmash_entry_list_t *dst_list = dst_trak->edts->elst->list;
+    lsmash_entry_t      *src_head = src_entry;
     while( src_entry )
     {
         isom_elst_entry_t *src_data = (isom_elst_entry_t *)src_entry->data;
         if( !src_data )
             return -1;
+        uint64_t segment_duration;
+        if( src_data->segment_duration == 0 && !dst->fragment )
+        {
+            /* The 0-duration edit makes no sence for non-fragmented movie file. */
+            if( src_entry == src_head )
+                /* Set an appropriate duration from the source track. */
+                segment_duration = src_track_duration
+                                 ? src_track_duration
+                                 : src_media_duration * ((double)src_movie_timescale / src_media_timescale);
+            else
+                /* Two or more 0-duration edits make no sence. Just skip them. */
+                continue;
+        }
+        else
+            segment_duration = src_data->segment_duration;
         isom_elst_entry_t *dst_data = (isom_elst_entry_t *)lsmash_malloc( sizeof(isom_elst_entry_t) );
         if( !dst_data )
             return -1;
-        dst_data->segment_duration = src_data->segment_duration                * ((double)dst_movie_timescale / src_movie_timescale) + 0.5;
+        dst_data->segment_duration = segment_duration                          * ((double)dst_movie_timescale / src_movie_timescale) + 0.5;
         dst_data->media_time       = (src_data->media_time + media_time_shift) * ((double)dst_media_timescale / src_media_timescale) + 0.5;
         dst_data->media_rate       = src_data->media_rate;
         if( lsmash_add_entry( dst_list, dst_data ) )
