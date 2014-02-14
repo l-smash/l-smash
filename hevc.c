@@ -44,7 +44,7 @@
 #define HEVC_MAX_SPS_ID             15
 #define HEVC_MAX_PPS_ID             63
 #define HEVC_MAX_DPB_SIZE           16
-#define HVCC_CONFIGURATION_VERSION  0   /* Fix this value when the NAL file format is finalized. */
+#define HVCC_CONFIGURATION_VERSION  1
 
 typedef enum
 {
