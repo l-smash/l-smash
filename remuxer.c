@@ -571,6 +571,43 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
     return 0;
 }
 
+static int check_white_brand( lsmash_brand_type brand )
+{
+    static const lsmash_brand_type brand_white_list[] =
+        {
+            ISOM_BRAND_TYPE_3G2A,
+            ISOM_BRAND_TYPE_3GG6,
+            ISOM_BRAND_TYPE_3GG9,
+            ISOM_BRAND_TYPE_3GP4,
+            ISOM_BRAND_TYPE_3GP5,
+            ISOM_BRAND_TYPE_3GP6,
+            ISOM_BRAND_TYPE_3GP7,
+            ISOM_BRAND_TYPE_3GP8,
+            ISOM_BRAND_TYPE_3GP9,
+            ISOM_BRAND_TYPE_3GR6,
+            ISOM_BRAND_TYPE_3GR9,
+            ISOM_BRAND_TYPE_M4A ,
+            ISOM_BRAND_TYPE_M4B ,
+            ISOM_BRAND_TYPE_M4V ,
+            ISOM_BRAND_TYPE_AVC1,
+            ISOM_BRAND_TYPE_DBY1,
+            ISOM_BRAND_TYPE_ISO2,
+            ISOM_BRAND_TYPE_ISO3,
+            ISOM_BRAND_TYPE_ISO4,
+            ISOM_BRAND_TYPE_ISO5,
+            ISOM_BRAND_TYPE_ISO6,
+            ISOM_BRAND_TYPE_ISOM,
+            ISOM_BRAND_TYPE_MP41,
+            ISOM_BRAND_TYPE_MP42,
+            ISOM_BRAND_TYPE_QT  ,
+            0
+        };
+    for( int i = 0; brand_white_list[i]; i++ )
+        if( brand == brand_white_list[i] )
+            return 1;
+    return 0;
+}
+
 static int set_movie_parameters( remuxer_t *remuxer )
 {
     int             num_input = remuxer->num_input;
@@ -584,6 +621,12 @@ static int set_movie_parameters( remuxer_t *remuxer )
     uint32_t          num_major_brand = 0;
     for( int i = 0; i < num_input; i++ )
     {
+        if( !check_white_brand( input[i].movie_param.major_brand ) )
+        {
+            /* Replace with whitelisted brand 'mp42'. */
+            input[i].movie_param.major_brand   = ISOM_BRAND_TYPE_MP42;
+            input[i].movie_param.minor_version = 0;
+        }
         major_brand      [num_major_brand] = input[i].movie_param.major_brand;
         minor_version    [num_major_brand] = input[i].movie_param.minor_version;
         major_brand_count[num_major_brand] = 0;
@@ -619,13 +662,12 @@ static int set_movie_parameters( remuxer_t *remuxer )
     num_input_brands = 0;
     for( int i = 0; i < num_input; i++ )
         for( uint32_t j = 0; j < input[i].movie_param.number_of_brands; j++ )
-            input_brands[num_input_brands++] = input[i].movie_param.brands[j];
+            if( input[i].movie_param.brands[j] || check_white_brand( input[i].movie_param.brands[j] ) )
+                input_brands[num_input_brands++] = input[i].movie_param.brands[j];
     lsmash_brand_type output_brands[num_input_brands];
     uint32_t num_output_brands = 0;
     for( uint32_t i = 0; i < num_input_brands; i++ )
     {
-        if( !input_brands[i] )
-            continue;
         output_brands[num_output_brands] = input_brands[i];
         for( uint32_t j = 0; j < num_output_brands; j++ )
             if( output_brands[num_output_brands] == output_brands[j] )
