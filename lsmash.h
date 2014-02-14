@@ -34,7 +34,7 @@
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  1
-#define LSMASH_VERSION_MINOR  0
+#define LSMASH_VERSION_MINOR  1
 #define LSMASH_VERSION_MICRO  0
 
 /****************************************************************************
@@ -1766,62 +1766,90 @@ int lsmash_modify_explicit_timeline_map
  ****************************************************************************/
 typedef enum
 {
-    ISOM_BRAND_TYPE_3G2A  = LSMASH_4CC( '3', 'g', '2', 'a' ),
-    ISOM_BRAND_TYPE_3GE6  = LSMASH_4CC( '3', 'g', 'e', '6' ),
-    ISOM_BRAND_TYPE_3GG6  = LSMASH_4CC( '3', 'g', 'g', '6' ),
-    ISOM_BRAND_TYPE_3GP4  = LSMASH_4CC( '3', 'g', 'p', '4' ),
-    ISOM_BRAND_TYPE_3GP5  = LSMASH_4CC( '3', 'g', 'p', '5' ),
-    ISOM_BRAND_TYPE_3GP6  = LSMASH_4CC( '3', 'g', 'p', '6' ),
-    ISOM_BRAND_TYPE_3GR6  = LSMASH_4CC( '3', 'g', 'r', '6' ),
-    ISOM_BRAND_TYPE_3GS6  = LSMASH_4CC( '3', 'g', 's', '6' ),
-    ISOM_BRAND_TYPE_CAEP  = LSMASH_4CC( 'C', 'A', 'E', 'P' ),
-    ISOM_BRAND_TYPE_CDES  = LSMASH_4CC( 'C', 'D', 'e', 's' ),
-    ISOM_BRAND_TYPE_M4A   = LSMASH_4CC( 'M', '4', 'A', ' ' ),
-    ISOM_BRAND_TYPE_M4B   = LSMASH_4CC( 'M', '4', 'B', ' ' ),
-    ISOM_BRAND_TYPE_M4P   = LSMASH_4CC( 'M', '4', 'P', ' ' ),
-    ISOM_BRAND_TYPE_M4V   = LSMASH_4CC( 'M', '4', 'V', ' ' ),
-    ISOM_BRAND_TYPE_MPPI  = LSMASH_4CC( 'M', 'P', 'P', 'I' ),
-    ISOM_BRAND_TYPE_ROSS  = LSMASH_4CC( 'R', 'O', 'S', 'S' ),
-    ISOM_BRAND_TYPE_AVC1  = LSMASH_4CC( 'a', 'v', 'c', '1' ),
-    ISOM_BRAND_TYPE_CAQV  = LSMASH_4CC( 'c', 'a', 'q', 'v' ),
-    ISOM_BRAND_TYPE_DA0A  = LSMASH_4CC( 'd', 'a', '0', 'a' ),
-    ISOM_BRAND_TYPE_DA0B  = LSMASH_4CC( 'd', 'a', '0', 'b' ),
-    ISOM_BRAND_TYPE_DA1A  = LSMASH_4CC( 'd', 'a', '1', 'a' ),
-    ISOM_BRAND_TYPE_DA1B  = LSMASH_4CC( 'd', 'a', '1', 'b' ),
-    ISOM_BRAND_TYPE_DA2A  = LSMASH_4CC( 'd', 'a', '2', 'a' ),
-    ISOM_BRAND_TYPE_DA2B  = LSMASH_4CC( 'd', 'a', '2', 'b' ),
-    ISOM_BRAND_TYPE_DA3A  = LSMASH_4CC( 'd', 'a', '3', 'a' ),
-    ISOM_BRAND_TYPE_DA3B  = LSMASH_4CC( 'd', 'a', '3', 'b' ),
-    ISOM_BRAND_TYPE_DMB1  = LSMASH_4CC( 'd', 'm', 'b', '1' ),
-    ISOM_BRAND_TYPE_DV1A  = LSMASH_4CC( 'd', 'v', '1', 'a' ),
-    ISOM_BRAND_TYPE_DV1B  = LSMASH_4CC( 'd', 'v', '1', 'b' ),
-    ISOM_BRAND_TYPE_DV2A  = LSMASH_4CC( 'd', 'v', '2', 'a' ),
-    ISOM_BRAND_TYPE_DV2B  = LSMASH_4CC( 'd', 'v', '2', 'b' ),
-    ISOM_BRAND_TYPE_DV3A  = LSMASH_4CC( 'd', 'v', '3', 'a' ),
-    ISOM_BRAND_TYPE_DV3B  = LSMASH_4CC( 'd', 'v', '3', 'b' ),
-    ISOM_BRAND_TYPE_DVR1  = LSMASH_4CC( 'd', 'v', 'r', '1' ),
-    ISOM_BRAND_TYPE_DVT1  = LSMASH_4CC( 'd', 'v', 't', '1' ),
-    ISOM_BRAND_TYPE_ISC2  = LSMASH_4CC( 'i', 's', 'c', '2' ),
-    ISOM_BRAND_TYPE_ISO2  = LSMASH_4CC( 'i', 's', 'o', '2' ),
-    ISOM_BRAND_TYPE_ISO3  = LSMASH_4CC( 'i', 's', 'o', '3' ),
-    ISOM_BRAND_TYPE_ISO4  = LSMASH_4CC( 'i', 's', 'o', '4' ),
-    ISOM_BRAND_TYPE_ISO5  = LSMASH_4CC( 'i', 's', 'o', '5' ),
-    ISOM_BRAND_TYPE_ISO6  = LSMASH_4CC( 'i', 's', 'o', '6' ),
-    ISOM_BRAND_TYPE_ISOM  = LSMASH_4CC( 'i', 's', 'o', 'm' ),
-    ISOM_BRAND_TYPE_JPSI  = LSMASH_4CC( 'j', 'p', 's', 'i' ),
-    ISOM_BRAND_TYPE_MJ2S  = LSMASH_4CC( 'm', 'j', '2', 'j' ),
-    ISOM_BRAND_TYPE_MJP2  = LSMASH_4CC( 'm', 'j', 'p', '2' ),
-    ISOM_BRAND_TYPE_MP21  = LSMASH_4CC( 'm', 'p', '2', '1' ),
-    ISOM_BRAND_TYPE_MP41  = LSMASH_4CC( 'm', 'p', '4', '1' ),
-    ISOM_BRAND_TYPE_MP42  = LSMASH_4CC( 'm', 'p', '4', '2' ),
-    ISOM_BRAND_TYPE_MP71  = LSMASH_4CC( 'm', 'p', '7', '1' ),
-    ISOM_BRAND_TYPE_NIKO  = LSMASH_4CC( 'n', 'i', 'k', 'o' ),
-    ISOM_BRAND_TYPE_ODCF  = LSMASH_4CC( 'o', 'd', 'c', 'f' ),
-    ISOM_BRAND_TYPE_OPF2  = LSMASH_4CC( 'o', 'p', 'f', '2' ),
-    ISOM_BRAND_TYPE_OPX2  = LSMASH_4CC( 'o', 'p', 'x', '2' ),
-    ISOM_BRAND_TYPE_PANA  = LSMASH_4CC( 'p', 'a', 'n', 'a' ),
-    ISOM_BRAND_TYPE_QT    = LSMASH_4CC( 'q', 't', ' ', ' ' ),
-    ISOM_BRAND_TYPE_SDV   = LSMASH_4CC( 's', 'd', 'v', ' ' ),
+    ISOM_BRAND_TYPE_3G2A  = LSMASH_4CC( '3', 'g', '2', 'a' ),   /* 3GPP2 */
+    ISOM_BRAND_TYPE_3GE6  = LSMASH_4CC( '3', 'g', 'e', '6' ),   /* 3GPP Release 6 Extended Presentation Profile */
+    ISOM_BRAND_TYPE_3GE9  = LSMASH_4CC( '3', 'g', 'e', '9' ),   /* 3GPP Release 9 Extended Presentation Profile */
+    ISOM_BRAND_TYPE_3GF9  = LSMASH_4CC( '3', 'g', 'f', '9' ),   /* 3GPP Release 9 File-delivery Server Profile */
+    ISOM_BRAND_TYPE_3GG6  = LSMASH_4CC( '3', 'g', 'g', '6' ),   /* 3GPP Release 6 General Profile */
+    ISOM_BRAND_TYPE_3GG9  = LSMASH_4CC( '3', 'g', 'g', '9' ),   /* 3GPP Release 9 General Profile */
+    ISOM_BRAND_TYPE_3GH9  = LSMASH_4CC( '3', 'g', 'h', '9' ),   /* 3GPP Release 9 Adaptive Streaming Profile */
+    ISOM_BRAND_TYPE_3GM9  = LSMASH_4CC( '3', 'g', 'm', '9' ),   /* 3GPP Release 9 Media Segment Profile */
+    ISOM_BRAND_TYPE_3GP4  = LSMASH_4CC( '3', 'g', 'p', '4' ),   /* 3GPP Release 4 */
+    ISOM_BRAND_TYPE_3GP5  = LSMASH_4CC( '3', 'g', 'p', '5' ),   /* 3GPP Release 5 */
+    ISOM_BRAND_TYPE_3GP6  = LSMASH_4CC( '3', 'g', 'p', '6' ),   /* 3GPP Release 6 Basic Profile */
+    ISOM_BRAND_TYPE_3GP7  = LSMASH_4CC( '3', 'g', 'p', '7' ),   /* 3GPP Release 7 */
+    ISOM_BRAND_TYPE_3GP8  = LSMASH_4CC( '3', 'g', 'p', '8' ),   /* 3GPP Release 8 */
+    ISOM_BRAND_TYPE_3GP9  = LSMASH_4CC( '3', 'g', 'p', '9' ),   /* 3GPP Release 9 Basic Profile */
+    ISOM_BRAND_TYPE_3GR6  = LSMASH_4CC( '3', 'g', 'r', '6' ),   /* 3GPP Release 6 Progressive Download Profile */
+    ISOM_BRAND_TYPE_3GR9  = LSMASH_4CC( '3', 'g', 'r', '9' ),   /* 3GPP Release 9 Progressive Download Profile */
+    ISOM_BRAND_TYPE_3GS6  = LSMASH_4CC( '3', 'g', 's', '6' ),   /* 3GPP Release 6 Streaming Server Profile */
+    ISOM_BRAND_TYPE_3GS9  = LSMASH_4CC( '3', 'g', 's', '9' ),   /* 3GPP Release 9 Streaming Server Profile */
+    ISOM_BRAND_TYPE_3GT9  = LSMASH_4CC( '3', 'g', 't', '9' ),   /* 3GPP Release 9 Media Stream Recording Profile */
+    ISOM_BRAND_TYPE_ARRI  = LSMASH_4CC( 'A', 'R', 'R', 'I' ),   /* ARRI Digital Camera */
+    ISOM_BRAND_TYPE_CAEP  = LSMASH_4CC( 'C', 'A', 'E', 'P' ),   /* Canon Digital Camera */
+    ISOM_BRAND_TYPE_CDES  = LSMASH_4CC( 'C', 'D', 'e', 's' ),   /* Convergent Designs */
+    ISOM_BRAND_TYPE_LCAG  = LSMASH_4CC( 'L', 'C', 'A', 'G' ),   /* Leica digital camera */
+    ISOM_BRAND_TYPE_M4A   = LSMASH_4CC( 'M', '4', 'A', ' ' ),   /* iTunes MPEG-4 audio protected or not */
+    ISOM_BRAND_TYPE_M4B   = LSMASH_4CC( 'M', '4', 'B', ' ' ),   /* iTunes AudioBook protected or not */
+    ISOM_BRAND_TYPE_M4P   = LSMASH_4CC( 'M', '4', 'P', ' ' ),   /* MPEG-4 protected audio */
+    ISOM_BRAND_TYPE_M4V   = LSMASH_4CC( 'M', '4', 'V', ' ' ),   /* MPEG-4 protected audio+video */
+    ISOM_BRAND_TYPE_MFSM  = LSMASH_4CC( 'M', 'F', 'S', 'M' ),   /* Media File for Samsung video Metadata */
+    ISOM_BRAND_TYPE_MPPI  = LSMASH_4CC( 'M', 'P', 'P', 'I' ),   /* Photo Player Multimedia Application Format */
+    ISOM_BRAND_TYPE_ROSS  = LSMASH_4CC( 'R', 'O', 'S', 'S' ),   /* Ross Video */
+    ISOM_BRAND_TYPE_AVC1  = LSMASH_4CC( 'a', 'v', 'c', '1' ),   /* Advanced Video Coding extensions */
+    ISOM_BRAND_TYPE_BBXM  = LSMASH_4CC( 'b', 'b', 'x', 'm' ),   /* Blinkbox Master File */
+    ISOM_BRAND_TYPE_CAQV  = LSMASH_4CC( 'c', 'a', 'q', 'v' ),   /* Casio Digital Camera */
+    ISOM_BRAND_TYPE_CCFF  = LSMASH_4CC( 'c', 'c', 'f', 'f' ),   /* Common container file format */
+    ISOM_BRAND_TYPE_DA0A  = LSMASH_4CC( 'd', 'a', '0', 'a' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DA0B  = LSMASH_4CC( 'd', 'a', '0', 'b' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DA1A  = LSMASH_4CC( 'd', 'a', '1', 'a' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DA1B  = LSMASH_4CC( 'd', 'a', '1', 'b' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DA2A  = LSMASH_4CC( 'd', 'a', '2', 'a' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DA2B  = LSMASH_4CC( 'd', 'a', '2', 'b' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DA3A  = LSMASH_4CC( 'd', 'a', '3', 'a' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DA3B  = LSMASH_4CC( 'd', 'a', '3', 'b' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DASH  = LSMASH_4CC( 'd', 'a', 's', 'h' ),   /* Indexed self-initializing Media Segment */
+    ISOM_BRAND_TYPE_DBY1  = LSMASH_4CC( 'd', 'b', 'y', '1' ),   /* MP4 files with Dolby content */
+    ISOM_BRAND_TYPE_DMB1  = LSMASH_4CC( 'd', 'm', 'b', '1' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DV1A  = LSMASH_4CC( 'd', 'v', '1', 'a' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DV1B  = LSMASH_4CC( 'd', 'v', '1', 'b' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DV2A  = LSMASH_4CC( 'd', 'v', '2', 'a' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DV2B  = LSMASH_4CC( 'd', 'v', '2', 'b' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DV3A  = LSMASH_4CC( 'd', 'v', '3', 'a' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DV3B  = LSMASH_4CC( 'd', 'v', '3', 'b' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DVR1  = LSMASH_4CC( 'd', 'v', 'r', '1' ),   /* DVB RTP */
+    ISOM_BRAND_TYPE_DVT1  = LSMASH_4CC( 'd', 'v', 't', '1' ),   /* DVB Transport Stream */
+    ISOM_BRAND_TYPE_IFRM  = LSMASH_4CC( 'i', 'f', 'r', 'm' ),   /* Apple iFrame */
+    ISOM_BRAND_TYPE_ISC2  = LSMASH_4CC( 'i', 's', 'c', '2' ),   /* Files encrypted according to ISMACryp 2.0 */
+    ISOM_BRAND_TYPE_ISO2  = LSMASH_4CC( 'i', 's', 'o', '2' ),   /* ISO Base Media file format version 2 */
+    ISOM_BRAND_TYPE_ISO3  = LSMASH_4CC( 'i', 's', 'o', '3' ),   /* ISO Base Media file format version 3 */
+    ISOM_BRAND_TYPE_ISO4  = LSMASH_4CC( 'i', 's', 'o', '4' ),   /* ISO Base Media file format version 4 */
+    ISOM_BRAND_TYPE_ISO5  = LSMASH_4CC( 'i', 's', 'o', '5' ),   /* ISO Base Media file format version 5 */
+    ISOM_BRAND_TYPE_ISO6  = LSMASH_4CC( 'i', 's', 'o', '6' ),   /* ISO Base Media file format version 6 */
+    ISOM_BRAND_TYPE_ISOM  = LSMASH_4CC( 'i', 's', 'o', 'm' ),   /* ISO Base Media file format version 1 */
+    ISOM_BRAND_TYPE_JPSI  = LSMASH_4CC( 'j', 'p', 's', 'i' ),   /* The JPSearch data interchange format */
+    ISOM_BRAND_TYPE_LMSG  = LSMASH_4CC( 'l', 'm', 's', 'g' ),   /* last Media Segment indicator */
+    ISOM_BRAND_TYPE_MJ2S  = LSMASH_4CC( 'm', 'j', '2', 's' ),   /* Motion JPEG 2000 simple profile */
+    ISOM_BRAND_TYPE_MJP2  = LSMASH_4CC( 'm', 'j', 'p', '2' ),   /* Motion JPEG 2000, general profile */
+    ISOM_BRAND_TYPE_MP21  = LSMASH_4CC( 'm', 'p', '2', '1' ),   /* MPEG-21 */
+    ISOM_BRAND_TYPE_MP41  = LSMASH_4CC( 'm', 'p', '4', '1' ),   /* MP4 version 1 */
+    ISOM_BRAND_TYPE_MP42  = LSMASH_4CC( 'm', 'p', '4', '2' ),   /* MP4 version 2 */
+    ISOM_BRAND_TYPE_MP71  = LSMASH_4CC( 'm', 'p', '7', '1' ),   /* MPEG-7 file-level metadata */
+    ISOM_BRAND_TYPE_MSDH  = LSMASH_4CC( 'm', 's', 'd', 'h' ),   /* Media Segment */
+    ISOM_BRAND_TYPE_MSIX  = LSMASH_4CC( 'm', 's', 'i', 'x' ),   /* Indexed Media Segment */
+    ISOM_BRAND_TYPE_NIKO  = LSMASH_4CC( 'n', 'i', 'k', 'o' ),   /* Nikon Digital Camera */
+    ISOM_BRAND_TYPE_ODCF  = LSMASH_4CC( 'o', 'd', 'c', 'f' ),   /* OMA DCF */
+    ISOM_BRAND_TYPE_OPF2  = LSMASH_4CC( 'o', 'p', 'f', '2' ),   /* OMA PDCF */
+    ISOM_BRAND_TYPE_OPX2  = LSMASH_4CC( 'o', 'p', 'x', '2' ),   /* OMA Adapted PDCF */
+    ISOM_BRAND_TYPE_PANA  = LSMASH_4CC( 'p', 'a', 'n', 'a' ),   /* Panasonic Digital Camera */
+    ISOM_BRAND_TYPE_PIFF  = LSMASH_4CC( 'p', 'i', 'f', 'f' ),   /* Protected Interoperable File Format */
+    ISOM_BRAND_TYPE_PNVI  = LSMASH_4CC( 'p', 'n', 'v', 'i' ),   /* Panasonic Video Intercom */
+    ISOM_BRAND_TYPE_QT    = LSMASH_4CC( 'q', 't', ' ', ' ' ),   /* QuickTime file format */
+    ISOM_BRAND_TYPE_RISX  = LSMASH_4CC( 'r', 'i', 's', 'x' ),   /* Representation Index Segment */
+    ISOM_BRAND_TYPE_SDV   = LSMASH_4CC( 's', 'd', 'v', ' ' ),   /* SD Video */
+    ISOM_BRAND_TYPE_SIMS  = LSMASH_4CC( 's', 'i', 'm', 's' ),   /* Sub-Indexed Media Segment */
+    ISOM_BRAND_TYPE_SISX  = LSMASH_4CC( 's', 'i', 's', 'x' ),   /* Single Index Segment */
+    ISOM_BRAND_TYPE_SSSS  = LSMASH_4CC( 's', 's', 's', 's' ),   /* Subsegment Index Segment */
 } lsmash_brand_type;
 
 typedef struct

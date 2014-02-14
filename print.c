@@ -239,6 +239,111 @@ static int isom_print_unknown( FILE *fp, lsmash_root_t *root, isom_box_t *box, i
     return 0;
 }
 
+static void isom_print_brand_description( FILE *fp, lsmash_brand_type brand )
+{
+    if( brand == 0 )
+        return;
+    static const struct
+    {
+        lsmash_brand_type brand;
+        char             *description;
+    } brand_description_table[] =
+        {
+            { ISOM_BRAND_TYPE_3G2A, "3GPP2" },
+            { ISOM_BRAND_TYPE_3GE6, "3GPP Release 6 Extended Presentation Profile" },
+            { ISOM_BRAND_TYPE_3GE9, "3GPP Release 9 Extended Presentation Profile" },
+            { ISOM_BRAND_TYPE_3GF9, "3GPP Release 9 File-delivery Server Profile" },
+            { ISOM_BRAND_TYPE_3GG6, "3GPP Release 6 General Profile" },
+            { ISOM_BRAND_TYPE_3GG9, "3GPP Release 9 General Profile" },
+            { ISOM_BRAND_TYPE_3GH9, "3GPP Release 9 Adaptive Streaming Profile" },
+            { ISOM_BRAND_TYPE_3GM9, "3GPP Release 9 Media Segment Profile" },
+            { ISOM_BRAND_TYPE_3GP4, "3GPP Release 4" },
+            { ISOM_BRAND_TYPE_3GP5, "3GPP Release 5" },
+            { ISOM_BRAND_TYPE_3GP6, "3GPP Release 6 Basic Profile" },
+            { ISOM_BRAND_TYPE_3GP7, "3GPP Release 7" },
+            { ISOM_BRAND_TYPE_3GP8, "3GPP Release 8" },
+            { ISOM_BRAND_TYPE_3GP9, "3GPP Release 9 Basic Profile" },
+            { ISOM_BRAND_TYPE_3GR6, "3GPP Release 6 Progressive Download Profile" },
+            { ISOM_BRAND_TYPE_3GR9, "3GPP Release 9 Progressive Download Profile" },
+            { ISOM_BRAND_TYPE_3GS6, "3GPP Release 6 Streaming Server Profile" },
+            { ISOM_BRAND_TYPE_3GS9, "3GPP Release 9 Streaming Server Profile" },
+            { ISOM_BRAND_TYPE_3GT9, "3GPP Release 9 Media Stream Recording Profile" },
+            { ISOM_BRAND_TYPE_ARRI, "ARRI Digital Camera" },
+            { ISOM_BRAND_TYPE_CAEP, "Canon Digital Camera" },
+            { ISOM_BRAND_TYPE_CDES, "Convergent Designs" },
+            { ISOM_BRAND_TYPE_LCAG, "Leica digital camera" },
+            { ISOM_BRAND_TYPE_M4A , "iTunes MPEG-4 audio protected or not" },
+            { ISOM_BRAND_TYPE_M4B , "iTunes AudioBook protected or not" },
+            { ISOM_BRAND_TYPE_M4P , "MPEG-4 protected audio" },
+            { ISOM_BRAND_TYPE_M4V , "MPEG-4 protected audio+video" },
+            { ISOM_BRAND_TYPE_MFSM, "Media File for Samsung video Metadata" },
+            { ISOM_BRAND_TYPE_MPPI, "Photo Player Multimedia Application Format" },
+            { ISOM_BRAND_TYPE_ROSS, "Ross Video" },
+            { ISOM_BRAND_TYPE_AVC1, "Advanced Video Coding extensions" },
+            { ISOM_BRAND_TYPE_BBXM, "Blinkbox Master File" },
+            { ISOM_BRAND_TYPE_CAQV, "Casio Digital Camera" },
+            { ISOM_BRAND_TYPE_CCFF, "Common container file format" },
+            { ISOM_BRAND_TYPE_DA0A, "DMB AF" },
+            { ISOM_BRAND_TYPE_DA0B, "DMB AF" },
+            { ISOM_BRAND_TYPE_DA1A, "DMB AF" },
+            { ISOM_BRAND_TYPE_DA1B, "DMB AF" },
+            { ISOM_BRAND_TYPE_DA2A, "DMB AF" },
+            { ISOM_BRAND_TYPE_DA2B, "DMB AF" },
+            { ISOM_BRAND_TYPE_DA3A, "DMB AF" },
+            { ISOM_BRAND_TYPE_DA3B, "DMB AF" },
+            { ISOM_BRAND_TYPE_DASH, "Indexed self-initializing Media Segment" },
+            { ISOM_BRAND_TYPE_DBY1, "MP4 files with Dolby content" },
+            { ISOM_BRAND_TYPE_DMB1, "DMB AF" },
+            { ISOM_BRAND_TYPE_DV1A, "DMB AF" },
+            { ISOM_BRAND_TYPE_DV1B, "DMB AF" },
+            { ISOM_BRAND_TYPE_DV2A, "DMB AF" },
+            { ISOM_BRAND_TYPE_DV2B, "DMB AF" },
+            { ISOM_BRAND_TYPE_DV3A, "DMB AF" },
+            { ISOM_BRAND_TYPE_DV3B, "DMB AF" },
+            { ISOM_BRAND_TYPE_DVR1, "DVB RTP" },
+            { ISOM_BRAND_TYPE_DVT1, "DVB Transport Stream" },
+            { ISOM_BRAND_TYPE_IFRM, "Apple iFrame" },
+            { ISOM_BRAND_TYPE_ISC2, "Files encrypted according to ISMACryp 2.0" },
+            { ISOM_BRAND_TYPE_ISO2, "ISO Base Media file format version 2" },
+            { ISOM_BRAND_TYPE_ISO3, "ISO Base Media file format version 3" },
+            { ISOM_BRAND_TYPE_ISO4, "ISO Base Media file format version 4" },
+            { ISOM_BRAND_TYPE_ISO5, "ISO Base Media file format version 5" },
+            { ISOM_BRAND_TYPE_ISO6, "ISO Base Media file format version 6" },
+            { ISOM_BRAND_TYPE_ISOM, "ISO Base Media file format version 1" },
+            { ISOM_BRAND_TYPE_JPSI, "The JPSearch data interchange format" },
+            { ISOM_BRAND_TYPE_LMSG, "last Media Segment indicator" },
+            { ISOM_BRAND_TYPE_MJ2S, "Motion JPEG 2000 simple profile" },
+            { ISOM_BRAND_TYPE_MJP2, "Motion JPEG 2000, general profile" },
+            { ISOM_BRAND_TYPE_MP21, "MPEG-21" },
+            { ISOM_BRAND_TYPE_MP41, "MP4 version 1" },
+            { ISOM_BRAND_TYPE_MP42, "MP4 version 2" },
+            { ISOM_BRAND_TYPE_MP71, "MPEG-7 file-level metadata" },
+            { ISOM_BRAND_TYPE_MSDH, "Media Segment" },
+            { ISOM_BRAND_TYPE_MSIX, "Indexed Media Segment" },
+            { ISOM_BRAND_TYPE_NIKO, "Nikon Digital Camera" },
+            { ISOM_BRAND_TYPE_ODCF, "OMA DCF" },
+            { ISOM_BRAND_TYPE_OPF2, "OMA PDCF" },
+            { ISOM_BRAND_TYPE_OPX2, "OMA Adapted PDCF" },
+            { ISOM_BRAND_TYPE_PANA, "Panasonic Digital Camera" },
+            { ISOM_BRAND_TYPE_PIFF, "Protected Interoperable File Format" },
+            { ISOM_BRAND_TYPE_PNVI, "Panasonic Video Intercom" },
+            { ISOM_BRAND_TYPE_QT  , "QuickTime file format" },
+            { ISOM_BRAND_TYPE_RISX, "Representation Index Segment" },
+            { ISOM_BRAND_TYPE_SDV , "SD Video" },
+            { ISOM_BRAND_TYPE_SIMS, "Sub-Indexed Media Segment" },
+            { ISOM_BRAND_TYPE_SISX, "Single Index Segment" },
+            { ISOM_BRAND_TYPE_SSSS, "Subsegment Index Segment" },
+            { 0,                    NULL }
+        };
+    for( int i = 0; brand_description_table[i].description; i++ )
+        if( brand == brand_description_table[i].brand )
+        {
+            fprintf( fp, " : %s\n", brand_description_table[i].description );
+            return;
+        }
+    fprintf( fp, "\n" );
+}
+
 static int isom_print_ftyp( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
@@ -246,11 +351,15 @@ static int isom_print_ftyp( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
     isom_ftyp_t *ftyp = (isom_ftyp_t *)box;
     int indent = level;
     isom_print_box_common( fp, indent++, box, "File Type Box" );
-    lsmash_ifprintf( fp, indent, "major_brand = %s\n", isom_4cc2str( ftyp->major_brand ) );
+    lsmash_ifprintf( fp, indent, "major_brand = %s", isom_4cc2str( ftyp->major_brand ) );
+    isom_print_brand_description( fp, ftyp->major_brand );
     lsmash_ifprintf( fp, indent, "minor_version = %"PRIu32"\n", ftyp->minor_version );
     lsmash_ifprintf( fp, indent++, "compatible_brands\n" );
     for( uint32_t i = 0; i < ftyp->brand_count; i++ )
-        lsmash_ifprintf( fp, indent, "brand[%"PRIu32"] = %s\n", i, isom_4cc2str( ftyp->compatible_brands[i] ) );
+    {
+        lsmash_ifprintf( fp, indent, "brand[%"PRIu32"] = %s", i, isom_4cc2str( ftyp->compatible_brands[i] ) );
+        isom_print_brand_description( fp, ftyp->compatible_brands[i] );
+    }
     return 0;
 }
 
