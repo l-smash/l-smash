@@ -544,17 +544,16 @@ static int dts_parse_xxch( dts_info_t *info, uint64_t *bits_pos, int extension )
 {
     lsmash_bits_t *bits = info->bits;
     /* XXCH Frame Header */
-    uint64_t xxch_pos = *bits_pos - 32;                                                             /* SYNCXXCh                    (32) */
+    uint64_t xxch_pos = *bits_pos - 32;                                                 /* SYNCXXCh                       (32) */
     if( !extension && (info->core.extension_audio_descriptor == 0 || info->core.extension_audio_descriptor == 3) )
         return -1;
-    uint64_t nuHeaderSizeXXCh       = dts_bits_get( bits, 6, bits_pos ) + 1;                        /* nuHeaderSizeXXCh            (6) */
-    dts_bits_get( bits, 1, bits_pos );                                                              /* bCRCPresent4ChSetHeaderXXCh (1) */
-    int nuBits4SpkrMaskXXCh         = dts_bits_get( bits, 5, bits_pos ) + 1;                        /* nuBits4SpkrMaskXXCh         (5) */
-    int nuNumChSetsInXXCh           = dts_bits_get( bits, 2, bits_pos ) + 1;                        /* nuNumChSetsInXXCh           (2) */
-    int pnuChSetFsizeXXCh[4];
+    uint64_t nuHeaderSizeXXCh       = dts_bits_get( bits, 6, bits_pos ) + 1;            /* nuHeaderSizeXXCh               (6) */
+    dts_bits_get( bits, 1, bits_pos );                                                  /* bCRCPresent4ChSetHeaderXXCh    (1) */
+    int nuBits4SpkrMaskXXCh         = dts_bits_get( bits, 5, bits_pos ) + 1;            /* nuBits4SpkrMaskXXCh            (5) */
+    int nuNumChSetsInXXCh           = dts_bits_get( bits, 2, bits_pos ) + 1;            /* nuNumChSetsInXXCh              (2) */
     for( int nChSet = 0; nChSet < nuNumChSetsInXXCh; nChSet++ )
-        pnuChSetFsizeXXCh[nChSet] = dts_bits_get( bits, 14, bits_pos ) + 1;                         /* pnuChSetFsizeXXCh[nChSet]   (14) */
-    uint32_t xxch_mask = dts_bits_get( bits, nuBits4SpkrMaskXXCh, bits_pos );                       /* nuCoreSpkrActivityMask      (nuBits4SpkrMaskXXCh) */
+        dts_bits_get( bits, 14, bits_pos );                                             /* pnuChSetFsizeXXCh[nChSet] - 1  (14) */
+    uint32_t xxch_mask = dts_bits_get( bits, nuBits4SpkrMaskXXCh, bits_pos );           /* nuCoreSpkrActivityMask         (nuBits4SpkrMaskXXCh) */
     uint16_t *channel_layout = extension ? &info->extension.channel_layout : &info->core.channel_layout;
     *channel_layout |= dts_get_channel_layout_from_xxch_mask( xxch_mask );
     uint8_t *xxch_lower_planes = extension ? &info->extension.xxch_lower_planes : &info->core.xxch_lower_planes;
@@ -564,19 +563,19 @@ static int dts_parse_xxch( dts_info_t *info, uint64_t *bits_pos, int extension )
     {
         /* XXCH Channel Set Header */
         xxch_pos = *bits_pos;
-        uint64_t nuXXChChSetHeaderSize = dts_bits_get( bits, 7, bits_pos ) + 1;                     /* nuXXChChSetHeaderSize       (7)*/
-        dts_bits_get( bits, 3, bits_pos );                                                          /* nuChInChSetXXCh             (3) */
+        uint64_t nuXXChChSetHeaderSize = dts_bits_get( bits, 7, bits_pos ) + 1;         /* nuXXChChSetHeaderSize          (7)*/
+        dts_bits_get( bits, 3, bits_pos );                                              /* nuChInChSetXXCh                (3) */
         if( nuBits4SpkrMaskXXCh > 6 )
         {
-            xxch_mask = dts_bits_get( bits, nuBits4SpkrMaskXXCh - 6, bits_pos ) << 6;               /* nuXXChSpkrLayoutMask        (nuBits4SpkrMaskXXCh - 6) */
+            xxch_mask = dts_bits_get( bits, nuBits4SpkrMaskXXCh - 6, bits_pos ) << 6;   /* nuXXChSpkrLayoutMask           (nuBits4SpkrMaskXXCh - 6) */
             *channel_layout |= dts_get_channel_layout_from_xxch_mask( xxch_mask );
             *xxch_lower_planes |= (xxch_mask >> 25) & 0x7;
         }
 #if 0   /* FIXME: Can we detect stereo downmixing from only XXCH data within the core substream? */
-        if( dts_bits_get( bits, 1, bits_pos ) )                                                     /* bDownMixCoeffCodeEmbedded   (1) */
+        if( dts_bits_get( bits, 1, bits_pos ) )                                         /* bDownMixCoeffCodeEmbedded      (1) */
         {
-            int bDownMixEmbedded = dts_bits_get( bits, 1, bits_pos );                               /* bDownMixEmbedded            (1) */
-            dts_bits_get( bits, 6, bits_pos );                                                      /* nDmixScaleFactor            (6) */
+            int bDownMixEmbedded = dts_bits_get( bits, 1, bits_pos );                   /* bDownMixEmbedded               (1) */
+            dts_bits_get( bits, 6, bits_pos );                                          /* nDmixScaleFactor               (6) */
             uint32_t DownMixChMapMask[8];
             for( int nCh = 0; nCh < nuChInChSetXXCh; nCh++ )
                 DownMixChMapMask[nCh] = dts_bits_get( bits, nuBits4SpkrMaskXXCh, bits_pos );
@@ -975,13 +974,10 @@ int dts_parse_extension_substream( dts_info_t *info, uint8_t *data, uint32_t dat
         int nuActiveExSSMask[nuNumAudioPresnt];
         for( int nAuPr = 0; nAuPr < nuNumAudioPresnt; nAuPr++ )
             nuActiveExSSMask[nAuPr] = dts_bits_get( bits, nExtSSIndex + 1, &bits_pos );     /* nuActiveExSSMask[nAuPr]       (nExtSSIndex + 1) */
-        int nuActiveAssetMask[nuNumAudioPresnt][nExtSSIndex + 1];
         for( int nAuPr = 0; nAuPr < nuNumAudioPresnt; nAuPr++ )
             for( int nSS = 0; nSS < nExtSSIndex + 1; nSS++ )
                 if( ((nuActiveExSSMask[nAuPr] >> nSS) & 0x1) == 1 )
-                    nuActiveAssetMask[nAuPr][nSS] = dts_bits_get( bits, 8, &bits_pos );     /* nuActiveAssetMask[nAuPr][nSS] (8) */
-                else
-                    nuActiveAssetMask[nAuPr][nSS] = 0;
+                    dts_bits_get( bits, 8, &bits_pos );                                     /* nuActiveAssetMask[nAuPr][nSS] (8) */
         info->extension.bMixMetadataEnbl = dts_bits_get( bits, 1, &bits_pos );              /* bMixMetadataEnbl              (1) */
         if( info->extension.bMixMetadataEnbl )
         {
@@ -1002,9 +998,8 @@ int dts_parse_extension_substream( dts_info_t *info, uint8_t *data, uint32_t dat
         info->extension.nuNumMixOutConfigs = 0;
     }
     info->extension.number_of_assets = nuNumAssets;
-    uint32_t nuAssetFsize[8];
     for( int nAst = 0; nAst < nuNumAssets; nAst++ )
-        nuAssetFsize[nAst] = dts_bits_get( bits, nuBits4ExSSFsize, &bits_pos ) + 1;         /* nuAssetFsize[nAst]            (nuBits4ExSSFsize) */
+        dts_bits_get( bits, nuBits4ExSSFsize, &bits_pos );                                  /* nuAssetFsize[nAst] - 1        (nuBits4ExSSFsize) */
     for( int nAst = 0; nAst < nuNumAssets; nAst++ )
         if( dts_parse_asset_descriptor( info, &bits_pos ) )
             goto parse_fail;
@@ -1113,7 +1108,7 @@ void dts_update_specific_param( dts_info_t *info )
     param->CoreLFEPresent = !!(info->core.channel_layout & DTS_CHANNEL_LAYOUT_LFE1);
     /* CoreLayout */
     if( param->StreamConstruction == 0  /* Unknown */
-     || param->StreamConstruction >= 17 /* No core* substream */ )
+     || param->StreamConstruction >= 17 /* No core substream */ )
         /* Use ChannelLayout. */
         param->CoreLayout = 31;
     else
