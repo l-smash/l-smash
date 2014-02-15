@@ -1106,8 +1106,10 @@ void dts_update_specific_param( dts_info_t *info )
     /* CoreLFEPresent */
     param->CoreLFEPresent = !!(info->core.channel_layout & DTS_CHANNEL_LAYOUT_LFE1);
     /* CoreLayout */
-    if( param->StreamConstruction == 0 || param->StreamConstruction >= 19 )
-        param->CoreLayout = 31;         /* Use ChannelLayout. */
+    if( param->StreamConstruction == 0  /* Unknown */
+     || param->StreamConstruction >= 17 /* No core* substream */ )
+        /* Use ChannelLayout. */
+        param->CoreLayout = 31;
     else
     {
         if( info->core.channel_arrangement != 1
@@ -1115,7 +1117,8 @@ void dts_update_specific_param( dts_info_t *info )
          && info->core.channel_arrangement <= 9 )
             param->CoreLayout = info->core.channel_arrangement;
         else
-            param->CoreLayout = 31;     /* Use ChannelLayout. */
+            /* Use ChannelLayout. */
+            param->CoreLayout = 31;
     }
     /* CoreSize
      * The specification says this field is the size of a core substream AU in bytes.
