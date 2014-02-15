@@ -669,18 +669,24 @@ static int dts_parse_exsub_lbr( dts_info_t *info, uint64_t *bits_pos )
                 11025, 22050, 44100, 0, 0,
                 12000, 24000, 48000, 0, 0, 0
             };
+        enum LBRFlags
+        {
+            LBR_FLAG_24_BIT_SAMPLES       = 0x01,   /* 0b00000001 */
+            LBR_FLAG_USE_LFE              = 0x02,   /* 0b00000010 */
+            LBR_FLAG_BANDLMT_MASK         = 0x1C,   /* 0b00011100 */
+            LBR_FLAG_STEREO_DOWNMIX       = 0x20,   /* 0b00100000 */
+            LBR_FLAG_MULTICHANNEL_DOWNMIX = 0x40,   /* 0b01000000 */
+        };
         info->lbr.sampling_frequency = source_sample_rate_table[nLBRSampleRateCode];
-        if( info->lbr.sampling_frequency < 16000 )
-            info->lbr.frame_duration = 1024;
-        else if( info->lbr.sampling_frequency < 32000 )
-            info->lbr.frame_duration = 2048;
-        else
-            info->lbr.frame_duration = 4096;
+        info->lbr.frame_duration     = info->lbr.sampling_frequency < 16000 ? 1024
+                                     : info->lbr.sampling_frequency < 32000 ? 2048
+                                     :                                        4096;
         info->lbr.channel_layout     = ((usLBRSpkrMask >> 8) & 0xff) | ((usLBRSpkrMask << 8) & 0xff00);     /* usLBRSpkrMask is little-endian. */
-        info->lbr.stereo_downmix    |= !!(nLBRCompressedFlags & 0x20);
-        info->lbr.lfe_present       |= !!(nLBRCompressedFlags & 0x02);
-        info->lbr.duration_modifier |= (nLBRCompressedFlags & 0x04) || (nLBRCompressedFlags & 0x0C);
-        info->lbr.sample_size        = nLBRCompressedFlags & 0x01 ? 24 : 16;
+        info->lbr.stereo_downmix    |= !!(nLBRCompressedFlags & LBR_FLAG_STEREO_DOWNMIX);
+        info->lbr.lfe_present       |= !!(nLBRCompressedFlags & LBR_FLAG_USE_LFE);
+        info->lbr.duration_modifier |= ((nLBRCompressedFlags & LBR_FLAG_BANDLMT_MASK) == 0x04)
+                                    || ((nLBRCompressedFlags & LBR_FLAG_BANDLMT_MASK) == 0x0C);
+        info->lbr.sample_size        = (nLBRCompressedFlags & LBR_FLAG_24_BIT_SAMPLES) ? 24 : 16;
     }
     else if( ucFmtInfoCode != 1 )
         return -1;      /* unknown */
