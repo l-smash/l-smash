@@ -571,9 +571,9 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
     return 0;
 }
 
-static int check_white_brand( lsmash_brand_type brand )
+static void replace_with_valid_brand( remuxer_t *remuxer )
 {
-    static const lsmash_brand_type brand_white_list[] =
+    static const lsmash_brand_type brand_filter_list[] =
         {
             ISOM_BRAND_TYPE_3G2A,
             ISOM_BRAND_TYPE_3GG6,
@@ -602,10 +602,63 @@ static int check_white_brand( lsmash_brand_type brand )
             ISOM_BRAND_TYPE_QT  ,
             0
         };
-    for( int i = 0; brand_white_list[i]; i++ )
-        if( brand == brand_white_list[i] )
-            return 1;
-    return 0;
+    input_movie_t *input = remuxer->input;
+    /* Check the number of video and audio tracks, and the number of video
+     * and audio sample descriptions for the restrictions of 3GPP Basic Profile.
+     *   - the maximum number of tracks shall be one for video (or alternatively
+     *     one for scene description), one for audio and one for text
+     *   - the maximum number of sample entries shall be one per track for video
+     *      and audio (but unrestricted for text and scene description) */
+    uint32_t video_track_count   = 0;
+    uint32_t audio_track_count   = 0;
+    uint32_t video_num_summaries = 0;
+    uint32_t audio_num_summaries = 0;
+    for( int i = 0; i < remuxer->num_input; i++ )
+    {
+        for( int j = 0; j < input[i].num_tracks; j++ )
+        {
+            if( input[i].track[j].media_param.handler_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK )
+            {
+                if( ++video_track_count == 1 )
+                    video_num_summaries = input[i].track[j].num_summaries;
+            }
+            else if( input[i].track[j].media_param.handler_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK )
+            {
+                if( ++audio_track_count == 1 )
+                    audio_num_summaries = input[i].track[j].num_summaries;
+            }
+        }
+    }
+    for( int i = 0; i < remuxer->num_input; i++ )
+    {
+        uint32_t *brand   = &input[i].movie_param.major_brand;
+        uint32_t *version = &input[i].movie_param.minor_version;
+        for( int j = 0; brand_filter_list[j]; j++ )
+            if( *brand == brand_filter_list[j] )
+            {
+                if( ((*brand >> 24) & 0xFF) == '3'
+                 && ((*brand >> 16) & 0xFF) == 'g'
+                 && (((*brand >>  8) & 0xFF) == 'p' || ((*brand >>  8) & 0xFF) == 'r') )
+                {
+                    if( video_track_count   <= 1 && audio_track_count   <= 1
+                     && video_num_summaries <= 1 && audio_num_summaries <= 1 )
+                        continue;
+                    /* Replace with the General Profile for maximum compatibility. */
+                    if( (*brand & 0xFF) < '6' )
+                    {
+                        /* 3GPP version 6.7.0 General Profile */
+                        *brand   = LSMASH_4CC( '3', 'g', 'g', '6' );
+                        *version = 0x00000700;
+                    }
+                    else
+                        *brand = LSMASH_4CC( '3', 'g', 'g', *brand & 0xFF );
+                }
+                continue;
+            }
+        /* Replace with the 'mp42' brand. */
+        *brand   = ISOM_BRAND_TYPE_MP42;
+        *version = 0;
+    }
 }
 
 static int set_movie_parameters( remuxer_t *remuxer )
@@ -614,6 +667,7 @@ static int set_movie_parameters( remuxer_t *remuxer )
     input_movie_t  *input     = remuxer->input;
     output_movie_t *output    = remuxer->output;
     lsmash_initialize_movie_parameters( &output->movie_param );
+    replace_with_valid_brand( remuxer );
     /* Pick the most used major_brands. */
     lsmash_brand_type major_brand      [num_input];
     uint32_t          minor_version    [num_input];
@@ -621,12 +675,6 @@ static int set_movie_parameters( remuxer_t *remuxer )
     uint32_t          num_major_brand = 0;
     for( int i = 0; i < num_input; i++ )
     {
-        if( !check_white_brand( input[i].movie_param.major_brand ) )
-        {
-            /* Replace with whitelisted brand 'mp42'. */
-            input[i].movie_param.major_brand   = ISOM_BRAND_TYPE_MP42;
-            input[i].movie_param.minor_version = 0;
-        }
         major_brand      [num_major_brand] = input[i].movie_param.major_brand;
         minor_version    [num_major_brand] = input[i].movie_param.minor_version;
         major_brand_count[num_major_brand] = 0;
@@ -655,15 +703,18 @@ static int set_movie_parameters( remuxer_t *remuxer )
             output->movie_param.minor_version = minor_version[i];
         }
     /* Deduplicate compatible brands. */
-    uint32_t num_input_brands = 0;
+    uint32_t num_input_brands = num_input;
     for( int i = 0; i < num_input; i++ )
         num_input_brands += input[i].movie_param.number_of_brands;
     lsmash_brand_type input_brands[num_input_brands];
     num_input_brands = 0;
     for( int i = 0; i < num_input; i++ )
+    {
+        input_brands[num_input_brands++] = input[i].movie_param.major_brand;
         for( uint32_t j = 0; j < input[i].movie_param.number_of_brands; j++ )
-            if( input[i].movie_param.brands[j] || check_white_brand( input[i].movie_param.brands[j] ) )
+            if( input[i].movie_param.brands[j] )
                 input_brands[num_input_brands++] = input[i].movie_param.brands[j];
+    }
     lsmash_brand_type output_brands[num_input_brands];
     uint32_t num_output_brands = 0;
     for( uint32_t i = 0; i < num_input_brands; i++ )
