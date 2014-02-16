@@ -326,11 +326,11 @@ static int decide_brands( option_t *opt )
         switch( opt->brands[i] )
         {
             case ISOM_BRAND_TYPE_3GP6 :
+                /* When being compatible with 3gp6, also compatible with 3g2a. */
+                add_brand( opt, ISOM_BRAND_TYPE_3G2A );
                 opt->brand_3gx = 1;
                 break;
             case ISOM_BRAND_TYPE_3G2A :
-                /* When being compatible with 3g2a, also compatible with 3gp6. */
-                add_brand( opt, ISOM_BRAND_TYPE_3GP6 );
                 opt->brand_3gx = 2;
                 break;
             case ISOM_BRAND_TYPE_QT :
@@ -980,7 +980,7 @@ static int prepare_output( muxer_t *muxer )
 
 static void set_reference_chapter_track( output_t *output, option_t *opt )
 {
-    if( !opt->chap_file || (!opt->qtff && !opt->itunes_movie) )
+    if( !opt->chap_file || (!opt->qtff && !opt->itunes_movie) || (opt->brand_3gx == 1) )
         return;
     lsmash_create_reference_chapter_track( output->root, opt->chap_track, opt->chap_file );
 }
