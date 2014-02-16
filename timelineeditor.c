@@ -802,6 +802,43 @@ static int edit_media_timeline( movie_t *input, timecode_t *timecode, opt_t *opt
     return 0;
 }
 
+static int check_white_brand( lsmash_brand_type brand )
+{
+    static const lsmash_brand_type brand_white_list[] =
+        {
+            ISOM_BRAND_TYPE_3G2A,
+            ISOM_BRAND_TYPE_3GG6,
+            ISOM_BRAND_TYPE_3GG9,
+            ISOM_BRAND_TYPE_3GP4,
+            ISOM_BRAND_TYPE_3GP5,
+            ISOM_BRAND_TYPE_3GP6,
+            ISOM_BRAND_TYPE_3GP7,
+            ISOM_BRAND_TYPE_3GP8,
+            ISOM_BRAND_TYPE_3GP9,
+            ISOM_BRAND_TYPE_3GR6,
+            ISOM_BRAND_TYPE_3GR9,
+            ISOM_BRAND_TYPE_M4A ,
+            ISOM_BRAND_TYPE_M4B ,
+            ISOM_BRAND_TYPE_M4V ,
+            ISOM_BRAND_TYPE_AVC1,
+            ISOM_BRAND_TYPE_DBY1,
+            ISOM_BRAND_TYPE_ISO2,
+            ISOM_BRAND_TYPE_ISO3,
+            ISOM_BRAND_TYPE_ISO4,
+            ISOM_BRAND_TYPE_ISO5,
+            ISOM_BRAND_TYPE_ISO6,
+            ISOM_BRAND_TYPE_ISOM,
+            ISOM_BRAND_TYPE_MP41,
+            ISOM_BRAND_TYPE_MP42,
+            ISOM_BRAND_TYPE_QT  ,
+            0
+        };
+    for( int i = 0; brand_white_list[i]; i++ )
+        if( brand == brand_white_list[i] )
+            return 1;
+    return 0;
+}
+
 static int moov_to_front_callback( void *param, uint64_t written_movie_size, uint64_t total_movie_size )
 {
     eprintf( "Finalizing: [%5.2lf%%]\r", ((double)written_movie_size / total_movie_size) * 100.0 );
@@ -918,7 +955,31 @@ int main( int argc, char *argv[] )
     output.movie_param.max_read_size       = 4*1024*1024;
     if( input.num_tracks == 1 )
         output.movie_param.timescale = input.track[0].media_param.timescale;
-    if( lsmash_set_movie_parameters( output.root, &output.movie_param ) )
+    if( !check_white_brand( output.movie_param.major_brand ) )
+    {
+        /* Replace with whitelisted brand 'mp42'. */
+        output.movie_param.major_brand   = ISOM_BRAND_TYPE_MP42;
+        output.movie_param.minor_version = 0;
+        uint32_t i;
+        for( i = 0; i < output.movie_param.number_of_brands; i++ )
+            if( output.movie_param.brands[i] == ISOM_BRAND_TYPE_MP42 )
+                break;
+        if( i == output.movie_param.number_of_brands )
+        {
+            /* Add 'mp42' into the list of compatible brands. */
+            output.movie_param.brands = lsmash_malloc( (i + 1) * sizeof(lsmash_brand_type) );
+            if( output.movie_param.brands )
+            {
+                memcpy( output.movie_param.brands, input.movie_param.brands, i * sizeof(lsmash_brand_type) );
+                output.movie_param.brands[i] = ISOM_BRAND_TYPE_MP42;
+            }
+        }
+    }
+    /* Set movie parameters. */
+    int error = lsmash_set_movie_parameters( output.root, &output.movie_param );
+    if( output.movie_param.brands != input.movie_param.brands )
+        lsmash_freep( &output.movie_param.brands );
+    if( error )
         return TIMELINEEDITOR_ERR( "Failed to set output movie parameters.\n" );
     /* Set iTunes metadata. */
     for( uint32_t i = 0; i < input.num_itunes_metadata; i++ )
