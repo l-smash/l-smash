@@ -647,7 +647,7 @@ static void replace_with_valid_brand( remuxer_t *remuxer )
                     if( (*brand & 0xFF) < '6' )
                     {
                         /* 3GPP version 6.7.0 General Profile */
-                        *brand   = LSMASH_4CC( '3', 'g', 'g', '6' );
+                        *brand   = ISOM_BRAND_TYPE_3GG6;
                         *version = 0x00000700;
                     }
                     else
@@ -733,13 +733,26 @@ static int set_movie_parameters( remuxer_t *remuxer )
     output->movie_param.brands           = output_brands;
     if( remuxer->chap_file )
         for( uint32_t i = 0; i < output->movie_param.number_of_brands; i++ )
-            if( output->movie_param.brands[i] == ISOM_BRAND_TYPE_QT  || output->movie_param.brands[i] == ISOM_BRAND_TYPE_M4A
-             || output->movie_param.brands[i] == ISOM_BRAND_TYPE_M4B || output->movie_param.brands[i] == ISOM_BRAND_TYPE_M4P
-             || output->movie_param.brands[i] == ISOM_BRAND_TYPE_M4V )
+        {
+            uint32_t brand = output->movie_param.brands[i];
+            /* According to the restrictions of 3GPP Basic Profile,
+             *   - there shall be no references between tracks, e.g., a scene description track
+             *     shall not refer to a media track since all tracks are on equal footing and
+             *     played in parallel by a conforming player.
+             * Therefore, the referenced chapter track is forbidden to use for 3GPP Basic Profile. */
+            if( ((brand >> 24) & 0xFF) == '3'
+             && ((brand >> 16) & 0xFF) == 'g'
+             && ((brand >>  8) & 0xFF) == 'p' )
+                break;
+            /* QuickTime file and iTunes MP4 file can contain the referenced chapter track. */
+            if( brand == ISOM_BRAND_TYPE_QT  || brand == ISOM_BRAND_TYPE_M4A
+             || brand == ISOM_BRAND_TYPE_M4B || brand == ISOM_BRAND_TYPE_M4P
+             || brand == ISOM_BRAND_TYPE_M4V )
             {
                 remuxer->ref_chap_available = 1;
                 break;
             }
+        }
     /* Set the movie timescale in order to match the media timescale if only one track is there. */
     if( output->num_tracks == 1 )
         for( int i = 0; i < remuxer->num_input; i++ )
