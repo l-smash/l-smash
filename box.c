@@ -3406,7 +3406,7 @@ int isom_add_free( void *parent_box )
     if( !parent_box )
         return -1;
     isom_box_t *parent = (isom_box_t *)parent_box;
-    if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV ) )
+    if( parent->root == (lsmash_root_t *)parent )
     {
         lsmash_root_t *root = (lsmash_root_t *)parent;
         isom_create_box( skip, root, ISOM_BOX_TYPE_FREE, LSMASH_BOX_PRECEDENCE_ISOM_FREE );

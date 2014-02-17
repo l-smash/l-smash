@@ -1184,8 +1184,6 @@ typedef struct
 typedef struct
 {
     ISOM_BASEBOX_COMMON;    /* If size is 0, then this box is the last box. */
-
-        uint64_t placeholder_pos;       /* placeholder position for largesize */
 } isom_mdat_t;
 
 /* Free Space Box

@@ -1233,57 +1233,68 @@ static int isom_write_mfra( lsmash_bs_t *bs, isom_box_t *box )
     return lsmash_bs_write_data( bs );
 }
 
-static int isom_bs_write_largesize_placeholder( lsmash_bs_t *bs )
+static int isom_write_mdat( lsmash_bs_t *bs, isom_box_t *box )
 {
-    lsmash_bs_put_be32( bs, ISOM_BASEBOX_COMMON_SIZE );
-    lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_FREE.fourcc );
-    return lsmash_bs_write_data( bs );
-}
-
-int isom_write_mdat_header( lsmash_bs_t *bs, isom_mdat_t *mdat, uint64_t media_size )
-{
-    if( !bs || !bs->stream || !mdat )
-        return -1;
-    if( media_size )
+    isom_mdat_t   *mdat = (isom_mdat_t *)box;
+    lsmash_root_t *root = mdat->root;
+    /* If any fragment, write the Media Data Box all at once. */
+    if( root->fragment )
     {
-        mdat->size = ISOM_BASEBOX_COMMON_SIZE + media_size;
+        /* Write the size and type fields of the Media Data Box. */
+        mdat->size = ISOM_BASEBOX_COMMON_SIZE + root->fragment->pool_size;
         if( mdat->size > UINT32_MAX )
             mdat->size += 8;    /* large_size */
         isom_bs_put_box_common( bs, mdat );
-        return 0;
+        /* Write the samples in the current movie fragment. */
+        for( lsmash_entry_t* entry = root->fragment->pool->head; entry; entry = entry->next )
+        {
+            isom_sample_pool_t *pool = (isom_sample_pool_t *)entry->data;
+            if( !pool )
+                return -1;
+            lsmash_bs_put_bytes( bs, pool->size, pool->data );
+        }
+        return lsmash_bs_write_data( bs );
     }
-    mdat->placeholder_pos = lsmash_ftell( bs->stream );
-    if( isom_bs_write_largesize_placeholder( bs ) )
-        return -1;
-    mdat->size = ISOM_BASEBOX_COMMON_SIZE;
-    isom_bs_put_box_common( bs, mdat );
-    return lsmash_bs_write_data( bs );
-}
-
-int isom_write_mdat_size( lsmash_bs_t *bs, isom_mdat_t *mdat )
-{
-    if( !bs || !bs->stream )
-        return -1;
-    if( !mdat )
-        return 0;
-    int   large_flag = (mdat->size > UINT32_MAX);
-    FILE *stream     = bs->stream;
-    uint64_t current_pos = lsmash_ftell( stream );
-    if( large_flag )
+    if( mdat->manager & LSMASH_PLACEHOLDER )
     {
-        lsmash_fseek( stream, mdat->placeholder_pos, SEEK_SET );
+        /* Write the placeholder for large size. */
+        if( !root->free && isom_add_free( root ) < 0 )
+            return -1;
+        isom_free_t *skip = root->free;
+        skip->pos      = lsmash_ftell( bs->stream );
+        skip->size     = ISOM_BASEBOX_COMMON_SIZE;
+        skip->manager |= LSMASH_PLACEHOLDER;
+        if( skip->write( bs, (isom_box_t *)skip ) < 0 )
+            return -1;
+        /* Write an incomplete Media Data Box. */
+        mdat->pos      = lsmash_ftell( bs->stream );
+        mdat->size     = ISOM_BASEBOX_COMMON_SIZE;
+        mdat->manager |= LSMASH_INCOMPLETE_BOX;
+        mdat->manager &= ~LSMASH_PLACEHOLDER;
+        isom_bs_put_box_common( bs, mdat );
+        return lsmash_bs_write_data( bs );
+    }
+    /* Write the actual size. */
+    uint64_t current_pos = lsmash_ftell( bs->stream );
+    if( mdat->size > UINT32_MAX )
+    {
+        /* The placeholder is overwritten by the Media Data Box. */
+        mdat->pos = root->free->pos;
+        lsmash_fseek( bs->stream, mdat->pos, SEEK_SET );
         lsmash_bs_put_be32( bs, 1 );
         lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_MDAT.fourcc );
         lsmash_bs_put_be64( bs, mdat->size + ISOM_BASEBOX_COMMON_SIZE );
+        /* Remove the placeholder for large size. */
+        isom_remove_box_by_itself( root->free );
     }
     else
     {
-        lsmash_fseek( stream, mdat->placeholder_pos + ISOM_BASEBOX_COMMON_SIZE, SEEK_SET );
+        lsmash_fseek( bs->stream, mdat->pos, SEEK_SET );
         lsmash_bs_put_be32( bs, mdat->size );
         lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_MDAT.fourcc );
     }
     int ret = lsmash_bs_write_data( bs );
-    lsmash_fseek( stream, current_pos, SEEK_SET );
+    lsmash_fseek( bs->stream, current_pos, SEEK_SET );
     return ret;
 }
 
@@ -1313,16 +1324,6 @@ static int isom_write_free( lsmash_bs_t *bs, isom_box_t *box )
     if( skip->data && skip->length )
         lsmash_bs_put_bytes( bs, skip->length, skip->data );
     return lsmash_bs_write_data( bs );
-}
-
-int lsmash_write_free( lsmash_root_t *root )
-{
-    if( !root
-     || !root->bs
-     || !root->free )
-        return -1;
-    root->free->size = 8 + root->free->length;
-    return isom_write_free( root->bs, (isom_box_t *)root->free );
 }
 
 int isom_write_box( lsmash_bs_t *bs, isom_box_t *box )
@@ -1468,6 +1469,7 @@ void isom_set_box_writer( isom_box_t *box )
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TFHD, isom_write_tfhd );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TFDT, isom_write_tfdt );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TRUN, isom_write_trun );
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MDAT, isom_write_mdat );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_FREE, isom_write_free );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SKIP, isom_write_free );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_META, isom_write_meta );

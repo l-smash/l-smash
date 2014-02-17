@@ -34,7 +34,7 @@
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  1
-#define LSMASH_VERSION_MINOR  1
+#define LSMASH_VERSION_MINOR  2
 #define LSMASH_VERSION_MICRO  0
 
 /****************************************************************************
@@ -3680,25 +3680,6 @@ int lsmash_set_copyright
 );
 
 int lsmash_create_object_descriptor
-(
-    lsmash_root_t *root
-);
-
-int lsmash_add_free
-(
-    lsmash_root_t *root,
-    uint8_t       *data,
-    uint64_t       data_length
-);
-
-int lsmash_set_free
-(
-    lsmash_root_t *root,
-    uint8_t       *data,
-    uint64_t       data_length
-);
-
-int lsmash_write_free
 (
     lsmash_root_t *root
 );

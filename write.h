@@ -23,8 +23,6 @@
 #ifndef LSMASH_WRITE_H
 #define LSMASH_WRITE_H
 
-int isom_write_mdat_header( lsmash_bs_t *bs, isom_mdat_t *mdat, uint64_t media_size );
-int isom_write_mdat_size( lsmash_bs_t *bs, isom_mdat_t *mdat );
 int isom_write_box( lsmash_bs_t *bs, isom_box_t *box );
 void isom_set_box_writer( isom_box_t *box );
 
