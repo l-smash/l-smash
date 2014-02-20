@@ -652,37 +652,6 @@ static isom_group_assignment_entry_t *isom_add_group_assignment_entry( isom_sbgp
     return data;
 }
 
-/* We put a placeholder for 64-bit media data if no movie fragments.
- * If a Media Data Box already exists and we don't pick movie fragments structure,
- * write the actual size of the current one and start a new one. */
-static int isom_new_mdat( lsmash_root_t *root )
-{
-    if( !root )
-        return 0;
-    isom_mdat_t *mdat = root->mdat;
-    if( mdat )
-    {
-        /* Write the actual size of the current Media Data Box if no movie fragments. */
-        if( !root->fragment )
-        {
-            mdat->manager &= ~(LSMASH_INCOMPLETE_BOX | LSMASH_PLACEHOLDER);
-            if( isom_write_box( root->bs, (isom_box_t *)mdat ) < 0 )
-                return -1;
-        }
-    }
-    else
-    {
-        if( isom_add_mdat( root ) )
-            return -1;
-        mdat = root->mdat;
-    }
-    /* Start a new Media Data Box. */
-    mdat->manager &= ~(LSMASH_INCOMPLETE_BOX | LSMASH_WRITTEN_BOX);
-    if( !root->fragment )
-        mdat->manager |= LSMASH_PLACEHOLDER;
-    return isom_write_box( root->bs, (isom_box_t *)mdat );
-}
-
 int isom_check_compatibility( lsmash_root_t *root )
 {
     if( !root )
@@ -3032,12 +3001,18 @@ static int isom_prepare_random_access_info( lsmash_root_t *root )
 static int isom_output_fragment_media_data( lsmash_root_t *root )
 {
     isom_fragment_manager_t *fragment = root->fragment;
+    /* If there is no available Media Data Box to write samples, add and write a new one. */
     if( fragment->pool->entry_count )
     {
-        /* If there is no available Media Data Box to write samples, add and write a new one. */
-        if( isom_new_mdat( root ) )
+        isom_mdat_t *mdat = root->mdat;
+        if( !root->mdat && isom_add_mdat( root ) < 0 )
+            return -1;
+        root->mdat->manager &= ~(LSMASH_INCOMPLETE_BOX | LSMASH_WRITTEN_BOX);
+        if( isom_write_box( root->bs, (isom_box_t *)mdat ) < 0 )
             return -1;
         root->size += root->mdat->size;
+        root->mdat->size       = 0;
+        root->mdat->media_size = 0;
     }
     lsmash_remove_entries( fragment->pool, isom_remove_sample_pool );
     fragment->pool_size = 0;
@@ -4314,8 +4289,8 @@ static int isom_write_pooled_samples( lsmash_root_t *root, isom_sample_pool_t *p
     lsmash_bs_put_bytes( root->bs, pool->size, pool->data );
     if( lsmash_bs_write_data( root->bs ) )
         return -1;
-    root->mdat->size  += pool->size;
-    root->size        += pool->size;
+    root->mdat->media_size  += pool->size;
+    root->size              += pool->size;
     pool->sample_count = 0;
     pool->size         = 0;
     return 0;
@@ -4484,9 +4459,12 @@ static int isom_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sa
     /* If there is no available Media Data Box to write samples, add and write a new one before any chunk offset is decided. */
     if( !root->mdat )
     {
-        if( isom_new_mdat( root ) )
+        if( isom_add_mdat( root ) )
             return -1;
-        /* Add the size of the Media Data Box and the placeholder. */
+        root->mdat->manager |= LSMASH_PLACEHOLDER;
+        if( isom_write_box( root->bs, (isom_box_t *)root->mdat ) < 0 )
+            return -1;
+        assert( root->free );
         root->size += root->free->size + root->mdat->size;
     }
     isom_sample_entry_t *sample_entry = (isom_sample_entry_t *)lsmash_get_entry_data( trak->mdia->minf->stbl->stsd->list, sample->index );

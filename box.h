@@ -1184,6 +1184,8 @@ typedef struct
 typedef struct
 {
     ISOM_BASEBOX_COMMON;    /* If size is 0, then this box is the last box. */
+
+        uint64_t media_size;    /* the total media size already written in this box */
 } isom_mdat_t;
 
 /* Free Space Box

@@ -1252,6 +1252,7 @@ static int isom_write_mdat( lsmash_bs_t *bs, isom_box_t *box )
                 return -1;
             lsmash_bs_put_bytes( bs, pool->size, pool->data );
         }
+        mdat->media_size = root->fragment->pool_size;
         return lsmash_bs_write_data( bs );
     }
     if( mdat->manager & LSMASH_PLACEHOLDER )
@@ -1273,29 +1274,26 @@ static int isom_write_mdat( lsmash_bs_t *bs, isom_box_t *box )
         isom_bs_put_box_common( bs, mdat );
         return lsmash_bs_write_data( bs );
     }
-    /* Write the actual size. */
-    uint64_t current_pos = lsmash_ftell( bs->stream );
-    if( mdat->size > UINT32_MAX )
+    if( !bs->unseekable )
     {
-        /* The placeholder is overwritten by the Media Data Box. */
-        assert( root->free );
-        mdat->pos = root->free->pos;
+        /* Write the actual size. */
+        uint64_t current_pos = lsmash_ftell( bs->stream );
+        mdat->size = ISOM_BASEBOX_COMMON_SIZE + mdat->media_size;
+        if( mdat->size > UINT32_MAX )
+        {
+            /* The placeholder is overwritten by the Media Data Box. */
+            assert( root->free );
+            mdat->pos   = root->free->pos;
+            mdat->size += root->free->size;
+            isom_remove_box_by_itself( root->free );
+        }
         lsmash_fseek( bs->stream, mdat->pos, SEEK_SET );
-        lsmash_bs_put_be32( bs, 1 );
-        lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_MDAT.fourcc );
-        lsmash_bs_put_be64( bs, mdat->size + ISOM_BASEBOX_COMMON_SIZE );
-        /* Remove the placeholder for large size. */
-        isom_remove_box_by_itself( root->free );
+        isom_bs_put_box_common( bs, mdat );
+        int ret = lsmash_bs_write_data( bs );
+        lsmash_fseek( bs->stream, current_pos, SEEK_SET );
+        return ret;
     }
-    else
-    {
-        lsmash_fseek( bs->stream, mdat->pos, SEEK_SET );
-        lsmash_bs_put_be32( bs, mdat->size );
-        lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_MDAT.fourcc );
-    }
-    int ret = lsmash_bs_write_data( bs );
-    lsmash_fseek( bs->stream, current_pos, SEEK_SET );
-    return ret;
+    return -1;
 }
 
 static int isom_write_ftyp( lsmash_bs_t *bs, isom_box_t *box )
