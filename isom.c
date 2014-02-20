@@ -666,7 +666,7 @@ static int isom_new_mdat( lsmash_root_t *root )
         if( !root->fragment )
         {
             mdat->manager &= ~(LSMASH_INCOMPLETE_BOX | LSMASH_PLACEHOLDER);
-            if( mdat->write( root->bs, (isom_box_t *)mdat ) < 0 )
+            if( isom_write_box( root->bs, (isom_box_t *)mdat ) < 0 )
                 return -1;
         }
     }
@@ -680,7 +680,7 @@ static int isom_new_mdat( lsmash_root_t *root )
     mdat->manager &= ~(LSMASH_INCOMPLETE_BOX | LSMASH_WRITTEN_BOX);
     if( !root->fragment )
         mdat->manager |= LSMASH_PLACEHOLDER;
-    return mdat->write( root->bs, (isom_box_t *)mdat );
+    return isom_write_box( root->bs, (isom_box_t *)mdat );
 }
 
 int isom_check_compatibility( lsmash_root_t *root )
@@ -2837,7 +2837,7 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
     /* Write the size of Media Data Box here. */
     lsmash_bs_t *bs = root->bs;
     root->mdat->manager &= ~LSMASH_INCOMPLETE_BOX;
-    if( root->mdat->write( bs, (isom_box_t *)root->mdat ) < 0 )
+    if( isom_write_box( bs, (isom_box_t *)root->mdat ) < 0 )
         return -1;
     /* Write the Movie Box and a Meta Box if no optimization for progressive download. */
     uint64_t meta_size = root->meta ? root->meta->size : 0;

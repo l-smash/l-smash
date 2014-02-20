@@ -1279,6 +1279,7 @@ static int isom_write_mdat( lsmash_bs_t *bs, isom_box_t *box )
     if( mdat->size > UINT32_MAX )
     {
         /* The placeholder is overwritten by the Media Data Box. */
+        assert( root->free );
         mdat->pos = root->free->pos;
         lsmash_fseek( bs->stream, mdat->pos, SEEK_SET );
         lsmash_bs_put_be32( bs, 1 );
@@ -1334,7 +1335,9 @@ int isom_write_box( lsmash_bs_t *bs, isom_box_t *box )
         return 0;
     if( box->write( bs, box ) < 0 )
         return -1;
-    if( !(box->manager & LSMASH_PLACEHOLDER) )
+    if( box->manager & (LSMASH_PLACEHOLDER | LSMASH_INCOMPLETE_BOX) )
+        return 0;
+    else
         box->manager |= LSMASH_WRITTEN_BOX;
     return isom_write_children( bs, box );
 }
