@@ -160,8 +160,7 @@ static int isom_write_elst( lsmash_bs_t *bs, isom_box_t *box )
     assert( elst->list );
     if( elst->list->entry_count == 0 )
         return 0;
-    if( elst->root->fragment
-     && elst->root->bs->stream != stdout )
+    if( elst->root->fragment && !elst->root->bs->unseekable )
         elst->pos = elst->root->bs->written;    /* Remember to rewrite entries. */
     isom_bs_put_box_common( bs, elst );
     lsmash_bs_put_be32( bs, elst->list->entry_count );

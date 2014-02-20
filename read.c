@@ -154,7 +154,7 @@ static void isom_skip_box_rest( lsmash_bs_t *bs, isom_box_t *box )
     if( box->manager & LSMASH_LAST_BOX )
     {
         box->size = (box->manager & LSMASH_FULLBOX) ? ISOM_FULLBOX_COMMON_SIZE : ISOM_BASEBOX_COMMON_SIZE;
-        if( bs->stream != stdin )
+        if( !bs->unseekable )
         {
             uint64_t start = lsmash_ftell( bs->stream );
             lsmash_fseek( bs->stream, 0, SEEK_END );
@@ -167,7 +167,7 @@ static void isom_skip_box_rest( lsmash_bs_t *bs, isom_box_t *box )
         return;
     }
     uint64_t skip_bytes = box->size - lsmash_bs_get_pos( bs );
-    if( bs->stream != stdin )
+    if( !bs->unseekable )
     {
         uint64_t start = lsmash_ftell( bs->stream );
         lsmash_fseek( bs->stream, skip_bytes, SEEK_CUR );
@@ -2513,11 +2513,11 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
     {
         /* skip extra bytes */
         uint64_t rest_size = parent->size - parent_pos;
-        if( bs->stream != stdin )
+        if( !bs->unseekable )
             lsmash_fseek( bs->stream, rest_size, SEEK_CUR );
         else
             for( uint64_t i = 0; i < rest_size; i++ )
-                if( fgetc( stdin ) == EOF )
+                if( fgetc( bs->stream ) == EOF )
                     break;
         box->size = rest_size;
         return 0;

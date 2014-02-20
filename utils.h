@@ -39,6 +39,7 @@ typedef struct
 {
     FILE    *stream;    /* I/O stream */
     uint8_t  error;
+    uint8_t  unseekable;
     uint8_t *data;      /* buffer for reading/writing */
     uint64_t store;     /* valid data size on buffer */
     uint64_t alloc;     /* total buffer size including invalid area */

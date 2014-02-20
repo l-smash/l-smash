@@ -162,11 +162,16 @@ lsmash_bs_t* lsmash_bs_create( char* filename )
     lsmash_bs_t* bs = lsmash_malloc_zero( sizeof(lsmash_bs_t) );
     if( !bs )
         return NULL;
-    if( filename && (bs->stream = lsmash_fopen( filename, "wb" )) == NULL )
+    if( filename )
     {
-        lsmash_free( bs );
-        return NULL;
+        if( (bs->stream = lsmash_fopen( filename, "wb" )) == NULL )
+        {
+            lsmash_free( bs );
+            return NULL;
+        }
     }
+    else
+        bs->unseekable = 1;
     return bs;
 }
 

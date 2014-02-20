@@ -2320,8 +2320,10 @@ lsmash_root_t *lsmash_open_movie( const char *filename, lsmash_file_mode mode )
     {
         if( mode & LSMASH_FILE_MODE_READ )
             root->bs->stream = stdin;
-        else if( (mode & LSMASH_FILE_MODE_WRITE) && (mode & LSMASH_FILE_MODE_FRAGMENTED) )
+        else if( (mode & LSMASH_FILE_MODE_WRITE)
+              && (mode & LSMASH_FILE_MODE_FRAGMENTED) )
             root->bs->stream = stdout;
+        root->bs->unseekable = 1;
     }
     else
         root->bs->stream = lsmash_fopen( filename, open_mode );
@@ -2785,7 +2787,7 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
         /* Output the final movie fragment. */
         if( isom_finish_fragment_movie( root ) )
             return -1;
-        if( root->bs->stream == stdout )
+        if( root->bs->unseekable )
             return 0;
         /* Write the overall random access information at the tail of the movie. */
         if( isom_write_fragment_random_access_info( root ) )
@@ -2947,7 +2949,7 @@ static int isom_create_fragment_overall_default_settings( lsmash_root_t *root )
 {
     if( isom_add_mvex( root->moov ) )
         return -1;
-    if( root->bs->stream != stdout )
+    if( !root->bs->unseekable )
     {
         if( isom_add_mehd( root->moov->mvex ) )
             return -1;
@@ -3019,7 +3021,7 @@ static int isom_create_fragment_overall_default_settings( lsmash_root_t *root )
 
 static int isom_prepare_random_access_info( lsmash_root_t *root )
 {
-    if( root->bs->stream == stdout )
+    if( root->bs->unseekable )
         return 0;
     if( isom_add_mfra( root )
      || isom_add_mfro( root->mfra ) )
@@ -3508,7 +3510,7 @@ int lsmash_modify_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID,
     data->segment_duration = edit.duration;
     data->media_time       = edit.start_time;
     data->media_rate       = edit.rate;
-    if( !elst->pos || !root->fragment || root->bs->stream == stdout )
+    if( elst->pos == 0 || !root->fragment || root->bs->unseekable )
         return isom_update_tkhd_duration( trak );
     /* Rewrite the specified entry.
      * Note: we don't update the version of the Edit List Box. */
@@ -4749,7 +4751,7 @@ static int isom_update_fragment_sample_tables( isom_traf_t *traf, lsmash_sample_
             tfhd->default_sample_flags = sample_flags;
             /* Set up random access information if this sample is a sync sample.
              * We inform only the first sample in each movie fragment. */
-            if( root->bs->stream != stdout && (sample->prop.ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC) )
+            if( !root->bs->unseekable && (sample->prop.ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC) )
             {
                 isom_tfra_t *tfra = isom_get_tfra( root->mfra, tfhd->track_ID );
                 if( !tfra )
