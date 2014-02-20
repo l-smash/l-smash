@@ -153,7 +153,7 @@ int lsmash_bs_write_data( lsmash_bs_t *bs )
         return -1;
     }
     bs->written += bs->store;
-    bs->store = 0;
+    bs->store    = 0;
     return 0;
 }
 

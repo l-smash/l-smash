@@ -3570,3 +3570,26 @@ int lsmash_write_top_level_box
     box->root->size += box->size;
     return 0;
 }
+
+uint8_t *lsmash_export_box
+(
+    lsmash_box_t *box,
+    uint32_t     *size
+)
+{
+    if( !box || !size )
+        return NULL;
+    lsmash_bs_t *bs = lsmash_bs_create( NULL );
+    if( !bs )
+        return NULL;
+    if( isom_write_box( bs, box ) < 0 )
+    {
+        lsmash_bs_cleanup( bs );
+        return NULL;
+    }
+    *size = bs->store;
+    uint8_t *data = bs->data;
+    bs->data = NULL;
+    lsmash_bs_cleanup( bs );
+    return data;
+}

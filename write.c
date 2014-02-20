@@ -1328,18 +1328,22 @@ static int isom_write_free( lsmash_bs_t *bs, isom_box_t *box )
 int isom_write_box( lsmash_bs_t *bs, isom_box_t *box )
 {
     assert( bs );
-    /* Don't write any incomplete or already written box. */
-    if( !box || !box->write || (box->manager & (LSMASH_INCOMPLETE_BOX | LSMASH_WRITTEN_BOX)) )
+    /* Don't write any incomplete or already written box to a file. */
+    if( !box || !box->write
+     || (bs->stream && (box->manager & (LSMASH_INCOMPLETE_BOX | LSMASH_WRITTEN_BOX))) )
         return 0;
     if( box->write( bs, box ) < 0 )
         return -1;
-    if( lsmash_bs_write_data( bs ) < 0 )
-        return -1;
-    /* Don't write any child box if this box is a placeholder or an incomplete box. */
-    if( box->manager & (LSMASH_PLACEHOLDER | LSMASH_INCOMPLETE_BOX) )
-        return 0;
-    else
-        box->manager |= LSMASH_WRITTEN_BOX;
+    if( bs->stream )
+    {
+        if( lsmash_bs_write_data( bs ) < 0 )
+            return -1;
+        /* Don't write any child box if this box is a placeholder or an incomplete box. */
+        if( box->manager & (LSMASH_PLACEHOLDER | LSMASH_INCOMPLETE_BOX) )
+            return 0;
+        else
+            box->manager |= LSMASH_WRITTEN_BOX;
+    }
     return isom_write_children( bs, box );
 }
 

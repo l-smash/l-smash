@@ -34,7 +34,7 @@
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  1
-#define LSMASH_VERSION_MINOR  2
+#define LSMASH_VERSION_MINOR  3
 #define LSMASH_VERSION_MICRO  0
 
 /****************************************************************************
@@ -331,6 +331,21 @@ lsmash_box_t *lsmash_root_as_box
 int lsmash_write_top_level_box
 (
     lsmash_box_t *box
+);
+
+/* Export the data of a given box and its children as the binary string.
+ * The returned address is of the beginning of an allocated memory block.
+ * You can deallocate the memory block by lsmash_free().
+ *
+ * Note that some boxes cannot be exported since L-SMASH might skip the cache for them.
+ * Media Data Box is an unexportable example.
+ *
+ * Return the address to the beginning of binary string if successful.
+ * Return NULL otherwise. */
+uint8_t *lsmash_export_box
+(
+    lsmash_box_t *box,
+    uint32_t     *size
 );
 
 /****************************************************************************
