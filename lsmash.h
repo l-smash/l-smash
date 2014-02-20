@@ -35,7 +35,7 @@
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  1
 #define LSMASH_VERSION_MINOR  3
-#define LSMASH_VERSION_MICRO  0
+#define LSMASH_VERSION_MICRO  1
 
 /****************************************************************************
  * ROOT
@@ -340,7 +340,7 @@ int lsmash_write_top_level_box
  * Note that some boxes cannot be exported since L-SMASH might skip the cache for them.
  * Media Data Box is an unexportable example.
  *
- * Return the address to the beginning of binary string if successful.
+ * Return the address to the beginning of the binary string if successful.
  * Return NULL otherwise. */
 uint8_t *lsmash_export_box
 (

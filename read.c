@@ -130,23 +130,27 @@ static void isom_box_common_copy( void *dst, void *src )
         isom_basebox_common_copy( (isom_box_t *)dst, (isom_box_t *)src );
 }
 
-static void isom_read_box_rest( lsmash_bs_t *bs, isom_box_t *box )
+static uint64_t isom_read_box_rest( lsmash_bs_t *bs, isom_box_t *box )
 {
     if( box->manager & LSMASH_LAST_BOX )
     {
+        uint64_t init_bs_store = bs->store;
         uint64_t prev_bs_store = bs->store;
         while( lsmash_bs_read_data( bs, 1 ) == 0 )
         {
             if( bs->store == prev_bs_store )
-                return;     /* No more data in the stream. */
+                /* No more data in the stream. */
+                break;
             prev_bs_store = bs->store;
         }
-        return;
+        return bs->store - init_bs_store;
     }
-    if( lsmash_bs_read_data( bs, box->size - lsmash_bs_get_pos( bs ) ) )
-        return;
+    uint64_t read_size = box->size - lsmash_bs_get_pos( bs );
+    if( lsmash_bs_read_data( bs, read_size ) )
+        return 0;
     if( box->size != bs->store )
         bs->error = 1;  /* not match size */
+    return read_size - (box->size - bs->store);
 }
 
 static void isom_skip_box_rest( lsmash_bs_t *bs, isom_box_t *box )
@@ -226,7 +230,7 @@ static int isom_read_children( lsmash_root_t *root, isom_box_t *box, void *paren
 static int isom_read_unknown_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     lsmash_bs_t *bs = root->bs;
-    isom_skip_box_rest( bs, box );
+    uint64_t read_size = isom_read_box_rest( bs, box );
     if( bs->error && feof( bs->stream ) )
     {
         /* This box ends incompletely at the end of the stream. */
@@ -242,8 +246,16 @@ static int isom_read_unknown_box( lsmash_root_t *root, isom_box_t *box, isom_box
         return -1;
     }
     isom_box_common_copy( unknown, box );
-    unknown->manager |= LSMASH_UNKNOWN_BOX | LSMASH_INCOMPLETE_BOX;
+    unknown->manager |= LSMASH_UNKNOWN_BOX;
     unknown->destruct = (isom_extension_destructor_t)isom_remove_unknown_box;
+    if( read_size )
+    {
+        unknown->unknown_field = lsmash_bs_get_bytes( bs, read_size );
+        if( unknown->unknown_field )
+            unknown->unknown_size = read_size;
+        else
+            unknown->manager |= LSMASH_INCOMPLETE_BOX;
+    }
     if( !(root->flags & LSMASH_FILE_MODE_DUMP) )
         return 0;
     /* Create a dummy for dump. */
