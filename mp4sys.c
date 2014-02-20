@@ -673,9 +673,7 @@ int mp4sys_put_ES_Descriptor( lsmash_bs_t *bs, mp4sys_ES_Descriptor_t *esd )
 
 int mp4sys_write_ES_Descriptor( lsmash_bs_t *bs, mp4sys_ES_Descriptor_t *esd )
 {
-    if( mp4sys_put_ES_Descriptor( bs, esd ) )
-        return -1;
-    return lsmash_bs_write_data( bs );
+    return mp4sys_put_ES_Descriptor( bs, esd );
 }
 
 static int mp4sys_put_ES_ID_Inc( lsmash_bs_t *bs, mp4sys_ES_ID_Inc_t* es_id_inc )
@@ -696,8 +694,9 @@ static int mp4sys_write_ES_ID_Incs( lsmash_bs_t *bs, mp4sys_ObjectDescriptor_t* 
     if( !od->esDescr )
         return 0; /* This may violate the spec, but some muxer do this */
     for( lsmash_entry_t *entry = od->esDescr->head; entry; entry = entry->next )
-        mp4sys_put_ES_ID_Inc( bs, (mp4sys_ES_ID_Inc_t*)entry->data );
-    return lsmash_bs_write_data( bs );
+        if( mp4sys_put_ES_ID_Inc( bs, (mp4sys_ES_ID_Inc_t*)entry->data ) < 0 )
+            return -1;
+    return 0;
 }
 
 int mp4sys_write_ObjectDescriptor( lsmash_bs_t *bs, mp4sys_ObjectDescriptor_t* od )
@@ -720,8 +719,6 @@ int mp4sys_write_ObjectDescriptor( lsmash_bs_t *bs, mp4sys_ObjectDescriptor_t* o
         lsmash_bs_put_byte( bs, od->visualProfileLevelIndication );
         lsmash_bs_put_byte( bs, od->graphicsProfileLevelIndication );
     }
-    if( lsmash_bs_write_data( bs ) )
-        return -1;
     return mp4sys_write_ES_ID_Incs( bs, od );
 }
 

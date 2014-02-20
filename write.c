@@ -51,7 +51,7 @@ static int isom_write_children( lsmash_bs_t *bs, isom_box_t *box )
 static int isom_write_binary_coded_box( lsmash_bs_t *bs, isom_box_t *box )
 {
     lsmash_bs_put_bytes( bs, box->size, box->binary );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_unknown_box( lsmash_bs_t *bs, isom_box_t *box )
@@ -61,7 +61,7 @@ static int isom_write_unknown_box( lsmash_bs_t *bs, isom_box_t *box )
     if( unknown_box->unknown_field
      && unknown_box->unknown_size )
         lsmash_bs_put_bytes( bs, unknown_box->unknown_size, unknown_box->unknown_field );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static void isom_bs_put_qt_color_table( lsmash_bs_t *bs, isom_qt_color_table_t *color_table )
@@ -85,7 +85,7 @@ static int isom_write_ctab( lsmash_bs_t *bs, isom_box_t *box )
     isom_ctab_t *ctab = (isom_ctab_t *)box;
     isom_bs_put_box_common( bs, ctab );
     isom_bs_put_qt_color_table( bs, &ctab->color_table );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_tkhd( lsmash_bs_t *bs, isom_box_t *box )
@@ -118,7 +118,7 @@ static int isom_write_tkhd( lsmash_bs_t *bs, isom_box_t *box )
         lsmash_bs_put_be32( bs, tkhd->matrix[i] );
     lsmash_bs_put_be32( bs, tkhd->width );
     lsmash_bs_put_be32( bs, tkhd->height );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_clef( lsmash_bs_t *bs, isom_box_t *box )
@@ -127,7 +127,7 @@ static int isom_write_clef( lsmash_bs_t *bs, isom_box_t *box )
     isom_bs_put_box_common( bs, clef );
     lsmash_bs_put_be32( bs, clef->width );
     lsmash_bs_put_be32( bs, clef->height );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_prof( lsmash_bs_t *bs, isom_box_t *box )
@@ -136,7 +136,7 @@ static int isom_write_prof( lsmash_bs_t *bs, isom_box_t *box )
     isom_bs_put_box_common( bs, prof );
     lsmash_bs_put_be32( bs, prof->width );
     lsmash_bs_put_be32( bs, prof->height );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_enof( lsmash_bs_t *bs, isom_box_t *box )
@@ -145,13 +145,13 @@ static int isom_write_enof( lsmash_bs_t *bs, isom_box_t *box )
     isom_bs_put_box_common( bs, enof );
     lsmash_bs_put_be32( bs, enof->width );
     lsmash_bs_put_be32( bs, enof->height );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_tapt( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_bs_put_box_common( bs, box );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_elst( lsmash_bs_t *bs, isom_box_t *box )
@@ -181,19 +181,19 @@ static int isom_write_elst( lsmash_bs_t *bs, isom_box_t *box )
         }
         lsmash_bs_put_be32( bs, data->media_rate );
     }
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_edts( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_bs_put_box_common( bs, box );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_tref( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_bs_put_box_common( bs, box );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_track_reference_type( lsmash_bs_t *bs, isom_box_t *box )
@@ -202,7 +202,7 @@ static int isom_write_track_reference_type( lsmash_bs_t *bs, isom_box_t *box )
     isom_bs_put_box_common( bs, ref );
     for( uint32_t i = 0; i < ref->ref_count; i++ )
         lsmash_bs_put_be32( bs, ref->track_ID[i] );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_mdhd( lsmash_bs_t *bs, isom_box_t *box )
@@ -225,7 +225,7 @@ static int isom_write_mdhd( lsmash_bs_t *bs, isom_box_t *box )
     }
     lsmash_bs_put_be16( bs, mdhd->language );
     lsmash_bs_put_be16( bs, mdhd->quality );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_hdlr( lsmash_bs_t *bs, isom_box_t *box )
@@ -238,7 +238,7 @@ static int isom_write_hdlr( lsmash_bs_t *bs, isom_box_t *box )
     lsmash_bs_put_be32( bs, hdlr->componentFlags );
     lsmash_bs_put_be32( bs, hdlr->componentFlagsMask );
     lsmash_bs_put_bytes( bs, hdlr->componentName_length, hdlr->componentName );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_vmhd( lsmash_bs_t *bs, isom_box_t *box )
@@ -248,7 +248,7 @@ static int isom_write_vmhd( lsmash_bs_t *bs, isom_box_t *box )
     lsmash_bs_put_be16( bs, vmhd->graphicsmode );
     for( uint32_t i = 0; i < 3; i++ )
         lsmash_bs_put_be16( bs, vmhd->opcolor[i] );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_smhd( lsmash_bs_t *bs, isom_box_t *box )
@@ -257,7 +257,7 @@ static int isom_write_smhd( lsmash_bs_t *bs, isom_box_t *box )
     isom_bs_put_box_common( bs, smhd );
     lsmash_bs_put_be16( bs, smhd->balance );
     lsmash_bs_put_be16( bs, smhd->reserved );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_hmhd( lsmash_bs_t *bs, isom_box_t *box )
@@ -269,14 +269,14 @@ static int isom_write_hmhd( lsmash_bs_t *bs, isom_box_t *box )
     lsmash_bs_put_be32( bs, hmhd->maxbitrate );
     lsmash_bs_put_be32( bs, hmhd->avgbitrate );
     lsmash_bs_put_be32( bs, hmhd->reserved );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_nmhd( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_nmhd_t *nmhd = (isom_nmhd_t *)box;
     isom_bs_put_box_common( bs, nmhd );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_gmin( lsmash_bs_t *bs, isom_box_t *box )
@@ -288,7 +288,7 @@ static int isom_write_gmin( lsmash_bs_t *bs, isom_box_t *box )
         lsmash_bs_put_be16( bs, gmin->opcolor[i] );
     lsmash_bs_put_be16( bs, gmin->balance );
     lsmash_bs_put_be16( bs, gmin->reserved );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_text( lsmash_bs_t *bs, isom_box_t *box )
@@ -297,13 +297,13 @@ static int isom_write_text( lsmash_bs_t *bs, isom_box_t *box )
     isom_bs_put_box_common( bs, text );
     for( uint32_t i = 0; i < 9; i++ )
         lsmash_bs_put_be32( bs, text->matrix[i] );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_gmhd( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_bs_put_box_common( bs, box );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_dref( lsmash_bs_t *bs, isom_box_t *box )
@@ -312,7 +312,7 @@ static int isom_write_dref( lsmash_bs_t *bs, isom_box_t *box )
     assert( dref->list );
     isom_bs_put_box_common( bs, dref );
     lsmash_bs_put_be32( bs, dref->list->entry_count );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_url( lsmash_bs_t *bs, isom_box_t *box )
@@ -320,13 +320,13 @@ static int isom_write_url( lsmash_bs_t *bs, isom_box_t *box )
     isom_dref_entry_t *url = (isom_dref_entry_t *)box;
     isom_bs_put_box_common( bs, url );
     lsmash_bs_put_bytes( bs, url->location_length, url->location );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_dinf( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_bs_put_box_common( bs, box );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_pasp( lsmash_bs_t *bs, isom_box_t *box )
@@ -335,7 +335,7 @@ static int isom_write_pasp( lsmash_bs_t *bs, isom_box_t *box )
     isom_bs_put_box_common( bs, pasp );
     lsmash_bs_put_be32( bs, pasp->hSpacing );
     lsmash_bs_put_be32( bs, pasp->vSpacing );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_clap( lsmash_bs_t *bs, isom_box_t *box )
@@ -350,7 +350,7 @@ static int isom_write_clap( lsmash_bs_t *bs, isom_box_t *box )
     lsmash_bs_put_be32( bs, clap->horizOffD );
     lsmash_bs_put_be32( bs, clap->vertOffN );
     lsmash_bs_put_be32( bs, clap->vertOffD );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_colr( lsmash_bs_t *bs, isom_box_t *box )
@@ -366,7 +366,7 @@ static int isom_write_colr( lsmash_bs_t *bs, isom_box_t *box )
     lsmash_bs_put_be16( bs, colr->matrix_index );
     if( colr->color_parameter_type == ISOM_COLOR_PARAMETER_TYPE_NCLX )
         lsmash_bs_put_byte( bs, (colr->full_range_flag << 7) | colr->reserved );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_gama( lsmash_bs_t *bs, isom_box_t *box )
@@ -380,7 +380,7 @@ static int isom_write_gama( lsmash_bs_t *bs, isom_box_t *box )
         return 0;
     isom_bs_put_box_common( bs, gama );
     lsmash_bs_put_be32( bs, gama->level );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_fiel( lsmash_bs_t *bs, isom_box_t *box )
@@ -389,7 +389,7 @@ static int isom_write_fiel( lsmash_bs_t *bs, isom_box_t *box )
     isom_bs_put_box_common( bs, fiel );
     lsmash_bs_put_byte( bs, fiel->fields );
     lsmash_bs_put_byte( bs, fiel->detail );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_cspc( lsmash_bs_t *bs, isom_box_t *box )
@@ -397,7 +397,7 @@ static int isom_write_cspc( lsmash_bs_t *bs, isom_box_t *box )
     isom_cspc_t *cspc = (isom_cspc_t *)box;
     isom_bs_put_box_common( bs, cspc );
     lsmash_bs_put_be32( bs, cspc->pixel_format );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_sgbt( lsmash_bs_t *bs, isom_box_t *box )
@@ -405,7 +405,7 @@ static int isom_write_sgbt( lsmash_bs_t *bs, isom_box_t *box )
     isom_sgbt_t *sgbt = (isom_sgbt_t *)box;
     isom_bs_put_box_common( bs, sgbt );
     lsmash_bs_put_byte( bs, sgbt->significantBits );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_stsl( lsmash_bs_t *bs, isom_box_t *box )
@@ -416,7 +416,7 @@ static int isom_write_stsl( lsmash_bs_t *bs, isom_box_t *box )
     lsmash_bs_put_byte( bs, stsl->scale_method );
     lsmash_bs_put_be16( bs, stsl->display_center_x );
     lsmash_bs_put_be16( bs, stsl->display_center_y );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_esds( lsmash_bs_t *bs, isom_box_t *box )
@@ -433,7 +433,7 @@ static int isom_write_btrt( lsmash_bs_t *bs, isom_box_t *box )
     lsmash_bs_put_be32( bs, btrt->bufferSizeDB );
     lsmash_bs_put_be32( bs, btrt->maxBitrate );
     lsmash_bs_put_be32( bs, btrt->avgBitrate );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_glbl( lsmash_bs_t *bs, isom_box_t *box )
@@ -442,7 +442,7 @@ static int isom_write_glbl( lsmash_bs_t *bs, isom_box_t *box )
     isom_bs_put_box_common( bs, glbl );
     if( glbl->header_data && glbl->header_size )
         lsmash_bs_put_bytes( bs, glbl->header_size, glbl->header_data );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_frma( lsmash_bs_t *bs, isom_box_t *box )
@@ -450,7 +450,7 @@ static int isom_write_frma( lsmash_bs_t *bs, isom_box_t *box )
     isom_frma_t *frma = (isom_frma_t *)box;
     isom_bs_put_box_common( bs, frma );
     lsmash_bs_put_be32( bs, frma->data_format );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_enda( lsmash_bs_t *bs, isom_box_t *box )
@@ -458,7 +458,7 @@ static int isom_write_enda( lsmash_bs_t *bs, isom_box_t *box )
     isom_enda_t *enda = (isom_enda_t *)box;
     isom_bs_put_box_common( bs, enda );
     lsmash_bs_put_be16( bs, enda->littleEndian );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_mp4a( lsmash_bs_t *bs, isom_box_t *box )
@@ -466,7 +466,7 @@ static int isom_write_mp4a( lsmash_bs_t *bs, isom_box_t *box )
     isom_mp4a_t *mp4a = (isom_mp4a_t *)box;
     isom_bs_put_box_common( bs, mp4a );
     lsmash_bs_put_be32( bs, mp4a->unknown );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_chan( lsmash_bs_t *bs, isom_box_t *box )
@@ -488,19 +488,19 @@ static int isom_write_chan( lsmash_bs_t *bs, isom_box_t *box )
             lsmash_bs_put_be32( bs, channelDescriptions->coordinates[1] );
             lsmash_bs_put_be32( bs, channelDescriptions->coordinates[2] );
         }
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_terminator( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_bs_put_box_common( bs, box );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_wave( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_bs_put_box_common( bs, box );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_visual_description( lsmash_bs_t *bs, isom_box_t *box )
@@ -527,7 +527,7 @@ static int isom_write_visual_description( lsmash_bs_t *bs, isom_box_t *box )
     lsmash_bs_put_be16( bs, data->color_table_ID );
     if( data->color_table_ID == 0 )
         isom_bs_put_qt_color_table( bs, &data->color_table );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_audio_description( lsmash_bs_t *bs, isom_box_t *box )
@@ -564,7 +564,7 @@ static int isom_write_audio_description( lsmash_bs_t *bs, isom_box_t *box )
         lsmash_bs_put_be32( bs, data->constBytesPerAudioPacket );
         lsmash_bs_put_be32( bs, data->constLPCMFramesPerAudioPacket );
     }
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 #if 0
@@ -578,7 +578,7 @@ static int isom_write_hint_description( lsmash_bs_t *bs, lsmash_entry_t *entry )
     lsmash_bs_put_be16( bs, data->data_reference_index );
     if( data->data && data->data_length )
         lsmash_bs_put_bytes( bs, data->data_length, data->data );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_metadata_description( lsmash_bs_t *bs, lsmash_entry_t *entry )
@@ -589,7 +589,7 @@ static int isom_write_metadata_description( lsmash_bs_t *bs, lsmash_entry_t *ent
     isom_bs_put_box_common( bs, data );
     lsmash_bs_put_bytes( bs, 6, data->reserved );
     lsmash_bs_put_be16( bs, data->data_reference_index );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 #endif
 
@@ -620,7 +620,7 @@ static int isom_write_qt_text_description( lsmash_bs_t *bs, isom_box_t *box )
     lsmash_bs_put_byte( bs, data->font_name_length );
     if( data->font_name && data->font_name_length )
         lsmash_bs_put_bytes( bs, data->font_name_length, data->font_name );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_ftab( lsmash_bs_t *bs, isom_box_t *box )
@@ -639,7 +639,7 @@ static int isom_write_ftab( lsmash_bs_t *bs, isom_box_t *box )
         if( data->font_name && data->font_name_length )
             lsmash_bs_put_bytes( bs, data->font_name_length, data->font_name );
     }
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_tx3g_description( lsmash_bs_t *bs, isom_box_t *box )
@@ -666,7 +666,7 @@ static int isom_write_tx3g_description( lsmash_bs_t *bs, isom_box_t *box )
     lsmash_bs_put_byte( bs, data->font_size );
     for( uint32_t i = 0; i < 4; i++ )
         lsmash_bs_put_byte( bs, data->text_color_rgba[i] );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_stsd( lsmash_bs_t *bs, isom_box_t *box )
@@ -675,7 +675,7 @@ static int isom_write_stsd( lsmash_bs_t *bs, isom_box_t *box )
     assert( stsd->list );
     isom_bs_put_box_common( bs, stsd );
     lsmash_bs_put_be32( bs, stsd->list->entry_count );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_stts( lsmash_bs_t *bs, isom_box_t *box )
@@ -692,7 +692,7 @@ static int isom_write_stts( lsmash_bs_t *bs, isom_box_t *box )
         lsmash_bs_put_be32( bs, data->sample_count );
         lsmash_bs_put_be32( bs, data->sample_delta );
     }
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_ctts( lsmash_bs_t *bs, isom_box_t *box )
@@ -709,7 +709,7 @@ static int isom_write_ctts( lsmash_bs_t *bs, isom_box_t *box )
         lsmash_bs_put_be32( bs, data->sample_count );
         lsmash_bs_put_be32( bs, data->sample_offset );
     }
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_cslg( lsmash_bs_t *bs, isom_box_t *box )
@@ -721,7 +721,7 @@ static int isom_write_cslg( lsmash_bs_t *bs, isom_box_t *box )
     lsmash_bs_put_be32( bs, cslg->greatestDecodeToDisplayDelta );
     lsmash_bs_put_be32( bs, cslg->compositionStartTime );
     lsmash_bs_put_be32( bs, cslg->compositionEndTime );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_stsz( lsmash_bs_t *bs, isom_box_t *box )
@@ -738,7 +738,7 @@ static int isom_write_stsz( lsmash_bs_t *bs, isom_box_t *box )
                 return -1;
             lsmash_bs_put_be32( bs, data->entry_size );
         }
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_stss( lsmash_bs_t *bs, isom_box_t *box )
@@ -754,7 +754,7 @@ static int isom_write_stss( lsmash_bs_t *bs, isom_box_t *box )
             return -1;
         lsmash_bs_put_be32( bs, data->sample_number );
     }
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_stps( lsmash_bs_t *bs, isom_box_t *box )
@@ -770,7 +770,7 @@ static int isom_write_stps( lsmash_bs_t *bs, isom_box_t *box )
             return -1;
         lsmash_bs_put_be32( bs, data->sample_number );
     }
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_sdtp( lsmash_bs_t *bs, isom_box_t *box )
@@ -789,7 +789,7 @@ static int isom_write_sdtp( lsmash_bs_t *bs, isom_box_t *box )
                      |  data->sample_has_redundancy;
         lsmash_bs_put_byte( bs, temp );
     }
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_stsc( lsmash_bs_t *bs, isom_box_t *box )
@@ -807,7 +807,7 @@ static int isom_write_stsc( lsmash_bs_t *bs, isom_box_t *box )
         lsmash_bs_put_be32( bs, data->samples_per_chunk );
         lsmash_bs_put_be32( bs, data->sample_description_index );
     }
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_co64( lsmash_bs_t *bs, isom_box_t *box )
@@ -823,7 +823,7 @@ static int isom_write_co64( lsmash_bs_t *bs, isom_box_t *box )
             return -1;
         lsmash_bs_put_be64( bs, data->chunk_offset );
     }
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_stco( lsmash_bs_t *bs, isom_box_t *box )
@@ -841,7 +841,7 @@ static int isom_write_stco( lsmash_bs_t *bs, isom_box_t *box )
             return -1;
         lsmash_bs_put_be32( bs, data->chunk_offset );
     }
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_sgpd( lsmash_bs_t *bs, isom_box_t *box )
@@ -877,7 +877,7 @@ static int isom_write_sgpd( lsmash_bs_t *bs, isom_box_t *box )
                 break;
         }
     }
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_sbgp( lsmash_bs_t *bs, isom_box_t *box )
@@ -897,25 +897,25 @@ static int isom_write_sbgp( lsmash_bs_t *bs, isom_box_t *box )
         lsmash_bs_put_be32( bs, data->sample_count );
         lsmash_bs_put_be32( bs, data->group_description_index );
     }
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_stbl( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_bs_put_box_common( bs, box );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_minf( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_bs_put_box_common( bs, box );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_mdia( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_bs_put_box_common( bs, box );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_chpl( lsmash_bs_t *bs, isom_box_t *box )
@@ -939,7 +939,7 @@ static int isom_write_chpl( lsmash_bs_t *bs, isom_box_t *box )
         lsmash_bs_put_byte( bs, data->chapter_name_length );
         lsmash_bs_put_bytes( bs, data->chapter_name_length, data->chapter_name );
     }
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_mean( lsmash_bs_t *bs, isom_box_t *box )
@@ -948,7 +948,7 @@ static int isom_write_mean( lsmash_bs_t *bs, isom_box_t *box )
     isom_bs_put_box_common( bs, mean );
     if( mean->meaning_string && mean->meaning_string_length )
         lsmash_bs_put_bytes( bs, mean->meaning_string_length, mean->meaning_string );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_name( lsmash_bs_t *bs, isom_box_t *box )
@@ -957,7 +957,7 @@ static int isom_write_name( lsmash_bs_t *bs, isom_box_t *box )
     isom_bs_put_box_common( bs, name );
     if( name->name && name->name_length )
         lsmash_bs_put_bytes( bs, name->name_length, name->name );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_data( lsmash_bs_t *bs, isom_box_t *box )
@@ -970,25 +970,25 @@ static int isom_write_data( lsmash_bs_t *bs, isom_box_t *box )
     lsmash_bs_put_be32( bs, data->the_locale );
     if( data->value && data->value_length )
         lsmash_bs_put_bytes( bs, data->value_length, data->value );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_metaitem( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_bs_put_box_common( bs, box );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_ilst( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_bs_put_box_common( bs, box );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_meta( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_bs_put_box_common( bs, box );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_cprt( lsmash_bs_t *bs, isom_box_t *box )
@@ -997,19 +997,19 @@ static int isom_write_cprt( lsmash_bs_t *bs, isom_box_t *box )
     isom_bs_put_box_common( bs, cprt );
     lsmash_bs_put_be16( bs, cprt->language );
     lsmash_bs_put_bytes( bs, cprt->notice_length, cprt->notice );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_udta( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_bs_put_box_common( bs, box );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_trak( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_bs_put_box_common( bs, box );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_iods( lsmash_bs_t *bs, isom_box_t *box )
@@ -1051,7 +1051,7 @@ static int isom_write_mvhd( lsmash_bs_t *bs, isom_box_t *box )
     lsmash_bs_put_be32( bs, mvhd->selectionDuration );
     lsmash_bs_put_be32( bs, mvhd->currentTime );
     lsmash_bs_put_be32( bs, mvhd->next_track_ID );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static void isom_bs_put_sample_flags( lsmash_bs_t *bs, isom_sample_flags_t *flags )
@@ -1091,7 +1091,7 @@ static int isom_write_mehd( lsmash_bs_t *bs, isom_box_t *box )
         else
             lsmash_bs_put_be32( bs, (uint32_t)mehd->fragment_duration );
     }
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_trex( lsmash_bs_t *bs, isom_box_t *box )
@@ -1103,13 +1103,13 @@ static int isom_write_trex( lsmash_bs_t *bs, isom_box_t *box )
     lsmash_bs_put_be32( bs, trex->default_sample_duration );
     lsmash_bs_put_be32( bs, trex->default_sample_size );
     isom_bs_put_sample_flags( bs, &trex->default_sample_flags );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_mvex( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_bs_put_box_common( bs, box );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_mfhd( lsmash_bs_t *bs, isom_box_t *box )
@@ -1117,7 +1117,7 @@ static int isom_write_mfhd( lsmash_bs_t *bs, isom_box_t *box )
     isom_mfhd_t *mfhd = (isom_mfhd_t *)box;
     isom_bs_put_box_common( bs, mfhd );
     lsmash_bs_put_be32( bs, mfhd->sequence_number );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_tfhd( lsmash_bs_t *bs, isom_box_t *box )
@@ -1130,7 +1130,7 @@ static int isom_write_tfhd( lsmash_bs_t *bs, isom_box_t *box )
     if( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_DURATION_PRESENT  ) lsmash_bs_put_be32( bs, tfhd->default_sample_duration );
     if( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_SIZE_PRESENT      ) lsmash_bs_put_be32( bs, tfhd->default_sample_size );
     if( tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT     ) isom_bs_put_sample_flags( bs, &tfhd->default_sample_flags );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_tfdt( lsmash_bs_t *bs, isom_box_t *box )
@@ -1141,7 +1141,7 @@ static int isom_write_tfdt( lsmash_bs_t *bs, isom_box_t *box )
         lsmash_bs_put_be64( bs, tfdt->baseMediaDecodeTime );
     else
         lsmash_bs_put_be32( bs, tfdt->baseMediaDecodeTime );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_trun( lsmash_bs_t *bs, isom_box_t *box )
@@ -1162,19 +1162,19 @@ static int isom_write_trun( lsmash_bs_t *bs, isom_box_t *box )
             if( trun->flags & ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT                   ) isom_bs_put_sample_flags( bs, &data->sample_flags );
             if( trun->flags & ISOM_TR_FLAGS_SAMPLE_COMPOSITION_TIME_OFFSET_PRESENT ) lsmash_bs_put_be32( bs, data->sample_composition_time_offset );
         }
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_traf( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_bs_put_box_common( bs, box );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_moof( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_bs_put_box_common( bs, box );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_tfra( lsmash_bs_t *bs, isom_box_t *box )
@@ -1198,8 +1198,8 @@ static int isom_write_tfra( lsmash_bs_t *bs, isom_box_t *box )
                 lsmash_bs_put_be32_from_64,
                 lsmash_bs_put_be64
             };
-        void (*bs_put_time)         ( lsmash_bs_t *, uint64_t ) = bs_put_funcs[ 3 + (tfra->version == 1)        ];
-        void (*bs_put_moof_offset)  ( lsmash_bs_t *, uint64_t ) = bs_put_funcs[ 3 + (tfra->version == 1)        ];
+        void (*bs_put_time)         ( lsmash_bs_t *, uint64_t ) = bs_put_funcs[ tfra->version == 1 ? 4 : 3      ];
+        void (*bs_put_moof_offset)  ( lsmash_bs_t *, uint64_t ) = bs_put_funcs[ tfra->version == 1 ? 4 : 3      ];
         void (*bs_put_traf_number)  ( lsmash_bs_t *, uint64_t ) = bs_put_funcs[ tfra->length_size_of_traf_num   ];
         void (*bs_put_trun_number)  ( lsmash_bs_t *, uint64_t ) = bs_put_funcs[ tfra->length_size_of_trun_num   ];
         void (*bs_put_sample_number)( lsmash_bs_t *, uint64_t ) = bs_put_funcs[ tfra->length_size_of_sample_num ];
@@ -1215,7 +1215,7 @@ static int isom_write_tfra( lsmash_bs_t *bs, isom_box_t *box )
             bs_put_sample_number( bs, data->sample_number );
         }
     }
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_mfro( lsmash_bs_t *bs, isom_box_t *box )
@@ -1223,13 +1223,13 @@ static int isom_write_mfro( lsmash_bs_t *bs, isom_box_t *box )
     isom_mfro_t *mfro = (isom_mfro_t *)box;
     isom_bs_put_box_common( bs, mfro );
     lsmash_bs_put_be32( bs, mfro->length );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_mfra( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_bs_put_box_common( bs, box );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_mdat( lsmash_bs_t *bs, isom_box_t *box )
@@ -1253,7 +1253,7 @@ static int isom_write_mdat( lsmash_bs_t *bs, isom_box_t *box )
             lsmash_bs_put_bytes( bs, pool->size, pool->data );
         }
         mdat->media_size = root->fragment->pool_size;
-        return lsmash_bs_write_data( bs );
+        return 0;
     }
     if( mdat->manager & LSMASH_PLACEHOLDER )
     {
@@ -1264,7 +1264,7 @@ static int isom_write_mdat( lsmash_bs_t *bs, isom_box_t *box )
         skip->pos      = lsmash_ftell( bs->stream );
         skip->size     = ISOM_BASEBOX_COMMON_SIZE;
         skip->manager |= LSMASH_PLACEHOLDER;
-        if( skip->write( bs, (isom_box_t *)skip ) < 0 )
+        if( isom_write_box( bs, (isom_box_t *)skip ) < 0 )
             return -1;
         /* Write an incomplete Media Data Box. */
         mdat->pos      = lsmash_ftell( bs->stream );
@@ -1272,7 +1272,7 @@ static int isom_write_mdat( lsmash_bs_t *bs, isom_box_t *box )
         mdat->manager |= LSMASH_INCOMPLETE_BOX;
         mdat->manager &= ~LSMASH_PLACEHOLDER;
         isom_bs_put_box_common( bs, mdat );
-        return lsmash_bs_write_data( bs );
+        return 0;
     }
     if( !bs->unseekable )
     {
@@ -1289,6 +1289,7 @@ static int isom_write_mdat( lsmash_bs_t *bs, isom_box_t *box )
         }
         lsmash_fseek( bs->stream, mdat->pos, SEEK_SET );
         isom_bs_put_box_common( bs, mdat );
+        /* isom_write_box() also calls lsmash_bs_write_data() but it must do nothing. */
         int ret = lsmash_bs_write_data( bs );
         lsmash_fseek( bs->stream, current_pos, SEEK_SET );
         return ret;
@@ -1306,13 +1307,13 @@ static int isom_write_ftyp( lsmash_bs_t *bs, isom_box_t *box )
     lsmash_bs_put_be32( bs, ftyp->minor_version );
     for( uint32_t i = 0; i < ftyp->brand_count; i++ )
         lsmash_bs_put_be32( bs, ftyp->compatible_brands[i] );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_moov( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_bs_put_box_common( bs, box );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 static int isom_write_free( lsmash_bs_t *bs, isom_box_t *box )
@@ -1321,7 +1322,7 @@ static int isom_write_free( lsmash_bs_t *bs, isom_box_t *box )
     isom_bs_put_box_common( bs, skip );
     if( skip->data && skip->length )
         lsmash_bs_put_bytes( bs, skip->length, skip->data );
-    return lsmash_bs_write_data( bs );
+    return 0;
 }
 
 int isom_write_box( lsmash_bs_t *bs, isom_box_t *box )
@@ -1332,6 +1333,9 @@ int isom_write_box( lsmash_bs_t *bs, isom_box_t *box )
         return 0;
     if( box->write( bs, box ) < 0 )
         return -1;
+    if( lsmash_bs_write_data( bs ) < 0 )
+        return -1;
+    /* Don't write any child box if this box is a placeholder or an incomplete box. */
     if( box->manager & (LSMASH_PLACEHOLDER | LSMASH_INCOMPLETE_BOX) )
         return 0;
     else
