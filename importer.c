@@ -3898,6 +3898,9 @@ static int hevc_importer_probe( importer_t *importer )
                                        &importer_info->composition_reordering_present,
                                        &importer_info->last_delta,
                                        max_composition_delay, num_access_units );
+    summary->timescale *= 2;    /* We assume that picture timing is in field level.
+                                 * For HEVC, it seems time_scale is set in frame level basically.
+                                 * So multiply by 2 for reducing timebase and timescale. */
     nalu_reduce_timescale( timestamp, npt, &importer_info->last_delta, &summary->timescale, num_access_units );
     lsmash_free( npt );
     importer_info->ts_list.sample_count = num_access_units;

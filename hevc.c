@@ -900,7 +900,7 @@ static int hevc_parse_sps_minimally
         else
         {
             sps->vui.num_units_in_tick = 1;     /* arbitrary */
-            sps->vui.time_scale        = 50;    /* arbitrary */
+            sps->vui.time_scale        = 25;    /* arbitrary */
         }
         if( lsmash_bits_get( bits, 1 ) )    /* bitstream_restriction_flag */
         {
@@ -927,7 +927,7 @@ static int hevc_parse_sps_minimally
         sps->vui.frame_field_info_present_flag = sps->ptl.general.progressive_source_flag
                                               && sps->ptl.general.interlaced_source_flag;
         sps->vui.num_units_in_tick             = 1;     /* arbitrary */
-        sps->vui.time_scale                    = 50;    /* arbitrary */
+        sps->vui.time_scale                    = 25;    /* arbitrary */
         sps->vui.min_spatial_segmentation_idc  = 0;
     }
     return bits->bs->error ? -1 : 0;
