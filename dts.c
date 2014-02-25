@@ -862,7 +862,7 @@ static int dts_parse_exss_xll( dts_info_t *info, uint64_t *bits_pos, dts_audio_a
                 if( bPrimaryChSet )
                     nLLDownmixType = dts_bits_get( bits, 3, bits_pos );                         /* nLLDownmixType                 (3) */
             }
-            dts_bits_get( bits, 1, bits_pos );                                                  /* bHierChSet                     (1) */
+            int bHierChSet = dts_bits_get( bits, 1, bits_pos );                                 /* bHierChSet                     (1) */
             if( bDownmixCoeffCodeEmbedded )
             {
                 /* N: the number of channels in the current channel set + 1 (+1 for the down scaling coefficients that prevent overflow)
@@ -876,7 +876,8 @@ static int dts_parse_exss_xll( dts_info_t *info, uint64_t *bits_pos, dts_audio_a
                 if( bPrimaryChSet && downmix_channel_count_table[nLLDownmixType] == 2 )
                     xll->stereo_downmix |= 1;
             }
-            sum_nChSetLLChannel += nChSetLLChannel;
+            if( bHierChSet )
+                sum_nChSetLLChannel += nChSetLLChannel;
             if( dts_bits_get( bits, 1, bits_pos ) )                                             /* bChMaskEnabled                 (1) */
                 xll->channel_layout |= dts_bits_get( bits, nBits4ChMask, bits_pos );            /* nChMask                        (nBits4ChMask) */
             else
