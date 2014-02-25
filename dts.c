@@ -702,20 +702,25 @@ static int dts_parse_core_x96( dts_info_t *info, uint64_t *bits_pos, dts_core_in
 
 static int dts_parse_core_xch( dts_info_t *info, uint64_t *bits_pos, dts_core_info_t *core )
 {
+    if( core->extension_audio_descriptor != 0
+     && core->extension_audio_descriptor != 3 )
+        return 0;   /* Probably this is not an XCh extension. We skip this anyway. */
     lsmash_bits_t *bits = info->bits;
     /* XCH Frame Header */
                                                                                 /* XChSYNC  (32) */
+    /* For compatibility reasons with legacy bitstreams the estimated distance in bytes is checked against
+     * the XChFSIZE+1 as well as the XChFSIZE. The XCh synchronization is pronounced if the distance matches
+     * either of these two values. */
     uint64_t XChFSIZE = (lsmash_bs_show_byte( bits->bs, 0 ) << 2)
-                      | ((lsmash_bs_show_byte( bits->bs, 1 ) >> 6) & 0x03);     /* XChFSIZE (10) */
-    if( (*bits_pos - 32 + (XChFSIZE + 1) * 8) != core->frame_size * 8 )
+                      | ((lsmash_bs_show_byte( bits->bs, 1 ) >> 6) & 0x03);
+    if( core->frame_size * 8 != (*bits_pos - 32 + (XChFSIZE + 1) * 8)
+     && core->frame_size * 8 != (*bits_pos - 32 +  XChFSIZE      * 8) )
         return 0;       /* Encountered four emulation bytes (pseudo sync word). */
-    if( core->extension_audio_descriptor != 0
-     && core->extension_audio_descriptor != 3 )
-        return -1;
-    dts_bits_get( bits, 10, bits_pos );
-    if( dts_bits_get( bits, 4, bits_pos ) != 1 )                                /* AMODE    (4) */
-        return -1;      /* At present, only centre surround channel extension is defined. */
-    dts_bits_get( bits, 2, bits_pos );      /* for bytes align */
+    if( ((lsmash_bs_show_byte( bits->bs, 1 ) >> 2) & 0xF) != 1 )
+        return 0;       /* A known value of AMODE is only 1. Otherwise just skip. */
+    dts_bits_get( bits, 16, bits_pos );                                         /* XChFSIZE   (10)
+                                                                                 * AMODE      (4)
+                                                                                 * byte align (2) */
     core->channel_layout |= DTS_CHANNEL_LAYOUT_CS;
     info->flags |= DTS_CORE_SUBSTREAM_XCH_FLAG;
     return bits->bs->error ? -1 : 0;
