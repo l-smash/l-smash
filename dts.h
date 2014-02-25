@@ -20,8 +20,9 @@
 
 /* This file is available under an ISC license. */
 
-#define DTS_MAX_CORE_SIZE      16384
-#define DTS_MAX_EXTENSION_SIZE 32768
+#define DTS_MAX_CORE_SIZE 16384
+#define DTS_MAX_EXSS_SIZE 32768
+#define DTS_MAX_NUM_EXSS      4 /* the maximum number of extension substreams */
 
 typedef enum
 {
@@ -32,46 +33,39 @@ typedef enum
 
 typedef struct
 {
+    uint16_t size;
+    uint16_t channel_layout;
+    uint8_t  lower_planes;      /* CL, LL and RL */
+} dts_xxch_info_t;
+
+typedef struct
+{
     uint32_t sampling_frequency;
     uint32_t frame_duration;
     uint16_t frame_size;
     uint16_t channel_layout;
     uint8_t  channel_arrangement;
-    uint8_t  xxch_lower_planes;
     uint8_t  extension_audio_descriptor;
     uint8_t  pcm_resolution;
+    dts_xxch_info_t xxch;
 } dts_core_info_t;
 
 typedef struct
 {
+    uint16_t size;
+    uint16_t channel_layout;
     uint32_t sampling_frequency;
     uint32_t frame_duration;
-    uint16_t channel_layout;
-    uint8_t  xxch_lower_planes;
-    uint8_t  bStaticFieldsPresent;
-    uint8_t  bMixMetadataEnbl;
-    uint8_t  bOne2OneMapChannels2Speakers;
-    uint8_t  nuNumMixOutConfigs;
-    uint8_t  nNumMixOutCh[4];
-    uint8_t  number_of_assets;
+    uint8_t  pcm_resolution;
     uint8_t  stereo_downmix;
-    uint8_t  representation_type;
-    uint8_t  bit_resolution;
-} dts_extension_info_t;
+} dts_xll_info_t;
 
 typedef struct
 {
+    uint16_t size;
+    uint16_t channel_layout;
     uint32_t sampling_frequency;
     uint32_t frame_duration;
-    uint16_t channel_layout;
-    uint8_t  bit_width;
-} dts_lossless_info_t;
-
-typedef struct
-{
-    uint32_t sampling_frequency;
-    uint32_t frame_duration;
-    uint16_t channel_layout;
     uint8_t  stereo_downmix;
     uint8_t  lfe_present;
     uint8_t  duration_modifier;
@@ -80,20 +74,55 @@ typedef struct
 
 typedef struct
 {
+    uint32_t                     size;
+    uint16_t                     channel_layout;
+    uint8_t                      bOne2OneMapChannels2Speakers;
+    uint8_t                      nuRepresentationType;
+    uint8_t                      nuCodingMode;
+    lsmash_dts_construction_flag nuCoreExtensionMask;
+    dts_core_info_t              core;
+    dts_xll_info_t               xll;
+    dts_lbr_info_t               lbr;
+    uint16_t                     xbr_size;
+    uint16_t                     x96_size;
+    uint16_t                     aux_size;
+} dts_audio_asset_t;
+
+typedef struct
+{
+    uint32_t sampling_frequency;
+    uint32_t frame_duration;
+    uint8_t  nuBits4ExSSFsize;
+    uint8_t  bStaticFieldsPresent;
+    uint8_t  bMixMetadataEnbl;
+    uint8_t  nuNumMixOutConfigs;
+    uint8_t  nNumMixOutCh[4];
+    uint8_t  nuNumAudioPresnt;
+    uint8_t  nuNumAssets;
+    uint8_t  nuActiveExSSMask[8];
+    uint8_t  nuActiveAssetMask[8][4];
+    uint8_t  bBcCorePresent[8];
+    uint8_t  nuBcCoreExtSSIndex[8];
+    uint8_t  nuBcCoreAssetIndex[8];
+    uint8_t  stereo_downmix;
+    uint8_t  bit_resolution;
+    dts_audio_asset_t asset[8];
+} dts_extension_info_t;
+
+typedef struct
+{
     dts_substream_type               substream_type;
     lsmash_dts_construction_flag     flags;
     lsmash_dts_specific_parameters_t ddts_param;
-    dts_core_info_t                  core;
-    dts_extension_info_t             extension;
-    dts_lossless_info_t              lossless;
-    dts_lbr_info_t                   lbr;
+    dts_core_info_t                  core;      /* core component and its extensions in core substream */
+    dts_extension_info_t             exss[4];   /* extension substreams */
     uint8_t  ddts_param_initialized;
     uint8_t  no_more_read;
-    uint8_t  extension_index;
-    uint8_t  extension_substream_count;
+    uint8_t  exss_index;
+    uint8_t  exss_count;
     uint32_t frame_duration;
-    uint32_t frame_size;
-    uint8_t  buffer[2 * DTS_MAX_EXTENSION_SIZE];
+    uint32_t frame_size;        /* size of substream */
+    uint8_t  buffer[2 * DTS_MAX_EXSS_SIZE];
     uint8_t *buffer_pos;
     uint8_t *buffer_end;
     lsmash_bits_t *bits;
@@ -105,9 +134,10 @@ typedef struct
     uint32_t au_number;
 } dts_info_t;
 
+void dts_setup_parser( dts_info_t *info );
 int dts_parse_core_substream( dts_info_t *info, uint8_t *data, uint32_t data_length );
 int dts_parse_extension_substream( dts_info_t *info, uint8_t *data, uint32_t data_length );
-int dts_get_channel_count_from_channel_layout( uint16_t channel_layout );
+int dts_get_max_channel_count( dts_info_t *info );
 dts_substream_type dts_get_substream_type( dts_info_t *info );
-int dts_get_extension_index( dts_info_t *info, uint8_t *extension_index );
+int dts_get_exss_index( dts_info_t *info, uint8_t *exss_index );
 void dts_update_specific_param( dts_info_t *info );

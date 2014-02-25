@@ -2112,6 +2112,7 @@ const static importer_functions mp4sys_als_importer =
     DTS importer
     ETSI TS 102 114 V1.2.1 (2002-12)
     ETSI TS 102 114 V1.3.1 (2011-08)
+    ETSI TS 102 114 V1.4.1 (2012-09)
 ***************************************************************************/
 #include "dts.h"
 
@@ -2144,7 +2145,7 @@ static dts_importer_info_t *create_dts_importer_info( void )
         lsmash_free( info );
         return NULL;
     }
-    dts_info->au_buffers = lsmash_create_multiple_buffers( 2, DTS_MAX_EXTENSION_SIZE );
+    dts_info->au_buffers = lsmash_create_multiple_buffers( 2, DTS_MAX_EXSS_SIZE );
     if( !dts_info->au_buffers )
     {
         lsmash_bits_adhoc_cleanup( dts_info->bits );
@@ -2153,6 +2154,7 @@ static dts_importer_info_t *create_dts_importer_info( void )
     }
     dts_info->au            = lsmash_withdraw_buffer( dts_info->au_buffers, 1 );
     dts_info->incomplete_au = lsmash_withdraw_buffer( dts_info->au_buffers, 2 );
+    dts_setup_parser( dts_info );
     return info;
 }
 
@@ -2171,14 +2173,14 @@ static int dts_importer_get_next_accessunit_internal( importer_t *importer )
     {
         /* Read data from the stream if needed. */
         uint32_t remainder_length = info->buffer_end - info->buffer_pos;
-        if( !info->no_more_read && remainder_length < DTS_MAX_EXTENSION_SIZE )
+        if( !info->no_more_read && remainder_length < DTS_MAX_EXSS_SIZE )
         {
             if( remainder_length )
                 memmove( info->buffer, info->buffer_pos, remainder_length );
-            uint32_t read_size = fread( info->buffer + remainder_length, 1, DTS_MAX_EXTENSION_SIZE, importer->stream );
+            uint32_t read_size = fread( info->buffer + remainder_length, 1, DTS_MAX_EXSS_SIZE, importer->stream );
             remainder_length += read_size;
-            info->buffer_pos = info->buffer;
-            info->buffer_end = info->buffer + remainder_length;
+            info->buffer_pos   = info->buffer;
+            info->buffer_end   = info->buffer + remainder_length;
             info->no_more_read = read_size == 0 ? feof( importer->stream ) : 0;
         }
         /* Check the remainder length of the buffer.
@@ -2210,10 +2212,11 @@ static int dts_importer_get_next_accessunit_internal( importer_t *importer )
                     break;
                 case DTS_SUBSTREAM_TYPE_EXTENSION :
                 {
-                    uint8_t prev_extension_index = info->extension_index;
-                    if( dts_get_extension_index( info, &info->extension_index ) )
+                    uint8_t prev_exss_index = info->exss_index;
+                    if( dts_get_exss_index( info, &info->exss_index ) )
                         return -1;
-                    if( prev_substream_type == DTS_SUBSTREAM_TYPE_EXTENSION && info->extension_index <= prev_extension_index )
+                    if( prev_substream_type == DTS_SUBSTREAM_TYPE_EXTENSION
+                     && info->exss_index <= prev_exss_index )
                         complete_au = 1;
                     dts_parse_frame = dts_parse_extension_substream;
                     break;
@@ -2224,22 +2227,22 @@ static int dts_importer_get_next_accessunit_internal( importer_t *importer )
             if( !info->ddts_param_initialized && complete_au )
                 dts_update_specific_param( info );
             info->frame_size = 0;
-            if( dts_parse_frame( info, info->buffer_pos, LSMASH_MIN( remainder_length, DTS_MAX_EXTENSION_SIZE ) ) )
+            if( dts_parse_frame( info, info->buffer_pos, LSMASH_MIN( remainder_length, DTS_MAX_EXSS_SIZE ) ) )
                 return -1;  /* Failed to parse. */
         }
         if( complete_au )
         {
             memcpy( info->au, info->incomplete_au, info->incomplete_au_length );
-            info->au_length = info->incomplete_au_length;
+            info->au_length            = info->incomplete_au_length;
             info->incomplete_au_length = 0;
-            info->extension_substream_count = (info->substream_type == DTS_SUBSTREAM_TYPE_EXTENSION);
+            info->exss_count           = (info->substream_type == DTS_SUBSTREAM_TYPE_EXTENSION);
             if( importer_info->status == IMPORTER_EOF )
                 break;
         }
         /* Increase buffer size to store AU if short. */
         if( info->incomplete_au_length + info->frame_size > info->au_buffers->buffer_size )
         {
-            lsmash_multiple_buffers_t *temp = lsmash_resize_multiple_buffers( info->au_buffers, info->au_buffers->buffer_size + DTS_MAX_EXTENSION_SIZE );
+            lsmash_multiple_buffers_t *temp = lsmash_resize_multiple_buffers( info->au_buffers, info->au_buffers->buffer_size + DTS_MAX_EXSS_SIZE );
             if( !temp )
                 return -1;
             info->au_buffers    = temp;
@@ -2276,10 +2279,10 @@ static int dts_importer_get_accessunit( importer_t *importer, uint32_t track_num
     if( current_status == IMPORTER_CHANGE )
         summary->max_au_length = 0;
     memcpy( buffered_sample->data, info->au, info->au_length );
-    buffered_sample->length = info->au_length;
-    buffered_sample->dts = info->au_number++ * summary->samples_in_frame;
-    buffered_sample->cts = buffered_sample->dts;
-    buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+    buffered_sample->length                 = info->au_length;
+    buffered_sample->dts                    = info->au_number++ * summary->samples_in_frame;
+    buffered_sample->cts                    = buffered_sample->dts;
+    buffered_sample->prop.ra_flags          = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
     buffered_sample->prop.pre_roll.distance = !!(info->flags & DTS_EXT_SUBSTREAM_LBR_FLAG);     /* MDCT */
     if( importer_info->status == IMPORTER_EOF )
     {
@@ -2339,16 +2342,9 @@ static lsmash_audio_summary_t *dts_create_summary( dts_info_t *info )
             break;
     }
     summary->samples_in_frame = (summary->frequency * info->frame_duration) / param->DTSSamplingFrequency;
-    summary->max_au_length    = DTS_MAX_CORE_SIZE + info->extension_substream_count * DTS_MAX_EXTENSION_SIZE;
+    summary->max_au_length    = DTS_MAX_CORE_SIZE + DTS_MAX_NUM_EXSS * DTS_MAX_EXSS_SIZE;
     summary->sample_size      = param->pcmSampleDepth;
-    int core_channel_count = dts_get_channel_count_from_channel_layout( info->core.channel_layout );
-    summary->channels  = core_channel_count;
-    summary->channels  = LSMASH_MAX( summary->channels, dts_get_channel_count_from_channel_layout( info->extension.channel_layout ) );
-    summary->channels  = LSMASH_MAX( summary->channels, dts_get_channel_count_from_channel_layout( info->lbr.channel_layout ) );
-    summary->channels  = LSMASH_MAX( summary->channels, dts_get_channel_count_from_channel_layout( info->lossless.channel_layout ) );
-    summary->channels += core_channel_count == summary->channels
-                       ? lsmash_count_bits( info->core.xxch_lower_planes )
-                       : lsmash_count_bits( info->extension.xxch_lower_planes );
+    summary->channels         = dts_get_max_channel_count( info );
     return summary;
 }
 
