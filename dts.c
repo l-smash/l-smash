@@ -679,12 +679,19 @@ static int dts_parse_exss_xxch( dts_info_t *info, uint64_t *bits_pos, dts_core_i
 
 static int dts_parse_core_x96( dts_info_t *info, uint64_t *bits_pos, dts_core_info_t *core )
 {
+    if( core->extension_audio_descriptor != 2
+     && core->extension_audio_descriptor != 3 )
+        return 0;   /* Probably this is not an X96 extension. We skip this anyway. */
     lsmash_bits_t *bits = info->bits;
     /* DTS_BCCORE_X96 Frame Header */
                                             /* SYNCX96 (32) */
-    if( core->extension_audio_descriptor != 2
-     && core->extension_audio_descriptor != 3 )
-        return 0;   /* Probably, encountered four emulation bytes (pseudo sync word). */
+    /* To reduce the probability of false synchronization caused by the presence of pseudo sync words, it is
+     * imperative to check the distance between the detected sync word and the end of current frame. This
+     * distance in bytes shall match the value of FSIZE96. */
+    uint64_t FSIZE96 = ((lsmash_bs_show_byte( bits->bs, 0 ) << 4)
+                     | ((lsmash_bs_show_byte( bits->bs, 1 ) >> 4) & 0x0F)) + 1;
+    if( core->frame_size * 8 != (*bits_pos - 32 + FSIZE96 * 8) )
+        return 0;       /* Encountered four emulation bytes (pseudo sync word). */
     dts_bits_get( bits, 16, bits_pos );     /* FSIZE96 (12)
                                              * REVNO   (4) */
     core->sampling_frequency *= 2;
