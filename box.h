@@ -1686,6 +1686,23 @@ typedef struct
 
 /** **/
 
+/* Track Box */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    isom_tkhd_t *tkhd;          /* Track Header Box */
+    isom_tapt_t *tapt;          /* ISOM: null / QTFF: Track Aperture Mode Dimensions Box */
+    isom_edts_t *edts;          /* Edit Box */
+    isom_tref_t *tref;          /* Track Reference Box */
+    isom_mdia_t *mdia;          /* Media Box */
+    isom_udta_t *udta;          /* User Data Box */
+    isom_meta_t *meta;          /* Meta Box */
+
+        isom_cache_t *cache;
+        uint32_t      related_track_ID;
+        uint8_t       is_chapter;
+} isom_trak_t;
+
 /* Movie Box */
 typedef struct
 {
@@ -1698,6 +1715,28 @@ typedef struct
     isom_meta_t         *meta;          /* Meta Box */
     isom_mvex_t         *mvex;          /* Movie Extends Box */
 } isom_moov_t;
+
+/** Segments
+ * segment
+ *   portion of an ISO base media file format file, consisting of either (a) a movie box, with its associated media data
+ *   (if any) and other associated boxes or (b) one or more movie fragment boxes, with their associated media data, and
+ *   and other associated boxes
+ **/
+/* Segment Type Box
+ * Media presentations may be divided into segments for delivery, for example, it is possible (e.g. in HTTP streaming) to
+ * form files that contain a segment ? or concatenated segments ? which would not necessarily form ISO Base Media file
+ * format compliant files (e.g. they do not contain a Movie Box).
+ * If segments are stored in separate files (e.g. on a standard HTTP server) it is recommended that these 'segment files'
+ * contain a Segment Type Box, which must be first if present, to enable identification of those files, and declaration of
+ * the specifications with which they are compliant.
+ * Segment Type Boxes that are not first in a file may be ignored.
+ * Valid Segment Type Boxes shall be the first box in a segment.
+ * Note:
+ *   The 'valid' here does not always mean that any brand of that segment has compatibility against other brands of it.
+ *   After concatenations of segments, the result file might contain incompatibilities among brands. */
+typedef isom_ftyp_t isom_styp_t;
+
+/** **/
 
 /* ROOT */
 struct lsmash_root_tag
@@ -1714,38 +1753,22 @@ struct lsmash_root_tag
 
         lsmash_bs_t *bs;                    /* bytestream manager */
         isom_fragment_manager_t *fragment;  /* movie fragment manager */
-        double max_chunk_duration;          /* max duration per chunk in seconds */
-        double max_async_tolerance;         /* max tolerance, in seconds, for amount of interleaving asynchronization between tracks */
+        double   max_chunk_duration;        /* max duration per chunk in seconds */
+        double   max_async_tolerance;       /* max tolerance, in seconds, for amount of interleaving asynchronization between tracks */
         uint64_t max_chunk_size;            /* max size per chunk in bytes. */
         uint64_t max_read_size;             /* max size of reading from a chunk at a time. */
-        uint8_t qt_compatible;              /* compatibility with QuickTime file format */
-        uint8_t isom_compatible;            /* compatibility with ISO Base Media file format */
-        uint8_t avc_extensions;             /* compatibility with AVC extensions */
-        uint8_t mp4_version1;               /* compatibility with MP4 ver.1 file format */
-        uint8_t mp4_version2;               /* compatibility with MP4 ver.2 file format */
-        uint8_t itunes_movie;               /* compatibility with iTunes Movie */
-        uint8_t max_3gpp_version;           /* maximum 3GPP version */
-        uint8_t max_isom_version;           /* maximum ISO Base Media file format version */
+        uint8_t  qt_compatible;             /* compatibility with QuickTime file format */
+        uint8_t  isom_compatible;           /* compatibility with ISO Base Media file format */
+        uint8_t  avc_extensions;            /* compatibility with AVC extensions */
+        uint8_t  mp4_version1;              /* compatibility with MP4 ver.1 file format */
+        uint8_t  mp4_version2;              /* compatibility with MP4 ver.2 file format */
+        uint8_t  itunes_movie;              /* compatibility with iTunes Movie */
+        uint8_t  max_3gpp_version;          /* maximum 3GPP version */
+        uint8_t  max_isom_version;          /* maximum ISO Base Media file format version */
         lsmash_entry_list_t *print;
         lsmash_entry_list_t *timeline;
 };
 
-/* Track Box */
-typedef struct
-{
-    ISOM_BASEBOX_COMMON;
-    isom_tkhd_t *tkhd;          /* Track Header Box */
-    isom_tapt_t *tapt;          /* ISOM: null / QTFF: Track Aperture Mode Dimensions Box */
-    isom_edts_t *edts;          /* Edit Box */
-    isom_tref_t *tref;          /* Track Reference Box */
-    isom_mdia_t *mdia;          /* Media Box */
-    isom_udta_t *udta;          /* User Data Box */
-    isom_meta_t *meta;          /* Meta Box */
-
-        isom_cache_t *cache;
-        uint32_t related_track_ID;
-        uint8_t is_chapter;
-} isom_trak_t;
 /** **/
 
 /* Box types */
@@ -1870,6 +1893,7 @@ typedef struct
 #define ISOM_BOX_TYPE_STSS lsmash_form_iso_box_type( LSMASH_4CC( 's', 't', 's', 's' ) )
 #define ISOM_BOX_TYPE_STSZ lsmash_form_iso_box_type( LSMASH_4CC( 's', 't', 's', 'z' ) )
 #define ISOM_BOX_TYPE_STTS lsmash_form_iso_box_type( LSMASH_4CC( 's', 't', 't', 's' ) )
+#define ISOM_BOX_TYPE_STYP lsmash_form_iso_box_type( LSMASH_4CC( 's', 't', 'y', 'p' ) )
 #define ISOM_BOX_TYPE_STZ2 lsmash_form_iso_box_type( LSMASH_4CC( 's', 't', 'z', '2' ) )
 #define ISOM_BOX_TYPE_SUBS lsmash_form_iso_box_type( LSMASH_4CC( 's', 'u', 'b', 's' ) )
 #define ISOM_BOX_TYPE_SWTC lsmash_form_iso_box_type( LSMASH_4CC( 's', 'w', 't', 'c' ) )
@@ -1969,6 +1993,7 @@ typedef struct
 
 /* Pre-defined precedence */
 #define LSMASH_BOX_PRECEDENCE_ISOM_FTYP (LSMASH_BOX_PRECEDENCE_H  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_STYP (LSMASH_BOX_PRECEDENCE_H  -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_MOOV (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_MVHD (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_IODS (LSMASH_BOX_PRECEDENCE_HM -  2 * LSMASH_BOX_PRECEDENCE_S)
@@ -2373,6 +2398,7 @@ isom_tfra_t *isom_add_tfra( isom_mfra_t *mfra );
 int isom_add_mfro( isom_mfra_t *mfra );
 int isom_add_mdat( lsmash_root_t *root );
 int isom_add_free( void *parent_box );
+int isom_add_styp( lsmash_root_t *root );
 
 void isom_remove_sample_description( isom_sample_entry_t *sample );
 void isom_remove_unknown_box( isom_unknown_box_t *unknown_box );

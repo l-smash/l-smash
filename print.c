@@ -344,6 +344,27 @@ static void isom_print_brand_description( FILE *fp, lsmash_brand_type brand )
     fprintf( fp, "\n" );
 }
 
+static void isom_print_file_type
+(
+    FILE     *fp,
+    int       indent,
+    uint32_t  major_brand,
+    uint32_t  minor_version,
+    uint32_t  brand_count,
+    uint32_t *compatible_brands
+)
+{
+    lsmash_ifprintf( fp, indent, "major_brand = %s", isom_4cc2str( major_brand ) );
+    isom_print_brand_description( fp, major_brand );
+    lsmash_ifprintf( fp, indent, "minor_version = %"PRIu32"\n", minor_version );
+    lsmash_ifprintf( fp, indent++, "compatible_brands\n" );
+    for( uint32_t i = 0; i < brand_count; i++ )
+    {
+        lsmash_ifprintf( fp, indent, "brand[%"PRIu32"] = %s", i, isom_4cc2str( compatible_brands[i] ) );
+        isom_print_brand_description( fp, compatible_brands[i] );
+    }
+}
+
 static int isom_print_ftyp( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
 {
     if( !box )
@@ -351,15 +372,28 @@ static int isom_print_ftyp( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
     isom_ftyp_t *ftyp = (isom_ftyp_t *)box;
     int indent = level;
     isom_print_box_common( fp, indent++, box, "File Type Box" );
-    lsmash_ifprintf( fp, indent, "major_brand = %s", isom_4cc2str( ftyp->major_brand ) );
-    isom_print_brand_description( fp, ftyp->major_brand );
-    lsmash_ifprintf( fp, indent, "minor_version = %"PRIu32"\n", ftyp->minor_version );
-    lsmash_ifprintf( fp, indent++, "compatible_brands\n" );
-    for( uint32_t i = 0; i < ftyp->brand_count; i++ )
-    {
-        lsmash_ifprintf( fp, indent, "brand[%"PRIu32"] = %s", i, isom_4cc2str( ftyp->compatible_brands[i] ) );
-        isom_print_brand_description( fp, ftyp->compatible_brands[i] );
-    }
+    isom_print_file_type( fp, indent, ftyp->major_brand, ftyp->minor_version, ftyp->brand_count, ftyp->compatible_brands );
+    return 0;
+}
+
+static int isom_print_styp( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    /* Print 'valid' if this box is the first box in a file. */
+    int valid;
+    if( root
+     && root->print
+     && root->print->head
+     && root->print->head->data )
+        valid = (box == ((isom_print_entry_t *)root->print->head->data)->box);
+    else
+        valid = 0;
+    char *name = valid ? "Segment Type Box (valid)" : "Segment Type Box";
+    isom_styp_t *styp = (isom_styp_t *)box;
+    int indent = level;
+    isom_print_box_common( fp, indent++, box, name );
+    isom_print_file_type( fp, indent, styp->major_brand, styp->minor_version, styp->brand_count, styp->compatible_brands );
     return 0;
 }
 
@@ -2567,6 +2601,7 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
         int i = 0;
 #define ADD_PRINT_BOX_TABLE_ELEMENT( type, func ) print_box_table[i++] = (struct print_box_table_tag){ type, func }
         ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_FTYP, isom_print_ftyp );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_STYP, isom_print_styp );
         ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_MOOV, isom_print_moov );
         ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_MVHD, isom_print_mvhd );
         ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_IODS, isom_print_iods );

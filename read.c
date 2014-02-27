@@ -289,8 +289,8 @@ static int isom_read_ftyp( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     isom_add_box( ftyp, lsmash_root_t );
     lsmash_bs_t *bs = root->bs;
     isom_read_box_rest( bs, box );
-    ftyp->major_brand              = lsmash_bs_get_be32( bs );
-    ftyp->minor_version            = lsmash_bs_get_be32( bs );
+    ftyp->major_brand   = lsmash_bs_get_be32( bs );
+    ftyp->minor_version = lsmash_bs_get_be32( bs );
     uint64_t pos = lsmash_bs_get_pos( bs );
     ftyp->brand_count = box->size > pos ? (box->size - pos) / sizeof(uint32_t) : 0;
     ftyp->compatible_brands = ftyp->brand_count ? lsmash_malloc( ftyp->brand_count * sizeof(uint32_t) ) : NULL;
@@ -301,6 +301,27 @@ static int isom_read_ftyp( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     box->size = lsmash_bs_get_pos( bs );
     isom_box_common_copy( ftyp, box );
     return isom_add_print_func( root, ftyp, level );
+}
+
+static int isom_read_styp( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( !lsmash_check_box_type_identical( parent->type, LSMASH_BOX_TYPE_UNSPECIFIED ) )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_add_box( styp, lsmash_root_t );
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    styp->major_brand   = lsmash_bs_get_be32( bs );
+    styp->minor_version = lsmash_bs_get_be32( bs );
+    uint64_t pos = lsmash_bs_get_pos( bs );
+    styp->brand_count = box->size > pos ? (box->size - pos) / sizeof(uint32_t) : 0;
+    styp->compatible_brands = styp->brand_count ? lsmash_malloc( styp->brand_count * sizeof(uint32_t) ) : NULL;
+    if( !styp->compatible_brands )
+        return -1;
+    for( uint32_t i = 0; i < styp->brand_count; i++ )
+        styp->compatible_brands[i] = lsmash_bs_get_be32( bs );
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( styp, box );
+    return isom_add_print_func( root, styp, level );
 }
 
 static int isom_read_moov( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
@@ -2762,6 +2783,7 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
 #define ADD_BOX_READER_TABLE_ELEMENT( type, form_box_type_func, reader_func ) \
     box_reader_table[i++] = (struct box_reader_table_tag){ type.fourcc, form_box_type_func, reader_func }
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_FTYP, lsmash_form_iso_box_type,  isom_read_ftyp );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_STYP, lsmash_form_iso_box_type,  isom_read_styp );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_MOOV, lsmash_form_iso_box_type,  isom_read_moov );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_MVHD, lsmash_form_iso_box_type,  isom_read_mvhd );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_IODS, lsmash_form_iso_box_type,  isom_read_iods );

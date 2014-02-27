@@ -1462,6 +1462,15 @@ static void isom_remove_mfra( isom_mfra_t *mfra )
     isom_remove_box( mfra, lsmash_root_t );
 }
 
+static void isom_remove_styp( isom_styp_t *styp )
+{
+    if( !styp )
+        return;
+    if( styp->compatible_brands )
+        lsmash_free( styp->compatible_brands );
+    lsmash_free( styp );
+}
+
 /* box size updaters */
 #define CHECK_LARGESIZE( x )                       \
     (x)->size += isom_update_extension_boxes( x ); \
@@ -2440,6 +2449,15 @@ static uint64_t isom_update_skip_size( isom_skip_t *skip )
     return skip->size;
 }
 
+static uint64_t isom_update_styp_size( isom_styp_t *styp )
+{
+    if( !styp )
+        return 0;
+    styp->size = ISOM_BASEBOX_COMMON_SIZE + 8 + styp->brand_count * 4;
+    CHECK_LARGESIZE( styp );
+    return styp->size;
+}
+
 static uint64_t isom_update_extension_boxes( void *box )
 {
     assert( box );
@@ -3415,6 +3433,12 @@ int isom_add_free( void *parent_box )
         return 0;
     }
     isom_create_box( skip, parent, ISOM_BOX_TYPE_FREE, LSMASH_BOX_PRECEDENCE_ISOM_FREE );
+    return 0;
+}
+
+int isom_add_styp( lsmash_root_t *root )
+{
+    isom_create_box( styp, root, ISOM_BOX_TYPE_STYP, LSMASH_BOX_PRECEDENCE_ISOM_STYP );
     return 0;
 }
 
