@@ -146,6 +146,7 @@ int isom_is_fullbox( void *box )
     {
         /* Initialize the table. */
         int i = 0;
+        fullbox_type_table[i++] = ISOM_BOX_TYPE_SIDX;
         fullbox_type_table[i++] = ISOM_BOX_TYPE_MVHD;
         fullbox_type_table[i++] = ISOM_BOX_TYPE_TKHD;
         fullbox_type_table[i++] = ISOM_BOX_TYPE_IODS;
@@ -1471,6 +1472,14 @@ static void isom_remove_styp( isom_styp_t *styp )
     lsmash_free( styp );
 }
 
+static void isom_remove_sidx( isom_sidx_t *sidx )
+{
+    if( !sidx )
+        return;
+    lsmash_remove_list( sidx->list, NULL );
+    lsmash_free( sidx );
+}
+
 /* box size updaters */
 #define CHECK_LARGESIZE( x )                       \
     (x)->size += isom_update_extension_boxes( x ); \
@@ -2458,6 +2467,17 @@ static uint64_t isom_update_styp_size( isom_styp_t *styp )
     return styp->size;
 }
 
+static uint64_t isom_update_sidx_size( isom_sidx_t *sidx )
+{
+    if( !sidx )
+        return 0;
+    sidx->size = ISOM_FULLBOX_COMMON_SIZE
+               + 12 + (sidx->version == 0 ? 8 : 16)
+               + 12 * sidx->reference_count;
+    CHECK_LARGESIZE( sidx );
+    return sidx->size;
+}
+
 static uint64_t isom_update_extension_boxes( void *box )
 {
     assert( box );
@@ -3439,6 +3459,12 @@ int isom_add_free( void *parent_box )
 int isom_add_styp( lsmash_root_t *root )
 {
     isom_create_box( styp, root, ISOM_BOX_TYPE_STYP, LSMASH_BOX_PRECEDENCE_ISOM_STYP );
+    return 0;
+}
+
+int isom_add_sidx( lsmash_root_t *root )
+{
+    isom_create_list_box( sidx, root, ISOM_BOX_TYPE_SIDX, LSMASH_BOX_PRECEDENCE_ISOM_SIDX );
     return 0;
 }
 

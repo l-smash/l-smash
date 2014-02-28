@@ -324,6 +324,54 @@ static int isom_read_styp( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     return isom_add_print_func( root, styp, level );
 }
 
+static int isom_read_sidx( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( !lsmash_check_box_type_identical( parent->type, LSMASH_BOX_TYPE_UNSPECIFIED ) )
+        return isom_read_unknown_box( root, box, parent, level );
+    isom_add_box( sidx, lsmash_root_t );
+    lsmash_bs_t *bs = root->bs;
+    isom_read_box_rest( bs, box );
+    sidx->reference_ID = lsmash_bs_get_be32( bs );
+    sidx->timescale    = lsmash_bs_get_be32( bs );
+    if( sidx->version == 0 )
+    {
+        sidx->earliest_presentation_time = lsmash_bs_get_be32( bs );
+        sidx->first_offset               = lsmash_bs_get_be32( bs );
+    }
+    else
+    {
+        sidx->earliest_presentation_time = lsmash_bs_get_be64( bs );
+        sidx->first_offset               = lsmash_bs_get_be64( bs );
+    }
+    sidx->reserved        = lsmash_bs_get_be16( bs );
+    sidx->reference_count = lsmash_bs_get_be16( bs );
+    for( uint64_t pos = lsmash_bs_get_pos( bs );
+         pos < box->size && sidx->list->entry_count < sidx->reference_count;
+         pos = lsmash_bs_get_pos( bs ) )
+    {
+        isom_sidx_referenced_item_t *data = lsmash_malloc( sizeof(isom_sidx_referenced_item_t) );
+        if( !data )
+            return -1;
+        if( lsmash_add_entry( sidx->list, data ) )
+        {
+            lsmash_free( data );
+            return -1;
+        }
+        uint32_t temp32;
+        temp32 = lsmash_bs_get_be32( bs );
+        data->reference_type = (temp32 >> 31) & 0x00000001;
+        data->reference_size =  temp32        & 0x7FFFFFFF;
+        data->subsegment_duration = lsmash_bs_get_be32( bs );
+        temp32 = lsmash_bs_get_be32( bs );
+        data->start_with_SAP = (temp32 >> 31) & 0x00000001;
+        data->SAP_type       = (temp32 >> 28) & 0x00000007;
+        data->SAP_delta_time =  temp32        & 0x0FFFFFFF;
+    }
+    box->size = lsmash_bs_get_pos( bs );
+    isom_box_common_copy( sidx, box );
+    return isom_add_print_func( root, sidx, level );
+}
+
 static int isom_read_moov( lsmash_root_t *root, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( !lsmash_check_box_type_identical( parent->type, LSMASH_BOX_TYPE_UNSPECIFIED ) || ((lsmash_root_t *)parent)->moov )
@@ -2784,6 +2832,7 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
     box_reader_table[i++] = (struct box_reader_table_tag){ type.fourcc, form_box_type_func, reader_func }
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_FTYP, lsmash_form_iso_box_type,  isom_read_ftyp );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_STYP, lsmash_form_iso_box_type,  isom_read_styp );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_SIDX, lsmash_form_iso_box_type,  isom_read_sidx );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_MOOV, lsmash_form_iso_box_type,  isom_read_moov );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_MVHD, lsmash_form_iso_box_type,  isom_read_mvhd );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_IODS, lsmash_form_iso_box_type,  isom_read_iods );

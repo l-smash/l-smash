@@ -397,6 +397,34 @@ static int isom_print_styp( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
     return 0;
 }
 
+static int isom_print_sidx( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
+{
+    if( !box )
+        return -1;
+    isom_sidx_t *sidx = (isom_sidx_t *)box;
+    int indent = level;
+    isom_print_box_common( fp, indent++, box, "Segment Index Box" );
+    lsmash_ifprintf( fp, indent, "reference_ID = %"PRIu32"\n", sidx->reference_ID );
+    lsmash_ifprintf( fp, indent, "timescale = %"PRIu32"\n", sidx->timescale );
+    lsmash_ifprintf( fp, indent, "earliest_presentation_time = %"PRIu64"\n", sidx->earliest_presentation_time );
+    lsmash_ifprintf( fp, indent, "first_offset = %"PRIu64"\n", sidx->first_offset );
+    lsmash_ifprintf( fp, indent, "reserved = %"PRIu16"\n", sidx->reserved );
+    lsmash_ifprintf( fp, indent, "reference_count = %"PRIu16"\n", sidx->reference_count );
+    uint32_t i = 0;
+    for( lsmash_entry_t *entry = sidx->list->head; entry; entry = entry->next )
+    {
+        isom_sidx_referenced_item_t *data = (isom_sidx_referenced_item_t *)entry->data;
+        lsmash_ifprintf( fp, indent++, "entry[%"PRIu32"]\n", i++ );
+        lsmash_ifprintf( fp, indent, "reference_type = %"PRIu8" (%s)\n", data->reference_type, data->reference_type ? "index" : "media" );
+        lsmash_ifprintf( fp, indent, "reference_size = %"PRIu32"\n", data->reference_size );
+        lsmash_ifprintf( fp, indent, "subsegment_duration = %"PRIu32"\n", data->subsegment_duration );
+        lsmash_ifprintf( fp, indent, "start_with_SAP = %"PRIu8" (%s)\n", data->start_with_SAP, data->start_with_SAP ? "yes" : "no" );
+        lsmash_ifprintf( fp, indent, "SAP_type = %"PRIu8"%s\n", data->SAP_type, data->SAP_type == 0 ? "(unknown)" : "" );
+        lsmash_ifprintf( fp, indent--, "SAP_delta_time = %"PRIu32"\n", data->SAP_delta_time );
+    }
+    return 0;
+}
+
 static int isom_print_moov( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
 {
     return isom_print_simple( fp, box, level, "Movie Box" );
@@ -2602,6 +2630,7 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
 #define ADD_PRINT_BOX_TABLE_ELEMENT( type, func ) print_box_table[i++] = (struct print_box_table_tag){ type, func }
         ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_FTYP, isom_print_ftyp );
         ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_STYP, isom_print_styp );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_SIDX, isom_print_sidx );
         ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_MOOV, isom_print_moov );
         ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_MVHD, isom_print_mvhd );
         ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_IODS, isom_print_iods );

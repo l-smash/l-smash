@@ -1721,6 +1721,11 @@ typedef struct
  *   portion of an ISO base media file format file, consisting of either (a) a movie box, with its associated media data
  *   (if any) and other associated boxes or (b) one or more movie fragment boxes, with their associated media data, and
  *   and other associated boxes
+ * subsegment
+ *   time interval of a segment formed from movie fragment boxes, that is also a valid segment
+ *     A subsegment is defined as a time interval of the containing (sub)segment, and corresponds to a single range of
+ *     bytes of the containing (sub)segment. The durations of all the subsegments sum to the duration of the containing
+ *     (sub)segment.
  **/
 /* Segment Type Box
  * Media presentations may be divided into segments for delivery, for example, it is possible (e.g. in HTTP streaming) to
@@ -1735,6 +1740,95 @@ typedef struct
  *   The 'valid' here does not always mean that any brand of that segment has compatibility against other brands of it.
  *   After concatenations of segments, the result file might contain incompatibilities among brands. */
 typedef isom_ftyp_t isom_styp_t;
+
+/* Segment Index Box
+ * This box provides a compact index of one media stream within the media segment to which it applies.
+ *
+ * Each Segment Index Box documents how a (sub)segment is divided into one or more subsegments (which may themselves be
+ * further subdivided using Segment Index boxes).
+ *
+ * Each entry in the Segment Index Box contains a reference type that indicates whether the reference points directly to
+ * the media bytes of a referenced leaf subsegment, which is a subsegment that does not contain any indexing information
+ * that would enable its further division into subsegments, or to a Segment Index box that describes how the referenced
+ * subsegment is further subdivided; as a result, the segment may be indexed in a 'hierarchical' or 'daisy-chain' or
+ * other form by documenting time and byte offset information for other Segment Index Boxes applying to portions of the
+ * same (sub)segment.
+ *
+ * For segments based on ISO Base Media file format (i.e. based on movie sample tables or movie fragments):
+ *   ! an access unit is a sample;
+ *   ! a subsegment is a self-contained set of one or more consecutive movie fragments; a self-contained set contains
+ *     one or more Movie Fragment Boxes with the corresponding Media Data Box(es), and a Media Data Box containing data
+ *     referenced by a Movie Fragment Box must follow that Movie Fragment Box and precede the next Movie Fragment box
+ *     containing information about the same track;
+ *   ! Segment Index Boxes shall be placed before subsegment material they document, that is, before any Movie Fragment
+ *     Box of the documented material of the subsegment;
+ *   ! streams are tracks in the file format, and stream IDs are track IDs;
+ *   ! a subsegment contains a stream access point if a track fragment within the subsegment for the track with track_ID
+ *     equal to reference_ID contains a stream access point;
+ *   ! initialisation data for SAPs consists of the Movie Box;
+ *   ! presentation times are in the movie timeline, that is they are composition times after the application of any edit
+ *     list for the track;
+ *   ! the ISAP is a position exactly pointing to the start of a top-level box, such as a Movie Fragment Box;
+ *   ! a SAP of type 1 or type 2 is indicated as a sync sample;
+ *   ! a SAP of type 3 is marked as a member of a sample group of type 'rap ';
+ *   ! a SAP of type 4 is marked as a member of a sample group of type 'roll' where the value of the roll_distance field
+ *     is greater than 0.
+ *   For SAPs of type 5 and 6, no specific signalling in the ISO Base Media file format is supported. */
+typedef struct
+{
+    unsigned int reference_type : 1;    /* 1: the reference is to a Segment Index Box
+                                         * 0: the reference is to media content
+                                         *      For files based on the ISO Base Media file format, the reference is to a
+                                         *      Movie Fragment Box.
+                                         *   If a separate index segment is used, then entries with reference type 1 are
+                                         *   in the index segment, and entries with reference type 0 are in the media file. */
+    unsigned int reference_size : 31;   /* the distance in bytes from the first byte of the referenced item to the first
+                                         * byte of the next referenced item, or in the case of the last entry, the end of
+                                         * the referenced material */
+    uint32_t     subsegment_duration;   /* when the reference is to Segment Index Box, i.e. reference_type is equal to 1:
+                                         *   this field carries the sum of the subsegment_duration fields in that box;
+                                         * when the reference is to a subsegment:
+                                         *   this field carries the difference between the earliest presentation time of
+                                         *   any access unit of the reference stream in the next subsegment (or the first
+                                         *   subsegment of the next segment, if this is the last subsegment of the segment,
+                                         *   or the end presentation time of the reference stream if this is the last
+                                         *   subsegment of the stream) and the earliest presentation time of any access
+                                         *   unit of the reference stream in the referenced subsegment;
+                                         * The duration is expressed in the timescale of the enclosing Segment Index Box. */
+    unsigned int start_with_SAP : 1;    /* whether the referenced subsegments start with a SAP */
+    unsigned int SAP_type       : 3;    /* a SAP type or the value 0
+                                         *   When starting with a SAP, the value 0 means a SAP may be of an unknown type.
+                                         *   Otherwise, the value 0 means no information of SAPs is provided. */
+    unsigned int SAP_delta_time : 28;   /* TSAP of the first SAP, in decoding order, in the referenced subsegment for
+                                         * the reference stream
+                                         *   If the referenced subsegments do not contain a SAP, SAP_delta_time is
+                                         *   reserved with the value 0, otherwise SAP_delta_time is the difference between
+                                         *   the earliest presentation time of the subsegment, and the TSAP.
+                                         *   Note that this difference may be zero, in the case that the subsegment starts
+                                         *   with a SAP. */
+} isom_sidx_referenced_item_t;
+
+typedef struct
+{
+    ISOM_FULLBOX_COMMON;
+    uint32_t reference_ID;      /* the stream ID for the reference stream
+                                 *   If this Segment Index box is referenced from a "parent" Segment Index box, the value
+                                 *   of the value of reference_ID shall be the same as the value of reference_ID of the
+                                 *   "parent" Segment Index Box. */
+    uint32_t timescale;         /* the timescale, in ticks per second, for the time and duration fields within this box
+                                 *   It is recommended that this match the timescale of the reference stream or track.
+                                 *   For files based on the ISO Base Media file format, that is the timescale field of
+                                 *   the Media Header Box of the track. */
+    /* version == 0: 64bits -> 32bits */
+    uint64_t earliest_presentation_time;    /* the earliest presentation time of any access unit in the reference stream
+                                             * in the first subsegment, in the timescale indicated in the timescale field */
+    uint64_t first_offset;                  /* the distance in bytes, in the file containing media, from the anchor point,
+                                             * to the first byte of the indexed material */
+    /* */
+    uint16_t reserved;          /* 0 */
+    uint16_t reference_count;   /* the number of referenced items */
+    lsmash_entry_list_t *list;  /* entry_count corresponds to reference_count. */
+} isom_sidx_t;
 
 /** **/
 
@@ -1878,6 +1972,7 @@ struct lsmash_root_tag
 #define ISOM_BOX_TYPE_SDVP lsmash_form_iso_box_type( LSMASH_4CC( 's', 'd', 'v', 'p' ) )
 #define ISOM_BOX_TYPE_SEGR lsmash_form_iso_box_type( LSMASH_4CC( 's', 'e', 'g', 'r' ) )
 #define ISOM_BOX_TYPE_SGPD lsmash_form_iso_box_type( LSMASH_4CC( 's', 'g', 'p', 'd' ) )
+#define ISOM_BOX_TYPE_SIDX lsmash_form_iso_box_type( LSMASH_4CC( 's', 'i', 'd', 'x' ) )
 #define ISOM_BOX_TYPE_SINF lsmash_form_iso_box_type( LSMASH_4CC( 's', 'i', 'n', 'f' ) )
 #define ISOM_BOX_TYPE_SKIP lsmash_form_iso_box_type( LSMASH_4CC( 's', 'k', 'i', 'p' ) )
 #define ISOM_BOX_TYPE_SMHD lsmash_form_iso_box_type( LSMASH_4CC( 's', 'm', 'h', 'd' ) )
@@ -1994,6 +2089,7 @@ struct lsmash_root_tag
 /* Pre-defined precedence */
 #define LSMASH_BOX_PRECEDENCE_ISOM_FTYP (LSMASH_BOX_PRECEDENCE_H  -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_STYP (LSMASH_BOX_PRECEDENCE_H  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_SIDX (LSMASH_BOX_PRECEDENCE_N  +  1 * LSMASH_BOX_PRECEDENCE_S)   /* placed before any 'moof' */
 #define LSMASH_BOX_PRECEDENCE_ISOM_MOOV (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_MVHD (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_IODS (LSMASH_BOX_PRECEDENCE_HM -  2 * LSMASH_BOX_PRECEDENCE_S)
@@ -2399,6 +2495,7 @@ int isom_add_mfro( isom_mfra_t *mfra );
 int isom_add_mdat( lsmash_root_t *root );
 int isom_add_free( void *parent_box );
 int isom_add_styp( lsmash_root_t *root );
+int isom_add_sidx( lsmash_root_t *root );
 
 void isom_remove_sample_description( isom_sample_entry_t *sample );
 void isom_remove_unknown_box( isom_unknown_box_t *unknown_box );
