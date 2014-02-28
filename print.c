@@ -418,8 +418,8 @@ static int isom_print_sidx( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
         lsmash_ifprintf( fp, indent, "reference_type = %"PRIu8" (%s)\n", data->reference_type, data->reference_type ? "index" : "media" );
         lsmash_ifprintf( fp, indent, "reference_size = %"PRIu32"\n", data->reference_size );
         lsmash_ifprintf( fp, indent, "subsegment_duration = %"PRIu32"\n", data->subsegment_duration );
-        lsmash_ifprintf( fp, indent, "start_with_SAP = %"PRIu8" (%s)\n", data->start_with_SAP, data->start_with_SAP ? "yes" : "no" );
-        lsmash_ifprintf( fp, indent, "SAP_type = %"PRIu8"%s\n", data->SAP_type, data->SAP_type == 0 ? "(unknown)" : "" );
+        lsmash_ifprintf( fp, indent, "start_with_SAP = %"PRIu8"%s\n", data->start_with_SAP, data->start_with_SAP ? " (yes)" : "" );
+        lsmash_ifprintf( fp, indent, "SAP_type = %"PRIu8"%s\n", data->SAP_type, data->SAP_type == 0 ? " (unknown)" : "" );
         lsmash_ifprintf( fp, indent--, "SAP_delta_time = %"PRIu32"\n", data->SAP_delta_time );
     }
     return 0;
