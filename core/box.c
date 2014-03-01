@@ -2769,10 +2769,10 @@ isom_trak_t *isom_add_trak( isom_moov_t *moov )
     if( !moov || !moov->file )
         return NULL;
     isom_create_box_pointer( trak, moov, ISOM_BOX_TYPE_TRAK, LSMASH_BOX_PRECEDENCE_ISOM_TRAK );
-    isom_cache_t *cache = lsmash_malloc_zero( sizeof(isom_cache_t) );
+    isom_fragment_t *fragment = NULL;
+    isom_cache_t    *cache    = lsmash_malloc_zero( sizeof(isom_cache_t) );
     if( !cache )
         goto fail;
-    isom_fragment_t *fragment = NULL;
     if( moov->file->fragment )
     {
         fragment = lsmash_malloc_zero( sizeof(isom_fragment_t) );
