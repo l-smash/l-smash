@@ -52,7 +52,7 @@ int lsmash_string_from_wchar( int cp, const wchar_t *from, char **to )
 
 FILE *lsmash_win32_fopen( const char *name, const char *mode )
 {
-    wchar_t *wname, *wmode;
+    wchar_t *wname = NULL, *wmode = NULL;
     lsmash_string_to_wchar( CP_UTF8, name, &wname );
     lsmash_string_to_wchar( CP_UTF8, mode, &wmode );
     FILE *fp = _wfopen( wname, wmode );
