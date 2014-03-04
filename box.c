@@ -3637,9 +3637,9 @@ uint8_t *lsmash_export_box
         lsmash_bs_cleanup( bs );
         return NULL;
     }
-    *size = bs->store;
-    uint8_t *data = bs->data;
-    bs->data = NULL;
+    *size = bs->buffer.store;
+    uint8_t *data = bs->buffer.data;
+    bs->buffer.data = NULL;
     lsmash_bs_cleanup( bs );
     return data;
 }

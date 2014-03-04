@@ -1267,8 +1267,8 @@ static int h264_get_sps_id
     lsmash_bs_t   bs   = { 0 };
     uint8_t rbsp_buffer[6];
     uint8_t buffer     [6];
-    bs.data  = buffer;
-    bs.alloc = 6;
+    bs.buffer.data  = buffer;
+    bs.buffer.alloc = 6;
     lsmash_bits_init( &bits, &bs );
     if( nalu_import_rbsp_from_ebsp( &bits, rbsp_buffer, ps_ebsp, LSMASH_MIN( ps_ebsp_length, 6 ) ) )
         return -1;
@@ -1294,8 +1294,8 @@ static int h264_get_pps_id
     lsmash_bs_t   bs   = { 0 };
     uint8_t rbsp_buffer[4];
     uint8_t buffer     [4];
-    bs.data  = buffer;
-    bs.alloc = 4;
+    bs.buffer.data  = buffer;
+    bs.buffer.alloc = 4;
     lsmash_bits_init( &bits, &bs );
     if( nalu_import_rbsp_from_ebsp( &bits, rbsp_buffer, ps_ebsp, LSMASH_MIN( ps_ebsp_length, 4 ) ) )
         return -1;
@@ -1646,8 +1646,8 @@ uint8_t *lsmash_create_h264_specific_info
     /* Set up bytestream writer. */
     uint8_t buffer[buffer_size];
     lsmash_bs_t bs = { 0 };
-    bs.data  = buffer;
-    bs.alloc = buffer_size;
+    bs.buffer.data  = buffer;
+    bs.buffer.alloc = buffer_size;
     /* Create an AVCConfigurationBox */
     lsmash_bs_put_be32( &bs, 0 );                                                               /* box size */
     lsmash_bs_put_be32( &bs, ISOM_BOX_TYPE_AVCC.fourcc );                                       /* box type: 'avcC' */
@@ -1753,8 +1753,8 @@ lsmash_dcr_nalu_appendable lsmash_check_h264_parameter_set_appendable
     lsmash_bs_t   bs   = { 0 };
     uint8_t rbsp_buffer[max_ps_length];
     uint8_t buffer     [max_ps_length];
-    bs.data  = buffer;
-    bs.alloc = max_ps_length;
+    bs.buffer.data  = buffer;
+    bs.buffer.alloc = max_ps_length;
     lsmash_bits_init( &bits, &bs );
     if( ps_type == H264_PARAMETER_SET_TYPE_PPS )
     {
@@ -1968,8 +1968,8 @@ int lsmash_append_h264_parameter_set
         lsmash_bs_t   bs   = { 0 };
         uint8_t rbsp_buffer[ps_length];
         uint8_t buffer     [ps_length];
-        bs.data  = buffer;
-        bs.alloc = ps_length;
+        bs.buffer.data  = buffer;
+        bs.buffer.alloc = ps_length;
         lsmash_bits_init( &bits, &bs );
         h264_sps_t sps;
         if( h264_parse_sps_minimally( &bits, &sps, rbsp_buffer, ps_data + 1, ps_length - 1 ) )

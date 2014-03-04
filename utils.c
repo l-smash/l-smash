@@ -34,66 +34,66 @@
 
 uint64_t lsmash_bs_get_pos( lsmash_bs_t *bs )
 {
-    return bs->pos;
+    return bs->buffer.pos;
 }
 
 void lsmash_bs_empty( lsmash_bs_t *bs )
 {
     if( !bs )
         return;
-    memset( bs->data, 0, bs->alloc );
-    bs->store = 0;
-    bs->pos   = 0;
+    memset( bs->buffer.data, 0, bs->buffer.alloc );
+    bs->buffer.store = 0;
+    bs->buffer.pos   = 0;
 }
 
 void lsmash_bs_free( lsmash_bs_t *bs )
 {
-    if( bs->data )
-        lsmash_free( bs->data );
-    bs->data  = NULL;
-    bs->alloc = 0;
-    bs->store = 0;
-    bs->pos   = 0;
+    if( bs->buffer.data )
+        lsmash_free( bs->buffer.data );
+    bs->buffer.data  = NULL;
+    bs->buffer.alloc = 0;
+    bs->buffer.store = 0;
+    bs->buffer.pos   = 0;
 }
 
 void lsmash_bs_alloc( lsmash_bs_t *bs, uint64_t size )
 {
-    if( (bs->alloc >= size) || bs->error )
+    if( (bs->buffer.alloc >= size) || bs->error )
         return;
     uint64_t alloc = size + (1<<16);
     uint8_t *data;
-    if( !bs->data )
+    if( !bs->buffer.data )
         data = lsmash_malloc( alloc );
     else
-        data = lsmash_realloc( bs->data, alloc );
+        data = lsmash_realloc( bs->buffer.data, alloc );
     if( !data )
     {
         lsmash_bs_free( bs );
         bs->error = 1;
         return;
     }
-    bs->data  = data;
-    bs->alloc = alloc;
+    bs->buffer.data  = data;
+    bs->buffer.alloc = alloc;
 }
 
 /*---- bitstream writer ----*/
 void lsmash_bs_put_byte( lsmash_bs_t *bs, uint8_t value )
 {
-    lsmash_bs_alloc( bs, bs->store + 1 );
+    lsmash_bs_alloc( bs, bs->buffer.store + 1 );
     if( bs->error )
         return;
-    bs->data[bs->store ++] = value;
+    bs->buffer.data[ bs->buffer.store ++ ] = value;
 }
 
 void lsmash_bs_put_bytes( lsmash_bs_t *bs, uint32_t size, void *value )
 {
     if( !size || !value )
         return;
-    lsmash_bs_alloc( bs, bs->store + size );
+    lsmash_bs_alloc( bs, bs->buffer.store + size );
     if( bs->error )
         return;
-    memcpy( bs->data + bs->store, value, size );
-    bs->store += size;
+    memcpy( bs->buffer.data + bs->buffer.store, value, size );
+    bs->buffer.store += size;
 }
 
 void lsmash_bs_put_be16( lsmash_bs_t *bs, uint16_t value )
@@ -144,16 +144,18 @@ int lsmash_bs_write_data( lsmash_bs_t *bs )
 {
     if( !bs )
         return -1;
-    if( bs->store == 0 || !bs->data )
+    if( bs->buffer.store == 0
+     || bs->buffer.data  == NULL )
         return 0;
-    if( bs->error || !bs->stream || fwrite( bs->data, 1, bs->store, bs->stream ) != bs->store )
+    if( bs->error || !bs->stream
+     || fwrite( bs->buffer.data, 1, bs->buffer.store, bs->stream ) != bs->buffer.store )
     {
         lsmash_bs_free( bs );
         bs->error = 1;
         return -1;
     }
-    bs->written += bs->store;
-    bs->store    = 0;
+    bs->written += bs->buffer.store;
+    bs->buffer.store = 0;
     return 0;
 }
 
@@ -187,13 +189,13 @@ void lsmash_bs_cleanup( lsmash_bs_t *bs )
 
 void *lsmash_bs_export_data( lsmash_bs_t *bs, uint32_t *length )
 {
-    if( !bs || !bs->data || bs->store == 0 || bs->error )
+    if( !bs || !bs->buffer.data || bs->buffer.store == 0 || bs->error )
         return NULL;
-    void *buf = lsmash_memdup( bs->data, bs->store );
+    void *buf = lsmash_memdup( bs->buffer.data, bs->buffer.store );
     if( !buf )
         return NULL;
     if( length )
-        *length = bs->store;
+        *length = bs->buffer.store;
     return buf;
 }
 /*---- ----*/
@@ -201,61 +203,61 @@ void *lsmash_bs_export_data( lsmash_bs_t *bs, uint32_t *length )
 /*---- bitstream reader ----*/
 uint8_t lsmash_bs_show_byte( lsmash_bs_t *bs, uint32_t offset )
 {
-    if( bs->error || !bs->data )
+    if( bs->error || !bs->buffer.data )
         return 0;
-    if( bs->pos + offset > bs->store )
+    if( bs->buffer.pos + offset > bs->buffer.store )
     {
         lsmash_bs_free( bs );
         bs->error = 1;
         return 0;
     }
-    return bs->data[bs->pos + offset];
+    return bs->buffer.data[ bs->buffer.pos + offset ];
 }
 
 uint8_t lsmash_bs_get_byte( lsmash_bs_t *bs )
 {
-    if( bs->error || !bs->data )
+    if( bs->error || !bs->buffer.data )
         return 0;
-    if( bs->pos + 1 > bs->store )
+    if( bs->buffer.pos + 1 > bs->buffer.store )
     {
         lsmash_bs_free( bs );
         bs->error = 1;
         return 0;
     }
-    return bs->data[bs->pos ++];
+    return bs->buffer.data[ bs->buffer.pos ++ ];
 }
 
 void lsmash_bs_skip_bytes( lsmash_bs_t *bs, uint32_t size )
 {
     if( bs->error || size == 0 )
         return;
-    if( bs->pos + size > bs->store )
+    if( bs->buffer.pos + size > bs->buffer.store )
     {
         lsmash_bs_free( bs );
         bs->error = 1;
         return;
     }
-    bs->pos += size;
+    bs->buffer.pos += size;
 }
 
 uint8_t *lsmash_bs_get_bytes( lsmash_bs_t *bs, uint32_t size )
 {
     if( bs->error || size == 0 )
         return NULL;
-    if( bs->pos + size > bs->store )
+    if( bs->buffer.pos + size > bs->buffer.store )
     {
         lsmash_bs_free( bs );
         bs->error = 1;
         return NULL;
     }
-    uint8_t *value = lsmash_memdup( bs->data + bs->pos, size );
+    uint8_t *value = lsmash_memdup( bs->buffer.data + bs->buffer.pos, size );
     if( !value )
     {
         lsmash_bs_free( bs );
         bs->error = 1;
         return NULL;
     }
-    bs->pos += size;
+    bs->buffer.pos += size;
     return value;
 }
 
@@ -309,20 +311,20 @@ int lsmash_bs_read_data( lsmash_bs_t *bs, uint32_t size )
         return -1;
     if( size == 0 )
         return 0;
-    lsmash_bs_alloc( bs, bs->store + size );
+    lsmash_bs_alloc( bs, bs->buffer.store + size );
     if( bs->error || !bs->stream )
     {
         lsmash_bs_free( bs );
         bs->error = 1;
         return -1;
     }
-    uint64_t read_size = fread( bs->data + bs->store, 1, size, bs->stream );
+    uint64_t read_size = fread( bs->buffer.data + bs->buffer.store, 1, size, bs->stream );
     if( read_size != size && !feof( bs->stream ) )
     {
         bs->error = 1;
         return -1;
     }
-    bs->store += read_size;
+    bs->buffer.store += read_size;
     return 0;
 }
 
@@ -330,14 +332,14 @@ int lsmash_bs_import_data( lsmash_bs_t *bs, void* data, uint32_t length )
 {
     if( !bs || bs->error || !data || length == 0 )
         return -1;
-    lsmash_bs_alloc( bs, bs->store + length );
-    if( bs->error || !bs->data ) /* means, failed to alloc. */
+    lsmash_bs_alloc( bs, bs->buffer.store + length );
+    if( bs->error || !bs->buffer.data ) /* means, failed to alloc. */
     {
         lsmash_bs_free( bs );
         return -1;
     }
-    memcpy( bs->data + bs->store, data, length );
-    bs->store += length;
+    memcpy( bs->buffer.data + bs->buffer.store, data, length );
+    bs->buffer.store += length;
     return 0;
 }
 /*---- ----*/

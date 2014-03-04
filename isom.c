@@ -2247,8 +2247,8 @@ static void isom_remove_root( lsmash_root_t *root )
     {
         if( root->bs->stream )
             fclose( root->bs->stream );
-        if( root->bs->data )
-            lsmash_free( root->bs->data );
+        if( root->bs->buffer.data )
+            lsmash_free( root->bs->buffer.data );
         lsmash_free( root->bs );
     }
     if( root->fragment )

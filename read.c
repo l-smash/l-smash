@@ -134,23 +134,23 @@ static uint64_t isom_read_box_rest( lsmash_bs_t *bs, isom_box_t *box )
 {
     if( box->manager & LSMASH_LAST_BOX )
     {
-        uint64_t init_bs_store = bs->store;
-        uint64_t prev_bs_store = bs->store;
+        uint64_t init_bs_store = bs->buffer.store;
+        uint64_t prev_bs_store = bs->buffer.store;
         while( lsmash_bs_read_data( bs, 1 ) == 0 )
         {
-            if( bs->store == prev_bs_store )
+            if( bs->buffer.store == prev_bs_store )
                 /* No more data in the stream. */
                 break;
-            prev_bs_store = bs->store;
+            prev_bs_store = bs->buffer.store;
         }
-        return bs->store - init_bs_store;
+        return bs->buffer.store - init_bs_store;
     }
     uint64_t read_size = box->size - lsmash_bs_get_pos( bs );
     if( lsmash_bs_read_data( bs, read_size ) )
         return 0;
-    if( box->size != bs->store )
+    if( box->size != bs->buffer.store )
         bs->error = 1;  /* not match size */
-    return read_size - (box->size - bs->store);
+    return read_size - (box->size - bs->buffer.store);
 }
 
 static void isom_skip_box_rest( lsmash_bs_t *bs, isom_box_t *box )
@@ -201,7 +201,7 @@ static void isom_check_box_size( lsmash_bs_t *bs, isom_box_t *box )
 {
     if( box->manager & LSMASH_LAST_BOX )
     {
-        box->size = bs->store;
+        box->size = bs->buffer.store;
         return;
     }
     uint64_t pos = lsmash_bs_get_pos( bs );
@@ -2573,12 +2573,12 @@ static int isom_read_mfro( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     return isom_add_print_func( root, mfro, level );
 }
 
-static int isom_check_qtff_meta( lsmash_bs_t *bs )
+static int isom_check_qtff_meta( lsmash_buffer_t *buffer )
 {
-    if( bs->store < ISOM_FULLBOX_COMMON_SIZE
-     || LSMASH_4CC( bs->data[4], bs->data[5], bs->data[6], bs->data[7] ) != ISOM_BOX_TYPE_META.fourcc )
+    if( buffer->store < ISOM_FULLBOX_COMMON_SIZE
+     || LSMASH_4CC( buffer->data[4], buffer->data[5], buffer->data[6], buffer->data[7] ) != ISOM_BOX_TYPE_META.fourcc )
         return 0;   /* Obviously, not 'meta' box */
-    if( !((bs->data[8] << 24) | (bs->data[9] << 16) | (bs->data[10] << 8) | bs->data[11]) )
+    if( !((buffer->data[8] << 24) | (buffer->data[9] << 16) | (buffer->data[10] << 8) | buffer->data[11]) )
         return 0;   /* If this field is 0, this shall be 'meta' box of ISO. */
     return 1;       /* OK. This shall be 'meta' box of QTFF. */
 }
@@ -2604,7 +2604,7 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
         return 0;
     }
     uint32_t read_size;
-    if( isom_check_qtff_meta( bs ) )
+    if( isom_check_qtff_meta( &bs->buffer ) )
     {
         /* 'meta' box of QTFF is not extended from FullBox.
          * Reuse the last 4 bytes as the size of the current box. */
@@ -2613,10 +2613,11 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
         parent->type     = QT_BOX_TYPE_META;
         parent->version  = 0;
         parent->flags    = 0;
-        memcpy( bs->data, bs->data + bs->store - 4, 4 );
-        memset( bs->data + 4, 0, bs->store - 4 );
-        bs->store = 4;
-        bs->pos   = 0;
+        lsmash_buffer_t *buffer = &bs->buffer;
+        memcpy( buffer->data, buffer->data + buffer->store - 4, 4 );
+        memset( buffer->data + 4, 0, buffer->store - 4 );
+        buffer->store = 4;
+        buffer->pos   = 0;
         read_size = ISOM_BASEBOX_COMMON_SIZE - 4;
         box->pos = lsmash_ftell( bs->stream ) - 4;
     }

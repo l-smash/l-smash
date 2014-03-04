@@ -1362,8 +1362,8 @@ static int hevc_get_sps_id
     lsmash_bs_t   bs   = { 0 };
     uint8_t rbsp_buffer[128];
     uint8_t buffer     [128];
-    bs.data  = buffer;
-    bs.alloc = 128;
+    bs.buffer.data  = buffer;
+    bs.buffer.alloc = 128;
     lsmash_bits_init( &bits, &bs );
     if( nalu_import_rbsp_from_ebsp( &bits, rbsp_buffer, ps_ebsp, LSMASH_MIN( ps_ebsp_length, 128 ) ) )
         return -1;
@@ -1393,8 +1393,8 @@ static int hevc_get_pps_id
     lsmash_bs_t   bs   = { 0 };
     uint8_t rbsp_buffer[3];
     uint8_t buffer     [3];
-    bs.data  = buffer;
-    bs.alloc = 3;
+    bs.buffer.data  = buffer;
+    bs.buffer.alloc = 3;
     lsmash_bits_init( &bits, &bs );
     if( nalu_import_rbsp_from_ebsp( &bits, rbsp_buffer, ps_ebsp, LSMASH_MIN( ps_ebsp_length, 3 ) ) )
         return -1;
@@ -1767,8 +1767,8 @@ uint8_t *lsmash_create_hevc_specific_info
     /* Set up bytestream writer. */
     uint8_t buffer[buffer_size];
     lsmash_bs_t bs = { 0 };
-    bs.data  = buffer;
-    bs.alloc = buffer_size;
+    bs.buffer.data  = buffer;
+    bs.buffer.alloc = buffer_size;
     /* Create an HEVCConfigurationBox */
     lsmash_bs_put_be32( &bs, 0 );                           /* box size */
     lsmash_bs_put_be32( &bs, ISOM_BOX_TYPE_HVCC.fourcc );   /* box type: 'hvcC' */
@@ -1890,8 +1890,8 @@ lsmash_dcr_nalu_appendable lsmash_check_hevc_dcr_nalu_appendable
     lsmash_bs_t   bs   = { 0 };
     uint8_t rbsp_buffer[max_ps_length];
     uint8_t bs_buffer  [max_ps_length];
-    bs.data  = bs_buffer;
-    bs.alloc = max_ps_length;
+    bs.buffer.data  = bs_buffer;
+    bs.buffer.alloc = max_ps_length;
     lsmash_bits_init( &bits, &bs );
     if( ps_type == HEVC_DCR_NALU_TYPE_PPS )
     {
@@ -2211,8 +2211,8 @@ int lsmash_append_hevc_dcr_nalu
         lsmash_bs_t   bs   = { 0 };
         uint8_t rbsp_buffer[ps_length];
         uint8_t buffer     [ps_length];
-        bs.data  = buffer;
-        bs.alloc = ps_length;
+        bs.buffer.data  = buffer;
+        bs.buffer.alloc = ps_length;
         lsmash_bits_init( &bits, &bs );
         if( ps_type == HEVC_DCR_NALU_TYPE_VPS )
         {
@@ -2327,8 +2327,8 @@ int lsmash_append_hevc_dcr_nalu
                 lsmash_bs_t   sps_bs   = { 0 };
                 uint8_t sps_rbsp_buffer[ ps->nalUnitLength ];
                 uint8_t sps_buffer     [ ps->nalUnitLength ];
-                sps_bs.data  = sps_buffer;
-                sps_bs.alloc = ps->nalUnitLength;
+                sps_bs.buffer.data  = sps_buffer;
+                sps_bs.buffer.alloc = ps->nalUnitLength;
                 lsmash_bits_init( &sps_bits, &sps_bs );
                 hevc_sps_t sps;
                 if( hevc_parse_sps_minimally( &sps_bits, &sps, sps_rbsp_buffer,

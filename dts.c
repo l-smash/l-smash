@@ -249,8 +249,8 @@ uint8_t *lsmash_create_dts_specific_info( lsmash_dts_specific_parameters_t *para
     uint32_t buffer_length = DTS_SPECIFIC_BOX_MIN_LENGTH + (reserved_box_present ? param->box->size : 0);
     uint8_t buffer[buffer_length];
     memset( buffer, 0, buffer_length );
-    bs.data  = buffer;
-    bs.alloc = buffer_length;
+    bs.buffer.data  = buffer;
+    bs.buffer.alloc = buffer_length;
     /* Create a DTSSpecificBox. */
     lsmash_bits_put( &bits, 32, 0 );                            /* box size */
     lsmash_bits_put( &bits, 32, ISOM_BOX_TYPE_DDTS.fourcc );    /* box type: 'ddts' */
@@ -289,8 +289,8 @@ int lsmash_setup_dts_specific_parameters_from_frame( lsmash_dts_specific_paramet
     lsmash_bits_t bits    = { 0 };
     lsmash_bs_t   bs      = { 0 };
     uint8_t buffer[DTS_MAX_EXSS_SIZE] = { 0 };
-    bs.data  = buffer;
-    bs.alloc = DTS_MAX_EXSS_SIZE;
+    bs.buffer.data  = buffer;
+    bs.buffer.alloc = DTS_MAX_EXSS_SIZE;
     dts_info_t  handler = { 0 };
     dts_info_t *info    = &handler;
     uint32_t overall_wasted_data_length = 0;

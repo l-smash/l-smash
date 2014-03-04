@@ -77,8 +77,8 @@ uint8_t *lsmash_create_ac3_specific_info( lsmash_ac3_specific_parameters_t *para
     lsmash_bs_t   bs   = { 0 };
     lsmash_bits_init( &bits, &bs );
     uint8_t buffer[AC3_SPECIFIC_BOX_LENGTH] = { 0 };
-    bs.data  = buffer;
-    bs.alloc = AC3_SPECIFIC_BOX_LENGTH;
+    bs.buffer.data  = buffer;
+    bs.buffer.alloc = AC3_SPECIFIC_BOX_LENGTH;
     lsmash_bits_put( &bits, 32, AC3_SPECIFIC_BOX_LENGTH );      /* box size */
     lsmash_bits_put( &bits, 32, ISOM_BOX_TYPE_DAC3.fourcc );    /* box type: 'dac3' */
     lsmash_bits_put( &bits, 2, param->fscod );
@@ -102,8 +102,8 @@ int lsmash_setup_ac3_specific_parameters_from_syncframe( lsmash_ac3_specific_par
     lsmash_bits_t bits = { 0 };
     lsmash_bs_t   bs   = { 0 };
     uint8_t buffer[AC3_MAX_SYNCFRAME_LENGTH] = { 0 };
-    bs.data  = buffer;
-    bs.alloc = AC3_MAX_SYNCFRAME_LENGTH;
+    bs.buffer.data  = buffer;
+    bs.buffer.alloc = AC3_MAX_SYNCFRAME_LENGTH;
     ac3_info_t  handler = { { 0 } };
     ac3_info_t *info    = &handler;
     memcpy( info->buffer, data, LSMASH_MIN( data_length, AC3_MAX_SYNCFRAME_LENGTH ) );
@@ -228,8 +228,8 @@ uint8_t *lsmash_create_eac3_specific_info( lsmash_eac3_specific_parameters_t *pa
     lsmash_bs_t   bs   = { 0 };
     lsmash_bits_init( &bits, &bs );
     uint8_t buffer[EAC3_SPECIFIC_BOX_MAX_LENGTH] = { 0 };
-    bs.data  = buffer;
-    bs.alloc = EAC3_SPECIFIC_BOX_MAX_LENGTH;
+    bs.buffer.data  = buffer;
+    bs.buffer.alloc = EAC3_SPECIFIC_BOX_MAX_LENGTH;
     lsmash_bits_put( &bits, 32, 0 );                            /* box size */
     lsmash_bits_put( &bits, 32, ISOM_BOX_TYPE_DEC3.fourcc );    /* box type: 'dec3' */
     lsmash_bits_put( &bits, 13, param->data_rate );             /* data_rate; setup by isom_update_bitrate_description */
@@ -269,8 +269,8 @@ int lsmash_setup_eac3_specific_parameters_from_frame( lsmash_eac3_specific_param
     lsmash_bits_t bits = { 0 };
     lsmash_bs_t   bs   = { 0 };
     uint8_t buffer[EAC3_MAX_SYNCFRAME_LENGTH] = { 0 };
-    bs.data  = buffer;
-    bs.alloc = EAC3_MAX_SYNCFRAME_LENGTH;
+    bs.buffer.data  = buffer;
+    bs.buffer.alloc = EAC3_MAX_SYNCFRAME_LENGTH;
     eac3_info_t  handler = { { 0 } };
     eac3_info_t *info    = &handler;
     uint32_t overall_wasted_data_length = 0;

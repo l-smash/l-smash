@@ -34,17 +34,21 @@ typedef struct
 } lsmash_class_t;
 
 /*---- bytestream ----*/
-
 typedef struct
 {
-    FILE    *stream;    /* I/O stream */
-    uint8_t  error;
-    uint8_t  unseekable;
     uint8_t *data;      /* buffer for reading/writing */
     uint64_t store;     /* valid data size on buffer */
     uint64_t alloc;     /* total buffer size including invalid area */
     uint64_t pos;       /* data position on buffer to be read next */
-    uint64_t written;   /* data size written into "stream" already */
+} lsmash_buffer_t;
+
+typedef struct
+{
+    FILE           *stream;     /* I/O stream */
+    uint8_t         error;
+    uint8_t         unseekable;
+    uint64_t        written;    /* data size written into "stream" already */
+    lsmash_buffer_t buffer;
 } lsmash_bs_t;
 
 uint64_t lsmash_bs_get_pos( lsmash_bs_t *bs );

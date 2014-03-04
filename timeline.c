@@ -432,8 +432,8 @@ static lsmash_sample_t *isom_read_sample_data_from_stream( lsmash_root_t *root, 
             return NULL;
         timeline->last_accessed_chunk_number = chunk->number;
         timeline->last_accessed_offset       = seek_pos;
-        timeline->last_read_size             = LSMASH_MIN( read_size, bs->store );
-        memcpy( timeline->last_accessed_chunk_data, bs->data, timeline->last_read_size );
+        timeline->last_read_size             = LSMASH_MIN( read_size, bs->buffer.store );
+        memcpy( timeline->last_accessed_chunk_data, bs->buffer.data, timeline->last_read_size );
         lsmash_bs_empty( bs );
     }
     lsmash_sample_t *sample = lsmash_create_sample( 0 );

@@ -515,8 +515,8 @@ uint8_t *lsmash_create_vc1_specific_info( lsmash_vc1_specific_parameters_t *para
     uint8_t buffer[buffer_size];
     lsmash_bits_t bits = { 0 };
     lsmash_bs_t   bs   = { 0 };
-    bs.data  = buffer;
-    bs.alloc = buffer_size;
+    bs.buffer.data  = buffer;
+    bs.buffer.alloc = buffer_size;
     lsmash_bits_init( &bits, &bs );
     /* Create a VC1SpecificBox */
     lsmash_bits_put( &bits, 32, 0 );                                    /* box size */

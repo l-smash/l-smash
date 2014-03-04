@@ -34,8 +34,8 @@ uint8_t *lsmash_create_alac_specific_info( lsmash_alac_specific_parameters_t *pa
 {
     uint8_t buffer[ALAC_SPECIFIC_BOX_LENGTH];
     lsmash_bs_t bs = { 0 };
-    bs.data  = buffer;
-    bs.alloc = ALAC_SPECIFIC_BOX_LENGTH;
+    bs.buffer.data  = buffer;
+    bs.buffer.alloc = ALAC_SPECIFIC_BOX_LENGTH;
     lsmash_bs_put_be32( &bs, ALAC_SPECIFIC_BOX_LENGTH );    /* box size */
     lsmash_bs_put_be32( &bs, ISOM_BOX_TYPE_ALAC.fourcc );   /* box type: 'alac' */
     lsmash_bs_put_be32( &bs, 0 );                           /* version + flags */
