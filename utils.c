@@ -76,6 +76,40 @@ void lsmash_bs_alloc( lsmash_bs_t *bs, uint64_t size )
     bs->buffer.alloc = alloc;
 }
 
+int lsmash_bs_seek( lsmash_bs_t *bs, int64_t offset, int whence )
+{
+    if( bs->unseekable )
+        return -1;
+    if( lsmash_fseek( bs->stream, offset, whence ) != 0 )
+        return -1;
+    if( whence == SEEK_SET )
+    {
+        assert( offset >= 0 );
+        if( bs->written < offset )
+            bs->offset = bs->written;
+        else
+            bs->offset = offset;
+    }
+    else if( whence == SEEK_CUR )
+    {
+        if( offset < 0 && bs->offset < -offset )
+            bs->offset = 0;
+        else if( offset > 0 && bs->written < bs->offset + offset )
+            bs->offset = bs->written;
+        else
+            bs->offset += offset;
+    }
+    else if( whence == SEEK_END )
+    {
+        assert( offset <= 0 );
+        if( bs->written < -offset )
+            bs->offset = 0;
+        else
+            bs->offset = bs->written + offset;
+    }
+    return 0;
+}
+
 /*---- bitstream writer ----*/
 void lsmash_bs_put_byte( lsmash_bs_t *bs, uint8_t value )
 {
@@ -140,7 +174,7 @@ void lsmash_bs_put_be32_from_64( lsmash_bs_t *bs, uint64_t value )
     lsmash_bs_put_be32( bs, (uint32_t)(value&0xffffffff) );
 }
 
-int lsmash_bs_write_data( lsmash_bs_t *bs )
+int lsmash_bs_flush_buffer( lsmash_bs_t *bs )
 {
     if( !bs )
         return -1;
@@ -155,8 +189,27 @@ int lsmash_bs_write_data( lsmash_bs_t *bs )
         return -1;
     }
     bs->written += bs->buffer.store;
+    bs->offset  += bs->buffer.store;
     bs->buffer.store = 0;
     return 0;
+}
+
+size_t lsmash_bs_write_data( lsmash_bs_t *bs, uint8_t *buf, size_t size )
+{
+    if( !bs )
+        return -1;
+    if( !buf || size == 0 )
+        return 0;
+    if( bs->error || !bs->stream )
+    {
+        lsmash_bs_free( bs );
+        bs->error = 1;
+        return -1;
+    }
+    size_t write_size = fwrite( buf, 1, size, bs->stream );
+    bs->written += write_size;
+    bs->offset  += write_size;
+    return write_size != size ? -1 : 0;
 }
 
 lsmash_bs_t* lsmash_bs_create( char* filename )
@@ -305,7 +358,7 @@ uint64_t lsmash_bs_get_be32_to_64( lsmash_bs_t *bs )
     return lsmash_bs_get_be32( bs );
 }
 
-int lsmash_bs_read_data( lsmash_bs_t *bs, uint32_t size )
+int lsmash_bs_read( lsmash_bs_t *bs, uint32_t size )
 {
     if( !bs )
         return -1;
@@ -318,13 +371,37 @@ int lsmash_bs_read_data( lsmash_bs_t *bs, uint32_t size )
         bs->error = 1;
         return -1;
     }
-    uint64_t read_size = fread( bs->buffer.data + bs->buffer.store, 1, size, bs->stream );
+    size_t read_size = fread( bs->buffer.data + bs->buffer.store, 1, size, bs->stream );
     if( read_size != size && !feof( bs->stream ) )
     {
         bs->error = 1;
         return -1;
     }
     bs->buffer.store += read_size;
+    bs->offset       += read_size;
+    return 0;
+}
+
+int lsmash_bs_read_data( lsmash_bs_t *bs, uint8_t *buf, size_t *size )
+{
+    if( !bs || !size )
+        return -1;
+    if( !buf || *size == 0 )
+        return 0;
+    if( bs->error || !bs->stream )
+    {
+        lsmash_bs_free( bs );
+        bs->error = 1;
+        return -1;
+    }
+    size_t read_size = fread( buf, 1, *size, bs->stream );
+    if( read_size != *size && !feof( bs->stream ) )
+    {
+        bs->error = 1;
+        return -1;
+    }
+    bs->offset += read_size;
+    *size       = read_size;
     return 0;
 }
 

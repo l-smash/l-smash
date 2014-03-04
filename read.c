@@ -40,7 +40,7 @@ static int isom_bs_read_box_common( lsmash_bs_t *bs, isom_box_t *box, uint32_t r
 {
     assert( bs && box && box->root );
     /* Read size and type. */
-    if( lsmash_bs_read_data( bs, read_size ) )
+    if( lsmash_bs_read( bs, read_size ) )
         return -1;
     if( feof( bs->stream ) )
         return 1;
@@ -49,7 +49,7 @@ static int isom_bs_read_box_common( lsmash_bs_t *bs, isom_box_t *box, uint32_t r
     /* Read more bytes if needed. */
     int uuidbox = (box->type.fourcc == ISOM_BOX_TYPE_UUID.fourcc);
     int more_read_size = 8 * (box->size == 1) + 16 * uuidbox;
-    if( more_read_size > 0 && lsmash_bs_read_data( bs, more_read_size ) )
+    if( more_read_size > 0 && lsmash_bs_read( bs, more_read_size ) )
         return -1;
     /* If size is set to 1, the actual size is repersented in the next 8 bytes.
      * If size is set to 0, this box ends at the end of the stream. */
@@ -86,7 +86,7 @@ static int isom_read_fullbox_common_extension( lsmash_bs_t *bs, isom_box_t *box 
     if( !isom_is_fullbox( box ) )
         return 0;
     /* Get version and flags. */
-    if( lsmash_bs_read_data( bs, 4 ) )
+    if( lsmash_bs_read( bs, 4 ) )
         return -1;
     box->version  = lsmash_bs_get_byte( bs );
     box->flags    = lsmash_bs_get_be24( bs );
@@ -136,7 +136,7 @@ static uint64_t isom_read_box_rest( lsmash_bs_t *bs, isom_box_t *box )
     {
         uint64_t init_bs_store = bs->buffer.store;
         uint64_t prev_bs_store = bs->buffer.store;
-        while( lsmash_bs_read_data( bs, 1 ) == 0 )
+        while( lsmash_bs_read( bs, 1 ) == 0 )
         {
             if( bs->buffer.store == prev_bs_store )
                 /* No more data in the stream. */
@@ -146,7 +146,7 @@ static uint64_t isom_read_box_rest( lsmash_bs_t *bs, isom_box_t *box )
         return bs->buffer.store - init_bs_store;
     }
     uint64_t read_size = box->size - lsmash_bs_get_pos( bs );
-    if( lsmash_bs_read_data( bs, read_size ) )
+    if( lsmash_bs_read( bs, read_size ) )
         return 0;
     if( box->size != bs->buffer.store )
         bs->error = 1;  /* not match size */
@@ -160,41 +160,48 @@ static void isom_skip_box_rest( lsmash_bs_t *bs, isom_box_t *box )
         box->size = (box->manager & LSMASH_FULLBOX) ? ISOM_FULLBOX_COMMON_SIZE : ISOM_BASEBOX_COMMON_SIZE;
         if( !bs->unseekable )
         {
-            uint64_t start = lsmash_ftell( bs->stream );
-            lsmash_fseek( bs->stream, 0, SEEK_END );
-            uint64_t end   = lsmash_ftell( bs->stream );
+            uint64_t start = bs->offset;
+            lsmash_bs_seek( bs, 0, SEEK_END );
+            uint64_t end   = bs->offset;
             box->size += end - start;
         }
         else
             while( fgetc( bs->stream ) != EOF )
+            {
                 ++ box->size;
+                ++ bs->offset;
+            }
         return;
     }
     uint64_t skip_bytes = box->size - lsmash_bs_get_pos( bs );
     if( !bs->unseekable )
     {
-        uint64_t start = lsmash_ftell( bs->stream );
-        lsmash_fseek( bs->stream, skip_bytes, SEEK_CUR );
+        uint64_t start = bs->offset;
+        lsmash_bs_seek( bs, skip_bytes, SEEK_CUR );
         if( fgetc( bs->stream ) == EOF )
         {
-            lsmash_fseek( bs->stream, 0, SEEK_END );
-            uint64_t end = lsmash_ftell( bs->stream );
+            lsmash_bs_seek( bs, 0, SEEK_END );
+            uint64_t end = bs->offset;
             if( end - start != skip_bytes )
                 bs->error = 1;  /* not match size */
             fgetc( bs->stream );    /* Set EOF flag.
                                      * FIXME: I think lsmash_bs_t should have its own EOF flag. */
             return;
         }
-        lsmash_fseek( bs->stream, -1, SEEK_CUR );
+        ++ bs->offset;
+        lsmash_bs_seek( bs, -1, SEEK_CUR );
         return;
     }
     for( uint64_t i = 0; i < skip_bytes; i++ )
+    {
         if( fgetc( bs->stream ) == EOF )
         {
             /* not match size */
             bs->error = 1;
             return;
         }
+        ++ bs->offset;
+    }
 }
 
 static void isom_check_box_size( lsmash_bs_t *bs, isom_box_t *box )
@@ -445,12 +452,12 @@ static int isom_read_iods( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
 
 static int isom_read_qt_color_table( lsmash_bs_t *bs, isom_qt_color_table_t *color_table )
 {
-    if( lsmash_bs_read_data( bs, 8 ) )
+    if( lsmash_bs_read( bs, 8 ) )
         return -1;
     color_table->seed  = lsmash_bs_get_be32( bs );
     color_table->flags = lsmash_bs_get_be16( bs );
     color_table->size  = lsmash_bs_get_be16( bs );
-    if( lsmash_bs_read_data( bs, (color_table->size + 1) * 8 ) )
+    if( lsmash_bs_read( bs, (color_table->size + 1) * 8 ) )
         return -1;
     isom_qt_color_array_t *array = lsmash_malloc_zero( (color_table->size + 1) * sizeof(isom_qt_color_array_t) );
     if( !array )
@@ -871,7 +878,7 @@ static int isom_read_dref( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         return isom_read_unknown_box( root, box, parent, level );
     isom_add_box( dref, isom_dinf_t );
     lsmash_bs_t *bs = root->bs;
-    if( lsmash_bs_read_data( bs, sizeof(uint32_t) ) )
+    if( lsmash_bs_read( bs, sizeof(uint32_t) ) )
         return -1;
     dref->list->entry_count = lsmash_bs_get_be32( bs );
     isom_box_common_copy( dref, box );
@@ -925,7 +932,7 @@ static int isom_read_stsd( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
         return isom_read_unknown_box( root, box, parent, level );
     isom_add_box( stsd, isom_stbl_t );
     lsmash_bs_t *bs = root->bs;
-    if( lsmash_bs_read_data( bs, sizeof(uint32_t) ) )
+    if( lsmash_bs_read( bs, sizeof(uint32_t) ) )
         return -1;
     stsd->entry_count = lsmash_bs_get_be32( bs );
     isom_box_common_copy( stsd, box );
@@ -1159,7 +1166,7 @@ static int isom_read_visual_description( lsmash_root_t *root, isom_box_t *box, i
     if( !visual )
         return -1;
     lsmash_bs_t *bs = root->bs;
-    if( lsmash_bs_read_data( bs, 78 ) )
+    if( lsmash_bs_read( bs, 78 ) )
         return -1;
     for( int i = 0; i < 6; i++ )
         visual->reserved[i]       = lsmash_bs_get_byte( bs );
@@ -1388,7 +1395,7 @@ static int isom_read_audio_description( lsmash_root_t *root, isom_box_t *box, is
     if( !audio )
         return -1;
     lsmash_bs_t *bs = root->bs;
-    if( lsmash_bs_read_data( bs, 28 ) )
+    if( lsmash_bs_read( bs, 28 ) )
         return -1;
     for( int i = 0; i < 6; i++ )
         audio->reserved[i]      = lsmash_bs_get_byte( bs );
@@ -1405,7 +1412,7 @@ static int isom_read_audio_description( lsmash_root_t *root, isom_box_t *box, is
     {
         if( ((isom_stsd_t *)parent)->version == 0 )
         {
-            if( lsmash_bs_read_data( bs, 16 ) )
+            if( lsmash_bs_read( bs, 16 ) )
                 return -1;
             audio->samplesPerPacket = lsmash_bs_get_be32( bs );
             audio->bytesPerPacket   = lsmash_bs_get_be32( bs );
@@ -1419,7 +1426,7 @@ static int isom_read_audio_description( lsmash_root_t *root, isom_box_t *box, is
     }
     else if( audio->version == 2 )
     {
-        if( lsmash_bs_read_data( bs, 36 ) )
+        if( lsmash_bs_read( bs, 36 ) )
             return -1;
         audio->sizeOfStructOnly              = lsmash_bs_get_be32( bs );
         audio->audioSampleRate               = lsmash_bs_get_be64( bs );
@@ -1531,7 +1538,7 @@ static int isom_read_qt_text_description( lsmash_root_t *root, isom_box_t *box, 
     if( !text )
         return -1;
     lsmash_bs_t *bs = root->bs;
-    if( lsmash_bs_read_data( bs, 51 ) )
+    if( lsmash_bs_read( bs, 51 ) )
         return -1;
     for( int i = 0; i < 6; i++ )
         text->reserved[i]        = lsmash_bs_get_byte( bs );
@@ -1555,7 +1562,7 @@ static int isom_read_qt_text_description( lsmash_root_t *root, isom_box_t *box, 
     text->font_name_length       = lsmash_bs_get_byte( bs );
     if( text->font_name_length )
     {
-        if( lsmash_bs_read_data( bs, text->font_name_length ) )
+        if( lsmash_bs_read( bs, text->font_name_length ) )
             return -1;
         text->font_name = lsmash_malloc( text->font_name_length + 1 );
         if( !text->font_name )
@@ -1579,7 +1586,7 @@ static int isom_read_tx3g_description( lsmash_root_t *root, isom_box_t *box, iso
     if( !tx3g )
         return -1;
     lsmash_bs_t *bs = root->bs;
-    if( lsmash_bs_read_data( bs, 38 ) )
+    if( lsmash_bs_read( bs, 38 ) )
         return -1;
     for( int i = 0; i < 6; i++ )
         tx3g->reserved[i]              = lsmash_bs_get_byte( bs );
@@ -2595,11 +2602,14 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
         /* skip extra bytes */
         uint64_t rest_size = parent->size - parent_pos;
         if( !bs->unseekable )
-            lsmash_fseek( bs->stream, rest_size, SEEK_CUR );
+            lsmash_bs_seek( bs, rest_size, SEEK_CUR );
         else
             for( uint64_t i = 0; i < rest_size; i++ )
+            {
                 if( fgetc( bs->stream ) == EOF )
                     break;
+                ++ bs->offset;
+            }
         box->size = rest_size;
         return 0;
     }
@@ -2619,13 +2629,13 @@ static int isom_read_box( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
         buffer->store = 4;
         buffer->pos   = 0;
         read_size = ISOM_BASEBOX_COMMON_SIZE - 4;
-        box->pos = lsmash_ftell( bs->stream ) - 4;
+        box->pos = bs->offset - 4;
     }
     else
     {
         lsmash_bs_empty( bs );
         read_size = ISOM_BASEBOX_COMMON_SIZE;
-        box->pos = lsmash_ftell( bs->stream );
+        box->pos = bs->offset;
     }
     int ret = -1;
     if( !!(ret = isom_bs_read_box_common( bs, box, read_size )) )

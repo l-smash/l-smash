@@ -47,7 +47,9 @@ typedef struct
     FILE           *stream;     /* I/O stream */
     uint8_t         error;
     uint8_t         unseekable;
-    uint64_t        written;    /* data size written into "stream" already */
+    uint64_t        written;    /* the number of bytes written into 'stream' already */
+    uint64_t        offset;     /* the current position in the 'stream'
+                                 * the number of bytes from the beginning */
     lsmash_buffer_t buffer;
 } lsmash_bs_t;
 
@@ -57,6 +59,7 @@ void lsmash_bs_free( lsmash_bs_t *bs );
 void lsmash_bs_alloc( lsmash_bs_t *bs, uint64_t size );
 lsmash_bs_t *lsmash_bs_create( char *filename );
 void lsmash_bs_cleanup( lsmash_bs_t *bs );
+int lsmash_bs_seek( lsmash_bs_t *bs, int64_t offset, int whence );
 
 /*---- bytestream writer ----*/
 void lsmash_bs_put_byte( lsmash_bs_t *bs, uint8_t value );
@@ -69,7 +72,8 @@ void lsmash_bs_put_byte_from_64( lsmash_bs_t *bs, uint64_t value );
 void lsmash_bs_put_be16_from_64( lsmash_bs_t *bs, uint64_t value );
 void lsmash_bs_put_be24_from_64( lsmash_bs_t *bs, uint64_t value );
 void lsmash_bs_put_be32_from_64( lsmash_bs_t *bs, uint64_t value );
-int lsmash_bs_write_data( lsmash_bs_t *bs );
+int lsmash_bs_flush_buffer( lsmash_bs_t *bs );
+size_t lsmash_bs_write_data( lsmash_bs_t *bs, uint8_t *buf, size_t size );
 void *lsmash_bs_export_data( lsmash_bs_t *bs, uint32_t *length );
 
 /*---- bytestream reader ----*/
@@ -85,7 +89,8 @@ uint64_t lsmash_bs_get_byte_to_64( lsmash_bs_t *bs );
 uint64_t lsmash_bs_get_be16_to_64( lsmash_bs_t *bs );
 uint64_t lsmash_bs_get_be24_to_64( lsmash_bs_t *bs );
 uint64_t lsmash_bs_get_be32_to_64( lsmash_bs_t *bs );
-int lsmash_bs_read_data( lsmash_bs_t *bs, uint32_t size );
+int lsmash_bs_read( lsmash_bs_t *bs, uint32_t size );
+int lsmash_bs_read_data( lsmash_bs_t *bs, uint8_t *buf, size_t *size );
 int lsmash_bs_import_data( lsmash_bs_t *bs, void *data, uint32_t length );
 
 /*---- bitstream ----*/

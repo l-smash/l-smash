@@ -2285,19 +2285,30 @@ lsmash_root_t *lsmash_open_movie( const char *filename, lsmash_file_mode mode )
     root->bs       = lsmash_malloc_zero( sizeof(lsmash_bs_t) );
     if( !root->bs )
         goto fail;
+    lsmash_bs_t *bs = root->bs;
     if( !strcmp( filename, "-" ) )
     {
         if( mode & LSMASH_FILE_MODE_READ )
-            root->bs->stream = stdin;
+            bs->stream = stdin;
         else if( (mode & LSMASH_FILE_MODE_WRITE)
               && (mode & LSMASH_FILE_MODE_FRAGMENTED) )
-            root->bs->stream = stdout;
-        root->bs->unseekable = 1;
+            bs->stream = stdout;
+        bs->unseekable = 1;
     }
     else
-        root->bs->stream = lsmash_fopen( filename, open_mode );
-    if( !root->bs->stream )
+        bs->stream = lsmash_fopen( filename, open_mode );
+    if( !bs->stream )
         goto fail;
+    /* Get the file size if seekable when reading. */
+    if( (mode & LSMASH_FILE_MODE_READ) && !bs->unseekable )
+    {
+        lsmash_bs_seek( bs, 0, SEEK_END );
+        int64_t ret = lsmash_ftell( bs->stream );
+        if( ret < 0 )
+            goto fail;
+        bs->written = ret;
+        lsmash_bs_seek( bs, 0, SEEK_SET );
+    }
     root->flags = mode;
     if( mode & LSMASH_FILE_MODE_WRITE )
     {
@@ -2641,11 +2652,10 @@ static int isom_set_fragment_overall_duration( lsmash_root_t *root )
     mehd->update( mehd );
     /* Write Movie Extends Header Box here. */
     lsmash_bs_t *bs = root->bs;
-    FILE *stream = bs->stream;
-    uint64_t current_pos = lsmash_ftell( stream );
-    lsmash_fseek( stream, mehd->pos, SEEK_SET );
+    uint64_t current_pos = bs->offset;
+    lsmash_bs_seek( bs, mehd->pos, SEEK_SET );
     int ret = isom_write_box( bs, (isom_box_t *)mehd );
-    lsmash_fseek( stream, current_pos, SEEK_SET );
+    lsmash_bs_seek( bs, current_pos, SEEK_SET );
     return ret;
 }
 
@@ -2847,7 +2857,7 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
     uint8_t *buf[2];
     if( (buf[0] = (uint8_t*)lsmash_malloc( remux->buffer_size )) == NULL )
         return -1; /* NOTE: i think we still can fallback to "return isom_write_moov();" here. */
-    uint64_t size = remux->buffer_size / 2;
+    size_t size = remux->buffer_size / 2;
     buf[1] = buf[0] + size;
     /* now the amount of offset is fixed. apply that to stco/co64 */
     for( lsmash_entry_t *entry = moov->trak_list->head; entry; entry = entry->next )
@@ -2861,20 +2871,20 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
                 ((isom_stco_entry_t *)stco_entry->data)->chunk_offset += mtf_size;
     }
     /* Backup starting area of mdat and write moov + meta there instead. */
-    FILE        *stream          = bs->stream;
     isom_mdat_t *mdat            = root->mdat;
     uint64_t     total           = root->size + mtf_size;
     uint64_t     placeholder_pos = root->free ? root->free->pos : mdat->pos;
-    if( lsmash_fseek( stream, placeholder_pos, SEEK_SET ) )
+    if( lsmash_bs_seek( bs, placeholder_pos, SEEK_SET ) < 0 )
         goto fail;
-    uint64_t read_num = fread( buf[0], 1, size, stream );
-    uint64_t read_pos = lsmash_ftell( stream );
+    size_t read_num = size;
+    lsmash_bs_read_data( bs, buf[0], &read_num );
+    uint64_t read_pos = bs->offset;
     /* Write moov + meta there instead. */
-    if( lsmash_fseek( stream, placeholder_pos, SEEK_SET )
+    if( lsmash_bs_seek( bs, placeholder_pos, SEEK_SET ) < 0
      || isom_write_box( bs, (isom_box_t *)root->moov )
      || isom_write_box( bs, (isom_box_t *)root->meta ) )
         goto fail;
-    uint64_t write_pos = lsmash_ftell( stream );
+    uint64_t write_pos = bs->offset;
     /* Update the positions */
     mdat->pos += mtf_size;
     if( root->free )
@@ -2883,19 +2893,20 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t* remux )
     int buf_switch = 1;
     while( read_num == size )
     {
-        if( lsmash_fseek( stream, read_pos, SEEK_SET ) )
+        if( lsmash_bs_seek( bs, read_pos, SEEK_SET ) < 0 )
             goto fail;
-        read_num    = fread( buf[buf_switch], 1, size, stream );
-        read_pos    = lsmash_ftell( stream );
+        lsmash_bs_read_data( bs, buf[buf_switch], &read_num );
+        read_pos    = bs->offset;
         buf_switch ^= 0x1;
-        if( lsmash_fseek( stream, write_pos, SEEK_SET )
-         || fwrite( buf[buf_switch], 1, size, stream ) != size )
+        if( lsmash_bs_seek( bs, write_pos, SEEK_SET ) < 0 )
             goto fail;
-        write_pos = lsmash_ftell( stream );
+        if( lsmash_bs_write_data( bs, buf[buf_switch], size ) < 0 )
+            goto fail;
+        write_pos = bs->offset;
         if( remux->func )
             remux->func( remux->param, write_pos, total ); // FIXME:
     }
-    if( fwrite( buf[buf_switch^0x1], 1, read_num, stream ) != read_num )
+    if( lsmash_bs_write_data( bs, buf[buf_switch^0x1], read_num ) < 0 )
         goto fail;
     if( remux->func )
         remux->func( remux->param, total, total ); // FIXME:
@@ -3490,10 +3501,9 @@ int lsmash_modify_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID,
     /* Rewrite the specified entry.
      * Note: we don't update the version of the Edit List Box. */
     lsmash_bs_t *bs = root->bs;
-    FILE *stream = bs->stream;
-    uint64_t current_pos = lsmash_ftell( stream );
+    uint64_t current_pos = bs->offset;
     uint64_t entry_pos = elst->pos + ISOM_LIST_FULLBOX_COMMON_SIZE + ((uint64_t)edit_number - 1) * (elst->version == 1 ? 20 : 12);
-    lsmash_fseek( stream, entry_pos, SEEK_SET );
+    lsmash_bs_seek( bs, entry_pos, SEEK_SET );
     if( elst->version )
     {
         lsmash_bs_put_be64( bs, data->segment_duration );
@@ -3505,8 +3515,8 @@ int lsmash_modify_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID,
         lsmash_bs_put_be32( bs, (uint32_t)data->media_time );
     }
     lsmash_bs_put_be32( bs, data->media_rate );
-    int ret = lsmash_bs_write_data( bs );
-    lsmash_fseek( stream, current_pos, SEEK_SET );
+    int ret = lsmash_bs_flush_buffer( bs );
+    lsmash_bs_seek( bs, current_pos, SEEK_SET );
     return ret;
 }
 
@@ -4287,7 +4297,7 @@ static int isom_write_pooled_samples( lsmash_root_t *root, isom_sample_pool_t *p
      || !root->bs->stream )
         return -1;
     lsmash_bs_put_bytes( root->bs, pool->size, pool->data );
-    if( lsmash_bs_write_data( root->bs ) )
+    if( lsmash_bs_flush_buffer( root->bs ) )
         return -1;
     root->mdat->media_size  += pool->size;
     root->size              += pool->size;

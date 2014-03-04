@@ -1261,13 +1261,13 @@ static int isom_write_mdat( lsmash_bs_t *bs, isom_box_t *box )
         if( !root->free && isom_add_free( root ) < 0 )
             return -1;
         isom_free_t *skip = root->free;
-        skip->pos      = lsmash_ftell( bs->stream );
+        skip->pos      = bs->offset;
         skip->size     = ISOM_BASEBOX_COMMON_SIZE;
         skip->manager |= LSMASH_PLACEHOLDER;
         if( isom_write_box( bs, (isom_box_t *)skip ) < 0 )
             return -1;
         /* Write an incomplete Media Data Box. */
-        mdat->pos      = lsmash_ftell( bs->stream );
+        mdat->pos      = bs->offset;
         mdat->size     = ISOM_BASEBOX_COMMON_SIZE;
         mdat->manager |= LSMASH_INCOMPLETE_BOX;
         mdat->manager &= ~LSMASH_PLACEHOLDER;
@@ -1277,7 +1277,7 @@ static int isom_write_mdat( lsmash_bs_t *bs, isom_box_t *box )
     if( !bs->unseekable )
     {
         /* Write the actual size. */
-        uint64_t current_pos = lsmash_ftell( bs->stream );
+        uint64_t current_pos = bs->offset;
         mdat->size = ISOM_BASEBOX_COMMON_SIZE + mdat->media_size;
         if( mdat->size > UINT32_MAX )
         {
@@ -1287,11 +1287,11 @@ static int isom_write_mdat( lsmash_bs_t *bs, isom_box_t *box )
             mdat->size += root->free->size;
             isom_remove_box_by_itself( root->free );
         }
-        lsmash_fseek( bs->stream, mdat->pos, SEEK_SET );
+        lsmash_bs_seek( bs, mdat->pos, SEEK_SET );
         isom_bs_put_box_common( bs, mdat );
-        /* isom_write_box() also calls lsmash_bs_write_data() but it must do nothing. */
-        int ret = lsmash_bs_write_data( bs );
-        lsmash_fseek( bs->stream, current_pos, SEEK_SET );
+        /* isom_write_box() also calls lsmash_bs_flush_buffer() but it must do nothing. */
+        int ret = lsmash_bs_flush_buffer( bs );
+        lsmash_bs_seek( bs, current_pos, SEEK_SET );
         return ret;
     }
     return -1;
@@ -1336,7 +1336,7 @@ int isom_write_box( lsmash_bs_t *bs, isom_box_t *box )
         return -1;
     if( bs->stream )
     {
-        if( lsmash_bs_write_data( bs ) < 0 )
+        if( lsmash_bs_flush_buffer( bs ) < 0 )
             return -1;
         /* Don't write any child box if this box is a placeholder or an incomplete box. */
         if( box->manager & (LSMASH_PLACEHOLDER | LSMASH_INCOMPLETE_BOX) )

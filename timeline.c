@@ -426,9 +426,9 @@ static lsmash_sample_t *isom_read_sample_data_from_stream( lsmash_root_t *root, 
             seek_pos  = sample_pos;
         }
         lsmash_bs_t *bs = root->bs;
-        lsmash_fseek( bs->stream, seek_pos, SEEK_SET );
+        lsmash_bs_seek( bs, seek_pos, SEEK_SET );
         lsmash_bs_empty( bs );
-        if( lsmash_bs_read_data( bs, read_size ) )
+        if( lsmash_bs_read( bs, read_size ) )
             return NULL;
         timeline->last_accessed_chunk_number = chunk->number;
         timeline->last_accessed_offset       = seek_pos;
