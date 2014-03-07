@@ -909,9 +909,9 @@ int vc1_copy_codec_specific( lsmash_codec_specific_t *dst, lsmash_codec_specific
     return 0;
 }
 
-int vc1_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
+int vc1_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
 {
-    assert( fp && root && box && (box->manager & LSMASH_BINARY_CODED_BOX) );
+    assert( fp && file && box && (box->manager & LSMASH_BINARY_CODED_BOX) );
     int indent = level;
     lsmash_ifprintf( fp, indent++, "[%s: VC1 Specific Box]\n", isom_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );

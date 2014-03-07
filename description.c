@@ -1159,7 +1159,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
         }
     }
     isom_trak_t *trak = (isom_trak_t *)visual->parent->parent->parent->parent->parent;
-    int qt_compatible = trak->root->qt_compatible;
+    int qt_compatible = trak->file->qt_compatible;
     isom_tapt_t *tapt = trak->tapt;
     isom_stsl_t *stsl = (isom_stsl_t *)isom_get_extension_box_format( &visual->extensions, ISOM_BOX_TYPE_STSL );
     int set_aperture_modes = qt_compatible                              /* Track Aperture Modes is only available under QuickTime file format. */
@@ -1213,7 +1213,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
      || summary->color.primaries_index
      || summary->color.transfer_index
      || summary->color.matrix_index
-     || (trak->root->isom_compatible && summary->color.full_range) )
+     || (trak->file->isom_compatible && summary->color.full_range) )
     {
         isom_colr_t *colr = isom_add_colr( visual );
         if( !colr )
@@ -1222,7 +1222,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
         uint16_t primaries = summary->color.primaries_index;
         uint16_t transfer  = summary->color.transfer_index;
         uint16_t matrix    = summary->color.matrix_index;
-        if( qt_compatible && !trak->root->isom_compatible )
+        if( qt_compatible && !trak->file->isom_compatible )
         {
             colr->manager                |= LSMASH_QTFF_BASE;
             colr->type                    = QT_BOX_TYPE_COLR;
@@ -1813,7 +1813,7 @@ static int isom_set_isom_template_audio_description( isom_audio_entry_t *audio, 
 
 int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_type, lsmash_audio_summary_t *summary )
 {
-    if( !stsd || !stsd->root || !summary )
+    if( !stsd || !stsd->file || !summary )
         return -1;
     if( isom_check_valid_summary( (lsmash_summary_t *)summary ) )
         return -1;
@@ -1821,14 +1821,14 @@ int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_
     if( !audio )
         return -1;
     audio->data_reference_index = 1;
-    lsmash_root_t *root = stsd->root;
+    lsmash_file_t *file = stsd->file;
     lsmash_codec_type_t audio_type = (lsmash_codec_type_t)audio->type;
     int ret;
     if( lsmash_check_codec_type_identical( audio_type, ISOM_CODEC_TYPE_MP4A_AUDIO )
      || lsmash_check_codec_type_identical( audio_type,   QT_CODEC_TYPE_MP4A_AUDIO ) )
     {
-        if( (root->ftyp && root->ftyp->major_brand == ISOM_BRAND_TYPE_QT)
-         || (!root->ftyp && (root->qt_compatible || (root->moov && !root->moov->iods))) )
+        if( (file->ftyp && file->ftyp->major_brand == ISOM_BRAND_TYPE_QT)
+         || (!file->ftyp && (file->qt_compatible || (file->moov && !file->moov->iods))) )
             ret = isom_set_qtff_mp4a_description( audio, summary );
         else
             ret = isom_set_isom_mp4a_description( audio, summary );
@@ -1840,7 +1840,7 @@ int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_
           || lsmash_check_codec_type_identical( audio_type, ISOM_CODEC_TYPE_DTSH_AUDIO )
           || lsmash_check_codec_type_identical( audio_type, ISOM_CODEC_TYPE_DTSL_AUDIO ) )
         ret = isom_set_isom_dts_description( audio, summary );
-    else if( root->qt_compatible )
+    else if( file->qt_compatible )
         ret = isom_set_qtff_template_audio_description( audio, summary );
     else
         ret = isom_set_isom_template_audio_description( audio, summary );
@@ -1869,7 +1869,7 @@ int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_
             }
             case LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_CHANNEL_LAYOUT :
             {
-                if( !root->qt_compatible
+                if( !file->qt_compatible
                  && !lsmash_check_codec_type_identical( (lsmash_codec_type_t)audio->type, ISOM_CODEC_TYPE_ALAC_AUDIO )
                  && !lsmash_check_codec_type_identical( (lsmash_codec_type_t)audio->type,   QT_CODEC_TYPE_ALAC_AUDIO ) )
                     continue;
@@ -1904,7 +1904,7 @@ int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_
             case LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG :
                 break;  /* shall be set up already */
             case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_ALAC :
-                if( root->qt_compatible )
+                if( file->qt_compatible )
                     continue;  /* shall be set up already */
             default :
             {
@@ -2232,7 +2232,7 @@ static int isom_append_structured_mp4sys_decoder_config( lsmash_codec_specific_l
 
 lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_t *sample_entry )
 {
-    if( !sample_entry || !sample_entry->root || !sample_entry->parent )
+    if( !sample_entry || !sample_entry->file || !sample_entry->parent )
         return NULL;
     isom_audio_entry_t *audio = (isom_audio_entry_t *)sample_entry;
     lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_AUDIO );
@@ -2243,7 +2243,7 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
     summary->channels    = audio->channelcount;
     summary->frequency   = audio->samplerate >> 16;
     if( ((isom_stsd_t *)audio->parent)->version == 0
-     && audio->root->qt_compatible
+     && audio->file->qt_compatible
      && isom_is_qt_audio( (lsmash_codec_type_t)audio->type ) )
     {
         if( audio->version == 1 )

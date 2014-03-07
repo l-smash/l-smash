@@ -947,9 +947,9 @@ static void mp4sys_print_ES_Descriptor( FILE *fp, mp4sys_ES_Descriptor_t *esd, i
     mp4sys_print_SLConfigDescriptor( fp, esd->slConfigDescr, indent );
 }
 
-int mp4sys_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
+int mp4sys_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
 {
-    assert( fp && root && box && !(box->manager & LSMASH_BINARY_CODED_BOX) );
+    assert( fp && file && box && !(box->manager & LSMASH_BINARY_CODED_BOX) );
     isom_esds_t *esds = (isom_esds_t *)box;
     int indent = level;
     lsmash_ifprintf( fp, indent++, "[%s: Elemental Stream Descriptor Box]\n", isom_4cc2str( esds->type.fourcc ) );

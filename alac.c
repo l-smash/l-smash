@@ -80,9 +80,9 @@ int alac_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_cod
     return 0;
 }
 
-int alac_print_codec_specific( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
+int alac_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
 {
-    assert( fp && root && box && (box->manager & LSMASH_BINARY_CODED_BOX) );
+    assert( fp && file && box && (box->manager & LSMASH_BINARY_CODED_BOX) );
     int indent = level;
     lsmash_ifprintf( fp, indent++, "[%s: ALAC Specific Box]\n", isom_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );

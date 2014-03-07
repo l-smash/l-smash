@@ -141,11 +141,23 @@ typedef struct
 
 typedef struct
 {
-    char           *file_name;
-    lsmash_root_t  *root;
     output_track_t *track;
-    uint32_t       num_of_tracks;
-    uint32_t       current_track_number;
+    uint32_t        num_of_tracks;
+    uint32_t        current_track_number;
+} output_movie_t;
+
+typedef struct
+{
+    char                    *name;
+    lsmash_file_t           *fh;
+    lsmash_file_parameters_t param;
+    output_movie_t           movie;
+} output_file_t;
+
+typedef struct
+{
+    lsmash_root_t  *root;
+    output_file_t   file;
 } output_t;
 
 typedef struct
@@ -161,15 +173,16 @@ static void cleanup_muxer( muxer_t *muxer )
     if( !muxer )
         return;
     output_t *output = &muxer->output;
+    lsmash_close_file( &output->file.param );
     lsmash_destroy_root( output->root );
-    if( output->track )
+    if( output->file.movie.track )
     {
-        for( uint32_t i = 0; i < output->num_of_tracks; i++ )
+        for( uint32_t i = 0; i < output->file.movie.num_of_tracks; i++ )
         {
-            output_track_t *out_track = &output->track[i];
+            output_track_t *out_track = &output->file.movie.track[i];
             lsmash_delete_sample( out_track->sample );
         }
-        lsmash_free( output->track );
+        lsmash_free( output->file.movie.track );
     }
     for( uint32_t i = 0; i < muxer->num_of_inputs; i++ )
     {
@@ -443,7 +456,7 @@ static int parse_global_options( int argc, char **argv, muxer_t *muxer )
         else if( !strcasecmp( argv[i], "-o" ) || !strcasecmp( argv[i], "--output" ) )
         {
             CHECK_NEXT_ARG;
-            muxer->output.file_name = argv[i];
+            muxer->output.file.name = argv[i];
         }
         else if( !strcasecmp( argv[i], "--optimize-pd" ) )
             opt->optimize_pd = 1;
@@ -570,7 +583,7 @@ static int parse_global_options( int argc, char **argv, muxer_t *muxer )
             return ERROR_MSG( "you specified invalid option: %s.\n", argv[i] );
         ++i;
     }
-    if( !muxer->output.file_name )
+    if( !muxer->output.file.name )
         return ERROR_MSG( "output file name is not specified.\n" );
     if( decide_brands( opt ) )
         return ERROR_MSG( "failed to set up output file format.\n" );
@@ -690,8 +703,8 @@ static void display_codec_name( lsmash_codec_type_t codec_type, uint32_t track_n
 
 static int open_input_files( muxer_t *muxer )
 {
-    output_t *output = &muxer->output;
-    option_t *opt = &muxer->opt;
+    output_movie_t *out_movie = &muxer->output.file.movie;
+    option_t       *opt       = &muxer->opt;
     for( uint32_t current_input_number = 1; current_input_number <= muxer->num_of_inputs; current_input_number++ )
     {
         input_t *input = &muxer->input[current_input_number - 1];
@@ -770,12 +783,12 @@ static int open_input_files( muxer_t *muxer )
             if( in_track->active )
             {
                 ++ input->num_of_active_tracks;
-                display_codec_name( codec_type, output->num_of_tracks + input->num_of_active_tracks );
+                display_codec_name( codec_type, out_movie->num_of_tracks + input->num_of_active_tracks );
             }
         }
-        output->num_of_tracks += input->num_of_active_tracks;
+        out_movie->num_of_tracks += input->num_of_active_tracks;
     }
-    if( output->num_of_tracks == 0 )
+    if( out_movie->num_of_tracks == 0 )
         return ERROR_MSG( "there is no media that can be stored in output movie.\n" );
     return 0;
 }
@@ -810,26 +823,34 @@ static int set_itunes_metadata( output_t *output, option_t *opt )
 
 static int prepare_output( muxer_t *muxer )
 {
-    output_t *output = &muxer->output;
-    option_t *opt = &muxer->opt;
+    option_t       *opt       = &muxer->opt;
+    output_t       *output    = &muxer->output;
+    output_file_t  *out_file  = &output->file;
+    output_movie_t *out_movie = &out_file->movie;
     /* Allocate output tracks. */
-    output->track = lsmash_malloc( output->num_of_tracks * sizeof(output_track_t) );
-    if( !output->track )
+    out_movie->track = lsmash_malloc( out_movie->num_of_tracks * sizeof(output_track_t) );
+    if( !out_movie->track )
         return ERROR_MSG( "failed to allocate output tracks.\n" );
-    memset( output->track, 0, output->num_of_tracks * sizeof(output_track_t) );
+    memset( out_movie->track, 0, out_movie->num_of_tracks * sizeof(output_track_t) );
     /* Initialize L-SMASH muxer */
-    output->root = lsmash_open_movie( output->file_name, LSMASH_FILE_MODE_WRITE );
+    output->root = lsmash_create_root();
     if( !output->root )
-        return ERROR_MSG( "failed to create root.\n" );
+        return ERROR_MSG( "failed to create a ROOT.\n" );
+    lsmash_file_parameters_t *file_param = &out_file->param;
+    if( lsmash_open_file( out_file->name, 0, file_param ) < 0 )
+        return ERROR_MSG( "failed to open an output file.\n" );
+    file_param->major_brand   = opt->major_brand;
+    file_param->brands        = opt->brands;
+    file_param->brand_count   = opt->num_of_brands;
+    file_param->minor_version = opt->minor_version;
+    if( opt->interleave )
+        file_param->max_chunk_duration = opt->interleave * 1e-3;
+    out_file->fh = lsmash_set_file( output->root, file_param );
+    if( !out_file->fh )
+        return ERROR_MSG( "failed to add an output file into a ROOT.\n" );
     /* Initialize movie */
     lsmash_movie_parameters_t movie_param;
     lsmash_initialize_movie_parameters( &movie_param );
-    movie_param.major_brand      = opt->major_brand;
-    movie_param.brands           = opt->brands;
-    movie_param.number_of_brands = opt->num_of_brands;
-    movie_param.minor_version    = opt->minor_version;
-    if( opt->interleave )
-        movie_param.max_chunk_duration = opt->interleave * 1e-3;
     if( lsmash_set_movie_parameters( output->root, &movie_param ) )
         return ERROR_MSG( "failed to set movie parameters.\n" );
     if( opt->copyright_notice
@@ -837,7 +858,7 @@ static int prepare_output( muxer_t *muxer )
         return ERROR_MSG( "failed to set a copyright notice for the entire movie.\n" );
     if( set_itunes_metadata( output, opt ) )
         return ERROR_MSG( "failed to set iTunes metadata.\n" );
-    output->current_track_number = 1;
+    out_movie->current_track_number = 1;
     for( uint32_t current_input_number = 1; current_input_number <= muxer->num_of_inputs; current_input_number++ )
     {
         input_t *input = &muxer->input[current_input_number - 1];
@@ -845,11 +866,11 @@ static int prepare_output( muxer_t *muxer )
              input->current_track_number <= input->num_of_tracks;
              input->current_track_number ++ )
         {
-            input_track_t *in_track = &input->track[input->current_track_number - 1];
+            input_track_t *in_track = &input->track[ input->current_track_number - 1 ];
             if( !in_track->active )
                 continue;
             input_track_option_t *track_opt = &in_track->opt;
-            output_track_t *out_track = &output->track[output->current_track_number - 1];
+            output_track_t *out_track = &out_movie->track[ out_movie->current_track_number - 1 ];
             /* Set up track parameters. */
             lsmash_track_parameters_t track_param;
             lsmash_initialize_track_parameters( &track_param );
@@ -984,11 +1005,11 @@ static int prepare_output( muxer_t *muxer )
             if( !out_track->sample_entry )
                 return ERROR_MSG( "failed to add sample description entry.\n" );
             out_track->active = 1;
-            ++ output->current_track_number;
+            ++ out_movie->current_track_number;
         }
         input->current_track_number = 1;
     }
-    output->current_track_number = 1;
+    out_movie->current_track_number = 1;
     return 0;
 }
 
@@ -1002,19 +1023,20 @@ static void set_reference_chapter_track( output_t *output, option_t *opt )
 static int do_mux( muxer_t *muxer )
 {
 #define LSMASH_MAX( a, b ) ((a) > (b) ? (a) : (b))
-    output_t *output = &muxer->output;
-    option_t *opt = &muxer->opt;
+    option_t       *opt       = &muxer->opt;
+    output_t       *output    = &muxer->output;
+    output_movie_t *out_movie = &output->file.movie;
     set_reference_chapter_track( output, opt );
     double   largest_dts = 0;
     uint32_t current_input_number = 1;
     uint32_t num_consecutive_sample_skip = 0;
-    uint32_t num_active_input_tracks = output->num_of_tracks;
+    uint32_t num_active_input_tracks = out_movie->num_of_tracks;
     uint64_t total_media_size = 0;
     uint8_t  sample_count = 0;
     while( 1 )
     {
         input_t *input = &muxer->input[current_input_number - 1];
-        output_track_t *out_track = &output->track[output->current_track_number - 1];
+        output_track_t *out_track = &out_movie->track[ out_movie->current_track_number - 1 ];
         if( out_track->active )
         {
             lsmash_sample_t *sample = out_track->sample;
@@ -1106,8 +1128,8 @@ static int do_mux( muxer_t *muxer )
                     ++num_consecutive_sample_skip;      /* Skip appendig sample. */
             }
         }
-        if( ++ output->current_track_number > output->num_of_tracks )
-            output->current_track_number = 1;       /* Back the first output track. */
+        if( ++ out_movie->current_track_number > out_movie->num_of_tracks )
+            out_movie->current_track_number = 1;    /* Back the first output track. */
         /* Move the next track. */
         if( ++ input->current_track_number > input->num_of_tracks )
         {
@@ -1117,12 +1139,12 @@ static int do_mux( muxer_t *muxer )
                 current_input_number = 1;       /* Back the first input movie. */
         }
     }
-    for( output->current_track_number = 1;
-         output->current_track_number <= output->num_of_tracks;
-         output->current_track_number ++ )
+    for( out_movie->current_track_number = 1;
+         out_movie->current_track_number <= out_movie->num_of_tracks;
+         out_movie->current_track_number ++ )
     {
         /* Close track. */
-        output_track_t *out_track = &output->track[output->current_track_number - 1];
+        output_track_t *out_track = &out_movie->track[ out_movie->current_track_number - 1 ];
         if( lsmash_flush_pooled_samples( output->root, out_track->track_ID, out_track->last_delta ) )
             ERROR_MSG( "failed to flush the rest of samples.\n" );
         /* Create edit list.

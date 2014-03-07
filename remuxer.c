@@ -45,12 +45,24 @@ typedef struct
 
 typedef struct
 {
-    lsmash_root_t            *root;
     output_track_t           *track;
-    lsmash_movie_parameters_t movie_param;
+    lsmash_movie_parameters_t param;
     uint32_t                  num_tracks;
     uint32_t                  current_track_number;
 } output_movie_t;
+
+typedef struct
+{
+    lsmash_file_t           *fh;
+    lsmash_file_parameters_t param;
+    output_movie_t           movie;
+} output_file_t;
+
+typedef struct
+{
+    lsmash_root_t *root;
+    output_file_t  file;
+} output_t;
 
 typedef struct
 {
@@ -77,15 +89,27 @@ typedef struct
 
 typedef struct
 {
-    lsmash_root_t                 *root;
     input_track_t                 *track;
     lsmash_itunes_metadata_t      *itunes_metadata;
-    lsmash_movie_parameters_t      movie_param;
+    lsmash_movie_parameters_t      param;
     uint32_t                       movie_ID;
     uint32_t                       num_tracks;
     uint32_t                       num_itunes_metadata;
     uint32_t                       current_track_number;
 } input_movie_t;
+
+typedef struct
+{
+    lsmash_file_t           *fh;
+    lsmash_file_parameters_t param;
+    input_movie_t            movie;
+} input_file_t;
+
+typedef struct
+{
+    lsmash_root_t *root;
+    input_file_t   file;
+} input_t;
 
 typedef struct
 {
@@ -101,8 +125,8 @@ typedef struct
 
 typedef struct
 {
-    output_movie_t      *output;
-    input_movie_t       *input;
+    output_t            *output;
+    input_t             *input;
     track_media_option **track_option;
     int                  num_input;
     int                  add_bom_to_chpl;
@@ -118,45 +142,50 @@ typedef struct
     int   num_track_delimiter;
 } file_option;
 
-static void cleanup_input_movie( input_movie_t *input )
+static void cleanup_input_movie( input_t *input )
 {
     if( !input )
         return;
-    if( input->itunes_metadata )
+    input_movie_t *in_movie = &input->file.movie;
+    if( in_movie->itunes_metadata )
     {
-        for( uint32_t i = 0; i < input->num_itunes_metadata; i++ )
-            lsmash_cleanup_itunes_metadata( &input->itunes_metadata[i] );
-        lsmash_free( input->itunes_metadata );
+        for( uint32_t i = 0; i < in_movie->num_itunes_metadata; i++ )
+            lsmash_cleanup_itunes_metadata( &in_movie->itunes_metadata[i] );
+        lsmash_freep( &in_movie->itunes_metadata );
     }
-    if( input->track )
+    if( in_movie->track )
     {
-        if( input->track->summaries )
+        for( uint32_t i = 0; i < in_movie->num_tracks; i++ )
         {
-            for( uint32_t i = 0; i < input->track->num_summaries; i++ )
-                lsmash_cleanup_summary( input->track->summaries[i].summary );
-            lsmash_free( input->track->summaries );
+            input_track_t *in_track = &in_movie->track[i];
+            if( in_track->summaries )
+            {
+                for( uint32_t j = 0; j < in_track->num_summaries; j++ )
+                    lsmash_cleanup_summary( in_track->summaries[j].summary );
+                lsmash_free( in_track->summaries );
+            }
         }
-        lsmash_free( input->track );
+        lsmash_freep( &in_movie->track );
     }
+    lsmash_close_file( &input->file.param );
     lsmash_destroy_root( input->root );
-    input->root            = NULL;
-    input->track           = NULL;
-    input->itunes_metadata = NULL;
+    input->root = NULL;
 }
 
-static void cleanup_output_movie( output_movie_t *output )
+static void cleanup_output_movie( output_t *output )
 {
     if( !output )
         return;
-    if( output->track )
+    output_movie_t *out_movie = &output->file.movie;
+    if( out_movie->track )
     {
-        if( output->track->summary_remap )
-            lsmash_free( output->track->summary_remap );
-        lsmash_free( output->track );
+        for( uint32_t i = 0; i < out_movie->num_tracks; i++ )
+            lsmash_free( out_movie->track[i].summary_remap );
+        lsmash_freep( &out_movie->track );
     }
+    lsmash_close_file( &output->file.param );
     lsmash_destroy_root( output->root );
-    output->root  = NULL;
-    output->track = NULL;
+    output->root = NULL;
 }
 
 static void cleanup_remuxer( remuxer_t *remuxer )
@@ -309,39 +338,49 @@ fail:
     return -1;
 }
 
-static int get_movie( input_movie_t *input, char *input_name )
+static int get_movie( input_t *input, char *input_name )
 {
     if( !strcmp( input_name, "-" ) )
         return ERROR_MSG( "standard input not supported.\n" );
-    input->root = lsmash_open_movie( input_name, LSMASH_FILE_MODE_READ );
+    /* Read an input file. */
+    input->root = lsmash_create_root();
     if( !input->root )
-        return ERROR_MSG( "failed to open input file.\n" );
-    input->num_itunes_metadata = lsmash_count_itunes_metadata( input->root );
-    if( input->num_itunes_metadata )
+        return ERROR_MSG( "failed to create a ROOT for an input file.\n" );
+    input_file_t *in_file = &input->file;
+    if( lsmash_open_file( input_name, 1, &in_file->param ) < 0 )
+        return ERROR_MSG( "failed to open an input file.\n" );
+    in_file->fh = lsmash_set_file( input->root, &in_file->param );
+    if( !in_file->fh )
+        return ERROR_MSG( "failed to add an input file into a ROOT.\n" );
+    if( lsmash_read_file( in_file->fh, &in_file->param ) < 0 )
+        return ERROR_MSG( "failed to read an input file\n" );
+    /* Get iTunes metadata. */
+    input_movie_t *in_movie = &in_file->movie;
+    in_movie->num_itunes_metadata = lsmash_count_itunes_metadata( input->root );
+    if( in_movie->num_itunes_metadata )
     {
-        input->itunes_metadata = lsmash_malloc( input->num_itunes_metadata * sizeof(lsmash_itunes_metadata_t) );
-        if( !input->itunes_metadata )
+        in_movie->itunes_metadata = lsmash_malloc( in_movie->num_itunes_metadata * sizeof(lsmash_itunes_metadata_t) );
+        if( !in_movie->itunes_metadata )
             return ERROR_MSG( "failed to alloc iTunes metadata.\n" );
         uint32_t itunes_metadata_count = 0;
-        for( uint32_t i = 1; i <= input->num_itunes_metadata; i++ )
+        for( uint32_t i = 1; i <= in_movie->num_itunes_metadata; i++ )
         {
-            if( get_itunes_metadata( input->root, i, &input->itunes_metadata[itunes_metadata_count] ) )
+            if( get_itunes_metadata( input->root, i, &in_movie->itunes_metadata[itunes_metadata_count] ) )
             {
                 WARNING_MSG( "failed to get an iTunes metadata.\n" );
                 continue;
             }
             ++itunes_metadata_count;
         }
-        input->num_itunes_metadata = itunes_metadata_count;
+        in_movie->num_itunes_metadata = itunes_metadata_count;
     }
-    input->current_track_number = 1;
-    lsmash_movie_parameters_t *movie_param = &input->movie_param;
-    lsmash_initialize_movie_parameters( movie_param );
-    if( lsmash_get_movie_parameters( input->root, movie_param ) )
+    in_movie->current_track_number = 1;
+    lsmash_initialize_movie_parameters( &in_movie->param );
+    if( lsmash_get_movie_parameters( input->root, &in_movie->param ) )
         return ERROR_MSG( "failed to get movie parameters.\n" );
-    uint32_t num_tracks = input->num_tracks = movie_param->number_of_tracks;
+    uint32_t num_tracks = in_movie->num_tracks = in_movie->param.number_of_tracks;
     /* Create tracks. */
-    input_track_t *in_track = input->track = lsmash_malloc( num_tracks * sizeof(input_track_t) );
+    input_track_t *in_track = in_movie->track = lsmash_malloc( num_tracks * sizeof(input_track_t) );
     if( !in_track )
         return ERROR_MSG( "failed to alloc input tracks.\n" );
     memset( in_track, 0, num_tracks * sizeof(input_track_t) );
@@ -409,7 +448,7 @@ static int get_movie( input_movie_t *input, char *input_name )
         in_track[i].composition_delay     = 0;
         in_track[i].skip_duration         = 0;
     }
-    lsmash_discard_boxes( input->root );
+    lsmash_destroy_children( lsmash_file_as_box( in_file->fh ) );
     return 0;
 }
 
@@ -417,7 +456,7 @@ static int parse_track_option( remuxer_t *remuxer )
 {
     track_media_option **track = remuxer->track_option;
     for( int i = 0; i < remuxer->num_input; i++ )
-        for( uint32_t j = 0; j < remuxer->input[i].num_tracks; j++ )
+        for( uint32_t j = 0; j < remuxer->input[i].file.movie.num_tracks; j++ )
         {
             track_media_option *current_track_opt = &track[i][j];
             if( current_track_opt->raw_track_option == NULL )
@@ -430,7 +469,7 @@ static int parse_track_option( remuxer_t *remuxer )
             uint32_t track_number = atoi( strtok( current_track_opt->raw_track_option, ":" ) );
             if( track_number == 0 )
                 return ERROR_MSG( "%s is an invalid track number.\n", strtok( current_track_opt->raw_track_option, ":" ) );
-            if( track_number > remuxer->input[i].num_tracks )
+            if( track_number > remuxer->input[i].file.movie.num_tracks )
                 return ERROR_MSG( "%d is an invalid track number.\n", track_number );
             char *track_option;
             while( (track_option = strtok( NULL, "," )) != NULL )
@@ -481,9 +520,9 @@ static int parse_track_option( remuxer_t *remuxer )
 
 static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
 {
-    input_movie_t       *input = remuxer->input;
+    input_t             *input        = remuxer->input;
     track_media_option **track_option = remuxer->track_option;
-    file_option          input_file_option[remuxer->num_input];
+    file_option          input_file_option[ remuxer->num_input ];
     int input_movie_number = 0;
     for( int i = 1; i < argc ; i++ )
     {
@@ -498,13 +537,13 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
                 input_file_option[input_movie_number].num_track_delimiter += (*p++ == '?');
             if( get_movie( &input[input_movie_number], strtok( argv[i], "?" ) ) )
                 return ERROR_MSG( "failed to get input movie.\n" );
-            uint32_t num_tracks = input[input_movie_number].num_tracks;
+            uint32_t num_tracks = input[input_movie_number].file.movie.num_tracks;
             track_option[input_movie_number] = lsmash_malloc( num_tracks * sizeof(track_media_option) );
             if( !track_option[input_movie_number] )
                 return ERROR_MSG( "couldn't allocate memory.\n" );
             memset( track_option[input_movie_number], 0, num_tracks * sizeof(track_media_option) );
             input_file_option[input_movie_number].whole_track_option = strtok( NULL, "" );
-            input[input_movie_number].movie_ID = input_movie_number + 1;
+            input[input_movie_number].file.movie.movie_ID = input_movie_number + 1;
             ++input_movie_number;
         }
         /* Create output movie. */
@@ -512,9 +551,12 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
         {
             if( ++i == argc )
                 return ERROR_MSG( "-o requires an argument.\n" );
-            remuxer->output->root = lsmash_open_movie( argv[i], LSMASH_FILE_MODE_WRITE );
-            if( !remuxer->output->root )
-                return ERROR_MSG( "failed to open output movie.\n" );
+            output_t *output = remuxer->output;
+            output->root = lsmash_create_root();
+            if( !output->root )
+                return ERROR_MSG( "failed to create a ROOT.\n" );
+            if( lsmash_open_file( argv[i], 0, &output->file.param ) < 0 )
+                return ERROR_MSG( "failed to open an output file.\n" );
         }
         else if( !strcasecmp( argv[i], "--chapter" ) )    /* chapter file */
         {
@@ -546,25 +588,26 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
     /* Parse track options */
     /* Get the current track and media parameters */
     for( int i = 0; i < remuxer->num_input; i++ )
-        for( uint32_t j = 0; j < input[i].num_tracks; j++ )
+        for( uint32_t j = 0; j < input[i].file.movie.num_tracks; j++ )
         {
-            input_track_t *in_track = &input[i].track[j];
+            input_track_t *in_track = &input[i].file.movie.track[j];
             if( !in_track->active )
                 continue;
             track_option[i][j].alternate_group = in_track->track_param.alternate_group;
-            track_option[i][j].ISO_language = in_track->media_param.ISO_language;
-            track_option[i][j].handler_name = in_track->media_param.media_handler_name;
+            track_option[i][j].ISO_language    = in_track->media_param.ISO_language;
+            track_option[i][j].handler_name    = in_track->media_param.media_handler_name;
         }
     /* Set the default language */
     if( remuxer->default_language )
         for( int i = 0; i < remuxer->num_input; i++ )
-            for( uint32_t j = 0; j < input[i].num_tracks; j++ )
+            for( uint32_t j = 0; j < input[i].file.movie.num_tracks; j++ )
                 track_option[i][j].ISO_language = remuxer->default_language;
     /* Get the track and media parameters specified by users */
     for( int i = 0; i < remuxer->num_input; i++ )
     {
-        if( input_file_option[i].num_track_delimiter > input[i].num_tracks )
-            return ERROR_MSG( "more track options specified than the actual number of the tracks (%"PRIu32").\n", input[i].num_tracks );
+        if( input_file_option[i].num_track_delimiter > input[i].file.movie.num_tracks )
+            return ERROR_MSG( "more track options specified than the actual number of the tracks (%"PRIu32").\n",
+                              input[i].file.movie.num_tracks );
         if( input_file_option[i].num_track_delimiter )
         {
             track_option[i][0].raw_track_option = strtok( input_file_option[i].whole_track_option, "?" );
@@ -608,7 +651,7 @@ static void replace_with_valid_brand( remuxer_t *remuxer )
             ISOM_BRAND_TYPE_QT  ,
             0
         };
-    input_movie_t *input = remuxer->input;
+    input_t *input = remuxer->input;
     /* Check the number of video and audio tracks, and the number of video
      * and audio sample descriptions for the restrictions of 3GPP Basic Profile.
      *   - the maximum number of tracks shall be one for video (or alternatively
@@ -621,24 +664,25 @@ static void replace_with_valid_brand( remuxer_t *remuxer )
     uint32_t audio_num_summaries = 0;
     for( int i = 0; i < remuxer->num_input; i++ )
     {
-        for( int j = 0; j < input[i].num_tracks; j++ )
+        input_movie_t *movie = &input[i].file.movie;
+        for( int j = 0; j < movie->num_tracks; j++ )
         {
-            if( input[i].track[j].media_param.handler_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK )
+            if( movie->track[j].media_param.handler_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK )
             {
                 if( ++video_track_count == 1 )
-                    video_num_summaries = input[i].track[j].num_summaries;
+                    video_num_summaries = movie->track[j].num_summaries;
             }
-            else if( input[i].track[j].media_param.handler_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK )
+            else if( movie->track[j].media_param.handler_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK )
             {
                 if( ++audio_track_count == 1 )
-                    audio_num_summaries = input[i].track[j].num_summaries;
+                    audio_num_summaries = movie->track[j].num_summaries;
             }
         }
     }
     for( int i = 0; i < remuxer->num_input; i++ )
     {
-        uint32_t *brand   = &input[i].movie_param.major_brand;
-        uint32_t *version = &input[i].movie_param.minor_version;
+        uint32_t *brand   = &input[i].file.param.major_brand;
+        uint32_t *version = &input[i].file.param.minor_version;
         for( int j = 0; brand_filter_list[j]; j++ )
             if( *brand == brand_filter_list[j] )
             {
@@ -669,10 +713,9 @@ static void replace_with_valid_brand( remuxer_t *remuxer )
 
 static int set_movie_parameters( remuxer_t *remuxer )
 {
-    int             num_input = remuxer->num_input;
-    input_movie_t  *input     = remuxer->input;
-    output_movie_t *output    = remuxer->output;
-    lsmash_initialize_movie_parameters( &output->movie_param );
+    int       num_input = remuxer->num_input;
+    input_t  *input     = remuxer->input;
+    output_t *output    = remuxer->output;
     replace_with_valid_brand( remuxer );
     /* Pick the most used major_brands. */
     lsmash_brand_type major_brand      [num_input];
@@ -681,12 +724,12 @@ static int set_movie_parameters( remuxer_t *remuxer )
     uint32_t          num_major_brand = 0;
     for( int i = 0; i < num_input; i++ )
     {
-        major_brand      [num_major_brand] = input[i].movie_param.major_brand;
-        minor_version    [num_major_brand] = input[i].movie_param.minor_version;
+        major_brand      [num_major_brand] = input[i].file.param.major_brand;
+        minor_version    [num_major_brand] = input[i].file.param.minor_version;
         major_brand_count[num_major_brand] = 0;
         for( int j = 0; j < num_input; j++ )
-            if( (major_brand  [num_major_brand] == input[j].movie_param.major_brand)
-             && (minor_version[num_major_brand] == input[j].movie_param.minor_version) )
+            if( (major_brand  [num_major_brand] == input[j].file.param.major_brand)
+             && (minor_version[num_major_brand] == input[j].file.param.minor_version) )
             {
                 if( i <= j )
                     ++major_brand_count[num_major_brand];
@@ -700,26 +743,27 @@ static int set_movie_parameters( remuxer_t *remuxer )
             }
         ++num_major_brand;
     }
-    uint32_t most_used_count = 0;
+    output_file_t *out_file        = &output->file;
+    uint32_t       most_used_count = 0;
     for( uint32_t i = 0; i < num_major_brand; i++ )
         if( major_brand_count[i] > most_used_count )
         {
             most_used_count = major_brand_count[i];
-            output->movie_param.major_brand   = major_brand  [i];
-            output->movie_param.minor_version = minor_version[i];
+            out_file->param.major_brand   = major_brand  [i];
+            out_file->param.minor_version = minor_version[i];
         }
     /* Deduplicate compatible brands. */
     uint32_t num_input_brands = num_input;
     for( int i = 0; i < num_input; i++ )
-        num_input_brands += input[i].movie_param.number_of_brands;
+        num_input_brands += input[i].file.param.brand_count;
     lsmash_brand_type input_brands[num_input_brands];
     num_input_brands = 0;
     for( int i = 0; i < num_input; i++ )
     {
-        input_brands[num_input_brands++] = input[i].movie_param.major_brand;
-        for( uint32_t j = 0; j < input[i].movie_param.number_of_brands; j++ )
-            if( input[i].movie_param.brands[j] )
-                input_brands[num_input_brands++] = input[i].movie_param.brands[j];
+        input_brands[num_input_brands++] = input[i].file.param.major_brand;
+        for( uint32_t j = 0; j < input[i].file.param.brand_count; j++ )
+            if( input[i].file.param.brands[j] )
+                input_brands[num_input_brands++] = input[i].file.param.brands[j];
     }
     lsmash_brand_type output_brands[num_input_brands];
     uint32_t num_output_brands = 0;
@@ -735,12 +779,17 @@ static int set_movie_parameters( remuxer_t *remuxer )
             }
         ++num_output_brands;
     }
-    output->movie_param.number_of_brands = num_output_brands;
-    output->movie_param.brands           = output_brands;
+    out_file->param.brand_count = num_output_brands;
+    out_file->param.brands      = output_brands;
+    /* Set up a file. */
+    out_file->fh = lsmash_set_file( output->root, &out_file->param );
+    if( !out_file->fh )
+        return ERROR_MSG( "failed to add an output file into a ROOT.\n" );
+    /* Check whether a reference chapter track is allowed or not. */
     if( remuxer->chap_file )
-        for( uint32_t i = 0; i < output->movie_param.number_of_brands; i++ )
+        for( uint32_t i = 0; i < out_file->param.brand_count; i++ )
         {
-            uint32_t brand = output->movie_param.brands[i];
+            uint32_t brand = out_file->param.brands[i];
             /* According to the restrictions of 3GPP Basic Profile,
              *   - there shall be no references between tracks, e.g., a scene description track
              *     shall not refer to a media track since all tracks are on equal footing and
@@ -760,29 +809,33 @@ static int set_movie_parameters( remuxer_t *remuxer )
             }
         }
     /* Set the movie timescale in order to match the media timescale if only one track is there. */
-    if( output->num_tracks == 1 )
+    lsmash_initialize_movie_parameters( &out_file->movie.param );
+    if( out_file->movie.num_tracks == 1 )
         for( int i = 0; i < remuxer->num_input; i++ )
-            for( uint32_t j = 0; j < input[i].num_tracks; j++ )
-                if( input[i].track[j].active )
+        {
+            input_movie_t *in_movie = &input[i].file.movie;
+            for( uint32_t j = 0; j < in_movie->num_tracks; j++ )
+                if( in_movie->track[j].active )
                 {
-                    output->movie_param.timescale = input[i].track[j].media_param.timescale;
+                    out_file->movie.param.timescale = in_movie->track[j].media_param.timescale;
                     break;
                 }
-    return lsmash_set_movie_parameters( output->root, &output->movie_param );
+        }
+    return lsmash_set_movie_parameters( output->root, &out_file->movie.param );
 }
 
-static void set_itunes_metadata( output_movie_t *output, input_movie_t *input, int num_input )
+static void set_itunes_metadata( output_t *output, input_t *input, int num_input )
 {
     for( int i = 0; i < num_input; i++ )
-        for( uint32_t j = 0; j < input[i].num_itunes_metadata; j++ )
-            if( lsmash_set_itunes_metadata( output->root, input[i].itunes_metadata[j] ) )
+        for( uint32_t j = 0; j < input[i].file.movie.num_itunes_metadata; j++ )
+            if( lsmash_set_itunes_metadata( output->root, input[i].file.movie.itunes_metadata[j] ) )
             {
                 WARNING_MSG( "failed to set an iTunes metadata.\n" );
                 continue;
             }
 }
 
-static int set_starting_point( input_movie_t *input, input_track_t *in_track, uint32_t seek_point, int consider_rap )
+static int set_starting_point( input_t *input, input_track_t *in_track, uint32_t seek_point, int consider_rap )
 {
     if( seek_point == 0 )
         return 0;
@@ -833,53 +886,59 @@ static int set_starting_point( input_movie_t *input, input_track_t *in_track, ui
     return 0;
 }
 
-static void exclude_invalid_output_track( output_movie_t *output, output_track_t *out_track,
-                                          input_movie_t *input, input_track_t *in_track,
+static void exclude_invalid_output_track( output_t *output, output_track_t *out_track,
+                                          input_movie_t *in_movie, input_track_t *in_track,
                                           const char *message, ... )
 {
     REFRESH_CONSOLE;
-    eprintf( "[Warning] in %"PRIu32"/%"PRIu32" -> out %"PRIu32": ", input->movie_ID, in_track->track_ID, out_track->track_ID );
+    eprintf( "[Warning] in %"PRIu32"/%"PRIu32" -> out %"PRIu32": ", in_movie->movie_ID, in_track->track_ID, out_track->track_ID );
     va_list args;
     va_start( args, message );
     vfprintf( stderr, message, args );
     va_end( args );
     lsmash_delete_track( output->root, out_track->track_ID );
-    -- output->num_tracks;
+    -- output->file.movie.num_tracks;
     in_track->active = 0;
 }
 
 static int prepare_output( remuxer_t *remuxer )
 {
-    output_movie_t *output = remuxer->output;
-    input_movie_t  *input  = remuxer->input;
+    input_t        *input     = remuxer->input;
+    output_t       *output    = remuxer->output;
+    output_movie_t *out_movie = &output->file.movie;
     /* Count the number of output tracks. */
     for( int i = 0; i < remuxer->num_input; i++ )
-        output->num_tracks += input[i].num_tracks;
+        out_movie->num_tracks += input[i].file.movie.num_tracks;
     for( int i = 0; i < remuxer->num_input; i++ )
-        for( uint32_t j = 0; j < input[i].num_tracks; j++ )
+    {
+        input_movie_t *in_movie = &input[i].file.movie;
+        for( uint32_t j = 0; j < in_movie->num_tracks; j++ )
         {
             /* Don't remux tracks specified as 'remove' by a user. */
             if( remuxer->track_option[i][j].remove )
-                input[i].track[j].active = 0;
-            if( !input[i].track[j].active )
-                -- output->num_tracks;
+                in_movie->track[j].active = 0;
+            if( !in_movie->track[j].active )
+                -- out_movie->num_tracks;
         }
+    }
     if( set_movie_parameters( remuxer ) )
         return ERROR_MSG( "failed to set output movie parameters.\n" );
     set_itunes_metadata( output, input, remuxer->num_input );
     /* Allocate output tracks. */
-    output->track = lsmash_malloc( output->num_tracks * sizeof(output_track_t) );
-    if( !output->track )
+    out_movie->track = lsmash_malloc( out_movie->num_tracks * sizeof(output_track_t) );
+    if( !out_movie->track )
         return ERROR_MSG( "failed to alloc output tracks.\n" );
-    output->current_track_number = 1;
+    out_movie->current_track_number = 1;
     for( int i = 0; i < remuxer->num_input; i++ )
-        for( uint32_t j = 0; j < input[i].num_tracks; j++ )
+    {
+        input_movie_t *in_movie = &input[i].file.movie;
+        for( uint32_t j = 0; j < in_movie->num_tracks; j++ )
         {
             track_media_option *current_track_opt = &remuxer->track_option[i][j];
-            input_track_t *in_track = &input[i].track[j];
+            input_track_t *in_track = &in_movie->track[j];
             if( !in_track->active )
                 continue;
-            output_track_t *out_track = &output->track[output->current_track_number - 1];
+            output_track_t *out_track = &out_movie->track[ out_movie->current_track_number - 1 ];
             out_track->summary_remap = lsmash_malloc( in_track->num_summaries * sizeof(uint32_t) );
             if( !out_track->summary_remap )
                 return ERROR_MSG( "failed to create summary mapping for a track.\n" );
@@ -899,12 +958,12 @@ static int prepare_output( remuxer_t *remuxer )
                 out_track->track_param.mode &= ~ISOM_TRACK_ENABLED;
             if( lsmash_set_track_parameters( output->root, out_track->track_ID, &out_track->track_param ) )
             {
-                exclude_invalid_output_track( output, out_track, &input[i], in_track, "failed to set track parameters.\n" );
+                exclude_invalid_output_track( output, out_track, in_movie, in_track, "failed to set track parameters.\n" );
                 continue;
             }
             if( lsmash_set_media_parameters( output->root, out_track->track_ID, &out_track->media_param ) )
             {
-                exclude_invalid_output_track( output, out_track, &input[i], in_track, "failed to set media parameters.\n" );
+                exclude_invalid_output_track( output, out_track, in_movie, in_track, "failed to set media parameters.\n" );
                 continue;
             }
             uint32_t valid_summary_count = 0;
@@ -929,23 +988,24 @@ static int prepare_output( remuxer_t *remuxer )
             }
             if( valid_summary_count == 0 )
             {
-                exclude_invalid_output_track( output, out_track, &input[i], in_track, "failed to append all summaries.\n" );
+                exclude_invalid_output_track( output, out_track, in_movie, in_track, "failed to append all summaries.\n" );
                 continue;
             }
             out_track->last_sample_delta = in_track->last_sample_delta;
             if( set_starting_point( input, in_track, current_track_opt->seek, current_track_opt->consider_rap ) )
             {
-                exclude_invalid_output_track( output, out_track, &input[i], in_track, "failed to set starting point.\n" );
+                exclude_invalid_output_track( output, out_track, in_movie, in_track, "failed to set starting point.\n" );
                 continue;
             }
             out_track->current_sample_number = 1;
             out_track->skip_dt_interval      = 0;
             out_track->last_sample_dts       = 0;
-            ++ output->current_track_number;
+            ++ out_movie->current_track_number;
         }
-    if( output->num_tracks == 0 )
+    }
+    if( out_movie->num_tracks == 0 )
         return ERROR_MSG( "failed to create the output movie.\n" );
-    output->current_track_number = 1;
+    out_movie->current_track_number = 1;
     return 0;
 }
 
@@ -958,19 +1018,21 @@ static void set_reference_chapter_track( remuxer_t *remuxer )
 static int do_remux( remuxer_t *remuxer )
 {
 #define LSMASH_MAX( a, b ) ((a) > (b) ? (a) : (b))
-    output_movie_t *out_movie = remuxer->output;
-    input_movie_t  *inputs    = remuxer->input;
+    input_t        *inputs    = remuxer->input;
+    output_t       *output    = remuxer->output;
+    output_movie_t *out_movie = &output->file.movie;
     set_reference_chapter_track( remuxer );
-    double   largest_dts = 0;
-    uint32_t input_movie_number = 1;
+    double   largest_dts                 = 0;
+    uint32_t input_movie_number          = 1;
     uint32_t num_consecutive_sample_skip = 0;
-    uint32_t num_active_input_tracks = out_movie->num_tracks;
-    uint64_t total_media_size = 0;
-    uint8_t  sample_count = 0;
+    uint32_t num_active_input_tracks     = out_movie->num_tracks;
+    uint64_t total_media_size            = 0;
+    uint8_t  sample_count                = 0;
     while( 1 )
     {
-        input_movie_t *in_movie = &inputs[input_movie_number - 1];
-        input_track_t *in_track = &in_movie->track[in_movie->current_track_number - 1];
+        input_t       *in       = &inputs[input_movie_number - 1];
+        input_movie_t *in_movie = &in->file.movie;
+        input_track_t *in_track = &in_movie->track[ in_movie->current_track_number - 1 ];
         if( !in_track->active )
         {
             /* Move the next track. */
@@ -991,7 +1053,7 @@ static int do_remux( remuxer_t *remuxer )
             /* Get a new sample data if the track doesn't hold any one. */
             if( !sample )
             {
-                sample = lsmash_get_sample_from_media_timeline( in_movie->root, in_track->track_ID, in_track->current_sample_number );
+                sample = lsmash_get_sample_from_media_timeline( in->root, in_track->track_ID, in_track->current_sample_number );
                 if( sample )
                 {
                     in_track->sample = sample;
@@ -999,7 +1061,7 @@ static int do_remux( remuxer_t *remuxer )
                 }
                 else
                 {
-                    if( lsmash_check_sample_existence_in_media_timeline( in_movie->root, in_track->track_ID, in_track->current_sample_number ) )
+                    if( lsmash_check_sample_existence_in_media_timeline( in->root, in_track->track_ID, in_track->current_sample_number ) )
                     {
                         ERROR_MSG( "failed to get a sample.\n" );
                         break;
@@ -1016,7 +1078,7 @@ static int do_remux( remuxer_t *remuxer )
                 /* Append a sample if meeting a condition. */
                 if( in_track->dts <= largest_dts || num_consecutive_sample_skip == num_active_input_tracks )
                 {
-                    output_track_t *out_track = &out_movie->track[out_movie->current_track_number - 1];
+                    output_track_t *out_track = &out_movie->track[ out_movie->current_track_number - 1 ];
                     sample->index = sample->index > in_track->num_summaries ? in_track->num_summaries
                                   : sample->index == 0 ? 1
                                   : sample->index;
@@ -1034,7 +1096,7 @@ static int do_remux( remuxer_t *remuxer )
                         uint64_t sample_size     = sample->length;      /* sample might be deleted internally after appending. */
                         uint64_t last_sample_dts = sample->dts;         /* same as above */
                         /* Append a sample into output movie. */
-                        if( lsmash_append_sample( out_movie->root, out_track->track_ID, sample ) )
+                        if( lsmash_append_sample( output->root, out_track->track_ID, sample ) )
                         {
                             lsmash_delete_sample( sample );
                             return ERROR_MSG( "failed to append a sample.\n" );
@@ -1074,7 +1136,7 @@ static int do_remux( remuxer_t *remuxer )
             out_movie->current_track_number = 1;    /* Back the first track in the output movie. */
     }
     for( uint32_t i = 0; i < out_movie->num_tracks; i++ )
-        if( lsmash_flush_pooled_samples( out_movie->root, out_movie->track[i].track_ID, out_movie->track[i].last_sample_delta ) )
+        if( lsmash_flush_pooled_samples( output->root, out_movie->track[i].track_ID, out_movie->track[i].last_sample_delta ) )
             return ERROR_MSG( "failed to flush samples.\n" );
     return 0;
 #undef LSMASH_MAX
@@ -1082,17 +1144,18 @@ static int do_remux( remuxer_t *remuxer )
 
 static int construct_timeline_maps( remuxer_t *remuxer )
 {
-    output_movie_t      *output       = remuxer->output;
-    input_movie_t       *input        = remuxer->input;
+    input_t             *input        = remuxer->input;
+    output_t            *output       = remuxer->output;
+    output_movie_t      *out_movie    = &output->file.movie;
     track_media_option **track_option = remuxer->track_option;
-    output->current_track_number = 1;
+    out_movie->current_track_number = 1;
     for( int i = 0; i < remuxer->num_input; i++ )
-        for( uint32_t j = 0; j < input[i].num_tracks; j++ )
+        for( uint32_t j = 0; j < input[i].file.movie.num_tracks; j++ )
         {
-            input_track_t *in_track  = &input[i].track[j];
+            input_track_t *in_track  = &input[i].file.movie.track[j];
             if( !in_track->active )
                 continue;
-            output_track_t *out_track = &output->track[output->current_track_number ++ - 1];
+            output_track_t *out_track = &out_movie->track[ out_movie->current_track_number ++ - 1 ];
             if( track_option[i][j].seek )
             {
                 /* Reconstruct timeline maps. */
@@ -1135,7 +1198,7 @@ static int moov_to_front_callback( void *param, uint64_t written_movie_size, uin
 
 static int finish_movie( remuxer_t *remuxer )
 {
-    output_movie_t *output = remuxer->output;
+    output_t *output = remuxer->output;
     /* Set chapter list */
     if( remuxer->chap_file )
         lsmash_set_tyrant_chapter( output->root, remuxer->chap_file, remuxer->add_bom_to_chpl );
@@ -1175,11 +1238,11 @@ int main( int argc, char *argv[] )
             num_input++;
     if( !num_input )
         return ERROR_MSG( "no input file specified.\n" );
-    output_movie_t      output = { 0 };
-    input_movie_t       input[ num_input ];
+    output_t            output = { 0 };
+    input_t             input[ num_input ];
     track_media_option *track_option[ num_input ];
     remuxer_t           remuxer = { &output, input, track_option, num_input, 0, 0, 1, NULL, 0 };
-    memset( input, 0, num_input * sizeof(input_movie_t) );
+    memset( input, 0, num_input * sizeof(input_t) );
     memset( track_option, 0, num_input * sizeof(track_media_option *) );
     if( parse_cli_option( argc, argv, &remuxer ) )
         return REMUXER_ERR( "failed to parse command line options.\n" );

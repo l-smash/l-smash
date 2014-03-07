@@ -2367,12 +2367,12 @@ fail:
 int h264_print_codec_specific
 (
     FILE          *fp,
-    lsmash_root_t *root,
+    lsmash_file_t *file,
     isom_box_t    *box,
     int            level
 )
 {
-    assert( fp && root && box && (box->manager & LSMASH_BINARY_CODED_BOX) );
+    assert( fp && file && box && (box->manager & LSMASH_BINARY_CODED_BOX) );
     int indent = level;
     lsmash_ifprintf( fp, indent++, "[%s: AVC Configuration Box]\n", isom_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
@@ -2477,12 +2477,12 @@ int h264_copy_codec_specific
 int h264_print_bitrate
 (
     FILE          *fp,
-    lsmash_root_t *root,
+    lsmash_file_t *file,
     isom_box_t    *box,
     int            level
 )
 {
-    assert( fp && root && box );
+    assert( fp && file && box );
     int indent = level;
     lsmash_ifprintf( fp, indent++, "[%s: MPEG-4 Bit Rate Box]\n", isom_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );

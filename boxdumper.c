@@ -58,14 +58,20 @@ static void display_help( void )
              "    --timestamp    Dump media timestamps\n" );
 }
 
-static int boxdumper_error( lsmash_root_t *root, char* message )
+static int boxdumper_error
+(
+    lsmash_root_t            *root,
+    lsmash_file_parameters_t *file_param,
+    const char               *message
+)
 {
+    lsmash_close_file( file_param );
     lsmash_destroy_root( root );
     eprintf( "%s", message );
     return -1;
 }
 
-#define BOXDUMPER_ERR( message ) boxdumper_error( root, message )
+#define BOXDUMPER_ERR( message ) boxdumper_error( root, &file_param, message )
 #define DO_NOTHING
 
 int main( int argc, char *argv[] )
@@ -111,15 +117,24 @@ int main( int argc, char *argv[] )
 #ifdef _WIN32
     _setmode( _fileno(stdin), _O_BINARY );
 #endif
-    lsmash_file_mode mode = LSMASH_FILE_MODE_READ;
-    if( dump_box )
-        mode |= LSMASH_FILE_MODE_DUMP;
-    lsmash_root_t *root = lsmash_open_movie( filename, mode );
+    /* Open the input file. */
+    lsmash_root_t *root = lsmash_create_root();
     if( !root )
     {
-        fprintf( stderr, "Failed to open input file.\n" );
+        fprintf( stderr, "Failed to create a ROOT.\n" );
         return -1;
     }
+    lsmash_file_parameters_t file_param;
+    if( lsmash_open_file( filename, 1, &file_param ) < 0 )
+        return BOXDUMPER_ERR( "Failed to open an input file.\n" );
+    if( dump_box )
+        file_param.mode |= LSMASH_FILE_MODE_DUMP;
+    lsmash_file_t *file = lsmash_set_file( root, &file_param );
+    if( !file )
+        return BOXDUMPER_ERR( "Failed to add a file into a ROOT.\n" );
+    if( lsmash_read_file( file, &file_param ) < 0 )
+        return BOXDUMPER_ERR( "Failed to read a file\n" );
+    /* Dump the input file. */
     if( chapter )
     {
         if( lsmash_print_chapter_list( root ) )

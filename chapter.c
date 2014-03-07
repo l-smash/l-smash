@@ -166,12 +166,15 @@ static int isom_add_chpl_entry( isom_chpl_t *chpl, isom_chapter_entry_t *chap_da
 
 int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom )
 {
+    if( !root )
+        goto error_message;
     /* This function should be called after updating of the latest movie duration. */
-    if( !root
-     || !root->moov
-     || !root->moov->mvhd
-     ||  root->moov->mvhd->timescale == 0
-     ||  root->moov->mvhd->duration  == 0 )
+    lsmash_file_t *file = root->file;
+    if( !file
+     || !file->moov
+     || !file->moov->mvhd
+     ||  file->moov->mvhd->timescale == 0
+     ||  file->moov->mvhd->duration  == 0 )
         goto error_message;
     /* check each line format */
     fn_get_chapter_data fnc = isom_check_chap_line( file_name );
@@ -183,10 +186,10 @@ int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom
         lsmash_log( NULL, LSMASH_LOG_ERROR, "failed to open the chapter file \"%s\".\n", file_name );
         goto error_message;
     }
-    if( (!root->moov->udta       && isom_add_udta( root->moov ))
-     || (!root->moov->udta->chpl && isom_add_chpl( root->moov->udta )) )
+    if( (!file->moov->udta       && isom_add_udta( file->moov ))
+     || (!file->moov->udta->chpl && isom_add_chpl( file->moov->udta )) )
         goto fail;
-    root->moov->udta->chpl->version = 1;    /* version = 1 is popular. */
+    file->moov->udta->chpl->version = 1;    /* version = 1 is popular. */
     isom_chapter_entry_t data = {0};
     while( !fnc( chapter, &data ) )
     {
@@ -200,7 +203,7 @@ int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom
             data.chapter_name = chapter_name_with_bom;
         }
         data.start_time = (data.start_time + 50) / 100;    /* convert to 100ns unit */
-        if( data.start_time / 1e7 > (double)root->moov->mvhd->duration / root->moov->mvhd->timescale )
+        if( data.start_time / 1e7 > (double)file->moov->mvhd->duration / file->moov->mvhd->timescale )
         {
             lsmash_log( NULL, LSMASH_LOG_WARNING,
                         "a chapter point exceeding the actual duration detected."
@@ -208,7 +211,7 @@ int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom
             lsmash_free( data.chapter_name );
             break;
         }
-        if( isom_add_chpl_entry( root->moov->udta->chpl, &data ) )
+        if( isom_add_chpl_entry( file->moov->udta->chpl, &data ) )
             goto fail2;
         lsmash_freep( &data.chapter_name );
     }
@@ -226,18 +229,21 @@ error_message:
 
 int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_ID, char *file_name )
 {
-    if( !root
-     || !root->moov
-     || !root->moov->mvhd )
+    if( !root )
         goto error_message;
-    if( root->forbid_tref || (!root->qt_compatible && !root->itunes_movie) )
+    lsmash_file_t *file = root->file;
+    if( !file
+     || !file->moov
+     || !file->moov->mvhd )
+        goto error_message;
+    if( file->forbid_tref || (!file->qt_compatible && !file->itunes_movie) )
     {
         lsmash_log( NULL, LSMASH_LOG_ERROR, "reference chapter is not available for this file.\n" );
         goto error_message;
     }
     FILE *chapter = NULL;       /* shut up 'uninitialized' warning */
     /* Create a Track Reference Box. */
-    isom_trak_t *trak = isom_get_trak( root, track_ID );
+    isom_trak_t *trak = isom_get_trak( file, track_ID );
     if( !trak )
     {
         lsmash_log( NULL, LSMASH_LOG_ERROR, "the specified track ID to apply the chapter doesn't exist.\n" );
@@ -249,7 +255,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     uint32_t *id = (uint32_t *)lsmash_malloc( sizeof(uint32_t) );
     if( !id )
         goto error_message;
-    uint32_t chapter_track_ID = *id = root->moov->mvhd->next_track_ID;
+    uint32_t chapter_track_ID = *id = file->moov->mvhd->next_track_ID;
     /* Create a Track Reference Type Box. */
     isom_tref_type_t *chap = isom_add_track_reference_type( trak->tref, QT_TREF_TYPE_CHAP );
     if( !chap )
@@ -272,12 +278,12 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     lsmash_media_parameters_t media_param;
     lsmash_initialize_media_parameters( &media_param );
     media_param.timescale    = media_timescale;
-    media_param.ISO_language = root->max_3gpp_version >= 6 || root->itunes_movie ? ISOM_LANGUAGE_CODE_UNDEFINED : 0;
+    media_param.ISO_language = file->max_3gpp_version >= 6 || file->itunes_movie ? ISOM_LANGUAGE_CODE_UNDEFINED : 0;
     media_param.MAC_language = 0;
     if( lsmash_set_media_parameters( root, chapter_track_ID, &media_param ) )
         goto fail;
     /* Create a sample description. */
-    lsmash_codec_type_t sample_type = root->max_3gpp_version >= 6 || root->itunes_movie
+    lsmash_codec_type_t sample_type = file->max_3gpp_version >= 6 || file->itunes_movie
                                     ? ISOM_CODEC_TYPE_TX3G_TEXT
                                     : QT_CODEC_TYPE_TEXT_TEXT;
     lsmash_summary_t summary = { .sample_type = sample_type };
@@ -339,7 +345,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     }
     if( lsmash_flush_pooled_samples( root, chapter_track_ID, 0 ) )
         goto fail;
-    isom_trak_t *chapter_trak = isom_get_trak( root, chapter_track_ID );
+    isom_trak_t *chapter_trak = isom_get_trak( file, chapter_track_ID );
     if( !chapter_trak )
         goto fail;
     fclose( chapter );
@@ -355,8 +361,8 @@ fail:
     if( trak->tref->ref_list.entry_count == 0 )
         isom_remove_box_by_itself( trak->tref );
     /* Remove the reference chapter track attached at tail of the list. */
-    if( root->moov->trak_list.tail )
-        isom_remove_box_by_itself( root->moov->trak_list.tail->data );
+    if( file->moov->trak_list.tail )
+        isom_remove_box_by_itself( file->moov->trak_list.tail->data );
 error_message:
     lsmash_log( NULL, LSMASH_LOG_ERROR, "failed to set reference chapter.\n" );
     return -1;
@@ -364,20 +370,21 @@ error_message:
 
 int lsmash_print_chapter_list( lsmash_root_t *root )
 {
-    if( !root || !(root->flags & LSMASH_FILE_MODE_READ) )
+    if( !root || !root->file || !(root->file->flags & LSMASH_FILE_MODE_READ) )
         return -1;
-    if( root->moov
-     && root->moov->udta
-     && root->moov->udta->chpl )
+    lsmash_file_t *file = root->file;
+    if( file->moov
+     && file->moov->udta
+     && file->moov->udta->chpl )
     {
-        isom_chpl_t *chpl = root->moov->udta->chpl;
+        isom_chpl_t *chpl = file->moov->udta->chpl;
         uint32_t timescale;
         if( !chpl->version )
         {
-            if( !root->moov
-             && !root->moov->mvhd )
+            if( !file->moov
+             && !file->moov->mvhd )
                 return -1;
-            timescale = root->moov->mvhd->timescale;
+            timescale = file->moov->mvhd->timescale;
         }
         else
             timescale = 10000000;

@@ -46,6 +46,7 @@ typedef int (*isom_extension_writer_t)( lsmash_bs_t *bs, isom_box_t *box );
 #define ISOM_BASEBOX_COMMON                                                                     \
         const lsmash_class_t       *class;                                                      \
         lsmash_root_t              *root;       /* pointer of root */                           \
+        lsmash_file_t              *file;       /* pointer of file */                           \
         isom_box_t                 *parent;     /* pointer of the parent box of this box */     \
         uint8_t                    *binary;     /* used only when LSMASH_BINARY_CODED_BOX */    \
         isom_extension_destructor_t destruct;   /* box specific destructor */                   \
@@ -1708,7 +1709,7 @@ typedef struct
 {
     ISOM_BASEBOX_COMMON;
     isom_mvhd_t         *mvhd;          /* Movie Header Box */
-    isom_iods_t         *iods;          /* ISOM: Object Descriptor Box / QTFF: null */
+    isom_iods_t         *iods;          /* MP4: Object Descriptor Box */
     lsmash_entry_list_t  trak_list;     /* Track Box List */
     isom_udta_t         *udta;          /* User Data Box */
     isom_ctab_t         *ctab;          /* ISOM: null / QTFF: Color Table Box */
@@ -1832,12 +1833,13 @@ typedef struct
 
 /** **/
 
-/* ROOT */
-struct lsmash_root_tag
+/* File */
+struct lsmash_file_tag
 {
-    ISOM_FULLBOX_COMMON;                /* the size field expresses total file size
-                                         * the flags field expresses file mode */
+    ISOM_FULLBOX_COMMON;                /* The 'size' field indicates total file size.
+                                         * The 'flags' field indicates file mode. */
     isom_ftyp_t         *ftyp;          /* File Type Box */
+    lsmash_entry_list_t  styp_list;     /* Segment Type Box List */
     isom_moov_t         *moov;          /* Movie Box */
     lsmash_entry_list_t  moof_list;     /* Movie Fragment Box List */
     isom_mdat_t         *mdat;          /* Media Data Box */
@@ -1849,21 +1851,31 @@ struct lsmash_root_tag
         isom_fragment_manager_t *fragment;  /* movie fragment manager */
         lsmash_entry_list_t     *print;
         lsmash_entry_list_t     *timeline;
-        double   max_chunk_duration;        /* max duration per chunk in seconds */
-        double   max_async_tolerance;       /* max tolerance, in seconds, for amount of interleaving asynchronization between tracks */
-        uint64_t max_chunk_size;            /* max size per chunk in bytes. */
-        uint64_t max_read_size;             /* max size of reading from a chunk at a time. */
+        double    max_chunk_duration;       /* max duration per chunk in seconds */
+        double    max_async_tolerance;      /* max tolerance, in seconds, for amount of interleaving asynchronization between tracks */
+        uint64_t  max_chunk_size;           /* max size per chunk in bytes. */
+        uint64_t  max_read_size;            /* max size of reading from a chunk at a time. */
+        uint32_t  brand_count;
+        uint32_t *compatible_brands;        /* the backup of the compatible brands in the File Type Box or the valid Segment Type Box */
+        uint8_t   bc_fclose;                /* a flag for backward compatible file closing */
         /* flags for compatibility */
-        uint8_t  qt_compatible;             /* compatibility with QuickTime file format */
-        uint8_t  isom_compatible;           /* compatibility with ISO Base Media file format */
-        uint8_t  avc_extensions;            /* compatibility with AVC extensions */
-        uint8_t  mp4_version1;              /* compatibility with MP4 ver.1 file format */
-        uint8_t  mp4_version2;              /* compatibility with MP4 ver.2 file format */
-        uint8_t  itunes_movie;              /* compatibility with iTunes Movie */
-        uint8_t  max_3gpp_version;          /* maximum 3GPP version */
-        uint8_t  max_isom_version;          /* maximum ISO Base Media file format version */
-        uint8_t  forbid_tref;               /* If set to 1, track reference is forbidden. */
-        uint8_t  undefined_64_ver;          /* If set to 1, 64-bit version fields, e.g. duration, are undefined. */
+        uint8_t qt_compatible;              /* compatibility with QuickTime file format */
+        uint8_t isom_compatible;            /* compatibility with ISO Base Media file format */
+        uint8_t avc_extensions;             /* compatibility with AVC extensions */
+        uint8_t mp4_version1;               /* compatibility with MP4 ver.1 file format */
+        uint8_t mp4_version2;               /* compatibility with MP4 ver.2 file format */
+        uint8_t itunes_movie;               /* compatibility with iTunes Movie */
+        uint8_t max_3gpp_version;           /* maximum 3GPP version */
+        uint8_t max_isom_version;           /* maximum ISO Base Media file format version */
+        uint8_t forbid_tref;                /* If set to 1, track reference is forbidden. */
+        uint8_t undefined_64_ver;           /* If set to 1, 64-bit version fields, e.g. duration, are undefined. */
+};
+
+/* ROOT */
+struct lsmash_root_tag
+{
+    ISOM_FULLBOX_COMMON;            /* The 'file' field contains the address of the current active file. */
+    lsmash_entry_list_t file_list;  /* the list of all files the ROOT contains */
 };
 
 /** **/
@@ -2388,11 +2400,11 @@ void isom_bs_put_basebox_common( lsmash_bs_t *bs, isom_box_t *box );
 void isom_bs_put_fullbox_common( lsmash_bs_t *bs, isom_box_t *box );
 void isom_bs_put_box_common( lsmash_bs_t *bs, void *box );
 
-int isom_check_compatibility( lsmash_root_t *root );
+int isom_check_compatibility( lsmash_file_t *file );
 
 char *isom_4cc2str( uint32_t fourcc );
 
-isom_trak_t *isom_get_trak( lsmash_root_t *root, uint32_t track_ID );
+isom_trak_t *isom_get_trak( lsmash_file_t *file, uint32_t track_ID );
 isom_trex_t *isom_get_trex( isom_mvex_t *mvex, uint32_t track_ID );
 isom_tfra_t *isom_get_tfra( isom_mfra_t *mfra, uint32_t track_ID );
 isom_sgpd_t *isom_get_sample_group_description( isom_stbl_t *stbl, uint32_t grouping_type );
@@ -2403,8 +2415,9 @@ void isom_remove_dcr_ps( isom_dcr_ps_entry_t *ps );
 
 int isom_setup_handler_reference( isom_hdlr_t *hdlr, uint32_t media_type );
 
-int isom_add_ftyp( lsmash_root_t *root );
-int isom_add_moov( lsmash_root_t *root );
+lsmash_file_t *isom_add_file( lsmash_root_t *root );
+int isom_add_ftyp( lsmash_file_t *file );
+int isom_add_moov( lsmash_file_t *file );
 int isom_add_mvhd( isom_moov_t *moov );
 int isom_add_iods( isom_moov_t *moov );
 int isom_add_ctab( void *parent_box );
@@ -2486,19 +2499,19 @@ int isom_add_data( isom_metaitem_t *metaitem );
 int isom_add_mvex( isom_moov_t *moov );
 int isom_add_mehd( isom_mvex_t *mvex );
 isom_trex_t *isom_add_trex( isom_mvex_t *mvex );
-isom_moof_t *isom_add_moof( lsmash_root_t *root );
+isom_moof_t *isom_add_moof( lsmash_file_t *file );
 int isom_add_mfhd( isom_moof_t *moof );
 isom_traf_t *isom_add_traf( isom_moof_t *moof );
 int isom_add_tfhd( isom_traf_t *traf );
 int isom_add_tfdt( isom_traf_t *traf );
 isom_trun_t *isom_add_trun( isom_traf_t *traf );
-int isom_add_mfra( lsmash_root_t *root );
+int isom_add_mfra( lsmash_file_t *file );
 isom_tfra_t *isom_add_tfra( isom_mfra_t *mfra );
 int isom_add_mfro( isom_mfra_t *mfra );
-int isom_add_mdat( lsmash_root_t *root );
+int isom_add_mdat( lsmash_file_t *file );
 int isom_add_free( void *parent_box );
-int isom_add_styp( lsmash_root_t *root );
-int isom_add_sidx( lsmash_root_t *root );
+isom_styp_t *isom_add_styp( lsmash_file_t *file );
+int isom_add_sidx( lsmash_file_t *file );
 
 void isom_remove_sample_description( isom_sample_entry_t *sample );
 void isom_remove_unknown_box( isom_unknown_box_t *unknown_box );

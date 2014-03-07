@@ -61,10 +61,9 @@ typedef struct
 
 typedef struct
 {
-    lsmash_root_t            *root;
     lsmash_itunes_metadata_t *itunes_metadata;
     track_t                  *track;
-    lsmash_movie_parameters_t movie_param;
+    lsmash_movie_parameters_t param;
     uint32_t                  num_tracks;
     uint32_t                  num_itunes_metadata;
     uint32_t                  current_track_number;
@@ -72,22 +71,35 @@ typedef struct
 
 typedef struct
 {
+    lsmash_file_t           *fh;
+    lsmash_file_parameters_t param;
+    movie_t                  movie;
+} file_t;
+
+typedef struct
+{
+    lsmash_root_t *root;
+    file_t         file;
+} root_t;
+
+typedef struct
+{
     FILE     *file;
     uint64_t *ts;
-    uint32_t sample_count;
-    int      auto_media_timescale;
-    int      auto_media_timebase;
-    uint64_t media_timescale;
-    uint64_t media_timebase;
-    uint64_t duration;
-    uint64_t composition_delay;
-    uint64_t empty_delay;
+    uint32_t  sample_count;
+    int       auto_media_timescale;
+    int       auto_media_timebase;
+    uint64_t  media_timescale;
+    uint64_t  media_timebase;
+    uint64_t  duration;
+    uint64_t  composition_delay;
+    uint64_t  empty_delay;
 } timecode_t;
 
 typedef struct
 {
-    movie_t *output;
-    movie_t *input;
+    root_t     *output;
+    root_t     *input;
     timecode_t *timecode;
 } movie_io_t;
 
@@ -101,10 +113,11 @@ typedef struct
     int      dts_compression;
 } opt_t;
 
-static void cleanup_movie( movie_t *movie )
+static void cleanup_root( root_t *h )
 {
-    if( !movie )
+    if( !h )
         return;
+    movie_t *movie = &h->file.movie;
     if( movie->itunes_metadata )
     {
         for( uint32_t i = 0; i < movie->num_itunes_metadata; i++ )
@@ -123,14 +136,13 @@ static void cleanup_movie( movie_t *movie )
             if( metadata->name )
                 lsmash_free( metadata->name );
         }
-        lsmash_free( movie->itunes_metadata );
+        lsmash_freep( &movie->itunes_metadata );
     }
     if( movie->track )
-        lsmash_free( movie->track );
-    lsmash_destroy_root( movie->root );
-    movie->root            = NULL;
-    movie->track           = NULL;
-    movie->itunes_metadata = NULL;
+        lsmash_freep( &movie->track );
+    lsmash_close_file( &h->file.param );
+    lsmash_destroy_root( h->root );
+    h->root = NULL;
 }
 
 static void cleanup_timecode( timecode_t *timecode )
@@ -138,11 +150,12 @@ static void cleanup_timecode( timecode_t *timecode )
     if( !timecode )
         return;
     if( timecode->file )
+    {
         fclose( timecode->file );
+        timecode->file = NULL;
+    }
     if( timecode->ts )
-        lsmash_free( timecode->ts );
-    timecode->file = NULL;
-    timecode->ts = NULL;
+        lsmash_freep( &timecode->ts );
 }
 
 static int error_message( const char* message, ... )
@@ -169,8 +182,8 @@ static int warning_message( const char* message, ... )
 
 static int timelineeditor_error( movie_io_t *io, const char *message, ... )
 {
-    cleanup_movie( io->input );
-    cleanup_movie( io->output );
+    cleanup_root( io->input );
+    cleanup_root( io->output );
     cleanup_timecode( io->timecode );
     va_list args;
     va_start( args, message );
@@ -238,7 +251,7 @@ fail:
     return -1;
 }
 
-static int get_summaries( movie_t *input, track_t *track )
+static int get_summaries( root_t *input, track_t *track )
 {
     track->num_summaries = lsmash_count_summary( input->root, track->track_ID );
     if( track->num_summaries == 0 )
@@ -261,48 +274,56 @@ static int get_summaries( movie_t *input, track_t *track )
     return 0;
 }
 
-static int get_movie( movie_t *input, char *input_name )
+static int get_movie( root_t *input, char *input_name )
 {
     if( !strcmp( input_name, "-" ) )
         return ERROR_MSG( "Standard input not supported.\n" );
-    input->root = lsmash_open_movie( input_name, LSMASH_FILE_MODE_READ );
+    input->root = lsmash_create_root();
     if( !input->root )
-        return ERROR_MSG( "Failed to open input file.\n" );
-    input->num_itunes_metadata = lsmash_count_itunes_metadata( input->root );
-    if( input->num_itunes_metadata )
+        return ERROR_MSG( "failed to create a ROOT for an input file.\n" );
+    file_t *in_file = &input->file;
+    if( lsmash_open_file( input_name, 1, &in_file->param ) < 0 )
+        return ERROR_MSG( "failed to open an input file.\n" );
+    in_file->fh = lsmash_set_file( input->root, &in_file->param );
+    if( !in_file->fh )
+        return ERROR_MSG( "failed to add an input file into a ROOT.\n" );
+    if( lsmash_read_file( in_file->fh, &in_file->param ) < 0 )
+        return ERROR_MSG( "failed to read an input file\n" );
+    movie_t *movie = &in_file->movie;
+    movie->num_itunes_metadata = lsmash_count_itunes_metadata( input->root );
+    if( movie->num_itunes_metadata )
     {
-        input->itunes_metadata = lsmash_malloc( input->num_itunes_metadata * sizeof(lsmash_itunes_metadata_t) );
-        if( !input->itunes_metadata )
+        movie->itunes_metadata = lsmash_malloc( movie->num_itunes_metadata * sizeof(lsmash_itunes_metadata_t) );
+        if( !movie->itunes_metadata )
             return ERROR_MSG( "failed to alloc iTunes metadata.\n" );
         uint32_t itunes_metadata_count = 0;
-        for( uint32_t i = 1; i <= input->num_itunes_metadata; i++ )
+        for( uint32_t i = 1; i <= movie->num_itunes_metadata; i++ )
         {
-            if( get_itunes_metadata( input->root, i, &input->itunes_metadata[itunes_metadata_count] ) )
+            if( get_itunes_metadata( input->root, i, &movie->itunes_metadata[itunes_metadata_count] ) )
             {
                 WARNING_MSG( "failed to get an iTunes metadata.\n" );
                 continue;
             }
             ++itunes_metadata_count;
         }
-        input->num_itunes_metadata = itunes_metadata_count;
+        movie->num_itunes_metadata = itunes_metadata_count;
     }
-    input->current_track_number = 1;
-    lsmash_movie_parameters_t *movie_param = &input->movie_param;
-    lsmash_initialize_movie_parameters( movie_param );
-    lsmash_get_movie_parameters( input->root, movie_param );
-    input->num_tracks = movie_param->number_of_tracks;
+    lsmash_initialize_movie_parameters( &movie->param );
+    lsmash_get_movie_parameters( input->root, &movie->param );
+    movie->num_tracks           = movie->param.number_of_tracks;
+    movie->current_track_number = 1;
     /* Create tracks. */
-    track_t *track = input->track = lsmash_malloc( input->num_tracks * sizeof(track_t) );
+    track_t *track = movie->track = lsmash_malloc( movie->num_tracks * sizeof(track_t) );
     if( !track )
         return ERROR_MSG( "Failed to alloc input tracks.\n" );
-    memset( track, 0, input->num_tracks * sizeof(track_t) );
-    for( uint32_t i = 0; i < input->num_tracks; i++ )
+    memset( track, 0, movie->num_tracks * sizeof(track_t) );
+    for( uint32_t i = 0; i < movie->num_tracks; i++ )
     {
         track[i].track_ID = lsmash_get_track_ID( input->root, i + 1 );
         if( !track[i].track_ID )
             return ERROR_MSG( "Failed to get track_ID.\n" );
     }
-    for( uint32_t i = 0; i < input->num_tracks; i++ )
+    for( uint32_t i = 0; i < movie->num_tracks; i++ )
     {
         lsmash_initialize_track_parameters( &track[i].track_param );
         if( lsmash_get_track_parameters( input->root, track[i].track_ID, &track[i].track_param ) )
@@ -334,7 +355,7 @@ static int get_movie( movie_t *input, char *input_name )
         track[i].active                = 1;
         track[i].current_sample_number = 1;
     }
-    lsmash_discard_boxes( input->root );
+    lsmash_destroy_children( lsmash_file_as_box( in_file->fh ) );
     return 0;
 }
 
@@ -684,11 +705,11 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
 #undef MATROSKA_TIMESCALE
 #undef SKIP_LINE_CHARACTER
 
-static int edit_media_timeline( movie_t *input, timecode_t *timecode, opt_t *opt )
+static int edit_media_timeline( root_t *input, timecode_t *timecode, opt_t *opt )
 {
     if( !timecode->file && !opt->media_timescale && !opt->media_timebase && !opt->dts_compression )
         return 0;
-    track_t *in_track = &input->track[opt->track_number - 1];
+    track_t *in_track = &input->file.movie.track[opt->track_number - 1];
     uint32_t track_ID = in_track->track_ID;
     lsmash_media_ts_list_t ts_list;
     if( lsmash_get_media_timestamps( input->root, track_ID, &ts_list ) )
@@ -889,8 +910,8 @@ int main( int argc, char *argv[] )
         display_help();
         return -1;
     }
-    movie_t    output   = { 0 };
-    movie_t    input    = { 0 };
+    root_t     output   = { 0 };
+    root_t     input    = { 0 };
     timecode_t timecode = { 0 };
     movie_io_t io = { &output, &input, &timecode };
     opt_t opt = { 1, 0, 0, 0, 0, 0 };
@@ -954,70 +975,81 @@ int main( int argc, char *argv[] )
     /* Get input movies. */
     if( get_movie( &input, argv[argn++] ) )
         return TIMELINEEDITOR_ERR( "Failed to get input movie.\n" );
-    if( opt.track_number && (opt.track_number > input.num_tracks) )
+    movie_t *in_movie = &input.file.movie;
+    if( opt.track_number && (opt.track_number > in_movie->num_tracks) )
         return TIMELINEEDITOR_ERR( "Invalid track number.\n" );
     /* Create output movie. */
-    output.root = lsmash_open_movie( argv[argn], LSMASH_FILE_MODE_WRITE );
+    file_t *out_file = &output.file;
+    output.root = lsmash_create_root();
     if( !output.root )
-        return TIMELINEEDITOR_ERR( "Failed to open output movie.\n" );
-    output.movie_param = input.movie_param;
-    output.movie_param.max_chunk_duration  = 0.5;
-    output.movie_param.max_async_tolerance = 2.0;
-    output.movie_param.max_chunk_size      = 4*1024*1024;
-    output.movie_param.max_read_size       = 4*1024*1024;
-    if( input.num_tracks == 1 )
-        output.movie_param.timescale = input.track[0].media_param.timescale;
-    if( !check_white_brand( output.movie_param.major_brand ) )
+        return TIMELINEEDITOR_ERR( "failed to create a ROOT for an output file.\n" );
+    if( lsmash_open_file( argv[argn], 0, &out_file->param ) < 0 )
+        return TIMELINEEDITOR_ERR( "failed to open an output file.\n" );
+    file_t *in_file = &input.file;
+    out_file->param.major_brand         = in_file->param.major_brand;
+    out_file->param.minor_version       = in_file->param.minor_version;
+    out_file->param.brands              = in_file->param.brands;
+    out_file->param.brand_count         = in_file->param.brand_count;
+    out_file->param.max_chunk_duration  = 0.5;
+    out_file->param.max_async_tolerance = 2.0;
+    out_file->param.max_chunk_size      = 4*1024*1024;
+    if( !check_white_brand( out_file->param.major_brand ) )
     {
         /* Replace with whitelisted brand 'mp42'. */
-        output.movie_param.major_brand   = ISOM_BRAND_TYPE_MP42;
-        output.movie_param.minor_version = 0;
+        out_file->param.major_brand   = ISOM_BRAND_TYPE_MP42;
+        out_file->param.minor_version = 0;
         uint32_t i;
-        for( i = 0; i < output.movie_param.number_of_brands; i++ )
-            if( output.movie_param.brands[i] == ISOM_BRAND_TYPE_MP42 )
+        for( i = 0; i < out_file->param.brand_count; i++ )
+            if( out_file->param.brands[i] == ISOM_BRAND_TYPE_MP42 )
                 break;
-        if( i == output.movie_param.number_of_brands )
+        if( i == out_file->param.brand_count )
         {
             /* Add 'mp42' into the list of compatible brands. */
-            output.movie_param.brands = lsmash_malloc( (i + 1) * sizeof(lsmash_brand_type) );
-            if( output.movie_param.brands )
+            out_file->param.brands = lsmash_malloc( (i + 1) * sizeof(lsmash_brand_type) );
+            if( out_file->param.brands )
             {
-                memcpy( output.movie_param.brands, input.movie_param.brands, i * sizeof(lsmash_brand_type) );
-                output.movie_param.brands[i] = ISOM_BRAND_TYPE_MP42;
+                memcpy( out_file->param.brands, in_file->param.brands, i * sizeof(lsmash_brand_type) );
+                out_file->param.brands[i] = ISOM_BRAND_TYPE_MP42;
             }
         }
     }
+    out_file->fh = lsmash_set_file( output.root, &out_file->param );
+    if( !out_file->fh )
+        return TIMELINEEDITOR_ERR( "failed to add an output file into a ROOT.\n" );
+    if( out_file->param.brands != in_file->param.brands )
+        lsmash_freep( &out_file->param.brands );
     /* Set movie parameters. */
-    int error = lsmash_set_movie_parameters( output.root, &output.movie_param );
-    if( output.movie_param.brands != input.movie_param.brands )
-        lsmash_freep( &output.movie_param.brands );
-    if( error )
+    movie_t *out_movie = &out_file->movie;
+    out_movie->param = in_movie->param; /* Copy movie parameters. */
+    if( in_movie->num_tracks == 1 )
+        out_movie->param.timescale = in_movie->track[0].media_param.timescale;
+    if( lsmash_set_movie_parameters( output.root, &out_movie->param ) )
         return TIMELINEEDITOR_ERR( "Failed to set output movie parameters.\n" );
     /* Set iTunes metadata. */
-    for( uint32_t i = 0; i < input.num_itunes_metadata; i++ )
-        if( lsmash_set_itunes_metadata( output.root, input.itunes_metadata[i] ) )
+    for( uint32_t i = 0; i < in_movie->num_itunes_metadata; i++ )
+        if( lsmash_set_itunes_metadata( output.root, in_movie->itunes_metadata[i] ) )
         {
             WARNING_MSG( "failed to set an iTunes metadata.\n" );
             continue;
         }
     /* Create tracks of the output movie. */
-    output.track = lsmash_malloc( input.num_tracks * sizeof(track_t) );
-    if( !output.track )
+    out_movie->track = lsmash_malloc( in_movie->num_tracks * sizeof(track_t) );
+    if( !out_movie->track )
         return TIMELINEEDITOR_ERR( "Failed to alloc output tracks.\n" );
     /* Edit timeline. */
     if( edit_media_timeline( &input, &timecode, &opt ) )
         return TIMELINEEDITOR_ERR( "Failed to edit timeline.\n" );
-    output.num_tracks = input.num_tracks;
-    output.current_track_number = 1;
-    for( uint32_t i = 0; i < input.num_tracks; i++ )
+    out_movie->num_tracks           = in_movie->num_tracks;
+    out_movie->current_track_number = 1;
+    for( uint32_t i = 0; i < in_movie->num_tracks; i++ )
     {
-        track_t *in_track = &input.track[i];
+        track_t *in_track = &in_movie->track[i];
         if( !in_track->active )
         {
-            -- output.num_tracks;
+            -- out_movie->num_tracks;
             continue;
         }
-        track_t *out_track = &output.track[i];
+        track_t *out_track = &out_movie->track[i];
         out_track->summary_remap = lsmash_malloc( in_track->num_summaries * sizeof(uint32_t) );
         if( !out_track->summary_remap )
             return TIMELINEEDITOR_ERR( "failed to create summary mapping for a track.\n" );
@@ -1060,18 +1092,18 @@ int main( int argc, char *argv[] )
         out_track->reach_end_of_media_timeline = 0;
     }
     /* Start muxing. */
-    double   largest_dts = 0;
+    double   largest_dts                 = 0;
     uint32_t num_consecutive_sample_skip = 0;
-    uint32_t num_active_input_tracks = output.num_tracks;
-    uint64_t total_media_size = 0;
-    uint8_t  sample_count = 0;
+    uint32_t num_active_input_tracks     = out_movie->num_tracks;
+    uint64_t total_media_size            = 0;
+    uint8_t  sample_count                = 0;
     while( 1 )
     {
-        track_t *in_track = &input.track[input.current_track_number - 1];
+        track_t *in_track = &in_movie->track[ in_movie->current_track_number - 1 ];
         /* Try append a sample in an input track where we didn't reach the end of media timeline. */
         if( !in_track->reach_end_of_media_timeline )
         {
-            track_t *out_track = &output.track[output.current_track_number - 1];
+            track_t *out_track = &out_movie->track[ out_movie->current_track_number - 1 ];
             uint32_t in_track_ID = in_track->track_ID;
             uint32_t out_track_ID = out_track->track_ID;
             uint32_t input_media_timescale = in_track->media_param.timescale;
@@ -1122,22 +1154,22 @@ int main( int argc, char *argv[] )
                 ++num_consecutive_sample_skip;      /* Skip appendig sample. */
         }
         /* Move the next track. */
-        if( ++ input.current_track_number > input.num_tracks )
-            input.current_track_number = 1;     /* Back the first track. */
-        if( ++ output.current_track_number > output.num_tracks )
-            output.current_track_number = 1;    /* Back the first track in the output movie. */
+        if( ++ in_movie->current_track_number > in_movie->num_tracks )
+            in_movie->current_track_number = 1;     /* Back the first track. */
+        if( ++ out_movie->current_track_number > out_movie->num_tracks )
+            out_movie->current_track_number = 1;    /* Back the first track in the output movie. */
     }
-    for( uint32_t i = 0; i < output.num_tracks; i++ )
-        if( lsmash_flush_pooled_samples( output.root, output.track[i].track_ID, output.track[i].last_sample_delta ) )
+    for( uint32_t i = 0; i < out_movie->num_tracks; i++ )
+        if( lsmash_flush_pooled_samples( output.root, out_movie->track[i].track_ID, out_movie->track[i].last_sample_delta ) )
             return TIMELINEEDITOR_ERR( "Failed to flush samples.\n" );
     /* Copy timeline maps. */
-    for( uint32_t i = 0; i < output.num_tracks; i++ )
-        if( lsmash_copy_timeline_map( output.root, output.track[i].track_ID, input.root, input.track[i].track_ID ) )
+    for( uint32_t i = 0; i < out_movie->num_tracks; i++ )
+        if( lsmash_copy_timeline_map( output.root, out_movie->track[i].track_ID, input.root, in_movie->track[i].track_ID ) )
             return TIMELINEEDITOR_ERR( "Failed to copy a timeline map.\n" );
     /* Edit timeline map. */
     if( argc > 3 )
     {
-        track_t *out_track       = &output.track[opt.track_number - 1];
+        track_t *out_track       = &out_movie->track[ opt.track_number - 1 ];
         uint32_t track_ID        = out_track->track_ID;
         uint32_t movie_timescale = lsmash_get_movie_timescale( output.root );
         uint32_t media_timescale = lsmash_get_media_timescale( output.root, track_ID );
@@ -1174,8 +1206,9 @@ int main( int argc, char *argv[] )
     if( lsmash_finish_movie( output.root, &moov_to_front )
      || lsmash_write_lsmash_indicator( output.root ) )
         return TIMELINEEDITOR_ERR( "Failed to finish output movie.\n" );
-    cleanup_movie( io.input );
-    cleanup_movie( io.output );
+    cleanup_root( io.input );
+    cleanup_root( io.output );
+    cleanup_timecode( io.timecode );
     eprintf( "Timeline editing completed!                                                    \n" );
     return 0;
 }

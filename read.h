@@ -23,6 +23,6 @@
 #ifndef LSMASH_READ_H
 #define LSMASH_READ_H
 
-int isom_read_root( lsmash_root_t *root );
+int isom_read_file( lsmash_file_t *file );
 
 #endif /* LSMASH_READ_H */

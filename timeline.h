@@ -23,6 +23,6 @@
 #ifndef LSMASH_TIMELINE_H
 #define LSMASH_TIMELINE_H
 
-void isom_remove_timelines( lsmash_root_t *root );
+void isom_remove_timelines( lsmash_file_t *file );
 
 #endif /* LSMASH_TIMELINE_H */

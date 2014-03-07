@@ -23,7 +23,7 @@
 #ifndef LSMASH_PRINT_H
 #define LSMASH_PRINT_H
 
-int isom_add_print_func( lsmash_root_t *root, void *box, int level );
-void isom_remove_print_funcs( lsmash_root_t *root );
+int isom_add_print_func( lsmash_file_t *file, void *box, int level );
+void isom_remove_print_funcs( lsmash_file_t *file );
 
 #endif /* LSMASH_PRINT_H */

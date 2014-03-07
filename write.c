@@ -160,8 +160,8 @@ static int isom_write_elst( lsmash_bs_t *bs, isom_box_t *box )
     assert( elst->list );
     if( elst->list->entry_count == 0 )
         return 0;
-    if( elst->root->fragment && !elst->root->bs->unseekable )
-        elst->pos = elst->root->bs->written;    /* Remember to rewrite entries. */
+    if( elst->file->fragment && !elst->file->bs->unseekable )
+        elst->pos = elst->file->bs->written;    /* Remember to rewrite entries. */
     isom_bs_put_box_common( bs, elst );
     lsmash_bs_put_be32( bs, elst->list->entry_count );
     for( lsmash_entry_t *entry = elst->list->head; entry; entry = entry->next )
@@ -1074,7 +1074,7 @@ static int isom_write_mehd( lsmash_bs_t *bs, isom_box_t *box )
          * The following will be overwritten by Movie Extends Header Box.
          * We use version 1 Movie Extends Header Box since it causes extra 4 bytes region
          * we cannot replace with empty Free Space Box as we place version 0 one.  */
-        box->pos = box->root->bs->written;
+        box->pos = box->file->bs->written;
         lsmash_bs_put_be32( bs, ISOM_BASEBOX_COMMON_SIZE + 12 );
         lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_FREE.fourcc );
         lsmash_bs_put_be32( bs, 0 );
@@ -1233,32 +1233,32 @@ static int isom_write_mfra( lsmash_bs_t *bs, isom_box_t *box )
 static int isom_write_mdat( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_mdat_t   *mdat = (isom_mdat_t *)box;
-    lsmash_root_t *root = mdat->root;
+    lsmash_file_t *file = mdat->file;
     /* If any fragment, write the Media Data Box all at once. */
-    if( root->fragment )
+    if( file->fragment )
     {
         /* Write the size and type fields of the Media Data Box. */
-        mdat->size = ISOM_BASEBOX_COMMON_SIZE + root->fragment->pool_size;
+        mdat->size = ISOM_BASEBOX_COMMON_SIZE + file->fragment->pool_size;
         if( mdat->size > UINT32_MAX )
             mdat->size += 8;    /* large_size */
         isom_bs_put_box_common( bs, mdat );
         /* Write the samples in the current movie fragment. */
-        for( lsmash_entry_t* entry = root->fragment->pool->head; entry; entry = entry->next )
+        for( lsmash_entry_t* entry = file->fragment->pool->head; entry; entry = entry->next )
         {
             isom_sample_pool_t *pool = (isom_sample_pool_t *)entry->data;
             if( !pool )
                 return -1;
             lsmash_bs_put_bytes( bs, pool->size, pool->data );
         }
-        mdat->media_size = root->fragment->pool_size;
+        mdat->media_size = file->fragment->pool_size;
         return 0;
     }
     if( mdat->manager & LSMASH_PLACEHOLDER )
     {
         /* Write the placeholder for large size. */
-        if( !root->free && isom_add_free( root ) < 0 )
+        if( !file->free && isom_add_free( file ) < 0 )
             return -1;
-        isom_free_t *skip = root->free;
+        isom_free_t *skip = file->free;
         skip->pos      = bs->offset;
         skip->size     = ISOM_BASEBOX_COMMON_SIZE;
         skip->manager |= LSMASH_PLACEHOLDER;
@@ -1280,10 +1280,10 @@ static int isom_write_mdat( lsmash_bs_t *bs, isom_box_t *box )
         if( mdat->size > UINT32_MAX )
         {
             /* The placeholder is overwritten by the Media Data Box. */
-            assert( root->free );
-            mdat->pos   = root->free->pos;
-            mdat->size += root->free->size;
-            isom_remove_box_by_itself( root->free );
+            assert( file->free );
+            mdat->pos   = file->free->pos;
+            mdat->size += file->free->size;
+            isom_remove_box_by_itself( file->free );
         }
         lsmash_bs_seek( bs, mdat->pos, SEEK_SET );
         isom_bs_put_box_common( bs, mdat );

@@ -34,24 +34,244 @@
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  1
-#define LSMASH_VERSION_MINOR  4
-#define LSMASH_VERSION_MICRO  1
+#define LSMASH_VERSION_MINOR  5
+#define LSMASH_VERSION_MICRO  0
 
 /****************************************************************************
  * ROOT
- *   This is the top level abstract layer for file handling.
+ *   The top-level opaque handler for whole file handling.
  ****************************************************************************/
 typedef struct lsmash_root_tag lsmash_root_t;
+typedef struct lsmash_file_tag lsmash_file_t;
 
 typedef enum
 {
-    LSMASH_FILE_MODE_WRITE             = 1,
-    LSMASH_FILE_MODE_READ              = 1<<1,
-    LSMASH_FILE_MODE_FRAGMENTED        = 1<<2,
+    LSMASH_FILE_MODE_WRITE             = 1,     /* output/muxing */
+    LSMASH_FILE_MODE_READ              = 1<<1,  /* input/demuxing */
+    LSMASH_FILE_MODE_FRAGMENTED        = 1<<2,  /* movie fragments */
     LSMASH_FILE_MODE_DUMP              = 1<<3,
-    LSMASH_FILE_MODE_WRITE_FRAGMENTED  = LSMASH_FILE_MODE_WRITE | LSMASH_FILE_MODE_FRAGMENTED,
-    //LSMASH_FILE_MODE_READ_FRAGMENTED   = LSMASH_FILE_MODE_READ  | LSMASH_FILE_MODE_FRAGMENTED,
+    LSMASH_FILE_MODE_BOX               = 1<<4,  /* box structure */
+    LSMASH_FILE_MODE_INITIALIZATION    = 1<<5,  /* movie sample table */
+    LSMASH_FILE_MODE_MEDIA             = 1<<6,  /* media data */
+    LSMASH_FILE_MODE_INDEX             = 1<<7,
+    LSMASH_FILE_MODE_SEGMENT           = 1<<8,  /* segment */
+    LSMASH_FILE_MODE_WRITE_FRAGMENTED  = LSMASH_FILE_MODE_WRITE | LSMASH_FILE_MODE_FRAGMENTED,  /* deprecated */
 } lsmash_file_mode;
+
+typedef enum
+{
+    ISOM_BRAND_TYPE_3G2A  = LSMASH_4CC( '3', 'g', '2', 'a' ),   /* 3GPP2 */
+    ISOM_BRAND_TYPE_3GE6  = LSMASH_4CC( '3', 'g', 'e', '6' ),   /* 3GPP Release 6 Extended Presentation Profile */
+    ISOM_BRAND_TYPE_3GE9  = LSMASH_4CC( '3', 'g', 'e', '9' ),   /* 3GPP Release 9 Extended Presentation Profile */
+    ISOM_BRAND_TYPE_3GF9  = LSMASH_4CC( '3', 'g', 'f', '9' ),   /* 3GPP Release 9 File-delivery Server Profile */
+    ISOM_BRAND_TYPE_3GG6  = LSMASH_4CC( '3', 'g', 'g', '6' ),   /* 3GPP Release 6 General Profile */
+    ISOM_BRAND_TYPE_3GG9  = LSMASH_4CC( '3', 'g', 'g', '9' ),   /* 3GPP Release 9 General Profile */
+    ISOM_BRAND_TYPE_3GH9  = LSMASH_4CC( '3', 'g', 'h', '9' ),   /* 3GPP Release 9 Adaptive Streaming Profile */
+    ISOM_BRAND_TYPE_3GM9  = LSMASH_4CC( '3', 'g', 'm', '9' ),   /* 3GPP Release 9 Media Segment Profile */
+    ISOM_BRAND_TYPE_3GP4  = LSMASH_4CC( '3', 'g', 'p', '4' ),   /* 3GPP Release 4 */
+    ISOM_BRAND_TYPE_3GP5  = LSMASH_4CC( '3', 'g', 'p', '5' ),   /* 3GPP Release 5 */
+    ISOM_BRAND_TYPE_3GP6  = LSMASH_4CC( '3', 'g', 'p', '6' ),   /* 3GPP Release 6 Basic Profile */
+    ISOM_BRAND_TYPE_3GP7  = LSMASH_4CC( '3', 'g', 'p', '7' ),   /* 3GPP Release 7 */
+    ISOM_BRAND_TYPE_3GP8  = LSMASH_4CC( '3', 'g', 'p', '8' ),   /* 3GPP Release 8 */
+    ISOM_BRAND_TYPE_3GP9  = LSMASH_4CC( '3', 'g', 'p', '9' ),   /* 3GPP Release 9 Basic Profile */
+    ISOM_BRAND_TYPE_3GR6  = LSMASH_4CC( '3', 'g', 'r', '6' ),   /* 3GPP Release 6 Progressive Download Profile */
+    ISOM_BRAND_TYPE_3GR9  = LSMASH_4CC( '3', 'g', 'r', '9' ),   /* 3GPP Release 9 Progressive Download Profile */
+    ISOM_BRAND_TYPE_3GS6  = LSMASH_4CC( '3', 'g', 's', '6' ),   /* 3GPP Release 6 Streaming Server Profile */
+    ISOM_BRAND_TYPE_3GS9  = LSMASH_4CC( '3', 'g', 's', '9' ),   /* 3GPP Release 9 Streaming Server Profile */
+    ISOM_BRAND_TYPE_3GT9  = LSMASH_4CC( '3', 'g', 't', '9' ),   /* 3GPP Release 9 Media Stream Recording Profile */
+    ISOM_BRAND_TYPE_ARRI  = LSMASH_4CC( 'A', 'R', 'R', 'I' ),   /* ARRI Digital Camera */
+    ISOM_BRAND_TYPE_CAEP  = LSMASH_4CC( 'C', 'A', 'E', 'P' ),   /* Canon Digital Camera */
+    ISOM_BRAND_TYPE_CDES  = LSMASH_4CC( 'C', 'D', 'e', 's' ),   /* Convergent Designs */
+    ISOM_BRAND_TYPE_LCAG  = LSMASH_4CC( 'L', 'C', 'A', 'G' ),   /* Leica digital camera */
+    ISOM_BRAND_TYPE_M4A   = LSMASH_4CC( 'M', '4', 'A', ' ' ),   /* iTunes MPEG-4 audio protected or not */
+    ISOM_BRAND_TYPE_M4B   = LSMASH_4CC( 'M', '4', 'B', ' ' ),   /* iTunes AudioBook protected or not */
+    ISOM_BRAND_TYPE_M4P   = LSMASH_4CC( 'M', '4', 'P', ' ' ),   /* MPEG-4 protected audio */
+    ISOM_BRAND_TYPE_M4V   = LSMASH_4CC( 'M', '4', 'V', ' ' ),   /* MPEG-4 protected audio+video */
+    ISOM_BRAND_TYPE_MFSM  = LSMASH_4CC( 'M', 'F', 'S', 'M' ),   /* Media File for Samsung video Metadata */
+    ISOM_BRAND_TYPE_MPPI  = LSMASH_4CC( 'M', 'P', 'P', 'I' ),   /* Photo Player Multimedia Application Format */
+    ISOM_BRAND_TYPE_ROSS  = LSMASH_4CC( 'R', 'O', 'S', 'S' ),   /* Ross Video */
+    ISOM_BRAND_TYPE_AVC1  = LSMASH_4CC( 'a', 'v', 'c', '1' ),   /* Advanced Video Coding extensions */
+    ISOM_BRAND_TYPE_BBXM  = LSMASH_4CC( 'b', 'b', 'x', 'm' ),   /* Blinkbox Master File */
+    ISOM_BRAND_TYPE_CAQV  = LSMASH_4CC( 'c', 'a', 'q', 'v' ),   /* Casio Digital Camera */
+    ISOM_BRAND_TYPE_CCFF  = LSMASH_4CC( 'c', 'c', 'f', 'f' ),   /* Common container file format */
+    ISOM_BRAND_TYPE_DA0A  = LSMASH_4CC( 'd', 'a', '0', 'a' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DA0B  = LSMASH_4CC( 'd', 'a', '0', 'b' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DA1A  = LSMASH_4CC( 'd', 'a', '1', 'a' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DA1B  = LSMASH_4CC( 'd', 'a', '1', 'b' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DA2A  = LSMASH_4CC( 'd', 'a', '2', 'a' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DA2B  = LSMASH_4CC( 'd', 'a', '2', 'b' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DA3A  = LSMASH_4CC( 'd', 'a', '3', 'a' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DA3B  = LSMASH_4CC( 'd', 'a', '3', 'b' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DASH  = LSMASH_4CC( 'd', 'a', 's', 'h' ),   /* Indexed self-initializing Media Segment */
+    ISOM_BRAND_TYPE_DBY1  = LSMASH_4CC( 'd', 'b', 'y', '1' ),   /* MP4 files with Dolby content */
+    ISOM_BRAND_TYPE_DMB1  = LSMASH_4CC( 'd', 'm', 'b', '1' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DV1A  = LSMASH_4CC( 'd', 'v', '1', 'a' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DV1B  = LSMASH_4CC( 'd', 'v', '1', 'b' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DV2A  = LSMASH_4CC( 'd', 'v', '2', 'a' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DV2B  = LSMASH_4CC( 'd', 'v', '2', 'b' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DV3A  = LSMASH_4CC( 'd', 'v', '3', 'a' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DV3B  = LSMASH_4CC( 'd', 'v', '3', 'b' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DVR1  = LSMASH_4CC( 'd', 'v', 'r', '1' ),   /* DVB RTP */
+    ISOM_BRAND_TYPE_DVT1  = LSMASH_4CC( 'd', 'v', 't', '1' ),   /* DVB Transport Stream */
+    ISOM_BRAND_TYPE_IFRM  = LSMASH_4CC( 'i', 'f', 'r', 'm' ),   /* Apple iFrame */
+    ISOM_BRAND_TYPE_ISC2  = LSMASH_4CC( 'i', 's', 'c', '2' ),   /* Files encrypted according to ISMACryp 2.0 */
+    ISOM_BRAND_TYPE_ISO2  = LSMASH_4CC( 'i', 's', 'o', '2' ),   /* ISO Base Media file format version 2 */
+    ISOM_BRAND_TYPE_ISO3  = LSMASH_4CC( 'i', 's', 'o', '3' ),   /* ISO Base Media file format version 3 */
+    ISOM_BRAND_TYPE_ISO4  = LSMASH_4CC( 'i', 's', 'o', '4' ),   /* ISO Base Media file format version 4 */
+    ISOM_BRAND_TYPE_ISO5  = LSMASH_4CC( 'i', 's', 'o', '5' ),   /* ISO Base Media file format version 5 */
+    ISOM_BRAND_TYPE_ISO6  = LSMASH_4CC( 'i', 's', 'o', '6' ),   /* ISO Base Media file format version 6 */
+    ISOM_BRAND_TYPE_ISOM  = LSMASH_4CC( 'i', 's', 'o', 'm' ),   /* ISO Base Media file format version 1 */
+    ISOM_BRAND_TYPE_JPSI  = LSMASH_4CC( 'j', 'p', 's', 'i' ),   /* The JPSearch data interchange format */
+    ISOM_BRAND_TYPE_LMSG  = LSMASH_4CC( 'l', 'm', 's', 'g' ),   /* last Media Segment indicator */
+    ISOM_BRAND_TYPE_MJ2S  = LSMASH_4CC( 'm', 'j', '2', 's' ),   /* Motion JPEG 2000 simple profile */
+    ISOM_BRAND_TYPE_MJP2  = LSMASH_4CC( 'm', 'j', 'p', '2' ),   /* Motion JPEG 2000, general profile */
+    ISOM_BRAND_TYPE_MP21  = LSMASH_4CC( 'm', 'p', '2', '1' ),   /* MPEG-21 */
+    ISOM_BRAND_TYPE_MP41  = LSMASH_4CC( 'm', 'p', '4', '1' ),   /* MP4 version 1 */
+    ISOM_BRAND_TYPE_MP42  = LSMASH_4CC( 'm', 'p', '4', '2' ),   /* MP4 version 2 */
+    ISOM_BRAND_TYPE_MP71  = LSMASH_4CC( 'm', 'p', '7', '1' ),   /* MPEG-7 file-level metadata */
+    ISOM_BRAND_TYPE_MSDH  = LSMASH_4CC( 'm', 's', 'd', 'h' ),   /* Media Segment */
+    ISOM_BRAND_TYPE_MSIX  = LSMASH_4CC( 'm', 's', 'i', 'x' ),   /* Indexed Media Segment */
+    ISOM_BRAND_TYPE_NIKO  = LSMASH_4CC( 'n', 'i', 'k', 'o' ),   /* Nikon Digital Camera */
+    ISOM_BRAND_TYPE_ODCF  = LSMASH_4CC( 'o', 'd', 'c', 'f' ),   /* OMA DCF */
+    ISOM_BRAND_TYPE_OPF2  = LSMASH_4CC( 'o', 'p', 'f', '2' ),   /* OMA PDCF */
+    ISOM_BRAND_TYPE_OPX2  = LSMASH_4CC( 'o', 'p', 'x', '2' ),   /* OMA Adapted PDCF */
+    ISOM_BRAND_TYPE_PANA  = LSMASH_4CC( 'p', 'a', 'n', 'a' ),   /* Panasonic Digital Camera */
+    ISOM_BRAND_TYPE_PIFF  = LSMASH_4CC( 'p', 'i', 'f', 'f' ),   /* Protected Interoperable File Format */
+    ISOM_BRAND_TYPE_PNVI  = LSMASH_4CC( 'p', 'n', 'v', 'i' ),   /* Panasonic Video Intercom */
+    ISOM_BRAND_TYPE_QT    = LSMASH_4CC( 'q', 't', ' ', ' ' ),   /* QuickTime file format */
+    ISOM_BRAND_TYPE_RISX  = LSMASH_4CC( 'r', 'i', 's', 'x' ),   /* Representation Index Segment */
+    ISOM_BRAND_TYPE_SDV   = LSMASH_4CC( 's', 'd', 'v', ' ' ),   /* SD Video */
+    ISOM_BRAND_TYPE_SIMS  = LSMASH_4CC( 's', 'i', 'm', 's' ),   /* Sub-Indexed Media Segment */
+    ISOM_BRAND_TYPE_SISX  = LSMASH_4CC( 's', 'i', 's', 'x' ),   /* Single Index Segment */
+    ISOM_BRAND_TYPE_SSSS  = LSMASH_4CC( 's', 's', 's', 's' ),   /* Subsegment Index Segment */
+} lsmash_brand_type;
+
+typedef struct
+{
+    lsmash_file_mode mode;  /* file modes */
+    /** custom I/O stuff **/
+    void *opaque;           /* custom I/O opaque handler used for the following callback functions */
+    /* Attempt to read up to 'size' bytes from the file referenced by 'opaque' into the buffer starting at 'buf'.
+     *
+     * Return the number of bytes read if successful.
+     * Return 0 if no more read.
+     * Return a negative value otherwise. */
+    int (*read)
+    (
+        void    *opaque,
+        uint8_t *buf,
+        int      size
+    );
+    /* Write up to 'size' bytes to the file referenced by 'opaque' from the buffer starting at 'buf'.
+     *
+     * Return the number of bytes written if successful.
+     * Return a negative value otherwise. */
+    int (*write)
+    (
+        void    *opaque,
+        uint8_t *buf,
+        int      size
+    );
+    /* Change the location of the read/write pointer of 'opaque'.
+     * The offset of the pointer is determined according to the directive 'whence' as follows:
+     *   If 'whence' is set to SEEK_SET, the offset is set to 'offset' bytes.
+     *   If 'whence' is set to SEEK_CUR, the offset is set to its current location plus 'offset' bytes.
+     *   If 'whence' is set to SEEK_END, the offset is set to the size of the file plus 'offset' bytes.
+     *
+     * Return the resulting offset of the location in bytes from the beginning of the file if successful.
+     * Return a negative value otherwise. */
+    int64_t (*seek)
+    (
+        void   *opaque,
+        int64_t offset,
+        int     whence
+    );
+    /** file types or segment types **/
+    lsmash_brand_type  major_brand;     /* the best used brand */
+    lsmash_brand_type *brands;          /* the list of compatible brands */
+    uint32_t           brand_count;     /* the number of compatible brands used in the file */
+    uint32_t           minor_version;   /* minor version of the best used brand
+                                         * minor_version is informative only i.e. not specifying requirements but merely providing information.
+                                         * It must not be used to determine the conformance of a file to a standard. */
+    /** muxing only **/
+    double   max_chunk_duration;        /* max duration per chunk in seconds. 0.5 is default value. */
+    double   max_async_tolerance;       /* max tolerance, in seconds, for amount of interleaving asynchronization between tracks.
+                                         * 2.0 is default value. At least twice of max_chunk_duration is used. */
+    uint64_t max_chunk_size;            /* max size per chunk in bytes. 4*1024*1024 (4MiB) is default value. */
+    /** demuxing only **/
+    uint64_t max_read_size;             /* max size of reading from a chunk at a time. 4*1024*1024 (4MiB) is default value. */
+} lsmash_file_parameters_t;
+
+/* Allocate a ROOT.
+ * The allocated ROOT can be deallocate by lsmash_destroy_root().
+ *
+ * Return the address of an allocated ROOT if successful.
+ * Return NULL otherwise. */
+lsmash_root_t *lsmash_create_root( void );
+
+/* Open a file where the path is given and set up the parameters by 'open_mode'.
+ * Here, the 'open_mode' parameter is either 0 or 1 as follows:
+ *   0: Create a file for output/muxing operations.
+ *      If a file with the same name already exists, its contents are discarded and the file is treated as a new file.    
+ *      If user specifies "-" for 'filename', operations are done on stdout.
+ *      The file types or segment types are set up as specified in 'param'.
+ *   1: Open a file for input/demuxing operations. The file must exist.
+ *      If user specifies "-" for 'filename', operations are done on stdin.
+ *
+ * This function sets up file modes minimally.
+ * User can add additional modes and/or remove modes already set later.
+ * The other parameters except for the custom I/O stuff are set to a default.
+ * User shall not touch the custom I/O stuff for the opened file if using this function.
+ *
+ * The opened file can be closed by lsmash_close_file().
+ *
+ * Note:
+ *   'filename' must be encoded by UTF-8 if 'open_mode' is equal to 0.
+ *   On Windows, lsmash_convert_ansi_to_utf8() may help you.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_open_file
+(
+    const char               *filename,
+    int                       open_mode,
+    lsmash_file_parameters_t *param
+);
+
+/* Close a file opened by lsmash_open_file().
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_close_file
+(
+    lsmash_file_parameters_t *param
+);
+
+/* Associate a file with a ROOT and allocate the handle of that file.
+ * The all allocated handles can be deallocated by lsmash_destroy_root().
+ *
+ * Note:
+ *   At present, the added file is only referenced by all tracks of the movie defined in the same file.
+ *   External data references are not implemented yet, but will come in the near future.
+ *
+ * Return the address of the allocated handle of the added file if successful.
+ * Return NULL otherwise. */
+lsmash_file_t *lsmash_set_file
+(
+    lsmash_root_t            *root,
+    lsmash_file_parameters_t *param
+);
+
+/* Read whole boxes in a given file.
+ * You can also get file modes and file types or segment types by this function.
+ *
+ * Return the file size (if seekable) or 0 if successful.
+ * Return a negative value otherwise. */
+int64_t lsmash_read_file
+(
+    lsmash_file_t            *file,
+    lsmash_file_parameters_t *param
+);
 
 /* Open the movie file to which the path is given, and allocate and set up the ROOT of the file.
  * The allocated ROOT can be deallocated by lsmash_destroy_root().
@@ -64,6 +284,8 @@ typedef enum
  *
  * Note that 'filename' must be encoded by UTF-8 if 'mode' contains LSMASH_FILE_MODE_WRITE.
  * On Windows, lsmash_convert_ansi_to_utf8() may help you.
+ *
+ * WARNING: This function is deprecated!
  *
  * Return the address of an allocated ROOT of the file if successful.
  * Return NULL otherwise. */
@@ -322,13 +544,25 @@ int lsmash_get_box_precedence
     uint64_t     *precedence
 );
 
-/* Return the address of a given ROOT as lsmash_box_t. */
+/* This function allows you to handle a ROOT as if it is a box.
+ * Of course, you can deallocate the ROOT by lsmash_destroy_box().
+ *
+ * Return the address of a given ROOT as a box. */
 lsmash_box_t *lsmash_root_as_box
 (
     lsmash_root_t *root
 );
 
-/* Write a top level box and its children already added to ROOT.
+/* This function allows you to handle the handle of a file as if it is a box.
+ * Of course, you can deallocate the handle of the file by lsmash_destroy_box().
+ *
+ * Return the address of the handle of a given file as a box. */
+lsmash_box_t *lsmash_file_as_box
+(
+    lsmash_file_t *file
+);
+
+/* Write a top level box and its children already added to a file.
  * WARNING:
  *   You should not use this function as long as media data is incompletely written.
  *   That is before starting to write a media data or after finishing of writing that.
@@ -1786,105 +2020,18 @@ int lsmash_modify_explicit_timeline_map
 /****************************************************************************
  * Movie Layer
  ****************************************************************************/
-typedef enum
-{
-    ISOM_BRAND_TYPE_3G2A  = LSMASH_4CC( '3', 'g', '2', 'a' ),   /* 3GPP2 */
-    ISOM_BRAND_TYPE_3GE6  = LSMASH_4CC( '3', 'g', 'e', '6' ),   /* 3GPP Release 6 Extended Presentation Profile */
-    ISOM_BRAND_TYPE_3GE9  = LSMASH_4CC( '3', 'g', 'e', '9' ),   /* 3GPP Release 9 Extended Presentation Profile */
-    ISOM_BRAND_TYPE_3GF9  = LSMASH_4CC( '3', 'g', 'f', '9' ),   /* 3GPP Release 9 File-delivery Server Profile */
-    ISOM_BRAND_TYPE_3GG6  = LSMASH_4CC( '3', 'g', 'g', '6' ),   /* 3GPP Release 6 General Profile */
-    ISOM_BRAND_TYPE_3GG9  = LSMASH_4CC( '3', 'g', 'g', '9' ),   /* 3GPP Release 9 General Profile */
-    ISOM_BRAND_TYPE_3GH9  = LSMASH_4CC( '3', 'g', 'h', '9' ),   /* 3GPP Release 9 Adaptive Streaming Profile */
-    ISOM_BRAND_TYPE_3GM9  = LSMASH_4CC( '3', 'g', 'm', '9' ),   /* 3GPP Release 9 Media Segment Profile */
-    ISOM_BRAND_TYPE_3GP4  = LSMASH_4CC( '3', 'g', 'p', '4' ),   /* 3GPP Release 4 */
-    ISOM_BRAND_TYPE_3GP5  = LSMASH_4CC( '3', 'g', 'p', '5' ),   /* 3GPP Release 5 */
-    ISOM_BRAND_TYPE_3GP6  = LSMASH_4CC( '3', 'g', 'p', '6' ),   /* 3GPP Release 6 Basic Profile */
-    ISOM_BRAND_TYPE_3GP7  = LSMASH_4CC( '3', 'g', 'p', '7' ),   /* 3GPP Release 7 */
-    ISOM_BRAND_TYPE_3GP8  = LSMASH_4CC( '3', 'g', 'p', '8' ),   /* 3GPP Release 8 */
-    ISOM_BRAND_TYPE_3GP9  = LSMASH_4CC( '3', 'g', 'p', '9' ),   /* 3GPP Release 9 Basic Profile */
-    ISOM_BRAND_TYPE_3GR6  = LSMASH_4CC( '3', 'g', 'r', '6' ),   /* 3GPP Release 6 Progressive Download Profile */
-    ISOM_BRAND_TYPE_3GR9  = LSMASH_4CC( '3', 'g', 'r', '9' ),   /* 3GPP Release 9 Progressive Download Profile */
-    ISOM_BRAND_TYPE_3GS6  = LSMASH_4CC( '3', 'g', 's', '6' ),   /* 3GPP Release 6 Streaming Server Profile */
-    ISOM_BRAND_TYPE_3GS9  = LSMASH_4CC( '3', 'g', 's', '9' ),   /* 3GPP Release 9 Streaming Server Profile */
-    ISOM_BRAND_TYPE_3GT9  = LSMASH_4CC( '3', 'g', 't', '9' ),   /* 3GPP Release 9 Media Stream Recording Profile */
-    ISOM_BRAND_TYPE_ARRI  = LSMASH_4CC( 'A', 'R', 'R', 'I' ),   /* ARRI Digital Camera */
-    ISOM_BRAND_TYPE_CAEP  = LSMASH_4CC( 'C', 'A', 'E', 'P' ),   /* Canon Digital Camera */
-    ISOM_BRAND_TYPE_CDES  = LSMASH_4CC( 'C', 'D', 'e', 's' ),   /* Convergent Designs */
-    ISOM_BRAND_TYPE_LCAG  = LSMASH_4CC( 'L', 'C', 'A', 'G' ),   /* Leica digital camera */
-    ISOM_BRAND_TYPE_M4A   = LSMASH_4CC( 'M', '4', 'A', ' ' ),   /* iTunes MPEG-4 audio protected or not */
-    ISOM_BRAND_TYPE_M4B   = LSMASH_4CC( 'M', '4', 'B', ' ' ),   /* iTunes AudioBook protected or not */
-    ISOM_BRAND_TYPE_M4P   = LSMASH_4CC( 'M', '4', 'P', ' ' ),   /* MPEG-4 protected audio */
-    ISOM_BRAND_TYPE_M4V   = LSMASH_4CC( 'M', '4', 'V', ' ' ),   /* MPEG-4 protected audio+video */
-    ISOM_BRAND_TYPE_MFSM  = LSMASH_4CC( 'M', 'F', 'S', 'M' ),   /* Media File for Samsung video Metadata */
-    ISOM_BRAND_TYPE_MPPI  = LSMASH_4CC( 'M', 'P', 'P', 'I' ),   /* Photo Player Multimedia Application Format */
-    ISOM_BRAND_TYPE_ROSS  = LSMASH_4CC( 'R', 'O', 'S', 'S' ),   /* Ross Video */
-    ISOM_BRAND_TYPE_AVC1  = LSMASH_4CC( 'a', 'v', 'c', '1' ),   /* Advanced Video Coding extensions */
-    ISOM_BRAND_TYPE_BBXM  = LSMASH_4CC( 'b', 'b', 'x', 'm' ),   /* Blinkbox Master File */
-    ISOM_BRAND_TYPE_CAQV  = LSMASH_4CC( 'c', 'a', 'q', 'v' ),   /* Casio Digital Camera */
-    ISOM_BRAND_TYPE_CCFF  = LSMASH_4CC( 'c', 'c', 'f', 'f' ),   /* Common container file format */
-    ISOM_BRAND_TYPE_DA0A  = LSMASH_4CC( 'd', 'a', '0', 'a' ),   /* DMB AF */
-    ISOM_BRAND_TYPE_DA0B  = LSMASH_4CC( 'd', 'a', '0', 'b' ),   /* DMB AF */
-    ISOM_BRAND_TYPE_DA1A  = LSMASH_4CC( 'd', 'a', '1', 'a' ),   /* DMB AF */
-    ISOM_BRAND_TYPE_DA1B  = LSMASH_4CC( 'd', 'a', '1', 'b' ),   /* DMB AF */
-    ISOM_BRAND_TYPE_DA2A  = LSMASH_4CC( 'd', 'a', '2', 'a' ),   /* DMB AF */
-    ISOM_BRAND_TYPE_DA2B  = LSMASH_4CC( 'd', 'a', '2', 'b' ),   /* DMB AF */
-    ISOM_BRAND_TYPE_DA3A  = LSMASH_4CC( 'd', 'a', '3', 'a' ),   /* DMB AF */
-    ISOM_BRAND_TYPE_DA3B  = LSMASH_4CC( 'd', 'a', '3', 'b' ),   /* DMB AF */
-    ISOM_BRAND_TYPE_DASH  = LSMASH_4CC( 'd', 'a', 's', 'h' ),   /* Indexed self-initializing Media Segment */
-    ISOM_BRAND_TYPE_DBY1  = LSMASH_4CC( 'd', 'b', 'y', '1' ),   /* MP4 files with Dolby content */
-    ISOM_BRAND_TYPE_DMB1  = LSMASH_4CC( 'd', 'm', 'b', '1' ),   /* DMB AF */
-    ISOM_BRAND_TYPE_DV1A  = LSMASH_4CC( 'd', 'v', '1', 'a' ),   /* DMB AF */
-    ISOM_BRAND_TYPE_DV1B  = LSMASH_4CC( 'd', 'v', '1', 'b' ),   /* DMB AF */
-    ISOM_BRAND_TYPE_DV2A  = LSMASH_4CC( 'd', 'v', '2', 'a' ),   /* DMB AF */
-    ISOM_BRAND_TYPE_DV2B  = LSMASH_4CC( 'd', 'v', '2', 'b' ),   /* DMB AF */
-    ISOM_BRAND_TYPE_DV3A  = LSMASH_4CC( 'd', 'v', '3', 'a' ),   /* DMB AF */
-    ISOM_BRAND_TYPE_DV3B  = LSMASH_4CC( 'd', 'v', '3', 'b' ),   /* DMB AF */
-    ISOM_BRAND_TYPE_DVR1  = LSMASH_4CC( 'd', 'v', 'r', '1' ),   /* DVB RTP */
-    ISOM_BRAND_TYPE_DVT1  = LSMASH_4CC( 'd', 'v', 't', '1' ),   /* DVB Transport Stream */
-    ISOM_BRAND_TYPE_IFRM  = LSMASH_4CC( 'i', 'f', 'r', 'm' ),   /* Apple iFrame */
-    ISOM_BRAND_TYPE_ISC2  = LSMASH_4CC( 'i', 's', 'c', '2' ),   /* Files encrypted according to ISMACryp 2.0 */
-    ISOM_BRAND_TYPE_ISO2  = LSMASH_4CC( 'i', 's', 'o', '2' ),   /* ISO Base Media file format version 2 */
-    ISOM_BRAND_TYPE_ISO3  = LSMASH_4CC( 'i', 's', 'o', '3' ),   /* ISO Base Media file format version 3 */
-    ISOM_BRAND_TYPE_ISO4  = LSMASH_4CC( 'i', 's', 'o', '4' ),   /* ISO Base Media file format version 4 */
-    ISOM_BRAND_TYPE_ISO5  = LSMASH_4CC( 'i', 's', 'o', '5' ),   /* ISO Base Media file format version 5 */
-    ISOM_BRAND_TYPE_ISO6  = LSMASH_4CC( 'i', 's', 'o', '6' ),   /* ISO Base Media file format version 6 */
-    ISOM_BRAND_TYPE_ISOM  = LSMASH_4CC( 'i', 's', 'o', 'm' ),   /* ISO Base Media file format version 1 */
-    ISOM_BRAND_TYPE_JPSI  = LSMASH_4CC( 'j', 'p', 's', 'i' ),   /* The JPSearch data interchange format */
-    ISOM_BRAND_TYPE_LMSG  = LSMASH_4CC( 'l', 'm', 's', 'g' ),   /* last Media Segment indicator */
-    ISOM_BRAND_TYPE_MJ2S  = LSMASH_4CC( 'm', 'j', '2', 's' ),   /* Motion JPEG 2000 simple profile */
-    ISOM_BRAND_TYPE_MJP2  = LSMASH_4CC( 'm', 'j', 'p', '2' ),   /* Motion JPEG 2000, general profile */
-    ISOM_BRAND_TYPE_MP21  = LSMASH_4CC( 'm', 'p', '2', '1' ),   /* MPEG-21 */
-    ISOM_BRAND_TYPE_MP41  = LSMASH_4CC( 'm', 'p', '4', '1' ),   /* MP4 version 1 */
-    ISOM_BRAND_TYPE_MP42  = LSMASH_4CC( 'm', 'p', '4', '2' ),   /* MP4 version 2 */
-    ISOM_BRAND_TYPE_MP71  = LSMASH_4CC( 'm', 'p', '7', '1' ),   /* MPEG-7 file-level metadata */
-    ISOM_BRAND_TYPE_MSDH  = LSMASH_4CC( 'm', 's', 'd', 'h' ),   /* Media Segment */
-    ISOM_BRAND_TYPE_MSIX  = LSMASH_4CC( 'm', 's', 'i', 'x' ),   /* Indexed Media Segment */
-    ISOM_BRAND_TYPE_NIKO  = LSMASH_4CC( 'n', 'i', 'k', 'o' ),   /* Nikon Digital Camera */
-    ISOM_BRAND_TYPE_ODCF  = LSMASH_4CC( 'o', 'd', 'c', 'f' ),   /* OMA DCF */
-    ISOM_BRAND_TYPE_OPF2  = LSMASH_4CC( 'o', 'p', 'f', '2' ),   /* OMA PDCF */
-    ISOM_BRAND_TYPE_OPX2  = LSMASH_4CC( 'o', 'p', 'x', '2' ),   /* OMA Adapted PDCF */
-    ISOM_BRAND_TYPE_PANA  = LSMASH_4CC( 'p', 'a', 'n', 'a' ),   /* Panasonic Digital Camera */
-    ISOM_BRAND_TYPE_PIFF  = LSMASH_4CC( 'p', 'i', 'f', 'f' ),   /* Protected Interoperable File Format */
-    ISOM_BRAND_TYPE_PNVI  = LSMASH_4CC( 'p', 'n', 'v', 'i' ),   /* Panasonic Video Intercom */
-    ISOM_BRAND_TYPE_QT    = LSMASH_4CC( 'q', 't', ' ', ' ' ),   /* QuickTime file format */
-    ISOM_BRAND_TYPE_RISX  = LSMASH_4CC( 'r', 'i', 's', 'x' ),   /* Representation Index Segment */
-    ISOM_BRAND_TYPE_SDV   = LSMASH_4CC( 's', 'd', 'v', ' ' ),   /* SD Video */
-    ISOM_BRAND_TYPE_SIMS  = LSMASH_4CC( 's', 'i', 'm', 's' ),   /* Sub-Indexed Media Segment */
-    ISOM_BRAND_TYPE_SISX  = LSMASH_4CC( 's', 'i', 's', 'x' ),   /* Single Index Segment */
-    ISOM_BRAND_TYPE_SSSS  = LSMASH_4CC( 's', 's', 's', 's' ),   /* Subsegment Index Segment */
-} lsmash_brand_type;
-
 typedef struct
 {
-    lsmash_brand_type  major_brand;         /* the best used brand */
-    lsmash_brand_type *brands;              /* the list of compatible brands */
-    uint32_t number_of_brands;              /* the number of compatible brands used in the movie */
-    uint32_t minor_version;                 /* minor version of best used brand */
-    double   max_chunk_duration;            /* max duration per chunk in seconds. 0.5 is default value. */
-    double   max_async_tolerance;           /* max tolerance, in seconds, for amount of interleaving asynchronization between tracks.
-                                             * 2.0 is default value. At least twice of max_chunk_duration is used. */
-    uint64_t max_chunk_size;                /* max size per chunk in bytes. 4*1024*1024 (4MiB) is default value. */
-    uint64_t max_read_size;                 /* max size of reading from a chunk at a time. 4*1024*1024 (4MiB) is default value. */
+    lsmash_brand_type  major_brand;         /* deprecated: the best used brand */
+    lsmash_brand_type *brands;              /* deprecated: the list of compatible brands */
+    uint32_t number_of_brands;              /* deprecated: the number of compatible brands used in the movie */
+    uint32_t minor_version;                 /* deprecated: minor version of best used brand */
+    double   max_chunk_duration;            /* deprecated: max duration per chunk in seconds. 0.5 is default value. */
+    double   max_async_tolerance;           /* deprecated:
+                                             *   max tolerance, in seconds, for amount of interleaving asynchronization between tracks.
+                                             *   2.0 is default value. At least twice of max_chunk_duration is used. */
+    uint64_t max_chunk_size;                /* deprecated: max size per chunk in bytes. 4*1024*1024 (4MiB) is default value. */
+    uint64_t max_read_size;                 /* deprecated: max size of reading from a chunk at a time. 4*1024*1024 (4MiB) is default value. */
     uint32_t timescale;                     /* movie timescale: timescale for the entire presentation */
     uint64_t duration;                      /* the duration, expressed in movie timescale, of the longest track
                                              * You can't set this parameter manually. */

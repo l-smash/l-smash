@@ -44,13 +44,16 @@ typedef struct
 
 typedef struct
 {
-    FILE           *stream;     /* I/O stream */
+    void           *stream;     /* I/O stream */
     uint8_t         error;
     uint8_t         unseekable;
     uint64_t        written;    /* the number of bytes written into 'stream' already */
     uint64_t        offset;     /* the current position in the 'stream'
                                  * the number of bytes from the beginning */
     lsmash_buffer_t buffer;
+    int     (*read) ( void *opaque, uint8_t *buf, int size );
+    int     (*write)( void *opaque, uint8_t *buf, int size );
+    int64_t (*seek) ( void *opaque, int64_t offset, int whence );
 } lsmash_bs_t;
 
 uint64_t lsmash_bs_get_pos( lsmash_bs_t *bs );
@@ -59,7 +62,7 @@ void lsmash_bs_free( lsmash_bs_t *bs );
 void lsmash_bs_alloc( lsmash_bs_t *bs, uint64_t size );
 lsmash_bs_t *lsmash_bs_create( void );
 void lsmash_bs_cleanup( lsmash_bs_t *bs );
-int lsmash_bs_seek( lsmash_bs_t *bs, int64_t offset, int whence );
+int64_t lsmash_bs_seek( lsmash_bs_t *bs, int64_t offset, int whence );
 
 /*---- bytestream writer ----*/
 void lsmash_bs_put_byte( lsmash_bs_t *bs, uint8_t value );
@@ -91,6 +94,7 @@ uint64_t lsmash_bs_get_be24_to_64( lsmash_bs_t *bs );
 uint64_t lsmash_bs_get_be32_to_64( lsmash_bs_t *bs );
 int lsmash_bs_read( lsmash_bs_t *bs, uint32_t size );
 int lsmash_bs_read_data( lsmash_bs_t *bs, uint8_t *buf, size_t *size );
+int lsmash_bs_read_c( lsmash_bs_t *bs );
 int lsmash_bs_import_data( lsmash_bs_t *bs, void *data, uint32_t length );
 
 /*---- bitstream ----*/

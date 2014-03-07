@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <limits.h>
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -76,12 +77,13 @@ void lsmash_bs_alloc( lsmash_bs_t *bs, uint64_t size )
     bs->buffer.alloc = alloc;
 }
 
-int lsmash_bs_seek( lsmash_bs_t *bs, int64_t offset, int whence )
+int64_t lsmash_bs_seek( lsmash_bs_t *bs, int64_t offset, int whence )
 {
     if( bs->unseekable )
         return -1;
-    if( lsmash_fseek( bs->stream, offset, whence ) != 0 )
-        return -1;
+    int64_t ret = bs->seek( bs->stream, offset, whence );
+    if( ret < 0 )
+        return ret;
     if( whence == SEEK_SET )
     {
         assert( offset >= 0 );
@@ -107,7 +109,7 @@ int lsmash_bs_seek( lsmash_bs_t *bs, int64_t offset, int whence )
         else
             bs->offset = bs->written + offset;
     }
-    return 0;
+    return ret;
 }
 
 /*---- bitstream writer ----*/
@@ -182,7 +184,7 @@ int lsmash_bs_flush_buffer( lsmash_bs_t *bs )
      || bs->buffer.data  == NULL )
         return 0;
     if( bs->error || !bs->stream
-     || fwrite( bs->buffer.data, 1, bs->buffer.store, bs->stream ) != bs->buffer.store )
+     || bs->write( bs->stream, bs->buffer.data, bs->buffer.store ) != bs->buffer.store )
     {
         lsmash_bs_free( bs );
         bs->error = 1;
@@ -196,7 +198,7 @@ int lsmash_bs_flush_buffer( lsmash_bs_t *bs )
 
 size_t lsmash_bs_write_data( lsmash_bs_t *bs, uint8_t *buf, size_t size )
 {
-    if( !bs )
+    if( !bs || size > INT_MAX )
         return -1;
     if( !buf || size == 0 )
         return 0;
@@ -206,7 +208,7 @@ size_t lsmash_bs_write_data( lsmash_bs_t *bs, uint8_t *buf, size_t size )
         bs->error = 1;
         return -1;
     }
-    size_t write_size = fwrite( buf, 1, size, bs->stream );
+    int write_size = bs->write( bs->stream, buf, size );
     bs->written += write_size;
     bs->offset  += write_size;
     return write_size != size ? -1 : 0;
@@ -349,7 +351,7 @@ uint64_t lsmash_bs_get_be32_to_64( lsmash_bs_t *bs )
 
 int lsmash_bs_read( lsmash_bs_t *bs, uint32_t size )
 {
-    if( !bs )
+    if( !bs || size > INT_MAX )
         return -1;
     if( size == 0 )
         return 0;
@@ -360,20 +362,20 @@ int lsmash_bs_read( lsmash_bs_t *bs, uint32_t size )
         bs->error = 1;
         return -1;
     }
-    size_t read_size = fread( bs->buffer.data + bs->buffer.store, 1, size, bs->stream );
-    if( read_size != size && !feof( bs->stream ) )
+    int read_size = bs->read( bs->stream, bs->buffer.data + bs->buffer.store, size );
+    if( read_size < 0 )
     {
         bs->error = 1;
         return -1;
     }
     bs->buffer.store += read_size;
     bs->offset       += read_size;
-    return 0;
+    return read_size;
 }
 
 int lsmash_bs_read_data( lsmash_bs_t *bs, uint8_t *buf, size_t *size )
 {
-    if( !bs || !size )
+    if( !bs || !size || *size > INT_MAX )
         return -1;
     if( !buf || *size == 0 )
         return 0;
@@ -383,8 +385,8 @@ int lsmash_bs_read_data( lsmash_bs_t *bs, uint8_t *buf, size_t *size )
         bs->error = 1;
         return -1;
     }
-    size_t read_size = fread( buf, 1, *size, bs->stream );
-    if( read_size != *size && !feof( bs->stream ) )
+    int read_size = bs->read( bs->stream, buf, *size );
+    if( read_size < 0 )
     {
         bs->error = 1;
         return -1;
@@ -392,6 +394,29 @@ int lsmash_bs_read_data( lsmash_bs_t *bs, uint8_t *buf, size_t *size )
     bs->offset += read_size;
     *size       = read_size;
     return 0;
+}
+
+int lsmash_bs_read_c( lsmash_bs_t *bs )
+{
+    if( !bs )
+        return -1;
+    if( bs->error || !bs->stream )
+    {
+        lsmash_bs_free( bs );
+        bs->error = 1;
+        return -1;
+    }
+    uint8_t c;
+    int read_size = bs->read( bs->stream, &c, 1 );
+    if( read_size != 1 )
+    {
+        if( read_size == 0 )
+            return EOF;
+        bs->error = 1;
+        return -1;
+    }
+    bs->offset += 1;
+    return c;
 }
 
 int lsmash_bs_import_data( lsmash_bs_t *bs, void* data, uint32_t length )

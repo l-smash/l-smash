@@ -27,23 +27,23 @@
 
 #include "box.h"
 
-static isom_data_t *isom_add_metadata( lsmash_root_t *root,
+static isom_data_t *isom_add_metadata( lsmash_file_t *file,
                                        lsmash_itunes_metadata_item item,
                                        char *meaning_string, char *name_string )
 {
-    assert( root && root->moov );
+    assert( file && file->moov );
     if( ((item == ITUNES_METADATA_ITEM_CUSTOM) && (!meaning_string || !meaning_string[0]) )
-     || (!root->moov->udta             && isom_add_udta( root->moov ))
-     || (!root->moov->udta->meta       && isom_add_meta( root->moov->udta ))
-     || (!root->moov->udta->meta->ilst && isom_add_ilst( root->moov->udta->meta )) )
+     || (!file->moov->udta             && isom_add_udta( file->moov ))
+     || (!file->moov->udta->meta       && isom_add_meta( file->moov->udta ))
+     || (!file->moov->udta->meta->ilst && isom_add_ilst( file->moov->udta->meta )) )
         return NULL;
-    if( !root->moov->udta->meta->hdlr )
+    if( !file->moov->udta->meta->hdlr )
     {
-        if( isom_add_hdlr( root->moov->udta->meta )
-         || isom_setup_handler_reference( root->moov->udta->meta->hdlr, ISOM_META_HANDLER_TYPE_ITUNES_METADATA ) )
+        if( isom_add_hdlr( file->moov->udta->meta )
+         || isom_setup_handler_reference( file->moov->udta->meta->hdlr, ISOM_META_HANDLER_TYPE_ITUNES_METADATA ) )
             return NULL;
     }
-    isom_ilst_t *ilst = root->moov->udta->meta->ilst;
+    isom_ilst_t *ilst = file->moov->udta->meta->ilst;
     if( isom_add_metaitem( ilst, item ) )
         return NULL;
     isom_metaitem_t *metaitem = (isom_metaitem_t *)ilst->item_list.tail->data;
@@ -75,14 +75,14 @@ fail:
     return NULL;
 }
 
-static int isom_set_itunes_metadata_string( lsmash_root_t *root,
+static int isom_set_itunes_metadata_string( lsmash_file_t *file,
                                             lsmash_itunes_metadata_item item,
                                             lsmash_itunes_metadata_value_t value, char *meaning, char *name )
 {
     uint32_t value_length = strlen( value.string );
     if( item == ITUNES_METADATA_ITEM_DESCRIPTION && value_length > 255 )
         item = ITUNES_METADATA_ITEM_LONG_DESCRIPTION;
-    isom_data_t *data = isom_add_metadata( root, item, meaning, name );
+    isom_data_t *data = isom_add_metadata( file, item, meaning, name );
     if( !data )
         return -1;
     data->type_code    = ITUNES_METADATA_SUBTYPE_UTF8;
@@ -90,14 +90,14 @@ static int isom_set_itunes_metadata_string( lsmash_root_t *root,
     data->value        = lsmash_memdup( value.string, data->value_length );
     if( !data->value )
     {
-        isom_ilst_t *ilst = root->moov->udta->meta->ilst;
+        isom_ilst_t *ilst = file->moov->udta->meta->ilst;
         isom_remove_box_by_itself( ilst->item_list.tail->data );
         return -1;
     }
     return 0;
 }
 
-static int isom_set_itunes_metadata_integer( lsmash_root_t *root,
+static int isom_set_itunes_metadata_integer( lsmash_file_t *file,
                                              lsmash_itunes_metadata_item item,
                                              lsmash_itunes_metadata_value_t value, char *meaning, char *name )
 {
@@ -130,7 +130,7 @@ static int isom_set_itunes_metadata_integer( lsmash_root_t *root,
             break;
     if( metadata_code_type_table[i].length == 0 )
         return -1;
-    isom_data_t *data = isom_add_metadata( root, item, meaning, name );
+    isom_data_t *data = isom_add_metadata( file, item, meaning, name );
     if( !data )
         return -1;
     if( item == ITUNES_METADATA_ITEM_PREDEFINED_GENRE )
@@ -147,18 +147,18 @@ static int isom_set_itunes_metadata_integer( lsmash_root_t *root,
     data->value = lsmash_memdup( temp, data->value_length );
     if( !data->value )
     {
-        isom_ilst_t *ilst = root->moov->udta->meta->ilst;
+        isom_ilst_t *ilst = file->moov->udta->meta->ilst;
         isom_remove_box_by_itself( ilst->item_list.tail->data );
         return -1;
     }
     return 0;
 }
 
-static int isom_set_itunes_metadata_boolean( lsmash_root_t *root,
+static int isom_set_itunes_metadata_boolean( lsmash_file_t *file,
                                              lsmash_itunes_metadata_item item,
                                              lsmash_itunes_metadata_value_t value, char *meaning, char *name )
 {
-    isom_data_t *data = isom_add_metadata( root, item, meaning, name );
+    isom_data_t *data = isom_add_metadata( file, item, meaning, name );
     if( !data )
         return -1;
     data->type_code = ITUNES_METADATA_SUBTYPE_INTEGER;
@@ -167,18 +167,18 @@ static int isom_set_itunes_metadata_boolean( lsmash_root_t *root,
     data->value = lsmash_memdup( &temp, 1 );
     if( !data->value )
     {
-        isom_ilst_t *ilst = root->moov->udta->meta->ilst;
+        isom_ilst_t *ilst = file->moov->udta->meta->ilst;
         isom_remove_box_by_itself( ilst->item_list.tail->data );
         return -1;
     }
     return 0;
 }
 
-static int isom_set_itunes_metadata_binary( lsmash_root_t *root,
+static int isom_set_itunes_metadata_binary( lsmash_file_t *file,
                                             lsmash_itunes_metadata_item item,
                                             lsmash_itunes_metadata_value_t value, char *meaning, char *name )
 {
-    isom_data_t *data = isom_add_metadata( root, item, meaning, name );
+    isom_data_t *data = isom_add_metadata( file, item, meaning, name );
     if( !data )
         return -1;
     switch( item )
@@ -228,7 +228,7 @@ static int isom_set_itunes_metadata_binary( lsmash_root_t *root,
     data->value        = lsmash_memdup( value.binary.data, value.binary.size );
     if( !data->value )
     {
-        isom_ilst_t *ilst = root->moov->udta->meta->ilst;
+        isom_ilst_t *ilst = file->moov->udta->meta->ilst;
         isom_remove_box_by_itself( ilst->item_list.tail->data );
         return -1;
     }
@@ -237,10 +237,12 @@ static int isom_set_itunes_metadata_binary( lsmash_root_t *root,
 
 int lsmash_set_itunes_metadata( lsmash_root_t *root, lsmash_itunes_metadata_t metadata )
 {
+    if( !root || !root->file )
+        return -1;
     static const struct
     {
         lsmash_itunes_metadata_item item;
-        int (*func_set_itunes_metadata)( lsmash_root_t *, lsmash_itunes_metadata_item, lsmash_itunes_metadata_value_t, char *, char * );
+        int (*func_set_itunes_metadata)( lsmash_file_t *, lsmash_itunes_metadata_item, lsmash_itunes_metadata_value_t, char *, char * );
     } itunes_metadata_function_mapping[] =
         {
             { ITUNES_METADATA_ITEM_ALBUM_NAME,                 isom_set_itunes_metadata_string },
@@ -296,20 +298,21 @@ int lsmash_set_itunes_metadata( lsmash_root_t *root, lsmash_itunes_metadata_t me
             { ITUNES_METADATA_ITEM_TRACK_NUMBER,               isom_set_itunes_metadata_binary },
             { 0,                                               NULL }
         };
+    lsmash_file_t *file = root->file;
     for( int i = 0; itunes_metadata_function_mapping[i].func_set_itunes_metadata; i++ )
         if( metadata.item == itunes_metadata_function_mapping[i].item )
-            return itunes_metadata_function_mapping[i].func_set_itunes_metadata( root, metadata.item, metadata.value, metadata.meaning, metadata.name );
+            return itunes_metadata_function_mapping[i].func_set_itunes_metadata( file, metadata.item, metadata.value, metadata.meaning, metadata.name );
     if( metadata.item == ITUNES_METADATA_ITEM_CUSTOM )
         switch( metadata.type )
         {
             case ITUNES_METADATA_TYPE_STRING :
-                return isom_set_itunes_metadata_string( root, metadata.item, metadata.value, metadata.meaning, metadata.name );
+                return isom_set_itunes_metadata_string( file, metadata.item, metadata.value, metadata.meaning, metadata.name );
             case ITUNES_METADATA_TYPE_INTEGER :
-                return isom_set_itunes_metadata_integer( root, metadata.item, metadata.value, metadata.meaning, metadata.name );
+                return isom_set_itunes_metadata_integer( file, metadata.item, metadata.value, metadata.meaning, metadata.name );
             case ITUNES_METADATA_TYPE_BOOLEAN :
-                return isom_set_itunes_metadata_boolean( root, metadata.item, metadata.value, metadata.meaning, metadata.name );
+                return isom_set_itunes_metadata_boolean( file, metadata.item, metadata.value, metadata.meaning, metadata.name );
             case ITUNES_METADATA_TYPE_BINARY :
-                return isom_set_itunes_metadata_binary( root, metadata.item, metadata.value, metadata.meaning, metadata.name );
+                return isom_set_itunes_metadata_binary( file, metadata.item, metadata.value, metadata.meaning, metadata.name );
             default :
                 break;
         }
@@ -385,9 +388,15 @@ static lsmash_itunes_metadata_type isom_get_itunes_metadata_type( lsmash_itunes_
 
 int lsmash_get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, lsmash_itunes_metadata_t *metadata )
 {
-    if( !metadata || !root || !root->moov || !root->moov->udta->meta || !root->moov->udta->meta->ilst )
+    if( !metadata
+     || !root
+     || !root->file
+     || !root->file->moov
+     || !root->file->moov->udta
+     || !root->file->moov->udta->meta
+     || !root->file->moov->udta->meta->ilst )
         return -1;
-    isom_ilst_t *ilst = root->moov->udta->meta->ilst;
+    isom_ilst_t *ilst = root->file->moov->udta->meta->ilst;
     isom_metaitem_t *metaitem = (isom_metaitem_t *)lsmash_get_entry_data( &ilst->item_list, metadata_number );
     if( !metaitem || !metaitem->data || !metaitem->data->value || metaitem->data->value_length == 0 )
         return -1;
@@ -467,12 +476,13 @@ fail:
 uint32_t lsmash_count_itunes_metadata( lsmash_root_t *root )
 {
     if( !root
-     || !root->moov
-     || !root->moov->udta
-     || !root->moov->udta->meta
-     || !root->moov->udta->meta->ilst )
+     || !root->file
+     || !root->file->moov
+     || !root->file->moov->udta
+     || !root->file->moov->udta->meta
+     || !root->file->moov->udta->meta->ilst )
         return 0;
-    return root->moov->udta->meta->ilst->item_list.entry_count;
+    return root->file->moov->udta->meta->ilst->item_list.entry_count;
 }
 
 void lsmash_cleanup_itunes_metadata( lsmash_itunes_metadata_t *metadata )
