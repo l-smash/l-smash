@@ -880,7 +880,7 @@ static int isom_read_dref( lsmash_root_t *root, isom_box_t *box, isom_box_t *par
     lsmash_bs_t *bs = root->bs;
     if( lsmash_bs_read( bs, sizeof(uint32_t) ) )
         return -1;
-    dref->list->entry_count = lsmash_bs_get_be32( bs );
+    dref->list.entry_count = lsmash_bs_get_be32( bs );
     isom_box_common_copy( dref, box );
     if( isom_add_print_func( root, dref, level ) )
         return -1;
@@ -892,8 +892,8 @@ static int isom_read_url( lsmash_root_t *root, isom_box_t *box, isom_box_t *pare
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_DREF ) )
         return isom_read_unknown_box( root, box, parent, level );
     isom_dref_t *dref = (isom_dref_t *)parent;
-    if( dref->list && !dref->list->head )
-        dref->list->entry_count = 0;    /* discard entry_count gotten from the file */
+    if( !dref->list.head )
+        dref->list.entry_count = 0; /* discard entry_count gotten from the file */
     isom_dref_entry_t *url  = isom_add_dref_entry( dref );
     if( !url )
         return -1;
@@ -1139,19 +1139,17 @@ static void *isom_sample_description_alloc( lsmash_codec_type_t sample_type )
 
 static void *isom_add_description( lsmash_codec_type_t sample_type, isom_stsd_t *stsd )
 {
-    if( !stsd->list )
-        return NULL;
     void *sample = isom_sample_description_alloc( sample_type );
     if( !sample )
         return NULL;
-    if( lsmash_add_entry( stsd->list, sample ) )
+    if( lsmash_add_entry( &stsd->list, sample ) )
     {
         lsmash_free( sample );
         return NULL;
     }
     if( lsmash_add_entry( &stsd->extensions, sample ) )
     {
-        lsmash_remove_entry_tail( stsd->list, lsmash_free );
+        lsmash_remove_entry_tail( &stsd->list, lsmash_free );
         return NULL;
     }
     ((isom_box_t *)sample)->destruct = (isom_extension_destructor_t)isom_remove_sample_description;

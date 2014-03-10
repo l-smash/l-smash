@@ -747,7 +747,7 @@ static int isom_print_dref( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
     isom_dref_t *dref = (isom_dref_t *)box;
     int indent = level;
     isom_print_box_common( fp, indent++, box, "Data Reference Box" );
-    lsmash_ifprintf( fp, indent, "entry_count = %"PRIu16"\n", dref->list->entry_count );
+    lsmash_ifprintf( fp, indent, "entry_count = %"PRIu16"\n", dref->list.entry_count );
     return 0;
 }
 
@@ -770,8 +770,6 @@ static int isom_print_stbl( FILE *fp, lsmash_root_t *root, isom_box_t *box, int 
 
 static int isom_print_stsd( FILE *fp, lsmash_root_t *root, isom_box_t *box, int level )
 {
-    if( !((isom_stsd_t *)box)->list )
-        return -1;
     isom_stsd_t *stsd = (isom_stsd_t *)box;
     int indent = level;
     isom_print_box_common( fp, indent++, box, "Sample Description Box" );

@@ -596,7 +596,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     isom_sbgp_t *sbgp_roll = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_ROLL );
     isom_sbgp_t *sbgp_rap  = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_RAP );
     lsmash_entry_t *elst_entry = elst && elst->list ? elst->list->head : NULL;
-    lsmash_entry_t *stsd_entry = stsd && stsd->list ? stsd->list->head : NULL;
+    lsmash_entry_t *stsd_entry = stsd               ? stsd->list. head : NULL;
     lsmash_entry_t *stts_entry = stts && stts->list ? stts->list->head : NULL;
     lsmash_entry_t *ctts_entry = ctts && ctts->list ? ctts->list->head : NULL;
     lsmash_entry_t *stss_entry = stss && stss->list ? stss->list->head : NULL;
@@ -610,7 +610,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     lsmash_entry_t *next_stsc_entry = stsc_entry ? stsc_entry->next : NULL;
     isom_stsc_entry_t *stsc_data = stsc_entry ? (isom_stsc_entry_t *)stsc_entry->data : NULL;
     isom_sample_entry_t *description = stsd_entry ? (isom_sample_entry_t *)stsd_entry->data : NULL;
-    int movie_framemts_present = (root->moov->mvex && root->moof_list && root->moof_list->head);
+    int movie_framemts_present = (root->moov->mvex && root->moof_list.head);
     if( !description )
         goto fail;
     if( !movie_framemts_present && (!stts_entry || !stsc_entry || !stco_entry || !stco_entry->data || (next_stsc_entry && !next_stsc_entry->data)) )
@@ -870,7 +870,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                     goto fail;
                 stsc_data = (isom_stsc_entry_t *)stsc_entry->data;
                 /* Update sample description. */
-                description = (isom_sample_entry_t *)lsmash_get_entry_data( stsd->list, stsc_data->sample_description_index );
+                description = (isom_sample_entry_t *)lsmash_get_entry_data( &stsd->list, stsc_data->sample_description_index );
                 is_lpcm_audio = isom_is_lpcm_audio( description );
                 if( is_lpcm_audio )
                     constant_sample_size = isom_get_lpcm_sample_size( (isom_audio_entry_t *)description );
@@ -925,16 +925,15 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
         chunk.data_offset = 0;
         chunk.length      = 0;
         /* Movie fragments */
-        for( lsmash_entry_t *moof_entry = root->moof_list->head; moof_entry; moof_entry = moof_entry->next )
+        for( lsmash_entry_t *moof_entry = root->moof_list.head; moof_entry; moof_entry = moof_entry->next )
         {
             isom_moof_t *moof = (isom_moof_t *)moof_entry->data;
-            if( !moof
-             || !moof->traf_list )
+            if( !moof )
                 goto fail;
             uint64_t last_sample_end_pos = 0;
             /* Track fragments */
             uint32_t traf_number = 1;
-            for( lsmash_entry_t *traf_entry = moof->traf_list->head; traf_entry; traf_entry = traf_entry->next )
+            for( lsmash_entry_t *traf_entry = moof->traf_list.head; traf_entry; traf_entry = traf_entry->next )
             {
                 isom_traf_t *traf = (isom_traf_t *)traf_entry->data;
                 if( !traf )
@@ -946,8 +945,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                 if( !trex )
                     goto fail;
                 /* Ignore ISOM_TF_FLAGS_DURATION_IS_EMPTY flag even if set. */
-                if( !traf->trun_list
-                 || !traf->trun_list->head )
+                if( !traf->trun_list.head )
                 {
                     ++traf_number;
                     continue;
@@ -956,14 +954,14 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                 uint64_t base_data_offset;
                 if( tfhd->flags & ISOM_TF_FLAGS_BASE_DATA_OFFSET_PRESENT )
                     base_data_offset = tfhd->base_data_offset;
-                else if( (tfhd->flags & ISOM_TF_FLAGS_DEFAULT_BASE_IS_MOOF) || traf_entry == moof->traf_list->head )
+                else if( (tfhd->flags & ISOM_TF_FLAGS_DEFAULT_BASE_IS_MOOF) || traf_entry == moof->traf_list.head )
                     base_data_offset = moof->pos;
                 else
                     base_data_offset = last_sample_end_pos;
                 int need_data_offset_only = (tfhd->track_ID != track_ID);
                 /* Track runs */
                 uint32_t trun_number = 1;
-                for( lsmash_entry_t *trun_entry = traf->trun_list->head; trun_entry; trun_entry = trun_entry->next )
+                for( lsmash_entry_t *trun_entry = traf->trun_list.head; trun_entry; trun_entry = trun_entry->next )
                 {
                     isom_trun_t *trun = (isom_trun_t *)trun_entry->data;
                     if( !trun )
@@ -976,7 +974,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                     /* Get data_offset. */
                     if( trun->flags & ISOM_TR_FLAGS_DATA_OFFSET_PRESENT )
                         data_offset = trun->data_offset + base_data_offset;
-                    else if( trun_entry == traf->trun_list->head )
+                    else if( trun_entry == traf->trun_list.head )
                         data_offset = base_data_offset;
                     else
                         data_offset = last_sample_end_pos;
@@ -1000,7 +998,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                             sample_description_index = tfhd->sample_description_index;
                         else
                             sample_description_index = trex->default_sample_description_index;
-                        description   = (isom_sample_entry_t *)lsmash_get_entry_data( stsd->list, sample_description_index );
+                        description   = (isom_sample_entry_t *)lsmash_get_entry_data( &stsd->list, sample_description_index );
                         is_lpcm_audio = isom_is_lpcm_audio( description );
                         if( is_lpcm_audio )
                             constant_sample_size = isom_get_lpcm_sample_size( (isom_audio_entry_t *)description );

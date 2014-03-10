@@ -935,7 +935,7 @@ static lsmash_box_type_t isom_guess_video_codec_specific_box_type( lsmash_codec_
 
 int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_type, lsmash_video_summary_t *summary )
 {
-    if( !summary || !stsd || !stsd->list || !stsd->parent || !stsd->parent->parent
+    if( !summary || !stsd || !stsd->parent || !stsd->parent->parent
      || !stsd->parent->parent->parent || !stsd->parent->parent->parent->parent )
         return -1;
     if( isom_check_valid_summary( (lsmash_summary_t *)summary ) )
@@ -1165,7 +1165,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
     int set_aperture_modes = qt_compatible                              /* Track Aperture Modes is only available under QuickTime file format. */
         && (!stsl || stsl->scale_method == 0)                           /* Sample scaling method might conflict with this feature. */
         && tapt && tapt->clef && tapt->prof && tapt->enof               /* Check if required boxes exist. */
-        && ((isom_stsd_t *)visual->parent)->list->entry_count == 1;     /* Multiple sample description might conflict with this, so in that case, disable this feature. */
+        && ((isom_stsd_t *)visual->parent)->list.entry_count == 1;      /* Multiple sample description might conflict with this, so in that case, disable this feature. */
     if( !set_aperture_modes )
         isom_remove_box_by_itself( trak->tapt );
     int uncompressed_ycbcr = qt_compatible && isom_is_uncompressed_ycbcr( visual->type );
@@ -1813,7 +1813,7 @@ static int isom_set_isom_template_audio_description( isom_audio_entry_t *audio, 
 
 int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_type, lsmash_audio_summary_t *summary )
 {
-    if( !stsd || !stsd->list || !stsd->root || !summary )
+    if( !stsd || !stsd->root || !summary )
         return -1;
     if( isom_check_valid_summary( (lsmash_summary_t *)summary ) )
         return -1;

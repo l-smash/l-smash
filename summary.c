@@ -151,10 +151,9 @@ uint32_t lsmash_count_summary( lsmash_root_t *root, uint32_t track_ID )
         return 0;
     isom_trak_t *trak = isom_get_trak( root, track_ID );
     if( !trak || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->hdlr
-     || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd
-     || !trak->mdia->minf->stbl->stsd->list )
+     || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd )
         return 0;
-    return trak->mdia->minf->stbl->stsd->list->entry_count;
+    return trak->mdia->minf->stbl->stsd->list.entry_count;
 }
 
 lsmash_summary_t *lsmash_get_summary( lsmash_root_t *root, uint32_t track_ID, uint32_t description_number )
@@ -166,13 +165,12 @@ lsmash_summary_t *lsmash_get_summary( lsmash_root_t *root, uint32_t track_ID, ui
      || !trak->mdia
      || !trak->mdia->mdhd || !trak->mdia->hdlr || !trak->mdia->minf
      || !trak->mdia->minf->stbl
-     || !trak->mdia->minf->stbl->stsd
-     || !trak->mdia->minf->stbl->stsd->list )
+     || !trak->mdia->minf->stbl->stsd )
         return NULL;
     isom_minf_t *minf = trak->mdia->minf;
     isom_stsd_t *stsd = minf->stbl->stsd;
     uint32_t i = 1;
-    for( lsmash_entry_t *entry = stsd->list->head; entry; entry = entry->next )
+    for( lsmash_entry_t *entry = stsd->list.head; entry; entry = entry->next )
     {
         if( i != description_number )
         {

@@ -309,9 +309,8 @@ static int isom_write_gmhd( lsmash_bs_t *bs, isom_box_t *box )
 static int isom_write_dref( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_dref_t *dref = (isom_dref_t *)box;
-    assert( dref->list );
     isom_bs_put_box_common( bs, dref );
-    lsmash_bs_put_be32( bs, dref->list->entry_count );
+    lsmash_bs_put_be32( bs, dref->list.entry_count );
     return 0;
 }
 
@@ -672,9 +671,8 @@ static int isom_write_tx3g_description( lsmash_bs_t *bs, isom_box_t *box )
 static int isom_write_stsd( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_stsd_t *stsd = (isom_stsd_t *)box;
-    assert( stsd->list );
     isom_bs_put_box_common( bs, stsd );
-    lsmash_bs_put_be32( bs, stsd->list->entry_count );
+    lsmash_bs_put_be32( bs, stsd->list.entry_count );
     return 0;
 }
 

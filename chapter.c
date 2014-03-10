@@ -228,8 +228,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
 {
     if( !root
      || !root->moov
-     || !root->moov->mvhd
-     || !root->moov->trak_list )
+     || !root->moov->mvhd )
         goto error_message;
     if( !root->qt_compatible && !root->itunes_movie )
     {
@@ -351,13 +350,13 @@ fail:
     if( chapter )
         fclose( chapter );
     /* Remove chapter track reference. */
-    if( trak->tref->ref_list && trak->tref->ref_list->tail )
-        isom_remove_box_by_itself( trak->tref->ref_list->tail->data );
-    if( trak->tref->ref_list->entry_count == 0 )
+    if( trak->tref->ref_list.tail )
+        isom_remove_box_by_itself( trak->tref->ref_list.tail->data );
+    if( trak->tref->ref_list.entry_count == 0 )
         isom_remove_box_by_itself( trak->tref );
     /* Remove the reference chapter track attached at tail of the list. */
-    if( root->moov->trak_list && root->moov->trak_list->tail )
-        isom_remove_box_by_itself( root->moov->trak_list->tail->data );
+    if( root->moov->trak_list.tail )
+        isom_remove_box_by_itself( root->moov->trak_list.tail->data );
 error_message:
     lsmash_log( NULL, LSMASH_LOG_ERROR, "failed to set reference chapter.\n" );
     return -1;

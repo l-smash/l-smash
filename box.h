@@ -292,7 +292,7 @@ typedef struct
 typedef struct
 {
     ISOM_BASEBOX_COMMON;
-    lsmash_entry_list_t *ref_list;      /* Track Reference Type Boxes */
+    lsmash_entry_list_t ref_list;   /* Track Reference Type Boxes */
 } isom_tref_t;
 
 /* Media Header Box
@@ -425,7 +425,7 @@ typedef struct
 typedef struct
 {
     ISOM_FULLBOX_COMMON;
-    lsmash_entry_list_t *list;
+    lsmash_entry_list_t list;
 } isom_dref_t;
 
 /* Data Information Box */
@@ -874,7 +874,7 @@ typedef struct
 {
     ISOM_FULLBOX_COMMON;
     uint32_t entry_count;   /* print only */
-    lsmash_entry_list_t *list;
+    lsmash_entry_list_t list;
 } isom_stsd_t;
 /** **/
 
@@ -1105,8 +1105,8 @@ typedef struct
     isom_stsc_t *stsc;      /* Sample To Chunk Box */
     isom_stsz_t *stsz;      /* Sample Size Box */
     isom_stco_t *stco;      /* Chunk Offset Box */
-    lsmash_entry_list_t *sgpd_list;      /* Sample Group Description Boxes */
-    lsmash_entry_list_t *sbgp_list;      /* Sample To Group Boxes */
+    lsmash_entry_list_t sgpd_list;  /* Sample Group Description Boxes */
+    lsmash_entry_list_t sbgp_list;  /* Sample To Group Boxes */
 } isom_stbl_t;
 
 /* Media Information Box */
@@ -1287,8 +1287,8 @@ typedef struct
 typedef struct
 {
     ISOM_BASEBOX_COMMON;
-    lsmash_entry_list_t *item_list;     /* Metadata Item Box List
-                                         * There is no entry_count field. */
+    lsmash_entry_list_t item_list;  /* Metadata Item Box List
+                                     * There is no entry_count field. */
 } isom_ilst_t;
 
 /* Meta Box */
@@ -1361,7 +1361,7 @@ typedef struct
     isom_SelO_t *SelO;      /* Play Selection Only Box */
     isom_AllF_t *AllF;      /* Play All Frames Box */
     /* Copyright Box List */
-    lsmash_entry_list_t *cprt_list;     /* Copyright Boxes is defined in ISO Base Media and 3GPP file format */
+    lsmash_entry_list_t cprt_list;  /* Copyright Boxes is defined in ISO Base Media and 3GPP file format */
 } isom_udta_t;
 
 /** Caches for handling tracks **/
@@ -1519,7 +1519,7 @@ typedef struct
 {
     ISOM_BASEBOX_COMMON;
     isom_mehd_t         *mehd;          /* Movie Extends Header Box / omitted when used in live streaming */
-    lsmash_entry_list_t *trex_list;     /* Track Extends Box */
+    lsmash_entry_list_t  trex_list;     /* Track Extends Box */
 } isom_mvex_t;
 
 /* Movie Fragment Header Box
@@ -1599,7 +1599,7 @@ typedef struct
     ISOM_BASEBOX_COMMON;
     isom_tfhd_t         *tfhd;          /* Track Fragment Header Box */
     isom_tfdt_t         *tfdt;          /* Track Fragment Base Media Decode Time Box */
-    lsmash_entry_list_t *trun_list;     /* Track Fragment Run Box List
+    lsmash_entry_list_t  trun_list;     /* Track Fragment Run Box List
                                          * If the duration-is-empty flag is set in the tf_flags, there are no track runs. */
     isom_sdtp_t         *sdtp;          /* Independent and Disposable Samples Box */
 
@@ -1611,7 +1611,7 @@ typedef struct
 {
     ISOM_BASEBOX_COMMON;
     isom_mfhd_t         *mfhd;          /* Movie Fragment Header Box */
-    lsmash_entry_list_t *traf_list;     /* Track Fragment Box List */
+    lsmash_entry_list_t  traf_list;     /* Track Fragment Box List */
 } isom_moof_t;
 
 /* Track Fragment Random Access Box
@@ -1670,7 +1670,7 @@ typedef struct
 typedef struct
 {
     ISOM_BASEBOX_COMMON;
-    lsmash_entry_list_t *tfra_list;     /* Track Fragment Random Access Box */
+    lsmash_entry_list_t  tfra_list;     /* Track Fragment Random Access Box */
     isom_mfro_t         *mfro;          /* Movie Fragment Random Access Offset Box */
 } isom_mfra_t;
 
@@ -1709,7 +1709,7 @@ typedef struct
     ISOM_BASEBOX_COMMON;
     isom_mvhd_t         *mvhd;          /* Movie Header Box */
     isom_iods_t         *iods;          /* ISOM: Object Descriptor Box / QTFF: null */
-    lsmash_entry_list_t *trak_list;     /* Track Box List */
+    lsmash_entry_list_t  trak_list;     /* Track Box List */
     isom_udta_t         *udta;          /* User Data Box */
     isom_ctab_t         *ctab;          /* ISOM: null / QTFF: Color Table Box */
     isom_meta_t         *meta;          /* Meta Box */
@@ -1839,7 +1839,7 @@ struct lsmash_root_tag
                                          * the flags field expresses file mode */
     isom_ftyp_t         *ftyp;          /* File Type Box */
     isom_moov_t         *moov;          /* Movie Box */
-    lsmash_entry_list_t *moof_list;     /* Movie Fragment Box List */
+    lsmash_entry_list_t  moof_list;     /* Movie Fragment Box List */
     isom_mdat_t         *mdat;          /* Media Data Box */
     isom_free_t         *free;          /* Free Space Box */
     isom_meta_t         *meta;          /* Meta Box */
