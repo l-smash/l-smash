@@ -170,7 +170,6 @@ int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, void *summa
     isom_trak_t *trak = isom_get_trak( root, track_ID );
     if( !trak
      || !trak->root
-     || !trak->root->ftyp
      || !trak->mdia
      || !trak->mdia->minf
      || !trak->mdia->minf->stbl
