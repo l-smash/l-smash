@@ -35,7 +35,7 @@
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  1
 #define LSMASH_VERSION_MINOR  3
-#define LSMASH_VERSION_MICRO  1
+#define LSMASH_VERSION_MICRO  2
 
 /****************************************************************************
  * ROOT
@@ -568,7 +568,7 @@ int lsmash_check_codec_type_identical( lsmash_codec_type_t a, lsmash_codec_type_
  ****************************************************************************/
 typedef enum
 {
-    LSMASH_SUMMARY_TYPE_UNKOWN = 0,
+    LSMASH_SUMMARY_TYPE_UNKNOWN = 0,
     LSMASH_SUMMARY_TYPE_VIDEO,
     LSMASH_SUMMARY_TYPE_AUDIO,
 } lsmash_summary_type;
