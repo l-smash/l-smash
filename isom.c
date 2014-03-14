@@ -643,7 +643,9 @@ int isom_check_compatibility( lsmash_root_t *root )
 {
     if( !root )
         return -1;
-    root->qt_compatible = 0;
+    /* Clear flags for compatibility. */
+    ptrdiff_t compat_offset = offsetof( lsmash_root_t, qt_compatible );
+    memset( (int8_t *)root + compat_offset, 0, sizeof(lsmash_root_t) - compat_offset );
     /* Check brand to decide mandatory boxes. */
     if( !root->ftyp || root->ftyp->brand_count == 0 )
     {

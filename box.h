@@ -1845,12 +1845,15 @@ struct lsmash_root_tag
     isom_meta_t         *meta;          /* Meta Box */
     isom_mfra_t         *mfra;          /* Movie Fragment Random Access Box */
 
-        lsmash_bs_t *bs;                    /* bytestream manager */
+        lsmash_bs_t             *bs;        /* bytestream manager */
         isom_fragment_manager_t *fragment;  /* movie fragment manager */
+        lsmash_entry_list_t     *print;
+        lsmash_entry_list_t     *timeline;
         double   max_chunk_duration;        /* max duration per chunk in seconds */
         double   max_async_tolerance;       /* max tolerance, in seconds, for amount of interleaving asynchronization between tracks */
         uint64_t max_chunk_size;            /* max size per chunk in bytes. */
         uint64_t max_read_size;             /* max size of reading from a chunk at a time. */
+        /* flags for compatibility */
         uint8_t  qt_compatible;             /* compatibility with QuickTime file format */
         uint8_t  isom_compatible;           /* compatibility with ISO Base Media file format */
         uint8_t  avc_extensions;            /* compatibility with AVC extensions */
@@ -1860,8 +1863,6 @@ struct lsmash_root_tag
         uint8_t  max_3gpp_version;          /* maximum 3GPP version */
         uint8_t  max_isom_version;          /* maximum ISO Base Media file format version */
         uint8_t  forbid_tref;               /* If set to 1, track reference is forbidden. */
-        lsmash_entry_list_t *print;
-        lsmash_entry_list_t *timeline;
 };
 
 /** **/
