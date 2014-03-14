@@ -710,6 +710,23 @@ int isom_check_compatibility( lsmash_root_t *root )
             case ISOM_BRAND_TYPE_3GS6 :
                 root->max_3gpp_version = LSMASH_MAX( root->max_3gpp_version, 6 );
                 break;
+            case ISOM_BRAND_TYPE_3GP7 :
+                root->max_3gpp_version = LSMASH_MAX( root->max_3gpp_version, 7 );
+                break;
+            case ISOM_BRAND_TYPE_3GP8 :
+                root->max_3gpp_version = LSMASH_MAX( root->max_3gpp_version, 8 );
+                break;
+            case ISOM_BRAND_TYPE_3GE9 :
+            case ISOM_BRAND_TYPE_3GF9 :
+            case ISOM_BRAND_TYPE_3GG9 :
+            case ISOM_BRAND_TYPE_3GH9 :
+            case ISOM_BRAND_TYPE_3GM9 :
+            case ISOM_BRAND_TYPE_3GP9 :
+            case ISOM_BRAND_TYPE_3GR9 :
+            case ISOM_BRAND_TYPE_3GS9 :
+            case ISOM_BRAND_TYPE_3GT9 :
+                root->max_3gpp_version = LSMASH_MAX( root->max_3gpp_version, 9 );
+                break;
             default :
                 break;
         }
