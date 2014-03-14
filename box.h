@@ -1859,6 +1859,7 @@ struct lsmash_root_tag
         uint8_t  itunes_movie;              /* compatibility with iTunes Movie */
         uint8_t  max_3gpp_version;          /* maximum 3GPP version */
         uint8_t  max_isom_version;          /* maximum ISO Base Media file format version */
+        uint8_t  forbid_tref;               /* If set to 1, track reference is forbidden. */
         lsmash_entry_list_t *print;
         lsmash_entry_list_t *timeline;
 };

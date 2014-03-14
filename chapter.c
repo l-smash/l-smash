@@ -230,7 +230,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
      || !root->moov
      || !root->moov->mvhd )
         goto error_message;
-    if( !root->qt_compatible && !root->itunes_movie )
+    if( root->forbid_tref || (!root->qt_compatible && !root->itunes_movie) )
     {
         lsmash_log( NULL, LSMASH_LOG_ERROR, "reference chapter is not available for this file.\n" );
         goto error_message;

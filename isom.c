@@ -740,6 +740,14 @@ int isom_check_compatibility( lsmash_root_t *root )
             case ISOM_BRAND_TYPE_ISO6 :
                 root->avc_extensions = 1;
                 break;
+            case ISOM_BRAND_TYPE_3GP4 :
+            case ISOM_BRAND_TYPE_3GP5 :
+            case ISOM_BRAND_TYPE_3GP6 :
+            case ISOM_BRAND_TYPE_3GP7 :
+            case ISOM_BRAND_TYPE_3GP8 :
+            case ISOM_BRAND_TYPE_3GP9 :
+                root->forbid_tref = 1;
+                break;
             default :
                 break;
         }
