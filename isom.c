@@ -119,6 +119,7 @@ isom_tfra_t *isom_get_tfra( isom_mfra_t *mfra, uint32_t track_ID )
 
 static int isom_add_elst_entry( isom_elst_t *elst, uint64_t segment_duration, int64_t media_time, int32_t media_rate )
 {
+    assert( elst->root );
     isom_elst_entry_t *data = lsmash_malloc( sizeof(isom_elst_entry_t) );
     if( !data )
         return -1;
@@ -130,9 +131,10 @@ static int isom_add_elst_entry( isom_elst_t *elst, uint64_t segment_duration, in
         lsmash_free( data );
         return -1;
     }
-    if( data->segment_duration > UINT32_MAX
-     || data->media_time       >  INT32_MAX
-     || data->media_time       <  INT32_MIN )
+    if( !elst->root->undefined_64_ver
+     && (data->segment_duration > UINT32_MAX
+      || data->media_time       >  INT32_MAX
+      || data->media_time       <  INT32_MIN) )
         elst->version = 1;
     return 0;
 }
@@ -657,7 +659,10 @@ int isom_check_compatibility( lsmash_root_t *root )
             root->isom_compatible = 1;
         }
         else
-            root->qt_compatible = 1;
+        {
+            root->qt_compatible    = 1;
+            root->undefined_64_ver = 1;
+        }
         return 0;
     }
     for( uint32_t i = 0; i <= root->ftyp->brand_count; i++ )
@@ -759,6 +764,7 @@ int isom_check_compatibility( lsmash_root_t *root )
                           || root->mp4_version2
                           || root->itunes_movie
                           || root->max_3gpp_version;
+    root->undefined_64_ver = root->qt_compatible || root->itunes_movie;
     return 0;
 }
 
@@ -1024,7 +1030,7 @@ static int isom_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_de
             }
         }
     }
-    if( mdhd->duration > UINT32_MAX )
+    if( mdhd->duration > UINT32_MAX && !root->undefined_64_ver )
         mdhd->version = 1;
     return 0;
 }
@@ -1032,7 +1038,8 @@ static int isom_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_de
 static int isom_update_mvhd_duration( isom_moov_t *moov )
 {
     if( !moov
-     || !moov->mvhd )
+     || !moov->mvhd
+     || !moov->mvhd->root )
         return -1;
     isom_mvhd_t *mvhd = moov->mvhd;
     mvhd->duration = 0;
@@ -1047,7 +1054,7 @@ static int isom_update_mvhd_duration( isom_moov_t *moov )
                        ? LSMASH_MAX( mvhd->duration, data->tkhd->duration )
                        : data->tkhd->duration;
     }
-    if( mvhd->duration > UINT32_MAX )
+    if( mvhd->duration > UINT32_MAX && !mvhd->root->undefined_64_ver )
         mvhd->version = 1;
     return 0;
 }
@@ -1087,7 +1094,7 @@ static int isom_update_tkhd_duration( isom_trak_t *trak )
             tkhd->duration += data->segment_duration;
         }
     }
-    if( tkhd->duration > UINT32_MAX )
+    if( tkhd->duration > UINT32_MAX && !root->undefined_64_ver )
         tkhd->version = 1;
     if( !root->fragment && tkhd->duration == 0 )
         tkhd->duration = tkhd->version == 1 ? 0xffffffffffffffff : 0xffffffff;

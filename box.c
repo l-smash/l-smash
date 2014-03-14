@@ -1514,9 +1514,10 @@ static uint64_t isom_update_mvhd_size( isom_mvhd_t *mvhd )
     if( !mvhd )
         return 0;
     mvhd->version = 0;
-    if( mvhd->creation_time     > UINT32_MAX
-     || mvhd->modification_time > UINT32_MAX
-     || mvhd->duration          > UINT32_MAX )
+    if( (mvhd->root && !mvhd->root->qt_compatible && !mvhd->root->itunes_movie)
+     && (mvhd->creation_time     > UINT32_MAX
+      || mvhd->modification_time > UINT32_MAX
+      || mvhd->duration          > UINT32_MAX) )
         mvhd->version = 1;
     mvhd->size = ISOM_FULLBOX_COMMON_SIZE + 96 + (uint64_t)mvhd->version * 12;
     CHECK_LARGESIZE( mvhd );
@@ -1556,9 +1557,10 @@ static uint64_t isom_update_tkhd_size( isom_tkhd_t *tkhd )
     if( !tkhd )
         return 0;
     tkhd->version = 0;
-    if( tkhd->creation_time     > UINT32_MAX
-     || tkhd->modification_time > UINT32_MAX
-     || tkhd->duration          > UINT32_MAX )
+    if( (tkhd->root && !tkhd->root->undefined_64_ver)
+     && (tkhd->creation_time     > UINT32_MAX
+      || tkhd->modification_time > UINT32_MAX
+      || tkhd->duration          > UINT32_MAX) )
         tkhd->version = 1;
     tkhd->size = ISOM_FULLBOX_COMMON_SIZE + 80 + (uint64_t)tkhd->version * 12;
     CHECK_LARGESIZE( tkhd );
@@ -1620,9 +1622,10 @@ static uint64_t isom_update_elst_size( isom_elst_t *elst )
     for( lsmash_entry_t *entry = elst->list->head; entry; entry = entry->next, i++ )
     {
         isom_elst_entry_t *data = (isom_elst_entry_t *)entry->data;
-        if( data->segment_duration > UINT32_MAX
-         || data->media_time       >  INT32_MAX
-         || data->media_time       <  INT32_MIN )
+        if( (elst->root && !elst->root->undefined_64_ver)
+         && (data->segment_duration > UINT32_MAX
+          || data->media_time       >  INT32_MAX
+          || data->media_time       <  INT32_MIN) )
             elst->version = 1;
     }
     elst->size = ISOM_LIST_FULLBOX_COMMON_SIZE + (uint64_t)i * ( elst->version ? 20 : 12 );
@@ -1660,9 +1663,10 @@ static uint64_t isom_update_mdhd_size( isom_mdhd_t *mdhd )
     if( !mdhd )
         return 0;
     mdhd->version = 0;
-    if( mdhd->creation_time     > UINT32_MAX
-     || mdhd->modification_time > UINT32_MAX
-     || mdhd->duration          > UINT32_MAX )
+    if( (mdhd->root && !mdhd->root->undefined_64_ver)
+     && (mdhd->creation_time     > UINT32_MAX
+      || mdhd->modification_time > UINT32_MAX
+      || mdhd->duration          > UINT32_MAX) )
         mdhd->version = 1;
     mdhd->size = ISOM_FULLBOX_COMMON_SIZE + 20 + (uint64_t)mdhd->version * 12;
     CHECK_LARGESIZE( mdhd );

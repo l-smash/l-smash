@@ -102,11 +102,11 @@ static int isom_write_tkhd( lsmash_bs_t *bs, isom_box_t *box )
     }
     else
     {
-        lsmash_bs_put_be32( bs, (uint32_t)tkhd->creation_time );
-        lsmash_bs_put_be32( bs, (uint32_t)tkhd->modification_time );
+        lsmash_bs_put_be32( bs, LSMASH_MIN( tkhd->creation_time, UINT32_MAX ) );
+        lsmash_bs_put_be32( bs, LSMASH_MIN( tkhd->modification_time, UINT32_MAX ) );
         lsmash_bs_put_be32( bs, tkhd->track_ID );
         lsmash_bs_put_be32( bs, tkhd->reserved1 );
-        lsmash_bs_put_be32( bs, (uint32_t)tkhd->duration );
+        lsmash_bs_put_be32( bs, LSMASH_MIN( tkhd->duration, UINT32_MAX ) );
     }
     lsmash_bs_put_be32( bs, tkhd->reserved2[0] );
     lsmash_bs_put_be32( bs, tkhd->reserved2[1] );
@@ -176,8 +176,8 @@ static int isom_write_elst( lsmash_bs_t *bs, isom_box_t *box )
         }
         else
         {
-            lsmash_bs_put_be32( bs, (uint32_t)data->segment_duration );
-            lsmash_bs_put_be32( bs, (uint32_t)data->media_time );
+            lsmash_bs_put_be32( bs, LSMASH_MIN( data->segment_duration, UINT32_MAX ) );
+            lsmash_bs_put_be32( bs, data->media_time < 0 ? (uint32_t)data->media_time : LSMASH_MIN( data->media_time, INT32_MAX ) );
         }
         lsmash_bs_put_be32( bs, data->media_rate );
     }
@@ -218,10 +218,10 @@ static int isom_write_mdhd( lsmash_bs_t *bs, isom_box_t *box )
     }
     else
     {
-        lsmash_bs_put_be32( bs, (uint32_t)mdhd->creation_time );
-        lsmash_bs_put_be32( bs, (uint32_t)mdhd->modification_time );
+        lsmash_bs_put_be32( bs, LSMASH_MIN( mdhd->creation_time, UINT32_MAX ) );
+        lsmash_bs_put_be32( bs, LSMASH_MIN( mdhd->modification_time, UINT32_MAX ) );
         lsmash_bs_put_be32( bs, mdhd->timescale );
-        lsmash_bs_put_be32( bs, (uint32_t)mdhd->duration );
+        lsmash_bs_put_be32( bs, LSMASH_MIN( mdhd->duration, UINT32_MAX ) );
     }
     lsmash_bs_put_be16( bs, mdhd->language );
     lsmash_bs_put_be16( bs, mdhd->quality );
@@ -1030,10 +1030,10 @@ static int isom_write_mvhd( lsmash_bs_t *bs, isom_box_t *box )
     }
     else
     {
-        lsmash_bs_put_be32( bs, (uint32_t)mvhd->creation_time );
-        lsmash_bs_put_be32( bs, (uint32_t)mvhd->modification_time );
+        lsmash_bs_put_be32( bs, LSMASH_MIN( mvhd->creation_time, UINT32_MAX ) );
+        lsmash_bs_put_be32( bs, LSMASH_MIN( mvhd->modification_time, UINT32_MAX ) );
         lsmash_bs_put_be32( bs, mvhd->timescale );
-        lsmash_bs_put_be32( bs, (uint32_t)mvhd->duration );
+        lsmash_bs_put_be32( bs, LSMASH_MIN( mvhd->duration, UINT32_MAX ) );
     }
     lsmash_bs_put_be32( bs, mvhd->rate );
     lsmash_bs_put_be16( bs, mvhd->volume );

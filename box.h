@@ -1863,6 +1863,7 @@ struct lsmash_root_tag
         uint8_t  max_3gpp_version;          /* maximum 3GPP version */
         uint8_t  max_isom_version;          /* maximum ISO Base Media file format version */
         uint8_t  forbid_tref;               /* If set to 1, track reference is forbidden. */
+        uint8_t  undefined_64_ver;          /* If set to 1, 64-bit version fields, e.g. duration, are undefined. */
 };
 
 /** **/
