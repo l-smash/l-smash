@@ -34,8 +34,8 @@
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  1
-#define LSMASH_VERSION_MINOR  3
-#define LSMASH_VERSION_MICRO  2
+#define LSMASH_VERSION_MINOR  4
+#define LSMASH_VERSION_MICRO  0
 
 /****************************************************************************
  * ROOT
@@ -300,8 +300,14 @@ int lsmash_add_box
     lsmash_box_t *box
 );
 
-/* Deallocate a given box. */
+/* Deallocate a given box and its children. */
 void lsmash_destroy_box
+(
+    lsmash_box_t *box
+);
+
+/* Deallocate all children of a given box. */
+void lsmash_destroy_children
 (
     lsmash_box_t *box
 );

@@ -3515,6 +3515,14 @@ void lsmash_destroy_box
     isom_remove_box_by_itself( box );
 }
 
+void lsmash_destroy_children
+(
+    lsmash_box_t *box
+)
+{
+    isom_remove_all_extension_boxes( &box->extensions );
+}
+
 int lsmash_get_box_precedence
 (
     lsmash_box_t *box,
