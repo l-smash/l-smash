@@ -350,7 +350,7 @@ mp4a_AudioSpecificConfig_t *mp4a_create_AudioSpecificConfig(
         else
             asc->extensionAudioObjectType = MP4A_AUDIO_OBJECT_TYPE_NULL;
 
-        if( sbr_mode == MP4A_AAC_SBR_BACKWARD_COMPATIBLE || sbr_mode == MP4A_AAC_SBR_BACKWARD_COMPATIBLE )
+        if( sbr_mode == MP4A_AAC_SBR_BACKWARD_COMPATIBLE || sbr_mode == MP4A_AAC_SBR_HIERARCHICAL )
         {
             asc->extensionSamplingFrequency = frequency * 2;
             asc->extensionSamplingFrequencyIndex = i == 0xC ? 0xF : mp4a_sampling_frequency_table[i][3];
