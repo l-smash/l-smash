@@ -3520,7 +3520,8 @@ void lsmash_destroy_children
     lsmash_box_t *box
 )
 {
-    isom_remove_all_extension_boxes( &box->extensions );
+    if( box )
+        isom_remove_all_extension_boxes( &box->extensions );
 }
 
 int lsmash_get_box_precedence
