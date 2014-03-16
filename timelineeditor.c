@@ -860,6 +860,7 @@ static void display_help( void )
     eprintf( "\n"
              "Usage: timelineeditor [options] input output\n"
              "  options:\n"
+             "    --version                    Display version information\n"
              "    --track           <integer>  Specify track number to edit [1]\n"
              "    --timecode        <string>   Specify timecode file to edit timeline\n"
              "    --media-timescale <integer>  Specify media timescale to convert\n"
@@ -872,15 +873,20 @@ static void display_help( void )
 
 int main( int argc, char *argv[] )
 {
-    if( argc < 3 )
-    {
-        display_help();
-        return -1;
-    }
     if( !strcasecmp( argv[1], "-h" ) || !strcasecmp( argv[1], "--help" ) )
     {
         display_help();
         return 0;
+    }
+    else if( !strcasecmp( argv[1], "-v" ) || !strcasecmp( argv[1], "--version" ) )
+    {
+        display_version();
+        return 0;
+    }
+    else if( argc < 3 )
+    {
+        display_help();
+        return -1;
     }
     movie_t    output   = { 0 };
     movie_t    input    = { 0 };

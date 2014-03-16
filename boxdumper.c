@@ -51,6 +51,7 @@ static void display_help( void )
     eprintf( "\n"
              "Usage: boxdumper [option] input\n"
              "  options:\n"
+             "    --version      Display version information\n"
              "    --box          Dump box structure\n"
              "    --chapter      Extract chapter list\n"
              "    --timestamp    Dump media timestamps\n" );
@@ -68,7 +69,17 @@ static int boxdumper_error( lsmash_root_t *root, char* message )
 
 int main( int argc, char *argv[] )
 {
-    if( argc < 2 )
+    if( !strcasecmp( argv[1], "-h" ) || !strcasecmp( argv[1], "--help" ) )
+    {
+        display_help();
+        return 0;
+    }
+    else if( !strcasecmp( argv[1], "-v" ) || !strcasecmp( argv[1], "--version" ) )
+    {
+        display_version();
+        return 0;
+    }
+    else if( argc < 2 )
     {
         display_help();
         return -1;
@@ -94,11 +105,6 @@ int main( int argc, char *argv[] )
     }
     else
     {
-        if( !strcasecmp( argv[1], "-h" ) || !strcasecmp( argv[1], "--help" ) )
-        {
-            display_help();
-            return 0;
-        }
         filename = argv[1];
     }
 #ifdef _WIN32

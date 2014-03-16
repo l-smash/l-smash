@@ -58,6 +58,7 @@ typedef struct
 typedef struct
 {
     int      help;
+    int      version;
     int      isom;
     int      isom_version;
     int      itunes_movie;
@@ -221,6 +222,7 @@ static void display_help( void )
              "Usage: muxer [global_options] -i input1 [-i input2 -i input3 ...] -o output\n"
              "Global options:\n"
              "    --help                    Display help\n"
+             "    --version                 Display version information\n"
              "    --optimize-pd             Optimize for progressive download\n"
              "    --interleave <integer>    Specify time interval for media interleaving in milliseconds\n"
              "    --file-format <string>    Specify output file format\n"
@@ -391,7 +393,17 @@ static int decide_brands( option_t *opt )
 
 static int parse_global_options( int argc, char **argv, muxer_t *muxer )
 {
-    if( argc < 5 )
+    if( !strcasecmp( argv[1], "-h" ) || !strcasecmp( argv[1], "--help" ) )
+    {
+        muxer->opt.help = 1;
+        return 0;
+    }
+    else if( !strcasecmp( argv[1], "-v" ) || !strcasecmp( argv[1], "--version" ) )
+    {
+        muxer->opt.version = 1;
+        return 0;
+    }
+    else if( argc < 5 )
         return -1;
     uint32_t i = 1;
     option_t *opt = &muxer->opt;
@@ -432,11 +444,6 @@ static int parse_global_options( int argc, char **argv, muxer_t *muxer )
         {
             CHECK_NEXT_ARG;
             muxer->output.file_name = argv[i];
-        }
-        else if( !strcasecmp( argv[i], "-h" ) || !strcasecmp( argv[i], "--help" ) )
-        {
-            opt->help = 1;
-            return 0;
         }
         else if( !strcasecmp( argv[i], "--optimize-pd" ) )
             opt->optimize_pd = 1;
@@ -1162,8 +1169,6 @@ static int finish_movie( output_t *output, option_t *opt )
 
 int main( int argc, char *argv[] )
 {
-    if( argc < 3 )
-        return MUXER_USAGE_ERR();
     muxer_t muxer = { { 0 } };
     lsmash_get_mainargs( &argc, &argv );
     if( parse_global_options( argc, argv, &muxer ) )
@@ -1171,6 +1176,12 @@ int main( int argc, char *argv[] )
     if( muxer.opt.help )
     {
         display_help();
+        cleanup_muxer( &muxer );
+        return 0;
+    }
+    else if( muxer.opt.version )
+    {
+        display_version();
         cleanup_muxer( &muxer );
         return 0;
     }
