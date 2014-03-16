@@ -36,19 +36,24 @@
 
 #define eprintf( ... ) fprintf( stderr, __VA_ARGS__ )
 
-static void display_help( void )
+static void display_version( void )
 {
     eprintf( "\n"
              "L-SMASH isom/mov structual analyzer rev%s  %s\n"
              "Built on %s %s\n"
-             "Copyright (C) 2010-2012 L-SMASH project\n"
-             "\n"
+             "Copyright (C) 2010-2012 L-SMASH project\n",
+             LSMASH_REV, LSMASH_GIT_HASH, __DATE__, __TIME__ );
+}
+
+static void display_help( void )
+{
+    display_version();
+    eprintf( "\n"
              "Usage: boxdumper [option] input\n"
              "  options:\n"
              "    --box          Dump box structure\n"
              "    --chapter      Extract chapter list\n"
-             "    --timestamp    Dump media timestamps\n",
-             LSMASH_REV, LSMASH_GIT_HASH, __DATE__, __TIME__ );
+             "    --timestamp    Dump media timestamps\n" );
 }
 
 static int boxdumper_error( lsmash_root_t *root, char* message )

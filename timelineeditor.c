@@ -845,13 +845,19 @@ static int moov_to_front_callback( void *param, uint64_t written_movie_size, uin
     return 0;
 }
 
-static void display_help( void )
+static void display_version( void )
 {
     eprintf( "\n"
              "L-SMASH isom/mov timeline editor rev%s  %s\n"
              "Built on %s %s\n"
-             "Copyright (C) 2011-2012 L-SMASH project\n"
-             "\n"
+             "Copyright (C) 2011-2012 L-SMASH project\n",
+             LSMASH_REV, LSMASH_GIT_HASH, __DATE__, __TIME__ );
+}
+
+static void display_help( void )
+{
+    display_version();
+    eprintf( "\n"
              "Usage: timelineeditor [options] input output\n"
              "  options:\n"
              "    --track           <integer>  Specify track number to edit [1]\n"
@@ -861,8 +867,7 @@ static void display_help( void )
              "    --skip            <integer>  Skip start of media presentation in milliseconds\n"
              "    --delay           <integer>  Insert blank clip before actual media presentation in milliseconds\n"
              "    --dts-compression            Eliminate composition delay with DTS hack\n"
-             "                                 Multiply media timescale and timebase automatically\n",
-             LSMASH_REV, LSMASH_GIT_HASH, __DATE__, __TIME__ );
+             "                                 Multiply media timescale and timebase automatically\n" );
 }
 
 int main( int argc, char *argv[] )

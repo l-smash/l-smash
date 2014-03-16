@@ -211,13 +211,19 @@ static int warning_message( const char *message, ... )
 #define ERROR_MSG( ... ) error_message( __VA_ARGS__ )
 #define WARNING_MSG( ... ) warning_message( __VA_ARGS__ )
 
-static void display_help( void )
+static void display_version( void )
 {
     eprintf( "\n"
              "L-SMASH isom/mov re-muliplexer rev%s  %s\n"
              "Built on %s %s\n"
-             "Copyright (C) 2011-2012 L-SMASH project\n"
-             "\n"
+             "Copyright (C) 2011-2012 L-SMASH project\n",
+             LSMASH_REV, LSMASH_GIT_HASH, __DATE__, __TIME__ );
+}
+
+static void display_help( void )
+{
+    display_version();
+    eprintf( "\n"
              "Usage: remuxer -i input1 [-i input2 -i input3 ...] -o output\n"
              "Global options:\n"
              "    --help                    Display help.\n"
@@ -242,8 +248,7 @@ static void display_help( void )
              "How to use track options:\n"
              "    -i input?[track_number1]:[track_option1],[track_option2]?[track_number2]:...\n"
              "For example:\n"
-             "    remuxer -i input1 -i input2?2:alternate-group=1?3:language=jpn,alternate-group=1 -o output\n",
-             LSMASH_REV, LSMASH_GIT_HASH, __DATE__, __TIME__ );
+             "    remuxer -i input1 -i input2?2:alternate-group=1?3:language=jpn,alternate-group=1 -o output\n" );
 }
 
 static char *duplicate_string( char *src )

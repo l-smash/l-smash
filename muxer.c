@@ -204,13 +204,20 @@ static int error_message( const char *message, ... )
     va_end( args );
     return -1;
 }
-static void display_help( void )
+
+static void display_version( void )
 {
     eprintf( "\n"
              "L-SMASH isom/mov multiplexer rev%s  %s\n"
              "Built on %s %s\n"
-             "Copyright (C) 2010-2012 L-SMASH project\n"
-             "\n"
+             "Copyright (C) 2010-2012 L-SMASH project\n",
+             LSMASH_REV, LSMASH_GIT_HASH, __DATE__, __TIME__ );
+}
+
+static void display_help( void )
+{
+    display_version();
+    eprintf( "\n"
              "Usage: muxer [global_options] -i input1 [-i input2 -i input3 ...] -o output\n"
              "Global options:\n"
              "    --help                    Display help\n"
@@ -263,8 +270,7 @@ static void display_help( void )
              "    --copyright <string>      Copyright\n"
              "    --description <string>    Description\n"
              "    --grouping <string>       Grouping\n"
-             "    --tempo <integer>         Beats per minute\n",
-             LSMASH_REV, LSMASH_GIT_HASH, __DATE__, __TIME__ );
+             "    --tempo <integer>         Beats per minute\n" );
 }
 
 static int muxer_usage_error( void )
