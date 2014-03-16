@@ -36,7 +36,7 @@
 
 #define eprintf( ... ) fprintf( stderr, __VA_ARGS__ )
 
-static int display_help( int ret )
+static void display_help( void )
 {
     eprintf( "\n"
              "L-SMASH isom/mov structual analyzer rev%s  %s\n"
@@ -49,7 +49,6 @@ static int display_help( int ret )
              "    --chapter      Extract chapter list\n"
              "    --timestamp    Dump media timestamps\n",
              LSMASH_REV, LSMASH_GIT_HASH, __DATE__, __TIME__ );
-    return ret;
 }
 
 static int boxdumper_error( lsmash_root_t *root, char* message )
@@ -65,7 +64,10 @@ static int boxdumper_error( lsmash_root_t *root, char* message )
 int main( int argc, char *argv[] )
 {
     if( argc < 2 )
-        return display_help( -1 );
+    {
+        display_help();
+        return -1;
+    }
     int dump_box = 1;
     int chapter = 0;
     char *filename;
@@ -79,13 +81,19 @@ int main( int argc, char *argv[] )
         else if( !strcasecmp( argv[1], "--timestamp" ) )
             dump_box = 0;
         else
-            return display_help( -1 );
+        {
+            display_help();
+            return -1;
+        }
         filename = argv[2];
     }
     else
     {
         if( !strcasecmp( argv[1], "-h" ) || !strcasecmp( argv[1], "--help" ) )
-            return display_help( 0 );
+        {
+            display_help();
+            return 0;
+        }
         filename = argv[1];
     }
 #ifdef _WIN32
