@@ -860,6 +860,7 @@ static void display_help( void )
     eprintf( "\n"
              "Usage: timelineeditor [options] input output\n"
              "  options:\n"
+             "    --help                       Display help\n"
              "    --version                    Display version information\n"
              "    --track           <integer>  Specify track number to edit [1]\n"
              "    --timecode        <string>   Specify timecode file to edit timeline\n"

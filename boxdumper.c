@@ -51,6 +51,7 @@ static void display_help( void )
     eprintf( "\n"
              "Usage: boxdumper [option] input\n"
              "  options:\n"
+             "    --help         Display help\n"
              "    --version      Display version information\n"
              "    --box          Dump box structure\n"
              "    --chapter      Extract chapter list\n"
