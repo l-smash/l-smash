@@ -845,7 +845,7 @@ static int moov_to_front_callback( void *param, uint64_t written_movie_size, uin
     return 0;
 }
 
-static void print_help( void )
+static void display_help( void )
 {
     eprintf( "\n"
              "L-SMASH isom/mov timeline editor rev%s  %s\n"
@@ -869,12 +869,12 @@ int main( int argc, char *argv[] )
 {
     if( argc < 3 )
     {
-        print_help();
+        display_help();
         return -1;
     }
     if( !strcasecmp( argv[1], "-h" ) || !strcasecmp( argv[1], "--help" ) )
     {
-        print_help();
+        display_help();
         return 0;
     }
     movie_t    output   = { 0 };
