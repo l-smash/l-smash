@@ -227,6 +227,7 @@ static void display_help( void )
              "Usage: remuxer -i input1 [-i input2 -i input3 ...] -o output\n"
              "Global options:\n"
              "    --help                    Display help.\n"
+             "    --version                 Display version information.\n"
              "    --chapter <string>        Set chapters from the file.\n"
              "    --chpl-with-bom           Add UTF-8 BOM to the chapter strings\n"
              "                              in the chapter list. (experimental)\n"
@@ -1151,11 +1152,22 @@ static int finish_movie( remuxer_t *remuxer )
 
 int main( int argc, char *argv[] )
 {
-    if( argc < 5 || !strcasecmp( argv[1], "-h" ) || !strcasecmp( argv[1], "--help" ) )
+    if( !strcasecmp( argv[1], "-h" ) || !strcasecmp( argv[1], "--help" ) )
     {
         display_help();
-        return argc < 5 ? -1 : 0;
+        return 0;
     }
+    else if( !strcasecmp( argv[1], "-v" ) || !strcasecmp( argv[1], "--version" ) )
+    {
+        display_version();
+        return 0;
+    }
+    else if( argc < 5 )
+    {
+        display_help();
+        return -1;
+    }
+
     lsmash_get_mainargs( &argc, &argv );
     int num_input = 0;
     for( int i = 1 ; i < argc ; i++ )
