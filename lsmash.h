@@ -330,7 +330,8 @@ lsmash_box_t *lsmash_root_as_box
 
 /* Write a top level box and its children already added to ROOT.
  * WARNING:
- *   You should not use this function before media data is not completely written.
+ *   You should not use this function as long as media data is incompletely written.
+ *   That is before starting to write a media data or after finishing of writing that.
  *
  * Return 0 if successful.
  * Return a negative value otherwise. */
