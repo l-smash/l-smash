@@ -1827,7 +1827,8 @@ int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_
     if( lsmash_check_codec_type_identical( audio_type, ISOM_CODEC_TYPE_MP4A_AUDIO )
      || lsmash_check_codec_type_identical( audio_type,   QT_CODEC_TYPE_MP4A_AUDIO ) )
     {
-        if( root->ftyp && root->ftyp->major_brand == ISOM_BRAND_TYPE_QT )
+        if( (root->ftyp && root->ftyp->major_brand == ISOM_BRAND_TYPE_QT)
+         || (!root->ftyp && (root->qt_compatible || (root->moov && !root->moov->iods))) )
             ret = isom_set_qtff_mp4a_description( audio, summary );
         else
             ret = isom_set_isom_mp4a_description( audio, summary );
