@@ -2513,38 +2513,4 @@ isom_box_t *isom_get_extension_box( lsmash_entry_list_t *extensions, lsmash_box_
 void *isom_get_extension_box_format( lsmash_entry_list_t *extensions, lsmash_box_type_t box_type );
 void isom_remove_box_by_itself( void *opaque_box );
 
-#define isom_create_box_base( box_name, parent, box_type, precedence, ret )            \
-    assert( parent );                                                                  \
-    isom_##box_name##_t *box_name = lsmash_malloc_zero( sizeof(isom_##box_name##_t) ); \
-    if( !box_name )                                                                    \
-        return ret;                                                                    \
-    isom_init_box_common( box_name, parent, box_type, precedence,                      \
-                          isom_remove_##box_name, isom_update_##box_name##_size );     \
-    if( isom_add_box_to_extension_list( parent, box_name ) )                           \
-    {                                                                                  \
-        lsmash_free( box_name );                                                       \
-        return ret;                                                                    \
-    }
-
-#define isom_create_list_box_base( box_name, parent, box_type, precedence, ret )   \
-    isom_create_box_base( box_name, parent, box_type, precedence, ret );           \
-    box_name->list = lsmash_create_entry_list();                                   \
-    if( !box_name->list )                                                          \
-    {                                                                              \
-        lsmash_remove_entry_tail( &(parent)->extensions, isom_remove_##box_name ); \
-        return ret;                                                                \
-    }
-
-#define isom_create_box( box_name, parent, box_type, precedence ) \
-        isom_create_box_base( box_name, parent, box_type, precedence, -1 );
-
-#define isom_create_box_pointer( box_name, parent, box_type, precedence ) \
-        isom_create_box_base( box_name, parent, box_type, precedence, NULL );
-
-#define isom_create_list_box( box_name, parent, box_type, precedence ) \
-        isom_create_list_box_base( box_name, parent, box_type, precedence, -1 );
-
-#define isom_create_list_box_null( box_name, parent, box_type, precedence ) \
-        isom_create_list_box_base( box_name, parent, box_type, precedence, NULL );
-
 #endif
