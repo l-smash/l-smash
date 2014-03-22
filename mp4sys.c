@@ -1223,7 +1223,7 @@ uint8_t *lsmash_create_mp4sys_decoder_config( lsmash_mp4sys_decoder_parameters_t
     mp4sys_ES_Descriptor_t *esd = mp4sys_setup_ES_Descriptor( &esd_param );
     if( !esd )
         return NULL;
-    lsmash_bs_t *bs = lsmash_bs_create( NULL );
+    lsmash_bs_t *bs = lsmash_bs_create();
     if( !bs )
     {
         mp4sys_remove_ES_Descriptor( esd );
@@ -1264,7 +1264,7 @@ int mp4sys_construct_decoder_config( lsmash_codec_specific_t *dst, lsmash_codec_
     if( size != src->size )
         return -1;
     data += 4;  /* Skip version and flags. */
-    lsmash_bs_t *bs = lsmash_bs_create( NULL );
+    lsmash_bs_t *bs = lsmash_bs_create();
     if( !bs )
         return -1;
     if( lsmash_bs_import_data( bs, data, src->size - (data - src->data.unstructured) ) )

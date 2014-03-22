@@ -3599,7 +3599,7 @@ uint8_t *lsmash_export_box
 {
     if( !box || !size )
         return NULL;
-    lsmash_bs_t *bs = lsmash_bs_create( NULL );
+    lsmash_bs_t *bs = lsmash_bs_create();
     if( !bs )
         return NULL;
     if( isom_write_box( bs, box ) < 0 )

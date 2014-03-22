@@ -57,7 +57,7 @@ uint64_t lsmash_bs_get_pos( lsmash_bs_t *bs );
 void lsmash_bs_empty( lsmash_bs_t *bs );
 void lsmash_bs_free( lsmash_bs_t *bs );
 void lsmash_bs_alloc( lsmash_bs_t *bs, uint64_t size );
-lsmash_bs_t *lsmash_bs_create( char *filename );
+lsmash_bs_t *lsmash_bs_create( void );
 void lsmash_bs_cleanup( lsmash_bs_t *bs );
 int lsmash_bs_seek( lsmash_bs_t *bs, int64_t offset, int whence );
 

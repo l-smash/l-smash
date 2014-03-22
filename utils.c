@@ -212,21 +212,12 @@ size_t lsmash_bs_write_data( lsmash_bs_t *bs, uint8_t *buf, size_t size )
     return write_size != size ? -1 : 0;
 }
 
-lsmash_bs_t* lsmash_bs_create( char* filename )
+lsmash_bs_t *lsmash_bs_create( void )
 {
     lsmash_bs_t* bs = lsmash_malloc_zero( sizeof(lsmash_bs_t) );
     if( !bs )
         return NULL;
-    if( filename )
-    {
-        if( (bs->stream = lsmash_fopen( filename, "wb" )) == NULL )
-        {
-            lsmash_free( bs );
-            return NULL;
-        }
-    }
-    else
-        bs->unseekable = 1;
+    bs->unseekable = 1;
     return bs;
 }
 
@@ -234,8 +225,6 @@ void lsmash_bs_cleanup( lsmash_bs_t *bs )
 {
     if( !bs )
         return;
-    if( bs->stream )
-        fclose( bs->stream );
     lsmash_bs_free( bs );
     lsmash_free( bs );
 }
@@ -562,7 +551,7 @@ uint64_t lsmash_bits_get( lsmash_bits_t *bits, uint32_t width )
 
 lsmash_bits_t* lsmash_bits_adhoc_create()
 {
-    lsmash_bs_t* bs = lsmash_bs_create( NULL ); /* no file writing */
+    lsmash_bs_t* bs = lsmash_bs_create();
     if( !bs )
         return NULL;
     lsmash_bits_t* bits = lsmash_bits_create( bs );

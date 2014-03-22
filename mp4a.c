@@ -725,7 +725,7 @@ uint8_t *mp4a_export_AudioSpecificConfig( lsmash_mp4a_AudioObjectType aot,
                                           uint32_t exdata_length,
                                           uint32_t *data_length )
 {
-    lsmash_bs_t *bs = lsmash_bs_create( NULL );
+    lsmash_bs_t *bs = lsmash_bs_create();
     if( !bs )
         return NULL;
     mp4a_AudioSpecificConfig_t *asc = mp4a_create_AudioSpecificConfig( aot, frequency, channels, sbr_mode, exdata, exdata_length );

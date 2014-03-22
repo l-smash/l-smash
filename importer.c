@@ -954,7 +954,7 @@ static int amr_get_accessunit( importer_t* importer, uint32_t track_number, lsma
 
 int mp4sys_amr_create_damr( lsmash_audio_summary_t *summary )
 {
-    lsmash_bs_t* bs = lsmash_bs_create( NULL ); /* no file writing */
+    lsmash_bs_t* bs = lsmash_bs_create();
     if( !bs )
         return -1;
     lsmash_bs_put_be32( bs, MP4SYS_DAMR_LENGTH );

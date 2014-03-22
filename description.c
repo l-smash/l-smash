@@ -715,7 +715,7 @@ lsmash_codec_specific_t *lsmash_convert_codec_specific_format( lsmash_codec_spec
                 return dst;
             case LSMASH_CODEC_SPECIFIC_DATA_TYPE_CODEC_GLOBAL_HEADER :
             {
-                lsmash_bs_t *bs = lsmash_bs_create( NULL );
+                lsmash_bs_t *bs = lsmash_bs_create();
                 if( !bs )
                     goto fail;
                 lsmash_codec_global_header_t *global = specific->data.structured;
@@ -2188,7 +2188,7 @@ fail:
 
 static int isom_append_structured_mp4sys_decoder_config( lsmash_codec_specific_list_t *opaque, isom_esds_t *esds )
 {
-    lsmash_bs_t *bs = lsmash_bs_create( NULL );
+    lsmash_bs_t *bs = lsmash_bs_create();
     if( !bs )
         return -1;
     /* Put box size, type, version and flags fields. */
@@ -2371,7 +2371,7 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
             {
                 /* Don't append 'wave' extension itself to the opaque CODEC specific info list. */
                 isom_wave_t *wave = (isom_wave_t *)box;
-                lsmash_bs_t *bs = lsmash_bs_create( NULL );
+                lsmash_bs_t *bs = lsmash_bs_create();
                 if( !bs )
                     goto fail;
                 for( lsmash_entry_t *wave_entry = wave->extensions.head; wave_entry; wave_entry = wave_entry->next )

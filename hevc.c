@@ -2748,7 +2748,7 @@ int hevc_construct_specific_parameters
         return -1;
     if( hevc_alloc_parameter_arrays( param ) < 0 )
         return -1;
-    lsmash_bs_t *bs = lsmash_bs_create( NULL );
+    lsmash_bs_t *bs = lsmash_bs_create();
     if( !bs )
         return -1;
     if( lsmash_bs_import_data( bs, data, src->size - (data - src->data.unstructured) ) )
@@ -2843,7 +2843,7 @@ int hevc_print_codec_specific
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     uint8_t     *data   = box->binary;
     uint32_t     offset = isom_skip_box_common( &data );
-    lsmash_bs_t *bs     = lsmash_bs_create( NULL );
+    lsmash_bs_t *bs     = lsmash_bs_create();
     if( !bs )
         return -1;
     if( lsmash_bs_import_data( bs, data, box->size - offset ) )

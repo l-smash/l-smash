@@ -40,7 +40,7 @@ int lsmash_setup_AudioSpecificConfig( lsmash_audio_summary_t *summary )
 {
     if( !summary )
         return -1;
-    lsmash_bs_t* bs = lsmash_bs_create( NULL ); /* no file writing */
+    lsmash_bs_t* bs = lsmash_bs_create();
     if( !bs )
         return -1;
     mp4a_AudioSpecificConfig_t *asc =
