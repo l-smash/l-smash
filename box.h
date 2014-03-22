@@ -2547,13 +2547,4 @@ void isom_remove_box_by_itself( void *opaque_box );
 #define isom_create_list_box_null( box_name, parent, box_type, precedence ) \
         isom_create_list_box_base( box_name, parent, box_type, precedence, NULL );
 
-#define isom_copy_fields( dst, src, box_name )      \
-    lsmash_root_t *root   = dst->box_name->root;    \
-    isom_box_t *parent    = dst->box_name->parent;  \
-    uint64_t pos          = dst->box_name->pos;     \
-    *dst->box_name        = *src->box_name;         \
-    dst->box_name->root   = root;                   \
-    dst->box_name->parent = parent;                 \
-    dst->box_name->pos    = pos
-
 #endif
