@@ -33,9 +33,9 @@
 /****************************************************************************
  * Version
  ****************************************************************************/
-#define LSMASH_VERSION_MAJOR  1
-#define LSMASH_VERSION_MINOR 13
-#define LSMASH_VERSION_MICRO 30
+#define LSMASH_VERSION_MAJOR  2
+#define LSMASH_VERSION_MINOR  0
+#define LSMASH_VERSION_MICRO  0
 
 #define LSMASH_VERSION_INT( a, b, c ) (((a) << 16) | ((b) << 8) | (c))
 
@@ -254,10 +254,7 @@ int lsmash_close_file
 
 /* Associate a file with a ROOT and allocate the handle of that file.
  * The all allocated handles can be deallocated by lsmash_destroy_root().
- *
- * Note:
- *   At present, the added file is only referenced by all tracks of the movie defined in the same file.
- *   External data references are not implemented yet, but will come in the near future.
+ * If the ROOT has no associated file yet, the first associated file is activated.
  *
  * Return the address of the allocated handle of the added file if successful.
  * Return NULL otherwise. */
@@ -278,28 +275,6 @@ int64_t lsmash_read_file
     lsmash_file_parameters_t *param
 );
 
-/* Open the movie file to which the path is given, and allocate and set up the ROOT of the file.
- * The allocated ROOT can be deallocated by lsmash_destroy_root().
- *
- * Users can specify "-" for 'filename'.
- * In this case,
- *   (1) read from stdin when 'mode' contains LSMASH_FILE_MODE_READ,
- * or
- *   (2) write into stdout when 'mode' contains LSMASH_FILE_MODE_WRITE_FRAGMENTED.
- *
- * Note that 'filename' must be encoded by UTF-8 if 'mode' contains LSMASH_FILE_MODE_WRITE.
- * On Windows, lsmash_convert_ansi_to_utf8() may help you.
- *
- * WARNING: This function is deprecated!
- *
- * Return the address of an allocated ROOT of the file if successful.
- * Return NULL otherwise. */
-lsmash_root_t *lsmash_open_movie
-(
-    const char       *filename,     /* the path of a file you want to open. */
-    lsmash_file_mode  mode          /* mode for opening file */
-);
-
 /* Deallocate a given ROOT. */
 void lsmash_destroy_root
 (
@@ -310,6 +285,16 @@ void lsmash_destroy_root
 void lsmash_discard_boxes
 (
     lsmash_root_t *root     /* the address of a ROOT you want to deallocate all boxes in it */
+);
+
+/* Activate a file associated with a ROOT.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_activate_file
+(
+    lsmash_root_t *root,
+    lsmash_file_t *file
 );
 
 /****************************************************************************
@@ -903,11 +888,13 @@ typedef enum
     LSMASH_CODEC_SUPPORT_FLAG_REMUX = LSMASH_CODEC_SUPPORT_FLAG_MUX | LSMASH_CODEC_SUPPORT_FLAG_DEMUX,
 } lsmash_codec_support_flag;
 
-#define LSMASH_BASE_SUMMARY                     \
-    lsmash_summary_type           summary_type; \
-    lsmash_codec_type_t           sample_type;  \
-    lsmash_codec_specific_list_t *opaque;       \
-    uint32_t                      max_au_length;     /* buffer length for 1 access unit, typically max size of 1 audio/video frame */
+#define LSMASH_BASE_SUMMARY                                                                         \
+    lsmash_summary_type           summary_type;                                                     \
+    lsmash_codec_type_t           sample_type;                                                      \
+    lsmash_codec_specific_list_t *opaque;                                                           \
+    uint32_t                      max_au_length;    /* buffer length for 1 access unit,             \
+                                                     * typically max size of 1 audio/video frame */ \
+    uint32_t                      data_ref_index;   /* the index of a data reference */
 
 typedef struct
 {
@@ -1452,14 +1439,17 @@ typedef struct
 
 typedef struct
 {
-    uint8_t                   allow_earlier;
+    lsmash_random_access_flag ra_flags;         /* random access flags */
+    lsmash_post_roll_t        post_roll;
+    lsmash_pre_roll_t         pre_roll;
+    uint8_t                   allow_earlier;    /* only for QuickTime file format */
     uint8_t                   leading;
     uint8_t                   independent;
     uint8_t                   disposable;
     uint8_t                   redundant;
-    lsmash_random_access_flag ra_flags;
-    lsmash_post_roll_t        post_roll;
-    lsmash_pre_roll_t         pre_roll;
+    uint8_t                   reserved[3];      /* non-output
+                                                 * broken link
+                                                 * ??? */
 } lsmash_sample_property_t;
 
 typedef struct
@@ -1469,7 +1459,8 @@ typedef struct
     uint8_t                 *data;      /* sample data */
     uint64_t                 dts;       /* Decoding TimeStamp in units of media timescale */
     uint64_t                 cts;       /* Composition TimeStamp in units of media timescale */
-    uint32_t                 index;
+    uint64_t                 pos;       /* absolute file offset of sample data (read-only) */
+    uint32_t                 index;     /* index of sample description */
     lsmash_sample_property_t prop;
 } lsmash_sample_t;
 
@@ -1690,6 +1681,13 @@ typedef struct
     PRIVATE char data_handler_name_shadow[256];
 } lsmash_media_parameters_t;
 
+typedef struct
+{
+    uint32_t index;     /* the index of a data reference */
+    char    *location;  /* URL; location of referenced media file */
+    /* Probably, additional string fields such as thing to indicate URN will be added in the future. */
+} lsmash_data_reference_t;
+
 /* Set all the given media parameters to default. */
 void lsmash_initialize_media_parameters
 (
@@ -1810,6 +1808,70 @@ uint32_t lsmash_get_composition_to_decode_shift
 uint16_t lsmash_pack_iso_language
 (
     char *iso_language      /* a string of ISO 639-2/T language code */
+);
+
+/* Count the number of data references in a track.
+ *
+ * Return the number of data references in a track if no error.
+ * Return 0 otherwise. */
+uint32_t lsmash_count_data_reference
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID
+);
+
+/* Get the location of a data reference in a track by specifying the index in 'data_ref'.
+ * The string fields in 'data_ref' may be allocated if referencing external media data.
+ * If referencing self-contained media data, the all string fields are set to NULL.
+ * You can deallocate the allocated fields by lsmash_free().
+ * Also you can deallocate all of the allocated fields by lsmash_cleanup_data_reference() at a time.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_get_data_reference
+(
+    lsmash_root_t           *root,
+    uint32_t                 track_ID,
+    lsmash_data_reference_t *data_ref
+);
+
+/* Deallocate all of allocated fields in a given data reference at a time.
+ * The deallocated fields are set to NULL. */
+void lsmash_cleanup_data_reference
+(
+    lsmash_data_reference_t *data_ref
+);
+
+/* Create a data reference in a track and specify its location on playback for writing.
+ * If no settings for data references in a track, the location of the first data reference is specified to
+ * the location of the same file implicitly.
+ * Note that referenced files shall be used as a media, i.e. LSMASH_FILE_MODE_MEDIA shall be set to the 'mode'
+ * in the lsmash_file_parameters_t before calling lsmash_set_file().
+ *
+ * As restrictions of the libary,
+ *   WARNING1: The box structured media files cannot be used as a reference data yet.
+ *   WARNING2: The external media files cannot be used as a reference data for movie fragments yet.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_create_data_reference
+(
+    lsmash_root_t           *root,
+    uint32_t                 track_ID,
+    lsmash_data_reference_t *data_ref,
+    lsmash_file_t           *file
+);
+
+/* Assign a data reference in a track to a read file.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_assign_data_reference
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID,
+    uint32_t       data_ref_index,
+    lsmash_file_t *file
 );
 
 /****************************************************************************
@@ -2054,16 +2116,6 @@ int lsmash_modify_explicit_timeline_map
  ****************************************************************************/
 typedef struct
 {
-    lsmash_brand_type  major_brand;         /* deprecated: the best used brand */
-    lsmash_brand_type *brands;              /* deprecated: the list of compatible brands */
-    uint32_t number_of_brands;              /* deprecated: the number of compatible brands used in the movie */
-    uint32_t minor_version;                 /* deprecated: minor version of best used brand */
-    double   max_chunk_duration;            /* deprecated: max duration per chunk in seconds. 0.5 is default value. */
-    double   max_async_tolerance;           /* deprecated:
-                                             *   max tolerance, in seconds, for amount of interleaving asynchronization between tracks.
-                                             *   2.0 is default value. At least twice of max_chunk_duration is used. */
-    uint64_t max_chunk_size;                /* deprecated: max size per chunk in bytes. 4*1024*1024 (4MiB) is default value. */
-    uint64_t max_read_size;                 /* deprecated: max size of reading from a chunk at a time. 4*1024*1024 (4MiB) is default value. */
     uint32_t timescale;                     /* movie timescale: timescale for the entire presentation */
     uint64_t duration;                      /* the duration, expressed in movie timescale, of the longest track
                                              * You can't set this parameter manually. */
@@ -2075,8 +2127,6 @@ typedef struct
     int32_t  preview_time;                  /* the time value in the movie at which the preview begins */
     int32_t  preview_duration;              /* the duration of the movie preview in movie timescale units */
     int32_t  poster_time;                   /* the time value of the time of the movie poster */
-    /* Any user shouldn't use the following parameter. */
-    PRIVATE lsmash_brand_type brands_shadow[50];
 } lsmash_movie_parameters_t;
 
 typedef int (*lsmash_adhoc_remux_callback)( void *param, uint64_t done, uint64_t total );
@@ -2699,7 +2749,6 @@ uint8_t *lsmash_create_ac3_specific_info
 typedef struct
 {
     uint8_t  fscod;         /* the same value as the fscod field in the independent substream */
-    uint8_t  fscod2;        /* deprecated: Any user must not use this. */
     uint8_t  bsid;          /* the same value as the bsid field in the independent substream */
     uint8_t  bsmod;         /* the same value as the bsmod field in the independent substream
                              * If the bsmod field is not present in the independent substream, this field shall be set to 0. */

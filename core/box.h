@@ -410,8 +410,9 @@ typedef struct
     char *name;             /* only for DataEntryUrnBox */
     char *location;         /* a location to find the resource with the given name */
 
-    uint32_t name_length;
-    uint32_t location_length;
+        uint32_t       name_length;
+        uint32_t       location_length;
+        lsmash_file_t *ref_file;    /* pointer to the handle of the referenced file */
 } isom_dref_entry_t;
 
 typedef struct
@@ -1881,7 +1882,6 @@ struct lsmash_file_tag
         uint64_t  max_chunk_size;           /* max size per chunk in bytes. */
         uint32_t  brand_count;
         uint32_t *compatible_brands;        /* the backup of the compatible brands in the File Type Box or the valid Segment Type Box */
-        uint8_t   bc_fclose;                /* a flag for backward compatible file closing */
         uint8_t   fake_file_mode;           /* If set to 1, the bytestream manager handles fake-file stream. */
         /* flags for compatibility */
         uint8_t qt_compatible;              /* compatibility with QuickTime file format */
@@ -2497,8 +2497,9 @@ int isom_group_roll_recovery( isom_box_t *parent, lsmash_sample_t *sample );
 int isom_update_tkhd_duration( isom_trak_t *trak );
 int isom_update_bitrate_description( isom_mdia_t *mdia );
 int isom_complement_data_reference( isom_minf_t *minf );
+int isom_check_large_offset_requirement( isom_moov_t *moov, uint64_t meta_size );
+void isom_add_preceding_box_size( isom_moov_t *moov, uint64_t preceding_size );
 int isom_establish_movie( lsmash_file_t *file );
-int isom_convert_stco_to_co64( isom_stbl_t *stbl );
 int isom_rap_grouping_established( isom_rap_group_t *group, int num_leading_samples_known, isom_sgpd_t *sgpd, int is_fragment );
 int isom_all_recovery_completed( isom_sbgp_t *sbgp, lsmash_entry_list_t *pool );
 

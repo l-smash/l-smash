@@ -828,6 +828,8 @@ static int isom_read_url( lsmash_file_t *file, isom_box_t *box, isom_box_t *pare
         for( uint32_t i = 0; pos < box->size; pos = lsmash_bs_count( bs ) )
             url->location[i++] = lsmash_bs_get_byte( bs );
     }
+    if( box->flags & 0x000001 )
+        url->ref_file = url->file;
     box->parent = parent;
     return isom_read_leaf_box_common_last_process( file, box, level, url );
 }

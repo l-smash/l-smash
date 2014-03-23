@@ -905,7 +905,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
     isom_visual_entry_t *visual = isom_add_visual_description( stsd, sample_type );
     if( !visual )
         return -1;
-    visual->data_reference_index = 1;
+    visual->data_reference_index = summary->data_ref_index;
     visual->version              = 0;
     visual->revision_level       = 0;
     visual->vendor               = 0;
@@ -2021,7 +2021,7 @@ int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_
     isom_audio_entry_t *audio = isom_add_audio_description( stsd, sample_type );
     if( !audio )
         return -1;
-    audio->data_reference_index = 1;
+    audio->data_reference_index = summary->data_ref_index;
     lsmash_file_t *file = stsd->file;
     lsmash_codec_type_t audio_type = audio->type;
     int ret;
@@ -2162,7 +2162,7 @@ fail:
     return -1;
 }
 
-int isom_setup_tx3g_description( isom_stsd_t *stsd )
+int isom_setup_tx3g_description( isom_stsd_t *stsd, lsmash_summary_t *summary )
 {
     isom_tx3g_entry_t *tx3g = isom_add_tx3g_description( stsd );
     if( !tx3g )
@@ -2170,7 +2170,7 @@ int isom_setup_tx3g_description( isom_stsd_t *stsd )
     /* We create a dummy font record to make valid font_ID in the sample description.
      * The specification (3GPP TS 26.245) does not forbid the value 0 for the identifier,
      * but we set 1 to it as track_ID begins from 1. */
-    tx3g->data_reference_index = 1;
+    tx3g->data_reference_index = summary->data_ref_index;
     tx3g->font_ID              = 1; /* ID of the default font record */
     isom_ftab_t *ftab = isom_add_ftab( tx3g );
     if( !ftab )
@@ -2246,10 +2246,11 @@ lsmash_summary_t *isom_create_video_summary_from_description( isom_sample_entry_
     lsmash_video_summary_t *summary = (lsmash_video_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_VIDEO );
     if( !summary )
         return NULL;
-    summary->sample_type = visual->type;
-    summary->width       = visual->width;
-    summary->height      = visual->height;
-    summary->depth       = visual->depth;
+    summary->sample_type    = visual->type;
+    summary->data_ref_index = visual->data_reference_index;
+    summary->width          = visual->width;
+    summary->height         = visual->height;
+    summary->depth          = visual->depth;
     memcpy( summary->compressorname, visual->compressorname, 32 );
     summary->compressorname[32] = '\0';
     if( isom_is_qt_video( summary->sample_type ) )
@@ -2486,10 +2487,11 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
     lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_AUDIO );
     if( !summary )
         return NULL;
-    summary->sample_type = audio->type;
-    summary->sample_size = audio->samplesize;
-    summary->channels    = audio->channelcount;
-    summary->frequency   = audio->samplerate >> 16;
+    summary->sample_type    = audio->type;
+    summary->data_ref_index = audio->data_reference_index;
+    summary->sample_size    = audio->samplesize;
+    summary->channels       = audio->channelcount;
+    summary->frequency      = audio->samplerate >> 16;
     if( ((isom_stsd_t *)audio->parent)->version == 0
      && audio->file->qt_compatible
      && isom_is_qt_audio( audio->type ) )
