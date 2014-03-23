@@ -108,7 +108,8 @@ lsmash_summary_t *lsmash_create_summary( lsmash_summary_type summary_type )
         lsmash_free( summary );
         return NULL;
     }
-    summary->summary_type = summary_type;
+    summary->summary_type   = summary_type;
+    summary->data_ref_index = 1;
     return summary;
 }
 

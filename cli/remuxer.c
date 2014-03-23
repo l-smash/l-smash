@@ -73,6 +73,19 @@ typedef struct
 
 typedef struct
 {
+    lsmash_file_t           *fh;
+    lsmash_file_parameters_t param;
+} input_data_ref_t;
+
+typedef struct
+{
+    lsmash_media_parameters_t param;
+    uint32_t                  num_data_refs;
+    input_data_ref_t         *data_refs;
+} input_media_t;
+
+typedef struct
+{
     int                       active;
     lsmash_sample_t          *sample;
     double                    dts;
@@ -86,7 +99,7 @@ typedef struct
     uint32_t                  num_summaries;
     input_summary_t          *summaries;
     lsmash_track_parameters_t track_param;
-    lsmash_media_parameters_t media_param;
+    input_media_t             media;
 } input_track_t;
 
 typedef struct
@@ -168,6 +181,11 @@ static void cleanup_input_movie( input_t *input )
                     lsmash_cleanup_summary( in_track->summaries[j].summary );
                 lsmash_free( in_track->summaries );
             }
+            input_media_t *in_media = &in_track->media;
+            for( uint32_t j = 0; j < in_media->num_data_refs; j++ )
+                if( input->file.fh != in_media->data_refs[j].fh )
+                    lsmash_close_file( &in_media->data_refs[j].param );
+            lsmash_free( in_media->data_refs );
         }
         lsmash_freep( &in_movie->track );
     }
@@ -346,6 +364,39 @@ fail:
     return -1;
 }
 
+static inline int is_relative_path( const char *path )
+{
+    return path[0] == '/' || path[0] == '\\' || (path[0] != '\0' && path[1] == ':') ? 0 : 1;
+}
+
+static int input_data_reference
+(
+    input_t                 *input,
+    uint32_t                 track_ID,
+    input_data_ref_t        *in_data_ref,
+    lsmash_data_reference_t *data_ref
+)
+{
+    if( lsmash_open_file( data_ref->location, 1, &in_data_ref->param ) < 0 )
+    {
+        WARNING_MSG( "failed to open an external media file.\n" );
+        return -1;
+    }
+    in_data_ref->param.mode |= LSMASH_FILE_MODE_MEDIA;
+    in_data_ref->fh = lsmash_set_file( input->root, &in_data_ref->param );
+    if( !in_data_ref->fh )
+    {
+        WARNING_MSG( "failed to set an external media file as a data reference.\n" );
+        return -1;
+    }
+    if( lsmash_assign_data_reference( input->root, track_ID, data_ref->index, in_data_ref->fh ) < 0 )
+    {
+        WARNING_MSG( "failed to assign an external media a data reference.\n" );
+        return -1;
+    }
+    return 0;
+}
+
 static int get_movie( input_t *input, char *input_name )
 {
     if( !strcmp( input_name, "-" ) )
@@ -405,11 +456,65 @@ static int get_movie( input_t *input, char *input_name )
             WARNING_MSG( "failed to get track parameters.\n" );
             continue;
         }
-        lsmash_initialize_media_parameters( &in_track[i].media_param );
-        if( lsmash_get_media_parameters( input->root, in_track[i].track_ID, &in_track[i].media_param ) )
+        lsmash_initialize_media_parameters( &in_track[i].media.param );
+        if( lsmash_get_media_parameters( input->root, in_track[i].track_ID, &in_track[i].media.param ) )
         {
             WARNING_MSG( "failed to get media parameters.\n" );
             continue;
+        }
+        uint32_t data_ref_count = lsmash_count_data_reference( input->root, in_track[i].track_ID );
+        if( data_ref_count == 0 )
+        {
+            WARNING_MSG( "failed to get the number of data references.\n" );
+            continue;
+        }
+        in_track[i].media.data_refs = lsmash_malloc_zero( data_ref_count * sizeof(input_data_ref_t) );
+        if( !in_track[i].media.data_refs )
+        {
+            WARNING_MSG( "failed to allocate handles of data reference.\n" );
+            continue;
+        }
+        for( uint32_t j = 0; j < data_ref_count; j++ )
+        {
+            input_data_ref_t *in_data_ref = &in_track[i].media.data_refs[j];
+            lsmash_data_reference_t data_ref = { .index = j + 1 };
+            if( lsmash_get_data_reference( input->root, in_track[i].track_ID, &data_ref ) < 0 )
+            {
+                WARNING_MSG( "failed to get a data references.\n" );
+                continue;
+            }
+            if( data_ref.location )
+            {
+                if( is_relative_path( data_ref.location ) && !is_relative_path( input_name ) )
+                {
+                    /* Append the directory path from the referencing file. */
+                    int location_length   = strlen( data_ref.location );
+                    int input_name_length = strlen( input_name );
+                    char *p = input_name + input_name_length;
+                    while( p != input_name && *p != '/' && *p != '\\' )
+                        --p;
+                    int relative_path_length = p == input_name ? 2 : p - input_name;
+                    char *location = lsmash_malloc( relative_path_length + location_length + 2 );
+                    if( location )
+                    {
+                        memcpy( location, input_name, relative_path_length );
+                        memcpy( location + relative_path_length + 1, data_ref.location, location_length );
+                        location[relative_path_length]                       = '/';
+                        location[relative_path_length + location_length + 1] = '\0';
+                        lsmash_cleanup_data_reference( &data_ref );
+                        data_ref.location = location;
+                    }
+                }
+                int ret = input_data_reference( input, in_track[i].track_ID, in_data_ref, &data_ref );
+                lsmash_cleanup_data_reference( &data_ref );
+                if( ret < 0 )
+                    continue;
+            }
+            else
+            {
+                in_data_ref->fh    = in_file->fh;
+                in_data_ref->param = in_file->param;
+            }
         }
         if( lsmash_construct_timeline( input->root, in_track[i].track_ID ) )
         {
@@ -609,8 +714,8 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
             if( !in_track->active )
                 continue;
             track_option[i][j].alternate_group = in_track->track_param.alternate_group;
-            track_option[i][j].ISO_language    = in_track->media_param.ISO_language;
-            track_option[i][j].handler_name    = in_track->media_param.media_handler_name;
+            track_option[i][j].ISO_language    = in_track->media.param.ISO_language;
+            track_option[i][j].handler_name    = in_track->media.param.media_handler_name;
         }
     /* Set the default language */
     if( remuxer->default_language )
@@ -683,12 +788,12 @@ static void replace_with_valid_brand( remuxer_t *remuxer )
         input_movie_t *movie = &input[i].file.movie;
         for( int j = 0; j < movie->num_tracks; j++ )
         {
-            if( movie->track[j].media_param.handler_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK )
+            if( movie->track[j].media.param.handler_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK )
             {
                 if( ++video_track_count == 1 )
                     video_num_summaries = movie->track[j].num_summaries;
             }
-            else if( movie->track[j].media_param.handler_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK )
+            else if( movie->track[j].media.param.handler_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK )
             {
                 if( ++audio_track_count == 1 )
                     audio_num_summaries = movie->track[j].num_summaries;
@@ -870,7 +975,7 @@ static int set_movie_parameters( remuxer_t *remuxer )
             for( uint32_t j = 0; j < in_movie->num_tracks; j++ )
                 if( in_movie->track[j].active )
                 {
-                    out_file->movie.param.timescale = in_movie->track[j].media_param.timescale;
+                    out_file->movie.param.timescale = in_movie->track[j].media.param.timescale;
                     break;
                 }
         }
@@ -974,7 +1079,7 @@ static int prepare_output( remuxer_t *remuxer )
                 -- out_movie->num_tracks;
         }
     }
-    if( set_movie_parameters( remuxer ) )
+    if( set_movie_parameters( remuxer ) < 0 )
         return ERROR_MSG( "failed to set output movie parameters.\n" );
     set_itunes_metadata( output, input, remuxer->num_input );
     /* Allocate output tracks. */
@@ -995,12 +1100,12 @@ static int prepare_output( remuxer_t *remuxer )
             out_track->summary_remap = lsmash_malloc_zero( in_track->num_summaries * sizeof(uint32_t) );
             if( !out_track->summary_remap )
                 return ERROR_MSG( "failed to create summary mapping for a track.\n" );
-            out_track->track_ID = lsmash_create_track( output->root, in_track->media_param.handler_type );
+            out_track->track_ID = lsmash_create_track( output->root, in_track->media.param.handler_type );
             if( !out_track->track_ID )
                 return ERROR_MSG( "failed to create a track.\n" );
             /* Copy track and media parameters except for track_ID. */
             out_track->track_param = in_track->track_param;
-            out_track->media_param = in_track->media_param;
+            out_track->media_param = in_track->media.param;
             /* Set track and media parameters specified by users */
             out_track->track_param.alternate_group    = current_track_opt->alternate_group;
             out_track->media_param.ISO_language       = current_track_opt->ISO_language;
@@ -1008,16 +1113,19 @@ static int prepare_output( remuxer_t *remuxer )
             out_track->track_param.track_ID           = out_track->track_ID;
             if( current_track_opt->disable )
                 out_track->track_param.mode &= ~ISOM_TRACK_ENABLED;
-            if( lsmash_set_track_parameters( output->root, out_track->track_ID, &out_track->track_param ) )
+            if( lsmash_set_track_parameters( output->root, out_track->track_ID, &out_track->track_param ) < 0 )
             {
                 exclude_invalid_output_track( output, out_track, in_movie, in_track, "failed to set track parameters.\n" );
                 continue;
             }
-            if( lsmash_set_media_parameters( output->root, out_track->track_ID, &out_track->media_param ) )
+            if( lsmash_set_media_parameters( output->root, out_track->track_ID, &out_track->media_param ) < 0 )
             {
                 exclude_invalid_output_track( output, out_track, in_movie, in_track, "failed to set media parameters.\n" );
                 continue;
             }
+            lsmash_data_reference_t data_ref = { .index = 1, .location = NULL };
+            if( lsmash_create_data_reference( output->root, out_track->track_ID, &data_ref, output->file.fh ) < 0 )
+                return ERROR_MSG( "failed to create a data reference for output movie.\n" );
             uint32_t valid_summary_count = 0;
             for( uint32_t k = 0; k < in_track->num_summaries; k++ )
             {
@@ -1027,6 +1135,7 @@ static int prepare_output( remuxer_t *remuxer )
                     continue;
                 }
                 lsmash_summary_t *summary = in_track->summaries[k].summary;
+                summary->data_ref_index = 1;
                 if( lsmash_add_sample_entry( output->root, out_track->track_ID, summary ) == 0 )
                 {
                     WARNING_MSG( "failed to append a summary.\n" );
@@ -1044,7 +1153,7 @@ static int prepare_output( remuxer_t *remuxer )
                 continue;
             }
             out_track->last_sample_delta = in_track->last_sample_delta;
-            if( set_starting_point( input, in_track, current_track_opt->seek, current_track_opt->consider_rap ) )
+            if( set_starting_point( input, in_track, current_track_opt->seek, current_track_opt->consider_rap ) < 0 )
             {
                 exclude_invalid_output_track( output, out_track, in_movie, in_track, "failed to set starting point.\n" );
                 continue;
@@ -1145,7 +1254,7 @@ static int do_remux( remuxer_t *remuxer )
                 if( sample )
                 {
                     in_track->sample = sample;
-                    in_track->dts = (double)sample->dts / in_track->media_param.timescale;
+                    in_track->dts    = (double)sample->dts / in_track->media.param.timescale;
                     /* Adapt the sample description index. */
                     output_track_t *out_track = &out_movie->track[ out_movie->current_track_number - 1 ];
                     sample->index = sample->index > in_track->num_summaries ? in_track->num_summaries
@@ -1162,11 +1271,20 @@ static int do_remux( remuxer_t *remuxer )
                         ERROR_MSG( "failed to get a sample.\n" );
                         break;
                     }
-                    /* No more appendable samples in this track. */
-                    in_track->sample = NULL;
-                    in_track->reach_end_of_media_timeline = 1;
-                    if( --num_active_input_tracks == 0 )
-                        break;      /* end of muxing */
+                    lsmash_sample_t sample_info = { 0 };
+                    if( lsmash_get_sample_info_from_media_timeline( in->root, in_track->track_ID, in_track->current_sample_number, &sample_info ) < 0 )
+                    {
+                        /* No more appendable samples in this track. */
+                        in_track->sample = NULL;
+                        in_track->reach_end_of_media_timeline = 1;
+                        if( --num_active_input_tracks == 0 )
+                            break;      /* end of muxing */
+                    }
+                    else
+                    {
+                        ERROR_MSG( "failed to get a sample.\n" );
+                        break;
+                    }
                 }
             }
             if( sample )

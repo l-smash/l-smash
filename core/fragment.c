@@ -521,39 +521,15 @@ static int isom_finish_fragment_initial_movie( lsmash_file_t *file )
         return -1;
     /* stco->co64 conversion, depending on last chunk's offset */
     uint64_t meta_size = file->meta ? file->meta->size : 0;
-    for( lsmash_entry_t *entry = moov->trak_list.head; entry; )
-    {
-        isom_trak_t *trak = (isom_trak_t *)entry->data;
-        isom_stco_t *stco = trak->mdia->minf->stbl->stco;
-        if( !stco->list->tail   /* no samples */
-         || stco->large_presentation
-         || (((isom_stco_entry_t *)stco->list->tail->data)->chunk_offset + moov->size + meta_size) <= UINT32_MAX )
-        {
-            entry = entry->next;
-            continue;   /* no need to convert stco into co64 */
-        }
-        /* stco->co64 conversion */
-        if( isom_convert_stco_to_co64( trak->mdia->minf->stbl ) < 0
-         || isom_update_box_size( moov ) == 0 )
-            return -1;
-        entry = moov->trak_list.head;   /* whenever any conversion, re-check all traks */
-    }
-    /* Now, the amount of offset is fixed. Apply that to stco/co64. */
+    if( isom_check_large_offset_requirement( moov, meta_size ) < 0 )
+        return -1;
+    /* Now, the amount of the offset is fixed. apply it to stco/co64 */
     uint64_t preceding_size = moov->size + meta_size;
-    for( lsmash_entry_t *entry = moov->trak_list.head; entry; entry = entry->next )
-    {
-        isom_stco_t *stco = ((isom_trak_t *)entry->data)->mdia->minf->stbl->stco;
-        if( stco->large_presentation )
-            for( lsmash_entry_t *co64_entry = stco->list->head ; co64_entry ; co64_entry = co64_entry->next )
-                ((isom_co64_entry_t *)co64_entry->data)->chunk_offset += preceding_size;
-        else
-            for( lsmash_entry_t *stco_entry = stco->list->head ; stco_entry ; stco_entry = stco_entry->next )
-                ((isom_stco_entry_t *)stco_entry->data)->chunk_offset += preceding_size;
-    }
+    isom_add_preceding_box_size( moov, preceding_size );
     /* Write File Type Box here if it was not written yet. */
     if( file->ftyp && !(file->ftyp->manager & LSMASH_WRITTEN_BOX) )
     {
-        if( isom_write_box( file->bs, (isom_box_t *)file->ftyp ) )
+        if( isom_write_box( file->bs, (isom_box_t *)file->ftyp ) < 0 )
             return -1;
         file->size += file->ftyp->size;
     }
