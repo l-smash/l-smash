@@ -2514,7 +2514,7 @@ static uint64_t isom_update_extension_boxes( void *box )
         if( !ext )
             continue;
         if( ext->update )
-            size += ext->update( ext );
+            size += isom_update_box_size( ext );
         else if( ext->manager & LSMASH_BINARY_CODED_BOX )
             size += ext->size;
         else if( ext->manager & LSMASH_UNKNOWN_BOX )

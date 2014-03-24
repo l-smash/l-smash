@@ -2905,7 +2905,7 @@ static int isom_set_fragment_overall_duration( lsmash_file_t *file )
     mehd->fragment_duration = longest_duration;
     mehd->version           = 1;
     mehd->manager          &= ~LSMASH_PLACEHOLDER;
-    mehd->update( mehd );
+    isom_update_box_size( mehd );
     /* Write Movie Extends Header Box here. */
     lsmash_bs_t *bs = file->bs;
     uint64_t current_pos = bs->offset;
@@ -3003,7 +3003,7 @@ static int isom_write_fragment_random_access_info( lsmash_file_t *file )
         }
     }
     /* Decide the size of the Movie Fragment Random Access Box. */
-    if( file->mfra->update( file->mfra ) == 0 )
+    if( isom_update_box_size( file->mfra ) == 0 )
         return -1;
     /* Write the Movie Fragment Random Access Box. */
     return isom_write_box( file->bs, (isom_box_t *)file->mfra );
@@ -3087,7 +3087,7 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t *remux )
         return -1;
     if( isom_check_mandatory_boxes( file )
      || isom_set_movie_creation_time( file )
-     || moov->update( moov ) == 0 )
+     || isom_update_box_size( moov ) == 0 )
         return -1;
     /* Write the size of Media Data Box here. */
     lsmash_bs_t *bs = file->bs;
@@ -3119,7 +3119,7 @@ int lsmash_finish_movie( lsmash_root_t *root, lsmash_adhoc_remux_t *remux )
         }
         /* stco->co64 conversion */
         if( isom_convert_stco_to_co64( trak->mdia->minf->stbl )
-         || moov->update( moov ) == 0 )
+         || isom_update_box_size( moov ) == 0 )
             return -1;
         entry = moov->trak_list.head;   /* whenever any conversion, re-check all traks */
     }
@@ -3341,7 +3341,7 @@ static int isom_finish_fragment_initial_movie( lsmash_file_t *file )
      || isom_prepare_random_access_info( file )
      || isom_check_mandatory_boxes( file->file )
      || isom_set_movie_creation_time( file->file )
-     || moov->update( moov ) == 0 )
+     || isom_update_box_size( moov ) == 0 )
         return -1;
     /* stco->co64 conversion, depending on last chunk's offset */
     uint64_t meta_size = file->meta ? file->meta->size : 0;
@@ -3358,7 +3358,7 @@ static int isom_finish_fragment_initial_movie( lsmash_file_t *file )
         }
         /* stco->co64 conversion */
         if( isom_convert_stco_to_co64( trak->mdia->minf->stbl )
-         || moov->update( moov ) == 0 )
+         || isom_update_box_size( moov ) == 0 )
             return -1;
         entry = moov->trak_list.head;   /* whenever any conversion, re-check all traks */
     }
@@ -3555,7 +3555,7 @@ static int isom_finish_fragment_movie( lsmash_file_t *file )
         traf->tfhd->flags |= ISOM_TF_FLAGS_BASE_DATA_OFFSET_PRESENT;
     }
     /* Consider the update of tf_flags here. */
-    if( moof->update( moof ) == 0 )
+    if( isom_update_box_size( moof ) == 0 )
         return -1;
     /* Now, we can calculate offsets in the current movie fragment, so do it. */
     for( lsmash_entry_t *entry = moof->traf_list.head; entry; entry = entry->next )
