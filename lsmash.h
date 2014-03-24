@@ -35,7 +35,7 @@
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  1
 #define LSMASH_VERSION_MINOR  5
-#define LSMASH_VERSION_MICRO  1
+#define LSMASH_VERSION_MICRO  2
 
 /****************************************************************************
  * ROOT
@@ -105,6 +105,7 @@ typedef enum
     ISOM_BRAND_TYPE_DASH  = LSMASH_4CC( 'd', 'a', 's', 'h' ),   /* Indexed self-initializing Media Segment */
     ISOM_BRAND_TYPE_DBY1  = LSMASH_4CC( 'd', 'b', 'y', '1' ),   /* MP4 files with Dolby content */
     ISOM_BRAND_TYPE_DMB1  = LSMASH_4CC( 'd', 'm', 'b', '1' ),   /* DMB AF */
+    ISOM_BRAND_TYPE_DSMS  = LSMASH_4CC( 'd', 's', 'm', 's' ),   /* Self-initializing Media Segment */
     ISOM_BRAND_TYPE_DV1A  = LSMASH_4CC( 'd', 'v', '1', 'a' ),   /* DMB AF */
     ISOM_BRAND_TYPE_DV1B  = LSMASH_4CC( 'd', 'v', '1', 'b' ),   /* DMB AF */
     ISOM_BRAND_TYPE_DV2A  = LSMASH_4CC( 'd', 'v', '2', 'a' ),   /* DMB AF */
@@ -120,6 +121,7 @@ typedef enum
     ISOM_BRAND_TYPE_ISO4  = LSMASH_4CC( 'i', 's', 'o', '4' ),   /* ISO Base Media file format version 4 */
     ISOM_BRAND_TYPE_ISO5  = LSMASH_4CC( 'i', 's', 'o', '5' ),   /* ISO Base Media file format version 5 */
     ISOM_BRAND_TYPE_ISO6  = LSMASH_4CC( 'i', 's', 'o', '6' ),   /* ISO Base Media file format version 6 */
+    ISOM_BRAND_TYPE_ISO7  = LSMASH_4CC( 'i', 's', 'o', '7' ),   /* ISO Base Media file format version 7 */
     ISOM_BRAND_TYPE_ISOM  = LSMASH_4CC( 'i', 's', 'o', 'm' ),   /* ISO Base Media file format version 1 */
     ISOM_BRAND_TYPE_JPSI  = LSMASH_4CC( 'j', 'p', 's', 'i' ),   /* The JPSearch data interchange format */
     ISOM_BRAND_TYPE_LMSG  = LSMASH_4CC( 'l', 'm', 's', 'g' ),   /* last Media Segment indicator */

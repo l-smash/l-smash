@@ -646,6 +646,7 @@ int isom_check_compatibility( lsmash_file_t *file )
     /* Clear flags for compatibility. */
     ptrdiff_t compat_offset = offsetof( lsmash_file_t, qt_compatible );
     memset( (int8_t *)file + compat_offset, 0, sizeof(lsmash_file_t) - compat_offset );
+    file->min_isom_version = UINT8_MAX; /* undefined value */
     /* Check brand to decide mandatory boxes. */
     if( (!file->ftyp || file->ftyp->brand_count == 0)
      && (!file->styp_list.head || !file->styp_list.head->data) )
@@ -664,6 +665,7 @@ int isom_check_compatibility( lsmash_file_t *file )
         }
         return 0;
     }
+    int media_segment = 0;
     for( uint32_t i = 0; i <= file->ftyp->brand_count; i++ )
     {
         uint32_t brand = (i == file->ftyp->brand_count ? file->ftyp->major_brand : file->ftyp->compatible_brands[i]);
@@ -681,21 +683,31 @@ int isom_check_compatibility( lsmash_file_t *file )
             case ISOM_BRAND_TYPE_AVC1 :
             case ISOM_BRAND_TYPE_ISOM :
                 file->max_isom_version = LSMASH_MAX( file->max_isom_version, 1 );
+                file->min_isom_version = LSMASH_MIN( file->min_isom_version, 1 );
                 break;
             case ISOM_BRAND_TYPE_ISO2 :
                 file->max_isom_version = LSMASH_MAX( file->max_isom_version, 2 );
+                file->min_isom_version = LSMASH_MIN( file->min_isom_version, 2 );
                 break;
             case ISOM_BRAND_TYPE_ISO3 :
                 file->max_isom_version = LSMASH_MAX( file->max_isom_version, 3 );
+                file->min_isom_version = LSMASH_MIN( file->min_isom_version, 3 );
                 break;
             case ISOM_BRAND_TYPE_ISO4 :
                 file->max_isom_version = LSMASH_MAX( file->max_isom_version, 4 );
+                file->min_isom_version = LSMASH_MIN( file->min_isom_version, 4 );
                 break;
             case ISOM_BRAND_TYPE_ISO5 :
                 file->max_isom_version = LSMASH_MAX( file->max_isom_version, 5 );
+                file->min_isom_version = LSMASH_MIN( file->min_isom_version, 5 );
                 break;
             case ISOM_BRAND_TYPE_ISO6 :
                 file->max_isom_version = LSMASH_MAX( file->max_isom_version, 6 );
+                file->min_isom_version = LSMASH_MIN( file->min_isom_version, 6 );
+                break;
+            case ISOM_BRAND_TYPE_ISO7 :
+                file->max_isom_version = LSMASH_MAX( file->max_isom_version, 7 );
+                file->min_isom_version = LSMASH_MIN( file->min_isom_version, 7 );
                 break;
             case ISOM_BRAND_TYPE_M4A :
             case ISOM_BRAND_TYPE_M4B :
@@ -754,6 +766,16 @@ int isom_check_compatibility( lsmash_file_t *file )
             case ISOM_BRAND_TYPE_3GP9 :
                 file->forbid_tref = 1;
                 break;
+            case ISOM_BRAND_TYPE_3GH9 :
+            case ISOM_BRAND_TYPE_3GM9 :
+            case ISOM_BRAND_TYPE_DASH :
+            case ISOM_BRAND_TYPE_DSMS :
+            case ISOM_BRAND_TYPE_LMSG :
+            case ISOM_BRAND_TYPE_MSDH :
+            case ISOM_BRAND_TYPE_MSIX :
+            case ISOM_BRAND_TYPE_SIMS :
+                media_segment = 1;
+                break;
             default :
                 break;
         }
@@ -764,6 +786,9 @@ int isom_check_compatibility( lsmash_file_t *file )
                           || file->itunes_movie
                           || file->max_3gpp_version;
     file->undefined_64_ver = file->qt_compatible || file->itunes_movie;
+    if( file->flags & LSMASH_FILE_MODE_WRITE )
+        file->allow_moof_base = (file->max_isom_version >= 5 && file->min_isom_version >= 5)
+                             || (file->max_isom_version == 0 && file->min_isom_version == UINT8_MAX && media_segment);
     return 0;
 }
 
@@ -3544,24 +3569,86 @@ static int isom_finish_fragment_movie( lsmash_file_t *file )
         else if( !isom_compare_sample_flags( &tfhd->default_sample_flags, &trex->default_sample_flags ) )
             tfhd->flags &= ~ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT;
     }
-    /* When using for live streaming, setting explicit base_data_offset is not preferable.
-     * However, it's OK because we haven't supported this yet.
-     * Implicit base_data_offsets that originate in the first byte of each Movie Fragment Box will be implemented
-     * by the feature of ISO Base Media File Format version 5 or later.
-     * Media Data Box starts immediately after Movie Fragment Box. */
-    for( lsmash_entry_t *entry = moof->traf_list.head; entry; entry = entry->next )
+    /* Establish Movie Fragment Box.
+     * We write exactly one Media Data Box starting immediately after the corresponding Movie Fragment Box. */
+    if( file->allow_moof_base )
     {
-        isom_traf_t *traf = (isom_traf_t *)entry->data;
-        traf->tfhd->flags |= ISOM_TF_FLAGS_BASE_DATA_OFFSET_PRESENT;
+        /* In this branch, we use default-base-is-moof flag, which indicates implicit base_data_offsets originate in the
+         * first byte of each enclosing Movie Fragment Box.
+         * We use the sum of the size of the Movie Fragment Box and the offset from the size field of the Media Data Box to
+         * the type field of it as the data_offset of the first track run like the following.
+         *
+         *  _____________ _ offset := 0
+         * |   |         |
+         * | m | s i z e |
+         * |   |_________|
+         * | o |         |
+         * |   | t y p e |
+         * | o |_________|
+         * |   |         |
+         * | f | d a t a |
+         * |___|_________|_ offset := the size of the Movie Fragment Box
+         * |   |         |
+         * | m | s i z e |
+         * |   |_________|
+         * | d |         |
+         * |   | t y p e |
+         * | a |_________|_ offset := the data_offset of the first track run
+         * |   |         |
+         * | t | d a t a |
+         * |___|_________|_ offset := the size of a subsegment containing exactly one movie fragment
+         *
+         * For a pair of one Movie Fragment Box and one Media Data Box, placed in this order, implicit base_data_offsets
+         * indicated by the absence of both base-data-offset-present and default-base-is-moof are somewhat complicated
+         * since the implicit base_data_offset of the current track fragment is defined by the end of the data of the
+         * previous track fragment and the data_offset of the track runs could be negative value because of interleaving
+         * track runs or something other reasons.
+         * In contrast, implicit base_data_offsets indicated by default-base-is-moof are simple since the base_data_offset
+         * of each track fragment is always constant for that pair and has no dependency on other track fragments.
+         */
+        for( lsmash_entry_t *entry = moof->traf_list.head; entry; entry = entry->next )
+        {
+            isom_traf_t *traf = (isom_traf_t *)entry->data;
+            traf->tfhd->flags           |= ISOM_TF_FLAGS_DEFAULT_BASE_IS_MOOF;
+            traf->tfhd->base_data_offset = file->size;  /* not written actually though */
+            for( lsmash_entry_t *trun_entry = traf->trun_list.head; trun_entry; trun_entry = trun_entry->next )
+            {
+                /* Here, data_offset is always greater than zero. */
+                isom_trun_t *trun = trun_entry->data;
+                trun->flags |= ISOM_TR_FLAGS_DATA_OFFSET_PRESENT;
+            }
+        }
+        /* Consider the update of tr_flags here. */
+        if( isom_update_box_size( moof ) == 0 )
+            return -1;
+        /* Now, we can calculate offsets in the current movie fragment, so do it. */
+        for( lsmash_entry_t *entry = moof->traf_list.head; entry; entry = entry->next )
+        {
+            isom_traf_t *traf = (isom_traf_t *)entry->data;
+            for( lsmash_entry_t *trun_entry = traf->trun_list.head; trun_entry; trun_entry = trun_entry->next )
+            {
+                isom_trun_t *trun = trun_entry->data;
+                trun->data_offset += moof->size + ISOM_BASEBOX_COMMON_SIZE;
+            }
+        }
     }
-    /* Consider the update of tf_flags here. */
-    if( isom_update_box_size( moof ) == 0 )
-        return -1;
-    /* Now, we can calculate offsets in the current movie fragment, so do it. */
-    for( lsmash_entry_t *entry = moof->traf_list.head; entry; entry = entry->next )
+    else
     {
-        isom_traf_t *traf = (isom_traf_t *)entry->data;
-        traf->tfhd->base_data_offset = file->size + moof->size + ISOM_BASEBOX_COMMON_SIZE;
+        /* In this branch, we use explicit base_data_offset. */
+        for( lsmash_entry_t *entry = moof->traf_list.head; entry; entry = entry->next )
+        {
+            isom_traf_t *traf = (isom_traf_t *)entry->data;
+            traf->tfhd->flags |= ISOM_TF_FLAGS_BASE_DATA_OFFSET_PRESENT;
+        }
+        /* Consider the update of tf_flags here. */
+        if( isom_update_box_size( moof ) == 0 )
+            return -1;
+        /* Now, we can calculate offsets in the current movie fragment, so do it. */
+        for( lsmash_entry_t *entry = moof->traf_list.head; entry; entry = entry->next )
+        {
+            isom_traf_t *traf = (isom_traf_t *)entry->data;
+            traf->tfhd->base_data_offset = file->size + moof->size + ISOM_BASEBOX_COMMON_SIZE;
+        }
     }
     if( isom_write_box( file->bs, (isom_box_t *)moof ) )
         return -1;

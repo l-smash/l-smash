@@ -1868,8 +1868,10 @@ struct lsmash_file_tag
         uint8_t itunes_movie;               /* compatibility with iTunes Movie */
         uint8_t max_3gpp_version;           /* maximum 3GPP version */
         uint8_t max_isom_version;           /* maximum ISO Base Media file format version */
+        uint8_t min_isom_version;           /* minimum ISO Base Media file format version */
         uint8_t forbid_tref;                /* If set to 1, track reference is forbidden. */
         uint8_t undefined_64_ver;           /* If set to 1, 64-bit version fields, e.g. duration, are undefined. */
+        uint8_t allow_moof_base;            /* If set to 1, default-base-is-moof is available for muxing. */
 };
 
 /* ROOT */
