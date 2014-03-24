@@ -3287,20 +3287,20 @@ static int isom_output_fragment_media_data( lsmash_file_t *file )
 {
     isom_fragment_manager_t *fragment = file->fragment;
     /* If there is no available Media Data Box to write samples, add and write a new one. */
-    if( fragment->pool->entry_count )
+    if( fragment->sample_count )
     {
-        isom_mdat_t *mdat = file->mdat;
         if( !file->mdat && isom_add_mdat( file ) < 0 )
             return -1;
         file->mdat->manager &= ~(LSMASH_INCOMPLETE_BOX | LSMASH_WRITTEN_BOX);
-        if( isom_write_box( file->bs, (isom_box_t *)mdat ) < 0 )
+        if( isom_write_box( file->bs, (isom_box_t *)file->mdat ) < 0 )
             return -1;
         file->size += file->mdat->size;
         file->mdat->size       = 0;
         file->mdat->media_size = 0;
     }
     lsmash_remove_entries( fragment->pool, isom_remove_sample_pool );
-    fragment->pool_size = 0;
+    fragment->pool_size    = 0;
+    fragment->sample_count = 0;
     return 0;
 }
 
@@ -4626,10 +4626,10 @@ static int isom_append_fragment_track_run( lsmash_file_t *file, isom_chunk_t *ch
     isom_fragment_manager_t *fragment = file->fragment;
     /* Move data in the pool of the current track fragment to the pool of the current movie fragment.
      * Empty the pool of current track. We don't delete data of samples here. */
-    if( lsmash_add_entry( fragment->pool, chunk->pool ) )
+    if( lsmash_add_entry( fragment->pool, chunk->pool ) < 0 )
         return -1;
-    fragment->pool->entry_count += chunk->pool->sample_count;
-    fragment->pool_size         += chunk->pool->size;
+    fragment->sample_count += chunk->pool->sample_count;
+    fragment->pool_size    += chunk->pool->size;
     chunk->pool = isom_create_sample_pool( chunk->pool->size );
     return chunk->pool ? 0 : -1;
 }

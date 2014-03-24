@@ -1243,7 +1243,7 @@ static int isom_write_mdat( lsmash_bs_t *bs, isom_box_t *box )
             mdat->size += 8;    /* large_size */
         isom_bs_put_box_common( bs, mdat );
         /* Write the samples in the current movie fragment. */
-        for( lsmash_entry_t* entry = file->fragment->pool->head; entry; entry = entry->next )
+        for( lsmash_entry_t *entry = file->fragment->pool->head; entry; entry = entry->next )
         {
             isom_sample_pool_t *pool = (isom_sample_pool_t *)entry->data;
             if( !pool )

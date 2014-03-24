@@ -1679,10 +1679,11 @@ typedef struct
  * The presence of this means we use the structure of movie fragments. */
 typedef struct
 {
-    isom_moof_t *movie;             /* the address corresponding to the current Movie Fragment Box */
-    uint64_t fragment_count;        /* the number of movie fragments we created */
-    uint64_t pool_size;
-    lsmash_entry_list_t *pool;      /* samples pooled to interleave for the current movie fragment */
+    isom_moof_t         *movie;             /* the address corresponding to the current Movie Fragment Box */
+    uint64_t             fragment_count;    /* the number of movie fragments we created */
+    uint64_t             pool_size;         /* the total sample size in the current movie fragment */
+    uint64_t             sample_count;      /* the number of samples within the current movie fragment */
+    lsmash_entry_list_t *pool;              /* samples pooled to interleave for the current movie fragment */
 } isom_fragment_manager_t;
 
 /** **/
