@@ -1578,6 +1578,7 @@ static int isom_print_sbgp( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
         return -1;
     isom_sbgp_t *sbgp = (isom_sbgp_t *)box;
     int indent = level;
+    int is_fragment = sbgp->parent && lsmash_check_box_type_identical( sbgp->parent->type, ISOM_BOX_TYPE_TRAF );
     uint32_t i = 0;
     isom_print_box_common( fp, indent++, box, "Sample to Group Box" );
     lsmash_ifprintf( fp, indent, "grouping_type = %s\n", isom_4cc2str( sbgp->grouping_type ) );
@@ -1590,6 +1591,8 @@ static int isom_print_sbgp( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
         lsmash_ifprintf( fp, indent++, "entry[%"PRIu32"]\n", i++ );
         lsmash_ifprintf( fp, indent, "sample_count = %"PRIu32"\n", data->sample_count );
         lsmash_ifprintf( fp, indent--, "group_description_index = %"PRIu32, data->group_description_index );
+        if( is_fragment && data->group_description_index >= 0x10000 )
+            fprintf( fp, " (i.e. %"PRIu32" for this fragment-local group)", data->group_description_index - 0x10000 );
         if( !data->group_description_index )
             fprintf( fp, " (not in this grouping type)\n" );
         else

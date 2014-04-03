@@ -3151,17 +3151,35 @@ int isom_add_sdtp( isom_box_t *parent )
     return 0;
 }
 
-isom_sgpd_t *isom_add_sgpd( isom_stbl_t *stbl )
+isom_sgpd_t *isom_add_sgpd( void *parent_box )
 {
-    if( !stbl )
+    if( !parent_box )
         return NULL;
-    isom_create_list_box_null( sgpd, stbl, ISOM_BOX_TYPE_SGPD, LSMASH_BOX_PRECEDENCE_ISOM_SGPD );
-    if( lsmash_add_entry( &stbl->sgpd_list, sgpd ) )
+    isom_box_t *parent = (isom_box_t *)parent_box;
+    if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) )
     {
-        lsmash_remove_entry_tail( &stbl->extensions, isom_remove_sgpd );
-        return NULL;
+        isom_stbl_t *stbl = (isom_stbl_t *)parent;
+        isom_create_list_box_null( sgpd, stbl, ISOM_BOX_TYPE_SGPD, LSMASH_BOX_PRECEDENCE_ISOM_SGPD );
+        if( lsmash_add_entry( &stbl->sgpd_list, sgpd ) )
+        {
+            lsmash_remove_entry_tail( &stbl->extensions, isom_remove_sgpd );
+            return NULL;
+        }
+        return sgpd;
     }
-    return sgpd;
+    else if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAF ) )
+    {
+        isom_traf_t *traf = (isom_traf_t *)parent;
+        isom_create_list_box_null( sgpd, traf, ISOM_BOX_TYPE_SGPD, LSMASH_BOX_PRECEDENCE_ISOM_SGPD );
+        if( lsmash_add_entry( &traf->sgpd_list, sgpd ) )
+        {
+            lsmash_remove_entry_tail( &traf->extensions, isom_remove_sgpd );
+            return NULL;
+        }
+        return sgpd;
+    }
+    assert( 0 );
+    return NULL;
 }
 
 isom_sbgp_t *isom_add_sbgp( void *parent_box )
@@ -3184,6 +3202,11 @@ isom_sbgp_t *isom_add_sbgp( void *parent_box )
     {
         isom_traf_t *traf = (isom_traf_t *)parent;
         isom_create_list_box_null( sbgp, traf, ISOM_BOX_TYPE_SBGP, LSMASH_BOX_PRECEDENCE_ISOM_SBGP );
+        if( lsmash_add_entry( &traf->sbgp_list, sbgp ) )
+        {
+            lsmash_remove_entry_tail( &traf->extensions, isom_remove_sbgp );
+            return NULL;
+        }
         return sbgp;
     }
     assert( 0 );

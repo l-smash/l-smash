@@ -559,9 +559,9 @@ static int isom_add_stco_entry( isom_stbl_t *stbl, uint64_t chunk_offset )
     return 0;
 }
 
-isom_sgpd_t *isom_get_sample_group_description( isom_stbl_t *stbl, uint32_t grouping_type )
+static isom_sgpd_t *isom_get_sample_group_description_common( lsmash_entry_list_t *list, uint32_t grouping_type )
 {
-    for( lsmash_entry_t *entry = stbl->sgpd_list.head; entry; entry = entry->next )
+    for( lsmash_entry_t *entry = list->head; entry; entry = entry->next )
     {
         isom_sgpd_t *sgpd = (isom_sgpd_t *)entry->data;
         if( !sgpd
@@ -573,9 +573,9 @@ isom_sgpd_t *isom_get_sample_group_description( isom_stbl_t *stbl, uint32_t grou
     return NULL;
 }
 
-isom_sbgp_t *isom_get_sample_to_group( isom_stbl_t *stbl, uint32_t grouping_type )
+static isom_sbgp_t *isom_get_sample_to_group_common( lsmash_entry_list_t *list, uint32_t grouping_type )
 {
-    for( lsmash_entry_t *entry = stbl->sbgp_list.head; entry; entry = entry->next )
+    for( lsmash_entry_t *entry = list->head; entry; entry = entry->next )
     {
         isom_sbgp_t *sbgp = (isom_sbgp_t *)entry->data;
         if( !sbgp
@@ -585,6 +585,26 @@ isom_sbgp_t *isom_get_sample_to_group( isom_stbl_t *stbl, uint32_t grouping_type
             return sbgp;
     }
     return NULL;
+}
+
+isom_sgpd_t *isom_get_sample_group_description( isom_stbl_t *stbl, uint32_t grouping_type )
+{
+    return isom_get_sample_group_description_common( &stbl->sgpd_list, grouping_type );
+}
+
+isom_sbgp_t *isom_get_sample_to_group( isom_stbl_t *stbl, uint32_t grouping_type )
+{
+    return isom_get_sample_to_group_common( &stbl->sbgp_list, grouping_type );
+}
+
+isom_sgpd_t *isom_get_fragment_sample_group_description( isom_traf_t *traf, uint32_t grouping_type )
+{
+    return isom_get_sample_group_description_common( &traf->sgpd_list, grouping_type );
+}
+
+isom_sbgp_t *isom_get_fragment_sample_to_group( isom_traf_t *traf, uint32_t grouping_type )
+{
+    return isom_get_sample_to_group_common( &traf->sbgp_list, grouping_type );
 }
 
 static isom_rap_entry_t *isom_add_rap_group_entry( isom_sgpd_t *sgpd )
@@ -2138,25 +2158,12 @@ static int isom_set_media_language( lsmash_file_t *file, uint32_t track_ID, uint
     return 0;
 }
 
-static int isom_create_grouping( isom_trak_t *trak, isom_grouping_type grouping_type )
+static int isom_add_sample_grouping( isom_box_t *parent, isom_grouping_type grouping_type )
 {
-    lsmash_file_t *file = trak->file;
-    switch( grouping_type )
-    {
-        case ISOM_GROUP_TYPE_RAP :
-            assert( file->max_isom_version >= 6 );
-            break;
-        case ISOM_GROUP_TYPE_ROLL :
-            assert( file->avc_extensions || file->qt_compatible );
-            break;
-        default :
-            assert( 0 );
-            break;
-    }
     isom_sgpd_t *sgpd;
     isom_sbgp_t *sbgp;
-    if( NULL == (sgpd = isom_add_sgpd( trak->mdia->minf->stbl ))
-     || NULL == (sbgp = isom_add_sbgp( trak->mdia->minf->stbl )) )
+    if( NULL == (sgpd = isom_add_sgpd( parent ))
+     || NULL == (sbgp = isom_add_sbgp( parent )) )
         return -1;
     sbgp->grouping_type = grouping_type;
     sgpd->grouping_type = grouping_type;
@@ -2173,6 +2180,39 @@ static int isom_create_grouping( isom_trak_t *trak, isom_grouping_type grouping_
             /* We don't consider other grouping types currently. */
             break;
     }
+    return 0;
+}
+
+static int isom_create_sample_grouping( isom_trak_t *trak, isom_grouping_type grouping_type )
+{
+    lsmash_file_t *file = trak->file;
+    switch( grouping_type )
+    {
+        case ISOM_GROUP_TYPE_RAP :
+            assert( file->max_isom_version >= 6 );
+            break;
+        case ISOM_GROUP_TYPE_ROLL :
+            assert( file->avc_extensions || file->qt_compatible );
+            break;
+        default :
+            assert( 0 );
+            break;
+    }
+    if( isom_add_sample_grouping( (isom_box_t *)trak->mdia->minf->stbl, grouping_type ) < 0 )
+        return -1;
+    if( trak->cache->fragment && file->max_isom_version >= 6 )
+        switch( grouping_type )
+        {
+            case ISOM_GROUP_TYPE_RAP :
+                trak->cache->fragment->rap_grouping = 1;
+                break;
+            case ISOM_GROUP_TYPE_ROLL :
+                trak->cache->fragment->roll_grouping = 1;
+                break;
+            default :
+                /* We don't consider other grouping types currently. */
+                break;
+        }
     return 0;
 }
 
@@ -2204,10 +2244,10 @@ int lsmash_set_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
      && isom_set_data_handler_name( file, track_ID, param->data_handler_name ) )
         return -1;
     if( (file->avc_extensions || file->qt_compatible) && param->roll_grouping
-     && isom_create_grouping( trak, ISOM_GROUP_TYPE_ROLL ) )
+     && isom_create_sample_grouping( trak, ISOM_GROUP_TYPE_ROLL ) )
         return -1;
     if( (file->max_isom_version >= 6) && param->rap_grouping
-     && isom_create_grouping( trak, ISOM_GROUP_TYPE_RAP ) )
+     && isom_create_sample_grouping( trak, ISOM_GROUP_TYPE_RAP ) )
         return -1;
     return 0;
 }
@@ -3329,6 +3369,9 @@ static int isom_output_fragment_media_data( lsmash_file_t *file )
     return 0;
 }
 
+static int isom_rap_grouping_established( isom_rap_group_t *group, int num_leading_samples_known, isom_sgpd_t *sgpd, int is_fragment );
+static int isom_all_recovery_completed( isom_sbgp_t *sbgp, lsmash_entry_list_t *pool );
+
 static int isom_finish_fragment_initial_movie( lsmash_file_t *file )
 {
     if( !file->moov )
@@ -3346,10 +3389,10 @@ static int isom_finish_fragment_initial_movie( lsmash_file_t *file )
          || !trak->mdia->minf->stbl
          || isom_complement_data_reference( trak->mdia->minf ) < 0 )
             return -1;
+        isom_stbl_t *stbl = trak->mdia->minf->stbl;
         if( isom_get_sample_count( trak ) )
         {
             /* Add stss box if any samples aren't sync sample. */
-            isom_stbl_t *stbl = trak->mdia->minf->stbl;
             if( !trak->cache->all_sync && !stbl->stss && isom_add_stss( stbl ) )
                 return -1;
             if( isom_update_tkhd_duration( trak ) )
@@ -3359,6 +3402,20 @@ static int isom_finish_fragment_initial_movie( lsmash_file_t *file )
             trak->tkhd->duration = 0;
         if( isom_update_bitrate_description( trak->mdia ) )
             return -1;
+        /* Complete the last sample groups within tracks in the initial movie. */
+        if( trak->cache->rap )
+        {
+            isom_sgpd_t *sgpd = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_RAP );
+            if( !sgpd || isom_rap_grouping_established( trak->cache->rap, 1, sgpd, 0 ) < 0 )
+                return -1;
+            lsmash_freep( &trak->cache->rap );
+        }
+        if( trak->cache->roll.pool )
+        {
+            isom_sbgp_t *sbgp = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_ROLL );
+            if( !sbgp || isom_all_recovery_completed( sbgp, trak->cache->roll.pool ) < 0 )
+                return -1;
+        }
     }
     if( file->mp4_version1 == 1 && isom_setup_iods( moov ) )
         return -1;
@@ -3412,7 +3469,16 @@ static int isom_finish_fragment_initial_movie( lsmash_file_t *file )
         return -1;
     file->size += preceding_size;
     /* Output samples. */
-    return isom_output_fragment_media_data( file );
+    if( isom_output_fragment_media_data( file ) < 0 )
+        return -1;
+    /* Revert the number of samples in tracks to 0. */
+    for( lsmash_entry_t *entry = moov->trak_list.head; entry; entry = entry->next )
+    {
+        isom_trak_t *trak = (isom_trak_t *)entry->data;
+        if( trak->cache->fragment )
+            trak->cache->fragment->sample_count = 0;
+    }
+    return 0;
 }
 
 /* Return 1 if there is diffrence, otherwise return 0. */
@@ -3569,6 +3635,24 @@ static int isom_finish_fragment_movie( lsmash_file_t *file )
         else if( !isom_compare_sample_flags( &tfhd->default_sample_flags, &trex->default_sample_flags ) )
             tfhd->flags &= ~ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT;
     }
+    /* Complete the last sample groups in the previous track fragments. */
+    for( lsmash_entry_t *entry = moof->traf_list.head; entry; entry = entry->next )
+    {
+        isom_traf_t *traf = (isom_traf_t *)entry->data;
+        if( traf->cache->rap )
+        {
+            isom_sgpd_t *sgpd = isom_get_fragment_sample_group_description( traf, ISOM_GROUP_TYPE_RAP );
+            if( !sgpd || isom_rap_grouping_established( traf->cache->rap, 1, sgpd, 1 ) < 0 )
+                return -1;
+            lsmash_freep( &traf->cache->rap );
+        }
+        if( traf->cache->roll.pool )
+        {
+            isom_sbgp_t *sbgp = isom_get_fragment_sample_to_group( traf, ISOM_GROUP_TYPE_ROLL );
+            if( !sbgp || isom_all_recovery_completed( sbgp, traf->cache->roll.pool ) < 0 )
+                return -1;
+        }
+    }
     /* Establish Movie Fragment Box.
      * We write exactly one Media Data Box starting immediately after the corresponding Movie Fragment Box. */
     if( file->allow_moof_base )
@@ -3654,7 +3738,16 @@ static int isom_finish_fragment_movie( lsmash_file_t *file )
         return -1;
     file->size += moof->size;
     /* Output samples. */
-    return isom_output_fragment_media_data( file );
+    if( isom_output_fragment_media_data( file ) < 0 )
+        return -1;
+    /* Revert the number of samples in track fragments to 0. */
+    for( lsmash_entry_t *entry = moof->traf_list.head; entry; entry = entry->next )
+    {
+        isom_traf_t *traf = (isom_traf_t *)entry->data;
+        if( traf->cache->fragment )
+            traf->cache->fragment->sample_count = 0;
+    }
+    return 0;
 }
 
 #undef GET_MOST_USED
@@ -4239,7 +4332,7 @@ static int isom_add_dependency_type( isom_trak_t *trak, lsmash_sample_property_t
     return isom_add_sdtp_entry( (isom_box_t *)stbl, prop, avc_extensions );
 }
 
-static int isom_rap_grouping_established( isom_rap_group_t *group, int num_leading_samples_known, isom_sgpd_t *sgpd )
+static int isom_rap_grouping_established( isom_rap_group_t *group, int num_leading_samples_known, isom_sgpd_t *sgpd, int is_fragment )
 {
     isom_rap_entry_t *rap = group->random_access;
     if( !rap )
@@ -4247,7 +4340,7 @@ static int isom_rap_grouping_established( isom_rap_group_t *group, int num_leadi
     assert( rap == (isom_rap_entry_t *)sgpd->list->tail->data );
     rap->num_leading_samples_known = num_leading_samples_known;
     /* Avoid duplication of sample group descriptions. */
-    uint32_t group_description_index = 1;
+    uint32_t group_description_index = is_fragment ? 0x10001 : 1;
     for( lsmash_entry_t *entry = sgpd->list->head; entry != sgpd->list->tail; entry = entry->next )
     {
         isom_rap_entry_t *data = (isom_rap_entry_t *)entry->data;
@@ -4262,8 +4355,13 @@ static int isom_rap_grouping_established( isom_rap_group_t *group, int num_leadi
             /* Replace assigned group_description_index with the one corresponding the same description. */
             if( group->assignment->group_description_index == 0 )
             {
+                /* We don't create consecutive sample groups not assigned to 'rap '.
+                 * So the previous sample group shall be a group of 'rap ' if any. */
                 if( group->prev_assignment )
+                {
+                    assert( group->prev_assignment->group_description_index );
                     group->prev_assignment->group_description_index = group_description_index;
+                }
             }
             else
                 group->assignment->group_description_index = group_description_index;
@@ -4275,35 +4373,61 @@ static int isom_rap_grouping_established( isom_rap_group_t *group, int num_leadi
     return 0;
 }
 
-static int isom_group_random_access( isom_trak_t *trak, lsmash_sample_property_t *prop )
+static int isom_group_random_access( isom_box_t *parent, lsmash_sample_property_t *prop )
 {
-    if( trak->file->max_isom_version < 6 )
+    if( parent->file->max_isom_version < 6 )
         return 0;
-    isom_stbl_t *stbl = trak->mdia->minf->stbl;
-    isom_sbgp_t *sbgp = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_RAP );
-    isom_sgpd_t *sgpd = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_RAP );
+    isom_cache_t *cache;
+    isom_sbgp_t  *sbgp;
+    isom_sgpd_t  *sgpd;
+    uint32_t      sample_count;
+    int           is_fragment;
+    if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAK ) )
+    {
+        isom_trak_t *trak = (isom_trak_t *)parent;
+        cache = trak->cache;
+        sbgp  = isom_get_sample_to_group         ( trak->mdia->minf->stbl, ISOM_GROUP_TYPE_RAP );
+        sgpd  = isom_get_sample_group_description( trak->mdia->minf->stbl, ISOM_GROUP_TYPE_RAP );
+        sample_count = isom_get_sample_count( trak );
+        is_fragment  = 0;
+    }
+    else if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAF ) )
+    {
+        isom_traf_t *traf = (isom_traf_t *)parent;
+        cache = traf->cache;
+        sbgp  = isom_get_fragment_sample_to_group         ( traf, ISOM_GROUP_TYPE_RAP );
+        sgpd  = isom_get_fragment_sample_group_description( traf, ISOM_GROUP_TYPE_RAP );
+        sample_count = cache->fragment->sample_count + 1;
+        is_fragment  = 1;
+    }
+    else
+    {
+        assert( 0 );
+        sbgp = NULL;
+        sgpd = NULL;
+    }
     if( !sbgp || !sgpd )
         return 0;
     uint8_t is_rap = (prop->ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC)
                   || (prop->ra_flags & QT_SAMPLE_RANDOM_ACCESS_FLAG_PARTIAL_SYNC)
                   || (prop->ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_RAP)
                   || (LSMASH_IS_POST_ROLL_START( prop->ra_flags ) && prop->post_roll.identifier == prop->post_roll.complete);
-    isom_rap_group_t *group = trak->cache->rap;
+    isom_rap_group_t *group = cache->rap;
     if( !group )
     {
         /* This sample is the first sample, create a grouping cache. */
-        assert( isom_get_sample_count( trak ) == 1 );
+        assert( sample_count == 1 );
         group = lsmash_malloc( sizeof(isom_rap_group_t) );
         if( !group )
             return -1;
         if( is_rap )
         {
             group->random_access = isom_add_rap_group_entry( sgpd );
-            group->assignment    = isom_add_group_assignment_entry( sbgp, 1, sgpd->list->entry_count );
+            group->assignment    = isom_add_group_assignment_entry( sbgp, 1, sgpd->list->entry_count + (is_fragment ? 0x10000 : 0) );
         }
         else
         {
-            /* The first sample is not always random access point. */
+            /* The first sample is not always a random access point. */
             group->random_access = NULL;
             group->assignment    = isom_add_group_assignment_entry( sbgp, 1, 0 );
         }
@@ -4314,7 +4438,7 @@ static int isom_group_random_access( isom_trak_t *trak, lsmash_sample_property_t
         }
         group->prev_assignment = NULL;
         group->is_prev_rap     = is_rap;
-        trak->cache->rap       = group;
+        cache->rap             = group;
         return 0;
     }
     if( group->is_prev_rap )
@@ -4336,11 +4460,11 @@ static int isom_group_random_access( isom_trak_t *trak, lsmash_sample_property_t
         {
             /* Create a new group since there is the possibility the next sample is a leading sample.
              * This sample is a member of 'rap ', so we set appropriate value on its group_description_index. */
-            if( isom_rap_grouping_established( group, 1, sgpd ) )
+            if( isom_rap_grouping_established( group, 1, sgpd, is_fragment ) < 0 )
                 return -1;
             group->random_access   = isom_add_rap_group_entry( sgpd );
             group->prev_assignment = group->assignment;
-            group->assignment      = isom_add_group_assignment_entry( sbgp, 1, sgpd->list->entry_count );
+            group->assignment      = isom_add_group_assignment_entry( sbgp, 1, sgpd->list->entry_count + (is_fragment ? 0x10000 : 0) );
             if( !group->assignment )
             {
                 lsmash_free( group );
@@ -4354,11 +4478,11 @@ static int isom_group_random_access( isom_trak_t *trak, lsmash_sample_property_t
     {
         /* This sample is a member of 'rap ' and the previous sample isn't.
          * So we create a new group and set appropriate value on its group_description_index. */
-        if( isom_rap_grouping_established( group, 1, sgpd ) )
+        if( isom_rap_grouping_established( group, 1, sgpd, is_fragment ) < 0 )
             return -1;
         group->random_access   = isom_add_rap_group_entry( sgpd );
         group->prev_assignment = group->assignment;
-        group->assignment      = isom_add_group_assignment_entry( sbgp, 1, sgpd->list->entry_count );
+        group->assignment      = isom_add_group_assignment_entry( sbgp, 1, sgpd->list->entry_count + (is_fragment ? 0x10000 : 0) );
         if( !group->assignment )
         {
             lsmash_free( group );
@@ -4373,15 +4497,16 @@ static int isom_group_random_access( isom_trak_t *trak, lsmash_sample_property_t
         if( prop->leading == ISOM_SAMPLE_LEADING_UNKNOWN )
         {
             /* We can no longer know num_leading_samples in this group. */
-            if( isom_rap_grouping_established( group, 0, sgpd ) )
+            if( isom_rap_grouping_established( group, 0, sgpd, is_fragment ) < 0 )
                 return -1;
         }
         else
         {
-            if( prop->leading == ISOM_SAMPLE_IS_UNDECODABLE_LEADING || prop->leading == ISOM_SAMPLE_IS_DECODABLE_LEADING )
+            if( prop->leading == ISOM_SAMPLE_IS_UNDECODABLE_LEADING
+             || prop->leading == ISOM_SAMPLE_IS_DECODABLE_LEADING )
                 ++ group->random_access->num_leading_samples;
             /* no more consecutive leading samples in this group */
-            else if( isom_rap_grouping_established( group, 1, sgpd ) )
+            else if( isom_rap_grouping_established( group, 1, sgpd, is_fragment ) < 0 )
                 return -1;
         }
     }
@@ -4389,10 +4514,10 @@ static int isom_group_random_access( isom_trak_t *trak, lsmash_sample_property_t
     return 0;
 }
 
-static int isom_roll_grouping_established( isom_roll_group_t *group, int16_t roll_distance, isom_sgpd_t *sgpd )
+static int isom_roll_grouping_established( isom_roll_group_t *group, int16_t roll_distance, isom_sgpd_t *sgpd, int is_fragment )
 {
     /* Avoid duplication of sample group descriptions. */
-    uint32_t group_description_index = 1;
+    uint32_t group_description_index = is_fragment ? 0x10001 : 1;
     for( lsmash_entry_t *entry = sgpd->list->head; entry; entry = entry->next )
     {
         isom_roll_entry_t *data = (isom_roll_entry_t *)entry->data;
@@ -4411,7 +4536,7 @@ static int isom_roll_grouping_established( isom_roll_group_t *group, int16_t rol
     /* Add a new roll recovery description. */
     if( !isom_add_roll_group_entry( sgpd, roll_distance ) )
         return -1;
-    group->assignment->group_description_index = sgpd->list->entry_count;
+    group->assignment->group_description_index = sgpd->list->entry_count + (is_fragment ? 0x10000 : 0);
     group->described = 1;
     return 0;
 }
@@ -4451,7 +4576,7 @@ static int isom_deduplicate_roll_group( isom_sbgp_t *sbgp, lsmash_entry_list_t *
 }
 
 /* Remove pooled caches that has become unnecessary. */
-static int isom_clean_roll_pool( isom_sbgp_t *sbgp, lsmash_entry_list_t *pool )
+static int isom_clean_roll_pool( lsmash_entry_list_t *pool )
 {
     for( lsmash_entry_t *entry = pool->head; entry; entry = pool->head )
     {
@@ -4469,9 +4594,9 @@ static int isom_clean_roll_pool( isom_sbgp_t *sbgp, lsmash_entry_list_t *pool )
 
 static int isom_flush_roll_pool( isom_sbgp_t *sbgp, lsmash_entry_list_t *pool )
 {
-    if( isom_deduplicate_roll_group( sbgp, pool ) )
+    if( isom_deduplicate_roll_group( sbgp, pool ) < 0 )
         return -1;
-    return isom_clean_roll_pool( sbgp, pool );
+    return isom_clean_roll_pool( pool );
 }
 
 static int isom_all_recovery_described( isom_sbgp_t *sbgp, lsmash_entry_list_t *pool )
@@ -4486,35 +4611,84 @@ static int isom_all_recovery_described( isom_sbgp_t *sbgp, lsmash_entry_list_t *
     return isom_flush_roll_pool( sbgp, pool );
 }
 
-static int isom_group_roll_recovery( isom_trak_t *trak, lsmash_sample_property_t *prop )
+static int isom_all_recovery_completed( isom_sbgp_t *sbgp, lsmash_entry_list_t *pool )
 {
-    if( !trak->file->avc_extensions && !trak->file->qt_compatible )
+    for( lsmash_entry_t *entry = pool->head; entry; entry = entry->next )
+    {
+        isom_roll_group_t *group = (isom_roll_group_t *)entry->data;
+        if( !group )
+            return -1;
+        group->described = 1;
+        group->delimited = 1;
+    }
+    return isom_flush_roll_pool( sbgp, pool );
+}
+
+static int isom_group_roll_recovery( isom_box_t *parent, lsmash_sample_property_t *prop )
+{
+    if( !parent->file->avc_extensions
+     && !parent->file->qt_compatible )
         return 0;
-    isom_stbl_t *stbl = trak->mdia->minf->stbl;
-    isom_sbgp_t *sbgp = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_ROLL );
-    isom_sgpd_t *sgpd = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_ROLL );
+    isom_cache_t *cache;
+    isom_sbgp_t  *sbgp;
+    isom_sgpd_t  *sgpd;
+    uint32_t      sample_count;
+    int           is_fragment;
+    if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAK ) )
+    {
+        isom_trak_t *trak = (isom_trak_t *)parent;
+        cache = trak->cache;
+        sbgp  = isom_get_sample_to_group         ( trak->mdia->minf->stbl, ISOM_GROUP_TYPE_ROLL );
+        sgpd  = isom_get_sample_group_description( trak->mdia->minf->stbl, ISOM_GROUP_TYPE_ROLL );
+        sample_count = isom_get_sample_count( trak );
+        is_fragment  = 0;
+    }
+    else if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAF ) )
+    {
+        if( parent->file->max_isom_version < 6 )
+            return 0;
+        isom_traf_t *traf = (isom_traf_t *)parent;
+        cache = traf->cache;
+        sbgp  = isom_get_fragment_sample_to_group         ( traf, ISOM_GROUP_TYPE_ROLL );
+        sgpd  = isom_get_fragment_sample_group_description( traf, ISOM_GROUP_TYPE_ROLL );
+        sample_count = cache->fragment->sample_count + 1;
+        is_fragment  = 1;
+    }
+    else
+    {
+        assert( 0 );
+        sbgp = NULL;
+        sgpd = NULL;
+    }
     if( !sbgp || !sgpd )
         return 0;
-    lsmash_entry_list_t *pool = trak->cache->roll.pool;
+    lsmash_entry_list_t *pool = cache->roll.pool;
     if( !pool )
     {
         pool = lsmash_create_entry_list();
         if( !pool )
             return -1;
-        trak->cache->roll.pool = pool;
+        cache->roll.pool = pool;
     }
     isom_roll_group_t *group = (isom_roll_group_t *)lsmash_get_entry_data( pool, pool->entry_count );
-    uint32_t sample_count = isom_get_sample_count( trak );
     int is_recovery_start = LSMASH_IS_POST_ROLL_START( prop->ra_flags );
-    int valid_pre_roll = !is_recovery_start && (prop->ra_flags != ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE)
-                      && (prop->pre_roll.distance > 0) && (prop->pre_roll.distance <= -INT16_MIN);
+    int valid_pre_roll = !is_recovery_start
+                      && (prop->ra_flags != ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE)
+                      && (prop->pre_roll.distance > 0)
+                      && (prop->pre_roll.distance <= -INT16_MIN);
     int new_group = !group || is_recovery_start || (group->prev_is_recovery_start != is_recovery_start);
     if( !new_group )
     {
         /* Check pre-roll distance. */
         if( !group->assignment )
             return -1;
-        isom_roll_entry_t *prev_roll = (isom_roll_entry_t *)lsmash_get_entry_data( sgpd->list, group->assignment->group_description_index );
+        uint32_t group_description_index = group->assignment->group_description_index;
+        if( group_description_index && is_fragment )
+        {
+            assert( group_description_index > 0x10000 );
+            group_description_index -= 0x10000;
+        }
+        isom_roll_entry_t *prev_roll = (isom_roll_entry_t *)lsmash_get_entry_data( sgpd->list, group_description_index );
         if( !prev_roll )
             new_group = valid_pre_roll;
         else if( !valid_pre_roll || (prop->pre_roll.distance != -prev_roll->roll_distance) )
@@ -4532,7 +4706,7 @@ static int isom_group_roll_recovery( isom_trak_t *trak, lsmash_sample_property_t
         if( !group )
             return -1;
         group->prev_is_recovery_start = is_recovery_start;
-        group->assignment = isom_add_group_assignment_entry( sbgp, 1, 0 );
+        group->assignment             = isom_add_group_assignment_entry( sbgp, 1, 0 );
         if( !group->assignment || lsmash_add_entry( pool, group ) )
         {
             lsmash_free( group );
@@ -4549,7 +4723,7 @@ static int isom_group_roll_recovery( isom_trak_t *trak, lsmash_sample_property_t
             if( valid_pre_roll )
             {
                 /* a member of pre-roll group */
-                if( isom_roll_grouping_established( group, -prop->pre_roll.distance, sgpd ) )
+                if( isom_roll_grouping_established( group, -prop->pre_roll.distance, sgpd, is_fragment ) < 0 )
                     return -1;
             }
             else
@@ -4559,8 +4733,8 @@ static int isom_group_roll_recovery( isom_trak_t *trak, lsmash_sample_property_t
     }
     else
     {
-        group->prev_is_recovery_start = is_recovery_start;
-        ++ group->assignment->sample_count;
+        group->prev_is_recovery_start    = is_recovery_start;
+        group->assignment->sample_count += 1;
     }
     /* If encountered a sync sample, all recovery is completed here. */
     if( prop->ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC )
@@ -4580,7 +4754,7 @@ static int isom_group_roll_recovery( isom_trak_t *trak, lsmash_sample_property_t
             if( distance )
             {
                 /* Now, this group is a 'roll'. */
-                if( isom_roll_grouping_established( group, distance, sgpd ) )
+                if( isom_roll_grouping_established( group, distance, sgpd, is_fragment ) < 0 )
                     return -1;
                 /* All groups before the current group are described. */
                 lsmash_entry_t *current = entry;
@@ -4697,10 +4871,10 @@ static int isom_update_sample_tables( isom_trak_t *trak, lsmash_sample_t *sample
     if( isom_add_dependency_type( trak, &sample->prop ) )
         return -1;
     /* Group samples into random access point type if needed. */
-    if( isom_group_random_access( trak, &sample->prop ) )
+    if( isom_group_random_access( (isom_box_t *)trak, &sample->prop ) < 0 )
         return -1;
     /* Group samples into random access recovery point type if needed. */
-    if( isom_group_roll_recovery( trak, &sample->prop ) )
+    if( isom_group_roll_recovery( (isom_box_t *)trak, &sample->prop ) < 0 )
         return -1;
     /* Add a chunk if needed. */
     return isom_add_chunk( trak, sample );
@@ -4886,9 +5060,10 @@ static int isom_append_sample( lsmash_file_t *file, uint32_t track_ID, lsmash_sa
 
 static int isom_output_cache( isom_trak_t *trak )
 {
-    if( trak->cache->chunk.pool
-     && trak->cache->chunk.pool->sample_count
-     && isom_output_cached_chunk( trak ) )
+    isom_cache_t *cache = trak->cache;
+    if( cache->chunk.pool
+     && cache->chunk.pool->sample_count
+     && isom_output_cached_chunk( trak ) < 0 )
         return -1;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     for( lsmash_entry_t *entry = stbl->sgpd_list.head; entry; entry = entry->next )
@@ -4900,10 +5075,10 @@ static int isom_output_cache( isom_trak_t *trak )
         {
             case ISOM_GROUP_TYPE_RAP :
             {
-                isom_rap_group_t *group = trak->cache->rap;
+                isom_rap_group_t *group = cache->rap;
                 if( !group )
                 {
-                    if( trak->file->fragment )
+                    if( stbl->file->fragment )
                         continue;
                     else
                         return -1;
@@ -4914,23 +5089,61 @@ static int isom_output_cache( isom_trak_t *trak )
                 break;
             }
             case ISOM_GROUP_TYPE_ROLL :
-                if( !trak->cache->roll.pool )
+                if( !cache->roll.pool )
                 {
-                    if( trak->file->fragment )
+                    if( stbl->file->fragment )
                         continue;
                     else
                         return -1;
                 }
-                for( lsmash_entry_t *roll_entry = trak->cache->roll.pool->head; roll_entry; roll_entry = roll_entry->next )
-                {
-                    isom_roll_group_t *group = (isom_roll_group_t *)roll_entry->data;
-                    if( !group )
-                        return -1;
-                    group->described = 1;
-                    group->delimited = 1;
-                }
                 isom_sbgp_t *sbgp = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_ROLL );
-                if( isom_flush_roll_pool( sbgp, trak->cache->roll.pool ) )
+                if( !sbgp || isom_all_recovery_completed( sbgp, cache->roll.pool ) < 0 )
+                    return -1;
+                break;
+            default :
+                break;
+        }
+    }
+    return 0;
+}
+
+static int isom_output_fragment_cache( isom_traf_t *traf )
+{
+    isom_cache_t *cache = traf->cache;
+    if( isom_append_fragment_track_run( traf->file, &cache->chunk ) < 0 )
+        return -1;
+    for( lsmash_entry_t *entry = traf->sgpd_list.head; entry; entry = entry->next )
+    {
+        isom_sgpd_t *sgpd = (isom_sgpd_t *)entry->data;
+        if( !sgpd )
+            return -1;
+        switch( sgpd->grouping_type )
+        {
+            case ISOM_GROUP_TYPE_RAP :
+            {
+                isom_rap_group_t *group = cache->rap;
+                if( !group )
+                {
+                    if( traf->file->fragment )
+                        continue;
+                    else
+                        return -1;
+                }
+                if( !group->random_access )
+                    continue;
+                group->random_access->num_leading_samples_known = 1;
+                break;
+            }
+            case ISOM_GROUP_TYPE_ROLL :
+                if( !cache->roll.pool )
+                {
+                    if( traf->file->fragment )
+                        continue;
+                    else
+                        return -1;
+                }
+                isom_sbgp_t *sbgp = isom_get_fragment_sample_to_group( traf, ISOM_GROUP_TYPE_ROLL );
+                if( !sbgp || isom_all_recovery_completed( sbgp, cache->roll.pool ) < 0 )
                     return -1;
                 break;
             default :
@@ -4959,7 +5172,7 @@ static int isom_flush_fragment_pooled_samples( lsmash_file_t *file, uint32_t tra
             trun->flags |= ISOM_TR_FLAGS_DATA_OFFSET_PRESENT;
         trun->data_offset = file->fragment->pool_size;
     }
-    if( isom_append_fragment_track_run( file, &traf->cache->chunk ) )
+    if( isom_output_fragment_cache( traf ) < 0 )
         return -1;
     return isom_set_fragment_last_duration( traf, last_sample_duration );
 }
@@ -4981,7 +5194,7 @@ int lsmash_flush_pooled_samples( lsmash_root_t *root, uint32_t track_ID, uint32_
      || !trak->mdia->minf->stbl->stsc
      || !trak->mdia->minf->stbl->stsc->list )
         return -1;
-    if( isom_output_cache( trak ) )
+    if( isom_output_cache( trak ) < 0 )
         return -1;
     return lsmash_set_last_sample_delta( root, track_ID, last_sample_delta );
 }
@@ -5194,6 +5407,9 @@ static int isom_update_fragment_sample_tables( isom_traf_t *traf, lsmash_sample_
         row->sample_flags                   = sample_flags;
         row->sample_composition_time_offset = sample_composition_time_offset;
     }
+    if( isom_group_random_access( (isom_box_t *)traf, &sample->prop ) < 0
+     || isom_group_roll_recovery( (isom_box_t *)traf, &sample->prop ) < 0 )
+        return -1;
     /* Set up the previous sample_duration if this sample is not the first sample in the overall movie. */
     if( cache->fragment->has_samples )
     {
@@ -5224,7 +5440,8 @@ static int isom_append_fragment_sample_internal_initial( isom_trak_t *trak, lsma
     /* Add a new sample into the pool of this track fragment. */
     if( isom_pool_sample( trak->cache->chunk.pool, sample ) )
         return -1;
-    trak->cache->fragment->has_samples = 1;
+    trak->cache->fragment->has_samples   = 1;
+    trak->cache->fragment->sample_count += 1;
     return 0;
 }
 
@@ -5240,7 +5457,8 @@ static int isom_append_fragment_sample_internal( isom_traf_t *traf, lsmash_sampl
     /* Add a new sample into the pool of this track fragment. */
     if( isom_pool_sample( traf->cache->chunk.pool, sample ) )
         return -1;
-    traf->cache->fragment->has_samples = 1;
+    traf->cache->fragment->has_samples   = 1;
+    traf->cache->fragment->sample_count += 1;
     return 0;
 }
 
@@ -5282,6 +5500,9 @@ static int isom_append_fragment_sample( lsmash_file_t *file, uint32_t track_ID, 
             traf->tfhd->track_ID               = trak->tkhd->track_ID;
             traf->cache                        = trak->cache;
             traf->cache->fragment->traf_number = fragment->movie->traf_list.entry_count;
+            if( (traf->cache->fragment->rap_grouping  && isom_add_sample_grouping( (isom_box_t *)traf, ISOM_GROUP_TYPE_RAP  ) < 0)
+             || (traf->cache->fragment->roll_grouping && isom_add_sample_grouping( (isom_box_t *)traf, ISOM_GROUP_TYPE_ROLL ) < 0) )
+                return -1;
         }
         else if( !traf->file
               || !traf->file->moov

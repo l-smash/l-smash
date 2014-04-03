@@ -1938,9 +1938,10 @@ static int isom_read_stco( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 
 static int isom_read_sgpd( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL )
+     && !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAF ) )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box_return_pointer( sgpd, isom_stbl_t );
+    isom_add_box_return_pointer( sgpd, void );
     lsmash_bs_t *bs = file->bs;
     isom_read_box_rest( bs, box );
     sgpd->grouping_type      = lsmash_bs_get_be32( bs );

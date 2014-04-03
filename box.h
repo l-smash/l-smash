@@ -1089,7 +1089,9 @@ typedef struct
     uint32_t sample_count;                  /* the number of consecutive samples with the same sample group descriptor */
     uint32_t group_description_index;       /* the index of the sample group entry which describes the samples in this group
                                              * The index ranges from 1 to the number of sample group entries in the Sample Group Description Box,
-                                             * or takes the value 0 to indicate that this sample is a member of no group of this type. */
+                                             * or takes the value 0 to indicate that this sample is a member of no group of this type.
+                                             * Within the Sample to Group Box in movie fragment, the group description indexes for groups defined
+                                             * within the same fragment start at 0x10001, i.e. the index value 1, with the value 1 in the top 16 bits. */
 } isom_group_assignment_entry_t;
 
 /* Sample Table Box */
@@ -1409,15 +1411,18 @@ typedef struct
 
 typedef struct
 {
-    lsmash_entry_list_t *pool;        /* grouping pooled to delimit and describe */
+    lsmash_entry_list_t *pool;  /* grouping pooled to delimit and describe */
 } isom_grouping_t;
 
 typedef struct
 {
     uint8_t  has_samples;
+    uint8_t  roll_grouping;
+    uint8_t  rap_grouping;
     uint32_t traf_number;
     uint32_t last_duration;     /* the last sample duration in this track fragment */
     uint64_t largest_cts;       /* the largest CTS in this track fragments */
+    uint64_t sample_count;      /* the number of samples in this track fragments */
 } isom_fragment_t;
 
 typedef struct
@@ -1602,7 +1607,9 @@ typedef struct
     isom_tfdt_t         *tfdt;          /* Track Fragment Base Media Decode Time Box */
     lsmash_entry_list_t  trun_list;     /* Track Fragment Run Box List
                                          * If the duration-is-empty flag is set in the tf_flags, there are no track runs. */
-    isom_sdtp_t         *sdtp;          /* Independent and Disposable Samples Box */
+    isom_sdtp_t         *sdtp;          /* Independent and Disposable Samples Box (available under Protected Interoperable File Format) */
+    lsmash_entry_list_t  sgpd_list;     /* Sample Group Description Boxes (available under ISO Base Media version 6 or later) */
+    lsmash_entry_list_t  sbgp_list;     /* Sample To Group Boxes */
 
         isom_cache_t *cache;
 } isom_traf_t;
@@ -2412,6 +2419,8 @@ isom_trex_t *isom_get_trex( isom_mvex_t *mvex, uint32_t track_ID );
 isom_tfra_t *isom_get_tfra( isom_mfra_t *mfra, uint32_t track_ID );
 isom_sgpd_t *isom_get_sample_group_description( isom_stbl_t *stbl, uint32_t grouping_type );
 isom_sbgp_t *isom_get_sample_to_group( isom_stbl_t *stbl, uint32_t grouping_type );
+isom_sgpd_t *isom_get_fragment_sample_group_description( isom_traf_t *traf, uint32_t grouping_type );
+isom_sbgp_t *isom_get_fragment_sample_to_group( isom_traf_t *traf, uint32_t grouping_type );
 
 isom_dcr_ps_entry_t *isom_create_ps_entry( uint8_t *ps, uint32_t ps_size );
 void isom_remove_dcr_ps( isom_dcr_ps_entry_t *ps );
@@ -2481,7 +2490,7 @@ int isom_add_stsz( isom_stbl_t *stbl );
 int isom_add_stss( isom_stbl_t *stbl );
 int isom_add_stps( isom_stbl_t *stbl );
 int isom_add_sdtp( isom_box_t *parent );
-isom_sgpd_t *isom_add_sgpd( isom_stbl_t *stbl );
+isom_sgpd_t *isom_add_sgpd( void *parent_box );
 isom_sbgp_t *isom_add_sbgp( void *parent_box );
 int isom_add_stco( isom_stbl_t *stbl );
 int isom_add_co64( isom_stbl_t *stbl );

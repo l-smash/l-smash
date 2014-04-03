@@ -539,14 +539,117 @@ static int isom_get_sample_property_from_media_timeline( isom_timeline_t *timeli
     return 0;
 }
 
-#define INCREMENT_SAMPLE_NUMBER_IN_ENTRY( sample_number_in_entry, entry, entry_data ) \
-    if( sample_number_in_entry == entry_data->sample_count ) \
-    { \
-        sample_number_in_entry = 1; \
-        entry = entry->next; \
-    } \
-    else \
-        ++sample_number_in_entry
+static inline void isom_increment_sample_number_in_entry
+(
+    uint32_t        *sample_number_in_entry,
+    lsmash_entry_t **entry,
+    uint32_t         sample_count
+)
+{
+    if( *sample_number_in_entry == sample_count )
+    {
+        *sample_number_in_entry = 1;
+        *entry = (*entry)->next;
+    }
+    else
+        *sample_number_in_entry += 1;
+}
+
+static inline isom_sgpd_t *isom_select_appropriate_sgpd
+(
+    isom_sgpd_t *sgpd,
+    isom_sgpd_t *sgpd_frag,
+    uint32_t    *group_description_index
+)
+{
+    if( sgpd_frag && *group_description_index >= 0x10000 )
+    {
+        /* The specification doesn't define 0x10000 explicitly, however says that there must be fewer than
+         * 65536 group definitions for this track and grouping type in the sample table in the Movie Box.
+         * So, we assume 0x10000 is equivalent to 0. */
+        *group_description_index -= 0x10000;
+        return sgpd_frag;
+    }
+    else
+        return sgpd;
+}
+
+static int isom_get_roll_recovery_grouping_info
+(
+    isom_timeline_t    *timeline,
+    lsmash_entry_t    **sbgp_roll_entry,
+    isom_sgpd_t        *sgpd_roll,
+    isom_sgpd_t        *sgpd_frag_roll,
+    uint32_t           *sample_number_in_sbgp_roll_entry,
+    isom_sample_info_t *info,
+    uint32_t            sample_number
+)
+{
+    isom_group_assignment_entry_t *assignment = (isom_group_assignment_entry_t *)(*sbgp_roll_entry)->data;
+    if( !assignment )
+        return -1;
+    if( assignment->group_description_index )
+    {
+        uint32_t group_description_index = assignment->group_description_index;
+        isom_sgpd_t *sgpd = isom_select_appropriate_sgpd( sgpd_roll, sgpd_frag_roll, &group_description_index );
+        isom_roll_entry_t *roll_data = (isom_roll_entry_t *)lsmash_get_entry_data( sgpd->list, group_description_index );
+        if( roll_data )
+        {
+            if( roll_data->roll_distance > 0 )
+            {
+                /* post-roll */
+                info->prop.post_roll.complete = sample_number + roll_data->roll_distance;
+                if( info->prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE )
+                    info->prop.ra_flags |= ISOM_SAMPLE_RANDOM_ACCESS_FLAG_POST_ROLL_START;
+            }
+            else if( roll_data->roll_distance < 0 )
+            {
+                /* pre-roll */
+                info->prop.pre_roll.distance = -roll_data->roll_distance;
+                if( info->prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE )
+                    info->prop.ra_flags |= ISOM_SAMPLE_RANDOM_ACCESS_FLAG_PRE_ROLL_END;
+            }
+        }
+        else if( *sample_number_in_sbgp_roll_entry == 1 )
+            lsmash_log( timeline, LSMASH_LOG_WARNING, "a description of roll recoveries is not found in the Sample Group Description Box.\n" );
+    }
+    isom_increment_sample_number_in_entry( sample_number_in_sbgp_roll_entry, sbgp_roll_entry, assignment->sample_count );
+    return 0;
+}
+
+static int isom_get_random_access_point_grouping_info
+(
+    isom_timeline_t    *timeline,
+    lsmash_entry_t    **sbgp_rap_entry,
+    isom_sgpd_t        *sgpd_rap,
+    isom_sgpd_t        *sgpd_frag_rap,
+    uint32_t           *sample_number_in_sbgp_rap_entry,
+    isom_sample_info_t *info,
+    uint32_t           *distance
+)
+{
+    isom_group_assignment_entry_t *assignment = (isom_group_assignment_entry_t *)(*sbgp_rap_entry)->data;
+    if( !assignment )
+        return -1;
+    if( assignment->group_description_index && (info->prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE) )
+    {
+        uint32_t group_description_index = assignment->group_description_index;
+        isom_sgpd_t *sgpd = isom_select_appropriate_sgpd( sgpd_rap, sgpd_frag_rap, &group_description_index );
+        isom_rap_entry_t *rap_data = (isom_rap_entry_t *)lsmash_get_entry_data( sgpd->list, group_description_index );
+        if( rap_data )
+        {
+            /* If this is not an open RAP, we treat it as an unknown RAP since non-IDR sample could make a closed GOP. */
+            info->prop.ra_flags |= (rap_data->num_leading_samples_known && !!rap_data->num_leading_samples)
+                                 ? ISOM_SAMPLE_RANDOM_ACCESS_FLAG_OPEN_RAP
+                                 : ISOM_SAMPLE_RANDOM_ACCESS_FLAG_RAP;
+            *distance = 0;
+        }
+        else if( *sample_number_in_sbgp_rap_entry == 1 )
+            lsmash_log( timeline, LSMASH_LOG_WARNING, "a description of random access points is not found in the Sample Group Description Box.\n" );
+    }
+    isom_increment_sample_number_in_entry( sample_number_in_sbgp_rap_entry, sbgp_rap_entry, assignment->sample_count );
+    return 0;
+}
 
 int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
 {
@@ -690,7 +793,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
             isom_stts_entry_t *stts_data = (isom_stts_entry_t *)stts_entry->data;
             if( !stts_data )
                 goto fail;
-            INCREMENT_SAMPLE_NUMBER_IN_ENTRY( sample_number_in_stts_entry, stts_entry, stts_data );
+            isom_increment_sample_number_in_entry( &sample_number_in_stts_entry, &stts_entry, stts_data->sample_count );
             last_duration = stts_data->sample_delta;
         }
         info.duration = last_duration;
@@ -700,7 +803,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
             isom_ctts_entry_t *ctts_data = (isom_ctts_entry_t *)ctts_entry->data;
             if( !ctts_data )
                 goto fail;
-            INCREMENT_SAMPLE_NUMBER_IN_ENTRY( sample_number_in_ctts_entry, ctts_entry, ctts_data );
+            isom_increment_sample_number_in_entry( &sample_number_in_ctts_entry, &ctts_entry, ctts_data->sample_count );
             info.offset = ctts_data->sample_offset;
         }
         else
@@ -760,53 +863,21 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                 sdtp_entry = sdtp_entry->next;
             }
             /* Get roll recovery grouping info. */
-            if( sbgp_roll_entry )
-            {
-                isom_group_assignment_entry_t *assignment = (isom_group_assignment_entry_t *)sbgp_roll_entry->data;
-                if( !assignment )
-                    goto fail;
-                if( assignment->group_description_index )
-                {
-                    isom_roll_entry_t *roll_data = (isom_roll_entry_t *)lsmash_get_entry_data( sgpd_roll->list, assignment->group_description_index );
-                    if( !roll_data )
-                        goto fail;
-                    if( roll_data->roll_distance > 0 )
-                    {
-                        /* post-roll */
-                        info.prop.post_roll.complete = sample_number + roll_data->roll_distance;
-                        if( info.prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE )
-                            info.prop.ra_flags |= ISOM_SAMPLE_RANDOM_ACCESS_FLAG_POST_ROLL_START;
-                    }
-                    else if( roll_data->roll_distance < 0 )
-                    {
-                        /* pre-roll */
-                        info.prop.pre_roll.distance = -roll_data->roll_distance;
-                        if( info.prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE )
-                            info.prop.ra_flags |= ISOM_SAMPLE_RANDOM_ACCESS_FLAG_PRE_ROLL_END;
-                    }
-                }
-                INCREMENT_SAMPLE_NUMBER_IN_ENTRY( sample_number_in_sbgp_roll_entry, sbgp_roll_entry, assignment );
-            }
+            if( sbgp_roll_entry
+             && isom_get_roll_recovery_grouping_info( timeline,
+                                                      &sbgp_roll_entry, sgpd_roll, NULL,
+                                                      &sample_number_in_sbgp_roll_entry,
+                                                      &info, sample_number ) < 0 )
+                goto fail;
             info.prop.post_roll.identifier = sample_number;
             /* Get random access point grouping info. */
-            if( sbgp_rap_entry )
-            {
-                isom_group_assignment_entry_t *assignment = (isom_group_assignment_entry_t *)sbgp_rap_entry->data;
-                if( !assignment )
-                    goto fail;
-                if( assignment->group_description_index && (info.prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE) )
-                {
-                    isom_rap_entry_t *rap_data = (isom_rap_entry_t *)lsmash_get_entry_data( sgpd_rap->list, assignment->group_description_index );
-                    if( !rap_data )
-                        goto fail;
-                    /* If this is not an open RAP, we treat it as an unknown RAP since non-IDR sample could make a closed GOP. */
-                    info.prop.ra_flags |= (rap_data->num_leading_samples_known && !!rap_data->num_leading_samples)
-                                        ? ISOM_SAMPLE_RANDOM_ACCESS_FLAG_OPEN_RAP
-                                        : ISOM_SAMPLE_RANDOM_ACCESS_FLAG_RAP;
-                    distance = 0;
-                }
-                INCREMENT_SAMPLE_NUMBER_IN_ENTRY( sample_number_in_sbgp_rap_entry, sbgp_rap_entry, assignment );
-            }
+            if( sbgp_rap_entry
+             && isom_get_random_access_point_grouping_info( timeline,
+                                                            &sbgp_rap_entry, sgpd_rap, NULL,
+                                                            &sample_number_in_sbgp_rap_entry,
+                                                            &info, &distance ) < 0 )
+                goto fail;
+            /* Set up distance from the previous random access point. */
             if( distance != NO_RANDOM_ACCESS_POINT )
             {
                 if( info.prop.pre_roll.distance == 0 )
@@ -962,6 +1033,13 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                     base_data_offset = moof->pos;
                 else
                     base_data_offset = last_sample_end_pos;
+                /* sample grouping */
+                isom_sgpd_t *sgpd_frag_roll = isom_get_fragment_sample_group_description( traf, ISOM_GROUP_TYPE_ROLL );
+                isom_sgpd_t *sgpd_frag_rap  = isom_get_fragment_sample_group_description( traf, ISOM_GROUP_TYPE_RAP );
+                sbgp_roll = isom_get_fragment_sample_to_group( traf, ISOM_GROUP_TYPE_ROLL );
+                sbgp_rap  = isom_get_fragment_sample_to_group( traf, ISOM_GROUP_TYPE_RAP );
+                sbgp_roll_entry = sbgp_roll && sbgp_roll->list ? sbgp_roll->list->head : NULL;
+                sbgp_rap_entry  = sbgp_rap  && sbgp_rap->list  ? sbgp_rap->list->head  : NULL;
                 int need_data_offset_only = (tfhd->track_ID != track_ID);
                 /* Track runs */
                 uint32_t trun_number = 1;
@@ -1096,6 +1174,22 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                                     info.prop.ra_flags |= ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
                                     distance = 0;
                                 }
+                                /* Get roll recovery grouping info. */
+                                uint32_t roll_id = sample_count + sample_number;
+                                if( sbgp_roll_entry
+                                 && isom_get_roll_recovery_grouping_info( timeline,
+                                                                          &sbgp_roll_entry, sgpd_roll, sgpd_frag_roll,
+                                                                          &sample_number_in_sbgp_roll_entry,
+                                                                          &info, roll_id ) < 0 )
+                                    goto fail;
+                                info.prop.post_roll.identifier = roll_id;
+                                /* Get random access point grouping info. */
+                                if( sbgp_rap_entry
+                                 && isom_get_random_access_point_grouping_info( timeline,
+                                                                                &sbgp_rap_entry, sgpd_rap, sgpd_frag_rap,
+                                                                                &sample_number_in_sbgp_rap_entry,
+                                                                                &info, &distance ) < 0 )
+                                    goto fail;
                                 /* Get the location of the sync sample from 'tfra' if it is not set up yet.
                                  * Note: there is no guarantee that its entries are placed in a specific order. */
                                 if( tfra )
