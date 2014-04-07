@@ -177,13 +177,72 @@ void lsmash_destruct_timeline( lsmash_root_t *root, uint32_t track_ID )
     }
 }
 
-static uint32_t isom_get_lpcm_sample_size( isom_audio_entry_t *audio )
+static void isom_get_qt_fixed_comp_audio_sample_quants
+(
+    isom_timeline_t     *timeline,
+    isom_sample_entry_t *description,
+    uint32_t            *samples_per_packet,
+    uint32_t            *constant_sample_size
+)
 {
+    isom_audio_entry_t *audio = (isom_audio_entry_t *)description;
     if( audio->version == 0 )
-        return (audio->samplesize * audio->channelcount) / 8;
+    {
+        if( lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_MAC3_AUDIO ) )
+        {
+            *samples_per_packet   = 6;
+            *constant_sample_size = 2 * audio->channelcount;
+        }
+        else if( lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_MAC6_AUDIO ) )
+        {
+            *samples_per_packet   = 6;
+            *constant_sample_size = audio->channelcount;
+        }
+        else if( lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_ADPCM17_AUDIO ) )
+        {
+            *samples_per_packet   = 64;
+            *constant_sample_size = 34 * audio->channelcount;
+        }
+        else if( lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_AGSM_AUDIO ) )
+        {
+            *samples_per_packet   = 160;
+            *constant_sample_size = 33;
+        }
+        else if( lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_ALAW_AUDIO )
+              || lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_ULAW_AUDIO ) )
+        {
+            *samples_per_packet   = 1;
+            *constant_sample_size = audio->channelcount;
+        }
+        else    /* LPCM */
+        {
+            if( !isom_is_lpcm_audio( audio ) )
+                lsmash_log( timeline, LSMASH_LOG_WARNING, "unsupported implicit sample table!\n" );
+            *samples_per_packet   = 1;
+            *constant_sample_size = (audio->samplesize * audio->channelcount) / 8;
+        }
+    }
     else if( audio->version == 1 )
-        return audio->bytesPerFrame;
-    return audio->constBytesPerAudioPacket;
+    {
+        *samples_per_packet   = audio->samplesPerPacket;
+        *constant_sample_size = audio->bytesPerFrame;
+    }
+    else /* if( audio->version == 2 ) */
+    {
+        *samples_per_packet   = audio->constLPCMFramesPerAudioPacket;
+        *constant_sample_size = audio->constBytesPerAudioPacket;
+    }
+}
+
+static int isom_is_qt_fixed_compressed_audio
+(
+    isom_sample_entry_t *description
+)
+{
+    if( (description->manager & LSMASH_VIDEO_DESCRIPTION) || !isom_is_qt_audio( description->type ) )
+        return 0;
+    /* LPCM is a special case of fixed compression. */
+    return (((isom_audio_entry_t *)description)->compression_ID != QT_AUDIO_COMPRESSION_ID_VARIABLE_COMPRESSION);
 }
 
 static int isom_add_sample_info_entry( isom_timeline_t *timeline, isom_sample_info_t *src_info )
@@ -724,15 +783,14 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
         goto fail;
     int all_sync = !stss;
     int large_presentation = stco->large_presentation || lsmash_check_box_type_identical( stco->type, ISOM_BOX_TYPE_CO64 );
-    int is_lpcm_audio = isom_is_lpcm_audio( description );
+    int is_lpcm_audio          = isom_is_lpcm_audio( description );
+    int is_qt_fixed_comp_audio = isom_is_qt_fixed_compressed_audio( description );
     int iso_sdtp = file->max_isom_version >= 2 || file->avc_extensions;
     int allow_negative_sample_offset = ctts && ((file->max_isom_version >= 4 && ctts->version == 1) || file->qt_compatible);
-    uint32_t sample_number                    = 1;
     uint32_t sample_number_in_stts_entry      = 1;
     uint32_t sample_number_in_ctts_entry      = 1;
     uint32_t sample_number_in_sbgp_roll_entry = 1;
     uint32_t sample_number_in_sbgp_rap_entry  = 1;
-    uint32_t sample_number_in_chunk           = 1;
     uint64_t dts               = 0;
     uint32_t chunk_number      = 1;
     uint64_t offset_from_chunk = 0;
@@ -741,9 +799,17 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                              ? ((isom_co64_entry_t *)stco_entry->data)->chunk_offset
                              : ((isom_stco_entry_t *)stco_entry->data)->chunk_offset
                          : 0;
-    uint32_t constant_sample_size = is_lpcm_audio
-                                  ? isom_get_lpcm_sample_size( (isom_audio_entry_t *)description )
-                                  : stsz->sample_size;
+    uint32_t samples_per_packet;
+    uint32_t constant_sample_size;
+    if( is_qt_fixed_comp_audio )
+        isom_get_qt_fixed_comp_audio_sample_quants( timeline, description, &samples_per_packet, &constant_sample_size );
+    else
+    {
+        samples_per_packet   = 1;
+        constant_sample_size = stsz->sample_size;
+    }
+    uint32_t sample_number          = samples_per_packet;
+    uint32_t sample_number_in_chunk = samples_per_packet;
     /* Copy edits. */
     while( elst_entry )
     {
@@ -783,39 +849,48 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
         goto fail;
     uint32_t distance      = NO_RANDOM_ACCESS_POINT;
     uint32_t last_duration = UINT32_MAX;
+    uint32_t packet_number = 1;
     isom_lpcm_bunch_t bunch = { 0 };
     while( sample_number <= stsz->sample_count )
     {
         isom_sample_info_t info = { 0 };
         /* Get sample duration and sample offset. */
-        if( stts_entry )
+        for( uint32_t i = 0; i < samples_per_packet; i++ )
         {
-            isom_stts_entry_t *stts_data = (isom_stts_entry_t *)stts_entry->data;
-            if( !stts_data )
-                goto fail;
-            isom_increment_sample_number_in_entry( &sample_number_in_stts_entry, &stts_entry, stts_data->sample_count );
-            last_duration = stts_data->sample_delta;
+            /* sample duration */
+            if( stts_entry )
+            {
+                isom_stts_entry_t *stts_data = (isom_stts_entry_t *)stts_entry->data;
+                if( !stts_data )
+                    goto fail;
+                isom_increment_sample_number_in_entry( &sample_number_in_stts_entry, &stts_entry, stts_data->sample_count );
+                last_duration = stts_data->sample_delta;
+            }
+            info.duration += last_duration;
+            dts           += last_duration;
+            /* sample offset */
+            uint32_t sample_offset;
+            if( ctts_entry )
+            {
+                isom_ctts_entry_t *ctts_data = (isom_ctts_entry_t *)ctts_entry->data;
+                if( !ctts_data )
+                    goto fail;
+                isom_increment_sample_number_in_entry( &sample_number_in_ctts_entry, &ctts_entry, ctts_data->sample_count );
+                sample_offset = ctts_data->sample_offset;
+                if( allow_negative_sample_offset )
+                {
+                    uint64_t cts = dts + (int32_t)sample_offset;
+                    if( (cts + timeline->ctd_shift) < dts )
+                        timeline->ctd_shift = dts - cts;
+                }
+            }
+            else
+                sample_offset = 0;
+            if( i == 0 )
+                info.offset = sample_offset;
         }
-        info.duration = last_duration;
         timeline->media_duration += info.duration;
-        if( ctts_entry )
-        {
-            isom_ctts_entry_t *ctts_data = (isom_ctts_entry_t *)ctts_entry->data;
-            if( !ctts_data )
-                goto fail;
-            isom_increment_sample_number_in_entry( &sample_number_in_ctts_entry, &ctts_entry, ctts_data->sample_count );
-            info.offset = ctts_data->sample_offset;
-        }
-        else
-            info.offset = 0;
-        if( allow_negative_sample_offset )
-        {
-            uint64_t cts = dts + (int32_t)info.offset;
-            if( (cts + timeline->ctd_shift) < dts )
-                timeline->ctd_shift = dts - cts;
-        }
-        dts += info.duration;
-        if( !is_lpcm_audio )
+        if( !is_qt_fixed_comp_audio )
         {
             /* Check whether sync sample or not. */
             if( stss_entry )
@@ -886,10 +961,10 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
             }
         }
         else
-            /* All LPCMFrame is a sync sample. */
+            /* All uncompressed and non-variable compressed audio frame is a sync sample. */
             info.prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
         /* Get size of sample in the stream. */
-        if( is_lpcm_audio || !stsz_entry )
+        if( is_qt_fixed_comp_audio || !stsz_entry )
             info.length = constant_sample_size;
         else
         {
@@ -910,7 +985,6 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
             if( info.chunk )
                 info.chunk->length = offset_from_chunk;
             /* Move the next chunk. */
-            sample_number_in_chunk = 1;
             if( stco_entry )
                 stco_entry = stco_entry->next;
             if( stco_entry
@@ -946,20 +1020,27 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                 stsc_data = (isom_stsc_entry_t *)stsc_entry->data;
                 /* Update sample description. */
                 description = (isom_sample_entry_t *)lsmash_get_entry_data( &stsd->list, stsc_data->sample_description_index );
-                is_lpcm_audio = isom_is_lpcm_audio( description );
-                if( is_lpcm_audio )
-                    constant_sample_size = isom_get_lpcm_sample_size( (isom_audio_entry_t *)description );
+                is_lpcm_audio          = isom_is_lpcm_audio( description );
+                is_qt_fixed_comp_audio = isom_is_qt_fixed_compressed_audio( description );
+                if( is_qt_fixed_comp_audio )
+                    isom_get_qt_fixed_comp_audio_sample_quants( timeline, description, &samples_per_packet, &constant_sample_size );
+                else
+                {
+                    samples_per_packet   = 1;
+                    constant_sample_size = stsz->sample_size;
+                }
             }
+            sample_number_in_chunk = samples_per_packet;
         }
         else
         {
-            ++sample_number_in_chunk;
-            data_offset += info.length;
+            data_offset            += info.length;
+            sample_number_in_chunk += samples_per_packet;
         }
         /* OK. Let's add its info. */
         if( is_lpcm_audio )
         {
-            if( sample_number == 1 )
+            if( sample_number == samples_per_packet )
                 isom_update_bunch( &bunch, &info );
             else if( isom_compare_lpcm_sample_info( &bunch, &info ) )
             {
@@ -977,7 +1058,8 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
             lsmash_log( timeline, LSMASH_LOG_ERROR, "LPCM + non-LPCM track is not supported.\n" );
             goto fail;
         }
-        ++sample_number;
+        sample_number += samples_per_packet;
+        packet_number += 1;
     }
     isom_portable_chunk_t *last_chunk = lsmash_get_entry_data( timeline->chunk_list, timeline->chunk_list->entry_count );
     if( last_chunk )
@@ -991,7 +1073,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
             --chunk_number;
         }
     }
-    uint32_t sample_count = sample_number - 1;
+    uint32_t sample_count = packet_number - 1;
     if( movie_framemts_present )
     {
         isom_tfra_t                     *tfra       = isom_get_tfra( file->mfra, track_ID );
@@ -1080,10 +1162,8 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                             sample_description_index = tfhd->sample_description_index;
                         else
                             sample_description_index = trex->default_sample_description_index;
-                        description   = (isom_sample_entry_t *)lsmash_get_entry_data( &stsd->list, sample_description_index );
+                        description  = (isom_sample_entry_t *)lsmash_get_entry_data( &stsd->list, sample_description_index );
                         is_lpcm_audio = isom_is_lpcm_audio( description );
-                        if( is_lpcm_audio )
-                            constant_sample_size = isom_get_lpcm_sample_size( (isom_audio_entry_t *)description );
                         /* Get dependency info for this track fragment. */
                         sdtp_entry = traf->sdtp && traf->sdtp->list ? traf->sdtp->list->head : NULL;
                         sdtp_data  = sdtp_entry && sdtp_entry->data ? (isom_sdtp_entry_t *)sdtp_entry->data : NULL;

@@ -106,43 +106,6 @@ static int isom_is_qt_video( lsmash_codec_type_t type )
         || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_WRLE_VIDEO );
 }
 
-static int isom_is_qt_audio( lsmash_codec_type_t type )
-{
-    return lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_23NI_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_MAC3_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_MAC6_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_NONE_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_QDM2_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_QDMC_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_QCLP_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_AC_3_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_AGSM_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_ALAC_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_ALAW_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_CDX2_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_CDX4_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_DVCA_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_DVI_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_FL32_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_FL64_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_IMA4_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_IN24_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_IN32_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_LPCM_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_MP4A_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_RAW_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_SOWT_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_TWOS_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_ULAW_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_VDVA_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_FULLMP3_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_MP3_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_ADPCM2_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_ADPCM17_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_GSM49_AUDIO )
-        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_NOT_SPECIFIED );
-}
-
 static int isom_is_nalff( lsmash_codec_type_t type )
 {
     return lsmash_check_codec_type_identical( type, ISOM_CODEC_TYPE_AVC1_VIDEO )

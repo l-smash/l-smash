@@ -35,7 +35,7 @@
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  1
 #define LSMASH_VERSION_MINOR  5
-#define LSMASH_VERSION_MICRO  3
+#define LSMASH_VERSION_MICRO  4
 
 /****************************************************************************
  * ROOT
