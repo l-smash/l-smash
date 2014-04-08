@@ -2636,19 +2636,26 @@ int64_t lsmash_read_file
             {
                 /* file types */
                 isom_ftyp_t *ftyp = file->ftyp;
-                param->major_brand      = ftyp->major_brand;
-                param->minor_version    = ftyp->minor_version;
-                param->brands           = file->compatible_brands;
-                param->brand_count      = file->brand_count;
+                param->major_brand   = ftyp->major_brand ? ftyp->major_brand : ISOM_BRAND_TYPE_QT;
+                param->minor_version = ftyp->minor_version;
+                param->brands        = file->compatible_brands;
+                param->brand_count   = file->brand_count;
             }
             else if( file->styp_list.head && file->styp_list.head->data )
             {
                 /* segment types */
                 isom_styp_t *styp = (isom_styp_t *)file->styp_list.head->data;
-                param->major_brand      = styp->major_brand;
-                param->minor_version    = styp->minor_version;
-                param->brands           = file->compatible_brands;
-                param->brand_count      = file->brand_count;
+                param->major_brand   = styp->major_brand ? styp->major_brand : ISOM_BRAND_TYPE_QT;
+                param->minor_version = styp->minor_version;
+                param->brands        = file->compatible_brands;
+                param->brand_count   = file->brand_count;
+            }
+            else
+            {
+                param->major_brand   = file->mp4_version1 ? ISOM_BRAND_TYPE_MP41 : ISOM_BRAND_TYPE_QT;
+                param->minor_version = 0;
+                param->brands        = NULL;
+                param->brand_count   = 0;
             }
         }
     }
