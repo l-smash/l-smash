@@ -680,35 +680,45 @@ static void replace_with_valid_brand( remuxer_t *remuxer )
         }
     }
     for( int i = 0; i < remuxer->num_input; i++ )
-    {
-        uint32_t *brand   = &input[i].file.param.major_brand;
-        uint32_t *version = &input[i].file.param.minor_version;
-        for( int j = 0; brand_filter_list[j]; j++ )
-            if( *brand == brand_filter_list[j] )
+        for( uint32_t j = 0; j <= input[i].file.param.brand_count; j++ )
+        {
+            int       invalid = 1;
+            uint32_t *brand   = j == 0 ? &input[i].file.param.major_brand   : &input[i].file.param.brands[j];
+            uint32_t *version = j == 0 ? &input[i].file.param.minor_version : NULL;
+            for( int k = 0; brand_filter_list[k]; k++ )
             {
-                if( ((*brand >> 24) & 0xFF) == '3'
-                 && ((*brand >> 16) & 0xFF) == 'g'
-                 && (((*brand >>  8) & 0xFF) == 'p' || ((*brand >>  8) & 0xFF) == 'r') )
+                if( *brand == brand_filter_list[k] )
                 {
-                    if( video_track_count   <= 1 && audio_track_count   <= 1
-                     && video_num_summaries <= 1 && audio_num_summaries <= 1 )
-                        continue;
-                    /* Replace with the General Profile for maximum compatibility. */
-                    if( (*brand & 0xFF) < '6' )
+                    if( ((*brand >> 24) & 0xFF) == '3'
+                     && ((*brand >> 16) & 0xFF) == 'g'
+                     && (((*brand >>  8) & 0xFF) == 'p' || ((*brand >>  8) & 0xFF) == 'r') )
                     {
-                        /* 3GPP version 6.7.0 General Profile */
-                        *brand   = ISOM_BRAND_TYPE_3GG6;
-                        *version = 0x00000700;
+                        if( video_track_count   <= 1 && audio_track_count   <= 1
+                         && video_num_summaries <= 1 && audio_num_summaries <= 1 )
+                            continue;
+                        /* Replace with the General Profile for maximum compatibility. */
+                        if( (*brand & 0xFF) < '6' )
+                        {
+                            /* 3GPP version 6.7.0 General Profile */
+                            *brand = ISOM_BRAND_TYPE_3GG6;
+                            if( version )
+                                *version = 0x00000700;
+                        }
+                        else
+                            *brand = LSMASH_4CC( '3', 'g', 'g', *brand & 0xFF );
                     }
-                    else
-                        *brand = LSMASH_4CC( '3', 'g', 'g', *brand & 0xFF );
+                    invalid = 0;
+                    break;
                 }
-                continue;
             }
-        /* Replace with the 'mp42' brand. */
-        *brand   = ISOM_BRAND_TYPE_MP42;
-        *version = 0;
-    }
+            if( invalid )
+            {
+                /* Replace with the 'mp42' brand. */
+                *brand = ISOM_BRAND_TYPE_MP42;
+                if( version )
+                    *version = 0;
+            }
+        }
 }
 
 static int set_movie_parameters( remuxer_t *remuxer )
