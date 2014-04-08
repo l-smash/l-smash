@@ -683,8 +683,8 @@ static void replace_with_valid_brand( remuxer_t *remuxer )
         for( uint32_t j = 0; j <= input[i].file.param.brand_count; j++ )
         {
             int       invalid = 1;
-            uint32_t *brand   = j == 0 ? &input[i].file.param.major_brand   : &input[i].file.param.brands[j];
-            uint32_t *version = j == 0 ? &input[i].file.param.minor_version : NULL;
+            uint32_t *brand   = j ? &input[i].file.param.brands[j - 1] : &input[i].file.param.major_brand;
+            uint32_t *version = j ? NULL                               : &input[i].file.param.minor_version;
             for( int k = 0; brand_filter_list[k]; k++ )
             {
                 if( *brand == brand_filter_list[k] )
