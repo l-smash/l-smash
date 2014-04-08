@@ -34,8 +34,10 @@
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  1
-#define LSMASH_VERSION_MINOR  5
-#define LSMASH_VERSION_MICRO  4
+#define LSMASH_VERSION_MINOR  6
+#define LSMASH_VERSION_MICRO  0
+
+#define LSMASH_VERSION_INT( a, b, c ) ((a << 16) | (b << 8) | (c))
 
 /****************************************************************************
  * ROOT
