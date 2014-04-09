@@ -124,7 +124,7 @@ int main( int argc, char *argv[] )
         fprintf( stderr, "Failed to create a ROOT.\n" );
         return -1;
     }
-    lsmash_file_parameters_t file_param;
+    lsmash_file_parameters_t file_param = { 0 };
     if( lsmash_open_file( filename, 1, &file_param ) < 0 )
         return BOXDUMPER_ERR( "Failed to open an input file.\n" );
     if( dump_box )

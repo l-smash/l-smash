@@ -213,7 +213,8 @@ typedef struct
  * Return NULL otherwise. */
 lsmash_root_t *lsmash_create_root( void );
 
-/* Open a file where the path is given and set up the parameters by 'open_mode'.
+/* Open a file where the path is given.
+ * And if successful, set up the parameters by 'open_mode'.
  * Here, the 'open_mode' parameter is either 0 or 1 as follows:
  *   0: Create a file for output/muxing operations.
  *      If a file with the same name already exists, its contents are discarded and the file is treated as a new file.    
