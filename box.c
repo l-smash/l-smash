@@ -275,6 +275,15 @@ int isom_is_uncompressed_ycbcr( lsmash_codec_type_t type )
         || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_YUV2_VIDEO );
 }
 
+int isom_is_waveform_audio( lsmash_box_type_t type )
+{
+    return lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_ADPCM2_AUDIO )
+        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_ADPCM17_AUDIO )
+        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_GSM49_AUDIO )
+        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_FULLMP3_AUDIO )
+        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_MP3_AUDIO );
+}
+
 size_t isom_skip_box_common( uint8_t **p_data )
 {
     uint8_t *orig = *p_data;

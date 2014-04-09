@@ -1416,6 +1416,7 @@ static int isom_set_qtff_lpcm_description( isom_audio_entry_t *audio, lsmash_aud
     }
     if( !lpcm )
         return -1;
+    audio->manager |= LSMASH_QTFF_BASE;
     lsmash_codec_type_t sample_type = audio->type;
     /* Convert the sample type into 'lpcm' if the description doesn't match the format or version = 2 fields are needed. */
     if( (lsmash_check_codec_type_identical( sample_type, QT_CODEC_TYPE_RAW_AUDIO )
@@ -1577,6 +1578,10 @@ static lsmash_box_type_t isom_guess_audio_codec_specific_box_type( lsmash_codec_
     GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE( ISOM_CODEC_TYPE_MP4A_AUDIO,  ISOM_BOX_TYPE_ESDS );
     GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE(   QT_CODEC_TYPE_ALAC_AUDIO,    QT_BOX_TYPE_ALAC );
     GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE(   QT_CODEC_TYPE_MP4A_AUDIO,    QT_BOX_TYPE_ESDS );
+    GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE(   QT_CODEC_TYPE_FULLMP3_AUDIO, QT_CODEC_TYPE_MP3_AUDIO );
+    GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE(   QT_CODEC_TYPE_ADPCM2_AUDIO,  QT_CODEC_TYPE_ADPCM2_AUDIO );
+    GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE(   QT_CODEC_TYPE_ADPCM17_AUDIO, QT_CODEC_TYPE_ADPCM17_AUDIO );
+    GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE(   QT_CODEC_TYPE_GSM49_AUDIO,   QT_CODEC_TYPE_GSM49_AUDIO );
     GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE( LSMASH_CODEC_TYPE_UNSPECIFIED, QT_BOX_TYPE_CHAN );
     GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE( LSMASH_CODEC_TYPE_UNSPECIFIED, QT_BOX_TYPE_GLBL );
     GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE( LSMASH_CODEC_TYPE_UNSPECIFIED, QT_BOX_TYPE_WAVE );
@@ -1584,39 +1589,166 @@ static lsmash_box_type_t isom_guess_audio_codec_specific_box_type( lsmash_codec_
     return box_type;
 }
 
-static int isom_set_qtff_template_audio_description( isom_audio_entry_t *audio, lsmash_audio_summary_t *summary )
+typedef struct
 {
-    audio->type    = lsmash_form_qtff_box_type( audio->type.fourcc );
-    audio->version = (summary->channels > 2 || summary->frequency > UINT16_MAX) ? 2 : 1;
-    /* Try to get QuickTime audio format specific flags. */
-    lsmash_qt_audio_format_specific_flag format_flags = QT_AUDIO_FORMAT_FLAG_BIG_ENDIAN;
-    for( lsmash_entry_t *entry = summary->opaque->list.head; entry; entry = entry->next )
+    uint16_t wFormatTag;
+    uint16_t nChannels;
+    uint32_t nSamplesPerSec;
+    uint32_t nAvgBytesPerSec;
+    uint16_t nBlockAlign;
+    uint16_t wBitsPerSample;
+    uint16_t cbSize;
+} wave_format_ex_t;
+
+static lsmash_bs_t *isom_create_waveform_audio_info
+(
+    wave_format_ex_t *wfx,
+    lsmash_box_type_t type
+)
+{
+    lsmash_bs_t *bs = lsmash_bs_create();
+    if( !bs )
+        return NULL;
+    lsmash_bs_put_be32( bs, ISOM_BASEBOX_COMMON_SIZE + 18 + wfx->cbSize );
+    lsmash_bs_put_be32( bs, type.fourcc );
+    lsmash_bs_put_le16( bs, wfx->wFormatTag );
+    lsmash_bs_put_le16( bs, wfx->nChannels );
+    lsmash_bs_put_le32( bs, wfx->nSamplesPerSec );
+    lsmash_bs_put_le32( bs, wfx->nAvgBytesPerSec );
+    lsmash_bs_put_le16( bs, wfx->nBlockAlign );
+    lsmash_bs_put_le16( bs, wfx->wBitsPerSample );
+    lsmash_bs_put_le16( bs, wfx->cbSize );
+    return bs;
+}
+
+static int isom_setup_waveform_audio_info
+(
+    isom_wave_t            *wave,
+    isom_audio_entry_t     *audio,
+    lsmash_audio_summary_t *summary,
+    uint32_t                samples_per_packet,
+    uint32_t                bytes_per_frame,
+    uint32_t                sample_size
+)
+{
+    wave_format_ex_t wfx;
+    wfx.wFormatTag      = 0x0000;   /* WAVE_FORMAT_UNKNOWN */
+    wfx.nChannels       = summary->channels;
+    wfx.nSamplesPerSec  = summary->frequency;
+    wfx.nAvgBytesPerSec = 0;
+    wfx.nBlockAlign     = bytes_per_frame;
+    wfx.wBitsPerSample  = sample_size;
+    wfx.cbSize          = 0;
+    lsmash_bs_t *bs = NULL;
+    if( lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_ADPCM2_AUDIO ) )
     {
-        lsmash_codec_specific_t *specific = (lsmash_codec_specific_t *)entry->data;
-        if( !specific
-         || !specific->data.structured )
-            continue;
-        if( specific->type   == LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_FORMAT_SPECIFIC_FLAGS
-         && specific->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED )
+        /* ADPCMWAVEFORMAT */
+        wfx.wFormatTag = 0x0002;    /* WAVE_FORMAT_ADPCM */
+        wfx.cbSize     = 32;
+        bs = isom_create_waveform_audio_info( &wfx, audio->type );
+        if( !bs )
+            return -1;
+        uint16_t wSamplesPerBlock = samples_per_packet; /* nBlockAlign * 2 / nChannels - 12 */
+        uint16_t wNumCoef         = 7;                  /* Microsoft ADPCM uses just 7 coefficients. */
+        static const struct
         {
-            /* A format specific flags is found.
-             * Force audio sample description version == 2. */
-            format_flags   = ((lsmash_qt_audio_format_specific_flags_t *)specific->data.structured)->format_flags;
-            audio->version = 2;
-            break;
+            int16_t iCoef1;
+            int16_t iCoef2;
+        } aCoef[7] = { { 256, 0 }, { 512, -256 }, { 0,0 }, { 192,64 }, { 240,0 }, { 460, -208 }, { 392,-232 } };
+        lsmash_bs_put_le16( bs, wSamplesPerBlock );
+        lsmash_bs_put_le16( bs, wNumCoef );
+        for( int i = 0; i < 7; i++ )
+        {
+            lsmash_bs_put_le16( bs, aCoef[i].iCoef1 );
+            lsmash_bs_put_le16( bs, aCoef[i].iCoef2 );
         }
     }
+    else if( lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_ADPCM17_AUDIO ) )
+    {
+        /* IMAADPCMWAVEFORMAT */
+        wfx.wFormatTag = 0x0011;    /* WAVE_FORMAT_DVI_ADPCM / WAVE_FORMAT_IMA_ADPCM */
+        wfx.cbSize     = 2;
+        bs = isom_create_waveform_audio_info( &wfx, audio->type );
+        if( !bs )
+            return -1;
+        uint16_t wSamplesPerBlock = samples_per_packet;
+        lsmash_bs_put_le16( bs, wSamplesPerBlock );
+    }
+    else if( lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_GSM49_AUDIO ) )
+    {
+        /* GSM610WAVEFORMAT */
+        wfx.wFormatTag = 0x0031;    /* WAVE_FORMAT_GSM610 */
+        wfx.cbSize     = 2;
+        bs = isom_create_waveform_audio_info( &wfx, audio->type );
+        if( !bs )
+            return -1;
+        uint16_t wSamplesPerBlock = samples_per_packet;
+        lsmash_bs_put_le16( bs, wSamplesPerBlock );
+    }
+    else if( lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_FULLMP3_AUDIO )
+          || lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_MP3_AUDIO ) )
+    {
+        /* MPEGLAYER3WAVEFORMAT */
+        wfx.wFormatTag     = 0x0055;    /* WAVE_FORMAT_MPEGLAYER3 */
+        wfx.nBlockAlign    = 1;         /* ? */
+        wfx.wBitsPerSample = 0;         /* undefined */
+        wfx.cbSize         = 12;
+        bs = isom_create_waveform_audio_info( &wfx, audio->type );
+        if( !bs )
+            return -1;
+        uint16_t wID             = 1;   /* MPEGLAYER3_ID_MPEG */
+        uint32_t fdwFlags        = 0;   /* We don't know whether the stream is padded or not here. */
+        uint16_t nBlockSize      = 0;   /* (144 * (bitrate / nSamplesPerSec) + padding) * nFramesPerBlock */
+        uint16_t nFramesPerBlock = 1;   /* the number of audio frames per block */
+        uint16_t nCodecDelay     = 0;   /* Encoder delay in samples is unknown. */
+        lsmash_bs_put_le16( bs, wID );
+        lsmash_bs_put_le32( bs, fdwFlags );
+        lsmash_bs_put_le16( bs, nBlockSize );
+        lsmash_bs_put_le16( bs, nFramesPerBlock );
+        lsmash_bs_put_le16( bs, nCodecDelay );
+    }
+    if( !bs )
+    {
+        assert( 0 );
+        return -1;
+    }
+    uint32_t wfx_size;
+    uint8_t *wfx_data = lsmash_bs_export_data( bs, &wfx_size );
+    lsmash_bs_cleanup( bs );
+    if( !wfx_data )
+        return -1;
+    if( wfx_size != ISOM_BASEBOX_COMMON_SIZE + 18 + wfx.cbSize
+     || isom_add_extension_binary( wave, audio->type, LSMASH_BOX_PRECEDENCE_HM, wfx_data, wfx_size ) < 0 )
+    {
+        lsmash_free( wfx_data );
+        return -1;
+    }
+    return 0;
+}
+
+static int isom_set_qtff_sound_decompression_parameters
+(
+    isom_audio_entry_t                   *audio,
+    lsmash_audio_summary_t               *summary,
+    lsmash_qt_audio_format_specific_flag *format_flags,
+    uint32_t                              samples_per_packet,
+    uint32_t                              bytes_per_frame,
+    uint32_t                              sample_size
+)
+{
     /* A 'wave' extension itself shall be absent in the opaque CODEC specific info list.
      * So, create a 'wave' extension here and append it as an extension to the audio sample description. */
     isom_wave_t *wave = isom_add_wave( audio );
-    if( isom_add_frma( wave )
-     || isom_add_terminator( wave ) )
+    if( isom_add_frma      ( wave ) < 0
+     || isom_add_terminator( wave ) < 0 )
     {
         lsmash_remove_entry_tail( &audio->extensions, wave->destruct );
         return -1;
     }
     wave->frma->data_format = audio->type.fourcc;
     /* Append extensions from the opaque CODEC specific info list to 'wave' extension. */
+    int waveform_audio_info_present  = 0;
+    int requires_waveform_audio_info = isom_is_waveform_audio( audio->type );
     for( lsmash_entry_t *entry = summary->opaque->list.head; entry; entry = entry->next )
     {
         lsmash_codec_specific_t *specific = (lsmash_codec_specific_t *)entry->data;
@@ -1665,9 +1797,9 @@ static int isom_set_qtff_template_audio_description( isom_audio_entry_t *audio, 
                     {
                         /* Override endianness indicated in format specific flags. */
                         if( box_data[9] == 1 )
-                            format_flags &= ~QT_AUDIO_FORMAT_FLAG_BIG_ENDIAN;
+                            *format_flags &= ~QT_AUDIO_FORMAT_FLAG_BIG_ENDIAN;
                         else
-                            format_flags |=  QT_AUDIO_FORMAT_FLAG_BIG_ENDIAN;
+                            *format_flags |=  QT_AUDIO_FORMAT_FLAG_BIG_ENDIAN;
                     }
                     lsmash_destroy_codec_specific_data( cs );
                     continue;
@@ -1679,6 +1811,7 @@ static int isom_set_qtff_template_audio_description( isom_audio_entry_t *audio, 
                     lsmash_destroy_codec_specific_data( cs );
                     continue;
                 }
+                box_type = lsmash_form_qtff_box_type( box_type.fourcc );
                 /* Determine 'precedence'. */
                 uint64_t precedence;
                 if( lsmash_check_box_type_identical( box_type, QT_BOX_TYPE_FRMA ) )
@@ -1699,30 +1832,76 @@ static int isom_set_qtff_template_audio_description( isom_audio_entry_t *audio, 
                 lsmash_destroy_codec_specific_data( cs );
                 if( ret < 0 )
                     return ret;
+                if( isom_is_waveform_audio( box_type ) )
+                    waveform_audio_info_present = 1;
                 break;
             }
         }
     }
+    if( requires_waveform_audio_info && !waveform_audio_info_present
+     && isom_setup_waveform_audio_info( wave, audio, summary, samples_per_packet, bytes_per_frame, sample_size ) < 0 )
+        return -1;
+    return 0;
+}
+
+static int isom_set_qtff_template_audio_description( isom_audio_entry_t *audio, lsmash_audio_summary_t *summary )
+{
+    audio->manager |= LSMASH_QTFF_BASE;
+    audio->type     = lsmash_form_qtff_box_type( audio->type.fourcc );
+    audio->version  = (summary->channels > 2 || summary->frequency > UINT16_MAX) ? 2 : 1;
+    /* Try to get QuickTime audio format specific flags. */
+    lsmash_qt_audio_format_specific_flag format_flags = QT_AUDIO_FORMAT_FLAG_BIG_ENDIAN;
+    for( lsmash_entry_t *entry = summary->opaque->list.head; entry; entry = entry->next )
+    {
+        lsmash_codec_specific_t *specific = (lsmash_codec_specific_t *)entry->data;
+        if( !specific
+         || !specific->data.structured )
+            continue;
+        if( specific->type   == LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_FORMAT_SPECIFIC_FLAGS
+         && specific->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED )
+        {
+            /* A format specific flags is found.
+             * Force audio sample description version == 2. */
+            format_flags   = ((lsmash_qt_audio_format_specific_flags_t *)specific->data.structured)->format_flags;
+            audio->version = 2;
+            break;
+        }
+    }
+    uint32_t samples_per_packet;
+    uint32_t bytes_per_frame;
+    uint32_t sample_size;
+    if( !((summary->samples_in_frame == 0 || summary->bytes_per_frame == 0 || summary->sample_size == 0)
+     && isom_get_implicit_qt_fixed_comp_audio_sample_quants( audio, &samples_per_packet, &bytes_per_frame, &sample_size )) )
+    {
+        samples_per_packet = summary->samples_in_frame;
+        bytes_per_frame    = summary->bytes_per_frame;
+        sample_size        = summary->sample_size;
+    }
+    if( (!lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_MAC3_AUDIO )
+      && !lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_MAC6_AUDIO )
+      && !lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_AGSM_AUDIO )
+      && !lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_ALAW_AUDIO )
+      && !lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_ULAW_AUDIO ))
+     && isom_set_qtff_sound_decompression_parameters( audio, summary, &format_flags, samples_per_packet, bytes_per_frame, sample_size ) < 0 )
+        return -1;
     /* Set up common audio description fields. */
-    audio->channelcount   = audio->version == 2 ? 3 : LSMASH_MIN( summary->channels, 2 );
-    audio->samplesize     = 16;
-    audio->compression_ID = QT_AUDIO_COMPRESSION_ID_VARIABLE_COMPRESSION;
-    audio->packet_size    = 0;
+    audio->samplesize  = 16;
+    audio->packet_size = 0;
     if( audio->version == 2 )
     {
         audio->channelcount                  = 3;
-        audio->compression_ID                = -2;
+        audio->compression_ID                = QT_AUDIO_COMPRESSION_ID_VARIABLE_COMPRESSION;
         audio->samplerate                    = 0x00010000;
         audio->sizeOfStructOnly              = 72;
         audio->audioSampleRate               = (union {double d; uint64_t i;}){summary->frequency}.i;
         audio->numAudioChannels              = summary->channels;
         audio->always7F000000                = 0x7F000000;
         audio->constBitsPerChannel           = 0;
-        audio->constBytesPerAudioPacket      = 0;
-        audio->constLPCMFramesPerAudioPacket = summary->samples_in_frame;
+        audio->constBytesPerAudioPacket      = bytes_per_frame;
+        audio->constLPCMFramesPerAudioPacket = samples_per_packet;
         if( lsmash_check_codec_type_identical( (lsmash_codec_type_t)audio->type, QT_CODEC_TYPE_ALAC_AUDIO ) )
         {
-            switch( summary->sample_size )
+            switch( sample_size )
             {
                 case 16 :
                     audio->formatSpecificFlags = QT_ALAC_FORMAT_FLAG_16BIT_SOURCE_DATA;
@@ -1752,11 +1931,12 @@ static int isom_set_qtff_template_audio_description( isom_audio_entry_t *audio, 
     else    /* if( audio->version == 1 ) */
     {
         audio->channelcount     = LSMASH_MIN( summary->channels, 2 );
+        audio->compression_ID   = QT_AUDIO_COMPRESSION_ID_FIXED_COMPRESSION;
         audio->samplerate       = summary->frequency << 16;
-        audio->samplesPerPacket = summary->samples_in_frame;
-        audio->bytesPerPacket   = summary->sample_size / 8;
-        audio->bytesPerFrame    = audio->bytesPerPacket * summary->channels;    /* sample_size field in stsz box is NOT used. */
-        audio->bytesPerSample   = 1 + (summary->sample_size != 8);
+        audio->samplesPerPacket = samples_per_packet;
+        audio->bytesPerPacket   = bytes_per_frame / summary->channels;
+        audio->bytesPerFrame    = bytes_per_frame;  /* sample_size field in stsz box is NOT used. */
+        audio->bytesPerSample   = 1 + (sample_size != 8);
     }
     return 0;
 }
@@ -1825,9 +2005,21 @@ int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_
                 if( specific->format == LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED )
                     continue;   /* Ignore since not fatal. */
                 lsmash_qt_audio_common_t *data = (lsmash_qt_audio_common_t *)specific->data.structured;
-                audio->revision_level  = data->revision_level;
-                audio->vendor          = data->vendor;
-                audio->compression_ID  = data->compression_ID;
+                audio->revision_level = data->revision_level;
+                audio->vendor         = data->vendor;
+                if( audio->version == 1
+                 && !isom_is_lpcm_audio( audio )
+                 && data->compression_ID != QT_AUDIO_COMPRESSION_ID_NOT_COMPRESSED )
+                {
+                    /* Compressed audio must not be set to QT_AUDIO_COMPRESSION_ID_NOT_COMPRESSED. */
+                    audio->compression_ID = data->compression_ID;
+                    if( audio->compression_ID == QT_AUDIO_COMPRESSION_ID_VARIABLE_COMPRESSION )
+                    {
+                        /* For variable compression, bytesPerPacket and bytesPerFrame are reserved and should be set to 0. */
+                        audio->bytesPerPacket = 0;
+                        audio->bytesPerFrame  = 0;
+                    }
+                }
                 break;
             }
             case LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_CHANNEL_LAYOUT :
@@ -2209,11 +2401,14 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
      && audio->file->qt_compatible
      && isom_is_qt_audio( (lsmash_codec_type_t)audio->type ) )
     {
-        if( audio->version == 1 )
+        if( audio->version == 0 )
+            isom_get_implicit_qt_fixed_comp_audio_sample_quants( audio, &summary->samples_in_frame, &summary->bytes_per_frame, &summary->sample_size );
+        else if( audio->version == 1 )
         {
-            summary->channels         = audio->bytesPerFrame / audio->bytesPerPacket;
+            summary->channels         = audio->bytesPerPacket ? audio->bytesPerFrame / audio->bytesPerPacket : audio->channelcount;
             summary->sample_size      = audio->bytesPerPacket * 8;
             summary->samples_in_frame = audio->samplesPerPacket;
+            summary->bytes_per_frame  = audio->bytesPerFrame;
         }
         else if( audio->version == 2 )
         {
@@ -2221,6 +2416,7 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
             summary->channels         = audio->numAudioChannels;
             summary->sample_size      = audio->constBitsPerChannel;
             summary->samples_in_frame = audio->constLPCMFramesPerAudioPacket;
+            summary->bytes_per_frame  = audio->constBytesPerAudioPacket;
         }
         lsmash_codec_specific_t *specific = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_COMMON,
                                                                                LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
@@ -2599,4 +2795,48 @@ int isom_compare_opaque_extensions( lsmash_summary_t *a, lsmash_summary_t *b )
             lsmash_destroy_codec_specific_data( in_cs );
     }
     return (identical_count != active_number_of_extensions);
+}
+
+int isom_get_implicit_qt_fixed_comp_audio_sample_quants
+(
+    isom_audio_entry_t *audio,
+    uint32_t           *samples_per_packet,
+    uint32_t           *constant_bytes_per_frame,
+    uint32_t           *sample_size
+)
+{
+    if( lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_MAC3_AUDIO ) )
+    {
+        *samples_per_packet       = 6;
+        *constant_bytes_per_frame = 2 * audio->channelcount;
+        *sample_size              = 8;
+    }
+    else if( lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_MAC6_AUDIO ) )
+    {
+        *samples_per_packet       = 6;
+        *constant_bytes_per_frame = audio->channelcount;
+        *sample_size              = 8;
+    }
+    else if( lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_ADPCM17_AUDIO ) )
+    {
+        *samples_per_packet       = 64;
+        *constant_bytes_per_frame = 34 * audio->channelcount;
+        *sample_size              = 16;
+    }
+    else if( lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_AGSM_AUDIO ) )
+    {
+        *samples_per_packet       = 160;
+        *constant_bytes_per_frame = 33;
+        *sample_size              = 16;
+    }
+    else if( lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_ALAW_AUDIO )
+          || lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_ULAW_AUDIO ) )
+    {
+        *samples_per_packet       = 1;
+        *constant_bytes_per_frame = audio->channelcount;
+        *sample_size              = 16;
+    }
+    else
+        return 0;
+    return 1;
 }

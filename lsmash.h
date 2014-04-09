@@ -34,7 +34,7 @@
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  1
-#define LSMASH_VERSION_MINOR  6
+#define LSMASH_VERSION_MINOR  7
 #define LSMASH_VERSION_MICRO  0
 
 #define LSMASH_VERSION_INT( a, b, c ) ((a << 16) | (b << 8) | (c))
@@ -1097,6 +1097,8 @@ typedef struct
                                              * Even if the stream is HE-AAC/aacPlus/SBR(+PS), this is base AAC's one, so 1024. */
     lsmash_mp4a_aac_sbr_mode sbr_mode;      /* SBR treatment. Currently we always set this as mp4a_AAC_SBR_NOT_SPECIFIED(Implicit signaling).
                                              * User can set this for treatment in other way. */
+    uint32_t bytes_per_frame;               /* If constant, this value is set to the number of bytes per audio frame.
+                                             * Otherwise set to 0. */
 } lsmash_audio_summary_t;
 
 /* Facilitate to make exdata (typically DecoderSpecificInfo or AudioSpecificConfig). */

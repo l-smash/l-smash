@@ -268,16 +268,25 @@ int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, void *summa
         ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( ISOM_CODEC_TYPE_SSMV_AUDIO, isom_setup_audio_description );
         ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( ISOM_CODEC_TYPE_TWOS_AUDIO, isom_setup_audio_description );
 #endif
-        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_MP4A_AUDIO, isom_setup_audio_description );
-        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_23NI_AUDIO, isom_setup_audio_description );
-        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_NONE_AUDIO, isom_setup_audio_description );
-        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_LPCM_AUDIO, isom_setup_audio_description );
-        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_SOWT_AUDIO, isom_setup_audio_description );
-        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_TWOS_AUDIO, isom_setup_audio_description );
-        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_FL32_AUDIO, isom_setup_audio_description );
-        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_FL64_AUDIO, isom_setup_audio_description );
-        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_IN24_AUDIO, isom_setup_audio_description );
-        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_IN32_AUDIO, isom_setup_audio_description );
+        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_MP4A_AUDIO,    isom_setup_audio_description );
+        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_MAC3_AUDIO,    isom_setup_audio_description );
+        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_MAC6_AUDIO,    isom_setup_audio_description );
+        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_AGSM_AUDIO,    isom_setup_audio_description );
+        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_ALAW_AUDIO,    isom_setup_audio_description );
+        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_ULAW_AUDIO,    isom_setup_audio_description );
+        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_FULLMP3_AUDIO, isom_setup_audio_description );
+        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_ADPCM2_AUDIO,  isom_setup_audio_description );
+        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_ADPCM17_AUDIO, isom_setup_audio_description );
+        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_GSM49_AUDIO,   isom_setup_audio_description );
+        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_NONE_AUDIO,    isom_setup_audio_description );
+        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_LPCM_AUDIO,    isom_setup_audio_description );
+        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_SOWT_AUDIO,    isom_setup_audio_description );
+        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_TWOS_AUDIO,    isom_setup_audio_description );
+        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_FL32_AUDIO,    isom_setup_audio_description );
+        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_FL64_AUDIO,    isom_setup_audio_description );
+        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_IN24_AUDIO,    isom_setup_audio_description );
+        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_IN32_AUDIO,    isom_setup_audio_description );
+        ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_23NI_AUDIO,    isom_setup_audio_description );
         ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_NOT_SPECIFIED, isom_setup_audio_description );
         ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( ISOM_CODEC_TYPE_TX3G_TEXT, isom_add_tx3g_description );
         ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( QT_CODEC_TYPE_TEXT_TEXT,   isom_add_qt_text_description );
@@ -1449,6 +1458,51 @@ static int isom_update_bitrate_description( isom_mdia_t *mdia )
             exdata[5] = (avgBitrate   >> 16) & 0xff;
             exdata[6] = (avgBitrate   >>  8) & 0xff;
             exdata[7] =  avgBitrate          & 0xff;
+        }
+        else if( isom_is_waveform_audio( sample_type ) )
+        {
+            isom_box_t *ext = isom_get_extension_box( &sample_entry->extensions, QT_BOX_TYPE_WAVE );
+            if( !ext )
+                return -1;
+            uint8_t *exdata      = NULL;
+            uint32_t exdata_size = 0;
+            if( ext->manager & LSMASH_BINARY_CODED_BOX )
+                exdata = isom_get_child_box_position( ext->binary, ext->size, sample_type, &exdata_size );
+            else
+            {
+                isom_wave_t *wave     = (isom_wave_t *)ext;
+                isom_box_t  *wave_ext = isom_get_extension_box( &wave->extensions, sample_type );
+                if( !wave_ext || !(wave_ext->manager & LSMASH_BINARY_CODED_BOX) )
+                    return -1;
+                exdata      = wave_ext->binary;
+                exdata_size = wave_ext->size;
+            }
+            /* Check whether exdata is valid or not. */
+            if( !exdata || exdata_size < ISOM_BASEBOX_COMMON_SIZE + 18 )
+                return -1;
+            exdata += ISOM_BASEBOX_COMMON_SIZE;
+            uint16_t cbSize = exdata[16] | (exdata[17] << 8);
+            if( exdata_size < ISOM_BASEBOX_COMMON_SIZE + 18 + cbSize )
+                return -1;
+            /* WAVEFORMATEX.nAvgBytesPerSec */
+            if( isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index ) < 0 )
+                return -1;
+            uint32_t nAvgBytesPerSec = avgBitrate / 8;
+            exdata[ 8] =  nAvgBytesPerSec        & 0xff;
+            exdata[ 9] = (nAvgBytesPerSec >>  8) & 0xff;
+            exdata[10] = (nAvgBytesPerSec >> 16) & 0xff;
+            exdata[11] = (nAvgBytesPerSec >> 24) & 0xff;
+            if( lsmash_check_codec_type_identical( sample_type, QT_CODEC_TYPE_FULLMP3_AUDIO )
+             || lsmash_check_codec_type_identical( sample_type, QT_CODEC_TYPE_MP3_AUDIO ) )
+            {
+                /* MPEGLAYER3WAVEFORMAT.nBlockSize */
+                uint32_t nSamplesPerSec  = exdata[ 4] | (exdata[ 5] << 8) | (exdata[6] << 16) | (exdata[7] << 24);
+                uint16_t nFramesPerBlock = exdata[26] | (exdata[27] << 8);
+                uint16_t padding         = 0;   /* FIXME? */
+                uint16_t nBlockSize      = (144 * (avgBitrate / nSamplesPerSec) + padding) * nFramesPerBlock;
+                exdata[24] =  nBlockSize        & 0xff;
+                exdata[25] = (nBlockSize >>  8) & 0xff;
+            }
         }
         else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_DTSC_AUDIO )
               || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_DTSE_AUDIO )
@@ -3895,10 +3949,12 @@ int lsmash_set_last_sample_delta( lsmash_root_t *root, uint32_t track_ID, uint32
     }
     isom_trak_t *trak = isom_get_trak( file, track_ID );
     if( !trak
+     || !trak->cache
      || !trak->mdia
      || !trak->mdia->mdhd
      || !trak->mdia->minf
      || !trak->mdia->minf->stbl
+     || !trak->mdia->minf->stbl->stsd
      || !trak->mdia->minf->stbl->stsz
      || !trak->mdia->minf->stbl->stts
      || !trak->mdia->minf->stbl->stts->list )
@@ -3912,6 +3968,8 @@ int lsmash_set_last_sample_delta( lsmash_root_t *root, uint32_t track_ID, uint32
             return 0;       /* no samples */
         if( sample_count > 1 )
             return -1;      /* irregular sample_count */
+        /* Set the duration of the first sample.
+         * This duration is also the duration of the last sample. */
         if( isom_add_stts_entry( stbl, sample_delta ) )
             return -1;
         return lsmash_update_track_duration( root, track_ID, 0 );
@@ -3921,20 +3979,51 @@ int lsmash_set_last_sample_delta( lsmash_root_t *root, uint32_t track_ID, uint32
         i += ((isom_stts_entry_t *)entry->data)->sample_count;
     if( sample_count < i )
         return -1;
+    int no_last = (sample_count > i);
     isom_stts_entry_t *last_stts_data = (isom_stts_entry_t *)stts->list->tail->data;
     if( !last_stts_data )
         return -1;
-    if( sample_count > i )
+    /* Consider QuikcTime fixed compression audio. */
+    isom_audio_entry_t *audio = (isom_audio_entry_t *)lsmash_get_entry_data( &trak->mdia->minf->stbl->stsd->list,
+                                                                              trak->cache->chunk.sample_description_index );
+    if( !audio )
+        return -1;
+    if( (audio->manager & LSMASH_AUDIO_DESCRIPTION)
+     && (audio->manager & LSMASH_QTFF_BASE)
+     && (audio->version == 1)
+     && (audio->compression_ID != QT_AUDIO_COMPRESSION_ID_VARIABLE_COMPRESSION) )
     {
+        if( audio->samplesPerPacket == 0 )
+            return -1;
+        int exclude_last_sample = no_last ? 0 : 1;
+        uint32_t j = audio->samplesPerPacket;
+        for( lsmash_entry_t *entry = stts->list->tail; entry && j > 1; entry = entry->prev )
+        {
+            isom_stts_entry_t *stts_data = (isom_stts_entry_t *)entry->data;
+            if( !stts_data )
+                return -1;
+            for( uint32_t k = exclude_last_sample; k < stts_data->sample_count && j > 1; k++ )
+            {
+                sample_delta -= stts_data->sample_delta;
+                --j;
+            }
+            exclude_last_sample = 0;
+        }
+    }
+    /* Set sample_delta. */
+    if( no_last )
+    {
+        /* The duration of the last sample is not set yet. */
         if( sample_count - i > 1 )
             return -1;
         /* Add a sample_delta. */
         if( sample_delta == last_stts_data->sample_delta )
             ++ last_stts_data->sample_count;
-        else if( isom_add_stts_entry( stbl, sample_delta ) )
+        else if( isom_add_stts_entry( stbl, sample_delta ) < 0 )
             return -1;
     }
-    else if( sample_count == i && isom_replace_last_sample_delta( stbl, sample_delta ) )
+    /* The duration of the last sample is already set. Replace it with a new one. */
+    else if( isom_replace_last_sample_delta( stbl, sample_delta ) < 0 )
         return -1;
     return lsmash_update_track_duration( root, track_ID, sample_delta );
 }
@@ -4859,30 +4948,61 @@ static int isom_write_pooled_samples( lsmash_file_t *file, isom_sample_pool_t *p
     return 0;
 }
 
-static int isom_update_sample_tables( isom_trak_t *trak, lsmash_sample_t *sample )
+static int isom_update_sample_tables( isom_trak_t *trak, lsmash_sample_t *sample, uint32_t *samples_per_packet )
 {
-    /* Add a sample_size and increment sample_count. */
-    uint32_t sample_count = isom_add_size( trak, sample->length );
-    if( !sample_count )
-        return -1;
-    /* Add a decoding timestamp and a composition timestamp. */
-    if( isom_add_timestamp( trak, sample->dts, sample->cts ) )
-        return -1;
-    /* Add a sync point if needed. */
-    if( isom_add_sync_point( trak, sample_count, &sample->prop ) )
-        return -1;
-    /* Add a partial sync point if needed. */
-    if( isom_add_partial_sync( trak, sample_count, &sample->prop ) )
-        return -1;
-    /* Add leading, independent, disposable and redundant information if needed. */
-    if( isom_add_dependency_type( trak, &sample->prop ) )
-        return -1;
-    /* Group samples into random access point type if needed. */
-    if( isom_group_random_access( (isom_box_t *)trak, &sample->prop ) < 0 )
-        return -1;
-    /* Group samples into random access recovery point type if needed. */
-    if( isom_group_roll_recovery( (isom_box_t *)trak, &sample->prop ) < 0 )
-        return -1;
+    isom_audio_entry_t *audio = (isom_audio_entry_t *)lsmash_get_entry_data( &trak->mdia->minf->stbl->stsd->list, sample->index );
+    if( (audio->manager & LSMASH_AUDIO_DESCRIPTION)
+     && (audio->manager & LSMASH_QTFF_BASE)
+     && (audio->version == 1)
+     && (audio->compression_ID != QT_AUDIO_COMPRESSION_ID_VARIABLE_COMPRESSION) )
+    {
+        /* Add entries of the sample table for each uncompressed sample. */
+        uint64_t sample_duration = trak->mdia->mdhd->timescale / (audio->samplerate >> 16);
+        if( audio->samplesPerPacket == 0 || sample_duration == 0 )
+            return -1;
+        uint64_t sample_dts = sample->dts;
+        uint64_t sample_cts = sample->cts;
+        for( uint32_t i = 0; i < audio->samplesPerPacket; i++ )
+        {
+            /* Add a size of uncomressed audio and increment sample_count.
+             * This points to individual uncompressed audio samples, each one byte in size, within the compressed frames. */
+            uint32_t sample_count = isom_add_size( trak, 1 );
+            if( sample_count == 0 )
+                return -1;
+            /* Add a decoding timestamp and a composition timestamp. */
+            if( isom_add_timestamp( trak, sample_dts, sample_cts ) < 0 )
+                return -1;
+            sample_dts += sample_duration;
+            sample_cts += sample_duration;
+        }
+        *samples_per_packet = audio->samplesPerPacket;
+    }
+    else
+    {
+        /* Add a sample_size and increment sample_count. */
+        uint32_t sample_count = isom_add_size( trak, sample->length );
+        if( sample_count == 0 )
+            return -1;
+        /* Add a decoding timestamp and a composition timestamp. */
+        if( isom_add_timestamp( trak, sample->dts, sample->cts ) < 0 )
+            return -1;
+        /* Add a sync point if needed. */
+        if( isom_add_sync_point( trak, sample_count, &sample->prop ) < 0 )
+            return -1;
+        /* Add a partial sync point if needed. */
+        if( isom_add_partial_sync( trak, sample_count, &sample->prop ) < 0 )
+            return -1;
+        /* Add leading, independent, disposable and redundant information if needed. */
+        if( isom_add_dependency_type( trak, &sample->prop ) < 0 )
+            return -1;
+        /* Group samples into random access point type if needed. */
+        if( isom_group_random_access( (isom_box_t *)trak, &sample->prop ) < 0 )
+            return -1;
+        /* Group samples into random access recovery point type if needed. */
+        if( isom_group_roll_recovery( (isom_box_t *)trak, &sample->prop ) < 0 )
+            return -1;
+        *samples_per_packet = 1;
+    }
     /* Add a chunk if needed. */
     return isom_add_chunk( trak, sample );
 }
@@ -4930,7 +5050,7 @@ static int isom_output_cached_chunk( isom_trak_t *trak )
     return isom_write_pooled_samples( file, chunk->pool );
 }
 
-static int isom_pool_sample( isom_sample_pool_t *pool, lsmash_sample_t *sample )
+static int isom_pool_sample( isom_sample_pool_t *pool, lsmash_sample_t *sample, uint32_t samples_per_packet )
 {
     uint64_t pool_size = pool->size + sample->length;
     if( pool->alloc < pool_size )
@@ -4948,14 +5068,15 @@ static int isom_pool_sample( isom_sample_pool_t *pool, lsmash_sample_t *sample )
     }
     memcpy( pool->data + pool->size, sample->data, sample->length );
     pool->size          = pool_size;
-    pool->sample_count += 1;
+    pool->sample_count += samples_per_packet;
     lsmash_delete_sample( sample );
     return 0;
 }
 
 static int isom_append_sample_internal( isom_trak_t *trak, lsmash_sample_t *sample )
 {
-    int flush = isom_update_sample_tables( trak, sample );
+    uint32_t samples_per_packet;
+    int flush = isom_update_sample_tables( trak, sample, &samples_per_packet );
     if( flush < 0 )
         return -1;
     /* flush == 1 means pooled samples must be flushed. */
@@ -5001,7 +5122,7 @@ static int isom_append_sample_internal( isom_trak_t *trak, lsmash_sample_t *samp
          * right next to the previous chunk of the same track or not. */
     }
     /* anyway the current sample must be pooled. */
-    return isom_pool_sample( current_pool, sample );
+    return isom_pool_sample( current_pool, sample, samples_per_packet );
 }
 
 /* This function is for non-fragmented movie. */
@@ -5439,13 +5560,14 @@ static int isom_append_fragment_sample_internal_initial( isom_trak_t *trak, lsma
 {
     /* Update the sample tables of this track fragment.
      * If a new chunk was created, append the previous one to the pool of this movie fragment. */
-    int delimit = isom_update_sample_tables( trak, sample );
+    uint32_t samples_per_packet;
+    int delimit = isom_update_sample_tables( trak, sample, &samples_per_packet );
     if( delimit < 0 )
         return -1;
     else if( delimit == 1 )
         isom_append_fragment_track_run( trak->file, &trak->cache->chunk );
     /* Add a new sample into the pool of this track fragment. */
-    if( isom_pool_sample( trak->cache->chunk.pool, sample ) )
+    if( isom_pool_sample( trak->cache->chunk.pool, sample, samples_per_packet ) )
         return -1;
     trak->cache->fragment->has_samples   = 1;
     trak->cache->fragment->sample_count += 1;
@@ -5462,7 +5584,7 @@ static int isom_append_fragment_sample_internal( isom_traf_t *traf, lsmash_sampl
     else if( delimit == 1 )
         isom_append_fragment_track_run( traf->file, &traf->cache->chunk );
     /* Add a new sample into the pool of this track fragment. */
-    if( isom_pool_sample( traf->cache->chunk.pool, sample ) )
+    if( isom_pool_sample( traf->cache->chunk.pool, sample, 1 ) )
         return -1;
     traf->cache->fragment->has_samples   = 1;
     traf->cache->fragment->sample_count += 1;

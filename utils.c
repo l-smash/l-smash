@@ -176,6 +176,18 @@ void lsmash_bs_put_be32_from_64( lsmash_bs_t *bs, uint64_t value )
     lsmash_bs_put_be32( bs, (uint32_t)(value&0xffffffff) );
 }
 
+void lsmash_bs_put_le16( lsmash_bs_t *bs, uint16_t value )
+{
+    lsmash_bs_put_byte( bs, (uint8_t)(value&0xff) );
+    lsmash_bs_put_byte( bs, (uint8_t)((value>>8)&0xff) );
+}
+
+void lsmash_bs_put_le32( lsmash_bs_t *bs, uint32_t value )
+{
+    lsmash_bs_put_le16( bs, (uint16_t)(value&0xffff) );
+    lsmash_bs_put_le16( bs, (uint16_t)((value>>16)&0xffff) );
+}
+
 int lsmash_bs_flush_buffer( lsmash_bs_t *bs )
 {
     if( !bs )

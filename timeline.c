@@ -188,34 +188,10 @@ static void isom_get_qt_fixed_comp_audio_sample_quants
     isom_audio_entry_t *audio = (isom_audio_entry_t *)description;
     if( audio->version == 0 )
     {
-        if( lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_MAC3_AUDIO ) )
+        uint32_t dummy;
+        if( !isom_get_implicit_qt_fixed_comp_audio_sample_quants( audio, samples_per_packet, constant_sample_size, &dummy ) )
         {
-            *samples_per_packet   = 6;
-            *constant_sample_size = 2 * audio->channelcount;
-        }
-        else if( lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_MAC6_AUDIO ) )
-        {
-            *samples_per_packet   = 6;
-            *constant_sample_size = audio->channelcount;
-        }
-        else if( lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_ADPCM17_AUDIO ) )
-        {
-            *samples_per_packet   = 64;
-            *constant_sample_size = 34 * audio->channelcount;
-        }
-        else if( lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_AGSM_AUDIO ) )
-        {
-            *samples_per_packet   = 160;
-            *constant_sample_size = 33;
-        }
-        else if( lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_ALAW_AUDIO )
-              || lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_ULAW_AUDIO ) )
-        {
-            *samples_per_packet   = 1;
-            *constant_sample_size = audio->channelcount;
-        }
-        else    /* LPCM */
-        {
+            /* LPCM */
             if( !isom_is_lpcm_audio( audio ) )
                 lsmash_log( timeline, LSMASH_LOG_WARNING, "unsupported implicit sample table!\n" );
             *samples_per_packet   = 1;
