@@ -406,7 +406,9 @@ static int decide_brands( option_t *opt )
 
 static int parse_global_options( int argc, char **argv, muxer_t *muxer )
 {
-    if( !strcasecmp( argv[1], "-h" ) || !strcasecmp( argv[1], "--help" ) )
+    if ( argc < 2 )
+        return -1;
+    else if( !strcasecmp( argv[1], "-h" ) || !strcasecmp( argv[1], "--help" ) )
     {
         muxer->opt.help = 1;
         return 0;
