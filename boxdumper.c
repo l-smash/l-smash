@@ -76,7 +76,12 @@ static int boxdumper_error
 
 int main( int argc, char *argv[] )
 {
-    if( !strcasecmp( argv[1], "-h" ) || !strcasecmp( argv[1], "--help" ) )
+    if ( argc < 2 )
+    {
+        display_help();
+        return -1;
+    }
+    else if( !strcasecmp( argv[1], "-h" ) || !strcasecmp( argv[1], "--help" ) )
     {
         display_help();
         return 0;
@@ -85,11 +90,6 @@ int main( int argc, char *argv[] )
     {
         display_version();
         return 0;
-    }
-    else if( argc < 2 )
-    {
-        display_help();
-        return -1;
     }
     int dump_box = 1;
     int chapter = 0;
