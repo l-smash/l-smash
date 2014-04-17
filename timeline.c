@@ -645,7 +645,7 @@ static int isom_get_roll_recovery_grouping_info
                     info->prop.ra_flags |= ISOM_SAMPLE_RANDOM_ACCESS_FLAG_PRE_ROLL_END;
             }
         }
-        else if( *sample_number_in_sbgp_roll_entry == 1 )
+        else if( *sample_number_in_sbgp_roll_entry == 1 && group_description_index )
             lsmash_log( timeline, LSMASH_LOG_WARNING, "a description of roll recoveries is not found in the Sample Group Description Box.\n" );
     }
     isom_increment_sample_number_in_entry( sample_number_in_sbgp_roll_entry, sbgp_roll_entry, assignment->sample_count );
@@ -679,7 +679,7 @@ static int isom_get_random_access_point_grouping_info
                                  : ISOM_SAMPLE_RANDOM_ACCESS_FLAG_RAP;
             *distance = 0;
         }
-        else if( *sample_number_in_sbgp_rap_entry == 1 )
+        else if( *sample_number_in_sbgp_rap_entry == 1 && group_description_index )
             lsmash_log( timeline, LSMASH_LOG_WARNING, "a description of random access points is not found in the Sample Group Description Box.\n" );
     }
     isom_increment_sample_number_in_entry( sample_number_in_sbgp_rap_entry, sbgp_rap_entry, assignment->sample_count );

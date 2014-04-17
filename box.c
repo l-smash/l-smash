@@ -1538,7 +1538,7 @@ static void isom_remove_styp( isom_styp_t *styp )
         return;
     if( styp->compatible_brands )
         lsmash_free( styp->compatible_brands );
-    lsmash_free( styp );
+    isom_remove_box_in_list( styp, lsmash_file_t );
 }
 
 static void isom_remove_sidx( isom_sidx_t *sidx )
@@ -1546,7 +1546,7 @@ static void isom_remove_sidx( isom_sidx_t *sidx )
     if( !sidx )
         return;
     lsmash_remove_list( sidx->list, NULL );
-    lsmash_free( sidx );
+    isom_remove_box_in_list( sidx, lsmash_file_t );
 }
 
 /* box size updaters */
@@ -3552,10 +3552,15 @@ isom_styp_t *isom_add_styp( lsmash_file_t *file )
     return styp;
 }
 
-int isom_add_sidx( lsmash_file_t *file )
+isom_sidx_t *isom_add_sidx( lsmash_file_t *file )
 {
-    isom_create_list_box( sidx, file, ISOM_BOX_TYPE_SIDX, LSMASH_BOX_PRECEDENCE_ISOM_SIDX );
-    return 0;
+    isom_create_list_box_null( sidx, file, ISOM_BOX_TYPE_SIDX, LSMASH_BOX_PRECEDENCE_ISOM_SIDX );
+    if( lsmash_add_entry( &file->sidx_list, sidx ) )
+    {
+        lsmash_remove_entry_tail( &file->extensions, isom_remove_sidx );
+        return NULL;
+    }
+    return sidx;
 }
 
 /* Public functions */

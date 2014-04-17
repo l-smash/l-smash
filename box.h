@@ -1416,13 +1416,29 @@ typedef struct
 
 typedef struct
 {
-    uint8_t  has_samples;
-    uint8_t  roll_grouping;
-    uint8_t  rap_grouping;
-    uint32_t traf_number;
-    uint32_t last_duration;     /* the last sample duration in this track fragment */
-    uint64_t largest_cts;       /* the largest CTS in this track fragments */
-    uint64_t sample_count;      /* the number of samples in this track fragments */
+    uint64_t largest_cts;          /* the largest CTS of a subsegment of the reference stream */
+    uint64_t smallest_cts;         /* the smallest CTS of a subsegment of the reference stream */
+    uint64_t first_cts;            /* the CTS of the first sample of a subsegment of the reference stream  */
+    uint64_t segment_duration;     /* the sum of the subsegment_duration of preceeding subsegments */
+    /* SAP related info within the active subsegment of the reference stream */
+    uint64_t                  first_ed_cts;     /* the earliest CTS of decodable samples after the first recovery point */
+    uint64_t                  first_rp_cts;     /* the CTS of the first recovery point */
+    uint32_t                  first_rp_number;  /* the number of the first recovery point */
+    uint32_t                  first_ra_number;  /* the number of the first random accessible sample */
+    lsmash_random_access_flag first_ra_flags;   /* the flags of the first random accessible sample */
+    int                       decodable;
+} isom_subsegment_t;
+
+typedef struct
+{
+    uint8_t           has_samples;
+    uint8_t           roll_grouping;
+    uint8_t           rap_grouping;
+    uint32_t          traf_number;
+    uint32_t          last_duration;        /* the last sample duration in this track fragment */
+    uint64_t          largest_cts;          /* the largest CTS in this track fragment */
+    uint64_t          sample_count;         /* the number of samples in this track fragment */
+    isom_subsegment_t subsegment;
 } isom_fragment_t;
 
 typedef struct
@@ -1688,6 +1704,7 @@ typedef struct
 {
     isom_moof_t         *movie;             /* the address corresponding to the current Movie Fragment Box */
     uint64_t             fragment_count;    /* the number of movie fragments we created */
+    uint64_t             first_moof_pos;
     uint64_t             pool_size;         /* the total sample size in the current movie fragment */
     uint64_t             sample_count;      /* the number of samples within the current movie fragment */
     lsmash_entry_list_t *pool;              /* samples pooled to interleave for the current movie fragment */
@@ -1785,13 +1802,13 @@ typedef isom_ftyp_t isom_styp_t;
  *   For SAPs of type 5 and 6, no specific signalling in the ISO Base Media file format is supported. */
 typedef struct
 {
-    unsigned int reference_type : 1;    /* 1: the reference is to a Segment Index Box
+    unsigned int reference_type  : 1;    /* 1: the reference is to a Segment Index Box
                                          * 0: the reference is to media content
                                          *      For files based on the ISO Base Media file format, the reference is to a
                                          *      Movie Fragment Box.
                                          *   If a separate index segment is used, then entries with reference type 1 are
                                          *   in the index segment, and entries with reference type 0 are in the media file. */
-    unsigned int reference_size : 31;   /* the distance in bytes from the first byte of the referenced item to the first
+    unsigned int reference_size  : 31;  /* the distance in bytes from the first byte of the referenced item to the first
                                          * byte of the next referenced item, or in the case of the last entry, the end of
                                          * the referenced material */
     uint32_t     subsegment_duration;   /* when the reference is to Segment Index Box, i.e. reference_type is equal to 1:
@@ -1804,11 +1821,11 @@ typedef struct
                                          *   subsegment of the stream) and the earliest presentation time of any access
                                          *   unit of the reference stream in the referenced subsegment;
                                          * The duration is expressed in the timescale of the enclosing Segment Index Box. */
-    unsigned int start_with_SAP : 1;    /* whether the referenced subsegments start with a SAP */
-    unsigned int SAP_type       : 3;    /* a SAP type or the value 0
+    unsigned int starts_with_SAP : 1;   /* whether the referenced subsegments start with a SAP */
+    unsigned int SAP_type        : 3;   /* a SAP type or the value 0
                                          *   When starting with a SAP, the value 0 means a SAP may be of an unknown type.
                                          *   Otherwise, the value 0 means no information of SAPs is provided. */
-    unsigned int SAP_delta_time : 28;   /* TSAP of the first SAP, in decoding order, in the referenced subsegment for
+    unsigned int SAP_delta_time  : 28;  /* TSAP of the first SAP, in decoding order, in the referenced subsegment for
                                          * the reference stream
                                          *   If the referenced subsegments do not contain a SAP, SAP_delta_time is
                                          *   reserved with the value 0, otherwise SAP_delta_time is the difference between
@@ -1849,6 +1866,7 @@ struct lsmash_file_tag
     isom_ftyp_t         *ftyp;          /* File Type Box */
     lsmash_entry_list_t  styp_list;     /* Segment Type Box List */
     isom_moov_t         *moov;          /* Movie Box */
+    lsmash_entry_list_t  sidx_list;     /* Segment Index Box List */
     lsmash_entry_list_t  moof_list;     /* Movie Fragment Box List */
     isom_mdat_t         *mdat;          /* Media Data Box */
     isom_free_t         *free;          /* Free Space Box */
@@ -1879,6 +1897,7 @@ struct lsmash_file_tag
         uint8_t forbid_tref;                /* If set to 1, track reference is forbidden. */
         uint8_t undefined_64_ver;           /* If set to 1, 64-bit version fields, e.g. duration, are undefined. */
         uint8_t allow_moof_base;            /* If set to 1, default-base-is-moof is available for muxing. */
+        uint8_t media_segment;              /* If set to 1, this file is a media segment. */
 };
 
 /* ROOT */
@@ -2114,7 +2133,7 @@ struct lsmash_root_tag
 /* Pre-defined precedence */
 #define LSMASH_BOX_PRECEDENCE_ISOM_FTYP (LSMASH_BOX_PRECEDENCE_H  -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_STYP (LSMASH_BOX_PRECEDENCE_H  -  0 * LSMASH_BOX_PRECEDENCE_S)
-#define LSMASH_BOX_PRECEDENCE_ISOM_SIDX (LSMASH_BOX_PRECEDENCE_N  +  1 * LSMASH_BOX_PRECEDENCE_S)   /* placed before any 'moof' */
+#define LSMASH_BOX_PRECEDENCE_ISOM_SIDX (LSMASH_BOX_PRECEDENCE_N  +  1 * LSMASH_BOX_PRECEDENCE_S)   /* shall be placed before any 'moof' of the documented subsegments */
 #define LSMASH_BOX_PRECEDENCE_ISOM_MOOV (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_MVHD (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_IODS (LSMASH_BOX_PRECEDENCE_HM -  2 * LSMASH_BOX_PRECEDENCE_S)
@@ -2200,7 +2219,7 @@ struct lsmash_root_tag
 #define LSMASH_BOX_PRECEDENCE_ISOM_MFHD (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_TRAF (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_TFHD (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)
-#define LSMASH_BOX_PRECEDENCE_ISOM_TFDT (LSMASH_BOX_PRECEDENCE_HM -  1 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_TFDT (LSMASH_BOX_PRECEDENCE_HM -  1 * LSMASH_BOX_PRECEDENCE_S)   /* shall be positioned after 'tfhd' and before 'trun' */
 #define LSMASH_BOX_PRECEDENCE_ISOM_TRUN (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_MFRA (LSMASH_BOX_PRECEDENCE_L  -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_TFRA (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
@@ -2525,7 +2544,7 @@ int isom_add_mfro( isom_mfra_t *mfra );
 int isom_add_mdat( lsmash_file_t *file );
 int isom_add_free( void *parent_box );
 isom_styp_t *isom_add_styp( lsmash_file_t *file );
-int isom_add_sidx( lsmash_file_t *file );
+isom_sidx_t *isom_add_sidx( lsmash_file_t *file );
 
 void isom_remove_sample_description( isom_sample_entry_t *sample );
 void isom_remove_unknown_box( isom_unknown_box_t *unknown_box );

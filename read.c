@@ -351,7 +351,7 @@ static int isom_read_sidx( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, LSMASH_BOX_TYPE_UNSPECIFIED ) )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( sidx, lsmash_file_t );
+    isom_add_box_return_pointer( sidx, lsmash_file_t );
     lsmash_bs_t *bs = file->bs;
     isom_read_box_rest( bs, box );
     sidx->reference_ID = lsmash_bs_get_be32( bs );
@@ -386,9 +386,9 @@ static int isom_read_sidx( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
         data->reference_size =  temp32        & 0x7FFFFFFF;
         data->subsegment_duration = lsmash_bs_get_be32( bs );
         temp32 = lsmash_bs_get_be32( bs );
-        data->start_with_SAP = (temp32 >> 31) & 0x00000001;
-        data->SAP_type       = (temp32 >> 28) & 0x00000007;
-        data->SAP_delta_time =  temp32        & 0x0FFFFFFF;
+        data->starts_with_SAP = (temp32 >> 31) & 0x00000001;
+        data->SAP_type        = (temp32 >> 28) & 0x00000007;
+        data->SAP_delta_time  =  temp32        & 0x0FFFFFFF;
     }
     box->size = lsmash_bs_get_pos( bs );
     file->flags |= LSMASH_FILE_MODE_INDEX;

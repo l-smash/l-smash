@@ -1323,6 +1323,42 @@ static int isom_write_free( lsmash_bs_t *bs, isom_box_t *box )
     return 0;
 }
 
+static int isom_write_sidx( lsmash_bs_t *bs, isom_box_t *box )
+{
+    isom_sidx_t *sidx = (isom_sidx_t *)box;
+    isom_bs_put_box_common( bs, sidx );
+    lsmash_bs_put_be32( bs, sidx->reference_ID );
+    lsmash_bs_put_be32( bs, sidx->timescale );
+    if( sidx->version == 0 )
+    {
+        lsmash_bs_put_be32( bs, sidx->earliest_presentation_time );
+        lsmash_bs_put_be32( bs, sidx->first_offset );
+    }
+    else
+    {
+        lsmash_bs_put_be64( bs, sidx->earliest_presentation_time );
+        lsmash_bs_put_be64( bs, sidx->first_offset );
+    }
+    lsmash_bs_put_be16( bs, sidx->reserved );
+    lsmash_bs_put_be16( bs, sidx->reference_count );
+    for( lsmash_entry_t *entry = sidx->list->head; entry; entry = entry->next )
+    {
+        isom_sidx_referenced_item_t *data = (isom_sidx_referenced_item_t *)entry->data;
+        if( !data )
+            return -1;
+        uint32_t temp32;
+        temp32 = (data->reference_type << 31)
+               |  data->reference_size;
+        lsmash_bs_put_be32( bs, temp32 );
+        lsmash_bs_put_be32( bs, data->subsegment_duration );
+        temp32 = (data->starts_with_SAP << 31)
+               | (data->SAP_type        << 28)
+               |  data->SAP_delta_time;
+        lsmash_bs_put_be32( bs, temp32 );
+    }
+    return 0;
+}
+
 int isom_write_box( lsmash_bs_t *bs, isom_box_t *box )
 {
     assert( bs );
@@ -1407,6 +1443,8 @@ void isom_set_box_writer( isom_box_t *box )
 #define ADD_BOX_WRITER_TABLE_ELEMENT( type, reader_func ) \
     box_writer_table[i++] = (struct box_writer_table_tag){ type, reader_func }
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_FTYP, isom_write_ftyp );
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STYP, isom_write_ftyp );
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SIDX, isom_write_sidx );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MOOV, isom_write_moov );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MVHD, isom_write_mvhd );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_IODS, isom_write_iods );
