@@ -735,9 +735,12 @@ static void replace_with_valid_brand( remuxer_t *remuxer )
 
 static int set_movie_parameters( remuxer_t *remuxer )
 {
-    int       num_input = remuxer->num_input;
-    input_t  *input     = remuxer->input;
-    output_t *output    = remuxer->output;
+    int            num_input = remuxer->num_input;
+    input_t       *input     = remuxer->input;
+    output_t      *output    = remuxer->output;
+    output_file_t *out_file  = &output->file;
+    if( remuxer->fragment_base_track )
+        out_file->param.mode |= LSMASH_FILE_MODE_FRAGMENTED;
     replace_with_valid_brand( remuxer );
     /* Pick the most used major_brands. */
     lsmash_brand_type major_brand      [num_input];
@@ -765,8 +768,7 @@ static int set_movie_parameters( remuxer_t *remuxer )
             }
         ++num_major_brand;
     }
-    output_file_t *out_file        = &output->file;
-    uint32_t       most_used_count = 0;
+    uint32_t most_used_count = 0;
     for( uint32_t i = 0; i < num_major_brand; i++ )
         if( major_brand_count[i] > most_used_count )
         {
@@ -804,8 +806,6 @@ static int set_movie_parameters( remuxer_t *remuxer )
     out_file->param.brand_count = num_output_brands;
     out_file->param.brands      = output_brands;
     /* Set up a file. */
-    if( remuxer->fragment_base_track )
-        out_file->param.mode |= LSMASH_FILE_MODE_FRAGMENTED;
     out_file->fh = lsmash_set_file( output->root, &out_file->param );
     if( !out_file->fh )
         return ERROR_MSG( "failed to add an output file into a ROOT.\n" );
