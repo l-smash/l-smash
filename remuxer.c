@@ -134,6 +134,7 @@ typedef struct
     uint32_t             chap_track;
     char                *chap_file;
     uint16_t             default_language;
+    uint32_t             fragment_base_track;
 } remuxer_t;
 
 typedef struct
@@ -266,6 +267,8 @@ static void display_help( void )
              "                              If this option is not used, it defaults to 1.\n"
              "    --language <string>       Specify the default language for all the output tracks.\n"
              "                              This option is overridden by the track options.\n"
+             "    --fragment <integer>      Enable fragmentation per random accessible point.\n"
+             "                              Set which track the fragmentation is based on.\n"
              "Track options:\n"
              "    remove                    Remove this track\n"
              "    disable                   Disable this track\n"
@@ -580,6 +583,14 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
                 return ERROR_MSG( "--chapter requires an argument.\n" );
             remuxer->default_language = lsmash_pack_iso_language( argv[i] );
         }
+        else if( !strcasecmp( argv[i], "--fragment" ) )
+        {
+            if( ++i == argc )
+                return ERROR_MSG( "--fragment requires an argument.\n" );
+            remuxer->fragment_base_track = atoi( argv[i] );
+            if( remuxer->fragment_base_track == 0 )
+                return ERROR_MSG( "%s is an invalid track number.\n", argv[i] );
+        }
         else
             return ERROR_MSG( "unkown option found: %s\n", argv[i] );
     }
@@ -693,7 +704,8 @@ static void replace_with_valid_brand( remuxer_t *remuxer )
                      && ((*brand >> 16) & 0xFF) == 'g'
                      && (((*brand >>  8) & 0xFF) == 'p' || ((*brand >>  8) & 0xFF) == 'r') )
                     {
-                        if( video_track_count   <= 1 && audio_track_count   <= 1
+                        if( remuxer->fragment_base_track == 0   /* Movie fragments are not allowed in '3gp4' and '3gp5'. */
+                         && video_track_count   <= 1 && audio_track_count   <= 1
                          && video_num_summaries <= 1 && audio_num_summaries <= 1 )
                             continue;
                         /* Replace with the General Profile for maximum compatibility. */
@@ -792,6 +804,8 @@ static int set_movie_parameters( remuxer_t *remuxer )
     out_file->param.brand_count = num_output_brands;
     out_file->param.brands      = output_brands;
     /* Set up a file. */
+    if( remuxer->fragment_base_track )
+        out_file->param.mode |= LSMASH_FILE_MODE_FRAGMENTED;
     out_file->fh = lsmash_set_file( output->root, &out_file->param );
     if( !out_file->fh )
         return ERROR_MSG( "failed to add an output file into a ROOT.\n" );
@@ -1025,6 +1039,48 @@ static void set_reference_chapter_track( remuxer_t *remuxer )
         lsmash_create_reference_chapter_track( remuxer->output->root, remuxer->chap_track, remuxer->chap_file );
 }
 
+static int flush_movie_fragment( remuxer_t *remuxer )
+{
+    input_t        *inputs    = remuxer->input;
+    output_t       *output    = remuxer->output;
+    output_movie_t *out_movie = &output->file.movie;
+    uint32_t out_current_track_number = 1;
+    for( uint32_t i = 1; i <= remuxer->num_input; i++ )
+    {
+        input_t       *in       = &inputs[i - 1];
+        input_movie_t *in_movie = &in->file.movie;
+        for( uint32_t j = 1; j <= in_movie->num_tracks; j++ )
+        {
+            input_track_t *in_track = &in_movie->track[j - 1];
+            if( !in_track->active )
+                continue;
+            if( !in_track->reach_end_of_media_timeline )
+            {
+                lsmash_sample_t sample;
+                if( lsmash_get_sample_info_from_media_timeline( in->root, in_track->track_ID, in_track->current_sample_number, &sample ) < 0 )
+                {
+                    ERROR_MSG( "failed to get the information of the next sample.\n" );
+                    return -1;
+                }
+                output_track_t *out_track = &out_movie->track[out_current_track_number - 1];
+                if( lsmash_flush_pooled_samples( output->root, out_track->track_ID, sample.dts - out_track->last_sample_dts ) < 0 )
+                {
+                    ERROR_MSG( "failed to flush the rest of samples in a fragment.\n" );
+                    return -1;
+                }
+            }
+            if( ++out_current_track_number > out_movie->num_tracks )
+                break;
+        }
+    }
+    if( lsmash_create_fragment_movie( output->root ) < 0 )
+    {
+        ERROR_MSG( "failed to create a movie fragment.\n" );
+        return -1;
+    }
+    return 0;
+}
+
 static int do_remux( remuxer_t *remuxer )
 {
 #define LSMASH_MAX( a, b ) ((a) > (b) ? (a) : (b))
@@ -1038,6 +1094,7 @@ static int do_remux( remuxer_t *remuxer )
     uint32_t num_active_input_tracks     = out_movie->num_tracks;
     uint64_t total_media_size            = 0;
     uint8_t  sample_count                = 0;
+    uint8_t  pending_flush_fragments     = 0;
     while( 1 )
     {
         input_t       *in       = &inputs[input_movie_number - 1];
@@ -1085,8 +1142,26 @@ static int do_remux( remuxer_t *remuxer )
             }
             if( sample )
             {
+                /* Flushing the active movie fragment is pending until random accessible point sample within all active tracks are ready. */
+                if( remuxer->fragment_base_track )
+                {
+                    if( pending_flush_fragments == 0 )
+                        pending_flush_fragments = (remuxer->fragment_base_track == out_movie->current_track_number
+                                                && sample->prop.ra_flags != ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE);
+                    else if( num_consecutive_sample_skip == num_active_input_tracks )
+                    {
+                        if( flush_movie_fragment( remuxer ) < 0 )
+                        {
+                            ERROR_MSG( "failed to flush a movie fragment.\n" );
+                            break;
+                        }
+                        pending_flush_fragments = 0;
+                    }
+                }
                 /* Append a sample if meeting a condition. */
-                if( in_track->dts <= largest_dts || num_consecutive_sample_skip == num_active_input_tracks )
+                if( pending_flush_fragments == 0
+                  ? in_track->dts <= largest_dts || num_consecutive_sample_skip == num_active_input_tracks
+                  : sample->prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE )
                 {
                     output_track_t *out_track = &out_movie->track[ out_movie->current_track_number - 1 ];
                     sample->index = sample->index > in_track->num_summaries ? in_track->num_summaries
@@ -1188,14 +1263,18 @@ static int construct_timeline_maps( remuxer_t *remuxer )
                     if( lsmash_create_explicit_timeline_map( output->root, out_track->track_ID, empty_edit ) )
                         return ERROR_MSG( "failed to create a empty duration.\n" );
                 }
-                edit.duration = (out_track->last_sample_dts + out_track->last_sample_delta - in_track->skip_duration) * timescale_convert_multiplier;
-                edit.rate     = ISOM_EDIT_MODE_NORMAL;
+                if( remuxer->fragment_base_track == 0 )
+                    edit.duration = (out_track->last_sample_dts + out_track->last_sample_delta - in_track->skip_duration) * timescale_convert_multiplier;
+                else
+                    edit.duration = ISOM_EDIT_DURATION_IMPLICIT;
+                edit.rate = ISOM_EDIT_MODE_NORMAL;
                 if( lsmash_create_explicit_timeline_map( output->root, out_track->track_ID, edit ) )
                     return ERROR_MSG( "failed to create a explicit timeline map.\n" );
             }
             else if( lsmash_copy_timeline_map( output->root, out_track->track_ID, input[i].root, in_track->track_ID ) )
                 return ERROR_MSG( "failed to copy timeline maps.\n" );
         }
+    out_movie->current_track_number = 1;
     return 0;
 }
 
@@ -1263,9 +1342,11 @@ int main( int argc, char *argv[] )
         return REMUXER_ERR( "failed to parse command line options.\n" );
     if( prepare_output( &remuxer ) )
         return REMUXER_ERR( "failed to set up preparation for output.\n" );
+    if( remuxer.fragment_base_track && construct_timeline_maps( &remuxer ) )
+        return REMUXER_ERR( "failed to construct timeline maps.\n" );
     if( do_remux( &remuxer ) )
         return REMUXER_ERR( "failed to remux movies.\n" );
-    if( construct_timeline_maps( &remuxer ) )
+    if( remuxer.fragment_base_track == 0 && construct_timeline_maps( &remuxer ) )
         return REMUXER_ERR( "failed to construct timeline maps.\n" );
     if( finish_movie( &remuxer ) )
         return REMUXER_ERR( "failed to finish output movie.\n" );
