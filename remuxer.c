@@ -1060,7 +1060,8 @@ static int flush_movie_fragment( remuxer_t *remuxer )
                 if( lsmash_get_sample_info_from_media_timeline( in->root, in_track->track_ID, in_track->current_sample_number, &sample ) < 0 )
                     return ERROR_MSG( "failed to get the information of the next sample.\n" );
                 output_track_t *out_track = &out_movie->track[out_current_track_number - 1];
-                if( lsmash_flush_pooled_samples( output->root, out_track->track_ID, sample.dts - out_track->last_sample_dts ) < 0 )
+                uint64_t sample_dts = sample.dts - out_track->skip_dt_interval;
+                if( lsmash_flush_pooled_samples( output->root, out_track->track_ID, sample_dts - out_track->last_sample_dts ) < 0 )
                     return ERROR_MSG( "failed to flush the rest of samples in a fragment.\n" );
             }
             if( ++out_current_track_number > out_movie->num_tracks )
