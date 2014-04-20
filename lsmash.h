@@ -34,7 +34,7 @@
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  1
-#define LSMASH_VERSION_MINOR  7
+#define LSMASH_VERSION_MINOR  8
 #define LSMASH_VERSION_MICRO  0
 
 #define LSMASH_VERSION_INT( a, b, c ) ((a << 16) | (b << 8) | (c))
@@ -1857,14 +1857,19 @@ typedef struct
 #define ISOM_EDIT_MODE_EMPTY         -1
 #define ISOM_EDIT_DURATION_UNKNOWN32 0xffffffff
 #define ISOM_EDIT_DURATION_UNKNOWN64 0xffffffffffffffff
+#define ISOM_EDIT_DURATION_IMPLICIT  0
 
 typedef struct
 {
     uint64_t duration;      /* the duration of this edit expressed in the movie timescale units
-                             * An edit can be used to the media within fragmented tracks.
-                             * The duration is unknown at the time of creating the initial movie because of real-time creation such as live streaming,
-                             * it is recomended the duration is set to ISOM_EDIT_DURATION_UNKNOWN32 (the maximum 32-bit unsigned integer)
-                             * or ISOM_EDIT_DURATION_UNKNOWN64 (the maximum 64-bit unsigned integer). */
+                             * An edit can refer to the media within fragmented tracks.
+                             * The duration can be unknown at the time of creation of the initial movie due to various limiting factors that include
+                             * real-time generation of content, such as live streaming. In such a case it is recommended that the duration is set to
+                             * either ISOM_EDIT_DURATION_UNKNOWN32 (the maximum 32-bit unsigned integer), ISOM_EDIT_DURATION_UNKNOWN64 (the maximum
+                             * 64-bit unsigned integer) or ISOM_EDIT_DURATION_IMPLICIT.
+                             * If you have no interest in the duration of this edit but want to set the offset from media composition time to movie
+                             * presentation time, ISOM_EDIT_DURATION_IMPLICIT is useful for the provision of the offset for the movie and subsequent
+                             * movie fragments. The duration is expected to be constructed by demuxer. */
     int64_t  start_time;    /* the starting composition time within the media of this edit
                              * If set to ISOM_EDIT_MODE_EMPTY (-1), it construct an empty edit, which doesn't select any portion within the media. */
     int32_t  rate;          /* the relative rate at which to play the media corresponding to this edit, expressed as 16.16 fixed-point number

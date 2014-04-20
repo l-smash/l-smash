@@ -3022,7 +3022,13 @@ static int isom_set_fragment_overall_duration( lsmash_file_t *file )
                 isom_elst_entry_t *data = (isom_elst_entry_t *)elst_entry->data;
                 if( !data )
                     return -1;
-                duration += data->segment_duration;
+                if( data->segment_duration == ISOM_EDIT_DURATION_IMPLICIT )
+                {
+                    uint64_t segment_duration = trak->cache->fragment->largest_cts + trak->cache->fragment->last_duration;
+                    duration += (uint64_t)(((double)segment_duration / trak->mdia->mdhd->timescale) * file->moov->mvhd->timescale);
+                }
+                else
+                    duration += data->segment_duration;
             }
         }
         longest_duration = LSMASH_MAX( duration, longest_duration );
