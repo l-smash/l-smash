@@ -3122,8 +3122,12 @@ static int isom_write_fragment_random_access_info( lsmash_file_t *file )
                  * Drop the rest of sync samples since they are generally absent in the whole presentation.
                  * Though the exceptions are sync samples with earlier composition time, we ignore them. (SAP type 2: TEPT = TDEC = TSAP < TPTF)
                  * To support this exception, we need sorting entries of the list by composition times. */
-                for( ; rap_entry; rap_entry = rap_entry->next )
+                while( rap_entry )
+                {
+                    lsmash_entry_t *next = rap_entry->next;
                     lsmash_remove_entry_direct( tfra->list, rap_entry, NULL );
+                    rap_entry = next;
+                }
                 break;
             }
             /* If the sync sample isn't in the presentation,
