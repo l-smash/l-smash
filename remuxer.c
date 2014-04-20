@@ -1058,26 +1058,17 @@ static int flush_movie_fragment( remuxer_t *remuxer )
             {
                 lsmash_sample_t sample;
                 if( lsmash_get_sample_info_from_media_timeline( in->root, in_track->track_ID, in_track->current_sample_number, &sample ) < 0 )
-                {
-                    ERROR_MSG( "failed to get the information of the next sample.\n" );
-                    return -1;
-                }
+                    return ERROR_MSG( "failed to get the information of the next sample.\n" );
                 output_track_t *out_track = &out_movie->track[out_current_track_number - 1];
                 if( lsmash_flush_pooled_samples( output->root, out_track->track_ID, sample.dts - out_track->last_sample_dts ) < 0 )
-                {
-                    ERROR_MSG( "failed to flush the rest of samples in a fragment.\n" );
-                    return -1;
-                }
+                    return ERROR_MSG( "failed to flush the rest of samples in a fragment.\n" );
             }
             if( ++out_current_track_number > out_movie->num_tracks )
                 break;
         }
     }
     if( lsmash_create_fragment_movie( output->root ) < 0 )
-    {
-        ERROR_MSG( "failed to create a movie fragment.\n" );
-        return -1;
-    }
+        return ERROR_MSG( "failed to create a movie fragment.\n" );
     return 0;
 }
 
@@ -1088,6 +1079,8 @@ static int do_remux( remuxer_t *remuxer )
     output_t       *output    = remuxer->output;
     output_movie_t *out_movie = &output->file.movie;
     set_reference_chapter_track( remuxer );
+    if( remuxer->fragment_base_track && lsmash_create_fragment_movie( output->root ) < 0 )
+        return ERROR_MSG( "failed to create a movie fragment.\n" );
     double   largest_dts                 = 0;
     uint32_t input_movie_number          = 1;
     uint32_t num_consecutive_sample_skip = 0;
