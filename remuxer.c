@@ -1068,8 +1068,6 @@ static int flush_movie_fragment( remuxer_t *remuxer )
                 break;
         }
     }
-    if( lsmash_create_fragment_movie( output->root ) < 0 )
-        return ERROR_MSG( "failed to create a movie fragment.\n" );
     return 0;
 }
 
@@ -1080,15 +1078,13 @@ static int do_remux( remuxer_t *remuxer )
     output_t       *output    = remuxer->output;
     output_movie_t *out_movie = &output->file.movie;
     set_reference_chapter_track( remuxer );
-    if( remuxer->fragment_base_track && lsmash_create_fragment_movie( output->root ) < 0 )
-        return ERROR_MSG( "failed to create a movie fragment.\n" );
     double   largest_dts                 = 0;
     uint32_t input_movie_number          = 1;
     uint32_t num_consecutive_sample_skip = 0;
     uint32_t num_active_input_tracks     = out_movie->num_tracks;
     uint64_t total_media_size            = 0;
     uint8_t  sample_count                = 0;
-    uint8_t  pending_flush_fragments     = 0;
+    uint8_t  pending_flush_fragments     = (remuxer->fragment_base_track != 0);
     while( 1 )
     {
         input_t       *in       = &inputs[input_movie_number - 1];
@@ -1147,6 +1143,11 @@ static int do_remux( remuxer_t *remuxer )
                         if( flush_movie_fragment( remuxer ) < 0 )
                         {
                             ERROR_MSG( "failed to flush a movie fragment.\n" );
+                            break;
+                        }
+                        if( lsmash_create_fragment_movie( output->root ) < 0 )
+                        {
+                            ERROR_MSG( "failed to create a movie fragment.\n" );
                             break;
                         }
                         pending_flush_fragments = 0;
