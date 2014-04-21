@@ -135,6 +135,7 @@ typedef struct
     char                *chap_file;
     uint16_t             default_language;
     uint32_t             fragment_base_track;
+    int                  dash;
 } remuxer_t;
 
 typedef struct
@@ -269,6 +270,8 @@ static void display_help( void )
              "                              This option is overridden by the track options.\n"
              "    --fragment <integer>      Enable fragmentation per random accessible point.\n"
              "                              Set which track the fragmentation is based on.\n"
+             "    --dash                    Construct Indexed self-initializing Media Segment.\n"
+             "                              This option requires --fragment.\n"
              "Track options:\n"
              "    remove                    Remove this track\n"
              "    disable                   Disable this track\n"
@@ -591,6 +594,8 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
             if( remuxer->fragment_base_track == 0 )
                 return ERROR_MSG( "%s is an invalid track number.\n", argv[i] );
         }
+        else if( !strcasecmp( argv[i], "--dash" ) )
+            remuxer->dash = 1;
         else
             return ERROR_MSG( "unkown option found: %s\n", argv[i] );
     }
@@ -656,6 +661,7 @@ static void replace_with_valid_brand( remuxer_t *remuxer )
             ISOM_BRAND_TYPE_ISO4,
             ISOM_BRAND_TYPE_ISO5,
             ISOM_BRAND_TYPE_ISO6,
+            ISOM_BRAND_TYPE_ISO7,
             ISOM_BRAND_TYPE_ISOM,
             ISOM_BRAND_TYPE_MP41,
             ISOM_BRAND_TYPE_MP42,
@@ -719,6 +725,13 @@ static void replace_with_valid_brand( remuxer_t *remuxer )
                         else
                             *brand = LSMASH_4CC( '3', 'g', 'g', *brand & 0xFF );
                     }
+                    if( (remuxer->output->file.param.mode & LSMASH_FILE_MODE_INDEX)
+                     && (*brand == ISOM_BRAND_TYPE_AVC1
+                      || (((*brand >> 24) & 0xFF) == 'i'
+                       && ((*brand >> 16) & 0xFF) == 's'
+                       && ((*brand >>  8) & 0xFF) == 'o'
+                       && ((*brand & 0xFF) == 'm' || (*brand & 0xFF) < '6'))) )
+                        *brand = ISOM_BRAND_TYPE_ISO6;
                     invalid = 0;
                     break;
                 }
@@ -741,47 +754,64 @@ static int set_movie_parameters( remuxer_t *remuxer )
     output_file_t *out_file  = &output->file;
     if( remuxer->fragment_base_track )
         out_file->param.mode |= LSMASH_FILE_MODE_FRAGMENTED;
-    replace_with_valid_brand( remuxer );
-    /* Pick the most used major_brands. */
-    lsmash_brand_type major_brand      [num_input];
-    uint32_t          minor_version    [num_input];
-    uint32_t          major_brand_count[num_input];
-    uint32_t          num_major_brand = 0;
-    for( int i = 0; i < num_input; i++ )
+    if( remuxer->dash )
     {
-        major_brand      [num_major_brand] = input[i].file.param.major_brand;
-        minor_version    [num_major_brand] = input[i].file.param.minor_version;
-        major_brand_count[num_major_brand] = 0;
-        for( int j = 0; j < num_input; j++ )
-            if( (major_brand  [num_major_brand] == input[j].file.param.major_brand)
-             && (minor_version[num_major_brand] == input[j].file.param.minor_version) )
-            {
-                if( i <= j )
-                    ++major_brand_count[num_major_brand];
-                else
-                {
-                    /* This major_brand already exists. Skip this. */
-                    major_brand_count[num_major_brand] = 0;
-                    --num_major_brand;
-                    break;
-                }
-            }
-        ++num_major_brand;
+        if( remuxer->fragment_base_track )
+            out_file->param.mode |= LSMASH_FILE_MODE_INDEX;
+        else
+            WARNING_MSG( "--dash requiers --fragment.\n" );
     }
-    uint32_t most_used_count = 0;
-    for( uint32_t i = 0; i < num_major_brand; i++ )
-        if( major_brand_count[i] > most_used_count )
+    replace_with_valid_brand( remuxer );
+    if( remuxer->dash )
+    {
+        out_file->param.major_brand   = ISOM_BRAND_TYPE_DASH;
+        out_file->param.minor_version = 0;
+    }
+    else
+    {
+        /* Pick the most used major_brands. */
+        lsmash_brand_type major_brand      [num_input];
+        uint32_t          minor_version    [num_input];
+        uint32_t          major_brand_count[num_input];
+        uint32_t          num_major_brand = 0;
+        for( int i = 0; i < num_input; i++ )
         {
-            most_used_count = major_brand_count[i];
-            out_file->param.major_brand   = major_brand  [i];
-            out_file->param.minor_version = minor_version[i];
+            major_brand      [num_major_brand] = input[i].file.param.major_brand;
+            minor_version    [num_major_brand] = input[i].file.param.minor_version;
+            major_brand_count[num_major_brand] = 0;
+            for( int j = 0; j < num_input; j++ )
+                if( (major_brand  [num_major_brand] == input[j].file.param.major_brand)
+                 && (minor_version[num_major_brand] == input[j].file.param.minor_version) )
+                {
+                    if( i <= j )
+                        ++major_brand_count[num_major_brand];
+                    else
+                    {
+                        /* This major_brand already exists. Skip this. */
+                        major_brand_count[num_major_brand] = 0;
+                        --num_major_brand;
+                        break;
+                    }
+                }
+            ++num_major_brand;
         }
+        uint32_t most_used_count = 0;
+        for( uint32_t i = 0; i < num_major_brand; i++ )
+            if( major_brand_count[i] > most_used_count )
+            {
+                most_used_count = major_brand_count[i];
+                out_file->param.major_brand   = major_brand  [i];
+                out_file->param.minor_version = minor_version[i];
+            }
+    }
     /* Deduplicate compatible brands. */
-    uint32_t num_input_brands = num_input;
+    uint32_t num_input_brands = num_input + (remuxer->dash ? 1 : 0);
     for( int i = 0; i < num_input; i++ )
         num_input_brands += input[i].file.param.brand_count;
     lsmash_brand_type input_brands[num_input_brands];
     num_input_brands = 0;
+    if( remuxer->dash )
+        input_brands[num_input_brands++] = ISOM_BRAND_TYPE_DASH;
     for( int i = 0; i < num_input; i++ )
     {
         input_brands[num_input_brands++] = input[i].file.param.major_brand;
