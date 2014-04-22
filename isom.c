@@ -5661,7 +5661,9 @@ static int isom_flush_fragment_pooled_samples( lsmash_file_t *file, uint32_t tra
 {
     isom_traf_t *traf = isom_get_traf( file->fragment->movie, track_ID );
     if( !traf )
-        return 0;   /* no samples */
+        /* No samples. We don't return as an error here since user might call the flushing function even if the
+         * current movie fragment has no track fragment with this track_ID. */
+        return 0;
     if( !traf->cache
      || !traf->cache->fragment )
         return -1;
