@@ -81,6 +81,7 @@ typedef struct
     uint32_t                  track_ID;
     uint32_t                  last_sample_delta;
     uint32_t                  current_sample_number;
+    uint32_t                  current_sample_index;
     uint32_t                  num_summaries;
     input_summary_t          *summaries;
     lsmash_track_parameters_t track_param;
@@ -1148,6 +1149,14 @@ static int do_remux( remuxer_t *remuxer )
                 {
                     in_track->sample = sample;
                     in_track->dts = (double)sample->dts / in_track->media_param.timescale;
+                    /* Adapt the sample description index. */
+                    output_track_t *out_track = &out_movie->track[ out_movie->current_track_number - 1 ];
+                    sample->index = sample->index > in_track->num_summaries ? in_track->num_summaries
+                                  : sample->index == 0 ? 1
+                                  : sample->index;
+                    sample->index = out_track->summary_remap[ sample->index - 1 ];
+                    if( in_track->current_sample_index == 0 )
+                        in_track->current_sample_index = sample->index;
                 }
                 else
                 {
@@ -1189,15 +1198,11 @@ static int do_remux( remuxer_t *remuxer )
                 /* Append a sample if meeting a condition. */
                 if( pending_flush_fragments == 0
                   ? in_track->dts <= largest_dts || num_consecutive_sample_skip == num_active_input_tracks
-                  : sample->prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE )
+                  : sample->prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE && sample->index == in_track->current_sample_index )
                 {
-                    output_track_t *out_track = &out_movie->track[ out_movie->current_track_number - 1 ];
-                    sample->index = sample->index > in_track->num_summaries ? in_track->num_summaries
-                                  : sample->index == 0 ? 1
-                                  : sample->index;
-                    sample->index = out_track->summary_remap[ sample->index - 1 ];
                     if( sample->index )
                     {
+                        output_track_t *out_track = &out_movie->track[ out_movie->current_track_number - 1 ];
                         /* The first DTS must be 0. */
                         if( out_track->current_sample_number == 1 )
                             out_track->skip_dt_interval = sample->dts;
@@ -1208,6 +1213,7 @@ static int do_remux( remuxer_t *remuxer )
                         }
                         uint64_t sample_size     = sample->length;      /* sample might be deleted internally after appending. */
                         uint64_t last_sample_dts = sample->dts;         /* same as above */
+                        uint32_t sample_index    = sample->index;       /* same as above */
                         /* Append a sample into output movie. */
                         if( lsmash_append_sample( output->root, out_track->track_ID, sample ) )
                         {
@@ -1217,6 +1223,7 @@ static int do_remux( remuxer_t *remuxer )
                         largest_dts                       = LSMASH_MAX( largest_dts, in_track->dts );
                         in_track->sample                  = NULL;
                         in_track->current_sample_number  += 1;
+                        in_track->current_sample_index    = sample_index;
                         out_track->current_sample_number += 1;
                         out_track->last_sample_dts        = last_sample_dts;
                         num_consecutive_sample_skip       = 0;
@@ -1229,7 +1236,7 @@ static int do_remux( remuxer_t *remuxer )
                     {
                         lsmash_delete_sample( sample );
                         in_track->sample = NULL;
-                        in_track->current_sample_number  += 1;
+                        in_track->current_sample_number += 1;
                     }
                 }
                 else
