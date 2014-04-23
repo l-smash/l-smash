@@ -6011,8 +6011,7 @@ static int isom_append_fragment_sample_internal( isom_traf_t *traf, lsmash_sampl
 static int isom_append_fragment_sample( lsmash_file_t *file, uint32_t track_ID, lsmash_sample_t *sample )
 {
     isom_fragment_manager_t *fragment = file->fragment;
-    if( !fragment || !fragment->pool )
-        return -1;
+    assert( fragment && fragment->pool );
     isom_trak_t *trak = isom_get_trak( file, track_ID );
     if( !trak
      || !trak->file
@@ -6031,6 +6030,9 @@ static int isom_append_fragment_sample( lsmash_file_t *file, uint32_t track_ID, 
     void *track_fragment = NULL;
     if( !fragment->movie )
     {
+        /* Forbid adding a sample into the initial movie if requiring compatibility with Media Segment. */
+        if( file->media_segment )
+            return -1;
         append_sample_func = (int (*)( void *, lsmash_sample_t * ))isom_append_fragment_sample_internal_initial;
         track_fragment = trak;
     }
