@@ -2437,6 +2437,7 @@ char *isom_4cc2str( uint32_t fourcc );
 
 isom_trak_t *isom_get_trak( lsmash_file_t *file, uint32_t track_ID );
 isom_trex_t *isom_get_trex( isom_mvex_t *mvex, uint32_t track_ID );
+isom_traf_t *isom_get_traf( isom_moof_t *moof, uint32_t track_ID );
 isom_tfra_t *isom_get_tfra( isom_mfra_t *mfra, uint32_t track_ID );
 isom_sgpd_t *isom_get_sample_group_description( isom_stbl_t *stbl, uint32_t grouping_type );
 isom_sbgp_t *isom_get_sample_to_group( isom_stbl_t *stbl, uint32_t grouping_type );
@@ -2447,6 +2448,36 @@ isom_dcr_ps_entry_t *isom_create_ps_entry( uint8_t *ps, uint32_t ps_size );
 void isom_remove_dcr_ps( isom_dcr_ps_entry_t *ps );
 
 int isom_setup_handler_reference( isom_hdlr_t *hdlr, uint32_t media_type );
+int isom_setup_iods( isom_moov_t *moov );
+
+uint32_t isom_get_sample_count( isom_trak_t *trak );
+isom_sample_pool_t *isom_create_sample_pool( uint64_t size );
+int isom_update_sample_tables( isom_trak_t *trak, lsmash_sample_t *sample, uint32_t *samples_per_packet );
+int isom_pool_sample( isom_sample_pool_t *pool, lsmash_sample_t *sample, uint32_t samples_per_packet );
+
+int isom_add_sample_grouping( isom_box_t *parent, isom_grouping_type grouping_type );
+int isom_group_random_access( isom_box_t *parent, lsmash_sample_t *sample );
+int isom_group_roll_recovery( isom_box_t *parent, lsmash_sample_t *sample );
+
+int isom_update_tkhd_duration( isom_trak_t *trak );
+int isom_update_bitrate_description( isom_mdia_t *mdia );
+int isom_complement_data_reference( isom_minf_t *minf );
+int isom_establish_movie( lsmash_file_t *file );
+int isom_convert_stco_to_co64( isom_stbl_t *stbl );
+int isom_rap_grouping_established( isom_rap_group_t *group, int num_leading_samples_known, isom_sgpd_t *sgpd, int is_fragment );
+int isom_all_recovery_completed( isom_sbgp_t *sbgp, lsmash_entry_list_t *pool );
+
+int isom_rearrange_boxes
+(
+    lsmash_file_t        *file,
+    lsmash_adhoc_remux_t *remux,
+    uint8_t              *buf[2],
+    size_t                read_num,
+    size_t                size,
+    uint64_t              read_pos,
+    uint64_t              write_pos,
+    uint64_t              file_size
+);
 
 lsmash_file_t *isom_add_file( lsmash_root_t *root );
 int isom_add_ftyp( lsmash_file_t *file );
