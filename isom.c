@@ -1766,7 +1766,8 @@ uint32_t lsmash_create_track( lsmash_root_t *root, lsmash_media_type media_type 
         return 0;
     lsmash_file_t *file = root->file;
     /* Don't allow to create a new track if the initial movie is already written. */
-    if( file->fragment->movie || (file->moov && (file->moov->manager & LSMASH_WRITTEN_BOX)) )
+    if( (file->fragment && file->fragment->movie)
+     || (file->moov && (file->moov->manager & LSMASH_WRITTEN_BOX)) )
         return 0;
     isom_trak_t *trak = isom_add_trak( file->moov );
     if( !trak
