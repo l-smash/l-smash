@@ -2447,7 +2447,7 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
                  * We should trust samplesize field in the description for misused CODEC indentifier. */
                 lsmash_codec_type_t audio_type = (lsmash_codec_type_t)audio->type;
                 if( lsmash_check_codec_type_identical( audio_type, QT_CODEC_TYPE_FL32_AUDIO )
-                 || lsmash_check_codec_type_identical( audio_type, QT_CODEC_TYPE_FL32_AUDIO ) )
+                 || lsmash_check_codec_type_identical( audio_type, QT_CODEC_TYPE_FL64_AUDIO ) )
                     data->format_flags = QT_LPCM_FORMAT_FLAG_FLOAT;
                 else if( lsmash_check_codec_type_identical( audio_type, QT_CODEC_TYPE_TWOS_AUDIO )
                       || lsmash_check_codec_type_identical( audio_type, QT_CODEC_TYPE_NONE_AUDIO )
