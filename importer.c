@@ -579,7 +579,7 @@ static int mp4sys_mp3_parse_header( uint8_t* buf, mp4sys_mp3_header_t* header )
 
 #define MP4SYS_MP3_MAX_FRAME_LENGTH (1152*(16/8)*2)
 #define MP4SYS_MP3_HEADER_LENGTH    4
-#define MP4SYS_MODE_IS_2CH( mode )  (!!~(mode))
+#define MP4SYS_MODE_IS_2CH( mode )  ((mode)!=3)
 #define MP4SYS_LAYER_III            0x1
 #define MP4SYS_LAYER_II             0x2
 #define MP4SYS_LAYER_I              0x3
@@ -593,7 +593,7 @@ static int mp4sys_mp3_samples_in_frame( mp4sys_mp3_header_t *header )
 {
     if( header->layer == MP4SYS_LAYER_I )
         return 384;
-    else if( header->ID == 0 || header->layer == MP4SYS_LAYER_II )
+    else if( header->ID == 1 || header->layer == MP4SYS_LAYER_II )
         return 1152;
     else
         return 576;
