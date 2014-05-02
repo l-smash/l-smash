@@ -1334,7 +1334,7 @@ static int finish_movie( remuxer_t *remuxer )
     REFRESH_CONSOLE;
     if( lsmash_finish_movie( output->root, &moov_to_front ) )
         return -1;
-    return lsmash_write_lsmash_indicator( output->root );
+    return remuxer->fragment_base_track ? 0 : lsmash_write_lsmash_indicator( output->root );
 }
 
 int main( int argc, char *argv[] )
