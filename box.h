@@ -1402,11 +1402,20 @@ typedef struct
 typedef struct
 {
     isom_group_assignment_entry_t *assignment;      /* the address corresponding to the entry in Sample to Group Box */
+    isom_sgpd_t                   *sgpd;            /* the address to the active Sample Group Description Box */
     uint32_t first_sample;                          /* the number of the first sample of the group */
     uint32_t recovery_point;                        /* the identifier necessary for the recovery from its starting point to be completed */
-    uint8_t  delimited;                             /* the flag if the sample_count is determined */
-    uint8_t  described;                             /* the flag if the group description is determined */
+    uint64_t rp_cts;                                /* the CTS of the recovery point */
+    int16_t  roll_distance;                         /* the current roll_distance
+                                                     * The value may be updated when 'described' is set to ROLL_DISTANCE_INITIALIZED. */
+#define MAX_ROLL_WAIT_AND_SEE_COUNT 64
+    uint8_t  wait_and_see_count;                    /* Wait-and-see after initialization of roll_distance until reaching MAX_ROLL_WAIT_AND_SEE. */
+    uint8_t  is_fragment;                           /* the flag if the current group is in fragment */
     uint8_t  prev_is_recovery_start;                /* whether the previous sample is a starting point of recovery or not */
+    uint8_t  delimited;                             /* the flag if the sample_count is determined */
+#define ROLL_DISTANCE_INITIALIZED 1
+#define ROLL_DISTANCE_DETERMINED  2
+    uint8_t  described;                             /* the status of the group description */
 } isom_roll_group_t;
 
 typedef struct

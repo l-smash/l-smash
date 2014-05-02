@@ -3850,30 +3850,29 @@ int isom_group_random_access( isom_box_t *parent, lsmash_sample_t *sample )
     return 0;
 }
 
-static int isom_roll_grouping_established( isom_roll_group_t *group, int16_t roll_distance, isom_sgpd_t *sgpd, int is_fragment )
+static int isom_roll_grouping_established( isom_roll_group_t *group )
 {
     /* Avoid duplication of sample group descriptions. */
-    uint32_t group_description_index = is_fragment ? 0x10001 : 1;
+    isom_sgpd_t *sgpd = group->sgpd;
+    uint32_t group_description_index = group->is_fragment ? 0x10001 : 1;
     for( lsmash_entry_t *entry = sgpd->list->head; entry; entry = entry->next )
     {
         isom_roll_entry_t *data = (isom_roll_entry_t *)entry->data;
         if( !data )
             return -1;
-        if( roll_distance == data->roll_distance )
+        if( group->roll_distance == data->roll_distance )
         {
             /* The same description already exists.
              * Set the group_description_index corresponding the same description. */
             group->assignment->group_description_index = group_description_index;
-            group->described = 1;
             return 0;
         }
         ++group_description_index;
     }
     /* Add a new roll recovery description. */
-    if( !isom_add_roll_group_entry( sgpd, roll_distance ) )
+    if( !isom_add_roll_group_entry( sgpd, group->roll_distance ) )
         return -1;
-    group->assignment->group_description_index = sgpd->list->entry_count + (is_fragment ? 0x10000 : 0);
-    group->described = 1;
+    group->assignment->group_description_index = sgpd->list->entry_count + (group->is_fragment ? 0x10000 : 0);
     return 0;
 }
 
@@ -3888,8 +3887,7 @@ static int isom_deduplicate_roll_group( isom_sbgp_t *sbgp, lsmash_entry_list_t *
         if( !group
          || !group->assignment )
             return -1;
-        if( !group->delimited
-         || !group->described )
+        if( !group->delimited || group->described != ROLL_DISTANCE_DETERMINED )
             return 0;
         if( prev_assignment && prev_assignment->group_description_index == group->assignment->group_description_index )
         {
@@ -3919,8 +3917,7 @@ static int isom_clean_roll_pool( lsmash_entry_list_t *pool )
         isom_roll_group_t *group = (isom_roll_group_t *)entry->data;
         if( !group )
             return -1;
-        if( !group->delimited
-         || !group->described )
+        if( !group->delimited || group->described != ROLL_DISTANCE_DETERMINED )
             return 0;
         if( lsmash_remove_entry_direct( pool, entry, NULL ) )
             return -1;
@@ -3930,6 +3927,17 @@ static int isom_clean_roll_pool( lsmash_entry_list_t *pool )
 
 static int isom_flush_roll_pool( isom_sbgp_t *sbgp, lsmash_entry_list_t *pool )
 {
+    for( lsmash_entry_t *entry = pool->head; entry; entry = entry->next )
+    {
+        isom_roll_group_t *group = (isom_roll_group_t *)entry->data;
+        if( !group )
+            return -1;
+        if( group->delimited
+         && group->described == ROLL_DISTANCE_DETERMINED
+         && group->roll_distance != 0
+         && isom_roll_grouping_established( group ) < 0 )
+            return -1;
+    }
     if( isom_deduplicate_roll_group( sbgp, pool ) < 0 )
         return -1;
     return isom_clean_roll_pool( pool );
@@ -3942,7 +3950,7 @@ static int isom_all_recovery_described( isom_sbgp_t *sbgp, lsmash_entry_list_t *
         isom_roll_group_t *group = (isom_roll_group_t *)entry->data;
         if( !group )
             return -1;
-        group->described = 1;
+        group->described = ROLL_DISTANCE_DETERMINED;
     }
     return isom_flush_roll_pool( sbgp, pool );
 }
@@ -3954,10 +3962,24 @@ int isom_all_recovery_completed( isom_sbgp_t *sbgp, lsmash_entry_list_t *pool )
         isom_roll_group_t *group = (isom_roll_group_t *)entry->data;
         if( !group )
             return -1;
-        group->described = 1;
+        group->described = ROLL_DISTANCE_DETERMINED;
         group->delimited = 1;
     }
     return isom_flush_roll_pool( sbgp, pool );
+}
+
+static isom_roll_entry_t *isom_get_roll_description
+(
+    isom_roll_group_t *group
+)
+{
+    uint32_t group_description_index = group->assignment->group_description_index;
+    if( group_description_index && group->is_fragment )
+    {
+        assert( group_description_index > 0x10000 );
+        group_description_index -= 0x10000;
+    }
+    return (isom_roll_entry_t *)lsmash_get_entry_data( group->sgpd->list, group_description_index );
 }
 
 int isom_group_roll_recovery( isom_box_t *parent, lsmash_sample_t *sample )
@@ -4017,15 +4039,8 @@ int isom_group_roll_recovery( isom_box_t *parent, lsmash_sample_t *sample )
     if( !new_group )
     {
         /* Check pre-roll distance. */
-        if( !group->assignment )
-            return -1;
-        uint32_t group_description_index = group->assignment->group_description_index;
-        if( group_description_index && is_fragment )
-        {
-            assert( group_description_index > 0x10000 );
-            group_description_index -= 0x10000;
-        }
-        isom_roll_entry_t *prev_roll = (isom_roll_entry_t *)lsmash_get_entry_data( sgpd->list, group_description_index );
+        assert( group->assignment && group->sgpd );
+        isom_roll_entry_t *prev_roll = isom_get_roll_description( group );
         if( !prev_roll )
             new_group = valid_pre_roll;
         else if( !valid_pre_roll || (prop->pre_roll.distance != -prev_roll->roll_distance) )
@@ -4042,7 +4057,9 @@ int isom_group_roll_recovery( isom_box_t *parent, lsmash_sample_t *sample )
         group = lsmash_malloc_zero( sizeof(isom_roll_group_t) );
         if( !group )
             return -1;
+        group->sgpd                   = sgpd;
         group->prev_is_recovery_start = is_recovery_start;
+        group->is_fragment            = is_fragment;
         group->assignment             = isom_add_group_assignment_entry( sbgp, 1, 0 );
         if( !group->assignment || lsmash_add_entry( pool, group ) )
         {
@@ -4057,15 +4074,17 @@ int isom_group_roll_recovery( isom_box_t *parent, lsmash_sample_t *sample )
         }
         else
         {
+            group->described = ROLL_DISTANCE_DETERMINED;
             if( valid_pre_roll )
             {
                 /* a member of pre-roll group */
-                if( isom_roll_grouping_established( group, -prop->pre_roll.distance, sgpd, is_fragment ) < 0 )
+                group->roll_distance = -prop->pre_roll.distance;
+                if( isom_roll_grouping_established( group ) < 0 )
                     return -1;
             }
             else
                 /* a member of non-roll group */
-                group->described = 1;
+                group->roll_distance = 0;
         }
     }
     else
@@ -4073,8 +4092,10 @@ int isom_group_roll_recovery( isom_box_t *parent, lsmash_sample_t *sample )
         group->prev_is_recovery_start    = is_recovery_start;
         group->assignment->sample_count += 1;
     }
-    /* If encountered a sync sample, all recovery is completed here. */
-    if( prop->ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC )
+    /* If encountered a RAP, all recovery is completed here. */
+    if( prop->ra_flags & (ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC
+                        | ISOM_SAMPLE_RANDOM_ACCESS_FLAG_RAP
+                        |   QT_SAMPLE_RANDOM_ACCESS_FLAG_PARTIAL_SYNC) )
         return isom_all_recovery_described( sbgp, pool );
     /* Check whether this sample is a random access recovery point or not. */
     for( lsmash_entry_t *entry = pool->head; entry; entry = entry->next )
@@ -4082,25 +4103,40 @@ int isom_group_roll_recovery( isom_box_t *parent, lsmash_sample_t *sample )
         group = (isom_roll_group_t *)entry->data;
         if( !group )
             return -1;
-        if( group->described )
+        if( group->described == ROLL_DISTANCE_DETERMINED )
             continue;
-        if( prop->post_roll.identifier == group->recovery_point )
+        if( group->described == ROLL_DISTANCE_INITIALIZED )
+        {
+            isom_roll_entry_t *post_roll = isom_get_roll_description( group );
+            if( post_roll && post_roll->roll_distance > 0 )
+            {
+                if( group->rp_cts > sample->cts )
+                    /* Updated roll_distance for composition reordering. */
+                    ++ post_roll->roll_distance;
+                if( ++ group->wait_and_see_count >= MAX_ROLL_WAIT_AND_SEE_COUNT )
+                    group->described = ROLL_DISTANCE_DETERMINED;
+            }
+        }
+        else if( prop->post_roll.identifier == group->recovery_point )
         {
             int16_t distance = sample_count - group->first_sample;
+            group->rp_cts        = sample->cts;
+            group->roll_distance = distance;
             /* Add a roll recovery entry only when roll_distance isn't zero since roll_distance = 0 must not be used. */
             if( distance )
             {
-                /* Now, this group is a 'roll'. */
-                if( isom_roll_grouping_established( group, distance, sgpd, is_fragment ) < 0 )
-                    return -1;
-                /* All groups before the current group are described. */
+                /* Now, this group is a 'roll'.
+                 * The roll_distance may be updated later because of composition reordering. */
+                group->described          = ROLL_DISTANCE_INITIALIZED;
+                group->wait_and_see_count = 0;
+                /* All groups with uninitialized roll_distance before the current group are described. */
                 lsmash_entry_t *current = entry;
                 for( entry = pool->head; entry != current; entry = entry->next )
                 {
                     group = (isom_roll_group_t *)entry->data;
-                    if( !group )
-                        return -1;
-                    group->described = 1;
+                    if( !group || group->described != ROLL_DISTANCE_INITIALIZED )
+                        continue;
+                    group->described = ROLL_DISTANCE_DETERMINED;
                 }
                 /* Cache the CTS of the first recovery point in a subsegment. */
                 if( cache->fragment
@@ -4113,8 +4149,8 @@ int isom_group_roll_recovery( isom_box_t *parent, lsmash_sample_t *sample )
                 }
             }
             else
-                group->described = 1;
-            break;      /* Avoid evaluating groups, in the pool, having the same identifier for recovery point again. */
+                /* Random Accessible Point */
+                return isom_all_recovery_described( sbgp, pool );
         }
     }
     return isom_flush_roll_pool( sbgp, pool );
