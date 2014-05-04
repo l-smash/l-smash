@@ -34,8 +34,8 @@
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  1
-#define LSMASH_VERSION_MINOR  9
-#define LSMASH_VERSION_MICRO  1
+#define LSMASH_VERSION_MINOR 10
+#define LSMASH_VERSION_MICRO  0
 
 #define LSMASH_VERSION_INT( a, b, c ) ((a << 16) | (b << 8) | (c))
 
@@ -2156,6 +2156,25 @@ int lsmash_set_tyrant_chapter
 void lsmash_delete_tyrant_chapter
 (
     lsmash_root_t *root
+);
+
+/* Count chapters in the chapter list (moov.udta.chpl). */
+uint32_t lsmash_count_tyrant_chapter
+(
+    lsmash_root_t *root
+);
+
+/* Retrieve a chapter entry from the chapter list (moov.udta.chpl).
+ * Returned pointer is owned by the ROOT structure, so user shall not
+ * modify or free it.
+ *
+ * Return chapter title string if successful, otherwise NULL.
+ */
+char *lsmash_get_tyrant_chapter
+(
+    lsmash_root_t *root,
+    uint32_t       index,     /* index of chapter ( >= 1)                    */
+    double        *timestamp  /* timestamp of the chapter entry (in seconds) */
 );
 
 /****************************************************************************

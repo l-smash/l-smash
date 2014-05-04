@@ -368,6 +368,41 @@ error_message:
     return -1;
 }
 
+uint32_t lsmash_count_tyrant_chapter( lsmash_root_t *root )
+{
+    if( root
+     && root->file
+     && root->file->moov
+     && root->file->moov->udta
+     && root->file->moov->udta->chpl
+     && root->file->moov->udta->chpl->list )
+        return root->file->moov->udta->chpl->list->entry_count;
+    return 0;
+}
+
+char *lsmash_get_tyrant_chapter( lsmash_root_t *root, uint32_t index, double *timestamp )
+{
+    if( !root
+     || !root->file
+     || !root->file->moov
+     || !root->file->moov->mvhd
+     || !root->file->moov->udta
+     || !root->file->moov->udta->chpl )
+        return NULL;
+
+    isom_chpl_t *chpl = root->file->moov->udta->chpl;
+    lsmash_entry_t *entry = lsmash_get_entry( chpl->list, index );
+    if( !entry || !entry->data )
+        return NULL;
+    isom_chpl_entry_t *data = (isom_chpl_entry_t *)entry->data;
+    double timescale = chpl->version ? 10000000.0 : root->file->moov->mvhd->timescale;
+    *timestamp = data->start_time / timescale;
+    if( !memcmp( data->chapter_name, UTF8_BOM, UTF8_BOM_LENGTH ) )
+        return data->chapter_name + UTF8_BOM_LENGTH;
+    return data->chapter_name;
+}
+
+
 int lsmash_print_chapter_list( lsmash_root_t *root )
 {
     if( !root || !root->file || !(root->file->flags & LSMASH_FILE_MODE_READ) )
