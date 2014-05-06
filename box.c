@@ -305,6 +305,7 @@ static void isom_destruct_extension_binary( void *ext )
     if( !ext )
         return;
     isom_box_t *box = (isom_box_t *)ext;
+    isom_remove_all_extension_boxes( &box->extensions );
     lsmash_free( box->binary );
     lsmash_free( box );
 }
