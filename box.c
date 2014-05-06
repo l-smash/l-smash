@@ -29,6 +29,7 @@
 #include "mp4a.h"
 #include "mp4sys.h"
 #include "write.h"
+#include "read.h"
 #ifdef LSMASH_DEMUXER_ENABLED
 #include "print.h"
 #include "timeline.h"
@@ -64,25 +65,16 @@ void isom_init_box_common
     isom_set_box_writer( box );
 }
 
-int isom_add_box_to_extension_list( void *parent_box, void *child_box )
+static void isom_reorder_tail_box( isom_box_t *parent )
 {
-    assert( parent_box && child_box );
-    isom_box_t *parent = (isom_box_t *)parent_box;
-    isom_box_t *child  = (isom_box_t *)child_box;
-    /* Append at the end of the list. */
-    lsmash_entry_list_t *list = &parent->extensions;
-    if( lsmash_add_entry( list, child ) )
-        return -1;
-    /* Don't reorder the appended box when the file is opened for reading. */
-    if( !parent->file || (parent->file->flags & LSMASH_FILE_MODE_READ) )
-        return 0;
     /* Reorder the appended box by 'precedence'. */
-    lsmash_entry_t *x = list->tail;
-    assert( x );
+    lsmash_entry_t *x = parent->extensions.tail;
+    assert( x && x->data );
+    uint64_t precedence = ((isom_box_t *)x->data)->precedence;
     for( lsmash_entry_t *y = x->prev; y; y = y->prev )
     {
         isom_box_t *box = (isom_box_t *)y->data;
-        if( !box || child->precedence > box->precedence )
+        if( !box || precedence > box->precedence )
         {
             /* Exchange the entity data of adjacent two entries. */
             y->data = x->data;
@@ -92,6 +84,20 @@ int isom_add_box_to_extension_list( void *parent_box, void *child_box )
         else
             break;
     }
+}
+
+int isom_add_box_to_extension_list( void *parent_box, void *child_box )
+{
+    assert( parent_box && child_box );
+    isom_box_t *parent = (isom_box_t *)parent_box;
+    isom_box_t *child  = (isom_box_t *)child_box;
+    /* Append at the end of the list. */
+    if( lsmash_add_entry( &parent->extensions, child ) < 0 )
+        return -1;
+    /* Don't reorder the appended box when the file is opened for reading. */
+    if( !parent->file || (parent->file->flags & LSMASH_FILE_MODE_READ) || parent->file->fake_file_mode )
+        return 0;
+    isom_reorder_tail_box( parent );
     return 0;
 }
 
@@ -3564,6 +3570,41 @@ isom_sidx_t *isom_add_sidx( lsmash_file_t *file )
     return sidx;
 }
 
+static int fake_file_read
+(
+    void    *opaque,
+    uint8_t *buf,
+    int      size
+)
+{
+    fake_file_stream_t *stream = (fake_file_stream_t *)opaque;
+    int read_size;
+    if( stream->pos + size > stream->size )
+        read_size = stream->size - stream->pos;
+    else
+        read_size = size;
+    memcpy( buf, stream->data + stream->pos, read_size );
+    stream->pos += read_size;
+    return read_size;
+}
+
+static int64_t fake_file_seek
+(
+    void   *opaque,
+    int64_t offset,
+    int     whence
+)
+{
+    fake_file_stream_t *stream = (fake_file_stream_t *)opaque;
+    if( whence == SEEK_SET )
+        stream->pos = offset;
+    else if( whence == SEEK_CUR )
+        stream->pos += offset;
+    else if( whence == SEEK_END )
+        stream->pos = stream->size + offset;
+    return stream->pos;
+}
+
 /* Public functions */
 lsmash_extended_box_type_t lsmash_form_extended_box_type( uint32_t fourcc, const uint8_t id[12] )
 {
@@ -3668,7 +3709,7 @@ lsmash_box_t *lsmash_create_box
     box->precedence = precedence;
     box->size       = ISOM_BASEBOX_COMMON_SIZE + size + (type.fourcc == ISOM_BOX_TYPE_UUID.fourcc ? 16 : 0);
     box->type       = type;
-    isom_set_box_writer( (lsmash_box_t *)box );
+    isom_set_box_writer( (isom_box_t *)box );
     return (lsmash_box_t *)box;
 }
 
@@ -3681,7 +3722,7 @@ int lsmash_add_box
     if( !parent )
         /* You cannot add any box without a box being its parent. */
         return -1;
-    if( !box || !(box->manager & LSMASH_UNKNOWN_BOX) || box->size < ISOM_BASEBOX_COMMON_SIZE )
+    if( !box || box->size < ISOM_BASEBOX_COMMON_SIZE )
         return -1;
     if( parent->root == (lsmash_root_t *)parent )
     {
@@ -3697,6 +3738,105 @@ int lsmash_add_box
     box->file   = parent->file;
     box->parent = parent;
     return isom_add_box_to_extension_list( parent, box );
+}
+
+int lsmash_add_box_ex
+(
+    lsmash_box_t  *parent,
+    lsmash_box_t **p_box
+)
+{
+    if( !parent )
+        /* You cannot add any box without a box being its parent. */
+        return -1;
+    isom_unknown_box_t *box = (isom_unknown_box_t *)*p_box;
+    if( !box || box->size < ISOM_BASEBOX_COMMON_SIZE )
+        return -1;
+    if( !(box->manager & LSMASH_UNKNOWN_BOX) )
+        /* Simply add the box. */
+        return lsmash_add_box( parent, *p_box );
+    /* Check if the size of the box to be added is valid. */
+    if( box->size != ISOM_BASEBOX_COMMON_SIZE + box->unknown_size + (box->type.fourcc == ISOM_BOX_TYPE_UUID.fourcc ? 16 : 0) )
+        return -1;
+    if( !parent->file || parent->file == (lsmash_file_t *)box )
+        return -1;
+    if( parent->root == (lsmash_root_t *)parent )
+        /* Only files can be added into any ROOT.
+         * For backward compatibility, use the active file as the parent. */
+        parent = (isom_box_t *)parent->file;
+    /* Switch to the fake-file stream mode. */
+    lsmash_file_t *file      = parent->file;
+    lsmash_bs_t   *bs_backup = file->bs;
+    lsmash_bs_t   *bs        = lsmash_bs_create();
+    if( !bs )
+        return -1;
+    uint8_t *buf = lsmash_malloc( box->size );
+    if( !buf )
+    {
+        lsmash_bs_cleanup( bs );
+        return -1;
+    }
+    fake_file_stream_t fake_file =
+        {
+            .size = box->size,
+            .data = buf,
+            .pos  = 0
+        };
+    bs->stream = &fake_file;
+    bs->read   = fake_file_read;
+    bs->write  = NULL;
+    bs->seek   = fake_file_seek;
+    file->bs             = bs;
+    file->fake_file_mode = 1;
+    /* Make the byte string representing the given box. */
+    buf[0] = (box->size        >> 24) & 0xff;
+    buf[1] = (box->size        >> 16) & 0xff;
+    buf[2] = (box->size        >>  8) & 0xff;
+    buf[3] =  box->size               & 0xff;
+    buf[4] = (box->type.fourcc >> 24) & 0xff;
+    buf[5] = (box->type.fourcc >> 16) & 0xff;
+    buf[6] = (box->type.fourcc >>  8) & 0xff;
+    buf[7] =  box->type.fourcc        & 0xff;
+    if( box->type.fourcc == ISOM_BOX_TYPE_UUID.fourcc )
+    {
+        buf[ 8] = (box->type.user.fourcc >> 24) & 0xff;
+        buf[ 9] = (box->type.user.fourcc >> 16) & 0xff;
+        buf[10] = (box->type.user.fourcc >>  8) & 0xff;
+        buf[11] =  box->type.user.fourcc        & 0xff;
+        memcpy( buf + 12, box->type.user.id, 12 );
+    }
+    memcpy( buf + (uintptr_t)(box->size - box->unknown_size), box->unknown_field, box->unknown_size );
+    /* Add a box as a child box and try to expand into struct format. */
+    lsmash_box_t dummy = { 0 };
+    int ret = isom_read_box( file, &dummy, parent, 0, 0 );
+    lsmash_free( buf );
+    lsmash_bs_cleanup( bs );
+    file->bs             = bs_backup;   /* Switch back to the normal file stream mode. */
+    file->fake_file_mode = 0;
+    if( ret < 0 )
+        return -1;
+    /* Reorder the added box by 'precedence'. */
+    *p_box = (lsmash_box_t *)parent->extensions.tail->data;
+    (*p_box)->precedence = box->precedence;
+    isom_reorder_tail_box( parent );
+    /* Do also its children by the same way. */
+    lsmash_entry_list_t extensions = box->extensions;
+    lsmash_init_entry_list( &box->extensions ); /* to avoid freeing the children */
+    isom_remove_box_by_itself( box );
+    for( lsmash_entry_t *entry = extensions.head; entry; entry = entry->next )
+    {
+        if( !entry->data )
+            continue;
+        lsmash_box_t *child = (lsmash_box_t *)entry->data;
+        if( lsmash_add_box_ex( *p_box, &child ) == 0 )
+        {
+            (*p_box)->size += child->size;
+            /* Avoid freeing at the end of this function. */
+            entry->data = NULL;
+        }
+    }
+    isom_remove_all_extension_boxes( &extensions );
+    return 0;
 }
 
 void lsmash_destroy_box

@@ -20,8 +20,6 @@
 
 /* This file is available under an ISC license. */
 
-#ifdef LSMASH_DEMUXER_ENABLED
-
 #include "internal.h" /* must be placed first */
 
 #include <stdlib.h>
@@ -33,8 +31,8 @@
 #include "mp4a.h"
 #include "mp4sys.h"
 #include "description.h"
-
-static int isom_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uint64_t parent_pos, int level );
+#include "read.h"
+#include "write.h"
 
 static int isom_bs_read_box_common( lsmash_bs_t *bs, isom_box_t *box, uint32_t read_size )
 {
@@ -254,6 +252,7 @@ static int isom_read_unknown_box( lsmash_file_t *file, isom_box_t *box, isom_box
     isom_box_common_copy( unknown, box );
     unknown->manager |= LSMASH_UNKNOWN_BOX;
     unknown->destruct = (isom_extension_destructor_t)isom_remove_unknown_box;
+    isom_set_box_writer( (isom_box_t *)unknown );
     if( read_size )
     {
         unknown->unknown_field = lsmash_bs_get_bytes( bs, read_size );
@@ -450,7 +449,7 @@ static int isom_read_mvhd( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 
 static int isom_read_iods( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV ) )
+    if( file->fake_file_mode || !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV ) )
         return isom_read_unknown_box( file, box, parent, level );
     isom_iods_t *iods = lsmash_malloc_zero( sizeof(isom_iods_t) );
     if( !iods )
@@ -2270,6 +2269,8 @@ static int isom_read_trun( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 
 static int isom_read_free( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
+    if( file->fake_file_mode )
+        return isom_read_unknown_box( file, box, parent, level );
     isom_box_t *skip = lsmash_malloc_zero( sizeof(isom_box_t) );
     if( !skip )
         return -1;
@@ -2288,7 +2289,7 @@ static int isom_read_free( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 
 static int isom_read_mdat( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( !lsmash_check_box_type_identical( parent->type, LSMASH_BOX_TYPE_UNSPECIFIED ) )
+    if( file->fake_file_mode || !lsmash_check_box_type_identical( parent->type, LSMASH_BOX_TYPE_UNSPECIFIED ) )
         return isom_read_unknown_box( file, box, parent, level );
     isom_box_t *mdat = lsmash_malloc_zero( sizeof(isom_box_t) );
     if( !mdat )
@@ -2610,7 +2611,7 @@ static int isom_check_qtff_meta( lsmash_buffer_t *buffer )
     return 1;       /* OK. This shall be 'meta' box of QTFF. */
 }
 
-static int isom_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uint64_t parent_pos, int level )
+int isom_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uint64_t parent_pos, int level )
 {
     lsmash_bs_t *bs = file->bs;
     memset( box, 0, sizeof(isom_box_t) );
@@ -3057,5 +3058,3 @@ int isom_read_file( lsmash_file_t *file )
         return ret;
     return isom_check_compatibility( file );
 }
-
-#endif /* LSMASH_DEMUXER_ENABLED */

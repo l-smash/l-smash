@@ -24,5 +24,6 @@
 #define LSMASH_READ_H
 
 int isom_read_file( lsmash_file_t *file );
+int isom_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uint64_t parent_pos, int level );
 
 #endif /* LSMASH_READ_H */

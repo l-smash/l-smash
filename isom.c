@@ -36,9 +36,7 @@
 #include "write.h"
 #include "description.h"
 #include "fragment.h"
-#ifdef LSMASH_DEMUXER_ENABLED
 #include "read.h"
-#endif
 
 /*---- ----*/
 char *isom_4cc2str( uint32_t fourcc )

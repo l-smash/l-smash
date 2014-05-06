@@ -52,7 +52,7 @@ int lsmash_write_lsmash_indicator( lsmash_root_t *root )
     lsmash_box_t *free_box = lsmash_create_box( type, (uint8_t *)string, length, LSMASH_BOX_PRECEDENCE_N );
     if( !free_box )
         return 0;
-    if( lsmash_add_box( lsmash_root_as_box( root ), free_box ) )
+    if( lsmash_add_box_ex( lsmash_root_as_box( root ), &free_box ) < 0 )
     {
         lsmash_destroy_box( free_box );
         return 0;

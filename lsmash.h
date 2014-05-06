@@ -34,8 +34,8 @@
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  1
-#define LSMASH_VERSION_MINOR 10
-#define LSMASH_VERSION_MICRO  2
+#define LSMASH_VERSION_MINOR 11
+#define LSMASH_VERSION_MICRO  0
 
 #define LSMASH_VERSION_INT( a, b, c ) ((a << 16) | (b << 8) | (c))
 
@@ -525,6 +525,21 @@ int lsmash_add_box
 (
     lsmash_box_t *parent,
     lsmash_box_t *box
+);
+
+/* Add a box into 'parent' box as a child box.
+ * If the adding child box is known and its children (if any) are known, expand them into known
+ * struct formats for the internal references within the L-SMASH library.
+ * If this function succeed, the adding child box is deallocated and the address is invalid.
+ * Instead of that, this function replaces the invalid address with the valid one of the new
+ * allocated memory block representing the added and expanded child box.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_add_box_ex
+(
+    lsmash_box_t  *parent,
+    lsmash_box_t **box
 );
 
 /* Deallocate a given box and its children. */

@@ -1893,6 +1893,7 @@ struct lsmash_file_tag
         uint32_t  brand_count;
         uint32_t *compatible_brands;        /* the backup of the compatible brands in the File Type Box or the valid Segment Type Box */
         uint8_t   bc_fclose;                /* a flag for backward compatible file closing */
+        uint8_t   fake_file_mode;           /* If set to 1, the bytestream manager handles fake-file stream. */
         /* flags for compatibility */
         uint8_t qt_compatible;              /* compatibility with QuickTime file format */
         uint8_t isom_compatible;            /* compatibility with ISO Base Media file format */
@@ -1908,6 +1909,14 @@ struct lsmash_file_tag
         uint8_t allow_moof_base;            /* If set to 1, default-base-is-moof is available for muxing. */
         uint8_t media_segment;              /* If set to 1, this file is a media segment. */
 };
+
+/* fake-file stream */
+typedef struct
+{
+    uint32_t size;
+    uint8_t *data;
+    uint32_t pos;
+} fake_file_stream_t;
 
 /* ROOT */
 struct lsmash_root_tag
