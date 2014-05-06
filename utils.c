@@ -829,7 +829,7 @@ void *lsmash_realloc( void *ptr, size_t size )
 
 void *lsmash_memdup( void *ptr, size_t size )
 {
-    if( !size )
+    if( !ptr || size == 0 )
         return NULL;
     void *dst = malloc( size );
     if( !dst )
