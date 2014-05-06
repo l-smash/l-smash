@@ -3637,17 +3637,26 @@ lsmash_box_t *lsmash_create_box
     uint64_t          precedence
 )
 {
-    if( !lsmash_check_box_type_specified( &type ) || !data || size < ISOM_BASEBOX_COMMON_SIZE )
+    if( !lsmash_check_box_type_specified( &type ) )
         return NULL;
     isom_unknown_box_t *box = lsmash_malloc_zero( sizeof(isom_unknown_box_t) );
     if( !box )
         return NULL;
-    box->unknown_size  = size;
-    box->unknown_field = lsmash_memdup( data, size );
-    if( !box->unknown_field )
+    if( size && data )
     {
-        lsmash_free( box );
-        return NULL;
+        box->unknown_size  = size;
+        box->unknown_field = lsmash_memdup( data, size );
+        if( !box->unknown_field )
+        {
+            lsmash_free( box );
+            return NULL;
+        }
+    }
+    else
+    {
+        box->unknown_size  = 0;
+        box->unknown_field = NULL;
+        size = 0;
     }
     box->class      = &lsmash_box_class;
     box->root       = NULL;
