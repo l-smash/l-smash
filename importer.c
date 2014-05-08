@@ -669,7 +669,51 @@ typedef struct
     uint32_t            au_number;
     uint16_t            main_data_size[32]; /* size of main_data of the last 32 frames, FIFO */
     uint16_t            prev_preroll_count; /* number of dependent frames of *previous* frame */
+    uint16_t            enc_delay;
+    uint16_t            padding;
+    uint64_t            valid_samples;
 } mp4sys_mp3_info_t;
+
+static int parse_xing_info_header( mp4sys_mp3_info_t *info, mp4sys_mp3_header_t *header, uint8_t *frame )
+{
+    unsigned int sip = header->protection_bit ? 4 : 6;
+    unsigned int side_info_size;
+    if( header->ID == 1 )
+        side_info_size = MP4SYS_MODE_IS_2CH( header->mode ) ? 32 : 17;
+    else
+        side_info_size = MP4SYS_MODE_IS_2CH( header->mode ) ? 17 : 9;
+
+    uint8_t *mdp = frame + sip + side_info_size;
+    if( memcmp( mdp, "Info", 4 ) && memcmp( mdp, "Xing", 4 ) )
+        return 0;
+    uint32_t flags = LSMASH_4CC( mdp[4], mdp[5], mdp[6], mdp[7] );
+    uint32_t off = 8;
+    uint32_t frame_count = 0;
+    if( flags & 1 )
+    {
+        frame_count = LSMASH_4CC( mdp[8], mdp[9], mdp[10], mdp[11] );
+        info->valid_samples = (uint64_t)frame_count * mp4sys_mp3_samples_in_frame( header );
+        off += 4;
+    }
+    if( flags & 2 ) off +=   4; /* file size    */
+    if( flags & 4 ) off += 100; /* TOC          */
+    if( flags & 8 ) off +=   4; /* VBR quality  */
+
+    if( mdp[off] == 'L' )
+    {   /* LAME header present */
+        unsigned v = (mdp[off + 21] << 16) | (mdp[off + 22] << 8) | mdp[off + 23];
+        info->enc_delay     = v >> 12;
+        info->padding       = v & 0xfff;
+        if( frame_count )
+            info->valid_samples -= info->enc_delay + info->padding;
+    }
+    return 1;
+}
+
+static int parse_vbri_header( mp4sys_mp3_info_t *info, mp4sys_mp3_header_t *header, uint8_t *frame )
+{
+    return memcmp( frame + 36, "VBRI", 4 ) == 0;
+}
 
 static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
 {
@@ -745,8 +789,17 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
     buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
     buffered_sample->prop.pre_roll.distance = header->layer == MP4SYS_LAYER_III ? 1 : 0;    /* Layer III uses MDCT */
 
+    int vbr_header_present = 0;
+    if( info->au_number == 1
+     && (parse_xing_info_header( info, header, buffered_sample->data )
+      || parse_vbri_header( info, header, buffered_sample->data )) )
+    {
+        vbr_header_present = 1;
+        info->au_number--;
+    }
+
     /* handle additional inter-frame dependency due to bit reservoir */
-    if( header->layer == MP4SYS_LAYER_III )
+    if( !vbr_header_present && header->layer == MP4SYS_LAYER_III )
     {
         /* position of side_info */
         unsigned int sip = header->protection_bit ? 4 : 6;
@@ -837,6 +890,9 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
     else
         info->status = IMPORTER_OK; /* no change which matters to mp4 muxing was found */
     info->header = new_header;
+
+    if( vbr_header_present )
+        return mp4sys_mp3_get_accessunit( importer, track_number, buffered_sample );
     return 0;
 }
 
