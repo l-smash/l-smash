@@ -527,6 +527,8 @@ const static importer_functions mp4sys_adts_importer =
     mp3 (Legacy Interface) importer
 ***************************************************************************/
 
+#define USE_MP4SYS_LEGACY_INTERFACE 1
+
 static void mp4sys_mp3_cleanup( importer_t *importer )
 {
     debug_if( importer && importer->info )
@@ -612,7 +614,7 @@ static lsmash_audio_summary_t *mp4sys_mp3_create_summary( mp4sys_mp3_header_t *h
     summary->samples_in_frame       = mp4sys_mp3_samples_in_frame( header );
     summary->aot                    = MP4A_AUDIO_OBJECT_TYPE_Layer_1 + (MP4SYS_LAYER_I - header->layer); /* no effect with Legacy Interface. */
     summary->sbr_mode               = MP4A_AAC_SBR_NOT_SPECIFIED; /* no effect */
-#if 0 /* FIXME: This is very unstable. Many players crash with this. */
+#if !USE_MP4SYS_LEGACY_INTERFACE /* FIXME: This is very unstable. Many players crash with this. */
     if( !legacy_mode )
     {
         summary->object_type_indication = MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3;
@@ -622,7 +624,6 @@ static lsmash_audio_summary_t *mp4sys_mp3_create_summary( mp4sys_mp3_header_t *h
             return NULL;
         }
     }
-#endif
     uint32_t data_length;
     uint8_t *data = mp4a_export_AudioSpecificConfig( MP4A_AUDIO_OBJECT_TYPE_Layer_1 + (MP4SYS_LAYER_I - header->layer),
                                                      summary->frequency, summary->channels, summary->sbr_mode,
@@ -632,17 +633,21 @@ static lsmash_audio_summary_t *mp4sys_mp3_create_summary( mp4sys_mp3_header_t *h
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         return NULL;
     }
+#endif
     lsmash_codec_specific_t *specific = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG,
                                                                            LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
     if( !specific )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+#if !USE_MP4SYS_LEGACY_INTERFACE
         lsmash_free( data );
+#endif
         return NULL;
     }
     lsmash_mp4sys_decoder_parameters_t *param = (lsmash_mp4sys_decoder_parameters_t *)specific->data.structured;
     param->objectTypeIndication = header->ID ? MP4SYS_OBJECT_TYPE_Audio_ISO_11172_3 : MP4SYS_OBJECT_TYPE_Audio_ISO_13818_3;
     param->streamType           = MP4SYS_STREAM_TYPE_AudioStream;
+#if !USE_MP4SYS_LEGACY_INTERFACE
     if( lsmash_set_mp4sys_decoder_specific_info( param, data, data_length ) )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
@@ -651,6 +656,7 @@ static lsmash_audio_summary_t *mp4sys_mp3_create_summary( mp4sys_mp3_header_t *h
         return NULL;
     }
     lsmash_free( data );
+#endif
     if( lsmash_add_entry( &summary->opaque->list, specific ) )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
