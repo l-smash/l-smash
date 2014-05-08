@@ -797,6 +797,12 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
         info->status = IMPORTER_EOF;
         return 0;
     }
+    if( ret >= 2 && (!memcmp( buf, "TA", 2 ) || !memcmp( buf, "AP", 2 )) )
+    {
+        /* ID3v1 or APE tag */
+        info->status = IMPORTER_EOF;
+        return 0;
+    }
     if( ret == 1 && *buf == 0x00 )
     {
         /* NOTE: ugly hack for mp1 stream created with SCMPX. */
@@ -836,6 +842,23 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
 
 static int mp4sys_mp3_probe( importer_t *importer )
 {
+    int c;
+    if( (c = getc( importer->stream )) == 'I'
+     && (c = getc( importer->stream )) == 'D'
+     && (c = getc( importer->stream )) == '3' )
+    {
+        lsmash_fseek( importer->stream, 3, SEEK_CUR );
+        uint32_t size = 0;
+        for( int i = 0 ; i < 4; i++ )
+        {
+            size <<= 7;
+            size |= getc( importer->stream );
+        }
+        lsmash_fseek( importer->stream, size, SEEK_CUR );
+    }
+    else
+        ungetc( c, importer->stream );
+
     uint8_t buf[MP4SYS_MP3_HEADER_LENGTH];
     if( fread( buf, 1, MP4SYS_MP3_HEADER_LENGTH, importer->stream ) != MP4SYS_MP3_HEADER_LENGTH )
         return -1;
