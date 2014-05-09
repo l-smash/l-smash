@@ -26,7 +26,8 @@
 #include <string.h>
 #include <inttypes.h>
 
-#include "box.h"
+#include "core/box.h"
+
 #include "description.h"
 #include "mp4a.h"
 #define MP4SYS_INTERNAL

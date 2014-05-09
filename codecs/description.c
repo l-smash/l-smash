@@ -25,7 +25,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "box.h"
+#include "core/box.h"
+
 #include "mp4a.h"
 #include "mp4sys.h"
 #include "description.h"

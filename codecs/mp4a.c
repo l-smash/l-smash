@@ -23,8 +23,9 @@
 #include "common/internal.h" /* must be placed first */
 
 #define MP4A_INTERNAL
+#include "core/box.h"
+
 #include "mp4a.h"
-#include "box.h"
 #include "description.h"
 
 #include <stdlib.h>

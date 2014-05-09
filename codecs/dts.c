@@ -26,7 +26,7 @@
 #include <string.h>
 #include <inttypes.h>
 
-#include "box.h"
+#include "core/box.h"
 
 /***************************************************************************
     ETSI TS 102 114 V1.2.1 (2002-12)

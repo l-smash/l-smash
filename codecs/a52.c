@@ -26,7 +26,7 @@
 #include <string.h>
 #include <inttypes.h>
 
-#include "box.h"
+#include "core/box.h"
 
 static const char *bit_stream_mode[] =
     {

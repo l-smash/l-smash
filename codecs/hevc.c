@@ -26,7 +26,7 @@
 #include <stdlib.h>
 #include <inttypes.h>
 
-#include "box.h"
+#include "core/box.h"
 
 /***************************************************************************
     ITU-T Recommendation H.265 (04/13)

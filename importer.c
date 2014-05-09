@@ -31,7 +31,8 @@
 #define LSMASH_IMPORTER_INTERNAL
 #include "importer.h"
 
-#include "box.h"
+#include "core/box.h"
+
 #include "codecs/mp4a.h"
 #include "codecs/description.h"
 

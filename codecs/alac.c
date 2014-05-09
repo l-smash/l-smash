@@ -26,7 +26,7 @@
 #include <string.h>
 #include <inttypes.h>
 
-#include "box.h"
+#include "core/box.h"
 
 #define ALAC_SPECIFIC_BOX_LENGTH 36
 
