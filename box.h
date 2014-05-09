@@ -29,8 +29,6 @@
 #include <time.h>
 #define ISOM_MAC_EPOCH_OFFSET 2082844800
 
-#include "utils.h"
-
 static const lsmash_class_t lsmash_box_class =
 {
     "box"

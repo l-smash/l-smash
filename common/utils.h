@@ -33,9 +33,6 @@ typedef struct
     char *name;
 } lsmash_class_t;
 
-#include "bstream.h"
-#include "list.h"
-
 /*---- type ----*/
 double lsmash_fixed2double( uint64_t value, int frac_width );
 float lsmash_int2float32( uint32_t value );

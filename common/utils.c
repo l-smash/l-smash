@@ -30,8 +30,6 @@
 #include <windows.h>
 #endif
 
-#include "utils.h"
-
 /*---- type ----*/
 double lsmash_fixed2double( uint64_t value, int frac_width )
 {

@@ -20,9 +20,7 @@
 
 /* This file is available under an ISC license. */
 
-#include "internal.h" /* must be placed first */
-
-#include "utils.h"
+#include "common/internal.h" /* must be placed first */
 
 #include <stdlib.h>
 #include <string.h>

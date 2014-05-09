@@ -24,8 +24,6 @@
 
 #include <string.h>
 
-#include "list.h"
-
 void lsmash_init_entry_list( lsmash_entry_list_t *list )
 {
     list->head                 = NULL;

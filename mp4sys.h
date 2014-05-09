@@ -139,8 +139,6 @@ struct lsmash_mp4sys_decoder_specific_info_tag
 
 #ifndef MP4SYS_INTERNAL
 
-#include "utils.h"
-
 typedef void mp4sys_ES_Descriptor_t;
 typedef void mp4sys_ObjectDescriptor_t;
 

@@ -25,8 +25,6 @@
 #include <string.h>
 #include <limits.h>
 
-#include "utils.h"
-
 uint64_t lsmash_bs_get_pos( lsmash_bs_t *bs )
 {
     return bs->buffer.pos;

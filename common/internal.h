@@ -23,7 +23,7 @@
 #ifndef INTERNAL_H
 #define INTERNAL_H
 
-#include "common/osdep.h" /* must be placed before stdio.h */
+#include "osdep.h" /* must be placed before stdio.h */
 #include <stdio.h>
 #include <assert.h>
 
@@ -33,5 +33,9 @@
 #endif
 
 #include "lsmash.h"
+
+#include "utils.h"
+#include "bstream.h"
+#include "list.h"
 
 #endif

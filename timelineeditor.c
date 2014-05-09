@@ -20,7 +20,7 @@
 
 /* This file is available under an ISC license. */
 
-#include "internal.h"
+#include "common/internal.h"
 
 #include <stdlib.h>
 #include <stdio.h>

@@ -22,8 +22,6 @@
 
 #include "internal.h" /* must be placed first */
 
-#include "common/osdep.h"
-#include <stdio.h>
 #include <stdlib.h>
 
 #ifdef _WIN32
