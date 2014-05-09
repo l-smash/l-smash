@@ -34,40 +34,7 @@ typedef struct
 } lsmash_class_t;
 
 #include "bstream.h"
-
-/*---- list ----*/
-
-typedef struct lsmash_entry_tag lsmash_entry_t;
-
-struct lsmash_entry_tag
-{
-    lsmash_entry_t *next;
-    lsmash_entry_t *prev;
-    void *data;
-};
-
-typedef struct
-{
-    lsmash_entry_t *head;
-    lsmash_entry_t *tail;
-    lsmash_entry_t *last_accessed_entry;
-    uint32_t last_accessed_number;
-    uint32_t entry_count;
-} lsmash_entry_list_t;
-
-typedef void (*lsmash_entry_data_eliminator)(void *data); /* very same as free() of standard c lib; void free(void *); */
-
-void lsmash_init_entry_list( lsmash_entry_list_t *list );
-lsmash_entry_list_t *lsmash_create_entry_list( void );
-int lsmash_add_entry( lsmash_entry_list_t *list, void *data );
-int lsmash_remove_entry_direct( lsmash_entry_list_t *list, lsmash_entry_t *entry, void *eliminator );
-int lsmash_remove_entry( lsmash_entry_list_t *list, uint32_t entry_number, void *eliminator );
-int lsmash_remove_entry_tail( lsmash_entry_list_t *list, void *eliminator );
-void lsmash_remove_entries( lsmash_entry_list_t *list, void *eliminator );
-void lsmash_remove_list( lsmash_entry_list_t *list, void *eliminator );
-
-lsmash_entry_t *lsmash_get_entry( lsmash_entry_list_t *list, uint32_t entry_number );
-void *lsmash_get_entry_data( lsmash_entry_list_t *list, uint32_t entry_number );
+#include "list.h"
 
 /*---- type ----*/
 double lsmash_fixed2double( uint64_t value, int frac_width );
