@@ -27,10 +27,11 @@
 #include <inttypes.h>
 
 #include "box.h"
-#include "mp4a.h"
-#include "mp4sys.h"
 #include "write.h"
-#include "description.h"
+
+#include "codecs/mp4a.h"
+#include "codecs/mp4sys.h"
+#include "codecs/description.h"
 
 int isom_write_box( lsmash_bs_t *bs, isom_box_t *box );
 

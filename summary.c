@@ -26,10 +26,11 @@
 #include <string.h>
 
 #include "importer.h"
-#include "mp4a.h"
-#include "mp4sys.h"
 #include "box.h"
-#include "description.h"
+
+#include "codecs/mp4a.h"
+#include "codecs/mp4sys.h"
+#include "codecs/description.h"
 
 /***************************************************************************
     summary and AudioSpecificConfig relative tools

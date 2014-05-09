@@ -31,9 +31,9 @@
 #define LSMASH_IMPORTER_INTERNAL
 #include "importer.h"
 
-#include "mp4a.h"
 #include "box.h"
-#include "description.h"
+#include "codecs/mp4a.h"
+#include "codecs/description.h"
 
 /***************************************************************************
     importer framework
@@ -1151,7 +1151,7 @@ const static importer_functions amr_importer =
     AC-3 importer
     ETSI TS 102 366 V1.2.1 (2008-08)
 ***************************************************************************/
-#include "a52.h"
+#include "codecs/a52.h"
 
 #define AC3_SAMPLE_DURATION 1536    /* 256 (samples per audio block) * 6 (audio blocks) */
 
@@ -2199,7 +2199,7 @@ const static importer_functions mp4sys_als_importer =
     ETSI TS 102 114 V1.3.1 (2011-08)
     ETSI TS 102 114 V1.4.1 (2012-09)
 ***************************************************************************/
-#include "dts.h"
+#include "codecs/dts.h"
 
 typedef struct
 {
@@ -2493,8 +2493,8 @@ const static importer_functions dts_importer =
     ITU-T Recommendation H.264 (04/13)
     ISO/IEC 14496-15:2010
 ***************************************************************************/
-#include "h264.h"
-#include "nalu.h"
+#include "codecs/h264.h"
+#include "codecs/nalu.h"
 
 typedef struct
 {
@@ -3372,7 +3372,7 @@ const static importer_functions h264_importer =
     ITU-T Recommendation H.265 (04/13)
     ISO/IEC 14496-15:2013 FDIS
 ***************************************************************************/
-#include "hevc.h"
+#include "codecs/hevc.h"
 
 typedef struct
 {
@@ -4044,7 +4044,7 @@ const static importer_functions hevc_importer =
     SMPTE 421M-2006
     SMPTE RP 2025-2007
 ***************************************************************************/
-#include "vc1.h"
+#include "codecs/vc1.h"
 
 typedef struct
 {

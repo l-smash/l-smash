@@ -28,11 +28,12 @@
 
 #include "box.h"
 #include "print.h"
-#include "mp4a.h"
-#include "mp4sys.h"
-#include "description.h"
 #include "read.h"
 #include "write.h"
+
+#include "codecs/mp4a.h"
+#include "codecs/mp4sys.h"
+#include "codecs/description.h"
 
 static int isom_bs_read_box_common( lsmash_bs_t *bs, isom_box_t *box, uint32_t read_size )
 {

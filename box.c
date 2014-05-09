@@ -26,14 +26,15 @@
 #include <string.h>
 
 #include "box.h"
-#include "mp4a.h"
-#include "mp4sys.h"
 #include "write.h"
 #include "read.h"
 #ifdef LSMASH_DEMUXER_ENABLED
 #include "print.h"
 #include "timeline.h"
 #endif
+
+#include "codecs/mp4a.h"
+#include "codecs/mp4sys.h"
 
 void isom_init_box_common
 (

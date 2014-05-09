@@ -31,12 +31,13 @@
 #endif
 
 #include "box.h"
-#include "mp4a.h"
-#include "mp4sys.h"
 #include "write.h"
-#include "description.h"
 #include "fragment.h"
 #include "read.h"
+
+#include "codecs/mp4a.h"
+#include "codecs/mp4sys.h"
+#include "codecs/description.h"
 
 /*---- ----*/
 char *isom_4cc2str( uint32_t fourcc )

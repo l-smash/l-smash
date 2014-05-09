@@ -29,9 +29,10 @@
 #include <inttypes.h>
 
 #include "box.h"
-#include "mp4a.h"
-#include "mp4sys.h"
-#include "description.h"
+
+#include "codecs/mp4a.h"
+#include "codecs/mp4sys.h"
+#include "codecs/description.h"
 
 #define NO_RANDOM_ACCESS_POINT 0xffffffff
 
