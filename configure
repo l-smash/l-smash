@@ -270,9 +270,9 @@ fi
 #=============================================================================
 # Notation for developpers.
 # Be sure to modified this block when you add/delete source files.
-SRCS="isom.c fragment.c utils.c bstream.c list.c mp4sys.c mp4a.c dts.c a52.c \
-      h264.c hevc.c vc1.c alac.c importer.c summary.c print.c read.c timeline.c \
-      chapter.c meta.c write.c description.c box.c osdep.c"
+SRCS="isom.c fragment.c alloc.c utils.c bstream.c list.c mp4sys.c mp4a.c dts.c \
+      a52.c h264.c hevc.c vc1.c alac.c importer.c summary.c print.c read.c \
+      timeline.c chapter.c meta.c write.c description.c box.c osdep.c"
 
 TOOLS_ALL="muxer remuxer boxdumper timelineeditor"
 TOOLS_NAME=""

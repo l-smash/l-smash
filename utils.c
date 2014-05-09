@@ -25,7 +25,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
-#include <limits.h>
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -47,55 +46,6 @@ float lsmash_int2float32( uint32_t value )
 double lsmash_int2float64( uint64_t value )
 {
     return (union {uint64_t i; double d;}){value}.d;
-}
-/*---- ----*/
-
-/*---- allocator ----*/
-void *lsmash_malloc( size_t size )
-{
-    return malloc( size );
-}
-
-void *lsmash_malloc_zero( size_t size )
-{
-    if( !size )
-        return NULL;
-    void *p = malloc( size );
-    if( !p )
-        return NULL;
-    memset( p, 0, size );
-    return p;
-}
-
-void *lsmash_realloc( void *ptr, size_t size )
-{
-    return realloc( ptr, size );
-}
-
-void *lsmash_memdup( void *ptr, size_t size )
-{
-    if( !ptr || size == 0 )
-        return NULL;
-    void *dst = malloc( size );
-    if( !dst )
-        return NULL;
-    memcpy( dst, ptr, size );
-    return dst;
-}
-
-void lsmash_free( void *ptr )
-{
-    /* free() shall do nothing if a given address is NULL. */
-    free( ptr );
-}
-
-void lsmash_freep( void *ptrptr )
-{
-    if( !ptrptr )
-        return;
-    void **ptr = (void **)ptrptr;
-    free( *ptr );
-    *ptr = NULL;
 }
 /*---- ----*/
 
