@@ -25,7 +25,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "importer.h"
 #include "box.h"
 
 #include "codecs/mp4a.h"

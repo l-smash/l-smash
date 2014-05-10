@@ -275,11 +275,11 @@ SRCS="common/alloc.c common/utils.c common/bstream.c common/list.c \
       codecs/h264.c codecs/hevc.c codecs/vc1.c codecs/alac.c \
       codecs/description.c core/isom.c core/fragment.c core/summary.c \
       core/print.c core/read.c core/timeline.c core/chapter.c core/meta.c \
-      core/write.c core/box.c importer.c"
+      core/write.c core/box.c"
 
 TOOLS_ALL="muxer remuxer boxdumper timelineeditor"
 TOOLS_NAME=""
-SRC_TOOLS="cli.c"
+SRC_TOOLS="cli/cli.c cli/importer.c"
 if test -n "$DEMUXER"; then
     CFLAGS="$CFLAGS -DLSMASH_DEMUXER_ENABLED"
     TOOLS="$TOOLS_ALL"
@@ -287,8 +287,8 @@ else
     TOOLS="muxer"
 fi
 for tool in $TOOLS; do
-    SRC_TOOLS="$SRC_TOOLS ${tool}.c"
-    TOOLS_NAME="$TOOLS_NAME ${tool}${EXT}"
+    SRC_TOOLS="$SRC_TOOLS cli/${tool}.c"
+    TOOLS_NAME="$TOOLS_NAME cli/${tool}${EXT}"
 done
 #=============================================================================
 
@@ -355,8 +355,8 @@ EOF
 
 for tool in $TOOLS; do
     cat >> config.mak2 << EOF
-${tool}${EXT}: ${tool}.o cli.o $STATICLIB $SHAREDLIB
-	\$(CC) \$(CFLAGS) \$(LDFLAGS) -o \$@ \$< cli.o -llsmash \$(LIBS)
+cli/${tool}${EXT}: cli/${tool}.o cli/cli.o cli/importer.o $STATICLIB $SHAREDLIB
+	\$(CC) \$(CFLAGS) \$(LDFLAGS) -o \$@ \$< cli/cli.o cli/importer.o -llsmash \$(LIBS)
 	-@ \$(if \$(STRIP), \$(STRIP) \$@)
 
 EOF
