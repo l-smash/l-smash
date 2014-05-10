@@ -49,11 +49,11 @@ void lsmash_bs_free( lsmash_bs_t *bs )
     bs->buffer.pos   = 0;
 }
 
-void lsmash_bs_alloc( lsmash_bs_t *bs, uint64_t size )
+static void bs_alloc( lsmash_bs_t *bs, size_t alloc )
 {
-    if( (bs->buffer.alloc >= size) || bs->error )
+    if( (bs->buffer.alloc >= alloc) || bs->error )
         return;
-    uint64_t alloc = size + (1<<16);
+    alloc += (1 << 16);
     uint8_t *data;
     if( !bs->buffer.data )
         data = lsmash_malloc( alloc );
@@ -107,7 +107,7 @@ int64_t lsmash_bs_seek( lsmash_bs_t *bs, int64_t offset, int whence )
 /*---- bitstream writer ----*/
 void lsmash_bs_put_byte( lsmash_bs_t *bs, uint8_t value )
 {
-    lsmash_bs_alloc( bs, bs->buffer.store + 1 );
+    bs_alloc( bs, bs->buffer.store + 1 );
     if( bs->error )
         return;
     bs->buffer.data[ bs->buffer.store ++ ] = value;
@@ -117,7 +117,7 @@ void lsmash_bs_put_bytes( lsmash_bs_t *bs, uint32_t size, void *value )
 {
     if( !size || !value )
         return;
-    lsmash_bs_alloc( bs, bs->buffer.store + size );
+    bs_alloc( bs, bs->buffer.store + size );
     if( bs->error )
         return;
     memcpy( bs->buffer.data + bs->buffer.store, value, size );
@@ -359,7 +359,7 @@ int lsmash_bs_read( lsmash_bs_t *bs, uint32_t size )
         return -1;
     if( size == 0 )
         return 0;
-    lsmash_bs_alloc( bs, bs->buffer.store + size );
+    bs_alloc( bs, bs->buffer.store + size );
     if( bs->error || !bs->stream )
     {
         lsmash_bs_free( bs );
@@ -427,7 +427,7 @@ int lsmash_bs_import_data( lsmash_bs_t *bs, void* data, uint32_t length )
 {
     if( !bs || bs->error || !data || length == 0 )
         return -1;
-    lsmash_bs_alloc( bs, bs->buffer.store + length );
+    bs_alloc( bs, bs->buffer.store + length );
     if( bs->error || !bs->buffer.data ) /* means, failed to alloc. */
     {
         lsmash_bs_free( bs );
