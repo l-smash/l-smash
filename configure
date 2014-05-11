@@ -364,6 +364,7 @@ done
 
 
 test "$SRCDIR" = "." || ln -sf ${SRCDIR}/Makefile .
+mkdir -p cli codecs common core
 
 
 cat << EOF
