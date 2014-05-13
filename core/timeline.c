@@ -40,7 +40,7 @@ typedef struct
 {
     uint64_t data_offset;
     uint64_t length;
-    uint32_t number;
+    uint32_t number;    /* useless at present */
 } isom_portable_chunk_t;
 
 typedef struct
@@ -85,17 +85,12 @@ struct isom_timeline_tag
     uint64_t media_duration;
     uint64_t track_duration;
     uint32_t last_accessed_sample_number;
-    uint32_t last_accessed_chunk_number;
     uint64_t last_accessed_sample_dts;
-    uint64_t last_accessed_offset;
     uint32_t last_accessed_lpcm_bunch_number;
     uint32_t last_accessed_lpcm_bunch_duration;
     uint32_t last_accessed_lpcm_bunch_sample_count;
     uint32_t last_accessed_lpcm_bunch_first_sample_number;
     uint64_t last_accessed_lpcm_bunch_dts;
-    uint64_t last_read_size;
-    uint32_t last_accessed_chunk_alloc_size;
-    void    *last_accessed_chunk_data;  /* may not contain all of a chunk */
     lsmash_entry_list_t edit_list [1];  /* list of edits */
     lsmash_entry_list_t chunk_list[1];  /* list of chunks */
     lsmash_entry_list_t info_list [1];  /* list of sample info */
@@ -141,8 +136,6 @@ static void isom_destruct_timeline_direct( isom_timeline_t *timeline )
 {
     if( !timeline )
         return;
-    if( timeline->last_accessed_chunk_data )
-        lsmash_free( timeline->last_accessed_chunk_data );
     lsmash_remove_entries( timeline->edit_list,        NULL );
     lsmash_remove_entries( timeline->chunk_list,       NULL );     /* chunk data must be already freed. */
     lsmash_remove_entries( timeline->info_list,        NULL );
@@ -428,56 +421,20 @@ static int isom_check_sample_existence_in_bunch_list( isom_timeline_t *timeline,
     return !!isom_get_bunch( timeline, sample_number );
 }
 
-static lsmash_sample_t *isom_read_sample_data_from_stream( lsmash_file_t *file, isom_timeline_t *timeline, isom_portable_chunk_t *chunk,
-                                                           uint32_t sample_length, uint64_t sample_pos )
+static lsmash_sample_t *isom_read_sample_data_from_stream
+(
+    lsmash_file_t   *file,
+    isom_timeline_t *timeline,
+    uint32_t         sample_length,
+    uint64_t         sample_pos
+)
 {
-    if( (timeline->last_accessed_chunk_number != chunk->number)
-     || (timeline->last_accessed_offset > sample_pos)
-     || (timeline->last_accessed_offset + timeline->last_read_size < sample_pos + sample_length) )
-    {
-        /* Realloc if an update of max_read_size exceeds the current allocated data size. */
-        if( file->max_read_size > timeline->last_accessed_chunk_alloc_size )
-        {
-            void *temp = lsmash_realloc( timeline->last_accessed_chunk_data, file->max_read_size );
-            if( temp )
-                timeline->last_accessed_chunk_data = temp;
-            else
-            {
-                file->max_read_size = timeline->last_accessed_chunk_alloc_size;
-                lsmash_log( timeline, LSMASH_LOG_WARNING, "Memory re-allocation by the new max_read_size failed.\n" );
-            }
-        }
-        /* Read data of a chunk in the stream. */
-        uint64_t read_size;
-        uint64_t seek_pos;
-        if( file->max_read_size >= chunk->length )
-        {
-            /* Read by a chunk size. */
-            read_size = chunk->length;
-            seek_pos  = chunk->data_offset;
-        }
-        else
-        {
-            /* Read by a sample size. */
-            read_size = LSMASH_MAX( file->max_read_size, sample_length );
-            seek_pos  = sample_pos;
-        }
-        lsmash_bs_t *bs = file->bs;
-        lsmash_bs_seek( bs, seek_pos, SEEK_SET );
-        lsmash_bs_empty( bs );
-        if( lsmash_bs_read( bs, read_size ) < 0 )
-            return NULL;
-        timeline->last_accessed_chunk_number = chunk->number;
-        timeline->last_accessed_offset       = seek_pos;
-        timeline->last_read_size             = LSMASH_MIN( read_size, bs->buffer.store );
-        memcpy( timeline->last_accessed_chunk_data, bs->buffer.data, timeline->last_read_size );
-        lsmash_bs_empty( bs );
-    }
     lsmash_sample_t *sample = lsmash_create_sample( 0 );
     if( !sample )
         return NULL;
-    uint64_t offset_from_seek = sample_pos - timeline->last_accessed_offset;
-    sample->data = lsmash_memdup( timeline->last_accessed_chunk_data + offset_from_seek, sample_length );
+    lsmash_bs_t *bs = file->bs;
+    lsmash_bs_read_seek( bs, sample_pos, SEEK_SET );
+    sample->data = lsmash_bs_get_bytes( bs, sample_length );
     if( !sample->data )
     {
         lsmash_delete_sample( sample );
@@ -492,10 +449,9 @@ static lsmash_sample_t *isom_get_lpcm_sample_from_media_timeline( lsmash_file_t 
     if( !bunch )
         return NULL;
     /* Get data of a sample from the stream. */
-    isom_portable_chunk_t *chunk = bunch->chunk;
     uint32_t sample_number_offset = sample_number - timeline->last_accessed_lpcm_bunch_first_sample_number;
     uint64_t sample_pos           = bunch->pos + sample_number_offset * bunch->length;
-    lsmash_sample_t *sample = isom_read_sample_data_from_stream( file, timeline, chunk, bunch->length, sample_pos );
+    lsmash_sample_t *sample = isom_read_sample_data_from_stream( file, timeline, bunch->length, sample_pos );
     if( !sample )
         return NULL;
     /* Get sample info. */
@@ -516,8 +472,7 @@ static lsmash_sample_t *isom_get_sample_from_media_timeline( lsmash_file_t *file
     if( !info )
         return NULL;
     /* Get data of a sample from the stream. */
-    isom_portable_chunk_t *chunk = info->chunk;
-    lsmash_sample_t *sample = isom_read_sample_data_from_stream( file, timeline, chunk, info->length, info->pos );
+    lsmash_sample_t *sample = isom_read_sample_data_from_stream( file, timeline, info->length, info->pos );
     if( !sample )
         return NULL;
     /* Get sample info. */
@@ -1320,10 +1275,6 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     if( bunch.sample_count && isom_add_lpcm_bunch_entry( timeline, &bunch ) )
         goto fail;
     if( lsmash_add_entry( file->timeline, timeline ) )
-        goto fail;
-    timeline->last_accessed_chunk_alloc_size = LSMASH_MAX( file->max_read_size, timeline->max_sample_size );
-    timeline->last_accessed_chunk_data       = lsmash_malloc_zero( timeline->last_accessed_chunk_alloc_size );
-    if( !timeline->last_accessed_chunk_data )
         goto fail;
     /* Finish timeline construction. */
     timeline->sample_count = sample_count;

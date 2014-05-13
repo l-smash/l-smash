@@ -2610,20 +2610,20 @@ lsmash_file_t *lsmash_set_file
     lsmash_file_t *file = isom_add_file( root );
     if( !file )
         return NULL;
-    lsmash_bs_t *bs = lsmash_malloc_zero( sizeof(lsmash_bs_t) );
+    lsmash_bs_t *bs = lsmash_bs_create();
     if( !bs )
         goto fail;
-    file->bs             = bs;
-    file->flags          = param->mode;
-    file->bs->stream     = param->opaque;
-    file->bs->read       = param->read;
-    file->bs->write      = param->write;
-    file->bs->seek       = param->seek;
-    file->bs->unseekable = (param->seek == NULL);
+    file->bs                  = bs;
+    file->flags               = param->mode;
+    file->bs->stream          = param->opaque;
+    file->bs->read            = param->read;
+    file->bs->write           = param->write;
+    file->bs->seek            = param->seek;
+    file->bs->unseekable      = (param->seek == NULL);
+    file->bs->buffer.max_size = param->max_read_size;
     file->max_chunk_duration  = param->max_chunk_duration;
     file->max_async_tolerance = LSMASH_MAX( param->max_async_tolerance, 2 * param->max_chunk_duration );
     file->max_chunk_size      = param->max_chunk_size;
-    file->max_read_size       = param->max_read_size;
     if( (file->flags & LSMASH_FILE_MODE_WRITE)
      && (file->flags & LSMASH_FILE_MODE_BOX) )
     {
@@ -2683,11 +2683,11 @@ int64_t lsmash_read_file
         /* Get the file size if seekable when reading. */
         if( !file->bs->unseekable )
         {
-            ret = lsmash_bs_seek( file->bs, 0, SEEK_END );
+            ret = lsmash_bs_read_seek( file->bs, 0, SEEK_END );
             if( ret < 0 )
                 return ret;
             file->bs->written = ret;
-            lsmash_bs_seek( file->bs, 0, SEEK_SET );
+            lsmash_bs_read_seek( file->bs, 0, SEEK_SET );
         }
         else
             ret = 0;
@@ -2793,8 +2793,8 @@ int lsmash_set_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t 
         file->max_async_tolerance = LSMASH_MAX( param->max_async_tolerance, 2 * param->max_chunk_duration );
     if( param->max_chunk_size )
         file->max_chunk_size = param->max_chunk_size;
-    if( param->max_read_size )
-        file->max_read_size = param->max_read_size;
+    if( file->bs && param->max_read_size )
+        file->bs->buffer.max_size = param->max_read_size;
     mvhd->timescale           = param->timescale;
     if( file->qt_compatible || file->itunes_movie )
     {
@@ -2839,7 +2839,7 @@ int lsmash_get_movie_parameters( lsmash_root_t *root, lsmash_movie_parameters_t 
     param->max_chunk_duration  = file->max_chunk_duration;
     param->max_async_tolerance = file->max_async_tolerance;
     param->max_chunk_size      = file->max_chunk_size;
-    param->max_read_size       = file->max_read_size;
+    param->max_read_size       = file->bs ? file->bs->buffer.max_size : 0;
     param->timescale           = mvhd->timescale;
     param->duration            = mvhd->duration;
     param->playback_rate       = mvhd->rate;
@@ -3002,12 +3002,12 @@ int isom_rearrange_boxes
     lsmash_bs_t *bs = file->bs;
     while( read_num == size )
     {
-        if( lsmash_bs_seek( bs, read_pos, SEEK_SET ) < 0 )
+        if( lsmash_bs_write_seek( bs, read_pos, SEEK_SET ) < 0 )
             return -1;
         lsmash_bs_read_data( bs, buf[buf_switch], &read_num );
         read_pos    = bs->offset;
         buf_switch ^= 0x1;
-        if( lsmash_bs_seek( bs, write_pos, SEEK_SET ) < 0 )
+        if( lsmash_bs_write_seek( bs, write_pos, SEEK_SET ) < 0 )
             return -1;
         if( lsmash_bs_write_data( bs, buf[buf_switch], size ) < 0 )
             return -1;
@@ -3145,15 +3145,15 @@ int lsmash_finish_movie
     isom_mdat_t *mdat            = file->mdat;
     uint64_t     total           = file->size + mtf_size;
     uint64_t     placeholder_pos = file->free ? file->free->pos : mdat->pos;
-    if( lsmash_bs_seek( bs, placeholder_pos, SEEK_SET ) < 0 )
+    if( lsmash_bs_write_seek( bs, placeholder_pos, SEEK_SET ) < 0 )
         goto fail;
     size_t read_num = size;
     lsmash_bs_read_data( bs, buf[0], &read_num );
     uint64_t read_pos = bs->offset;
     /* Write moov + meta there instead. */
-    if( lsmash_bs_seek( bs, placeholder_pos, SEEK_SET ) < 0
-     || isom_write_box( bs, (isom_box_t *)file->moov )  < 0
-     || isom_write_box( bs, (isom_box_t *)file->meta )  < 0 )
+    if( lsmash_bs_write_seek( bs, placeholder_pos, SEEK_SET ) < 0
+     || isom_write_box( bs, (isom_box_t *)file->moov )        < 0
+     || isom_write_box( bs, (isom_box_t *)file->meta )        < 0 )
         goto fail;
     uint64_t write_pos = bs->offset;
     /* Update the positions */
@@ -3294,7 +3294,7 @@ int lsmash_modify_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID,
     lsmash_bs_t *bs = file->bs;
     uint64_t current_pos = bs->offset;
     uint64_t entry_pos = elst->pos + ISOM_LIST_FULLBOX_COMMON_SIZE + ((uint64_t)edit_number - 1) * (elst->version == 1 ? 20 : 12);
-    lsmash_bs_seek( bs, entry_pos, SEEK_SET );
+    lsmash_bs_write_seek( bs, entry_pos, SEEK_SET );
     if( elst->version )
     {
         lsmash_bs_put_be64( bs, data->segment_duration );
@@ -3307,7 +3307,7 @@ int lsmash_modify_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID,
     }
     lsmash_bs_put_be32( bs, data->media_rate );
     int ret = lsmash_bs_flush_buffer( bs );
-    lsmash_bs_seek( bs, current_pos, SEEK_SET );
+    lsmash_bs_write_seek( bs, current_pos, SEEK_SET );
     return ret;
 }
 

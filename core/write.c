@@ -1286,11 +1286,11 @@ static int isom_write_mdat( lsmash_bs_t *bs, isom_box_t *box )
             mdat->size += file->free->size;
             isom_remove_box_by_itself( file->free );
         }
-        lsmash_bs_seek( bs, mdat->pos, SEEK_SET );
+        lsmash_bs_write_seek( bs, mdat->pos, SEEK_SET );
         isom_bs_put_box_common( bs, mdat );
         /* isom_write_box() also calls lsmash_bs_flush_buffer() but it must do nothing. */
         int ret = lsmash_bs_flush_buffer( bs );
-        lsmash_bs_seek( bs, current_pos, SEEK_SET );
+        lsmash_bs_write_seek( bs, current_pos, SEEK_SET );
         return ret;
     }
     return -1;

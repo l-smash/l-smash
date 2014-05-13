@@ -126,9 +126,9 @@ static int isom_set_fragment_overall_duration( lsmash_file_t *file )
     /* Write Movie Extends Header Box here. */
     lsmash_bs_t *bs = file->bs;
     uint64_t current_pos = bs->offset;
-    lsmash_bs_seek( bs, mehd->pos, SEEK_SET );
+    lsmash_bs_write_seek( bs, mehd->pos, SEEK_SET );
     int ret = isom_write_box( bs, (isom_box_t *)mehd );
-    lsmash_bs_seek( bs, current_pos, SEEK_SET );
+    lsmash_bs_write_seek( bs, current_pos, SEEK_SET );
     return ret;
 }
 
@@ -307,13 +307,13 @@ int isom_finish_final_fragment_movie
         buf[1] = buf[0] + size;
         /* Seek to the beginning of the first Movie Fragment Box. */
         lsmash_bs_t *bs = file->bs;
-        if( lsmash_bs_seek( bs, file->fragment->first_moof_pos, SEEK_SET ) < 0 )
+        if( lsmash_bs_write_seek( bs, file->fragment->first_moof_pos, SEEK_SET ) < 0 )
             goto fail;
         size_t read_num = size;
         lsmash_bs_read_data( bs, buf[0], &read_num );
         uint64_t read_pos = bs->offset;
         /* */
-        if( lsmash_bs_seek( bs, file->fragment->first_moof_pos, SEEK_SET ) < 0 )
+        if( lsmash_bs_write_seek( bs, file->fragment->first_moof_pos, SEEK_SET ) < 0 )
             goto fail;
         for( lsmash_entry_t *entry = file->sidx_list.head; entry; entry = entry->next )
         {

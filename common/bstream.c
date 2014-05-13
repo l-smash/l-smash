@@ -25,9 +25,23 @@
 #include <string.h>
 #include <limits.h>
 
-uint64_t lsmash_bs_get_pos( lsmash_bs_t *bs )
+lsmash_bs_t *lsmash_bs_create( void )
 {
-    return bs->buffer.pos;
+    lsmash_bs_t *bs = lsmash_malloc_zero( sizeof(lsmash_bs_t) );
+    if( !bs )
+        return NULL;
+    bs->unseekable      = 1;
+    bs->buffer.internal = 1;
+    bs->buffer.max_size = BS_MAX_DEFAULT_READ_SIZE;
+    return bs;
+}
+
+void lsmash_bs_cleanup( lsmash_bs_t *bs )
+{
+    if( !bs )
+        return;
+    lsmash_bs_free( bs );
+    lsmash_free( bs );
 }
 
 void lsmash_bs_empty( lsmash_bs_t *bs )
@@ -41,7 +55,8 @@ void lsmash_bs_empty( lsmash_bs_t *bs )
 
 void lsmash_bs_free( lsmash_bs_t *bs )
 {
-    if( bs->buffer.data )
+    if( bs->buffer.internal
+     && bs->buffer.data )
         lsmash_free( bs->buffer.data );
     bs->buffer.data  = NULL;
     bs->buffer.alloc = 0;
@@ -53,7 +68,14 @@ static void bs_alloc( lsmash_bs_t *bs, size_t alloc )
 {
     if( (bs->buffer.alloc >= alloc) || bs->error )
         return;
+    if( !bs->buffer.internal )
+    {
+        /* We cannot re-allocate the memory block. */
+        bs->error = 1;
+        return;
+    }
     alloc += (1 << 16);
+    alloc  = LSMASH_MAX( alloc, bs->buffer.max_size );
     uint8_t *data;
     if( !bs->buffer.data )
         data = lsmash_malloc( alloc );
@@ -65,43 +87,101 @@ static void bs_alloc( lsmash_bs_t *bs, size_t alloc )
         bs->error = 1;
         return;
     }
-    bs->buffer.data  = data;
-    bs->buffer.alloc = alloc;
+    bs->buffer.internal = 1;
+    bs->buffer.data     = data;
+    bs->buffer.alloc    = alloc;
 }
 
-int64_t lsmash_bs_seek( lsmash_bs_t *bs, int64_t offset, int whence )
+static uint64_t bs_estimate_seek_offset( lsmash_bs_t *bs, int64_t offset, int whence )
 {
-    if( bs->unseekable )
-        return -1;
-    int64_t ret = bs->seek( bs->stream, offset, whence );
-    if( ret < 0 )
-        return ret;
+    /* Calculate the offset after the seek. */
+    uint64_t dst_offset;
     if( whence == SEEK_SET )
     {
         assert( offset >= 0 );
         if( bs->written < offset )
-            bs->offset = bs->written;
+            dst_offset = bs->written;
         else
-            bs->offset = offset;
+            dst_offset = offset;
     }
     else if( whence == SEEK_CUR )
     {
         if( offset < 0 && bs->offset < -offset )
-            bs->offset = 0;
+            dst_offset = 0;
         else if( offset > 0 && bs->written < bs->offset + offset )
-            bs->offset = bs->written;
+            dst_offset = bs->written;
         else
-            bs->offset += offset;
+            dst_offset = bs->offset + offset;
     }
-    else if( whence == SEEK_END )
+    else /* if( whence == SEEK_END ) */
     {
         assert( offset <= 0 );
         if( bs->written < -offset )
-            bs->offset = 0;
+            dst_offset = 0;
         else
-            bs->offset = bs->written + offset;
+            dst_offset = bs->written + offset;
     }
+    return dst_offset;
+}
+
+/* TODO: Support offset > INT64_MAX */
+int64_t lsmash_bs_write_seek( lsmash_bs_t *bs, int64_t offset, int whence )
+{
+    if( bs->unseekable || (whence != SEEK_SET && whence != SEEK_CUR && whence != SEEK_END) )
+        return -1;
+    /* Try to seek the stream. */
+    int64_t ret = bs->seek( bs->stream, offset, whence );
+    if( ret < 0 )
+        return ret;
+    bs->offset = bs_estimate_seek_offset( bs, offset, whence );
+    bs->eof    = 0;
+    bs->eob    = 0;
     return ret;
+}
+
+/* TODO: Support offset > INT64_MAX */
+int64_t lsmash_bs_read_seek( lsmash_bs_t *bs, int64_t offset, int whence )
+{
+    if( bs->unseekable || (whence != SEEK_SET && whence != SEEK_CUR && whence != SEEK_END) )
+        return -1;
+    if( whence == SEEK_CUR )
+        offset -= lsmash_bs_get_remaining_buffer_size( bs );
+    uint64_t dst_offset = bs_estimate_seek_offset( bs, offset, whence );
+    /* Check whether we can seek on the buffer. */
+    if( !bs->buffer.unseekable )
+    {
+        assert( bs->offset >= bs->buffer.store );
+        uint64_t offset_s = bs->offset - bs->buffer.store;
+        uint64_t offset_e = bs->offset;
+        if( dst_offset >= offset_s && dst_offset < offset_e )
+        {
+            /* OK, we can. So, seek on the buffer. */
+            bs->buffer.pos = dst_offset - offset_s;
+            bs->eob        = 0;
+            return bs->offset;
+        }
+    }
+    /* Try to seek the stream. */
+    int64_t ret = bs->seek( bs->stream, offset, whence );
+    if( ret < 0 )
+        return ret;
+    bs->offset = dst_offset;
+    bs->eof    = 0;
+    bs->eob    = 0;
+    /* The data on the buffer is invalid. */
+    lsmash_bs_empty( bs );
+    return ret;
+}
+
+static void bs_dispose_past_data( lsmash_bs_t *bs )
+{
+    /* Move remainder bytes. */
+    assert( bs->buffer.store >= bs->buffer.pos );
+    size_t remainder = lsmash_bs_get_remaining_buffer_size( bs );
+    if( bs->buffer.pos && remainder )
+        memmove( lsmash_bs_get_buffer_data_start( bs ), lsmash_bs_get_buffer_data( bs ), remainder );
+    bs->buffer.store = remainder;
+    bs->buffer.pos   = 0;
 }
 
 /*---- bitstream writer ----*/
@@ -120,7 +200,7 @@ void lsmash_bs_put_bytes( lsmash_bs_t *bs, uint32_t size, void *value )
     bs_alloc( bs, bs->buffer.store + size );
     if( bs->error )
         return;
-    memcpy( bs->buffer.data + bs->buffer.store, value, size );
+    memcpy( lsmash_bs_get_buffer_data_end( bs ), value, size );
     bs->buffer.store += size;
 }
 
@@ -188,7 +268,7 @@ int lsmash_bs_flush_buffer( lsmash_bs_t *bs )
      || bs->buffer.data  == NULL )
         return 0;
     if( bs->error || !bs->stream
-     || bs->write( bs->stream, bs->buffer.data, bs->buffer.store ) != bs->buffer.store )
+     || bs->write( bs->stream, lsmash_bs_get_buffer_data_start( bs ), bs->buffer.store ) != bs->buffer.store )
     {
         lsmash_bs_free( bs );
         bs->error = 1;
@@ -218,28 +298,11 @@ size_t lsmash_bs_write_data( lsmash_bs_t *bs, uint8_t *buf, size_t size )
     return write_size != size ? -1 : 0;
 }
 
-lsmash_bs_t *lsmash_bs_create( void )
-{
-    lsmash_bs_t* bs = lsmash_malloc_zero( sizeof(lsmash_bs_t) );
-    if( !bs )
-        return NULL;
-    bs->unseekable = 1;
-    return bs;
-}
-
-void lsmash_bs_cleanup( lsmash_bs_t *bs )
-{
-    if( !bs )
-        return;
-    lsmash_bs_free( bs );
-    lsmash_free( bs );
-}
-
 void *lsmash_bs_export_data( lsmash_bs_t *bs, uint32_t *length )
 {
     if( !bs || !bs->buffer.data || bs->buffer.store == 0 || bs->error )
         return NULL;
-    void *buf = lsmash_memdup( bs->buffer.data, bs->buffer.store );
+    void *buf = lsmash_memdup( lsmash_bs_get_buffer_data_start( bs ), bs->buffer.store );
     if( !buf )
         return NULL;
     if( length )
@@ -249,64 +312,221 @@ void *lsmash_bs_export_data( lsmash_bs_t *bs, uint32_t *length )
 /*---- ----*/
 
 /*---- bitstream reader ----*/
+static void bs_fill_buffer( lsmash_bs_t *bs )
+{
+    if( bs->eof || bs->error )
+        return;
+    if( !bs->read || !bs->stream || bs->buffer.max_size == 0 )
+    {
+        bs->eof = 1;
+        return;
+    }
+    if( !bs->buffer.data )
+    {
+        bs_alloc( bs, bs->buffer.max_size );
+        if( bs->error )
+            return;
+    }
+    /* Read bytes from the stream to fill the buffer. */
+    bs_dispose_past_data( bs );
+    while( bs->buffer.alloc > bs->buffer.store )
+    {
+        uint64_t invalid_buffer_size = bs->buffer.alloc - bs->buffer.store;
+        int max_read_size = LSMASH_MIN( invalid_buffer_size, bs->buffer.max_size );
+        int read_size = bs->read( bs->stream, lsmash_bs_get_buffer_data_end( bs ), max_read_size );
+        if( read_size == 0 )
+        {
+            bs->eof = 1;
+            return;
+        }
+        else if( read_size < 0 )
+        {
+            bs->error = 1;
+            return;
+        }
+        bs->buffer.unseekable = 0;
+        bs->buffer.store += read_size;
+        bs->offset       += read_size;
+    }
+}
+
 uint8_t lsmash_bs_show_byte( lsmash_bs_t *bs, uint32_t offset )
 {
-    if( bs->error || !bs->buffer.data )
+    if( bs->error )
         return 0;
-    if( bs->buffer.pos + offset > bs->buffer.store )
+    if( offset >= lsmash_bs_get_remaining_buffer_size( bs ) )
     {
-        lsmash_bs_free( bs );
-        bs->error = 1;
-        return 0;
+        bs_fill_buffer( bs );
+        if( bs->error )
+            return 0;
+        if( offset >= lsmash_bs_get_remaining_buffer_size( bs ) )
+        {
+            if( bs->eof )
+                /* No more read from both the stream and the buffer. */
+                return 0;
+            /* We need increase the buffer size. */
+            bs_alloc( bs, bs->buffer.pos + offset + 1 );
+            bs_fill_buffer( bs );
+            if( bs->error )
+                return 0;
+        }
     }
     return bs->buffer.data[ bs->buffer.pos + offset ];
 }
 
+uint16_t lsmash_bs_show_be16( lsmash_bs_t *bs, uint32_t offset )
+{
+    return ((uint16_t)lsmash_bs_show_byte( bs, offset     ) << 8)
+         | ((uint16_t)lsmash_bs_show_byte( bs, offset + 1 ));
+}
+
+uint32_t lsmash_bs_show_be32( lsmash_bs_t *bs, uint32_t offset )
+{
+    return ((uint32_t)lsmash_bs_show_byte( bs, offset     ) << 24)
+         | ((uint32_t)lsmash_bs_show_byte( bs, offset + 1 ) << 16)
+         | ((uint32_t)lsmash_bs_show_byte( bs, offset + 2 ) <<  8)
+         | ((uint32_t)lsmash_bs_show_byte( bs, offset + 3 ));
+}
+
+uint64_t lsmash_bs_show_be64( lsmash_bs_t *bs, uint32_t offset )
+{
+    return ((uint64_t)lsmash_bs_show_byte( bs, offset     ) << 56)
+         | ((uint64_t)lsmash_bs_show_byte( bs, offset + 1 ) << 48)
+         | ((uint64_t)lsmash_bs_show_byte( bs, offset + 2 ) << 40)
+         | ((uint64_t)lsmash_bs_show_byte( bs, offset + 3 ) << 32)
+         | ((uint64_t)lsmash_bs_show_byte( bs, offset + 4 ) << 24)
+         | ((uint64_t)lsmash_bs_show_byte( bs, offset + 5 ) << 16)
+         | ((uint64_t)lsmash_bs_show_byte( bs, offset + 6 ) <<  8)
+         | ((uint64_t)lsmash_bs_show_byte( bs, offset + 7 ));
+}
+
 uint8_t lsmash_bs_get_byte( lsmash_bs_t *bs )
 {
-    if( bs->error || !bs->buffer.data )
+    if( bs->eob || bs->error )
         return 0;
-    if( bs->buffer.pos + 1 > bs->buffer.store )
+    assert( bs->buffer.pos <= bs->buffer.store );
+    if( bs->buffer.pos == bs->buffer.store )
     {
-        lsmash_bs_free( bs );
-        bs->error = 1;
-        return 0;
+        bs_fill_buffer( bs );
+        if( bs->error )
+            return 0;
+        if( bs->buffer.pos == bs->buffer.store && bs->eof )
+        {
+            /* No more read from both the stream and the buffer. */
+            bs->eob = 1;
+            return 0;
+        }
     }
+    ++ bs->buffer.count;    /* increment counter */
     return bs->buffer.data[ bs->buffer.pos ++ ];
 }
 
 void lsmash_bs_skip_bytes( lsmash_bs_t *bs, uint32_t size )
 {
-    if( bs->error || size == 0 )
+    if( bs->eob || bs->error || size == 0 )
         return;
-    if( bs->buffer.pos + size > bs->buffer.store )
+    uint64_t remainder;
+    uint64_t offset = 0;
+    while( size > lsmash_bs_get_remaining_buffer_size( bs ) )
     {
-        lsmash_bs_free( bs );
-        bs->error = 1;
-        return;
+        remainder = lsmash_bs_get_remaining_buffer_size( bs );
+        offset += remainder;
+        size   -= remainder;
+        bs->buffer.pos = bs->buffer.store;
+        if( bs->eof )
+        {
+            /* No more read from both the stream and the buffer. */
+            bs->eob = 1;
+            break;
+        }
+        else
+        {
+            bs_fill_buffer( bs );
+            if( bs->error )
+                break;
+        }
     }
-    bs->buffer.pos += size;
+    remainder = LSMASH_MIN( size, lsmash_bs_get_remaining_buffer_size( bs ) );
+    offset           += remainder;
+    bs->buffer.pos   += remainder;
+    bs->buffer.count += offset;
+}
+
+void lsmash_bs_skip_bytes_64( lsmash_bs_t *bs, uint64_t size )
+{
+    while( size )
+    {
+        uint64_t skip_bytes = LSMASH_MIN( size, UINT32_MAX );
+        lsmash_bs_skip_bytes( bs, (uint32_t)skip_bytes );
+        size -= skip_bytes;
+        if( bs->eob )
+            return;
+    }
+}
+
+int bs_get_bytes( lsmash_bs_t *bs, uint32_t size, uint8_t *buf )
+{
+    size_t    remainder;
+    size_t    remain_size = size;
+    uintptr_t offset      = 0;
+    while( remain_size > lsmash_bs_get_remaining_buffer_size( bs ) )
+    {
+        remainder = lsmash_bs_get_remaining_buffer_size( bs );
+        memcpy( buf + offset, lsmash_bs_get_buffer_data( bs ), remainder );
+        offset      += remainder;
+        remain_size -= remainder;
+        bs->buffer.pos = bs->buffer.store;
+        if( bs->eof )
+        {
+            /* No more read from both the stream and the buffer. */
+            bs->eob = 1;
+            break;
+        }
+        else
+        {
+            bs_fill_buffer( bs );
+            if( bs->error )
+            {
+                bs->buffer.count += offset;
+                return -1;
+            }
+        }
+    }
+    remainder = LSMASH_MIN( remain_size, lsmash_bs_get_remaining_buffer_size( bs ) );
+    memcpy( buf + offset, lsmash_bs_get_buffer_data( bs ), remainder );
+    offset           += remainder;
+    bs->buffer.pos   += remainder;
+    bs->buffer.count += offset;
+    if( offset < size )
+        memset( buf + offset, 0, size - offset );
+    return 0;
 }
 
 uint8_t *lsmash_bs_get_bytes( lsmash_bs_t *bs, uint32_t size )
 {
-    if( bs->error || size == 0 )
+    if( bs->eob || bs->error || size == 0 )
         return NULL;
-    if( bs->buffer.pos + size > bs->buffer.store )
-    {
-        lsmash_bs_free( bs );
-        bs->error = 1;
-        return NULL;
-    }
-    uint8_t *value = lsmash_memdup( bs->buffer.data + bs->buffer.pos, size );
+    uint8_t *value = lsmash_malloc( size );
     if( !value )
     {
-        lsmash_bs_free( bs );
         bs->error = 1;
         return NULL;
     }
-    bs->buffer.pos += size;
+    if( bs_get_bytes( bs, size, value ) < 0 )
+    {
+        lsmash_free( value );
+        return NULL;
+    }
     return value;
+}
+
+int lsmash_bs_get_bytes_ex( lsmash_bs_t *bs, uint32_t size, uint8_t *value )
+{
+    if( size == 0 )
+        return 0;
+    if( bs->eob || bs->error )
+        return -1;
+    return bs_get_bytes( bs, size, value );
 }
 
 uint16_t lsmash_bs_get_be16( lsmash_bs_t *bs )
@@ -362,12 +582,16 @@ int lsmash_bs_read( lsmash_bs_t *bs, uint32_t size )
     bs_alloc( bs, bs->buffer.store + size );
     if( bs->error || !bs->stream )
     {
-        lsmash_bs_free( bs );
         bs->error = 1;
         return -1;
     }
-    int read_size = bs->read( bs->stream, bs->buffer.data + bs->buffer.store, size );
-    if( read_size < 0 )
+    int read_size = bs->read( bs->stream, lsmash_bs_get_buffer_data_end( bs ), size );
+    if( read_size == 0 )
+    {
+        bs->eof = 1;
+        return 0;
+    }
+    else if( read_size < 0 )
     {
         bs->error = 1;
         return -1;
@@ -385,42 +609,21 @@ int lsmash_bs_read_data( lsmash_bs_t *bs, uint8_t *buf, size_t *size )
         return 0;
     if( bs->error || !bs->stream )
     {
-        lsmash_bs_free( bs );
         bs->error = 1;
         return -1;
     }
     int read_size = bs->read( bs->stream, buf, *size );
-    if( read_size < 0 )
+    if( read_size == 0 )
+        bs->eof = 1;
+    else if( read_size < 0 )
     {
         bs->error = 1;
         return -1;
     }
+    bs->buffer.unseekable = 1;
     bs->offset += read_size;
     *size       = read_size;
     return 0;
-}
-
-int lsmash_bs_read_c( lsmash_bs_t *bs )
-{
-    if( !bs )
-        return -1;
-    if( bs->error || !bs->stream )
-    {
-        lsmash_bs_free( bs );
-        bs->error = 1;
-        return -1;
-    }
-    uint8_t c;
-    int read_size = bs->read( bs->stream, &c, 1 );
-    if( read_size != 1 )
-    {
-        if( read_size == 0 )
-            return EOF;
-        bs->error = 1;
-        return -1;
-    }
-    bs->offset += 1;
-    return c;
 }
 
 int lsmash_bs_import_data( lsmash_bs_t *bs, void* data, uint32_t length )
@@ -433,7 +636,7 @@ int lsmash_bs_import_data( lsmash_bs_t *bs, void* data, uint32_t length )
         lsmash_bs_free( bs );
         return -1;
     }
-    memcpy( bs->buffer.data + bs->buffer.store, data, length );
+    memcpy( lsmash_bs_get_buffer_data_end( bs ), data, length );
     bs->buffer.store += length;
     return 0;
 }

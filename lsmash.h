@@ -35,7 +35,7 @@
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  1
 #define LSMASH_VERSION_MINOR 11
-#define LSMASH_VERSION_MICRO  2
+#define LSMASH_VERSION_MICRO  3
 
 #define LSMASH_VERSION_INT( a, b, c ) (((a) << 16) | ((b) << 8) | (c))
 
@@ -203,7 +203,7 @@ typedef struct
                                          * 2.0 is default value. At least twice of max_chunk_duration is used. */
     uint64_t max_chunk_size;            /* max size per chunk in bytes. 4*1024*1024 (4MiB) is default value. */
     /** demuxing only **/
-    uint64_t max_read_size;             /* max size of reading from a chunk at a time. 4*1024*1024 (4MiB) is default value. */
+    uint64_t max_read_size;             /* max size of reading from the file at a time. 4*1024*1024 (4MiB) is default value. */
 } lsmash_file_parameters_t;
 
 /* Allocate a ROOT.

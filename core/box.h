@@ -1887,7 +1887,6 @@ struct lsmash_file_tag
         double    max_chunk_duration;       /* max duration per chunk in seconds */
         double    max_async_tolerance;      /* max tolerance, in seconds, for amount of interleaving asynchronization between tracks */
         uint64_t  max_chunk_size;           /* max size per chunk in bytes. */
-        uint64_t  max_read_size;            /* max size of reading from a chunk at a time. */
         uint32_t  brand_count;
         uint32_t *compatible_brands;        /* the backup of the compatible brands in the File Type Box or the valid Segment Type Box */
         uint8_t   bc_fclose;                /* a flag for backward compatible file closing */
