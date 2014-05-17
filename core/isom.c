@@ -2428,9 +2428,7 @@ void lsmash_destroy_root( lsmash_root_t *root )
 static int fread_wrapper( void *opaque, uint8_t *buf, int size )
 {
     int read_size = fread( buf, 1, size, (FILE *)opaque );
-    if( read_size != size && !feof( (FILE *)opaque ) )
-        return -1;
-    return read_size;
+    return ferror( (FILE *)opaque ) ? -1 : read_size;
 }
 
 static int fwrite_wrapper( void *opaque, uint8_t *buf, int size )
