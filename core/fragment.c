@@ -183,7 +183,9 @@ static int isom_write_fragment_random_access_info( lsmash_file_t *file )
             /* Skip edits that doesn't need the current sync sample indicated in the Track Fragment Random Access Box. */
             while( edit )
             {
-                uint64_t segment_duration = ((edit->segment_duration - 1) / movie_timescale + 1) * media_timescale;
+                uint64_t segment_duration = edit->segment_duration == ISOM_EDIT_DURATION_IMPLICIT
+                                          ? trak->cache->fragment->largest_cts + trak->cache->fragment->last_duration
+                                          : ((edit->segment_duration - 1) / movie_timescale + 1) * media_timescale;
                 if( edit->media_time != ISOM_EDIT_MODE_EMPTY
                  && composition_time < edit->media_time + segment_duration )
                     break;  /* This Timeline Mapping Edit might require the current sync sample.
