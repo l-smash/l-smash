@@ -2478,7 +2478,10 @@ int lsmash_open_file
     if( !strcmp( filename, "-" ) )
     {
         if( file_mode & LSMASH_FILE_MODE_READ )
-            stream = stdin;
+        {
+            stream   = stdin;
+            seekable = 0;
+        }
         else if( file_mode & LSMASH_FILE_MODE_WRITE )
         {
             stream     = stdout;
