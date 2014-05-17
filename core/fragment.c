@@ -222,6 +222,7 @@ static int isom_write_fragment_random_access_info( lsmash_file_t *file )
                 rap->time += composition_time - edit->media_time;
             rap_entry = rap_entry->next;
         }
+        tfra->number_of_entry = tfra->list->entry_count;
     }
     /* Decide the size of the Movie Fragment Random Access Box. */
     if( isom_update_box_size( file->mfra ) == 0 )
