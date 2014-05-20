@@ -358,8 +358,13 @@ static void isom_print_file_type
     lsmash_ifprintf( fp, indent++, "compatible_brands\n" );
     for( uint32_t i = 0; i < brand_count; i++ )
     {
-        lsmash_ifprintf( fp, indent, "brand[%"PRIu32"] = %s", i, isom_4cc2str( compatible_brands[i] ) );
-        isom_print_brand_description( fp, compatible_brands[i] );
+        if( compatible_brands[i] )
+        {
+            lsmash_ifprintf( fp, indent, "brand[%"PRIu32"] = %s", i, isom_4cc2str( compatible_brands[i] ) );
+            isom_print_brand_description( fp, compatible_brands[i] );
+        }
+        else
+            lsmash_ifprintf( fp, indent, "brand[%"PRIu32"] = (void)\n", i );
     }
 }
 
