@@ -934,19 +934,12 @@ static int isom_read_codec_specific( lsmash_file_t *file, isom_box_t *box, isom_
     }
     if( i != opaque_pos )
         goto fail;
-    isom_box_t *ext = lsmash_malloc( sizeof(isom_box_t) );
-    if( !ext )
+    if( isom_add_extension_binary( parent, box->type, LSMASH_BOX_PRECEDENCE_N, exdata, box->size ) < 0 )
         goto fail;
+    isom_box_t *ext = (isom_box_t *)parent->extensions.tail->data;
+    box->manager |= ext->manager;
     isom_check_box_size( file->bs, box );
-    isom_basebox_common_copy( (isom_box_t *)ext, box );
-    ext->manager |= LSMASH_BINARY_CODED_BOX;
-    ext->binary   = exdata;
-    ext->destruct = exdata ? lsmash_free : NULL;
-    if( lsmash_add_entry( &parent->extensions, ext ) )
-    {
-        isom_remove_extension_box( ext );
-        return -1;
-    }
+    isom_basebox_common_copy( ext, box );
     return isom_add_print_func( file, ext, level );
 fail:
     lsmash_free( exdata );
