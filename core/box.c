@@ -885,56 +885,45 @@ static void isom_remove_stsd( isom_stsd_t *stsd )
 static void isom_remove_visual_description( isom_sample_entry_t *description )
 {
     isom_visual_entry_t *visual = (isom_visual_entry_t *)description;
-    isom_remove_all_extension_boxes( &visual->extensions );
     if( visual->color_table.array )
         lsmash_free( visual->color_table.array );
-    lsmash_free( visual );
+    isom_remove_box_in_predefined_list( visual, offsetof( isom_stsd_t, list ) );
 }
 
 static void isom_remove_audio_description( isom_sample_entry_t *description )
 {
-    isom_audio_entry_t *audio = (isom_audio_entry_t *)description;
-    isom_remove_all_extension_boxes( &audio->extensions );
-    lsmash_free( audio );
+    isom_remove_box_in_predefined_list( description, offsetof( isom_stsd_t, list ) );
 }
 
 static void isom_remove_hint_description( isom_sample_entry_t *description )
 {
     isom_hint_entry_t *hint = (isom_hint_entry_t *)description;
-    isom_remove_all_extension_boxes( &hint->extensions );
     if( hint->data )
         lsmash_free( hint->data );
-    lsmash_free( hint );
+    isom_remove_box_in_predefined_list( hint, offsetof( isom_stsd_t, list ) );
 }
 
 static void isom_remove_metadata_description( isom_sample_entry_t *description )
 {
-    isom_metadata_entry_t *metadata = (isom_metadata_entry_t *)description;
-    isom_remove_all_extension_boxes( &metadata->extensions );
-    lsmash_free( metadata );
+    isom_remove_box_in_predefined_list( description, offsetof( isom_stsd_t, list ) );
 }
 
 static void isom_remove_tx3g_description( isom_sample_entry_t *description )
 {
-    isom_tx3g_entry_t *tx3g = (isom_tx3g_entry_t *)description;
-    isom_remove_all_extension_boxes( &tx3g->extensions );
-    lsmash_free( tx3g );
+    isom_remove_box_in_predefined_list( description, offsetof( isom_stsd_t, list ) );
 }
 
 static void isom_remove_qt_text_description( isom_sample_entry_t *description )
 {
     isom_qt_text_entry_t *text = (isom_qt_text_entry_t *)description;
-    isom_remove_all_extension_boxes( &text->extensions );
     if( text->font_name )
         free( text->font_name );
-    lsmash_free( text );
+    isom_remove_box_in_predefined_list( text, offsetof( isom_stsd_t, list ) );
 }
 
 static void isom_remove_mp4s_description( isom_sample_entry_t *description )
 {
-    isom_mp4s_entry_t *mp4s = (isom_mp4s_entry_t *)description;
-    isom_remove_all_extension_boxes( &mp4s->extensions );
-    lsmash_free( mp4s );
+    isom_remove_box_in_predefined_list( description, offsetof( isom_stsd_t, list ) );
 }
 
 void isom_remove_sample_description( isom_sample_entry_t *sample )
