@@ -25,6 +25,9 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include "memwatch.h"
 
 #define PRIVATE     /* If this declaration is placed at a variable, any user shall NOT use it. */
 

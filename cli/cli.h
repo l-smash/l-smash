@@ -23,6 +23,8 @@
 #ifndef CLI_H
 #define CLI_H
 
+#include "common/alloc.h"
+
 #ifdef _WIN32
    void lsmash_get_mainargs( int *argc, char ***argv );
 #else

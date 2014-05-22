@@ -34,6 +34,7 @@
 
 #include "lsmash.h"
 
+#include "alloc.h"
 #include "utils.h"
 #include "bstream.h"
 #include "list.h"
