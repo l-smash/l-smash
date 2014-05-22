@@ -561,8 +561,8 @@ static void isom_remove_trak( isom_trak_t *trak )
     {
         isom_remove_sample_pool( trak->cache->chunk.pool );
         lsmash_remove_list( trak->cache->roll.pool, NULL );
-        if( trak->cache->rap )
-            lsmash_free( trak->cache->rap );
+        lsmash_free( trak->cache->rap );
+        lsmash_free( trak->cache->fragment );
         lsmash_free( trak->cache );
     }
     isom_remove_box_in_list( trak, isom_moov_t );
