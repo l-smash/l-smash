@@ -2605,7 +2605,6 @@ static inline uint64_t isom_update_box_size( void *box )
 uint64_t isom_update_unknown_box_size( isom_unknown_box_t *unknown_box );
 
 int isom_add_extension_binary( void *parent_box, lsmash_box_type_t box_type, uint64_t precedence, uint8_t *box_data, uint32_t box_size );
-void isom_remove_extension_box( isom_box_t *ext );
 void isom_remove_all_extension_boxes( lsmash_entry_list_t *extensions );
 isom_box_t *isom_get_extension_box( lsmash_entry_list_t *extensions, lsmash_box_type_t box_type );
 void *isom_get_extension_box_format( lsmash_entry_list_t *extensions, lsmash_box_type_t box_type );

@@ -36,17 +36,6 @@
 #include "codecs/mp4a.h"
 #include "codecs/mp4sys.h"
 
-static void isom_remove_box_common
-(
-    void *opaque_box
-)
-{
-    if( !opaque_box )
-        return;
-    isom_remove_all_extension_boxes( &((isom_box_t *)opaque_box)->extensions );
-    lsmash_free( opaque_box );
-}
-
 void isom_init_box_common
 (
     void             *_box,
@@ -65,7 +54,7 @@ void isom_init_box_common
     box->file       = parent->file;
     box->parent     = parent;
     box->precedence = precedence;
-    box->destruct   = destructor ? destructor : isom_remove_box_common;
+    box->destruct   = destructor ? destructor : NULL;
     box->update     = updater;
     box->size       = 0;
     box->type       = box_type;
@@ -324,7 +313,6 @@ static void isom_destruct_extension_binary( void *ext )
         return;
     isom_box_t *box = (isom_box_t *)ext;
     lsmash_free( box->binary );
-    isom_remove_box_common( box );
 }
 
 int isom_add_extension_binary
@@ -363,14 +351,14 @@ int isom_add_extension_binary
     return 0;
 }
 
-void isom_remove_extension_box( isom_box_t *ext )
+static void isom_remove_extension_box( isom_box_t *ext )
 {
     if( !ext )
         return;
     if( ext->destruct )
         ext->destruct( ext );
-    else
-        isom_remove_box_common( ext );
+    isom_remove_all_extension_boxes( &ext->extensions );
+    lsmash_free( ext );
 }
 
 void isom_remove_all_extension_boxes( lsmash_entry_list_t *extensions )
@@ -454,7 +442,6 @@ static void isom_remove_predefined_box( void *opaque_box, size_t offset_of_box )
         if( *p == box )
             *p = NULL;
     }
-    isom_remove_box_common( box );
 }
 #define isom_remove_box( box_name, parent_type ) \
         isom_remove_predefined_box( box_name, offsetof( parent_type, box_name ) )
@@ -480,8 +467,6 @@ static void isom_remove_box_in_predefined_list( void *opaque_box, size_t offset_
                     break;
                 }
     }
-    /* Free this box actually here. */
-    isom_remove_box_common( box );
 }
 
 #define isom_remove_box_in_list( box_name, parent_type ) \
@@ -517,12 +502,10 @@ void isom_remove_unknown_box( isom_unknown_box_t *unknown_box )
         return;
     if( unknown_box->unknown_field )
         lsmash_free( unknown_box->unknown_field );
-    isom_remove_box_common( unknown_box );
 }
 
 static void isom_remove_root( lsmash_root_t *root )
 {
-    isom_remove_box_common( root );
 }
 
 static void isom_remove_file( lsmash_file_t *file )
@@ -721,17 +704,14 @@ static void isom_remove_hdlr( isom_hdlr_t *hdlr )
             assert( 0 );
         return;
     }
-    isom_remove_box_common( hdlr );
 }
 
 static void isom_remove_clap( isom_clap_t *clap )
 {
-    isom_remove_box_common( clap );
 }
 
 static void isom_remove_pasp( isom_pasp_t *pasp )
 {
-    isom_remove_box_common( pasp );
 }
 
 static void isom_remove_glbl( isom_glbl_t *glbl )
@@ -740,37 +720,30 @@ static void isom_remove_glbl( isom_glbl_t *glbl )
         return;
     if( glbl->header_data )
         free( glbl->header_data );
-    isom_remove_box_common( glbl );
 }
 
 static void isom_remove_colr( isom_colr_t *colr )
 {
-    isom_remove_box_common( colr );
 }
 
 static void isom_remove_gama( isom_gama_t *gama )
 {
-    isom_remove_box_common( gama );
 }
 
 static void isom_remove_fiel( isom_fiel_t *fiel )
 {
-    isom_remove_box_common( fiel );
 }
 
 static void isom_remove_cspc( isom_cspc_t *cspc )
 {
-    isom_remove_box_common( cspc );
 }
 
 static void isom_remove_sgbt( isom_sgbt_t *sgbt )
 {
-    isom_remove_box_common( sgbt );
 }
 
 static void isom_remove_stsl( isom_stsl_t *stsl )
 {
-    isom_remove_box_common( stsl );
 }
 
 static void isom_remove_esds( isom_esds_t *esds )
@@ -778,12 +751,10 @@ static void isom_remove_esds( isom_esds_t *esds )
     if( !esds )
         return;
     mp4sys_remove_ES_Descriptor( esds->ES );
-    isom_remove_box_common( esds );
 }
 
 static void isom_remove_btrt( isom_btrt_t *btrt )
 {
-    isom_remove_box_common( btrt );
 }
 
 static void isom_remove_font_record( isom_font_record_t *font_record )
@@ -833,7 +804,6 @@ static void isom_remove_terminator( isom_terminator_t *terminator )
 
 static void isom_remove_wave( isom_wave_t *wave )
 {
-    isom_remove_box_common( wave );
 }
 
 static void isom_remove_chan( isom_chan_t *chan )
@@ -842,12 +812,10 @@ static void isom_remove_chan( isom_chan_t *chan )
         return;
     if( chan->channelDescriptions )
         lsmash_free( chan->channelDescriptions );
-    isom_remove_box_common( chan );
 }
 
 static void isom_remove_srat( isom_srat_t *srat )
 {
-    isom_remove_box_common( srat );
 }
 
 static void isom_remove_stsd( isom_stsd_t *stsd )
@@ -1139,7 +1107,6 @@ static void isom_remove_sdtp( isom_sdtp_t *sdtp )
             assert( 0 );
         return;
     }
-    isom_remove_box_common( sdtp );
 }
 
 static void isom_remove_stco( isom_stco_t *stco )
@@ -1312,7 +1279,6 @@ static void isom_remove_meta( isom_meta_t *meta )
             assert( 0 );
         return;
     }
-    isom_remove_box_common( meta );
 }
 
 static void isom_remove_cprt( isom_cprt_t *cprt )
@@ -1338,7 +1304,6 @@ static void isom_remove_udta( isom_udta_t *udta )
             assert( 0 );
         return;
     }
-    isom_remove_box_common( udta );
 }
 
 static void isom_remove_WLOC( isom_WLOC_t *WLOC )
@@ -1377,8 +1342,6 @@ static void isom_remove_ctab( isom_ctab_t *ctab )
         lsmash_free( ctab->color_table.array );
     if( ctab->parent && lsmash_check_box_type_identical( ctab->parent->type, ISOM_BOX_TYPE_MOOV ) )
         isom_remove_box( ctab, isom_moov_t );
-    else
-        isom_remove_box_common( ctab );
 }
 
 static void isom_remove_mehd( isom_mehd_t *mehd )
