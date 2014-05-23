@@ -2612,18 +2612,32 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
     return isom_print_unknown;
 }
 
+static inline void isom_print_remove_plastic_box( isom_box_t *box )
+{
+    if( box->manager & LSMASH_ABSENT_IN_ROOT )
+        /* free flagged box */
+        isom_remove_box_by_itself( box );
+}
+
 int isom_add_print_func( lsmash_file_t *file, void *box, int level )
 {
     if( !(file->flags & LSMASH_FILE_MODE_DUMP) )
+    {
+        isom_print_remove_plastic_box( box );
         return 0;
+    }
     isom_print_entry_t *data = lsmash_malloc( sizeof(isom_print_entry_t) );
     if( !data )
+    {
+        isom_print_remove_plastic_box( box );
         return -1;
+    }
     data->level = level;
     data->box   = (isom_box_t *)box;
     data->func  = isom_select_print_func( (isom_box_t *)box );
-    if( !data->func || lsmash_add_entry( file->print, data ) )
+    if( !data->func || lsmash_add_entry( file->print, data ) < 0 )
     {
+        isom_print_remove_plastic_box( data->box );
         lsmash_free( data );
         return -1;
     }
@@ -2634,14 +2648,7 @@ static void isom_remove_print_func( isom_print_entry_t *data )
 {
     if( !data || !data->box )
         return;
-    if( data->box->manager & LSMASH_ABSENT_IN_ROOT )
-    {
-        /* free flagged box */
-        if( data->box->destruct )
-            data->box->destruct( data->box );
-        else
-            lsmash_free( data->box );
-    }
+    isom_print_remove_plastic_box( data->box );
     lsmash_free( data );
 }
 

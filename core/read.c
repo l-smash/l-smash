@@ -254,7 +254,7 @@ static int isom_read_unknown_box( lsmash_file_t *file, isom_box_t *box, isom_box
         return -1;
     box->manager |= LSMASH_ABSENT_IN_ROOT;
     isom_box_common_copy( dummy, box );
-    if( isom_add_print_func( file, dummy, level ) )
+    if( isom_add_print_func( file, dummy, level ) < 0 )
     {
         lsmash_free( dummy );
         return -1;
@@ -427,12 +427,10 @@ static int isom_read_iods( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     isom_iods_t *iods = lsmash_malloc_zero( sizeof(isom_iods_t) );
     if( !iods )
         return -1;
-    lsmash_bs_t *bs = file->bs;
-    isom_skip_box_rest( bs, box );
+    isom_skip_box_rest( file->bs, box );
     box->manager |= LSMASH_ABSENT_IN_ROOT;
-    iods->destruct = (isom_extension_destructor_t)lsmash_free;
     isom_box_common_copy( iods, box );
-    if( isom_add_print_func( file, iods, level ) )
+    if( isom_add_print_func( file, iods, level ) < 0 )
     {
         isom_remove_box_by_itself( iods );
         return -1;
@@ -2088,12 +2086,10 @@ static int isom_read_free( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     isom_box_t *skip = lsmash_malloc_zero( sizeof(isom_box_t) );
     if( !skip )
         return -1;
-    lsmash_bs_t *bs = file->bs;
-    isom_skip_box_rest( bs, box );
-    skip->destruct = (isom_extension_destructor_t)lsmash_free;
+    isom_skip_box_rest( file->bs, box );
     box->manager |= LSMASH_ABSENT_IN_ROOT;
     isom_box_common_copy( skip, box );
-    if( isom_add_print_func( file, skip, level ) )
+    if( isom_add_print_func( file, skip, level ) < 0 )
     {
         lsmash_free( skip );
         return -1;
@@ -2108,13 +2104,11 @@ static int isom_read_mdat( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     isom_box_t *mdat = lsmash_malloc_zero( sizeof(isom_box_t) );
     if( !mdat )
         return -1;
-    lsmash_bs_t *bs = file->bs;
-    isom_skip_box_rest( bs, box );
-    mdat->destruct = (isom_extension_destructor_t)lsmash_free;
+    isom_skip_box_rest( file->bs, box );
     box->manager |= LSMASH_ABSENT_IN_ROOT;
     file->flags |= LSMASH_FILE_MODE_MEDIA;
     isom_box_common_copy( mdat, box );
-    if( isom_add_print_func( file, mdat, level ) )
+    if( isom_add_print_func( file, mdat, level ) < 0 )
     {
         lsmash_free( mdat );
         return -1;
