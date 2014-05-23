@@ -2402,29 +2402,6 @@ void lsmash_discard_boxes( lsmash_root_t *root )
     isom_remove_all_extension_boxes( &root->file->extensions );
 }
 
-static void isom_remove_root( lsmash_root_t *root )
-{
-    if( !root )
-        return;
-    isom_remove_all_extension_boxes( &root->extensions );
-    lsmash_free( root );
-}
-
-lsmash_root_t *lsmash_create_root( void )
-{
-    lsmash_root_t *root = lsmash_malloc_zero( sizeof(lsmash_root_t) );
-    if( !root )
-        return NULL;
-    root->destruct = (isom_extension_destructor_t)isom_remove_root;
-    root->root     = root;
-    return root;
-}
-
-void lsmash_destroy_root( lsmash_root_t *root )
-{
-    isom_remove_box_by_itself( root );
-}
-
 static int fread_wrapper( void *opaque, uint8_t *buf, int size )
 {
     int read_size = fread( buf, 1, size, (FILE *)opaque );
