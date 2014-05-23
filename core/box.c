@@ -521,7 +521,7 @@ static void isom_remove_file( lsmash_file_t *file )
     {
         if( file->bc_fclose && file->bs->stream )
             fclose( file->bs->stream );
-        lsmash_bs_free( file->bs );
+        lsmash_bs_cleanup( file->bs );
     }
     if( file->fragment )
     {
