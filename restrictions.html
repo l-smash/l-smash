@@ -1,0 +1,233 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+    <link rel="stylesheet" type="text/css" href="style.css"/>
+
+    <script type="text/javascript" src="display.js"></script>
+    <noscript>JavaScript is disabled.</noscript>
+
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+
+    <title>L-SMASH's restrictions</title>
+</head>
+
+<body bgcolor="#68A8D8" text="#304060">
+
+<div class="normal_link">
+    <h2 align="center"><a name="p0">L-SMASH's restrictions</a></h2>
+    <div class="frame_box">
+        <p>A list of restrictions of <a href="index.html" class="wikipage">L-SMASH</a>. Some will be fixed, while others won't.</p>
+    </div>
+</div>
+
+<div class="frame_box_bg">
+    <div class="small_box toggle_link">
+        <a href="#p1" id="id_01_1" onClick="toggle_display_org('id_01');" style="display:none;">+</a>
+        <a href="#p1" id="id_01_2" onClick="toggle_display_org('id_01');">-</a>
+    </div>
+    <h3 style="color : orange; text-decoration : underline;"><a name="p1">multiplexer body</a></h3>
+    <span id="id_01_0">
+        <div class="frame_box">
+            <div class="small_box toggle_link">
+                <a href="#p2" id="id_02_1" onClick="toggle_display_org('id_02');" style="display:none;">+</a>
+                <a href="#p2" id="id_02_2" onClick="toggle_display_org('id_02');">-</a>
+            </div>
+            <h4 style="text-decoration : underline;"><a name="p2">Common</a></h4>
+            <ul id="id_02_0">
+                <li>The output is suboptimal for streaming. This is not actually problem, because it's unavoidable with 1-pass muxing. </li>
+            </ul>
+        </div>
+
+        <div class="frame_box">
+            <div class="small_box toggle_link">
+                <a href="#p3" id="id_03_1" onClick="toggle_display_org('id_03');" style="display:none;">+</a>
+                <a href="#p3" id="id_03_2" onClick="toggle_display_org('id_03');">-</a>
+            </div>
+            <h4 style="text-decoration : underline;"><a name="p3">MP4 support</a></h4>
+            <ul id="id_03_0">
+                <li>No presentation i.e. no BIFS and Object Descriptor tracks.</li>
+                <ul>
+                    <li>QuickTime Player rejects file with both BIFS and Object Descriptor tracks preceding video and/or audio tracks.</li>
+                    <li>No one has interest in MP4 composition.</li>
+                </ul>
+            </ul>
+        </div>
+
+        <div class="frame_box">
+            <div class="small_box toggle_link">
+                <a href="#p4" id="id_04_1" onClick="toggle_display_org('id_04');" style="display:none;">+</a>
+                <a href="#p4" id="id_04_2" onClick="toggle_display_org('id_04');">-</a>
+            </div>
+            <h4 style="text-decoration : underline;"><a name="p4">3GPP/3GPP2 support</a></h4>
+            <span id="id_04_0">
+                <ul>
+                    <li>No check for compliance as a library. Even if given any streams violating to the spec of 3gpp/3gpp2, L-SMASH just multiplexes them silently.</li>
+                </ul>
+                <ul>
+                    <li>Playback on some stupid devices are not supported. Blame the vendor of such devices.</li>
+                    <ul>
+                        <li>Some devices require <ins>absence</ins> of 'pasp' box which contains aspect ratio information.</li>
+                        <li>Some devices require their custom box structure which is not mandatory in the spec. </li>
+                    </ul>
+                </ul>
+            </span>
+        </div>
+
+        <div class="frame_box">
+            <div class="small_box toggle_link">
+                <a href="#p5" id="id_05_1" onClick="toggle_display_org('id_05');" style="display:none;">+</a>
+                <a href="#p5" id="id_05_2" onClick="toggle_display_org('id_05');">-</a>
+            </div>
+            <h4 style="text-decoration : underline;"><a name="p5">DASH support</a></h4>
+            <ul id="id_05_0">
+                <li>We may never support MPD in the range of L-SMASH project.</li>
+                <li>Only support self-initializing media segment with or without index.</li>
+            </ul>
+        </div>
+
+        <div class="frame_box">
+            <div class="small_box toggle_link">
+                <a href="#p9" id="id_09_1" onClick="toggle_display_org('id_09');" style="display:none;">+</a>
+                <a href="#p9" id="id_09_2" onClick="toggle_display_org('id_09');">-</a>
+            </div>
+            <h4 style="text-decoration : underline;"><a name="p9">Issues come from the standards themselves.</a></h4>
+            <span id="id_09_0">
+                <p>Write configurationVersion=0 inside 'hvcC' to distinguish from the official version because the spec of HEVC-in-ISOBMFF has not been published yet.</p>
+                <p>When publication of the spec, we'll correct the configurationVersion.</p>
+            </span>
+        </div>
+    </span>
+</div>
+
+<div class="frame_box_bg">
+    <div class="small_box toggle_link">
+        <a href="#" id="id_10_1" onClick="toggle_display_org('id_10');" style="display:none;">+</a>
+        <a href="#" id="id_10_2" onClick="toggle_display_org('id_10');">-</a>
+    </div>
+    <h3 style="color : orange; text-decoration : underline;"><a name="p10">Importers</a></h3>
+    <span id="id_10_0">
+        <p>Restrictions of importers. Currently, only the standalone muxer CLI tool is affected.</p>
+        <div class="frame_box">
+            <div class="small_box toggle_link">
+                <a href="#p11" id="id_11_1" onClick="toggle_display_org('id_11');" style="display:none;">+</a>
+                <a href="#p11" id="id_11_2" onClick="toggle_display_org('id_11');">-</a>
+            </div>
+            <h4 style="text-decoration : underline;"><a name="p11">ADTS importer</a></h4>
+            <ul id="id_11_0">
+                <li>By its definition, ADIF is not supported.</li>
+                <li>channel_config=0(custom channel configuration) is not supported.</li>
+                <li>Never does re-sync. The stream shall be fully consistent.</li>
+                <li>audioProfileLevelIndication is determined by its number of channels, and not by channels' layout.</li>
+                <li>Never detects HE-AAC automatically. HE-AAC streams are multiplexed in the way of Implicit Signaling.</li>
+            </ul>
+        </div>
+
+        <div class="frame_box">
+            <div class="small_box toggle_link">
+                <a href="#p12" id="id_12_1" onClick="toggle_display_org('id_12');" style="display:none;">+</a>
+                <a href="#p12" id="id_12_2" onClick="toggle_display_org('id_12');">-</a>
+            </div>
+            <h4 style="text-decoration : underline;"><a name="p12">MPEG-1/2BC Audio Legacy Interface importer</a></h4>
+            <ul id="id_12_0">
+                <li>By its definition, using Legacy Interface defined by ISO/IEC 14496-3.</li>
+                <li>Never does timestamp adjustment even if it might be required. This only matters if the stream is cut and lacks preceding data of the first frame given.</li>
+                <li>Never does re-sync. The stream shall be fully consistent.</li>
+                <li>bitrate_index=&quot;free&quot; is not supported.</li>
+                <li>MPEG-2.5 Audio is not supported. This is not of legitimate MPEG standard and MP4 does not have definitions for them.</li>
+            </ul>
+        </div>
+
+        <div class="frame_box">
+            <div class="small_box toggle_link">
+                <a href="#p13" id="id_13_1" onClick="toggle_display_org('id_13');" style="display:none;">+</a>
+                <a href="#p13" id="id_13_2" onClick="toggle_display_org('id_13');">-</a>
+            </div>
+            <h4 style="text-decoration : underline;"><a name="p13">AMR importer</a></h4>
+            <ul id="id_13_0">
+                <li>AMR-WB+ is not supported.</li>
+                <li>Supports only the Single-Channel Storage Format, defined by RFC. The Multi-Channel Storage Format and IF1/IF2 are not supported.</li>
+                <li>Latest features might not be supported. We don't know recent AMR's detail.</li>
+                <li>Uses dummy and sub-optimal safe values for 'damr' box.</li>
+            </ul>
+        </div>
+
+        <div class="frame_box">
+            <div class="small_box toggle_link">
+                <a href="#p14" id="id_14_1" onClick="toggle_display_org('id_14');" style="display:none;">+</a>
+                <a href="#p14" id="id_14_2" onClick="toggle_display_org('id_14');">-</a>
+            </div>
+            <h4 style="text-decoration : underline;"><a name="p14">AC-3 importer</a></h4>
+            <ul id="id_14_0">
+                <li>DolbyNet (bsid = 9 and 10) is not supported. The specifications we refer to does not have any definition for it.</li>
+                <li>The DecoderSpecificInfo for QuickTime file format is not supported. Its definition is closed and unknown.</li>
+            </ul>
+        </div>
+
+        <div class="frame_box">
+            <div class="small_box toggle_link">
+                <a href="#p15" id="id_15_1" onClick="toggle_display_org('id_15');" style="display:none;">+</a>
+                <a href="#p15" id="id_15_2" onClick="toggle_display_org('id_15');">-</a>
+            </div>
+            <h4 style="text-decoration : underline;"><a name="p15">Enhanced AC-3 importer</a></h4>
+            <ul id="id_15_0">
+                <li>We might make a 'sample' which consists of non-6 audio blocks at the end of stream though the specification we refer to defines a 'sample' consists of 6 audio blocks.</li>
+                <li>The DecoderSpecificInfo for QuickTime file format is not supported. Its definition is closed and unknown.</li>
+            </ul>
+        </div>
+
+        <div class="frame_box">
+            <div class="small_box toggle_link">
+                <a href="#p16" id="id_16_1" onClick="toggle_display_org('id_16');" style="display:none;">+</a>
+                <a href="#p16" id="id_16_2" onClick="toggle_display_org('id_16');">-</a>
+            </div>
+            <h4 style="text-decoration : underline;"><a name="p16">MPEG-4 ALS importer</a></h4>
+            <ul id="id_16_0">
+                <li>Unspecified number of samples i.e. samples = 0xffffffff is not supported.</li>
+                <li>ra_flag = 0 i.e. absence of ra_unit_size is not supported.</li>
+            </ul>
+        </div>
+
+        <div class="frame_box">
+            <div class="small_box toggle_link">
+                <a href="#p17" id="id_17_1" onClick="toggle_display_org('id_17');" style="display:none;">+</a>
+                <a href="#p17" id="id_17_2" onClick="toggle_display_org('id_17');">-</a>
+            </div>
+            <h4 style="text-decoration : underline;"><a name="p17">HEVC importer</a></h4>
+            <ul id="id_17_0">
+                <li>When probing the stream, importer parses the entire stream in order to decide decoding and composition timestamps.</li>
+                <li>Streams with HRD + filler is not supported, because we have to remove filler and update HRD information due to that, but the current importer does not have HRD updater.</li>
+                <li>Remove AU delimiter when importing because it doesn't guarantee what slice types are in. AU delimiter is redundant for NALu Video file format.</li>
+            </ul>
+        </div>
+
+        <div class="frame_box">
+            <div class="small_box toggle_link">
+                <a href="#p18" id="id_18_1" onClick="toggle_display_org('id_18');" style="display:none;">+</a>
+                <a href="#p18" id="id_18_2" onClick="toggle_display_org('id_18');">-</a>
+            </div>
+            <h4 style="text-decoration : underline;"><a name="p18">H.264 importer</a></h4>
+            <ul id="id_18_0">
+                <li>SVC and MVC is not supported.</li>
+                <li>When probing the stream, importer parses the entire stream in order to decide decoding and composition timestamps.</li>
+                <li>Streams with HRD + filler is not supported, because we have to remove filler and update HRD information due to that, but the current importer does not have HRD updater.</li>
+                <li>Remove AU delimiter when importing because it doesn't guarantee what slice types are in. AU delimiter is redundant for NALu Video file format.</li>
+            </ul>
+        </div>
+
+        <div class="frame_box">
+            <div class="small_box toggle_link">
+                <a href="#p19" id="id_19_1" onClick="toggle_display_org('id_19');" style="display:none;">+</a>
+                <a href="#p19" id="id_19_2" onClick="toggle_display_org('id_19');">-</a>
+            </div>
+            <h4 style="text-decoration : underline;"><a name="p19">SMPTE VC-1 importer</a></h4>
+            <ul id="id_19_0">
+                <li>Simple and Main profiles are not supported because their container format defined in SMPTE 421m Annex L is different from Advanced profile's.</li>
+                <li>When probing the stream, importer parses the entire stream in order to decide decoding and composition timestamps, presence of B-frames, frame coding mode and so on.</li>
+            </ul>
+        </div>
+    </span>
+</div>
+
+<p><script type="text/javascript">document.write( last_modified() )</script></p>
+</body>
+</html>

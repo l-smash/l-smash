@@ -1,0 +1,281 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+    <link rel="stylesheet" type="text/css" href="style.css"/>
+
+    <script type="text/javascript" src="display.js"></script>
+    <noscript>JavaScript is disabled.</noscript>
+
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+
+    <title>L-SMASH</title>
+</head>
+
+<body bgcolor="#68A8D8" text="#304060">
+
+<h1 align="center"><a name="p0">L-SMASH</a></h2>
+<div class="frame_box_bg normal_link">
+    <div class="small_box toggle_link">
+        <a href="#p1" id="id_01_1" onClick="toggle_display_org('id_01');" style="display:none;">+</a>
+        <a href="#p1" id="id_01_2" onClick="toggle_display_org('id_01');">-</a>
+    </div>
+    <h3 style="color : orange; text-decoration : underline;"><a name="p1">L-SMASHとは</text></a></h3>
+    <div class="frame_box" id="id_01_0">
+        <p>L-SMASHはISO Base Mediaファイルフォーマット及びMP4を含むその派生ファイルフォーマットを扱うクロスプラットフォームのライブラリです。</p>
+        <p>将来的にはMP4に関わる様々な用途を想定していますが、現在のところ、実際に動作する機能は以下のように限られています。</p>
+        <div class="frame_box_ul">
+            <ul>
+                <li><em>β版レベル</em>のMultiplexer(マルチプレクサ)及びDemultiplexer(デマルチプレクサ)として動作します。</li>
+                <li>スタンドアローンな実行ファイルを利用して、いくつかの形式の映像及び音声をmuxすることができます。</li>
+            </ul>
+        </div>
+        <p>具体的には、以下の標準の一部を実装しています。</p>
+        <div class="frame_box_ul">
+            <ul>
+                <li>ISO/IEC 14496-1, MPEG-4 Part1: Systems</li>
+                <li>ISO/IEC 14496-12, MPEG-4 Part12: ISO base media file format</li>
+                <li>ISO/IEC 14496-14, MPEG-4 Part14: MP4 file format</li>
+                <li>ISO/IEC 14496-15, MPEG-4 Part15: Advanced Video Coding (AVC) file format</li>
+            </ul>
+        </div>
+        <p>関連規格として、以下の標準の一部も実装しています。</p>
+        <div class="frame_box_ul">
+            <ul>
+                <li>ISO/IEC 14496-3, MPEG-4 Part3: Audio</li>
+                <ul>
+                    <li>Subpart 4: General Audio Coding</li>
+                    <li>Subpart 9: MPEG-1/2 Audio in MPEG-4</li>
+                    <li>Subpart11: Audio Lossless Coding</li>
+                </ul>
+                <li>ISO/IEC 13818-7, MPEG-2 Part7: Advanced Audio Coding (AAC)</li>
+                <li>ETSI TS 102 366, A/52 | AC-3/Enhanced AC-3</li>
+                <li>Request for Comments: 4867（AMR-NB/WB Storage Format）</li>
+                <li>#9302J81100, IMPLEMENTATION OF DTS AUDIO IN MEDIA FILES BASED ON ISO/IEC 14496</li>
+                <li>RP 2025-2007, VC-1 Bitstream Storage in the ISO Base Media File Format</li>
+            </ul>
+        </div>
+        <p>また、MOV(QuickTime)ファイル形式をサポートするため、Apple QuickTime仕様の一部を実装しています。</p>
+    </div>
+
+    <div class="frame_box">
+        <div class="small_box toggle_link">
+            <a href="#p2" id="id_02_1" onClick="toggle_display_org('id_02');" style="display:none;">+</a>
+            <a href="#p2" id="id_02_2" onClick="toggle_display_org('id_02');">-</a>
+        </div>
+        <h4 style="text-decoration : underline;"><a name="p2">機能</a></h4>
+        <ul id="id_02_0">
+            <li>任意のボックス(アトム)をエクスポートしたり、任意の位置に書き出すことができます。</li>
+            <li>カスタムI/O APIを提供しているため、ユーザーがメモリ上に入力や出力を行う処理を記述することが可能です。</li>
+            <li>Mux直後にプログレッシヴダウンロード用の最適化が可能です。</li>
+            <li>ムービーフラグメントによる出力が可能です。</li>
+            <li>インデックス済み自己初期化可能なセグメント('dash')の作成が可能です。</li>
+            <li>テストツール的な実行ファイルで以下に挙げるストリームをmuxすることができます。</li>
+            <div class="frame_box_ul">
+                <ul>
+                    <li>映像</li>
+                    <ul>
+                        <li>AVC/H.264 | MPEG-4 Part10</li>
+                        <li>HEVC/H.265 | MPEG-H Part2</li>
+                        <li>SMPTE VC-1 Advanced Profile</li>
+                    </ul>
+                    <li>音声</li>
+                    <ul>
+                        <li>MPEG-2 AAC および MPEG-4 AAC</li>
+                        <li>MPEG-1/2 Layer 1|2|3</li>
+                        <li>MPEG-4 ALS</li>
+                        <li>AMR-NB/WB</li>
+                        <li>AC-3およびEnhanced AC-3</li>
+                        <li>DTSおよびDTS-HD</li>
+                    </ul>
+                </ul>
+            </div>
+        </ul>
+    </div>
+
+    <div class="frame_box normal_link">
+        <div class="small_box toggle_link">
+            <a href="#p3" id="id_03_1" onClick="toggle_display_org('id_03');" style="display:none;">+</a>
+            <a href="#p3" id="id_03_2" onClick="toggle_display_org('id_03');">-</a>
+        </div>
+        <h4 style="text-decoration : underline;"><a name="p3">仕様・制限事項</a></h4>
+        <p id="id_03_0">
+            <a href="restrictions.html" class="wikipage">L-SMASH's restrictions</a>（英語）を参照してください。
+        </p>
+    </div>
+
+    <div class="frame_box normal_link">
+        <div class="small_box toggle_link">
+            <a href="#p4" id="id_04_1" onClick="toggle_display_org('id_04');" style="display:none;">+</a>
+            <a href="#p4" id="id_04_2" onClick="toggle_display_org('id_04');">-</a>
+        </div>
+        <h4 style="text-decoration : underline;"><a name="p4">L-SMASHの開発の契機と特徴</a></h4>
+        <span id="id_04_0">
+            <p>巷には既にいくつかのオープンなMP4/MOVの実装が存在するにも関わらず、L-SMASHプロジェクトは開始しました。</p>
+            <p>当初はx264のMP4 muxerのみを想定していましたが、その後展望が広がり、現在では汎用のMP4ツールとなるべく実装が進んでいます。</p>
+            <p>開発の契機は、既存のオープンソースの実装が大きく、複雑すぎること、そして規格上誤った実装が多いことから、自分たちで真っ当な実装を行おう、と思い立ったことにあります。</p>
+            <p>このため、L-SMASHは以下のような基本コンセプトを持っています。</p>
+            <div class="frame_box_ul">
+                <ul>
+                    <li>一般に動画コンテナとして重要な機能のみを実装する。</li>
+                    <li>素直でシンプルに実装する。</li>
+                    <li>可能な限り規格に忠実に実装する。</li>
+                </ul>
+            </div>
+            <p>MP4は非常に多種多様な表現を内包することのできる、高機能なコンテナ形式です。</p>
+            <p>しかし、L-SMASHでは2D/3Dグラフィックスやインタラクティブコンテンツ等をサポートしません。</p>
+            <p>現状の動画コンテナとして一般に重要ではなく、実装を過度に複雑にする機能を排除し、シンプルにしています。</p>
+            <p>L-SMASHのソースコードは必ずしも実行時の効率が良くはなっていません。多少効率が悪くとも、正しく、かつ規格と実際の動作の理解が容易なコードにしています。</p>
+        </span>
+    </div>
+</div>
+
+<div class="frame_box_bg normal_link">
+    <div class="small_box toggle_link">
+        <a href="#p6" id="id_06_1" onClick="toggle_display_org('id_06');" style="display:none;">+</a>
+        <a href="#p6" id="id_06_2" onClick="toggle_display_org('id_06');">-</a>
+    </div>
+    <h3 style="color : orange; text-decoration : underline;"><a name="p6">入手方法</a></h3>
+    <span id="id_06_0">
+        <p>L-SMASHプロジェクトは公式にはバイナリを提供しません。</p>
+        <p>ソースコードは<a href="https://github.com/l-smash/l-smash" target="_blank" class="outgoing">GitHubのgitレポジトリ</a>で管理しており、gitコマンド、またはミラー（以前の公式）である<a href="http://repo.or.cz/w/L-SMASH.git" target="_blank" class="outgoing">repo.or.cz</a>のsnapshotによって取得可能です。</p>
+        <p>gitでの取得の場合、任意の作業ディレクトリ上で以下のようにして取得できます。</p>
+        <div class="frame_box">
+            <pre>git clone https://github.com/l-smash/l-smash.git</pre>
+        </div>
+    </span>
+</div>
+
+<div class="frame_box_bg normal_link">
+    <div class="small_box toggle_link">
+        <a href="#p7" id="id_07_1" onClick="toggle_display_org('id_07');" style="display:none;">+</a>
+        <a href="#p7" id="id_07_2" onClick="toggle_display_org('id_07');">-</a>
+    </div>
+    <h3 style="color : orange; text-decoration : underline;"><a name="p7">動作環境</a></h3>
+    <span id="id_07_0">
+        <p>L-SMASHは殆どがC99の範囲で作成されており、ビルド・動作共に環境依存性が低くなっています。</p>
+        <p>ただし、以下の点により、コンパイルできない、または動作しない環境がある可能性があります。</p>
+        <div class="frame_box">
+        <ul>
+            <li>64bit整数(uint64_t等)の使用。</li>
+            <li>64bit対応fseek/ftellの使用。</li>
+            <ul>
+                <li>一般的なGCC環境向けには&quot;#define _FILE_OFFSET_BITS 64&quot;を使用しています。</li>
+                <li>MinGW向けにはfseeko64/ftello64を使用しています。</li>
+            </ul>
+        </ul>
+        </div>
+        <p>具体的な動作環境として、開発者は主にMinGW-w64上で作業を行っており、他にMacOSX(Intel)上での動作が確認されています。PPCでの動作も確認されましたのでバイエンディアンです。</p>
+    </span>
+</div>
+
+<div class="frame_box_bg normal_link">
+    <div class="small_box toggle_link">
+        <a href="#p8" id="id_08_1" onClick="toggle_display_org('id_08');" style="display:none;">+</a>
+        <a href="#p8" id="id_08_2" onClick="toggle_display_org('id_08');">-</a>
+    </div>
+    <h3 style="color : orange; text-decoration : underline;"><a name="p8">バグ報告・連絡等</a></h3>
+    <span id="id_08_0">
+        <p>まだあまり充実していません。よりオープンにしていきたいとは考えています。</p>
+        <p>英語での議論のための専用の場所は用意していませんが、開発者と協力者はx264周辺、そしてdoom9やdoom10のフォーラムにいますので、連絡を取るのは難しくないでしょう。</p>
+        <h4 style="text-decoration : underline;"><a name="p9">IRC</a></h4>
+        <p>irc://freenode/L-SMASH に開発者・協力者の常駐するIRCチャンネルがあります。英語も日本語も可ですが、時間帯によって、誰も反応しないかもしれません。</p>
+        <h4 style="text-decoration : underline;"><a name="p10">メール</a></h4>
+        <p>ソースコードにメールアドレスの記載があります。</p>
+        <p>返信の迅速性、確実性にはあまり期待しないで下さい。また、メールによる連絡は、開発レベル以上のトピックに限って下さい。一般ユーザレベルでの使用方法やビルド方法に関してはフォーラムを使用して下さい。</p>
+    </span>
+</div>
+
+<div class="frame_box_bg normal_link">
+    <div class="small_box toggle_link">
+        <a href="#p11" id="id_11_1" onClick="toggle_display_org('id_11');" style="display:none;">+</a>
+        <a href="#p11" id="id_11_2" onClick="toggle_display_org('id_11');">-</a>
+    </div>
+    <h3 style="color : orange; text-decoration : underline;"><a name="p11">ライセンス</a></h3>
+    <span id="id_11_0">
+        <p><a href="http://www.isc.org/downloads/software-support-policy/isc-license/" target="_blank" class="outgoing">ISCライセンス</a>です。</p>
+        <div class="frame_box">
+            <pre>
+Copyright (C) 2010-2014 L-SMASH project
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED &quot;AS IS&quot; AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+            </pre>
+        </div>
+        <p>規格不適合ファイルの生産の抑止力となりたいという理念の体現として、不自由なソフトウェアからも気兼ねなく利用できるように、ライセンスを選択致しました。</p>
+    </span>
+</div>
+
+<div class="frame_box_bg normal_link">
+    <div class="small_box toggle_link">
+        <a href="#p12" id="id_12_1" onClick="toggle_display_org('id_12');" style="display:none;">+</a>
+        <a href="#p12" id="id_12_2" onClick="toggle_display_org('id_12');">-</a>
+    </div>
+    <h3 style="color : orange; text-decoration : underline;"><a name="p12">開発者 (Developers)</a></h3>
+    <span id="id_12_0">
+        <div class="frame_box">
+            <dl>
+                <dt><a href="http://vfrmaniac.fushizen.eu/">Yusuke Nakamura</a> (known as Paranoialmaniac, MP4_maniac, or VFR_maniac)</dt>
+                <dd>Primary author, main reviewer (Initial developer).</dd>
+            </dl>
+            <dl>
+                <dt>Takashi Hirata (known as silverfilain)</dt>
+                <dd><del>Primary reviewer, sub author, project supervisor (Initial developer). </del>An undead boxed hell cat.</dd>
+            </dl>
+        </div>
+        <p><del>変態</del> 変人を自負出来る開発者募集中。</p>
+    </span>
+</div>
+
+<div class="frame_box_bg normal_link">
+    <div class="small_box toggle_link">
+        <a href="#p13" id="id_13_1" onClick="toggle_display_org('id_13');" style="display:none;">+</a>
+        <a href="#p13" id="id_13_2" onClick="toggle_display_org('id_13');">-</a>
+    </div>
+    <h3 style="color : orange; text-decoration : underline;"><a name="p13">貢献者 (Contributors)</a></h3>
+    <div class="frame_box" id="id_13_0">
+        <dl>
+            <dt>Tsukasa OMOTO (known as henry, or henry0312)</dt>
+            <dd>Mainly handling chapters. Previously lead tester for audio muxing and on Mac OS. Helper for misc stuff such as Homebrew PR.</dd>
+        </dl>
+        <dl>
+            <dt>Hiroki Taniura (known as boiled_sugar, or 砂糖煮, or a translator of <a href="http://www.bunkus.org/videotools/mkvtoolnix/" target="_blank" class="outgoing">MKVToolNix</a> for Japanese)</dt>
+            <dd>Initial tester. Mainly handling chapters and UTF-8 BOM.</dd>
+        </dl>
+        <dl>
+            <dt>Oka Motofumi (known as Chikuzen)</dt>
+            <dd>Initial tester. IRC channel operator. Mainly contributing compilation stuff.</dd>
+        </dl>
+    </div>
+</div>
+
+<div class="frame_box_bg normal_link">
+    <div class="small_box toggle_link">
+        <a href="#p14" id="id_14_1" onClick="toggle_display_org('id_14');" style="display:none;">+</a>
+        <a href="#p14" id="id_14_2" onClick="toggle_display_org('id_14');">-</a>
+    </div>
+    <h3 style="color : orange; text-decoration : underline;"><a name="p14">協力者・謝辞 (Special Thanks)</a></h3>
+    <div class="frame_box" id="id_14_0">
+        <p>&quot;JEEBと愉快な仲間たち&quot;の協力に感謝します。</p>
+            <ul>
+                <li>checkers : Adviser in early terms, about misc stuff on project's operation. Known as <a href="http://mewiki.project357.com/wiki/Main_Page" target="_blank" class="outgoing">MeWiki</a> maintainer.</li>
+                <li>golgol7777 : Adviser about compatibilities, major contributor for integration of x264-audio (especially with qtaacenc).</li>
+                <li><a href="http://dic.nicovideo.jp/a/jeeb">JEEB</a> : Initial tester.</li>
+                <li>Kovensky : Adviser in early terms, about audio relative stuff. Known as one of x264 devs.</li>
+                <li>wipple : Lead tester for compatibilities. Helper for misc stuff.</li>
+            </ul>
+        <p>(alphabetical order)</p>
+    </div>
+</div>
+
+<p><script type="text/javascript">document.write( last_modified() )</script></p>
+</body>
+</html>
