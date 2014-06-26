@@ -877,8 +877,8 @@ typedef enum
 typedef union
 {
     void    *always_null;       /* LSMASH_CODEC_SPECIFIC_FORMAT_UNSPECIFIED */
-    void    *structured;        /* LSMASH_CODEC_SPECIFIC_FORM_STRUCTURED */
-    uint8_t *unstructured;      /* LSMASH_CODEC_SPECIFIC_FORM_UNSTRUCTURED */
+    void    *structured;        /* LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED */
+    uint8_t *unstructured;      /* LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED */
 } lsmash_codec_specific_data_t;
 
 typedef void (*lsmash_codec_specific_destructor_t)( void * );
