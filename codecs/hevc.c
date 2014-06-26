@@ -30,7 +30,7 @@
 
 /***************************************************************************
     ITU-T Recommendation H.265 (04/13)
-    ISO/IEC 14496-15:2013 FDIS
+    ISO/IEC 14496-15:2014
 ***************************************************************************/
 #include "hevc.h"
 #include "nalu.h"
@@ -44,7 +44,7 @@
 #define HEVC_MAX_SPS_ID             15
 #define HEVC_MAX_PPS_ID             63
 #define HEVC_MAX_DPB_SIZE           16
-#define HVCC_CONFIGURATION_VERSION  0   /* Fix this value when the NAL file format is finalized. */
+#define HVCC_CONFIGURATION_VERSION  1
 
 typedef enum
 {
