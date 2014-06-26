@@ -3371,7 +3371,7 @@ const static importer_functions h264_importer =
 /***************************************************************************
     HEVC importer
     ITU-T Recommendation H.265 (04/13)
-    ISO/IEC 14496-15:2013 FDIS
+    ISO/IEC 14496-15:2014
 ***************************************************************************/
 #include "codecs/hevc.h"
 
