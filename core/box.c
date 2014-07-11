@@ -295,12 +295,11 @@ size_t isom_skip_box_common( uint8_t **p_data )
 {
     uint8_t *orig = *p_data;
     uint8_t *data = *p_data;
-    uint64_t size = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+    uint64_t size = LSMASH_GET_BE32( data );
     data += ISOM_BASEBOX_COMMON_SIZE;
     if( size == 1 )
     {
-        size = ((uint64_t)data[0] << 56) | ((uint64_t)data[1] << 48) | ((uint64_t)data[2] << 40) | ((uint64_t)data[3] << 32)
-             | ((uint64_t)data[4] << 24) | ((uint64_t)data[5] << 16) | ((uint64_t)data[6] <<  8) |  (uint64_t)data[7];
+        size = LSMASH_GET_BE64( data );
         data += 8;
     }
     *p_data = data;
@@ -3726,21 +3725,12 @@ int lsmash_add_box_ex
     file->bs             = bs;
     file->fake_file_mode = 1;
     /* Make the byte string representing the given box. */
-    buf[0] = (box->size        >> 24) & 0xff;
-    buf[1] = (box->size        >> 16) & 0xff;
-    buf[2] = (box->size        >>  8) & 0xff;
-    buf[3] =  box->size               & 0xff;
-    buf[4] = (box->type.fourcc >> 24) & 0xff;
-    buf[5] = (box->type.fourcc >> 16) & 0xff;
-    buf[6] = (box->type.fourcc >>  8) & 0xff;
-    buf[7] =  box->type.fourcc        & 0xff;
+    LSMASH_SET_BE32( &buf[0], box->size );
+    LSMASH_SET_BE32( &buf[4], box->type.fourcc );
     if( box->type.fourcc == ISOM_BOX_TYPE_UUID.fourcc )
     {
-        buf[ 8] = (box->type.user.fourcc >> 24) & 0xff;
-        buf[ 9] = (box->type.user.fourcc >> 16) & 0xff;
-        buf[10] = (box->type.user.fourcc >>  8) & 0xff;
-        buf[11] =  box->type.user.fourcc        & 0xff;
-        memcpy( buf + 12, box->type.user.id, 12 );
+        LSMASH_SET_BE32( &buf[8], box->type.user.fourcc );
+        memcpy( &buf[12], box->type.user.id, 12 );
     }
     memcpy( buf + (uintptr_t)(box->size - box->unknown_size), box->unknown_field, box->unknown_size );
     /* Add a box as a child box and try to expand into struct format. */

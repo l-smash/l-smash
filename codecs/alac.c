@@ -60,23 +60,22 @@ int alac_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_cod
         return -1;
     lsmash_alac_specific_parameters_t *param = (lsmash_alac_specific_parameters_t *)dst->data.structured;
     uint8_t *data = src->data.unstructured;
-    uint64_t size = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+    uint64_t size = LSMASH_GET_BE32( data );
     data += ISOM_BASEBOX_COMMON_SIZE;
     if( size == 1 )
     {
-        size = ((uint64_t)data[0] << 56) | ((uint64_t)data[1] << 48) | ((uint64_t)data[2] << 40) | ((uint64_t)data[3] << 32)
-             | ((uint64_t)data[4] << 24) | ((uint64_t)data[5] << 16) | ((uint64_t)data[6] <<  8) |  (uint64_t)data[7];
+        size = LSMASH_GET_BE64( data );
         data += 8;
     }
     if( size != src->size )
         return -1;
     data += 4;  /* Skip version and flags. */
-    param->frameLength   = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
-    param->bitDepth      = data[5];
-    param->numChannels   = data[9];
-    param->maxFrameBytes = (data[12] << 24) | (data[13] << 16) | (data[14] << 8) | data[15];
-    param->avgBitrate    = (data[16] << 24) | (data[17] << 16) | (data[18] << 8) | data[19];
-    param->sampleRate    = (data[20] << 24) | (data[21] << 16) | (data[22] << 8) | data[23];
+    param->frameLength   = LSMASH_GET_BE32( &data[0] );
+    param->bitDepth      = LSMASH_GET_BYTE( &data[5] );
+    param->numChannels   = LSMASH_GET_BYTE( &data[9] );
+    param->maxFrameBytes = LSMASH_GET_BE32( &data[12] );
+    param->avgBitrate    = LSMASH_GET_BE32( &data[16] );
+    param->sampleRate    = LSMASH_GET_BE32( &data[20] );
     return 0;
 }
 
@@ -91,20 +90,20 @@ int alac_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, i
         return -1;
     uint8_t *data = box->binary;
     isom_skip_box_common( &data );
-    lsmash_ifprintf( fp, indent, "version = %"PRIu8"\n", data[0] );
-    lsmash_ifprintf( fp, indent, "flags = 0x%06"PRIx32"\n", (data[1] << 16) | (data[2] << 8) | data[3] );
+    lsmash_ifprintf( fp, indent, "version = %"PRIu8"\n",           LSMASH_GET_BYTE( &data[0] ) );
+    lsmash_ifprintf( fp, indent, "flags = 0x%06"PRIx32"\n",        LSMASH_GET_BE24( &data[1] ) );
     data += 4;
-    lsmash_ifprintf( fp, indent, "frameLength = %"PRIu32"\n", (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3] );
-    lsmash_ifprintf( fp, indent, "compatibleVersion = %"PRIu8"\n", data[4] );
-    lsmash_ifprintf( fp, indent, "bitDepth = %"PRIu8"\n", data[5] );
-    lsmash_ifprintf( fp, indent, "pb = %"PRIu8"\n", data[6] );
-    lsmash_ifprintf( fp, indent, "mb = %"PRIu8"\n", data[7] );
-    lsmash_ifprintf( fp, indent, "kb = %"PRIu8"\n", data[8] );
-    lsmash_ifprintf( fp, indent, "numChannels = %"PRIu8"\n", data[9] );
-    lsmash_ifprintf( fp, indent, "maxRun = %"PRIu16"\n", (data[10] << 8) | data[11] );
-    lsmash_ifprintf( fp, indent, "maxFrameBytes = %"PRIu32"\n", (data[12] << 24) | (data[13] << 16) | (data[14] << 8) | data[15] );
-    lsmash_ifprintf( fp, indent, "avgBitrate = %"PRIu32"\n", (data[16] << 24) | (data[17] << 16) | (data[18] << 8) | data[19] );
-    lsmash_ifprintf( fp, indent, "sampleRate = %"PRIu32"\n", (data[20] << 24) | (data[21] << 16) | (data[22] << 8) | data[23] );
+    lsmash_ifprintf( fp, indent, "frameLength = %"PRIu32"\n",      LSMASH_GET_BE32( &data[0] ) );
+    lsmash_ifprintf( fp, indent, "compatibleVersion = %"PRIu8"\n", LSMASH_GET_BYTE( &data[4] ) );
+    lsmash_ifprintf( fp, indent, "bitDepth = %"PRIu8"\n",          LSMASH_GET_BYTE( &data[5] ) );
+    lsmash_ifprintf( fp, indent, "pb = %"PRIu8"\n",                LSMASH_GET_BYTE( &data[6] ) );
+    lsmash_ifprintf( fp, indent, "mb = %"PRIu8"\n",                LSMASH_GET_BYTE( &data[7] ) );
+    lsmash_ifprintf( fp, indent, "kb = %"PRIu8"\n",                LSMASH_GET_BYTE( &data[8] ) );
+    lsmash_ifprintf( fp, indent, "numChannels = %"PRIu8"\n",       LSMASH_GET_BYTE( &data[9] ) );
+    lsmash_ifprintf( fp, indent, "maxRun = %"PRIu16"\n",           LSMASH_GET_BE16( &data[10] ) );
+    lsmash_ifprintf( fp, indent, "maxFrameBytes = %"PRIu32"\n",    LSMASH_GET_BE32( &data[12] ) );
+    lsmash_ifprintf( fp, indent, "avgBitrate = %"PRIu32"\n",       LSMASH_GET_BE32( &data[16] ) );
+    lsmash_ifprintf( fp, indent, "sampleRate = %"PRIu32"\n",       LSMASH_GET_BE32( &data[20] ) );
     return 0;
 }
 

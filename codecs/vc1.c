@@ -543,10 +543,7 @@ uint8_t *lsmash_create_vc1_specific_info( lsmash_vc1_specific_parameters_t *para
     /* */
     uint8_t *data = lsmash_bits_export_data( &bits, data_length );
     /* Update box size. */
-    data[0] = ((*data_length) >> 24) & 0xff;
-    data[1] = ((*data_length) >> 16) & 0xff;
-    data[2] = ((*data_length) >>  8) & 0xff;
-    data[3] =  (*data_length)        & 0xff;
+    LSMASH_SET_BE32( data, *data_length );
     return data;
 }
 
@@ -766,12 +763,11 @@ int vc1_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_code
         return -1;
     lsmash_vc1_specific_parameters_t *param = (lsmash_vc1_specific_parameters_t *)dst->data.structured;
     uint8_t *data = src->data.unstructured;
-    uint64_t size = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+    uint64_t size = LSMASH_GET_BE32( data );
     data += ISOM_BASEBOX_COMMON_SIZE;
     if( size == 1 )
     {
-        size = ((uint64_t)data[0] << 56) | ((uint64_t)data[1] << 48) | ((uint64_t)data[2] << 40) | ((uint64_t)data[3] << 32)
-             | ((uint64_t)data[4] << 24) | ((uint64_t)data[5] << 16) | ((uint64_t)data[6] <<  8) |  (uint64_t)data[7];
+        size = LSMASH_GET_BE64( data );
         data += 8;
     }
     if( size != src->size )
@@ -786,7 +782,7 @@ int vc1_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_code
     param->multiple_entry    = !((data[2] >> 3) & 0x01);
     param->slice_present     = !((data[2] >> 2) & 0x01);
     param->bframe_present    = !((data[2] >> 1) & 0x01);
-    param->framerate         = (data[3] << 24) | (data[4] << 16) | (data[5] << 8) | data[6];
+    param->framerate         = LSMASH_GET_BE32( &data[3] );
     /* Try to get seqhdr_ephdr[]. */
     if( !param->seqhdr )
     {
@@ -935,7 +931,7 @@ int vc1_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, in
     lsmash_ifprintf( fp, indent, "no_slice_code = %"PRIu8"\n", (data[2] >> 2) & 0x01 );
     lsmash_ifprintf( fp, indent, "no_bframe = %"PRIu8"\n", (data[2] >> 1) & 0x01 );
     lsmash_ifprintf( fp, indent, "reserved2 = %"PRIu8"\n", data[2] & 0x01 );
-    uint32_t framerate = (data[3] << 24) | (data[4] << 16) | (data[5] << 8) | data[6];
+    uint32_t framerate = LSMASH_GET_BE32( &data[3] );
     lsmash_ifprintf( fp, indent, "framerate = %"PRIu32"\n", framerate );
     uint32_t seqhdr_ephdr_size = box->size - (data - box->binary + 7);
     if( seqhdr_ephdr_size )

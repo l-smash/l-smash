@@ -185,7 +185,7 @@ static int mp4sys_adts_parse_variable_header( FILE* stream, uint8_t* buf, unsign
         {
             if( fread( buf2, 1, 2, stream ) != 2 )
                 return -1;
-            raw_data_block_position[i] = (buf2[0] << 8) | buf2[1];
+            raw_data_block_position[i] = LSMASH_GET_BE16( buf2 );
         }
         /* skip crc_check in adts_header_error_check().
            Or might be sizeof( adts_error_check() ) if we share with the case number_of_raw_data_blocks_in_frame == 0 */
@@ -557,7 +557,7 @@ typedef struct
 static int mp4sys_mp3_parse_header( uint8_t* buf, mp4sys_mp3_header_t* header )
 {
     /* FIXME: should we rewrite these code using bitstream reader? */
-    uint32_t data = (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3];
+    uint32_t data = LSMASH_GET_BE32( buf );
     header->syncword           = (data >> 20) & 0xFFF; /* NOTE: don't consider what is called MPEG2.5, which last bit is 0. */
     header->ID                 = (data >> 19) & 0x1;
     header->layer              = (data >> 17) & 0x3;
@@ -693,12 +693,12 @@ static int parse_xing_info_header( mp4sys_mp3_info_t *info, mp4sys_mp3_header_t 
     uint8_t *mdp = frame + sip + side_info_size;
     if( memcmp( mdp, "Info", 4 ) && memcmp( mdp, "Xing", 4 ) )
         return 0;
-    uint32_t flags = LSMASH_4CC( mdp[4], mdp[5], mdp[6], mdp[7] );
+    uint32_t flags = LSMASH_GET_BE32( &mdp[4] );
     uint32_t off = 8;
     uint32_t frame_count = 0;
     if( flags & 1 )
     {
-        frame_count = LSMASH_4CC( mdp[8], mdp[9], mdp[10], mdp[11] );
+        frame_count = LSMASH_GET_BE32( &mdp[8] );
         info->valid_samples = (uint64_t)frame_count * mp4sys_mp3_samples_in_frame( header );
         off += 4;
     }
@@ -708,7 +708,7 @@ static int parse_xing_info_header( mp4sys_mp3_info_t *info, mp4sys_mp3_header_t 
 
     if( mdp[off] == 'L' )
     {   /* LAME header present */
-        unsigned v = (mdp[off + 21] << 16) | (mdp[off + 22] << 8) | mdp[off + 23];
+        unsigned v = LSMASH_GET_BE24( &mdp[off + 21] );
         info->enc_delay     = v >> 12;
         info->padding       = v & 0xfff;
         if( frame_count )
@@ -1913,16 +1913,16 @@ static int als_parse_specific_config( lsmash_stream_buffers_t *sb, als_specific_
     if( sb->end < sb->start + ALSSC_TWELVE_LENGTH
      || buf[0] != 0x41 || buf[1] != 0x4C || buf[2] != 0x53 || buf[3] != 0x00 )
         return -1;
-    alssc->samp_freq     = (buf[4] << 24) | (buf[5] << 16) | (buf[6] << 8) | buf[7];
-    alssc->samples       = (buf[8] << 24) | (buf[9] << 16) | (buf[10] << 8) | buf[11];
+    alssc->samp_freq     = LSMASH_GET_BE32( &buf[4] );
+    alssc->samples       = LSMASH_GET_BE32( &buf[8] );
     if( alssc->samples == 0xffffffff )
         return -1;      /* We don't support this case. */
-    alssc->channels      = (buf[12] << 8) | buf[13];
+    alssc->channels      = LSMASH_GET_BE16( &buf[12] );
     alssc->resolution    = (buf[14] & 0x1c) >> 2;
     if( alssc->resolution > 3 )
         return -1;      /* reserved */
-    alssc->frame_length  = (buf[15] << 8) | buf[16];
-    alssc->random_access = buf[17];
+    alssc->frame_length  = LSMASH_GET_BE16( &buf[15] );
+    alssc->random_access = LSMASH_GET_BYTE( &buf[17] );
     alssc->ra_flag       = (buf[18] & 0xc0) >> 6;
     if( alssc->ra_flag == 0 )
         return -1;      /* We don't support this case. */
@@ -1964,8 +1964,8 @@ static int als_parse_specific_config( lsmash_stream_buffers_t *sb, als_specific_
     }
     /* header_size and trailer_size */
     CHECK_UPDATE( 8 );
-    uint32_t header_size  = (sb->pos[0] << 24) | (sb->pos[1] << 16) | (sb->pos[2] << 8) | sb->pos[3];
-    uint32_t trailer_size = (sb->pos[4] << 24) | (sb->pos[5] << 16) | (sb->pos[6] << 8) | sb->pos[7];
+    uint32_t header_size  = LSMASH_GET_BE32( &sb->pos[0] );
+    uint32_t trailer_size = LSMASH_GET_BE32( &sb->pos[4] );
     als_copy_from_buffer( alssc, sb, 8 );
     /* orig_header, orig_trailer and crc. */
     uint32_t read_size = header_size * (header_size != 0xffffffff) + trailer_size * (trailer_size != 0xffffffff) + 4 * crc_enabled;
@@ -1994,7 +1994,7 @@ static int als_parse_specific_config( lsmash_stream_buffers_t *sb, als_specific_
         {
             if( sb->pos + 4 > sb->end )
                 return -1;
-            alssc->ra_unit_size[i] = (sb->pos[0] << 24) | (sb->pos[1] << 16) | (sb->pos[2] << 8) | sb->pos[3];
+            alssc->ra_unit_size[i] = LSMASH_GET_BE32( sb->pos );
             lsmash_stream_buffers_seek( sb, 4, SEEK_CUR );
             max_ra_unit_size = LSMASH_MAX( max_ra_unit_size, alssc->ra_unit_size[i] );
         }
@@ -2008,7 +2008,7 @@ static int als_parse_specific_config( lsmash_stream_buffers_t *sb, als_specific_
     if( aux_data_enabled )
     {
         CHECK_UPDATE( 4 );
-        uint32_t aux_size = (sb->pos[0] << 24) | (sb->pos[1] << 16) | (sb->pos[2] << 8) | sb->pos[3];
+        uint32_t aux_size = LSMASH_GET_BE32( sb->pos );
         als_copy_from_buffer( alssc, sb, 4 );
         if( aux_size && aux_size != 0xffffffff )
         {
@@ -2056,7 +2056,7 @@ static int mp4sys_als_importer_get_accessunit( importer_t *importer, uint32_t tr
     {
         CHECK_UPDATE( 4 );
         /* We remove ra_unit_size. */
-        au_length = (sb->pos[0] << 24) | (sb->pos[1] << 16) | (sb->pos[2] << 8) | sb->pos[3];
+        au_length = LSMASH_GET_BE32( sb->pos );
         lsmash_stream_buffers_seek( sb, 4, SEEK_CUR );
     }
     if( buffered_sample->length < au_length

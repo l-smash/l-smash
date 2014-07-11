@@ -83,19 +83,9 @@ static int isom_bs_read_box_common( lsmash_bs_t *bs, isom_box_t *box )
         lsmash_box_type_t *type = &box->type;
         uint64_t temp64 = lsmash_bs_get_be64( bs );
         type->user.fourcc = (temp64 >> 32) & 0xffffffff;
-        type->user.id[0]  = (temp64 >> 24) & 0xff;
-        type->user.id[1]  = (temp64 >> 16) & 0xff;
-        type->user.id[2]  = (temp64 >>  8) & 0xff;
-        type->user.id[3]  =  temp64        & 0xff;
+        LSMASH_SET_BE32( &type->user.id[0], temp64 );
         temp64 = lsmash_bs_get_be64( bs );
-        type->user.id[4]  = (temp64 >> 56) & 0xff;
-        type->user.id[5]  = (temp64 >> 48) & 0xff;
-        type->user.id[6]  = (temp64 >> 40) & 0xff;
-        type->user.id[7]  = (temp64 >> 32) & 0xff;
-        type->user.id[8]  = (temp64 >> 24) & 0xff;
-        type->user.id[9]  = (temp64 >> 16) & 0xff;
-        type->user.id[10] = (temp64 >>  8) & 0xff;
-        type->user.id[11] =  temp64        & 0xff;
+        LSMASH_SET_BE64( &type->user.id[4], temp64 );
     }
     return bs->eob;
 }
@@ -905,30 +895,21 @@ static int isom_read_codec_specific( lsmash_file_t *file, isom_box_t *box, isom_
         return -1;
     if( lsmash_bs_get_bytes_ex( bs, exdata_length, exdata + (uintptr_t)opaque_pos ) < 0 )
         goto fail;
-    int i = 0;
-    exdata[i++] = (box->size        >> 24) & 0xff;
-    exdata[i++] = (box->size        >> 16) & 0xff;
-    exdata[i++] = (box->size        >>  8) & 0xff;
-    exdata[i++] =  box->size               & 0xff;
-    exdata[i++] = (box->type.fourcc >> 24) & 0xff;
-    exdata[i++] = (box->type.fourcc >> 16) & 0xff;
-    exdata[i++] = (box->type.fourcc >>  8) & 0xff;
-    exdata[i++] =  box->type.fourcc        & 0xff;
+    LSMASH_SET_BE32( &exdata[0], box->size );
+    LSMASH_SET_BE32( &exdata[4], box->type.fourcc );
+    uintptr_t i = 8;
     if( box->type.fourcc == ISOM_BOX_TYPE_UUID.fourcc )
     {
-        exdata[i++] = (box->type.user.fourcc >> 24) & 0xff;
-        exdata[i++] = (box->type.user.fourcc >> 16) & 0xff;
-        exdata[i++] = (box->type.user.fourcc >>  8) & 0xff;
-        exdata[i++] =  box->type.user.fourcc        & 0xff;
-        memcpy( exdata + i, box->type.user.id, 12 );
-        i += 12;
+        LSMASH_SET_BE32( &exdata[8], box->type.user.fourcc );
+        memcpy( &exdata[12], box->type.user.id, 12 );
+        i += 16;
     }
     if( box->manager & LSMASH_FULLBOX )
     {
-        exdata[i++] = box->version;
-        exdata[i++] = (box->flags >> 16) & 0xff;
-        exdata[i++] = (box->flags >>  8) & 0xff;
-        exdata[i++] =  box->flags        & 0xff;
+        LSMASH_SET_BYTE( &exdata[i], box->version );
+        i += 1;
+        LSMASH_SET_BE24( &exdata[i], box->flags );
+        i += 3;
     }
     if( i != opaque_pos )
         goto fail;

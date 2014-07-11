@@ -156,12 +156,11 @@ int ac3_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_code
         return -1;
     lsmash_ac3_specific_parameters_t *param = (lsmash_ac3_specific_parameters_t *)dst->data.structured;
     uint8_t *data = src->data.unstructured;
-    uint64_t size = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+    uint64_t size = LSMASH_GET_BE32( data );
     data += ISOM_BASEBOX_COMMON_SIZE;
     if( size == 1 )
     {
-        size = ((uint64_t)data[0] << 56) | ((uint64_t)data[1] << 48) | ((uint64_t)data[2] << 40) | ((uint64_t)data[3] << 32)
-             | ((uint64_t)data[4] << 24) | ((uint64_t)data[5] << 16) | ((uint64_t)data[6] <<  8) |  (uint64_t)data[7];
+        size = LSMASH_GET_BE64( data );
         data += 8;
     }
     if( size != src->size )
@@ -253,10 +252,7 @@ uint8_t *lsmash_create_eac3_specific_info( lsmash_eac3_specific_parameters_t *pa
     uint8_t *data = lsmash_bits_export_data( &bits, data_length );
     lsmash_bits_empty( &bits );
     /* Update box size. */
-    data[0] = ((*data_length) >> 24) & 0xff;
-    data[1] = ((*data_length) >> 16) & 0xff;
-    data[2] = ((*data_length) >>  8) & 0xff;
-    data[3] =  (*data_length)        & 0xff;
+    LSMASH_SET_BE32( data, *data_length );
     return data;
 #undef EAC3_SPECIFIC_BOX_MAX_LENGTH
 }
@@ -522,12 +518,11 @@ int eac3_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_cod
         return -1;
     lsmash_eac3_specific_parameters_t *param = (lsmash_eac3_specific_parameters_t *)dst->data.structured;
     uint8_t *data = src->data.unstructured;
-    uint64_t size = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+    uint64_t size = LSMASH_GET_BE32( data );
     data += ISOM_BASEBOX_COMMON_SIZE;
     if( size == 1 )
     {
-        size = ((uint64_t)data[0] << 56) | ((uint64_t)data[1] << 48) | ((uint64_t)data[2] << 40) | ((uint64_t)data[3] << 32)
-             | ((uint64_t)data[4] << 24) | ((uint64_t)data[5] << 16) | ((uint64_t)data[6] <<  8) |  (uint64_t)data[7];
+        size = LSMASH_GET_BE64( data );
         data += 8;
     }
     if( size != src->size )

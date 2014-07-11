@@ -448,19 +448,18 @@ static size_t isom_description_read_box_common( uint8_t **p_data, uint64_t *size
 {
     uint8_t *orig = *p_data;
     uint8_t *data = *p_data;
-    *size        = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
-    type->fourcc = (data[4] << 24) | (data[5] << 16) | (data[6] << 8) | data[7];
+    *size        = LSMASH_GET_BE32( &data[0] );
+    type->fourcc = LSMASH_GET_BE32( &data[4] );
     data += ISOM_BASEBOX_COMMON_SIZE;
     if( *size == 1 )
     {
-        *size = ((uint64_t)data[0] << 56) | ((uint64_t)data[1] << 48) | ((uint64_t)data[2] << 40) | ((uint64_t)data[3] << 32)
-              | ((uint64_t)data[4] << 24) | ((uint64_t)data[5] << 16) | ((uint64_t)data[6] <<  8) |  (uint64_t)data[7];
+        *size = LSMASH_GET_BE64( data );
         data += 8;
     }
     *p_data = data;
     if( type->fourcc == ISOM_BOX_TYPE_UUID.fourcc )
     {
-        type->user.fourcc = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+        type->user.fourcc = LSMASH_GET_BE32( &data[0] );
         memcpy( type->user.id, &data[4], 12 );
     }
     return data - orig;
@@ -496,13 +495,12 @@ static int isom_construct_global_specific_header( lsmash_codec_specific_t *dst, 
         return -1;
     lsmash_codec_global_header_t *global = (lsmash_codec_global_header_t *)dst->data.structured;
     uint8_t *data = src->data.unstructured;
-    uint64_t size = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+    uint64_t size = LSMASH_GET_BE32( data );
     data += ISOM_BASEBOX_COMMON_SIZE;
     global->header_size = size - ISOM_BASEBOX_COMMON_SIZE;
     if( size == 1 )
     {
-        size = ((uint64_t)data[0] << 56) | ((uint64_t)data[1] << 48) | ((uint64_t)data[2] << 40) | ((uint64_t)data[3] << 32)
-             | ((uint64_t)data[4] << 24) | ((uint64_t)data[5] << 16) | ((uint64_t)data[6] <<  8) |  (uint64_t)data[7];
+        size = LSMASH_GET_BE64( data );
         data += 8;
         global->header_size -= 8;
     }
@@ -523,18 +521,17 @@ static int isom_construct_audio_channel_layout( lsmash_codec_specific_t *dst, ls
         return -1;
     lsmash_qt_audio_channel_layout_t *layout = (lsmash_qt_audio_channel_layout_t *)dst->data.structured;
     uint8_t *data = src->data.unstructured;
-    uint64_t size = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+    uint64_t size = LSMASH_GET_BE32( data );
     data += ISOM_FULLBOX_COMMON_SIZE;
     if( size == 1 )
     {
-        size = ((uint64_t)data[0] << 56) | ((uint64_t)data[1] << 48) | ((uint64_t)data[2] << 40) | ((uint64_t)data[3] << 32)
-             | ((uint64_t)data[4] << 24) | ((uint64_t)data[5] << 16) | ((uint64_t)data[6] <<  8) |  (uint64_t)data[7];
+        size = LSMASH_GET_BE64( data );
         data += 8;
     }
     if( size != src->size )
         return -1;
-    layout->channelLayoutTag = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
-    layout->channelBitmap    = (data[4] << 24) | (data[5] << 16) | (data[6] << 8) | data[7];
+    layout->channelLayoutTag = LSMASH_GET_BE32( &data[0] );
+    layout->channelBitmap    = LSMASH_GET_BE32( &data[4] );
     return 0;
 }
 
@@ -566,7 +563,7 @@ static int codec_construct_qt_audio_decompression_info( lsmash_codec_specific_t 
                 if( isom_add_frma( wave ) )
                     return -1;
                 isom_frma_t *frma = (isom_frma_t *)wave->extensions.tail->data;;
-                frma->data_format = (pos[0] << 24) | (pos[1] << 16) | (pos[2] << 8) | pos[3];
+                frma->data_format = LSMASH_GET_BE32( pos );
                 pos += 4;
                 break;
             }
@@ -577,7 +574,7 @@ static int codec_construct_qt_audio_decompression_info( lsmash_codec_specific_t 
                 if( isom_add_enda( wave ) )
                     return -1;
                 isom_enda_t *enda = (isom_enda_t *)wave->extensions.tail->data;;
-                enda->littleEndian = (pos[0] << 8) | pos[1];
+                enda->littleEndian = LSMASH_GET_BE16( pos );
                 break;
             }
             case QT_BOX_TYPE_MP4A :
@@ -587,7 +584,7 @@ static int codec_construct_qt_audio_decompression_info( lsmash_codec_specific_t 
                 if( isom_add_mp4a( wave ) )
                     return -1;
                 isom_mp4a_t *mp4a = (isom_mp4a_t *)wave->extensions.tail->data;;
-                mp4a->unknown = (pos[0] << 24) | (pos[1] << 16) | (pos[2] << 8) | pos[3];
+                mp4a->unknown = LSMASH_GET_BE32( pos );
                 pos += 4;
                 break;
             }
@@ -2360,10 +2357,7 @@ static int isom_append_structured_mp4sys_decoder_config( lsmash_codec_specific_l
     if( !esds_data )
         return -1;
     /* Update box size. */
-    esds_data[0] = ((esds_size) >> 24) & 0xff;
-    esds_data[1] = ((esds_size) >> 16) & 0xff;
-    esds_data[2] = ((esds_size) >>  8) & 0xff;
-    esds_data[3] =  (esds_size)        & 0xff;
+    LSMASH_SET_BE32( esds_data, esds_size );
     lsmash_codec_specific_data_type type = isom_get_codec_specific_data_type( ISOM_BOX_TYPE_ESDS.fourcc );
     lsmash_codec_specific_t *specific = lsmash_create_codec_specific_data( type, LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
     if( !specific )

@@ -1886,16 +1886,13 @@ static int isom_print_data( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
         else if( well_known_type == 23 && data->value_length == 4 )
         {
             /* a big-endian 32-bit floating point value (IEEE754) */
-            uint32_t float32 = (data->value[0] << 24) | (data->value[1] << 16) | (data->value[2] << 8) | data->value[3];
+            uint32_t float32 = LSMASH_GET_BE32( data->value );
             lsmash_ifprintf( fp, indent, "value = %f\n", lsmash_int2float32( float32 ) );
         }
         else if( well_known_type == 24 && data->value_length == 8 )
         {
             /* a big-endian 64-bit floating point value (IEEE754) */
-            uint64_t float64 = ((uint64_t)data->value[0] << 56) | ((uint64_t)data->value[1] << 48)
-                             | ((uint64_t)data->value[2] << 40) | ((uint64_t)data->value[3] << 32)
-                             | ((uint64_t)data->value[4] << 24) | ((uint64_t)data->value[5] << 16)
-                             | ((uint64_t)data->value[6] <<  8) |  (uint64_t)data->value[7];
+            uint64_t float64 = LSMASH_GET_BE64( data->value );
             lsmash_ifprintf( fp, indent, "value = %lf\n", lsmash_int2float64( float64 ) );
         }
         else
@@ -1959,28 +1956,24 @@ static int isom_print_data( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
         else if( data->type_code == 8 && data->value_length == 16 )
             /* UUID */
             lsmash_ifprintf( fp, indent, "value = 0x%08"PRIx32"-%04"PRIx16"-%04"PRIx16"-%04"PRIx16"-%04"PRIx16"0x%08"PRIx32"\n",
-                             (data->value[ 0] << 24) | (data->value[ 1] << 16) | (data->value[ 2] << 8) | data->value[ 3],
-                             (data->value[ 4] <<  8) |  data->value[ 5],
-                             (data->value[ 6] <<  8) |  data->value[ 7],
-                             (data->value[ 8] <<  8) |  data->value[ 9],
-                             (data->value[10] <<  8) |  data->value[11],
-                             (data->value[12] << 24) | (data->value[13] << 16) | (data->value[14] << 8) | data->value[15] );
+                             LSMASH_GET_BE32( &data->value[ 0] ),
+                             LSMASH_GET_BE16( &data->value[ 4] ),
+                             LSMASH_GET_BE16( &data->value[ 6] ),
+                             LSMASH_GET_BE16( &data->value[ 8] ),
+                             LSMASH_GET_BE16( &data->value[10] ),
+                             LSMASH_GET_BE32( &data->value[12] ) );
         else if( data->type_code == 16 && data->value_length == 4 )
         {
             /* duration in milliseconds */
-            uint32_t duration = (data->value[0] << 24) | (data->value[1] << 16) | (data->value[2] << 8) | data->value[3];
+            uint32_t duration = LSMASH_GET_BE32( data->value );
             lsmash_ifprintf( fp, indent, "value = %"PRIu32" milliseconds\n", duration );
         }
         else if( data->type_code == 17 && (data->value_length == 4 || data->value_length == 8) )
         {
             /* UTC, counting seconds since midnight on 1 January, 1904 */
-            uint64_t mp4time = (data->value[0] << 24) | (data->value[1] << 16) | (data->value[2] << 8) | data->value[3];
-            if( data->value_length == 8 )
-            {
-                /* 64bit */
-                mp4time <<= 32;
-                mp4time  |= (data->value[4] << 24) | (data->value[5] << 16) | (data->value[6] << 8) | data->value[7];
-            }
+            uint64_t mp4time = data->value_length == 8
+                             ? LSMASH_GET_BE64( data->value )
+                             : LSMASH_GET_BE32( data->value );
             isom_mp4time2utc( mp4time );
         }
         else if( data->type_code == 21 && data->value_length <= 8 )

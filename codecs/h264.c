@@ -1678,10 +1678,7 @@ uint8_t *lsmash_create_h264_specific_info
     }
     uint8_t *data = lsmash_bs_export_data( &bs, data_length );
     /* Update box size. */
-    data[0] = ((*data_length) >> 24) & 0xff;
-    data[1] = ((*data_length) >> 16) & 0xff;
-    data[2] = ((*data_length) >>  8) & 0xff;
-    data[3] =  (*data_length)        & 0xff;
+    LSMASH_SET_BE32( data, *data_length );
     return data;
 }
 
@@ -2312,12 +2309,11 @@ int h264_construct_specific_parameters
         return -1;
     lsmash_h264_specific_parameters_t *param = (lsmash_h264_specific_parameters_t *)dst->data.structured;
     uint8_t *data = src->data.unstructured;
-    uint64_t size = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+    uint64_t size = LSMASH_GET_BE32( data );
     data += ISOM_BASEBOX_COMMON_SIZE;
     if( size == 1 )
     {
-        size = ((uint64_t)data[0] << 56) | ((uint64_t)data[1] << 48) | ((uint64_t)data[2] << 40) | ((uint64_t)data[3] << 32)
-             | ((uint64_t)data[4] << 24) | ((uint64_t)data[5] << 16) | ((uint64_t)data[6] <<  8) |  (uint64_t)data[7];
+        size = LSMASH_GET_BE64( data );
         data += 8;
     }
     if( size != src->size )

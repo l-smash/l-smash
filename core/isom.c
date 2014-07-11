@@ -43,10 +43,7 @@
 char *isom_4cc2str( uint32_t fourcc )
 {
     static char str[5];
-    str[0] = (fourcc >> 24) & 0xff;
-    str[1] = (fourcc >> 16) & 0xff;
-    str[2] = (fourcc >>  8) & 0xff;
-    str[3] =  fourcc        & 0xff;
+    LSMASH_SET_BE32( str, fourcc );
     str[4] = 0;
     return str;
 }
@@ -1454,15 +1451,9 @@ int isom_update_bitrate_description( isom_mdia_t *mdia )
                 return -1;
             exdata += 24;
             /* maxFrameBytes */
-            exdata[0] = (bufferSizeDB >> 24) & 0xff;
-            exdata[1] = (bufferSizeDB >> 16) & 0xff;
-            exdata[2] = (bufferSizeDB >>  8) & 0xff;
-            exdata[3] =  bufferSizeDB        & 0xff;
+            LSMASH_SET_BE32( &exdata[0], bufferSizeDB );
             /* avgBitRate */
-            exdata[4] = (avgBitrate   >> 24) & 0xff;
-            exdata[5] = (avgBitrate   >> 16) & 0xff;
-            exdata[6] = (avgBitrate   >>  8) & 0xff;
-            exdata[7] =  avgBitrate          & 0xff;
+            LSMASH_SET_BE32( &exdata[4], avgBitrate );
         }
         else if( isom_is_waveform_audio( sample_type ) )
         {
@@ -1486,27 +1477,23 @@ int isom_update_bitrate_description( isom_mdia_t *mdia )
             if( !exdata || exdata_size < ISOM_BASEBOX_COMMON_SIZE + 18 )
                 return -1;
             exdata += ISOM_BASEBOX_COMMON_SIZE;
-            uint16_t cbSize = exdata[16] | (exdata[17] << 8);
+            uint16_t cbSize = LSMASH_GET_LE16( &exdata[16] );
             if( exdata_size < ISOM_BASEBOX_COMMON_SIZE + 18 + cbSize )
                 return -1;
             /* WAVEFORMATEX.nAvgBytesPerSec */
             if( isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index ) < 0 )
                 return -1;
             uint32_t nAvgBytesPerSec = avgBitrate / 8;
-            exdata[ 8] =  nAvgBytesPerSec        & 0xff;
-            exdata[ 9] = (nAvgBytesPerSec >>  8) & 0xff;
-            exdata[10] = (nAvgBytesPerSec >> 16) & 0xff;
-            exdata[11] = (nAvgBytesPerSec >> 24) & 0xff;
+            LSMASH_SET_LE32( &exdata[8], nAvgBytesPerSec );
             if( lsmash_check_codec_type_identical( sample_type, QT_CODEC_TYPE_FULLMP3_AUDIO )
              || lsmash_check_codec_type_identical( sample_type, QT_CODEC_TYPE_MP3_AUDIO ) )
             {
                 /* MPEGLAYER3WAVEFORMAT.nBlockSize */
-                uint32_t nSamplesPerSec  = exdata[ 4] | (exdata[ 5] << 8) | (exdata[6] << 16) | (exdata[7] << 24);
-                uint16_t nFramesPerBlock = exdata[26] | (exdata[27] << 8);
+                uint32_t nSamplesPerSec  = LSMASH_GET_LE32( &exdata[ 4] );
+                uint16_t nFramesPerBlock = LSMASH_GET_LE16( &exdata[26] );
                 uint16_t padding         = 0;   /* FIXME? */
                 uint16_t nBlockSize      = (144 * (avgBitrate / nSamplesPerSec) + padding) * nFramesPerBlock;
-                exdata[24] =  nBlockSize        & 0xff;
-                exdata[25] = (nBlockSize >>  8) & 0xff;
+                LSMASH_SET_LE16( &exdata[24], nBlockSize );
             }
         }
         else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_DTSC_AUDIO )
@@ -1525,14 +1512,8 @@ int isom_update_bitrate_description( isom_mdia_t *mdia )
             if( !stbl->stsz->list )
                 maxBitrate = avgBitrate;
             uint8_t *exdata = ext->binary + 12;
-            exdata[0] = (maxBitrate >> 24) & 0xff;
-            exdata[1] = (maxBitrate >> 16) & 0xff;
-            exdata[2] = (maxBitrate >>  8) & 0xff;
-            exdata[3] =  maxBitrate        & 0xff;
-            exdata[4] = (avgBitrate >> 24) & 0xff;
-            exdata[5] = (avgBitrate >> 16) & 0xff;
-            exdata[6] = (avgBitrate >>  8) & 0xff;
-            exdata[7] =  avgBitrate        & 0xff;
+            LSMASH_SET_BE32( &exdata[0], maxBitrate );
+            LSMASH_SET_BE32( &exdata[4], avgBitrate );
         }
         else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_EC_3_AUDIO ) )
         {

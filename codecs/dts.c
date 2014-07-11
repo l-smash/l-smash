@@ -277,10 +277,7 @@ uint8_t *lsmash_create_dts_specific_info( lsmash_dts_specific_parameters_t *para
     /* */
     uint8_t *data = lsmash_bits_export_data( &bits, data_length );
     /* Update box size. */
-    data[0] = ((*data_length) >> 24) & 0xff;
-    data[1] = ((*data_length) >> 16) & 0xff;
-    data[2] = ((*data_length) >>  8) & 0xff;
-    data[3] =  (*data_length)        & 0xff;
+    LSMASH_SET_BE32( data, *data_length );
     return data;
 }
 
@@ -1509,22 +1506,21 @@ int dts_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_code
         return -1;
     lsmash_dts_specific_parameters_t *param = (lsmash_dts_specific_parameters_t *)dst->data.structured;
     uint8_t *data = src->data.unstructured;
-    uint64_t size = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+    uint64_t size = LSMASH_GET_BE32( data );
     int dts_specific_box_min_length = DTS_SPECIFIC_BOX_MIN_LENGTH;
     data += ISOM_BASEBOX_COMMON_SIZE;
     if( size == 1 )
     {
-        size = ((uint64_t)data[0] << 56) | ((uint64_t)data[1] << 48) | ((uint64_t)data[2] << 40) | ((uint64_t)data[3] << 32)
-             | ((uint64_t)data[4] << 24) | ((uint64_t)data[5] << 16) | ((uint64_t)data[6] <<  8) |  (uint64_t)data[7];
+        size = LSMASH_GET_BE64( data );
         dts_specific_box_min_length += 8;
         data += 8;
     }
     if( size != src->size )
         return -1;
-    param->DTSSamplingFrequency = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
-    param->maxBitrate           = (data[4] << 24) | (data[5] << 16) | (data[6] << 8) | data[7];
-    param->avgBitrate           = (data[8] << 24) | (data[9] << 16) | (data[10] << 8) | data[11];
-    param->pcmSampleDepth       = data[12];
+    param->DTSSamplingFrequency = LSMASH_GET_BE32( &data[0] );
+    param->maxBitrate           = LSMASH_GET_BE32( &data[4] );
+    param->avgBitrate           = LSMASH_GET_BE32( &data[8] );
+    param->pcmSampleDepth       = LSMASH_GET_BYTE( &data[12] );
     param->FrameDuration        = (data[13] >> 6) & 0x03;
     param->StreamConstruction   = (data[13] >> 1) & 0x1F;
     param->CoreLFEPresent       = data[13] & 0x01;
@@ -1565,10 +1561,10 @@ int dts_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, in
         return -1;
     uint8_t *data = box->binary;
     isom_skip_box_common( &data );
-    uint32_t DTSSamplingFrequency = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
-    uint32_t maxBitrate           = (data[4] << 24) | (data[5] << 16) | (data[6] << 8) | data[7];
-    uint32_t avgBitrate           = (data[8] << 24) | (data[9] << 16) | (data[10] << 8) | data[11];
-    uint8_t  pcmSampleDepth       = data[12];
+    uint32_t DTSSamplingFrequency = LSMASH_GET_BE32( &data[0] );
+    uint32_t maxBitrate           = LSMASH_GET_BE32( &data[4] );
+    uint32_t avgBitrate           = LSMASH_GET_BE32( &data[8] );
+    uint8_t  pcmSampleDepth       = LSMASH_GET_BYTE( &data[12] );
     uint8_t  FrameDuration        = (data[13] >> 6) & 0x03;
     uint8_t  StreamConstruction   = (data[13] >> 1) & 0x1F;
     uint8_t  CoreLFEPresent       = data[13] & 0x01;
