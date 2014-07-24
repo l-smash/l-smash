@@ -1924,7 +1924,20 @@ struct lsmash_root_tag
 
 /** **/
 
-/* Box types */
+/* Box types
+ *
+ * For developers :
+ *   Be careful about the use of the following defined BOX identifiers.
+ *   Values of array XXXX_BOX_TYPE_YYYY.user.id may be invalid/disappeared value.
+ *   For some systems, e.g.,
+ *     uint8_t id[12];
+ *     memcpy( id, ISOM_BOX_TYPE_MOOV.user.id, 12 * sizeof(uint8_t) );
+ *   brings about undefined behaviour.
+ *   If you want to access values of array XXXX_BOX_TYPE_YYYY.user.id, you shall do like
+ *     uint8_t id[12];
+ *     lsmash_box_type_t type = ISOM_BOX_TYPE_MOOV;
+ *     memcpy( id, type.user.id, 12 * sizeof(uint8_t) );
+ */
 #define ISOM_BOX_TYPE_ID32 lsmash_form_iso_box_type( LSMASH_4CC( 'I', 'D', '3', '2' ) )
 #define ISOM_BOX_TYPE_ALBM lsmash_form_iso_box_type( LSMASH_4CC( 'a', 'l', 'b', 'm' ) )
 #define ISOM_BOX_TYPE_AUTH lsmash_form_iso_box_type( LSMASH_4CC( 'a', 'u', 't', 'h' ) )
