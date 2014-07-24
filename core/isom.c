@@ -2105,7 +2105,7 @@ uint32_t lsmash_get_composition_to_decode_shift( lsmash_root_t *root, uint32_t t
     uint32_t ctd_shift = 0;
     uint32_t i         = 0;
     uint32_t j         = 0;
-    for( uint32_t k = 0; k < sample_count; i++ )
+    for( uint32_t k = 0; k < sample_count; k++ )
     {
         isom_stts_entry_t *stts_data = (isom_stts_entry_t *)stts_entry->data;
         isom_ctts_entry_t *ctts_data = (isom_ctts_entry_t *)ctts_entry->data;
