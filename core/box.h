@@ -2461,7 +2461,7 @@ void isom_bs_put_box_common( lsmash_bs_t *bs, void *box );
 
 int isom_check_compatibility( lsmash_file_t *file );
 
-char *isom_4cc2str( uint32_t fourcc );
+#define isom_4cc2str( fourcc ) (const char [5]){ (fourcc) >> 24, (fourcc) >> 16, (fourcc) >> 8, (fourcc), 0 }
 
 isom_trak_t *isom_get_trak( lsmash_file_t *file, uint32_t track_ID );
 isom_trex_t *isom_get_trex( isom_mvex_t *mvex, uint32_t track_ID );

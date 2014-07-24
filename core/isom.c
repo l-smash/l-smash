@@ -40,14 +40,6 @@
 #include "codecs/description.h"
 
 /*---- ----*/
-char *isom_4cc2str( uint32_t fourcc )
-{
-    static char str[5];
-    LSMASH_SET_BE32( str, fourcc );
-    str[4] = 0;
-    return str;
-}
-
 isom_trak_t *isom_get_trak( lsmash_file_t *file, uint32_t track_ID )
 {
     if( track_ID == 0
