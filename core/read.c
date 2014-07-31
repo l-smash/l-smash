@@ -252,21 +252,16 @@ static int isom_read_unknown_box( lsmash_file_t *file, isom_box_t *box, isom_box
     return 0;
 }
 
-#define isom_add_box( box_name, parent_type )          \
-    if( isom_add_##box_name( (parent_type *)parent ) ) \
-        return -1;                                     \
-    isom_##box_name##_t *box_name = (isom_##box_name##_t *)parent->extensions.tail->data;
-
-#define isom_add_box_return_pointer( box_name, parent_type )                      \
+#define ADD_BOX( box_name, parent_type )                                          \
     isom_##box_name##_t *box_name = isom_add_##box_name( (parent_type *)parent ); \
     if( !box_name )                                                               \
-        return -1;
+        return -1
 
 static int isom_read_ftyp( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( !lsmash_check_box_type_identical( parent->type, LSMASH_BOX_TYPE_UNSPECIFIED ) || ((lsmash_file_t *)parent)->ftyp )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( ftyp, lsmash_file_t );
+    ADD_BOX( ftyp, lsmash_file_t );
     lsmash_bs_t *bs = file->bs;
     ftyp->major_brand   = lsmash_bs_get_be32( bs );
     ftyp->minor_version = lsmash_bs_get_be32( bs );
@@ -292,7 +287,7 @@ static int isom_read_styp( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, LSMASH_BOX_TYPE_UNSPECIFIED ) )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box_return_pointer( styp, lsmash_file_t );
+    ADD_BOX( styp, lsmash_file_t );
     lsmash_bs_t *bs = file->bs;
     styp->major_brand   = lsmash_bs_get_be32( bs );
     styp->minor_version = lsmash_bs_get_be32( bs );
@@ -319,7 +314,7 @@ static int isom_read_sidx( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, LSMASH_BOX_TYPE_UNSPECIFIED ) )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box_return_pointer( sidx, lsmash_file_t );
+    ADD_BOX( sidx, lsmash_file_t );
     lsmash_bs_t *bs = file->bs;
     sidx->reference_ID = lsmash_bs_get_be32( bs );
     sidx->timescale    = lsmash_bs_get_be32( bs );
@@ -365,7 +360,7 @@ static int isom_read_moov( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, LSMASH_BOX_TYPE_UNSPECIFIED ) || ((lsmash_file_t *)parent)->moov )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( moov, lsmash_file_t );
+    ADD_BOX( moov, lsmash_file_t );
     file->flags |= LSMASH_FILE_MODE_INITIALIZATION;
     isom_box_common_copy( moov, box );
     if( isom_add_print_func( file, moov, level ) )
@@ -377,7 +372,7 @@ static int isom_read_mvhd( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV ) || ((isom_moov_t *)parent)->mvhd )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( mvhd, isom_moov_t );
+    ADD_BOX( mvhd, isom_moov_t );
     lsmash_bs_t *bs = file->bs;
     if( box->version )
     {
@@ -452,7 +447,7 @@ static int isom_read_qt_color_table( lsmash_bs_t *bs, isom_qt_color_table_t *col
 
 static int isom_read_ctab( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
-    isom_add_box( ctab, isom_moov_t );
+    ADD_BOX( ctab, isom_moov_t );
     lsmash_bs_t *bs = file->bs;
     if( isom_read_qt_color_table( bs, &ctab->color_table ) < 0 )
         return -1;
@@ -463,7 +458,7 @@ static int isom_read_trak( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV ) )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box_return_pointer( trak, isom_moov_t );
+    ADD_BOX( trak, isom_moov_t );
     box->parent = parent;
     box->root   = file->root;
     box->file   = file;
@@ -477,7 +472,7 @@ static int isom_read_tkhd( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAK ) || ((isom_trak_t *)parent)->tkhd )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( tkhd, isom_trak_t );
+    ADD_BOX( tkhd, isom_trak_t );
     lsmash_bs_t *bs = file->bs;
     if( box->version )
     {
@@ -512,7 +507,7 @@ static int isom_read_tapt( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAK ) || ((isom_trak_t *)parent)->tapt )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( tapt, isom_trak_t );
+    ADD_BOX( tapt, isom_trak_t );
     isom_box_common_copy( tapt, box );
     if( isom_add_print_func( file, tapt, level ) )
         return -1;
@@ -523,7 +518,7 @@ static int isom_read_clef( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_TAPT ) || ((isom_tapt_t *)parent)->clef )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( clef, isom_tapt_t );
+    ADD_BOX( clef, isom_tapt_t );
     lsmash_bs_t *bs = file->bs;
     clef->width  = lsmash_bs_get_be32( bs );
     clef->height = lsmash_bs_get_be32( bs );
@@ -534,7 +529,7 @@ static int isom_read_prof( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_TAPT ) || ((isom_tapt_t *)parent)->prof )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( prof, isom_tapt_t );
+    ADD_BOX( prof, isom_tapt_t );
     lsmash_bs_t *bs = file->bs;
     prof->width  = lsmash_bs_get_be32( bs );
     prof->height = lsmash_bs_get_be32( bs );
@@ -545,7 +540,7 @@ static int isom_read_enof( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_TAPT ) || ((isom_tapt_t *)parent)->enof )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( enof, isom_tapt_t );
+    ADD_BOX( enof, isom_tapt_t );
     lsmash_bs_t *bs = file->bs;
     enof->width  = lsmash_bs_get_be32( bs );
     enof->height = lsmash_bs_get_be32( bs );
@@ -556,7 +551,7 @@ static int isom_read_edts( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAK ) || ((isom_trak_t *)parent)->edts )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( edts, isom_trak_t );
+    ADD_BOX( edts, isom_trak_t );
     isom_box_common_copy( edts, box );
     if( isom_add_print_func( file, edts, level ) )
         return -1;
@@ -567,7 +562,7 @@ static int isom_read_elst( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_EDTS ) || ((isom_edts_t *)parent)->elst )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( elst, isom_edts_t );
+    ADD_BOX( elst, isom_edts_t );
     lsmash_bs_t *bs = file->bs;
     uint32_t entry_count = lsmash_bs_get_be32( bs );
     for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && elst->list->entry_count < entry_count; pos = lsmash_bs_count( bs ) )
@@ -599,7 +594,7 @@ static int isom_read_tref( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAK ) || ((isom_trak_t *)parent)->tref )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( tref, isom_trak_t );
+    ADD_BOX( tref, isom_trak_t );
     isom_box_common_copy( tref, box );
     if( isom_add_print_func( file, tref, level ) )
         return -1;
@@ -633,7 +628,7 @@ static int isom_read_mdia( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAK ) || ((isom_trak_t *)parent)->mdia )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( mdia, isom_trak_t );
+    ADD_BOX( mdia, isom_trak_t );
     isom_box_common_copy( mdia, box );
     if( isom_add_print_func( file, mdia, level ) )
         return -1;
@@ -644,7 +639,7 @@ static int isom_read_mdhd( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MDIA ) || ((isom_mdia_t *)parent)->mdhd )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( mdhd, isom_mdia_t );
+    ADD_BOX( mdhd, isom_mdia_t );
     lsmash_bs_t *bs = file->bs;
     if( box->version )
     {
@@ -676,7 +671,7 @@ static int isom_read_hdlr( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
      || (lsmash_check_box_type_identical( parent->type,   QT_BOX_TYPE_META ) && ((isom_meta_t *)parent)->hdlr)
      || (lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MINF ) && ((isom_minf_t *)parent)->hdlr) )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( hdlr, void );
+    ADD_BOX( hdlr, void );
     lsmash_bs_t *bs = file->bs;
     hdlr->componentType         = lsmash_bs_get_be32( bs );
     hdlr->componentSubtype      = lsmash_bs_get_be32( bs );
@@ -700,7 +695,7 @@ static int isom_read_minf( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MDIA ) || ((isom_mdia_t *)parent)->minf )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( minf, isom_mdia_t );
+    ADD_BOX( minf, isom_mdia_t );
     isom_box_common_copy( minf, box );
     if( isom_add_print_func( file, minf, level ) )
         return -1;
@@ -711,7 +706,7 @@ static int isom_read_vmhd( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MINF ) || ((isom_minf_t *)parent)->vmhd )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( vmhd, isom_minf_t );
+    ADD_BOX( vmhd, isom_minf_t );
     lsmash_bs_t *bs = file->bs;
     vmhd->graphicsmode   = lsmash_bs_get_be16( bs );
     for( int i = 0; i < 3; i++ )
@@ -723,7 +718,7 @@ static int isom_read_smhd( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MINF ) || ((isom_minf_t *)parent)->smhd )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( smhd, isom_minf_t );
+    ADD_BOX( smhd, isom_minf_t );
     lsmash_bs_t *bs = file->bs;
     smhd->balance  = lsmash_bs_get_be16( bs );
     smhd->reserved = lsmash_bs_get_be16( bs );
@@ -734,7 +729,7 @@ static int isom_read_hmhd( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MINF ) || ((isom_minf_t *)parent)->hmhd )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( hmhd, isom_minf_t );
+    ADD_BOX( hmhd, isom_minf_t );
     lsmash_bs_t *bs = file->bs;
     hmhd->maxPDUsize = lsmash_bs_get_be16( bs );
     hmhd->avgPDUsize = lsmash_bs_get_be16( bs );
@@ -748,7 +743,7 @@ static int isom_read_nmhd( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MINF ) || ((isom_minf_t *)parent)->nmhd )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( nmhd, isom_minf_t );
+    ADD_BOX( nmhd, isom_minf_t );
     return isom_read_leaf_box_common_last_process( file, box, level, nmhd );
 }
 
@@ -756,7 +751,7 @@ static int isom_read_gmhd( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MINF ) || ((isom_minf_t *)parent)->gmhd )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( gmhd, isom_minf_t );
+    ADD_BOX( gmhd, isom_minf_t );
     isom_box_common_copy( gmhd, box );
     if( isom_add_print_func( file, gmhd, level ) )
         return -1;
@@ -767,7 +762,7 @@ static int isom_read_gmin( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_GMHD ) || ((isom_gmhd_t *)parent)->gmin )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( gmin, isom_gmhd_t );
+    ADD_BOX( gmin, isom_gmhd_t );
     lsmash_bs_t *bs = file->bs;
     gmin->graphicsmode   = lsmash_bs_get_be16( bs );
     for( int i = 0; i < 3; i++ )
@@ -781,7 +776,7 @@ static int isom_read_text( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_GMHD ) || ((isom_gmhd_t *)parent)->text )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( text, isom_gmhd_t );
+    ADD_BOX( text, isom_gmhd_t );
     lsmash_bs_t *bs = file->bs;
     for( int i = 0; i < 9; i++ )
         text->matrix[i] = lsmash_bs_get_be32( bs );
@@ -797,7 +792,7 @@ static int isom_read_dinf( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
      || (lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_META ) && ((isom_meta_t *)parent)->dinf)
      || (lsmash_check_box_type_identical( parent->type,   QT_BOX_TYPE_META ) && ((isom_meta_t *)parent)->dinf) )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( dinf, void );
+    ADD_BOX( dinf, void );
     isom_box_common_copy( dinf, box );
     if( isom_add_print_func( file, dinf, level ) )
         return -1;
@@ -808,7 +803,7 @@ static int isom_read_dref( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_DINF ) || ((isom_dinf_t *)parent)->dref )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( dref, isom_dinf_t );
+    ADD_BOX( dref, isom_dinf_t );
     lsmash_bs_t *bs = file->bs;
     dref->list.entry_count = lsmash_bs_get_be32( bs );
     isom_box_common_copy( dref, box );
@@ -846,7 +841,7 @@ static int isom_read_stbl( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MINF ) || ((isom_minf_t *)parent)->stbl )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( stbl, isom_minf_t );
+    ADD_BOX( stbl, isom_minf_t );
     isom_box_common_copy( stbl, box );
     if( isom_add_print_func( file, stbl, level ) )
         return -1;
@@ -857,7 +852,7 @@ static int isom_read_stsd( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) || ((isom_stbl_t *)parent)->stsd )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( stsd, isom_stbl_t );
+    ADD_BOX( stsd, isom_stbl_t );
     lsmash_bs_t *bs = file->bs;
     stsd->entry_count = lsmash_bs_get_be32( bs );
     isom_box_common_copy( stsd, box );
@@ -1151,7 +1146,7 @@ static int isom_read_esds( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     }
     else
         box->type = ISOM_BOX_TYPE_ESDS;
-    isom_add_box_return_pointer( esds, void );
+    ADD_BOX( esds, void );
     lsmash_bs_t *bs = file->bs;
     esds->ES = mp4sys_get_ES_Descriptor( bs );
     if( !esds->ES )
@@ -1164,7 +1159,7 @@ static int isom_read_esds( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 
 static int isom_read_btrt( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
-    isom_add_box_return_pointer( btrt, isom_visual_entry_t );
+    ADD_BOX( btrt, isom_visual_entry_t );
     lsmash_bs_t *bs = file->bs;
     btrt->bufferSizeDB = lsmash_bs_get_be32( bs );
     btrt->maxBitrate   = lsmash_bs_get_be32( bs );
@@ -1174,7 +1169,7 @@ static int isom_read_btrt( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 
 static int isom_read_glbl( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
-    isom_add_box_return_pointer( glbl, isom_visual_entry_t );
+    ADD_BOX( glbl, isom_visual_entry_t );
     lsmash_bs_t *bs = file->bs;
     uint32_t header_size = box->size - ISOM_BASEBOX_COMMON_SIZE;
     if( header_size )
@@ -1191,7 +1186,7 @@ static int isom_read_glbl( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 
 static int isom_read_clap( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
-    isom_add_box_return_pointer( clap, isom_visual_entry_t );
+    ADD_BOX( clap, isom_visual_entry_t );
     lsmash_bs_t *bs = file->bs;
     clap->cleanApertureWidthN  = lsmash_bs_get_be32( bs );
     clap->cleanApertureWidthD  = lsmash_bs_get_be32( bs );
@@ -1206,7 +1201,7 @@ static int isom_read_clap( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 
 static int isom_read_pasp( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
-    isom_add_box_return_pointer( pasp, isom_visual_entry_t );
+    ADD_BOX( pasp, isom_visual_entry_t );
     lsmash_bs_t *bs = file->bs;
     pasp->hSpacing = lsmash_bs_get_be32( bs );
     pasp->vSpacing = lsmash_bs_get_be32( bs );
@@ -1215,7 +1210,7 @@ static int isom_read_pasp( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 
 static int isom_read_colr( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
-    isom_add_box_return_pointer( colr, isom_visual_entry_t );
+    ADD_BOX( colr, isom_visual_entry_t );
     lsmash_bs_t *bs = file->bs;
     colr->color_parameter_type = lsmash_bs_get_be32( bs );
     if( colr->color_parameter_type == QT_COLOR_PARAMETER_TYPE_NCLC
@@ -1249,7 +1244,7 @@ static int isom_read_colr( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 
 static int isom_read_gama( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
-    isom_add_box_return_pointer( gama, isom_visual_entry_t );
+    ADD_BOX( gama, isom_visual_entry_t );
     lsmash_bs_t *bs = file->bs;
     gama->level = lsmash_bs_get_be32( bs );
     return isom_read_leaf_box_common_last_process( file, box, level, gama );
@@ -1257,7 +1252,7 @@ static int isom_read_gama( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 
 static int isom_read_fiel( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
-    isom_add_box_return_pointer( fiel, isom_visual_entry_t );
+    ADD_BOX( fiel, isom_visual_entry_t );
     lsmash_bs_t *bs = file->bs;
     fiel->fields = lsmash_bs_get_byte( bs );
     fiel->detail = lsmash_bs_get_byte( bs );
@@ -1266,7 +1261,7 @@ static int isom_read_fiel( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 
 static int isom_read_cspc( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
-    isom_add_box_return_pointer( cspc, isom_visual_entry_t );
+    ADD_BOX( cspc, isom_visual_entry_t );
     lsmash_bs_t *bs = file->bs;
     cspc->pixel_format = lsmash_bs_get_be32( bs );
     return isom_read_leaf_box_common_last_process( file, box, level, cspc );
@@ -1274,7 +1269,7 @@ static int isom_read_cspc( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 
 static int isom_read_sgbt( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
-    isom_add_box_return_pointer( sgbt, isom_visual_entry_t );
+    ADD_BOX( sgbt, isom_visual_entry_t );
     lsmash_bs_t *bs = file->bs;
     sgbt->significantBits = lsmash_bs_get_byte( bs );
     return isom_read_leaf_box_common_last_process( file, box, level, sgbt );
@@ -1282,7 +1277,7 @@ static int isom_read_sgbt( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 
 static int isom_read_stsl( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
-    isom_add_box_return_pointer( stsl, isom_visual_entry_t );
+    ADD_BOX( stsl, isom_visual_entry_t );
     lsmash_bs_t *bs = file->bs;
     stsl->constraint_flag  = lsmash_bs_get_byte( bs );
     stsl->scale_method     = lsmash_bs_get_byte( bs );
@@ -1346,7 +1341,7 @@ static int isom_read_audio_description( lsmash_file_t *file, isom_box_t *box, is
 
 static int isom_read_wave( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
-    isom_add_box_return_pointer( wave, isom_audio_entry_t );
+    ADD_BOX( wave, isom_audio_entry_t );
     isom_box_common_copy( wave, box );
     if( isom_add_print_func( file, wave, level ) )
         return -1;
@@ -1357,7 +1352,7 @@ static int isom_read_frma( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_WAVE ) || ((isom_wave_t *)parent)->frma )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( frma, isom_wave_t );
+    ADD_BOX( frma, isom_wave_t );
     lsmash_bs_t *bs = file->bs;
     frma->data_format = lsmash_bs_get_be32( bs );
     return isom_read_leaf_box_common_last_process( file, box, level, frma );
@@ -1367,7 +1362,7 @@ static int isom_read_enda( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_WAVE ) || ((isom_wave_t *)parent)->enda )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( enda, isom_wave_t );
+    ADD_BOX( enda, isom_wave_t );
     lsmash_bs_t *bs = file->bs;
     enda->littleEndian = lsmash_bs_get_be16( bs );
     return isom_read_leaf_box_common_last_process( file, box, level, enda );
@@ -1377,13 +1372,13 @@ static int isom_read_terminator( lsmash_file_t *file, isom_box_t *box, isom_box_
 {
     if( !lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_WAVE ) || ((isom_wave_t *)parent)->terminator )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( terminator, isom_wave_t );
+    ADD_BOX( terminator, isom_wave_t );
     return isom_read_leaf_box_common_last_process( file, box, level, terminator );
 }
 
 static int isom_read_chan( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
-    isom_add_box_return_pointer( chan, isom_audio_entry_t );
+    ADD_BOX( chan, isom_audio_entry_t );
     lsmash_bs_t *bs = file->bs;
     chan->channelLayoutTag          = lsmash_bs_get_be32( bs );
     chan->channelBitmap             = lsmash_bs_get_be32( bs );
@@ -1407,7 +1402,7 @@ static int isom_read_chan( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 
 static int isom_read_srat( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
-    isom_add_box_return_pointer( srat, isom_audio_entry_t );
+    ADD_BOX( srat, isom_audio_entry_t );
     lsmash_bs_t *bs = file->bs;
     srat->sampling_rate = lsmash_bs_get_be32( bs );
     return isom_read_leaf_box_common_last_process( file, box, level, srat );
@@ -1496,7 +1491,7 @@ static int isom_read_ftab( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     if( !lsmash_check_box_type_identical( parent->type, (lsmash_box_type_t)ISOM_CODEC_TYPE_TX3G_TEXT )
      || ((isom_tx3g_entry_t *)parent)->ftab )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( ftab, isom_tx3g_entry_t );
+    ADD_BOX( ftab, isom_tx3g_entry_t );
     lsmash_bs_t *bs = file->bs;
     uint32_t entry_count = lsmash_bs_get_be16( bs );
     for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && ftab->list->entry_count < entry_count; pos = lsmash_bs_count( bs ) )
@@ -1528,7 +1523,7 @@ static int isom_read_stts( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) || ((isom_stbl_t *)parent)->stts )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( stts, isom_stbl_t );
+    ADD_BOX( stts, isom_stbl_t );
     lsmash_bs_t *bs = file->bs;
     uint32_t entry_count = lsmash_bs_get_be32( bs );
     for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && stts->list->entry_count < entry_count; pos = lsmash_bs_count( bs ) )
@@ -1551,7 +1546,7 @@ static int isom_read_ctts( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) || ((isom_stbl_t *)parent)->ctts )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( ctts, isom_stbl_t );
+    ADD_BOX( ctts, isom_stbl_t );
     lsmash_bs_t *bs = file->bs;
     uint32_t entry_count = lsmash_bs_get_be32( bs );
     for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && ctts->list->entry_count < entry_count; pos = lsmash_bs_count( bs ) )
@@ -1574,7 +1569,7 @@ static int isom_read_cslg( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) || ((isom_stbl_t *)parent)->cslg )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( cslg, isom_stbl_t );
+    ADD_BOX( cslg, isom_stbl_t );
     lsmash_bs_t *bs = file->bs;
     cslg->compositionToDTSShift        = lsmash_bs_get_be32( bs );
     cslg->leastDecodeToDisplayDelta    = lsmash_bs_get_be32( bs );
@@ -1588,7 +1583,7 @@ static int isom_read_stss( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) || ((isom_stbl_t *)parent)->stss )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( stss, isom_stbl_t );
+    ADD_BOX( stss, isom_stbl_t );
     lsmash_bs_t *bs = file->bs;
     uint32_t entry_count = lsmash_bs_get_be32( bs );
     for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && stss->list->entry_count < entry_count; pos = lsmash_bs_count( bs ) )
@@ -1610,7 +1605,7 @@ static int isom_read_stps( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) || ((isom_stbl_t *)parent)->stps )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( stps, isom_stbl_t );
+    ADD_BOX( stps, isom_stbl_t );
     lsmash_bs_t *bs = file->bs;
     uint32_t entry_count = lsmash_bs_get_be32( bs );
     for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && stps->list->entry_count < entry_count; pos = lsmash_bs_count( bs ) )
@@ -1635,7 +1630,7 @@ static int isom_read_sdtp( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
      || (lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) && ((isom_stbl_t *)parent)->sdtp)
      || (lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAF ) && ((isom_traf_t *)parent)->sdtp))
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( sdtp, isom_box_t );
+    ADD_BOX( sdtp, isom_box_t );
     lsmash_bs_t *bs = file->bs;
     for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size; pos = lsmash_bs_count( bs ) )
     {
@@ -1660,7 +1655,7 @@ static int isom_read_stsc( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) || ((isom_stbl_t *)parent)->stsc )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( stsc, isom_stbl_t );
+    ADD_BOX( stsc, isom_stbl_t );
     lsmash_bs_t *bs = file->bs;
     uint32_t entry_count = lsmash_bs_get_be32( bs );
     for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && stsc->list->entry_count < entry_count; pos = lsmash_bs_count( bs ) )
@@ -1684,7 +1679,7 @@ static int isom_read_stsz( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) || ((isom_stbl_t *)parent)->stsz )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( stsz, isom_stbl_t );
+    ADD_BOX( stsz, isom_stbl_t );
     lsmash_bs_t *bs = file->bs;
     stsz->sample_size  = lsmash_bs_get_be32( bs );
     stsz->sample_count = lsmash_bs_get_be32( bs );
@@ -1715,20 +1710,15 @@ static int isom_read_stco( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) || ((isom_stbl_t *)parent)->stco )
         return isom_read_unknown_box( file, box, parent, level );
     box->type = lsmash_form_iso_box_type( box->type.fourcc );
-    if( lsmash_check_box_type_identical( box->type, ISOM_BOX_TYPE_STCO ) )
-    {
-        if( isom_add_stco( (isom_stbl_t *)parent ) )
-            return -1;
-    }
-    else
-    {
-        if( isom_add_co64( (isom_stbl_t *)parent ) )
-            return -1;
-    }
-    isom_stco_t *stco = (isom_stco_t *)parent->extensions.tail->data;
-    lsmash_bs_t *bs   = file->bs;
+    int is_stco = lsmash_check_box_type_identical( box->type, ISOM_BOX_TYPE_STCO );
+    isom_stco_t *stco = is_stco
+                      ? isom_add_stco( (isom_stbl_t *)parent )
+                      : isom_add_co64( (isom_stbl_t *)parent );
+    if( !stco )
+        return -1;
+    lsmash_bs_t *bs = file->bs;
     uint32_t entry_count = lsmash_bs_get_be32( bs );
-    if( lsmash_check_box_type_identical( box->type, ISOM_BOX_TYPE_STCO ) )
+    if( is_stco )
         for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && stco->list->entry_count < entry_count; pos = lsmash_bs_count( bs ) )
         {
             isom_stco_entry_t *data = lsmash_malloc( sizeof(isom_stco_entry_t) );
@@ -1764,7 +1754,7 @@ static int isom_read_sgpd( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL )
      && !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAF ) )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box_return_pointer( sgpd, void );
+    ADD_BOX( sgpd, void );
     lsmash_bs_t *bs = file->bs;
     sgpd->grouping_type      = lsmash_bs_get_be32( bs );
     if( box->version == 1 )
@@ -1829,7 +1819,7 @@ static int isom_read_sbgp( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL )
      && !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAF ) )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box_return_pointer( sbgp, void );
+    ADD_BOX( sbgp, void );
     lsmash_bs_t *bs = file->bs;
     sbgp->grouping_type  = lsmash_bs_get_be32( bs );
     if( box->version == 1 )
@@ -1858,7 +1848,7 @@ static int isom_read_udta( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
      || (lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV ) && ((isom_moov_t *)parent)->udta)
      || (lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAK ) && ((isom_trak_t *)parent)->udta) )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( udta, void );
+    ADD_BOX( udta, void );
     isom_box_common_copy( udta, box );
     if( isom_add_print_func( file, udta, level ) )
         return -1;
@@ -1869,7 +1859,7 @@ static int isom_read_chpl( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_UDTA ) || ((isom_udta_t *)parent)->chpl )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( chpl, isom_udta_t );
+    ADD_BOX( chpl, isom_udta_t );
     lsmash_bs_t *bs = file->bs;
     uint32_t entry_count;
     if( box->version == 1 )
@@ -1908,7 +1898,7 @@ static int isom_read_mvex( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV ) || ((isom_moov_t *)parent)->mvex )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( mvex, isom_moov_t );
+    ADD_BOX( mvex, isom_moov_t );
     file->flags |= LSMASH_FILE_MODE_FRAGMENTED;
     isom_box_common_copy( mvex, box );
     if( isom_add_print_func( file, mvex, level ) )
@@ -1920,7 +1910,7 @@ static int isom_read_mehd( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MVEX ) || ((isom_mvex_t *)parent)->mehd )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( mehd, isom_mvex_t );
+    ADD_BOX( mehd, isom_mvex_t );
     lsmash_bs_t *bs = file->bs;
     if( box->version == 1 )
         mehd->fragment_duration = lsmash_bs_get_be64( bs );
@@ -1948,7 +1938,7 @@ static int isom_read_trex( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MVEX ) )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box_return_pointer( trex, isom_mvex_t );
+    ADD_BOX( trex, isom_mvex_t );
     box->parent = parent;
     lsmash_bs_t *bs = file->bs;
     trex->track_ID                         = lsmash_bs_get_be32( bs );
@@ -1963,7 +1953,7 @@ static int isom_read_moof( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, LSMASH_BOX_TYPE_UNSPECIFIED ) )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box_return_pointer( moof, lsmash_file_t );
+    ADD_BOX( moof, lsmash_file_t );
     box->parent = parent;
     isom_box_common_copy( moof, box );
     if( isom_add_print_func( file, moof, level ) )
@@ -1975,7 +1965,7 @@ static int isom_read_mfhd( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOF ) || ((isom_moof_t *)parent)->mfhd )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( mfhd, isom_moof_t );
+    ADD_BOX( mfhd, isom_moof_t );
     lsmash_bs_t *bs = file->bs;
     mfhd->sequence_number = lsmash_bs_get_be32( bs );
     return isom_read_leaf_box_common_last_process( file, box, level, mfhd );
@@ -1985,7 +1975,7 @@ static int isom_read_traf( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOF ) )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box_return_pointer( traf, isom_moof_t );
+    ADD_BOX( traf, isom_moof_t );
     box->parent = parent;
     isom_box_common_copy( traf, box );
     if( isom_add_print_func( file, traf, level ) )
@@ -1997,7 +1987,7 @@ static int isom_read_tfhd( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAF ) || ((isom_traf_t *)parent)->tfhd )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( tfhd, isom_traf_t );
+    ADD_BOX( tfhd, isom_traf_t );
     lsmash_bs_t *bs = file->bs;
     tfhd->track_ID = lsmash_bs_get_be32( bs );
     if( box->flags & ISOM_TF_FLAGS_BASE_DATA_OFFSET_PRESENT         ) tfhd->base_data_offset         = lsmash_bs_get_be64( bs );
@@ -2012,7 +2002,7 @@ static int isom_read_tfdt( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAF ) || ((isom_traf_t *)parent)->tfdt )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( tfdt, isom_traf_t );
+    ADD_BOX( tfdt, isom_traf_t );
     lsmash_bs_t *bs = file->bs;
     if( box->version == 1 )
         tfdt->baseMediaDecodeTime = lsmash_bs_get_be64( bs );
@@ -2025,7 +2015,7 @@ static int isom_read_trun( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAF ) )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box_return_pointer( trun, isom_traf_t );
+    ADD_BOX( trun, isom_traf_t );
     box->parent = parent;
     lsmash_bs_t *bs = file->bs;
     int has_optional_rows = ISOM_TR_FLAGS_SAMPLE_DURATION_PRESENT
@@ -2108,7 +2098,7 @@ static int isom_read_meta( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
      || (lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAK ) && ((isom_trak_t *)parent)->meta)
      || (lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_UDTA ) && ((isom_udta_t *)parent)->meta) )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( meta, void );
+    ADD_BOX( meta, void );
     isom_box_common_copy( meta, box );
     int is_qtff = lsmash_check_box_type_identical( box->type, QT_BOX_TYPE_META );
     if( is_qtff )
@@ -2126,7 +2116,7 @@ static int isom_read_keys( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     if( (!lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_META ) && !(parent->manager & LSMASH_QTFF_BASE))
      || ((isom_meta_t *)parent)->keys )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( keys, isom_meta_t );
+    ADD_BOX( keys, isom_meta_t );
     lsmash_bs_t *bs = file->bs;
     uint32_t entry_count = lsmash_bs_get_be32( bs );
     for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && keys->list->entry_count < entry_count; pos = lsmash_bs_count( bs ) )
@@ -2159,7 +2149,7 @@ static int isom_read_ilst( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
       && !lsmash_check_box_type_identical( parent->type,   QT_BOX_TYPE_META ))
      || ((isom_meta_t *)parent)->ilst )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( ilst, isom_meta_t );
+    ADD_BOX( ilst, isom_meta_t );
     isom_box_common_copy( ilst, box );
     if( isom_add_print_func( file, ilst, level ) )
         return -1;
@@ -2171,9 +2161,9 @@ static int isom_read_metaitem( lsmash_file_t *file, isom_box_t *box, isom_box_t 
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_ILST )
      && !lsmash_check_box_type_identical( parent->type,   QT_BOX_TYPE_ILST ) )
         return isom_read_unknown_box( file, box, parent, level );
-    if( isom_add_metaitem( (isom_ilst_t *)parent, box->type.fourcc ) )
+    isom_metaitem_t *metaitem = isom_add_metaitem( (isom_ilst_t *)parent, box->type.fourcc );
+    if( !metaitem )
         return -1;
-    isom_metaitem_t *metaitem = (isom_metaitem_t *)parent->extensions.tail->data;
     box->parent = parent;
     isom_box_common_copy( metaitem, box );
     if( isom_add_print_func( file, metaitem, level ) )
@@ -2185,7 +2175,7 @@ static int isom_read_mean( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( parent->type.fourcc != ITUNES_METADATA_ITEM_CUSTOM || ((isom_metaitem_t *)parent)->mean )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( mean, isom_metaitem_t );
+    ADD_BOX( mean, isom_metaitem_t );
     lsmash_bs_t *bs = file->bs;
     mean->meaning_string_length = box->size - lsmash_bs_count( bs );
     mean->meaning_string = lsmash_bs_get_bytes( bs, mean->meaning_string_length );
@@ -2198,7 +2188,7 @@ static int isom_read_name( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( parent->type.fourcc != ITUNES_METADATA_ITEM_CUSTOM || ((isom_metaitem_t *)parent)->name )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( name, isom_metaitem_t );
+    ADD_BOX( name, isom_metaitem_t );
     lsmash_bs_t *bs = file->bs;
     name->name_length = box->size - lsmash_bs_count( bs );
     name->name = lsmash_bs_get_bytes( bs, name->name_length );
@@ -2211,7 +2201,7 @@ static int isom_read_data( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( ((isom_metaitem_t *)parent)->data )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( data, isom_metaitem_t );
+    ADD_BOX( data, isom_metaitem_t );
     lsmash_bs_t *bs = file->bs;
     data->value_length = box->size - lsmash_bs_count( bs ) - 8;
     data->reserved            = lsmash_bs_get_be16( bs );
@@ -2231,7 +2221,7 @@ static int isom_read_WLOC( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_UDTA ) || ((isom_udta_t *)parent)->WLOC )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( WLOC, isom_udta_t );
+    ADD_BOX( WLOC, isom_udta_t );
     lsmash_bs_t *bs = file->bs;
     WLOC->x = lsmash_bs_get_be16( bs );
     WLOC->y = lsmash_bs_get_be16( bs );
@@ -2242,7 +2232,7 @@ static int isom_read_LOOP( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_UDTA ) || ((isom_udta_t *)parent)->LOOP )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( LOOP, isom_udta_t );
+    ADD_BOX( LOOP, isom_udta_t );
     lsmash_bs_t *bs = file->bs;
     LOOP->looping_mode = lsmash_bs_get_be32( bs );
     return isom_read_leaf_box_common_last_process( file, box, level, LOOP );
@@ -2252,7 +2242,7 @@ static int isom_read_SelO( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_UDTA ) || ((isom_udta_t *)parent)->SelO )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( SelO, isom_udta_t );
+    ADD_BOX( SelO, isom_udta_t );
     lsmash_bs_t *bs = file->bs;
     SelO->selection_only = lsmash_bs_get_byte( bs );
     return isom_read_leaf_box_common_last_process( file, box, level, SelO );
@@ -2262,7 +2252,7 @@ static int isom_read_AllF( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_UDTA ) || ((isom_udta_t *)parent)->AllF )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( AllF, isom_udta_t );
+    ADD_BOX( AllF, isom_udta_t );
     lsmash_bs_t *bs = file->bs;
     AllF->play_all_frames = lsmash_bs_get_byte( bs );
     return isom_read_leaf_box_common_last_process( file, box, level, AllF );
@@ -2272,7 +2262,7 @@ static int isom_read_cprt( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_UDTA ) )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( cprt, isom_udta_t );
+    ADD_BOX( cprt, isom_udta_t );
     box->parent = parent;
     lsmash_bs_t *bs = file->bs;
     cprt->language      = lsmash_bs_get_be16( bs );
@@ -2293,7 +2283,7 @@ static int isom_read_mfra( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, LSMASH_BOX_TYPE_UNSPECIFIED ) || ((lsmash_file_t *)parent)->mfra )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( mfra, lsmash_file_t );
+    ADD_BOX( mfra, lsmash_file_t );
     isom_box_common_copy( mfra, box );
     if( isom_add_print_func( file, mfra, level ) )
         return -1;
@@ -2304,7 +2294,7 @@ static int isom_read_tfra( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MFRA ) )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box_return_pointer( tfra, isom_mfra_t );
+    ADD_BOX( tfra, isom_mfra_t );
     box->parent = parent;
     lsmash_bs_t *bs = file->bs;
     tfra->track_ID        = lsmash_bs_get_be32( bs );
@@ -2356,7 +2346,7 @@ static int isom_read_mfro( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MFRA ) || ((isom_mfra_t *)parent)->mfro )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_add_box( mfro, isom_mfra_t );
+    ADD_BOX( mfro, isom_mfra_t );
     lsmash_bs_t *bs = file->bs;
     mfro->length = lsmash_bs_get_be32( bs );
     return isom_read_leaf_box_common_last_process( file, box, level, mfro );

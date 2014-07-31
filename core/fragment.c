@@ -64,7 +64,7 @@ int lsmash_create_fragment_movie( lsmash_root_t *root )
         if( file->fragment->movie && file->moof_list.entry_count != 1 )
             return -1;
         isom_moof_t *moof = isom_add_moof( file );
-        if( isom_add_mfhd( moof ) < 0 )
+        if( !isom_add_mfhd( moof ) )
             return -1;
         file->fragment->movie = moof;
         moof->mfhd->sequence_number = ++ file->fragment->fragment_count;
@@ -364,11 +364,11 @@ fail:
 
 static int isom_create_fragment_overall_default_settings( lsmash_file_t *file )
 {
-    if( isom_add_mvex( file->moov ) )
+    if( !isom_add_mvex( file->moov ) )
         return -1;
     if( !file->bs->unseekable )
     {
-        if( isom_add_mehd( file->moov->mvex ) )
+        if( !isom_add_mehd( file->moov->mvex ) )
             return -1;
         file->moov->mvex->mehd->manager |= LSMASH_PLACEHOLDER;
     }
@@ -440,8 +440,8 @@ static int isom_prepare_random_access_info( lsmash_file_t *file )
 {
     if( file->bs->unseekable )
         return 0;
-    if( isom_add_mfra( file )
-     || isom_add_mfro( file->mfra ) )
+    if( !isom_add_mfra( file )
+     || !isom_add_mfro( file->mfra ) )
         return -1;
     return 0;
 }
@@ -452,7 +452,7 @@ static int isom_output_fragment_media_data( lsmash_file_t *file )
     /* If there is no available Media Data Box to write samples, add and write a new one. */
     if( fragment->sample_count )
     {
-        if( !file->mdat && isom_add_mdat( file ) < 0 )
+        if( !file->mdat && !isom_add_mdat( file ) )
             return -1;
         file->mdat->manager &= ~(LSMASH_INCOMPLETE_BOX | LSMASH_WRITTEN_BOX);
         if( isom_write_box( file->bs, (isom_box_t *)file->mdat ) < 0 )
@@ -488,7 +488,7 @@ static int isom_finish_fragment_initial_movie( lsmash_file_t *file )
         if( isom_get_sample_count( trak ) )
         {
             /* Add stss box if any samples aren't sync sample. */
-            if( !trak->cache->all_sync && !stbl->stss && isom_add_stss( stbl ) )
+            if( !trak->cache->all_sync && !stbl->stss && !isom_add_stss( stbl ) )
                 return -1;
             if( isom_update_tkhd_duration( trak ) < 0 )
                 return -1;
@@ -1120,7 +1120,7 @@ int lsmash_create_fragment_empty_duration( lsmash_root_t *root, uint32_t track_I
     if( traf )
         return -1;
     traf = isom_add_traf( moof );
-    if( isom_add_tfhd( traf ) )
+    if( !isom_add_tfhd( traf ) )
         return -1;
     isom_tfhd_t *tfhd = traf->tfhd;
     tfhd->flags                   = ISOM_TF_FLAGS_DURATION_IS_EMPTY;    /* no samples for this track fragment yet */
@@ -1444,7 +1444,7 @@ static int isom_update_fragment_sample_tables( isom_traf_t *traf, lsmash_sample_
             if( file->max_isom_version >= 6 || file->media_segment )
             {
                 assert( !traf->tfdt );
-                if( isom_add_tfdt( traf ) )
+                if( !isom_add_tfdt( traf ) )
                     return -1;
                 if( sample->dts > UINT32_MAX )
                     traf->tfdt->version = 1;
@@ -1615,7 +1615,7 @@ int isom_append_fragment_sample
         if( !traf )
         {
             traf = isom_add_traf( fragment->movie );
-            if( isom_add_tfhd( traf ) )
+            if( !isom_add_tfhd( traf ) )
                 return -1;
             traf->tfhd->flags                  = ISOM_TF_FLAGS_DURATION_IS_EMPTY; /* no samples for this track fragment yet */
             traf->tfhd->track_ID               = trak->tkhd->track_ID;

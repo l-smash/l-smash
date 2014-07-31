@@ -33,23 +33,23 @@ static isom_data_t *isom_add_metadata( lsmash_file_t *file,
 {
     assert( file && file->moov );
     if( ((item == ITUNES_METADATA_ITEM_CUSTOM) && (!meaning_string || !meaning_string[0]) )
-     || (!file->moov->udta             && isom_add_udta( file->moov ))
-     || (!file->moov->udta->meta       && isom_add_meta( file->moov->udta ))
-     || (!file->moov->udta->meta->ilst && isom_add_ilst( file->moov->udta->meta )) )
+     || (!file->moov->udta             && !isom_add_udta( file->moov ))
+     || (!file->moov->udta->meta       && !isom_add_meta( file->moov->udta ))
+     || (!file->moov->udta->meta->ilst && !isom_add_ilst( file->moov->udta->meta )) )
         return NULL;
     if( !file->moov->udta->meta->hdlr )
     {
-        if( isom_add_hdlr( file->moov->udta->meta )
+        if( !isom_add_hdlr( file->moov->udta->meta )
          || isom_setup_handler_reference( file->moov->udta->meta->hdlr, ISOM_META_HANDLER_TYPE_ITUNES_METADATA ) )
             return NULL;
     }
     isom_ilst_t *ilst = file->moov->udta->meta->ilst;
-    if( isom_add_metaitem( ilst, item ) )
+    if( !isom_add_metaitem( ilst, item ) )
         return NULL;
     isom_metaitem_t *metaitem = (isom_metaitem_t *)ilst->item_list.tail->data;
     if( item == ITUNES_METADATA_ITEM_CUSTOM )
     {
-        if( isom_add_mean( metaitem ) )
+        if( !isom_add_mean( metaitem ) )
             goto fail;
         isom_mean_t *mean = metaitem->mean;
         mean->meaning_string_length = strlen( meaning_string );    /* No null terminator */
@@ -58,7 +58,7 @@ static isom_data_t *isom_add_metadata( lsmash_file_t *file,
             goto fail;
         if( name_string && name_string[0] )
         {
-            if( isom_add_name( metaitem ) )
+            if( !isom_add_name( metaitem ) )
                 goto fail;
             isom_name_t *name = metaitem->name;
             name->name_length = strlen( name_string );    /* No null terminator */
@@ -67,7 +67,7 @@ static isom_data_t *isom_add_metadata( lsmash_file_t *file,
                 goto fail;
         }
     }
-    if( isom_add_data( metaitem ) )
+    if( !isom_add_data( metaitem ) )
         goto fail;
     return metaitem->data;
 fail:

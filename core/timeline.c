@@ -1683,8 +1683,8 @@ int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_
     if( !src_entry )
         return 0;
     /* Generate edit list if absent in destination. */
-    if( (!dst_trak->edts       && isom_add_edts( dst_trak ))
-     || (!dst_trak->edts->elst && isom_add_elst( dst_trak->edts )) )
+    if( (!dst_trak->edts       && !isom_add_edts( dst_trak ))
+     || (!dst_trak->edts->elst && !isom_add_elst( dst_trak->edts )) )
         return -1;
     uint32_t dst_movie_timescale = dst_file->moov->mvhd->timescale;
     uint32_t dst_media_timescale = dst_trak->mdia->mdhd->timescale;

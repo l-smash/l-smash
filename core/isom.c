@@ -296,7 +296,7 @@ int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, void *summa
                 if( tx3g )
                 {
                     tx3g->data_reference_index = 1;
-                    ret = isom_add_ftab( tx3g );
+                    ret = !isom_add_ftab( tx3g ) ? -1 : 0;
                     if( ret < 0 )
                         isom_remove_box_by_itself( tx3g );
                 }
@@ -511,7 +511,7 @@ int isom_convert_stco_to_co64( isom_stbl_t *stbl )
     int ret = 0;
     isom_stco_t *stco = stbl->stco;
     stbl->stco = NULL;
-    if( isom_add_co64( stbl ) )
+    if( !isom_add_co64( stbl ) )
     {
         ret = -1;
         goto fail;
@@ -1059,7 +1059,7 @@ static int isom_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_de
             {
                 if( !cslg )
                 {
-                    if( isom_add_cslg( trak->mdia->minf->stbl ) )
+                    if( !isom_add_cslg( trak->mdia->minf->stbl ) )
                         return -1;
                     cslg = stbl->cslg;
                 }
@@ -1733,49 +1733,49 @@ uint32_t lsmash_create_track( lsmash_root_t *root, lsmash_media_type media_type 
      || !trak->file->moov
      || !trak->file->moov->mvhd )
         goto fail;
-    if( isom_add_tkhd( trak )
-     || isom_add_mdia( trak )
-     || isom_add_mdhd( trak->mdia )
-     || isom_add_minf( trak->mdia )
-     || isom_add_dinf( trak->mdia->minf )
-     || isom_add_dref( trak->mdia->minf->dinf )
-     || isom_add_stbl( trak->mdia->minf )
-     || isom_add_stsd( trak->mdia->minf->stbl )
-     || isom_add_stts( trak->mdia->minf->stbl )
-     || isom_add_stsc( trak->mdia->minf->stbl )
-     || isom_add_stco( trak->mdia->minf->stbl )
-     || isom_add_stsz( trak->mdia->minf->stbl ) )
+    if( !isom_add_tkhd( trak )
+     || !isom_add_mdia( trak )
+     || !isom_add_mdhd( trak->mdia )
+     || !isom_add_minf( trak->mdia )
+     || !isom_add_dinf( trak->mdia->minf )
+     || !isom_add_dref( trak->mdia->minf->dinf )
+     || !isom_add_stbl( trak->mdia->minf )
+     || !isom_add_stsd( trak->mdia->minf->stbl )
+     || !isom_add_stts( trak->mdia->minf->stbl )
+     || !isom_add_stsc( trak->mdia->minf->stbl )
+     || !isom_add_stco( trak->mdia->minf->stbl )
+     || !isom_add_stsz( trak->mdia->minf->stbl ) )
         goto fail;
-    if( isom_add_hdlr( trak->mdia )
+    if( !isom_add_hdlr( trak->mdia )
      || isom_setup_handler_reference( trak->mdia->hdlr, media_type ) )
         goto fail;
     if( file->qt_compatible )
     {
-        if( isom_add_hdlr( trak->mdia->minf )
+        if( !isom_add_hdlr( trak->mdia->minf )
          || isom_setup_handler_reference( trak->mdia->minf->hdlr, QT_REFERENCE_HANDLER_TYPE_URL ) )
             goto fail;
     }
     switch( media_type )
     {
         case ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK :
-            if( isom_add_vmhd( trak->mdia->minf ) )
+            if( !isom_add_vmhd( trak->mdia->minf ) )
                 goto fail;
             trak->mdia->minf->vmhd->flags = 0x000001;
             break;
         case ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK :
-            if( isom_add_smhd( trak->mdia->minf ) )
+            if( !isom_add_smhd( trak->mdia->minf ) )
                 goto fail;
             break;
         case ISOM_MEDIA_HANDLER_TYPE_HINT_TRACK :
-            if( isom_add_hmhd( trak->mdia->minf ) )
+            if( !isom_add_hmhd( trak->mdia->minf ) )
                 goto fail;
             break;
         case ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK :
             if( file->qt_compatible || file->itunes_movie )
             {
-                if( isom_add_gmhd( trak->mdia->minf )
-                 || isom_add_gmin( trak->mdia->minf->gmhd )
-                 || isom_add_text( trak->mdia->minf->gmhd ) )
+                if( !isom_add_gmhd( trak->mdia->minf )
+                 || !isom_add_gmin( trak->mdia->minf->gmhd )
+                 || !isom_add_text( trak->mdia->minf->gmhd ) )
                     return 0;
                 /* Default Text Media Information Box. */
                 {
@@ -1789,7 +1789,7 @@ uint32_t lsmash_create_track( lsmash_root_t *root, lsmash_media_type media_type 
                 goto fail;  /* We support only reference text media track for chapter yet. */
             break;
         default :
-            if( isom_add_nmhd( trak->mdia->minf ) )
+            if( !isom_add_nmhd( trak->mdia->minf ) )
                 goto fail;
             break;
     }
@@ -1847,12 +1847,12 @@ int lsmash_set_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     /* Prepare Track Aperture Modes if required. */
     if( file->qt_compatible && param->aperture_modes )
     {
-        if( !trak->tapt && isom_add_tapt( trak ) )
+        if( !trak->tapt && !isom_add_tapt( trak ) )
             return -1;
         isom_tapt_t *tapt = trak->tapt;
-        if( (!tapt->clef && isom_add_clef( tapt ))
-         || (!tapt->prof && isom_add_prof( tapt ))
-         || (!tapt->enof && isom_add_enof( tapt )) )
+        if( (!tapt->clef && !isom_add_clef( tapt ))
+         || (!tapt->prof && !isom_add_prof( tapt ))
+         || (!tapt->enof && !isom_add_enof( tapt )) )
             return -1;
     }
     else
@@ -2495,7 +2495,7 @@ static int isom_set_brands
     if( file->flags & LSMASH_FILE_MODE_INITIALIZATION )
     {
         /* Add File Type Box if absent yet. */
-        if( !file->ftyp && isom_add_ftyp( file ) < 0 )
+        if( !file->ftyp && !isom_add_ftyp( file ) )
             return -1;
         ftyp = file->ftyp;
     }
@@ -2598,8 +2598,8 @@ lsmash_file_t *lsmash_set_file
         /* Create the movie header if the initialization of the streams is required. */
         if( file->flags & LSMASH_FILE_MODE_INITIALIZATION )
         {
-            if( isom_add_moov( file )       < 0
-             || isom_add_mvhd( file->moov ) < 0 )
+            if( !isom_add_moov( file )
+             || !isom_add_mvhd( file->moov ) )
                 goto fail;
             /* Default Movie Header Box. */
             isom_mvhd_t *mvhd = file->moov->mvhd;
@@ -2875,7 +2875,7 @@ static int isom_scan_trak_profileLevelIndication( isom_trak_t *trak, mp4a_audioP
 
 int isom_setup_iods( isom_moov_t *moov )
 {
-    if( !moov->iods && isom_add_iods( moov ) )
+    if( !moov->iods && !isom_add_iods( moov ) )
         return -1;
     isom_iods_t *iods = moov->iods;
     iods->OD = mp4sys_create_ObjectDescriptor( 1 ); /* NOTE: Use 1 for ObjectDescriptorID of IOD. */
@@ -3025,7 +3025,7 @@ int lsmash_finish_movie
         }
         /* Add stss box if any samples aren't sync sample. */
         isom_stbl_t *stbl = trak->mdia->minf->stbl;
-        if( !trak->cache->all_sync && !stbl->stss && isom_add_stss( stbl ) )
+        if( !trak->cache->all_sync && !stbl->stss && !isom_add_stss( stbl ) )
             return -1;
         if( isom_update_tkhd_duration( trak ) < 0 )
             return -1;
@@ -3273,8 +3273,8 @@ int lsmash_create_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID,
                   : trak->tkhd->duration ? trak->tkhd->duration
                   : isom_update_tkhd_duration( trak ) < 0 ? 0
                   : trak->tkhd->duration;
-    if( (!trak->edts       && isom_add_edts( trak ))
-     || (!trak->edts->elst && isom_add_elst( trak->edts ))
+    if( (!trak->edts       && !isom_add_edts( trak ))
+     || (!trak->edts->elst && !isom_add_elst( trak->edts ))
      || isom_add_elst_entry( trak->edts->elst, edit.duration, edit.start_time, edit.rate ) )
         return -1;
     return isom_update_tkhd_duration( trak );
@@ -3489,7 +3489,7 @@ static int isom_add_cts( isom_stbl_t *stbl, isom_timestamp_t *cache, uint64_t ct
             return 0;
         }
         /* Add ctts box and the first ctts entry. */
-        if( isom_add_ctts( stbl ) || isom_add_ctts_entry( stbl, 0 ) )
+        if( !isom_add_ctts( stbl ) || isom_add_ctts_entry( stbl, 0 ) < 0 )
             return -1;
         ctts = stbl->ctts;
         isom_ctts_entry_t *data = (isom_ctts_entry_t *)ctts->list->head->data;
@@ -3561,7 +3561,7 @@ static int isom_add_sync_point( isom_trak_t *trak, uint32_t sample_number, lsmas
     {
         if( !cache->all_sync )
             return 0;
-        if( !stbl->stss && isom_add_stss( stbl ) )
+        if( !stbl->stss && !isom_add_stss( stbl ) )
             return -1;
         if( isom_add_stss_entry( stbl, 1 ) )    /* Declare here the first sample is a sync sample. */
             return -1;
@@ -3577,7 +3577,7 @@ static int isom_add_sync_point( isom_trak_t *trak, uint32_t sample_number, lsmas
             cache->all_sync = 1;    /* Also the first sample is a sync sample. */
             return 0;
         }
-        if( isom_add_stss( stbl ) )
+        if( !isom_add_stss( stbl ) )
             return -1;
     }
     return isom_add_stss_entry( stbl, sample_number );
@@ -3591,7 +3591,7 @@ static int isom_add_partial_sync( isom_trak_t *trak, uint32_t sample_number, lsm
         return 0;
     /* This sample is a partial sync sample. */
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
-    if( !stbl->stps && isom_add_stps( stbl ) )
+    if( !stbl->stps && !isom_add_stps( stbl ) )
         return -1;
     return isom_add_stps_entry( stbl, sample_number );
 }
@@ -3606,7 +3606,7 @@ static int isom_add_dependency_type( isom_trak_t *trak, lsmash_sample_property_t
         return isom_add_sdtp_entry( (isom_box_t *)stbl, prop, avc_extensions );
     if( !prop->allow_earlier && !prop->leading && !prop->independent && !prop->disposable && !prop->redundant )  /* no null check for prop */
         return 0;
-    if( isom_add_sdtp( (isom_box_t *)stbl ) )
+    if( !isom_add_sdtp( (isom_box_t *)stbl ) )
         return -1;
     uint32_t count = isom_get_sample_count( trak );
     /* fill past samples with ISOM_SAMPLE_*_UNKNOWN */
@@ -4364,7 +4364,7 @@ static int isom_append_sample( lsmash_file_t *file, uint32_t track_ID, lsmash_sa
     /* If there is no available Media Data Box to write samples, add and write a new one before any chunk offset is decided. */
     if( !file->mdat )
     {
-        if( isom_add_mdat( file ) )
+        if( !isom_add_mdat( file ) )
             return -1;
         file->mdat->manager |= LSMASH_PLACEHOLDER;
         if( isom_write_box( file->bs, (isom_box_t *)file->mdat ) < 0 )
@@ -4561,7 +4561,7 @@ int lsmash_set_copyright( lsmash_root_t *root, uint32_t track_ID, uint16_t ISO_l
         if( !cprt || cprt->language == ISO_language )
             return -1;
     }
-    if( isom_add_cprt( udta ) )
+    if( !isom_add_cprt( udta ) )
         return -1;
     isom_cprt_t *cprt = (isom_cprt_t *)udta->cprt_list.tail->data;
     cprt->language      = ISO_language;

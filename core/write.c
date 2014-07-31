@@ -1257,7 +1257,7 @@ static int isom_write_mdat( lsmash_bs_t *bs, isom_box_t *box )
     if( mdat->manager & LSMASH_PLACEHOLDER )
     {
         /* Write the placeholder for large size. */
-        if( !file->free && isom_add_free( file ) < 0 )
+        if( !file->free && !isom_add_free( file ) )
             return -1;
         isom_free_t *skip = file->free;
         skip->pos      = bs->offset;

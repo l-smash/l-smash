@@ -560,9 +560,9 @@ static int codec_construct_qt_audio_decompression_info( lsmash_codec_specific_t 
             {
                 if( pos + 4 > end )
                     return -1;
-                if( isom_add_frma( wave ) )
+                isom_frma_t *frma = isom_add_frma( wave );
+                if( !frma )
                     return -1;
-                isom_frma_t *frma = (isom_frma_t *)wave->extensions.tail->data;;
                 frma->data_format = LSMASH_GET_BE32( pos );
                 pos += 4;
                 break;
@@ -571,9 +571,9 @@ static int codec_construct_qt_audio_decompression_info( lsmash_codec_specific_t 
             {
                 if( pos + 2 > end )
                     return -1;
-                if( isom_add_enda( wave ) )
+                isom_enda_t *enda = isom_add_enda( wave );
+                if( !enda )
                     return -1;
-                isom_enda_t *enda = (isom_enda_t *)wave->extensions.tail->data;;
                 enda->littleEndian = LSMASH_GET_BE16( pos );
                 break;
             }
@@ -581,16 +581,16 @@ static int codec_construct_qt_audio_decompression_info( lsmash_codec_specific_t 
             {
                 if( pos + 4 > end )
                     return -1;
-                if( isom_add_mp4a( wave ) )
+                isom_mp4a_t *mp4a = isom_add_mp4a( wave );
+                if( !mp4a )
                     return -1;
-                isom_mp4a_t *mp4a = (isom_mp4a_t *)wave->extensions.tail->data;;
                 mp4a->unknown = LSMASH_GET_BE32( pos );
                 pos += 4;
                 break;
             }
             case QT_BOX_TYPE_TERMINATOR :
             {
-                if( isom_add_terminator( wave ) )
+                if( !isom_add_terminator( wave ) )
                     return -1;
                 break;
             }
@@ -1316,14 +1316,15 @@ static int isom_append_channel_layout_extension( lsmash_codec_specific_t *specif
 static int isom_set_qtff_mp4a_description( isom_audio_entry_t *audio, lsmash_audio_summary_t *summary )
 {
     isom_wave_t *wave = isom_add_wave( audio );
-    if( isom_add_frma( wave )
-     || isom_add_mp4a( wave )
-     || isom_add_terminator( wave ) )
+    isom_frma_t *frma;
+    if( !(frma = isom_add_frma( wave ))
+     || !isom_add_mp4a( wave )
+     || !isom_add_terminator( wave ) )
     {
         lsmash_remove_entry_tail( &audio->extensions, wave->destruct );
         return -1;
     }
-    wave->frma->data_format = audio->type.fourcc;
+    frma->data_format = audio->type.fourcc;
     /* Add ES Descriptor Box. */
     if( isom_append_audio_es_descriptor_extension( (isom_box_t *)wave, summary ) )
         return -1;
@@ -1495,15 +1496,17 @@ static int isom_set_qtff_lpcm_description( isom_audio_entry_t *audio, lsmash_aud
          || lsmash_check_codec_type_identical( sample_type, QT_CODEC_TYPE_IN32_AUDIO ) )
         {
             isom_wave_t *wave = isom_add_wave( audio );
-            if( isom_add_frma( wave )
-             || isom_add_enda( wave )
-             || isom_add_terminator( wave ) )
+            isom_frma_t *frma;
+            isom_enda_t *enda;
+            if( !(frma = isom_add_frma( wave ))
+             || !(enda = isom_add_enda( wave ))
+             || !isom_add_terminator( wave ) )
             {
                 lsmash_remove_entry_tail( &audio->extensions, wave->destruct );
                 return -1;
             }
-            wave->frma->data_format  = sample_type.fourcc;
-            wave->enda->littleEndian = !(lpcm->format_flags & QT_LPCM_FORMAT_FLAG_BIG_ENDIAN);
+            frma->data_format  = sample_type.fourcc;
+            enda->littleEndian = !(lpcm->format_flags & QT_LPCM_FORMAT_FLAG_BIG_ENDIAN);
         }
     }
     else    /* audio->version == 0 */
@@ -1737,8 +1740,8 @@ static int isom_set_qtff_sound_decompression_parameters
     /* A 'wave' extension itself shall be absent in the opaque CODEC specific info list.
      * So, create a 'wave' extension here and append it as an extension to the audio sample description. */
     isom_wave_t *wave = isom_add_wave( audio );
-    if( isom_add_frma      ( wave ) < 0
-     || isom_add_terminator( wave ) < 0 )
+    if( !isom_add_frma      ( wave )
+     || !isom_add_terminator( wave ) )
     {
         lsmash_remove_entry_tail( &audio->extensions, wave->destruct );
         return -1;
