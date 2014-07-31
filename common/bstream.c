@@ -48,7 +48,8 @@ void lsmash_bs_empty( lsmash_bs_t *bs )
 {
     if( !bs )
         return;
-    memset( bs->buffer.data, 0, bs->buffer.alloc );
+    if( bs->buffer.data )
+        memset( bs->buffer.data, 0, bs->buffer.alloc );
     bs->buffer.store = 0;
     bs->buffer.pos   = 0;
 }
@@ -187,20 +188,29 @@ static void bs_dispose_past_data( lsmash_bs_t *bs )
 /*---- bitstream writer ----*/
 void lsmash_bs_put_byte( lsmash_bs_t *bs, uint8_t value )
 {
-    bs_alloc( bs, bs->buffer.store + 1 );
-    if( bs->error )
-        return;
-    bs->buffer.data[ bs->buffer.store ++ ] = value;
+    if( bs->buffer.internal
+     || bs->buffer.data )
+    {
+        bs_alloc( bs, bs->buffer.store + 1 );
+        if( bs->error )
+            return;
+        bs->buffer.data[ bs->buffer.store ] = value;
+    }
+    ++ bs->buffer.store;
 }
 
 void lsmash_bs_put_bytes( lsmash_bs_t *bs, uint32_t size, void *value )
 {
-    if( !size || !value )
+    if( size == 0 || !value )
         return;
-    bs_alloc( bs, bs->buffer.store + size );
-    if( bs->error )
-        return;
-    memcpy( lsmash_bs_get_buffer_data_end( bs ), value, size );
+    if( bs->buffer.internal
+     || bs->buffer.data )
+    {
+        bs_alloc( bs, bs->buffer.store + size );
+        if( bs->error )
+            return;
+        memcpy( lsmash_bs_get_buffer_data_end( bs ), value, size );
+    }
     bs->buffer.store += size;
 }
 
@@ -265,17 +275,20 @@ int lsmash_bs_flush_buffer( lsmash_bs_t *bs )
     if( !bs )
         return -1;
     if( bs->buffer.store == 0
-     || bs->buffer.data  == NULL )
+     || (bs->stream && bs->write && !bs->buffer.data) )
         return 0;
-    if( bs->error || !bs->stream
-     || bs->write( bs->stream, lsmash_bs_get_buffer_data_start( bs ), bs->buffer.store ) != bs->buffer.store )
+    if( bs->error
+     || (bs->stream && bs->write && bs->write( bs->stream, lsmash_bs_get_buffer_data_start( bs ), bs->buffer.store ) != bs->buffer.store) )
     {
         lsmash_bs_free( bs );
         bs->error = 1;
         return -1;
     }
-    bs->written += bs->buffer.store;
-    bs->offset  += bs->buffer.store;
+    if( bs->write )
+    {
+        bs->written += bs->buffer.store;
+        bs->offset  += bs->buffer.store;
+    }
     bs->buffer.store = 0;
     return 0;
 }

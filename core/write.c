@@ -92,6 +92,15 @@ static int isom_write_ctab( lsmash_bs_t *bs, isom_box_t *box )
 static int isom_write_tkhd( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_tkhd_t *tkhd = (isom_tkhd_t *)box;
+    /* Check the version. */
+    if( (tkhd->file && !tkhd->file->undefined_64_ver)
+     && (tkhd->creation_time     > UINT32_MAX
+      || tkhd->modification_time > UINT32_MAX
+      || tkhd->duration          > UINT32_MAX) )
+        tkhd->version = 1;
+    else
+        tkhd->version = 0;
+    /* Write. */
     isom_bs_put_box_common( bs, tkhd );
     if( tkhd->version )
     {
@@ -103,11 +112,11 @@ static int isom_write_tkhd( lsmash_bs_t *bs, isom_box_t *box )
     }
     else
     {
-        lsmash_bs_put_be32( bs, LSMASH_MIN( tkhd->creation_time, UINT32_MAX ) );
+        lsmash_bs_put_be32( bs, LSMASH_MIN( tkhd->creation_time,     UINT32_MAX ) );
         lsmash_bs_put_be32( bs, LSMASH_MIN( tkhd->modification_time, UINT32_MAX ) );
         lsmash_bs_put_be32( bs, tkhd->track_ID );
         lsmash_bs_put_be32( bs, tkhd->reserved1 );
-        lsmash_bs_put_be32( bs, LSMASH_MIN( tkhd->duration, UINT32_MAX ) );
+        lsmash_bs_put_be32( bs, LSMASH_MIN( tkhd->duration,          UINT32_MAX ) );
     }
     lsmash_bs_put_be32( bs, tkhd->reserved2[0] );
     lsmash_bs_put_be32( bs, tkhd->reserved2[1] );
@@ -161,15 +170,28 @@ static int isom_write_elst( lsmash_bs_t *bs, isom_box_t *box )
     assert( elst->list );
     if( elst->list->entry_count == 0 )
         return 0;
+    /* Check the version. */
+    elst->version = 0;
+    if( elst->file && !elst->file->undefined_64_ver )
+        for( lsmash_entry_t *entry = elst->list->head; entry; entry = entry->next )
+        {
+            isom_elst_entry_t *data = (isom_elst_entry_t *)entry->data;
+            if( !data )
+                return -1;
+            if( data->segment_duration > UINT32_MAX
+             || data->media_time       >  INT32_MAX
+             || data->media_time       <  INT32_MIN )
+                elst->version = 1;
+        }
+    /* Remember to rewrite entries. */
     if( elst->file->fragment && !elst->file->bs->unseekable )
-        elst->pos = elst->file->bs->written;    /* Remember to rewrite entries. */
+        elst->pos = elst->file->bs->written;
+    /* Write. */
     isom_bs_put_box_common( bs, elst );
     lsmash_bs_put_be32( bs, elst->list->entry_count );
     for( lsmash_entry_t *entry = elst->list->head; entry; entry = entry->next )
     {
         isom_elst_entry_t *data = (isom_elst_entry_t *)entry->data;
-        if( !data )
-            return -1;
         if( elst->version )
         {
             lsmash_bs_put_be64( bs, data->segment_duration );
@@ -209,6 +231,15 @@ static int isom_write_track_reference_type( lsmash_bs_t *bs, isom_box_t *box )
 static int isom_write_mdhd( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_mdhd_t *mdhd = (isom_mdhd_t *)box;
+    /* Check the version. */
+    if( (mdhd->file && !mdhd->file->undefined_64_ver)
+     && (mdhd->creation_time     > UINT32_MAX
+      || mdhd->modification_time > UINT32_MAX
+      || mdhd->duration          > UINT32_MAX) )
+        mdhd->version = 1;
+    else
+        mdhd->version = 0;
+    /* Write. */
     isom_bs_put_box_common( bs, mdhd );
     if( mdhd->version )
     {
@@ -219,10 +250,10 @@ static int isom_write_mdhd( lsmash_bs_t *bs, isom_box_t *box )
     }
     else
     {
-        lsmash_bs_put_be32( bs, LSMASH_MIN( mdhd->creation_time, UINT32_MAX ) );
+        lsmash_bs_put_be32( bs, LSMASH_MIN( mdhd->creation_time,     UINT32_MAX ) );
         lsmash_bs_put_be32( bs, LSMASH_MIN( mdhd->modification_time, UINT32_MAX ) );
         lsmash_bs_put_be32( bs, mdhd->timescale );
-        lsmash_bs_put_be32( bs, LSMASH_MIN( mdhd->duration, UINT32_MAX ) );
+        lsmash_bs_put_be32( bs, LSMASH_MIN( mdhd->duration,          UINT32_MAX ) );
     }
     lsmash_bs_put_be16( bs, mdhd->language );
     lsmash_bs_put_be16( bs, mdhd->quality );
@@ -1021,6 +1052,15 @@ static int isom_write_iods( lsmash_bs_t *bs, isom_box_t *box )
 static int isom_write_mvhd( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_mvhd_t *mvhd = (isom_mvhd_t *)box;
+    /* Check the version. */
+    if( (mvhd->file && !mvhd->file->undefined_64_ver)
+     && (mvhd->creation_time     > UINT32_MAX
+      || mvhd->modification_time > UINT32_MAX
+      || mvhd->duration          > UINT32_MAX) )
+        mvhd->version = 1;
+    else
+        mvhd->version = 0;
+    /* Write. */
     isom_bs_put_box_common( bs, mvhd );
     if( mvhd->version )
     {
@@ -1031,10 +1071,10 @@ static int isom_write_mvhd( lsmash_bs_t *bs, isom_box_t *box )
     }
     else
     {
-        lsmash_bs_put_be32( bs, LSMASH_MIN( mvhd->creation_time, UINT32_MAX ) );
+        lsmash_bs_put_be32( bs, LSMASH_MIN( mvhd->creation_time,     UINT32_MAX ) );
         lsmash_bs_put_be32( bs, LSMASH_MIN( mvhd->modification_time, UINT32_MAX ) );
         lsmash_bs_put_be32( bs, mvhd->timescale );
-        lsmash_bs_put_be32( bs, LSMASH_MIN( mvhd->duration, UINT32_MAX ) );
+        lsmash_bs_put_be32( bs, LSMASH_MIN( mvhd->duration,          UINT32_MAX ) );
     }
     lsmash_bs_put_be32( bs, mvhd->rate );
     lsmash_bs_put_be16( bs, mvhd->volume );
@@ -1084,11 +1124,12 @@ static int isom_write_mehd( lsmash_bs_t *bs, isom_box_t *box )
     else
     {
         isom_mehd_t *mehd = (isom_mehd_t *)box;
+        //mehd->version = mehd->fragment_duration > UINT32_MAX ? 1 : 0;
         isom_bs_put_box_common( bs, mehd );
         if( mehd->version == 1 )
             lsmash_bs_put_be64( bs, mehd->fragment_duration );
         else
-            lsmash_bs_put_be32( bs, (uint32_t)mehd->fragment_duration );
+            lsmash_bs_put_be32( bs, LSMASH_MIN( mehd->fragment_duration, UINT32_MAX ) );
     }
     return 0;
 }
@@ -1135,6 +1176,9 @@ static int isom_write_tfhd( lsmash_bs_t *bs, isom_box_t *box )
 static int isom_write_tfdt( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_tfdt_t *tfdt = (isom_tfdt_t *)box;
+    /* Check the version. */
+    tfdt->version = tfdt->baseMediaDecodeTime > UINT32_MAX ? 1 : 0;
+    /* Write. */
     isom_bs_put_box_common( bs, tfdt );
     if( tfdt->version == 1 )
         lsmash_bs_put_be64( bs, tfdt->baseMediaDecodeTime );
@@ -1221,13 +1265,16 @@ static int isom_write_mfro( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_mfro_t *mfro = (isom_mfro_t *)box;
     isom_bs_put_box_common( bs, mfro );
-    lsmash_bs_put_be32( bs, mfro->length );
+    lsmash_bs_put_be32( bs, mfro->length ); /* determined at isom_write_mfra(). */
     return 0;
 }
 
 static int isom_write_mfra( lsmash_bs_t *bs, isom_box_t *box )
 {
-    isom_bs_put_box_common( bs, box );
+    isom_mfra_t *mfra = (isom_mfra_t *)box;
+    if( mfra->mfro )
+        mfra->mfro->length = mfra->size;
+    isom_bs_put_box_common( bs, mfra );
     return 0;
 }
 
@@ -1327,13 +1374,20 @@ static int isom_write_free( lsmash_bs_t *bs, isom_box_t *box )
 static int isom_write_sidx( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_sidx_t *sidx = (isom_sidx_t *)box;
+    /* Check the version. */
+    if( sidx->earliest_presentation_time > UINT32_MAX
+     || sidx->first_offset               > UINT32_MAX )
+        sidx->version = 1;
+    else
+        sidx->version = 0;
+    /* Write. */
     isom_bs_put_box_common( bs, sidx );
     lsmash_bs_put_be32( bs, sidx->reference_ID );
     lsmash_bs_put_be32( bs, sidx->timescale );
     if( sidx->version == 0 )
     {
-        lsmash_bs_put_be32( bs, sidx->earliest_presentation_time );
-        lsmash_bs_put_be32( bs, sidx->first_offset );
+        lsmash_bs_put_be32( bs, LSMASH_MIN( sidx->earliest_presentation_time, UINT32_MAX ) );
+        lsmash_bs_put_be32( bs, LSMASH_MIN( sidx->first_offset,               UINT32_MAX ) );
     }
     else
     {

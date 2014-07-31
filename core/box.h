@@ -2609,12 +2609,7 @@ void isom_remove_sample_description( isom_sample_entry_t *sample );
 void isom_remove_unknown_box( isom_unknown_box_t *unknown_box );
 void isom_remove_sample_pool( isom_sample_pool_t *pool );
 
-static inline uint64_t isom_update_box_size( void *box )
-{
-    assert( box );
-    return ((isom_box_t *)box)->update( box );
-}
-
+uint64_t isom_update_box_size( void *box );
 uint64_t isom_update_unknown_box_size( isom_unknown_box_t *unknown_box );
 
 int isom_add_extension_binary( void *parent_box, lsmash_box_type_t box_type, uint64_t precedence, uint8_t *box_data, uint32_t box_size );
