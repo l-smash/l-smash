@@ -4057,12 +4057,23 @@ int isom_group_roll_recovery( isom_box_t *parent, lsmash_sample_t *sample )
             continue;
         if( group->described == ROLL_DISTANCE_INITIALIZED )
         {
+            /* Let's consider the following picture sequence.
+             *   coded order : P[0] P[1] P[2] P[3] P[4] P[5]
+             *   DTS         :   0    1    2    3    4    5
+             *   CTS         :   2    4    3    6    7    5
+             * Here, P[0] conveys a recovery point SEI and P[3] is the recovery point.
+             * Correctness of decoded pictures is specified by recovery point in output order for both AVC and HEVC.
+             * Therefore, as follows,
+             *   output order : P[0] P[2] P[1] P[5]|P[3] P[4]
+             *                  ---(incorrect?)--->|
+             * there is no guarantee that P[5] is decoded and output correctly.
+             * From this, it can be said that the roll_distance of this sequence is equal to 5. */
             isom_roll_entry_t *post_roll = isom_get_roll_description( group );
             if( post_roll && post_roll->roll_distance > 0 )
             {
                 if( group->rp_cts > sample->cts )
                     /* Updated roll_distance for composition reordering. */
-                    ++ post_roll->roll_distance;
+                    post_roll->roll_distance = sample_count - group->first_sample;
                 if( ++ group->wait_and_see_count >= MAX_ROLL_WAIT_AND_SEE_COUNT )
                     group->described = ROLL_DISTANCE_DETERMINED;
             }
