@@ -1495,16 +1495,20 @@ uint64_t isom_update_box_size( void *opaque_box )
                 });
             /* Calculate the size of the children if no error. */
             if( size >= ISOM_BASEBOX_COMMON_SIZE )
+            {
                 for( lsmash_entry_t *entry = box->extensions.head; entry; entry = entry->next )
                     if( entry->data )
                         size += isom_update_box_size( entry->data );
+                /* Check large size. */
+                if( size > UINT32_MAX )
+                    size += 8;
+            }
+            else
+                size = 0;
         }
         else
             size = 0;
     }
-    /* Check large size. */
-    if( size > UINT32_MAX )
-        size += 8;
     box->size = size;
     return size;
 }
