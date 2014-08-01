@@ -36,7 +36,6 @@ static const lsmash_class_t lsmash_box_class =
 
 typedef struct lsmash_box_tag isom_box_t;
 typedef void (*isom_extension_destructor_t)( void *extension_data );
-typedef uint64_t (*isom_extension_updater_t)( void *extension_data );
 typedef int (*isom_extension_writer_t)( lsmash_bs_t *bs, isom_box_t *box );
 
 /* If size is 1, then largesize is actual size.
@@ -48,7 +47,6 @@ typedef int (*isom_extension_writer_t)( lsmash_bs_t *bs, isom_box_t *box );
         isom_box_t                 *parent;     /* pointer of the parent box of this box */     \
         uint8_t                    *binary;     /* used only when LSMASH_BINARY_CODED_BOX */    \
         isom_extension_destructor_t destruct;   /* box specific destructor */                   \
-        isom_extension_updater_t    update;     /* box specific size updater */                 \
         isom_extension_writer_t     write;      /* box specific writer */                       \
         uint32_t                    manager;    /* flags for L-SMASH */                         \
         uint64_t                    precedence; /* precedence of the box position */            \
@@ -2452,7 +2450,7 @@ int isom_is_qt_audio( lsmash_codec_type_t type );
 int isom_is_uncompressed_ycbcr( lsmash_codec_type_t type );
 int isom_is_waveform_audio( lsmash_box_type_t type );
 
-void isom_init_box_common( void *box, void *parent, lsmash_box_type_t box_type, uint64_t precedence, void *destructor, void *updater );
+void isom_init_box_common( void *box, void *parent, lsmash_box_type_t box_type, uint64_t precedence, void *destructor );
 size_t isom_skip_box_common( uint8_t **p_data );
 
 void isom_bs_put_basebox_common( lsmash_bs_t *bs, isom_box_t *box );
@@ -2610,7 +2608,6 @@ void isom_remove_unknown_box( isom_unknown_box_t *unknown_box );
 void isom_remove_sample_pool( isom_sample_pool_t *pool );
 
 uint64_t isom_update_box_size( void *box );
-uint64_t isom_update_unknown_box_size( isom_unknown_box_t *unknown_box );
 
 int isom_add_extension_binary( void *parent_box, lsmash_box_type_t box_type, uint64_t precedence, uint8_t *box_data, uint32_t box_size );
 void isom_remove_all_extension_boxes( lsmash_entry_list_t *extensions );

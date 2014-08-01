@@ -599,7 +599,7 @@ static int codec_construct_qt_audio_decompression_info( lsmash_codec_specific_t 
                 isom_unknown_box_t *box = lsmash_malloc_zero( sizeof(isom_unknown_box_t) );
                 if( !box )
                     return -1;
-                isom_init_box_common( box, wave, type, isom_remove_unknown_box, isom_update_unknown_box_size );
+                isom_init_box_common( box, wave, type, isom_remove_unknown_box );
                 box->unknown_size  = size - offset;
                 box->unknown_field = lsmash_memdup( pos, box->unknown_size );
                 if( !box->unknown_field )

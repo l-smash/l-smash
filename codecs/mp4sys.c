@@ -487,7 +487,7 @@ static uint32_t mp4sys_update_SLConfigDescriptor_size( mp4sys_ES_Descriptor_t* e
     return mp4sys_get_descriptor_size( size );
 }
 
-uint32_t mp4sys_update_ES_Descriptor_size( mp4sys_ES_Descriptor_t* esd )
+static uint32_t mp4sys_update_ES_Descriptor_size( mp4sys_ES_Descriptor_t* esd )
 {
     if( !esd )
         return 0;
@@ -504,6 +504,7 @@ uint32_t mp4sys_update_ES_Descriptor_size( mp4sys_ES_Descriptor_t* esd )
     return mp4sys_get_descriptor_size( size );
 }
 
+#if 0
 static uint32_t mp4sys_update_ES_ID_Inc_size( mp4sys_ES_ID_Inc_t* es_id_inc )
 {
     debug_if( !es_id_inc )
@@ -525,7 +526,7 @@ static uint32_t mp4sys_update_ES_ID_Incs_size( mp4sys_ObjectDescriptor_t* od )
     return size;
 }
 
-uint32_t mp4sys_update_ObjectDescriptor_size( mp4sys_ObjectDescriptor_t* od )
+static uint32_t mp4sys_update_ObjectDescriptor_size( mp4sys_ObjectDescriptor_t* od )
 {
     if( !od )
         return 0;
@@ -534,6 +535,7 @@ uint32_t mp4sys_update_ObjectDescriptor_size( mp4sys_ObjectDescriptor_t* od )
     od->header.size = size;
     return mp4sys_get_descriptor_size( size );
 }
+#endif
 
 static int mp4sys_put_descriptor_header( lsmash_bs_t *bs, mp4sys_descriptor_head_t* header )
 {
