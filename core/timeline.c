@@ -689,10 +689,10 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     isom_stsc_t *stsc = stbl->stsc;
     isom_stsz_t *stsz = stbl->stsz;
     isom_stco_t *stco = stbl->stco;
-    isom_sgpd_t *sgpd_roll = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_ROLL );
     isom_sgpd_t *sgpd_rap  = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_RAP );
-    isom_sbgp_t *sbgp_roll = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_ROLL );
-    isom_sbgp_t *sbgp_rap  = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_RAP );
+    isom_sbgp_t *sbgp_rap  = isom_get_sample_to_group         ( stbl, ISOM_GROUP_TYPE_RAP );
+    isom_sgpd_t *sgpd_roll = isom_get_roll_recovery_sample_group_description( &stbl->sgpd_list );
+    isom_sbgp_t *sbgp_roll = isom_get_roll_recovery_sample_to_group         ( &stbl->sbgp_list );
     lsmash_entry_t *elst_entry = elst && elst->list ? elst->list->head : NULL;
     lsmash_entry_t *stsd_entry = stsd               ? stsd->list. head : NULL;
     lsmash_entry_t *stts_entry = stts && stts->list ? stts->list->head : NULL;
@@ -1048,12 +1048,14 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
                 else
                     base_data_offset = last_sample_end_pos;
                 /* sample grouping */
-                isom_sgpd_t *sgpd_frag_roll = isom_get_fragment_sample_group_description( traf, ISOM_GROUP_TYPE_ROLL );
-                isom_sgpd_t *sgpd_frag_rap  = isom_get_fragment_sample_group_description( traf, ISOM_GROUP_TYPE_RAP );
-                sbgp_roll = isom_get_fragment_sample_to_group( traf, ISOM_GROUP_TYPE_ROLL );
-                sbgp_rap  = isom_get_fragment_sample_to_group( traf, ISOM_GROUP_TYPE_RAP );
+                isom_sgpd_t *sgpd_frag_rap;
+                isom_sgpd_t *sgpd_frag_roll;
+                sgpd_frag_rap   = isom_get_fragment_sample_group_description( traf, ISOM_GROUP_TYPE_RAP );
+                sbgp_rap        = isom_get_fragment_sample_to_group         ( traf, ISOM_GROUP_TYPE_RAP );
+                sbgp_rap_entry  = sbgp_rap && sbgp_rap->list ? sbgp_rap->list->head : NULL;
+                sgpd_frag_roll  = isom_get_roll_recovery_sample_group_description( &traf->sgpd_list );
+                sbgp_roll       = isom_get_roll_recovery_sample_to_group         ( &traf->sbgp_list );
                 sbgp_roll_entry = sbgp_roll && sbgp_roll->list ? sbgp_roll->list->head : NULL;
-                sbgp_rap_entry  = sbgp_rap  && sbgp_rap->list  ? sbgp_rap->list->head  : NULL;
                 int need_data_offset_only = (tfhd->track_ID != track_ID);
                 /* Track runs */
                 uint32_t trun_number = 1;

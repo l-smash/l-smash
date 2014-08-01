@@ -898,6 +898,7 @@ static int isom_write_sgpd( lsmash_bs_t *bs, isom_box_t *box )
                 break;
             }
             case ISOM_GROUP_TYPE_ROLL :
+            case ISOM_GROUP_TYPE_PROL :
                 lsmash_bs_put_be16( bs, ((isom_roll_entry_t *)entry->data)->roll_distance );
                 break;
             default :

@@ -1563,6 +1563,7 @@ static int isom_print_sgpd( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
             }
             break;
         case ISOM_GROUP_TYPE_ROLL :
+        case ISOM_GROUP_TYPE_PROL :
             for( lsmash_entry_t *entry = sgpd->list->head; entry; entry = entry->next )
             {
                 if( sgpd->version == 1 && !sgpd->default_length )

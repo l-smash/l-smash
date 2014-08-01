@@ -595,6 +595,24 @@ isom_sbgp_t *isom_get_sample_to_group( isom_stbl_t *stbl, uint32_t grouping_type
     return isom_get_sample_to_group_common( &stbl->sbgp_list, grouping_type );
 }
 
+isom_sgpd_t *isom_get_roll_recovery_sample_group_description( lsmash_entry_list_t *list )
+{
+    isom_sgpd_t *sgpd;
+    if( (sgpd = isom_get_sample_group_description_common( list, ISOM_GROUP_TYPE_ROLL ))
+     || (sgpd = isom_get_sample_group_description_common( list, ISOM_GROUP_TYPE_PROL )) )
+        return sgpd;
+    return NULL;
+}
+
+isom_sbgp_t *isom_get_roll_recovery_sample_to_group( lsmash_entry_list_t *list )
+{
+    isom_sbgp_t *sbgp;
+    if( (sbgp = isom_get_sample_to_group_common( list, ISOM_GROUP_TYPE_ROLL ))
+     || (sbgp = isom_get_sample_to_group_common( list, ISOM_GROUP_TYPE_PROL )) )
+        return sbgp;
+    return NULL;
+}
+
 isom_sgpd_t *isom_get_fragment_sample_group_description( isom_traf_t *traf, uint32_t grouping_type )
 {
     return isom_get_sample_group_description_common( &traf->sgpd_list, grouping_type );
@@ -1765,6 +1783,7 @@ uint32_t lsmash_create_track( lsmash_root_t *root, lsmash_media_type media_type 
         case ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK :
             if( !isom_add_smhd( trak->mdia->minf ) )
                 goto fail;
+            trak->cache->is_audio = 1;
             break;
         case ISOM_MEDIA_HANDLER_TYPE_HINT_TRACK :
             if( !isom_add_hmhd( trak->mdia->minf ) )
@@ -2210,6 +2229,7 @@ int isom_add_sample_grouping( isom_box_t *parent, isom_grouping_type grouping_ty
             sgpd->default_length = 1;
             break;
         case ISOM_GROUP_TYPE_ROLL :
+        case ISOM_GROUP_TYPE_PROL :
             sgpd->default_length = 2;
             break;
         default :
@@ -2228,6 +2248,7 @@ static int isom_create_sample_grouping( isom_trak_t *trak, isom_grouping_type gr
             assert( file->max_isom_version >= 6 );
             break;
         case ISOM_GROUP_TYPE_ROLL :
+        case ISOM_GROUP_TYPE_PROL :
             assert( file->avc_extensions || file->qt_compatible );
             break;
         default :
@@ -2243,6 +2264,7 @@ static int isom_create_sample_grouping( isom_trak_t *trak, isom_grouping_type gr
                 trak->cache->fragment->rap_grouping = 1;
                 break;
             case ISOM_GROUP_TYPE_ROLL :
+            case ISOM_GROUP_TYPE_PROL :
                 trak->cache->fragment->roll_grouping = 1;
                 break;
             default :
@@ -2310,12 +2332,12 @@ int lsmash_get_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     {
         isom_sbgp_t *sbgp;
         isom_sgpd_t *sgpd;
-        sbgp = isom_get_sample_to_group         ( stbl, ISOM_GROUP_TYPE_ROLL );
-        sgpd = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_ROLL );
-        param->roll_grouping = sbgp && sgpd;
         sbgp = isom_get_sample_to_group         ( stbl, ISOM_GROUP_TYPE_RAP );
         sgpd = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_RAP );
         param->rap_grouping = sbgp && sgpd;
+        sbgp = isom_get_roll_recovery_sample_to_group         ( &stbl->sbgp_list );
+        sgpd = isom_get_roll_recovery_sample_group_description( &stbl->sgpd_list );
+        param->roll_grouping = sbgp && sgpd;
     }
     /* Get media language. */
     if( mdhd->language >= 0x800 )
@@ -3937,17 +3959,17 @@ int isom_group_roll_recovery( isom_box_t *parent, lsmash_sample_t *sample )
     if( !parent->file->avc_extensions
      && !parent->file->qt_compatible )
         return 0;
+    uint32_t sample_count;
+    int      is_fragment;
     isom_cache_t *cache;
-    isom_sbgp_t  *sbgp;
-    isom_sgpd_t  *sgpd;
-    uint32_t      sample_count;
-    int           is_fragment;
+    lsmash_entry_list_t *sbgp_list;
+    lsmash_entry_list_t *sgpd_list;
     if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAK ) )
     {
         isom_trak_t *trak = (isom_trak_t *)parent;
         cache = trak->cache;
-        sbgp  = isom_get_sample_to_group         ( trak->mdia->minf->stbl, ISOM_GROUP_TYPE_ROLL );
-        sgpd  = isom_get_sample_group_description( trak->mdia->minf->stbl, ISOM_GROUP_TYPE_ROLL );
+        sbgp_list = &trak->mdia->minf->stbl->sbgp_list;
+        sgpd_list = &trak->mdia->minf->stbl->sgpd_list;
         sample_count = isom_get_sample_count( trak );
         is_fragment  = 0;
     }
@@ -3957,19 +3979,26 @@ int isom_group_roll_recovery( isom_box_t *parent, lsmash_sample_t *sample )
             return 0;
         isom_traf_t *traf = (isom_traf_t *)parent;
         cache = traf->cache;
-        sbgp  = isom_get_fragment_sample_to_group         ( traf, ISOM_GROUP_TYPE_ROLL );
-        sgpd  = isom_get_fragment_sample_group_description( traf, ISOM_GROUP_TYPE_ROLL );
+        sbgp_list = &traf->sbgp_list;
+        sgpd_list = &traf->sgpd_list;
         sample_count = cache->fragment->sample_count + 1;
         is_fragment  = 1;
     }
     else
-    {
         assert( 0 );
-        sbgp = NULL;
-        sgpd = NULL;
-    }
-    if( !sbgp || !sgpd )
+    isom_sbgp_t *sbgp = isom_get_roll_recovery_sample_to_group         ( sbgp_list );
+    isom_sgpd_t *sgpd = isom_get_roll_recovery_sample_group_description( sgpd_list );
+    if( !sbgp || !sgpd || sbgp->grouping_type != sgpd->grouping_type )
         return 0;
+    /* Check if 'roll' -> 'prol' conversion is needed. */
+    if( cache->is_audio
+     && sbgp->grouping_type == ISOM_GROUP_TYPE_ROLL
+     && !(sample->prop.ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC) )
+    {
+        /* Since not every samples is a sync sample, change grouping_type into 'prol'. */
+        sbgp->grouping_type = ISOM_GROUP_TYPE_PROL;
+        sgpd->grouping_type = ISOM_GROUP_TYPE_PROL;
+    }
     lsmash_entry_list_t *pool = cache->roll.pool;
     if( !pool )
     {
@@ -4449,6 +4478,7 @@ static int isom_output_cache( isom_trak_t *trak )
                 break;
             }
             case ISOM_GROUP_TYPE_ROLL :
+            case ISOM_GROUP_TYPE_PROL :
                 if( !cache->roll.pool )
                 {
                     if( stbl->file->fragment )
@@ -4456,7 +4486,7 @@ static int isom_output_cache( isom_trak_t *trak )
                     else
                         return -1;
                 }
-                isom_sbgp_t *sbgp = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_ROLL );
+                isom_sbgp_t *sbgp = isom_get_roll_recovery_sample_to_group( &stbl->sbgp_list );
                 if( !sbgp || isom_all_recovery_completed( sbgp, cache->roll.pool ) < 0 )
                     return -1;
                 break;

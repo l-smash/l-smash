@@ -1449,6 +1449,7 @@ typedef struct
 typedef struct
 {
     uint8_t           all_sync;     /* if all samples are sync sample */
+    uint8_t           is_audio;
     isom_chunk_t      chunk;
     isom_timestamp_t  timestamp;
     isom_grouping_t   roll;
@@ -2436,9 +2437,10 @@ typedef enum
     ISOM_GROUP_TYPE_AVSS = LSMASH_4CC( 'a', 'v', 's', 's' ),      /* AVC Sub Sequence */
     ISOM_GROUP_TYPE_DTRT = LSMASH_4CC( 'd', 't', 'r', 't' ),      /* Decode re-timing */
     ISOM_GROUP_TYPE_MVIF = LSMASH_4CC( 'm', 'v', 'i', 'f' ),      /* MVC Scalability Information */
+    ISOM_GROUP_TYPE_PROL = LSMASH_4CC( 'p', 'r', 'o', 'l' ),      /* Pre-roll */
     ISOM_GROUP_TYPE_RAP  = LSMASH_4CC( 'r', 'a', 'p', ' ' ),      /* Random Access Point */
     ISOM_GROUP_TYPE_RASH = LSMASH_4CC( 'r', 'a', 's', 'h' ),      /* Rate Share */
-    ISOM_GROUP_TYPE_ROLL = LSMASH_4CC( 'r', 'o', 'l', 'l' ),      /* Random Access Recovery Point */
+    ISOM_GROUP_TYPE_ROLL = LSMASH_4CC( 'r', 'o', 'l', 'l' ),      /* Pre-roll/Post-roll */
     ISOM_GROUP_TYPE_SCIF = LSMASH_4CC( 's', 'c', 'i', 'f' ),      /* SVC Scalability Information */
     ISOM_GROUP_TYPE_SCNM = LSMASH_4CC( 's', 'c', 'n', 'm' ),      /* AVC/SVC/MVC map groups */
     ISOM_GROUP_TYPE_VIPR = LSMASH_4CC( 'v', 'i', 'p', 'r' ),      /* View priority */
@@ -2467,6 +2469,8 @@ isom_traf_t *isom_get_traf( isom_moof_t *moof, uint32_t track_ID );
 isom_tfra_t *isom_get_tfra( isom_mfra_t *mfra, uint32_t track_ID );
 isom_sgpd_t *isom_get_sample_group_description( isom_stbl_t *stbl, uint32_t grouping_type );
 isom_sbgp_t *isom_get_sample_to_group( isom_stbl_t *stbl, uint32_t grouping_type );
+isom_sgpd_t *isom_get_roll_recovery_sample_group_description( lsmash_entry_list_t *list );
+isom_sbgp_t *isom_get_roll_recovery_sample_to_group( lsmash_entry_list_t *list );
 isom_sgpd_t *isom_get_fragment_sample_group_description( isom_traf_t *traf, uint32_t grouping_type );
 isom_sbgp_t *isom_get_fragment_sample_to_group( isom_traf_t *traf, uint32_t grouping_type );
 

@@ -507,7 +507,7 @@ static int isom_finish_fragment_initial_movie( lsmash_file_t *file )
         }
         if( trak->cache->roll.pool )
         {
-            isom_sbgp_t *sbgp = isom_get_sample_to_group( stbl, ISOM_GROUP_TYPE_ROLL );
+            isom_sbgp_t *sbgp = isom_get_roll_recovery_sample_to_group( &stbl->sbgp_list );
             if( !sbgp || isom_all_recovery_completed( sbgp, trak->cache->roll.pool ) < 0 )
                 return -1;
         }
@@ -746,7 +746,7 @@ static int isom_finish_fragment_movie( lsmash_file_t *file )
         }
         if( traf->cache->roll.pool )
         {
-            isom_sbgp_t *sbgp = isom_get_fragment_sample_to_group( traf, ISOM_GROUP_TYPE_ROLL );
+            isom_sbgp_t *sbgp = isom_get_roll_recovery_sample_to_group( &traf->sbgp_list );
             if( !sbgp || isom_all_recovery_completed( sbgp, traf->cache->roll.pool ) < 0 )
                 return -1;
         }
@@ -1227,6 +1227,7 @@ static int isom_output_fragment_cache( isom_traf_t *traf )
                 break;
             }
             case ISOM_GROUP_TYPE_ROLL :
+            case ISOM_GROUP_TYPE_PROL :
                 if( !cache->roll.pool )
                 {
                     if( traf->file->fragment )
@@ -1234,7 +1235,7 @@ static int isom_output_fragment_cache( isom_traf_t *traf )
                     else
                         return -1;
                 }
-                isom_sbgp_t *sbgp = isom_get_fragment_sample_to_group( traf, ISOM_GROUP_TYPE_ROLL );
+                isom_sbgp_t *sbgp = isom_get_roll_recovery_sample_to_group( &traf->sbgp_list );
                 if( !sbgp || isom_all_recovery_completed( sbgp, cache->roll.pool ) < 0 )
                     return -1;
                 break;
@@ -1485,6 +1486,7 @@ static int isom_update_fragment_sample_tables( isom_traf_t *traf, lsmash_sample_
         row->sample_flags                   = sample_flags;
         row->sample_composition_time_offset = sample_composition_time_offset;
     }
+    /* Set up the sample groupings for random access. */
     if( isom_group_random_access( (isom_box_t *)traf, sample ) < 0
      || isom_group_roll_recovery( (isom_box_t *)traf, sample ) < 0 )
         return -1;

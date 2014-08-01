@@ -1788,6 +1788,7 @@ static int isom_read_sgpd( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
             break;
         }
         case ISOM_GROUP_TYPE_ROLL :
+        case ISOM_GROUP_TYPE_PROL :
         {
             for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && sgpd->list->entry_count < entry_count; pos = lsmash_bs_count( bs ) )
             {
