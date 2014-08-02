@@ -1632,7 +1632,7 @@ typedef struct
     lsmash_entry_list_t  sgpd_list;     /* Sample Group Description Boxes (available under ISO Base Media version 6 or later) */
     lsmash_entry_list_t  sbgp_list;     /* Sample To Group Boxes */
 
-        isom_cache_t *cache;
+        isom_cache_t *cache;            /* taken over from corresponding 'trak' */
 } isom_traf_t;
 
 /* Movie Fragment Box */

@@ -2382,14 +2382,6 @@ isom_traf_t *isom_add_traf( isom_moof_t *moof )
         lsmash_remove_entry_tail( &moof->extensions, isom_remove_traf );
         return NULL;
     }
-    isom_cache_t *cache = lsmash_malloc( sizeof(isom_cache_t) );
-    if( !cache )
-    {
-        lsmash_remove_entry_tail( &moof->extensions, isom_remove_traf );
-        return NULL;
-    }
-    memset( cache, 0, sizeof(isom_cache_t) );
-    traf->cache = cache;
     return traf;
 }
 
