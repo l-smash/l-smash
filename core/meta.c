@@ -46,7 +46,7 @@ static isom_data_t *isom_add_metadata( lsmash_file_t *file,
     isom_ilst_t *ilst = file->moov->udta->meta->ilst;
     if( !isom_add_metaitem( ilst, item ) )
         return NULL;
-    isom_metaitem_t *metaitem = (isom_metaitem_t *)ilst->item_list.tail->data;
+    isom_metaitem_t *metaitem = (isom_metaitem_t *)ilst->metaitem_list.tail->data;
     if( item == ITUNES_METADATA_ITEM_CUSTOM )
     {
         if( !isom_add_mean( metaitem ) )
@@ -91,7 +91,7 @@ static int isom_set_itunes_metadata_string( lsmash_file_t *file,
     if( !data->value )
     {
         isom_ilst_t *ilst = file->moov->udta->meta->ilst;
-        isom_remove_box_by_itself( ilst->item_list.tail->data );
+        isom_remove_box_by_itself( ilst->metaitem_list.tail->data );
         return -1;
     }
     return 0;
@@ -148,7 +148,7 @@ static int isom_set_itunes_metadata_integer( lsmash_file_t *file,
     if( !data->value )
     {
         isom_ilst_t *ilst = file->moov->udta->meta->ilst;
-        isom_remove_box_by_itself( ilst->item_list.tail->data );
+        isom_remove_box_by_itself( ilst->metaitem_list.tail->data );
         return -1;
     }
     return 0;
@@ -168,7 +168,7 @@ static int isom_set_itunes_metadata_boolean( lsmash_file_t *file,
     if( !data->value )
     {
         isom_ilst_t *ilst = file->moov->udta->meta->ilst;
-        isom_remove_box_by_itself( ilst->item_list.tail->data );
+        isom_remove_box_by_itself( ilst->metaitem_list.tail->data );
         return -1;
     }
     return 0;
@@ -229,7 +229,7 @@ static int isom_set_itunes_metadata_binary( lsmash_file_t *file,
     if( !data->value )
     {
         isom_ilst_t *ilst = file->moov->udta->meta->ilst;
-        isom_remove_box_by_itself( ilst->item_list.tail->data );
+        isom_remove_box_by_itself( ilst->metaitem_list.tail->data );
         return -1;
     }
     return 0;
@@ -397,7 +397,7 @@ int lsmash_get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, l
      || !root->file->moov->udta->meta->ilst )
         return -1;
     isom_ilst_t *ilst = root->file->moov->udta->meta->ilst;
-    isom_metaitem_t *metaitem = (isom_metaitem_t *)lsmash_get_entry_data( &ilst->item_list, metadata_number );
+    isom_metaitem_t *metaitem = (isom_metaitem_t *)lsmash_get_entry_data( &ilst->metaitem_list, metadata_number );
     if( !metaitem || !metaitem->data || !metaitem->data->value || metaitem->data->value_length == 0 )
         return -1;
     /* Get 'item'. */
@@ -482,7 +482,7 @@ uint32_t lsmash_count_itunes_metadata( lsmash_root_t *root )
      || !root->file->moov->udta->meta
      || !root->file->moov->udta->meta->ilst )
         return 0;
-    return root->file->moov->udta->meta->ilst->item_list.entry_count;
+    return root->file->moov->udta->meta->ilst->metaitem_list.entry_count;
 }
 
 void lsmash_cleanup_itunes_metadata( lsmash_itunes_metadata_t *metadata )

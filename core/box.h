@@ -1286,8 +1286,8 @@ typedef struct
 typedef struct
 {
     ISOM_BASEBOX_COMMON;
-    lsmash_entry_list_t item_list;  /* Metadata Item Box List
-                                     * There is no entry_count field. */
+    lsmash_entry_list_t metaitem_list;  /* Metadata Item Box List
+                                         * There is no entry_count field. */
 } isom_ilst_t;
 
 /* Meta Box */

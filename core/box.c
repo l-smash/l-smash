@@ -1247,7 +1247,7 @@ static void isom_remove_metaitem( isom_metaitem_t *metaitem )
 {
     if( !metaitem )
         return;
-    isom_remove_box_in_predefined_list( metaitem, offsetof( isom_ilst_t, item_list ) );
+    isom_remove_box_in_predefined_list( metaitem, offsetof( isom_ilst_t, metaitem_list ) );
 }
 
 static void isom_remove_ilst( isom_ilst_t *ilst )
@@ -2188,12 +2188,7 @@ isom_metaitem_t *isom_add_metaitem( isom_ilst_t *ilst, lsmash_itunes_metadata_it
     if( !ilst )
         return NULL;
     lsmash_box_type_t type = lsmash_form_iso_box_type( item );
-    CREATE_BOX( metaitem, ilst, type, LSMASH_BOX_PRECEDENCE_ISOM_METAITEM );
-    if( lsmash_add_entry( &ilst->item_list, metaitem ) < 0 )
-    {
-        lsmash_remove_entry_tail( &ilst->extensions, isom_remove_metaitem );
-        return NULL;
-    }
+    ADD_BOX_IN_LIST( metaitem, ilst, type, LSMASH_BOX_PRECEDENCE_ISOM_METAITEM );
     return metaitem;
 }
 
