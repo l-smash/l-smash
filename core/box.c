@@ -1535,17 +1535,29 @@ uint64_t isom_update_box_size( void *opaque_box )
         return NULL;                                                               \
     }
 
-#define ADD_BOX_TEMPLATE( box_name, parent_name, box_type, precedence, BOX_CREATOR ) \
-    if( !parent_name )                                                               \
-        return NULL;                                                                 \
-    BOX_CREATOR( box_name, parent_name, box_type, precedence );                      \
-    if( !parent_name->box_name )                                                     \
-        parent_name->box_name = box_name
+#define ADD_BOX_TEMPLATE( box_name, parent, box_type, precedence, BOX_CREATOR ) \
+    if( !(parent) )                                                             \
+        return NULL;                                                            \
+    BOX_CREATOR( box_name, parent, box_type, precedence );                      \
+    if( !(parent)->box_name )                                                   \
+        (parent)->box_name = box_name
+
+#define ADD_BOX_IN_LIST_TEMPLATE( box_name, parent, box_type, precedence, BOX_CREATOR ) \
+    BOX_CREATOR( box_name, parent, box_type, precedence );                              \
+    if( lsmash_add_entry( &(parent)->box_name##_list, box_name ) < 0 )                  \
+    {                                                                                   \
+        lsmash_remove_entry_tail( &(parent)->extensions, isom_remove_##box_name );      \
+        return NULL;                                                                    \
+    }
 
 #define ADD_BOX( box_name, parent, box_type, precedence ) \
         ADD_BOX_TEMPLATE( box_name, parent, box_type, precedence, CREATE_BOX )
+#define ADD_BOX_IN_LIST( box_name, parent, box_type, precedence ) \
+        ADD_BOX_IN_LIST_TEMPLATE( box_name, parent, box_type, precedence, CREATE_BOX )
 #define ADD_LIST_BOX( box_name, parent, box_type, precedence ) \
         ADD_BOX_TEMPLATE( box_name, parent, box_type, precedence, CREATE_LIST_BOX )
+#define ADD_LIST_BOX_IN_LIST( box_name, parent, box_type, precedence ) \
+        ADD_BOX_IN_LIST_TEMPLATE( box_name, parent, box_type, precedence, CREATE_LIST_BOX )
 
 lsmash_file_t *isom_add_file( lsmash_root_t *root )
 {
@@ -2131,23 +2143,13 @@ isom_sgpd_t *isom_add_sgpd( void *parent_box )
     if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) )
     {
         isom_stbl_t *stbl = (isom_stbl_t *)parent;
-        CREATE_LIST_BOX( sgpd, stbl, ISOM_BOX_TYPE_SGPD, LSMASH_BOX_PRECEDENCE_ISOM_SGPD );
-        if( lsmash_add_entry( &stbl->sgpd_list, sgpd ) < 0 )
-        {
-            lsmash_remove_entry_tail( &stbl->extensions, isom_remove_sgpd );
-            return NULL;
-        }
+        ADD_LIST_BOX_IN_LIST( sgpd, stbl, ISOM_BOX_TYPE_SGPD, LSMASH_BOX_PRECEDENCE_ISOM_SGPD );
         return sgpd;
     }
     else if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAF ) )
     {
         isom_traf_t *traf = (isom_traf_t *)parent;
-        CREATE_LIST_BOX( sgpd, traf, ISOM_BOX_TYPE_SGPD, LSMASH_BOX_PRECEDENCE_ISOM_SGPD );
-        if( lsmash_add_entry( &traf->sgpd_list, sgpd ) < 0 )
-        {
-            lsmash_remove_entry_tail( &traf->extensions, isom_remove_sgpd );
-            return NULL;
-        }
+        ADD_LIST_BOX_IN_LIST( sgpd, traf, ISOM_BOX_TYPE_SGPD, LSMASH_BOX_PRECEDENCE_ISOM_SGPD );
         return sgpd;
     }
     assert( 0 );
@@ -2162,23 +2164,13 @@ isom_sbgp_t *isom_add_sbgp( void *parent_box )
     if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) )
     {
         isom_stbl_t *stbl = (isom_stbl_t *)parent;
-        CREATE_LIST_BOX( sbgp, stbl, ISOM_BOX_TYPE_SBGP, LSMASH_BOX_PRECEDENCE_ISOM_SBGP );
-        if( lsmash_add_entry( &stbl->sbgp_list, sbgp ) < 0 )
-        {
-            lsmash_remove_entry_tail( &stbl->extensions, isom_remove_sbgp );
-            return NULL;
-        }
+        ADD_LIST_BOX_IN_LIST( sbgp, stbl, ISOM_BOX_TYPE_SBGP, LSMASH_BOX_PRECEDENCE_ISOM_SBGP );
         return sbgp;
     }
     else if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAF ) )
     {
         isom_traf_t *traf = (isom_traf_t *)parent;
-        CREATE_LIST_BOX( sbgp, traf, ISOM_BOX_TYPE_SBGP, LSMASH_BOX_PRECEDENCE_ISOM_SBGP );
-        if( lsmash_add_entry( &traf->sbgp_list, sbgp ) < 0 )
-        {
-            lsmash_remove_entry_tail( &traf->extensions, isom_remove_sbgp );
-            return NULL;
-        }
+        ADD_LIST_BOX_IN_LIST( sbgp, traf, ISOM_BOX_TYPE_SBGP, LSMASH_BOX_PRECEDENCE_ISOM_SBGP );
         return sbgp;
     }
     assert( 0 );
@@ -2274,12 +2266,7 @@ isom_cprt_t *isom_add_cprt( isom_udta_t *udta )
 {
     if( !udta )
         return NULL;
-    CREATE_BOX( cprt, udta, ISOM_BOX_TYPE_CPRT, LSMASH_BOX_PRECEDENCE_ISOM_CPRT );
-    if( lsmash_add_entry( &udta->cprt_list, cprt ) < 0 )
-    {
-        lsmash_remove_entry_tail( &udta->extensions, isom_remove_cprt );
-        return NULL;
-    }
+    ADD_BOX_IN_LIST( cprt, udta, ISOM_BOX_TYPE_CPRT, LSMASH_BOX_PRECEDENCE_ISOM_CPRT );
     return cprt;
 }
 
@@ -2344,12 +2331,7 @@ isom_trex_t *isom_add_trex( isom_mvex_t *mvex )
 {
     if( !mvex )
         return NULL;
-    CREATE_BOX( trex, mvex, ISOM_BOX_TYPE_TREX, LSMASH_BOX_PRECEDENCE_ISOM_TREX );
-    if( lsmash_add_entry( &mvex->trex_list, trex ) < 0 )
-    {
-        lsmash_remove_entry_tail( &mvex->extensions, isom_remove_trex );
-        return NULL;
-    }
+    ADD_BOX_IN_LIST( trex, mvex, ISOM_BOX_TYPE_TREX, LSMASH_BOX_PRECEDENCE_ISOM_TREX );
     return trex;
 }
 
@@ -2357,12 +2339,7 @@ isom_moof_t *isom_add_moof( lsmash_file_t *file )
 {
     if( !file )
         return NULL;
-    CREATE_BOX( moof, file, ISOM_BOX_TYPE_MOOF, LSMASH_BOX_PRECEDENCE_ISOM_MOOF );
-    if( lsmash_add_entry( &file->moof_list, moof ) < 0 )
-    {
-        lsmash_remove_entry_tail( &file->extensions, isom_remove_moof );
-        return NULL;
-    }
+    ADD_BOX_IN_LIST( moof, file, ISOM_BOX_TYPE_MOOF, LSMASH_BOX_PRECEDENCE_ISOM_MOOF );
     return moof;
 }
 
@@ -2376,12 +2353,7 @@ isom_traf_t *isom_add_traf( isom_moof_t *moof )
 {
     if( !moof )
         return NULL;
-    CREATE_BOX( traf, moof, ISOM_BOX_TYPE_TRAF, LSMASH_BOX_PRECEDENCE_ISOM_TRAF );
-    if( lsmash_add_entry( &moof->traf_list, traf ) < 0 )
-    {
-        lsmash_remove_entry_tail( &moof->extensions, isom_remove_traf );
-        return NULL;
-    }
+    ADD_BOX_IN_LIST( traf, moof, ISOM_BOX_TYPE_TRAF, LSMASH_BOX_PRECEDENCE_ISOM_TRAF );
     return traf;
 }
 
@@ -2401,12 +2373,7 @@ isom_trun_t *isom_add_trun( isom_traf_t *traf )
 {
     if( !traf )
         return NULL;
-    CREATE_BOX( trun, traf, ISOM_BOX_TYPE_TRUN, LSMASH_BOX_PRECEDENCE_ISOM_TRUN );
-    if( lsmash_add_entry( &traf->trun_list, trun ) < 0 )
-    {
-        lsmash_remove_entry_tail( &traf->extensions, isom_remove_trun );
-        return NULL;
-    }
+    ADD_BOX_IN_LIST( trun, traf, ISOM_BOX_TYPE_TRUN, LSMASH_BOX_PRECEDENCE_ISOM_TRUN );
     return trun;
 }
 
@@ -2420,12 +2387,7 @@ isom_tfra_t *isom_add_tfra( isom_mfra_t *mfra )
 {
     if( !mfra )
         return NULL;
-    CREATE_BOX( tfra, mfra, ISOM_BOX_TYPE_TFRA, LSMASH_BOX_PRECEDENCE_ISOM_TFRA );
-    if( lsmash_add_entry( &mfra->tfra_list, tfra ) < 0 )
-    {
-        lsmash_remove_entry_tail( &mfra->extensions, isom_remove_tfra );
-        return NULL;
-    }
+    ADD_BOX_IN_LIST( tfra, mfra, ISOM_BOX_TYPE_TFRA, LSMASH_BOX_PRECEDENCE_ISOM_TFRA );
     return tfra;
 }
 
@@ -2462,31 +2424,24 @@ isom_free_t *isom_add_free( void *parent_box )
 
 isom_styp_t *isom_add_styp( lsmash_file_t *file )
 {
-    CREATE_BOX( styp, file, ISOM_BOX_TYPE_STYP, LSMASH_BOX_PRECEDENCE_ISOM_STYP );
-    if( lsmash_add_entry( &file->styp_list, styp ) < 0 )
-    {
-        lsmash_remove_entry_tail( &file->extensions, isom_remove_styp );
-        return NULL;
-    }
+    ADD_BOX_IN_LIST( styp, file, ISOM_BOX_TYPE_STYP, LSMASH_BOX_PRECEDENCE_ISOM_STYP );
     return styp;
 }
 
 isom_sidx_t *isom_add_sidx( lsmash_file_t *file )
 {
-    CREATE_LIST_BOX( sidx, file, ISOM_BOX_TYPE_SIDX, LSMASH_BOX_PRECEDENCE_ISOM_SIDX );
-    if( lsmash_add_entry( &file->sidx_list, sidx ) < 0 )
-    {
-        lsmash_remove_entry_tail( &file->extensions, isom_remove_sidx );
-        return NULL;
-    }
+    ADD_LIST_BOX_IN_LIST( sidx, file, ISOM_BOX_TYPE_SIDX, LSMASH_BOX_PRECEDENCE_ISOM_SIDX );
     return sidx;
 }
 
 #undef CREATE_BOX
 #undef CREATE_LIST_BOX
 #undef ADD_BOX_TEMPLATE
+#undef ADD_BOX_IN_LIST_TEMPLATE
 #undef ADD_BOX
+#undef ADD_BOX_IN_LIST
 #undef ADD_LIST_BOX
+#undef ADD_LIST_BOX_IN_LIST
 
 static int fake_file_read
 (
