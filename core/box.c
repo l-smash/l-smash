@@ -1511,7 +1511,8 @@ uint64_t isom_update_box_size( void *opaque_box )
 
 /* box adding functions */
 #define CREATE_BOX( box_name, parent, box_type, precedence )                                \
-    assert( parent );                                                                       \
+    if( !(parent) )                                                                         \
+        return NULL;                                                                        \
     isom_##box_name##_t *box_name = lsmash_malloc_zero( sizeof(isom_##box_name##_t) );      \
     if( !box_name )                                                                         \
         return NULL;                                                                        \
@@ -1521,7 +1522,6 @@ uint64_t isom_update_box_size( void *opaque_box )
         lsmash_free( box_name );                                                            \
         return NULL;                                                                        \
     }
-
 #define CREATE_LIST_BOX( box_name, parent, box_type, precedence )                  \
     CREATE_BOX( box_name, parent, box_type, precedence );                          \
     box_name->list = lsmash_create_entry_list();                                   \
@@ -1532,12 +1532,9 @@ uint64_t isom_update_box_size( void *opaque_box )
     }
 
 #define ADD_BOX_TEMPLATE( box_name, parent, box_type, precedence, BOX_CREATOR ) \
-    if( !(parent) )                                                             \
-        return NULL;                                                            \
     BOX_CREATOR( box_name, parent, box_type, precedence );                      \
     if( !(parent)->box_name )                                                   \
         (parent)->box_name = box_name
-
 #define ADD_BOX_IN_LIST_TEMPLATE( box_name, parent, box_type, precedence, BOX_CREATOR ) \
     BOX_CREATOR( box_name, parent, box_type, precedence );                              \
     if( lsmash_add_entry( &(parent)->box_name##_list, box_name ) < 0 )                  \
@@ -1554,6 +1551,19 @@ uint64_t isom_update_box_size( void *opaque_box )
         ADD_BOX_TEMPLATE( box_name, parent, box_type, precedence, CREATE_LIST_BOX )
 #define ADD_LIST_BOX_IN_LIST( box_name, parent, box_type, precedence ) \
         ADD_BOX_IN_LIST_TEMPLATE( box_name, parent, box_type, precedence, CREATE_LIST_BOX )
+
+#define DEFINE_SIMPLE_BOX_ADDER_TEMPLATE( box_name, parent_name, box_type, precedence, ADDER ) \
+    isom_##box_name##_t *isom_add_##box_name( isom_##parent_name##_t *parent_name )            \
+    {                                                                                          \
+        ADDER( box_name, parent_name, box_type, precedence );                                  \
+        return box_name;                                                                       \
+    }
+#define DEFINE_SIMPLE_BOX_ADDER( func_name, box_name, parent_name, box_type, precedence ) \
+        DEFINE_SIMPLE_BOX_ADDER_TEMPLATE( box_name, parent_name, box_type, precedence, ADD_BOX )
+#define DEFINE_SIMPLE_BOX_IN_LIST_ADDER( func_name, box_name, parent_name, box_type, precedence ) \
+        DEFINE_SIMPLE_BOX_ADDER_TEMPLATE( box_name, parent_name, box_type, precedence, ADD_BOX_IN_LIST )
+#define DEFINE_SIMPLE_LIST_BOX_ADDER( func_name, box_name, parent_name, box_type, precedence ) \
+        DEFINE_SIMPLE_BOX_ADDER_TEMPLATE( box_name, parent_name, box_type, precedence, ADD_LIST_BOX )
 
 lsmash_file_t *isom_add_file( lsmash_root_t *root )
 {
@@ -1609,29 +1619,10 @@ isom_tref_type_t *isom_add_track_reference_type( isom_tref_t *tref, isom_track_r
     return ref;
 }
 
-isom_frma_t *isom_add_frma( isom_wave_t *wave )
-{
-    ADD_BOX( frma, wave, QT_BOX_TYPE_FRMA, LSMASH_BOX_PRECEDENCE_QTFF_FRMA );
-    return frma;
-}
-
-isom_enda_t *isom_add_enda( isom_wave_t *wave )
-{
-    ADD_BOX( enda, wave, QT_BOX_TYPE_ENDA, LSMASH_BOX_PRECEDENCE_QTFF_ENDA );
-    return enda;
-}
-
-isom_mp4a_t *isom_add_mp4a( isom_wave_t *wave )
-{
-    ADD_BOX( mp4a, wave, QT_BOX_TYPE_MP4A, LSMASH_BOX_PRECEDENCE_QTFF_MP4A );
-    return mp4a;
-}
-
-isom_terminator_t *isom_add_terminator( isom_wave_t *wave )
-{
-    ADD_BOX( terminator, wave, QT_BOX_TYPE_TERMINATOR, LSMASH_BOX_PRECEDENCE_QTFF_TERMINATOR );
-    return terminator;
-}
+DEFINE_SIMPLE_BOX_ADDER( isom_add_frma, frma, wave, QT_BOX_TYPE_FRMA, LSMASH_BOX_PRECEDENCE_QTFF_FRMA )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_enda, enda, wave, QT_BOX_TYPE_ENDA, LSMASH_BOX_PRECEDENCE_QTFF_ENDA )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_mp4a, mp4a, wave, QT_BOX_TYPE_MP4A, LSMASH_BOX_PRECEDENCE_QTFF_MP4A )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_terminator, terminator, wave, QT_BOX_TYPE_TERMINATOR, LSMASH_BOX_PRECEDENCE_QTFF_TERMINATOR )
 
 isom_ftab_t *isom_add_ftab( isom_tx3g_entry_t *tx3g )
 {
@@ -1665,17 +1656,8 @@ isom_moov_t *isom_add_moov( lsmash_file_t *file )
     return moov;
 }
 
-isom_mvhd_t *isom_add_mvhd( isom_moov_t *moov )
-{
-    ADD_BOX( mvhd, moov, ISOM_BOX_TYPE_MVHD, LSMASH_BOX_PRECEDENCE_ISOM_MVHD );
-    return mvhd;
-}
-
-isom_iods_t *isom_add_iods( isom_moov_t *moov )
-{
-    ADD_BOX( iods, moov, ISOM_BOX_TYPE_IODS, LSMASH_BOX_PRECEDENCE_ISOM_IODS );
-    return iods;
-}
+DEFINE_SIMPLE_BOX_ADDER( isom_add_mvhd, mvhd, moov, ISOM_BOX_TYPE_MVHD, LSMASH_BOX_PRECEDENCE_ISOM_MVHD )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_iods, iods, moov, ISOM_BOX_TYPE_IODS, LSMASH_BOX_PRECEDENCE_ISOM_IODS )
 
 isom_ctab_t *isom_add_ctab( void *parent_box )
 {
@@ -1721,66 +1703,16 @@ fail:
     return NULL;
 }
 
-isom_tkhd_t *isom_add_tkhd( isom_trak_t *trak )
-{
-    ADD_BOX( tkhd, trak, ISOM_BOX_TYPE_TKHD, LSMASH_BOX_PRECEDENCE_ISOM_TKHD );
-    return tkhd;
-}
-
-isom_tapt_t *isom_add_tapt( isom_trak_t *trak )
-{
-    ADD_BOX( tapt, trak, QT_BOX_TYPE_TAPT, LSMASH_BOX_PRECEDENCE_QTFF_TAPT );
-    return tapt;
-}
-
-isom_clef_t *isom_add_clef( isom_tapt_t *tapt )
-{
-    ADD_BOX( clef, tapt, QT_BOX_TYPE_CLEF, LSMASH_BOX_PRECEDENCE_QTFF_CLEF );
-    return clef;
-}
-
-isom_prof_t *isom_add_prof( isom_tapt_t *tapt )
-{
-    ADD_BOX( prof, tapt, QT_BOX_TYPE_PROF, LSMASH_BOX_PRECEDENCE_QTFF_PROF );
-    return prof;
-}
-
-isom_enof_t *isom_add_enof( isom_tapt_t *tapt )
-{
-    ADD_BOX( enof, tapt, QT_BOX_TYPE_ENOF, LSMASH_BOX_PRECEDENCE_QTFF_ENOF );
-    return enof;
-}
-
-isom_edts_t *isom_add_edts( isom_trak_t *trak )
-{
-    ADD_BOX( edts, trak, ISOM_BOX_TYPE_EDTS, LSMASH_BOX_PRECEDENCE_ISOM_EDTS );
-    return edts;
-}
-
-isom_elst_t *isom_add_elst( isom_edts_t *edts )
-{
-    ADD_LIST_BOX( elst, edts, ISOM_BOX_TYPE_ELST, LSMASH_BOX_PRECEDENCE_ISOM_ELST );
-    return elst;
-}
-
-isom_tref_t *isom_add_tref( isom_trak_t *trak )
-{
-    ADD_BOX( tref, trak, ISOM_BOX_TYPE_TREF, LSMASH_BOX_PRECEDENCE_ISOM_TREF );
-    return tref;
-}
-
-isom_mdia_t *isom_add_mdia( isom_trak_t *trak )
-{
-    ADD_BOX( mdia, trak, ISOM_BOX_TYPE_MDIA, LSMASH_BOX_PRECEDENCE_ISOM_MDIA );
-    return mdia;
-}
-
-
-isom_mdhd_t *isom_add_mdhd( isom_mdia_t *mdia )
-{
-    ADD_BOX( mdhd, mdia, ISOM_BOX_TYPE_MDHD, LSMASH_BOX_PRECEDENCE_ISOM_MDHD );
-    return mdhd;
-}
+DEFINE_SIMPLE_BOX_ADDER( isom_add_tkhd, tkhd, trak, ISOM_BOX_TYPE_TKHD, LSMASH_BOX_PRECEDENCE_ISOM_TKHD )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_tapt, tapt, trak, QT_BOX_TYPE_TAPT, LSMASH_BOX_PRECEDENCE_QTFF_TAPT )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_clef, clef, tapt, QT_BOX_TYPE_CLEF, LSMASH_BOX_PRECEDENCE_QTFF_CLEF )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_prof, prof, tapt, QT_BOX_TYPE_PROF, LSMASH_BOX_PRECEDENCE_QTFF_PROF )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_enof, enof, tapt, QT_BOX_TYPE_ENOF, LSMASH_BOX_PRECEDENCE_QTFF_ENOF )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_edts, edts, trak, ISOM_BOX_TYPE_EDTS, LSMASH_BOX_PRECEDENCE_ISOM_EDTS )
+DEFINE_SIMPLE_LIST_BOX_ADDER( isom_add_elst, elst, edts, ISOM_BOX_TYPE_ELST, LSMASH_BOX_PRECEDENCE_ISOM_ELST )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_tref, tref, trak, ISOM_BOX_TYPE_TREF, LSMASH_BOX_PRECEDENCE_ISOM_TREF )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_mdia, mdia, trak, ISOM_BOX_TYPE_MDIA, LSMASH_BOX_PRECEDENCE_ISOM_MDIA )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_mdhd, mdhd, mdia, ISOM_BOX_TYPE_MDHD, LSMASH_BOX_PRECEDENCE_ISOM_MDHD )
 
 isom_hdlr_t *isom_add_hdlr( void *parent_box )
 {
@@ -1812,53 +1744,14 @@ isom_hdlr_t *isom_add_hdlr( void *parent_box )
     return hdlr;
 }
 
-isom_minf_t *isom_add_minf( isom_mdia_t *mdia )
-{
-    ADD_BOX( minf, mdia, ISOM_BOX_TYPE_MINF, LSMASH_BOX_PRECEDENCE_ISOM_MINF );
-    return minf;
-}
-
-isom_vmhd_t *isom_add_vmhd( isom_minf_t *minf )
-{
-    ADD_BOX( vmhd, minf, ISOM_BOX_TYPE_VMHD, LSMASH_BOX_PRECEDENCE_ISOM_VMHD );
-    return vmhd;
-}
-
-isom_smhd_t *isom_add_smhd( isom_minf_t *minf )
-{
-    ADD_BOX( smhd, minf, ISOM_BOX_TYPE_SMHD, LSMASH_BOX_PRECEDENCE_ISOM_SMHD );
-    return smhd;
-}
-
-isom_hmhd_t *isom_add_hmhd( isom_minf_t *minf )
-{
-    ADD_BOX( hmhd, minf, ISOM_BOX_TYPE_HMHD, LSMASH_BOX_PRECEDENCE_ISOM_HMHD );
-    return hmhd;
-}
-
-isom_nmhd_t *isom_add_nmhd( isom_minf_t *minf )
-{
-    ADD_BOX( nmhd, minf, ISOM_BOX_TYPE_NMHD, LSMASH_BOX_PRECEDENCE_ISOM_NMHD );
-    return nmhd;
-}
-
-isom_gmhd_t *isom_add_gmhd( isom_minf_t *minf )
-{
-    ADD_BOX( gmhd, minf, QT_BOX_TYPE_GMHD, LSMASH_BOX_PRECEDENCE_QTFF_GMHD );
-    return gmhd;
-}
-
-isom_gmin_t *isom_add_gmin( isom_gmhd_t *gmhd )
-{
-    ADD_BOX( gmin, gmhd, QT_BOX_TYPE_GMIN, LSMASH_BOX_PRECEDENCE_QTFF_GMIN );
-    return gmin;
-}
-
-isom_text_t *isom_add_text( isom_gmhd_t *gmhd )
-{
-    ADD_BOX( text, gmhd, QT_BOX_TYPE_TEXT, LSMASH_BOX_PRECEDENCE_QTFF_TEXT );
-    return text;
-}
+DEFINE_SIMPLE_BOX_ADDER( isom_add_minf, minf, mdia, ISOM_BOX_TYPE_MINF, LSMASH_BOX_PRECEDENCE_ISOM_MINF )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_vmhd, vmhd, minf, ISOM_BOX_TYPE_VMHD, LSMASH_BOX_PRECEDENCE_ISOM_VMHD )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_smhd, smhd, minf, ISOM_BOX_TYPE_SMHD, LSMASH_BOX_PRECEDENCE_ISOM_SMHD )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_hmhd, hmhd, minf, ISOM_BOX_TYPE_HMHD, LSMASH_BOX_PRECEDENCE_ISOM_HMHD )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_nmhd, nmhd, minf, ISOM_BOX_TYPE_NMHD, LSMASH_BOX_PRECEDENCE_ISOM_NMHD )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_gmhd, gmhd, minf, QT_BOX_TYPE_GMHD, LSMASH_BOX_PRECEDENCE_QTFF_GMHD )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_gmin, gmin, gmhd, QT_BOX_TYPE_GMIN, LSMASH_BOX_PRECEDENCE_QTFF_GMIN )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_text, text, gmhd, QT_BOX_TYPE_TEXT, LSMASH_BOX_PRECEDENCE_QTFF_TEXT )
 
 isom_dinf_t *isom_add_dinf( void *parent_box )
 {
@@ -1905,23 +1798,9 @@ isom_dref_entry_t *isom_add_dref_entry( isom_dref_t *dref )
     return data;
 }
 
-isom_dref_t *isom_add_dref( isom_dinf_t *dinf )
-{
-    ADD_BOX( dref, dinf, ISOM_BOX_TYPE_DREF, LSMASH_BOX_PRECEDENCE_ISOM_DREF );
-    return dref;
-}
-
-isom_stbl_t *isom_add_stbl( isom_minf_t *minf )
-{
-    ADD_BOX( stbl, minf, ISOM_BOX_TYPE_STBL, LSMASH_BOX_PRECEDENCE_ISOM_STBL );
-    return stbl;
-}
-
-isom_stsd_t *isom_add_stsd( isom_stbl_t *stbl )
-{
-    ADD_BOX( stsd, stbl, ISOM_BOX_TYPE_STSD, LSMASH_BOX_PRECEDENCE_ISOM_STSD );
-    return stsd;
-}
+DEFINE_SIMPLE_BOX_ADDER( isom_add_dref, dref, dinf, ISOM_BOX_TYPE_DREF, LSMASH_BOX_PRECEDENCE_ISOM_DREF )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_stbl, stbl, minf, ISOM_BOX_TYPE_STBL, LSMASH_BOX_PRECEDENCE_ISOM_STBL )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_stsd, stsd, stbl, ISOM_BOX_TYPE_STSD, LSMASH_BOX_PRECEDENCE_ISOM_STSD )
 
 static int isom_add_sample_description_entry( isom_stsd_t *stsd, void *description, void *destructor )
 {
@@ -2068,48 +1947,13 @@ isom_srat_t *isom_add_srat( isom_audio_entry_t *audio )
     return srat;
 }
 
-isom_stts_t *isom_add_stts( isom_stbl_t *stbl )
-{
-    ADD_LIST_BOX( stts, stbl, ISOM_BOX_TYPE_STTS, LSMASH_BOX_PRECEDENCE_ISOM_STTS );
-    return stts;
-}
-
-isom_ctts_t *isom_add_ctts( isom_stbl_t *stbl )
-{
-    ADD_LIST_BOX( ctts, stbl, ISOM_BOX_TYPE_CTTS, LSMASH_BOX_PRECEDENCE_ISOM_CTTS );
-    return ctts;
-}
-
-isom_cslg_t *isom_add_cslg( isom_stbl_t *stbl )
-{
-    ADD_BOX( cslg, stbl, ISOM_BOX_TYPE_CSLG, LSMASH_BOX_PRECEDENCE_ISOM_CSLG );
-    return cslg;
-}
-
-isom_stsc_t *isom_add_stsc( isom_stbl_t *stbl )
-{
-    ADD_LIST_BOX( stsc, stbl, ISOM_BOX_TYPE_STSC, LSMASH_BOX_PRECEDENCE_ISOM_STSC );
-    return stsc;
-}
-
-isom_stsz_t *isom_add_stsz( isom_stbl_t *stbl )
-{
-    /* We don't create a list here. */
-    ADD_BOX( stsz, stbl, ISOM_BOX_TYPE_STSZ, LSMASH_BOX_PRECEDENCE_ISOM_STSZ );
-    return stsz;
-}
-
-isom_stss_t *isom_add_stss( isom_stbl_t *stbl )
-{
-    ADD_LIST_BOX( stss, stbl, ISOM_BOX_TYPE_STSS, LSMASH_BOX_PRECEDENCE_ISOM_STSS );
-    return stss;
-}
-
-isom_stps_t *isom_add_stps( isom_stbl_t *stbl )
-{
-    ADD_LIST_BOX( stps, stbl, QT_BOX_TYPE_STPS, LSMASH_BOX_PRECEDENCE_QTFF_STPS );
-    return stps;
-}
+DEFINE_SIMPLE_LIST_BOX_ADDER( isom_add_stts, stts, stbl, ISOM_BOX_TYPE_STTS, LSMASH_BOX_PRECEDENCE_ISOM_STTS )
+DEFINE_SIMPLE_LIST_BOX_ADDER( isom_add_ctts, ctts, stbl, ISOM_BOX_TYPE_CTTS, LSMASH_BOX_PRECEDENCE_ISOM_CTTS )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_cslg, cslg, stbl, ISOM_BOX_TYPE_CSLG, LSMASH_BOX_PRECEDENCE_ISOM_CSLG )
+DEFINE_SIMPLE_LIST_BOX_ADDER( isom_add_stsc, stsc, stbl, ISOM_BOX_TYPE_STSC, LSMASH_BOX_PRECEDENCE_ISOM_STSC )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_stsz, stsz, stbl, ISOM_BOX_TYPE_STSZ, LSMASH_BOX_PRECEDENCE_ISOM_STSZ )   /* We don't create a list here. */
+DEFINE_SIMPLE_LIST_BOX_ADDER( isom_add_stss, stss, stbl, ISOM_BOX_TYPE_STSS, LSMASH_BOX_PRECEDENCE_ISOM_STSS )
+DEFINE_SIMPLE_LIST_BOX_ADDER( isom_add_stps, stps, stbl, QT_BOX_TYPE_STPS, LSMASH_BOX_PRECEDENCE_QTFF_STPS )
 
 isom_sdtp_t *isom_add_sdtp( isom_box_t *parent )
 {
@@ -2173,11 +2017,7 @@ isom_sbgp_t *isom_add_sbgp( void *parent_box )
     return NULL;
 }
 
-isom_chpl_t *isom_add_chpl( isom_udta_t *udta )
-{
-    ADD_LIST_BOX( chpl, udta, ISOM_BOX_TYPE_CHPL, LSMASH_BOX_PRECEDENCE_ISOM_CHPL );
-    return chpl;
-}
+DEFINE_SIMPLE_LIST_BOX_ADDER( isom_add_chpl, chpl, udta, ISOM_BOX_TYPE_CHPL, LSMASH_BOX_PRECEDENCE_ISOM_CHPL )
 
 isom_metaitem_t *isom_add_metaitem( isom_ilst_t *ilst, lsmash_itunes_metadata_item item )
 {
@@ -2188,35 +2028,11 @@ isom_metaitem_t *isom_add_metaitem( isom_ilst_t *ilst, lsmash_itunes_metadata_it
     return metaitem;
 }
 
-isom_mean_t *isom_add_mean( isom_metaitem_t *metaitem )
-{
-    ADD_BOX( mean, metaitem, ISOM_BOX_TYPE_MEAN, LSMASH_BOX_PRECEDENCE_ISOM_MEAN );
-    return mean;
-}
-
-isom_name_t *isom_add_name( isom_metaitem_t *metaitem )
-{
-    ADD_BOX( name, metaitem, ISOM_BOX_TYPE_NAME, LSMASH_BOX_PRECEDENCE_ISOM_NAME );
-    return name;
-}
-
-isom_data_t *isom_add_data( isom_metaitem_t *metaitem )
-{
-    ADD_BOX( data, metaitem, ISOM_BOX_TYPE_DATA, LSMASH_BOX_PRECEDENCE_ISOM_DATA );
-    return data;
-}
-
-isom_ilst_t *isom_add_ilst( isom_meta_t *meta )
-{
-    ADD_BOX( ilst, meta, ISOM_BOX_TYPE_ILST, LSMASH_BOX_PRECEDENCE_ISOM_ILST );
-    return ilst;
-}
-
-isom_keys_t *isom_add_keys( isom_meta_t *meta )
-{
-    ADD_LIST_BOX( keys, meta, QT_BOX_TYPE_KEYS, LSMASH_BOX_PRECEDENCE_QTFF_KEYS );
-    return keys;
-}
+DEFINE_SIMPLE_BOX_ADDER( isom_add_mean, mean, metaitem, ISOM_BOX_TYPE_MEAN, LSMASH_BOX_PRECEDENCE_ISOM_MEAN )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_name, name, metaitem, ISOM_BOX_TYPE_NAME, LSMASH_BOX_PRECEDENCE_ISOM_NAME )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_data, data, metaitem, ISOM_BOX_TYPE_DATA, LSMASH_BOX_PRECEDENCE_ISOM_DATA )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_ilst, ilst, meta, ISOM_BOX_TYPE_ILST, LSMASH_BOX_PRECEDENCE_ISOM_ILST )
+DEFINE_SIMPLE_LIST_BOX_ADDER( isom_add_keys, keys, meta, QT_BOX_TYPE_KEYS, LSMASH_BOX_PRECEDENCE_QTFF_KEYS )
 
 isom_meta_t *isom_add_meta( void *parent_box )
 {
@@ -2253,13 +2069,7 @@ isom_meta_t *isom_add_meta( void *parent_box )
     return meta;
 }
 
-isom_cprt_t *isom_add_cprt( isom_udta_t *udta )
-{
-    if( !udta )
-        return NULL;
-    ADD_BOX_IN_LIST( cprt, udta, ISOM_BOX_TYPE_CPRT, LSMASH_BOX_PRECEDENCE_ISOM_CPRT );
-    return cprt;
-}
+DEFINE_SIMPLE_BOX_IN_LIST_ADDER( isom_add_cprt, cprt, udta, ISOM_BOX_TYPE_CPRT, LSMASH_BOX_PRECEDENCE_ISOM_CPRT )
 
 isom_udta_t *isom_add_udta( void *parent_box )
 {
@@ -2282,49 +2092,13 @@ isom_udta_t *isom_add_udta( void *parent_box )
     return NULL;
 }
 
-isom_WLOC_t *isom_add_WLOC( isom_udta_t *udta )
-{
-    ADD_BOX( WLOC, udta, QT_BOX_TYPE_WLOC, LSMASH_BOX_PRECEDENCE_QTFF_WLOC );
-    return WLOC;
-}
-
-isom_LOOP_t *isom_add_LOOP( isom_udta_t *udta )
-{
-    ADD_BOX( LOOP, udta, QT_BOX_TYPE_LOOP, LSMASH_BOX_PRECEDENCE_QTFF_LOOP );
-    return LOOP;
-}
-
-isom_SelO_t *isom_add_SelO( isom_udta_t *udta )
-{
-    ADD_BOX( SelO, udta, QT_BOX_TYPE_SELO, LSMASH_BOX_PRECEDENCE_QTFF_SELO );
-    return SelO;
-}
-
-isom_AllF_t *isom_add_AllF( isom_udta_t *udta )
-{
-    ADD_BOX( AllF, udta, QT_BOX_TYPE_ALLF, LSMASH_BOX_PRECEDENCE_QTFF_ALLF );
-    return AllF;
-}
-
-isom_mvex_t *isom_add_mvex( isom_moov_t *moov )
-{
-    ADD_BOX( mvex, moov, ISOM_BOX_TYPE_MVEX, LSMASH_BOX_PRECEDENCE_ISOM_MVEX );
-    return mvex;
-}
-
-isom_mehd_t *isom_add_mehd( isom_mvex_t *mvex )
-{
-    ADD_BOX( mehd, mvex, ISOM_BOX_TYPE_MEHD, LSMASH_BOX_PRECEDENCE_ISOM_MEHD );
-    return mehd;
-}
-
-isom_trex_t *isom_add_trex( isom_mvex_t *mvex )
-{
-    if( !mvex )
-        return NULL;
-    ADD_BOX_IN_LIST( trex, mvex, ISOM_BOX_TYPE_TREX, LSMASH_BOX_PRECEDENCE_ISOM_TREX );
-    return trex;
-}
+DEFINE_SIMPLE_BOX_ADDER( isom_add_WLOC, WLOC, udta, QT_BOX_TYPE_WLOC, LSMASH_BOX_PRECEDENCE_QTFF_WLOC )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_LOOP, LOOP, udta, QT_BOX_TYPE_LOOP, LSMASH_BOX_PRECEDENCE_QTFF_LOOP )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_SelO, SelO, udta, QT_BOX_TYPE_SELO, LSMASH_BOX_PRECEDENCE_QTFF_SELO )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_AllF, AllF, udta, QT_BOX_TYPE_ALLF, LSMASH_BOX_PRECEDENCE_QTFF_ALLF )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_mvex, mvex, moov, ISOM_BOX_TYPE_MVEX, LSMASH_BOX_PRECEDENCE_ISOM_MVEX )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_mehd, mehd, mvex, ISOM_BOX_TYPE_MEHD, LSMASH_BOX_PRECEDENCE_ISOM_MEHD )
+DEFINE_SIMPLE_BOX_IN_LIST_ADDER( isom_add_trex, trex, mvex, ISOM_BOX_TYPE_TREX, LSMASH_BOX_PRECEDENCE_ISOM_TREX )
 
 isom_moof_t *isom_add_moof( lsmash_file_t *file )
 {
@@ -2334,39 +2108,11 @@ isom_moof_t *isom_add_moof( lsmash_file_t *file )
     return moof;
 }
 
-isom_mfhd_t *isom_add_mfhd( isom_moof_t *moof )
-{
-    ADD_BOX( mfhd, moof, ISOM_BOX_TYPE_MFHD, LSMASH_BOX_PRECEDENCE_ISOM_MFHD );
-    return mfhd;
-}
-
-isom_traf_t *isom_add_traf( isom_moof_t *moof )
-{
-    if( !moof )
-        return NULL;
-    ADD_BOX_IN_LIST( traf, moof, ISOM_BOX_TYPE_TRAF, LSMASH_BOX_PRECEDENCE_ISOM_TRAF );
-    return traf;
-}
-
-isom_tfhd_t *isom_add_tfhd( isom_traf_t *traf )
-{
-    ADD_BOX( tfhd, traf, ISOM_BOX_TYPE_TFHD, LSMASH_BOX_PRECEDENCE_ISOM_TFHD );
-    return tfhd;
-}
-
-isom_tfdt_t *isom_add_tfdt( isom_traf_t *traf )
-{
-    ADD_BOX( tfdt, traf, ISOM_BOX_TYPE_TFDT, LSMASH_BOX_PRECEDENCE_ISOM_TFDT );
-    return tfdt;
-}
-
-isom_trun_t *isom_add_trun( isom_traf_t *traf )
-{
-    if( !traf )
-        return NULL;
-    ADD_BOX_IN_LIST( trun, traf, ISOM_BOX_TYPE_TRUN, LSMASH_BOX_PRECEDENCE_ISOM_TRUN );
-    return trun;
-}
+DEFINE_SIMPLE_BOX_ADDER( isom_add_mfhd, mfhd, moof, ISOM_BOX_TYPE_MFHD, LSMASH_BOX_PRECEDENCE_ISOM_MFHD )
+DEFINE_SIMPLE_BOX_IN_LIST_ADDER( isom_add_traf, traf, moof, ISOM_BOX_TYPE_TRAF, LSMASH_BOX_PRECEDENCE_ISOM_TRAF )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_tfhd, tfhd, traf, ISOM_BOX_TYPE_TFHD, LSMASH_BOX_PRECEDENCE_ISOM_TFHD )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_tfdt, tfdt, traf, ISOM_BOX_TYPE_TFDT, LSMASH_BOX_PRECEDENCE_ISOM_TFDT )
+DEFINE_SIMPLE_BOX_IN_LIST_ADDER( isom_add_trun, trun, traf, ISOM_BOX_TYPE_TRUN, LSMASH_BOX_PRECEDENCE_ISOM_TRUN )
 
 isom_mfra_t *isom_add_mfra( lsmash_file_t *file )
 {
@@ -2374,19 +2120,8 @@ isom_mfra_t *isom_add_mfra( lsmash_file_t *file )
     return mfra;
 }
 
-isom_tfra_t *isom_add_tfra( isom_mfra_t *mfra )
-{
-    if( !mfra )
-        return NULL;
-    ADD_BOX_IN_LIST( tfra, mfra, ISOM_BOX_TYPE_TFRA, LSMASH_BOX_PRECEDENCE_ISOM_TFRA );
-    return tfra;
-}
-
-isom_mfro_t *isom_add_mfro( isom_mfra_t *mfra )
-{
-    ADD_BOX( mfro, mfra, ISOM_BOX_TYPE_MFRO, LSMASH_BOX_PRECEDENCE_ISOM_MFRO );
-    return mfro;
-}
+DEFINE_SIMPLE_BOX_IN_LIST_ADDER( isom_add_tfra, tfra, mfra, ISOM_BOX_TYPE_TFRA, LSMASH_BOX_PRECEDENCE_ISOM_TFRA )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_mfro, mfro, mfra, ISOM_BOX_TYPE_MFRO, LSMASH_BOX_PRECEDENCE_ISOM_MFRO )
 
 isom_mdat_t *isom_add_mdat( lsmash_file_t *file )
 {
@@ -2433,6 +2168,10 @@ isom_sidx_t *isom_add_sidx( lsmash_file_t *file )
 #undef ADD_BOX_IN_LIST
 #undef ADD_LIST_BOX
 #undef ADD_LIST_BOX_IN_LIST
+#undef DEFINE_SIMPLE_BOX_ADDER_TEMPLATE
+#undef DEFINE_SIMPLE_BOX_ADDER
+#undef DEFINE_SIMPLE_BOX_IN_LIST_ADDER
+#undef DEFINE_SIMPLE_LIST_BOX_ADDER
 
 static int fake_file_read
 (
