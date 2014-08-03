@@ -1479,34 +1479,30 @@ uint64_t isom_update_box_size( void *opaque_box )
 {
     assert( opaque_box );
     isom_box_t *box = (isom_box_t *)opaque_box;
-    uint64_t size;
     if( box->manager & LSMASH_WRITTEN_BOX )
-        /* No need to calculate the size of this box since the size is already decided. */
-        size = box->size;
-    else
+        /* No need to calculate the size of this box since the size is already decided and fixed. */
+        return box->size;
+    uint64_t size = 0;
+    if( box->write )
     {
-        if( box->write )
+        /* Calculate the size of this box excluding its children with a fake bytestream writer. */
         {
-            /* Calculate the size of this box excluding its children with a fake bytestream writer. */
-            size =
-                ({
-                    lsmash_bs_t fake_bs = { NULL };
-                    box->write( &fake_bs, box ) < 0 ? 0ULL : lsmash_bs_get_valid_data_size( &fake_bs );
-                });
-            /* Calculate the size of the children if no error. */
-            if( size >= ISOM_BASEBOX_COMMON_SIZE )
-            {
-                for( lsmash_entry_t *entry = box->extensions.head; entry; entry = entry->next )
-                    if( entry->data )
-                        size += isom_update_box_size( entry->data );
-                /* Check large size. */
-                if( size > UINT32_MAX )
-                    size += 8;
-            }
-            else
-                size = 0;
+            lsmash_bs_t fake_bs = { NULL };
+            if( box->write( &fake_bs, box ) == 0 )
+                size = lsmash_bs_get_valid_data_size( &fake_bs );
+        }
+        /* Calculate the size of the children if no error. */
+        if( size >= ISOM_BASEBOX_COMMON_SIZE )
+        {
+            for( lsmash_entry_t *entry = box->extensions.head; entry; entry = entry->next )
+                if( entry->data )
+                    size += isom_update_box_size( entry->data );
+            /* Check large size. */
+            if( size > UINT32_MAX )
+                size += 8;
         }
         else
+            /* TODO: add error handling. */
             size = 0;
     }
     box->size = size;
