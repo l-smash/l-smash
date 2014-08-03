@@ -3985,7 +3985,10 @@ int isom_group_roll_recovery( isom_box_t *parent, lsmash_sample_t *sample )
         is_fragment  = 1;
     }
     else
+    {
         assert( 0 );
+        return -1;
+    }
     isom_sbgp_t *sbgp = isom_get_roll_recovery_sample_to_group         ( sbgp_list );
     isom_sgpd_t *sgpd = isom_get_roll_recovery_sample_group_description( sgpd_list );
     if( !sbgp || !sgpd || sbgp->grouping_type != sgpd->grouping_type )
