@@ -895,16 +895,24 @@ static int isom_finish_fragment_movie( lsmash_file_t *file )
         uint64_t TEPT;
         uint64_t TPTF;
         uint64_t composition_duration = subsegment->largest_cts - subsegment->smallest_cts + track_fragment->last_duration;
-        int subsegment_in_presentation;
-        int first_rp_in_presentation;
-        int first_sample_in_presentation;
-        isom_elst_entry_t *edit = NULL;
+        int subsegment_in_presentation;     /* If set to 1, TEPT is available. */
+        int first_rp_in_presentation;       /* If set to 1, both TSAP and TDEC are available. */
+        int first_sample_in_presentation;   /* If set to 1, TPTF is available. */
         if( trak->edts && trak->edts->elst && trak->edts->elst->list )
         {
-            /* Explicit edits */
-            isom_elst_t *elst = trak->edts->elst;
+            /**-- Explicit edits --**/
+            const isom_elst_t       *elst = trak->edts->elst;
+            const isom_elst_entry_t *edit = NULL;
             uint32_t movie_timescale = file->moov->mvhd->timescale;
             uint64_t pts             = subsegment->segment_duration;
+            /* This initialization is redundant since these are unused when uninitialized
+             * and are initialized always in used cases, but unclever compilers may
+             * complain that these variables may be uninitialized. */
+            TSAP = 0;
+            TDEC = 0;
+            TEPT = 0;
+            TPTF = 0;
+            /* */
             subsegment_in_presentation   = 0;
             first_rp_in_presentation     = 0;
             first_sample_in_presentation = 0;
@@ -995,7 +1003,7 @@ static int isom_finish_fragment_movie( lsmash_file_t *file )
         }
         else
         {
-            /* Implicit edit */
+            /**-- Implicit edit --**/
             if( sidx->reference_count == 1 )
                 sidx->earliest_presentation_time = subsegment->smallest_cts;
             data->subsegment_duration = composition_duration;
