@@ -1711,10 +1711,11 @@ lsmash_dcr_nalu_appendable lsmash_check_h264_parameter_set_appendable
 (
     lsmash_h264_specific_parameters_t *param,
     lsmash_h264_parameter_set_type     ps_type,
-    void                              *ps_data,
+    void                              *_ps_data,
     uint32_t                           ps_length
 )
 {
+    uint8_t *ps_data = _ps_data;
     if( !param )
         return DCR_NALU_APPEND_ERROR;
     if( h264_validate_ps_type( ps_type, ps_data, ps_length ) )
@@ -1889,10 +1890,11 @@ int lsmash_append_h264_parameter_set
 (
     lsmash_h264_specific_parameters_t *param,
     lsmash_h264_parameter_set_type     ps_type,
-    void                              *ps_data,
+    void                              *_ps_data,
     uint32_t                           ps_length
 )
 {
+    uint8_t *ps_data = _ps_data;
     if( !param || !ps_data || ps_length < 2 )
         return -1;
     if( !param->parameter_sets )
@@ -1993,10 +1995,11 @@ int h264_try_to_append_parameter_set
 (
     h264_info_t                   *info,
     lsmash_h264_parameter_set_type ps_type,
-    void                          *ps_data,
+    void                          *_ps_data,
     uint32_t                       ps_length
 )
 {
+    uint8_t *ps_data = _ps_data;
     lsmash_dcr_nalu_appendable ret = lsmash_check_h264_parameter_set_appendable( &info->avcC_param, ps_type, ps_data, ps_length );
     lsmash_h264_specific_parameters_t *param;
     switch( ret )
