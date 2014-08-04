@@ -1510,6 +1510,15 @@ uint64_t isom_update_box_size( void *opaque_box )
 }
 
 /* box adding functions */
+#define ATTACH_EXACTLY_ONE_BOX_TO_PARENT( box_name, parent_type )     \
+    do                                                                \
+    {                                                                 \
+        isom_box_t **p = (isom_box_t **)(((int8_t *)box_name->parent) \
+                       + offsetof( parent_type, box_name ));          \
+        if( *p == NULL )                                              \
+            *p = (isom_box_t *)box_name;                              \
+    } while( 0 )
+
 #define CREATE_BOX( box_name, parent, box_type, precedence )                                \
     if( !(parent) )                                                                         \
         return NULL;                                                                        \
@@ -1668,11 +1677,7 @@ isom_ctab_t *isom_add_ctab( void *parent_box )
     isom_box_t *parent = (isom_box_t *)parent_box;
     CREATE_BOX( ctab, parent, QT_BOX_TYPE_CTAB, LSMASH_BOX_PRECEDENCE_QTFF_CTAB );
     if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV ) )
-    {
-        isom_moov_t *moov = (isom_moov_t *)parent;
-        if( !moov->ctab )
-            moov->ctab = ctab;
-    }
+        ATTACH_EXACTLY_ONE_BOX_TO_PARENT( ctab, isom_moov_t );
     return ctab;
 }
 
@@ -1721,24 +1726,12 @@ isom_hdlr_t *isom_add_hdlr( void *parent_box )
     isom_box_t *parent = (isom_box_t *)parent_box;
     CREATE_BOX( hdlr, parent, ISOM_BOX_TYPE_HDLR, LSMASH_BOX_PRECEDENCE_ISOM_HDLR );
     if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MDIA ) )
-    {
-        isom_mdia_t *mdia = (isom_mdia_t *)parent;
-        if( !mdia->hdlr )
-            mdia->hdlr = hdlr;
-    }
+        ATTACH_EXACTLY_ONE_BOX_TO_PARENT( hdlr, isom_mdia_t );
     else if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_META )
           || lsmash_check_box_type_identical( parent->type,   QT_BOX_TYPE_META ) )
-    {
-        isom_meta_t *meta = (isom_meta_t *)parent;
-        if( !meta->hdlr )
-            meta->hdlr = hdlr;
-    }
+        ATTACH_EXACTLY_ONE_BOX_TO_PARENT( hdlr, isom_meta_t );
     else if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MINF ) )
-    {
-        isom_minf_t *minf = (isom_minf_t *)parent;
-        if( !minf->hdlr )
-            minf->hdlr = hdlr;
-    }
+        ATTACH_EXACTLY_ONE_BOX_TO_PARENT( hdlr, isom_minf_t );
     else
         assert( 0 );
     return hdlr;
@@ -1760,18 +1753,10 @@ isom_dinf_t *isom_add_dinf( void *parent_box )
     isom_box_t *parent = (isom_box_t *)parent_box;
     CREATE_BOX( dinf, parent, ISOM_BOX_TYPE_DINF, LSMASH_BOX_PRECEDENCE_ISOM_DINF );
     if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MINF ) )
-    {
-        isom_minf_t *minf = (isom_minf_t *)parent;
-        if( !minf->dinf )
-            minf->dinf = dinf;
-    }
+        ATTACH_EXACTLY_ONE_BOX_TO_PARENT( dinf, isom_minf_t );
     else if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_META )
           || lsmash_check_box_type_identical( parent->type,   QT_BOX_TYPE_META ) )
-    {
-        isom_meta_t *meta = (isom_meta_t *)parent;
-        if( !meta->dinf )
-            meta->dinf = dinf;
-    }
+        ATTACH_EXACTLY_ONE_BOX_TO_PARENT( dinf, isom_meta_t );
     else
         assert( 0 );
     return dinf;
@@ -2041,29 +2026,13 @@ isom_meta_t *isom_add_meta( void *parent_box )
     isom_box_t *parent = (isom_box_t *)parent_box;
     CREATE_BOX( meta, parent, ISOM_BOX_TYPE_META, LSMASH_BOX_PRECEDENCE_ISOM_META );
     if( parent->file == (lsmash_file_t *)parent )
-    {
-        lsmash_file_t *file = (lsmash_file_t *)parent;
-        if( !file->meta )
-            file->meta = meta;
-    }
+        ATTACH_EXACTLY_ONE_BOX_TO_PARENT( meta, lsmash_file_t );
     else if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV ) )
-    {
-        isom_moov_t *moov = (isom_moov_t *)parent;
-        if( !moov->meta )
-            moov->meta = meta;
-    }
+        ATTACH_EXACTLY_ONE_BOX_TO_PARENT( meta, isom_moov_t );
     else if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAK ) )
-    {
-        isom_trak_t *trak = (isom_trak_t *)parent;
-        if( !trak->meta )
-            trak->meta = meta;
-    }
+        ATTACH_EXACTLY_ONE_BOX_TO_PARENT( meta, isom_trak_t );
     else if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_UDTA ) )
-    {
-        isom_udta_t *udta = (isom_udta_t *)parent;
-        if( !udta->meta )
-            udta->meta = meta;
-    }
+        ATTACH_EXACTLY_ONE_BOX_TO_PARENT( meta, isom_udta_t );
     else
         assert( 0 );
     return meta;
@@ -2160,6 +2129,7 @@ isom_sidx_t *isom_add_sidx( lsmash_file_t *file )
     return sidx;
 }
 
+#undef ATTACH_EXACTLY_ONE_BOX_TO_PARENT
 #undef CREATE_BOX
 #undef CREATE_LIST_BOX
 #undef ADD_BOX_TEMPLATE
