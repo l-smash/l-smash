@@ -434,29 +434,28 @@ lsmash_entry_t *isom_get_entry_of_box
 #define REMOVE_BOX_IN_LIST( box_name, parent_type ) \
         isom_remove_box_in_predefined_list( box_name, offsetof( parent_type, box_name##_list ) )
 
+#define REMOVE_LIST_BOX_TEMPLATE( REMOVER, box_name, parent_type, eliminator ) \
+    do                                                                         \
+    {                                                                          \
+        lsmash_remove_list( box_name->list, eliminator );                      \
+        REMOVER( box_name, parent_type );                                      \
+    } while( 0 )
+
 #define REMOVE_LIST_BOX( ... ) CALL_FUNC_DEFAULT_ARGS( REMOVE_LIST_BOX, __VA_ARGS__ )
 #define REMOVE_LIST_BOX_3( box_name, parent_type, eliminator ) \
-    do                                                         \
-    {                                                          \
-        lsmash_remove_list( box_name->list, eliminator );      \
-        REMOVE_BOX( box_name, parent_type );                   \
-    } while( 0 )
+        REMOVE_LIST_BOX_TEMPLATE( REMOVE_BOX, box_name, parent_type, eliminator )
 #define REMOVE_LIST_BOX_2( box_name, parent_type ) \
         REMOVE_LIST_BOX_3( box_name, parent_type, NULL )
 
 #define REMOVE_LIST_BOX_IN_LIST( box_name, parent_type ) \
-    do                                                   \
-    {                                                    \
-        lsmash_remove_list( box_name->list, NULL );      \
-        REMOVE_BOX_IN_LIST( box_name, parent_type );     \
-    } while( 0 )
+        REMOVE_LIST_BOX_TEMPLATE( REMOVE_BOX_IN_LIST, box_name, parent_type, NULL )
 
-#define DEFINE_SIMPLE_BOX_REMOVER_TEMPLATE( REMOVER, box_name, ... ) \
-    static void isom_remove_##box_name( isom_##box_name##_t *box_name )      \
-    {                                                                        \
-        if( !box_name )                                                      \
-            return;                                                          \
-        REMOVER( box_name, __VA_ARGS__ );                                    \
+#define DEFINE_SIMPLE_BOX_REMOVER_TEMPLATE( REMOVER, box_name, ... )    \
+    static void isom_remove_##box_name( isom_##box_name##_t *box_name ) \
+    {                                                                   \
+        if( !box_name )                                                 \
+            return;                                                     \
+        REMOVER( box_name, __VA_ARGS__ );                               \
     }
 
 #define DEFINE_SIMPLE_BOX_REMOVER( func_name, ... )   \
