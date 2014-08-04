@@ -4004,7 +4004,7 @@ static int hevc_importer_probe( importer_t *importer )
     memset( &info->slice, 0, sizeof(hevc_slice_info_t) );
     memset( &info->vps,   0, sizeof(hevc_vps_t) );
     memset( &info->sps,   0, sizeof(hevc_sps_t) );
-    memset( &info->pps,   0, sizeof(hevc_pps_t) );
+    memset( &info->pps,   0, SIZEOF_PPS_EXCLUDING_HEAP );
     for( int i = 0; i < HEVC_DCR_NALU_TYPE_NUM; i++ )
         lsmash_remove_entries( info->hvcC_param.parameter_arrays->ps_array[i].list, isom_remove_dcr_ps );
     lsmash_destroy_hevc_parameter_arrays( &info->hvcC_param_next );

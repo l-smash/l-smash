@@ -84,10 +84,8 @@ static void hevc_remove_pps
 {
     if( !pps )
         return;
-    if( pps->colWidth )
-        lsmash_free( pps->colWidth );
-    if( pps->rowHeight )
-        lsmash_free( pps->rowHeight );
+    lsmash_free( pps->colWidth );
+    lsmash_free( pps->rowHeight );
     lsmash_free( pps );
 }
 
@@ -971,14 +969,24 @@ static int hevc_allocate_tile_sizes
 )
 {
     /* Allocate columns and rows of tiles. */
-    void *temp = lsmash_realloc( pps->colWidth, 2 * num_tile_columns * sizeof(uint32_t) );
-    if( !temp )
-        return -1;
-    pps->colWidth = temp;
-    temp = lsmash_realloc( pps->rowHeight, 2 * num_tile_rows * sizeof(uint32_t) );
-    if( !temp )
-        return -1;
-    pps->rowHeight = temp;
+    size_t col_alloc_size = 2 * num_tile_columns * sizeof(uint32_t);
+    if( col_alloc_size > pps->col_alloc_size )
+    {
+        void *temp = lsmash_realloc( pps->colWidth, col_alloc_size );
+        if( !temp )
+            return -1;
+        pps->col_alloc_size = col_alloc_size;
+        pps->colWidth       = temp;
+    }
+    size_t row_alloc_size = 2 * num_tile_rows * sizeof(uint32_t);
+    if( row_alloc_size > pps->row_alloc_size )
+    {
+        void *temp = lsmash_realloc( pps->rowHeight, row_alloc_size );
+        if( !temp )
+            return -1;
+        pps->row_alloc_size = row_alloc_size;
+        pps->rowHeight      = temp;
+    }
     pps->colBd = pps->colWidth  + num_tile_columns;
     pps->rowBd = pps->rowHeight + num_tile_rows;
     return 0;
@@ -995,7 +1003,7 @@ static int hevc_parse_pps_minimally
 {
     if( nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, ebsp_size ) )
         return -1;
-    memset( pps, 0, sizeof(hevc_pps_t) );
+    memset( pps, 0, SIZEOF_PPS_EXCLUDING_HEAP );
     pps->pic_parameter_set_id                  = nalu_get_exp_golomb_ue( bits );
     pps->seq_parameter_set_id                  = nalu_get_exp_golomb_ue( bits );
     pps->dependent_slice_segments_enabled_flag = lsmash_bits_get( bits, 1 );
@@ -1039,7 +1047,7 @@ int hevc_parse_pps
         pps = hevc_get_pps( info->pps_list, min_pps.pic_parameter_set_id );
         if( !pps )
             return -1;
-        *pps = min_pps;
+        memcpy( pps, &min_pps, SIZEOF_PPS_EXCLUDING_HEAP );
     }
     hevc_sps_t temp_sps = info->sps;
     if( hevc_activate_sps( info, pps->seq_parameter_set_id ) < 0 )
