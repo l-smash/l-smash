@@ -28,6 +28,52 @@
 #define LSMASH_MAX( a, b ) ((a) > (b) ? (a) : (b))
 #define LSMASH_MIN( a, b ) ((a) < (b) ? (a) : (b))
 
+/* default argument
+ * Use only CALL_FUNC_DEFAULT_ARGS().
+ * The defined macros can't be passed an argument requiring its one or more arguments at the end of the parameter list.
+ *
+ * The following is an example.
+ *   #define TEMPLATE_A( ... ) CALL_FUNC_DEFAULT_ARGS( TEMPLATE_A, __VA_ARGS__ )
+ *   #define TEMPLATE_A_2( _1, _2 ) _1( 1, 2 )
+ *   #define TEMPLATE_A_1( _1 )     _1( 1, 2 )
+ *   #define TEMPLATE_B( ... ) CALL_FUNC_DEFAULT_ARGS( TEMPLATE_B, __VA_ARGS__ )
+ *   #define TEMPLATE_B_2( _1, _2 ) ((_1) + (_2))
+ *   #define TEMPLATE_B_1( _1 )     TEMPLATE_B_2( _1, 0 )
+ *   #define TEMPLATE_B_0()         TEMPLATE_B_2(  0, 0 )
+ *   int main( void )
+ *   {
+ *      TEMPLATE_B( 1, 2 );          // OK
+ *      TEMPLATE_A( TEMPLATE_B, 0 ); // OK
+ *      TEMPLATE_A( TEMPLATE_B );    // NG
+ *      return 0;
+ *   }
+ * */
+#define NUM_ARGS( _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, ... ) _10
+#define COUNT_NUM_ARGS( ... ) NUM_ARGS( __VA_ARGS__, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0 )
+#define HAS_COMMA( ... ) NUM_ARGS( __VA_ARGS__, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0 )  /* Zero or one argument has no comma. */
+#define COMMA_TRIGGERED_BY_PARENTHESIS( ... ) , /* Without parenthesis, just represent "COMMA_TRIGGERED_BY_PARENTHESIS".
+                                                 * Thus, HAS_COMMA( COMMA_TRIGGERED_BY_PARENTHESIS ) is equal to 0, but
+                                                 * HAS_COMMA( COMMA_TRIGGERED_BY_PARENTHESIS() ) is equal to 1. */
+#define CAT_ARGS_2( _0, _1 )             _0 ## _1
+#define CAT_ARGS_5( _0, _1, _2, _3, _4 ) _0 ## _1 ## _2 ## _3 ## _4
+#define EMPTY_CASE_0001 ,
+#define IS_EMPTY_EX0( _0, _1, _2, _3 ) HAS_COMMA( CAT_ARGS_5( EMPTY_CASE_, _0, _1, _2, _3 ) )
+#define IS_EMPTY( ... )                                                \
+        IS_EMPTY_EX0                                                   \
+        (                                                              \
+            HAS_COMMA( __VA_ARGS__ ),                                  \
+            HAS_COMMA( COMMA_TRIGGERED_BY_PARENTHESIS __VA_ARGS__ ),   \
+            HAS_COMMA( __VA_ARGS__ () ),                               \
+            HAS_COMMA( COMMA_TRIGGERED_BY_PARENTHESIS __VA_ARGS__ () ) \
+        )
+#define GET_FUNC_BY_NUM_ARGS_EXN( func_name, N )          func_name ## _ ## N
+#define GET_FUNC_BY_NUM_ARGS_EX0( func_name, N )          GET_FUNC_BY_NUM_ARGS_EXN( func_name, N )
+#define GET_FUNC_BY_NUM_ARGS_EX1( func_name, N )          GET_FUNC_BY_NUM_ARGS_EXN( func_name, 0 )
+#define GET_FUNC_BY_NUM_ARGS_EX2( func_name, _0_OR_1, N ) CAT_ARGS_2( GET_FUNC_BY_NUM_ARGS_EX, _0_OR_1 ) ( func_name, N )
+#define GET_FUNC_BY_NUM_ARGS_EX3( func_name, ... )        GET_FUNC_BY_NUM_ARGS_EX2( func_name, IS_EMPTY( __VA_ARGS__ ), COUNT_NUM_ARGS( __VA_ARGS__ ) )
+#define CALL_FUNC_DEFAULT_ARGS( func_name, ... )          GET_FUNC_BY_NUM_ARGS_EX3( func_name, __VA_ARGS__ ) ( __VA_ARGS__ )
+
+/*---- class ----*/
 typedef struct
 {
     char *name;
