@@ -782,7 +782,7 @@ typedef struct
 /* Hint Sample Entry */
 #define ISOM_HINT_SAMPLE_ENTRY \
     ISOM_SAMPLE_ENTRY; \
-    uint8_t *data;
+    uint8_t *data
 
 typedef struct
 {
@@ -792,7 +792,7 @@ typedef struct
 
 /* Metadata Sample Entry */
 #define ISOM_METADATA_SAMPLE_ENTRY \
-    ISOM_SAMPLE_ENTRY;
+    ISOM_SAMPLE_ENTRY
 
 typedef struct
 {
