@@ -37,7 +37,7 @@ void lsmash_get_mainargs( int *argc, char ***argv )
     int __wgetmainargs( int *, wchar_t ***, wchar_t ***, int, struct SI * );
     wchar_t **wargv, **envp;
     __wgetmainargs( argc, &wargv, &envp, 1, &si );
-    *argv = calloc( *argc + 1, sizeof(char*) );
+    *argv = lsmash_malloc_zero( (*argc + 1) * sizeof(char *) );
     for( int i = 0; i < *argc; ++i )
         lsmash_string_from_wchar( CP_UTF8, wargv[i], &(*argv)[i] );
 }
