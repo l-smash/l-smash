@@ -30,7 +30,7 @@
 
 /* default argument
  * Use only CALL_FUNC_DEFAULT_ARGS().
- * The defined macros can't be passed an argument requiring its one or more arguments at the end of the parameter list.
+ * The defined macros can't be passed a macro argument requiring its one or more arguments at the end of the parameter list.
  *
  * The following is an example.
  *   #define TEMPLATE_A( ... ) CALL_FUNC_DEFAULT_ARGS( TEMPLATE_A, __VA_ARGS__ )
@@ -42,9 +42,10 @@
  *   #define TEMPLATE_B_0()         TEMPLATE_B_2(  0, 0 )
  *   int main( void )
  *   {
- *      TEMPLATE_B( 1, 2 );          // OK
- *      TEMPLATE_A( TEMPLATE_B, 0 ); // OK
- *      TEMPLATE_A( TEMPLATE_B );    // NG
+ *      TEMPLATE_B( 1, 2 );            // OK
+ *      TEMPLATE_A( TEMPLATE_B_2, 0 ); // OK
+ *      TEMPLATE_A( TEMPLATE_B,   0 ); // NG
+ *      TEMPLATE_A( TEMPLATE_B );      // NG
  *      return 0;
  *   }
  * */
