@@ -1854,10 +1854,11 @@ lsmash_dcr_nalu_appendable lsmash_check_hevc_dcr_nalu_appendable
 (
     lsmash_hevc_specific_parameters_t *param,
     lsmash_hevc_dcr_nalu_type          ps_type,
-    void                              *ps_data,
+    void                              *_ps_data,
     uint32_t                           ps_length
 )
 {
+    uint8_t *ps_data = _ps_data;
     if( !param )
         return DCR_NALU_APPEND_ERROR;
     if( hevc_validate_dcr_nalu_type( ps_type, ps_data, ps_length ) )
@@ -2140,10 +2141,11 @@ int lsmash_append_hevc_dcr_nalu
 (
     lsmash_hevc_specific_parameters_t *param,
     lsmash_hevc_dcr_nalu_type          ps_type,
-    void                              *ps_data,
+    void                              *_ps_data,
     uint32_t                           ps_length
 )
 {
+    uint8_t *ps_data = _ps_data;
     if( !param || !ps_data || ps_length < 2 )
         return -1;
     if( hevc_alloc_parameter_arrays( param ) < 0 )
@@ -2375,10 +2377,11 @@ int hevc_try_to_append_dcr_nalu
 (
     hevc_info_t              *info,
     lsmash_hevc_dcr_nalu_type ps_type,
-    void                     *ps_data,
+    void                     *_ps_data,
     uint32_t                  ps_length
 )
 {
+    uint8_t *ps_data = _ps_data;
     lsmash_dcr_nalu_appendable ret = lsmash_check_hevc_dcr_nalu_appendable( &info->hvcC_param, ps_type, ps_data, ps_length );
     lsmash_hevc_specific_parameters_t *param;
     switch( ret )
