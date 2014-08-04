@@ -34,8 +34,8 @@
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  1
-#define LSMASH_VERSION_MINOR 11
-#define LSMASH_VERSION_MICRO 15
+#define LSMASH_VERSION_MINOR 12
+#define LSMASH_VERSION_MICRO  0
 
 #define LSMASH_VERSION_INT( a, b, c ) (((a) << 16) | ((b) << 8) | (c))
 
@@ -3332,25 +3332,25 @@ typedef struct
  * When audio stream has 3 or more number of channels, this extension shall be present. */
 typedef enum
 {
-    QT_CHANNEL_LABEL_UNKNOWN                = 0xffffffff,   /* unknown or unspecified other use */
-    QT_CHANNEL_LABEL_UNUSED                 = 0,            /* channel is present, but has no intended use or destination */
-    QT_CHANNEL_LABEL_USE_COORDINATES        = 100,          /* channel is described by the coordinates fields. */
+    QT_CHANNEL_LABEL_UNKNOWN                = (signed)0xffffffff,   /* unknown or unspecified other use */
+    QT_CHANNEL_LABEL_UNUSED                 = 0,                    /* channel is present, but has no intended use or destination */
+    QT_CHANNEL_LABEL_USE_COORDINATES        = 100,                  /* channel is described by the coordinates fields. */
 
     QT_CHANNEL_LABEL_LEFT                   = 1,
     QT_CHANNEL_LABEL_RIGHT                  = 2,
     QT_CHANNEL_LABEL_CENTER                 = 3,
     QT_CHANNEL_LABEL_LFE_SCREEN             = 4,
-    QT_CHANNEL_LABEL_LEFT_SURROUND          = 5,            /* WAVE: "Back Left" */
-    QT_CHANNEL_LABEL_RIGHT_SUROUND          = 6,            /* WAVE: "Back Right" */
+    QT_CHANNEL_LABEL_LEFT_SURROUND          = 5,                    /* WAVE: "Back Left" */
+    QT_CHANNEL_LABEL_RIGHT_SUROUND          = 6,                    /* WAVE: "Back Right" */
     QT_CHANNEL_LABEL_LEFT_CENTER            = 7,
     QT_CHANNEL_LABEL_RIGHT_CENTER           = 8,
-    QT_CHANNEL_LABEL_CENTER_SURROUND        = 9,            /* WAVE: "Back Center" or plain "Rear Surround" */
-    QT_CHANNEL_LABEL_LEFT_SURROUND_DIRECT   = 10,           /* WAVE: "Side Left" */
-    QT_CHANNEL_LABEL_RIGHT_SURROUND_DIRECT  = 11,           /* WAVE: "Side Right" */
+    QT_CHANNEL_LABEL_CENTER_SURROUND        = 9,                    /* WAVE: "Back Center" or plain "Rear Surround" */
+    QT_CHANNEL_LABEL_LEFT_SURROUND_DIRECT   = 10,                   /* WAVE: "Side Left" */
+    QT_CHANNEL_LABEL_RIGHT_SURROUND_DIRECT  = 11,                   /* WAVE: "Side Right" */
     QT_CHANNEL_LABEL_TOP_CENTER_SURROUND    = 12,
-    QT_CHANNEL_LABEL_VERTICAL_HEIGHT_LEFT   = 13,           /* WAVE: "Top Front Left" */
-    QT_CHANNEL_LABEL_VERTICAL_HEIGHT_CENTER = 14,           /* WAVE: "Top Front Center" */
-    QT_CHANNEL_LABEL_VERTICAL_HEIGHT_RIGHT  = 15,           /* WAVE: "Top Front Right" */
+    QT_CHANNEL_LABEL_VERTICAL_HEIGHT_LEFT   = 13,                   /* WAVE: "Top Front Left" */
+    QT_CHANNEL_LABEL_VERTICAL_HEIGHT_CENTER = 14,                   /* WAVE: "Top Front Center" */
+    QT_CHANNEL_LABEL_VERTICAL_HEIGHT_RIGHT  = 15,                   /* WAVE: "Top Front Right" */
 
     QT_CHANNEL_LABEL_TOP_BACK_LEFT          = 16,
     QT_CHANNEL_LABEL_TOP_BACK_CENTER        = 17,
@@ -3361,14 +3361,14 @@ typedef enum
     QT_CHANNEL_LABEL_LEFT_WIDE              = 35,
     QT_CHANNEL_LABEL_RIGHT_WIDE             = 36,
     QT_CHANNEL_LABEL_LFE2                   = 37,
-    QT_CHANNEL_LABEL_LEFT_TOTAL             = 38,           /* matrix encoded 4 channels */
-    QT_CHANNEL_LABEL_RIGHT_TOTAL            = 39,           /* matrix encoded 4 channels */
+    QT_CHANNEL_LABEL_LEFT_TOTAL             = 38,                   /* matrix encoded 4 channels */
+    QT_CHANNEL_LABEL_RIGHT_TOTAL            = 39,                   /* matrix encoded 4 channels */
     QT_CHANNEL_LABEL_HEARING_IMPAIRED       = 40,
     QT_CHANNEL_LABEL_NARRATION              = 41,
     QT_CHANNEL_LABEL_MONO                   = 42,
     QT_CHANNEL_LABEL_DIALOG_CENTRIC_MIX     = 43,
 
-    QT_CHANNEL_LABEL_CENTER_SURROUND_DIRECT = 44,           /* back center, non diffuse */
+    QT_CHANNEL_LABEL_CENTER_SURROUND_DIRECT = 44,                   /* back center, non diffuse */
 
     QT_CHANNEL_LABEL_HAPTIC                 = 45,
 
@@ -3645,7 +3645,7 @@ typedef enum
     QT_CHANNEL_LAYOUT_ALAC_7_1                 = QT_CHANNEL_LAYOUT_MPEG_7_1_B,      /* C Lc Rc L R Ls Rs LFE */
 
     QT_CHANNEL_LAYOUT_DISCRETE_IN_ORDER        = 147<<16,                           /* needs to be ORed with the actual number of channels */
-    QT_CHANNEL_LAYOUT_UNKNOWN                  = 0xffff0000,                        /* needs to be ORed with the actual number of channels */
+    QT_CHANNEL_LAYOUT_UNKNOWN                  = (signed)0xffff0000,                /* needs to be ORed with the actual number of channels */
 } lsmash_channel_layout_tag;
 
 typedef struct
