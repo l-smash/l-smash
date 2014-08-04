@@ -40,14 +40,29 @@ typedef struct
 
 typedef void (*lsmash_entry_data_eliminator)(void *data); /* very same as free() of standard c lib; void free(void *); */
 
+#define lsmash_remove_entry_direct( list, entry, eliminator ) \
+        lsmash_remove_entry_direct_orig( list, entry, (lsmash_entry_data_eliminator)(eliminator) )
+
+#define lsmash_remove_entry( list, entry_number, eliminator ) \
+        lsmash_remove_entry_orig( list, entry_number, (lsmash_entry_data_eliminator)(eliminator) )
+
+#define lsmash_remove_entry_tail( list, eliminator ) \
+        lsmash_remove_entry_tail_orig( list, (lsmash_entry_data_eliminator)(eliminator) )
+
+#define lsmash_remove_entries( list, eliminator ) \
+        lsmash_remove_entries_orig( list, (lsmash_entry_data_eliminator)(eliminator) )
+
+#define lsmash_remove_list( list, eliminator ) \
+        lsmash_remove_list_orig( list, (lsmash_entry_data_eliminator)(eliminator) )
+
 void lsmash_init_entry_list( lsmash_entry_list_t *list );
 lsmash_entry_list_t *lsmash_create_entry_list( void );
 int lsmash_add_entry( lsmash_entry_list_t *list, void *data );
-int lsmash_remove_entry_direct( lsmash_entry_list_t *list, lsmash_entry_t *entry, void *eliminator );
-int lsmash_remove_entry( lsmash_entry_list_t *list, uint32_t entry_number, void *eliminator );
-int lsmash_remove_entry_tail( lsmash_entry_list_t *list, void *eliminator );
-void lsmash_remove_entries( lsmash_entry_list_t *list, void *eliminator );
-void lsmash_remove_list( lsmash_entry_list_t *list, void *eliminator );
+int lsmash_remove_entry_direct_orig( lsmash_entry_list_t *list, lsmash_entry_t *entry, lsmash_entry_data_eliminator eliminator );
+int lsmash_remove_entry_orig( lsmash_entry_list_t *list, uint32_t entry_number, lsmash_entry_data_eliminator eliminator );
+int lsmash_remove_entry_tail_orig( lsmash_entry_list_t *list, lsmash_entry_data_eliminator eliminator );
+void lsmash_remove_entries_orig( lsmash_entry_list_t *list, lsmash_entry_data_eliminator eliminator );
+void lsmash_remove_list_orig( lsmash_entry_list_t *list, lsmash_entry_data_eliminator eliminator );
 
 lsmash_entry_t *lsmash_get_entry( lsmash_entry_list_t *list, uint32_t entry_number );
 void *lsmash_get_entry_data( lsmash_entry_list_t *list, uint32_t entry_number );
