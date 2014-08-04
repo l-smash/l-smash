@@ -677,8 +677,7 @@ DEFINE_SIMPLE_BOX_REMOVER( isom_remove_stsd, stsd, isom_stbl_t )
 static void isom_remove_visual_description( isom_sample_entry_t *description )
 {
     isom_visual_entry_t *visual = (isom_visual_entry_t *)description;
-    if( visual->color_table.array )
-        lsmash_free( visual->color_table.array );
+    lsmash_free( visual->color_table.array );
     isom_remove_box_in_predefined_list( visual, offsetof( isom_stsd_t, list ) );
 }
 
@@ -690,8 +689,7 @@ static void isom_remove_audio_description( isom_sample_entry_t *description )
 static void isom_remove_hint_description( isom_sample_entry_t *description )
 {
     isom_hint_entry_t *hint = (isom_hint_entry_t *)description;
-    if( hint->data )
-        lsmash_free( hint->data );
+    lsmash_free( hint->data );
     isom_remove_box_in_predefined_list( hint, offsetof( isom_stsd_t, list ) );
 }
 
@@ -708,8 +706,7 @@ static void isom_remove_tx3g_description( isom_sample_entry_t *description )
 static void isom_remove_qt_text_description( isom_sample_entry_t *description )
 {
     isom_qt_text_entry_t *text = (isom_qt_text_entry_t *)description;
-    if( text->font_name )
-        free( text->font_name );
+    lsmash_free( text->font_name );
     isom_remove_box_in_predefined_list( text, offsetof( isom_stsd_t, list ) );
 }
 
