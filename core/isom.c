@@ -176,16 +176,17 @@ int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, void *summa
             ret = isom_setup_audio_description( stsd, sample_type, (lsmash_audio_summary_t *)summary );
         return ret < 0 ? 0 : list->entry_count;
     }
+typedef void (*opaque_func_t)( void );
     static struct description_setup_table_tag
     {
         lsmash_codec_type_t type;
-        void *func;
+        opaque_func_t       func;
     } description_setup_table[160] = { { LSMASH_CODEC_TYPE_INITIALIZER, NULL } };
     if( !description_setup_table[0].func )
     {
         int i = 0;
 #define ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( type, func ) \
-    description_setup_table[i++] = (struct description_setup_table_tag){ type, func }
+    description_setup_table[i++] = (struct description_setup_table_tag){ type, (opaque_func_t)func }
         ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC1_VIDEO, isom_setup_visual_description );
         ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC2_VIDEO, isom_setup_visual_description );
         ADD_DESCRIPTION_SETUP_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC3_VIDEO, isom_setup_visual_description );
@@ -286,11 +287,11 @@ int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, void *summa
     for( int i = 0; description_setup_table[i].func; i++ )
         if( lsmash_check_codec_type_identical( sample_type, description_setup_table[i].type ) )
         {
-            if( isom_setup_visual_description == description_setup_table[i].func )
+                 if( (opaque_func_t)isom_setup_visual_description == description_setup_table[i].func )
                 ret = isom_setup_visual_description( stsd, sample_type, (lsmash_video_summary_t *)summary );
-            else if( isom_setup_audio_description == description_setup_table[i].func )
+            else if( (opaque_func_t)isom_setup_audio_description == description_setup_table[i].func )
                 ret = isom_setup_audio_description( stsd, sample_type, (lsmash_audio_summary_t *)summary );
-            else if( isom_add_tx3g_description == description_setup_table[i].func )
+            else if( (opaque_func_t)isom_add_tx3g_description == description_setup_table[i].func )
             {
                 isom_tx3g_entry_t *tx3g = isom_add_tx3g_description( stsd );
                 if( tx3g )
@@ -301,7 +302,7 @@ int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, void *summa
                         isom_remove_box_by_itself( tx3g );
                 }
             }
-            else if( isom_add_qt_text_description == description_setup_table[i].func )
+            else if( (opaque_func_t)isom_add_qt_text_description == description_setup_table[i].func )
             {
                 isom_qt_text_entry_t *text = isom_add_qt_text_description( stsd );
                 if( text )
