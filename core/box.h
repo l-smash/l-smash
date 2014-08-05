@@ -2446,13 +2446,25 @@ typedef enum
     ISOM_GROUP_TYPE_VIPR = LSMASH_4CC( 'v', 'i', 'p', 'r' ),      /* View priority */
 } isom_grouping_type;
 
+/* wrapper to avoid boring cast */
+#define isom_init_box_common( box, parent, box_type, precedence, destructor ) \
+        isom_init_box_common_orig( box, parent, box_type, precedence, (isom_extension_destructor_t)(destructor) )
+
+void isom_init_box_common_orig
+(
+    void                       *box,
+    void                       *parent,
+    lsmash_box_type_t           box_type,
+    uint64_t                    precedence,
+    isom_extension_destructor_t destructor
+);
+
 int isom_is_fullbox( void *box );
 int isom_is_lpcm_audio( void *box );
 int isom_is_qt_audio( lsmash_codec_type_t type );
 int isom_is_uncompressed_ycbcr( lsmash_codec_type_t type );
 int isom_is_waveform_audio( lsmash_box_type_t type );
 
-void isom_init_box_common( void *box, void *parent, lsmash_box_type_t box_type, uint64_t precedence, void *destructor );
 size_t isom_skip_box_common( uint8_t **p_data );
 
 void isom_bs_put_basebox_common( lsmash_bs_t *bs, isom_box_t *box );

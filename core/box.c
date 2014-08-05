@@ -36,13 +36,13 @@
 #include "codecs/mp4a.h"
 #include "codecs/mp4sys.h"
 
-void isom_init_box_common
+void isom_init_box_common_orig
 (
-    void             *_box,
-    void             *_parent,
-    lsmash_box_type_t box_type,
-    uint64_t          precedence,
-    void             *destructor
+    void                       *_box,
+    void                       *_parent,
+    lsmash_box_type_t           box_type,
+    uint64_t                    precedence,
+    isom_extension_destructor_t destructor
 )
 {
     isom_box_t *box    = (isom_box_t *)_box;
@@ -1373,7 +1373,12 @@ DEFINE_SIMPLE_BOX_ADDER( isom_add_dref, dref, dinf, ISOM_BOX_TYPE_DREF, LSMASH_B
 DEFINE_SIMPLE_BOX_ADDER( isom_add_stbl, stbl, minf, ISOM_BOX_TYPE_STBL, LSMASH_BOX_PRECEDENCE_ISOM_STBL )
 DEFINE_SIMPLE_BOX_ADDER( isom_add_stsd, stsd, stbl, ISOM_BOX_TYPE_STSD, LSMASH_BOX_PRECEDENCE_ISOM_STSD )
 
-static int isom_add_sample_description_entry( isom_stsd_t *stsd, void *description, void *destructor )
+static int isom_add_sample_description_entry
+(
+    isom_stsd_t *stsd,
+    void        *description,
+    void (*destructor)( isom_sample_entry_t * )
+)
 {
     if( isom_add_box_to_extension_list( stsd, description ) < 0 )
     {
