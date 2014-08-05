@@ -1361,7 +1361,7 @@ int isom_update_bitrate_description( isom_mdia_t *mdia )
         uint32_t maxBitrate;
         uint32_t avgBitrate;
         /* set bitrate info */
-        lsmash_codec_type_t sample_type = (lsmash_codec_type_t)sample_entry->type;
+        lsmash_codec_type_t sample_type = sample_entry->type;
         if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_AVC1_VIDEO )
          || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_AVC2_VIDEO )
          || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_AVC3_VIDEO )
@@ -2849,7 +2849,7 @@ static int isom_scan_trak_profileLevelIndication( isom_trak_t *trak, mp4a_audioP
         isom_sample_entry_t *sample_entry = (isom_sample_entry_t *)entry->data;
         if( !sample_entry )
             return -1;
-        lsmash_codec_type_t sample_type = (lsmash_codec_type_t)sample_entry->type;
+        lsmash_codec_type_t sample_type = sample_entry->type;
         if( trak->mdia->minf->vmhd )
         {
             if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_AVC1_VIDEO )

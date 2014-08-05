@@ -2313,7 +2313,7 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
         isom_box_t *parent = box->parent;
         if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) )
         {
-            lsmash_codec_type_t sample_type = (lsmash_codec_type_t)box->type;
+            lsmash_codec_type_t sample_type = box->type;
             if( lsmash_check_codec_type_identical( sample_type, LSMASH_CODEC_TYPE_RAW ) )
             {
                 if( box->manager & LSMASH_VIDEO_DESCRIPTION )

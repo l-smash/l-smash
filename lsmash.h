@@ -615,7 +615,7 @@ uint8_t *lsmash_export_box
 typedef lsmash_box_type_t lsmash_codec_type_t;
 
 #define LSMASH_CODEC_TYPE_INITIALIZER LSMASH_BOX_TYPE_INITIALIZER
-#define LSMASH_CODEC_TYPE_UNSPECIFIED ((lsmash_codec_type_t)static_lsmash_box_type_unspecified)
+#define LSMASH_CODEC_TYPE_UNSPECIFIED LSMASH_BOX_TYPE_UNSPECIFIED
 
 #define DEFINE_ISOM_CODEC_TYPE( BOX_TYPE_NAME, BOX_TYPE_FOURCC ) \
     static const lsmash_codec_type_t BOX_TYPE_NAME = LSMASH_ISO_BOX_TYPE_INITIALIZER( BOX_TYPE_FOURCC )

@@ -1108,7 +1108,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
                 }
                 uint8_t *data = cs->data.unstructured;
                 lsmash_compact_box_type_t fourcc   = LSMASH_4CC( data[4], data[5], data[6], data[7] );
-                lsmash_box_type_t         box_type = isom_guess_video_codec_specific_box_type( (lsmash_codec_type_t)visual->type, fourcc );
+                lsmash_box_type_t         box_type = isom_guess_video_codec_specific_box_type( visual->type, fourcc );
                 /* Append the extension. */
                 int ret = isom_add_extension_binary( visual, box_type, LSMASH_BOX_PRECEDENCE_HM, cs->data.unstructured, cs->size );
                 cs->data.unstructured = NULL;   /* Avoid freeing the binary data of the extension. */
@@ -1805,7 +1805,7 @@ static int isom_set_qtff_sound_decompression_parameters
                     lsmash_destroy_codec_specific_data( cs );
                     continue;
                 }
-                lsmash_box_type_t box_type = isom_guess_audio_codec_specific_box_type( (lsmash_codec_type_t)audio->type, fourcc );
+                lsmash_box_type_t box_type = isom_guess_audio_codec_specific_box_type( audio->type, fourcc );
                 if( lsmash_check_box_type_identical( box_type, QT_BOX_TYPE_WAVE ) )
                 {
                     /* It is insane to appened a 'wave' extension to a 'wave' extension. */
@@ -1900,7 +1900,7 @@ static int isom_set_qtff_template_audio_description( isom_audio_entry_t *audio, 
         audio->constBitsPerChannel           = 0;
         audio->constBytesPerAudioPacket      = bytes_per_frame;
         audio->constLPCMFramesPerAudioPacket = samples_per_packet;
-        if( lsmash_check_codec_type_identical( (lsmash_codec_type_t)audio->type, QT_CODEC_TYPE_ALAC_AUDIO ) )
+        if( lsmash_check_codec_type_identical( audio->type, QT_CODEC_TYPE_ALAC_AUDIO ) )
         {
             switch( sample_size )
             {
@@ -1966,7 +1966,7 @@ int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_
         return -1;
     audio->data_reference_index = 1;
     lsmash_file_t *file = stsd->file;
-    lsmash_codec_type_t audio_type = (lsmash_codec_type_t)audio->type;
+    lsmash_codec_type_t audio_type = audio->type;
     int ret;
     if( lsmash_check_codec_type_identical( audio_type, ISOM_CODEC_TYPE_MP4A_AUDIO )
      || lsmash_check_codec_type_identical( audio_type,   QT_CODEC_TYPE_MP4A_AUDIO ) )
@@ -2026,8 +2026,8 @@ int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_
             case LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_CHANNEL_LAYOUT :
             {
                 if( !file->qt_compatible
-                 && !lsmash_check_codec_type_identical( (lsmash_codec_type_t)audio->type, ISOM_CODEC_TYPE_ALAC_AUDIO )
-                 && !lsmash_check_codec_type_identical( (lsmash_codec_type_t)audio->type,   QT_CODEC_TYPE_ALAC_AUDIO ) )
+                 && !lsmash_check_codec_type_identical( audio->type, ISOM_CODEC_TYPE_ALAC_AUDIO )
+                 && !lsmash_check_codec_type_identical( audio->type,   QT_CODEC_TYPE_ALAC_AUDIO ) )
                     continue;
                 if( isom_append_channel_layout_extension( specific, audio, summary->channels ) )
                     goto fail;
@@ -2074,7 +2074,7 @@ int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_
                 }
                 uint8_t *box_data = cs->data.unstructured;
                 lsmash_compact_box_type_t fourcc   = LSMASH_4CC( box_data[4], box_data[5], box_data[6], box_data[7] );
-                lsmash_box_type_t         box_type = isom_guess_audio_codec_specific_box_type( (lsmash_codec_type_t)audio->type, fourcc );
+                lsmash_box_type_t         box_type = isom_guess_audio_codec_specific_box_type( audio->type, fourcc );
                 if( lsmash_check_box_type_identical( box_type, QT_BOX_TYPE_WAVE ) )
                 {
                     /* CODEC specific info shall be already inside 'wave' extension. */
@@ -2397,7 +2397,7 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
     summary->frequency   = audio->samplerate >> 16;
     if( ((isom_stsd_t *)audio->parent)->version == 0
      && audio->file->qt_compatible
-     && isom_is_qt_audio( (lsmash_codec_type_t)audio->type ) )
+     && isom_is_qt_audio( audio->type ) )
     {
         if( audio->version == 0 )
             isom_get_implicit_qt_fixed_comp_audio_sample_quants( audio, &summary->samples_in_frame, &summary->bytes_per_frame, &summary->sample_size );
@@ -2443,7 +2443,7 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
                 data->format_flags = 0;
                 /* Here, don't override samplesize.
                  * We should trust samplesize field in the description for misused CODEC indentifier. */
-                lsmash_codec_type_t audio_type = (lsmash_codec_type_t)audio->type;
+                lsmash_codec_type_t audio_type = audio->type;
                 if( lsmash_check_codec_type_identical( audio_type, QT_CODEC_TYPE_FL32_AUDIO )
                  || lsmash_check_codec_type_identical( audio_type, QT_CODEC_TYPE_FL64_AUDIO ) )
                     data->format_flags = QT_LPCM_FORMAT_FLAG_FLOAT;
@@ -2467,8 +2467,8 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
             }
         }
         else if( audio->version == 2
-              && (lsmash_check_codec_type_identical( (lsmash_codec_type_t)audio->type, ISOM_CODEC_TYPE_ALAC_AUDIO )
-               || lsmash_check_codec_type_identical( (lsmash_codec_type_t)audio->type,   QT_CODEC_TYPE_ALAC_AUDIO )) )
+              && (lsmash_check_codec_type_identical( audio->type, ISOM_CODEC_TYPE_ALAC_AUDIO )
+               || lsmash_check_codec_type_identical( audio->type,   QT_CODEC_TYPE_ALAC_AUDIO )) )
             switch( audio->formatSpecificFlags )
             {
                 case QT_ALAC_FORMAT_FLAG_16BIT_SOURCE_DATA :

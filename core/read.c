@@ -1096,7 +1096,7 @@ static int isom_read_visual_description( lsmash_file_t *file, isom_box_t *box, i
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_visual_entry_t *visual = (isom_visual_entry_t *)isom_add_description( (lsmash_codec_type_t)box->type, (isom_stsd_t *)parent );
+    isom_visual_entry_t *visual = (isom_visual_entry_t *)isom_add_description( box->type, (isom_stsd_t *)parent );
     if( !visual )
         return -1;
     lsmash_bs_t *bs = file->bs;
@@ -1132,16 +1132,16 @@ static int isom_read_visual_description( lsmash_file_t *file, isom_box_t *box, i
 
 static int isom_read_esds( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( !lsmash_check_box_type_identical( parent->type, (lsmash_box_type_t)ISOM_CODEC_TYPE_MP4V_VIDEO )
-     && !lsmash_check_box_type_identical( parent->type, (lsmash_box_type_t)ISOM_CODEC_TYPE_MP4A_AUDIO )
-     && !lsmash_check_box_type_identical( parent->type, (lsmash_box_type_t)ISOM_CODEC_TYPE_M4AE_AUDIO )
-     && !lsmash_check_box_type_identical( parent->type, (lsmash_box_type_t)ISOM_CODEC_TYPE_MP4S_SYSTEM )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_CODEC_TYPE_MP4V_VIDEO )
+     && !lsmash_check_box_type_identical( parent->type, ISOM_CODEC_TYPE_MP4A_AUDIO )
+     && !lsmash_check_box_type_identical( parent->type, ISOM_CODEC_TYPE_M4AE_AUDIO )
+     && !lsmash_check_box_type_identical( parent->type, ISOM_CODEC_TYPE_MP4S_SYSTEM )
      && !lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_WAVE ) )
         return isom_read_unknown_box( file, box, parent, level );
     if( lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_WAVE ) )
     {
         box->type = QT_BOX_TYPE_ESDS;
-        if( parent->parent && lsmash_check_box_type_identical( parent->parent->type, (lsmash_box_type_t)ISOM_CODEC_TYPE_MP4A_AUDIO ) )
+        if( parent->parent && lsmash_check_box_type_identical( parent->parent->type, ISOM_CODEC_TYPE_MP4A_AUDIO ) )
             parent->parent->type = QT_CODEC_TYPE_MP4A_AUDIO;
     }
     else
@@ -1488,7 +1488,7 @@ static int isom_read_tx3g_description( lsmash_file_t *file, isom_box_t *box, iso
 
 static int isom_read_ftab( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( !lsmash_check_box_type_identical( parent->type, (lsmash_box_type_t)ISOM_CODEC_TYPE_TX3G_TEXT )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_CODEC_TYPE_TX3G_TEXT )
      || ((isom_tx3g_entry_t *)parent)->ftab )
         return isom_read_unknown_box( file, box, parent, level );
     ADD_BOX( ftab, isom_tx3g_entry_t );
