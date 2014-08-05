@@ -103,7 +103,7 @@ IMPLIB=""
 
 TOOLS=""
 
-CFLAGS="-Wshadow -Wall -std=c99 -I. -I$SRCDIR"
+CFLAGS="-Wshadow -Wall -std=c99 -pedantic -I. -I$SRCDIR"
 LDFLAGS="-L."
 SO_LDFLAGS='-shared -Wl,-soname,$@'
 LIBS="-lm"
@@ -202,6 +202,7 @@ case "$TARGET_OS" in
         SHARED_EXT=".dll"
         IMPLIB="liblsmash.dll.a"
         SO_LDFLAGS="-shared -Wl,--out-implib,$IMPLIB"
+        CFLAGS="$CFLAGS -D__USE_MINGW_ANSI_STDIO=1"
         ;;
     *cygwin*)
         EXT=".exe"
