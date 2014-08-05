@@ -2027,7 +2027,7 @@ static inline void hevc_specific_parameters_ready
     lsmash_hevc_specific_parameters_t *param
 )
 {
-    param->general_profile_compatibility_flags = ~0UL;
+    param->general_profile_compatibility_flags = ~UINT32_C(0);
     param->general_constraint_indicator_flags  = 0x0000FFFFFFFFFFFF;
     param->min_spatial_segmentation_idc        = 0x0FFF;
     param->avgFrameRate                        = 0;     /* unspecified average frame rate */
