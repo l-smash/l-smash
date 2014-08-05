@@ -103,7 +103,7 @@ IMPLIB=""
 
 TOOLS=""
 
-CFLAGS="-Wshadow -Wall -std=gnu99 -I. -I$SRCDIR"
+CFLAGS="-Wshadow -Wall -std=c99 -I. -I$SRCDIR"
 LDFLAGS="-L."
 SO_LDFLAGS='-shared -Wl,-soname,$@'
 LIBS="-lm"
