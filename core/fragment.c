@@ -22,6 +22,7 @@
 
 #include "common/internal.h" /* must be placed first */
 
+#include <string.h>
 #include "box.h"
 #include "write.h"
 
