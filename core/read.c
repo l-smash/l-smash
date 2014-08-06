@@ -407,20 +407,18 @@ static int isom_read_mvhd( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 
 static int isom_read_iods( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
-    if( file->fake_file_mode || !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV ) )
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MOOV ) )
         return isom_read_unknown_box( file, box, parent, level );
-    isom_iods_t *iods = lsmash_malloc_zero( sizeof(isom_iods_t) );
-    if( !iods )
-        return -1;
-    isom_skip_box_rest( file->bs, box );
-    box->manager |= LSMASH_ABSENT_IN_ROOT;
-    isom_box_common_copy( iods, box );
-    if( isom_add_print_func( file, iods, level ) < 0 )
+    ADD_BOX( iods, isom_moov_t );
+    lsmash_bs_t *bs = file->bs;
+    iods->OD = mp4sys_get_ObjectDescriptor( bs );
+    if( !iods->OD )
     {
-        isom_remove_box_by_itself( iods );
+        lsmash_free( iods );
         return -1;
     }
-    return 0;
+    isom_skip_box_rest( file->bs, box );
+    return isom_read_leaf_box_common_last_process( file, box, level, iods );
 }
 
 static int isom_read_qt_color_table( lsmash_bs_t *bs, isom_qt_color_table_t *color_table )
