@@ -980,11 +980,11 @@ void mp4sys_print_ObjectDescriptor( FILE *fp, mp4sys_ObjectDescriptor_t *od, int
         if( od->header.tag == MP4SYS_DESCRIPTOR_TAG_InitialObjectDescrTag
          || od->header.tag == MP4SYS_DESCRIPTOR_TAG_MP4_IOD_Tag )
         {
-            lsmash_ifprintf( fp, indent, "ODProfileLevelIndication = 0x%02"PRIx8"\n",     od->ODProfileLevelIndication );
-            lsmash_ifprintf( fp, indent, "sceneProfileLevelIndication = 0x%02"PRIx8"\n",  od->sceneProfileLevelIndication );
-            lsmash_ifprintf( fp, indent, "audioProfileLevelIndication = 0x%02"PRIx8"\n",  od->audioProfileLevelIndication );
-            lsmash_ifprintf( fp, indent, "visualProfileLevelIndication = 0x%02"PRIx8"\n", od->visualProfileLevelIndication );
-            lsmash_ifprintf( fp, indent, "ODProfileLevelIndication = 0x%02"PRIx8"\n",     od->graphicsProfileLevelIndication );
+            lsmash_ifprintf( fp, indent, "ODProfileLevelIndication = 0x%02"PRIx8"\n",       od->ODProfileLevelIndication );
+            lsmash_ifprintf( fp, indent, "sceneProfileLevelIndication = 0x%02"PRIx8"\n",    od->sceneProfileLevelIndication );
+            lsmash_ifprintf( fp, indent, "audioProfileLevelIndication = 0x%02"PRIx8"\n",    od->audioProfileLevelIndication );
+            lsmash_ifprintf( fp, indent, "visualProfileLevelIndication = 0x%02"PRIx8"\n",   od->visualProfileLevelIndication );
+            lsmash_ifprintf( fp, indent, "graphicsProfileLevelIndication = 0x%02"PRIx8"\n", od->graphicsProfileLevelIndication );
         }
         if( od->header.tag == MP4SYS_DESCRIPTOR_TAG_MP4_OD_Tag
          || od->header.tag == MP4SYS_DESCRIPTOR_TAG_MP4_IOD_Tag )
