@@ -943,7 +943,7 @@ static void mp4sys_print_ES_Descriptor( FILE *fp, mp4sys_ES_Descriptor_t *esd, i
     if( esd->URL_Flag )
     {
         lsmash_ifprintf( fp, indent, "URLlength = %"PRIu8"\n", esd->URLlength );
-        lsmash_ifprintf( fp, indent, "URLlength = %s\n", esd->URLstring );
+        lsmash_ifprintf( fp, indent, "URLstring = %s\n", esd->URLstring );
     }
     if( esd->OCRstreamFlag )
         lsmash_ifprintf( fp, indent, "OCR_ES_Id = %"PRIu16"\n", esd->OCR_ES_Id );
@@ -973,7 +973,7 @@ void mp4sys_print_ObjectDescriptor( FILE *fp, mp4sys_ObjectDescriptor_t *od, int
     if( od->URL_Flag )
     {
         lsmash_ifprintf( fp, indent, "URLlength = %"PRIu8"\n", od->URLlength );
-        lsmash_ifprintf( fp, indent, "URLlength = %s\n", od->URLstring );
+        lsmash_ifprintf( fp, indent, "URLstring = %s\n", od->URLstring );
     }
     else
     {
