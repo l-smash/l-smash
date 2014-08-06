@@ -2426,7 +2426,7 @@ int lsmash_open_file
     if( !filename || !param )
         return -1;
     char mode[4] = { 0 };
-    lsmash_file_mode file_mode;
+    lsmash_file_mode file_mode = 0;
     if( open_mode == 0 )
     {
         memcpy( mode, "w+b", 4 );
@@ -2442,7 +2442,7 @@ int lsmash_open_file
         file_mode = LSMASH_FILE_MODE_READ;
     }
 #endif
-    if( !mode[0] )
+    if( file_mode == 0 )
         return -1;
     FILE *stream   = NULL;
     int   seekable = 1;
@@ -3683,34 +3683,38 @@ int isom_group_random_access( isom_box_t *parent, lsmash_sample_t *sample )
 {
     if( parent->file->max_isom_version < 6 )
         return 0;
-    isom_cache_t *cache;
     isom_sbgp_t  *sbgp;
     isom_sgpd_t  *sgpd;
+    isom_cache_t *cache;
     uint32_t      sample_count;
     int           is_fragment;
     if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAK ) )
     {
         isom_trak_t *trak = (isom_trak_t *)parent;
-        cache = trak->cache;
         sbgp  = isom_get_sample_to_group         ( trak->mdia->minf->stbl, ISOM_GROUP_TYPE_RAP );
         sgpd  = isom_get_sample_group_description( trak->mdia->minf->stbl, ISOM_GROUP_TYPE_RAP );
+        cache = trak->cache;
         sample_count = isom_get_sample_count( trak );
         is_fragment  = 0;
     }
     else if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAF ) )
     {
         isom_traf_t *traf = (isom_traf_t *)parent;
-        cache = traf->cache;
         sbgp  = isom_get_fragment_sample_to_group         ( traf, ISOM_GROUP_TYPE_RAP );
         sgpd  = isom_get_fragment_sample_group_description( traf, ISOM_GROUP_TYPE_RAP );
+        cache = traf->cache;
         sample_count = cache->fragment->sample_count + 1;
         is_fragment  = 1;
     }
     else
     {
         assert( 0 );
-        sbgp = NULL;
-        sgpd = NULL;
+        sbgp  = NULL;
+        sgpd  = NULL;
+        /* redundant initializations to suppress warnings from unclever compilers */
+        cache = NULL;
+        sample_count = 0;
+        is_fragment  = 0;
     }
     if( !sbgp || !sgpd )
         return 0;
