@@ -2864,9 +2864,7 @@ static int isom_scan_trak_profileLevelIndication( isom_trak_t *trak, mp4a_audioP
             {
                 /* FIXME: Do we have to arbitrate like audio? */
                 if( *visual_pli == MP4SYS_VISUAL_PLI_NONE_REQUIRED )
-                    *visual_pli = lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_AVCP_VIDEO )
-                                ? MP4SYS_OBJECT_TYPE_Parameter_Sets_H_264_ISO_14496_10
-                                : MP4SYS_VISUAL_PLI_H264_AVC;
+                    *visual_pli = MP4SYS_VISUAL_PLI_H264_AVC;
             }
             else
                 *visual_pli = MP4SYS_VISUAL_PLI_NOT_SPECIFIED;
