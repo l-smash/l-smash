@@ -216,58 +216,58 @@ void lsmash_bs_put_bytes( lsmash_bs_t *bs, uint32_t size, void *value )
 
 void lsmash_bs_put_be16( lsmash_bs_t *bs, uint16_t value )
 {
-    lsmash_bs_put_byte( bs, (uint8_t)((value>>8)&0xff) );
-    lsmash_bs_put_byte( bs, (uint8_t)(value&0xff) );
+    lsmash_bs_put_byte( bs, value >> 8 );
+    lsmash_bs_put_byte( bs, value );
 }
 
 void lsmash_bs_put_be24( lsmash_bs_t *bs, uint32_t value )
 {
-    lsmash_bs_put_byte( bs, (uint8_t)((value>>16)&0xff) );
-    lsmash_bs_put_be16( bs, (uint16_t)(value&0xffff) );
+    lsmash_bs_put_byte( bs, value >> 16 );
+    lsmash_bs_put_be16( bs, value );
 }
 
 void lsmash_bs_put_be32( lsmash_bs_t *bs, uint32_t value )
 {
-    lsmash_bs_put_be16( bs, (uint16_t)((value>>16)&0xffff) );
-    lsmash_bs_put_be16( bs, (uint16_t)(value&0xffff) );
+    lsmash_bs_put_be16( bs, value >> 16 );
+    lsmash_bs_put_be16( bs, value );
 }
 
 void lsmash_bs_put_be64( lsmash_bs_t *bs, uint64_t value )
 {
-    lsmash_bs_put_be32( bs, (uint32_t)((value>>32)&0xffffffff) );
-    lsmash_bs_put_be32( bs, (uint32_t)(value&0xffffffff) );
+    lsmash_bs_put_be32( bs, value >> 32 );
+    lsmash_bs_put_be32( bs, value );
 }
 
 void lsmash_bs_put_byte_from_64( lsmash_bs_t *bs, uint64_t value )
 {
-    lsmash_bs_put_byte( bs, (uint8_t)(value&0xff) );
+    lsmash_bs_put_byte( bs, value );
 }
 
 void lsmash_bs_put_be16_from_64( lsmash_bs_t *bs, uint64_t value )
 {
-    lsmash_bs_put_be16( bs, (uint16_t)(value&0xffff) );
+    lsmash_bs_put_be16( bs, value );
 }
 
 void lsmash_bs_put_be24_from_64( lsmash_bs_t *bs, uint64_t value )
 {
-    lsmash_bs_put_be24( bs, (uint32_t)(value&0xffffff) );
+    lsmash_bs_put_be24( bs, value );
 }
 
 void lsmash_bs_put_be32_from_64( lsmash_bs_t *bs, uint64_t value )
 {
-    lsmash_bs_put_be32( bs, (uint32_t)(value&0xffffffff) );
+    lsmash_bs_put_be32( bs, value );
 }
 
 void lsmash_bs_put_le16( lsmash_bs_t *bs, uint16_t value )
 {
-    lsmash_bs_put_byte( bs, (uint8_t)(value&0xff) );
-    lsmash_bs_put_byte( bs, (uint8_t)((value>>8)&0xff) );
+    lsmash_bs_put_byte( bs, value );
+    lsmash_bs_put_byte( bs, value >> 8 );
 }
 
 void lsmash_bs_put_le32( lsmash_bs_t *bs, uint32_t value )
 {
-    lsmash_bs_put_le16( bs, (uint16_t)(value&0xffff) );
-    lsmash_bs_put_le16( bs, (uint16_t)((value>>16)&0xffff) );
+    lsmash_bs_put_le16( bs, value );
+    lsmash_bs_put_le16( bs, value >> 16 );
 }
 
 int lsmash_bs_flush_buffer( lsmash_bs_t *bs )
