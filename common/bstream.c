@@ -293,7 +293,7 @@ int lsmash_bs_flush_buffer( lsmash_bs_t *bs )
     return 0;
 }
 
-size_t lsmash_bs_write_data( lsmash_bs_t *bs, uint8_t *buf, size_t size )
+int lsmash_bs_write_data( lsmash_bs_t *bs, uint8_t *buf, size_t size )
 {
     if( !bs || size > INT_MAX )
         return -1;
