@@ -504,7 +504,6 @@ static uint32_t mp4sys_update_ES_Descriptor_size( mp4sys_ES_Descriptor_t* esd )
     return mp4sys_get_descriptor_size( size );
 }
 
-#if 0
 static uint32_t mp4sys_update_ES_ID_Inc_size( mp4sys_ES_ID_Inc_t* es_id_inc )
 {
     debug_if( !es_id_inc )
@@ -535,7 +534,6 @@ static uint32_t mp4sys_update_ObjectDescriptor_size( mp4sys_ObjectDescriptor_t* 
     od->header.size = size;
     return mp4sys_get_descriptor_size( size );
 }
-#endif
 
 static int mp4sys_put_descriptor_header( lsmash_bs_t *bs, mp4sys_descriptor_head_t* header )
 {
@@ -674,6 +672,7 @@ int mp4sys_put_ES_Descriptor( lsmash_bs_t *bs, mp4sys_ES_Descriptor_t *esd )
 
 int mp4sys_write_ES_Descriptor( lsmash_bs_t *bs, mp4sys_ES_Descriptor_t *esd )
 {
+    mp4sys_update_ES_Descriptor_size( esd );
     return mp4sys_put_ES_Descriptor( bs, esd );
 }
 
@@ -704,6 +703,7 @@ int mp4sys_write_ObjectDescriptor( lsmash_bs_t *bs, mp4sys_ObjectDescriptor_t* o
 {
     if( !bs || !od )
         return -1;
+    mp4sys_update_ObjectDescriptor_size( od );
     debug_if( mp4sys_put_descriptor_header( bs, &od->header ) )
         return -1;
     uint16_t temp = (od->ObjectDescriptorID << 6);
