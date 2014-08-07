@@ -183,10 +183,6 @@ int mp4sys_to_InitialObjectDescriptor
     mp4sys_graphicsProfileLevelIndication graph_pli
 );
 
-int mp4sys_put_ES_Descriptor( lsmash_bs_t *bs, mp4sys_ES_Descriptor_t *esd );
-int mp4sys_write_ES_Descriptor( lsmash_bs_t *bs, mp4sys_ES_Descriptor_t *esd );
-int mp4sys_write_ObjectDescriptor( lsmash_bs_t *bs, mp4sys_ObjectDescriptor_t *od );
-
 int mp4sys_update_DecoderConfigDescriptor
 (
     mp4sys_ES_Descriptor_t *esd,
@@ -199,6 +195,7 @@ int mp4sys_update_DecoderConfigDescriptor
 mp4sys_ES_Descriptor_t *mp4sys_duplicate_ES_Descriptor( mp4sys_ES_Descriptor_t *src );
 #endif
 
+int mp4sys_write_descriptor( lsmash_bs_t *bs, mp4sys_descriptor_t *descriptor );
 void mp4sys_print_descriptor( FILE *fp, mp4sys_descriptor_t *descriptor, int indent );
 mp4sys_descriptor_t *mp4sys_get_descriptor( lsmash_bs_t *bs );
 

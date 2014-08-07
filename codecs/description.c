@@ -2352,7 +2352,7 @@ static int isom_append_structured_mp4sys_decoder_config( lsmash_codec_specific_l
     lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_ESDS.fourcc );
     lsmash_bs_put_be32( bs, 0 );
     /* Put ES Descriptor. */
-    mp4sys_put_ES_Descriptor( bs, esds->ES );
+    mp4sys_write_descriptor( bs, esds->ES );
     /* Export ES Descriptor Box as binary string. */
     uint32_t esds_size;
     uint8_t *esds_data = lsmash_bs_export_data( bs, &esds_size );

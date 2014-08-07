@@ -86,9 +86,11 @@ typedef struct
 } mp4sys_descriptor_head_t;
 
 typedef void (*mp4sys_descriptor_destructor_t)( void * );
+typedef int (*mp4sys_descriptor_writer_t)( lsmash_bs_t *, void * );
 
-#define MP4SYS_DESCRIPTOR_COMMON               \
-    mp4sys_descriptor_destructor_t destructor; \
+#define MP4SYS_DESCRIPTOR_COMMON             \
+    mp4sys_descriptor_destructor_t destruct; \
+    mp4sys_descriptor_writer_t     write;    \
     mp4sys_descriptor_head_t       header
 
 typedef struct
@@ -229,8 +231,8 @@ void mp4sys_remove_descriptor( void *descriptor )
 {
     if( !descriptor )
         return;
-    if( ((mp4sys_descriptor_t *)descriptor)->destructor )
-        ((mp4sys_descriptor_t *)descriptor)->destructor( descriptor );
+    if( ((mp4sys_descriptor_t *)descriptor)->destruct )
+        ((mp4sys_descriptor_t *)descriptor)->destruct( descriptor );
     else
         lsmash_free( descriptor );
 }
@@ -278,24 +280,308 @@ static void mp4sys_remove_ObjectDescriptor( mp4sys_ObjectDescriptor_t *od )
     lsmash_free( od );
 }
 
-static inline void *mp4sys_construct_descriptor_orig( size_t size, mp4sys_descriptor_destructor_t destructor )
+/* returns total size of descriptor, including header, 2 at least */
+static inline uint32_t mp4sys_get_descriptor_size( uint32_t payload_size_in_byte )
+{
+#if ALWAYS_28BITS_LENGTH_CODING
+    return payload_size_in_byte + 4 + 1; /* +4 means 28bits length coding, +1 means tag's space */
+#else
+    /* descriptor length will be split into 7bits
+       see 14496-1 Expandable classes and Length encoding of descriptors and commands */
+    uint32_t i;
+    for( i = 1; payload_size_in_byte >> ( 7 * i ); i++ );
+    return payload_size_in_byte + i + 1; /* +1 means tag's space */
+#endif
+}
+
+static uint32_t mp4sys_update_DecoderSpecificInfo_size( mp4sys_ES_Descriptor_t *esd )
+{
+    debug_if( !esd || !esd->decConfigDescr )
+        return 0;
+    if( !esd->decConfigDescr->decSpecificInfo )
+        return 0;
+    /* no need to update, header.size is already set */
+    return mp4sys_get_descriptor_size( esd->decConfigDescr->decSpecificInfo->header.size );
+}
+
+static uint32_t mp4sys_update_DecoderConfigDescriptor_size( mp4sys_ES_Descriptor_t *esd )
+{
+    debug_if( !esd )
+        return 0;
+    if( !esd->decConfigDescr )
+        return 0;
+    uint32_t size = 13;
+    size += mp4sys_update_DecoderSpecificInfo_size( esd );
+    esd->decConfigDescr->header.size = size;
+    return mp4sys_get_descriptor_size( size );
+}
+
+static uint32_t mp4sys_update_SLConfigDescriptor_size( mp4sys_ES_Descriptor_t *esd )
+{
+    debug_if( !esd )
+        return 0;
+    if( !esd->slConfigDescr )
+        return 0;
+    mp4sys_SLConfigDescriptor_t *slcd = esd->slConfigDescr;
+    uint32_t size = 1;
+    if( slcd->predefined == 0x00 )
+        size += 15;
+    if( slcd->durationFlag )
+        size += 8;
+    if( !slcd->useTimeStampsFlag )
+        size += (2 * slcd->timeStampLength + 7) / 8;
+    esd->slConfigDescr->header.size = size;
+    return mp4sys_get_descriptor_size( size );
+}
+
+static uint32_t mp4sys_update_ES_Descriptor_size( mp4sys_ES_Descriptor_t *esd )
+{
+    if( !esd )
+        return 0;
+    uint32_t size = 3;
+    if( esd->streamDependenceFlag )
+        size += 2;
+    if( esd->URL_Flag )
+        size += 1 + esd->URLlength;
+    if( esd->OCRstreamFlag )
+        size += 2;
+    size += mp4sys_update_DecoderConfigDescriptor_size( esd );
+    size += mp4sys_update_SLConfigDescriptor_size( esd );
+    esd->header.size = size;
+    return mp4sys_get_descriptor_size( size );
+}
+
+static uint32_t mp4sys_update_ES_ID_Inc_size( mp4sys_ES_ID_Inc_t *es_id_inc )
+{
+    debug_if( !es_id_inc )
+        return 0;
+    es_id_inc->header.size = 4;
+    return mp4sys_get_descriptor_size( es_id_inc->header.size );
+}
+
+/* This function works as aggregate of ES_ID_Incs, so this function itself updates no size information */
+static uint32_t mp4sys_update_ES_ID_Incs_size( mp4sys_ObjectDescriptor_t *od )
+{
+    debug_if( !od )
+        return 0;
+    if( !od->esDescr )
+        return 0;
+    uint32_t size = 0;
+    for( lsmash_entry_t *entry = od->esDescr->head; entry; entry = entry->next )
+        size += mp4sys_update_ES_ID_Inc_size( (mp4sys_ES_ID_Inc_t *)entry->data );
+    return size;
+}
+
+static uint32_t mp4sys_update_ObjectDescriptor_size( mp4sys_ObjectDescriptor_t *od )
+{
+    if( !od )
+        return 0;
+    uint32_t size = od->header.tag == MP4SYS_DESCRIPTOR_TAG_MP4_IOD_Tag ? 7 : 2;
+    size += mp4sys_update_ES_ID_Incs_size( od );
+    od->header.size = size;
+    return mp4sys_get_descriptor_size( size );
+}
+
+static int mp4sys_write_descriptor_header( lsmash_bs_t *bs, mp4sys_descriptor_head_t *header )
+{
+    debug_if( !bs || !header )
+        return -1;
+    lsmash_bs_put_byte( bs, header->tag );
+    /* descriptor length will be splitted into 7bits
+       see 14496-1 Expandable classes and Length encoding of descriptors and commands */
+#if ALWAYS_28BITS_LENGTH_CODING
+    lsmash_bs_put_byte( bs, ( header->size >> 21 ) | 0x80 );
+    lsmash_bs_put_byte( bs, ( header->size >> 14 ) | 0x80 );
+    lsmash_bs_put_byte( bs, ( header->size >>  7 ) | 0x80 );
+#else
+    for( uint32_t i = mp4sys_get_descriptor_size( header->size ) - header->size - 2; i; i-- ){
+        lsmash_bs_put_byte( bs, ( header->size >> ( 7 * i ) ) | 0x80 );
+    }
+#endif
+    lsmash_bs_put_byte( bs, header->size & 0x7F );
+    return 0;
+}
+
+static int mp4sys_write_DecoderSpecificInfo( lsmash_bs_t *bs, mp4sys_DecoderSpecificInfo_t *dsi )
+{
+    if( mp4sys_write_descriptor_header( bs, &dsi->header ) < 0 )
+        return -1;
+    if( dsi->data && dsi->header.size != 0 )
+        lsmash_bs_put_bytes( bs, dsi->header.size, dsi->data );
+    return 0;
+}
+
+static int mp4sys_write_DecoderConfigDescriptor( lsmash_bs_t *bs, mp4sys_DecoderConfigDescriptor_t *dcd )
+{
+    if( mp4sys_write_descriptor_header( bs, &dcd->header ) < 0 )
+        return -1;
+    lsmash_bs_put_byte( bs, dcd->objectTypeIndication );
+    uint8_t temp;
+    temp  = (dcd->streamType << 2) & 0x3F;
+    temp |= (dcd->upStream   << 1) & 0x01;
+    temp |=  dcd->reserved         & 0x01;
+    lsmash_bs_put_byte( bs, temp );
+    lsmash_bs_put_be24( bs, dcd->bufferSizeDB );
+    lsmash_bs_put_be32( bs, dcd->maxBitrate );
+    lsmash_bs_put_be32( bs, dcd->avgBitrate );
+    return mp4sys_write_DecoderSpecificInfo( bs, dcd->decSpecificInfo );
+    /* here, profileLevelIndicationIndexDescriptor is omitted */
+}
+
+static int mp4sys_write_SLConfigDescriptor( lsmash_bs_t *bs, mp4sys_SLConfigDescriptor_t *slcd )
+{
+    if( mp4sys_write_descriptor_header( bs, &slcd->header ) < 0 )
+        return -1;
+    lsmash_bs_put_byte( bs, slcd->predefined );
+    if( slcd->predefined == 0x00 )
+    {
+        uint8_t temp8;
+        temp8  = slcd->useAccessUnitStartFlag       << 7;
+        temp8 |= slcd->useAccessUnitEndFlag         << 6;
+        temp8 |= slcd->useRandomAccessPointFlag     << 5;
+        temp8 |= slcd->hasRandomAccessUnitsOnlyFlag << 4;
+        temp8 |= slcd->usePaddingFlag               << 3;
+        temp8 |= slcd->useTimeStampsFlag            << 2;
+        temp8 |= slcd->useIdleFlag                  << 1;
+        temp8 |= slcd->durationFlag;
+        lsmash_bs_put_byte( bs, temp8 );
+        lsmash_bs_put_be32( bs, slcd->timeStampResolution );
+        lsmash_bs_put_be32( bs, slcd->OCRResolution );
+        lsmash_bs_put_byte( bs, slcd->timeStampLength );
+        lsmash_bs_put_byte( bs, slcd->OCRLength );
+        lsmash_bs_put_byte( bs, slcd->AU_Length );
+        lsmash_bs_put_byte( bs, slcd->instantBitrateLength );
+        uint16_t temp16;
+        temp16  = slcd->degradationPriorityLength << 12;
+        temp16 |= slcd->AU_seqNumLength           << 7;
+        temp16 |= slcd->packetSeqNumLength        << 2;
+        temp16 |= slcd->reserved;
+        lsmash_bs_put_be16( bs, temp16 );
+    }
+    if( slcd->durationFlag )
+    {
+        lsmash_bs_put_be32( bs, slcd->timeScale );
+        lsmash_bs_put_be16( bs, slcd->accessUnitDuration );
+        lsmash_bs_put_be16( bs, slcd->compositionUnitDuration );
+    }
+    if( !slcd->useTimeStampsFlag )
+    {
+        lsmash_bits_t *bits = lsmash_bits_create( bs );
+        if( !bits )
+            return -1;
+        lsmash_bits_put( bits, slcd->timeStampLength, slcd->startDecodingTimeStamp );
+        lsmash_bits_put( bits, slcd->timeStampLength, slcd->startCompositionTimeStamp );
+        lsmash_bits_put_align( bits );
+        lsmash_bits_cleanup( bits );
+    }
+    return 0;
+}
+
+static int mp4sys_write_ES_Descriptor( lsmash_bs_t *bs, mp4sys_ES_Descriptor_t *esd )
+{
+    mp4sys_update_ES_Descriptor_size( esd );
+    if( mp4sys_write_descriptor_header( bs, &esd->header ) < 0 )
+        return -1;
+    lsmash_bs_put_be16( bs, esd->ES_ID );
+    uint8_t temp;
+    temp  = esd->streamDependenceFlag << 7;
+    temp |= esd->URL_Flag             << 6;
+    temp |= esd->OCRstreamFlag        << 5;
+    temp |= esd->streamPriority;
+    lsmash_bs_put_byte( bs, temp );
+    if( esd->streamDependenceFlag )
+        lsmash_bs_put_be16( bs, esd->dependsOn_ES_ID );
+    if( esd->URL_Flag )
+    {
+        lsmash_bs_put_byte( bs, esd->URLlength );
+        lsmash_bs_put_bytes( bs, esd->URLlength, esd->URLstring );
+    }
+    if( esd->OCRstreamFlag )
+        lsmash_bs_put_be16( bs, esd->OCR_ES_Id );
+    /* here, some syntax elements are omitted due to previous flags (all 0) */
+    if( mp4sys_write_DecoderConfigDescriptor( bs, esd->decConfigDescr ) )
+        return -1;
+    return mp4sys_write_SLConfigDescriptor( bs, esd->slConfigDescr );
+}
+
+static int mp4sys_write_ES_ID_Inc( lsmash_bs_t *bs, mp4sys_ES_ID_Inc_t *es_id_inc )
+{
+    if( mp4sys_write_descriptor_header( bs, &es_id_inc->header ) < 0 )
+        return -1;
+    lsmash_bs_put_be32( bs, es_id_inc->Track_ID );
+    return 0;
+}
+
+static int mp4sys_write_ObjectDescriptor( lsmash_bs_t *bs, mp4sys_ObjectDescriptor_t *od )
+{
+    mp4sys_update_ObjectDescriptor_size( od );
+    if( mp4sys_write_descriptor_header( bs, &od->header ) < 0 )
+        return -1;
+    uint16_t temp = (od->ObjectDescriptorID << 6);
+    // temp |= (0x0 << 5); /* URL_Flag */
+    temp |= (od->includeInlineProfileLevelFlag << 4); /* if MP4_OD, includeInlineProfileLevelFlag is 0x1. */
+    temp |= 0xF;  /* reserved */
+    lsmash_bs_put_be16( bs, temp );
+    /* here, since we don't support URL_Flag, we put ProfileLevelIndications */
+    if( od->header.tag == MP4SYS_DESCRIPTOR_TAG_MP4_IOD_Tag )
+    {
+        lsmash_bs_put_byte( bs, od->ODProfileLevelIndication );
+        lsmash_bs_put_byte( bs, od->sceneProfileLevelIndication );
+        lsmash_bs_put_byte( bs, od->audioProfileLevelIndication );
+        lsmash_bs_put_byte( bs, od->visualProfileLevelIndication );
+        lsmash_bs_put_byte( bs, od->graphicsProfileLevelIndication );
+    }
+    if( !od->esDescr )
+        return 0; /* This may violate the spec, but some muxer do this */
+    for( lsmash_entry_t *entry = od->esDescr->head; entry; entry = entry->next )
+        if( mp4sys_write_ES_ID_Inc( bs, entry->data ) < 0 )
+            return -1;
+    return 0;
+}
+
+int mp4sys_write_descriptor( lsmash_bs_t *bs, void *descriptor )
+{
+    if( !bs || !descriptor )
+        return -1;
+    if( ((mp4sys_descriptor_t *)descriptor)->write )
+        return ((mp4sys_descriptor_t *)descriptor)->write( bs, descriptor );
+    else
+        return 0;
+}
+
+static inline void *mp4sys_construct_descriptor_orig
+(
+    size_t                         size,
+    mp4sys_descriptor_destructor_t destructor,
+    mp4sys_descriptor_writer_t     writer
+)
 {
     assert( size >= sizeof(mp4sys_BaseDescriptor_t) );
     mp4sys_descriptor_t *descriptor = lsmash_malloc_zero( size );
     if( !descriptor )
         return NULL;
-    descriptor->destructor = destructor;
+    descriptor->destruct = destructor;
+    descriptor->write    = writer;
     return descriptor;
 }
 
-#define mp4sys_construct_descriptor( size, destructor ) \
-        mp4sys_construct_descriptor_orig( size, (mp4sys_descriptor_destructor_t)destructor )
+#define mp4sys_construct_descriptor( size, destructor, writer ) \
+        mp4sys_construct_descriptor_orig                        \
+        (                                                       \
+            size,                                               \
+            (mp4sys_descriptor_destructor_t)destructor,         \
+            (mp4sys_descriptor_writer_t)writer                  \
+        )
 
-#define MP4SYS_CONSTRUCT_DESCRIPTOR( var, descriptor_name, ret )               \
-        mp4sys_##descriptor_name##_t *var =                                    \
-            mp4sys_construct_descriptor( sizeof(mp4sys_##descriptor_name##_t), \
-                                         mp4sys_remove_##descriptor_name );    \
-        if( !var )                                                             \
+#define MP4SYS_CONSTRUCT_DESCRIPTOR( var, descriptor_name, ret ) \
+        mp4sys_##descriptor_name##_t *var =                      \
+            mp4sys_construct_descriptor                          \
+            (                                                    \
+                sizeof(mp4sys_##descriptor_name##_t),            \
+                mp4sys_remove_##descriptor_name,                 \
+                mp4sys_write_##descriptor_name                   \
+            );                                                   \
+        if( !var )                                               \
             return ret
 
 int mp4sys_add_DecoderSpecificInfo( mp4sys_ES_Descriptor_t *esd, void *dsi_payload, uint32_t dsi_payload_length )
@@ -438,296 +724,6 @@ int mp4sys_to_InitialObjectDescriptor
     od->visualProfileLevelIndication   = visual_pli;
     od->graphicsProfileLevelIndication = graph_pli;
     return 0;
-}
-
-/* returns total size of descriptor, including header, 2 at least */
-static inline uint32_t mp4sys_get_descriptor_size( uint32_t payload_size_in_byte )
-{
-#if ALWAYS_28BITS_LENGTH_CODING
-    return payload_size_in_byte + 4 + 1; /* +4 means 28bits length coding, +1 means tag's space */
-#else
-    /* descriptor length will be split into 7bits
-       see 14496-1 Expandable classes and Length encoding of descriptors and commands */
-    uint32_t i;
-    for( i = 1; payload_size_in_byte >> ( 7 * i ); i++ );
-    return payload_size_in_byte + i + 1; /* +1 means tag's space */
-#endif
-}
-
-static uint32_t mp4sys_update_DecoderSpecificInfo_size( mp4sys_ES_Descriptor_t *esd )
-{
-    debug_if( !esd || !esd->decConfigDescr )
-        return 0;
-    if( !esd->decConfigDescr->decSpecificInfo )
-        return 0;
-    /* no need to update, header.size is already set */
-    return mp4sys_get_descriptor_size( esd->decConfigDescr->decSpecificInfo->header.size );
-}
-
-static uint32_t mp4sys_update_DecoderConfigDescriptor_size( mp4sys_ES_Descriptor_t *esd )
-{
-    debug_if( !esd )
-        return 0;
-    if( !esd->decConfigDescr )
-        return 0;
-    uint32_t size = 13;
-    size += mp4sys_update_DecoderSpecificInfo_size( esd );
-    esd->decConfigDescr->header.size = size;
-    return mp4sys_get_descriptor_size( size );
-}
-
-static uint32_t mp4sys_update_SLConfigDescriptor_size( mp4sys_ES_Descriptor_t *esd )
-{
-    debug_if( !esd )
-        return 0;
-    if( !esd->slConfigDescr )
-        return 0;
-    mp4sys_SLConfigDescriptor_t *slcd = esd->slConfigDescr;
-    uint32_t size = 1;
-    if( slcd->predefined == 0x00 )
-        size += 15;
-    if( slcd->durationFlag )
-        size += 8;
-    if( !slcd->useTimeStampsFlag )
-        size += (2 * slcd->timeStampLength + 7) / 8;
-    esd->slConfigDescr->header.size = size;
-    return mp4sys_get_descriptor_size( size );
-}
-
-static uint32_t mp4sys_update_ES_Descriptor_size( mp4sys_ES_Descriptor_t *esd )
-{
-    if( !esd )
-        return 0;
-    uint32_t size = 3;
-    if( esd->streamDependenceFlag )
-        size += 2;
-    if( esd->URL_Flag )
-        size += 1 + esd->URLlength;
-    if( esd->OCRstreamFlag )
-        size += 2;
-    size += mp4sys_update_DecoderConfigDescriptor_size( esd );
-    size += mp4sys_update_SLConfigDescriptor_size( esd );
-    esd->header.size = size;
-    return mp4sys_get_descriptor_size( size );
-}
-
-static uint32_t mp4sys_update_ES_ID_Inc_size( mp4sys_ES_ID_Inc_t *es_id_inc )
-{
-    debug_if( !es_id_inc )
-        return 0;
-    es_id_inc->header.size = 4;
-    return mp4sys_get_descriptor_size( es_id_inc->header.size );
-}
-
-/* This function works as aggregate of ES_ID_Incs, so this function itself updates no size information */
-static uint32_t mp4sys_update_ES_ID_Incs_size( mp4sys_ObjectDescriptor_t *od )
-{
-    debug_if( !od )
-        return 0;
-    if( !od->esDescr )
-        return 0;
-    uint32_t size = 0;
-    for( lsmash_entry_t *entry = od->esDescr->head; entry; entry = entry->next )
-        size += mp4sys_update_ES_ID_Inc_size( (mp4sys_ES_ID_Inc_t *)entry->data );
-    return size;
-}
-
-static uint32_t mp4sys_update_ObjectDescriptor_size( mp4sys_ObjectDescriptor_t *od )
-{
-    if( !od )
-        return 0;
-    uint32_t size = od->header.tag == MP4SYS_DESCRIPTOR_TAG_MP4_IOD_Tag ? 7 : 2;
-    size += mp4sys_update_ES_ID_Incs_size( od );
-    od->header.size = size;
-    return mp4sys_get_descriptor_size( size );
-}
-
-static int mp4sys_put_descriptor_header( lsmash_bs_t *bs, mp4sys_descriptor_head_t *header )
-{
-    debug_if( !bs || !header )
-        return -1;
-    lsmash_bs_put_byte( bs, header->tag );
-    /* descriptor length will be splitted into 7bits
-       see 14496-1 Expandable classes and Length encoding of descriptors and commands */
-#if ALWAYS_28BITS_LENGTH_CODING
-    lsmash_bs_put_byte( bs, ( header->size >> 21 ) | 0x80 );
-    lsmash_bs_put_byte( bs, ( header->size >> 14 ) | 0x80 );
-    lsmash_bs_put_byte( bs, ( header->size >>  7 ) | 0x80 );
-#else
-    for( uint32_t i = mp4sys_get_descriptor_size( header->size ) - header->size - 2; i; i-- ){
-        lsmash_bs_put_byte( bs, ( header->size >> ( 7 * i ) ) | 0x80 );
-    }
-#endif
-    lsmash_bs_put_byte( bs, header->size & 0x7F );
-    return 0;
-}
-
-static int mp4sys_put_DecoderSpecificInfo( lsmash_bs_t *bs, mp4sys_DecoderSpecificInfo_t *dsi )
-{
-    debug_if( !bs )
-        return -1;
-    if( !dsi )
-        return 0; /* can be NULL */
-    debug_if( mp4sys_put_descriptor_header( bs, &dsi->header ) )
-        return -1;
-    if( dsi->data && dsi->header.size != 0 )
-        lsmash_bs_put_bytes( bs, dsi->header.size, dsi->data );
-    return 0;
-}
-
-static int mp4sys_put_DecoderConfigDescriptor( lsmash_bs_t *bs, mp4sys_DecoderConfigDescriptor_t *dcd )
-{
-    debug_if( !bs )
-        return -1;
-    if( !dcd )
-        return -1; /* cannot be NULL */
-    debug_if( mp4sys_put_descriptor_header( bs, &dcd->header ) )
-        return -1;
-    lsmash_bs_put_byte( bs, dcd->objectTypeIndication );
-    uint8_t temp;
-    temp  = (dcd->streamType << 2) & 0x3F;
-    temp |= (dcd->upStream   << 1) & 0x01;
-    temp |=  dcd->reserved         & 0x01;
-    lsmash_bs_put_byte( bs, temp );
-    lsmash_bs_put_be24( bs, dcd->bufferSizeDB );
-    lsmash_bs_put_be32( bs, dcd->maxBitrate );
-    lsmash_bs_put_be32( bs, dcd->avgBitrate );
-    return mp4sys_put_DecoderSpecificInfo( bs, dcd->decSpecificInfo );
-    /* here, profileLevelIndicationIndexDescriptor is omitted */
-}
-
-static int mp4sys_put_SLConfigDescriptor( lsmash_bs_t *bs, mp4sys_SLConfigDescriptor_t *slcd )
-{
-    debug_if( !bs )
-        return -1;
-    if( !slcd )
-        return 0;
-    debug_if( mp4sys_put_descriptor_header( bs, &slcd->header ) )
-        return -1;
-    lsmash_bs_put_byte( bs, slcd->predefined );
-    if( slcd->predefined == 0x00 )
-    {
-        uint8_t temp8;
-        temp8  = slcd->useAccessUnitStartFlag       << 7;
-        temp8 |= slcd->useAccessUnitEndFlag         << 6;
-        temp8 |= slcd->useRandomAccessPointFlag     << 5;
-        temp8 |= slcd->hasRandomAccessUnitsOnlyFlag << 4;
-        temp8 |= slcd->usePaddingFlag               << 3;
-        temp8 |= slcd->useTimeStampsFlag            << 2;
-        temp8 |= slcd->useIdleFlag                  << 1;
-        temp8 |= slcd->durationFlag;
-        lsmash_bs_put_byte( bs, temp8 );
-        lsmash_bs_put_be32( bs, slcd->timeStampResolution );
-        lsmash_bs_put_be32( bs, slcd->OCRResolution );
-        lsmash_bs_put_byte( bs, slcd->timeStampLength );
-        lsmash_bs_put_byte( bs, slcd->OCRLength );
-        lsmash_bs_put_byte( bs, slcd->AU_Length );
-        lsmash_bs_put_byte( bs, slcd->instantBitrateLength );
-        uint16_t temp16;
-        temp16  = slcd->degradationPriorityLength << 12;
-        temp16 |= slcd->AU_seqNumLength           << 7;
-        temp16 |= slcd->packetSeqNumLength        << 2;
-        temp16 |= slcd->reserved;
-        lsmash_bs_put_be16( bs, temp16 );
-    }
-    if( slcd->durationFlag )
-    {
-        lsmash_bs_put_be32( bs, slcd->timeScale );
-        lsmash_bs_put_be16( bs, slcd->accessUnitDuration );
-        lsmash_bs_put_be16( bs, slcd->compositionUnitDuration );
-    }
-    if( !slcd->useTimeStampsFlag )
-    {
-        lsmash_bits_t *bits = lsmash_bits_create( bs );
-        if( !bits )
-            return -1;
-        lsmash_bits_put( bits, slcd->timeStampLength, slcd->startDecodingTimeStamp );
-        lsmash_bits_put( bits, slcd->timeStampLength, slcd->startCompositionTimeStamp );
-        lsmash_bits_put_align( bits );
-        lsmash_bits_cleanup( bits );
-    }
-    return 0;
-}
-
-int mp4sys_put_ES_Descriptor( lsmash_bs_t *bs, mp4sys_ES_Descriptor_t *esd )
-{
-    if( !bs || !esd )
-        return -1;
-    debug_if( mp4sys_put_descriptor_header( bs, &esd->header ) )
-        return -1;
-    lsmash_bs_put_be16( bs, esd->ES_ID );
-    uint8_t temp;
-    temp  = esd->streamDependenceFlag << 7;
-    temp |= esd->URL_Flag             << 6;
-    temp |= esd->OCRstreamFlag        << 5;
-    temp |= esd->streamPriority;
-    lsmash_bs_put_byte( bs, temp );
-    if( esd->streamDependenceFlag )
-        lsmash_bs_put_be16( bs, esd->dependsOn_ES_ID );
-    if( esd->URL_Flag )
-    {
-        lsmash_bs_put_byte( bs, esd->URLlength );
-        lsmash_bs_put_bytes( bs, esd->URLlength, esd->URLstring );
-    }
-    if( esd->OCRstreamFlag )
-        lsmash_bs_put_be16( bs, esd->OCR_ES_Id );
-    /* here, some syntax elements are omitted due to previous flags (all 0) */
-    if( mp4sys_put_DecoderConfigDescriptor( bs, esd->decConfigDescr ) )
-        return -1;
-    return mp4sys_put_SLConfigDescriptor( bs, esd->slConfigDescr );
-}
-
-int mp4sys_write_ES_Descriptor( lsmash_bs_t *bs, mp4sys_ES_Descriptor_t *esd )
-{
-    mp4sys_update_ES_Descriptor_size( esd );
-    return mp4sys_put_ES_Descriptor( bs, esd );
-}
-
-static int mp4sys_put_ES_ID_Inc( lsmash_bs_t *bs, mp4sys_ES_ID_Inc_t *es_id_inc )
-{
-    debug_if( !es_id_inc )
-        return 0;
-    debug_if( mp4sys_put_descriptor_header( bs, &es_id_inc->header ) )
-        return -1;
-    lsmash_bs_put_be32( bs, es_id_inc->Track_ID );
-    return 0;
-}
-
-/* This function works as aggregate of ES_ID_Incs */
-static int mp4sys_write_ES_ID_Incs( lsmash_bs_t *bs, mp4sys_ObjectDescriptor_t *od )
-{
-    debug_if( !od )
-        return 0;
-    if( !od->esDescr )
-        return 0; /* This may violate the spec, but some muxer do this */
-    for( lsmash_entry_t *entry = od->esDescr->head; entry; entry = entry->next )
-        if( mp4sys_put_ES_ID_Inc( bs, (mp4sys_ES_ID_Inc_t *)entry->data ) < 0 )
-            return -1;
-    return 0;
-}
-
-int mp4sys_write_ObjectDescriptor( lsmash_bs_t *bs, mp4sys_ObjectDescriptor_t *od )
-{
-    if( !bs || !od )
-        return -1;
-    mp4sys_update_ObjectDescriptor_size( od );
-    debug_if( mp4sys_put_descriptor_header( bs, &od->header ) )
-        return -1;
-    uint16_t temp = (od->ObjectDescriptorID << 6);
-    // temp |= (0x0 << 5); /* URL_Flag */
-    temp |= (od->includeInlineProfileLevelFlag << 4); /* if MP4_OD, includeInlineProfileLevelFlag is 0x1. */
-    temp |= 0xF;  /* reserved */
-    lsmash_bs_put_be16( bs, temp );
-    /* here, since we don't support URL_Flag, we put ProfileLevelIndications */
-    if( od->header.tag == MP4SYS_DESCRIPTOR_TAG_MP4_IOD_Tag )
-    {
-        lsmash_bs_put_byte( bs, od->ODProfileLevelIndication );
-        lsmash_bs_put_byte( bs, od->sceneProfileLevelIndication );
-        lsmash_bs_put_byte( bs, od->audioProfileLevelIndication );
-        lsmash_bs_put_byte( bs, od->visualProfileLevelIndication );
-        lsmash_bs_put_byte( bs, od->graphicsProfileLevelIndication );
-    }
-    return mp4sys_write_ES_ID_Incs( bs, od );
 }
 
 #ifdef LSMASH_DEMUXER_ENABLED
@@ -1435,10 +1431,10 @@ uint8_t *lsmash_create_mp4sys_decoder_config( lsmash_mp4sys_decoder_parameters_t
         mp4sys_remove_descriptor( esd );
         return NULL;
     }
-    lsmash_bs_put_be32( bs, ISOM_FULLBOX_COMMON_SIZE + mp4sys_update_ES_Descriptor_size( esd ) );
+    lsmash_bs_put_be32( bs, 0 );    /* update later */
     lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_ESDS.fourcc );
     lsmash_bs_put_be32( bs, 0 );
-    mp4sys_put_ES_Descriptor( bs, esd );
+    mp4sys_write_descriptor( bs, esd );
     mp4sys_remove_descriptor( esd );
     uint8_t *data = lsmash_bs_export_data( bs, data_length );
     lsmash_bs_cleanup( bs );
