@@ -1271,7 +1271,7 @@ static int isom_append_audio_es_descriptor_extension( isom_box_t *box, lsmash_au
     bs.buffer.data  = esds_data + ISOM_FULLBOX_COMMON_SIZE;
     bs.buffer.alloc = esds_size - ISOM_FULLBOX_COMMON_SIZE;
     bs.buffer.store = bs.buffer.alloc;
-    esds->ES = mp4sys_get_descriptor( &bs );
+    esds->ES = mp4sys_get_descriptor( &bs, NULL );
     lsmash_free( esds_data );
     if( !esds->ES )
     {

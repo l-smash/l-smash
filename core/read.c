@@ -411,7 +411,7 @@ static int isom_read_iods( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
         return isom_read_unknown_box( file, box, parent, level );
     ADD_BOX( iods, isom_moov_t );
     lsmash_bs_t *bs = file->bs;
-    iods->OD = mp4sys_get_descriptor( bs );
+    iods->OD = mp4sys_get_descriptor( bs, NULL );
     if( !iods->OD )
     {
         lsmash_free( iods );
@@ -1146,7 +1146,7 @@ static int isom_read_esds( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
         box->type = ISOM_BOX_TYPE_ESDS;
     ADD_BOX( esds, void );
     lsmash_bs_t *bs = file->bs;
-    esds->ES = mp4sys_get_descriptor( bs );
+    esds->ES = mp4sys_get_descriptor( bs, NULL );
     if( !esds->ES )
     {
         lsmash_free( esds );
