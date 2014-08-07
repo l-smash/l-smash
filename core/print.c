@@ -497,11 +497,11 @@ static int isom_print_ctab( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
 
 static int isom_print_iods( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
 {
-    extern void mp4sys_print_ObjectDescriptor( FILE *, void *, int );
+    extern void mp4sys_print_descriptor( FILE *, void *, int );
     isom_iods_t *iods = (isom_iods_t *)box;
     int indent = level;
     isom_print_box_common( fp, indent, box, "Object Descriptor Box" );
-    mp4sys_print_ObjectDescriptor( fp, iods->OD, indent + 1 );
+    mp4sys_print_descriptor( fp, iods->OD, indent + 1 );
     return 0;
 }
 

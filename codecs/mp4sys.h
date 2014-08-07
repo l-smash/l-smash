@@ -4,6 +4,7 @@
  * Copyright (C) 2010-2014 L-SMASH project
  *
  * Authors: Takashi Hirata <silverfilain@gmail.com>
+ *          Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -28,14 +29,16 @@
 ***************************************************************************/
 
 /* ODProfileLevelIndication */
-typedef enum {
+typedef enum
+{
     MP4SYS_OD_PLI_Forbidden     = 0x00, /* Forbidden */
     MP4SYS_OD_PLI_NOT_SPECIFIED = 0xFE, /* no OD profile specified */
     MP4SYS_OD_PLI_NONE_REQUIRED = 0xFF, /* no OD capability required */
 } mp4sys_ODProfileLevelIndication;
 
 /* sceneProfileLevelIndication */
-typedef enum {
+typedef enum
+{
     MP4SYS_SCENE_PLI_RESERVED      = 0x00, /* Reserved for ISO use */
     MP4SYS_SCENE_PLI_Simple2D_L1   = 0x01, /* Simple 2D L1 */
     MP4SYS_SCENE_PLI_Simple2D_L2   = 0x02, /* Simple 2D L2 */
@@ -61,7 +64,8 @@ typedef enum {
 } mp4sys_sceneProfileLevelIndication;
 
 /* 14496-2 Profile and level indication and restrictions */
-typedef enum {
+typedef enum
+{
     MP4SYS_VISUAL_PLI_Reserved                       = 0x00, /* 0b00000000, Reserved */
     MP4SYS_VISUAL_PLI_Simple_PL1                     = 0x01, /* 0b00000001, Simple Profile/Level 1 */
     MP4SYS_VISUAL_PLI_Simple_PL2                     = 0x02, /* 0b00000010, Simple Profile/Level 2 */
@@ -106,7 +110,8 @@ typedef enum {
 } mp4sys_visualProfileLevelIndication;
 
 /* graphicsProfileLevelIndication */
-typedef enum {
+typedef enum
+{
     MP4SYS_GRAPHICS_PLI_RESERVED         = 0x00, /* Reserved for ISO use */
     MP4SYS_GRAPHICS_PLI_Simple2D_L1      = 0x01, /* Simple2D profile L1 */
     MP4SYS_GRAPHICS_PLI_Simple2D_Text_L1 = 0x02, /* Simple 2D + Text profile L1 */
@@ -120,14 +125,15 @@ typedef enum {
 } mp4sys_graphicsProfileLevelIndication;
 
 /* Just for mp4sys_setup_ES_Descriptor, to facilitate to make ES_Descriptor */
-typedef struct {
+typedef struct
+{
     uint16_t ES_ID;                 /* Maybe 0 in stsd(esds), or alternatively, lower 16 bits of the TrackID */
     lsmash_mp4sys_object_type_indication objectTypeIndication;
-    lsmash_mp4sys_stream_type streamType;
+    lsmash_mp4sys_stream_type            streamType;
     uint32_t bufferSizeDB;          /* byte unit, NOT bit unit. */
     uint32_t maxBitrate;
     uint32_t avgBitrate;            /* 0 if VBR */
-    void* dsi_payload;              /* AudioSpecificConfig or so */
+    void    *dsi_payload;           /* AudioSpecificConfig or so */
     uint32_t dsi_payload_length ;   /* size of dsi_payload */
 } mp4sys_ES_Descriptor_params_t;
 
@@ -139,68 +145,67 @@ struct lsmash_mp4sys_decoder_specific_info_tag
 
 #ifndef MP4SYS_INTERNAL
 
+typedef void mp4sys_descriptor_t;
 typedef void mp4sys_ES_Descriptor_t;
 typedef void mp4sys_ObjectDescriptor_t;
 
-int mp4sys_remove_DecoderSpecificInfo( mp4sys_ES_Descriptor_t* esd );
-int mp4sys_remove_DecoderConfigDescriptor( mp4sys_ES_Descriptor_t* esd );
-int mp4sys_remove_SLConfigDescriptor( mp4sys_ES_Descriptor_t* esd );
-int mp4sys_remove_ES_Descriptor( mp4sys_ES_Descriptor_t* esd );
-int mp4sys_remove_ES_ID_Incs( mp4sys_ObjectDescriptor_t* od );
-int mp4sys_remove_ObjectDescriptor( mp4sys_ObjectDescriptor_t* od );
+void mp4sys_remove_descriptor( mp4sys_descriptor_t *descriptor );
 
-int mp4sys_add_DecoderSpecificInfo( mp4sys_ES_Descriptor_t* esd, void* dsi_payload, uint32_t dsi_payload_length );
+int mp4sys_add_DecoderSpecificInfo( mp4sys_ES_Descriptor_t *esd, void *dsi_payload, uint32_t dsi_payload_length );
 /*
     bufferSizeDB is byte unit, NOT bit unit.
     avgBitrate is 0 if VBR
 */
-int mp4sys_add_DecoderConfigDescriptor(
-    mp4sys_ES_Descriptor_t* esd,
+int mp4sys_add_DecoderConfigDescriptor
+(
+    mp4sys_ES_Descriptor_t              *esd,
     lsmash_mp4sys_object_type_indication objectTypeIndication,
-    lsmash_mp4sys_stream_type streamType,
-    uint32_t bufferSizeDB,
-    uint32_t maxBitrate,
-    uint32_t avgBitrate
+    lsmash_mp4sys_stream_type            streamType,
+    uint32_t                             bufferSizeDB,
+    uint32_t                             maxBitrate,
+    uint32_t                             avgBitrate
 );
-int mp4sys_add_SLConfigDescriptor( mp4sys_ES_Descriptor_t* esd );
-int mp4sys_add_ES_ID_Inc( mp4sys_ObjectDescriptor_t* od, uint32_t Track_ID);
+int mp4sys_add_SLConfigDescriptor( mp4sys_ES_Descriptor_t *esd );
+int mp4sys_add_ES_ID_Inc( mp4sys_ObjectDescriptor_t *od, uint32_t Track_ID );
 
 /* ES_ID of the ES Descriptor is stored as 0 when the ES Descriptor is built into sample descriptions in MP4 file format
  * since the lower 16 bits of the track_ID is used, instead of ES_ID, for the identifier of the elemental stream within the track. */
-mp4sys_ES_Descriptor_t* mp4sys_create_ES_Descriptor( uint16_t ES_ID );
-mp4sys_ObjectDescriptor_t* mp4sys_create_ObjectDescriptor( uint16_t ObjectDescriptorID );
-int mp4sys_to_InitialObjectDescriptor(
-    mp4sys_ObjectDescriptor_t* od,
-    uint8_t include_inline_pli,
-    mp4sys_ODProfileLevelIndication od_pli,
-    mp4sys_sceneProfileLevelIndication scene_pli,
-    mp4a_audioProfileLevelIndication audio_pli,
-    mp4sys_visualProfileLevelIndication visual_pli,
+mp4sys_ES_Descriptor_t *mp4sys_create_ES_Descriptor( uint16_t ES_ID );
+mp4sys_ObjectDescriptor_t *mp4sys_create_ObjectDescriptor( uint16_t ObjectDescriptorID );
+int mp4sys_to_InitialObjectDescriptor
+(
+    mp4sys_ObjectDescriptor_t            *od,
+    uint8_t                               include_inline_pli,
+    mp4sys_ODProfileLevelIndication       od_pli,
+    mp4sys_sceneProfileLevelIndication    scene_pli,
+    mp4a_audioProfileLevelIndication      audio_pli,
+    mp4sys_visualProfileLevelIndication   visual_pli,
     mp4sys_graphicsProfileLevelIndication graph_pli
 );
 
 int mp4sys_put_ES_Descriptor( lsmash_bs_t *bs, mp4sys_ES_Descriptor_t *esd );
 int mp4sys_write_ES_Descriptor( lsmash_bs_t *bs, mp4sys_ES_Descriptor_t *esd );
-int mp4sys_write_ObjectDescriptor( lsmash_bs_t *bs, mp4sys_ObjectDescriptor_t* od );
+int mp4sys_write_ObjectDescriptor( lsmash_bs_t *bs, mp4sys_ObjectDescriptor_t *od );
 
-int mp4sys_update_DecoderConfigDescriptor(
-    mp4sys_ES_Descriptor_t* esd,
-    uint32_t bufferSizeDB,
-    uint32_t maxBitrate,
-    uint32_t avgBitrate
+int mp4sys_update_DecoderConfigDescriptor
+(
+    mp4sys_ES_Descriptor_t *esd,
+    uint32_t                bufferSizeDB,
+    uint32_t                maxBitrate,
+    uint32_t                avgBitrate
 );
 
 #ifdef LSMASH_DEMUXER_ENABLED
 mp4sys_ES_Descriptor_t *mp4sys_duplicate_ES_Descriptor( mp4sys_ES_Descriptor_t *src );
 #endif
 
-mp4sys_ES_Descriptor_t *mp4sys_get_ES_Descriptor( lsmash_bs_t *bs );
-mp4sys_ObjectDescriptor_t *mp4sys_get_ObjectDescriptor( lsmash_bs_t *bs );
+void mp4sys_print_descriptor( FILE *fp, mp4sys_descriptor_t *descriptor, int indent );
+mp4sys_descriptor_t *mp4sys_get_descriptor( lsmash_bs_t *bs );
 
 int mp4sys_setup_summary_from_DecoderSpecificInfo( lsmash_audio_summary_t *summary, mp4sys_ES_Descriptor_t *esd );
 
 /* to facilitate to make ES_Descriptor */
-mp4sys_ES_Descriptor_t* mp4sys_setup_ES_Descriptor( mp4sys_ES_Descriptor_params_t* params );
+mp4sys_ES_Descriptor_t *mp4sys_setup_ES_Descriptor( mp4sys_ES_Descriptor_params_t *params );
 
 #endif /* #ifndef MP4SYS_INTERNAL */
 

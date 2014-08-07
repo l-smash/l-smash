@@ -571,7 +571,7 @@ static void isom_remove_iods( isom_iods_t *iods )
 {
     if( !iods )
         return;
-    mp4sys_remove_ObjectDescriptor( iods->OD );
+    mp4sys_remove_descriptor( iods->OD );
     REMOVE_BOX( iods, isom_moov_t );
 }
 
@@ -648,7 +648,7 @@ static void isom_remove_esds( isom_esds_t *esds )
 {
     if( !esds )
         return;
-    mp4sys_remove_ES_Descriptor( esds->ES );
+    mp4sys_remove_descriptor( esds->ES );
 }
 
 static void isom_remove_font_record( isom_font_record_t *font_record )
