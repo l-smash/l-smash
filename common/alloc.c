@@ -46,7 +46,7 @@ void *lsmash_realloc( void *ptr, size_t size )
     return realloc( ptr, size );
 }
 
-void *lsmash_memdup( void *ptr, size_t size )
+void *lsmash_memdup( const void *ptr, size_t size )
 {
     if( !ptr || size == 0 )
         return NULL;

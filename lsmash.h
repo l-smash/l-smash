@@ -34,8 +34,8 @@
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  1
-#define LSMASH_VERSION_MINOR 12
-#define LSMASH_VERSION_MICRO  6
+#define LSMASH_VERSION_MINOR 13
+#define LSMASH_VERSION_MICRO  0
 
 #define LSMASH_VERSION_INT( a, b, c ) (((a) << 16) | ((b) << 8) | (c))
 
@@ -380,8 +380,8 @@ void *lsmash_realloc
  * Return NULL otherwise. */
 void *lsmash_memdup
 (
-    void  *ptr,     /* an address to the source of data to be copied */
-    size_t size     /* number of bytes to copy */
+    const void *ptr,    /* an address to the source of data to be copied */
+    size_t      size    /* number of bytes to copy */
 );
 
 /* Deallocate a given memory block.
