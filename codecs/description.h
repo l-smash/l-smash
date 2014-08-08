@@ -57,6 +57,10 @@ int isom_setup_audio_description
     lsmash_codec_type_t     sample_type,
     lsmash_audio_summary_t *summary
 );
+int isom_setup_tx3g_description
+(
+    isom_stsd_t *stsd
+);
 
 lsmash_summary_t *isom_create_video_summary_from_description
 (

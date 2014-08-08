@@ -292,16 +292,7 @@ typedef void (*opaque_func_t)( void );
             else if( (opaque_func_t)isom_setup_audio_description == description_setup_table[i].func )
                 ret = isom_setup_audio_description( stsd, sample_type, (lsmash_audio_summary_t *)summary );
             else if( (opaque_func_t)isom_add_tx3g_description == description_setup_table[i].func )
-            {
-                isom_tx3g_entry_t *tx3g = isom_add_tx3g_description( stsd );
-                if( tx3g )
-                {
-                    tx3g->data_reference_index = 1;
-                    ret = !isom_add_ftab( tx3g ) ? -1 : 0;
-                    if( ret < 0 )
-                        isom_remove_box_by_itself( tx3g );
-                }
-            }
+                ret = isom_setup_tx3g_description( stsd );
             else if( (opaque_func_t)isom_add_qt_text_description == description_setup_table[i].func )
             {
                 isom_qt_text_entry_t *text = isom_add_qt_text_description( stsd );

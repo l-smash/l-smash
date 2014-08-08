@@ -2101,6 +2101,36 @@ fail:
     return -1;
 }
 
+int isom_setup_tx3g_description( isom_stsd_t *stsd )
+{
+    isom_tx3g_entry_t *tx3g = isom_add_tx3g_description( stsd );
+    if( !tx3g )
+        return -1;
+    tx3g->data_reference_index = 1;
+    tx3g->font_ID              = 0;
+    isom_ftab_t *ftab = isom_add_ftab( tx3g );
+    if( !ftab )
+        goto fail;
+    isom_font_record_t *font = lsmash_malloc( sizeof(isom_font_record_t) );
+    if( !font )
+        goto fail;
+    if( lsmash_add_entry( ftab->list, font ) < 0 )
+    {
+        lsmash_free( font );
+        goto fail;
+    }
+    const char font_names[] = "Serif,Sans-serif,Monospace";
+    font->font_ID          = 0;
+    font->font_name_length = sizeof(font_names);
+    font->font_name        = lsmash_memdup( font_names, sizeof(font_names) );
+    if( !font->font_name )
+        goto fail;
+    return 0;
+fail:
+    isom_remove_box_by_itself( tx3g );
+    return -1;
+}
+
 static lsmash_codec_specific_data_type isom_get_codec_specific_data_type( lsmash_compact_box_type_t extension_fourcc )
 {
     static struct codec_specific_data_type_table_tag
