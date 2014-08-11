@@ -2903,7 +2903,7 @@ int isom_setup_iods( isom_moov_t *moov )
             goto fail;
         if( isom_scan_trak_profileLevelIndication( trak, &audio_pli, &visual_pli ) )
             goto fail;
-        if( mp4sys_add_ES_ID_Inc( iods->OD, trak->tkhd->track_ID ) )
+        if( mp4sys_create_ES_ID_Inc( iods->OD, trak->tkhd->track_ID ) )
             goto fail;
     }
     if( mp4sys_to_InitialObjectDescriptor( iods->OD,

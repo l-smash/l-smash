@@ -151,27 +151,12 @@ typedef void mp4sys_ObjectDescriptor_t;
 
 void mp4sys_remove_descriptor( mp4sys_descriptor_t *descriptor );
 
-int mp4sys_add_DecoderSpecificInfo( mp4sys_ES_Descriptor_t *esd, void *dsi_payload, uint32_t dsi_payload_length );
-/*
-    bufferSizeDB is byte unit, NOT bit unit.
-    avgBitrate is 0 if VBR
-*/
-int mp4sys_add_DecoderConfigDescriptor
-(
-    mp4sys_ES_Descriptor_t              *esd,
-    lsmash_mp4sys_object_type_indication objectTypeIndication,
-    lsmash_mp4sys_stream_type            streamType,
-    uint32_t                             bufferSizeDB,
-    uint32_t                             maxBitrate,
-    uint32_t                             avgBitrate
-);
-int mp4sys_add_SLConfigDescriptor( mp4sys_ES_Descriptor_t *esd );
-int mp4sys_add_ES_ID_Inc( mp4sys_ObjectDescriptor_t *od, uint32_t Track_ID );
-
 /* ES_ID of the ES Descriptor is stored as 0 when the ES Descriptor is built into sample descriptions in MP4 file format
  * since the lower 16 bits of the track_ID is used, instead of ES_ID, for the identifier of the elemental stream within the track. */
 mp4sys_ES_Descriptor_t *mp4sys_create_ES_Descriptor( uint16_t ES_ID );
 mp4sys_ObjectDescriptor_t *mp4sys_create_ObjectDescriptor( uint16_t ObjectDescriptorID );
+int mp4sys_create_ES_ID_Inc( mp4sys_ObjectDescriptor_t *od, uint32_t Track_ID );
+
 int mp4sys_to_InitialObjectDescriptor
 (
     mp4sys_ObjectDescriptor_t            *od,
