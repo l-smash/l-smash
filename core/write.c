@@ -33,8 +33,6 @@
 #include "codecs/mp4sys.h"
 #include "codecs/description.h"
 
-int isom_write_box( lsmash_bs_t *bs, isom_box_t *box );
-
 static int isom_write_children( lsmash_bs_t *bs, isom_box_t *box )
 {
     for( lsmash_entry_t *entry = box->extensions.head; entry; entry = entry->next )
@@ -454,6 +452,7 @@ static int isom_write_esds( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_esds_t *esds = (isom_esds_t *)box;
     isom_bs_put_box_common( bs, esds );
+    mp4sys_update_descriptor_size( esds->ES );
     return mp4sys_write_descriptor( bs, esds->ES );
 }
 
@@ -1047,6 +1046,7 @@ static int isom_write_iods( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_iods_t *iods = (isom_iods_t *)box;
     isom_bs_put_box_common( bs, iods );
+    mp4sys_update_descriptor_size( iods->OD );
     return mp4sys_write_descriptor( bs, iods->OD );
 }
 
