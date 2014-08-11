@@ -666,8 +666,9 @@ int mp4a_setup_summary_from_AudioSpecificConfig( lsmash_audio_summary_t *summary
     mp4a_AudioSpecificConfig_t *asc = mp4a_get_AudioSpecificConfig( dsi_payload, dsi_payload_length );
     if( !asc )
         return -1;
-    summary->sample_type = ISOM_CODEC_TYPE_MP4A_AUDIO;
-    summary->aot         = asc->audioObjectType;
+    summary->summary_type = LSMASH_SUMMARY_TYPE_AUDIO;
+    summary->sample_type  = ISOM_CODEC_TYPE_MP4A_AUDIO;
+    summary->aot          = asc->audioObjectType;
     switch( asc->audioObjectType )
     {
         case MP4A_AUDIO_OBJECT_TYPE_AAC_MAIN :
@@ -1118,8 +1119,8 @@ mp4a_audioProfileLevelIndication mp4a_max_audioProfileLevelIndication( mp4a_audi
         d = a;
     }
     /* AAC-LC and SBR specific; If mixtured there, use correspond HE_AAC profile. */
-    if( MP4A_AUDIO_PLI_AAC_L1 <= c && c <= MP4A_AUDIO_PLI_AAC_L5
-        && MP4A_AUDIO_PLI_HE_AAC_L2 <= d && d <= MP4A_AUDIO_PLI_HE_AAC_L5 )
+    if( MP4A_AUDIO_PLI_AAC_L1    <= c && c <= MP4A_AUDIO_PLI_AAC_L5
+     && MP4A_AUDIO_PLI_HE_AAC_L2 <= d && d <= MP4A_AUDIO_PLI_HE_AAC_L5 )
     {
         if( c <= MP4A_AUDIO_PLI_AAC_L2 )
             return d;

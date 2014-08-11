@@ -2825,7 +2825,12 @@ uint32_t lsmash_get_movie_timescale( lsmash_root_t *root )
     return root->file->moov->mvhd->timescale;
 }
 
-static int isom_scan_trak_profileLevelIndication( isom_trak_t *trak, mp4a_audioProfileLevelIndication *audio_pli, mp4sys_visualProfileLevelIndication *visual_pli )
+static int isom_scan_trak_profileLevelIndication
+(
+    isom_trak_t                         *trak,
+    mp4a_audioProfileLevelIndication    *audio_pli,
+    mp4sys_visualProfileLevelIndication *visual_pli
+)
 {
     if( !trak
      || !trak->mdia
@@ -2865,15 +2870,15 @@ static int isom_scan_trak_profileLevelIndication( isom_trak_t *trak, mp4a_audioP
             if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_MP4A_AUDIO ) )
             {
                 isom_audio_entry_t *audio = (isom_audio_entry_t *)sample_entry;
-#ifdef LSMASH_DEMUXER_ENABLED
                 isom_esds_t *esds = (isom_esds_t *)isom_get_extension_box_format( &audio->extensions, ISOM_BOX_TYPE_ESDS );
                 if( !esds || !esds->ES )
                     return -1;
-                if( !lsmash_check_codec_type_identical( audio->summary.sample_type, ISOM_CODEC_TYPE_MP4A_AUDIO ) )
-                    /* This is needed when copying descriptions. */
-                    mp4sys_setup_summary_from_DecoderSpecificInfo( &audio->summary, esds->ES );
-#endif
-                *audio_pli = mp4a_max_audioProfileLevelIndication( *audio_pli, mp4a_get_audioProfileLevelIndication( &audio->summary ) );
+                lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_AUDIO );
+                if( !summary )
+                    continue;
+                mp4sys_setup_summary_from_DecoderSpecificInfo( summary, esds->ES );
+                *audio_pli = mp4a_max_audioProfileLevelIndication( *audio_pli, mp4a_get_audioProfileLevelIndication( summary ) );
+                lsmash_cleanup_summary( (lsmash_summary_t *)summary );
             }
             else
                 /* NOTE: Audio CODECs other than 'mp4a' does not have appropriate pli. */

@@ -775,8 +775,6 @@ typedef struct
     uint32_t formatSpecificFlags;
     uint32_t constBytesPerAudioPacket;          /* only set if constant */
     uint32_t constLPCMFramesPerAudioPacket;     /* only set if constant */
-
-        lsmash_audio_summary_t summary;
 } isom_audio_entry_t;
 
 /* Hint Sample Entry */

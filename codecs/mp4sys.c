@@ -1460,11 +1460,40 @@ int mp4sys_setup_summary_from_DecoderSpecificInfo( lsmash_audio_summary_t *summa
     uint8_t *dsi_payload = mp4sys_export_DecoderSpecificInfo( esd, &dsi_payload_length );
     if( !dsi_payload && dsi_payload_length )
         return -1;
-    int ret = dsi_payload_length
-            ? mp4a_setup_summary_from_AudioSpecificConfig( summary, dsi_payload, dsi_payload_length )
-            : 0;
+    if( dsi_payload_length )
+    {
+        lsmash_codec_specific_t *cs = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG,
+                                                                         LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+        if( !cs )
+            goto fail;
+        if( mp4a_setup_summary_from_AudioSpecificConfig( summary, dsi_payload, dsi_payload_length ) < 0 )
+        {
+            lsmash_destroy_codec_specific_data( cs );
+            goto fail;
+        }
+        mp4sys_DecoderConfigDescriptor_t *dcd = esd->decConfigDescr;
+        lsmash_mp4sys_decoder_parameters_t *params = (lsmash_mp4sys_decoder_parameters_t *)cs->data.structured;
+        params->objectTypeIndication = dcd->objectTypeIndication;
+        params->streamType           = dcd->streamType;
+        params->bufferSizeDB         = dcd->bufferSizeDB;
+        params->maxBitrate           = dcd->maxBitrate;
+        params->avgBitrate           = dcd->avgBitrate;
+        if( lsmash_set_mp4sys_decoder_specific_info( params, dsi_payload, dsi_payload_length ) < 0 )
+        {
+            lsmash_destroy_codec_specific_data( cs );
+            goto fail;
+        }
+        if( lsmash_add_entry( &summary->opaque->list, cs ) < 0 )
+        {
+            lsmash_destroy_codec_specific_data( cs );
+            goto fail;
+        }
+    }
     lsmash_free( dsi_payload );
-    return ret;
+    return 0;
+fail:
+    lsmash_free( dsi_payload );
+    return -1;
 }
 
 /**** following functions are for facilitation purpose ****/
