@@ -653,6 +653,7 @@ static mp4a_AudioSpecificConfig_t *mp4a_get_AudioSpecificConfig( uint8_t *dsi_pa
     }
     if( ret < 0 )
         goto fail;
+    lsmash_bits_adhoc_cleanup( bits );
     return asc;
 fail:
     lsmash_bits_adhoc_cleanup( bits );
