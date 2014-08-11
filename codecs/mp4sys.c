@@ -748,61 +748,6 @@ int mp4sys_to_InitialObjectDescriptor
 }
 
 #ifdef LSMASH_DEMUXER_ENABLED
-static int mp4sys_copy_DecoderSpecificInfo( mp4sys_ES_Descriptor_t *dst, mp4sys_ES_Descriptor_t *src )
-{
-    if( !src || !src->decConfigDescr
-     || !dst || !dst->decConfigDescr )
-        return -1;
-    mp4sys_remove_descriptor( dst->decConfigDescr->decSpecificInfo );
-    mp4sys_DecoderSpecificInfo_t *src_dsi = src->decConfigDescr->decSpecificInfo;
-    if( !src_dsi
-     || !src_dsi->data
-     || !src_dsi->header.size )
-        return 0;
-    mp4sys_DecoderSpecificInfo_t *dst_dsi = mp4sys_add_DecoderSpecificInfo( dst->decConfigDescr );
-    if( !dst_dsi )
-        return -1;
-    dst_dsi->data = lsmash_memdup( dst_dsi->data, src_dsi->header.size );
-    if( !dst_dsi->data )
-    {
-        mp4sys_remove_descriptor( dst_dsi );
-        return -1;
-    }
-    dst_dsi->header.size = src_dsi->header.size;
-    return 0;
-}
-
-static int mp4sys_copy_DecoderConfigDescriptor( mp4sys_ES_Descriptor_t *dst, mp4sys_ES_Descriptor_t *src )
-{
-    if( !src || !dst )
-        return -1;
-    mp4sys_remove_descriptor( dst->decConfigDescr );
-    if( !src->decConfigDescr )
-        return 0;
-    mp4sys_DecoderConfigDescriptor_t *dcd = mp4sys_add_DecoderConfigDescriptor( dst );
-        return -1;
-    memcpy( dst->decConfigDescr + sizeof(mp4sys_BaseDescriptor_t),
-            src->decConfigDescr + sizeof(mp4sys_BaseDescriptor_t),
-            sizeof(mp4sys_DecoderConfigDescriptor_t) - sizeof(mp4sys_BaseDescriptor_t) );
-    dcd->decSpecificInfo = NULL;
-    return mp4sys_copy_DecoderSpecificInfo( dst, src );
-}
-
-static int mp4sys_copy_SLConfigDescriptor( mp4sys_ES_Descriptor_t *dst, mp4sys_ES_Descriptor_t *src )
-{
-    if( !src || !dst )
-        return -1;
-    mp4sys_remove_descriptor( dst->slConfigDescr );
-    if( !src->slConfigDescr )
-        return 0;
-    if( !mp4sys_add_SLConfigDescriptor( dst ) )
-        return -1;
-    memcpy( dst->slConfigDescr + sizeof(mp4sys_BaseDescriptor_t),
-            src->slConfigDescr + sizeof(mp4sys_BaseDescriptor_t),
-            sizeof(mp4sys_SLConfigDescriptor_t) - sizeof(mp4sys_BaseDescriptor_t) );
-    return 0;
-}
-
 /*
     bufferSizeDB is byte unit, NOT bit unit.
     avgBitrate is 0 if VBR
@@ -816,25 +761,6 @@ int mp4sys_update_DecoderConfigDescriptor( mp4sys_ES_Descriptor_t *esd, uint32_t
     dcd->maxBitrate   = maxBitrate;
     dcd->avgBitrate   = avgBitrate;
     return 0;
-}
-
-mp4sys_ES_Descriptor_t *mp4sys_duplicate_ES_Descriptor( mp4sys_ES_Descriptor_t *src )
-{
-    if( !src )
-        return NULL;
-    mp4sys_ES_Descriptor_t *dst = mp4sys_create_ES_Descriptor( 0 );
-    if( !dst )
-        return NULL;
-    *dst = *src;
-    dst->decConfigDescr = NULL;
-    dst->slConfigDescr  = NULL;
-    if( mp4sys_copy_DecoderConfigDescriptor( dst, src ) < 0
-     || mp4sys_copy_SLConfigDescriptor     ( dst, src ) < 0 )
-    {
-        mp4sys_remove_descriptor( dst );
-        return NULL;
-    }
-    return dst;
 }
 
 void mp4sys_print_descriptor( FILE *fp, mp4sys_descriptor_t *descriptor, int indent );

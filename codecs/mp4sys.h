@@ -176,10 +176,6 @@ int mp4sys_update_DecoderConfigDescriptor
     uint32_t                avgBitrate
 );
 
-#ifdef LSMASH_DEMUXER_ENABLED
-mp4sys_ES_Descriptor_t *mp4sys_duplicate_ES_Descriptor( mp4sys_ES_Descriptor_t *src );
-#endif
-
 uint32_t mp4sys_update_descriptor_size( mp4sys_descriptor_t *descriptor );
 int mp4sys_write_descriptor( lsmash_bs_t *bs, mp4sys_descriptor_t *descriptor );
 void mp4sys_print_descriptor( FILE *fp, mp4sys_descriptor_t *descriptor, int indent );
