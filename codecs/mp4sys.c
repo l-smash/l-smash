@@ -1460,12 +1460,11 @@ int mp4sys_setup_summary_from_DecoderSpecificInfo( lsmash_audio_summary_t *summa
     uint8_t *dsi_payload = mp4sys_export_DecoderSpecificInfo( esd, &dsi_payload_length );
     if( !dsi_payload && dsi_payload_length )
         return -1;
-    if( dsi_payload_length && mp4a_setup_summary_from_AudioSpecificConfig( summary, dsi_payload, dsi_payload_length ) )
-    {
-        lsmash_free( dsi_payload );
-        return -1;
-    }
-    return 0;
+    int ret = dsi_payload_length
+            ? mp4a_setup_summary_from_AudioSpecificConfig( summary, dsi_payload, dsi_payload_length )
+            : 0;
+    lsmash_free( dsi_payload );
+    return ret;
 }
 
 /**** following functions are for facilitation purpose ****/
