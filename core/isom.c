@@ -2876,8 +2876,10 @@ static int isom_scan_trak_profileLevelIndication
                 lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_AUDIO );
                 if( !summary )
                     continue;
-                mp4sys_setup_summary_from_DecoderSpecificInfo( summary, esds->ES );
-                *audio_pli = mp4a_max_audioProfileLevelIndication( *audio_pli, mp4a_get_audioProfileLevelIndication( summary ) );
+                if( mp4sys_setup_summary_from_DecoderSpecificInfo( summary, esds->ES ) < 0 )
+                    *audio_pli = MP4A_AUDIO_PLI_NOT_SPECIFIED;
+                else
+                    *audio_pli = mp4a_max_audioProfileLevelIndication( *audio_pli, mp4a_get_audioProfileLevelIndication( summary ) );
                 lsmash_cleanup_summary( (lsmash_summary_t *)summary );
             }
             else
