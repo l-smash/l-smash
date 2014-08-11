@@ -558,7 +558,10 @@ uint32_t mp4sys_update_descriptor_size( void *opaque_descriptor )
                 if( entry->data )
                     size += mp4sys_update_descriptor_size( entry->data );
             /* Calculate the size of this descriptor excluding its header. */
-            descriptor->header.size = size - mp4sys_get_descriptor_header_size( header_size );
+            size -= mp4sys_get_descriptor_header_size( header_size );
+            descriptor->header.size = size;
+            /* Now, we get the actual size of this descriptor. */
+            size += mp4sys_get_descriptor_header_size( size );
         }
         else
         {
