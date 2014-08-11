@@ -1214,13 +1214,10 @@ static mp4sys_ES_Descriptor_t *mp4sys_get_ES_Descriptor( lsmash_bs_t *bs, mp4sys
 
 static mp4sys_ES_ID_Inc_t *mp4sys_get_ES_ID_Inc( lsmash_bs_t *bs, mp4sys_descriptor_head_t *header, void *parent )
 {
-    MP4SYS_CONSTRUCT_DESCRIPTOR( es_id_inc, ES_ID_Inc, parent, NULL );
-    if( parent && lsmash_add_entry( &((mp4sys_descriptor_t *)parent)->children, es_id_inc ) < 0 )
-    {
-        mp4sys_remove_descriptor( es_id_inc );
+    mp4sys_ES_ID_Inc_t *es_id_inc = mp4sys_add_ES_ID_Inc( parent );
+    if( !es_id_inc )
         return NULL;
-    }
-    es_id_inc->header   = *header;
+    es_id_inc->header.size = header->size;
     es_id_inc->Track_ID = lsmash_bs_get_be32( bs );
     return es_id_inc;
 }
@@ -1271,11 +1268,6 @@ static mp4sys_ObjectDescriptor_t *mp4sys_get_ObjectDescriptor( lsmash_bs_t *bs, 
             {
                 mp4sys_remove_descriptor( desc );
                 break;
-            }
-            if( lsmash_add_entry( &od->esDescr, desc ) < 0 )
-            {
-                mp4sys_remove_descriptor( desc );
-                return NULL;
             }
         }
     }
