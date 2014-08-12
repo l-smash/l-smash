@@ -413,10 +413,7 @@ static int isom_read_iods( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     lsmash_bs_t *bs = file->bs;
     iods->OD = mp4sys_get_descriptor( bs, NULL );
     if( !iods->OD )
-    {
-        lsmash_free( iods );
         return -1;
-    }
     isom_skip_box_rest( file->bs, box );
     return isom_read_leaf_box_common_last_process( file, box, level, iods );
 }
@@ -1148,10 +1145,7 @@ static int isom_read_esds( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     lsmash_bs_t *bs = file->bs;
     esds->ES = mp4sys_get_descriptor( bs, NULL );
     if( !esds->ES )
-    {
-        lsmash_free( esds );
         return -1;
-    }
     return isom_read_leaf_box_common_last_process( file, box, level, esds );
 }
 
