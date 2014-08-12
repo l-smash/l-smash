@@ -882,7 +882,6 @@ static void mp4sys_print_DecoderConfigDescriptor( FILE *fp, mp4sys_descriptor_t 
     lsmash_ifprintf( fp, indent, "bufferSizeDB = %"PRIu32"\n", dcd->bufferSizeDB );
     lsmash_ifprintf( fp, indent, "maxBitrate = %"PRIu32"\n", dcd->maxBitrate );
     lsmash_ifprintf( fp, indent, "avgBitrate = %"PRIu32"%s\n", dcd->avgBitrate, dcd->avgBitrate ? "" : " (variable bitrate)" );
-    mp4sys_print_descriptor( fp, (mp4sys_descriptor_t *)dcd->decSpecificInfo, indent );
 }
 
 static void mp4sys_print_SLConfigDescriptor( FILE *fp, mp4sys_descriptor_t *descriptor, int indent )
@@ -940,8 +939,6 @@ static void mp4sys_print_ES_Descriptor( FILE *fp, mp4sys_descriptor_t *descripto
     }
     if( esd->OCRstreamFlag )
         lsmash_ifprintf( fp, indent, "OCR_ES_Id = %"PRIu16"\n", esd->OCR_ES_Id );
-    mp4sys_print_descriptor( fp, (mp4sys_descriptor_t *)esd->decConfigDescr, indent );
-    mp4sys_print_descriptor( fp, (mp4sys_descriptor_t *)esd->slConfigDescr, indent );
 }
 
 static void mp4sys_print_ES_ID_Inc( FILE *fp, mp4sys_descriptor_t *descriptor, int indent )
@@ -979,9 +976,6 @@ static void mp4sys_print_ObjectDescriptor( FILE *fp, mp4sys_descriptor_t *descri
             lsmash_ifprintf( fp, indent, "visualProfileLevelIndication = 0x%02"PRIx8"\n",   od->visualProfileLevelIndication );
             lsmash_ifprintf( fp, indent, "graphicsProfileLevelIndication = 0x%02"PRIx8"\n", od->graphicsProfileLevelIndication );
         }
-        for( lsmash_entry_t *entry = od->esDescr.head; entry; entry = entry->next )
-            if( entry->data )
-                mp4sys_print_descriptor( fp, entry->data, indent );
     }
 }
 
@@ -1016,6 +1010,9 @@ void mp4sys_print_descriptor( FILE *fp, mp4sys_descriptor_t *descriptor, int ind
         default :
             break;
     }
+    for( lsmash_entry_t *entry = descriptor->children.head; entry; entry = entry->next )
+        if( entry->data )
+            mp4sys_print_descriptor( fp, entry->data, indent );
 }
 
 int mp4sys_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
