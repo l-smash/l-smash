@@ -718,7 +718,8 @@ static int isom_print_hmhd( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
 
 static int isom_print_nmhd( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
 {
-    return isom_print_simple( fp, box, level, "Null Media Header Box" );
+    isom_print_box_common( fp, level, box, "Null Media Header Box" );
+    return 0;
 }
 
 static int isom_print_gmhd( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
