@@ -1093,11 +1093,6 @@ static mp4sys_DecoderConfigDescriptor_t *mp4sys_get_DecoderConfigDescriptor( lsm
         else
             break;
     }
-    if( !dcd->decSpecificInfo )
-    {
-        mp4sys_remove_descriptor( dcd );
-        return NULL;
-    }
     return dcd;
 }
 
