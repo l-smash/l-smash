@@ -1274,6 +1274,18 @@ static int isom_print_ftab( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
     return 0;
 }
 
+static int isom_print_mp4s_description( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
+{
+    isom_mp4s_entry_t *mp4s = (isom_mp4s_entry_t *)box;
+    int indent = level;
+    lsmash_ifprintf( fp, indent++, "[%s: MPEG-4 Systems Description]\n", isom_4cc2str( mp4s->type.fourcc ) );
+    lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", mp4s->pos );
+    lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", mp4s->size );
+    isom_ifprintf_sample_description_common_reserved( fp, indent, mp4s->reserved );
+    lsmash_ifprintf( fp, indent, "data_reference_index = %"PRIu16"\n", mp4s->data_reference_index );
+    return 0;
+}
+
 static int isom_print_sample_description_extesion( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
 {
     extern int mp4sys_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
@@ -2466,6 +2478,7 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_NOT_SPECIFIED, isom_print_audio_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_TEXT_TEXT,     isom_print_text_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_TX3G_TEXT,   isom_print_tx3g_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_MP4S_SYSTEM, isom_print_mp4s_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( LSMASH_CODEC_TYPE_UNSPECIFIED, NULL );
 #undef ADD_PRINT_DESCRIPTION_TABLE_ELEMENT
             }

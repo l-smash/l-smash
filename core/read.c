@@ -1059,6 +1059,7 @@ static void *isom_sample_description_alloc( lsmash_codec_type_t sample_type )
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_NOT_SPECIFIED, sizeof(isom_audio_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_TX3G_TEXT, sizeof(isom_tx3g_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_TEXT_TEXT, sizeof(isom_qt_text_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_MP4S_SYSTEM, sizeof(isom_mp4s_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( LSMASH_CODEC_TYPE_UNSPECIFIED, 0 );
 #undef ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT
     }
@@ -1509,6 +1510,24 @@ static int isom_read_ftab( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
         }
     }
     return isom_read_leaf_box_common_last_process( file, box, level, ftab );
+}
+
+static int isom_read_mp4s_description( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) )
+        return isom_read_unknown_box( file, box, parent, level );
+    isom_mp4s_entry_t *mp4s = (isom_mp4s_entry_t *)isom_add_description( box->type, (isom_stsd_t *)parent );
+    if( !mp4s )
+        return -1;
+    lsmash_bs_t *bs = file->bs;
+    for( int i = 0; i < 6; i++ )
+        mp4s->reserved[i]      = lsmash_bs_get_byte( bs );
+    mp4s->data_reference_index = lsmash_bs_get_be16( bs );
+    box->parent = parent;
+    isom_box_common_copy( mp4s, box );
+    if( isom_add_print_func( file, mp4s, level ) )
+        return -1;
+    return isom_read_children( file, box, mp4s, level );
 }
 
 static int isom_read_stts( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
@@ -2585,6 +2604,7 @@ int isom_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uin
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_NOT_SPECIFIED, lsmash_form_qtff_box_type, isom_read_audio_description );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_TEXT_TEXT,   lsmash_form_qtff_box_type, isom_read_qt_text_description );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_TX3G_TEXT, lsmash_form_iso_box_type,  isom_read_tx3g_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_MP4S_SYSTEM, lsmash_form_iso_box_type, isom_read_mp4s_description );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( LSMASH_CODEC_TYPE_UNSPECIFIED, NULL, NULL );
 #undef ADD_DESCRIPTION_READER_TABLE_ELEMENT
         }
