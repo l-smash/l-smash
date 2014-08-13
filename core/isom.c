@@ -449,7 +449,14 @@ static int isom_add_stps_entry( isom_stbl_t *stbl, uint32_t sample_number )
     return 0;
 }
 
-static int isom_add_sdtp_entry( isom_box_t *parent, lsmash_sample_property_t *prop, uint8_t avc_extensions )
+/* Between ISOBMFF and QTFF, the most significant 2-bit has different meaning.
+ * For the maximum compatibility, we set 0 to the most significant 2-bit when compatible with
+ * both ISOBMFF with AVCFF extensions and QTFF.
+ *   compatibility == 0 -> neither AVCFF extensions nor QTFF compatible
+ *   compatibility == 1 -> AVCFF extensions compatible
+ *   compatibility == 2 -> QTFF compatible
+ *   compatibility == 3 -> both AVCFF extensions and QTFF compatible */
+static int isom_add_sdtp_entry( isom_box_t *parent, lsmash_sample_property_t *prop, int compatibility )
 {
     if( !prop || !parent )
         return -1;
@@ -466,12 +473,19 @@ static int isom_add_sdtp_entry( isom_box_t *parent, lsmash_sample_property_t *pr
     isom_sdtp_entry_t *data = lsmash_malloc( sizeof(isom_sdtp_entry_t) );
     if( !data )
         return -1;
-    /* isom_sdtp_entry_t is smaller than lsmash_sample_property_t. */
-    data->is_leading            = (avc_extensions ? prop->leading : prop->allow_earlier) & 0x03;
+    if( compatibility == 1 )
+        data->is_leading = prop->leading & 0x03;
+    else if( compatibility == 2 )
+        data->is_leading = prop->allow_earlier & 0x03;
+    else
+    {
+        data->is_leading = 0;
+        assert( compatibility == 3 );
+    }
     data->sample_depends_on     = prop->independent & 0x03;
     data->sample_is_depended_on = prop->disposable  & 0x03;
     data->sample_has_redundancy = prop->redundant   & 0x03;
-    if( lsmash_add_entry( sdtp->list, data ) )
+    if( lsmash_add_entry( sdtp->list, data ) < 0 )
     {
         lsmash_free( data );
         return -1;
@@ -3619,10 +3633,13 @@ static int isom_add_dependency_type( isom_trak_t *trak, lsmash_sample_property_t
 {
     if( !trak->file->qt_compatible && !trak->file->avc_extensions )
         return 0;
-    uint8_t avc_extensions = trak->file->avc_extensions;
+    int compatibility = trak->file->avc_extensions && trak->file->qt_compatible ? 3
+                      : trak->file->qt_compatible                               ? 2
+                      : trak->file->avc_extensions                              ? 1
+                      :                                                           0;
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     if( stbl->sdtp )
-        return isom_add_sdtp_entry( (isom_box_t *)stbl, prop, avc_extensions );
+        return isom_add_sdtp_entry( (isom_box_t *)stbl, prop, compatibility );
     if( !prop->allow_earlier && !prop->leading && !prop->independent && !prop->disposable && !prop->redundant )  /* no null check for prop */
         return 0;
     if( !isom_add_sdtp( (isom_box_t *)stbl ) )
@@ -3631,9 +3648,9 @@ static int isom_add_dependency_type( isom_trak_t *trak, lsmash_sample_property_t
     /* fill past samples with ISOM_SAMPLE_*_UNKNOWN */
     lsmash_sample_property_t null_prop = { 0 };
     for( uint32_t i = 1; i < count; i++ )
-        if( isom_add_sdtp_entry( (isom_box_t *)stbl, &null_prop, avc_extensions ) )
+        if( isom_add_sdtp_entry( (isom_box_t *)stbl, &null_prop, compatibility ) )
             return -1;
-    return isom_add_sdtp_entry( (isom_box_t *)stbl, prop, avc_extensions );
+    return isom_add_sdtp_entry( (isom_box_t *)stbl, prop, compatibility );
 }
 
 int isom_rap_grouping_established( isom_rap_group_t *group, int num_leading_samples_known, isom_sgpd_t *sgpd, int is_fragment )
