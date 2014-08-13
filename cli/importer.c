@@ -514,7 +514,7 @@ static uint32_t mp4sys_adts_get_last_delta( importer_t *importer, uint32_t track
     return info->samples_in_frame;
 }
 
-const static importer_functions mp4sys_adts_importer =
+static const importer_functions mp4sys_adts_importer =
 {
     { "adts" },
     1,
@@ -969,7 +969,7 @@ static uint32_t mp4sys_mp3_get_last_delta( importer_t *importer, uint32_t track_
     return info->samples_in_frame;
 }
 
-const static importer_functions mp4sys_mp3_importer =
+static const importer_functions mp4sys_mp3_importer =
 {
     { "MPEG-1/2BC_Audio_Legacy" },
     1,
@@ -1138,7 +1138,7 @@ static uint32_t amr_get_last_delta( importer_t* importer, uint32_t track_number 
     return info->samples_in_frame;
 }
 
-const static importer_functions amr_importer =
+static const importer_functions amr_importer =
 {
     { "amr" },
     1,
@@ -1394,7 +1394,7 @@ static uint32_t ac3_importer_get_last_delta( importer_t *importer, uint32_t trac
     return AC3_SAMPLE_DURATION;
 }
 
-const static importer_functions ac3_importer =
+static const importer_functions ac3_importer =
 {
     { "AC-3" },
     1,
@@ -1792,7 +1792,7 @@ static uint32_t eac3_importer_get_last_delta( importer_t *importer, uint32_t tra
     return EAC3_MIN_SAMPLE_DURATION * info->info.number_of_audio_blocks;
 }
 
-const static importer_functions eac3_importer =
+static const importer_functions eac3_importer =
 {
     { "Enhanced AC-3" },
     1,
@@ -2184,7 +2184,7 @@ static uint32_t mp4sys_als_importer_get_last_delta( importer_t *importer, uint32
     return alssc->samples - (alssc->number_of_ra_units - 1) * info->samples_in_frame;
 }
 
-const static importer_functions mp4sys_als_importer =
+static const importer_functions mp4sys_als_importer =
 {
     { "MPEG-4 ALS" },
     1,
@@ -2479,7 +2479,7 @@ static uint32_t dts_importer_get_last_delta( importer_t* importer, uint32_t trac
     return (summary->frequency * info->info.frame_duration) / info->info.ddts_param.DTSSamplingFrequency;
 }
 
-const static importer_functions dts_importer =
+static const importer_functions dts_importer =
 {
     { "DTS Coherent Acoustics" },
     1,
@@ -3358,7 +3358,7 @@ static uint32_t h264_importer_get_last_delta( importer_t *importer, uint32_t tra
          : UINT32_MAX;    /* arbitrary */
 }
 
-const static importer_functions h264_importer =
+static const importer_functions h264_importer =
 {
     { "H.264" },
     1,
@@ -4029,7 +4029,7 @@ static uint32_t hevc_importer_get_last_delta( importer_t *importer, uint32_t tra
          : UINT32_MAX;    /* arbitrary */
 }
 
-const static importer_functions hevc_importer =
+static const importer_functions hevc_importer =
 {
     { "HEVC" },
     1,
@@ -4554,7 +4554,7 @@ static uint32_t vc1_importer_get_last_delta( importer_t *importer, uint32_t trac
          : UINT32_MAX;    /* arbitrary */
 }
 
-const static importer_functions vc1_importer =
+static const importer_functions vc1_importer =
 {
     { "VC-1" },
     1,
@@ -4568,9 +4568,9 @@ const static importer_functions vc1_importer =
     importer public interfaces
 ***************************************************************************/
 
-
 /******** importer listing table ********/
-const static importer_functions *importer_func_table[] = {
+static const importer_functions *importer_func_table[] =
+{
     &mp4sys_adts_importer,
     &mp4sys_mp3_importer,
     &amr_importer,
