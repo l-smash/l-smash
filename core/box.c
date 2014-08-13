@@ -36,6 +36,11 @@
 #include "codecs/mp4a.h"
 #include "codecs/mp4sys.h"
 
+static const lsmash_class_t lsmash_box_class =
+{
+    "box"
+};
+
 void isom_init_box_common_orig
 (
     void                       *_box,
