@@ -50,7 +50,7 @@ double lsmash_int2float64( uint64_t value )
 /*---- others ----*/
 void lsmash_log
 (
-    void            *hp,
+    const void      *class,
     lsmash_log_level level,
     const char      *message,
     ...
@@ -74,10 +74,10 @@ void lsmash_log
             prefix = "Unknown";
             break;
     }
-    /* Dereference lsmash_class_t pointer if hp is non-NULL. */
-    lsmash_class_t *class = hp ? (lsmash_class_t *)*(intptr_t *)hp : NULL;
-    if( class )
-        fprintf( stderr, "[%s: %s]: ", class->name, prefix );
+    /* Dereference lsmash_class_t pointer if 'class' is non-NULL. */
+    lsmash_class_t *cls = class ? (lsmash_class_t *)*(intptr_t *)class : NULL;
+    if( cls )
+        fprintf( stderr, "[%s: %s]: ", cls->name, prefix );
     else
         fprintf( stderr, "[%s]: ", prefix );
     vfprintf( stderr, message, args );

@@ -3377,7 +3377,6 @@ const static importer_functions h264_importer =
 
 typedef struct
 {
-    const lsmash_class_t  *class;
     importer_status        status;
     hevc_info_t            info;
     lsmash_entry_list_t    hvcC_list[1];    /* stored as lsmash_codec_specific_t */
@@ -4607,27 +4606,28 @@ importer_t *lsmash_importer_open( const char *identifier, const char *format )
     importer_t *importer = (importer_t *)lsmash_malloc_zero( sizeof(importer_t) );
     if( !importer )
         return NULL;
+    importer->class = &lsmash_importer_class;
     if( !strcmp( identifier, "-" ) )
     {
         /* special treatment for stdin */
         if( auto_detect )
         {
-            lsmash_free( importer );
-            return NULL;
+            lsmash_log( importer, LSMASH_LOG_ERROR, "auto importer detection on stdin is not supported.\n" );
+            goto fail;
         }
         importer->stream = stdin;
         importer->is_stdin = 1;
     }
     else if( (importer->stream = lsmash_fopen( identifier, "rb" )) == NULL )
     {
-        lsmash_importer_close( importer );
-        return NULL;
+        lsmash_log( importer, LSMASH_LOG_ERROR, "failed to open %s.\n", identifier );
+        goto fail;
     }
     importer->summaries = lsmash_create_entry_list();
     if( !importer->summaries )
     {
-        lsmash_importer_close( importer );
-        return NULL;
+        lsmash_log( importer, LSMASH_LOG_ERROR, "failed to set up the importer.\n" );
+        goto fail;
     }
     /* find importer */
     const importer_functions *funcs;
@@ -4658,11 +4658,14 @@ importer_t *lsmash_importer_open( const char *identifier, const char *format )
     }
     if( !funcs )
     {
-        lsmash_importer_close( importer );
-        return NULL;
+        lsmash_log( importer, LSMASH_LOG_ERROR, "failed to find the matched importer.\n" );
+        goto fail;
     }
     importer->funcs = *funcs;
     return importer;
+fail:
+    lsmash_importer_close( importer );
+    return NULL;
 }
 
 /* 0 if success, positive if changed, negative if failed */

@@ -88,7 +88,7 @@ typedef struct
 
 void lsmash_log
 (
-    void            *hp,
+    const void      *class,
     lsmash_log_level level,
     const char      *message,
     ...
