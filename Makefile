@@ -46,7 +46,7 @@ install-lib: liblsmash.pc lib
 	install -d $(DESTDIR)$(libdir)/pkgconfig
 	install -m 644 liblsmash.pc $(DESTDIR)$(libdir)/pkgconfig
 ifneq ($(STATICLIB),)
-	install -m644 $(STATICLIB) $(DESTDIR)$(libdir)
+	install -m 644 $(STATICLIB) $(DESTDIR)$(libdir)
 endif
 ifneq ($(SHAREDLIB),)
 ifneq ($(IMPLIB),)
@@ -54,7 +54,7 @@ ifneq ($(IMPLIB),)
 	install -d $(DESTDIR)$(bindir)
 	install -m 755 $(SHAREDLIB) $(DESTDIR)$(bindir)
 else
-	install -m 755 $(SHAREDLIB) $(DESTDIR)$(libdir)
+	install -m 644 $(SHAREDLIB) $(DESTDIR)$(libdir)
 endif
 endif
 
