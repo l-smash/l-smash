@@ -294,7 +294,16 @@ done
 #=============================================================================
 
 pushd $SRCDIR
+MAJVER=$(grep -e '#define LSMASH_VERSION_MAJOR' lsmash.h|sed -e 's/#define LSMASH_VERSION_MAJOR //;s/ //g')
+MINVER=$(grep -e '#define LSMASH_VERSION_MINOR' lsmash.h|sed -e 's/#define LSMASH_VERSION_MINOR //;s/ //g')
+MICVER=$(grep -e '#define LSMASH_VERSION_MICRO' lsmash.h|sed -e 's/#define LSMASH_VERSION_MICRO //;s/ //g')
+VER=$MAJVER.$MINVER.$MICVER
 REV="$(git rev-list HEAD 2> /dev/null | wc -l)"
+if test $REV -ne 0; then
+    VER_STRING="$VER rev.$REV"
+else
+    VER_STRING="$VER"
+fi
 HASH="$(git describe --always 2> /dev/null)"
 popd
 cat >> config.h << EOF
@@ -311,7 +320,7 @@ includedir=$includedir
 
 Name: liblsmash
 Description: Loyal to Spec of MPEG4, and Ad-hock Simple Hackwork
-Version: rev.$REV
+Version: $VER_STRING
 Requires:
 URL: http://code.google.com/p/l-smash/
 Libs: -L${libdir} -llsmash $LIBS
