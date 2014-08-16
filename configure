@@ -322,7 +322,7 @@ Name: liblsmash
 Description: Loyal to Spec of MPEG4, and Ad-hock Simple Hackwork
 Version: $VER_STRING
 Requires:
-URL: http://code.google.com/p/l-smash/
+URL: https://github.com/l-smash/l-smash
 Libs: -L${libdir} -llsmash $LIBS
 Libs.private:
 Cflags: -I${includedir}
