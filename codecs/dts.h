@@ -118,26 +118,16 @@ typedef struct
     dts_core_info_t                  core;      /* core component and its extensions in core substream */
     dts_extension_info_t             exss[4];   /* extension substreams */
     uint8_t  ddts_param_initialized;
-    uint8_t  no_more_read;
     uint8_t  exss_index;
     uint8_t  exss_count;
     uint32_t frame_duration;
     uint32_t frame_size;        /* size of substream */
-    uint8_t  buffer[2 * DTS_MAX_EXSS_SIZE];
-    uint8_t *buffer_pos;
-    uint8_t *buffer_end;
     lsmash_bits_t *bits;
-    lsmash_multiple_buffers_t *au_buffers;
-    uint8_t *au;
-    uint32_t au_length;
-    uint8_t *incomplete_au;
-    uint32_t incomplete_au_length;
-    uint32_t au_number;
 } dts_info_t;
 
 void dts_setup_parser( dts_info_t *info );
-int dts_parse_core_substream( dts_info_t *info, uint8_t *data, uint32_t data_length );
-int dts_parse_extension_substream( dts_info_t *info, uint8_t *data, uint32_t data_length );
+int dts_parse_core_substream( dts_info_t *info );
+int dts_parse_extension_substream( dts_info_t *info );
 int dts_get_max_channel_count( dts_info_t *info );
 dts_substream_type dts_get_substream_type( dts_info_t *info );
 int dts_get_exss_index( dts_info_t *info, uint8_t *exss_index );

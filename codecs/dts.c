@@ -298,40 +298,28 @@ int lsmash_setup_dts_specific_parameters_from_frame( lsmash_dts_specific_paramet
     lsmash_bs_t   bs      = { 0 };
     uint8_t buffer[DTS_MAX_EXSS_SIZE] = { 0 };
     bs.buffer.data  = buffer;
+    bs.buffer.store = data_length;
     bs.buffer.alloc = DTS_MAX_EXSS_SIZE;
-    dts_info_t  handler = { 0 };
-    dts_info_t *info    = &handler;
-    uint32_t overall_wasted_data_length = 0;
-    info->buffer_pos = info->buffer;
-    info->buffer_end = info->buffer;
+    dts_info_t *info = &(dts_info_t){ .bits = &bits };
     info->bits = &bits;
     lsmash_bits_init( &bits, &bs );
+    memcpy( buffer, data, LSMASH_MIN( data_length, DTS_MAX_EXSS_SIZE ) );
     dts_setup_parser( info );
+    uint64_t next_frame_pos = 0;
     while( 1 )
     {
+        /* Seek to the head of the next syncframe. */
+        bs.buffer.pos = LSMASH_MIN( data_length, next_frame_pos );
         /* Check the remainder length of the buffer.
          * If there is enough length, then continue to parse the frame in it.
          * The length 10 is the required byte length to get frame size. */
-        uint32_t remainder_length = info->buffer_end - info->buffer_pos;
-        if( !info->no_more_read && remainder_length < DTS_MAX_EXSS_SIZE )
-        {
-            if( remainder_length )
-                memmove( info->buffer, info->buffer_pos, remainder_length );
-            uint32_t wasted_data_length = LSMASH_MIN( data_length, DTS_MAX_EXSS_SIZE );
-            memcpy( info->buffer + remainder_length, data + overall_wasted_data_length, wasted_data_length );
-            data_length                -= wasted_data_length;
-            overall_wasted_data_length += wasted_data_length;
-            remainder_length           += wasted_data_length;
-            info->buffer_pos   = info->buffer;
-            info->buffer_end   = info->buffer + remainder_length;
-            info->no_more_read = (data_length < 10);
-        }
-        if( remainder_length < 10 && info->no_more_read )
+        uint64_t remain_size = lsmash_bs_get_remaining_buffer_size( &bs );
+        if( bs.eob || (bs.eof && remain_size < 10) )
             goto setup_param;   /* No more valid data. */
         /* Parse substream frame. */
         dts_substream_type prev_substream_type = info->substream_type;
         info->substream_type = dts_get_substream_type( info );
-        int (*dts_parse_frame)( dts_info_t *, uint8_t *, uint32_t ) = NULL;
+        int (*dts_parse_frame)( dts_info_t * ) = NULL;
         switch( info->substream_type )
         {
             /* Decide substream frame parser and check if this frame and the previous frame belong to the same AU. */
@@ -343,7 +331,7 @@ int lsmash_setup_dts_specific_parameters_from_frame( lsmash_dts_specific_paramet
             case DTS_SUBSTREAM_TYPE_EXTENSION :
             {
                 uint8_t prev_exss_index = info->exss_index;
-                if( dts_get_exss_index( info, &info->exss_index ) )
+                if( dts_get_exss_index( info, &info->exss_index ) < 0 )
                     return -1;
                 if( prev_substream_type == DTS_SUBSTREAM_TYPE_EXTENSION && info->exss_index <= prev_exss_index )
                     goto setup_param;
@@ -354,9 +342,9 @@ int lsmash_setup_dts_specific_parameters_from_frame( lsmash_dts_specific_paramet
                 return -1;
         }
         info->frame_size = 0;
-        if( dts_parse_frame( info, info->buffer_pos, LSMASH_MIN( remainder_length, DTS_MAX_EXSS_SIZE ) ) )
+        if( dts_parse_frame( info ) < 0 )
             return -1;  /* Failed to parse. */
-        info->buffer_pos += info->frame_size;
+        next_frame_pos += info->frame_size;
     }
 setup_param:
     dts_update_specific_param( info );
@@ -1096,11 +1084,9 @@ static int dts_parse_exss_core( dts_info_t *info, uint64_t *bits_pos, dts_audio_
     return bits->bs->error ? -1 : 0;
 }
 
-int dts_parse_core_substream( dts_info_t *info, uint8_t *data, uint32_t data_length )
+int dts_parse_core_substream( dts_info_t *info )
 {
     lsmash_bits_t *bits = info->bits;
-    if( lsmash_bits_import_data( info->bits, data, data_length ) )
-        return -1;
     uint64_t bits_pos = 0;
     if( DTS_SYNCWORD_CORE != dts_bits_get( bits, 32, &bits_pos ) )
         goto parse_fail;
@@ -1115,18 +1101,16 @@ int dts_parse_core_substream( dts_info_t *info, uint8_t *data, uint32_t data_len
     info->exss_count      = 0;
     info->core            = exss->asset[0].core;
     info->frame_size      = exss->asset[0].core.frame_size;
-    lsmash_bits_empty( bits );
+    lsmash_bits_get_align( bits );
     return 0;
 parse_fail:
-    lsmash_bits_empty( bits );
+    lsmash_bits_get_align( bits );
     return -1;
 }
 
-int dts_parse_extension_substream( dts_info_t *info, uint8_t *data, uint32_t data_length )
+int dts_parse_extension_substream( dts_info_t *info )
 {
     lsmash_bits_t *bits = info->bits;
-    if( lsmash_bits_import_data( info->bits, data, data_length ) )
-        return -1;
     uint64_t bits_pos = 0;
     dts_bits_get( bits, 40, &bits_pos );                                                    /* SYNCEXTSSH                    (32)
                                                                                              * UserDefinedBits               (8) */
@@ -1271,20 +1255,20 @@ int dts_parse_extension_substream( dts_info_t *info, uint8_t *data, uint32_t dat
         dts_bits_get( bits, asset->size * 8 - (bits_pos - asset_pos), &bits_pos );
     }
     dts_bits_get( bits, info->frame_size * 8 - bits_pos, &bits_pos );
-    lsmash_bits_empty( bits );
+    lsmash_bits_get_align( bits );
     if( info->exss_count < DTS_MAX_NUM_EXSS )
         info->exss_count += 1;
     return 0;
 parse_fail:
-    lsmash_bits_empty( bits );
+    lsmash_bits_get_align( bits );
     return -1;
 }
 
 dts_substream_type dts_get_substream_type( dts_info_t *info )
 {
-    if( info->buffer_end - info->buffer_pos < 4 )
+    if( lsmash_bs_get_remaining_buffer_size( info->bits->bs ) < 4 )
         return DTS_SUBSTREAM_TYPE_NONE;
-    uint8_t *buffer = info->buffer_pos;
+    uint8_t *buffer = lsmash_bs_get_buffer_data( info->bits->bs );
     uint32_t syncword = LSMASH_4CC( buffer[0], buffer[1], buffer[2], buffer[3] );
     switch( syncword )
     {
@@ -1299,9 +1283,9 @@ dts_substream_type dts_get_substream_type( dts_info_t *info )
 
 int dts_get_exss_index( dts_info_t *info, uint8_t *exss_index )
 {
-    if( info->buffer_end - info->buffer_pos < 6 )
+    if( lsmash_bs_get_remaining_buffer_size( info->bits->bs ) < 6 )
         return -1;
-    *exss_index = info->buffer_pos[5] >> 6;
+    *exss_index = lsmash_bs_show_byte( info->bits->bs, 5 ) >> 6;
     return 0;
 }
 
