@@ -606,7 +606,7 @@ int eac3_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, i
                     "Lc/Rc pair"
                 };
             uint16_t chan_loc = ((data[-1] & 0x01) << 8) | data[0];
-            lsmash_ifprintf( fp, sub_indent, "chan_loc = 0x%04"PRIu16"\n", chan_loc );
+            lsmash_ifprintf( fp, sub_indent, "chan_loc = 0x%04"PRIx16"\n", chan_loc );
             for( int j = 0; j < 9; j++ )
                 if( (chan_loc >> j & 0x01) )
                     lsmash_ifprintf( fp, sub_indent + 1, "%s\n", channel_location[j] );
