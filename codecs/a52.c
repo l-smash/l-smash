@@ -142,7 +142,7 @@ int ac3_parse_syncframe_header( ac3_info_t *info )
     if( param->acmod == 0x02 )
         lsmash_bits_get( bits, 2 );     /* dsurmod */
     param->lfeon = lsmash_bits_get( bits, 1 );
-    lsmash_bits_empty( bits );
+    lsmash_bits_get_align( bits );
     return ac3_check_syncframe_header( param );
 }
 

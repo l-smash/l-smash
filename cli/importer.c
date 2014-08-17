@@ -1332,7 +1332,7 @@ static int ac3_importer_get_accessunit( importer_t *importer, uint32_t track_num
     lsmash_bs_t *bs = info->bits->bs;
     ac3_imp->next_frame_pos += frame_size;
     lsmash_bs_read_seek( bs, ac3_imp->next_frame_pos, SEEK_SET );
-    uint8_t next_bytes[2] =
+    uint8_t syncword[2] =
     {
         lsmash_bs_show_byte( bs, 0 ),
         lsmash_bs_show_byte( bs, 1 )
@@ -1342,8 +1342,8 @@ static int ac3_importer_get_accessunit( importer_t *importer, uint32_t track_num
     else
     {
         /* Parse the next syncframe header. */
-        if( next_bytes[0] != 0x0b
-         || next_bytes[1] != 0x77
+        if( syncword[0] != 0x0b
+         || syncword[1] != 0x77
          || ac3_buffer_frame( ac3_imp->buffer, bs ) < 0 )
         {
             ac3_imp->status = IMPORTER_ERROR;
