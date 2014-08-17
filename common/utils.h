@@ -58,7 +58,9 @@
 /*---- class ----*/
 typedef struct
 {
-    char *name;
+    char  *name;
+    size_t log_level_offset;    /* offset in the struct where 'log_level' is placed
+                                 * If set to 0, 'log_level' is unavailable and implicitly set to LSMASH_LOG_INFO. */
 } lsmash_class_t;
 
 /*---- type ----*/
@@ -69,6 +71,7 @@ double lsmash_int2float64( uint64_t value );
 /*---- others ----*/
 typedef enum
 {
+    LSMASH_LOG_QUIET = 0,
     LSMASH_LOG_ERROR,
     LSMASH_LOG_WARNING,
     LSMASH_LOG_INFO,

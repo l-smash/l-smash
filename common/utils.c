@@ -56,6 +56,14 @@ void lsmash_log
     ...
 )
 {
+    /* Dereference lsmash_class_t pointer if 'class' is non-NULL. */
+    lsmash_class_t *cls = class ? (lsmash_class_t *)*(intptr_t *)class : NULL;
+    if( cls && cls->log_level_offset )
+    {
+        lsmash_log_level log_level = *(lsmash_log_level *)((int8_t *)class + cls->log_level_offset);
+        if( level > log_level )
+            return;
+    }
     char *prefix;
     va_list args;
     va_start( args, message );
@@ -74,8 +82,6 @@ void lsmash_log
             prefix = "Unknown";
             break;
     }
-    /* Dereference lsmash_class_t pointer if 'class' is non-NULL. */
-    lsmash_class_t *cls = class ? (lsmash_class_t *)*(intptr_t *)class : NULL;
     if( cls )
         fprintf( stderr, "[%s: %s]: ", cls->name, prefix );
     else
