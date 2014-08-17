@@ -28,8 +28,6 @@ typedef struct
 {
     lsmash_ac3_specific_parameters_t dac3_param;
     lsmash_bits_t *bits;
-    uint8_t *next_dac3;
-    uint32_t au_number;
 } ac3_info_t;
 
 typedef struct

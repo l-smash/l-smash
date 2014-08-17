@@ -1162,16 +1162,18 @@ typedef struct
 {
     importer_status status;
     ac3_info_t      info;
-    uint8_t         buffer[AC3_MAX_SYNCFRAME_LENGTH];
     uint64_t        next_frame_pos;
+    uint8_t        *next_dac3;
+    uint8_t         buffer[AC3_MAX_SYNCFRAME_LENGTH];
+    uint32_t        au_number;
 } ac3_importer_t;
 
-static void remove_ac3_importer( ac3_importer_t *info )
+static void remove_ac3_importer( ac3_importer_t *ac3_imp )
 {
-    if( !info )
+    if( !ac3_imp )
         return;
-    lsmash_bits_adhoc_cleanup( info->info.bits );
-    lsmash_free( info );
+    lsmash_bits_adhoc_cleanup( ac3_imp->info.bits );
+    lsmash_free( ac3_imp );
 }
 
 static ac3_importer_t *create_ac3_importer( void )
@@ -1319,7 +1321,7 @@ static int ac3_importer_get_accessunit( importer_t *importer, uint32_t track_num
         if( specific )
         {
             specific->destruct( specific->data.unstructured );
-            specific->data.unstructured = info->next_dac3;
+            specific->data.unstructured = ac3_imp->next_dac3;
         }
         summary->frequency  = ac3_sample_rate_table[ param->fscod ];
         summary->channels   = ac3_channel_count_table[ param->acmod ] + param->lfeon;
@@ -1327,7 +1329,7 @@ static int ac3_importer_get_accessunit( importer_t *importer, uint32_t track_num
     }
     memcpy( buffered_sample->data, ac3_imp->buffer, frame_size );
     buffered_sample->length                 = frame_size;
-    buffered_sample->dts                    = info->au_number++ * summary->samples_in_frame;
+    buffered_sample->dts                    = ac3_imp->au_number++ * summary->samples_in_frame;
     buffered_sample->cts                    = buffered_sample->dts;
     buffered_sample->prop.ra_flags          = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
     buffered_sample->prop.pre_roll.distance = 1;    /* MDCT */
@@ -1362,8 +1364,8 @@ static int ac3_importer_get_accessunit( importer_t *importer, uint32_t track_num
                 ac3_imp->status = IMPORTER_ERROR;
                 return current_status;
             }
-            ac3_imp->status = IMPORTER_CHANGE;
-            info->next_dac3 = dac3;
+            ac3_imp->status    = IMPORTER_CHANGE;
+            ac3_imp->next_dac3 = dac3;
         }
         else
             ac3_imp->status = IMPORTER_OK;
@@ -1397,8 +1399,8 @@ static int ac3_importer_probe( importer_t *importer )
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         goto fail;
     }
-    ac3_imp->status         = IMPORTER_OK;
-    ac3_imp->info.au_number = 0;
+    ac3_imp->status    = IMPORTER_OK;
+    ac3_imp->au_number = 0;
     importer->info = ac3_imp;
     return 0;
 fail:
@@ -1410,8 +1412,8 @@ static uint32_t ac3_importer_get_last_delta( importer_t *importer, uint32_t trac
 {
     debug_if( !importer || !importer->info )
         return 0;
-    ac3_importer_t *info = (ac3_importer_t *)importer->info;
-    if( !info || track_number != 1 || info->status != IMPORTER_EOF )
+    ac3_importer_t *ac3_imp = (ac3_importer_t *)importer->info;
+    if( !ac3_imp || track_number != 1 || ac3_imp->status != IMPORTER_EOF )
         return 0;
     return AC3_SAMPLE_DURATION;
 }
