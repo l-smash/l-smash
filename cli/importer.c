@@ -4678,6 +4678,7 @@ importer_t *lsmash_importer_open( const char *identifier, const char *format )
     }
     if( !funcs )
     {
+        importer->class = &lsmash_importer_class;
         lsmash_log( importer, LSMASH_LOG_ERROR, "failed to find the matched importer.\n" );
         goto fail;
     }
