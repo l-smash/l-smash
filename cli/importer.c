@@ -41,11 +41,6 @@
 ***************************************************************************/
 struct importer_tag;
 
-static const lsmash_class_t lsmash_importer_class =
-{
-    "importer"
-};
-
 typedef void     ( *importer_cleanup )          ( struct importer_tag * );
 typedef int      ( *importer_get_accessunit )   ( struct importer_tag *, uint32_t, lsmash_sample_t * );
 typedef int      ( *importer_probe )            ( struct importer_tag * );
@@ -64,6 +59,7 @@ typedef struct
 typedef struct importer_tag
 {
     const lsmash_class_t   *class;
+    lsmash_log_level        log_level;
     lsmash_stream_buffers_t sb;
     FILE                   *stream;    /* will be deprecated */
     int                     is_stdin;
@@ -79,6 +75,12 @@ typedef enum
     IMPORTER_CHANGE = 1,
     IMPORTER_EOF    = 2,
 } importer_status;
+
+static const lsmash_class_t lsmash_importer_class =
+{
+    "importer",
+    offsetof( importer_t, log_level )
+};
 
 /***************************************************************************
     ADTS importer
@@ -1274,14 +1276,14 @@ static int ac3_compare_specific_param( lsmash_ac3_specific_parameters_t *a, lsma
 
 static int ac3_buffer_frame( uint8_t *buffer, lsmash_bs_t *bs )
 {
-    size_t remain_size = lsmash_bs_get_remaining_buffer_size( bs );
+    uint64_t remain_size = lsmash_bs_get_remaining_buffer_size( bs );
     if( remain_size < AC3_MAX_SYNCFRAME_LENGTH )
     {
         if( lsmash_bs_read( bs, bs->buffer.max_size ) < 0 )
             return -1;
         remain_size = lsmash_bs_get_remaining_buffer_size( bs );
     }
-    size_t copy_size = LSMASH_MIN( remain_size, AC3_MAX_SYNCFRAME_LENGTH );
+    uint64_t copy_size = LSMASH_MIN( remain_size, AC3_MAX_SYNCFRAME_LENGTH );
     memcpy( buffer, lsmash_bs_get_buffer_data( bs ), copy_size );
     return 0;
 }
@@ -1434,47 +1436,47 @@ typedef struct
 {
     importer_status status;
     eac3_info_t     info;
-} eac3_importer_info_t;
+    uint8_t  buffer[EAC3_MAX_SYNCFRAME_LENGTH];
+    uint64_t next_frame_pos;
+} eac3_importer_t;
 
-static void remove_eac3_importer_info( eac3_importer_info_t *info )
+static void remove_eac3_importer( eac3_importer_t *eac3_imp )
 {
-    if( !info )
+    if( !eac3_imp )
         return;
-    lsmash_destroy_multiple_buffers( info->info.au_buffers );
-    lsmash_bits_adhoc_cleanup( info->info.bits );
-    lsmash_free( info );
+    lsmash_destroy_multiple_buffers( eac3_imp->info.au_buffers );
+    lsmash_bits_adhoc_cleanup( eac3_imp->info.bits );
+    lsmash_free( eac3_imp );
 }
 
-static eac3_importer_info_t *create_eac3_importer_info( void )
+static eac3_importer_t *create_eac3_importer( void )
 {
-    eac3_importer_info_t *info = (eac3_importer_info_t *)lsmash_malloc_zero( sizeof(eac3_importer_info_t) );
-    if( !info )
+    eac3_importer_t *eac3_imp = (eac3_importer_t *)lsmash_malloc_zero( sizeof(eac3_importer_t) );
+    if( !eac3_imp )
         return NULL;
-    eac3_info_t *eac3_info = &info->info;
-    eac3_info->buffer_pos = eac3_info->buffer;
-    eac3_info->buffer_end = eac3_info->buffer;
-    eac3_info->bits = lsmash_bits_adhoc_create();
-    if( !eac3_info->bits )
+    eac3_info_t *info = &eac3_imp->info;
+    info->bits = lsmash_bits_adhoc_create();
+    if( !info->bits )
     {
-        lsmash_free( info );
+        lsmash_free( eac3_imp );
         return NULL;
     }
-    eac3_info->au_buffers = lsmash_create_multiple_buffers( 2, EAC3_MAX_SYNCFRAME_LENGTH );
-    if( !eac3_info->au_buffers )
+    info->au_buffers = lsmash_create_multiple_buffers( 2, EAC3_MAX_SYNCFRAME_LENGTH );
+    if( !info->au_buffers )
     {
-        lsmash_bits_adhoc_cleanup( eac3_info->bits );
-        lsmash_free( info );
+        lsmash_bits_adhoc_cleanup( info->bits );
+        lsmash_free( eac3_imp );
         return NULL;
     }
-    eac3_info->au            = lsmash_withdraw_buffer( eac3_info->au_buffers, 1 );
-    eac3_info->incomplete_au = lsmash_withdraw_buffer( eac3_info->au_buffers, 2 );
-    return info;
+    info->au            = lsmash_withdraw_buffer( info->au_buffers, 1 );
+    info->incomplete_au = lsmash_withdraw_buffer( info->au_buffers, 2 );
+    return eac3_imp;
 }
 
 static void eac3_importer_cleanup( importer_t *importer )
 {
     debug_if( importer && importer->info )
-        remove_eac3_importer_info( importer->info );
+        remove_eac3_importer( importer->info );
 }
 
 static void eac3_update_sample_rate( lsmash_audio_summary_t *summary, lsmash_eac3_specific_parameters_t *dec3_param )
@@ -1573,49 +1575,72 @@ static void eac3_update_channel_info( lsmash_audio_summary_t *summary, lsmash_ea
 static int eac3_importer_get_next_accessunit_internal( importer_t *importer )
 {
     int complete_au = 0;
-    eac3_importer_info_t *importer_info = (eac3_importer_info_t *)importer->info;
-    eac3_info_t *info = &importer_info->info;
+    eac3_importer_t *eac3_imp = (eac3_importer_t *)importer->info;
+    eac3_info_t     *info     = &eac3_imp->info;
+    lsmash_bs_t     *bs       = info->bits->bs;
     while( !complete_au )
     {
         /* Read data from the stream if needed. */
-        uint32_t remainder_length = info->buffer_end - info->buffer_pos;
-        if( !info->no_more_read && remainder_length < EAC3_MAX_SYNCFRAME_LENGTH )
+        eac3_imp->next_frame_pos += info->frame_size;
+        lsmash_bs_read_seek( bs, eac3_imp->next_frame_pos, SEEK_SET );
+        uint64_t remain_size = lsmash_bs_get_remaining_buffer_size( bs );
+        if( remain_size < EAC3_MAX_SYNCFRAME_LENGTH )
         {
-            if( remainder_length )
-                memmove( info->buffer, info->buffer_pos, remainder_length );
-            uint32_t read_size = fread( info->buffer + remainder_length, 1, EAC3_MAX_SYNCFRAME_LENGTH, importer->stream );
-            remainder_length += read_size;
-            info->buffer_pos = info->buffer;
-            info->buffer_end = info->buffer + remainder_length;
-            info->no_more_read = read_size == 0 ? feof( importer->stream ) : 0;
+            if( lsmash_bs_read( bs, bs->buffer.max_size ) < 0 )
+            {
+                lsmash_log( importer, LSMASH_LOG_ERROR, "failed to read data from the stream.\n" );
+                return -1;
+            }
+            remain_size = lsmash_bs_get_remaining_buffer_size( bs );
         }
+        uint64_t copy_size = LSMASH_MIN( remain_size, EAC3_MAX_SYNCFRAME_LENGTH );
+        memcpy( eac3_imp->buffer, lsmash_bs_get_buffer_data( bs ), copy_size );
         /* Check the remainder length of the buffer.
          * If there is enough length, then parse the syncframe in it.
          * The length 5 is the required byte length to get frame size. */
-        if( remainder_length < 5 )
+        if( bs->eob || (bs->eof && remain_size < 5) )
         {
             /* Reached the end of stream.
              * According to ETSI TS 102 366 V1.2.1 (2008-08),
              * one access unit consists of 6 audio blocks and begins with independent substream 0.
              * The specification doesn't mention the case where a enhanced AC-3 stream ends at non-mod6 audio blocks.
              * At the end of the stream, therefore, we might make an access unit which has less than 6 audio blocks anyway. */
-            importer_info->status = IMPORTER_EOF;
+            eac3_imp->status = IMPORTER_EOF;
             complete_au = !!info->incomplete_au_length;
             if( !complete_au )
-                return remainder_length ? -1 : 0;   /* No more access units in the stream. */
+            {
+                /* No more access units in the stream. */
+                if( lsmash_bs_get_remaining_buffer_size( bs ) )
+                {
+                    lsmash_log( importer, LSMASH_LOG_WARNING, "the stream is truncated at the end.\n" );
+                    return -1;
+                }
+                return 0;
+            }
             if( !info->dec3_param_initialized )
                 eac3_update_specific_param( info );
         }
         else
         {
+            /* Check the syncword. */
+            if( lsmash_bs_show_byte( bs, 0 ) != 0x0b
+             || lsmash_bs_show_byte( bs, 1 ) != 0x77 )
+            {
+                lsmash_log( importer, LSMASH_LOG_ERROR, "a syncword is not found.\n" );
+                return -1;
+            }
             /* Parse syncframe. */
-            IF_A52_SYNCWORD( info->buffer_pos )
-                return -1;
             info->frame_size = 0;
-            if( eac3_parse_syncframe( info, info->buffer_pos, LSMASH_MIN( remainder_length, EAC3_MAX_SYNCFRAME_LENGTH ) ) )
+            if( eac3_parse_syncframe( info ) < 0 )
+            {
+                lsmash_log( importer, LSMASH_LOG_ERROR, "failed to parse syncframe.\n" );
                 return -1;
-            if( remainder_length < info->frame_size )
+            }
+            if( remain_size < info->frame_size )
+            {
+                lsmash_log( importer, LSMASH_LOG_ERROR, "a frame is truncated.\n" );
                 return -1;
+            }
             int independent = info->strmtyp != 0x1;
             if( independent && info->substreamid == 0x0 )
             {
@@ -1626,13 +1651,19 @@ static int eac3_importer_get_next_accessunit_internal( importer_t *importer )
                     complete_au = 1;
                 }
                 else if( info->number_of_audio_blocks > 6 )
+                {
+                    lsmash_log( importer, LSMASH_LOG_ERROR, "greater than 6 consecutive independent substreams.\n" );
                     return -1;
+                }
                 info->number_of_audio_blocks += eac3_audio_block_table[ info->numblkscod ];
                 info->number_of_independent_substreams = 0;
             }
             else if( info->syncframe_count == 0 )
+            {
                 /* The first syncframe in an AU must be independent and assigned substream ID 0. */
+                lsmash_log( importer, LSMASH_LOG_ERROR, "the first syncframe is NOT an independent substream.\n" );
                 return -1;
+            }
             if( independent )
                 info->independent_info[info->number_of_independent_substreams ++].num_dep_sub = 0;
             else
@@ -1641,11 +1672,11 @@ static int eac3_importer_get_next_accessunit_internal( importer_t *importer )
         if( complete_au )
         {
             memcpy( info->au, info->incomplete_au, info->incomplete_au_length );
-            info->au_length = info->incomplete_au_length;
-            info->incomplete_au_length = 0;
+            info->au_length             = info->incomplete_au_length;
+            info->incomplete_au_length  = 0;
             info->syncframe_count_in_au = info->syncframe_count;
-            info->syncframe_count = 0;
-            if( importer_info->status == IMPORTER_EOF )
+            info->syncframe_count       = 0;
+            if( eac3_imp->status == IMPORTER_EOF )
                 break;
         }
         /* Increase buffer size to store AU if short. */
@@ -1659,9 +1690,8 @@ static int eac3_importer_get_next_accessunit_internal( importer_t *importer )
             info->incomplete_au = lsmash_withdraw_buffer( info->au_buffers, 2 );
         }
         /* Append syncframe data. */
-        memcpy( info->incomplete_au + info->incomplete_au_length, info->buffer_pos, info->frame_size );
+        memcpy( info->incomplete_au + info->incomplete_au_length, eac3_imp->buffer, info->frame_size );
         info->incomplete_au_length += info->frame_size;
-        info->buffer_pos           += info->frame_size;
         ++ info->syncframe_count;
     }
     return info->bits->bs->error ? -1 : 0;
@@ -1676,9 +1706,9 @@ static int eac3_importer_get_accessunit( importer_t *importer, uint32_t track_nu
     lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_get_entry_data( importer->summaries, track_number );
     if( !summary )
         return -1;
-    eac3_importer_info_t *importer_info = (eac3_importer_info_t *)importer->info;
-    eac3_info_t *info = &importer_info->info;
-    importer_status current_status = importer_info->status;
+    eac3_importer_t *eac3_imp = (eac3_importer_t *)importer->info;
+    eac3_info_t     *info     = &eac3_imp->info;
+    importer_status current_status = eac3_imp->status;
     if( current_status == IMPORTER_ERROR || buffered_sample->length < info->au_length )
         return -1;
     if( current_status == IMPORTER_EOF && info->au_length == 0 )
@@ -1700,20 +1730,20 @@ static int eac3_importer_get_accessunit( importer_t *importer, uint32_t track_nu
         eac3_update_channel_info( summary, &info->dec3_param );
     }
     memcpy( buffered_sample->data, info->au, info->au_length );
-    buffered_sample->length = info->au_length;
-    buffered_sample->dts = info->au_number++ * summary->samples_in_frame;
-    buffered_sample->cts = buffered_sample->dts;
-    buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+    buffered_sample->length                 = info->au_length;
+    buffered_sample->dts                    = info->au_number++ * summary->samples_in_frame;
+    buffered_sample->cts                    = buffered_sample->dts;
+    buffered_sample->prop.ra_flags          = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
     buffered_sample->prop.pre_roll.distance = 1;    /* MDCT */
-    if( importer_info->status == IMPORTER_EOF )
+    if( eac3_imp->status == IMPORTER_EOF )
     {
         info->au_length = 0;
         return 0;
     }
     uint32_t old_syncframe_count_in_au = info->syncframe_count_in_au;
-    if( eac3_importer_get_next_accessunit_internal( importer ) )
+    if( eac3_importer_get_next_accessunit_internal( importer ) < 0 )
     {
-        importer_info->status = IMPORTER_ERROR;
+        eac3_imp->status = IMPORTER_ERROR;
         return current_status;
     }
     if( info->syncframe_count_in_au )
@@ -1723,21 +1753,21 @@ static int eac3_importer_get_accessunit( importer_t *importer, uint32_t track_nu
         uint8_t *dec3 = lsmash_create_eac3_specific_info( &info->dec3_param, &new_length );
         if( !dec3 )
         {
-            importer_info->status = IMPORTER_ERROR;
+            eac3_imp->status = IMPORTER_ERROR;
             return current_status;
         }
         lsmash_codec_specific_t *specific = isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3 );
         if( (info->syncframe_count_in_au > old_syncframe_count_in_au)
          || (specific && (new_length != specific->size || memcmp( dec3, specific->data.unstructured, specific->size ))) )
         {
-            importer_info->status = IMPORTER_CHANGE;
-            info->next_dec3 = dec3;
+            eac3_imp->status = IMPORTER_CHANGE;
+            info->next_dec3        = dec3;
             info->next_dec3_length = new_length;
         }
         else
         {
-            if( importer_info->status != IMPORTER_EOF )
-                importer_info->status = IMPORTER_OK;
+            if( eac3_imp->status != IMPORTER_EOF )
+                eac3_imp->status = IMPORTER_OK;
             lsmash_free( dec3 );
         }
     }
@@ -1753,7 +1783,7 @@ static lsmash_audio_summary_t *eac3_create_summary( eac3_info_t *info )
                                                                            LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
     specific->data.unstructured = lsmash_create_eac3_specific_info( &info->dec3_param, &specific->size );
     if( !specific->data.unstructured
-     || lsmash_add_entry( &summary->opaque->list, specific ) )
+     || lsmash_add_entry( &summary->opaque->list, specific ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         lsmash_destroy_codec_specific_data( specific );
@@ -1772,41 +1802,42 @@ static lsmash_audio_summary_t *eac3_create_summary( eac3_info_t *info )
 
 static int eac3_importer_probe( importer_t *importer )
 {
-    eac3_importer_info_t *info = create_eac3_importer_info();
-    if( !info )
+    eac3_importer_t *eac3_imp = create_eac3_importer();
+    if( !eac3_imp )
         return -1;
-    importer->info = info;
-    if( eac3_importer_get_next_accessunit_internal( importer ) )
-    {
-        remove_eac3_importer_info( importer->info );
-        importer->info = NULL;
-        return -1;
-    }
-    lsmash_audio_summary_t *summary = eac3_create_summary( &info->info );
+    lsmash_bits_t *bits = eac3_imp->info.bits;
+    lsmash_bs_t   *bs   = bits->bs;
+    bs->stream          = importer->stream;
+    bs->read            = lsmash_fread_wrapper;
+    bs->seek            = lsmash_fseek_wrapper;
+    bs->unseekable      = importer->is_stdin;
+    bs->buffer.max_size = EAC3_MAX_SYNCFRAME_LENGTH;
+    importer->info = eac3_imp;
+    if( eac3_importer_get_next_accessunit_internal( importer ) < 0 )
+        goto fail;
+    lsmash_audio_summary_t *summary = eac3_create_summary( &eac3_imp->info );
     if( !summary )
-    {
-        remove_eac3_importer_info( importer->info );
-        importer->info = NULL;
-        return -1;
-    }
-    if( info->status != IMPORTER_EOF )
-        info->status = IMPORTER_OK;
-    info->info.au_number = 0;
-    if( lsmash_add_entry( importer->summaries, summary ) )
+        goto fail;
+    if( eac3_imp->status != IMPORTER_EOF )
+        eac3_imp->status = IMPORTER_OK;
+    eac3_imp->info.au_number = 0;
+    if( lsmash_add_entry( importer->summaries, summary ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-        remove_eac3_importer_info( importer->info );
-        importer->info = NULL;
-        return -1;
+        goto fail;
     }
     return 0;
+fail:
+    remove_eac3_importer( eac3_imp );
+    importer->info      = NULL;
+    return -1;
 }
 
 static uint32_t eac3_importer_get_last_delta( importer_t *importer, uint32_t track_number )
 {
     debug_if( !importer || !importer->info )
         return 0;
-    eac3_importer_info_t *info = (eac3_importer_info_t *)importer->info;
+    eac3_importer_t *info = (eac3_importer_t *)importer->info;
     if( !info || track_number != 1 || info->status != IMPORTER_EOF || info->info.au_length )
         return 0;
     return EAC3_MIN_SAMPLE_DURATION * info->info.number_of_audio_blocks;
@@ -1814,7 +1845,7 @@ static uint32_t eac3_importer_get_last_delta( importer_t *importer, uint32_t tra
 
 static const importer_functions eac3_importer =
 {
-    { "Enhanced AC-3" },
+    { "Enhanced AC-3", offsetof( importer_t, log_level ) },
     1,
     eac3_importer_probe,
     eac3_importer_get_accessunit,
@@ -4650,6 +4681,7 @@ importer_t *lsmash_importer_open( const char *identifier, const char *format )
         goto fail;
     }
     /* find importer */
+    importer->log_level = LSMASH_LOG_QUIET; /* Any error log is confusing for the probe step. */
     const importer_functions *funcs;
     if( auto_detect )
     {
@@ -4676,6 +4708,7 @@ importer_t *lsmash_importer_open( const char *identifier, const char *format )
             break;
         }
     }
+    importer->log_level = LSMASH_LOG_INFO;
     if( !funcs )
     {
         importer->class = &lsmash_importer_class;

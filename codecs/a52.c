@@ -97,7 +97,9 @@ int lsmash_setup_ac3_specific_parameters_from_syncframe( lsmash_ac3_specific_par
 {
     if( !data || data_length < AC3_MIN_SYNCFRAME_LENGTH )
         return -1;
-    IF_A52_SYNCWORD( data )
+    /* Check a syncword. */
+    if( data[0] != 0x0b
+     || data[1] != 0x77 )
         return -1;
     lsmash_bits_t bits = { 0 };
     lsmash_bs_t   bs   = { 0 };
@@ -263,42 +265,31 @@ int lsmash_setup_eac3_specific_parameters_from_frame( lsmash_eac3_specific_param
     lsmash_bs_t   bs   = { 0 };
     uint8_t buffer[EAC3_MAX_SYNCFRAME_LENGTH] = { 0 };
     bs.buffer.data  = buffer;
+    bs.buffer.store = data_length;
     bs.buffer.alloc = EAC3_MAX_SYNCFRAME_LENGTH;
-    eac3_info_t  handler = { { 0 } };
-    eac3_info_t *info    = &handler;
-    uint32_t overall_wasted_data_length = 0;
-    info->buffer_pos = info->buffer;
-    info->buffer_end = info->buffer;
-    info->bits = &bits;
+    eac3_info_t *info = &(eac3_info_t){ .bits = &bits };
     lsmash_bits_init( &bits, &bs );
+    memcpy( buffer, data, LSMASH_MIN( data_length, EAC3_MAX_SYNCFRAME_LENGTH ) );
+    uint64_t next_frame_pos = 0;
     while( 1 )
     {
+        /* Seek to the head of the next syncframe. */
+        bs.buffer.pos = LSMASH_MIN( data_length, next_frame_pos );
         /* Check the remainder length of the input data.
          * If there is enough length, then parse the syncframe in it.
          * The length 5 is the required byte length to get frame size. */
-        uint32_t remainder_length = info->buffer_end - info->buffer_pos;
-        if( !info->no_more_read && remainder_length < EAC3_MAX_SYNCFRAME_LENGTH )
-        {
-            if( remainder_length )
-                memmove( info->buffer, info->buffer_pos, remainder_length );
-            uint32_t wasted_data_length = LSMASH_MIN( data_length, EAC3_MAX_SYNCFRAME_LENGTH );
-            data_length -= wasted_data_length;
-            memcpy( info->buffer + remainder_length, data + overall_wasted_data_length, wasted_data_length );
-            overall_wasted_data_length += wasted_data_length;
-            remainder_length           += wasted_data_length;
-            info->buffer_pos = info->buffer;
-            info->buffer_end = info->buffer + remainder_length;
-            info->no_more_read = (data_length < 5);
-        }
-        if( remainder_length < 5 && info->no_more_read )
+        uint64_t remain_size = lsmash_bs_get_remaining_buffer_size( &bs );
+        if( bs.eob || (bs.eof && remain_size < 5) )
             goto setup_param;   /* No more valid data. */
+        /* Check the syncword. */
+        if( lsmash_bs_show_byte( &bs, 0 ) != 0x0b
+         || lsmash_bs_show_byte( &bs, 1 ) != 0x77 )
+            goto setup_param;
         /* Parse syncframe. */
-        IF_A52_SYNCWORD( info->buffer_pos )
-            goto setup_param;
         info->frame_size = 0;
-        if( eac3_parse_syncframe( info, info->buffer_pos, LSMASH_MIN( remainder_length, EAC3_MAX_SYNCFRAME_LENGTH ) ) )
+        if( eac3_parse_syncframe( info ) < 0 )
             goto setup_param;
-        if( remainder_length < info->frame_size )
+        if( remain_size < info->frame_size )
             goto setup_param;
         int independent = info->strmtyp != 0x1;
         if( independent && info->substreamid == 0x0 )
@@ -321,7 +312,7 @@ int lsmash_setup_eac3_specific_parameters_from_frame( lsmash_eac3_specific_param
             info->independent_info[info->number_of_independent_substreams ++].num_dep_sub = 0;
         else
             ++ info->independent_info[info->number_of_independent_substreams - 1].num_dep_sub;
-        info->buffer_pos += info->frame_size;
+        next_frame_pos += info->frame_size;
         ++ info->syncframe_count;
     }
 setup_param:
@@ -354,11 +345,9 @@ static int eac3_check_syncframe_header( eac3_info_t *info )
     return 0;
 }
 
-int eac3_parse_syncframe( eac3_info_t *info, uint8_t *data, uint32_t data_length )
+int eac3_parse_syncframe( eac3_info_t *info )
 {
     lsmash_bits_t *bits = info->bits;
-    if( lsmash_bits_import_data( bits, data, data_length ) )
-        return -1;
     lsmash_bits_get( bits, 16 );                                                    /* syncword           (16) */
     info->strmtyp     = lsmash_bits_get( bits, 2 );                                 /* strmtyp            (2) */
     info->substreamid = lsmash_bits_get( bits, 3 );                                 /* substreamid        (3) */
@@ -492,7 +481,7 @@ int eac3_parse_syncframe( eac3_info_t *info, uint8_t *data, uint32_t data_length
         uint8_t addbsil = lsmash_bits_get( bits, 6 );                               /* addbsil            (6) */
         lsmash_bits_get( bits, (addbsil + 1) * 8 );                                 /* addbsi             ((addbsil + 1) * 8) */
     }
-    lsmash_bits_empty( bits );
+    lsmash_bits_get_align( bits );
     return eac3_check_syncframe_header( info );
 }
 
