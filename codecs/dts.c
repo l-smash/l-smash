@@ -57,38 +57,49 @@ typedef enum
     DTS_SYNCWORD_SUBSTREAM_CORE = 0x02b09261,
 } dts_syncword;
 
+/* Loudspeaker Masks (up to 32-bit) for
+ *   - nuCoreSpkrActivityMask
+ *   - nuXXChSpkrLayoutMask
+ *   - DownMixChMapMask
+ *   - nChMask
+ *   - nSpkrMask */
 typedef enum
 {
-    DTS_XXCH_LOUDSPEAKER_MASK_C    = 0x00000001,    /* Centre in front of listener */
-    DTS_XXCH_LOUDSPEAKER_MASK_L    = 0x00000002,    /* Left in front */
-    DTS_XXCH_LOUDSPEAKER_MASK_R    = 0x00000004,    /* Right in front */
-    DTS_XXCH_LOUDSPEAKER_MASK_LS   = 0x00000008,    /* Left surround on side in rear */
-    DTS_XXCH_LOUDSPEAKER_MASK_RS   = 0x00000010,    /* Right surround on side in rear */
-    DTS_XXCH_LOUDSPEAKER_MASK_LFE1 = 0x00000020,    /* Low frequency effects subwoofer */
-    DTS_XXCH_LOUDSPEAKER_MASK_CS   = 0x00000040,    /* Centre surround in rear */
-    DTS_XXCH_LOUDSPEAKER_MASK_LSR  = 0x00000080,    /* Left surround in rear */
-    DTS_XXCH_LOUDSPEAKER_MASK_RSR  = 0x00000100,    /* Right surround in rear */
-    DTS_XXCH_LOUDSPEAKER_MASK_LSS  = 0x00000200,    /* Left surround on side */
-    DTS_XXCH_LOUDSPEAKER_MASK_RSS  = 0x00000400,    /* Right surround on side */
-    DTS_XXCH_LOUDSPEAKER_MASK_LC   = 0x00000800,    /* Between left and centre in front */
-    DTS_XXCH_LOUDSPEAKER_MASK_RC   = 0x00001000,    /* Between right and centre in front */
-    DTS_XXCH_LOUDSPEAKER_MASK_LH   = 0x00002000,    /* Left height in front */
-    DTS_XXCH_LOUDSPEAKER_MASK_CH   = 0x00004000,    /* Centre Height in front */
-    DTS_XXCH_LOUDSPEAKER_MASK_RH   = 0x00008000,    /* Right Height in front */
-    DTS_XXCH_LOUDSPEAKER_MASK_LFE2 = 0x00010000,    /* Second low frequency effects subwoofer */
-    DTS_XXCH_LOUDSPEAKER_MASK_LW   = 0x00020000,    /* Left on side in front */
-    DTS_XXCH_LOUDSPEAKER_MASK_RW   = 0x00040000,    /* Right on side in front */
-    DTS_XXCH_LOUDSPEAKER_MASK_OH   = 0x00080000,    /* Over the listener's head */
-    DTS_XXCH_LOUDSPEAKER_MASK_LHS  = 0x00100000,    /* Left height on side */
-    DTS_XXCH_LOUDSPEAKER_MASK_RHS  = 0x00200000,    /* Right height on side */
-    DTS_XXCH_LOUDSPEAKER_MASK_CHR  = 0x00400000,    /* Centre height in rear */
-    DTS_XXCH_LOUDSPEAKER_MASK_LHR  = 0x00800000,    /* Left height in rear */
-    DTS_XXCH_LOUDSPEAKER_MASK_RHR  = 0x01000000,    /* Right height in rear */
-    DTS_XXCH_LOUDSPEAKER_MASK_CL   = 0x02000000,    /* Centre in the plane lower than listener's ears */
-    DTS_XXCH_LOUDSPEAKER_MASK_LL   = 0x04000000,    /* Left in the plane lower than listener's ears */
-    DTS_XXCH_LOUDSPEAKER_MASK_RL   = 0x08000000,    /* Right in the plane lower than listener's ears */
+    DTS_LOUDSPEAKER_MASK32_C    = 0x00000001,    /* Centre in front of listener */
+    DTS_LOUDSPEAKER_MASK32_L    = 0x00000002,    /* Left in front */
+    DTS_LOUDSPEAKER_MASK32_R    = 0x00000004,    /* Right in front */
+    DTS_LOUDSPEAKER_MASK32_LS   = 0x00000008,    /* Left surround on side in rear */
+    DTS_LOUDSPEAKER_MASK32_RS   = 0x00000010,    /* Right surround on side in rear */
+    DTS_LOUDSPEAKER_MASK32_LFE1 = 0x00000020,    /* Low frequency effects subwoofer */
+    DTS_LOUDSPEAKER_MASK32_CS   = 0x00000040,    /* Centre surround in rear */
+    DTS_LOUDSPEAKER_MASK32_LSR  = 0x00000080,    /* Left surround in rear */
+    DTS_LOUDSPEAKER_MASK32_RSR  = 0x00000100,    /* Right surround in rear */
+    DTS_LOUDSPEAKER_MASK32_LSS  = 0x00000200,    /* Left surround on side */
+    DTS_LOUDSPEAKER_MASK32_RSS  = 0x00000400,    /* Right surround on side */
+    DTS_LOUDSPEAKER_MASK32_LC   = 0x00000800,    /* Between left and centre in front */
+    DTS_LOUDSPEAKER_MASK32_RC   = 0x00001000,    /* Between right and centre in front */
+    DTS_LOUDSPEAKER_MASK32_LH   = 0x00002000,    /* Left height in front */
+    DTS_LOUDSPEAKER_MASK32_CH   = 0x00004000,    /* Centre Height in front */
+    DTS_LOUDSPEAKER_MASK32_RH   = 0x00008000,    /* Right Height in front */
+    DTS_LOUDSPEAKER_MASK32_LFE2 = 0x00010000,    /* Second low frequency effects subwoofer */
+    DTS_LOUDSPEAKER_MASK32_LW   = 0x00020000,    /* Left on side in front */
+    DTS_LOUDSPEAKER_MASK32_RW   = 0x00040000,    /* Right on side in front */
+    DTS_LOUDSPEAKER_MASK32_OH   = 0x00080000,    /* Over the listener's head */
+    DTS_LOUDSPEAKER_MASK32_LHS  = 0x00100000,    /* Left height on side */
+    DTS_LOUDSPEAKER_MASK32_RHS  = 0x00200000,    /* Right height on side */
+    DTS_LOUDSPEAKER_MASK32_CHR  = 0x00400000,    /* Centre height in rear */
+    DTS_LOUDSPEAKER_MASK32_LHR  = 0x00800000,    /* Left height in rear */
+    DTS_LOUDSPEAKER_MASK32_RHR  = 0x01000000,    /* Right height in rear */
+    DTS_LOUDSPEAKER_MASK32_CL   = 0x02000000,    /* Centre in the plane lower than listener's ears */
+    DTS_LOUDSPEAKER_MASK32_LL   = 0x04000000,    /* Left in the plane lower than listener's ears */
+    DTS_LOUDSPEAKER_MASK32_RL   = 0x08000000,    /* Right in the plane lower than listener's ears */
 } dts_loudspeaker_mask;
 
+/* Loudspeaker Masks (up to 16-bit) for
+ *  - nuSpkrActivityMask
+ *  - nuStndrSpkrLayoutMask
+ *  - nuMixOutChMask
+ *  - ChannelLayout of DTSSpecificBox */
 typedef enum
 {
     DTS_CHANNEL_LAYOUT_C       = 0x0001,    /* Centre in front of listener */
@@ -376,42 +387,48 @@ static int dts_get_channel_count_from_channel_layout( uint16_t channel_layout )
 #undef DTS_CHANNEL_PAIR_MASK
 }
 
-static uint32_t dts_get_channel_layout_from_xxch_mask( uint32_t mask )
+static uint32_t dts_get_channel_layout_from_ls_mask32( uint32_t mask )
 {
     uint32_t layout = 0;
-    if( mask & DTS_XXCH_LOUDSPEAKER_MASK_C )
+    if( mask & DTS_LOUDSPEAKER_MASK32_C )
         layout |= DTS_CHANNEL_LAYOUT_C;
-    if( mask & (DTS_XXCH_LOUDSPEAKER_MASK_L | DTS_XXCH_LOUDSPEAKER_MASK_R) )
+    if( mask & (DTS_LOUDSPEAKER_MASK32_L | DTS_LOUDSPEAKER_MASK32_R) )
         layout |= DTS_CHANNEL_LAYOUT_L_R;
-    if( mask & (DTS_XXCH_LOUDSPEAKER_MASK_LS | DTS_XXCH_LOUDSPEAKER_MASK_RS) )
+    if( mask & (DTS_LOUDSPEAKER_MASK32_LS | DTS_LOUDSPEAKER_MASK32_RS) )
         layout |= DTS_CHANNEL_LAYOUT_LS_RS;
-    if( mask & DTS_XXCH_LOUDSPEAKER_MASK_LFE1 )
+    if( mask & DTS_LOUDSPEAKER_MASK32_LFE1 )
         layout |= DTS_CHANNEL_LAYOUT_LFE1;
-    if( mask & DTS_XXCH_LOUDSPEAKER_MASK_CS )
+    if( mask & DTS_LOUDSPEAKER_MASK32_CS )
         layout |= DTS_CHANNEL_LAYOUT_CS;
-    if( mask & (DTS_XXCH_LOUDSPEAKER_MASK_LH | DTS_XXCH_LOUDSPEAKER_MASK_RH) )
+    if( mask & (DTS_LOUDSPEAKER_MASK32_LH | DTS_LOUDSPEAKER_MASK32_RH) )
         layout |= DTS_CHANNEL_LAYOUT_LH_RH;
-    if( mask & (DTS_XXCH_LOUDSPEAKER_MASK_LSR | DTS_XXCH_LOUDSPEAKER_MASK_RSR) )
+    if( mask & (DTS_LOUDSPEAKER_MASK32_LSR | DTS_LOUDSPEAKER_MASK32_RSR) )
         layout |= DTS_CHANNEL_LAYOUT_LSR_RSR;
-    if( mask & DTS_XXCH_LOUDSPEAKER_MASK_CH )
+    if( mask & DTS_LOUDSPEAKER_MASK32_CH )
         layout |= DTS_CHANNEL_LAYOUT_CH;
-    if( mask & DTS_XXCH_LOUDSPEAKER_MASK_OH )
+    if( mask & DTS_LOUDSPEAKER_MASK32_OH )
         layout |= DTS_CHANNEL_LAYOUT_OH;
-    if( mask & (DTS_XXCH_LOUDSPEAKER_MASK_LC | DTS_XXCH_LOUDSPEAKER_MASK_RC) )
+    if( mask & (DTS_LOUDSPEAKER_MASK32_LC | DTS_LOUDSPEAKER_MASK32_RC) )
         layout |= DTS_CHANNEL_LAYOUT_LC_RC;
-    if( mask & (DTS_XXCH_LOUDSPEAKER_MASK_LW | DTS_XXCH_LOUDSPEAKER_MASK_RW) )
+    if( mask & (DTS_LOUDSPEAKER_MASK32_LW | DTS_LOUDSPEAKER_MASK32_RW) )
         layout |= DTS_CHANNEL_LAYOUT_LW_RW;
-    if( mask & (DTS_XXCH_LOUDSPEAKER_MASK_LSS | DTS_XXCH_LOUDSPEAKER_MASK_RSS) )
+    if( mask & (DTS_LOUDSPEAKER_MASK32_LSS | DTS_LOUDSPEAKER_MASK32_RSS) )
         layout |= DTS_CHANNEL_LAYOUT_LSS_RSS;
-    if( mask & DTS_XXCH_LOUDSPEAKER_MASK_LFE2 )
+    if( mask & DTS_LOUDSPEAKER_MASK32_LFE2 )
         layout |= DTS_CHANNEL_LAYOUT_LFE2;
-    if( mask & (DTS_XXCH_LOUDSPEAKER_MASK_LHS | DTS_XXCH_LOUDSPEAKER_MASK_RHS) )
+    if( mask & (DTS_LOUDSPEAKER_MASK32_LHS | DTS_LOUDSPEAKER_MASK32_RHS) )
         layout |= DTS_CHANNEL_LAYOUT_LHS_RHS;
-    if( mask & DTS_XXCH_LOUDSPEAKER_MASK_CHR )
+    if( mask & DTS_LOUDSPEAKER_MASK32_CHR )
         layout |= DTS_CHANNEL_LAYOUT_CHR;
-    if( mask & (DTS_XXCH_LOUDSPEAKER_MASK_LHR | DTS_XXCH_LOUDSPEAKER_MASK_RHR) )
+    if( mask & (DTS_LOUDSPEAKER_MASK32_LHR | DTS_LOUDSPEAKER_MASK32_RHR) )
         layout |= DTS_CHANNEL_LAYOUT_LHR_RHR;
     return layout;
+}
+
+/* for channels which cannot be expressed by ChannelLayout; CL, LL and RL */
+static uint8_t dts_get_lower_channels_from_ls_mask32( uint32_t mask )
+{
+    return (mask >> 25) & 0x7;
 }
 
 static void dts_parse_xll_navigation( lsmash_bits_t *bits, dts_xll_info_t *xll, int nuBits4ExSSFsize, uint64_t *bits_pos )
@@ -621,9 +638,8 @@ static int dts_parse_xxch( dts_info_t *info, uint64_t *bits_pos, dts_xxch_info_t
      * (Lsr and Rsr) from the XXCh stream to get the original 7.1 speaker layout (C, L, R, LFE1, Lss,
      * Rsr, Lsr and Rsr) and configures its outputs accordingly. */
     uint32_t xxch_mask = dts_bits_get( bits, nuBits4SpkrMaskXXCh, bits_pos );           /* nuCoreSpkrActivityMask         (nuBits4SpkrMaskXXCh) */
-    xxch->channel_layout |= dts_get_channel_layout_from_xxch_mask( xxch_mask );
-    /* Store channels which cannot be expressed by ChannelLayout; CL, LL and RL. */
-    xxch->lower_planes = (xxch_mask >> 25) & 0x7;
+    xxch->channel_layout |= dts_get_channel_layout_from_ls_mask32( xxch_mask );
+    xxch->lower_planes    = dts_get_lower_channels_from_ls_mask32( xxch_mask );
     dts_bits_get( bits, nuHeaderSizeXXCh * 8 - (*bits_pos - xxch_pos), bits_pos );      /* Skip remaining part of XXCH Frame Header. */
     for( int nChSet = 0; nChSet < nuNumChSetsInXXCh; nChSet++ )
     {
@@ -634,8 +650,8 @@ static int dts_parse_xxch( dts_info_t *info, uint64_t *bits_pos, dts_xxch_info_t
         if( nuBits4SpkrMaskXXCh > 6 )
         {
             xxch_mask = dts_bits_get( bits, nuBits4SpkrMaskXXCh - 6, bits_pos ) << 6;   /* nuXXChSpkrLayoutMask           (nuBits4SpkrMaskXXCh - 6) */
-            xxch->channel_layout |= dts_get_channel_layout_from_xxch_mask( xxch_mask );
-            xxch->lower_planes   |= (xxch_mask >> 25) & 0x7;
+            xxch->channel_layout |= dts_get_channel_layout_from_ls_mask32( xxch_mask );
+            xxch->lower_planes   |= dts_get_lower_channels_from_ls_mask32( xxch_mask );
         }
 #if 0   /* FIXME: Can we detect stereo downmixing from only XXCH data within the core substream? */
         if( dts_bits_get( bits, 1, bits_pos ) )                                         /* bDownMixCoeffCodeEmbedded      (1) */
@@ -877,7 +893,11 @@ static int dts_parse_exss_xll( dts_info_t *info, uint64_t *bits_pos, dts_audio_a
             if( bHierChSet )
                 sum_nChSetLLChannel += nChSetLLChannel;
             if( dts_bits_get( bits, 1, bits_pos ) )                                             /* bChMaskEnabled                 (1) */
-                xll->channel_layout |= dts_bits_get( bits, nBits4ChMask, bits_pos );            /* nChMask                        (nBits4ChMask) */
+            {
+                uint32_t nChMask = dts_bits_get( bits, nBits4ChMask, bits_pos );                /* nChMask                        (nBits4ChMask) */
+                xll->channel_layout |= dts_get_channel_layout_from_ls_mask32( nChMask );
+                xll->lower_planes   |= dts_get_lower_channels_from_ls_mask32( nChMask );
+            }
             else
                 dts_bits_get( bits, 25 * nChSetLLChannel, bits_pos );                           /* RadiusDelta[ch]                (9)
                                                                                                  * Theta[ch]                      (9)
@@ -897,7 +917,11 @@ static int dts_parse_exss_xll( dts_info_t *info, uint64_t *bits_pos, dts_audio_a
                     int pnNumSpeakers = dts_bits_get( bits, 6, bits_pos ) + 1;                  /* pnNumSpeakers[nSpkrConf]       (6) */
                     int bSpkrMaskEnabled = dts_bits_get( bits, 1, bits_pos );                   /* bSpkrMaskEnabled               (1) */
                     if( bSpkrMaskEnabled )
-                        xll->channel_layout |= dts_bits_get( bits, nBits4ChMask, bits_pos );    /* nSpkrMask[nSpkrConf]           (nBits4ChMask) */
+                    {
+                        uint32_t nSpkrMask = dts_bits_get( bits, nBits4ChMask, bits_pos );      /* nSpkrMask[nSpkrConf]           (nBits4ChMask) */
+                        xll->channel_layout |= dts_get_channel_layout_from_ls_mask32( nSpkrMask );
+                        xll->lower_planes   |= dts_get_lower_channels_from_ls_mask32( nSpkrMask );
+                    }
                     for( int nSpkr = 0; nSpkr < pnNumSpeakers; nSpkr++ )
                     {
                         if( !bSpkrMaskEnabled )
@@ -1305,7 +1329,7 @@ int dts_get_max_channel_count( dts_info_t *info )
             }
             uint16_t ext_channel_layout = 0;
             uint16_t lbr_channel_layout = 0;
-            uint16_t xll_channel_layout = 0;
+            uint64_t xll_channel_layout = 0;
             for( int nSS = 0; nSS <= nExtSSIndex; nSS++ )
                 if( (exss->nuActiveExSSMask[nAuPr] >> nSS) & 0x1 )
                 {
@@ -1315,7 +1339,7 @@ int dts_get_max_channel_count( dts_info_t *info )
                             dts_audio_asset_t *asset = &exss->asset[nAst];
                             ext_channel_layout |= asset->channel_layout;
                             lbr_channel_layout |= asset->lbr.channel_layout;
-                            xll_channel_layout |= asset->xll.channel_layout;
+                            xll_channel_layout |= asset->xll.channel_layout | ((uint64_t)asset->xll.lower_planes << 16);
                         }
                 }
             channel_count += dts_get_channel_count_from_channel_layout( channel_layout );
@@ -1325,6 +1349,7 @@ int dts_get_max_channel_count( dts_info_t *info )
             channel_count = dts_get_channel_count_from_channel_layout( lbr_channel_layout );
             max_channel_count = LSMASH_MAX( max_channel_count, channel_count );
             channel_count = dts_get_channel_count_from_channel_layout( xll_channel_layout );
+                          + lsmash_count_bits( xll_channel_layout >> 16 );
             max_channel_count = LSMASH_MAX( max_channel_count, channel_count );
         }
     }

@@ -58,6 +58,7 @@ typedef struct
     uint32_t frame_duration;
     uint8_t  pcm_resolution;
     uint8_t  stereo_downmix;
+    uint8_t  lower_planes;      /* CL, LL and RL */
 } dts_xll_info_t;
 
 typedef struct
