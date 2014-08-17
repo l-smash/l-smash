@@ -103,6 +103,7 @@ int lsmash_setup_ac3_specific_parameters_from_syncframe( lsmash_ac3_specific_par
     lsmash_bs_t   bs   = { 0 };
     uint8_t buffer[AC3_MAX_SYNCFRAME_LENGTH] = { 0 };
     bs.buffer.data  = buffer;
+    bs.buffer.store = data_length;
     bs.buffer.alloc = AC3_MAX_SYNCFRAME_LENGTH;
     ac3_info_t info = { .bits = &bits };
     lsmash_bits_init( &bits, &bs );
