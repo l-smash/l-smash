@@ -166,9 +166,10 @@ int64_t lsmash_bs_read_seek( lsmash_bs_t *bs, int64_t offset, int whence )
     int64_t ret = bs->seek( bs->stream, offset, whence );
     if( ret < 0 )
         return ret;
-    bs->offset = dst_offset;
-    bs->eof    = 0;
-    bs->eob    = 0;
+    bs->offset  = dst_offset;
+    bs->written = LSMASH_MAX( bs->written, bs->offset );
+    bs->eof     = 0;
+    bs->eob     = 0;
     /* The data on the buffer is invalid. */
     lsmash_bs_empty( bs );
     return ret;
@@ -360,6 +361,7 @@ static void bs_fill_buffer( lsmash_bs_t *bs )
         bs->buffer.unseekable = 0;
         bs->buffer.store += read_size;
         bs->offset       += read_size;
+        bs->written = LSMASH_MAX( bs->written, bs->offset );
     }
 }
 
@@ -611,6 +613,7 @@ int lsmash_bs_read( lsmash_bs_t *bs, uint32_t size )
     }
     bs->buffer.store += read_size;
     bs->offset       += read_size;
+    bs->written = LSMASH_MAX( bs->written, bs->offset );
     return read_size;
 }
 
@@ -636,6 +639,7 @@ int lsmash_bs_read_data( lsmash_bs_t *bs, uint8_t *buf, size_t *size )
     bs->buffer.unseekable = 1;
     bs->offset += read_size;
     *size       = read_size;
+    bs->written = LSMASH_MAX( bs->written, bs->offset );
     return 0;
 }
 
