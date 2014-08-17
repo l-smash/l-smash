@@ -31,7 +31,6 @@ typedef struct
 {
     lsmash_ac3_specific_parameters_t dac3_param;
     lsmash_bits_t *bits;
-    uint8_t  buffer[AC3_MAX_SYNCFRAME_LENGTH];
     uint8_t *next_dac3;
     uint32_t au_number;
 } ac3_info_t;
@@ -70,6 +69,6 @@ typedef struct
 static const uint32_t ac3_sample_rate_table[4] = { 48000, 44100, 32000, 0 };
 static const uint8_t eac3_audio_block_table[4] = { 1, 2, 3, 6 };
 
-int ac3_parse_syncframe_header( ac3_info_t *info, uint8_t *data );
+int ac3_parse_syncframe_header( ac3_info_t *info );
 int eac3_parse_syncframe( eac3_info_t *info, uint8_t *data, uint32_t data_length );
 void eac3_update_specific_param( eac3_info_t *info );

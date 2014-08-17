@@ -828,6 +828,25 @@ int lsmash_bits_import_data( lsmash_bits_t* bits, void* data, uint32_t length )
 }
 /*---- ----*/
 
+/*---- basic I/O ----*/
+int lsmash_fread_wrapper( void *opaque, uint8_t *buf, int size )
+{
+    int read_size = fread( buf, 1, size, (FILE *)opaque );
+    return ferror( (FILE *)opaque ) ? -1 : read_size;
+}
+
+int lsmash_fwrite_wrapper( void *opaque, uint8_t *buf, int size )
+{
+    return fwrite( buf, 1, size, (FILE *)opaque );
+}
+
+int64_t lsmash_fseek_wrapper( void *opaque, int64_t offset, int whence )
+{
+    if( lsmash_fseek( (FILE *)opaque, offset, whence ) != 0 )
+        return -1;
+    return lsmash_ftell( (FILE *)opaque );
+}
+
 lsmash_multiple_buffers_t *lsmash_create_multiple_buffers( uint32_t number_of_buffers, uint32_t buffer_size )
 {
     if( (uint64_t)number_of_buffers * buffer_size > UINT32_MAX )

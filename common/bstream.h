@@ -174,6 +174,11 @@ void lsmash_bits_adhoc_cleanup( lsmash_bits_t *bits );
 void* lsmash_bits_export_data( lsmash_bits_t *bits, uint32_t *length );
 int lsmash_bits_import_data( lsmash_bits_t *bits, void *data, uint32_t length );
 
+/*---- basic I/O ----*/
+int lsmash_fread_wrapper( void *opaque, uint8_t *buf, int size );
+int lsmash_fwrite_wrapper( void *opaque, uint8_t *buf, int size );
+int64_t lsmash_fseek_wrapper( void *opaque, int64_t offset, int whence );
+
 /*---- multiple buffers ----*/
 typedef struct
 {

@@ -104,14 +104,12 @@ int lsmash_setup_ac3_specific_parameters_from_syncframe( lsmash_ac3_specific_par
     uint8_t buffer[AC3_MAX_SYNCFRAME_LENGTH] = { 0 };
     bs.buffer.data  = buffer;
     bs.buffer.alloc = AC3_MAX_SYNCFRAME_LENGTH;
-    ac3_info_t  handler = { { 0 } };
-    ac3_info_t *info    = &handler;
-    memcpy( info->buffer, data, LSMASH_MIN( data_length, AC3_MAX_SYNCFRAME_LENGTH ) );
-    info->bits = &bits;
+    ac3_info_t info = { .bits = &bits };
     lsmash_bits_init( &bits, &bs );
-    if( ac3_parse_syncframe_header( info, info->buffer ) )
+    memcpy( buffer, data, LSMASH_MIN( data_length, AC3_MAX_SYNCFRAME_LENGTH ) );
+    if( ac3_parse_syncframe_header( &info ) < 0 )
         return -1;
-    *param = info->dac3_param;
+    *param = info.dac3_param;
     return 0;
 }
 
@@ -126,11 +124,9 @@ static int ac3_check_syncframe_header( lsmash_ac3_specific_parameters_t *param )
     return 0;
 }
 
-int ac3_parse_syncframe_header( ac3_info_t *info, uint8_t *data )
+int ac3_parse_syncframe_header( ac3_info_t *info )
 {
     lsmash_bits_t *bits = info->bits;
-    if( lsmash_bits_import_data( bits, data, AC3_MIN_SYNCFRAME_LENGTH ) )
-        return -1;
     lsmash_ac3_specific_parameters_t *param = &info->dac3_param;
     lsmash_bits_get( bits, 32 );        /* syncword + crc1 */
     param->fscod      = lsmash_bits_get( bits, 2 );

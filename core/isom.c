@@ -2403,24 +2403,6 @@ void lsmash_discard_boxes( lsmash_root_t *root )
     isom_remove_all_extension_boxes( &root->file->extensions );
 }
 
-static int fread_wrapper( void *opaque, uint8_t *buf, int size )
-{
-    int read_size = fread( buf, 1, size, (FILE *)opaque );
-    return ferror( (FILE *)opaque ) ? -1 : read_size;
-}
-
-static int fwrite_wrapper( void *opaque, uint8_t *buf, int size )
-{
-    return fwrite( buf, 1, size, (FILE *)opaque );
-}
-
-static int64_t fseek_wrapper( void *opaque, int64_t offset, int whence )
-{
-    if( lsmash_fseek( (FILE *)opaque, offset, whence ) != 0 )
-        return -1;
-    return lsmash_ftell( (FILE *)opaque );
-}
-
 int lsmash_open_file
 (
     const char               *filename,
@@ -2472,9 +2454,9 @@ int lsmash_open_file
     memset( param, 0, sizeof(lsmash_file_parameters_t) );
     param->mode                = file_mode;
     param->opaque              = (void *)stream;
-    param->read                = fread_wrapper;
-    param->write               = fwrite_wrapper;
-    param->seek                = seekable ? fseek_wrapper : NULL;
+    param->read                = lsmash_fread_wrapper;
+    param->write               = lsmash_fwrite_wrapper;
+    param->seek                = seekable ? lsmash_fseek_wrapper : NULL;
     param->major_brand         = 0;
     param->brands              = NULL;
     param->brand_count         = 0;
