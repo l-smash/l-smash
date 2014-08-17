@@ -862,11 +862,12 @@ static int dts_parse_exss_xll( dts_info_t *info, uint64_t *bits_pos, dts_audio_a
             int bHierChSet = dts_bits_get( bits, 1, bits_pos );                                 /* bHierChSet                     (1) */
             if( bDownmixCoeffCodeEmbedded )
             {
-                /* N: the number of channels in the current channel set + 1 (+1 for the down scaling coefficients that prevent overflow)
+                /* N: the number of channels in the current channel set
+                 *    for non-primary channel set, adding +1 for the down scaling coefficients that prevent overflow
                  * M: the number of channels that the current channel set is mixed into
                  * Downmix coefficients are transmitted using 9-bit codes. */
                 static const int downmix_channel_count_table[8] = { 1, 2, 2, 3, 3, 4, 4, 0 };
-                int N = nChSetLLChannel + 1;
+                int N = nChSetLLChannel + (bPrimaryChSet ? 0 : 1);
                 int M = bPrimaryChSet ? downmix_channel_count_table[nLLDownmixType] : sum_nChSetLLChannel;
                 int nDownmixCoeffs = N * M;
                 dts_bits_get( bits, nDownmixCoeffs * 9, bits_pos );                             /* DownmixCoeffs                  (nDownmixCoeffs * 9) */
