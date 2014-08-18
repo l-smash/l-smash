@@ -1332,7 +1332,7 @@ int dts_get_max_channel_count( dts_info_t *info )
             max_channel_count = LSMASH_MAX( max_channel_count, channel_count );
             channel_count = dts_get_channel_count_from_channel_layout( lbr_channel_layout );
             max_channel_count = LSMASH_MAX( max_channel_count, channel_count );
-            channel_count = dts_get_channel_count_from_channel_layout( xll_channel_layout );
+            channel_count = dts_get_channel_count_from_channel_layout( xll_channel_layout )
                           + lsmash_count_bits( xll_channel_layout >> 16 );
             max_channel_count = LSMASH_MAX( max_channel_count, channel_count );
         }
