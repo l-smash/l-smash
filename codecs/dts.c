@@ -1297,6 +1297,7 @@ int dts_get_max_channel_count( dts_info_t *info )
         dts_extension_info_t *exss = &info->exss[nExtSSIndex];
         for( uint8_t nAuPr = 0; nAuPr < exss->nuNumAudioPresnt; nAuPr++ )
         {
+            /* Get the channel layout of an audio presentation from a core component. */
             uint16_t channel_layout = 0;
             int      channel_count  = 0;
             if( exss->bBcCorePresent    [nAuPr]
@@ -1311,29 +1312,33 @@ int dts_get_max_channel_count( dts_info_t *info )
                 else
                     channel_layout = core->channel_layout;
             }
+            channel_count += dts_get_channel_count_from_channel_layout( channel_layout );
+            max_channel_count = LSMASH_MAX( max_channel_count, channel_count );
+            /* Get the channel layouts of an audio presentation from extension substreams. */
             uint16_t ext_channel_layout = 0;
             uint16_t lbr_channel_layout = 0;
-            uint64_t xll_channel_layout = 0;
+            uint16_t xll_channel_layout = 0;
+            uint8_t  xll_lower_channels = 0;
             for( int nSS = 0; nSS <= nExtSSIndex; nSS++ )
                 if( (exss->nuActiveExSSMask[nAuPr] >> nSS) & 0x1 )
-                {
                     for( uint8_t nAst = 0; nAst < exss->nuNumAssets; nAst++ )
                         if( (exss->nuActiveAssetMask[nAuPr][nSS] >> nAst) & 0x1 )
                         {
                             dts_audio_asset_t *asset = &exss->asset[nAst];
                             ext_channel_layout |= asset->channel_layout;
                             lbr_channel_layout |= asset->lbr.channel_layout;
-                            xll_channel_layout |= asset->xll.channel_layout | ((uint64_t)asset->xll.lower_planes << 16);
+                            xll_channel_layout |= asset->xll.channel_layout;
+                            xll_lower_channels |= asset->xll.lower_planes;
                         }
-                }
-            channel_count += dts_get_channel_count_from_channel_layout( channel_layout );
-            max_channel_count = LSMASH_MAX( max_channel_count, channel_count );
+            /* Audio asset descriptors */
             channel_count = dts_get_channel_count_from_channel_layout( ext_channel_layout );
             max_channel_count = LSMASH_MAX( max_channel_count, channel_count );
+            /* LBR components */
             channel_count = dts_get_channel_count_from_channel_layout( lbr_channel_layout );
             max_channel_count = LSMASH_MAX( max_channel_count, channel_count );
+            /* Lossless extensions */
             channel_count = dts_get_channel_count_from_channel_layout( xll_channel_layout )
-                          + lsmash_count_bits( xll_channel_layout >> 16 );
+                          + lsmash_count_bits( xll_lower_channels );
             max_channel_count = LSMASH_MAX( max_channel_count, channel_count );
         }
     }
