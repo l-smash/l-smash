@@ -1354,7 +1354,7 @@ void dts_update_specific_param( dts_info_t *info )
         }
     }
     /* DTSSamplingFrequency and FrameDuration */
-    for( int nExtSSIndex = 0; nExtSSIndex < DTS_MAX_NUM_EXSS; nExtSSIndex++ )
+    for( int nExtSSIndex = exss_index_start; nExtSSIndex < DTS_MAX_NUM_EXSS; nExtSSIndex++ )
     {
         dts_extension_info_t *exss = &info->exss[nExtSSIndex];
         if( exss->nuNumAudioPresnt == 0 || exss->nuNumAssets == 0 )
@@ -1389,7 +1389,7 @@ void dts_update_specific_param( dts_info_t *info )
         ++ param->FrameDuration;
     /* pcmSampleDepth */
     param->pcmSampleDepth = 0;
-    for( int nExtSSIndex = 0; nExtSSIndex < DTS_MAX_NUM_EXSS; nExtSSIndex++ )
+    for( int nExtSSIndex = exss_index_start; nExtSSIndex < DTS_MAX_NUM_EXSS; nExtSSIndex++ )
     {
         dts_extension_info_t *exss = &info->exss[nExtSSIndex];
         if( exss->nuNumAudioPresnt == 0 || exss->nuNumAssets == 0 )
@@ -1483,7 +1483,7 @@ void dts_update_specific_param( dts_info_t *info )
      * complete information on channels coded in the audio stream including core and extensions */
     param->ChannelLayout = 0;
     if( param->RepresentationType == 0 )
-        for( int nExtSSIndex = 0; nExtSSIndex < DTS_MAX_NUM_EXSS; nExtSSIndex++ )
+        for( int nExtSSIndex = exss_index_start; nExtSSIndex < DTS_MAX_NUM_EXSS; nExtSSIndex++ )
         {
             dts_extension_info_t *exss = &info->exss[nExtSSIndex];
             if( exss->nuNumAudioPresnt == 0 || exss->nuNumAssets == 0 )
