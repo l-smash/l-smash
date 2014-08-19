@@ -414,7 +414,7 @@ static uint32_t dts_get_channel_layout_from_ls_mask32( uint32_t mask )
 }
 
 /* for channels which cannot be expressed by ChannelLayout; CL, LL and RL */
-static uint8_t dts_get_lower_channels_from_ls_mask32( uint32_t mask )
+static inline uint8_t dts_get_lower_channels_from_ls_mask32( uint32_t mask )
 {
     return (mask >> 25) & 0x7;
 }
