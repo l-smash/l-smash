@@ -2484,9 +2484,17 @@ static lsmash_audio_summary_t *dts_create_summary( dts_info_t *info )
         lsmash_destroy_codec_specific_data( specific );
         return NULL;
     }
-    summary->aot         = MP4A_AUDIO_OBJECT_TYPE_NULL;     /* no effect */
-    summary->sbr_mode    = MP4A_AAC_SBR_NOT_SPECIFIED;      /* no effect */
+    /* The CODEC identifiers probably should not be the combination of 'mp4a' and
+     * the objectTypeIndications for DTS audio since there is no public specification
+     * which defines the encapsulation of the stream as the MPEG-4 Audio context yet.
+     * In the world, there are muxers which is using such doubtful implementation.
+     * The objectTypeIndications are registered at MP4RA, but this does not always
+     * mean we can mux by using those objectTypeIndications.
+     * If available, there shall be the specification which defines the existence of
+     * DecoderSpecificInfo and its semantics, and what access unit consists of. */
     summary->sample_type = lsmash_dts_get_codingname( param );
+    summary->aot         = MP4A_AUDIO_OBJECT_TYPE_NULL;     /* make no sense */
+    summary->sbr_mode    = MP4A_AAC_SBR_NOT_SPECIFIED;      /* make no sense */
     switch( param->DTSSamplingFrequency )
     {
         case 12000 :    /* Invalid? (No reference in the spec) */
