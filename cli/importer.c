@@ -4023,6 +4023,8 @@ static int hevc_importer_probe( importer_t *importer )
         importer_info->max_TemporalId = LSMASH_MAX( importer_info->max_TemporalId, info->au.TemporalId );
         if( picture->idr )
             ++picture_stats[HEVC_PICTURE_TYPE_IDR];
+        else if( picture->irap )
+            ++picture_stats[ picture->broken_link ? HEVC_PICTURE_TYPE_BLA : HEVC_PICTURE_TYPE_CRA ];
         else if( picture->type >= HEVC_PICTURE_TYPE_NONE )
             ++picture_stats[HEVC_PICTURE_TYPE_NONE];
         else
@@ -4030,8 +4032,9 @@ static int hevc_importer_probe( importer_t *importer )
     }
     fprintf( stderr, "                                                                               \r" );
     lsmash_log( importer, LSMASH_LOG_INFO,
-                "IDR: %"PRIu32", I: %"PRIu32", P: %"PRIu32", B: %"PRIu32", Unknown: %"PRIu32"\n",
-                picture_stats[HEVC_PICTURE_TYPE_IDR], picture_stats[HEVC_PICTURE_TYPE_I],
+                "IDR: %"PRIu32", CRA: %"PRIu32", BLA: %"PRIu32", I: %"PRIu32", P: %"PRIu32", B: %"PRIu32", Unknown: %"PRIu32"\n",
+                picture_stats[HEVC_PICTURE_TYPE_IDR], picture_stats[HEVC_PICTURE_TYPE_CRA],
+                picture_stats[HEVC_PICTURE_TYPE_BLA], picture_stats[HEVC_PICTURE_TYPE_I],
                 picture_stats[HEVC_PICTURE_TYPE_I_P], picture_stats[HEVC_PICTURE_TYPE_I_P_B],
                 picture_stats[HEVC_PICTURE_TYPE_NONE]);
     /* Copy and append the last Codec Specific info. */

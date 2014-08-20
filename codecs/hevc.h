@@ -252,30 +252,32 @@ typedef struct
 /* Picture */
 typedef enum
 {
-    HEVC_PICTURE_TYPE_IDR   = 0,
-    HEVC_PICTURE_TYPE_I     = 1,
-    HEVC_PICTURE_TYPE_I_P   = 2,
-    HEVC_PICTURE_TYPE_I_P_B = 3,
-    HEVC_PICTURE_TYPE_NONE  = 4,
+    HEVC_PICTURE_TYPE_I     = 0,
+    HEVC_PICTURE_TYPE_I_P   = 1,
+    HEVC_PICTURE_TYPE_I_P_B = 2,
+    HEVC_PICTURE_TYPE_IDR   = 3,
+    HEVC_PICTURE_TYPE_CRA   = 4,
+    HEVC_PICTURE_TYPE_BLA   = 5,
+    HEVC_PICTURE_TYPE_NONE  = 6,
 } hevc_picture_type;
 
 typedef struct
 {
     hevc_picture_type type;
-    uint8_t           irap;
-    uint8_t           idr;
-    uint8_t           broken_link;
-    uint8_t           radl;
-    uint8_t           rasl;
-    uint8_t           sublayer_nonref;
-    uint8_t           closed_rap;
+    uint8_t           irap;             /* 1: IDR, CRA or BLA picture */
+    uint8_t           idr;              /* 1: IDR picture */
+    uint8_t           broken_link;      /* 1: BLA picture or picture with broken link flag */
+    uint8_t           radl;             /* 1: RADL picture */
+    uint8_t           rasl;             /* 1: RASL picture */
+    uint8_t           sublayer_nonref;  /* 1: sub-layer non-reference picture */
+    uint8_t           closed_rap;       /* 1: no undecodable leading picture in CVS */
     uint8_t           first;
-    uint8_t           random_accessible;
+    uint8_t           random_accessible;/* 1: RAP or starting point of GDR */
     uint8_t           TemporalId;
-    uint8_t           independent;
-    uint8_t           field_coded;
+    uint8_t           independent;      /* 1: intra coded picture */
+    uint8_t           field_coded;      /* 1: field coded picture */
     uint8_t           pic_parameter_set_id;
-    uint8_t           has_primary;
+    uint8_t           has_primary;      /* 1: an independent slice segment is present. */
     uint8_t           delta;
     /* POC */
     uint16_t          poc_lsb;
