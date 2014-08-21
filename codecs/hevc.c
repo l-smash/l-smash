@@ -1667,11 +1667,30 @@ int hevc_find_au_delimit_by_nalu_type
     uint8_t prev_nalu_type
 )
 {
-    return (prev_nalu_type <= HEVC_NALU_TYPE_RSV_VCL31)
-        && ((nalu_type >= HEVC_NALU_TYPE_VPS        && nalu_type <= HEVC_NALU_TYPE_AUD)
-         ||  nalu_type == HEVC_NALU_TYPE_PREFIX_SEI
-         || (nalu_type >= HEVC_NALU_TYPE_RSV_NVCL41 && nalu_type <= HEVC_NALU_TYPE_RSV_NVCL44)
-         || (nalu_type >= HEVC_NALU_TYPE_UNSPEC48   && nalu_type <= HEVC_NALU_TYPE_UNSPEC55));
+    /* 7.4.2.4.4 Order of NAL units and coded pictures and their association to access units */
+    if( prev_nalu_type <= HEVC_NALU_TYPE_RSV_VCL31 )
+        /* The first of any of the following NAL units after the last VCL NAL unit of a coded picture
+         * specifies the start of a new access unit:
+         *   - access unit delimiter NAL unit (when present)
+         *   - VPS NAL unit (when present)
+         *   - SPS NAL unit (when present)
+         *   - PPS NAL unit (when present)
+         *   - Prefix SEI NAL unit (when present)
+         *   - NAL units with nal_unit_type in the range of RSV_NVCL41..RSV_NVCL44 (when present)
+         *   - NAL units with nal_unit_type in the range of UNSPEC48..UNSPEC55 (when present)
+         *   - first VCL NAL unit of a coded picture (always present) */
+        return (nalu_type >= HEVC_NALU_TYPE_VPS        && nalu_type <= HEVC_NALU_TYPE_AUD)
+            || (nalu_type == HEVC_NALU_TYPE_PREFIX_SEI)
+            || (nalu_type >= HEVC_NALU_TYPE_RSV_NVCL41 && nalu_type <= HEVC_NALU_TYPE_RSV_NVCL44)
+            || (nalu_type >= HEVC_NALU_TYPE_UNSPEC48   && nalu_type <= HEVC_NALU_TYPE_UNSPEC55);
+    else if( prev_nalu_type == HEVC_NALU_TYPE_EOS )
+        /* An end of sequence NAL unit shall be the last NAL unit in the access unit unless the next
+         * NAL unit is an end of bitstream NAL unit. */
+        return (nalu_type != HEVC_NALU_TYPE_EOB);
+    else
+        /* An end of bitstream NAL unit shall be the last NAL unit in the access unit.
+         * Thus, the next NAL unit shall be the first NAL unit in the next access unit. */
+        return (prev_nalu_type == HEVC_NALU_TYPE_EOB);
 }
 
 int hevc_supplement_buffer
