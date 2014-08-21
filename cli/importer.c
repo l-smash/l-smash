@@ -3516,6 +3516,7 @@ static hevc_importer_info_t *create_hevc_importer_info( importer_t *importer )
         return NULL;
     }
     lsmash_init_entry_list( info->hvcC_list );
+    info->info.eos = 1;
     return info;
 }
 
@@ -3828,6 +3829,9 @@ static int hevc_get_access_unit_internal
             if( hevc_check_nalu_header( &nalu_header, sb, !!consecutive_zero_byte_count ) )
                 return hevc_get_au_internal_failed( importer_info, au, &nalu_header, no_more_buf, complete_au );
             info->ebsp_head_pos = next_nalu_head_pos + nalu_header.length;
+            /* Check if the end of sequence. Used for POC calculation. */
+            info->eos = nalu_header.nal_unit_type == HEVC_NALU_TYPE_EOS
+                     || nalu_header.nal_unit_type == HEVC_NALU_TYPE_EOB;
         }
         /* If there is no more data in the stream, and flushed chunk of NALUs, flush it as complete AU here. */
         else if( au->incomplete_length && au->length == 0 )

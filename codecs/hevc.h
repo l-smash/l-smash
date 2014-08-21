@@ -324,6 +324,7 @@ struct hevc_info_tag
     hevc_access_unit_t   au;
     uint8_t              prev_nalu_type;
     uint8_t              hvcC_pending;
+    uint8_t              eos;           /* end of sequence */
     uint64_t             ebsp_head_pos;
     lsmash_bits_t       *bits;
     hevc_stream_buffer_t buffer;

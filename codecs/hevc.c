@@ -250,7 +250,23 @@ int hevc_calculate_poc
         return -1;
     /* 8.3.1 Decoding process for picture order count
      * This process needs to be invoked only for the first slice segment of a picture. */
-    int NoRaslOutputFlag = picture->irap && (picture->idr || picture->broken_link || picture->first);
+    int NoRaslOutputFlag;
+    if( picture->irap )
+    {
+        /* 8.1 General decoding process
+         * If the current picture is an IDR picture, a BLA picture, the first picture in the
+         * bitstream in decoding order, or the first picture that follows an end of sequence
+         * NAL unit in decoding order, the variable NoRaslOutputFlag is set equal to 1.
+         *
+         * Note that not only the end of sequence NAL unit but the end of bistream NAL unit as
+         * well specify that the current access unit is the last access unit in the coded video
+         * sequence in decoding order. */
+        NoRaslOutputFlag = picture->idr || picture->broken_link || info->eos;
+        if( info->eos )
+            info->eos = 0;
+    }
+    else
+        NoRaslOutputFlag = 0;
     int64_t poc_msb;
     int32_t poc_lsb = picture->poc_lsb;
     if( picture->irap && NoRaslOutputFlag )
@@ -2745,6 +2761,11 @@ int lsmash_setup_hevc_specific_parameters_from_access_unit
             if( hevc_check_nalu_header( &nalu_header, sb, !!consecutive_zero_byte_count ) )
                 return hevc_parse_failed( info );
             info->ebsp_head_pos = next_nalu_head_pos + nalu_header.length;
+#if 0
+            /* Check if the end of sequence. Used for POC calculation. */
+            info->eos = nalu_header.nal_unit_type == HEVC_NALU_TYPE_EOS
+                     || nalu_header.nal_unit_type == HEVC_NALU_TYPE_EOB;
+#endif
         }
         else
             return hevc_parse_succeeded( info, param );
