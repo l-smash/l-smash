@@ -3998,7 +3998,6 @@ static int hevc_importer_probe( importer_t *importer )
 #endif
         hevc_picture_info_t     *picture = &info->au.picture;
         hevc_picture_info_t prev_picture = *picture;
-        picture->first = (num_access_units == 0);
         if( hevc_get_access_unit_internal( importer_info, 1 )
          || hevc_calculate_poc( info, &info->au.picture, &prev_picture ) )
         {

@@ -271,7 +271,6 @@ typedef struct
     uint8_t           rasl;             /* 1: RASL picture */
     uint8_t           sublayer_nonref;  /* 1: sub-layer non-reference picture */
     uint8_t           closed_rap;       /* 1: no undecodable leading picture in CVS */
-    uint8_t           first;
     uint8_t           random_accessible;/* 1: RAP or starting point of GDR */
     uint8_t           TemporalId;
     uint8_t           independent;      /* 1: intra coded picture */
