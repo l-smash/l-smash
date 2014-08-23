@@ -222,9 +222,9 @@ typedef struct
 
 typedef struct
 {
-    uint8_t  present;
-    uint8_t  broken_link_flag;
-    uint32_t recovery_poc_cnt;
+    uint8_t present;
+    uint8_t broken_link_flag;
+    int32_t recovery_poc_cnt;
 } hevc_recovery_point_t;
 
 typedef struct
@@ -285,7 +285,7 @@ typedef struct
     int32_t           tid0_poc_msb;
     int32_t           tid0_poc_lsb;
     /* */
-    uint32_t          recovery_poc_cnt;
+    int32_t           recovery_poc_cnt;
 } hevc_picture_info_t;
 
 /* Access unit */

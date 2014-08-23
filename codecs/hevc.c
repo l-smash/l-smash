@@ -1224,7 +1224,7 @@ int hevc_parse_sei
             {
                 /* recovery_point */
                 sei->recovery_point.present          = 1;
-                sei->recovery_point.recovery_poc_cnt = nalu_get_exp_golomb_ue( bits );
+                sei->recovery_point.recovery_poc_cnt = nalu_get_exp_golomb_se( bits );
                 lsmash_bits_get( bits, 1 );     /* exact_match_flag */
                 sei->recovery_point.broken_link_flag = lsmash_bits_get( bits, 1 );
             }
