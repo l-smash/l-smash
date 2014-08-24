@@ -4586,7 +4586,6 @@ static int vc1_importer_probe( importer_t *importer )
         lsmash_free( cts );
         goto fail;
     }
-    fprintf( stderr, "                                                                               \r" );
     /* Construct timestamps. */
     lsmash_media_ts_t *timestamp = lsmash_malloc( num_access_units * sizeof(lsmash_media_ts_t) );
     if( !timestamp )
@@ -4610,6 +4609,7 @@ static int vc1_importer_probe( importer_t *importer )
         for( uint32_t i = 0; i < num_access_units; i++ )
             timestamp[i].cts = timestamp[i].dts = i;
     lsmash_free( cts );
+    lsmash_log_refresh_line( importer );
 #if 0
     for( uint32_t i = 0; i < num_access_units; i++ )
         fprintf( stderr, "Timestamp[%"PRIu32"]: DTS=%"PRIu64", CTS=%"PRIu64"\n", i, timestamp[i].dts, timestamp[i].cts );
@@ -4640,6 +4640,7 @@ static int vc1_importer_probe( importer_t *importer )
     memset( &info->picture, 0, sizeof(vc1_picture_info_t) );
     return 0;
 fail:
+    lsmash_log_refresh_line( importer );
     remove_vc1_importer_info( importer_info );
     importer->info = NULL;
     lsmash_remove_entries( importer->summaries, lsmash_cleanup_summary );
