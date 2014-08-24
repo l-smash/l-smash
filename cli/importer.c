@@ -3352,7 +3352,7 @@ static int h264_importer_probe( importer_t *importer )
         else
             ++picture_stats[ picture->type ];
     }
-    fprintf( stderr, "                                                                               \r" );
+    lsmash_log_refresh_line( importer );
     lsmash_log( importer, LSMASH_LOG_INFO,
                 "IDR: %"PRIu32", I: %"PRIu32", P: %"PRIu32", B: %"PRIu32", "
                 "SI: %"PRIu32", SP: %"PRIu32", Unknown: %"PRIu32"\n",
@@ -3435,6 +3435,7 @@ static int h264_importer_probe( importer_t *importer )
     lsmash_destroy_h264_parameter_sets( &info->avcC_param_next );
     return 0;
 fail:
+    lsmash_log_refresh_line( importer );
     remove_h264_importer_info( importer_info );
     importer->info = NULL;
     lsmash_remove_entries( importer->summaries, lsmash_cleanup_summary );
