@@ -4034,7 +4034,7 @@ static int hevc_importer_probe( importer_t *importer )
         else
             ++picture_stats[ picture->type ];
     }
-    fprintf( stderr, "                                                                               \r" );
+    lsmash_log_refresh_line( importer );
     lsmash_log( importer, LSMASH_LOG_INFO,
                 "IDR: %"PRIu32", CRA: %"PRIu32", BLA: %"PRIu32", I: %"PRIu32", P: %"PRIu32", B: %"PRIu32", Unknown: %"PRIu32"\n",
                 picture_stats[HEVC_PICTURE_TYPE_IDR], picture_stats[HEVC_PICTURE_TYPE_CRA],
@@ -4113,6 +4113,7 @@ static int hevc_importer_probe( importer_t *importer )
     lsmash_destroy_hevc_parameter_arrays( &info->hvcC_param_next );
     return 0;
 fail:
+    lsmash_log_refresh_line( importer );
     remove_hevc_importer_info( importer_info );
     importer->info = NULL;
     lsmash_remove_entries( importer->summaries, lsmash_cleanup_summary );
