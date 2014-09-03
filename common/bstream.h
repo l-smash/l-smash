@@ -132,7 +132,7 @@ uint8_t lsmash_bs_get_byte( lsmash_bs_t *bs );
 void lsmash_bs_skip_bytes( lsmash_bs_t *bs, uint32_t size );
 void lsmash_bs_skip_bytes_64( lsmash_bs_t *bs, uint64_t size );
 uint8_t *lsmash_bs_get_bytes( lsmash_bs_t *bs, uint32_t size );
-int lsmash_bs_get_bytes_ex( lsmash_bs_t *bs, uint32_t size, uint8_t *value );
+int64_t lsmash_bs_get_bytes_ex( lsmash_bs_t *bs, uint32_t size, uint8_t *value );
 uint16_t lsmash_bs_get_be16( lsmash_bs_t *bs );
 uint32_t lsmash_bs_get_be24( lsmash_bs_t *bs );
 uint32_t lsmash_bs_get_be32( lsmash_bs_t *bs );

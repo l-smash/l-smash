@@ -479,7 +479,7 @@ void lsmash_bs_skip_bytes_64( lsmash_bs_t *bs, uint64_t size )
     }
 }
 
-static int bs_get_bytes( lsmash_bs_t *bs, uint32_t size, uint8_t *buf )
+static int64_t bs_get_bytes( lsmash_bs_t *bs, uint32_t size, uint8_t *buf )
 {
     size_t    remainder;
     size_t    remain_size = size;
@@ -514,7 +514,7 @@ static int bs_get_bytes( lsmash_bs_t *bs, uint32_t size, uint8_t *buf )
     bs->buffer.count += offset;
     if( offset < size )
         memset( buf + offset, 0, size - offset );
-    return 0;
+    return (int64_t)offset;
 }
 
 uint8_t *lsmash_bs_get_bytes( lsmash_bs_t *bs, uint32_t size )
@@ -535,7 +535,7 @@ uint8_t *lsmash_bs_get_bytes( lsmash_bs_t *bs, uint32_t size )
     return value;
 }
 
-int lsmash_bs_get_bytes_ex( lsmash_bs_t *bs, uint32_t size, uint8_t *value )
+int64_t lsmash_bs_get_bytes_ex( lsmash_bs_t *bs, uint32_t size, uint8_t *value )
 {
     if( size == 0 )
         return 0;
