@@ -796,7 +796,7 @@ static void mp4a_print_ALSSpecificConfig( FILE *fp, mp4a_AudioSpecificConfig_t *
 {
     mp4a_ALSSpecificConfig_t *alssc = (mp4a_ALSSpecificConfig_t *)asc->deepAudioSpecificConfig;
     const char *file_type [4] = { "raw", "wave", "aiff", "bwf" };
-    const char *floating  [2] = { "IEEE 32-bit floating-point", "integer" };
+    const char *floating  [2] = { "integer", "IEEE 32-bit floating-point" };
     const char *endian    [2] = { "little", "big" };
     const char *ra_flag   [4] = { "not stored", "stored at the beginning of frame_data()", "stored at the end of ALSSpecificConfig", "?" };
     lsmash_ifprintf( fp, indent++, "[ALSSpecificConfig]\n" );
