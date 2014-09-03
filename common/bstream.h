@@ -102,7 +102,6 @@ static inline size_t lsmash_bs_get_valid_data_size( lsmash_bs_t *bs )
 lsmash_bs_t *lsmash_bs_create( void );
 void lsmash_bs_cleanup( lsmash_bs_t *bs );
 void lsmash_bs_empty( lsmash_bs_t *bs );
-void lsmash_bs_free( lsmash_bs_t *bs );
 int64_t lsmash_bs_write_seek( lsmash_bs_t *bs, int64_t offset, int whence );
 int64_t lsmash_bs_read_seek( lsmash_bs_t *bs, int64_t offset, int whence );
 

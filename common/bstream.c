@@ -36,11 +36,22 @@ lsmash_bs_t *lsmash_bs_create( void )
     return bs;
 }
 
+static void bs_buffer_free( lsmash_bs_t *bs )
+{
+    if( bs->buffer.internal
+     && bs->buffer.data )
+        lsmash_free( bs->buffer.data );
+    bs->buffer.data  = NULL;
+    bs->buffer.alloc = 0;
+    bs->buffer.store = 0;
+    bs->buffer.pos   = 0;
+}
+
 void lsmash_bs_cleanup( lsmash_bs_t *bs )
 {
     if( !bs )
         return;
-    lsmash_bs_free( bs );
+    bs_buffer_free( bs );
     lsmash_free( bs );
 }
 
@@ -50,17 +61,6 @@ void lsmash_bs_empty( lsmash_bs_t *bs )
         return;
     if( bs->buffer.data )
         memset( bs->buffer.data, 0, bs->buffer.alloc );
-    bs->buffer.store = 0;
-    bs->buffer.pos   = 0;
-}
-
-void lsmash_bs_free( lsmash_bs_t *bs )
-{
-    if( bs->buffer.internal
-     && bs->buffer.data )
-        lsmash_free( bs->buffer.data );
-    bs->buffer.data  = NULL;
-    bs->buffer.alloc = 0;
     bs->buffer.store = 0;
     bs->buffer.pos   = 0;
 }
@@ -84,7 +84,7 @@ static void bs_alloc( lsmash_bs_t *bs, size_t alloc )
         data = lsmash_realloc( bs->buffer.data, alloc );
     if( !data )
     {
-        lsmash_bs_free( bs );
+        bs_buffer_free( bs );
         bs->error = 1;
         return;
     }
@@ -281,7 +281,7 @@ int lsmash_bs_flush_buffer( lsmash_bs_t *bs )
     if( bs->error
      || (bs->stream && bs->write && bs->write( bs->stream, lsmash_bs_get_buffer_data_start( bs ), bs->buffer.store ) != bs->buffer.store) )
     {
-        lsmash_bs_free( bs );
+        bs_buffer_free( bs );
         bs->error = 1;
         return -1;
     }
@@ -302,7 +302,7 @@ int lsmash_bs_write_data( lsmash_bs_t *bs, uint8_t *buf, size_t size )
         return 0;
     if( bs->error || !bs->stream )
     {
-        lsmash_bs_free( bs );
+        bs_buffer_free( bs );
         bs->error = 1;
         return -1;
     }
@@ -650,7 +650,7 @@ int lsmash_bs_import_data( lsmash_bs_t *bs, void* data, uint32_t length )
     bs_alloc( bs, bs->buffer.store + length );
     if( bs->error || !bs->buffer.data ) /* means, failed to alloc. */
     {
-        lsmash_bs_free( bs );
+        bs_buffer_free( bs );
         return -1;
     }
     memcpy( lsmash_bs_get_buffer_data_end( bs ), data, length );
