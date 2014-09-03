@@ -479,7 +479,7 @@ void lsmash_bs_skip_bytes_64( lsmash_bs_t *bs, uint64_t size )
     }
 }
 
-int bs_get_bytes( lsmash_bs_t *bs, uint32_t size, uint8_t *buf )
+static int bs_get_bytes( lsmash_bs_t *bs, uint32_t size, uint8_t *buf )
 {
     size_t    remainder;
     size_t    remain_size = size;
