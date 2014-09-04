@@ -143,15 +143,15 @@ int64_t lsmash_bs_write_seek( lsmash_bs_t *bs, int64_t offset, int whence )
 /* TODO: Support offset > INT64_MAX */
 int64_t lsmash_bs_read_seek( lsmash_bs_t *bs, int64_t offset, int whence )
 {
-    if( bs->unseekable || (whence != SEEK_SET && whence != SEEK_CUR && whence != SEEK_END) )
+    if( whence != SEEK_SET && whence != SEEK_CUR && whence != SEEK_END )
         return -1;
     if( whence == SEEK_CUR )
         offset -= lsmash_bs_get_remaining_buffer_size( bs );
-    uint64_t dst_offset = bs_estimate_seek_offset( bs, offset, whence );
     /* Check whether we can seek on the buffer. */
     if( !bs->buffer.unseekable )
     {
         assert( bs->offset >= bs->buffer.store );
+        uint64_t dst_offset = bs_estimate_seek_offset( bs, offset, whence );
         uint64_t offset_s = bs->offset - bs->buffer.store;
         uint64_t offset_e = bs->offset;
         if( dst_offset >= offset_s && dst_offset < offset_e )
@@ -162,6 +162,8 @@ int64_t lsmash_bs_read_seek( lsmash_bs_t *bs, int64_t offset, int whence )
             return lsmash_bs_get_stream_pos( bs );
         }
     }
+    if( bs->unseekable )
+        return -1;
     /* Try to seek the stream. */
     int64_t ret = bs->seek( bs->stream, offset, whence );
     if( ret < 0 )
