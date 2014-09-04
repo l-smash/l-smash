@@ -159,7 +159,7 @@ int64_t lsmash_bs_read_seek( lsmash_bs_t *bs, int64_t offset, int whence )
             /* OK, we can. So, seek on the buffer. */
             bs->buffer.pos = dst_offset - offset_s;
             bs->eob        = 0;
-            return bs->offset;
+            return lsmash_bs_get_stream_pos( bs );
         }
     }
     /* Try to seek the stream. */
