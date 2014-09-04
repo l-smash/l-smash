@@ -166,7 +166,7 @@ int64_t lsmash_bs_read_seek( lsmash_bs_t *bs, int64_t offset, int whence )
     int64_t ret = bs->seek( bs->stream, offset, whence );
     if( ret < 0 )
         return ret;
-    bs->offset  = dst_offset;
+    bs->offset  = ret;
     bs->written = LSMASH_MAX( bs->written, bs->offset );
     bs->eof     = 0;
     bs->eob     = 0;
