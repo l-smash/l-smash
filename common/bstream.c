@@ -55,6 +55,31 @@ void lsmash_bs_cleanup( lsmash_bs_t *bs )
     lsmash_free( bs );
 }
 
+int lsmash_bs_set_empty_stream( lsmash_bs_t *bs, uint8_t *data, size_t size )
+{
+    if( !bs )
+        return -1;
+    bs->stream     = NULL;      /* empty stream */
+    bs->eof        = 1;         /* unreadable because of empty stream */
+    bs->eob        = 0;         /* readable on the buffer */
+    bs->error      = 0;
+    bs->unseekable = 1;         /* only seek on the buffer */
+    bs->written    = size;      /* behave as if the size of the empty stream is 'size' */
+    bs->offset     = size;      /* behave as if the poiter of the stream is at the end */
+    bs->buffer.unseekable = 0;  /* only seek on the buffer */
+    bs->buffer.internal   = 0;  /* must not be allocated internally */
+    bs->buffer.data       = data;
+    bs->buffer.store      = size;
+    bs->buffer.alloc      = size;
+    bs->buffer.pos        = 0;
+    bs->buffer.max_size   = 0;  /* make no sense */
+    bs->buffer.count      = 0;
+    bs->read  = NULL;
+    bs->write = NULL;
+    bs->seek  = NULL;
+    return 0;
+}
+
 void lsmash_bs_empty( lsmash_bs_t *bs )
 {
     if( !bs )
