@@ -87,8 +87,8 @@ typedef struct vc1_info_tag vc1_info_t;
 
 typedef struct
 {
-    lsmash_stream_buffers_t *sb;
-    uint8_t                 *rbdu;
+    lsmash_multiple_buffers_t *bank;
+    uint8_t                   *rbdu;
 } vc1_stream_buffer_t;
 
 struct vc1_info_tag
@@ -98,7 +98,6 @@ struct vc1_info_tag
     vc1_entry_point_t     entry_point;
     vc1_picture_info_t    picture;
     vc1_access_unit_t     access_unit;
-    uint8_t               bdu_type;
     uint8_t               prev_bdu_type;
     uint64_t              ebdu_head_pos;
     lsmash_bits_t        *bits;
@@ -107,11 +106,21 @@ struct vc1_info_tag
 
 int vc1_setup_parser
 (
-    vc1_info_t                *info,
-    lsmash_stream_buffers_t   *sb,
-    int                        parse_only,
-    lsmash_stream_buffers_type type,
-    void                      *stream
+    vc1_info_t *info,
+    int         parse_only
+);
+
+uint64_t vc1_find_next_start_code_prefix
+(
+    lsmash_bs_t *bs,
+    uint8_t     *bdu_type,
+    uint64_t    *trailing_zero_bytes
+);
+
+int vc1_check_next_start_code_suffix
+(
+    lsmash_bs_t *bs,
+    uint8_t     *p_bdu_type
 );
 
 void vc1_cleanup_parser( vc1_info_t *info );
@@ -123,18 +132,3 @@ int vc1_parse_advanced_picture( lsmash_bits_t *bits,
 void vc1_update_au_property( vc1_access_unit_t *access_unit, vc1_picture_info_t *picture );
 int vc1_find_au_delimit_by_bdu_type( uint8_t bdu_type, uint8_t prev_bdu_type );
 int vc1_supplement_buffer( vc1_stream_buffer_t *buffer, vc1_access_unit_t *access_unit, uint32_t size );
-
-static inline int vc1_check_next_start_code_prefix( uint8_t *buf_pos, uint8_t *buf_end )
-{
-    return ((buf_pos + 2) < buf_end) && !buf_pos[0] && !buf_pos[1] && (buf_pos[2] == 0x01);
-}
-
-static inline int vc1_check_next_start_code_suffix( uint8_t *p_bdu_type, uint8_t **p_start_code_suffix )
-{
-    uint8_t bdu_type = **p_start_code_suffix;
-    if( (bdu_type >= 0x00 && bdu_type <= 0x09) || (bdu_type >= 0x20 && bdu_type <= 0xFF) )
-        return -1;      /* SMPTE reserved or forbidden value */
-    *p_bdu_type = bdu_type;
-    ++ *p_start_code_suffix;
-    return 0;
-}
