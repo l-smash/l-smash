@@ -179,7 +179,7 @@ int64_t lsmash_bs_read_seek( lsmash_bs_t *bs, int64_t offset, int whence )
         uint64_t dst_offset = bs_estimate_seek_offset( bs, offset, whence );
         uint64_t offset_s = bs->offset - bs->buffer.store;
         uint64_t offset_e = bs->offset;
-        if( dst_offset >= offset_s && dst_offset < offset_e )
+        if( bs->unseekable || (dst_offset >= offset_s && dst_offset < offset_e) )
         {
             /* OK, we can. So, seek on the buffer. */
             bs->buffer.pos = dst_offset - offset_s;
