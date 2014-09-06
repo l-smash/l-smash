@@ -422,6 +422,13 @@ uint16_t lsmash_bs_show_be16( lsmash_bs_t *bs, uint32_t offset )
          | ((uint16_t)lsmash_bs_show_byte( bs, offset + 1 ));
 }
 
+uint32_t lsmash_bs_show_be24( lsmash_bs_t *bs, uint32_t offset )
+{
+    return ((uint32_t)lsmash_bs_show_byte( bs, offset     ) << 16)
+         | ((uint32_t)lsmash_bs_show_byte( bs, offset + 1 ) <<  8)
+         | ((uint32_t)lsmash_bs_show_byte( bs, offset + 2 ));
+}
+
 uint32_t lsmash_bs_show_be32( lsmash_bs_t *bs, uint32_t offset )
 {
     return ((uint32_t)lsmash_bs_show_byte( bs, offset     ) << 24)

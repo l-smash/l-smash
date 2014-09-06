@@ -126,6 +126,7 @@ void *lsmash_bs_export_data( lsmash_bs_t *bs, uint32_t *length );
 /*---- bytestream reader ----*/
 uint8_t lsmash_bs_show_byte( lsmash_bs_t *bs, uint32_t offset );
 uint16_t lsmash_bs_show_be16( lsmash_bs_t *bs, uint32_t offset );
+uint32_t lsmash_bs_show_be24( lsmash_bs_t *bs, uint32_t offset );
 uint32_t lsmash_bs_show_be32( lsmash_bs_t *bs, uint32_t offset );
 uint64_t lsmash_bs_show_be64( lsmash_bs_t *bs, uint32_t offset );
 uint8_t lsmash_bs_get_byte( lsmash_bs_t *bs );
