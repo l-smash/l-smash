@@ -4471,7 +4471,7 @@ static int vc1_analyze_whole_stream
     while( vc1_imp->status != IMPORTER_EOF )
     {
 #if 0
-        lsmash_log( logger, LSMASH_LOG_INFO, "Analyzing stream as VC-1: %"PRIu32"\n", num_access_units + 1 );
+        lsmash_log( &logger, LSMASH_LOG_INFO, "Analyzing stream as VC-1: %"PRIu32"\n", num_access_units + 1 );
 #endif
         if( vc1_importer_get_access_unit_internal( importer, 1 ) < 0 )
             goto fail;
@@ -4535,7 +4535,7 @@ static int vc1_analyze_whole_stream
         for( uint32_t i = 0; i < num_access_units; i++ )
             timestamp[i].cts = timestamp[i].dts = i;
     lsmash_free( cts );
-    lsmash_log_refresh_line( logger );
+    lsmash_log_refresh_line( &logger );
 #if 0
     for( uint32_t i = 0; i < num_access_units; i++ )
         fprintf( stderr, "Timestamp[%"PRIu32"]: DTS=%"PRIu64", CTS=%"PRIu64"\n", i, timestamp[i].dts, timestamp[i].cts );
@@ -4544,7 +4544,7 @@ static int vc1_analyze_whole_stream
     vc1_imp->ts_list.timestamp    = timestamp;
     return 0;
 fail:
-    lsmash_log_refresh_line( logger );
+    lsmash_log_refresh_line( &logger );
     lsmash_free( cts );
     return -1;
 }
