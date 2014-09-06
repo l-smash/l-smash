@@ -2578,14 +2578,16 @@ typedef struct
     h264_info_t            info;
     lsmash_entry_list_t    avcC_list[1];    /* stored as lsmash_codec_specific_t */
     lsmash_media_ts_list_t ts_list;
+    lsmash_bs_t           *bs;
     uint32_t max_au_length;
     uint32_t num_undecodable;
     uint32_t avcC_number;
     uint32_t last_delta;
     uint64_t last_intra_cts;
+    uint64_t sc_head_pos;
     uint8_t  composition_reordering_present;
     uint8_t  field_pic_present;
-} h264_importer_info_t;
+} h264_importer_t;
 
 typedef struct
 {
@@ -2595,35 +2597,46 @@ typedef struct
     uint16_t reset;
 } nal_pic_timing_t;
 
-static void remove_h264_importer_info( h264_importer_info_t *info )
+static void remove_h264_importer( h264_importer_t *h264_imp )
 {
-    if( !info )
+    if( !h264_imp )
         return;
-    lsmash_remove_entries( info->avcC_list, lsmash_destroy_codec_specific_data );
-    h264_cleanup_parser( &info->info );
-    if( info->ts_list.timestamp )
-        lsmash_free( info->ts_list.timestamp );
-    lsmash_free( info );
+    lsmash_remove_entries( h264_imp->avcC_list, lsmash_destroy_codec_specific_data );
+    h264_cleanup_parser( &h264_imp->info );
+    lsmash_free( h264_imp->ts_list.timestamp );
+    lsmash_free( h264_imp );
 }
 
 static void h264_importer_cleanup( importer_t *importer )
 {
     debug_if( importer && importer->info )
-        remove_h264_importer_info( importer->info );
+        remove_h264_importer( importer->info );
 }
 
-static h264_importer_info_t *create_h264_importer_info( importer_t *importer )
+static h264_importer_t *create_h264_importer( importer_t *importer )
 {
-    h264_importer_info_t *info = lsmash_malloc_zero( sizeof(h264_importer_info_t) );
-    if( !info )
+    h264_importer_t *h264_imp = lsmash_malloc_zero( sizeof(h264_importer_t) );
+    if( !h264_imp )
         return NULL;
-    if( h264_setup_parser( &info->info, &importer->sb, 0, LSMASH_STREAM_BUFFERS_TYPE_FILE, importer->stream ) )
+    if( h264_setup_parser( &h264_imp->info, 0 ) < 0 )
     {
-        remove_h264_importer_info( info );
+        remove_h264_importer( h264_imp );
         return NULL;
     }
-    lsmash_init_entry_list( info->avcC_list );
-    return info;
+    lsmash_bs_t *bs = lsmash_bs_create();
+    if( !bs )
+    {
+        remove_h264_importer( h264_imp );
+        return NULL;
+    }
+    bs->stream          = importer->stream;
+    bs->read            = lsmash_fread_wrapper;
+    bs->seek            = lsmash_fseek_wrapper;
+    bs->unseekable      = importer->is_stdin;
+    bs->buffer.max_size = BS_MAX_DEFAULT_READ_SIZE;
+    lsmash_init_entry_list( h264_imp->avcC_list );
+    h264_imp->bs = bs;
+    return h264_imp;
 }
 
 static inline int h264_complete_au( h264_picture_info_t *picture, int probe )
@@ -2653,25 +2666,24 @@ static void h264_append_nalu_to_au( h264_picture_info_t *picture, uint8_t *src_n
     picture->incomplete_au_length += H264_DEFAULT_NALU_LENGTH_SIZE + nalu_length;
 }
 
-static inline void h264_get_au_internal_end( h264_importer_info_t *info, h264_picture_info_t *picture, h264_nalu_header_t *nalu_header, int no_more_buf )
+static inline void h264_get_au_internal_end( h264_importer_t *h264_imp, h264_picture_info_t *picture )
 {
-    if( info->info.buffer.sb->no_more_read && no_more_buf && (picture->incomplete_au_length == 0) )
-        info->status = IMPORTER_EOF;
-    else if( info->status != IMPORTER_CHANGE )
-        info->status = IMPORTER_OK;
-    info->info.nalu_header = *nalu_header;
+    if( lsmash_bs_is_end( h264_imp->bs, 0 ) && (picture->incomplete_au_length == 0) )
+        h264_imp->status = IMPORTER_EOF;
+    else if( h264_imp->status != IMPORTER_CHANGE )
+        h264_imp->status = IMPORTER_OK;
 }
 
-static int h264_get_au_internal_succeeded( h264_importer_info_t *info, h264_picture_info_t *picture, h264_nalu_header_t *nalu_header, int no_more_buf )
+static int h264_get_au_internal_succeeded( h264_importer_t *h264_imp, h264_picture_info_t *picture )
 {
-    h264_get_au_internal_end( info, picture, nalu_header, no_more_buf );
+    h264_get_au_internal_end( h264_imp, picture );
     picture->au_number += 1;
     return 0;
 }
 
-static int h264_get_au_internal_failed( h264_importer_info_t *info, h264_picture_info_t *picture, h264_nalu_header_t *nalu_header, int no_more_buf, int complete_au )
+static int h264_get_au_internal_failed( h264_importer_t *h264_imp, h264_picture_info_t *picture, int complete_au )
 {
-    h264_get_au_internal_end( info, picture, nalu_header, no_more_buf );
+    h264_get_au_internal_end( h264_imp, picture );
     if( complete_au )
         picture->au_number += 1;
     return -1;
@@ -2689,14 +2701,14 @@ static lsmash_video_summary_t *h264_create_summary
         return NULL;
     /* Update summary here.
      * max_au_length is set at the last of mp4sys_h264_probe function. */
-    lsmash_codec_specific_t *specific = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264,
-                                                                           LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
-    specific->data.unstructured = lsmash_create_h264_specific_info( param, &specific->size );
-    if( !specific->data.unstructured
-     || lsmash_add_entry( &summary->opaque->list, specific ) )
+    lsmash_codec_specific_t *cs = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264,
+                                                                     LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
+    cs->data.unstructured = lsmash_create_h264_specific_info( param, &cs->size );
+    if( !cs->data.unstructured
+     || lsmash_add_entry( &summary->opaque->list, cs ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-        lsmash_destroy_codec_specific_data( specific );
+        lsmash_destroy_codec_specific_data( cs );
         return NULL;
     }
     summary->sample_type            = ISOM_CODEC_TYPE_AVC1_VIDEO;
@@ -2718,7 +2730,7 @@ static lsmash_video_summary_t *h264_create_summary
 
 static int h264_store_codec_specific
 (
-    h264_importer_info_t              *info,
+    h264_importer_t                   *info,
     lsmash_h264_specific_parameters_t *avcC_param
 )
 {
@@ -2731,7 +2743,7 @@ static int h264_store_codec_specific
     lsmash_codec_specific_t *dst_cs = lsmash_convert_codec_specific_format( src_cs, LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
     src_param->parameter_sets = NULL;   /* Avoid freeing parameter sets within avcC_param. */
     lsmash_destroy_codec_specific_data( src_cs );
-    if( !dst_cs || lsmash_add_entry( info->avcC_list, dst_cs ) )
+    if( !dst_cs || lsmash_add_entry( info->avcC_list, dst_cs ) < 0 )
     {
         lsmash_destroy_codec_specific_data( dst_cs );
         return -1;
@@ -2739,24 +2751,8 @@ static int h264_store_codec_specific
     return 0;
 }
 
-/* If probe equals 0, don't get the actual data (EBPS) of an access unit and only parse NALU.
- * Currently, you can get AU of AVC video elemental stream only, not AVC parameter set elemental stream defined in 14496-15. */
-static int h264_get_access_unit_internal
-(
-    h264_importer_info_t *importer_info,
-    int                   probe
-)
+static inline void h264_new_picture( h264_picture_info_t *picture )
 {
-    h264_info_t             *info     = &importer_info->info;
-    h264_slice_info_t       *slice    = &info->slice;
-    h264_picture_info_t     *picture  = &info->picture;
-    h264_stream_buffer_t    *hb       = &info->buffer;
-    lsmash_stream_buffers_t *sb       = hb->sb;
-    h264_nalu_header_t nalu_header = info->nalu_header;
-    uint64_t consecutive_zero_byte_count = 0;
-    uint64_t ebsp_length = 0;
-    int      no_more_buf = 0;
-    int      complete_au = 0;
     picture->au_length          = 0;
     picture->type               = H264_PICTURE_TYPE_NONE;
     picture->random_accessible  = 0;
@@ -2764,44 +2760,55 @@ static int h264_get_access_unit_internal
     picture->has_mmco5          = 0;
     picture->has_redundancy     = 0;
     picture->broken_link_flag   = 0;
+}
+
+/* If probe equals 0, don't get the actual data (EBPS) of an access unit and only parse NALU.
+ * Currently, you can get AU of AVC video elemental stream only, not AVC parameter set elemental stream defined in 14496-15. */
+static int h264_get_access_unit_internal
+(
+    importer_t *importer,
+    int         probe
+)
+{
+    h264_importer_t      *h264_imp = (h264_importer_t *)importer->info;
+    h264_info_t          *info     = &h264_imp->info;
+    h264_slice_info_t    *slice    = &info->slice;
+    h264_picture_info_t  *picture  = &info->picture;
+    h264_stream_buffer_t *sb       = &info->buffer;
+    lsmash_bs_t          *bs       = h264_imp->bs;
+    int complete_au = 0;
+    h264_new_picture( picture );
     while( 1 )
     {
-        lsmash_stream_buffers_update( sb, 2 );
-        no_more_buf = (lsmash_stream_buffers_get_remainder( sb ) == 0);
-        int no_more = lsmash_stream_buffers_is_eos( sb ) && no_more_buf;
-        if( !nalu_check_next_short_start_code( sb->pos, sb->end ) && !no_more )
-        {
-            if( lsmash_stream_buffers_get_byte( sb ) )
-                consecutive_zero_byte_count = 0;
-            else
-                ++consecutive_zero_byte_count;
-            ++ebsp_length;
-            continue;
-        }
-        if( no_more && ebsp_length == 0 )
+        h264_nalu_header_t nuh;
+        uint64_t start_code_length;
+        uint64_t trailing_zero_bytes;
+        uint64_t nalu_length = h264_find_next_start_code( bs, &nuh, &start_code_length, &trailing_zero_bytes );
+        if( start_code_length <= H264_SHORT_START_CODE_LENGTH && lsmash_bs_is_end( bs, nalu_length ) )
         {
             /* For the last NALU.
              * This NALU already has been appended into the latest access unit and parsed. */
             h264_update_picture_info( info, picture, slice, &info->sei );
-            h264_complete_au( picture, probe );
-            return h264_get_au_internal_succeeded( importer_info, picture, &nalu_header, no_more_buf );
+            complete_au = h264_complete_au( picture, probe );
+            if( complete_au )
+                return h264_get_au_internal_succeeded( h264_imp, picture );
+            else
+                return h264_get_au_internal_failed( h264_imp, picture, complete_au );
         }
-        uint64_t next_nalu_head_pos = info->ebsp_head_pos + ebsp_length + !no_more * H264_SHORT_START_CODE_LENGTH;
-       /* Memorize position of short start code of the next NALU in buffer.
-        * This is used when backward reading of stream doesn't occur. */
-        uint8_t *next_short_start_code_pos = lsmash_stream_buffers_get_pos( sb );
-        uint8_t nalu_type = nalu_header.nal_unit_type;
-        int read_back = 0;
+        uint8_t  nalu_type        = nuh.nal_unit_type;
+        uint64_t next_sc_head_pos = h264_imp->sc_head_pos
+                                  + start_code_length
+                                  + nalu_length
+                                  + trailing_zero_bytes;
 #if 0
         if( probe )
         {
-            fprintf( stderr, "NALU type: %"PRIu8"\n", nalu_type );
-            fprintf( stderr, "    NALU header position: %"PRIx64"\n", info->ebsp_head_pos - nalu_header.length );
-            fprintf( stderr, "    EBSP position: %"PRIx64"\n", info->ebsp_head_pos );
-            fprintf( stderr, "    EBSP length: %"PRIx64" (%"PRIu64")\n", ebsp_length - consecutive_zero_byte_count,
-                                                                         ebsp_length - consecutive_zero_byte_count );
-            fprintf( stderr, "    consecutive_zero_byte_count: %"PRIx64"\n", consecutive_zero_byte_count );
-            fprintf( stderr, "    Next NALU header position: %"PRIx64"\n", next_nalu_head_pos );
+            fprintf( stderr, "NALU type: %"PRIu8"                    \n", nalu_type );
+            fprintf( stderr, "    NALU header position: %"PRIx64"    \n", h264_imp->sc_head_pos + start_code_length );
+            fprintf( stderr, "    EBSP position: %"PRIx64"           \n", h264_imp->sc_head_pos + start_code_length + nuh.length );
+            fprintf( stderr, "    EBSP length: %"PRIx64" (%"PRIu64") \n", nalu_length - nuh.length, nalu_length - nuh.length );
+            fprintf( stderr, "    trailing_zero_bytes: %"PRIx64"     \n", trailing_zero_bytes );
+            fprintf( stderr, "    Next start code position: %"PRIx64"\n", next_sc_head_pos );
         }
 #endif
         if( nalu_type == H264_NALU_TYPE_FD )
@@ -2809,50 +2816,33 @@ static int h264_get_access_unit_internal
             /* We don't support streams with both filler and HRD yet.
              * Otherwise, just skip filler because elemental streams defined in 14496-15 are forbidden to use filler. */
             if( info->sps.vui.hrd.present )
-                return h264_get_au_internal_failed( importer_info, picture, &nalu_header, no_more_buf, complete_au );
+                return h264_get_au_internal_failed( h264_imp, picture, complete_au );
         }
         else if( (nalu_type >= H264_NALU_TYPE_SLICE_N_IDR && nalu_type <= H264_NALU_TYPE_SPS_EXT)
               || nalu_type == H264_NALU_TYPE_SLICE_AUX )
         {
+            /* Increase the buffer if needed. */
+            uint64_t possible_au_length = picture->incomplete_au_length + H264_DEFAULT_NALU_LENGTH_SIZE + nalu_length;
+            if( sb->bank->buffer_size < possible_au_length
+             && h264_supplement_buffer( sb, picture, 2 * possible_au_length ) < 0 )
+            {
+                lsmash_log( importer, LSMASH_LOG_ERROR, "failed to increase the buffer size.\n" );
+                return h264_get_au_internal_failed( h264_imp, picture, complete_au );
+            }
             /* Get the EBSP of the current NALU here.
              * AVC elemental stream defined in 14496-15 can recognizes from 0 to 13, and 19 of nal_unit_type.
              * We don't support SVC and MVC elemental stream defined in 14496-15 yet. */
-            ebsp_length -= consecutive_zero_byte_count;     /* Any EBSP doesn't have zero bytes at the end. */
-            uint64_t nalu_length = nalu_header.length + ebsp_length;
-            uint64_t possible_au_length = picture->incomplete_au_length + H264_DEFAULT_NALU_LENGTH_SIZE + nalu_length;
-            if( lsmash_stream_buffers_get_buffer_size( sb ) < possible_au_length )
-            {
-                if( h264_supplement_buffer( hb, picture, 2 * possible_au_length ) )
-                    return h264_get_au_internal_failed( importer_info, picture, &nalu_header, no_more_buf, complete_au );
-                next_short_start_code_pos = lsmash_stream_buffers_get_pos( sb );
-            }
-            /* Move to the first byte of the current NALU. */
-            read_back = (lsmash_stream_buffers_get_offset( sb ) < (nalu_length + consecutive_zero_byte_count));
-            if( read_back )
-            {
-                lsmash_fseek( sb->stream, info->ebsp_head_pos - nalu_header.length, SEEK_SET );
-                lsmash_stream_buffers_seek( sb, 0, SEEK_SET );
-                lsmash_stream_buffers_read( sb, nalu_length );
-                if( lsmash_stream_buffers_get_valid_size( sb ) != nalu_length )
-                    return h264_get_au_internal_failed( importer_info, picture, &nalu_header, no_more_buf, complete_au );
-#if 0
-                if( probe )
-                    fprintf( stderr, "    ----Read Back\n" );
-#endif
-            }
-            else
-                lsmash_stream_buffers_seek( sb, -(nalu_length + consecutive_zero_byte_count), SEEK_CUR );
+            uint8_t *nalu = lsmash_bs_get_buffer_data( bs ) + start_code_length;
             if( nalu_type >= H264_NALU_TYPE_SLICE_N_IDR && nalu_type <= H264_NALU_TYPE_SLICE_IDR )
             {
                 /* VCL NALU (slice) */
                 h264_slice_info_t prev_slice = *slice;
-                if( h264_parse_slice( info, &nalu_header, hb->rbsp,
-                                      lsmash_stream_buffers_get_pos( sb ) + nalu_header.length, ebsp_length ) )
-                    return h264_get_au_internal_failed( importer_info, picture, &nalu_header, no_more_buf, complete_au );
+                if( h264_parse_slice( info, &nuh, sb->rbsp, nalu + nuh.length, nalu_length - nuh.length ) )
+                    return h264_get_au_internal_failed( h264_imp, picture, complete_au );
                 if( probe && info->avcC_pending )
                 {
                     /* Copy and append a Codec Specific info. */
-                    if( h264_store_codec_specific( importer_info, &info->avcC_param ) < 0 )
+                    if( h264_store_codec_specific( h264_imp, &info->avcC_param ) < 0 )
                         return -1;
                 }
                 if( h264_move_pending_avcC_param( info ) < 0 )
@@ -2870,7 +2860,7 @@ static int h264_get_access_unit_internal
                     else
                         h264_update_picture_info_for_slice( info, picture, &prev_slice );
                 }
-                h264_append_nalu_to_au( picture, lsmash_stream_buffers_get_pos( sb ), nalu_length, probe );
+                h264_append_nalu_to_au( picture, nalu, nalu_length, probe );
                 slice->present = 1;
             }
             else
@@ -2881,71 +2871,56 @@ static int h264_get_access_unit_internal
                     h264_update_picture_info( info, picture, slice, &info->sei );
                     complete_au = h264_complete_au( picture, probe );
                 }
-                else if( no_more )
-                    complete_au = h264_complete_au( picture, probe );
                 switch( nalu_type )
                 {
                     case H264_NALU_TYPE_SEI :
                     {
-                        uint8_t *sei_pos = lsmash_stream_buffers_get_pos( sb );
-                        if( h264_parse_sei( info->bits, &info->sps, &info->sei, hb->rbsp, sei_pos + nalu_header.length, ebsp_length ) < 0 )
-                            return h264_get_au_internal_failed( importer_info, picture, &nalu_header, no_more_buf, complete_au );
-                        h264_append_nalu_to_au( picture, sei_pos, nalu_length, probe );
+                        if( h264_parse_sei( info->bits, &info->sps, &info->sei, sb->rbsp, nalu + nuh.length, nalu_length - nuh.length ) < 0 )
+                            return h264_get_au_internal_failed( h264_imp, picture, complete_au );
+                        h264_append_nalu_to_au( picture, nalu, nalu_length, probe );
                         break;
                     }
                     case H264_NALU_TYPE_SPS :
-                        if( h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_SPS, sb->pos, nalu_header.length + ebsp_length ) < 0 )
-                            return h264_get_au_internal_failed( importer_info, picture, &nalu_header, no_more_buf, complete_au );
+                        if( h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_SPS, nalu, nalu_length ) < 0 )
+                            return h264_get_au_internal_failed( h264_imp, picture, complete_au );
                         break;
                     case H264_NALU_TYPE_PPS :
-                        if( h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_PPS, sb->pos, nalu_header.length + ebsp_length ) < 0 )
-                            return h264_get_au_internal_failed( importer_info, picture, &nalu_header, no_more_buf, complete_au );
+                        if( h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_PPS, nalu, nalu_length ) < 0 )
+                            return h264_get_au_internal_failed( h264_imp, picture, complete_au );
                         break;
                     case H264_NALU_TYPE_AUD :   /* We drop access unit delimiters. */
                         break;
                     case H264_NALU_TYPE_SPS_EXT :
-                        if( h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_SPSEXT, sb->pos, nalu_header.length + ebsp_length ) < 0 )
-                            return h264_get_au_internal_failed( importer_info, picture, &nalu_header, no_more_buf, complete_au );
+                        if( h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_SPSEXT, nalu, nalu_length ) < 0 )
+                            return h264_get_au_internal_failed( h264_imp, picture, complete_au );
                         break;
                     default :
-                        h264_append_nalu_to_au( picture, lsmash_stream_buffers_get_pos( sb ), nalu_length, probe );
+                        h264_append_nalu_to_au( picture, nalu, nalu_length, probe );
                         break;
                 }
                 if( info->avcC_pending )
-                    importer_info->status = IMPORTER_CHANGE;
+                    h264_imp->status = IMPORTER_CHANGE;
             }
         }
-        /* Move to the first byte of the next NALU. */
-        if( read_back )
-        {
-            lsmash_fseek( sb->stream, next_nalu_head_pos, SEEK_SET );
-            lsmash_stream_buffers_seek( sb, 0, SEEK_SET );
-            lsmash_stream_buffers_read( sb, 0 );
-        }
-        else
-            lsmash_stream_buffers_set_pos( sb, next_short_start_code_pos + H264_SHORT_START_CODE_LENGTH );
+        /* Move to the first byte of the next start code. */
         info->prev_nalu_type = nalu_type;
-        lsmash_stream_buffers_update( sb, 0 );
-        no_more_buf = (lsmash_stream_buffers_get_remainder( sb ) == 0);
-        ebsp_length = 0;
-        no_more = lsmash_stream_buffers_is_eos( sb ) && no_more_buf;
-        if( !no_more )
+        if( lsmash_bs_read_seek( bs, next_sc_head_pos, SEEK_SET ) != next_sc_head_pos )
         {
-            /* Check the next NALU header. */
-            if( h264_check_nalu_header( &nalu_header, sb, !!consecutive_zero_byte_count ) )
-                return h264_get_au_internal_failed( importer_info, picture, &nalu_header, no_more_buf, complete_au );
-            info->ebsp_head_pos = next_nalu_head_pos + nalu_header.length;
+            lsmash_log( importer, LSMASH_LOG_ERROR, "failed to seek the next start code.\n" );
+            return h264_get_au_internal_failed( h264_imp, picture, complete_au );
         }
+        /* Check if no more data to read from the stream. */
+        if( !lsmash_bs_is_end( bs, H264_SHORT_START_CODE_LENGTH ) )
+            h264_imp->sc_head_pos = next_sc_head_pos;
         /* If there is no more data in the stream, and flushed chunk of NALUs, flush it as complete AU here. */
         else if( picture->incomplete_au_length && picture->au_length == 0 )
         {
             h264_update_picture_info( info, picture, slice, &info->sei );
             h264_complete_au( picture, probe );
-            return h264_get_au_internal_succeeded( importer_info, picture, &nalu_header, no_more_buf );
+            return h264_get_au_internal_succeeded( h264_imp, picture );
         }
         if( complete_au )
-            return h264_get_au_internal_succeeded( importer_info, picture, &nalu_header, no_more_buf );
-        consecutive_zero_byte_count = 0;
+            return h264_get_au_internal_succeeded( h264_imp, picture );
     }
 }
 
@@ -2960,53 +2935,52 @@ static int h264_importer_get_accessunit
         return -1;
     if( !importer->info || track_number != 1 )
         return -1;
-    h264_importer_info_t *importer_info = (h264_importer_info_t *)importer->info;
-    h264_info_t *info = &importer_info->info;
-    importer_status current_status = importer_info->status;
-    if( current_status == IMPORTER_ERROR || buffered_sample->length < importer_info->max_au_length )
+    h264_importer_t *h264_imp = (h264_importer_t *)importer->info;
+    h264_info_t     *info     = &h264_imp->info;
+    importer_status current_status = h264_imp->status;
+    if( current_status == IMPORTER_ERROR || buffered_sample->length < h264_imp->max_au_length )
         return -1;
     if( current_status == IMPORTER_EOF )
     {
         buffered_sample->length = 0;
         return 0;
     }
-    if( h264_get_access_unit_internal( importer_info, 0 ) )
+    if( h264_get_access_unit_internal( importer, 0 ) < 0 )
     {
-        importer_info->status = IMPORTER_ERROR;
+        h264_imp->status = IMPORTER_ERROR;
         return -1;
     }
-    if( importer_info->status == IMPORTER_CHANGE && !info->avcC_pending )
+    if( h264_imp->status == IMPORTER_CHANGE && !info->avcC_pending )
         current_status = IMPORTER_CHANGE;
     if( current_status == IMPORTER_CHANGE )
     {
         /* Update the active summary. */
-        lsmash_codec_specific_t *cs = (lsmash_codec_specific_t *)lsmash_get_entry_data( importer_info->avcC_list, ++ importer_info->avcC_number );
+        lsmash_codec_specific_t *cs = (lsmash_codec_specific_t *)lsmash_get_entry_data( h264_imp->avcC_list, ++ h264_imp->avcC_number );
         if( !cs )
             return -1;
         lsmash_h264_specific_parameters_t *avcC_param = (lsmash_h264_specific_parameters_t *)cs->data.structured;
-        lsmash_video_summary_t *summary = h264_create_summary( avcC_param, &info->sps, importer_info->max_au_length );
+        lsmash_video_summary_t *summary = h264_create_summary( avcC_param, &info->sps, h264_imp->max_au_length );
         if( !summary )
             return -1;
         lsmash_remove_entry( importer->summaries, track_number, lsmash_cleanup_summary );
-        if( lsmash_add_entry( importer->summaries, summary ) )
+        if( lsmash_add_entry( importer->summaries, summary ) < 0 )
         {
             lsmash_cleanup_summary( (lsmash_summary_t *)summary );
             return -1;
         }
-        importer_info->status = IMPORTER_OK;
+        h264_imp->status = IMPORTER_OK;
     }
-    h264_sps_t *sps = &info->sps;
     h264_picture_info_t *picture = &info->picture;
-    buffered_sample->dts = importer_info->ts_list.timestamp[picture->au_number - 1].dts;
-    buffered_sample->cts = importer_info->ts_list.timestamp[picture->au_number - 1].cts;
-    if( picture->au_number < importer_info->num_undecodable )
+    buffered_sample->dts = h264_imp->ts_list.timestamp[picture->au_number - 1].dts;
+    buffered_sample->cts = h264_imp->ts_list.timestamp[picture->au_number - 1].cts;
+    if( picture->au_number < h264_imp->num_undecodable )
         buffered_sample->prop.leading = ISOM_SAMPLE_IS_UNDECODABLE_LEADING;
     else
-        buffered_sample->prop.leading = picture->independent || buffered_sample->cts >= importer_info->last_intra_cts
+        buffered_sample->prop.leading = picture->independent || buffered_sample->cts >= h264_imp->last_intra_cts
                                       ? ISOM_SAMPLE_IS_NOT_LEADING : ISOM_SAMPLE_IS_UNDECODABLE_LEADING;
     if( picture->independent )
-        importer_info->last_intra_cts = buffered_sample->cts;
-    if( importer_info->composition_reordering_present && !picture->disposable && !picture->idr )
+        h264_imp->last_intra_cts = buffered_sample->cts;
+    if( h264_imp->composition_reordering_present && !picture->disposable && !picture->idr )
         buffered_sample->prop.allow_earlier = QT_SAMPLE_EARLIER_PTS_ALLOWED;
     buffered_sample->prop.independent = picture->independent    ? ISOM_SAMPLE_IS_INDEPENDENT : ISOM_SAMPLE_IS_NOT_INDEPENDENT;
     buffered_sample->prop.disposable  = picture->disposable     ? ISOM_SAMPLE_IS_DISPOSABLE  : ISOM_SAMPLE_IS_NOT_DISPOSABLE;
@@ -3019,7 +2993,7 @@ static int h264_importer_get_accessunit
         else if( picture->recovery_frame_cnt )
         {
             buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_POST_ROLL_START;
-            buffered_sample->prop.post_roll.complete = (picture->frame_num + picture->recovery_frame_cnt) % sps->MaxFrameNum;
+            buffered_sample->prop.post_roll.complete = (picture->frame_num + picture->recovery_frame_cnt) % info->sps.MaxFrameNum;
         }
         else
         {
@@ -3152,9 +3126,10 @@ static void nalu_generate_timestamps_from_poc
         }
         qsort( timestamp, num_access_units, sizeof(lsmash_media_ts_t), (int(*)( const void *, const void * ))lsmash_compare_cts );
         /* Check POC gap in output order. */
+        lsmash_class_t *logger = &(lsmash_class_t){ .name = importer->class->name };
         for( uint32_t i = 1; i < num_access_units; i++ )
             if( timestamp[i].cts > timestamp[i - 1].cts + npt[i - 1].poc_delta )
-                lsmash_log( importer, LSMASH_LOG_WARNING,
+                lsmash_log( &logger, LSMASH_LOG_WARNING,
                             "POC gap is detected at picture %"PRIu64". Maybe some pictures are lost.\n", timestamp[i].dts );
         /* Get the maximum composition delay derived from reordering. */
         for( uint32_t i = 0; i < num_access_units; i++ )
@@ -3244,45 +3219,39 @@ static void nalu_reduce_timescale
 #endif
 }
 
-static int h264_importer_probe( importer_t *importer )
+static lsmash_video_summary_t *h264_setup_first_summary
+(
+    importer_t *importer
+)
 {
-#define H264_LONG_START_CODE_LENGTH 4
-#define H264_CHECK_NEXT_LONG_START_CODE( x ) (!(x)[0] && !(x)[1] && !(x)[2] && ((x)[3] == 0x01))
-    h264_importer_info_t *importer_info = create_h264_importer_info( importer );
-    if( !importer_info )
-        return -1;
-    h264_info_t             *info = &importer_info->info;
-    h264_stream_buffer_t    *hb   = &info->buffer;
-    lsmash_stream_buffers_t *sb   = hb->sb;     /* shall be equal to &importer->sb */
-    /* Find the first start code. */
-    lsmash_stream_buffers_seek( sb, 0, SEEK_SET );
-    lsmash_stream_buffers_read( sb, 0 );
-    while( 1 )
+    h264_importer_t *h264_imp = (h264_importer_t *)importer->info;
+    lsmash_codec_specific_t *cs = (lsmash_codec_specific_t *)lsmash_get_entry_data( h264_imp->avcC_list, ++ h264_imp->avcC_number );
+    if( !cs || !cs->data.structured )
     {
-        /* The first NALU of an AU in decoding order shall have long start code (0x00000001). */
-        if( H264_CHECK_NEXT_LONG_START_CODE( sb->pos ) )
-            break;
-        /* If the first trial of finding long start code failed, we assume this stream is not byte stream format of H.264. */
-        if( lsmash_stream_buffers_get_remainder( sb ) == H264_LONG_START_CODE_LENGTH )
-            goto fail;
-        /* Invalid if encountered any value of non-zero before the first start code. */
-        if( lsmash_stream_buffers_get_byte( sb ) )
-            goto fail;
+        lsmash_destroy_codec_specific_data( cs );
+        return NULL;
     }
-    /* OK. It seems the stream has a long start code of H.264. */
-    importer->info = importer_info;
-    lsmash_stream_buffers_seek( sb, H264_LONG_START_CODE_LENGTH, SEEK_CUR );
-    uint64_t first_ebsp_head_pos = lsmash_stream_buffers_get_offset( sb );
-    lsmash_stream_buffers_update( sb, 0 );
-    h264_nalu_header_t first_nalu_header;
-    if( h264_check_nalu_header( &first_nalu_header, sb, 1 ) )
-        goto fail;
-    if( lsmash_stream_buffers_get_remainder( sb ) == 0 )
-        goto fail;  /* It seems the stream ends at the first incomplete access unit. */
-    first_ebsp_head_pos += first_nalu_header.length;    /* EBSP doesn't include NALU header. */
-    importer_info->status = IMPORTER_OK;
-    info->nalu_header   = first_nalu_header;
-    info->ebsp_head_pos = first_ebsp_head_pos;
+    lsmash_video_summary_t *summary = h264_create_summary( (lsmash_h264_specific_parameters_t *)cs->data.structured,
+                                                           &h264_imp->info.sps, h264_imp->max_au_length );
+    if( !summary )
+    {
+        lsmash_destroy_codec_specific_data( cs );
+        return NULL;
+    }
+    if( lsmash_add_entry( importer->summaries, summary ) < 0 )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        return NULL;
+    }
+    summary->sample_per_field = h264_imp->field_pic_present;
+    return summary;
+}
+
+static int h264_analyze_whole_stream
+(
+    importer_t *importer
+)
+{
     /* Parse all NALU in the stream for preparation of calculating timestamps. */
     uint32_t npt_alloc = (1 << 12) * sizeof(nal_pic_timing_t);
     nal_pic_timing_t *npt = lsmash_malloc( npt_alloc );
@@ -3290,39 +3259,37 @@ static int h264_importer_probe( importer_t *importer )
         goto fail;
     uint32_t picture_stats[H264_PICTURE_TYPE_NONE + 1] = { 0 };
     uint32_t num_access_units = 0;
-    lsmash_log( importer, LSMASH_LOG_INFO, "Analyzing stream as H.264\r" );
-    while( importer_info->status != IMPORTER_EOF )
+    lsmash_class_t *logger = &(lsmash_class_t){ "H.264" };
+    lsmash_log( &logger, LSMASH_LOG_INFO, "Analyzing stream as H.264\r" );
+    h264_importer_t *h264_imp = (h264_importer_t *)importer->info;
+    h264_info_t     *info     = &h264_imp->info;
+    h264_imp->status = IMPORTER_OK;
+    while( h264_imp->status != IMPORTER_EOF )
     {
 #if 0
-        lsmash_log( importer, LSMASH_LOG_INFO, "Analyzing stream as H.264: %"PRIu32"\n", num_access_units + 1 );
+        lsmash_log( &logger, LSMASH_LOG_INFO, "Analyzing stream as H.264: %"PRIu32"\n", num_access_units + 1 );
 #endif
         h264_picture_info_t     *picture = &info->picture;
         h264_picture_info_t prev_picture = *picture;
-        if( h264_get_access_unit_internal( importer_info, 1 )
-         || h264_calculate_poc( info, picture, &prev_picture ) )
-        {
-            lsmash_free( npt );
+        if( h264_get_access_unit_internal( importer, 1 )       < 0
+         || h264_calculate_poc( info, picture, &prev_picture ) < 0 )
             goto fail;
-        }
         if( npt_alloc <= num_access_units * sizeof(nal_pic_timing_t) )
         {
             uint32_t alloc = 2 * num_access_units * sizeof(nal_pic_timing_t);
             nal_pic_timing_t *temp = (nal_pic_timing_t *)lsmash_realloc( npt, alloc );
             if( !temp )
-            {
-                lsmash_free( npt );
                 goto fail;
-            }
-            npt = temp;
+            npt       = temp;
             npt_alloc = alloc;
         }
-        importer_info->field_pic_present |= info->picture.field_pic_flag;
+        h264_imp->field_pic_present |= info->picture.field_pic_flag;
         npt[num_access_units].poc       = picture->PicOrderCnt;
         npt[num_access_units].delta     = picture->delta;
         npt[num_access_units].poc_delta = picture->field_pic_flag ? 1 : 2;
         npt[num_access_units].reset     = picture->has_mmco5;
         ++num_access_units;
-        importer_info->max_au_length = LSMASH_MAX( info->picture.au_length, importer_info->max_au_length );
+        h264_imp->max_au_length = LSMASH_MAX( info->picture.au_length, h264_imp->max_au_length );
         if( picture->idr )
             ++picture_stats[H264_PICTURE_TYPE_IDR];
         else if( picture->type >= H264_PICTURE_TYPE_NONE )
@@ -3330,8 +3297,8 @@ static int h264_importer_probe( importer_t *importer )
         else
             ++picture_stats[ picture->type ];
     }
-    lsmash_log_refresh_line( importer );
-    lsmash_log( importer, LSMASH_LOG_INFO,
+    lsmash_log_refresh_line( &logger );
+    lsmash_log( &logger, LSMASH_LOG_INFO,
                 "IDR: %"PRIu32", I: %"PRIu32", P: %"PRIu32", B: %"PRIu32", "
                 "SI: %"PRIu32", SP: %"PRIu32", Unknown: %"PRIu32"\n",
                 picture_stats[H264_PICTURE_TYPE_IDR        ],
@@ -3345,60 +3312,72 @@ static int h264_importer_probe( importer_t *importer )
               + picture_stats[H264_PICTURE_TYPE_I_SI_P_SP_B],
                 picture_stats[H264_PICTURE_TYPE_NONE       ] );
     /* Copy and append the last Codec Specific info. */
-    if( h264_store_codec_specific( importer_info, &info->avcC_param ) < 0 )
-        return -1;
+    if( h264_store_codec_specific( h264_imp, &info->avcC_param ) < 0 )
+        goto fail;
     /* Set up the first summary. */
-    lsmash_codec_specific_t *cs = (lsmash_codec_specific_t *)lsmash_get_entry_data( importer_info->avcC_list, ++ importer_info->avcC_number );
-    if( !cs || !cs->data.structured )
-    {
-        lsmash_free( npt );
+    lsmash_video_summary_t *summary = h264_setup_first_summary( importer );
+    if( !summary )
         goto fail;
-    }
-    lsmash_h264_specific_parameters_t *avcC_param = (lsmash_h264_specific_parameters_t *)cs->data.structured;
-    lsmash_video_summary_t *summary = h264_create_summary( avcC_param, &info->sps, importer_info->max_au_length );
-    if( !summary || lsmash_add_entry( importer->summaries, summary ) )
-    {
-        if( summary )
-            lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-        lsmash_free( npt );
-        goto fail;
-    }
-    summary->sample_per_field = importer_info->field_pic_present;
-    /* */
+    /* Allocate timestamps. */
     lsmash_media_ts_t *timestamp = lsmash_malloc( num_access_units * sizeof(lsmash_media_ts_t) );
     if( !timestamp )
-    {
-        lsmash_free( npt );
         goto fail;
-    }
     /* Count leading samples that are undecodable. */
     for( uint32_t i = 0; i < num_access_units; i++ )
     {
         if( npt[i].poc == 0 )
             break;
-        ++ importer_info->num_undecodable;
+        ++ h264_imp->num_undecodable;
     }
     /* Deduplicate POCs. */
     uint32_t max_composition_delay = 0;
     nalu_deduplicate_poc( npt, &max_composition_delay, num_access_units, 32 );
     /* Generate timestamps. */
     nalu_generate_timestamps_from_poc( importer, timestamp, npt,
-                                       &importer_info->composition_reordering_present,
-                                       &importer_info->last_delta,
+                                       &h264_imp->composition_reordering_present,
+                                       &h264_imp->last_delta,
                                        max_composition_delay, num_access_units );
-    nalu_reduce_timescale( timestamp, npt, &importer_info->last_delta, &summary->timescale, num_access_units );
+    nalu_reduce_timescale( timestamp, npt, &h264_imp->last_delta, &summary->timescale, num_access_units );
     lsmash_free( npt );
-    importer_info->ts_list.sample_count = num_access_units;
-    importer_info->ts_list.timestamp    = timestamp;
+    h264_imp->ts_list.sample_count = num_access_units;
+    h264_imp->ts_list.timestamp    = timestamp;
+    return 0;
+fail:
+    lsmash_log_refresh_line( &logger );
+    lsmash_free( npt );
+    return -1;
+}
+
+static int h264_importer_probe( importer_t *importer )
+{
+    /* Find the first start code. */
+    h264_importer_t *h264_imp = create_h264_importer( importer );
+    if( !h264_imp )
+        return -1;
+    lsmash_bs_t *bs = h264_imp->bs;
+    uint64_t first_sc_head_pos = 0;
+    while( 1 )
+    {
+        /* The first NALU of an AU in decoding order shall have long start code (0x00000001). */
+        if( 0x00000001 == lsmash_bs_show_be32( bs, first_sc_head_pos ) )
+            break;
+        /* Invalid if encountered any value of non-zero before the first start code. */
+        if( lsmash_bs_show_byte( bs, first_sc_head_pos ) )
+            goto fail;
+        ++first_sc_head_pos;
+    }
+    /* OK. It seems the stream has a long start code of H.264. */
+    importer->info = h264_imp;
+    h264_info_t *info = &h264_imp->info;
+    lsmash_bs_read_seek( bs, first_sc_head_pos, SEEK_SET );
+    h264_imp->sc_head_pos = first_sc_head_pos;
+    if( h264_analyze_whole_stream( importer ) < 0 )
+        goto fail;
     /* Go back to EBSP of the first NALU. */
-    lsmash_fseek( sb->stream, first_ebsp_head_pos, SEEK_SET );
-    importer_info->status       = IMPORTER_OK;
-    info->nalu_header           = first_nalu_header;
-    info->prev_nalu_type        = 0;
-    sb->no_more_read            = 0;
-    lsmash_stream_buffers_seek( sb, 0, SEEK_SET );
-    lsmash_stream_buffers_read( sb, 0 );
-    info->ebsp_head_pos         = first_ebsp_head_pos;
+    h264_imp->status = IMPORTER_OK;
+    lsmash_bs_read_seek( bs, first_sc_head_pos, SEEK_SET );
+    info->prev_nalu_type        = H264_NALU_TYPE_UNSPECIFIED0;
+    h264_imp->sc_head_pos       = first_sc_head_pos;
     uint8_t *temp_au            = info->picture.au;
     uint8_t *temp_incomplete_au = info->picture.incomplete_au;
     memset( &info->picture, 0, sizeof(h264_picture_info_t) );
@@ -3413,30 +3392,27 @@ static int h264_importer_probe( importer_t *importer )
     lsmash_destroy_h264_parameter_sets( &info->avcC_param_next );
     return 0;
 fail:
-    lsmash_log_refresh_line( importer );
-    remove_h264_importer_info( importer_info );
+    remove_h264_importer( h264_imp );
     importer->info = NULL;
     lsmash_remove_entries( importer->summaries, lsmash_cleanup_summary );
     return -1;
-#undef H264_LONG_START_CODE_LENGTH
-#undef H264_CHECK_NEXT_LONG_START_CODE
 }
 
 static uint32_t h264_importer_get_last_delta( importer_t *importer, uint32_t track_number )
 {
     debug_if( !importer || !importer->info )
         return 0;
-    h264_importer_info_t *info = (h264_importer_info_t *)importer->info;
-    if( !info || track_number != 1 || info->status != IMPORTER_EOF )
+    h264_importer_t *h264_imp = (h264_importer_t *)importer->info;
+    if( !h264_imp || track_number != 1 || h264_imp->status != IMPORTER_EOF )
         return 0;
-    return info->ts_list.sample_count
-         ? info->last_delta
+    return h264_imp->ts_list.sample_count
+         ? h264_imp->last_delta
          : UINT32_MAX;    /* arbitrary */
 }
 
 static const importer_functions h264_importer =
 {
-    { "H.264" },
+    { "H.264", offsetof( importer_t, log_level ) },
     1,
     h264_importer_probe,
     h264_importer_get_accessunit,
