@@ -2603,6 +2603,7 @@ static void remove_h264_importer( h264_importer_t *h264_imp )
         return;
     lsmash_remove_entries( h264_imp->avcC_list, lsmash_destroy_codec_specific_data );
     h264_cleanup_parser( &h264_imp->info );
+    lsmash_bs_cleanup( h264_imp->bs );
     lsmash_free( h264_imp->ts_list.timestamp );
     lsmash_free( h264_imp );
 }
@@ -3373,7 +3374,7 @@ static int h264_importer_probe( importer_t *importer )
     h264_imp->sc_head_pos = first_sc_head_pos;
     if( h264_analyze_whole_stream( importer ) < 0 )
         goto fail;
-    /* Go back to EBSP of the first NALU. */
+    /* Go back to the start code of the first NALU. */
     h264_imp->status = IMPORTER_OK;
     lsmash_bs_read_seek( bs, first_sc_head_pos, SEEK_SET );
     info->prev_nalu_type        = H264_NALU_TYPE_UNSPECIFIED0;
