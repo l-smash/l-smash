@@ -23,6 +23,7 @@
 #define HEVC_DEFAULT_BUFFER_SIZE      (1<<16)
 #define HEVC_DEFAULT_NALU_LENGTH_SIZE 4     /* We always use 4 bytes length. */
 #define HEVC_SHORT_START_CODE_LENGTH  3
+#define HEVC_LONG_START_CODE_LENGTH   4
 
 enum
 {
@@ -78,9 +79,11 @@ struct lsmash_hevc_parameter_arrays_tag
 
 typedef struct
 {
-    uint8_t  nal_unit_type;
-    uint8_t  TemporalId;
-    uint16_t length;
+    unsigned forbidden_zero_bit : 1;
+    unsigned nal_unit_type      : 7;   /* +1 bit for HEVC_NALU_TYPE_UNKNOWN */
+    unsigned nuh_layer_id       : 6;
+    unsigned TemporalId         : 3;
+    unsigned length             : 15;
 } hevc_nalu_header_t;
 
 /* Profile, Tier and Level */
@@ -303,15 +306,15 @@ typedef struct hevc_info_tag hevc_info_t;
 
 typedef struct
 {
-    lsmash_stream_buffers_t *sb;
-    uint8_t                 *rbsp;
+    lsmash_multiple_buffers_t *bank;
+    uint8_t                   *rbsp;
 } hevc_stream_buffer_t;
 
 struct hevc_info_tag
 {
     lsmash_hevc_specific_parameters_t hvcC_param;
     lsmash_hevc_specific_parameters_t hvcC_param_next;
-    hevc_nalu_header_t   nalu_header;
+    hevc_nalu_header_t   nuh;
     lsmash_entry_list_t  vps_list[1];
     lsmash_entry_list_t  sps_list[1];
     lsmash_entry_list_t  pps_list[1];
@@ -331,16 +334,21 @@ struct hevc_info_tag
 
 int hevc_setup_parser
 (
-    hevc_info_t               *info,
-    lsmash_stream_buffers_t   *sb,
-    int                        parse_only,
-    lsmash_stream_buffers_type type,
-    void                      *stream
+    hevc_info_t *info,
+    int          parse_only
 );
 
 void hevc_cleanup_parser
 (
     hevc_info_t *info
+);
+
+uint64_t hevc_find_next_start_code
+(
+    lsmash_bs_t        *bs,
+    hevc_nalu_header_t *nuh,
+    uint64_t           *start_code_length,
+    uint64_t           *trailing_zero_bytes
 );
 
 int hevc_calculate_poc
@@ -386,13 +394,6 @@ int hevc_supplement_buffer
     uint32_t              size
 );
 
-int hevc_check_nalu_header
-(
-    hevc_nalu_header_t      *nalu_header,
-    lsmash_stream_buffers_t *sb,
-    int                      use_long_start_code
-);
-
 int hevc_parse_vps
 (
     hevc_info_t *info,
@@ -423,7 +424,7 @@ int hevc_parse_sei
     hevc_vps_t         *vps,
     hevc_sps_t         *sps,
     hevc_sei_t         *sei,
-    hevc_nalu_header_t *nalu_header,
+    hevc_nalu_header_t *nuh,
     uint8_t            *rbsp_buffer,
     uint8_t            *ebsp,
     uint64_t            ebsp_size
@@ -431,7 +432,7 @@ int hevc_parse_sei
 int hevc_parse_slice_segment_header
 (
     hevc_info_t        *info,
-    hevc_nalu_header_t *nalu_header,
+    hevc_nalu_header_t *nuh,
     uint8_t            *rbsp_buffer,
     uint8_t            *ebsp,
     uint64_t            ebsp_size

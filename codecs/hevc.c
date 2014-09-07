@@ -101,51 +101,160 @@ void hevc_cleanup_parser
     lsmash_remove_entries( info->pps_list, hevc_remove_pps );
     lsmash_destroy_hevc_parameter_arrays( &info->hvcC_param );
     lsmash_destroy_hevc_parameter_arrays( &info->hvcC_param_next );
-    lsmash_stream_buffers_cleanup( info->buffer.sb );
+    lsmash_destroy_multiple_buffers( info->buffer.bank );
     lsmash_bits_adhoc_cleanup( info->bits );
     info->bits = NULL;
 }
 
 int hevc_setup_parser
 (
-    hevc_info_t               *info,
-    lsmash_stream_buffers_t   *sb,
-    int                        parse_only,
-    lsmash_stream_buffers_type type,
-    void                      *stream
+    hevc_info_t *info,
+    int          parse_only
 )
 {
-    assert( sb );
     if( !info )
         return -1;
     memset( info, 0, sizeof(hevc_info_t) );
     info->hvcC_param     .lengthSizeMinusOne = HEVC_DEFAULT_NALU_LENGTH_SIZE - 1;
     info->hvcC_param_next.lengthSizeMinusOne = HEVC_DEFAULT_NALU_LENGTH_SIZE - 1;
-    hevc_stream_buffer_t *hb = &info->buffer;
-    hb->sb = sb;
-    lsmash_stream_buffers_setup( sb, type, stream );
-    sb->bank = lsmash_create_multiple_buffers( parse_only ? 2 : 4, HEVC_DEFAULT_BUFFER_SIZE );
+    hevc_stream_buffer_t *sb = &info->buffer;
+    sb->bank = lsmash_create_multiple_buffers( parse_only ? 1 : 3, HEVC_DEFAULT_BUFFER_SIZE );
     if( !sb->bank )
         return -1;
-    sb->start = lsmash_withdraw_buffer( sb->bank, 1 );
-    hb->rbsp  = lsmash_withdraw_buffer( sb->bank, 2 );
-    sb->pos   = sb->start;
-    sb->end   = sb->start;
+    sb->rbsp = lsmash_withdraw_buffer( sb->bank, 1 );
     if( !parse_only )
     {
-        info->au.data            = lsmash_withdraw_buffer( sb->bank, 3 );
-        info->au.incomplete_data = lsmash_withdraw_buffer( sb->bank, 4 );
+        info->au.data            = lsmash_withdraw_buffer( sb->bank, 2 );
+        info->au.incomplete_data = lsmash_withdraw_buffer( sb->bank, 3 );
     }
     info->bits = lsmash_bits_adhoc_create();
     if( !info->bits )
     {
-        lsmash_stream_buffers_cleanup( sb );
+        lsmash_destroy_multiple_buffers( sb->bank );
         return -1;
     }
     lsmash_init_entry_list( info->vps_list );
     lsmash_init_entry_list( info->sps_list );
     lsmash_init_entry_list( info->pps_list );
+    info->prev_nalu_type = HEVC_NALU_TYPE_UNKNOWN;
     return 0;
+}
+
+static int hevc_check_nalu_header
+(
+    lsmash_bs_t        *bs,
+    hevc_nalu_header_t *nuh,
+    int                 use_long_start_code
+)
+{
+    /* Check if the enough length of NALU header on the buffer. */
+    int start_code_length = use_long_start_code ? HEVC_LONG_START_CODE_LENGTH : HEVC_SHORT_START_CODE_LENGTH;
+    if( lsmash_bs_is_end( bs, start_code_length + 1 ) )
+        return -1;
+    /* Read NALU header. */
+    uint16_t temp16 = lsmash_bs_show_be16( bs, start_code_length );
+    nuh->forbidden_zero_bit       = (temp16 >> 15) & 0x01;
+    nuh->nal_unit_type            = (temp16 >>  9) & 0x3f;
+    nuh->nuh_layer_id             = (temp16 >>  3) & 0x3f;
+    uint8_t nuh_temporal_id_plus1 =  temp16        & 0x07;
+    IF_INVALID_VALUE( nuh->forbidden_zero_bit || nuh_temporal_id_plus1 == 0 )
+        return -1;
+    nuh->TemporalId = nuh_temporal_id_plus1 - 1;
+    nuh->length     = HEVC_MIN_NALU_HEADER_LENGTH;
+    /* nuh_layer_id shall be 0 in the specification we refer to. */
+    if( nuh->nuh_layer_id )
+        return -1;
+    if( nuh->TemporalId == 0 )
+    {
+        /* For TSA_N, TSA_R, STSA_N and STSA_R, TemporalId shall not be equal to 0. */
+        IF_INVALID_VALUE( nuh->nal_unit_type >= HEVC_NALU_TYPE_TSA_N
+                       && nuh->nal_unit_type <= HEVC_NALU_TYPE_STSA_R )
+            return -1;
+    }
+    else
+    {
+        /* For BLA_W_LP to RSV_IRAP_VCL23, TemporalId shall be equal to 0. */
+        IF_INVALID_VALUE( nuh->nal_unit_type >= HEVC_NALU_TYPE_BLA_W_LP
+                       && nuh->nal_unit_type <= HEVC_NALU_TYPE_RSV_IRAP_VCL23 )
+            return -1;
+        /* For VPS, SPS, EOS and EOB, TemporalId shall be equal to 0. */
+        IF_INVALID_VALUE( nuh->nal_unit_type >= HEVC_NALU_TYPE_VPS
+                       && nuh->nal_unit_type <= HEVC_NALU_TYPE_EOB
+                       && nuh->nal_unit_type != HEVC_NALU_TYPE_PPS
+                       && nuh->nal_unit_type != HEVC_NALU_TYPE_AUD )
+            return -1;
+    }
+    /* VPS, SPS and PPS require long start code (0x00000001).
+     * Also AU delimiter requires it too because this type of NALU shall be the first NALU of any AU if present. */
+    IF_INVALID_VALUE( !use_long_start_code
+                   && nuh->nal_unit_type >= HEVC_NALU_TYPE_VPS
+                   && nuh->nal_unit_type <= HEVC_NALU_TYPE_AUD )
+        return -1;
+    return 0;
+}
+
+uint64_t hevc_find_next_start_code
+(
+    lsmash_bs_t        *bs,
+    hevc_nalu_header_t *nuh,
+    uint64_t           *start_code_length,
+    uint64_t           *trailing_zero_bytes
+)
+{
+    uint64_t length = 0;    /* the length of the latest NALU */
+    uint64_t count  = 0;    /* the number of the trailing zero bytes after the latest NALU */
+    /* Check the type of the current start code. */
+    int long_start_code
+        = (!lsmash_bs_is_end( bs, HEVC_LONG_START_CODE_LENGTH )  && 0x00000001 == lsmash_bs_show_be32( bs, 0 )) ? 1
+        : (!lsmash_bs_is_end( bs, HEVC_SHORT_START_CODE_LENGTH ) && 0x000001   == lsmash_bs_show_be24( bs, 0 )) ? 0
+        :                                                                                                        -1;
+    if( long_start_code >= 0 && hevc_check_nalu_header( bs, nuh, long_start_code ) == 0 )
+    {
+        *start_code_length = long_start_code ? HEVC_LONG_START_CODE_LENGTH : HEVC_SHORT_START_CODE_LENGTH;
+        uint64_t distance = *start_code_length + nuh->length;
+        /* Find the start code of the next NALU and get the distance from the start code of the latest NALU. */
+        if( !lsmash_bs_is_end( bs, distance + HEVC_SHORT_START_CODE_LENGTH ) )
+        {
+            uint32_t sync_bytes = lsmash_bs_show_be24( bs, distance );
+            while( 0x000001 != sync_bytes )
+            {
+                if( lsmash_bs_is_end( bs, ++distance + HEVC_SHORT_START_CODE_LENGTH ) )
+                {
+                    distance = lsmash_bs_get_remaining_buffer_size( bs );
+                    break;
+                }
+                sync_bytes <<= 8;
+                sync_bytes  |= lsmash_bs_show_byte( bs, distance + HEVC_SHORT_START_CODE_LENGTH - 1 );
+                sync_bytes  &= 0xFFFFFF;
+            }
+        }
+        else
+            distance = lsmash_bs_get_remaining_buffer_size( bs );
+        /* Any NALU has no consecutive zero bytes at the end. */
+        while( 0x00 == lsmash_bs_show_byte( bs, distance - 1 ) )
+        {
+            --distance;
+            ++count;
+        }
+        /* Remove the length of the start code. */
+        length = distance - *start_code_length;
+        /* If there are one or more trailing zero bytes, we treat the last one byte as a part of the next start code.
+         * This makes the next start code a long start code. */
+        if( count )
+            --count;
+    }
+    else
+    {
+        /* No start code. */
+        nuh->forbidden_zero_bit = 1;    /* shall be 0, so invalid */
+        nuh->nal_unit_type      = HEVC_NALU_TYPE_UNKNOWN;
+        nuh->nuh_layer_id       = 0;    /* arbitrary */
+        nuh->TemporalId         = 0;    /* arbitrary */
+        nuh->length             = 0;
+        *start_code_length = 0;
+    }
+    *trailing_zero_bytes = count;
+    return length;
 }
 
 static hevc_vps_t *hevc_get_vps
@@ -299,49 +408,6 @@ int hevc_calculate_poc
     fprintf( stderr, "    MaxPicOrderCntLsb: %"PRIu64"\n",  max_poc_lsb );
     fprintf( stderr, "    POC: %"PRId32"\n", picture->poc );
 #endif
-    return 0;
-}
-
-int hevc_check_nalu_header
-(
-    hevc_nalu_header_t      *nalu_header,
-    lsmash_stream_buffers_t *sb,
-    int                      use_long_start_code
-)
-{
-    uint8_t forbidden_zero_bit    = (*sb->pos >> 7) & 0x01;
-    uint8_t nal_unit_type         = (*sb->pos >> 1) & 0x3f;
-    uint8_t nuh_layer_id          = ((*sb->pos & 0x01) << 5) | ((*(sb->pos + 1) >> 3) & 0x1f);
-    uint8_t nuh_temporal_id_plus1 = *(sb->pos + 1) & 0x07;
-    nalu_header->nal_unit_type = nal_unit_type;
-    nalu_header->TemporalId    = nuh_temporal_id_plus1 - 1;
-    nalu_header->length        = HEVC_MIN_NALU_HEADER_LENGTH;
-    sb->pos += nalu_header->length;
-    IF_INVALID_VALUE( forbidden_zero_bit || nuh_temporal_id_plus1 == 0 )
-        return -1;
-    /* nuh_layer_id shall be 0 in the specification we refer to. */
-    if( nuh_layer_id )
-        return -1;
-    if( nalu_header->TemporalId == 0 )
-    {
-        /* For TSA_N, TSA_R, STSA_N and STSA_R, TemporalId shall not be equal to 0. */
-        IF_INVALID_VALUE( nal_unit_type >= HEVC_NALU_TYPE_TSA_N && nal_unit_type <= HEVC_NALU_TYPE_STSA_R )
-            return -1;
-    }
-    else
-    {
-        /* For BLA_W_LP to RSV_IRAP_VCL23, TemporalId shall be equal to 0. */
-        IF_INVALID_VALUE( nal_unit_type >= HEVC_NALU_TYPE_BLA_W_LP && nal_unit_type <= HEVC_NALU_TYPE_RSV_IRAP_VCL23 )
-            return -1;
-        /* For VPS, SPS, EOS and EOB, TemporalId shall be equal to 0. */
-        IF_INVALID_VALUE( nal_unit_type >= HEVC_NALU_TYPE_VPS && nal_unit_type <= HEVC_NALU_TYPE_EOB
-                       && nal_unit_type != HEVC_NALU_TYPE_PPS && nal_unit_type != HEVC_NALU_TYPE_AUD )
-            return -1;
-    }
-    /* VPS, SPS and PPS require long start code (0x00000001).
-     * Also AU delimiter requires it too because this type of NALU shall be the first NALU of any AU if present. */
-    IF_INVALID_VALUE( !use_long_start_code && (nal_unit_type >= HEVC_NALU_TYPE_VPS && nal_unit_type <= HEVC_NALU_TYPE_AUD) )
-        return -1;
     return 0;
 }
 
@@ -645,8 +711,8 @@ static int hevc_parse_vps_minimally
     /* vps_max_layers_minus1 shall be 0 in the specification we refer to. */
     if( lsmash_bits_get( bits, 6 ) != 0 )
         return -1;
-    vps->max_sub_layers_minus1    = lsmash_bits_get( bits,  3 );
-    vps->temporal_id_nesting_flag = lsmash_bits_get( bits,  1 );
+    vps->max_sub_layers_minus1    = lsmash_bits_get( bits, 3 );
+    vps->temporal_id_nesting_flag = lsmash_bits_get( bits, 1 );
     /* When vps_max_sub_layers_minus1 is equal to 0, vps_temporal_id_nesting_flag shall be equal to 1. */
     if( (vps->max_sub_layers_minus1 | vps->temporal_id_nesting_flag) == 0 )
         return -1;
@@ -1142,7 +1208,7 @@ int hevc_parse_sei
     hevc_vps_t         *vps,
     hevc_sps_t         *sps,
     hevc_sei_t         *sei,
-    hevc_nalu_header_t *nalu_header,
+    hevc_nalu_header_t *nuh,
     uint8_t            *rbsp_buffer,
     uint8_t            *ebsp,
     uint64_t            ebsp_size
@@ -1175,7 +1241,7 @@ int hevc_parse_sei
             if( temp != 0xff )
                 break;
         }
-        if( nalu_header->nal_unit_type == HEVC_NALU_TYPE_PREFIX_SEI )
+        if( nuh->nal_unit_type == HEVC_NALU_TYPE_PREFIX_SEI )
         {
             if( payloadType == 1 )
             {
@@ -1231,7 +1297,7 @@ int hevc_parse_sei
             else
                 goto skip_sei_message;
         }
-        else if( nalu_header->nal_unit_type == HEVC_NALU_TYPE_SUFFIX_SEI )
+        else if( nuh->nal_unit_type == HEVC_NALU_TYPE_SUFFIX_SEI )
         {
             if( payloadType == 3 )
             {
@@ -1258,7 +1324,7 @@ skip_sei_message:
 int hevc_parse_slice_segment_header
 (
     hevc_info_t        *info,
-    hevc_nalu_header_t *nalu_header,
+    hevc_nalu_header_t *nuh,
     uint8_t            *rbsp_buffer,
     uint8_t            *ebsp,
     uint64_t            ebsp_size
@@ -1269,11 +1335,11 @@ int hevc_parse_slice_segment_header
         return -1;
     hevc_slice_info_t *slice = &info->slice;
     memset( slice, 0, sizeof(hevc_slice_info_t) );
-    slice->nalu_type  = nalu_header->nal_unit_type;
-    slice->TemporalId = nalu_header->TemporalId;
+    slice->nalu_type  = nuh->nal_unit_type;
+    slice->TemporalId = nuh->TemporalId;
     slice->first_slice_segment_in_pic_flag = lsmash_bits_get( bits, 1 );
-    if( nalu_header->nal_unit_type >= HEVC_NALU_TYPE_BLA_W_LP
-     && nalu_header->nal_unit_type <= HEVC_NALU_TYPE_RSV_IRAP_VCL23 )
+    if( nuh->nal_unit_type >= HEVC_NALU_TYPE_BLA_W_LP
+     && nuh->nal_unit_type <= HEVC_NALU_TYPE_RSV_IRAP_VCL23 )
         lsmash_bits_get( bits, 1 );     /* no_output_of_prior_pics_flag */
     slice->pic_parameter_set_id = nalu_get_exp_golomb_ue( bits );
     /* Get PPS by slice_pic_parameter_set_id. */
@@ -1308,8 +1374,8 @@ int hevc_parse_slice_segment_header
             lsmash_bits_get( bits, 1 );         /* pic_output_flag */
         if( sps->separate_colour_plane_flag )
             lsmash_bits_get( bits, 1 );         /* colour_plane_id */
-        if( nalu_header->nal_unit_type != HEVC_NALU_TYPE_IDR_W_RADL
-         && nalu_header->nal_unit_type != HEVC_NALU_TYPE_IDR_N_LP )
+        if( nuh->nal_unit_type != HEVC_NALU_TYPE_IDR_W_RADL
+         && nuh->nal_unit_type != HEVC_NALU_TYPE_IDR_N_LP )
         {
             slice->pic_order_cnt_lsb = lsmash_bits_get( bits, sps->log2_max_pic_order_cnt_lsb );
             if( !lsmash_bits_get( bits, 1 ) )   /* short_term_ref_pic_set_sps_flag */
@@ -1711,26 +1777,20 @@ int hevc_find_au_delimit_by_nalu_type
 
 int hevc_supplement_buffer
 (
-    hevc_stream_buffer_t *hb,
+    hevc_stream_buffer_t *sb,
     hevc_access_unit_t   *au,
     uint32_t              size
 )
 {
-    lsmash_stream_buffers_t *sb = hb->sb;
-    uint32_t buffer_pos_offset   = sb->pos - sb->start;
-    uint32_t buffer_valid_length = sb->end - sb->start;
     lsmash_multiple_buffers_t *bank = lsmash_resize_multiple_buffers( sb->bank, size );
     if( !bank )
         return -1;
-    sb->bank  = bank;
-    sb->start = lsmash_withdraw_buffer( bank, 1 );
-    hb->rbsp  = lsmash_withdraw_buffer( bank, 2 );
-    sb->pos = sb->start + buffer_pos_offset;
-    sb->end = sb->start + buffer_valid_length;
-    if( au && bank->number_of_buffers == 4 )
+    sb->bank = bank;
+    sb->rbsp = lsmash_withdraw_buffer( bank, 1 );
+    if( au && bank->number_of_buffers == 3 )
     {
-        au->data            = lsmash_withdraw_buffer( bank, 3 );
-        au->incomplete_data = lsmash_withdraw_buffer( bank, 4 );
+        au->data            = lsmash_withdraw_buffer( bank, 2 );
+        au->incomplete_data = lsmash_withdraw_buffer( bank, 3 );
     }
     return 0;
 }
@@ -2623,46 +2683,29 @@ int lsmash_setup_hevc_specific_parameters_from_access_unit
 {
     if( !param || !data || data_length == 0 )
         return -1;
-    hevc_info_t  handler = { { 0 } };
-    hevc_info_t *info    = &handler;
-    lsmash_stream_buffers_t _sb = { LSMASH_STREAM_BUFFERS_TYPE_NONE };
-    lsmash_stream_buffers_t *sb = &_sb;
-    lsmash_data_string_handler_t stream = { 0 };
-    stream.data             = data;
-    stream.data_length      = data_length;
-    stream.remainder_length = data_length;
-    if( hevc_setup_parser( info, sb, 1, LSMASH_STREAM_BUFFERS_TYPE_DATA_STRING, &stream ) )
+    hevc_info_t *info = &(hevc_info_t){ { 0 } };
+    lsmash_bs_t *bs   = &(lsmash_bs_t){ 0 };
+    if( lsmash_bs_set_empty_stream( bs, data, data_length ) < 0 )
+        return -1;
+    if( hevc_setup_parser( info, 1 ) < 0 )
         return hevc_parse_failed( info );
-    hevc_stream_buffer_t *hb    = &info->buffer;
+    hevc_stream_buffer_t *sb    = &info->buffer;
     hevc_slice_info_t    *slice = &info->slice;
-    hevc_nalu_header_t nalu_header = { 0 };
-    uint64_t consecutive_zero_byte_count = 0;
-    uint64_t ebsp_length = 0;
-    int      no_more_buf = 0;
-    int      complete_au = 0;
+    uint64_t sc_head_pos = 0;
     while( 1 )
     {
-        lsmash_stream_buffers_update( sb, 2 );
-        no_more_buf = (lsmash_stream_buffers_get_remainder( sb ) == 0);
-        int no_more = lsmash_stream_buffers_is_eos( sb ) && no_more_buf;
-        if( !nalu_check_next_short_start_code( sb->pos, sb->end ) && !no_more )
-        {
-            if( lsmash_stream_buffers_get_byte( sb ) )
-                consecutive_zero_byte_count = 0;
-            else
-                ++consecutive_zero_byte_count;
-            ++ebsp_length;
-            continue;
-        }
-        if( no_more && ebsp_length == 0 )
+        hevc_nalu_header_t nuh;
+        uint64_t start_code_length;
+        uint64_t trailing_zero_bytes;
+        uint64_t nalu_length = hevc_find_next_start_code( bs, &nuh, &start_code_length, &trailing_zero_bytes );
+        if( start_code_length <= HEVC_SHORT_START_CODE_LENGTH && lsmash_bs_is_end( bs, nalu_length ) )
             /* For the last NALU. This NALU already has been parsed. */
             return hevc_parse_succeeded( info, param );
-        uint64_t next_nalu_head_pos = info->ebsp_head_pos + ebsp_length + !no_more * HEVC_SHORT_START_CODE_LENGTH;
-        /* Memorize position of short start code of the next NALU in buffer.
-         * This is used when backward reading of stream doesn't occur. */
-        uint8_t *next_short_start_code_pos = lsmash_stream_buffers_get_pos( sb );
-        uint8_t nalu_type = nalu_header.nal_unit_type;
-        int read_back = 0;
+        uint8_t  nalu_type        = nuh.nal_unit_type;
+        uint64_t next_sc_head_pos = sc_head_pos
+                                  + start_code_length
+                                  + nalu_length
+                                  + trailing_zero_bytes;
         if( nalu_type == HEVC_NALU_TYPE_FD )
         {
             /* We don't support streams with both filler and HRD yet.
@@ -2674,30 +2717,18 @@ int lsmash_setup_hevc_specific_parameters_from_access_unit
              || (nalu_type >= HEVC_NALU_TYPE_BLA_W_LP && nalu_type <= HEVC_NALU_TYPE_CRA)
              || (nalu_type >= HEVC_NALU_TYPE_VPS      && nalu_type <= HEVC_NALU_TYPE_SUFFIX_SEI) )
         {
+            /* Increase the buffer if needed. */
+            uint64_t possible_au_length = HEVC_DEFAULT_NALU_LENGTH_SIZE + nalu_length;
+            if( sb->bank->buffer_size < possible_au_length
+             && hevc_supplement_buffer( sb, NULL, 2 * possible_au_length ) < 0 )
+                return hevc_parse_failed( info );
             /* Get the EBSP of the current NALU here. */
-            ebsp_length -= consecutive_zero_byte_count;     /* Any EBSP doesn't have zero bytes at the end. */
-            uint64_t nalu_length = nalu_header.length + ebsp_length;
-            if( lsmash_stream_buffers_get_buffer_size( sb ) < (HEVC_DEFAULT_NALU_LENGTH_SIZE + nalu_length) )
-            {
-                if( hevc_supplement_buffer( hb, NULL, 2 * (HEVC_DEFAULT_NALU_LENGTH_SIZE + nalu_length) ) )
-                    return hevc_parse_failed( info );
-                next_short_start_code_pos = lsmash_stream_buffers_get_pos( sb );
-            }
-            /* Move to the first byte of the current NALU. */
-            read_back = (lsmash_stream_buffers_get_offset( sb ) < (nalu_length + consecutive_zero_byte_count));
-            if( read_back )
-            {
-                lsmash_stream_buffers_seek( sb, 0, SEEK_SET );
-                lsmash_data_string_copy( sb, &stream, nalu_length, info->ebsp_head_pos - nalu_header.length );
-            }
-            else
-                lsmash_stream_buffers_seek( sb, -(nalu_length + consecutive_zero_byte_count), SEEK_CUR );
+            uint8_t *nalu = lsmash_bs_get_buffer_data( bs ) + start_code_length;
             if( nalu_type <= HEVC_NALU_TYPE_RSV_VCL31 )
             {
                 /* VCL NALU (slice) */
                 hevc_slice_info_t prev_slice = *slice;
-                if( hevc_parse_slice_segment_header( info, &nalu_header, hb->rbsp,
-                                                     lsmash_stream_buffers_get_pos( sb ) + nalu_header.length, ebsp_length ) )
+                if( hevc_parse_slice_segment_header( info, &nuh, sb->rbsp, nalu + nuh.length, nalu_length - nuh.length ) < 0 )
                     return hevc_parse_failed( info );
                 if( prev_slice.present )
                 {
@@ -2705,35 +2736,27 @@ int lsmash_setup_hevc_specific_parameters_from_access_unit
                     if( hevc_find_au_delimit_by_slice_info( info, slice, &prev_slice ) )
                         /* The current NALU is the first VCL NALU of the primary coded picture of a new AU.
                          * Therefore, the previous slice belongs to that new AU. */
-                        complete_au = 1;
+                        return hevc_parse_succeeded( info, param );
                 }
                 slice->present = 1;
             }
             else
             {
                 if( hevc_find_au_delimit_by_nalu_type( nalu_type, info->prev_nalu_type ) )
-                {
                     /* The last slice belongs to the AU you want at this time. */
-                    slice->present = 0;
-                    complete_au = 1;
-                }
-                else if( no_more )
-                    complete_au = 1;
+                    return hevc_parse_succeeded( info, param );
                 switch( nalu_type )
                 {
                     case HEVC_NALU_TYPE_VPS :
-                        if( hevc_try_to_append_dcr_nalu( info, HEVC_DCR_NALU_TYPE_VPS,
-                                                              lsmash_stream_buffers_get_pos( sb ), nalu_length ) )
+                        if( hevc_try_to_append_dcr_nalu( info, HEVC_DCR_NALU_TYPE_VPS, nalu, nalu_length ) < 0 )
                             return hevc_parse_failed( info );
                         break;
                     case HEVC_NALU_TYPE_SPS :
-                        if( hevc_try_to_append_dcr_nalu( info, HEVC_DCR_NALU_TYPE_SPS,
-                                                              lsmash_stream_buffers_get_pos( sb ), nalu_length ) )
+                        if( hevc_try_to_append_dcr_nalu( info, HEVC_DCR_NALU_TYPE_SPS, nalu, nalu_length ) < 0 )
                             return hevc_parse_failed( info );
                         break;
                     case HEVC_NALU_TYPE_PPS :
-                        if( hevc_try_to_append_dcr_nalu( info, HEVC_DCR_NALU_TYPE_PPS,
-                                                              lsmash_stream_buffers_get_pos( sb ), nalu_length ) )
+                        if( hevc_try_to_append_dcr_nalu( info, HEVC_DCR_NALU_TYPE_PPS, nalu, nalu_length ) < 0 )
                             return hevc_parse_failed( info );
                         break;
                     default :
@@ -2741,35 +2764,15 @@ int lsmash_setup_hevc_specific_parameters_from_access_unit
                 }
             }
         }
-        /* Move to the first byte of the next NALU. */
-        if( read_back )
-        {
-            uint64_t consumed_data_length = LSMASH_MIN( stream.remainder_length, lsmash_stream_buffers_get_buffer_size( sb ) );
-            lsmash_stream_buffers_seek( sb, 0, SEEK_SET );
-            lsmash_data_string_copy( sb, &stream, consumed_data_length, next_nalu_head_pos );
-        }
-        else
-            lsmash_stream_buffers_set_pos( sb, next_short_start_code_pos + HEVC_SHORT_START_CODE_LENGTH );
+        /* Move to the first byte of the next start code. */
         info->prev_nalu_type = nalu_type;
-        lsmash_stream_buffers_update( sb, 1 );
-        no_more_buf = (lsmash_stream_buffers_get_remainder( sb ) == 0);
-        ebsp_length = 0;
-        no_more = lsmash_stream_buffers_is_eos( sb ) && no_more_buf;
-        if( !no_more && !complete_au )
-        {
-            /* Check the next NALU header. */
-            if( hevc_check_nalu_header( &nalu_header, sb, !!consecutive_zero_byte_count ) )
-                return hevc_parse_failed( info );
-            info->ebsp_head_pos = next_nalu_head_pos + nalu_header.length;
-#if 0
-            /* Check if the end of sequence. Used for POC calculation. */
-            info->eos = nalu_header.nal_unit_type == HEVC_NALU_TYPE_EOS
-                     || nalu_header.nal_unit_type == HEVC_NALU_TYPE_EOB;
-#endif
-        }
+        if( lsmash_bs_read_seek( bs, next_sc_head_pos, SEEK_SET ) != next_sc_head_pos )
+            return hevc_parse_failed( info );
+        /* Check if no more data to read from the stream. */
+        if( !lsmash_bs_is_end( bs, HEVC_SHORT_START_CODE_LENGTH ) )
+            sc_head_pos = next_sc_head_pos;
         else
             return hevc_parse_succeeded( info, param );
-        consecutive_zero_byte_count = 0;
     }
 }
 
