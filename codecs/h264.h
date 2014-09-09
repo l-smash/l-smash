@@ -201,7 +201,7 @@ typedef struct
     uint8_t           independent;
     uint8_t           disposable;   /* 1: nal_ref_idc == 0, 0: otherwise */
     uint8_t           has_redundancy;
-    uint8_t           incomplete_au_has_primary;
+    uint8_t           has_primary;
     uint8_t           pic_parameter_set_id;
     uint8_t           field_pic_flag;
     uint8_t           bottom_field_flag;
@@ -222,12 +222,17 @@ typedef struct
     /* */
     uint32_t          recovery_frame_cnt;
     uint32_t          frame_num;
-    uint8_t          *au;
-    uint32_t          au_length;
-    uint8_t          *incomplete_au;
-    uint32_t          incomplete_au_length;
-    uint32_t          au_number;
 } h264_picture_info_t;
+
+typedef struct
+{
+    uint8_t            *data;
+    uint8_t            *incomplete_data;
+    uint32_t            length;
+    uint32_t            incomplete_length;
+    uint32_t            number;
+    h264_picture_info_t picture;
+} h264_access_unit_t;
 
 typedef struct h264_info_tag h264_info_t;
 
@@ -248,7 +253,7 @@ struct h264_info_tag
     h264_pps_t           pps;           /* active PPS */
     h264_sei_t           sei;           /* active SEI */
     h264_slice_info_t    slice;         /* active slice */
-    h264_picture_info_t  picture;
+    h264_access_unit_t   au;
     uint8_t              prev_nalu_type;
     uint8_t              avcC_pending;
     lsmash_bits_t       *bits;
@@ -311,7 +316,7 @@ int h264_find_au_delimit_by_nalu_type
 int h264_supplement_buffer
 (
     h264_stream_buffer_t *buffer,
-    h264_picture_info_t  *picture,
+    h264_access_unit_t   *au,
     uint32_t              size
 );
 

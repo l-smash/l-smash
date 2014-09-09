@@ -109,8 +109,8 @@ int h264_setup_parser
     sb->rbsp = lsmash_withdraw_buffer( sb->bank, 1 );
     if( !parse_only )
     {
-        info->picture.au            = lsmash_withdraw_buffer( sb->bank, 2 );
-        info->picture.incomplete_au = lsmash_withdraw_buffer( sb->bank, 3 );
+        info->au.data            = lsmash_withdraw_buffer( sb->bank, 2 );
+        info->au.incomplete_data = lsmash_withdraw_buffer( sb->bank, 3 );
     }
     info->bits = lsmash_bits_adhoc_create();
     if( !info->bits )
@@ -1515,9 +1515,9 @@ void h264_update_picture_info_for_slice
 )
 {
     assert( info );
-    picture->has_mmco5                 |= slice->has_mmco5;
-    picture->has_redundancy            |= slice->has_redundancy;
-    picture->incomplete_au_has_primary |= !slice->has_redundancy;
+    picture->has_mmco5      |= slice->has_mmco5;
+    picture->has_redundancy |= slice->has_redundancy;
+    picture->has_primary    |= !slice->has_redundancy;
     h264_update_picture_type( picture, slice );
     /* Mark 'used' on active parameter sets. */
     uint8_t ps_id[2] = { slice->seq_parameter_set_id, slice->pic_parameter_set_id };
@@ -1621,7 +1621,7 @@ int h264_find_au_delimit_by_nalu_type
 int h264_supplement_buffer
 (
     h264_stream_buffer_t *sb,
-    h264_picture_info_t  *picture,
+    h264_access_unit_t   *au,
     uint32_t              size
 )
 {
@@ -1630,10 +1630,10 @@ int h264_supplement_buffer
         return -1;
     sb->bank = bank;
     sb->rbsp = lsmash_withdraw_buffer( bank, 1 );
-    if( picture && bank->number_of_buffers == 3 )
+    if( au && bank->number_of_buffers == 3 )
     {
-        picture->au            = lsmash_withdraw_buffer( bank, 2 );
-        picture->incomplete_au = lsmash_withdraw_buffer( bank, 3 );
+        au->data            = lsmash_withdraw_buffer( bank, 2 );
+        au->incomplete_data = lsmash_withdraw_buffer( bank, 3 );
     }
     return 0;
 }
