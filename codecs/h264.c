@@ -2212,11 +2212,13 @@ int lsmash_setup_h264_specific_parameters_from_access_unit
     lsmash_bs_t *bs   = &(lsmash_bs_t){ 0 };
     if( lsmash_bs_set_empty_stream( bs, data, data_length ) < 0 )
         return -1;
+    uint64_t sc_head_pos = nalu_find_first_start_code( bs );
+    if( sc_head_pos == UINT64_MAX )
+        return -1;
     if( h264_setup_parser( info, 1 ) < 0 )
         return h264_parse_failed( info );
     h264_stream_buffer_t *sb    = &info->buffer;
     h264_slice_info_t    *slice = &info->slice;
-    uint64_t sc_head_pos = 0;
     while( 1 )
     {
         h264_nalu_header_t nuh;

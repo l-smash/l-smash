@@ -3356,17 +3356,9 @@ static int h264_importer_probe( importer_t *importer )
     if( !h264_imp )
         return -1;
     lsmash_bs_t *bs = h264_imp->bs;
-    uint64_t first_sc_head_pos = 0;
-    while( 1 )
-    {
-        /* The first NALU of an AU in decoding order shall have long start code (0x00000001). */
-        if( 0x00000001 == lsmash_bs_show_be32( bs, first_sc_head_pos ) )
-            break;
-        /* Invalid if encountered any value of non-zero before the first start code. */
-        if( lsmash_bs_show_byte( bs, first_sc_head_pos ) )
-            goto fail;
-        ++first_sc_head_pos;
-    }
+    uint64_t first_sc_head_pos = nalu_find_first_start_code( bs );
+    if( first_sc_head_pos == UINT64_MAX )
+        goto fail;
     /* OK. It seems the stream has a long start code of H.264. */
     importer->info = h264_imp;
     h264_info_t *info = &h264_imp->info;
@@ -3377,8 +3369,8 @@ static int h264_importer_probe( importer_t *importer )
     /* Go back to the start code of the first NALU. */
     h264_imp->status = IMPORTER_OK;
     lsmash_bs_read_seek( bs, first_sc_head_pos, SEEK_SET );
-    info->prev_nalu_type        = H264_NALU_TYPE_UNSPECIFIED0;
     h264_imp->sc_head_pos       = first_sc_head_pos;
+    info->prev_nalu_type        = H264_NALU_TYPE_UNSPECIFIED0;
     uint8_t *temp_au            = info->picture.au;
     uint8_t *temp_incomplete_au = info->picture.incomplete_au;
     memset( &info->picture, 0, sizeof(h264_picture_info_t) );
@@ -4011,17 +4003,9 @@ static int hevc_importer_probe( importer_t *importer )
     if( !hevc_imp )
         return -1;
     lsmash_bs_t *bs = hevc_imp->bs;
-    uint64_t first_sc_head_pos = 0;
-    while( 1 )
-    {
-        /* The first NALU of an AU in decoding order shall have long start code (0x00000001). */
-        if( 0x00000001 == lsmash_bs_show_be32( bs, first_sc_head_pos ) )
-            break;
-        /* Invalid if encountered any value of non-zero before the first start code. */
-        if( lsmash_bs_show_byte( bs, first_sc_head_pos ) )
-            goto fail;
-        ++first_sc_head_pos;
-    }
+    uint64_t first_sc_head_pos = nalu_find_first_start_code( bs );
+    if( first_sc_head_pos == UINT64_MAX )
+        goto fail;
     /* OK. It seems the stream has a long start code of HEVC. */
     importer->info = hevc_imp;
     hevc_info_t *info = &hevc_imp->info;
@@ -4032,8 +4016,8 @@ static int hevc_importer_probe( importer_t *importer )
     /* Go back to the start code of the first NALU. */
     hevc_imp->status = IMPORTER_OK;
     lsmash_bs_read_seek( bs, first_sc_head_pos, SEEK_SET );
-    info->prev_nalu_type        = HEVC_NALU_TYPE_UNKNOWN;
     hevc_imp->sc_head_pos       = first_sc_head_pos;
+    info->prev_nalu_type        = HEVC_NALU_TYPE_UNKNOWN;
     uint8_t *temp_au            = info->au.data;
     uint8_t *temp_incomplete_au = info->au.incomplete_data;
     memset( &info->au, 0, sizeof(hevc_access_unit_t) );

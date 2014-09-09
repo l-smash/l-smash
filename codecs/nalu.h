@@ -227,3 +227,26 @@ static inline int nalu_check_next_short_start_code
 {
     return ((buf_pos + 2) < buf_end) && !buf_pos[0] && !buf_pos[1] && (buf_pos[2] == 0x01);
 }
+
+/* Return the offset from the beginning of stream if a start code is found.
+ * Return UINT64_MAX otherwise. */
+static inline uint64_t nalu_find_first_start_code
+(
+    lsmash_bs_t *bs
+)
+{
+    uint64_t first_sc_head_pos = 0;
+    while( 1 )
+    {
+        if( lsmash_bs_is_end( bs, first_sc_head_pos + NALU_LONG_START_CODE_LENGTH ) )
+            return UINT64_MAX;
+        /* Invalid if encountered any value of non-zero before the first start code. */
+        if( lsmash_bs_show_byte( bs, first_sc_head_pos ) )
+            return UINT64_MAX;
+        /* The first NALU of an AU in decoding order shall have long start code (0x00000001). */
+        if( 0x00000001 == lsmash_bs_show_be32( bs, first_sc_head_pos ) )
+            break;
+        ++first_sc_head_pos;
+    }
+    return first_sc_head_pos;
+}
