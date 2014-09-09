@@ -20,12 +20,6 @@
 
 /* This file is available under an ISC license. */
 
-#define H264_DEFAULT_BUFFER_SIZE      (1<<16)
-#define H264_DEFAULT_NALU_LENGTH_SIZE 4     /* We always use 4 bytes length. */
-#define H264_SHORT_START_CODE_LENGTH  3
-#define H264_LONG_START_CODE_LENGTH   4
-
-
 enum
 {
     H264_NALU_TYPE_UNSPECIFIED0  = 0,   /* Unspecified */

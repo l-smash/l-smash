@@ -20,6 +20,11 @@
 
 /* This file is available under an ISC license. */
 
+#define NALU_DEFAULT_BUFFER_SIZE      (1<<16)
+#define NALU_DEFAULT_NALU_LENGTH_SIZE 4     /* We always use 4 bytes length. */
+#define NALU_SHORT_START_CODE_LENGTH  3
+#define NALU_LONG_START_CODE_LENGTH   4
+
 static inline uint64_t nalu_get_codeNum
 (
     lsmash_bits_t *bits

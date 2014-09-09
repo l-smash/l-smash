@@ -100,10 +100,10 @@ int h264_setup_parser
     if( !info )
         return -1;
     memset( info, 0, sizeof(h264_info_t) );
-    info->avcC_param     .lengthSizeMinusOne = H264_DEFAULT_NALU_LENGTH_SIZE - 1;
-    info->avcC_param_next.lengthSizeMinusOne = H264_DEFAULT_NALU_LENGTH_SIZE - 1;
+    info->avcC_param     .lengthSizeMinusOne = NALU_DEFAULT_NALU_LENGTH_SIZE - 1;
+    info->avcC_param_next.lengthSizeMinusOne = NALU_DEFAULT_NALU_LENGTH_SIZE - 1;
     h264_stream_buffer_t *sb = &info->buffer;
-    sb->bank = lsmash_create_multiple_buffers( parse_only ? 1 : 3, H264_DEFAULT_BUFFER_SIZE );
+    sb->bank = lsmash_create_multiple_buffers( parse_only ? 1 : 3, NALU_DEFAULT_BUFFER_SIZE );
     if( !sb->bank )
         return -1;
     sb->rbsp = lsmash_withdraw_buffer( sb->bank, 1 );
@@ -131,7 +131,7 @@ static int h264_check_nalu_header
     int                      use_long_start_code
 )
 {
-    uint8_t temp8 = lsmash_bs_show_byte( bs, use_long_start_code ? H264_LONG_START_CODE_LENGTH : H264_SHORT_START_CODE_LENGTH );
+    uint8_t temp8 = lsmash_bs_show_byte( bs, use_long_start_code ? NALU_LONG_START_CODE_LENGTH : NALU_SHORT_START_CODE_LENGTH );
     nuh->forbidden_zero_bit = (temp8 >> 7) & 0x01;
     nuh->nal_ref_idc        = (temp8 >> 5) & 0x03;
     nuh->nal_unit_type      =  temp8       & 0x1f;
@@ -182,26 +182,26 @@ uint64_t h264_find_next_start_code
     uint64_t count  = 0;    /* the number of the trailing zero bytes after the latest NALU */
     /* Check the type of the current start code. */
     int long_start_code
-        = (!lsmash_bs_is_end( bs, H264_LONG_START_CODE_LENGTH )  && 0x00000001 == lsmash_bs_show_be32( bs, 0 )) ? 1
-        : (!lsmash_bs_is_end( bs, H264_SHORT_START_CODE_LENGTH ) && 0x000001   == lsmash_bs_show_be24( bs, 0 )) ? 0
+        = (!lsmash_bs_is_end( bs, NALU_LONG_START_CODE_LENGTH )  && 0x00000001 == lsmash_bs_show_be32( bs, 0 )) ? 1
+        : (!lsmash_bs_is_end( bs, NALU_SHORT_START_CODE_LENGTH ) && 0x000001   == lsmash_bs_show_be24( bs, 0 )) ? 0
         :                                                                                                        -1;
     if( long_start_code >= 0 && h264_check_nalu_header( bs, nuh, long_start_code ) == 0 )
     {
-        *start_code_length = long_start_code ? H264_LONG_START_CODE_LENGTH : H264_SHORT_START_CODE_LENGTH;
+        *start_code_length = long_start_code ? NALU_LONG_START_CODE_LENGTH : NALU_SHORT_START_CODE_LENGTH;
         uint64_t distance = *start_code_length + nuh->length;
         /* Find the start code of the next NALU and get the distance from the start code of the latest NALU. */
-        if( !lsmash_bs_is_end( bs, distance + H264_SHORT_START_CODE_LENGTH ) )
+        if( !lsmash_bs_is_end( bs, distance + NALU_SHORT_START_CODE_LENGTH ) )
         {
             uint32_t sync_bytes = lsmash_bs_show_be24( bs, distance );
             while( 0x000001 != sync_bytes )
             {
-                if( lsmash_bs_is_end( bs, ++distance + H264_SHORT_START_CODE_LENGTH ) )
+                if( lsmash_bs_is_end( bs, ++distance + NALU_SHORT_START_CODE_LENGTH ) )
                 {
                     distance = lsmash_bs_get_remaining_buffer_size( bs );
                     break;
                 }
                 sync_bytes <<= 8;
-                sync_bytes  |= lsmash_bs_show_byte( bs, distance + H264_SHORT_START_CODE_LENGTH - 1 );
+                sync_bytes  |= lsmash_bs_show_byte( bs, distance + NALU_SHORT_START_CODE_LENGTH - 1 );
                 sync_bytes  &= 0xFFFFFF;
             }
         }
@@ -2223,7 +2223,7 @@ int lsmash_setup_h264_specific_parameters_from_access_unit
         uint64_t start_code_length;
         uint64_t trailing_zero_bytes;
         uint64_t nalu_length = h264_find_next_start_code( bs, &nuh, &start_code_length, &trailing_zero_bytes );
-        if( start_code_length <= H264_SHORT_START_CODE_LENGTH && lsmash_bs_is_end( bs, nalu_length ) )
+        if( start_code_length <= NALU_SHORT_START_CODE_LENGTH && lsmash_bs_is_end( bs, nalu_length ) )
             /* For the last NALU. This NALU already has been parsed. */
             return h264_parse_succeeded( info, param );
         uint8_t  nalu_type        = nuh.nal_unit_type;
@@ -2242,7 +2242,7 @@ int lsmash_setup_h264_specific_parameters_from_access_unit
               || nalu_type == H264_NALU_TYPE_SLICE_AUX )
         {
             /* Increase the buffer if needed. */
-            uint64_t possible_au_length = H264_DEFAULT_NALU_LENGTH_SIZE + nalu_length;
+            uint64_t possible_au_length = NALU_DEFAULT_NALU_LENGTH_SIZE + nalu_length;
             if( sb->bank->buffer_size < possible_au_length
              && h264_supplement_buffer( sb, NULL, 2 * possible_au_length ) < 0 )
                 return h264_parse_failed( info );
@@ -2295,7 +2295,7 @@ int lsmash_setup_h264_specific_parameters_from_access_unit
         if( lsmash_bs_read_seek( bs, next_sc_head_pos, SEEK_SET ) != next_sc_head_pos )
             return h264_parse_failed( info );
         /* Check if no more data to read from the stream. */
-        if( !lsmash_bs_is_end( bs, H264_SHORT_START_CODE_LENGTH ) )
+        if( !lsmash_bs_is_end( bs, NALU_SHORT_START_CODE_LENGTH ) )
             sc_head_pos = next_sc_head_pos;
         else
             return h264_parse_succeeded( info, param );

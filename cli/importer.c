@@ -2656,15 +2656,15 @@ static void h264_append_nalu_to_au( h264_picture_info_t *picture, uint8_t *src_n
 {
     if( !probe )
     {
-        uint8_t *dst_nalu = picture->incomplete_au + picture->incomplete_au_length + H264_DEFAULT_NALU_LENGTH_SIZE;
-        for( int i = H264_DEFAULT_NALU_LENGTH_SIZE; i; i-- )
+        uint8_t *dst_nalu = picture->incomplete_au + picture->incomplete_au_length + NALU_DEFAULT_NALU_LENGTH_SIZE;
+        for( int i = NALU_DEFAULT_NALU_LENGTH_SIZE; i; i-- )
             *(dst_nalu - i) = (nalu_length >> ((i - 1) * 8)) & 0xff;
         memcpy( dst_nalu, src_nalu, nalu_length );
     }
     /* Note: picture->incomplete_au_length shall be 0 immediately after AU has completed.
      * Therefore, possible_au_length in h264_get_access_unit_internal() can't be used here
      * to avoid increasing AU length monotonously through the entire stream. */
-    picture->incomplete_au_length += H264_DEFAULT_NALU_LENGTH_SIZE + nalu_length;
+    picture->incomplete_au_length += NALU_DEFAULT_NALU_LENGTH_SIZE + nalu_length;
 }
 
 static inline void h264_get_au_internal_end( h264_importer_t *h264_imp, h264_picture_info_t *picture )
@@ -2785,7 +2785,7 @@ static int h264_get_access_unit_internal
         uint64_t start_code_length;
         uint64_t trailing_zero_bytes;
         uint64_t nalu_length = h264_find_next_start_code( bs, &nuh, &start_code_length, &trailing_zero_bytes );
-        if( start_code_length <= H264_SHORT_START_CODE_LENGTH && lsmash_bs_is_end( bs, nalu_length ) )
+        if( start_code_length <= NALU_SHORT_START_CODE_LENGTH && lsmash_bs_is_end( bs, nalu_length ) )
         {
             /* For the last NALU.
              * This NALU already has been appended into the latest access unit and parsed. */
@@ -2823,7 +2823,7 @@ static int h264_get_access_unit_internal
               || nalu_type == H264_NALU_TYPE_SLICE_AUX )
         {
             /* Increase the buffer if needed. */
-            uint64_t possible_au_length = picture->incomplete_au_length + H264_DEFAULT_NALU_LENGTH_SIZE + nalu_length;
+            uint64_t possible_au_length = picture->incomplete_au_length + NALU_DEFAULT_NALU_LENGTH_SIZE + nalu_length;
             if( sb->bank->buffer_size < possible_au_length
              && h264_supplement_buffer( sb, picture, 2 * possible_au_length ) < 0 )
             {
@@ -2911,7 +2911,7 @@ static int h264_get_access_unit_internal
             return h264_get_au_internal_failed( h264_imp, picture, complete_au );
         }
         /* Check if no more data to read from the stream. */
-        if( !lsmash_bs_is_end( bs, H264_SHORT_START_CODE_LENGTH ) )
+        if( !lsmash_bs_is_end( bs, NALU_SHORT_START_CODE_LENGTH ) )
             h264_imp->sc_head_pos = next_sc_head_pos;
         /* If there is no more data in the stream, and flushed chunk of NALUs, flush it as complete AU here. */
         else if( picture->incomplete_au_length && picture->au_length == 0 )
@@ -3507,15 +3507,15 @@ static void hevc_append_nalu_to_au( hevc_access_unit_t *au, uint8_t *src_nalu, u
 {
     if( !probe )
     {
-        uint8_t *dst_nalu = au->incomplete_data + au->incomplete_length + HEVC_DEFAULT_NALU_LENGTH_SIZE;
-        for( int i = HEVC_DEFAULT_NALU_LENGTH_SIZE; i; i-- )
+        uint8_t *dst_nalu = au->incomplete_data + au->incomplete_length + NALU_DEFAULT_NALU_LENGTH_SIZE;
+        for( int i = NALU_DEFAULT_NALU_LENGTH_SIZE; i; i-- )
             *(dst_nalu - i) = (nalu_length >> ((i - 1) * 8)) & 0xff;
         memcpy( dst_nalu, src_nalu, nalu_length );
     }
     /* Note: picture->incomplete_au_length shall be 0 immediately after AU has completed.
      * Therefore, possible_au_length in hevc_get_access_unit_internal() can't be used here
      * to avoid increasing AU length monotonously through the entire stream. */
-    au->incomplete_length += HEVC_DEFAULT_NALU_LENGTH_SIZE + nalu_length;
+    au->incomplete_length += NALU_DEFAULT_NALU_LENGTH_SIZE + nalu_length;
 }
 
 static inline void hevc_get_au_internal_end( hevc_importer_t *hevc_imp, hevc_access_unit_t *au )
@@ -3634,7 +3634,7 @@ static int hevc_get_access_unit_internal
         uint64_t start_code_length;
         uint64_t trailing_zero_bytes;
         uint64_t nalu_length = hevc_find_next_start_code( bs, &nuh, &start_code_length, &trailing_zero_bytes );
-        if( start_code_length <= HEVC_SHORT_START_CODE_LENGTH && lsmash_bs_is_end( bs, nalu_length ) )
+        if( start_code_length <= NALU_SHORT_START_CODE_LENGTH && lsmash_bs_is_end( bs, nalu_length ) )
         {
             /* For the last NALU.
              * This NALU already has been appended into the latest access unit and parsed. */
@@ -3677,7 +3677,7 @@ static int hevc_get_access_unit_internal
              || (nalu_type >= HEVC_NALU_TYPE_VPS      && nalu_type <= HEVC_NALU_TYPE_SUFFIX_SEI)  )
         {
             /* Increase the buffer if needed. */
-            uint64_t possible_au_length = au->incomplete_length + HEVC_DEFAULT_NALU_LENGTH_SIZE + nalu_length;
+            uint64_t possible_au_length = au->incomplete_length + NALU_DEFAULT_NALU_LENGTH_SIZE + nalu_length;
             if( sb->bank->buffer_size < possible_au_length
              && hevc_supplement_buffer( sb, au, 2 * possible_au_length ) < 0 )
             {
@@ -3765,7 +3765,7 @@ static int hevc_get_access_unit_internal
             lsmash_log( importer, LSMASH_LOG_ERROR, "failed to seek the next start code.\n" );
             return hevc_get_au_internal_failed( hevc_imp, au, complete_au );
         }
-        if( !lsmash_bs_is_end( bs, HEVC_SHORT_START_CODE_LENGTH ) )
+        if( !lsmash_bs_is_end( bs, NALU_SHORT_START_CODE_LENGTH ) )
             hevc_imp->sc_head_pos = next_sc_head_pos;
         /* If there is no more data in the stream, and flushed chunk of NALUs, flush it as complete AU here. */
         else if( au->incomplete_length && au->length == 0 )
