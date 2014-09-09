@@ -3580,7 +3580,7 @@ static lsmash_video_summary_t *hevc_create_summary
 
 static int hevc_store_codec_specific
 (
-    hevc_importer_t              *info,
+    hevc_importer_t                   *hevc_imp,
     lsmash_hevc_specific_parameters_t *hvcC_param
 )
 {
@@ -3593,7 +3593,7 @@ static int hevc_store_codec_specific
     lsmash_codec_specific_t *dst_cs = lsmash_convert_codec_specific_format( src_cs, LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
     src_param->parameter_arrays = NULL;     /* Avoid freeing parameter arrays within hvcC_param. */
     lsmash_destroy_codec_specific_data( src_cs );
-    if( !dst_cs || lsmash_add_entry( info->hvcC_list, dst_cs ) < 0 )
+    if( !dst_cs || lsmash_add_entry( hevc_imp->hvcC_list, dst_cs ) < 0 )
     {
         lsmash_destroy_codec_specific_data( dst_cs );
         return -1;
@@ -3601,7 +3601,7 @@ static int hevc_store_codec_specific
     return 0;
 }
 
-static void hevc_new_access_unit( hevc_access_unit_t *au )
+static inline void hevc_new_access_unit( hevc_access_unit_t *au )
 {
     au->length                    = 0;
     au->picture.type              = HEVC_PICTURE_TYPE_NONE;
