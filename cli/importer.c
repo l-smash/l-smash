@@ -3362,7 +3362,7 @@ static int h264_importer_probe( importer_t *importer )
         return -1;
     lsmash_bs_t *bs = h264_imp->bs;
     uint64_t first_sc_head_pos = nalu_find_first_start_code( bs );
-    if( first_sc_head_pos == UINT64_MAX )
+    if( first_sc_head_pos == NALU_NO_START_CODE_FOUND )
         goto fail;
     /* OK. It seems the stream has a long start code of H.264. */
     importer->info = h264_imp;
@@ -4009,7 +4009,7 @@ static int hevc_importer_probe( importer_t *importer )
         return -1;
     lsmash_bs_t *bs = hevc_imp->bs;
     uint64_t first_sc_head_pos = nalu_find_first_start_code( bs );
-    if( first_sc_head_pos == UINT64_MAX )
+    if( first_sc_head_pos == NALU_NO_START_CODE_FOUND )
         goto fail;
     /* OK. It seems the stream has a long start code of HEVC. */
     importer->info = hevc_imp;

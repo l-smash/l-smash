@@ -2213,7 +2213,7 @@ int lsmash_setup_h264_specific_parameters_from_access_unit
     if( lsmash_bs_set_empty_stream( bs, data, data_length ) < 0 )
         return -1;
     uint64_t sc_head_pos = nalu_find_first_start_code( bs );
-    if( sc_head_pos == UINT64_MAX )
+    if( sc_head_pos == NALU_NO_START_CODE_FOUND )
         return -1;
     if( h264_setup_parser( info, 1 ) < 0 )
         return h264_parse_failed( info );

@@ -24,6 +24,7 @@
 #define NALU_DEFAULT_NALU_LENGTH_SIZE 4     /* We always use 4 bytes length. */
 #define NALU_SHORT_START_CODE_LENGTH  3
 #define NALU_LONG_START_CODE_LENGTH   4
+#define NALU_NO_START_CODE_FOUND      UINT64_MAX
 
 static inline uint64_t nalu_get_codeNum
 (
@@ -229,7 +230,7 @@ static inline int nalu_check_next_short_start_code
 }
 
 /* Return the offset from the beginning of stream if a start code is found.
- * Return UINT64_MAX otherwise. */
+ * Return NALU_NO_START_CODE_FOUND otherwise. */
 static inline uint64_t nalu_find_first_start_code
 (
     lsmash_bs_t *bs
@@ -239,10 +240,10 @@ static inline uint64_t nalu_find_first_start_code
     while( 1 )
     {
         if( lsmash_bs_is_end( bs, first_sc_head_pos + NALU_LONG_START_CODE_LENGTH ) )
-            return UINT64_MAX;
+            return NALU_NO_START_CODE_FOUND;
         /* Invalid if encountered any value of non-zero before the first start code. */
         if( lsmash_bs_show_byte( bs, first_sc_head_pos ) )
-            return UINT64_MAX;
+            return NALU_NO_START_CODE_FOUND;
         /* The first NALU of an AU in decoding order shall have long start code (0x00000001). */
         if( 0x00000001 == lsmash_bs_show_be32( bs, first_sc_head_pos ) )
             break;
