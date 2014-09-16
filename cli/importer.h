@@ -40,8 +40,6 @@ uint32_t lsmash_importer_get_last_delta( importer_t *importer, uint32_t track_nu
 uint32_t lsmash_importer_get_track_count( importer_t *importer );
 lsmash_summary_t *lsmash_duplicate_summary( importer_t *importer, uint32_t track_number );
 
-int mp4sys_amr_create_damr( lsmash_audio_summary_t *summary );
-
 #endif /* #ifndef LSMASH_IMPORTER_INTERNAL */
 
 #endif /* #ifndef LSMASH_IMPORTER_H */
