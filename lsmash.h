@@ -35,7 +35,7 @@
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  1
 #define LSMASH_VERSION_MINOR 13
-#define LSMASH_VERSION_MICRO 23
+#define LSMASH_VERSION_MICRO 24
 
 #define LSMASH_VERSION_INT( a, b, c ) (((a) << 16) | ((b) << 8) | (c))
 
@@ -2676,7 +2676,7 @@ uint8_t *lsmash_create_ac3_specific_info
 typedef struct
 {
     uint8_t  fscod;         /* the same value as the fscod field in the independent substream */
-    uint8_t  fscod2;        /* Any user must not use this. */
+    uint8_t  fscod2;        /* deprecated: Any user must not use this. */
     uint8_t  bsid;          /* the same value as the bsid field in the independent substream */
     uint8_t  bsmod;         /* the same value as the bsmod field in the independent substream
                              * If the bsmod field is not present in the independent substream, this field shall be set to 0. */

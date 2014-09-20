@@ -71,6 +71,32 @@ static const char *audio_coding_mode[] =
 
 #define AC3_SPECIFIC_BOX_LENGTH 11
 
+uint32_t ac3_get_sample_rate( lsmash_ac3_specific_parameters_t *dac3_param )
+{
+    /* The value 3 (or 0b11) of fscod is reserved. */
+    uint32_t samplerate = ac3_sample_rate_table[ dac3_param->fscod ];
+    if( samplerate == 0 )
+        lsmash_log( NULL, LSMASH_LOG_WARNING, "Unknown sampling rate is detected.\n" );
+    return samplerate;
+}
+
+#if 0
+/* FIXME: though this table is for AC-3 in QTFF, we don't support it yet since the structure of CODEC specific info is unknown.
+ *        ChannelLayout is given by ac3_channel_layout_table[ acmod ][ lfeon ]. */
+static const lsmash_channel_layout_tag ac3_channel_layout_table[8][2] =
+{
+    /*        LFE: off                      LFE: on             */
+    { QT_CHANNEL_LAYOUT_UNKNOWN,    QT_CHANNEL_LAYOUT_UNKNOWN    },     /* FIXME: dual mono */
+    { QT_CHANNEL_LAYOUT_MONO,       QT_CHANNEL_LAYOUT_AC3_1_0_1  },
+    { QT_CHANNEL_LAYOUT_STEREO,     QT_CHANNEL_LAYOUT_DVD_4      },
+    { QT_CHANNEL_LAYOUT_AC3_3_0,    QT_CHANNEL_LAYOUT_AC3_3_0_1  },
+    { QT_CHANNEL_LAYOUT_DVD_2,      QT_CHANNEL_LAYOUT_AC3_2_1_1  },
+    { QT_CHANNEL_LAYOUT_AC3_3_1,    QT_CHANNEL_LAYOUT_AC3_3_1_1  },
+    { QT_CHANNEL_LAYOUT_DVD_3,      QT_CHANNEL_LAYOUT_DVD_18     },
+    { QT_CHANNEL_LAYOUT_MPEG_5_0_C, QT_CHANNEL_LAYOUT_MPEG_5_1_C }
+};
+#endif
+
 uint8_t *lsmash_create_ac3_specific_info( lsmash_ac3_specific_parameters_t *param, uint32_t *data_length )
 {
     lsmash_bits_t bits = { 0 };
@@ -338,7 +364,7 @@ static int eac3_check_syncframe_header( eac3_info_t *info )
         substream_info = &info->independent_info[ info->current_independent_substream_id ];
     else
         substream_info = &info->dependent_info;
-    if( substream_info->fscod == 0x3 && substream_info->fscod2 == 0x3 )
+    if( substream_info->fscod == 0x3 && info->fscod2 == 0x3 )
         return -1;      /* unknown Sample Rate Code */
     if( substream_info->bsid < 10 || substream_info->bsid > 16 )
         return -1;      /* not EAC-3 */
@@ -366,14 +392,14 @@ int eac3_parse_syncframe( eac3_info_t *info )
     substream_info->fscod = lsmash_bits_get( bits, 2 );                             /* fscod              (2) */
     if( substream_info->fscod == 0x3 )
     {
-        substream_info->fscod2 = lsmash_bits_get( bits, 2 );                        /* fscod2             (2) */
+        info->fscod2     = lsmash_bits_get( bits, 2 );                              /* fscod2             (2) */
         info->numblkscod = 0x3;
     }
     else
         info->numblkscod = lsmash_bits_get( bits, 2 );                              /* numblkscod         (2) */
     substream_info->acmod = lsmash_bits_get( bits, 3 );                             /* acmod              (3) */
     substream_info->lfeon = lsmash_bits_get( bits, 1 );                             /* lfeon              (1) */
-    substream_info->bsid = lsmash_bits_get( bits, 5 );                              /* bsid               (5) */
+    substream_info->bsid  = lsmash_bits_get( bits, 5 );                             /* bsid               (5) */
     lsmash_bits_get( bits, 5 );                                                     /* dialnorm           (5) */
     if( lsmash_bits_get( bits, 1 ) )                                                /* compre             (1) */
         lsmash_bits_get( bits, 8 );                                                 /* compr              (8) */
@@ -540,6 +566,105 @@ int eac3_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_cod
         }
     }
     return 0;
+}
+
+void eac3_update_sample_rate
+(
+    uint32_t                          *frequency,
+    lsmash_eac3_specific_parameters_t *dec3_param,
+    uint8_t                           *fscod2
+)
+{
+    /* Additional independent substreams 1 to 7 must be encoded at the same sample rate as independent substream 0. */
+    uint32_t samplerate = ac3_sample_rate_table[ dec3_param->independent_info[0].fscod ];
+    if( samplerate == 0 && fscod2 )
+        /* The value 3 (or 0b11) of fscod2 is reserved. */
+        samplerate = ac3_sample_rate_table[ *fscod2 ] / 2;
+    if( samplerate != 0 )
+        *frequency = samplerate;
+    else
+        lsmash_log( NULL, LSMASH_LOG_WARNING, "Unknown sampling rate is detected.\n" );
+}
+
+#if 0
+/* FIXME: though this table is for EAC-3 in QTFF, we don't support it yet since the structure of CODEC specific info is unknown. */
+static void eac3_update_channel_layout
+(
+    lsmash_channel_layout_tag    *layout_tag,
+    lsmash_eac3_substream_info_t *independent_info
+)
+{
+    if( independent_info->chan_loc == 0 )
+    {
+        *layout_tag = ac3_channel_layout_table[ independent_info->acmod ][ independent_info->lfeon ];
+        return;
+    }
+    else if( independent_info->acmod != 0x7 )
+    {
+        *layout_tag = QT_CHANNEL_LAYOUT_UNKNOWN;
+        return;
+    }
+    /* OK. All L, C, R, Ls and Rs exsist. */
+    if( !independent_info->lfeon )
+    {
+        if( independent_info->chan_loc == 0x80 )
+            *layout_tag = QT_CHANNEL_LAYOUT_EAC_7_0_A;
+        else if( independent_info->chan_loc == 0x40 )
+            *layout_tag = QT_CHANNEL_LAYOUT_EAC_6_0_A;
+        else
+            *layout_tag = QT_CHANNEL_LAYOUT_UNKNOWN;
+        return;
+    }
+    /* Also LFE exsists. */
+    static const struct
+    {
+        uint16_t chan_loc;
+        lsmash_channel_layout_tag tag;
+    } eac3_channel_layout_table[]
+        = {
+            { 0x100, QT_CHANNEL_LAYOUT_EAC3_7_1_B },
+            { 0x80,  QT_CHANNEL_LAYOUT_EAC3_7_1_A },
+            { 0x40,  QT_CHANNEL_LAYOUT_EAC3_6_1_A },
+            { 0x20,  QT_CHANNEL_LAYOUT_EAC3_6_1_B },
+            { 0x10,  QT_CHANNEL_LAYOUT_EAC3_7_1_C },
+            { 0x10,  QT_CHANNEL_LAYOUT_EAC3_7_1_D },
+            { 0x4,   QT_CHANNEL_LAYOUT_EAC3_7_1_E },
+            { 0x2,   QT_CHANNEL_LAYOUT_EAC3_6_1_C },
+            { 0x60,  QT_CHANNEL_LAYOUT_EAC3_7_1_F },
+            { 0x42,  QT_CHANNEL_LAYOUT_EAC3_7_1_G },
+            { 0x22,  QT_CHANNEL_LAYOUT_EAC3_7_1_H },
+            { 0 }
+          };
+    for( int i = 0; eac3_channel_layout_table[i].chan_loc; i++ )
+        if( independent_info->chan_loc == eac3_channel_layout_table[i].chan_loc )
+        {
+            *layout_tag = eac3_channel_layout_table[i].tag;
+            return;
+        }
+    *layout_tag = QT_CHANNEL_LAYOUT_UNKNOWN;
+}
+#endif
+
+void eac3_update_channel_count
+(
+    uint32_t                          *channels,
+    lsmash_eac3_specific_parameters_t *dec3_param
+)
+{
+    /* The default programme selection should always be Programme 1.
+     * Thus, pick the number of channels of Programme 1. */
+    lsmash_eac3_substream_info_t *independent_info = &dec3_param->independent_info[0];
+    *channels = ac3_channel_count_table[ independent_info->acmod ]  /* L/C/R/Ls/Rs combination */
+              + 2 * !!(independent_info->chan_loc & 0x100)          /* Lc/Rc pair */
+              + 2 * !!(independent_info->chan_loc & 0x80)           /* Lrs/Rrs pair */
+              +     !!(independent_info->chan_loc & 0x40)           /* Cs */
+              +     !!(independent_info->chan_loc & 0x20)           /* Ts */
+              + 2 * !!(independent_info->chan_loc & 0x10)           /* Lsd/Rsd pair */
+              + 2 * !!(independent_info->chan_loc & 0x8)            /* Lw/Rw pair */
+              + 2 * !!(independent_info->chan_loc & 0x4)            /* Lvh/Rvh pair */
+              +     !!(independent_info->chan_loc & 0x2)            /* Cvh */
+              +     !!(independent_info->chan_loc & 0x1)            /* LFE2 */
+              + independent_info->lfeon;                            /* LFE */
 }
 
 int eac3_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )

@@ -27,6 +27,7 @@
 
 #include "core/box.h"
 
+#include "a52.h"
 #include "mp4a.h"
 #include "mp4sys.h"
 #include "description.h"
@@ -2757,14 +2758,41 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
                 lsmash_destroy_codec_specific_data( specific );
                 goto fail;
             }
-            if( specific->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_DTS )
+            if( specific->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_DTS
+             || specific->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3
+             || specific->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3 )
             {
                 specific = lsmash_convert_codec_specific_format( specific, LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
                 if( !specific )
                     goto fail;
-                lsmash_dts_specific_parameters_t *param = (lsmash_dts_specific_parameters_t *)specific->data.structured;
-                summary->sample_size      = param->pcmSampleDepth;
-                summary->samples_in_frame = (summary->frequency * (512 << param->FrameDuration)) / param->DTSSamplingFrequency;
+                switch( specific->type )
+                {
+                    case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_DTS :
+                    {
+                        lsmash_dts_specific_parameters_t *param = (lsmash_dts_specific_parameters_t *)specific->data.structured;
+                        summary->sample_size      = param->pcmSampleDepth;
+                        summary->samples_in_frame = (summary->frequency * (512 << param->FrameDuration)) / param->DTSSamplingFrequency;
+                        break;
+                    }
+                    case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3 :
+                    {
+                        lsmash_ac3_specific_parameters_t *param = (lsmash_ac3_specific_parameters_t *)specific->data.structured;
+                        summary->frequency        = ac3_get_sample_rate( param );
+                        summary->channels         = ac3_get_channel_count( param );
+                        summary->samples_in_frame = 1536;
+                        break;
+                    }
+                    case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3 :
+                    {
+                        lsmash_eac3_specific_parameters_t *param = (lsmash_eac3_specific_parameters_t *)specific->data.structured;
+                        eac3_update_sample_rate( &summary->frequency, param, NULL );
+                        eac3_update_channel_count( &summary->channels, param );
+                        summary->samples_in_frame = 1536;
+                        break;
+                    }
+                    default :
+                        break;
+                }
                 lsmash_destroy_codec_specific_data( specific );
             }
         }

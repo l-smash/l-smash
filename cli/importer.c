@@ -1320,49 +1320,30 @@ static const uint32_t ac3_frame_size_table[19][3] =
     { 2560,  2786,  3840 }
 };
 
-static const uint32_t ac3_channel_count_table[8] = { 2, 1, 2, 3, 3, 4, 4, 5 };
-
-#if 0
-/* FIXME: though this table is for AC-3 in QTFF, we don't support it yet since the structure of CODEC specific info is unknown.
- *        ChannelLayout is given by ac3_channel_layout_table[ acmod ][ lfeon ]. */
-static const lsmash_channel_layout_tag ac3_channel_layout_table[8][2] =
-{
-    /*        LFE: off                      LFE: on             */
-    { QT_CHANNEL_LAYOUT_UNKNOWN,    QT_CHANNEL_LAYOUT_UNKNOWN    },     /* FIXME: dual mono */
-    { QT_CHANNEL_LAYOUT_MONO,       QT_CHANNEL_LAYOUT_AC3_1_0_1  },
-    { QT_CHANNEL_LAYOUT_STEREO,     QT_CHANNEL_LAYOUT_DVD_4      },
-    { QT_CHANNEL_LAYOUT_AC3_3_0,    QT_CHANNEL_LAYOUT_AC3_3_0_1  },
-    { QT_CHANNEL_LAYOUT_DVD_2,      QT_CHANNEL_LAYOUT_AC3_2_1_1  },
-    { QT_CHANNEL_LAYOUT_AC3_3_1,    QT_CHANNEL_LAYOUT_AC3_3_1_1  },
-    { QT_CHANNEL_LAYOUT_DVD_3,      QT_CHANNEL_LAYOUT_DVD_18     },
-    { QT_CHANNEL_LAYOUT_MPEG_5_0_C, QT_CHANNEL_LAYOUT_MPEG_5_1_C }
-};
-#endif
-
 static lsmash_audio_summary_t *ac3_create_summary( ac3_info_t *info )
 {
     lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_AUDIO );
     if( !summary )
         return NULL;
     lsmash_ac3_specific_parameters_t *param = &info->dac3_param;
-    lsmash_codec_specific_t *specific = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3,
-                                                                           LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
-    specific->data.unstructured = lsmash_create_ac3_specific_info( &info->dac3_param, &specific->size );
-    if( !specific->data.unstructured
-     || lsmash_add_entry( &summary->opaque->list, specific ) )
+    lsmash_codec_specific_t *cs = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3,
+                                                                     LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
+    cs->data.unstructured = lsmash_create_ac3_specific_info( &info->dac3_param, &cs->size );
+    if( !cs->data.unstructured
+     || lsmash_add_entry( &summary->opaque->list, cs ) )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-        lsmash_destroy_codec_specific_data( specific );
+        lsmash_destroy_codec_specific_data( cs );
         return NULL;
     }
-    summary->sample_type            = ISOM_CODEC_TYPE_AC_3_AUDIO;
-    summary->max_au_length          = AC3_MAX_SYNCFRAME_LENGTH;
-    summary->aot                    = MP4A_AUDIO_OBJECT_TYPE_NULL;          /* no effect */
-    summary->frequency              = ac3_sample_rate_table[ param->fscod ];
-    summary->channels               = ac3_channel_count_table[ param->acmod ] + param->lfeon;
-    summary->sample_size            = 16;                                   /* no effect */
-    summary->samples_in_frame       = AC3_SAMPLE_DURATION;
-    summary->sbr_mode               = MP4A_AAC_SBR_NOT_SPECIFIED;           /* no effect */
+    summary->sample_type      = ISOM_CODEC_TYPE_AC_3_AUDIO;
+    summary->max_au_length    = AC3_MAX_SYNCFRAME_LENGTH;
+    summary->aot              = MP4A_AUDIO_OBJECT_TYPE_NULL;    /* no effect */
+    summary->frequency        = ac3_get_sample_rate( param );
+    summary->channels         = ac3_get_channel_count( param );
+    summary->sample_size      = 16;                             /* no effect */
+    summary->samples_in_frame = AC3_SAMPLE_DURATION;
+    summary->sbr_mode         = MP4A_AAC_SBR_NOT_SPECIFIED;     /* no effect */
     return summary;
 }
 
@@ -1417,14 +1398,14 @@ static int ac3_importer_get_accessunit( importer_t *importer, uint32_t track_num
         return -1;
     if( current_status == IMPORTER_CHANGE )
     {
-        lsmash_codec_specific_t *specific = isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3 );
-        if( specific )
+        lsmash_codec_specific_t *cs = isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3 );
+        if( cs )
         {
-            specific->destruct( specific->data.unstructured );
-            specific->data.unstructured = ac3_imp->next_dac3;
+            cs->destruct( cs->data.unstructured );
+            cs->data.unstructured = ac3_imp->next_dac3;
         }
-        summary->frequency  = ac3_sample_rate_table[ param->fscod ];
-        summary->channels   = ac3_channel_count_table[ param->acmod ] + param->lfeon;
+        summary->frequency  = ac3_get_sample_rate( param );
+        summary->channels   = ac3_get_channel_count( param );
         //summary->layout_tag = ac3_channel_layout_table[ param->acmod ][ param->lfeon ];
     }
     memcpy( buffered_sample->data, ac3_imp->buffer, frame_size );
@@ -1541,6 +1522,7 @@ typedef struct
     uint64_t next_frame_pos;
     uint32_t next_dec3_length;
     uint8_t *next_dec3;
+    uint8_t  current_fscod2;
     uint8_t  buffer[EAC3_MAX_SYNCFRAME_LENGTH];
     lsmash_multiple_buffers_t *au_buffers;
     uint8_t *au;
@@ -1588,99 +1570,6 @@ static void eac3_importer_cleanup( importer_t *importer )
 {
     debug_if( importer && importer->info )
         remove_eac3_importer( importer->info );
-}
-
-static void eac3_update_sample_rate( lsmash_audio_summary_t *summary, lsmash_eac3_specific_parameters_t *dec3_param )
-{
-    /* Additional independent substreams 1 to 7 must be encoded at the same sample rate as independent substream 0. */
-    summary->frequency = ac3_sample_rate_table[ dec3_param->independent_info[0].fscod ];
-    if( summary->frequency == 0 )
-    {
-        static const uint32_t eac3_reduced_sample_rate_table[4] = { 24000, 22050, 16000, 0 };
-        summary->frequency = eac3_reduced_sample_rate_table[ dec3_param->independent_info[0].fscod2 ];
-    }
-}
-
-#if 0
-/* FIXME: though this table is for EAC-3 in QTFF, we don't support it yet since the structure of CODEC specific info is unknown. */
-static void eac3_update_channel_layout( lsmash_audio_summary_t *summary, lsmash_eac3_substream_info_t *independent_info )
-{
-    if( independent_info->chan_loc == 0 )
-    {
-        summary->layout_tag = ac3_channel_layout_table[ independent_info->acmod ][ independent_info->lfeon ];
-        return;
-    }
-    else if( independent_info->acmod != 0x7 )
-    {
-        summary->layout_tag = QT_CHANNEL_LAYOUT_UNKNOWN;
-        return;
-    }
-    /* OK. All L, C, R, Ls and Rs exsist. */
-    if( !independent_info->lfeon )
-    {
-        if( independent_info->chan_loc == 0x80 )
-            summary->layout_tag = QT_CHANNEL_LAYOUT_EAC_7_0_A;
-        else if( independent_info->chan_loc == 0x40 )
-            summary->layout_tag = QT_CHANNEL_LAYOUT_EAC_6_0_A;
-        else
-            summary->layout_tag = QT_CHANNEL_LAYOUT_UNKNOWN;
-        return;
-    }
-    /* Also LFE exsists. */
-    static const struct
-    {
-        uint16_t chan_loc;
-        lsmash_channel_layout_tag tag;
-    } eac3_channel_layout_table[]
-        = {
-            { 0x100, QT_CHANNEL_LAYOUT_EAC3_7_1_B },
-            { 0x80,  QT_CHANNEL_LAYOUT_EAC3_7_1_A },
-            { 0x40,  QT_CHANNEL_LAYOUT_EAC3_6_1_A },
-            { 0x20,  QT_CHANNEL_LAYOUT_EAC3_6_1_B },
-            { 0x10,  QT_CHANNEL_LAYOUT_EAC3_7_1_C },
-            { 0x10,  QT_CHANNEL_LAYOUT_EAC3_7_1_D },
-            { 0x4,   QT_CHANNEL_LAYOUT_EAC3_7_1_E },
-            { 0x2,   QT_CHANNEL_LAYOUT_EAC3_6_1_C },
-            { 0x60,  QT_CHANNEL_LAYOUT_EAC3_7_1_F },
-            { 0x42,  QT_CHANNEL_LAYOUT_EAC3_7_1_G },
-            { 0x22,  QT_CHANNEL_LAYOUT_EAC3_7_1_H },
-            { 0 }
-          };
-    for( int i = 0; eac3_channel_layout_table[i].chan_loc; i++ )
-        if( independent_info->chan_loc == eac3_channel_layout_table[i].chan_loc )
-        {
-            summary->layout_tag = eac3_channel_layout_table[i].tag;
-            return;
-        }
-    summary->layout_tag = QT_CHANNEL_LAYOUT_UNKNOWN;
-}
-#endif
-
-static void eac3_update_channel_info( lsmash_audio_summary_t *summary, lsmash_eac3_specific_parameters_t *dec3_param )
-{
-    summary->channels = 0;
-    for( int i = 0; i <= dec3_param->num_ind_sub; i++ )
-    {
-        int channel_count = 0;
-        lsmash_eac3_substream_info_t *independent_info = &dec3_param->independent_info[i];
-        channel_count = ac3_channel_count_table[ independent_info->acmod ]  /* L/C/R/Ls/Rs combination */
-                      + 2 * !!(independent_info->chan_loc & 0x100)          /* Lc/Rc pair */
-                      + 2 * !!(independent_info->chan_loc & 0x80)           /* Lrs/Rrs pair */
-                      +     !!(independent_info->chan_loc & 0x40)           /* Cs */
-                      +     !!(independent_info->chan_loc & 0x20)           /* Ts */
-                      + 2 * !!(independent_info->chan_loc & 0x10)           /* Lsd/Rsd pair */
-                      + 2 * !!(independent_info->chan_loc & 0x8)            /* Lw/Rw pair */
-                      + 2 * !!(independent_info->chan_loc & 0x4)            /* Lvh/Rvh pair */
-                      +     !!(independent_info->chan_loc & 0x2)            /* Cvh */
-                      +     !!(independent_info->chan_loc & 0x1)            /* LFE2 */
-                      + independent_info->lfeon;                            /* LFE */
-        if( channel_count > summary->channels )
-        {
-            /* Pick the maximum number of channels. */
-            summary->channels = channel_count;
-            //eac3_update_channel_layout( summary, independent_info );
-        }
-    }
 }
 
 static int eac3_importer_get_next_accessunit_internal( importer_t *importer )
@@ -1768,6 +1657,7 @@ static int eac3_importer_get_next_accessunit_internal( importer_t *importer )
                 }
                 info->number_of_audio_blocks += eac3_audio_block_table[ info->numblkscod ];
                 info->number_of_independent_substreams = 0;
+                eac3_imp->current_fscod2 = info->fscod2;
             }
             else if( info->syncframe_count == 0 )
             {
@@ -1830,16 +1720,16 @@ static int eac3_importer_get_accessunit( importer_t *importer, uint32_t track_nu
     }
     if( current_status == IMPORTER_CHANGE )
     {
-        lsmash_codec_specific_t *specific = isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3 );
-        if( specific )
+        lsmash_codec_specific_t *cs = isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3 );
+        if( cs )
         {
-            specific->destruct( specific->data.unstructured );
-            specific->data.unstructured = eac3_imp->next_dec3;
-            specific->size              = eac3_imp->next_dec3_length;
+            cs->destruct( cs->data.unstructured );
+            cs->data.unstructured = eac3_imp->next_dec3;
+            cs->size              = eac3_imp->next_dec3_length;
         }
         summary->max_au_length = eac3_imp->syncframe_count_in_au * EAC3_MAX_SYNCFRAME_LENGTH;
-        eac3_update_sample_rate( summary, &info->dec3_param );
-        eac3_update_channel_info( summary, &info->dec3_param );
+        eac3_update_sample_rate( &summary->frequency, &info->dec3_param, &eac3_imp->current_fscod2 );
+        eac3_update_channel_count( &summary->channels, &info->dec3_param );
     }
     memcpy( buffered_sample->data, eac3_imp->au, eac3_imp->au_length );
     buffered_sample->length                 = eac3_imp->au_length;
@@ -1868,9 +1758,9 @@ static int eac3_importer_get_accessunit( importer_t *importer, uint32_t track_nu
             eac3_imp->status = IMPORTER_ERROR;
             return current_status;
         }
-        lsmash_codec_specific_t *specific = isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3 );
+        lsmash_codec_specific_t *cs = isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3 );
         if( (eac3_imp->syncframe_count_in_au > old_syncframe_count_in_au)
-         || (specific && (new_length != specific->size || memcmp( dec3, specific->data.unstructured, specific->size ))) )
+         || (cs && (new_length != cs->size || memcmp( dec3, cs->data.unstructured, cs->size ))) )
         {
             eac3_imp->status = IMPORTER_CHANGE;
             eac3_imp->next_dec3        = dec3;
@@ -1892,24 +1782,24 @@ static lsmash_audio_summary_t *eac3_create_summary( eac3_importer_t *eac3_imp )
     if( !summary )
         return NULL;
     eac3_info_t *info = &eac3_imp->info;
-    lsmash_codec_specific_t *specific = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3,
-                                                                           LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
-    specific->data.unstructured = lsmash_create_eac3_specific_info( &info->dec3_param, &specific->size );
-    if( !specific->data.unstructured
-     || lsmash_add_entry( &summary->opaque->list, specific ) < 0 )
+    lsmash_codec_specific_t *cs = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3,
+                                                                     LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
+    cs->data.unstructured = lsmash_create_eac3_specific_info( &info->dec3_param, &cs->size );
+    if( !cs->data.unstructured
+     || lsmash_add_entry( &summary->opaque->list, cs ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-        lsmash_destroy_codec_specific_data( specific );
+        lsmash_destroy_codec_specific_data( cs );
         return NULL;
     }
-    summary->sample_type            = ISOM_CODEC_TYPE_EC_3_AUDIO;
-    summary->max_au_length          = eac3_imp->syncframe_count_in_au * EAC3_MAX_SYNCFRAME_LENGTH;
-    summary->aot                    = MP4A_AUDIO_OBJECT_TYPE_NULL;      /* no effect */
-    summary->sample_size            = 16;                               /* no effect */
-    summary->samples_in_frame       = EAC3_MIN_SAMPLE_DURATION * 6;     /* 256 (samples per audio block) * 6 (audio blocks) */
-    summary->sbr_mode               = MP4A_AAC_SBR_NOT_SPECIFIED;       /* no effect */
-    eac3_update_sample_rate( summary, &info->dec3_param );
-    eac3_update_channel_info( summary, &info->dec3_param );
+    summary->sample_type      = ISOM_CODEC_TYPE_EC_3_AUDIO;
+    summary->max_au_length    = eac3_imp->syncframe_count_in_au * EAC3_MAX_SYNCFRAME_LENGTH;
+    summary->aot              = MP4A_AUDIO_OBJECT_TYPE_NULL;    /* no effect */
+    summary->sample_size      = 16;                             /* no effect */
+    summary->samples_in_frame = EAC3_MIN_SAMPLE_DURATION * 6;   /* 256 (samples per audio block) * 6 (audio blocks) */
+    summary->sbr_mode         = MP4A_AAC_SBR_NOT_SPECIFIED;     /* no effect */
+    eac3_update_sample_rate( &summary->frequency, &info->dec3_param, &eac3_imp->current_fscod2 );
+    eac3_update_channel_count( &summary->channels, &info->dec3_param );
     return summary;
 }
 

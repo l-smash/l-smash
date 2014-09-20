@@ -39,6 +39,7 @@ typedef struct
     uint8_t  strmtyp;
     uint8_t  substreamid;
     uint8_t  current_independent_substream_id;
+    uint8_t  fscod2;
     uint8_t  numblkscod;
     uint8_t  number_of_audio_blocks;
     uint8_t  number_of_independent_substreams;
@@ -47,9 +48,47 @@ typedef struct
     lsmash_bits_t *bits;
 } eac3_info_t;
 
-static const uint32_t ac3_sample_rate_table[4] = { 48000, 44100, 32000, 0 };
-static const uint8_t eac3_audio_block_table[4] = { 1, 2, 3, 6 };
+static const uint32_t ac3_sample_rate_table  [4] = { 48000, 44100, 32000, 0 };
+static const uint32_t ac3_channel_count_table[8] = { 2, 1, 2, 3, 3, 4, 4, 5 };
+static const uint8_t eac3_audio_block_table  [4] = { 1, 2, 3, 6 };
 
-int ac3_parse_syncframe_header( ac3_info_t *info );
-int eac3_parse_syncframe( eac3_info_t *info );
-void eac3_update_specific_param( eac3_info_t *info );
+static inline uint32_t ac3_get_channel_count
+(
+    lsmash_ac3_specific_parameters_t *dac3_param
+)
+{
+    return ac3_channel_count_table[ dac3_param->acmod ] + dac3_param->lfeon;
+}
+
+uint32_t ac3_get_sample_rate
+(
+    lsmash_ac3_specific_parameters_t *dac3_param
+);
+
+int ac3_parse_syncframe_header
+(
+    ac3_info_t *info
+);
+
+int eac3_parse_syncframe
+(
+    eac3_info_t *info
+);
+
+void eac3_update_specific_param
+(
+    eac3_info_t *info
+);
+
+void eac3_update_sample_rate
+(
+    uint32_t                          *frequency,
+    lsmash_eac3_specific_parameters_t *dec3_param,
+    uint8_t                           *fscod2
+);
+
+void eac3_update_channel_count
+(
+    uint32_t                          *channels,
+    lsmash_eac3_specific_parameters_t *dec3_param
+);
