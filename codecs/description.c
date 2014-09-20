@@ -1955,6 +1955,58 @@ static int isom_set_isom_template_audio_description( isom_audio_entry_t *audio, 
     return 0;
 }
 
+static void isom_set_samplerate_division_of_media_timescale( isom_audio_entry_t *audio )
+{
+    if( audio->parent                           /* stsd */
+     && audio->parent->parent                   /* stbl */
+     && audio->parent->parent->parent           /* minf */
+     && audio->parent->parent->parent->parent   /* mdia */
+     && lsmash_check_box_type_identical( audio->parent->parent->parent->parent->type, ISOM_BOX_TYPE_MDIA )
+     && ((isom_mdia_t *)audio->parent->parent->parent->parent)->mdhd )
+    {
+        /* Make an effort to match the timescale with samplerate, or be an integer multiple of it. */
+        uint32_t orig_timescale = ((isom_mdia_t *)audio->parent->parent->parent->parent)->mdhd->timescale;
+        uint32_t timescale      = orig_timescale;
+        uint32_t i              = 2;
+        while( timescale > UINT16_MAX && timescale > 1 && i <= UINT32_MAX )
+        {
+            if( timescale % i == 0 )
+                timescale /= i;
+            else
+                i += i > 2 ? 2 : 1;
+        }
+        if( timescale != orig_timescale )
+            lsmash_log( NULL, LSMASH_LOG_WARNING, "samplerate does not match the media timescale.\n" );
+        if( timescale <= UINT16_MAX && timescale > 1 )
+        {
+            audio->samplerate = timescale << 16;
+            return;
+        }
+    }
+    audio->samplerate = 0;
+}
+
+static int isom_set_isom_amr_audio_description( isom_audio_entry_t *audio, int wb )
+{
+    /* For AMR-NB and AMR-WB stream, these fields are not meaningful. */
+    audio->version        = 0;  /* always 0 */
+    audio->revision_level = 0;  /* always 0 */
+    audio->vendor         = 0;  /* always 0 */
+    audio->channelcount   = 2;  /* always 2 although the actual number of channels is always 1 */
+    audio->samplesize     = 16; /* always 16 */
+    audio->compression_ID = 0;  /* always 0 */
+    audio->packet_size    = 0;  /* always 0 */
+    /* Set samplerate by trying to copy from Media Header Box of this media though the
+     * actual samplerate is 8000 Hz for AMR-NB and 16000 Hz for AMR-WB.
+     * 3GPP and 3GPP2 has no restriction for media timescale. Therefore, users should
+     * set suitable media timescale by themselves within the bounds of common sense. */
+    isom_set_samplerate_division_of_media_timescale( audio );
+    if( audio->samplerate == 0 )
+        /* Set hard-coded but correct samplerate in the CODEC level. */
+        audio->samplerate = wb ? 8000 : 16000;
+    return 0;
+}
+
 int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_type, lsmash_audio_summary_t *summary )
 {
     if( !stsd || !stsd->file || !summary )
@@ -1986,6 +2038,10 @@ int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_
         ret = isom_set_isom_dts_description( audio, summary );
     else if( file->qt_compatible )
         ret = isom_set_qtff_template_audio_description( audio, summary );
+    else if( lsmash_check_codec_type_identical( audio_type, ISOM_CODEC_TYPE_SAMR_AUDIO ) )
+        ret = isom_set_isom_amr_audio_description( audio, 0 );
+    else if( lsmash_check_codec_type_identical( audio_type, ISOM_CODEC_TYPE_SAWB_AUDIO ) )
+        ret = isom_set_isom_amr_audio_description( audio, 1 );
     else
         ret = isom_set_isom_template_audio_description( audio, summary );
     if( ret )
@@ -2517,6 +2573,16 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
                 default :
                     break;
             }
+    }
+    else if( lsmash_check_codec_type_identical( audio->type, ISOM_CODEC_TYPE_SAMR_AUDIO ) )
+    {
+        summary->channels  = 1;
+        summary->frequency = 8000;
+    }
+    else if( lsmash_check_codec_type_identical( audio->type, ISOM_CODEC_TYPE_SAWB_AUDIO ) )
+    {
+        summary->channels  = 1;
+        summary->frequency = 16000;
     }
     for( lsmash_entry_t *entry = audio->extensions.head; entry; entry = entry->next )
     {
