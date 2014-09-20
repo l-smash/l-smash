@@ -1942,20 +1942,7 @@ static int isom_set_qtff_template_audio_description( isom_audio_entry_t *audio, 
     return 0;
 }
 
-static int isom_set_isom_template_audio_description( isom_audio_entry_t *audio, lsmash_audio_summary_t *summary )
-{
-    audio->version        = 0;
-    audio->revision_level = 0;
-    audio->vendor         = 0;
-    audio->channelcount   = summary->channels;
-    audio->samplesize     = 16;
-    audio->compression_ID = 0;
-    audio->packet_size    = 0;
-    audio->samplerate     = summary->frequency <= UINT16_MAX ? summary->frequency << 16 : 0;
-    return 0;
-}
-
-static void isom_set_samplerate_division_of_media_timescale( isom_audio_entry_t *audio )
+static void isom_set_samplerate_division_of_media_timescale( isom_audio_entry_t *audio, int strict )
 {
     if( audio->parent                           /* stsd */
      && audio->parent->parent                   /* stbl */
@@ -1975,7 +1962,7 @@ static void isom_set_samplerate_division_of_media_timescale( isom_audio_entry_t 
             else
                 i += i > 2 ? 2 : 1;
         }
-        if( timescale != orig_timescale )
+        if( timescale != orig_timescale && strict )
             lsmash_log( NULL, LSMASH_LOG_WARNING, "samplerate does not match the media timescale.\n" );
         if( timescale <= UINT16_MAX && timescale > 1 )
         {
@@ -1984,6 +1971,23 @@ static void isom_set_samplerate_division_of_media_timescale( isom_audio_entry_t 
         }
     }
     audio->samplerate = 0;
+}
+
+static int isom_set_isom_template_audio_description( isom_audio_entry_t *audio, lsmash_audio_summary_t *summary )
+{
+    audio->version        = 0;  /* reserved */
+    audio->revision_level = 0;  /* reserved */
+    audio->vendor         = 0;  /* reserved */
+    audio->channelcount   = 2;  /* template */
+    audio->samplesize     = 16; /* template */
+    audio->compression_ID = 0;  /* pre_defined */
+    audio->packet_size    = 0;  /* reserved */
+    /* template : default output audio sampling rate at playback */
+    if( summary->frequency <= UINT16_MAX )
+        audio->samplerate = summary->frequency << 16;
+    else
+        isom_set_samplerate_division_of_media_timescale( audio, 0 );
+    return 0;
 }
 
 static int isom_set_isom_amr_audio_description( isom_audio_entry_t *audio, int wb )
@@ -2000,7 +2004,7 @@ static int isom_set_isom_amr_audio_description( isom_audio_entry_t *audio, int w
      * actual samplerate is 8000 Hz for AMR-NB and 16000 Hz for AMR-WB.
      * 3GPP and 3GPP2 has no restriction for media timescale. Therefore, users should
      * set suitable media timescale by themselves within the bounds of common sense. */
-    isom_set_samplerate_division_of_media_timescale( audio );
+    isom_set_samplerate_division_of_media_timescale( audio, 1 );
     if( audio->samplerate == 0 )
         /* Set hard-coded but correct samplerate in the CODEC level. */
         audio->samplerate = wb ? 8000 : 16000;
