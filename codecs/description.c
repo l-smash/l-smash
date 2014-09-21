@@ -2592,6 +2592,7 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
         summary->channels  = 1;
         summary->frequency = 16000;
     }
+    uint32_t actual_sampling_rate = 0;
     for( lsmash_entry_t *entry = audio->extensions.head; entry; entry = entry->next )
     {
         isom_box_t *box = (isom_box_t *)entry->data;
@@ -2625,9 +2626,8 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
             }
             else if( lsmash_check_box_type_identical( box->type, ISOM_BOX_TYPE_SRAT ) )
             {
-                /* Set the actual sampling rate. */
                 isom_srat_t *srat = (isom_srat_t *)box;
-                summary->frequency = srat->sampling_rate;
+                actual_sampling_rate = srat->sampling_rate;
             }
             else if( lsmash_check_box_type_identical( box->type, QT_BOX_TYPE_WAVE ) )
             {
@@ -2800,6 +2800,9 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
             }
         }
     }
+    /* Set the actual sampling rate. */
+    if( actual_sampling_rate )
+        summary->frequency = actual_sampling_rate;
     return (lsmash_summary_t *)summary;
 fail:
     lsmash_cleanup_summary( (lsmash_summary_t *)summary );
