@@ -1107,28 +1107,28 @@ static int amr_check_magic_number
     lsmash_bs_t *bs
 )
 {
-#define MP4SYS_AMR_STORAGE_MAGIC_LENGTH 6
-#define MP4SYS_AMRWB_EX_MAGIC_LENGTH    3
+#define AMR_STORAGE_MAGIC_LENGTH  6
+#define AMR_AMRWB_EX_MAGIC_LENGTH 3
     /* Check the magic number for single-channel AMR-NB/AMR-WB files.
      *   For AMR-NB, "#!AMR\n" (or 0x2321414d520a in hexadecimal).
      *   For AMR-WB, "#!AMR-WB\n" (or 0x2321414d522d57420a in hexadecimal).
      * Note that AMR-NB and AMR-WB data is stored in the 3GPP/3GPP2 file format according to
      * the AMR-NB and AMR-WB storage format for single channel header without the AMR magic numbers. */
-    uint8_t buf[MP4SYS_AMR_STORAGE_MAGIC_LENGTH];
-    if( lsmash_bs_get_bytes_ex( bs, MP4SYS_AMR_STORAGE_MAGIC_LENGTH, buf ) != MP4SYS_AMR_STORAGE_MAGIC_LENGTH
-     || memcmp( buf, "#!AMR", MP4SYS_AMR_STORAGE_MAGIC_LENGTH - 1 ) )
+    uint8_t buf[AMR_STORAGE_MAGIC_LENGTH];
+    if( lsmash_bs_get_bytes_ex( bs, AMR_STORAGE_MAGIC_LENGTH, buf ) != AMR_STORAGE_MAGIC_LENGTH
+     || memcmp( buf, "#!AMR", AMR_STORAGE_MAGIC_LENGTH - 1 ) )
         return -1;
-    if( buf[MP4SYS_AMR_STORAGE_MAGIC_LENGTH - 1] == '\n' )
+    if( buf[AMR_STORAGE_MAGIC_LENGTH - 1] == '\n' )
         /* single-channel AMR-NB file */
         return 0;
-    if( buf[MP4SYS_AMR_STORAGE_MAGIC_LENGTH - 1] != '-'
-     || lsmash_bs_get_bytes_ex( bs, MP4SYS_AMRWB_EX_MAGIC_LENGTH, buf ) != MP4SYS_AMRWB_EX_MAGIC_LENGTH
-     || memcmp( buf, "WB\n", MP4SYS_AMRWB_EX_MAGIC_LENGTH ) )
+    if( buf[AMR_STORAGE_MAGIC_LENGTH - 1] != '-'
+     || lsmash_bs_get_bytes_ex( bs, AMR_AMRWB_EX_MAGIC_LENGTH, buf ) != AMR_AMRWB_EX_MAGIC_LENGTH
+     || memcmp( buf, "WB\n", AMR_AMRWB_EX_MAGIC_LENGTH ) )
         return -1;
     /* single-channel AMR-WB file */
     return 1;
-#undef MP4SYS_AMR_STORAGE_MAGIC_LENGTH
-#undef MP4SYS_AMRWB_EX_MAGIC_LENGTH
+#undef AMR_STORAGE_MAGIC_LENGTH
+#undef AMR_AMRWB_EX_MAGIC_LENGTH
 }
 
 static int amr_create_damr
@@ -1137,11 +1137,11 @@ static int amr_create_damr
     int                     wb
 )
 {
-#define MP4SYS_DAMR_LENGTH 17
+#define AMR_DAMR_LENGTH 17
     lsmash_bs_t *bs = lsmash_bs_create();
     if( !bs )
         return -1;
-    lsmash_bs_put_be32( bs, MP4SYS_DAMR_LENGTH );
+    lsmash_bs_put_be32( bs, AMR_DAMR_LENGTH );
     lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_DAMR.fourcc );
     /* NOTE: These are specific to each codec vendor, but we're surely not a vendor.
      *       Using dummy data. */
@@ -1161,7 +1161,7 @@ static int amr_create_damr
     cs->format            = LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED;
     cs->destruct          = (lsmash_codec_specific_destructor_t)lsmash_free;
     cs->data.unstructured = lsmash_bs_export_data( bs, &cs->size );
-    cs->size              = MP4SYS_DAMR_LENGTH;
+    cs->size              = AMR_DAMR_LENGTH;
     lsmash_bs_cleanup( bs );
     if( !cs->data.unstructured
      || lsmash_add_entry( &summary->opaque->list, cs ) < 0 )
@@ -1170,7 +1170,7 @@ static int amr_create_damr
         return -1;
     }
     return 0;
-#undef MP4SYS_DAMR_LENGTH
+#undef AMR_DAMR_LENGTH
 }
 
 static lsmash_audio_summary_t *amr_create_summary
