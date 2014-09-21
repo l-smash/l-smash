@@ -1042,10 +1042,10 @@ lsmash_codec_support_flag lsmash_check_codec_support
 
 /****************************************************************************
  * Audio Description Layer
- *   NOTE: Currently assuming AAC-LC.
  ****************************************************************************/
 /* Audio Object Types */
-typedef enum {
+typedef enum
+{
     MP4A_AUDIO_OBJECT_TYPE_NULL                           = 0,
     MP4A_AUDIO_OBJECT_TYPE_AAC_MAIN                       = 1,  /* ISO/IEC 14496-3 subpart 4 */
     MP4A_AUDIO_OBJECT_TYPE_AAC_LC                         = 2,  /* ISO/IEC 14496-3 subpart 4 */
@@ -1089,7 +1089,8 @@ typedef enum {
 } lsmash_mp4a_AudioObjectType;
 
 /* See ISO/IEC 14496-3 Signaling of SBR, SBR Signaling and Corresponding Decoder Behavior */
-typedef enum {
+typedef enum
+{
     MP4A_AAC_SBR_NOT_SPECIFIED = 0x0,   /* not mention to SBR presence. Implicit signaling. */
     MP4A_AAC_SBR_NONE,                  /* explicitly signals SBR does not present. Useless in general. */
     MP4A_AAC_SBR_BACKWARD_COMPATIBLE,   /* explicitly signals SBR present. Recommended method to signal SBR. */
@@ -1099,21 +1100,26 @@ typedef enum {
 typedef struct
 {
     LSMASH_BASE_SUMMARY
-    // mp4a_audioProfileLevelIndication pli;   /* I wonder we should have this or not. */
-    lsmash_mp4a_AudioObjectType aot;        /* Detailed codec type. If not mp4a, just ignored. */
-    uint32_t frequency;                     /* the audio sampling rate (Hz)
-                                             * For some audio, this field is used as a nominal value.
-                                             * For instance, even if the stream is HE-AAC v1/SBR, this is base AAC's one. */
-    uint32_t channels;                      /* the number of audio channels
-                                             * Even if the stream is HE-AAC v2/SBR+PS, this is base AAC's one. */
-    uint32_t sample_size;                   /* For uncompressed audio, the number of bits in each uncompressed sample for a single channel
-                                             * For some compressed audio, such as audio that uses MDCT, this field shall be nonsense and then set to 16. */
-    uint32_t samples_in_frame;              /* the number of decoded PCM samples in an audio frame at 'frequency'.
-                                             * Even if the stream is HE-AAC/aacPlus/SBR(+PS), this is base AAC's one, so 1024. */
-    lsmash_mp4a_aac_sbr_mode sbr_mode;      /* SBR treatment. Currently we always set this as mp4a_AAC_SBR_NOT_SPECIFIED(Implicit signaling).
-                                             * User can set this for treatment in other way. */
-    uint32_t bytes_per_frame;               /* If constant, this value is set to the number of bytes per audio frame.
-                                             * Otherwise set to 0. */
+    lsmash_mp4a_AudioObjectType aot;    /* detailed codec type
+                                         *   If neither ISOM_CODEC_TYPE_MP4A_AUDIO nor QT_CODEC_TYPE_MP4A_AUDIO, just ignored. */
+    uint32_t frequency;                 /* the audio sampling rate (in Hz) at the default output playback
+                                         *   For some audio, this field is used as a nominal value.
+                                         *   For HE-AAC v1/SBR stream, this is base AAC's one.
+                                         *   For ISOM_CODEC_TYPE_AC_3_AUDIO and ISOM_CODEC_TYPE_EC_3_AUDIO, this shall be
+                                         *   equal to the sampling rate (in Hz) of the stream and the media timescale. */
+    uint32_t channels;                  /* the number of audio channels at the default output playback
+                                         *   Even if the stream is HE-AAC v2/SBR+PS, this is base AAC's one. */
+    uint32_t sample_size;               /* For uncompressed audio,
+                                         *   the number of bits in each uncompressed sample for a single channel.
+                                         * For some compressed audio, such as audio that uses MDCT,
+                                         *   N/A (not applicable), and may be set to 16. */
+    uint32_t samples_in_frame;          /* the number of decoded PCM samples in an audio frame at 'frequency'
+                                         *   Even if the stream is HE-AAC/aacPlus/SBR(+PS), this is base AAC's one, so 1024. */
+    lsmash_mp4a_aac_sbr_mode sbr_mode;  /* SBR treatment
+                                         *   Currently we always set this as mp4a_AAC_SBR_NOT_SPECIFIED (Implicit signaling).
+                                         *   User can set this for treatment in other way. */
+    uint32_t bytes_per_frame;           /* the number of bytes per audio frame
+                                         *   If variable, shall be set to 0. */
 } lsmash_audio_summary_t;
 
 /* Facilitate to make exdata (typically DecoderSpecificInfo or AudioSpecificConfig). */
@@ -1292,7 +1298,6 @@ enum
 typedef struct
 {
     LSMASH_BASE_SUMMARY
-    // mp4sys_visualProfileLevelIndication pli;    /* I wonder we should have this or not. */
     // lsmash_mp4v_VideoObjectType vot;            /* Detailed codec type. If not mp4v, just ignored. */
     uint32_t           timescale;           /* media timescale
                                              * User can't set this parameter manually. */
@@ -2504,7 +2509,12 @@ void lsmash_sort_timestamps_composition_order
 /****************************************************************************
  * Tools for creating CODEC Specific Information Extensions (Magic Cookies)
  ****************************************************************************/
-/** MPEG-4 stream tools **/
+/* MPEG-4 Systems Specific Information
+ *   Mandatory :
+ *     ISOM_CODEC_TYPE_MP4A_AUDIO
+ *       QT_CODEC_TYPE_MP4A_AUDIO
+ *     ISOM_CODEC_TYPE_MP4V_AUDIO
+ *     ISOM_CODEC_TYPE_MP4S_AUDIO */
 /* objectTypeIndication */
 typedef enum
 {
@@ -2596,9 +2606,9 @@ typedef enum
     MP4SYS_STREAM_TYPE_StreamingText           = 0x0D,  /* StreamingText */
 } lsmash_mp4sys_stream_type;
 
-/* Decoder Specific Information
- * an opaque container with information for a specific media decoder
- * The existence and semantics of decoder specific information depends on the values of streamType and objectTypeIndication. */
+/* MPEG-4 Systems Decoder Specific Information
+ *   an opaque container with information for a specific media decoder
+ *   The existence and semantics of decoder specific information depends on the values of streamType and objectTypeIndication. */
 typedef struct lsmash_mp4sys_decoder_specific_info_tag lsmash_mp4sys_decoder_specific_info_t;
 
 /* Note: bufferSizeDB, maxBitrate and avgBitrate are calculated internally when calling lsmash_finish_movie().
@@ -2648,7 +2658,13 @@ int lsmash_get_mp4sys_decoder_specific_info
     uint32_t                           *payload_length
 );
 
-/* AC-3 tools to make exdata (AC-3 specific info). */
+/* AC-3 Specific Information
+ *   Mandatory :
+ *     ISOM_CODEC_TYPE_AC_3_AUDIO
+ *
+ * Unlike MPEG-4 Audio formats, the decoder does not require this for the initialization.
+ * Each AC-3 sample is self-contained.
+ * Users shall set the actual sample rate to 'frequency', which is a member of lsmash_audio_summary_t. */
 typedef struct
 {
     uint8_t fscod;          /* the same value as the fscod field in the AC-3 bitstream */
@@ -2672,7 +2688,14 @@ uint8_t *lsmash_create_ac3_specific_info
     uint32_t                         *data_length
 );
 
-/* Enhanced AC-3 tools to make exdata (Enhanced AC-3 specific info). */
+/* Enhanced AC-3 Specific Information
+ *   Mandatory :
+ *     ISOM_CODEC_TYPE_EC_3_AUDIO
+ *
+ * Unlike MPEG-4 Audio formats, the decoder does not require this for the initialization.
+ * Each Enhanced AC-3 sample is self-contained.
+ * Note that this cannot document reduced sample rates (24000, 22050 or 16000 Hz).
+ * Therefore, users shall set the actual sample rate to 'frequency', which is a member of lsmash_audio_summary_t. */
 typedef struct
 {
     uint8_t  fscod;         /* the same value as the fscod field in the independent substream */
@@ -2715,7 +2738,15 @@ uint8_t *lsmash_create_eac3_specific_info
     uint32_t                          *data_length
 );
 
-/* DTS audio tools to make exdata (DTS specific info). */
+/* DTS Audio Specific Information
+ *   Mandatory :
+ *     ISOM_CODEC_TYPE_DTSC_AUDIO
+ *     ISOM_CODEC_TYPE_DTSH_AUDIO
+ *     ISOM_CODEC_TYPE_DTSL_AUDIO
+ *     ISOM_CODEC_TYPE_DTSE_AUDIO
+ *
+ * Unlike MPEG-4 Audio formats, the decoder does not require this for the initialization.
+ * Each DTS Audio sample is self-contained. */
 typedef enum
 {
     DTS_CORE_SUBSTREAM_CORE_FLAG = 0x00000001,
@@ -2817,7 +2848,10 @@ void lsmash_remove_dts_reserved_box
     lsmash_dts_specific_parameters_t *param
 );
 
-/* Apple Lossless Audio tools */
+/* Apple Lossless Audio Specific Information
+ *   Mandatory :
+ *     ISOM_CODEC_TYPE_ALAC_AUDIO
+ *       QT_CODEC_TYPE_ALAC_AUDIO */
 typedef struct
 {
     uint32_t frameLength;       /* the frames per packet when no explicit frames per packet setting is present in the packet header
@@ -2840,10 +2874,18 @@ uint8_t *lsmash_create_alac_specific_info
     uint32_t                          *data_length
 );
 
-/* MPEG-4 Bitrate information.
- *   Though you need not to set these fields manually since lsmash_finish_movie() calls the function
- *   that calculates these values internally, these fields are optional.
- *   Therefore, if you want to add this info, append this as an extension via LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264_BITRATE at least. */
+/* MPEG-4 Bitrate Information.
+ *   Optional :
+ *     ISOM_CODEC_TYPE_AVC1_VIDEO
+ *     ISOM_CODEC_TYPE_AVC2_VIDEO
+ *     ISOM_CODEC_TYPE_AVC3_VIDEO
+ *     ISOM_CODEC_TYPE_AVC4_VIDEO
+ *     ISOM_CODEC_TYPE_HVC1_VIDEO
+ *     ISOM_CODEC_TYPE_HEV1_VIDEO
+ *
+ * Though you need not to set these fields manually since lsmash_finish_movie() calls the function
+ * that calculates these values internally, these fields are optional.
+ * Therefore, if you want to add this info, append this as an extension via LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264_BITRATE at least. */
 typedef struct
 {
     uint32_t bufferSizeDB;  /* the size of the decoding buffer for the elementary stream in bytes */
@@ -2861,9 +2903,15 @@ typedef enum
     DCR_NALU_APPEND_POSSIBLE                  = 1,  /* It is possible to append the NAL unit into the Decoder Configuration Record. */
 } lsmash_dcr_nalu_appendable;
 
-/* H.264 tools to make exdata (AVC specific info).
- *   All members in lsmash_h264_specific_parameters_t except for lengthSizeMinusOne shall be automatically set up
- *   when appending SPS NAL units by calling lsmash_append_h264_parameter_set(). */
+/* H.264/AVC Specific Information
+ *   Mandatory :
+ *     ISOM_CODEC_TYPE_AVC1_VIDEO
+ *     ISOM_CODEC_TYPE_AVC2_VIDEO
+ *     ISOM_CODEC_TYPE_AVC3_VIDEO
+ *     ISOM_CODEC_TYPE_AVC4_VIDEO
+ *
+ * All members in lsmash_h264_specific_parameters_t except for lengthSizeMinusOne shall be automatically set up
+ * when appending SPS NAL units by calling lsmash_append_h264_parameter_set(). */
 typedef enum
 {
     H264_PARAMETER_SET_TYPE_SPS    = 0,     /* SPS (Sequence Parameter Set) */
@@ -2938,11 +2986,15 @@ uint8_t *lsmash_create_h264_specific_info
     uint32_t                          *data_length
 );
 
-/* HEVC tools to make exdata (HEVC specific info).
- *   All members in lsmash_hevc_specific_parameters_t except for avgFrameRate and lengthSizeMinusOne shall be
- *   automatically set up when appending VPS and SPS NAL units by calling lsmash_append_hevc_dcr_nalu().
- *   It is recommended that you should append VPS, SPS and PPS in this order so that a parameter set can reference
- *   another parameter set. */
+/* H.265/HEVC Specific Information
+ *   Mandatory :
+ *     ISOM_CODEC_TYPE_HVC1_VIDEO
+ *     ISOM_CODEC_TYPE_HEV1_VIDEO
+ *
+ * All members in lsmash_hevc_specific_parameters_t except for avgFrameRate and lengthSizeMinusOne shall be
+ * automatically set up when appending VPS and SPS NAL units by calling lsmash_append_hevc_dcr_nalu().
+ * It is recommended that you should append VPS, SPS and PPS in this order so that a parameter set can reference
+ * another parameter set. */
 typedef enum
 {
     /* Parameter sets
@@ -3086,7 +3138,11 @@ uint8_t *lsmash_create_hevc_specific_info
     uint32_t                          *data_length
 );
 
-/* VC-1 tools to make exdata (VC-1 specific info). */
+/* VC-1 Specific Information
+ *   Mandatory :
+ *     ISOM_CODEC_TYPE_VC_1_VIDEO
+ *
+ * We support only advanced profile at present. */
 typedef struct lsmash_vc1_header_tag lsmash_vc1_header_t;
 
 typedef struct
