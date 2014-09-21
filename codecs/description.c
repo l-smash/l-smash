@@ -2167,8 +2167,11 @@ int isom_setup_tx3g_description( isom_stsd_t *stsd )
     isom_tx3g_entry_t *tx3g = isom_add_tx3g_description( stsd );
     if( !tx3g )
         return -1;
+    /* We create a dummy font record to make valid font_ID in the sample description.
+     * The specification (3GPP TS 26.245) does not forbid the value 0 for the identifier,
+     * but we set 1 to it as track_ID begins from 1. */
     tx3g->data_reference_index = 1;
-    tx3g->font_ID              = 0;
+    tx3g->font_ID              = 1; /* ID of the default font record */
     isom_ftab_t *ftab = isom_add_ftab( tx3g );
     if( !ftab )
         goto fail;
@@ -2181,7 +2184,7 @@ int isom_setup_tx3g_description( isom_stsd_t *stsd )
         goto fail;
     }
     const char font_names[] = "Serif,Sans-serif,Monospace";
-    font->font_ID          = 0;
+    font->font_ID          = 1;
     font->font_name_length = sizeof(font_names);
     font->font_name        = lsmash_memdup( font_names, sizeof(font_names) );
     if( !font->font_name )
