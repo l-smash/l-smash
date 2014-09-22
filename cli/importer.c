@@ -60,7 +60,6 @@ typedef struct importer_tag
 {
     const lsmash_class_t   *class;
     lsmash_log_level        log_level;
-    lsmash_stream_buffers_t sb;
     FILE                   *stream;    /* will be deprecated */
     int                     is_stdin;
     void                   *info;      /* importer internal status information. */
