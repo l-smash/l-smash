@@ -1,0 +1,11 @@
+language: c
+compiler: gcc
+script:
+ - "./configure --disable-static --prefix=$PWD/tmp"
+ - "make && make install"
+ - "make distclean && ./configure --prefix=$PWD/tmp"
+ - "make lib && make install-lib"
+ - "LD_LIBRARY_PATH=$PWD/tmp/lib $PWD/tmp/bin/boxdumper --help"
+ - "LD_LIBRARY_PATH=$PWD/tmp/lib $PWD/tmp/bin/muxer --help"
+ - "LD_LIBRARY_PATH=$PWD/tmp/lib $PWD/tmp/bin/remuxer --help"
+ - "LD_LIBRARY_PATH=$PWD/tmp/lib $PWD/tmp/bin/timelineeditor --help"
