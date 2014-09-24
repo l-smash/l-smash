@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 #----------------------------------------------------------------------------
 #  configure script for L-SMASH
@@ -294,7 +294,8 @@ for tool in $TOOLS; do
 done
 #=============================================================================
 
-pushd $SRCDIR
+CURDIR="$PWD"
+cd $SRCDIR
 MAJVER=$(grep -e '#define LSMASH_VERSION_MAJOR' lsmash.h|sed -e 's/#define LSMASH_VERSION_MAJOR //;s/ //g')
 MINVER=$(grep -e '#define LSMASH_VERSION_MINOR' lsmash.h|sed -e 's/#define LSMASH_VERSION_MINOR //;s/ //g')
 MICVER=$(grep -e '#define LSMASH_VERSION_MICRO' lsmash.h|sed -e 's/#define LSMASH_VERSION_MICRO //;s/ //g')
@@ -306,7 +307,7 @@ else
     VER_STRING="$VER"
 fi
 HASH="$(git describe --always 2> /dev/null)"
-popd
+cd "$CURDIR"
 cat >> config.h << EOF
 #define LSMASH_REV "$REV"
 #define LSMASH_GIT_HASH "$HASH"
