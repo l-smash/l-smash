@@ -66,9 +66,10 @@ echo generating config.mak ...
 echo
 
 
-SRCDIR="$(cd $(dirname $0); pwd)"
+SRCDIR=$(dirname "$0")
+SRCDIR=$(cd "$SRCDIR"; pwd)
 test "$SRCDIR" = "$(pwd)" && SRCDIR=.
-test -n $(echo "$SRCDIR" | grep ' ') && \
+test -n "$(echo $SRCDIR | grep ' ')" && \
     error_exit "out-of-tree builds are impossible with whitespace in source path"
 
 prefix=""
