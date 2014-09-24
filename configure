@@ -165,7 +165,7 @@ for opt; do
         --extra-libs=*)
             XLIBS="$optarg"
             ;;
-        # "--disable-demuxer" is the special option only for developpers.
+        # "--disable-demuxer" is the special option only for developers.
         --disable-demuxer)
             DEMUXER=""
             ;;
