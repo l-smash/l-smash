@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 #----------------------------------------------------------------------------
 #  configure script for L-SMASH
@@ -68,7 +68,7 @@ echo
 
 SRCDIR="$(cd $(dirname $0); pwd)"
 test "$SRCDIR" = "$(pwd)" && SRCDIR=.
-test -n "$(echo $SRCDIR | grep ' ')" && \
+test -n $(echo "$SRCDIR" | grep ' ') && \
     error_exit "out-of-tree builds are impossible with whitespace in source path"
 
 prefix=""
@@ -191,6 +191,11 @@ for f in "$CC" "$AR" "$LD" "$RANLIB" "$STRIP"; do
 done
 
 
+MAJVER=$(grep -e '#define LSMASH_VERSION_MAJOR' $SRCDIR/lsmash.h | sed -e 's/#define LSMASH_VERSION_MAJOR //;s/ //g')
+MINVER=$(grep -e '#define LSMASH_VERSION_MINOR' $SRCDIR/lsmash.h | sed -e 's/#define LSMASH_VERSION_MINOR //;s/ //g')
+MICVER=$(grep -e '#define LSMASH_VERSION_MICRO' $SRCDIR/lsmash.h | sed -e 's/#define LSMASH_VERSION_MICRO //;s/ //g')
+VERSION=$MAJVER.$MINVER.$MICVER
+
 if test -n "$TARGET_OS"; then
     TARGET_OS=$(echo $TARGET_OS | tr '[A-Z]' '[a-z]')
 else
@@ -220,6 +225,9 @@ case "$TARGET_OS" in
         SHAREDLIB=""
         ;;
     *)
+        API="0"
+        SHARED_NAME="liblsmash-$VERSION"
+        SHARED_EXT=".so.$API"
         if test -n "$SHAREDLIB"; then
             CFLAGS="$CFLAGS -fPIC"
             LDFLAGS="$LDFLAGS -fPIC"
@@ -293,19 +301,16 @@ for tool in $TOOLS; do
 done
 #=============================================================================
 
-pushd $SRCDIR
-MAJVER=$(grep -e '#define LSMASH_VERSION_MAJOR' lsmash.h|sed -e 's/#define LSMASH_VERSION_MAJOR //;s/ //g')
-MINVER=$(grep -e '#define LSMASH_VERSION_MINOR' lsmash.h|sed -e 's/#define LSMASH_VERSION_MINOR //;s/ //g')
-MICVER=$(grep -e '#define LSMASH_VERSION_MICRO' lsmash.h|sed -e 's/#define LSMASH_VERSION_MICRO //;s/ //g')
-VER=$MAJVER.$MINVER.$MICVER
+CURDIR="$PWD"
+cd $SRCDIR
 REV="$(git rev-list HEAD 2> /dev/null | wc -l)"
 if test $REV -ne 0; then
-    VER_STRING="$VER rev.$REV"
+    VER_STRING="$VERSION rev.$REV"
 else
-    VER_STRING="$VER"
+    VER_STRING="$VERSION"
 fi
 HASH="$(git describe --always 2> /dev/null)"
-popd
+cd "$CURDIR"
 cat >> config.h << EOF
 #define LSMASH_REV "$REV"
 #define LSMASH_GIT_HASH "$HASH"
@@ -360,6 +365,8 @@ SRCS = $SRCS
 SRC_TOOLS = $SRC_TOOLS
 TOOLS_ALL = $TOOLS_ALL
 TOOLS = $TOOLS_NAME
+VERSION = $VERSION
+API = $API
 EOF
 
 
@@ -373,7 +380,7 @@ EOF
 done
 
 
-test "$SRCDIR" = "." || ln -sf ${SRCDIR}/Makefile .
+test $SRCDIR = "." || ln -sf ${SRCDIR}/Makefile .
 mkdir -p cli codecs common core
 
 

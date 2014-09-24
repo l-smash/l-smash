@@ -28,6 +28,9 @@ $(STATICLIBNAME): $(OBJS)
 $(SHAREDLIBNAME): $(OBJS)
 	$(LD) $(SO_LDFLAGS) $(LDFLAGS) -o $@ $^ $(LIBS)
 	-@ $(if $(STRIP), $(STRIP) -x $@)
+ifeq ($(SHAREDLIBNAME), liblsmash-$(VERSION).so.$(API))
+	ln -s $(SHAREDLIBNAME) liblsmash.so
+endif
 
 # $(TOOLS) is automatically generated as config.mak2 by configure.
 # The reason for having config.mak2 is for making this Makefile easy to read.
@@ -55,17 +58,20 @@ ifneq ($(IMPLIB),)
 	install -m 755 $(SHAREDLIB) $(DESTDIR)$(bindir)
 else
 	install -m 644 $(SHAREDLIB) $(DESTDIR)$(libdir)
+ifeq ($(SHAREDLIB), liblsmash-$(VERSION).so.$(API))
+	ln -s $(SHAREDLIB) $(DESTDIR)$(libdir)/liblsmash.so
+endif
 endif
 endif
 
 #All objects should be deleted regardless of configure when uninstall/clean/distclean.
 uninstall:
 	$(RM) $(DESTDIR)$(includedir)/lsmash.h
-	$(RM) $(addprefix $(DESTDIR)$(libdir)/, liblsmash.a liblsmash.dll.a liblsmash.so liblsmash.dylib pkgconfig/liblsmash.pc)
+	$(RM) $(addprefix $(DESTDIR)$(libdir)/, liblsmash.a liblsmash.dll.a liblsmash*.so* liblsmash.dylib pkgconfig/liblsmash.pc)
 	$(RM) $(addprefix $(DESTDIR)$(bindir)/, $(TOOLS_ALL) $(TOOLS_ALL:%=%.exe) liblsmash.dll cyglsmash.dll)
 
 clean:
-	$(RM) */*.o *.a *.so *.dll *.dylib $(addprefix cli/, *.exe $(TOOLS_ALL)) .depend
+	$(RM) */*.o *.a *.so* *.dll *.dylib $(addprefix cli/, *.exe $(TOOLS_ALL)) .depend
 
 distclean: clean
 	$(RM) config.* *.pc
