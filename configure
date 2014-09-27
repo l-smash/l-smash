@@ -198,6 +198,7 @@ fi
 case "$TARGET_OS" in
     *mingw*)
         EXT=".exe"
+        SHARED_NAME="liblsmash-$MAJVER"
         SHARED_EXT=".dll"
         IMPLIB="liblsmash.dll.a"
         SO_LDFLAGS="-shared -Wl,--out-implib,$IMPLIB -Wl,--version-script,liblsmash.ver"
