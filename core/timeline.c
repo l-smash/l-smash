@@ -1717,10 +1717,13 @@ int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_
         isom_elst_entry_t *dst_data = (isom_elst_entry_t *)lsmash_malloc( sizeof(isom_elst_entry_t) );
         if( !dst_data )
             return -1;
-        dst_data->segment_duration = segment_duration                          * ((double)dst_movie_timescale / src_movie_timescale) + 0.5;
-        dst_data->media_time       = (src_data->media_time + media_time_shift) * ((double)dst_media_timescale / src_media_timescale) + 0.5;
+        dst_data->segment_duration = segment_duration * ((double)dst_movie_timescale / src_movie_timescale) + 0.5;
         dst_data->media_rate       = src_data->media_rate;
-        if( lsmash_add_entry( dst_list, dst_data ) )
+        if( src_data->media_time != ISOM_EDIT_MODE_EMPTY )
+            dst_data->media_time = (src_data->media_time + media_time_shift) * ((double)dst_media_timescale / src_media_timescale) + 0.5;
+        else
+            dst_data->media_time = ISOM_EDIT_MODE_EMPTY;
+        if( lsmash_add_entry( dst_list, dst_data ) < 0 )
         {
             lsmash_free( dst_data );
             return -1;
