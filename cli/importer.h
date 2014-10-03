@@ -28,18 +28,87 @@
     importer
 ***************************************************************************/
 
-#ifndef LSMASH_IMPORTER_INTERNAL
+#ifdef LSMASH_IMPORTER_INTERNAL
+
+#include "core/box.h"
+#include "codecs/description.h"
+
+struct importer_tag;
+
+typedef void     ( *importer_cleanup )          ( struct importer_tag * );
+typedef int      ( *importer_get_accessunit )   ( struct importer_tag *, uint32_t, lsmash_sample_t * );
+typedef int      ( *importer_probe )            ( struct importer_tag * );
+typedef uint32_t ( *importer_get_last_duration )( struct importer_tag *, uint32_t );
+
+typedef struct
+{
+    lsmash_class_t             class;
+    int                        detectable;
+    importer_probe             probe;
+    importer_get_accessunit    get_accessunit;
+    importer_get_last_duration get_last_delta;
+    importer_cleanup           cleanup;
+} importer_functions;
+
+typedef struct importer_tag
+{
+    const lsmash_class_t   *class;
+    lsmash_log_level        log_level;
+    FILE                   *stream;    /* will be deprecated */
+    int                     is_stdin;
+    void                   *info;      /* importer internal status information. */
+    importer_functions      funcs;
+    lsmash_entry_list_t    *summaries;
+} importer_t;
+
+typedef enum
+{
+    IMPORTER_ERROR  = -1,
+    IMPORTER_OK     = 0,
+    IMPORTER_CHANGE = 1,
+    IMPORTER_EOF    = 2,
+} importer_status;
+
+#else
 
 typedef void importer_t;
 
 /* importing functions */
-importer_t *lsmash_importer_open( const char *identifier, const char *format );
-void lsmash_importer_close( importer_t *importer );
-int lsmash_importer_get_access_unit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample );
-uint32_t lsmash_importer_get_last_delta( importer_t *importer, uint32_t track_number );
-uint32_t lsmash_importer_get_track_count( importer_t *importer );
-lsmash_summary_t *lsmash_duplicate_summary( importer_t *importer, uint32_t track_number );
+importer_t *lsmash_importer_open
+(
+    const char *identifier,
+    const char *format
+);
 
-#endif /* #ifndef LSMASH_IMPORTER_INTERNAL */
+void lsmash_importer_close
+(
+    importer_t *importer
+);
+
+int lsmash_importer_get_access_unit
+(
+    importer_t      *importer,
+    uint32_t         track_number,
+    lsmash_sample_t *buffered_sample
+);
+
+uint32_t lsmash_importer_get_last_delta
+(
+    importer_t *importer,
+    uint32_t    track_number
+);
+
+uint32_t lsmash_importer_get_track_count
+(
+    importer_t *importer
+);
+
+lsmash_summary_t *lsmash_duplicate_summary
+(
+    importer_t *importer,
+    uint32_t    track_number
+);
+
+#endif /* #ifdef LSMASH_IMPORTER_INTERNAL */
 
 #endif /* #ifndef LSMASH_IMPORTER_H */
