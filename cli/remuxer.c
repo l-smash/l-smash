@@ -388,10 +388,9 @@ static int get_movie( input_t *input, char *input_name )
         return ERROR_MSG( "failed to get movie parameters.\n" );
     uint32_t num_tracks = in_movie->num_tracks = in_movie->param.number_of_tracks;
     /* Create tracks. */
-    input_track_t *in_track = in_movie->track = lsmash_malloc( num_tracks * sizeof(input_track_t) );
+    input_track_t *in_track = in_movie->track = lsmash_malloc_zero( num_tracks * sizeof(input_track_t) );
     if( !in_track )
         return ERROR_MSG( "failed to alloc input tracks.\n" );
-    memset( in_track, 0, num_tracks * sizeof(input_track_t) );
     for( uint32_t i = 0; i < num_tracks; i++ )
     {
         in_track[i].track_ID = lsmash_get_track_ID( input->root, i + 1 );
@@ -428,10 +427,9 @@ static int get_movie( input_t *input, char *input_name )
             WARNING_MSG( "failed to find valid summaries.\n" );
             continue;
         }
-        in_track[i].summaries = lsmash_malloc( in_track[i].num_summaries * sizeof(input_summary_t) );
+        in_track[i].summaries = lsmash_malloc_zero( in_track[i].num_summaries * sizeof(input_summary_t) );
         if( !in_track[i].summaries )
             return ERROR_MSG( "failed to alloc input summaries.\n" );
-        memset( in_track[i].summaries, 0, in_track[i].num_summaries * sizeof(input_summary_t) );
         for( uint32_t j = 0; j < in_track[i].num_summaries; j++ )
         {
             lsmash_summary_t *summary = lsmash_get_summary( input->root, in_track[i].track_ID, j + 1 );
@@ -546,10 +544,9 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
             if( get_movie( &input[input_movie_number], strtok( argv[i], "?" ) ) )
                 return ERROR_MSG( "failed to get input movie.\n" );
             uint32_t num_tracks = input[input_movie_number].file.movie.num_tracks;
-            track_option[input_movie_number] = lsmash_malloc( num_tracks * sizeof(track_media_option) );
+            track_option[input_movie_number] = lsmash_malloc_zero( num_tracks * sizeof(track_media_option) );
             if( !track_option[input_movie_number] )
                 return ERROR_MSG( "couldn't allocate memory.\n" );
-            memset( track_option[input_movie_number], 0, num_tracks * sizeof(track_media_option) );
             input_file_option[input_movie_number].whole_track_option = strtok( NULL, "" );
             input[input_movie_number].file.movie.movie_ID = input_movie_number + 1;
             ++input_movie_number;
@@ -995,10 +992,9 @@ static int prepare_output( remuxer_t *remuxer )
             if( !in_track->active )
                 continue;
             output_track_t *out_track = &out_movie->track[ out_movie->current_track_number - 1 ];
-            out_track->summary_remap = lsmash_malloc( in_track->num_summaries * sizeof(uint32_t) );
+            out_track->summary_remap = lsmash_malloc_zero( in_track->num_summaries * sizeof(uint32_t) );
             if( !out_track->summary_remap )
                 return ERROR_MSG( "failed to create summary mapping for a track.\n" );
-            memset( out_track->summary_remap, 0, in_track->num_summaries * sizeof(uint32_t) );
             out_track->track_ID = lsmash_create_track( output->root, in_track->media_param.handler_type );
             if( !out_track->track_ID )
                 return ERROR_MSG( "failed to create a track.\n" );
