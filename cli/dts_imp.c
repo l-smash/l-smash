@@ -22,6 +22,8 @@
 
 #include "common/internal.h" /* must be placed first */
 
+#include <string.h>
+
 #define LSMASH_IMPORTER_INTERNAL
 #include "importer.h"
 
