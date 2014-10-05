@@ -126,8 +126,8 @@ static fn_get_chapter_data isom_check_chap_line( char *file_name )
         char *p_buff = &buff[ !memcmp( buff, UTF8_BOM, UTF8_BOM_LENGTH ) ? UTF8_BOM_LENGTH : 0 ];   /* BOM detection */
         if( !strncmp( p_buff, "CHAPTER", 7 ) )
             fnc = isom_read_simple_chapter;
-        else if( isdigit( p_buff[0] ) && isdigit( p_buff[1] ) && p_buff[2] == ':'
-              && isdigit( p_buff[3] ) && isdigit( p_buff[4] ) && p_buff[5] == ':' )
+        else if( isdigit( (unsigned char)p_buff[0] ) && isdigit( (unsigned char)p_buff[1] ) && p_buff[2] == ':'
+              && isdigit( (unsigned char)p_buff[3] ) && isdigit( (unsigned char)p_buff[4] ) && p_buff[5] == ':' )
             fnc = isom_read_minimum_chapter;
         else
             lsmash_log( NULL, LSMASH_LOG_ERROR, "the chapter file is malformed.\n" );
