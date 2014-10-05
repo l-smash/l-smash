@@ -689,9 +689,10 @@ int isom_check_compatibility( lsmash_file_t *file )
     ptrdiff_t compat_offset = offsetof( lsmash_file_t, qt_compatible );
     memset( (int8_t *)file + compat_offset, 0, sizeof(lsmash_file_t) - compat_offset );
     file->min_isom_version = UINT8_MAX; /* undefined value */
+    /* Get the brand container. */
+    isom_ftyp_t *ftyp = file->ftyp ? file->ftyp : (isom_ftyp_t *)lsmash_get_entry_data( &file->styp_list, 1 );
     /* Check brand to decide mandatory boxes. */
-    if( (!file->ftyp || file->ftyp->brand_count == 0)
-     && (!file->styp_list.head || !file->styp_list.head->data) )
+    if( !ftyp )
     {
         /* No brand declaration means this file is a MP4 version 1 or QuickTime file format. */
         if( file->moov
@@ -707,9 +708,9 @@ int isom_check_compatibility( lsmash_file_t *file )
         }
         return 0;
     }
-    for( uint32_t i = 0; i <= file->ftyp->brand_count; i++ )
+    for( uint32_t i = 0; i <= ftyp->brand_count; i++ )
     {
-        uint32_t brand = (i == file->ftyp->brand_count ? file->ftyp->major_brand : file->ftyp->compatible_brands[i]);
+        uint32_t brand = (i == ftyp->brand_count ? ftyp->major_brand : ftyp->compatible_brands[i]);
         switch( brand )
         {
             case ISOM_BRAND_TYPE_QT :
