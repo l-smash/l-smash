@@ -4589,13 +4589,13 @@ int lsmash_set_copyright( lsmash_root_t *root, uint32_t track_ID, uint16_t ISO_l
     if( track_ID )
     {
         isom_trak_t *trak = isom_get_trak( file, track_ID );
-        if( !trak || (!trak->udta && isom_add_udta( trak )) )
+        if( !trak || (!trak->udta && !isom_add_udta( trak )) )
             return -1;
         udta = trak->udta;
     }
     else
     {
-        if( !file->moov->udta && isom_add_udta( file->moov ) )
+        if( !file->moov->udta && !isom_add_udta( file->moov ) )
             return -1;
         udta = file->moov->udta;
     }
