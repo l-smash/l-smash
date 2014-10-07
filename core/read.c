@@ -318,7 +318,7 @@ static int isom_read_sidx( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     lsmash_bs_t *bs = file->bs;
     sidx->reference_ID = lsmash_bs_get_be32( bs );
     sidx->timescale    = lsmash_bs_get_be32( bs );
-    if( sidx->version == 0 )
+    if( box->version == 0 )
     {
         sidx->earliest_presentation_time = lsmash_bs_get_be32( bs );
         sidx->first_offset               = lsmash_bs_get_be32( bs );
