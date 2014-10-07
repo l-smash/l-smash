@@ -1630,7 +1630,7 @@ static int isom_set_track_creation_time( isom_trak_t *trak, uint64_t current_mp4
     isom_tkhd_t *tkhd = trak->tkhd;
     if( tkhd->creation_time == 0 )
         tkhd->creation_time = tkhd->modification_time = current_mp4time;
-    if( isom_set_media_creation_time( trak, current_mp4time ) )
+    if( isom_set_media_creation_time( trak, current_mp4time ) < 0 )
         return -1;
     return 0;
 }
@@ -1642,8 +1642,8 @@ static int isom_set_movie_creation_time( lsmash_file_t *file )
      || !file->moov->mvhd )
         return -1;
     uint64_t current_mp4time = isom_get_current_mp4time();
-    for( uint32_t i = 1; i <= file->moov->trak_list.entry_count; i++ )
-        if( isom_set_track_creation_time( isom_get_trak( file, i ), current_mp4time ) )
+    for( lsmash_entry_t *entry = file->moov->trak_list.head; entry; entry = entry->next )
+        if( isom_set_track_creation_time( (isom_trak_t *)entry->data, current_mp4time ) < 0 )
             return -1;
     isom_mvhd_t *mvhd = file->moov->mvhd;
     if( mvhd->creation_time == 0 )
@@ -2990,8 +2990,8 @@ int isom_rearrange_boxes
 
 int isom_establish_movie( lsmash_file_t *file )
 {
-    if( isom_check_mandatory_boxes( file )
-     || isom_set_movie_creation_time( file )
+    if( isom_check_mandatory_boxes( file ) < 0
+     || isom_set_movie_creation_time( file ) < 0
      || isom_update_box_size( file->moov ) == 0 )
         return -1;
     return 0;
