@@ -2466,6 +2466,13 @@ void isom_bs_put_box_common( lsmash_bs_t *bs, void *box );
 
 int isom_check_compatibility( lsmash_file_t *file );
 
+#define isom_is_printable_char( c ) ( (c) >= 32 && (c) < 128 )
+#define isom_is_printable_4cc( fourcc ) \
+    ( isom_is_printable_char( (fourcc) >> 24 & 0xff ) && \
+      isom_is_printable_char( (fourcc) >> 16 & 0xff ) && \
+      isom_is_printable_char( (fourcc) >>  8 & 0xff ) && \
+      isom_is_printable_char( (fourcc) >>  0 & 0xff ) )
+
 #define isom_4cc2str( fourcc ) (const char [5]){ (fourcc) >> 24, (fourcc) >> 16, (fourcc) >> 8, (fourcc), 0 }
 
 isom_trak_t *isom_get_trak( lsmash_file_t *file, uint32_t track_ID );

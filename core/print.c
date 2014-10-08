@@ -173,7 +173,8 @@ static inline int isom_print_simple( FILE *fp, isom_box_t *box, int level, char 
         lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
         lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
         lsmash_ifprintf( fp, indent++, "usertype\n" );
-        lsmash_ifprintf( fp, indent, "type = %s\n", isom_4cc2str( box->type.user.fourcc ) );
+        if( isom_is_printable_4cc( box->type.user.fourcc ) )
+            lsmash_ifprintf( fp, indent, "type = %s\n", isom_4cc2str( box->type.user.fourcc ) );
         lsmash_ifprintf( fp, indent, "name = %s\n", name );
         lsmash_ifprintf( fp, indent, "uuid = 0x%08"PRIx32"-%04"PRIx16"-%04"PRIx16"-%04"PRIx16"-%04"PRIx16"0x%08"PRIx32"\n",
                          box->type.user.fourcc,
@@ -225,7 +226,8 @@ static int isom_print_unknown( FILE *fp, lsmash_file_t *file, isom_box_t *box, i
         lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
         lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
         lsmash_ifprintf( fp, indent++, "usertype\n" );
-        lsmash_ifprintf( fp, indent, "type = %s\n", isom_4cc2str( box->type.user.fourcc ) );
+        if( isom_is_printable_4cc( box->type.user.fourcc ) )
+            lsmash_ifprintf( fp, indent, "type = %s\n", isom_4cc2str( box->type.user.fourcc ) );
         lsmash_ifprintf( fp, indent, "uuid = 0x%08"PRIx32"-%04"PRIx16"-%04"PRIx16"-%04"PRIx16"-%04"PRIx16"%08"PRIx32"\n",
                          box->type.user.fourcc,
                          (box->type.user.id[0] << 8) | box->type.user.id[1], (box->type.user.id[2] << 8) | box->type.user.id[3],
