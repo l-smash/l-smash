@@ -863,7 +863,7 @@ static int set_movie_parameters( remuxer_t *remuxer )
         if( remuxer->fragment_base_track )
             out_file->param.mode |= LSMASH_FILE_MODE_INDEX;
         else
-            WARNING_MSG( "--dash requiers --fragment.\n" );
+            WARNING_MSG( "--dash requires --fragment.\n" );
     }
     replace_with_valid_brand( remuxer );
     if( remuxer->dash )
