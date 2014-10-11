@@ -330,7 +330,7 @@ int isom_finish_final_fragment_movie
             goto fail;
         file->size += total_sidx_size;
         lsmash_freep( &buf[0] );
-        /* Update moof_offset. */
+        /* Update 'moof_offset' of each entry within the Track Fragment Random Access Boxes. */
         if( file->mfra )
             for( lsmash_entry_t *entry = file->mfra->tfra_list.head; entry; entry = entry->next )
             {
@@ -346,8 +346,8 @@ int isom_finish_final_fragment_movie
                 }
             }
     }
-    /* Write the overall random access information at the tail of the movie. */
-    if( isom_write_fragment_random_access_info( file ) )
+    /* Write the overall random access information at the tail of the movie if this file is self-contained. */
+    if( isom_write_fragment_random_access_info( file ) < 0 )
         return -1;
     /* Set overall duration of the movie. */
     return isom_set_fragment_overall_duration( file );
@@ -439,7 +439,11 @@ static int isom_create_fragment_overall_default_settings( lsmash_file_t *file )
 
 static int isom_prepare_random_access_info( lsmash_file_t *file )
 {
-    if( file->bs->unseekable )
+    /* Don't write the random access info at the end of the file if unseekable or not self-contained. */
+    if( file->bs->unseekable
+     || !(file->flags & LSMASH_FILE_MODE_BOX)
+     || !(file->flags & LSMASH_FILE_MODE_INITIALIZATION)
+     ||  (file->flags & LSMASH_FILE_MODE_SEGMENT) )
         return 0;
     if( !isom_add_mfra( file )
      || !isom_add_mfro( file->mfra ) )
