@@ -1295,7 +1295,7 @@ static int do_remux( remuxer_t *remuxer )
                     if( pending_flush_fragments == 0 )
                         pending_flush_fragments = (remuxer->fragment_base_track == out_movie->current_track_number
                                                 && sample->prop.ra_flags != ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE);
-                    else if( num_consecutive_sample_skip == num_active_input_tracks )
+                    else if( num_consecutive_sample_skip == num_active_input_tracks || total_media_size == 0 )
                     {
                         if( flush_movie_fragment( remuxer ) < 0 )
                         {
