@@ -27,6 +27,7 @@
 #include <inttypes.h>
 
 #include "box.h"
+#include "file.h"
 #include "print.h"
 #include "read.h"
 #include "write.h"

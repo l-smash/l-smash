@@ -283,7 +283,7 @@ SRCS="common/alloc.c common/utils.c common/bstream.c common/list.c \
       codecs/h264.c codecs/hevc.c codecs/vc1.c codecs/alac.c \
       codecs/description.c core/isom.c core/fragment.c core/summary.c \
       core/print.c core/read.c core/timeline.c core/chapter.c core/meta.c \
-      core/write.c core/box.c"
+      core/write.c core/box.c core/file.c"
 SRC_TOOLS="cli/cli.c cli/adts_imp.c cli/mp3_imp.c cli/amr_imp.c cli/a52_imp.c \
            cli/als_imp.c cli/dts_imp.c cli/vc1_imp.c cli/nalu_imp.c \
            cli/importer.c"

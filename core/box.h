@@ -2464,8 +2464,6 @@ void isom_bs_put_basebox_common( lsmash_bs_t *bs, isom_box_t *box );
 void isom_bs_put_fullbox_common( lsmash_bs_t *bs, isom_box_t *box );
 void isom_bs_put_box_common( lsmash_bs_t *bs, void *box );
 
-int isom_check_compatibility( lsmash_file_t *file );
-
 #define isom_is_printable_char( c ) ((c) >= 32 && (c) < 128)
 #define isom_is_printable_4cc( fourcc )                \
     (isom_is_printable_char( ((fourcc) >> 24) & 0xff ) \
