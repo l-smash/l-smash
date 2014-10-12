@@ -2629,7 +2629,7 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
 
 static inline void isom_print_remove_plastic_box( isom_box_t *box )
 {
-    if( box->manager & LSMASH_ABSENT_IN_ROOT )
+    if( box->manager & LSMASH_ABSENT_IN_FILE )
         /* free flagged box */
         isom_remove_box_by_itself( box );
 }

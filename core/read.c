@@ -242,7 +242,7 @@ static int isom_read_unknown_box( lsmash_file_t *file, isom_box_t *box, isom_box
     isom_box_t *dummy = lsmash_malloc_zero( sizeof(isom_box_t) );
     if( !dummy )
         return -1;
-    box->manager |= LSMASH_ABSENT_IN_ROOT;
+    box->manager |= LSMASH_ABSENT_IN_FILE;
     isom_box_common_copy( dummy, box );
     if( isom_add_print_func( file, dummy, level ) < 0 )
     {
@@ -2072,7 +2072,7 @@ static int isom_read_free( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     if( !skip )
         return -1;
     isom_skip_box_rest( file->bs, box );
-    box->manager |= LSMASH_ABSENT_IN_ROOT;
+    box->manager |= LSMASH_ABSENT_IN_FILE;
     isom_box_common_copy( skip, box );
     if( isom_add_print_func( file, skip, level ) < 0 )
     {
@@ -2090,7 +2090,7 @@ static int isom_read_mdat( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     if( !mdat )
         return -1;
     isom_skip_box_rest( file->bs, box );
-    box->manager |= LSMASH_ABSENT_IN_ROOT;
+    box->manager |= LSMASH_ABSENT_IN_FILE;
     file->flags |= LSMASH_FILE_MODE_MEDIA;
     isom_box_common_copy( mdat, box );
     if( isom_add_print_func( file, mdat, level ) < 0 )

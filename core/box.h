@@ -61,7 +61,7 @@ typedef int (*isom_extension_writer_t)( lsmash_bs_t *bs, isom_box_t *box );
 
 /* flags for L-SMASH */
 #define LSMASH_UNKNOWN_BOX       0x001
-#define LSMASH_ABSENT_IN_ROOT    0x002
+#define LSMASH_ABSENT_IN_FILE    0x002
 #define LSMASH_QTFF_BASE         0x004
 #define LSMASH_VIDEO_DESCRIPTION 0x008
 #define LSMASH_AUDIO_DESCRIPTION 0x010
