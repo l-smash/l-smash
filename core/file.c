@@ -26,6 +26,7 @@
 
 #include "box.h"
 #include "read.h"
+#include "fragment.h"
 
 int isom_check_compatibility
 (
@@ -253,6 +254,7 @@ int isom_rearrange_data
     uint64_t              file_size
 )
 {
+    assert( remux );
     /* Copy-pastan */
     int buf_switch = 1;
     lsmash_bs_t *bs = file->bs;
@@ -268,12 +270,12 @@ int isom_rearrange_data
         if( lsmash_bs_write_data( bs, buf[buf_switch], size ) < 0 )
             return -1;
         write_pos = bs->offset;
-        if( remux && remux->func )
+        if( remux->func )
             remux->func( remux->param, write_pos, file_size ); // FIXME:
     }
     if( lsmash_bs_write_data( bs, buf[buf_switch ^ 0x1], read_num ) < 0 )
         return -1;
-    if( remux && remux->func )
+    if( remux->func )
         remux->func( remux->param, file_size, file_size ); // FIXME:
     return 0;
 }
@@ -473,6 +475,12 @@ lsmash_file_t *lsmash_set_file
     if( (file->flags & LSMASH_FILE_MODE_WRITE)
      && (file->flags & LSMASH_FILE_MODE_BOX) )
     {
+        /* Construction of Segment Index Box requires seekability at our current implementation.
+         * If segment is not so large, data rearrangement can be avoided by buffering i.e. the
+         * seekability is not essential, but at present we don't support buffering of all materials
+         * within segment. */
+        if( (file->flags & LSMASH_FILE_MODE_INDEX) && file->bs->unseekable )
+            goto fail;
         /* Establish the fragment handler if required. */
         if( file->flags & LSMASH_FILE_MODE_FRAGMENTED )
         {
@@ -505,6 +513,7 @@ lsmash_file_t *lsmash_set_file
             mvhd->matrix[4]     = 0x00010000;
             mvhd->matrix[8]     = 0x40000000;
             mvhd->next_track_ID = 1;
+            file->initializer = file;
         }
     }
     if( !root->file )
@@ -585,5 +594,42 @@ int lsmash_activate_file
     if( !root || !file || file->root != root )
         return -1;
     root->file = file;
+    return 0;
+}
+
+int lsmash_switch_media_segment
+(
+    lsmash_root_t        *root,
+    lsmash_file_t        *successor,
+    lsmash_adhoc_remux_t *remux
+)
+{
+    if( !root || !remux )
+        return -1;
+    lsmash_file_t *predecessor = root->file;
+    if( !predecessor || !successor
+     || predecessor == successor
+     || predecessor->root != successor->root
+     || !predecessor->root || !successor->root
+     || predecessor->root != root || successor->root != root
+     ||  (successor->flags & LSMASH_FILE_MODE_INITIALIZATION)
+     || !(successor->flags & LSMASH_FILE_MODE_MEDIA)
+     || !(predecessor->flags & LSMASH_FILE_MODE_WRITE)      || !(successor->flags & LSMASH_FILE_MODE_WRITE)
+     || !(predecessor->flags & LSMASH_FILE_MODE_BOX)        || !(successor->flags & LSMASH_FILE_MODE_BOX)
+     || !(predecessor->flags & LSMASH_FILE_MODE_FRAGMENTED) || !(successor->flags & LSMASH_FILE_MODE_FRAGMENTED)
+     || !(predecessor->flags & LSMASH_FILE_MODE_SEGMENT)    || !(successor->flags & LSMASH_FILE_MODE_SEGMENT)
+     || (!(predecessor->flags & LSMASH_FILE_MODE_MEDIA) && !(predecessor->flags & LSMASH_FILE_MODE_INITIALIZATION))
+     || isom_finish_final_fragment_movie( predecessor, remux ) < 0 )
+        return -1;
+    if( predecessor->flags & LSMASH_FILE_MODE_INITIALIZATION )
+    {
+        if( predecessor->initializer != predecessor )
+            return -1;
+        successor->initializer = predecessor;
+    }
+    else
+        successor->initializer = predecessor->initializer;
+    successor->fragment_count = predecessor->fragment_count;
+    root->file = successor;
     return 0;
 }

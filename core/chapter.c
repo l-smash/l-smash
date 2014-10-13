@@ -166,7 +166,7 @@ static int isom_add_chpl_entry( isom_chpl_t *chpl, isom_chapter_entry_t *chap_da
 
 int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom )
 {
-    if( !root )
+    if( isom_check_initializer_present( root ) < 0 )
         goto error_message;
     /* This function should be called after updating of the latest movie duration. */
     lsmash_file_t *file = root->file;
@@ -229,7 +229,7 @@ error_message:
 
 int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_ID, char *file_name )
 {
-    if( !root )
+    if( isom_check_initializer_present( root ) < 0 )
         goto error_message;
     lsmash_file_t *file = root->file;
     if( !file
@@ -370,32 +370,31 @@ error_message:
 
 uint32_t lsmash_count_tyrant_chapter( lsmash_root_t *root )
 {
-    if( root
-     && root->file
-     && root->file->moov
-     && root->file->moov->udta
-     && root->file->moov->udta->chpl
-     && root->file->moov->udta->chpl->list )
-        return root->file->moov->udta->chpl->list->entry_count;
+    if( isom_check_initializer_present( root ) < 0
+     && root->file->initializer->moov
+     && root->file->initializer->moov->udta
+     && root->file->initializer->moov->udta->chpl
+     && root->file->initializer->moov->udta->chpl->list )
+        return root->file->initializer->moov->udta->chpl->list->entry_count;
     return 0;
 }
 
 char *lsmash_get_tyrant_chapter( lsmash_root_t *root, uint32_t index, double *timestamp )
 {
-    if( !root
-     || !root->file
-     || !root->file->moov
-     || !root->file->moov->mvhd
-     || !root->file->moov->udta
-     || !root->file->moov->udta->chpl )
+    if( isom_check_initializer_present( root ) < 0 )
         return NULL;
-
-    isom_chpl_t *chpl = root->file->moov->udta->chpl;
+    lsmash_file_t *file = root->file->initializer;
+    if( !file->moov
+     || !file->moov->mvhd
+     || !file->moov->udta
+     || !file->moov->udta->chpl )
+        return NULL;
+    isom_chpl_t *chpl = file->moov->udta->chpl;
     lsmash_entry_t *entry = lsmash_get_entry( chpl->list, index );
     if( !entry || !entry->data )
         return NULL;
     isom_chpl_entry_t *data = (isom_chpl_entry_t *)entry->data;
-    double timescale = chpl->version ? 10000000.0 : root->file->moov->mvhd->timescale;
+    double timescale = chpl->version ? 10000000.0 : file->moov->mvhd->timescale;
     *timestamp = data->start_time / timescale;
     if( !memcmp( data->chapter_name, UTF8_BOM, UTF8_BOM_LENGTH ) )
         return data->chapter_name + UTF8_BOM_LENGTH;
@@ -405,9 +404,10 @@ char *lsmash_get_tyrant_chapter( lsmash_root_t *root, uint32_t index, double *ti
 
 int lsmash_print_chapter_list( lsmash_root_t *root )
 {
-    if( !root || !root->file || !(root->file->flags & LSMASH_FILE_MODE_READ) )
+    if( isom_check_initializer_present( root ) < 0
+     || !(root->file->initializer->flags & LSMASH_FILE_MODE_READ) )
         return -1;
-    lsmash_file_t *file = root->file;
+    lsmash_file_t *file = root->file->initializer;
     if( file->moov
      && file->moov->udta
      && file->moov->udta->chpl )

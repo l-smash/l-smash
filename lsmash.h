@@ -34,8 +34,8 @@
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  2
-#define LSMASH_VERSION_MINOR  0
-#define LSMASH_VERSION_MICRO  1
+#define LSMASH_VERSION_MINOR  1
+#define LSMASH_VERSION_MICRO  0
 
 #define LSMASH_VERSION_INT( a, b, c ) (((a) << 16) | ((b) << 8) | (c))
 
@@ -206,6 +206,14 @@ typedef struct
     uint64_t max_read_size;             /* max size of reading from the file at a time. 4*1024*1024 (4MiB) is default value. */
 } lsmash_file_parameters_t;
 
+typedef int (*lsmash_adhoc_remux_callback)( void *param, uint64_t done, uint64_t total );
+typedef struct
+{
+    uint64_t                    buffer_size;
+    lsmash_adhoc_remux_callback func;
+    void                       *param;
+} lsmash_adhoc_remux_t;
+
 /* Allocate a ROOT.
  * The allocated ROOT can be deallocate by lsmash_destroy_root().
  *
@@ -295,6 +303,24 @@ int lsmash_activate_file
 (
     lsmash_root_t *root,
     lsmash_file_t *file
+);
+
+/* Switch from the current segment file to the following media segment file.
+ * After switching, the followed segment file can be closed unless that file is an initialization segment.
+ *
+ * The first followed segment file must be also an initialization segment.
+ * The second or later segment files must not be an initialization segment.
+ * For media segment files flagging LSMASH_FILE_MODE_INDEX, 'remux' must be set.
+ *
+ * Users shall call lsmash_flush_pooled_samples() for each track before calling this function.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_switch_media_segment
+(
+    lsmash_root_t        *root,
+    lsmash_file_t        *successor,
+    lsmash_adhoc_remux_t *remux
 );
 
 /****************************************************************************
@@ -2128,13 +2154,6 @@ typedef struct
     int32_t  preview_duration;              /* the duration of the movie preview in movie timescale units */
     int32_t  poster_time;                   /* the time value of the time of the movie poster */
 } lsmash_movie_parameters_t;
-
-typedef int (*lsmash_adhoc_remux_callback)( void *param, uint64_t done, uint64_t total );
-typedef struct {
-    uint64_t                    buffer_size;
-    lsmash_adhoc_remux_callback func;
-    void                       *param;
-} lsmash_adhoc_remux_t;
 
 /* Set all the given movie parameters to default. */
 void lsmash_initialize_movie_parameters

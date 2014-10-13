@@ -26,6 +26,7 @@
 #include "box.h"
 #include "file.h"
 #include "write.h"
+#include "fragment.h"
 
 static isom_sidx_t *isom_get_sidx( lsmash_file_t *file, uint32_t reference_ID )
 {
@@ -48,13 +49,12 @@ static int isom_finish_fragment_movie( lsmash_file_t *file );
  * So you must call this function before switching sample descriptions. */
 int lsmash_create_fragment_movie( lsmash_root_t *root )
 {
-    if( !root )
+    if( isom_check_initializer_present( root ) < 0 )
         return -1;
     lsmash_file_t *file = root->file;
     if( !file
      || !file->bs
-     || !file->fragment
-     || !file->moov )
+     || !file->fragment )
         return -1;
     /* Finish and write the current movie fragment before starting a new one. */
     if( isom_finish_fragment_movie( file ) < 0 )
@@ -69,7 +69,7 @@ int lsmash_create_fragment_movie( lsmash_root_t *root )
         if( !isom_add_mfhd( moof ) )
             return -1;
         file->fragment->movie = moof;
-        moof->mfhd->sequence_number = ++ file->fragment->fragment_count;
+        moof->mfhd->sequence_number = ++ file->fragment_count;
         if( file->moof_list.entry_count == 1 )
             return 0;
         /* Remove the previous movie fragment. */
@@ -81,6 +81,7 @@ int lsmash_create_fragment_movie( lsmash_root_t *root )
 
 static int isom_set_fragment_overall_duration( lsmash_file_t *file )
 {
+    assert( file == file->initializer );
     /* Get the longest duration of the tracks. */
     uint64_t longest_duration = 0;
     for( lsmash_entry_t *entry = file->moov->trak_list.head; entry; entry = entry->next )
@@ -123,7 +124,7 @@ static int isom_set_fragment_overall_duration( lsmash_file_t *file )
     isom_mehd_t *mehd = file->moov->mvex->mehd;
     mehd->fragment_duration = longest_duration;
     mehd->version           = 1;
-    mehd->manager          &= ~LSMASH_PLACEHOLDER;
+    mehd->manager          &= ~(LSMASH_PLACEHOLDER | LSMASH_WRITTEN_BOX);   /* Update per media segment. */
     isom_update_box_size( mehd );
     /* Write Movie Extends Header Box here. */
     lsmash_bs_t *bs = file->bs;
@@ -136,6 +137,7 @@ static int isom_set_fragment_overall_duration( lsmash_file_t *file )
 
 static int isom_write_fragment_random_access_info( lsmash_file_t *file )
 {
+    assert( file == file->initializer );
     if( !file->mfra )
         return 0;
     if( !file->moov->mvex )
@@ -288,7 +290,7 @@ static int isom_write_segment_indexes
     }
     /* The buffer size must be at least total_sidx_size * 2. */
     size_t buffer_size = total_sidx_size * 2;
-    if( remux && remux->buffer_size > buffer_size )
+    if( remux->buffer_size > buffer_size )
         buffer_size = remux->buffer_size;
     /* Split to 2 buffers. */
     uint8_t *buf[2] = { NULL, NULL };
@@ -359,14 +361,16 @@ int isom_finish_final_fragment_movie
      * This is reasonable since DASH requires no samples in the initial movie.
      * This implementation is not suitable for live-streaming.
      + To support live-streaming, it is good to use daisy-chained index. */
-    if( (file->flags & LSMASH_FILE_MODE_INDEX)
-     && isom_write_segment_indexes( file, remux ) < 0 )
+    if( (file->flags & LSMASH_FILE_MODE_MEDIA)
+     && (file->flags & LSMASH_FILE_MODE_INDEX)
+     && (file->flags & LSMASH_FILE_MODE_SEGMENT)
+     && (!remux || isom_write_segment_indexes( file, remux ) < 0) )
         return -1;
     /* Write the overall random access information at the tail of the movie if this file is self-contained. */
-    if( isom_write_fragment_random_access_info( file ) < 0 )
+    if( isom_write_fragment_random_access_info( file->initializer ) < 0 )
         return -1;
     /* Set overall duration of the movie. */
-    return isom_set_fragment_overall_duration( file );
+    return isom_set_fragment_overall_duration( file->initializer );
 }
 
 #define GET_MOST_USED( box_name, index, flag_name ) \
@@ -378,6 +382,7 @@ int isom_finish_final_fragment_movie
 
 static int isom_create_fragment_overall_default_settings( lsmash_file_t *file )
 {
+    assert( file == file->initializer );
     if( !isom_add_mvex( file->moov ) )
         return -1;
     if( !file->bs->unseekable )
@@ -452,10 +457,12 @@ static int isom_create_fragment_overall_default_settings( lsmash_file_t *file )
 
 static int isom_prepare_random_access_info( lsmash_file_t *file )
 {
+    assert( file == file->initializer );
     /* Don't write the random access info at the end of the file if unseekable or not self-contained. */
     if( file->bs->unseekable
      || !(file->flags & LSMASH_FILE_MODE_BOX)
      || !(file->flags & LSMASH_FILE_MODE_INITIALIZATION)
+     || !(file->flags & LSMASH_FILE_MODE_MEDIA)
      ||  (file->flags & LSMASH_FILE_MODE_SEGMENT) )
         return 0;
     if( !isom_add_mfra( file )
@@ -487,6 +494,7 @@ static int isom_output_fragment_media_data( lsmash_file_t *file )
 
 static int isom_finish_fragment_initial_movie( lsmash_file_t *file )
 {
+    assert( file == file->initializer );
     if( !file->moov )
         return -1;
     isom_moov_t *moov = file->moov;
@@ -594,8 +602,8 @@ static int isom_make_segment_index_entry
         isom_tfhd_t       *tfhd           = traf->tfhd;
         isom_fragment_t   *track_fragment = traf->cache->fragment;
         isom_subsegment_t *subsegment     = &track_fragment->subsegment;
-        isom_sidx_t       *sidx           = isom_get_sidx( file, tfhd->track_ID );
-        isom_trak_t       *trak           = isom_get_trak( file, tfhd->track_ID );
+        isom_sidx_t       *sidx           = isom_get_sidx( file,              tfhd->track_ID );
+        isom_trak_t       *trak           = isom_get_trak( file->initializer, tfhd->track_ID );
         if( !trak
          || !trak->mdia
          || !trak->mdia->mdhd )
@@ -639,7 +647,7 @@ static int isom_make_segment_index_entry
             /**-- Explicit edits --**/
             const isom_elst_t       *elst = trak->edts->elst;
             const isom_elst_entry_t *edit = NULL;
-            uint32_t movie_timescale = file->moov->mvhd->timescale;
+            uint32_t movie_timescale = file->initializer->moov->mvhd->timescale;
             uint64_t pts             = subsegment->segment_duration;
             /* This initialization is redundant since these are unused when uninitialized
              * and are initialized always in used cases, but unclever compilers may
@@ -799,15 +807,22 @@ static int isom_make_segment_index_entry
     return 0;
 }
 
-static int isom_finish_fragment_movie( lsmash_file_t *file )
+static int isom_finish_fragment_movie
+(
+    lsmash_file_t *file
+)
 {
-    if( !file->moov
-     || !file->fragment
+    if( !file->fragment
      || !file->fragment->pool )
         return -1;
     isom_moof_t *moof = file->fragment->movie;
     if( !moof )
-        return isom_finish_fragment_initial_movie( file );
+    {
+        if( file == file->initializer )
+            return isom_finish_fragment_initial_movie( file );
+        else
+            return 0;   /* No movie fragment to be finished. */
+    }
     /* Don't write the current movie fragment if containing no track fragments.
      * This is a requirement of DASH Media Segment. */
     if( !moof->traf_list.head
@@ -821,11 +836,12 @@ static int isom_finish_fragment_movie( lsmash_file_t *file )
         if( !traf
          || !traf->tfhd
          || !traf->file
-         || !traf->file->moov
-         || !traf->file->moov->mvex )
+         || !traf->file->initializer
+         || !traf->file->initializer->moov
+         || !traf->file->initializer->moov->mvex )
             return -1;
         isom_tfhd_t *tfhd = traf->tfhd;
-        isom_trex_t *trex = isom_get_trex( file->moov->mvex, tfhd->track_ID );
+        isom_trex_t *trex = isom_get_trex( file->initializer->moov->mvex, tfhd->track_ID );
         if( !trex )
             return -1;
         struct sample_flags_stats_t
@@ -1048,8 +1064,12 @@ static int isom_finish_fragment_movie( lsmash_file_t *file )
     moof->pos = file->size;
     if( isom_write_box( file->bs, (isom_box_t *)moof ) )
         return -1;
-    if( file->fragment->fragment_count == 1 )
+    if( file->fragment->first_moof_pos == 0 )
+    {
+        if( moof->pos == 0 )
+            return -1;  /* because of the presence of the preceding File Type Box or Segment Type Box */
         file->fragment->first_moof_pos = moof->pos;
+    }
     file->size += moof->size;
     /* Output samples. */
     if( isom_output_fragment_media_data( file ) < 0 )
@@ -1109,21 +1129,25 @@ static isom_trun_optional_row_t *isom_request_trun_optional_row( isom_trun_t *tr
     return NULL;
 }
 
-int lsmash_create_fragment_empty_duration( lsmash_root_t *root, uint32_t track_ID, uint32_t duration )
+int lsmash_create_fragment_empty_duration
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID,
+    uint32_t       duration
+)
 {
-    if( !root )
+    if( isom_check_initializer_present( root ) < 0 )
         return -1;
     lsmash_file_t *file = root->file;
-    if( !file
-     || !file->fragment
+    if( !file->fragment
      || !file->fragment->movie
-     || !file->moov )
+     || !file->initializer->moov )
         return -1;
-    isom_trak_t *trak = isom_get_trak( file, track_ID );
+    isom_trak_t *trak = isom_get_trak( file->initializer, track_ID );
     if( !trak
      || !trak->tkhd )
         return -1;
-    isom_trex_t *trex = isom_get_trex( file->moov->mvex, track_ID );
+    isom_trex_t *trex = isom_get_trex( file->initializer->moov->mvex, track_ID );
     if( !trex )
         return -1;
     isom_moof_t *moof = file->fragment->movie;
@@ -1156,7 +1180,7 @@ int isom_set_fragment_last_duration
      || !traf->trun_list.tail->data )
     {
         /* There are no track runs in this track fragment, so it is a empty-duration. */
-        isom_trex_t *trex = isom_get_trex( traf->file->moov->mvex, tfhd->track_ID );
+        isom_trex_t *trex = isom_get_trex( traf->file->initializer->moov->mvex, tfhd->track_ID );
         if( !trex )
             return -1;
         tfhd->flags |= ISOM_TF_FLAGS_DURATION_IS_EMPTY;
@@ -1171,7 +1195,7 @@ int isom_set_fragment_last_duration
     if( trun->sample_count           == 1
      && traf->trun_list.entry_count == 1 )
     {
-        isom_trex_t *trex = isom_get_trex( traf->file->moov->mvex, tfhd->track_ID );
+        isom_trex_t *trex = isom_get_trex( traf->file->initializer->moov->mvex, tfhd->track_ID );
         if( !trex )
             return -1;
         if( last_duration != trex->default_sample_duration )
@@ -1347,7 +1371,7 @@ static isom_sample_flags_t isom_generate_fragment_sample_flags( lsmash_sample_t 
 static int isom_update_fragment_sample_tables( isom_traf_t *traf, lsmash_sample_t *sample )
 {
     isom_tfhd_t *tfhd = traf->tfhd;
-    isom_trex_t *trex = isom_get_trex( traf->file->moov->mvex, tfhd->track_ID );
+    isom_trex_t *trex = isom_get_trex( traf->file->initializer->moov->mvex, tfhd->track_ID );
     if( !trex )
         return -1;
     lsmash_file_t *file    = traf->file;
@@ -1598,7 +1622,7 @@ int isom_append_fragment_sample
 {
     isom_fragment_manager_t *fragment = file->fragment;
     assert( fragment && fragment->pool );
-    isom_trak_t *trak = isom_get_trak( file, track_ID );
+    isom_trak_t *trak = isom_get_trak( file->initializer, track_ID );
     if( !trak
      || !trak->file
      || !trak->cache
@@ -1639,8 +1663,9 @@ int isom_append_fragment_sample
                 return -1;
         }
         else if( !traf->file
-              || !traf->file->moov
-              || !traf->file->moov->mvex
+              || !traf->file->initializer
+              || !traf->file->initializer->moov
+              || !traf->file->initializer->moov->mvex
               || !traf->cache
               || !traf->tfhd )
             return -1;

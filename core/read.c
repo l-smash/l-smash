@@ -362,7 +362,8 @@ static int isom_read_moov( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     if( !lsmash_check_box_type_identical( parent->type, LSMASH_BOX_TYPE_UNSPECIFIED ) || ((lsmash_file_t *)parent)->moov )
         return isom_read_unknown_box( file, box, parent, level );
     ADD_BOX( moov, lsmash_file_t );
-    file->flags |= LSMASH_FILE_MODE_INITIALIZATION;
+    file->flags      |= LSMASH_FILE_MODE_INITIALIZATION;
+    file->initializer = file;
     isom_box_common_copy( moov, box );
     if( isom_add_print_func( file, moov, level ) )
         return -1;

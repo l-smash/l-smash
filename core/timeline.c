@@ -107,7 +107,9 @@ struct isom_timeline_tag
 
 static isom_timeline_t *isom_get_timeline( lsmash_root_t *root, uint32_t track_ID )
 {
-    if( !track_ID || !root || !root->file || !root->file->timeline )
+    if( isom_check_initializer_present( root ) < 0
+     || track_ID == 0
+     || !root->file->timeline )
         return NULL;
     for( lsmash_entry_t *entry = root->file->timeline->head; entry; entry = entry->next )
     {
@@ -657,11 +659,10 @@ static int isom_get_random_access_point_grouping_info
 
 int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
 {
-    if( !root )
+    if( isom_check_initializer_present( root ) < 0 )
         return -1;
     lsmash_file_t *file = root->file;
-    if( !file
-     || !file->moov
+    if( !file->moov
      || !file->moov->mvhd
      ||  file->moov->mvhd->timescale == 0 )
         return -1;
@@ -1641,10 +1642,11 @@ uint64_t lsmash_get_media_duration_from_media_timeline( lsmash_root_t *root, uin
 
 int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_root_t *src, uint32_t src_track_ID )
 {
-    if( !dst || !src )
+    if( isom_check_initializer_present( dst ) < 0
+     || isom_check_initializer_present( src ) < 0 )
         return -1;
     lsmash_file_t *dst_file = dst->file;
-    isom_trak_t *dst_trak = isom_get_trak( dst_file, dst_track_ID );
+    isom_trak_t   *dst_trak = isom_get_trak( dst_file, dst_track_ID );
     if( !dst_file->moov
      || !dst_file->moov->mvhd
      ||  dst_file->moov->mvhd->timescale == 0
@@ -1665,8 +1667,8 @@ int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_
     int32_t  src_ctd_shift;     /* Add timeline shift difference between src and dst to each media_time.
                                  * Therefore, call this function as later as possible. */
     lsmash_entry_t *src_entry;
-    lsmash_file_t *src_file = src->file;
-    isom_trak_t *src_trak = isom_get_trak( src_file, src_track_ID );
+    lsmash_file_t  *src_file = src->file->initializer;
+    isom_trak_t    *src_trak = isom_get_trak( src_file, src_track_ID );
     if( !src_trak
      || !src_trak->edts
      || !src_trak->edts->elst

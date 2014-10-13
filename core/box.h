@@ -1703,7 +1703,6 @@ typedef struct
 typedef struct
 {
     isom_moof_t         *movie;             /* the address corresponding to the current Movie Fragment Box */
-    uint64_t             fragment_count;    /* the number of movie fragments we created */
     uint64_t             first_moof_pos;
     uint64_t             pool_size;         /* the total sample size in the current movie fragment */
     uint64_t             sample_count;      /* the number of samples within the current movie fragment */
@@ -1877,6 +1876,8 @@ struct lsmash_file_tag
         isom_fragment_manager_t *fragment;  /* movie fragment manager */
         lsmash_entry_list_t     *print;
         lsmash_entry_list_t     *timeline;
+        lsmash_file_t           *initializer;
+        uint64_t  fragment_count;           /* the number of movie fragments we created */
         double    max_chunk_duration;       /* max duration per chunk in seconds */
         double    max_async_tolerance;      /* max tolerance, in seconds, for amount of interleaving asynchronization between tracks */
         uint64_t  max_chunk_size;           /* max size per chunk in bytes. */
@@ -2472,6 +2473,8 @@ void isom_bs_put_box_common( lsmash_bs_t *bs, void *box );
   && isom_is_printable_char(  (fourcc)        & 0xff ))
 
 #define isom_4cc2str( fourcc ) (const char [5]){ (fourcc) >> 24, (fourcc) >> 16, (fourcc) >> 8, (fourcc), 0 }
+
+int isom_check_initializer_present( lsmash_root_t *root );
 
 isom_trak_t *isom_get_trak( lsmash_file_t *file, uint32_t track_ID );
 isom_trex_t *isom_get_trex( isom_mvex_t *mvex, uint32_t track_ID );

@@ -237,7 +237,7 @@ static int isom_set_itunes_metadata_binary( lsmash_file_t *file,
 
 int lsmash_set_itunes_metadata( lsmash_root_t *root, lsmash_itunes_metadata_t metadata )
 {
-    if( !root || !root->file )
+    if( isom_check_initializer_present( root ) < 0 )
         return -1;
     static const struct
     {
@@ -388,15 +388,15 @@ static lsmash_itunes_metadata_type isom_get_itunes_metadata_type( lsmash_itunes_
 
 int lsmash_get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, lsmash_itunes_metadata_t *metadata )
 {
-    if( !metadata
-     || !root
-     || !root->file
-     || !root->file->moov
-     || !root->file->moov->udta
-     || !root->file->moov->udta->meta
-     || !root->file->moov->udta->meta->ilst )
+    if( isom_check_initializer_present( root ) < 0 || !metadata )
         return -1;
-    isom_ilst_t *ilst = root->file->moov->udta->meta->ilst;
+    lsmash_file_t *file = root->file->initializer;
+    if( !file->moov
+     || !file->moov->udta
+     || !file->moov->udta->meta
+     || !file->moov->udta->meta->ilst )
+        return -1;
+    isom_ilst_t *ilst = file->moov->udta->meta->ilst;
     isom_metaitem_t *metaitem = (isom_metaitem_t *)lsmash_get_entry_data( &ilst->metaitem_list, metadata_number );
     if( !metaitem || !metaitem->data || !metaitem->data->value || metaitem->data->value_length == 0 )
         return -1;
@@ -475,14 +475,13 @@ fail:
 
 uint32_t lsmash_count_itunes_metadata( lsmash_root_t *root )
 {
-    if( !root
-     || !root->file
-     || !root->file->moov
-     || !root->file->moov->udta
-     || !root->file->moov->udta->meta
-     || !root->file->moov->udta->meta->ilst )
+    if( isom_check_initializer_present( root ) < 0
+     || !root->file->initializer->moov
+     || !root->file->initializer->moov->udta
+     || !root->file->initializer->moov->udta->meta
+     || !root->file->initializer->moov->udta->meta->ilst )
         return 0;
-    return root->file->moov->udta->meta->ilst->metaitem_list.entry_count;
+    return root->file->initializer->moov->udta->meta->ilst->metaitem_list.entry_count;
 }
 
 void lsmash_cleanup_itunes_metadata( lsmash_itunes_metadata_t *metadata )

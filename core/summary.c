@@ -148,23 +148,30 @@ int lsmash_add_codec_specific_data( lsmash_summary_t *summary, lsmash_codec_spec
 
 uint32_t lsmash_count_summary( lsmash_root_t *root, uint32_t track_ID )
 {
-    if( !root || track_ID == 0 )
+    if( isom_check_initializer_present( root ) < 0 || track_ID == 0 )
         return 0;
-    isom_trak_t *trak = isom_get_trak( root->file, track_ID );
-    if( !trak || !trak->mdia || !trak->mdia->mdhd || !trak->mdia->hdlr
-     || !trak->mdia->minf || !trak->mdia->minf->stbl || !trak->mdia->minf->stbl->stsd )
+    isom_trak_t *trak = isom_get_trak( root->file->initializer, track_ID );
+    if( !trak
+     || !trak->mdia
+     || !trak->mdia->mdhd
+     || !trak->mdia->hdlr
+     || !trak->mdia->minf
+     || !trak->mdia->minf->stbl
+     || !trak->mdia->minf->stbl->stsd )
         return 0;
     return trak->mdia->minf->stbl->stsd->list.entry_count;
 }
 
 lsmash_summary_t *lsmash_get_summary( lsmash_root_t *root, uint32_t track_ID, uint32_t description_number )
 {
-    if( !root || track_ID == 0 || description_number == 0 )
+    if( isom_check_initializer_present( root ) < 0 || track_ID == 0 || description_number == 0 )
         return NULL;
-    isom_trak_t *trak = isom_get_trak( root->file, track_ID );
+    isom_trak_t *trak = isom_get_trak( root->file->initializer, track_ID );
     if( !trak
      || !trak->mdia
-     || !trak->mdia->mdhd || !trak->mdia->hdlr || !trak->mdia->minf
+     || !trak->mdia->mdhd
+     || !trak->mdia->hdlr
+     || !trak->mdia->minf
      || !trak->mdia->minf->stbl
      || !trak->mdia->minf->stbl->stsd )
         return NULL;
