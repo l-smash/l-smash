@@ -135,8 +135,10 @@ static int isom_set_fragment_overall_duration( lsmash_file_t *file )
 
 static int isom_write_fragment_random_access_info( lsmash_file_t *file )
 {
-    if( !file->moov->mvex )
+    if( !file->mfra )
         return 0;
+    if( !file->moov->mvex )
+        return -1;
     /* Reconstruct the Movie Fragment Random Access Box.
      * All 'time' field in the Track Fragment Random Access Boxes shall reflect edit list. */
     uint32_t movie_timescale = lsmash_get_movie_timescale( file->root );
