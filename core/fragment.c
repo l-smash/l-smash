@@ -267,6 +267,80 @@ static int isom_update_indexed_material_offset
     return 0;
 }
 
+static int isom_write_segment_indexes
+(
+    lsmash_file_t        *file,
+    lsmash_adhoc_remux_t *remux
+)
+{
+    /* Update the size of each Segment Index Box and establish the offset from the anchor point to the indexed material. */
+    if( isom_update_indexed_material_offset( file, (isom_sidx_t *)file->sidx_list.tail->data ) < 0 )
+        return -1;
+    /* Get the total size of all Segment Index Boxes. */
+    uint64_t total_sidx_size = 0;
+    for( lsmash_entry_t *entry = file->sidx_list.head; entry; entry = entry->next )
+    {
+        isom_sidx_t *sidx = (isom_sidx_t *)entry->data;
+        if( !sidx )
+            continue;
+        total_sidx_size += sidx->size;
+    }
+    /* The buffer size must be at least total_sidx_size * 2. */
+    size_t buffer_size = total_sidx_size * 2;
+    if( remux && remux->buffer_size > buffer_size )
+        buffer_size = remux->buffer_size;
+    /* Split to 2 buffers. */
+    uint8_t *buf[2] = { NULL, NULL };
+    if( (buf[0] = (uint8_t *)lsmash_malloc( buffer_size )) == NULL )
+        return -1;
+    size_t size = buffer_size / 2;
+    buf[1] = buf[0] + size;
+    /* Seek to the beginning of the first Movie Fragment Box i.e. the first subsegment within this media segment. */
+    lsmash_bs_t *bs = file->bs;
+    if( lsmash_bs_write_seek( bs, file->fragment->first_moof_pos, SEEK_SET ) < 0 )
+        goto fail;
+    size_t read_num = size;
+    lsmash_bs_read_data( bs, buf[0], &read_num );
+    uint64_t read_pos = bs->offset;
+    /* Write the Segment Index Boxes actually here. */
+    if( lsmash_bs_write_seek( bs, file->fragment->first_moof_pos, SEEK_SET ) < 0 )
+        goto fail;
+    for( lsmash_entry_t *entry = file->sidx_list.head; entry; entry = entry->next )
+    {
+        isom_sidx_t *sidx = (isom_sidx_t *)entry->data;
+        if( !sidx )
+            continue;
+        if( isom_write_box( file->bs, (isom_box_t *)sidx ) < 0 )
+            return -1;
+    }
+    /* Rearrange subsequent data. */
+    uint64_t write_pos = bs->offset;
+    uint64_t total     = file->size + total_sidx_size;
+    if( isom_rearrange_boxes( file, remux, buf, read_num, size, read_pos, write_pos, total ) < 0 )
+        goto fail;
+    file->size += total_sidx_size;
+    lsmash_freep( &buf[0] );
+    /* Update 'moof_offset' of each entry within the Track Fragment Random Access Boxes. */
+    if( file->mfra )
+        for( lsmash_entry_t *entry = file->mfra->tfra_list.head; entry; entry = entry->next )
+        {
+            isom_tfra_t *tfra = (isom_tfra_t *)entry->data;
+            if( !tfra )
+                continue;
+            for( lsmash_entry_t *rap_entry = tfra->list->head; rap_entry; rap_entry = rap_entry->next )
+            {
+                isom_tfra_location_time_entry_t *rap = (isom_tfra_location_time_entry_t *)rap_entry->data;
+                if( !rap )
+                    continue;
+                rap->moof_offset += total_sidx_size;
+            }
+        }
+    return 0;
+fail:
+    lsmash_free( buf[0] );
+    return -1;
+}
+
 int isom_finish_final_fragment_movie
 (
     lsmash_file_t        *file,
@@ -283,79 +357,15 @@ int isom_finish_final_fragment_movie
      * We don't consider updating of chunk offsets within initial movie sample table here.
      * This is reasonable since DASH requires no samples in the initial movie.
      * This implementation is not suitable for live-streaming.
-     + To support live-streaming, it is good to use daisy-chained index.  */
-    uint8_t *buf[2] = { NULL, NULL };
-    if( file->flags & LSMASH_FILE_MODE_INDEX )
-    {
-        /* Update the size of each Segment Index Box and establish the offset from the anchor point to the indexed material. */
-        if( isom_update_indexed_material_offset( file, (isom_sidx_t *)file->sidx_list.tail->data ) < 0 )
-            return -1;
-        /* Get the total size of all Segment Index Boxes. */
-        uint64_t total_sidx_size = 0;
-        for( lsmash_entry_t *entry = file->sidx_list.head; entry; entry = entry->next )
-        {
-            isom_sidx_t *sidx = (isom_sidx_t *)entry->data;
-            if( !sidx )
-                continue;
-            total_sidx_size += sidx->size;
-        }
-        /* buffer size must be at least total_sidx_size * 2 */
-        size_t buffer_size = total_sidx_size * 2;
-        if( remux && remux->buffer_size > buffer_size )
-            buffer_size = remux->buffer_size;
-        /* Split to 2 buffers. */
-        if( (buf[0] = (uint8_t *)lsmash_malloc( buffer_size )) == NULL )
-            return -1;
-        size_t size = buffer_size / 2;
-        buf[1] = buf[0] + size;
-        /* Seek to the beginning of the first Movie Fragment Box. */
-        lsmash_bs_t *bs = file->bs;
-        if( lsmash_bs_write_seek( bs, file->fragment->first_moof_pos, SEEK_SET ) < 0 )
-            goto fail;
-        size_t read_num = size;
-        lsmash_bs_read_data( bs, buf[0], &read_num );
-        uint64_t read_pos = bs->offset;
-        /* */
-        if( lsmash_bs_write_seek( bs, file->fragment->first_moof_pos, SEEK_SET ) < 0 )
-            goto fail;
-        for( lsmash_entry_t *entry = file->sidx_list.head; entry; entry = entry->next )
-        {
-            isom_sidx_t *sidx = (isom_sidx_t *)entry->data;
-            if( !sidx )
-                continue;
-            if( isom_write_box( file->bs, (isom_box_t *)sidx ) < 0 )
-                return -1;
-        }
-        uint64_t write_pos = bs->offset;
-        uint64_t total     = file->size + total_sidx_size;
-        if( isom_rearrange_boxes( file, remux, buf, read_num, size, read_pos, write_pos, total ) < 0 )
-            goto fail;
-        file->size += total_sidx_size;
-        lsmash_freep( &buf[0] );
-        /* Update 'moof_offset' of each entry within the Track Fragment Random Access Boxes. */
-        if( file->mfra )
-            for( lsmash_entry_t *entry = file->mfra->tfra_list.head; entry; entry = entry->next )
-            {
-                isom_tfra_t *tfra = (isom_tfra_t *)entry->data;
-                if( !tfra )
-                    continue;
-                for( lsmash_entry_t *rap_entry = tfra->list->head; rap_entry; rap_entry = rap_entry->next )
-                {
-                    isom_tfra_location_time_entry_t *rap = (isom_tfra_location_time_entry_t *)rap_entry->data;
-                    if( !rap )
-                        continue;
-                    rap->moof_offset += total_sidx_size;
-                }
-            }
-    }
+     + To support live-streaming, it is good to use daisy-chained index. */
+    if( (file->flags & LSMASH_FILE_MODE_INDEX)
+     && isom_write_segment_indexes( file, remux ) < 0 )
+        return -1;
     /* Write the overall random access information at the tail of the movie if this file is self-contained. */
     if( isom_write_fragment_random_access_info( file ) < 0 )
         return -1;
     /* Set overall duration of the movie. */
     return isom_set_fragment_overall_duration( file );
-fail:
-    lsmash_free( buf[0] );
-    return -1;
 }
 
 #define GET_MOST_USED( box_name, index, flag_name ) \
