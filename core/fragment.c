@@ -1389,7 +1389,7 @@ static int isom_update_fragment_sample_tables( isom_traf_t *traf, lsmash_sample_
             tfhd->default_sample_flags = sample_flags;
             /* Set up random access information if this sample is a sync sample.
              * We inform only the first sample in each movie fragment. */
-            if( !file->bs->unseekable && (sample->prop.ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC) )
+            if( file->mfra && (sample->prop.ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC) )
             {
                 isom_tfra_t *tfra = isom_get_tfra( file->mfra, tfhd->track_ID );
                 if( !tfra )
