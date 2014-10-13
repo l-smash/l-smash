@@ -570,6 +570,224 @@ static int isom_compare_sample_flags( isom_sample_flags_t *a, isom_sample_flags_
         || (a->sample_degradation_priority != b->sample_degradation_priority);
 }
 
+static int isom_make_segment_index_entry
+(
+    lsmash_file_t *file,
+    isom_moof_t   *moof
+)
+{
+    /* Make the index of this subsegment. */
+    for( lsmash_entry_t *entry = moof->traf_list.head; entry; entry = entry->next )
+    {
+        isom_traf_t       *traf           = (isom_traf_t *)entry->data;
+        isom_tfhd_t       *tfhd           = traf->tfhd;
+        isom_fragment_t   *track_fragment = traf->cache->fragment;
+        isom_subsegment_t *subsegment     = &track_fragment->subsegment;
+        isom_sidx_t       *sidx           = isom_get_sidx( file, tfhd->track_ID );
+        isom_trak_t       *trak           = isom_get_trak( file, tfhd->track_ID );
+        if( !trak
+         || !trak->mdia
+         || !trak->mdia->mdhd )
+            return -1;
+        assert( traf->tfdt );
+        if( !sidx )
+        {
+            sidx = isom_add_sidx( file );
+            if( !sidx )
+                return -1;
+            sidx->reference_ID    = tfhd->track_ID;
+            sidx->timescale       = trak->mdia->mdhd->timescale;
+            sidx->reserved        = 0;
+            sidx->reference_count = 0;
+            if( isom_update_indexed_material_offset( file, sidx ) < 0 )
+                return -1;
+        }
+        /* One pair of a Movie Fragment Box with an associated Media Box per subsegment. */
+        isom_sidx_referenced_item_t *data = lsmash_malloc( sizeof(isom_sidx_referenced_item_t) );
+        if( !data )
+            return -1;
+        if( lsmash_add_entry( sidx->list, data ) < 0 )
+        {
+            lsmash_free( data );
+            return -1;
+        }
+        sidx->reference_count = sidx->list->entry_count;
+        data->reference_type = 0;  /* media */
+        data->reference_size = file->size - moof->pos;
+        /* presentation */
+        uint64_t TSAP;
+        uint64_t TDEC;
+        uint64_t TEPT;
+        uint64_t TPTF;
+        uint64_t composition_duration = subsegment->largest_cts - subsegment->smallest_cts + track_fragment->last_duration;
+        int subsegment_in_presentation;     /* If set to 1, TEPT is available. */
+        int first_rp_in_presentation;       /* If set to 1, both TSAP and TDEC are available. */
+        int first_sample_in_presentation;   /* If set to 1, TPTF is available. */
+        if( trak->edts && trak->edts->elst && trak->edts->elst->list )
+        {
+            /**-- Explicit edits --**/
+            const isom_elst_t       *elst = trak->edts->elst;
+            const isom_elst_entry_t *edit = NULL;
+            uint32_t movie_timescale = file->moov->mvhd->timescale;
+            uint64_t pts             = subsegment->segment_duration;
+            /* This initialization is redundant since these are unused when uninitialized
+             * and are initialized always in used cases, but unclever compilers may
+             * complain that these variables may be uninitialized. */
+            TSAP = 0;
+            TDEC = 0;
+            TEPT = 0;
+            TPTF = 0;
+            /* */
+            subsegment_in_presentation   = 0;
+            first_rp_in_presentation     = 0;
+            first_sample_in_presentation = 0;
+            for( lsmash_entry_t *elst_entry = elst->list->head; elst_entry; elst_entry = elst_entry->next )
+            {
+                edit = (isom_elst_entry_t *)elst_entry->data;
+                if( !edit )
+                    continue;
+                uint64_t edit_end_pts;
+                uint64_t edit_end_cts;
+                if( edit->segment_duration == ISOM_EDIT_DURATION_IMPLICIT
+                 || (elst->version == 0 && edit->segment_duration == ISOM_EDIT_DURATION_UNKNOWN32)
+                 || (elst->version == 1 && edit->segment_duration == ISOM_EDIT_DURATION_UNKNOWN64) )
+                {
+                    edit_end_cts = UINT64_MAX;
+                    edit_end_pts = UINT64_MAX;
+                }
+                else
+                {
+                    if( edit->segment_duration )
+                    {
+                        double segment_duration = edit->segment_duration * ((double)sidx->timescale / movie_timescale);
+                        edit_end_cts = edit->media_time + (uint64_t)(segment_duration * ((double)edit->media_rate / (1 << 16)));
+                        edit_end_pts = pts + (uint64_t)segment_duration;
+                    }
+                    else
+                    {
+                        uint64_t segment_duration = composition_duration;
+                        if( edit->media_time > subsegment->smallest_cts )
+                        {
+                            if( subsegment->largest_cts + track_fragment->last_duration > edit->media_time )
+                                segment_duration -= edit->media_time - subsegment->smallest_cts;
+                            else
+                                segment_duration = 0;
+                        }
+                        edit_end_cts = edit->media_time + (uint64_t)(segment_duration * ((double)edit->media_rate / (1 << 16)));
+                        edit_end_pts = pts + (uint64_t)segment_duration;
+                    }
+                }
+                if( edit->media_time == ISOM_EDIT_MODE_EMPTY )
+                {
+                    pts = edit_end_pts;
+                    continue;
+                }
+                if( (subsegment->smallest_cts >= edit->media_time && subsegment->smallest_cts < edit_end_cts)
+                 || (subsegment->largest_cts  >= edit->media_time && subsegment->largest_cts  < edit_end_cts) )
+                {
+                    /* This subsegment is present in this edit. */
+                    double rate = (double)edit->media_rate / (1 << 16);
+                    uint64_t start_time = LSMASH_MAX( subsegment->smallest_cts, edit->media_time );
+                    if( sidx->reference_count == 1 )
+                        sidx->earliest_presentation_time = pts;
+                    if( subsegment_in_presentation == 0 )
+                    {
+                        subsegment_in_presentation = 1;
+                        if( subsegment->smallest_cts >= edit->media_time )
+                            TEPT = pts + (uint64_t)((subsegment->smallest_cts - start_time) / rate);
+                        else
+                            TEPT = pts;
+                    }
+                    if( first_rp_in_presentation == 0
+                     && ((subsegment->first_ed_cts >= edit->media_time && subsegment->first_ed_cts < edit_end_cts)
+                      || (subsegment->first_rp_cts >= edit->media_time && subsegment->first_rp_cts < edit_end_cts)) )
+                    {
+                        /* FIXME: to distinguish TSAP and TDEC, need something to indicate incorrectly decodable sample. */
+                        first_rp_in_presentation = 1;
+                        if( subsegment->first_ed_cts >= edit->media_time && subsegment->first_ed_cts < edit_end_cts )
+                            TSAP = pts + (uint64_t)((subsegment->first_ed_cts - start_time) / rate);
+                        else
+                            TSAP = pts;
+                        TDEC = TSAP;
+                    }
+                    if( first_sample_in_presentation == 0
+                     && subsegment->first_cts >= edit->media_time && subsegment->first_cts < edit_end_cts )
+                    {
+                        first_sample_in_presentation = 1;
+                        TPTF = pts + (uint64_t)((subsegment->first_cts - start_time) / rate);
+                    }
+                    uint64_t subsegment_end_pts = pts + (uint64_t)(composition_duration / rate);
+                    pts = LSMASH_MIN( edit_end_pts, subsegment_end_pts );
+                    /* Update subsegment_duration. */
+                    data->subsegment_duration = pts - subsegment->segment_duration;
+                }
+                else
+                    /* This subsegment is not present in this edit. */
+                    pts = edit_end_pts;
+            }
+        }
+        else
+        {
+            /**-- Implicit edit --**/
+            if( sidx->reference_count == 1 )
+                sidx->earliest_presentation_time = subsegment->smallest_cts;
+            data->subsegment_duration = composition_duration;
+            /* FIXME: to distinguish TSAP and TDEC, need something to indicate incorrectly decodable sample. */
+            TSAP = subsegment->first_rp_cts;
+            TDEC = subsegment->first_rp_cts;
+            TEPT = subsegment->smallest_cts;
+            TPTF = subsegment->first_cts;
+            subsegment_in_presentation   = 1;
+            first_rp_in_presentation     = 1;
+            first_sample_in_presentation = 1;
+        }
+        if( subsegment->first_ra_flags  == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE
+         || subsegment->first_ra_number == 0
+         || subsegment->first_rp_number == 0
+         || subsegment_in_presentation  == 0
+         || first_rp_in_presentation    == 0 )
+        {
+            /* No SAP in this subsegment. */
+            data->starts_with_SAP = 0;
+            data->SAP_type        = 0;
+            data->SAP_delta_time  = 0;
+        }
+        else
+        {
+            data->starts_with_SAP = (subsegment->first_ra_number == 1);
+            data->SAP_type        = 0;
+            data->SAP_delta_time  = TSAP - TEPT;
+            /* Decide SAP_type. */
+            if( first_sample_in_presentation )
+            {
+                if( TEPT == TDEC && TDEC == TSAP && TSAP == TPTF )
+                    data->SAP_type = 1;
+                else if( TEPT == TDEC && TDEC == TSAP && TSAP < TPTF )
+                    data->SAP_type = 2;
+                else if( TEPT < TDEC && TDEC == TSAP && TSAP <= TPTF )
+                    data->SAP_type = 3;
+                else if( TEPT <= TPTF && TPTF < TDEC && TDEC == TSAP )
+                    data->SAP_type = 4;
+            }
+            if( data->SAP_type == 0 )
+            {
+                if( TEPT == TDEC && TDEC < TSAP )
+                    data->SAP_type = 5;
+                else if( TEPT < TDEC && TDEC < TSAP )
+                    data->SAP_type = 6;
+            }
+        }
+        subsegment->segment_duration += data->subsegment_duration;
+        subsegment->first_ed_cts      = UINT64_MAX;
+        subsegment->first_rp_cts      = UINT64_MAX;
+        subsegment->first_rp_number   = 0;
+        subsegment->first_ra_number   = 0;
+        subsegment->first_ra_flags    = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE;
+        subsegment->decodable         = 0;
+    }
+    return 0;
+}
+
 static int isom_finish_fragment_movie( lsmash_file_t *file )
 {
     if( !file->moov
@@ -834,216 +1052,7 @@ static int isom_finish_fragment_movie( lsmash_file_t *file )
     }
     if( !(file->flags & LSMASH_FILE_MODE_INDEX) || file->max_isom_version < 6 )
         return 0;
-    /* Make the index of this subsegment. */
-    for( lsmash_entry_t *entry = moof->traf_list.head; entry; entry = entry->next )
-    {
-        isom_traf_t       *traf           = (isom_traf_t *)entry->data;
-        isom_tfhd_t       *tfhd           = traf->tfhd;
-        isom_fragment_t   *track_fragment = traf->cache->fragment;
-        isom_subsegment_t *subsegment     = &track_fragment->subsegment;
-        isom_sidx_t       *sidx           = isom_get_sidx( file, tfhd->track_ID );
-        isom_trak_t       *trak           = isom_get_trak( file, tfhd->track_ID );
-        if( !trak
-         || !trak->mdia
-         || !trak->mdia->mdhd )
-            return -1;
-        assert( traf->tfdt );
-        if( !sidx )
-        {
-            sidx = isom_add_sidx( file );
-            if( !sidx )
-                return -1;
-            sidx->reference_ID    = tfhd->track_ID;
-            sidx->timescale       = trak->mdia->mdhd->timescale;
-            sidx->reserved        = 0;
-            sidx->reference_count = 0;
-            if( isom_update_indexed_material_offset( file, sidx ) < 0 )
-                return -1;
-        }
-        /* One pair of a Movie Fragment Box with an associated Media Box per subsegment. */
-        isom_sidx_referenced_item_t *data = lsmash_malloc( sizeof(isom_sidx_referenced_item_t) );
-        if( !data )
-            return -1;
-        if( lsmash_add_entry( sidx->list, data ) < 0 )
-        {
-            lsmash_free( data );
-            return -1;
-        }
-        sidx->reference_count = sidx->list->entry_count;
-        data->reference_type = 0;  /* media */
-        data->reference_size = file->size - moof->pos;
-        /* presentation */
-        uint64_t TSAP;
-        uint64_t TDEC;
-        uint64_t TEPT;
-        uint64_t TPTF;
-        uint64_t composition_duration = subsegment->largest_cts - subsegment->smallest_cts + track_fragment->last_duration;
-        int subsegment_in_presentation;     /* If set to 1, TEPT is available. */
-        int first_rp_in_presentation;       /* If set to 1, both TSAP and TDEC are available. */
-        int first_sample_in_presentation;   /* If set to 1, TPTF is available. */
-        if( trak->edts && trak->edts->elst && trak->edts->elst->list )
-        {
-            /**-- Explicit edits --**/
-            const isom_elst_t       *elst = trak->edts->elst;
-            const isom_elst_entry_t *edit = NULL;
-            uint32_t movie_timescale = file->moov->mvhd->timescale;
-            uint64_t pts             = subsegment->segment_duration;
-            /* This initialization is redundant since these are unused when uninitialized
-             * and are initialized always in used cases, but unclever compilers may
-             * complain that these variables may be uninitialized. */
-            TSAP = 0;
-            TDEC = 0;
-            TEPT = 0;
-            TPTF = 0;
-            /* */
-            subsegment_in_presentation   = 0;
-            first_rp_in_presentation     = 0;
-            first_sample_in_presentation = 0;
-            for( lsmash_entry_t *elst_entry = elst->list->head; elst_entry; elst_entry = elst_entry->next )
-            {
-                edit = (isom_elst_entry_t *)elst_entry->data;
-                if( !edit )
-                    continue;
-                uint64_t edit_end_pts;
-                uint64_t edit_end_cts;
-                if( edit->segment_duration == ISOM_EDIT_DURATION_IMPLICIT
-                 || (elst->version == 0 && edit->segment_duration == ISOM_EDIT_DURATION_UNKNOWN32)
-                 || (elst->version == 1 && edit->segment_duration == ISOM_EDIT_DURATION_UNKNOWN64) )
-                {
-                    edit_end_cts = UINT64_MAX;
-                    edit_end_pts = UINT64_MAX;
-                }
-                else
-                {
-                    if( edit->segment_duration )
-                    {
-                        double segment_duration = edit->segment_duration * ((double)sidx->timescale / movie_timescale);
-                        edit_end_cts = edit->media_time + (uint64_t)(segment_duration * ((double)edit->media_rate / (1 << 16)));
-                        edit_end_pts = pts + (uint64_t)segment_duration;
-                    }
-                    else
-                    {
-                        uint64_t segment_duration = composition_duration;
-                        if( edit->media_time > subsegment->smallest_cts )
-                        {
-                            if( subsegment->largest_cts + track_fragment->last_duration > edit->media_time )
-                                segment_duration -= edit->media_time - subsegment->smallest_cts;
-                            else
-                                segment_duration = 0;
-                        }
-                        edit_end_cts = edit->media_time + (uint64_t)(segment_duration * ((double)edit->media_rate / (1 << 16)));
-                        edit_end_pts = pts + (uint64_t)segment_duration;
-                    }
-                }
-                if( edit->media_time == ISOM_EDIT_MODE_EMPTY )
-                {
-                    pts = edit_end_pts;
-                    continue;
-                }
-                if( (subsegment->smallest_cts >= edit->media_time && subsegment->smallest_cts < edit_end_cts)
-                 || (subsegment->largest_cts  >= edit->media_time && subsegment->largest_cts  < edit_end_cts) )
-                {
-                    /* This subsegment is present in this edit. */
-                    double rate = (double)edit->media_rate / (1 << 16);
-                    uint64_t start_time = LSMASH_MAX( subsegment->smallest_cts, edit->media_time );
-                    if( sidx->reference_count == 1 )
-                        sidx->earliest_presentation_time = pts;
-                    if( subsegment_in_presentation == 0 )
-                    {
-                        subsegment_in_presentation = 1;
-                        if( subsegment->smallest_cts >= edit->media_time )
-                            TEPT = pts + (uint64_t)((subsegment->smallest_cts - start_time) / rate);
-                        else
-                            TEPT = pts;
-                    }
-                    if( first_rp_in_presentation == 0
-                     && ((subsegment->first_ed_cts >= edit->media_time && subsegment->first_ed_cts < edit_end_cts)
-                      || (subsegment->first_rp_cts >= edit->media_time && subsegment->first_rp_cts < edit_end_cts)) )
-                    {
-                        /* FIXME: to distinguish TSAP and TDEC, need something to indicate incorrectly decodable sample. */
-                        first_rp_in_presentation = 1;
-                        if( subsegment->first_ed_cts >= edit->media_time && subsegment->first_ed_cts < edit_end_cts )
-                            TSAP = pts + (uint64_t)((subsegment->first_ed_cts - start_time) / rate);
-                        else
-                            TSAP = pts;
-                        TDEC = TSAP;
-                    }
-                    if( first_sample_in_presentation == 0
-                     && subsegment->first_cts >= edit->media_time && subsegment->first_cts < edit_end_cts )
-                    {
-                        first_sample_in_presentation = 1;
-                        TPTF = pts + (uint64_t)((subsegment->first_cts - start_time) / rate);
-                    }
-                    uint64_t subsegment_end_pts = pts + (uint64_t)(composition_duration / rate);
-                    pts = LSMASH_MIN( edit_end_pts, subsegment_end_pts );
-                    /* Update subsegment_duration. */
-                    data->subsegment_duration = pts - subsegment->segment_duration;
-                }
-                else
-                    /* This subsegment is not present in this edit. */
-                    pts = edit_end_pts;
-            }
-        }
-        else
-        {
-            /**-- Implicit edit --**/
-            if( sidx->reference_count == 1 )
-                sidx->earliest_presentation_time = subsegment->smallest_cts;
-            data->subsegment_duration = composition_duration;
-            /* FIXME: to distinguish TSAP and TDEC, need something to indicate incorrectly decodable sample. */
-            TSAP = subsegment->first_rp_cts;
-            TDEC = subsegment->first_rp_cts;
-            TEPT = subsegment->smallest_cts;
-            TPTF = subsegment->first_cts;
-            subsegment_in_presentation   = 1;
-            first_rp_in_presentation     = 1;
-            first_sample_in_presentation = 1;
-        }
-        if( subsegment->first_ra_flags  == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE
-         || subsegment->first_ra_number == 0
-         || subsegment->first_rp_number == 0
-         || subsegment_in_presentation  == 0
-         || first_rp_in_presentation    == 0 )
-        {
-            /* No SAP in this subsegment. */
-            data->starts_with_SAP = 0;
-            data->SAP_type        = 0;
-            data->SAP_delta_time  = 0;
-        }
-        else
-        {
-            data->starts_with_SAP = (subsegment->first_ra_number == 1);
-            data->SAP_type        = 0;
-            data->SAP_delta_time  = TSAP - TEPT;
-            /* Decide SAP_type. */
-            if( first_sample_in_presentation )
-            {
-                if( TEPT == TDEC && TDEC == TSAP && TSAP == TPTF )
-                    data->SAP_type = 1;
-                else if( TEPT == TDEC && TDEC == TSAP && TSAP < TPTF )
-                    data->SAP_type = 2;
-                else if( TEPT < TDEC && TDEC == TSAP && TSAP <= TPTF )
-                    data->SAP_type = 3;
-                else if( TEPT <= TPTF && TPTF < TDEC && TDEC == TSAP )
-                    data->SAP_type = 4;
-            }
-            if( data->SAP_type == 0 )
-            {
-                if( TEPT == TDEC && TDEC < TSAP )
-                    data->SAP_type = 5;
-                else if( TEPT < TDEC && TDEC < TSAP )
-                    data->SAP_type = 6;
-            }
-        }
-        subsegment->segment_duration += data->subsegment_duration;
-        subsegment->first_ed_cts      = UINT64_MAX;
-        subsegment->first_rp_cts      = UINT64_MAX;
-        subsegment->first_rp_number   = 0;
-        subsegment->first_ra_number   = 0;
-        subsegment->first_ra_flags    = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE;
-        subsegment->decodable         = 0;
-    }
-    return 0;
+    return isom_make_segment_index_entry( file, moof );
 }
 
 #undef GET_MOST_USED
