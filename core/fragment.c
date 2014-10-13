@@ -24,6 +24,7 @@
 
 #include <string.h>
 #include "box.h"
+#include "file.h"
 #include "write.h"
 
 static isom_sidx_t *isom_get_sidx( lsmash_file_t *file, uint32_t reference_ID )
@@ -316,7 +317,7 @@ static int isom_write_segment_indexes
     /* Rearrange subsequent data. */
     uint64_t write_pos = bs->offset;
     uint64_t total     = file->size + total_sidx_size;
-    if( isom_rearrange_boxes( file, remux, buf, read_num, size, read_pos, write_pos, total ) < 0 )
+    if( isom_rearrange_data( file, remux, buf, read_num, size, read_pos, write_pos, total ) < 0 )
         goto fail;
     file->size += total_sidx_size;
     lsmash_freep( &buf[0] );

@@ -29,3 +29,15 @@ int isom_check_mandatory_boxes
 (
     lsmash_file_t *file
 );
+
+int isom_rearrange_data
+(
+    lsmash_file_t        *file,
+    lsmash_adhoc_remux_t *remux,
+    uint8_t              *buf[2],
+    size_t                read_num,
+    size_t                size,
+    uint64_t              read_pos,
+    uint64_t              write_pos,
+    uint64_t              file_size
+);

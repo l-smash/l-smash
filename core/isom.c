@@ -2614,43 +2614,6 @@ void isom_add_preceding_box_size
     }
 }
 
-int isom_rearrange_boxes
-(
-    lsmash_file_t        *file,
-    lsmash_adhoc_remux_t *remux,
-    uint8_t              *buf[2],
-    size_t                read_num,
-    size_t                size,
-    uint64_t              read_pos,
-    uint64_t              write_pos,
-    uint64_t              file_size
-)
-{
-    /* Copy-pastan */
-    int buf_switch = 1;
-    lsmash_bs_t *bs = file->bs;
-    while( read_num == size )
-    {
-        if( lsmash_bs_write_seek( bs, read_pos, SEEK_SET ) < 0 )
-            return -1;
-        lsmash_bs_read_data( bs, buf[buf_switch], &read_num );
-        read_pos    = bs->offset;
-        buf_switch ^= 0x1;
-        if( lsmash_bs_write_seek( bs, write_pos, SEEK_SET ) < 0 )
-            return -1;
-        if( lsmash_bs_write_data( bs, buf[buf_switch], size ) < 0 )
-            return -1;
-        write_pos = bs->offset;
-        if( remux && remux->func )
-            remux->func( remux->param, write_pos, file_size ); // FIXME:
-    }
-    if( lsmash_bs_write_data( bs, buf[buf_switch ^ 0x1], read_num ) < 0 )
-        return -1;
-    if( remux && remux->func )
-        remux->func( remux->param, file_size, file_size ); // FIXME:
-    return 0;
-}
-
 int isom_establish_movie( lsmash_file_t *file )
 {
     if( isom_check_mandatory_boxes( file ) < 0
@@ -2768,7 +2731,7 @@ int lsmash_finish_movie
     if( file->free )
         file->free->pos += mtf_size;
     /* Move Media Data Box. */
-    if( isom_rearrange_boxes( file, remux, buf, read_num, size, read_pos, write_pos, total ) < 0 )
+    if( isom_rearrange_data( file, remux, buf, read_num, size, read_pos, write_pos, total ) < 0 )
         goto fail;
     file->size += mtf_size;
     lsmash_free( buf[0] );

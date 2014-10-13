@@ -2508,18 +2508,6 @@ int isom_establish_movie( lsmash_file_t *file );
 int isom_rap_grouping_established( isom_rap_group_t *group, int num_leading_samples_known, isom_sgpd_t *sgpd, int is_fragment );
 int isom_all_recovery_completed( isom_sbgp_t *sbgp, lsmash_entry_list_t *pool );
 
-int isom_rearrange_boxes
-(
-    lsmash_file_t        *file,
-    lsmash_adhoc_remux_t *remux,
-    uint8_t              *buf[2],
-    size_t                read_num,
-    size_t                size,
-    uint64_t              read_pos,
-    uint64_t              write_pos,
-    uint64_t              file_size
-);
-
 lsmash_file_t *isom_add_file( lsmash_root_t *root );
 isom_ftyp_t *isom_add_ftyp( lsmash_file_t *file );
 isom_moov_t *isom_add_moov( lsmash_file_t *file );
