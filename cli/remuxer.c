@@ -54,15 +54,19 @@ typedef struct
 
 typedef struct
 {
+    const char              *name;
     lsmash_file_t           *fh;
     lsmash_file_parameters_t param;
+    lsmash_file_parameters_t seg_param;
     output_movie_t           movie;
+    uint32_t                 current_subseg_number;
 } output_file_t;
 
 typedef struct
 {
     lsmash_root_t *root;
     output_file_t  file;
+    uint32_t       current_seg_number;
 } output_t;
 
 typedef struct
@@ -150,6 +154,7 @@ typedef struct
     char                *chap_file;
     uint16_t             default_language;
     uint32_t             fragment_base_track;
+    uint32_t             subseg_per_seg;
     int                  dash;
 } remuxer_t;
 
@@ -205,6 +210,12 @@ static void cleanup_output_movie( output_t *output )
             lsmash_free( out_movie->track[i].summary_remap );
         lsmash_freep( &out_movie->track );
     }
+    if( !(output->file.seg_param.mode & LSMASH_FILE_MODE_INITIALIZATION) )
+    {
+        lsmash_freep( &output->file.seg_param.brands );
+        lsmash_close_file( &output->file.seg_param );
+    }
+    lsmash_freep( &output->file.param.brands );
     lsmash_close_file( &output->file.param );
     lsmash_destroy_root( output->root );
     output->root = NULL;
@@ -290,7 +301,9 @@ static void display_help( void )
              "                              This option is overridden by the track options.\n"
              "    --fragment <integer>      Enable fragmentation per random accessible point.\n"
              "                              Set which track the fragmentation is based on.\n"
-             "    --dash                    Construct Indexed self-initializing Media Segment.\n"
+             "    --dash <integer>          Enable DASH ISOBMFF-based Media segmentation.\n"
+             "                              The value is the number of subsegments per segment.\n"
+             "                              If zero, Indexed self-initializing Media Segment.\n"
              "                              This option requires --fragment.\n"
              "Track options:\n"
              "    remove                    Remove this track\n"
@@ -667,6 +680,7 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
                 return ERROR_MSG( "failed to create a ROOT.\n" );
             if( lsmash_open_file( argv[i], 0, &output->file.param ) < 0 )
                 return ERROR_MSG( "failed to open an output file.\n" );
+            output->file.name = argv[i];
         }
         else if( !strcasecmp( argv[i], "--chapter" ) )    /* chapter file */
         {
@@ -699,7 +713,12 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
                 return ERROR_MSG( "%s is an invalid track number.\n", argv[i] );
         }
         else if( !strcasecmp( argv[i], "--dash" ) )
-            remuxer->dash = 1;
+        {
+            if( ++i == argc )
+                return ERROR_MSG( "--dash requires an argument.\n" );
+            remuxer->subseg_per_seg = atoi( argv[i] );
+            remuxer->dash           = 1;
+        }
         else
             return ERROR_MSG( "unkown option found: %s\n", argv[i] );
     }
@@ -829,7 +848,7 @@ static void replace_with_valid_brand( remuxer_t *remuxer )
                         else
                             *brand = LSMASH_4CC( '3', 'g', 'g', *brand & 0xFF );
                     }
-                    if( (remuxer->output->file.param.mode & LSMASH_FILE_MODE_INDEX)
+                    if( remuxer->dash
                      && (*brand == ISOM_BRAND_TYPE_AVC1
                       || (((*brand >> 24) & 0xFF) == 'i'
                        && ((*brand >> 16) & 0xFF) == 's'
@@ -858,15 +877,24 @@ static int set_movie_parameters( remuxer_t *remuxer )
     output_file_t *out_file  = &output->file;
     if( remuxer->fragment_base_track )
         out_file->param.mode |= LSMASH_FILE_MODE_FRAGMENTED;
+    int self_containd_segment = (remuxer->dash && remuxer->subseg_per_seg == 0);
     if( remuxer->dash )
     {
         if( remuxer->fragment_base_track )
-            out_file->param.mode |= LSMASH_FILE_MODE_INDEX;
+        {
+            if( self_containd_segment )
+                out_file->param.mode |= LSMASH_FILE_MODE_INDEX;
+            else
+            {
+                out_file->param.mode &= ~LSMASH_FILE_MODE_MEDIA;
+                out_file->param.mode |= LSMASH_FILE_MODE_SEGMENT;
+            }
+        }
         else
             WARNING_MSG( "--dash requires --fragment.\n" );
     }
     replace_with_valid_brand( remuxer );
-    if( remuxer->dash )
+    if( self_containd_segment )
     {
         out_file->param.major_brand   = ISOM_BRAND_TYPE_DASH;
         out_file->param.minor_version = 0;
@@ -909,12 +937,12 @@ static int set_movie_parameters( remuxer_t *remuxer )
             }
     }
     /* Deduplicate compatible brands. */
-    uint32_t num_input_brands = num_input + (remuxer->dash ? 1 : 0);
+    uint32_t num_input_brands = num_input + (self_containd_segment ? 1 : 0);
     for( int i = 0; i < num_input; i++ )
         num_input_brands += input[i].file.param.brand_count;
     lsmash_brand_type input_brands[num_input_brands];
     num_input_brands = 0;
-    if( remuxer->dash )
+    if( self_containd_segment )
         input_brands[num_input_brands++] = ISOM_BRAND_TYPE_DASH;
     for( int i = 0; i < num_input; i++ )
     {
@@ -923,7 +951,9 @@ static int set_movie_parameters( remuxer_t *remuxer )
             if( input[i].file.param.brands[j] )
                 input_brands[num_input_brands++] = input[i].file.param.brands[j];
     }
-    lsmash_brand_type output_brands[num_input_brands];
+    lsmash_brand_type *output_brands = lsmash_malloc_zero( num_input_brands * sizeof(lsmash_brand_type) );
+    if( !output_brands )
+        return ERROR_MSG( "failed to allocate brands for an output file.\n" );
     uint32_t num_output_brands = 0;
     for( uint32_t i = 0; i < num_input_brands; i++ )
     {
@@ -943,6 +973,7 @@ static int set_movie_parameters( remuxer_t *remuxer )
     out_file->fh = lsmash_set_file( output->root, &out_file->param );
     if( !out_file->fh )
         return ERROR_MSG( "failed to add an output file into a ROOT.\n" );
+    out_file->seg_param = out_file->param;
     /* Check whether a reference chapter track is allowed or not. */
     if( remuxer->chap_file )
         for( uint32_t i = 0; i < out_file->param.brand_count; i++ )
@@ -1167,6 +1198,7 @@ static int prepare_output( remuxer_t *remuxer )
     if( out_movie->num_tracks == 0 )
         return ERROR_MSG( "failed to create the output movie.\n" );
     out_movie->current_track_number = 1;
+    output->current_seg_number = 1;
     return 0;
 }
 
@@ -1208,6 +1240,124 @@ static int flush_movie_fragment( remuxer_t *remuxer )
                 break;
         }
     }
+    return 0;
+}
+
+static int moov_to_front_callback( void *param, uint64_t written_movie_size, uint64_t total_movie_size )
+{
+    REFRESH_CONSOLE;
+    eprintf( "Finalizing: [%5.2lf%%]\r", ((double)written_movie_size / total_movie_size) * 100.0 );
+    return 0;
+}
+
+static lsmash_adhoc_remux_t moov_to_front =
+{
+    .func        = moov_to_front_callback,
+    .buffer_size = 4 * 1024 * 1024, /* 4MiB */
+    .param       = NULL
+};
+
+static int open_media_segment( output_t *output, lsmash_file_parameters_t *seg_param )
+{
+    /* Open a media segment file.
+     * Each file is named as follows.
+     *   a.mp4
+     *   a_1.mp4
+     *   a_2.mp4
+     *    ...
+     *   a_N.mp4
+     * N is the number of segment files excluding the initialization segment file.
+     */
+    output_file_t *out_file = &output->file;
+    int out_file_name_length = strlen( out_file->name );
+    const char *end = &out_file->name[ out_file_name_length ];
+    const char *p   = end;
+    while( p >= out_file->name && *p != '.' && *p != '/' && *p != '\\' )
+        --p;
+    if( p < out_file->name )
+        ++p;
+    if( *p != '.' )
+        p = end;
+    int suffix_length = 1;
+    for( uint32_t i = output->current_seg_number; i; i /= 10 )
+        ++suffix_length;
+    int seg_name_length   = out_file_name_length + suffix_length;
+    int suffixless_length = p - out_file->name;
+    char seg_name[ seg_name_length + 1 ];
+    seg_name[ seg_name_length ] = '\0';
+    memcpy( seg_name, out_file->name, suffixless_length );
+    sprintf( seg_name + suffixless_length, "_%"PRIu32, output->current_seg_number );
+    if( *p == '.' )
+        memcpy( seg_name + suffixless_length + suffix_length, p, end - p );
+    int ret = lsmash_open_file( seg_name, 0, seg_param );
+    if( ret == 0 )
+        eprintf( "[Segment] out: %s\n", seg_name );
+    return ret;
+}
+
+static int switch_segment( remuxer_t *remuxer )
+{
+    output_t      *output   = remuxer->output;
+    output_file_t *out_file = &output->file;
+    lsmash_file_parameters_t seg_param = { 0 };
+    if( open_media_segment( output, &seg_param ) < 0 )
+        return ERROR_MSG( "failed to open an output file for segmentation.\n" );
+    /* Set up the media segment file.
+     * Copy the parameters of the previous segment if the previous is not the initialization segment. */
+    if( out_file->seg_param.mode & LSMASH_FILE_MODE_INITIALIZATION )
+    {
+        uint32_t           brand_count = out_file->param.brand_count + 2;
+        lsmash_brand_type *brands      = lsmash_malloc_zero( brand_count * sizeof(lsmash_brand_type) );
+        if( !brands )
+            return ERROR_MSG( "failed to allocate brands for an output segment file.\n" );
+        brands[0] = ISOM_BRAND_TYPE_MSDH;
+        brands[1] = ISOM_BRAND_TYPE_MSIX;
+        for( uint32_t i = 0; i < out_file->param.brand_count; i++ )
+            brands[i + 2] = out_file->param.brands[i];
+        seg_param.major_brand = ISOM_BRAND_TYPE_MSDH;
+        seg_param.brand_count = brand_count;
+        seg_param.brands      = brands;
+        seg_param.mode        = LSMASH_FILE_MODE_WRITE | LSMASH_FILE_MODE_FRAGMENTED
+                              | LSMASH_FILE_MODE_BOX   | LSMASH_FILE_MODE_MEDIA
+                              | LSMASH_FILE_MODE_INDEX | LSMASH_FILE_MODE_SEGMENT;
+    }
+    else
+    {
+        void *opaque = seg_param.opaque;
+        seg_param = out_file->seg_param;
+        seg_param.opaque = opaque;
+    }
+    lsmash_file_t *segment = lsmash_set_file( output->root, &seg_param );
+    if( !segment )
+        return ERROR_MSG( "failed to add an output segment file into a ROOT.\n" );
+    /* Switch to the next segment.
+     * After switching, close the previous segment if the previous is not the initialization segment. */
+    if( lsmash_switch_media_segment( output->root, segment, &moov_to_front ) < 0 )
+        return ERROR_MSG( "failed to switch to the next segment.\n" );
+    if( !(out_file->seg_param.mode & LSMASH_FILE_MODE_INITIALIZATION) )
+        return lsmash_close_file( &out_file->seg_param );
+    out_file->seg_param = seg_param;
+    return 0;
+}
+
+static int handle_segmentation( remuxer_t *remuxer )
+{
+    if( remuxer->subseg_per_seg == 0 )
+        return 0;
+    output_t *output = remuxer->output;
+    if( remuxer->subseg_per_seg == output->file.current_subseg_number
+     || output->current_seg_number == 1 )
+    {
+        if( switch_segment( remuxer ) < 0 )
+        {
+            ERROR_MSG( "failed to switch to a segment.\n" );
+            return -1;
+        }
+        output->file.current_subseg_number = 1;
+        ++ output->current_seg_number;
+    }
+    else
+        ++ output->file.current_subseg_number;
     return 0;
 }
 
@@ -1302,6 +1452,8 @@ static int do_remux( remuxer_t *remuxer )
                             ERROR_MSG( "failed to flush a movie fragment.\n" );
                             break;
                         }
+                        if( handle_segmentation( remuxer ) < 0 )
+                            break;
                         if( lsmash_create_fragment_movie( output->root ) < 0 )
                         {
                             ERROR_MSG( "failed to create a movie fragment.\n" );
@@ -1428,13 +1580,6 @@ static int construct_timeline_maps( remuxer_t *remuxer )
     return 0;
 }
 
-static int moov_to_front_callback( void *param, uint64_t written_movie_size, uint64_t total_movie_size )
-{
-    REFRESH_CONSOLE;
-    eprintf( "Finalizing: [%5.2lf%%]\r", ((double)written_movie_size / total_movie_size) * 100.0 );
-    return 0;
-}
-
 static int finish_movie( remuxer_t *remuxer )
 {
     output_t *output = remuxer->output;
@@ -1442,10 +1587,6 @@ static int finish_movie( remuxer_t *remuxer )
     if( remuxer->chap_file )
         lsmash_set_tyrant_chapter( output->root, remuxer->chap_file, remuxer->add_bom_to_chpl );
     /* Finish muxing. */
-    lsmash_adhoc_remux_t moov_to_front;
-    moov_to_front.func        = moov_to_front_callback;
-    moov_to_front.buffer_size = 4*1024*1024;    /* 4MiB */
-    moov_to_front.param       = NULL;
     REFRESH_CONSOLE;
     if( lsmash_finish_movie( output->root, &moov_to_front ) )
         return -1;
@@ -1485,7 +1626,21 @@ int main( int argc, char *argv[] )
     output_t            output = { 0 };
     input_t             input[ num_input ];
     track_media_option *track_option[ num_input ];
-    remuxer_t           remuxer = { &output, input, track_option, num_input, 0, 0, 1, NULL, 0 };
+    remuxer_t           remuxer =
+    {
+        .output              = &output,
+        .input               = input,
+        .track_option        = track_option,
+        .num_input           = num_input,
+        .add_bom_to_chpl     = 0,
+        .ref_chap_available  = 0,
+        .chap_track          = 1,
+        .chap_file           = NULL,
+        .default_language    = 0,
+        .fragment_base_track = 0,
+        .subseg_per_seg      = 0,
+        .dash                = 0
+    };
     memset( input, 0, num_input * sizeof(input_t) );
     memset( track_option, 0, num_input * sizeof(track_media_option *) );
     if( parse_cli_option( argc, argv, &remuxer ) )
@@ -1501,7 +1656,7 @@ int main( int argc, char *argv[] )
     if( finish_movie( &remuxer ) )
         return REMUXER_ERR( "failed to finish output movie.\n" );
     REFRESH_CONSOLE;
-    eprintf( "Remuxing completed!\n" );
+    eprintf( "%s completed!\n", !remuxer.dash || remuxer.subseg_per_seg == 0 ? "Remuxing" : "Segmentation" );
     cleanup_remuxer( &remuxer );
     return 0;
 }
