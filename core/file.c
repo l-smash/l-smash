@@ -28,6 +28,16 @@
 #include "read.h"
 #include "fragment.h"
 
+static void isom_clear_compat_flags
+(
+    lsmash_file_t *file
+)
+{
+    /* Clear flags for compatibility. */
+    memset( (int8_t *)file + COMPAT_FLAGS_OFFSET, 0, sizeof(lsmash_file_t) - COMPAT_FLAGS_OFFSET );
+    file->min_isom_version = UINT8_MAX; /* undefined value */
+}
+
 int isom_check_compatibility
 (
     lsmash_file_t *file
@@ -35,10 +45,7 @@ int isom_check_compatibility
 {
     if( !file )
         return -1;
-    /* Clear flags for compatibility. */
-    ptrdiff_t compat_offset = offsetof( lsmash_file_t, qt_compatible );
-    memset( (int8_t *)file + compat_offset, 0, sizeof(lsmash_file_t) - compat_offset );
-    file->min_isom_version = UINT8_MAX; /* undefined value */
+    isom_clear_compat_flags( file );
     /* Get the brand container. */
     isom_ftyp_t *ftyp = file->ftyp ? file->ftyp : (isom_ftyp_t *)lsmash_get_entry_data( &file->styp_list, 1 );
     /* Check brand to decide mandatory boxes. */
@@ -293,10 +300,33 @@ static int isom_set_brands
         return -1;      /* We support setting brands up to 50. */
     if( major_brand == 0 || brand_count == 0 )
     {
-        /* Absence of File Type Box means this file is a QuickTime or MP4 version 1 format file. */
-        isom_remove_box_by_itself( file->ftyp );
-        /* Anyway we use QTFF as a default file format. */
-        file->qt_compatible = 1;
+        if( file->flags & LSMASH_FILE_MODE_INITIALIZATION )
+        {
+            /* Absence of File Type Box means this file is a QuickTime or MP4 version 1 format file. */
+            isom_remove_box_by_itself( file->ftyp );
+            /* Anyway we use QTFF as a default file format. */
+            isom_clear_compat_flags( file );
+            file->qt_compatible = 1;
+        }
+        else
+        {
+            /* The absence of the Segment Type Box is allowed.
+             * We set brands from the initialization segment after switching to this segment. */
+            for( lsmash_entry_t *entry = file->styp_list.head; entry; entry = entry->next )
+                isom_remove_box_by_itself( entry->data );
+            if( file->initializer )
+            {
+                /* Copy flags for compatibility. */
+                memcpy( (int8_t *)file + COMPAT_FLAGS_OFFSET, file->initializer, sizeof(lsmash_file_t) - COMPAT_FLAGS_OFFSET );
+                file->isom_compatible  = 1;
+                file->allow_moof_base  = 1;
+                file->media_segment    = 1;
+                if( file->min_isom_version < 5 )
+                    file->min_isom_version = 5;
+                if( file->max_isom_version < 6 )
+                    file->max_isom_version = 6;
+            }
+        }
         return 0;
     }
     isom_ftyp_t *ftyp;
@@ -487,6 +517,7 @@ lsmash_file_t *lsmash_set_file
             file->fragment = lsmash_malloc_zero( sizeof(isom_fragment_manager_t) );
             if( !file->fragment )
                 goto fail;
+            file->fragment->first_moof_pos = FIRST_MOOF_POS_UNDETERMINED;
             file->fragment->pool = lsmash_create_entry_list();
             if( !file->fragment->pool )
                 goto fail;
@@ -629,6 +660,9 @@ int lsmash_switch_media_segment
     }
     else
         successor->initializer = predecessor->initializer;
+    if( !lsmash_get_entry_data( &successor->styp_list, 1 )
+     && isom_set_brands( successor, 0, 0, NULL, 0 ) < 0 )
+        return -1;
     successor->fragment_count = predecessor->fragment_count;
     root->file = successor;
     return 0;

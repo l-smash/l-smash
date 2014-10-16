@@ -1702,6 +1702,7 @@ typedef struct
  * The presence of this means we use the structure of movie fragments. */
 typedef struct
 {
+#define FIRST_MOOF_POS_UNDETERMINED UINT64_MAX
     isom_moof_t         *movie;             /* the address corresponding to the current Movie Fragment Box */
     uint64_t             first_moof_pos;
     uint64_t             pool_size;         /* the total sample size in the current movie fragment */
@@ -1885,6 +1886,7 @@ struct lsmash_file_tag
         uint32_t *compatible_brands;        /* the backup of the compatible brands in the File Type Box or the valid Segment Type Box */
         uint8_t   fake_file_mode;           /* If set to 1, the bytestream manager handles fake-file stream. */
         /* flags for compatibility */
+#define COMPAT_FLAGS_OFFSET offsetof( lsmash_file_t, qt_compatible )
         uint8_t qt_compatible;              /* compatibility with QuickTime file format */
         uint8_t isom_compatible;            /* compatibility with ISO Base Media file format */
         uint8_t avc_extensions;             /* compatibility with AVC extensions */

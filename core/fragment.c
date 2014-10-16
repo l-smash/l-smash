@@ -1064,12 +1064,8 @@ static int isom_finish_fragment_movie
     moof->pos = file->size;
     if( isom_write_box( file->bs, (isom_box_t *)moof ) )
         return -1;
-    if( file->fragment->first_moof_pos == 0 )
-    {
-        if( moof->pos == 0 )
-            return -1;  /* because of the presence of the preceding File Type Box or Segment Type Box */
+    if( file->fragment->first_moof_pos == FIRST_MOOF_POS_UNDETERMINED )
         file->fragment->first_moof_pos = moof->pos;
-    }
     file->size += moof->size;
     /* Output samples. */
     if( isom_output_fragment_media_data( file ) < 0 )
@@ -1636,6 +1632,18 @@ int isom_append_fragment_sample
      || !trak->mdia->minf->stbl->stsd
      || !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
         return -1;
+    /* Write the Segment Type Box here if required and if it was not written yet. */
+    if( !(file->flags & LSMASH_FILE_MODE_INITIALIZATION)
+     && file->styp_list.head && file->styp_list.head->data )
+    {
+        isom_styp_t *styp = (isom_styp_t *)file->styp_list.head->data;
+        if( !(styp->manager & LSMASH_WRITTEN_BOX) )
+        {
+            if( isom_write_box( file->bs, (isom_box_t *)styp ) < 0 )
+                return -1;
+            file->size += styp->size;
+        }
+    }
     int (*append_sample_func)( void *, lsmash_sample_t * ) = NULL;
     void *track_fragment = NULL;
     if( !fragment->movie )

@@ -4172,7 +4172,7 @@ int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_
      || file->max_chunk_duration  == 0
      || file->max_async_tolerance == 0 )
         return -1;
-    /* Write File Type Box or Segment Type Box here if it was not written yet. */
+    /* Write File Type Box here if it was not written yet. */
     if( file->flags & LSMASH_FILE_MODE_INITIALIZATION )
     {
         if( file->ftyp && !(file->ftyp->manager & LSMASH_WRITTEN_BOX) )
@@ -4181,22 +4181,6 @@ int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_
                 return -1;
             file->size += file->ftyp->size;
         }
-    }
-    else
-    {
-        if( file->styp_list.head
-         && file->styp_list.head->data )
-        {
-            isom_styp_t *styp = (isom_styp_t *)file->styp_list.head->data;
-            if( !(styp->manager & LSMASH_WRITTEN_BOX) )
-            {
-                if( isom_write_box( file->bs, (isom_box_t *)styp ) < 0 )
-                    return -1;
-                file->size += styp->size;
-            }
-        }
-        else
-            return -1;
     }
     if( (file->flags & LSMASH_FILE_MODE_FRAGMENTED)
      && file->fragment
