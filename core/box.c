@@ -910,8 +910,40 @@ static void isom_remove_sdtp( isom_sdtp_t *sdtp )
     }
 }
 
-DEFINE_SIMPLE_LIST_BOX_IN_LIST_REMOVER( isom_remove_sgpd, sgpd, isom_stbl_t )
-DEFINE_SIMPLE_LIST_BOX_IN_LIST_REMOVER( isom_remove_sbgp, sbgp, isom_stbl_t )
+static void isom_remove_sgpd( isom_sgpd_t *sgpd )
+{
+    if( !sgpd )
+        return;
+    lsmash_remove_list( sgpd->list, NULL );
+    if( sgpd->parent )
+    {
+        if( lsmash_check_box_type_identical( sgpd->parent->type, ISOM_BOX_TYPE_STBL ) )
+            REMOVE_BOX_IN_LIST( sgpd, isom_stbl_t );
+        else if( lsmash_check_box_type_identical( sgpd->parent->type, ISOM_BOX_TYPE_TRAF ) )
+            REMOVE_BOX_IN_LIST( sgpd, isom_traf_t );
+        else
+            assert( 0 );
+        return;
+    }
+}
+
+static void isom_remove_sbgp( isom_sbgp_t *sbgp )
+{
+    if( !sbgp )
+        return;
+    lsmash_remove_list( sbgp->list, NULL );
+    if( sbgp->parent )
+    {
+        if( lsmash_check_box_type_identical( sbgp->parent->type, ISOM_BOX_TYPE_STBL ) )
+            REMOVE_BOX_IN_LIST( sbgp, isom_stbl_t );
+        else if( lsmash_check_box_type_identical( sbgp->parent->type, ISOM_BOX_TYPE_TRAF ) )
+            REMOVE_BOX_IN_LIST( sbgp, isom_traf_t );
+        else
+            assert( 0 );
+        return;
+    }
+}
+
 DEFINE_SIMPLE_BOX_REMOVER( isom_remove_stbl, stbl, isom_minf_t )
 
 static void isom_remove_dref_entry( isom_dref_entry_t *data_entry )
