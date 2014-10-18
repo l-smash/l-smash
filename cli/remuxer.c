@@ -153,7 +153,7 @@ typedef struct
     uint32_t             chap_track;
     char                *chap_file;
     uint16_t             default_language;
-    uint32_t             fragment_base_track;
+    uint32_t             frag_base_track;
     uint32_t             subseg_per_seg;
     int                  dash;
 } remuxer_t;
@@ -708,8 +708,8 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
         {
             if( ++i == argc )
                 return ERROR_MSG( "--fragment requires an argument.\n" );
-            remuxer->fragment_base_track = atoi( argv[i] );
-            if( remuxer->fragment_base_track == 0 )
+            remuxer->frag_base_track = atoi( argv[i] );
+            if( remuxer->frag_base_track == 0 )
                 return ERROR_MSG( "%s is an invalid track number.\n", argv[i] );
         }
         else if( !strcasecmp( argv[i], "--dash" ) )
@@ -833,7 +833,7 @@ static void replace_with_valid_brand( remuxer_t *remuxer )
                      && ((*brand >> 16) & 0xFF) == 'g'
                      && (((*brand >>  8) & 0xFF) == 'p' || ((*brand >>  8) & 0xFF) == 'r') )
                     {
-                        if( remuxer->fragment_base_track == 0   /* Movie fragments are not allowed in '3gp4' and '3gp5'. */
+                        if( remuxer->frag_base_track == 0   /* Movie fragments are not allowed in '3gp4' and '3gp5'. */
                          && video_track_count   <= 1 && audio_track_count   <= 1
                          && video_num_summaries <= 1 && audio_num_summaries <= 1 )
                             continue;
@@ -875,12 +875,12 @@ static int set_movie_parameters( remuxer_t *remuxer )
     input_t       *input     = remuxer->input;
     output_t      *output    = remuxer->output;
     output_file_t *out_file  = &output->file;
-    if( remuxer->fragment_base_track )
+    if( remuxer->frag_base_track )
         out_file->param.mode |= LSMASH_FILE_MODE_FRAGMENTED;
     int self_containd_segment = (remuxer->dash && remuxer->subseg_per_seg == 0);
     if( remuxer->dash )
     {
-        if( remuxer->fragment_base_track )
+        if( remuxer->frag_base_track )
         {
             if( self_containd_segment )
                 out_file->param.mode |= LSMASH_FILE_MODE_INDEX;
@@ -1361,6 +1361,28 @@ static int handle_segmentation( remuxer_t *remuxer )
     return 0;
 }
 
+static void adapt_description_index( output_track_t *out_track, input_track_t *in_track, lsmash_sample_t *sample )
+{
+    sample->index = sample->index > in_track->num_summaries ? in_track->num_summaries
+                  : sample->index == 0 ? 1
+                  : sample->index;
+    sample->index = out_track->summary_remap[ sample->index - 1 ];
+    if( in_track->current_sample_index == 0 )
+        in_track->current_sample_index = sample->index;
+}
+
+static void adjust_timestamp( output_track_t *out_track, lsmash_sample_t *sample )
+{
+    /* The first DTS must be 0. */
+    if( out_track->current_sample_number == 1 )
+        out_track->skip_dt_interval = sample->dts;
+    if( out_track->skip_dt_interval )
+    {
+        sample->dts -= out_track->skip_dt_interval;
+        sample->cts -= out_track->skip_dt_interval;
+    }
+}
+
 static int do_remux( remuxer_t *remuxer )
 {
 #define LSMASH_MAX( a, b ) ((a) > (b) ? (a) : (b))
@@ -1368,13 +1390,14 @@ static int do_remux( remuxer_t *remuxer )
     output_t       *output    = remuxer->output;
     output_movie_t *out_movie = &output->file.movie;
     set_reference_chapter_track( remuxer );
-    double   largest_dts                 = 0;
+    double   largest_dts                 = 0;   /* in seconds */
+    double   frag_base_dts               = 0;   /* in seconds */
     uint32_t input_movie_number          = 1;
     uint32_t num_consecutive_sample_skip = 0;
     uint32_t num_active_input_tracks     = out_movie->num_tracks;
     uint64_t total_media_size            = 0;
     uint8_t  sample_count                = 0;
-    uint8_t  pending_flush_fragments     = (remuxer->fragment_base_track != 0);
+    uint8_t  pending_flush_fragments     = (remuxer->frag_base_track != 0); /* For non-fragmented movie, always set to 0. */
     while( 1 )
     {
         input_t       *in       = &inputs[input_movie_number - 1];
@@ -1403,16 +1426,11 @@ static int do_remux( remuxer_t *remuxer )
                 sample = lsmash_get_sample_from_media_timeline( in->root, in_track->track_ID, in_track->current_sample_number );
                 if( sample )
                 {
+                    output_track_t *out_track = &out_movie->track[ out_movie->current_track_number - 1 ];
+                    adapt_description_index( out_track, in_track, sample );
+                    adjust_timestamp( out_track, sample );
                     in_track->sample = sample;
                     in_track->dts    = (double)sample->dts / in_track->media.param.timescale;
-                    /* Adapt the sample description index. */
-                    output_track_t *out_track = &out_movie->track[ out_movie->current_track_number - 1 ];
-                    sample->index = sample->index > in_track->num_summaries ? in_track->num_summaries
-                                  : sample->index == 0 ? 1
-                                  : sample->index;
-                    sample->index = out_track->summary_remap[ sample->index - 1 ];
-                    if( in_track->current_sample_index == 0 )
-                        in_track->current_sample_index = sample->index;
                 }
                 else
                 {
@@ -1440,11 +1458,17 @@ static int do_remux( remuxer_t *remuxer )
             if( sample )
             {
                 /* Flushing the active movie fragment is pending until random accessible point sample within all active tracks are ready. */
-                if( remuxer->fragment_base_track )
+                if( remuxer->frag_base_track )
                 {
                     if( pending_flush_fragments == 0 )
-                        pending_flush_fragments = (remuxer->fragment_base_track == out_movie->current_track_number
-                                                && sample->prop.ra_flags != ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE);
+                    {
+                        if( remuxer->frag_base_track == out_movie->current_track_number
+                         && sample->prop.ra_flags != ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE )
+                        {
+                            pending_flush_fragments = 1;
+                            frag_base_dts = in_track->dts;
+                        }
+                    }
                     else if( num_consecutive_sample_skip == num_active_input_tracks || total_media_size == 0 )
                     {
                         if( flush_movie_fragment( remuxer ) < 0 )
@@ -1463,26 +1487,38 @@ static int do_remux( remuxer_t *remuxer )
                     }
                 }
                 /* Append a sample if meeting a condition. */
-                if( pending_flush_fragments == 0
-                  ? in_track->dts <= largest_dts || num_consecutive_sample_skip == num_active_input_tracks
-                  : sample->prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE && sample->index == in_track->current_sample_index )
+                int append = 0;
+                int need_new_fragment = (remuxer->frag_base_track && sample->index != in_track->current_sample_index);
+                if( pending_flush_fragments == 0 )
+                    append = (in_track->dts <= largest_dts || num_consecutive_sample_skip == num_active_input_tracks) && !need_new_fragment;
+                else if( remuxer->frag_base_track != out_movie->current_track_number && !need_new_fragment )
+                {
+                    /* Wait as much as possible both to make the last sample within each track fragment close to the DTS of
+                     * the first sample within the track fragment corresponding to the base track within the next movie
+                     * fragment and to make all the track fragments within the next movie fragment start with RAP. */
+                    if( sample->prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE )
+                        append = 1;
+                    else
+                    {
+                        /* Check the DTS and random accessibilities of the next sample. */
+                        lsmash_sample_t info;
+                        if( lsmash_get_sample_info_from_media_timeline( in->root, in_track->track_ID, in_track->current_sample_number + 1, &info ) < 0 )
+                            append = 0;
+                        else
+                            append = (info.prop.ra_flags != ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE)
+                                  && ((double)info.dts / in_track->media.param.timescale <= frag_base_dts);
+                    }
+                }
+                if( append )
                 {
                     if( sample->index )
                     {
                         output_track_t *out_track = &out_movie->track[ out_movie->current_track_number - 1 ];
-                        /* The first DTS must be 0. */
-                        if( out_track->current_sample_number == 1 )
-                            out_track->skip_dt_interval = sample->dts;
-                        if( out_track->skip_dt_interval )
-                        {
-                            sample->dts -= out_track->skip_dt_interval;
-                            sample->cts -= out_track->skip_dt_interval;
-                        }
                         uint64_t sample_size     = sample->length;      /* sample might be deleted internally after appending. */
                         uint64_t last_sample_dts = sample->dts;         /* same as above */
                         uint32_t sample_index    = sample->index;       /* same as above */
                         /* Append a sample into output movie. */
-                        if( lsmash_append_sample( output->root, out_track->track_ID, sample ) )
+                        if( lsmash_append_sample( output->root, out_track->track_ID, sample ) < 0 )
                         {
                             lsmash_delete_sample( sample );
                             return ERROR_MSG( "failed to append a sample.\n" );
@@ -1565,7 +1601,7 @@ static int construct_timeline_maps( remuxer_t *remuxer )
                     if( lsmash_create_explicit_timeline_map( output->root, out_track->track_ID, empty_edit ) )
                         return ERROR_MSG( "failed to create a empty duration.\n" );
                 }
-                if( remuxer->fragment_base_track == 0 )
+                if( remuxer->frag_base_track == 0 )
                     edit.duration = (out_track->last_sample_dts + out_track->last_sample_delta - in_track->skip_duration) * timescale_convert_multiplier;
                 else
                     edit.duration = ISOM_EDIT_DURATION_IMPLICIT;
@@ -1590,7 +1626,7 @@ static int finish_movie( remuxer_t *remuxer )
     REFRESH_CONSOLE;
     if( lsmash_finish_movie( output->root, &moov_to_front ) )
         return -1;
-    return remuxer->fragment_base_track ? 0 : lsmash_write_lsmash_indicator( output->root );
+    return remuxer->frag_base_track ? 0 : lsmash_write_lsmash_indicator( output->root );
 }
 
 int main( int argc, char *argv[] )
@@ -1628,18 +1664,18 @@ int main( int argc, char *argv[] )
     track_media_option *track_option[ num_input ];
     remuxer_t           remuxer =
     {
-        .output              = &output,
-        .input               = input,
-        .track_option        = track_option,
-        .num_input           = num_input,
-        .add_bom_to_chpl     = 0,
-        .ref_chap_available  = 0,
-        .chap_track          = 1,
-        .chap_file           = NULL,
-        .default_language    = 0,
-        .fragment_base_track = 0,
-        .subseg_per_seg      = 0,
-        .dash                = 0
+        .output             = &output,
+        .input              = input,
+        .track_option       = track_option,
+        .num_input          = num_input,
+        .add_bom_to_chpl    = 0,
+        .ref_chap_available = 0,
+        .chap_track         = 1,
+        .chap_file          = NULL,
+        .default_language   = 0,
+        .frag_base_track    = 0,
+        .subseg_per_seg     = 0,
+        .dash               = 0
     };
     memset( input, 0, num_input * sizeof(input_t) );
     memset( track_option, 0, num_input * sizeof(track_media_option *) );
@@ -1647,11 +1683,11 @@ int main( int argc, char *argv[] )
         return REMUXER_ERR( "failed to parse command line options.\n" );
     if( prepare_output( &remuxer ) )
         return REMUXER_ERR( "failed to set up preparation for output.\n" );
-    if( remuxer.fragment_base_track && construct_timeline_maps( &remuxer ) )
+    if( remuxer.frag_base_track && construct_timeline_maps( &remuxer ) )
         return REMUXER_ERR( "failed to construct timeline maps.\n" );
     if( do_remux( &remuxer ) )
         return REMUXER_ERR( "failed to remux movies.\n" );
-    if( remuxer.fragment_base_track == 0 && construct_timeline_maps( &remuxer ) )
+    if( remuxer.frag_base_track == 0 && construct_timeline_maps( &remuxer ) )
         return REMUXER_ERR( "failed to construct timeline maps.\n" );
     if( finish_movie( &remuxer ) )
         return REMUXER_ERR( "failed to finish output movie.\n" );
