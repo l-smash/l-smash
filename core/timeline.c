@@ -722,8 +722,8 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
     lsmash_entry_t *sbgp_rap_entry  = sbgp_rap  && sbgp_rap->list  ? sbgp_rap->list->head  : NULL;
     lsmash_entry_t *next_stsc_entry = stsc_entry ? stsc_entry->next : NULL;
     isom_stsc_entry_t *stsc_data = stsc_entry ? (isom_stsc_entry_t *)stsc_entry->data : NULL;
-    int movie_framemts_present = (file->moov->mvex && file->moof_list.head);
-    if( !movie_framemts_present && (!stts_entry || !stsc_entry || !stco_entry || !stco_entry->data || (next_stsc_entry && !next_stsc_entry->data)) )
+    int movie_fragments_present = (file->moov->mvex && file->moof_list.head);
+    if( !movie_fragments_present && (!stts_entry || !stsc_entry || !stco_entry || !stco_entry->data || (next_stsc_entry && !next_stsc_entry->data)) )
         goto fail;
     isom_sample_entry_t *description = (isom_sample_entry_t *)lsmash_get_entry_data( &stsd->list, stsc_data ? stsc_data->sample_description_index : 1 );
     if( !description )
@@ -1026,7 +1026,7 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
         }
     }
     uint32_t sample_count = packet_number - 1;
-    if( movie_framemts_present )
+    if( movie_fragments_present )
     {
         isom_tfra_t                     *tfra       = isom_get_tfra( file->mfra, track_ID );
         lsmash_entry_t                  *tfra_entry = tfra && tfra->list ? tfra->list->head : NULL;
@@ -1645,7 +1645,7 @@ int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_
     if( isom_check_initializer_present( dst ) < 0
      || isom_check_initializer_present( src ) < 0 )
         return -1;
-    lsmash_file_t *dst_file = dst->file;
+    lsmash_file_t *dst_file = dst->file->initializer;
     isom_trak_t   *dst_trak = isom_get_trak( dst_file, dst_track_ID );
     if( !dst_file->moov
      || !dst_file->moov->mvhd
@@ -1666,29 +1666,35 @@ int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_
     uint64_t src_media_duration;
     int32_t  src_ctd_shift;     /* Add timeline shift difference between src and dst to each media_time.
                                  * Therefore, call this function as later as possible. */
-    lsmash_entry_t *src_entry;
+    lsmash_entry_t *src_entry = NULL;
     lsmash_file_t  *src_file = src->file->initializer;
     isom_trak_t    *src_trak = isom_get_trak( src_file, src_track_ID );
+    int src_fragmented = !!(src_file->flags & LSMASH_FILE_MODE_FRAGMENTED);
     if( !src_trak
      || !src_trak->edts
      || !src_trak->edts->elst
-     || !src_trak->edts->elst->list )
+     || !src_trak->edts->elst->list
+     || src_fragmented )
     {
-        /* Get from timeline instead of boxes. */
+        /* Get from constructed timeline instead of boxes. */
         isom_timeline_t *src_timeline = isom_get_timeline( src, src_track_ID );
-        if( !src_timeline
-         ||  src_timeline->movie_timescale == 0
-         ||  src_timeline->media_timescale == 0
-         || !src_timeline->edit_list )
+        if( src_timeline
+         && src_timeline->movie_timescale
+         && src_timeline->media_timescale )
+        {
+            src_entry = src_timeline->edit_list->head;
+            if( !src_entry )
+                return 0;
+            src_movie_timescale = src_timeline->movie_timescale;
+            src_media_timescale = src_timeline->media_timescale;
+            src_track_duration  = src_timeline->track_duration;
+            src_media_duration  = src_timeline->media_duration;
+            src_ctd_shift       = src_timeline->ctd_shift;
+        }
+        else if( !src_fragmented )
             return -1;
-        src_movie_timescale = src_timeline->movie_timescale;
-        src_media_timescale = src_timeline->media_timescale;
-        src_track_duration  = src_timeline->track_duration;
-        src_media_duration  = src_timeline->media_duration;
-        src_ctd_shift       = src_timeline->ctd_shift;
-        src_entry = src_timeline->edit_list->head;
     }
-    else
+    if( !src_entry )
     {
         if( !src_file->moov
          || !src_file->moov->mvhd
@@ -1700,16 +1706,16 @@ int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_
          || !src_trak->mdia->minf
          || !src_trak->mdia->minf->stbl )
             return -1;
+        src_entry = src_trak->edts->elst->list->head;
+        if( !src_entry )
+            return 0;
         src_movie_timescale = src_file->moov->mvhd->timescale;
         src_media_timescale = src_trak->mdia->mdhd->timescale;
         src_track_duration  = src_trak->tkhd->duration;
         src_media_duration  = src_trak->mdia->mdhd->duration;
         src_ctd_shift       = src_trak->mdia->minf->stbl->cslg ? src_trak->mdia->minf->stbl->cslg->compositionToDTSShift : 0;
-        src_entry = src_trak->edts->elst->list->head;
     }
-    if( !src_entry )
-        return 0;
-    /* Generate edit list if absent in destination. */
+    /* Generate the edit list if absent in the destination. */
     if( (!dst_trak->edts       && !isom_add_edts( dst_trak ))
      || (!dst_trak->edts->elst && !isom_add_elst( dst_trak->edts )) )
         return -1;
@@ -1718,30 +1724,23 @@ int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_
     int32_t  dst_ctd_shift       = dst_trak->mdia->minf->stbl->cslg ? dst_trak->mdia->minf->stbl->cslg->compositionToDTSShift : 0;
     int32_t  media_time_shift    = src_ctd_shift - dst_ctd_shift;
     lsmash_entry_list_t *dst_list = dst_trak->edts->elst->list;
-    lsmash_entry_t      *src_head = src_entry;
     while( src_entry )
     {
         isom_elst_entry_t *src_data = (isom_elst_entry_t *)src_entry->data;
         if( !src_data )
             return -1;
-        uint64_t segment_duration;
-        if( src_data->segment_duration == 0 && !dst_file->fragment )
-        {
-            /* The 0-duration edit makes no sence for non-fragmented movie file. */
-            if( src_entry == src_head )
-                /* Set an appropriate duration from the source track. */
-                segment_duration = src_track_duration
-                                 ? src_track_duration
-                                 : src_media_duration * ((double)src_movie_timescale / src_media_timescale);
-            else
-                /* Two or more 0-duration edits make no sence. Just skip them. */
-                continue;
-        }
-        else
-            segment_duration = src_data->segment_duration;
         isom_elst_entry_t *dst_data = (isom_elst_entry_t *)lsmash_malloc( sizeof(isom_elst_entry_t) );
         if( !dst_data )
             return -1;
+        uint64_t segment_duration;
+        if( src_data->segment_duration == 0 && !dst_file->fragment )
+            /* The implicit duration edit is not suitable for non-fragmented movie file.
+             * Set an appropriate duration from the source track. */
+            segment_duration = src_fragmented
+                             ? (uint64_t)(src_media_duration * ((double)src_movie_timescale / src_media_timescale))
+                             : src_track_duration;
+        else
+            segment_duration = src_data->segment_duration;
         dst_data->segment_duration = segment_duration * ((double)dst_movie_timescale / src_movie_timescale) + 0.5;
         dst_data->media_rate       = src_data->media_rate;
         if( src_data->media_time != ISOM_EDIT_MODE_EMPTY )
