@@ -121,7 +121,7 @@ static int isom_add_elst_entry( isom_elst_t *elst, uint64_t segment_duration, in
     data->segment_duration = segment_duration;
     data->media_time       = media_time;
     data->media_rate       = media_rate;
-    if( lsmash_add_entry( elst->list, data ) )
+    if( lsmash_add_entry( elst->list, data ) < 0 )
     {
         lsmash_free( data );
         return -1;
@@ -325,7 +325,7 @@ static int isom_add_stts_entry( isom_stbl_t *stbl, uint32_t sample_delta )
         return -1;
     data->sample_count = 1;
     data->sample_delta = sample_delta;
-    if( lsmash_add_entry( stbl->stts->list, data ) )
+    if( lsmash_add_entry( stbl->stts->list, data ) < 0 )
     {
         lsmash_free( data );
         return -1;
@@ -344,7 +344,7 @@ static int isom_add_ctts_entry( isom_stbl_t *stbl, uint32_t sample_offset )
         return -1;
     data->sample_count  = 1;
     data->sample_offset = sample_offset;
-    if( lsmash_add_entry( stbl->ctts->list, data ) )
+    if( lsmash_add_entry( stbl->ctts->list, data ) < 0 )
     {
         lsmash_free( data );
         return -1;
@@ -364,7 +364,7 @@ static int isom_add_stsc_entry( isom_stbl_t *stbl, uint32_t first_chunk, uint32_
     data->first_chunk              = first_chunk;
     data->samples_per_chunk        = samples_per_chunk;
     data->sample_description_index = sample_description_index;
-    if( lsmash_add_entry( stbl->stsc->list, data ) )
+    if( lsmash_add_entry( stbl->stsc->list, data ) < 0 )
     {
         lsmash_free( data );
         return -1;
@@ -399,7 +399,7 @@ static int isom_add_stsz_entry( isom_stbl_t *stbl, uint32_t entry_size )
             if( !data )
                 return -1;
             data->entry_size = stsz->sample_size;
-            if( lsmash_add_entry( stsz->list, data ) )
+            if( lsmash_add_entry( stsz->list, data ) < 0 )
             {
                 lsmash_free( data );
                 return -1;
@@ -411,7 +411,7 @@ static int isom_add_stsz_entry( isom_stbl_t *stbl, uint32_t entry_size )
     if( !data )
         return -1;
     data->entry_size = entry_size;
-    if( lsmash_add_entry( stsz->list, data ) )
+    if( lsmash_add_entry( stsz->list, data ) < 0 )
     {
         lsmash_free( data );
         return -1;
@@ -430,7 +430,7 @@ static int isom_add_stss_entry( isom_stbl_t *stbl, uint32_t sample_number )
     if( !data )
         return -1;
     data->sample_number = sample_number;
-    if( lsmash_add_entry( stbl->stss->list, data ) )
+    if( lsmash_add_entry( stbl->stss->list, data ) < 0 )
     {
         lsmash_free( data );
         return -1;
@@ -448,7 +448,7 @@ static int isom_add_stps_entry( isom_stbl_t *stbl, uint32_t sample_number )
     if( !data )
         return -1;
     data->sample_number = sample_number;
-    if( lsmash_add_entry( stbl->stps->list, data ) )
+    if( lsmash_add_entry( stbl->stps->list, data ) < 0 )
     {
         lsmash_free( data );
         return -1;
@@ -510,7 +510,7 @@ static int isom_add_co64_entry( isom_stbl_t *stbl, uint64_t chunk_offset )
     if( !data )
         return -1;
     data->chunk_offset = chunk_offset;
-    if( lsmash_add_entry( stbl->stco->list, data ) )
+    if( lsmash_add_entry( stbl->stco->list, data ) < 0 )
     {
         lsmash_free( data );
         return -1;
@@ -562,7 +562,7 @@ static int isom_add_stco_entry( isom_stbl_t *stbl, uint64_t chunk_offset )
     if( !data )
         return -1;
     data->chunk_offset = (uint32_t)chunk_offset;
-    if( lsmash_add_entry( stbl->stco->list, data ) )
+    if( lsmash_add_entry( stbl->stco->list, data ) < 0 )
     {
         lsmash_free( data );
         return -1;
@@ -646,7 +646,7 @@ static isom_rap_entry_t *isom_add_rap_group_entry( isom_sgpd_t *sgpd )
     data->description_length        = 0;
     data->num_leading_samples_known = 0;
     data->num_leading_samples       = 0;
-    if( lsmash_add_entry( sgpd->list, data ) )
+    if( lsmash_add_entry( sgpd->list, data ) < 0 )
     {
         lsmash_free( data );
         return NULL;
@@ -663,7 +663,7 @@ static isom_roll_entry_t *isom_add_roll_group_entry( isom_sgpd_t *sgpd, int16_t 
         return NULL;
     data->description_length = 0;
     data->roll_distance      = roll_distance;
-    if( lsmash_add_entry( sgpd->list, data ) )
+    if( lsmash_add_entry( sgpd->list, data ) < 0 )
     {
         lsmash_free( data );
         return NULL;
@@ -680,7 +680,7 @@ static isom_group_assignment_entry_t *isom_add_group_assignment_entry( isom_sbgp
         return NULL;
     data->sample_count            = sample_count;
     data->group_description_index = group_description_index;
-    if( lsmash_add_entry( sbgp->list, data ) )
+    if( lsmash_add_entry( sbgp->list, data ) < 0 )
     {
         lsmash_free( data );
         return NULL;
@@ -3653,7 +3653,7 @@ int isom_group_roll_recovery( isom_box_t *parent, lsmash_sample_t *sample )
         group->prev_is_recovery_start = is_recovery_start;
         group->is_fragment            = is_fragment;
         group->assignment             = isom_add_group_assignment_entry( sbgp, 1, 0 );
-        if( !group->assignment || lsmash_add_entry( pool, group ) )
+        if( !group->assignment || lsmash_add_entry( pool, group ) < 0 )
         {
             lsmash_free( group );
             return -1;
