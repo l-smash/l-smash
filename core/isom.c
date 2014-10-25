@@ -154,8 +154,7 @@ void isom_remove_dcr_ps( isom_dcr_ps_entry_t *ps )
 {
     if( !ps )
         return;
-    if( ps->nalUnit )
-        lsmash_free( ps->nalUnit );
+    lsmash_free( ps->nalUnit );
     lsmash_free( ps );
 }
 
@@ -3023,8 +3022,7 @@ int lsmash_sample_alloc( lsmash_sample_t *sample, uint32_t size )
         return -1;
     if( size == 0 )
     {
-        if( sample->data )
-            lsmash_free( sample->data );
+        lsmash_free( sample->data );
         sample->data   = NULL;
         sample->length = 0;
         return 0;
@@ -3047,8 +3045,7 @@ void lsmash_delete_sample( lsmash_sample_t *sample )
 {
     if( !sample )
         return;
-    if( sample->data )
-        lsmash_free( sample->data );
+    lsmash_free( sample->data );
     lsmash_free( sample );
 }
 
@@ -3073,8 +3070,7 @@ void isom_remove_sample_pool( isom_sample_pool_t *pool )
 {
     if( !pool )
         return;
-    if( pool->data )
-        lsmash_free( pool->data );
+    lsmash_free( pool->data );
     lsmash_free( pool );
 }
 
