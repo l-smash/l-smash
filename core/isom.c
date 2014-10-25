@@ -944,11 +944,7 @@ static int isom_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_de
                 cslg->compositionEndTime           = composition_end_time;
             }
             else
-            {
-                if( cslg )
-                    lsmash_free( cslg );
-                stbl->cslg = NULL;
-            }
+                isom_remove_box_by_itself( cslg );
         }
     }
     if( mdhd->duration > UINT32_MAX && !file->undefined_64_ver )
