@@ -1819,7 +1819,7 @@ void lsmash_cleanup_data_reference
 {
     if( !data_ref )
         return;
-    lsmash_free( data_ref->location );
+    lsmash_freep( &data_ref->location );
 }
 
 int lsmash_create_data_reference
