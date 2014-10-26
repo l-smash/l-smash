@@ -39,10 +39,10 @@
 int lsmash_setup_AudioSpecificConfig( lsmash_audio_summary_t *summary )
 {
     if( !summary )
-        return -1;
+        return LSMASH_ERR_FUNCTION_PARAM;
     lsmash_bs_t* bs = lsmash_bs_create();
     if( !bs )
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     mp4a_AudioSpecificConfig_t *asc =
         mp4a_create_AudioSpecificConfig( summary->aot,
                                          summary->frequency,
@@ -53,7 +53,7 @@ int lsmash_setup_AudioSpecificConfig( lsmash_audio_summary_t *summary )
     if( !asc )
     {
         lsmash_bs_cleanup( bs );
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     }
     mp4a_put_AudioSpecificConfig( bs, asc );
     void *new_asc;
@@ -62,12 +62,12 @@ int lsmash_setup_AudioSpecificConfig( lsmash_audio_summary_t *summary )
     mp4a_remove_AudioSpecificConfig( asc );
     lsmash_bs_cleanup( bs );
     if( !new_asc )
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     lsmash_codec_specific_t *specific = lsmash_malloc_zero( sizeof(lsmash_codec_specific_t) );
     if( !specific )
     {
         lsmash_free( new_asc );
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     }
     specific->type              = LSMASH_CODEC_SPECIFIC_DATA_TYPE_UNKNOWN;
     specific->format            = LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED;
@@ -79,7 +79,7 @@ int lsmash_setup_AudioSpecificConfig( lsmash_audio_summary_t *summary )
     {
         lsmash_free( new_asc );
         lsmash_destroy_codec_specific_data( specific );
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     }
     return 0;
 }
@@ -134,14 +134,14 @@ void lsmash_cleanup_summary( lsmash_summary_t *summary )
 int lsmash_add_codec_specific_data( lsmash_summary_t *summary, lsmash_codec_specific_t *specific )
 {
     if( !summary || !summary->opaque || !specific )
-        return -1;
+        return LSMASH_ERR_FUNCTION_PARAM;
     lsmash_codec_specific_t *dup = isom_duplicate_codec_specific_data( specific );
     if( !dup )
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     if( lsmash_add_entry( &summary->opaque->list, dup ) < 0 )
     {
         lsmash_destroy_codec_specific_data( dup );
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     }
     return 0;
 }
@@ -201,7 +201,7 @@ lsmash_summary_t *lsmash_get_summary( lsmash_root_t *root, uint32_t track_ID, ui
 int lsmash_compare_summary( lsmash_summary_t *a, lsmash_summary_t *b )
 {
     if( !a || !b )
-        return -1;
+        return LSMASH_ERR_FUNCTION_PARAM;
     if( a->summary_type != b->summary_type
      || !lsmash_check_box_type_identical( a->sample_type, b->sample_type ) )
         return 1;
