@@ -38,8 +38,7 @@ lsmash_bs_t *lsmash_bs_create( void )
 
 static void bs_buffer_free( lsmash_bs_t *bs )
 {
-    if( bs->buffer.internal
-     && bs->buffer.data )
+    if( bs->buffer.internal )
         lsmash_free( bs->buffer.data );
     bs->buffer.data  = NULL;
     bs->buffer.alloc = 0;
@@ -946,7 +945,6 @@ void lsmash_destroy_multiple_buffers( lsmash_multiple_buffers_t *multiple_buffer
 {
     if( !multiple_buffer )
         return;
-    if( multiple_buffer->buffers )
-        lsmash_free( multiple_buffer->buffers );
+    lsmash_free( multiple_buffer->buffers );
     lsmash_free( multiple_buffer );
 }
