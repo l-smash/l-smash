@@ -343,7 +343,7 @@ int isom_add_extension_binary
     ext->type       = box_type;
     ext->binary     = box_data;
     ext->destruct   = isom_destruct_extension_binary;
-    if( isom_add_box_to_extension_list( parent, ext ) )
+    if( isom_add_box_to_extension_list( parent, ext ) < 0 )
     {
         lsmash_free( ext );
         return -1;
