@@ -1802,7 +1802,7 @@ typedef isom_ftyp_t isom_styp_t;
  *   For SAPs of type 5 and 6, no specific signalling in the ISO Base Media file format is supported. */
 typedef struct
 {
-    unsigned int reference_type  : 1;    /* 1: the reference is to a Segment Index Box
+    unsigned int reference_type  : 1;   /* 1: the reference is to a Segment Index Box
                                          * 0: the reference is to media content
                                          *      For files based on the ISO Base Media file format, the reference is to a
                                          *      Movie Fragment Box.
