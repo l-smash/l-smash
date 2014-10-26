@@ -124,7 +124,7 @@ static lsmash_audio_summary_t *mp4sys_mp3_create_summary( mp4sys_mp3_header_t *h
     if( !legacy_mode )
     {
         summary->object_type_indication = MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3;
-        if( lsmash_setup_AudioSpecificConfig( summary ) )
+        if( lsmash_setup_AudioSpecificConfig( summary ) < 0 )
         {
             lsmash_cleanup_summary( summary );
             return NULL;
@@ -154,7 +154,7 @@ static lsmash_audio_summary_t *mp4sys_mp3_create_summary( mp4sys_mp3_header_t *h
     param->objectTypeIndication = header->ID ? MP4SYS_OBJECT_TYPE_Audio_ISO_11172_3 : MP4SYS_OBJECT_TYPE_Audio_ISO_13818_3;
     param->streamType           = MP4SYS_STREAM_TYPE_AudioStream;
 #if !USE_MP4SYS_LEGACY_INTERFACE
-    if( lsmash_set_mp4sys_decoder_specific_info( param, data, data_length ) )
+    if( lsmash_set_mp4sys_decoder_specific_info( param, data, data_length ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         lsmash_destroy_codec_specific_data( specific );
@@ -163,7 +163,7 @@ static lsmash_audio_summary_t *mp4sys_mp3_create_summary( mp4sys_mp3_header_t *h
     }
     lsmash_free( data );
 #endif
-    if( lsmash_add_entry( &summary->opaque->list, specific ) )
+    if( lsmash_add_entry( &summary->opaque->list, specific ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         lsmash_destroy_codec_specific_data( specific );
@@ -381,7 +381,7 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
     }
 
     mp4sys_mp3_header_t new_header = {0};
-    if( mp4sys_mp3_parse_header( buf, &new_header ) )
+    if( mp4sys_mp3_parse_header( buf, &new_header ) < 0 )
     {
         info->status = IMPORTER_ERROR;
         return 0;
@@ -432,7 +432,7 @@ static int mp4sys_mp3_probe( importer_t *importer )
         return -1;
 
     mp4sys_mp3_header_t header = {0};
-    if( mp4sys_mp3_parse_header( buf, &header ) )
+    if( mp4sys_mp3_parse_header( buf, &header ) < 0 )
         return -1;
 
     /* now the stream seems valid mp3 */
@@ -453,7 +453,7 @@ static int mp4sys_mp3_probe( importer_t *importer )
     info->samples_in_frame = summary->samples_in_frame;
     memcpy( info->raw_header, buf, MP4SYS_MP3_HEADER_LENGTH );
 
-    if( lsmash_add_entry( importer->summaries, summary ) )
+    if( lsmash_add_entry( importer->summaries, summary ) < 0 )
     {
         lsmash_free( info );
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
