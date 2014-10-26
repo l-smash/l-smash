@@ -34,10 +34,23 @@
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  2
-#define LSMASH_VERSION_MINOR  1
-#define LSMASH_VERSION_MICRO  5
+#define LSMASH_VERSION_MINOR  2
+#define LSMASH_VERSION_MICRO  0
 
 #define LSMASH_VERSION_INT( a, b, c ) (((a) << 16) | ((b) << 8) | (c))
+
+/****************************************************************************
+ * Error Values
+ ****************************************************************************/
+enum
+{
+    LSMASH_ERR_NAMELESS       = -1, /* An error but not assigned to any following errors */
+    LSMASH_ERR_MEMORY_ALLOC   = -2, /* There is not enough room in the heap. */
+    LSMASH_ERR_INVALID_DATA   = -3, /* Invalid data was found. */
+    LSMASH_ERR_FUNCTION_PARAM = -4, /* An error in the parameter list of the function */
+    LSMASH_ERR_PATCH_WELCOME  = -5, /* Not implemented yet, so patches welcome. */
+    LSMASH_ERR_UNKNOWN        = -6, /* Unknown error occured. */
+};
 
 /****************************************************************************
  * ROOT
