@@ -69,12 +69,12 @@ static int isom_read_simple_chapter( FILE *chapter, isom_chapter_entry_t *data )
 {
     char buff[CHAPTER_BUFSIZE];
     /* get start_time */
-    if( isom_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) )
+    if( isom_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) < 0 )
         return -1;
     char *chapter_time = strchr( buff, '=' );   /* find separator */
     if( !chapter_time++
-     || isom_get_start_time( chapter_time, data )
-     || isom_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) ) /* get chapter_name */
+     || isom_get_start_time( chapter_time, data ) < 0
+     || isom_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) < 0 )    /* get chapter_name */
         return -1;
     char *chapter_name = strchr( buff, '=' );   /* find separator */
     if( !chapter_name++ )
@@ -91,10 +91,10 @@ static int isom_read_simple_chapter( FILE *chapter, isom_chapter_entry_t *data )
 static int isom_read_minimum_chapter( FILE *chapter, isom_chapter_entry_t *data )
 {
     char buff[CHAPTER_BUFSIZE];
-    if( isom_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) ) /* read newline */
+    if( isom_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) < 0 )    /* read newline */
         return -1;
     char *p_buff = &buff[ !memcmp( buff, UTF8_BOM, UTF8_BOM_LENGTH ) ? UTF8_BOM_LENGTH : 0 ];   /* BOM detection */
-    if( isom_get_start_time( p_buff, data ) )   /* get start_time */
+    if( isom_get_start_time( p_buff, data ) < 0 )   /* get start_time */
         return -1;
     /* get chapter_name */
     char *chapter_name = strchr( buff, ' ' );   /* find separator */
@@ -155,7 +155,7 @@ static int isom_add_chpl_entry( isom_chpl_t *chpl, isom_chapter_entry_t *chap_da
     }
     memcpy( data->chapter_name, chap_data->chapter_name, data->chapter_name_length );
     data->chapter_name[ data->chapter_name_length ] = '\0';
-    if( lsmash_add_entry( chpl->list, data ) )
+    if( lsmash_add_entry( chpl->list, data ) < 0 )
     {
         lsmash_free( data->chapter_name );
         lsmash_free( data );
@@ -211,7 +211,7 @@ int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom
             lsmash_free( data.chapter_name );
             break;
         }
-        if( isom_add_chpl_entry( file->moov->udta->chpl, &data ) )
+        if( isom_add_chpl_entry( file->moov->udta->chpl, &data ) < 0 )
             goto fail2;
         lsmash_freep( &data.chapter_name );
     }
@@ -269,7 +269,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     lsmash_track_parameters_t track_param;
     lsmash_initialize_track_parameters( &track_param );
     track_param.mode = ISOM_TRACK_IN_MOVIE | ISOM_TRACK_IN_PREVIEW;
-    if( lsmash_set_track_parameters( root, chapter_track_ID, &track_param ) )
+    if( lsmash_set_track_parameters( root, chapter_track_ID, &track_param ) < 0 )
         goto fail;
     /* Set media parameters. */
     uint64_t media_timescale = lsmash_get_media_timescale( root, track_ID );
@@ -280,7 +280,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     media_param.timescale    = media_timescale;
     media_param.ISO_language = file->max_3gpp_version >= 6 || file->itunes_movie ? ISOM_LANGUAGE_CODE_UNDEFINED : 0;
     media_param.MAC_language = 0;
-    if( lsmash_set_media_parameters( root, chapter_track_ID, &media_param ) )
+    if( lsmash_set_media_parameters( root, chapter_track_ID, &media_param ) < 0 )
         goto fail;
     /* Create a sample description. */
     lsmash_codec_type_t sample_type = file->max_3gpp_version >= 6 || file->itunes_movie
@@ -336,14 +336,14 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
         sample->cts           = data.start_time;
         sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
         sample->index         = sample_entry;
-        if( lsmash_append_sample( root, chapter_track_ID, sample ) )
+        if( lsmash_append_sample( root, chapter_track_ID, sample ) < 0 )
         {
             lsmash_free( data.chapter_name );
             goto fail;
         }
         lsmash_freep( &data.chapter_name );
     }
-    if( lsmash_flush_pooled_samples( root, chapter_track_ID, 0 ) )
+    if( lsmash_flush_pooled_samples( root, chapter_track_ID, 0 ) < 0 )
         goto fail;
     isom_trak_t *chapter_trak = isom_get_trak( file, chapter_track_ID );
     if( !chapter_trak )
