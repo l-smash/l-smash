@@ -183,15 +183,13 @@ static inline void mp4a_remove_GASpecificConfig( mp4a_GASpecificConfig_t* gasc )
 {
     debug_if( !gasc )
         return;
-    if( gasc->program_config_element )
-        lsmash_free( gasc->program_config_element );
+    lsmash_free( gasc->program_config_element );
     lsmash_free( gasc );
 }
 
 static inline void mp4a_remove_MPEG_1_2_SpecificConfig( mp4a_MPEG_1_2_SpecificConfig_t* mpeg_1_2_sc )
 {
-    debug_if( mpeg_1_2_sc )
-        lsmash_free( mpeg_1_2_sc );
+    lsmash_free( mpeg_1_2_sc );
 }
 
 void mp4a_remove_AudioSpecificConfig( mp4a_AudioSpecificConfig_t* asc )
@@ -220,8 +218,7 @@ void mp4a_remove_AudioSpecificConfig( mp4a_AudioSpecificConfig_t* asc )
         mp4a_remove_MPEG_1_2_SpecificConfig( (mp4a_MPEG_1_2_SpecificConfig_t*)asc->deepAudioSpecificConfig );
         break;
     default:
-        if( asc->deepAudioSpecificConfig )
-            lsmash_free( asc->deepAudioSpecificConfig );
+        lsmash_free( asc->deepAudioSpecificConfig );
         break;
     }
     lsmash_free( asc );
