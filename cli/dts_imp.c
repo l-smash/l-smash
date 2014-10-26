@@ -232,7 +232,7 @@ static int dts_importer_get_accessunit( importer_t *importer, uint32_t track_num
         dts_imp->au_length = 0;
         return 0;
     }
-    if( dts_importer_get_next_accessunit_internal( importer ) )
+    if( dts_importer_get_next_accessunit_internal( importer ) < 0 )
         dts_imp->status = IMPORTER_ERROR;
     return current_status;
 }
@@ -247,7 +247,7 @@ static lsmash_audio_summary_t *dts_create_summary( dts_info_t *info )
                                                                            LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
     specific->data.unstructured = lsmash_create_dts_specific_info( param, &specific->size );
     if( !specific->data.unstructured
-     || lsmash_add_entry( &summary->opaque->list, specific ) )
+     || lsmash_add_entry( &summary->opaque->list, specific ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         lsmash_destroy_codec_specific_data( specific );
