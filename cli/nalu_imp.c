@@ -307,7 +307,7 @@ static int h264_get_access_unit_internal
             {
                 /* VCL NALU (slice) */
                 h264_slice_info_t prev_slice = *slice;
-                if( h264_parse_slice( info, &nuh, sb->rbsp, nalu + nuh.length, nalu_length - nuh.length ) )
+                if( h264_parse_slice( info, &nuh, sb->rbsp, nalu + nuh.length, nalu_length - nuh.length ) < 0 )
                     return h264_get_au_internal_failed( h264_imp, au, complete_au );
                 if( probe && info->avcC_pending )
                 {
@@ -1153,7 +1153,7 @@ static int hevc_get_access_unit_internal
                 /* VCL NALU (slice) */
                 hevc_slice_info_t prev_slice = *slice;
                 if( hevc_parse_slice_segment_header( info, &nuh, sb->rbsp,
-                                                     nalu + nuh.length, nalu_length - nuh.length ) )
+                                                     nalu + nuh.length, nalu_length - nuh.length ) < 0 )
                     return hevc_get_au_internal_failed( hevc_imp, au, complete_au );
                 if( probe && info->hvcC_pending )
                 {
@@ -1275,7 +1275,7 @@ static int hevc_importer_get_accessunit( importer_t *importer, uint32_t track_nu
         if( !summary )
             return -1;
         lsmash_remove_entry( importer->summaries, track_number, lsmash_cleanup_summary );
-        if( lsmash_add_entry( importer->summaries, summary ) )
+        if( lsmash_add_entry( importer->summaries, summary ) < 0 )
         {
             lsmash_cleanup_summary( (lsmash_summary_t *)summary );
             return -1;
