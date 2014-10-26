@@ -1880,11 +1880,7 @@ void lsmash_delete_media_timestamps( lsmash_media_ts_list_t *ts_list )
 {
     if( !ts_list )
         return;
-    if( ts_list->timestamp )
-    {
-        lsmash_free( ts_list->timestamp );
-        ts_list->timestamp = NULL;
-    }
+    lsmash_freep( &ts_list->timestamp );
     ts_list->sample_count = 0;
 }
 
