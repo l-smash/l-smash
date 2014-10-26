@@ -248,7 +248,7 @@ int vc1_parse_sequence_header( vc1_info_t *info, uint8_t *ebdu, uint64_t ebdu_si
 {
     lsmash_bits_t *bits = info->bits;
     vc1_sequence_header_t *sequence = &info->sequence;
-    if( vc1_import_rbdu_from_ebdu( bits, info->buffer.rbdu, ebdu + VC1_START_CODE_LENGTH, ebdu_size ) )
+    if( vc1_import_rbdu_from_ebdu( bits, info->buffer.rbdu, ebdu + VC1_START_CODE_LENGTH, ebdu_size ) < 0 )
         return -1;
     memset( sequence, 0, sizeof(vc1_sequence_header_t) );
     sequence->profile          = lsmash_bits_get( bits, 2 );
@@ -386,7 +386,7 @@ int vc1_parse_entry_point_header( vc1_info_t *info, uint8_t *ebdu, uint64_t ebdu
     lsmash_bits_t *bits = info->bits;
     vc1_sequence_header_t *sequence = &info->sequence;
     vc1_entry_point_t *entry_point = &info->entry_point;
-    if( vc1_import_rbdu_from_ebdu( bits, info->buffer.rbdu, ebdu + VC1_START_CODE_LENGTH, ebdu_size ) )
+    if( vc1_import_rbdu_from_ebdu( bits, info->buffer.rbdu, ebdu + VC1_START_CODE_LENGTH, ebdu_size ) < 0 )
         return -1;
     memset( entry_point, 0, sizeof(vc1_entry_point_t) );
     uint8_t broken_link_flag = lsmash_bits_get( bits, 1 );          /* 0: no concatenation between the current and the previous entry points
@@ -469,7 +469,7 @@ int vc1_parse_advanced_picture( lsmash_bits_t *bits,
                                 vc1_sequence_header_t *sequence, vc1_picture_info_t *picture,
                                 uint8_t *rbdu_buffer, uint8_t *ebdu, uint64_t ebdu_size )
 {
-    if( vc1_import_rbdu_from_ebdu( bits, rbdu_buffer, ebdu + VC1_START_CODE_LENGTH, ebdu_size ) )
+    if( vc1_import_rbdu_from_ebdu( bits, rbdu_buffer, ebdu + VC1_START_CODE_LENGTH, ebdu_size ) < 0 )
         return -1;
     if( sequence->interlace )
         picture->frame_coding_mode = vc1_get_vlc( bits, 2 );
