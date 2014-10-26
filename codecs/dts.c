@@ -1169,7 +1169,7 @@ int dts_parse_extension_substream( dts_info_t *info )
     for( uint8_t nAst = 0; nAst < exss->nuNumAssets; nAst++ )
         exss->asset[nAst].size = dts_bits_get( bits, nuBits4ExSSFsize, &bits_pos ) + 1;     /* nuAssetFsize[nAst] - 1        (nuBits4ExSSFsize) */
     for( uint8_t nAst = 0; nAst < exss->nuNumAssets; nAst++ )
-        if( dts_parse_asset_descriptor( info, &bits_pos ) )
+        if( dts_parse_asset_descriptor( info, &bits_pos ) < 0 )
             goto parse_fail;
     for( uint8_t nAuPr = 0; nAuPr < exss->nuNumAudioPresnt; nAuPr++ )
         exss->bBcCorePresent[nAuPr] = dts_bits_get( bits, 1, &bits_pos );
