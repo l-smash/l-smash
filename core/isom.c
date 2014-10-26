@@ -533,7 +533,7 @@ static int isom_convert_stco_to_co64( isom_stbl_t *stbl )
     for( lsmash_entry_t *entry = stco->list->head; entry; entry = entry->next )
     {
         isom_stco_entry_t *data = (isom_stco_entry_t*)entry->data;
-        if( isom_add_co64_entry( stbl, data->chunk_offset ) )
+        if( isom_add_co64_entry( stbl, data->chunk_offset ) < 0 )
         {
             ret = -1;
             goto fail;
@@ -766,7 +766,7 @@ static int isom_replace_last_sample_delta( isom_stbl_t *stbl, uint32_t sample_de
         if( last_stts_data->sample_count > 1 )
         {
             last_stts_data->sample_count -= 1;
-            if( isom_add_stts_entry( stbl, sample_delta ) )
+            if( isom_add_stts_entry( stbl, sample_delta ) < 0 )
                 return -1;
         }
         else
@@ -816,7 +816,7 @@ static int isom_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_de
         if( last_sample_delta )
         {
             mdhd->duration += last_sample_delta;
-            if( isom_replace_last_sample_delta( stbl, last_sample_delta ) )
+            if( isom_replace_last_sample_delta( stbl, last_sample_delta ) < 0 )
                 return -1;
         }
         else if( last_stts_data->sample_count > 1 )
@@ -824,7 +824,7 @@ static int isom_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_de
         else
         {
             /* Remove the last entry. */
-            if( lsmash_remove_entry_tail( stts->list, NULL ) )
+            if( lsmash_remove_entry_tail( stts->list, NULL ) < 0 )
                 return -1;
             /* copy the previous sample_delta. */
             ++ ((isom_stts_entry_t *)stts->list->tail->data)->sample_count;
@@ -913,7 +913,7 @@ static int isom_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_de
             else
                 mdhd->duration = dts + last_sample_delta;   /* media duration must not less than last dts. */
         }
-        if( isom_replace_last_sample_delta( stbl, last_sample_delta ) )
+        if( isom_replace_last_sample_delta( stbl, last_sample_delta ) < 0 )
             return -1;
         /* Explicit composition information and timeline shifting  */
         if( cslg || file->qt_compatible || file->max_isom_version >= 4 )
@@ -995,7 +995,7 @@ int isom_update_tkhd_duration( isom_trak_t *trak )
          || !file->moov->mvhd
          ||  trak->mdia->mdhd->timescale == 0 )
             return -1;
-        if( trak->mdia->mdhd->duration == 0 && isom_update_mdhd_duration( trak, 0 ) )
+        if( trak->mdia->mdhd->duration == 0 && isom_update_mdhd_duration( trak, 0 ) < 0 )
             return -1;
         tkhd->duration = trak->mdia->mdhd->duration * ((double)file->moov->mvhd->timescale / trak->mdia->mdhd->timescale);
     }
@@ -1025,7 +1025,7 @@ int lsmash_update_track_duration( lsmash_root_t *root, uint32_t track_ID, uint32
     isom_trak_t   *trak = isom_get_trak( file, track_ID );
     if( !trak )
         return -1;
-    if( isom_update_mdhd_duration( trak, last_sample_delta ) )
+    if( isom_update_mdhd_duration( trak, last_sample_delta ) < 0 )
         return -1;
     /* If the presentation won't be extended and this track has any edit, we don't change or update duration in tkhd. */
     return (!file->fragment && trak->edts && trak->edts->elst)
@@ -1133,7 +1133,7 @@ static int isom_calculate_bitrate_description( isom_mdia_t *mdia, uint32_t *buff
                         }
                         if( !stts_entry )
                             break;
-                        if( isom_increment_sample_number_in_entry( &sample_number_in_stts, ((isom_stts_entry_t *)stts_entry->data)->sample_count, &stts_entry ) )
+                        if( isom_increment_sample_number_in_entry( &sample_number_in_stts, ((isom_stts_entry_t *)stts_entry->data)->sample_count, &stts_entry ) < 0 )
                             return -1;
                     }
                     if( (stsz->list && !stsz_entry) || !stts_entry )
@@ -1226,7 +1226,7 @@ int isom_update_bitrate_description( isom_mdia_t *mdia )
             isom_btrt_t *btrt = (isom_btrt_t *)isom_get_extension_box_format( &stsd_data->extensions, ISOM_BOX_TYPE_BTRT );
             if( btrt )
             {
-                if( isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index ) )
+                if( isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index ) < 0 )
                     return -1;
                 btrt->bufferSizeDB = bufferSizeDB;
                 btrt->maxBitrate   = maxBitrate;
@@ -1241,10 +1241,10 @@ int isom_update_bitrate_description( isom_mdia_t *mdia )
             isom_esds_t *esds = (isom_esds_t *)isom_get_extension_box_format( &stsd_data->extensions, ISOM_BOX_TYPE_ESDS );
             if( !esds || !esds->ES )
                 return -1;
-            if( isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index ) )
+            if( isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index ) < 0 )
                 return -1;
             /* FIXME: avgBitrate is 0 only if VBR in proper. */
-            if( mp4sys_update_DecoderConfigDescriptor( esds->ES, bufferSizeDB, maxBitrate, 0 ) )
+            if( mp4sys_update_DecoderConfigDescriptor( esds->ES, bufferSizeDB, maxBitrate, 0 ) < 0 )
                 return -1;
         }
         else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_MP4A_AUDIO ) )
@@ -1265,10 +1265,10 @@ int isom_update_bitrate_description( isom_mdia_t *mdia )
                 esds = (isom_esds_t *)isom_get_extension_box_format( &stsd_data->extensions, ISOM_BOX_TYPE_ESDS );
             if( !esds || !esds->ES )
                 return -1;
-            if( isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index ) )
+            if( isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index ) < 0 )
                 return -1;
             /* FIXME: avgBitrate is 0 only if VBR in proper. */
-            if( mp4sys_update_DecoderConfigDescriptor( esds->ES, bufferSizeDB, maxBitrate, 0 ) )
+            if( mp4sys_update_DecoderConfigDescriptor( esds->ES, bufferSizeDB, maxBitrate, 0 ) < 0 )
                 return -1;
         }
         else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_ALAC_AUDIO )
@@ -1308,7 +1308,7 @@ int isom_update_bitrate_description( isom_mdia_t *mdia )
             }
             if( !exdata || exdata_size < 36 )
                 return -1;
-            if( isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index ) )
+            if( isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index ) < 0 )
                 return -1;
             exdata += 24;
             /* maxFrameBytes */
@@ -1368,7 +1368,7 @@ int isom_update_bitrate_description( isom_mdia_t *mdia )
             isom_box_t *ext = isom_get_extension_box( &dts_audio->extensions, ISOM_BOX_TYPE_DDTS );
             if( !(ext && (ext->manager & LSMASH_BINARY_CODED_BOX) && ext->binary && ext->size >= 28) )
                 return -1;
-            if( isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index ) )
+            if( isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index ) < 0 )
                 return -1;
             if( !stbl->stsz->list )
                 maxBitrate = avgBitrate;
@@ -1387,7 +1387,7 @@ int isom_update_bitrate_description( isom_mdia_t *mdia )
             uint16_t bitrate;
             if( stbl->stsz->list )
             {
-                if( isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index ) )
+                if( isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index ) < 0 )
                     return -1;
                 bitrate = maxBitrate / 1000;    /* Use maximum bitrate if VBR. */
             }
@@ -1566,12 +1566,12 @@ uint32_t lsmash_create_track( lsmash_root_t *root, lsmash_media_type media_type 
      || !isom_add_stsz( trak->mdia->minf->stbl ) )
         goto fail;
     if( !isom_add_hdlr( trak->mdia )
-     || isom_setup_handler_reference( trak->mdia->hdlr, media_type ) )
+     || isom_setup_handler_reference( trak->mdia->hdlr, media_type ) < 0 )
         goto fail;
     if( file->qt_compatible )
     {
         if( !isom_add_hdlr( trak->mdia->minf )
-         || isom_setup_handler_reference( trak->mdia->minf->hdlr, QT_REFERENCE_HANDLER_TYPE_URL ) )
+         || isom_setup_handler_reference( trak->mdia->minf->hdlr, QT_REFERENCE_HANDLER_TYPE_URL ) < 0 )
             goto fail;
     }
     switch( media_type )
@@ -2234,19 +2234,19 @@ int lsmash_set_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
      || !trak->mdia->minf->stbl )
         return -1;
     trak->mdia->mdhd->timescale = param->timescale;
-    if( isom_set_media_language( file, track_ID, param->ISO_language, param->MAC_language ) )
+    if( isom_set_media_language( file, track_ID, param->ISO_language, param->MAC_language ) < 0 )
         return -1;
     if( param->media_handler_name
-     && isom_set_media_handler_name( file, track_ID, param->media_handler_name ) )
+     && isom_set_media_handler_name( file, track_ID, param->media_handler_name ) < 0 )
         return -1;
     if( file->qt_compatible && param->data_handler_name
-     && isom_set_data_handler_name( file, track_ID, param->data_handler_name ) )
+     && isom_set_data_handler_name( file, track_ID, param->data_handler_name ) < 0 )
         return -1;
     if( (file->avc_extensions || file->qt_compatible) && param->roll_grouping
-     && isom_create_sample_grouping( trak, ISOM_GROUP_TYPE_ROLL ) )
+     && isom_create_sample_grouping( trak, ISOM_GROUP_TYPE_ROLL ) < 0 )
         return -1;
     if( (file->max_isom_version >= 6) && param->rap_grouping
-     && isom_create_sample_grouping( trak, ISOM_GROUP_TYPE_RAP ) )
+     && isom_create_sample_grouping( trak, ISOM_GROUP_TYPE_RAP ) < 0 )
         return -1;
     return 0;
 }
@@ -2481,16 +2481,16 @@ int isom_setup_iods( isom_moov_t *moov )
         if( !trak
          || !trak->tkhd )
             goto fail;
-        if( isom_scan_trak_profileLevelIndication( trak, &audio_pli, &visual_pli ) )
+        if( isom_scan_trak_profileLevelIndication( trak, &audio_pli, &visual_pli ) < 0 )
             goto fail;
-        if( mp4sys_create_ES_ID_Inc( iods->OD, trak->tkhd->track_ID ) )
+        if( mp4sys_create_ES_ID_Inc( iods->OD, trak->tkhd->track_ID ) < 0 )
             goto fail;
     }
     if( mp4sys_to_InitialObjectDescriptor( iods->OD,
                                            0, /* FIXME: I'm not quite sure what the spec says. */
                                            MP4SYS_OD_PLI_NONE_REQUIRED, MP4SYS_SCENE_PLI_NONE_REQUIRED,
                                            audio_pli, visual_pli,
-                                           MP4SYS_GRAPHICS_PLI_NONE_REQUIRED ) )
+                                           MP4SYS_GRAPHICS_PLI_NONE_REQUIRED ) < 0 )
         goto fail;
     return 0;
 fail:
@@ -2786,7 +2786,7 @@ int lsmash_set_last_sample_delta( lsmash_root_t *root, uint32_t track_ID, uint32
             return -1;      /* irregular sample_count */
         /* Set the duration of the first sample.
          * This duration is also the duration of the last sample. */
-        if( isom_add_stts_entry( stbl, sample_delta ) )
+        if( isom_add_stts_entry( stbl, sample_delta ) < 0 )
             return -1;
         return lsmash_update_track_duration( root, track_ID, 0 );
     }
@@ -2904,7 +2904,7 @@ int lsmash_create_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID,
                   : trak->tkhd->duration;
     if( (!trak->edts       && !isom_add_edts( trak ))
      || (!trak->edts->elst && !isom_add_elst( trak->edts ))
-     || isom_add_elst_entry( trak->edts->elst, edit.duration, edit.start_time, edit.rate ) )
+     || isom_add_elst_entry( trak->edts->elst, edit.duration, edit.start_time, edit.rate ) < 0 )
         return -1;
     return isom_update_tkhd_duration( trak );
 }
@@ -3076,7 +3076,7 @@ void isom_remove_sample_pool( isom_sample_pool_t *pool )
 
 static uint32_t isom_add_size( isom_trak_t *trak, uint32_t sample_size )
 {
-    if( isom_add_stsz_entry( trak->mdia->minf->stbl, sample_size ) )
+    if( isom_add_stsz_entry( trak->mdia->minf->stbl, sample_size ) < 0 )
         return 0;
     return isom_get_sample_count( trak );
 }
@@ -3086,7 +3086,7 @@ static uint32_t isom_add_dts( isom_stbl_t *stbl, isom_timestamp_t *cache, uint64
     isom_stts_t *stts = stbl->stts;
     if( stts->list->entry_count == 0 )
     {
-        if( isom_add_stts_entry( stbl, dts ) )
+        if( isom_add_stts_entry( stbl, dts ) < 0 )
             return 0;
         cache->dts = dts;
         return dts;
@@ -3097,7 +3097,7 @@ static uint32_t isom_add_dts( isom_stbl_t *stbl, isom_timestamp_t *cache, uint64
     isom_stts_entry_t *data = (isom_stts_entry_t *)stts->list->tail->data;
     if( data->sample_delta == sample_delta )
         ++ data->sample_count;
-    else if( isom_add_stts_entry( stbl, sample_delta ) )
+    else if( isom_add_stts_entry( stbl, sample_delta ) < 0 )
         return 0;
     cache->dts = dts;
     return sample_delta;
@@ -3122,7 +3122,7 @@ static int isom_add_cts( isom_stbl_t *stbl, isom_timestamp_t *cache, uint64_t ct
         if( sample_count != 1 )
         {
             data->sample_count = sample_count - 1;
-            if( isom_add_ctts_entry( stbl, cts - cache->dts ) )
+            if( isom_add_ctts_entry( stbl, cts - cache->dts ) < 0 )
                 return -1;
         }
         else
@@ -3136,7 +3136,7 @@ static int isom_add_cts( isom_stbl_t *stbl, isom_timestamp_t *cache, uint64_t ct
     uint32_t sample_offset = cts - cache->dts;
     if( data->sample_offset == sample_offset )
         ++ data->sample_count;
-    else if( isom_add_ctts_entry( stbl, sample_offset ) )
+    else if( isom_add_ctts_entry( stbl, sample_offset ) < 0 )
         return -1;
     cache->cts = cts;
     return 0;
@@ -3157,7 +3157,7 @@ static int isom_add_timestamp( isom_trak_t *trak, uint64_t dts, uint64_t cts )
     uint32_t sample_delta = sample_count > 1 ? isom_add_dts( stbl, ts_cache, dts ) : 0;
     if( sample_count > 1 && !sample_delta )
         return -1;
-    if( isom_add_cts( stbl, ts_cache, cts ) )
+    if( isom_add_cts( stbl, ts_cache, cts ) < 0 )
         return -1;
     if( (cts + ts_cache->ctd_shift) < dts )
     {
@@ -3188,7 +3188,7 @@ static int isom_add_sync_point( isom_trak_t *trak, uint32_t sample_number, lsmas
             return 0;
         if( !stbl->stss && !isom_add_stss( stbl ) )
             return -1;
-        if( isom_add_stss_entry( stbl, 1 ) )    /* Declare here the first sample is a sync sample. */
+        if( isom_add_stss_entry( stbl, 1 ) < 0 )    /* Declare here the first sample is a sync sample. */
             return -1;
         cache->all_sync = 0;
         return 0;
@@ -3232,7 +3232,12 @@ static int isom_add_dependency_type( isom_trak_t *trak, lsmash_sample_property_t
     isom_stbl_t *stbl = trak->mdia->minf->stbl;
     if( stbl->sdtp )
         return isom_add_sdtp_entry( (isom_box_t *)stbl, prop, compatibility );
-    if( !prop->allow_earlier && !prop->leading && !prop->independent && !prop->disposable && !prop->redundant )  /* no null check for prop */
+    /* no null check for prop */
+    if( !prop->allow_earlier
+     && !prop->leading
+     && !prop->independent
+     && !prop->disposable
+     && !prop->redundant )
         return 0;
     if( !isom_add_sdtp( (isom_box_t *)stbl ) )
         return -1;
@@ -3240,7 +3245,7 @@ static int isom_add_dependency_type( isom_trak_t *trak, lsmash_sample_property_t
     /* fill past samples with ISOM_SAMPLE_*_UNKNOWN */
     lsmash_sample_property_t null_prop = { 0 };
     for( uint32_t i = 1; i < count; i++ )
-        if( isom_add_sdtp_entry( (isom_box_t *)stbl, &null_prop, compatibility ) )
+        if( isom_add_sdtp_entry( (isom_box_t *)stbl, &null_prop, compatibility ) < 0 )
             return -1;
     return isom_add_sdtp_entry( (isom_box_t *)stbl, prop, compatibility );
 }
@@ -3476,8 +3481,8 @@ static int isom_deduplicate_roll_group( isom_sbgp_t *sbgp, lsmash_entry_list_t *
             /* Merge the current group with the previous. */
             lsmash_entry_t *next_entry = entry->next;
             prev_assignment->sample_count += group->assignment->sample_count;
-            if( lsmash_remove_entry( sbgp->list, current_group_number, NULL )
-             || lsmash_remove_entry_direct( pool, entry, NULL ) )
+            if( lsmash_remove_entry( sbgp->list, current_group_number, NULL ) < 0
+             || lsmash_remove_entry_direct( pool, entry, NULL ) < 0 )
                 return -1;
             entry = next_entry;
         }
@@ -3501,7 +3506,7 @@ static int isom_clean_roll_pool( lsmash_entry_list_t *pool )
             return -1;
         if( !group->delimited || group->described != ROLL_DISTANCE_DETERMINED )
             return 0;
-        if( lsmash_remove_entry_direct( pool, entry, NULL ) )
+        if( lsmash_remove_entry_direct( pool, entry, NULL ) < 0 )
             return -1;
     }
     return 0;
