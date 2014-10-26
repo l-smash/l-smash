@@ -604,7 +604,7 @@ static mp4a_AudioSpecificConfig_t *mp4a_get_AudioSpecificConfig( uint8_t *dsi_pa
     lsmash_bits_t *bits = lsmash_bits_adhoc_create();
     if( !bits )
         return NULL;
-    if( lsmash_bits_import_data( bits, dsi_payload, dsi_payload_length ) )
+    if( lsmash_bits_import_data( bits, dsi_payload, dsi_payload_length ) < 0 )
     {
         lsmash_bits_adhoc_cleanup( bits );
         return NULL;
