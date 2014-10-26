@@ -39,12 +39,12 @@ static int isom_get_start_time( char *chap_time, isom_chapter_entry_t *data )
     uint64_t hh, mm;
     double ss;
     if( sscanf( chap_time, "%"SCNu64":%2"SCNu64":%lf", &hh, &mm, &ss ) != 3 )
-        return -1;
+        return LSMASH_ERR_INVALID_DATA;
     /* check overflow */
     if( hh >= 5124095
      || mm >= 60
      || ss >= 60 )
-        return -1;
+        return LSMASH_ERR_INVALID_DATA;
     /* 1ns timescale */
     data->start_time = (hh * 3600 + mm * 60 + ss) * 1e9;
     return 0;
@@ -57,7 +57,7 @@ static int isom_lumber_line( char *buff, int bufsize, FILE *chapter  )
     do
     {
         if( fgets( buff, bufsize, chapter ) == NULL )
-            return -1;
+            return LSMASH_ERR_NAMELESS;
         tail = &buff[ strlen( buff ) - 1 ];
         while( tail >= buff && (*tail == '\n' || *tail == '\r') )
             *tail-- = '\0';
@@ -70,19 +70,21 @@ static int isom_read_simple_chapter( FILE *chapter, isom_chapter_entry_t *data )
     char buff[CHAPTER_BUFSIZE];
     /* get start_time */
     if( isom_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) < 0 )
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     char *chapter_time = strchr( buff, '=' );   /* find separator */
-    if( !chapter_time++
-     || isom_get_start_time( chapter_time, data ) < 0
-     || isom_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) < 0 )    /* get chapter_name */
-        return -1;
+    if( !chapter_time++ )
+        return LSMASH_ERR_INVALID_DATA;
+    if( isom_get_start_time( chapter_time, data ) < 0 )
+        return LSMASH_ERR_INVALID_DATA;
+    if( isom_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) < 0 )    /* get chapter_name */
+        return LSMASH_ERR_NAMELESS;
     char *chapter_name = strchr( buff, '=' );   /* find separator */
     if( !chapter_name++ )
-        return -1;
+        return LSMASH_ERR_INVALID_DATA;
     int len = LSMASH_MIN( 255, strlen( chapter_name ) );    /* We support length of chapter_name up to 255 */
     data->chapter_name = (char *)lsmash_malloc( len + 1 );
     if( !data->chapter_name )
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     memcpy( data->chapter_name, chapter_name, len );
     data->chapter_name[len] = '\0';
     return 0;
@@ -92,18 +94,18 @@ static int isom_read_minimum_chapter( FILE *chapter, isom_chapter_entry_t *data 
 {
     char buff[CHAPTER_BUFSIZE];
     if( isom_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) < 0 )    /* read newline */
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     char *p_buff = &buff[ !memcmp( buff, UTF8_BOM, UTF8_BOM_LENGTH ) ? UTF8_BOM_LENGTH : 0 ];   /* BOM detection */
     if( isom_get_start_time( p_buff, data ) < 0 )   /* get start_time */
-        return -1;
+        return LSMASH_ERR_INVALID_DATA;
     /* get chapter_name */
     char *chapter_name = strchr( buff, ' ' );   /* find separator */
     if( !chapter_name++ )
-        return -1;
+        return LSMASH_ERR_INVALID_DATA;
     int len = LSMASH_MIN( 255, strlen( chapter_name ) );    /* We support length of chapter_name up to 255 */
     data->chapter_name = (char *)lsmash_malloc( len + 1 );
     if( !data->chapter_name )
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     memcpy( data->chapter_name, chapter_name, len );
     data->chapter_name[len] = '\0';
     return 0;
@@ -141,17 +143,17 @@ static int isom_add_chpl_entry( isom_chpl_t *chpl, isom_chapter_entry_t *chap_da
     if( !chap_data->chapter_name
      || !chpl
      || !chpl->list )
-        return -1;
+        return LSMASH_ERR_FUNCTION_PARAM;
     isom_chpl_entry_t *data = lsmash_malloc( sizeof(isom_chpl_entry_t) );
     if( !data )
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     data->start_time          = chap_data->start_time;
     data->chapter_name_length = strlen( chap_data->chapter_name );
     data->chapter_name        = (char *)lsmash_malloc( data->chapter_name_length + 1 );
     if( !data->chapter_name )
     {
         lsmash_free( data );
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     }
     memcpy( data->chapter_name, chap_data->chapter_name, data->chapter_name_length );
     data->chapter_name[ data->chapter_name_length ] = '\0';
@@ -159,7 +161,7 @@ static int isom_add_chpl_entry( isom_chpl_t *chpl, isom_chapter_entry_t *chap_da
     {
         lsmash_free( data->chapter_name );
         lsmash_free( data );
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     }
     return 0;
 }
@@ -223,7 +225,7 @@ fail:
     fclose( chapter );
 error_message:
     lsmash_log( NULL, LSMASH_LOG_ERROR, "failed to set chapter list.\n" );
-    return -1;
+    return LSMASH_ERR_NAMELESS;
 }
 
 int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_ID, char *file_name )
@@ -364,7 +366,7 @@ fail:
         isom_remove_box_by_itself( file->moov->trak_list.tail->data );
 error_message:
     lsmash_log( NULL, LSMASH_LOG_ERROR, "failed to set reference chapter.\n" );
-    return -1;
+    return LSMASH_ERR_NAMELESS;
 }
 
 uint32_t lsmash_count_tyrant_chapter( lsmash_root_t *root )
@@ -404,7 +406,7 @@ int lsmash_print_chapter_list( lsmash_root_t *root )
 {
     if( isom_check_initializer_present( root ) < 0
      || !(root->file->initializer->flags & LSMASH_FILE_MODE_READ) )
-        return -1;
+        return LSMASH_ERR_FUNCTION_PARAM;
     lsmash_file_t *file = root->file->initializer;
     if( file->moov
      && file->moov->udta
@@ -416,7 +418,7 @@ int lsmash_print_chapter_list( lsmash_root_t *root )
         {
             if( !file->moov
              && !file->moov->mvhd )
-                return -1;
+                return LSMASH_ERR_NAMELESS;
             timescale = file->moov->mvhd->timescale;
         }
         else
@@ -443,7 +445,6 @@ int lsmash_print_chapter_list( lsmash_root_t *root )
         }
         return 0;
     }
-    else
-        lsmash_log( NULL, LSMASH_LOG_ERROR, "this file doesn't have a chapter list.\n" );
-    return -1;
+    lsmash_log( NULL, LSMASH_LOG_ERROR, "this file doesn't have a chapter list.\n" );
+    return LSMASH_ERR_NAMELESS;
 }
