@@ -204,7 +204,7 @@ static inline int nalu_get_dcr_ps
         isom_dcr_ps_entry_t *data = lsmash_malloc( sizeof(isom_dcr_ps_entry_t) );
         if( !data )
             return -1;
-        if( lsmash_add_entry( list, data ) )
+        if( lsmash_add_entry( list, data ) < 0 )
         {
             lsmash_free( data );
             return -1;
