@@ -277,7 +277,7 @@ static hevc_vps_t *hevc_get_vps
     if( !vps )
         return NULL;
     vps->video_parameter_set_id = vps_id;
-    if( lsmash_add_entry( vps_list, vps ) )
+    if( lsmash_add_entry( vps_list, vps ) < 0 )
     {
         lsmash_free( vps );
         return NULL;
@@ -305,7 +305,7 @@ static hevc_sps_t *hevc_get_sps
     if( !sps )
         return NULL;
     sps->seq_parameter_set_id = sps_id;
-    if( lsmash_add_entry( sps_list, sps ) )
+    if( lsmash_add_entry( sps_list, sps ) < 0 )
     {
         lsmash_free( sps );
         return NULL;
@@ -333,7 +333,7 @@ static hevc_pps_t *hevc_get_pps
     if( !pps )
         return NULL;
     pps->pic_parameter_set_id = pps_id;
-    if( lsmash_add_entry( pps_list, pps ) )
+    if( lsmash_add_entry( pps_list, pps ) < 0 )
     {
         lsmash_free( pps );
         return NULL;
@@ -701,7 +701,7 @@ static int hevc_parse_vps_minimally
     uint64_t       ebsp_size
 )
 {
-    if( nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, ebsp_size ) )
+    if( nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, ebsp_size ) < 0 )
         return -1;
     memset( vps, 0, sizeof(hevc_vps_t) );
     vps->video_parameter_set_id = lsmash_bits_get( bits, 4 );
@@ -750,7 +750,7 @@ int hevc_parse_vps
     {
         /* Parse VPS minimally for configuration records. */
         hevc_vps_t min_vps;
-        if( hevc_parse_vps_minimally( bits, &min_vps, rbsp_buffer, ebsp, ebsp_size ) )
+        if( hevc_parse_vps_minimally( bits, &min_vps, rbsp_buffer, ebsp, ebsp_size ) < 0 )
             return -1;
         vps = hevc_get_vps( info->vps_list, min_vps.video_parameter_set_id );
         if( !vps )
@@ -799,7 +799,7 @@ static int hevc_parse_sps_minimally
     uint64_t       ebsp_size
 )
 {
-    if( nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, ebsp_size ) )
+    if( nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, ebsp_size ) < 0 )
         return -1;
     memset( sps, 0, sizeof(hevc_sps_t) );
     sps->video_parameter_set_id   = lsmash_bits_get( bits, 4 );
@@ -1026,7 +1026,7 @@ int hevc_parse_sps
     {
         /* Parse SPS minimally for configuration records. */
         hevc_sps_t min_sps;
-        if( hevc_parse_sps_minimally( bits, &min_sps, rbsp_buffer, ebsp, ebsp_size ) )
+        if( hevc_parse_sps_minimally( bits, &min_sps, rbsp_buffer, ebsp, ebsp_size ) < 0 )
             return -1;
         sps = hevc_get_sps( info->sps_list, min_sps.seq_parameter_set_id );
         if( !sps )
@@ -1083,7 +1083,7 @@ static int hevc_parse_pps_minimally
     uint64_t       ebsp_size
 )
 {
-    if( nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, ebsp_size ) )
+    if( nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, ebsp_size ) < 0 )
         return -1;
     memset( pps, 0, SIZEOF_PPS_EXCLUDING_HEAP );
     pps->pic_parameter_set_id                  = nalu_get_exp_golomb_ue( bits );
@@ -1124,7 +1124,7 @@ int hevc_parse_pps
     {
         /* Parse PPS minimally for configuration records. */
         hevc_pps_t min_pps;
-        if( hevc_parse_pps_minimally( bits, &min_pps, rbsp_buffer, ebsp, ebsp_size ) )
+        if( hevc_parse_pps_minimally( bits, &min_pps, rbsp_buffer, ebsp, ebsp_size ) < 0 )
             return -1;
         pps = hevc_get_pps( info->pps_list, min_pps.pic_parameter_set_id );
         if( !pps )
@@ -1214,7 +1214,7 @@ int hevc_parse_sei
     uint64_t            ebsp_size
 )
 {
-    if( nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, ebsp_size ) )
+    if( nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, ebsp_size ) < 0 )
         return -1;
     uint8_t *rbsp_start = rbsp_buffer;
     uint64_t rbsp_pos = 0;
@@ -1331,7 +1331,7 @@ int hevc_parse_slice_segment_header
 )
 {
     lsmash_bits_t *bits = info->bits;
-    if( nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, LSMASH_MIN( ebsp_size, 50 ) ) )
+    if( nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, LSMASH_MIN( ebsp_size, 50 ) ) < 0 )
         return -1;
     hevc_slice_info_t *slice = &info->slice;
     memset( slice, 0, sizeof(hevc_slice_info_t) );
@@ -1455,7 +1455,7 @@ static int hevc_get_sps_id
     bs.buffer.data  = buffer;
     bs.buffer.alloc = 128;
     lsmash_bits_init( &bits, &bs );
-    if( nalu_import_rbsp_from_ebsp( &bits, rbsp_buffer, ps_ebsp, LSMASH_MIN( ps_ebsp_length, 128 ) ) )
+    if( nalu_import_rbsp_from_ebsp( &bits, rbsp_buffer, ps_ebsp, LSMASH_MIN( ps_ebsp_length, 128 ) ) < 0 )
         return -1;
     /* Skip sps_video_parameter_set_id and sps_temporal_id_nesting_flag. */
     uint8_t sps_max_sub_layers_minus1 = (lsmash_bits_get( &bits, 8 ) >> 1) & 0x07;
@@ -1486,7 +1486,7 @@ static int hevc_get_pps_id
     bs.buffer.data  = buffer;
     bs.buffer.alloc = 3;
     lsmash_bits_init( &bits, &bs );
-    if( nalu_import_rbsp_from_ebsp( &bits, rbsp_buffer, ps_ebsp, LSMASH_MIN( ps_ebsp_length, 3 ) ) )
+    if( nalu_import_rbsp_from_ebsp( &bits, rbsp_buffer, ps_ebsp, LSMASH_MIN( ps_ebsp_length, 3 ) ) < 0 )
         return -1;
     uint64_t pic_parameter_set_id = nalu_get_exp_golomb_ue( &bits );
     IF_INVALID_VALUE( pic_parameter_set_id > HEVC_MAX_PPS_ID )
@@ -1561,7 +1561,7 @@ static lsmash_entry_t *hevc_get_ps_entry_from_param
             return NULL;
         uint8_t param_ps_id;
         if( get_ps_id( ps->nalUnit       + HEVC_MIN_NALU_HEADER_LENGTH,
-                       ps->nalUnitLength - HEVC_MIN_NALU_HEADER_LENGTH, &param_ps_id ) )
+                       ps->nalUnitLength - HEVC_MIN_NALU_HEADER_LENGTH, &param_ps_id ) < 0 )
             return NULL;
         if( ps_id == param_ps_id )
             return entry;
@@ -1956,7 +1956,7 @@ lsmash_dcr_nalu_appendable lsmash_check_hevc_dcr_nalu_appendable
     uint8_t *ps_data = _ps_data;
     if( !param )
         return DCR_NALU_APPEND_ERROR;
-    if( hevc_validate_dcr_nalu_type( ps_type, ps_data, ps_length ) )
+    if( hevc_validate_dcr_nalu_type( ps_type, ps_data, ps_length ) < 0 )
         return DCR_NALU_APPEND_ERROR;
     /* Check whether the same parameter set already exsits or not. */
     lsmash_entry_list_t *ps_list = hevc_get_parameter_set_list( param, ps_type );
@@ -1970,7 +1970,7 @@ lsmash_dcr_nalu_appendable lsmash_check_hevc_dcr_nalu_appendable
     }
     /* Check the number of parameter sets in HEVC Decoder Configuration Record. */
     uint32_t ps_count;
-    if( nalu_get_ps_count( ps_list, &ps_count ) )
+    if( nalu_get_ps_count( ps_list, &ps_count ) < 0 )
         return DCR_NALU_APPEND_ERROR;
     if( (ps_type == HEVC_DCR_NALU_TYPE_VPS        && ps_count >= HEVC_MAX_VPS_ID)
      || (ps_type == HEVC_DCR_NALU_TYPE_SPS        && ps_count >= HEVC_MAX_SPS_ID)
@@ -1983,7 +1983,7 @@ lsmash_dcr_nalu_appendable lsmash_check_hevc_dcr_nalu_appendable
         return DCR_NALU_APPEND_POSSIBLE;
     /* Check the maximum length of parameter sets in HEVC Decoder Configuration Record. */
     uint32_t max_ps_length;
-    if( nalu_get_max_ps_length( ps_list, &max_ps_length ) )
+    if( nalu_get_max_ps_length( ps_list, &max_ps_length ) < 0 )
         return DCR_NALU_APPEND_ERROR;
     max_ps_length = LSMASH_MAX( max_ps_length, ps_length );
     /* Check whether a new specific info is needed or not. */
@@ -1999,7 +1999,7 @@ lsmash_dcr_nalu_appendable lsmash_check_hevc_dcr_nalu_appendable
         /* PPS */
         uint8_t pps_id;
         if( hevc_get_pps_id( ps_data   + HEVC_MIN_NALU_HEADER_LENGTH,
-                             ps_length - HEVC_MIN_NALU_HEADER_LENGTH, &pps_id ) )
+                             ps_length - HEVC_MIN_NALU_HEADER_LENGTH, &pps_id ) < 0 )
             return DCR_NALU_APPEND_ERROR;
         for( lsmash_entry_t *entry = ps_list->head; entry; entry = entry->next )
         {
@@ -2010,7 +2010,7 @@ lsmash_dcr_nalu_appendable lsmash_check_hevc_dcr_nalu_appendable
                 continue;
             uint8_t param_pps_id;
             if( hevc_get_pps_id( ps->nalUnit       + HEVC_MIN_NALU_HEADER_LENGTH,
-                                 ps->nalUnitLength - HEVC_MIN_NALU_HEADER_LENGTH, &param_pps_id ) )
+                                 ps->nalUnitLength - HEVC_MIN_NALU_HEADER_LENGTH, &param_pps_id ) < 0 )
                 return DCR_NALU_APPEND_ERROR;
             if( pps_id == param_pps_id )
                 /* PPS that has the same pic_parameter_set_id already exists with different form. */
@@ -2024,7 +2024,7 @@ lsmash_dcr_nalu_appendable lsmash_check_hevc_dcr_nalu_appendable
         hevc_vps_t vps;
         if( hevc_parse_vps_minimally( &bits, &vps, rbsp_buffer,
                                       ps_data   + HEVC_MIN_NALU_HEADER_LENGTH,
-                                      ps_length - HEVC_MIN_NALU_HEADER_LENGTH ) )
+                                      ps_length - HEVC_MIN_NALU_HEADER_LENGTH ) < 0 )
             return DCR_NALU_APPEND_ERROR;
         /* The value of profile_space must be identical in all the parameter sets in a single HEVC Decoder Configuration Record. */
         if( vps.ptl.general.profile_space != param->general_profile_space )
@@ -2041,7 +2041,7 @@ lsmash_dcr_nalu_appendable lsmash_check_hevc_dcr_nalu_appendable
                 continue;
             uint8_t param_vps_id;
             if( hevc_get_vps_id( ps->nalUnit       + HEVC_MIN_NALU_HEADER_LENGTH,
-                                 ps->nalUnitLength - HEVC_MIN_NALU_HEADER_LENGTH, &param_vps_id ) )
+                                 ps->nalUnitLength - HEVC_MIN_NALU_HEADER_LENGTH, &param_vps_id ) < 0 )
                 return DCR_NALU_APPEND_ERROR;
             if( param_vps_id == vps.video_parameter_set_id )
                 /* VPS that has the same video_parameter_set_id already exists with different form. */
@@ -2053,7 +2053,7 @@ lsmash_dcr_nalu_appendable lsmash_check_hevc_dcr_nalu_appendable
     hevc_sps_t sps;
     if( hevc_parse_sps_minimally( &bits, &sps, rbsp_buffer,
                                   ps_data   + HEVC_MIN_NALU_HEADER_LENGTH,
-                                  ps_length - HEVC_MIN_NALU_HEADER_LENGTH ) )
+                                  ps_length - HEVC_MIN_NALU_HEADER_LENGTH ) < 0 )
         return DCR_NALU_APPEND_ERROR;
     lsmash_bits_empty( &bits );
     /* The values of profile_space, chromaFormat, bitDepthLumaMinus8 and bitDepthChromaMinus8
@@ -2085,7 +2085,7 @@ lsmash_dcr_nalu_appendable lsmash_check_hevc_dcr_nalu_appendable
             continue;
         uint8_t param_sps_id;
         if( hevc_get_sps_id( ps->nalUnit       + HEVC_MIN_NALU_HEADER_LENGTH,
-                             ps->nalUnitLength - HEVC_MIN_NALU_HEADER_LENGTH, &param_sps_id ) )
+                             ps->nalUnitLength - HEVC_MIN_NALU_HEADER_LENGTH, &param_sps_id ) < 0 )
             return DCR_NALU_APPEND_ERROR;
         if( param_sps_id == sps.seq_parameter_set_id )
             /* SPS that has the same seq_parameter_set_id already exists with different form. */
@@ -2097,7 +2097,7 @@ lsmash_dcr_nalu_appendable lsmash_check_hevc_dcr_nalu_appendable
             hevc_sps_t first_sps;
             if( hevc_parse_sps_minimally( &bits, &first_sps, rbsp_buffer,
                                           ps->nalUnit       + HEVC_MIN_NALU_HEADER_LENGTH,
-                                          ps->nalUnitLength - HEVC_MIN_NALU_HEADER_LENGTH ) )
+                                          ps->nalUnitLength - HEVC_MIN_NALU_HEADER_LENGTH ) < 0 )
                 return DCR_NALU_APPEND_ERROR;
             if( sps.cropped_width                    != first_sps.cropped_width
              || sps.cropped_height                   != first_sps.cropped_height
@@ -2256,7 +2256,7 @@ int lsmash_append_hevc_dcr_nalu
         isom_dcr_ps_entry_t *ps = isom_create_ps_entry( ps_data, ps_length );
         if( !ps )
             return -1;
-        if( lsmash_add_entry( ps_list, ps ) )
+        if( lsmash_add_entry( ps_list, ps ) < 0 )
         {
             isom_remove_dcr_ps( ps );
             return -1;
@@ -2270,7 +2270,7 @@ int lsmash_append_hevc_dcr_nalu
     /* Check if the same parameter set identifier already exists. */
     uint8_t ps_id;
     if( hevc_get_ps_id( ps_data   + HEVC_MIN_NALU_HEADER_LENGTH,
-                        ps_length - HEVC_MIN_NALU_HEADER_LENGTH, &ps_id, ps_type ) )
+                        ps_length - HEVC_MIN_NALU_HEADER_LENGTH, &ps_id, ps_type ) < 0 )
         return -1;
     lsmash_entry_t *entry = hevc_get_ps_entry_from_param( param, ps_type, ps_id );
     isom_dcr_ps_entry_t *ps = entry ? (isom_dcr_ps_entry_t *)entry->data : NULL;
@@ -2297,7 +2297,7 @@ int lsmash_append_hevc_dcr_nalu
         ps = isom_create_ps_entry( ps_data, ps_length );
         if( !ps )
             return -1;
-        if( lsmash_add_entry( ps_list, ps ) )
+        if( lsmash_add_entry( ps_list, ps ) < 0 )
         {
             isom_remove_dcr_ps( ps );
             return -1;
@@ -2499,19 +2499,19 @@ int hevc_try_to_append_dcr_nalu
         case HEVC_DCR_NALU_TYPE_VPS :
             if( hevc_parse_vps( info, info->buffer.rbsp,
                                 ps_data   + HEVC_MIN_NALU_HEADER_LENGTH,
-                                ps_length - HEVC_MIN_NALU_HEADER_LENGTH ) )
+                                ps_length - HEVC_MIN_NALU_HEADER_LENGTH ) < 0 )
                 return -1;
             break;
         case HEVC_DCR_NALU_TYPE_SPS :
             if( hevc_parse_sps( info, info->buffer.rbsp,
                                 ps_data   + HEVC_MIN_NALU_HEADER_LENGTH,
-                                ps_length - HEVC_MIN_NALU_HEADER_LENGTH ) )
+                                ps_length - HEVC_MIN_NALU_HEADER_LENGTH ) < 0 )
                 return -1;
             break;
         case HEVC_DCR_NALU_TYPE_PPS :
             if( hevc_parse_pps( info, info->buffer.rbsp,
                                 ps_data   + HEVC_MIN_NALU_HEADER_LENGTH,
-                                ps_length - HEVC_MIN_NALU_HEADER_LENGTH ) )
+                                ps_length - HEVC_MIN_NALU_HEADER_LENGTH ) < 0 )
                 return -1;
             break;
         default :
@@ -2564,7 +2564,7 @@ static int hevc_move_dcr_nalu_entry
         if( !dst_entry )
         {
             /* Move the parameter set. */
-            if( lsmash_add_entry( dst_ps_list, src_ps ) )
+            if( lsmash_add_entry( dst_ps_list, src_ps ) < 0 )
                 return -1;
             src_entry->data = NULL;
         }
@@ -2803,7 +2803,7 @@ int hevc_construct_specific_parameters
     lsmash_bs_t *bs = lsmash_bs_create();
     if( !bs )
         return -1;
-    if( lsmash_bs_import_data( bs, data, src->size - (data - src->data.unstructured) ) )
+    if( lsmash_bs_import_data( bs, data, src->size - (data - src->data.unstructured) ) < 0 )
         goto fail;
     if( lsmash_bs_get_byte( bs ) != HVCC_CONFIGURATION_VERSION )
         goto fail;  /* We don't support configurationVersion other than HVCC_CONFIGURATION_VERSION. */
@@ -2898,7 +2898,7 @@ int hevc_print_codec_specific
     lsmash_bs_t *bs     = lsmash_bs_create();
     if( !bs )
         return -1;
-    if( lsmash_bs_import_data( bs, data, box->size - offset ) )
+    if( lsmash_bs_import_data( bs, data, box->size - offset ) < 0 )
     {
         lsmash_bs_cleanup( bs );
         return -1;
@@ -2997,7 +2997,7 @@ static inline int hevc_copy_dcr_nalu_array
             lsmash_destroy_hevc_parameter_arrays( dst_data );
             return -1;
         }
-        if( lsmash_add_entry( dst_ps_list, dst_ps ) )
+        if( lsmash_add_entry( dst_ps_list, dst_ps ) < 0 )
         {
             lsmash_destroy_hevc_parameter_arrays( dst_data );
             isom_remove_dcr_ps( dst_ps );
