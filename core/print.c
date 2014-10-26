@@ -2314,7 +2314,7 @@ int lsmash_print_movie( lsmash_root_t *root, const char *filename )
     for( lsmash_entry_t *entry = file->print->head; entry; entry = entry->next )
     {
         isom_print_entry_t *data = (isom_print_entry_t *)entry->data;
-        if( !data || !data->box || data->func( destination, file, data->box, data->level ) )
+        if( !data || !data->box || data->func( destination, file, data->box, data->level ) < 0 )
         {
             fclose( destination );
             return -1;
