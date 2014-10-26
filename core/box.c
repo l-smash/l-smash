@@ -550,8 +550,7 @@ static void isom_remove_file( lsmash_file_t *file )
     isom_remove_timelines( file );
 #endif
     lsmash_free( file->compatible_brands );
-    if( file->bs )
-        lsmash_bs_cleanup( file->bs );
+    lsmash_bs_cleanup( file->bs );
     if( file->fragment )
     {
         lsmash_remove_list( file->fragment->pool, isom_remove_sample_pool );
@@ -621,8 +620,7 @@ static void isom_remove_hdlr( isom_hdlr_t *hdlr )
 {
     if( !hdlr )
         return;
-    if( hdlr->componentName )
-        lsmash_free( hdlr->componentName );
+    lsmash_free( hdlr->componentName );
     if( hdlr->parent )
     {
              if( lsmash_check_box_type_identical( hdlr->parent->type, ISOM_BOX_TYPE_MDIA ) )
