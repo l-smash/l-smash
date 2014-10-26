@@ -842,16 +842,14 @@ int vc1_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_code
     /* Append the Sequence header EBDU and Entry-point header EBDU if present. */
     if( seqhdr->ebdu_size )
     {
-        if( seqhdr->ebdu )
-            lsmash_free( seqhdr->ebdu );
+        lsmash_free( seqhdr->ebdu );
         seqhdr->ebdu = lsmash_memdup( data, seqhdr->ebdu_size );
         if( !seqhdr->ebdu )
             return -1;
     }
     if( ephdr->ebdu_size )
     {
-        if( ephdr->ebdu )
-            lsmash_free( ephdr->ebdu );
+        lsmash_free( ephdr->ebdu );
         ephdr->ebdu = lsmash_memdup( data, ephdr->ebdu_size );
         if( !ephdr->ebdu )
             return -1;
