@@ -1062,7 +1062,7 @@ static int isom_finish_fragment_movie
     }
     /* Write Movie Fragment Box and its children. */
     moof->pos = file->size;
-    if( isom_write_box( file->bs, (isom_box_t *)moof ) )
+    if( isom_write_box( file->bs, (isom_box_t *)moof ) < 0 )
         return -1;
     if( file->fragment->first_moof_pos == FIRST_MOOF_POS_UNDETERMINED )
         file->fragment->first_moof_pos = moof->pos;
@@ -1105,7 +1105,7 @@ static isom_trun_optional_row_t *isom_request_trun_optional_row( isom_trun_t *tr
             row->sample_size                    = tfhd->default_sample_size;
             row->sample_flags                   = tfhd->default_sample_flags;
             row->sample_composition_time_offset = 0;
-            if( lsmash_add_entry( trun->optional, row ) )
+            if( lsmash_add_entry( trun->optional, row ) < 0 )
             {
                 lsmash_free( row );
                 return NULL;
@@ -1456,7 +1456,7 @@ static int isom_update_fragment_sample_tables( isom_traf_t *traf, lsmash_sample_
                 rap->traf_number   = cache->fragment->traf_number;
                 rap->trun_number   = traf->trun_list.entry_count;
                 rap->sample_number = trun->sample_count;
-                if( lsmash_add_entry( tfra->list, rap ) )
+                if( lsmash_add_entry( tfra->list, rap ) < 0 )
                 {
                     lsmash_free( rap );
                     return -1;
@@ -1585,7 +1585,7 @@ static int isom_append_fragment_sample_internal_initial( isom_trak_t *trak, lsma
     else if( delimit == 1 )
         isom_append_fragment_track_run( trak->file, &trak->cache->chunk );
     /* Add a new sample into the pool of this track fragment. */
-    if( isom_pool_sample( trak->cache->chunk.pool, sample, samples_per_packet ) )
+    if( isom_pool_sample( trak->cache->chunk.pool, sample, samples_per_packet ) < 0 )
         return -1;
     trak->cache->fragment->has_samples   = 1;
     trak->cache->fragment->sample_count += 1;
@@ -1602,7 +1602,7 @@ static int isom_append_fragment_sample_internal( isom_traf_t *traf, lsmash_sampl
     else if( delimit == 1 )
         isom_append_fragment_track_run( traf->file, &traf->cache->chunk );
     /* Add a new sample into the pool of this track fragment. */
-    if( isom_pool_sample( traf->cache->chunk.pool, sample, 1 ) )
+    if( isom_pool_sample( traf->cache->chunk.pool, sample, 1 ) < 0 )
         return -1;
     traf->cache->fragment->has_samples   = 1;
     traf->cache->fragment->sample_count += 1;
@@ -1703,7 +1703,7 @@ int isom_append_fragment_sample
             lpcm_sample->cts   = cts++;
             lpcm_sample->prop  = sample->prop;
             lpcm_sample->index = sample->index;
-            if( append_sample_func( track_fragment, lpcm_sample ) )
+            if( append_sample_func( track_fragment, lpcm_sample ) < 0 )
             {
                 lsmash_delete_sample( lpcm_sample );
                 return -1;
