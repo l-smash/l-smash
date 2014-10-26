@@ -39,8 +39,7 @@ static void global_destruct_specific_data( void *data )
     if( !data )
         return;
     lsmash_codec_global_header_t *global = (lsmash_codec_global_header_t *)data;
-    if( global->header_data )
-        lsmash_free( global->header_data );
+    lsmash_free( global->header_data );
     lsmash_free( global );
 }
 
