@@ -97,7 +97,7 @@ int isom_add_box_to_extension_list( void *parent_box, void *child_box )
     isom_box_t *child  = (isom_box_t *)child_box;
     /* Append at the end of the list. */
     if( lsmash_add_entry( &parent->extensions, child ) < 0 )
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     /* Don't reorder the appended box when the file is opened for reading. */
     if( !parent->file || (parent->file->flags & LSMASH_FILE_MODE_READ) || parent->file->fake_file_mode )
         return 0;
@@ -328,10 +328,10 @@ int isom_add_extension_binary
 {
     if( !parent_box || !box_data || box_size < ISOM_BASEBOX_COMMON_SIZE
      || !lsmash_check_box_type_specified( &box_type ) )
-        return -1;
+        return LSMASH_ERR_FUNCTION_PARAM;
     isom_box_t *ext = lsmash_malloc_zero( sizeof(isom_box_t) );
     if( !ext )
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     isom_box_t *parent = (isom_box_t *)parent_box;
     ext->class      = &lsmash_box_class;
     ext->root       = parent->root;
@@ -346,7 +346,7 @@ int isom_add_extension_binary
     if( isom_add_box_to_extension_list( parent, ext ) < 0 )
     {
         lsmash_free( ext );
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     }
     isom_set_box_writer( ext );
     return 0;
@@ -1414,12 +1414,12 @@ static int isom_add_sample_description_entry
     if( isom_add_box_to_extension_list( stsd, description ) < 0 )
     {
         lsmash_free( description );
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     }
     if( lsmash_add_entry( &stsd->list, description ) < 0 )
     {
         lsmash_remove_entry_tail( &stsd->extensions, destructor );
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     }
     return 0;
 }
@@ -1863,9 +1863,9 @@ int lsmash_add_box
 {
     if( !parent )
         /* You cannot add any box without a box being its parent. */
-        return -1;
+        return LSMASH_ERR_FUNCTION_PARAM;
     if( !box || box->size < ISOM_BASEBOX_COMMON_SIZE )
-        return -1;
+        return LSMASH_ERR_FUNCTION_PARAM;
     if( parent->root == (lsmash_root_t *)parent )
     {
         /* Only files can be added into any ROOT.
@@ -1873,7 +1873,7 @@ int lsmash_add_box
         if( parent->file )
             parent = (isom_box_t *)parent->file;
         else
-            return -1;
+            return LSMASH_ERR_FUNCTION_PARAM;
     }
     /* Add a box as a child box. */
     box->root   = parent->root;
@@ -1890,18 +1890,18 @@ int lsmash_add_box_ex
 {
     if( !parent )
         /* You cannot add any box without a box being its parent. */
-        return -1;
+        return LSMASH_ERR_FUNCTION_PARAM;
     isom_unknown_box_t *box = (isom_unknown_box_t *)*p_box;
     if( !box || box->size < ISOM_BASEBOX_COMMON_SIZE )
-        return -1;
+        return LSMASH_ERR_FUNCTION_PARAM;
     if( !(box->manager & LSMASH_UNKNOWN_BOX) )
         /* Simply add the box. */
         return lsmash_add_box( parent, *p_box );
     /* Check if the size of the box to be added is valid. */
     if( box->size != ISOM_BASEBOX_COMMON_SIZE + box->unknown_size + (box->type.fourcc == ISOM_BOX_TYPE_UUID.fourcc ? 16 : 0) )
-        return -1;
+        return LSMASH_ERR_FUNCTION_PARAM;
     if( !parent->file || parent->file == (lsmash_file_t *)box )
-        return -1;
+        return LSMASH_ERR_FUNCTION_PARAM;
     if( parent->root == (lsmash_root_t *)parent )
         /* Only files can be added into any ROOT.
          * For backward compatibility, use the active file as the parent. */
@@ -1911,12 +1911,12 @@ int lsmash_add_box_ex
     lsmash_bs_t   *bs_backup = file->bs;
     lsmash_bs_t   *bs        = lsmash_bs_create();
     if( !bs )
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     uint8_t *buf = lsmash_malloc( box->size );
     if( !buf )
     {
         lsmash_bs_cleanup( bs );
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     }
     fake_file_stream_t fake_file =
         {
@@ -1947,7 +1947,7 @@ int lsmash_add_box_ex
     file->bs             = bs_backup;   /* Switch back to the normal file stream mode. */
     file->fake_file_mode = 0;
     if( ret < 0 )
-        return -1;
+        return ret;
     /* Reorder the added box by 'precedence'. */
     *p_box = (lsmash_box_t *)parent->extensions.tail->data;
     (*p_box)->precedence = box->precedence;
@@ -1996,7 +1996,7 @@ int lsmash_get_box_precedence
 )
 {
     if( !box || !precedence )
-        return -1;
+        return LSMASH_ERR_FUNCTION_PARAM;
     *precedence = box->precedence;
     return 0;
 }
@@ -2023,9 +2023,10 @@ int lsmash_write_top_level_box
 )
 {
     if( !box || (isom_box_t *)box->file != box->parent )
-        return -1;
-    if( isom_write_box( box->file->bs, box ) < 0 )
-        return -1;
+        return LSMASH_ERR_FUNCTION_PARAM;
+    int ret = isom_write_box( box->file->bs, box );
+    if( ret < 0 )
+        return ret;
     box->file->size += box->size;
     return 0;
 }
