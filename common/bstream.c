@@ -57,7 +57,7 @@ void lsmash_bs_cleanup( lsmash_bs_t *bs )
 int lsmash_bs_set_empty_stream( lsmash_bs_t *bs, uint8_t *data, size_t size )
 {
     if( !bs )
-        return -1;
+        return LSMASH_ERR_FUNCTION_PARAM;
     bs->stream     = NULL;      /* empty stream */
     bs->eof        = 1;         /* unreadable because of empty stream */
     bs->eob        = 0;         /* readable on the buffer */
@@ -152,8 +152,10 @@ static uint64_t bs_estimate_seek_offset( lsmash_bs_t *bs, int64_t offset, int wh
 /* TODO: Support offset > INT64_MAX */
 int64_t lsmash_bs_write_seek( lsmash_bs_t *bs, int64_t offset, int whence )
 {
-    if( bs->unseekable || (whence != SEEK_SET && whence != SEEK_CUR && whence != SEEK_END) )
-        return -1;
+    if( bs->unseekable )
+        return LSMASH_ERR_NAMELESS;
+    if( whence != SEEK_SET && whence != SEEK_CUR && whence != SEEK_END )
+        return LSMASH_ERR_FUNCTION_PARAM;
     /* Try to seek the stream. */
     int64_t ret = bs->seek( bs->stream, offset, whence );
     if( ret < 0 )
@@ -168,7 +170,7 @@ int64_t lsmash_bs_write_seek( lsmash_bs_t *bs, int64_t offset, int whence )
 int64_t lsmash_bs_read_seek( lsmash_bs_t *bs, int64_t offset, int whence )
 {
     if( whence != SEEK_SET && whence != SEEK_CUR && whence != SEEK_END )
-        return -1;
+        return LSMASH_ERR_FUNCTION_PARAM;
     if( whence == SEEK_CUR )
         offset -= lsmash_bs_get_remaining_buffer_size( bs );
     /* Check whether we can seek on the buffer. */
@@ -187,7 +189,7 @@ int64_t lsmash_bs_read_seek( lsmash_bs_t *bs, int64_t offset, int whence )
         }
     }
     if( bs->unseekable )
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     /* Try to seek the stream. */
     int64_t ret = bs->seek( bs->stream, offset, whence );
     if( ret < 0 )
@@ -300,7 +302,7 @@ void lsmash_bs_put_le32( lsmash_bs_t *bs, uint32_t value )
 int lsmash_bs_flush_buffer( lsmash_bs_t *bs )
 {
     if( !bs )
-        return -1;
+        return LSMASH_ERR_FUNCTION_PARAM;
     if( bs->buffer.store == 0
      || (bs->stream && bs->write && !bs->buffer.data) )
         return 0;
@@ -309,7 +311,7 @@ int lsmash_bs_flush_buffer( lsmash_bs_t *bs )
     {
         bs_buffer_free( bs );
         bs->error = 1;
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     }
     if( bs->write )
     {
@@ -323,19 +325,19 @@ int lsmash_bs_flush_buffer( lsmash_bs_t *bs )
 int lsmash_bs_write_data( lsmash_bs_t *bs, uint8_t *buf, size_t size )
 {
     if( !bs || size > INT_MAX )
-        return -1;
+        return LSMASH_ERR_FUNCTION_PARAM;
     if( !buf || size == 0 )
         return 0;
     if( bs->error || !bs->stream )
     {
         bs_buffer_free( bs );
         bs->error = 1;
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     }
     int write_size = bs->write( bs->stream, buf, size );
     bs->written += write_size;
     bs->offset  += write_size;
-    return write_size != size ? -1 : 0;
+    return write_size != size ? LSMASH_ERR_NAMELESS : 0;
 }
 
 void *lsmash_bs_export_data( lsmash_bs_t *bs, uint32_t *length )
@@ -536,7 +538,7 @@ static int64_t bs_get_bytes( lsmash_bs_t *bs, uint32_t size, uint8_t *buf )
             if( bs->error )
             {
                 bs->buffer.count += offset;
-                return -1;
+                return LSMASH_ERR_NAMELESS;
             }
         }
     }
@@ -573,7 +575,7 @@ int64_t lsmash_bs_get_bytes_ex( lsmash_bs_t *bs, uint32_t size, uint8_t *value )
     if( size == 0 )
         return 0;
     if( bs->eob || bs->error )
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     return bs_get_bytes( bs, size, value );
 }
 
@@ -624,14 +626,14 @@ uint64_t lsmash_bs_get_be32_to_64( lsmash_bs_t *bs )
 int lsmash_bs_read( lsmash_bs_t *bs, uint32_t size )
 {
     if( !bs || size > INT_MAX )
-        return -1;
+        return LSMASH_ERR_FUNCTION_PARAM;
     if( size == 0 )
         return 0;
     bs_alloc( bs, bs->buffer.store + size );
     if( bs->error || !bs->stream )
     {
         bs->error = 1;
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     }
     int read_size = bs->read( bs->stream, lsmash_bs_get_buffer_data_end( bs ), size );
     if( read_size == 0 )
@@ -642,7 +644,7 @@ int lsmash_bs_read( lsmash_bs_t *bs, uint32_t size )
     else if( read_size < 0 )
     {
         bs->error = 1;
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     }
     bs->buffer.store += read_size;
     bs->offset       += read_size;
@@ -653,13 +655,13 @@ int lsmash_bs_read( lsmash_bs_t *bs, uint32_t size )
 int lsmash_bs_read_data( lsmash_bs_t *bs, uint8_t *buf, size_t *size )
 {
     if( !bs || !size || *size > INT_MAX )
-        return -1;
+        return LSMASH_ERR_FUNCTION_PARAM;
     if( !buf || *size == 0 )
         return 0;
     if( bs->error || !bs->stream )
     {
         bs->error = 1;
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     }
     int read_size = bs->read( bs->stream, buf, *size );
     if( read_size == 0 )
@@ -667,7 +669,7 @@ int lsmash_bs_read_data( lsmash_bs_t *bs, uint8_t *buf, size_t *size )
     else if( read_size < 0 )
     {
         bs->error = 1;
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     }
     bs->buffer.unseekable = 1;
     bs->offset += read_size;
@@ -676,15 +678,17 @@ int lsmash_bs_read_data( lsmash_bs_t *bs, uint8_t *buf, size_t *size )
     return 0;
 }
 
-int lsmash_bs_import_data( lsmash_bs_t *bs, void* data, uint32_t length )
+int lsmash_bs_import_data( lsmash_bs_t *bs, void *data, uint32_t length )
 {
-    if( !bs || bs->error || !data || length == 0 )
-        return -1;
+    if( !bs || !data || length == 0 )
+        return LSMASH_ERR_FUNCTION_PARAM;
+    if( bs->error )
+        return LSMASH_ERR_NAMELESS;
     bs_alloc( bs, bs->buffer.store + length );
     if( bs->error || !bs->buffer.data ) /* means, failed to alloc. */
     {
         bs_buffer_free( bs );
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     }
     memcpy( lsmash_bs_get_buffer_data_end( bs ), data, length );
     bs->buffer.store += length;
@@ -869,7 +873,7 @@ int lsmash_bits_import_data( lsmash_bits_t* bits, void* data, uint32_t length )
 int lsmash_fread_wrapper( void *opaque, uint8_t *buf, int size )
 {
     int read_size = fread( buf, 1, size, (FILE *)opaque );
-    return ferror( (FILE *)opaque ) ? -1 : read_size;
+    return ferror( (FILE *)opaque ) ? LSMASH_ERR_NAMELESS : read_size;
 }
 
 int lsmash_fwrite_wrapper( void *opaque, uint8_t *buf, int size )
@@ -880,7 +884,7 @@ int lsmash_fwrite_wrapper( void *opaque, uint8_t *buf, int size )
 int64_t lsmash_fseek_wrapper( void *opaque, int64_t offset, int whence )
 {
     if( lsmash_fseek( (FILE *)opaque, offset, whence ) != 0 )
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     return lsmash_ftell( (FILE *)opaque );
 }
 
