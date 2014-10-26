@@ -107,7 +107,7 @@ static lsmash_audio_summary_t *ac3_create_summary( ac3_info_t *info )
                                                                      LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
     cs->data.unstructured = lsmash_create_ac3_specific_info( &info->dac3_param, &cs->size );
     if( !cs->data.unstructured
-     || lsmash_add_entry( &summary->opaque->list, cs ) )
+     || lsmash_add_entry( &summary->opaque->list, cs ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         lsmash_destroy_codec_specific_data( cs );
