@@ -185,8 +185,7 @@ void lsmash_remove_dts_reserved_box( lsmash_dts_specific_parameters_t *param )
 {
     if( !param->box )
         return;
-    if( param->box->data )
-        lsmash_free( param->box->data );
+    lsmash_free( param->box->data );
     lsmash_freep( &param->box );
 }
 
