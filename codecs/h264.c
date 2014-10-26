@@ -253,7 +253,7 @@ static h264_sps_t *h264_get_sps
     if( !sps )
         return NULL;
     sps->seq_parameter_set_id = sps_id;
-    if( lsmash_add_entry( sps_list, sps ) )
+    if( lsmash_add_entry( sps_list, sps ) < 0 )
     {
         lsmash_free( sps );
         return NULL;
@@ -281,7 +281,7 @@ static h264_pps_t *h264_get_pps
     if( !pps )
         return NULL;
     pps->pic_parameter_set_id = pps_id;
-    if( lsmash_add_entry( pps_list, pps ) )
+    if( lsmash_add_entry( pps_list, pps ) < 0 )
     {
         lsmash_free( pps );
         return NULL;
@@ -309,7 +309,7 @@ static h264_slice_info_t *h264_get_slice_info
     if( !slice )
         return NULL;
     slice->slice_id = slice_id;
-    if( lsmash_add_entry( slice_list, slice ) )
+    if( lsmash_add_entry( slice_list, slice ) < 0 )
     {
         lsmash_free( slice );
         return NULL;
@@ -524,7 +524,7 @@ static int h264_parse_sps_minimally
     uint64_t       ebsp_size
 )
 {
-    if( nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, ebsp_size ) )
+    if( nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, ebsp_size ) < 0 )
         return -1;
     memset( sps, 0, sizeof(h264_sps_t) );
     sps->profile_idc          = lsmash_bits_get( bits, 8 );
@@ -581,7 +581,7 @@ int h264_parse_sps
     lsmash_bits_t *bits = info->bits;
     /* seq_parameter_set_data() */
     h264_sps_t temp_sps;
-    if( h264_parse_sps_minimally( bits, &temp_sps, rbsp_buffer, ebsp, ebsp_size ) )
+    if( h264_parse_sps_minimally( bits, &temp_sps, rbsp_buffer, ebsp, ebsp_size ) < 0 )
         return -1;
     h264_sps_t *sps = h264_get_sps( info->sps_list, temp_sps.seq_parameter_set_id );
     if( !sps )
@@ -746,11 +746,11 @@ int h264_parse_sps
         }
         int nal_hrd_parameters_present_flag = lsmash_bits_get( bits, 1 );
         if( nal_hrd_parameters_present_flag
-         && h264_parse_hrd_parameters( bits, &sps->vui.hrd ) )
+         && h264_parse_hrd_parameters( bits, &sps->vui.hrd ) < 0 )
             return -1;
         int vcl_hrd_parameters_present_flag = lsmash_bits_get( bits, 1 );
         if( vcl_hrd_parameters_present_flag
-         && h264_parse_hrd_parameters( bits, &sps->vui.hrd ) )
+         && h264_parse_hrd_parameters( bits, &sps->vui.hrd ) < 0 )
             return -1;
         if( nal_hrd_parameters_present_flag || vcl_hrd_parameters_present_flag )
         {
@@ -797,7 +797,7 @@ static int h264_parse_pps_minimally
     uint64_t       ebsp_size
 )
 {
-    if( nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, ebsp_size ) )
+    if( nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, ebsp_size ) < 0 )
         return -1;
     memset( pps, 0, sizeof(h264_pps_t) );
     uint64_t pic_parameter_set_id = nalu_get_exp_golomb_ue( bits );
@@ -818,7 +818,7 @@ int h264_parse_pps
     lsmash_bits_t *bits = info->bits;
     /* pic_parameter_set_rbsp */
     h264_pps_t temp_pps;
-    if( h264_parse_pps_minimally( bits, &temp_pps, rbsp_buffer, ebsp, ebsp_size ) )
+    if( h264_parse_pps_minimally( bits, &temp_pps, rbsp_buffer, ebsp, ebsp_size ) < 0 )
         return -1;
     h264_pps_t *pps = h264_get_pps( info->pps_list, temp_pps.pic_parameter_set_id );
     if( !pps )
@@ -918,7 +918,7 @@ int h264_parse_sei
     uint64_t       ebsp_size
 )
 {
-    if( nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, ebsp_size ) )
+    if( nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, ebsp_size ) < 0 )
         return -1;
     uint8_t *rbsp_start = rbsp_buffer;
     uint64_t rbsp_pos = 0;
@@ -1277,7 +1277,7 @@ int h264_parse_slice
     uint64_t size = nuh->nal_unit_type == H264_NALU_TYPE_SLICE_IDR || nuh->nal_ref_idc == 0
                   ? LSMASH_MIN( ebsp_size, 100 )
                   : LSMASH_MIN( ebsp_size, 1000 );
-    if( nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, size ) )
+    if( nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, size ) < 0 )
         return -1;
     if( nuh->nal_unit_type != H264_NALU_TYPE_SLICE_DP_B
      && nuh->nal_unit_type != H264_NALU_TYPE_SLICE_DP_C )
@@ -1329,7 +1329,7 @@ static int h264_get_sps_id
     bs.buffer.data  = buffer;
     bs.buffer.alloc = 6;
     lsmash_bits_init( &bits, &bs );
-    if( nalu_import_rbsp_from_ebsp( &bits, rbsp_buffer, ps_ebsp, LSMASH_MIN( ps_ebsp_length, 6 ) ) )
+    if( nalu_import_rbsp_from_ebsp( &bits, rbsp_buffer, ps_ebsp, LSMASH_MIN( ps_ebsp_length, 6 ) ) < 0 )
         return -1;
     lsmash_bits_get( &bits, 24 );   /* profile_idc, constraint_set_flags and level_idc */
     uint64_t sec_parameter_set_id = nalu_get_exp_golomb_ue( &bits );
@@ -1356,7 +1356,7 @@ static int h264_get_pps_id
     bs.buffer.data  = buffer;
     bs.buffer.alloc = 4;
     lsmash_bits_init( &bits, &bs );
-    if( nalu_import_rbsp_from_ebsp( &bits, rbsp_buffer, ps_ebsp, LSMASH_MIN( ps_ebsp_length, 4 ) ) )
+    if( nalu_import_rbsp_from_ebsp( &bits, rbsp_buffer, ps_ebsp, LSMASH_MIN( ps_ebsp_length, 4 ) ) < 0 )
         return -1;
     uint64_t pic_parameter_set_id = nalu_get_exp_golomb_ue( &bits );
     IF_INVALID_VALUE( pic_parameter_set_id > 255 )
@@ -1416,7 +1416,7 @@ static lsmash_entry_t *h264_get_ps_entry_from_param
         if( !ps )
             return NULL;
         uint8_t param_ps_id;
-        if( get_ps_id( ps->nalUnit + 1, ps->nalUnitLength - 1, &param_ps_id ) )
+        if( get_ps_id( ps->nalUnit + 1, ps->nalUnitLength - 1, &param_ps_id ) < 0 )
             return NULL;
         if( ps_id == param_ps_id )
             return entry;
@@ -1771,7 +1771,7 @@ lsmash_dcr_nalu_appendable lsmash_check_h264_parameter_set_appendable
     uint8_t *ps_data = _ps_data;
     if( !param )
         return DCR_NALU_APPEND_ERROR;
-    if( h264_validate_ps_type( ps_type, ps_data, ps_length ) )
+    if( h264_validate_ps_type( ps_type, ps_data, ps_length ) < 0 )
         return DCR_NALU_APPEND_ERROR;
     if( ps_type == H264_PARAMETER_SET_TYPE_SPSEXT
      && !H264_REQUIRES_AVCC_EXTENSION( param->AVCProfileIndication ) )
@@ -1787,7 +1787,7 @@ lsmash_dcr_nalu_appendable lsmash_check_h264_parameter_set_appendable
         default : return DCR_NALU_APPEND_ERROR;         /* An error occured. */
     }
     uint32_t max_ps_length;
-    if( nalu_get_max_ps_length( ps_list, &max_ps_length ) )
+    if( nalu_get_max_ps_length( ps_list, &max_ps_length ) < 0 )
         return DCR_NALU_APPEND_ERROR;
     max_ps_length = LSMASH_MAX( max_ps_length, ps_length );
     uint32_t ps_count;
@@ -1811,7 +1811,7 @@ lsmash_dcr_nalu_appendable lsmash_check_h264_parameter_set_appendable
     {
         /* PPS */
         uint8_t pps_id;
-        if( h264_get_pps_id( ps_data + 1, ps_length - 1, &pps_id ) )
+        if( h264_get_pps_id( ps_data + 1, ps_length - 1, &pps_id ) < 0 )
             return DCR_NALU_APPEND_ERROR;
         for( lsmash_entry_t *entry = ps_list->head; entry; entry = entry->next )
         {
@@ -1821,7 +1821,7 @@ lsmash_dcr_nalu_appendable lsmash_check_h264_parameter_set_appendable
             if( ps->unused )
                 continue;
             uint8_t param_pps_id;
-            if( h264_get_pps_id( ps->nalUnit + 1, ps->nalUnitLength - 1, &param_pps_id ) )
+            if( h264_get_pps_id( ps->nalUnit + 1, ps->nalUnitLength - 1, &param_pps_id ) < 0 )
                 return DCR_NALU_APPEND_ERROR;
             if( pps_id == param_pps_id )
                 /* PPS that has the same pic_parameter_set_id already exists with different form. */
@@ -1831,7 +1831,7 @@ lsmash_dcr_nalu_appendable lsmash_check_h264_parameter_set_appendable
     }
     /* SPS */
     h264_sps_t sps;
-    if( h264_parse_sps_minimally( &bits, &sps, rbsp_buffer, ps_data + 1, ps_length - 1 ) )
+    if( h264_parse_sps_minimally( &bits, &sps, rbsp_buffer, ps_data + 1, ps_length - 1 ) < 0 )
         return DCR_NALU_APPEND_ERROR;
     lsmash_bits_empty( &bits );
     /* FIXME; If the sequence parameter sets are marked with different profiles,
@@ -1862,7 +1862,7 @@ lsmash_dcr_nalu_appendable lsmash_check_h264_parameter_set_appendable
         if( ps->unused )
             continue;
         uint8_t param_sps_id;
-        if( h264_get_sps_id( ps->nalUnit + 1, ps->nalUnitLength - 1, &param_sps_id ) )
+        if( h264_get_sps_id( ps->nalUnit + 1, ps->nalUnitLength - 1, &param_sps_id ) < 0 )
             return DCR_NALU_APPEND_ERROR;
         if( sps_id == param_sps_id )
             /* SPS that has the same seq_parameter_set_id already exists with different form. */
@@ -1873,7 +1873,7 @@ lsmash_dcr_nalu_appendable lsmash_check_h264_parameter_set_appendable
             h264_sps_t first_sps;
             if( h264_parse_sps_minimally( &bits, &first_sps, rbsp_buffer,
                                      ps->nalUnit       + 1,
-                                     ps->nalUnitLength - 1 ) )
+                                     ps->nalUnitLength - 1 ) < 0 )
                 return DCR_NALU_APPEND_ERROR;
             if( sps.cropped_width  != first_sps.cropped_width
              || sps.cropped_height != first_sps.cropped_height )
@@ -1970,7 +1970,7 @@ int lsmash_append_h264_parameter_set
         isom_dcr_ps_entry_t *ps = isom_create_ps_entry( ps_data, ps_length );
         if( !ps )
             return -1;
-        if( lsmash_add_entry( ps_list, ps ) )
+        if( lsmash_add_entry( ps_list, ps ) < 0 )
         {
             isom_remove_dcr_ps( ps );
             return -1;
@@ -1979,7 +1979,7 @@ int lsmash_append_h264_parameter_set
     }
     /* Check if the same parameter set identifier already exists. */
     uint8_t ps_id;
-    if( h264_get_ps_id( ps_data + 1, ps_length - 1, &ps_id, ps_type ) )
+    if( h264_get_ps_id( ps_data + 1, ps_length - 1, &ps_id, ps_type ) < 0 )
         return -1;
     lsmash_entry_t *entry = h264_get_ps_entry_from_param( param, ps_type, ps_id );
     isom_dcr_ps_entry_t *ps = entry ? (isom_dcr_ps_entry_t *)entry->data : NULL;
@@ -2006,7 +2006,7 @@ int lsmash_append_h264_parameter_set
         ps = isom_create_ps_entry( ps_data, ps_length );
         if( !ps )
             return -1;
-        if( lsmash_add_entry( ps_list, ps ) )
+        if( lsmash_add_entry( ps_list, ps ) < 0 )
         {
             isom_remove_dcr_ps( ps );
             return -1;
@@ -2024,7 +2024,7 @@ int lsmash_append_h264_parameter_set
         bs.buffer.alloc = ps_length;
         lsmash_bits_init( &bits, &bs );
         h264_sps_t sps;
-        if( h264_parse_sps_minimally( &bits, &sps, rbsp_buffer, ps_data + 1, ps_length - 1 ) )
+        if( h264_parse_sps_minimally( &bits, &sps, rbsp_buffer, ps_data + 1, ps_length - 1 ) < 0 )
         {
             lsmash_remove_entry_tail( ps_list, isom_remove_dcr_ps );
             return -1;
@@ -2126,7 +2126,7 @@ static inline int h264_move_dcr_nalu_entry
         if( !dst_entry )
         {
             /* Move the parameter set. */
-            if( lsmash_add_entry( dst_ps_list, src_ps ) )
+            if( lsmash_add_entry( dst_ps_list, src_ps ) < 0 )
                 return -1;
             src_entry->data = NULL;
         }
@@ -2256,7 +2256,7 @@ int lsmash_setup_h264_specific_parameters_from_access_unit
             {
                 /* VCL NALU (slice) */
                 h264_slice_info_t prev_slice = *slice;
-                if( h264_parse_slice( info, &nuh, sb->rbsp, nalu + nuh.length, nalu_length - nuh.length ) )
+                if( h264_parse_slice( info, &nuh, sb->rbsp, nalu + nuh.length, nalu_length - nuh.length ) < 0 )
                     return h264_parse_failed( info );
                 if( prev_slice.present )
                 {
@@ -2276,15 +2276,15 @@ int lsmash_setup_h264_specific_parameters_from_access_unit
                 switch( nalu_type )
                 {
                     case H264_NALU_TYPE_SPS :
-                        if( h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_SPS, nalu, nalu_length ) )
+                        if( h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_SPS, nalu, nalu_length ) < 0 )
                             return h264_parse_failed( info );
                         break;
                     case H264_NALU_TYPE_PPS :
-                        if( h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_PPS, nalu, nalu_length ) )
+                        if( h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_PPS, nalu, nalu_length ) < 0 )
                             return h264_parse_failed( info );
                         break;
                     case H264_NALU_TYPE_SPS_EXT :
-                        if( h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_SPSEXT, nalu, nalu_length ) )
+                        if( h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_SPSEXT, nalu, nalu_length ) < 0 )
                             return h264_parse_failed( info );
                         break;
                     default :
@@ -2333,7 +2333,7 @@ int h264_construct_specific_parameters
     lsmash_bs_t *bs = lsmash_bs_create();
     if( !bs )
         return -1;
-    if( lsmash_bs_import_data( bs, data, src->size - (data - src->data.unstructured) ) )
+    if( lsmash_bs_import_data( bs, data, src->size - (data - src->data.unstructured) ) < 0 )
         goto fail;
     if( lsmash_bs_get_byte( bs ) != 1 )
         goto fail;  /* We don't support configurationVersion other than 1. */
@@ -2343,11 +2343,11 @@ int h264_construct_specific_parameters
     param->lengthSizeMinusOne    = lsmash_bs_get_byte( bs ) & 0x03;
     uint8_t numOfSequenceParameterSets = lsmash_bs_get_byte( bs ) & 0x1F;
     if( numOfSequenceParameterSets
-     && nalu_get_dcr_ps( bs, param->parameter_sets->sps_list, numOfSequenceParameterSets ) )
+     && nalu_get_dcr_ps( bs, param->parameter_sets->sps_list, numOfSequenceParameterSets ) < 0 )
         goto fail;
     uint8_t numOfPictureParameterSets = lsmash_bs_get_byte( bs );
     if( numOfPictureParameterSets
-     && nalu_get_dcr_ps( bs, param->parameter_sets->pps_list, numOfPictureParameterSets ) )
+     && nalu_get_dcr_ps( bs, param->parameter_sets->pps_list, numOfPictureParameterSets ) < 0 )
         goto fail;
     if( H264_REQUIRES_AVCC_EXTENSION( param->AVCProfileIndication ) )
     {
@@ -2356,7 +2356,7 @@ int h264_construct_specific_parameters
         param->bit_depth_chroma_minus8 = lsmash_bs_get_byte( bs ) & 0x07;
         uint8_t numOfSequenceParameterSetExt = lsmash_bs_get_byte( bs );
         if( numOfSequenceParameterSetExt
-         && nalu_get_dcr_ps( bs, param->parameter_sets->spsext_list, numOfSequenceParameterSetExt ) )
+         && nalu_get_dcr_ps( bs, param->parameter_sets->spsext_list, numOfSequenceParameterSetExt ) < 0 )
             goto fail;
     }
     lsmash_bs_cleanup( bs );
@@ -2384,7 +2384,7 @@ int h264_print_codec_specific
     lsmash_bs_t *bs     = lsmash_bs_create();
     if( !bs )
         return -1;
-    if( lsmash_bs_import_data( bs, data, box->size - offset ) )
+    if( lsmash_bs_import_data( bs, data, box->size - offset ) < 0 )
     {
         lsmash_bs_cleanup( bs );
         return -1;
@@ -2465,7 +2465,7 @@ int h264_copy_codec_specific
                 lsmash_destroy_h264_parameter_sets( dst_data );
                 return -1;
             }
-            if( lsmash_add_entry( dst_ps_list, dst_ps ) )
+            if( lsmash_add_entry( dst_ps_list, dst_ps ) < 0 )
             {
                 lsmash_destroy_h264_parameter_sets( dst_data );
                 isom_remove_dcr_ps( dst_ps );
