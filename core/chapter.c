@@ -190,7 +190,7 @@ int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom
      || (!file->moov->udta->chpl && !isom_add_chpl( file->moov->udta )) )
         goto fail;
     file->moov->udta->chpl->version = 1;    /* version = 1 is popular. */
-    isom_chapter_entry_t data = {0};
+    isom_chapter_entry_t data = { 0 };
     while( !fnc( chapter, &data ) )
     {
         if( add_bom )
@@ -218,8 +218,7 @@ int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom
     fclose( chapter );
     return 0;
 fail2:
-    if( data.chapter_name )
-        lsmash_free( data.chapter_name );
+    lsmash_free( data.chapter_name );
 fail:
     fclose( chapter );
 error_message:
