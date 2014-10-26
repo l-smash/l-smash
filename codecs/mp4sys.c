@@ -1505,7 +1505,7 @@ int mp4sys_construct_decoder_config( lsmash_codec_specific_t *dst, lsmash_codec_
     lsmash_bs_t *bs = lsmash_bs_create();
     if( !bs )
         return -1;
-    if( lsmash_bs_import_data( bs, data, src->size - (data - src->data.unstructured) ) )
+    if( lsmash_bs_import_data( bs, data, src->size - (data - src->data.unstructured) ) < 0 )
     {
         lsmash_bs_cleanup( bs );
         return -1;
@@ -1524,7 +1524,7 @@ int mp4sys_construct_decoder_config( lsmash_codec_specific_t *dst, lsmash_codec_
     if( dsi
      && dsi->header.size
      && dsi->data
-     && lsmash_set_mp4sys_decoder_specific_info( param, dsi->data, dsi->header.size ) )
+     && lsmash_set_mp4sys_decoder_specific_info( param, dsi->data, dsi->header.size ) < 0 )
     {
         mp4sys_remove_descriptor( esd );
         return -1;
