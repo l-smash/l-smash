@@ -40,7 +40,7 @@ static isom_data_t *isom_add_metadata( lsmash_file_t *file,
     if( !file->moov->udta->meta->hdlr )
     {
         if( !isom_add_hdlr( file->moov->udta->meta )
-         || isom_setup_handler_reference( file->moov->udta->meta->hdlr, ISOM_META_HANDLER_TYPE_ITUNES_METADATA ) )
+         || isom_setup_handler_reference( file->moov->udta->meta->hdlr, ISOM_META_HANDLER_TYPE_ITUNES_METADATA ) < 0 )
             return NULL;
     }
     isom_ilst_t *ilst = file->moov->udta->meta->ilst;
