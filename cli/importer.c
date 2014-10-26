@@ -124,7 +124,7 @@ importer_t *lsmash_importer_open( const char *identifier, const char *format )
             importer->class = &funcs->class;
             if( !funcs->detectable )
                 continue;
-            if( !funcs->probe( importer ) || lsmash_fseek( importer->stream, 0, SEEK_SET ) )
+            if( !funcs->probe( importer ) || lsmash_fseek( importer->stream, 0, SEEK_SET ) != 0 )
                 break;
         }
     }
@@ -136,7 +136,7 @@ importer_t *lsmash_importer_open( const char *identifier, const char *format )
             importer->class = &funcs->class;
             if( strcmp( importer->class->name, format ) )
                 continue;
-            if( funcs->probe( importer ) )
+            if( funcs->probe( importer ) < 0 )
                 funcs = NULL;
             break;
         }
@@ -208,7 +208,7 @@ lsmash_summary_t *lsmash_duplicate_summary( importer_t *importer, uint32_t track
         if( !src_specific )
             continue;
         lsmash_codec_specific_t *dup = isom_duplicate_codec_specific_data( src_specific );
-        if( lsmash_add_entry( &summary->opaque->list, dup ) )
+        if( lsmash_add_entry( &summary->opaque->list, dup ) < 0 )
         {
             lsmash_cleanup_summary( (lsmash_summary_t *)summary );
             lsmash_destroy_codec_specific_data( dup );
