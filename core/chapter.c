@@ -389,10 +389,9 @@ char *lsmash_get_tyrant_chapter( lsmash_root_t *root, uint32_t index, double *ti
      || !file->moov->udta->chpl )
         return NULL;
     isom_chpl_t *chpl = file->moov->udta->chpl;
-    lsmash_entry_t *entry = lsmash_get_entry( chpl->list, index );
-    if( !entry || !entry->data )
+    isom_chpl_entry_t *data = (isom_chpl_entry_t *)lsmash_get_entry_data( chpl->list, index );
+    if( !data )
         return NULL;
-    isom_chpl_entry_t *data = (isom_chpl_entry_t *)entry->data;
     double timescale = chpl->version ? 10000000.0 : file->moov->mvhd->timescale;
     *timestamp = data->start_time / timescale;
     if( !memcmp( data->chapter_name, UTF8_BOM, UTF8_BOM_LENGTH ) )
