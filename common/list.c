@@ -45,10 +45,10 @@ lsmash_entry_list_t *lsmash_create_entry_list( void )
 int lsmash_add_entry( lsmash_entry_list_t *list, void *data )
 {
     if( !list )
-        return -1;
+        return LSMASH_ERR_FUNCTION_PARAM;
     lsmash_entry_t *entry = lsmash_malloc( sizeof(lsmash_entry_t) );
     if( !entry )
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     entry->next = NULL;
     entry->prev = list->tail;
     entry->data = data;
@@ -64,7 +64,7 @@ int lsmash_add_entry( lsmash_entry_list_t *list, void *data )
 int lsmash_remove_entry_direct_orig( lsmash_entry_list_t *list, lsmash_entry_t *entry, lsmash_entry_data_eliminator eliminator )
 {
     if( !list || !entry )
-        return -1;
+        return LSMASH_ERR_FUNCTION_PARAM;
     if( !eliminator )
         eliminator = lsmash_free;
     lsmash_entry_t *next = entry->next;
