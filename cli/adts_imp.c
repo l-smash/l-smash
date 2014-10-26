@@ -173,7 +173,7 @@ static int mp4sys_adts_parse_variable_header( FILE* stream, uint8_t* buf, unsign
 static int mp4sys_adts_parse_headers( FILE* stream, uint8_t* buf, mp4sys_adts_fixed_header_t* header, mp4sys_adts_variable_header_t* variable_header )
 {
     mp4sys_adts_parse_fixed_header( buf, header );
-    if( mp4sys_adts_check_fixed_header( header ) )
+    if( mp4sys_adts_check_fixed_header( header ) < 0 )
         return -1;
     /* get payload length & skip extra(crc) header */
     return mp4sys_adts_parse_variable_header( stream, buf, header->protection_absent, variable_header );
@@ -229,7 +229,7 @@ static lsmash_audio_summary_t *mp4sys_adts_create_summary( mp4sys_adts_fixed_hea
     lsmash_mp4sys_decoder_parameters_t *param = (lsmash_mp4sys_decoder_parameters_t *)specific->data.structured;
     param->objectTypeIndication = MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3;
     param->streamType           = MP4SYS_STREAM_TYPE_AudioStream;
-    if( lsmash_set_mp4sys_decoder_specific_info( param, data, data_length ) )
+    if( lsmash_set_mp4sys_decoder_specific_info( param, data, data_length ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         lsmash_destroy_codec_specific_data( specific );
@@ -237,7 +237,7 @@ static lsmash_audio_summary_t *mp4sys_adts_create_summary( mp4sys_adts_fixed_hea
         return NULL;
     }
     lsmash_free( data );
-    if( lsmash_add_entry( &summary->opaque->list, specific ) )
+    if( lsmash_add_entry( &summary->opaque->list, specific ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         lsmash_destroy_codec_specific_data( specific );
@@ -352,7 +352,7 @@ static int mp4sys_adts_get_accessunit( importer_t *importer, uint32_t track_numb
      */
     mp4sys_adts_fixed_header_t header = {0};
     mp4sys_adts_variable_header_t variable_header = {0};
-    if( mp4sys_adts_parse_headers( importer->stream, buf, &header, &variable_header ) )
+    if( mp4sys_adts_parse_headers( importer->stream, buf, &header, &variable_header ) < 0 )
     {
         info->status = IMPORTER_ERROR;
         return 0;
@@ -419,7 +419,7 @@ static int mp4sys_adts_probe( importer_t *importer )
 
     mp4sys_adts_fixed_header_t header = {0};
     mp4sys_adts_variable_header_t variable_header = {0};
-    if( mp4sys_adts_parse_headers( importer->stream, buf, &header, &variable_header ) )
+    if( mp4sys_adts_parse_headers( importer->stream, buf, &header, &variable_header ) < 0 )
         return -1;
 
     /* now the stream seems valid ADTS */
@@ -441,7 +441,7 @@ static int mp4sys_adts_probe( importer_t *importer )
     info->variable_header = variable_header;
     info->samples_in_frame = summary->samples_in_frame;
 
-    if( lsmash_add_entry( importer->summaries, summary ) )
+    if( lsmash_add_entry( importer->summaries, summary ) < 0 )
     {
         lsmash_free( info );
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
