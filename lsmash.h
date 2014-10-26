@@ -44,6 +44,23 @@
  *   The top-level opaque handler for whole file handling.
  ****************************************************************************/
 typedef struct lsmash_root_tag lsmash_root_t;
+
+/* Allocate a ROOT.
+ * The allocated ROOT can be deallocate by lsmash_destroy_root().
+ *
+ * Return the address of an allocated ROOT if successful.
+ * Return NULL otherwise. */
+lsmash_root_t *lsmash_create_root( void );
+
+/* Deallocate a given ROOT. */
+void lsmash_destroy_root
+(
+    lsmash_root_t *root     /* the address of a ROOT you want to deallocate */
+);
+
+/****************************************************************************
+ * File Layer
+ ****************************************************************************/
 typedef struct lsmash_file_tag lsmash_file_t;
 
 typedef enum
@@ -214,13 +231,6 @@ typedef struct
     void                       *param;
 } lsmash_adhoc_remux_t;
 
-/* Allocate a ROOT.
- * The allocated ROOT can be deallocate by lsmash_destroy_root().
- *
- * Return the address of an allocated ROOT if successful.
- * Return NULL otherwise. */
-lsmash_root_t *lsmash_create_root( void );
-
 /* Open a file where the path is given.
  * And if successful, set up the parameters by 'open_mode'.
  * Here, the 'open_mode' parameter is either 0 or 1 as follows:
@@ -283,16 +293,10 @@ int64_t lsmash_read_file
     lsmash_file_parameters_t *param
 );
 
-/* Deallocate a given ROOT. */
-void lsmash_destroy_root
-(
-    lsmash_root_t *root     /* the address of a ROOT you want to deallocate */
-);
-
-/* Deallocate all boxes in a given ROOT. */
+/* Deallocate all boxes within the current active file in a given ROOT. */
 void lsmash_discard_boxes
 (
-    lsmash_root_t *root     /* the address of a ROOT you want to deallocate all boxes in it */
+    lsmash_root_t *root     /* the address of a ROOT you want to deallocate all boxes within the active file in it */
 );
 
 /* Activate a file associated with a ROOT.
