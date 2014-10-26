@@ -1417,8 +1417,7 @@ int lsmash_set_mp4sys_decoder_specific_info( lsmash_mp4sys_decoder_parameters_t 
     }
     else
     {
-        if( param->dsi->payload )
-            lsmash_freep( &param->dsi->payload );
+        lsmash_freep( &param->dsi->payload );
         param->dsi->payload_length = 0;
     }
     param->dsi->payload = lsmash_memdup( payload, payload_length );
