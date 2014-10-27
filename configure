@@ -56,6 +56,15 @@ cc_check()
     return $ret
 }
 
+is_64bit()
+{
+    echo 'int main(void){int a[2*(sizeof(void *)>4)-1]; return 0;}' > conftest.c
+    $CC conftest.c -o conftest 2> /dev/null
+    ret=$?
+    rm -f conftest*
+    return $ret
+}
+
 #-----------------------------------------------------------------------------
 
 rm -f config.* .depend conftest* liblsmash.pc *.ver
@@ -200,9 +209,29 @@ case "$TARGET_OS" in
         EXT=".exe"
         SHARED_NAME="liblsmash-$MAJVER"
         SHARED_EXT=".dll"
+        DEFNAME="${SHARED_NAME}.def"
         IMPLIB="liblsmash.dll.a"
-        SO_LDFLAGS="-shared -Wl,--out-implib,$IMPLIB -Wl,--version-script,liblsmash.ver"
+        SO_LDFLAGS="-shared -Wl,--output-def,$DEFNAME -Wl,--out-implib,$IMPLIB -Wl,--version-script,liblsmash.ver"
         CFLAGS="$CFLAGS -D__USE_MINGW_ANSI_STDIO=1"
+        LIBARCH=i386
+        if lib.exe --list > /dev/null 2>&1 ; then
+            if is_64bit ; then
+                LIBARCH=x64
+            fi
+            SLIB_CMD='sed -i "s/ @[^ ]*//" $(DEFNAME); lib.exe -machine:$(LIBARCH) -def:$(DEFNAME) -out:lsmash.lib'
+        elif genlib -V > /dev/null 2>&1 ; then
+            if is_64bit ; then
+                LIBARCH=x86_64
+            else
+                LIBARCH=x86
+            fi
+            SLIB_CMD='sed -i "s/ @[^ ]*//" $(DEFNAME); genlib -a $(LIBARCH) -o lsmash.lib -d $(SHAREDLIBNAME) $(DEFNAME)'
+        elif ${CROSS}dlltool --version > /dev/null 2>&1 ; then
+            if is_64bit ; then
+                LIBARCH="i386:x86-64"
+            fi
+            SLIB_CMD="sed -i \"s/ @[^ ]*//\" \$(DEFNAME); ${CROSS}dlltool -m \$(LIBARCH) -d \$(DEFNAME) -l lsmash.lib -D \$(SHAREDLIBNAME)"
+        fi
         ;;
     *cygwin*)
         EXT=".exe"
@@ -429,6 +458,9 @@ CFLAGS = $CFLAGS
 LDFLAGS = $LDFLAGS
 SO_LDFLAGS = $SO_LDFLAGS
 LIBS = $LIBS
+LIBARCH = $LIBARCH
+DEFNAME = $DEFNAME
+SLIB_CMD = $SLIB_CMD
 EOF
 
 cat config.mak

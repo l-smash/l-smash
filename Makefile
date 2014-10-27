@@ -28,6 +28,9 @@ $(STATICLIBNAME): $(OBJS)
 $(SHAREDLIBNAME): $(OBJS)
 	$(LD) $(SO_LDFLAGS) $(LDFLAGS) -o $@ $^ $(LIBS)
 	-@ $(if $(STRIP), $(STRIP) -x $@)
+ifneq ($(SLIB_CMD),)
+	$(SLIB_CMD)
+endif
 ifeq ($(SHAREDLIBNAME), liblsmash.so.$(MAJVER))
 	ln -sf $(SHAREDLIBNAME) liblsmash.so
 endif
@@ -56,6 +59,10 @@ ifneq ($(IMPLIB),)
 	install -m 644 $(IMPLIB) $(DESTDIR)$(libdir)
 	install -d $(DESTDIR)$(bindir)
 	install -m 755 $(SHAREDLIB) $(DESTDIR)$(bindir)
+ifneq ($(SLIB_CMD),)
+	install -m 644 $(DEFNAME) $(DESTDIR)$(libdir)
+	install -m 644 lsmash.lib $(DESTDIR)$(bindir)
+endif
 else
 	install -m 644 $(SHAREDLIB) $(DESTDIR)$(libdir)
 ifeq ($(SHAREDLIB), liblsmash.so.$(MAJVER))
@@ -71,7 +78,7 @@ uninstall:
 	$(RM) $(addprefix $(DESTDIR)$(bindir)/, $(TOOLS_ALL) $(TOOLS_ALL:%=%.exe) liblsmash.dll cyglsmash.dll)
 
 clean:
-	$(RM) */*.o *.a *.so* *.dll *.dylib $(addprefix cli/, *.exe $(TOOLS_ALL)) .depend *.ver
+	$(RM) */*.o *.a *.so* *.def *.exp *.lib *.dll *.dylib $(addprefix cli/, *.exe $(TOOLS_ALL)) .depend *.ver
 
 distclean: clean
 	$(RM) config.* *.pc

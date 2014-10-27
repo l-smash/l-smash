@@ -6,6 +6,7 @@
 *.dll*
 *.dylib
 *.exe
+*.exp
 *.lib
 *.o
 *.orig
