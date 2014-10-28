@@ -93,10 +93,10 @@ static int amr_get_accessunit
     lsmash_sample_t *buffered_sample
 )
 {
-    debug_if( !importer || !importer->info || !buffered_sample->data || !buffered_sample->length )
-        return -1;
+    if( !importer->info )
+        return LSMASH_ERR_NAMELESS;
     if( track_number != 1 )
-        return -1;
+        return LSMASH_ERR_FUNCTION_PARAM;
     amr_importer_t *amr_imp = (amr_importer_t *)importer->info;
     lsmash_bs_t    *bs      = amr_imp->bs;
     if( amr_imp->status == IMPORTER_EOF || lsmash_bs_is_end( bs, 0 ) )
@@ -132,15 +132,15 @@ static int amr_get_accessunit
     {
         lsmash_log( importer, LSMASH_LOG_ERROR, "an %s speech frame is detected.\n", read_size < 0 ? "invalid" : "unknown" );
         amr_imp->status = IMPORTER_ERROR;
-        return -1;
+        return read_size < 0 ? LSMASH_ERR_INVALID_DATA : LSMASH_ERR_NAMELESS;
     }
     if( buffered_sample->length < read_size )
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     if( lsmash_bs_get_bytes_ex( bs, read_size, buffered_sample->data ) != read_size )
     {
         lsmash_log( importer, LSMASH_LOG_WARNING, "the stream is truncated at the end.\n" );
         amr_imp->status = IMPORTER_EOF;
-        return -1;
+        return LSMASH_ERR_INVALID_DATA;
     }
     buffered_sample->length        = read_size;
     buffered_sample->dts           = amr_imp->au_number ++ * amr_imp->samples_in_frame;
@@ -164,14 +164,14 @@ static int amr_check_magic_number
     uint8_t buf[AMR_STORAGE_MAGIC_LENGTH];
     if( lsmash_bs_get_bytes_ex( bs, AMR_STORAGE_MAGIC_LENGTH, buf ) != AMR_STORAGE_MAGIC_LENGTH
      || memcmp( buf, "#!AMR", AMR_STORAGE_MAGIC_LENGTH - 1 ) )
-        return -1;
+        return LSMASH_ERR_INVALID_DATA;
     if( buf[AMR_STORAGE_MAGIC_LENGTH - 1] == '\n' )
         /* single-channel AMR-NB file */
         return 0;
     if( buf[AMR_STORAGE_MAGIC_LENGTH - 1] != '-'
      || lsmash_bs_get_bytes_ex( bs, AMR_AMRWB_EX_MAGIC_LENGTH, buf ) != AMR_AMRWB_EX_MAGIC_LENGTH
      || memcmp( buf, "WB\n", AMR_AMRWB_EX_MAGIC_LENGTH ) )
-        return -1;
+        return LSMASH_ERR_INVALID_DATA;
     /* single-channel AMR-WB file */
     return 1;
 #undef AMR_STORAGE_MAGIC_LENGTH
@@ -187,7 +187,7 @@ static int amr_create_damr
 #define AMR_DAMR_LENGTH 17
     lsmash_bs_t *bs = lsmash_bs_create();
     if( !bs )
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     lsmash_bs_put_be32( bs, AMR_DAMR_LENGTH );
     lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_DAMR.fourcc );
     /* NOTE: These are specific to each codec vendor, but we're surely not a vendor.
@@ -202,7 +202,7 @@ static int amr_create_damr
     if( !cs )
     {
         lsmash_bs_cleanup( bs );
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     }
     cs->type              = LSMASH_CODEC_SPECIFIC_DATA_TYPE_UNKNOWN;
     cs->format            = LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED;
@@ -214,7 +214,7 @@ static int amr_create_damr
      || lsmash_add_entry( &summary->opaque->list, cs ) < 0 )
     {
         lsmash_destroy_codec_specific_data( cs );
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     }
     return 0;
 #undef AMR_DAMR_LENGTH
@@ -255,13 +255,20 @@ static int amr_probe
 
     amr_importer_t *amr_imp = create_amr_importer( importer );
     if( !amr_imp )
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
+    int err;
     int wb = amr_check_magic_number( amr_imp->bs );
     if( wb < 0 )
+    {
+        err = wb;
         goto fail;
+    }
     lsmash_audio_summary_t *summary = amr_create_summary( importer, wb );
     if( !summary )
+    {
+        err = LSMASH_ERR_NAMELESS;
         goto fail;
+    }
     amr_imp->status           = IMPORTER_OK;
     amr_imp->wb               = wb;
     amr_imp->samples_in_frame = summary->samples_in_frame;
@@ -270,7 +277,7 @@ static int amr_probe
     return 0;
 fail:
     remove_amr_importer( amr_imp );
-    return -1;
+    return err;
 }
 
 static uint32_t amr_get_last_delta
