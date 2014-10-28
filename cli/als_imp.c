@@ -110,35 +110,35 @@ static int als_parse_specific_config( mp4a_als_importer_t *als_imp )
     lsmash_bs_t *bs = als_imp->bs;
     /* Check ALS identifier( = 0x414C5300). */
     if( 0x414C5300 != lsmash_bs_show_be32( bs, 0 ) )
-        return -1;
+        return LSMASH_ERR_INVALID_DATA;
     als_specific_config_t *alssc = &als_imp->alssc;
     alssc->samp_freq     = lsmash_bs_show_be32( bs, 4 );
     alssc->samples       = lsmash_bs_show_be32( bs, 8 );
     if( alssc->samples == 0xffffffff )
-        return -1;      /* We don't support this case. */
+        return LSMASH_ERR_PATCH_WELCOME;    /* We don't support this case. */
     alssc->channels      = lsmash_bs_show_be16( bs, 12 );
     alssc->resolution    = (lsmash_bs_show_byte( bs, 14 ) & 0x1c) >> 2;
     if( alssc->resolution > 3 )
-        return -1;      /* reserved */
+        return LSMASH_ERR_NAMELESS; /* reserved */
     alssc->frame_length  = lsmash_bs_show_be16( bs, 15 );
     alssc->random_access = lsmash_bs_show_byte( bs, 17 );
     alssc->ra_flag       = (lsmash_bs_show_byte( bs, 18 ) & 0xc0) >> 6;
     if( alssc->ra_flag == 0 )
-        return -1;      /* We don't support this case. */
+        return LSMASH_ERR_PATCH_WELCOME;    /* We don't support this case. */
 #if 0
     if( alssc->samples == 0xffffffff && alssc->ra_flag == 2 )
-        return -1;
+        return LSMASH_ERR_NAMELESS;
 #endif
     uint8_t temp8 = lsmash_bs_show_byte( bs, 20 );
     int chan_sort = !!(temp8 & 0x1);
     if( alssc->channels == 0 )
     {
         if( temp8 & 0x8 )
-            return -1;      /* If channels = 0 (mono), joint_stereo = 0. */
+            return LSMASH_ERR_INVALID_DATA; /* If channels = 0 (mono), joint_stereo = 0. */
         else if( temp8 & 0x4 )
-            return -1;      /* If channels = 0 (mono), mc_coding = 0. */
+            return LSMASH_ERR_INVALID_DATA; /* If channels = 0 (mono), mc_coding = 0. */
         else if( chan_sort )
-            return -1;      /* If channels = 0 (mono), chan_sort = 0. */
+            return LSMASH_ERR_INVALID_DATA; /* If channels = 0 (mono), chan_sort = 0. */
     }
     int chan_config      = !!(temp8 & 0x2);
     temp8 = lsmash_bs_show_byte( bs, 21 );
@@ -194,7 +194,7 @@ static int als_parse_specific_config( mp4a_als_importer_t *als_imp )
             int64_t end_offset = lsmash_bs_get_stream_pos( bs ) + read_size;
             alssc->ra_unit_size = lsmash_malloc( read_size );
             if( !alssc->ra_unit_size )
-                return -1;
+                return LSMASH_ERR_MEMORY_ALLOC;
             uint32_t max_ra_unit_size = 0;
             for( uint32_t i = 0; i < alssc->number_of_ra_units; i++ )
             {
@@ -224,13 +224,13 @@ static int als_parse_specific_config( mp4a_als_importer_t *als_imp )
 
 static int mp4a_als_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
 {
-    debug_if( !importer || !importer->info || !buffered_sample->data || !buffered_sample->length )
-        return -1;
-    if( !importer->info || track_number != 1 )
-        return -1;
+    if( !importer->info )
+        return LSMASH_ERR_NAMELESS;
+    if( track_number != 1 )
+        return LSMASH_ERR_FUNCTION_PARAM;
     lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_get_entry_data( importer->summaries, track_number );
     if( !summary )
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     mp4a_als_importer_t *als_imp = (mp4a_als_importer_t *)importer->info;
     importer_status current_status = als_imp->status;
     if( current_status == IMPORTER_EOF )
@@ -259,13 +259,13 @@ static int mp4a_als_importer_get_accessunit( importer_t *importer, uint32_t trac
     if( buffered_sample->length < au_length )
     {
         lsmash_log( importer, LSMASH_LOG_WARNING, "the buffer has not enough size.\n" );
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     }
     if( lsmash_bs_get_bytes_ex( bs, au_length, buffered_sample->data ) != au_length )
     {
         lsmash_log( importer, LSMASH_LOG_WARNING, "failed to read an access unit.\n" );
         als_imp->status = IMPORTER_ERROR;
-        return -1;
+        return LSMASH_ERR_INVALID_DATA;
     }
     buffered_sample->length        = au_length;
     buffered_sample->dts           = als_imp->au_number ++ * als_imp->samples_in_frame;
@@ -348,7 +348,7 @@ static int mp4a_als_importer_probe( importer_t *importer )
 {
     mp4a_als_importer_t *als_imp = create_mp4a_als_importer( importer );
     if( !als_imp )
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     lsmash_bs_t *bs = als_imp->bs;
     bs->stream          = importer->stream;
     bs->read            = lsmash_fread_wrapper;
@@ -356,24 +356,29 @@ static int mp4a_als_importer_probe( importer_t *importer )
     bs->unseekable      = importer->is_stdin;
     bs->buffer.max_size = BS_MAX_DEFAULT_READ_SIZE;
     /* Parse ALS specific configuration. */
-    if( als_parse_specific_config( als_imp ) < 0 )
+    int err = als_parse_specific_config( als_imp );
+    if( err < 0 )
         goto fail;
     lsmash_audio_summary_t *summary = als_create_summary( bs, &als_imp->alssc );
     if( !summary )
+    {
+        err = LSMASH_ERR_NAMELESS;
         goto fail;
+    }
     /* importer status */
     als_imp->status           = IMPORTER_OK;
     als_imp->samples_in_frame = summary->samples_in_frame;
     if( lsmash_add_entry( importer->summaries, summary ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        err = LSMASH_ERR_MEMORY_ALLOC;
         goto fail;
     }
     importer->info = als_imp;
     return 0;
 fail:
     remove_mp4a_als_importer( als_imp );
-    return -1;
+    return err;
 }
 
 static uint32_t mp4a_als_importer_get_last_delta( importer_t *importer, uint32_t track_number )
