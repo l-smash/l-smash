@@ -139,8 +139,9 @@ static int ac3_buffer_frame( uint8_t *buffer, lsmash_bs_t *bs )
     uint64_t remain_size = lsmash_bs_get_remaining_buffer_size( bs );
     if( remain_size < AC3_MAX_SYNCFRAME_LENGTH )
     {
-        if( lsmash_bs_read( bs, bs->buffer.max_size ) < 0 )
-            return -1;
+        int err = lsmash_bs_read( bs, bs->buffer.max_size );
+        if( err < 0 )
+            return err;
         remain_size = lsmash_bs_get_remaining_buffer_size( bs );
     }
     uint64_t copy_size = LSMASH_MIN( remain_size, AC3_MAX_SYNCFRAME_LENGTH );
@@ -150,18 +151,18 @@ static int ac3_buffer_frame( uint8_t *buffer, lsmash_bs_t *bs )
 
 static int ac3_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
 {
-    debug_if( !importer || !importer->info || !buffered_sample->data || !buffered_sample->length )
-        return -1;
-    if( !importer->info || track_number != 1 )
-        return -1;
+    if( !importer->info )
+        return LSMASH_ERR_NAMELESS;
+    if( track_number != 1 )
+        return LSMASH_ERR_FUNCTION_PARAM;
     lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_get_entry_data( importer->summaries, track_number );
     if( !summary )
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     ac3_importer_t *ac3_imp = (ac3_importer_t *)importer->info;
     ac3_info_t     *info    = &ac3_imp->info;
     importer_status current_status = ac3_imp->status;
     if( current_status == IMPORTER_ERROR )
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     if( current_status == IMPORTER_EOF )
     {
         buffered_sample->length = 0;
@@ -172,7 +173,7 @@ static int ac3_importer_get_accessunit( importer_t *importer, uint32_t track_num
     if( param->fscod == 0x1 && param->frmsizecod & 0x1 )
         frame_size += 2;
     if( buffered_sample->length < frame_size )
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     if( current_status == IMPORTER_CHANGE )
     {
         lsmash_codec_specific_t *cs = isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3 );
@@ -235,7 +236,7 @@ static int ac3_importer_probe( importer_t *importer )
 {
     ac3_importer_t *ac3_imp = create_ac3_importer();
     if( !ac3_imp )
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     lsmash_bits_t *bits = ac3_imp->info.bits;
     lsmash_bs_t   *bs   = bits->bs;
     bs->stream          = importer->stream;
@@ -244,17 +245,26 @@ static int ac3_importer_probe( importer_t *importer )
     bs->unseekable      = importer->is_stdin;
     bs->buffer.max_size = AC3_MAX_SYNCFRAME_LENGTH;
     /* Check the syncword and parse the syncframe header */
+    int err;
     if( lsmash_bs_show_byte( bs, 0 ) != 0x0b
-     || lsmash_bs_show_byte( bs, 1 ) != 0x77
-     || ac3_buffer_frame( ac3_imp->buffer, bs ) < 0
-     || ac3_parse_syncframe_header( &ac3_imp->info ) < 0 )
+     || lsmash_bs_show_byte( bs, 1 ) != 0x77 )
+    {
+        err = LSMASH_ERR_INVALID_DATA;
+        goto fail;
+    }
+    if( (err = ac3_buffer_frame( ac3_imp->buffer, bs ))      < 0
+     || (err = ac3_parse_syncframe_header( &ac3_imp->info )) < 0 )
         goto fail;
     lsmash_audio_summary_t *summary = ac3_create_summary( &ac3_imp->info );
     if( !summary )
+    {
+        err = LSMASH_ERR_NAMELESS;
         goto fail;
+    }
     if( lsmash_add_entry( importer->summaries, summary ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        err = LSMASH_ERR_MEMORY_ALLOC;
         goto fail;
     }
     ac3_imp->status    = IMPORTER_OK;
@@ -263,7 +273,7 @@ static int ac3_importer_probe( importer_t *importer )
     return 0;
 fail:
     remove_ac3_importer( ac3_imp );
-    return -1;
+    return err;
 }
 
 static uint32_t ac3_importer_get_last_delta( importer_t *importer, uint32_t track_number )
@@ -363,10 +373,11 @@ static int eac3_importer_get_next_accessunit_internal( importer_t *importer )
         uint64_t remain_size = lsmash_bs_get_remaining_buffer_size( bs );
         if( remain_size < EAC3_MAX_SYNCFRAME_LENGTH )
         {
-            if( lsmash_bs_read( bs, bs->buffer.max_size ) < 0 )
+            int err = lsmash_bs_read( bs, bs->buffer.max_size );
+            if( err < 0 )
             {
                 lsmash_log( importer, LSMASH_LOG_ERROR, "failed to read data from the stream.\n" );
-                return -1;
+                return err;
             }
             remain_size = lsmash_bs_get_remaining_buffer_size( bs );
         }
@@ -390,7 +401,7 @@ static int eac3_importer_get_next_accessunit_internal( importer_t *importer )
                 if( lsmash_bs_get_remaining_buffer_size( bs ) )
                 {
                     lsmash_log( importer, LSMASH_LOG_WARNING, "the stream is truncated at the end.\n" );
-                    return -1;
+                    return LSMASH_ERR_INVALID_DATA;
                 }
                 return 0;
             }
@@ -404,19 +415,20 @@ static int eac3_importer_get_next_accessunit_internal( importer_t *importer )
              || lsmash_bs_show_byte( bs, 1 ) != 0x77 )
             {
                 lsmash_log( importer, LSMASH_LOG_ERROR, "a syncword is not found.\n" );
-                return -1;
+                return LSMASH_ERR_INVALID_DATA;
             }
             /* Parse syncframe. */
             info->frame_size = 0;
-            if( eac3_parse_syncframe( info ) < 0 )
+            int err = eac3_parse_syncframe( info );
+            if( err < 0 )
             {
                 lsmash_log( importer, LSMASH_LOG_ERROR, "failed to parse syncframe.\n" );
-                return -1;
+                return err;
             }
             if( remain_size < info->frame_size )
             {
                 lsmash_log( importer, LSMASH_LOG_ERROR, "a frame is truncated.\n" );
-                return -1;
+                return LSMASH_ERR_INVALID_DATA;
             }
             int independent = info->strmtyp != 0x1;
             if( independent && info->substreamid == 0x0 )
@@ -430,7 +442,7 @@ static int eac3_importer_get_next_accessunit_internal( importer_t *importer )
                 else if( info->number_of_audio_blocks > 6 )
                 {
                     lsmash_log( importer, LSMASH_LOG_ERROR, "greater than 6 consecutive independent substreams.\n" );
-                    return -1;
+                    return LSMASH_ERR_INVALID_DATA;
                 }
                 info->number_of_audio_blocks += eac3_audio_block_table[ info->numblkscod ];
                 info->number_of_independent_substreams = 0;
@@ -440,7 +452,7 @@ static int eac3_importer_get_next_accessunit_internal( importer_t *importer )
             {
                 /* The first syncframe in an AU must be independent and assigned substream ID 0. */
                 lsmash_log( importer, LSMASH_LOG_ERROR, "the first syncframe is NOT an independent substream.\n" );
-                return -1;
+                return LSMASH_ERR_INVALID_DATA;
             }
             if( independent )
                 info->independent_info[info->number_of_independent_substreams ++].num_dep_sub = 0;
@@ -463,7 +475,7 @@ static int eac3_importer_get_next_accessunit_internal( importer_t *importer )
             lsmash_multiple_buffers_t *temp = lsmash_resize_multiple_buffers( eac3_imp->au_buffers,
                                                                               eac3_imp->au_buffers->buffer_size + EAC3_MAX_SYNCFRAME_LENGTH );
             if( !temp )
-                return -1;
+                return LSMASH_ERR_MEMORY_ALLOC;
             eac3_imp->au_buffers    = temp;
             eac3_imp->au            = lsmash_withdraw_buffer( eac3_imp->au_buffers, 1 );
             eac3_imp->incomplete_au = lsmash_withdraw_buffer( eac3_imp->au_buffers, 2 );
@@ -473,23 +485,23 @@ static int eac3_importer_get_next_accessunit_internal( importer_t *importer )
         eac3_imp->incomplete_au_length += info->frame_size;
         ++ info->syncframe_count;
     }
-    return info->bits->bs->error ? -1 : 0;
+    return info->bits->bs->error ? LSMASH_ERR_NAMELESS : 0;
 }
 
 static int eac3_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
 {
-    debug_if( !importer || !importer->info || !buffered_sample->data || !buffered_sample->length )
-        return -1;
-    if( !importer->info || track_number != 1 )
-        return -1;
+    if( !importer->info )
+        return LSMASH_ERR_NAMELESS;
+    if( track_number != 1 )
+        return LSMASH_ERR_FUNCTION_PARAM;
     lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_get_entry_data( importer->summaries, track_number );
     if( !summary )
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     eac3_importer_t *eac3_imp = (eac3_importer_t *)importer->info;
     eac3_info_t     *info     = &eac3_imp->info;
     importer_status current_status = eac3_imp->status;
     if( current_status == IMPORTER_ERROR || buffered_sample->length < eac3_imp->au_length )
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     if( current_status == IMPORTER_EOF && eac3_imp->au_length == 0 )
     {
         buffered_sample->length = 0;
@@ -584,7 +596,7 @@ static int eac3_importer_probe( importer_t *importer )
 {
     eac3_importer_t *eac3_imp = create_eac3_importer();
     if( !eac3_imp )
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     lsmash_bits_t *bits = eac3_imp->info.bits;
     lsmash_bs_t   *bs   = bits->bs;
     bs->stream          = importer->stream;
@@ -593,24 +605,29 @@ static int eac3_importer_probe( importer_t *importer )
     bs->unseekable      = importer->is_stdin;
     bs->buffer.max_size = EAC3_MAX_SYNCFRAME_LENGTH;
     importer->info = eac3_imp;
-    if( eac3_importer_get_next_accessunit_internal( importer ) < 0 )
+    int err = eac3_importer_get_next_accessunit_internal( importer );
+    if( err < 0 )
         goto fail;
     lsmash_audio_summary_t *summary = eac3_create_summary( eac3_imp );
     if( !summary )
+    {
+        err = LSMASH_ERR_NAMELESS;
         goto fail;
+    }
     if( eac3_imp->status != IMPORTER_EOF )
         eac3_imp->status = IMPORTER_OK;
     eac3_imp->au_number = 0;
     if( lsmash_add_entry( importer->summaries, summary ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        err = LSMASH_ERR_MEMORY_ALLOC;
         goto fail;
     }
     return 0;
 fail:
     remove_eac3_importer( eac3_imp );
     importer->info      = NULL;
-    return -1;
+    return err;
 }
 
 static uint32_t eac3_importer_get_last_delta( importer_t *importer, uint32_t track_number )
