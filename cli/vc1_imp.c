@@ -126,13 +126,13 @@ static int vc1_get_au_internal_succeeded( vc1_importer_t *vc1_imp )
     return 0;
 }
 
-static int vc1_get_au_internal_failed( vc1_importer_t *vc1_imp, int complete_au )
+static int vc1_get_au_internal_failed( vc1_importer_t *vc1_imp, int complete_au, int ret )
 {
     vc1_access_unit_t *access_unit = &vc1_imp->info.access_unit;
     vc1_get_au_internal_end( vc1_imp, access_unit );
     if( complete_au )
         access_unit->number += 1;
-    return -1;
+    return ret;
 }
 
 static int vc1_importer_get_access_unit_internal( importer_t *importer, int probe )
@@ -146,6 +146,7 @@ static int vc1_importer_get_access_unit_internal( importer_t *importer, int prob
     access_unit->data_length = 0;
     while( 1 )
     {
+        int      err;
         uint8_t  bdu_type;
         uint64_t trailing_zero_bytes;
         uint64_t ebdu_length = vc1_find_next_start_code_prefix( bs, &bdu_type, &trailing_zero_bytes );
@@ -159,7 +160,7 @@ static int vc1_importer_get_access_unit_internal( importer_t *importer, int prob
         else if( bdu_type == 0xFF )
         {
             lsmash_log( importer, LSMASH_LOG_ERROR, "a forbidden BDU type is detected.\n" );
-            return vc1_get_au_internal_failed( vc1_imp, complete_au );
+            return vc1_get_au_internal_failed( vc1_imp, complete_au, LSMASH_ERR_INVALID_DATA );
         }
         uint64_t next_ebdu_head_pos = info->ebdu_head_pos
                                     + ebdu_length
@@ -183,10 +184,10 @@ static int vc1_importer_get_access_unit_internal( importer_t *importer, int prob
             /* Increase the buffer if needed. */
             uint64_t possible_au_length = access_unit->incomplete_data_length + ebdu_length;
             if( sb->bank->buffer_size < possible_au_length
-             && vc1_supplement_buffer( sb, access_unit, 2 * possible_au_length ) < 0 )
+             && (err = vc1_supplement_buffer( sb, access_unit, 2 * possible_au_length )) < 0 )
             {
                 lsmash_log( importer, LSMASH_LOG_ERROR, "failed to increase the buffer size.\n" );
-                return vc1_get_au_internal_failed( vc1_imp, complete_au );
+                return vc1_get_au_internal_failed( vc1_imp, complete_au, err );
             }
             /* Process EBDU by its BDU type and append it to access unit. */
             uint8_t *ebdu = lsmash_bs_get_buffer_data( bs );
@@ -205,10 +206,10 @@ static int vc1_importer_get_access_unit_internal( importer_t *importer, int prob
                              * For the Progressive or Frame Interlace mode, shall signal the beginning of a new video frame.
                              * For the Field Interlace mode, shall signal the beginning of a sequence of two independently coded video fields.
                              * [FRM_SC][PIC_L][[FLD_SC][PIC_L] (optional)][[SLC_SC][SLC_L] (optional)] ...  */
-                    if( vc1_parse_advanced_picture( info->bits, &info->sequence, &info->picture, sb->rbdu, ebdu, ebdu_length ) < 0 )
+                    if( (err = vc1_parse_advanced_picture( info->bits, &info->sequence, &info->picture, sb->rbdu, ebdu, ebdu_length )) < 0 )
                     {
                         lsmash_log( importer, LSMASH_LOG_ERROR, "failed to parse a frame.\n" );
-                        return vc1_get_au_internal_failed( vc1_imp, complete_au );
+                        return vc1_get_au_internal_failed( vc1_imp, complete_au, err );
                     }
                 case 0x0C : /* Field
                              * Shall only be used for Field Interlaced frames
@@ -231,10 +232,10 @@ static int vc1_importer_get_access_unit_internal( importer_t *importer, int prob
                              *   1. I-picture - progressive or frame interlace
                              *   2. I/I-picture, I/P-picture, or P/I-picture - field interlace
                              * [[SEQ_SC][SEQ_L] (optional)][EP_SC][EP_L][FRM_SC][PIC_L] ... */
-                    if( vc1_parse_entry_point_header( info, ebdu, ebdu_length, probe ) < 0 )
+                    if( (err = vc1_parse_entry_point_header( info, ebdu, ebdu_length, probe )) < 0 )
                     {
                         lsmash_log( importer, LSMASH_LOG_ERROR, "failed to parse an entry point.\n" );
-                        return vc1_get_au_internal_failed( vc1_imp, complete_au );
+                        return vc1_get_au_internal_failed( vc1_imp, complete_au, err );
                     }
                     /* Signal random access type of the frame that follows this entry-point header. */
                     info->picture.closed_gop        = info->entry_point.closed_entry_point;
@@ -242,10 +243,10 @@ static int vc1_importer_get_access_unit_internal( importer_t *importer, int prob
                     break;
                 case 0x0F : /* Sequence header
                              * [SEQ_SC][SEQ_L][EP_SC][EP_L][FRM_SC][PIC_L] ... */
-                    if( vc1_parse_sequence_header( info, ebdu, ebdu_length, probe ) < 0 )
+                    if( (err = vc1_parse_sequence_header( info, ebdu, ebdu_length, probe )) < 0 )
                     {
                         lsmash_log( importer, LSMASH_LOG_ERROR, "failed to parse a sequence header.\n" );
-                        return vc1_get_au_internal_failed( vc1_imp, complete_au );
+                        return vc1_get_au_internal_failed( vc1_imp, complete_au, err );
                     }
                     /* The frame that is the first frame after this sequence header shall be a random accessible point. */
                     info->picture.start_of_sequence = 1;
@@ -259,13 +260,13 @@ static int vc1_importer_get_access_unit_internal( importer_t *importer, int prob
             vc1_append_ebdu_to_au( access_unit, ebdu, ebdu_length, probe );
         }
         else    /* We don't support other BDU types such as user data yet. */
-            return vc1_get_au_internal_failed( vc1_imp, complete_au );
+            return vc1_get_au_internal_failed( vc1_imp, complete_au, LSMASH_ERR_PATCH_WELCOME );
         /* Move to the first byte of the next EBDU. */
         info->prev_bdu_type = bdu_type;
         if( lsmash_bs_read_seek( bs, next_ebdu_head_pos, SEEK_SET ) != next_ebdu_head_pos )
         {
             lsmash_log( importer, LSMASH_LOG_ERROR, "failed to seek the next start code suffix.\n" );
-            return vc1_get_au_internal_failed( vc1_imp, complete_au );
+            return vc1_get_au_internal_failed( vc1_imp, complete_au, LSMASH_ERR_NAMELESS );
         }
         /* Check if no more data to read from the stream. */
         if( !lsmash_bs_is_end( bs, VC1_START_CODE_PREFIX_LENGTH ) )
@@ -283,24 +284,25 @@ static int vc1_importer_get_access_unit_internal( importer_t *importer, int prob
 
 static int vc1_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
 {
-    debug_if( !importer || !importer->info || !buffered_sample->data || !buffered_sample->length )
-        return -1;
-    if( !importer->info || track_number != 1 )
-        return -1;
+    if( !importer->info )
+        return LSMASH_ERR_NAMELESS;
+    if( track_number != 1 )
+        return LSMASH_ERR_FUNCTION_PARAM;
     vc1_importer_t *vc1_imp = (vc1_importer_t *)importer->info;
     vc1_info_t     *info    = &vc1_imp->info;
     importer_status current_status = vc1_imp->status;
     if( current_status == IMPORTER_ERROR || buffered_sample->length < vc1_imp->max_au_length )
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     if( current_status == IMPORTER_EOF )
     {
         buffered_sample->length = 0;
         return 0;
     }
-    if( vc1_importer_get_access_unit_internal( importer, 0 ) < 0 )
+    int err = vc1_importer_get_access_unit_internal( importer, 0 );
+    if( err < 0 )
     {
         vc1_imp->status = IMPORTER_ERROR;
-        return -1;
+        return err;
     }
     vc1_access_unit_t *access_unit = &info->access_unit;
     buffered_sample->dts = vc1_imp->ts_list.timestamp[ access_unit->number - 1 ].dts;
@@ -366,7 +368,7 @@ static int vc1_analyze_whole_stream
     uint32_t cts_alloc = (1 << 12) * sizeof(uint64_t);
     uint64_t *cts = lsmash_malloc( cts_alloc );
     if( !cts )
-        return -1;  /* Failed to allocate CTS list */
+        return LSMASH_ERR_MEMORY_ALLOC; /* Failed to allocate CTS list */
     uint32_t num_access_units  = 0;
     uint32_t num_consecutive_b = 0;
     lsmash_class_t *logger = &(lsmash_class_t){ "VC-1" };
@@ -374,12 +376,13 @@ static int vc1_analyze_whole_stream
     vc1_importer_t *vc1_imp = (vc1_importer_t *)importer->info;
     vc1_info_t     *info    = &vc1_imp->info;
     vc1_imp->status = IMPORTER_OK;
+    int err;
     while( vc1_imp->status != IMPORTER_EOF )
     {
 #if 0
         lsmash_log( &logger, LSMASH_LOG_INFO, "Analyzing stream as VC-1: %"PRIu32"\n", num_access_units + 1 );
 #endif
-        if( vc1_importer_get_access_unit_internal( importer, 1 ) < 0 )
+        if( (err = vc1_importer_get_access_unit_internal( importer, 1 )) < 0 )
             goto fail;
         /* In the case where B-pictures exist
          * Decode order
@@ -410,7 +413,10 @@ static int vc1_analyze_whole_stream
             uint32_t alloc = 2 * num_access_units * sizeof(uint64_t);
             uint64_t *temp = lsmash_realloc( cts, alloc );
             if( !temp )
+            {
+                err = LSMASH_ERR_MEMORY_ALLOC;
                 goto fail;  /* Failed to re-allocate CTS list */
+            }
             cts = temp;
             cts_alloc = alloc;
         }
@@ -420,11 +426,17 @@ static int vc1_analyze_whole_stream
     if( num_access_units > num_consecutive_b )
         cts[ num_access_units - num_consecutive_b - 1 ] = num_access_units;
     else
+    {
+        err = LSMASH_ERR_INVALID_DATA;
         goto fail;
+    }
     /* Construct timestamps. */
     lsmash_media_ts_t *timestamp = lsmash_malloc( num_access_units * sizeof(lsmash_media_ts_t) );
     if( !timestamp )
+    {
+        err = LSMASH_ERR_MEMORY_ALLOC;
         goto fail;  /* Failed to allocate timestamp list */
+    }
     for( uint32_t i = 1; i < num_access_units; i++ )
         if( cts[i] < cts[i - 1] )
         {
@@ -452,7 +464,7 @@ static int vc1_analyze_whole_stream
 fail:
     lsmash_log_refresh_line( &logger );
     lsmash_free( cts );
-    return -1;
+    return err;
 }
 
 static int vc1_importer_probe( importer_t *importer )
@@ -460,9 +472,10 @@ static int vc1_importer_probe( importer_t *importer )
     /* Find the first start code. */
     vc1_importer_t *vc1_imp = create_vc1_importer( importer );
     if( !vc1_imp )
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     lsmash_bs_t *bs = vc1_imp->bs;
     uint64_t first_ebdu_head_pos = 0;
+    int err;
     while( 1 )
     {
         /* The first EBDU in decoding order of the stream shall have start code (0x000001). */
@@ -470,7 +483,10 @@ static int vc1_importer_probe( importer_t *importer )
             break;
         /* Invalid if encountered any value of non-zero before the first start code. */
         if( lsmash_bs_show_byte( bs, first_ebdu_head_pos ) )
+        {
+            err = LSMASH_ERR_INVALID_DATA;
             goto fail;
+        }
         ++first_ebdu_head_pos;
     }
     /* OK. It seems the stream has a sequence header of VC-1. */
@@ -478,14 +494,18 @@ static int vc1_importer_probe( importer_t *importer )
     vc1_info_t *info = &vc1_imp->info;
     lsmash_bs_read_seek( bs, first_ebdu_head_pos, SEEK_SET );
     info->ebdu_head_pos = first_ebdu_head_pos;
-    if( vc1_analyze_whole_stream( importer ) < 0 )
+    if( (err = vc1_analyze_whole_stream( importer )) < 0 )
         goto fail;
     lsmash_video_summary_t *summary = vc1_create_summary( info, &vc1_imp->first_sequence, vc1_imp->max_au_length );
     if( !summary )
+    {
+        err = LSMASH_ERR_NAMELESS;
         goto fail;
+    }
     if( lsmash_add_entry( importer->summaries, summary ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        err = LSMASH_ERR_MEMORY_ALLOC;
         goto fail;
     }
     /* Go back to layer of the first EBDU. */
@@ -504,7 +524,7 @@ fail:
     remove_vc1_importer( vc1_imp );
     importer->info = NULL;
     lsmash_remove_entries( importer->summaries, lsmash_cleanup_summary );
-    return -1;
+    return err;
 }
 
 static uint32_t vc1_importer_get_last_delta( importer_t *importer, uint32_t track_number )
