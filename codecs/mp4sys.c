@@ -452,7 +452,7 @@ static int mp4sys_write_SLConfigDescriptor( lsmash_bs_t *bs, mp4sys_SLConfigDesc
     {
         lsmash_bits_t *bits = lsmash_bits_create( bs );
         if( !bits )
-            return -1;
+            return LSMASH_ERR_MEMORY_ALLOC;
         lsmash_bits_put( bits, slcd->timeStampLength, slcd->startDecodingTimeStamp );
         lsmash_bits_put( bits, slcd->timeStampLength, slcd->startCompositionTimeStamp );
         lsmash_bits_put_align( bits );
@@ -525,13 +525,14 @@ static int mp4sys_write_children( lsmash_bs_t *bs, mp4sys_descriptor_t *descript
 int mp4sys_write_descriptor( lsmash_bs_t *bs, void *opaque_descriptor )
 {
     if( !bs || !opaque_descriptor )
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     mp4sys_descriptor_t *descriptor = (mp4sys_descriptor_t *)opaque_descriptor;
     mp4sys_write_descriptor_header( bs, &descriptor->header );
     if( !descriptor->write )
         return 0;
-    if( descriptor->write( bs, descriptor ) < 0 )
-        return -1;
+    int err = descriptor->write( bs, descriptor );
+    if( err < 0 )
+        return err;
     return mp4sys_write_children( bs, descriptor );
 }
 
@@ -693,7 +694,7 @@ int mp4sys_create_ES_ID_Inc( mp4sys_ObjectDescriptor_t *od, uint32_t Track_ID )
 {
     mp4sys_ES_ID_Inc_t *es_id_inc = mp4sys_add_ES_ID_Inc( od );
     if( !es_id_inc )
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     es_id_inc->Track_ID = Track_ID;
     return 0;
 }
@@ -736,7 +737,7 @@ int mp4sys_to_InitialObjectDescriptor
 )
 {
     if( !od )
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     od->header.tag                     = MP4SYS_DESCRIPTOR_TAG_MP4_IOD_Tag;
     od->includeInlineProfileLevelFlag  = include_inline_pli;
     od->ODProfileLevelIndication       = od_pli;
@@ -755,7 +756,7 @@ int mp4sys_to_InitialObjectDescriptor
 int mp4sys_update_DecoderConfigDescriptor( mp4sys_ES_Descriptor_t *esd, uint32_t bufferSizeDB, uint32_t maxBitrate, uint32_t avgBitrate )
 {
     if( !esd || !esd->decConfigDescr )
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     mp4sys_DecoderConfigDescriptor_t *dcd = esd->decConfigDescr;
     dcd->bufferSizeDB = bufferSizeDB;
     dcd->maxBitrate   = maxBitrate;
@@ -1331,13 +1332,17 @@ int mp4sys_setup_summary_from_DecoderSpecificInfo( lsmash_audio_summary_t *summa
     uint32_t dsi_payload_length = UINT32_MAX;       /* arbitrary */
     uint8_t *dsi_payload = mp4sys_export_DecoderSpecificInfo( esd, &dsi_payload_length );
     if( !dsi_payload && dsi_payload_length )
-        return -1;
+        return LSMASH_ERR_NAMELESS;
+    int err = 0;
     if( dsi_payload_length )
     {
         lsmash_codec_specific_t *cs = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG,
                                                                          LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
         if( !cs )
+        {
+            err = LSMASH_ERR_MEMORY_ALLOC;
             goto fail;
+        }
         lsmash_mp4sys_decoder_parameters_t *params = (lsmash_mp4sys_decoder_parameters_t *)cs->data.structured;
         mp4sys_DecoderConfigDescriptor_t   *dcd    = esd->decConfigDescr;
         params->objectTypeIndication = dcd->objectTypeIndication;
@@ -1345,19 +1350,17 @@ int mp4sys_setup_summary_from_DecoderSpecificInfo( lsmash_audio_summary_t *summa
         params->bufferSizeDB         = dcd->bufferSizeDB;
         params->maxBitrate           = dcd->maxBitrate;
         params->avgBitrate           = dcd->avgBitrate;
-        if( mp4a_setup_summary_from_AudioSpecificConfig( summary, dsi_payload, dsi_payload_length ) < 0
-         || lsmash_set_mp4sys_decoder_specific_info( params, dsi_payload, dsi_payload_length )      < 0
-         || lsmash_add_entry( &summary->opaque->list, cs )                                          < 0 )
+        if( (err = mp4a_setup_summary_from_AudioSpecificConfig( summary, dsi_payload, dsi_payload_length )) < 0
+         || (err = lsmash_set_mp4sys_decoder_specific_info( params, dsi_payload, dsi_payload_length ))      < 0
+         || (err = lsmash_add_entry( &summary->opaque->list, cs ))                                          < 0 )
         {
             lsmash_destroy_codec_specific_data( cs );
             goto fail;
         }
     }
-    lsmash_free( dsi_payload );
-    return 0;
 fail:
     lsmash_free( dsi_payload );
-    return -1;
+    return err;
 }
 
 /**** following functions are for facilitation purpose ****/
@@ -1408,12 +1411,12 @@ fail:
 int lsmash_set_mp4sys_decoder_specific_info( lsmash_mp4sys_decoder_parameters_t *param, uint8_t *payload, uint32_t payload_length )
 {
     if( !param || !payload || payload_length == 0 )
-        return -1;
+        return LSMASH_ERR_FUNCTION_PARAM;
     if( !param->dsi )
     {
         param->dsi = lsmash_malloc_zero( sizeof(lsmash_mp4sys_decoder_specific_info_t) );
         if( !param->dsi )
-            return -1;
+            return LSMASH_ERR_MEMORY_ALLOC;
     }
     else
     {
@@ -1422,7 +1425,7 @@ int lsmash_set_mp4sys_decoder_specific_info( lsmash_mp4sys_decoder_parameters_t 
     }
     param->dsi->payload = lsmash_memdup( payload, payload_length );
     if( !param->dsi->payload )
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     param->dsi->payload_length = payload_length;
     return 0;
 }
@@ -1489,7 +1492,7 @@ int mp4sys_construct_decoder_config( lsmash_codec_specific_t *dst, lsmash_codec_
 {
     assert( dst && dst->data.structured && src && src->data.unstructured );
     if( src->size < ISOM_FULLBOX_COMMON_SIZE + 23 )
-        return -1;
+        return LSMASH_ERR_INVALID_DATA;
     lsmash_mp4sys_decoder_parameters_t *param = (lsmash_mp4sys_decoder_parameters_t *)dst->data.structured;
     uint8_t *data = src->data.unstructured;
     uint64_t size = LSMASH_GET_BE32( data );
@@ -1500,20 +1503,21 @@ int mp4sys_construct_decoder_config( lsmash_codec_specific_t *dst, lsmash_codec_
         data += 8;
     }
     if( size != src->size )
-        return -1;
+        return LSMASH_ERR_INVALID_DATA;
     data += 4;  /* Skip version and flags. */
     lsmash_bs_t *bs = lsmash_bs_create();
     if( !bs )
-        return -1;
-    if( lsmash_bs_import_data( bs, data, src->size - (data - src->data.unstructured) ) < 0 )
+        return LSMASH_ERR_MEMORY_ALLOC;
+    int err = lsmash_bs_import_data( bs, data, src->size - (data - src->data.unstructured) );
+    if( err < 0 )
     {
         lsmash_bs_cleanup( bs );
-        return -1;
+        return err;
     }
     mp4sys_ES_Descriptor_t *esd = (mp4sys_ES_Descriptor_t *)mp4sys_get_descriptor( bs, NULL );
     lsmash_bs_cleanup( bs );
     if( !esd || esd->header.tag != MP4SYS_DESCRIPTOR_TAG_ES_DescrTag || !esd->decConfigDescr )
-        return -1;
+        return LSMASH_ERR_INVALID_DATA;
     mp4sys_DecoderConfigDescriptor_t *dcd = esd->decConfigDescr;
     param->objectTypeIndication = dcd->objectTypeIndication;
     param->streamType           = dcd->streamType;
@@ -1524,10 +1528,10 @@ int mp4sys_construct_decoder_config( lsmash_codec_specific_t *dst, lsmash_codec_
     if( dsi
      && dsi->header.size
      && dsi->data
-     && lsmash_set_mp4sys_decoder_specific_info( param, dsi->data, dsi->header.size ) < 0 )
+     && (err = lsmash_set_mp4sys_decoder_specific_info( param, dsi->data, dsi->header.size )) < 0 )
     {
         mp4sys_remove_descriptor( esd );
-        return -1;
+        return err;
     }
     mp4sys_remove_descriptor( esd );
     return 0;
@@ -1573,7 +1577,7 @@ lsmash_mp4sys_object_type_indication lsmash_mp4sys_get_object_type_indication( l
 int lsmash_get_mp4sys_decoder_specific_info( lsmash_mp4sys_decoder_parameters_t *param, uint8_t **payload, uint32_t *payload_length )
 {
     if( !param || !payload || !payload_length )
-        return -1;
+        return LSMASH_ERR_FUNCTION_PARAM;
     if( !param->dsi || !param->dsi->payload || param->dsi->payload_length == 0 )
     {
         *payload = NULL;
@@ -1582,7 +1586,7 @@ int lsmash_get_mp4sys_decoder_specific_info( lsmash_mp4sys_decoder_parameters_t 
     }
     uint8_t *temp = lsmash_memdup( param->dsi->payload, param->dsi->payload_length );
     if( !temp )
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     *payload = temp;
     *payload_length = param->dsi->payload_length;
     return 0;
