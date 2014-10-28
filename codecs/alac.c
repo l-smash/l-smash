@@ -57,7 +57,7 @@ int alac_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_cod
 {
     assert( dst && dst->data.structured && src && src->data.unstructured );
     if( src->size < ALAC_SPECIFIC_BOX_LENGTH )
-        return -1;
+        return LSMASH_ERR_INVALID_DATA;
     lsmash_alac_specific_parameters_t *param = (lsmash_alac_specific_parameters_t *)dst->data.structured;
     uint8_t *data = src->data.unstructured;
     uint64_t size = LSMASH_GET_BE32( data );
@@ -68,7 +68,7 @@ int alac_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_cod
         data += 8;
     }
     if( size != src->size )
-        return -1;
+        return LSMASH_ERR_INVALID_DATA;
     data += 4;  /* Skip version and flags. */
     param->frameLength   = LSMASH_GET_BE32( &data[0] );
     param->bitDepth      = LSMASH_GET_BYTE( &data[5] );
@@ -87,7 +87,7 @@ int alac_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, i
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     if( box->size < ALAC_SPECIFIC_BOX_LENGTH )
-        return -1;
+        return LSMASH_ERR_INVALID_DATA;
     uint8_t *data = box->binary;
     isom_skip_box_common( &data );
     lsmash_ifprintf( fp, indent, "version = %"PRIu8"\n",           LSMASH_GET_BYTE( &data[0] ) );
