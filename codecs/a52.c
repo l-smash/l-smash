@@ -122,11 +122,11 @@ uint8_t *lsmash_create_ac3_specific_info( lsmash_ac3_specific_parameters_t *para
 int lsmash_setup_ac3_specific_parameters_from_syncframe( lsmash_ac3_specific_parameters_t *param, uint8_t *data, uint32_t data_length )
 {
     if( !data || data_length < AC3_MIN_SYNCFRAME_LENGTH )
-        return -1;
+        return LSMASH_ERR_FUNCTION_PARAM;
     /* Check a syncword. */
     if( data[0] != 0x0b
      || data[1] != 0x77 )
-        return -1;
+        return LSMASH_ERR_INVALID_DATA;
     lsmash_bits_t bits = { 0 };
     lsmash_bs_t   bs   = { 0 };
     uint8_t buffer[AC3_MAX_SYNCFRAME_LENGTH] = { 0 };
@@ -136,8 +136,9 @@ int lsmash_setup_ac3_specific_parameters_from_syncframe( lsmash_ac3_specific_par
     ac3_info_t info = { .bits = &bits };
     lsmash_bits_init( &bits, &bs );
     memcpy( buffer, data, LSMASH_MIN( data_length, AC3_MAX_SYNCFRAME_LENGTH ) );
-    if( ac3_parse_syncframe_header( &info ) < 0 )
-        return -1;
+    int err = ac3_parse_syncframe_header( &info );
+    if( err < 0 )
+        return err;
     *param = info.dac3_param;
     return 0;
 }
@@ -145,11 +146,11 @@ int lsmash_setup_ac3_specific_parameters_from_syncframe( lsmash_ac3_specific_par
 static int ac3_check_syncframe_header( lsmash_ac3_specific_parameters_t *param )
 {
     if( param->fscod == 0x3 )
-        return -1;      /* unknown Sample Rate Code */
+        return LSMASH_ERR_INVALID_DATA; /* unknown Sample Rate Code */
     if( param->frmsizecod > 0x25 )
-        return -1;      /* unknown Frame Size Code */
+        return LSMASH_ERR_INVALID_DATA; /* unknown Frame Size Code */
     if( param->bsid >= 10 )
-        return -1;      /* might be EAC-3 */
+        return LSMASH_ERR_INVALID_DATA; /* might be EAC-3 */
     return 0;
 }
 
@@ -178,7 +179,7 @@ int ac3_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_code
 {
     assert( dst && dst->data.structured && src && src->data.unstructured );
     if( src->size < AC3_SPECIFIC_BOX_LENGTH )
-        return -1;
+        return LSMASH_ERR_INVALID_DATA;
     lsmash_ac3_specific_parameters_t *param = (lsmash_ac3_specific_parameters_t *)dst->data.structured;
     uint8_t *data = src->data.unstructured;
     uint64_t size = LSMASH_GET_BE32( data );
@@ -189,7 +190,7 @@ int ac3_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_code
         data += 8;
     }
     if( size != src->size )
-        return -1;
+        return LSMASH_ERR_INVALID_DATA;
     param->fscod      = (data[0] >> 6) & 0x03;                                  /* XXxx xxxx xxxx xxxx xxxx xxxx */
     param->bsid       = (data[0] >> 1) & 0x1F;                                  /* xxXX XXXx xxxx xxxx xxxx xxxx */
     param->bsmod      = ((data[0] & 0x01) << 2) | ((data[2] >> 6) & 0x03);      /* xxxx xxxX XXxx xxxx xxxx xxxx */
@@ -208,7 +209,7 @@ int ac3_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, in
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     if( box->size < AC3_SPECIFIC_BOX_LENGTH )
-        return -1;
+        return LSMASH_ERR_INVALID_DATA;
     uint8_t *data = box->binary;
     isom_skip_box_common( &data );
     uint8_t fscod         = (data[0] >> 6) & 0x03;
@@ -286,7 +287,7 @@ uint8_t *lsmash_create_eac3_specific_info( lsmash_eac3_specific_parameters_t *pa
 int lsmash_setup_eac3_specific_parameters_from_frame( lsmash_eac3_specific_parameters_t *param, uint8_t *data, uint32_t data_length )
 {
     if( !data || data_length < 5 )
-        return -1;
+        return LSMASH_ERR_FUNCTION_PARAM;
     lsmash_bits_t bits = { 0 };
     lsmash_bs_t   bs   = { 0 };
     uint8_t buffer[EAC3_MAX_SYNCFRAME_LENGTH] = { 0 };
@@ -333,7 +334,7 @@ int lsmash_setup_eac3_specific_parameters_from_frame( lsmash_eac3_specific_param
         }
         else if( info->syncframe_count == 0 )
             /* The first syncframe in an AU must be independent and assigned substream ID 0. */
-            return -2;
+            return LSMASH_ERR_INVALID_DATA;
         if( independent )
             info->independent_info[info->number_of_independent_substreams ++].num_dep_sub = 0;
         else
@@ -343,11 +344,11 @@ int lsmash_setup_eac3_specific_parameters_from_frame( lsmash_eac3_specific_param
     }
 setup_param:
     if( info->number_of_independent_substreams == 0 || info->number_of_independent_substreams > 8 )
-        return -1;
+        return LSMASH_ERR_INVALID_DATA;
     if( !info->dec3_param_initialized )
         eac3_update_specific_param( info );
     *param = info->dec3_param;
-    return info->number_of_audio_blocks == 6 ? 0 : -1;
+    return info->number_of_audio_blocks == 6 ? 0 : LSMASH_ERR_INVALID_DATA;
 }
 
 uint16_t lsmash_eac3_get_chan_loc_from_chanmap( uint16_t chanmap )
@@ -358,16 +359,16 @@ uint16_t lsmash_eac3_get_chan_loc_from_chanmap( uint16_t chanmap )
 static int eac3_check_syncframe_header( eac3_info_t *info )
 {
     if( info->strmtyp == 0x3 )
-        return -1;      /* unknown Stream type */
+        return LSMASH_ERR_INVALID_DATA; /* unknown Stream type */
     lsmash_eac3_substream_info_t *substream_info;
     if( info->strmtyp != 0x1 )
         substream_info = &info->independent_info[ info->current_independent_substream_id ];
     else
         substream_info = &info->dependent_info;
     if( substream_info->fscod == 0x3 && info->fscod2 == 0x3 )
-        return -1;      /* unknown Sample Rate Code */
+        return LSMASH_ERR_INVALID_DATA; /* unknown Sample Rate Code */
     if( substream_info->bsid < 10 || substream_info->bsid > 16 )
-        return -1;      /* not EAC-3 */
+        return LSMASH_ERR_INVALID_DATA; /* not EAC-3 */
     return 0;
 }
 
@@ -527,7 +528,7 @@ int eac3_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_cod
 {
     assert( dst && dst->data.structured && src && src->data.unstructured );
     if( src->size < EAC3_SPECIFIC_BOX_MIN_LENGTH )
-        return -1;
+        return LSMASH_ERR_INVALID_DATA;
     lsmash_eac3_specific_parameters_t *param = (lsmash_eac3_specific_parameters_t *)dst->data.structured;
     uint8_t *data = src->data.unstructured;
     uint64_t size = LSMASH_GET_BE32( data );
@@ -538,7 +539,7 @@ int eac3_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_cod
         data += 8;
     }
     if( size != src->size )
-        return -1;
+        return LSMASH_ERR_INVALID_DATA;
     param->data_rate   = (data[0] << 5) | ((data[1] >> 3) & 0x1F);  /* XXXX XXXX XXXX Xxxx */
     param->num_ind_sub = data[1] & 0x07;                            /* xxxx xxxx xxxx xXXX */
     data += 2;
@@ -546,7 +547,7 @@ int eac3_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_cod
     for( int i = 0; i <= param->num_ind_sub; i++ )
     {
         if( size < 3 )
-            return -1;
+            return LSMASH_ERR_INVALID_DATA;
         lsmash_eac3_substream_info_t *independent_info = &param->independent_info[i];
         independent_info->fscod       = (data[0] >> 6) & 0x03;                              /* XXxx xxxx xxxx xxxx xxxx xxxx */
         independent_info->bsid        = (data[0] >> 1) & 0x1F;                              /* xxXX XXXx xxxx xxxx xxxx xxxx */
@@ -559,7 +560,7 @@ int eac3_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_cod
         if( independent_info->num_dep_sub > 0 )
         {
             if( size < 1 )
-                return -1;
+                return LSMASH_ERR_INVALID_DATA;
             independent_info->chan_loc = ((data[-1] & 0x01) << 8) | data[0];    /* xxxx xxxX XXXX XXXX */
             data += 1;
             size -= 1;
@@ -675,7 +676,7 @@ int eac3_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, i
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     if( box->size < EAC3_SPECIFIC_BOX_MIN_LENGTH )
-        return -1;
+        return LSMASH_ERR_INVALID_DATA;
     uint8_t *data = box->binary;
     isom_skip_box_common( &data );
     lsmash_ifprintf( fp, indent, "data_rate = %"PRIu16" kbit/s\n", (data[0] << 5) | ((data[1] >> 3) & 0x1F) );
