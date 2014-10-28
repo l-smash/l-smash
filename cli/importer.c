@@ -158,8 +158,10 @@ fail:
 /* 0 if success, positive if changed, negative if failed */
 int lsmash_importer_get_access_unit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
 {
-    if( !importer || !importer->funcs.get_accessunit || !buffered_sample->data || buffered_sample->length == 0 )
-        return -1;
+    if( !importer || !buffered_sample->data || buffered_sample->length == 0 )
+        return LSMASH_ERR_FUNCTION_PARAM;
+    if( !importer->funcs.get_accessunit )
+        return LSMASH_ERR_NAMELESS;
     return importer->funcs.get_accessunit( importer, track_number, buffered_sample );
 }
 
