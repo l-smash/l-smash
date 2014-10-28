@@ -145,7 +145,7 @@ static inline int nalu_get_max_ps_length
     {
         isom_dcr_ps_entry_t *ps = (isom_dcr_ps_entry_t *)entry->data;
         if( !ps )
-            return -1;
+            return LSMASH_ERR_NAMELESS;
         if( ps->unused )
             continue;
         *max_ps_length = LSMASH_MAX( *max_ps_length, ps->nalUnitLength );
@@ -164,7 +164,7 @@ static inline int nalu_get_ps_count
     {
         isom_dcr_ps_entry_t *ps = (isom_dcr_ps_entry_t *)entry->data;
         if( !ps )
-            return -1;
+            return LSMASH_ERR_NAMELESS;
         if( ps->unused )
             continue;
         ++(*ps_count);
@@ -183,7 +183,7 @@ static inline int nalu_check_same_ps_existence
     {
         isom_dcr_ps_entry_t *ps = (isom_dcr_ps_entry_t *)entry->data;
         if( !ps )
-            return -1;
+            return LSMASH_ERR_NAMELESS;
         if( ps->unused )
             continue;
         if( ps->nalUnitLength == ps_length && !memcmp( ps->nalUnit, ps_data, ps_length ) )
@@ -203,18 +203,18 @@ static inline int nalu_get_dcr_ps
     {
         isom_dcr_ps_entry_t *data = lsmash_malloc( sizeof(isom_dcr_ps_entry_t) );
         if( !data )
-            return -1;
+            return LSMASH_ERR_MEMORY_ALLOC;
         if( lsmash_add_entry( list, data ) < 0 )
         {
             lsmash_free( data );
-            return -1;
+            return LSMASH_ERR_MEMORY_ALLOC;
         }
         data->nalUnitLength = lsmash_bs_get_be16( bs );
         data->nalUnit       = lsmash_bs_get_bytes( bs, data->nalUnitLength );
         if( !data->nalUnit )
         {
             lsmash_remove_entries( list, isom_remove_dcr_ps );
-            return -1;
+            return LSMASH_ERR_NAMELESS;
         }
     }
     return 0;
