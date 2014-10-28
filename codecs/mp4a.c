@@ -545,7 +545,7 @@ static int mp4a_get_GASpecificConfig( lsmash_bits_t *bits, mp4a_AudioSpecificCon
 {
     mp4a_GASpecificConfig_t *gasc = (mp4a_GASpecificConfig_t *)lsmash_malloc_zero( sizeof(mp4a_GASpecificConfig_t) );
     if( !gasc )
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     asc->deepAudioSpecificConfig = gasc;
     gasc->frameLengthFlag    = lsmash_bits_get( bits, 1 );
     gasc->dependsOnCoreCoder = lsmash_bits_get( bits, 1 );
@@ -559,7 +559,7 @@ static int mp4a_get_MPEG_1_2_SpecificConfig( lsmash_bits_t *bits, mp4a_AudioSpec
 {
     mp4a_MPEG_1_2_SpecificConfig_t *mpeg_1_2_sc = (mp4a_MPEG_1_2_SpecificConfig_t *)lsmash_malloc_zero( sizeof(mp4a_MPEG_1_2_SpecificConfig_t) );
     if( !mpeg_1_2_sc )
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     mpeg_1_2_sc->extension = lsmash_bits_get( bits, 1 );
     return 0;
 }
@@ -568,7 +568,7 @@ static int mp4a_get_ALSSpecificConfig( lsmash_bits_t *bits, mp4a_AudioSpecificCo
 {
     mp4a_ALSSpecificConfig_t *alssc = (mp4a_ALSSpecificConfig_t *)lsmash_malloc_zero( sizeof(mp4a_ALSSpecificConfig_t) );
     if( !alssc )
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     asc->deepAudioSpecificConfig = alssc;
     alssc->als_id               = lsmash_bits_get( bits, 32 );
     alssc->samp_freq            = lsmash_bits_get( bits, 32 );
@@ -662,7 +662,7 @@ int mp4a_setup_summary_from_AudioSpecificConfig( lsmash_audio_summary_t *summary
 {
     mp4a_AudioSpecificConfig_t *asc = mp4a_get_AudioSpecificConfig( dsi_payload, dsi_payload_length );
     if( !asc )
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     summary->summary_type = LSMASH_SUMMARY_TYPE_AUDIO;
     summary->sample_type  = ISOM_CODEC_TYPE_MP4A_AUDIO;
     summary->aot          = asc->audioObjectType;
@@ -698,7 +698,10 @@ int mp4a_setup_summary_from_AudioSpecificConfig( lsmash_audio_summary_t *summary
                     ++i;
                 }
                 if( i == 0xc )
-                    goto fail;
+                {
+                    mp4a_remove_AudioSpecificConfig( asc );
+                    return LSMASH_ERR_INVALID_DATA;
+                }
             }
             if( asc->channelConfiguration < 8 )
                 summary->channels = asc->channelConfiguration != 7 ? asc->channelConfiguration : 8;
@@ -736,9 +739,6 @@ int mp4a_setup_summary_from_AudioSpecificConfig( lsmash_audio_summary_t *summary
     }
     mp4a_remove_AudioSpecificConfig( asc );
     return 0;
-fail:
-    mp4a_remove_AudioSpecificConfig( asc );
-    return -1;
 }
 
 /* This function is very ad-hoc. */
