@@ -82,14 +82,14 @@ static void mp4sys_adts_parse_fixed_header( uint8_t* buf, mp4sys_adts_fixed_head
 
 static int mp4sys_adts_check_fixed_header( mp4sys_adts_fixed_header_t* header )
 {
-    if( header->syncword != 0xFFF )              return -1;
-//  if( header->ID != 0x0 )                      return -1; /* we don't care. */
-    if( header->layer != 0x0 )                   return -1; /* must be 0b00 for any type of AAC */
-//  if( header->protection_absent != 0x1 )       return -1; /* we don't care. */
-    if( header->profile_ObjectType != 0x1 )      return -1; /* FIXME: 0b00=Main, 0b01=LC, 0b10=SSR, 0b11=LTP. */
-    if( header->sampling_frequency_index > 0xB ) return -1; /* must not be > 0xB. */
-    if( header->channel_configuration == 0x0 )   return -1; /* FIXME: we do not support 0b000 currently. */
-    if( header->profile_ObjectType == 0x3 && header->ID != 0x0 ) return -1; /* LTP is valid only if ID==0. */
+    if( header->syncword != 0xFFF )              return LSMASH_ERR_INVALID_DATA;
+//  if( header->ID != 0x0 )                      return LSMASH_ERR_NAMELESS;        /* we don't care. */
+    if( header->layer != 0x0 )                   return LSMASH_ERR_INVALID_DATA;    /* must be 0b00 for any type of AAC */
+//  if( header->protection_absent != 0x1 )       return LSMASH_ERR_NAMELESS;        /* we don't care. */
+    if( header->profile_ObjectType != 0x1 )      return LSMASH_ERR_PATCH_WELCOME;   /* FIXME: 0b00=Main, 0b01=LC, 0b10=SSR, 0b11=LTP. */
+    if( header->sampling_frequency_index > 0xB ) return LSMASH_ERR_INVALID_DATA;    /* must not be > 0xB. */
+    if( header->channel_configuration == 0x0 )   return LSMASH_ERR_PATCH_WELCOME;   /* FIXME: we do not support 0b000 currently. */
+    if( header->profile_ObjectType == 0x3 && header->ID != 0x0 ) return LSMASH_ERR_INVALID_DATA; /* LTP is valid only if ID==0. */
     return 0;
 }
 
@@ -103,7 +103,7 @@ static int mp4sys_adts_parse_variable_header( FILE* stream, uint8_t* buf, unsign
     header->number_of_raw_data_blocks_in_frame = buf[6] & 0x3;
 
     if( header->frame_length <= MP4SYS_ADTS_BASIC_HEADER_LENGTH + 2 * (protection_absent == 0) )
-        return -1; /* easy error check */
+        return LSMASH_ERR_INVALID_DATA; /* easy error check */
 
     /* protection_absent and number_of_raw_data_blocks_in_frame relatives */
 
@@ -117,7 +117,7 @@ static int mp4sys_adts_parse_variable_header( FILE* stream, uint8_t* buf, unsign
         {
             header->raw_data_block_size[0] -= 2;
             if( fread( buf2, 1, 2, stream ) != 2 )
-                return -1;
+                return LSMASH_ERR_INVALID_DATA;
         }
         return 0;
     }
@@ -132,13 +132,13 @@ static int mp4sys_adts_parse_variable_header( FILE* stream, uint8_t* buf, unsign
         for( int i = 0 ; i < number_of_blocks ; i++ ) /* 1-based in the spec, but we use 0-based */
         {
             if( fread( buf2, 1, 2, stream ) != 2 )
-                return -1;
+                return LSMASH_ERR_INVALID_DATA;
             raw_data_block_position[i] = LSMASH_GET_BE16( buf2 );
         }
         /* skip crc_check in adts_header_error_check().
            Or might be sizeof( adts_error_check() ) if we share with the case number_of_raw_data_blocks_in_frame == 0 */
         if( fread( buf2, 1, 2, stream ) != 2 )
-            return -1;
+            return LSMASH_ERR_INVALID_DATA;
         first_offset += ( 2 * number_of_blocks ) + 2; /* according to above */
     }
     else
@@ -150,7 +150,7 @@ static int mp4sys_adts_parse_variable_header( FILE* stream, uint8_t* buf, unsign
          * L-SMASH is NOT AAC DECODER, so that we've just given up for this case.
          * This is ISO/IEC 13818-7's sin which defines ADTS format originally.
          */
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     }
 
     /* convert raw_data_block_position --> raw_data_block_size */
@@ -173,8 +173,9 @@ static int mp4sys_adts_parse_variable_header( FILE* stream, uint8_t* buf, unsign
 static int mp4sys_adts_parse_headers( FILE* stream, uint8_t* buf, mp4sys_adts_fixed_header_t* header, mp4sys_adts_variable_header_t* variable_header )
 {
     mp4sys_adts_parse_fixed_header( buf, header );
-    if( mp4sys_adts_check_fixed_header( header ) < 0 )
-        return -1;
+    int err = mp4sys_adts_check_fixed_header( header );
+    if( err < 0 )
+        return err;
     /* get payload length & skip extra(crc) header */
     return mp4sys_adts_parse_variable_header( stream, buf, header->protection_absent, variable_header );
 }
@@ -258,15 +259,15 @@ typedef struct
 
 static int mp4sys_adts_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
 {
-    debug_if( !importer || !importer->info || !buffered_sample->data || !buffered_sample->length )
-        return -1;
-    if( !importer->info || track_number != 1 )
-        return -1;
+    if( !importer->info )
+        return LSMASH_ERR_NAMELESS;
+    if( track_number != 1 )
+        return LSMASH_ERR_FUNCTION_PARAM;
     mp4sys_adts_info_t* info = (mp4sys_adts_info_t*)importer->info;
     importer_status current_status = info->status;
     uint16_t raw_data_block_size = info->variable_header.raw_data_block_size[info->raw_data_block_idx];
     if( current_status == IMPORTER_ERROR || buffered_sample->length < raw_data_block_size )
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     if( current_status == IMPORTER_EOF )
     {
         buffered_sample->length = 0;
@@ -276,10 +277,10 @@ static int mp4sys_adts_get_accessunit( importer_t *importer, uint32_t track_numb
     {
         lsmash_audio_summary_t* summary = mp4sys_adts_create_summary( &info->header );
         if( !summary )
-            return -1;
+            return LSMASH_ERR_NAMELESS;
         lsmash_entry_t* entry = lsmash_get_entry( importer->summaries, track_number );
         if( !entry || !entry->data )
-            return -1;
+            return LSMASH_ERR_NAMELESS;
         lsmash_cleanup_summary( entry->data );
         entry->data = summary;
         info->samples_in_frame = summary->samples_in_frame;
@@ -289,7 +290,7 @@ static int mp4sys_adts_get_accessunit( importer_t *importer, uint32_t track_numb
     if( fread( buffered_sample->data, 1, raw_data_block_size, importer->stream ) != raw_data_block_size )
     {
         info->status = IMPORTER_ERROR;
-        return -1;
+        return LSMASH_ERR_INVALID_DATA;
     }
     buffered_sample->length = raw_data_block_size;
     buffered_sample->dts = info->au_number++ * info->samples_in_frame;
@@ -301,8 +302,8 @@ static int mp4sys_adts_get_accessunit( importer_t *importer, uint32_t track_numb
 
     /* skip adts_raw_data_block_error_check() */
     if( info->header.protection_absent == 0
-        && info->variable_header.number_of_raw_data_blocks_in_frame != 0
-        && fread( buffered_sample->data, 1, 2, importer->stream ) != 2 )
+     && info->variable_header.number_of_raw_data_blocks_in_frame != 0
+     && fread( buffered_sample->data, 1, 2, importer->stream ) != 2 )
     {
         info->status = IMPORTER_ERROR;
         return 0;
@@ -372,8 +373,8 @@ static int mp4sys_adts_get_accessunit( importer_t *importer, uint32_t track_numb
      */
     /* currently UNsupported "change(s)". */
     if( info->header.profile_ObjectType != header.profile_ObjectType /* currently unsupported. */
-        || info->header.ID != header.ID /* In strict, this means change of object_type_indication. */
-        || info->header.sampling_frequency_index != header.sampling_frequency_index ) /* This may change timebase. */
+     || info->header.ID != header.ID /* In strict, this means change of object_type_indication. */
+     || info->header.sampling_frequency_index != header.sampling_frequency_index ) /* This may change timebase. */
     {
         info->status = IMPORTER_ERROR;
         return 0;
@@ -415,40 +416,30 @@ static int mp4sys_adts_probe( importer_t *importer )
 {
     uint8_t buf[MP4SYS_ADTS_MAX_FRAME_LENGTH];
     if( fread( buf, 1, MP4SYS_ADTS_BASIC_HEADER_LENGTH, importer->stream ) != MP4SYS_ADTS_BASIC_HEADER_LENGTH )
-        return -1;
-
-    mp4sys_adts_fixed_header_t header = {0};
-    mp4sys_adts_variable_header_t variable_header = {0};
-    if( mp4sys_adts_parse_headers( importer->stream, buf, &header, &variable_header ) < 0 )
-        return -1;
-
+        return LSMASH_ERR_INVALID_DATA;
+    mp4sys_adts_fixed_header_t    header          = { 0 };
+    mp4sys_adts_variable_header_t variable_header = { 0 };
+    int err = mp4sys_adts_parse_headers( importer->stream, buf, &header, &variable_header );
+    if( err < 0 )
+        return err;
     /* now the stream seems valid ADTS */
-
     lsmash_audio_summary_t* summary = mp4sys_adts_create_summary( &header );
     if( !summary )
-        return -1;
-
+        return LSMASH_ERR_NAMELESS;
     /* importer status */
     mp4sys_adts_info_t* info = lsmash_malloc_zero( sizeof(mp4sys_adts_info_t) );
-    if( !info )
-    {
-        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-        return -1;
-    }
-    info->status = IMPORTER_OK;
-    info->raw_data_block_idx = 0;
-    info->header = header;
-    info->variable_header = variable_header;
-    info->samples_in_frame = summary->samples_in_frame;
-
-    if( lsmash_add_entry( importer->summaries, summary ) < 0 )
+    if( !info || lsmash_add_entry( importer->summaries, summary ) < 0 )
     {
         lsmash_free( info );
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     }
+    info->status             = IMPORTER_OK;
+    info->raw_data_block_idx = 0;
+    info->header             = header;
+    info->variable_header    = variable_header;
+    info->samples_in_frame   = summary->samples_in_frame;
     importer->info = info;
-
     return 0;
 }
 
