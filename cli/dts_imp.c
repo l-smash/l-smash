@@ -103,10 +103,11 @@ static int dts_importer_get_next_accessunit_internal( importer_t *importer )
         uint64_t remain_size = lsmash_bs_get_remaining_buffer_size( bs );
         if( remain_size < DTS_MAX_EXSS_SIZE )
         {
-            if( lsmash_bs_read( bs, bs->buffer.max_size ) < 0 )
+            int err = lsmash_bs_read( bs, bs->buffer.max_size );
+            if( err < 0 )
             {
                 lsmash_log( importer, LSMASH_LOG_ERROR, "failed to read data from the stream.\n" );
-                return -1;
+                return err;
             }
             remain_size = lsmash_bs_get_remaining_buffer_size( bs );
         }
@@ -125,7 +126,7 @@ static int dts_importer_get_next_accessunit_internal( importer_t *importer )
                 if( lsmash_bs_get_remaining_buffer_size( bs ) )
                 {
                     lsmash_log( importer, LSMASH_LOG_WARNING, "the stream is truncated at the end.\n" );
-                    return -1;
+                    return LSMASH_ERR_INVALID_DATA;
                 }
                 return 0;
             }
@@ -137,6 +138,7 @@ static int dts_importer_get_next_accessunit_internal( importer_t *importer )
             /* Parse substream frame. */
             dts_substream_type prev_substream_type = info->substream_type;
             info->substream_type = dts_get_substream_type( info );
+            int err;
             int (*dts_parse_frame)( dts_info_t * ) = NULL;
             switch( info->substream_type )
             {
@@ -149,10 +151,10 @@ static int dts_importer_get_next_accessunit_internal( importer_t *importer )
                 case DTS_SUBSTREAM_TYPE_EXTENSION :
                 {
                     uint8_t prev_exss_index = info->exss_index;
-                    if( dts_get_exss_index( info, &info->exss_index ) < 0 )
+                    if( (err = dts_get_exss_index( info, &info->exss_index )) < 0 )
                     {
                         lsmash_log( importer, LSMASH_LOG_ERROR, "failed to get the index of an extension substream.\n" );
-                        return -1;
+                        return err;
                     }
                     if( prev_substream_type == DTS_SUBSTREAM_TYPE_EXTENSION
                      && info->exss_index <= prev_exss_index )
@@ -162,15 +164,15 @@ static int dts_importer_get_next_accessunit_internal( importer_t *importer )
                 }
                 default :
                     lsmash_log( importer, LSMASH_LOG_ERROR, "unknown substream type is detected.\n" );
-                    return -1;
+                    return LSMASH_ERR_NAMELESS;
             }
             if( !info->ddts_param_initialized && au_completed )
                 dts_update_specific_param( info );
             info->frame_size = 0;
-            if( dts_parse_frame( info ) < 0 )
+            if( (err = dts_parse_frame( info )) < 0 )
             {
                 lsmash_log( importer, LSMASH_LOG_ERROR, "failed to parse a frame.\n" );
-                return -1;
+                return err;
             }
         }
         if( au_completed )
@@ -188,7 +190,7 @@ static int dts_importer_get_next_accessunit_internal( importer_t *importer )
             lsmash_multiple_buffers_t *temp = lsmash_resize_multiple_buffers( dts_imp->au_buffers,
                                                                               dts_imp->au_buffers->buffer_size + DTS_MAX_EXSS_SIZE );
             if( !temp )
-                return -1;
+                return LSMASH_ERR_MEMORY_ALLOC;
             dts_imp->au_buffers    = temp;
             dts_imp->au            = lsmash_withdraw_buffer( dts_imp->au_buffers, 1 );
             dts_imp->incomplete_au = lsmash_withdraw_buffer( dts_imp->au_buffers, 2 );
@@ -197,23 +199,23 @@ static int dts_importer_get_next_accessunit_internal( importer_t *importer )
         memcpy( dts_imp->incomplete_au + dts_imp->incomplete_au_length, dts_imp->buffer, info->frame_size );
         dts_imp->incomplete_au_length += info->frame_size;
     }
-    return info->bits->bs->error ? -1 : 0;
+    return info->bits->bs->error ? LSMASH_ERR_NAMELESS : 0;
 }
 
 static int dts_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
 {
-    debug_if( !importer || !importer->info || !buffered_sample->data || !buffered_sample->length )
-        return -1;
-    if( !importer->info || track_number != 1 )
-        return -1;
+    if( !importer->info )
+        return LSMASH_ERR_NAMELESS;
+    if( track_number != 1 )
+        return LSMASH_ERR_FUNCTION_PARAM;
     lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_get_entry_data( importer->summaries, track_number );
     if( !summary )
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     dts_importer_t *dts_imp = (dts_importer_t *)importer->info;
     dts_info_t     *info    = &dts_imp->info;
     importer_status current_status = dts_imp->status;
     if( current_status == IMPORTER_ERROR || buffered_sample->length < dts_imp->au_length )
-        return -1;
+        return LSMASH_ERR_NAMELESS;
     if( current_status == IMPORTER_EOF && dts_imp->au_length == 0 )
     {
         buffered_sample->length = 0;
@@ -303,7 +305,7 @@ static int dts_importer_probe( importer_t *importer )
 {
     dts_importer_t *dts_imp = create_dts_importer();
     if( !dts_imp )
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     lsmash_bits_t *bits = dts_imp->info.bits;
     lsmash_bs_t   *bs   = bits->bs;
     bs->stream          = importer->stream;
@@ -312,24 +314,29 @@ static int dts_importer_probe( importer_t *importer )
     bs->unseekable      = importer->is_stdin;
     bs->buffer.max_size = DTS_MAX_EXSS_SIZE;
     importer->info = dts_imp;
-    if( dts_importer_get_next_accessunit_internal( importer ) < 0 )
+    int err = dts_importer_get_next_accessunit_internal( importer );
+    if( err < 0 )
         goto fail;
     lsmash_audio_summary_t *summary = dts_create_summary( &dts_imp->info );
     if( !summary )
+    {
+        err = LSMASH_ERR_NAMELESS;
         goto fail;
+    }
     if( dts_imp->status != IMPORTER_EOF )
         dts_imp->status = IMPORTER_OK;
     dts_imp->au_number = 0;
     if( lsmash_add_entry( importer->summaries, summary ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        err = LSMASH_ERR_MEMORY_ALLOC;
         goto fail;
     }
     return 0;
 fail:
     remove_dts_importer( dts_imp );
     importer->info = NULL;
-    return -1;
+    return err;
 }
 
 static uint32_t dts_importer_get_last_delta( importer_t* importer, uint32_t track_number )
