@@ -713,7 +713,7 @@ static int hevc_parse_vps_minimally
     vps->max_sub_layers_minus1    = lsmash_bits_get( bits, 3 );
     vps->temporal_id_nesting_flag = lsmash_bits_get( bits, 1 );
     /* When vps_max_sub_layers_minus1 is equal to 0, vps_temporal_id_nesting_flag shall be equal to 1. */
-    if( vps->max_sub_layers_minus1 == 0 && vps->temporal_id_nesting_flag == 1 )
+    if( (vps->max_sub_layers_minus1 | vps->temporal_id_nesting_flag) == 0 )
         return LSMASH_ERR_INVALID_DATA;
     /* vps_reserved_0xffff_16bits shall be 0xFFFF in the specification we refer to. */
     if( lsmash_bits_get( bits, 16 ) != 0xFFFF )
@@ -1127,7 +1127,7 @@ int hevc_parse_pps
     hevc_pps_t *pps;
     {
         /* Parse PPS minimally for configuration records. */
-        hevc_pps_t min_pps; 
+        hevc_pps_t min_pps;
         if( (err = hevc_parse_pps_minimally( bits, &min_pps, rbsp_buffer, ebsp, ebsp_size )) < 0 )
             return err;
         pps = hevc_get_pps( info->pps_list, min_pps.pic_parameter_set_id );
