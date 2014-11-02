@@ -287,7 +287,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     lsmash_codec_type_t sample_type = file->max_3gpp_version >= 6 || file->itunes_movie
                                     ? ISOM_CODEC_TYPE_TX3G_TEXT
                                     : QT_CODEC_TYPE_TEXT_TEXT;
-    lsmash_summary_t summary = { .sample_type = sample_type };
+    lsmash_summary_t summary = { .sample_type = sample_type, .data_ref_index = 1 };
     uint32_t sample_entry = lsmash_add_sample_entry( root, chapter_track_ID, &summary );
     if( !sample_entry )
         goto fail;
