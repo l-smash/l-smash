@@ -161,7 +161,9 @@ void isom_remove_dcr_ps( isom_dcr_ps_entry_t *ps )
 /* This function returns 0 if failed, sample_entry_number if succeeded. */
 int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, void *summary )
 {
-    if( !root || !summary )
+    if( !root || !summary
+     || ((lsmash_summary_t *)summary)->data_ref_index == 0
+     || ((lsmash_summary_t *)summary)->data_ref_index > UINT16_MAX )
         return 0;
     isom_trak_t *trak = isom_get_trak( root->file, track_ID );
     if( !trak
