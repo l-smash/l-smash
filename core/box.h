@@ -2136,6 +2136,9 @@ struct lsmash_root_tag
 #define QT_BOX_TYPE_TEXT lsmash_form_qtff_box_type( LSMASH_4CC( 't', 'e', 'x', 't' ) )
 #define QT_BOX_TYPE_WLOC lsmash_form_qtff_box_type( LSMASH_4CC( 'W', 'L', 'O', 'C' ) )
 
+#define QT_BOX_TYPE_ALIS lsmash_form_qtff_box_type( LSMASH_4CC( 'a', 'l', 'i', 's' ) )
+#define QT_BOX_TYPE_RSRC lsmash_form_qtff_box_type( LSMASH_4CC( 'r', 's', 'r', 'c' ) )
+
 #define QT_BOX_TYPE_CHAN lsmash_form_qtff_box_type( LSMASH_4CC( 'c', 'h', 'a', 'n' ) )
 #define QT_BOX_TYPE_COLR lsmash_form_qtff_box_type( LSMASH_4CC( 'c', 'o', 'l', 'r' ) )
 #define QT_BOX_TYPE_CSPC lsmash_form_qtff_box_type( LSMASH_4CC( 'c', 's', 'p', 'c' ) )
@@ -2183,7 +2186,7 @@ struct lsmash_root_tag
 #define LSMASH_BOX_PRECEDENCE_QTFF_TEXT (LSMASH_BOX_PRECEDENCE_N  -  1 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_DINF (LSMASH_BOX_PRECEDENCE_N  -  1 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_DREF (LSMASH_BOX_PRECEDENCE_N  -  1 * LSMASH_BOX_PRECEDENCE_S)
-#define LSMASH_BOX_PRECEDENCE_ISOM_URL  (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_DREF_ENTRY (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_STBL (LSMASH_BOX_PRECEDENCE_N  -  2 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_STSD (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_QTFF_GLBL (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)
@@ -2542,7 +2545,7 @@ isom_gmin_t *isom_add_gmin( isom_gmhd_t *gmhd );
 isom_text_t *isom_add_text( isom_gmhd_t *gmhd );
 isom_dinf_t *isom_add_dinf( void *parent_box );
 isom_dref_t *isom_add_dref( isom_dinf_t *dinf );
-isom_dref_entry_t *isom_add_dref_entry( isom_dref_t *dref );
+isom_dref_entry_t *isom_add_dref_entry( isom_dref_t *dref, lsmash_box_type_t type );
 isom_stbl_t *isom_add_stbl( isom_minf_t *minf );
 isom_stsd_t *isom_add_stsd( isom_stbl_t *stbl );
 isom_visual_entry_t *isom_add_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_type );

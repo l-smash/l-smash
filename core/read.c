@@ -820,31 +820,36 @@ static int isom_read_dref( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     return isom_read_children( file, box, dref, level );
 }
 
-static int isom_read_url( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
+static int isom_read_dref_entry( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_DREF ) )
         return isom_read_unknown_box( file, box, parent, level );
     isom_dref_t *dref = (isom_dref_t *)parent;
     if( !dref->list.head )
         dref->list.entry_count = 0; /* discard entry_count gotten from the file */
-    isom_dref_entry_t *url  = isom_add_dref_entry( dref );
-    if( !url )
+    isom_dref_entry_t *ref = isom_add_dref_entry( dref, box->type );
+    if( !ref )
         return LSMASH_ERR_NAMELESS;
     lsmash_bs_t *bs = file->bs;
-    uint64_t pos = lsmash_bs_count( bs );
-    url->location_length = box->size - pos;
-    if( url->location_length )
+    if( lsmash_check_box_type_identical( ref->type, ISOM_BOX_TYPE_URL ) )
     {
-        url->location = lsmash_malloc( url->location_length );
-        if( !url->location )
-            return LSMASH_ERR_MEMORY_ALLOC;
-        for( uint32_t i = 0; pos < box->size; pos = lsmash_bs_count( bs ) )
-            url->location[i++] = lsmash_bs_get_byte( bs );
+        uint64_t pos = lsmash_bs_count( bs );
+        ref->location_length = box->size - pos;
+        if( ref->location_length )
+        {
+            ref->location = lsmash_malloc( ref->location_length );
+            if( !ref->location )
+                return LSMASH_ERR_MEMORY_ALLOC;
+            for( uint32_t i = 0; pos < box->size; pos = lsmash_bs_count( bs ) )
+                ref->location[i++] = lsmash_bs_get_byte( bs );
+        }
     }
+    else
+        isom_skip_box_rest( bs, box );
     if( box->flags & 0x000001 )
-        url->ref_file = url->file;
+        ref->ref_file = ref->file;
     box->parent = parent;
-    return isom_read_leaf_box_common_last_process( file, box, level, url );
+    return isom_read_leaf_box_common_last_process( file, box, level, ref );
 }
 
 static int isom_read_stbl( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
@@ -2669,6 +2674,17 @@ int isom_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uin
         reader_func        = isom_read_track_reference_type;
         goto read_box;
     }
+    if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_DREF ) )
+    {
+        if( box->type.fourcc == ISOM_BOX_TYPE_URL.fourcc
+         || box->type.fourcc == ISOM_BOX_TYPE_URN.fourcc )
+            form_box_type_func = lsmash_form_iso_box_type;
+        else if( box->type.fourcc == QT_BOX_TYPE_ALIS.fourcc
+              || box->type.fourcc == QT_BOX_TYPE_RSRC.fourcc )
+            form_box_type_func = lsmash_form_qtff_box_type;
+        reader_func = isom_read_dref_entry;
+        goto read_box;
+    }
     static struct box_reader_table_tag
     {
         lsmash_compact_box_type_t fourcc;
@@ -2711,7 +2727,6 @@ int isom_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uin
         ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_TEXT, lsmash_form_qtff_box_type, isom_read_text );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_DINF, lsmash_form_iso_box_type,  isom_read_dinf );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_DREF, lsmash_form_iso_box_type,  isom_read_dref );
-        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_URL,  lsmash_form_iso_box_type,  isom_read_url  );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_STBL, lsmash_form_iso_box_type,  isom_read_stbl );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSD, lsmash_form_iso_box_type,  isom_read_stsd );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_BTRT, lsmash_form_iso_box_type,  isom_read_btrt );

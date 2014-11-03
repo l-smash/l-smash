@@ -179,7 +179,6 @@ int isom_is_fullbox( void *box )
         fullbox_type_table[i++] = ISOM_BOX_TYPE_NMHD;
         fullbox_type_table[i++] = QT_BOX_TYPE_GMIN;
         fullbox_type_table[i++] = ISOM_BOX_TYPE_DREF;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_URL;
         fullbox_type_table[i++] = ISOM_BOX_TYPE_STSD;
         fullbox_type_table[i++] = ISOM_BOX_TYPE_STSL;
         fullbox_type_table[i++] = QT_BOX_TYPE_CHAN;
@@ -214,8 +213,14 @@ int isom_is_fullbox( void *box )
     for( int i = 0; lsmash_check_box_type_specified( &fullbox_type_table[i] ); i++ )
         if( lsmash_check_box_type_identical( type, fullbox_type_table[i] ) )
             return 1;
-    return lsmash_check_box_type_identical( type, ISOM_BOX_TYPE_CPRT )
-        && current->parent && lsmash_check_box_type_identical( current->parent->type, ISOM_BOX_TYPE_UDTA );
+    if( current->parent )
+    {
+        if( lsmash_check_box_type_identical( current->parent->type, ISOM_BOX_TYPE_DREF )
+         || (lsmash_check_box_type_identical(                  type, ISOM_BOX_TYPE_CPRT )
+          && lsmash_check_box_type_identical( current->parent->type, ISOM_BOX_TYPE_UDTA )) )
+            return 1;
+    }
+    return 0;
 }
 
 /* Return 1 if the sample type is LPCM audio, Otherwise return 0. */
@@ -1379,14 +1384,14 @@ isom_dinf_t *isom_add_dinf( void *parent_box )
     return dinf;
 }
 
-isom_dref_entry_t *isom_add_dref_entry( isom_dref_t *dref )
+isom_dref_entry_t *isom_add_dref_entry( isom_dref_t *dref, lsmash_box_type_t type )
 {
     if( !dref )
         return NULL;
     isom_dref_entry_t *data = lsmash_malloc_zero( sizeof(isom_dref_entry_t) );
     if( !data )
         return NULL;
-    isom_init_box_common( data, dref, ISOM_BOX_TYPE_URL, LSMASH_BOX_PRECEDENCE_ISOM_URL, isom_remove_dref_entry );
+    isom_init_box_common( data, dref, type, LSMASH_BOX_PRECEDENCE_ISOM_DREF_ENTRY, isom_remove_dref_entry );
     if( isom_add_box_to_extension_list( dref, data ) < 0 )
     {
         lsmash_free( data );

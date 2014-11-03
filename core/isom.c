@@ -1860,7 +1860,7 @@ int lsmash_create_data_reference
     isom_trak_t *trak = isom_get_trak( root->file, track_ID );
     if( check_dref_presence( trak ) < 0 )
         return LSMASH_ERR_NAMELESS;
-    isom_dref_entry_t *url = isom_add_dref_entry( trak->mdia->minf->dinf->dref );
+    isom_dref_entry_t *url = isom_add_dref_entry( trak->mdia->minf->dinf->dref, ISOM_BOX_TYPE_URL );
     if( !url )
         return LSMASH_ERR_NAMELESS;
     if( !data_ref->location || root->file == file )
@@ -2539,7 +2539,7 @@ int isom_complement_data_reference( isom_minf_t *minf )
     /* Complement data referece if absent. */
     if( !minf->dinf->dref->list.head )
     {
-        isom_dref_entry_t *url = isom_add_dref_entry( minf->dinf->dref );
+        isom_dref_entry_t *url = isom_add_dref_entry( minf->dinf->dref, ISOM_BOX_TYPE_URL );
         if( !url )
             return LSMASH_ERR_NAMELESS;
         url->flags = 0x000001;  /* Media data is in the same file. */
