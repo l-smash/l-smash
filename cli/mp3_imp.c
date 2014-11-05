@@ -35,6 +35,13 @@
 
 #define USE_MP4SYS_LEGACY_INTERFACE 1
 
+#define MP4SYS_MP3_MAX_FRAME_LENGTH (1152*(16/8)*2)
+#define MP4SYS_MP3_HEADER_LENGTH    4
+#define MP4SYS_MODE_IS_2CH( mode )  ((mode)!=3)
+#define MP4SYS_LAYER_III            0x1
+#define MP4SYS_LAYER_II             0x2
+#define MP4SYS_LAYER_I              0x3
+
 static void mp4sys_mp3_cleanup( importer_t *importer )
 {
     debug_if( importer && importer->info )
@@ -56,10 +63,9 @@ typedef struct
 //  uint8_t  copyright;          /* <1> don't care. */
 //  uint8_t  original_copy;      /* <1> don't care. */
     uint8_t  emphasis;           /* <2> for error check only. */
-
 } mp4sys_mp3_header_t;
 
-static int mp4sys_mp3_parse_header( uint8_t* buf, mp4sys_mp3_header_t* header )
+static int mp4sys_mp3_parse_header( uint8_t *buf, mp4sys_mp3_header_t *header )
 {
     /* FIXME: should we rewrite these code using bitstream reader? */
     uint32_t data = LSMASH_GET_BE32( buf );
@@ -76,23 +82,17 @@ static int mp4sys_mp3_parse_header( uint8_t* buf, mp4sys_mp3_header_t* header )
 //  header->copyright          = (data >>  3) & 0x1; /* don't care. */
 //  header->original_copy      = (data >>  2) & 0x1; /* don't care. */
     header->emphasis           = data         & 0x3; /* for error check only. */
-
-    if( header->syncword != 0xFFF )                                    return -1;
-    if( header->layer == 0x0 )                                         return -1;
-    if( header->bitrate_index == 0x0 || header->bitrate_index == 0xF ) return -1; /* FIXME: "free" bitrate is unsupported currently. */
-    if( header->sampling_frequency == 0x3)                             return -1;
-    if( header->emphasis == 0x2)                                       return -1;
+    if( header->syncword != 0xFFF )         return LSMASH_ERR_INVALID_DATA;
+    if( header->layer == 0x0 )              return LSMASH_ERR_NAMELESS;         /* 0b00: reserved */
+    if( header->bitrate_index == 0x0 )      return LSMASH_ERR_PATCH_WELCOME;    /* FIXME: "free" bitrate is unsupported currently. */
+    if( header->bitrate_index == 0xF )      return LSMASH_ERR_INVALID_DATA;     /* Forbidden */
+    if( header->sampling_frequency == 0x3 ) return LSMASH_ERR_NAMELESS;         /* 0b11: reserved */
+    if( header->emphasis == 0x2 )           return LSMASH_ERR_NAMELESS;         /* 0b10: reserved */
     return 0;
 }
 
-#define MP4SYS_MP3_MAX_FRAME_LENGTH (1152*(16/8)*2)
-#define MP4SYS_MP3_HEADER_LENGTH    4
-#define MP4SYS_MODE_IS_2CH( mode )  ((mode)!=3)
-#define MP4SYS_LAYER_III            0x1
-#define MP4SYS_LAYER_II             0x2
-#define MP4SYS_LAYER_I              0x3
-
-static const uint32_t mp4sys_mp3_frequency_tbl[2][3] = {
+static const uint32_t mp4sys_mp3_frequency_tbl[2][3] =
+{
     { 22050, 24000, 16000 }, /* MPEG-2 BC audio */
     { 44100, 48000, 32000 }  /* MPEG-1 audio */
 };
@@ -196,7 +196,8 @@ static int parse_xing_info_header( mp4sys_mp3_info_t *info, mp4sys_mp3_header_t 
         side_info_size = MP4SYS_MODE_IS_2CH( header->mode ) ? 17 : 9;
 
     uint8_t *mdp = frame + sip + side_info_size;
-    if( memcmp( mdp, "Info", 4 ) && memcmp( mdp, "Xing", 4 ) )
+    if( memcmp( mdp, "Info", 4 )
+     && memcmp( mdp, "Xing", 4 ) )
         return 0;
     uint32_t flags = LSMASH_GET_BE32( &mdp[4] );
     uint32_t off = 8;
@@ -213,7 +214,7 @@ static int parse_xing_info_header( mp4sys_mp3_info_t *info, mp4sys_mp3_header_t 
 
     if( mdp[off] == 'L' )
     {   /* LAME header present */
-        unsigned v = LSMASH_GET_BE24( &mdp[off + 21] );
+        unsigned int v = LSMASH_GET_BE24( &mdp[off + 21] );
         info->enc_delay     = v >> 12;
         info->padding       = v & 0xfff;
         if( frame_count )
@@ -229,36 +230,41 @@ static int parse_vbri_header( mp4sys_mp3_info_t *info, mp4sys_mp3_header_t *head
 
 static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
 {
-    debug_if( !importer || !importer->info || !buffered_sample->data || !buffered_sample->length )
-        return -1;
-    if( !importer->info || track_number != 1 )
-        return -1;
+    if( !importer->info )
+        return LSMASH_ERR_NAMELESS;
+    if( track_number != 1 )
+        return LSMASH_ERR_FUNCTION_PARAM;
     mp4sys_mp3_info_t   *info           = (mp4sys_mp3_info_t *)importer->info;
     mp4sys_mp3_header_t *header         = (mp4sys_mp3_header_t *)&info->header;
     importer_status      current_status = info->status;
-
-    const uint32_t bitrate_tbl[2][3][16] = {
+    /* bitrate */
+    const uint32_t bitrate_tbl[2][3][16] =
+    {
         {   /* MPEG-2 BC audio */
-            { 0,  8, 16, 24,  32,  40,  48,  56,  64,  80,  96, 112, 128, 144, 160, 0 }, /* Layer III */
-            { 0,  8, 16, 24,  32,  40,  48,  56,  64,  80,  96, 112, 128, 144, 160, 0 }, /* Layer II  */
-            { 0, 32, 48, 56,  64,  80,  96, 112, 128, 144, 160, 176, 192, 224, 256, 0 }  /* Layer I   */
+            { 1,  8, 16, 24,  32,  40,  48,  56,  64,  80,  96, 112, 128, 144, 160, 0 }, /* Layer III */
+            { 1,  8, 16, 24,  32,  40,  48,  56,  64,  80,  96, 112, 128, 144, 160, 0 }, /* Layer II  */
+            { 1, 32, 48, 56,  64,  80,  96, 112, 128, 144, 160, 176, 192, 224, 256, 0 }  /* Layer I   */
         },
         {   /* MPEG-1 audio */
-            { 0, 32, 40, 48,  56,  64,  80,  96, 112, 128, 160, 192, 224, 256, 320, 0 }, /* Layer III */
-            { 0, 32, 48, 56,  64,  80,  96, 112, 128, 160, 192, 224, 256, 320, 384, 0 }, /* Layer II  */
-            { 0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448, 0 }  /* Layer I   */
+            { 1, 32, 40, 48,  56,  64,  80,  96, 112, 128, 160, 192, 224, 256, 320, 0 }, /* Layer III */
+            { 1, 32, 48, 56,  64,  80,  96, 112, 128, 160, 192, 224, 256, 320, 384, 0 }, /* Layer II  */
+            { 1, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448, 0 }  /* Layer I   */
         }
     };
-    uint32_t bitrate = bitrate_tbl[header->ID][header->layer-1][header->bitrate_index];
+    uint32_t bitrate = bitrate_tbl[ header->ID ][ header->layer - 1 ][ header->bitrate_index ];
+    if( bitrate == 0 )
+        return LSMASH_ERR_INVALID_DATA;
+    else if( bitrate == 1 )
+        return LSMASH_ERR_PATCH_WELCOME;    /* free format */
+    /* sampling frequency */
     uint32_t frequency = mp4sys_mp3_frequency_tbl[header->ID][header->sampling_frequency];
-    debug_if( bitrate == 0 || frequency == 0 )
-        return -1;
+    if( frequency == 0 )
+        return LSMASH_ERR_NAMELESS;         /* reserved */
+    /* frame size */
     uint32_t frame_size;
     if( header->layer == MP4SYS_LAYER_I )
-    {
         /* mp1's 'slot' is 4 bytes unit. see 11172-3, Audio Sequence General. */
-        frame_size = ( 12 * 1000 * bitrate / frequency + header->padding_bit ) * 4;
-    }
+        frame_size = (12 * 1000 * bitrate / frequency + header->padding_bit) * 4;
     else
     {
         /* mp2/3's 'slot' is 1 bytes unit. */
@@ -267,9 +273,10 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
             div <<= 1;
         frame_size = 144 * 1000 * bitrate / div + header->padding_bit;
     }
-
-    if( current_status == IMPORTER_ERROR || frame_size <= 4 || buffered_sample->length < frame_size )
-        return -1;
+    if( frame_size <= 4 )
+        return LSMASH_ERR_INVALID_DATA;
+    if( current_status == IMPORTER_ERROR || buffered_sample->length < frame_size )
+        return LSMASH_ERR_NAMELESS;
     if( current_status == IMPORTER_EOF )
     {
         buffered_sample->length = 0;
@@ -277,12 +284,12 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
     }
     if( current_status == IMPORTER_CHANGE )
     {
-        lsmash_audio_summary_t* summary = mp4sys_mp3_create_summary( header, 1 ); /* FIXME: use legacy mode. */
+        lsmash_audio_summary_t *summary = mp4sys_mp3_create_summary( header, 1 ); /* FIXME: use legacy mode. */
         if( !summary )
-            return -1;
-        lsmash_entry_t* entry = lsmash_get_entry( importer->summaries, track_number );
+            return LSMASH_ERR_NAMELESS;
+        lsmash_entry_t *entry = lsmash_get_entry( importer->summaries, track_number );
         if( !entry || !entry->data )
-            return -1;
+            return LSMASH_ERR_NAMELESS;
         lsmash_cleanup_summary( entry->data );
         entry->data = summary;
         info->samples_in_frame = summary->samples_in_frame;
@@ -290,15 +297,15 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
     /* read a frame's data. */
     memcpy( buffered_sample->data, info->raw_header, MP4SYS_MP3_HEADER_LENGTH );
     frame_size -= MP4SYS_MP3_HEADER_LENGTH;
-    if( fread( ((uint8_t*)buffered_sample->data)+MP4SYS_MP3_HEADER_LENGTH, 1, frame_size, importer->stream ) != frame_size )
+    if( fread( ((uint8_t *)buffered_sample->data) + MP4SYS_MP3_HEADER_LENGTH, 1, frame_size, importer->stream ) != frame_size )
     {
         info->status = IMPORTER_ERROR;
-        return -1;
+        return LSMASH_ERR_INVALID_DATA;
     }
-    buffered_sample->length = MP4SYS_MP3_HEADER_LENGTH + frame_size;
-    buffered_sample->dts = info->au_number++ * info->samples_in_frame;
-    buffered_sample->cts = buffered_sample->dts;
-    buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+    buffered_sample->length                 = MP4SYS_MP3_HEADER_LENGTH + frame_size;
+    buffered_sample->dts                    = info->au_number++ * info->samples_in_frame;
+    buffered_sample->cts                    = buffered_sample->dts;
+    buffered_sample->prop.ra_flags          = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
     buffered_sample->prop.pre_roll.distance = header->layer == MP4SYS_LAYER_III ? 1 : 0;    /* Layer III uses MDCT */
 
     int vbr_header_present = 0;
@@ -390,7 +397,7 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
 
     /* currently UNsupported "change(s)". */
     if( header->layer != new_header.layer /* This means change of object_type_indication with Legacy Interface. */
-        || header->sampling_frequency != new_header.sampling_frequency ) /* This may change timescale. */
+     || header->sampling_frequency != new_header.sampling_frequency ) /* This may change timescale. */
     {
         info->status = IMPORTER_ERROR;
         return 0;
@@ -426,41 +433,31 @@ static int mp4sys_mp3_probe( importer_t *importer )
     }
     else
         ungetc( c, importer->stream );
-
+    /* Parse the header. */
     uint8_t buf[MP4SYS_MP3_HEADER_LENGTH];
     if( fread( buf, 1, MP4SYS_MP3_HEADER_LENGTH, importer->stream ) != MP4SYS_MP3_HEADER_LENGTH )
-        return -1;
-
-    mp4sys_mp3_header_t header = {0};
-    if( mp4sys_mp3_parse_header( buf, &header ) < 0 )
-        return -1;
-
-    /* now the stream seems valid mp3 */
-
-    lsmash_audio_summary_t* summary = mp4sys_mp3_create_summary( &header, 1 ); /* FIXME: use legacy mode. */
+        return LSMASH_ERR_INVALID_DATA;
+    mp4sys_mp3_header_t header = { 0 };
+    int err = mp4sys_mp3_parse_header( buf, &header );
+    if( err < 0 )
+        return err;
+    /* Now, the stream seems valid mp3. */
+    lsmash_audio_summary_t *summary = mp4sys_mp3_create_summary( &header, 1 );
     if( !summary )
-        return -1;
-
+        return LSMASH_ERR_NAMELESS;
     /* importer status */
-    mp4sys_mp3_info_t* info = lsmash_malloc_zero( sizeof(mp4sys_mp3_info_t) );
-    if( !info )
-    {
-        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-        return -1;
-    }
-    info->status = IMPORTER_OK;
-    info->header = header;
-    info->samples_in_frame = summary->samples_in_frame;
-    memcpy( info->raw_header, buf, MP4SYS_MP3_HEADER_LENGTH );
-
-    if( lsmash_add_entry( importer->summaries, summary ) < 0 )
+    mp4sys_mp3_info_t *info = lsmash_malloc_zero( sizeof(mp4sys_mp3_info_t) );
+    if( !info || lsmash_add_entry( importer->summaries, summary ) < 0 )
     {
         lsmash_free( info );
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-        return -1;
+        return LSMASH_ERR_MEMORY_ALLOC;
     }
+    info->status           = IMPORTER_OK;
+    info->header           = header;
+    info->samples_in_frame = summary->samples_in_frame;
+    memcpy( info->raw_header, buf, MP4SYS_MP3_HEADER_LENGTH );
     importer->info = info;
-
     return 0;
 }
 
@@ -476,7 +473,7 @@ static uint32_t mp4sys_mp3_get_last_delta( importer_t *importer, uint32_t track_
 
 const importer_functions mp4sys_mp3_importer =
 {
-    { "MPEG-1/2BC_Audio_Legacy" },
+    { "MPEG-1/2BC Audio Legacy" },
     1,
     mp4sys_mp3_probe,
     mp4sys_mp3_get_accessunit,
