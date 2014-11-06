@@ -34,10 +34,14 @@
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  2
-#define LSMASH_VERSION_MINOR  2
-#define LSMASH_VERSION_MICRO 25
+#define LSMASH_VERSION_MINOR  3
+#define LSMASH_VERSION_MICRO  0
 
 #define LSMASH_VERSION_INT( a, b, c ) (((a) << 16) | ((b) << 8) | (c))
+
+#define LIBLSMASH_VERSION_INT LSMASH_VERSION_INT( LSMASH_VERSION_MAJOR, \
+                                                  LSMASH_VERSION_MINOR, \
+                                                  LSMASH_VERSION_MICRO )
 
 /****************************************************************************
  * Error Values
@@ -248,7 +252,7 @@ typedef struct
  * And if successful, set up the parameters by 'open_mode'.
  * Here, the 'open_mode' parameter is either 0 or 1 as follows:
  *   0: Create a file for output/muxing operations.
- *      If a file with the same name already exists, its contents are discarded and the file is treated as a new file.    
+ *      If a file with the same name already exists, its contents are discarded and the file is treated as a new file.
  *      If user specifies "-" for 'filename', operations are done on stdout.
  *      The file types or segment types are set up as specified in 'param'.
  *   1: Open a file for input/demuxing operations. The file must exist.
