@@ -33,7 +33,7 @@
 
 #define MP4SYS_ADTS_FIXED_HEADER_LENGTH 4 /* this is partly a lie. actually 28 bits. */
 #define MP4SYS_ADTS_BASIC_HEADER_LENGTH 7
-#define MP4SYS_ADTS_MAX_FRAME_LENGTH ( ( 1 << 13 ) - 1 )
+#define MP4SYS_ADTS_MAX_FRAME_LENGTH (( 1 << 13 ) - 1)
 #define MP4SYS_ADTS_MAX_RAW_DATA_BLOCKS 4
 
 typedef struct
@@ -65,7 +65,60 @@ typedef struct
 //  uint16_t adts_raw_data_block_error_check[MP4SYS_ADTS_MAX_RAW_DATA_BLOCKS]; /* we don't support */
 } mp4sys_adts_variable_header_t;
 
-static void mp4sys_adts_parse_fixed_header( uint8_t* buf, mp4sys_adts_fixed_header_t* header )
+typedef struct
+{
+    importer_status               status;
+    lsmash_bs_t                  *bs;
+    unsigned int                  raw_data_block_idx;
+    mp4sys_adts_fixed_header_t    header;
+    mp4sys_adts_variable_header_t variable_header;
+    uint32_t                      samples_in_frame;
+    uint32_t                      au_number;
+} mp4sys_adts_importer_t;
+
+static void remove_mp4sys_adts_importer
+(
+    mp4sys_adts_importer_t *adts_imp
+)
+{
+    lsmash_bs_cleanup( adts_imp->bs );
+    lsmash_free( adts_imp );
+}
+
+static mp4sys_adts_importer_t *create_mp4sys_adts_importer
+(
+    importer_t *importer
+)
+{
+    mp4sys_adts_importer_t *adts_imp = (mp4sys_adts_importer_t *)lsmash_malloc_zero( sizeof(mp4sys_adts_importer_t) );
+    if( !adts_imp )
+        return NULL;
+    lsmash_bs_t *bs = lsmash_bs_create();
+    if( !bs )
+    {
+        lsmash_free( adts_imp );
+        return NULL;
+    }
+    adts_imp->bs = bs;
+    bs->stream          = importer->stream;
+    bs->read            = lsmash_fread_wrapper;
+    bs->seek            = lsmash_fseek_wrapper;
+    bs->unseekable      = importer->is_stdin;
+    bs->buffer.max_size = BS_MAX_DEFAULT_READ_SIZE;
+    return adts_imp;
+}
+
+static void mp4sys_adts_cleanup( importer_t *importer )
+{
+    debug_if( importer && importer->info )
+        remove_mp4sys_adts_importer( importer->info );
+}
+
+static void mp4sys_adts_parse_fixed_header
+(
+    uint8_t                    *buf,
+    mp4sys_adts_fixed_header_t *header
+)
 {
     /* FIXME: should we rewrite these code using bitstream reader? */
     header->syncword                 = (buf[0] << 4) | (buf[1] >> 4);
@@ -80,7 +133,10 @@ static void mp4sys_adts_parse_fixed_header( uint8_t* buf, mp4sys_adts_fixed_head
 //  header->home                     = (buf[3] >> 4) & 0x1; /* we don't care currently. */
 }
 
-static int mp4sys_adts_check_fixed_header( mp4sys_adts_fixed_header_t* header )
+static int mp4sys_adts_check_fixed_header
+(
+    mp4sys_adts_fixed_header_t *header
+)
 {
     if( header->syncword != 0xFFF )              return LSMASH_ERR_INVALID_DATA;
 //  if( header->ID != 0x0 )                      return LSMASH_ERR_NAMELESS;        /* we don't care. */
@@ -93,7 +149,13 @@ static int mp4sys_adts_check_fixed_header( mp4sys_adts_fixed_header_t* header )
     return 0;
 }
 
-static int mp4sys_adts_parse_variable_header( FILE* stream, uint8_t* buf, unsigned int protection_absent, mp4sys_adts_variable_header_t* header )
+static int mp4sys_adts_parse_variable_header
+(
+    lsmash_bs_t                   *bs,
+    uint8_t                       *buf,
+    unsigned int                   protection_absent,
+    mp4sys_adts_variable_header_t *header
+)
 {
     /* FIXME: should we rewrite these code using bitstream reader? */
 //  header->copyright_identification_bit       = (buf[3] >> 3) & 0x1; /* we don't care. */
@@ -116,7 +178,7 @@ static int mp4sys_adts_parse_variable_header( FILE* stream, uint8_t* buf, unsign
         if( protection_absent == 0 )
         {
             header->raw_data_block_size[0] -= 2;
-            if( fread( buf2, 1, 2, stream ) != 2 )
+            if( lsmash_bs_get_bytes_ex( bs, 2, buf2 ) != 2 )
                 return LSMASH_ERR_INVALID_DATA;
         }
         return 0;
@@ -131,13 +193,13 @@ static int mp4sys_adts_parse_variable_header( FILE* stream, uint8_t* buf, unsign
         /* process adts_header_error_check() */
         for( int i = 0 ; i < number_of_blocks ; i++ ) /* 1-based in the spec, but we use 0-based */
         {
-            if( fread( buf2, 1, 2, stream ) != 2 )
+            if( lsmash_bs_get_bytes_ex( bs, 2, buf2 ) != 2 )
                 return LSMASH_ERR_INVALID_DATA;
             raw_data_block_position[i] = LSMASH_GET_BE16( buf2 );
         }
         /* skip crc_check in adts_header_error_check().
            Or might be sizeof( adts_error_check() ) if we share with the case number_of_raw_data_blocks_in_frame == 0 */
-        if( fread( buf2, 1, 2, stream ) != 2 )
+        if( lsmash_bs_get_bytes_ex( bs, 2, buf2 ) != 2 )
             return LSMASH_ERR_INVALID_DATA;
         first_offset += ( 2 * number_of_blocks ) + 2; /* according to above */
     }
@@ -170,17 +232,26 @@ static int mp4sys_adts_parse_variable_header( FILE* stream, uint8_t* buf, unsign
     return 0;
 }
 
-static int mp4sys_adts_parse_headers( FILE* stream, uint8_t* buf, mp4sys_adts_fixed_header_t* header, mp4sys_adts_variable_header_t* variable_header )
+static int mp4sys_adts_parse_headers
+(
+    lsmash_bs_t                   *bs,
+    uint8_t                       *buf,
+    mp4sys_adts_fixed_header_t    *header,
+    mp4sys_adts_variable_header_t *variable_header
+)
 {
     mp4sys_adts_parse_fixed_header( buf, header );
     int err = mp4sys_adts_check_fixed_header( header );
     if( err < 0 )
         return err;
     /* get payload length & skip extra(crc) header */
-    return mp4sys_adts_parse_variable_header( stream, buf, header->protection_absent, variable_header );
+    return mp4sys_adts_parse_variable_header( bs, buf, header->protection_absent, variable_header );
 }
 
-static lsmash_audio_summary_t *mp4sys_adts_create_summary( mp4sys_adts_fixed_header_t *header )
+static lsmash_audio_summary_t *mp4sys_adts_create_summary
+(
+    mp4sys_adts_fixed_header_t *header
+)
 {
     lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_AUDIO );
     if( !summary )
@@ -247,25 +318,20 @@ static lsmash_audio_summary_t *mp4sys_adts_create_summary( mp4sys_adts_fixed_hea
     return summary;
 }
 
-typedef struct
-{
-    importer_status               status;
-    unsigned int                  raw_data_block_idx;
-    mp4sys_adts_fixed_header_t    header;
-    mp4sys_adts_variable_header_t variable_header;
-    uint32_t                      samples_in_frame;
-    uint32_t                      au_number;
-} mp4sys_adts_info_t;
-
-static int mp4sys_adts_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
+static int mp4sys_adts_get_accessunit
+(
+    importer_t      *importer,
+    uint32_t         track_number,
+    lsmash_sample_t *buffered_sample
+)
 {
     if( !importer->info )
         return LSMASH_ERR_NAMELESS;
     if( track_number != 1 )
         return LSMASH_ERR_FUNCTION_PARAM;
-    mp4sys_adts_info_t* info = (mp4sys_adts_info_t*)importer->info;
-    importer_status current_status = info->status;
-    uint16_t raw_data_block_size = info->variable_header.raw_data_block_size[info->raw_data_block_idx];
+    mp4sys_adts_importer_t *adts_imp = (mp4sys_adts_importer_t *)importer->info;
+    importer_status current_status = adts_imp->status;
+    uint16_t raw_data_block_size = adts_imp->variable_header.raw_data_block_size[ adts_imp->raw_data_block_idx ];
     if( current_status == IMPORTER_ERROR || buffered_sample->length < raw_data_block_size )
         return LSMASH_ERR_NAMELESS;
     if( current_status == IMPORTER_EOF )
@@ -275,7 +341,7 @@ static int mp4sys_adts_get_accessunit( importer_t *importer, uint32_t track_numb
     }
     if( current_status == IMPORTER_CHANGE )
     {
-        lsmash_audio_summary_t* summary = mp4sys_adts_create_summary( &info->header );
+        lsmash_audio_summary_t *summary = mp4sys_adts_create_summary( &adts_imp->header );
         if( !summary )
             return LSMASH_ERR_NAMELESS;
         lsmash_entry_t* entry = lsmash_get_entry( importer->summaries, track_number );
@@ -283,52 +349,52 @@ static int mp4sys_adts_get_accessunit( importer_t *importer, uint32_t track_numb
             return LSMASH_ERR_NAMELESS;
         lsmash_cleanup_summary( entry->data );
         entry->data = summary;
-        info->samples_in_frame = summary->samples_in_frame;
+        adts_imp->samples_in_frame = summary->samples_in_frame;
     }
-
+    lsmash_bs_t *bs = adts_imp->bs;
     /* read a raw_data_block(), typically == payload of a ADTS frame */
-    if( fread( buffered_sample->data, 1, raw_data_block_size, importer->stream ) != raw_data_block_size )
+    if( lsmash_bs_get_bytes_ex( bs, raw_data_block_size, buffered_sample->data ) != raw_data_block_size )
     {
-        info->status = IMPORTER_ERROR;
+        adts_imp->status = IMPORTER_ERROR;
         return LSMASH_ERR_INVALID_DATA;
     }
-    buffered_sample->length = raw_data_block_size;
-    buffered_sample->dts = info->au_number++ * info->samples_in_frame;
-    buffered_sample->cts = buffered_sample->dts;
-    buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+    buffered_sample->length                 = raw_data_block_size;
+    buffered_sample->dts                    = adts_imp->au_number ++ * adts_imp->samples_in_frame;
+    buffered_sample->cts                    = buffered_sample->dts;
+    buffered_sample->prop.ra_flags          = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
     buffered_sample->prop.pre_roll.distance = 1;    /* MDCT */
 
     /* now we succeeded to read current frame, so "return" takes 0 always below. */
 
     /* skip adts_raw_data_block_error_check() */
-    if( info->header.protection_absent == 0
-     && info->variable_header.number_of_raw_data_blocks_in_frame != 0
-     && fread( buffered_sample->data, 1, 2, importer->stream ) != 2 )
+    if( adts_imp->header.protection_absent == 0
+     && adts_imp->variable_header.number_of_raw_data_blocks_in_frame != 0
+     && lsmash_bs_get_bytes_ex( bs, 2, buffered_sample->data ) != 2 )
     {
-        info->status = IMPORTER_ERROR;
+        adts_imp->status = IMPORTER_ERROR;
         return 0;
     }
     /* current adts_frame() has any more raw_data_block()? */
-    if( info->raw_data_block_idx < info->variable_header.number_of_raw_data_blocks_in_frame )
+    if( adts_imp->raw_data_block_idx < adts_imp->variable_header.number_of_raw_data_blocks_in_frame )
     {
-        info->raw_data_block_idx++;
-        info->status = IMPORTER_OK;
+        adts_imp->raw_data_block_idx++;
+        adts_imp->status = IMPORTER_OK;
         return 0;
     }
-    info->raw_data_block_idx = 0;
+    adts_imp->raw_data_block_idx = 0;
 
     /* preparation for next frame */
 
     uint8_t buf[MP4SYS_ADTS_MAX_FRAME_LENGTH];
-    size_t ret = fread( buf, 1, MP4SYS_ADTS_BASIC_HEADER_LENGTH, importer->stream );
+    int64_t ret = lsmash_bs_get_bytes_ex( bs, MP4SYS_ADTS_BASIC_HEADER_LENGTH, buf );
     if( ret == 0 )
     {
-        info->status = IMPORTER_EOF;
+        adts_imp->status = IMPORTER_EOF;
         return 0;
     }
     if( ret != MP4SYS_ADTS_BASIC_HEADER_LENGTH )
     {
-        info->status = IMPORTER_ERROR;
+        adts_imp->status = IMPORTER_ERROR;
         return 0;
     }
     /*
@@ -351,15 +417,14 @@ static int mp4sys_adts_get_accessunit( importer_t *importer, uint32_t track_numb
      * But then we have to cache and memcpy every frame so that it requires more clocks and memory.
      * To avoid them, I adopted this separate retrieving method.
      */
-    mp4sys_adts_fixed_header_t header = {0};
-    mp4sys_adts_variable_header_t variable_header = {0};
-    if( mp4sys_adts_parse_headers( importer->stream, buf, &header, &variable_header ) < 0 )
+    mp4sys_adts_fixed_header_t header = { 0 };
+    mp4sys_adts_variable_header_t variable_header = { 0 };
+    if( mp4sys_adts_parse_headers( bs, buf, &header, &variable_header ) < 0 )
     {
-        info->status = IMPORTER_ERROR;
+        adts_imp->status = IMPORTER_ERROR;
         return 0;
     }
-    info->variable_header = variable_header;
-
+    adts_imp->variable_header = variable_header;
     /*
      * NOTE: About our support for change(s) of properties within an ADTS stream.
      * We have to modify these conditions depending on the features we support.
@@ -372,15 +437,15 @@ static int mp4sys_adts_get_accessunit( importer_t *importer, uint32_t track_numb
      * Sometimes the "change(s)" can be allowed, while sometimes they're forbidden.
      */
     /* currently UNsupported "change(s)". */
-    if( info->header.profile_ObjectType != header.profile_ObjectType /* currently unsupported. */
-     || info->header.ID != header.ID /* In strict, this means change of object_type_indication. */
-     || info->header.sampling_frequency_index != header.sampling_frequency_index ) /* This may change timebase. */
+    if( adts_imp->header.profile_ObjectType != header.profile_ObjectType /* currently unsupported. */
+     || adts_imp->header.ID != header.ID /* In strict, this means change of object_type_indication. */
+     || adts_imp->header.sampling_frequency_index != header.sampling_frequency_index ) /* This may change timebase. */
     {
-        info->status = IMPORTER_ERROR;
+        adts_imp->status = IMPORTER_ERROR;
         return 0;
     }
     /* currently supported "change(s)". */
-    if( info->header.channel_configuration != header.channel_configuration )
+    if( adts_imp->header.channel_configuration != header.channel_configuration )
     {
         /*
          * FIXME: About conditions of VALID "change(s)".
@@ -396,61 +461,67 @@ static int mp4sys_adts_get_accessunit( importer_t *importer, uint32_t track_numb
          * because user may retrieve summary right after this function call of this time,
          * and that should be of current, before change, one.
          */
-        info->header = header;
-        info->status = IMPORTER_CHANGE;
+        adts_imp->header = header;
+        adts_imp->status = IMPORTER_CHANGE;
         return 0;
     }
     /* no change which matters to mp4 muxing was found */
-    info->status = IMPORTER_OK;
+    adts_imp->status = IMPORTER_OK;
     return 0;
-}
-
-static void mp4sys_adts_cleanup( importer_t *importer )
-{
-    debug_if( importer && importer->info )
-        lsmash_free( importer->info );
 }
 
 /* returns 0 if it seems adts. */
-static int mp4sys_adts_probe( importer_t *importer )
+static int mp4sys_adts_probe
+(
+    importer_t *importer
+)
 {
+    mp4sys_adts_importer_t *adts_imp = create_mp4sys_adts_importer( importer );
+    if( !adts_imp )
+        return LSMASH_ERR_MEMORY_ALLOC;
     uint8_t buf[MP4SYS_ADTS_MAX_FRAME_LENGTH];
-    if( fread( buf, 1, MP4SYS_ADTS_BASIC_HEADER_LENGTH, importer->stream ) != MP4SYS_ADTS_BASIC_HEADER_LENGTH )
+    if( lsmash_bs_get_bytes_ex( adts_imp->bs, MP4SYS_ADTS_BASIC_HEADER_LENGTH, buf ) != MP4SYS_ADTS_BASIC_HEADER_LENGTH )
         return LSMASH_ERR_INVALID_DATA;
     mp4sys_adts_fixed_header_t    header          = { 0 };
     mp4sys_adts_variable_header_t variable_header = { 0 };
-    int err = mp4sys_adts_parse_headers( importer->stream, buf, &header, &variable_header );
+    int err = mp4sys_adts_parse_headers( adts_imp->bs, buf, &header, &variable_header );
     if( err < 0 )
         return err;
     /* now the stream seems valid ADTS */
-    lsmash_audio_summary_t* summary = mp4sys_adts_create_summary( &header );
+    lsmash_audio_summary_t *summary = mp4sys_adts_create_summary( &header );
     if( !summary )
         return LSMASH_ERR_NAMELESS;
     /* importer status */
-    mp4sys_adts_info_t* info = lsmash_malloc_zero( sizeof(mp4sys_adts_info_t) );
-    if( !info || lsmash_add_entry( importer->summaries, summary ) < 0 )
+    if( lsmash_add_entry( importer->summaries, summary ) < 0 )
     {
-        lsmash_free( info );
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-        return LSMASH_ERR_MEMORY_ALLOC;
+        err = LSMASH_ERR_MEMORY_ALLOC;
+        goto fail;
     }
-    info->status             = IMPORTER_OK;
-    info->raw_data_block_idx = 0;
-    info->header             = header;
-    info->variable_header    = variable_header;
-    info->samples_in_frame   = summary->samples_in_frame;
-    importer->info = info;
+    adts_imp->status             = IMPORTER_OK;
+    adts_imp->raw_data_block_idx = 0;
+    adts_imp->header             = header;
+    adts_imp->variable_header    = variable_header;
+    adts_imp->samples_in_frame   = summary->samples_in_frame;
+    importer->info = adts_imp;
     return 0;
+fail:
+    remove_mp4sys_adts_importer( adts_imp );
+    return err;
 }
 
-static uint32_t mp4sys_adts_get_last_delta( importer_t *importer, uint32_t track_number )
+static uint32_t mp4sys_adts_get_last_delta
+(
+    importer_t *importer,
+    uint32_t    track_number
+)
 {
     debug_if( !importer || !importer->info )
         return 0;
-    mp4sys_adts_info_t *info = (mp4sys_adts_info_t *)importer->info;
-    if( !info || track_number != 1 || info->status != IMPORTER_EOF )
+    mp4sys_adts_importer_t *adts_imp = (mp4sys_adts_importer_t *)importer->info;
+    if( !adts_imp || track_number != 1 || adts_imp->status != IMPORTER_EOF )
         return 0;
-    return info->samples_in_frame;
+    return adts_imp->samples_in_frame;
 }
 
 const importer_functions mp4sys_adts_importer =
