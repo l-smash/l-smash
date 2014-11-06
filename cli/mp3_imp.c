@@ -42,12 +42,6 @@
 #define MP4SYS_LAYER_II             0x2
 #define MP4SYS_LAYER_I              0x3
 
-static void mp4sys_mp3_cleanup( importer_t *importer )
-{
-    debug_if( importer && importer->info )
-        lsmash_free( importer->info );
-}
-
 typedef struct
 {
     uint16_t syncword;           /* <12> */
@@ -64,6 +58,59 @@ typedef struct
 //  uint8_t  original_copy;      /* <1> don't care. */
     uint8_t  emphasis;           /* <2> for error check only. */
 } mp4sys_mp3_header_t;
+
+typedef struct
+{
+    importer_status     status;
+    lsmash_bs_t        *bs;
+    mp4sys_mp3_header_t header;
+    uint8_t             raw_header[MP4SYS_MP3_HEADER_LENGTH];
+    uint32_t            samples_in_frame;
+    uint32_t            au_number;
+    uint16_t            main_data_size[32]; /* size of main_data of the last 32 frames, FIFO */
+    uint16_t            prev_preroll_count; /* number of dependent frames of *previous* frame */
+    uint16_t            enc_delay;
+    uint16_t            padding;
+    uint64_t            valid_samples;
+} mp4sys_mp3_importer_t;
+
+static void remove_mp4sys_mp3_importer
+(
+    mp4sys_mp3_importer_t *mp3_imp
+)
+{
+    lsmash_bs_cleanup( mp3_imp->bs );
+    lsmash_free( mp3_imp );
+}
+
+static mp4sys_mp3_importer_t *create_mp4sys_mp3_importer
+(
+    importer_t *importer
+)
+{
+    mp4sys_mp3_importer_t *mp3_imp = (mp4sys_mp3_importer_t *)lsmash_malloc_zero( sizeof(mp4sys_mp3_importer_t) );
+    if( !mp3_imp )
+        return NULL;
+    lsmash_bs_t *bs = lsmash_bs_create();
+    if( !bs )
+    {
+        lsmash_free( mp3_imp );
+        return NULL;
+    }
+    mp3_imp->bs = bs;
+    bs->stream          = importer->stream;
+    bs->read            = lsmash_fread_wrapper;
+    bs->seek            = lsmash_fseek_wrapper;
+    bs->unseekable      = importer->is_stdin;
+    bs->buffer.max_size = BS_MAX_DEFAULT_READ_SIZE;
+    return mp3_imp;
+}
+
+static void mp4sys_mp3_cleanup( importer_t *importer )
+{
+    debug_if( importer && importer->info )
+        remove_mp4sys_mp3_importer( importer->info );
+}
 
 static int mp4sys_mp3_parse_header( uint8_t *buf, mp4sys_mp3_header_t *header )
 {
@@ -172,21 +219,7 @@ static lsmash_audio_summary_t *mp4sys_mp3_create_summary( mp4sys_mp3_header_t *h
     return summary;
 }
 
-typedef struct
-{
-    importer_status     status;
-    mp4sys_mp3_header_t header;
-    uint8_t             raw_header[MP4SYS_MP3_HEADER_LENGTH];
-    uint32_t            samples_in_frame;
-    uint32_t            au_number;
-    uint16_t            main_data_size[32]; /* size of main_data of the last 32 frames, FIFO */
-    uint16_t            prev_preroll_count; /* number of dependent frames of *previous* frame */
-    uint16_t            enc_delay;
-    uint16_t            padding;
-    uint64_t            valid_samples;
-} mp4sys_mp3_info_t;
-
-static int parse_xing_info_header( mp4sys_mp3_info_t *info, mp4sys_mp3_header_t *header, uint8_t *frame )
+static int parse_xing_info_header( mp4sys_mp3_importer_t *mp3_imp, mp4sys_mp3_header_t *header, uint8_t *frame )
 {
     unsigned int sip = header->protection_bit ? 4 : 6;
     unsigned int side_info_size;
@@ -205,7 +238,7 @@ static int parse_xing_info_header( mp4sys_mp3_info_t *info, mp4sys_mp3_header_t 
     if( flags & 1 )
     {
         frame_count = LSMASH_GET_BE32( &mdp[8] );
-        info->valid_samples = (uint64_t)frame_count * mp4sys_mp3_samples_in_frame( header );
+        mp3_imp->valid_samples = (uint64_t)frame_count * mp4sys_mp3_samples_in_frame( header );
         off += 4;
     }
     if( flags & 2 ) off +=   4; /* file size    */
@@ -215,15 +248,15 @@ static int parse_xing_info_header( mp4sys_mp3_info_t *info, mp4sys_mp3_header_t 
     if( mdp[off] == 'L' )
     {   /* LAME header present */
         unsigned int v = LSMASH_GET_BE24( &mdp[off + 21] );
-        info->enc_delay     = v >> 12;
-        info->padding       = v & 0xfff;
+        mp3_imp->enc_delay     = v >> 12;
+        mp3_imp->padding       = v & 0xfff;
         if( frame_count )
-            info->valid_samples -= info->enc_delay + info->padding;
+            mp3_imp->valid_samples -= mp3_imp->enc_delay + mp3_imp->padding;
     }
     return 1;
 }
 
-static int parse_vbri_header( mp4sys_mp3_info_t *info, mp4sys_mp3_header_t *header, uint8_t *frame )
+static int parse_vbri_header( mp4sys_mp3_importer_t *mp3_imp, mp4sys_mp3_header_t *header, uint8_t *frame )
 {
     return memcmp( frame + 36, "VBRI", 4 ) == 0;
 }
@@ -234,9 +267,9 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
         return LSMASH_ERR_NAMELESS;
     if( track_number != 1 )
         return LSMASH_ERR_FUNCTION_PARAM;
-    mp4sys_mp3_info_t   *info           = (mp4sys_mp3_info_t *)importer->info;
-    mp4sys_mp3_header_t *header         = (mp4sys_mp3_header_t *)&info->header;
-    importer_status      current_status = info->status;
+    mp4sys_mp3_importer_t *mp3_imp        = (mp4sys_mp3_importer_t *)importer->info;
+    mp4sys_mp3_header_t   *header         = (mp4sys_mp3_header_t *)&mp3_imp->header;
+    importer_status        current_status = mp3_imp->status;
     /* bitrate */
     const uint32_t bitrate_tbl[2][3][16] =
     {
@@ -292,29 +325,30 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
             return LSMASH_ERR_NAMELESS;
         lsmash_cleanup_summary( entry->data );
         entry->data = summary;
-        info->samples_in_frame = summary->samples_in_frame;
+        mp3_imp->samples_in_frame = summary->samples_in_frame;
     }
     /* read a frame's data. */
-    memcpy( buffered_sample->data, info->raw_header, MP4SYS_MP3_HEADER_LENGTH );
+    uint8_t *frame_data = buffered_sample->data;
+    memcpy( frame_data, mp3_imp->raw_header, MP4SYS_MP3_HEADER_LENGTH );
     frame_size -= MP4SYS_MP3_HEADER_LENGTH;
-    if( fread( ((uint8_t *)buffered_sample->data) + MP4SYS_MP3_HEADER_LENGTH, 1, frame_size, importer->stream ) != frame_size )
+    if( lsmash_bs_get_bytes_ex( mp3_imp->bs, frame_size, frame_data + MP4SYS_MP3_HEADER_LENGTH ) != frame_size )
     {
-        info->status = IMPORTER_ERROR;
+        mp3_imp->status = IMPORTER_ERROR;
         return LSMASH_ERR_INVALID_DATA;
     }
     buffered_sample->length                 = MP4SYS_MP3_HEADER_LENGTH + frame_size;
-    buffered_sample->dts                    = info->au_number++ * info->samples_in_frame;
+    buffered_sample->dts                    = mp3_imp->au_number ++ * mp3_imp->samples_in_frame;
     buffered_sample->cts                    = buffered_sample->dts;
     buffered_sample->prop.ra_flags          = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
     buffered_sample->prop.pre_roll.distance = header->layer == MP4SYS_LAYER_III ? 1 : 0;    /* Layer III uses MDCT */
 
     int vbr_header_present = 0;
-    if( info->au_number == 1
-     && (parse_xing_info_header( info, header, buffered_sample->data )
-      || parse_vbri_header( info, header, buffered_sample->data )) )
+    if( mp3_imp->au_number == 1
+     && (parse_xing_info_header( mp3_imp, header, frame_data )
+      || parse_vbri_header( mp3_imp, header, frame_data )) )
     {
         vbr_header_present = 1;
-        info->au_number--;
+        mp3_imp->au_number--;
     }
 
     /* handle additional inter-frame dependency due to bit reservoir */
@@ -322,11 +356,11 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
     {
         /* position of side_info */
         unsigned int sip = header->protection_bit ? 4 : 6;
-        unsigned int main_data_begin = buffered_sample->data[sip];
+        unsigned int main_data_begin = frame_data[sip];
         if( header->ID == 1 )
         {
             main_data_begin <<= 1;
-            main_data_begin |= (buffered_sample->data[sip + 1] >> 7);
+            main_data_begin |= (frame_data[sip + 1] >> 7);
         }
         if( main_data_begin > 0 )
         {
@@ -341,12 +375,12 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
             unsigned int i;
             for( i = 0; i < 32 && reservoir_data < main_data_begin; ++i )
             {
-                reservoir_data += info->main_data_size[i];
-                if( info->main_data_size[i] == 0 )
+                reservoir_data += mp3_imp->main_data_size[i];
+                if( mp3_imp->main_data_size[i] == 0 )
                     break;
             }
-            buffered_sample->prop.pre_roll.distance += info->prev_preroll_count;
-            info->prev_preroll_count = i;
+            buffered_sample->prop.pre_roll.distance += mp3_imp->prev_preroll_count;
+            mp3_imp->prev_preroll_count = i;
         }
         uint16_t side_info_size;
         if( header->ID == 1 )
@@ -356,59 +390,59 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
 
         /* pop back main_data_size[] and push main_data size of this frame
          * to the front */
-        memmove( info->main_data_size + 1, info->main_data_size, sizeof(info->main_data_size) - sizeof( info->main_data_size[0] ) );
-        info->main_data_size[0] = frame_size - sip - side_info_size;
+        memmove( mp3_imp->main_data_size + 1, mp3_imp->main_data_size, sizeof(mp3_imp->main_data_size) - sizeof( mp3_imp->main_data_size[0] ) );
+        mp3_imp->main_data_size[0] = frame_size - sip - side_info_size;
     }
     /* now we succeeded to read current frame, so "return" takes 0 always below. */
     /* preparation for next frame */
 
     uint8_t buf[MP4SYS_MP3_HEADER_LENGTH];
-    size_t ret = fread( buf, 1, MP4SYS_MP3_HEADER_LENGTH, importer->stream );
+    int64_t ret = lsmash_bs_get_bytes_ex( mp3_imp->bs, MP4SYS_MP3_HEADER_LENGTH, buf );
     if( ret == 0 )
     {
-        info->status = IMPORTER_EOF;
+        mp3_imp->status = IMPORTER_EOF;
         return 0;
     }
     if( ret >= 2 && (!memcmp( buf, "TA", 2 ) || !memcmp( buf, "AP", 2 )) )
     {
         /* ID3v1 or APE tag */
-        info->status = IMPORTER_EOF;
+        mp3_imp->status = IMPORTER_EOF;
         return 0;
     }
     if( ret == 1 && *buf == 0x00 )
     {
         /* NOTE: ugly hack for mp1 stream created with SCMPX. */
-        info->status = IMPORTER_EOF;
+        mp3_imp->status = IMPORTER_EOF;
         return 0;
     }
     if( ret != MP4SYS_MP3_HEADER_LENGTH )
     {
-        info->status = IMPORTER_ERROR;
+        mp3_imp->status = IMPORTER_ERROR;
         return 0;
     }
 
     mp4sys_mp3_header_t new_header = {0};
     if( mp4sys_mp3_parse_header( buf, &new_header ) < 0 )
     {
-        info->status = IMPORTER_ERROR;
+        mp3_imp->status = IMPORTER_ERROR;
         return 0;
     }
-    memcpy( info->raw_header, buf, MP4SYS_MP3_HEADER_LENGTH );
+    memcpy( mp3_imp->raw_header, buf, MP4SYS_MP3_HEADER_LENGTH );
 
     /* currently UNsupported "change(s)". */
     if( header->layer != new_header.layer /* This means change of object_type_indication with Legacy Interface. */
      || header->sampling_frequency != new_header.sampling_frequency ) /* This may change timescale. */
     {
-        info->status = IMPORTER_ERROR;
+        mp3_imp->status = IMPORTER_ERROR;
         return 0;
     }
 
     /* currently supported "change(s)". */
     if( MP4SYS_MODE_IS_2CH( header->mode ) != MP4SYS_MODE_IS_2CH( new_header.mode ) )
-        info->status = IMPORTER_CHANGE;
+        mp3_imp->status = IMPORTER_CHANGE;
     else
-        info->status = IMPORTER_OK; /* no change which matters to mp4 muxing was found */
-    info->header = new_header;
+        mp3_imp->status = IMPORTER_OK; /* no change which matters to mp4 muxing was found */
+    mp3_imp->header = new_header;
 
     if( vbr_header_present )
         return mp4sys_mp3_get_accessunit( importer, track_number, buffered_sample );
@@ -417,58 +451,61 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
 
 static int mp4sys_mp3_probe( importer_t *importer )
 {
-    int c;
-    if( (c = getc( importer->stream )) == 'I'
-     && (c = getc( importer->stream )) == 'D'
-     && (c = getc( importer->stream )) == '3' )
+    mp4sys_mp3_importer_t *mp3_imp = create_mp4sys_mp3_importer( importer );
+    if( !mp3_imp )
+        return LSMASH_ERR_MEMORY_ALLOC;
+    lsmash_bs_t *bs = mp3_imp->bs;
+    if( lsmash_bs_show_byte( bs, 0 ) == 'I'
+     && lsmash_bs_show_byte( bs, 1 ) == 'D'
+     && lsmash_bs_show_byte( bs, 2 ) == '3' )
     {
-        lsmash_fseek( importer->stream, 3, SEEK_CUR );
+        lsmash_bs_read_seek( bs, 6, SEEK_CUR );
         uint32_t size = 0;
         for( int i = 0 ; i < 4; i++ )
         {
             size <<= 7;
-            size |= getc( importer->stream );
+            size |= lsmash_bs_get_byte( bs );
         }
-        lsmash_fseek( importer->stream, size, SEEK_CUR );
+        lsmash_bs_read_seek( bs, size, SEEK_CUR );
     }
-    else
-        ungetc( c, importer->stream );
     /* Parse the header. */
     uint8_t buf[MP4SYS_MP3_HEADER_LENGTH];
-    if( fread( buf, 1, MP4SYS_MP3_HEADER_LENGTH, importer->stream ) != MP4SYS_MP3_HEADER_LENGTH )
+    if( lsmash_bs_get_bytes_ex( bs, MP4SYS_MP3_HEADER_LENGTH, buf ) != MP4SYS_MP3_HEADER_LENGTH )
         return LSMASH_ERR_INVALID_DATA;
     mp4sys_mp3_header_t header = { 0 };
     int err = mp4sys_mp3_parse_header( buf, &header );
     if( err < 0 )
-        return err;
+        goto fail;
     /* Now, the stream seems valid mp3. */
     lsmash_audio_summary_t *summary = mp4sys_mp3_create_summary( &header, 1 );
     if( !summary )
         return LSMASH_ERR_NAMELESS;
     /* importer status */
-    mp4sys_mp3_info_t *info = lsmash_malloc_zero( sizeof(mp4sys_mp3_info_t) );
-    if( !info || lsmash_add_entry( importer->summaries, summary ) < 0 )
+    if( lsmash_add_entry( importer->summaries, summary ) < 0 )
     {
-        lsmash_free( info );
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-        return LSMASH_ERR_MEMORY_ALLOC;
+        err = LSMASH_ERR_MEMORY_ALLOC;
+        goto fail;
     }
-    info->status           = IMPORTER_OK;
-    info->header           = header;
-    info->samples_in_frame = summary->samples_in_frame;
-    memcpy( info->raw_header, buf, MP4SYS_MP3_HEADER_LENGTH );
-    importer->info = info;
+    mp3_imp->status           = IMPORTER_OK;
+    mp3_imp->header           = header;
+    mp3_imp->samples_in_frame = summary->samples_in_frame;
+    memcpy( mp3_imp->raw_header, buf, MP4SYS_MP3_HEADER_LENGTH );
+    importer->info = mp3_imp;
     return 0;
+fail:
+    remove_mp4sys_mp3_importer( mp3_imp );
+    return err;
 }
 
 static uint32_t mp4sys_mp3_get_last_delta( importer_t *importer, uint32_t track_number )
 {
     debug_if( !importer || !importer->info )
         return 0;
-    mp4sys_mp3_info_t *info = (mp4sys_mp3_info_t *)importer->info;
-    if( !info || track_number != 1 || info->status != IMPORTER_EOF )
+    mp4sys_mp3_importer_t *mp3_imp = (mp4sys_mp3_importer_t *)importer->info;
+    if( !mp3_imp || track_number != 1 || mp3_imp->status != IMPORTER_EOF )
         return 0;
-    return info->samples_in_frame;
+    return mp3_imp->samples_in_frame;
 }
 
 const importer_functions mp4sys_mp3_importer =
