@@ -37,7 +37,6 @@
 
 typedef struct
 {
-    importer_status        status;
     vc1_info_t             info;
     vc1_sequence_header_t  first_sequence;
     lsmash_media_ts_list_t ts_list;
@@ -111,17 +110,9 @@ static inline void vc1_append_ebdu_to_au( vc1_access_unit_t *access_unit, uint8_
     access_unit->incomplete_data_length += ebdu_length;
 }
 
-static inline void vc1_get_au_internal_end( vc1_importer_t *vc1_imp, vc1_access_unit_t *access_unit )
-{
-    vc1_imp->status = lsmash_bs_is_end( vc1_imp->bs, 0 ) && (access_unit->incomplete_data_length == 0)
-                    ? IMPORTER_EOF
-                    : IMPORTER_OK;
-}
-
 static int vc1_get_au_internal_succeeded( vc1_importer_t *vc1_imp )
 {
     vc1_access_unit_t *access_unit = &vc1_imp->info.access_unit;
-    vc1_get_au_internal_end( vc1_imp, access_unit );
     access_unit->number += 1;
     return 0;
 }
@@ -129,7 +120,6 @@ static int vc1_get_au_internal_succeeded( vc1_importer_t *vc1_imp )
 static int vc1_get_au_internal_failed( vc1_importer_t *vc1_imp, int complete_au, int ret )
 {
     vc1_access_unit_t *access_unit = &vc1_imp->info.access_unit;
-    vc1_get_au_internal_end( vc1_imp, access_unit );
     if( complete_au )
         access_unit->number += 1;
     return ret;
@@ -282,6 +272,15 @@ static int vc1_importer_get_access_unit_internal( importer_t *importer, int prob
     }
 }
 
+static inline void vc1_importer_check_eof( importer_t *importer )
+{
+    vc1_importer_t *vc1_imp = (vc1_importer_t *)importer->info;
+    if( lsmash_bs_is_end( vc1_imp->bs, 0 ) && vc1_imp->info.access_unit.incomplete_data_length == 0 )
+        importer->status = IMPORTER_EOF;
+    else
+        importer->status = IMPORTER_OK;
+}
+
 static int vc1_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
 {
     if( !importer->info )
@@ -290,7 +289,7 @@ static int vc1_importer_get_accessunit( importer_t *importer, uint32_t track_num
         return LSMASH_ERR_FUNCTION_PARAM;
     vc1_importer_t *vc1_imp = (vc1_importer_t *)importer->info;
     vc1_info_t     *info    = &vc1_imp->info;
-    importer_status current_status = vc1_imp->status;
+    importer_status current_status = importer->status;
     if( current_status == IMPORTER_ERROR || buffered_sample->length < vc1_imp->max_au_length )
         return LSMASH_ERR_NAMELESS;
     if( current_status == IMPORTER_EOF )
@@ -301,9 +300,10 @@ static int vc1_importer_get_accessunit( importer_t *importer, uint32_t track_num
     int err = vc1_importer_get_access_unit_internal( importer, 0 );
     if( err < 0 )
     {
-        vc1_imp->status = IMPORTER_ERROR;
+        importer->status = IMPORTER_ERROR;
         return err;
     }
+    vc1_importer_check_eof( importer );
     vc1_access_unit_t *access_unit = &info->access_unit;
     buffered_sample->dts = vc1_imp->ts_list.timestamp[ access_unit->number - 1 ].dts;
     buffered_sample->cts = vc1_imp->ts_list.timestamp[ access_unit->number - 1 ].cts;
@@ -375,15 +375,16 @@ static int vc1_analyze_whole_stream
     lsmash_log( &logger, LSMASH_LOG_INFO, "Analyzing stream as VC-1\r" );
     vc1_importer_t *vc1_imp = (vc1_importer_t *)importer->info;
     vc1_info_t     *info    = &vc1_imp->info;
-    vc1_imp->status = IMPORTER_OK;
+    importer->status = IMPORTER_OK;
     int err;
-    while( vc1_imp->status != IMPORTER_EOF )
+    while( importer->status != IMPORTER_EOF )
     {
 #if 0
         lsmash_log( &logger, LSMASH_LOG_INFO, "Analyzing stream as VC-1: %"PRIu32"\n", num_access_units + 1 );
 #endif
         if( (err = vc1_importer_get_access_unit_internal( importer, 1 )) < 0 )
             goto fail;
+        vc1_importer_check_eof( importer );
         /* In the case where B-pictures exist
          * Decode order
          *      I[0]P[1]P[2]B[3]B[4]P[5]...
@@ -509,7 +510,7 @@ static int vc1_importer_probe( importer_t *importer )
         goto fail;
     }
     /* Go back to layer of the first EBDU. */
-    vc1_imp->status = IMPORTER_OK;
+    importer->status = IMPORTER_OK;
     lsmash_bs_read_seek( bs, first_ebdu_head_pos, SEEK_SET );
     info->prev_bdu_type                  = 0xFF;    /* 0xFF is a forbidden value. */
     info->ebdu_head_pos                  = first_ebdu_head_pos;
@@ -532,7 +533,7 @@ static uint32_t vc1_importer_get_last_delta( importer_t *importer, uint32_t trac
     debug_if( !importer || !importer->info )
         return 0;
     vc1_importer_t *vc1_imp = (vc1_importer_t *)importer->info;
-    if( !vc1_imp || track_number != 1 || vc1_imp->status != IMPORTER_EOF )
+    if( !vc1_imp || track_number != 1 || importer->status != IMPORTER_EOF )
         return 0;
     return vc1_imp->ts_list.sample_count
          ? 1

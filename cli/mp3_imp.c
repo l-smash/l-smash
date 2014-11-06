@@ -61,7 +61,6 @@ typedef struct
 
 typedef struct
 {
-    importer_status     status;
     lsmash_bs_t        *bs;
     mp4sys_mp3_header_t header;
     uint8_t             raw_header[MP4SYS_MP3_HEADER_LENGTH];
@@ -269,7 +268,7 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
         return LSMASH_ERR_FUNCTION_PARAM;
     mp4sys_mp3_importer_t *mp3_imp        = (mp4sys_mp3_importer_t *)importer->info;
     mp4sys_mp3_header_t   *header         = (mp4sys_mp3_header_t *)&mp3_imp->header;
-    importer_status        current_status = mp3_imp->status;
+    importer_status        current_status = importer->status;
     /* bitrate */
     const uint32_t bitrate_tbl[2][3][16] =
     {
@@ -333,7 +332,7 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
     frame_size -= MP4SYS_MP3_HEADER_LENGTH;
     if( lsmash_bs_get_bytes_ex( mp3_imp->bs, frame_size, frame_data + MP4SYS_MP3_HEADER_LENGTH ) != frame_size )
     {
-        mp3_imp->status = IMPORTER_ERROR;
+        importer->status = IMPORTER_ERROR;
         return LSMASH_ERR_INVALID_DATA;
     }
     buffered_sample->length                 = MP4SYS_MP3_HEADER_LENGTH + frame_size;
@@ -400,31 +399,31 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
     int64_t ret = lsmash_bs_get_bytes_ex( mp3_imp->bs, MP4SYS_MP3_HEADER_LENGTH, buf );
     if( ret == 0 )
     {
-        mp3_imp->status = IMPORTER_EOF;
+        importer->status = IMPORTER_EOF;
         return 0;
     }
     if( ret >= 2 && (!memcmp( buf, "TA", 2 ) || !memcmp( buf, "AP", 2 )) )
     {
         /* ID3v1 or APE tag */
-        mp3_imp->status = IMPORTER_EOF;
+        importer->status = IMPORTER_EOF;
         return 0;
     }
     if( ret == 1 && *buf == 0x00 )
     {
         /* NOTE: ugly hack for mp1 stream created with SCMPX. */
-        mp3_imp->status = IMPORTER_EOF;
+        importer->status = IMPORTER_EOF;
         return 0;
     }
     if( ret != MP4SYS_MP3_HEADER_LENGTH )
     {
-        mp3_imp->status = IMPORTER_ERROR;
+        importer->status = IMPORTER_ERROR;
         return 0;
     }
 
-    mp4sys_mp3_header_t new_header = {0};
+    mp4sys_mp3_header_t new_header = { 0 };
     if( mp4sys_mp3_parse_header( buf, &new_header ) < 0 )
     {
-        mp3_imp->status = IMPORTER_ERROR;
+        importer->status = IMPORTER_ERROR;
         return 0;
     }
     memcpy( mp3_imp->raw_header, buf, MP4SYS_MP3_HEADER_LENGTH );
@@ -433,15 +432,15 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
     if( header->layer != new_header.layer /* This means change of object_type_indication with Legacy Interface. */
      || header->sampling_frequency != new_header.sampling_frequency ) /* This may change timescale. */
     {
-        mp3_imp->status = IMPORTER_ERROR;
+        importer->status = IMPORTER_ERROR;
         return 0;
     }
 
     /* currently supported "change(s)". */
     if( MP4SYS_MODE_IS_2CH( header->mode ) != MP4SYS_MODE_IS_2CH( new_header.mode ) )
-        mp3_imp->status = IMPORTER_CHANGE;
+        importer->status = IMPORTER_CHANGE;
     else
-        mp3_imp->status = IMPORTER_OK; /* no change which matters to mp4 muxing was found */
+        importer->status = IMPORTER_OK; /* no change which matters to mp4 muxing was found */
     mp3_imp->header = new_header;
 
     if( vbr_header_present )
@@ -487,11 +486,11 @@ static int mp4sys_mp3_probe( importer_t *importer )
         err = LSMASH_ERR_MEMORY_ALLOC;
         goto fail;
     }
-    mp3_imp->status           = IMPORTER_OK;
     mp3_imp->header           = header;
     mp3_imp->samples_in_frame = summary->samples_in_frame;
     memcpy( mp3_imp->raw_header, buf, MP4SYS_MP3_HEADER_LENGTH );
-    importer->info = mp3_imp;
+    importer->info   = mp3_imp;
+    importer->status = IMPORTER_OK;
     return 0;
 fail:
     remove_mp4sys_mp3_importer( mp3_imp );
@@ -503,7 +502,7 @@ static uint32_t mp4sys_mp3_get_last_delta( importer_t *importer, uint32_t track_
     debug_if( !importer || !importer->info )
         return 0;
     mp4sys_mp3_importer_t *mp3_imp = (mp4sys_mp3_importer_t *)importer->info;
-    if( !mp3_imp || track_number != 1 || mp3_imp->status != IMPORTER_EOF )
+    if( !mp3_imp || track_number != 1 || importer->status != IMPORTER_EOF )
         return 0;
     return mp3_imp->samples_in_frame;
 }

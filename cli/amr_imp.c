@@ -38,7 +38,6 @@
 ***************************************************************************/
 typedef struct
 {
-    importer_status status;
     lsmash_bs_t    *bs;
     int             wb; /* 0: AMR-NB, 1: AMR-WB */
     uint32_t        samples_in_frame;
@@ -99,10 +98,10 @@ static int amr_get_accessunit
         return LSMASH_ERR_FUNCTION_PARAM;
     amr_importer_t *amr_imp = (amr_importer_t *)importer->info;
     lsmash_bs_t    *bs      = amr_imp->bs;
-    if( amr_imp->status == IMPORTER_EOF || lsmash_bs_is_end( bs, 0 ) )
+    if( importer->status == IMPORTER_EOF || lsmash_bs_is_end( bs, 0 ) )
     {
         /* EOF */
-        amr_imp->status = IMPORTER_EOF;
+        importer->status = IMPORTER_EOF;
         buffered_sample->length = 0;
         return 0;
     }
@@ -131,7 +130,7 @@ static int amr_get_accessunit
     if( read_size <= 0 )
     {
         lsmash_log( importer, LSMASH_LOG_ERROR, "an %s speech frame is detected.\n", read_size < 0 ? "invalid" : "unknown" );
-        amr_imp->status = IMPORTER_ERROR;
+        importer->status = IMPORTER_ERROR;
         return read_size < 0 ? LSMASH_ERR_INVALID_DATA : LSMASH_ERR_NAMELESS;
     }
     if( buffered_sample->length < read_size )
@@ -139,7 +138,7 @@ static int amr_get_accessunit
     if( lsmash_bs_get_bytes_ex( bs, read_size, buffered_sample->data ) != read_size )
     {
         lsmash_log( importer, LSMASH_LOG_WARNING, "the stream is truncated at the end.\n" );
-        amr_imp->status = IMPORTER_EOF;
+        importer->status = IMPORTER_EOF;
         return LSMASH_ERR_INVALID_DATA;
     }
     buffered_sample->length        = read_size;
@@ -269,11 +268,11 @@ static int amr_probe
         err = LSMASH_ERR_NAMELESS;
         goto fail;
     }
-    amr_imp->status           = IMPORTER_OK;
     amr_imp->wb               = wb;
     amr_imp->samples_in_frame = summary->samples_in_frame;
     amr_imp->au_number        = 0;
-    importer->info = amr_imp;
+    importer->info   = amr_imp;
+    importer->status = IMPORTER_OK;
     return 0;
 fail:
     remove_amr_importer( amr_imp );

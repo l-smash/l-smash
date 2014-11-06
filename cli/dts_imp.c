@@ -37,7 +37,6 @@
 
 typedef struct
 {
-    importer_status status;
     dts_info_t      info;
     uint64_t next_frame_pos;
     uint8_t buffer[DTS_MAX_EXSS_SIZE];
@@ -118,7 +117,7 @@ static int dts_importer_get_next_accessunit_internal( importer_t *importer )
         if( bs->eob || (bs->eof && remain_size < 10) )
         {
             /* Reached the end of stream. */
-            dts_imp->status = IMPORTER_EOF;
+            importer->status = IMPORTER_EOF;
             au_completed = !!dts_imp->incomplete_au_length;
             if( !au_completed )
             {
@@ -181,7 +180,7 @@ static int dts_importer_get_next_accessunit_internal( importer_t *importer )
             dts_imp->au_length            = dts_imp->incomplete_au_length;
             dts_imp->incomplete_au_length = 0;
             info->exss_count = (info->substream_type == DTS_SUBSTREAM_TYPE_EXTENSION);
-            if( dts_imp->status == IMPORTER_EOF )
+            if( importer->status == IMPORTER_EOF )
                 break;
         }
         /* Increase buffer size to store AU if short. */
@@ -213,7 +212,7 @@ static int dts_importer_get_accessunit( importer_t *importer, uint32_t track_num
         return LSMASH_ERR_NAMELESS;
     dts_importer_t *dts_imp = (dts_importer_t *)importer->info;
     dts_info_t     *info    = &dts_imp->info;
-    importer_status current_status = dts_imp->status;
+    importer_status current_status = importer->status;
     if( current_status == IMPORTER_ERROR || buffered_sample->length < dts_imp->au_length )
         return LSMASH_ERR_NAMELESS;
     if( current_status == IMPORTER_EOF && dts_imp->au_length == 0 )
@@ -229,13 +228,13 @@ static int dts_importer_get_accessunit( importer_t *importer, uint32_t track_num
     buffered_sample->cts                    = buffered_sample->dts;
     buffered_sample->prop.ra_flags          = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
     buffered_sample->prop.pre_roll.distance = !!(info->flags & DTS_EXT_SUBSTREAM_LBR_FLAG);     /* MDCT */
-    if( dts_imp->status == IMPORTER_EOF )
+    if( importer->status == IMPORTER_EOF )
     {
         dts_imp->au_length = 0;
         return 0;
     }
     if( dts_importer_get_next_accessunit_internal( importer ) < 0 )
-        dts_imp->status = IMPORTER_ERROR;
+        importer->status = IMPORTER_ERROR;
     return current_status;
 }
 
@@ -323,8 +322,8 @@ static int dts_importer_probe( importer_t *importer )
         err = LSMASH_ERR_NAMELESS;
         goto fail;
     }
-    if( dts_imp->status != IMPORTER_EOF )
-        dts_imp->status = IMPORTER_OK;
+    if( importer->status != IMPORTER_EOF )
+        importer->status = IMPORTER_OK;
     dts_imp->au_number = 0;
     if( lsmash_add_entry( importer->summaries, summary ) < 0 )
     {
@@ -344,7 +343,7 @@ static uint32_t dts_importer_get_last_delta( importer_t* importer, uint32_t trac
     debug_if( !importer || !importer->info )
         return 0;
     dts_importer_t *dts_imp = (dts_importer_t *)importer->info;
-    if( !dts_imp || track_number != 1 || dts_imp->status != IMPORTER_EOF || dts_imp->au_length )
+    if( !dts_imp || track_number != 1 || importer->status != IMPORTER_EOF || dts_imp->au_length )
         return 0;
     lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_get_entry_data( importer->summaries, track_number );
     if( !summary )

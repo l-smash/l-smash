@@ -54,7 +54,6 @@ typedef struct
 
 typedef struct
 {
-    importer_status        status;
     lsmash_bs_t           *bs;
     als_specific_config_t  alssc;
     uint32_t               samples_in_frame;
@@ -232,7 +231,7 @@ static int mp4a_als_importer_get_accessunit( importer_t *importer, uint32_t trac
     if( !summary )
         return LSMASH_ERR_NAMELESS;
     mp4a_als_importer_t *als_imp = (mp4a_als_importer_t *)importer->info;
-    importer_status current_status = als_imp->status;
+    importer_status current_status = importer->status;
     if( current_status == IMPORTER_EOF )
     {
         buffered_sample->length = 0;
@@ -247,7 +246,7 @@ static int mp4a_als_importer_get_accessunit( importer_t *importer, uint32_t trac
         buffered_sample->cts           = 0;
         buffered_sample->dts           = 0;
         buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
-        als_imp->status = IMPORTER_EOF;
+        importer->status = IMPORTER_EOF;
         return 0;
     }
     uint32_t au_length;
@@ -264,7 +263,7 @@ static int mp4a_als_importer_get_accessunit( importer_t *importer, uint32_t trac
     if( lsmash_bs_get_bytes_ex( bs, au_length, buffered_sample->data ) != au_length )
     {
         lsmash_log( importer, LSMASH_LOG_WARNING, "failed to read an access unit.\n" );
-        als_imp->status = IMPORTER_ERROR;
+        importer->status = IMPORTER_ERROR;
         return LSMASH_ERR_INVALID_DATA;
     }
     buffered_sample->length        = au_length;
@@ -272,7 +271,7 @@ static int mp4a_als_importer_get_accessunit( importer_t *importer, uint32_t trac
     buffered_sample->cts           = buffered_sample->dts;
     buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
     if( als_imp->au_number == alssc->number_of_ra_units )
-        als_imp->status = IMPORTER_EOF;
+        importer->status = IMPORTER_EOF;
     return 0;
 }
 
@@ -366,7 +365,6 @@ static int mp4a_als_importer_probe( importer_t *importer )
         goto fail;
     }
     /* importer status */
-    als_imp->status           = IMPORTER_OK;
     als_imp->samples_in_frame = summary->samples_in_frame;
     if( lsmash_add_entry( importer->summaries, summary ) < 0 )
     {
@@ -374,7 +372,8 @@ static int mp4a_als_importer_probe( importer_t *importer )
         err = LSMASH_ERR_MEMORY_ALLOC;
         goto fail;
     }
-    importer->info = als_imp;
+    importer->info   = als_imp;
+    importer->status = IMPORTER_OK;
     return 0;
 fail:
     remove_mp4a_als_importer( als_imp );
@@ -386,7 +385,7 @@ static uint32_t mp4a_als_importer_get_last_delta( importer_t *importer, uint32_t
     debug_if( !importer || !importer->info )
         return 0;
     mp4a_als_importer_t *als_imp = (mp4a_als_importer_t *)importer->info;
-    if( !als_imp || track_number != 1 || als_imp->status != IMPORTER_EOF )
+    if( !als_imp || track_number != 1 || importer->status != IMPORTER_EOF )
         return 0;
     als_specific_config_t *alssc = &als_imp->alssc;
     /* If alssc->number_of_ra_units == 0, then the last sample duration is just alssc->samples

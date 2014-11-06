@@ -67,7 +67,6 @@ typedef struct
 
 typedef struct
 {
-    importer_status               status;
     lsmash_bs_t                  *bs;
     unsigned int                  raw_data_block_idx;
     mp4sys_adts_fixed_header_t    header;
@@ -330,7 +329,7 @@ static int mp4sys_adts_get_accessunit
     if( track_number != 1 )
         return LSMASH_ERR_FUNCTION_PARAM;
     mp4sys_adts_importer_t *adts_imp = (mp4sys_adts_importer_t *)importer->info;
-    importer_status current_status = adts_imp->status;
+    importer_status current_status = importer->status;
     uint16_t raw_data_block_size = adts_imp->variable_header.raw_data_block_size[ adts_imp->raw_data_block_idx ];
     if( current_status == IMPORTER_ERROR || buffered_sample->length < raw_data_block_size )
         return LSMASH_ERR_NAMELESS;
@@ -355,7 +354,7 @@ static int mp4sys_adts_get_accessunit
     /* read a raw_data_block(), typically == payload of a ADTS frame */
     if( lsmash_bs_get_bytes_ex( bs, raw_data_block_size, buffered_sample->data ) != raw_data_block_size )
     {
-        adts_imp->status = IMPORTER_ERROR;
+        importer->status = IMPORTER_ERROR;
         return LSMASH_ERR_INVALID_DATA;
     }
     buffered_sample->length                 = raw_data_block_size;
@@ -371,14 +370,14 @@ static int mp4sys_adts_get_accessunit
      && adts_imp->variable_header.number_of_raw_data_blocks_in_frame != 0
      && lsmash_bs_get_bytes_ex( bs, 2, buffered_sample->data ) != 2 )
     {
-        adts_imp->status = IMPORTER_ERROR;
+        importer->status = IMPORTER_ERROR;
         return 0;
     }
     /* current adts_frame() has any more raw_data_block()? */
     if( adts_imp->raw_data_block_idx < adts_imp->variable_header.number_of_raw_data_blocks_in_frame )
     {
         adts_imp->raw_data_block_idx++;
-        adts_imp->status = IMPORTER_OK;
+        importer->status = IMPORTER_OK;
         return 0;
     }
     adts_imp->raw_data_block_idx = 0;
@@ -389,12 +388,12 @@ static int mp4sys_adts_get_accessunit
     int64_t ret = lsmash_bs_get_bytes_ex( bs, MP4SYS_ADTS_BASIC_HEADER_LENGTH, buf );
     if( ret == 0 )
     {
-        adts_imp->status = IMPORTER_EOF;
+        importer->status = IMPORTER_EOF;
         return 0;
     }
     if( ret != MP4SYS_ADTS_BASIC_HEADER_LENGTH )
     {
-        adts_imp->status = IMPORTER_ERROR;
+        importer->status = IMPORTER_ERROR;
         return 0;
     }
     /*
@@ -421,7 +420,7 @@ static int mp4sys_adts_get_accessunit
     mp4sys_adts_variable_header_t variable_header = { 0 };
     if( mp4sys_adts_parse_headers( bs, buf, &header, &variable_header ) < 0 )
     {
-        adts_imp->status = IMPORTER_ERROR;
+        importer->status = IMPORTER_ERROR;
         return 0;
     }
     adts_imp->variable_header = variable_header;
@@ -441,7 +440,7 @@ static int mp4sys_adts_get_accessunit
      || adts_imp->header.ID != header.ID /* In strict, this means change of object_type_indication. */
      || adts_imp->header.sampling_frequency_index != header.sampling_frequency_index ) /* This may change timebase. */
     {
-        adts_imp->status = IMPORTER_ERROR;
+        importer->status = IMPORTER_ERROR;
         return 0;
     }
     /* currently supported "change(s)". */
@@ -462,11 +461,11 @@ static int mp4sys_adts_get_accessunit
          * and that should be of current, before change, one.
          */
         adts_imp->header = header;
-        adts_imp->status = IMPORTER_CHANGE;
+        importer->status = IMPORTER_CHANGE;
         return 0;
     }
     /* no change which matters to mp4 muxing was found */
-    adts_imp->status = IMPORTER_OK;
+    importer->status = IMPORTER_OK;
     return 0;
 }
 
@@ -498,12 +497,12 @@ static int mp4sys_adts_probe
         err = LSMASH_ERR_MEMORY_ALLOC;
         goto fail;
     }
-    adts_imp->status             = IMPORTER_OK;
     adts_imp->raw_data_block_idx = 0;
     adts_imp->header             = header;
     adts_imp->variable_header    = variable_header;
     adts_imp->samples_in_frame   = summary->samples_in_frame;
-    importer->info = adts_imp;
+    importer->info   = adts_imp;
+    importer->status = IMPORTER_OK;
     return 0;
 fail:
     remove_mp4sys_adts_importer( adts_imp );
@@ -519,7 +518,7 @@ static uint32_t mp4sys_adts_get_last_delta
     debug_if( !importer || !importer->info )
         return 0;
     mp4sys_adts_importer_t *adts_imp = (mp4sys_adts_importer_t *)importer->info;
-    if( !adts_imp || track_number != 1 || adts_imp->status != IMPORTER_EOF )
+    if( !adts_imp || track_number != 1 || importer->status != IMPORTER_EOF )
         return 0;
     return adts_imp->samples_in_frame;
 }

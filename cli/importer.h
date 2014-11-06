@@ -40,6 +40,14 @@ typedef int      ( *importer_get_accessunit )   ( struct importer_tag *, uint32_
 typedef int      ( *importer_probe )            ( struct importer_tag * );
 typedef uint32_t ( *importer_get_last_duration )( struct importer_tag *, uint32_t );
 
+typedef enum
+{
+    IMPORTER_ERROR  = -1,
+    IMPORTER_OK     = 0,
+    IMPORTER_CHANGE = 1,
+    IMPORTER_EOF    = 2,
+} importer_status;
+
 typedef struct
 {
     lsmash_class_t             class;
@@ -54,20 +62,13 @@ typedef struct importer_tag
 {
     const lsmash_class_t   *class;
     lsmash_log_level        log_level;
+    importer_status         status;
     FILE                   *stream;    /* will be deprecated */
     int                     is_stdin;
     void                   *info;      /* importer internal status information. */
     importer_functions      funcs;
     lsmash_entry_list_t    *summaries;
 } importer_t;
-
-typedef enum
-{
-    IMPORTER_ERROR  = -1,
-    IMPORTER_OK     = 0,
-    IMPORTER_CHANGE = 1,
-    IMPORTER_EOF    = 2,
-} importer_status;
 
 #else
 
