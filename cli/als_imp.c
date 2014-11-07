@@ -54,7 +54,6 @@ typedef struct
 
 typedef struct
 {
-    lsmash_bs_t           *bs;
     als_specific_config_t  alssc;
     uint32_t               samples_in_frame;
     uint32_t               au_number;
@@ -62,7 +61,6 @@ typedef struct
 
 static void remove_mp4a_als_importer( mp4a_als_importer_t *als_imp )
 {
-    lsmash_bs_cleanup( als_imp->bs );
     lsmash_free( als_imp->alssc.ra_unit_size );
     lsmash_free( als_imp->alssc.sc_data );
     lsmash_free( als_imp );
@@ -76,16 +74,7 @@ static void mp4a_als_importer_cleanup( importer_t *importer )
 
 static mp4a_als_importer_t *create_mp4a_als_importer( importer_t *importer )
 {
-    mp4a_als_importer_t *als_imp = lsmash_malloc_zero( sizeof(mp4a_als_importer_t) );
-    if( !als_imp )
-        return NULL;
-    als_imp->bs = lsmash_bs_create();
-    if( !als_imp->bs )
-    {
-        lsmash_free( als_imp );
-        return NULL;
-    }
-    return als_imp;
+    return (mp4a_als_importer_t *)lsmash_malloc_zero( sizeof(mp4a_als_importer_t) );
 }
 
 static void als_copy_from_buffer( als_specific_config_t *alssc, lsmash_bs_t *bs, uint64_t size )
@@ -104,9 +93,8 @@ static void als_copy_from_buffer( als_specific_config_t *alssc, lsmash_bs_t *bs,
     lsmash_bs_read_seek( bs, size, SEEK_CUR );
 }
 
-static int als_parse_specific_config( mp4a_als_importer_t *als_imp )
+static int als_parse_specific_config( lsmash_bs_t *bs, mp4a_als_importer_t *als_imp )
 {
-    lsmash_bs_t *bs = als_imp->bs;
     /* Check ALS identifier( = 0x414C5300). */
     if( 0x414C5300 != lsmash_bs_show_be32( bs, 0 ) )
         return LSMASH_ERR_INVALID_DATA;
@@ -237,7 +225,7 @@ static int mp4a_als_importer_get_accessunit( importer_t *importer, uint32_t trac
         buffered_sample->length = 0;
         return 0;
     }
-    lsmash_bs_t *bs = als_imp->bs;
+    lsmash_bs_t *bs = importer->bs;
     als_specific_config_t *alssc = &als_imp->alssc;
     if( alssc->number_of_ra_units == 0 )
     {
@@ -348,17 +336,11 @@ static int mp4a_als_importer_probe( importer_t *importer )
     mp4a_als_importer_t *als_imp = create_mp4a_als_importer( importer );
     if( !als_imp )
         return LSMASH_ERR_MEMORY_ALLOC;
-    lsmash_bs_t *bs = als_imp->bs;
-    bs->stream          = importer->stream;
-    bs->read            = lsmash_fread_wrapper;
-    bs->seek            = lsmash_fseek_wrapper;
-    bs->unseekable      = importer->is_stdin;
-    bs->buffer.max_size = BS_MAX_DEFAULT_READ_SIZE;
     /* Parse ALS specific configuration. */
-    int err = als_parse_specific_config( als_imp );
+    int err = als_parse_specific_config( importer->bs, als_imp );
     if( err < 0 )
         goto fail;
-    lsmash_audio_summary_t *summary = als_create_summary( bs, &als_imp->alssc );
+    lsmash_audio_summary_t *summary = als_create_summary( importer->bs, &als_imp->alssc );
     if( !summary )
     {
         err = LSMASH_ERR_NAMELESS;

@@ -48,16 +48,16 @@ static void remove_ac3_importer( ac3_importer_t *ac3_imp )
 {
     if( !ac3_imp )
         return;
-    lsmash_bits_adhoc_cleanup( ac3_imp->info.bits );
+    lsmash_bits_cleanup( ac3_imp->info.bits );
     lsmash_free( ac3_imp );
 }
 
-static ac3_importer_t *create_ac3_importer( void )
+static ac3_importer_t *create_ac3_importer( importer_t *importer )
 {
     ac3_importer_t *ac3_imp = (ac3_importer_t *)lsmash_malloc_zero( sizeof(ac3_importer_t) );
     if( !ac3_imp )
         return NULL;
-    ac3_imp->info.bits = lsmash_bits_adhoc_create();
+    ac3_imp->info.bits = lsmash_bits_create( importer->bs );
     if( !ac3_imp->info.bits )
     {
         lsmash_free( ac3_imp );
@@ -233,15 +233,11 @@ static int ac3_importer_get_accessunit( importer_t *importer, uint32_t track_num
 
 static int ac3_importer_probe( importer_t *importer )
 {
-    ac3_importer_t *ac3_imp = create_ac3_importer();
+    ac3_importer_t *ac3_imp = create_ac3_importer( importer );
     if( !ac3_imp )
         return LSMASH_ERR_MEMORY_ALLOC;
     lsmash_bits_t *bits = ac3_imp->info.bits;
     lsmash_bs_t   *bs   = bits->bs;
-    bs->stream          = importer->stream;
-    bs->read            = lsmash_fread_wrapper;
-    bs->seek            = lsmash_fseek_wrapper;
-    bs->unseekable      = importer->is_stdin;
     bs->buffer.max_size = AC3_MAX_SYNCFRAME_LENGTH;
     /* Check the syncword and parse the syncframe header */
     int err;
@@ -303,7 +299,7 @@ const importer_functions ac3_importer =
 
 typedef struct
 {
-    eac3_info_t     info;
+    eac3_info_t info;
     uint64_t next_frame_pos;
     uint32_t next_dec3_length;
     uint8_t *next_dec3;
@@ -323,17 +319,17 @@ static void remove_eac3_importer( eac3_importer_t *eac3_imp )
     if( !eac3_imp )
         return;
     lsmash_destroy_multiple_buffers( eac3_imp->au_buffers );
-    lsmash_bits_adhoc_cleanup( eac3_imp->info.bits );
+    lsmash_bits_cleanup( eac3_imp->info.bits );
     lsmash_free( eac3_imp );
 }
 
-static eac3_importer_t *create_eac3_importer( void )
+static eac3_importer_t *create_eac3_importer( importer_t *importer )
 {
     eac3_importer_t *eac3_imp = (eac3_importer_t *)lsmash_malloc_zero( sizeof(eac3_importer_t) );
     if( !eac3_imp )
         return NULL;
     eac3_info_t *info = &eac3_imp->info;
-    info->bits = lsmash_bits_adhoc_create();
+    info->bits = lsmash_bits_create( importer->bs );
     if( !info->bits )
     {
         lsmash_free( eac3_imp );
@@ -342,7 +338,7 @@ static eac3_importer_t *create_eac3_importer( void )
     eac3_imp->au_buffers = lsmash_create_multiple_buffers( 2, EAC3_MAX_SYNCFRAME_LENGTH );
     if( !eac3_imp->au_buffers )
     {
-        lsmash_bits_adhoc_cleanup( info->bits );
+        lsmash_bits_cleanup( info->bits );
         lsmash_free( eac3_imp );
         return NULL;
     }
@@ -483,7 +479,7 @@ static int eac3_importer_get_next_accessunit_internal( importer_t *importer )
         eac3_imp->incomplete_au_length += info->frame_size;
         ++ info->syncframe_count;
     }
-    return info->bits->bs->error ? LSMASH_ERR_NAMELESS : 0;
+    return bs->error ? LSMASH_ERR_NAMELESS : 0;
 }
 
 static int eac3_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
@@ -592,15 +588,11 @@ static lsmash_audio_summary_t *eac3_create_summary( eac3_importer_t *eac3_imp )
 
 static int eac3_importer_probe( importer_t *importer )
 {
-    eac3_importer_t *eac3_imp = create_eac3_importer();
+    eac3_importer_t *eac3_imp = create_eac3_importer( importer );
     if( !eac3_imp )
         return LSMASH_ERR_MEMORY_ALLOC;
     lsmash_bits_t *bits = eac3_imp->info.bits;
     lsmash_bs_t   *bs   = bits->bs;
-    bs->stream          = importer->stream;
-    bs->read            = lsmash_fread_wrapper;
-    bs->seek            = lsmash_fseek_wrapper;
-    bs->unseekable      = importer->is_stdin;
     bs->buffer.max_size = EAC3_MAX_SYNCFRAME_LENGTH;
     importer->info = eac3_imp;
     int err = eac3_importer_get_next_accessunit_internal( importer );

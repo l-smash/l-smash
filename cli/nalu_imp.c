@@ -42,7 +42,6 @@ typedef struct
     h264_info_t            info;
     lsmash_entry_list_t    avcC_list[1];    /* stored as lsmash_codec_specific_t */
     lsmash_media_ts_list_t ts_list;
-    lsmash_bs_t           *bs;
     uint32_t max_au_length;
     uint32_t num_undecodable;
     uint32_t avcC_number;
@@ -67,7 +66,6 @@ static void remove_h264_importer( h264_importer_t *h264_imp )
         return;
     lsmash_remove_entries( h264_imp->avcC_list, lsmash_destroy_codec_specific_data );
     h264_cleanup_parser( &h264_imp->info );
-    lsmash_bs_cleanup( h264_imp->bs );
     lsmash_free( h264_imp->ts_list.timestamp );
     lsmash_free( h264_imp );
 }
@@ -88,19 +86,7 @@ static h264_importer_t *create_h264_importer( importer_t *importer )
         remove_h264_importer( h264_imp );
         return NULL;
     }
-    lsmash_bs_t *bs = lsmash_bs_create();
-    if( !bs )
-    {
-        remove_h264_importer( h264_imp );
-        return NULL;
-    }
-    bs->stream          = importer->stream;
-    bs->read            = lsmash_fread_wrapper;
-    bs->seek            = lsmash_fseek_wrapper;
-    bs->unseekable      = importer->is_stdin;
-    bs->buffer.max_size = BS_MAX_DEFAULT_READ_SIZE;
     lsmash_init_entry_list( h264_imp->avcC_list );
-    h264_imp->bs = bs;
     return h264_imp;
 }
 
@@ -239,7 +225,7 @@ static int h264_get_access_unit_internal
     h264_access_unit_t   *au       = &info->au;
     h264_picture_info_t  *picture  = &au->picture;
     h264_stream_buffer_t *sb       = &info->buffer;
-    lsmash_bs_t          *bs       = h264_imp->bs;
+    lsmash_bs_t          *bs       = importer->bs;
     int complete_au = 0;
     h264_new_access_unit( au );
     while( 1 )
@@ -391,10 +377,9 @@ static int h264_get_access_unit_internal
     }
 }
 
-static inline void h264_importer_check_eof( importer_t *importer )
+static inline void h264_importer_check_eof( importer_t *importer, h264_access_unit_t *au )
 {
-    h264_importer_t *h264_imp = (h264_importer_t *)importer->info;
-    if( lsmash_bs_is_end( h264_imp->bs, 0 ) && (h264_imp->info.au.incomplete_length == 0) )
+    if( lsmash_bs_is_end( importer->bs, 0 ) && au->incomplete_length == 0 )
         importer->status = IMPORTER_EOF;
     else if( importer->status != IMPORTER_CHANGE )
         importer->status = IMPORTER_OK;
@@ -427,7 +412,7 @@ static int h264_importer_get_accessunit
         importer->status = IMPORTER_ERROR;
         return err;
     }
-    h264_importer_check_eof( importer );
+    h264_importer_check_eof( importer, &info->au );
     if( importer->status == IMPORTER_CHANGE && !info->avcC_pending )
         current_status = IMPORTER_CHANGE;
     if( current_status == IMPORTER_CHANGE )
@@ -754,7 +739,7 @@ static int h264_analyze_whole_stream
         if( (err = h264_get_access_unit_internal( importer, 1 ))       < 0
          || (err = h264_calculate_poc( info, picture, &prev_picture )) < 0 )
             goto fail;
-        h264_importer_check_eof( importer );
+        h264_importer_check_eof( importer, &info->au );
         if( npt_alloc <= num_access_units * sizeof(nal_pic_timing_t) )
         {
             uint32_t alloc = 2 * num_access_units * sizeof(nal_pic_timing_t);
@@ -838,7 +823,7 @@ static int h264_importer_probe( importer_t *importer )
     h264_importer_t *h264_imp = create_h264_importer( importer );
     if( !h264_imp )
         return LSMASH_ERR_MEMORY_ALLOC;
-    lsmash_bs_t *bs = h264_imp->bs;
+    lsmash_bs_t *bs = importer->bs;
     uint64_t first_sc_head_pos = nalu_find_first_start_code( bs );
     int err;
     if( first_sc_head_pos == NALU_NO_START_CODE_FOUND )
@@ -912,7 +897,6 @@ typedef struct
     hevc_info_t            info;
     lsmash_entry_list_t    hvcC_list[1];    /* stored as lsmash_codec_specific_t */
     lsmash_media_ts_list_t ts_list;
-    lsmash_bs_t           *bs;
     uint32_t max_au_length;
     uint32_t num_undecodable;
     uint32_t hvcC_number;
@@ -930,7 +914,6 @@ static void remove_hevc_importer( hevc_importer_t *hevc_imp )
         return;
     lsmash_remove_entries( hevc_imp->hvcC_list, lsmash_destroy_codec_specific_data );
     hevc_cleanup_parser( &hevc_imp->info );
-    lsmash_bs_cleanup( hevc_imp->bs );
     lsmash_free( hevc_imp->ts_list.timestamp );
     lsmash_free( hevc_imp );
 }
@@ -951,19 +934,7 @@ static hevc_importer_t *create_hevc_importer( importer_t *importer )
         remove_hevc_importer( hevc_imp );
         return NULL;
     }
-    lsmash_bs_t *bs = lsmash_bs_create();
-    if( !bs )
-    {
-        remove_hevc_importer( hevc_imp );
-        return NULL;
-    }
-    bs->stream          = importer->stream;
-    bs->read            = lsmash_fread_wrapper;
-    bs->seek            = lsmash_fseek_wrapper;
-    bs->unseekable      = importer->is_stdin;
-    bs->buffer.max_size = BS_MAX_DEFAULT_READ_SIZE;
     lsmash_init_entry_list( hevc_imp->hvcC_list );
-    hevc_imp->bs = bs;
     hevc_imp->info.eos = 1;
     return hevc_imp;
 }
@@ -1098,7 +1069,7 @@ static int hevc_get_access_unit_internal
     hevc_access_unit_t   *au       = &info->au;
     hevc_picture_info_t  *picture  = &au->picture;
     hevc_stream_buffer_t *sb       = &info->buffer;
-    lsmash_bs_t          *bs       = hevc_imp->bs;
+    lsmash_bs_t          *bs       = importer->bs;
     int complete_au = 0;
     hevc_new_access_unit( au );
     while( 1 )
@@ -1253,10 +1224,9 @@ static int hevc_get_access_unit_internal
     }
 }
 
-static inline void hevc_importer_check_eof( importer_t *importer )
+static inline void hevc_importer_check_eof( importer_t *importer, hevc_access_unit_t *au )
 {
-    hevc_importer_t *hevc_imp = (hevc_importer_t *)importer->info;
-    if( lsmash_bs_is_end( hevc_imp->bs, 0 ) && (hevc_imp->info.au.incomplete_length == 0) )
+    if( lsmash_bs_is_end( importer->bs, 0 ) && au->incomplete_length == 0 )
         importer->status = IMPORTER_EOF;
     else if( importer->status != IMPORTER_CHANGE )
         importer->status = IMPORTER_OK;
@@ -1284,7 +1254,7 @@ static int hevc_importer_get_accessunit( importer_t *importer, uint32_t track_nu
         importer->status = IMPORTER_ERROR;
         return err;
     }
-    hevc_importer_check_eof( importer );
+    hevc_importer_check_eof( importer, &info->au );
     if( importer->status == IMPORTER_CHANGE && !info->hvcC_pending )
         current_status = IMPORTER_CHANGE;
     if( current_status == IMPORTER_CHANGE )
@@ -1416,7 +1386,7 @@ static int hevc_analyze_whole_stream
         if( (err = hevc_get_access_unit_internal( importer, 1 ))                 < 0
          || (err = hevc_calculate_poc( info, &info->au.picture, &prev_picture )) < 0 )
             goto fail;
-        hevc_importer_check_eof( importer );
+        hevc_importer_check_eof( importer, &info->au );
         if( npt_alloc <= num_access_units * sizeof(nal_pic_timing_t) )
         {
             uint32_t alloc = 2 * num_access_units * sizeof(nal_pic_timing_t);
@@ -1499,7 +1469,7 @@ static int hevc_importer_probe( importer_t *importer )
     hevc_importer_t *hevc_imp = create_hevc_importer( importer );
     if( !hevc_imp )
         return LSMASH_ERR_MEMORY_ALLOC;
-    lsmash_bs_t *bs = hevc_imp->bs;
+    lsmash_bs_t *bs = importer->bs;
     uint64_t first_sc_head_pos = nalu_find_first_start_code( bs );
     int err;
     if( first_sc_head_pos == NALU_NO_START_CODE_FOUND )

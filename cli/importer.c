@@ -74,10 +74,14 @@ void lsmash_importer_close( importer_t *importer )
 {
     if( !importer )
         return;
-    if( !importer->is_stdin && importer->stream )
-        fclose( importer->stream );
     if( importer->funcs.cleanup )
         importer->funcs.cleanup( importer );
+    if( importer->bs )
+    {
+        if( !importer->is_stdin && importer->bs->stream )
+            fclose( importer->bs->stream );
+        lsmash_bs_cleanup( importer->bs );
+    }
     lsmash_remove_list( importer->summaries, lsmash_cleanup_summary );
     lsmash_free( importer );
 }
@@ -91,6 +95,18 @@ importer_t *lsmash_importer_open( const char *identifier, const char *format )
     if( !importer )
         return NULL;
     importer->class = &lsmash_importer_class;
+    /* Set up the bitstream handler for input. */
+    lsmash_bs_t *bs = lsmash_bs_create();
+    if( !bs )
+    {
+        lsmash_log( importer, LSMASH_LOG_ERROR, "failed to create a bitstream handler.\n" );
+        goto fail;
+    }
+    bs->read            = lsmash_fread_wrapper;
+    bs->seek            = lsmash_fseek_wrapper;
+    bs->unseekable      = importer->is_stdin;
+    bs->buffer.max_size = BS_MAX_DEFAULT_READ_SIZE;
+    /* Open an input 'stream'. */
     if( !strcmp( identifier, "-" ) )
     {
         /* special treatment for stdin */
@@ -99,14 +115,15 @@ importer_t *lsmash_importer_open( const char *identifier, const char *format )
             lsmash_log( importer, LSMASH_LOG_ERROR, "auto importer detection on stdin is not supported.\n" );
             goto fail;
         }
-        importer->stream = stdin;
+        bs->stream = stdin;
         importer->is_stdin = 1;
     }
-    else if( (importer->stream = lsmash_fopen( identifier, "rb" )) == NULL )
+    else if( (bs->stream = lsmash_fopen( identifier, "rb" )) == NULL )
     {
         lsmash_log( importer, LSMASH_LOG_ERROR, "failed to open %s.\n", identifier );
         goto fail;
     }
+    importer->bs = bs;
     importer->summaries = lsmash_create_entry_list();
     if( !importer->summaries )
     {
@@ -124,7 +141,7 @@ importer_t *lsmash_importer_open( const char *identifier, const char *format )
             importer->class = &funcs->class;
             if( !funcs->detectable )
                 continue;
-            if( !funcs->probe( importer ) || lsmash_fseek( importer->stream, 0, SEEK_SET ) != 0 )
+            if( !funcs->probe( importer ) || lsmash_bs_read_seek( bs, 0, SEEK_SET ) != 0 )
                 break;
         }
     }

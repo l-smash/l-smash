@@ -38,7 +38,6 @@
 ***************************************************************************/
 typedef struct
 {
-    lsmash_bs_t    *bs;
     int             wb; /* 0: AMR-NB, 1: AMR-WB */
     uint32_t        samples_in_frame;
     uint32_t        au_number;
@@ -49,7 +48,6 @@ static void remove_amr_importer
     amr_importer_t *amr_imp
 )
 {
-    lsmash_bs_cleanup( amr_imp->bs );
     lsmash_free( amr_imp );
 }
 
@@ -58,22 +56,7 @@ static amr_importer_t *create_amr_importer
     importer_t *importer
 )
 {
-    amr_importer_t *amr_imp = (amr_importer_t *)lsmash_malloc_zero( sizeof(amr_importer_t) );
-    if( !amr_imp )
-        return NULL;
-    lsmash_bs_t *bs = lsmash_bs_create();
-    if( !bs )
-    {
-        lsmash_free( amr_imp );
-        return NULL;
-    }
-    amr_imp->bs = bs;
-    bs->stream          = importer->stream;
-    bs->read            = lsmash_fread_wrapper;
-    bs->seek            = lsmash_fseek_wrapper;
-    bs->unseekable      = importer->is_stdin;
-    bs->buffer.max_size = BS_MAX_DEFAULT_READ_SIZE;
-    return amr_imp;
+    return (amr_importer_t *)lsmash_malloc_zero( sizeof(amr_importer_t) );
 }
 
 static void amr_cleanup
@@ -97,7 +80,7 @@ static int amr_get_accessunit
     if( track_number != 1 )
         return LSMASH_ERR_FUNCTION_PARAM;
     amr_importer_t *amr_imp = (amr_importer_t *)importer->info;
-    lsmash_bs_t    *bs      = amr_imp->bs;
+    lsmash_bs_t    *bs      = importer->bs;
     if( importer->status == IMPORTER_EOF || lsmash_bs_is_end( bs, 0 ) )
     {
         /* EOF */
@@ -256,7 +239,7 @@ static int amr_probe
     if( !amr_imp )
         return LSMASH_ERR_MEMORY_ALLOC;
     int err;
-    int wb = amr_check_magic_number( amr_imp->bs );
+    int wb = amr_check_magic_number( importer->bs );
     if( wb < 0 )
     {
         err = wb;

@@ -61,7 +61,6 @@ typedef struct
 
 typedef struct
 {
-    lsmash_bs_t        *bs;
     mp4sys_mp3_header_t header;
     uint8_t             raw_header[MP4SYS_MP3_HEADER_LENGTH];
     uint32_t            samples_in_frame;
@@ -78,7 +77,6 @@ static void remove_mp4sys_mp3_importer
     mp4sys_mp3_importer_t *mp3_imp
 )
 {
-    lsmash_bs_cleanup( mp3_imp->bs );
     lsmash_free( mp3_imp );
 }
 
@@ -87,22 +85,7 @@ static mp4sys_mp3_importer_t *create_mp4sys_mp3_importer
     importer_t *importer
 )
 {
-    mp4sys_mp3_importer_t *mp3_imp = (mp4sys_mp3_importer_t *)lsmash_malloc_zero( sizeof(mp4sys_mp3_importer_t) );
-    if( !mp3_imp )
-        return NULL;
-    lsmash_bs_t *bs = lsmash_bs_create();
-    if( !bs )
-    {
-        lsmash_free( mp3_imp );
-        return NULL;
-    }
-    mp3_imp->bs = bs;
-    bs->stream          = importer->stream;
-    bs->read            = lsmash_fread_wrapper;
-    bs->seek            = lsmash_fseek_wrapper;
-    bs->unseekable      = importer->is_stdin;
-    bs->buffer.max_size = BS_MAX_DEFAULT_READ_SIZE;
-    return mp3_imp;
+    return (mp4sys_mp3_importer_t *)lsmash_malloc_zero( sizeof(mp4sys_mp3_importer_t) );
 }
 
 static void mp4sys_mp3_cleanup( importer_t *importer )
@@ -330,7 +313,7 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
     uint8_t *frame_data = buffered_sample->data;
     memcpy( frame_data, mp3_imp->raw_header, MP4SYS_MP3_HEADER_LENGTH );
     frame_size -= MP4SYS_MP3_HEADER_LENGTH;
-    if( lsmash_bs_get_bytes_ex( mp3_imp->bs, frame_size, frame_data + MP4SYS_MP3_HEADER_LENGTH ) != frame_size )
+    if( lsmash_bs_get_bytes_ex( importer->bs, frame_size, frame_data + MP4SYS_MP3_HEADER_LENGTH ) != frame_size )
     {
         importer->status = IMPORTER_ERROR;
         return LSMASH_ERR_INVALID_DATA;
@@ -396,7 +379,7 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
     /* preparation for next frame */
 
     uint8_t buf[MP4SYS_MP3_HEADER_LENGTH];
-    int64_t ret = lsmash_bs_get_bytes_ex( mp3_imp->bs, MP4SYS_MP3_HEADER_LENGTH, buf );
+    int64_t ret = lsmash_bs_get_bytes_ex( importer->bs, MP4SYS_MP3_HEADER_LENGTH, buf );
     if( ret == 0 )
     {
         importer->status = IMPORTER_EOF;
@@ -453,7 +436,7 @@ static int mp4sys_mp3_probe( importer_t *importer )
     mp4sys_mp3_importer_t *mp3_imp = create_mp4sys_mp3_importer( importer );
     if( !mp3_imp )
         return LSMASH_ERR_MEMORY_ALLOC;
-    lsmash_bs_t *bs = mp3_imp->bs;
+    lsmash_bs_t *bs = importer->bs;
     if( lsmash_bs_show_byte( bs, 0 ) == 'I'
      && lsmash_bs_show_byte( bs, 1 ) == 'D'
      && lsmash_bs_show_byte( bs, 2 ) == '3' )

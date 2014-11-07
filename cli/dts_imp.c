@@ -37,9 +37,9 @@
 
 typedef struct
 {
-    dts_info_t      info;
+    dts_info_t info;
     uint64_t next_frame_pos;
-    uint8_t buffer[DTS_MAX_EXSS_SIZE];
+    uint8_t  buffer[DTS_MAX_EXSS_SIZE];
     lsmash_multiple_buffers_t *au_buffers;
     uint8_t *au;
     uint32_t au_length;
@@ -53,17 +53,17 @@ static void remove_dts_importer( dts_importer_t *dts_imp )
     if( !dts_imp )
         return;
     lsmash_destroy_multiple_buffers( dts_imp->au_buffers );
-    lsmash_bits_adhoc_cleanup( dts_imp->info.bits );
+    lsmash_bits_cleanup( dts_imp->info.bits );
     lsmash_free( dts_imp );
 }
 
-static dts_importer_t *create_dts_importer( void )
+static dts_importer_t *create_dts_importer( importer_t *importer )
 {
     dts_importer_t *dts_imp = (dts_importer_t *)lsmash_malloc_zero( sizeof(dts_importer_t) );
     if( !dts_imp )
         return NULL;
     dts_info_t *dts_info = &dts_imp->info;
-    dts_info->bits = lsmash_bits_adhoc_create();
+    dts_info->bits = lsmash_bits_create( importer->bs );
     if( !dts_info->bits )
     {
         lsmash_free( dts_imp );
@@ -72,7 +72,7 @@ static dts_importer_t *create_dts_importer( void )
     dts_imp->au_buffers = lsmash_create_multiple_buffers( 2, DTS_MAX_EXSS_SIZE );
     if( !dts_imp->au_buffers )
     {
-        lsmash_bits_adhoc_cleanup( dts_info->bits );
+        lsmash_bits_cleanup( dts_info->bits );
         lsmash_free( dts_imp );
         return NULL;
     }
@@ -198,7 +198,7 @@ static int dts_importer_get_next_accessunit_internal( importer_t *importer )
         memcpy( dts_imp->incomplete_au + dts_imp->incomplete_au_length, dts_imp->buffer, info->frame_size );
         dts_imp->incomplete_au_length += info->frame_size;
     }
-    return info->bits->bs->error ? LSMASH_ERR_NAMELESS : 0;
+    return bs->error ? LSMASH_ERR_NAMELESS : 0;
 }
 
 static int dts_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
@@ -302,15 +302,11 @@ static lsmash_audio_summary_t *dts_create_summary( dts_info_t *info )
 
 static int dts_importer_probe( importer_t *importer )
 {
-    dts_importer_t *dts_imp = create_dts_importer();
+    dts_importer_t *dts_imp = create_dts_importer( importer );
     if( !dts_imp )
         return LSMASH_ERR_MEMORY_ALLOC;
     lsmash_bits_t *bits = dts_imp->info.bits;
     lsmash_bs_t   *bs   = bits->bs;
-    bs->stream          = importer->stream;
-    bs->read            = lsmash_fread_wrapper;
-    bs->seek            = lsmash_fseek_wrapper;
-    bs->unseekable      = importer->is_stdin;
     bs->buffer.max_size = DTS_MAX_EXSS_SIZE;
     importer->info = dts_imp;
     int err = dts_importer_get_next_accessunit_internal( importer );

@@ -67,7 +67,6 @@ typedef struct
 
 typedef struct
 {
-    lsmash_bs_t                  *bs;
     unsigned int                  raw_data_block_idx;
     mp4sys_adts_fixed_header_t    header;
     mp4sys_adts_variable_header_t variable_header;
@@ -80,7 +79,6 @@ static void remove_mp4sys_adts_importer
     mp4sys_adts_importer_t *adts_imp
 )
 {
-    lsmash_bs_cleanup( adts_imp->bs );
     lsmash_free( adts_imp );
 }
 
@@ -89,22 +87,7 @@ static mp4sys_adts_importer_t *create_mp4sys_adts_importer
     importer_t *importer
 )
 {
-    mp4sys_adts_importer_t *adts_imp = (mp4sys_adts_importer_t *)lsmash_malloc_zero( sizeof(mp4sys_adts_importer_t) );
-    if( !adts_imp )
-        return NULL;
-    lsmash_bs_t *bs = lsmash_bs_create();
-    if( !bs )
-    {
-        lsmash_free( adts_imp );
-        return NULL;
-    }
-    adts_imp->bs = bs;
-    bs->stream          = importer->stream;
-    bs->read            = lsmash_fread_wrapper;
-    bs->seek            = lsmash_fseek_wrapper;
-    bs->unseekable      = importer->is_stdin;
-    bs->buffer.max_size = BS_MAX_DEFAULT_READ_SIZE;
-    return adts_imp;
+    return (mp4sys_adts_importer_t *)lsmash_malloc_zero( sizeof(mp4sys_adts_importer_t) );
 }
 
 static void mp4sys_adts_cleanup( importer_t *importer )
@@ -350,7 +333,7 @@ static int mp4sys_adts_get_accessunit
         entry->data = summary;
         adts_imp->samples_in_frame = summary->samples_in_frame;
     }
-    lsmash_bs_t *bs = adts_imp->bs;
+    lsmash_bs_t *bs = importer->bs;
     /* read a raw_data_block(), typically == payload of a ADTS frame */
     if( lsmash_bs_get_bytes_ex( bs, raw_data_block_size, buffered_sample->data ) != raw_data_block_size )
     {
@@ -479,11 +462,11 @@ static int mp4sys_adts_probe
     if( !adts_imp )
         return LSMASH_ERR_MEMORY_ALLOC;
     uint8_t buf[MP4SYS_ADTS_MAX_FRAME_LENGTH];
-    if( lsmash_bs_get_bytes_ex( adts_imp->bs, MP4SYS_ADTS_BASIC_HEADER_LENGTH, buf ) != MP4SYS_ADTS_BASIC_HEADER_LENGTH )
+    if( lsmash_bs_get_bytes_ex( importer->bs, MP4SYS_ADTS_BASIC_HEADER_LENGTH, buf ) != MP4SYS_ADTS_BASIC_HEADER_LENGTH )
         return LSMASH_ERR_INVALID_DATA;
     mp4sys_adts_fixed_header_t    header          = { 0 };
     mp4sys_adts_variable_header_t variable_header = { 0 };
-    int err = mp4sys_adts_parse_headers( adts_imp->bs, buf, &header, &variable_header );
+    int err = mp4sys_adts_parse_headers( importer->bs, buf, &header, &variable_header );
     if( err < 0 )
         return err;
     /* now the stream seems valid ADTS */

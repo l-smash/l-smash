@@ -40,7 +40,6 @@ typedef struct
     vc1_info_t             info;
     vc1_sequence_header_t  first_sequence;
     lsmash_media_ts_list_t ts_list;
-    lsmash_bs_t           *bs;
     uint8_t  composition_reordering_present;
     uint32_t max_au_length;
     uint32_t num_undecodable;
@@ -52,7 +51,6 @@ static void remove_vc1_importer( vc1_importer_t *vc1_imp )
     if( !vc1_imp )
         return;
     vc1_cleanup_parser( &vc1_imp->info );
-    lsmash_bs_cleanup( vc1_imp->bs );
     lsmash_free( vc1_imp->ts_list.timestamp );
     lsmash_free( vc1_imp );
 }
@@ -73,18 +71,6 @@ static vc1_importer_t *create_vc1_importer( importer_t *importer )
         remove_vc1_importer( vc1_imp );
         return NULL;
     }
-    lsmash_bs_t *bs = lsmash_bs_create();
-    if( !bs )
-    {
-        remove_vc1_importer( vc1_imp );
-        return NULL;
-    }
-    bs->stream          = importer->stream;
-    bs->read            = lsmash_fread_wrapper;
-    bs->seek            = lsmash_fseek_wrapper;
-    bs->unseekable      = importer->is_stdin;
-    bs->buffer.max_size = BS_MAX_DEFAULT_READ_SIZE;
-    vc1_imp->bs = bs;
     return vc1_imp;
 }
 
@@ -131,7 +117,7 @@ static int vc1_importer_get_access_unit_internal( importer_t *importer, int prob
     vc1_info_t          *info        = &vc1_imp->info;
     vc1_stream_buffer_t *sb          = &info->buffer;
     vc1_access_unit_t   *access_unit = &info->access_unit;
-    lsmash_bs_t         *bs          = vc1_imp->bs;
+    lsmash_bs_t         *bs          = importer->bs;
     int                  complete_au = 0;
     access_unit->data_length = 0;
     while( 1 )
@@ -272,10 +258,9 @@ static int vc1_importer_get_access_unit_internal( importer_t *importer, int prob
     }
 }
 
-static inline void vc1_importer_check_eof( importer_t *importer )
+static inline void vc1_importer_check_eof( importer_t *importer, vc1_access_unit_t *access_unit )
 {
-    vc1_importer_t *vc1_imp = (vc1_importer_t *)importer->info;
-    if( lsmash_bs_is_end( vc1_imp->bs, 0 ) && vc1_imp->info.access_unit.incomplete_data_length == 0 )
+    if( lsmash_bs_is_end( importer->bs, 0 ) && access_unit->incomplete_data_length == 0 )
         importer->status = IMPORTER_EOF;
     else
         importer->status = IMPORTER_OK;
@@ -303,8 +288,8 @@ static int vc1_importer_get_accessunit( importer_t *importer, uint32_t track_num
         importer->status = IMPORTER_ERROR;
         return err;
     }
-    vc1_importer_check_eof( importer );
     vc1_access_unit_t *access_unit = &info->access_unit;
+    vc1_importer_check_eof( importer, access_unit );
     buffered_sample->dts = vc1_imp->ts_list.timestamp[ access_unit->number - 1 ].dts;
     buffered_sample->cts = vc1_imp->ts_list.timestamp[ access_unit->number - 1 ].cts;
     buffered_sample->prop.leading = access_unit->independent
@@ -384,7 +369,7 @@ static int vc1_analyze_whole_stream
 #endif
         if( (err = vc1_importer_get_access_unit_internal( importer, 1 )) < 0 )
             goto fail;
-        vc1_importer_check_eof( importer );
+        vc1_importer_check_eof( importer, &info->access_unit );
         /* In the case where B-pictures exist
          * Decode order
          *      I[0]P[1]P[2]B[3]B[4]P[5]...
@@ -474,7 +459,7 @@ static int vc1_importer_probe( importer_t *importer )
     vc1_importer_t *vc1_imp = create_vc1_importer( importer );
     if( !vc1_imp )
         return LSMASH_ERR_MEMORY_ALLOC;
-    lsmash_bs_t *bs = vc1_imp->bs;
+    lsmash_bs_t *bs = importer->bs;
     uint64_t first_ebdu_head_pos = 0;
     int err;
     while( 1 )
