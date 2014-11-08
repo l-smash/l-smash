@@ -2109,6 +2109,7 @@ struct lsmash_root_tag
 #define ISOM_BOX_TYPE_DAMR lsmash_form_iso_box_type( LSMASH_4CC( 'd', 'a', 'm', 'r' ) )
 #define ISOM_BOX_TYPE_DDTS lsmash_form_iso_box_type( LSMASH_4CC( 'd', 'd', 't', 's' ) )
 #define ISOM_BOX_TYPE_DEC3 lsmash_form_iso_box_type( LSMASH_4CC( 'd', 'e', 'c', '3' ) )
+#define ISOM_BOX_TYPE_DOPS lsmash_form_iso_box_type( LSMASH_4CC( 'd', 'O', 'p', 's' ) )
 #define ISOM_BOX_TYPE_DVC1 lsmash_form_iso_box_type( LSMASH_4CC( 'd', 'v', 'c', '1' ) )
 #define ISOM_BOX_TYPE_ESDS lsmash_form_iso_box_type( LSMASH_4CC( 'e', 's', 'd', 's' ) )
 #define ISOM_BOX_TYPE_HVCC lsmash_form_iso_box_type( LSMASH_4CC( 'h', 'v', 'c', 'C' ) )

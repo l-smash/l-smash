@@ -1298,6 +1298,7 @@ static int isom_print_sample_description_extesion( FILE *fp, lsmash_file_t *file
     extern int ac3_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
     extern int eac3_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
     extern int dts_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
+    extern int opus_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
     extern int alac_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
     extern int wma_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
     static struct print_description_extension_table_tag
@@ -1332,6 +1333,7 @@ static int isom_print_sample_description_extesion( FILE *fp, lsmash_file_t *file
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DAC3, ac3_print_codec_specific );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DEC3, eac3_print_codec_specific );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DDTS, dts_print_codec_specific );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DOPS, opus_print_codec_specific );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_ALAC, alac_print_codec_specific );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_WFEX, wma_print_codec_specific );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_FTAB, isom_print_ftab );
@@ -2471,6 +2473,7 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_M4AE_AUDIO,  isom_print_audio_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_MLPA_AUDIO,  isom_print_audio_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_MP4A_AUDIO,  isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_OPUS_AUDIO,  isom_print_audio_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAMR_AUDIO,  isom_print_audio_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAWB_AUDIO,  isom_print_audio_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAWP_AUDIO,  isom_print_audio_description );

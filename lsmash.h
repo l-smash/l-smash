@@ -676,6 +676,7 @@ DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_G726_AUDIO,  LSMASH_4CC( 'g', '7', '2', 
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_M4AE_AUDIO,  LSMASH_4CC( 'm', '4', 'a', 'e' ) );    /* MPEG-4 Audio Enhancement */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_MLPA_AUDIO,  LSMASH_4CC( 'm', 'l', 'p', 'a' ) );    /* MLP Audio */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_MP4A_AUDIO,  LSMASH_4CC( 'm', 'p', '4', 'a' ) );    /* MPEG-4 Audio */
+DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_OPUS_AUDIO,  LSMASH_4CC( 'O', 'p', 'u', 's' ) );    /* Opus */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_RAW_AUDIO,   LSMASH_4CC( 'r', 'a', 'w', ' ' ) );    /* Uncompressed audio */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_SAMR_AUDIO,  LSMASH_4CC( 's', 'a', 'm', 'r' ) );    /* Narrowband AMR voice */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_SAWB_AUDIO,  LSMASH_4CC( 's', 'a', 'w', 'b' ) );    /* Wideband AMR voice */
@@ -905,6 +906,9 @@ typedef enum
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_CHANNEL_LAYOUT,
 
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_CODEC_GLOBAL_HEADER,
+
+    /* Added at the end because of the backward compatibility. */
+    LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_OPUS,
 } lsmash_codec_specific_data_type;
 
 typedef enum
@@ -2966,6 +2970,58 @@ typedef struct
 uint8_t *lsmash_create_alac_specific_info
 (
     lsmash_alac_specific_parameters_t *param,
+    uint32_t                          *data_length
+);
+
+/* Opus Audio Specific Information
+ *   Mandatory :
+ *     ISOM_CODEC_TYPE_OPUS_AUDIO */
+enum
+{
+    OPUS_DSI_FLAG_PRE_SKIP_PRESENT          = 0x000001,
+    OPUS_DSI_FLAG_INPUT_SAMPLE_RATE_PRESENT = 0x000002,
+    OPUS_DSI_FLAG_OUTPUT_GAIN_PRESENT       = 0x000004,
+};
+
+typedef struct
+{
+    uint8_t  version;               /* Only version = 0 is supported. */
+    uint32_t flags;                 /* 0x000001 pre-skip-present:
+                                     *   This flag indicates the presence of the PreSkip field.
+                                     * 0x000002 input-sample-rate-present:
+                                     *   This flag indicates the presence of the InputSampleRate field.
+                                     * 0x000004 output-gain-present:
+                                     *   This flag indicates the presence of the OutputGain field. */
+    uint8_t  OutputChannelCount;    /* the number of output channels */
+    uint16_t PreSkip;               /* the number of the priming samples */
+    uint32_t InputSampleRate;       /* the sampling rate of the original input stream */
+    int16_t  OutputGain;            /* a gain to be applied by the decoder as fixed point 8.8 number
+                                     *   sample *= pow( 10, OutputGain / 20.0 ) */
+    uint8_t  ChannelMappingFamily;  /* the order and semantic meaning of the output channels
+                                     *   0: allowed OutputChannelCount is 1 or 2.
+                                     *     1 -> monophonic (mono),
+                                     *     2 -> stereo (left, right)
+                                     *   1: allowed OutputChannelCount is from 1 to 8.
+                                     *     1 -> monophonic (mono),
+                                     *     2 -> stereo (left, right)
+                                     *     3 -> linear surround (left, center, right)
+                                     *     4 -> quadraphonic (front left, front right, rear left, rear right)
+                                     *     5 -> 5.0 surround (front left, front center, front right, rear left, rear right)
+                                     *     6 -> 5.1 surround (front left, front center, front right, rear left, rear right, LFE)
+                                     *     7 -> 6.1 surround (front left, front center, front right, side left, side right, rear center, LFE)
+                                     *     8 -> 7.1 surround (front left, front center, front right, side left, side right, rear left, rear right, LFE) */
+    /* If ChannelMappingFamily is not set to 0, the following fields are coded.  */
+    uint8_t  StreamCount;           /* the total number of streams in each Opus sample
+                                     * If ChannelMappingFamily is set to 0, the value defaults to 1. */
+    uint8_t  CoupledCount;          /* the number of streams whose decoders should be configured to produce two channels
+                                     * If ChannelMappingFamily is set to 0, the value defaults to OutputChannelCount - 1. */
+    uint8_t  ChannelMapping[255];   /* one octet per output, indicating which decoded channel should be used for each one
+                                     * If ChannelMappingFamily is set to 0, the first index defaults to 0, and if OutputChannelCount == 2, the second index defaults to 1. */
+} lsmash_opus_specific_parameters_t;
+
+uint8_t *lsmash_create_opus_specific_info
+(
+    lsmash_opus_specific_parameters_t *param,
     uint32_t                          *data_length
 );
 
