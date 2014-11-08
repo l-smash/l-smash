@@ -323,6 +323,7 @@ SRC_CODECS="      \
     mp4a.c        \
     mp4v.c        \
     nalu.c        \
+    opus.c        \
     qt_wfex.c     \
     vc1.c         \
     wma.c"

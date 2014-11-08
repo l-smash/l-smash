@@ -63,6 +63,9 @@
     <ClCompile Include="codecs\hevc.c">
       <Filter>Sources</Filter>
     </ClCompile>
+    <ClCompile Include="codecs\id.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
     <ClCompile Include="importer\importer.c">
       <Filter>Sources</Filter>
     </ClCompile>
@@ -99,6 +102,9 @@
     <ClCompile Include="importer\nalu_imp.c">
       <Filter>Sources</Filter>
     </ClCompile>
+    <ClCompile Include="codecs\opus.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
     <ClCompile Include="common\osdep.c">
       <Filter>Sources</Filter>
     </ClCompile>
@@ -133,9 +139,6 @@
       <Filter>Sources</Filter>
     </ClCompile>
     <ClCompile Include="core\write.c">
-      <Filter>Sources</Filter>
-    </ClCompile>
-    <ClCompile Include="codecs\id.c">
       <Filter>Sources</Filter>
     </ClCompile>
   </ItemGroup>
