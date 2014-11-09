@@ -430,8 +430,8 @@ Description: Loyal to Spec of MPEG4, and Ad-hock Simple Hackwork
 Version: $VER_STRING
 Requires:
 URL: https://github.com/l-smash/l-smash
-Libs: -L${libdir} -llsmash $LIBS
-Libs.private:
+Libs: -L${libdir} -llsmash $(test -z "$SHAREDLIB" && echo $LIBS)
+Libs.private: $(test -n "$SHAREDLIB" && echo $LIBS)
 Cflags: -I${includedir}
 EOF
 
