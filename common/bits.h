@@ -1,9 +1,9 @@
 /*****************************************************************************
- * internal.h:
+ * bits.h
  *****************************************************************************
  * Copyright (C) 2010-2014 L-SMASH project
  *
- * Authors:  Takashi Hirata <silverfilain@gmail.com>
+ * Authors: Takashi Hirata <silverfilain@gmail.com>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -20,24 +20,23 @@
 
 /* This file is available under an ISC license. */
 
-#ifndef INTERNAL_H
-#define INTERNAL_H
+typedef struct
+{
+    lsmash_bs_t *bs;
+    uint8_t      store;
+    uint8_t      cache;
+} lsmash_bits_t;
 
-#include "osdep.h" /* must be placed before stdio.h */
-#include <stdio.h>
-#include <assert.h>
+void lsmash_bits_init( lsmash_bits_t* bits, lsmash_bs_t *bs );
+lsmash_bits_t *lsmash_bits_create( lsmash_bs_t *bs );
+void lsmash_bits_cleanup( lsmash_bits_t *bits );
+void lsmash_bits_empty( lsmash_bits_t *bits );
+void lsmash_bits_put_align( lsmash_bits_t *bits );
+void lsmash_bits_get_align( lsmash_bits_t *bits );
+void lsmash_bits_put( lsmash_bits_t *bits, uint32_t width, uint64_t value );
+uint64_t lsmash_bits_get( lsmash_bits_t *bits, uint32_t width );
+void *lsmash_bits_export_data( lsmash_bits_t *bits, uint32_t *length );
+int lsmash_bits_import_data( lsmash_bits_t *bits, void *data, uint32_t length );
 
-#ifndef lsmash_fseek
-#define lsmash_fseek fseeko
-#define lsmash_ftell ftello
-#endif
-
-#include "lsmash.h"
-
-#include "utils.h"
-#include "bstream.h"
-#include "bits.h"
-#include "multibuf.h"
-#include "list.h"
-
-#endif
+lsmash_bits_t *lsmash_bits_adhoc_create();
+void lsmash_bits_adhoc_cleanup( lsmash_bits_t *bits );

@@ -155,28 +155,6 @@ static inline int lsmash_bs_is_end( lsmash_bs_t *bs, uint32_t offset )
     return bs->eof && (offset >= lsmash_bs_get_remaining_buffer_size( bs ));
 }
 
-/*---- bitstream ----*/
-typedef struct {
-    lsmash_bs_t* bs;
-    uint8_t store;
-    uint8_t cache;
-} lsmash_bits_t;
-
-void lsmash_bits_init( lsmash_bits_t* bits, lsmash_bs_t *bs );
-lsmash_bits_t *lsmash_bits_create( lsmash_bs_t *bs );
-void lsmash_bits_empty( lsmash_bits_t *bits );
-void lsmash_bits_put_align( lsmash_bits_t *bits );
-void lsmash_bits_get_align( lsmash_bits_t *bits );
-void lsmash_bits_cleanup( lsmash_bits_t *bits );
-
-/*---- bitstream writer ----*/
-void lsmash_bits_put( lsmash_bits_t *bits, uint32_t width, uint64_t value );
-uint64_t lsmash_bits_get( lsmash_bits_t *bits, uint32_t width );
-lsmash_bits_t *lsmash_bits_adhoc_create();
-void lsmash_bits_adhoc_cleanup( lsmash_bits_t *bits );
-void* lsmash_bits_export_data( lsmash_bits_t *bits, uint32_t *length );
-int lsmash_bits_import_data( lsmash_bits_t *bits, void *data, uint32_t length );
-
 /*---- basic I/O ----*/
 int lsmash_fread_wrapper( void *opaque, uint8_t *buf, int size );
 int lsmash_fwrite_wrapper( void *opaque, uint8_t *buf, int size );
