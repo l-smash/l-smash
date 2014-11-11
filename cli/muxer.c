@@ -103,6 +103,7 @@ typedef struct
     lsmash_summary_t    *summary;
     input_track_option_t opt;
     int                  active;
+    int                  lpcm;
 } input_track_t;
 
 typedef struct
@@ -138,6 +139,7 @@ typedef struct
     uint64_t          prev_dts;
     int64_t           start_offset;
     double            dts;
+    int               lpcm;
 } output_track_t;
 
 typedef struct
@@ -701,6 +703,7 @@ static void display_codec_name( lsmash_codec_type_t codec_type, uint32_t track_n
     DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_DTSL_AUDIO, DTS-HD Lossless );
     DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_SAWB_AUDIO, Wideband AMR voice );
     DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_SAMR_AUDIO, Narrowband AMR voice );
+    DISPLAY_CODEC_NAME(   QT_CODEC_TYPE_LPCM_AUDIO, Uncompressed Audio );
 #undef DISPLAY_CODEC_NAME
 }
 
@@ -774,6 +777,12 @@ static int open_input_files( muxer_t *muxer )
             {
                 if( !opt->brand_3gx )
                     return ERROR_MSG( "the input seems AMR-NB/WB, available for 3GPP(2) file format.\n" );
+            }
+            else if( lsmash_check_codec_type_identical( codec_type, QT_CODEC_TYPE_LPCM_AUDIO ) )
+            {
+                if( opt->isom && !opt->qtff )
+                    return ERROR_MSG( "the input seems Uncompressed Audio, at present available only for QuickTime file format.\n" );
+                in_track->lpcm = 1;
             }
             else
             {
@@ -973,10 +982,11 @@ static int prepare_output( muxer_t *muxer )
                     }
                     media_param.timescale          = summary->frequency;
                     media_param.media_handler_name = track_opt->handler_name ? track_opt->handler_name : "L-SMASH Audio Handler";
-                    media_param.roll_grouping      = (opt->isom_version >= 2 || opt->qtff);
+                    media_param.roll_grouping      = (opt->isom_version >= 2 || (opt->qtff && !in_track->lpcm));
                     out_track->priming_samples = track_opt->encoder_delay;
                     out_track->timescale       = summary->frequency;
                     out_track->timebase        = 1;
+                    out_track->lpcm            = in_track->lpcm;
                     break;
                 }
                 default :
@@ -1146,12 +1156,15 @@ static int do_mux( muxer_t *muxer )
     {
         /* Close track. */
         output_track_t *out_track = &out_movie->track[ out_movie->current_track_number - 1 ];
-        if( lsmash_flush_pooled_samples( output->root, out_track->track_ID, out_track->last_delta ) )
+        uint32_t last_sample_delta = out_track->lpcm ? 1 : out_track->last_delta;
+        if( lsmash_flush_pooled_samples( output->root, out_track->track_ID, last_sample_delta ) )
             ERROR_MSG( "failed to flush the rest of samples.\n" );
         /* Create edit list.
-         * Don't trust media duration. It's just duration of media, not duration of track presentation.
-         * Calculation of presentation duration by DTS is reliable since this muxer handles CFR only. */
-        uint64_t actual_duration  = out_track->prev_dts + out_track->last_delta - out_track->priming_samples;
+         * Don't trust media duration basically. It's just duration of media, not duration of track presentation. */
+        uint64_t actual_duration = out_track->lpcm
+                                 ? lsmash_get_media_duration( output->root, out_track->track_ID )
+                                 : out_track->prev_dts + last_sample_delta;
+        actual_duration -= out_track->priming_samples;
         lsmash_edit_t edit;
         edit.duration   = actual_duration * ((double)lsmash_get_movie_timescale( output->root ) / out_track->timescale);
         edit.start_time = out_track->priming_samples + out_track->start_offset;
