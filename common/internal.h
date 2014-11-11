@@ -36,7 +36,7 @@
 
 #include "utils.h"
 #include "memint.h"
-#include "bstream.h"
+#include "bytes.h"
 #include "bits.h"
 #include "multibuf.h"
 #include "list.h"
