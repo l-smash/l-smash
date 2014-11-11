@@ -1,9 +1,9 @@
 /*****************************************************************************
- * internal.h:
+ * multibuf.h
  *****************************************************************************
- * Copyright (C) 2010-2014 L-SMASH project
+ * Copyright (C) 2011-2014 L-SMASH project
  *
- * Authors:  Takashi Hirata <silverfilain@gmail.com>
+ * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -20,23 +20,14 @@
 
 /* This file is available under an ISC license. */
 
-#ifndef INTERNAL_H
-#define INTERNAL_H
+typedef struct
+{
+    uint32_t number_of_buffers;
+    uint32_t buffer_size;
+    void    *buffers;
+} lsmash_multiple_buffers_t;
 
-#include "osdep.h" /* must be placed before stdio.h */
-#include <stdio.h>
-#include <assert.h>
-
-#ifndef lsmash_fseek
-#define lsmash_fseek fseeko
-#define lsmash_ftell ftello
-#endif
-
-#include "lsmash.h"
-
-#include "utils.h"
-#include "bstream.h"
-#include "multibuf.h"
-#include "list.h"
-
-#endif
+lsmash_multiple_buffers_t *lsmash_create_multiple_buffers( uint32_t number_of_buffers, uint32_t buffer_size );
+void *lsmash_withdraw_buffer( lsmash_multiple_buffers_t *multiple_buffer, uint32_t buffer_number );
+lsmash_multiple_buffers_t *lsmash_resize_multiple_buffers( lsmash_multiple_buffers_t *multiple_buffer, uint32_t buffer_size );
+void lsmash_destroy_multiple_buffers( lsmash_multiple_buffers_t *multiple_buffer );

@@ -182,19 +182,6 @@ int lsmash_fread_wrapper( void *opaque, uint8_t *buf, int size );
 int lsmash_fwrite_wrapper( void *opaque, uint8_t *buf, int size );
 int64_t lsmash_fseek_wrapper( void *opaque, int64_t offset, int whence );
 
-/*---- multiple buffers ----*/
-typedef struct
-{
-    uint32_t number_of_buffers;
-    uint32_t buffer_size;
-    void    *buffers;
-} lsmash_multiple_buffers_t;
-
-lsmash_multiple_buffers_t *lsmash_create_multiple_buffers( uint32_t number_of_buffers, uint32_t buffer_size );
-void *lsmash_withdraw_buffer( lsmash_multiple_buffers_t *multiple_buffer, uint32_t buffer_number );
-lsmash_multiple_buffers_t *lsmash_resize_multiple_buffers( lsmash_multiple_buffers_t *multiple_buffer, uint32_t buffer_size );
-void lsmash_destroy_multiple_buffers( lsmash_multiple_buffers_t *multiple_buffer );
-
 /*---- memory writers ----*/
 #define LSMASH_SET_BYTE( p, x )          \
     do                                   \

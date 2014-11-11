@@ -278,9 +278,9 @@ fi
 #=============================================================================
 # Notation for developpers.
 # Be sure to modified this block when you add/delete source files.
-SRCS="common/alloc.c common/utils.c common/bstream.c common/list.c \
-      common/osdep.c codecs/mp4sys.c codecs/mp4a.c codecs/dts.c codecs/a52.c \
-      codecs/h264.c codecs/hevc.c codecs/vc1.c codecs/alac.c \
+SRCS="common/alloc.c common/utils.c common/bstream.c common/multibuf.c \
+      common/list.c common/osdep.c codecs/mp4sys.c codecs/mp4a.c codecs/dts.c \
+      codecs/a52.c codecs/h264.c codecs/hevc.c codecs/vc1.c codecs/alac.c \
       codecs/description.c core/isom.c core/fragment.c core/summary.c \
       core/print.c core/read.c core/timeline.c core/chapter.c core/meta.c \
       core/write.c core/box.c core/file.c"
