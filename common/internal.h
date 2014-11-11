@@ -35,6 +35,7 @@
 #include "lsmash.h"
 
 #include "utils.h"
+#include "memint.h"
 #include "bstream.h"
 #include "bits.h"
 #include "multibuf.h"
