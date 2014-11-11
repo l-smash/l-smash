@@ -142,6 +142,8 @@ uint64_t lsmash_bs_get_byte_to_64( lsmash_bs_t *bs );
 uint64_t lsmash_bs_get_be16_to_64( lsmash_bs_t *bs );
 uint64_t lsmash_bs_get_be24_to_64( lsmash_bs_t *bs );
 uint64_t lsmash_bs_get_be32_to_64( lsmash_bs_t *bs );
+uint16_t lsmash_bs_get_le16( lsmash_bs_t *bs );
+uint32_t lsmash_bs_get_le32( lsmash_bs_t *bs );
 int lsmash_bs_read( lsmash_bs_t *bs, uint32_t size );
 int lsmash_bs_read_data( lsmash_bs_t *bs, uint8_t *buf, size_t *size );
 int lsmash_bs_import_data( lsmash_bs_t *bs, void *data, uint32_t length );

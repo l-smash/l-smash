@@ -623,6 +623,18 @@ uint64_t lsmash_bs_get_be32_to_64( lsmash_bs_t *bs )
     return lsmash_bs_get_be32( bs );
 }
 
+uint16_t lsmash_bs_get_le16( lsmash_bs_t *bs )
+{
+    uint16_t value = lsmash_bs_get_byte( bs );
+    return value | (lsmash_bs_get_byte( bs ) << 8);
+}
+
+uint32_t lsmash_bs_get_le32( lsmash_bs_t *bs )
+{
+    uint32_t value = lsmash_bs_get_le16( bs );
+    return value | (lsmash_bs_get_le16( bs ) << 16);
+}
+
 int lsmash_bs_read( lsmash_bs_t *bs, uint32_t size )
 {
     if( !bs || size > INT_MAX )
