@@ -296,7 +296,8 @@ SRC_CODECS="      \
     hevc.c        \
     mp4sys.c      \
     mp4a.c        \
-    vc1.c"
+    vc1.c         \
+    wma.c"
 
 SRC_CORE="     \
     box.c      \

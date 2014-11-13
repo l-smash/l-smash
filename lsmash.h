@@ -34,7 +34,7 @@
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  2
-#define LSMASH_VERSION_MINOR  3
+#define LSMASH_VERSION_MINOR  4
 #define LSMASH_VERSION_MICRO  0
 
 #define LSMASH_VERSION_INT( a, b, c ) (((a) << 16) | ((b) << 8) | (c))
@@ -677,6 +677,7 @@ DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_SEVC_AUDIO,  LSMASH_4CC( 's', 'e', 'v', 
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_SQCP_AUDIO,  LSMASH_4CC( 's', 'q', 'c', 'p' ) );    /* 13K Voice */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_SSMV_AUDIO,  LSMASH_4CC( 's', 's', 'm', 'v' ) );    /* SMV Voice */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_TWOS_AUDIO,  LSMASH_4CC( 't', 'w', 'o', 's' ) );    /* Uncompressed 16-bit audio */
+DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_WMA_AUDIO,   LSMASH_4CC( 'w', 'm', 'a', ' ' ) );    /* Windows Media Audio V2 or V3 (not registered at MP4RA) */
 
 DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_23NI_AUDIO,    LSMASH_4CC( '2', '3', 'n', 'i' ) );    /* 32-bit little endian integer uncompressed */
 DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_MAC3_AUDIO,    LSMASH_4CC( 'M', 'A', 'C', '3' ) );    /* MACE 3:1 */

@@ -1299,6 +1299,7 @@ static int isom_print_sample_description_extesion( FILE *fp, lsmash_file_t *file
     extern int eac3_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
     extern int dts_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
     extern int alac_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
+    extern int wma_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
     static struct print_description_extension_table_tag
     {
         lsmash_box_type_t type;
@@ -1332,6 +1333,7 @@ static int isom_print_sample_description_extesion( FILE *fp, lsmash_file_t *file
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DEC3, eac3_print_codec_specific );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DDTS, dts_print_codec_specific );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_ALAC, alac_print_codec_specific );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_WFEX, wma_print_codec_specific );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_FTAB, isom_print_ftab );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_ESDS, mp4sys_print_codec_specific );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_ALAC, alac_print_codec_specific );
@@ -2454,6 +2456,7 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_SQCP_AUDIO,  isom_print_audio_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_SSMV_AUDIO,  isom_print_audio_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_TWOS_AUDIO,  isom_print_audio_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_WMA_AUDIO,   isom_print_audio_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_MP4A_AUDIO,    isom_print_audio_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_23NI_AUDIO,    isom_print_audio_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_MAC3_AUDIO,    isom_print_audio_description );

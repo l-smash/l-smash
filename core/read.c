@@ -1050,6 +1050,7 @@ static void *isom_sample_description_alloc( lsmash_codec_type_t sample_type )
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_SQCP_AUDIO, sizeof(isom_audio_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_SSMV_AUDIO, sizeof(isom_audio_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_TWOS_AUDIO, sizeof(isom_audio_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_WMA_AUDIO,  sizeof(isom_audio_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_MP4A_AUDIO, sizeof(isom_audio_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_23NI_AUDIO, sizeof(isom_audio_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_MAC3_AUDIO, sizeof(isom_audio_entry_t) );
@@ -2613,6 +2614,7 @@ int isom_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uin
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_SQCP_AUDIO, lsmash_form_iso_box_type, isom_read_audio_description );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_SSMV_AUDIO, lsmash_form_iso_box_type, isom_read_audio_description );
             //ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_TWOS_AUDIO, lsmash_form_iso_box_type, isom_read_audio_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_WMA_AUDIO,  lsmash_form_iso_box_type, isom_read_audio_description );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_23NI_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_MAC3_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_MAC6_AUDIO, lsmash_form_qtff_box_type, isom_read_audio_description );
@@ -2860,6 +2862,7 @@ int isom_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uin
             ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( ISOM_BOX_TYPE_DEC3, lsmash_form_iso_box_type );
             ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( ISOM_BOX_TYPE_DVC1, lsmash_form_iso_box_type );
             ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( ISOM_BOX_TYPE_HVCC, lsmash_form_iso_box_type );
+            ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( ISOM_BOX_TYPE_WFEX, lsmash_form_iso_box_type );
             ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT(   QT_BOX_TYPE_GLBL, lsmash_form_qtff_box_type );
             ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( LSMASH_BOX_TYPE_UNSPECIFIED, NULL );
 #undef ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT
