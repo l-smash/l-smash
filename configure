@@ -278,17 +278,76 @@ fi
 #=============================================================================
 # Notation for developpers.
 # Be sure to modified this block when you add/delete source files.
-SRCS="common/alloc.c common/utils.c common/bytes.c common/bits.c \
-      common/multibuf.c common/list.c common/osdep.c \
-      codecs/mp4sys.c codecs/mp4a.c codecs/dts.c \
-      codecs/a52.c codecs/h264.c codecs/hevc.c codecs/vc1.c codecs/alac.c \
-      codecs/description.c core/isom.c core/fragment.c core/summary.c \
-      core/print.c core/read.c core/timeline.c core/chapter.c core/meta.c \
-      core/write.c core/box.c core/file.c"
-SRC_TOOLS="cli/cli.c cli/adts_imp.c cli/mp3_imp.c cli/amr_imp.c cli/a52_imp.c \
-           cli/als_imp.c cli/dts_imp.c cli/wave_imp.c cli/vc1_imp.c cli/nalu_imp.c \
-           cli/importer.c"
+SRC_COMMON="   \
+    alloc.c    \
+    bits.c     \
+    bytes.c    \
+    list.c     \
+    multibuf.c \
+    osdep.c    \
+    utils.c"
+
+SRC_CODECS="      \
+    a52.c         \
+    alac.c        \
+    description.c \
+    dts.c         \
+    h264.c        \
+    hevc.c        \
+    mp4sys.c      \
+    mp4a.c        \
+    vc1.c"
+
+SRC_CORE="     \
+    box.c      \
+    chapter.c  \
+    file.c     \
+    fragment.c \
+    isom.c     \
+    meta.c     \
+    print.c    \
+    read.c     \
+    summary.c  \
+    timeline.c \
+    write.c"
+
+SRCS=""
+
+for src in $SRC_COMMON; do
+    SRCS="$SRCS common/$src"
+done
+
+for src in $SRC_CODECS; do
+    SRCS="$SRCS codecs/$src"
+done
+
+for src in $SRC_CORE; do
+    SRCS="$SRCS core/$src"
+done
+
+SRC_CLI="      \
+    a52_imp.c  \
+    adts_imp.c \
+    als_imp.c  \
+    amr_imp.c  \
+    cli.c      \
+    dts_imp.c  \
+    importer.c \
+    mp3_imp.c  \
+    nalu_imp.c \
+    vc1_imp.c  \
+    wave_imp.c"
+
+SRC_TOOLS=""
 OBJ_TOOLS=""
+
+for src in $SRC_CLI; do
+    SRC_TOOLS="$SRC_TOOLS cli/$src"
+done
+
+for src in $SRC_TOOLS; do
+    OBJ_TOOLS="$OBJ_TOOLS ${src%.c}.o"
+done
 
 TOOLS_ALL="muxer remuxer boxdumper timelineeditor"
 TOOLS_NAME=""
@@ -299,10 +358,6 @@ if test -n "$DEMUXER"; then
 else
     TOOLS="muxer"
 fi
-
-for tool in $SRC_TOOLS; do
-    OBJ_TOOLS="$OBJ_TOOLS ${tool%.c}.o"
-done
 
 for tool in $TOOLS; do
     SRC_TOOLS="$SRC_TOOLS cli/${tool}.c"
