@@ -1324,7 +1324,20 @@ static int isom_read_audio_description( lsmash_file_t *file, isom_box_t *box, is
     audio->compression_ID       = lsmash_bs_get_be16( bs );
     audio->packet_size          = lsmash_bs_get_be16( bs );
     audio->samplerate           = lsmash_bs_get_be32( bs );
-    if( audio->version == 1 )
+    if( audio->version == 0 && isom_is_qt_audio( box->type ) )
+    {
+        /* Skip weird extra bytes.
+         * About QTFF, extensions were first added with Sound Sample Description v1. */
+        while( lsmash_bs_count( bs ) + ISOM_BASEBOX_COMMON_SIZE <= box->size )
+        {
+            uint32_t size = lsmash_bs_show_be32( bs, 0 );
+            if( size == 0 || lsmash_bs_count( bs ) + size > box->size )
+                lsmash_bs_skip_bytes( bs, 1 );
+            else
+                break;
+        }
+    }
+    else if( audio->version == 1 )
     {
         if( ((isom_stsd_t *)parent)->version == 0 )
         {
