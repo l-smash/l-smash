@@ -941,6 +941,8 @@ fail:
 
 static void *isom_sample_description_alloc( lsmash_codec_type_t sample_type )
 {
+    if( lsmash_check_codec_type_identical( sample_type, LSMASH_CODEC_TYPE_RAW ) )
+        return lsmash_malloc_zero( LSMASH_MAX( sizeof(isom_visual_entry_t), sizeof(isom_audio_entry_t) ) );
     static struct description_alloc_table_tag
     {
         lsmash_codec_type_t type;
@@ -1071,7 +1073,6 @@ static void *isom_sample_description_alloc( lsmash_codec_type_t sample_type )
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_IN24_AUDIO, sizeof(isom_audio_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_IN32_AUDIO, sizeof(isom_audio_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_LPCM_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_RAW_AUDIO,  sizeof(isom_audio_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_SOWT_AUDIO, sizeof(isom_audio_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_TWOS_AUDIO, sizeof(isom_audio_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_ULAW_AUDIO, sizeof(isom_audio_entry_t) );
@@ -1144,7 +1145,7 @@ static int isom_read_visual_description( lsmash_file_t *file, isom_box_t *box, i
      && lsmash_bs_get_pos( bs ) < box->size
      && (ret = isom_read_qt_color_table( bs, &visual->color_table )) < 0 )
         return ret;
-    box->parent = parent;
+    box->parent   = parent;
     box->manager |= LSMASH_VIDEO_DESCRIPTION;
     isom_box_common_copy( visual, box );
     if( (ret = isom_add_print_func( file, visual, level )) < 0 )
