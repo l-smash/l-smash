@@ -74,6 +74,23 @@ struct importer_tag
     lsmash_entry_list_t    *summaries;
 };
 
+int lsmash_importer_make_fake_movie
+(
+    importer_t *importer
+);
+
+int lsmash_importer_make_fake_track
+(
+    importer_t       *importer,
+    lsmash_media_type media_type,
+    uint32_t         *track_ID
+);
+
+void lsmash_importer_break_fake_movie
+(
+    importer_t *importer
+);
+
 #else
 
 int lsmash_importer_set_file

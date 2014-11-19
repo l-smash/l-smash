@@ -1528,40 +1528,12 @@ int isom_setup_handler_reference( isom_hdlr_t *hdlr, uint32_t media_type )
     return 0;
 }
 
-/*******************************
-    public interfaces
-*******************************/
-
-/*---- track manipulators ----*/
-
-void lsmash_delete_track( lsmash_root_t *root, uint32_t track_ID )
+isom_trak_t *isom_track_create( lsmash_file_t *file, lsmash_media_type media_type )
 {
-    if( isom_check_initializer_present( root ) < 0
-     || !root->file->initializer->moov )
-        return;
-    for( lsmash_entry_t *entry = root->file->initializer->moov->trak_list.head; entry; entry = entry->next )
-    {
-        isom_trak_t *trak = (isom_trak_t *)entry->data;
-        if( !trak
-         || !trak->tkhd )
-            return;
-        if( trak->tkhd->track_ID == track_ID )
-        {
-            isom_remove_box_by_itself( trak );
-            return;
-        }
-    }
-}
-
-uint32_t lsmash_create_track( lsmash_root_t *root, lsmash_media_type media_type )
-{
-    if( isom_check_initializer_present( root ) < 0 )
-        return 0;
-    lsmash_file_t *file = root->file;
     /* Don't allow to create a new track if the initial movie is already written. */
     if( (file->fragment && file->fragment->movie)
      || (file->moov && (file->moov->manager & LSMASH_WRITTEN_BOX)) )
-        return 0;
+        return NULL;
     isom_trak_t *trak = isom_add_trak( file->moov );
     if( !trak
      || !trak->file
@@ -1641,10 +1613,66 @@ uint32_t lsmash_create_track( lsmash_root_t *root, lsmash_media_type media_type 
         tkhd->track_ID  = trak->file->moov->mvhd->next_track_ID ++;
     }
     trak->mdia->mdhd->language = file->qt_compatible ? 0 : ISOM_LANGUAGE_CODE_UNDEFINED;
-    return trak->tkhd->track_ID;
+    return trak;
 fail:
     isom_remove_box_by_itself( trak );
-    return 0;
+    return NULL;
+}
+
+isom_moov_t *isom_movie_create( lsmash_file_t *file )
+{
+    isom_moov_t *moov = isom_add_moov( file );
+    isom_mvhd_t *mvhd = isom_add_mvhd( moov );
+    if( !mvhd )
+    {
+        isom_remove_box_by_itself( moov );
+        return NULL;
+    }
+    /* Default Movie Header Box. */
+    mvhd->rate          = 0x00010000;
+    mvhd->volume        = 0x0100;
+    mvhd->matrix[0]     = 0x00010000;
+    mvhd->matrix[4]     = 0x00010000;
+    mvhd->matrix[8]     = 0x40000000;
+    mvhd->next_track_ID = 1;
+    file->initializer = file;
+    return moov;
+}
+
+/*******************************
+    public interfaces
+*******************************/
+
+/*---- track manipulators ----*/
+
+void lsmash_delete_track( lsmash_root_t *root, uint32_t track_ID )
+{
+    if( isom_check_initializer_present( root ) < 0
+     || !root->file->initializer->moov )
+        return;
+    for( lsmash_entry_t *entry = root->file->initializer->moov->trak_list.head; entry; entry = entry->next )
+    {
+        isom_trak_t *trak = (isom_trak_t *)entry->data;
+        if( !trak
+         || !trak->tkhd )
+            return;
+        if( trak->tkhd->track_ID == track_ID )
+        {
+            isom_remove_box_by_itself( trak );
+            return;
+        }
+    }
+}
+
+uint32_t lsmash_create_track( lsmash_root_t *root, lsmash_media_type media_type )
+{
+    if( isom_check_initializer_present( root ) < 0 )
+        return 0;
+    isom_trak_t *trak = isom_track_create( root->file, media_type );
+    if( !trak
+     || !trak->tkhd )
+        return 0;
+    return trak->tkhd->track_ID;
 }
 
 uint32_t lsmash_get_track_ID( lsmash_root_t *root, uint32_t track_number )

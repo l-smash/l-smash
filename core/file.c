@@ -547,21 +547,8 @@ lsmash_file_t *lsmash_set_file
                                    param->brands, param->brand_count ) < 0 )
             goto fail;
         /* Create the movie header if the initialization of the streams is required. */
-        if( file->flags & LSMASH_FILE_MODE_INITIALIZATION )
-        {
-            if( !isom_add_moov( file )
-             || !isom_add_mvhd( file->moov ) )
-                goto fail;
-            /* Default Movie Header Box. */
-            isom_mvhd_t *mvhd = file->moov->mvhd;
-            mvhd->rate          = 0x00010000;
-            mvhd->volume        = 0x0100;
-            mvhd->matrix[0]     = 0x00010000;
-            mvhd->matrix[4]     = 0x00010000;
-            mvhd->matrix[8]     = 0x40000000;
-            mvhd->next_track_ID = 1;
-            file->initializer = file;
-        }
+        if( (file->flags & LSMASH_FILE_MODE_INITIALIZATION) && !isom_movie_create( file ) )
+            goto fail;
     }
     if( !root->file )
         root->file = file;

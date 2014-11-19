@@ -286,3 +286,43 @@ lsmash_summary_t *lsmash_duplicate_summary( importer_t *importer, uint32_t track
     }
     return summary;
 }
+
+int lsmash_importer_make_fake_movie( importer_t *importer )
+{
+    if( !importer || !importer->file || (importer->file->flags & LSMASH_FILE_MODE_BOX) )
+        return LSMASH_ERR_FUNCTION_PARAM;
+    if( !isom_movie_create( importer->file ) )
+        return LSMASH_ERR_NAMELESS;
+    return 0;
+}
+
+int lsmash_importer_make_fake_track( importer_t *importer, lsmash_media_type media_type, uint32_t *track_ID )
+{
+    if( !importer || !importer->file || (importer->file->flags & LSMASH_FILE_MODE_BOX) || !track_ID )
+        return LSMASH_ERR_FUNCTION_PARAM;
+    isom_trak_t *trak = isom_track_create( importer->file, media_type );
+    int err;
+    if( !trak
+     || !trak->tkhd
+     ||  trak->tkhd->track_ID == 0
+     || !trak->mdia
+     || !trak->mdia->minf )
+    {
+        err = LSMASH_ERR_NAMELESS;
+        goto fail;
+    }
+    if( (err = isom_complement_data_reference( trak->mdia->minf )) < 0 )
+        goto fail;
+    *track_ID = trak->tkhd->track_ID;
+    return 0;
+fail:
+    isom_remove_box_by_itself( trak );
+    return err;
+}
+
+void lsmash_importer_break_fake_movie( importer_t *importer )
+{
+    if( !importer || !importer->file )
+        return;
+    isom_remove_box_by_itself( importer->file->moov );
+}

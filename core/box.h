@@ -2494,6 +2494,9 @@ isom_sbgp_t *isom_get_roll_recovery_sample_to_group( lsmash_entry_list_t *list )
 isom_sgpd_t *isom_get_fragment_sample_group_description( isom_traf_t *traf, uint32_t grouping_type );
 isom_sbgp_t *isom_get_fragment_sample_to_group( isom_traf_t *traf, uint32_t grouping_type );
 
+isom_trak_t *isom_track_create( lsmash_file_t *file, lsmash_media_type media_type );
+isom_moov_t *isom_movie_create( lsmash_file_t *file );
+
 isom_dcr_ps_entry_t *isom_create_ps_entry( uint8_t *ps, uint32_t ps_size );
 void isom_remove_dcr_ps( isom_dcr_ps_entry_t *ps );
 
