@@ -29,10 +29,11 @@
 #include <inttypes.h>
 
 #include "lsmash.h"
-#include "importer.h"
 #include "cli.h"
 
 #include "config.h"
+
+#include "importer/importer.h"
 
 #define MAX_NUM_OF_BRANDS 50
 #define MAX_NUM_OF_INPUTS 10
