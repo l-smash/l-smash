@@ -1054,20 +1054,18 @@ static int do_mux( muxer_t *muxer )
             /* Get a new sample data if the track doesn't hold any one. */
             if( !sample )
             {
-                /* Allocate sample buffer. */
-                sample = lsmash_create_sample( out_track->summary->max_au_length );
-                if( !sample )
-                    return ERROR_MSG( "failed to alloc memory for buffer.\n" );
                 /* lsmash_importer_get_access_unit() returns 1 if there're any changes in stream's properties. */
-                int ret = lsmash_importer_get_access_unit( input->importer, input->current_track_number, sample );
-                if( ret == -1 )
+                int ret = lsmash_importer_get_access_unit( input->importer, input->current_track_number, &sample );
+                if( ret == LSMASH_ERR_MEMORY_ALLOC )
+                    return ERROR_MSG( "failed to alloc memory for buffer.\n" );
+                else if( ret <= -1 )
                 {
                     lsmash_delete_sample( sample );
                     ERROR_MSG( "failed to get a frame from input file. Maybe corrupted.\n"
                                "Aborting muxing operation and trying to let output be valid file.\n" );
                     break;
                 }
-                else if( ret == 1 )
+                else if( ret == 1 ) /* a change of stream's properties */
                 {
                     input_track_t *in_track = &input->track[input->current_track_number - 1];
                     lsmash_cleanup_summary( in_track->summary );
@@ -1080,7 +1078,7 @@ static int do_mux( muxer_t *muxer )
                         break;
                     }
                 }
-                if( sample->length == 0 )
+                else if( ret == 2 ) /* EOF */
                 {
                     /* No more appendable samples in this track. */
                     lsmash_delete_sample( sample );

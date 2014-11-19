@@ -177,13 +177,14 @@ fail:
 }
 
 /* 0 if success, positive if changed, negative if failed */
-int lsmash_importer_get_access_unit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
+int lsmash_importer_get_access_unit( importer_t *importer, uint32_t track_number, lsmash_sample_t **p_sample )
 {
-    if( !importer || !buffered_sample->data || buffered_sample->length == 0 )
+    if( !importer || !p_sample )
         return LSMASH_ERR_FUNCTION_PARAM;
     if( !importer->funcs.get_accessunit )
         return LSMASH_ERR_NAMELESS;
-    return importer->funcs.get_accessunit( importer, track_number, buffered_sample );
+    *p_sample = NULL;
+    return importer->funcs.get_accessunit( importer, track_number, p_sample );
 }
 
 /* Return 0 if failed, otherwise succeeded. */

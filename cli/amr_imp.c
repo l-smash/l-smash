@@ -70,9 +70,9 @@ static void amr_cleanup
 
 static int amr_get_accessunit
 (
-    importer_t      *importer,
-    uint32_t         track_number,
-    lsmash_sample_t *buffered_sample
+    importer_t       *importer,
+    uint32_t          track_number,
+    lsmash_sample_t **p_sample
 )
 {
     if( !importer->info )
@@ -85,8 +85,7 @@ static int amr_get_accessunit
     {
         /* EOF */
         importer->status = IMPORTER_EOF;
-        buffered_sample->length = 0;
-        return 0;
+        return IMPORTER_EOF;
     }
     /* Each speech frame consists of one speech frame header and one speech data.
      * At the end of each speech data, octet alignment if needed.
@@ -116,18 +115,20 @@ static int amr_get_accessunit
         importer->status = IMPORTER_ERROR;
         return read_size < 0 ? LSMASH_ERR_INVALID_DATA : LSMASH_ERR_NAMELESS;
     }
-    if( buffered_sample->length < read_size )
-        return LSMASH_ERR_NAMELESS;
-    if( lsmash_bs_get_bytes_ex( bs, read_size, buffered_sample->data ) != read_size )
+    lsmash_sample_t *sample = lsmash_create_sample( read_size );
+    if( !sample )
+        return LSMASH_ERR_MEMORY_ALLOC;
+    *p_sample = sample;
+    if( lsmash_bs_get_bytes_ex( bs, read_size, sample->data ) != read_size )
     {
         lsmash_log( importer, LSMASH_LOG_WARNING, "the stream is truncated at the end.\n" );
         importer->status = IMPORTER_EOF;
         return LSMASH_ERR_INVALID_DATA;
     }
-    buffered_sample->length        = read_size;
-    buffered_sample->dts           = amr_imp->au_number ++ * amr_imp->samples_in_frame;
-    buffered_sample->cts           = buffered_sample->dts;
-    buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+    sample->length        = read_size;
+    sample->dts           = amr_imp->au_number ++ * amr_imp->samples_in_frame;
+    sample->cts           = sample->dts;
+    sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
     return 0;
 }
 

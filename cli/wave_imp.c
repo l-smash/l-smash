@@ -104,7 +104,7 @@ static void wave_importer_cleanup( importer_t *importer )
         remove_wave_importer( importer->info );
 }
 
-static int wave_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
+static int wave_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t **p_sample )
 {
     if( !importer->info )
         return LSMASH_ERR_NAMELESS;
@@ -115,13 +115,10 @@ static int wave_importer_get_accessunit( importer_t *importer, uint32_t track_nu
         return LSMASH_ERR_NAMELESS;
     wave_importer_t *wave_imp = (wave_importer_t *)importer->info;
     importer_status current_status = importer->status;
-    if( current_status == IMPORTER_ERROR || buffered_sample->length < wave_imp->au_length )
+    if( current_status == IMPORTER_ERROR )
         return LSMASH_ERR_NAMELESS;
     if( current_status == IMPORTER_EOF )
-    {
-        buffered_sample->length = 0;
-        return 0;
-    }
+        return IMPORTER_EOF;
     if( wave_imp->number_of_samples / summary->samples_in_frame > wave_imp->au_number )
         wave_imp->au_length = summary->bytes_per_frame;
     else
@@ -129,20 +126,21 @@ static int wave_importer_get_accessunit( importer_t *importer, uint32_t track_nu
         wave_imp->au_length = wave_imp->fmt.wfx.nBlockAlign * (wave_imp->number_of_samples % summary->samples_in_frame);
         importer->status = IMPORTER_EOF;
         if( wave_imp->au_length == 0 )
-        {
-            buffered_sample->length = 0;
-            return 0;
-        }
+            return IMPORTER_EOF;
     }
-    if( lsmash_bs_get_bytes_ex( importer->bs, wave_imp->au_length, buffered_sample->data ) != wave_imp->au_length )
+    lsmash_sample_t *sample = lsmash_create_sample( wave_imp->au_length );
+    if( !sample )
+        return LSMASH_ERR_MEMORY_ALLOC;
+    *p_sample = sample;
+    if( lsmash_bs_get_bytes_ex( importer->bs, wave_imp->au_length, sample->data ) != wave_imp->au_length )
     {
         importer->status = IMPORTER_ERROR;
         return LSMASH_ERR_INVALID_DATA;
     }
-    buffered_sample->length        = wave_imp->au_length;
-    buffered_sample->dts           = wave_imp->au_number ++ * summary->samples_in_frame;
-    buffered_sample->cts           = buffered_sample->dts;
-    buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+    sample->length        = wave_imp->au_length;
+    sample->dts           = wave_imp->au_number ++ * summary->samples_in_frame;
+    sample->cts           = sample->dts;
+    sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
     return current_status;
 }
 

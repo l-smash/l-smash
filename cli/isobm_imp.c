@@ -74,7 +74,7 @@ static void isobm_importer_cleanup( importer_t *importer )
         remove_isobm_importer( importer->info );
 }
 
-static int isobm_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
+static int isobm_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t **p_sample )
 {
     if( !importer->info )
         return LSMASH_ERR_NAMELESS;
@@ -84,10 +84,7 @@ static int isobm_importer_get_accessunit( importer_t *importer, uint32_t track_n
     if( current_status == IMPORTER_ERROR )
         return LSMASH_ERR_NAMELESS;
     if( current_status == IMPORTER_EOF )
-    {
-        buffered_sample->length = 0;
-        return 0;
-    }
+        return IMPORTER_EOF;
     isobm_importer_t *isobm_imp = (isobm_importer_t *)importer->info;
     lsmash_root_t *root     = isobm_imp->root;
     uint32_t       track_ID = lsmash_get_track_ID( root, track_number );
@@ -102,36 +99,32 @@ static int isobm_importer_get_accessunit( importer_t *importer, uint32_t track_n
         {
             /* No more samples. */
             importer->status = IMPORTER_EOF;
-            buffered_sample->length = 0;
-            return 0;
+            return IMPORTER_EOF;
         }
     }
-    if( buffered_sample->length < sample->length )
-        return LSMASH_ERR_NAMELESS;
-    memcpy( buffered_sample->data, sample->data, sample->length );
-    buffered_sample->length = sample->length;
-    buffered_sample->dts    = sample->dts / isobm_imp->timebase;
-    buffered_sample->cts    = sample->cts / isobm_imp->timebase;
-    buffered_sample->pos    = sample->pos;
-    buffered_sample->index  = sample->index;
-    buffered_sample->prop   = sample->prop;
-    lsmash_delete_sample( sample );
-    if( buffered_sample->index != isobm_imp->current_sample_description_index )
+    sample->dts /= isobm_imp->timebase;
+    sample->cts /= isobm_imp->timebase;
+    if( sample->index != isobm_imp->current_sample_description_index )
     {
         /* Update the active summary. */
-        lsmash_summary_t *summary = lsmash_get_summary( isobm_imp->root, isobm_imp->track_ID, buffered_sample->index );
+        lsmash_summary_t *summary = lsmash_get_summary( isobm_imp->root, isobm_imp->track_ID, sample->index );
         if( !summary )
+        {
+            lsmash_delete_sample( sample );
             return LSMASH_ERR_NAMELESS;
+        }
         lsmash_remove_entry( importer->summaries, track_number, lsmash_cleanup_summary );
         if( lsmash_add_entry( importer->summaries, summary ) < 0 )
         {
+            lsmash_delete_sample( sample );
             lsmash_cleanup_summary( (lsmash_summary_t *)summary );
             return LSMASH_ERR_MEMORY_ALLOC;
         }
-        isobm_imp->current_sample_description_index = buffered_sample->index;
+        isobm_imp->current_sample_description_index = sample->index;
         importer->status = IMPORTER_OK;
         current_status   = IMPORTER_CHANGE;
     }
+    *p_sample = sample;
     ++ isobm_imp->au_number;
     return current_status;
 }

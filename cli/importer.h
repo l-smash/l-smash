@@ -36,7 +36,7 @@
 struct importer_tag;
 
 typedef void     ( *importer_cleanup )          ( struct importer_tag * );
-typedef int      ( *importer_get_accessunit )   ( struct importer_tag *, uint32_t, lsmash_sample_t * );
+typedef int      ( *importer_get_accessunit )   ( struct importer_tag *, uint32_t, lsmash_sample_t ** );
 typedef int      ( *importer_probe )            ( struct importer_tag * );
 typedef uint32_t ( *importer_get_last_duration )( struct importer_tag *, uint32_t );
 
@@ -88,9 +88,9 @@ void lsmash_importer_close
 
 int lsmash_importer_get_access_unit
 (
-    importer_t      *importer,
-    uint32_t         track_number,
-    lsmash_sample_t *buffered_sample
+    importer_t       *importer,
+    uint32_t          track_number,
+    lsmash_sample_t **p_sample
 );
 
 uint32_t lsmash_importer_get_last_delta

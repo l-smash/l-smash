@@ -243,7 +243,7 @@ static int parse_vbri_header( mp4sys_mp3_importer_t *mp3_imp, mp4sys_mp3_header_
     return memcmp( frame + 36, "VBRI", 4 ) == 0;
 }
 
-static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
+static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t **p_sample )
 {
     if( !importer->info )
         return LSMASH_ERR_NAMELESS;
@@ -290,13 +290,10 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
     }
     if( frame_size <= 4 )
         return LSMASH_ERR_INVALID_DATA;
-    if( current_status == IMPORTER_ERROR || buffered_sample->length < frame_size )
+    if( current_status == IMPORTER_ERROR )
         return LSMASH_ERR_NAMELESS;
     if( current_status == IMPORTER_EOF )
-    {
-        buffered_sample->length = 0;
-        return 0;
-    }
+        return IMPORTER_EOF;
     if( current_status == IMPORTER_CHANGE )
     {
         lsmash_audio_summary_t *summary = mp4sys_mp3_create_summary( header, 1 ); /* FIXME: use legacy mode. */
@@ -310,7 +307,15 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
         mp3_imp->samples_in_frame = summary->samples_in_frame;
     }
     /* read a frame's data. */
-    uint8_t *frame_data = buffered_sample->data;
+    lsmash_sample_t *sample = *p_sample;
+    if( !sample )
+    {
+        sample = lsmash_create_sample( MP4SYS_MP3_MAX_FRAME_LENGTH );
+        if( !sample )
+            return LSMASH_ERR_MEMORY_ALLOC;
+        *p_sample = sample;
+    }
+    uint8_t *frame_data = sample->data;
     memcpy( frame_data, mp3_imp->raw_header, MP4SYS_MP3_HEADER_LENGTH );
     frame_size -= MP4SYS_MP3_HEADER_LENGTH;
     if( lsmash_bs_get_bytes_ex( importer->bs, frame_size, frame_data + MP4SYS_MP3_HEADER_LENGTH ) != frame_size )
@@ -318,11 +323,11 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
         importer->status = IMPORTER_ERROR;
         return LSMASH_ERR_INVALID_DATA;
     }
-    buffered_sample->length                 = MP4SYS_MP3_HEADER_LENGTH + frame_size;
-    buffered_sample->dts                    = mp3_imp->au_number ++ * mp3_imp->samples_in_frame;
-    buffered_sample->cts                    = buffered_sample->dts;
-    buffered_sample->prop.ra_flags          = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
-    buffered_sample->prop.pre_roll.distance = header->layer == MP4SYS_LAYER_III ? 1 : 0;    /* Layer III uses MDCT */
+    sample->length                 = MP4SYS_MP3_HEADER_LENGTH + frame_size;
+    sample->dts                    = mp3_imp->au_number ++ * mp3_imp->samples_in_frame;
+    sample->cts                    = sample->dts;
+    sample->prop.ra_flags          = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+    sample->prop.pre_roll.distance = header->layer == MP4SYS_LAYER_III ? 1 : 0; /* Layer III uses MDCT */
 
     int vbr_header_present = 0;
     if( mp3_imp->au_number == 1
@@ -361,7 +366,7 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
                 if( mp3_imp->main_data_size[i] == 0 )
                     break;
             }
-            buffered_sample->prop.pre_roll.distance += mp3_imp->prev_preroll_count;
+            sample->prop.pre_roll.distance += mp3_imp->prev_preroll_count;
             mp3_imp->prev_preroll_count = i;
         }
         uint16_t side_info_size;
@@ -427,7 +432,7 @@ static int mp4sys_mp3_get_accessunit( importer_t *importer, uint32_t track_numbe
     mp3_imp->header = new_header;
 
     if( vbr_header_present )
-        return mp4sys_mp3_get_accessunit( importer, track_number, buffered_sample );
+        return mp4sys_mp3_get_accessunit( importer, track_number, &sample );
     return 0;
 }
 

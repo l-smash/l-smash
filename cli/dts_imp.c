@@ -201,7 +201,7 @@ static int dts_importer_get_next_accessunit_internal( importer_t *importer )
     return bs->error ? LSMASH_ERR_NAMELESS : 0;
 }
 
-static int dts_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
+static int dts_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t **p_sample )
 {
     if( !importer->info )
         return LSMASH_ERR_NAMELESS;
@@ -213,21 +213,22 @@ static int dts_importer_get_accessunit( importer_t *importer, uint32_t track_num
     dts_importer_t *dts_imp = (dts_importer_t *)importer->info;
     dts_info_t     *info    = &dts_imp->info;
     importer_status current_status = importer->status;
-    if( current_status == IMPORTER_ERROR || buffered_sample->length < dts_imp->au_length )
+    if( current_status == IMPORTER_ERROR )
         return LSMASH_ERR_NAMELESS;
     if( current_status == IMPORTER_EOF && dts_imp->au_length == 0 )
-    {
-        buffered_sample->length = 0;
-        return 0;
-    }
+        return IMPORTER_EOF;
     if( current_status == IMPORTER_CHANGE )
         summary->max_au_length = 0;
-    memcpy( buffered_sample->data, dts_imp->au, dts_imp->au_length );
-    buffered_sample->length                 = dts_imp->au_length;
-    buffered_sample->dts                    = dts_imp->au_number++ * summary->samples_in_frame;
-    buffered_sample->cts                    = buffered_sample->dts;
-    buffered_sample->prop.ra_flags          = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
-    buffered_sample->prop.pre_roll.distance = !!(info->flags & DTS_EXT_SUBSTREAM_LBR_FLAG);     /* MDCT */
+    lsmash_sample_t *sample = lsmash_create_sample( dts_imp->au_length );
+    if( !sample )
+        return LSMASH_ERR_MEMORY_ALLOC;
+    *p_sample = sample;
+    memcpy( sample->data, dts_imp->au, dts_imp->au_length );
+    sample->length                 = dts_imp->au_length;
+    sample->dts                    = dts_imp->au_number++ * summary->samples_in_frame;
+    sample->cts                    = sample->dts;
+    sample->prop.ra_flags          = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+    sample->prop.pre_roll.distance = !!(info->flags & DTS_EXT_SUBSTREAM_LBR_FLAG);  /* MDCT */
     if( importer->status == IMPORTER_EOF )
     {
         dts_imp->au_length = 0;

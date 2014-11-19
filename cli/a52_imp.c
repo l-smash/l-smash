@@ -148,7 +148,7 @@ static int ac3_buffer_frame( uint8_t *buffer, lsmash_bs_t *bs )
     return 0;
 }
 
-static int ac3_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
+static int ac3_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t **p_sample )
 {
     if( !importer->info )
         return LSMASH_ERR_NAMELESS;
@@ -163,16 +163,11 @@ static int ac3_importer_get_accessunit( importer_t *importer, uint32_t track_num
     if( current_status == IMPORTER_ERROR )
         return LSMASH_ERR_NAMELESS;
     if( current_status == IMPORTER_EOF )
-    {
-        buffered_sample->length = 0;
-        return 0;
-    }
+        return IMPORTER_EOF;
     lsmash_ac3_specific_parameters_t *param = &info->dac3_param;
     uint32_t frame_size = ac3_frame_size_table[ param->frmsizecod >> 1 ][ param->fscod ];
     if( param->fscod == 0x1 && param->frmsizecod & 0x1 )
         frame_size += 2;
-    if( buffered_sample->length < frame_size )
-        return LSMASH_ERR_NAMELESS;
     if( current_status == IMPORTER_CHANGE )
     {
         lsmash_codec_specific_t *cs = isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3 );
@@ -185,12 +180,16 @@ static int ac3_importer_get_accessunit( importer_t *importer, uint32_t track_num
         summary->channels   = ac3_get_channel_count( param );
         //summary->layout_tag = ac3_channel_layout_table[ param->acmod ][ param->lfeon ];
     }
-    memcpy( buffered_sample->data, ac3_imp->buffer, frame_size );
-    buffered_sample->length                 = frame_size;
-    buffered_sample->dts                    = ac3_imp->au_number++ * summary->samples_in_frame;
-    buffered_sample->cts                    = buffered_sample->dts;
-    buffered_sample->prop.ra_flags          = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
-    buffered_sample->prop.pre_roll.distance = 1;    /* MDCT */
+    lsmash_sample_t *sample = lsmash_create_sample( frame_size );
+    if( !sample )
+        return LSMASH_ERR_MEMORY_ALLOC;
+    *p_sample = sample;
+    memcpy( sample->data, ac3_imp->buffer, frame_size );
+    sample->length                 = frame_size;
+    sample->dts                    = ac3_imp->au_number++ * summary->samples_in_frame;
+    sample->cts                    = sample->dts;
+    sample->prop.ra_flags          = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+    sample->prop.pre_roll.distance = 1; /* MDCT */
     lsmash_bs_t *bs = info->bits->bs;
     ac3_imp->next_frame_pos += frame_size;
     lsmash_bs_read_seek( bs, ac3_imp->next_frame_pos, SEEK_SET );
@@ -482,7 +481,7 @@ static int eac3_importer_get_next_accessunit_internal( importer_t *importer )
     return bs->error ? LSMASH_ERR_NAMELESS : 0;
 }
 
-static int eac3_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
+static int eac3_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t **p_sample )
 {
     if( !importer->info )
         return LSMASH_ERR_NAMELESS;
@@ -494,13 +493,10 @@ static int eac3_importer_get_accessunit( importer_t *importer, uint32_t track_nu
     eac3_importer_t *eac3_imp = (eac3_importer_t *)importer->info;
     eac3_info_t     *info     = &eac3_imp->info;
     importer_status current_status = importer->status;
-    if( current_status == IMPORTER_ERROR || buffered_sample->length < eac3_imp->au_length )
+    if( current_status == IMPORTER_ERROR )
         return LSMASH_ERR_NAMELESS;
     if( current_status == IMPORTER_EOF && eac3_imp->au_length == 0 )
-    {
-        buffered_sample->length = 0;
-        return 0;
-    }
+        return IMPORTER_EOF;
     if( current_status == IMPORTER_CHANGE )
     {
         lsmash_codec_specific_t *cs = isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3 );
@@ -514,12 +510,16 @@ static int eac3_importer_get_accessunit( importer_t *importer, uint32_t track_nu
         eac3_update_sample_rate( &summary->frequency, &info->dec3_param, &eac3_imp->current_fscod2 );
         eac3_update_channel_count( &summary->channels, &info->dec3_param );
     }
-    memcpy( buffered_sample->data, eac3_imp->au, eac3_imp->au_length );
-    buffered_sample->length                 = eac3_imp->au_length;
-    buffered_sample->dts                    = eac3_imp->au_number++ * summary->samples_in_frame;
-    buffered_sample->cts                    = buffered_sample->dts;
-    buffered_sample->prop.ra_flags          = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
-    buffered_sample->prop.pre_roll.distance = 1;    /* MDCT */
+    lsmash_sample_t *sample = lsmash_create_sample( eac3_imp->au_length );
+    if( !sample )
+        return LSMASH_ERR_MEMORY_ALLOC;
+    *p_sample = sample;
+    memcpy( sample->data, eac3_imp->au, eac3_imp->au_length );
+    sample->length                 = eac3_imp->au_length;
+    sample->dts                    = eac3_imp->au_number++ * summary->samples_in_frame;
+    sample->cts                    = sample->dts;
+    sample->prop.ra_flags          = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+    sample->prop.pre_roll.distance = 1; /* MDCT */
     if( importer->status == IMPORTER_EOF )
     {
         eac3_imp->au_length = 0;

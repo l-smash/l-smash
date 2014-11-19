@@ -266,7 +266,7 @@ static inline void vc1_importer_check_eof( importer_t *importer, vc1_access_unit
         importer->status = IMPORTER_OK;
 }
 
-static int vc1_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t *buffered_sample )
+static int vc1_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t **p_sample )
 {
     if( !importer->info )
         return LSMASH_ERR_NAMELESS;
@@ -275,39 +275,40 @@ static int vc1_importer_get_accessunit( importer_t *importer, uint32_t track_num
     vc1_importer_t *vc1_imp = (vc1_importer_t *)importer->info;
     vc1_info_t     *info    = &vc1_imp->info;
     importer_status current_status = importer->status;
-    if( current_status == IMPORTER_ERROR || buffered_sample->length < vc1_imp->max_au_length )
+    if( current_status == IMPORTER_ERROR )
         return LSMASH_ERR_NAMELESS;
     if( current_status == IMPORTER_EOF )
-    {
-        buffered_sample->length = 0;
-        return 0;
-    }
+        return IMPORTER_EOF;
     int err = vc1_importer_get_access_unit_internal( importer, 0 );
     if( err < 0 )
     {
         importer->status = IMPORTER_ERROR;
         return err;
     }
+    lsmash_sample_t *sample = lsmash_create_sample( vc1_imp->max_au_length );
+    if( !sample )
+        return LSMASH_ERR_MEMORY_ALLOC;
+    *p_sample = sample;
     vc1_access_unit_t *access_unit = &info->access_unit;
     vc1_importer_check_eof( importer, access_unit );
-    buffered_sample->dts = vc1_imp->ts_list.timestamp[ access_unit->number - 1 ].dts;
-    buffered_sample->cts = vc1_imp->ts_list.timestamp[ access_unit->number - 1 ].cts;
-    buffered_sample->prop.leading = access_unit->independent
+    sample->dts = vc1_imp->ts_list.timestamp[ access_unit->number - 1 ].dts;
+    sample->cts = vc1_imp->ts_list.timestamp[ access_unit->number - 1 ].cts;
+    sample->prop.leading = access_unit->independent
                                  || access_unit->non_bipredictive
-                                 || buffered_sample->cts >= vc1_imp->last_ref_intra_cts
+                                 || sample->cts >= vc1_imp->last_ref_intra_cts
                                   ? ISOM_SAMPLE_IS_NOT_LEADING : ISOM_SAMPLE_IS_UNDECODABLE_LEADING;
     if( access_unit->independent && !access_unit->disposable )
-        vc1_imp->last_ref_intra_cts = buffered_sample->cts;
+        vc1_imp->last_ref_intra_cts = sample->cts;
     if( vc1_imp->composition_reordering_present && !access_unit->disposable && !access_unit->closed_gop )
-        buffered_sample->prop.allow_earlier = QT_SAMPLE_EARLIER_PTS_ALLOWED;
-    buffered_sample->prop.independent = access_unit->independent ? ISOM_SAMPLE_IS_INDEPENDENT : ISOM_SAMPLE_IS_NOT_INDEPENDENT;
-    buffered_sample->prop.disposable  = access_unit->disposable  ? ISOM_SAMPLE_IS_DISPOSABLE  : ISOM_SAMPLE_IS_NOT_DISPOSABLE;
-    buffered_sample->prop.redundant   = ISOM_SAMPLE_HAS_NO_REDUNDANCY;
+        sample->prop.allow_earlier = QT_SAMPLE_EARLIER_PTS_ALLOWED;
+    sample->prop.independent = access_unit->independent ? ISOM_SAMPLE_IS_INDEPENDENT : ISOM_SAMPLE_IS_NOT_INDEPENDENT;
+    sample->prop.disposable  = access_unit->disposable  ? ISOM_SAMPLE_IS_DISPOSABLE  : ISOM_SAMPLE_IS_NOT_DISPOSABLE;
+    sample->prop.redundant   = ISOM_SAMPLE_HAS_NO_REDUNDANCY;
     if( access_unit->random_accessible )
         /* All random access point is a sync sample even if it's an open RAP. */
-        buffered_sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
-    buffered_sample->length = access_unit->data_length;
-    memcpy( buffered_sample->data, access_unit->data, access_unit->data_length );
+        sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+    sample->length = access_unit->data_length;
+    memcpy( sample->data, access_unit->data, access_unit->data_length );
     return current_status;
 }
 
