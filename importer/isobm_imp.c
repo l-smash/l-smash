@@ -194,7 +194,7 @@ static int isobm_importer_construct_timeline( importer_t *importer, uint32_t tra
 {
     lsmash_root_t *root = importer->root;
     uint32_t track_ID = lsmash_get_track_ID( root, track_number );
-    int err = isom_construct_timeline( root, track_ID );
+    int err = isom_timeline_construct( root, track_ID );
     if( err < 0 )
         return err;
     if( root && root == importer->file->root )
