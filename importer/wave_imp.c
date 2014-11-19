@@ -36,6 +36,8 @@
         Multiple channel audio data and WAVE files March 7, 2007
         Microsoft Windows SDK MMReg.h
 **********************************************************************************/
+#include "core/timeline.h"
+
 #define WAVE_MIN_FILESIZE 45
 
 #define WAVE_FORMAT_TYPE_ID_PCM        0x0001   /* WAVE_FORMAT_PCM */
@@ -84,6 +86,7 @@ typedef struct
     uint32_t au_length;
     uint32_t au_number;
     waveformat_extensible_t fmt;
+    isom_portable_chunk_t   chunk;
 } wave_importer_t;
 
 static void remove_wave_importer( wave_importer_t *wave_imp )
@@ -283,6 +286,10 @@ static int wave_importer_probe( importer_t *importer )
                     err = LSMASH_ERR_INVALID_DATA;
                     goto fail;
                 }
+                wave_imp->chunk.data_offset = lsmash_bs_get_stream_pos( bs );
+                wave_imp->chunk.length      = ckSize;
+                wave_imp->chunk.number      = 1;
+                wave_imp->chunk.file        = importer->file;
                 wave_imp->number_of_samples = ckSize / wave_imp->fmt.wfx.nBlockAlign;
                 data_chunk_present = 1;
                 break;
@@ -308,9 +315,27 @@ static int wave_importer_probe( importer_t *importer )
         err = LSMASH_ERR_INVALID_DATA;
         goto fail;
     }
+    /* Make fake movie. */
+    uint32_t track_ID;
+    lsmash_movie_parameters_t movie_param = { 0 };
+    lsmash_track_parameters_t track_param = { 0 };
+    lsmash_media_parameters_t media_param = { 0 };
+    if( (err = lsmash_importer_make_fake_movie( importer )) < 0
+     || (err = lsmash_importer_make_fake_track( importer, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK, &track_ID )) < 0
+     || (err = lsmash_get_movie_parameters( importer->root, &movie_param )) < 0
+     || (err = lsmash_get_track_parameters( importer->root, track_ID, &track_param )) < 0
+     || (err = lsmash_get_media_parameters( importer->root, track_ID, &media_param )) < 0 )
+        goto fail;
+    movie_param.timescale = wave_imp->fmt.wfx.nSamplesPerSec;
+    media_param.timescale = wave_imp->fmt.wfx.nSamplesPerSec;
+    if( (err = lsmash_set_movie_parameters( importer->root, &movie_param )) < 0
+     || (err = lsmash_set_track_parameters( importer->root, track_ID, &track_param )) < 0
+     || (err = lsmash_set_media_parameters( importer->root, track_ID, &media_param )) < 0 )
+        goto fail;
     lsmash_audio_summary_t *summary = wave_create_summary( &wave_imp->fmt );
-    if( !summary )
+    if( !summary || lsmash_add_sample_entry( importer->root, track_ID, summary ) != 1 )
     {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         err = LSMASH_ERR_NAMELESS;
         goto fail;
     }
@@ -323,6 +348,7 @@ static int wave_importer_probe( importer_t *importer )
     importer->status = IMPORTER_OK;
     return 0;
 fail:
+    lsmash_importer_break_fake_movie( importer );
     remove_wave_importer( wave_imp );
     importer->info = NULL;
     return err;
@@ -343,6 +369,67 @@ static uint32_t wave_importer_get_last_delta( importer_t *importer, uint32_t tra
          : (wave_imp->number_of_samples % summary->samples_in_frame);
 }
 
+static int wave_importer_construct_timeline( importer_t *importer, uint32_t track_number )
+{
+    lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_get_entry_data( importer->summaries, track_number );
+    if( !summary )
+        return LSMASH_ERR_NAMELESS;
+    isom_timeline_t *timeline = isom_timeline_create();
+    if( !timeline )
+        return LSMASH_ERR_NAMELESS;
+    int err;
+    lsmash_file_t *file = importer->file;
+    if( !file->timeline )
+    {
+        file->timeline = lsmash_create_entry_list();
+        if( !file->timeline )
+        {
+            err = LSMASH_ERR_MEMORY_ALLOC;
+            goto fail;
+        }
+    }
+    wave_importer_t *wave_imp = (wave_importer_t *)importer->info;
+    if( (err = isom_timeline_set_track_ID( timeline, 1 )) < 0
+     || (err = isom_timeline_set_movie_timescale( timeline, wave_imp->fmt.wfx.nSamplesPerSec )) < 0
+     || (err = isom_timeline_set_media_timescale( timeline, wave_imp->fmt.wfx.nSamplesPerSec )) < 0
+     || (err = isom_timeline_set_sample_count( timeline, wave_imp->number_of_samples )) < 0
+     || (err = isom_timeline_set_max_sample_size( timeline, summary->max_au_length )) < 0
+     || (err = isom_timeline_set_media_duration( timeline, wave_imp->number_of_samples )) < 0
+     || (err = isom_timeline_set_track_duration( timeline, wave_imp->number_of_samples )) < 0 )
+        goto fail;
+    isom_timeline_set_lpcm_sample_getter_funcs( timeline );
+    uint64_t data_offset = wave_imp->chunk.data_offset;
+    for( uint32_t samples = 0; samples < wave_imp->number_of_samples; samples += summary->samples_in_frame )
+    {
+        uint32_t duration;
+        if( wave_imp->number_of_samples - samples >= summary->samples_in_frame )
+            duration = summary->samples_in_frame;
+        else
+            duration = wave_imp->number_of_samples - samples;
+        isom_lpcm_bunch_t bunch =
+        {
+            .pos          = data_offset,
+            .duration     = 1,
+            .offset       = 0,
+            .length       = wave_imp->fmt.wfx.nBlockAlign,
+            .index        = 1, /* no changes */
+            .chunk        = &wave_imp->chunk,
+            .prop         = (lsmash_sample_property_t){ .ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC },
+            .sample_count = duration
+        };
+        data_offset += duration * wave_imp->fmt.wfx.nBlockAlign;
+        if( (err = isom_add_lpcm_bunch_entry( timeline, &bunch )) < 0 )
+            goto fail;
+    }
+    if( (err = lsmash_add_entry( file->timeline, timeline )) < 0 )
+        goto fail;
+    return 0;
+fail:
+    isom_timeline_destroy( timeline );
+    isom_remove_timelines( file );
+    return err;
+}
+
 const importer_functions wave_importer =
 {
     { "WAVE", offsetof( importer_t, log_level ) },
@@ -350,5 +437,6 @@ const importer_functions wave_importer =
     wave_importer_probe,
     wave_importer_get_accessunit,
     wave_importer_get_last_delta,
-    wave_importer_cleanup
+    wave_importer_cleanup,
+    wave_importer_construct_timeline
 };
