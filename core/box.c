@@ -36,6 +36,8 @@
 #include "codecs/mp4a.h"
 #include "codecs/mp4sys.h"
 
+#include "importer/importer.h"
+
 static const lsmash_class_t lsmash_box_class =
 {
     "box"
@@ -556,6 +558,7 @@ static void isom_remove_file( lsmash_file_t *file )
 #endif
     lsmash_free( file->compatible_brands );
     lsmash_bs_cleanup( file->bs );
+    lsmash_importer_destroy( file->importer );
     if( file->fragment )
     {
         lsmash_remove_list( file->fragment->pool, isom_remove_sample_pool );

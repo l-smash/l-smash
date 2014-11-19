@@ -29,6 +29,8 @@
 #include "read.h"
 #include "fragment.h"
 
+#include "importer/importer.h"
+
 static void isom_clear_compat_flags
 (
     lsmash_file_t *file
@@ -583,19 +585,12 @@ int64_t lsmash_read_file
     int64_t ret = LSMASH_ERR_NAMELESS;
     if( file->flags & (LSMASH_FILE_MODE_READ | LSMASH_FILE_MODE_DUMP) )
     {
-        /* Get the file size if seekable when reading. */
-        if( !file->bs->unseekable )
-        {
-            ret = lsmash_bs_read_seek( file->bs, 0, SEEK_END );
-            if( ret < 0 )
-                return ret;
-            file->bs->written = ret;
-            lsmash_bs_read_seek( file->bs, 0, SEEK_SET );
-        }
-        else
-            ret = 0;
-        /* Read whole boxes. */
-        ret = isom_read_file( file );
+        importer_t *importer = lsmash_importer_alloc();
+        if( !importer )
+            return (int64_t)LSMASH_ERR_MEMORY_ALLOC;
+        file->importer = importer;
+        lsmash_importer_set_file( importer, file );
+        ret = lsmash_importer_find( importer, "ISOBMFF/QTFF", !file->bs->unseekable );
         if( ret < 0 )
             return ret;
         if( param )

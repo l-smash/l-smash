@@ -73,70 +73,69 @@ static const importer_functions *importer_func_table[] =
 ***************************************************************************/
 
 /******** importer public functions ********/
+importer_t *lsmash_importer_alloc( void )
+{
+    importer_t *importer = (importer_t *)lsmash_malloc_zero( sizeof(importer_t) );
+    if( !importer )
+        return NULL;
+    importer->root = lsmash_create_root();
+    if( !importer->root )
+    {
+        lsmash_free( importer );
+        return NULL;
+    }
+    importer->summaries = lsmash_create_entry_list();
+    if( !importer->summaries )
+    {
+        lsmash_destroy_root( importer->root );
+        lsmash_free( importer );
+        return NULL;
+    }
+    importer->class = &lsmash_importer_class;
+    return importer;
+}
 
-void lsmash_importer_close( importer_t *importer )
+void lsmash_importer_destroy( importer_t *importer )
 {
     if( !importer )
         return;
     if( importer->funcs.cleanup )
         importer->funcs.cleanup( importer );
-    if( importer->bs )
-    {
-        if( !importer->is_stdin && importer->bs->stream )
-            fclose( importer->bs->stream );
-        lsmash_bs_cleanup( importer->bs );
-    }
     lsmash_remove_list( importer->summaries, lsmash_cleanup_summary );
+    if( importer->root && importer->root != importer->file->root )
+        importer->root->file = NULL;    /* not internally opened file */
+    lsmash_destroy_root( importer->root );
     lsmash_free( importer );
 }
 
-importer_t *lsmash_importer_open( const char *identifier, const char *format )
+int lsmash_importer_set_file( importer_t *importer, lsmash_file_t *file )
 {
-    if( identifier == NULL )
-        return NULL;
-    int auto_detect = ( format == NULL || !strcmp( format, "auto" ) );
-    importer_t *importer = (importer_t *)lsmash_malloc_zero( sizeof(importer_t) );
+    if( !importer || !file || !file->bs )
+        return LSMASH_ERR_NAMELESS;
+    importer->root->file = file;
+    importer->file       = file;
+    importer->bs         = file->bs;
+    return 0;
+}
+
+void lsmash_importer_close( importer_t *importer )
+{
     if( !importer )
-        return NULL;
-    importer->class = &lsmash_importer_class;
-    /* Set up the bitstream handler for input. */
-    lsmash_bs_t *bs = lsmash_bs_create();
-    if( !bs )
+        return;
+    if( importer->bs )
     {
-        lsmash_log( importer, LSMASH_LOG_ERROR, "failed to create a bitstream handler.\n" );
-        goto fail;
+        if( !importer->is_stdin )
+            lsmash_close_file( &importer->file_param );
+        lsmash_bs_cleanup( importer->bs );
     }
-    bs->read            = lsmash_fread_wrapper;
-    bs->seek            = lsmash_fseek_wrapper;
-    bs->unseekable      = importer->is_stdin;
-    bs->buffer.max_size = BS_MAX_DEFAULT_READ_SIZE;
-    /* Open an input 'stream'. */
-    if( !strcmp( identifier, "-" ) )
-    {
-        /* special treatment for stdin */
-        if( auto_detect )
-        {
-            lsmash_log( importer, LSMASH_LOG_ERROR, "auto importer detection on stdin is not supported.\n" );
-            goto fail;
-        }
-        bs->stream = stdin;
-        importer->is_stdin = 1;
-    }
-    else if( (bs->stream = lsmash_fopen( identifier, "rb" )) == NULL )
-    {
-        lsmash_log( importer, LSMASH_LOG_ERROR, "failed to open %s.\n", identifier );
-        goto fail;
-    }
-    importer->bs = bs;
-    importer->summaries = lsmash_create_entry_list();
-    if( !importer->summaries )
-    {
-        lsmash_log( importer, LSMASH_LOG_ERROR, "failed to set up the importer.\n" );
-        goto fail;
-    }
-    /* find importer */
+    lsmash_importer_destroy( importer );
+}
+
+int lsmash_importer_find( importer_t *importer, const char *format, int auto_detect )
+{
     importer->log_level = LSMASH_LOG_QUIET; /* Any error log is confusing for the probe step. */
     const importer_functions *funcs;
+    int err = LSMASH_ERR_NAMELESS;
     if( auto_detect )
     {
         /* just rely on detector. */
@@ -145,7 +144,8 @@ importer_t *lsmash_importer_open( const char *identifier, const char *format )
             importer->class = &funcs->class;
             if( !funcs->detectable )
                 continue;
-            if( !funcs->probe( importer ) || lsmash_bs_read_seek( bs, 0, SEEK_SET ) != 0 )
+            if( (err = funcs->probe( importer )) == 0
+             || lsmash_bs_read_seek( importer->bs, 0, SEEK_SET ) != 0 )
                 break;
         }
     }
@@ -157,7 +157,7 @@ importer_t *lsmash_importer_open( const char *identifier, const char *format )
             importer->class = &funcs->class;
             if( strcmp( importer->class->name, format ) )
                 continue;
-            if( funcs->probe( importer ) < 0 )
+            if( (err = funcs->probe( importer )) < 0 )
                 funcs = NULL;
             break;
         }
@@ -167,9 +167,45 @@ importer_t *lsmash_importer_open( const char *identifier, const char *format )
     {
         importer->class = &lsmash_importer_class;
         lsmash_log( importer, LSMASH_LOG_ERROR, "failed to find the matched importer.\n" );
+    }
+    else
+        importer->funcs = *funcs;
+    return err;
+}
+
+importer_t *lsmash_importer_open( const char *identifier, const char *format )
+{
+    if( identifier == NULL )
+        return NULL;
+    int auto_detect = (format == NULL || !strcmp( format, "auto" ));
+    importer_t *importer = lsmash_importer_alloc();
+    if( !importer )
+        return NULL;
+    /* Open an input 'stream'. */
+    if( !strcmp( identifier, "-" ) )
+    {
+        /* special treatment for stdin */
+        if( auto_detect )
+        {
+            lsmash_log( importer, LSMASH_LOG_ERROR, "auto importer detection on stdin is not supported.\n" );
+            goto fail;
+        }
+        importer->is_stdin = 1;
+    }
+    if( lsmash_open_file( identifier, 1, &importer->file_param ) < 0 )
+    {
+        lsmash_log( importer, LSMASH_LOG_ERROR, "failed to open %s.\n", identifier );
         goto fail;
     }
-    importer->funcs = *funcs;
+    lsmash_file_t *file = lsmash_set_file( importer->root, &importer->file_param );
+    if( !file )
+    {
+        lsmash_log( importer, LSMASH_LOG_ERROR, "failed to set opened file.\n" );
+        goto fail;
+    }
+    lsmash_importer_set_file( importer, file );
+    if( lsmash_importer_find( importer, format, auto_detect ) < 0 )
+        goto fail;
     return importer;
 fail:
     lsmash_importer_close( importer );

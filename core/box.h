@@ -1878,6 +1878,7 @@ struct lsmash_file_tag
         lsmash_entry_list_t     *print;
         lsmash_entry_list_t     *timeline;
         lsmash_file_t           *initializer;
+        struct importer_tag     *importer;
         uint64_t  fragment_count;           /* the number of movie fragments we created */
         double    max_chunk_duration;       /* max duration per chunk in seconds */
         double    max_async_tolerance;      /* max tolerance, in seconds, for amount of interleaving asynchronization between tracks */
