@@ -326,17 +326,18 @@ for src in $SRC_CORE; do
     SRCS="$SRCS core/$src"
 done
 
-SRC_CLI="      \
-    a52_imp.c  \
-    adts_imp.c \
-    als_imp.c  \
-    amr_imp.c  \
-    cli.c      \
-    dts_imp.c  \
-    importer.c \
-    mp3_imp.c  \
-    nalu_imp.c \
-    vc1_imp.c  \
+SRC_CLI="       \
+    a52_imp.c   \
+    adts_imp.c  \
+    als_imp.c   \
+    amr_imp.c   \
+    cli.c       \
+    dts_imp.c   \
+    importer.c  \
+    isobm_imp.c \
+    mp3_imp.c   \
+    nalu_imp.c  \
+    vc1_imp.c   \
     wave_imp.c"
 
 SRC_TOOLS=""
