@@ -161,30 +161,7 @@ static int isobm_importer_probe( importer_t *importer )
             err = LSMASH_ERR_PATCH_WELCOME;
             goto fail;
         }
-        if( (err = lsmash_construct_timeline( root, isobm_imp->track_ID )) < 0 )
-            goto fail;
         lsmash_summary_t *summary = lsmash_get_summary( root, isobm_imp->track_ID, 1 );
-        summary->max_au_length = lsmash_get_max_sample_size_in_media_timeline( root, isobm_imp->track_ID );
-        if( summary->summary_type == LSMASH_SUMMARY_TYPE_VIDEO )
-        {
-            lsmash_media_ts_list_t ts_list;
-            if( (err = lsmash_get_media_timestamps( root, isobm_imp->track_ID, &ts_list )) < 0 )
-                goto fail;
-            uint32_t last_sample_delta;
-            if( (err = lsmash_get_last_sample_delta_from_media_timeline( root, isobm_imp->track_ID, &last_sample_delta )) < 0 )
-                goto fail;
-            isobm_imp->timebase = last_sample_delta;
-            for( uint32_t i = 1; i < ts_list.sample_count; i++ )
-                isobm_imp->timebase = lsmash_get_gcd( isobm_imp->timebase, ts_list.timestamp[i].dts - ts_list.timestamp[i - 1].dts );
-            lsmash_sort_timestamps_composition_order( &ts_list );
-            for( uint32_t i = 1; i < ts_list.sample_count; i++ )
-                isobm_imp->timebase = lsmash_get_gcd( isobm_imp->timebase, ts_list.timestamp[i].cts - ts_list.timestamp[i - 1].cts );
-            lsmash_delete_media_timestamps( &ts_list );
-            if( isobm_imp->timebase == 0 )
-                isobm_imp->timebase = 1;
-            ((lsmash_video_summary_t *)summary)->timebase  = isobm_imp->timebase;
-            ((lsmash_video_summary_t *)summary)->timescale = lsmash_get_media_timescale( root, isobm_imp->track_ID );
-        }
         if( (err = lsmash_add_entry( importer->summaries, summary )) < 0 )
         {
             lsmash_cleanup_summary( (lsmash_summary_t *)summary );
@@ -213,6 +190,42 @@ static uint32_t isobm_importer_get_last_delta( importer_t *importer, uint32_t tr
     return last_sample_delta / isobm_imp->timebase;
 }
 
+static int isobm_importer_construct_timeline( importer_t *importer, uint32_t track_number )
+{
+    lsmash_root_t *root = importer->root;
+    uint32_t track_ID = lsmash_get_track_ID( root, track_number );
+    int err = isom_construct_timeline( root, track_ID );
+    if( err < 0 )
+        return err;
+    if( root && root == importer->file->root )
+    {
+        lsmash_summary_t *summary = lsmash_get_entry_data( importer->summaries, track_number );
+        summary->max_au_length = lsmash_get_max_sample_size_in_media_timeline( root, track_ID );
+        if( summary->summary_type == LSMASH_SUMMARY_TYPE_VIDEO )
+        {
+            lsmash_media_ts_list_t ts_list;
+            if( (err = lsmash_get_media_timestamps( root, track_ID, &ts_list )) < 0 )
+                return err;
+            uint32_t last_sample_delta;
+            if( (err = lsmash_get_last_sample_delta_from_media_timeline( root, track_ID, &last_sample_delta )) < 0 )
+                return err;
+            isobm_importer_t *isobm_imp = (isobm_importer_t *)importer->info;
+            isobm_imp->timebase = last_sample_delta;
+            for( uint32_t i = 1; i < ts_list.sample_count; i++ )
+                isobm_imp->timebase = lsmash_get_gcd( isobm_imp->timebase, ts_list.timestamp[i].dts - ts_list.timestamp[i - 1].dts );
+            lsmash_sort_timestamps_composition_order( &ts_list );
+            for( uint32_t i = 1; i < ts_list.sample_count; i++ )
+                isobm_imp->timebase = lsmash_get_gcd( isobm_imp->timebase, ts_list.timestamp[i].cts - ts_list.timestamp[i - 1].cts );
+            lsmash_delete_media_timestamps( &ts_list );
+            if( isobm_imp->timebase == 0 )
+                isobm_imp->timebase = 1;
+            ((lsmash_video_summary_t *)summary)->timebase  = isobm_imp->timebase;
+            ((lsmash_video_summary_t *)summary)->timescale = lsmash_get_media_timescale( root, track_ID );
+        }
+    }
+    return 0;
+}
+
 const importer_functions isobm_importer =
 {
     { "ISOBMFF/QTFF", offsetof( importer_t, log_level ) },
@@ -220,5 +233,6 @@ const importer_functions isobm_importer =
     isobm_importer_probe,
     isobm_importer_get_accessunit,
     isobm_importer_get_last_delta,
-    isobm_importer_cleanup
+    isobm_importer_cleanup,
+    isobm_importer_construct_timeline
 };

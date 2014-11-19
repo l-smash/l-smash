@@ -34,10 +34,11 @@ typedef struct importer_tag importer_t;
 #include "core/box.h"
 #include "codecs/description.h"
 
-typedef void     ( *importer_cleanup )          ( importer_t * );
-typedef int      ( *importer_get_accessunit )   ( importer_t *, uint32_t, lsmash_sample_t ** );
-typedef int      ( *importer_probe )            ( importer_t * );
-typedef uint32_t ( *importer_get_last_duration )( importer_t *, uint32_t );
+typedef void     ( *importer_cleanup )           ( importer_t * );
+typedef int      ( *importer_get_accessunit )    ( importer_t *, uint32_t, lsmash_sample_t ** );
+typedef int      ( *importer_probe )             ( importer_t * );
+typedef uint32_t ( *importer_get_last_duration ) ( importer_t *, uint32_t );
+typedef int      ( *importer_construct_timeline )( importer_t *, uint32_t );
 
 typedef enum
 {
@@ -49,12 +50,13 @@ typedef enum
 
 typedef struct
 {
-    lsmash_class_t             class;
-    int                        detectable;
-    importer_probe             probe;
-    importer_get_accessunit    get_accessunit;
-    importer_get_last_duration get_last_delta;
-    importer_cleanup           cleanup;
+    lsmash_class_t              class;
+    int                         detectable;
+    importer_probe              probe;
+    importer_get_accessunit     get_accessunit;
+    importer_get_last_duration  get_last_delta;
+    importer_cleanup            cleanup;
+    importer_construct_timeline construct_timeline;
 } importer_functions;
 
 struct importer_tag
@@ -114,6 +116,12 @@ int lsmash_importer_get_access_unit
 );
 
 uint32_t lsmash_importer_get_last_delta
+(
+    importer_t *importer,
+    uint32_t    track_number
+);
+
+int lsmash_importer_construct_timeline
 (
     importer_t *importer,
     uint32_t    track_number

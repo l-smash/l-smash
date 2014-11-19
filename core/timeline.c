@@ -34,6 +34,8 @@
 #include "codecs/mp4sys.h"
 #include "codecs/description.h"
 
+#include "importer/importer.h"
+
 #define NO_RANDOM_ACCESS_POINT 0xffffffff
 
 typedef struct
@@ -659,7 +661,7 @@ static int isom_get_random_access_point_grouping_info
     return 0;
 }
 
-int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
+int isom_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
 {
     if( isom_check_initializer_present( root ) < 0 )
         return LSMASH_ERR_FUNCTION_PARAM;
@@ -1336,6 +1338,40 @@ int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
 fail:
     isom_destruct_timeline_direct( timeline );
     return err;
+}
+
+int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
+{
+    if( !root
+     || !root->file
+     || track_ID == 0 )
+        return LSMASH_ERR_FUNCTION_PARAM;
+    uint32_t track_number;
+    if( root->file->initializer )
+    {
+        if( !root->file->initializer->moov )
+            return LSMASH_ERR_INVALID_DATA;
+        track_number = 1;
+        int track_found = 0;
+        for( lsmash_entry_t *entry = root->file->initializer->moov->trak_list.head; entry; entry = entry->next )
+        {
+            isom_trak_t *trak = (isom_trak_t *)entry->data;
+            if( !trak
+             || !trak->tkhd )
+                continue;
+            if( trak->tkhd->track_ID == track_ID )
+            {
+                track_found = 1;
+                break;
+            }
+            ++track_number;
+        }
+        if( !track_found )
+            return LSMASH_ERR_NAMELESS;
+    }
+    else
+        track_number = track_ID;
+    return lsmash_importer_construct_timeline( root->file->importer, track_number );
 }
 
 int lsmash_get_dts_from_media_timeline( lsmash_root_t *root, uint32_t track_ID, uint32_t sample_number, uint64_t *dts )

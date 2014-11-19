@@ -231,6 +231,15 @@ uint32_t lsmash_importer_get_last_delta( importer_t *importer, uint32_t track_nu
     return importer->funcs.get_last_delta( importer, track_number );
 }
 
+int lsmash_importer_construct_timeline( importer_t *importer, uint32_t track_number )
+{
+    if( !importer )
+        return LSMASH_ERR_FUNCTION_PARAM;
+    if( !importer->funcs.construct_timeline )
+        return LSMASH_ERR_PATCH_WELCOME;
+    return importer->funcs.construct_timeline( importer, track_number );
+}
+
 uint32_t lsmash_importer_get_track_count( importer_t *importer )
 {
     if( !importer || !importer->summaries )

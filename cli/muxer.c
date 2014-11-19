@@ -734,6 +734,12 @@ static int open_input_files( muxer_t *muxer )
              input->current_track_number ++ )
         {
             input_track_t *in_track = &input->track[input->current_track_number - 1];
+            int err = lsmash_importer_construct_timeline( input->importer, input->current_track_number );
+            if( err < 0 && err != LSMASH_ERR_PATCH_WELCOME )
+            {
+                in_track->active = 0;
+                continue;
+            }
             in_track->summary = lsmash_duplicate_summary( input->importer, input->current_track_number );
             if( !in_track->summary )
                 return ERROR_MSG( "failed to get input summary.\n" );

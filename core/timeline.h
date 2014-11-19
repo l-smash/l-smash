@@ -23,6 +23,15 @@
 #ifndef LSMASH_TIMELINE_H
 #define LSMASH_TIMELINE_H
 
-void isom_remove_timelines( lsmash_file_t *file );
+void isom_remove_timelines
+(
+    lsmash_file_t *file
+);
+
+int isom_construct_timeline
+(
+    lsmash_root_t *root,
+    uint32_t      track_ID
+);
 
 #endif /* LSMASH_TIMELINE_H */
