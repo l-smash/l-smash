@@ -115,9 +115,6 @@ int main( int argc, char *argv[] )
     {
         filename = argv[1];
     }
-#ifdef _WIN32
-    _setmode( _fileno(stdin), _O_BINARY );
-#endif
     /* Open the input file. */
     lsmash_root_t *root = lsmash_create_root();
     if( !root )
