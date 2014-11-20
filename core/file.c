@@ -23,6 +23,7 @@
 #include "common/internal.h" /* must be placed first */
 
 #include <string.h>
+#include <fcntl.h>
 
 #include "box.h"
 #include "read.h"
@@ -434,6 +435,11 @@ int lsmash_open_file
 #endif
     if( file_mode == 0 )
         return LSMASH_ERR_FUNCTION_PARAM;
+#ifdef _WIN32
+    _setmode( _fileno( stdin ),  _O_BINARY );
+    _setmode( _fileno( stdout ), _O_BINARY );
+    _setmode( _fileno( stderr ), _O_BINARY );
+#endif
     FILE *stream   = NULL;
     int   seekable = 1;
     if( !strcmp( filename, "-" ) )
