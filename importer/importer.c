@@ -122,12 +122,8 @@ void lsmash_importer_close( importer_t *importer )
 {
     if( !importer )
         return;
-    if( importer->bs )
-    {
-        if( !importer->is_stdin )
-            lsmash_close_file( &importer->file_param );
-        lsmash_bs_cleanup( importer->bs );
-    }
+    if( !importer->is_stdin )
+        lsmash_close_file( &importer->file_param );
     lsmash_importer_destroy( importer );
 }
 
