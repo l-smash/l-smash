@@ -483,7 +483,7 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
         }
         if( assume_fps <= 0 )
             return ERROR_MSG( "Invalid assumed fps\n" );
-        int64_t file_pos = ftell( timecode->file );
+        int64_t file_pos = lsmash_ftell( timecode->file );
         if( file_pos < 0 )
             return ERROR_MSG( "Failed to tell the postion of input timecode file.\n" );
         /* Check whether valid or not and count number of sequences. */
@@ -505,7 +505,7 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
             if( timecode->auto_media_timescale || timecode->auto_media_timebase )
                 ++num_sequences;
         }
-        if( fseek( timecode->file, file_pos, SEEK_SET ) != 0 )
+        if( lsmash_fseek( timecode->file, file_pos, SEEK_SET ) != 0 )
             return ERROR_MSG( "Failed to seek input timecode file.\n" );
         /* Preparation storing timecodes. */
         double fps_array[ (timecode->auto_media_timescale || timecode->auto_media_timebase) * num_sequences + 1 ];
@@ -555,7 +555,7 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
                 lsmash_free( timecode_array );
                 return ERROR_MSG( "Failed to try matroska timescale.\n" );
             }
-            if( fseek( timecode->file, file_pos, SEEK_SET ) != 0 )
+            if( lsmash_fseek( timecode->file, file_pos, SEEK_SET ) != 0 )
                 return ERROR_MSG( "Failed to seek input timecode file.\n" );
             assume_fps_sig = sigexp10( assume_fps, &exponent );
             corrected_assume_fps = MATROSKA_TIMESCALE / ( round( MATROSKA_TIMESCALE / assume_fps_sig ) / exponent );
@@ -580,7 +580,7 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
     else    /* tcfv == 2 */
     {
         uint32_t num_timecodes = 0;
-        int64_t file_pos = ftell( timecode->file );
+        int64_t file_pos = lsmash_ftell( timecode->file );
         if( file_pos < 0 )
             return ERROR_MSG( "Failed to tell the postion of input timecode file.\n" );
         while( fgets( buff, sizeof(buff), timecode->file ) )
@@ -589,7 +589,7 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
             {
                 if( !num_timecodes )
                 {
-                    file_pos = ftell( timecode->file );
+                    file_pos = lsmash_ftell( timecode->file );
                     if( file_pos < 0 )
                         return ERROR_MSG( "Failed to tell the postion of input timecode file.\n" );
                 }
@@ -601,7 +601,7 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
             return ERROR_MSG( "No timecodes!\n" );
         if( sample_count > num_timecodes )
             return ERROR_MSG( "Lack number of timecodes.\n" );
-        if( fseek( timecode->file, file_pos, SEEK_SET ) != 0 )
+        if( lsmash_fseek( timecode->file, file_pos, SEEK_SET ) != 0 )
             return ERROR_MSG( "Failed to seek input timecode file.\n" );
         timecode_array = lsmash_malloc( sample_count * sizeof(uint64_t) );
         if( !timecode_array )
