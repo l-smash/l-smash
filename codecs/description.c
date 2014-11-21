@@ -1979,7 +1979,7 @@ static void isom_set_samplerate_division_of_media_timescale( isom_audio_entry_t 
         uint32_t orig_timescale = ((isom_mdia_t *)audio->parent->parent->parent->parent)->mdhd->timescale;
         uint32_t timescale      = orig_timescale;
         uint32_t i              = 2;
-        while( timescale > UINT16_MAX && timescale > 1 && i <= UINT32_MAX )
+        while( timescale > UINT16_MAX && timescale > 1 )
         {
             if( timescale % i == 0 )
                 timescale /= i;
