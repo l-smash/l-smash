@@ -260,7 +260,10 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     /* Create a Track Reference Type Box. */
     isom_tref_type_t *chap = isom_add_track_reference_type( trak->tref, QT_TREF_TYPE_CHAP );
     if( !chap )
-        goto error_message;      /* no need to free id */
+    {
+        lsmash_free( id );
+        goto error_message;
+    }
     chap->ref_count = 1;
     chap->track_ID  = id;
     /* Create a reference chapter track. */
