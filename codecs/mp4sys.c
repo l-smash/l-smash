@@ -258,7 +258,7 @@ static void mp4sys_remove_descriptor_in_predefined_list( void *opaque_descriptor
     if( descriptor->parent )
     {
         lsmash_entry_list_t *list = (lsmash_entry_list_t *)(((int8_t *)descriptor->parent) + offset_of_list);
-        for( lsmash_entry_t *entry = list ? list->head : NULL; entry; entry = entry->next )
+        for( lsmash_entry_t *entry = list->head; entry; entry = entry->next )
             if( descriptor == entry->data )
             {
                 /* We don't free this descriptor here.
