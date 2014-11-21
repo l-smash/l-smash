@@ -2699,11 +2699,6 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
                                 for( uint32_t i = 0; i < chan->numberChannelDescriptions; i++ )
                                 {
                                     isom_channel_description_t *channelDescriptions = (isom_channel_description_t *)(&chan->channelDescriptions[i]);
-                                    if( !channelDescriptions )
-                                    {
-                                        lsmash_bs_cleanup( bs );
-                                        goto fail;
-                                    }
                                     lsmash_bs_put_be32( bs, channelDescriptions->channelLabel );
                                     lsmash_bs_put_be32( bs, channelDescriptions->channelFlags );
                                     lsmash_bs_put_be32( bs, channelDescriptions->coordinates[0] );
