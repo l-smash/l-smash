@@ -304,7 +304,7 @@ static int muxer_usage_error( void )
 
 static int add_brand( option_t *opt, uint32_t brand )
 {
-    if( opt->num_of_brands > MAX_NUM_OF_BRANDS )
+    if( opt->num_of_brands >= MAX_NUM_OF_BRANDS )
         return -1;
     /* Avoid duplication. */
     for( uint32_t i = 0; i < opt->num_of_brands; i++ )
