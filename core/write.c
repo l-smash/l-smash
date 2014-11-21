@@ -510,8 +510,6 @@ static int isom_write_chan( lsmash_bs_t *bs, isom_box_t *box )
         for( uint32_t i = 0; i < chan->numberChannelDescriptions; i++ )
         {
             isom_channel_description_t *channelDescriptions = (isom_channel_description_t *)(&chan->channelDescriptions[i]);
-            if( !channelDescriptions )
-                return LSMASH_ERR_NAMELESS;
             lsmash_bs_put_be32( bs, channelDescriptions->channelLabel );
             lsmash_bs_put_be32( bs, channelDescriptions->channelFlags );
             lsmash_bs_put_be32( bs, channelDescriptions->coordinates[0] );
