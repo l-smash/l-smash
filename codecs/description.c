@@ -2759,6 +2759,7 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
                     lsmash_codec_specific_t *specific = lsmash_create_codec_specific_data( type, LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
                     if( !specific )
                     {
+                        lsmash_free( box_data );
                         lsmash_bs_cleanup( bs );
                         goto fail;
                     }
