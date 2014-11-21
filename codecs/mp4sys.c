@@ -403,9 +403,9 @@ static int mp4sys_write_DecoderConfigDescriptor( lsmash_bs_t *bs, mp4sys_Decoder
 {
     lsmash_bs_put_byte( bs, dcd->objectTypeIndication );
     uint8_t temp;
-    temp  = (dcd->streamType << 2) & 0x3F;
-    temp |= (dcd->upStream   << 1) & 0x01;
-    temp |=  dcd->reserved         & 0x01;
+    temp  = (dcd->streamType & 0x3F) << 2;
+    temp |= (dcd->upStream   & 0x01) << 1;
+    temp |=  dcd->reserved   & 0x01;
     lsmash_bs_put_byte( bs, temp );
     lsmash_bs_put_be24( bs, dcd->bufferSizeDB );
     lsmash_bs_put_be32( bs, dcd->maxBitrate );
