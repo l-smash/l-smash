@@ -560,6 +560,7 @@ static int mp4a_get_MPEG_1_2_SpecificConfig( lsmash_bits_t *bits, mp4a_AudioSpec
     mp4a_MPEG_1_2_SpecificConfig_t *mpeg_1_2_sc = (mp4a_MPEG_1_2_SpecificConfig_t *)lsmash_malloc_zero( sizeof(mp4a_MPEG_1_2_SpecificConfig_t) );
     if( !mpeg_1_2_sc )
         return LSMASH_ERR_MEMORY_ALLOC;
+    asc->deepAudioSpecificConfig = mpeg_1_2_sc;
     mpeg_1_2_sc->extension = lsmash_bits_get( bits, 1 );
     return 0;
 }
