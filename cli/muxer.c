@@ -908,8 +908,8 @@ static int prepare_output( muxer_t *muxer )
                     if( !out_track->track_ID )
                         return ERROR_MSG( "failed to create a track.\n" );
                     lsmash_video_summary_t *summary = (lsmash_video_summary_t *)in_track->summary;
-                    uint64_t display_width  = summary->width  << 16;
-                    uint64_t display_height = summary->height << 16;
+                    uint64_t display_width  = (uint64_t)summary->width  << 16;
+                    uint64_t display_height = (uint64_t)summary->height << 16;
                     if( summary->par_h && summary->par_v )
                     {
                         double sar = (double)summary->par_h / summary->par_v;
@@ -918,8 +918,8 @@ static int prepare_output( muxer_t *muxer )
                         else
                             display_height /= sar;
                     }
-                    track_param.display_width  = display_width;
-                    track_param.display_height = display_height;
+                    track_param.display_width  = display_width  <= UINT32_MAX ? display_width  : UINT32_MAX;
+                    track_param.display_height = display_height <= UINT32_MAX ? display_height : UINT32_MAX;
                     /* Initialize media */
                     uint32_t timescale = 25;    /* default value */
                     uint32_t timebase  = 1;     /* default value */
