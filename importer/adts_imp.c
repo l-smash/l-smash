@@ -320,11 +320,11 @@ static int mp4sys_adts_get_accessunit
         return IMPORTER_EOF;
     if( current_status == IMPORTER_CHANGE )
     {
+        lsmash_entry_t *entry = lsmash_get_entry( importer->summaries, track_number );
+        if( !entry || !entry->data )
+            return LSMASH_ERR_NAMELESS;
         lsmash_audio_summary_t *summary = mp4sys_adts_create_summary( &adts_imp->header );
         if( !summary )
-            return LSMASH_ERR_NAMELESS;
-        lsmash_entry_t* entry = lsmash_get_entry( importer->summaries, track_number );
-        if( !entry || !entry->data )
             return LSMASH_ERR_NAMELESS;
         lsmash_cleanup_summary( entry->data );
         entry->data = summary;
