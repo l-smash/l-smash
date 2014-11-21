@@ -842,8 +842,8 @@ static int isom_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_de
         uint64_t max_cts    = 0;
         uint64_t max2_cts   = 0;
         uint64_t min_cts    = UINT64_MAX;
-        uint32_t max_offset = 0;
-        uint32_t min_offset = UINT32_MAX;
+        int64_t  max_offset = 0;
+        int64_t  min_offset = UINT32_MAX;
         int32_t  ctd_shift  = trak->cache->timestamp.ctd_shift;
         uint32_t j = 0;
         uint32_t k = 0;
@@ -861,10 +861,10 @@ static int isom_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_de
             if( ctd_shift )
             {
                 /* Anyway, add composition to decode timeline shift for calculating maximum and minimum CTS correctly. */
-                int32_t sample_offset = (int32_t)ctts_data->sample_offset;
+                int64_t sample_offset = (int32_t)ctts_data->sample_offset;
                 cts = dts + sample_offset + ctd_shift;
-                max_offset = LSMASH_MAX( (int32_t)max_offset, sample_offset );
-                min_offset = LSMASH_MIN( (int32_t)min_offset, sample_offset );
+                max_offset = LSMASH_MAX( max_offset, sample_offset );
+                min_offset = LSMASH_MIN( min_offset, sample_offset );
             }
             else
             {
@@ -930,8 +930,9 @@ static int isom_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_de
             }
             int64_t composition_end_time = max_cts + (max_cts - max2_cts);
             if( !file->fragment
-             && ((int32_t)min_offset <= INT32_MAX) && ((int32_t)max_offset  <= INT32_MAX)
-             && ((int64_t)min_cts    <= INT32_MAX) && (composition_end_time <= INT32_MAX) )
+             && (min_offset <= INT32_MAX) && (min_offset >= INT32_MIN)
+             && (max_offset <= INT32_MAX) && (max_offset >= INT32_MIN)
+             && ((int64_t)min_cts <= INT32_MAX) && (composition_end_time <= INT32_MAX) )
             {
                 if( !cslg )
                 {
