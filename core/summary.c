@@ -56,9 +56,8 @@ int lsmash_setup_AudioSpecificConfig( lsmash_audio_summary_t *summary )
         return LSMASH_ERR_NAMELESS;
     }
     mp4a_put_AudioSpecificConfig( bs, asc );
-    void *new_asc;
     uint32_t new_length;
-    new_asc = lsmash_bs_export_data( bs, &new_length );
+    uint8_t *new_asc = lsmash_bs_export_data( bs, &new_length );
     mp4a_remove_AudioSpecificConfig( asc );
     lsmash_bs_cleanup( bs );
     if( !new_asc )
@@ -73,11 +72,10 @@ int lsmash_setup_AudioSpecificConfig( lsmash_audio_summary_t *summary )
     specific->format            = LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED;
     specific->destruct          = (lsmash_codec_specific_destructor_t)lsmash_free;
     specific->size              = new_length;
-    specific->data.unstructured = lsmash_memdup( new_asc, new_length );
+    specific->data.unstructured = new_asc;
     if( !specific->data.unstructured
      || lsmash_add_entry( &summary->opaque->list, specific ) < 0 )
     {
-        lsmash_free( new_asc );
         lsmash_destroy_codec_specific_data( specific );
         return LSMASH_ERR_MEMORY_ALLOC;
     }
