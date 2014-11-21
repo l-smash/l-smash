@@ -1237,8 +1237,6 @@ int isom_update_bitrate_description( isom_mdia_t *mdia )
          || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_HEV1_VIDEO ) )
         {
             isom_visual_entry_t *stsd_data = (isom_visual_entry_t *)sample_entry;
-            if( !stsd_data )
-                return LSMASH_ERR_INVALID_DATA;
             isom_btrt_t *btrt = (isom_btrt_t *)isom_get_extension_box_format( &stsd_data->extensions, ISOM_BOX_TYPE_BTRT );
             if( btrt )
             {
@@ -1252,8 +1250,6 @@ int isom_update_bitrate_description( isom_mdia_t *mdia )
         else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_MP4V_VIDEO ) )
         {
             isom_visual_entry_t *stsd_data = (isom_visual_entry_t *)sample_entry;
-            if( !stsd_data )
-                return LSMASH_ERR_INVALID_DATA;
             isom_esds_t *esds = (isom_esds_t *)isom_get_extension_box_format( &stsd_data->extensions, ISOM_BOX_TYPE_ESDS );
             if( !esds || !esds->ES )
                 return LSMASH_ERR_INVALID_DATA;
@@ -1266,8 +1262,6 @@ int isom_update_bitrate_description( isom_mdia_t *mdia )
         else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_MP4A_AUDIO ) )
         {
             isom_audio_entry_t *stsd_data = (isom_audio_entry_t *)sample_entry;
-            if( !stsd_data )
-                return LSMASH_ERR_INVALID_DATA;
             isom_esds_t *esds = NULL;
             if( ((isom_audio_entry_t *)sample_entry)->version )
             {
@@ -1291,8 +1285,6 @@ int isom_update_bitrate_description( isom_mdia_t *mdia )
               || lsmash_check_codec_type_identical( sample_type,   QT_CODEC_TYPE_ALAC_AUDIO ) )
         {
             isom_audio_entry_t *alac = (isom_audio_entry_t *)sample_entry;
-            if( !alac )
-                return LSMASH_ERR_INVALID_DATA;
             uint8_t *exdata      = NULL;
             uint32_t exdata_size = 0;
             isom_box_t *alac_ext = isom_get_extension_box( &alac->extensions, QT_BOX_TYPE_WAVE );
@@ -1379,8 +1371,6 @@ int isom_update_bitrate_description( isom_mdia_t *mdia )
               || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_DTSL_AUDIO ) )
         {
             isom_audio_entry_t *dts_audio = (isom_audio_entry_t *)sample_entry;
-            if( !dts_audio )
-                return LSMASH_ERR_INVALID_DATA;
             isom_box_t *ext = isom_get_extension_box( &dts_audio->extensions, ISOM_BOX_TYPE_DDTS );
             if( !(ext && (ext->manager & LSMASH_BINARY_CODED_BOX) && ext->binary && ext->size >= 28) )
                 return LSMASH_ERR_INVALID_DATA;
@@ -1395,8 +1385,6 @@ int isom_update_bitrate_description( isom_mdia_t *mdia )
         else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_EC_3_AUDIO ) )
         {
             isom_audio_entry_t *eac3 = (isom_audio_entry_t *)sample_entry;
-            if( !eac3 )
-                return LSMASH_ERR_INVALID_DATA;
             isom_box_t *ext = isom_get_extension_box( &eac3->extensions, ISOM_BOX_TYPE_DEC3 );
             if( !(ext && (ext->manager & LSMASH_BINARY_CODED_BOX) && ext->binary && ext->size >= 10) )
                 return LSMASH_ERR_INVALID_DATA;
