@@ -2006,7 +2006,7 @@ static int isom_print_data( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
         {
             /* RIAA-PA (RIAA Parental advisory) 8-bit integer */
             lsmash_ifprintf( fp, indent, "value = %"PRIu8, data->value[0] );
-            if( (signed)data->value[0] == -1 )
+            if( data->value[0] == (uint8_t)-1 )
                 fprintf( fp, " (no)" );
             else if( data->value[0] == 1 )
                 fprintf( fp, " (yes)" );
