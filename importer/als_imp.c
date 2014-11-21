@@ -288,7 +288,7 @@ static lsmash_audio_summary_t *als_create_summary( lsmash_bs_t *bs, als_specific
         while( !bs->eof )
         {
             if( lsmash_bs_read( bs, bs->buffer.max_size ) < 0 )
-                return NULL;
+                goto fail;
             alssc->access_unit_size = lsmash_bs_get_remaining_buffer_size( bs );
         }
         summary->max_au_length    = alssc->access_unit_size;
@@ -299,36 +299,33 @@ static lsmash_audio_summary_t *als_create_summary( lsmash_bs_t *bs, als_specific
                                                      summary->frequency, summary->channels, summary->sbr_mode,
                                                      alssc->sc_data, alssc->size, &data_length );
     if( !data )
-    {
-        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-        return NULL;
-    }
+        goto fail;
     lsmash_codec_specific_t *specific = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG,
                                                                            LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
     if( !specific )
     {
-        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         lsmash_free( data );
-        return NULL;
+        goto fail;
     }
     lsmash_mp4sys_decoder_parameters_t *param = (lsmash_mp4sys_decoder_parameters_t *)specific->data.structured;
     param->objectTypeIndication = MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3;
     param->streamType           = MP4SYS_STREAM_TYPE_AudioStream;
     if( lsmash_set_mp4sys_decoder_specific_info( param, data, data_length ) < 0 )
     {
-        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         lsmash_destroy_codec_specific_data( specific );
         lsmash_free( data );
-        return NULL;
+        goto fail;
     }
     lsmash_free( data );
     if( lsmash_add_entry( &summary->opaque->list, specific ) < 0 )
     {
-        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         lsmash_destroy_codec_specific_data( specific );
-        return NULL;
+        goto fail;
     }
     return summary;
+fail:
+    lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+    return NULL;
 }
 
 static int mp4a_als_importer_probe( importer_t *importer )
