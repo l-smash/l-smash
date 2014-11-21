@@ -101,6 +101,7 @@ typedef struct
     uint8_t  ChromaArrayType;
     uint8_t  bit_depth_luma_minus8;
     uint8_t  bit_depth_chroma_minus8;
+    uint8_t  log2_max_frame_num;
     uint8_t  pic_order_cnt_type;
     uint8_t  delta_pic_order_always_zero_flag;
     uint8_t  num_ref_frames_in_pic_order_cnt_cycle;
@@ -110,7 +111,6 @@ typedef struct
     int32_t  offset_for_ref_frame[255];
     int64_t  ExpectedDeltaPerPicOrderCntCycle;
     uint32_t max_num_ref_frames;
-    uint32_t log2_max_frame_num;
     uint32_t MaxFrameNum;
     uint32_t log2_max_pic_order_cnt_lsb;
     uint32_t MaxPicOrderCntLsb;

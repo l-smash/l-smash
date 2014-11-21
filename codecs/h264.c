@@ -1035,7 +1035,7 @@ static int h264_parse_slice_header
     if( sps->separate_colour_plane_flag )
         lsmash_bits_get( bits, 2 );     /* colour_plane_id */
     uint64_t frame_num = lsmash_bits_get( bits, sps->log2_max_frame_num );
-    if( frame_num >= (1 << sps->log2_max_frame_num) || (slice->IdrPicFlag && frame_num) )
+    if( frame_num >= (1ULL << sps->log2_max_frame_num) || (slice->IdrPicFlag && frame_num) )
         return LSMASH_ERR_INVALID_DATA;
     slice->frame_num = frame_num;
     if( !sps->frame_mbs_only_flag )
