@@ -611,7 +611,7 @@ static mp4a_AudioSpecificConfig_t *mp4a_get_AudioSpecificConfig( uint8_t *dsi_pa
     }
     mp4a_AudioSpecificConfig_t *asc = (mp4a_AudioSpecificConfig_t *)lsmash_malloc_zero( sizeof(mp4a_AudioSpecificConfig_t) );
     if( !asc )
-        return NULL;
+        goto fail;
     asc->audioObjectType = lsmash_bits_get( bits, 5 );
     if( asc->audioObjectType == 31 )
         asc->extensionAudioObjectType = asc->audioObjectType += 1 + lsmash_bits_get( bits, 6 );
