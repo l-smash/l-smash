@@ -364,6 +364,7 @@ static int decide_brands( option_t *opt )
             case ISOM_BRAND_TYPE_M4A :
             case ISOM_BRAND_TYPE_M4V :
                 opt->itunes_movie = 1;
+                /* fall-through */
             case ISOM_BRAND_TYPE_MP42 :
                 add_brand( opt, ISOM_BRAND_TYPE_MP42 );
                 add_brand( opt, ISOM_BRAND_TYPE_MP41 );
