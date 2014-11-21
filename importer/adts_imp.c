@@ -462,18 +462,24 @@ static int mp4sys_adts_probe
     mp4sys_adts_importer_t *adts_imp = create_mp4sys_adts_importer( importer );
     if( !adts_imp )
         return LSMASH_ERR_MEMORY_ALLOC;
+    int err;
     uint8_t buf[MP4SYS_ADTS_MAX_FRAME_LENGTH];
     if( lsmash_bs_get_bytes_ex( importer->bs, MP4SYS_ADTS_BASIC_HEADER_LENGTH, buf ) != MP4SYS_ADTS_BASIC_HEADER_LENGTH )
-        return LSMASH_ERR_INVALID_DATA;
+    {
+        err = LSMASH_ERR_INVALID_DATA;
+        goto fail;
+    }
     mp4sys_adts_fixed_header_t    header          = { 0 };
     mp4sys_adts_variable_header_t variable_header = { 0 };
-    int err = mp4sys_adts_parse_headers( importer->bs, buf, &header, &variable_header );
-    if( err < 0 )
+    if( (err = mp4sys_adts_parse_headers( importer->bs, buf, &header, &variable_header )) < 0 )
         return err;
     /* now the stream seems valid ADTS */
     lsmash_audio_summary_t *summary = mp4sys_adts_create_summary( &header );
     if( !summary )
-        return LSMASH_ERR_NAMELESS;
+    {
+        err = LSMASH_ERR_NAMELESS;
+        goto fail;
+    }
     /* importer status */
     if( lsmash_add_entry( importer->summaries, summary ) < 0 )
     {
