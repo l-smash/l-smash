@@ -670,7 +670,7 @@ static int parse_track_options( input_t *input )
                     }
                     ++track_parameter;
                 }
-                track_opt->copyright_language = track_parameter ? lsmash_pack_iso_language( track_parameter ) : ISOM_LANGUAGE_CODE_UNDEFINED;
+                track_opt->copyright_language = lsmash_pack_iso_language( track_parameter );
             }
             else if( strstr( track_option, "handler=" ) )
             {
