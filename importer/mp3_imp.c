@@ -456,17 +456,23 @@ static int mp4sys_mp3_probe( importer_t *importer )
         lsmash_bs_read_seek( bs, size, SEEK_CUR );
     }
     /* Parse the header. */
+    int err;
     uint8_t buf[MP4SYS_MP3_HEADER_LENGTH];
     if( lsmash_bs_get_bytes_ex( bs, MP4SYS_MP3_HEADER_LENGTH, buf ) != MP4SYS_MP3_HEADER_LENGTH )
-        return LSMASH_ERR_INVALID_DATA;
+    {
+        err = LSMASH_ERR_INVALID_DATA;
+        goto fail;
+    }
     mp4sys_mp3_header_t header = { 0 };
-    int err = mp4sys_mp3_parse_header( buf, &header );
-    if( err < 0 )
+    if( (err = mp4sys_mp3_parse_header( buf, &header )) < 0 )
         goto fail;
     /* Now, the stream seems valid mp3. */
     lsmash_audio_summary_t *summary = mp4sys_mp3_create_summary( &header, 1 );
     if( !summary )
-        return LSMASH_ERR_NAMELESS;
+    {
+        err = LSMASH_ERR_NAMELESS;
+        goto fail;
+    }
     /* importer status */
     if( lsmash_add_entry( importer->summaries, summary ) < 0 )
     {
