@@ -1558,6 +1558,8 @@ int lsmash_get_closest_random_accessible_point_from_media_timeline( lsmash_root_
     if( sample_number == 0 || !rap_number )
         return LSMASH_ERR_FUNCTION_PARAM;
     isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
+    if( !timeline )
+        return LSMASH_ERR_NAMELESS;
     if( timeline->info_list->entry_count == 0 )
     {
         *rap_number = sample_number;    /* All LPCM is sync sample. */
@@ -1572,6 +1574,8 @@ int lsmash_get_closest_random_accessible_point_detail_from_media_timeline( lsmas
     if( sample_number == 0 )
         return LSMASH_ERR_FUNCTION_PARAM;
     isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
+    if( !timeline )
+        return LSMASH_ERR_NAMELESS;
     if( timeline->info_list->entry_count == 0 )
     {
         /* All LPCM is sync sample. */
