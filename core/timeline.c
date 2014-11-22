@@ -1824,6 +1824,7 @@ int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_
         if( !src_file->moov
          || !src_file->moov->mvhd
          ||  src_file->moov->mvhd->timescale == 0
+         || !src_trak
          || !src_trak->tkhd
          || !src_trak->mdia
          || !src_trak->mdia->mdhd
@@ -1831,9 +1832,12 @@ int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_
          || !src_trak->mdia->minf
          || !src_trak->mdia->minf->stbl )
             return LSMASH_ERR_NAMELESS;
-        src_entry = src_trak->edts->elst->list->head;
-        if( !src_entry )
+        if( !src_trak->edts
+         || !src_trak->edts->elst
+         || !src_trak->edts->elst->list
+         || !src_trak->edts->elst->list->head )
             return 0;
+        src_entry = src_trak->edts->elst->list->head;
         src_movie_timescale = src_file->moov->mvhd->timescale;
         src_media_timescale = src_trak->mdia->mdhd->timescale;
         src_track_duration  = src_trak->tkhd->duration;
