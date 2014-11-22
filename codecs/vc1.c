@@ -553,7 +553,7 @@ uint8_t *lsmash_create_vc1_specific_info( lsmash_vc1_specific_parameters_t *para
 {
     if( !param || !data_length )
         return NULL;
-    if( !param->seqhdr && !param->ephdr )
+    if( !param->seqhdr || !param->ephdr )
         return NULL;
     /* Calculate enough buffer size. */
     lsmash_vc1_header_t *seqhdr = param->seqhdr;
