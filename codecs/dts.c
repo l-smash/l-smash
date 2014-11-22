@@ -1570,8 +1570,11 @@ int dts_copy_codec_specific( lsmash_codec_specific_t *dst, lsmash_codec_specific
     lsmash_dts_specific_parameters_t *dst_data = (lsmash_dts_specific_parameters_t *)dst->data.structured;
     lsmash_remove_dts_reserved_box( dst_data );
     *dst_data = *src_data;
-    if( !src_data->box && src_data->box->data && src_data->box->size )
+    if( !src_data->box || !src_data->box->data || src_data->box->size == 0 )
+    {
+        lsmash_remove_dts_reserved_box( dst_data );
         return 0;
+    }
     return lsmash_append_dts_reserved_box( dst_data, src_data->box->data, src_data->box->size );
 }
 
