@@ -2309,7 +2309,11 @@ int lsmash_print_movie( lsmash_root_t *root, const char *filename )
     if( !strcmp( filename, "-" ) )
         destination = stdout;
     else
+    {
         destination = lsmash_fopen( filename, "wb" );
+        if( !destination )
+            return LSMASH_ERR_NAMELESS;
+    }
     fprintf( destination, "[File]\n" );
     fprintf( destination, "    size = %"PRIu64"\n", file->size );
     for( lsmash_entry_t *entry = file->print->head; entry; entry = entry->next )
