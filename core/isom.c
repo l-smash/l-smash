@@ -2572,7 +2572,7 @@ static lsmash_file_t *isom_get_written_media_file
 {
     isom_minf_t         *minf        = trak->mdia->minf;
     isom_sample_entry_t *description = (isom_sample_entry_t *)lsmash_get_entry_data( &minf->stbl->stsd->list, sample_description_index );
-    isom_dref_entry_t   *dref_entry  = (isom_dref_entry_t *)lsmash_get_entry_data( &minf->dinf->dref->list, description->data_reference_index );
+    isom_dref_entry_t   *dref_entry  = (isom_dref_entry_t *)lsmash_get_entry_data( &minf->dinf->dref->list, description ? description->data_reference_index : 1 );
     lsmash_file_t       *file        = (!dref_entry || !dref_entry->ref_file) ? trak->file : dref_entry->ref_file;
     if( !(file->flags & LSMASH_FILE_MODE_MEDIA)
      || !(file->flags & LSMASH_FILE_MODE_WRITE) )
