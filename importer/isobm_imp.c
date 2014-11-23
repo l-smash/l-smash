@@ -200,6 +200,8 @@ static int isobm_importer_construct_timeline( importer_t *importer, uint32_t tra
     if( root && root == importer->file->root )
     {
         lsmash_summary_t *summary = lsmash_get_entry_data( importer->summaries, track_number );
+        if( !summary )
+            return LSMASH_ERR_NAMELESS;
         summary->max_au_length = lsmash_get_max_sample_size_in_media_timeline( root, track_ID );
         if( summary->summary_type == LSMASH_SUMMARY_TYPE_VIDEO )
         {
