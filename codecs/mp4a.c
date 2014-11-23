@@ -248,7 +248,7 @@ static mp4a_GASpecificConfig_t* mp4a_create_GASpecificConfig( uint8_t samplingFr
     case MP4A_AUDIO_OBJECT_TYPE_TwinVQ:
         gasc->extensionFlag = 0;
         break;
-    /* currently never occures. */
+#if 0 /* intentional dead code */
     case MP4A_AUDIO_OBJECT_TYPE_ER_AAC_LC:
     case MP4A_AUDIO_OBJECT_TYPE_ER_AAC_LTP:
     case MP4A_AUDIO_OBJECT_TYPE_ER_AAC_scalable:
@@ -257,6 +257,7 @@ static mp4a_GASpecificConfig_t* mp4a_create_GASpecificConfig( uint8_t samplingFr
     case MP4A_AUDIO_OBJECT_TYPE_ER_AAC_LD:
         gasc->extensionFlag = 1;
         break;
+#endif
     default:
         gasc->extensionFlag = 0;
         break;
