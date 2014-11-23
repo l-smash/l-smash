@@ -37,7 +37,6 @@ static const lsmash_class_t lsmash_importer_class =
     offsetof( importer_t, log_level )
 };
 
-extern const importer_functions isobm_importer;
 extern const importer_functions mp4sys_adts_importer;
 extern const importer_functions mp4sys_mp3_importer;
 extern const importer_functions amr_importer;
@@ -49,11 +48,11 @@ extern const importer_functions wave_importer;
 extern const importer_functions h264_importer;
 extern const importer_functions hevc_importer;
 extern const importer_functions vc1_importer;
+extern const importer_functions isobm_importer;
 
 /******** importer listing table ********/
 static const importer_functions *importer_func_table[] =
 {
-    &isobm_importer,
     &mp4sys_adts_importer,
     &mp4sys_mp3_importer,
     &amr_importer,
@@ -65,6 +64,7 @@ static const importer_functions *importer_func_table[] =
     &h264_importer,
     &hevc_importer,
     &vc1_importer,
+    &isobm_importer,
     NULL,
 };
 
