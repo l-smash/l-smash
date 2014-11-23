@@ -472,7 +472,7 @@ static int mp4sys_adts_probe
     mp4sys_adts_fixed_header_t    header          = { 0 };
     mp4sys_adts_variable_header_t variable_header = { 0 };
     if( (err = mp4sys_adts_parse_headers( importer->bs, buf, &header, &variable_header )) < 0 )
-        return err;
+        goto fail;
     /* now the stream seems valid ADTS */
     lsmash_audio_summary_t *summary = mp4sys_adts_create_summary( &header );
     if( !summary )
