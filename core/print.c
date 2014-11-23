@@ -383,8 +383,7 @@ static int isom_print_styp( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
 {
     /* Print 'valid' if this box is the first box in a file. */
     int valid;
-    if( file
-     && file->print
+    if( file->print
      && file->print->head
      && file->print->head->data )
         valid = (box == ((isom_print_entry_t *)file->print->head->data)->box);
@@ -532,7 +531,7 @@ static int isom_print_tkhd( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
     lsmash_ifprintf( fp, indent, "modification_time = %s", isom_mp4time2utc( tkhd->modification_time ) );
     lsmash_ifprintf( fp, indent, "track_ID = %"PRIu32"\n", tkhd->track_ID );
     lsmash_ifprintf( fp, indent, "reserved = 0x%08"PRIx32"\n", tkhd->reserved1 );
-    if( file && file->moov && file->moov->mvhd )
+    if( file->moov && file->moov->mvhd )
         isom_ifprintf_duration( fp, indent, "duration", tkhd->duration, file->moov->mvhd->timescale );
     else
         isom_ifprintf_duration( fp, indent, "duration", tkhd->duration, 0 );
@@ -1640,7 +1639,7 @@ static int isom_print_chpl( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
     uint32_t timescale;
     if( !chpl->version )
     {
-        if( !file || !file->moov || !file->moov->mvhd )
+        if( !file->moov || !file->moov->mvhd )
             return LSMASH_ERR_INVALID_DATA;
         timescale = file->moov->mvhd->timescale;
     }
@@ -2125,7 +2124,7 @@ static int isom_print_mehd( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
     isom_mehd_t *mehd = (isom_mehd_t *)box;
     int indent = level;
     isom_print_box_common( fp, indent++, box, "Movie Extends Header Box" );
-    if( file && file->moov && file->moov->mvhd )
+    if( file->moov && file->moov->mvhd )
         isom_ifprintf_duration( fp, indent, "fragment_duration", mehd->fragment_duration, file->moov->mvhd->timescale );
     else
         isom_ifprintf_duration( fp, indent, "fragment_duration", mehd->fragment_duration, 0 );
