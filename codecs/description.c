@@ -2302,7 +2302,10 @@ lsmash_summary_t *isom_create_video_summary_from_description( isom_sample_entry_
         {
             isom_qt_color_table_t *src_ct = &visual->color_table;
             if( !src_ct->array )
+            {
+                lsmash_destroy_codec_specific_data( specific );
                 goto fail;
+            }
             uint16_t element_count = LSMASH_MIN( src_ct->size + 1, 256 );
             lsmash_qt_color_table_t *dst_ct = &data->color_table;
             dst_ct->seed  = src_ct->seed;
