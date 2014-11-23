@@ -498,15 +498,16 @@ static int isom_construct_global_specific_header( lsmash_codec_specific_t *dst, 
     uint8_t *data = src->data.unstructured;
     uint64_t size = LSMASH_GET_BE32( data );
     data += ISOM_BASEBOX_COMMON_SIZE;
-    global->header_size = size - ISOM_BASEBOX_COMMON_SIZE;
     if( size == 1 )
     {
         size = LSMASH_GET_BE64( data );
         data += 8;
-        global->header_size = size - ISOM_BASEBOX_COMMON_SIZE - 8;
     }
     if( size != src->size )
         return LSMASH_ERR_INVALID_DATA;
+    global->header_size = size - ISOM_BASEBOX_COMMON_SIZE;
+    if( data != src->data.unstructured + ISOM_BASEBOX_COMMON_SIZE )
+        global->header_size -= 8;   /* largesize */
     if( global->header_size )
     {
         global->header_data = lsmash_memdup( data, global->header_size );
