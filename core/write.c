@@ -168,22 +168,25 @@ static int isom_write_elst( lsmash_bs_t *bs, isom_box_t *box )
     assert( elst->list );
     if( elst->list->entry_count == 0 )
         return 0;
-    /* Check the version. */
     elst->version = 0;
-    if( elst->file && !elst->file->undefined_64_ver )
-        for( lsmash_entry_t *entry = elst->list->head; entry; entry = entry->next )
-        {
-            isom_elst_entry_t *data = (isom_elst_entry_t *)entry->data;
-            if( !data )
-                return LSMASH_ERR_NAMELESS;
-            if( data->segment_duration > UINT32_MAX
-             || data->media_time       >  INT32_MAX
-             || data->media_time       <  INT32_MIN )
-                elst->version = 1;
-        }
-    /* Remember to rewrite entries. */
-    if( elst->file->fragment && !elst->file->bs->unseekable )
-        elst->pos = elst->file->bs->written;
+    if( elst->file )
+    {
+        /* Check the version. */
+        if( !elst->file->undefined_64_ver )
+            for( lsmash_entry_t *entry = elst->list->head; entry; entry = entry->next )
+            {
+                isom_elst_entry_t *data = (isom_elst_entry_t *)entry->data;
+                if( !data )
+                    return LSMASH_ERR_NAMELESS;
+                if( data->segment_duration > UINT32_MAX
+                 || data->media_time       >  INT32_MAX
+                 || data->media_time       <  INT32_MIN )
+                    elst->version = 1;
+            }
+        /* Remember to rewrite entries. */
+        if( elst->file->fragment && !elst->file->bs->unseekable )
+            elst->pos = elst->file->bs->written;
+    }
     /* Write. */
     isom_bs_put_box_common( bs, elst );
     lsmash_bs_put_be32( bs, elst->list->entry_count );
