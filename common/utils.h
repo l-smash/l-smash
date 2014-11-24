@@ -49,7 +49,12 @@
  *   }
  * */
 #define NUM_ARGS( _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, ... ) _10
+#ifdef _MSC_VER
+#define EXPAND_VA_ARGS( x ) x
+#define COUNT_NUM_ARGS( ... ) EXPAND_VA_ARGS( NUM_ARGS( __VA_ARGS__, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0 ) )
+#else
 #define COUNT_NUM_ARGS( ... ) NUM_ARGS( __VA_ARGS__, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0 )
+#endif
 #define GET_FUNC_BY_NUM_ARGS_EXN( func_name, N )   func_name ## _ ## N
 #define GET_FUNC_BY_NUM_ARGS_EX0( func_name, N )   GET_FUNC_BY_NUM_ARGS_EXN( func_name, N )
 #define GET_FUNC_BY_NUM_ARGS_EX1( func_name, ... ) GET_FUNC_BY_NUM_ARGS_EX0( func_name, COUNT_NUM_ARGS( __VA_ARGS__ ) )

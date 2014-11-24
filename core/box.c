@@ -453,7 +453,7 @@ lsmash_entry_t *isom_get_entry_of_box
         REMOVER( box_name, parent_type );                                      \
     } while( 0 )
 
-#define REMOVE_LIST_BOX( ... ) CALL_FUNC_DEFAULT_ARGS( REMOVE_LIST_BOX, __VA_ARGS__ )
+#define REMOVE_LIST_BOX( box_name, ... ) CALL_FUNC_DEFAULT_ARGS( REMOVE_LIST_BOX, box_name, __VA_ARGS__ )
 #define REMOVE_LIST_BOX_3( box_name, parent_type, eliminator ) \
         REMOVE_LIST_BOX_TEMPLATE( REMOVE_BOX, box_name, parent_type, eliminator )
 #define REMOVE_LIST_BOX_2( box_name, parent_type ) \
@@ -470,17 +470,17 @@ lsmash_entry_t *isom_get_entry_of_box
         REMOVER( box_name, __VA_ARGS__ );                               \
     }
 
-#define DEFINE_SIMPLE_BOX_REMOVER( func_name, ... )   \
-        DEFINE_SIMPLE_BOX_REMOVER_TEMPLATE( REMOVE_BOX, __VA_ARGS__ )
+#define DEFINE_SIMPLE_BOX_REMOVER( func_name, box_name, ... )   \
+        DEFINE_SIMPLE_BOX_REMOVER_TEMPLATE( REMOVE_BOX, box_name, __VA_ARGS__ )
 
-#define DEFINE_SIMPLE_LIST_BOX_REMOVER( func_name, ... ) \
-        DEFINE_SIMPLE_BOX_REMOVER_TEMPLATE( REMOVE_LIST_BOX, __VA_ARGS__ )
+#define DEFINE_SIMPLE_LIST_BOX_REMOVER( func_name, box_name, ... ) \
+        DEFINE_SIMPLE_BOX_REMOVER_TEMPLATE( REMOVE_LIST_BOX, box_name, __VA_ARGS__ )
 
-#define DEFINE_SIMPLE_BOX_IN_LIST_REMOVER( func_name, ... ) \
-        DEFINE_SIMPLE_BOX_REMOVER_TEMPLATE( REMOVE_BOX_IN_LIST, __VA_ARGS__ )
+#define DEFINE_SIMPLE_BOX_IN_LIST_REMOVER( func_name, box_name, ... ) \
+        DEFINE_SIMPLE_BOX_REMOVER_TEMPLATE( REMOVE_BOX_IN_LIST, box_name, __VA_ARGS__ )
 
-#define DEFINE_SIMPLE_LIST_BOX_IN_LIST_REMOVER( func_name, ... ) \
-        DEFINE_SIMPLE_BOX_REMOVER_TEMPLATE( REMOVE_LIST_BOX_IN_LIST, __VA_ARGS__ )
+#define DEFINE_SIMPLE_LIST_BOX_IN_LIST_REMOVER( func_name, box_name, ... ) \
+        DEFINE_SIMPLE_BOX_REMOVER_TEMPLATE( REMOVE_LIST_BOX_IN_LIST, box_name, __VA_ARGS__ )
 
 static void isom_remove_predefined_box( void *opaque_box, size_t offset_of_box )
 {
