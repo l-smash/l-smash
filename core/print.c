@@ -1815,8 +1815,9 @@ static int isom_print_metaitem( FILE *fp, lsmash_file_t *file, isom_box_t *box, 
     memcpy( display_name + 19, name, name_length );
     display_name[display_name_length - 1] = ')';
     display_name[display_name_length] = 0;
+    int ret = isom_print_simple( fp, box, level, display_name );
     lsmash_free( display_name );
-    return isom_print_simple( fp, box, level, display_name );
+    return ret;
 }
 
 static int isom_print_name( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
