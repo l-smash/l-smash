@@ -32,6 +32,10 @@
 #define lsmash_ftell ftello64
 #endif
 
+#ifdef _MSC_VER
+#define inline __inline
+#endif
+
 #ifdef _WIN32
 #  include <stdio.h>
    FILE *lsmash_win32_fopen( const char *name, const char *mode );
