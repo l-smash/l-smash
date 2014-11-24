@@ -707,7 +707,7 @@ static uint64_t isom_get_dts( isom_stts_t *stts, uint32_t sample_number )
     uint64_t dts = 0;
     uint32_t i   = 1;
     lsmash_entry_t    *entry;
-    isom_stts_entry_t *data;
+    isom_stts_entry_t *data = NULL;
     for( entry = stts->list->head; entry; entry = entry->next )
     {
         data = (isom_stts_entry_t *)entry->data;
@@ -734,7 +734,7 @@ static uint64_t isom_get_cts( isom_stts_t *stts, isom_ctts_t *ctts, uint32_t sam
         return isom_get_dts( stts, sample_number );
     uint32_t i = 1;     /* This can be 0 (and then condition below shall be changed) but I dare use same algorithm with isom_get_dts. */
     lsmash_entry_t    *entry;
-    isom_ctts_entry_t *data;
+    isom_ctts_entry_t *data = NULL;
     if( sample_number == 0 )
         return 0;
     for( entry = ctts->list->head; entry; entry = entry->next )
