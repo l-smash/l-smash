@@ -558,38 +558,34 @@ uint8_t *lsmash_create_vc1_specific_info( lsmash_vc1_specific_parameters_t *para
     /* Calculate enough buffer size. */
     lsmash_vc1_header_t *seqhdr = param->seqhdr;
     lsmash_vc1_header_t *ephdr  = param->ephdr;
-    uint32_t buffer_size = ISOM_BASEBOX_COMMON_SIZE + 7 + seqhdr->ebdu_size + ephdr->ebdu_size;
-    /* Set up bitstream writer. */
-    uint8_t buffer[buffer_size];
-    lsmash_bits_t bits = { 0 };
-    lsmash_bs_t   bs   = { 0 };
-    bs.buffer.data  = buffer;
-    bs.buffer.alloc = buffer_size;
-    lsmash_bits_init( &bits, &bs );
     /* Create a VC1SpecificBox */
-    lsmash_bits_put( &bits, 32, 0 );                                    /* box size */
-    lsmash_bits_put( &bits, 32, ISOM_BOX_TYPE_DVC1.fourcc );            /* box type: 'dvc1' */
-    lsmash_bits_put( &bits, 4, param->profile );                        /* profile */
-    lsmash_bits_put( &bits, 3, param->level );                          /* level */
-    lsmash_bits_put( &bits, 1, 0 );                                     /* reserved */
+    lsmash_bits_t *bits = lsmash_bits_adhoc_create();
+    if( !bits )
+        return NULL;
+    lsmash_bits_put( bits, 32, 0 );                         /* box size */
+    lsmash_bits_put( bits, 32, ISOM_BOX_TYPE_DVC1.fourcc ); /* box type: 'dvc1' */
+    lsmash_bits_put( bits, 4, param->profile );             /* profile */
+    lsmash_bits_put( bits, 3, param->level );               /* level */
+    lsmash_bits_put( bits, 1, 0 );                          /* reserved */
     /* VC1AdvDecSpecStruc (for Advanced Profile) */
-    lsmash_bits_put( &bits, 3, param->level );                          /* level (identical to the previous level field) */
-    lsmash_bits_put( &bits, 1, param->cbr );                            /* cbr */
-    lsmash_bits_put( &bits, 6, 0 );                                     /* reserved */
-    lsmash_bits_put( &bits, 1, !param->interlaced );                    /* no_interlace */
-    lsmash_bits_put( &bits, 1, !param->multiple_sequence );             /* no_multiple_seq */
-    lsmash_bits_put( &bits, 1, !param->multiple_entry );                /* no_multiple_entry */
-    lsmash_bits_put( &bits, 1, !param->slice_present );                 /* no_slice_code */
-    lsmash_bits_put( &bits, 1, !param->bframe_present );                /* no_bframe */
-    lsmash_bits_put( &bits, 1, 0 );                                     /* reserved */
-    lsmash_bits_put( &bits, 32, param->framerate );                     /* framerate */
+    lsmash_bits_put( bits, 3, param->level );               /* level (identical to the previous level field) */
+    lsmash_bits_put( bits, 1, param->cbr );                 /* cbr */
+    lsmash_bits_put( bits, 6, 0 );                          /* reserved */
+    lsmash_bits_put( bits, 1, !param->interlaced );         /* no_interlace */
+    lsmash_bits_put( bits, 1, !param->multiple_sequence );  /* no_multiple_seq */
+    lsmash_bits_put( bits, 1, !param->multiple_entry );     /* no_multiple_entry */
+    lsmash_bits_put( bits, 1, !param->slice_present );      /* no_slice_code */
+    lsmash_bits_put( bits, 1, !param->bframe_present );     /* no_bframe */
+    lsmash_bits_put( bits, 1, 0 );                          /* reserved */
+    lsmash_bits_put( bits, 32, param->framerate );          /* framerate */
     /* seqhdr_ephdr[] */
     for( uint32_t i = 0; i < seqhdr->ebdu_size; i++ )
-        lsmash_bits_put( &bits, 8, *(seqhdr->ebdu + i) );
+        lsmash_bits_put( bits, 8, *(seqhdr->ebdu + i) );
     for( uint32_t i = 0; i < ephdr->ebdu_size; i++ )
-        lsmash_bits_put( &bits, 8, *(ephdr->ebdu + i) );
+        lsmash_bits_put( bits, 8, *(ephdr->ebdu + i) );
     /* */
-    uint8_t *data = lsmash_bits_export_data( &bits, data_length );
+    uint8_t *data = lsmash_bits_export_data( bits, data_length );
+    lsmash_bits_adhoc_cleanup( bits );
     /* Update box size. */
     LSMASH_SET_BE32( data, *data_length );
     return data;
