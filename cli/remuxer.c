@@ -224,9 +224,17 @@ static void cleanup_remuxer( remuxer_t *remuxer )
 {
     for( int i = 0; i < remuxer->num_input; i++ )
     {
-        cleanup_input_movie( &remuxer->input[i] );
-        if( remuxer->track_option[i] )
-            lsmash_free( remuxer->track_option[i] );
+        if( remuxer->input )
+        {
+            cleanup_input_movie( &remuxer->input[i] );
+            lsmash_free( remuxer->input );
+        }
+        if( remuxer->track_option )
+        {
+            if( remuxer->track_option[i] )
+                lsmash_free( remuxer->track_option[i] );
+            lsmash_free( remuxer->track_option );
+        }
     }
     cleanup_output_movie( remuxer->output );
 }
@@ -643,9 +651,18 @@ static int parse_track_option( remuxer_t *remuxer )
 
 static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
 {
-    input_t             *input        = remuxer->input;
-    track_media_option **track_option = remuxer->track_option;
-    file_option          input_file_option[ remuxer->num_input ];
+#define FAILED_PARSE_CLI_OPTION( ... ) \
+    do                                     \
+    {                                      \
+        lsmash_free( input_file_option );  \
+        return ERROR_MSG( __VA_ARGS__ );   \
+    }                                      \
+    while( 0 )
+    input_t             *input             = remuxer->input;
+    track_media_option **track_option      = remuxer->track_option;
+    file_option         *input_file_option = lsmash_malloc( remuxer->num_input * sizeof(file_option) );
+    if( !input_file_option )
+        return ERROR_MSG( "failed to allocate per-file option.\n" );
     int input_movie_number = 0;
     for( int i = 1; i < argc ; i++ )
     {
@@ -653,17 +670,17 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
         if( !strcasecmp( argv[i], "-i" ) || !strcasecmp( argv[i], "--input" ) )    /* input file */
         {
             if( ++i == argc )
-                return ERROR_MSG( "-i requires an argument.\n" );
+                FAILED_PARSE_CLI_OPTION( "-i requires an argument.\n" );
             input_file_option[input_movie_number].num_track_delimiter = 0;
             char *p = argv[i];
             while( *p )
                 input_file_option[input_movie_number].num_track_delimiter += (*p++ == '?');
             if( get_movie( &input[input_movie_number], strtok( argv[i], "?" ) ) )
-                return ERROR_MSG( "failed to get input movie.\n" );
+                FAILED_PARSE_CLI_OPTION( "failed to get input movie.\n" );
             uint32_t num_tracks = input[input_movie_number].file.movie.num_tracks;
             track_option[input_movie_number] = lsmash_malloc_zero( num_tracks * sizeof(track_media_option) );
             if( !track_option[input_movie_number] )
-                return ERROR_MSG( "couldn't allocate memory.\n" );
+                FAILED_PARSE_CLI_OPTION( "couldn't allocate memory.\n" );
             input_file_option[input_movie_number].whole_track_option = strtok( NULL, "" );
             input[input_movie_number].file.movie.movie_ID = input_movie_number + 1;
             ++input_movie_number;
@@ -672,19 +689,19 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
         else if( !strcasecmp( argv[i], "-o" ) || !strcasecmp( argv[i], "--output" ) )    /* output file */
         {
             if( ++i == argc )
-                return ERROR_MSG( "-o requires an argument.\n" );
+                FAILED_PARSE_CLI_OPTION( "-o requires an argument.\n" );
             output_t *output = remuxer->output;
             output->root = lsmash_create_root();
             if( !output->root )
-                return ERROR_MSG( "failed to create a ROOT.\n" );
+                FAILED_PARSE_CLI_OPTION( "failed to create a ROOT.\n" );
             if( lsmash_open_file( argv[i], 0, &output->file.param ) < 0 )
-                return ERROR_MSG( "failed to open an output file.\n" );
+                FAILED_PARSE_CLI_OPTION( "failed to open an output file.\n" );
             output->file.name = argv[i];
         }
         else if( !strcasecmp( argv[i], "--chapter" ) )    /* chapter file */
         {
             if( ++i == argc )
-                return ERROR_MSG( "--chapter requires an argument.\n" );
+                FAILED_PARSE_CLI_OPTION( "--chapter requires an argument.\n" );
             remuxer->chap_file = argv[i];
         }
         else if( !strcasecmp( argv[i], "--chpl-with-bom" ) )
@@ -692,37 +709,37 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
         else if( !strcasecmp( argv[i], "--chapter-track" ) )    /* track to apply reference chapter to */
         {
             if( ++i == argc )
-                return ERROR_MSG( "--chapter-track requires an argument.\n" );
+                FAILED_PARSE_CLI_OPTION( "--chapter-track requires an argument.\n" );
             remuxer->chap_track = atoi( argv[i] );
             if( !remuxer->chap_track )
-                return ERROR_MSG( "%s is an invalid track number.\n", argv[i] );
+                FAILED_PARSE_CLI_OPTION( "%s is an invalid track number.\n", argv[i] );
         }
         else if( !strcasecmp( argv[i], "--language" ) )
         {
             if( ++i == argc )
-                return ERROR_MSG( "--chapter requires an argument.\n" );
+                FAILED_PARSE_CLI_OPTION( "--chapter requires an argument.\n" );
             remuxer->default_language = lsmash_pack_iso_language( argv[i] );
         }
         else if( !strcasecmp( argv[i], "--fragment" ) )
         {
             if( ++i == argc )
-                return ERROR_MSG( "--fragment requires an argument.\n" );
+                FAILED_PARSE_CLI_OPTION( "--fragment requires an argument.\n" );
             remuxer->frag_base_track = atoi( argv[i] );
             if( remuxer->frag_base_track == 0 )
-                return ERROR_MSG( "%s is an invalid track number.\n", argv[i] );
+                FAILED_PARSE_CLI_OPTION( "%s is an invalid track number.\n", argv[i] );
         }
         else if( !strcasecmp( argv[i], "--dash" ) )
         {
             if( ++i == argc )
-                return ERROR_MSG( "--dash requires an argument.\n" );
+                FAILED_PARSE_CLI_OPTION( "--dash requires an argument.\n" );
             remuxer->subseg_per_seg = atoi( argv[i] );
             remuxer->dash           = 1;
         }
         else
-            return ERROR_MSG( "unkown option found: %s\n", argv[i] );
+            FAILED_PARSE_CLI_OPTION( "unkown option found: %s\n", argv[i] );
     }
     if( !remuxer->output->root )
-        return ERROR_MSG( "output file name is not specified.\n" );
+        FAILED_PARSE_CLI_OPTION( "output file name is not specified.\n" );
     /* Parse track options */
     /* Get the current track and media parameters */
     for( int i = 0; i < remuxer->num_input; i++ )
@@ -744,8 +761,8 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
     for( int i = 0; i < remuxer->num_input; i++ )
     {
         if( input_file_option[i].num_track_delimiter > input[i].file.movie.num_tracks )
-            return ERROR_MSG( "more track options specified than the actual number of the tracks (%"PRIu32").\n",
-                              input[i].file.movie.num_tracks );
+            FAILED_PARSE_CLI_OPTION( "more track options specified than the actual number of the tracks (%"PRIu32").\n",
+                                     input[i].file.movie.num_tracks );
         if( input_file_option[i].num_track_delimiter )
         {
             track_option[i][0].raw_track_option = strtok( input_file_option[i].whole_track_option, "?" );
@@ -754,8 +771,10 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
         }
     }
     if( parse_track_option( remuxer ) )
-        return ERROR_MSG( "failed to parse track options.\n" );
+        FAILED_PARSE_CLI_OPTION( "failed to parse track options.\n" );
+    lsmash_free( input_file_option );
     return 0;
+#undef FAILED_PARSE_CLI_OPTION
 }
 
 static void replace_with_valid_brand( remuxer_t *remuxer )
@@ -868,6 +887,48 @@ static void replace_with_valid_brand( remuxer_t *remuxer )
         }
 }
 
+static int pick_most_used_major_brand( input_t *input, output_file_t *out_file, int num_input )
+{
+    void *heap = lsmash_malloc( num_input * (sizeof(lsmash_brand_type) + 2 * sizeof(uint32_t)) );
+    if( !heap )
+        return ERROR_MSG( "failed to allocate memory.\n" );
+    lsmash_brand_type *major_brand       = (lsmash_brand_type *)heap;
+    uint32_t          *minor_version     = (uint32_t *)((lsmash_brand_type *)heap + num_input);
+    uint32_t          *major_brand_count = minor_version + num_input;
+    uint32_t           num_major_brand   = 0;
+    for( int i = 0; i < num_input; i++ )
+    {
+        major_brand      [num_major_brand] = input[i].file.param.major_brand;
+        minor_version    [num_major_brand] = input[i].file.param.minor_version;
+        major_brand_count[num_major_brand] = 0;
+        for( int j = 0; j < num_input; j++ )
+            if( (major_brand  [num_major_brand] == input[j].file.param.major_brand)
+             && (minor_version[num_major_brand] == input[j].file.param.minor_version) )
+            {
+                if( i <= j )
+                    ++major_brand_count[num_major_brand];
+                else
+                {
+                    /* This major_brand already exists. Skip this. */
+                    major_brand_count[num_major_brand] = 0;
+                    --num_major_brand;
+                    break;
+                }
+            }
+        ++num_major_brand;
+    }
+    uint32_t most_used_count = 0;
+    for( uint32_t i = 0; i < num_major_brand; i++ )
+        if( major_brand_count[i] > most_used_count )
+        {
+            most_used_count = major_brand_count[i];
+            out_file->param.major_brand   = major_brand  [i];
+            out_file->param.minor_version = minor_version[i];
+        }
+    lsmash_free( heap );
+    return 0;
+}
+
 static int set_movie_parameters( remuxer_t *remuxer )
 {
     int            num_input = remuxer->num_input;
@@ -898,48 +959,15 @@ static int set_movie_parameters( remuxer_t *remuxer )
         out_file->param.major_brand   = ISOM_BRAND_TYPE_DASH;
         out_file->param.minor_version = 0;
     }
-    else
-    {
-        /* Pick the most used major_brands. */
-        lsmash_brand_type major_brand      [num_input];
-        uint32_t          minor_version    [num_input];
-        uint32_t          major_brand_count[num_input];
-        uint32_t          num_major_brand = 0;
-        for( int i = 0; i < num_input; i++ )
-        {
-            major_brand      [num_major_brand] = input[i].file.param.major_brand;
-            minor_version    [num_major_brand] = input[i].file.param.minor_version;
-            major_brand_count[num_major_brand] = 0;
-            for( int j = 0; j < num_input; j++ )
-                if( (major_brand  [num_major_brand] == input[j].file.param.major_brand)
-                 && (minor_version[num_major_brand] == input[j].file.param.minor_version) )
-                {
-                    if( i <= j )
-                        ++major_brand_count[num_major_brand];
-                    else
-                    {
-                        /* This major_brand already exists. Skip this. */
-                        major_brand_count[num_major_brand] = 0;
-                        --num_major_brand;
-                        break;
-                    }
-                }
-            ++num_major_brand;
-        }
-        uint32_t most_used_count = 0;
-        for( uint32_t i = 0; i < num_major_brand; i++ )
-            if( major_brand_count[i] > most_used_count )
-            {
-                most_used_count = major_brand_count[i];
-                out_file->param.major_brand   = major_brand  [i];
-                out_file->param.minor_version = minor_version[i];
-            }
-    }
+    else if( pick_most_used_major_brand( input, out_file, num_input ) < 0 )
+        return ERROR_MSG( "failed to pick the most used major brand.\n" );
     /* Deduplicate compatible brands. */
     uint32_t num_input_brands = num_input + (self_containd_segment ? 1 : 0);
     for( int i = 0; i < num_input; i++ )
         num_input_brands += input[i].file.param.brand_count;
-    lsmash_brand_type input_brands[num_input_brands];
+    lsmash_brand_type *input_brands = lsmash_malloc( num_input_brands * sizeof(lsmash_brand_type) );
+    if( !input_brands )
+        return ERROR_MSG( "failed to allocate brands for an input file.\n" );
     num_input_brands = 0;
     if( self_containd_segment )
         input_brands[num_input_brands++] = ISOM_BRAND_TYPE_DASH;
@@ -952,7 +980,10 @@ static int set_movie_parameters( remuxer_t *remuxer )
     }
     lsmash_brand_type *output_brands = lsmash_malloc_zero( num_input_brands * sizeof(lsmash_brand_type) );
     if( !output_brands )
+    {
+        lsmash_free( input_brands );
         return ERROR_MSG( "failed to allocate brands for an output file.\n" );
+    }
     uint32_t num_output_brands = 0;
     for( uint32_t i = 0; i < num_input_brands; i++ )
     {
@@ -966,6 +997,7 @@ static int set_movie_parameters( remuxer_t *remuxer )
             }
         ++num_output_brands;
     }
+    lsmash_free( input_brands );
     out_file->param.brand_count = num_output_brands;
     out_file->param.brands      = output_brands;
     /* Set up a file. */
@@ -1282,7 +1314,9 @@ static int open_media_segment( output_t *output, lsmash_file_parameters_t *seg_p
         ++suffix_length;
     int seg_name_length   = out_file_name_length + suffix_length;
     int suffixless_length = p - out_file->name;
-    char seg_name[ seg_name_length + 1 ];
+    char *seg_name = lsmash_malloc( (seg_name_length + 1) * sizeof(char) );
+    if( !seg_name )
+        return ERROR_MSG( "failed to allocate to store a segment filename.\n" );
     seg_name[ seg_name_length ] = '\0';
     memcpy( seg_name, out_file->name, suffixless_length );
     sprintf( seg_name + suffixless_length, "_%"PRIu32, output->current_seg_number );
@@ -1291,6 +1325,7 @@ static int open_media_segment( output_t *output, lsmash_file_parameters_t *seg_p
     int ret = lsmash_open_file( seg_name, 0, seg_param );
     if( ret == 0 )
         eprintf( "[Segment] out: %s\n", seg_name );
+    lsmash_free( seg_name );
     return ret;
 }
 
@@ -1658,9 +1693,16 @@ int main( int argc, char *argv[] )
             num_input++;
     if( !num_input )
         return ERROR_MSG( "no input file specified.\n" );
-    output_t            output = { 0 };
-    input_t             input[ num_input ];
-    track_media_option *track_option[ num_input ];
+    output_t output = { 0 };
+    input_t *input = lsmash_malloc_zero( num_input * sizeof(input_t) );
+    if( !input )
+        return ERROR_MSG( "failed to allocate the input handler.\n" );
+    track_media_option **track_option = lsmash_malloc_zero( num_input * sizeof(track_media_option *) );
+    if( !track_option )
+    {
+        lsmash_free( input );
+        return ERROR_MSG( "failed to allocate the track option handler.\n" );
+    }
     remuxer_t           remuxer =
     {
         .output             = &output,
@@ -1676,8 +1718,6 @@ int main( int argc, char *argv[] )
         .subseg_per_seg     = 0,
         .dash               = 0
     };
-    memset( input, 0, num_input * sizeof(input_t) );
-    memset( track_option, 0, num_input * sizeof(track_media_option *) );
     if( parse_cli_option( argc, argv, &remuxer ) )
         return REMUXER_ERR( "failed to parse command line options.\n" );
     if( prepare_output( &remuxer ) )
