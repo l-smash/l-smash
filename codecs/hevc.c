@@ -550,7 +550,7 @@ static int hevc_short_term_ref_pic_set
         {
             uint64_t delta_poc_s0_minus1 = nalu_get_exp_golomb_ue( bits );
             if( i == 0 )
-                st_rps->DeltaPocS0[i] = -(delta_poc_s0_minus1 + 1);
+                st_rps->DeltaPocS0[i] = -(signed)(delta_poc_s0_minus1 + 1);
             else
                 st_rps->DeltaPocS0[i] = st_rps->DeltaPocS0[i - 1] - (delta_poc_s0_minus1 + 1);
             st_rps->UsedByCurrPicS0[i] = lsmash_bits_get( bits, 1 );    /* used_by_curr_pic_s0_flag */
