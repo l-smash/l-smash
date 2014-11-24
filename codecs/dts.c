@@ -252,40 +252,36 @@ lsmash_codec_type_t lsmash_dts_get_codingname( lsmash_dts_specific_parameters_t 
 
 uint8_t *lsmash_create_dts_specific_info( lsmash_dts_specific_parameters_t *param, uint32_t *data_length )
 {
-    lsmash_bits_t bits = { 0 };
-    lsmash_bs_t   bs   = { 0 };
-    lsmash_bits_init( &bits, &bs );
     int reserved_box_present = (param->box && param->box->data && param->box->size);
-    uint32_t buffer_length = DTS_SPECIFIC_BOX_MIN_LENGTH + (reserved_box_present ? param->box->size : 0);
-    uint8_t buffer[buffer_length];
-    memset( buffer, 0, buffer_length );
-    bs.buffer.data  = buffer;
-    bs.buffer.alloc = buffer_length;
+    lsmash_bits_t *bits = lsmash_bits_adhoc_create();
+    if( !bits )
+        return NULL;
     /* Create a DTSSpecificBox. */
-    lsmash_bits_put( &bits, 32, 0 );                            /* box size */
-    lsmash_bits_put( &bits, 32, ISOM_BOX_TYPE_DDTS.fourcc );    /* box type: 'ddts' */
-    lsmash_bits_put( &bits, 32, param->DTSSamplingFrequency );
-    lsmash_bits_put( &bits, 32, param->maxBitrate );            /* maxBitrate; setup by isom_update_bitrate_description */
-    lsmash_bits_put( &bits, 32, param->avgBitrate );            /* avgBitrate; setup by isom_update_bitrate_description */
-    lsmash_bits_put( &bits, 8, param->pcmSampleDepth );
-    lsmash_bits_put( &bits, 2, param->FrameDuration );
-    lsmash_bits_put( &bits, 5, param->StreamConstruction );
-    lsmash_bits_put( &bits, 1, param->CoreLFEPresent );
-    lsmash_bits_put( &bits, 6, param->CoreLayout );
-    lsmash_bits_put( &bits, 14, param->CoreSize );
-    lsmash_bits_put( &bits, 1, param->StereoDownmix );
-    lsmash_bits_put( &bits, 3, param->RepresentationType );
-    lsmash_bits_put( &bits, 16, param->ChannelLayout );
-    lsmash_bits_put( &bits, 1, param->MultiAssetFlag );
-    lsmash_bits_put( &bits, 1, param->LBRDurationMod );
-    lsmash_bits_put( &bits, 1, reserved_box_present );
-    lsmash_bits_put( &bits, 5, 0 );                             /* Reserved */
+    lsmash_bits_put( bits, 32, 0 );                             /* box size */
+    lsmash_bits_put( bits, 32, ISOM_BOX_TYPE_DDTS.fourcc );     /* box type: 'ddts' */
+    lsmash_bits_put( bits, 32, param->DTSSamplingFrequency );
+    lsmash_bits_put( bits, 32, param->maxBitrate );             /* maxBitrate; setup by isom_update_bitrate_description */
+    lsmash_bits_put( bits, 32, param->avgBitrate );             /* avgBitrate; setup by isom_update_bitrate_description */
+    lsmash_bits_put( bits, 8, param->pcmSampleDepth );
+    lsmash_bits_put( bits, 2, param->FrameDuration );
+    lsmash_bits_put( bits, 5, param->StreamConstruction );
+    lsmash_bits_put( bits, 1, param->CoreLFEPresent );
+    lsmash_bits_put( bits, 6, param->CoreLayout );
+    lsmash_bits_put( bits, 14, param->CoreSize );
+    lsmash_bits_put( bits, 1, param->StereoDownmix );
+    lsmash_bits_put( bits, 3, param->RepresentationType );
+    lsmash_bits_put( bits, 16, param->ChannelLayout );
+    lsmash_bits_put( bits, 1, param->MultiAssetFlag );
+    lsmash_bits_put( bits, 1, param->LBRDurationMod );
+    lsmash_bits_put( bits, 1, reserved_box_present );
+    lsmash_bits_put( bits, 5, 0 );                              /* Reserved */
     /* ReservedBox */
     if( reserved_box_present )
         for( uint32_t i = 0; i < param->box->size; i++ )
-            lsmash_bits_put( &bits, 8, param->box->data[i] );
+            lsmash_bits_put( bits, 8, param->box->data[i] );
     /* */
-    uint8_t *data = lsmash_bits_export_data( &bits, data_length );
+    uint8_t *data = lsmash_bits_export_data( bits, data_length );
+    lsmash_bits_adhoc_cleanup( bits );
     /* Update box size. */
     LSMASH_SET_BE32( data, *data_length );
     return data;
