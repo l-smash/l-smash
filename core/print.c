@@ -1859,7 +1859,7 @@ static int isom_print_data( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
     {
         uint32_t type_set_indicator = data->reserved >> 8;
         uint32_t well_known_type = ((data->reserved << 16) | (data->type_set_identifier << 8) | data->type_code) & 0xffffff;
-        char *well_known_type_name;
+        char *well_known_type_name = "Unknown";
         static const struct
         {
             uint32_t type;
@@ -1889,8 +1889,6 @@ static int isom_print_data( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
                 well_known_type_name = well_known_type_table[table_index].name;
                 break;
             }
-        if( well_known_type_table[table_index].type == UINT32_MAX )
-            well_known_type_name = "Unknown";
         lsmash_ifprintf( fp, indent, "type_set_indicator = %"PRIu8"\n", type_set_indicator );
         lsmash_ifprintf( fp, indent, "well_known_type = %"PRIu32" (%s)\n", well_known_type, well_known_type_name );
         lsmash_ifprintf( fp, indent, "locale_indicator = %"PRIu32"\n", data->the_locale );
@@ -1940,7 +1938,7 @@ static int isom_print_data( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
     }
     else
     {
-        char *basic_data_type_name;
+        char *basic_data_type_name = "Unknown";
         static const struct
         {
             uint32_t type;
@@ -1976,8 +1974,6 @@ static int isom_print_data( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
                 basic_data_type_name = basic_data_type_table[table_index].name;
                 break;
             }
-        if( basic_data_type_table[table_index].type == UINT32_MAX )
-            basic_data_type_name = "Unknown";
         lsmash_ifprintf( fp, indent, "reserved = %"PRIu16"\n", data->reserved );
         lsmash_ifprintf( fp, indent, "type_set_identifier = %"PRIu8"%s\n",
                          data->type_set_identifier,
