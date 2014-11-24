@@ -190,7 +190,7 @@ static inline void lsmash_reduce_fraction_su
     {
         c /= gcd;
         *b /= gcd;
-        *a = *a > 0 ? c : -c;
+        *a = *a > 0 ? (signed)c : -(signed)c;
     }
 }
 
