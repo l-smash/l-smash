@@ -2514,11 +2514,13 @@ int lsmash_append_hevc_dcr_nalu
     if( invoke_reorder )
         /* Add a new parameter set in order of ascending parameter set identifier. */
         hevc_reorder_parameter_set_ascending_id( param, ps_type, ps_list, ps_id );
-    return 0;
+    err = 0;
+    goto clean;
 fail:
     ps = (isom_dcr_ps_entry_t *)lsmash_get_entry_data( ps_list, ps_list->entry_count );
     if( ps )
         ps->unused = 1;
+clean:
     lsmash_bits_adhoc_cleanup( bits );
     lsmash_free( rbsp_buffer );
     return err;
