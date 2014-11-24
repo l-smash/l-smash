@@ -514,6 +514,7 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
             return ERROR_MSG( "Failed to seek input timecode file.\n" );
         /* Preparation storing timecodes. */
         double *fps_array = lsmash_malloc( ((timecode->auto_media_timescale || timecode->auto_media_timebase) * num_sequences + 1) * sizeof(double) );
+        if( !fps_array )
             return ERROR_MSG( "Failed to allocate fps array\n" );
         double corrected_assume_fps = correct_fps( assume_fps, timecode );
         if( corrected_assume_fps < 0 )
