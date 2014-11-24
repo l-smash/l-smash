@@ -26,6 +26,10 @@
 #include "common/osdep.h"
 #include "lsmash.h"
 
+#ifdef _MSC_VER
+#define strcasecmp _stricmp
+#endif
+
 #ifdef _WIN32
    void lsmash_get_mainargs( int *argc, char ***argv );
 #else
