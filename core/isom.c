@@ -3731,7 +3731,7 @@ int isom_group_roll_recovery( isom_box_t *parent, lsmash_sample_t *sample )
             if( valid_pre_roll )
             {
                 /* a member of pre-roll group */
-                group->roll_distance = -prop->pre_roll.distance;
+                group->roll_distance = -(signed)prop->pre_roll.distance;
                 int err = isom_roll_grouping_established( group );
                 if( err < 0 )
                     return err;
