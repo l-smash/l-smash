@@ -616,8 +616,8 @@ int h264_parse_sps
     else if( sps->pic_order_cnt_type == 1 )
     {
         sps->delta_pic_order_always_zero_flag = lsmash_bits_get( bits, 1 );
-        static const int64_t max_value =  ((uint64_t)1 << 31) - 1;
-        static const int64_t min_value = -((uint64_t)1 << 31) + 1;
+        static const int64_t max_value =  (signed)(((uint64_t)1 << 31) - 1);
+        static const int64_t min_value = -(signed)(((uint64_t)1 << 31) - 1);
         int64_t offset_for_non_ref_pic = nalu_get_exp_golomb_se( bits );
         if( offset_for_non_ref_pic < min_value || offset_for_non_ref_pic > max_value )
             return LSMASH_ERR_INVALID_DATA;
