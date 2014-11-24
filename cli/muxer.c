@@ -1099,7 +1099,7 @@ static int do_mux( muxer_t *muxer )
                     if( --num_active_input_tracks == 0 )
                         break;      /* Reached the end of whole tracks. */
                 }
-                else
+                if( sample )
                 {
                     sample->index = out_track->sample_entry;
                     sample->dts  *= out_track->timebase;
