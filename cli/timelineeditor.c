@@ -459,6 +459,14 @@ static int try_matroska_timescale( double *fps_array, timecode_t *timecode, uint
 
 static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
 {
+#define FAILED_PARSE_TIMECODE( ... )       \
+    do                                     \
+    {                                      \
+        lsmash_free( fps_array );          \
+        lsmash_free( timecode_array );     \
+        return ERROR_MSG( __VA_ARGS__ );   \
+    }                                      \
+    while( 0 )
     int tcfv;
     int ret = fscanf( timecode->file, "# timecode format v%d", &tcfv );
     if( ret != 1 || (tcfv != 1 && tcfv != 2) )
@@ -505,13 +513,14 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
         if( lsmash_fseek( timecode->file, file_pos, SEEK_SET ) != 0 )
             return ERROR_MSG( "Failed to seek input timecode file.\n" );
         /* Preparation storing timecodes. */
-        double fps_array[ (timecode->auto_media_timescale || timecode->auto_media_timebase) * num_sequences + 1 ];
+        double *fps_array = lsmash_malloc( ((timecode->auto_media_timescale || timecode->auto_media_timebase) * num_sequences + 1) * sizeof(double) );
+            return ERROR_MSG( "Failed to allocate fps array\n" );
         double corrected_assume_fps = correct_fps( assume_fps, timecode );
         if( corrected_assume_fps < 0 )
-            return ERROR_MSG( "Failed to correct the assumed framerate\n" );
+            FAILED_PARSE_TIMECODE( "Failed to correct the assumed framerate\n" );
         timecode_array = lsmash_malloc( sample_count * sizeof(double) );
         if( !timecode_array )
-            return ERROR_MSG( "Failed to alloc timecodes\n" );
+            FAILED_PARSE_TIMECODE( "Failed to alloc timecodes\n" );
         timecode_array[0] = 0;
         num_sequences = 0;
         uint32_t i = 0;
@@ -530,10 +539,7 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
                     fps_array[num_sequences++] = sequence_fps;
                 sequence_fps = correct_fps( sequence_fps, timecode );
                 if( sequence_fps < 0 )
-                {
-                    lsmash_free( timecode_array );
-                    return ERROR_MSG( "Failed to correct the framerate of a sequence.\n" );
-                }
+                    FAILED_PARSE_TIMECODE( "Failed to correct the framerate of a sequence.\n" );
                 for( i = start; i <= end && i < sample_count - 1; i++ )
                     timecode_array[i + 1] = timecode_array[i] + 1 / sequence_fps;
             }
@@ -548,12 +554,9 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
             double exponent;
             double assume_fps_sig, sequence_fps_sig;
             if( try_matroska_timescale( fps_array, timecode, num_sequences + 1 ) < 0 )
-            {
-                lsmash_free( timecode_array );
-                return ERROR_MSG( "Failed to try matroska timescale.\n" );
-            }
+                FAILED_PARSE_TIMECODE( "Failed to try matroska timescale.\n" );
             if( lsmash_fseek( timecode->file, file_pos, SEEK_SET ) != 0 )
-                return ERROR_MSG( "Failed to seek input timecode file.\n" );
+                FAILED_PARSE_TIMECODE( "Failed to seek input timecode file.\n" );
             assume_fps_sig = sigexp10( assume_fps, &exponent );
             corrected_assume_fps = MATROSKA_TIMESCALE / ( round( MATROSKA_TIMESCALE / assume_fps_sig ) / exponent );
             for( i = 0; i < sample_count - 1 && fgets( buff, sizeof(buff), timecode->file ); )
@@ -573,6 +576,7 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
             for( ; i < sample_count - 1; i++ )
                 timecode_array[i + 1] = timecode_array[i] + 1 / corrected_assume_fps;
         }
+        lsmash_free( fps_array );
     }
     else    /* tcfv == 2 */
     {
@@ -635,7 +639,9 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
         /* Generate media timescale automatically if needed. */
         if( sample_count != 1 && timecode->auto_media_timescale )
         {
-            double fps_array[sample_count - 1];
+            double *fps_array = lsmash_malloc( (sample_count - 1) * sizeof(double) );
+            if( !fps_array )
+                FAILED_PARSE_TIMECODE( "Failed to allocate fps array\n" );
             for( i = 0; i < sample_count - 1; i++ )
             {
                 fps_array[i] = 1 / (timecode_array[i + 1] - timecode_array[i]);
@@ -666,10 +672,8 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
             }
             if( timecode->auto_media_timebase && !timecode->auto_media_timescale
              && try_matroska_timescale( fps_array, timecode, sample_count - 1 ) < 0 )
-            {
-                lsmash_free( timecode_array );
-                return ERROR_MSG( "Failed to try matroska timescale.\n" );
-            }
+                FAILED_PARSE_TIMECODE( "Failed to try matroska timescale.\n" );
+            lsmash_free( fps_array );
         }
     }
     if( timecode->auto_media_timescale || timecode->auto_media_timebase )
@@ -708,6 +712,7 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
     }
     lsmash_free( timecode_array );
     return 0;
+#undef FAILED_PARSE_TIMECODE
 }
 
 #undef DOUBLE_EPSILON
@@ -796,7 +801,9 @@ static int edit_media_timeline( root_t *input, timecode_t *timecode, opt_t *opt 
             timestamp[i].cts = timecode->ts[i] + sample_delay_time;
         /* Reorder decode order and generate new DTS from CTS. */
         lsmash_sort_timestamps_decoding_order( &ts_list );
-        uint64_t prev_reordered_cts[sample_delay];
+        uint64_t *prev_reordered_cts = lsmash_malloc( sample_delay * sizeof(uint64_t) );
+        if( !prev_reordered_cts )
+            return ERROR_MSG( "Failed to allocate the previous reordered CTS array.\n" );
         for( uint32_t i = 0; i <= sample_delay; i++ )
         {
             if( !opt->dts_compression )
@@ -805,7 +812,10 @@ static int edit_media_timeline( root_t *input, timecode_t *timecode, opt_t *opt 
             {
                 timestamp[i].dts = (i * initial_delta) / (!!opt->media_timescale * sample_delay + 1);
                 if( i && (timestamp[i].dts <= timestamp[i - 1].dts) )
+                {
+                    lsmash_free( prev_reordered_cts );
                     return ERROR_MSG( "Failed to do DTS compression.\n" );
+                }
             }
             prev_reordered_cts[ i % sample_delay ] = timecode->ts[i] + sample_delay_time;
         }
@@ -814,6 +824,7 @@ static int edit_media_timeline( root_t *input, timecode_t *timecode, opt_t *opt 
             timestamp[i].dts = prev_reordered_cts[ (i - sample_delay) % sample_delay ];
             prev_reordered_cts[ i % sample_delay ] = timecode->ts[i] + sample_delay_time;
         }
+        lsmash_free( prev_reordered_cts );
     }
     else
         for( uint32_t i = 0; i < sample_count; i++ )
