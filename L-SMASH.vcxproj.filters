@@ -1,0 +1,213 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Headers">
+      <UniqueIdentifier>{c9986010-ffd6-450c-927d-2781d86079b8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Sources">
+      <UniqueIdentifier>{4633bd3c-6029-4388-a958-67e79400b808}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="codecs\a52.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="importer\a52_imp.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="importer\adts_imp.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="codecs\alac.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="common\alloc.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="importer\als_imp.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="importer\amr_imp.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="common\bits.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="core\box.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="common\bytes.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="core\chapter.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="codecs\description.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="codecs\dts.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="importer\dts_imp.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="core\file.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="core\fragment.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="codecs\h264.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="codecs\hevc.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="importer\importer.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="importer\isobm_imp.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="core\isom.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="common\list.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="core\meta.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="importer\mp3_imp.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="codecs\mp4a.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="codecs\mp4sys.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="common\multibuf.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="importer\nalu_imp.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="common\osdep.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="core\print.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="core\read.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="core\summary.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="core\timeline.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="common\utils.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="codecs\vc1.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="importer\vc1_imp.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="importer\wave_imp.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="codecs\wma.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="core\write.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="codecs\a52.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="common\bits.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="core\box.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="common\bstream.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="common\bytes.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="codecs\description.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="codecs\dts.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="core\file.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="core\fragment.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="codecs\h264.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="codecs\hevc.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="importer\importer.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="common\internal.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="common\list.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="lsmash.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="common\memint.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="codecs\mp4a.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="codecs\mp4sys.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="common\multibuf.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="codecs\nalu.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="common\osdep.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="core\print.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="core\read.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="core\timeline.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="common\utils.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="codecs\vc1.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+    <ClInclude Include="core\write.h">
+      <Filter>Headers</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
