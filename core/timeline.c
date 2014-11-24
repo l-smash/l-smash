@@ -1910,7 +1910,7 @@ int lsmash_set_media_timestamps( lsmash_root_t *root, uint32_t track_ID, lsmash_
     {
         i = 1;
         lsmash_entry_t *entry = timeline->info_list->head;
-        isom_sample_info_t *info;
+        isom_sample_info_t *info = NULL;
         while( i < sample_count )
         {
             info = (isom_sample_info_t *)entry->data;
