@@ -20,6 +20,8 @@
 
 /* This file is available under an ISC license. */
 
+#include "cli.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
@@ -29,9 +31,6 @@
 #include <io.h>
 #include <fcntl.h>
 #endif
-
-#include "lsmash.h"
-#include "cli.h"
 
 #include "config.h"
 

@@ -21,15 +21,14 @@
 
 /* This file is available under an ISC license. */
 
+#include "cli.h"
+
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
 #include <strings.h>
 #include <stdlib.h>
 #include <inttypes.h>
-
-#include "lsmash.h"
-#include "cli.h"
 
 #include "config.h"
 

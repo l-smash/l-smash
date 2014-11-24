@@ -20,7 +20,7 @@
 
 /* This file is available under an ISC license. */
 
-#include "common/internal.h"
+#include "cli.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -29,9 +29,6 @@
 #include <inttypes.h>
 #include <math.h>
 #include <stdarg.h>
-
-#include "lsmash.h"
-#include "cli.h"
 
 #include "config.h"
 

@@ -23,6 +23,9 @@
 #ifndef CLI_H
 #define CLI_H
 
+#include "common/osdep.h"
+#include "lsmash.h"
+
 #ifdef _WIN32
    void lsmash_get_mainargs( int *argc, char ***argv );
 #else
