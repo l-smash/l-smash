@@ -30,6 +30,9 @@
 #ifdef __MINGW32__
 #define lsmash_fseek fseeko64
 #define lsmash_ftell ftello64
+#else
+#define lsmash_fseek fseeko
+#define lsmash_ftell ftello
 #endif
 
 #ifdef _MSC_VER

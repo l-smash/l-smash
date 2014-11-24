@@ -27,11 +27,6 @@
 #include <stdio.h>
 #include <assert.h>
 
-#ifndef lsmash_fseek
-#define lsmash_fseek fseeko
-#define lsmash_ftell ftello
-#endif
-
 #include "lsmash.h"
 
 #include "utils.h"
