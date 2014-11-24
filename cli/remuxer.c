@@ -224,18 +224,11 @@ static void cleanup_remuxer( remuxer_t *remuxer )
 {
     for( int i = 0; i < remuxer->num_input; i++ )
     {
-        if( remuxer->input )
-        {
-            cleanup_input_movie( &remuxer->input[i] );
-            lsmash_free( remuxer->input );
-        }
-        if( remuxer->track_option )
-        {
-            if( remuxer->track_option[i] )
-                lsmash_free( remuxer->track_option[i] );
-            lsmash_free( remuxer->track_option );
-        }
+        cleanup_input_movie( &remuxer->input[i] );
+        lsmash_free( remuxer->track_option[i] );
     }
+    lsmash_free( remuxer->track_option );
+    lsmash_free( remuxer->input );
     cleanup_output_movie( remuxer->output );
 }
 
