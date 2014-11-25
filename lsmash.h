@@ -34,8 +34,8 @@
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  2
-#define LSMASH_VERSION_MINOR  4
-#define LSMASH_VERSION_MICRO 27
+#define LSMASH_VERSION_MINOR  5
+#define LSMASH_VERSION_MICRO  0
 
 #define LSMASH_VERSION_INT( a, b, c ) (((a) << 16) | ((b) << 8) | (c))
 
@@ -475,7 +475,7 @@ typedef struct
 
 #define LSMASH_BOX_TYPE_INITIALIZER { 0x00000000, { 0x00000000, { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 } } }
 #define LSMASH_BOX_TYPE_UNSPECIFIED static_lsmash_box_type_unspecified
-static const lsmash_box_type_t static_lsmash_box_type_unspecified = LSMASH_BOX_TYPE_INITIALIZER;
+extern const lsmash_box_type_t static_lsmash_box_type_unspecified;
 
 /* Return extended box type that consists of combination of given FourCC and 12-byte ID. */
 lsmash_extended_box_type_t lsmash_form_extended_box_type
@@ -649,10 +649,17 @@ typedef lsmash_box_type_t lsmash_codec_type_t;
 #define LSMASH_CODEC_TYPE_INITIALIZER LSMASH_BOX_TYPE_INITIALIZER
 #define LSMASH_CODEC_TYPE_UNSPECIFIED LSMASH_BOX_TYPE_UNSPECIFIED
 
+#ifndef LSMASH_INITIALIZE_CODEC_ID_HERE
 #define DEFINE_ISOM_CODEC_TYPE( BOX_TYPE_NAME, BOX_TYPE_FOURCC ) \
-    static const lsmash_codec_type_t BOX_TYPE_NAME = LSMASH_ISO_BOX_TYPE_INITIALIZER( BOX_TYPE_FOURCC )
+    extern const lsmash_codec_type_t BOX_TYPE_NAME
 #define DEFINE_QTFF_CODEC_TYPE( BOX_TYPE_NAME, BOX_TYPE_FOURCC ) \
-    static const lsmash_codec_type_t BOX_TYPE_NAME = LSMASH_QTFF_BOX_TYPE_INITIALIZER( BOX_TYPE_FOURCC )
+    extern const lsmash_codec_type_t BOX_TYPE_NAME
+#else
+#define DEFINE_ISOM_CODEC_TYPE( BOX_TYPE_NAME, BOX_TYPE_FOURCC ) \
+    const lsmash_codec_type_t BOX_TYPE_NAME = LSMASH_ISO_BOX_TYPE_INITIALIZER( BOX_TYPE_FOURCC )
+#define DEFINE_QTFF_CODEC_TYPE( BOX_TYPE_NAME, BOX_TYPE_FOURCC ) \
+    const lsmash_codec_type_t BOX_TYPE_NAME = LSMASH_QTFF_BOX_TYPE_INITIALIZER( BOX_TYPE_FOURCC )
+#endif
 
 /* Audio CODEC identifiers */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_AC_3_AUDIO,  LSMASH_4CC( 'a', 'c', '-', '3' ) );    /* AC-3 audio */

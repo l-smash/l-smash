@@ -294,6 +294,7 @@ SRC_CODECS="      \
     dts.c         \
     h264.c        \
     hevc.c        \
+    id.c          \
     mp4sys.c      \
     mp4a.c        \
     vc1.c         \

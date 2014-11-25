@@ -43,6 +43,8 @@ static const lsmash_class_t lsmash_box_class =
     "box"
 };
 
+const lsmash_box_type_t static_lsmash_box_type_unspecified = LSMASH_BOX_TYPE_INITIALIZER;
+
 void isom_init_box_common_orig
 (
     void                       *_box,
