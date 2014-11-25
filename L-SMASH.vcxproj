@@ -77,6 +77,7 @@
     <ClCompile Include="codecs\dts.c" />
     <ClCompile Include="codecs\h264.c" />
     <ClCompile Include="codecs\hevc.c" />
+    <ClCompile Include="codecs\id.c" />
     <ClCompile Include="codecs\mp4a.c" />
     <ClCompile Include="codecs\mp4sys.c" />
     <ClCompile Include="codecs\vc1.c" />

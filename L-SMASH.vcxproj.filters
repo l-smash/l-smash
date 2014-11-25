@@ -126,6 +126,9 @@
     <ClCompile Include="core\write.c">
       <Filter>Sources</Filter>
     </ClCompile>
+    <ClCompile Include="codecs\id.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="codecs\a52.h">
