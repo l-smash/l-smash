@@ -23,6 +23,7 @@
 #include "common/internal.h" /* must be placed first */
 
 #include <string.h>
+#include <io.h>
 #include <fcntl.h>
 
 #include "box.h"
