@@ -28,15 +28,13 @@
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <shellapi.h>
 #endif
 
 #ifdef _WIN32
 void lsmash_get_mainargs( int *argc, char ***argv )
 {
-    struct SI { int newmode; } si = { 0 };
-    int __wgetmainargs( int *, wchar_t ***, wchar_t ***, int, struct SI * );
-    wchar_t **wargv, **envp;
-    __wgetmainargs( argc, &wargv, &envp, 1, &si );
+    wchar_t **wargv = CommandLineToArgvW( GetCommandLineW(), argc );
     *argv = lsmash_malloc_zero( (*argc + 1) * sizeof(char *) );
     for( int i = 0; i < *argc; ++i )
         lsmash_string_from_wchar( CP_UTF8, wargv[i], &(*argv)[i] );
