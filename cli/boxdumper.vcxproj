@@ -19,32 +19,32 @@
     </ProjectConfiguration>
   </ItemGroup>
   <PropertyGroup Label="Globals">
-    <ProjectGuid>{9CFCDBDD-FD7D-48E9-9AE8-6CEB544D7E4B}</ProjectGuid>
-    <RootNamespace>LSMASH</RootNamespace>
-    <ProjectName>liblsmash</ProjectName>
+    <ProjectGuid>{FEFC262E-D528-4938-99A9-467E6525045D}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>boxdumper</RootNamespace>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v120_xp</PlatformToolset>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='CLIDebug|Win32'" Label="Configuration">
-    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v120_xp</PlatformToolset>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
-    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v120_xp</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>MultiByte</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='CLIRelease|Win32'" Label="Configuration">
-    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v120_xp</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
@@ -66,151 +66,107 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <IntDir>$(SolutionDir)$(Configuration)\$(ProjectName)\</IntDir>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='CLIRelease|Win32'">
-    <IntDir>$(SolutionDir)$(Configuration)\$(ProjectName)\</IntDir>
-  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
     <IntDir>$(SolutionDir)$(Configuration)\$(ProjectName)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='CLIDebug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+    <IntDir>$(SolutionDir)$(Configuration)\$(ProjectName)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+    <IntDir>$(SolutionDir)$(Configuration)\$(ProjectName)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='CLIRelease|Win32'">
+    <LinkIncremental>false</LinkIncremental>
     <IntDir>$(SolutionDir)$(Configuration)\$(ProjectName)\</IntDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>WIN32;LSMASH_DEMUXER_ENABLED;_DEBUG;_CONSOLE;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)</AdditionalIncludeDirectories>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>$(ProjectDir)</AdditionalIncludeDirectories>
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>LSMASH_DEMUXER_ENABLED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
+      <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <LargeAddressAware>true</LargeAddressAware>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='CLIDebug|Win32'">
     <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>WIN32;LSMASH_DEMUXER_ENABLED;_DEBUG;_CONSOLE;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)</AdditionalIncludeDirectories>
       <SDLCheck>true</SDLCheck>
-      <AdditionalIncludeDirectories>$(ProjectDir)</AdditionalIncludeDirectories>
-      <CompileAs>CompileAsC</CompileAs>
-      <PreprocessorDefinitions>LSMASH_DEMUXER_ENABLED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
+      <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <LargeAddressAware>true</LargeAddressAware>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>WIN32;LSMASH_DEMUXER_ENABLED;NDEBUG;_CONSOLE;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)</AdditionalIncludeDirectories>
       <SDLCheck>true</SDLCheck>
-      <CompileAs>CompileAsC</CompileAs>
-      <AdditionalIncludeDirectories>$(ProjectDir)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>LSMASH_DEMUXER_ENABLED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
+      <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
+      <LargeAddressAware>true</LargeAddressAware>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='CLIRelease|Win32'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>true</SDLCheck>
-      <CompileAs>CompileAsC</CompileAs>
-      <AdditionalIncludeDirectories>$(ProjectDir)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>LSMASH_DEMUXER_ENABLED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;LSMASH_DEMUXER_ENABLED;NDEBUG;_CONSOLE;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <SDLCheck>true</SDLCheck>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
+      <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
+      <LargeAddressAware>true</LargeAddressAware>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="codecs\a52.c" />
-    <ClCompile Include="codecs\alac.c" />
-    <ClCompile Include="codecs\description.c" />
-    <ClCompile Include="codecs\dts.c" />
-    <ClCompile Include="codecs\h264.c" />
-    <ClCompile Include="codecs\hevc.c" />
-    <ClCompile Include="codecs\id.c" />
-    <ClCompile Include="codecs\mp4a.c" />
-    <ClCompile Include="codecs\mp4sys.c" />
-    <ClCompile Include="codecs\vc1.c" />
-    <ClCompile Include="codecs\wma.c" />
-    <ClCompile Include="common\alloc.c" />
-    <ClCompile Include="common\bits.c" />
-    <ClCompile Include="common\bytes.c" />
-    <ClCompile Include="common\list.c" />
-    <ClCompile Include="common\multibuf.c" />
-    <ClCompile Include="common\osdep.c" />
-    <ClCompile Include="common\utils.c" />
-    <ClCompile Include="core\box.c" />
-    <ClCompile Include="core\chapter.c" />
-    <ClCompile Include="core\file.c" />
-    <ClCompile Include="core\fragment.c" />
-    <ClCompile Include="core\isom.c" />
-    <ClCompile Include="core\meta.c" />
-    <ClCompile Include="core\print.c" />
-    <ClCompile Include="core\read.c" />
-    <ClCompile Include="core\summary.c" />
-    <ClCompile Include="core\timeline.c" />
-    <ClCompile Include="core\write.c" />
-    <ClCompile Include="importer\a52_imp.c" />
-    <ClCompile Include="importer\adts_imp.c" />
-    <ClCompile Include="importer\als_imp.c" />
-    <ClCompile Include="importer\amr_imp.c" />
-    <ClCompile Include="importer\dts_imp.c" />
-    <ClCompile Include="importer\importer.c" />
-    <ClCompile Include="importer\isobm_imp.c" />
-    <ClCompile Include="importer\mp3_imp.c" />
-    <ClCompile Include="importer\nalu_imp.c" />
-    <ClCompile Include="importer\vc1_imp.c" />
-    <ClCompile Include="importer\wave_imp.c" />
+    <ClCompile Include="boxdumper.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="codecs\a52.h" />
-    <ClInclude Include="codecs\description.h" />
-    <ClInclude Include="codecs\dts.h" />
-    <ClInclude Include="codecs\h264.h" />
-    <ClInclude Include="codecs\hevc.h" />
-    <ClInclude Include="codecs\mp4a.h" />
-    <ClInclude Include="codecs\mp4sys.h" />
-    <ClInclude Include="codecs\nalu.h" />
-    <ClInclude Include="codecs\vc1.h" />
-    <ClInclude Include="common\bits.h" />
-    <ClInclude Include="common\bstream.h" />
-    <ClInclude Include="common\bytes.h" />
-    <ClInclude Include="common\internal.h" />
-    <ClInclude Include="common\list.h" />
-    <ClInclude Include="common\memint.h" />
-    <ClInclude Include="common\multibuf.h" />
-    <ClInclude Include="common\osdep.h" />
-    <ClInclude Include="common\utils.h" />
-    <ClInclude Include="core\box.h" />
-    <ClInclude Include="core\file.h" />
-    <ClInclude Include="core\fragment.h" />
-    <ClInclude Include="core\print.h" />
-    <ClInclude Include="core\read.h" />
-    <ClInclude Include="core\timeline.h" />
-    <ClInclude Include="core\write.h" />
-    <ClInclude Include="importer\importer.h" />
-    <ClInclude Include="lsmash.h" />
+    <ProjectReference Include="..\L-SMASH.vcxproj">
+      <Project>{9cfcdbdd-fd7d-48e9-9ae8-6ceb544d7e4b}</Project>
+    </ProjectReference>
+    <ProjectReference Include="cli.vcxproj">
+      <Project>{df39d172-117d-4aac-9415-01e55dca6d9e}</Project>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

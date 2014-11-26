@@ -1,20 +1,66 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Express 2013 for Windows Desktop
-VisualStudioVersion = 12.0.30723.0
+# Visual Studio 2013
+VisualStudioVersion = 12.0.31101.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "L-SMASH", "L-SMASH.vcxproj", "{9CFCDBDD-FD7D-48E9-9AE8-6CEB544D7E4B}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "liblsmash", "L-SMASH.vcxproj", "{9CFCDBDD-FD7D-48E9-9AE8-6CEB544D7E4B}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "remuxer", "cli\remuxer.vcxproj", "{EDB3F1A6-BCDD-47D2-80AD-6E09BEEC8CBB}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "boxdumper", "cli\boxdumper.vcxproj", "{FEFC262E-D528-4938-99A9-467E6525045D}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "muxer", "cli\muxer.vcxproj", "{61737BD1-7995-4227-A10A-AAF499AB8AE9}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "timelineeditor", "cli\timelineeditor.vcxproj", "{A0F6445C-CBCD-4B85-A0F7-D8250A6B021E}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "cli", "cli\cli.vcxproj", "{DF39D172-117D-4AAC-9415-01E55DCA6D9E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		CLIDebug|Win32 = CLIDebug|Win32
+		CLIRelease|Win32 = CLIRelease|Win32
 		Debug|Win32 = Debug|Win32
 		Release|Win32 = Release|Win32
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{9CFCDBDD-FD7D-48E9-9AE8-6CEB544D7E4B}.CLIDebug|Win32.ActiveCfg = CLIDebug|Win32
+		{9CFCDBDD-FD7D-48E9-9AE8-6CEB544D7E4B}.CLIDebug|Win32.Build.0 = CLIDebug|Win32
+		{9CFCDBDD-FD7D-48E9-9AE8-6CEB544D7E4B}.CLIRelease|Win32.ActiveCfg = CLIRelease|Win32
+		{9CFCDBDD-FD7D-48E9-9AE8-6CEB544D7E4B}.CLIRelease|Win32.Build.0 = CLIRelease|Win32
 		{9CFCDBDD-FD7D-48E9-9AE8-6CEB544D7E4B}.Debug|Win32.ActiveCfg = Debug|Win32
 		{9CFCDBDD-FD7D-48E9-9AE8-6CEB544D7E4B}.Debug|Win32.Build.0 = Debug|Win32
 		{9CFCDBDD-FD7D-48E9-9AE8-6CEB544D7E4B}.Release|Win32.ActiveCfg = Release|Win32
 		{9CFCDBDD-FD7D-48E9-9AE8-6CEB544D7E4B}.Release|Win32.Build.0 = Release|Win32
+		{EDB3F1A6-BCDD-47D2-80AD-6E09BEEC8CBB}.CLIDebug|Win32.ActiveCfg = CLIDebug|Win32
+		{EDB3F1A6-BCDD-47D2-80AD-6E09BEEC8CBB}.CLIDebug|Win32.Build.0 = CLIDebug|Win32
+		{EDB3F1A6-BCDD-47D2-80AD-6E09BEEC8CBB}.CLIRelease|Win32.ActiveCfg = CLIRelease|Win32
+		{EDB3F1A6-BCDD-47D2-80AD-6E09BEEC8CBB}.CLIRelease|Win32.Build.0 = CLIRelease|Win32
+		{EDB3F1A6-BCDD-47D2-80AD-6E09BEEC8CBB}.Debug|Win32.ActiveCfg = Debug|Win32
+		{EDB3F1A6-BCDD-47D2-80AD-6E09BEEC8CBB}.Release|Win32.ActiveCfg = Release|Win32
+		{FEFC262E-D528-4938-99A9-467E6525045D}.CLIDebug|Win32.ActiveCfg = CLIDebug|Win32
+		{FEFC262E-D528-4938-99A9-467E6525045D}.CLIDebug|Win32.Build.0 = CLIDebug|Win32
+		{FEFC262E-D528-4938-99A9-467E6525045D}.CLIRelease|Win32.ActiveCfg = CLIRelease|Win32
+		{FEFC262E-D528-4938-99A9-467E6525045D}.CLIRelease|Win32.Build.0 = CLIRelease|Win32
+		{FEFC262E-D528-4938-99A9-467E6525045D}.Debug|Win32.ActiveCfg = Debug|Win32
+		{FEFC262E-D528-4938-99A9-467E6525045D}.Release|Win32.ActiveCfg = Release|Win32
+		{61737BD1-7995-4227-A10A-AAF499AB8AE9}.CLIDebug|Win32.ActiveCfg = CLIDebug|Win32
+		{61737BD1-7995-4227-A10A-AAF499AB8AE9}.CLIDebug|Win32.Build.0 = CLIDebug|Win32
+		{61737BD1-7995-4227-A10A-AAF499AB8AE9}.CLIRelease|Win32.ActiveCfg = CLIRelease|Win32
+		{61737BD1-7995-4227-A10A-AAF499AB8AE9}.CLIRelease|Win32.Build.0 = CLIRelease|Win32
+		{61737BD1-7995-4227-A10A-AAF499AB8AE9}.Debug|Win32.ActiveCfg = Debug|Win32
+		{61737BD1-7995-4227-A10A-AAF499AB8AE9}.Release|Win32.ActiveCfg = Release|Win32
+		{A0F6445C-CBCD-4B85-A0F7-D8250A6B021E}.CLIDebug|Win32.ActiveCfg = CLIDebug|Win32
+		{A0F6445C-CBCD-4B85-A0F7-D8250A6B021E}.CLIDebug|Win32.Build.0 = CLIDebug|Win32
+		{A0F6445C-CBCD-4B85-A0F7-D8250A6B021E}.CLIRelease|Win32.ActiveCfg = CLIRelease|Win32
+		{A0F6445C-CBCD-4B85-A0F7-D8250A6B021E}.CLIRelease|Win32.Build.0 = CLIRelease|Win32
+		{A0F6445C-CBCD-4B85-A0F7-D8250A6B021E}.Debug|Win32.ActiveCfg = Debug|Win32
+		{A0F6445C-CBCD-4B85-A0F7-D8250A6B021E}.Release|Win32.ActiveCfg = Release|Win32
+		{DF39D172-117D-4AAC-9415-01E55DCA6D9E}.CLIDebug|Win32.ActiveCfg = CLIDebug|Win32
+		{DF39D172-117D-4AAC-9415-01E55DCA6D9E}.CLIDebug|Win32.Build.0 = CLIDebug|Win32
+		{DF39D172-117D-4AAC-9415-01E55DCA6D9E}.CLIRelease|Win32.ActiveCfg = CLIRelease|Win32
+		{DF39D172-117D-4AAC-9415-01E55DCA6D9E}.CLIRelease|Win32.Build.0 = CLIRelease|Win32
+		{DF39D172-117D-4AAC-9415-01E55DCA6D9E}.Debug|Win32.ActiveCfg = Debug|Win32
+		{DF39D172-117D-4AAC-9415-01E55DCA6D9E}.Release|Win32.ActiveCfg = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
