@@ -1080,7 +1080,7 @@ static int hevc_get_access_unit_internal
         uint64_t start_code_length;
         uint64_t trailing_zero_bytes;
         uint64_t nalu_length = hevc_find_next_start_code( bs, &nuh, &start_code_length, &trailing_zero_bytes );
-        if( start_code_length <= NALU_SHORT_START_CODE_LENGTH && lsmash_bs_is_end( bs, nalu_length ) )
+        if( nalu_length == NALU_NO_START_CODE_FOUND )
         {
             /* For the last NALU.
              * This NALU already has been appended into the latest access unit and parsed. */
@@ -1228,7 +1228,8 @@ static int hevc_get_access_unit_internal
 
 static inline void hevc_importer_check_eof( importer_t *importer, hevc_access_unit_t *au )
 {
-    if( lsmash_bs_is_end( importer->bs, 0 ) && au->incomplete_length == 0 )
+    /* HEVC byte stream NALU consists of at least 5 bytes (start-code + NALU-header). */
+    if( lsmash_bs_is_end( importer->bs, NALU_SHORT_START_CODE_LENGTH + 1 ) && au->incomplete_length == 0 )
         importer->status = IMPORTER_EOF;
     else if( importer->status != IMPORTER_CHANGE )
         importer->status = IMPORTER_OK;
