@@ -1432,6 +1432,8 @@ static int isom_read_chan( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
                 desc->coordinates[j] = lsmash_bs_get_be32( bs );
         }
     }
+    /* A 'chan' box often contains extra 20 bytes (= the number of bytes of one channel description). */
+    isom_skip_box_rest( bs, box );
     return isom_read_leaf_box_common_last_process( file, box, level, chan );
 }
 
