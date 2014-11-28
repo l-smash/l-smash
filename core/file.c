@@ -22,8 +22,12 @@
 
 #include "common/internal.h" /* must be placed first */
 
-#include <string.h>
+/* for _setmode() */
+#ifdef _WIN32
 #include <io.h>
+#endif
+
+#include <string.h>
 #include <fcntl.h>
 
 #include "box.h"
