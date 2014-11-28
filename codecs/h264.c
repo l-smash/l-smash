@@ -226,6 +226,7 @@ uint64_t h264_find_next_start_code
         nuh->nal_unit_type      = H264_NALU_TYPE_UNSPECIFIED0;
         nuh->length             = 0;
         *start_code_length = 0;
+        length = NALU_NO_START_CODE_FOUND;
     }
     *trailing_zero_bytes = count;
     return length;
@@ -2266,7 +2267,7 @@ int lsmash_setup_h264_specific_parameters_from_access_unit
         uint64_t start_code_length;
         uint64_t trailing_zero_bytes;
         uint64_t nalu_length = h264_find_next_start_code( bs, &nuh, &start_code_length, &trailing_zero_bytes );
-        if( start_code_length <= NALU_SHORT_START_CODE_LENGTH && lsmash_bs_is_end( bs, nalu_length ) )
+        if( nalu_length == NALU_NO_START_CODE_FOUND )
             /* For the last NALU. This NALU already has been parsed. */
             return h264_parse_succeeded( info, param );
         uint8_t  nalu_type        = nuh.nal_unit_type;

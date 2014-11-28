@@ -234,7 +234,7 @@ static int h264_get_access_unit_internal
         uint64_t start_code_length;
         uint64_t trailing_zero_bytes;
         uint64_t nalu_length = h264_find_next_start_code( bs, &nuh, &start_code_length, &trailing_zero_bytes );
-        if( start_code_length <= NALU_SHORT_START_CODE_LENGTH && lsmash_bs_is_end( bs, nalu_length ) )
+        if( nalu_length == NALU_NO_START_CODE_FOUND )
         {
             /* For the last NALU.
              * This NALU already has been appended into the latest access unit and parsed. */
@@ -379,7 +379,8 @@ static int h264_get_access_unit_internal
 
 static inline void h264_importer_check_eof( importer_t *importer, h264_access_unit_t *au )
 {
-    if( lsmash_bs_is_end( importer->bs, 0 ) && au->incomplete_length == 0 )
+    /* AVC byte stream NALU consists of at least 4 bytes (start-code + NALU-header). */
+    if( lsmash_bs_is_end( importer->bs, NALU_SHORT_START_CODE_LENGTH ) && au->incomplete_length == 0 )
         importer->status = IMPORTER_EOF;
     else if( importer->status != IMPORTER_CHANGE )
         importer->status = IMPORTER_OK;
