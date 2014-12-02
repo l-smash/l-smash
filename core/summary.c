@@ -38,46 +38,43 @@
 /* create AudioSpecificConfig as memory block from summary, and set it into that summary itself */
 int lsmash_setup_AudioSpecificConfig( lsmash_audio_summary_t *summary )
 {
-    if( !summary )
+    if( !summary || !summary->opaque )
         return LSMASH_ERR_FUNCTION_PARAM;
-    lsmash_bs_t* bs = lsmash_bs_create();
-    if( !bs )
-        return LSMASH_ERR_MEMORY_ALLOC;
-    mp4a_AudioSpecificConfig_t *asc =
-        mp4a_create_AudioSpecificConfig( summary->aot,
-                                         summary->frequency,
-                                         summary->channels,
-                                         summary->sbr_mode,
-                                         NULL,/*FIXME*/
-                                         0 /*FIXME*/);
-    if( !asc )
+    /* Remove an old one. */
+    for( lsmash_entry_t *entry = summary->opaque->list.head; entry; entry = entry->next )
     {
-        lsmash_bs_cleanup( bs );
-        return LSMASH_ERR_NAMELESS;
+        lsmash_codec_specific_t *cs = (lsmash_codec_specific_t *)entry->data;
+        if( !cs || cs->type != LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG )
+            continue;
+        lsmash_remove_entry_direct( &summary->opaque->list, entry, lsmash_destroy_codec_specific_data );
     }
-    mp4a_put_AudioSpecificConfig( bs, asc );
-    uint32_t new_length;
-    uint8_t *new_asc = lsmash_bs_export_data( bs, &new_length );
-    mp4a_remove_AudioSpecificConfig( asc );
-    lsmash_bs_cleanup( bs );
-    if( !new_asc )
+    /* Create and add a new one. */
+    uint32_t data_length;
+    uint8_t *data = mp4a_export_AudioSpecificConfig( summary->aot,
+                                                     summary->frequency,
+                                                     summary->channels,
+                                                     summary->sbr_mode,
+                                                     NULL,  /* FIXME */
+                                                     0,     /* FIXME */
+                                                     &data_length );
+    if( !data )
         return LSMASH_ERR_NAMELESS;
-    lsmash_codec_specific_t *specific = lsmash_malloc_zero( sizeof(lsmash_codec_specific_t) );
-    if( !specific )
+    lsmash_codec_specific_t *cs = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG,
+                                                                     LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+    if( !cs )
     {
-        lsmash_free( new_asc );
+        lsmash_free( data );
         return LSMASH_ERR_MEMORY_ALLOC;
     }
-    specific->type              = LSMASH_CODEC_SPECIFIC_DATA_TYPE_UNKNOWN;
-    specific->format            = LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED;
-    specific->destruct          = (lsmash_codec_specific_destructor_t)lsmash_free;
-    specific->size              = new_length;
-    specific->data.unstructured = new_asc;
-    if( !specific->data.unstructured
-     || lsmash_add_entry( &summary->opaque->list, specific ) < 0 )
+    lsmash_mp4sys_decoder_parameters_t *param = (lsmash_mp4sys_decoder_parameters_t *)cs->data.structured;
+    param->objectTypeIndication = MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3;
+    param->streamType           = MP4SYS_STREAM_TYPE_AudioStream;
+    int err = lsmash_set_mp4sys_decoder_specific_info( param, data, data_length );
+    lsmash_free( data );
+    if( err < 0 || (err = lsmash_add_entry( &summary->opaque->list, cs )) < 0 )
     {
-        lsmash_destroy_codec_specific_data( specific );
-        return LSMASH_ERR_MEMORY_ALLOC;
+        lsmash_destroy_codec_specific_data( cs );
+        return err;
     }
     return 0;
 }
