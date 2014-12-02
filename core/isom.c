@@ -4090,6 +4090,47 @@ static int isom_append_sample_internal
     return isom_pool_sample( current_pool, sample, samples_per_packet );
 }
 
+int isom_append_sample_by_type
+(
+    void                *track,
+    lsmash_sample_t     *sample,
+    isom_sample_entry_t *sample_entry,
+    int (*func_append_sample)( void *, lsmash_sample_t *, isom_sample_entry_t * )
+)
+{
+    if( isom_is_lpcm_audio( sample_entry ) )
+    {
+        uint32_t frame_size = ((isom_audio_entry_t *)sample_entry)->constBytesPerAudioPacket;
+        if( sample->length == frame_size )
+            return func_append_sample( track, sample, sample_entry );
+        else if( sample->length < frame_size )
+            return LSMASH_ERR_INVALID_DATA;
+        /* Append samples splitted into each LPCMFrame. */
+        uint64_t dts = sample->dts;
+        uint64_t cts = sample->cts;
+        for( uint32_t offset = 0; offset < sample->length; offset += frame_size )
+        {
+            lsmash_sample_t *lpcm_sample = lsmash_create_sample( frame_size );
+            if( !lpcm_sample )
+                return LSMASH_ERR_MEMORY_ALLOC;
+            memcpy( lpcm_sample->data, sample->data + offset, frame_size );
+            lpcm_sample->dts   = dts++;
+            lpcm_sample->cts   = cts++;
+            lpcm_sample->prop  = sample->prop;
+            lpcm_sample->index = sample->index;
+            int err = func_append_sample( track, lpcm_sample, sample_entry );
+            if( err < 0 )
+            {
+                lsmash_delete_sample( lpcm_sample );
+                return err;
+            }
+        }
+        lsmash_delete_sample( sample );
+        return 0;
+    }
+    return func_append_sample( track, sample, sample_entry );
+}
+
 /* This function is for non-fragmented movie. */
 static int isom_append_sample
 (
@@ -4111,36 +4152,7 @@ static int isom_append_sample
         assert( file->free );
         file->size += file->free->size + file->mdat->size;
     }
-    if( isom_is_lpcm_audio( sample_entry ) )
-    {
-        uint32_t frame_size = ((isom_audio_entry_t *)sample_entry)->constBytesPerAudioPacket;
-        if( sample->length == frame_size )
-            return isom_append_sample_internal( trak, sample, sample_entry );
-        else if( sample->length < frame_size )
-            return LSMASH_ERR_INVALID_DATA;
-        /* Append samples splitted into each LPCMFrame. */
-        uint64_t dts = sample->dts;
-        uint64_t cts = sample->cts;
-        for( uint32_t offset = 0; offset < sample->length; offset += frame_size )
-        {
-            lsmash_sample_t *lpcm_sample = lsmash_create_sample( frame_size );
-            if( !lpcm_sample )
-                return LSMASH_ERR_MEMORY_ALLOC;
-            memcpy( lpcm_sample->data, sample->data + offset, frame_size );
-            lpcm_sample->dts   = dts++;
-            lpcm_sample->cts   = cts++;
-            lpcm_sample->prop  = sample->prop;
-            lpcm_sample->index = sample->index;
-            if( (err = isom_append_sample_internal( trak, lpcm_sample, sample_entry )) < 0 )
-            {
-                lsmash_delete_sample( lpcm_sample );
-                return err;
-            }
-        }
-        lsmash_delete_sample( sample );
-        return 0;
-    }
-    return isom_append_sample_internal( trak, sample, sample_entry );
+    return isom_append_sample_by_type( trak, sample, sample_entry, (int (*)( void *, lsmash_sample_t *, isom_sample_entry_t * ))isom_append_sample_internal );
 }
 
 static int isom_output_cache( isom_trak_t *trak )

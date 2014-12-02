@@ -2503,10 +2503,38 @@ void isom_remove_dcr_ps( isom_dcr_ps_entry_t *ps );
 int isom_setup_handler_reference( isom_hdlr_t *hdlr, uint32_t media_type );
 int isom_setup_iods( isom_moov_t *moov );
 
-uint32_t isom_get_sample_count( isom_trak_t *trak );
-isom_sample_pool_t *isom_create_sample_pool( uint64_t size );
-int isom_update_sample_tables( isom_trak_t *trak, lsmash_sample_t *sample, uint32_t *samples_per_packet, isom_sample_entry_t *sample_entry );
-int isom_pool_sample( isom_sample_pool_t *pool, lsmash_sample_t *sample, uint32_t samples_per_packet );
+uint32_t isom_get_sample_count
+(
+    isom_trak_t *trak
+);
+
+isom_sample_pool_t *isom_create_sample_pool
+(
+    uint64_t size
+);
+
+int isom_update_sample_tables
+(
+    isom_trak_t         *trak,
+    lsmash_sample_t     *sample,
+    uint32_t            *samples_per_packet,
+    isom_sample_entry_t *sample_entry
+);
+
+int isom_pool_sample
+(
+    isom_sample_pool_t *pool,
+    lsmash_sample_t    *sample,
+    uint32_t            samples_per_packet
+);
+
+int isom_append_sample_by_type
+(
+    void                *track,
+    lsmash_sample_t     *sample,
+    isom_sample_entry_t *sample_entry,
+    int (*func_append_sample)( void *, lsmash_sample_t *, isom_sample_entry_t * )
+);
 
 int isom_add_sample_grouping( isom_box_t *parent, isom_grouping_type grouping_type );
 int isom_group_random_access( isom_box_t *parent, lsmash_sample_t *sample );
