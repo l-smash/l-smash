@@ -47,7 +47,8 @@ int isom_flush_fragment_pooled_samples
 
 int isom_append_fragment_sample
 (
-    lsmash_file_t   *file,
-    uint32_t         track_ID,
-    lsmash_sample_t *sample
+    lsmash_file_t       *file,
+    isom_trak_t         *trak,
+    lsmash_sample_t     *sample,
+    isom_sample_entry_t *sample_entry
 );

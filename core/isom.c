@@ -3907,10 +3907,16 @@ static int isom_write_pooled_samples( lsmash_file_t *file, isom_sample_pool_t *p
     return 0;
 }
 
-int isom_update_sample_tables( isom_trak_t *trak, lsmash_sample_t *sample, uint32_t *samples_per_packet )
+int isom_update_sample_tables
+(
+    isom_trak_t         *trak,
+    lsmash_sample_t     *sample,
+    uint32_t            *samples_per_packet,
+    isom_sample_entry_t *sample_entry
+)
 {
     int err;
-    isom_audio_entry_t *audio = (isom_audio_entry_t *)lsmash_get_entry_data( &trak->mdia->minf->stbl->stsd->list, sample->index );
+    isom_audio_entry_t *audio = (isom_audio_entry_t *)sample_entry;
     if( (audio->manager & LSMASH_AUDIO_DESCRIPTION)
      && (audio->manager & LSMASH_QTFF_BASE)
      && (audio->version == 1)
@@ -4019,10 +4025,15 @@ int isom_pool_sample( isom_sample_pool_t *pool, lsmash_sample_t *sample, uint32_
     return 0;
 }
 
-static int isom_append_sample_internal( isom_trak_t *trak, lsmash_sample_t *sample )
+static int isom_append_sample_internal
+(
+    isom_trak_t         *trak,
+    lsmash_sample_t     *sample,
+    isom_sample_entry_t *sample_entry
+)
 {
     uint32_t samples_per_packet;
-    int ret = isom_update_sample_tables( trak, sample, &samples_per_packet );
+    int ret = isom_update_sample_tables( trak, sample, &samples_per_packet, sample_entry );
     if( ret < 0 )
         return ret;
     /* ret == 1 means pooled samples must be flushed. */
@@ -4080,20 +4091,14 @@ static int isom_append_sample_internal( isom_trak_t *trak, lsmash_sample_t *samp
 }
 
 /* This function is for non-fragmented movie. */
-static int isom_append_sample( lsmash_file_t *file, uint32_t track_ID, lsmash_sample_t *sample )
+static int isom_append_sample
+(
+    lsmash_file_t       *file,
+    isom_trak_t         *trak,
+    lsmash_sample_t     *sample,
+    isom_sample_entry_t *sample_entry
+)
 {
-    isom_trak_t *trak = isom_get_trak( file, track_ID );
-    if( !trak
-     || !trak->file
-     || !trak->cache
-     || !trak->mdia
-     || !trak->mdia->mdhd
-     ||  trak->mdia->mdhd->timescale == 0
-     || !trak->mdia->minf
-     || !trak->mdia->minf->stbl
-     || !trak->mdia->minf->stbl->stsd
-     || !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
-        return LSMASH_ERR_NAMELESS;
     /* If there is no available Media Data Box to write samples, add and write a new one before any chunk offset is decided. */
     int err;
     if( !file->mdat )
@@ -4106,14 +4111,11 @@ static int isom_append_sample( lsmash_file_t *file, uint32_t track_ID, lsmash_sa
         assert( file->free );
         file->size += file->free->size + file->mdat->size;
     }
-    isom_sample_entry_t *sample_entry = (isom_sample_entry_t *)lsmash_get_entry_data( &trak->mdia->minf->stbl->stsd->list, sample->index );
-    if( !sample_entry )
-        return LSMASH_ERR_NAMELESS;
     if( isom_is_lpcm_audio( sample_entry ) )
     {
         uint32_t frame_size = ((isom_audio_entry_t *)sample_entry)->constBytesPerAudioPacket;
         if( sample->length == frame_size )
-            return isom_append_sample_internal( trak, sample );
+            return isom_append_sample_internal( trak, sample, sample_entry );
         else if( sample->length < frame_size )
             return LSMASH_ERR_INVALID_DATA;
         /* Append samples splitted into each LPCMFrame. */
@@ -4129,7 +4131,7 @@ static int isom_append_sample( lsmash_file_t *file, uint32_t track_ID, lsmash_sa
             lpcm_sample->cts   = cts++;
             lpcm_sample->prop  = sample->prop;
             lpcm_sample->index = sample->index;
-            if( (err = isom_append_sample_internal( trak, lpcm_sample )) < 0 )
+            if( (err = isom_append_sample_internal( trak, lpcm_sample, sample_entry )) < 0 )
             {
                 lsmash_delete_sample( lpcm_sample );
                 return err;
@@ -4138,7 +4140,7 @@ static int isom_append_sample( lsmash_file_t *file, uint32_t track_ID, lsmash_sa
         lsmash_delete_sample( sample );
         return 0;
     }
-    return isom_append_sample_internal( trak, sample );
+    return isom_append_sample_internal( trak, sample, sample_entry );
 }
 
 static int isom_output_cache( isom_trak_t *trak )
@@ -4246,13 +4248,31 @@ int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_
             file->size += file->ftyp->size;
         }
     }
+    /* Get a sample initializer. */
+    isom_trak_t *trak = isom_get_trak( file->initializer, track_ID );
+    if( !trak
+     || !trak->file
+     || !trak->cache
+     || !trak->tkhd
+     || !trak->mdia
+     || !trak->mdia->mdhd
+     ||  trak->mdia->mdhd->timescale == 0
+     || !trak->mdia->minf
+     || !trak->mdia->minf->stbl
+     || !trak->mdia->minf->stbl->stsd
+     || !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
+        return LSMASH_ERR_NAMELESS;
+    isom_sample_entry_t *sample_entry = (isom_sample_entry_t *)lsmash_get_entry_data( &trak->mdia->minf->stbl->stsd->list, sample->index );
+    if( !sample_entry )
+        return LSMASH_ERR_NAMELESS;
+    /* Append a sample. */
     if( (file->flags & LSMASH_FILE_MODE_FRAGMENTED)
      && file->fragment
      && file->fragment->pool )
-        return isom_append_fragment_sample( file, track_ID, sample );
+        return isom_append_fragment_sample( file, trak, sample, sample_entry );
     if( file != file->initializer )
         return LSMASH_ERR_INVALID_DATA;
-    return isom_append_sample( file, track_ID, sample );
+    return isom_append_sample( file, trak, sample, sample_entry );
 }
 
 /*---- misc functions ----*/

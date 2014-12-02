@@ -1606,12 +1606,17 @@ static int isom_update_fragment_sample_tables( isom_traf_t *traf, lsmash_sample_
     return delimit;
 }
 
-static int isom_append_fragment_sample_internal_initial( isom_trak_t *trak, lsmash_sample_t *sample )
+static int isom_append_fragment_sample_internal_initial
+(
+    isom_trak_t         *trak,
+    lsmash_sample_t     *sample,
+    isom_sample_entry_t *sample_entry
+)
 {
     /* Update the sample tables of this track fragment.
      * If a new chunk was created, append the previous one to the pool of this movie fragment. */
     uint32_t samples_per_packet;
-    int ret = isom_update_sample_tables( trak, sample, &samples_per_packet );
+    int ret = isom_update_sample_tables( trak, sample, &samples_per_packet, sample_entry );
     if( ret < 0 )
         return ret;
     else if( ret == 1 )
@@ -1624,7 +1629,12 @@ static int isom_append_fragment_sample_internal_initial( isom_trak_t *trak, lsma
     return 0;
 }
 
-static int isom_append_fragment_sample_internal( isom_traf_t *traf, lsmash_sample_t *sample )
+static int isom_append_fragment_sample_internal
+(
+    isom_traf_t         *traf,
+    lsmash_sample_t     *sample,
+    isom_sample_entry_t *sample_entry   /* unused */
+)
 {
     /* Update the sample tables of this track fragment.
      * If a new track run was created, append the previous one to the pool of this movie fragment. */
@@ -1643,27 +1653,16 @@ static int isom_append_fragment_sample_internal( isom_traf_t *traf, lsmash_sampl
 
 int isom_append_fragment_sample
 (
-    lsmash_file_t   *file,
-    uint32_t         track_ID,
-    lsmash_sample_t *sample
+    lsmash_file_t       *file,
+    isom_trak_t         *trak,
+    lsmash_sample_t     *sample,
+    isom_sample_entry_t *sample_entry
 )
 {
+    if( !trak->cache->fragment )
+        return LSMASH_ERR_NAMELESS;
     isom_fragment_manager_t *fragment = file->fragment;
     assert( fragment && fragment->pool );
-    isom_trak_t *trak = isom_get_trak( file->initializer, track_ID );
-    if( !trak
-     || !trak->file
-     || !trak->cache
-     || !trak->cache->fragment
-     || !trak->tkhd
-     || !trak->mdia
-     || !trak->mdia->mdhd
-     ||  trak->mdia->mdhd->timescale == 0
-     || !trak->mdia->minf
-     || !trak->mdia->minf->stbl
-     || !trak->mdia->minf->stbl->stsd
-     || !trak->mdia->minf->stbl->stsc || !trak->mdia->minf->stbl->stsc->list )
-        return LSMASH_ERR_NAMELESS;
     /* Write the Segment Type Box here if required and if it was not written yet. */
     if( !(file->flags & LSMASH_FILE_MODE_INITIALIZATION)
      && file->styp_list.head && file->styp_list.head->data )
@@ -1677,19 +1676,19 @@ int isom_append_fragment_sample
             file->size += styp->size;
         }
     }
-    int (*append_sample_func)( void *, lsmash_sample_t * ) = NULL;
+    int (*append_sample_func)( void *, lsmash_sample_t *, isom_sample_entry_t * ) = NULL;
     void *track_fragment = NULL;
     if( !fragment->movie )
     {
         /* Forbid adding a sample into the initial movie if requiring compatibility with Media Segment. */
         if( file->media_segment )
             return LSMASH_ERR_NAMELESS;
-        append_sample_func = (int (*)( void *, lsmash_sample_t * ))isom_append_fragment_sample_internal_initial;
+        append_sample_func = (int (*)( void *, lsmash_sample_t *, isom_sample_entry_t * ))isom_append_fragment_sample_internal_initial;
         track_fragment = trak;
     }
     else
     {
-        isom_traf_t *traf = isom_get_traf( fragment->movie, track_ID );
+        isom_traf_t *traf = isom_get_traf( fragment->movie, trak->tkhd->track_ID );
         if( !traf )
         {
             traf = isom_add_traf( fragment->movie );
@@ -1711,17 +1710,14 @@ int isom_append_fragment_sample
               || !traf->cache
               || !traf->tfhd )
             return LSMASH_ERR_NAMELESS;
-        append_sample_func = (int (*)( void *, lsmash_sample_t * ))isom_append_fragment_sample_internal;
+        append_sample_func = (int (*)( void *, lsmash_sample_t *, isom_sample_entry_t * ))isom_append_fragment_sample_internal;
         track_fragment = traf;
     }
-    isom_sample_entry_t *sample_entry = (isom_sample_entry_t *)lsmash_get_entry_data( &trak->mdia->minf->stbl->stsd->list, sample->index );
-    if( !sample_entry )
-        return LSMASH_ERR_NAMELESS;
     if( isom_is_lpcm_audio( sample_entry ) )
     {
         uint32_t frame_size = ((isom_audio_entry_t *)sample_entry)->constBytesPerAudioPacket;
         if( sample->length == frame_size )
-            return append_sample_func( track_fragment, sample );
+            return append_sample_func( track_fragment, sample, sample_entry );
         else if( sample->length < frame_size )
             return LSMASH_ERR_INVALID_DATA;
         /* Append samples splitted into each LPCMFrame. */
@@ -1737,7 +1733,7 @@ int isom_append_fragment_sample
             lpcm_sample->cts   = cts++;
             lpcm_sample->prop  = sample->prop;
             lpcm_sample->index = sample->index;
-            int ret = append_sample_func( track_fragment, lpcm_sample );
+            int ret = append_sample_func( track_fragment, lpcm_sample, sample_entry );
             if( ret < 0 )
             {
                 lsmash_delete_sample( lpcm_sample );
@@ -1747,5 +1743,5 @@ int isom_append_fragment_sample
         lsmash_delete_sample( sample );
         return 0;
     }
-    return append_sample_func( track_fragment, sample );
+    return append_sample_func( track_fragment, sample, sample_entry );
 }
