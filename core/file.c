@@ -314,7 +314,7 @@ static int isom_set_brands
 {
     if( brand_count > 50 )
         return LSMASH_ERR_FUNCTION_PARAM;   /* We support setting brands up to 50. */
-    if( major_brand == 0 || brand_count == 0 )
+    if( major_brand == 0 && (!brands || brand_count == 0 || brands[0] == 0) )
     {
         if( file->flags & LSMASH_FILE_MODE_INITIALIZATION )
         {
@@ -345,6 +345,14 @@ static int isom_set_brands
         }
         return 0;
     }
+    else if( major_brand == 0 )
+    {
+        major_brand = brands[0];
+        lsmash_log( NULL, LSMASH_LOG_WARNING,
+                    "major_brand is not specified. Use the first brand in the compatible brand list as major_brand.\n" );
+    }
+    else if( !brands )
+        brand_count = 0;
     isom_ftyp_t *ftyp;
     if( file->flags & LSMASH_FILE_MODE_INITIALIZATION )
     {
