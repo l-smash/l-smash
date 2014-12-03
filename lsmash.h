@@ -23,6 +23,10 @@
 #ifndef LSMASH_H
 #define LSMASH_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -4064,5 +4068,9 @@ int lsmash_convert_ansi_to_utf8
 #endif
 
 #undef PRIVATE
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
