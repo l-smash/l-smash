@@ -32,6 +32,15 @@ extern "C" {
 
 #define PRIVATE     /* If this declaration is placed at a variable, any user shall NOT use it. */
 
+/**************************************************************************************
+ * Handle windows dll imports. The user must define this before including this header.
+ **************************************************************************************/
+#ifdef LSMASH_API_IMPORTS
+#define LSMASH_API __declspec(dllimport)
+#else
+#define LSMASH_API
+#endif
+
 #define LSMASH_4CC( a, b, c, d ) (((a)<<24) | ((b)<<16) | ((c)<<8) | (d))
 
 /****************************************************************************
@@ -479,7 +488,7 @@ typedef struct
 
 #define LSMASH_BOX_TYPE_INITIALIZER { 0x00000000, { 0x00000000, { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 } } }
 #define LSMASH_BOX_TYPE_UNSPECIFIED static_lsmash_box_type_unspecified
-extern const lsmash_box_type_t static_lsmash_box_type_unspecified;
+LSMASH_API extern const lsmash_box_type_t static_lsmash_box_type_unspecified;
 
 /* Return extended box type that consists of combination of given FourCC and 12-byte ID. */
 lsmash_extended_box_type_t lsmash_form_extended_box_type
@@ -655,9 +664,9 @@ typedef lsmash_box_type_t lsmash_codec_type_t;
 
 #ifndef LSMASH_INITIALIZE_CODEC_ID_HERE
 #define DEFINE_ISOM_CODEC_TYPE( BOX_TYPE_NAME, BOX_TYPE_FOURCC ) \
-    extern const lsmash_codec_type_t BOX_TYPE_NAME
+    LSMASH_API extern const lsmash_codec_type_t BOX_TYPE_NAME
 #define DEFINE_QTFF_CODEC_TYPE( BOX_TYPE_NAME, BOX_TYPE_FOURCC ) \
-    extern const lsmash_codec_type_t BOX_TYPE_NAME
+    LSMASH_API extern const lsmash_codec_type_t BOX_TYPE_NAME
 #else
 #define DEFINE_ISOM_CODEC_TYPE( BOX_TYPE_NAME, BOX_TYPE_FOURCC ) \
     const lsmash_codec_type_t BOX_TYPE_NAME = LSMASH_ISO_BOX_TYPE_INITIALIZER( BOX_TYPE_FOURCC )
