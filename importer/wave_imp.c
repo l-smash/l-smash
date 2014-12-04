@@ -315,11 +315,13 @@ static int wave_importer_probe( importer_t *importer )
         err = LSMASH_ERR_INVALID_DATA;
         goto fail;
     }
-    /* Make fake movie. */
+    /* Make fake movie.
+     * Treat WAVE file format as if it's QuickTime file format. */
     uint32_t track_ID;
     lsmash_movie_parameters_t movie_param = { 0 };
     lsmash_track_parameters_t track_param = { 0 };
     lsmash_media_parameters_t media_param = { 0 };
+    importer->file->qt_compatible = 1;
     if( (err = lsmash_importer_make_fake_movie( importer )) < 0
      || (err = lsmash_importer_make_fake_track( importer, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK, &track_ID )) < 0
      || (err = lsmash_get_movie_parameters( importer->root, &movie_param )) < 0
@@ -350,6 +352,7 @@ static int wave_importer_probe( importer_t *importer )
 fail:
     lsmash_importer_break_fake_movie( importer );
     remove_wave_importer( wave_imp );
+    importer->file->qt_compatible = 0;
     importer->info = NULL;
     return err;
 }
