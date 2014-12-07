@@ -58,7 +58,7 @@ cc_check()
 
 #-----------------------------------------------------------------------------
 
-rm -f config.* .depend conftest* liblsmash.pc
+rm -f config.* .depend conftest* liblsmash.pc *.ver
 
 
 echo
@@ -106,7 +106,7 @@ TOOLS=""
 
 CFLAGS="-Wshadow -Wall -std=c99 -pedantic -I. -I$SRCDIR"
 LDFLAGS="-L."
-SO_LDFLAGS='-shared -Wl,-soname,$@'
+SO_LDFLAGS='-shared -Wl,-soname,$@ -Wl,--version-script,liblsmash.ver'
 LIBS="-lm"
 
 for opt; do
@@ -200,7 +200,7 @@ case "$TARGET_OS" in
         EXT=".exe"
         SHARED_EXT=".dll"
         IMPLIB="liblsmash.dll.a"
-        SO_LDFLAGS="-shared -Wl,--out-implib,$IMPLIB"
+        SO_LDFLAGS="-shared -Wl,--out-implib,$IMPLIB -Wl,--version-script,liblsmash.ver"
         CFLAGS="$CFLAGS -D__USE_MINGW_ANSI_STDIO=1"
         ;;
     *cygwin*)
@@ -208,11 +208,11 @@ case "$TARGET_OS" in
         SHARED_NAME="cyglsmash"
         SHARED_EXT=".dll"
         IMPLIB="liblsmash.dll.a"
-        SO_LDFLAGS="-shared -Wl,--out-implib,$IMPLIB"
+        SO_LDFLAGS="-shared -Wl,--out-implib,$IMPLIB -Wl,--version-script,liblsmash.ver"
         ;;
     *darwin*)
         SHARED_EXT=".dylib"
-        SO_LDFLAGS="-dynamiclib -Wl,-undefined,suppress -Wl,-read_only_relocs,suppress -Wl,-flat_namespace"
+        SO_LDFLAGS="-dynamiclib -Wl,-undefined,suppress -Wl,-read_only_relocs,suppress -Wl,-flat_namespace -Wl,--version-script,liblsmash.ver"
         ;;
     *solaris*)
         #patches welcome
@@ -379,6 +379,9 @@ cat >> config.h << EOF
 #define LSMASH_REV "$REV"
 #define LSMASH_GIT_HASH "$HASH"
 EOF
+
+
+sed "s/\\\$MAJOR/$MAJVER/" $SRCDIR/liblsmash.v > liblsmash.ver
 
 
 cat >> liblsmash.pc << EOF
