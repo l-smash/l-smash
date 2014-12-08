@@ -29,9 +29,10 @@
 
 #include "box.h"
 #include "file.h"
-#include "write.h"
 #include "fragment.h"
 #include "read.h"
+#include "timeline.h"
+#include "write.h"
 
 #include "codecs/mp4a.h"
 #include "codecs/mp4sys.h"
@@ -2957,24 +2958,28 @@ int lsmash_get_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, ui
 {
     if( isom_check_initializer_present( root ) < 0 || !edit )
         return LSMASH_ERR_FUNCTION_PARAM;
+    isom_elst_entry_t *data;
     isom_trak_t *trak = isom_get_trak( root->file->initializer, track_ID );
     if( !trak )
-        return LSMASH_ERR_NAMELESS;
-    if( !trak->edts
-     || !trak->edts->elst )
+        data = isom_timelime_get_explicit_timeline_map( root, track_ID, edit_number );
+    else
     {
-        /* no edits */
-        edit->duration   = 0;
-        edit->start_time = 0;
-        edit->rate       = 0;
-        return 0;
+        if( !trak->edts
+         || !trak->edts->elst )
+        {
+            /* no edits */
+            edit->duration   = 0;
+            edit->start_time = 0;
+            edit->rate       = 0;
+            return 0;
+        }
+        data = (isom_elst_entry_t *)lsmash_get_entry_data( trak->edts->elst->list, edit_number );
     }
-    isom_elst_entry_t *elst = (isom_elst_entry_t *)lsmash_get_entry_data( trak->edts->elst->list, edit_number );
-    if( !elst )
+    if( !data )
         return LSMASH_ERR_NAMELESS;
-    edit->duration   = elst->segment_duration;
-    edit->start_time = elst->media_time;
-    edit->rate       = elst->media_rate;
+    edit->duration   = data->segment_duration;
+    edit->start_time = data->media_time;
+    edit->rate       = data->media_rate;
     return 0;
 }
 
@@ -2983,12 +2988,16 @@ uint32_t lsmash_count_explicit_timeline_map( lsmash_root_t *root, uint32_t track
     if( isom_check_initializer_present( root ) < 0 )
         return LSMASH_ERR_FUNCTION_PARAM;
     isom_trak_t *trak = isom_get_trak( root->file->initializer, track_ID );
-    if( !trak
-     || !trak->edts
-     || !trak->edts->elst
-     || !trak->edts->elst->list )
-        return 0;
-    return trak->edts->elst->list->entry_count;
+    if( !trak )
+        return isom_timelime_count_explicit_timeline_map( root, track_ID );
+    else
+    {
+        if( !trak->edts
+         || !trak->edts->elst
+         || !trak->edts->elst->list )
+            return 0;
+        return trak->edts->elst->list->entry_count;
+    }
 }
 
 /*---- create / modification time fields manipulators ----*/

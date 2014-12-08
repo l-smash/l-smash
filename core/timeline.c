@@ -1765,6 +1765,31 @@ uint64_t lsmash_get_media_duration_from_media_timeline( lsmash_root_t *root, uin
     return timeline->media_duration;
 }
 
+isom_elst_entry_t *isom_timelime_get_explicit_timeline_map
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID,
+    uint32_t       edit_number
+)
+{
+    isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
+    if( !timeline )
+        return NULL;
+    return lsmash_get_entry_data( timeline->edit_list, edit_number );
+}
+
+uint32_t isom_timelime_count_explicit_timeline_map
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID
+)
+{
+    isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
+    if( !timeline )
+        return 0;
+    return timeline->edit_list->entry_count;
+}
+
 int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_root_t *src, uint32_t src_track_ID )
 {
     if( isom_check_initializer_present( dst ) < 0

@@ -122,4 +122,17 @@ int isom_add_lpcm_bunch_entry
     isom_lpcm_bunch_t *src_bunch
 );
 
+isom_elst_entry_t *isom_timelime_get_explicit_timeline_map
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID,
+    uint32_t       edit_number
+);
+
+uint32_t isom_timelime_count_explicit_timeline_map
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID
+);
+
 #endif /* LSMASH_TIMELINE_H */
