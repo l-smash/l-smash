@@ -28,10 +28,8 @@
 #include "box.h"
 #include "write.h"
 #include "read.h"
-#ifdef LSMASH_DEMUXER_ENABLED
 #include "print.h"
 #include "timeline.h"
-#endif
 
 #include "codecs/mp4a.h"
 #include "codecs/mp4sys.h"
@@ -554,10 +552,8 @@ static void isom_remove_file( lsmash_file_t *file )
 {
     if( !file )
         return;
-#ifdef LSMASH_DEMUXER_ENABLED
     isom_remove_print_funcs( file );
     isom_remove_timelines( file );
-#endif
     lsmash_free( file->compatible_brands );
     lsmash_bs_cleanup( file->bs );
     lsmash_importer_destroy( file->importer );

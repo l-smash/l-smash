@@ -109,8 +109,6 @@ LDFLAGS="-L."
 SO_LDFLAGS='-shared -Wl,-soname,$@'
 LIBS="-lm"
 
-DEMUXER="enabled"
-
 for opt; do
     optarg="${opt#*=}"
     case "$opt" in
@@ -164,10 +162,6 @@ for opt; do
             ;;
         --extra-libs=*)
             XLIBS="$optarg"
-            ;;
-        # "--disable-demuxer" is the special option only for developers.
-        --disable-demuxer)
-            DEMUXER=""
             ;;
         *)
             error_exit "unknown option $opt"
@@ -359,13 +353,7 @@ done
 
 TOOLS_ALL="muxer remuxer boxdumper timelineeditor"
 TOOLS_NAME=""
-
-if test -n "$DEMUXER"; then
-    CFLAGS="$CFLAGS -DLSMASH_DEMUXER_ENABLED"
-    TOOLS="$TOOLS_ALL"
-else
-    TOOLS="muxer"
-fi
+TOOLS="$TOOLS_ALL"
 
 for tool in $TOOLS; do
     SRC_TOOLS="$SRC_TOOLS cli/${tool}.c"

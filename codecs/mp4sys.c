@@ -748,7 +748,6 @@ int mp4sys_to_InitialObjectDescriptor
     return 0;
 }
 
-#ifdef LSMASH_DEMUXER_ENABLED
 /*
     bufferSizeDB is byte unit, NOT bit unit.
     avgBitrate is 0 if VBR
@@ -1029,7 +1028,6 @@ int mp4sys_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box,
     mp4sys_print_descriptor( fp, (mp4sys_descriptor_t *)esds->ES, indent );
     return 0;
 }
-#endif /* LSMASH_DEMUXER_ENABLED */
 
 mp4sys_descriptor_t *mp4sys_get_descriptor( lsmash_bs_t *bs, void *parent );
 

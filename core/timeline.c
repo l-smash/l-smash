@@ -20,8 +20,6 @@
 
 /* This file is available under an ISC license. */
 
-#ifdef LSMASH_DEMUXER_ENABLED
-
 #include "common/internal.h" /* must be placed first */
 
 #include <stdlib.h>
@@ -2090,5 +2088,3 @@ int lsmash_get_max_sample_delay( lsmash_media_ts_list_t *ts_list, uint32_t *max_
     ts_list->timestamp = orig_ts;
     return 0;
 }
-
-#endif /* LSMASH_DEMUXER_ENABLED */

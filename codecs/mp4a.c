@@ -770,7 +770,6 @@ uint8_t *mp4a_export_AudioSpecificConfig( lsmash_mp4a_AudioObjectType aot,
     return data;
 }
 
-#ifdef LSMASH_DEMUXER_ENABLED
 static void mp4a_print_GASpecificConfig( FILE *fp, mp4a_AudioSpecificConfig_t *asc, int indent )
 {
     mp4a_GASpecificConfig_t *gasc = (mp4a_GASpecificConfig_t *)asc->deepAudioSpecificConfig;
@@ -938,7 +937,6 @@ void mp4a_print_AudioSpecificConfig( FILE *fp, uint8_t *dsi_payload, uint32_t ds
         }
     mp4a_remove_AudioSpecificConfig( asc );
 }
-#endif /* LSMASH_DEMUXER_ENABLED */
 
 /***************************************************************************
     audioProfileLevelIndication

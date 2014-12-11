@@ -441,13 +441,11 @@ int lsmash_open_file
                   | LSMASH_FILE_MODE_INITIALIZATION
                   | LSMASH_FILE_MODE_MEDIA;
     }
-#ifdef LSMASH_DEMUXER_ENABLED
     else if( open_mode == 1 )
     {
         memcpy( mode, "rb", 3 );
         file_mode = LSMASH_FILE_MODE_READ;
     }
-#endif
     if( file_mode == 0 )
         return LSMASH_ERR_FUNCTION_PARAM;
 #ifdef _WIN32
@@ -577,7 +575,6 @@ int64_t lsmash_read_file
     lsmash_file_parameters_t *param
 )
 {
-#ifdef LSMASH_DEMUXER_ENABLED
     if( !file )
         return (int64_t)LSMASH_ERR_FUNCTION_PARAM;
     if( !file->bs )
@@ -623,9 +620,6 @@ int64_t lsmash_read_file
         }
     }
     return ret;
-#else
-    return (int64_t)LSMASH_ERR_NAMELESS;
-#endif
 }
 
 int lsmash_activate_file

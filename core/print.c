@@ -20,8 +20,6 @@
 
 /* This file is available under an ISC license. */
 
-#ifdef LSMASH_DEMUXER_ENABLED
-
 #include "common/internal.h" /* must be placed first */
 
 #include <stdlib.h>
@@ -2706,5 +2704,3 @@ void isom_remove_print_funcs( lsmash_file_t *file )
     lsmash_remove_list( file->print, isom_remove_print_func );
     file->print = NULL;
 }
-
-#endif /* LSMASH_DEMUXER_ENABLED */

@@ -35,7 +35,7 @@
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  2
 #define LSMASH_VERSION_MINOR  5
-#define LSMASH_VERSION_MICRO  7
+#define LSMASH_VERSION_MICRO  8
 
 #define LSMASH_VERSION_INT( a, b, c ) (((a) << 16) | ((b) << 8) | (c))
 
@@ -2320,7 +2320,6 @@ int lsmash_create_fragment_empty_duration
     uint32_t       duration
 );
 
-#ifdef LSMASH_DEMUXER_ENABLED
 /****************************************************************************
  * Dump / Print
  ****************************************************************************/
@@ -2602,7 +2601,6 @@ void lsmash_sort_timestamps_composition_order
 (
     lsmash_media_ts_list_t *ts_list
 );
-#endif
 
 /****************************************************************************
  * Tools for creating CODEC Specific Information Extensions (Magic Cookies)
