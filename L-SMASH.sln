@@ -4,6 +4,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 12.0.31101.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "liblsmash", "L-SMASH.vcxproj", "{9CFCDBDD-FD7D-48E9-9AE8-6CEB544D7E4B}"
+	ProjectSection(ProjectDependencies) = postProject
+		{4BCB601E-A480-4DCE-95DD-F4737D9D57C9} = {4BCB601E-A480-4DCE-95DD-F4737D9D57C9}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "remuxer", "cli\remuxer.vcxproj", "{EDB3F1A6-BCDD-47D2-80AD-6E09BEEC8CBB}"
 EndProject
@@ -14,6 +17,8 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "timelineeditor", "cli\timelineeditor.vcxproj", "{A0F6445C-CBCD-4B85-A0F7-D8250A6B021E}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "cli", "cli\cli.vcxproj", "{DF39D172-117D-4AAC-9415-01E55DCA6D9E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "dllexportgen", "windows\dllexportgen.csproj", "{4BCB601E-A480-4DCE-95DD-F4737D9D57C9}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -61,6 +66,14 @@ Global
 		{DF39D172-117D-4AAC-9415-01E55DCA6D9E}.CLIRelease|Win32.Build.0 = CLIRelease|Win32
 		{DF39D172-117D-4AAC-9415-01E55DCA6D9E}.Debug|Win32.ActiveCfg = Debug|Win32
 		{DF39D172-117D-4AAC-9415-01E55DCA6D9E}.Release|Win32.ActiveCfg = Release|Win32
+		{4BCB601E-A480-4DCE-95DD-F4737D9D57C9}.CLIDebug|Win32.ActiveCfg = CLIDebug|x86
+		{4BCB601E-A480-4DCE-95DD-F4737D9D57C9}.CLIDebug|Win32.Build.0 = CLIDebug|x86
+		{4BCB601E-A480-4DCE-95DD-F4737D9D57C9}.CLIRelease|Win32.ActiveCfg = CLIRelease|x86
+		{4BCB601E-A480-4DCE-95DD-F4737D9D57C9}.CLIRelease|Win32.Build.0 = CLIRelease|x86
+		{4BCB601E-A480-4DCE-95DD-F4737D9D57C9}.Debug|Win32.ActiveCfg = Debug|x86
+		{4BCB601E-A480-4DCE-95DD-F4737D9D57C9}.Debug|Win32.Build.0 = Debug|x86
+		{4BCB601E-A480-4DCE-95DD-F4737D9D57C9}.Release|Win32.ActiveCfg = Release|x86
+		{4BCB601E-A480-4DCE-95DD-F4737D9D57C9}.Release|Win32.Build.0 = Release|x86
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
