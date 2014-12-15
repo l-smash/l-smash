@@ -632,6 +632,8 @@ lsmash_codec_specific_t *lsmash_convert_codec_specific_format( lsmash_codec_spec
     if( format == specific->format )
         return isom_duplicate_codec_specific_data( specific );
     lsmash_codec_specific_t *dst = lsmash_create_codec_specific_data( specific->type, format );
+    if( !dst )
+        return NULL;
     if( format == LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED )
         /* structured -> unstructured */
         switch( specific->type )

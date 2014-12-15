@@ -247,6 +247,11 @@ static lsmash_audio_summary_t *dts_create_summary( dts_info_t *info )
     lsmash_dts_specific_parameters_t *param = &info->ddts_param;
     lsmash_codec_specific_t *specific = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_DTS,
                                                                            LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
+    if( !specific )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        return NULL;
+    }
     specific->data.unstructured = lsmash_create_dts_specific_info( param, &specific->size );
     if( !specific->data.unstructured
      || lsmash_add_entry( &summary->opaque->list, specific ) < 0 )

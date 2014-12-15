@@ -144,6 +144,11 @@ static lsmash_video_summary_t *h264_create_summary
      * max_au_length is set at the last of mp4sys_h264_probe function. */
     lsmash_codec_specific_t *cs = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264,
                                                                      LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
+    if( !cs )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        return NULL;
+    }
     cs->data.unstructured = lsmash_create_h264_specific_info( param, &cs->size );
     if( !cs->data.unstructured
      || lsmash_add_entry( &summary->opaque->list, cs ) < 0 )
@@ -996,6 +1001,11 @@ static lsmash_video_summary_t *hevc_create_summary
      * max_au_length is set at the last of hevc_importer_probe function. */
     lsmash_codec_specific_t *specific = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_HEVC,
                                                                            LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
+    if( !specific )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        return NULL;
+    }
     specific->data.unstructured = lsmash_create_hevc_specific_info( param, &specific->size );
     if( !specific->data.unstructured
      || lsmash_add_entry( &summary->opaque->list, specific ) < 0 )

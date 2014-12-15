@@ -104,6 +104,11 @@ static lsmash_audio_summary_t *ac3_create_summary( ac3_info_t *info )
     lsmash_ac3_specific_parameters_t *param = &info->dac3_param;
     lsmash_codec_specific_t *cs = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3,
                                                                      LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
+    if( !cs )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        return NULL;
+    }
     cs->data.unstructured = lsmash_create_ac3_specific_info( &info->dac3_param, &cs->size );
     if( !cs->data.unstructured
      || lsmash_add_entry( &summary->opaque->list, cs ) < 0 )
@@ -567,6 +572,11 @@ static lsmash_audio_summary_t *eac3_create_summary( eac3_importer_t *eac3_imp )
     eac3_info_t *info = &eac3_imp->info;
     lsmash_codec_specific_t *cs = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3,
                                                                      LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
+    if( !cs )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        return NULL;
+    }
     cs->data.unstructured = lsmash_create_eac3_specific_info( &info->dec3_param, &cs->size );
     if( !cs->data.unstructured
      || lsmash_add_entry( &summary->opaque->list, cs ) < 0 )
