@@ -1761,6 +1761,15 @@ lsmash_extended_box_type_t lsmash_form_extended_box_type( uint32_t fourcc, const
                                                    id[6], id[7], id[8], id[9], id[10], id[11] } };
 }
 
+lsmash_box_type_t lsmash_form_box_type
+(
+    lsmash_compact_box_type_t  type,
+    lsmash_extended_box_type_t user
+)
+{
+    return (lsmash_box_type_t){ type, user };
+}
+
 lsmash_box_type_t lsmash_form_iso_box_type( uint32_t fourcc )
 {
     return (lsmash_box_type_t){ fourcc, lsmash_form_extended_box_type( fourcc, LSMASH_ISO_12_BYTES ) };
