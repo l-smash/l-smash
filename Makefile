@@ -78,10 +78,10 @@ uninstall:
 	$(RM) $(addprefix $(DESTDIR)$(bindir)/, $(TOOLS_ALL) $(TOOLS_ALL:%=%.exe) liblsmash.dll cyglsmash.dll)
 
 clean:
-	$(RM) */*.o *.a *.so* *.def *.exp *.lib *.dll *.dylib $(addprefix cli/, *.exe $(TOOLS_ALL)) .depend *.ver
+	$(RM) */*.o *.a *.so* *.def *.exp *.lib *.dll *.dylib $(addprefix cli/, *.exe $(TOOLS_ALL)) .depend
 
 distclean: clean
-	$(RM) config.* *.pc
+	$(RM) config.* *.pc *.ver
 
 dep: .depend
 
