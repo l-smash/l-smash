@@ -14,6 +14,8 @@
 *.rej
 *.so*
 *.swp
+*.v
+*.ver
 .depend
 .DS_Store
 config.*
