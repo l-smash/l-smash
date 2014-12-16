@@ -441,7 +441,7 @@ done
 
 
 test "$SRCDIR" = "." || ln -sf ${SRCDIR}/Makefile .
-mkdir -p cli codecs common core
+mkdir -p cli codecs common core importer
 
 
 cat << EOF
