@@ -80,7 +80,10 @@ typedef struct lsmash_root_tag lsmash_root_t;
  *
  * Return the address of an allocated ROOT if successful.
  * Return NULL otherwise. */
-lsmash_root_t *lsmash_create_root( void );
+lsmash_root_t *lsmash_create_root
+(
+    void
+);
 
 /* Deallocate a given ROOT. */
 void lsmash_destroy_root
@@ -506,8 +509,15 @@ lsmash_box_type_t lsmash_form_box_type
 
 #define LSMASH_ISO_BOX_TYPE_INITIALIZER( x )  { x, { x, { 0x00, 0x11, 0x00, 0x10, 0x80, 0x00, 0x00, 0xAA, 0x00, 0x38, 0x9B, 0x71 } } }
 #define LSMASH_QTFF_BOX_TYPE_INITIALIZER( x ) { x, { x, { 0x0F, 0x11, 0x4D, 0xA5, 0xBF, 0x4E, 0xF2, 0xC4, 0x8C, 0x6A, 0xA1, 0x1E } } }
-lsmash_box_type_t lsmash_form_iso_box_type( lsmash_compact_box_type_t type );
-lsmash_box_type_t lsmash_form_qtff_box_type( lsmash_compact_box_type_t type );
+lsmash_box_type_t lsmash_form_iso_box_type
+(
+    lsmash_compact_box_type_t type
+);
+
+lsmash_box_type_t lsmash_form_qtff_box_type
+(
+    lsmash_compact_box_type_t type
+);
 
 /* precedence of the box position
  * Box with higher value will precede physically other boxes with lower one.
@@ -874,7 +884,11 @@ DEFINE_QTFF_CODEC_TYPE( LSMASH_CODEC_TYPE_RAW,       LSMASH_4CC( 'r', 'a', 'w', 
  *
  * Return 1 if the both CODEC identifiers are identical.
  * Return 0 otherwise. */
-int lsmash_check_codec_type_identical( lsmash_codec_type_t a, lsmash_codec_type_t b );
+int lsmash_check_codec_type_identical
+(
+    lsmash_codec_type_t a,
+    lsmash_codec_type_t b
+);
 
 /****************************************************************************
  * Summary of Stream Configuration
