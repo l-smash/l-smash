@@ -1,7 +1,7 @@
 /*****************************************************************************
  * write.h:
  *****************************************************************************
- * Copyright (C) 2011-2014 L-SMASH project
+ * Copyright (C) 2011-2015 L-SMASH project
  *
  * Authors: Hiroki Taniura <boiled.sugar@gmail.com>
  *

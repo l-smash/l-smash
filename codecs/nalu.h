@@ -1,7 +1,7 @@
 /*****************************************************************************
  * nalu.h:
  *****************************************************************************
- * Copyright (C) 2013-2014 L-SMASH project
+ * Copyright (C) 2013-2015 L-SMASH project
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *

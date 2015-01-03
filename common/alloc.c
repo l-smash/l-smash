@@ -1,7 +1,7 @@
 /*****************************************************************************
  * alloc.c
  *****************************************************************************
- * Copyright (C) 2011-2014 L-SMASH project
+ * Copyright (C) 2011-2015 L-SMASH project
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
