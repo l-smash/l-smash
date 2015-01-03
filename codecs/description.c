@@ -98,6 +98,7 @@ static int isom_is_qt_video( lsmash_codec_type_t type )
         || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_ULY0_VIDEO )
         || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_ULH2_VIDEO )
         || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_ULH0_VIDEO )
+        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_UQY2_VIDEO )
         || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_V210_VIDEO )
         || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_V216_VIDEO )
         || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_V308_VIDEO )
@@ -781,6 +782,7 @@ static inline void isom_set_default_compressorname( char *compressorname, lsmash
         ADD_COMPRESSORNAME_TABLE( QT_CODEC_TYPE_ULY2_VIDEO,   "\017Ut Video (ULY2)" );
         ADD_COMPRESSORNAME_TABLE( QT_CODEC_TYPE_ULH0_VIDEO,   "\017Ut Video (ULH0)" );
         ADD_COMPRESSORNAME_TABLE( QT_CODEC_TYPE_ULH2_VIDEO,   "\017Ut Video (ULH2)" );
+        ADD_COMPRESSORNAME_TABLE( QT_CODEC_TYPE_UQY2_VIDEO,   "\021Ut Video Pro (UQY2)" );
         ADD_COMPRESSORNAME_TABLE( LSMASH_CODEC_TYPE_UNSPECIFIED, { '\0' } );
 #undef ADD_COMPRESSORNAME_TABLE
     }
@@ -844,7 +846,8 @@ static int isom_check_valid_summary( lsmash_summary_t *summary )
           || lsmash_check_codec_type_identical( sample_type, QT_CODEC_TYPE_ULY0_VIDEO )
           || lsmash_check_codec_type_identical( sample_type, QT_CODEC_TYPE_ULY2_VIDEO )
           || lsmash_check_codec_type_identical( sample_type, QT_CODEC_TYPE_ULH0_VIDEO )
-          || lsmash_check_codec_type_identical( sample_type, QT_CODEC_TYPE_ULH2_VIDEO ) )
+          || lsmash_check_codec_type_identical( sample_type, QT_CODEC_TYPE_ULH2_VIDEO )
+          || lsmash_check_codec_type_identical( sample_type, QT_CODEC_TYPE_UQY2_VIDEO ) )
         required_data_type = LSMASH_CODEC_SPECIFIC_DATA_TYPE_CODEC_GLOBAL_HEADER;
     else if( lsmash_check_codec_type_identical( sample_type, QT_CODEC_TYPE_V216_VIDEO ) )
         required_data_type = LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_SIGNIFICANT_BITS;

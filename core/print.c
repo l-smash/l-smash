@@ -2451,6 +2451,7 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_ULY0_VIDEO,   isom_print_visual_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_ULH2_VIDEO,   isom_print_visual_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_ULH0_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_UQY2_VIDEO,   isom_print_visual_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_V210_VIDEO,   isom_print_visual_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_V216_VIDEO,   isom_print_visual_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_V308_VIDEO,   isom_print_visual_description );
