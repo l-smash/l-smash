@@ -28,8 +28,6 @@
 #include <inttypes.h>
 #include <stdarg.h>
 
-#include "config.h"
-
 typedef struct
 {
     uint32_t                  track_ID;

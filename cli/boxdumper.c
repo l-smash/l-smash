@@ -31,8 +31,6 @@
 #include <fcntl.h>
 #endif
 
-#include "config.h"
-
 #define eprintf( ... ) fprintf( stderr, __VA_ARGS__ )
 
 static void display_version( void )

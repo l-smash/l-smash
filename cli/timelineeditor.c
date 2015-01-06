@@ -29,8 +29,6 @@
 #include <math.h>
 #include <stdarg.h>
 
-#include "config.h"
-
 #define LSMASH_MAX( a, b ) ((a) > (b) ? (a) : (b))
 
 #define eprintf( ... ) fprintf( stderr, __VA_ARGS__ )

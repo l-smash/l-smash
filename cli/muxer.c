@@ -29,8 +29,6 @@
 #include <stdlib.h>
 #include <inttypes.h>
 
-#include "config.h"
-
 #include "importer/importer.h"
 
 #define MAX_NUM_OF_BRANDS 50

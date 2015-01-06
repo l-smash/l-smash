@@ -23,6 +23,7 @@
 #ifndef CLI_H
 #define CLI_H
 
+#include "config.h"
 #include "common/osdep.h"
 #include "lsmash.h"
 

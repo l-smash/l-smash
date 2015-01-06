@@ -127,7 +127,8 @@ echo #define LSMASH_GIT_HASH "%HASH%" &gt;&gt; "$(SolutionDir)config.h"</Command
 for /f usebackq %%a in (`git describe --always`) do set HASH=%%a
 type nul &gt; "$(SolutionDir)config.h"
 echo #define LSMASH_REV "%REV%" &gt;&gt; "$(SolutionDir)config.h"
-echo #define LSMASH_GIT_HASH "%HASH%" &gt;&gt; "$(SolutionDir)config.h"</Command>
+echo #define LSMASH_GIT_HASH "%HASH%" &gt;&gt; "$(SolutionDir)config.h"
+echo #define LSMASH_API_IMPORTS &gt;&gt; "$(SolutionDir)config.h"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -153,9 +154,9 @@ echo #define LSMASH_GIT_HASH "%HASH%" &gt;&gt; "$(SolutionDir)config.h"</Command
     <PreBuildEvent>
       <Command>for /f usebackq %%a in (`git rev-list HEAD ^| find /c /v ""`) do set REV=%%a
 for /f usebackq %%a in (`git describe --always`) do set HASH=%%a
-type nul &gt; config.h
-echo #define LSMASH_REV "%REV%" &gt;&gt; config.h
-echo #define LSMASH_GIT_HASH "%HASH%" &gt;&gt; config.h</Command>
+type nul &gt; "$(SolutionDir)config.h"
+echo #define LSMASH_REV "%REV%" &gt;&gt; "$(SolutionDir)config.h"
+echo #define LSMASH_GIT_HASH "%HASH%" &gt;&gt; "$(SolutionDir)config.h"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='CLIRelease|Win32'">
@@ -178,13 +179,13 @@ echo #define LSMASH_GIT_HASH "%HASH%" &gt;&gt; config.h</Command>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
     </Link>
-    <PreBuildEvent />
     <PreBuildEvent>
       <Command>for /f usebackq %%a in (`git rev-list HEAD ^| find /c /v ""`) do set REV=%%a
 for /f usebackq %%a in (`git describe --always`) do set HASH=%%a
 type nul &gt; "$(SolutionDir)config.h"
 echo #define LSMASH_REV "%REV%" &gt;&gt; "$(SolutionDir)config.h"
-echo #define LSMASH_GIT_HASH "%HASH%" &gt;&gt; "$(SolutionDir)config.h"</Command>
+echo #define LSMASH_GIT_HASH "%HASH%" &gt;&gt; "$(SolutionDir)config.h"
+echo #define LSMASH_API_IMPORTS &gt;&gt; "$(SolutionDir)config.h"</Command>
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
