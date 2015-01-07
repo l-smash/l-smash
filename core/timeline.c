@@ -787,7 +787,7 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
     /* Preparation for construction. */
     isom_elst_t *elst = trak->edts ? trak->edts->elst : NULL;
     isom_minf_t *minf = trak->mdia->minf;
-    isom_dref_t *dref = minf->dinf->dref;
+    isom_dref_t *dref = minf->dinf ? minf->dinf->dref : NULL;
     isom_stbl_t *stbl = minf->stbl;
     isom_stsd_t *stsd = stbl->stsd;
     isom_stts_t *stts = stbl->stts;
@@ -822,7 +822,8 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
     isom_sample_entry_t *description = (isom_sample_entry_t *)lsmash_get_entry_data( &stsd->list, stsc_data ? stsc_data->sample_description_index : 1 );
     if( !description )
         goto fail;
-    isom_dref_entry_t *dref_entry = (isom_dref_entry_t *)lsmash_get_entry_data( &dref->list, description->data_reference_index );
+    lsmash_entry_list_t *dref_list = dref ? &dref->list : NULL;
+    isom_dref_entry_t *dref_entry = (isom_dref_entry_t *)lsmash_get_entry_data( dref_list, description->data_reference_index );
     int all_sync = !stss;
     int large_presentation = stco->large_presentation || lsmash_check_box_type_identical( stco->type, ISOM_BOX_TYPE_CO64 );
     int is_lpcm_audio          = isom_is_lpcm_audio( description );
@@ -1074,7 +1075,7 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
                     constant_sample_size = stsz->sample_size;
                 }
                 /* Reference media data. */
-                dref_entry = (isom_dref_entry_t *)lsmash_get_entry_data( &dref->list, description ? description->data_reference_index : 0 );
+                dref_entry = (isom_dref_entry_t *)lsmash_get_entry_data( dref_list, description ? description->data_reference_index : 0 );
                 chunk.file = (!dref_entry || !dref_entry->ref_file) ? NULL : dref_entry->ref_file;
             }
             sample_number_in_chunk = samples_per_packet;
@@ -1207,7 +1208,7 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
                         description   = (isom_sample_entry_t *)lsmash_get_entry_data( &stsd->list, sample_description_index );
                         is_lpcm_audio = description ? isom_is_lpcm_audio( description ) : 0;
                         /* Reference media data. */
-                        dref_entry = (isom_dref_entry_t *)lsmash_get_entry_data( &dref->list, description ? description->data_reference_index : 0 );
+                        dref_entry = (isom_dref_entry_t *)lsmash_get_entry_data( dref_list, description ? description->data_reference_index : 0 );
                         lsmash_file_t *ref_file = (!dref_entry || !dref_entry->ref_file) ? NULL : dref_entry->ref_file;
                         /* Each track run can be considered as a chunk.
                          * Here, we consider physically consecutive track runs as one chunk. */
