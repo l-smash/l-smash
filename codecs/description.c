@@ -2575,21 +2575,28 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
                 data->format_flags = audio->formatSpecificFlags;
             else
             {
-                data->format_flags = 0;
+                data->format_flags = QT_LPCM_FORMAT_FLAG_BIG_ENDIAN | QT_LPCM_FORMAT_FLAG_SIGNED_INTEGER;
                 /* Here, don't override samplesize.
                  * We should trust samplesize field in the description for misused CODEC indentifier. */
                 lsmash_codec_type_t audio_type = audio->type;
-                if( lsmash_check_codec_type_identical( audio_type, QT_CODEC_TYPE_FL32_AUDIO )
-                 || lsmash_check_codec_type_identical( audio_type, QT_CODEC_TYPE_FL64_AUDIO ) )
-                    data->format_flags = QT_LPCM_FORMAT_FLAG_FLOAT;
-                else if( lsmash_check_codec_type_identical( audio_type, QT_CODEC_TYPE_TWOS_AUDIO )
-                      || lsmash_check_codec_type_identical( audio_type, QT_CODEC_TYPE_NONE_AUDIO )
-                      || lsmash_check_codec_type_identical( audio_type, QT_CODEC_TYPE_NOT_SPECIFIED ) )
+                if( lsmash_check_codec_type_identical( audio_type, QT_CODEC_TYPE_TWOS_AUDIO )
+                 || lsmash_check_codec_type_identical( audio_type, QT_CODEC_TYPE_NONE_AUDIO )
+                 || lsmash_check_codec_type_identical( audio_type, QT_CODEC_TYPE_NOT_SPECIFIED ) )
                 {
-                    if( lsmash_check_codec_type_identical( audio_type, QT_CODEC_TYPE_TWOS_AUDIO ) )
-                        data->format_flags = QT_LPCM_FORMAT_FLAG_BIG_ENDIAN | QT_AUDIO_FORMAT_FLAG_SIGNED_INTEGER;
-                    if( summary->sample_size > 8 )
-                        data->format_flags = QT_LPCM_FORMAT_FLAG_BIG_ENDIAN;
+                    if( summary->sample_size <= 8 )
+                        data->format_flags &= ~(QT_LPCM_FORMAT_FLAG_BIG_ENDIAN | QT_LPCM_FORMAT_FLAG_SIGNED_INTEGER);
+                }
+                else
+                {
+                    if( lsmash_check_codec_type_identical( audio_type, QT_CODEC_TYPE_FL32_AUDIO )
+                     || lsmash_check_codec_type_identical( audio_type, QT_CODEC_TYPE_FL64_AUDIO ) )
+                    {
+                        data->format_flags &= ~QT_LPCM_FORMAT_FLAG_SIGNED_INTEGER;
+                        data->format_flags |=  QT_LPCM_FORMAT_FLAG_FLOAT;
+                    }
+                    else if( lsmash_check_codec_type_identical( audio_type, QT_CODEC_TYPE_23NI_AUDIO )
+                          || lsmash_check_codec_type_identical( audio_type, QT_CODEC_TYPE_SOWT_AUDIO ) )
+                        data->format_flags &= ~QT_LPCM_FORMAT_FLAG_BIG_ENDIAN;
                 }
             }
             isom_wave_t *wave = (isom_wave_t *)isom_get_extension_box_format( &audio->extensions, QT_BOX_TYPE_WAVE );
