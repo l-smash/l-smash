@@ -47,7 +47,7 @@ static void isom_ifprintf_duration( FILE *fp, int indent, char *field_name, uint
         return;
     }
     int dur = duration / timescale;
-    int hour = (dur / 3600) % 24;
+    int hour =  dur / 3600;
     int min  = (dur /   60) % 60;
     int sec  =  dur         % 60;
     int ms   = ((double)duration / timescale - (hour * 3600 + min * 60 + sec)) * 1e3 + 0.5;
