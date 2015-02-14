@@ -51,6 +51,7 @@ static int isom_is_qt_video( lsmash_codec_type_t type )
         || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_APCS_VIDEO )
         || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_APCO_VIDEO )
         || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_AP4H_VIDEO )
+        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_AP4X_VIDEO )
         || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_CFHD_VIDEO )
         || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_CIVD_VIDEO )
         || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_DVC_VIDEO )
@@ -767,6 +768,7 @@ static inline void isom_set_default_compressorname( char *compressorname, lsmash
         ADD_COMPRESSORNAME_TABLE( QT_CODEC_TYPE_APCS_VIDEO,   "\023Apple ProRes 422 (LT)" );
         ADD_COMPRESSORNAME_TABLE( QT_CODEC_TYPE_APCO_VIDEO,   "\026Apple ProRes 422 (Proxy)" );
         ADD_COMPRESSORNAME_TABLE( QT_CODEC_TYPE_AP4H_VIDEO,   "\019Apple ProRes 4444" );
+        ADD_COMPRESSORNAME_TABLE( QT_CODEC_TYPE_AP4X_VIDEO,   "\022Apple ProRes 4444 XQ" );
         ADD_COMPRESSORNAME_TABLE( QT_CODEC_TYPE_DVPP_VIDEO,   "\014DVCPRO - PAL" );
         ADD_COMPRESSORNAME_TABLE( QT_CODEC_TYPE_DV5N_VIDEO,   "\017DVCPRO50 - NTSC" );
         ADD_COMPRESSORNAME_TABLE( QT_CODEC_TYPE_DV5P_VIDEO,   "\016DVCPRO50 - PAL" );

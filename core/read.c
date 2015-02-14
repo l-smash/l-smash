@@ -993,6 +993,7 @@ static void *isom_sample_description_alloc( lsmash_codec_type_t sample_type )
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_APCS_VIDEO, sizeof(isom_visual_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_APCO_VIDEO, sizeof(isom_visual_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_AP4H_VIDEO, sizeof(isom_visual_entry_t) );
+        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_AP4X_VIDEO, sizeof(isom_visual_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_CIVD_VIDEO, sizeof(isom_visual_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_DRAC_VIDEO, sizeof(isom_visual_entry_t) );
         ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_DVC_VIDEO,  sizeof(isom_visual_entry_t) );
@@ -2573,6 +2574,7 @@ int isom_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uin
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_APCS_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_APCO_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_AP4H_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_AP4X_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_CIVD_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
             //ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_DRAC_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_DVC_VIDEO, lsmash_form_qtff_box_type, isom_read_visual_description );

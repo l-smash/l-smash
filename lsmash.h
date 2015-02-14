@@ -47,8 +47,8 @@ extern "C" {
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  2
-#define LSMASH_VERSION_MINOR  7
-#define LSMASH_VERSION_MICRO  3
+#define LSMASH_VERSION_MINOR  8
+#define LSMASH_VERSION_MICRO  0
 
 #define LSMASH_VERSION_INT( a, b, c ) (((a) << 16) | ((b) << 8) | (c))
 
@@ -796,6 +796,7 @@ DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_APCN_VIDEO,    LSMASH_4CC( 'a', 'p', 'c', 
 DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_APCS_VIDEO,    LSMASH_4CC( 'a', 'p', 'c', 's' ) );    /* Apple ProRes 422 LT */
 DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_APCO_VIDEO,    LSMASH_4CC( 'a', 'p', 'c', 'o' ) );    /* Apple ProRes 422 Proxy */
 DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_AP4H_VIDEO,    LSMASH_4CC( 'a', 'p', '4', 'h' ) );    /* Apple ProRes 4444 */
+DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_AP4X_VIDEO,    LSMASH_4CC( 'a', 'p', '4', 'x' ) );    /* Apple ProRes 4444 XQ */
 DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_CIVD_VIDEO,    LSMASH_4CC( 'c', 'i', 'v', 'd' ) );    /* Cinepak Video */
 DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_DRAC_VIDEO,    LSMASH_4CC( 'd', 'r', 'a', 'c' ) );    /* Dirac Video Coder */
 DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_DVC_VIDEO,     LSMASH_4CC( 'd', 'v', 'c', ' ' ) );    /* DV NTSC format */

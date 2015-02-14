@@ -2420,6 +2420,7 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_APCS_VIDEO,   isom_print_visual_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_APCO_VIDEO,   isom_print_visual_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_AP4H_VIDEO,   isom_print_visual_description );
+                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_AP4X_VIDEO,   isom_print_visual_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_CIVD_VIDEO,   isom_print_visual_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DRAC_VIDEO,   isom_print_visual_description );
                 ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVC_VIDEO,    isom_print_visual_description );
