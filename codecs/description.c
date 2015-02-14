@@ -2593,8 +2593,13 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
                 }
             }
             isom_wave_t *wave = (isom_wave_t *)isom_get_extension_box_format( &audio->extensions, QT_BOX_TYPE_WAVE );
-            if( wave && wave->enda && !wave->enda->littleEndian )
-                data->format_flags |= QT_LPCM_FORMAT_FLAG_BIG_ENDIAN;
+            if( wave && wave->enda )
+            {
+                if( wave->enda->littleEndian )
+                    data->format_flags &= ~QT_LPCM_FORMAT_FLAG_BIG_ENDIAN;
+                else
+                    data->format_flags |=  QT_LPCM_FORMAT_FLAG_BIG_ENDIAN;
+            }
             if( lsmash_add_entry( &summary->opaque->list, specific ) < 0 )
             {
                 lsmash_destroy_codec_specific_data( specific );
