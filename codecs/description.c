@@ -748,7 +748,7 @@ static inline void isom_set_default_compressorname( char *compressorname, lsmash
     {
         lsmash_codec_type_t type;
         char                name[33];
-    } compressorname_table[32] = { { LSMASH_CODEC_TYPE_INITIALIZER, { '\0' } } };
+    } compressorname_table[33] = { { LSMASH_CODEC_TYPE_INITIALIZER, { '\0' } } };
     if( compressorname_table[0].name[0] == '\0' )
     {
         int i = 0;
