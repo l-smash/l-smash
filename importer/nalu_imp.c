@@ -576,6 +576,7 @@ static void nalu_generate_timestamps_from_poc
     /* Check if composition delay derived from reordering is present. */
     if( max_composition_delay == 0 )
     {
+        *composition_reordering_present = 0;
         for( uint32_t i = 1; i < num_access_units; i++ )
             if( npt[i].poc < npt[i - 1].poc )
             {
@@ -585,7 +586,6 @@ static void nalu_generate_timestamps_from_poc
     }
     else
         *composition_reordering_present = 1;
-    /* Generate timestamps. */
     if( *composition_reordering_present )
     {
         /* Generate timestamps.
@@ -609,6 +609,10 @@ static void nalu_generate_timestamps_from_poc
                 uint32_t composition_delay = timestamp[i].dts - i;
                 max_composition_delay = LSMASH_MAX( max_composition_delay, composition_delay );
             }
+    }
+    /* Generate timestamps. */
+    if( max_composition_delay )
+    {
         uint64_t *ts_buffer = (uint64_t *)lsmash_malloc( (num_access_units + max_composition_delay) * sizeof(uint64_t) );
         if( !ts_buffer )
         {
