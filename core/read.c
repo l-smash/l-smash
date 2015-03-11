@@ -2423,10 +2423,20 @@ static int isom_read_mfro( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     return isom_read_leaf_box_common_last_process( file, box, level, mfro );
 }
 
-static inline void isom_read_skip_extra_bytes( lsmash_bs_t *bs, uint64_t size )
+static void isom_read_skip_extra_bytes( lsmash_bs_t *bs, uint64_t size )
 {
     if( !bs->unseekable )
+    {
+        /* lsmash_bs_read_seek() could fail on offset=INT64_MAX, so use (INT64_MAX >> 1) instead. */
+        while( size > (INT64_MAX >> 1) )
+        {
+            lsmash_bs_read_seek( bs, INT64_MAX >> 1, SEEK_CUR );
+            if( lsmash_bs_is_end( bs, 0 ) )
+                return;
+            size -= (INT64_MAX >> 1);
+        }
         lsmash_bs_read_seek( bs, size, SEEK_CUR );
+    }
     else
         lsmash_bs_skip_bytes_64( bs, size );
 }
