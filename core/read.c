@@ -2460,39 +2460,49 @@ static int isom_read_skip_box_extra_bytes( lsmash_file_t *file, isom_box_t *box,
         if( size > 1
          && size < ISOM_BASEBOX_COMMON_SIZE )
         {
-            /* It seems we are still within the box considered as previous.
-             * Skip bytes up to the next box. */
-            isom_read_skip_extra_bytes( bs, parent->size - parent_pos );
-            box->size = 0;
+            /* It's not a valid size of any box, therefore, it seems we are still within the box considered as the previous.
+             * Skip bytes up to the next box of the parent box. */
+            uint64_t extra_bytes = parent->size - parent_pos;
+            isom_read_skip_extra_bytes( bs, extra_bytes );
+            box->size = extra_bytes;
             return 1;
         }
         if( size == 1 && lsmash_bs_is_end( bs, 15 ) == 0 )
-            size = lsmash_bs_show_be64( bs, 8 );
+            size = lsmash_bs_show_be64( bs, 8 );    /* large size */
         if( size == 0 && parent != (isom_box_t *)file )
         {
             /* Check if this box is actually the last box or not. */
-            size = parent->size - parent_pos;
-            uint64_t extra_bytes;
+            uint64_t extra_bytes = parent->size - parent_pos;
             if( !bs->unseekable )
-                extra_bytes = bs->written - lsmash_bs_get_stream_pos( bs );
+                size = bs->written - lsmash_bs_get_stream_pos( bs );
             else
             {
-                extra_bytes = lsmash_bs_get_remaining_buffer_size( bs );
-                while( size < extra_bytes )
+                size = lsmash_bs_get_remaining_buffer_size( bs );
+                while( size <= extra_bytes )
                 {
                     int ret = lsmash_bs_read( bs, 1 );
                     if( bs->eof || ret < 0 )
                         break;
-                    extra_bytes = lsmash_bs_get_remaining_buffer_size( bs );
+                    size = lsmash_bs_get_remaining_buffer_size( bs );
                 }
             }
             if( size != extra_bytes )
             {
                 /* This is not the size of the last box.
-                 * It seems we are still within the box considered as previous.
+                 * It seems we are still within the box considered as the previous or the parent box.
                  * Skip bytes up to the next box. */
-                isom_read_skip_extra_bytes( bs, box->size - lsmash_bs_count( bs ) );
-                box->size = 0;
+                if( box->size > lsmash_bs_count( bs ) )
+                {
+                    /* within the previous */
+                    isom_read_skip_extra_bytes( bs, box->size - lsmash_bs_count( bs ) );
+                    box->size = 0;  /* already added to the size of the parent box */
+                }
+                else
+                {
+                    /* within the parent */
+                    isom_read_skip_extra_bytes( bs, extra_bytes );
+                    box->size = extra_bytes;
+                }
                 return 1;
             }
         }
