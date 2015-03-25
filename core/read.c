@@ -2427,8 +2427,6 @@ static void isom_read_skip_extra_bytes( lsmash_bs_t *bs, uint64_t size )
 {
     if( !bs->unseekable )
     {
-        /* Offsets exceeding the file size are nonsense. */
-        size = LSMASH_MIN( size, bs->written );
         /* lsmash_bs_read_seek() could fail on offset=INT64_MAX, so use (INT64_MAX >> 1) instead. */
         while( size > (INT64_MAX >> 1) )
         {
