@@ -920,16 +920,23 @@ static int dts_parse_exss_xll( dts_info_t *info, uint64_t *bits_pos, dts_audio_a
                 }
             }
         }
+        int full_bandwidth;
         int nNumFreqBands;
         if( nFs > 96000 )
         {
-            if( dts_bits_get( bits, 1, bits_pos ) )                                             /* bXtraFreqBands                 (1) */
-                nNumFreqBands = nFs > 192000 ? 4 : 2;
-            else
-                nNumFreqBands = nFs > 192000 ? 2 : 1;
+            /* When bXtraFreqBands is equal to 0, only one-half of the original bandwidth is preserved and, therefore,
+             * of frequency bands is also one-half of the number in the case where full bandwidth is preserved. Apparently,
+             * nSmplInSeg is the number of samples in a segment per one frequency band when full bandwidth is preserved.
+             * Because of this, to get the correct number of samples per frame, multiply the result by 2 when bXtraFreqBands
+             * is equal to 0. */
+            full_bandwidth = dts_bits_get( bits, 1, bits_pos );                                 /* bXtraFreqBands                 (1) */
+            nNumFreqBands  = (1 + full_bandwidth) << (nFs > 192000);
         }
         else
-            nNumFreqBands = 1;
+        {
+            full_bandwidth = 1;
+            nNumFreqBands  = 1;
+        }
         uint32_t nSmplInSeg_nChSet;
         if( nChSet == 0 )
         {
@@ -943,7 +950,7 @@ static int dts_parse_exss_xll( dts_info_t *info, uint64_t *bits_pos, dts_audio_a
         {
             xll->sampling_frequency = nFs;
             uint32_t samples_per_band_in_frame = nSegmentsInFrame * nSmplInSeg_nChSet;
-            xll->frame_duration = samples_per_band_in_frame * nNumFreqBands;
+            xll->frame_duration = samples_per_band_in_frame * nNumFreqBands * (2 - full_bandwidth);
         }
         dts_bits_get( bits, nChSetHeaderSize * 8 - (*bits_pos - xll_pos), bits_pos );   /* Skip the remaining bits in Channel Set Sub-Header. */
     }
