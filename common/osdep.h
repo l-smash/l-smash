@@ -34,6 +34,7 @@
 #define lsmash_fseek fseeko64
 #define lsmash_ftell ftello64
 #else
+#define _POSIX_C_SOURCE 200809L
 #define lsmash_fseek fseeko
 #define lsmash_ftell ftello
 #endif
