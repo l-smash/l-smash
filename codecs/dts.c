@@ -924,7 +924,7 @@ static int dts_parse_exss_xll( dts_info_t *info, uint64_t *bits_pos, dts_audio_a
         int nNumFreqBands;
         if( nFs > 96000 )
         {
-            /* When bXtraFreqBands is equal to 0, only one-half of the original bandwidth is preserved and, therefore,
+            /* When bXtraFreqBands is equal to 0, only one-half of the original bandwidth is preserved and, thus, the number
              * of frequency bands is also one-half of the number in the case where full bandwidth is preserved. Apparently,
              * nSmplInSeg is the number of samples in a segment per one frequency band when full bandwidth is preserved.
              * Because of this, to get the correct number of samples per frame, multiply the result by 2 when bXtraFreqBands
