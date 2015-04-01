@@ -1735,9 +1735,11 @@ int hevc_find_au_delimit_by_slice_info
     if( slice->TemporalId != prev_slice->TemporalId )
         return 1;
     /* 7.4.2.4.5 Order of VCL NAL units and association to coded pictures
-     *  - if( TileId[ CtbAddrRsToTs[ slice->segment_address ] ] <= TileId[ CtbAddrRsToTs[ prev_slice->segment_address ] ]
-     *     ||         CtbAddrRsToTs[ slice->segment_address ]   <=         CtbAddrRsToTs[ prev_slice->segment_address ] )
-     *        return 1;
+     * When either of the following conditions is true, both the current and the previous coded slice segment NAL units
+     * shall belong to the same coded picture.
+     *  - TileId[ CtbAddrRsToTs[ prev_slice->segment_address ] ] <  TileId[ CtbAddrRsToTs[ slice->segment_address ] ]
+     *  - TileId[ CtbAddrRsToTs[ prev_slice->segment_address ] ] == TileId[ CtbAddrRsToTs[ slice->segment_address ] ]
+     *   &&       CtbAddrRsToTs[ prev_slice->segment_address ]   <          CtbAddrRsToTs[ slice->segment_address ]
      */
     hevc_pps_t *prev_pps = hevc_get_pps( info->pps_list, prev_slice->pic_parameter_set_id );
     if( !prev_pps )
@@ -1749,10 +1751,11 @@ int hevc_find_au_delimit_by_slice_info
     uint64_t prevTileId;
     uint64_t currCtbAddrInTs = hevc_get_ctb_address_in_tile_scan( &info->sps, &info->pps,      slice->segment_address, &currTileId );
     uint64_t prevCtbAddrInTs = hevc_get_ctb_address_in_tile_scan(   prev_sps,   prev_pps, prev_slice->segment_address, &prevTileId );
-    if( currTileId      <= prevTileId
-     || currCtbAddrInTs <= prevCtbAddrInTs )
-        return 1;
-    return 0;
+    if( prevTileId < currTileId )
+        return 0;
+    if( prevTileId == currTileId && prevCtbAddrInTs < currCtbAddrInTs )
+        return 0;
+    return 1;
 }
 
 int hevc_find_au_delimit_by_nalu_type
