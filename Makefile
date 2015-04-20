@@ -29,7 +29,7 @@ $(SHAREDLIBNAME): $(OBJS)
 	$(LD) $(SO_LDFLAGS) $(LDFLAGS) -o $@ $^ $(LIBS)
 	-@ $(if $(STRIP), $(STRIP) -x $@)
 ifeq ($(SHAREDLIBNAME), liblsmash.so.$(MAJVER))
-	ln -s $(SHAREDLIBNAME) liblsmash.so
+	ln -sf $(SHAREDLIBNAME) liblsmash.so
 endif
 
 # $(TOOLS) is automatically generated as config.mak2 by configure.
@@ -59,7 +59,7 @@ ifneq ($(IMPLIB),)
 else
 	install -m 644 $(SHAREDLIB) $(DESTDIR)$(libdir)
 ifeq ($(SHAREDLIB), liblsmash.so.$(MAJVER))
-	ln -s $(SHAREDLIB) $(DESTDIR)$(libdir)/liblsmash.so
+	ln -sf $(SHAREDLIB) $(DESTDIR)$(libdir)/liblsmash.so
 endif
 endif
 endif
