@@ -2257,6 +2257,8 @@ int lsmash_setup_h264_specific_parameters_from_access_unit
     uint64_t sc_head_pos = nalu_find_first_start_code( bs );
     if( sc_head_pos == NALU_NO_START_CODE_FOUND )
         return LSMASH_ERR_INVALID_DATA;
+    else if( sc_head_pos == NALU_IO_ERROR )
+        return LSMASH_ERR_IO;
     if( (err = h264_setup_parser( info, 1 )) < 0 )
         return h264_parse_failed( info, err );
     h264_stream_buffer_t *sb    = &info->buffer;

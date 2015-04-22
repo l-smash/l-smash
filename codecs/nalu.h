@@ -24,6 +24,7 @@
 #define NALU_DEFAULT_NALU_LENGTH_SIZE 4     /* We always use 4 bytes length. */
 #define NALU_SHORT_START_CODE_LENGTH  3
 #define NALU_LONG_START_CODE_LENGTH   4
+#define NALU_IO_ERROR                 UINT64_MAX - 1
 #define NALU_NO_START_CODE_FOUND      UINT64_MAX
 
 static inline uint64_t nalu_get_codeNum
@@ -239,6 +240,8 @@ static inline uint64_t nalu_find_first_start_code
     uint64_t first_sc_head_pos = 0;
     while( 1 )
     {
+        if( lsmash_bs_is_error( bs ) )
+            return NALU_IO_ERROR;
         if( lsmash_bs_is_end( bs, first_sc_head_pos + NALU_LONG_START_CODE_LENGTH ) )
             return NALU_NO_START_CODE_FOUND;
         /* Invalid if encountered any value of non-zero before the first start code. */
