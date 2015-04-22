@@ -470,6 +470,11 @@ static int vc1_importer_probe( importer_t *importer )
     int err;
     while( 1 )
     {
+        if( lsmash_bs_is_error( bs ) )
+        {
+            err = LSMASH_ERR_IO;
+            goto fail;
+        }
         /* The first EBDU in decoding order of the stream shall have start code (0x000001). */
         if( 0x000001 == lsmash_bs_show_be24( bs, first_ebdu_head_pos ) )
             break;
