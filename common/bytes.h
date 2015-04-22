@@ -155,6 +155,12 @@ static inline int lsmash_bs_is_end( lsmash_bs_t *bs, uint32_t offset )
     return bs->eof && (offset >= lsmash_bs_get_remaining_buffer_size( bs ));
 }
 
+/* Check if an error has occurred. */
+static inline int lsmash_bs_is_error( lsmash_bs_t *bs )
+{
+    return bs->error;
+}
+
 /*---- basic I/O ----*/
 int lsmash_fread_wrapper( void *opaque, uint8_t *buf, int size );
 int lsmash_fwrite_wrapper( void *opaque, uint8_t *buf, int size );
