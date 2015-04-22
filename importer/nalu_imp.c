@@ -842,6 +842,11 @@ static int h264_importer_probe( importer_t *importer )
         err = LSMASH_ERR_INVALID_DATA;
         goto fail;
     }
+    else if( first_sc_head_pos == NALU_IO_ERROR )
+    {
+        err = LSMASH_ERR_IO;
+        goto fail;
+    }
     /* OK. It seems the stream has a long start code of H.264. */
     importer->info = h264_imp;
     h264_info_t *info = &h264_imp->info;
@@ -1493,6 +1498,11 @@ static int hevc_importer_probe( importer_t *importer )
     if( first_sc_head_pos == NALU_NO_START_CODE_FOUND )
     {
         err = LSMASH_ERR_INVALID_DATA;
+        goto fail;
+    }
+    else if( first_sc_head_pos == NALU_IO_ERROR )
+    {
+        err = LSMASH_ERR_IO;
         goto fail;
     }
     /* OK. It seems the stream has a long start code of HEVC. */
