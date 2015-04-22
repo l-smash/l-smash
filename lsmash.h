@@ -47,8 +47,8 @@ extern "C" {
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  2
-#define LSMASH_VERSION_MINOR  8
-#define LSMASH_VERSION_MICRO  4
+#define LSMASH_VERSION_MINOR  9
+#define LSMASH_VERSION_MICRO  0
 
 #define LSMASH_VERSION_INT( a, b, c ) (((a) << 16) | ((b) << 8) | (c))
 
@@ -67,6 +67,7 @@ enum
     LSMASH_ERR_FUNCTION_PARAM = -4, /* An error in the parameter list of the function */
     LSMASH_ERR_PATCH_WELCOME  = -5, /* Not implemented yet, so patches welcome. */
     LSMASH_ERR_UNKNOWN        = -6, /* Unknown error occured. */
+    LSMASH_ERR_IO             = -7, /* I/O error occurred. */
 };
 
 /****************************************************************************
