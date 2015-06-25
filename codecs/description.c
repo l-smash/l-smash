@@ -1767,6 +1767,8 @@ static int isom_set_qtff_sound_decompression_parameters
     /* A 'wave' extension itself shall be absent in the opaque CODEC specific info list.
      * So, create a 'wave' extension here and append it as an extension to the audio sample description. */
     isom_wave_t *wave = isom_add_wave( audio );
+    if( !wave )
+        return LSMASH_ERR_NAMELESS;
     if( !isom_add_frma      ( wave )
      || !isom_add_terminator( wave ) )
     {
