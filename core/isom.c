@@ -2334,7 +2334,7 @@ int lsmash_get_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     int length = LSMASH_MIN( 255, hdlr->componentName_length );
     if( length )
     {
-        memcpy( param->media_handler_name_shadow, hdlr->componentName + file->qt_compatible, length );
+        memcpy( param->media_handler_name_shadow, hdlr->componentName + file->qt_compatible, length - file->qt_compatible );
         param->media_handler_name_shadow[length - 2 + file->isom_compatible + file->qt_compatible] = '\0';
         param->media_handler_name = param->media_handler_name_shadow;
     }
@@ -2349,7 +2349,7 @@ int lsmash_get_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
         length = LSMASH_MIN( 255, hdlr->componentName_length );
         if( length )
         {
-            memcpy( param->data_handler_name_shadow, hdlr->componentName + file->qt_compatible, length );
+            memcpy( param->data_handler_name_shadow, hdlr->componentName + file->qt_compatible, length - file->qt_compatible );
             param->data_handler_name_shadow[length - 2 + file->isom_compatible + file->qt_compatible] = '\0';
             param->data_handler_name = param->data_handler_name_shadow;
         }
