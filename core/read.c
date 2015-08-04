@@ -134,7 +134,7 @@ static void isom_box_common_copy( void *dst, void *src )
         isom_basebox_common_copy( (isom_box_t *)dst, (isom_box_t *)src );
         return;
     }
-    if( isom_is_fullbox( src ) )
+    if( isom_is_fullbox( src ) && isom_is_fullbox( dst ) )
         isom_fullbox_common_copy( (isom_box_t *)dst, (isom_box_t *)src );
     else
         isom_basebox_common_copy( (isom_box_t *)dst, (isom_box_t *)src );
