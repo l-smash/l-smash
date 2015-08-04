@@ -502,6 +502,8 @@ static lsmash_sample_t *isom_read_sample_data_from_stream
     uint64_t         sample_pos
 )
 {
+    if( !file )
+        return NULL;
     lsmash_sample_t *sample = lsmash_create_sample( 0 );
     if( !sample )
         return NULL;
@@ -767,7 +769,10 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
      || !trak->mdia->mdhd
      ||  trak->mdia->mdhd->timescale == 0
      || !trak->mdia->minf
-     || !trak->mdia->minf->stbl )
+     || !trak->mdia->minf->stbl
+     || !trak->mdia->minf->stbl->stco
+     || !trak->mdia->minf->stbl->stsd
+     || !trak->mdia->minf->stbl->stsz )
         return LSMASH_ERR_INVALID_DATA;
     /* Create a timeline list if it doesn't exist. */
     if( !file->timeline )
@@ -808,9 +813,9 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
     lsmash_entry_t *stss_entry = stss && stss->list ? stss->list->head : NULL;
     lsmash_entry_t *stps_entry = stps && stps->list ? stps->list->head : NULL;
     lsmash_entry_t *sdtp_entry = sdtp && sdtp->list ? sdtp->list->head : NULL;
-    lsmash_entry_t *stsz_entry = stsz && stsz->list ? stsz->list->head : NULL;
+    lsmash_entry_t *stsz_entry = stsz->list ? stsz->list->head : NULL;
     lsmash_entry_t *stsc_entry = stsc && stsc->list ? stsc->list->head : NULL;
-    lsmash_entry_t *stco_entry = stco && stco->list ? stco->list->head : NULL;
+    lsmash_entry_t *stco_entry = stco->list ? stco->list->head : NULL;
     lsmash_entry_t *sbgp_roll_entry = sbgp_roll && sbgp_roll->list ? sbgp_roll->list->head : NULL;
     lsmash_entry_t *sbgp_rap_entry  = sbgp_rap  && sbgp_rap->list  ? sbgp_rap->list->head  : NULL;
     lsmash_entry_t *next_stsc_entry = stsc_entry ? stsc_entry->next : NULL;
