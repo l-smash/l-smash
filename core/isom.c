@@ -2289,6 +2289,31 @@ int lsmash_set_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     return 0;
 }
 
+static uint32_t get_actual_handler_name_length( isom_hdlr_t *hdlr, lsmash_file_t *file )
+{
+    if( hdlr->componentName_length == 0 )
+        return 0;
+    uint32_t length;
+    uint8_t *name;
+    if( file->qt_compatible )
+    {
+        length = LSMASH_MIN( hdlr->componentName[0], hdlr->componentName_length - 1 );
+        if( !file->isom_compatible )
+            return length;
+        name = &hdlr->componentName[1];
+    }
+    else
+    {
+        length = hdlr->componentName_length;
+        name   = hdlr->componentName;
+    }
+    /* Considering fool-proof such as not terminated by '\0'. */
+    uint32_t i = 0;
+    while( i < length && name[i] )
+        ++i;
+    return i;
+}
+
 int lsmash_get_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_media_parameters_t *param )
 {
     if( isom_check_initializer_present( root ) < 0 )
@@ -2331,11 +2356,12 @@ int lsmash_get_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     }
     /* Get handler name(s). */
     isom_hdlr_t *hdlr = trak->mdia->hdlr;
-    int length = LSMASH_MIN( 255, hdlr->componentName_length );
+    uint32_t actual_length = get_actual_handler_name_length( hdlr, file );
+    uint32_t length = LSMASH_MIN( 255, actual_length );
     if( length )
     {
-        memcpy( param->media_handler_name_shadow, hdlr->componentName + file->qt_compatible, length - file->qt_compatible );
-        param->media_handler_name_shadow[length - 2 + file->isom_compatible + file->qt_compatible] = '\0';
+        memcpy( param->media_handler_name_shadow, hdlr->componentName + file->qt_compatible, length );
+        param->media_handler_name_shadow[length] = '\0';
         param->media_handler_name = param->media_handler_name_shadow;
     }
     else
@@ -2346,11 +2372,12 @@ int lsmash_get_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     if( trak->mdia->minf->hdlr )
     {
         hdlr = trak->mdia->minf->hdlr;
-        length = LSMASH_MIN( 255, hdlr->componentName_length );
+        actual_length = get_actual_handler_name_length( hdlr, file );
+        length = LSMASH_MIN( 255, actual_length );
         if( length )
         {
-            memcpy( param->data_handler_name_shadow, hdlr->componentName + file->qt_compatible, length - file->qt_compatible );
-            param->data_handler_name_shadow[length - 2 + file->isom_compatible + file->qt_compatible] = '\0';
+            memcpy( param->data_handler_name_shadow, hdlr->componentName + file->qt_compatible, length );
+            param->data_handler_name_shadow[length] = '\0';
             param->data_handler_name = param->data_handler_name_shadow;
         }
         else
