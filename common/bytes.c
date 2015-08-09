@@ -99,7 +99,6 @@ static void bs_alloc( lsmash_bs_t *bs, size_t alloc )
         bs->error = 1;
         return;
     }
-    alloc += (1 << 16);
     alloc  = LSMASH_MAX( alloc, bs->buffer.max_size );
     uint8_t *data;
     if( !bs->buffer.data )
