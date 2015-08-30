@@ -2363,7 +2363,7 @@ int lsmash_set_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     if( (file->max_isom_version >= 6) && param->rap_grouping
      && (err = isom_create_sample_grouping( trak, ISOM_GROUP_TYPE_RAP )) < 0 )
         return err;
-    if( param->compact_sample_size_table )
+    if( !file->qt_compatible && param->compact_sample_size_table )
         trak->mdia->minf->stbl->compress_sample_size_table = isom_compress_sample_size_table;
     return 0;
 }
