@@ -772,7 +772,7 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
      || !trak->mdia->minf->stbl
      || !trak->mdia->minf->stbl->stco
      || !trak->mdia->minf->stbl->stsd
-     || !trak->mdia->minf->stbl->stsz )
+     || (!trak->mdia->minf->stbl->stsz && !trak->mdia->minf->stbl->stz2) )
         return LSMASH_ERR_INVALID_DATA;
     /* Create a timeline list if it doesn't exist. */
     if( !file->timeline )
@@ -802,6 +802,7 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
     isom_sdtp_t *sdtp = stbl->sdtp;
     isom_stsc_t *stsc = stbl->stsc;
     isom_stsz_t *stsz = stbl->stsz;
+    isom_stz2_t *stz2 = stbl->stz2;
     isom_stco_t *stco = stbl->stco;
     isom_sgpd_t *sgpd_rap  = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_RAP );
     isom_sbgp_t *sbgp_rap  = isom_get_sample_to_group         ( stbl, ISOM_GROUP_TYPE_RAP );
@@ -813,7 +814,7 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
     lsmash_entry_t *stss_entry = stss && stss->list ? stss->list->head : NULL;
     lsmash_entry_t *stps_entry = stps && stps->list ? stps->list->head : NULL;
     lsmash_entry_t *sdtp_entry = sdtp && sdtp->list ? sdtp->list->head : NULL;
-    lsmash_entry_t *stsz_entry = stsz->list ? stsz->list->head : NULL;
+    lsmash_entry_t *stsz_entry = stsz ? (stsz->list ? stsz->list->head : NULL) : (stz2->list ? stz2->list->head : NULL);
     lsmash_entry_t *stsc_entry = stsc && stsc->list ? stsc->list->head : NULL;
     lsmash_entry_t *stco_entry = stco->list ? stco->list->head : NULL;
     lsmash_entry_t *sbgp_roll_entry = sbgp_roll && sbgp_roll->list ? sbgp_roll->list->head : NULL;
@@ -847,6 +848,7 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
                              ? ((isom_co64_entry_t *)stco_entry->data)->chunk_offset
                              : ((isom_stco_entry_t *)stco_entry->data)->chunk_offset
                          : 0;
+    uint32_t initial_movie_sample_count = stsz ? stsz->sample_count : stz2->sample_count;
     uint32_t samples_per_packet;
     uint32_t constant_sample_size;
     if( is_qt_fixed_comp_audio )
@@ -854,7 +856,7 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
     else
     {
         samples_per_packet   = 1;
-        constant_sample_size = stsz->sample_size;
+        constant_sample_size = stsz ? stsz->sample_size : 0;
     }
     uint32_t sample_number          = samples_per_packet;
     uint32_t sample_number_in_chunk = samples_per_packet;
@@ -903,7 +905,7 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
     uint32_t last_duration = UINT32_MAX;
     uint32_t packet_number = 1;
     isom_lpcm_bunch_t bunch = { 0 };
-    while( sample_number <= stsz->sample_count )
+    while( sample_number <= initial_movie_sample_count )
     {
         isom_sample_info_t info = { 0 };
         /* Get sample duration and sample offset. */
@@ -1077,7 +1079,7 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
                 else
                 {
                     samples_per_packet   = 1;
-                    constant_sample_size = stsz->sample_size;
+                    constant_sample_size = stsz ? stsz->sample_size : 0;
                 }
                 /* Reference media data. */
                 dref_entry = (isom_dref_entry_t *)lsmash_get_entry_data( dref_list, description ? description->data_reference_index : 0 );

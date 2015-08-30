@@ -1765,6 +1765,74 @@ static int isom_read_stsz( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     return isom_read_leaf_box_common_last_process( file, box, level, stsz );
 }
 
+static int isom_read_stz2( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) || ((isom_stbl_t *)parent)->stz2 )
+        return isom_read_unknown_box( file, box, parent, level );
+    ADD_BOX( stz2, isom_stbl_t );
+    lsmash_bs_t *bs = file->bs;
+    uint32_t temp32    = lsmash_bs_get_be32( bs );
+    stz2->reserved     = temp32 >> 24;
+    stz2->field_size   = temp32 & 0xff;
+    stz2->sample_count = lsmash_bs_get_be32( bs );
+    uint64_t pos = lsmash_bs_count( bs );
+    if( pos < box->size )
+    {
+        if( stz2->field_size == 16 || stz2->field_size == 8 )
+        {
+            uint64_t (*bs_get_funcs[2])( lsmash_bs_t * ) =
+                {
+                  lsmash_bs_get_byte_to_64,
+                  lsmash_bs_get_be16_to_64
+                };
+            uint64_t (*bs_get_entry_size)( lsmash_bs_t * ) = bs_get_funcs[ stz2->field_size == 16 ? 1 : 0 ];
+            for( ; pos < box->size && stz2->list->entry_count < stz2->sample_count; pos = lsmash_bs_count( bs ) )
+            {
+                isom_stsz_entry_t *data = lsmash_malloc( sizeof(isom_stsz_entry_t) );
+                if( !data )
+                    return LSMASH_ERR_MEMORY_ALLOC;
+                if( lsmash_add_entry( stz2->list, data ) < 0 )
+                {
+                    lsmash_free( data );
+                    return LSMASH_ERR_MEMORY_ALLOC;
+                }
+                data->entry_size = bs_get_entry_size( bs );
+            }
+        }
+        else if( stz2->field_size == 4 )
+        {
+            int parity = 1;
+            uint8_t temp8;
+            while( pos < box->size && stz2->list->entry_count < stz2->sample_count )
+            {
+                isom_stsz_entry_t *data = lsmash_malloc( sizeof(isom_stsz_entry_t) );
+                if( !data )
+                    return LSMASH_ERR_MEMORY_ALLOC;
+                if( lsmash_add_entry( stz2->list, data ) < 0 )
+                {
+                    lsmash_free( data );
+                    return LSMASH_ERR_MEMORY_ALLOC;
+                }
+                /* Read a byte by two entries. */
+                if( parity )
+                {
+                    temp8 = lsmash_bs_get_byte( bs );
+                    data->entry_size = (temp8 >> 4) & 0xf;
+                }
+                else
+                {
+                    pos = lsmash_bs_count( bs );
+                    data->entry_size =  temp8       & 0xf;
+                }
+                parity ^= 1;
+            }
+        }
+        else
+            return LSMASH_ERR_INVALID_DATA;
+    }
+    return isom_read_leaf_box_common_last_process( file, box, level, stz2 );
+}
+
 static int isom_read_stco( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) || ((isom_stbl_t *)parent)->stco )
@@ -2793,6 +2861,7 @@ int isom_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uin
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_SDTP, lsmash_form_iso_box_type,  isom_read_sdtp );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSC, lsmash_form_iso_box_type,  isom_read_stsc );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSZ, lsmash_form_iso_box_type,  isom_read_stsz );
+        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_STZ2, lsmash_form_iso_box_type,  isom_read_stz2 );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_STCO, lsmash_form_iso_box_type,  isom_read_stco );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_CO64, lsmash_form_iso_box_type,  isom_read_stco );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_SGPD, lsmash_form_iso_box_type,  isom_read_sgpd );

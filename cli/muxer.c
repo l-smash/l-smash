@@ -64,6 +64,7 @@ typedef struct
     int      brand_3gx;
     int      optimize_pd;
     int      timeline_shift;
+    int      compact_size_table;
     uint32_t interleave;
     uint32_t num_of_brands;
     uint32_t brands[MAX_NUM_OF_BRANDS];
@@ -254,6 +255,7 @@ static void display_help( void )
              "                                  <arg> is <string> or <string>/<string>\n"
              "    --language <string>       Specify the default language for all the output tracks.\n"
              "                              This option is overridden by the track options.\n"
+             "    --compact-size-table      Compress sample size tables if possible.\n"
              "Output file formats:\n"
              "    mp4, mov, 3gp, 3g2, m4a, m4v\n"
              "\n"
@@ -514,6 +516,8 @@ static int parse_global_options( int argc, char **argv, muxer_t *muxer )
         }
         else if( !strcasecmp( argv[i], "--shift-timeline" ) )
             opt->timeline_shift = 1;
+        else if( !strcasecmp( argv[i], "compact-size-table" ) )
+            opt->compact_size_table = 1;
         else if( !strcasecmp( argv[i], "--chapter" ) )
         {
             CHECK_NEXT_ARG;
@@ -896,7 +900,8 @@ static int prepare_output( muxer_t *muxer )
             track_param.alternate_group = track_opt->alternate_group;
             lsmash_media_parameters_t media_param;
             lsmash_initialize_media_parameters( &media_param );
-            media_param.ISO_language = track_opt->ISO_language;
+            media_param.ISO_language              = track_opt->ISO_language;
+            media_param.compact_sample_size_table = opt->compact_size_table;
             switch( in_track->summary->summary_type )
             {
                 case LSMASH_SUMMARY_TYPE_VIDEO :

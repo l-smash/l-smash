@@ -152,6 +152,7 @@ typedef struct
     uint32_t             frag_base_track;
     uint32_t             subseg_per_seg;
     int                  dash;
+    int                  compact_size_table;
 } remuxer_t;
 
 typedef struct
@@ -302,6 +303,7 @@ static void display_help( void )
              "                              The value is the number of subsegments per segment.\n"
              "                              If zero, Indexed self-initializing Media Segment.\n"
              "                              This option requires --fragment.\n"
+             "    --compact-size-table      Compress sample size tables if possible.\n"
              "Track options:\n"
              "    remove                    Remove this track\n"
              "    disable                   Disable this track\n"
@@ -725,6 +727,8 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
             remuxer->subseg_per_seg = atoi( argv[i] );
             remuxer->dash           = 1;
         }
+        else if( !strcasecmp( argv[i], "--compact-size-table" ) )
+            remuxer->compact_size_table = 1;
         else
             FAILED_PARSE_CLI_OPTION( "unkown option found: %s\n", argv[i] );
     }
@@ -1159,10 +1163,11 @@ static int prepare_output( remuxer_t *remuxer )
             out_track->track_param = in_track->track_param;
             out_track->media_param = in_track->media.param;
             /* Set track and media parameters specified by users */
-            out_track->track_param.alternate_group    = current_track_opt->alternate_group;
-            out_track->media_param.ISO_language       = current_track_opt->ISO_language;
-            out_track->media_param.media_handler_name = current_track_opt->handler_name;
-            out_track->track_param.track_ID           = out_track->track_ID;
+            out_track->track_param.alternate_group           = current_track_opt->alternate_group;
+            out_track->media_param.ISO_language              = current_track_opt->ISO_language;
+            out_track->media_param.media_handler_name        = current_track_opt->handler_name;
+            out_track->media_param.compact_sample_size_table = remuxer->compact_size_table;
+            out_track->track_param.track_ID                  = out_track->track_ID;
             if( current_track_opt->disable )
                 out_track->track_param.mode &= ~ISOM_TRACK_ENABLED;
             if( lsmash_set_track_parameters( output->root, out_track->track_ID, &out_track->track_param ) < 0 )

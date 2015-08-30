@@ -193,6 +193,7 @@ int isom_is_fullbox( void *box )
         fullbox_type_table[i++] = ISOM_BOX_TYPE_SDTP;
         fullbox_type_table[i++] = ISOM_BOX_TYPE_STSC;
         fullbox_type_table[i++] = ISOM_BOX_TYPE_STSZ;
+        fullbox_type_table[i++] = ISOM_BOX_TYPE_STZ2;
         fullbox_type_table[i++] = ISOM_BOX_TYPE_STCO;
         fullbox_type_table[i++] = ISOM_BOX_TYPE_CO64;
         fullbox_type_table[i++] = ISOM_BOX_TYPE_SGPD;
@@ -896,6 +897,7 @@ DEFINE_SIMPLE_LIST_BOX_REMOVER( isom_remove_ctts, ctts, isom_stbl_t )
 DEFINE_SIMPLE_BOX_REMOVER( isom_remove_cslg, cslg, isom_stbl_t )
 DEFINE_SIMPLE_LIST_BOX_REMOVER( isom_remove_stsc, stsc, isom_stbl_t )
 DEFINE_SIMPLE_LIST_BOX_REMOVER( isom_remove_stsz, stsz, isom_stbl_t )
+DEFINE_SIMPLE_LIST_BOX_REMOVER( isom_remove_stz2, stz2, isom_stbl_t )
 DEFINE_SIMPLE_LIST_BOX_REMOVER( isom_remove_stss, stss, isom_stbl_t )
 DEFINE_SIMPLE_LIST_BOX_REMOVER( isom_remove_stps, stps, isom_stbl_t )
 DEFINE_SIMPLE_LIST_BOX_REMOVER( isom_remove_stco, stco, isom_stbl_t )
@@ -1504,6 +1506,7 @@ DEFINE_SIMPLE_LIST_BOX_ADDER( isom_add_ctts, ctts, stbl, ISOM_BOX_TYPE_CTTS, LSM
 DEFINE_SIMPLE_BOX_ADDER     ( isom_add_cslg, cslg, stbl, ISOM_BOX_TYPE_CSLG, LSMASH_BOX_PRECEDENCE_ISOM_CSLG )
 DEFINE_SIMPLE_LIST_BOX_ADDER( isom_add_stsc, stsc, stbl, ISOM_BOX_TYPE_STSC, LSMASH_BOX_PRECEDENCE_ISOM_STSC )
 DEFINE_SIMPLE_BOX_ADDER     ( isom_add_stsz, stsz, stbl, ISOM_BOX_TYPE_STSZ, LSMASH_BOX_PRECEDENCE_ISOM_STSZ )  /* We don't create a list here. */
+DEFINE_SIMPLE_LIST_BOX_ADDER( isom_add_stz2, stz2, stbl, ISOM_BOX_TYPE_STZ2, LSMASH_BOX_PRECEDENCE_ISOM_STZ2 )
 DEFINE_SIMPLE_LIST_BOX_ADDER( isom_add_stss, stss, stbl, ISOM_BOX_TYPE_STSS, LSMASH_BOX_PRECEDENCE_ISOM_STSS )
 DEFINE_SIMPLE_LIST_BOX_ADDER( isom_add_stps, stps, stbl,   QT_BOX_TYPE_STPS, LSMASH_BOX_PRECEDENCE_QTFF_STPS )
 

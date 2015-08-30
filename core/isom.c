@@ -386,7 +386,7 @@ static int isom_add_stsz_entry( isom_stbl_t *stbl, uint32_t entry_size )
     /* retrieve initial sample_size */
     if( stsz->sample_count == 0 )
         stsz->sample_size = entry_size;
-    /* if it seems constant access_unit size at present, update sample_count only */
+    /* if it seems constant sample size at present, update sample_count only */
     if( !stsz->list && stsz->sample_size == entry_size )
     {
         ++ stsz->sample_count;
@@ -696,10 +696,14 @@ uint32_t isom_get_sample_count( isom_trak_t *trak )
     if( !trak
      || !trak->mdia
      || !trak->mdia->minf
-     || !trak->mdia->minf->stbl
-     || !trak->mdia->minf->stbl->stsz )
+     || !trak->mdia->minf->stbl )
         return 0;
-    return trak->mdia->minf->stbl->stsz->sample_count;
+    if( trak->mdia->minf->stbl->stsz )
+        return trak->mdia->minf->stbl->stsz->sample_count;
+    else if( trak->mdia->minf->stbl->stz2 )
+        return trak->mdia->minf->stbl->stz2->sample_count;
+    else
+        return 0;
 }
 
 static uint64_t isom_get_dts( isom_stts_t *stts, uint32_t sample_number )
@@ -1067,8 +1071,9 @@ static inline int isom_increment_sample_number_in_entry( uint32_t *sample_number
 
 static int isom_calculate_bitrate_description( isom_mdia_t *mdia, uint32_t *bufferSizeDB, uint32_t *maxBitrate, uint32_t *avgBitrate, uint32_t sample_description_index )
 {
-    isom_stsz_t *stsz               = mdia->minf->stbl->stsz;
-    lsmash_entry_t *stsz_entry      = stsz->list ? stsz->list->head : NULL;
+    isom_stsz_t *stsz = mdia->minf->stbl->stsz;
+    lsmash_entry_list_t *stsz_list  = stsz ? stsz->list : mdia->minf->stbl->stz2->list;
+    lsmash_entry_t *stsz_entry      = stsz_list ? stsz_list->head : NULL;
     lsmash_entry_t *stts_entry      = mdia->minf->stbl->stts->list->head;
     lsmash_entry_t *stsc_entry      = NULL;
     lsmash_entry_t *next_stsc_entry = mdia->minf->stbl->stsc->list->head;
@@ -1083,6 +1088,7 @@ static int isom_calculate_bitrate_description( isom_mdia_t *mdia, uint32_t *buff
     uint32_t chunk_number           = 0;
     uint32_t sample_number_in_stts  = 1;
     uint32_t sample_number_in_chunk = 1;
+    uint32_t constant_sample_size   = stsz ? stsz->sample_size : 0;
     *bufferSizeDB = 0;
     *maxBitrate   = 0;
     *avgBitrate   = 0;
@@ -1140,7 +1146,7 @@ static int isom_calculate_bitrate_description( isom_mdia_t *mdia, uint32_t *buff
                     number_of_skips += (((isom_stsc_entry_t *)next_stsc_entry->data)->first_chunk - first_chunk) * samples_per_chunk;
                     for( uint32_t i = 0; i < number_of_skips; i++ )
                     {
-                        if( stsz->list )
+                        if( stsz_list )
                         {
                             if( !stsz_entry )
                                 break;
@@ -1153,7 +1159,7 @@ static int isom_calculate_bitrate_description( isom_mdia_t *mdia, uint32_t *buff
                                                                           &stts_entry )) < 0 )
                             return err;
                     }
-                    if( (stsz->list && !stsz_entry) || !stts_entry )
+                    if( (stsz_list && !stsz_entry) || !stts_entry )
                         break;
                     chunk_number = stsc_data->first_chunk;
                 }
@@ -1163,7 +1169,7 @@ static int isom_calculate_bitrate_description( isom_mdia_t *mdia, uint32_t *buff
             ++sample_number_in_chunk;
         /* Get current sample's size. */
         uint32_t size;
-        if( stsz->list )
+        if( stsz_list )
         {
             if( !stsz_entry )
                 break;
@@ -1174,7 +1180,7 @@ static int isom_calculate_bitrate_description( isom_mdia_t *mdia, uint32_t *buff
             stsz_entry = stsz_entry->next;
         }
         else
-            size = stsz->sample_size;
+            size = constant_sample_size;
         /* Get current sample's DTS. */
         if( stts_data )
             dts += stts_data->sample_delta;
@@ -1206,6 +1212,39 @@ static int isom_calculate_bitrate_description( isom_mdia_t *mdia, uint32_t *buff
     return 0;
 }
 
+static int isom_is_variable_size( isom_stbl_t *stbl )
+{
+    if( (stbl->stz2 && stbl->stz2->sample_count > 1)
+     || (stbl->stsz && stbl->stsz->sample_count > 1 && stbl->stsz->sample_size == 0) )
+        return 1;
+    else
+        return 0;
+}
+
+uint32_t isom_get_first_sample_size( isom_stbl_t *stbl )
+{
+    if( stbl->stsz )
+    {
+        /* 'stsz' */
+        if( stbl->stsz->sample_size )
+            return stbl->stsz->sample_size;
+        else if( stbl->stsz->list && stbl->stsz->list->head && stbl->stsz->list->head->data )
+            return ((isom_stsz_entry_t *)stbl->stsz->list->head->data)->entry_size;
+        else
+            return 0;
+    }
+    else if( stbl->stz2 )
+    {
+        /* stz2 */
+        if( stbl->stz2->list && stbl->stz2->list->head && stbl->stz2->list->head->data )
+            return ((isom_stsz_entry_t *)stbl->stz2->list->head->data)->entry_size;
+        else
+            return 0;
+    }
+    else
+        return 0;
+}
+
 int isom_update_bitrate_description( isom_mdia_t *mdia )
 {
     if( !mdia
@@ -1215,7 +1254,7 @@ int isom_update_bitrate_description( isom_mdia_t *mdia )
         return LSMASH_ERR_INVALID_DATA;
     isom_stbl_t *stbl = mdia->minf->stbl;
     if( !stbl->stsd
-     || !stbl->stsz
+     || (!stbl->stsz && !stbl->stz2)
      || !stbl->stsc || !stbl->stsc->list
      || !stbl->stts || !stbl->stts->list )
         return LSMASH_ERR_INVALID_DATA;
@@ -1379,7 +1418,7 @@ int isom_update_bitrate_description( isom_mdia_t *mdia )
                 return LSMASH_ERR_INVALID_DATA;
             if( (err = isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index )) < 0 )
                 return err;
-            if( !stbl->stsz->list )
+            if( !isom_is_variable_size( stbl ) )
                 maxBitrate = avgBitrate;
             uint8_t *exdata = ext->binary + 12;
             LSMASH_SET_BE32( &exdata[0], maxBitrate );
@@ -1392,14 +1431,14 @@ int isom_update_bitrate_description( isom_mdia_t *mdia )
             if( !(ext && (ext->manager & LSMASH_BINARY_CODED_BOX) && ext->binary && ext->size >= 10) )
                 return LSMASH_ERR_INVALID_DATA;
             uint16_t bitrate;
-            if( stbl->stsz->list )
+            if( isom_is_variable_size( stbl ) )
             {
                 if( (err = isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index )) < 0 )
                     return err;
                 bitrate = maxBitrate / 1000;    /* Use maximum bitrate if VBR. */
             }
             else
-                bitrate = stbl->stsz->sample_size * (eac3->samplerate >> 16) / 192000;      /* 192000 == 1536 * 1000 / 8 */
+                bitrate = isom_get_first_sample_size( stbl ) * (eac3->samplerate >> 16) / 192000;   /* 192000 == 1536 * 1000 / 8 */
             uint8_t *exdata = ext->binary + 8;
             exdata[0] = (bitrate >> 5) & 0xff;
             exdata[1] = (bitrate & 0x1f) << 3;
@@ -2252,6 +2291,44 @@ static int isom_create_sample_grouping( isom_trak_t *trak, isom_grouping_type gr
     return 0;
 }
 
+static int isom_compress_sample_size_table( isom_stbl_t *stbl )
+{
+    if( stbl->stsz && isom_is_variable_size( stbl ) )
+    {
+        int max_num_bits = 0;
+        for( lsmash_entry_t *entry = stbl->stsz->list->head; entry; entry = entry->next )
+        {
+            isom_stsz_entry_t *data = (isom_stsz_entry_t *)entry->data;
+            if( !data )
+                return LSMASH_ERR_INVALID_DATA;
+            int num_bits;
+            for( num_bits = 1; data->entry_size >> num_bits; num_bits++ );
+            if( max_num_bits < num_bits )
+            {
+                max_num_bits = num_bits;
+                if( max_num_bits > 16 )
+                    return 0;   /* not compressible */
+            }
+        }
+        if( max_num_bits <= 16 && isom_add_stz2( stbl ) )
+        {
+            /* The sample size table can be compressed by using 'stz2'. */
+            isom_stsz_t *stsz = stbl->stsz;
+            isom_stz2_t *stz2 = stbl->stz2;
+            stz2->sample_count = stsz->sample_count;
+            if( max_num_bits <= 4 )
+                stz2->field_size = 4;
+            else if( max_num_bits <= 8 )
+                stz2->field_size = 8;
+            else
+                stz2->field_size = 16;
+            lsmash_move_entries( stz2->list, stsz->list );
+            isom_remove_box_by_itself( stsz );
+        }
+    }
+    return 0;
+}
+
 void lsmash_initialize_media_parameters( lsmash_media_parameters_t *param )
 {
     memset( param, 0, sizeof(lsmash_media_parameters_t) );
@@ -2286,6 +2363,8 @@ int lsmash_set_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     if( (file->max_isom_version >= 6) && param->rap_grouping
      && (err = isom_create_sample_grouping( trak, ISOM_GROUP_TYPE_RAP )) < 0 )
         return err;
+    if( param->compact_sample_size_table )
+        trak->mdia->minf->stbl->compress_sample_size_table = isom_compress_sample_size_table;
     return 0;
 }
 
@@ -2391,6 +2470,8 @@ int lsmash_get_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
         param->data_handler_name = NULL;
         memset( param->data_handler_name_shadow, 0, sizeof(param->data_handler_name_shadow) );
     }
+    param->compact_sample_size_table = !!stbl->stz2;
+    param->reserved[0] = param->reserved[1] = param->reserved[2] = 0;
     return 0;
 }
 
@@ -2746,8 +2827,12 @@ int lsmash_finish_movie
             if( (err = lsmash_create_explicit_timeline_map( root, track_ID, edit )) < 0 )
                 return err;
         }
-        /* Add stss box if any samples aren't sync sample. */
         isom_stbl_t *stbl = trak->mdia->minf->stbl;
+        /* Compress sample size table. */
+        if( stbl->compress_sample_size_table
+         && (err = stbl->compress_sample_size_table( stbl )) < 0 )
+            return err;
+        /* Add stss box if any samples aren't sync sample. */
         if( !trak->cache->all_sync && !stbl->stss && !isom_add_stss( stbl ) )
             return LSMASH_ERR_NAMELESS;
         if( (err = isom_update_tkhd_duration( trak ))             < 0
@@ -2843,7 +2928,7 @@ int lsmash_set_last_sample_delta( lsmash_root_t *root, uint32_t track_ID, uint32
      || !trak->mdia->minf
      || !trak->mdia->minf->stbl
      || !trak->mdia->minf->stbl->stsd
-     || !trak->mdia->minf->stbl->stsz
+     || (!trak->mdia->minf->stbl->stsz && !trak->mdia->minf->stbl->stz2)
      || !trak->mdia->minf->stbl->stts
      || !trak->mdia->minf->stbl->stts->list )
         return LSMASH_ERR_NAMELESS;
@@ -3203,7 +3288,7 @@ static int isom_add_cts( isom_stbl_t *stbl, isom_timestamp_t *cache, uint64_t ct
             return err;
         ctts = stbl->ctts;
         isom_ctts_entry_t *data = (isom_ctts_entry_t *)ctts->list->head->data;
-        uint32_t sample_count = stbl->stsz->sample_count;
+        uint32_t sample_count = stbl->stsz ? stbl->stsz->sample_count : stbl->stz2->sample_count;
         if( sample_count != 1 )
         {
             data->sample_count = sample_count - 1;

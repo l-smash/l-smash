@@ -230,7 +230,7 @@ int isom_check_mandatory_boxes
          || !trak->mdia->minf->dinf->dref
          || !trak->mdia->minf->stbl
          || !trak->mdia->minf->stbl->stsd
-         || !trak->mdia->minf->stbl->stsz
+         || (!trak->mdia->minf->stbl->stsz && !trak->mdia->minf->stbl->stz2)
          || !trak->mdia->minf->stbl->stts
          || !trak->mdia->minf->stbl->stsc
          || !trak->mdia->minf->stbl->stco )

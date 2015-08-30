@@ -142,6 +142,12 @@ void lsmash_remove_list_orig( lsmash_entry_list_t *list, lsmash_entry_data_elimi
     lsmash_free( list );
 }
 
+void lsmash_move_entries( lsmash_entry_list_t *dst, lsmash_entry_list_t *src )
+{
+    *dst = *src;
+    lsmash_init_entry_list( src );
+}
+
 lsmash_entry_t *lsmash_get_entry( lsmash_entry_list_t *list, uint32_t entry_number )
 {
     if( !list || !entry_number || entry_number > list->entry_count )

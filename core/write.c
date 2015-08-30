@@ -771,6 +771,48 @@ static int isom_write_stsz( lsmash_bs_t *bs, isom_box_t *box )
     return 0;
 }
 
+static int isom_write_stz2( lsmash_bs_t *bs, isom_box_t *box )
+{
+    isom_stz2_t *stz2 = (isom_stz2_t *)box;
+    isom_bs_put_box_common( bs, stz2 );
+    lsmash_bs_put_be32( bs, (stz2->reserved << 8) | stz2->field_size );
+    lsmash_bs_put_be32( bs, stz2->sample_count );
+    if( stz2->field_size == 16 )
+        for( lsmash_entry_t *entry = stz2->list->head; entry; entry = entry->next )
+        {
+            isom_stsz_entry_t *data = (isom_stsz_entry_t *)entry->data;
+            if( !data )
+                return LSMASH_ERR_NAMELESS;
+            assert( data->entry_size <= 0xffff );
+            lsmash_bs_put_be16( bs, data->entry_size );
+        }
+    else if( stz2->field_size == 8 )
+        for( lsmash_entry_t *entry = stz2->list->head; entry; entry = entry->next )
+        {
+            isom_stsz_entry_t *data = (isom_stsz_entry_t *)entry->data;
+            if( !data )
+                return LSMASH_ERR_NAMELESS;
+            assert( data->entry_size <= 0xff );
+            lsmash_bs_put_byte( bs, data->entry_size );
+        }
+    else if( stz2->field_size == 4 )
+    {
+        isom_stsz_entry_t zero_padding = { .entry_size = 0 };
+        for( lsmash_entry_t *entry = stz2->list->head; entry; entry = entry->next ? entry->next->next : entry->next )
+        {
+            isom_stsz_entry_t *data_o = (isom_stsz_entry_t *)entry->data;
+            isom_stsz_entry_t *data_e = (isom_stsz_entry_t *)(entry->next ? entry->next->data : &zero_padding);
+            if( !data_o || !data_e )
+                return LSMASH_ERR_NAMELESS;
+            assert( data_o->entry_size <= 0xf && data_e->entry_size <= 0xf );
+            lsmash_bs_put_byte( bs, (data_o->entry_size << 4) | data_e->entry_size );
+        }
+    }
+    else
+        return LSMASH_ERR_NAMELESS;
+    return 0;
+}
+
 static int isom_write_stss( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_stss_t *stss = (isom_stss_t *)box;
@@ -1557,6 +1599,7 @@ void isom_set_box_writer( isom_box_t *box )
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SDTP, isom_write_sdtp );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSC, isom_write_stsc );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSZ, isom_write_stsz );
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STZ2, isom_write_stz2 );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STCO, isom_write_stco );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_CO64, isom_write_stco );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SGPD, isom_write_sgpd );

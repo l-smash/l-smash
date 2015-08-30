@@ -923,9 +923,9 @@ typedef struct
     int32_t compositionEndTime;             /* the CTS plus the composition duration, of the sample with the largest CTS in this track */
 } isom_cslg_t;
 
-/* Sample Size Box
+/* Sample Size Box / Compact Sample Size Box
  * This box contains the sample count and a table giving the size in bytes of each sample.
- * The total number of samples in the media is always indicated in the sample_count.
+ * The total number of samples in the media within the initial movie is always indicated in the sample_count.
  * Note: a sample size of zero is not prohibited in general, but it must be valid and defined for the coding system,
  *       as defined by the sample entry, that the sample belongs to. */
 typedef struct
@@ -936,10 +936,23 @@ typedef struct
 typedef struct
 {
     ISOM_FULLBOX_COMMON;
-    uint32_t sample_size;           /* If this field is set to 0, then the samples have different sizes. */
-    uint32_t sample_count;          /* the number of samples in the track */
+    uint32_t sample_size;           /* the default sample size
+                                     * If this field is set to 0, then the samples have different sizes. */
+    uint32_t sample_count;          /* the number of samples in the media within the initial movie */
     lsmash_entry_list_t *list;      /* available if sample_size == 0 */
 } isom_stsz_t;
+
+typedef struct
+{
+    ISOM_FULLBOX_COMMON;
+    unsigned int reserved   : 24;   /* 0 */
+    unsigned int field_size : 8;    /* the size in bits of the entries in the following table
+                                     * It shall take the value 4, 8 or 16. If the value 4 is used, then each byte contains two values
+                                     * entry[i]<<4 + entry[i+1]; if the sizes do not fill an integral number of bytes, the last byte is
+                                     * padded with zero. */
+    uint32_t     sample_count;      /* the number of entries in the following table */
+    lsmash_entry_list_t *list;      /* L-SMASH uses isom_stsz_entry_t for its internal processes. */
+} isom_stz2_t;
 
 /* Sync Sample Box
  * If this box is not present, every sample is a random access point.
@@ -1085,7 +1098,9 @@ typedef struct
 } isom_group_assignment_entry_t;
 
 /* Sample Table Box */
-typedef struct
+typedef struct isom_stbl_tag isom_stbl_t;
+
+struct isom_stbl_tag
 {
     ISOM_BASEBOX_COMMON;
     isom_stsd_t *stsd;      /* Sample Description Box */
@@ -1097,10 +1112,13 @@ typedef struct
     isom_sdtp_t *sdtp;      /* Independent and Disposable Samples Box */
     isom_stsc_t *stsc;      /* Sample To Chunk Box */
     isom_stsz_t *stsz;      /* Sample Size Box */
+    isom_stz2_t *stz2;      /* Compact Sample Size Box */
     isom_stco_t *stco;      /* Chunk Offset Box */
     lsmash_entry_list_t sgpd_list;  /* Sample Group Description Boxes */
     lsmash_entry_list_t sbgp_list;  /* Sample To Group Boxes */
-} isom_stbl_t;
+
+        int (*compress_sample_size_table)( isom_stbl_t *stbl ); /* Use 'stz2' instead of 'stsz' if possible. (write mode only) */
+};
 
 /* Media Information Box */
 typedef struct
@@ -2055,6 +2073,7 @@ struct lsmash_root_tag
 #define ISOM_BOX_TYPE_STSH lsmash_form_iso_box_type( LSMASH_4CC( 's', 't', 's', 'h' ) )
 #define ISOM_BOX_TYPE_STSS lsmash_form_iso_box_type( LSMASH_4CC( 's', 't', 's', 's' ) )
 #define ISOM_BOX_TYPE_STSZ lsmash_form_iso_box_type( LSMASH_4CC( 's', 't', 's', 'z' ) )
+#define ISOM_BOX_TYPE_STZ2 lsmash_form_iso_box_type( LSMASH_4CC( 's', 't', 'z', '2' ) )
 #define ISOM_BOX_TYPE_STTS lsmash_form_iso_box_type( LSMASH_4CC( 's', 't', 't', 's' ) )
 #define ISOM_BOX_TYPE_STYP lsmash_form_iso_box_type( LSMASH_4CC( 's', 't', 'y', 'p' ) )
 #define ISOM_BOX_TYPE_STZ2 lsmash_form_iso_box_type( LSMASH_4CC( 's', 't', 'z', '2' ) )
@@ -2221,6 +2240,7 @@ struct lsmash_root_tag
 #define LSMASH_BOX_PRECEDENCE_ISOM_SDTP (LSMASH_BOX_PRECEDENCE_N  - 12 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_STSC (LSMASH_BOX_PRECEDENCE_N  - 14 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_STSZ (LSMASH_BOX_PRECEDENCE_N  - 16 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_STZ2 (LSMASH_BOX_PRECEDENCE_N  - 16 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_STCO (LSMASH_BOX_PRECEDENCE_N  - 18 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_CO64 (LSMASH_BOX_PRECEDENCE_N  - 18 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_SGPD (LSMASH_BOX_PRECEDENCE_N  - 20 * LSMASH_BOX_PRECEDENCE_S)
@@ -2536,6 +2556,11 @@ int isom_append_sample_by_type
     int (*func_append_sample)( void *, lsmash_sample_t *, isom_sample_entry_t * )
 );
 
+uint32_t isom_get_first_sample_size
+(
+    isom_stbl_t *stbl
+);
+
 int isom_add_sample_grouping( isom_box_t *parent, isom_grouping_type grouping_type );
 int isom_group_random_access( isom_box_t *parent, lsmash_sample_t *sample );
 int isom_group_roll_recovery( isom_box_t *parent, lsmash_sample_t *sample );
@@ -2609,6 +2634,7 @@ isom_ctts_t *isom_add_ctts( isom_stbl_t *stbl );
 isom_cslg_t *isom_add_cslg( isom_stbl_t *stbl );
 isom_stsc_t *isom_add_stsc( isom_stbl_t *stbl );
 isom_stsz_t *isom_add_stsz( isom_stbl_t *stbl );
+isom_stz2_t *isom_add_stz2( isom_stbl_t *stbl );
 isom_stss_t *isom_add_stss( isom_stbl_t *stbl );
 isom_stps_t *isom_add_stps( isom_stbl_t *stbl );
 isom_sdtp_t *isom_add_sdtp( isom_box_t *parent );

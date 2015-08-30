@@ -1531,6 +1531,23 @@ static int isom_print_stsz( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
     return 0;
 }
 
+static int isom_print_stz2( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
+{
+    isom_stz2_t *stz2 = (isom_stz2_t *)box;
+    int indent = level;
+    uint32_t i = 0;
+    isom_print_box_common( fp, indent++, box, "Compact Sample Size Box" );
+    lsmash_ifprintf( fp, indent, "reserved = 0x%06"PRIx32"\n", stz2->reserved );
+    lsmash_ifprintf( fp, indent, "field_size = %"PRIu8"\n", stz2->field_size );
+    lsmash_ifprintf( fp, indent, "sample_count = %"PRIu32"\n", stz2->sample_count );
+    for( lsmash_entry_t *entry = stz2->list->head; entry; entry = entry->next )
+    {
+        isom_stsz_entry_t *data = (isom_stsz_entry_t *)entry->data;
+        lsmash_ifprintf( fp, indent, "entry_size[%"PRIu32"] = %"PRIu32"\n", i++, data->entry_size );
+    }
+    return 0;
+}
+
 static int isom_print_stco( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
 {
     if( !((isom_stco_t *)box)->list )
@@ -2621,6 +2638,7 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
         ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_SDTP, isom_print_sdtp );
         ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_STSC, isom_print_stsc );
         ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_STSZ, isom_print_stsz );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_STZ2, isom_print_stz2 );
         ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_STCO, isom_print_stco );
         ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_CO64, isom_print_stco );
         ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_SGPD, isom_print_sgpd );

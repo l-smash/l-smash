@@ -63,6 +63,7 @@ int lsmash_remove_entry_orig( lsmash_entry_list_t *list, uint32_t entry_number, 
 int lsmash_remove_entry_tail_orig( lsmash_entry_list_t *list, lsmash_entry_data_eliminator eliminator );
 void lsmash_remove_entries_orig( lsmash_entry_list_t *list, lsmash_entry_data_eliminator eliminator );
 void lsmash_remove_list_orig( lsmash_entry_list_t *list, lsmash_entry_data_eliminator eliminator );
+void lsmash_move_entries( lsmash_entry_list_t *dst, lsmash_entry_list_t *src );
 
 lsmash_entry_t *lsmash_get_entry( lsmash_entry_list_t *list, uint32_t entry_number );
 void *lsmash_get_entry_data( lsmash_entry_list_t *list, uint32_t entry_number );

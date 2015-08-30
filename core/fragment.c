@@ -416,10 +416,12 @@ static int isom_create_fragment_overall_default_settings( lsmash_file_t *file )
          || !trak->mdia->minf->stbl )
             return LSMASH_ERR_NAMELESS;
         isom_stbl_t *stbl = trak->mdia->minf->stbl;
-        if( !stbl->stts || !stbl->stts->list
-         || !stbl->stsz
+        if( !stbl->stts
+         || !stbl->stts->list
          || (stbl->stts->list->tail && !stbl->stts->list->tail->data)
-         || (stbl->stsz->list && stbl->stsz->list->head && !stbl->stsz->list->head->data) )
+         || (!stbl->stsz && !stbl->stz2)
+         || (stbl->stsz && stbl->stsz->list && stbl->stsz->list->head && !stbl->stsz->list->head->data)
+         || (stbl->stz2 && stbl->stz2->list && stbl->stz2->list->head && !stbl->stz2->list->head->data))
             return LSMASH_ERR_NAMELESS;
         isom_trex_t *trex = isom_add_trex( file->moov->mvex );
         if( !trex )
@@ -432,9 +434,7 @@ static int isom_create_fragment_overall_default_settings( lsmash_file_t *file )
         trex->default_sample_duration          = stbl->stts->list->tail
                                                ? ((isom_stts_entry_t *)stbl->stts->list->tail->data)->sample_delta
                                                : 1;
-        trex->default_sample_size              = !stbl->stsz->list
-                                               ? stbl->stsz->sample_size : stbl->stsz->list->head
-                                               ? ((isom_stsz_entry_t *)stbl->stsz->list->head->data)->entry_size : 0;
+        trex->default_sample_size              = isom_get_first_sample_size( stbl );
         if( stbl->sdtp
          && stbl->sdtp->list )
         {
@@ -530,6 +530,10 @@ static int isom_finish_fragment_initial_movie( lsmash_file_t *file )
         isom_stbl_t *stbl = trak->mdia->minf->stbl;
         if( isom_get_sample_count( trak ) )
         {
+            /* Compress sample size table. */
+            if( stbl->compress_sample_size_table
+             && (ret = stbl->compress_sample_size_table( stbl )) < 0 )
+                return ret;
             /* Add stss box if any samples aren't sync sample. */
             if( !trak->cache->all_sync && !stbl->stss && !isom_add_stss( stbl ) )
                 return -1;
