@@ -2293,6 +2293,24 @@ static int isom_create_sample_grouping( isom_trak_t *trak, isom_grouping_type gr
 
 static int isom_compress_sample_size_table( isom_stbl_t *stbl )
 {
+    if( stbl->file->max_3gpp_version )
+        /* 3GPP: Limitations to the ISO base media file format
+         *  - compact sample sizes ('stz2') shall not be used for tracks containing H.263, MPEG-4 video, AMR, AMR-WB, AAC or Timed text.
+         * Note that 'mp4a' check is incomplete here since this restriction is not applied to Enhanced aacPlus audio (HE-AAC v2). */
+        for( lsmash_entry_t *entry = stbl->stsd->list.head; entry; entry = entry->next )
+        {
+            isom_sample_entry_t *sample_entry = (isom_sample_entry_t *)entry->data;
+            if( !sample_entry )
+                return LSMASH_ERR_INVALID_DATA;
+            lsmash_codec_type_t sample_type = sample_entry->type;
+            if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_S263_VIDEO )
+             || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_MP4V_VIDEO )
+             || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_MP4A_AUDIO )
+             || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_SAMR_AUDIO )
+             || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_SAWB_AUDIO )
+             || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_TX3G_TEXT ) )
+                return 0;
+        }
     if( stbl->stsz && isom_is_variable_size( stbl ) )
     {
         int max_num_bits = 0;
@@ -2806,6 +2824,9 @@ int lsmash_finish_movie
          || !trak->mdia
          || !trak->mdia->minf
          || !trak->mdia->minf->stbl
+         || !trak->mdia->minf->stbl->stsd
+         || !trak->mdia->minf->stbl->stsd->list.head
+         || !trak->mdia->minf->stbl->stsd->list.head->data
          || !trak->mdia->minf->stbl->stco
          || !trak->mdia->minf->stbl->stco->list
          || !trak->mdia->minf->stbl->stco->list->tail )
