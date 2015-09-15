@@ -438,15 +438,6 @@ typedef struct
     struct mp4sys_ES_Descriptor_t *ES;
 } isom_esds_t;
 
-/* Parameter Set Entry within AVC/HEVC Decoder Configuration Record */
-typedef struct
-{
-    uint16_t nalUnitLength;
-    uint8_t *nalUnit;
-    /* */
-    int      unused;
-} isom_dcr_ps_entry_t;
-
 /* MPEG-4 Bit Rate Box
  * This box signals the bit rate information of the AVC video stream. */
 typedef struct
@@ -2519,9 +2510,6 @@ isom_sbgp_t *isom_get_fragment_sample_to_group( isom_traf_t *traf, uint32_t grou
 
 isom_trak_t *isom_track_create( lsmash_file_t *file, lsmash_media_type media_type );
 isom_moov_t *isom_movie_create( lsmash_file_t *file );
-
-isom_dcr_ps_entry_t *isom_create_ps_entry( uint8_t *ps, uint32_t ps_size );
-void isom_remove_dcr_ps( isom_dcr_ps_entry_t *ps );
 
 int isom_setup_handler_reference( isom_hdlr_t *hdlr, uint32_t media_type );
 int isom_setup_iods( isom_moov_t *moov );

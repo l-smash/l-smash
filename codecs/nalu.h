@@ -27,6 +27,26 @@
 #define NALU_IO_ERROR                 UINT64_MAX - 1
 #define NALU_NO_START_CODE_FOUND      UINT64_MAX
 
+/* Parameter Set Entry within AVC/HEVC Decoder Configuration Record */
+typedef struct
+{
+    uint16_t nalUnitLength;
+    uint8_t *nalUnit;
+    /* */
+    int      unused;
+} isom_dcr_ps_entry_t;
+
+isom_dcr_ps_entry_t *isom_create_ps_entry
+(
+    uint8_t *ps,
+    uint32_t ps_size
+);
+
+void isom_remove_dcr_ps
+(
+    isom_dcr_ps_entry_t *ps
+);
+
 static inline uint64_t nalu_get_codeNum
 (
     lsmash_bits_t *bits
