@@ -1554,8 +1554,8 @@ static int isom_update_fragment_sample_tables( isom_traf_t *traf, lsmash_sample_
     }
     /* Set up the sample groupings for random access. */
     int ret;
-    if( (ret = isom_group_random_access( (isom_box_t *)traf, sample )) < 0
-     || (ret = isom_group_roll_recovery( (isom_box_t *)traf, sample )) < 0 )
+    if( (ret = isom_group_random_access( (isom_box_t *)traf, cache, sample )) < 0
+     || (ret = isom_group_roll_recovery( (isom_box_t *)traf, cache, sample )) < 0 )
         return ret;
     /* Set up the previous sample_duration if this sample is not the first sample in the overall movie. */
     if( cache->fragment->has_samples )

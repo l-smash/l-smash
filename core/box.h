@@ -2562,8 +2562,8 @@ uint32_t isom_get_first_sample_size
 );
 
 int isom_add_sample_grouping( isom_box_t *parent, isom_grouping_type grouping_type );
-int isom_group_random_access( isom_box_t *parent, lsmash_sample_t *sample );
-int isom_group_roll_recovery( isom_box_t *parent, lsmash_sample_t *sample );
+int isom_group_random_access( isom_box_t *parent, isom_cache_t *cache, lsmash_sample_t *sample );
+int isom_group_roll_recovery( isom_box_t *parent, isom_cache_t *cache, lsmash_sample_t *sample );
 
 int isom_update_tkhd_duration( isom_trak_t *trak );
 int isom_update_bitrate_description( isom_mdia_t *mdia );

@@ -691,6 +691,16 @@ static isom_group_assignment_entry_t *isom_add_group_assignment_entry( isom_sbgp
     return data;
 }
 
+static uint32_t isom_get_sample_count_from_sample_table( isom_stbl_t *stbl )
+{
+    if( stbl->stsz )
+        return stbl->stsz->sample_count;
+    else if( stbl->stz2 )
+        return stbl->stz2->sample_count;
+    else
+        return 0;
+}
+
 uint32_t isom_get_sample_count( isom_trak_t *trak )
 {
     if( !trak
@@ -698,12 +708,7 @@ uint32_t isom_get_sample_count( isom_trak_t *trak )
      || !trak->mdia->minf
      || !trak->mdia->minf->stbl )
         return 0;
-    if( trak->mdia->minf->stbl->stsz )
-        return trak->mdia->minf->stbl->stsz->sample_count;
-    else if( trak->mdia->minf->stbl->stz2 )
-        return trak->mdia->minf->stbl->stz2->sample_count;
-    else
-        return 0;
+    return isom_get_sample_count_from_sample_table( trak->mdia->minf->stbl );
 }
 
 static uint64_t isom_get_dts( isom_stts_t *stts, uint32_t sample_number )
@@ -3262,11 +3267,11 @@ void isom_remove_sample_pool( isom_sample_pool_t *pool )
     lsmash_free( pool );
 }
 
-static uint32_t isom_add_size( isom_trak_t *trak, uint32_t sample_size )
+static uint32_t isom_add_size( isom_stbl_t *stbl, uint32_t sample_size )
 {
-    if( isom_add_stsz_entry( trak->mdia->minf->stbl, sample_size ) < 0 )
+    if( isom_add_stsz_entry( stbl, sample_size ) < 0 )
         return 0;
-    return isom_get_sample_count( trak );
+    return isom_get_sample_count_from_sample_table( stbl );
 }
 
 static uint32_t isom_add_dts( isom_stbl_t *stbl, isom_timestamp_t *cache, uint64_t dts )
@@ -3333,18 +3338,16 @@ static int isom_add_cts( isom_stbl_t *stbl, isom_timestamp_t *cache, uint64_t ct
     return 0;
 }
 
-static int isom_add_timestamp( isom_trak_t *trak, uint64_t dts, uint64_t cts )
+static int isom_add_timestamp( isom_stbl_t *stbl, isom_cache_t *cache, lsmash_file_t *file, uint64_t dts, uint64_t cts )
 {
-    if( !trak->cache
-     || !trak->mdia->minf->stbl->stts
-     || !trak->mdia->minf->stbl->stts->list )
+    if( !cache
+     || !stbl->stts
+     || !stbl->stts->list )
         return LSMASH_ERR_INVALID_DATA;
-    lsmash_file_t *file = trak->file;
     if( file->isom_compatible && file->qt_compatible && (cts - dts) > INT32_MAX )
         return LSMASH_ERR_INVALID_DATA; /* sample_offset is not compatible. */
-    isom_stbl_t      *stbl     = trak->mdia->minf->stbl;
-    isom_timestamp_t *ts_cache = &trak->cache->timestamp;
-    uint32_t sample_count = isom_get_sample_count( trak );
+    isom_timestamp_t *ts_cache = &cache->timestamp;
+    uint32_t sample_count = isom_get_sample_count_from_sample_table( stbl );
     uint32_t sample_delta = sample_count > 1 ? isom_add_dts( stbl, ts_cache, dts ) : 0;
     if( sample_count > 1 && sample_delta == 0 )
         return LSMASH_ERR_INVALID_DATA;
@@ -3361,19 +3364,17 @@ static int isom_add_timestamp( isom_trak_t *trak, uint64_t dts, uint64_t cts )
         if( stbl->ctts->version == 0 && !file->qt_compatible )
             stbl->ctts->version = 1;
     }
-    if( trak->cache->fragment )
+    if( cache->fragment )
     {
-        isom_fragment_t *fragment_cache = trak->cache->fragment;
+        isom_fragment_t *fragment_cache = cache->fragment;
         fragment_cache->last_duration = sample_delta;
         fragment_cache->largest_cts   = LSMASH_MAX( ts_cache->cts, fragment_cache->largest_cts );
     }
     return 0;
 }
 
-static int isom_add_sync_point( isom_trak_t *trak, uint32_t sample_number, lsmash_sample_property_t *prop )
+static int isom_add_sync_point( isom_stbl_t *stbl, isom_cache_t *cache, uint32_t sample_number, lsmash_sample_property_t *prop )
 {
-    isom_stbl_t  *stbl  = trak->mdia->minf->stbl;
-    isom_cache_t *cache = trak->cache;
     if( !(prop->ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC) )   /* no null check for prop */
     {
         if( !cache->all_sync )
@@ -3390,7 +3391,7 @@ static int isom_add_sync_point( isom_trak_t *trak, uint32_t sample_number, lsmas
         return 0;
     if( !stbl->stss )
     {
-        if( isom_get_sample_count( trak ) == 1 )
+        if( isom_get_sample_count_from_sample_table( stbl ) == 1 )
         {
             cache->all_sync = 1;    /* Also the first sample is a sync sample. */
             return 0;
@@ -3401,28 +3402,26 @@ static int isom_add_sync_point( isom_trak_t *trak, uint32_t sample_number, lsmas
     return isom_add_stss_entry( stbl, sample_number );
 }
 
-static int isom_add_partial_sync( isom_trak_t *trak, uint32_t sample_number, lsmash_sample_property_t *prop )
+static int isom_add_partial_sync( isom_stbl_t *stbl, lsmash_file_t *file, uint32_t sample_number, lsmash_sample_property_t *prop )
 {
-    if( !trak->file->qt_compatible )
+    if( !file->qt_compatible )
         return 0;
     if( !(prop->ra_flags & QT_SAMPLE_RANDOM_ACCESS_FLAG_PARTIAL_SYNC) )
         return 0;
     /* This sample is a partial sync sample. */
-    isom_stbl_t *stbl = trak->mdia->minf->stbl;
     if( !stbl->stps && !isom_add_stps( stbl ) )
         return LSMASH_ERR_NAMELESS;
     return isom_add_stps_entry( stbl, sample_number );
 }
 
-static int isom_add_dependency_type( isom_trak_t *trak, lsmash_sample_property_t *prop )
+static int isom_add_dependency_type( isom_stbl_t *stbl, lsmash_file_t *file, lsmash_sample_property_t *prop )
 {
-    if( !trak->file->qt_compatible && !trak->file->avc_extensions )
+    if( !file->qt_compatible && !file->avc_extensions )
         return 0;
-    int compatibility = trak->file->avc_extensions && trak->file->qt_compatible ? 3
-                      : trak->file->qt_compatible                               ? 2
-                      : trak->file->avc_extensions                              ? 1
-                      :                                                           0;
-    isom_stbl_t *stbl = trak->mdia->minf->stbl;
+    int compatibility = file->avc_extensions && file->qt_compatible ? 3
+                      : file->qt_compatible                         ? 2
+                      : file->avc_extensions                        ? 1
+                      :                                               0;
     if( stbl->sdtp )
         return isom_add_sdtp_entry( (isom_box_t *)stbl, prop, compatibility );
     /* no null check for prop */
@@ -3434,7 +3433,7 @@ static int isom_add_dependency_type( isom_trak_t *trak, lsmash_sample_property_t
         return 0;
     if( !isom_add_sdtp( (isom_box_t *)stbl ) )
         return LSMASH_ERR_NAMELESS;
-    uint32_t count = isom_get_sample_count( trak );
+    uint32_t count = isom_get_sample_count_from_sample_table( stbl );
     /* fill past samples with ISOM_SAMPLE_*_UNKNOWN */
     lsmash_sample_property_t null_prop = { 0 };
     for( uint32_t i = 1; i < count; i++ )
@@ -3487,22 +3486,20 @@ int isom_rap_grouping_established( isom_rap_group_t *group, int num_leading_samp
     return 0;
 }
 
-int isom_group_random_access( isom_box_t *parent, lsmash_sample_t *sample )
+int isom_group_random_access( isom_box_t *parent, isom_cache_t *cache, lsmash_sample_t *sample )
 {
     if( parent->file->max_isom_version < 6 )
         return 0;
     isom_sbgp_t  *sbgp;
     isom_sgpd_t  *sgpd;
-    isom_cache_t *cache;
     uint32_t      sample_count;
     int           is_fragment;
-    if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAK ) )
+    if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) )
     {
-        isom_trak_t *trak = (isom_trak_t *)parent;
-        sbgp  = isom_get_sample_to_group         ( trak->mdia->minf->stbl, ISOM_GROUP_TYPE_RAP );
-        sgpd  = isom_get_sample_group_description( trak->mdia->minf->stbl, ISOM_GROUP_TYPE_RAP );
-        cache = trak->cache;
-        sample_count = isom_get_sample_count( trak );
+        isom_stbl_t *stbl = (isom_stbl_t *)parent;
+        sbgp  = isom_get_sample_to_group         ( stbl, ISOM_GROUP_TYPE_RAP );
+        sgpd  = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_RAP );
+        sample_count = isom_get_sample_count_from_sample_table( stbl );
         is_fragment  = 0;
     }
     else if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAF ) )
@@ -3510,7 +3507,6 @@ int isom_group_random_access( isom_box_t *parent, lsmash_sample_t *sample )
         isom_traf_t *traf = (isom_traf_t *)parent;
         sbgp  = isom_get_fragment_sample_to_group         ( traf, ISOM_GROUP_TYPE_RAP );
         sgpd  = isom_get_fragment_sample_group_description( traf, ISOM_GROUP_TYPE_RAP );
-        cache = traf->cache;
         sample_count = cache->fragment->sample_count + 1;
         is_fragment  = 1;
     }
@@ -3520,7 +3516,6 @@ int isom_group_random_access( isom_box_t *parent, lsmash_sample_t *sample )
         sbgp  = NULL;
         sgpd  = NULL;
         /* redundant initializations to suppress warnings from unclever compilers */
-        cache = NULL;
         sample_count = 0;
         is_fragment  = 0;
     }
@@ -3769,23 +3764,21 @@ static isom_roll_entry_t *isom_get_roll_description
     return (isom_roll_entry_t *)lsmash_get_entry_data( group->sgpd->list, group_description_index );
 }
 
-int isom_group_roll_recovery( isom_box_t *parent, lsmash_sample_t *sample )
+int isom_group_roll_recovery( isom_box_t *parent, isom_cache_t *cache, lsmash_sample_t *sample )
 {
     if( !parent->file->avc_extensions
      && !parent->file->qt_compatible )
         return 0;
     uint32_t sample_count;
     int      is_fragment;
-    isom_cache_t *cache;
     lsmash_entry_list_t *sbgp_list;
     lsmash_entry_list_t *sgpd_list;
-    if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAK ) )
+    if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) )
     {
-        isom_trak_t *trak = (isom_trak_t *)parent;
-        cache = trak->cache;
-        sbgp_list = &trak->mdia->minf->stbl->sbgp_list;
-        sgpd_list = &trak->mdia->minf->stbl->sgpd_list;
-        sample_count = isom_get_sample_count( trak );
+        isom_stbl_t *stbl = (isom_stbl_t *)parent;
+        sbgp_list = &stbl->sbgp_list;
+        sgpd_list = &stbl->sgpd_list;
+        sample_count = isom_get_sample_count_from_sample_table( stbl );
         is_fragment  = 0;
     }
     else if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAF ) )
@@ -3793,7 +3786,6 @@ int isom_group_roll_recovery( isom_box_t *parent, lsmash_sample_t *sample )
         if( parent->file->max_isom_version < 6 )
             return 0;
         isom_traf_t *traf = (isom_traf_t *)parent;
-        cache = traf->cache;
         sbgp_list = &traf->sbgp_list;
         sgpd_list = &traf->sgpd_list;
         sample_count = cache->fragment->sample_count + 1;
@@ -4072,15 +4064,16 @@ int isom_update_sample_tables
             return LSMASH_ERR_INVALID_DATA;
         uint64_t sample_dts = sample->dts;
         uint64_t sample_cts = sample->cts;
+        isom_stbl_t *stbl = trak->mdia->minf->stbl;
         for( uint32_t i = 0; i < audio->samplesPerPacket; i++ )
         {
             /* Add a size of uncomressed audio and increment sample_count.
              * This points to individual uncompressed audio samples, each one byte in size, within the compressed frames. */
-            uint32_t sample_count = isom_add_size( trak, 1 );
+            uint32_t sample_count = isom_add_size( stbl, 1 );
             if( sample_count == 0 )
                 return LSMASH_ERR_NAMELESS;
             /* Add a decoding timestamp and a composition timestamp. */
-            if( (err = isom_add_timestamp( trak, sample_dts, sample_cts )) < 0 )
+            if( (err = isom_add_timestamp( stbl, trak->cache, trak->file, sample_dts, sample_cts )) < 0 )
                 return err;
             sample_dts += sample_duration;
             sample_cts += sample_duration;
@@ -4089,27 +4082,28 @@ int isom_update_sample_tables
     }
     else
     {
+        isom_stbl_t *stbl = trak->mdia->minf->stbl;
         /* Add a sample_size and increment sample_count. */
-        uint32_t sample_count = isom_add_size( trak, sample->length );
+        uint32_t sample_count = isom_add_size( stbl, sample->length );
         if( sample_count == 0 )
             return LSMASH_ERR_NAMELESS;
         /* Add a decoding timestamp and a composition timestamp. */
-        if( (err = isom_add_timestamp( trak, sample->dts, sample->cts )) < 0 )
+        if( (err = isom_add_timestamp( stbl, trak->cache, trak->file, sample->dts, sample->cts )) < 0 )
             return err;
         /* Add a sync point if needed. */
-        if( (err = isom_add_sync_point( trak, sample_count, &sample->prop )) < 0 )
+        if( (err = isom_add_sync_point( stbl, trak->cache, sample_count, &sample->prop )) < 0 )
             return err;
         /* Add a partial sync point if needed. */
-        if( (err = isom_add_partial_sync( trak, sample_count, &sample->prop )) < 0 )
+        if( (err = isom_add_partial_sync( stbl, trak->file, sample_count, &sample->prop )) < 0 )
             return err;
         /* Add leading, independent, disposable and redundant information if needed. */
-        if( (err = isom_add_dependency_type( trak, &sample->prop )) < 0 )
+        if( (err = isom_add_dependency_type( stbl, trak->file, &sample->prop )) < 0 )
             return err;
         /* Group samples into random access point type if needed. */
-        if( (err = isom_group_random_access( (isom_box_t *)trak, sample )) < 0 )
+        if( (err = isom_group_random_access( (isom_box_t *)stbl, trak->cache, sample )) < 0 )
             return err;
         /* Group samples into random access recovery point type if needed. */
-        if( (err = isom_group_roll_recovery( (isom_box_t *)trak, sample )) < 0 )
+        if( (err = isom_group_roll_recovery( (isom_box_t *)stbl, trak->cache, sample )) < 0 )
             return err;
         *samples_per_packet = 1;
     }
