@@ -2352,6 +2352,37 @@ static int isom_compress_sample_size_table( isom_stbl_t *stbl )
     return 0;
 }
 
+static int isom_add_dependency_type( isom_stbl_t *stbl, lsmash_file_t *file, lsmash_sample_property_t *prop )
+{
+    if( !file->qt_compatible && !file->avc_extensions )
+        return 0;
+    int compatibility = file->avc_extensions && file->qt_compatible ? 3
+                      : file->qt_compatible                         ? 2
+                      : file->avc_extensions                        ? 1
+                      :                                               0;
+    if( stbl->sdtp )
+        return isom_add_sdtp_entry( (isom_box_t *)stbl, prop, compatibility );
+    /* no null check for prop */
+    if( !prop->allow_earlier
+     && !prop->leading
+     && !prop->independent
+     && !prop->disposable
+     && !prop->redundant )
+        return 0;
+    if( !isom_add_sdtp( (isom_box_t *)stbl ) )
+        return LSMASH_ERR_NAMELESS;
+    uint32_t count = isom_get_sample_count_from_sample_table( stbl );
+    /* fill past samples with ISOM_SAMPLE_*_UNKNOWN */
+    lsmash_sample_property_t null_prop = { 0 };
+    for( uint32_t i = 1; i < count; i++ )
+    {
+        int err = isom_add_sdtp_entry( (isom_box_t *)stbl, &null_prop, compatibility );
+        if( err < 0 )
+            return err;
+    }
+    return isom_add_sdtp_entry( (isom_box_t *)stbl, prop, compatibility );
+}
+
 void lsmash_initialize_media_parameters( lsmash_media_parameters_t *param )
 {
     memset( param, 0, sizeof(lsmash_media_parameters_t) );
@@ -2388,6 +2419,8 @@ int lsmash_set_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
         return err;
     if( !file->qt_compatible && param->compact_sample_size_table )
         trak->mdia->minf->stbl->compress_sample_size_table = isom_compress_sample_size_table;
+    if( !param->no_sample_dependency_table )
+        trak->mdia->minf->stbl->add_dependency_type = isom_add_dependency_type;
     return 0;
 }
 
@@ -2493,8 +2526,9 @@ int lsmash_get_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
         param->data_handler_name = NULL;
         memset( param->data_handler_name_shadow, 0, sizeof(param->data_handler_name_shadow) );
     }
-    param->compact_sample_size_table = !!stbl->stz2;
-    param->reserved[0] = param->reserved[1] = param->reserved[2] = 0;
+    param->compact_sample_size_table  = !!stbl->stz2;
+    param->no_sample_dependency_table = !!stbl->sdtp;
+    param->reserved[0] = param->reserved[1] = 0;
     return 0;
 }
 
@@ -3414,37 +3448,6 @@ static int isom_add_partial_sync( isom_stbl_t *stbl, lsmash_file_t *file, uint32
     return isom_add_stps_entry( stbl, sample_number );
 }
 
-static int isom_add_dependency_type( isom_stbl_t *stbl, lsmash_file_t *file, lsmash_sample_property_t *prop )
-{
-    if( !file->qt_compatible && !file->avc_extensions )
-        return 0;
-    int compatibility = file->avc_extensions && file->qt_compatible ? 3
-                      : file->qt_compatible                         ? 2
-                      : file->avc_extensions                        ? 1
-                      :                                               0;
-    if( stbl->sdtp )
-        return isom_add_sdtp_entry( (isom_box_t *)stbl, prop, compatibility );
-    /* no null check for prop */
-    if( !prop->allow_earlier
-     && !prop->leading
-     && !prop->independent
-     && !prop->disposable
-     && !prop->redundant )
-        return 0;
-    if( !isom_add_sdtp( (isom_box_t *)stbl ) )
-        return LSMASH_ERR_NAMELESS;
-    uint32_t count = isom_get_sample_count_from_sample_table( stbl );
-    /* fill past samples with ISOM_SAMPLE_*_UNKNOWN */
-    lsmash_sample_property_t null_prop = { 0 };
-    for( uint32_t i = 1; i < count; i++ )
-    {
-        int err = isom_add_sdtp_entry( (isom_box_t *)stbl, &null_prop, compatibility );
-        if( err < 0 )
-            return err;
-    }
-    return isom_add_sdtp_entry( (isom_box_t *)stbl, prop, compatibility );
-}
-
 int isom_rap_grouping_established( isom_rap_group_t *group, int num_leading_samples_known, isom_sgpd_t *sgpd, int is_fragment )
 {
     isom_rap_entry_t *rap = group->random_access;
@@ -4097,7 +4100,8 @@ int isom_update_sample_tables
         if( (err = isom_add_partial_sync( stbl, trak->file, sample_count, &sample->prop )) < 0 )
             return err;
         /* Add leading, independent, disposable and redundant information if needed. */
-        if( (err = isom_add_dependency_type( stbl, trak->file, &sample->prop )) < 0 )
+        if( stbl->add_dependency_type
+         && (err = stbl->add_dependency_type( stbl, trak->file, &sample->prop )) < 0 )
             return err;
         /* Group samples into random access point type if needed. */
         if( (err = isom_group_random_access( (isom_box_t *)stbl, trak->cache, sample )) < 0 )

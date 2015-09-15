@@ -1117,7 +1117,10 @@ struct isom_stbl_tag
     lsmash_entry_list_t sgpd_list;  /* Sample Group Description Boxes */
     lsmash_entry_list_t sbgp_list;  /* Sample To Group Boxes */
 
-        int (*compress_sample_size_table)( isom_stbl_t *stbl ); /* Use 'stz2' instead of 'stsz' if possible. (write mode only) */
+        /* Use 'stz2' instead of 'stsz' if possible. (write mode only) */
+        int (*compress_sample_size_table)( isom_stbl_t *stbl );
+        /* Add independent and disposable info for each sample if possible. (write mode only) */
+        int (*add_dependency_type)( isom_stbl_t *stbl, lsmash_file_t *file, lsmash_sample_property_t *prop );
 };
 
 /* Media Information Box */
