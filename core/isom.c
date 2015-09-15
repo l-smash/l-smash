@@ -3984,10 +3984,15 @@ static int isom_update_chunk_tables
     return isom_add_stco_entry( stbl, offset );
 }
 
-/* returns 1 if pooled samples must be flushed. */
-/* FIXME: I wonder if this function should have a extra argument which indicates force_to_flush_cached_chunk.
-   see lsmash_append_sample for detail. */
-static int isom_add_chunk( isom_trak_t *trak, lsmash_sample_t *sample )
+/* This function decides to put a give sample on the current chunk or the next new one.
+ * Returns 1 if pooled samples must be flushed.
+ *   FIXME: I wonder if this function should have a extra argument which indicates force_to_flush_cached_chunk.
+ *          see lsmash_append_sample for detail. */
+static int isom_add_sample_to_chunk
+(
+    isom_trak_t     *trak,
+    lsmash_sample_t *sample
+)
 {
     if( !trak->file
      || !trak->cache
@@ -4122,7 +4127,7 @@ int isom_update_sample_tables
         *samples_per_packet = 1;
     }
     /* Add a chunk if needed. */
-    return isom_add_chunk( trak, sample );
+    return isom_add_sample_to_chunk( trak, sample );
 }
 
 static int isom_output_cached_chunk( isom_trak_t *trak )
