@@ -3960,6 +3960,30 @@ int isom_group_roll_recovery( isom_box_t *parent, isom_cache_t *cache, lsmash_sa
     return isom_flush_roll_pool( sbgp, pool );
 }
 
+static int isom_update_chunk_tables
+(
+    isom_stbl_t   *stbl,
+    lsmash_file_t *media_file,
+    isom_chunk_t  *current
+)
+{
+    isom_stsc_entry_t *last_stsc_data = stbl->stsc->list->tail ? (isom_stsc_entry_t *)stbl->stsc->list->tail->data : NULL;
+    /* Create a new chunk sequence in this track if needed. */
+    int err;
+    if( (!last_stsc_data
+      || current->pool->sample_count       != last_stsc_data->samples_per_chunk
+      || current->sample_description_index != last_stsc_data->sample_description_index)
+     && (err = isom_add_stsc_entry( stbl, current->chunk_number,
+                                          current->pool->sample_count,
+                                          current->sample_description_index )) < 0 )
+        return err;
+    /* Add a new chunk offset in this track. */
+    uint64_t offset = media_file->size;
+    if( media_file->fragment )
+        offset += ISOM_BASEBOX_COMMON_SIZE + media_file->fragment->pool_size;
+    return isom_add_stco_entry( stbl, offset );
+}
+
 /* returns 1 if pooled samples must be flushed. */
 /* FIXME: I wonder if this function should have a extra argument which indicates force_to_flush_cached_chunk.
    see lsmash_append_sample for detail. */
@@ -3993,29 +4017,15 @@ static int isom_add_chunk( isom_trak_t *trak, lsmash_sample_t *sample )
     }
     if( sample->dts < current->first_dts )
         return LSMASH_ERR_INVALID_DATA; /* easy error check. */
-    isom_stbl_t   *stbl = trak->mdia->minf->stbl;
-    lsmash_file_t *file = isom_get_written_media_file( trak, current->sample_description_index );
+    lsmash_file_t *media_file = isom_get_written_media_file( trak, current->sample_description_index );
     if( (current->sample_description_index == sample->index)
-     && (file->max_chunk_duration >= ((double)(sample->dts - current->first_dts) / trak->mdia->mdhd->timescale))
-     && (file->max_chunk_size     >= current->pool->size + sample->length) )
+     && (media_file->max_chunk_duration >= ((double)(sample->dts - current->first_dts) / trak->mdia->mdhd->timescale))
+     && (media_file->max_chunk_size     >= current->pool->size + sample->length) )
         return 0;   /* No need to flush current cached chunk, the current sample must be put into that. */
-    /* NOTE: chunk relative stuff must be pushed into file after a chunk is fully determined with its contents. */
-    /* Now the current cached chunk is fixed, actually add the chunk relative properties to its file accordingly. */
-    isom_stsc_entry_t *last_stsc_data = stbl->stsc->list->tail ? (isom_stsc_entry_t *)stbl->stsc->list->tail->data : NULL;
-    /* Create a new chunk sequence in this track if needed. */
-    int err;
-    if( (!last_stsc_data
-      || current->pool->sample_count       != last_stsc_data->samples_per_chunk
-      || current->sample_description_index != last_stsc_data->sample_description_index)
-     && (err = isom_add_stsc_entry( stbl, current->chunk_number,
-                                          current->pool->sample_count,
-                                          current->sample_description_index )) < 0 )
-        return err;
-    /* Add a new chunk offset in this track. */
-    uint64_t offset = file->size;
-    if( file->fragment )
-        offset += ISOM_BASEBOX_COMMON_SIZE + file->fragment->pool_size;
-    if( (err = isom_add_stco_entry( stbl, offset )) < 0 )
+    /* NOTE: chunk relative stuff must be pushed into file after a chunk is fully determined with its contents.
+     * Now the current cached chunk is fixed, actually add the chunk relative properties to its file accordingly. */
+    int err = isom_update_chunk_tables( trak->mdia->minf->stbl, media_file, current );
+    if( err < 0 )
         return err;
     /* Update and re-initialize cache, using the current sample */
     current->chunk_number            += 1;
