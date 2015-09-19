@@ -2180,7 +2180,7 @@ fail:
     return err;
 }
 
-int isom_setup_tx3g_description( isom_stsd_t *stsd, lsmash_summary_t *summary )
+static int isom_setup_tx3g_description( isom_stsd_t *stsd, lsmash_summary_t *summary )
 {
     isom_tx3g_entry_t *tx3g = isom_add_tx3g_description( stsd );
     if( !tx3g )
@@ -2215,6 +2215,25 @@ int isom_setup_tx3g_description( isom_stsd_t *stsd, lsmash_summary_t *summary )
 fail:
     isom_remove_box_by_itself( tx3g );
     return err;
+}
+
+static int isom_setup_qt_text_description( isom_stsd_t *stsd, lsmash_summary_t *summary )
+{
+    isom_qt_text_entry_t *text = isom_add_qt_text_description( stsd );
+    if( !text )
+        return LSMASH_ERR_NAMELESS;
+    text->data_reference_index = summary->data_ref_index;
+    return 0;
+}
+
+int isom_setup_text_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_type, lsmash_summary_t *summary )
+{
+    if( lsmash_check_box_type_identical( sample_type, ISOM_CODEC_TYPE_TX3G_TEXT ) )
+        return isom_setup_tx3g_description( stsd, summary );
+    else if( lsmash_check_box_type_identical( sample_type, QT_CODEC_TYPE_TEXT_TEXT ) )
+        return isom_setup_qt_text_description( stsd, summary );
+    else
+        return LSMASH_ERR_NAMELESS;
 }
 
 static lsmash_codec_specific_data_type isom_get_codec_specific_data_type( lsmash_compact_box_type_t extension_fourcc )
