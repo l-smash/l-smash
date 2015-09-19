@@ -2478,11 +2478,12 @@ int isom_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uin
     ++level;
     lsmash_box_type_t (*form_box_type_func)( lsmash_compact_box_type_t )   = NULL;
     int (*reader_func)( lsmash_file_t *, isom_box_t *, isom_box_t *, int ) = NULL;
-    if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD )
-     && isom_check_media_hdlr_from_stsd( (isom_stsd_t *)parent ) )
+    if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) )
     {
         /* OK, this box is a sample entry.
-         * Here, determine the suitable sample entry reader by media type. */
+         * Here, determine the suitable sample entry reader by media type if possible. */
+        if( !isom_check_media_hdlr_from_stsd( (isom_stsd_t *)parent ) )
+            goto read_box;
         lsmash_media_type media_type = isom_get_media_type_from_stsd( (isom_stsd_t *)parent );
         if( media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK )
             reader_func = isom_read_visual_description;
