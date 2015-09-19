@@ -2581,6 +2581,21 @@ uint32_t isom_get_first_sample_size
     isom_stbl_t *stbl
 );
 
+/* Utilities for sample entry type decision
+ * NOTE: This implementation does not work when 'mdia' and/or 'hdlr' is stored as binary string. */
+static inline int isom_check_media_hdlr_from_stsd( isom_stsd_t *stsd )
+{
+    return ((isom_stbl_t *)stsd->parent
+        &&  (isom_minf_t *)stsd->parent->parent
+        &&  (isom_mdia_t *)stsd->parent->parent->parent
+        && ((isom_mdia_t *)stsd->parent->parent->parent)->hdlr);
+}
+static inline lsmash_media_type isom_get_media_type_from_stsd( isom_stsd_t *stsd )
+{
+    assert( isom_check_media_hdlr_from_stsd( stsd ) );
+    return ((isom_mdia_t *)stsd->parent->parent->parent)->hdlr->componentSubtype;
+}
+
 int isom_add_sample_grouping( isom_box_t *parent, isom_grouping_type grouping_type );
 int isom_group_random_access( isom_box_t *parent, isom_cache_t *cache, lsmash_sample_t *sample );
 int isom_group_roll_recovery( isom_box_t *parent, isom_cache_t *cache, lsmash_sample_t *sample );

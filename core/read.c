@@ -36,12 +36,6 @@
 #include "codecs/mp4sys.h"
 #include "codecs/description.h"
 
-#define CHECK_MEDIA_HDLR_PRESENCE_FROM_STSD( stsd_ptr )     \
-    (    (isom_stbl_t *)(stsd_ptr)->parent                  \
-     &&  (isom_minf_t *)(stsd_ptr)->parent->parent          \
-     &&  (isom_mdia_t *)(stsd_ptr)->parent->parent->parent  \
-     && ((isom_mdia_t *)(stsd_ptr)->parent->parent->parent)->hdlr)
-
 static int isom_bs_read_box_common( lsmash_bs_t *bs, isom_box_t *box )
 {
     assert( bs && box && box->file );
@@ -947,7 +941,7 @@ fail:
 
 static void *isom_sample_description_alloc( lsmash_codec_type_t sample_type, isom_stsd_t *stsd )
 {
-    assert( CHECK_MEDIA_HDLR_PRESENCE_FROM_STSD( stsd ) );
+    assert( isom_check_media_hdlr_from_stsd( stsd ) );
     /* Determine suitable allocation size. */
     size_t            alloc_size = 0;
     lsmash_media_type media_type = ((isom_mdia_t *)stsd->parent->parent->parent)->hdlr->componentSubtype;
@@ -2485,11 +2479,11 @@ int isom_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uin
     lsmash_box_type_t (*form_box_type_func)( lsmash_compact_box_type_t )   = NULL;
     int (*reader_func)( lsmash_file_t *, isom_box_t *, isom_box_t *, int ) = NULL;
     if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD )
-     && CHECK_MEDIA_HDLR_PRESENCE_FROM_STSD( parent ) )
+     && isom_check_media_hdlr_from_stsd( (isom_stsd_t *)parent ) )
     {
         /* OK, this box is a sample entry.
          * Here, determine the suitable sample entry reader by media type. */
-        lsmash_media_type media_type = ((isom_mdia_t *)parent->parent->parent->parent)->hdlr->componentSubtype;
+        lsmash_media_type media_type = isom_get_media_type_from_stsd( (isom_stsd_t *)parent );
         if( media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK )
             reader_func = isom_read_visual_description;
         else if( media_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK )

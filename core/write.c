@@ -1496,23 +1496,23 @@ void isom_set_box_writer( isom_box_t *box )
     }
     assert( box->parent );
     isom_box_t *parent = box->parent;
-    if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) )
+    if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD )
+     && isom_check_media_hdlr_from_stsd( (isom_stsd_t *)parent ) )
     {
-        /* Check whether CODEC is RAW Video/Audio encapsulated in QTFF. */
-        if( parent->parent && parent->parent->parent )
+        /* OK, this box is a sample entry.
+         * Here, determine the suitable sample entry writer by media type. */
+        lsmash_media_type media_type = isom_get_media_type_from_stsd( (isom_stsd_t *)parent );
+        if( media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK )
+            box->write = isom_write_visual_description;
+        else if( media_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK )
+            box->write = isom_write_audio_description;
+        else if( media_type == ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK )
         {
-            isom_minf_t *minf = (isom_minf_t *)parent->parent->parent;
-            if( minf->vmhd )
-                box->write = isom_write_visual_description;
-            else if( minf->smhd )
-                box->write = isom_write_audio_description;
-            if( box->write )
-                return;
+            if( lsmash_check_box_type_identical( box->type, QT_CODEC_TYPE_TEXT_TEXT ) )
+                box->write = isom_write_qt_text_description;
+            else if( lsmash_check_box_type_identical( box->type, ISOM_CODEC_TYPE_TX3G_TEXT ) )
+                box->write = isom_write_tx3g_description;
         }
-        if( lsmash_check_box_type_identical( box->type, QT_CODEC_TYPE_TEXT_TEXT ) )
-            box->write = isom_write_qt_text_description;
-        else if( lsmash_check_box_type_identical( box->type, ISOM_CODEC_TYPE_TX3G_TEXT ) )
-            box->write = isom_write_tx3g_description;
         if( box->write )
             return;
     }
