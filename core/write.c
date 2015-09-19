@@ -1496,11 +1496,12 @@ void isom_set_box_writer( isom_box_t *box )
     }
     assert( box->parent );
     isom_box_t *parent = box->parent;
-    if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD )
-     && isom_check_media_hdlr_from_stsd( (isom_stsd_t *)parent ) )
+    if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) )
     {
         /* OK, this box is a sample entry.
-         * Here, determine the suitable sample entry writer by media type. */
+         * Here, determine the suitable sample entry writer by media type if possible. */
+        if( !isom_check_media_hdlr_from_stsd( (isom_stsd_t *)parent ) )
+            return;
         lsmash_media_type media_type = isom_get_media_type_from_stsd( (isom_stsd_t *)parent );
         if( media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK )
             box->write = isom_write_visual_description;
