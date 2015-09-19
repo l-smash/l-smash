@@ -2380,163 +2380,25 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
         isom_box_t *parent = box->parent;
         if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) )
         {
-            lsmash_codec_type_t sample_type = box->type;
-            if( lsmash_check_codec_type_identical( sample_type, LSMASH_CODEC_TYPE_RAW ) )
+            /* OK, this box is a sample entry.
+             * Here, determine the suitable sample entry printer by media type if possible. */
+            if( isom_check_media_hdlr_from_stsd( (isom_stsd_t *)parent ) )
             {
-                if( box->manager & LSMASH_VIDEO_DESCRIPTION )
+                lsmash_media_type media_type = isom_get_media_type_from_stsd( (isom_stsd_t *)parent );
+                if( media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK )
                     return isom_print_visual_description;
-                else if( box->manager & LSMASH_AUDIO_DESCRIPTION )
+                else if( media_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK )
                     return isom_print_audio_description;
+                else if( media_type == ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK )
+                {
+                    if( lsmash_check_box_type_identical( box->type, QT_CODEC_TYPE_TEXT_TEXT ) )
+                        return isom_print_text_description;
+                    else if( lsmash_check_box_type_identical( box->type, ISOM_CODEC_TYPE_TX3G_TEXT ) )
+                        return isom_print_tx3g_description;
+                }
+                else if( lsmash_check_box_type_identical( box->type, ISOM_CODEC_TYPE_MP4S_SYSTEM ) )
+                    return isom_print_mp4s_description;
             }
-            static struct print_description_table_tag
-            {
-                lsmash_codec_type_t type;
-                isom_print_box_t    func;
-            } print_description_table[160] = { { LSMASH_CODEC_TYPE_INITIALIZER, NULL } };
-            if( !print_description_table[0].func )
-            {
-                /* Initialize the table. */
-                int i = 0;
-#define ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( type, func ) print_description_table[i++] = (struct print_description_table_tag){ type, func }
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC1_VIDEO, isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC2_VIDEO, isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC3_VIDEO, isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC4_VIDEO, isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVCP_VIDEO, isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_DRAC_VIDEO, isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_ENCV_VIDEO, isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_HVC1_VIDEO, isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_HEV1_VIDEO, isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_MJP2_VIDEO, isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_MP4V_VIDEO, isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_MVC1_VIDEO, isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_MVC2_VIDEO, isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_S263_VIDEO, isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_SVC1_VIDEO, isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_VC_1_VIDEO, isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_2VUY_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_CFHD_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DV10_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVOO_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVOR_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVTV_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVVT_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_HD10_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_M105_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_PNTG_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_SVQ1_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_SVQ3_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_SHR0_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_SHR1_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_SHR2_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_SHR3_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_SHR4_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_WRLE_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_APCH_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_APCN_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_APCS_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_APCO_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_AP4H_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_AP4X_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_CIVD_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DRAC_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVC_VIDEO,    isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVCP_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVPP_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DV5N_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DV5P_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVH2_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVH3_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVH5_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVH6_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVHP_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVHQ_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_FLIC_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_GIF_VIDEO,    isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_H261_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_H263_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_JPEG_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_MJPA_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_MJPB_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_PNG_VIDEO,    isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_RLE_VIDEO,    isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_RPZA_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_TGA_VIDEO,    isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_TIFF_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_ULRA_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_ULRG_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_ULY2_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_ULY0_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_ULH2_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_ULH0_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_UQY2_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_V210_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_V216_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_V308_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_V408_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_V410_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_YUV2_VIDEO,   isom_print_visual_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_AC_3_AUDIO,  isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_ALAC_AUDIO,  isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_DRA1_AUDIO,  isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSC_AUDIO,  isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSE_AUDIO,  isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSH_AUDIO,  isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSL_AUDIO,  isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_EC_3_AUDIO,  isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_ENCA_AUDIO,  isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_G719_AUDIO,  isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_G726_AUDIO,  isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_M4AE_AUDIO,  isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_MLPA_AUDIO,  isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_MP4A_AUDIO,  isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAMR_AUDIO,  isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAWB_AUDIO,  isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAWP_AUDIO,  isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_SEVC_AUDIO,  isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_SQCP_AUDIO,  isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_SSMV_AUDIO,  isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_TWOS_AUDIO,  isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_WMA_AUDIO,   isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_MP4A_AUDIO,    isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_23NI_AUDIO,    isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_MAC3_AUDIO,    isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_MAC6_AUDIO,    isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_NONE_AUDIO,    isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_QDM2_AUDIO,    isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_QDMC_AUDIO,    isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_QCLP_AUDIO,    isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_AGSM_AUDIO,    isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_ALAW_AUDIO,    isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_CDX2_AUDIO,    isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_CDX4_AUDIO,    isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVCA_AUDIO,    isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_DVI_AUDIO,     isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_FL32_AUDIO,    isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_FL64_AUDIO,    isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_IMA4_AUDIO,    isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_IN24_AUDIO,    isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_IN32_AUDIO,    isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_LPCM_AUDIO,    isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_SOWT_AUDIO,    isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_TWOS_AUDIO,    isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_ULAW_AUDIO,    isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_VDVA_AUDIO,    isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_FULLMP3_AUDIO, isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_MP3_AUDIO,     isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_ADPCM2_AUDIO,  isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_ADPCM17_AUDIO, isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_GSM49_AUDIO,   isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_NOT_SPECIFIED, isom_print_audio_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( QT_CODEC_TYPE_TEXT_TEXT,     isom_print_text_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_TX3G_TEXT,   isom_print_tx3g_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( ISOM_CODEC_TYPE_MP4S_SYSTEM, isom_print_mp4s_description );
-                ADD_PRINT_DESCRIPTION_TABLE_ELEMENT( LSMASH_CODEC_TYPE_UNSPECIFIED, NULL );
-#undef ADD_PRINT_DESCRIPTION_TABLE_ELEMENT
-            }
-            for( int i = 0; print_description_table[i].func; i++ )
-                if( lsmash_check_codec_type_identical( sample_type, print_description_table[i].type ) )
-                    return print_description_table[i].func;
             return isom_print_unknown;
         }
         if( lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_WAVE ) )
