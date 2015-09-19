@@ -151,19 +151,12 @@ int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, void *summa
      || !trak->mdia->minf->stbl
      || !trak->mdia->minf->stbl->stsd )
         return 0;
-    isom_stsd_t        *stsd        = trak->mdia->minf->stbl->stsd;
-    lsmash_media_type   media_type  = trak->mdia->hdlr->componentSubtype;
-    lsmash_codec_type_t sample_type = ((lsmash_summary_t *)summary)->sample_type;
-    int ret;
-    if( media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK )
-        ret = isom_setup_visual_description( stsd, sample_type, (lsmash_video_summary_t *)summary );
-    else if( media_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK )
-        ret = isom_setup_audio_description( stsd, sample_type, (lsmash_audio_summary_t *)summary );
-    else if( media_type == ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK )
-        ret = isom_setup_text_description( stsd, sample_type, (lsmash_summary_t *)summary );
+    isom_stsd_t      *stsd       = trak->mdia->minf->stbl->stsd;
+    lsmash_media_type media_type = trak->mdia->hdlr->componentSubtype;
+    if( isom_setup_sample_description( stsd, media_type, (lsmash_summary_t *)summary ) < 0 )
+        return 0;
     else
-        ret = LSMASH_ERR_NAMELESS;
-    return ret < 0 ? 0 : stsd->list.entry_count;
+        return stsd->list.entry_count;
 }
 
 static int isom_add_stts_entry( isom_stbl_t *stbl, uint32_t sample_delta )

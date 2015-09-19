@@ -858,7 +858,7 @@ static lsmash_box_type_t isom_guess_video_codec_specific_box_type( lsmash_codec_
     return box_type;
 }
 
-int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_type, lsmash_video_summary_t *summary )
+static int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_video_summary_t *summary )
 {
     if( !summary
      || !stsd
@@ -870,7 +870,7 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
     int err = isom_check_valid_summary( (lsmash_summary_t *)summary );
     if( err < 0 )
         return err;
-    isom_visual_entry_t *visual = isom_add_visual_description( stsd, sample_type );
+    isom_visual_entry_t *visual = isom_add_visual_description( stsd, summary->sample_type );
     if( !visual )
         return LSMASH_ERR_NAMELESS;
     visual->data_reference_index = summary->data_ref_index;
@@ -885,11 +885,11 @@ int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample
     visual->vertresolution       = 0x00480000;
     visual->dataSize             = 0;
     visual->frame_count          = 1;
-    visual->depth                = isom_is_qt_video( summary->sample_type ) || isom_is_nalff( summary->sample_type )
+    visual->depth                = isom_is_qt_video( visual->type ) || isom_is_nalff( visual->type )
                                  ? summary->depth : 0x0018;
     visual->color_table_ID       = -1;
     if( summary->compressorname[0] == '\0' )
-        isom_set_default_compressorname( visual->compressorname, sample_type );
+        isom_set_default_compressorname( visual->compressorname, visual->type );
     else
     {
         memcpy( visual->compressorname, summary->compressorname, 32 );
@@ -2015,14 +2015,14 @@ static int isom_set_isom_eac3_audio_description( isom_audio_entry_t *audio, lsma
     return isom_set_isom_template_audio_description( audio, summary );
 }
 
-int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_type, lsmash_audio_summary_t *summary )
+static int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_audio_summary_t *summary )
 {
     if( !stsd || !stsd->file || !summary )
         return LSMASH_ERR_NAMELESS;
     int err = isom_check_valid_summary( (lsmash_summary_t *)summary );
     if( err < 0 )
         return err;
-    isom_audio_entry_t *audio = isom_add_audio_description( stsd, sample_type );
+    isom_audio_entry_t *audio = isom_add_audio_description( stsd, summary->sample_type );
     if( !audio )
         return LSMASH_ERR_NAMELESS;
     audio->data_reference_index = summary->data_ref_index;
@@ -2055,7 +2055,7 @@ int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_
           || lsmash_check_codec_type_identical( audio_type, ISOM_CODEC_TYPE_DTSH_AUDIO )
           || lsmash_check_codec_type_identical( audio_type, ISOM_CODEC_TYPE_DTSL_AUDIO ) )
         err = isom_set_isom_dts_audio_description( audio, summary );
-    else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_EC_3_AUDIO ) )
+    else if( lsmash_check_codec_type_identical( audio_type, ISOM_CODEC_TYPE_EC_3_AUDIO ) )
         err = isom_set_isom_eac3_audio_description( audio, summary );
     else if( file->qt_compatible )
         err = isom_set_qtff_template_audio_description( audio, summary );
@@ -2226,12 +2226,25 @@ static int isom_setup_qt_text_description( isom_stsd_t *stsd, lsmash_summary_t *
     return 0;
 }
 
-int isom_setup_text_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_type, lsmash_summary_t *summary )
+static int isom_setup_text_description( isom_stsd_t *stsd, lsmash_summary_t *summary )
 {
+    lsmash_codec_type_t sample_type = summary->sample_type;
     if( lsmash_check_box_type_identical( sample_type, ISOM_CODEC_TYPE_TX3G_TEXT ) )
         return isom_setup_tx3g_description( stsd, summary );
     else if( lsmash_check_box_type_identical( sample_type, QT_CODEC_TYPE_TEXT_TEXT ) )
         return isom_setup_qt_text_description( stsd, summary );
+    else
+        return LSMASH_ERR_NAMELESS;
+}
+
+int isom_setup_sample_description( isom_stsd_t *stsd, lsmash_media_type media_type, lsmash_summary_t *summary )
+{
+    if( media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK )
+        return isom_setup_visual_description( stsd, (lsmash_video_summary_t *)summary );
+    else if( media_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK )
+        return isom_setup_audio_description( stsd, (lsmash_audio_summary_t *)summary );
+    else if( media_type == ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK )
+        return isom_setup_text_description( stsd, (lsmash_summary_t *)summary );
     else
         return LSMASH_ERR_NAMELESS;
 }
