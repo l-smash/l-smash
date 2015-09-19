@@ -951,7 +951,7 @@ int mp4a_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_d
         isom_wave_t *wave = (isom_wave_t *)isom_get_extension_box_format( &mp4a->extensions, QT_BOX_TYPE_WAVE );
         if( !wave )
             return LSMASH_ERR_INVALID_DATA;
-        esds = (isom_esds_t *)isom_get_extension_box_format( &wave->extensions, ISOM_BOX_TYPE_ESDS );
+        esds = (isom_esds_t *)isom_get_extension_box_format( &wave->extensions, QT_BOX_TYPE_ESDS );
     }
     else
         esds = (isom_esds_t *)isom_get_extension_box_format( &mp4a->extensions, ISOM_BOX_TYPE_ESDS );
