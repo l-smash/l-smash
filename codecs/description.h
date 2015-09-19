@@ -36,14 +36,6 @@ lsmash_codec_specific_t *isom_get_codec_specific
     lsmash_codec_specific_data_type type
 );
 
-uint8_t *isom_get_child_box_position
-(
-    uint8_t          *parent_data,
-    uint32_t          parent_size,
-    lsmash_box_type_t child_type,
-    uint32_t         *child_size
-);
-
 int isom_setup_visual_description
 (
     isom_stsd_t            *stsd,
@@ -86,4 +78,9 @@ int isom_get_implicit_qt_fixed_comp_audio_sample_quants
     uint32_t           *samples_per_packet,
     uint32_t           *constant_bytes_per_frame,
     uint32_t           *sample_size
+);
+
+isom_bitrate_updater_t isom_get_bitrate_updater
+(
+    isom_sample_entry_t *sample_entry
 );

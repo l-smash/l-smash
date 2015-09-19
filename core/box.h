@@ -30,8 +30,13 @@
 #define ISOM_MAC_EPOCH_OFFSET 2082844800
 
 typedef struct lsmash_box_tag isom_box_t;
+typedef struct isom_mdhd_tag isom_mdhd_t;
+typedef struct isom_stbl_tag isom_stbl_t;
+
 typedef void (*isom_extension_destructor_t)( void *extension_data );
 typedef int (*isom_extension_writer_t)( lsmash_bs_t *bs, isom_box_t *box );
+
+typedef int (*isom_bitrate_updater_t)( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index );
 
 /* If size is 1, then largesize is actual size.
  * If size is 0, then this box is the last one in the file. */
@@ -289,7 +294,7 @@ typedef struct
 
 /* Media Header Box
  * This box declares overall information that is media-independent, and relevant to characteristics of the media in a track.*/
-typedef struct
+struct isom_mdhd_tag
 {
     ISOM_FULLBOX_COMMON;            /* version is either 0 or 1 */
     /* version == 0: uint64_t -> uint32_t */
@@ -303,7 +308,7 @@ typedef struct
                                      * QTFF: Macintosh language codes is usually used.
                                      *       Mac's value is less than 0x800 while ISO's value is 0x800 or greater. */
     int16_t quality;                /* ISOM: pre_defined / QTFF: the media's playback quality */
-} isom_mdhd_t;
+};
 
 /* Handler Reference Box
  * In Media Box, this box is mandatory and (ISOM: should/QTFF: must) come before Media Information Box.
@@ -575,9 +580,9 @@ typedef struct
 } isom_stsl_t;
 
 /* Sample Entry */
-#define ISOM_SAMPLE_ENTRY \
-    ISOM_BASEBOX_COMMON; \
-    uint8_t reserved[6]; \
+#define ISOM_SAMPLE_ENTRY           \
+    ISOM_BASEBOX_COMMON;            \
+    uint8_t reserved[6];            \
     uint16_t data_reference_index
 
 typedef struct
@@ -1089,8 +1094,6 @@ typedef struct
 } isom_group_assignment_entry_t;
 
 /* Sample Table Box */
-typedef struct isom_stbl_tag isom_stbl_t;
-
 struct isom_stbl_tag
 {
     ISOM_BASEBOX_COMMON;
@@ -2480,7 +2483,18 @@ int isom_is_qt_audio( lsmash_codec_type_t type );
 int isom_is_uncompressed_ycbcr( lsmash_codec_type_t type );
 int isom_is_waveform_audio( lsmash_box_type_t type );
 
-size_t isom_skip_box_common( uint8_t **p_data );
+size_t isom_skip_box_common
+(
+    uint8_t **p_data
+);
+
+uint8_t *isom_get_child_box_position
+(
+    uint8_t           *parent_data,
+    uint32_t          parent_size,
+    lsmash_box_type_t child_type,
+    uint32_t         *child_size
+);
 
 void isom_bs_put_basebox_common( lsmash_bs_t *bs, isom_box_t *box );
 void isom_bs_put_fullbox_common( lsmash_bs_t *bs, isom_box_t *box );
@@ -2545,6 +2559,21 @@ int isom_append_sample_by_type
     lsmash_sample_t     *sample,
     isom_sample_entry_t *sample_entry,
     int (*func_append_sample)( void *, lsmash_sample_t *, isom_sample_entry_t * )
+);
+
+int isom_calculate_bitrate_description
+(
+    isom_stbl_t *stbl,
+    isom_mdhd_t *mdhd,
+    uint32_t    *bufferSizeDB,
+    uint32_t    *maxBitrate,
+    uint32_t    *avgBitrate,
+    uint32_t     sample_description_index
+);
+
+int isom_is_variable_size
+(
+    isom_stbl_t *stbl
 );
 
 uint32_t isom_get_first_sample_size

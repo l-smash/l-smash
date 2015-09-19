@@ -1714,3 +1714,25 @@ int dts_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, in
     lsmash_ifprintf( fp, indent, "Reserved = 0x%02"PRIx8"\n", Reserved );
     return 0;
 }
+
+int dts_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index )
+{
+    isom_audio_entry_t *dts_audio = (isom_audio_entry_t *)lsmash_get_entry_data( &stbl->stsd->list, sample_description_index );
+    if( !dts_audio )
+        return LSMASH_ERR_INVALID_DATA;
+    isom_box_t *ext = isom_get_extension_box( &dts_audio->extensions, ISOM_BOX_TYPE_DDTS );
+    if( !(ext && (ext->manager & LSMASH_BINARY_CODED_BOX) && ext->binary && ext->size >= 28) )
+        return LSMASH_ERR_INVALID_DATA;
+    uint32_t bufferSizeDB;
+    uint32_t maxBitrate;
+    uint32_t avgBitrate;
+    int err = isom_calculate_bitrate_description( stbl, mdhd, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index );
+    if( err < 0 )
+        return err;
+    if( !isom_is_variable_size( stbl ) )
+        maxBitrate = avgBitrate;
+    uint8_t *exdata = ext->binary + 12;
+    LSMASH_SET_BE32( &exdata[0], maxBitrate );
+    LSMASH_SET_BE32( &exdata[4], avgBitrate );
+    return 0;
+}

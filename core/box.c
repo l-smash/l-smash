@@ -317,6 +317,52 @@ size_t isom_skip_box_common( uint8_t **p_data )
     return data - orig;
 }
 
+/* TODO: more secure handling */
+static size_t isom_read_box_size_and_type_from_binary_string( uint8_t **p_data, uint64_t *size, lsmash_box_type_t *type )
+{
+    uint8_t *orig = *p_data;
+    uint8_t *data = *p_data;
+    *size        = LSMASH_GET_BE32( &data[0] );
+    type->fourcc = LSMASH_GET_BE32( &data[4] );
+    data += ISOM_BASEBOX_COMMON_SIZE;
+    if( *size == 1 )
+    {
+        *size = LSMASH_GET_BE64( data );
+        data += 8;
+    }
+    *p_data = data;
+    if( type->fourcc == ISOM_BOX_TYPE_UUID.fourcc )
+    {
+        type->user.fourcc = LSMASH_GET_BE32( &data[0] );
+        memcpy( type->user.id, &data[4], 12 );
+    }
+    return data - orig;
+}
+
+uint8_t *isom_get_child_box_position( uint8_t *parent_data, uint32_t parent_size, lsmash_box_type_t child_type, uint32_t *child_size )
+{
+    if( !parent_data || !child_size || parent_size < ISOM_BASEBOX_COMMON_SIZE )
+        return NULL;
+    uint8_t *data = parent_data;
+    uint64_t          size;
+    lsmash_box_type_t type;
+    uint32_t offset = isom_read_box_size_and_type_from_binary_string( &data, &size, &type );
+    if( size != parent_size )
+        return NULL;
+    uint8_t *end = parent_data + parent_size;
+    for( uint8_t *pos = data; pos + ISOM_BASEBOX_COMMON_SIZE <= end; )
+    {
+        offset = isom_read_box_size_and_type_from_binary_string( &pos, &size, &type );
+        if( lsmash_check_box_type_identical( type, child_type ) )
+        {
+            *child_size = size;
+            return pos - offset;
+        }
+        pos += size - offset;   /* Move to the next box. */
+    }
+    return NULL;
+}
+
 static void isom_destruct_extension_binary( void *ext )
 {
     if( !ext )

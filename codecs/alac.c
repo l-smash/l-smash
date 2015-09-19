@@ -107,4 +107,54 @@ int alac_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, i
     return 0;
 }
 
+int alac_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index )
+{
+    isom_audio_entry_t *alac = (isom_audio_entry_t *)lsmash_get_entry_data( &stbl->stsd->list, sample_description_index );
+    if( !alac )
+        return LSMASH_ERR_INVALID_DATA;
+    uint8_t *exdata      = NULL;
+    uint32_t exdata_size = 0;
+    isom_box_t *alac_ext = isom_get_extension_box( &alac->extensions, QT_BOX_TYPE_WAVE );
+    if( alac_ext )
+    {
+        /* Apple Lossless Audio inside QuickTime file format
+         * Though average bitrate field we found is always set to 0 apparently,
+         * we set up maxFrameBytes and avgBitRate fields. */
+        if( alac_ext->manager & LSMASH_BINARY_CODED_BOX )
+            exdata = isom_get_child_box_position( alac_ext->binary, alac_ext->size, QT_BOX_TYPE_ALAC, &exdata_size );
+        else
+        {
+            isom_wave_t *wave     = (isom_wave_t *)alac_ext;
+            isom_box_t  *wave_ext = isom_get_extension_box( &wave->extensions, QT_BOX_TYPE_ALAC );
+            if( !wave_ext || !(wave_ext->manager & LSMASH_BINARY_CODED_BOX) )
+                return LSMASH_ERR_INVALID_DATA;
+            exdata      = wave_ext->binary;
+            exdata_size = wave_ext->size;
+        }
+    }
+    else
+    {
+        /* Apple Lossless Audio inside ISO Base Media file format */
+        isom_box_t *ext = isom_get_extension_box( &alac->extensions, ISOM_BOX_TYPE_ALAC );
+        if( !ext || !(ext->manager & LSMASH_BINARY_CODED_BOX) )
+            return LSMASH_ERR_INVALID_DATA;
+        exdata      = ext->binary;
+        exdata_size = ext->size;
+    }
+    if( !exdata || exdata_size < 36 )
+        return LSMASH_ERR_INVALID_DATA;
+    uint32_t bufferSizeDB;
+    uint32_t maxBitrate;
+    uint32_t avgBitrate;
+    int err = isom_calculate_bitrate_description( stbl, mdhd, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index );
+    if( err < 0 )
+        return err;
+    exdata += 24;
+    /* maxFrameBytes */
+    LSMASH_SET_BE32( &exdata[0], bufferSizeDB );
+    /* avgBitRate */
+    LSMASH_SET_BE32( &exdata[4], avgBitrate );
+    return 0;
+}
+
 #undef ALAC_SPECIFIC_BOX_LENGTH

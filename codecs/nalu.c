@@ -24,6 +24,8 @@
 
 #include <string.h>
 
+#include "core/box.h"
+
 #include "nalu.h"
 
 isom_dcr_ps_entry_t *isom_create_ps_entry
@@ -238,4 +240,25 @@ uint64_t nalu_get_codeNum
         b = lsmash_bits_get( bits, 1 );
     --leadingZeroBits;
     return ((uint64_t)1 << leadingZeroBits) - 1 + lsmash_bits_get( bits, leadingZeroBits );
+}
+
+int nalu_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index )
+{
+    isom_visual_entry_t *sample_entry = (isom_visual_entry_t *)lsmash_get_entry_data( &stbl->stsd->list, sample_description_index );
+    if( !sample_entry )
+        return LSMASH_ERR_INVALID_DATA;
+    isom_btrt_t *btrt = (isom_btrt_t *)isom_get_extension_box_format( &sample_entry->extensions, ISOM_BOX_TYPE_BTRT );
+    if( btrt )
+    {
+        uint32_t bufferSizeDB;
+        uint32_t maxBitrate;
+        uint32_t avgBitrate;
+        int err = isom_calculate_bitrate_description( stbl, mdhd, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index );
+        if( err < 0 )
+            return err;
+        btrt->bufferSizeDB = bufferSizeDB;
+        btrt->maxBitrate   = maxBitrate;
+        btrt->avgBitrate   = avgBitrate;
+    }
+    return 0;
 }

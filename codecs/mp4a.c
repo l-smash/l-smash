@@ -26,6 +26,7 @@
 #include "core/box.h"
 
 #include "mp4a.h"
+#include "mp4sys.h"
 #include "description.h"
 
 #include <stdlib.h>
@@ -936,6 +937,34 @@ void mp4a_print_AudioSpecificConfig( FILE *fp, uint8_t *dsi_payload, uint32_t ds
                 break;
         }
     mp4a_remove_AudioSpecificConfig( asc );
+}
+
+int mp4a_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index )
+{
+    isom_audio_entry_t *mp4a = (isom_audio_entry_t *)lsmash_get_entry_data( &stbl->stsd->list, sample_description_index );
+    if( !mp4a )
+        return LSMASH_ERR_INVALID_DATA;
+    isom_esds_t *esds = NULL;
+    if( mp4a->version )
+    {
+        /* MPEG-4 Audio in QTFF */
+        isom_wave_t *wave = (isom_wave_t *)isom_get_extension_box_format( &mp4a->extensions, QT_BOX_TYPE_WAVE );
+        if( !wave )
+            return LSMASH_ERR_INVALID_DATA;
+        esds = (isom_esds_t *)isom_get_extension_box_format( &wave->extensions, ISOM_BOX_TYPE_ESDS );
+    }
+    else
+        esds = (isom_esds_t *)isom_get_extension_box_format( &mp4a->extensions, ISOM_BOX_TYPE_ESDS );
+    if( !esds || !esds->ES )
+        return LSMASH_ERR_INVALID_DATA;
+    uint32_t bufferSizeDB;
+    uint32_t maxBitrate;
+    uint32_t avgBitrate;
+    int err = isom_calculate_bitrate_description( stbl, mdhd, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index );
+    if( err < 0 )
+        return err;
+    /* FIXME: avgBitrate is 0 only if VBR in proper. */
+    return mp4sys_update_DecoderConfigDescriptor( esds->ES, bufferSizeDB, maxBitrate, 0 );
 }
 
 /***************************************************************************

@@ -1032,7 +1032,12 @@ int lsmash_update_track_duration( lsmash_root_t *root, uint32_t track_ID, uint32
     return err;
 }
 
-static inline int isom_increment_sample_number_in_entry( uint32_t *sample_number_in_entry, uint32_t sample_count_in_entry, lsmash_entry_t **entry )
+static inline int isom_increment_sample_number_in_entry
+(
+    uint32_t        *sample_number_in_entry,
+    uint32_t         sample_count_in_entry,
+    lsmash_entry_t **entry
+)
 {
     if( *sample_number_in_entry != sample_count_in_entry )
     {
@@ -1050,14 +1055,22 @@ static inline int isom_increment_sample_number_in_entry( uint32_t *sample_number
     return 0;
 }
 
-static int isom_calculate_bitrate_description( isom_mdia_t *mdia, uint32_t *bufferSizeDB, uint32_t *maxBitrate, uint32_t *avgBitrate, uint32_t sample_description_index )
+int isom_calculate_bitrate_description
+(
+    isom_stbl_t *stbl,
+    isom_mdhd_t *mdhd,
+    uint32_t    *bufferSizeDB,
+    uint32_t    *maxBitrate,
+    uint32_t    *avgBitrate,
+    uint32_t     sample_description_index
+)
 {
-    isom_stsz_t *stsz = mdia->minf->stbl->stsz;
-    lsmash_entry_list_t *stsz_list  = stsz ? stsz->list : mdia->minf->stbl->stz2->list;
+    isom_stsz_t *stsz = stbl->stsz;
+    lsmash_entry_list_t *stsz_list  = stsz ? stsz->list : stbl->stz2->list;
     lsmash_entry_t *stsz_entry      = stsz_list ? stsz_list->head : NULL;
-    lsmash_entry_t *stts_entry      = mdia->minf->stbl->stts->list->head;
+    lsmash_entry_t *stts_entry      = stbl->stts->list->head;
     lsmash_entry_t *stsc_entry      = NULL;
-    lsmash_entry_t *next_stsc_entry = mdia->minf->stbl->stsc->list->head;
+    lsmash_entry_t *next_stsc_entry = stbl->stsc->list->head;
     isom_stts_entry_t *stts_data    = NULL;
     isom_stsc_entry_t *stsc_data    = NULL;
     if( next_stsc_entry && !next_stsc_entry->data )
@@ -1065,7 +1078,6 @@ static int isom_calculate_bitrate_description( isom_mdia_t *mdia, uint32_t *buff
     uint32_t rate                   = 0;
     uint64_t dts                    = 0;
     uint32_t time_wnd               = 0;
-    uint32_t timescale              = mdia->mdhd->timescale;
     uint32_t chunk_number           = 0;
     uint32_t sample_number_in_stts  = 1;
     uint32_t sample_number_in_chunk = 1;
@@ -1175,7 +1187,7 @@ static int isom_calculate_bitrate_description( isom_mdia_t *mdia, uint32_t *buff
             *bufferSizeDB = size;
         *avgBitrate += size;
         rate += size;
-        if( dts > time_wnd + timescale )
+        if( dts > time_wnd + mdhd->timescale )
         {
             if( rate > *maxBitrate )
                 *maxBitrate = rate;
@@ -1183,7 +1195,7 @@ static int isom_calculate_bitrate_description( isom_mdia_t *mdia, uint32_t *buff
             rate = 0;
         }
     }
-    double duration = (double)mdia->mdhd->duration / timescale;
+    double duration = (double)mdhd->duration / mdhd->timescale;
     *avgBitrate = (uint32_t)(*avgBitrate / duration);
     if( *maxBitrate == 0 )
         *maxBitrate = *avgBitrate;
@@ -1193,7 +1205,7 @@ static int isom_calculate_bitrate_description( isom_mdia_t *mdia, uint32_t *buff
     return 0;
 }
 
-static int isom_is_variable_size( isom_stbl_t *stbl )
+int isom_is_variable_size( isom_stbl_t *stbl )
 {
     if( (stbl->stz2 && stbl->stz2->sample_count > 1)
      || (stbl->stsz && stbl->stsz->sample_count > 1 && stbl->stsz->sample_size == 0) )
@@ -1246,183 +1258,12 @@ int isom_update_bitrate_description( isom_mdia_t *mdia )
         if( !sample_entry )
             return LSMASH_ERR_INVALID_DATA;
         ++sample_description_index;
-        int      err;
-        uint32_t bufferSizeDB;
-        uint32_t maxBitrate;
-        uint32_t avgBitrate;
-        /* set bitrate info */
-        lsmash_codec_type_t sample_type = sample_entry->type;
-        if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_AVC1_VIDEO )
-         || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_AVC2_VIDEO )
-         || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_AVC3_VIDEO )
-         || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_AVC4_VIDEO )
-         || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_HVC1_VIDEO )
-         || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_HEV1_VIDEO ) )
+        isom_bitrate_updater_t func_update_bitrate = isom_get_bitrate_updater( sample_entry );
+        if( func_update_bitrate )
         {
-            isom_visual_entry_t *stsd_data = (isom_visual_entry_t *)sample_entry;
-            isom_btrt_t *btrt = (isom_btrt_t *)isom_get_extension_box_format( &stsd_data->extensions, ISOM_BOX_TYPE_BTRT );
-            if( btrt )
-            {
-                if( (err = isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index )) < 0 )
-                    return err;
-                btrt->bufferSizeDB = bufferSizeDB;
-                btrt->maxBitrate   = maxBitrate;
-                btrt->avgBitrate   = avgBitrate;
-            }
-        }
-        else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_MP4V_VIDEO ) )
-        {
-            isom_visual_entry_t *stsd_data = (isom_visual_entry_t *)sample_entry;
-            isom_esds_t *esds = (isom_esds_t *)isom_get_extension_box_format( &stsd_data->extensions, ISOM_BOX_TYPE_ESDS );
-            if( !esds || !esds->ES )
-                return LSMASH_ERR_INVALID_DATA;
-            if( (err = isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index )) < 0 )
+            int err = func_update_bitrate( stbl, mdia->mdhd, sample_description_index );
+            if( err < 0 )
                 return err;
-            /* FIXME: avgBitrate is 0 only if VBR in proper. */
-            if( (err = mp4sys_update_DecoderConfigDescriptor( esds->ES, bufferSizeDB, maxBitrate, 0 )) < 0 )
-                return err;
-        }
-        else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_MP4A_AUDIO ) )
-        {
-            isom_audio_entry_t *stsd_data = (isom_audio_entry_t *)sample_entry;
-            isom_esds_t *esds = NULL;
-            if( ((isom_audio_entry_t *)sample_entry)->version )
-            {
-                /* MPEG-4 Audio in QTFF */
-                isom_wave_t *wave = (isom_wave_t *)isom_get_extension_box_format( &stsd_data->extensions, QT_BOX_TYPE_WAVE );
-                if( !wave )
-                    return LSMASH_ERR_INVALID_DATA;
-                esds = (isom_esds_t *)isom_get_extension_box_format( &wave->extensions, ISOM_BOX_TYPE_ESDS );
-            }
-            else
-                esds = (isom_esds_t *)isom_get_extension_box_format( &stsd_data->extensions, ISOM_BOX_TYPE_ESDS );
-            if( !esds || !esds->ES )
-                return LSMASH_ERR_INVALID_DATA;
-            if( (err = isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index )) < 0 )
-                return err;
-            /* FIXME: avgBitrate is 0 only if VBR in proper. */
-            if( (err = mp4sys_update_DecoderConfigDescriptor( esds->ES, bufferSizeDB, maxBitrate, 0 )) < 0 )
-                return err;
-        }
-        else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_ALAC_AUDIO )
-              || lsmash_check_codec_type_identical( sample_type,   QT_CODEC_TYPE_ALAC_AUDIO ) )
-        {
-            isom_audio_entry_t *alac = (isom_audio_entry_t *)sample_entry;
-            uint8_t *exdata      = NULL;
-            uint32_t exdata_size = 0;
-            isom_box_t *alac_ext = isom_get_extension_box( &alac->extensions, QT_BOX_TYPE_WAVE );
-            if( alac_ext )
-            {
-                /* Apple Lossless Audio inside QuickTime file format
-                 * Though average bitrate field we found is always set to 0 apparently,
-                 * we set up maxFrameBytes and avgBitRate fields. */
-                if( alac_ext->manager & LSMASH_BINARY_CODED_BOX )
-                    exdata = isom_get_child_box_position( alac_ext->binary, alac_ext->size, QT_BOX_TYPE_ALAC, &exdata_size );
-                else
-                {
-                    isom_wave_t *wave     = (isom_wave_t *)alac_ext;
-                    isom_box_t  *wave_ext = isom_get_extension_box( &wave->extensions, QT_BOX_TYPE_ALAC );
-                    if( !wave_ext || !(wave_ext->manager & LSMASH_BINARY_CODED_BOX) )
-                        return LSMASH_ERR_INVALID_DATA;
-                    exdata      = wave_ext->binary;
-                    exdata_size = wave_ext->size;
-                }
-            }
-            else
-            {
-                /* Apple Lossless Audio inside ISO Base Media file format */
-                isom_box_t *ext = isom_get_extension_box( &alac->extensions, ISOM_BOX_TYPE_ALAC );
-                if( !ext || !(ext->manager & LSMASH_BINARY_CODED_BOX) )
-                    return LSMASH_ERR_INVALID_DATA;
-                exdata      = ext->binary;
-                exdata_size = ext->size;
-            }
-            if( !exdata || exdata_size < 36 )
-                return LSMASH_ERR_INVALID_DATA;
-            if( (err = isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index )) < 0 )
-                return err;
-            exdata += 24;
-            /* maxFrameBytes */
-            LSMASH_SET_BE32( &exdata[0], bufferSizeDB );
-            /* avgBitRate */
-            LSMASH_SET_BE32( &exdata[4], avgBitrate );
-        }
-        else if( isom_is_waveform_audio( sample_type ) )
-        {
-            isom_box_t *ext = isom_get_extension_box( &sample_entry->extensions, QT_BOX_TYPE_WAVE );
-            if( !ext )
-                return LSMASH_ERR_INVALID_DATA;
-            uint8_t *exdata      = NULL;
-            uint32_t exdata_size = 0;
-            if( ext->manager & LSMASH_BINARY_CODED_BOX )
-                exdata = isom_get_child_box_position( ext->binary, ext->size, sample_type, &exdata_size );
-            else
-            {
-                isom_wave_t *wave     = (isom_wave_t *)ext;
-                isom_box_t  *wave_ext = isom_get_extension_box( &wave->extensions, sample_type );
-                if( !wave_ext || !(wave_ext->manager & LSMASH_BINARY_CODED_BOX) )
-                    return LSMASH_ERR_INVALID_DATA;
-                exdata      = wave_ext->binary;
-                exdata_size = wave_ext->size;
-            }
-            /* Check whether exdata is valid or not. */
-            if( !exdata || exdata_size < ISOM_BASEBOX_COMMON_SIZE + 18 )
-                return LSMASH_ERR_INVALID_DATA;
-            exdata += ISOM_BASEBOX_COMMON_SIZE;
-            uint16_t cbSize = LSMASH_GET_LE16( &exdata[16] );
-            if( exdata_size < ISOM_BASEBOX_COMMON_SIZE + 18 + cbSize )
-                return LSMASH_ERR_INVALID_DATA;
-            /* WAVEFORMATEX.nAvgBytesPerSec */
-            if( (err = isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index )) < 0 )
-                return err;
-            uint32_t nAvgBytesPerSec = avgBitrate / 8;
-            LSMASH_SET_LE32( &exdata[8], nAvgBytesPerSec );
-            if( lsmash_check_codec_type_identical( sample_type, QT_CODEC_TYPE_FULLMP3_AUDIO )
-             || lsmash_check_codec_type_identical( sample_type, QT_CODEC_TYPE_MP3_AUDIO ) )
-            {
-                /* MPEGLAYER3WAVEFORMAT.nBlockSize */
-                uint32_t nSamplesPerSec  = LSMASH_GET_LE32( &exdata[ 4] );
-                uint16_t nFramesPerBlock = LSMASH_GET_LE16( &exdata[26] );
-                uint16_t padding         = 0;   /* FIXME? */
-                uint16_t nBlockSize      = (144 * (avgBitrate / nSamplesPerSec) + padding) * nFramesPerBlock;
-                LSMASH_SET_LE16( &exdata[24], nBlockSize );
-            }
-        }
-        else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_DTSC_AUDIO )
-              || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_DTSE_AUDIO )
-              || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_DTSH_AUDIO )
-              || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_DTSL_AUDIO ) )
-        {
-            isom_audio_entry_t *dts_audio = (isom_audio_entry_t *)sample_entry;
-            isom_box_t *ext = isom_get_extension_box( &dts_audio->extensions, ISOM_BOX_TYPE_DDTS );
-            if( !(ext && (ext->manager & LSMASH_BINARY_CODED_BOX) && ext->binary && ext->size >= 28) )
-                return LSMASH_ERR_INVALID_DATA;
-            if( (err = isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index )) < 0 )
-                return err;
-            if( !isom_is_variable_size( stbl ) )
-                maxBitrate = avgBitrate;
-            uint8_t *exdata = ext->binary + 12;
-            LSMASH_SET_BE32( &exdata[0], maxBitrate );
-            LSMASH_SET_BE32( &exdata[4], avgBitrate );
-        }
-        else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_EC_3_AUDIO ) )
-        {
-            isom_audio_entry_t *eac3 = (isom_audio_entry_t *)sample_entry;
-            isom_box_t *ext = isom_get_extension_box( &eac3->extensions, ISOM_BOX_TYPE_DEC3 );
-            if( !(ext && (ext->manager & LSMASH_BINARY_CODED_BOX) && ext->binary && ext->size >= 10) )
-                return LSMASH_ERR_INVALID_DATA;
-            uint16_t bitrate;
-            if( isom_is_variable_size( stbl ) )
-            {
-                if( (err = isom_calculate_bitrate_description( mdia, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index )) < 0 )
-                    return err;
-                bitrate = maxBitrate / 1000;    /* Use maximum bitrate if VBR. */
-            }
-            else
-                bitrate = isom_get_first_sample_size( stbl ) * (eac3->samplerate >> 16) / 192000;   /* 192000 == 1536 * 1000 / 8 */
-            uint8_t *exdata = ext->binary + 8;
-            exdata[0] = (bitrate >> 5) & 0xff;
-            exdata[1] = (bitrate & 0x1f) << 3;
         }
     }
     return sample_description_index ? 0 : LSMASH_ERR_INVALID_DATA;
