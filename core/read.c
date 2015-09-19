@@ -36,6 +36,12 @@
 #include "codecs/mp4sys.h"
 #include "codecs/description.h"
 
+#define CHECK_MEDIA_HDLR_PRESENCE_FROM_STSD( stsd_ptr )     \
+    (    (isom_stbl_t *)(stsd_ptr)->parent                  \
+     &&  (isom_minf_t *)(stsd_ptr)->parent->parent          \
+     &&  (isom_mdia_t *)(stsd_ptr)->parent->parent->parent  \
+     && ((isom_mdia_t *)(stsd_ptr)->parent->parent->parent)->hdlr)
+
 static int isom_bs_read_box_common( lsmash_bs_t *bs, isom_box_t *box )
 {
     assert( bs && box && box->file );
@@ -939,167 +945,34 @@ fail:
     return ret;
 }
 
-static void *isom_sample_description_alloc( lsmash_codec_type_t sample_type )
+static void *isom_sample_description_alloc( lsmash_codec_type_t sample_type, isom_stsd_t *stsd )
 {
-    if( lsmash_check_codec_type_identical( sample_type, LSMASH_CODEC_TYPE_RAW ) )
-        return lsmash_malloc_zero( LSMASH_MAX( sizeof(isom_visual_entry_t), sizeof(isom_audio_entry_t) ) );
-    static struct description_alloc_table_tag
+    assert( CHECK_MEDIA_HDLR_PRESENCE_FROM_STSD( stsd ) );
+    /* Determine suitable allocation size. */
+    size_t            alloc_size = 0;
+    lsmash_media_type media_type = ((isom_mdia_t *)stsd->parent->parent->parent)->hdlr->componentSubtype;
+    if( media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK )
+        alloc_size = sizeof(isom_visual_entry_t);
+    else if( media_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK )
+        alloc_size = sizeof(isom_audio_entry_t);
+    else if( media_type == ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK )
     {
-        lsmash_codec_type_t type;
-        size_t              alloc_size;
-    } description_alloc_table[160] = { { LSMASH_CODEC_TYPE_INITIALIZER, 0 } };
-    if( description_alloc_table[0].alloc_size == 0 )
-    {
-        /* Initialize the table. */
-        int i = 0;
-#define ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( type, alloc_size ) \
-    description_alloc_table[i++] = (struct description_alloc_table_tag){ type, alloc_size }
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC1_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC2_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC3_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC4_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVCP_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_HVC1_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_HEV1_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_MVC1_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_MVC2_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_MP4V_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_DRAC_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_ENCV_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_MJP2_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_S263_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_SVC1_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_VC_1_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_2VUY_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_CFHD_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_DV10_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_DVOO_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_DVOR_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_DVTV_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_DVVT_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_HD10_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_M105_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_PNTG_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_SVQ1_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_SVQ3_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_SHR0_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_SHR1_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_SHR2_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_SHR3_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_SHR4_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_WRLE_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_APCH_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_APCN_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_APCS_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_APCO_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_AP4H_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_AP4X_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_CIVD_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_DRAC_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_DVC_VIDEO,  sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_DVCP_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_DVPP_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_DV5N_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_DV5P_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_DVH2_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_DVH3_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_DVH5_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_DVH6_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_DVHP_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_DVHQ_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_FLIC_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_GIF_VIDEO,  sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_H261_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_H263_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_JPEG_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_MJPA_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_MJPB_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_PNG_VIDEO,  sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_RLE_VIDEO,  sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_RPZA_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_TGA_VIDEO,  sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_TIFF_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_ULRA_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_ULRG_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_ULY2_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_ULY0_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_ULH2_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_ULH0_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_UQY2_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_V210_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_V216_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_V308_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_V408_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_V410_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_YUV2_VIDEO, sizeof(isom_visual_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_AC_3_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_ALAC_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_DRA1_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSC_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSE_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSH_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSL_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_EC_3_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_ENCA_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_G719_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_G726_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_M4AE_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_MLPA_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_MP4A_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_RAW_AUDIO,  sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAMR_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAWB_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAWP_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_SEVC_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_SQCP_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_SSMV_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_TWOS_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_WMA_AUDIO,  sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_MP4A_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_23NI_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_MAC3_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_MAC6_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_NONE_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_QDM2_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_QDMC_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_QCLP_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_AGSM_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_ALAW_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_CDX2_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_CDX4_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_DVCA_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_DVI_AUDIO,  sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_FL32_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_FL64_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_IMA4_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_IN24_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_IN32_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_LPCM_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_SOWT_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_TWOS_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_ULAW_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_VDVA_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_FULLMP3_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_MP3_AUDIO,     sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_ADPCM2_AUDIO,  sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_ADPCM17_AUDIO, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_GSM49_AUDIO,   sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_NOT_SPECIFIED, sizeof(isom_audio_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_TX3G_TEXT, sizeof(isom_tx3g_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT(   QT_CODEC_TYPE_TEXT_TEXT, sizeof(isom_qt_text_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( ISOM_CODEC_TYPE_MP4S_SYSTEM, sizeof(isom_mp4s_entry_t) );
-        ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT( LSMASH_CODEC_TYPE_UNSPECIFIED, 0 );
-#undef ADD_DESCRIPTION_ALLOC_TABLE_ELEMENT
+        if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_TX3G_TEXT ) )
+            alloc_size = sizeof(isom_tx3g_entry_t);
+        else if( lsmash_check_codec_type_identical( sample_type, QT_CODEC_TYPE_TEXT_TEXT ) )
+            alloc_size = sizeof(isom_qt_text_entry_t);
     }
-    for( int i = 0; description_alloc_table[i].alloc_size; i++ )
-        if( lsmash_check_codec_type_identical( sample_type, description_alloc_table[i].type ) )
-            return lsmash_malloc_zero( description_alloc_table[i].alloc_size );
-    return NULL;
+    else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_MP4S_SYSTEM ) )
+        alloc_size = sizeof(isom_mp4s_entry_t);
+    /* Return allocated memory block if the allocation size is non-zero. */
+    if( alloc_size == 0 )
+        return NULL;
+    return lsmash_malloc_zero( alloc_size );
 }
 
 static void *isom_add_description( lsmash_codec_type_t sample_type, isom_stsd_t *stsd )
 {
-    void *sample = isom_sample_description_alloc( sample_type );
+    void *sample = isom_sample_description_alloc( sample_type, stsd );
     if( !sample )
         return NULL;
     if( lsmash_add_entry( &stsd->list, sample ) < 0 )
@@ -2612,10 +2485,7 @@ int isom_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uin
     lsmash_box_type_t (*form_box_type_func)( lsmash_compact_box_type_t )   = NULL;
     int (*reader_func)( lsmash_file_t *, isom_box_t *, isom_box_t *, int ) = NULL;
     if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD )
-     &&  (isom_stbl_t *)parent->parent
-     &&  (isom_minf_t *)parent->parent->parent
-     &&  (isom_mdia_t *)parent->parent->parent->parent
-     && ((isom_mdia_t *)parent->parent->parent->parent)->hdlr )
+     && CHECK_MEDIA_HDLR_PRESENCE_FROM_STSD( parent ) )
     {
         /* OK, this box is a sample entry.
          * Here, determine the suitable sample entry reader by media type. */
