@@ -87,7 +87,13 @@
     <ClCompile Include="codecs\mp4sys.c">
       <Filter>Sources</Filter>
     </ClCompile>
+    <ClCompile Include="codecs\mp4v.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
     <ClCompile Include="common\multibuf.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="codecs\nalu.c">
       <Filter>Sources</Filter>
     </ClCompile>
     <ClCompile Include="importer\nalu_imp.c">
@@ -97,6 +103,9 @@
       <Filter>Sources</Filter>
     </ClCompile>
     <ClCompile Include="core\print.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="codecs\qt_wfex.c">
       <Filter>Sources</Filter>
     </ClCompile>
     <ClCompile Include="core\read.c">

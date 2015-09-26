@@ -158,6 +158,9 @@
     <ClCompile Include="codecs\id.c" />
     <ClCompile Include="codecs\mp4a.c" />
     <ClCompile Include="codecs\mp4sys.c" />
+    <ClCompile Include="codecs\mp4v.c" />
+    <ClCompile Include="codecs\nalu.c" />
+    <ClCompile Include="codecs\qt_wfex.c" />
     <ClCompile Include="codecs\vc1.c" />
     <ClCompile Include="codecs\wma.c" />
     <ClCompile Include="common\alloc.c" />
