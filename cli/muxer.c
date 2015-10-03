@@ -94,6 +94,8 @@ typedef struct
     uint16_t copyright_language;
     char    *copyright_notice;
     char    *handler_name;
+    uint32_t par_h;
+    uint32_t par_v;
 } input_track_option_t;
 
 typedef struct
@@ -270,6 +272,8 @@ static void display_help( void )
              "                                  <arg> is <string> or <string>/<string>\n"
              "    handler=<string>          Set media handler name\n"
              "    sbr                       Enable backward-compatible SBR explicit signaling mode\n"
+             "    par=<integer>:<integer>   Specify pixel aspect ratio of the first sequence\n"
+             "                              And never change ones in the media stream.\n"
              "How to use track options:\n"
              "    -i input?[track_option1],[track_option2]...\n"
              "\n"
@@ -679,6 +683,15 @@ static int parse_track_options( input_t *input )
             }
             else if( strstr( track_option, "sbr" ) )
                 track_opt->sbr = 1;
+            else if( strstr( track_option, "par=" ) )
+            {
+                char *track_parameter = strchr( track_option, '=' ) + 1;
+                if( sscanf( track_parameter, "%"SCNu32":%"SCNu32, &track_opt->par_h, &track_opt->par_v ) != 2 )
+                {
+                    track_opt->par_h = 0;
+                    track_opt->par_v = 0;
+                }
+            }
             else
                 return ERROR_MSG( "unknown track option %s\n", track_option );
         }
@@ -912,6 +925,11 @@ static int prepare_output( muxer_t *muxer )
                     lsmash_video_summary_t *summary = (lsmash_video_summary_t *)in_track->summary;
                     uint64_t display_width  = (uint64_t)summary->width  << 16;
                     uint64_t display_height = (uint64_t)summary->height << 16;
+                    if( track_opt->par_h && track_opt-> par_v )
+                    {
+                        summary->par_h = track_opt->par_h;
+                        summary->par_v = track_opt->par_v;
+                    }
                     if( summary->par_h && summary->par_v )
                     {
                         double sar = (double)summary->par_h / summary->par_v;
