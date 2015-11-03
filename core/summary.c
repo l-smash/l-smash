@@ -111,6 +111,9 @@ lsmash_summary_t *lsmash_create_summary( lsmash_summary_type summary_type )
         case LSMASH_SUMMARY_TYPE_AUDIO :
             summary_size = sizeof(lsmash_audio_summary_t);
             break;
+        case LSMASH_SUMMARY_TYPE_HINT:
+            summary_size = sizeof(lsmash_hint_summary_t);
+            break;
         default :
             /* 'summary_size = sizeof(lsmash_summary_t);' is a dead assignment here. */
             return NULL;
@@ -236,6 +239,15 @@ int lsmash_compare_summary( lsmash_summary_t *a, lsmash_summary_t *b )
          || in_audio->samples_in_frame != out_audio->samples_in_frame )
             return 1;
     }
+    else if( a->summary_type == LSMASH_SUMMARY_TYPE_HINT )
+    {
+        lsmash_hint_summary_t *in_hint  = (lsmash_hint_summary_t *)a;
+        lsmash_hint_summary_t *out_hint = (lsmash_hint_summary_t *)b;
+        if( in_hint->version                  != out_hint->version
+         || in_hint->highestcompatibleversion != out_hint->highestcompatibleversion
+         || in_hint->maxpacketsize            != out_hint->maxpacketsize )
+            return 1;
+    }
     return isom_compare_opaque_extensions( a, b );
 }
 
@@ -337,6 +349,7 @@ lsmash_codec_support_flag lsmash_check_codec_support( lsmash_codec_type_t sample
         ADD_CODEC_SUPPORT_TABLE_ELEMENT( QT_CODEC_TYPE_V408_VIDEO,      LSMASH_CODEC_SUPPORT_FLAG_REMUX );
         ADD_CODEC_SUPPORT_TABLE_ELEMENT( QT_CODEC_TYPE_V410_VIDEO,      LSMASH_CODEC_SUPPORT_FLAG_REMUX );
         ADD_CODEC_SUPPORT_TABLE_ELEMENT( QT_CODEC_TYPE_YUV2_VIDEO,      LSMASH_CODEC_SUPPORT_FLAG_REMUX );
+        ADD_CODEC_SUPPORT_TABLE_ELEMENT( ISOM_CODEC_TYPE_RRTP_HINT,     LSMASH_CODEC_SUPPORT_FLAG_MUX );
         ADD_CODEC_SUPPORT_TABLE_ELEMENT( LSMASH_CODEC_TYPE_UNSPECIFIED, LSMASH_CODEC_SUPPORT_FLAG_NONE );
     }
     for( int i = 0; !lsmash_check_codec_type_identical( codec_support_table[i].type, LSMASH_CODEC_TYPE_UNSPECIFIED ); i++ )

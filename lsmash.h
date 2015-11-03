@@ -47,8 +47,8 @@ extern "C" {
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  2
-#define LSMASH_VERSION_MINOR 14
-#define LSMASH_VERSION_MICRO  6
+#define LSMASH_VERSION_MINOR 15
+#define LSMASH_VERSION_MICRO  0
 
 #define LSMASH_VERSION_INT( a, b, c ) (((a) << 16) | ((b) << 8) | (c))
 
@@ -905,6 +905,7 @@ typedef enum
     LSMASH_SUMMARY_TYPE_UNKNOWN = 0,
     LSMASH_SUMMARY_TYPE_VIDEO,
     LSMASH_SUMMARY_TYPE_AUDIO,
+    LSMASH_SUMMARY_TYPE_HINT,
 } lsmash_summary_type;
 
 typedef enum
@@ -925,6 +926,7 @@ typedef enum
 
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_SAMPLE_SCALE,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264_BITRATE,
+    LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_RTP_HINT_COMMON,
 
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_COMMON,                    /* must be LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED */
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_COMMON,                    /* must be LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED */
@@ -1414,6 +1416,18 @@ int lsmash_convert_clap_into_crop
     uint32_t       height,
     lsmash_crop_t *crop
 );
+
+/****************************************************************************
+* Hint Description Layer
+****************************************************************************/
+
+typedef struct
+{
+    LSMASH_BASE_SUMMARY
+    uint16_t version;                   /* = 1 */
+    uint16_t highestcompatibleversion;  /* = 1 */
+    uint32_t maxpacketsize;             /* maximum size of one packet */
+} lsmash_hint_summary_t;
 
 /****************************************************************************
  * Media Sample
@@ -4108,6 +4122,35 @@ int lsmash_create_object_descriptor
 (
     lsmash_root_t *root
 );
+
+/* Set a session description protocol (SDP) to a track.
+ * track_ID == 0 means SDP applies to the entire presentation, not an entire track.
+ * Recommendation: Record session level section of SDP to movie and media-level sections to track
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_set_sdp
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID,
+    char          *sdptext
+);
+
+/* Timestamp synchronization */
+typedef enum
+{
+    ISOM_SYNC_ANY          = 0,
+    ISOM_SYNC_RECIEVED_RTP = 1,
+    ISOM_SYNC_OTHER_TRACKS = 2,
+    ISOM_SYNC_RESERVED     = 3,
+} timestamp_sync_t;
+
+typedef struct
+{
+    uint32_t timescale;                 /* timscale of this track */
+    uint32_t time_offset;               /* Beginning time stamp offset compared to */
+    uint8_t  reserved_timestamp_sync;   /* first 6 bits = 0, last two indicate whether tracks have been synchronized */
+} lsmash_isom_rtp_reception_hint_t;
 
 #ifdef _WIN32
 /* Convert string encoded by ACP (ANSI CODE PAGE) to UTF-8.

@@ -40,6 +40,12 @@
 #include "codecs/description.h"
 
 /*---- ----*/
+
+#define RTP_SAMPLE_HEADER_SIZE    4
+#define RTP_PACKET_SIZE           12 /* a structure in Hint track sample */
+#define RTP_HEADER_SIZE           12
+#define RTP_CONSTRUCTOR_SIZE      16
+
 int isom_check_initializer_present( lsmash_root_t *root )
 {
     if( LSMASH_IS_NON_EXISTING_BOX( root )
@@ -1271,6 +1277,9 @@ isom_trak_t *isom_track_create( lsmash_file_t *file, lsmash_media_type media_typ
         case ISOM_MEDIA_HANDLER_TYPE_HINT_TRACK :
             if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_hmhd( trak->mdia->minf ) ) )
                 goto fail;
+            trak->mdia->minf->hmhd->combinedPDUsize = 0;
+            trak->mdia->minf->hmhd->PDUcount        = 0;
+            trak->mdia->minf->hmhd->maxPDUsize      = 0;
             break;
         case ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK :
             if( file->qt_compatible || file->itunes_movie )
@@ -3920,6 +3929,31 @@ int isom_append_sample_by_type
         lsmash_delete_sample( sample );
         return 0;
     }
+    else if( lsmash_check_codec_type_identical( sample_entry->type, ISOM_CODEC_TYPE_RTP_HINT  )
+          || lsmash_check_codec_type_identical( sample_entry->type, ISOM_CODEC_TYPE_RRTP_HINT ) )
+    {
+        /* calculate PDU statistics for hmhd box. 
+         * It requires accessing sample data to get the number of packets per sample. */
+        isom_trak_t *trak = (isom_trak_t*)track;
+        isom_hmhd_t *hmhd = trak->mdia->minf->hmhd;
+        uint16_t packetcount = LSMASH_GET_BE16( sample->data );
+        uint8_t *data = sample->data + RTP_SAMPLE_HEADER_SIZE + RTP_PACKET_SIZE;
+        /* Calculate only packet headers and packet payloads sizes int PDU size. Later use these two to get avgPDUsize. */
+        hmhd->combinedPDUsize += sample->length - (packetcount * RTP_CONSTRUCTOR_SIZE) - RTP_SAMPLE_HEADER_SIZE;
+        hmhd->PDUcount        += packetcount;
+        for( unsigned int i = 0; i < packetcount; i++ )
+        {
+            /* constructor type */
+            if( *data == 2 )
+            {
+                /* payload size*/
+                uint16_t length = *(data + 2);
+                /* Check if this packet is larger than any of the previous ones. */
+                hmhd->maxPDUsize = hmhd->maxPDUsize > length + RTP_HEADER_SIZE ? hmhd->maxPDUsize : length + RTP_HEADER_SIZE;
+                data += RTP_CONSTRUCTOR_SIZE + RTP_PACKET_SIZE;
+            } /* TODO: other constructor types */
+        }
+    } /* TODO: add other hint tracks that have a hmhd box */
     return func_append_sample( track, sample, sample_entry );
 }
 
@@ -4088,6 +4122,62 @@ void lsmash_delete_tyrant_chapter( lsmash_root_t *root )
      || LSMASH_IS_NON_EXISTING_BOX( root->file->initializer->moov->udta ) )
         return;
     isom_remove_box_by_itself( root->file->moov->udta->chpl );
+}
+
+int lsmash_set_sdp( lsmash_root_t *root, uint32_t track_ID, char *sdptext )
+{
+    if( isom_check_initializer_present( root ) < 0 || sdptext == NULL )
+        return LSMASH_ERR_FUNCTION_PARAM;
+    lsmash_file_t *file = root->file;
+    if( LSMASH_IS_NON_EXISTING_BOX( file->moov ) || !file->isom_compatible )
+        return LSMASH_ERR_NAMELESS;
+    isom_udta_t *udta;
+    if( track_ID )
+    {
+        isom_trak_t *trak = isom_get_trak( file, track_ID );
+        if( LSMASH_IS_NON_EXISTING_BOX( trak ) )
+            return LSMASH_ERR_NAMELESS;
+        if( LSMASH_IS_NON_EXISTING_BOX( trak->udta )
+         && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_udta( trak ) ) )
+            return LSMASH_ERR_NAMELESS;
+        udta = trak->udta;
+    }
+    else
+    {
+        if( LSMASH_IS_NON_EXISTING_BOX( file->moov->udta )
+         && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_udta( file->moov ) ) )
+            return LSMASH_ERR_NAMELESS;
+        udta = file->moov->udta;
+    }
+    assert( LSMASH_IS_EXISTING_BOX( udta ) );
+    if( LSMASH_IS_NON_EXISTING_BOX( udta->hnti )
+     && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_hnti( udta ) ) )
+        return LSMASH_ERR_NAMELESS;
+    isom_hnti_t *hnti = udta->hnti;
+    /* If track ID is given, text is meant for track hnti box,
+     * otherwise it is meant for movie 'hnti' box. */
+    if( track_ID )
+    {
+        if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_sdp( hnti ) ) )
+            return LSMASH_ERR_NAMELESS;
+        isom_sdp_t *sdp = hnti->sdp;
+        sdp->sdp_length = strlen( sdptext );    /* leaves \0 out*/
+        sdp->sdptext    = lsmash_memdup( sdptext, sdp->sdp_length );
+        if( !sdp->sdptext )
+            return LSMASH_ERR_MEMORY_ALLOC;
+    }
+    else
+    {
+        if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_rtp( hnti ) ) )
+            return LSMASH_ERR_NAMELESS;
+        isom_rtp_t *rtp = hnti->rtp;
+        rtp->descriptionformat = LSMASH_4CC( 's', 'd', 'p', ' ' );
+        rtp->sdp_length        = strlen( sdptext );     /* leaves \0 out */
+        rtp->sdptext           = lsmash_memdup( sdptext, rtp->sdp_length );
+        if( !rtp->sdptext )
+            return LSMASH_ERR_MEMORY_ALLOC;
+    }
+    return 0;
 }
 
 int lsmash_set_copyright( lsmash_root_t *root, uint32_t track_ID, uint16_t ISO_language, char *notice )

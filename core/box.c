@@ -717,7 +717,6 @@ static void isom_remove_audio_description( isom_sample_entry_t *description )
 static void isom_remove_hint_description( isom_sample_entry_t *description )
 {
     isom_hint_entry_t *hint = (isom_hint_entry_t *)description;
-    lsmash_free( hint->data );
     isom_remove_box_in_predefined_list( hint );
 }
 
@@ -995,11 +994,24 @@ static void isom_remove_cprt( isom_cprt_t *cprt )
     REMOVE_BOX_IN_LIST( cprt );
 }
 
+static void isom_remove_rtp( isom_rtp_t *rtp )
+{
+    lsmash_free( rtp->sdptext );
+    REMOVE_BOX( rtp );
+}
+
+static void isom_remove_sdp( isom_sdp_t *sdp )
+{
+    lsmash_free( sdp->sdptext );
+    REMOVE_BOX( sdp );
+}
+
 DEFINE_SIMPLE_BOX_REMOVER( isom_remove_udta, udta )
 DEFINE_SIMPLE_BOX_REMOVER( isom_remove_WLOC, WLOC )
 DEFINE_SIMPLE_BOX_REMOVER( isom_remove_LOOP, LOOP )
 DEFINE_SIMPLE_BOX_REMOVER( isom_remove_SelO, SelO )
 DEFINE_SIMPLE_BOX_REMOVER( isom_remove_AllF, AllF )
+DEFINE_SIMPLE_BOX_REMOVER( isom_remove_hnti, hnti )
 
 static void isom_remove_ctab( isom_ctab_t *ctab )
 {
@@ -1429,6 +1441,16 @@ isom_audio_entry_t *isom_add_audio_description( isom_stsd_t *stsd, lsmash_codec_
     return isom_add_sample_description_entry( stsd, audio );
 }
 
+isom_hint_entry_t *isom_add_hint_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_type )
+{
+    assert( stsd );
+    isom_hint_entry_t *hint = ALLOCATE_BOX( hint_entry );
+    if ( LSMASH_IS_NON_EXISTING_BOX( hint ) )
+        return hint;
+    isom_init_box_common( hint, stsd, sample_type, LSMASH_BOX_PRECEDENCE_HM, isom_remove_hint_description );
+    return isom_add_sample_description_entry( stsd, hint );
+}
+
 isom_qt_text_entry_t *isom_add_qt_text_description( isom_stsd_t *stsd )
 {
     assert( LSMASH_IS_EXISTING_BOX( stsd ) );
@@ -1472,6 +1494,9 @@ DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_btrt, btrt, visual, ISOM_BOX_TYPE
 DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_wave, wave, audio,    QT_BOX_TYPE_WAVE, LSMASH_BOX_PRECEDENCE_QTFF_WAVE, 0, isom_audio_entry_t )
 DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_chan, chan, audio,    QT_BOX_TYPE_CHAN, LSMASH_BOX_PRECEDENCE_QTFF_CHAN, 1, isom_audio_entry_t )
 DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_srat, srat, audio,  ISOM_BOX_TYPE_SRAT, LSMASH_BOX_PRECEDENCE_ISOM_SRAT, 0, isom_audio_entry_t )
+DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_tims, tims, hint,   ISOM_BOX_TYPE_TIMS, LSMASH_BOX_PRECEDENCE_ISOM_TIMS, 0, isom_hint_entry_t )
+DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_tsro, tsro, hint,   ISOM_BOX_TYPE_TSRO, LSMASH_BOX_PRECEDENCE_ISOM_TSRO, 0, isom_hint_entry_t )
+DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_tssy, tssy, hint,   ISOM_BOX_TYPE_TSSY, LSMASH_BOX_PRECEDENCE_ISOM_TSSY, 0, isom_hint_entry_t )
 
 DEFINE_SIMPLE_LIST_BOX_ADDER( isom_add_stts, stts, stbl, ISOM_BOX_TYPE_STTS, LSMASH_BOX_PRECEDENCE_ISOM_STTS )
 DEFINE_SIMPLE_LIST_BOX_ADDER( isom_add_ctts, ctts, stbl, ISOM_BOX_TYPE_CTTS, LSMASH_BOX_PRECEDENCE_ISOM_CTTS )
@@ -1595,6 +1620,9 @@ isom_meta_t *isom_add_meta( void *parent_box )
 }
 
 DEFINE_SIMPLE_BOX_IN_LIST_ADDER( isom_add_cprt, cprt, udta, ISOM_BOX_TYPE_CPRT, LSMASH_BOX_PRECEDENCE_ISOM_CPRT )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_hnti, hnti, udta, ISOM_BOX_TYPE_HNTI, LSMASH_BOX_PRECEDENCE_ISOM_HNTI )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_rtp, rtp, hnti, ISOM_BOX_TYPE_RTP, LSMASH_BOX_PRECEDENCE_ISOM_RTP )
+DEFINE_SIMPLE_BOX_ADDER( isom_add_sdp, sdp, hnti, ISOM_BOX_TYPE_SDP, LSMASH_BOX_PRECEDENCE_ISOM_SDP )
 
 isom_udta_t *isom_add_udta( void *parent_box )
 {

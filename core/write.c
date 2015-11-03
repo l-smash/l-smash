@@ -470,6 +470,33 @@ static int isom_write_btrt( lsmash_bs_t *bs, isom_box_t *box )
     return 0;
 }
 
+static int isom_write_tims( lsmash_bs_t *bs, isom_box_t *box )
+{
+    isom_tims_t *tims = (isom_tims_t *)box;
+    isom_bs_put_box_common( bs, tims );
+    lsmash_bs_put_be32( bs, tims->timescale );
+    return 0;
+}
+
+static int isom_write_tsro( lsmash_bs_t *bs, isom_box_t *box )
+{
+    isom_tsro_t *tsro = (isom_tsro_t *)box;
+    isom_bs_put_box_common( bs, tsro );
+    lsmash_bs_put_be32( bs, tsro->offset );
+    return 0;
+}
+
+static int isom_write_tssy( lsmash_bs_t *bs, isom_box_t *box )
+{
+    isom_tssy_t *tssy = (isom_tssy_t *)box;
+    isom_bs_put_box_common( bs, tssy );
+    uint8_t data = 0;
+    data  = tssy->reserved << 2;
+    data |= tssy->timestamp_sync;
+    lsmash_bs_put_byte( bs, data );
+    return 0;
+}
+
 static int isom_write_glbl( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_glbl_t *glbl = (isom_glbl_t *)box;
@@ -599,20 +626,20 @@ static int isom_write_audio_description( lsmash_bs_t *bs, isom_box_t *box )
     return 0;
 }
 
-#if 0
-static int isom_write_hint_description( lsmash_bs_t *bs, lsmash_entry_t *entry )
+static int isom_write_hint_description( lsmash_bs_t *bs, isom_box_t *box )
 {
-    isom_hint_entry_t *data = (isom_hint_entry_t *)entry->data;
+    isom_hint_entry_t *data = (isom_hint_entry_t *)box;
     if( LSMASH_IS_NON_EXISTING_BOX( data ) )
         return LSMASH_ERR_NAMELESS;
     isom_bs_put_box_common( bs, data );
     lsmash_bs_put_bytes( bs, 6, data->reserved );
-    lsmash_bs_put_be16( bs, data->data_reference_index );
-    if( data->data && data->data_length )
-        lsmash_bs_put_bytes( bs, data->data_length, data->data );
+    lsmash_bs_put_be16( bs, data->hinttrackversion );
+    lsmash_bs_put_be16( bs, data->highestcompatibleversion );
+    lsmash_bs_put_be32( bs, data->maxpacketsize );
     return 0;
 }
 
+#if 0
 static int isom_write_metadata_description( lsmash_bs_t *bs, lsmash_entry_t *entry )
 {
     isom_metadata_entry_t *data = (isom_metadata_entry_t *)entry->data;
@@ -1080,6 +1107,28 @@ static int isom_write_udta( lsmash_bs_t *bs, isom_box_t *box )
     return 0;
 }
 
+static int isom_write_hnti( lsmash_bs_t *bs, isom_box_t *box )
+{
+    isom_bs_put_box_common( bs, box );
+    return 0;
+}
+
+static int isom_write_rtp( lsmash_bs_t *bs, isom_box_t *box )
+{
+    isom_rtp_t *rtp = (isom_rtp_t *)box;
+    isom_bs_put_box_common( bs, rtp );
+    lsmash_bs_put_be32( bs, rtp->descriptionformat );
+    lsmash_bs_put_bytes( bs, rtp->sdp_length, rtp->sdptext );
+    return 0;
+}
+static int isom_write_sdp( lsmash_bs_t *bs, isom_box_t *box )
+{
+    isom_sdp_t *sdp = (isom_sdp_t *)box;
+    isom_bs_put_box_common( bs, sdp );
+    lsmash_bs_put_bytes( bs, sdp->sdp_length, sdp->sdptext );
+    return 0;
+}
+
 static int isom_write_trak( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_bs_put_box_common( bs, box );
@@ -1521,6 +1570,8 @@ void isom_set_box_writer( isom_box_t *box )
             box->write = isom_write_visual_description;
         else if( media_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK )
             box->write = isom_write_audio_description;
+        else if( media_type == ISOM_MEDIA_HANDLER_TYPE_HINT_TRACK )
+            box->write = isom_write_hint_description;
         else if( media_type == ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK )
         {
             if( lsmash_check_box_type_identical( box->type, QT_CODEC_TYPE_TEXT_TEXT ) )
@@ -1592,6 +1643,9 @@ void isom_set_box_writer( isom_box_t *box )
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STBL, isom_write_stbl );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSD, isom_write_stsd );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_BTRT, isom_write_btrt );
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TIMS, isom_write_tims );
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TSRO, isom_write_tsro );
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TSSY, isom_write_tssy );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_COLR, isom_write_colr );
         ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_COLR, isom_write_colr );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_CLAP, isom_write_clap );
@@ -1620,6 +1674,9 @@ void isom_set_box_writer( isom_box_t *box )
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SGPD, isom_write_sgpd );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SBGP, isom_write_sbgp );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_UDTA, isom_write_udta );
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_HNTI, isom_write_hnti );
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_RTP,  isom_write_rtp  );
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SDP,  isom_write_sdp  );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_CHPL, isom_write_chpl );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MVEX, isom_write_mvex );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MEHD, isom_write_mehd );
