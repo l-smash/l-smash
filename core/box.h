@@ -1382,6 +1382,30 @@ typedef struct
         uint32_t notice_length;
 } isom_cprt_t;
 
+/* Movie SDP Information box */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    uint32_t descriptionformat;
+    uint8_t *sdptext;
+    uint32_t sdp_length;
+}isom_rtp_t;
+
+/* Track SDP Information box */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    uint8_t *sdptext;
+    uint32_t sdp_length;
+}isom_sdp_t;
+
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    isom_rtp_t *rtp;      /* Movie-level SDP box*/
+    isom_sdp_t *sdp;      /* Track-level SDP box*/
+} isom_hnti_t;
+
 /* User Data Box
  * This box is a container box for informative user-data.
  * This user data is formatted as a set of boxes with more specific box types, which declare more precisely their content.
@@ -1398,6 +1422,8 @@ typedef struct
     isom_AllF_t *AllF;      /* Play All Frames Box */
     /* Copyright Box List */
     lsmash_entry_list_t cprt_list;  /* Copyright Boxes is defined in ISO Base Media and 3GPP file format */
+    /* Hint information box */
+    isom_hnti_t *hnti;
 } isom_udta_t;
 
 /** Caches for handling tracks **/
@@ -1990,6 +2016,9 @@ struct lsmash_root_tag
 #define ISOM_BOX_TYPE_CO64 lsmash_form_iso_box_type( LSMASH_4CC( 'c', 'o', '6', '4' ) )
 #define ISOM_BOX_TYPE_COLR lsmash_form_iso_box_type( LSMASH_4CC( 'c', 'o', 'l', 'r' ) )
 #define ISOM_BOX_TYPE_CPRT lsmash_form_iso_box_type( LSMASH_4CC( 'c', 'p', 'r', 't' ) )
+#define ISOM_BOX_TYPE_HNTI lsmash_form_iso_box_type( LSMASH_4CC( 'h', 'n', 't', 'i' ) )
+#define ISOM_BOX_TYPE_RTP  lsmash_form_iso_box_type( LSMASH_4CC( 'r', 't', 'p', ' ' ) )
+#define ISOM_BOX_TYPE_SDP  lsmash_form_iso_box_type( LSMASH_4CC( 's', 'd', 'p', ' ' ) )
 #define ISOM_BOX_TYPE_CSLG lsmash_form_iso_box_type( LSMASH_4CC( 'c', 's', 'l', 'g' ) )
 #define ISOM_BOX_TYPE_CTTS lsmash_form_iso_box_type( LSMASH_4CC( 'c', 't', 't', 's' ) )
 #define ISOM_BOX_TYPE_CVRU lsmash_form_iso_box_type( LSMASH_4CC( 'c', 'v', 'r', 'u' ) )
@@ -2286,6 +2315,9 @@ struct lsmash_root_tag
 #define LSMASH_BOX_PRECEDENCE_ISOM_METAITEM (LSMASH_BOX_PRECEDENCE_N - 0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_CHPL (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_META (LSMASH_BOX_PRECEDENCE_N  -  7 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_HNTI (LSMASH_BOX_PRECEDENCE_N  -  8 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_RTP  (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_SDP  (LSMASH_BOX_PRECEDENCE_N  -  1 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_QTFF_WLOC (LSMASH_BOX_PRECEDENCE_N  -  8 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_QTFF_LOOP (LSMASH_BOX_PRECEDENCE_N  -  9 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_QTFF_SELO (LSMASH_BOX_PRECEDENCE_N  - 10 * LSMASH_BOX_PRECEDENCE_S)
@@ -2718,6 +2750,9 @@ isom_stco_t *isom_add_stco( isom_stbl_t *stbl );
 isom_stco_t *isom_add_co64( isom_stbl_t *stbl );
 isom_udta_t *isom_add_udta( void *parent_box );
 isom_cprt_t *isom_add_cprt( isom_udta_t *udta );
+isom_hnti_t *isom_add_hnti( isom_udta_t *udta );
+isom_rtp_t  *isom_add_rtp(  isom_hnti_t *hnti );
+isom_sdp_t  *isom_add_sdp(  isom_hnti_t *hnti );
 isom_WLOC_t *isom_add_WLOC( isom_udta_t *udta );
 isom_LOOP_t *isom_add_LOOP( isom_udta_t *udta );
 isom_SelO_t *isom_add_SelO( isom_udta_t *udta );

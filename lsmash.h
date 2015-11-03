@@ -4100,6 +4100,19 @@ int lsmash_create_object_descriptor
     lsmash_root_t *root
 );
 
+/* Set a session description protocol (SDP) to a track.
+ * track_ID == 0 means SDP applies to the entire presentation, not an entire track.
+ * Recommendation: Record session level section of SDP to movie and media-level sections to track
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_set_sdp
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID,
+    char          *sdptext
+);
+
 /* Timestamp synchronization */
 typedef enum
 {
