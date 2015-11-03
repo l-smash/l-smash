@@ -39,6 +39,12 @@
 #include "codecs/description.h"
 
 /*---- ----*/
+
+#define RTP_SAMPLE_HEADER_SIZE    4
+#define RTP_PACKET_SIZE           12 /* a structure in Hint track sample */
+#define RTP_HEADER_SIZE           12
+#define RTP_CONSTRUCTOR_SIZE      16
+
 int isom_check_initializer_present( lsmash_root_t *root )
 {
     if( !root
@@ -4008,6 +4014,31 @@ int isom_append_sample_by_type
         lsmash_delete_sample( sample );
         return 0;
     }
+    else if( lsmash_check_codec_type_identical( sample_entry->type, ISOM_CODEC_TYPE_RTP_HINT )
+          || lsmash_check_codec_type_identical( sample_entry->type, ISOM_CODEC_TYPE_RRTP_HINT ) )
+    {
+        /* Calculate PDU statistics for hmhd box. 
+         * It requires accessing sample data to get the number of packets per sample. */
+        isom_trak_t *trak = (isom_trak_t*)track;
+        isom_hmhd_t *hmhd = trak->mdia->minf->hmhd;
+        uint16_t packetcount = LSMASH_GET_BE16( sample->data );
+        uint8_t *data        = sample->data + RTP_SAMPLE_HEADER_SIZE + RTP_PACKET_SIZE;
+        /* calculate only packet headers and packet payloads sizes int PDU size. Later use these two to get avgPDUsize */
+        hmhd->combinedPDUsize += sample->length - packetcount * RTP_CONSTRUCTOR_SIZE - RTP_SAMPLE_HEADER_SIZE;
+        hmhd->PDUcount        += packetcount;
+        for( unsigned int i = 0; i < packetcount; i++ )
+        {
+            /* constructor type */
+            if( *data == 2 )
+            {
+                /* payload size*/
+                uint16_t length = *( data + 2 );
+                /* Check if this packet is larger than any of the previous ones. */
+                hmhd->maxPDUsize = LSMASH_MAX( hmhd->maxPDUsize, length + RTP_HEADER_SIZE );
+                data += RTP_CONSTRUCTOR_SIZE + RTP_PACKET_SIZE;
+            } /* TODO: other constructor types */
+        }
+    } /* TODO: add other hint tracks that have a hmhd box */
     return func_append_sample( track, sample, sample_entry );
 }
 
