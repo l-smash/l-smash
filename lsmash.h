@@ -923,6 +923,7 @@ typedef enum
 
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_SAMPLE_SCALE,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264_BITRATE,
+    LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_RTP_HINT_COMMON,
 
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_COMMON,                    /* must be LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED */
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_COMMON,                    /* must be LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED */
@@ -4098,6 +4099,22 @@ int lsmash_create_object_descriptor
 (
     lsmash_root_t *root
 );
+
+/* Timestamp synchronization */
+typedef enum
+{
+    ISOM_SYNC_ANY          = 0,
+    ISOM_SYNC_RECIEVED_RTP = 1,
+    ISOM_SYNC_OTHER_TRACKS = 2,
+    ISOM_SYNC_RESERVED     = 3,
+} timestamp_sync_t;
+
+typedef struct
+{
+    uint32_t timescale;              /* timscale of this track */
+    uint32_t time_offset;            /* Beginning time stamp offset compared to */
+    uint8_t reserved_timestamp_sync; /* first 6 bits = 0, last two indicate whether tracks have been synchronized */
+} lsmash_isom_rtp_reception_hint_t;
 
 #ifdef _WIN32
 /* Convert string encoded by ACP (ANSI CODE PAGE) to UTF-8.
