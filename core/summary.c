@@ -90,6 +90,9 @@ lsmash_summary_t *lsmash_create_summary( lsmash_summary_type summary_type )
         case LSMASH_SUMMARY_TYPE_AUDIO :
             summary_size = sizeof(lsmash_audio_summary_t);
             break;
+        case LSMASH_SUMMARY_TYPE_HINT:
+            summary_size = sizeof(lsmash_hint_summary_t);
+            break;
         default :
             summary_size = sizeof(lsmash_summary_t);
             return NULL;
@@ -232,6 +235,16 @@ int lsmash_compare_summary( lsmash_summary_t *a, lsmash_summary_t *b )
          || in_audio->channels         != out_audio->channels
          || in_audio->sample_size      != out_audio->sample_size
          || in_audio->samples_in_frame != out_audio->samples_in_frame )
+            return 1;
+    }
+    else if( a->summary_type == LSMASH_SUMMARY_TYPE_HINT )
+    {
+        lsmash_hint_summary_t *in_hint  = (lsmash_hint_summary_t *)a;
+        lsmash_hint_summary_t *out_hint = (lsmash_hint_summary_t *)b;
+
+        if( in_hint->version                  != out_hint->version
+         || in_hint->highestcompatibleversion != out_hint->highestcompatibleversion
+         || in_hint->maxpacketsize            != out_hint->maxpacketsize )
             return 1;
     }
     return isom_compare_opaque_extensions( a, b );

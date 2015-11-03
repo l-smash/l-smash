@@ -1536,6 +1536,14 @@ static int isom_set_isom_dts_audio_description( isom_audio_entry_t *audio, lsmas
     return 0;
 }
 
+static int isom_set_hint_summary( isom_hint_entry_t *hint, lsmash_hint_summary_t *summary )
+{
+    hint->hinttrackversion = summary->version;
+    hint->highestcompatibleversion = summary->highestcompatibleversion;
+    hint->maxpacketsize = summary->maxpacketsize;
+    return 0;
+}
+
 static lsmash_box_type_t isom_guess_audio_codec_specific_box_type( lsmash_codec_type_t active_codec_type, lsmash_compact_box_type_t fourcc )
 {
     lsmash_box_type_t box_type = LSMASH_BOX_TYPE_INITIALIZER;
