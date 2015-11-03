@@ -3118,6 +3118,23 @@ int isom_get_implicit_qt_fixed_comp_audio_sample_quants
     return 1;
 }
 
+int hint_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index )
+{
+    uint32_t bufferSizeDB;
+    uint32_t maxBitrate = 0;
+    uint32_t avgBitrate = 0;
+    isom_hmhd_t *hmhd = ( (isom_mdia_t*)(mdhd->parent) )->minf->hmhd;
+    int err = LSMASH_ERR_NAMELESS;
+    if( hmhd->PDUcount > 0 )
+        hmhd->avgPDUsize = hmhd->combinedPDUsize / hmhd->PDUcount;
+    else
+        hmhd->avgPDUsize = 0;
+    err = isom_calculate_bitrate_description( stbl, mdhd, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index );
+    hmhd->maxbitrate = maxBitrate;
+    hmhd->avgbitrate = avgBitrate;
+    return err;
+}
+
 isom_bitrate_updater_t isom_get_bitrate_updater
 (
     isom_sample_entry_t *sample_entry
@@ -3151,6 +3168,8 @@ isom_bitrate_updater_t isom_get_bitrate_updater
         RETURN_BITRATE_UPDATER( dts_update_bitrate )
     else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_EC_3_AUDIO ) )
         RETURN_BITRATE_UPDATER( eac3_update_bitrate )
+    else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_RRTP_HINT ) )
+        RETURN_BITRATE_UPDATER( hint_update_bitrate )
     else if( isom_is_waveform_audio( sample_type ) )
         RETURN_BITRATE_UPDATER( waveform_audio_update_bitrate )
     else
