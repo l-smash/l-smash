@@ -741,7 +741,6 @@ static void isom_remove_audio_description( isom_sample_entry_t *description )
 static void isom_remove_hint_description( isom_sample_entry_t *description )
 {
     isom_hint_entry_t *hint = (isom_hint_entry_t *)description;
-    lsmash_free( hint->data );
     isom_remove_box_in_predefined_list( hint, offsetof( isom_stsd_t, list ) );
 }
 
@@ -1510,6 +1509,16 @@ isom_audio_entry_t *isom_add_audio_description( isom_stsd_t *stsd, lsmash_codec_
     isom_init_box_common( audio, stsd, sample_type, LSMASH_BOX_PRECEDENCE_HM, isom_remove_audio_description );
     audio->manager |= LSMASH_AUDIO_DESCRIPTION;
     return isom_add_sample_description_entry( stsd, audio, isom_remove_audio_description ) ? NULL : audio;
+}
+
+isom_hint_entry_t *isom_add_hint_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_type )
+{
+    assert( stsd );
+    isom_hint_entry_t *hint = lsmash_malloc_zero( sizeof(isom_hint_entry_t) );
+    if ( !hint )
+        return NULL;
+    isom_init_box_common( hint, stsd, sample_type, LSMASH_BOX_PRECEDENCE_HM, isom_remove_hint_description );
+    return isom_add_sample_description_entry( stsd, hint, isom_remove_hint_description ) ? NULL : hint;
 }
 
 isom_qt_text_entry_t *isom_add_qt_text_description( isom_stsd_t *stsd )

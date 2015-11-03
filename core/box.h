@@ -769,15 +769,20 @@ typedef struct
     uint32_t constLPCMFramesPerAudioPacket;     /* only set if constant */
 } isom_audio_entry_t;
 
-/* Hint Sample Entry */
-#define ISOM_HINT_SAMPLE_ENTRY \
-    ISOM_SAMPLE_ENTRY; \
-    uint8_t *data
-
+/* Hint Sample Entry data field for
+ * rtp hint track, 
+ * srtp hint track,
+ * rtp reception hint track and 
+ * srtp reception hint track
+ * rtcp reception hint track
+ * srtcp reception hint track
+ */
 typedef struct
 {
-    ISOM_HINT_SAMPLE_ENTRY;
-    uint32_t data_length;
+    ISOM_SAMPLE_ENTRY;
+    uint16_t hinttrackversion;         /* = 1 */
+    uint16_t highestcompatibleversion; /* = 1 */
+    uint32_t maxpacketsize;
 } isom_hint_entry_t;
 
 /* Metadata Sample Entry */
@@ -2687,6 +2692,7 @@ isom_stbl_t *isom_add_stbl( isom_minf_t *minf );
 isom_stsd_t *isom_add_stsd( isom_stbl_t *stbl );
 isom_visual_entry_t *isom_add_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_type );
 isom_audio_entry_t *isom_add_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_type );
+isom_hint_entry_t *isom_add_hint_description(isom_stsd_t *stsd, lsmash_codec_type_t sample_type);
 isom_qt_text_entry_t *isom_add_qt_text_description( isom_stsd_t *stsd );
 isom_tx3g_entry_t *isom_add_tx3g_description( isom_stsd_t *stsd );
 isom_esds_t *isom_add_esds( void *parent_box );

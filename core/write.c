@@ -598,20 +598,20 @@ static int isom_write_audio_description( lsmash_bs_t *bs, isom_box_t *box )
     return 0;
 }
 
-#if 0
-static int isom_write_hint_description( lsmash_bs_t *bs, lsmash_entry_t *entry )
+static int isom_write_hint_description( lsmash_bs_t *bs, isom_box_t *box )
 {
-    isom_hint_entry_t *data = (isom_hint_entry_t *)entry->data;
+    isom_hint_entry_t *data = (isom_hint_entry_t *)box;
     if( !data )
         return LSMASH_ERR_NAMELESS;
     isom_bs_put_box_common( bs, data );
     lsmash_bs_put_bytes( bs, 6, data->reserved );
-    lsmash_bs_put_be16( bs, data->data_reference_index );
-    if( data->data && data->data_length )
-        lsmash_bs_put_bytes( bs, data->data_length, data->data );
+    lsmash_bs_put_be16( bs, data->hinttrackversion );
+    lsmash_bs_put_be16( bs, data->highestcompatibleversion );
+    lsmash_bs_put_be32( bs, data->maxpacketsize );
     return 0;
 }
 
+#if 0
 static int isom_write_metadata_description( lsmash_bs_t *bs, lsmash_entry_t *entry )
 {
     isom_metadata_entry_t *data = (isom_metadata_entry_t *)entry->data;
@@ -1507,6 +1507,8 @@ void isom_set_box_writer( isom_box_t *box )
             box->write = isom_write_visual_description;
         else if( media_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK )
             box->write = isom_write_audio_description;
+        else if( media_type == ISOM_MEDIA_HANDLER_TYPE_HINT_TRACK )
+            box->write = isom_write_hint_description;
         else if( media_type == ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK )
         {
             if( lsmash_check_box_type_identical( box->type, QT_CODEC_TYPE_TEXT_TEXT ) )

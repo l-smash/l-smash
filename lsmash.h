@@ -47,7 +47,7 @@ extern "C" {
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  2
-#define LSMASH_VERSION_MINOR 13
+#define LSMASH_VERSION_MINOR 14
 #define LSMASH_VERSION_MICRO  0
 
 #define LSMASH_VERSION_INT( a, b, c ) (((a) << 16) | ((b) << 8) | (c))
@@ -905,6 +905,7 @@ typedef enum
     LSMASH_SUMMARY_TYPE_UNKNOWN = 0,
     LSMASH_SUMMARY_TYPE_VIDEO,
     LSMASH_SUMMARY_TYPE_AUDIO,
+    LSMASH_SUMMARY_TYPE_HINT,
 } lsmash_summary_type;
 
 typedef enum
@@ -1414,6 +1415,18 @@ int lsmash_convert_clap_into_crop
     uint32_t       height,
     lsmash_crop_t *crop
 );
+
+/****************************************************************************
+* Hint Description Layer
+****************************************************************************/
+
+typedef struct
+{
+    LSMASH_BASE_SUMMARY
+    uint16_t version;                   /* = 1 */
+    uint16_t highestcompatibleversion;  /* = 1 */
+    uint32_t maxpacketsize;             /* maximum size of one packet */
+} lsmash_hint_summary_t;
 
 /****************************************************************************
  * Media Sample
