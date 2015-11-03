@@ -453,6 +453,32 @@ typedef struct
     uint32_t avgBitrate;    /* the average rate in bits/second over the entire presentation */
 } isom_btrt_t;
 
+/* Timescale Entry Box
+ * This box is in RTP and RTP reception hint track sample descriptions. */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    uint32_t timescale;
+} isom_tims_t;
+
+/* Time Offset Box
+ * This box is in RTP and RTP reception hint track sample descriptions */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    int32_t offset;
+} isom_tsro_t;
+
+/* Timestamp Synchrony Box
+ * This box is in RTP reception hint track sample description. */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    unsigned int reserved       : 6;
+    unsigned int timestamp_sync : 2;
+} isom_tssy_t;
+
+
 /* Global Header Box */
 typedef struct
 {
@@ -2117,6 +2143,10 @@ struct lsmash_root_tag
 
 #define ISOM_BOX_TYPE_FTAB lsmash_form_iso_box_type( LSMASH_4CC( 'f', 't', 'a', 'b' ) )
 
+#define ISOM_BOX_TYPE_TIMS lsmash_form_iso_box_type( LSMASH_4CC( 't', 'i', 'm', 's' ) )
+#define ISOM_BOX_TYPE_TSRO lsmash_form_iso_box_type( LSMASH_4CC( 't', 's', 'r', 'o' ) )
+#define ISOM_BOX_TYPE_TSSY lsmash_form_iso_box_type( LSMASH_4CC( 't', 's', 's', 'y' ) )
+
 /* iTunes Metadata */
 #define ISOM_BOX_TYPE_DATA lsmash_form_iso_box_type( LSMASH_4CC( 'd', 'a', 't', 'a' ) )
 #define ISOM_BOX_TYPE_ILST lsmash_form_iso_box_type( LSMASH_4CC( 'i', 'l', 's', 't' ) )
@@ -2219,6 +2249,9 @@ struct lsmash_root_tag
 #define LSMASH_BOX_PRECEDENCE_ISOM_ESDS (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_QTFF_ESDS (LSMASH_BOX_PRECEDENCE_HM -  1 * LSMASH_BOX_PRECEDENCE_S)   /* preceded by 'frma' and 'mp4a' */
 #define LSMASH_BOX_PRECEDENCE_ISOM_BTRT (LSMASH_BOX_PRECEDENCE_HM -  1 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_TIMS (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_TSRO (LSMASH_BOX_PRECEDENCE_HM -  1 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_TSSY (LSMASH_BOX_PRECEDENCE_HM -  2 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_COLR (LSMASH_BOX_PRECEDENCE_LP +  2 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_QTFF_COLR (LSMASH_BOX_PRECEDENCE_LP +  2 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_QTFF_GAMA (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
@@ -2706,6 +2739,9 @@ isom_cspc_t *isom_add_cspc( isom_visual_entry_t *visual );
 isom_sgbt_t *isom_add_sgbt( isom_visual_entry_t *visual );
 isom_stsl_t *isom_add_stsl( isom_visual_entry_t *visual );
 isom_btrt_t *isom_add_btrt( isom_visual_entry_t *visual );
+isom_tims_t *isom_add_tims( isom_hint_entry_t *hint );
+isom_tsro_t *isom_add_tsro( isom_hint_entry_t *hint );
+isom_tssy_t *isom_add_tssy( isom_hint_entry_t *hint );
 isom_wave_t *isom_add_wave( isom_audio_entry_t *audio );
 isom_frma_t *isom_add_frma( isom_wave_t *wave );
 isom_enda_t *isom_add_enda( isom_wave_t *wave );

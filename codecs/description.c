@@ -2280,24 +2280,38 @@ static int isom_setup_hint_description( isom_stsd_t *stsd, lsmash_hint_summary_t
         /* go through list of codec specific datas associated with this summary */
         for( lsmash_entry_t *entry = summary->opaque->list.head; entry; entry = entry->next )
         {
+            err = LSMASH_ERR_NAMELESS;
             lsmash_codec_specific_t *specific = (lsmash_codec_specific_t *)entry->data;
             if( !specific )
-            {
-                err = LSMASH_ERR_NAMELESS;
                 goto fail;
-            }
             if( specific->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_RTP_HINT_COMMON )
             {
                 lsmash_isom_rtp_reception_hint_t *rtp_param = (lsmash_isom_rtp_reception_hint_t *)specific->data.structured;
                 if( rtp_param->timescale == 0 )
-                    return LSMASH_ERR_INVALID_DATA;
+                {
+                    err = LSMASH_ERR_INVALID_DATA;
+                    goto fail;
+                }
                 isom_set_hint_summary( hint, summary );
-                return 0;
+                isom_tims_t *tims;
+                isom_tsro_t *tsro;
+                isom_tssy_t *tssy;
+                if( !(tims = isom_add_tims( hint ))
+                 || !(tsro = isom_add_tsro( hint ))
+                 || !(tssy = isom_add_tssy( hint )) )
+                    goto fail;
+                tims->timescale      = rtp_param->timescale;
+                tsro->offset         = rtp_param->time_offset;
+                tssy->reserved       = (rtp_param->timestampsynchrony >> 2) & 0x3F;
+                tssy->timestamp_sync =  rtp_param->timestampsynchrony       & 0x03;
             }
         }
     }
     else
-        return LSMASH_ERR_PATCH_WELCOME;
+    {
+        err = LSMASH_ERR_PATCH_WELCOME;
+        goto fail;
+    }
     return 0;
 fail:
     isom_remove_box_by_itself( hint );
