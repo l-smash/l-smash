@@ -469,6 +469,33 @@ static int isom_write_btrt( lsmash_bs_t *bs, isom_box_t *box )
     return 0;
 }
 
+static int isom_write_tims( lsmash_bs_t *bs, isom_box_t *box )
+{
+    isom_tims_t *tims = (isom_tims_t *)box;
+    isom_bs_put_box_common( bs, tims );
+    lsmash_bs_put_be32( bs, tims->timescale );
+    return 0;
+}
+
+static int isom_write_tsro( lsmash_bs_t *bs, isom_box_t *box )
+{
+    isom_tsro_t *tsro = (isom_tsro_t *)box;
+    isom_bs_put_box_common( bs, tsro );
+    lsmash_bs_put_be32( bs, tsro->offset );
+    return 0;
+}
+
+static int isom_write_tssy( lsmash_bs_t *bs, isom_box_t *box )
+{
+    isom_tssy_t *tssy = (isom_tssy_t *)box;
+    isom_bs_put_box_common( bs, tssy );
+    uint8_t data = 0;
+    data = tssy->reserved << 2;
+    data |= tssy->timestamp_sync;
+    lsmash_bs_put_byte( bs, data );
+    return 0;
+}
+
 static int isom_write_glbl( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_glbl_t *glbl = (isom_glbl_t *)box;
@@ -1580,6 +1607,9 @@ void isom_set_box_writer( isom_box_t *box )
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STBL, isom_write_stbl );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSD, isom_write_stsd );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_BTRT, isom_write_btrt );
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TIMS, isom_write_tims );
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TSRO, isom_write_tsro );
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TSSY, isom_write_tssy );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_COLR, isom_write_colr );
         ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_COLR, isom_write_colr );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_CLAP, isom_write_clap );

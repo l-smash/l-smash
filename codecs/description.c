@@ -2285,7 +2285,22 @@ int isom_setup_hint_description( isom_stsd_t *stsd, lsmash_hint_summary_t *summa
                 rtp_param = (lsmash_isom_rtp_reception_hint_t *)specific->data.structured;
                 if( !rtp_param->timescale )
                     return LSMASH_ERR_INVALID_DATA;
-                isom_set_hint_summary( hint, summary );
+                err = isom_set_hint_summary( hint, summary );
+                if( err < 0 )
+                    goto fail;
+                isom_tims_t *tims = isom_add_tims( hint );
+                if( !tims )
+                    return LSMASH_ERR_NAMELESS;
+                tims->timescale = rtp_param->timescale;
+                isom_tsro_t *tsro = isom_add_tsro( hint );
+                if( !tsro )
+                    return LSMASH_ERR_NAMELESS;
+                tsro->offset = rtp_param->time_offset;
+                isom_tssy_t *tssy = isom_add_tssy( hint );
+                if( !tssy )
+                    return LSMASH_ERR_NAMELESS;
+                tssy->reserved = rtp_param->reserved_timestamp_sync >> 2;
+                tssy->timestamp_sync = rtp_param->reserved_timestamp_sync & 0x03;
             }
         }
     }
