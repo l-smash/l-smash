@@ -1103,6 +1103,28 @@ static int isom_write_udta( lsmash_bs_t *bs, isom_box_t *box )
     return 0;
 }
 
+static int isom_write_hnti( lsmash_bs_t *bs, isom_box_t *box )
+{
+    isom_bs_put_box_common( bs, box );
+    return 0;
+}
+
+static int isom_write_rtp( lsmash_bs_t *bs, isom_box_t *box )
+{
+    isom_rtp_t *rtp = (isom_rtp_t *)box;
+    isom_bs_put_box_common( bs, rtp );
+    lsmash_bs_put_be32( bs, rtp->descriptionformat );
+    lsmash_bs_put_bytes( bs, rtp->sdp_length, rtp->sdptext );
+    return 0;
+}
+static int isom_write_sdp( lsmash_bs_t *bs, isom_box_t *box )
+{
+    isom_sdp_t *sdp = (isom_sdp_t *)box;
+    isom_bs_put_box_common( bs, sdp );
+    lsmash_bs_put_bytes( bs, sdp->sdp_length, sdp->sdptext );
+    return 0;
+}
+
 static int isom_write_trak( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_bs_put_box_common( bs, box );
@@ -1635,6 +1657,9 @@ void isom_set_box_writer( isom_box_t *box )
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SGPD, isom_write_sgpd );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SBGP, isom_write_sbgp );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_UDTA, isom_write_udta );
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_HNTI, isom_write_hnti );
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_RTP,  isom_write_rtp  );
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SDP,  isom_write_sdp  );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_CHPL, isom_write_chpl );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MVEX, isom_write_mvex );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MEHD, isom_write_mehd );

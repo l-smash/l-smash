@@ -4189,6 +4189,69 @@ void lsmash_delete_tyrant_chapter( lsmash_root_t *root )
     isom_remove_box_by_itself( root->file->moov->udta->chpl );
 }
 
+int lsmash_set_sdp
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID,
+    const char    *sdptext
+)
+{
+    if( isom_check_initializer_present( root ) < 0 || !sdptext )
+        return LSMASH_ERR_FUNCTION_PARAM;
+    lsmash_file_t *file = root->file;
+    if( !file->moov
+     || !file->isom_compatible )
+        return LSMASH_ERR_NAMELESS;
+    isom_udta_t *udta;
+    if( track_ID != 0 )
+    {
+        isom_trak_t *trak = isom_get_trak( file, track_ID );
+        if( !trak || (!trak->udta && !isom_add_udta( trak )) )
+            return LSMASH_ERR_NAMELESS;
+        udta = trak->udta;
+    }
+    else
+    {
+        if( !file->moov->udta && !isom_add_udta( file->moov ) )
+            return LSMASH_ERR_NAMELESS;
+        udta = file->moov->udta;
+    }
+    assert( udta );
+    if( !udta->hnti && !isom_add_hnti( udta ) )
+        return LSMASH_ERR_NAMELESS;
+    isom_hnti_t *hnti = udta->hnti;
+    /* If track ID is given, text is meant for track hnti box,
+     * otherwise it is meant for movie hnti box. */
+    uint32_t sdp_length = strlen( sdptext );    /* leaves '\0' out */
+    uint8_t *tmp_sdptext = lsmash_memdup( sdptext, sdp_length );
+    if( !tmp_sdptext )
+        return LSMASH_ERR_MEMORY_ALLOC;
+    if( track_ID )
+    {
+        if( !isom_add_sdp( hnti ) )
+        {
+            lsmash_free( tmp_sdptext );
+            return LSMASH_ERR_NAMELESS;
+        }
+        isom_sdp_t *sdp = hnti->sdp;
+        sdp->sdp_length = sdp_length;
+        sdp->sdptext    = tmp_sdptext;
+    }
+    else
+    {
+        if( !isom_add_rtp( hnti ) )
+        {
+            lsmash_free( tmp_sdptext );
+            return LSMASH_ERR_NAMELESS;
+        }
+        isom_rtp_t *rtp = hnti->rtp;
+        rtp->descriptionformat = LSMASH_4CC( 's', 'd', 'p', ' ' );
+        rtp->sdp_length        = sdp_length;
+        rtp->sdptext           = tmp_sdptext;
+    }
+    return 0;
+}
+
 int lsmash_set_copyright( lsmash_root_t *root, uint32_t track_ID, uint16_t ISO_language, char *notice )
 {
     if( isom_check_initializer_present( root ) < 0
