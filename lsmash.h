@@ -926,6 +926,7 @@ typedef enum
 
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_SAMPLE_SCALE,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264_BITRATE,
+    LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_RTP_HINT_COMMON,
 
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_COMMON,                    /* must be LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED */
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_COMMON,                    /* must be LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED */
@@ -3913,6 +3914,25 @@ typedef struct
     uint32_t header_size;
     uint8_t *header_data;
 } lsmash_codec_global_header_t;
+
+/* RTP Reception Specific Information
+ *   Mandatory :
+ *     ISOM_CODEC_TYPE_RRTP_HINT */
+typedef enum
+{
+    /* Timestamp synchronization */
+    ISOM_HINT_TIMESTAMP_SYNCHRONY_ANY          = 0x00,
+    ISOM_HINT_TIMESTAMP_SYNCHRONY_RECIEVED_RTP = 0x01,
+    ISOM_HINT_TIMESTAMP_SYNCHRONY_OTHER_TRACKS = 0x02,
+    ISOM_HINT_TIMESTAMP_SYNCHRONY_RESERVED     = 0x03,
+} lsmash_hint_timestampsynchrony;
+
+typedef struct
+{
+    uint32_t                       timescale;           /* timscale of this track */
+    uint32_t                       time_offset;         /* Beginning time stamp offset compared to */
+    lsmash_hint_timestampsynchrony timestampsynchrony;  /* first 6 bits = 0, last two indicate whether tracks have been synchronized */
+} lsmash_isom_rtp_reception_hint_t;
 
 /****************************************************************************
  * iTunes Metadata
