@@ -74,8 +74,8 @@ endif
 #All objects should be deleted regardless of configure when uninstall/clean/distclean.
 uninstall:
 	$(RM) $(DESTDIR)$(includedir)/lsmash.h
-	$(RM) $(addprefix $(DESTDIR)$(libdir)/, liblsmash.a liblsmash.dll.a liblsmash.so* liblsmash.dylib pkgconfig/liblsmash.pc)
-	$(RM) $(addprefix $(DESTDIR)$(bindir)/, $(TOOLS_ALL) $(TOOLS_ALL:%=%.exe) liblsmash.dll cyglsmash.dll)
+	$(RM) $(addprefix $(DESTDIR)$(libdir)/, liblsmash.a liblsmash.dll.a liblsmash.so* liblsmash.dylib liblsmash*.def pkgconfig/liblsmash.pc)
+	$(RM) $(addprefix $(DESTDIR)$(bindir)/, $(TOOLS_ALL) $(TOOLS_ALL:%=%.exe) liblsmash*.dll lsmash.lib cyglsmash.dll)
 
 clean:
 	$(RM) */*.o *.a *.so* *.def *.exp *.lib *.dll *.dylib $(addprefix cli/, *.exe $(TOOLS_ALL)) .depend
