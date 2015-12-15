@@ -2273,30 +2273,6 @@ struct lsmash_root_tag
 #define LSMASH_BOX_PRECEDENCE_ISOM_FREE (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_SKIP (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
 
-/* Track reference types */
-typedef enum
-{
-    ISOM_TREF_TYPE_AVCP = LSMASH_4CC( 'a', 'v', 'c', 'p' ),   /* AVC parameter set stream link */
-    ISOM_TREF_TYPE_CDSC = LSMASH_4CC( 'c', 'd', 's', 'c' ),   /* This track describes the referenced track. */
-    ISOM_TREF_TYPE_DPND = LSMASH_4CC( 'd', 'p', 'n', 'd' ),   /* This track has an MPEG-4 dependency on the referenced track. */
-    ISOM_TREF_TYPE_HIND = LSMASH_4CC( 'h', 'i', 'n', 'd' ),   /* Hint dependency */
-    ISOM_TREF_TYPE_HINT = LSMASH_4CC( 'h', 'i', 'n', 't' ),   /* Links hint track to original media track */
-    ISOM_TREF_TYPE_IPIR = LSMASH_4CC( 'i', 'p', 'i', 'r' ),   /* This track contains IPI declarations for the referenced track. */
-    ISOM_TREF_TYPE_MPOD = LSMASH_4CC( 'm', 'p', 'o', 'd' ),   /* This track is an OD track which uses the referenced track as an included elementary stream track. */
-    ISOM_TREF_TYPE_SBAS = LSMASH_4CC( 's', 'b', 'a', 's' ),   /* Scalable base */
-    ISOM_TREF_TYPE_SCAL = LSMASH_4CC( 's', 'c', 'a', 'l' ),   /* Scalable extraction */
-    ISOM_TREF_TYPE_SWFR = LSMASH_4CC( 's', 'w', 'f', 'r' ),   /* AVC Switch from */
-    ISOM_TREF_TYPE_SWTO = LSMASH_4CC( 's', 'w', 't', 'o' ),   /* AVC Switch to */
-    ISOM_TREF_TYPE_SYNC = LSMASH_4CC( 's', 'y', 'n', 'c' ),   /* This track uses the referenced track as its synchronization source. */
-    ISOM_TREF_TYPE_VDEP = LSMASH_4CC( 'v', 'd', 'e', 'p' ),   /* Auxiliary video depth */
-    ISOM_TREF_TYPE_VPLX = LSMASH_4CC( 'v', 'p', 'l', 'x' ),   /* Auxiliary video parallax */
-
-    QT_TREF_TYPE_CHAP   = LSMASH_4CC( 'c', 'h', 'a', 'p' ),   /* Chapter or scene list. Usually references a text track. */
-    QT_TREF_TYPE_SCPT   = LSMASH_4CC( 's', 'c', 'p', 't' ),   /* Transcript. Usually references a text track. */
-    QT_TREF_TYPE_SSRC   = LSMASH_4CC( 's', 's', 'r', 'c' ),   /* Nonprimary source. Indicates that the referenced track should send its data to this track, rather than presenting it. */
-    QT_TREF_TYPE_TMCD   = LSMASH_4CC( 't', 'm', 'c', 'd' ),   /* Time code. Usually references a time code track. */
-} isom_track_reference_type;
-
 /* Handler types */
 enum isom_handler_type
 {
