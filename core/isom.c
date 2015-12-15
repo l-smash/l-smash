@@ -1529,6 +1529,56 @@ int lsmash_get_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     return 0;
 }
 
+int lsmash_add_track_reference
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID,
+    uint32_t       ref_track_ID,
+    uint32_t       track_ref_type
+)
+{
+    if( isom_check_initializer_present( root ) < 0
+     || track_ID == 0 || ref_track_ID == 0 )
+        return LSMASH_ERR_FUNCTION_PARAM;
+    lsmash_file_t *file = root->file;
+    if( file->forbid_tref )
+        return LSMASH_ERR_NAMELESS;
+    isom_trak_t *trak = isom_get_trak( file, track_ID );
+    if( !trak )
+        return LSMASH_ERR_NAMELESS;
+    isom_tref_t *tref = trak->tref;
+    if( !tref && !(tref = isom_add_tref( trak )) )
+        return LSMASH_ERR_NAMELESS;
+    /* Check if this type of track references already exist. */
+    for( lsmash_entry_t *entry = tref->ref_list.head; entry; entry = entry->next )
+    {
+        isom_tref_type_t *tref_type = (isom_tref_type_t *)entry->data;
+        if( !tref_type )
+            return LSMASH_ERR_NAMELESS;
+        if( lsmash_check_box_type_identical( tref_type->type, lsmash_form_iso_box_type( track_ref_type ) )
+         || lsmash_check_box_type_identical( tref_type->type, lsmash_form_qtff_box_type( track_ref_type ) ) )
+        {
+            /* Increase the number of this type of track references. */
+            uint32_t *temp = lsmash_realloc( tref_type->track_ID, sizeof(uint32_t) * (tref_type->ref_count + 1) );
+            if( !temp )
+                return LSMASH_ERR_MEMORY_ALLOC;
+            tref_type->track_ID = temp;
+            tref_type->track_ID[ tref_type->ref_count ++ ] = ref_track_ID;
+            return 0;
+        }
+    }
+    /* Add a new type of track refereces. */
+    isom_tref_type_t *tref_type = isom_add_track_reference_type( tref, track_ref_type );
+    if( !tref_type )
+        return LSMASH_ERR_NAMELESS;
+    tref_type->track_ID = lsmash_malloc( sizeof(uint32_t) );
+    if( !tref_type->track_ID )
+        return LSMASH_ERR_MEMORY_ALLOC;
+    tref_type->track_ID[0] = ref_track_ID;
+    tref_type->ref_count   = 1;
+    return 0;
+}
+
 static inline int check_dref_presence( isom_trak_t *trak )
 {
     if( !trak

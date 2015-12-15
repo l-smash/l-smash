@@ -2225,6 +2225,20 @@ int lsmash_modify_explicit_timeline_map
     lsmash_edit_t  edit
 );
 
+/* Set a track reference for track.
+ * track_ID is the track which the reference is added to.
+ * ref_track_ID is the referenced track, to set multiple referenced tracks call this function again.
+ * 
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_add_track_reference
+(
+    lsmash_root_t *root,
+    uint32_t track_ID,
+    uint32_t ref_track_ID,
+    uint32_t track_ref_type
+);
+
 /****************************************************************************
  * Movie Layer
  ****************************************************************************/
