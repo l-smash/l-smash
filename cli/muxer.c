@@ -1070,7 +1070,7 @@ static int do_mux( muxer_t *muxer )
     uint32_t num_consecutive_sample_skip = 0;
     uint32_t num_active_input_tracks = out_movie->num_of_tracks;
     uint64_t total_media_size = 0;
-    uint8_t  sample_count = 0;
+    uint32_t progress_pos = 0;
     while( 1 )
     {
         input_t *input = &muxer->input[current_input_number - 1];
@@ -1153,10 +1153,10 @@ static int do_mux( muxer_t *muxer )
                     total_media_size += sample_size;
                     ++ out_track->current_sample_number;
                     num_consecutive_sample_skip = 0;
-                    /* Print, per 256 samples, total size of imported media. */
-                    if( ++sample_count == 0 )
+                    /* Print, per 4 megabytes, total size of imported media. */
+                    if( (total_media_size >> 22) > progress_pos )
                     {
-                        REFRESH_CONSOLE;
+                        progress_pos = total_media_size >> 22;
                         eprintf( "Importing: %"PRIu64" bytes\r", total_media_size );
                     }
                 }
@@ -1203,8 +1203,13 @@ static int do_mux( muxer_t *muxer )
 
 static int moov_to_front_callback( void *param, uint64_t written_movie_size, uint64_t total_movie_size )
 {
+    static uint32_t progress_pos = 0;
+    if ( (written_movie_size >> 24) <= progress_pos )
+        return 0;
     REFRESH_CONSOLE;
     eprintf( "Finalizing: [%5.2lf%%]\r", total_movie_size ? ((double)written_movie_size / total_movie_size) * 100.0 : 0 );
+    /* Print, per 16 megabytes */
+    progress_pos = written_movie_size >> 24;
     return 0;
 }
 
