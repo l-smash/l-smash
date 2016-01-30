@@ -1271,8 +1271,13 @@ static int flush_movie_fragment( remuxer_t *remuxer )
 
 static int moov_to_front_callback( void *param, uint64_t written_movie_size, uint64_t total_movie_size )
 {
+    static uint32_t progress_pos = 0;
+    if ( (written_movie_size >> 24) <= progress_pos )
+        return 0;
     REFRESH_CONSOLE;
     eprintf( "Finalizing: [%5.2lf%%]\r", ((double)written_movie_size / total_movie_size) * 100.0 );
+    // Print, per 16 megabytes
+    progress_pos = written_movie_size >> 24;
     return 0;
 }
 
@@ -1425,7 +1430,7 @@ static int do_remux( remuxer_t *remuxer )
     uint32_t num_consecutive_sample_skip = 0;
     uint32_t num_active_input_tracks     = out_movie->num_tracks;
     uint64_t total_media_size            = 0;
-    uint8_t  sample_count                = 0;
+    uint32_t progress_pos                = 0;
     uint8_t  pending_flush_fragments     = (remuxer->frag_base_track != 0); /* For non-fragmented movie, always set to 0. */
     while( 1 )
     {
@@ -1560,9 +1565,12 @@ static int do_remux( remuxer_t *remuxer )
                         out_track->last_sample_dts        = last_sample_dts;
                         num_consecutive_sample_skip       = 0;
                         total_media_size                 += sample_size;
-                        /* Print, per 256 samples, total size of imported media. */
-                        if( ++sample_count == 0 )
+                        /* Print, per 4 megabytes, total size of imported media. */
+                        if( (total_media_size >> 22) > progress_pos )
+                        {
+                            progress_pos = total_media_size >> 22;
                             eprintf( "Importing: %"PRIu64" bytes\r", total_media_size );
+                        }
                     }
                     else
                     {

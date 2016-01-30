@@ -1119,7 +1119,7 @@ int main( int argc, char *argv[] )
     uint32_t num_consecutive_sample_skip = 0;
     uint32_t num_active_input_tracks     = out_movie->num_tracks;
     uint64_t total_media_size            = 0;
-    uint8_t  sample_count                = 0;
+    uint32_t progress_pos                = 0;
     while( 1 )
     {
         track_t *in_track = &in_movie->track[ in_movie->current_track_number - 1 ];
@@ -1168,9 +1168,12 @@ int main( int argc, char *argv[] )
                     total_media_size += sample_size;
                     ++ in_track->current_sample_number;
                     num_consecutive_sample_skip = 0;
-                    /* Print, per 256 samples, total size of imported media. */
-                    if( ++sample_count == 0 )
+                    /* Print, per 4 megabytes, total size of imported media. */
+                    if( (total_media_size >> 22) > progress_pos )
+                    {
+                        progress_pos = total_media_size >> 22;
                         eprintf( "Importing: %"PRIu64" bytes\r", total_media_size );
+                    }
                 }
             }
             else
