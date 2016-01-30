@@ -470,7 +470,7 @@ static int vc1_importer_probe( importer_t *importer )
     int err;
     while( 1 )
     {
-        if( lsmash_bs_is_error( bs ) )
+        if( lsmash_bs_is_error( bs ) || bs->eob )
         {
             err = LSMASH_ERR_IO;
             goto fail;
