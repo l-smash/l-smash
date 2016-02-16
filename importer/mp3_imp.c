@@ -442,9 +442,10 @@ static int mp4sys_mp3_probe( importer_t *importer )
     if( !mp3_imp )
         return LSMASH_ERR_MEMORY_ALLOC;
     lsmash_bs_t *bs = importer->bs;
-    if( lsmash_bs_show_byte( bs, 0 ) == 'I'
-     && lsmash_bs_show_byte( bs, 1 ) == 'D'
-     && lsmash_bs_show_byte( bs, 2 ) == '3' )
+    /* Multiple ID3 tags could be present, loop to skip them first. */
+    while( lsmash_bs_show_byte( bs, 0 ) == 'I'
+        && lsmash_bs_show_byte( bs, 1 ) == 'D'
+        && lsmash_bs_show_byte( bs, 2 ) == '3' )
     {
         lsmash_bs_read_seek( bs, 6, SEEK_CUR );
         uint32_t size = 0;
