@@ -243,7 +243,7 @@ static int isom_read_unknown_box( lsmash_file_t *file, isom_box_t *box, isom_box
     isom_box_t *dummy = lsmash_malloc_zero( sizeof(isom_box_t) );
     if( !dummy )
         return LSMASH_ERR_MEMORY_ALLOC;
-    box->manager |= LSMASH_ABSENT_IN_FILE;
+    box->manager |= LSMASH_ABSENT_IN_FILE | LSMASH_UNKNOWN_BOX;
     isom_box_common_copy( dummy, box );
     int ret = isom_add_print_func( file, dummy, level );
     if( ret < 0 )
