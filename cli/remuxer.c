@@ -939,10 +939,8 @@ static int set_movie_parameters( remuxer_t *remuxer )
             if( self_containd_segment )
                 out_file->param.mode |= LSMASH_FILE_MODE_INDEX;
             else
-            {
                 out_file->param.mode &= ~LSMASH_FILE_MODE_MEDIA;
-                out_file->param.mode |= LSMASH_FILE_MODE_SEGMENT;
-            }
+            out_file->param.mode |= LSMASH_FILE_MODE_SEGMENT;
         }
         else
             WARNING_MSG( "--dash requires --fragment.\n" );
@@ -1706,7 +1704,7 @@ int main( int argc, char *argv[] )
         lsmash_free( input );
         return ERROR_MSG( "failed to allocate the track option handler.\n" );
     }
-    remuxer_t           remuxer =
+    remuxer_t remuxer =
     {
         .output             = &output,
         .input              = input,
