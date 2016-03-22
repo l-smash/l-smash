@@ -153,6 +153,7 @@ typedef struct
     uint32_t             subseg_per_seg;
     int                  dash;
     int                  compact_size_table;
+    double               min_frag_duration;
 } remuxer_t;
 
 typedef struct
@@ -299,6 +300,8 @@ static void display_help( void )
              "                              This option is overridden by the track options.\n"
              "    --fragment <integer>      Enable fragmentation per random accessible point.\n"
              "                              Set which track the fragmentation is based on.\n"
+             "    --min-frag-duration <float> Specify the minimum duration which fragments are allowed to be.\n"
+             "                              This option requires --fragment.\n"
              "    --dash <integer>          Enable DASH ISOBMFF-based Media segmentation.\n"
              "                              The value is the number of subsegments per segment.\n"
              "                              If zero, Indexed self-initializing Media Segment.\n"
@@ -719,6 +722,16 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
             remuxer->frag_base_track = atoi( argv[i] );
             if( remuxer->frag_base_track == 0 )
                 FAILED_PARSE_CLI_OPTION( "%s is an invalid track number.\n", argv[i] );
+        }
+        else if( !strcasecmp( argv[i], "--min-frag-duration" ) )
+        {
+            if( ++i == argc )
+                FAILED_PARSE_CLI_OPTION( "--min-frag-duration requires an argument.\n" );
+            remuxer->min_frag_duration = atof( argv[i] );
+            if( remuxer->min_frag_duration == 0.0 || remuxer->min_frag_duration == -0.0 )
+                FAILED_PARSE_CLI_OPTION( "%s is an invalid fragment duration.\n", argv[i] );
+            else if( remuxer->frag_base_track == 0 )
+                FAILED_PARSE_CLI_OPTION( "--min-frag-duration requires --fragment also be set.\n" );
         }
         else if( !strcasecmp( argv[i], "--dash" ) )
         {
@@ -1494,8 +1507,16 @@ static int do_remux( remuxer_t *remuxer )
                 {
                     if( pending_flush_fragments == 0 )
                     {
+                        int over_duration = 1;
+                        if( remuxer->min_frag_duration != 0.0 )
+                        {
+                            lsmash_sample_t info;
+                            if( lsmash_get_sample_info_from_media_timeline( in->root, in_track->track_ID, in_track->current_sample_number + 1, &info ) >= 0 )
+                                over_duration = ((double)info.dts / in_track->media.param.timescale) - frag_base_dts >= remuxer->min_frag_duration;
+                        }
                         if( remuxer->frag_base_track == out_movie->current_track_number
-                         && sample->prop.ra_flags != ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE )
+                         && sample->prop.ra_flags != ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE
+                         && over_duration )
                         {
                             pending_flush_fragments = 1;
                             frag_base_dts = in_track->dts;
