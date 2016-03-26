@@ -173,7 +173,7 @@ static void isom_skip_box_rest( lsmash_bs_t *bs, isom_box_t *box )
         box->manager |= LSMASH_INCOMPLETE_BOX;
 }
 
-static void isom_check_box_size( lsmash_bs_t *bs, isom_box_t *box )
+static void isom_validate_box_size( lsmash_bs_t *bs, isom_box_t *box )
 {
     uint64_t pos = lsmash_bs_count( bs );
     if( box->manager & LSMASH_LAST_BOX )
@@ -183,8 +183,14 @@ static void isom_check_box_size( lsmash_bs_t *bs, isom_box_t *box )
     }
     if( box->size < pos )
     {
-        printf( "[%s] box has more bytes: %"PRId64"\n", isom_4cc2str( box->type.fourcc ), pos - box->size );
+        printf( "[%s] box has less bytes than expected: %"PRId64"\n", isom_4cc2str( box->type.fourcc ), pos - box->size );
         box->size = pos;
+    }
+    else if( box->size > pos )
+    {
+        /* The box probably has extra padding bytes at the end. */
+        printf( "[%s] box has more bytes than expected: %"PRId64"\n", isom_4cc2str( box->type.fourcc ), box->size - pos );
+        isom_skip_box_rest( bs, box );
     }
 }
 
@@ -206,7 +212,7 @@ static int isom_read_children( lsmash_file_t *file, isom_box_t *box, void *paren
 
 static int isom_read_leaf_box_common_last_process( lsmash_file_t *file, isom_box_t *box, int level, void *instance )
 {
-    isom_check_box_size( file->bs, box );
+    isom_validate_box_size( file->bs, box );
     isom_box_common_copy( instance, box );
     return isom_add_print_func( file, instance, level );
 }
@@ -418,7 +424,6 @@ static int isom_read_iods( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     iods->OD = mp4sys_get_descriptor( bs, NULL );
     if( !iods->OD )
         return LSMASH_ERR_INVALID_DATA;
-    isom_skip_box_rest( file->bs, box );
     return isom_read_leaf_box_common_last_process( file, box, level, iods );
 }
 
@@ -844,8 +849,6 @@ static int isom_read_dref_entry( lsmash_file_t *file, isom_box_t *box, isom_box_
                 ref->location[i++] = lsmash_bs_get_byte( bs );
         }
     }
-    else
-        isom_skip_box_rest( bs, box );
     if( box->flags & 0x000001 )
         ref->ref_file = ref->file;
     box->parent = parent;
@@ -931,7 +934,7 @@ static int isom_read_codec_specific( lsmash_file_t *file, isom_box_t *box, isom_
         goto fail;
     isom_box_t *ext = (isom_box_t *)parent->extensions.tail->data;
     box->manager |= ext->manager;
-    isom_check_box_size( file->bs, box );
+    isom_validate_box_size( file->bs, box );
     isom_basebox_common_copy( ext, box );
     return isom_add_print_func( file, ext, level );
 fail:
@@ -1301,8 +1304,6 @@ static int isom_read_chan( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
                 desc->coordinates[j] = lsmash_bs_get_be32( bs );
         }
     }
-    /* A 'chan' box often contains extra 20 bytes (= the number of bytes of one channel description). */
-    isom_skip_box_rest( bs, box );
     return isom_read_leaf_box_common_last_process( file, box, level, chan );
 }
 
