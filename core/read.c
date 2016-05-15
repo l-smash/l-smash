@@ -1033,7 +1033,7 @@ static int isom_read_esds( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
      && !lsmash_check_box_type_identical( parent->type, ISOM_CODEC_TYPE_M4AE_AUDIO )
      && !lsmash_check_box_type_identical( parent->type, ISOM_CODEC_TYPE_MP4S_SYSTEM )
      && !lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_WAVE ) )
-        return isom_read_unknown_box( file, box, parent, level );
+        return isom_read_codec_specific( file, box, parent, level );
     if( lsmash_check_box_type_identical( parent->type, QT_BOX_TYPE_WAVE ) )
     {
         box->type = QT_BOX_TYPE_ESDS;
@@ -1410,7 +1410,7 @@ static int isom_read_ftab( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_CODEC_TYPE_TX3G_TEXT )
      || ((isom_tx3g_entry_t *)parent)->ftab )
-        return isom_read_unknown_box( file, box, parent, level );
+        return isom_read_codec_specific( file, box, parent, level );
     ADD_BOX( ftab, isom_tx3g_entry_t );
     lsmash_bs_t *bs = file->bs;
     uint32_t entry_count = lsmash_bs_get_be16( bs );
@@ -2641,6 +2641,7 @@ int isom_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uin
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_MP4S_SYSTEM, lsmash_form_iso_box_type );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( LSMASH_CODEC_TYPE_RAW, lsmash_form_qtff_box_type );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( LSMASH_CODEC_TYPE_UNSPECIFIED, NULL );
+            assert( sizeof(description_reader_table) >= (size_t)i * sizeof(description_reader_table[0]) );
 #undef ADD_DESCRIPTION_READER_TABLE_ELEMENT
         }
         for( int i = 0; description_reader_table[i].form_box_type_func; i++ )
@@ -2698,7 +2699,6 @@ int isom_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uin
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_MVHD, lsmash_form_iso_box_type,  isom_read_mvhd );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_IODS, lsmash_form_iso_box_type,  isom_read_iods );
         ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_CTAB, lsmash_form_qtff_box_type, isom_read_ctab );
-        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_ESDS, lsmash_form_iso_box_type,  isom_read_esds );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_TRAK, lsmash_form_iso_box_type,  isom_read_trak );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_TKHD, lsmash_form_iso_box_type,  isom_read_tkhd );
         ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_TAPT, lsmash_form_qtff_box_type, isom_read_tapt );
@@ -2723,20 +2723,6 @@ int isom_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uin
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_DREF, lsmash_form_iso_box_type,  isom_read_dref );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_STBL, lsmash_form_iso_box_type,  isom_read_stbl );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSD, lsmash_form_iso_box_type,  isom_read_stsd );
-        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_BTRT, lsmash_form_iso_box_type,  isom_read_btrt );
-        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_COLR, lsmash_form_iso_box_type,  isom_read_colr );
-        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_CLAP, lsmash_form_iso_box_type,  isom_read_clap );
-        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_PASP, lsmash_form_iso_box_type,  isom_read_pasp );
-        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_GLBL, lsmash_form_qtff_box_type, isom_read_glbl );
-        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_GAMA, lsmash_form_qtff_box_type, isom_read_gama );
-        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_FIEL, lsmash_form_qtff_box_type, isom_read_fiel );
-        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_CSPC, lsmash_form_qtff_box_type, isom_read_cspc );
-        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_SGBT, lsmash_form_qtff_box_type, isom_read_sgbt );
-        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSL, lsmash_form_iso_box_type,  isom_read_stsl );
-        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_WAVE, lsmash_form_qtff_box_type, isom_read_wave );
-        ADD_BOX_READER_TABLE_ELEMENT(   QT_BOX_TYPE_CHAN, lsmash_form_qtff_box_type, isom_read_chan );
-        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_SRAT, lsmash_form_iso_box_type,  isom_read_srat );
-        ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_FTAB, lsmash_form_iso_box_type,  isom_read_ftab );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_STTS, lsmash_form_iso_box_type,  isom_read_stts );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_CTTS, lsmash_form_iso_box_type,  isom_read_ctts );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_CSLG, lsmash_form_iso_box_type,  isom_read_cslg );
@@ -2773,6 +2759,7 @@ int isom_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uin
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_TFRA, lsmash_form_iso_box_type,  isom_read_tfra );
         ADD_BOX_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_MFRO, lsmash_form_iso_box_type,  isom_read_mfro );
         ADD_BOX_READER_TABLE_ELEMENT( LSMASH_BOX_TYPE_UNSPECIFIED, NULL,  NULL );
+        assert( sizeof(box_reader_table) >= (size_t)i * sizeof(box_reader_table[0]) );
 #undef ADD_BOX_READER_TABLE_ELEMENT
     }
     for( int i = 0; box_reader_table[i].reader_func; i++ )
@@ -2836,35 +2823,55 @@ int isom_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uin
     }
     if( parent->parent && lsmash_check_box_type_identical( parent->parent->type, ISOM_BOX_TYPE_STSD ) )
     {
-        static struct codec_specific_marker_table_tag
+        static struct sample_description_extension_reader_table_tag
         {
             lsmash_compact_box_type_t fourcc;
             lsmash_box_type_t (*form_box_type_func)( lsmash_compact_box_type_t );
-        } codec_specific_marker_table[16] = { { 0, NULL } };
-        if( !codec_specific_marker_table[0].form_box_type_func )
+            int (*reader_func)( lsmash_file_t *, isom_box_t *, isom_box_t *, int );
+        } extension_reader_table[32] = { { 0, NULL, NULL } };
+        if( !extension_reader_table[0].reader_func )
         {
             /* Initialize the table. */
             int i = 0;
-#define ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( type, form_box_type_func ) \
-    codec_specific_marker_table[i++] = (struct codec_specific_marker_table_tag){ type.fourcc, form_box_type_func }
-            ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( ISOM_BOX_TYPE_ALAC, lsmash_form_iso_box_type );
-            ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( ISOM_BOX_TYPE_AVCC, lsmash_form_iso_box_type );
-            ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( ISOM_BOX_TYPE_DAC3, lsmash_form_iso_box_type );
-            ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( ISOM_BOX_TYPE_DAMR, lsmash_form_iso_box_type );
-            ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( ISOM_BOX_TYPE_DDTS, lsmash_form_iso_box_type );
-            ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( ISOM_BOX_TYPE_DEC3, lsmash_form_iso_box_type );
-            ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( ISOM_BOX_TYPE_DVC1, lsmash_form_iso_box_type );
-            ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( ISOM_BOX_TYPE_HVCC, lsmash_form_iso_box_type );
-            ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( ISOM_BOX_TYPE_WFEX, lsmash_form_iso_box_type );
-            ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT(   QT_BOX_TYPE_GLBL, lsmash_form_qtff_box_type );
-            ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT( LSMASH_BOX_TYPE_UNSPECIFIED, NULL );
-#undef ADD_CODEC_SPECIFIC_MARKER_TABLE_ELEMENT
+#define ADD_EXTENSION_READER_TABLE_ELEMENT( type, form_box_type_func, reader_func ) \
+    extension_reader_table[i++] = (struct sample_description_extension_reader_table_tag){ type.fourcc, form_box_type_func, reader_func }
+            /* Audio */
+            ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_ALAC, lsmash_form_iso_box_type,  isom_read_codec_specific );
+            ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_DAC3, lsmash_form_iso_box_type,  isom_read_codec_specific );
+            ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_DAMR, lsmash_form_iso_box_type,  isom_read_codec_specific );
+            ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_DDTS, lsmash_form_iso_box_type,  isom_read_codec_specific );
+            ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_DEC3, lsmash_form_iso_box_type,  isom_read_codec_specific );
+            ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_SRAT, lsmash_form_iso_box_type,  isom_read_srat );
+            ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_WFEX, lsmash_form_iso_box_type,  isom_read_codec_specific );
+            ADD_EXTENSION_READER_TABLE_ELEMENT(   QT_BOX_TYPE_CHAN, lsmash_form_qtff_box_type, isom_read_chan );
+            ADD_EXTENSION_READER_TABLE_ELEMENT(   QT_BOX_TYPE_WAVE, lsmash_form_qtff_box_type, isom_read_wave );
+            /* Video */
+            ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_AVCC, lsmash_form_iso_box_type,  isom_read_codec_specific );
+            ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_BTRT, lsmash_form_iso_box_type,  isom_read_btrt );
+            ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_COLR, lsmash_form_iso_box_type,  isom_read_colr );
+            ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_CLAP, lsmash_form_iso_box_type,  isom_read_clap );
+            ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_DVC1, lsmash_form_iso_box_type,  isom_read_codec_specific );
+            ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_HVCC, lsmash_form_iso_box_type,  isom_read_codec_specific );
+            ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_PASP, lsmash_form_iso_box_type,  isom_read_pasp );
+            ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSL, lsmash_form_iso_box_type,  isom_read_stsl );
+            ADD_EXTENSION_READER_TABLE_ELEMENT(   QT_BOX_TYPE_CSPC, lsmash_form_qtff_box_type, isom_read_cspc );
+            ADD_EXTENSION_READER_TABLE_ELEMENT(   QT_BOX_TYPE_FIEL, lsmash_form_qtff_box_type, isom_read_fiel );
+            ADD_EXTENSION_READER_TABLE_ELEMENT(   QT_BOX_TYPE_GAMA, lsmash_form_qtff_box_type, isom_read_gama );
+            ADD_EXTENSION_READER_TABLE_ELEMENT(   QT_BOX_TYPE_GLBL, lsmash_form_qtff_box_type, isom_read_glbl );
+            ADD_EXTENSION_READER_TABLE_ELEMENT(   QT_BOX_TYPE_SGBT, lsmash_form_qtff_box_type, isom_read_sgbt );
+            /* Others */
+            ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_ESDS, lsmash_form_iso_box_type,  isom_read_esds );
+            ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_FTAB, lsmash_form_iso_box_type,  isom_read_ftab );
+            ADD_EXTENSION_READER_TABLE_ELEMENT( LSMASH_BOX_TYPE_UNSPECIFIED, NULL,  NULL );
+            assert( sizeof(extension_reader_table) >= (size_t)i * sizeof(extension_reader_table[0]) );
+#undef ADD_EXTENSION_READER_TABLE_ELEMENT
         }
-        for( int i = 0; codec_specific_marker_table[i].form_box_type_func; i++ )
-            if( box->type.fourcc == codec_specific_marker_table[i].fourcc )
+        for( int i = 0; extension_reader_table[i].reader_func; i++ )
+            if( box->type.fourcc == extension_reader_table[i].fourcc )
             {
-                form_box_type_func = codec_specific_marker_table[i].form_box_type_func;
-                break;
+                form_box_type_func = extension_reader_table[i].form_box_type_func;
+                reader_func        = extension_reader_table[i].reader_func;
+                goto read_box;
             }
         reader_func = isom_read_codec_specific;
     }
