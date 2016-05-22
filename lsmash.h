@@ -48,7 +48,7 @@ extern "C" {
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  2
 #define LSMASH_VERSION_MINOR 11
-#define LSMASH_VERSION_MICRO  4
+#define LSMASH_VERSION_MICRO  5
 
 #define LSMASH_VERSION_INT( a, b, c ) (((a) << 16) | ((b) << 8) | (c))
 
@@ -255,6 +255,7 @@ typedef struct
     uint64_t max_chunk_size;            /* max size per chunk in bytes. 4*1024*1024 (4MiB) is default value. */
     /** demuxing only **/
     uint64_t max_read_size;             /* max size of reading from the file at a time. 4*1024*1024 (4MiB) is default value. */
+    int auto_probe;                     /* whether or not to auto probe in lsmash_read_file. */
 } lsmash_file_parameters_t;
 
 typedef int (*lsmash_adhoc_remux_callback)( void *param, uint64_t done, uint64_t total );
