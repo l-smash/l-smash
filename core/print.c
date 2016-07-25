@@ -141,14 +141,14 @@ static void isom_ifprintf_sample_flags( FILE *fp, int indent, char *field_name, 
                   | (flags->sample_is_non_sync_sample << 16)
                   |  flags->sample_degradation_priority;
     lsmash_ifprintf( fp, indent++, "%s = 0x%08"PRIx32"\n", field_name, temp );
-         if( flags->is_leading & ISOM_SAMPLE_IS_UNDECODABLE_LEADING       ) lsmash_ifprintf( fp, indent, "undecodable leading\n" );
+    if     ( flags->is_leading & ISOM_SAMPLE_IS_UNDECODABLE_LEADING       ) lsmash_ifprintf( fp, indent, "undecodable leading\n" );
     else if( flags->is_leading & ISOM_SAMPLE_IS_NOT_LEADING               ) lsmash_ifprintf( fp, indent, "non-leading\n" );
     else if( flags->is_leading & ISOM_SAMPLE_IS_DECODABLE_LEADING         ) lsmash_ifprintf( fp, indent, "decodable leading\n" );
-         if( flags->sample_depends_on & ISOM_SAMPLE_IS_INDEPENDENT        ) lsmash_ifprintf( fp, indent, "independent\n" );
+    if     ( flags->sample_depends_on & ISOM_SAMPLE_IS_INDEPENDENT        ) lsmash_ifprintf( fp, indent, "independent\n" );
     else if( flags->sample_depends_on & ISOM_SAMPLE_IS_NOT_INDEPENDENT    ) lsmash_ifprintf( fp, indent, "dependent\n" );
-         if( flags->sample_is_depended_on & ISOM_SAMPLE_IS_NOT_DISPOSABLE ) lsmash_ifprintf( fp, indent, "non-disposable\n" );
+    if     ( flags->sample_is_depended_on & ISOM_SAMPLE_IS_NOT_DISPOSABLE ) lsmash_ifprintf( fp, indent, "non-disposable\n" );
     else if( flags->sample_is_depended_on & ISOM_SAMPLE_IS_DISPOSABLE     ) lsmash_ifprintf( fp, indent, "disposable\n" );
-         if( flags->sample_has_redundancy & ISOM_SAMPLE_HAS_REDUNDANCY    ) lsmash_ifprintf( fp, indent, "redundant\n" );
+    if     ( flags->sample_has_redundancy & ISOM_SAMPLE_HAS_REDUNDANCY    ) lsmash_ifprintf( fp, indent, "redundant\n" );
     else if( flags->sample_has_redundancy & ISOM_SAMPLE_HAS_NO_REDUNDANCY ) lsmash_ifprintf( fp, indent, "non-redundant\n" );
     if( flags->sample_padding_value )
         lsmash_ifprintf( fp, indent, "padding_bits = %"PRIu8"\n", flags->sample_padding_value );
