@@ -183,13 +183,13 @@ static void isom_validate_box_size( lsmash_bs_t *bs, isom_box_t *box )
     }
     if( box->size < pos )
     {
-        printf( "[%s] box has less bytes than expected: %"PRId64"\n", isom_4cc2str( box->type.fourcc ), pos - box->size );
+        fprintf( stderr, "[%s] box has less bytes than expected: %"PRId64"\n", isom_4cc2str( box->type.fourcc ), pos - box->size );
         box->size = pos;
     }
     else if( box->size > pos )
     {
         /* The box probably has extra padding bytes at the end. */
-        printf( "[%s] box has more bytes than expected: %"PRId64"\n", isom_4cc2str( box->type.fourcc ), box->size - pos );
+        fprintf( stderr, "[%s] box has more bytes than expected: %"PRId64"\n", isom_4cc2str( box->type.fourcc ), box->size - pos );
         isom_skip_box_rest( bs, box );
     }
 }
@@ -889,7 +889,7 @@ static int isom_read_stsd( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     }
     if( stsd->size < stsd_pos )
     {
-        printf( "[stsd] box has extra bytes: %"PRId64"\n", stsd_pos - stsd->size );
+        fprintf( stderr, "[stsd] box has extra bytes: %"PRId64"\n", stsd_pos - stsd->size );
         stsd->size = stsd_pos;
     }
     box->size = stsd->size;
