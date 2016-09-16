@@ -487,6 +487,7 @@ int lsmash_open_file
     param->max_async_tolerance = 2.0;
     param->max_chunk_size      = 4 * 1024 * 1024;
     param->max_read_size       = 4 * 1024 * 1024;
+    param->auto_probe          = 1;
     return 0;
 }
 
@@ -587,7 +588,7 @@ int64_t lsmash_read_file
             return (int64_t)LSMASH_ERR_MEMORY_ALLOC;
         file->importer = importer;
         lsmash_importer_set_file( importer, file );
-        ret = lsmash_importer_find( importer, "ISOBMFF/QTFF", !file->bs->unseekable );
+        ret = lsmash_importer_find( importer, "ISOBMFF/QTFF", param->auto_probe && !file->bs->unseekable );
         if( ret < 0 )
             return ret;
         if( param )
