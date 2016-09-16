@@ -1307,7 +1307,7 @@ mp4sys_descriptor_t *mp4sys_get_descriptor( lsmash_bs_t *bs, void *parent )
     uint64_t skip_bytes = end_pos - lsmash_bs_count( bs );
     if( skip_bytes )
     {
-        printf( "[MPEG-4 Systems Descriptor Tag = 0x%02"PRIx8"] has more bytes than expected: %"PRId64"\n", header.tag, skip_bytes );
+        fprintf( stderr, "[MPEG-4 Systems Descriptor Tag = 0x%02"PRIx8"] has more bytes than expected: %"PRId64"\n", header.tag, skip_bytes );
         if( !bs->unseekable )
         {
             /* The stream is seekable. So, skip by seeking the stream. */
