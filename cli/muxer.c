@@ -716,6 +716,7 @@ static void display_codec_name( lsmash_codec_type_t codec_type, uint32_t track_n
     DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_DTSE_AUDIO, DTS LBR );
     DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_DTSH_AUDIO, DTS-HD );
     DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_DTSL_AUDIO, DTS-HD Lossless );
+    DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_DTSX_AUDIO, DTS:X );
     DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_SAWB_AUDIO, Wideband AMR voice );
     DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_SAMR_AUDIO, Narrowband AMR voice );
     DISPLAY_CODEC_NAME(   QT_CODEC_TYPE_LPCM_AUDIO, Uncompressed Audio );
@@ -788,7 +789,8 @@ static int open_input_files( muxer_t *muxer )
             else if( lsmash_check_codec_type_identical( codec_type, ISOM_CODEC_TYPE_DTSC_AUDIO )
                   || lsmash_check_codec_type_identical( codec_type, ISOM_CODEC_TYPE_DTSE_AUDIO )
                   || lsmash_check_codec_type_identical( codec_type, ISOM_CODEC_TYPE_DTSH_AUDIO )
-                  || lsmash_check_codec_type_identical( codec_type, ISOM_CODEC_TYPE_DTSL_AUDIO ) )
+                  || lsmash_check_codec_type_identical( codec_type, ISOM_CODEC_TYPE_DTSL_AUDIO )
+                  || lsmash_check_codec_type_identical( codec_type, ISOM_CODEC_TYPE_DTSX_AUDIO ) )
             {
                 if( !opt->isom && opt->qtff )
                     return ERROR_MSG( "the input seems DTS(-HD) Audio, at present available only for ISO Base Media file format.\n" );

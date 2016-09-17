@@ -47,8 +47,8 @@ extern "C" {
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  2
-#define LSMASH_VERSION_MINOR 11
-#define LSMASH_VERSION_MICRO  5
+#define LSMASH_VERSION_MINOR 12
+#define LSMASH_VERSION_MICRO  0
 
 #define LSMASH_VERSION_INT( a, b, c ) (((a) << 16) | ((b) << 8) | (c))
 
@@ -689,10 +689,13 @@ typedef lsmash_box_type_t lsmash_codec_type_t;
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_AC_3_AUDIO,  LSMASH_4CC( 'a', 'c', '-', '3' ) );    /* AC-3 audio */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_ALAC_AUDIO,  LSMASH_4CC( 'a', 'l', 'a', 'c' ) );    /* Apple lossless audio codec */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_DRA1_AUDIO,  LSMASH_4CC( 'd', 'r', 'a', '1' ) );    /* DRA Audio */
+DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_DTSEL_AUDIO, LSMASH_4CC( 'd', 't', 's', '+' ) );    /* Enhancement layer for DTS layered audio */
+DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_DTSDL_AUDIO, LSMASH_4CC( 'd', 't', 's', '-' ) );    /* Dependent base layer for DTS layered audio */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_DTSC_AUDIO,  LSMASH_4CC( 'd', 't', 's', 'c' ) );    /* DTS Coherent Acoustics audio */
+DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_DTSE_AUDIO,  LSMASH_4CC( 'd', 't', 's', 'e' ) );    /* DTS Express low bit rate audio, also known as DTS LBR */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_DTSH_AUDIO,  LSMASH_4CC( 'd', 't', 's', 'h' ) );    /* DTS-HD High Resolution Audio */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_DTSL_AUDIO,  LSMASH_4CC( 'd', 't', 's', 'l' ) );    /* DTS-HD Master Audio */
-DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_DTSE_AUDIO,  LSMASH_4CC( 'd', 't', 's', 'e' ) );    /* DTS Express low bit rate audio, also known as DTS LBR */
+DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_DTSX_AUDIO,  LSMASH_4CC( 'd', 't', 's', 'x' ) );    /* DTS:X */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_EC_3_AUDIO,  LSMASH_4CC( 'e', 'c', '-', '3' ) );    /* Enhanced AC-3 audio */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_ENCA_AUDIO,  LSMASH_4CC( 'e', 'n', 'c', 'a' ) );    /* Encrypted/Protected audio */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_G719_AUDIO,  LSMASH_4CC( 'g', '7', '1', '9' ) );    /* ITU-T Recommendation G.719 (2008) ); */
@@ -2970,7 +2973,7 @@ uint8_t *lsmash_create_dts_specific_info
 int lsmash_append_dts_reserved_box
 (
     lsmash_dts_specific_parameters_t *param,
-    uint8_t                          *box_data,
+    const uint8_t                    *box_data,
     uint32_t                          box_size
 );
 

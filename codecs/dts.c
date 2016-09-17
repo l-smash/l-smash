@@ -28,7 +28,7 @@
 
 #include "core/box.h"
 
-/***************************************************************************
+/*****************************************************************************
     ETSI TS 102 114 V1.2.1 (2002-12)
     ETSI TS 102 114 V1.3.1 (2011-08)
     ETSI TS 102 114 V1.4.1 (2012-09)
@@ -37,7 +37,9 @@
         Document No.: 9302J81100
         Revision: F
         Version: 1.3
-***************************************************************************/
+
+    Common File Format & Media Formats Specification Version 2.2 31 July 2015
+*****************************************************************************/
 #include "dts.h"
 
 #define DTS_MIN_CORE_SIZE           96
@@ -55,6 +57,7 @@ typedef enum
     DTS_SYNCWORD_XLL            = 0x41A29547,
     DTS_SYNCWORD_SUBSTREAM      = 0x64582025,
     DTS_SYNCWORD_SUBSTREAM_CORE = 0x02b09261,
+    DTS_SYNCWORD_X              = 0x02000850,
 } dts_syncword;
 
 /* Loudspeaker Masks (up to 32-bit) for
@@ -164,20 +167,38 @@ struct lsmash_dts_reserved_box_tag
     uint8_t *data;
 };
 
-int lsmash_append_dts_reserved_box( lsmash_dts_specific_parameters_t *param, uint8_t *box_data, uint32_t box_size )
+int lsmash_append_dts_reserved_box( lsmash_dts_specific_parameters_t *param, const uint8_t *box_data, uint32_t box_size )
 {
     if( !param || !box_data || box_size == 0 )
         return LSMASH_ERR_FUNCTION_PARAM;
-    param->box = lsmash_malloc( sizeof(lsmash_dts_reserved_box_t) );
     if( !param->box )
-        return LSMASH_ERR_MEMORY_ALLOC;
-    param->box->data = lsmash_memdup( box_data, box_size );
-    if( !param->box->data )
     {
-        lsmash_freep( &param->box );
-        return LSMASH_ERR_MEMORY_ALLOC;
+        param->box = lsmash_malloc_zero( sizeof(lsmash_dts_reserved_box_t) );
+        if( !param->box )
+            return LSMASH_ERR_MEMORY_ALLOC;
     }
-    param->box->size = box_size;
+    if( param->box->size == 0 )
+    {
+        /* New the first DTSExpansionBox. */
+        param->box->data = lsmash_memdup( box_data, box_size );
+        if( !param->box->data )
+        {
+            lsmash_freep( &param->box );
+            return LSMASH_ERR_MEMORY_ALLOC;
+        }
+        param->box->size = box_size;
+    }
+    else
+    {
+        /* New a DTSExpansionBox. */
+        uint32_t size = param->box->size + box_size;
+        uint8_t *data = lsmash_realloc( param->box->data, size );
+        if( !data )
+            return LSMASH_ERR_MEMORY_ALLOC;
+        memcpy( data + param->box->size, box_data, box_size );
+        param->box->data = data;
+        param->box->size = size;
+    }
     return 0;
 }
 
@@ -247,7 +268,26 @@ lsmash_codec_type_t lsmash_dts_get_codingname( lsmash_dts_specific_parameters_t 
         codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
         codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
     }
-    return codingname_table[ param->StreamConstruction ];
+    lsmash_codec_type_t codingname = codingname_table[ param->StreamConstruction ];
+    /* Check the presence of DTSXParameters Box. */
+    if( !lsmash_check_codec_type_identical( codingname, ISOM_CODEC_TYPE_DTSC_AUDIO )
+     && !lsmash_check_codec_type_identical( codingname, ISOM_CODEC_TYPE_DTSE_AUDIO )
+     && param->box
+     && param->box->data
+     && param->box->size >= ISOM_FULLBOX_COMMON_SIZE )
+    {
+        uint8_t *data = param->box->data;
+        uint32_t pos  = 0;
+        while( pos + ISOM_FULLBOX_COMMON_SIZE <= param->box->size )
+        {
+            uint32_t size = LSMASH_GET_BE32( &data[0] );
+            uint32_t type = LSMASH_GET_BE32( &data[4] );
+            if( type == LSMASH_4CC( 'd', 'x', 'p', 'b' ) )
+                return ISOM_CODEC_TYPE_DTSX_AUDIO;
+            pos += size;
+        }
+    }
+    return codingname;
 }
 
 uint8_t *lsmash_create_dts_specific_info( lsmash_dts_specific_parameters_t *param, uint32_t *data_length )
@@ -349,10 +389,22 @@ setup_param:
     return 0;
 }
 
-static uint64_t dts_bits_get( lsmash_bits_t *bits, uint32_t width, uint64_t *bits_pos )
+static inline uint64_t dts_bits_get( lsmash_bits_t *bits, uint32_t width, uint64_t *bits_pos )
 {
     *bits_pos += width;
     return lsmash_bits_get( bits, width );
+}
+
+static inline void dts_bits_align( lsmash_bits_t *bits, uint64_t *bits_pos )
+{
+    uint8_t remainder = 8 - (*bits_pos & 0x7);
+    (void)dts_bits_get( bits, remainder, bits_pos );
+}
+
+static inline void dts_bits_align4( lsmash_bits_t *bits, uint64_t *bits_pos )
+{
+    uint8_t remainder = 32 - (*bits_pos & 0x1f);
+    (void)dts_bits_get( bits, remainder, bits_pos );
 }
 
 static int dts_get_channel_count_from_channel_layout( uint16_t channel_layout )
@@ -819,14 +871,22 @@ static int dts_parse_exss_xll( dts_info_t *info, uint64_t *bits_pos, dts_audio_a
     int      nNumChSetsInFrame = dts_bits_get( bits, 4, bits_pos ) + 1;                         /* nNumChSetsInFrame              (4) */
     uint16_t nSegmentsInFrame  = 1 << dts_bits_get( bits, 4, bits_pos );                        /* nSegmentsInFrame               (4) */
     uint16_t nSmplInSeg        = 1 << dts_bits_get( bits, 4, bits_pos );                        /* nSmplInSeg                     (4) */
-    dts_bits_get( bits, 5, bits_pos );                                                          /* nBits4SSize                    (5) */
+    int      nBits4SSize       = dts_bits_get( bits, 5, bits_pos ) + 1;                         /* nBits4SSize                    (5) */
     dts_bits_get( bits, 3, bits_pos );                                                          /* nBandDataCRCEn                 (2)
                                                                                                  * bScalableLSBs                  (1) */
     int nBits4ChMask = dts_bits_get( bits, 5, bits_pos ) + 1;                                   /* nBits4ChMask                   (5) */
     dts_bits_get( bits, nHeaderSize * 8 - (*bits_pos - xll_pos), bits_pos );    /* Skip the remaining bits in Common Header. */
-    int      sum_nChSetLLChannel = 0;
-    uint32_t nFs1                = 0;
-    int      nNumFreqBands1      = 0;
+    int      sum_nChSetLLChannel       = 0;
+    uint32_t nFs1                      = 0;
+    int      number_of_frequency_bands = 0; /* the number of frequency bands is determined simply by the underlying maximum sampling
+                                             * frequency among all of the channel sets.
+                                             * For sampling frequency Fs,
+                                             *   Number of frequency bands is 1 for Fs <= Base_Fs
+                                             *   Number of frequency bands is 2 for Base_Fs < Fs <= 2 * Base_Fs
+                                             *   Number of frequency bands is 2 for 2 * Base_Fs < Fs <= 4 * Base_Fs
+                                             * where Base_Fs denotes the base sampling frequency i.e. 64 kHz, 88.2 kHz, or 96 kHz. */
+    int      nNumFreqBands1            = 0;
+    int      nNumFreqBands[17]         = { 0 };
     xll->channel_layout = 0;
     for( int nChSet = 0; nChSet < nNumChSetsInFrame; nChSet++ )
     {
@@ -921,7 +981,6 @@ static int dts_parse_exss_xll( dts_info_t *info, uint64_t *bits_pos, dts_audio_a
             }
         }
         int full_bandwidth;
-        int nNumFreqBands;
         if( nFs > 96000 )
         {
             /* When bXtraFreqBands is equal to 0, only one-half of the original bandwidth is preserved and, thus, the number
@@ -929,31 +988,54 @@ static int dts_parse_exss_xll( dts_info_t *info, uint64_t *bits_pos, dts_audio_a
              * nSmplInSeg is the number of samples in a segment per one frequency band when full bandwidth is preserved.
              * Because of this, to get the correct number of samples per frame, multiply the result by 2 when bXtraFreqBands
              * is equal to 0. */
-            full_bandwidth = dts_bits_get( bits, 1, bits_pos );                                 /* bXtraFreqBands                 (1) */
-            nNumFreqBands  = (1 + full_bandwidth) << (nFs > 192000);
+            full_bandwidth        = dts_bits_get( bits, 1, bits_pos );                          /* bXtraFreqBands                 (1) */
+            nNumFreqBands[nChSet] = (1 + full_bandwidth) << (nFs > 192000);
         }
         else
         {
-            full_bandwidth = 1;
-            nNumFreqBands  = 1;
+            full_bandwidth        = 1;
+            nNumFreqBands[nChSet] = 1;
         }
         uint32_t nSmplInSeg_nChSet;
         if( nChSet == 0 )
         {
             nFs1              = nFs;
-            nNumFreqBands1    = nNumFreqBands;
+            nNumFreqBands1    = nNumFreqBands[nChSet];
             nSmplInSeg_nChSet = nSmplInSeg;
         }
         else
-            nSmplInSeg_nChSet = (nSmplInSeg * (nFs * nNumFreqBands1)) / (nFs1 * nNumFreqBands);
+            nSmplInSeg_nChSet = (nSmplInSeg * (nFs * nNumFreqBands1)) / (nFs1 * nNumFreqBands[nChSet]);
         if( xll->sampling_frequency < nFs )
         {
             xll->sampling_frequency = nFs;
             uint32_t samples_per_band_in_frame = nSegmentsInFrame * nSmplInSeg_nChSet;
-            xll->frame_duration = samples_per_band_in_frame * nNumFreqBands * (2 - full_bandwidth);
+            xll->frame_duration = samples_per_band_in_frame * nNumFreqBands[nChSet] * (2 - full_bandwidth);
         }
+        if( number_of_frequency_bands < nNumFreqBands[nChSet] )
+            number_of_frequency_bands = nNumFreqBands[nChSet];
         dts_bits_get( bits, nChSetHeaderSize * 8 - (*bits_pos - xll_pos), bits_pos );   /* Skip the remaining bits in Channel Set Sub-Header. */
     }
+    /* NAVI */
+    uint64_t FreqBandDataSize = 0;
+    for( int Band = 0; Band < number_of_frequency_bands; Band++ )
+        for( int Seg = 0; Seg < nSegmentsInFrame; Seg++ )
+        {
+            /* The spec pseudocode extracts bits and initialize SegmentSize[Band][Seg] here. This may be one of lies in the spec.
+             * According to 8.3.2 Stream Navigation in ETSI TS 102 114 V1.4.1, sum of all band data for all channel set in a segments is
+             * the size of that segment. In addition there are no headers associated with segment and channel set of abstraction layer.
+             * Obviously, the extraction is meaningless and the navigation should works without it. */
+            // SegmentSize[Band][Seg] = dts_bits_get( bits, nBits4SSize, bits_pos );
+            for( int nChSet = 0; nChSet < nNumChSetsInFrame; nChSet++ )
+                if( nNumFreqBands[nChSet] > Band )
+                    FreqBandDataSize += dts_bits_get( bits, nBits4SSize, bits_pos ) + 1;        /* BandChSetSize[Band][Seg][nChSet] (nBits4SSize) */
+        }
+    dts_bits_align( bits, bits_pos );
+    dts_bits_get( bits, 16, bits_pos );                                                         /* Checksum                         (16) */
+    /* Skip band data. */
+    dts_bits_get( bits, FreqBandDataSize * 8, bits_pos );
+    dts_bits_align4( bits, bits_pos );
+    if( lsmash_bs_show_be32( bits->bs, 0 ) == DTS_SYNCWORD_X )
+        xll->dtsx_extension_present = 1;
     info->flags |= DTS_EXT_SUBSTREAM_XLL_FLAG;
     return bits->bs->error ? LSMASH_ERR_NAMELESS : 0;
 }
@@ -1525,6 +1607,30 @@ void dts_update_specific_param( dts_info_t *info )
     /* LBRDurationMod */
     param->LBRDurationMod = info->exss[exss_index_start].asset[0].lbr.duration_modifier;
     info->ddts_param_initialized = 1;
+    /* DTSExpansionBox[] */
+    for( int nExtSSIndex = 0; nExtSSIndex < DTS_MAX_NUM_EXSS; nExtSSIndex++ )
+    {
+        dts_extension_info_t *exss = &info->exss[nExtSSIndex];
+        for( uint8_t nAst = 0; nAst < exss->nuNumAssets; nAst++ )
+        {
+            dts_audio_asset_t *asset = &exss->asset[nAst];
+            if( asset->xll.dtsx_extension_present )
+            {
+                /* Add DTSXParameters Box so that its presence indicates DTS:X extensions are present in the bitstream.
+                 * Here, treat as unknown whether dialog level control for dialog objects in the bitstream is present or not. */
+                static const uint8_t dxpb[] =
+                {
+                    0x00, 0x00, 0x00, 0x0c, /* size = 12 */
+                    0x64, 0x78, 0x70, 0x62, /* type = 'dxpb' */
+                    0x00, 0x00, 0x00, 0x00  /* version = 0, flags = 0x000000 (no dialog_control_info_present flag) */
+                };
+                lsmash_remove_dts_reserved_box( param );
+                lsmash_append_dts_reserved_box( param, dxpb, sizeof(dxpb) );
+                /* No error checks and just return. */
+                return;
+            }
+        }
+    }
 }
 
 int dts_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )

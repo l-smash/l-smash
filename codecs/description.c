@@ -120,6 +120,17 @@ static int isom_is_nalff( lsmash_codec_type_t type )
         || lsmash_check_codec_type_identical( type, ISOM_CODEC_TYPE_HEV1_VIDEO );
 }
 
+static int isom_is_dts_audio( lsmash_codec_type_t type )
+{
+    return lsmash_check_codec_type_identical( type, ISOM_CODEC_TYPE_DTSC_AUDIO )
+        || lsmash_check_codec_type_identical( type, ISOM_CODEC_TYPE_DTSE_AUDIO )
+        || lsmash_check_codec_type_identical( type, ISOM_CODEC_TYPE_DTSH_AUDIO )
+        || lsmash_check_codec_type_identical( type, ISOM_CODEC_TYPE_DTSL_AUDIO )
+        || lsmash_check_codec_type_identical( type, ISOM_CODEC_TYPE_DTSX_AUDIO )
+        || lsmash_check_codec_type_identical( type, ISOM_CODEC_TYPE_DTSEL_AUDIO )
+        || lsmash_check_codec_type_identical( type, ISOM_CODEC_TYPE_DTSDL_AUDIO );
+}
+
 int lsmash_convert_crop_into_clap( lsmash_crop_t crop, uint32_t width, uint32_t height, lsmash_clap_t *clap )
 {
     if( !clap || crop.top.d == 0 || crop.bottom.d == 0 || crop.left.d == 0 ||  crop.right.d == 0 )
@@ -816,10 +827,7 @@ static int isom_check_valid_summary( lsmash_summary_t *summary )
         required_data_type = LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3;
     else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_EC_3_AUDIO ) )
         required_data_type = LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3;
-    else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_DTSC_AUDIO )
-          || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_DTSE_AUDIO )
-          || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_DTSH_AUDIO )
-          || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_DTSL_AUDIO ) )
+    else if( isom_is_dts_audio( sample_type ) )
         required_data_type = LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_DTS;
     else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_ALAC_AUDIO )
           || lsmash_check_codec_type_identical( sample_type,   QT_CODEC_TYPE_ALAC_AUDIO ) )
@@ -1552,6 +1560,9 @@ static lsmash_box_type_t isom_guess_audio_codec_specific_box_type( lsmash_codec_
     GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE( ISOM_CODEC_TYPE_DTSE_AUDIO,  ISOM_BOX_TYPE_DDTS );
     GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE( ISOM_CODEC_TYPE_DTSH_AUDIO,  ISOM_BOX_TYPE_DDTS );
     GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE( ISOM_CODEC_TYPE_DTSL_AUDIO,  ISOM_BOX_TYPE_DDTS );
+    GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE( ISOM_CODEC_TYPE_DTSX_AUDIO,  ISOM_BOX_TYPE_DDTS );
+    GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE( ISOM_CODEC_TYPE_DTSEL_AUDIO, ISOM_BOX_TYPE_DDTS );
+    GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE( ISOM_CODEC_TYPE_DTSDL_AUDIO, ISOM_BOX_TYPE_DDTS );
     GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE( ISOM_CODEC_TYPE_ALAC_AUDIO,  ISOM_BOX_TYPE_ALAC );
     GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE( ISOM_CODEC_TYPE_MP4A_AUDIO,  ISOM_BOX_TYPE_ESDS );
     GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE(   QT_CODEC_TYPE_ALAC_AUDIO,    QT_BOX_TYPE_ALAC );
@@ -2050,10 +2061,7 @@ static int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_audio_summary
         else
             err = isom_set_isom_alac_audio_description( audio, summary );
     }
-    else if( lsmash_check_codec_type_identical( audio_type, ISOM_CODEC_TYPE_DTSC_AUDIO )
-          || lsmash_check_codec_type_identical( audio_type, ISOM_CODEC_TYPE_DTSE_AUDIO )
-          || lsmash_check_codec_type_identical( audio_type, ISOM_CODEC_TYPE_DTSH_AUDIO )
-          || lsmash_check_codec_type_identical( audio_type, ISOM_CODEC_TYPE_DTSL_AUDIO ) )
+    else if( isom_is_dts_audio( audio_type ) )
         err = isom_set_isom_dts_audio_description( audio, summary );
     else if( lsmash_check_codec_type_identical( audio_type, ISOM_CODEC_TYPE_EC_3_AUDIO ) )
         err = isom_set_isom_eac3_audio_description( audio, summary );
@@ -3067,10 +3075,7 @@ isom_bitrate_updater_t isom_get_bitrate_updater
     else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_ALAC_AUDIO )
           || lsmash_check_codec_type_identical( sample_type,   QT_CODEC_TYPE_ALAC_AUDIO ) )
         RETURN_BITRATE_UPDATER( alac_update_bitrate )
-    else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_DTSC_AUDIO )
-          || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_DTSE_AUDIO )
-          || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_DTSH_AUDIO )
-          || lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_DTSL_AUDIO ) )
+    else if( isom_is_dts_audio( sample_type ) )
         RETURN_BITRATE_UPDATER( dts_update_bitrate )
     else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_EC_3_AUDIO ) )
         RETURN_BITRATE_UPDATER( eac3_update_bitrate )
