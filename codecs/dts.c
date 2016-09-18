@@ -177,28 +177,14 @@ int lsmash_append_dts_reserved_box( lsmash_dts_specific_parameters_t *param, con
         if( !param->box )
             return LSMASH_ERR_MEMORY_ALLOC;
     }
-    if( param->box->size == 0 )
-    {
-        /* New the first DTSExpansionBox. */
-        param->box->data = lsmash_memdup( box_data, box_size );
-        if( !param->box->data )
-        {
-            lsmash_freep( &param->box );
-            return LSMASH_ERR_MEMORY_ALLOC;
-        }
-        param->box->size = box_size;
-    }
-    else
-    {
-        /* New a DTSExpansionBox. */
-        uint32_t size = param->box->size + box_size;
-        uint8_t *data = lsmash_realloc( param->box->data, size );
-        if( !data )
-            return LSMASH_ERR_MEMORY_ALLOC;
-        memcpy( data + param->box->size, box_data, box_size );
-        param->box->data = data;
-        param->box->size = size;
-    }
+    /* New a DTSExpansionBox. */
+    uint32_t size = param->box->size + box_size;
+    uint8_t *data = lsmash_realloc( param->box->data, size );
+    if( !data )
+        return LSMASH_ERR_MEMORY_ALLOC;
+    memcpy( data + param->box->size, box_data, box_size );
+    param->box->data = data;
+    param->box->size = size;
     return 0;
 }
 
