@@ -238,14 +238,14 @@ lsmash_codec_type_t lsmash_dts_get_codingname( lsmash_dts_specific_parameters_t 
         codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
         codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
         codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
-        codingname_table[i++] = ISOM_CODEC_TYPE_DTSL_AUDIO;
-        codingname_table[i++] = ISOM_CODEC_TYPE_DTSL_AUDIO;
-        codingname_table[i++] = ISOM_CODEC_TYPE_DTSL_AUDIO;
+        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
+        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
+        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
         codingname_table[i++] = ISOM_CODEC_TYPE_DTSL_AUDIO;
         codingname_table[i++] = ISOM_CODEC_TYPE_DTSE_AUDIO;
         codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
         codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
-        codingname_table[i++] = ISOM_CODEC_TYPE_DTSL_AUDIO;
+        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
     }
     return codingname_table[ param->StreamConstruction ];
 }
