@@ -872,7 +872,7 @@ static int dts_parse_exss_xll( dts_info_t *info, uint64_t *bits_pos, dts_audio_a
                                              *   Number of frequency bands is 2 for 2 * Base_Fs < Fs <= 4 * Base_Fs
                                              * where Base_Fs denotes the base sampling frequency i.e. 64 kHz, 88.2 kHz, or 96 kHz. */
     int      nNumFreqBands1            = 0;
-    int      nNumFreqBands[17]         = { 0 };
+    int      nNumFreqBands[16]         = { 0 };
     xll->channel_layout = 0;
     for( int nChSet = 0; nChSet < nNumChSetsInFrame; nChSet++ )
     {
