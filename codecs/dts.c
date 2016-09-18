@@ -1429,6 +1429,9 @@ int dts_get_max_channel_count( dts_info_t *info )
 void dts_update_specific_param( dts_info_t *info )
 {
     lsmash_dts_specific_parameters_t *param = &info->ddts_param;
+    /* Find the first valid substream.
+     * Both nuNumAudioPresnt and nuNumAssets of any substream must not be 0. Therefore, at least one of these are 0,
+     * then the substream is invalid or absent. */
     int exss_index_start = 0;
     for( int nExtSSIndex = 0; nExtSSIndex < DTS_MAX_NUM_EXSS; nExtSSIndex++ )
     {
@@ -1592,9 +1595,8 @@ void dts_update_specific_param( dts_info_t *info )
                             + info->exss[3].nuNumAssets) > 1);
     /* LBRDurationMod */
     param->LBRDurationMod = info->exss[exss_index_start].asset[0].lbr.duration_modifier;
-    info->ddts_param_initialized = 1;
     /* DTSExpansionBox[] */
-    for( int nExtSSIndex = 0; nExtSSIndex < DTS_MAX_NUM_EXSS; nExtSSIndex++ )
+    for( int nExtSSIndex = exss_index_start; nExtSSIndex < DTS_MAX_NUM_EXSS; nExtSSIndex++ )
     {
         dts_extension_info_t *exss = &info->exss[nExtSSIndex];
         for( uint8_t nAst = 0; nAst < exss->nuNumAssets; nAst++ )
@@ -1613,10 +1615,12 @@ void dts_update_specific_param( dts_info_t *info )
                 lsmash_remove_dts_reserved_box( param );
                 lsmash_append_dts_reserved_box( param, dxpb, sizeof(dxpb) );
                 /* No error checks and just return. */
-                return;
+                goto param_initialized;
             }
         }
     }
+param_initialized:
+    info->ddts_param_initialized = 1;
 }
 
 int dts_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
