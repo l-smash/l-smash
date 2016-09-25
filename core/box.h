@@ -368,6 +368,9 @@ typedef struct
     uint32_t maxbitrate;        /* the maximum rate in bits/second over any window of one second */
     uint32_t avgbitrate;        /* the average rate in bits/second over the entire presentation */
     uint32_t reserved;
+    /* run time variables for calculating avgPDUsize, should not be written to file */
+    uint64_t combinedPDUsize;
+    uint64_t PDUcount;
 } isom_hmhd_t;
 
 /* Null Media Header Box
@@ -452,6 +455,29 @@ typedef struct
     uint32_t maxBitrate;    /* the maximum rate in bits/second over any window of one second */
     uint32_t avgBitrate;    /* the average rate in bits/second over the entire presentation */
 } isom_btrt_t;
+
+typedef struct
+{
+    /* This box is in RTP and RTP reception hint track sample descriptions */
+    ISOM_BASEBOX_COMMON;
+    uint32_t timescale;
+} isom_tims_t;
+
+typedef struct
+{
+    /* This box is in RTP and RTP reception hint track sample descriptions */
+    ISOM_BASEBOX_COMMON;
+    int32_t offset;
+} isom_tsro_t;
+
+typedef struct
+{
+    /* This box is in RTP reception hint track sample description */
+    ISOM_BASEBOX_COMMON;
+    unsigned int reserved : 6;
+    unsigned int timestamp_sync : 2;
+} isom_tssy_t;
+
 
 /* Global Header Box */
 typedef struct
@@ -769,15 +795,20 @@ typedef struct
     uint32_t constLPCMFramesPerAudioPacket;     /* only set if constant */
 } isom_audio_entry_t;
 
-/* Hint Sample Entry */
-#define ISOM_HINT_SAMPLE_ENTRY \
-    ISOM_SAMPLE_ENTRY; \
-    uint8_t *data
-
+/* Hint Sample Entry data field for
+ * rtp hint track, 
+ * srtp hint track,
+ * rtp reception hint track and 
+ * srtp reception hint track
+ * rtcp reception hint track
+ * srtcp reception hint track
+ */
 typedef struct
 {
-    ISOM_HINT_SAMPLE_ENTRY;
-    uint32_t data_length;
+    ISOM_SAMPLE_ENTRY;
+    uint16_t hinttrackversion;         /* = 1 */
+    uint16_t highestcompatibleversion; /* = 1 */
+    uint32_t maxpacketsize;
 } isom_hint_entry_t;
 
 /* Metadata Sample Entry */
@@ -1354,6 +1385,30 @@ typedef struct
         uint32_t notice_length;
 } isom_cprt_t;
 
+/* Movie SDP Information box */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    uint32_t descriptionformat;
+    uint8_t *sdptext;
+    uint32_t sdp_length;
+}isom_rtp_t;
+
+/* Track SDP Information box */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    uint8_t *sdptext;
+    uint32_t sdp_length;
+}isom_sdp_t;
+
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    isom_rtp_t *rtp;      /* Movie-level SDP box*/
+    isom_sdp_t *sdp;      /* Track-level SDP box*/
+} isom_hnti_t;
+
 /* User Data Box
  * This box is a container box for informative user-data.
  * This user data is formatted as a set of boxes with more specific box types, which declare more precisely their content.
@@ -1370,6 +1425,8 @@ typedef struct
     isom_AllF_t *AllF;      /* Play All Frames Box */
     /* Copyright Box List */
     lsmash_entry_list_t cprt_list;  /* Copyright Boxes is defined in ISO Base Media and 3GPP file format */
+    /* Hint information box */
+    isom_hnti_t *hnti;
 } isom_udta_t;
 
 /** Caches for handling tracks **/
@@ -1962,6 +2019,9 @@ struct lsmash_root_tag
 #define ISOM_BOX_TYPE_CO64 lsmash_form_iso_box_type( LSMASH_4CC( 'c', 'o', '6', '4' ) )
 #define ISOM_BOX_TYPE_COLR lsmash_form_iso_box_type( LSMASH_4CC( 'c', 'o', 'l', 'r' ) )
 #define ISOM_BOX_TYPE_CPRT lsmash_form_iso_box_type( LSMASH_4CC( 'c', 'p', 'r', 't' ) )
+#define ISOM_BOX_TYPE_HNTI lsmash_form_iso_box_type( LSMASH_4CC( 'h', 'n', 't', 'i' ) )
+#define ISOM_BOX_TYPE_RTP  lsmash_form_iso_box_type( LSMASH_4CC( 'r', 't', 'p', ' ' ) )
+#define ISOM_BOX_TYPE_SDP  lsmash_form_iso_box_type( LSMASH_4CC( 's', 'd', 'p', ' ' ) )
 #define ISOM_BOX_TYPE_CSLG lsmash_form_iso_box_type( LSMASH_4CC( 'c', 's', 'l', 'g' ) )
 #define ISOM_BOX_TYPE_CTTS lsmash_form_iso_box_type( LSMASH_4CC( 'c', 't', 't', 's' ) )
 #define ISOM_BOX_TYPE_CVRU lsmash_form_iso_box_type( LSMASH_4CC( 'c', 'v', 'r', 'u' ) )
@@ -2109,6 +2169,10 @@ struct lsmash_root_tag
 
 #define ISOM_BOX_TYPE_FTAB lsmash_form_iso_box_type( LSMASH_4CC( 'f', 't', 'a', 'b' ) )
 
+#define ISOM_BOX_TYPE_TIMS lsmash_form_iso_box_type( LSMASH_4CC( 't', 'i', 'm', 's' ) )
+#define ISOM_BOX_TYPE_TSRO lsmash_form_iso_box_type( LSMASH_4CC( 't', 's', 'r', 'o' ) )
+#define ISOM_BOX_TYPE_TSSY lsmash_form_iso_box_type( LSMASH_4CC( 't', 's', 's', 'y' ) )
+
 /* iTunes Metadata */
 #define ISOM_BOX_TYPE_DATA lsmash_form_iso_box_type( LSMASH_4CC( 'd', 'a', 't', 'a' ) )
 #define ISOM_BOX_TYPE_ILST lsmash_form_iso_box_type( LSMASH_4CC( 'i', 'l', 's', 't' ) )
@@ -2211,6 +2275,9 @@ struct lsmash_root_tag
 #define LSMASH_BOX_PRECEDENCE_ISOM_ESDS (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_QTFF_ESDS (LSMASH_BOX_PRECEDENCE_HM -  1 * LSMASH_BOX_PRECEDENCE_S)   /* preceded by 'frma' and 'mp4a' */
 #define LSMASH_BOX_PRECEDENCE_ISOM_BTRT (LSMASH_BOX_PRECEDENCE_HM -  1 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_TIMS (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_TSRO (LSMASH_BOX_PRECEDENCE_HM -  1 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_TSSY (LSMASH_BOX_PRECEDENCE_HM -  2 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_COLR (LSMASH_BOX_PRECEDENCE_LP +  2 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_QTFF_COLR (LSMASH_BOX_PRECEDENCE_LP +  2 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_QTFF_GAMA (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
@@ -2251,6 +2318,9 @@ struct lsmash_root_tag
 #define LSMASH_BOX_PRECEDENCE_ISOM_METAITEM (LSMASH_BOX_PRECEDENCE_N - 0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_CHPL (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_META (LSMASH_BOX_PRECEDENCE_N  -  7 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_HNTI (LSMASH_BOX_PRECEDENCE_N  -  8 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_RTP  (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_SDP  (LSMASH_BOX_PRECEDENCE_N  -  1 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_QTFF_WLOC (LSMASH_BOX_PRECEDENCE_N  -  8 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_QTFF_LOOP (LSMASH_BOX_PRECEDENCE_N  -  9 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_QTFF_SELO (LSMASH_BOX_PRECEDENCE_N  - 10 * LSMASH_BOX_PRECEDENCE_S)
@@ -2643,6 +2713,7 @@ isom_stbl_t *isom_add_stbl( isom_minf_t *minf );
 isom_stsd_t *isom_add_stsd( isom_stbl_t *stbl );
 isom_visual_entry_t *isom_add_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_type );
 isom_audio_entry_t *isom_add_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_type );
+isom_hint_entry_t *isom_add_hint_description(isom_stsd_t *stsd, lsmash_codec_type_t sample_type);
 isom_qt_text_entry_t *isom_add_qt_text_description( isom_stsd_t *stsd );
 isom_tx3g_entry_t *isom_add_tx3g_description( isom_stsd_t *stsd );
 isom_esds_t *isom_add_esds( void *parent_box );
@@ -2656,6 +2727,9 @@ isom_cspc_t *isom_add_cspc( isom_visual_entry_t *visual );
 isom_sgbt_t *isom_add_sgbt( isom_visual_entry_t *visual );
 isom_stsl_t *isom_add_stsl( isom_visual_entry_t *visual );
 isom_btrt_t *isom_add_btrt( isom_visual_entry_t *visual );
+isom_tims_t *isom_add_tims( isom_hint_entry_t *hint );
+isom_tsro_t *isom_add_tsro( isom_hint_entry_t *hint );
+isom_tssy_t *isom_add_tssy( isom_hint_entry_t *hint );
 isom_wave_t *isom_add_wave( isom_audio_entry_t *audio );
 isom_frma_t *isom_add_frma( isom_wave_t *wave );
 isom_enda_t *isom_add_enda( isom_wave_t *wave );
@@ -2679,6 +2753,9 @@ isom_stco_t *isom_add_stco( isom_stbl_t *stbl );
 isom_stco_t *isom_add_co64( isom_stbl_t *stbl );
 isom_udta_t *isom_add_udta( void *parent_box );
 isom_cprt_t *isom_add_cprt( isom_udta_t *udta );
+isom_hnti_t *isom_add_hnti( isom_udta_t *udta );
+isom_rtp_t  *isom_add_rtp(  isom_hnti_t *hnti );
+isom_sdp_t  *isom_add_sdp(  isom_hnti_t *hnti );
 isom_WLOC_t *isom_add_WLOC( isom_udta_t *udta );
 isom_LOOP_t *isom_add_LOOP( isom_udta_t *udta );
 isom_SelO_t *isom_add_SelO( isom_udta_t *udta );
