@@ -50,16 +50,34 @@ typedef struct
     dts_xxch_info_t xxch;
 } dts_core_info_t;
 
+/* XLL Peak Bit Rate handler */
 typedef struct
 {
-    uint16_t size;
+    uint8_t  data[240 * 1024];  /* 240 kbytes are the maximum PBR buffer size. */
+    uint32_t size;
+    uint32_t delay;
+} dts_xll_pbr_t;
+
+typedef struct
+{
+    uint8_t       present;
+    uint32_t      delay_frames;
+    uint32_t      offset;
+    dts_xll_pbr_t pbr;
+} dts_xll_sync_t;
+
+typedef struct
+{
+    uint16_t size;              /* size of an XLL extension */
     uint16_t channel_layout;
     uint32_t sampling_frequency;
     uint32_t frame_duration;
+    uint32_t frame_size;        /* size of a lossless frame */
     uint8_t  pcm_resolution;
     uint8_t  stereo_downmix;
     uint8_t  lower_planes;      /* CL, LL and RL */
     uint8_t  dtsx_extension_present;
+    dts_xll_sync_t sync;
 } dts_xll_info_t;
 
 typedef struct

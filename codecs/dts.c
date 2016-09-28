@@ -456,13 +456,20 @@ static inline uint8_t dts_get_lower_channels_from_ls_mask32( uint32_t mask )
 
 static void dts_parse_xll_navigation( lsmash_bits_t *bits, dts_xll_info_t *xll, int nuBits4ExSSFsize, uint64_t *bits_pos )
 {
-    xll->size = dts_bits_get( bits, nuBits4ExSSFsize, bits_pos ) + 1;                   /* nuExSSXLLFsize        (nuBits4ExSSFsize) */
-    if( dts_bits_get( bits, 1, bits_pos ) )                                             /* bExSSXLLSyncPresent   (1) */
+    xll->size         = dts_bits_get( bits, nuBits4ExSSFsize, bits_pos ) + 1;           /* nuExSSXLLFsize        (nuBits4ExSSFsize) */
+    xll->sync.present = dts_bits_get( bits, 1, bits_pos );                              /* bExSSXLLSyncPresent   (1) */
+    if( xll->sync.present )
     {
+        /* Ignore nuPeakBRCntrlBuffSzkB but use just the maximum value of it. */
         dts_bits_get( bits, 4, bits_pos );                                              /* nuPeakBRCntrlBuffSzkB (4) */
-        int nuBitsInitDecDly = dts_bits_get( bits, 5, bits_pos ) + 1;                   /* nuBitsInitDecDly      (5) */
-        dts_bits_get( bits, nuBitsInitDecDly, bits_pos );                               /* nuInitLLDecDlyFrames  (nuBitsInitDecDly) */
-        dts_bits_get( bits, nuBits4ExSSFsize, bits_pos );                               /* nuExSSXLLSyncOffset   (nuBits4ExSSFsize) */
+        int nuBitsInitDecDly   = dts_bits_get( bits, 5, bits_pos ) + 1;                 /* nuBitsInitDecDly      (5) */
+        xll->sync.delay_frames = dts_bits_get( bits, nuBitsInitDecDly, bits_pos );      /* nuInitLLDecDlyFrames  (nuBitsInitDecDly) */
+        xll->sync.offset       = dts_bits_get( bits, nuBits4ExSSFsize, bits_pos );      /* nuExSSXLLSyncOffset   (nuBits4ExSSFsize) */
+    }
+    else
+    {
+        xll->sync.delay_frames = 0;
+        xll->sync.offset       = 0;
     }
 }
 
@@ -842,10 +849,8 @@ static int dts_parse_exss_lbr( dts_info_t *info, uint64_t *bits_pos, dts_audio_a
     return bits->bs->error ? LSMASH_ERR_NAMELESS : 0;
 }
 
-static int dts_parse_exss_xll( dts_info_t *info, uint64_t *bits_pos, dts_audio_asset_t *asset )
+static int dts_parse_exss_xll_entity( dts_xll_info_t *xll, lsmash_bits_t *bits, uint64_t *bits_pos, dts_audio_asset_t *asset )
 {
-    lsmash_bits_t  *bits = info->bits;
-    dts_xll_info_t *xll  = &asset->xll;
     /* Common Header */
     uint64_t xll_pos = *bits_pos;
     if( DTS_SYNCWORD_XLL != dts_bits_get( bits, 32, bits_pos ) )                                /* SYNCXLL                        (32) */
@@ -853,7 +858,7 @@ static int dts_parse_exss_xll( dts_info_t *info, uint64_t *bits_pos, dts_audio_a
     dts_bits_get( bits, 4, bits_pos );                                                          /* nVersion                       (4) */
     uint64_t nHeaderSize       = dts_bits_get( bits, 8, bits_pos ) + 1;                         /* nHeaderSize                    (8) */
     int      nBits4FrameFsize  = dts_bits_get( bits, 5, bits_pos ) + 1;                         /* nBits4FrameFsize               (5) */
-    dts_bits_get( bits, nBits4FrameFsize, bits_pos );                                           /* nLLFrameSize                   (nBits4FrameFsize) */
+    xll->frame_size            = dts_bits_get( bits, nBits4FrameFsize, bits_pos ) + 1;          /* nLLFrameSize                   (nBits4FrameFsize) */
     int      nNumChSetsInFrame = dts_bits_get( bits, 4, bits_pos ) + 1;                         /* nNumChSetsInFrame              (4) */
     uint16_t nSegmentsInFrame  = 1 << dts_bits_get( bits, 4, bits_pos );                        /* nSegmentsInFrame               (4) */
     uint16_t nSmplInSeg        = 1 << dts_bits_get( bits, 4, bits_pos );                        /* nSmplInSeg                     (4) */
@@ -1022,6 +1027,74 @@ static int dts_parse_exss_xll( dts_info_t *info, uint64_t *bits_pos, dts_audio_a
     dts_bits_align4( bits, bits_pos );
     if( lsmash_bs_show_be32( bits->bs, 0 ) == DTS_SYNCWORD_X )
         xll->dtsx_extension_present = 1;
+}
+
+static inline void dts_xll_copy_to_pbr_buffer( dts_xll_info_t *xll, uint8_t *data, uint32_t size, uint32_t delay )
+{
+    memcpy( xll->sync.pbr.data + xll->sync.pbr.size, data, size );
+    xll->sync.pbr.size += size;
+    xll->sync.pbr.delay = delay;
+}
+
+static int dts_parse_exss_xll_on_pbr_buffer( dts_xll_info_t *xll, lsmash_bits_t *bits, uint64_t *bits_pos, dts_audio_asset_t *asset )
+{
+    uint8_t *data = lsmash_bs_get_buffer_data( bits->bs );
+    dts_xll_copy_to_pbr_buffer( xll, data, xll->size. xll->sync.pbr.delay );
+    if( xll->sync.pbr.delay && (-- xll->sync.pbr.delay) )
+        return 0;
+    int err = dts_parse_exss_xll_entity( xll, bits, bits_pos, asset );
+    xll->sync.pbr.size -= xll->frame_size;
+    if( xll->sync.pbr.size )
+        memmove( xll->sync.pbr.data, xll->sync.pbr.data + xll->frame_size, xll->sync.pbr.size );
+    return err;
+}
+
+static int dts_parse_exss_xll_direct( dts_xll_info_t *xll, lsmash_bits_t *bits, uint64_t *bits_pos, dts_audio_asset_t *asset )
+{
+    /* |<--------------------------- nuAssetFsize[nAst] ------------------------------>|
+     * |                            |<-------------- nuExSSXLLFsize ------------------>|
+     * |                            |<- nuExSSXLLSyncOffset ->|<--- nLLFrameSize --->| |
+     * |                            |                         |<- A lossless frame ->| |
+     * |<- An extension substream ->|<---------- An XLL extension substream ---------->|
+     * |<----------------------------- An Audio Asset -------------------------------->| */
+    uint32_t size = xll->size;
+    uint8_t *data = lsmash_bs_get_buffer_data( bits->bs );
+    if( xll->sync.present )
+    {
+        if( xll->sync.offset < size )
+        {
+            size -= xll->sync.offset;
+            dts_bits_get( bits, xll->sync.offset * 8, bits_pos );
+            if( xll->sync.delay_frames )
+                dts_xll_copy_to_pbr_buffer( xll, data + xll->sync.offset, size. xll->sync.delay_frames );
+        }
+        /* If delay is there, skip parsing lossless frame. Otherwise do parsing. */
+        int err = xll->sync.delay_frames ? 0 : dts_parse_exss_xll_entity( xll, bits, bits_pos, asset );
+        /* Copy remaining data in XLL extension into PBR buffer. */
+        if( xll->frame_size < size )
+            dts_xll_copy_to_pbr_buffer( xll, data + xll->frame_size, size - xll->frame_size, 0 );
+        return err;
+    }
+    dts_xll_copy_to_pbr_buffer( xll, data, size, xll->sync.pbr.delay );
+    return 0;
+}
+
+static int dts_parse_exss_xll( dts_info_t *info, uint64_t *bits_pos, dts_audio_asset_t *asset )
+(
+    dts_info_t        *info,
+    uint64_t          *bits_pos,
+    dts_audio_asset_t *asset
+)
+{
+    lsmash_bits_t  *bits = info->bits;
+    dts_xll_info_t *xll  = &asset->xll;
+    int err;
+    if( xll->sync.pbr.size )
+        err = dts_parse_exss_xll_on_pbr_buffer( xll, bits, bits_pos, asset );
+    else
+        err = dts_parse_exss_xll_direct( xll, bits, bits_pos, asset );
+    if( err < 0 )
+        return err;
     info->flags |= DTS_EXT_SUBSTREAM_XLL_FLAG;
     return bits->bs->error ? LSMASH_ERR_NAMELESS : 0;
 }
