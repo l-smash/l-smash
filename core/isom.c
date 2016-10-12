@@ -2208,7 +2208,7 @@ int lsmash_get_media_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
         memset( param->data_handler_name_shadow, 0, sizeof(param->data_handler_name_shadow) );
     }
     param->compact_sample_size_table  = !!stbl->stz2;
-    param->no_sample_dependency_table = !!stbl->sdtp;
+    param->no_sample_dependency_table =  !stbl->sdtp;
     param->reserved[0] = param->reserved[1] = 0;
     return 0;
 }
