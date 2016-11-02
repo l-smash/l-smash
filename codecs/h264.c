@@ -2205,7 +2205,9 @@ int h264_move_pending_avcC_param
     info->avcC_param.parameter_sets = parameter_sets;
     /* No pending avcC. */
     lsmash_destroy_h264_parameter_sets( &info->avcC_param_next );
+    uint8_t lengthSizeMinusOne = info->avcC_param_next.lengthSizeMinusOne;
     memset( &info->avcC_param_next, 0, sizeof(lsmash_h264_specific_parameters_t) );
+    info->avcC_param_next.lengthSizeMinusOne = lengthSizeMinusOne;
     info->avcC_pending = 0;
     return 0;
 }
