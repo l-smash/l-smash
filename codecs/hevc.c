@@ -2671,7 +2671,9 @@ int hevc_move_pending_hvcC_param
     info->hvcC_param.parameter_arrays = parameter_arrays;
     /* No pending hvcC. */
     lsmash_destroy_hevc_parameter_arrays( &info->hvcC_param_next );
+    uint8_t lengthSizeMinusOne = info->hvcC_param_next.lengthSizeMinusOne;
     memset( &info->hvcC_param_next, 0, sizeof(lsmash_hevc_specific_parameters_t) );
+    info->hvcC_param_next.lengthSizeMinusOne = lengthSizeMinusOne;
     info->hvcC_pending = 0;
     return 0;
 }
