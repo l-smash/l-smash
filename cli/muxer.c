@@ -66,6 +66,7 @@ typedef struct
     int      timeline_shift;
     int      compact_size_table;
     uint32_t interleave;
+    uint32_t movie_timescale;
     uint32_t num_of_brands;
     uint32_t brands[MAX_NUM_OF_BRANDS];
     uint32_t major_brand;
@@ -258,6 +259,7 @@ static void display_help( void )
              "    --language <string>       Specify the default language for all the output tracks.\n"
              "                              This option is overridden by the track options.\n"
              "    --compact-size-table      Compress sample size tables if possible.\n"
+             "    --movie-timescale <integer> Specify movie timescale.\n"
              "Output file formats:\n"
              "    mp4, mov, 3gp, 3g2, m4a, m4v\n"
              "\n"
@@ -553,6 +555,13 @@ static int parse_global_options( int argc, char **argv, muxer_t *muxer )
                 ++language;
             }
             opt->copyright_language = language ? lsmash_pack_iso_language( language ) : ISOM_LANGUAGE_CODE_UNDEFINED;
+        }
+        else if( !strcasecmp( argv[i], "--movie-timescale" ) )
+        {
+            CHECK_NEXT_ARG;
+            if( opt->movie_timescale )
+                return ERROR_MSG( "you specified --movie-timescale twice.\n" );
+            opt->movie_timescale = atoi( argv[i] );
         }
         /* iTunes metadata */
 #define CHECK_ITUNES_METADATA_ARG_STRING( argument, value ) \
@@ -884,6 +893,8 @@ static int prepare_output( muxer_t *muxer )
     /* Initialize movie */
     lsmash_movie_parameters_t movie_param;
     lsmash_initialize_movie_parameters( &movie_param );
+    if( opt->movie_timescale )
+        movie_param.timescale = opt->movie_timescale;
     if( lsmash_set_movie_parameters( output->root, &movie_param ) )
         return ERROR_MSG( "failed to set movie parameters.\n" );
     if( opt->copyright_notice
