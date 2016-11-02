@@ -3039,6 +3039,8 @@ int hevc_print_codec_specific
         {
             uint16_t nalUnitLength = lsmash_bs_get_be16( bs );
             lsmash_bs_skip_bytes( bs, nalUnitLength );
+            lsmash_ifprintf( fp, array_indent, "nalUnit[%"PRIu16"]\n", j );
+            lsmash_ifprintf( fp, array_indent + 1, "nalUnitLength = %"PRIu16"\n", nalUnitLength );
         }
     }
     lsmash_bs_cleanup( bs );
