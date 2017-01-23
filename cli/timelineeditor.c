@@ -103,8 +103,10 @@ typedef struct
     uint32_t track_number;
     uint32_t media_timescale;
     uint32_t media_timebase;
-    uint32_t skip_duration;
-    uint32_t empty_delay;
+    uint32_t skip_duration_num;
+    uint32_t skip_duration_den;
+    uint32_t empty_delay_num;
+    uint32_t empty_delay_den;
     int      dts_compression;
 } opt_t;
 
@@ -905,8 +907,8 @@ static void display_help( void )
              "    --timecode        <string>   Specify timecode file to edit timeline\n"
              "    --media-timescale <integer>  Specify media timescale to convert\n"
              "    --media-timebase  <integer>  Specify media timebase to convert\n"
-             "    --skip            <integer>  Skip start of media presentation in milliseconds\n"
-             "    --delay           <integer>  Insert blank clip before actual media presentation in milliseconds\n"
+             "    --skip            <rational> Skip start of media presentation in arbitrary units\n"
+             "    --delay           <rational> Insert blank clip before actual media presentation in arbitrary units\n"
              "    --dts-compression            Eliminate composition delay with DTS hack\n"
              "                                 Multiply media timescale and timebase automatically\n" );
 }
@@ -937,7 +939,17 @@ int main( int argc, char *argv[] )
     root_t     input    = { 0 };
     timecode_t timecode = { 0 };
     movie_io_t io = { &output, &input, &timecode };
-    opt_t opt = { 1, 0, 0, 0, 0, 0 };
+    opt_t opt =
+    {
+        .track_number      = 1,
+        .media_timescale   = 0,
+        .media_timebase    = 0,
+        .skip_duration_num = 0,
+        .skip_duration_den = 1,
+        .empty_delay_num   = 0,
+        .empty_delay_den   = 1,
+        .dts_compression   = 0
+    };
     /* Parse options. */
     lsmash_get_mainargs( &argc, &argv );
     int argn = 1;
@@ -973,15 +985,25 @@ int main( int argc, char *argv[] )
         }
         else if( !strcasecmp( argv[argn], "--skip" ) )
         {
-            opt.skip_duration = atoi( argv[++argn] );
-            if( !opt.skip_duration )
+            char *skip_param = argv[++argn];
+            if( sscanf( skip_param, "%"SCNu32"/%"SCNu32, &opt.skip_duration_num, &opt.skip_duration_den ) != 2 )
+            {
+                opt.skip_duration_num = atoi( skip_param );
+                opt.skip_duration_den = 1;
+            }
+            if( opt.skip_duration_num == 0 )
                 return TIMELINEEDITOR_ERR( "Invalid skip duration.\n" );
             ++argn;
         }
         else if( !strcasecmp( argv[argn], "--delay" ) )
         {
-            opt.empty_delay = atoi( argv[++argn] );
-            if( !opt.empty_delay )
+            char *delay_param = argv[++argn];
+            if( sscanf( delay_param, "%"SCNu32"/%"SCNu32, &opt.empty_delay_num, &opt.empty_delay_den ) != 2 )
+            {
+                opt.empty_delay_num = atoi( delay_param );
+                opt.empty_delay_den = 1;
+            }
+            if( opt.empty_delay_num == 0 )
                 return TIMELINEEDITOR_ERR( "Invalid delay time.\n" );
             ++argn;
         }
@@ -1199,7 +1221,7 @@ int main( int argc, char *argv[] )
         uint32_t track_ID        = out_track->track_ID;
         uint32_t movie_timescale = lsmash_get_movie_timescale( output.root );
         uint32_t media_timescale = lsmash_get_media_timescale( output.root, track_ID );
-        uint64_t empty_delay     = timecode.empty_delay + (uint64_t)(opt.empty_delay * (1e-3 * media_timescale) + 0.5);
+        uint64_t empty_delay     = timecode.empty_delay + (uint64_t)((double)((uint64_t)opt.empty_delay_num * media_timescale) / opt.empty_delay_den + 0.5);
         uint64_t duration        = timecode.duration + empty_delay;
         if( lsmash_delete_explicit_timeline_map( output.root, track_ID ) )
             return TIMELINEEDITOR_ERR( "Failed to delete explicit timeline maps.\n" );
@@ -1218,7 +1240,7 @@ int main( int argc, char *argv[] )
             duration  = ((double)duration / media_timescale) * movie_timescale;
         lsmash_edit_t edit;
         edit.duration   = duration;
-        edit.start_time = timecode.composition_delay + (uint64_t)(opt.skip_duration * (1e-3 * media_timescale) + 0.5);
+        edit.start_time = timecode.composition_delay + (uint64_t)((double)((uint64_t)opt.skip_duration_num * media_timescale) / opt.skip_duration_den + 0.5);
         edit.rate       = ISOM_EDIT_MODE_NORMAL;
         if( lsmash_create_explicit_timeline_map( output.root, track_ID, edit ) )
             return TIMELINEEDITOR_ERR( "Failed to create a explicit timeline map.\n" );
