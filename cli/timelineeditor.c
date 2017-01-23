@@ -1223,10 +1223,10 @@ int main( int argc, char *argv[] )
         uint64_t duration        = timecode.duration + empty_delay;
         if( lsmash_delete_explicit_timeline_map( output.root, track_ID ) )
             return TIMELINEEDITOR_ERR( "Failed to delete explicit timeline maps.\n" );
-        if( timecode.empty_delay )
+        if( empty_delay )
         {
             lsmash_edit_t empty_edit;
-            empty_edit.duration   = ((double)timecode.empty_delay / media_timescale) * movie_timescale;
+            empty_edit.duration   = ((double)empty_delay / media_timescale) * movie_timescale;
             empty_edit.start_time = ISOM_EDIT_MODE_EMPTY;
             empty_edit.rate       = ISOM_EDIT_MODE_NORMAL;
             if( lsmash_create_explicit_timeline_map( output.root, track_ID, empty_edit ) )
