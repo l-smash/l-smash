@@ -721,8 +721,6 @@ static int parse_timecode( timecode_t *timecode, uint32_t sample_count )
 
 static int edit_media_timeline( root_t *input, timecode_t *timecode, opt_t *opt )
 {
-    if( !timecode->file && !opt->media_timescale && !opt->media_timebase && !opt->dts_compression )
-        return 0;
     track_t *in_track = &input->file.movie.track[opt->track_number - 1];
     uint32_t track_ID = in_track->track_ID;
     lsmash_media_ts_list_t ts_list;
