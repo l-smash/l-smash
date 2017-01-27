@@ -56,6 +56,8 @@ typedef struct
     lsmash_file_parameters_t seg_param;
     output_movie_t           movie;
     uint32_t                 current_subseg_number;
+    int (*open)( const char *filename, int open_mode, lsmash_file_parameters_t * );
+    int (*close)( lsmash_file_parameters_t * );
 } output_file_t;
 
 typedef struct
@@ -154,6 +156,7 @@ typedef struct
     int                  dash;
     int                  compact_size_table;
     double               min_frag_duration;
+    int                  dry_run;
 } remuxer_t;
 
 typedef struct
@@ -211,10 +214,11 @@ static void cleanup_output_movie( output_t *output )
     if( !(output->file.seg_param.mode & LSMASH_FILE_MODE_INITIALIZATION) )
     {
         lsmash_freep( &output->file.seg_param.brands );
-        lsmash_close_file( &output->file.seg_param );
+        output->file.close( &output->file.seg_param );
     }
     lsmash_freep( &output->file.param.brands );
-    lsmash_close_file( &output->file.param );
+    if( output->file.close )
+        output->file.close( &output->file.param );
     lsmash_destroy_root( output->root );
     output->root = NULL;
 }
@@ -307,6 +311,7 @@ static void display_help( void )
              "                                If zero, Indexed self-initializing Media Segment.\n"
              "                                This option requires --fragment.\n"
              "    --compact-size-table        Compress sample size tables if possible.\n"
+             "    --dry-run                   Execute as a dry run.\n"
              "Track options:\n"
              "    remove                      Remove this track\n"
              "    disable                     Disable this track\n"
@@ -689,8 +694,6 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
             output->root = lsmash_create_root();
             if( !output->root )
                 FAILED_PARSE_CLI_OPTION( "failed to create a ROOT.\n" );
-            if( lsmash_open_file( argv[i], 0, &output->file.param ) < 0 )
-                FAILED_PARSE_CLI_OPTION( "failed to open an output file.\n" );
             output->file.name = argv[i];
         }
         else if( !strcasecmp( argv[i], "--chapter" ) )    /* chapter file */
@@ -742,6 +745,8 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
         }
         else if( !strcasecmp( argv[i], "--compact-size-table" ) )
             remuxer->compact_size_table = 1;
+        else if( !strcasecmp( argv[i], "--dry-run" ) )
+            remuxer->dry_run = 1;
         else
             FAILED_PARSE_CLI_OPTION( "unkown option found: %s\n", argv[i] );
     }
@@ -1131,6 +1136,19 @@ static int prepare_output( remuxer_t *remuxer )
     input_t        *input     = remuxer->input;
     output_t       *output    = remuxer->output;
     output_movie_t *out_movie = &output->file.movie;
+    /* Try to open an output file. */
+    if( remuxer->dry_run )
+    {
+        output->file.open  = dry_open_file;
+        output->file.close = dry_close_file;
+    }
+    else
+    {
+        output->file.open  = lsmash_open_file;
+        output->file.close = lsmash_close_file;
+    }
+    if( output->file.open( output->file.name, 0, &output->file.param ) < 0 )
+        return ERROR_MSG( "failed to open an output file.\n" );
     /* Count the number of output tracks. */
     for( int i = 0; i < remuxer->num_input; i++ )
         out_movie->num_tracks += input[i].file.movie.num_tracks;
@@ -1333,7 +1351,7 @@ static int open_media_segment( output_t *output, lsmash_file_parameters_t *seg_p
     sprintf( seg_name + suffixless_length, "_%"PRIu32, output->current_seg_number );
     if( *p == '.' )
         memcpy( seg_name + suffixless_length + suffix_length, p, end - p );
-    int ret = lsmash_open_file( seg_name, 0, seg_param );
+    int ret = out_file->open( seg_name, 0, seg_param );
     if( ret == 0 )
         eprintf( "[Segment] out: %s\n", seg_name );
     lsmash_free( seg_name );
@@ -1380,7 +1398,7 @@ static int switch_segment( remuxer_t *remuxer )
     if( lsmash_switch_media_segment( output->root, segment, &moov_to_front ) < 0 )
         return ERROR_MSG( "failed to switch to the next segment.\n" );
     if( !(out_file->seg_param.mode & LSMASH_FILE_MODE_INITIALIZATION) )
-        return lsmash_close_file( &out_file->seg_param );
+        return out_file->close( &out_file->seg_param );
     out_file->seg_param = seg_param;
     return 0;
 }

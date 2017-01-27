@@ -41,4 +41,16 @@
 
 int lsmash_write_lsmash_indicator( lsmash_root_t *root );
 
+int dry_open_file
+(
+    const char               *filename,
+    int                       open_mode,
+    lsmash_file_parameters_t *param
+);
+
+int dry_close_file
+(
+    lsmash_file_parameters_t *param
+);
+
 #endif

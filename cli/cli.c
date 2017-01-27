@@ -29,6 +29,8 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <shellapi.h>
+#include <io.h>     /* for _setmode() */
+#include <fcntl.h>  /* for O_BINARY */
 #endif
 
 #ifdef _WIN32
@@ -56,4 +58,110 @@ int lsmash_write_lsmash_indicator( lsmash_root_t *root )
         return 0;
     }
     return lsmash_write_top_level_box( free_box );
+}
+
+/*** Dry Run tools ***/
+
+typedef struct
+{
+    uint64_t pos;
+    uint64_t size;
+} dry_run_stream_t;
+
+static dry_run_stream_t dry_stream = { .pos = 0, .size = 0 };
+
+static int dry_read( void *opaque, uint8_t *buf, int size )
+{
+    dry_run_stream_t *stream = (dry_run_stream_t *)opaque;
+    int read_size;
+    if( stream->pos + size > stream->size )
+        read_size = stream->size - stream->pos;
+    else
+        read_size = size;
+    stream->pos += read_size;
+    return read_size;
+}
+
+static int dry_write( void *opaque, uint8_t *buf, int size )
+{
+    dry_run_stream_t *stream = (dry_run_stream_t *)opaque;
+    stream->pos += size;
+    if( stream->size < stream->pos )
+        stream->size = stream->pos;
+    return size;
+}
+
+static int64_t dry_seek( void *opaque, int64_t offset, int whence )
+{
+    dry_run_stream_t *stream = (dry_run_stream_t *)opaque;
+    if( whence == SEEK_SET )
+        stream->pos = offset;
+    else if( whence == SEEK_CUR )
+        stream->pos += offset;
+    else if( whence == SEEK_END )
+        stream->pos = stream->size + offset;
+    return stream->pos;
+}
+
+int dry_open_file
+(
+    const char               *filename,
+    int                       open_mode,
+    lsmash_file_parameters_t *param
+)
+{
+    if( !filename || !param )
+        return LSMASH_ERR_FUNCTION_PARAM;
+    lsmash_file_mode file_mode = 0;
+    if( open_mode == 0 )
+        file_mode = LSMASH_FILE_MODE_WRITE
+                  | LSMASH_FILE_MODE_BOX
+                  | LSMASH_FILE_MODE_INITIALIZATION
+                  | LSMASH_FILE_MODE_MEDIA;
+    else if( open_mode == 1 )
+        file_mode = LSMASH_FILE_MODE_READ;
+    if( file_mode == 0 )
+        return LSMASH_ERR_FUNCTION_PARAM;
+#ifdef _WIN32
+    _setmode( _fileno( stdin ),  _O_BINARY );
+    _setmode( _fileno( stdout ), _O_BINARY );
+    _setmode( _fileno( stderr ), _O_BINARY );
+#endif
+    int seekable = 1;
+    if( !strcmp( filename, "-" ) )
+    {
+        if( file_mode & LSMASH_FILE_MODE_READ )
+            seekable = 0;
+        else if( file_mode & LSMASH_FILE_MODE_WRITE )
+        {
+            seekable   = 0;
+            file_mode |= LSMASH_FILE_MODE_FRAGMENTED;
+        }
+    }
+    memset( param, 0, sizeof(lsmash_file_parameters_t) );
+    param->mode                = file_mode;
+    param->opaque              = (void *)&dry_stream;
+    param->read                = dry_read;
+    param->write               = dry_write;
+    param->seek                = seekable ? dry_seek : NULL;
+    param->major_brand         = 0;
+    param->brands              = NULL;
+    param->brand_count         = 0;
+    param->minor_version       = 0;
+    param->max_chunk_duration  = 0.5;
+    param->max_async_tolerance = 2.0;
+    param->max_chunk_size      = 4 * 1024 * 1024;
+    param->max_read_size       = 4 * 1024 * 1024;
+    return 0;
+}
+
+int dry_close_file
+(
+    lsmash_file_parameters_t *param
+)
+{
+    if( !param )
+        return LSMASH_ERR_NAMELESS;
+    param->opaque = NULL;
+    return 0;
 }
