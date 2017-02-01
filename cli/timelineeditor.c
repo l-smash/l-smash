@@ -121,22 +121,15 @@ static void cleanup_root( root_t *h )
         {
             lsmash_itunes_metadata_t *metadata = &movie->itunes_metadata[i];
             if( metadata->type == ITUNES_METADATA_TYPE_STRING )
-            {
-                if( metadata->value.string )
-                    lsmash_free( metadata->value.string );
-            }
+                lsmash_free( metadata->value.string );
             else if( metadata->type == ITUNES_METADATA_TYPE_BINARY )
-                if( metadata->value.binary.data )
-                    lsmash_free( metadata->value.binary.data );
-            if( metadata->meaning )
-                lsmash_free( metadata->meaning );
-            if( metadata->name )
-                lsmash_free( metadata->name );
+                lsmash_free( metadata->value.binary.data );
+            lsmash_free( metadata->meaning );
+            lsmash_free( metadata->name );
         }
         lsmash_freep( &movie->itunes_metadata );
     }
-    if( movie->track )
-        lsmash_freep( &movie->track );
+    lsmash_freep( &movie->track );
     lsmash_close_file( &h->file.param );
     lsmash_destroy_root( h->root );
     h->root = NULL;
@@ -151,8 +144,7 @@ static void cleanup_timecode( timecode_t *timecode )
         fclose( timecode->file );
         timecode->file = NULL;
     }
-    if( timecode->ts )
-        lsmash_freep( &timecode->ts );
+    lsmash_freep( &timecode->ts );
 }
 
 static int error_message( const char* message, ... )
@@ -241,10 +233,8 @@ static int get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, l
     }
     return 0;
 fail:
-    if( metadata->meaning )
-        lsmash_free( metadata->meaning );
-    if( metadata->name )
-        lsmash_free( metadata->name );
+    lsmash_free( metadata->meaning );
+    lsmash_free( metadata->name );
     return -1;
 }
 
