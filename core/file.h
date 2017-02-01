@@ -1,7 +1,7 @@
 /*****************************************************************************
  * file.h
  *****************************************************************************
- * Copyright (C) 2014-2015 L-SMASH project
+ * Copyright (C) 2014-2017 L-SMASH project
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *

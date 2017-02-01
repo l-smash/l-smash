@@ -1,7 +1,7 @@
 /*****************************************************************************
  * dllexportgen.cs
  *****************************************************************************
- * Copyright (C) 2015 L-SMASH project
+ * Copyright (C) 2015-2017 L-SMASH project
  *
  * Authors: Derek Buitenhuis <derek.buitenhuis@gmail.com>
  *

@@ -1,7 +1,7 @@
 /*****************************************************************************
  * a52_imp.c
  *****************************************************************************
- * Copyright (C) 2011-2015 L-SMASH project
+ * Copyright (C) 2011-2017 L-SMASH project
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *

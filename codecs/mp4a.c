@@ -1,7 +1,7 @@
 /*****************************************************************************
- * mp4a.c:
+ * mp4a.c
  *****************************************************************************
- * Copyright (C) 2010-2015 L-SMASH project
+ * Copyright (C) 2010-2017 L-SMASH project
  *
  * Authors: Takashi Hirata <silverfilain@gmail.com>
  *
