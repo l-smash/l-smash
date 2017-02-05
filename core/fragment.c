@@ -80,6 +80,16 @@ int lsmash_create_fragment_movie( lsmash_root_t *root )
     return 0;
 }
 
+static inline uint64_t isom_fragment_get_implicit_segment_duration
+(
+    isom_cache_t *cache
+)
+{
+    return cache->fragment->largest_cts != LSMASH_TIMESTAMP_UNDEFINED
+         ? cache->fragment->largest_cts + cache->fragment->last_duration
+         : 0;
+}
+
 static int isom_set_fragment_overall_duration( lsmash_file_t *file )
 {
     assert( file == file->initializer );
@@ -96,13 +106,11 @@ static int isom_set_fragment_overall_duration( lsmash_file_t *file )
          ||  trak->mdia->mdhd->timescale == 0 )
             return LSMASH_ERR_NAMELESS;
         uint64_t duration;
+        uint64_t implicit_segment_duration = isom_fragment_get_implicit_segment_duration( trak->cache );
         if( !trak->edts
          || !trak->edts->elst
          || !trak->edts->elst->list )
-        {
-            duration = trak->cache->fragment->largest_cts + trak->cache->fragment->last_duration;
-            duration = (uint64_t)(((double)duration / trak->mdia->mdhd->timescale) * file->moov->mvhd->timescale);
-        }
+            duration = (uint64_t)(((double)implicit_segment_duration / trak->mdia->mdhd->timescale) * file->moov->mvhd->timescale);
         else
         {
             duration = 0;
@@ -112,10 +120,7 @@ static int isom_set_fragment_overall_duration( lsmash_file_t *file )
                 if( !data )
                     return LSMASH_ERR_NAMELESS;
                 if( data->segment_duration == ISOM_EDIT_DURATION_IMPLICIT )
-                {
-                    uint64_t segment_duration = trak->cache->fragment->largest_cts + trak->cache->fragment->last_duration;
-                    duration += (uint64_t)(((double)segment_duration / trak->mdia->mdhd->timescale) * file->moov->mvhd->timescale);
-                }
+                    duration += (uint64_t)(((double)implicit_segment_duration / trak->mdia->mdhd->timescale) * file->moov->mvhd->timescale);
                 else
                     duration += data->segment_duration;
             }
@@ -186,12 +191,13 @@ static int isom_write_fragment_random_access_info( lsmash_file_t *file )
                 rap_entry = next;
                 continue;
             }
-            uint64_t composition_time = rap->time;
+            uint64_t composition_time          = rap->time;
+            uint64_t implicit_segment_duration = isom_fragment_get_implicit_segment_duration( trak->cache );
             /* Skip edits that doesn't need the current sync sample indicated in the Track Fragment Random Access Box. */
             while( edit )
             {
                 uint64_t segment_duration = edit->segment_duration == ISOM_EDIT_DURATION_IMPLICIT
-                                          ? trak->cache->fragment->largest_cts + trak->cache->fragment->last_duration
+                                          ? implicit_segment_duration
                                           : ((edit->segment_duration - 1) / movie_timescale + 1) * media_timescale;
                 if( edit->media_time != ISOM_EDIT_MODE_EMPTY
                  && composition_time < edit->media_time + segment_duration )
@@ -487,9 +493,9 @@ static int isom_prepare_random_access_info( lsmash_file_t *file )
 
 static int isom_output_fragment_media_data( lsmash_file_t *file )
 {
-    isom_fragment_manager_t *fragment = file->fragment;
+    isom_fragment_manager_t *frag_manager = file->fragment;
     /* If there is no available Media Data Box to write samples, add and write a new one. */
-    if( fragment->sample_count )
+    if( frag_manager->sample_count )
     {
         if( !file->mdat && !isom_add_mdat( file ) )
             return LSMASH_ERR_NAMELESS;
@@ -501,10 +507,19 @@ static int isom_output_fragment_media_data( lsmash_file_t *file )
         file->mdat->size       = 0;
         file->mdat->media_size = 0;
     }
-    lsmash_remove_entries( fragment->pool, isom_remove_sample_pool );
-    fragment->pool_size    = 0;
-    fragment->sample_count = 0;
+    lsmash_remove_entries( frag_manager->pool, isom_remove_sample_pool );
+    frag_manager->pool_size    = 0;
+    frag_manager->sample_count = 0;
     return 0;
+}
+
+static inline void isom_fragment_reset_sample_counts
+(
+    isom_cache_t *cache
+)
+{
+    cache->fragment->sample_count        = 0;
+    cache->fragment->output_sample_count = 0;
 }
 
 static int isom_finish_fragment_initial_movie( lsmash_file_t *file )
@@ -596,7 +611,7 @@ static int isom_finish_fragment_initial_movie( lsmash_file_t *file )
     {
         isom_trak_t *trak = (isom_trak_t *)entry->data;
         if( trak->cache->fragment )
-            trak->cache->fragment->sample_count = 0;
+            isom_fragment_reset_sample_counts( trak->cache );
     }
     return 0;
 }
@@ -664,10 +679,10 @@ static int isom_make_segment_index_entry
         uint64_t TDEC;
         uint64_t TEPT;
         uint64_t TPTF;
-        uint64_t composition_duration = subsegment->largest_cts - subsegment->smallest_cts + track_fragment->last_duration;
-        int subsegment_in_presentation;     /* If set to 1, TEPT is available. */
-        int first_rp_in_presentation;       /* If set to 1, both TSAP and TDEC are available. */
-        int first_sample_in_presentation;   /* If set to 1, TPTF is available. */
+        uint64_t composition_duration = subsegment->largest_cts - subsegment->smallest_cts;
+        if( subsegment->smallest_cts != LSMASH_TIMESTAMP_UNDEFINED
+         && subsegment->largest_cts  != LSMASH_TIMESTAMP_UNDEFINED )
+            composition_duration += track_fragment->last_duration;
         if( trak->edts && trak->edts->elst && trak->edts->elst->list )
         {
             /**-- Explicit edits --**/
@@ -675,17 +690,14 @@ static int isom_make_segment_index_entry
             const isom_elst_entry_t *edit = NULL;
             uint32_t movie_timescale = file->initializer->moov->mvhd->timescale;
             uint64_t pts             = subsegment->segment_duration;
-            /* This initialization is redundant since these are unused when uninitialized
-             * and are initialized always in used cases, but unclever compilers may
-             * complain that these variables may be uninitialized. */
-            TSAP = 0;
-            TDEC = 0;
-            TEPT = 0;
-            TPTF = 0;
+            int subsegment_in_presentation   = 0;   /* If set to 1, TEPT is available. */
+            int first_rp_in_presentation     = 0;   /* If set to 1, both TSAP and TDEC are available. */
+            int first_sample_in_presentation = 0;   /* If set to 1, TPTF is available. */
+            TSAP = LSMASH_TIMESTAMP_UNDEFINED;
+            TDEC = LSMASH_TIMESTAMP_UNDEFINED;
+            TEPT = LSMASH_TIMESTAMP_UNDEFINED;
+            TPTF = LSMASH_TIMESTAMP_UNDEFINED;
             /* */
-            subsegment_in_presentation   = 0;
-            first_rp_in_presentation     = 0;
-            first_sample_in_presentation = 0;
             for( lsmash_entry_t *elst_entry = elst->list->head; elst_entry; elst_entry = elst_entry->next )
             {
                 edit = (isom_elst_entry_t *)elst_entry->data;
@@ -702,33 +714,19 @@ static int isom_make_segment_index_entry
                 }
                 else
                 {
-                    if( edit->segment_duration )
-                    {
-                        double segment_duration = edit->segment_duration * ((double)sidx->timescale / movie_timescale);
-                        edit_end_cts = edit->media_time + (uint64_t)(segment_duration * ((double)edit->media_rate / (1 << 16)));
-                        edit_end_pts = pts + (uint64_t)segment_duration;
-                    }
-                    else
-                    {
-                        uint64_t segment_duration = composition_duration;
-                        if( edit->media_time > subsegment->smallest_cts )
-                        {
-                            if( subsegment->largest_cts + track_fragment->last_duration > edit->media_time )
-                                segment_duration -= edit->media_time - subsegment->smallest_cts;
-                            else
-                                segment_duration = 0;
-                        }
-                        edit_end_cts = edit->media_time + (uint64_t)(segment_duration * ((double)edit->media_rate / (1 << 16)));
-                        edit_end_pts = pts + (uint64_t)segment_duration;
-                    }
+                    double segment_duration = edit->segment_duration * ((double)sidx->timescale / movie_timescale);
+                    edit_end_cts = edit->media_time + (uint64_t)(segment_duration * ((double)edit->media_rate / (1 << 16)));
+                    edit_end_pts = pts + (uint64_t)segment_duration;
                 }
                 if( edit->media_time == ISOM_EDIT_MODE_EMPTY )
                 {
                     pts = edit_end_pts;
                     continue;
                 }
-                if( (subsegment->smallest_cts >= edit->media_time && subsegment->smallest_cts < edit_end_cts)
-                 || (subsegment->largest_cts  >= edit->media_time && subsegment->largest_cts  < edit_end_cts) )
+                if( subsegment->smallest_cts != LSMASH_TIMESTAMP_UNDEFINED
+                 && subsegment->largest_cts  != LSMASH_TIMESTAMP_UNDEFINED
+                 && ((subsegment->smallest_cts >= edit->media_time && subsegment->smallest_cts < edit_end_cts)
+                  || (subsegment->largest_cts  >= edit->media_time && subsegment->largest_cts  < edit_end_cts)) )
                 {
                     /* This subsegment is present in this edit. */
                     double rate = (double)edit->media_rate / (1 << 16);
@@ -744,6 +742,8 @@ static int isom_make_segment_index_entry
                             TEPT = pts;
                     }
                     if( first_rp_in_presentation == 0
+                     && subsegment->first_ed_cts != LSMASH_TIMESTAMP_UNDEFINED
+                     && subsegment->first_rp_cts != LSMASH_TIMESTAMP_UNDEFINED
                      && ((subsegment->first_ed_cts >= edit->media_time && subsegment->first_ed_cts < edit_end_cts)
                       || (subsegment->first_rp_cts >= edit->media_time && subsegment->first_rp_cts < edit_end_cts)) )
                     {
@@ -756,10 +756,11 @@ static int isom_make_segment_index_entry
                         TDEC = TSAP;
                     }
                     if( first_sample_in_presentation == 0
-                     && subsegment->first_cts >= edit->media_time && subsegment->first_cts < edit_end_cts )
+                     && subsegment->first_sample_cts != LSMASH_TIMESTAMP_UNDEFINED
+                     && subsegment->first_sample_cts >= edit->media_time && subsegment->first_sample_cts < edit_end_cts )
                     {
                         first_sample_in_presentation = 1;
-                        TPTF = pts + (uint64_t)((subsegment->first_cts - start_time) / rate);
+                        TPTF = pts + (uint64_t)((subsegment->first_sample_cts - start_time) / rate);
                     }
                     uint64_t subsegment_end_pts = pts + (uint64_t)(composition_duration / rate);
                     pts = LSMASH_MIN( edit_end_pts, subsegment_end_pts );
@@ -781,29 +782,17 @@ static int isom_make_segment_index_entry
             TSAP = subsegment->first_rp_cts;
             TDEC = subsegment->first_rp_cts;
             TEPT = subsegment->smallest_cts;
-            TPTF = subsegment->first_cts;
-            subsegment_in_presentation   = 1;
-            first_rp_in_presentation     = 1;
-            first_sample_in_presentation = 1;
+            TPTF = subsegment->first_sample_cts;
         }
-        if( subsegment->first_ra_flags  == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE
-         || subsegment->first_ra_number == 0
-         || subsegment->first_rp_number == 0
-         || subsegment_in_presentation  == 0
-         || first_rp_in_presentation    == 0 )
+        /* Decide SAP_type. */
+        data->starts_with_SAP = (subsegment->first_ra_number == 1);
+        data->SAP_type        = 0;
+        data->SAP_delta_time  = 0;
+        if( TSAP != LSMASH_TIMESTAMP_UNDEFINED
+         && TDEC != LSMASH_TIMESTAMP_UNDEFINED
+         && TEPT != LSMASH_TIMESTAMP_UNDEFINED )
         {
-            /* No SAP in this subsegment. */
-            data->starts_with_SAP = 0;
-            data->SAP_type        = 0;
-            data->SAP_delta_time  = 0;
-        }
-        else
-        {
-            data->starts_with_SAP = (subsegment->first_ra_number == 1);
-            data->SAP_type        = 0;
-            data->SAP_delta_time  = TSAP - TEPT;
-            /* Decide SAP_type. */
-            if( first_sample_in_presentation )
+            if( TPTF != LSMASH_TIMESTAMP_UNDEFINED )
             {
                 if( TEPT == TDEC && TDEC == TSAP && TSAP == TPTF )
                     data->SAP_type = 1;
@@ -821,10 +810,16 @@ static int isom_make_segment_index_entry
                 else if( TEPT < TDEC && TDEC < TSAP )
                     data->SAP_type = 6;
             }
+            if( data->SAP_type != 0 )
+                data->SAP_delta_time = TSAP - TEPT;
         }
+        /* Prepare for the next subsegment. */
         subsegment->segment_duration += data->subsegment_duration;
-        subsegment->first_ed_cts      = UINT64_MAX;
-        subsegment->first_rp_cts      = UINT64_MAX;
+        subsegment->largest_cts       = LSMASH_TIMESTAMP_UNDEFINED;
+        subsegment->smallest_cts      = LSMASH_TIMESTAMP_UNDEFINED;
+        subsegment->first_sample_cts  = LSMASH_TIMESTAMP_UNDEFINED;
+        subsegment->first_ed_cts      = LSMASH_TIMESTAMP_UNDEFINED;
+        subsegment->first_rp_cts      = LSMASH_TIMESTAMP_UNDEFINED;
         subsegment->first_rp_number   = 0;
         subsegment->first_ra_number   = 0;
         subsegment->first_ra_flags    = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE;
@@ -1106,7 +1101,7 @@ static int isom_finish_fragment_movie
     {
         isom_traf_t *traf = (isom_traf_t *)entry->data;
         if( traf->cache->fragment )
-            traf->cache->fragment->sample_count = 0;
+            isom_fragment_reset_sample_counts( traf->cache );
     }
     if( !(file->flags & LSMASH_FILE_MODE_INDEX) || file->max_isom_version < 6 )
         return 0;
@@ -1219,7 +1214,7 @@ int isom_set_fragment_last_duration
     }
     /* Update the last sample_duration if needed. */
     isom_trun_t *trun = (isom_trun_t *)traf->trun_list.tail->data;
-    if( trun->sample_count           == 1
+    if( trun->sample_count          == 1
      && traf->trun_list.entry_count == 1 )
     {
         isom_trex_t *trex = isom_get_trex( traf->file->initializer->moov->mvex, tfhd->track_ID );
@@ -1250,13 +1245,13 @@ int isom_append_fragment_track_run
 {
     if( !chunk->pool || chunk->pool->size == 0 )
         return 0;
-    isom_fragment_manager_t *fragment = file->fragment;
+    isom_fragment_manager_t *frag_manager = file->fragment;
     /* Move data in the pool of the current track fragment to the pool of the current movie fragment.
      * Empty the pool of current track. We don't delete data of samples here. */
-    if( lsmash_add_entry( fragment->pool, chunk->pool ) < 0 )
+    if( lsmash_add_entry( frag_manager->pool, chunk->pool ) < 0 )
         return LSMASH_ERR_MEMORY_ALLOC;
-    fragment->sample_count += chunk->pool->sample_count;
-    fragment->pool_size    += chunk->pool->size;
+    frag_manager->sample_count += chunk->pool->sample_count;
+    frag_manager->pool_size    += chunk->pool->size;
     chunk->pool = isom_create_sample_pool( chunk->pool->size );
     return chunk->pool ? 0 : LSMASH_ERR_MEMORY_ALLOC;
 }
@@ -1381,7 +1376,6 @@ static int isom_update_fragment_previous_sample_duration( isom_traf_t *traf, iso
             return LSMASH_ERR_NAMELESS;
         row->sample_duration = duration;
     }
-    traf->cache->fragment->last_duration = duration;
     return 0;
 }
 
@@ -1399,7 +1393,111 @@ static isom_sample_flags_t isom_generate_fragment_sample_flags( lsmash_sample_t 
     return flags;
 }
 
-static int isom_update_fragment_sample_tables( isom_traf_t *traf, lsmash_sample_t *sample )
+/* Set up the base media decode time of this track fragment.
+ * This feature is available under ISO Base Media version 6 or later.
+ * For DASH Media Segment, each Track Fragment Box shall contain a Track Fragment Base Media Decode Time Box. */
+static int isom_fragment_set_base_media_decode_time( lsmash_file_t *file, isom_traf_t *traf, uint64_t dts )
+{
+    if( file->max_isom_version >= 6 || file->media_segment )
+    {
+        assert( !traf->tfdt );
+        if( !isom_add_tfdt( traf ) )
+            return LSMASH_ERR_NAMELESS;
+        if( dts > UINT32_MAX )
+            traf->tfdt->version = 1;
+        traf->tfdt->baseMediaDecodeTime = dts;
+    }
+    return 0;
+}
+
+/* Update the cache of SAP related information. */
+static void isom_fragment_update_cache_for_sap
+(
+    isom_cache_t    *cache,
+    lsmash_sample_t *sample
+)
+{
+    isom_subsegment_t *subsegment = &cache->fragment->subsegment;
+    int non_output_sample = (sample->cts == LSMASH_TIMESTAMP_UNDEFINED);
+    if( !non_output_sample )
+    {
+        if( cache->fragment->sample_count == 1 )
+        {
+            assert( subsegment->first_sample_cts == LSMASH_TIMESTAMP_UNDEFINED );
+            subsegment->first_sample_cts = sample->cts;
+        }
+        if( cache->fragment->output_sample_count > 1 )
+        {
+            assert( subsegment->largest_cts  != LSMASH_TIMESTAMP_UNDEFINED
+                 && subsegment->smallest_cts != LSMASH_TIMESTAMP_UNDEFINED );
+            subsegment->largest_cts  = LSMASH_MAX( sample->cts, subsegment->largest_cts );
+            subsegment->smallest_cts = LSMASH_MIN( sample->cts, subsegment->smallest_cts );
+        }
+        else
+        {
+            assert( subsegment->largest_cts  == LSMASH_TIMESTAMP_UNDEFINED
+                 && subsegment->smallest_cts == LSMASH_TIMESTAMP_UNDEFINED );
+            if( cache->fragment->output_sample_count == 1 )
+            {
+
+                subsegment->largest_cts  = sample->cts;
+                subsegment->smallest_cts = sample->cts;
+            }
+        }
+    }
+    if( subsegment->first_ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE
+     && sample->prop.ra_flags      != ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE )
+    {
+        assert( subsegment->first_ra_number == 0 );
+        subsegment->first_ra_flags  = sample->prop.ra_flags;
+        subsegment->first_ra_number = cache->fragment->sample_count;
+        if( sample->prop.ra_flags & (ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC | ISOM_SAMPLE_RANDOM_ACCESS_FLAG_RAP) )
+            subsegment->is_first_recovery_point = 1;
+    }
+    if( subsegment->is_first_recovery_point )
+    {
+        assert( subsegment->first_rp_number == 0 );
+        if( !non_output_sample )
+        {
+            assert( subsegment->first_rp_cts == LSMASH_TIMESTAMP_UNDEFINED
+                 && subsegment->first_ed_cts == LSMASH_TIMESTAMP_UNDEFINED );
+            subsegment->first_rp_cts = sample->cts;
+            subsegment->first_ed_cts = sample->cts;
+        }
+        subsegment->first_rp_number         = subsegment->first_ra_number;
+        subsegment->decodable               = 1;
+        subsegment->is_first_recovery_point = 0;
+    }
+    else if( subsegment->decodable )
+    {
+        if( (subsegment->first_ra_flags & (ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC | ISOM_SAMPLE_RANDOM_ACCESS_FLAG_RAP))
+          ? (sample->prop.leading == ISOM_SAMPLE_IS_DECODABLE_LEADING)
+          : (subsegment->first_ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_POST_ROLL_START) )
+        {
+            if( !non_output_sample )
+                subsegment->first_ed_cts = LSMASH_MIN( sample->cts, subsegment->first_ed_cts );
+        }
+        else
+            subsegment->decodable = 0;
+    }
+}
+
+/* Update the cache of fragment related information.
+ * The cached sample_count is incremented here, so be careful to treat it. */
+static void isom_fragment_update_cache
+(
+    isom_cache_t    *cache,
+    lsmash_sample_t *sample
+)
+{
+    cache->fragment->has_samples          = 1;
+    cache->fragment->sample_count        += 1;
+    cache->fragment->output_sample_count += sample->cts == LSMASH_TIMESTAMP_UNDEFINED ? 0 : 1;
+    assert( cache->fragment->sample_count >= cache->fragment->output_sample_count );
+    isom_fragment_update_cache_for_sap( cache, sample );
+}
+
+static int isom_fragment_update_sample_tables( isom_traf_t *traf, lsmash_sample_t *sample )
 {
     isom_tfhd_t *tfhd = traf->tfhd;
     isom_trex_t *trex = isom_get_trex( traf->file->initializer->moov->mvex, tfhd->track_ID );
@@ -1449,24 +1547,21 @@ static int isom_update_fragment_sample_tables( isom_traf_t *traf, lsmash_sample_
         trun = (isom_trun_t *)traf->trun_list.tail->data;
     }
     isom_sample_flags_t sample_flags = isom_generate_fragment_sample_flags( sample );
+    int non_output_sample = (sample->cts == LSMASH_TIMESTAMP_UNDEFINED);
     if( ++trun->sample_count == 1 )
     {
         if( traf->trun_list.entry_count == 1 )
         {
-            /* This track fragment isn't empty-duration-fragment any more. */
-            tfhd->flags &= ~ISOM_TF_FLAGS_DURATION_IS_EMPTY;
-            /* Set up sample_description_index in this track fragment. */
+            tfhd->sample_description_index = current->sample_description_index
+                                           = sample->index;
+            tfhd->default_sample_size      = sample->length;
+            tfhd->default_sample_flags     = sample_flags;      /* Note: we decide an appropriate default value at the end of this movie fragment. */
+            tfhd->flags &= ~ISOM_TF_FLAGS_DURATION_IS_EMPTY;    /* This track fragment isn't empty-duration-fragment any more. */
             if( sample->index != trex->default_sample_description_index )
                 tfhd->flags |= ISOM_TF_FLAGS_SAMPLE_DESCRIPTION_INDEX_PRESENT;
-            tfhd->sample_description_index = current->sample_description_index = sample->index;
-            /* Set up default_sample_size used in this track fragment. */
-            tfhd->default_sample_size = sample->length;
-            /* Set up default_sample_flags used in this track fragment.
-             * Note: we decide an appropriate default value at the end of this movie fragment. */
-            tfhd->default_sample_flags = sample_flags;
             /* Set up random access information if this sample is a sync sample.
              * We inform only the first sample in each movie fragment. */
-            if( file->mfra && (sample->prop.ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC) )
+            if( !non_output_sample && file->mfra && (sample->prop.ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC) )
             {
                 isom_tfra_t *tfra = isom_get_tfra( file->mfra, tfhd->track_ID );
                 if( !tfra )
@@ -1485,7 +1580,7 @@ static int isom_update_fragment_sample_tables( isom_traf_t *traf, lsmash_sample_
                 isom_tfra_location_time_entry_t *rap = lsmash_malloc( sizeof(isom_tfra_location_time_entry_t) );
                 if( !rap )
                     return LSMASH_ERR_MEMORY_ALLOC;
-                rap->time          = sample->cts;   /* Set composition timestamp temporally.
+                rap->time          = sample->cts;   /* Set composition timestamp temporarily.
                                                      * At the end of the whole movie, this will be reset as presentation time. */
                 rap->moof_offset   = file->size;    /* We place Movie Fragment Box in the head of each movie fragment. */
                 rap->traf_number   = cache->fragment->traf_number;
@@ -1505,18 +1600,9 @@ static int isom_update_fragment_sample_tables( isom_traf_t *traf, lsmash_sample_
                 for( length = 1; rap->sample_number >> (length * 8); length++ );
                 tfra->length_size_of_sample_num = LSMASH_MAX( length - 1, tfra->length_size_of_sample_num );
             }
-            /* Set up the base media decode time of this track fragment.
-             * This feature is available under ISO Base Media version 6 or later.
-             * For DASH Media Segment, each Track Fragment Box shall contain a Track Fragment Base Media Decode Time Box. */
-            if( file->max_isom_version >= 6 || file->media_segment )
-            {
-                assert( !traf->tfdt );
-                if( !isom_add_tfdt( traf ) )
-                    return LSMASH_ERR_NAMELESS;
-                if( sample->dts > UINT32_MAX )
-                    traf->tfdt->version = 1;
-                traf->tfdt->baseMediaDecodeTime = sample->dts;
-            }
+            int err = isom_fragment_set_base_media_decode_time( file, traf, sample->dts );
+            if( err < 0 )
+                return err;
         }
         trun->first_sample_flags = sample_flags;
         current->first_dts = sample->dts;
@@ -1526,21 +1612,29 @@ static int isom_update_fragment_sample_tables( isom_traf_t *traf, lsmash_sample_
         trun->flags |= ISOM_TR_FLAGS_SAMPLE_SIZE_PRESENT;
     if( isom_compare_sample_flags( &sample_flags, &tfhd->default_sample_flags ) )
         trun->flags |= ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT;
-    uint32_t sample_composition_time_offset = sample->cts - sample->dts;
+    uint32_t sample_composition_time_offset = !non_output_sample ? sample->cts - sample->dts : ISOM_NON_OUTPUT_SAMPLE_OFFSET;
+    int32_t  ctd_shift                      = cache->timestamp.ctd_shift;
     if( sample_composition_time_offset )
     {
         trun->flags |= ISOM_TR_FLAGS_SAMPLE_COMPOSITION_TIME_OFFSET_PRESENT;
         /* Check if negative composition time offset is present. */
-        isom_timestamp_t *ts_cache = &cache->timestamp;
-        if( (sample->cts + ts_cache->ctd_shift) < sample->dts )
+        if( !non_output_sample )
+        {
+            if( (sample->cts + ctd_shift) < sample->dts )
+            {
+                if( file->max_isom_version < 6 )
+                    return LSMASH_ERR_INVALID_DATA; /* Negative composition time offset is invalid. */
+                if( (sample->dts - sample->cts) > INT32_MAX )
+                    return LSMASH_ERR_INVALID_DATA; /* Overflow */
+                ctd_shift = sample->dts - sample->cts;
+                trun->version = 1;
+            }
+        }
+        else
         {
             if( file->max_isom_version < 6 )
                 return LSMASH_ERR_INVALID_DATA; /* Negative composition time offset is invalid. */
-            if( (sample->dts - sample->cts) > INT32_MAX )
-                return LSMASH_ERR_INVALID_DATA; /* Overflow */
-            ts_cache->ctd_shift = sample->dts - sample->cts;
-            if( trun->version == 0 && file->max_isom_version >= 6 )
-                trun->version = 1;
+            trun->version = 1;
         }
     }
     if( trun->flags )
@@ -1558,6 +1652,7 @@ static int isom_update_fragment_sample_tables( isom_traf_t *traf, lsmash_sample_
      || (ret = isom_group_roll_recovery( (isom_box_t *)traf, cache, sample )) < 0 )
         return ret;
     /* Set up the previous sample_duration if this sample is not the first sample in the overall movie. */
+    uint32_t sample_duration;
     if( cache->fragment->has_samples )
     {
         /* Note: when using for live streaming, it is not good idea to return error by sample->dts < prev_dts
@@ -1566,47 +1661,13 @@ static int isom_update_fragment_sample_tables( isom_traf_t *traf, lsmash_sample_
         if( sample->dts <= prev_dts
          || sample->dts >  prev_dts + UINT32_MAX )
             return LSMASH_ERR_INVALID_DATA;
-        uint32_t sample_duration = sample->dts - prev_dts;
+        sample_duration = sample->dts - prev_dts;
         if( (ret = isom_update_fragment_previous_sample_duration( traf, trex, sample_duration )) < 0 )
             return ret;
     }
-    /* Cache */
-    cache->timestamp.dts         = sample->dts;
-    cache->timestamp.cts         = sample->cts;
-    cache->fragment->largest_cts = LSMASH_MAX( sample->cts, cache->fragment->largest_cts );
-    isom_subsegment_t *subsegment = &cache->fragment->subsegment;
-    if( trun->sample_count == 1 && traf->trun_list.entry_count == 1 )
-    {
-        subsegment->first_cts    = sample->cts;
-        subsegment->largest_cts  = sample->cts;
-        subsegment->smallest_cts = sample->cts;
-    }
     else
-    {
-        subsegment->largest_cts  = LSMASH_MAX( sample->cts, subsegment->largest_cts );
-        subsegment->smallest_cts = LSMASH_MIN( sample->cts, subsegment->smallest_cts );
-    }
-    if( subsegment->first_ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE )
-    {
-        subsegment->first_ra_flags  = sample->prop.ra_flags;
-        subsegment->first_ra_number = cache->fragment->sample_count + 1;
-        if( sample->prop.ra_flags & (ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC | ISOM_SAMPLE_RANDOM_ACCESS_FLAG_RAP) )
-        {
-            subsegment->first_rp_number = subsegment->first_ra_number;
-            subsegment->first_rp_cts    = sample->cts;
-            subsegment->first_ed_cts    = sample->cts;
-            subsegment->decodable       = 1;
-        }
-    }
-    else if( subsegment->decodable )
-    {
-        if( (subsegment->first_ra_flags & (ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC | ISOM_SAMPLE_RANDOM_ACCESS_FLAG_RAP))
-          ? (sample->prop.leading == ISOM_SAMPLE_IS_DECODABLE_LEADING)
-          : (subsegment->first_ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_POST_ROLL_START) )
-            subsegment->first_ed_cts = LSMASH_MIN( sample->cts, subsegment->first_ed_cts );
-        else
-            subsegment->decodable = 0;
-    }
+        sample_duration = cache->fragment->last_duration;
+    isom_update_cache_timestamp( cache, sample->dts, sample->cts, ctd_shift, sample_duration, non_output_sample );
     return delimit;
 }
 
@@ -1617,7 +1678,7 @@ static int isom_append_fragment_sample_internal_initial
     isom_sample_entry_t *sample_entry
 )
 {
-    /* Update the sample tables of this track fragment.
+    /* Update the sample tables of this track fragment enclosing the initial movie.
      * If a new chunk was created, append the previous one to the pool of this movie fragment. */
     uint32_t samples_per_packet;
     int ret = isom_update_sample_tables( trak, sample, &samples_per_packet, sample_entry );
@@ -1625,11 +1686,10 @@ static int isom_append_fragment_sample_internal_initial
         return ret;
     else if( ret == 1 )
         isom_append_fragment_track_run( trak->file, &trak->cache->chunk );
+    isom_fragment_update_cache( trak->cache, sample );
     /* Add a new sample into the pool of this track fragment. */
     if( (ret = isom_pool_sample( trak->cache->chunk.pool, sample, samples_per_packet )) < 0 )
         return ret;
-    trak->cache->fragment->has_samples   = 1;
-    trak->cache->fragment->sample_count += 1;
     return 0;
 }
 
@@ -1642,16 +1702,15 @@ static int isom_append_fragment_sample_internal
 {
     /* Update the sample tables of this track fragment.
      * If a new track run was created, append the previous one to the pool of this movie fragment. */
-    int ret = isom_update_fragment_sample_tables( traf, sample );
+    int ret = isom_fragment_update_sample_tables( traf, sample );
     if( ret < 0 )
         return ret;
     else if( ret == 1 )
         isom_append_fragment_track_run( traf->file, &traf->cache->chunk );
+    isom_fragment_update_cache( traf->cache, sample );
     /* Add a new sample into the pool of this track fragment. */
     if( (ret = isom_pool_sample( traf->cache->chunk.pool, sample, 1 )) < 0 )
         return ret;
-    traf->cache->fragment->has_samples   = 1;
-    traf->cache->fragment->sample_count += 1;
     return 0;
 }
 
@@ -1692,6 +1751,11 @@ int isom_append_fragment_sample
     }
     else
     {
+        /* NOTE: there are codes to support non-output sample signaling in fragments but we disabled them currently since the
+         * ISOBMFF spec 5th edition mentions 'ctts' and 'cslg' in 'stbl' which exists in the initial movie only. Therefore,
+         * as a safety, reject non-output samples here. */
+        if( sample->cts == LSMASH_TIMESTAMP_UNDEFINED )
+            return LSMASH_ERR_INVALID_DATA;
         isom_traf_t *traf = isom_get_traf( fragment->movie, trak->tkhd->track_ID );
         if( !traf )
         {

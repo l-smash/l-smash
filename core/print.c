@@ -1380,7 +1380,10 @@ static int isom_print_ctts( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
             isom_ctts_entry_t *data = (isom_ctts_entry_t *)entry->data;
             lsmash_ifprintf( fp, indent++, "entry[%"PRIu32"]\n", i++ );
             lsmash_ifprintf( fp, indent, "sample_count = %"PRIu32"\n", data->sample_count );
-            lsmash_ifprintf( fp, indent--, "sample_offset = %"PRId32"\n", (union {uint32_t ui; int32_t si;}){ data->sample_offset }.si );
+            if( data->sample_offset != ISOM_NON_OUTPUT_SAMPLE_OFFSET )
+                lsmash_ifprintf( fp, indent--, "sample_offset = %"PRId32"\n", (union {uint32_t ui; int32_t si;}){ data->sample_offset }.si );
+            else
+                lsmash_ifprintf( fp, indent--, "sample_offset = -2^31 (non-output sample)\n" );
         }
     else
         for( lsmash_entry_t *entry = ctts->list->head; entry; entry = entry->next )
