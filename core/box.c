@@ -1373,6 +1373,12 @@ isom_trak_t *isom_add_trak( isom_moov_t *moov )
         if( !fragment )
             goto fail;
         cache->fragment = fragment;
+        fragment->largest_cts                 = LSMASH_TIMESTAMP_UNDEFINED;
+        fragment->subsegment.largest_cts      = LSMASH_TIMESTAMP_UNDEFINED;
+        fragment->subsegment.smallest_cts     = LSMASH_TIMESTAMP_UNDEFINED;
+        fragment->subsegment.first_sample_cts = LSMASH_TIMESTAMP_UNDEFINED;
+        fragment->subsegment.first_ed_cts     = LSMASH_TIMESTAMP_UNDEFINED;
+        fragment->subsegment.first_rp_cts     = LSMASH_TIMESTAMP_UNDEFINED;
     }
     if( lsmash_add_entry( &moov->trak_list, trak ) < 0 )
         goto fail;

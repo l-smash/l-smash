@@ -178,7 +178,7 @@ static int isom_add_stts_entry( isom_stbl_t *stbl, uint32_t sample_delta )
     return 0;
 }
 
-static int isom_add_ctts_entry( isom_stbl_t *stbl, uint32_t sample_offset )
+static int isom_add_ctts_entry( isom_stbl_t *stbl, uint32_t sample_count, uint32_t sample_offset )
 {
     if( !stbl
      || !stbl->ctts
@@ -187,7 +187,7 @@ static int isom_add_ctts_entry( isom_stbl_t *stbl, uint32_t sample_offset )
     isom_ctts_entry_t *data = lsmash_malloc( sizeof(isom_ctts_entry_t) );
     if( !data )
         return LSMASH_ERR_MEMORY_ALLOC;
-    data->sample_count  = 1;
+    data->sample_count  = sample_count;
     data->sample_offset = sample_offset;
     if( lsmash_add_entry( stbl->ctts->list, data ) < 0 )
     {
@@ -693,7 +693,7 @@ static int isom_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_de
         uint64_t dts        = 0;
         uint64_t max_cts    = 0;
         uint64_t max2_cts   = 0;
-        uint64_t min_cts    = UINT64_MAX;
+        uint64_t min_cts    = LSMASH_TIMESTAMP_UNDEFINED;
         int64_t  max_offset = 0;
         int64_t  min_offset = UINT32_MAX;
         int32_t  ctd_shift  = trak->cache->timestamp.ctd_shift;
@@ -709,29 +709,32 @@ static int isom_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_de
             isom_ctts_entry_t *ctts_data = (isom_ctts_entry_t *)ctts_entry->data;
             if( !stts_data || !ctts_data )
                 return LSMASH_ERR_INVALID_DATA;
-            uint64_t cts;
-            if( ctd_shift )
+            if( ctts_data->sample_offset != ISOM_NON_OUTPUT_SAMPLE_OFFSET )
             {
-                /* Anyway, add composition to decode timeline shift for calculating maximum and minimum CTS correctly. */
-                int64_t sample_offset = (int32_t)ctts_data->sample_offset;
-                cts = dts + sample_offset + ctd_shift;
-                max_offset = LSMASH_MAX( max_offset, sample_offset );
-                min_offset = LSMASH_MIN( min_offset, sample_offset );
+                uint64_t cts;
+                if( ctd_shift )
+                {
+                    /* Anyway, add composition to decode timeline shift for calculating maximum and minimum CTS correctly. */
+                    int64_t sample_offset = (int32_t)ctts_data->sample_offset;
+                    cts = dts + sample_offset + ctd_shift;
+                    max_offset = LSMASH_MAX( max_offset, sample_offset );
+                    min_offset = LSMASH_MIN( min_offset, sample_offset );
+                }
+                else
+                {
+                    cts = dts + ctts_data->sample_offset;
+                    max_offset = LSMASH_MAX( max_offset, ctts_data->sample_offset );
+                    min_offset = LSMASH_MIN( min_offset, ctts_data->sample_offset );
+                }
+                min_cts = LSMASH_MIN( min_cts, cts );
+                if( max_cts < cts )
+                {
+                    max2_cts = max_cts;
+                    max_cts  = cts;
+                }
+                else if( max2_cts < cts )
+                    max2_cts = cts;
             }
-            else
-            {
-                cts = dts + ctts_data->sample_offset;
-                max_offset = LSMASH_MAX( max_offset, ctts_data->sample_offset );
-                min_offset = LSMASH_MIN( min_offset, ctts_data->sample_offset );
-            }
-            min_cts = LSMASH_MIN( min_cts, cts );
-            if( max_cts < cts )
-            {
-                max2_cts = max_cts;
-                max_cts  = cts;
-            }
-            else if( max2_cts < cts )
-                max2_cts = cts;
             dts += stts_data->sample_delta;
             /* If finished sample_count of current entry, move to next. */
             if( ++j == ctts_data->sample_count )
@@ -760,7 +763,8 @@ static int isom_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_de
                 /* The spec allows an arbitrary value for the duration of the last sample. So, we pick last-1 sample's. */
                 last_sample_delta = max_cts - max2_cts;
             }
-            mdhd->duration = max_cts - min_cts + last_sample_delta;
+            if( min_cts != LSMASH_TIMESTAMP_UNDEFINED )
+                mdhd->duration = max_cts - min_cts + last_sample_delta;
             /* To match dts and media duration, update stts and mdhd relatively. */
             if( mdhd->duration > dts )
                 last_sample_delta = mdhd->duration - dts;
@@ -782,6 +786,7 @@ static int isom_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_de
             }
             int64_t composition_end_time = max_cts + (max_cts - max2_cts);
             if( !file->fragment
+             && min_cts != LSMASH_TIMESTAMP_UNDEFINED
              && (min_offset <= INT32_MAX) && (min_offset >= INT32_MIN)
              && (max_offset <= INT32_MAX) && (max_offset >= INT32_MIN)
              && ((int64_t)min_cts <= INT32_MAX) && (composition_end_time <= INT32_MAX) )
@@ -1824,9 +1829,12 @@ uint32_t lsmash_get_composition_to_decode_shift( lsmash_root_t *root, uint32_t t
         isom_ctts_entry_t *ctts_data = (isom_ctts_entry_t *)ctts_entry->data;
         if( !stts_data || !ctts_data )
             return 0;
-        cts = dts + (int32_t)ctts_data->sample_offset;
-        if( dts > cts + ctd_shift )
-            ctd_shift = dts - cts;
+        if( ctts_data->sample_offset != ISOM_NON_OUTPUT_SAMPLE_OFFSET )
+        {
+            cts = dts + (int32_t)ctts_data->sample_offset;
+            if( dts > cts + ctd_shift )
+                ctd_shift = dts - cts;
+        }
         dts += stts_data->sample_delta;
         if( ++i == stts_data->sample_count )
         {
@@ -2989,68 +2997,109 @@ static uint32_t isom_add_size( isom_stbl_t *stbl, uint32_t sample_size )
     return isom_get_sample_count_from_sample_table( stbl );
 }
 
-static uint32_t isom_add_dts( isom_stbl_t *stbl, isom_timestamp_t *cache, uint64_t dts )
+static uint32_t isom_add_dts( isom_stbl_t *stbl, uint64_t dts, uint64_t prev_dts )
 {
     isom_stts_t *stts = stbl->stts;
     if( stts->list->entry_count == 0 )
-    {
-        if( isom_add_stts_entry( stbl, dts ) < 0 )
-            return 0;
-        cache->dts = dts;
-        return dts;
-    }
-    if( dts <= cache->dts )
+        return isom_add_stts_entry( stbl, dts ) < 0 ? 0 : dts;
+    if( dts <= prev_dts )
         return 0;
-    uint32_t sample_delta = dts - cache->dts;
+    uint32_t sample_delta = dts - prev_dts;
     isom_stts_entry_t *data = (isom_stts_entry_t *)stts->list->tail->data;
     if( data->sample_delta == sample_delta )
         ++ data->sample_count;
     else if( isom_add_stts_entry( stbl, sample_delta ) < 0 )
         return 0;
-    cache->dts = dts;
     return sample_delta;
 }
 
-static int isom_add_cts( isom_stbl_t *stbl, isom_timestamp_t *cache, uint64_t cts )
+/* Add ctts box and the first ctts entry. */
+static int isom_add_initial_sample_offset( isom_stbl_t *stbl, uint32_t sample_offset )
 {
-    int err;
-    isom_ctts_t *ctts = stbl->ctts;
-    if( !ctts )
+    if( !isom_add_ctts( stbl ) )
+        return LSMASH_ERR_NAMELESS;
+    if( sample_offset == ISOM_NON_OUTPUT_SAMPLE_OFFSET )
+        stbl->ctts->version = 1;
+    uint32_t sample_count = isom_get_sample_count_from_sample_table( stbl );
+    if( sample_count > 1 )
     {
-        if( cts == cache->dts )
-        {
-            cache->cts = cts;
-            return 0;
-        }
-        /* Add ctts box and the first ctts entry. */
-        if( !isom_add_ctts( stbl ) )
-            return LSMASH_ERR_NAMELESS;
-        if( (err = isom_add_ctts_entry( stbl, 0 )) < 0 )
+        /* Set all prior samples' sample_offset to 0. */
+        int err = isom_add_ctts_entry( stbl, sample_count - 1, 0 );
+        if( err < 0 )
             return err;
-        ctts = stbl->ctts;
-        isom_ctts_entry_t *data = (isom_ctts_entry_t *)ctts->list->head->data;
-        uint32_t sample_count = stbl->stsz ? stbl->stsz->sample_count : stbl->stz2->sample_count;
-        if( sample_count != 1 )
-        {
-            data->sample_count = sample_count - 1;
-            if( (err = isom_add_ctts_entry( stbl, cts - cache->dts )) < 0 )
-                return err;
-        }
-        else
-            data->sample_offset = cts;
-        cache->cts = cts;
-        return 0;
     }
-    if( !ctts->list )
+    return isom_add_ctts_entry( stbl, 1, sample_offset );
+}
+
+static int isom_add_sample_offset( isom_stbl_t *stbl, uint32_t sample_offset )
+{
+    if( !stbl->ctts->list )
         return LSMASH_ERR_INVALID_DATA;
-    isom_ctts_entry_t *data = (isom_ctts_entry_t *)ctts->list->tail->data;
-    uint32_t sample_offset = cts - cache->dts;
+    isom_ctts_entry_t *data = (isom_ctts_entry_t *)stbl->ctts->list->tail->data;
     if( data->sample_offset == sample_offset )
         ++ data->sample_count;
-    else if( (err = isom_add_ctts_entry( stbl, sample_offset )) < 0 )
-        return err;
-    cache->cts = cts;
+    else
+    {
+        int err = isom_add_ctts_entry( stbl, 1, sample_offset );
+        if( err < 0 )
+            return err;
+    }
     return 0;
+}
+
+static int isom_add_cts( isom_stbl_t *stbl, uint64_t dts, uint64_t cts, int non_output_sample )
+{
+    uint32_t sample_offset = !non_output_sample ? cts - dts : ISOM_NON_OUTPUT_SAMPLE_OFFSET;
+    if( stbl->ctts )
+        return isom_add_sample_offset( stbl, sample_offset );
+    return sample_offset != 0 ? isom_add_initial_sample_offset( stbl, sample_offset ) : 0;
+}
+
+static int isom_check_sample_offset_compatibility( lsmash_file_t *file, uint64_t dts, uint64_t cts, int non_output_sample )
+{
+    if( non_output_sample )
+    {
+        if( file->min_isom_version < 4 )
+            return LSMASH_ERR_INVALID_DATA; /* Non-output sample can be indicated under 'iso4' or later brands. */
+    }
+    else
+    {
+        if( file->isom_compatible && file->qt_compatible && (((cts >= dts) ? (cts - dts) : (dts - cts)) > INT32_MAX) )
+            return LSMASH_ERR_INVALID_DATA; /* sample_offset is not compatible with both ISOBMFF and QTFF. */
+    }
+    if( non_output_sample || dts < cts )
+    {
+        /* Negative sample offset is required. */
+        if( file->max_isom_version <  4 && !file->qt_compatible )
+            return LSMASH_ERR_INVALID_DATA; /* Negative sample offset is not supported in both ISOBMFF and QTFF. */
+        if( file->max_isom_version >= 4 &&  file->qt_compatible )
+            return LSMASH_ERR_INVALID_DATA; /* ctts version 1 is not defined in QTFF. */
+    }
+    return 0;
+}
+
+void isom_update_cache_timestamp
+(
+    isom_cache_t *cache,
+    uint64_t      dts,
+    uint64_t      cts,
+    int32_t       ctd_shift,
+    uint32_t      sample_duration,
+    int           non_output_sample
+)
+{
+    cache->timestamp.dts       = dts;
+    cache->timestamp.cts       = non_output_sample ? cache->timestamp.cts : cts;
+    cache->timestamp.ctd_shift = ctd_shift;
+    if( cache->fragment )
+    {
+        cache->fragment->last_duration = sample_duration;
+        if( !non_output_sample )
+            cache->fragment->largest_cts
+                = cache->fragment->largest_cts != LSMASH_TIMESTAMP_UNDEFINED
+                ? LSMASH_MAX( cache->timestamp.cts, cache->fragment->largest_cts )
+                : cache->timestamp.cts;
+    }
 }
 
 static int isom_add_timestamp( isom_stbl_t *stbl, isom_cache_t *cache, lsmash_file_t *file, uint64_t dts, uint64_t cts )
@@ -3059,32 +3108,28 @@ static int isom_add_timestamp( isom_stbl_t *stbl, isom_cache_t *cache, lsmash_fi
      || !stbl->stts
      || !stbl->stts->list )
         return LSMASH_ERR_INVALID_DATA;
-    if( file->isom_compatible && file->qt_compatible && (cts - dts) > INT32_MAX )
-        return LSMASH_ERR_INVALID_DATA; /* sample_offset is not compatible. */
-    isom_timestamp_t *ts_cache = &cache->timestamp;
-    uint32_t sample_count = isom_get_sample_count_from_sample_table( stbl );
-    uint32_t sample_delta = sample_count > 1 ? isom_add_dts( stbl, ts_cache, dts ) : 0;
-    if( sample_count > 1 && sample_delta == 0 )
-        return LSMASH_ERR_INVALID_DATA;
-    int err = isom_add_cts( stbl, ts_cache, cts );
+    int non_output_sample = (cts == LSMASH_TIMESTAMP_UNDEFINED);
+    int err = isom_check_sample_offset_compatibility( file, dts, cts, non_output_sample );
     if( err < 0 )
         return err;
-    if( (cts + ts_cache->ctd_shift) < dts )
+    uint32_t sample_count = isom_get_sample_count_from_sample_table( stbl );
+    uint32_t sample_delta = sample_count > 1 ? isom_add_dts( stbl, dts, cache->timestamp.dts ) : 0;
+    if( sample_count > 1 && sample_delta == 0 )
+        return LSMASH_ERR_INVALID_DATA;
+    if( (err = isom_add_cts( stbl, dts, cts, non_output_sample )) < 0 )
+        return err;
+    int32_t ctd_shift = cache->timestamp.ctd_shift;
+    if( !non_output_sample && ((cts + ctd_shift) < dts) )
     {
-        if( (file->max_isom_version <  4 && !file->qt_compatible)   /* Negative sample offset is not supported. */
-         || (file->max_isom_version >= 4 &&  file->qt_compatible)   /* ctts version 1 is not defined in QTFF. */
-         || ((dts - cts) > INT32_MAX) )                             /* Overflow */
+        /* Check overflow of composition to decode timeline shift. */
+        if( (dts - cts) > INT32_MAX )
             return LSMASH_ERR_INVALID_DATA;
-        ts_cache->ctd_shift = dts - cts;
+        assert( stbl->ctts );
         if( stbl->ctts->version == 0 && !file->qt_compatible )
             stbl->ctts->version = 1;
+        ctd_shift = dts - cts;
     }
-    if( cache->fragment )
-    {
-        isom_fragment_t *fragment_cache = cache->fragment;
-        fragment_cache->last_duration = sample_delta;
-        fragment_cache->largest_cts   = LSMASH_MAX( ts_cache->cts, fragment_cache->largest_cts );
-    }
+    isom_update_cache_timestamp( cache, dts, cts, ctd_shift, sample_delta, non_output_sample );
     return 0;
 }
 
@@ -3191,7 +3236,7 @@ int isom_group_random_access( isom_box_t *parent, isom_cache_t *cache, lsmash_sa
         isom_traf_t *traf = (isom_traf_t *)parent;
         sbgp  = isom_get_fragment_sample_to_group         ( traf, ISOM_GROUP_TYPE_RAP );
         sgpd  = isom_get_fragment_sample_group_description( traf, ISOM_GROUP_TYPE_RAP );
-        sample_count = cache->fragment->sample_count + 1;
+        sample_count = cache->fragment->sample_count + 1;   /* Cached sample_count is incremented later in isom_fragment_update_cache(). */
         is_fragment  = 1;
     }
     else
@@ -3472,7 +3517,7 @@ int isom_group_roll_recovery( isom_box_t *parent, isom_cache_t *cache, lsmash_sa
         isom_traf_t *traf = (isom_traf_t *)parent;
         sbgp_list = &traf->sbgp_list;
         sgpd_list = &traf->sgpd_list;
-        sample_count = cache->fragment->sample_count + 1;
+        sample_count = cache->fragment->sample_count + 1;   /* Cached sample_count is incremented later in isom_fragment_update_cache(). */
         is_fragment  = 1;
     }
     else
@@ -3595,7 +3640,9 @@ int isom_group_roll_recovery( isom_box_t *parent, isom_cache_t *cache, lsmash_sa
             isom_roll_entry_t *post_roll = isom_get_roll_description( group );
             if( post_roll && post_roll->roll_distance > 0 )
             {
-                if( group->rp_cts > sample->cts )
+                if( sample->cts   != LSMASH_TIMESTAMP_UNDEFINED
+                 && group->rp_cts != LSMASH_TIMESTAMP_UNDEFINED
+                 && group->rp_cts > sample->cts )
                     /* Updated roll_distance for composition reordering. */
                     post_roll->roll_distance = sample_count - group->first_sample;
                 if( ++ group->wait_and_see_count >= MAX_ROLL_WAIT_AND_SEE_COUNT )
@@ -3623,15 +3670,10 @@ int isom_group_roll_recovery( isom_box_t *parent, isom_cache_t *cache, lsmash_sa
                         continue;
                     group->described = ROLL_DISTANCE_DETERMINED;
                 }
-                /* Cache the CTS of the first recovery point in a subsegment. */
+                /* Cache the mark of the first recovery point in a subsegment. */
                 if( cache->fragment
                  && cache->fragment->subsegment.first_rp_number == 0 )
-                {
-                    cache->fragment->subsegment.first_rp_number = sample_count;
-                    cache->fragment->subsegment.first_rp_cts    = sample->cts;
-                    cache->fragment->subsegment.first_ed_cts    = sample->cts;
-                    cache->fragment->subsegment.decodable       = 1;
-                }
+                    cache->fragment->subsegment.is_first_recovery_point = 1;
             }
             else
                 /* Random Accessible Point */
@@ -3759,7 +3801,7 @@ int isom_update_sample_tables
     {
         /* Add entries of the sample table for each uncompressed sample. */
         uint64_t sample_duration = trak->mdia->mdhd->timescale / (audio->samplerate >> 16);
-        if( audio->samplesPerPacket == 0 || sample_duration == 0 )
+        if( audio->samplesPerPacket == 0 || sample_duration == 0 || sample->cts == LSMASH_TIMESTAMP_UNDEFINED )
             return LSMASH_ERR_INVALID_DATA;
         uint64_t sample_dts = sample->dts;
         uint64_t sample_cts = sample->cts;
@@ -3941,7 +3983,7 @@ int isom_append_sample_by_type
         uint32_t frame_size = ((isom_audio_entry_t *)sample_entry)->constBytesPerAudioPacket;
         if( sample->length == frame_size )
             return func_append_sample( track, sample, sample_entry );
-        else if( sample->length < frame_size )
+        else if( sample->length < frame_size || sample->cts == LSMASH_TIMESTAMP_UNDEFINED )
             return LSMASH_ERR_INVALID_DATA;
         /* Append samples splitted into each LPCMFrame. */
         uint64_t dts = sample->dts;

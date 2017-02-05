@@ -47,8 +47,8 @@ extern "C" {
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  2
-#define LSMASH_VERSION_MINOR 12
-#define LSMASH_VERSION_MICRO  4
+#define LSMASH_VERSION_MINOR 13
+#define LSMASH_VERSION_MICRO  0
 
 #define LSMASH_VERSION_INT( a, b, c ) (((a) << 16) | ((b) << 8) | (c))
 
@@ -1535,18 +1535,24 @@ typedef struct
     uint8_t                   independent;
     uint8_t                   disposable;
     uint8_t                   redundant;
-    uint8_t                   reserved[3];      /* non-output
-                                                 * broken link
+    uint8_t                   reserved[3];      /* broken link
                                                  * ??? */
 } lsmash_sample_property_t;
 
 typedef struct
 {
+#define LSMASH_TIMESTAMP_UNDEFINED UINT64_MAX
     uint32_t                 length;    /* size of sample data
                                          * Note: this is NOT always an allocated size. */
     uint8_t                 *data;      /* sample data */
-    uint64_t                 dts;       /* Decoding TimeStamp in units of media timescale */
-    uint64_t                 cts;       /* Composition TimeStamp in units of media timescale */
+    uint64_t                 dts;       /* Decoding TimeStamp in units of media timescale
+                                         * No two samples in the same track have the same Decoding TimeStamp.
+                                         * Any user must not set Decoding TimeStamp of any sample to LSMASH_TIMESTAMP_UNDEFINED. */
+    uint64_t                 cts;       /* Composition TimeStamp in units of media timescale
+                                         * No two samples in the same track have the same Composition TimeStamp.
+                                         * If sample is a non-output sample i.e. decoded but not used, set its Composition TimeStamp to LSMASH_TIMESTAMP_UNDEFINED.
+                                         * Composition TimeStamp of any non-output sample makes no sense. Note that explicit timeline maps shall be used to exclude
+                                         * non-output samples from presentation timeline. */
     uint64_t                 pos;       /* absolute file offset of sample data (read-only) */
     uint32_t                 index;     /* index of sample description */
     lsmash_sample_property_t prop;

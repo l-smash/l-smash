@@ -890,6 +890,7 @@ typedef struct
  * This box is optional and must only be present if DTS and CTS differ for any samples. */
 typedef struct
 {
+#define ISOM_NON_OUTPUT_SAMPLE_OFFSET 0x80000000
     uint32_t sample_count;      /* number of consecutive samples that have the given sample_offset */
     uint32_t sample_offset;     /* CTS[n] = DTS[n] + sample_offset[n];
                                  * ISOM: if version is set to 1, sample_offset is signed 32-bit integer.
@@ -1430,28 +1431,30 @@ typedef struct
 
 typedef struct
 {
+    uint64_t segment_duration;     /* the sum of the subsegment_duration of preceeding subsegments */
     uint64_t largest_cts;          /* the largest CTS of a subsegment of the reference stream */
     uint64_t smallest_cts;         /* the smallest CTS of a subsegment of the reference stream */
-    uint64_t first_cts;            /* the CTS of the first sample of a subsegment of the reference stream  */
-    uint64_t segment_duration;     /* the sum of the subsegment_duration of preceeding subsegments */
+    uint64_t first_sample_cts;     /* the CTS of the first sample of a subsegment of the reference stream  */
     /* SAP related info within the active subsegment of the reference stream */
     uint64_t                  first_ed_cts;     /* the earliest CTS of decodable samples after the first recovery point */
     uint64_t                  first_rp_cts;     /* the CTS of the first recovery point */
     uint32_t                  first_rp_number;  /* the number of the first recovery point */
     uint32_t                  first_ra_number;  /* the number of the first random accessible sample */
     lsmash_random_access_flag first_ra_flags;   /* the flags of the first random accessible sample */
+    int                       is_first_recovery_point;
     int                       decodable;
 } isom_subsegment_t;
 
 typedef struct
 {
-    uint8_t           has_samples;
+    uint8_t           has_samples;          /* Whether whole movie has any sample or not. */
     uint8_t           roll_grouping;
     uint8_t           rap_grouping;
     uint32_t          traf_number;
     uint32_t          last_duration;        /* the last sample duration in this track fragment */
     uint64_t          largest_cts;          /* the largest CTS in this track fragment */
-    uint64_t          sample_count;         /* the number of samples in this track fragment */
+    uint32_t          sample_count;         /* the number of samples in this track fragment */
+    uint32_t          output_sample_count;  /* the number of output samples in this track fragment */
     isom_subsegment_t subsegment;
 } isom_fragment_t;
 
@@ -1460,7 +1463,7 @@ typedef struct
     uint8_t           all_sync;     /* if all samples are sync sample */
     uint8_t           is_audio;
     isom_chunk_t      chunk;
-    isom_timestamp_t  timestamp;
+    isom_timestamp_t  timestamp;    /* Each field stores the last valid value. */
     isom_grouping_t   roll;
     isom_rap_group_t *rap;
     isom_fragment_t  *fragment;
@@ -2580,6 +2583,47 @@ uint32_t isom_get_first_sample_size
 (
     isom_stbl_t *stbl
 );
+
+
+void isom_update_cache_timestamp
+(
+    isom_cache_t *cache,
+    uint64_t      dts,
+    uint64_t      cts,
+    int32_t       ctd_shift,
+    uint32_t      sample_duration,
+    int           non_output_sample
+);
+
+/* Make CTS from DTS and sample_offset.
+ * This function does NOT add the value of composition to decode timeline shift to the result. */
+static inline uint64_t isom_make_cts
+(
+    uint64_t dts,
+    uint32_t sample_offset,
+    int32_t  ctd_shift
+)
+{
+    if( sample_offset != ISOM_NON_OUTPUT_SAMPLE_OFFSET )
+        return ctd_shift ? (dts + (int32_t)sample_offset) : (dts + sample_offset);
+    else
+        return LSMASH_TIMESTAMP_UNDEFINED;
+}
+
+/* Make CTS from DTS and sample_offset.
+ * This function adds the value of composition to decode timeline shift to the result. */
+static inline uint64_t isom_make_cts_adjust
+(
+    uint64_t dts,
+    uint32_t sample_offset,
+    int32_t  ctd_shift
+)
+{
+    if( sample_offset != ISOM_NON_OUTPUT_SAMPLE_OFFSET )
+        return ctd_shift ? (dts + (int32_t)sample_offset + ctd_shift) : (dts + sample_offset);
+    else
+        return LSMASH_TIMESTAMP_UNDEFINED;
+}
 
 /* Utilities for sample entry type decision
  * NOTE: This implementation does not work when 'mdia' and/or 'hdlr' is stored as binary string. */
