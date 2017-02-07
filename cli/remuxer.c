@@ -151,6 +151,7 @@ typedef struct
     uint32_t             chap_track;
     char                *chap_file;
     uint16_t             default_language;
+    uint64_t             max_chunk_size;
     uint32_t             max_chunk_duration_in_ms;
     uint32_t             frag_base_track;
     uint32_t             subseg_per_seg;
@@ -306,6 +307,8 @@ static void display_help( void )
              "    --max-chunk-duration <int>  Specify the maximum duration per chunk in milliseconds.\n"
              "                                Chunk is the minimum unit for media interleaving.\n"
              "                                If this option is not used, it defaults to 500.\n"
+             "    --max-chunk-size <integer>  Specify the maximum size per chunk in bytes.\n"
+             "                                If this option is not used, it defaults to 4*1024*1024.\n"
              "    --fragment <integer>        Enable fragmentation per random accessible point.\n"
              "                                Set which track the fragmentation is based on.\n"
              "    --min-frag-duration <float> Specify the minimum duration which fragments are allowed to be.\n"
@@ -730,6 +733,14 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
             if( remuxer->max_chunk_duration_in_ms == 0 )
                 FAILED_PARSE_CLI_OPTION( "%s is an invalid value for --max-chunk-duration.\n", argv[i] );
         }
+        else if( !strcasecmp( argv[i], "--max-chunk-size" ) )
+        {
+            if( ++i == argc )
+                FAILED_PARSE_CLI_OPTION( "--max-chunk-size requires an argument.\n" );
+            remuxer->max_chunk_size = atoi( argv[i] );
+            if( remuxer->max_chunk_size == 0 )
+                FAILED_PARSE_CLI_OPTION( "%s is an invalid value for --max-chunk-size.\n", argv[i] );
+        }
         else if( !strcasecmp( argv[i], "--fragment" ) )
         {
             if( ++i == argc )
@@ -977,6 +988,8 @@ static int set_movie_parameters( remuxer_t *remuxer )
     }
     if( remuxer->max_chunk_duration_in_ms )
         out_file->param.max_chunk_duration = remuxer->max_chunk_duration_in_ms * 1e-3;
+    if( remuxer->max_chunk_size )
+        out_file->param.max_chunk_size = remuxer->max_chunk_size;
     replace_with_valid_brand( remuxer );
     if( self_containd_segment )
     {
