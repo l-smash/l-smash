@@ -986,10 +986,8 @@ static int set_movie_parameters( remuxer_t *remuxer )
         else
             WARNING_MSG( "--dash requires --fragment.\n" );
     }
-    if( remuxer->max_chunk_duration_in_ms )
-        out_file->param.max_chunk_duration = remuxer->max_chunk_duration_in_ms * 1e-3;
-    if( remuxer->max_chunk_size )
-        out_file->param.max_chunk_size = remuxer->max_chunk_size;
+    out_file->param.max_chunk_duration = remuxer->max_chunk_duration_in_ms * 1e-3;
+    out_file->param.max_chunk_size     = remuxer->max_chunk_size;
     replace_with_valid_brand( remuxer );
     if( self_containd_segment )
     {
@@ -1772,18 +1770,23 @@ int main( int argc, char *argv[] )
     }
     remuxer_t remuxer =
     {
-        .output             = &output,
-        .input              = input,
-        .track_option       = track_option,
-        .num_input          = num_input,
-        .add_bom_to_chpl    = 0,
-        .ref_chap_available = 0,
-        .chap_track         = 1,
-        .chap_file          = NULL,
-        .default_language   = 0,
-        .frag_base_track    = 0,
-        .subseg_per_seg     = 0,
-        .dash               = 0
+        .output                   = &output,
+        .input                    = input,
+        .track_option             = track_option,
+        .num_input                = num_input,
+        .add_bom_to_chpl          = 0,
+        .ref_chap_available       = 0,
+        .chap_track               = 1,
+        .chap_file                = NULL,
+        .default_language         = 0,
+        .max_chunk_size           = 4*1024*1024,
+        .max_chunk_duration_in_ms = 500,
+        .frag_base_track          = 0,
+        .subseg_per_seg           = 0,
+        .dash                     = 0,
+        .compact_size_table       = 0,
+        .min_frag_duration        = 0.0,
+        .dry_run                  = 0
     };
     if( parse_cli_option( argc, argv, &remuxer ) )
         return REMUXER_ERR( "failed to parse command line options.\n" );
