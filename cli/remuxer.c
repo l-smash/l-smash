@@ -151,6 +151,7 @@ typedef struct
     uint32_t             chap_track;
     char                *chap_file;
     uint16_t             default_language;
+    uint32_t             max_chunk_duration_in_ms;
     uint32_t             frag_base_track;
     uint32_t             subseg_per_seg;
     int                  dash;
@@ -302,6 +303,9 @@ static void display_help( void )
              "                                If this option is not used, it defaults to 1.\n"
              "    --language <string>         Specify the default language for all the output tracks.\n"
              "                                This option is overridden by the track options.\n"
+             "    --max-chunk-duration <int>  Specify the maximum duration per chunk in milliseconds.\n"
+             "                                Chunk is the minimum unit for media interleaving.\n"
+             "                                If this option is not used, it defaults to 500.\n"
              "    --fragment <integer>        Enable fragmentation per random accessible point.\n"
              "                                Set which track the fragmentation is based on.\n"
              "    --min-frag-duration <float> Specify the minimum duration which fragments are allowed to be.\n"
@@ -718,6 +722,14 @@ static int parse_cli_option( int argc, char **argv, remuxer_t *remuxer )
                 FAILED_PARSE_CLI_OPTION( "--chapter requires an argument.\n" );
             remuxer->default_language = lsmash_pack_iso_language( argv[i] );
         }
+        else if( !strcasecmp( argv[i], "--max-chunk-duration" ) )
+        {
+            if( ++i == argc )
+                FAILED_PARSE_CLI_OPTION( "--max-chunk-duration requires an argument.\n" );
+            remuxer->max_chunk_duration_in_ms = atoi( argv[i] );
+            if( remuxer->max_chunk_duration_in_ms == 0 )
+                FAILED_PARSE_CLI_OPTION( "%s is an invalid value for --max-chunk-duration.\n", argv[i] );
+        }
         else if( !strcasecmp( argv[i], "--fragment" ) )
         {
             if( ++i == argc )
@@ -963,6 +975,8 @@ static int set_movie_parameters( remuxer_t *remuxer )
         else
             WARNING_MSG( "--dash requires --fragment.\n" );
     }
+    if( remuxer->max_chunk_duration_in_ms )
+        out_file->param.max_chunk_duration = remuxer->max_chunk_duration_in_ms * 1e-3;
     replace_with_valid_brand( remuxer );
     if( self_containd_segment )
     {
