@@ -3067,7 +3067,7 @@ static int isom_check_sample_offset_compatibility( lsmash_file_t *file, uint64_t
         if( file->isom_compatible && file->qt_compatible && (((cts >= dts) ? (cts - dts) : (dts - cts)) > INT32_MAX) )
             return LSMASH_ERR_INVALID_DATA; /* sample_offset is not compatible with both ISOBMFF and QTFF. */
     }
-    if( non_output_sample || dts < cts )
+    if( non_output_sample || cts < dts )
     {
         /* Negative sample offset is required. */
         if( file->max_isom_version <  4 && !file->qt_compatible )
