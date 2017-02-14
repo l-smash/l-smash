@@ -1495,7 +1495,7 @@ static void isom_fragment_update_cache
     cache->fragment->sample_count        += 1;
     cache->fragment->output_sample_count += sample->cts == LSMASH_TIMESTAMP_UNDEFINED ? 0 : 1;
     assert( cache->fragment->sample_count >= cache->fragment->output_sample_count );
-    if( (file->flags & LSMASH_FILE_MODE_INDEX) && (file->max_isom_version < 6) )
+    if( (file->flags & LSMASH_FILE_MODE_INDEX) && (file->max_isom_version >= 6) )
         isom_fragment_update_cache_for_sap( cache, sample );
 }
 
