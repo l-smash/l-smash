@@ -1347,37 +1347,26 @@ static int isom_write_mdat( lsmash_bs_t *bs, isom_box_t *box )
     }
     if( mdat->manager & LSMASH_PLACEHOLDER )
     {
-        /* Write the placeholder for large size. */
-        if( !file->free && !isom_add_free( file ) )
-            return LSMASH_ERR_NAMELESS;
-        isom_free_t *skip = file->free;
-        skip->pos      = bs->offset;
-        skip->size     = ISOM_BASEBOX_COMMON_SIZE;
-        skip->manager |= LSMASH_PLACEHOLDER;
-        int ret = isom_write_box( bs, (isom_box_t *)skip );
-        if( ret < 0 )
-            return ret;
-        /* Write an incomplete Media Data Box. */
+        /* Write an incomplete Media Data Box.
+         * Braindead implementation might check box order and return an error if an expected box does not come the
+         * next. Placement of eight 0x00 byte string as a simple large_size placeholder passes such silly box order
+         * checks. This placement is more compatible than placement of a Free Space Box ('free' or 'skip') or a
+         * Placeholder Atom ('wide') as a large_size placeholder since Media Data Box can store any data and any
+         * implementation surely do not check what contents are stored in it until taking samples out according to
+         * chunk offsets, and the placeholder is placed before any chunk offset thus it won't be touched. */
         mdat->pos      = bs->offset;
-        mdat->size     = ISOM_BASEBOX_COMMON_SIZE;
+        mdat->size     = ISOM_BASEBOX_COMMON_SIZE + 8;
         mdat->manager |= LSMASH_INCOMPLETE_BOX;
         mdat->manager &= ~LSMASH_PLACEHOLDER;
         isom_bs_put_box_common( bs, mdat );
+        lsmash_bs_put_be64( bs, 0x0000000000000000 );
         return 0;
     }
     if( !bs->unseekable )
     {
         /* Write the actual size. */
         uint64_t current_pos = bs->offset;
-        mdat->size = ISOM_BASEBOX_COMMON_SIZE + mdat->media_size;
-        if( mdat->size > UINT32_MAX )
-        {
-            /* The placeholder is overwritten by the Media Data Box. */
-            assert( file->free );
-            mdat->pos   = file->free->pos;
-            mdat->size += file->free->size;
-            isom_remove_box_by_itself( file->free );
-        }
+        mdat->size = ISOM_BASEBOX_COMMON_SIZE + 8 + mdat->media_size;
         lsmash_bs_write_seek( bs, mdat->pos, SEEK_SET );
         isom_bs_put_box_common( bs, mdat );
         /* isom_write_box() also calls lsmash_bs_flush_buffer() but it must do nothing. */

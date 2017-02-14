@@ -2625,7 +2625,7 @@ int lsmash_finish_movie
     /* Backup starting area of mdat and write moov + meta there instead. */
     isom_mdat_t *mdat            = file->mdat;
     uint64_t     total           = file->size + mtf_size;
-    uint64_t     placeholder_pos = file->free ? file->free->pos : mdat->pos;
+    uint64_t     placeholder_pos = mdat->pos;
     if( (err = lsmash_bs_write_seek( bs, placeholder_pos, SEEK_SET )) < 0 )
         goto fail;
     size_t read_num = size;
@@ -2639,8 +2639,6 @@ int lsmash_finish_movie
     uint64_t write_pos = bs->offset;
     /* Update the positions */
     mdat->pos += mtf_size;
-    if( file->free )
-        file->free->pos += mtf_size;
     /* Move Media Data Box. */
     if( (err = isom_rearrange_data( file, remux, buf, read_num, size, read_pos, write_pos, total )) < 0 )
         goto fail;
@@ -4029,8 +4027,7 @@ static int isom_append_sample
         file->mdat->manager |= LSMASH_PLACEHOLDER;
         if( (err = isom_write_box( file->bs, (isom_box_t *)file->mdat )) < 0 )
             return err;
-        assert( file->free );
-        file->size += file->free->size + file->mdat->size;
+        file->size += file->mdat->size;
     }
     return isom_append_sample_by_type( trak, sample, sample_entry, (int (*)( void *, lsmash_sample_t *, isom_sample_entry_t * ))isom_append_sample_internal );
 }

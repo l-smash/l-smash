@@ -1887,7 +1887,6 @@ struct lsmash_file_tag
     lsmash_entry_list_t  sidx_list;     /* Segment Index Box List */
     lsmash_entry_list_t  moof_list;     /* Movie Fragment Box List */
     isom_mdat_t         *mdat;          /* Media Data Box */
-    isom_free_t         *free;          /* Free Space Box */
     isom_meta_t         *meta;          /* Meta Box */
     isom_mfra_t         *mfra;          /* Movie Fragment Random Access Box */
 

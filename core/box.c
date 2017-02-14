@@ -1147,7 +1147,6 @@ static void isom_remove_free( isom_free_t *skip )
     if( !skip )
         return;
     lsmash_free( skip->data );
-    isom_remove_predefined_box( skip, offsetof( lsmash_file_t, free ) );
 }
 #define isom_remove_skip isom_remove_free
 
@@ -1730,14 +1729,6 @@ isom_free_t *isom_add_free( void *parent_box )
     if( !parent_box )
         return NULL;
     isom_box_t *parent = (isom_box_t *)parent_box;
-    if( parent->file == (lsmash_file_t *)parent )
-    {
-        lsmash_file_t *file = (lsmash_file_t *)parent;
-        CREATE_BOX( skip, file, ISOM_BOX_TYPE_FREE, LSMASH_BOX_PRECEDENCE_ISOM_FREE, 1 );
-        if( !file->free )
-            file->free = skip;
-        return skip;
-    }
     CREATE_BOX( skip, parent, ISOM_BOX_TYPE_FREE, LSMASH_BOX_PRECEDENCE_ISOM_FREE, 1 );
     return skip;
 }
