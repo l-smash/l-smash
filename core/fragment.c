@@ -1487,14 +1487,16 @@ static void isom_fragment_update_cache_for_sap
 static void isom_fragment_update_cache
 (
     isom_cache_t    *cache,
-    lsmash_sample_t *sample
+    lsmash_sample_t *sample,
+    lsmash_file_t   *file
 )
 {
     cache->fragment->has_samples          = 1;
     cache->fragment->sample_count        += 1;
     cache->fragment->output_sample_count += sample->cts == LSMASH_TIMESTAMP_UNDEFINED ? 0 : 1;
     assert( cache->fragment->sample_count >= cache->fragment->output_sample_count );
-    isom_fragment_update_cache_for_sap( cache, sample );
+    if( (file->flags & LSMASH_FILE_MODE_INDEX) && (file->max_isom_version < 6) )
+        isom_fragment_update_cache_for_sap( cache, sample );
 }
 
 static int isom_fragment_update_sample_tables( isom_traf_t *traf, lsmash_sample_t *sample )
@@ -1686,7 +1688,7 @@ static int isom_append_fragment_sample_internal_initial
         return ret;
     else if( ret == 1 )
         isom_append_fragment_track_run( trak->file, &trak->cache->chunk );
-    isom_fragment_update_cache( trak->cache, sample );
+    isom_fragment_update_cache( trak->cache, sample, trak->file );
     /* Add a new sample into the pool of this track fragment. */
     if( (ret = isom_pool_sample( trak->cache->chunk.pool, sample, samples_per_packet )) < 0 )
         return ret;
@@ -1707,7 +1709,7 @@ static int isom_append_fragment_sample_internal
         return ret;
     else if( ret == 1 )
         isom_append_fragment_track_run( traf->file, &traf->cache->chunk );
-    isom_fragment_update_cache( traf->cache, sample );
+    isom_fragment_update_cache( traf->cache, sample, traf->file );
     /* Add a new sample into the pool of this track fragment. */
     if( (ret = isom_pool_sample( traf->cache->chunk.pool, sample, 1 )) < 0 )
         return ret;
