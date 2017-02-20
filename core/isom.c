@@ -2290,6 +2290,25 @@ uint32_t lsmash_get_movie_timescale( lsmash_root_t *root )
     return root->file->initializer->moov->mvhd->timescale;
 }
 
+int lsmash_reserve_media_data_size
+(
+    lsmash_root_t        *root,
+    uint64_t              media_data_size
+)
+{
+    if( isom_check_initializer_present( root ) < 0
+     || media_data_size <= ISOM_BASEBOX_COMMON_SIZE )
+        return LSMASH_ERR_FUNCTION_PARAM;
+    lsmash_file_t *file = root->file->initializer;
+    if( file->mdat          /* whether the Media Data Box is already written or not */
+     || file->fragment )    /* For fragmented movies, this function makes no sense. */
+        return LSMASH_ERR_NAMELESS;
+    if( !isom_add_mdat( file ) )
+        return LSMASH_ERR_NAMELESS;
+    file->mdat->reserved_size = media_data_size;
+    return 0;
+}
+
 static int isom_scan_trak_profileLevelIndication
 (
     isom_trak_t                         *trak,
@@ -4020,9 +4039,9 @@ static int isom_append_sample
 {
     /* If there is no available Media Data Box to write samples, add and write a new one before any chunk offset is decided. */
     int err;
-    if( !file->mdat )
+    if( !file->mdat || !(file->mdat->manager & LSMASH_INCOMPLETE_BOX) )
     {
-        if( !isom_add_mdat( file ) )
+        if( !file->mdat && !isom_add_mdat( file ) )
             return LSMASH_ERR_NAMELESS;
         file->mdat->manager |= LSMASH_PLACEHOLDER;
         if( (err = isom_write_box( file->bs, (isom_box_t *)file->mdat )) < 0 )

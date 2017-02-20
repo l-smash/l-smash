@@ -120,7 +120,7 @@ void lsmash_bs_put_be32_from_64( lsmash_bs_t *bs, uint64_t value );
 void lsmash_bs_put_le16( lsmash_bs_t *bs, uint16_t value );
 void lsmash_bs_put_le32( lsmash_bs_t *bs, uint32_t value );
 int lsmash_bs_flush_buffer( lsmash_bs_t *bs );
-int lsmash_bs_write_data( lsmash_bs_t *bs, uint8_t *buf, size_t size );
+int lsmash_bs_write_data( lsmash_bs_t *bs, const uint8_t *buf, size_t size );
 void *lsmash_bs_export_data( lsmash_bs_t *bs, uint32_t *length );
 
 /*---- bytestream reader ----*/

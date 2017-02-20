@@ -321,7 +321,7 @@ int lsmash_bs_flush_buffer( lsmash_bs_t *bs )
     return 0;
 }
 
-int lsmash_bs_write_data( lsmash_bs_t *bs, uint8_t *buf, size_t size )
+int lsmash_bs_write_data( lsmash_bs_t *bs, const uint8_t *buf, size_t size )
 {
     if( !bs || size > INT_MAX )
         return LSMASH_ERR_FUNCTION_PARAM;
@@ -333,7 +333,7 @@ int lsmash_bs_write_data( lsmash_bs_t *bs, uint8_t *buf, size_t size )
         bs->error = 1;
         return LSMASH_ERR_NAMELESS;
     }
-    int write_size = bs->write( bs->stream, buf, size );
+    int write_size = bs->write( bs->stream, (uint8_t *)buf, size );
     bs->written += write_size;
     bs->offset  += write_size;
     return write_size != size ? LSMASH_ERR_NAMELESS : 0;

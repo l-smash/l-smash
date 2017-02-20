@@ -47,8 +47,8 @@ extern "C" {
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  2
-#define LSMASH_VERSION_MINOR 13
-#define LSMASH_VERSION_MICRO  1
+#define LSMASH_VERSION_MINOR 14
+#define LSMASH_VERSION_MICRO  0
 
 #define LSMASH_VERSION_INT( a, b, c ) (((a) << 16) | ((b) << 8) | (c))
 
@@ -2287,6 +2287,20 @@ int lsmash_get_movie_parameters
 uint32_t lsmash_get_movie_timescale
 (
     lsmash_root_t *root
+);
+
+/* Reserve the size of the media data region for a non-fragmented movie.
+ * This enables to get rid of requirement of seekability for rewriting the actual size of the media data region when finishing
+ * a non-fragmented movie. Note that the specified size is excluding the type and the size fields of the enclosing box and
+ * this function must be called before any lsmash_append_sample(). If the actual size is greater than the reserved size when
+ * finishing a non-fragmented movie, seek and rewrite the size of the box enclosing the media data region.
+ *
+ * Return 0 if successful.
+ * Return a negative value otherwise. */
+int lsmash_reserve_media_data_size
+(
+    lsmash_root_t *root,
+    uint64_t       media_data_size
 );
 
 /****************************************************************************

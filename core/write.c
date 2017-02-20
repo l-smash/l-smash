@@ -1355,18 +1355,41 @@ static int isom_write_mdat( lsmash_bs_t *bs, isom_box_t *box )
          * implementation surely do not check what contents are stored in it until taking samples out according to
          * chunk offsets, and the placeholder is placed before any chunk offset thus it won't be touched. */
         mdat->pos      = bs->offset;
-        mdat->size     = ISOM_BASEBOX_COMMON_SIZE + 8;
+        mdat->size     = ISOM_BASEBOX_COMMON_SIZE + 8 + mdat->reserved_size;
         mdat->manager |= LSMASH_INCOMPLETE_BOX;
         mdat->manager &= ~LSMASH_PLACEHOLDER;
         isom_bs_put_box_common( bs, mdat );
-        lsmash_bs_put_be64( bs, 0x0000000000000000 );
+        if( mdat->size <= UINT32_MAX )
+            lsmash_bs_put_be64( bs, 0x0000000000000000 );
+        mdat->size     = ISOM_BASEBOX_COMMON_SIZE + 8;
         return 0;
+    }
+    assert( !(mdat->manager & (LSMASH_INCOMPLETE_BOX | LSMASH_PLACEHOLDER)) );
+    uint64_t actual_size   = ISOM_BASEBOX_COMMON_SIZE + 8 + mdat->media_size;
+    uint64_t reserved_size = ISOM_BASEBOX_COMMON_SIZE + 8 + mdat->reserved_size;
+    if( actual_size < reserved_size )
+    {
+        /* Write padding zero bytes until end of this box.
+         * This code path is invoked when the size of a Media Data Box was reserved. */
+        mdat->size = reserved_size;
+        int err = lsmash_bs_flush_buffer( bs );
+        if( err )
+            return err;
+        uint64_t padding_size = reserved_size - actual_size;
+        static const uint8_t zero_bytes[64] = { 0 };
+        while( padding_size > sizeof(zero_bytes) )
+        {
+            if( (err = lsmash_bs_write_data( bs, zero_bytes, sizeof(zero_bytes) )) < 0 )
+                return err;
+            padding_size -= sizeof(zero_bytes);
+        }
+        return lsmash_bs_write_data( bs, zero_bytes, padding_size );
     }
     if( !bs->unseekable )
     {
         /* Write the actual size. */
         uint64_t current_pos = bs->offset;
-        mdat->size = ISOM_BASEBOX_COMMON_SIZE + 8 + mdat->media_size;
+        mdat->size = actual_size;
         lsmash_bs_write_seek( bs, mdat->pos, SEEK_SET );
         isom_bs_put_box_common( bs, mdat );
         /* isom_write_box() also calls lsmash_bs_flush_buffer() but it must do nothing. */
