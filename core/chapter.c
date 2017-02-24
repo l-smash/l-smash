@@ -140,9 +140,8 @@ static fn_get_chapter_data isom_check_chap_line( char *file_name )
 
 static int isom_add_chpl_entry( isom_chpl_t *chpl, isom_chapter_entry_t *chap_data )
 {
-    if( !chap_data->chapter_name
-     || !chpl
-     || !chpl->list )
+    assert( LSMASH_IS_EXISTING_BOX( chpl ) );
+    if( !chap_data->chapter_name || !chpl->list )
         return LSMASH_ERR_FUNCTION_PARAM;
     isom_chpl_entry_t *data = lsmash_malloc( sizeof(isom_chpl_entry_t) );
     if( !data )
@@ -172,11 +171,9 @@ int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom
         goto error_message;
     /* This function should be called after updating of the latest movie duration. */
     lsmash_file_t *file = root->file;
-    if( !file
-     || !file->moov
-     || !file->moov->mvhd
-     ||  file->moov->mvhd->timescale == 0
-     ||  file->moov->mvhd->duration  == 0 )
+    if( LSMASH_IS_NON_EXISTING_BOX( file->moov->mvhd )
+     || file->moov->mvhd->timescale == 0
+     || file->moov->mvhd->duration  == 0 )
         goto error_message;
     /* check each line format */
     fn_get_chapter_data fnc = isom_check_chap_line( file_name );
@@ -188,8 +185,8 @@ int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom
         lsmash_log( NULL, LSMASH_LOG_ERROR, "failed to open the chapter file \"%s\".\n", file_name );
         goto error_message;
     }
-    if( (!file->moov->udta       && !isom_add_udta( file->moov ))
-     || (!file->moov->udta->chpl && !isom_add_chpl( file->moov->udta )) )
+    if( (LSMASH_IS_NON_EXISTING_BOX( file->moov->udta )       && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_udta( file->moov ) ))
+     || (LSMASH_IS_NON_EXISTING_BOX( file->moov->udta->chpl ) && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_chpl( file->moov->udta ) )) )
         goto fail;
     file->moov->udta->chpl->version = 1;    /* version = 1 is popular. */
     isom_chapter_entry_t data = { 0 };
@@ -233,9 +230,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     if( isom_check_initializer_present( root ) < 0 )
         goto error_message;
     lsmash_file_t *file = root->file;
-    if( !file
-     || !file->moov
-     || !file->moov->mvhd )
+    if( LSMASH_IS_NON_EXISTING_BOX( file->moov->mvhd ) )
         goto error_message;
     if( file->forbid_tref || (!file->qt_compatible && !file->itunes_movie) )
     {
@@ -245,12 +240,12 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     FILE *chapter = NULL;       /* shut up 'uninitialized' warning */
     /* Create a Track Reference Box. */
     isom_trak_t *trak = isom_get_trak( file, track_ID );
-    if( !trak )
+    if( LSMASH_IS_NON_EXISTING_BOX( trak ) )
     {
         lsmash_log( NULL, LSMASH_LOG_ERROR, "the specified track ID to apply the chapter doesn't exist.\n" );
         goto error_message;
     }
-    if( !trak->tref && !isom_add_tref( trak ) )
+    if( LSMASH_IS_NON_EXISTING_BOX( trak->tref ) && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_tref( trak ) ) )
         goto error_message;
     /* Create a track_ID for a new chapter track. */
     uint32_t *id = (uint32_t *)lsmash_malloc( sizeof(uint32_t) );
@@ -259,7 +254,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     uint32_t chapter_track_ID = *id = file->moov->mvhd->next_track_ID;
     /* Create a Track Reference Type Box. */
     isom_tref_type_t *chap = isom_add_track_reference_type( trak->tref, QT_TREF_TYPE_CHAP );
-    if( !chap )
+    if( LSMASH_IS_NON_EXISTING_BOX( chap ) )
     {
         lsmash_free( id );
         goto error_message;
@@ -277,7 +272,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
         goto fail;
     /* Set media parameters. */
     uint64_t media_timescale = lsmash_get_media_timescale( root, track_ID );
-    if( !media_timescale )
+    if( media_timescale == 0 )
         goto fail;
     lsmash_media_parameters_t media_param;
     lsmash_initialize_media_parameters( &media_param );
@@ -292,7 +287,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
                                     : QT_CODEC_TYPE_TEXT_TEXT;
     lsmash_summary_t summary = { .sample_type = sample_type, .data_ref_index = 1 };
     uint32_t sample_entry = lsmash_add_sample_entry( root, chapter_track_ID, &summary );
-    if( !sample_entry )
+    if( sample_entry == 0 )
         goto fail;
     /* Check each line format. */
     fn_get_chapter_data fnc = isom_check_chap_line( file_name );
@@ -350,7 +345,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     if( lsmash_flush_pooled_samples( root, chapter_track_ID, 0 ) < 0 )
         goto fail;
     isom_trak_t *chapter_trak = isom_get_trak( file, chapter_track_ID );
-    if( !chapter_trak )
+    if( LSMASH_IS_NON_EXISTING_BOX( chapter_trak ) )
         goto fail;
     fclose( chapter );
     chapter_trak->is_chapter       = 1;
@@ -375,9 +370,6 @@ error_message:
 uint32_t lsmash_count_tyrant_chapter( lsmash_root_t *root )
 {
     if( isom_check_initializer_present( root ) < 0
-     && root->file->initializer->moov
-     && root->file->initializer->moov->udta
-     && root->file->initializer->moov->udta->chpl
      && root->file->initializer->moov->udta->chpl->list )
         return root->file->initializer->moov->udta->chpl->list->entry_count;
     return 0;
@@ -388,10 +380,8 @@ char *lsmash_get_tyrant_chapter( lsmash_root_t *root, uint32_t index, double *ti
     if( isom_check_initializer_present( root ) < 0 )
         return NULL;
     lsmash_file_t *file = root->file->initializer;
-    if( !file->moov
-     || !file->moov->mvhd
-     || !file->moov->udta
-     || !file->moov->udta->chpl )
+    if( LSMASH_IS_NON_EXISTING_BOX( file->moov->mvhd )
+     || LSMASH_IS_NON_EXISTING_BOX( file->moov->udta->chpl ) )
         return NULL;
     isom_chpl_t *chpl = file->moov->udta->chpl;
     isom_chpl_entry_t *data = (isom_chpl_entry_t *)lsmash_get_entry_data( chpl->list, index );
@@ -411,16 +401,13 @@ int lsmash_print_chapter_list( lsmash_root_t *root )
      || !(root->file->initializer->flags & LSMASH_FILE_MODE_READ) )
         return LSMASH_ERR_FUNCTION_PARAM;
     lsmash_file_t *file = root->file->initializer;
-    if( file->moov
-     && file->moov->udta
-     && file->moov->udta->chpl )
+    if( LSMASH_IS_EXISTING_BOX( file->moov->udta->chpl ) )
     {
         isom_chpl_t *chpl = file->moov->udta->chpl;
         uint32_t timescale;
-        if( !chpl->version )
+        if( chpl->version == 0 )
         {
-            if( !file->moov
-             && !file->moov->mvhd )
+            if( LSMASH_IS_NON_EXISTING_BOX( file->moov->mvhd ) )
                 return LSMASH_ERR_NAMELESS;
             timescale = file->moov->mvhd->timescale;
         }

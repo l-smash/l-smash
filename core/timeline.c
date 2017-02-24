@@ -127,17 +127,15 @@ void isom_timeline_destroy( isom_timeline_t *timeline )
 
 void isom_remove_timelines( lsmash_file_t *file )
 {
-    if( !file
-     || !file->timeline )
+    if( LSMASH_IS_NON_EXISTING_BOX( file ) || !file->timeline )
         return;
     lsmash_remove_list( file->timeline, isom_timeline_destroy );
 }
 
 void lsmash_destruct_timeline( lsmash_root_t *root, uint32_t track_ID )
 {
-    if( track_ID == 0
-     || !root
-     || !root->file
+    if( LSMASH_IS_NON_EXISTING_BOX( root )
+     || track_ID == 0
      || !root->file->timeline )
         return;
     for( lsmash_entry_t *entry = root->file->timeline->head; entry; entry = entry->next )
@@ -663,7 +661,7 @@ static inline isom_sgpd_t *isom_select_appropriate_sgpd
     uint32_t    *group_description_index
 )
 {
-    if( sgpd_frag && *group_description_index >= 0x10000 )
+    if( LSMASH_IS_EXISTING_BOX( sgpd_frag ) && *group_description_index >= 0x10000 )
     {
         /* The specification doesn't define 0x10000 explicitly, however says that there must be fewer than
          * 65536 group definitions for this track and grouping type in the sample table in the Movie Box.
@@ -757,22 +755,17 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
     if( isom_check_initializer_present( root ) < 0 )
         return LSMASH_ERR_FUNCTION_PARAM;
     lsmash_file_t *file = root->file;
-    if( !file->moov
-     || !file->moov->mvhd
+    if( LSMASH_IS_NON_EXISTING_BOX( file->moov->mvhd )
      ||  file->moov->mvhd->timescale == 0 )
         return LSMASH_ERR_INVALID_DATA;
     /* Get track by track_ID. */
     isom_trak_t *trak = isom_get_trak( file, track_ID );
-    if( !trak
-     || !trak->tkhd
-     || !trak->mdia
-     || !trak->mdia->mdhd
-     ||  trak->mdia->mdhd->timescale == 0
-     || !trak->mdia->minf
-     || !trak->mdia->minf->stbl
-     || !trak->mdia->minf->stbl->stco
-     || !trak->mdia->minf->stbl->stsd
-     || (!trak->mdia->minf->stbl->stsz && !trak->mdia->minf->stbl->stz2) )
+    if( LSMASH_IS_NON_EXISTING_BOX( trak->tkhd )
+     || LSMASH_IS_NON_EXISTING_BOX( trak->mdia->mdhd )
+     || LSMASH_IS_NON_EXISTING_BOX( trak->mdia->minf->stbl->stco )
+     || LSMASH_IS_NON_EXISTING_BOX( trak->mdia->minf->stbl->stsd )
+     || (LSMASH_IS_NON_EXISTING_BOX( trak->mdia->minf->stbl->stsz ) && LSMASH_IS_NON_EXISTING_BOX( trak->mdia->minf->stbl->stz2 ))
+     ||  trak->mdia->mdhd->timescale == 0 )
         return LSMASH_ERR_INVALID_DATA;
     /* Create a timeline list if it doesn't exist. */
     if( !file->timeline )
@@ -790,9 +783,9 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
     timeline->media_timescale = trak->mdia->mdhd->timescale;
     timeline->track_duration  = trak->tkhd->duration;
     /* Preparation for construction. */
-    isom_elst_t *elst = trak->edts ? trak->edts->elst : NULL;
+    isom_elst_t *elst = trak->edts->elst;
     isom_minf_t *minf = trak->mdia->minf;
-    isom_dref_t *dref = minf->dinf ? minf->dinf->dref : NULL;
+    isom_dref_t *dref = minf->dinf->dref;
     isom_stbl_t *stbl = minf->stbl;
     isom_stsd_t *stsd = stbl->stsd;
     isom_stts_t *stts = stbl->stts;
@@ -808,29 +801,30 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
     isom_sbgp_t *sbgp_rap  = isom_get_sample_to_group         ( stbl, ISOM_GROUP_TYPE_RAP );
     isom_sgpd_t *sgpd_roll = isom_get_roll_recovery_sample_group_description( &stbl->sgpd_list );
     isom_sbgp_t *sbgp_roll = isom_get_roll_recovery_sample_to_group         ( &stbl->sbgp_list );
-    lsmash_entry_t *elst_entry = elst && elst->list ? elst->list->head : NULL;
-    lsmash_entry_t *stts_entry = stts && stts->list ? stts->list->head : NULL;
-    lsmash_entry_t *ctts_entry = ctts && ctts->list ? ctts->list->head : NULL;
-    lsmash_entry_t *stss_entry = stss && stss->list ? stss->list->head : NULL;
-    lsmash_entry_t *stps_entry = stps && stps->list ? stps->list->head : NULL;
-    lsmash_entry_t *sdtp_entry = sdtp && sdtp->list ? sdtp->list->head : NULL;
-    lsmash_entry_t *stsz_entry = stsz ? (stsz->list ? stsz->list->head : NULL) : (stz2->list ? stz2->list->head : NULL);
-    lsmash_entry_t *stsc_entry = stsc && stsc->list ? stsc->list->head : NULL;
+    lsmash_entry_t *elst_entry = elst->list ? elst->list->head : NULL;
+    lsmash_entry_t *stts_entry = stts->list ? stts->list->head : NULL;
+    lsmash_entry_t *ctts_entry = ctts->list ? ctts->list->head : NULL;
+    lsmash_entry_t *stss_entry = stss->list ? stss->list->head : NULL;
+    lsmash_entry_t *stps_entry = stps->list ? stps->list->head : NULL;
+    lsmash_entry_t *sdtp_entry = sdtp->list ? sdtp->list->head : NULL;
+    lsmash_entry_t *stsz_entry = LSMASH_IS_EXISTING_BOX( stsz ) ? (stsz->list ? stsz->list->head : NULL)
+                                                                : (stz2->list ? stz2->list->head : NULL);
+    lsmash_entry_t *stsc_entry = stsc->list ? stsc->list->head : NULL;
     lsmash_entry_t *stco_entry = stco->list ? stco->list->head : NULL;
-    lsmash_entry_t *sbgp_roll_entry = sbgp_roll && sbgp_roll->list ? sbgp_roll->list->head : NULL;
-    lsmash_entry_t *sbgp_rap_entry  = sbgp_rap  && sbgp_rap->list  ? sbgp_rap->list->head  : NULL;
+    lsmash_entry_t *sbgp_roll_entry = sbgp_roll->list ? sbgp_roll->list->head : NULL;
+    lsmash_entry_t *sbgp_rap_entry  = sbgp_rap->list  ? sbgp_rap->list->head  : NULL;
     lsmash_entry_t *next_stsc_entry = stsc_entry ? stsc_entry->next : NULL;
     isom_stsc_entry_t *stsc_data = stsc_entry ? (isom_stsc_entry_t *)stsc_entry->data : NULL;
     int err = LSMASH_ERR_INVALID_DATA;
-    int movie_fragments_present = (file->moov->mvex && file->moof_list.head);
+    int movie_fragments_present = (LSMASH_IS_EXISTING_BOX( file->moov->mvex ) && file->moof_list.head);
     if( !movie_fragments_present && (!stts_entry || !stsc_entry || !stco_entry || !stco_entry->data || (next_stsc_entry && !next_stsc_entry->data)) )
         goto fail;
     isom_sample_entry_t *description = (isom_sample_entry_t *)lsmash_get_entry_data( &stsd->list, stsc_data ? stsc_data->sample_description_index : 1 );
-    if( !description )
+    if( LSMASH_IS_NON_EXISTING_BOX( description ) )
         goto fail;
-    lsmash_entry_list_t *dref_list = dref ? &dref->list : NULL;
+    lsmash_entry_list_t *dref_list = LSMASH_IS_EXISTING_BOX( dref ) ? &dref->list : NULL;
     isom_dref_entry_t *dref_entry = (isom_dref_entry_t *)lsmash_get_entry_data( dref_list, description->data_reference_index );
-    int all_sync = !stss;
+    int all_sync = LSMASH_IS_NON_EXISTING_BOX( stss );
     int large_presentation = stco->large_presentation || lsmash_check_box_type_identical( stco->type, ISOM_BOX_TYPE_CO64 );
     int is_lpcm_audio          = isom_is_lpcm_audio( description );
     int is_qt_fixed_comp_audio = isom_is_qt_fixed_compressed_audio( description );
@@ -848,7 +842,7 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
                              ? ((isom_co64_entry_t *)stco_entry->data)->chunk_offset
                              : ((isom_stco_entry_t *)stco_entry->data)->chunk_offset
                          : 0;
-    uint32_t initial_movie_sample_count = stsz ? stsz->sample_count : stz2->sample_count;
+    uint32_t initial_movie_sample_count = LSMASH_IS_EXISTING_BOX( stsz ) ? stsz->sample_count : stz2->sample_count;
     uint32_t samples_per_packet;
     uint32_t constant_sample_size;
     if( is_qt_fixed_comp_audio )
@@ -898,7 +892,7 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
     chunk.data_offset = data_offset;
     chunk.length      = 0;
     chunk.number      = chunk_number;
-    chunk.file        = (!dref_entry || !dref_entry->ref_file) ? NULL : dref_entry->ref_file;
+    chunk.file        = (!dref_entry || LSMASH_IS_NON_EXISTING_BOX( dref_entry->ref_file )) ? NULL : dref_entry->ref_file;
     if( (err = isom_add_portable_chunk_entry( timeline, &chunk )) < 0 )
         goto fail;
     uint32_t distance      = NO_RANDOM_ACCESS_POINT;
@@ -1072,8 +1066,8 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
                 stsc_data = (isom_stsc_entry_t *)stsc_entry->data;
                 /* Update sample description. */
                 description = (isom_sample_entry_t *)lsmash_get_entry_data( &stsd->list, stsc_data->sample_description_index );
-                is_lpcm_audio          = description ? isom_is_lpcm_audio( description )                : 0;
-                is_qt_fixed_comp_audio = description ? isom_is_qt_fixed_compressed_audio( description ) : 0;
+                is_lpcm_audio          = LSMASH_IS_EXISTING_BOX( description ) ? isom_is_lpcm_audio( description )                : 0;
+                is_qt_fixed_comp_audio = LSMASH_IS_EXISTING_BOX( description ) ? isom_is_qt_fixed_compressed_audio( description ) : 0;
                 if( is_qt_fixed_comp_audio )
                     isom_get_qt_fixed_comp_audio_sample_quants( timeline, description, &samples_per_packet, &constant_sample_size );
                 else
@@ -1082,8 +1076,8 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
                     constant_sample_size = stsz ? stsz->sample_size : 0;
                 }
                 /* Reference media data. */
-                dref_entry = (isom_dref_entry_t *)lsmash_get_entry_data( dref_list, description ? description->data_reference_index : 0 );
-                chunk.file = (!dref_entry || !dref_entry->ref_file) ? NULL : dref_entry->ref_file;
+                dref_entry = (isom_dref_entry_t *)lsmash_get_entry_data( dref_list, LSMASH_IS_EXISTING_BOX( description ) ? description->data_reference_index : 0 );
+                chunk.file = (!dref_entry || LSMASH_IS_NON_EXISTING_BOX( dref_entry->ref_file )) ? NULL : dref_entry->ref_file;
             }
             sample_number_in_chunk = samples_per_packet;
             if( (err = isom_add_portable_chunk_entry( timeline, &chunk )) < 0 )
@@ -1135,7 +1129,7 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
     if( movie_fragments_present )
     {
         isom_tfra_t                     *tfra       = isom_get_tfra( file->mfra, track_ID );
-        lsmash_entry_t                  *tfra_entry = tfra && tfra->list ? tfra->list->head : NULL;
+        lsmash_entry_t                  *tfra_entry = tfra->list ? tfra->list->head : NULL;
         isom_tfra_location_time_entry_t *rap        = tfra_entry ? (isom_tfra_location_time_entry_t *)tfra_entry->data : NULL;
         chunk.data_offset = 0;
         chunk.length      = 0;
@@ -1143,7 +1137,7 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
         for( lsmash_entry_t *moof_entry = file->moof_list.head; moof_entry; moof_entry = moof_entry->next )
         {
             isom_moof_t *moof = (isom_moof_t *)moof_entry->data;
-            if( !moof )
+            if( LSMASH_IS_NON_EXISTING_BOX( moof ) )
                 goto fail;
             uint64_t last_sample_end_pos = 0;
             /* Track fragments */
@@ -1151,13 +1145,9 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
             for( lsmash_entry_t *traf_entry = moof->traf_list.head; traf_entry; traf_entry = traf_entry->next )
             {
                 isom_traf_t *traf = (isom_traf_t *)traf_entry->data;
-                if( !traf )
-                    goto fail;
                 isom_tfhd_t *tfhd = traf->tfhd;
-                if( !tfhd )
-                    goto fail;
                 isom_trex_t *trex = isom_get_trex( file->moov->mvex, tfhd->track_ID );
-                if( !trex )
+                if( LSMASH_IS_NON_EXISTING_BOX( trex ) )
                     goto fail;
                 /* Ignore ISOM_TF_FLAGS_DURATION_IS_EMPTY flag even if set. */
                 if( !traf->trun_list.head )
@@ -1178,17 +1168,17 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
                 isom_sgpd_t *sgpd_frag_roll;
                 sgpd_frag_rap   = isom_get_fragment_sample_group_description( traf, ISOM_GROUP_TYPE_RAP );
                 sbgp_rap        = isom_get_fragment_sample_to_group         ( traf, ISOM_GROUP_TYPE_RAP );
-                sbgp_rap_entry  = sbgp_rap && sbgp_rap->list ? sbgp_rap->list->head : NULL;
+                sbgp_rap_entry  = sbgp_rap->list ? sbgp_rap->list->head : NULL;
                 sgpd_frag_roll  = isom_get_roll_recovery_sample_group_description( &traf->sgpd_list );
                 sbgp_roll       = isom_get_roll_recovery_sample_to_group         ( &traf->sbgp_list );
-                sbgp_roll_entry = sbgp_roll && sbgp_roll->list ? sbgp_roll->list->head : NULL;
+                sbgp_roll_entry = sbgp_roll->list ? sbgp_roll->list->head : NULL;
                 int need_data_offset_only = (tfhd->track_ID != track_ID);
                 /* Track runs */
                 uint32_t trun_number = 1;
                 for( lsmash_entry_t *trun_entry = traf->trun_list.head; trun_entry; trun_entry = trun_entry->next )
                 {
                     isom_trun_t *trun = (isom_trun_t *)trun_entry->data;
-                    if( !trun )
+                    if( LSMASH_IS_NON_EXISTING_BOX( trun ) )
                         goto fail;
                     if( trun->sample_count == 0 )
                     {
@@ -1213,10 +1203,10 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
                         else
                             sample_description_index = trex->default_sample_description_index;
                         description   = (isom_sample_entry_t *)lsmash_get_entry_data( &stsd->list, sample_description_index );
-                        is_lpcm_audio = description ? isom_is_lpcm_audio( description ) : 0;
+                        is_lpcm_audio = LSMASH_IS_EXISTING_BOX( description ) ? isom_is_lpcm_audio( description ) : 0;
                         /* Reference media data. */
-                        dref_entry = (isom_dref_entry_t *)lsmash_get_entry_data( dref_list, description ? description->data_reference_index : 0 );
-                        lsmash_file_t *ref_file = (!dref_entry || !dref_entry->ref_file) ? NULL : dref_entry->ref_file;
+                        dref_entry = (isom_dref_entry_t *)lsmash_get_entry_data( dref_list, LSMASH_IS_EXISTING_BOX( description ) ? description->data_reference_index : 0 );
+                        lsmash_file_t *ref_file = (!dref_entry || LSMASH_IS_NON_EXISTING_BOX( dref_entry->ref_file )) ? NULL : dref_entry->ref_file;
                         /* Each track run can be considered as a chunk.
                          * Here, we consider physically consecutive track runs as one chunk. */
                         if( chunk.data_offset + chunk.length != data_offset || chunk.file != ref_file )
@@ -1229,7 +1219,7 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
                                 goto fail;
                         }
                         /* Get dependency info for this track fragment. */
-                        sdtp_entry = traf->sdtp && traf->sdtp->list ? traf->sdtp->list->head : NULL;
+                        sdtp_entry = traf->sdtp->list ? traf->sdtp->list->head : NULL;
                         sdtp_data  = sdtp_entry && sdtp_entry->data ? (isom_sdtp_entry_t *)sdtp_entry->data : NULL;
                     }
                     /* Get info of each sample. */
@@ -1336,7 +1326,7 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
                                     goto fail;
                                 /* Get the location of the sync sample from 'tfra' if it is not set up yet.
                                  * Note: there is no guarantee that its entries are placed in a specific order. */
-                                if( tfra )
+                                if( LSMASH_IS_EXISTING_BOX( tfra ) )
                                 {
                                     if( tfra->number_of_entry == 0
                                      && info.prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE )
@@ -1423,22 +1413,22 @@ fail:
 
 int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )
 {
-    if( !root
-     || !root->file
+    if( LSMASH_IS_NON_EXISTING_BOX( root )
+     || LSMASH_IS_NON_EXISTING_BOX( root->file )
      || track_ID == 0 )
         return LSMASH_ERR_FUNCTION_PARAM;
     uint32_t track_number;
-    if( root->file->initializer )
+    if( LSMASH_IS_EXISTING_BOX( root->file->initializer ) )
     {
-        if( !root->file->initializer->moov )
+        if( LSMASH_IS_NON_EXISTING_BOX( root->file->initializer->moov ) )
             return LSMASH_ERR_INVALID_DATA;
         track_number = 1;
         int track_found = 0;
         for( lsmash_entry_t *entry = root->file->initializer->moov->trak_list.head; entry; entry = entry->next )
         {
             isom_trak_t *trak = (isom_trak_t *)entry->data;
-            if( !trak
-             || !trak->tkhd )
+            if( LSMASH_IS_NON_EXISTING_BOX( trak )
+             || LSMASH_IS_NON_EXISTING_BOX( trak->tkhd ) )
                 continue;
             if( trak->tkhd->track_ID == track_ID )
             {
@@ -1803,18 +1793,13 @@ int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_
         return LSMASH_ERR_FUNCTION_PARAM;
     lsmash_file_t *dst_file = dst->file->initializer;
     isom_trak_t   *dst_trak = isom_get_trak( dst_file, dst_track_ID );
-    if( !dst_file->moov
-     || !dst_file->moov->mvhd
-     ||  dst_file->moov->mvhd->timescale == 0
-     || !dst_trak
-     || !dst_trak->mdia
-     || !dst_trak->mdia->mdhd
-     ||  dst_trak->mdia->mdhd->timescale == 0
-     || !dst_trak->mdia->minf
-     || !dst_trak->mdia->minf->stbl )
+    if( LSMASH_IS_NON_EXISTING_BOX( dst_file->moov->mvhd )
+     || LSMASH_IS_NON_EXISTING_BOX( dst_trak->mdia->mdhd )
+     || LSMASH_IS_NON_EXISTING_BOX( dst_trak->mdia->minf->stbl )
+     || dst_file->moov->mvhd->timescale == 0
+     || dst_trak->mdia->mdhd->timescale == 0 )
         return LSMASH_ERR_NAMELESS;
-    if( dst_trak->edts
-     && dst_trak->edts->elst )
+    if( LSMASH_IS_EXISTING_BOX( dst_trak->edts->elst ) )
         lsmash_remove_entries( dst_trak->edts->elst->list, NULL );
     uint32_t src_movie_timescale;
     uint32_t src_media_timescale;
@@ -1826,10 +1811,7 @@ int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_
     lsmash_file_t  *src_file = src->file->initializer;
     isom_trak_t    *src_trak = isom_get_trak( src_file, src_track_ID );
     int src_fragmented = !!(src_file->flags & LSMASH_FILE_MODE_FRAGMENTED);
-    if( !src_trak
-     || !src_trak->edts
-     || !src_trak->edts->elst
-     || !src_trak->edts->elst->list
+    if( !src_trak->edts->elst->list
      || src_fragmented )
     {
         /* Get from constructed timeline instead of boxes. */
@@ -1852,20 +1834,14 @@ int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_
     }
     if( !src_entry )
     {
-        if( !src_file->moov
-         || !src_file->moov->mvhd
-         ||  src_file->moov->mvhd->timescale == 0
-         || !src_trak
-         || !src_trak->tkhd
-         || !src_trak->mdia
-         || !src_trak->mdia->mdhd
-         ||  src_trak->mdia->mdhd->timescale == 0
-         || !src_trak->mdia->minf
-         || !src_trak->mdia->minf->stbl )
+        if( LSMASH_IS_NON_EXISTING_BOX( src_file->moov->mvhd )
+         || LSMASH_IS_NON_EXISTING_BOX( src_trak->tkhd )
+         || LSMASH_IS_NON_EXISTING_BOX( src_trak->mdia->mdhd )
+         || LSMASH_IS_NON_EXISTING_BOX( src_trak->mdia->minf->stbl )
+         || src_file->moov->mvhd->timescale == 0
+         || src_trak->mdia->mdhd->timescale == 0 )
             return LSMASH_ERR_NAMELESS;
-        if( !src_trak->edts
-         || !src_trak->edts->elst
-         || !src_trak->edts->elst->list
+        if( !src_trak->edts->elst->list
          || !src_trak->edts->elst->list->head )
             return 0;
         src_entry = src_trak->edts->elst->list->head;
@@ -1873,15 +1849,15 @@ int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_
         src_media_timescale = src_trak->mdia->mdhd->timescale;
         src_track_duration  = src_trak->tkhd->duration;
         src_media_duration  = src_trak->mdia->mdhd->duration;
-        src_ctd_shift       = src_trak->mdia->minf->stbl->cslg ? src_trak->mdia->minf->stbl->cslg->compositionToDTSShift : 0;
+        src_ctd_shift       = src_trak->mdia->minf->stbl->cslg->compositionToDTSShift;
     }
     /* Generate the edit list if absent in the destination. */
-    if( (!dst_trak->edts       && !isom_add_edts( dst_trak ))
-     || (!dst_trak->edts->elst && !isom_add_elst( dst_trak->edts )) )
+    if( (LSMASH_IS_NON_EXISTING_BOX( dst_trak->edts       ) && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_edts( dst_trak ) ))
+     || (LSMASH_IS_NON_EXISTING_BOX( dst_trak->edts->elst ) && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_elst( dst_trak->edts ) )) )
         return LSMASH_ERR_NAMELESS;
     uint32_t dst_movie_timescale = dst_file->moov->mvhd->timescale;
     uint32_t dst_media_timescale = dst_trak->mdia->mdhd->timescale;
-    int32_t  dst_ctd_shift       = dst_trak->mdia->minf->stbl->cslg ? dst_trak->mdia->minf->stbl->cslg->compositionToDTSShift : 0;
+    int32_t  dst_ctd_shift       = dst_trak->mdia->minf->stbl->cslg->compositionToDTSShift;
     int32_t  media_time_shift    = src_ctd_shift - dst_ctd_shift;
     lsmash_entry_list_t *dst_list = dst_trak->edts->elst->list;
     while( src_entry )
@@ -1919,7 +1895,9 @@ int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_
 
 int lsmash_set_media_timestamps( lsmash_root_t *root, uint32_t track_ID, lsmash_media_ts_list_t *ts_list )
 {
-    if( !root || !root->file || !ts_list )
+    if( LSMASH_IS_NON_EXISTING_BOX( root )
+     || LSMASH_IS_NON_EXISTING_BOX( root->file )
+     || !ts_list )
         return -1;
     isom_timeline_t *timeline = isom_get_timeline( root, track_ID );
     if( !timeline )
@@ -1994,7 +1972,7 @@ int lsmash_get_media_timestamps( lsmash_root_t *root, uint32_t track_ID, lsmash_
     if( !timeline )
         return LSMASH_ERR_NAMELESS;
     uint32_t sample_count = timeline->info_list->entry_count;
-    if( !sample_count )
+    if( sample_count == 0 )
     {
         ts_list->sample_count = 0;
         ts_list->timestamp    = NULL;

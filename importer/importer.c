@@ -75,7 +75,7 @@ static const importer_functions *importer_func_table[] =
 /******** importer public functions ********/
 importer_t *lsmash_importer_alloc( lsmash_root_t *root )
 {
-    if( !root )
+    if( LSMASH_IS_NON_EXISTING_BOX( root ) )
         return NULL;
     importer_t *importer = (importer_t *)lsmash_malloc_zero( sizeof(importer_t) );
     if( !importer )
@@ -88,7 +88,6 @@ importer_t *lsmash_importer_alloc( lsmash_root_t *root )
         lsmash_free( importer );
         return NULL;
     }
-    importer->class = &lsmash_importer_class;
     return importer;
 }
 
@@ -196,7 +195,7 @@ importer_t *lsmash_importer_open( lsmash_root_t *root, const char *identifier, c
         goto fail;
     }
     lsmash_file_t *file = lsmash_set_file( root, &importer->file_param );
-    if( !file )
+    if( LSMASH_IS_NON_EXISTING_BOX( file ) )
     {
         lsmash_log( importer, LSMASH_LOG_ERROR, "failed to set opened file.\n" );
         goto fail;
@@ -287,24 +286,22 @@ lsmash_summary_t *lsmash_duplicate_summary( importer_t *importer, uint32_t track
 
 int lsmash_importer_make_fake_movie( importer_t *importer )
 {
-    if( !importer || !importer->file || (importer->file->flags & LSMASH_FILE_MODE_BOX) )
+    if( !importer || (importer->file->flags & LSMASH_FILE_MODE_BOX) )
         return LSMASH_ERR_FUNCTION_PARAM;
-    if( !isom_movie_create( importer->file ) )
+    if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_movie_create( importer->file ) ) )
         return LSMASH_ERR_NAMELESS;
     return 0;
 }
 
 int lsmash_importer_make_fake_track( importer_t *importer, lsmash_media_type media_type, uint32_t *track_ID )
 {
-    if( !importer || !importer->file || (importer->file->flags & LSMASH_FILE_MODE_BOX) || !track_ID )
+    if( !importer || (importer->file->flags & LSMASH_FILE_MODE_BOX) || track_ID == 0 )
         return LSMASH_ERR_FUNCTION_PARAM;
     isom_trak_t *trak = isom_track_create( importer->file, media_type );
     int err;
-    if( !trak
-     || !trak->tkhd
-     ||  trak->tkhd->track_ID == 0
-     || !trak->mdia
-     || !trak->mdia->minf )
+    if( LSMASH_IS_NON_EXISTING_BOX( trak->tkhd )
+     || LSMASH_IS_NON_EXISTING_BOX( trak->mdia->minf )
+     || trak->tkhd->track_ID == 0 )
     {
         err = LSMASH_ERR_NAMELESS;
         goto fail;
@@ -320,7 +317,7 @@ fail:
 
 void lsmash_importer_break_fake_movie( importer_t *importer )
 {
-    if( !importer || !importer->file )
+    if( !importer )
         return;
     isom_remove_box_by_itself( importer->file->moov );
 }

@@ -245,10 +245,10 @@ uint64_t nalu_get_codeNum
 int nalu_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index )
 {
     isom_visual_entry_t *sample_entry = (isom_visual_entry_t *)lsmash_get_entry_data( &stbl->stsd->list, sample_description_index );
-    if( !sample_entry )
+    if( LSMASH_IS_NON_EXISTING_BOX( sample_entry ) )
         return LSMASH_ERR_INVALID_DATA;
     isom_btrt_t *btrt = (isom_btrt_t *)isom_get_extension_box_format( &sample_entry->extensions, ISOM_BOX_TYPE_BTRT );
-    if( btrt )
+    if( LSMASH_IS_EXISTING_BOX( btrt ) )
     {
         uint32_t bufferSizeDB;
         uint32_t maxBitrate;

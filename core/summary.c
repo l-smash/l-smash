@@ -146,13 +146,9 @@ uint32_t lsmash_count_summary( lsmash_root_t *root, uint32_t track_ID )
     if( isom_check_initializer_present( root ) < 0 || track_ID == 0 )
         return 0;
     isom_trak_t *trak = isom_get_trak( root->file->initializer, track_ID );
-    if( !trak
-     || !trak->mdia
-     || !trak->mdia->mdhd
-     || !trak->mdia->hdlr
-     || !trak->mdia->minf
-     || !trak->mdia->minf->stbl
-     || !trak->mdia->minf->stbl->stsd )
+    if( LSMASH_IS_NON_EXISTING_BOX( trak )
+     || LSMASH_IS_NON_EXISTING_BOX( trak->mdia->mdhd )
+     || LSMASH_IS_NON_EXISTING_BOX( trak->mdia->hdlr ) )
         return 0;
     return trak->mdia->minf->stbl->stsd->list.entry_count;
 }
@@ -162,13 +158,8 @@ lsmash_summary_t *lsmash_get_summary( lsmash_root_t *root, uint32_t track_ID, ui
     if( isom_check_initializer_present( root ) < 0 || track_ID == 0 || description_number == 0 )
         return NULL;
     isom_trak_t *trak = isom_get_trak( root->file->initializer, track_ID );
-    if( !trak
-     || !trak->mdia
-     || !trak->mdia->mdhd
-     || !trak->mdia->hdlr
-     || !trak->mdia->minf
-     || !trak->mdia->minf->stbl
-     || !trak->mdia->minf->stbl->stsd )
+    if( LSMASH_IS_NON_EXISTING_BOX( trak->mdia->mdhd )
+     || LSMASH_IS_NON_EXISTING_BOX( trak->mdia->hdlr ) )
         return NULL;
     isom_minf_t *minf = trak->mdia->minf;
     isom_stsd_t *stsd = minf->stbl->stsd;
@@ -181,11 +172,11 @@ lsmash_summary_t *lsmash_get_summary( lsmash_root_t *root, uint32_t track_ID, ui
             continue;
         }
         isom_sample_entry_t *sample_entry = entry->data;
-        if( !sample_entry )
+        if( LSMASH_IS_NON_EXISTING_BOX( sample_entry ) )
             return NULL;
-        if( minf->vmhd )
+        if( LSMASH_IS_EXISTING_BOX( minf->vmhd ) )
             return isom_create_video_summary_from_description( sample_entry );
-        else if( minf->smhd )
+        else if( LSMASH_IS_EXISTING_BOX( minf->smhd ) )
             return isom_create_audio_summary_from_description( sample_entry );
         else
             return NULL;

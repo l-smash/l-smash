@@ -31,25 +31,28 @@ static isom_data_t *isom_add_metadata( lsmash_file_t *file,
                                        lsmash_itunes_metadata_item item,
                                        char *meaning_string, char *name_string )
 {
-    assert( file && file->moov );
+    assert( LSMASH_IS_EXISTING_BOX( file->moov ) );
     if( ((item == ITUNES_METADATA_ITEM_CUSTOM) && (!meaning_string || !meaning_string[0]) )
-     || (!file->moov->udta             && !isom_add_udta( file->moov ))
-     || (!file->moov->udta->meta       && !isom_add_meta( file->moov->udta ))
-     || (!file->moov->udta->meta->ilst && !isom_add_ilst( file->moov->udta->meta )) )
+     || (LSMASH_IS_NON_EXISTING_BOX( file->moov->udta )
+      && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_udta( file->moov ) ))
+     || (LSMASH_IS_NON_EXISTING_BOX( file->moov->udta->meta )
+      && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_meta( file->moov->udta ) ))
+     || (LSMASH_IS_NON_EXISTING_BOX( file->moov->udta->meta->ilst )
+      && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_ilst( file->moov->udta->meta ) )) )
         return NULL;
-    if( !file->moov->udta->meta->hdlr )
+    if( LSMASH_IS_NON_EXISTING_BOX( file->moov->udta->meta->hdlr ) )
     {
-        if( !isom_add_hdlr( file->moov->udta->meta )
+        if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_hdlr( file->moov->udta->meta ) )
          || isom_setup_handler_reference( file->moov->udta->meta->hdlr, ISOM_META_HANDLER_TYPE_ITUNES_METADATA ) < 0 )
             return NULL;
     }
     isom_ilst_t *ilst = file->moov->udta->meta->ilst;
-    if( !isom_add_metaitem( ilst, item ) )
+    if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_metaitem( ilst, item ) ) )
         return NULL;
     isom_metaitem_t *metaitem = (isom_metaitem_t *)ilst->metaitem_list.tail->data;
     if( item == ITUNES_METADATA_ITEM_CUSTOM )
     {
-        if( !isom_add_mean( metaitem ) )
+        if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_mean( metaitem ) ) )
             goto fail;
         isom_mean_t *mean = metaitem->mean;
         mean->meaning_string_length = strlen( meaning_string );    /* No null terminator */
@@ -58,7 +61,7 @@ static isom_data_t *isom_add_metadata( lsmash_file_t *file,
             goto fail;
         if( name_string && name_string[0] )
         {
-            if( !isom_add_name( metaitem ) )
+            if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_name( metaitem ) ) )
                 goto fail;
             isom_name_t *name = metaitem->name;
             name->name_length = strlen( name_string );    /* No null terminator */
@@ -67,7 +70,7 @@ static isom_data_t *isom_add_metadata( lsmash_file_t *file,
                 goto fail;
         }
     }
-    if( !isom_add_data( metaitem ) )
+    if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_data( metaitem ) ) )
         goto fail;
     return metaitem->data;
 fail:
@@ -83,7 +86,7 @@ static int isom_set_itunes_metadata_string( lsmash_file_t *file,
     if( item == ITUNES_METADATA_ITEM_DESCRIPTION && value_length > 255 )
         item = ITUNES_METADATA_ITEM_LONG_DESCRIPTION;
     isom_data_t *data = isom_add_metadata( file, item, meaning, name );
-    if( !data )
+    if( LSMASH_IS_NON_EXISTING_BOX( data ) )
         return LSMASH_ERR_NAMELESS;
     data->type_code    = ITUNES_METADATA_SUBTYPE_UTF8;
     data->value_length = value_length;      /* No null terminator */
@@ -131,7 +134,7 @@ static int isom_set_itunes_metadata_integer( lsmash_file_t *file,
     if( metadata_code_type_table[i].length == 0 )
         return LSMASH_ERR_NAMELESS;
     isom_data_t *data = isom_add_metadata( file, item, meaning, name );
-    if( !data )
+    if( LSMASH_IS_NON_EXISTING_BOX( data ) )
         return LSMASH_ERR_NAMELESS;
     if( item == ITUNES_METADATA_ITEM_PREDEFINED_GENRE )
         data->type_code = ITUNES_METADATA_SUBTYPE_IMPLICIT;
@@ -159,7 +162,7 @@ static int isom_set_itunes_metadata_boolean( lsmash_file_t *file,
                                              lsmash_itunes_metadata_value_t value, char *meaning, char *name )
 {
     isom_data_t *data = isom_add_metadata( file, item, meaning, name );
-    if( !data )
+    if( LSMASH_IS_NON_EXISTING_BOX( data ) )
         return LSMASH_ERR_NAMELESS;
     data->type_code = ITUNES_METADATA_SUBTYPE_INTEGER;
     data->value_length = 1;
@@ -179,7 +182,7 @@ static int isom_set_itunes_metadata_binary( lsmash_file_t *file,
                                             lsmash_itunes_metadata_value_t value, char *meaning, char *name )
 {
     isom_data_t *data = isom_add_metadata( file, item, meaning, name );
-    if( !data )
+    if( LSMASH_IS_NON_EXISTING_BOX( data ) )
         return LSMASH_ERR_NAMELESS;
     switch( item )
     {
@@ -391,23 +394,21 @@ int lsmash_get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, l
     if( isom_check_initializer_present( root ) < 0 || !metadata )
         return LSMASH_ERR_FUNCTION_PARAM;
     lsmash_file_t *file = root->file->initializer;
-    if( !file->moov
-     || !file->moov->udta
-     || !file->moov->udta->meta
-     || !file->moov->udta->meta->ilst )
+    if( !file->moov->udta->meta->ilst )
         return LSMASH_ERR_NAMELESS;
     isom_ilst_t *ilst = file->moov->udta->meta->ilst;
     isom_metaitem_t *metaitem = (isom_metaitem_t *)lsmash_get_entry_data( &ilst->metaitem_list, metadata_number );
-    if( !metaitem || !metaitem->data || !metaitem->data->value || metaitem->data->value_length == 0 )
+    if( LSMASH_IS_NON_EXISTING_BOX( metaitem )
+     || LSMASH_IS_NON_EXISTING_BOX( metaitem->data )
+     || metaitem->data->value        == NULL
+     || metaitem->data->value_length == 0 )
         return LSMASH_ERR_NAMELESS;
-    /* Get 'item'. */
     metadata->item = metaitem->type.fourcc;
-    /* Get 'type'. */
     metadata->type = isom_get_itunes_metadata_type( metadata->item );
     /* Get 'meaning'. */
     int err = LSMASH_ERR_MEMORY_ALLOC;
     isom_mean_t *mean = metaitem->mean;
-    if( mean )
+    if( LSMASH_IS_NON_EXISTING_BOX( mean ) )
     {
         uint8_t *temp = lsmash_malloc( mean->meaning_string_length + 1 );
         if( !temp )
@@ -420,7 +421,7 @@ int lsmash_get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, l
         metadata->meaning = NULL;
     /* Get 'name'. */
     isom_name_t *name = metaitem->name;
-    if( name )
+    if( LSMASH_IS_NON_EXISTING_BOX( name ) )
     {
         uint8_t *temp = lsmash_malloc( name->name_length + 1 );
         if( !temp )
@@ -480,9 +481,6 @@ fail:
 uint32_t lsmash_count_itunes_metadata( lsmash_root_t *root )
 {
     if( isom_check_initializer_present( root ) < 0
-     || !root->file->initializer->moov
-     || !root->file->initializer->moov->udta
-     || !root->file->initializer->moov->udta->meta
      || !root->file->initializer->moov->udta->meta->ilst )
         return 0;
     return root->file->initializer->moov->udta->meta->ilst->metaitem_list.entry_count;

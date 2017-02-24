@@ -340,17 +340,18 @@ SRC_IMPORTER="  \
     vc1_imp.c   \
     wave_imp.c"
 
-SRC_CORE="     \
-    box.c      \
-    chapter.c  \
-    file.c     \
-    fragment.c \
-    isom.c     \
-    meta.c     \
-    print.c    \
-    read.c     \
-    summary.c  \
-    timeline.c \
+SRC_CORE="        \
+    box.c         \
+    box_default.c \
+    chapter.c     \
+    file.c        \
+    fragment.c    \
+    isom.c        \
+    meta.c        \
+    print.c       \
+    read.c        \
+    summary.c     \
+    timeline.c    \
     write.c"
 
 SRCS=""

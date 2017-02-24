@@ -38,7 +38,7 @@ static int isom_write_children( lsmash_bs_t *bs, isom_box_t *box )
     for( lsmash_entry_t *entry = box->extensions.head; entry; entry = entry->next )
     {
         isom_box_t *child = (isom_box_t *)entry->data;
-        if( !child )
+        if( LSMASH_IS_NON_EXISTING_BOX( child ) )
             continue;
         int ret = isom_write_box( bs, child );
         if( ret < 0 )
@@ -91,7 +91,7 @@ static int isom_write_tkhd( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_tkhd_t *tkhd = (isom_tkhd_t *)box;
     /* Check the version. */
-    if( (tkhd->file && !tkhd->file->undefined_64_ver)
+    if( (LSMASH_IS_EXISTING_BOX( tkhd->file ) && !tkhd->file->undefined_64_ver)
      && (tkhd->creation_time     > UINT32_MAX
       || tkhd->modification_time > UINT32_MAX
       || tkhd->duration          > UINT32_MAX) )
@@ -169,10 +169,11 @@ static int isom_write_elst( lsmash_bs_t *bs, isom_box_t *box )
     if( elst->list->entry_count == 0 )
         return 0;
     elst->version = 0;
-    if( elst->file )
+    lsmash_file_t *file = elst->file;
+    if( LSMASH_IS_EXISTING_BOX( file ) )
     {
         /* Check the version. */
-        if( !elst->file->undefined_64_ver )
+        if( !file->undefined_64_ver )
             for( lsmash_entry_t *entry = elst->list->head; entry; entry = entry->next )
             {
                 isom_elst_entry_t *data = (isom_elst_entry_t *)entry->data;
@@ -184,8 +185,8 @@ static int isom_write_elst( lsmash_bs_t *bs, isom_box_t *box )
                     elst->version = 1;
             }
         /* Remember to rewrite entries. */
-        if( elst->file->fragment && !elst->file->bs->unseekable )
-            elst->pos = elst->file->bs->written;
+        if( file->fragment && !file->bs->unseekable )
+            elst->pos = file->bs->written;
     }
     /* Write. */
     isom_bs_put_box_common( bs, elst );
@@ -233,7 +234,7 @@ static int isom_write_mdhd( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_mdhd_t *mdhd = (isom_mdhd_t *)box;
     /* Check the version. */
-    if( (mdhd->file && !mdhd->file->undefined_64_ver)
+    if( (LSMASH_IS_EXISTING_BOX( mdhd->file ) && !mdhd->file->undefined_64_ver)
      && (mdhd->creation_time     > UINT32_MAX
       || mdhd->modification_time > UINT32_MAX
       || mdhd->duration          > UINT32_MAX) )
@@ -537,7 +538,7 @@ static int isom_write_wave( lsmash_bs_t *bs, isom_box_t *box )
 static int isom_write_visual_description( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_visual_entry_t *data = (isom_visual_entry_t *)box;
-    if( !data )
+    if( LSMASH_IS_NON_EXISTING_BOX( data ) )
         return LSMASH_ERR_NAMELESS;
     isom_bs_put_box_common( bs, data );
     lsmash_bs_put_bytes( bs, 6, data->reserved );
@@ -564,7 +565,7 @@ static int isom_write_visual_description( lsmash_bs_t *bs, isom_box_t *box )
 static int isom_write_audio_description( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_audio_entry_t *data = (isom_audio_entry_t *)box;
-    if( !data )
+    if( LSMASH_IS_NON_EXISTING_BOX( data ) )
         return LSMASH_ERR_NAMELESS;
     isom_bs_put_box_common( bs, data );
     lsmash_bs_put_bytes( bs, 6, data->reserved );
@@ -602,7 +603,7 @@ static int isom_write_audio_description( lsmash_bs_t *bs, isom_box_t *box )
 static int isom_write_hint_description( lsmash_bs_t *bs, lsmash_entry_t *entry )
 {
     isom_hint_entry_t *data = (isom_hint_entry_t *)entry->data;
-    if( !data )
+    if( LSMASH_IS_NON_EXISTING_BOX( data ) )
         return LSMASH_ERR_NAMELESS;
     isom_bs_put_box_common( bs, data );
     lsmash_bs_put_bytes( bs, 6, data->reserved );
@@ -615,7 +616,7 @@ static int isom_write_hint_description( lsmash_bs_t *bs, lsmash_entry_t *entry )
 static int isom_write_metadata_description( lsmash_bs_t *bs, lsmash_entry_t *entry )
 {
     isom_metadata_entry_t *data = (isom_metadata_entry_t *)entry->data;
-    if( !data )
+    if( LSMASH_IS_NON_EXISTING_BOX( data ) )
         return LSMASH_ERR_NAMELESS;
     isom_bs_put_box_common( bs, data );
     lsmash_bs_put_bytes( bs, 6, data->reserved );
@@ -627,7 +628,7 @@ static int isom_write_metadata_description( lsmash_bs_t *bs, lsmash_entry_t *ent
 static int isom_write_qt_text_description( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_qt_text_entry_t *data = (isom_qt_text_entry_t *)box;
-    if( !data )
+    if( LSMASH_IS_NON_EXISTING_BOX( data ) )
         return LSMASH_ERR_NAMELESS;
     isom_bs_put_box_common( bs, data );
     lsmash_bs_put_bytes( bs, 6, data->reserved );
@@ -676,7 +677,7 @@ static int isom_write_ftab( lsmash_bs_t *bs, isom_box_t *box )
 static int isom_write_tx3g_description( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_tx3g_entry_t *data = (isom_tx3g_entry_t *)box;
-    if( !data )
+    if( LSMASH_IS_NON_EXISTING_BOX( data ) )
         return LSMASH_ERR_NAMELESS;
     isom_bs_put_box_common( bs, data );
     lsmash_bs_put_bytes( bs, 6, data->reserved );
@@ -1097,7 +1098,7 @@ static int isom_write_mvhd( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_mvhd_t *mvhd = (isom_mvhd_t *)box;
     /* Check the version. */
-    if( (mvhd->file && !mvhd->file->undefined_64_ver)
+    if( (LSMASH_IS_EXISTING_BOX( mvhd->file ) && !mvhd->file->undefined_64_ver)
      && (mvhd->creation_time     > UINT32_MAX
       || mvhd->modification_time > UINT32_MAX
       || mvhd->duration          > UINT32_MAX) )
@@ -1475,7 +1476,8 @@ int isom_write_box( lsmash_bs_t *bs, isom_box_t *box )
 {
     assert( bs );
     /* Don't write any incomplete or already written box to a file. */
-    if( !box || !box->write
+    if( LSMASH_IS_NON_EXISTING_BOX( box )
+     || !box->write
      || (bs->stream && (box->manager & (LSMASH_INCOMPLETE_BOX | LSMASH_WRITTEN_BOX))) )
         return 0;
     int ret = box->write( bs, box );
@@ -1506,7 +1508,7 @@ void isom_set_box_writer( isom_box_t *box )
         box->write = isom_write_unknown_box;
         return;
     }
-    assert( box->parent );
+    assert( LSMASH_IS_EXISTING_BOX( box->parent ) );
     isom_box_t *parent = box->parent;
     if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) )
     {
@@ -1653,7 +1655,7 @@ void isom_set_box_writer( isom_box_t *box )
         box->write = isom_write_metaitem;
         return;
     }
-    if( parent->parent && lsmash_check_box_type_identical( parent->parent->type, ISOM_BOX_TYPE_ILST ) )
+    if( lsmash_check_box_type_identical( parent->parent->type, ISOM_BOX_TYPE_ILST ) )
     {
              if( lsmash_check_box_type_identical( box->type, ISOM_BOX_TYPE_MEAN ) )
             box->write = isom_write_mean;

@@ -29,7 +29,13 @@
 #include <time.h>
 #define ISOM_MAC_EPOCH_OFFSET 2082844800
 
+/* aliases internally used only for convenience */
+typedef struct lsmash_file_tag isom_file_abstract_t;
+typedef struct lsmash_root_tag isom_root_abstract_t;
+typedef struct isom_unknown_box_tag isom_unknown_t;
+
 typedef struct lsmash_box_tag isom_box_t;
+typedef struct isom_unknown_box_tag isom_unknown_box_t;
 typedef struct isom_mdhd_tag isom_mdhd_t;
 typedef struct isom_stbl_tag isom_stbl_t;
 
@@ -40,19 +46,20 @@ typedef int (*isom_bitrate_updater_t)( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uin
 
 /* If size is 1, then largesize is actual size.
  * If size is 0, then this box is the last one in the file. */
-#define ISOM_BASEBOX_COMMON                                                                     \
-        const lsmash_class_t       *class;                                                      \
-        lsmash_root_t              *root;       /* pointer of root */                           \
-        lsmash_file_t              *file;       /* pointer of file */                           \
-        isom_box_t                 *parent;     /* pointer of the parent box of this box */     \
-        uint8_t                    *binary;     /* used only when LSMASH_BINARY_CODED_BOX */    \
-        isom_extension_destructor_t destruct;   /* box specific destructor */                   \
-        isom_extension_writer_t     write;      /* box specific writer */                       \
-        uint32_t                    manager;    /* flags for L-SMASH */                         \
-        uint64_t                    precedence; /* precedence of the box position */            \
-        uint64_t                    pos;        /* starting position of this box in the file */ \
-        lsmash_entry_list_t         extensions; /* extension boxes */                           \
-    uint64_t          size;                     /* the number of bytes in this box */           \
+#define ISOM_BASEBOX_COMMON                                                                         \
+        const lsmash_class_t       *class;                                                          \
+        lsmash_root_t              *root;           /* pointer to root */                           \
+        lsmash_file_t              *file;           /* pointer to file */                           \
+        isom_box_t                 *parent;         /* pointer to the parent box of this box */     \
+        void                       *nonexist_ptr;   /* pointer to non-existing box constant */      \
+        uint8_t                    *binary;         /* used only when LSMASH_BINARY_CODED_BOX */    \
+        isom_extension_destructor_t destruct;       /* box specific destructor */                   \
+        isom_extension_writer_t     write;          /* box specific writer */                       \
+        uint32_t                    manager;        /* flags for L-SMASH */                         \
+        uint64_t                    precedence;     /* precedence of the box position */            \
+        uint64_t                    pos;            /* starting position of this box in the file */ \
+        lsmash_entry_list_t         extensions;     /* extension boxes */                           \
+    uint64_t          size;                         /* the number of bytes in this box */           \
     lsmash_box_type_t type
 
 #define ISOM_FULLBOX_COMMON                                         \
@@ -76,6 +83,27 @@ typedef int (*isom_bitrate_updater_t)( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uin
 #define LSMASH_BINARY_CODED_BOX  0x100
 #define LSMASH_PLACEHOLDER       0x200
 #define LSMASH_WRITTEN_BOX       0x400
+#define LSMASH_NON_EXISTING_BOX  0x800  /* This flag indicates a read only non-existing box constant.
+                                         * Don't use for wild boxes other than non-existing box constants
+                                         * because this flags prevents attempting to freeing its box. */
+
+/* Use these macros for checking existences of boxes.
+ * If the result of LSMASH_IS_EXISTING_BOX is 0, the evaluated box is read only.
+ * If the result of LSMASH_IS_NON_EXISTING_BOX is 1, the evaluated box is read only. */
+#define LSMASH_IS_EXISTING_BOX( box_ptr ) \
+    ((box_ptr) && !((box_ptr)->manager & LSMASH_NON_EXISTING_BOX))
+#define LSMASH_IS_NON_EXISTING_BOX( box_ptr ) \
+    (!(box_ptr) || ((box_ptr)->manager & LSMASH_NON_EXISTING_BOX))
+
+#define LSMASH_IS_BOX_ADDITION_SUCCESS( box_ptr ) \
+    (!((box_ptr)->manager & LSMASH_NON_EXISTING_BOX))
+#define LSMASH_IS_BOX_ADDITION_FAILURE( box_ptr ) \
+    (!!((box_ptr)->manager & LSMASH_NON_EXISTING_BOX))
+
+/* Use this macro for disabling a predefined child box in struct.
+ * Predefined childs must not be NULL for safety. */
+#define LSMASH_MAKE_BOX_NON_EXISTING( box_ptr ) \
+    (box_ptr) = (void *)(box_ptr)->nonexist_ptr
 
 /* 12-byte ISO reserved value:
  * 0xXXXXXXXX-0011-0010-8000-00AA00389B71 */
@@ -97,12 +125,12 @@ struct lsmash_box_tag
 /* Unknown Box
  * This structure is for boxes we don't know or define yet.
  * This box must be always appended as an extension box. */
-typedef struct
+struct isom_unknown_box_tag
 {
     ISOM_BASEBOX_COMMON;
     uint32_t unknown_size;
     uint8_t *unknown_field;
-} isom_unknown_box_t;
+};
 
 /* File Type Box
  * This box identifies the specifications to which this file complies.

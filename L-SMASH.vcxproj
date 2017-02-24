@@ -171,6 +171,7 @@
     <ClCompile Include="common\osdep.c" />
     <ClCompile Include="common\utils.c" />
     <ClCompile Include="core\box.c" />
+    <ClCompile Include="core\box_default.c" />
     <ClCompile Include="core\chapter.c" />
     <ClCompile Include="core\file.c" />
     <ClCompile Include="core\fragment.c" />

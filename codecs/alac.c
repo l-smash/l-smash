@@ -81,7 +81,7 @@ int alac_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_cod
 
 int alac_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
 {
-    assert( fp && file && box && (box->manager & LSMASH_BINARY_CODED_BOX) );
+    assert( box->manager & LSMASH_BINARY_CODED_BOX );
     int indent = level;
     lsmash_ifprintf( fp, indent++, "[%s: ALAC Specific Box]\n", isom_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
@@ -110,12 +110,12 @@ int alac_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, i
 int alac_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index )
 {
     isom_audio_entry_t *alac = (isom_audio_entry_t *)lsmash_get_entry_data( &stbl->stsd->list, sample_description_index );
-    if( !alac )
+    if( LSMASH_IS_NON_EXISTING_BOX( alac ) )
         return LSMASH_ERR_INVALID_DATA;
     uint8_t *exdata      = NULL;
     uint32_t exdata_size = 0;
     isom_box_t *alac_ext = isom_get_extension_box( &alac->extensions, QT_BOX_TYPE_WAVE );
-    if( alac_ext )
+    if( LSMASH_IS_EXISTING_BOX( alac_ext ) )
     {
         /* Apple Lossless Audio inside QuickTime file format
          * Though average bitrate field we found is always set to 0 apparently,
@@ -126,7 +126,7 @@ int alac_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_d
         {
             isom_wave_t *wave     = (isom_wave_t *)alac_ext;
             isom_box_t  *wave_ext = isom_get_extension_box( &wave->extensions, QT_BOX_TYPE_ALAC );
-            if( !wave_ext || !(wave_ext->manager & LSMASH_BINARY_CODED_BOX) )
+            if( !(wave_ext->manager & LSMASH_BINARY_CODED_BOX) )
                 return LSMASH_ERR_INVALID_DATA;
             exdata      = wave_ext->binary;
             exdata_size = wave_ext->size;
@@ -136,7 +136,7 @@ int alac_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_d
     {
         /* Apple Lossless Audio inside ISO Base Media file format */
         isom_box_t *ext = isom_get_extension_box( &alac->extensions, ISOM_BOX_TYPE_ALAC );
-        if( !ext || !(ext->manager & LSMASH_BINARY_CODED_BOX) )
+        if( !(ext->manager & LSMASH_BINARY_CODED_BOX) )
             return LSMASH_ERR_INVALID_DATA;
         exdata      = ext->binary;
         exdata_size = ext->size;

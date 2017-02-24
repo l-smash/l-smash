@@ -2425,7 +2425,7 @@ int h264_print_codec_specific
     int            level
 )
 {
-    assert( fp && file && box && (box->manager & LSMASH_BINARY_CODED_BOX) );
+    assert( box->manager & LSMASH_BINARY_CODED_BOX );
     int indent = level;
     lsmash_ifprintf( fp, indent++, "[%s: AVC Configuration Box]\n", isom_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
@@ -2536,7 +2536,7 @@ int h264_print_bitrate
     int            level
 )
 {
-    assert( fp && file && box );
+    assert( fp && LSMASH_IS_EXISTING_BOX( file ) && LSMASH_IS_EXISTING_BOX( box ) );
     int indent = level;
     lsmash_ifprintf( fp, indent++, "[%s: MPEG-4 Bit Rate Box]\n", isom_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );

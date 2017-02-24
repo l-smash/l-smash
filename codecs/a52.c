@@ -206,7 +206,7 @@ int ac3_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_code
 
 int ac3_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
 {
-    assert( fp && file && box && (box->manager & LSMASH_BINARY_CODED_BOX) );
+    assert( box->manager & LSMASH_BINARY_CODED_BOX );
     int indent = level;
     lsmash_ifprintf( fp, indent++, "[%s: AC3 Specific Box]\n", isom_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
@@ -675,7 +675,7 @@ void eac3_update_channel_count
 
 int eac3_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
 {
-    assert( fp && file && box && (box->manager & LSMASH_BINARY_CODED_BOX) );
+    assert( box->manager & LSMASH_BINARY_CODED_BOX );
     int indent = level;
     lsmash_ifprintf( fp, indent++, "[%s: EC3 Specific Box]\n", isom_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
@@ -741,10 +741,10 @@ int eac3_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, i
 int eac3_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index )
 {
     isom_audio_entry_t *eac3 = (isom_audio_entry_t *)lsmash_get_entry_data( &stbl->stsd->list, sample_description_index );
-    if( !eac3 )
+    if( LSMASH_IS_NON_EXISTING_BOX( eac3 ) )
         return LSMASH_ERR_INVALID_DATA;
     isom_box_t *ext = isom_get_extension_box( &eac3->extensions, ISOM_BOX_TYPE_DEC3 );
-    if( !(ext && (ext->manager & LSMASH_BINARY_CODED_BOX) && ext->binary && ext->size >= 10) )
+    if( !((ext->manager & LSMASH_BINARY_CODED_BOX) && ext->binary && ext->size >= 10) )
         return LSMASH_ERR_INVALID_DATA;
     uint16_t bitrate;
     if( isom_is_variable_size( stbl ) )

@@ -2962,7 +2962,7 @@ int hevc_print_codec_specific
     int            level
 )
 {
-    assert( fp && file && box && (box->manager & LSMASH_BINARY_CODED_BOX) );
+    assert( box->manager & LSMASH_BINARY_CODED_BOX );
     int indent = level;
     lsmash_ifprintf( fp, indent++, "[%s: HEVC Configuration Box]\n", isom_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );

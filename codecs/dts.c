@@ -1679,7 +1679,7 @@ int dts_copy_codec_specific( lsmash_codec_specific_t *dst, lsmash_codec_specific
 
 int dts_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
 {
-    assert( fp && file && box && (box->manager & LSMASH_BINARY_CODED_BOX) );
+    assert( box->manager & LSMASH_BINARY_CODED_BOX );
     int indent = level;
     lsmash_ifprintf( fp, indent++, "[%s: DTS Specific Box]\n", isom_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
@@ -1814,10 +1814,10 @@ int dts_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, in
 int dts_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index )
 {
     isom_audio_entry_t *dts_audio = (isom_audio_entry_t *)lsmash_get_entry_data( &stbl->stsd->list, sample_description_index );
-    if( !dts_audio )
+    if( LSMASH_IS_NON_EXISTING_BOX( dts_audio ) )
         return LSMASH_ERR_INVALID_DATA;
     isom_box_t *ext = isom_get_extension_box( &dts_audio->extensions, ISOM_BOX_TYPE_DDTS );
-    if( !(ext && (ext->manager & LSMASH_BINARY_CODED_BOX) && ext->binary && ext->size >= 28) )
+    if( !((ext->manager & LSMASH_BINARY_CODED_BOX) && ext->binary && ext->size >= 28) )
         return LSMASH_ERR_INVALID_DATA;
     uint32_t bufferSizeDB;
     uint32_t maxBitrate;
