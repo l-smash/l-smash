@@ -2296,8 +2296,7 @@ int lsmash_reserve_media_data_size
     uint64_t              media_data_size
 )
 {
-    if( isom_check_initializer_present( root ) < 0
-     || media_data_size <= ISOM_BASEBOX_COMMON_SIZE )
+    if( isom_check_initializer_present( root ) < 0 )
         return LSMASH_ERR_FUNCTION_PARAM;
     lsmash_file_t *file = root->file->initializer;
     if( file->mdat          /* whether the Media Data Box is already written or not */
