@@ -141,6 +141,9 @@
     <ClCompile Include="core\box_default.c">
       <Filter>Sources</Filter>
     </ClCompile>
+    <ClCompile Include="core\box_type.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="codecs\a52.h">

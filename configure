@@ -343,6 +343,7 @@ SRC_IMPORTER="  \
 SRC_CORE="        \
     box.c         \
     box_default.c \
+    box_type.c    \
     chapter.c     \
     file.c        \
     fragment.c    \
