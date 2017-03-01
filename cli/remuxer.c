@@ -216,7 +216,8 @@ static void cleanup_output_movie( output_t *output )
     if( !(output->file.seg_param.mode & LSMASH_FILE_MODE_INITIALIZATION) )
     {
         lsmash_freep( &output->file.seg_param.brands );
-        output->file.close( &output->file.seg_param );
+        if( output->file.close )
+            output->file.close( &output->file.seg_param );
     }
     lsmash_freep( &output->file.param.brands );
     if( output->file.close )
