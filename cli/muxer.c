@@ -115,13 +115,14 @@ typedef struct
 
 typedef struct
 {
-    input_option_t     opt;
-    char              *file_name;
-    importer_t        *importer;
-    input_track_t      track[MAX_NUM_OF_TRACKS];
-    uint32_t           num_of_tracks;
-    uint32_t           num_of_active_tracks;
-    uint32_t           current_track_number;
+    input_option_t opt;
+    lsmash_root_t *root;
+    char          *file_name;
+    importer_t    *importer;
+    input_track_t  track[MAX_NUM_OF_TRACKS];
+    uint32_t       num_of_tracks;
+    uint32_t       num_of_active_tracks;
+    uint32_t       current_track_number;
 } input_t;
 
 typedef struct
@@ -194,6 +195,7 @@ static void cleanup_muxer( muxer_t *muxer )
         lsmash_importer_close( input->importer );
         for( uint32_t j = 0; j < input->num_of_tracks; j++ )
             lsmash_cleanup_summary( input->track[j].summary );
+        lsmash_destroy_root( input->root );
     }
 }
 
@@ -740,7 +742,11 @@ static int open_input_files( muxer_t *muxer )
     {
         input_t *input = &muxer->input[current_input_number - 1];
         /* Initialize importer framework. */
-        input->importer = lsmash_importer_open( input->file_name, "auto" );
+        lsmash_root_t *root = lsmash_create_root();
+        if( !root )
+            return ERROR_MSG( "failed to create a ROOT for input file.\n" );
+        input->root = root;
+        input->importer = lsmash_importer_open( root, input->file_name, "auto" );
         if( !input->importer )
             return ERROR_MSG( "failed to open input file.\n" );
         input->num_of_tracks = lsmash_importer_get_track_count( input->importer );
@@ -877,7 +883,7 @@ static int prepare_output( muxer_t *muxer )
     /* Initialize L-SMASH muxer */
     output->root = lsmash_create_root();
     if( !output->root )
-        return ERROR_MSG( "failed to create a ROOT.\n" );
+        return ERROR_MSG( "failed to create a ROOT for output file.\n" );
     lsmash_file_parameters_t *file_param = &out_file->param;
     if( lsmash_open_file( out_file->name, 0, file_param ) < 0 )
         return ERROR_MSG( "failed to open an output file.\n" );

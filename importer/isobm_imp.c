@@ -29,6 +29,8 @@
 
 /*********************************************************************************
     ISO Base Media File Format (ISOBMFF) / QuickTime File Format (QTFF) importer
+
+    TODO: Make this importer work for multiple tracks.
 **********************************************************************************/
 #include "core/read.h"
 #include "core/timeline.h"
@@ -153,9 +155,9 @@ static int isobm_importer_probe( importer_t *importer )
         goto fail;
     }
     importer->file->flags |= LSMASH_FILE_MODE_BOX;
-    lsmash_root_t *root = importer->root;
-    if( root && root == importer->file->root )
+    if( importer->is_adhoc_open )
     {
+        lsmash_root_t *root = importer->root;
         if( (isobm_imp->track_ID = lsmash_get_track_ID( root, 1 )) == 0 )
         {
             err = LSMASH_ERR_PATCH_WELCOME;
@@ -197,7 +199,7 @@ static int isobm_importer_construct_timeline( importer_t *importer, uint32_t tra
     int err = isom_timeline_construct( root, track_ID );
     if( err < 0 )
         return err;
-    if( root && root == importer->file->root )
+    if( importer->is_adhoc_open )
     {
         lsmash_summary_t *summary = lsmash_get_entry_data( importer->summaries, track_number );
         if( !summary )

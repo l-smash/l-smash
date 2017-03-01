@@ -73,17 +73,14 @@ static const importer_functions *importer_func_table[] =
 ***************************************************************************/
 
 /******** importer public functions ********/
-importer_t *lsmash_importer_alloc( void )
+importer_t *lsmash_importer_alloc( lsmash_root_t *root )
 {
+    if( !root )
+        return NULL;
     importer_t *importer = (importer_t *)lsmash_malloc_zero( sizeof(importer_t) );
     if( !importer )
         return NULL;
-    importer->root = lsmash_create_root();
-    if( !importer->root )
-    {
-        lsmash_free( importer );
-        return NULL;
-    }
+    importer->root = root;
     importer->summaries = lsmash_create_entry_list();
     if( !importer->summaries )
     {
@@ -99,22 +96,25 @@ void lsmash_importer_destroy( importer_t *importer )
 {
     if( !importer )
         return;
+    lsmash_file_t *file = importer->file;
     if( importer->funcs.cleanup )
         importer->funcs.cleanup( importer );
     lsmash_remove_list( importer->summaries, lsmash_cleanup_summary );
-    if( importer->root && importer->root != importer->file->root )
-        importer->root->file = NULL;    /* not internally opened file */
-    lsmash_destroy_root( importer->root );
     lsmash_free( importer );
+    /* Prevent freeing this already freed importer in file's destructor again. */
+    if( file->importer )
+        file->importer = NULL;
 }
 
 int lsmash_importer_set_file( importer_t *importer, lsmash_file_t *file )
 {
-    if( !importer || !file || !file->bs )
+    if( !importer
+     || lsmash_activate_file( importer->root, file ) < 0
+     || !file->bs )
         return LSMASH_ERR_NAMELESS;
-    importer->root->file = file;
-    importer->file       = file;
-    importer->bs         = file->bs;
+    importer->file = file;
+    importer->bs   = file->bs;
+    file->importer = importer;
     return 0;
 }
 
@@ -123,6 +123,7 @@ void lsmash_importer_close( importer_t *importer )
     if( !importer )
         return;
     if( !importer->is_stdin )
+        /* FIXME: stdin should not be closed by fclose(). */
         lsmash_close_file( &importer->file_param );
     lsmash_importer_destroy( importer );
 }
@@ -169,14 +170,15 @@ int lsmash_importer_find( importer_t *importer, const char *format, int auto_det
     return err;
 }
 
-importer_t *lsmash_importer_open( const char *identifier, const char *format )
+importer_t *lsmash_importer_open( lsmash_root_t *root, const char *identifier, const char *format )
 {
     if( identifier == NULL )
         return NULL;
     int auto_detect = (format == NULL || !strcmp( format, "auto" ));
-    importer_t *importer = lsmash_importer_alloc();
+    importer_t *importer = lsmash_importer_alloc( root );
     if( !importer )
         return NULL;
+    importer->is_adhoc_open = 1;
     /* Open an input 'stream'. */
     if( !strcmp( identifier, "-" ) )
     {
@@ -193,7 +195,7 @@ importer_t *lsmash_importer_open( const char *identifier, const char *format )
         lsmash_log( importer, LSMASH_LOG_ERROR, "failed to open %s.\n", identifier );
         goto fail;
     }
-    lsmash_file_t *file = lsmash_set_file( importer->root, &importer->file_param );
+    lsmash_file_t *file = lsmash_set_file( root, &importer->file_param );
     if( !file )
     {
         lsmash_log( importer, LSMASH_LOG_ERROR, "failed to set opened file.\n" );

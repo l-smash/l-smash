@@ -61,17 +61,22 @@ typedef struct
 
 struct importer_tag
 {
-    const lsmash_class_t   *class;
-    lsmash_log_level        log_level;
-    importer_status         status;
-    lsmash_root_t          *root;
-    lsmash_file_t          *file;
-    lsmash_bs_t            *bs;
+    const lsmash_class_t    *class;
+    lsmash_log_level         log_level;
+    importer_status          status;
+    lsmash_root_t           *root;          /* pointer to a referenced ROOT */
+    lsmash_file_t           *file;          /* pointer to a file which this importer handles */
+    lsmash_bs_t             *bs;
     lsmash_file_parameters_t file_param;
-    int                     is_stdin;
-    void                   *info;      /* importer internal status information. */
-    importer_functions      funcs;
-    lsmash_entry_list_t    *summaries;
+    int                      is_stdin;
+    void                    *info;          /* importer internal status information. */
+    importer_functions       funcs;
+    lsmash_entry_list_t     *summaries;
+    int                      is_adhoc_open; /* If set to 1, it means this importer is not allocated by lsmash_read_file().
+                                             * This is a poor design due to historical implementation between the importer
+                                             * framework and ISOBMFF demuxer framework. The importer shall be hidden inside
+                                             * the file handling abstraction layer. That'll achieve integration of the muxer
+                                             * and the remuxer CLIs. */
 };
 
 int lsmash_importer_make_fake_movie
@@ -100,7 +105,10 @@ int lsmash_importer_set_file
 );
 
 /* importing functions */
-importer_t *lsmash_importer_alloc( void );
+importer_t *lsmash_importer_alloc
+(
+    lsmash_root_t *root
+);
 
 void lsmash_importer_destroy
 (
@@ -116,8 +124,9 @@ int lsmash_importer_find
 
 importer_t *lsmash_importer_open
 (
-    const char *identifier,
-    const char *format
+    lsmash_root_t *root,
+    const char    *identifier,
+    const char    *format
 );
 
 void lsmash_importer_close
