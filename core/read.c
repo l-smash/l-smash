@@ -129,7 +129,9 @@ static void isom_fullbox_common_copy( isom_box_t *dst, isom_box_t *src )
 
 static void isom_box_common_copy( void *dst, void *src )
 {
-    if( src && lsmash_check_box_type_identical( ((isom_box_t *)src)->type, ISOM_BOX_TYPE_STSD ) )
+    assert( LSMASH_IS_EXISTING_BOX( (isom_box_t *)dst )
+         && LSMASH_IS_EXISTING_BOX( (isom_box_t *)src ) );
+    if( lsmash_check_box_type_identical( ((isom_box_t *)src)->type, ISOM_BOX_TYPE_STSD ) )
     {
         isom_basebox_common_copy( (isom_box_t *)dst, (isom_box_t *)src );
         return;
