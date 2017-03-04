@@ -157,9 +157,9 @@ void isom_bs_put_box_common( lsmash_bs_t *bs, void *box )
 }
 
 /* Return 1 if the box is fullbox, Otherwise return 0. */
-int isom_is_fullbox( void *box )
+int isom_is_fullbox( const void *box )
 {
-    isom_box_t *current = (isom_box_t *)box;
+    const isom_box_t *current = (const isom_box_t *)box;
     lsmash_box_type_t type = current->type;
     static lsmash_box_type_t fullbox_type_table[50] = { LSMASH_BOX_TYPE_INITIALIZER };
     if( !lsmash_check_box_type_specified( &fullbox_type_table[0] ) )
@@ -230,9 +230,9 @@ int isom_is_fullbox( void *box )
 }
 
 /* Return 1 if the sample type is LPCM audio, Otherwise return 0. */
-int isom_is_lpcm_audio( void *box )
+int isom_is_lpcm_audio( const void *box )
 {
-    isom_box_t *current = (isom_box_t *)box;
+    const isom_box_t *current = (const isom_box_t *)box;
     lsmash_box_type_t type = current->type;
     return lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_23NI_AUDIO )
         || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_NONE_AUDIO )

@@ -2278,8 +2278,8 @@ void isom_init_box_common_orig
     isom_extension_destructor_t destructor
 );
 
-int isom_is_fullbox( void *box );
-int isom_is_lpcm_audio( void *box );
+int isom_is_fullbox( const void *box );
+int isom_is_lpcm_audio( const void *box );
 int isom_is_qt_audio( lsmash_codec_type_t type );
 int isom_is_uncompressed_ycbcr( lsmash_codec_type_t type );
 int isom_is_waveform_audio( lsmash_box_type_t type );
