@@ -403,6 +403,89 @@ static int isom_set_brands
     return isom_check_compatibility( file );
 }
 
+/*---- default I/O ----*/
+typedef struct
+{
+    FILE *file_ptr;
+    int   is_standard_stream;   /* If set to 1, 'file_ptr' points to standard stream (i.e. stdin, stdout or stderr).
+                                 * This flag prevents from accidentally closing standard streams. */
+    lsmash_file_mode file_mode;
+} default_io_stream_t;
+
+static default_io_stream_t *default_io_stream_open( const char *filename, int open_mode )
+{
+#ifdef _WIN32
+    _setmode( _fileno( stdin ),  _O_BINARY );
+    _setmode( _fileno( stdout ), _O_BINARY );
+    _setmode( _fileno( stderr ), _O_BINARY );
+#endif
+    default_io_stream_t *stream = (default_io_stream_t *)lsmash_malloc_zero( sizeof(default_io_stream_t) );
+    if( !stream )
+        return NULL;
+    char mode[4] = { 0 };
+    if( open_mode == 0 )
+    {
+        memcpy( mode, "w+b", 4 );
+        stream->file_mode = LSMASH_FILE_MODE_WRITE
+                          | LSMASH_FILE_MODE_BOX
+                          | LSMASH_FILE_MODE_INITIALIZATION
+                          | LSMASH_FILE_MODE_MEDIA;
+    }
+    else if( open_mode == 1 )
+    {
+        memcpy( mode, "rb", 3 );
+        stream->file_mode = LSMASH_FILE_MODE_READ;
+    }
+    else
+        assert( 0 );
+    if( !strcmp( filename, "-" ) )
+    {
+        if( stream->file_mode & LSMASH_FILE_MODE_READ )
+        {
+            stream->file_ptr           = stdin;
+            stream->is_standard_stream = 1;
+        }
+        else if( stream->file_mode & LSMASH_FILE_MODE_WRITE )
+        {
+            stream->file_ptr           = stdout;
+            stream->is_standard_stream = 1;
+            stream->file_mode         |= LSMASH_FILE_MODE_FRAGMENTED;
+        }
+    }
+    else
+        stream->file_ptr = lsmash_fopen( filename, mode );
+    if( stream->file_ptr == NULL )
+        lsmash_freep( &stream );
+    return stream;
+}
+
+static int default_io_stream_close( default_io_stream_t *stream )
+{
+    if( !stream )
+        return 0;
+    int ret = stream->is_standard_stream ? 0 : fclose( stream->file_ptr );
+    lsmash_free( stream );
+    return ret;
+}
+
+static int default_io_stream_read( void *opaque, uint8_t *buf, int size )
+{
+    int read_size = fread( buf, 1, size, ((default_io_stream_t *)opaque)->file_ptr );
+    return ferror( ((default_io_stream_t *)opaque)->file_ptr ) ? LSMASH_ERR_NAMELESS : read_size;
+}
+
+static int default_io_stream_write( void *opaque, uint8_t *buf, int size )
+{
+    return fwrite( buf, 1, size, ((default_io_stream_t *)opaque)->file_ptr );
+}
+
+static int64_t default_io_stream_seek( void *opaque, int64_t offset, int whence )
+{
+    if( lsmash_fseek( ((default_io_stream_t *)opaque)->file_ptr, offset, whence ) != 0 )
+        return LSMASH_ERR_NAMELESS;
+    return lsmash_ftell( ((default_io_stream_t *)opaque)->file_ptr );
+}
+
 /*******************************
     public interfaces
 *******************************/
@@ -425,56 +508,17 @@ int lsmash_open_file
     lsmash_file_parameters_t *param
 )
 {
-    if( !filename || !param )
+    if( !filename || !param || (open_mode != 0 && open_mode != 1) )
         return LSMASH_ERR_FUNCTION_PARAM;
-    char mode[4] = { 0 };
-    lsmash_file_mode file_mode = 0;
-    if( open_mode == 0 )
-    {
-        memcpy( mode, "w+b", 4 );
-        file_mode = LSMASH_FILE_MODE_WRITE
-                  | LSMASH_FILE_MODE_BOX
-                  | LSMASH_FILE_MODE_INITIALIZATION
-                  | LSMASH_FILE_MODE_MEDIA;
-    }
-    else if( open_mode == 1 )
-    {
-        memcpy( mode, "rb", 3 );
-        file_mode = LSMASH_FILE_MODE_READ;
-    }
-    if( file_mode == 0 )
-        return LSMASH_ERR_FUNCTION_PARAM;
-#ifdef _WIN32
-    _setmode( _fileno( stdin ),  _O_BINARY );
-    _setmode( _fileno( stdout ), _O_BINARY );
-    _setmode( _fileno( stderr ), _O_BINARY );
-#endif
-    FILE *stream   = NULL;
-    int   seekable = 1;
-    if( !strcmp( filename, "-" ) )
-    {
-        if( file_mode & LSMASH_FILE_MODE_READ )
-        {
-            stream   = stdin;
-            seekable = 0;
-        }
-        else if( file_mode & LSMASH_FILE_MODE_WRITE )
-        {
-            stream     = stdout;
-            seekable   = 0;
-            file_mode |= LSMASH_FILE_MODE_FRAGMENTED;
-        }
-    }
-    else
-        stream = lsmash_fopen( filename, mode );
+    default_io_stream_t *stream = default_io_stream_open( filename, open_mode );
     if( !stream )
         return LSMASH_ERR_NAMELESS;
     memset( param, 0, sizeof(lsmash_file_parameters_t) );
-    param->mode                = file_mode;
+    param->mode                = stream->file_mode;
     param->opaque              = (void *)stream;
-    param->read                = lsmash_fread_wrapper;
-    param->write               = lsmash_fwrite_wrapper;
-    param->seek                = seekable ? lsmash_fseek_wrapper : NULL;
+    param->read                = default_io_stream_read;
+    param->write               = default_io_stream_write;
+    param->seek                = stream->is_standard_stream ? NULL : default_io_stream_seek;
     param->major_brand         = 0;
     param->brands              = NULL;
     param->brand_count         = 0;
@@ -493,9 +537,7 @@ int lsmash_close_file
 {
     if( !param )
         return LSMASH_ERR_NAMELESS;
-    if( !param->opaque )
-        return 0;
-    int ret = fclose( (FILE *)param->opaque );
+    int ret = default_io_stream_close( (default_io_stream_t *)param->opaque );
     param->opaque = NULL;
     return ret == 0 ? 0 : LSMASH_ERR_UNKNOWN;
 }

@@ -68,7 +68,6 @@ struct importer_tag
     lsmash_file_t           *file;          /* pointer to a file which this importer handles */
     lsmash_bs_t             *bs;
     lsmash_file_parameters_t file_param;
-    int                      is_stdin;
     void                    *info;          /* importer internal status information. */
     importer_functions       funcs;
     lsmash_entry_list_t     *summaries;

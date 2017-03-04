@@ -705,23 +705,3 @@ int lsmash_bs_import_data( lsmash_bs_t *bs, void *data, uint32_t length )
     bs->buffer.store += length;
     return 0;
 }
-/*---- ----*/
-
-/*---- basic I/O ----*/
-int lsmash_fread_wrapper( void *opaque, uint8_t *buf, int size )
-{
-    int read_size = fread( buf, 1, size, (FILE *)opaque );
-    return ferror( (FILE *)opaque ) ? LSMASH_ERR_NAMELESS : read_size;
-}
-
-int lsmash_fwrite_wrapper( void *opaque, uint8_t *buf, int size )
-{
-    return fwrite( buf, 1, size, (FILE *)opaque );
-}
-
-int64_t lsmash_fseek_wrapper( void *opaque, int64_t offset, int whence )
-{
-    if( lsmash_fseek( (FILE *)opaque, offset, whence ) != 0 )
-        return LSMASH_ERR_NAMELESS;
-    return lsmash_ftell( (FILE *)opaque );
-}

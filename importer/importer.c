@@ -121,9 +121,7 @@ void lsmash_importer_close( importer_t *importer )
 {
     if( !importer )
         return;
-    if( !importer->is_stdin )
-        /* FIXME: stdin should not be closed by fclose(). */
-        lsmash_close_file( &importer->file_param );
+    lsmash_close_file( &importer->file_param );
     lsmash_importer_destroy( importer );
 }
 
@@ -187,7 +185,6 @@ importer_t *lsmash_importer_open( lsmash_root_t *root, const char *identifier, c
             lsmash_log( importer, LSMASH_LOG_ERROR, "auto importer detection on stdin is not supported.\n" );
             goto fail;
         }
-        importer->is_stdin = 1;
     }
     if( lsmash_open_file( identifier, 1, &importer->file_param ) < 0 )
     {

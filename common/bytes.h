@@ -160,8 +160,3 @@ static inline int lsmash_bs_is_error( lsmash_bs_t *bs )
 {
     return bs->error;
 }
-
-/*---- basic I/O ----*/
-int lsmash_fread_wrapper( void *opaque, uint8_t *buf, int size );
-int lsmash_fwrite_wrapper( void *opaque, uint8_t *buf, int size );
-int64_t lsmash_fseek_wrapper( void *opaque, int64_t offset, int whence );
