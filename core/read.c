@@ -103,7 +103,7 @@ static int isom_read_fullbox_common_extension( lsmash_bs_t *bs, isom_box_t *box 
 }
 
 /* Don't copy destructor since a destructor is defined as box specific. */
-static void isom_basebox_common_copy( isom_box_t *dst, isom_box_t *src )
+static void isom_basebox_common_copy( isom_box_t *dst, const isom_box_t *src )
 {
     dst->root    = src->root;
     dst->file    = src->file;
@@ -114,7 +114,7 @@ static void isom_basebox_common_copy( isom_box_t *dst, isom_box_t *src )
     dst->type    = src->type;
 }
 
-static void isom_fullbox_common_copy( isom_box_t *dst, isom_box_t *src )
+static void isom_fullbox_common_copy( isom_box_t *dst, const isom_box_t *src )
 {
     dst->root    = src->root;
     dst->file    = src->file;
@@ -127,7 +127,7 @@ static void isom_fullbox_common_copy( isom_box_t *dst, isom_box_t *src )
     dst->flags   = src->flags;
 }
 
-static void isom_box_common_copy( void *dst, void *src )
+static void isom_box_common_copy( void *dst, const void *src )
 {
     assert( LSMASH_IS_EXISTING_BOX( (isom_box_t *)dst )
          && LSMASH_IS_EXISTING_BOX( (isom_box_t *)src ) );
