@@ -313,7 +313,7 @@ size_t isom_skip_box_common( uint8_t **p_data )
     data += ISOM_BASEBOX_COMMON_SIZE;
     if( size == 1 )
     {
-        size = LSMASH_GET_BE64( data );
+        /* 'size = LSMASH_GET_BE64( data );' is a dead assignment here. */
         data += 8;
     }
     *p_data = data;
