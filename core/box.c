@@ -349,13 +349,13 @@ uint8_t *isom_get_child_box_position( uint8_t *parent_data, uint32_t parent_size
     uint8_t *data = parent_data;
     uint64_t          size;
     lsmash_box_type_t type;
-    uint32_t offset = isom_read_box_size_and_type_from_binary_string( &data, &size, &type );
+    (void)isom_read_box_size_and_type_from_binary_string( &data, &size, &type );
     if( size != parent_size )
         return NULL;
     uint8_t *end = parent_data + parent_size;
     for( uint8_t *pos = data; pos + ISOM_BASEBOX_COMMON_SIZE <= end; )
     {
-        offset = isom_read_box_size_and_type_from_binary_string( &pos, &size, &type );
+        uint32_t offset = isom_read_box_size_and_type_from_binary_string( &pos, &size, &type );
         if( lsmash_check_box_type_identical( type, child_type ) )
         {
             *child_size = size;
