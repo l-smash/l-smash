@@ -48,20 +48,21 @@ typedef int (*isom_bitrate_updater_t)( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uin
 
 /* If size is 1, then largesize is actual size.
  * If size is 0, then this box is the last one in the file. */
-#define ISOM_BASEBOX_COMMON                                                                         \
-        const lsmash_class_t       *class;                                                          \
-        lsmash_root_t              *root;           /* pointer to root */                           \
-        lsmash_file_t              *file;           /* pointer to file */                           \
-        isom_box_t                 *parent;         /* pointer to the parent box of this box */     \
-        void                       *nonexist_ptr;   /* pointer to non-existing box constant */      \
-        uint8_t                    *binary;         /* used only when LSMASH_BINARY_CODED_BOX */    \
-        isom_extension_destructor_t destruct;       /* box specific destructor */                   \
-        isom_extension_writer_t     write;          /* box specific writer */                       \
-        uint32_t                    manager;        /* flags for L-SMASH */                         \
-        uint64_t                    precedence;     /* precedence of the box position */            \
-        uint64_t                    pos;            /* starting position of this box in the file */ \
-        lsmash_entry_list_t         extensions;     /* extension boxes */                           \
-    uint64_t          size;                         /* the number of bytes in this box */           \
+#define ISOM_BASEBOX_COMMON                                                                             \
+        const lsmash_class_t       *class;                                                              \
+        lsmash_root_t              *root;               /* pointer to root */                           \
+        lsmash_file_t              *file;               /* pointer to file */                           \
+        isom_box_t                 *parent;             /* pointer to the parent box of this box */     \
+        void                       *nonexist_ptr;       /* pointer to non-existing box constant */      \
+        uint8_t                    *binary;             /* used only when LSMASH_BINARY_CODED_BOX */    \
+        isom_extension_destructor_t destruct;           /* box specific destructor */                   \
+        isom_extension_writer_t     write;              /* box specific writer */                       \
+        size_t                      offset_in_parent;   /* offset of this box in parent box struct */   \
+        uint32_t                    manager;            /* flags for L-SMASH */                         \
+        uint64_t                    precedence;         /* precedence of the box position */            \
+        uint64_t                    pos;                /* starting position of this box in the file */ \
+        lsmash_entry_list_t         extensions;         /* extension boxes */                           \
+    uint64_t          size;                             /* the number of bytes in this box */           \
     lsmash_box_type_t type
 
 #define ISOM_FULLBOX_COMMON                                         \
@@ -1968,8 +1969,8 @@ typedef struct
 /* ROOT */
 struct lsmash_root_tag
 {
-    ISOM_FULLBOX_COMMON;            /* The 'file' field contains the address of the current active file. */
-    lsmash_entry_list_t file_list;  /* the list of all files the ROOT contains */
+    ISOM_FULLBOX_COMMON;                    /* The 'file' field contains the address of the current active file. */
+    lsmash_entry_list_t file_abstract_list; /* the list of all files the ROOT contains */
 };
 
 /** **/
@@ -2450,7 +2451,7 @@ int isom_establish_movie( lsmash_file_t *file );
 int isom_rap_grouping_established( isom_rap_group_t *group, int num_leading_samples_known, isom_sgpd_t *sgpd, int is_fragment );
 int isom_all_recovery_completed( isom_sbgp_t *sbgp, lsmash_entry_list_t *pool );
 
-lsmash_file_t *isom_add_file( lsmash_root_t *root );
+lsmash_file_t *isom_add_file_abstract( lsmash_root_t *root );
 isom_ftyp_t *isom_add_ftyp( lsmash_file_t *file );
 isom_moov_t *isom_add_moov( lsmash_file_t *file );
 isom_mvhd_t *isom_add_mvhd( isom_moov_t *moov );

@@ -508,7 +508,7 @@ lsmash_file_t *lsmash_set_file
 {
     if( LSMASH_IS_NON_EXISTING_BOX( root ) || !param )
         return NULL;
-    lsmash_file_t *file = isom_add_file( root );
+    lsmash_file_t *file = isom_add_file_abstract( root );
     if( LSMASH_IS_NON_EXISTING_BOX( file ) )
         return NULL;
     lsmash_bs_t *bs = lsmash_bs_create();

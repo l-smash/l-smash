@@ -1006,7 +1006,8 @@ static void *isom_add_description( lsmash_codec_type_t sample_type, isom_stsd_t 
         lsmash_remove_entry_tail( &stsd->list, lsmash_free );
         return NULL;
     }
-    ((isom_box_t *)sample)->destruct = (isom_extension_destructor_t)isom_remove_sample_description;
+    ((isom_box_t *)sample)->offset_in_parent = offsetof( isom_stsd_t, list );
+    ((isom_box_t *)sample)->destruct         = (isom_extension_destructor_t)isom_remove_sample_description;
     return sample;
 }
 
