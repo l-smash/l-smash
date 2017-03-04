@@ -1655,9 +1655,9 @@ int dts_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_code
     param->ChannelLayout        = (data[17] << 8) | data[18];
     param->MultiAssetFlag       = (data[19] >> 7) & 0x01;
     param->LBRDurationMod       = (data[19] >> 6) & 0x01;
-    int reserved_box_present    = ((data[19] >> 5) & 0x01) && (size > DTS_SPECIFIC_BOX_MIN_LENGTH);
+    int reserved_box_present    = ((data[19] >> 5) & 0x01) && (size > dts_specific_box_min_length);
     if( reserved_box_present )
-        lsmash_append_dts_reserved_box( param, data + 20, size - DTS_SPECIFIC_BOX_MIN_LENGTH );
+        lsmash_append_dts_reserved_box( param, data + 20, size - dts_specific_box_min_length );
     return 0;
 }
 
