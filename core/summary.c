@@ -91,7 +91,7 @@ lsmash_summary_t *lsmash_create_summary( lsmash_summary_type summary_type )
             summary_size = sizeof(lsmash_audio_summary_t);
             break;
         default :
-            summary_size = sizeof(lsmash_summary_t);
+            /* 'summary_size = sizeof(lsmash_summary_t);' is a dead assignment here. */
             return NULL;
     }
     lsmash_summary_t *summary = (lsmash_summary_t *)lsmash_malloc_zero( summary_size );
