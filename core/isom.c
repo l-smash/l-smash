@@ -4024,9 +4024,10 @@ int lsmash_flush_pooled_samples( lsmash_root_t *root, uint32_t track_ID, uint32_
 int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_t *sample )
 {
     if( isom_check_initializer_present( root ) < 0
-     || track_ID == 0
-     || !sample
-     || !sample->data )
+     || track_ID     == 0
+     || sample       == NULL
+     || sample->data == NULL
+     || sample->dts  == LSMASH_TIMESTAMP_UNDEFINED )
         return LSMASH_ERR_FUNCTION_PARAM;
     lsmash_file_t *file = root->file;
     /* We think max_chunk_duration == 0, which means all samples will be cached on memory, should be prevented.
