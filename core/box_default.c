@@ -248,9 +248,9 @@ void *allocate_box_by_default
 )
 {
     assert( data_type_size >= offsetof( isom_box_t, manager ) + sizeof(((isom_box_t *)0)->manager) );
-    void *temp = lsmash_memdup( nonexist_ptr, data_type_size );
-    if( !temp )
+    isom_box_t *box = (isom_box_t *)lsmash_memdup( nonexist_ptr, data_type_size );
+    if( !box )
         return (void *)nonexist_ptr;
-    ((isom_box_t *)temp)->manager &= ~LSMASH_NON_EXISTING_BOX;
-    return temp;
+    box->manager &= ~LSMASH_NON_EXISTING_BOX;
+    return (void *)box;
 }

@@ -1144,7 +1144,7 @@ uint64_t isom_update_box_size( void *opaque_box )
         return isom_non_existing_##box_name();                                         \
     isom_##box_name##_t *box_name = ALLOCATE_BOX( box_name );                          \
     if( LSMASH_IS_NON_EXISTING_BOX( box_name ) )                                       \
-        return isom_non_existing_##box_name();                                         \
+        return box_name;                                                               \
     INIT_BOX_COMMON ## has_destructor( box_name, parent_name, box_type, precedence );  \
     if( isom_add_box_to_extension_list( parent_name, box_name ) < 0 )                  \
     {                                                                                  \
@@ -1214,7 +1214,7 @@ isom_tref_type_t *isom_add_track_reference_type( isom_tref_t *tref, isom_track_r
         return isom_non_existing_tref_type();
     isom_tref_type_t *tref_type = ALLOCATE_BOX( tref_type );
     if( LSMASH_IS_NON_EXISTING_BOX( tref_type ) )
-        return isom_non_existing_tref_type();
+        return tref_type;
     /* Initialize common fields. */
     tref_type->class      = &lsmash_box_class;
     tref_type->root       = tref->root;
@@ -1357,7 +1357,7 @@ isom_dref_entry_t *isom_add_dref_entry( isom_dref_t *dref, lsmash_box_type_t typ
         return isom_non_existing_dref_entry();
     isom_dref_entry_t *dref_entry = ALLOCATE_BOX( dref_entry );
     if( LSMASH_IS_NON_EXISTING_BOX( dref_entry ) )
-        return isom_non_existing_dref_entry();
+        return dref_entry;
     isom_init_box_common( dref_entry, dref, type, LSMASH_BOX_PRECEDENCE_ISOM_DREF_ENTRY, isom_remove_dref_entry );
     if( isom_add_box_to_extension_list( dref, dref_entry ) < 0 )
     {
@@ -1403,7 +1403,7 @@ isom_visual_entry_t *isom_add_visual_description( isom_stsd_t *stsd, lsmash_code
     assert( LSMASH_IS_EXISTING_BOX( stsd ) );
     isom_visual_entry_t *visual = ALLOCATE_BOX( visual_entry );
     if( LSMASH_IS_NON_EXISTING_BOX( visual ) )
-        return isom_non_existing_visual_entry();
+        return visual;
     isom_init_box_common( visual, stsd, sample_type, LSMASH_BOX_PRECEDENCE_HM, isom_remove_visual_description );
     visual->manager |= LSMASH_VIDEO_DESCRIPTION;
     return isom_add_sample_description_entry( stsd, visual, isom_remove_visual_description ) ? NULL : visual;
@@ -1414,7 +1414,7 @@ isom_audio_entry_t *isom_add_audio_description( isom_stsd_t *stsd, lsmash_codec_
     assert( LSMASH_IS_EXISTING_BOX( stsd ) );
     isom_audio_entry_t *audio = ALLOCATE_BOX( audio_entry );
     if( LSMASH_IS_NON_EXISTING_BOX( audio ) )
-        return isom_non_existing_audio_entry();
+        return audio;
     isom_init_box_common( audio, stsd, sample_type, LSMASH_BOX_PRECEDENCE_HM, isom_remove_audio_description );
     audio->manager |= LSMASH_AUDIO_DESCRIPTION;
     return isom_add_sample_description_entry( stsd, audio, isom_remove_audio_description ) ? NULL : audio;
@@ -1425,7 +1425,7 @@ isom_qt_text_entry_t *isom_add_qt_text_description( isom_stsd_t *stsd )
     assert( LSMASH_IS_EXISTING_BOX( stsd ) );
     isom_qt_text_entry_t *text = ALLOCATE_BOX( qt_text_entry );
     if( LSMASH_IS_NON_EXISTING_BOX( text ) )
-        return isom_non_existing_qt_text_entry();
+        return text;
     isom_init_box_common( text, stsd, QT_CODEC_TYPE_TEXT_TEXT, LSMASH_BOX_PRECEDENCE_HM, isom_remove_qt_text_description );
     return isom_add_sample_description_entry( stsd, text, isom_remove_qt_text_description ) ? NULL : text;
 }
@@ -1435,7 +1435,7 @@ isom_tx3g_entry_t *isom_add_tx3g_description( isom_stsd_t *stsd )
     assert( LSMASH_IS_EXISTING_BOX( stsd ) );
     isom_tx3g_entry_t *tx3g = ALLOCATE_BOX( tx3g_entry );
     if( LSMASH_IS_NON_EXISTING_BOX( tx3g ) )
-        return isom_non_existing_tx3g_entry();
+        return tx3g;
     isom_init_box_common( tx3g, stsd, ISOM_CODEC_TYPE_TX3G_TEXT, LSMASH_BOX_PRECEDENCE_HM, isom_remove_tx3g_description );
     return isom_add_sample_description_entry( stsd, tx3g, isom_remove_tx3g_description ) ? NULL : tx3g;
 }
