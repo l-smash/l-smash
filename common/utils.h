@@ -103,11 +103,6 @@ void lsmash_log
     ...
 );
 
-void lsmash_log_refresh_line
-(
-    const void *class
-);
-
 uint32_t lsmash_count_bits
 (
     uint32_t bits

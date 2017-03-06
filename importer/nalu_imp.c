@@ -735,7 +735,7 @@ static int h264_analyze_whole_stream
     uint32_t picture_stats[H264_PICTURE_TYPE_NONE + 1] = { 0 };
     uint32_t num_access_units = 0;
     lsmash_class_t *logger = &(lsmash_class_t){ "H.264" };
-    lsmash_log( &logger, LSMASH_LOG_INFO, "Analyzing stream as H.264\r" );
+    lsmash_log( &logger, LSMASH_LOG_INFO, "Analyzing stream as H.264\n" );
     h264_importer_t *h264_imp = (h264_importer_t *)importer->info;
     h264_info_t     *info     = &h264_imp->info;
     importer->status = IMPORTER_OK;
@@ -774,7 +774,6 @@ static int h264_analyze_whole_stream
         else
             ++picture_stats[ picture->type ];
     }
-    lsmash_log_refresh_line( &logger );
     lsmash_log( &logger, LSMASH_LOG_INFO,
                 "IDR: %"PRIu32", I: %"PRIu32", P: %"PRIu32", B: %"PRIu32", "
                 "SI: %"PRIu32", SP: %"PRIu32", Unknown: %"PRIu32"\n",
@@ -823,7 +822,6 @@ static int h264_analyze_whole_stream
     h264_imp->ts_list.timestamp    = timestamp;
     return 0;
 fail:
-    lsmash_log_refresh_line( &logger );
     lsmash_free( npt );
     return err;
 }
@@ -1394,7 +1392,7 @@ static int hevc_analyze_whole_stream
     uint32_t picture_stats[HEVC_PICTURE_TYPE_NONE + 1] = { 0 };
     uint32_t num_access_units = 0;
     lsmash_class_t *logger = &(lsmash_class_t){ "HEVC" };
-    lsmash_log( &logger, LSMASH_LOG_INFO, "Analyzing stream as HEVC\r" );
+    lsmash_log( &logger, LSMASH_LOG_INFO, "Analyzing stream as HEVC\n" );
     hevc_importer_t *hevc_imp = (hevc_importer_t *)importer->info;
     hevc_info_t     *info     = &hevc_imp->info;
     importer->status = IMPORTER_OK;
@@ -1436,7 +1434,6 @@ static int hevc_analyze_whole_stream
         else
             ++picture_stats[ picture->type ];
     }
-    lsmash_log_refresh_line( &logger );
     lsmash_log( &logger, LSMASH_LOG_INFO,
                 "IDR: %"PRIu32", CRA: %"PRIu32", BLA: %"PRIu32", I: %"PRIu32", P: %"PRIu32", B: %"PRIu32", Unknown: %"PRIu32"\n",
                 picture_stats[HEVC_PICTURE_TYPE_IDR], picture_stats[HEVC_PICTURE_TYPE_CRA],
@@ -1481,7 +1478,6 @@ static int hevc_analyze_whole_stream
     hevc_imp->ts_list.timestamp    = timestamp;
     return 0;
 fail:
-    lsmash_log_refresh_line( &logger );
     lsmash_free( npt );
     return err;
 }

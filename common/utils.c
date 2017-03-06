@@ -90,15 +90,6 @@ void lsmash_log
     va_end( args );
 }
 
-void lsmash_log_refresh_line
-(
-    const void *class   /* unused, but for forward compatibility */
-)
-{
-    /* Assume 80 characters per line. */
-    fprintf( stderr, "%80c", '\r' );
-}
-
 uint32_t lsmash_count_bits
 (
     uint32_t bits
