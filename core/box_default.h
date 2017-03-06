@@ -31,6 +31,7 @@
         return (isom_##box_name##_t *)&isom_##box_name##_box_default;       \
     }
 
+DEFINE_BOX_DEFAULT_CONSTANT( dummy )
 DEFINE_BOX_DEFAULT_CONSTANT( unknown )
 DEFINE_BOX_DEFAULT_CONSTANT( ftyp )
 DEFINE_BOX_DEFAULT_CONSTANT( ctab )

@@ -328,7 +328,7 @@ static lsmash_video_summary_t *vc1_create_summary( vc1_info_t *info, vc1_sequenc
     }
     specific->data.unstructured = lsmash_create_vc1_specific_info( &info->dvc1_param, &specific->size );
     if( !specific->data.unstructured
-     || lsmash_add_entry( &summary->opaque->list, specific ) < 0 )
+     || lsmash_list_add_entry( &summary->opaque->list, specific ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         lsmash_destroy_codec_specific_data( specific );
@@ -499,7 +499,7 @@ static int vc1_importer_probe( importer_t *importer )
         err = LSMASH_ERR_NAMELESS;
         goto fail;
     }
-    if( lsmash_add_entry( importer->summaries, summary ) < 0 )
+    if( lsmash_list_add_entry( importer->summaries, summary ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         err = LSMASH_ERR_MEMORY_ALLOC;
@@ -520,7 +520,7 @@ static int vc1_importer_probe( importer_t *importer )
 fail:
     remove_vc1_importer( vc1_imp );
     importer->info = NULL;
-    lsmash_remove_entries( importer->summaries, lsmash_cleanup_summary );
+    lsmash_list_remove_entries( importer->summaries );
     return err;
 }
 

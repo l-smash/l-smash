@@ -1813,7 +1813,7 @@ int dts_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, in
 
 int dts_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index )
 {
-    isom_audio_entry_t *dts_audio = (isom_audio_entry_t *)lsmash_get_entry_data( &stbl->stsd->list, sample_description_index );
+    isom_audio_entry_t *dts_audio = (isom_audio_entry_t *)lsmash_list_get_entry_data( &stbl->stsd->list, sample_description_index );
     if( LSMASH_IS_NON_EXISTING_BOX( dts_audio ) )
         return LSMASH_ERR_INVALID_DATA;
     isom_box_t *ext = isom_get_extension_box( &dts_audio->extensions, ISOM_BOX_TYPE_DDTS );

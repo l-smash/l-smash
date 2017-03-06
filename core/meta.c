@@ -397,7 +397,7 @@ int lsmash_get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, l
     if( !file->moov->udta->meta->ilst )
         return LSMASH_ERR_NAMELESS;
     isom_ilst_t *ilst = file->moov->udta->meta->ilst;
-    isom_metaitem_t *metaitem = (isom_metaitem_t *)lsmash_get_entry_data( &ilst->metaitem_list, metadata_number );
+    isom_metaitem_t *metaitem = (isom_metaitem_t *)lsmash_list_get_entry_data( &ilst->metaitem_list, metadata_number );
     if( LSMASH_IS_NON_EXISTING_BOX( metaitem )
      || LSMASH_IS_NON_EXISTING_BOX( metaitem->data )
      || metaitem->data->value        == NULL

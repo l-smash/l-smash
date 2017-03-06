@@ -64,7 +64,7 @@ static void remove_h264_importer( h264_importer_t *h264_imp )
 {
     if( !h264_imp )
         return;
-    lsmash_remove_entries( h264_imp->avcC_list, lsmash_destroy_codec_specific_data );
+    lsmash_list_remove_entries( h264_imp->avcC_list );
     h264_cleanup_parser( &h264_imp->info );
     lsmash_free( h264_imp->ts_list.timestamp );
     lsmash_free( h264_imp );
@@ -86,7 +86,7 @@ static h264_importer_t *create_h264_importer( importer_t *importer )
         remove_h264_importer( h264_imp );
         return NULL;
     }
-    lsmash_init_entry_list( h264_imp->avcC_list );
+    lsmash_list_init( h264_imp->avcC_list, lsmash_destroy_codec_specific_data );
     return h264_imp;
 }
 
@@ -151,7 +151,7 @@ static lsmash_video_summary_t *h264_create_summary
     }
     cs->data.unstructured = lsmash_create_h264_specific_info( param, &cs->size );
     if( !cs->data.unstructured
-     || lsmash_add_entry( &summary->opaque->list, cs ) < 0 )
+     || lsmash_list_add_entry( &summary->opaque->list, cs ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         lsmash_destroy_codec_specific_data( cs );
@@ -194,7 +194,7 @@ static int h264_store_codec_specific
         lsmash_destroy_codec_specific_data( dst_cs );
         return LSMASH_ERR_NAMELESS;
     }
-    if( lsmash_add_entry( h264_imp->avcC_list, dst_cs ) < 0 )
+    if( lsmash_list_add_entry( h264_imp->avcC_list, dst_cs ) < 0 )
     {
         lsmash_destroy_codec_specific_data( dst_cs );
         return LSMASH_ERR_MEMORY_ALLOC;
@@ -421,15 +421,15 @@ static int h264_importer_get_accessunit
     if( current_status == IMPORTER_CHANGE )
     {
         /* Update the active summary. */
-        lsmash_codec_specific_t *cs = (lsmash_codec_specific_t *)lsmash_get_entry_data( h264_imp->avcC_list, ++ h264_imp->avcC_number );
+        lsmash_codec_specific_t *cs = (lsmash_codec_specific_t *)lsmash_list_get_entry_data( h264_imp->avcC_list, ++ h264_imp->avcC_number );
         if( !cs )
             return LSMASH_ERR_NAMELESS;
         lsmash_h264_specific_parameters_t *avcC_param = (lsmash_h264_specific_parameters_t *)cs->data.structured;
         lsmash_video_summary_t *summary = h264_create_summary( avcC_param, &info->sps, h264_imp->max_au_length );
         if( !summary )
             return LSMASH_ERR_NAMELESS;
-        lsmash_remove_entry( importer->summaries, track_number, lsmash_cleanup_summary );
-        if( lsmash_add_entry( importer->summaries, summary ) < 0 )
+        lsmash_list_remove_entry( importer->summaries, track_number );
+        if( lsmash_list_add_entry( importer->summaries, summary ) < 0 )
         {
             lsmash_cleanup_summary( (lsmash_summary_t *)summary );
             return LSMASH_ERR_MEMORY_ALLOC;
@@ -700,7 +700,7 @@ static lsmash_video_summary_t *h264_setup_first_summary
 )
 {
     h264_importer_t *h264_imp = (h264_importer_t *)importer->info;
-    lsmash_codec_specific_t *cs = (lsmash_codec_specific_t *)lsmash_get_entry_data( h264_imp->avcC_list, ++ h264_imp->avcC_number );
+    lsmash_codec_specific_t *cs = (lsmash_codec_specific_t *)lsmash_list_get_entry_data( h264_imp->avcC_list, ++ h264_imp->avcC_number );
     if( !cs || !cs->data.structured )
     {
         lsmash_destroy_codec_specific_data( cs );
@@ -713,7 +713,7 @@ static lsmash_video_summary_t *h264_setup_first_summary
         lsmash_destroy_codec_specific_data( cs );
         return NULL;
     }
-    if( lsmash_add_entry( importer->summaries, summary ) < 0 )
+    if( lsmash_list_add_entry( importer->summaries, summary ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         return NULL;
@@ -867,15 +867,15 @@ static int h264_importer_probe( importer_t *importer )
     memset( &info->slice, 0, sizeof(h264_slice_info_t) );
     memset( &info->sps, 0, sizeof(h264_sps_t) );
     memset( &info->pps, 0, sizeof(h264_pps_t) );
-    lsmash_remove_entries( info->avcC_param.parameter_sets->sps_list,    isom_remove_dcr_ps );
-    lsmash_remove_entries( info->avcC_param.parameter_sets->pps_list,    isom_remove_dcr_ps );
-    lsmash_remove_entries( info->avcC_param.parameter_sets->spsext_list, isom_remove_dcr_ps );
+    lsmash_list_remove_entries( info->avcC_param.parameter_sets->sps_list );
+    lsmash_list_remove_entries( info->avcC_param.parameter_sets->pps_list );
+    lsmash_list_remove_entries( info->avcC_param.parameter_sets->spsext_list );
     lsmash_destroy_h264_parameter_sets( &info->avcC_param_next );
     return 0;
 fail:
     remove_h264_importer( h264_imp );
     importer->info = NULL;
-    lsmash_remove_entries( importer->summaries, lsmash_cleanup_summary );
+    lsmash_list_remove_entries( importer->summaries );
     return err;
 }
 
@@ -928,7 +928,7 @@ static void remove_hevc_importer( hevc_importer_t *hevc_imp )
 {
     if( !hevc_imp )
         return;
-    lsmash_remove_entries( hevc_imp->hvcC_list, lsmash_destroy_codec_specific_data );
+    lsmash_list_remove_entries( hevc_imp->hvcC_list );
     hevc_cleanup_parser( &hevc_imp->info );
     lsmash_free( hevc_imp->ts_list.timestamp );
     lsmash_free( hevc_imp );
@@ -950,7 +950,7 @@ static hevc_importer_t *create_hevc_importer( importer_t *importer )
         remove_hevc_importer( hevc_imp );
         return NULL;
     }
-    lsmash_init_entry_list( hevc_imp->hvcC_list );
+    lsmash_list_init( hevc_imp->hvcC_list, lsmash_destroy_codec_specific_data );
     hevc_imp->info.eos = 1;
     return hevc_imp;
 }
@@ -1017,7 +1017,7 @@ static lsmash_video_summary_t *hevc_create_summary
     }
     specific->data.unstructured = lsmash_create_hevc_specific_info( param, &specific->size );
     if( !specific->data.unstructured
-     || lsmash_add_entry( &summary->opaque->list, specific ) < 0 )
+     || lsmash_list_add_entry( &summary->opaque->list, specific ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         lsmash_destroy_codec_specific_data( specific );
@@ -1061,7 +1061,7 @@ static int hevc_store_codec_specific
         lsmash_destroy_codec_specific_data( dst_cs );
         return LSMASH_ERR_NAMELESS;
     }
-    if( lsmash_add_entry( hevc_imp->hvcC_list, dst_cs ) < 0 )
+    if( lsmash_list_add_entry( hevc_imp->hvcC_list, dst_cs ) < 0 )
     {
         lsmash_destroy_codec_specific_data( dst_cs );
         return LSMASH_ERR_MEMORY_ALLOC;
@@ -1279,15 +1279,15 @@ static int hevc_importer_get_accessunit( importer_t *importer, uint32_t track_nu
     if( current_status == IMPORTER_CHANGE )
     {
         /* Update the active summary. */
-        lsmash_codec_specific_t *cs = (lsmash_codec_specific_t *)lsmash_get_entry_data( hevc_imp->hvcC_list, ++ hevc_imp->hvcC_number );
+        lsmash_codec_specific_t *cs = (lsmash_codec_specific_t *)lsmash_list_get_entry_data( hevc_imp->hvcC_list, ++ hevc_imp->hvcC_number );
         if( !cs )
             return LSMASH_ERR_NAMELESS;
         lsmash_hevc_specific_parameters_t *hvcC_param = (lsmash_hevc_specific_parameters_t *)cs->data.structured;
         lsmash_video_summary_t *summary = hevc_create_summary( hvcC_param, &info->sps, hevc_imp->max_au_length );
         if( !summary )
             return LSMASH_ERR_NAMELESS;
-        lsmash_remove_entry( importer->summaries, track_number, lsmash_cleanup_summary );
-        if( lsmash_add_entry( importer->summaries, summary ) < 0 )
+        lsmash_list_remove_entry( importer->summaries, track_number );
+        if( lsmash_list_add_entry( importer->summaries, summary ) < 0 )
         {
             lsmash_cleanup_summary( (lsmash_summary_t *)summary );
             return LSMASH_ERR_MEMORY_ALLOC;
@@ -1359,7 +1359,7 @@ static lsmash_video_summary_t *hevc_setup_first_summary
 )
 {
     hevc_importer_t *hevc_imp = (hevc_importer_t *)importer->info;
-    lsmash_codec_specific_t *cs = (lsmash_codec_specific_t *)lsmash_get_entry_data( hevc_imp->hvcC_list, ++ hevc_imp->hvcC_number );
+    lsmash_codec_specific_t *cs = (lsmash_codec_specific_t *)lsmash_list_get_entry_data( hevc_imp->hvcC_list, ++ hevc_imp->hvcC_number );
     if( !cs || !cs->data.structured )
     {
         lsmash_destroy_codec_specific_data( cs );
@@ -1372,7 +1372,7 @@ static lsmash_video_summary_t *hevc_setup_first_summary
         lsmash_destroy_codec_specific_data( cs );
         return NULL;
     }
-    if( lsmash_add_entry( importer->summaries, summary ) < 0 )
+    if( lsmash_list_add_entry( importer->summaries, summary ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         return NULL;
@@ -1527,13 +1527,13 @@ static int hevc_importer_probe( importer_t *importer )
     memset( &info->sps,   0, sizeof(hevc_sps_t) );
     memset( &info->pps,   0, SIZEOF_PPS_EXCLUDING_HEAP );
     for( int i = 0; i < HEVC_DCR_NALU_TYPE_NUM; i++ )
-        lsmash_remove_entries( info->hvcC_param.parameter_arrays->ps_array[i].list, isom_remove_dcr_ps );
+        lsmash_list_remove_entries( info->hvcC_param.parameter_arrays->ps_array[i].list );
     lsmash_destroy_hevc_parameter_arrays( &info->hvcC_param_next );
     return 0;
 fail:
     remove_hevc_importer( hevc_imp );
     importer->info = NULL;
-    lsmash_remove_entries( importer->summaries, lsmash_cleanup_summary );
+    lsmash_list_remove_entries( importer->summaries );
     return err;
 }
 

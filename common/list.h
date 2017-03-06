@@ -20,50 +20,98 @@
 
 /* This file is available under an ISC license. */
 
+typedef void (*lsmash_entry_data_eliminator)( void *data ); /* very same as free() of standard C lib; void free( void * );
+                                                             * If 'data' is equal to NULL, the eliminator must do nothing. */
+
 typedef struct lsmash_entry_tag lsmash_entry_t;
 
 struct lsmash_entry_tag
 {
     lsmash_entry_t *next;
     lsmash_entry_t *prev;
-    void *data;
+    void           *data;
 };
 
 typedef struct
 {
-    lsmash_entry_t *head;
-    lsmash_entry_t *tail;
-    lsmash_entry_t *last_accessed_entry;
-    uint32_t last_accessed_number;
-    uint32_t entry_count;
+    lsmash_entry_t              *head;
+    lsmash_entry_t              *tail;
+    lsmash_entry_t              *last_accessed_entry;
+    uint32_t                     last_accessed_number;
+    uint32_t                     entry_count;
+    lsmash_entry_data_eliminator eliminator;
 } lsmash_entry_list_t;
 
-typedef void (*lsmash_entry_data_eliminator)(void *data); /* very same as free() of standard c lib; void free(void *); */
+/* Utility macros to avoid 'lsmash_entry_data_eliminator' casts to the 'eliminator' argument */
+#define lsmash_list_init( list, eliminator ) \
+        lsmash_list_init_orig( list, (lsmash_entry_data_eliminator)(eliminator) )
+#define lsmash_list_init_simple( list ) \
+        lsmash_list_init_orig( list, (lsmash_entry_data_eliminator)lsmash_free )
 
-#define lsmash_remove_entry_direct( list, entry, eliminator ) \
-        lsmash_remove_entry_direct_orig( list, entry, (lsmash_entry_data_eliminator)(eliminator) )
+#define lsmash_list_create( eliminator ) \
+        lsmash_list_create_orig( (lsmash_entry_data_eliminator)(eliminator) )
+#define lsmash_list_create_simple() \
+        lsmash_list_create_orig( (lsmash_entry_data_eliminator)lsmash_free )
 
-#define lsmash_remove_entry( list, entry_number, eliminator ) \
-        lsmash_remove_entry_orig( list, entry_number, (lsmash_entry_data_eliminator)(eliminator) )
+/* functions for internal usage */
+void lsmash_list_init_orig
+(
+    lsmash_entry_list_t         *list,
+    lsmash_entry_data_eliminator eliminator
+);
 
-#define lsmash_remove_entry_tail( list, eliminator ) \
-        lsmash_remove_entry_tail_orig( list, (lsmash_entry_data_eliminator)(eliminator) )
+lsmash_entry_list_t *lsmash_list_create_orig
+(
+    lsmash_entry_data_eliminator eliminator
+);
 
-#define lsmash_remove_entries( list, eliminator ) \
-        lsmash_remove_entries_orig( list, (lsmash_entry_data_eliminator)(eliminator) )
+void lsmash_list_destroy
+(
+    lsmash_entry_list_t *list
+);
 
-#define lsmash_remove_list( list, eliminator ) \
-        lsmash_remove_list_orig( list, (lsmash_entry_data_eliminator)(eliminator) )
+int lsmash_list_add_entry
+(
+    lsmash_entry_list_t *list,
+    void                *data
+);
 
-void lsmash_init_entry_list( lsmash_entry_list_t *list );
-lsmash_entry_list_t *lsmash_create_entry_list( void );
-int lsmash_add_entry( lsmash_entry_list_t *list, void *data );
-int lsmash_remove_entry_direct_orig( lsmash_entry_list_t *list, lsmash_entry_t *entry, lsmash_entry_data_eliminator eliminator );
-int lsmash_remove_entry_orig( lsmash_entry_list_t *list, uint32_t entry_number, lsmash_entry_data_eliminator eliminator );
-int lsmash_remove_entry_tail_orig( lsmash_entry_list_t *list, lsmash_entry_data_eliminator eliminator );
-void lsmash_remove_entries_orig( lsmash_entry_list_t *list, lsmash_entry_data_eliminator eliminator );
-void lsmash_remove_list_orig( lsmash_entry_list_t *list, lsmash_entry_data_eliminator eliminator );
-void lsmash_move_entries( lsmash_entry_list_t *dst, lsmash_entry_list_t *src );
+int lsmash_list_remove_entry_direct
+(
+    lsmash_entry_list_t *list,
+    lsmash_entry_t      *entry
+);
 
-lsmash_entry_t *lsmash_get_entry( lsmash_entry_list_t *list, uint32_t entry_number );
-void *lsmash_get_entry_data( lsmash_entry_list_t *list, uint32_t entry_number );
+int lsmash_list_remove_entry
+(
+    lsmash_entry_list_t *list,
+    uint32_t             entry_number
+);
+
+int lsmash_list_remove_entry_tail
+(
+    lsmash_entry_list_t *list
+);
+
+void lsmash_list_remove_entries
+(
+    lsmash_entry_list_t *list
+);
+
+void lsmash_list_move_entries
+(
+    lsmash_entry_list_t *dst,
+    lsmash_entry_list_t *src
+);
+
+lsmash_entry_t *lsmash_list_get_entry
+(
+    lsmash_entry_list_t *list,
+    uint32_t             entry_number
+);
+
+void *lsmash_list_get_entry_data
+(
+    lsmash_entry_list_t *list,
+    uint32_t             entry_number
+);

@@ -215,7 +215,7 @@ static int mp4a_als_importer_get_accessunit( importer_t *importer, uint32_t trac
         return LSMASH_ERR_NAMELESS;
     if( track_number != 1 )
         return LSMASH_ERR_FUNCTION_PARAM;
-    lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_get_entry_data( importer->summaries, track_number );
+    lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_list_get_entry_data( importer->summaries, track_number );
     if( !summary )
         return LSMASH_ERR_NAMELESS;
     mp4a_als_importer_t *als_imp = (mp4a_als_importer_t *)importer->info;
@@ -317,7 +317,7 @@ static lsmash_audio_summary_t *als_create_summary( lsmash_bs_t *bs, als_specific
         goto fail;
     }
     lsmash_free( data );
-    if( lsmash_add_entry( &summary->opaque->list, specific ) < 0 )
+    if( lsmash_list_add_entry( &summary->opaque->list, specific ) < 0 )
     {
         lsmash_destroy_codec_specific_data( specific );
         goto fail;
@@ -345,7 +345,7 @@ static int mp4a_als_importer_probe( importer_t *importer )
     }
     /* importer status */
     als_imp->samples_in_frame = summary->samples_in_frame;
-    if( lsmash_add_entry( importer->summaries, summary ) < 0 )
+    if( lsmash_list_add_entry( importer->summaries, summary ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         err = LSMASH_ERR_MEMORY_ALLOC;

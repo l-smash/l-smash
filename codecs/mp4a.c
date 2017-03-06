@@ -941,7 +941,7 @@ void mp4a_print_AudioSpecificConfig( FILE *fp, uint8_t *dsi_payload, uint32_t ds
 
 int mp4a_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index )
 {
-    isom_audio_entry_t *mp4a = (isom_audio_entry_t *)lsmash_get_entry_data( &stbl->stsd->list, sample_description_index );
+    isom_audio_entry_t *mp4a = (isom_audio_entry_t *)lsmash_list_get_entry_data( &stbl->stsd->list, sample_description_index );
     if( LSMASH_IS_NON_EXISTING_BOX( mp4a ) )
         return LSMASH_ERR_INVALID_DATA;
     isom_esds_t *esds;

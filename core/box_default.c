@@ -37,7 +37,7 @@
     .manager      = LSMASH_NON_EXISTING_BOX,                                 \
     .precedence   = 0,                                                       \
     .pos          = 0,                                                       \
-    .extensions   = { NULL },                                                \
+    .extensions   = { .head = NULL },                                        \
     .size         = 0,                                                       \
     .type         = LSMASH_BOX_TYPE_INITIALIZER
 
@@ -58,6 +58,7 @@ static const isom_box_t isom_opaque_box_default =
     INITIALIZE_BASEBOX_COMMON( opaque )
 };
 
+DEFINE_SIMPLE_BOX_DEFAULT_CONSTANT( dummy );
 DEFINE_SIMPLE_BOX_DEFAULT_CONSTANT( unknown );
 DEFINE_SIMPLE_BOX_DEFAULT_CONSTANT( ftyp );
 DEFINE_SIMPLE_BOX_DEFAULT_CONSTANT( ctab );
@@ -241,6 +242,16 @@ DEFINE_SIMPLE_CONTAINER_BOX_DEFAULT_CONSTANT( trak, tkhd, tapt, edts, tref, mdia
 DEFINE_SIMPLE_CONTAINER_BOX_DEFAULT_CONSTANT( moov, mvhd, iods, udta, ctab, meta, mvex );
 DEFINE_SIMPLE_CONTAINER_BOX_DEFAULT_CONSTANT( file_abstract, ftyp, moov, mdat, meta, mfra );
 
+/* Box-lists predefined in the parent box definitions are initialized by 0s, thus the entry eliminator
+ * of each list also be set to NULL (0). This must not be an issue since all box are deallocated through
+ * the 'extensions' list of the parent box. Only 'entry' which holds the actual box data is deallocated
+ * when the box is deallocated by the isom_remove_box_in_predefined_list() function. Because of that,
+ * here, there are no explicit default constant definitions of indivisual predefined box-lists. */
+
+
+/* Allocate box by default settings.
+ *
+ * Use this function to allocate boxes as much as possible, it covers forgetful settings. */
 void *allocate_box_by_default
 (
     const void  *nonexist_ptr,
@@ -252,5 +263,6 @@ void *allocate_box_by_default
     if( !box )
         return (void *)nonexist_ptr;
     box->manager &= ~LSMASH_NON_EXISTING_BOX;
+    lsmash_list_init( &box->extensions, isom_remove_extension_box );
     return (void *)box;
 }

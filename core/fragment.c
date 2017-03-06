@@ -184,7 +184,7 @@ static int isom_write_fragment_random_access_info( lsmash_file_t *file )
             {
                 /* Irregular case. Drop this entry. */
                 lsmash_entry_t *next = rap_entry->next;
-                lsmash_remove_entry_direct( tfra->list, rap_entry, NULL );
+                lsmash_list_remove_entry_direct( tfra->list, rap_entry );
                 rap_entry = next;
                 continue;
             }
@@ -222,7 +222,7 @@ static int isom_write_fragment_random_access_info( lsmash_file_t *file )
                 while( rap_entry )
                 {
                     lsmash_entry_t *next = rap_entry->next;
-                    lsmash_remove_entry_direct( tfra->list, rap_entry, NULL );
+                    lsmash_list_remove_entry_direct( tfra->list, rap_entry );
                     rap_entry = next;
                 }
                 break;
@@ -499,7 +499,7 @@ static int isom_output_fragment_media_data( lsmash_file_t *file )
         file->mdat->size       = 0;
         file->mdat->media_size = 0;
     }
-    lsmash_remove_entries( frag_manager->pool, isom_remove_sample_pool );
+    lsmash_list_remove_entries( frag_manager->pool );
     frag_manager->pool_size    = 0;
     frag_manager->sample_count = 0;
     return 0;
@@ -657,7 +657,7 @@ static int isom_make_segment_index_entry
         isom_sidx_referenced_item_t *data = lsmash_malloc( sizeof(isom_sidx_referenced_item_t) );
         if( !data )
             return LSMASH_ERR_NAMELESS;
-        if( lsmash_add_entry( sidx->list, data ) < 0 )
+        if( lsmash_list_add_entry( sidx->list, data ) < 0 )
         {
             lsmash_free( data );
             return LSMASH_ERR_MEMORY_ALLOC;
@@ -1112,7 +1112,7 @@ static isom_trun_optional_row_t *isom_request_trun_optional_row( isom_trun_t *tr
     isom_trun_optional_row_t *row = NULL;
     if( !trun->optional )
     {
-        trun->optional = lsmash_create_entry_list();
+        trun->optional = lsmash_list_create_simple();
         if( !trun->optional )
             return NULL;
     }
@@ -1128,7 +1128,7 @@ static isom_trun_optional_row_t *isom_request_trun_optional_row( isom_trun_t *tr
             row->sample_size                    = tfhd->default_sample_size;
             row->sample_flags                   = tfhd->default_sample_flags;
             row->sample_composition_time_offset = 0;
-            if( lsmash_add_entry( trun->optional, row ) < 0 )
+            if( lsmash_list_add_entry( trun->optional, row ) < 0 )
             {
                 lsmash_free( row );
                 return NULL;
@@ -1244,7 +1244,7 @@ int isom_append_fragment_track_run
     isom_fragment_manager_t *frag_manager = file->fragment;
     /* Move data in the pool of the current track fragment to the pool of the current movie fragment.
      * Empty the pool of current track. We don't delete data of samples here. */
-    if( lsmash_add_entry( frag_manager->pool, chunk->pool ) < 0 )
+    if( lsmash_list_add_entry( frag_manager->pool, chunk->pool ) < 0 )
         return LSMASH_ERR_MEMORY_ALLOC;
     frag_manager->sample_count += chunk->pool->sample_count;
     frag_manager->pool_size    += chunk->pool->size;
@@ -1573,7 +1573,7 @@ static int isom_fragment_update_sample_tables( isom_traf_t *traf, lsmash_sample_
                 }
                 if( !tfra->list )
                 {
-                    tfra->list = lsmash_create_entry_list();
+                    tfra->list = lsmash_list_create_simple();
                     if( !tfra->list )
                         return LSMASH_ERR_MEMORY_ALLOC;
                 }
@@ -1586,7 +1586,7 @@ static int isom_fragment_update_sample_tables( isom_traf_t *traf, lsmash_sample_
                 rap->traf_number   = cache->fragment->traf_number;
                 rap->trun_number   = traf->trun_list.entry_count;
                 rap->sample_number = trun->sample_count;
-                if( lsmash_add_entry( tfra->list, rap ) < 0 )
+                if( lsmash_list_add_entry( tfra->list, rap ) < 0 )
                 {
                     lsmash_free( rap );
                     return LSMASH_ERR_MEMORY_ALLOC;

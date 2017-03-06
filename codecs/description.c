@@ -577,7 +577,7 @@ static int codec_construct_qt_audio_decompression_info( lsmash_codec_specific_t 
                     isom_remove_box_by_itself( box );
                     return LSMASH_ERR_MEMORY_ALLOC;
                 }
-                if( lsmash_add_entry( &wave->extensions, box ) < 0 )
+                if( lsmash_list_add_entry( &wave->extensions, box ) < 0 )
                 {
                     isom_remove_unknown_box( box );
                     return LSMASH_ERR_MEMORY_ALLOC;
@@ -1304,7 +1304,7 @@ static int isom_set_qtff_mp4a_description( isom_audio_entry_t *audio, lsmash_aud
      || (mp4a       = isom_add_mp4a( wave ),       LSMASH_IS_NON_EXISTING_BOX( mp4a ))
      || (terminator = isom_add_terminator( wave ), LSMASH_IS_NON_EXISTING_BOX( terminator )) )
     {
-        lsmash_remove_entry_tail( &audio->extensions, wave->destruct );
+        lsmash_list_remove_entry_tail( &audio->extensions );
         return LSMASH_ERR_NAMELESS;
     }
     frma->data_format = audio->type.fourcc;
@@ -1489,7 +1489,7 @@ static int isom_set_qtff_lpcm_description( isom_audio_entry_t *audio, lsmash_aud
              || (enda       = isom_add_enda( wave ),       LSMASH_IS_NON_EXISTING_BOX( enda ))
              || (terminator = isom_add_terminator( wave ), LSMASH_IS_NON_EXISTING_BOX( terminator )) )
             {
-                lsmash_remove_entry_tail( &audio->extensions, wave->destruct );
+                lsmash_list_remove_entry_tail( &audio->extensions );
                 return LSMASH_ERR_NAMELESS;
             }
             frma->data_format  = sample_type.fourcc;
@@ -1740,7 +1740,7 @@ static int isom_set_qtff_sound_decompression_parameters
     if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_frma      ( wave ) )
      || LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_terminator( wave ) ) )
     {
-        lsmash_remove_entry_tail( &audio->extensions, wave->destruct );
+        lsmash_list_remove_entry_tail( &audio->extensions );
         return LSMASH_ERR_NAMELESS;
     }
     wave->frma->data_format = audio->type.fourcc;
@@ -2208,7 +2208,7 @@ static int isom_setup_tx3g_description( isom_stsd_t *stsd, lsmash_summary_t *sum
     isom_font_record_t *font = lsmash_malloc( sizeof(isom_font_record_t) );
     if( !font )
         goto fail;
-    if( lsmash_add_entry( ftab->list, font ) < 0 )
+    if( lsmash_list_add_entry( ftab->list, font ) < 0 )
     {
         lsmash_free( font );
         goto fail;
@@ -2352,7 +2352,7 @@ lsmash_summary_t *isom_create_video_summary_from_description( isom_sample_entry_
                 dst_ct->array[i].b      = src_ct->array[i].b;
             }
         }
-        if( lsmash_add_entry( &summary->opaque->list, specific ) < 0 )
+        if( lsmash_list_add_entry( &summary->opaque->list, specific ) < 0 )
         {
             lsmash_destroy_codec_specific_data( specific );
             goto fail;
@@ -2470,7 +2470,7 @@ lsmash_summary_t *isom_create_video_summary_from_description( isom_sample_entry_
             }
             else
                 continue;
-            if( lsmash_add_entry( &summary->opaque->list, specific ) < 0 )
+            if( lsmash_list_add_entry( &summary->opaque->list, specific ) < 0 )
             {
                 lsmash_destroy_codec_specific_data( specific );
                 goto fail;
@@ -2489,7 +2489,7 @@ lsmash_summary_t *isom_create_video_summary_from_description( isom_sample_entry_
             specific->size              = box->size;
             specific->data.unstructured = lsmash_memdup( box->binary, box->size );
             if( !specific->data.unstructured
-             || lsmash_add_entry( &summary->opaque->list, specific ) < 0 )
+             || lsmash_list_add_entry( &summary->opaque->list, specific ) < 0 )
             {
                 lsmash_destroy_codec_specific_data( specific );
                 goto fail;
@@ -2536,7 +2536,7 @@ static int isom_append_structured_mp4sys_decoder_config( lsmash_codec_specific_l
     lsmash_destroy_codec_specific_data( specific );
     if( !conv )
         return LSMASH_ERR_NAMELESS;
-    if( lsmash_add_entry( &opaque->list, conv ) < 0 )
+    if( lsmash_list_add_entry( &opaque->list, conv ) < 0 )
     {
         lsmash_destroy_codec_specific_data( conv );
         return LSMASH_ERR_MEMORY_ALLOC;
@@ -2587,7 +2587,7 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
         common->revision_level = audio->revision_level;
         common->vendor         = audio->vendor;
         common->compression_ID = audio->compression_ID;
-        if( lsmash_add_entry( &summary->opaque->list, specific ) < 0 )
+        if( lsmash_list_add_entry( &summary->opaque->list, specific ) < 0 )
         {
             lsmash_destroy_codec_specific_data( specific );
             goto fail;
@@ -2635,7 +2635,7 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
                 else
                     data->format_flags |=  QT_LPCM_FORMAT_FLAG_BIG_ENDIAN;
             }
-            if( lsmash_add_entry( &summary->opaque->list, specific ) < 0 )
+            if( lsmash_list_add_entry( &summary->opaque->list, specific ) < 0 )
             {
                 lsmash_destroy_codec_specific_data( specific );
                 goto fail;
@@ -2690,7 +2690,7 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
                 lsmash_qt_audio_channel_layout_t *data = (lsmash_qt_audio_channel_layout_t *)specific->data.structured;
                 data->channelLayoutTag = chan->channelLayoutTag;
                 data->channelBitmap    = chan->channelBitmap;
-                if( lsmash_add_entry( &summary->opaque->list, specific ) < 0 )
+                if( lsmash_list_add_entry( &summary->opaque->list, specific ) < 0 )
                 {
                     lsmash_destroy_codec_specific_data( specific );
                     goto fail;
@@ -2809,7 +2809,7 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
                     }
                     specific->data.unstructured = box_data;
                     specific->size              = box_size;
-                    if( lsmash_add_entry( &summary->opaque->list, specific ) < 0 )
+                    if( lsmash_list_add_entry( &summary->opaque->list, specific ) < 0 )
                     {
                         lsmash_destroy_codec_specific_data( specific );
                         lsmash_bs_cleanup( bs );
@@ -2832,7 +2832,7 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
             specific->size              = box->size;
             specific->data.unstructured = lsmash_memdup( box->binary, box->size );
             if( !specific->data.unstructured
-             || lsmash_add_entry( &summary->opaque->list, specific ) < 0 )
+             || lsmash_list_add_entry( &summary->opaque->list, specific ) < 0 )
             {
                 lsmash_destroy_codec_specific_data( specific );
                 goto fail;

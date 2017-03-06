@@ -113,7 +113,7 @@ static int wave_importer_get_accessunit( importer_t *importer, uint32_t track_nu
         return LSMASH_ERR_NAMELESS;
     if( track_number != 1 )
         return LSMASH_ERR_FUNCTION_PARAM;
-    lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_get_entry_data( importer->summaries, track_number );
+    lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_list_get_entry_data( importer->summaries, track_number );
     if( !summary )
         return LSMASH_ERR_NAMELESS;
     wave_importer_t *wave_imp = (wave_importer_t *)importer->info;
@@ -211,7 +211,7 @@ static lsmash_audio_summary_t *wave_create_summary( waveformat_extensible_t *fmt
         lpcm->format_flags |= QT_AUDIO_FORMAT_FLAG_ALIGNED_HIGH;
     if( summary->sample_size > 8 )
         lpcm->format_flags |= QT_AUDIO_FORMAT_FLAG_SIGNED_INTEGER;
-    if( lsmash_add_entry( &summary->opaque->list, cs ) < 0 )
+    if( lsmash_list_add_entry( &summary->opaque->list, cs ) < 0 )
     {
         lsmash_destroy_codec_specific_data( cs );
         goto fail;
@@ -233,7 +233,7 @@ static lsmash_audio_summary_t *wave_create_summary( waveformat_extensible_t *fmt
             layout->channelLayoutTag = QT_CHANNEL_LAYOUT_UNKNOWN | wfx->nChannels;
             layout->channelBitmap    = 0;
         }
-        if( lsmash_add_entry( &summary->opaque->list, cs ) < 0 )
+        if( lsmash_list_add_entry( &summary->opaque->list, cs ) < 0 )
         {
             lsmash_destroy_codec_specific_data( cs );
             goto fail;
@@ -341,7 +341,7 @@ static int wave_importer_probe( importer_t *importer )
         err = LSMASH_ERR_NAMELESS;
         goto fail;
     }
-    if( (err = lsmash_add_entry( importer->summaries, summary )) < 0 )
+    if( (err = lsmash_list_add_entry( importer->summaries, summary )) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         goto fail;
@@ -364,7 +364,7 @@ static uint32_t wave_importer_get_last_delta( importer_t *importer, uint32_t tra
     wave_importer_t *wave_imp = (wave_importer_t *)importer->info;
     if( !wave_imp || track_number != 1 || importer->status != IMPORTER_EOF )
         return 0;
-    lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_get_entry_data( importer->summaries, track_number );
+    lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_list_get_entry_data( importer->summaries, track_number );
     if( !summary )
         return 0;
     return wave_imp->number_of_samples / summary->samples_in_frame >= wave_imp->au_number
@@ -374,7 +374,7 @@ static uint32_t wave_importer_get_last_delta( importer_t *importer, uint32_t tra
 
 static int wave_importer_construct_timeline( importer_t *importer, uint32_t track_number )
 {
-    lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_get_entry_data( importer->summaries, track_number );
+    lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_list_get_entry_data( importer->summaries, track_number );
     if( !summary )
         return LSMASH_ERR_NAMELESS;
     isom_timeline_t *timeline = isom_timeline_create();
@@ -384,7 +384,8 @@ static int wave_importer_construct_timeline( importer_t *importer, uint32_t trac
     lsmash_file_t *file = importer->file;
     if( !file->timeline )
     {
-        file->timeline = lsmash_create_entry_list();
+        /* TODO: this is not a proper place. It should be enclosed in isom_timeline_create(). */
+        file->timeline = lsmash_list_create( isom_timeline_destroy );
         if( !file->timeline )
         {
             err = LSMASH_ERR_MEMORY_ALLOC;
@@ -424,7 +425,7 @@ static int wave_importer_construct_timeline( importer_t *importer, uint32_t trac
         if( (err = isom_add_lpcm_bunch_entry( timeline, &bunch )) < 0 )
             goto fail;
     }
-    if( (err = lsmash_add_entry( file->timeline, timeline )) < 0 )
+    if( (err = lsmash_list_add_entry( file->timeline, timeline )) < 0 )
         goto fail;
     return 0;
 fail:

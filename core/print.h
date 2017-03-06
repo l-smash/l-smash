@@ -24,6 +24,7 @@
 #define LSMASH_PRINT_H
 
 int isom_add_print_func( lsmash_file_t *file, void *box, int level );
-void isom_remove_print_funcs( lsmash_file_t *file );
+void isom_printer_destory_list( lsmash_file_t *file );
+lsmash_entry_list_t *isom_printer_create_list( void );
 
 #endif /* LSMASH_PRINT_H */

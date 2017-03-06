@@ -156,7 +156,7 @@ static int isom_add_chpl_entry( isom_chpl_t *chpl, isom_chapter_entry_t *chap_da
     }
     memcpy( data->chapter_name, chap_data->chapter_name, data->chapter_name_length );
     data->chapter_name[ data->chapter_name_length ] = '\0';
-    if( lsmash_add_entry( chpl->list, data ) < 0 )
+    if( lsmash_list_add_entry( chpl->list, data ) < 0 )
     {
         lsmash_free( data->chapter_name );
         lsmash_free( data );
@@ -384,7 +384,7 @@ char *lsmash_get_tyrant_chapter( lsmash_root_t *root, uint32_t index, double *ti
      || LSMASH_IS_NON_EXISTING_BOX( file->moov->udta->chpl ) )
         return NULL;
     isom_chpl_t *chpl = file->moov->udta->chpl;
-    isom_chpl_entry_t *data = (isom_chpl_entry_t *)lsmash_get_entry_data( chpl->list, index );
+    isom_chpl_entry_t *data = (isom_chpl_entry_t *)lsmash_list_get_entry_data( chpl->list, index );
     if( !data )
         return NULL;
     double timescale = chpl->version ? 10000000.0 : file->moov->mvhd->timescale;

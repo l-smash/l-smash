@@ -2564,7 +2564,7 @@ int isom_add_print_func( lsmash_file_t *file, void *box, int level )
     data->box   = (isom_box_t *)box;
     data->func  = isom_select_print_func( (isom_box_t *)box );
     assert( data->func );
-    if( lsmash_add_entry( file->print, data ) < 0 )
+    if( lsmash_list_add_entry( file->print, data ) < 0 )
     {
         isom_print_remove_plastic_box( data->box );
         lsmash_free( data );
@@ -2581,8 +2581,13 @@ static void isom_remove_print_func( isom_print_entry_t *data )
     lsmash_free( data );
 }
 
-void isom_remove_print_funcs( lsmash_file_t *file )
+void isom_printer_destory_list( lsmash_file_t *file )
 {
-    lsmash_remove_list( file->print, isom_remove_print_func );
+    lsmash_list_destroy( file->print );
     file->print = NULL;
+}
+
+lsmash_entry_list_t *isom_printer_create_list( void )
+{
+    return lsmash_list_create( isom_remove_print_func );
 }

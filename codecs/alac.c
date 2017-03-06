@@ -109,7 +109,7 @@ int alac_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, i
 
 int alac_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index )
 {
-    isom_audio_entry_t *alac = (isom_audio_entry_t *)lsmash_get_entry_data( &stbl->stsd->list, sample_description_index );
+    isom_audio_entry_t *alac = (isom_audio_entry_t *)lsmash_list_get_entry_data( &stbl->stsd->list, sample_description_index );
     if( LSMASH_IS_NON_EXISTING_BOX( alac ) )
         return LSMASH_ERR_INVALID_DATA;
     uint8_t *exdata      = NULL;

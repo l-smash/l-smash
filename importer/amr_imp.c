@@ -194,7 +194,7 @@ static int amr_create_damr
     cs->size              = AMR_DAMR_LENGTH;
     lsmash_bs_cleanup( bs );
     if( !cs->data.unstructured
-     || lsmash_add_entry( &summary->opaque->list, cs ) < 0 )
+     || lsmash_list_add_entry( &summary->opaque->list, cs ) < 0 )
     {
         lsmash_destroy_codec_specific_data( cs );
         return LSMASH_ERR_MEMORY_ALLOC;
@@ -222,7 +222,7 @@ static lsmash_audio_summary_t *amr_create_summary
     summary->samples_in_frame = (160 << wb);
     summary->sbr_mode         = MP4A_AAC_SBR_NOT_SPECIFIED;     /* no effect */
     if( amr_create_damr( summary, wb ) < 0
-     || lsmash_add_entry( importer->summaries, summary ) < 0 )
+     || lsmash_list_add_entry( importer->summaries, summary ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         return NULL;

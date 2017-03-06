@@ -265,7 +265,7 @@ static void mp4sys_remove_descriptor_in_predefined_list( void *opaque_descriptor
                  * Because of freeing an entry of the list here, don't pass the list to free this descriptor.
                  * Or double free. */
                 entry->data = NULL;
-                lsmash_remove_entry_direct( list, entry, NULL );
+                lsmash_list_remove_entry_direct( list, entry );
                 break;
             }
     }
@@ -286,7 +286,7 @@ static void mp4sys_destruct_descriptor( mp4sys_descriptor_t *descriptor )
 
 static void mp4sys_remove_all_child_descriptors( lsmash_entry_list_t *children )
 {
-    lsmash_remove_entries( children, mp4sys_destruct_descriptor );
+    lsmash_list_remove_entries( children );
 }
 
 /* Remove a descriptor by the pointer containing its address.
@@ -306,7 +306,7 @@ void mp4sys_remove_descriptor( void *opaque_descriptor )
             {
                 /* Free the corresponding entry here, therefore don't call this function as a callback function
                  * if a function frees the same entry later and calls this function. */
-                lsmash_remove_entry_direct( &parent->children, entry, mp4sys_destruct_descriptor );
+                lsmash_list_remove_entry_direct( &parent->children, entry );
                 return;
             }
     }
@@ -592,6 +592,7 @@ static inline void *mp4sys_construct_descriptor_orig
     descriptor->parent   = parent;
     descriptor->destruct = destructor;
     descriptor->write    = writer;
+    lsmash_list_init( &descriptor->children, mp4sys_destruct_descriptor );
     return descriptor;
 }
 
@@ -622,7 +623,7 @@ static mp4sys_DecoderSpecificInfo_t *mp4sys_add_DecoderSpecificInfo( mp4sys_Deco
         return NULL;
     MP4SYS_CONSTRUCT_DESCRIPTOR( dsi, DecoderSpecificInfo, dcd, NULL );
     dsi->header.tag = MP4SYS_DESCRIPTOR_TAG_DecSpecificInfoTag;
-    if( lsmash_add_entry( &dcd->children, dsi ) < 0 )
+    if( lsmash_list_add_entry( &dcd->children, dsi ) < 0 )
     {
         mp4sys_remove_descriptor( dsi );
         return NULL;
@@ -644,7 +645,7 @@ static mp4sys_DecoderConfigDescriptor_t *mp4sys_add_DecoderConfigDescriptor
         return NULL;
     MP4SYS_CONSTRUCT_DESCRIPTOR( dcd, DecoderConfigDescriptor, esd, NULL );
     dcd->header.tag = MP4SYS_DESCRIPTOR_TAG_DecoderConfigDescrTag;
-    if( lsmash_add_entry( &esd->children, dcd ) < 0 )
+    if( lsmash_list_add_entry( &esd->children, dcd ) < 0 )
     {
         mp4sys_remove_descriptor( dcd );
         return NULL;
@@ -659,7 +660,7 @@ static mp4sys_SLConfigDescriptor_t *mp4sys_add_SLConfigDescriptor( mp4sys_ES_Des
         return NULL;
     MP4SYS_CONSTRUCT_DESCRIPTOR( slcd, SLConfigDescriptor, esd, NULL );
     slcd->header.tag = MP4SYS_DESCRIPTOR_TAG_SLConfigDescrTag;
-    if( lsmash_add_entry( &esd->children, slcd ) < 0 )
+    if( lsmash_list_add_entry( &esd->children, slcd ) < 0 )
     {
         mp4sys_remove_descriptor( slcd );
         return NULL;
@@ -677,14 +678,14 @@ static mp4sys_ES_ID_Inc_t *mp4sys_add_ES_ID_Inc( mp4sys_ObjectDescriptor_t *od )
         return NULL;
     MP4SYS_CONSTRUCT_DESCRIPTOR( es_id_inc, ES_ID_Inc, od, NULL );
     es_id_inc->header.tag = MP4SYS_DESCRIPTOR_TAG_ES_ID_IncTag;
-    if( lsmash_add_entry( &od->children, es_id_inc ) < 0 )
+    if( lsmash_list_add_entry( &od->children, es_id_inc ) < 0 )
     {
         mp4sys_remove_descriptor( es_id_inc );
         return NULL;
     }
-    if( lsmash_add_entry( &od->esDescr, es_id_inc ) < 0 )
+    if( lsmash_list_add_entry( &od->esDescr, es_id_inc ) < 0 )
     {
-        lsmash_remove_entry_tail( &od->children, mp4sys_remove_ES_ID_Inc );
+        lsmash_list_remove_entry_tail( &od->children );
         return NULL;
     }
     return es_id_inc;
@@ -1156,7 +1157,7 @@ static mp4sys_SLConfigDescriptor_t *mp4sys_get_SLConfigDescriptor( lsmash_bs_t *
 static mp4sys_ES_Descriptor_t *mp4sys_get_ES_Descriptor( lsmash_bs_t *bs, mp4sys_descriptor_head_t *header, void *parent )
 {
     MP4SYS_CONSTRUCT_DESCRIPTOR( esd, ES_Descriptor, parent, NULL );
-    if( parent && lsmash_add_entry( &((mp4sys_descriptor_t *)parent)->children, esd ) < 0 )
+    if( parent && lsmash_list_add_entry( &((mp4sys_descriptor_t *)parent)->children, esd ) < 0 )
     {
         mp4sys_remove_descriptor( esd );
         return NULL;
@@ -1216,7 +1217,7 @@ static mp4sys_ES_ID_Inc_t *mp4sys_get_ES_ID_Inc( lsmash_bs_t *bs, mp4sys_descrip
 static mp4sys_ObjectDescriptor_t *mp4sys_get_ObjectDescriptor( lsmash_bs_t *bs, mp4sys_descriptor_head_t *header, void *parent )
 {
     MP4SYS_CONSTRUCT_DESCRIPTOR( od, ObjectDescriptor, parent, NULL );
-    if( parent && lsmash_add_entry( &((mp4sys_descriptor_t *)parent)->children, od ) < 0 )
+    if( parent && lsmash_list_add_entry( &((mp4sys_descriptor_t *)parent)->children, od ) < 0 )
     {
         mp4sys_remove_descriptor( od );
         return NULL;
@@ -1368,7 +1369,7 @@ int mp4sys_setup_summary_from_DecoderSpecificInfo( lsmash_audio_summary_t *summa
         params->avgBitrate           = dcd->avgBitrate;
         if( (err = mp4a_setup_summary_from_AudioSpecificConfig( summary, dsi_payload, dsi_payload_length )) < 0
          || (err = lsmash_set_mp4sys_decoder_specific_info( params, dsi_payload, dsi_payload_length ))      < 0
-         || (err = lsmash_add_entry( &summary->opaque->list, cs ))                                          < 0 )
+         || (err = lsmash_list_add_entry( &summary->opaque->list, cs ))                                          < 0 )
         {
             lsmash_destroy_codec_specific_data( cs );
             goto fail;

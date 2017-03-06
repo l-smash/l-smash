@@ -46,7 +46,7 @@ int lsmash_setup_AudioSpecificConfig( lsmash_audio_summary_t *summary )
         lsmash_codec_specific_t *cs = (lsmash_codec_specific_t *)entry->data;
         if( !cs || cs->type != LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG )
             continue;
-        lsmash_remove_entry_direct( &summary->opaque->list, entry, lsmash_destroy_codec_specific_data );
+        lsmash_list_remove_entry_direct( &summary->opaque->list, entry );
     }
     /* Create and add a new one. */
     uint32_t data_length;
@@ -71,12 +71,31 @@ int lsmash_setup_AudioSpecificConfig( lsmash_audio_summary_t *summary )
     param->streamType           = MP4SYS_STREAM_TYPE_AudioStream;
     int err = lsmash_set_mp4sys_decoder_specific_info( param, data, data_length );
     lsmash_free( data );
-    if( err < 0 || (err = lsmash_add_entry( &summary->opaque->list, cs )) < 0 )
+    if( err < 0 || (err = lsmash_list_add_entry( &summary->opaque->list, cs )) < 0 )
     {
         lsmash_destroy_codec_specific_data( cs );
         return err;
     }
     return 0;
+}
+
+static lsmash_codec_specific_list_t *summary_allocate_opaque( void )
+{
+    lsmash_codec_specific_list_t *opaque = (lsmash_codec_specific_list_t *)lsmash_malloc_zero( sizeof(lsmash_codec_specific_list_t) );
+    if( opaque )
+        lsmash_list_init( &opaque->list, lsmash_destroy_codec_specific_data );
+    return opaque;
+}
+
+static void summary_deallocate_opaque
+(
+    lsmash_codec_specific_list_t *opaque
+)
+{
+    if( !opaque )
+        return;
+    lsmash_list_remove_entries( &opaque->list );
+    lsmash_free( opaque );
 }
 
 lsmash_summary_t *lsmash_create_summary( lsmash_summary_type summary_type )
@@ -97,7 +116,7 @@ lsmash_summary_t *lsmash_create_summary( lsmash_summary_type summary_type )
     lsmash_summary_t *summary = (lsmash_summary_t *)lsmash_malloc_zero( summary_size );
     if( !summary )
         return NULL;
-    summary->opaque = (lsmash_codec_specific_list_t *)lsmash_malloc_zero( sizeof(lsmash_codec_specific_list_t) );
+    summary->opaque = summary_allocate_opaque();
     if( !summary->opaque )
     {
         lsmash_free( summary );
@@ -112,17 +131,7 @@ void lsmash_cleanup_summary( lsmash_summary_t *summary )
 {
     if( !summary )
         return;
-    if( summary->opaque )
-    {
-        for( lsmash_entry_t *entry = summary->opaque->list.head; entry; )
-        {
-            lsmash_entry_t *next = entry->next;
-            lsmash_destroy_codec_specific_data( (lsmash_codec_specific_t *)entry->data );
-            lsmash_free( entry );
-            entry = next;
-        }
-        lsmash_free( summary->opaque );
-    }
+    summary_deallocate_opaque( summary->opaque );
     lsmash_free( summary );
 }
 
@@ -133,7 +142,7 @@ int lsmash_add_codec_specific_data( lsmash_summary_t *summary, lsmash_codec_spec
     lsmash_codec_specific_t *dup = isom_duplicate_codec_specific_data( specific );
     if( !dup )
         return LSMASH_ERR_NAMELESS;
-    if( lsmash_add_entry( &summary->opaque->list, dup ) < 0 )
+    if( lsmash_list_add_entry( &summary->opaque->list, dup ) < 0 )
     {
         lsmash_destroy_codec_specific_data( dup );
         return LSMASH_ERR_MEMORY_ALLOC;

@@ -57,7 +57,7 @@ int isom_check_compatibility
     /* Get the brand container. */
     isom_ftyp_t *ftyp = LSMASH_IS_EXISTING_BOX( file->ftyp )
                       ? file->ftyp
-                      : (isom_ftyp_t *)lsmash_get_entry_data( &file->styp_list, 1 );
+                      : (isom_ftyp_t *)lsmash_list_get_entry_data( &file->styp_list, 1 );
     /* Check brand to decide mandatory boxes. */
     if( LSMASH_IS_NON_EXISTING_BOX( ftyp ) )
     {
@@ -583,7 +583,7 @@ lsmash_file_t *lsmash_set_file
             if( !file->fragment )
                 goto fail;
             file->fragment->first_moof_pos = FIRST_MOOF_POS_UNDETERMINED;
-            file->fragment->pool = lsmash_create_entry_list();
+            file->fragment->pool = lsmash_list_create( isom_remove_sample_pool );
             if( !file->fragment->pool )
                 goto fail;
         }
@@ -705,7 +705,7 @@ int lsmash_switch_media_segment
     }
     else
         successor->initializer = predecessor->initializer;
-    isom_styp_t *styp = (isom_styp_t *)lsmash_get_entry_data( &successor->styp_list, 1 );
+    isom_styp_t *styp = (isom_styp_t *)lsmash_list_get_entry_data( &successor->styp_list, 1 );
     if( LSMASH_IS_NON_EXISTING_BOX( styp ) )
     {
         ret = isom_set_brands( successor, 0, 0, NULL, 0 );
