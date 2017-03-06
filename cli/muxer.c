@@ -200,12 +200,10 @@ static void cleanup_muxer( muxer_t *muxer )
 }
 
 #define eprintf( ... ) fprintf( stderr, __VA_ARGS__ )
-#define REFRESH_CONSOLE eprintf( "                                                                               \r" )
 
 static int muxer_error( muxer_t *muxer, const char *message, ... )
 {
     cleanup_muxer( muxer );
-    REFRESH_CONSOLE;
     eprintf( "Error: " );
     va_list args;
     va_start( args, message );
@@ -216,7 +214,6 @@ static int muxer_error( muxer_t *muxer, const char *message, ... )
 
 static int error_message( const char *message, ... )
 {
-    REFRESH_CONSOLE;
     eprintf( "Error: " );
     va_list args;
     va_start( args, message );
@@ -1176,7 +1173,7 @@ static int do_mux( muxer_t *muxer )
                     if( (total_media_size >> 22) > progress_pos )
                     {
                         progress_pos = total_media_size >> 22;
-                        eprintf( "Importing: %"PRIu64" bytes\r", total_media_size );
+                        eprintf( "Importing: %"PRIu64" bytes\n", total_media_size );
                     }
                 }
                 else
@@ -1225,8 +1222,7 @@ static int moov_to_front_callback( void *param, uint64_t written_movie_size, uin
     static uint32_t progress_pos = 0;
     if ( (written_movie_size >> 24) <= progress_pos )
         return 0;
-    REFRESH_CONSOLE;
-    eprintf( "Finalizing: [%5.2lf%%]\r", total_movie_size ? ((double)written_movie_size / total_movie_size) * 100.0 : 0 );
+    eprintf( "Finalizing: [%5.2lf%%]\n", total_movie_size ? ((double)written_movie_size / total_movie_size) * 100.0 : 0 );
     /* Print, per 16 megabytes */
     progress_pos = written_movie_size >> 24;
     return 0;
@@ -1238,7 +1234,6 @@ static int finish_movie( output_t *output, option_t *opt )
     if( opt->chap_file )
         lsmash_set_tyrant_chapter( output->root, opt->chap_file, opt->add_bom_to_chpl );
     /* Close movie. */
-    REFRESH_CONSOLE;
     if( opt->optimize_pd )
     {
         lsmash_adhoc_remux_t moov_to_front;
@@ -1278,7 +1273,6 @@ int main( int argc, char *argv[] )
         return MUXER_ERR( "failed to do muxing.\n" );
     if( finish_movie( &muxer.output, &muxer.opt ) )
         return MUXER_ERR( "failed to finish movie.\n" );
-    REFRESH_CONSOLE;
     eprintf( "Muxing completed!\n" );
     cleanup_muxer( &muxer );        /* including lsmash_destroy_root() */
     return 0;

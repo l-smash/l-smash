@@ -32,7 +32,6 @@
 #define LSMASH_MAX( a, b ) ((a) > (b) ? (a) : (b))
 
 #define eprintf( ... ) fprintf( stderr, __VA_ARGS__ )
-#define REFRESH_CONSOLE eprintf( "                                                                               \r" )
 
 typedef struct
 {
@@ -149,7 +148,6 @@ static void cleanup_timecode( timecode_t *timecode )
 
 static int error_message( const char* message, ... )
 {
-    REFRESH_CONSOLE;
     eprintf( "Error: " );
     va_list args;
     va_start( args, message );
@@ -160,7 +158,6 @@ static int error_message( const char* message, ... )
 
 static int warning_message( const char* message, ... )
 {
-    REFRESH_CONSOLE;
     eprintf( "Warning: " );
     va_list args;
     va_start( args, message );
@@ -870,7 +867,7 @@ static int check_white_brand( lsmash_brand_type brand )
 
 static int moov_to_front_callback( void *param, uint64_t written_movie_size, uint64_t total_movie_size )
 {
-    eprintf( "Finalizing: [%5.2lf%%]\r", ((double)written_movie_size / total_movie_size) * 100.0 );
+    eprintf( "Finalizing: [%5.2lf%%]\n", ((double)written_movie_size / total_movie_size) * 100.0 );
     return 0;
 }
 
@@ -1182,7 +1179,7 @@ int main( int argc, char *argv[] )
                     if( (total_media_size >> 22) > progress_pos )
                     {
                         progress_pos = total_media_size >> 22;
-                        eprintf( "Importing: %"PRIu64" bytes\r", total_media_size );
+                        eprintf( "Importing: %"PRIu64" bytes\n", total_media_size );
                     }
                 }
             }
@@ -1238,7 +1235,7 @@ int main( int argc, char *argv[] )
     moov_to_front.func = moov_to_front_callback;
     moov_to_front.buffer_size = 4*1024*1024;
     moov_to_front.param = NULL;
-    eprintf( "                                                                               \r" );
+    eprintf( "                                                                               \n" );
     if( lsmash_finish_movie( output.root, &moov_to_front )
      || lsmash_write_lsmash_indicator( output.root ) )
         return TIMELINEEDITOR_ERR( "Failed to finish output movie.\n" );

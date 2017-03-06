@@ -239,12 +239,10 @@ static void cleanup_remuxer( remuxer_t *remuxer )
 }
 
 #define eprintf( ... ) fprintf( stderr, __VA_ARGS__ )
-#define REFRESH_CONSOLE eprintf( "                                                                               \r" )
 
 static int remuxer_error( remuxer_t *remuxer, const char *message, ... )
 {
     cleanup_remuxer( remuxer );
-    REFRESH_CONSOLE;
     eprintf( "[Error] " );
     va_list args;
     va_start( args, message );
@@ -255,7 +253,6 @@ static int remuxer_error( remuxer_t *remuxer, const char *message, ... )
 
 static int error_message( const char *message, ... )
 {
-    REFRESH_CONSOLE;
     eprintf( "[Error] " );
     va_list args;
     va_start( args, message );
@@ -266,7 +263,6 @@ static int error_message( const char *message, ... )
 
 static int warning_message( const char *message, ... )
 {
-    REFRESH_CONSOLE;
     eprintf( "[Warning] " );
     va_list args;
     va_start( args, message );
@@ -1164,7 +1160,6 @@ static void exclude_invalid_output_track( output_t *output, output_track_t *out_
                                           input_movie_t *in_movie, input_track_t *in_track,
                                           const char *message, ... )
 {
-    REFRESH_CONSOLE;
     eprintf( "[Warning] in %"PRIu32"/%"PRIu32" -> out %"PRIu32": ", in_movie->movie_ID, in_track->track_ID, out_track->track_ID );
     va_list args;
     va_start( args, message );
@@ -1347,8 +1342,7 @@ static int moov_to_front_callback( void *param, uint64_t written_movie_size, uin
     static uint32_t progress_pos = 0;
     if ( (written_movie_size >> 24) <= progress_pos )
         return 0;
-    REFRESH_CONSOLE;
-    eprintf( "Finalizing: [%5.2lf%%]\r", ((double)written_movie_size / total_movie_size) * 100.0 );
+    eprintf( "Finalizing: [%5.2lf%%]\n", ((double)written_movie_size / total_movie_size) * 100.0 );
     /* Print, per 16 megabytes */
     progress_pos = written_movie_size >> 24;
     return 0;
@@ -1650,7 +1644,7 @@ static int do_remux( remuxer_t *remuxer )
                         if( (total_media_size >> 22) > progress_pos )
                         {
                             progress_pos = total_media_size >> 22;
-                            eprintf( "Importing: %"PRIu64" bytes\r", total_media_size );
+                            eprintf( "Importing: %"PRIu64" bytes\n", total_media_size );
                         }
                     }
                     else
@@ -1741,7 +1735,6 @@ static int finish_movie( remuxer_t *remuxer )
     if( remuxer->chap_file )
         lsmash_set_tyrant_chapter( output->root, remuxer->chap_file, remuxer->add_bom_to_chpl );
     /* Finish muxing. */
-    REFRESH_CONSOLE;
     if( lsmash_finish_movie( output->root, &moov_to_front ) )
         return -1;
     return remuxer->frag_base_track ? 0 : lsmash_write_lsmash_indicator( output->root );
@@ -1819,7 +1812,6 @@ int main( int argc, char *argv[] )
         return REMUXER_ERR( "failed to construct timeline maps.\n" );
     if( finish_movie( &remuxer ) )
         return REMUXER_ERR( "failed to finish output movie.\n" );
-    REFRESH_CONSOLE;
     eprintf( "%s completed!\n", !remuxer.dash || remuxer.subseg_per_seg == 0 ? "Remuxing" : "Segmentation" );
     cleanup_remuxer( &remuxer );
     return 0;
