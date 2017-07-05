@@ -101,7 +101,7 @@ void lsmash_importer_destroy( importer_t *importer )
     lsmash_remove_list( importer->summaries, lsmash_cleanup_summary );
     lsmash_free( importer );
     /* Prevent freeing this already freed importer in file's destructor again. */
-    if( file->importer )
+    if( file && file->importer )
         file->importer = NULL;
 }
 
