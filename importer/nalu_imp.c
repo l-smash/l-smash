@@ -1205,7 +1205,14 @@ static int hevc_get_access_unit_internal
                         if( (err = hevc_parse_sei( info->bits, &info->vps, &info->sps, &info->sei, &nuh,
                                                    sb->rbsp, nalu + nuh.length, nalu_length - nuh.length )) < 0 )
                             return hevc_get_au_internal_failed( hevc_imp, au, complete_au, err );
-                        hevc_append_nalu_to_au( au, nalu, nalu_length, probe );
+                        if( info->sei.mastering_display.present == 2 )
+                        {
+                            if( (err = hevc_try_to_append_dcr_nalu(info, HEVC_DCR_NALU_TYPE_PREFIX_SEI, nalu, nalu_length)) < 0 )
+                                return hevc_get_au_internal_failed( hevc_imp, au, complete_au, err );
+                            info->sei.mastering_display.present--; /* so that only one is added */
+                        }
+                        else
+                            hevc_append_nalu_to_au( au, nalu, nalu_length, probe );
                         break;
                     }
                     case HEVC_NALU_TYPE_VPS :

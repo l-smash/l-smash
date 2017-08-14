@@ -1349,6 +1349,20 @@ int hevc_parse_sei
                 lsmash_bits_get( bits, 1 );     /* exact_match_flag */
                 sei->recovery_point.broken_link_flag = lsmash_bits_get( bits, 1 );
             }
+            else if( payloadType == 137 )
+            {
+                /* mastering_display */
+                sei->mastering_display.present = 2; /* so that only one is added */
+                for( size_t j = 0; j < 3; j++ )
+                {
+                    sei->mastering_display.display_primaries_x[j] = lsmash_bits_get( bits, 16 );
+                    sei->mastering_display.display_primaries_y[j] = lsmash_bits_get( bits, 16 );
+                }
+                sei->mastering_display.white_point_x = lsmash_bits_get( bits, 16 );
+                sei->mastering_display.white_point_y = lsmash_bits_get( bits, 16 );
+                sei->mastering_display.max_display_mastering_luminance = lsmash_bits_get( bits, 32 );
+                sei->mastering_display.min_display_mastering_luminance = lsmash_bits_get( bits, 32 );
+            }
             else
                 goto skip_sei_message;
         }
