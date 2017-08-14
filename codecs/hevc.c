@@ -1349,7 +1349,7 @@ int hevc_parse_sei
                 lsmash_bits_get( bits, 1 );     /* exact_match_flag */
                 sei->recovery_point.broken_link_flag = lsmash_bits_get( bits, 1 );
             }
-            else if( payloadType == 137 )
+            else if( payloadType == HEVC_SEI_MASTERING_DISPLAY )
             {
                 /* mastering_display */
                 sei->mastering_display.present = 2; /* so that only one is added */
@@ -2761,6 +2761,32 @@ int lsmash_get_hevc_array_completeness
         return LSMASH_ERR_FUNCTION_PARAM;
     *array_completeness = ps_array->array_completeness;
     return 0;
+}
+
+int lsmash_get_hevc_array_sei_presence
+(
+    lsmash_hevc_specific_parameters_t *param,
+    lsmash_hevc_dcr_nalu_type          ps_type,
+    lsmash_hevc_sei_payload_type       payload_type
+)
+{
+    if( hevc_alloc_parameter_arrays_if_needed( param ) < 0 )
+        return LSMASH_ERR_MEMORY_ALLOC;
+    hevc_parameter_array_t *ps_array = hevc_get_parameter_set_array( param, ps_type );
+    if( !ps_array )
+        return LSMASH_ERR_FUNCTION_PARAM;
+
+    if( ps_array->NAL_unit_type != HEVC_NALU_TYPE_PREFIX_SEI )
+        return LSMASH_ERR_FUNCTION_PARAM;
+
+    for( lsmash_entry_t *entry = ps_array->list->head; entry; entry = entry->next )
+    {
+        isom_dcr_ps_entry_t *ps = (isom_dcr_ps_entry_t *)entry->data;
+        if( ps->nalUnitLength > 2 && *(ps->nalUnit + 2) == payload_type )
+            return 0;
+    }
+
+    return LSMASH_ERR_INVALID_DATA;
 }
 
 static int hevc_parse_succeeded
