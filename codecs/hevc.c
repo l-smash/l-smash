@@ -3119,9 +3119,17 @@ int hevc_print_codec_specific
         for( uint16_t j = 0; j < numNalus; j++ )
         {
             uint16_t nalUnitLength = lsmash_bs_get_be16( bs );
-            lsmash_bs_skip_bytes( bs, nalUnitLength );
             lsmash_ifprintf( fp, array_indent, "nalUnit[%"PRIu16"]\n", j );
             lsmash_ifprintf( fp, array_indent + 1, "nalUnitLength = %"PRIu16"\n", nalUnitLength );
+
+            if( (temp8 & 0x3F) == HEVC_NALU_TYPE_PREFIX_SEI )
+            {
+                lsmash_bs_skip_bytes( bs, 2 );
+                lsmash_ifprintf(fp, array_indent + 1, "seiPayloadType = %"PRIu8"\n", lsmash_bs_get_byte( bs ));
+                lsmash_bs_skip_bytes( bs, nalUnitLength - 3 );
+            }
+            else
+                lsmash_bs_skip_bytes( bs, nalUnitLength );
         }
     }
     lsmash_bs_cleanup( bs );
