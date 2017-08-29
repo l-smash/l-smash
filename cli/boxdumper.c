@@ -71,6 +71,12 @@ static int boxdumper_error
 #define BOXDUMPER_ERR( message ) boxdumper_error( root, &file_param, message )
 #define DO_NOTHING
 
+static int isom_compare_pos( const lsmash_sample_t *a, const lsmash_sample_t *b )
+{
+    int64_t diff = (int64_t)(a->pos - b->pos);
+    return diff > 0 ? 1 : (diff == 0 ? 0 : -1);
+}
+
 int main( int argc, char *argv[] )
 {
     if ( argc < 2 )
@@ -88,8 +94,9 @@ int main( int argc, char *argv[] )
         display_version();
         return 0;
     }
-    int dump_box = 1;
-    int chapter = 0;
+    int dump_box        = 1;
+    int dump_interleave = 0;
+    int chapter         = 0;
     char *filename;
     lsmash_get_mainargs( &argc, &argv );
     if( argc > 2 )
@@ -100,6 +107,11 @@ int main( int argc, char *argv[] )
             chapter = 1;
         else if( !strcasecmp( argv[1], "--timestamp" ) )
             dump_box = 0;
+        else if( !strcasecmp( argv[1], "--interleave" ) )
+        {
+            dump_interleave = 1;
+            dump_box        = 0;
+        }
         else
         {
             display_help();
@@ -138,6 +150,74 @@ int main( int argc, char *argv[] )
     {
         if( lsmash_print_movie( root, "-" ) )
             return BOXDUMPER_ERR( "Failed to dump box structure.\n" );
+    }
+    else if( dump_interleave )
+    {
+        lsmash_movie_parameters_t movie_param;
+        lsmash_initialize_movie_parameters( &movie_param );
+        lsmash_get_movie_parameters( root, &movie_param );
+        uint32_t num_tracks = movie_param.number_of_tracks;
+        lsmash_sample_t **info_lists = lsmash_malloc_zero( num_tracks * sizeof(lsmash_sample_t *) );
+        if( !info_lists )
+            return BOXDUMPER_ERR( "Failed to allocate sample info lists.\n" );
+        uint32_t *sample_count = lsmash_malloc_zero( num_tracks * sizeof(uint32_t) );
+        if( !sample_count )
+            return BOXDUMPER_ERR( "Failed to allocate sample_count.\n" );
+        uint64_t overall_sample_count = 0;
+        for( uint32_t track_number = 1; track_number <= num_tracks; track_number++ )
+        {
+            uint32_t track_ID = lsmash_get_track_ID( root, track_number );
+            if( !track_ID )
+                return BOXDUMPER_ERR( "Failed to get track_ID.\n" );
+            lsmash_media_parameters_t media_param;
+            lsmash_initialize_media_parameters( &media_param );
+            if( lsmash_get_media_parameters( root, track_ID, &media_param ) )
+                return BOXDUMPER_ERR( "Failed to get media parameters.\n" );
+            if( lsmash_construct_timeline( root, track_ID ) )
+                return BOXDUMPER_ERR( "Failed to construct timeline.\n" );
+            uint32_t timeline_shift;
+            if( lsmash_get_composition_to_decode_shift_from_media_timeline( root, track_ID, &timeline_shift ) )
+                return BOXDUMPER_ERR( "Failed to get timestamps.\n" );
+            sample_count[ track_number - 1 ] = lsmash_get_sample_count_in_media_timeline( root, track_ID );
+            if( sample_count[ track_number - 1 ] == 0 )
+                return BOXDUMPER_ERR( "Failed to get the number of samples.\n" );
+            overall_sample_count += sample_count[ track_number - 1 ];
+            info_lists[ track_number - 1 ] = lsmash_malloc_zero( sample_count[ track_number - 1 ] * sizeof(lsmash_sample_t) );
+            lsmash_sample_t *info_list = info_lists[ track_number - 1 ];
+            if( !info_list )
+                return BOXDUMPER_ERR( "Failed to allocate sample info lists.\n" );
+            for( uint32_t sample_number = 1; sample_number <= sample_count[ track_number - 1 ]; sample_number++ )
+            {
+                if( lsmash_check_sample_existence_in_media_timeline( root, track_ID, sample_number ) == 0 )
+                    return BOXDUMPER_ERR( "Failed to get a sample info.\n" );
+                lsmash_sample_t *sample_info = &info_list[ sample_number - 1 ];
+                if( lsmash_get_sample_info_from_media_timeline( root, track_ID, sample_number, sample_info ) < 0 )
+                    break;
+            }
+        }
+        lsmash_sample_t *info = lsmash_malloc_zero( overall_sample_count * sizeof(lsmash_sample_t) );
+        if( !info )
+            return BOXDUMPER_ERR( "Failed to allocate sample info list.\n" );
+        uint32_t current_sample_number = 1;
+        for( uint32_t track_number = 1; track_number <= num_tracks; track_number++ )
+        {
+            for( uint32_t sample_number = 1; sample_number <= sample_count[ track_number - 1 ]; sample_number++ )
+            {
+                lsmash_sample_t *info_list = info_lists[ track_number - 1 ];
+                info[ current_sample_number - 1 ] = info_list[ sample_number - 1 ];
+                info[ current_sample_number - 1 ].index = track_number; /* Store track_number instead of sample_description_index. */
+                ++current_sample_number;
+            }
+            lsmash_free( info_lists[ track_number - 1 ] );
+        }
+        lsmash_free( info_lists );
+        qsort( info, overall_sample_count, sizeof(lsmash_sample_t), (int(*)( const void *, const void * ))isom_compare_pos );
+        for( uint64_t sample_number = 1; sample_number <= overall_sample_count; sample_number++ )
+        {
+            lsmash_sample_t *sample = &info[ sample_number - 1 ];
+            fprintf( stdout, "Track %"PRIu32": POS=%"PRIu64", DTS=%"PRIu64", PTS=%"PRIu64"\n", sample->index, sample->pos, sample->dts, sample->cts );
+        }
+        lsmash_free( info );
     }
     else
     {
