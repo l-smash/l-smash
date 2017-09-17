@@ -2214,7 +2214,7 @@ static int isom_read_ilst( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
 {
     if( (!lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_META )
       && !lsmash_check_box_type_identical( parent->type,   QT_BOX_TYPE_META ))
-     || ((isom_meta_t *)parent)->ilst )
+     || LSMASH_IS_EXISTING_BOX( ((isom_meta_t *)parent)->ilst ) )
         return isom_read_unknown_box( file, box, parent, level );
     ADD_BOX( ilst, isom_meta_t );
     isom_box_common_copy( ilst, box );
