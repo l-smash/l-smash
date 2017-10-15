@@ -41,12 +41,14 @@ int lsmash_setup_AudioSpecificConfig( lsmash_audio_summary_t *summary )
     if( !summary || !summary->opaque )
         return LSMASH_ERR_FUNCTION_PARAM;
     /* Remove an old one. */
-    for( lsmash_entry_t *entry = summary->opaque->list.head; entry; entry = entry->next )
+    for( lsmash_entry_t *entry = summary->opaque->list.head; entry; )
     {
-        lsmash_codec_specific_t *cs = (lsmash_codec_specific_t *)entry->data;
+        lsmash_entry_t *old_entry = entry;
+        entry = entry->next;
+        lsmash_codec_specific_t *cs = (lsmash_codec_specific_t *)old_entry->data;
         if( !cs || cs->type != LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG )
             continue;
-        lsmash_list_remove_entry_direct( &summary->opaque->list, entry );
+        lsmash_list_remove_entry_direct( &summary->opaque->list, old_entry );
     }
     /* Create and add a new one. */
     uint32_t data_length;
