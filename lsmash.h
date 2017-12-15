@@ -47,7 +47,7 @@ extern "C" {
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  2
-#define LSMASH_VERSION_MINOR 15
+#define LSMASH_VERSION_MINOR 16
 #define LSMASH_VERSION_MICRO  0
 
 #define LSMASH_VERSION_INT( a, b, c ) (((a) << 16) | ((b) << 8) | (c))
@@ -937,6 +937,8 @@ typedef enum
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_PIXEL_FORMAT,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_SIGNIFICANT_BITS,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_GAMMA_LEVEL,
+    LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_CONTENT_LIGHT_LEVEL_INFO,
+    LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_MASTERING_DISPLAY_COLOR_VOLUME,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_CHANNEL_LAYOUT,
 
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_CODEC_GLOBAL_HEADER,
@@ -3442,6 +3444,28 @@ typedef struct
 {
     uint32_t level;     /* A fixed-point 16.16 number indicating the gamma level at which the image was captured. */
 } lsmash_qt_gamma_t;
+
+/* Content Light Level Info */
+typedef struct
+{
+    uint16_t max_content_light_level;
+    uint16_t max_pic_average_light_level;
+} lsmash_qt_content_light_level_info_t;
+
+/* Mastering Display Color Volume */
+typedef struct
+{
+    uint16_t display_primaries_g_x;
+    uint16_t display_primaries_g_y;
+    uint16_t display_primaries_b_x;
+    uint16_t display_primaries_b_y;
+    uint16_t display_primaries_r_x;
+    uint16_t display_primaries_r_y;
+    uint16_t white_point_x;
+    uint16_t white_point_y;
+    uint32_t max_display_mastering_luminance;
+    uint32_t min_display_mastering_luminance;
+} lsmash_qt_mastering_display_color_volume_t;
 
 typedef enum
 {

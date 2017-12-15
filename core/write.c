@@ -425,6 +425,32 @@ static int isom_write_fiel( lsmash_bs_t *bs, isom_box_t *box )
     return 0;
 }
 
+static int isom_write_clli( lsmash_bs_t *bs, isom_box_t *box )
+{
+    isom_clli_t *clli = (isom_clli_t *)box;
+    isom_bs_put_box_common( bs, clli );
+    lsmash_bs_put_be16( bs, clli->max_content_light_level );
+    lsmash_bs_put_be16( bs, clli->max_pic_average_light_level );
+    return 0;
+}
+
+static int isom_write_mdcv( lsmash_bs_t *bs, isom_box_t *box )
+{
+    isom_mdcv_t *mdcv = (isom_mdcv_t *)box;
+    isom_bs_put_box_common( bs, mdcv );
+    lsmash_bs_put_be16( bs, mdcv->display_primaries_g_x );
+    lsmash_bs_put_be16( bs, mdcv->display_primaries_g_y );
+    lsmash_bs_put_be16( bs, mdcv->display_primaries_b_x );
+    lsmash_bs_put_be16( bs, mdcv->display_primaries_b_y );
+    lsmash_bs_put_be16( bs, mdcv->display_primaries_r_x );
+    lsmash_bs_put_be16( bs, mdcv->display_primaries_r_y );
+    lsmash_bs_put_be16( bs, mdcv->white_point_x );
+    lsmash_bs_put_be16( bs, mdcv->white_point_y );
+    lsmash_bs_put_be16( bs, mdcv->max_display_mastering_luminance );
+    lsmash_bs_put_be16( bs, mdcv->min_display_mastering_luminance );
+    return 0;
+}
+
 static int isom_write_cspc( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_cspc_t *cspc = (isom_cspc_t *)box;
@@ -1653,6 +1679,8 @@ void isom_set_box_writer( isom_box_t *box )
         ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_GLBL, isom_write_glbl );
         ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_GAMA, isom_write_gama );
         ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_FIEL, isom_write_fiel );
+        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_CLLI, isom_write_clli );
+        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_MDCV, isom_write_mdcv );
         ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_CSPC, isom_write_cspc );
         ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_SGBT, isom_write_sgbt );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSL, isom_write_stsl );
