@@ -580,13 +580,31 @@ typedef struct
 
 /* Content Light Level Info Box
  * This Box is used to identify the upper bounds for the nominal target brightness light level of the pictures of the video.
- * Note:  The format of this box is identical to h.265 (HEVC) SEI Payload Type 144 (ISO-23008-2 D.3.35) */
+ * Note:  The format of this box is identical to h.265 (HEVC) SEI Payload Type 144 (ISO-23008-2 D.2.35) */
 typedef struct
 {
     ISOM_BASEBOX_COMMON;
     uint16_t max_content_light_level;
     uint16_t max_pic_average_light_level;
 } isom_clli_t;
+
+/* Master Display Color Volume Box
+ * This box is used to identify the color volume of a display that is considered to be the mastering display for the video content
+ * Note:  The format of this box is identical to the h.265 (HEVC) SEI Payload Type 137 (ISO-23008-2 D.2.28) */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    uint16_t display_primaries_g_x;
+    uint16_t display_primaries_g_y;
+    uint16_t display_primaries_b_x;
+    uint16_t display_primaries_b_y;
+    uint16_t display_primaries_r_x;
+    uint16_t display_primaries_r_y;
+    uint16_t white_point_x;
+    uint16_t white_point_y;
+    uint32_t max_display_mastering_luminance;
+    uint32_t min_display_mastering_luminance;
+} isom_mdcv_t;
 
 /* Colorspace Box
  * This box is defined in ImageCompression.h. */
@@ -2028,6 +2046,7 @@ struct lsmash_root_tag
 #define LSMASH_BOX_PRECEDENCE_QTFF_GAMA (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_QTFF_FIEL (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_CLLI (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_MDCV (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_QTFF_CSPC (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_QTFF_SGBT (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)   /* 'v216' specific */
 #define LSMASH_BOX_PRECEDENCE_ISOM_CLAP (LSMASH_BOX_PRECEDENCE_LP +  1 * LSMASH_BOX_PRECEDENCE_S)
@@ -2507,6 +2526,7 @@ isom_colr_t *isom_add_colr( isom_visual_entry_t *visual );
 isom_gama_t *isom_add_gama( isom_visual_entry_t *visual );
 isom_fiel_t *isom_add_fiel( isom_visual_entry_t *visual );
 isom_clli_t *isom_add_clli( isom_visual_entry_t *visual );
+isom_mdcv_t *isom_add_mdcv( isom_visual_entry_t *visual );
 isom_cspc_t *isom_add_cspc( isom_visual_entry_t *visual );
 isom_sgbt_t *isom_add_sgbt( isom_visual_entry_t *visual );
 isom_stsl_t *isom_add_stsl( isom_visual_entry_t *visual );

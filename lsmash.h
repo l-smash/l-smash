@@ -1230,6 +1230,21 @@ typedef struct
     uint16_t max_pic_average_light_level;
 } lsmash_clli_t;
 
+/* Mastering Display Color Volume */
+typedef struct
+{
+    uint16_t display_primaries_g_x;
+    uint16_t display_primaries_g_y;
+    uint16_t display_primaries_b_x;
+    uint16_t display_primaries_b_y;
+    uint16_t display_primaries_r_x;
+    uint16_t display_primaries_r_y;
+    uint16_t white_point_x;
+    uint16_t white_point_y;
+    uint32_t max_display_mastering_luminance;
+    uint32_t min_display_mastering_luminance;
+} lsmash_mdcv_t;
+
 /* Video depth */
 typedef enum
 {
@@ -1395,6 +1410,7 @@ typedef struct
     lsmash_video_depth depth;               /* data size of a pixel */
     lsmash_clap_t      clap;                /* clean aperture */
     lsmash_clli_t      clli;                /* content light level */
+    lsmash_mdcv_t      mdcv;                /* mastering display color volume */
     uint32_t           par_h;               /* horizontal factor of pixel aspect ratio */
     uint32_t           par_v;               /* vertical factor of pixel aspect ratio */
     struct

@@ -1188,6 +1188,23 @@ static int isom_read_clli( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     return isom_read_leaf_box_common_last_process( file, box, level, clli );
 }
 
+static int isom_read_mdcv( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
+{
+    ADD_BOX( mdcv, isom_visual_entry_t );
+    lsmash_bs_t *bs = file->bs;
+    mdcv->display_primaries_g_x = lsmash_bs_get_be16( bs );
+    mdcv->display_primaries_g_y = lsmash_bs_get_be16( bs );
+    mdcv->display_primaries_b_x = lsmash_bs_get_be16( bs );
+    mdcv->display_primaries_b_y = lsmash_bs_get_be16( bs );
+    mdcv->display_primaries_r_x = lsmash_bs_get_be16( bs );
+    mdcv->display_primaries_r_y = lsmash_bs_get_be16( bs );
+    mdcv->white_point_x = lsmash_bs_get_be16( bs );
+    mdcv->white_point_y = lsmash_bs_get_be16( bs );
+    mdcv->max_display_mastering_luminance = lsmash_bs_get_be32( bs );
+    mdcv->min_display_mastering_luminance = lsmash_bs_get_be32( bs );
+    return isom_read_leaf_box_common_last_process( file, box, level, mdcv );
+}
+
 static int isom_read_cspc( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
     ADD_BOX( cspc, isom_visual_entry_t );
@@ -2920,6 +2937,7 @@ int isom_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uin
             ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_PASP, lsmash_form_iso_box_type,  isom_read_pasp );
             ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSL, lsmash_form_iso_box_type,  isom_read_stsl );
             ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_CLLI, lsmash_form_iso_box_type,  isom_read_clli );
+            ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_MDCV, lsmash_form_iso_box_type,  isom_read_mdcv );
             ADD_EXTENSION_READER_TABLE_ELEMENT(   QT_BOX_TYPE_CSPC, lsmash_form_qtff_box_type, isom_read_cspc );
             ADD_EXTENSION_READER_TABLE_ELEMENT(   QT_BOX_TYPE_FIEL, lsmash_form_qtff_box_type, isom_read_fiel );
             ADD_EXTENSION_READER_TABLE_ELEMENT(   QT_BOX_TYPE_GAMA, lsmash_form_qtff_box_type, isom_read_gama );
