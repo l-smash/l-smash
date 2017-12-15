@@ -1179,6 +1179,15 @@ static int isom_read_fiel( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     return isom_read_leaf_box_common_last_process( file, box, level, fiel );
 }
 
+static int isom_read_clli( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
+{
+    ADD_BOX( clli, isom_visual_entry_t );
+    lsmash_bs_t *bs = file->bs;
+    clli->max_content_light_level = lsmash_bs_get_be16( bs );
+    clli->max_pic_average_light_level = lsmash_bs_get_be16( bs );
+    return isom_read_leaf_box_common_last_process( file, box, level, clli );
+}
+
 static int isom_read_cspc( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
     ADD_BOX( cspc, isom_visual_entry_t );
@@ -2910,6 +2919,7 @@ int isom_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uin
             ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_HVCC, lsmash_form_iso_box_type,  isom_read_codec_specific );
             ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_PASP, lsmash_form_iso_box_type,  isom_read_pasp );
             ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSL, lsmash_form_iso_box_type,  isom_read_stsl );
+            ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_CLLI, lsmash_form_iso_box_type,  isom_read_clli );
             ADD_EXTENSION_READER_TABLE_ELEMENT(   QT_BOX_TYPE_CSPC, lsmash_form_qtff_box_type, isom_read_cspc );
             ADD_EXTENSION_READER_TABLE_ELEMENT(   QT_BOX_TYPE_FIEL, lsmash_form_qtff_box_type, isom_read_fiel );
             ADD_EXTENSION_READER_TABLE_ELEMENT(   QT_BOX_TYPE_GAMA, lsmash_form_qtff_box_type, isom_read_gama );

@@ -984,6 +984,15 @@ static int isom_print_fiel( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
     return 0;
 }
 
+static int isom_print_clli( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level ) {
+    isom_clli_t *clli = (isom_clli_t *)box;
+    int indent = level;
+    isom_print_box_common( fp, indent++, box, "Content Light Level Box" );
+    lsmash_ifprintf( fp, indent, "max_content_light_level = %d\n", clli->max_content_light_level );
+    lsmash_ifprintf( fp, indent, "max_pic_average_light_level = %d\n", clli->max_pic_average_light_level );
+    return 0;
+}
+
 static int isom_print_cspc( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
 {
     isom_cspc_t *cspc = (isom_cspc_t *)box;
@@ -1318,6 +1327,7 @@ static int isom_print_sample_description_extesion( FILE *fp, lsmash_file_t *file
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_COLR, isom_print_colr );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_GAMA, isom_print_gama );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_FIEL, isom_print_fiel );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_CLLI, isom_print_clli );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_CSPC, isom_print_cspc );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_SGBT, isom_print_sgbt );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_CTAB, isom_print_ctab );
@@ -2485,6 +2495,7 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
         ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_GLBL, isom_print_glbl );
         ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_GAMA, isom_print_gama );
         ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_FIEL, isom_print_fiel );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_CLLI, isom_print_clli );
         ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_CSPC, isom_print_cspc );
         ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_SGBT, isom_print_sgbt );
         ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_STSL, isom_print_stsl );

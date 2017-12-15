@@ -1223,6 +1223,13 @@ typedef struct
     lsmash_rational_u32_t right;
 } lsmash_crop_t;
 
+/* Content Light Level Info */
+typedef struct
+{
+    uint16_t max_content_light_level;
+    uint16_t max_pic_average_light_level;
+} lsmash_clli_t;
+
 /* Video depth */
 typedef enum
 {
@@ -1387,6 +1394,7 @@ typedef struct
     char               compressorname[33];  /* a 32-byte Pascal string containing the name of the compressor that created the image */
     lsmash_video_depth depth;               /* data size of a pixel */
     lsmash_clap_t      clap;                /* clean aperture */
+    lsmash_clli_t      clli;                /* content light level */
     uint32_t           par_h;               /* horizontal factor of pixel aspect ratio */
     uint32_t           par_v;               /* vertical factor of pixel aspect ratio */
     struct

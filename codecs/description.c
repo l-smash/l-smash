@@ -2396,6 +2396,13 @@ lsmash_summary_t *isom_create_video_summary_from_description( isom_sample_entry_
                 summary->color.full_range      = colr->full_range_flag;
                 continue;
             }
+            else if( lsmash_check_box_type_identical( box->type, ISOM_BOX_TYPE_CLLI ) )
+            {
+                isom_clli_t *clli = (isom_clli_t *)box;
+                summary->clli.max_content_light_level = clli->max_content_light_level;
+                summary->clli.max_pic_average_light_level = clli->max_pic_average_light_level;
+                continue;
+            }
             else if( lsmash_check_box_type_identical( box->type, ISOM_BOX_TYPE_STSL ) )
             {
                 specific = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_SAMPLE_SCALE,
