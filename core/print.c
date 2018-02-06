@@ -988,8 +988,8 @@ static int isom_print_clli( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
     isom_clli_t *clli = (isom_clli_t *)box;
     int indent = level;
     isom_print_box_common( fp, indent++, box, "Content Light Level Box" );
-    lsmash_ifprintf( fp, indent, "max_content_light_level = %d\n", clli->max_content_light_level );
-    lsmash_ifprintf( fp, indent, "max_pic_average_light_level = %d\n", clli->max_pic_average_light_level );
+    lsmash_ifprintf( fp, indent, "max_content_light_level = %"PRIu16"\n", clli->max_content_light_level );
+    lsmash_ifprintf( fp, indent, "max_pic_average_light_level = %"PRIu16"\n", clli->max_pic_average_light_level );
     return 0;
 }
 
@@ -997,16 +997,16 @@ static int isom_print_mdcv( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
     isom_mdcv_t *mdcv = (isom_mdcv_t *)box;
     int indent = level;
     isom_print_box_common( fp, indent++, box, "Mastering Display Color Volume Box" );
-    lsmash_ifprintf( fp, indent, "display_primaries_g_x = %d\n", mdcv->display_primaries_g_x );
-    lsmash_ifprintf( fp, indent, "display_primaries_g_y = %d\n", mdcv->display_primaries_g_y );
-    lsmash_ifprintf( fp, indent, "display_primaries_b_x = %d\n", mdcv->display_primaries_b_x );
-    lsmash_ifprintf( fp, indent, "display_primaries_b_y = %d\n", mdcv->display_primaries_b_y );
-    lsmash_ifprintf( fp, indent, "display_primaries_r_x = %d\n", mdcv->display_primaries_r_x );
-    lsmash_ifprintf( fp, indent, "display_primaries_r_y = %d\n", mdcv->display_primaries_r_y );
-    lsmash_ifprintf( fp, indent, "white_point_x = %d\n", mdcv->white_point_x );
-    lsmash_ifprintf( fp, indent, "white_point_y = %d\n", mdcv->white_point_y );
-    lsmash_ifprintf( fp, indent, "max_display_mastering_luminance = %d\n", mdcv->max_display_mastering_luminance );
-    lsmash_ifprintf( fp, indent, "min_display_mastering_luminance = %d\n", mdcv->min_display_mastering_luminance );
+    lsmash_ifprintf( fp, indent, "display_primaries_g_x = %"PRIu16"\n", mdcv->display_primaries_g_x );
+    lsmash_ifprintf( fp, indent, "display_primaries_g_y = %"PRIu16"\n", mdcv->display_primaries_g_y );
+    lsmash_ifprintf( fp, indent, "display_primaries_b_x = %"PRIu16"\n", mdcv->display_primaries_b_x );
+    lsmash_ifprintf( fp, indent, "display_primaries_b_y = %"PRIu16"\n", mdcv->display_primaries_b_y );
+    lsmash_ifprintf( fp, indent, "display_primaries_r_x = %"PRIu16"\n", mdcv->display_primaries_r_x );
+    lsmash_ifprintf( fp, indent, "display_primaries_r_y = %"PRIu16"\n", mdcv->display_primaries_r_y );
+    lsmash_ifprintf( fp, indent, "white_point_x = %"PRIu16"\n", mdcv->white_point_x );
+    lsmash_ifprintf( fp, indent, "white_point_y = %"PRIu16"\n", mdcv->white_point_y );
+    lsmash_ifprintf( fp, indent, "max_display_mastering_luminance = %"PRIu32"\n", mdcv->max_display_mastering_luminance );
+    lsmash_ifprintf( fp, indent, "min_display_mastering_luminance = %"PRIu32"\n", mdcv->min_display_mastering_luminance );
     return 0;
 }
 
@@ -1344,8 +1344,8 @@ static int isom_print_sample_description_extesion( FILE *fp, lsmash_file_t *file
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_COLR, isom_print_colr );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_GAMA, isom_print_gama );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_FIEL, isom_print_fiel );
-        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_CLLI, isom_print_clli );
-        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_MDCV, isom_print_mdcv );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_CLLI, isom_print_clli );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_MDCV, isom_print_mdcv );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_CSPC, isom_print_cspc );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_SGBT, isom_print_sgbt );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_CTAB, isom_print_ctab );
@@ -2513,8 +2513,8 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
         ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_GLBL, isom_print_glbl );
         ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_GAMA, isom_print_gama );
         ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_FIEL, isom_print_fiel );
-        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_CLLI, isom_print_clli );
-        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_MDCV, isom_print_mdcv );
+        ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_CLLI, isom_print_clli );
+        ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_MDCV, isom_print_mdcv );
         ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_CSPC, isom_print_cspc );
         ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_SGBT, isom_print_sgbt );
         ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_STSL, isom_print_stsl );

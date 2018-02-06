@@ -1625,8 +1625,8 @@ void isom_set_box_writer( isom_box_t *box )
         ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_GLBL, isom_write_glbl );
         ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_GAMA, isom_write_gama );
         ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_FIEL, isom_write_fiel );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_CLLI, isom_write_clli );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MDCV, isom_write_mdcv );
+        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_CLLI, isom_write_clli );
+        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_MDCV, isom_write_mdcv );
         ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_CSPC, isom_write_cspc );
         ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_SGBT, isom_write_sgbt );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSL, isom_write_stsl );

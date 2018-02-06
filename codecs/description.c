@@ -2396,28 +2396,6 @@ lsmash_summary_t *isom_create_video_summary_from_description( isom_sample_entry_
                 summary->color.full_range      = colr->full_range_flag;
                 continue;
             }
-            else if( lsmash_check_box_type_identical( box->type, ISOM_BOX_TYPE_CLLI ) )
-            {
-                isom_clli_t *clli = (isom_clli_t *)box;
-                summary->clli.max_content_light_level = clli->max_content_light_level;
-                summary->clli.max_pic_average_light_level = clli->max_pic_average_light_level;
-                continue;
-            }
-            else if( lsmash_check_box_type_identical( box->type, ISOM_BOX_TYPE_MDCV ) )
-            {
-                isom_mdcv_t *mdcv = (isom_mdcv_t *)box;
-                summary->mdcv.display_primaries_g_x = mdcv->display_primaries_g_x;
-                summary->mdcv.display_primaries_g_y = mdcv->display_primaries_g_y;
-                summary->mdcv.display_primaries_b_x = mdcv->display_primaries_b_x;
-                summary->mdcv.display_primaries_b_y = mdcv->display_primaries_b_y;
-                summary->mdcv.display_primaries_r_x = mdcv->display_primaries_r_x;
-                summary->mdcv.display_primaries_r_y = mdcv->display_primaries_r_y;
-                summary->mdcv.white_point_x = mdcv->white_point_x;
-                summary->mdcv.white_point_y = mdcv->white_point_y;
-                summary->mdcv.max_display_mastering_luminance = mdcv->max_display_mastering_luminance;
-                summary->mdcv.min_display_mastering_luminance = mdcv->min_display_mastering_luminance;
-                continue;
-            }
             else if( lsmash_check_box_type_identical( box->type, ISOM_BOX_TYPE_STSL ) )
             {
                 specific = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_SAMPLE_SCALE,
@@ -2463,6 +2441,28 @@ lsmash_summary_t *isom_create_video_summary_from_description( isom_sample_entry_
                 isom_cspc_t *cspc = (isom_cspc_t *)box;
                 lsmash_qt_pixel_format_t *data = (lsmash_qt_pixel_format_t *)specific->data.structured;
                 data->pixel_format = cspc->pixel_format;
+            }
+            else if( lsmash_check_box_type_identical( box->type, QT_BOX_TYPE_CLLI ) )
+            {
+                isom_clli_t *clli = (isom_clli_t *)box;
+                summary->clli.max_content_light_level = clli->max_content_light_level;
+                summary->clli.max_pic_average_light_level = clli->max_pic_average_light_level;
+                continue;
+            }
+            else if( lsmash_check_box_type_identical( box->type, QT_BOX_TYPE_MDCV ) )
+            {
+                isom_mdcv_t *mdcv = (isom_mdcv_t *)box;
+                summary->mdcv.display_primaries_g_x = mdcv->display_primaries_g_x;
+                summary->mdcv.display_primaries_g_y = mdcv->display_primaries_g_y;
+                summary->mdcv.display_primaries_b_x = mdcv->display_primaries_b_x;
+                summary->mdcv.display_primaries_b_y = mdcv->display_primaries_b_y;
+                summary->mdcv.display_primaries_r_x = mdcv->display_primaries_r_x;
+                summary->mdcv.display_primaries_r_y = mdcv->display_primaries_r_y;
+                summary->mdcv.white_point_x = mdcv->white_point_x;
+                summary->mdcv.white_point_y = mdcv->white_point_y;
+                summary->mdcv.max_display_mastering_luminance = mdcv->max_display_mastering_luminance;
+                summary->mdcv.min_display_mastering_luminance = mdcv->min_display_mastering_luminance;
+                continue;
             }
             else if( lsmash_check_box_type_identical( box->type, QT_BOX_TYPE_SGBT ) )
             {
