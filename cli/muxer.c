@@ -1113,15 +1113,35 @@ static int do_mux( muxer_t *muxer )
                 }
                 else if( ret == 1 ) /* a change of stream's properties */
                 {
+                    /* Add a new sample entry if no duplications within the output track. */
+                    int got_new_sample_entry = 1;
                     input_track_t *in_track = &input->track[input->current_track_number - 1];
-                    lsmash_cleanup_summary( in_track->summary );
-                    in_track->summary = lsmash_duplicate_summary( input->importer, input->current_track_number );
-                    out_track->summary      = in_track->summary;
-                    out_track->sample_entry = lsmash_add_sample_entry( output->root, out_track->track_ID, out_track->summary );
-                    if( !out_track->sample_entry )
+                    lsmash_summary_t *summary = lsmash_duplicate_summary( input->importer, input->current_track_number );
+                    uint32_t summary_count = lsmash_count_summary( output->root, out_track->track_ID );
+                    for( uint32_t desc_index = 1; desc_index <= summary_count; desc_index++ )
                     {
-                        ERROR_MSG( "failed to add sample description entry.\n" );
-                        break;
+                        lsmash_summary_t *s = lsmash_get_summary( output->root, out_track->track_ID, desc_index );
+                        int diff = lsmash_compare_summary( summary, s );
+                        lsmash_cleanup_summary( s );
+                        if( diff == 0 )
+                        {
+                            /* The same sample entry is already present in the output track. */
+                            got_new_sample_entry = 0;
+                            out_track->sample_entry = desc_index;
+                            break;
+                        }
+                    }
+                    lsmash_cleanup_summary( in_track->summary );
+                    in_track->summary       = summary;
+                    out_track->summary      = summary;
+                    if( got_new_sample_entry )
+                    {
+                        out_track->sample_entry = lsmash_add_sample_entry( output->root, out_track->track_ID, out_track->summary );
+                        if( out_track->sample_entry == 0 )
+                        {
+                            ERROR_MSG( "failed to add sample description entry.\n" );
+                            break;
+                        }
                     }
                 }
                 else if( ret == 2 ) /* EOF */
