@@ -876,10 +876,9 @@ static int prepare_output( muxer_t *muxer )
     output_file_t  *out_file  = &output->file;
     output_movie_t *out_movie = &out_file->movie;
     /* Allocate output tracks. */
-    out_movie->track = lsmash_malloc( out_movie->num_of_tracks * sizeof(output_track_t) );
+    out_movie->track = lsmash_malloc_zero( out_movie->num_of_tracks * sizeof(output_track_t) );
     if( !out_movie->track )
         return ERROR_MSG( "failed to allocate output tracks.\n" );
-    memset( out_movie->track, 0, out_movie->num_of_tracks * sizeof(output_track_t) );
     /* Initialize L-SMASH muxer */
     output->root = lsmash_create_root();
     if( !output->root )
@@ -1080,6 +1079,7 @@ static void set_reference_chapter_track( output_t *output, option_t *opt )
 static int do_mux( muxer_t *muxer )
 {
 #define LSMASH_MAX( a, b ) ((a) > (b) ? (a) : (b))
+#define LSMASH_MIN( a, b ) ((a) < (b) ? (a) : (b))
     option_t       *opt       = &muxer->opt;
     output_t       *output    = &muxer->output;
     output_movie_t *out_movie = &output->file.movie;
@@ -1185,7 +1185,10 @@ static int do_mux( muxer_t *muxer )
                     if( out_track->current_sample_number == 0 )
                         out_track->start_offset = sample_cts;
                     else
-                        out_track->last_delta = sample_dts - out_track->prev_dts;       /* for any changes in stream's properties */
+                    {
+                        out_track->start_offset = LSMASH_MIN( sample_cts, out_track->start_offset );
+                        out_track->last_delta   = sample_dts - out_track->prev_dts;       /* for any changes in stream's properties */
+                    }
                     out_track->prev_dts = sample_dts;
                     out_track->sample = NULL;
                     largest_dts = LSMASH_MAX( largest_dts, out_track->dts );
@@ -1238,6 +1241,7 @@ static int do_mux( muxer_t *muxer )
     }
     return 0;
 #undef LSMASH_MAX
+#undef LSMASH_MIN
 }
 
 static int moov_to_front_callback( void *param, uint64_t written_movie_size, uint64_t total_movie_size )
