@@ -47,6 +47,7 @@ typedef struct
     uint32_t avcC_number;
     uint32_t last_delta;
     uint64_t last_intra_cts;
+    uint64_t last_sync_cts;
     uint64_t sc_head_pos;
     uint8_t  composition_reordering_present;
     uint8_t  field_pic_present;
@@ -447,10 +448,11 @@ static int h264_importer_get_accessunit
     if( au->number < h264_imp->num_undecodable )
         sample->prop.leading = ISOM_SAMPLE_IS_UNDECODABLE_LEADING;
     else
-        sample->prop.leading = picture->independent || sample->cts >= h264_imp->last_intra_cts
-                                      ? ISOM_SAMPLE_IS_NOT_LEADING : ISOM_SAMPLE_IS_UNDECODABLE_LEADING;
-    if( picture->independent )
-        h264_imp->last_intra_cts = sample->cts;
+        sample->prop.leading =
+              picture->independent                    ? ISOM_SAMPLE_IS_NOT_LEADING
+            : sample->cts >= h264_imp->last_intra_cts ? ISOM_SAMPLE_IS_NOT_LEADING
+            : sample->cts <  h264_imp->last_sync_cts  ? ISOM_SAMPLE_IS_DECODABLE_LEADING
+            :                                           ISOM_SAMPLE_IS_UNDECODABLE_LEADING;
     if( h264_imp->composition_reordering_present && !picture->disposable && !picture->idr )
         sample->prop.allow_earlier = QT_SAMPLE_EARLIER_PTS_ALLOWED;
     sample->prop.independent = picture->independent    ? ISOM_SAMPLE_IS_INDEPENDENT : ISOM_SAMPLE_IS_NOT_INDEPENDENT;
@@ -473,6 +475,10 @@ static int h264_importer_get_accessunit
                 sample->prop.ra_flags |= QT_SAMPLE_RANDOM_ACCESS_FLAG_PARTIAL_SYNC;
         }
     }
+    if( picture->independent )
+        h264_imp->last_intra_cts = sample->cts;
+    if( picture->idr )
+        h264_imp->last_sync_cts  = sample->cts;
     sample->length = au->length;
     memcpy( sample->data, au->data, au->length );
     return current_status;
