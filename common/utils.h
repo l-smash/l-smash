@@ -108,17 +108,24 @@ void lsmash_log_refresh_line
     const void *class
 );
 
-uint32_t lsmash_count_bits
-(
-    uint32_t bits
-);
-
 void lsmash_ifprintf
 (
     FILE       *fp,
     int         indent,
     const char *format, ...
 );
+
+static inline uint32_t lsmash_count_bits
+(
+    uint32_t bits
+)
+{
+    bits = (bits & 0x55555555) + ((bits >>  1) & 0x55555555);
+    bits = (bits & 0x33333333) + ((bits >>  2) & 0x33333333);
+    bits = (bits & 0x0f0f0f0f) + ((bits >>  4) & 0x0f0f0f0f);
+    bits = (bits & 0x00ff00ff) + ((bits >>  8) & 0x00ff00ff);
+    return (bits & 0x0000ffff) + ((bits >> 16) & 0x0000ffff);
+}
 
 static inline size_t lsmash_floor_log2
 (
