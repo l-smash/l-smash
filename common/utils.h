@@ -125,6 +125,25 @@ int lsmash_ceil_log2
     uint64_t value
 );
 
+static inline size_t lsmash_floor_log2
+(
+    uint64_t value
+)
+{
+    assert( value >= 1 );
+#if defined(__GNUC__) && (__GNUC__ >= 4 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 4))  /* GCC >= 3.4 */
+    return (sizeof(uint64_t) - 1) - __builtin_clzll( value );
+#else
+    size_t s = 0;
+    while( value )
+    {
+        value >>= 1;
+        ++s;
+    }
+    return s - 1;
+#endif
+}
+
 int lsmash_compare_dts
 (
     const lsmash_media_ts_t *a,
