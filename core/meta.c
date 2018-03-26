@@ -482,7 +482,7 @@ fail:
 uint32_t lsmash_count_itunes_metadata( lsmash_root_t *root )
 {
     if( isom_check_initializer_present( root ) < 0
-     || !root->file->initializer->moov->udta->meta->ilst )
+     || LSMASH_IS_NON_EXISTING_BOX( root->file->initializer->moov->udta->meta->ilst ) )
         return 0;
     return root->file->initializer->moov->udta->meta->ilst->metaitem_list.entry_count;
 }
