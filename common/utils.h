@@ -144,10 +144,7 @@ static inline size_t lsmash_ceil_log2
     uint64_t value
 )
 {
-    size_t length = 0;
-    while( value > (1ULL << length) )
-        ++length;
-    return length;
+    return lsmash_floor_log2( value ) + ((value & (value - 1)) != 0);
 }
 
 int lsmash_compare_dts
