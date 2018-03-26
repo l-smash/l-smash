@@ -145,17 +145,6 @@ void lsmash_ifprintf
     va_end( args );
 }
 
-int lsmash_ceil_log2
-(
-    uint64_t value
-)
-{
-    int length = 0;
-    while( value > (1ULL << length) )
-        ++length;
-    return length;
-}
-
 /* for qsort function */
 int lsmash_compare_dts
 (

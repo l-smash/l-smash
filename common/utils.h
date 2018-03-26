@@ -120,11 +120,6 @@ void lsmash_ifprintf
     const char *format, ...
 );
 
-int lsmash_ceil_log2
-(
-    uint64_t value
-);
-
 static inline size_t lsmash_floor_log2
 (
     uint64_t value
@@ -142,6 +137,17 @@ static inline size_t lsmash_floor_log2
     }
     return s - 1;
 #endif
+}
+
+static inline size_t lsmash_ceil_log2
+(
+    uint64_t value
+)
+{
+    size_t length = 0;
+    while( value > (1ULL << length) )
+        ++length;
+    return length;
 }
 
 int lsmash_compare_dts
