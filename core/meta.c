@@ -26,6 +26,7 @@
 #include <stdlib.h>
 
 #include "box.h"
+#include "box_default.h"
 
 static isom_data_t *isom_add_metadata( lsmash_file_t *file,
                                        lsmash_itunes_metadata_item item,
@@ -39,16 +40,16 @@ static isom_data_t *isom_add_metadata( lsmash_file_t *file,
       && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_meta( file->moov->udta ) ))
      || (LSMASH_IS_NON_EXISTING_BOX( file->moov->udta->meta->ilst )
       && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_ilst( file->moov->udta->meta ) )) )
-        return NULL;
+        return isom_non_existing_data();
     if( LSMASH_IS_NON_EXISTING_BOX( file->moov->udta->meta->hdlr ) )
     {
         if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_hdlr( file->moov->udta->meta ) )
          || isom_setup_handler_reference( file->moov->udta->meta->hdlr, ISOM_META_HANDLER_TYPE_ITUNES_METADATA ) < 0 )
-            return NULL;
+            return isom_non_existing_data();
     }
     isom_ilst_t *ilst = file->moov->udta->meta->ilst;
     if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_metaitem( ilst, item ) ) )
-        return NULL;
+        return isom_non_existing_data();
     isom_metaitem_t *metaitem = (isom_metaitem_t *)ilst->metaitem_list.tail->data;
     if( item == ITUNES_METADATA_ITEM_CUSTOM )
     {
@@ -75,7 +76,7 @@ static isom_data_t *isom_add_metadata( lsmash_file_t *file,
     return metaitem->data;
 fail:
     isom_remove_box_by_itself( metaitem );
-    return NULL;
+    return isom_non_existing_data();
 }
 
 static int isom_set_itunes_metadata_string( lsmash_file_t *file,
