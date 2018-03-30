@@ -47,18 +47,11 @@ void isom_remove_dcr_ps
     isom_dcr_ps_entry_t *ps
 );
 
-/* Convert EBSP (Encapsulated Byte Sequence Packets) to RBSP (Raw Byte Sequence Packets). */
-uint8_t *nalu_remove_emulation_prevention
-(
-    uint8_t *src,
-    uint64_t src_length,
-    uint8_t *dst
-);
-
 int nalu_import_rbsp_from_ebsp
 (
     lsmash_bits_t *bits,
     uint8_t       *rbsp_buffer,
+    uint64_t      *rbsp_size,
     uint8_t       *ebsp,
     uint64_t       ebsp_size
 );

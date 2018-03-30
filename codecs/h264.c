@@ -541,7 +541,8 @@ static int h264_parse_sps_minimally
     uint64_t       ebsp_size
 )
 {
-    int err = nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, ebsp_size );
+    uint64_t rbsp_size;
+    int err = nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, &rbsp_size, ebsp, ebsp_size );
     if( err < 0 )
         return err;
     memset( sps, 0, sizeof(h264_sps_t) );
@@ -816,7 +817,8 @@ static int h264_parse_pps_minimally
     uint64_t       ebsp_size
 )
 {
-    int err = nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, ebsp_size );
+    uint64_t rbsp_size;
+    int err = nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, &rbsp_size, ebsp, ebsp_size );
     if( err < 0 )
         return err;
     memset( pps, 0, sizeof(h264_pps_t) );
@@ -939,7 +941,8 @@ int h264_parse_sei
     uint64_t       ebsp_size
 )
 {
-    int err = nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, ebsp_size );
+    uint64_t rbsp_size;
+    int err = nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, &rbsp_size, ebsp, ebsp_size );
     if( err < 0 )
         return err;
     uint8_t *rbsp_start = rbsp_buffer;
@@ -1299,7 +1302,8 @@ int h264_parse_slice
     uint64_t size = nuh->nal_unit_type == H264_NALU_TYPE_SLICE_IDR || nuh->nal_ref_idc == 0
                   ? LSMASH_MIN( ebsp_size, 100 )
                   : LSMASH_MIN( ebsp_size, 1000 );
-    int err = nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, size );
+    uint64_t rbsp_size;
+    int err = nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, &rbsp_size, ebsp, size );
     if( err < 0 )
         return err;
     if( nuh->nal_unit_type != H264_NALU_TYPE_SLICE_DP_B
@@ -1352,7 +1356,8 @@ static int h264_get_sps_id
     bs.buffer.data  = buffer;
     bs.buffer.alloc = 6;
     lsmash_bits_init( &bits, &bs );
-    int err = nalu_import_rbsp_from_ebsp( &bits, rbsp_buffer, ps_ebsp, LSMASH_MIN( ps_ebsp_length, 6 ) );
+    uint64_t rbsp_size;
+    int err = nalu_import_rbsp_from_ebsp( &bits, rbsp_buffer, &rbsp_size, ps_ebsp, LSMASH_MIN( ps_ebsp_length, 6 ) );
     if( err < 0 )
         return err;
     lsmash_bits_get( &bits, 24 );   /* profile_idc, constraint_set_flags and level_idc */
@@ -1380,7 +1385,8 @@ static int h264_get_pps_id
     bs.buffer.data  = buffer;
     bs.buffer.alloc = 4;
     lsmash_bits_init( &bits, &bs );
-    int err = nalu_import_rbsp_from_ebsp( &bits, rbsp_buffer, ps_ebsp, LSMASH_MIN( ps_ebsp_length, 4 ) );
+    uint64_t rbsp_size;
+    int err = nalu_import_rbsp_from_ebsp( &bits, rbsp_buffer, &rbsp_size, ps_ebsp, LSMASH_MIN( ps_ebsp_length, 4 ) );
     if( err < 0 )
         return err;
     uint64_t pic_parameter_set_id = nalu_get_exp_golomb_ue( &bits );

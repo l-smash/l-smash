@@ -742,7 +742,8 @@ static int hevc_parse_vps_minimally
     uint64_t       ebsp_size
 )
 {
-    int err = nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, ebsp_size );
+    uint64_t rbsp_size;
+    int err = nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, &rbsp_size, ebsp, ebsp_size );
     if( err < 0 )
         return err;
     memset( vps, 0, sizeof(hevc_vps_t) );
@@ -842,7 +843,8 @@ static int hevc_parse_sps_minimally
     uint64_t       ebsp_size
 )
 {
-    int err = nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, ebsp_size );
+    uint64_t rbsp_size;
+    int err = nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, &rbsp_size, ebsp, ebsp_size );
     if( err < 0 )
         return err;
     memset( sps, 0, sizeof(hevc_sps_t) );
@@ -1128,7 +1130,8 @@ static int hevc_parse_pps_minimally
     uint64_t       ebsp_size
 )
 {
-    int err = nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, ebsp_size );
+    uint64_t rbsp_size;
+    int err = nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, &rbsp_size, ebsp, ebsp_size );
     if( err < 0 )
         return err;
     memset( pps, 0, SIZEOF_PPS_EXCLUDING_HEAP );
@@ -1264,7 +1267,8 @@ int hevc_parse_sei
     uint64_t            ebsp_size
 )
 {
-    int err = nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, ebsp_size );
+    uint64_t rbsp_size;
+    int err = nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, &rbsp_size, ebsp, ebsp_size );
     if( err < 0 )
         return err;
     uint8_t *rbsp_start = rbsp_buffer;
@@ -1382,7 +1386,8 @@ int hevc_parse_slice_segment_header
 )
 {
     lsmash_bits_t *bits = info->bits;
-    int err = nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, ebsp, LSMASH_MIN( ebsp_size, 50 ) );
+    uint64_t rbsp_size;
+    int err = nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, &rbsp_size, ebsp, LSMASH_MIN( ebsp_size, 50 ) );
     if( err < 0 )
         return err;
     hevc_slice_info_t *slice = &info->slice;
@@ -1507,7 +1512,8 @@ static int hevc_get_sps_id
     bs.buffer.data  = buffer;
     bs.buffer.alloc = 128;
     lsmash_bits_init( &bits, &bs );
-    int err = nalu_import_rbsp_from_ebsp( &bits, rbsp_buffer, ps_ebsp, LSMASH_MIN( ps_ebsp_length, 128 ) );
+    uint64_t rbsp_size;
+    int err = nalu_import_rbsp_from_ebsp( &bits, rbsp_buffer, &rbsp_size, ps_ebsp, LSMASH_MIN( ps_ebsp_length, 128 ) );
     if( err < 0 )
         return err;
     /* Skip sps_video_parameter_set_id and sps_temporal_id_nesting_flag. */
@@ -1539,7 +1545,8 @@ static int hevc_get_pps_id
     bs.buffer.data  = buffer;
     bs.buffer.alloc = 3;
     lsmash_bits_init( &bits, &bs );
-    int err = nalu_import_rbsp_from_ebsp( &bits, rbsp_buffer, ps_ebsp, LSMASH_MIN( ps_ebsp_length, 3 ) );
+    uint64_t rbsp_size;
+    int err = nalu_import_rbsp_from_ebsp( &bits, rbsp_buffer, &rbsp_size, ps_ebsp, LSMASH_MIN( ps_ebsp_length, 3 ) );
     if( err < 0 )
         return err;
     uint64_t pic_parameter_set_id = nalu_get_exp_golomb_ue( &bits );

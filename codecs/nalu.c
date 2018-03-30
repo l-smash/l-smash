@@ -60,7 +60,7 @@ void isom_remove_dcr_ps
 }
 
 /* Convert EBSP (Encapsulated Byte Sequence Packets) to RBSP (Raw Byte Sequence Packets). */
-uint8_t *nalu_remove_emulation_prevention
+static uint8_t *nalu_remove_emulation_prevention
 (
     uint8_t *src,
     uint64_t src_length,
@@ -85,14 +85,17 @@ int nalu_import_rbsp_from_ebsp
 (
     lsmash_bits_t *bits,
     uint8_t       *rbsp_buffer,
+    uint64_t      *rbsp_size,
     uint8_t       *ebsp,
     uint64_t       ebsp_size
 )
 {
-    uint8_t *rbsp_start  = rbsp_buffer;
-    uint8_t *rbsp_end    = nalu_remove_emulation_prevention( ebsp, ebsp_size, rbsp_buffer );
-    uint64_t rbsp_length = rbsp_end - rbsp_start;
-    return lsmash_bits_import_data( bits, rbsp_start, rbsp_length );
+    uint8_t *rbsp_start = rbsp_buffer;
+    uint8_t *rbsp_end   = nalu_remove_emulation_prevention( ebsp, ebsp_size, rbsp_buffer );
+    *rbsp_size = (uint64_t)(rbsp_end - rbsp_start);
+    if( *rbsp_size > ebsp_size )
+        return LSMASH_ERR_INVALID_DATA;
+    return lsmash_bits_import_data( bits, rbsp_start, *rbsp_size );
 }
 
 int nalu_check_more_rbsp_data
