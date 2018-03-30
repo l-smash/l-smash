@@ -97,7 +97,7 @@ int isom_add_box_to_extension_list( void *parent_box, void *child_box )
 {
     isom_box_t *parent = (isom_box_t *)parent_box;
     isom_box_t *child  = (isom_box_t *)child_box;
-    assert( LSMASH_IS_EXISTING_BOX( parent ) && LSMASH_IS_EXISTING_BOX( child ) ); 
+    assert( LSMASH_IS_EXISTING_BOX( parent ) && LSMASH_IS_EXISTING_BOX( child ) );
     /* Append at the end of the list. */
     if( lsmash_list_add_entry( &parent->extensions, child ) < 0 )
         return LSMASH_ERR_MEMORY_ALLOC;
@@ -1487,6 +1487,8 @@ DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_pasp, pasp, visual, ISOM_BOX_TYPE
 DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_colr, colr, visual, ISOM_BOX_TYPE_COLR, LSMASH_BOX_PRECEDENCE_ISOM_COLR, 0, isom_visual_entry_t )
 DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_gama, gama, visual,   QT_BOX_TYPE_GAMA, LSMASH_BOX_PRECEDENCE_QTFF_GAMA, 0, isom_visual_entry_t )
 DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_fiel, fiel, visual,   QT_BOX_TYPE_FIEL, LSMASH_BOX_PRECEDENCE_QTFF_FIEL, 0, isom_visual_entry_t )
+DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_clli, clli, visual,   QT_BOX_TYPE_CLLI, LSMASH_BOX_PRECEDENCE_QTFF_CLLI, 0, isom_visual_entry_t )
+DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_mdcv, mdcv, visual,   QT_BOX_TYPE_MDCV, LSMASH_BOX_PRECEDENCE_QTFF_MDCV, 0, isom_visual_entry_t )
 DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_cspc, cspc, visual,   QT_BOX_TYPE_CSPC, LSMASH_BOX_PRECEDENCE_QTFF_CSPC, 0, isom_visual_entry_t )
 DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_sgbt, sgbt, visual,   QT_BOX_TYPE_SGBT, LSMASH_BOX_PRECEDENCE_QTFF_SGBT, 0, isom_visual_entry_t )
 DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_stsl, stsl, visual, ISOM_BOX_TYPE_STSL, LSMASH_BOX_PRECEDENCE_ISOM_STSL, 0, isom_visual_entry_t )

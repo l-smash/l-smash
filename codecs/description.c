@@ -426,6 +426,12 @@ static int isom_duplicate_structured_specific_data( lsmash_codec_specific_t *dst
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_GAMMA_LEVEL :
             *(lsmash_qt_gamma_t *)dst_data = *(lsmash_qt_gamma_t *)src_data;
             return 0;
+        case LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_CONTENT_LIGHT_LEVEL_INFO :
+            *(lsmash_qt_content_light_level_info_t *)dst_data = *(lsmash_qt_content_light_level_info_t *)src_data;
+            return 0;
+        case LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_MASTERING_DISPLAY_COLOR_VOLUME :
+            *(lsmash_qt_mastering_display_color_volume_t *)dst_data = *(lsmash_qt_mastering_display_color_volume_t *)src_data;
+            return 0;
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_CHANNEL_LAYOUT :
             *(lsmash_qt_audio_channel_layout_t *)dst_data = *(lsmash_qt_audio_channel_layout_t *)src_data;
             return 0;
@@ -1056,6 +1062,48 @@ static int isom_setup_visual_description( isom_stsd_t *stsd, lsmash_video_summar
                     goto fail;
                 }
                 gama->level = data->level;
+                lsmash_destroy_codec_specific_data( cs );
+                break;
+            }
+            case LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_CONTENT_LIGHT_LEVEL_INFO :
+            {
+                lsmash_codec_specific_t *cs = lsmash_convert_codec_specific_format( specific, LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+                if( !cs )
+                    goto fail;
+                lsmash_qt_content_light_level_info_t *data = (lsmash_qt_content_light_level_info_t *)cs->data.structured;
+                isom_clli_t *clli = isom_add_clli( visual );
+                if( LSMASH_IS_NON_EXISTING_BOX( clli ) )
+                {
+                    lsmash_destroy_codec_specific_data( cs );
+                    goto fail;
+                }
+                clli->max_content_light_level = data->max_content_light_level;
+                clli->max_pic_average_light_level = data->max_pic_average_light_level;
+                lsmash_destroy_codec_specific_data( cs );
+                break;
+            }
+            case LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_MASTERING_DISPLAY_COLOR_VOLUME :
+            {
+                lsmash_codec_specific_t *cs = lsmash_convert_codec_specific_format( specific, LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+                if( !cs )
+                    goto fail;
+                lsmash_qt_mastering_display_color_volume_t *data = (lsmash_qt_mastering_display_color_volume_t *)cs->data.structured;
+                isom_mdcv_t *mdcv = isom_add_mdcv( visual );
+                if( LSMASH_IS_NON_EXISTING_BOX( mdcv ) )
+                {
+                    lsmash_destroy_codec_specific_data( cs );
+                    goto fail;
+                }
+                mdcv->display_primaries_g_x           = data->display_primaries_g_x;
+                mdcv->display_primaries_g_y           = data->display_primaries_g_y;
+                mdcv->display_primaries_b_x           = data->display_primaries_b_x;
+                mdcv->display_primaries_b_y           = data->display_primaries_b_y;
+                mdcv->display_primaries_r_x           = data->display_primaries_r_x;
+                mdcv->display_primaries_r_y           = data->display_primaries_r_y;
+                mdcv->white_point_x                   = data->white_point_x;
+                mdcv->white_point_y                   = data->white_point_y;
+                mdcv->max_display_mastering_luminance = data->max_display_mastering_luminance;
+                mdcv->min_display_mastering_luminance = data->min_display_mastering_luminance;
                 lsmash_destroy_codec_specific_data( cs );
                 break;
             }
@@ -2359,6 +2407,8 @@ static lsmash_codec_specific_data_type isom_get_codec_specific_data_type( lsmash
         ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT(   QT_BOX_TYPE_CSPC, LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_PIXEL_FORMAT );
         ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT(   QT_BOX_TYPE_SGBT, LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_SIGNIFICANT_BITS );
         ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT(   QT_BOX_TYPE_GAMA, LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_GAMMA_LEVEL );
+        ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT(   QT_BOX_TYPE_CLLI, LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_CONTENT_LIGHT_LEVEL_INFO );
+        ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT(   QT_BOX_TYPE_MDCV, LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_MASTERING_DISPLAY_COLOR_VOLUME );
         ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT(   QT_BOX_TYPE_CHAN, LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_CHANNEL_LAYOUT );
         ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT(   QT_BOX_TYPE_GLBL, LSMASH_CODEC_SPECIFIC_DATA_TYPE_CODEC_GLOBAL_HEADER );
         ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT( LSMASH_BOX_TYPE_UNSPECIFIED, LSMASH_CODEC_SPECIFIC_DATA_TYPE_UNKNOWN );
@@ -2541,6 +2591,36 @@ lsmash_summary_t *isom_create_video_summary_from_description( isom_sample_entry_
                     lsmash_destroy_codec_specific_data( specific );
                     goto fail;
                 }
+            }
+            else if( lsmash_check_box_type_identical( box->type, QT_BOX_TYPE_CLLI ) )
+            {
+                specific = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_CONTENT_LIGHT_LEVEL_INFO,
+                                                              LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+                if( !specific )
+                    goto fail;
+                isom_clli_t *clli = (isom_clli_t *)box;
+                lsmash_qt_content_light_level_info_t *data = (lsmash_qt_content_light_level_info_t *)specific->data.structured;
+                data->max_content_light_level = clli->max_content_light_level;
+                data->max_pic_average_light_level = clli->max_pic_average_light_level;
+            }
+            else if( lsmash_check_box_type_identical( box->type, QT_BOX_TYPE_MDCV ) )
+            {
+                specific = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_MASTERING_DISPLAY_COLOR_VOLUME,
+                                                              LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+                if( !specific )
+                    goto fail;
+                isom_mdcv_t *mdcv = (isom_mdcv_t *)box;
+                lsmash_qt_mastering_display_color_volume_t *data = (lsmash_qt_mastering_display_color_volume_t *)specific->data.structured;
+                data->display_primaries_g_x           = mdcv->display_primaries_g_x;
+                data->display_primaries_g_y           = mdcv->display_primaries_g_y;
+                data->display_primaries_b_x           = mdcv->display_primaries_b_x;
+                data->display_primaries_b_y           = mdcv->display_primaries_b_y;
+                data->display_primaries_r_x           = mdcv->display_primaries_r_x;
+                data->display_primaries_r_y           = mdcv->display_primaries_r_y;
+                data->white_point_x                   = mdcv->white_point_x;
+                data->white_point_y                   = mdcv->white_point_y;
+                data->max_display_mastering_luminance = mdcv->max_display_mastering_luminance;
+                data->min_display_mastering_luminance = mdcv->min_display_mastering_luminance;
             }
             else
                 continue;
