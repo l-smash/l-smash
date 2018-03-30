@@ -1016,6 +1016,21 @@ skip_sei_message:
         }
         lsmash_bits_get_align( bits );
         rbsp_pos += payloadSize;
+        if( rbsp_pos > rbsp_size )
+        {
+            rbsp_pos = rbsp_size;
+            if( *(rbsp_start + rbsp_pos) != 0x80 )
+            {
+                lsmash_log( NULL, LSMASH_LOG_ERROR, "Invalid payloadSize is there within H.264/AVC sei_message().\n" );
+                return LSMASH_ERR_INVALID_DATA;
+            }
+            else
+            {
+                /* The last payloadSize is invalid but it probably can do recovery, so just log warning and break loop here. */
+                lsmash_log( NULL, LSMASH_LOG_WARNING, "Invalid payloadSize is there within H.264/AVC sei_message().\n" );
+                break;  /* redundant but for readability */
+            }
+        }
     } while( *(rbsp_start + rbsp_pos) != 0x80 );        /* All SEI messages are byte aligned at their end.
                                                          * Therefore, 0x80 shall be rbsp_trailing_bits(). */
     lsmash_bits_empty( bits );
