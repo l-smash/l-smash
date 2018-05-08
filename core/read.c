@@ -2456,6 +2456,66 @@ static int isom_read_mfro( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     return isom_read_leaf_box_common_last_process( file, box, level, mfro );
 }
 
+static int isom_read_senc( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
+{
+    int is_trak = lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAK );
+    int is_traf = lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAF );
+    if( (!is_trak && !is_traf)
+     || ( is_trak &&  is_traf)
+     || (is_trak && LSMASH_IS_EXISTING_BOX( ((isom_trak_t *)parent)->senc ))
+     || (is_traf && LSMASH_IS_EXISTING_BOX( ((isom_traf_t *)parent)->senc )) )
+        return isom_read_unknown_box( file, box, parent, level );
+    ADD_BOX( senc, void );
+    isom_box_common_copy( senc, box );  /* fetch flags */
+    senc->sample_count = lsmash_bs_get_be32( bs );
+    for( uint32_t i = 0; i < senc->sample_count; i++ )
+    {
+        uint8_t Per_Sample_IV_Size = 0; /** TODO **/
+        cenc_sample_aux_data_format_t *csadf = lsmash_malloc( sizeof(cenc_sample_aux_data_format_t) );
+        if( !csadf )
+            return LSMASH_ERR_MEMORY_ALLOC;
+        if( lsmash_list_add_entry( senc->list, csadf ) < 0 )
+        {
+            lsmash_free( csadf );
+            return LSMASH_ERR_MEMORY_ALLOC;
+        }
+        if( Per_Sample_IV_Size == 8 )
+        {
+            uint64_t iv = lsmash_bs_get_be64( bs );
+            LSMASH_SET_BE64( csadf->InitializationVector, iv );
+        }
+        else if( Per_Sample_IV_Size == 16 )
+        {
+            uint64_t iv_hi = lsmash_bs_get_be64( bs );
+            uint64_t iv_lo = lsmash_bs_get_be64( bs );
+            LSMASH_SET_BE64( &csadf->InitializationVector[0], iv_hi );
+            LSMASH_SET_BE64( &csadf->InitializationVector[8], iv_lo );
+        }
+        else
+        {
+            lsmash_bs_skip_bytes( bs, Per_Sample_IV_Size );
+        }
+        if( !(senc->flags & ISOM_SENC_FLAGS_USE_SUBSAMPLE_ENCRYPTION) )
+            continue;
+        /* Subsample encryption */
+        csadf->subsample_count = lsmash_bs_get_be16( bs );
+        for( uint32_t i = 0; i < csadf->subsample_count; i++ )
+        {
+            cenc_subsample_aux_info_t *cssai = lsmash_malloc( sizeof(cenc_subsample_aux_info_t) );
+            if( !cssai )
+                return LSMASH_ERR_MEMORY_ALLOC;
+            if( lsmash_list_add_entry( csadf->list, cssai ) < 0 )
+            {
+                lsmash_free( csadf );
+                return LSMASH_ERR_MEMORY_ALLOC;
+            }
+            BytesOfClearData     = lsmash_bs_get_be16( bs );
+            BytesOfProtectedData = lsmash_bs_get_be32( bs );
+        }
+    }
+    return isom_read_leaf_box_common_last_process( file, box, level, senc );
+}
+
 static void isom_read_skip_extra_bytes( lsmash_bs_t *bs, uint64_t size )
 {
     if( !bs->unseekable )

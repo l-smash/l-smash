@@ -668,7 +668,8 @@ typedef struct
 /* Sample Entry */
 #define ISOM_SAMPLE_ENTRY           \
     ISOM_BASEBOX_COMMON;            \
-    uint8_t reserved[6];            \
+    lsmash_entry_list_t sinf_list;  \   /* Protection Scheme Information Box List */
+    uint8_t  reserved[6];           \
     uint16_t data_reference_index
 
 typedef struct
@@ -719,7 +720,7 @@ typedef struct
     isom_qt_color_table_t color_table;  /* a list of preferred colors for displaying the movie on devices that support only 256 colors */
 } isom_visual_entry_t;
 
-/* Format Box
+/* QTFF: Format Box / ISOBMFF: Original Format Box
  * This box shows the data format of the stored sound media.
  * ISO base media file format also defines the same four-character-code for the type field,
  * however, that is used to indicate original sample description of the media when a protected sample entry is used. */
@@ -1764,6 +1765,7 @@ typedef struct
     isom_sdtp_t         *sdtp;          /* Independent and Disposable Samples Box (available under Protected Interoperable File Format) */
     lsmash_entry_list_t  sgpd_list;     /* Sample Group Description Boxes (available under ISO Base Media version 6 or later) */
     lsmash_entry_list_t  sbgp_list;     /* Sample To Group Boxes */
+    isom_senc_t         *senc;          /* Sample Encryption Box */
 
         isom_cache_t *cache;            /* taken over from corresponding 'trak' */
 } isom_traf_t;
@@ -1773,6 +1775,7 @@ typedef struct
 {
     ISOM_BASEBOX_COMMON;
     isom_mfhd_t         *mfhd;          /* Movie Fragment Header Box */
+    lsmash_entry_list_t  pssh_list;     /* Protection System Specific Header Box List */
     lsmash_entry_list_t  traf_list;     /* Track Fragment Box List */
 } isom_moof_t;
 
@@ -1861,6 +1864,7 @@ typedef struct
     isom_mdia_t *mdia;          /* Media Box */
     isom_udta_t *udta;          /* User Data Box */
     isom_meta_t *meta;          /* Meta Box */
+    isom_senc_t *senc;          /* Sample Encryption Box */
 
         isom_cache_t *cache;
         uint32_t      related_track_ID;
@@ -1873,6 +1877,7 @@ typedef struct
     ISOM_BASEBOX_COMMON;
     isom_mvhd_t         *mvhd;          /* Movie Header Box */
     isom_iods_t         *iods;          /* MP4: Object Descriptor Box */
+    lsmash_entry_list_t  pssh_list;     /* Protection System Specific Header Box List */
     lsmash_entry_list_t  trak_list;     /* Track Box List */
     isom_udta_t         *udta;          /* User Data Box */
     isom_ctab_t         *ctab;          /* ISOM: null / QTFF: Color Table Box */
@@ -2058,6 +2063,206 @@ struct lsmash_root_tag
     ISOM_FULLBOX_COMMON;                    /* The 'file' field contains the address of the current active file. */
     lsmash_entry_list_t file_abstract_list; /* the list of all files the ROOT contains */
 };
+
+/** Protected Streams **/
+/* the protection or restriction scheme types */
+typedef enum
+{
+    /* protection scheme
+     *   encryption algorithm and information identified by four character code in Scheme Type Box ('schm')
+     *    ____________________________________________________________
+     *   |              | Full sample encryption | Pattern encryption |
+     *   |--------------|------------------------|--------------------|
+     *   | AES-CTR mode |         'cenc'         |      'cens'        |
+     *   |--------------|------------------------|--------------------|
+     *   | AES-CBC mode |         'cbc1'         |      'cbcs'        |
+     *   |______________|________________________|____________________|
+     */
+    ISOM_PROTECTION_SCHEME_CBC1 = LSMASH_4CC( 'c', 'b', 'c', '1' ), /* AES-CBC scheme
+                                                                     * Common Encryption: Optional support
+                                                                     *  - The version of the 'tenc' SHALL be 0.
+                                                                     *  - Encrypted video tracks using NAL Structured Video SHALL be protected using
+                                                                     *    Subsample encryption and SHALL NOT use pattern encryption. The fields
+                                                                     *    crypt_byte_block and skip_byte_block SHALL be 0.
+                                                                     *  - Other tracks SHALL be protected using full sample encryption.
+                                                                     *  - Constant IVs SHALL NOT be used; Per_Sample_IV_Size SHALL NOT be 0,
+                                                                     *    except for unencrypted sample groups.
+                                                                     *  - Per_Sample_IV_Size MAY be 16 and SHALL be a single value per track, or zero for
+                                                                     *    unencrypted samples.
+                                                                     *  - In Subsampled video tracks, the BytesOfProtectedData size SHALL be a multiple of 16
+                                                                     *    bytes to avoid partial cipher blocks in Subsamples. */
+    ISOM_PROTECTION_SCHEME_CBCS = LSMASH_4CC( 'c', 'b', 'c', 's' ), /* AES-CBC subsample pattern encryption scheme
+                                                                     * Common Encryption: Optional support
+                                                                     *  - The version of the 'tenc' SHALL be 1.
+                                                                     *  - Encrypted video tracks using NAL Structured Video SHALL be protected using
+                                                                     *    Subsample encryption, and SHALL use pattern encryption. As a result, the fields 
+                                                                     *    crypt_byte_block and skip_byte_block SHALL NOT be 0.
+                                                                     *  - Tracks other than video are protected using whole-block full-sample encryption,
+                                                                     *    skip_byte_block SHALL be 0.
+                                                                     *  - Constant IVs SHALL be used; default_Per_Sample_IV_Size and Per_Sample_IV_Size
+                                                                     *    SHALL be 0.
+                                                                     *  - Pattern Block length, i.e. crypt_byte_block + skip_byte_block SHOULD equal 10.
+                                                                     *  - The first complete byte of video slice data (following the video slice header)
+                                                                     *    SHALL begin a single Subsample protected byte range indicated by the start of
+                                                                     *    BytesOfProtectedData, which extends to the end of the video NAL. */
+    ISOM_PROTECTION_SCHEME_CENC = LSMASH_4CC( 'c', 'e', 'n', 'c' ), /* AES-CTR scheme
+                                                                     * Common Encryption: Mandatory support
+                                                                     *  - The version of the 'tenc' SHALL be 0.
+                                                                     *  - Encrypted video tracks using NAL Structured Video SHALL be protected using
+                                                                     *    Subsample encryption and SHALL NOT use pattern encryption. The fields
+                                                                     *    crypt_byte_block and skip_byte_block SHALL be 0.
+                                                                     *  - Non-video encrypted tracks SHALL be protected using full-sample encryption.
+                                                                     *  - Constant IVs SHALL NOT be used; Per_Sample_IV_Size SHALL NOT be 0,
+                                                                     *    except for unencrypted sample groups.
+                                                                     *  - For an isProtected flag of 0x1, counter values SHALL be unique per KID.
+                                                                     *  - default_Per_Sample_IV_Size and Per_Sample_IV_Size SHOULD be 8-bytes, and SHALL
+                                                                     *    be a single value per track, or zero for unencrypted samples.
+                                                                     *  - The BytesOfProtectedData size SHOULD be a multiple of 16 bytes to avoid partial
+                                                                     *    cipher blocks in Subsamples. */
+    ISOM_PROTECTION_SCHEME_CENS = LSMASH_4CC( 'c', 'e', 'n', 's' ), /* AES-CTR subsample pattern encryption scheme
+                                                                     * Common Encryption: Optional support
+                                                                     *  - The version of the 'tenc' SHALL be 1.
+                                                                     *  - Encrypted video tracks using NAL Structured Video SHALL be protected using
+                                                                     *    Subsample encryption and SHALL use pattern encryption. As a result, the fields
+                                                                     *    crypt_byte_block and skip_byte_block SHALL NOT be 0.
+                                                                     *  - Tracks other than video are protected using whole-block full-sample encryption
+                                                                     *    and skip_byte_block SHALL be 0.
+                                                                     *  - Constant IVs SHALL NOT be used; Per_Sample_IV_Size SHALL NOT be 0 except for
+                                                                     *    unencrypted sample groups.
+                                                                     *  - default_Per_Sample_IV_Size and Per_Sample_IV_Size SHOULD be 8-bytes.
+                                                                     *  - The BytesOfProtectedData size SHALL be a multiple of 16 bytes to avoid partial
+                                                                     *    cipher blocks in Subsamples.
+                                                                     *  - For an isProtected flag of 0x1, counter values SHALL be unique per KID. */
+} isom_protection_scheme_type;
+
+/* Scheme Type Box */
+typedef struct
+{
+    ISOM_FULLBOX_COMMON;
+    uint32_t scheme_type;       /* the code defining the protection or restriction scheme */
+    uint32_t scheme_version;    /* the version of the scheme (used to create the content)
+                                 *  - For protection schemes, this field shall be set to 0x00010000 (Major version 1, Minor version 0). */
+    /* if( flags & 0x000001 )
+     * { */
+           uint8_t  *scheme_uri;
+           uint32_t  scheme_uri_length;
+    /* } */
+} isom_schm_t;
+
+/* Scheme Information Box */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    lsmash_entry_list_t scheme_specific_data_list;
+} isom_schi_t;
+
+/* Protection Scheme Information Box */
+typedef struct
+{
+    ISOM_BASEBOX_COMMON;
+    isom_frma_t *frma;  /* Original Format Box */
+    isom_schm_t *schm;  /* Scheme Type Box */
+    isom_schi_t *schi;  /* Scheme Information Box */
+} isom_sinf_t;
+
+/** Common Encryption (ISO/IEC 23001-7)
+ * block
+ *   16-byte extent of sample data that may be encrypted or decrypted by the AES-128 block cipher, in which case, a cipher block
+ * initialization vector
+ *   8-byte or 16-byte value used in combination with a key and a 16-byte block of content to create the first cipher block
+ *   in a chain and derive subsequent cipher blocks in a cipher block chain
+ * subsample
+ *   byte range within a sample consisting of an unprotected byte range followed by a protected byte range samples and subsamples
+ *   under that sample entry or mapped to that sample group
+ * constant IV
+ *   initialization vector specified in a sample entry or sample group description that applies to all
+ **/
+/* CencSampleEncryptionInformationGroupEntry */
+typedef struct
+{
+    uint8_t      reserved;              /* = 0 */
+    unsigned int crypt_byte_block : 4;  /* the count of the encrypted Blocks in the protection pattern, where each Block is of size 16-bytes */
+    unsigned int skip_byte_block  : 4;  /* the count of the unencrypted Blocks in the protection pattern */
+    uint8_t      isProtected;           /* the flag which indicates the encryption state of the samples in the sample group
+                                         *  - 0x0: not protected
+                                         *  - 0x1: protected */
+    uint8_t      Per_Sample_IV_Size;    /* the Initialization Vector size in bytes for samples in the sample group
+                                         *  - 0 if the isProtected flag is 0x0 (Not Protected) or Constant IVs are in use.
+                                         *  - 8 specifies 64-bit Initialization Vectors.
+                                         *  - 16 specifies 128-bit Initialization Vectors. */
+    uint8_t      KID[16];               /* the key identifier used for samples in the sample group */
+    /* if( isProtected == 1 && Per_Sample_IV_Size == 0 )
+     * { */
+           uint8_t constant_IV_size;    /* the size of a possible Initialization Vector used for all samples associated with this group
+                                         *  - 8 specifies 64-bit Initialization Vectors.
+                                         *  - 16 specifies 128-bit Initialization Vectors. */
+           uint8_t constant_IV[16];     /* the Initialization Vector used for all samples associated with this group */
+    /* } */
+} isom_seig_group_t;
+
+/* CencSampleAuxiliaryDataFormat */
+typedef struct
+{
+    uint16_t BytesOfClearData;      /* the number of bytes of clear data at the beginning of this Subsample */
+    uint32_t BytesOfProtectedData;  /* the number of bytes of protected data following the clear data in this Subsample */
+} cenc_subsample_aux_info_t;
+
+typedef struct
+{
+    uint8_t  InitializationVector[16];  /* the Initialization Vector for the sample, unless a constant_IV is present in the 'tenc' */
+    uint16_t subsample_count;           /* the count of Subsamples encryption entries for this sample */
+    lsmash_entry_list_t *list;          /* entry_count corresponds to subsample_count. => cenc_subsample_aux_info_t */
+} cenc_sample_aux_data_format_t;
+
+/* Sample Encryption Box */
+typedef enum
+{
+    ISOM_SENC_FLAGS_USE_SUBSAMPLE_ENCRYPTION = 0x000002,    /* UseSubSampleEncryption flag */
+} isom_senc_flags_code;
+
+typedef struct
+{
+    ISOM_FULLBOX_COMMON;        /* The 'flags' field could have flags defined in isom_senc_flags_code. */
+    uint32_t sample_count;      /* the number of protected samples in the containing track or track fragment */
+    lsmash_entry_list_t *list;  /* entry_count corresponds to sample_count. => cenc_sample_aux_data_format_t
+                                 * When UseSubSampleEncryption flag is set, Subsample mapping data follows each InitializationVector. */
+} isom_senc_t;
+
+/* Protection System Specific Header Box
+ * This box contains information needed by a Content Protection System to play back the content. */
+typedef struct
+{
+    ISOM_FULLBOX_COMMON;
+    uint8_t SystemID[16];   /* UUID that uniquely identifies the content protection system that this header belongs to */
+    /* if( version > 0 )
+     * { */
+           uint32_t KID_count;  /* the number of KID entries in the following table
+                                 * The value MAY be zero. */
+           uint8_t *KID[16];    /* a key identifier that the Data field applies to
+                                 * If not set, then the Data array SHALL apply to all KIDs in the movie or movie fragment containing this box. */
+    /* } */
+    uint32_t DataSize;      /* the size in bytes of the Data member */
+    uint8_t *Data;          /* the content protection system specific data */
+} isom_pssh_t;
+
+/* Track Encryption box
+ * The Track Encryption Box contains default values for the isProtected flag, Per_Sample_IV_Size, and KID for the entire track. */
+typedef struct
+{
+    ISOM_FULLBOX_COMMON;    /* The value of the version field SHALL be zero unless pattern-based encryption is in use, whereupon it SHALL be 1. */
+    uint8_t reserved;       /* = 0 */
+    unsigned int default_crypt_byte_block : 4;
+    unsigned int default_skip_byte_block  : 4;
+    uint8_t default_isProtected;
+    uint8_t default_Per_Sample_IV_Size;
+    uint8_t default_KID;
+    /* if( default_isProtected == 1 && default_Per_Sample_IV_Size == 0 )
+     * { */
+           uint8_t default_constant_IV_size;    /* the size of a possible Initialization Vector used for all samples associated with this group */
+           uint8_t default_constant_IV[16];     /* the Initialization Vector used for all samples associated with this group */
+    /* } */
+} isom_tenc_t;
+
 
 /** **/
 
