@@ -143,6 +143,8 @@ static int ac3_buffer_frame( uint8_t *buffer, lsmash_bs_t *bs )
     uint64_t remain_size = lsmash_bs_get_remaining_buffer_size( bs );
     if( remain_size < AC3_MAX_SYNCFRAME_LENGTH )
     {
+        if( bs->buffer.pos > AC3_MAX_SYNCFRAME_LENGTH * 1000 )
+            lsmash_bs_dispose_past_data( bs );
         int err = lsmash_bs_read( bs, bs->buffer.max_size );
         if( err < 0 )
             return err;
@@ -371,6 +373,8 @@ static int eac3_importer_get_next_accessunit_internal( importer_t *importer )
         uint64_t remain_size = lsmash_bs_get_remaining_buffer_size( bs );
         if( remain_size < EAC3_MAX_SYNCFRAME_LENGTH )
         {
+            if( bs->buffer.pos > EAC3_MAX_SYNCFRAME_LENGTH * 1000 )
+                lsmash_bs_dispose_past_data( bs );
             int err = lsmash_bs_read( bs, bs->buffer.max_size );
             if( err < 0 )
             {
