@@ -102,6 +102,8 @@ static int dts_importer_get_next_accessunit_internal( importer_t *importer )
         uint64_t remain_size = lsmash_bs_get_remaining_buffer_size( bs );
         if( remain_size < DTS_MAX_EXSS_SIZE )
         {
+            if( bs->buffer.pos > DTS_MAX_EXSS_SIZE * 100 )
+                lsmash_bs_dispose_past_data( bs );
             int err = lsmash_bs_read( bs, bs->buffer.max_size );
             if( err < 0 )
             {
