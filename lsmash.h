@@ -48,7 +48,7 @@ extern "C" {
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  2
 #define LSMASH_VERSION_MINOR 16
-#define LSMASH_VERSION_MICRO  0
+#define LSMASH_VERSION_MICRO  1
 
 #define LSMASH_VERSION_INT( a, b, c ) (((a) << 16) | ((b) << 8) | (c))
 

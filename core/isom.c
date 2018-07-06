@@ -1498,7 +1498,7 @@ int lsmash_get_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
         param->matrix[i]   = tkhd->matrix[i];
     param->display_width   = tkhd->width;
     param->display_height  = tkhd->height;
-    param->aperture_modes  = !!trak->tapt;
+    param->aperture_modes  = LSMASH_IS_EXISTING_BOX( trak->tapt );
     return 0;
 }
 
