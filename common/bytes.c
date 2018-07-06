@@ -202,7 +202,7 @@ int64_t lsmash_bs_read_seek( lsmash_bs_t *bs, int64_t offset, int whence )
     return ret;
 }
 
-static void bs_dispose_past_data( lsmash_bs_t *bs )
+void lsmash_bs_dispose_past_data( lsmash_bs_t *bs )
 {
     /* Move remainder bytes. */
     assert( bs->buffer.store >= bs->buffer.pos );
@@ -369,7 +369,7 @@ static void bs_fill_buffer( lsmash_bs_t *bs )
             return;
     }
     /* Read bytes from the stream to fill the buffer. */
-    bs_dispose_past_data( bs );
+    lsmash_bs_dispose_past_data( bs );
     while( bs->buffer.alloc > bs->buffer.store )
     {
         uint64_t invalid_buffer_size = bs->buffer.alloc - bs->buffer.store;

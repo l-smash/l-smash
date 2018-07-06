@@ -105,6 +105,7 @@ int lsmash_bs_set_empty_stream( lsmash_bs_t *bs, uint8_t *data, size_t size );
 void lsmash_bs_empty( lsmash_bs_t *bs );
 int64_t lsmash_bs_write_seek( lsmash_bs_t *bs, int64_t offset, int whence );
 int64_t lsmash_bs_read_seek( lsmash_bs_t *bs, int64_t offset, int whence );
+void lsmash_bs_dispose_past_data( lsmash_bs_t *bs );
 
 /*---- bytestream writer ----*/
 void lsmash_bs_put_byte( lsmash_bs_t *bs, uint8_t value );
