@@ -719,6 +719,7 @@ static void display_codec_name( lsmash_codec_type_t codec_type, uint32_t track_n
     DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_AVC1_VIDEO, H.264 Advanced Video Coding );
     DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_HVC1_VIDEO, H.265 High Efficiency Video Coding );
     DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_VC_1_VIDEO, SMPTE VC-1 Advanced Profile );
+    DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_AV01_VIDEO, AOM AV1 );
     DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_MP4A_AUDIO, MPEG-4 Audio );
     DISPLAY_CODEC_NAME(   QT_CODEC_TYPE_MP4A_AUDIO, MPEG-4 Audio );
     DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_AC_3_AUDIO, AC-3 );
@@ -790,6 +791,13 @@ static int open_input_files( muxer_t *muxer )
             {
                 if( !opt->isom && opt->qtff )
                     return ERROR_MSG( "the input seems VC-1, at present available only for ISO Base Media file format.\n" );
+            }
+            if( lsmash_check_codec_type_identical( codec_type, ISOM_CODEC_TYPE_AV01_VIDEO ) )
+            {
+                if( opt->isom )
+                    add_brand( opt, ISOM_BRAND_TYPE_AV01 );
+                else if( opt->qtff )
+                    return ERROR_MSG( "the input seems AV1, at present available only for ISO Base Media file format.\n" );
             }
             else if( lsmash_check_codec_type_identical( codec_type, ISOM_CODEC_TYPE_MP4A_AUDIO )
                   || lsmash_check_codec_type_identical( codec_type,   QT_CODEC_TYPE_MP4A_AUDIO ) )

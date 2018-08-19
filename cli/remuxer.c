@@ -849,6 +849,7 @@ static void replace_with_valid_brand( remuxer_t *remuxer )
             ISOM_BRAND_TYPE_M4A ,
             ISOM_BRAND_TYPE_M4B ,
             ISOM_BRAND_TYPE_M4V ,
+            ISOM_BRAND_TYPE_AV01,
             ISOM_BRAND_TYPE_AVC1,
             ISOM_BRAND_TYPE_DBY1,
             ISOM_BRAND_TYPE_ISO2,
