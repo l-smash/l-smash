@@ -777,6 +777,8 @@ DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_MVC2_VIDEO,  LSMASH_4CC( 'm', 'v', 'c', 
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_S263_VIDEO,  LSMASH_4CC( 's', '2', '6', '3' ) );    /* ITU H.263 video (3GPP format) */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_SVC1_VIDEO,  LSMASH_4CC( 's', 'v', 'c', '1' ) );    /* Scalable Video Coding */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_VC_1_VIDEO,  LSMASH_4CC( 'v', 'c', '-', '1' ) );    /* SMPTE VC-1 */
+DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_VP08_VIDEO,  LSMASH_4CC( 'v', 'p', '0', '8' ) );    /* VP8 video */
+DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_VP09_VIDEO,  LSMASH_4CC( 'v', 'p', '0', '9' ) );    /* VP9 video */
 
 DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_2VUY_VIDEO,    LSMASH_4CC( '2', 'v', 'u', 'y' ) );    /* Uncompressed Y'CbCr, 8-bit-per-component 4:2:2
                                                                                              *      |Cb(8)|Y'0(8)|Cr(8)|Y'1(8)| */

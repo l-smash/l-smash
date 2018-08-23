@@ -336,6 +336,7 @@ SRC_IMPORTER="  \
     dts_imp.c   \
     importer.c  \
     isobm_imp.c \
+    ivf_imp.c   \
     mp3_imp.c   \
     nalu_imp.c  \
     vc1_imp.c   \
