@@ -737,6 +737,11 @@ static void isom_remove_qt_text_description( isom_sample_entry_t *description )
     isom_remove_box_in_predefined_list( text );
 }
 
+static void isom_remove_qt_clcp_description( isom_sample_entry_t *description )
+{
+    isom_remove_box_in_predefined_list( description );
+}
+
 static void isom_remove_mp4s_description( isom_sample_entry_t *description )
 {
     isom_remove_box_in_predefined_list( description );
@@ -905,6 +910,8 @@ void isom_remove_sample_description( isom_sample_entry_t *sample )
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_XML_META,  isom_remove_metadata_description );
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_TX3G_TEXT, isom_remove_tx3g_description );
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_TEXT_TEXT, isom_remove_qt_text_description );
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_C608_CAPTION, isom_remove_qt_clcp_description );
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( QT_CODEC_TYPE_C708_CAPTION, isom_remove_qt_clcp_description );
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_MP4S_SYSTEM, isom_remove_mp4s_description );
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( LSMASH_CODEC_TYPE_UNSPECIFIED, NULL );
     }
@@ -1459,6 +1466,16 @@ isom_qt_text_entry_t *isom_add_qt_text_description( isom_stsd_t *stsd )
         return text;
     isom_init_box_common( text, stsd, QT_CODEC_TYPE_TEXT_TEXT, LSMASH_BOX_PRECEDENCE_HM, isom_remove_qt_text_description );
     return isom_add_sample_description_entry( stsd, text );
+}
+
+isom_qt_clcp_entry_t *isom_add_qt_clcp_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_type )
+{
+    assert( LSMASH_IS_EXISTING_BOX( stsd ) );
+    isom_qt_clcp_entry_t *clcp = ALLOCATE_BOX( qt_clcp_entry );
+    if( LSMASH_IS_NON_EXISTING_BOX( clcp ) )
+        return clcp;
+    isom_init_box_common( clcp, stsd, sample_type, LSMASH_BOX_PRECEDENCE_HM, isom_remove_qt_clcp_description );
+    return isom_add_sample_description_entry( stsd, clcp );
 }
 
 isom_tx3g_entry_t *isom_add_tx3g_description( isom_stsd_t *stsd )

@@ -678,6 +678,17 @@ static int isom_write_metadata_description( lsmash_bs_t *bs, lsmash_entry_t *ent
 }
 #endif
 
+static int isom_write_qt_clcp_description( lsmash_bs_t *bs, isom_box_t *box )
+{
+    isom_qt_clcp_entry_t *data = (isom_qt_clcp_entry_t *)box;
+    if( LSMASH_IS_NON_EXISTING_BOX( data ) )
+        return LSMASH_ERR_NAMELESS;
+    isom_bs_put_box_common( bs, data );
+    lsmash_bs_put_bytes( bs, 6, data->reserved );
+    lsmash_bs_put_be16( bs, data->data_reference_index );
+    return 0;
+}
+
 static int isom_write_qt_text_description( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_qt_text_entry_t *data = (isom_qt_text_entry_t *)box;
@@ -1605,6 +1616,8 @@ void isom_set_box_writer( isom_box_t *box )
             else if( lsmash_check_box_type_identical( box->type, ISOM_CODEC_TYPE_TX3G_TEXT ) )
                 box->write = isom_write_tx3g_description;
         }
+        else if( media_type == ISOM_MEDIA_HANDLER_TYPE_CLOSED_CAPTIONING_TRACK )
+            box->write = isom_write_qt_clcp_description;
         if( box->write )
             return;
     }

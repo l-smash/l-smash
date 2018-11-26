@@ -880,6 +880,12 @@ typedef struct
     ISOM_METADATA_SAMPLE_ENTRY;
 } isom_metadata_entry_t;
 
+/* QuickTime Closed Caption Sample Description */
+typedef struct
+{
+    ISOM_SAMPLE_ENTRY;
+} isom_qt_clcp_entry_t;
+
 /* QuickTime Text Sample Description */
 typedef struct
 {
@@ -2580,6 +2586,7 @@ isom_stsd_t *isom_add_stsd( isom_stbl_t *stbl );
 isom_visual_entry_t *isom_add_visual_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_type );
 isom_audio_entry_t *isom_add_audio_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_type );
 isom_hint_entry_t *isom_add_hint_description(isom_stsd_t *stsd, lsmash_codec_type_t sample_type);
+isom_qt_clcp_entry_t *isom_add_qt_clcp_description( isom_stsd_t *stsd, lsmash_codec_type_t sample_type );
 isom_qt_text_entry_t *isom_add_qt_text_description( isom_stsd_t *stsd );
 isom_tx3g_entry_t *isom_add_tx3g_description( isom_stsd_t *stsd );
 isom_esds_t *isom_add_esds( void *parent_box );

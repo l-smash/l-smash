@@ -114,6 +114,9 @@ lsmash_summary_t *lsmash_create_summary( lsmash_summary_type summary_type )
         case LSMASH_SUMMARY_TYPE_HINT:
             summary_size = sizeof(lsmash_hint_summary_t);
             break;
+        case LSMASH_SUMMARY_TYPE_GENERIC:
+            summary_size = sizeof(lsmash_summary_t);
+            break;
         default :
             /* 'summary_size = sizeof(lsmash_summary_t);' is a dead assignment here. */
             return NULL;
@@ -192,6 +195,8 @@ lsmash_summary_t *lsmash_get_summary( lsmash_root_t *root, uint32_t track_ID, ui
             return isom_create_video_summary_from_description( sample_entry );
         else if( LSMASH_IS_EXISTING_BOX( minf->smhd ) )
             return isom_create_audio_summary_from_description( sample_entry );
+        else if( LSMASH_IS_EXISTING_BOX( minf->gmhd ) )
+            return isom_create_generic_summary_from_description( sample_entry );
         else
             return NULL;
     }

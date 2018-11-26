@@ -985,6 +985,10 @@ static void *isom_sample_description_alloc( lsmash_codec_type_t sample_type, iso
         else if( lsmash_check_codec_type_identical( sample_type, QT_CODEC_TYPE_TEXT_TEXT ) )
             sample_desc = ALLOCATE_BOX( qt_text_entry );
     }
+    else if( media_type == ISOM_MEDIA_HANDLER_TYPE_CLOSED_CAPTIONING_TRACK )
+    {
+        sample_desc = ALLOCATE_BOX( qt_clcp_entry );
+    }
     else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_MP4S_SYSTEM ) )
         sample_desc = ALLOCATE_BOX( mp4s_entry );
     if( !sample_desc )
@@ -1370,6 +1374,21 @@ static int isom_read_srat( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     lsmash_bs_t *bs = file->bs;
     srat->sampling_rate = lsmash_bs_get_be32( bs );
     return isom_read_leaf_box_common_last_process( file, box, level, srat );
+}
+
+static int isom_read_qt_clcp_description( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) )
+        return isom_read_unknown_box( file, box, parent, level );
+    isom_qt_clcp_entry_t *clcp = (isom_qt_clcp_entry_t *)isom_add_description( box->type, (isom_stsd_t *)parent );
+    if( LSMASH_IS_NON_EXISTING_BOX( clcp ) )
+        return LSMASH_ERR_MEMORY_ALLOC;
+    lsmash_bs_t *bs = file->bs;
+    for( int i = 0; i < 6; i++ )
+        clcp->reserved[i]        = lsmash_bs_get_byte( bs );
+    clcp->data_reference_index   = lsmash_bs_get_be16( bs );
+    isom_box_common_copy( clcp, box );
+    return isom_read_leaf_box_common_last_process( file, box, level, clcp );
 }
 
 static int isom_read_qt_text_description( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
@@ -2572,6 +2591,8 @@ int isom_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uin
             reader_func = isom_read_audio_description;
         else if( media_type == ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK )
             reader_func = isom_read_text_description;
+        else if( media_type == ISOM_MEDIA_HANDLER_TYPE_CLOSED_CAPTIONING_TRACK )
+            reader_func = isom_read_qt_clcp_description;
         else
             reader_func = isom_read_other_description;
         /* Determine either of file formats the sample type is defined in; ISOBMFF or QTFF. */
@@ -2719,6 +2740,8 @@ int isom_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uin
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_GSM49_AUDIO,   lsmash_form_qtff_box_type );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_NOT_SPECIFIED, lsmash_form_qtff_box_type );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_TEXT_TEXT, lsmash_form_qtff_box_type );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_C608_CAPTION, lsmash_form_qtff_box_type );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( QT_CODEC_TYPE_C708_CAPTION, lsmash_form_qtff_box_type );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_TX3G_TEXT, lsmash_form_iso_box_type );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_MP4S_SYSTEM, lsmash_form_iso_box_type );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( LSMASH_CODEC_TYPE_RAW, lsmash_form_qtff_box_type );
