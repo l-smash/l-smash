@@ -70,7 +70,7 @@ typedef struct
 } lsmash_class_t;
 
 /*---- type ----*/
-double lsmash_fixed2double( uint64_t value, int frac_width );
+double lsmash_fixed2double( int64_t value, int frac_width );
 float lsmash_int2float32( uint32_t value );
 double lsmash_int2float64( uint64_t value );
 

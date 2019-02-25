@@ -31,7 +31,7 @@
 #endif
 
 /*---- type ----*/
-double lsmash_fixed2double( uint64_t value, int frac_width )
+double lsmash_fixed2double( int64_t value, int frac_width )
 {
     return value / (double)(1ULL << frac_width);
 }
