@@ -283,8 +283,16 @@ static int isom_initialize_structured_codec_specific_data( lsmash_codec_specific
             specific->size     = sizeof(lsmash_qt_audio_channel_layout_t);
             specific->destruct = lsmash_free;
             break;
-        case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_RTP_HINT_COMMON:
+        case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_RTP_HINT_COMMON :
             specific->size     = sizeof(lsmash_isom_rtp_reception_hint_t);
+            specific->destruct = lsmash_free;
+            break;
+        case LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_CONTENT_LIGHT_LEVEL_INFO :
+            specific->size     = sizeof(lsmash_qt_content_light_level_info_t);
+            specific->destruct = lsmash_free;
+            break;
+        case LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_MASTERING_DISPLAY_COLOR_VOLUME :
+            specific->size     = sizeof(lsmash_qt_mastering_display_color_volume_t);
             specific->destruct = lsmash_free;
             break;
         default :
