@@ -49,9 +49,85 @@ typedef struct
     uint8_t first_frame_in_temporal_unit;
     uint8_t frame_type;
     uint8_t show_frame;
+    uint8_t showable_frame;
     uint8_t show_existing_frame;
     uint8_t frame_to_show_map_idx;
     //uint8_t with_sequence_header;
+
+    uint8_t use_superres;
+    uint8_t coded_denom;
+    uint8_t SuperresDenom;
+
+    uint16_t UpscaledWidth;
+    uint16_t UpscaledHeight;
+
+    uint16_t render_width_minus_1;
+    uint16_t render_height_minus_1;
+    uint16_t RenderWidth;
+    uint16_t RenderHeight;
+
+    uint16_t frame_width_minus_1;
+    uint16_t frame_height_minus_1;
+    uint16_t FrameWidth;
+    uint16_t FrameHeight;
+
+    uint8_t render_and_frame_size_different;
+
+    int MiCols;
+    int MiRows;
+
+    int NumTiles;
+
+    uint8_t frame_size_override_flag;
+    uint8_t curFrameHint;
+    uint8_t earliestOrderHint;
+    uint8_t latestOrderHint;
+    uint8_t goldOrderHint;
+    uint8_t OrderHint;
+    uint8_t lastOrderHint;
+
+    int current_frame_id;
+    int order_hint;
+
+#define NUM_REF_FRAMES_ARRAY 8 // see below for NUM_REF_FRAMES
+    int OrderHints[NUM_REF_FRAMES_ARRAY];
+    int shiftedOrderHints[NUM_REF_FRAMES_ARRAY];
+    int usedFrame[NUM_REF_FRAMES_ARRAY];
+    int RefOrderHint[NUM_REF_FRAMES_ARRAY];
+    int RefValid[NUM_REF_FRAMES_ARRAY];
+    int ref_order_hint[NUM_REF_FRAMES_ARRAY];
+
+    int ref_frame_idx[NUM_REF_FRAMES_ARRAY];
+    uint8_t last_frame_idx;
+    uint8_t gold_frame_idx;
+
+    uint8_t is_filter_switchable;
+    uint8_t interpolation_filter;
+    uint8_t force_integer_mv;
+    uint8_t disable_cdf_update;
+
+    int TileColsLog2;
+    int TileCols;
+    int TileRowsLog2;
+    int TileRows;
+
+    uint8_t FrameIsIntra;
+    int frame_presentation_time;
+    uint8_t error_resilient_mode;
+    uint8_t buffer_removal_time_present_flag;
+    uint8_t allow_screen_content_tools;
+
+    int primary_ref_frame;
+    uint8_t refresh_frame_flags;
+    uint8_t frame_refs_short_signaling;
+    uint8_t allow_intrabc;
+    uint8_t allow_high_precision_mv;
+    uint8_t is_motion_mode_switchable;
+    uint8_t use_ref_frame_mvs;
+    uint8_t tile_start_and_end_present_flag;
+
+    uint16_t delta_frame_id_minus_1;
+    uint8_t disable_frame_end_update_cdf;
 } av1_frame_t;
 
 typedef struct
@@ -89,6 +165,23 @@ typedef struct
 
 typedef struct
 {
+    uint8_t high_bitdepth;
+    uint8_t twelve_bit;
+    uint8_t mono_chrome;
+    uint8_t subsampling_x;
+    uint8_t subsampling_y;
+    uint8_t chroma_sample_position;
+    uint8_t separate_uv_delta_q;
+
+    uint8_t color_description_present_flag;
+    uint16_t color_primaries;
+    uint16_t transfer_characteristics;
+    uint16_t matrix_coefficients;
+    uint8_t color_range;
+} av1_color_config_t;
+
+typedef struct
+{
     uint8_t  seq_profile;
     uint8_t  still_picture;
     uint8_t  reduced_still_picture_header;
@@ -107,6 +200,30 @@ typedef struct
     uint8_t  use_128x128_superblock;
     uint8_t  enable_filter_intra;
     uint8_t  enable_intra_edge_filter;
+
+    av1_color_config_t cc;
+    uint32_t num_units_in_display_tick;
+    uint8_t enable_warped_motion;
+    uint8_t enable_dual_filter;
+    uint8_t enable_order_hint;
+    uint8_t enable_int_comp;
+    uint8_t enable_ref_frame_mvs;
+    uint8_t seq_force_screen_content_tools;
+    uint8_t seq_force_integer_mv;
+    uint8_t seq_choose_screen_content_tools;
+    uint8_t seq_choose_integer_mv;
+    uint8_t enable_interintra_compound;
+    uint8_t enable_restoration;
+    uint8_t enable_cdef;
+    uint8_t enable_superres;
+    uint8_t enable_masked_compound;
+
+    uint8_t order_hint_bits_minus_1;
+
+    uint16_t frame_width_bits_minus_1;
+    uint16_t frame_height_bits_minus_1;
+
+    int OrderHintBits;
 } av1_sequence_header_t;
 
 typedef struct
@@ -116,6 +233,15 @@ typedef struct
     /* */
     uint16_t MaxRenderWidth;
     uint16_t MaxRenderHeight;
+
+    lsmash_av1_specific_parameters_t param;
+
+    int RefValid[NUM_REF_FRAMES_ARRAY];
+    int RefFrameId[NUM_REF_FRAMES_ARRAY];
+    uint16_t RefUpscaledWidth[NUM_REF_FRAMES_ARRAY];
+    uint16_t RefFrameHeight[NUM_REF_FRAMES_ARRAY];
+    uint16_t RefRenderWidth[NUM_REF_FRAMES_ARRAY];
+    uint16_t RefRenderHeight[NUM_REF_FRAMES_ARRAY];
 } av1_parser_t;
 
 enum
@@ -141,13 +267,23 @@ enum
     PRIMARY_REF_NONE            = 7,
 
     /* RefFrame[*] */
+    NONE_FRAME = 0,
     LAST_FRAME = 1,
+    LAST2_FRAME = 2,
+    LAST3_FRAME = 3,
+    GOLDEN_FRAME = 4,
+    BWDREF_FRAME = 5,
+    ALTREF2_FRAME = 6,
+    ALTREF_FRAME = 7,
 
     /* frame_type */
     KEY_FRAME        = 0,
     INTER_FRAME      = 1,
     INTRA_ONLY_FRAME = 2,
     SWITCH_FRAME     = 3,
+
+    /* filter */
+    SWITCHABLE = 3,
 };
 
 static inline void *av1_allocate_obu( size_t sz )

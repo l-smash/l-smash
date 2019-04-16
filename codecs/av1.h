@@ -49,8 +49,15 @@ typedef struct
 
 int av1_get_access_unit
 (
-    lsmash_bs_t                      *bs,
-    lsmash_sample_property_t         *prop,
+    lsmash_bs_t               *bs,
+    lsmash_sample_property_t  *prop,
+    lsmash_video_summary_t   **summary,
+    uint8_t                   *au_data,
+    uint32_t                   au_length,
+    av1_parser_t              *parser
+);
+
+uint8_t *lsmash_create_av1_specific_info(
     lsmash_av1_specific_parameters_t *param,
-    uint32_t                          au_length
+    uint32_t *data_length
 );
