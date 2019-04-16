@@ -1128,8 +1128,7 @@ static int av1_parse_tile_info
         int tileWidthSb = (sbCols + (1 << frame->TileColsLog2) - 1) >> frame->TileColsLog2;
         int i = 0;
         for( int startSb = 0; startSb < sbCols; startSb += tileWidthSb )
-            MiColStarts[i++] = startSb << sbShift;
-        MiColStarts[i] = frame->MiCols;
+            i++;
         frame->TileCols = i;
         int minLog2TileRows = LSMASH_MAX( minLog2Tiles - frame->TileColsLog2, 0 );
         frame->TileRowsLog2 = minLog2TileRows;
@@ -1144,8 +1143,7 @@ static int av1_parse_tile_info
         int tileHeightSb = (sbRows + (1 << frame->TileRowsLog2) - 1) >> frame->TileRowsLog2;
         i = 0;
         for( int startSb = 0; startSb < sbRows; startSb += tileHeightSb )
-            MiRowStarts[i++] = startSb << sbShift;
-        MiRowStarts[i] = frame->MiRows;
+            i++;
         frame->TileRows = i;
     }
     else
@@ -1155,13 +1153,12 @@ static int av1_parse_tile_info
         int i = 0;
         for( int startSb = 0; startSb < sbCols; startSb += sizeSb )
         {
-            MiColStarts[i++] = startSb << sbShift;
+            i++;
             int maxWidth = LSMASH_MIN( sbCols - startSb, maxTileWidthSb );
             int width_in_sbs_minus_1 = av1_get_ns( bits, maxWidth );
             sizeSb = width_in_sbs_minus_1 + 1;
             widestTileSb = LSMASH_MAX( sizeSb, widestTileSb );
         }
-        MiColStarts[i] = frame->MiCols;
         frame->TileCols = i;
         frame->TileColsLog2 = tile_log2( 1, frame->TileCols );
         if ( minLog2Tiles > 0 )
@@ -1172,12 +1169,11 @@ static int av1_parse_tile_info
         i = 0;
         for( int startSb = 0; startSb < sbRows; startSb += sizeSb )
         {
-            MiRowStarts[i++] = startSb << sbShift;
+            i++;
             int maxHeight = LSMASH_MIN( sbRows - startSb, maxTileHeightSb );
             int height_in_sbs_minus_1 = av1_get_ns( bits, maxHeight );
             sizeSb = height_in_sbs_minus_1 + 1;
         }
-        MiRowStarts[i] = frame->MiRows;
         frame->TileRows = i;
         frame->TileRowsLog2 = tile_log2( 1, frame->TileRows );
     }
