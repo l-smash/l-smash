@@ -589,7 +589,7 @@ static void av1_parser_color_config
 {
     lsmash_bits_t         *bits = parser->bits;
     av1_sequence_header_t *sh   = &parser->sequence_header;
-    av1_color_config_t    *cc   = &sequence_header->color_config;
+    av1_color_config_t    *cc   = &sh->cc;
     cc->high_bitdepth = lsmash_bits_get( bits, 1 );
     if( sh->seq_profile == 2 && cc->high_bitdepth )
         cc->twelve_bit = lsmash_bits_get( bits, 1 );
@@ -675,7 +675,7 @@ static int av1_parse_sequence_header
     sh->seq_profile                  = lsmash_bits_get( bits, 3 );
     sh->still_picture                = lsmash_bits_get( bits, 1 );
     sh->reduced_still_picture_header = lsmash_bits_get( bits, 1 );
-    if( reduced_still_picture_header )
+    if( sh->reduced_still_picture_header )
     {
         sh->timing_info_present_flag           = 0;
         sh->decoder_model_info_present_flag    = 0;
@@ -747,7 +747,7 @@ static int av1_parse_sequence_header
     sh->max_frame_width_minus_1  = lsmash_bits_get( bits, sh->frame_width_bits_minus_1  + 1 );
     sh->max_frame_height_minus_1 = lsmash_bits_get( bits, sh->frame_height_bits_minus_1 + 1 );
 
-    sh->frame_id_numbers_present_flag = reduced_still_picture_header ? 0 : lsmash_bits_get( bits, 1 );
+    sh->frame_id_numbers_present_flag = sh->reduced_still_picture_header ? 0 : lsmash_bits_get( bits, 1 );
     if( sh->frame_id_numbers_present_flag )
     {
         sh->delta_frame_id_length_minus_2      = lsmash_bits_get( bits, 4 );
@@ -907,11 +907,11 @@ static int av1_parse_frame_size_with_refs
         {
             /* To set up Ref*s, we need call av1_decode_frame_wrapup().
              * To set up ref_frame_idx[i], we may need to call av1_set_frame_refs(). */
-            frame->UpscaledWidth = RefUpscaledWidth[ frame->ref_frame_idx[i] ];
-            frame->FrameWidth    = UpscaledWidth;
-            frame->FrameHeight   = RefFrameHeight[ frame->ref_frame_idx[i] ];
-            frame->RenderWidth   = RefRenderWidth[ frame->ref_frame_idx[i] ];
-            frame->RenderHeight  = RefRenderHeight[ frame->ref_frame_idx[i] ];
+            frame->UpscaledWidth = parser->RefUpscaledWidth[ frame->ref_frame_idx[i] ];
+            frame->FrameWidth    = frame->UpscaledWidth; // XXX
+            frame->FrameHeight   = parser->RefFrameHeight[ frame->ref_frame_idx[i] ];
+            frame->RenderWidth   = parser->RefRenderWidth[ frame->ref_frame_idx[i] ];
+            frame->RenderHeight  = parser->RefRenderHeight[ frame->ref_frame_idx[i] ];
             break;
         }
     }
@@ -1050,12 +1050,12 @@ static int av1_set_frame_refs
             LAST2_FRAME, LAST3_FRAME, BWDREF_FRAME, ALTREF2_FRAME, ALTREF_FRAME
         };
         int refFrame = Ref_Frame_List[i];
-        if( ref_frame_idx[refFrame - LAST_FRAME] < 0 )
+        if( frame->ref_frame_idx[refFrame - LAST_FRAME] < 0 )
         {
             ref = av1_find_latest_forward( frame );
             if( ref >= 0 ) {
                 frame->ref_frame_idx[refFrame - LAST_FRAME] = ref;
-                usedFrame[ref] = 1;
+                frame->usedFrame[ref] = 1;
             }
         }
     }
@@ -1213,7 +1213,7 @@ static int av1_uncompressed_header
         if( frame->show_frame && sh->decoder_model_info_present_flag && !sh->ti.equal_picture_interval )
             frame->frame_presentation_time = lsmash_bits_get( bits, sh->dmi.frame_presentation_time_length_minus_1 + 1 );
         frame->showable_frame = frame->show_frame ? frame->frame_type != KEY_FRAME : lsmash_bits_get( bits, 1 );
-        if( frame_type == SWITCH_FRAME
+        if( frame->frame_type == SWITCH_FRAME
          || (frame->frame_type == KEY_FRAME && frame->show_frame) )
             frame->error_resilient_mode = 1;
         else
@@ -1239,7 +1239,7 @@ static int av1_uncompressed_header
         if( sh->seq_force_integer_mv == SELECT_INTEGER_MV )
             frame->force_integer_mv = lsmash_bits_get( bits, 1 );
         else
-            frame->force_integer_mv = seq_force_integer_mv;
+            frame->force_integer_mv = sh->seq_force_integer_mv;
     }
     else
         frame->force_integer_mv = 0;
@@ -1269,15 +1269,15 @@ static int av1_uncompressed_header
         if( frame->buffer_removal_time_present_flag )
             for( uint8_t opNum = 0; opNum <= sh->operating_points_cnt_minus_1; opNum++ )
             {
-                if( sh->decoder_model_present_for_this_op[opNum] )
+                if( sh->op[opNum].decoder_model_present_for_this_op )
                 {
-                    uint16_t opPtIdc    = operating_point_idc[opNum];
+                    uint16_t opPtIdc    = sh->op[opNum].operating_point_idc;
                     int inTemporalLayer = (opPtIdc >> temporal_id)      & 1;
                     int inSpatialLayer  = (opPtIdc >> (spatial_id + 8)) & 1;
                     if( opPtIdc == 0 || (inTemporalLayer && inSpatialLayer) )
                     {
-                        uint32_t n = buffer_removal_time_length_minus_1 + 1
-                        uint32_t buffer_removal_time[opNum] = lsmash_bits_get( bits, n );
+                        uint32_t n = sh->dmi.buffer_removal_time_length_minus_1 + 1;
+                        /*uint32_t buffer_removal_time[opNum] =*/ lsmash_bits_get( bits, n );
                     }
                 }
             }
@@ -1335,7 +1335,7 @@ static int av1_uncompressed_header
                 if( !frame->frame_refs_short_signaling )
                     frame->ref_frame_idx[i] = lsmash_bits_get( bits, 3 );
                 if( sh->frame_id_numbers_present_flag )
-                    frame->delta_frame_id_minus_1 = lsmash_bits_get( bits, delta_frame_id_length_minus_2 + 2 );
+                    frame->delta_frame_id_minus_1 = lsmash_bits_get( bits, sh->delta_frame_id_length_minus_2 + 2 );
             }
             if( frame->frame_size_override_flag && !frame->error_resilient_mode )
             {
@@ -1383,7 +1383,7 @@ static int av1_uncompressed_header
         /* load_cdfs( frame->ref_frame_idx[ frame->primary_ref_frame ] )
          * load_previous() */;
     }
-    if( sh->use_ref_frame_mvs )
+    if( frame->use_ref_frame_mvs )
         av1_motion_field_estimation();
     /* To call av1_decode_frame_wrapup() at the end of the tile group. We need parse tile_info(). */
     av1_parse_tile_info( parser, frame );
@@ -1404,12 +1404,12 @@ static int av1_decode_frame_wrapup
     for( int i; i < NUM_REF_FRAMES; i++ )
         if( (frame->refresh_frame_flags >> i) & 1 )
         {
-            RefValid[i]         = 1;
-            RefFrameId[i]       = frame->current_frame_id;
-            RefUpscaledWidth[i] = frame->UpscaledWidth;
-            RefFrameHeight[i]   = frame->FrameHeight;
-            RefRenderWidth[i]   = frame->RenderWidth;
-            RefRenderHeight[i]  = frame->RenderHeight;
+            parser->RefValid[i]         = 1;
+            parser->RefFrameId[i]       = frame->current_frame_id;
+            parser->RefUpscaledWidth[i] = frame->UpscaledWidth;
+            parser->RefFrameHeight[i]   = frame->FrameHeight;
+            parser->RefRenderWidth[i]   = frame->RenderWidth;
+            parser->RefRenderHeight[i]  = frame->RenderHeight;
         }
     return 0;
 }
@@ -1502,7 +1502,7 @@ static int av1_parse_frame
     int err = av1_parse_frame_header( parser, frame, is_redundant_header, 1, temporal_id, spatial_id );
     if( err < 0 )
         return err;
-    lsmash_bits_get_align( bit );
+    lsmash_bits_get_align( parser->bits );
     return av1_parse_tile_group( parser, frame, 1 );
 }
 
@@ -1615,7 +1615,7 @@ int av1_get_access_unit
                     assert( 0 );
             }
             /* No need byte alignment. */
-            lsmash_bits_empty( bits );  /* redundant though */
+            lsmash_bits_empty( parser->bits );  /* redundant though */
         }
         /* TODO: Temporal delimiter OBU. */
     }
