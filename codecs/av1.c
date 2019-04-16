@@ -496,16 +496,16 @@ static int av1_is_shown_frame
 static inline void av1_compute_pixel_aspect_ratio
 (
     av1_parser_t *parser,
-    uint32_t *par_h,
-    uint32_t *par_v
+    uint64_t *par_h,
+    uint64_t *par_v
 )
 {
     av1_sequence_header_t *sh = &parser->sequence_header;
     uint64_t hSpacing = parser->MaxRenderWidth  * (sh->max_frame_height_minus_1 + 1);
     uint64_t vSpacing = parser->MaxRenderHeight * (sh->max_frame_width_minus_1  + 1);
     lsmash_reduce_fraction( &hSpacing, &vSpacing );
-    par_h = h;
-    par_v = v;
+    *par_h = hSpacing;
+    *par_v = vSpacing;
 }
 
 static lsmash_video_summary_t *av1_create_summary
@@ -565,8 +565,8 @@ static lsmash_video_summary_t *av1_create_summary
         return NULL;
     }
     /* Set up the summary. */
-    uint32_t par_h;
-    uint32_t par_v;
+    uint64_t par_h;
+    uint64_t par_v;
     av1_compute_pixel_aspect_ratio( parser, &par_h, &par_v );
     summary->sample_type           = ISOM_CODEC_TYPE_AV01_VIDEO;
     summary->timescale             = sh->num_units_in_display_tick ? sh->num_units_in_display_tick : 0;
@@ -1101,17 +1101,16 @@ static int av1_parse_tile_info
     av1_sequence_header_t *sh = &parser->sequence_header;
 
     /* To compute NumTiles, we need TileCols and TileRows. */
-    sbCols  = sh->use_128x128_superblock ? ((frame->MiCols + 31) >> 5) : ((frame->MiCols + 15) >> 4);
-    sbRows  = sh->use_128x128_superblock ? ((frame->MiRows + 31) >> 5) : ((frame->MiRows + 15) >> 4);
-    sbShift = sh->use_128x128_superblock ? 5 : 4;
-    sbSize  = sbShift + 2;
-    maxTileWidthSb = MAX_TILE_WIDTH >> sbSize;
-    maxTileAreaSb = MAX_TILE_AREA >> (2 * sbSize);
-    minLog2TileCols = tile_log2(  maxTileWidthSb, sbCols );
-    maxLog2TileCols = tile_log2( 1, LSMASH_MIN( sbCols, MAX_TILE_COLS ) );
-    maxLog2TileRows = tile_log2( 1, LSMASH_MIN( sbRows, MAX_TILE_ROWS ) );
-    minLog2Tiles = LSMASH_MAX( minLog2TileCols, tile_log2( maxTileAreaSb, sbRows * sbCols ) );
-    uniform_tile_spacing_flag = lsmash_bits_get( bits, 1 );
+    int sbCols  = sh->use_128x128_superblock ? ((frame->MiCols + 31) >> 5) : ((frame->MiCols + 15) >> 4);
+    int sbRows  = sh->use_128x128_superblock ? ((frame->MiRows + 31) >> 5) : ((frame->MiRows + 15) >> 4);
+    int sbShift = sh->use_128x128_superblock ? 5 : 4;
+    int sbSize  = sbShift + 2;
+    int maxTileWidthSb = MAX_TILE_WIDTH >> sbSize;
+    int maxTileAreaSb = MAX_TILE_AREA >> (2 * sbSize);
+    int minLog2TileCols = tile_log2(  maxTileWidthSb, sbCols );
+    int maxLog2TileCols = tile_log2( 1, LSMASH_MIN( sbCols, MAX_TILE_COLS ) );
+    int maxLog2TileRows = tile_log2( 1, LSMASH_MIN( sbRows, MAX_TILE_ROWS ) );
+    int minLog2Tiles = LSMASH_MAX( minLog2TileCols, tile_log2( maxTileAreaSb, sbRows * sbCols ) );
 
     lsmash_bits_t *bits = parser->bits;
     uint8_t uniform_tile_spacing_flag = lsmash_bits_get( bits, 1 );
@@ -1120,44 +1119,45 @@ static int av1_parse_tile_info
         frame->TileColsLog2 = minLog2TileCols;
         while( frame->TileColsLog2 < maxLog2TileCols )
         {
-            increment_tile_cols_log2 = lsmash_bits_get( bits, 1 );
+            uint8_t increment_tile_cols_log2 = lsmash_bits_get( bits, 1 );
             if( increment_tile_cols_log2 == 1 )
                 ++ frame->TileColsLog2;
             else
                 break;
         }
-        tileWidthSb = (sbCols + (1 << frame->TileColsLog2) - 1) >> frame->TileColsLog2;
+        int tileWidthSb = (sbCols + (1 << frame->TileColsLog2) - 1) >> frame->TileColsLog2;
         int i = 0;
-        for( startSb = 0; startSb < sbCols; startSb += tileWidthSb )
+        for( int startSb = 0; startSb < sbCols; startSb += tileWidthSb )
             MiColStarts[i++] = startSb << sbShift;
         MiColStarts[i] = frame->MiCols;
         frame->TileCols = i;
-        minLog2TileRows = LSMASH_MAX( minLog2Tiles - frame->TileColsLog2, 0 );
+        int minLog2TileRows = LSMASH_MAX( minLog2Tiles - frame->TileColsLog2, 0 );
         frame->TileRowsLog2 = minLog2TileRows;
         while( frame->TileRowsLog2 < maxLog2TileRows )
         {
-            increment_tile_rows_log2 = lsmash_bits_get( bits, 1 );
+            int increment_tile_rows_log2 = lsmash_bits_get( bits, 1 );
             if( increment_tile_rows_log2 == 1 )
                 ++ frame->TileRowsLog2;
             else
                 break;
         }
-        tileHeightSb = (sbRows + (1 << frame->TileRowsLog2) - 1) >> frame->TileRowsLog2;
+        int tileHeightSb = (sbRows + (1 << frame->TileRowsLog2) - 1) >> frame->TileRowsLog2;
         i = 0;
-        for( startSb = 0; startSb < sbRows; startSb += tileHeightSb )
+        for( int startSb = 0; startSb < sbRows; startSb += tileHeightSb )
             MiRowStarts[i++] = startSb << sbShift;
         MiRowStarts[i] = frame->MiRows;
         frame->TileRows = i;
     }
     else
     {
-        widestTileSb = 0;
+        int sizeSb = 0;
+        int widestTileSb = 0;
         int i = 0;
-        for( startSb = 0; startSb < sbCols; startSb += sizeSb )
+        for( int startSb = 0; startSb < sbCols; startSb += sizeSb )
         {
             MiColStarts[i++] = startSb << sbShift;
-            maxWidth = LSMASH_MIN( sbCols - startSb, maxTileWidthSb );
-            width_in_sbs_minus_1 = av1_get_ns( bits, maxWidth );
+            int maxWidth = LSMASH_MIN( sbCols - startSb, maxTileWidthSb );
+            int width_in_sbs_minus_1 = av1_get_ns( bits, maxWidth );
             sizeSb = width_in_sbs_minus_1 + 1;
             widestTileSb = LSMASH_MAX( sizeSb, widestTileSb );
         }
@@ -1168,13 +1168,13 @@ static int av1_parse_tile_info
             maxTileAreaSb = (sbRows * sbCols) >> (minLog2Tiles + 1);
         else
             maxTileAreaSb = sbRows * sbCols;
-        maxTileHeightSb = LSMASH_MAX( maxTileAreaSb / widestTileSb, 1 );
+        int maxTileHeightSb = LSMASH_MAX( maxTileAreaSb / widestTileSb, 1 );
         i = 0;
-        for( startSb = 0; startSb < sbRows; startSb += sizeSb )
+        for( int startSb = 0; startSb < sbRows; startSb += sizeSb )
         {
             MiRowStarts[i++] = startSb << sbShift;
-            maxHeight = LSMASH_MIN( sbRows - startSb, maxTileHeightSb );
-            height_in_sbs_minus_1 = av1_get_ns( bits, maxHeight );
+            int maxHeight = LSMASH_MIN( sbRows - startSb, maxTileHeightSb );
+            int height_in_sbs_minus_1 = av1_get_ns( bits, maxHeight );
             sizeSb = height_in_sbs_minus_1 + 1;
         }
         MiRowStarts[i] = frame->MiRows;
@@ -1185,8 +1185,8 @@ static int av1_parse_tile_info
     if( frame->TileColsLog2 > 0 || frame->TileRowsLog2 > 0 )
     {
         context_update_tile_id  = lsmash_bits_get( bits, frame->TileRowsLog2 + frame->TileColsLog2 );
-        tile_size_bytes_minus_1 = lsmash_bits_get( bits, 2 );
-        TileSizeBytes = tile_size_bytes_minus_1 + 1;
+        int tile_size_bytes_minus_1 = lsmash_bits_get( bits, 2 );
+        int TileSizeBytes = tile_size_bytes_minus_1 + 1; // XXX: unused
     }
     else
         context_update_tile_id = 0;
