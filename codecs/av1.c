@@ -485,6 +485,11 @@ static int av1_is_shown_frame
 (
 )
 {
+    int show_frame = 1;
+    int show_existing_frame = 1;
+
+    //XXX: TODO
+
     return show_frame || show_existing_frame;
 }
 
@@ -902,6 +907,7 @@ static int av1_parse_frame_size_with_refs
     uint8_t found_ref;
     for ( int i = 0; i < REFS_PER_FRAME; i++ )
     {
+        lsmash_bits_t *bits = parser->bits;
         found_ref = lsmash_bits_get( bits, 1 );
         if( found_ref )
         {
@@ -1092,6 +1098,8 @@ static int av1_parse_tile_info
     av1_frame_t  *frame
 )
 {
+    av1_sequence_header_t *sh = &parser->sequence_header;
+
     /* To compute NumTiles, we need TileCols and TileRows. */
     sbCols  = sh->use_128x128_superblock ? ((frame->MiCols + 31) >> 5) : ((frame->MiCols + 15) >> 4);
     sbRows  = sh->use_128x128_superblock ? ((frame->MiRows + 31) >> 5) : ((frame->MiRows + 15) >> 4);
@@ -1104,6 +1112,9 @@ static int av1_parse_tile_info
     maxLog2TileRows = tile_log2( 1, LSMASH_MIN( sbRows, MAX_TILE_ROWS ) );
     minLog2Tiles = LSMASH_MAX( minLog2TileCols, tile_log2( maxTileAreaSb, sbRows * sbCols ) );
     uniform_tile_spacing_flag = lsmash_bits_get( bits, 1 );
+
+    lsmash_bits_t *bits = parser->bits;
+    uint8_t uniform_tile_spacing_flag = lsmash_bits_get( bits, 1 );
     if( uniform_tile_spacing_flag )
     {
         frame->TileColsLog2 = minLog2TileCols;
@@ -1170,6 +1181,7 @@ static int av1_parse_tile_info
         frame->TileRows = i;
         frame->TileRowsLog2 = tile_log2( 1, frame->TileRows );
     }
+    int context_update_tile_id; // XXX: unused
     if( frame->TileColsLog2 > 0 || frame->TileRowsLog2 > 0 )
     {
         context_update_tile_id  = lsmash_bits_get( bits, frame->TileRowsLog2 + frame->TileColsLog2 );
@@ -1357,6 +1369,7 @@ static int av1_uncompressed_header
                 frame->use_ref_frame_mvs = lsmash_bits_get( bits, 1 );
         }
     }
+    int RefFrameSignBias[NUM_REF_FRAMES_ARRAY];
     if( !frame->FrameIsIntra )
         for( int i = 0; i < REFS_PER_FRAME; i++ )
         {
@@ -1444,7 +1457,6 @@ static int av1_parse_frame_header
         }
         else
         {
-            TileNum = 0;
             frame->SeenFrameHeader = 1;
         }
     }
@@ -1458,6 +1470,9 @@ static int av1_parse_tile_group
     int           is_frame_obu
 )
 {
+    lsmash_bits_t *bits = parser->bits;
+    int tg_start, tg_end;
+
     if( !frame->SeenFrameHeader )
         return LSMASH_ERR_INVALID_DATA;
     frame->NumTiles = frame->TileCols * frame->TileRows;
@@ -1660,6 +1675,8 @@ int lsmash_setup_av1_specific_parameters_from_access_unit
             continue;
         }
         lsmash_bs_skip_bytes( bs, 1 + obu_extension_flag );
+        av1_parser_t parser;
+        av1_setup_parser(&parser, bs);
         av1_parse_sequence_header();
     }
 
