@@ -28,6 +28,7 @@
 #include "core/box.h"
 
 #include "a52.h"
+#include "av1.h"
 #include "mp4a.h"
 #include "mp4sys.h"
 #include "description.h"

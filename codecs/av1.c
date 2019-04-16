@@ -20,9 +20,12 @@
 
 /* This file is available under an ISC license. */
 
+#include <string.h>
+
 #include "common/internal.h" /* must be placed first */
 
 #include "core/box.h"
+#include "description.h"
 
 /*********************************************************************************
     Alliance for Open Media AV1
