@@ -505,8 +505,7 @@ static inline void av1_compute_pixel_aspect_ratio
 
 static lsmash_video_summary_t *av1_create_summary
 (
-    av1_parser_t            *parser,
-    lsmash_video_summary_t **summary
+    av1_parser_t            *parser
 )
 {
     lsmash_video_summary_t *summary = (lsmash_video_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_VIDEO );
@@ -552,7 +551,7 @@ static lsmash_video_summary_t *av1_create_summary
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         return NULL;
     }
-    cs->data.unstructured = lsmash_create_av1_specific_info( param, &cs->size );
+    cs->data.unstructured = lsmash_create_av1_specific_info( &param, &cs->size );
     if( !cs->data.unstructured
      || lsmash_list_add_entry( &summary->opaque->list, cs ) < 0 )
     {
@@ -615,7 +614,7 @@ static void av1_parser_color_config
         cc->color_range            = lsmash_bits_get( bits, 1 );
         cc->subsampling_x          = 1;
         cc->subsampling_y          = 1;
-        cc->chroma_sample_position = CSP_UNKNOWN;
+        cc->chroma_sample_position = LSMASH_AV1_CSP_UNKNOWN;
         cc->separate_uv_delta_q    = 0;
         return;
     }
@@ -764,7 +763,7 @@ static int av1_parse_sequence_header
         sh->enable_warped_motion           = 0;
         sh->enable_dual_filter             = 0;
         sh->enable_order_hint              = 0;
-        sh->enable_jnt_comp                = 0;
+        sh->enable_int_comp                = 0;
         sh->enable_ref_frame_mvs           = 0;
         sh->seq_force_screen_content_tools = SELECT_SCREEN_CONTENT_TOOLS;
         sh->seq_force_integer_mv           = SELECT_INTEGER_MV;
@@ -779,12 +778,12 @@ static int av1_parse_sequence_header
         sh->enable_order_hint          = lsmash_bits_get( bits, 1 );
         if( sh->enable_order_hint )
         {
-            sh->enable_jnt_comp      = lsmash_bits_get( bits, 1 );
+            sh->enable_int_comp      = lsmash_bits_get( bits, 1 );
             sh->enable_ref_frame_mvs = lsmash_bits_get( bits, 1 );
         }
         else
         {
-            sh->enable_jnt_comp      = 0;
+            sh->enable_int_comp      = 0;
             sh->enable_ref_frame_mvs = 0;
         }
         sh->seq_choose_screen_content_tools = lsmash_bits_get( bits, 1 );
@@ -808,8 +807,9 @@ static int av1_parse_sequence_header
     sh->enable_superres    = lsmash_bits_get( bits, 1 );
     sh->enable_cdef        = lsmash_bits_get( bits, 1 );
     sh->enable_restoration = lsmash_bits_get( bits, 1 );
-    return av1_parser_color_config( parser );
+    av1_parser_color_config( parser );
     /* film_grain_params_present */
+    return 0;
 }
 
 static void av1_parse_superres_params
@@ -950,7 +950,7 @@ static int av1_find_latest_backward
     av1_frame_t *frame
 )
 {
-    int ref = -1
+    int ref = -1;
     for( int i = 0; i < NUM_REF_FRAMES; i++ )
     {
         int hint = frame->shiftedOrderHints[i];
@@ -971,7 +971,7 @@ static int av1_find_earliest_backward
     int ref = -1;
     for( int i = 0; i < NUM_REF_FRAMES; i++ )
     {
-        int hint = frame->shiftedOrderHints[i]
+        int hint = frame->shiftedOrderHints[i];
         if( !frame->usedFrame[i] && hint >= frame->curFrameHint && (ref < 0 || hint < frame->earliestOrderHint) )
         {
             ref = i;
@@ -1016,10 +1016,10 @@ static int av1_set_frame_refs
     frame->usedFrame[ frame->last_frame_idx ] = 1;
     frame->usedFrame[ frame->gold_frame_idx ] = 1;
     frame->curFrameHint = 1 << (sh->OrderHintBits - 1);
-    for ( i = 0; i < NUM_REF_FRAMES; i++ )
+    for ( int i = 0; i < NUM_REF_FRAMES; i++ )
         frame->shiftedOrderHints[i] = frame->curFrameHint + av1_get_relative_dist( sh, frame->RefOrderHint[i], frame->OrderHint );
     frame->lastOrderHint = frame->shiftedOrderHints[ frame->last_frame_idx ];
-    frame->goldOrderHint = frame->shiftedOrderHints[ frame->gold_frame_idxx ];
+    frame->goldOrderHint = frame->shiftedOrderHints[ frame->gold_frame_idx ];
     IF_OUT_OF_SPEC( frame->lastOrderHint >= frame->curFrameHint || frame->goldOrderHint >= frame->curFrameHint )
         return LSMASH_ERR_INVALID_DATA;
     /* The ALTREF_FRAME reference is set to be a backward reference to the frame with highest output order */
@@ -1129,7 +1129,7 @@ static int av1_parse_tile_info
             if( increment_tile_rows_log2 == 1 )
                 ++ frame->TileRowsLog2;
             else
-                break
+                break;
         }
         tileHeightSb = (sbRows + (1 << frame->TileRowsLog2) - 1) >> frame->TileRowsLog2;
         i = 0;
@@ -1291,7 +1291,7 @@ static int av1_uncompressed_header
         if( frame->error_resilient_mode && sh->enable_order_hint )
             for( int i = 0; i < NUM_REF_FRAMES; i++ )
             {
-                frame->ref_order_hint[i] =  = lsmash_bits_get( bits, sh->order_hint_bits_minus_1 + 1 );
+                frame->ref_order_hint[i] = lsmash_bits_get( bits, sh->order_hint_bits_minus_1 + 1 );
                 if( frame->ref_order_hint[i] != frame->RefOrderHint[i] )
                     frame->RefValid[i] = 0;
             }
@@ -1299,7 +1299,7 @@ static int av1_uncompressed_header
     int err;
     if( frame->frame_type == KEY_FRAME )
     {
-        if( (err = av1_parse_frame_size( parser, frame )) < 0
+        if( (err = av1_parse_frame_size( parser, frame )) < 0 ||
             (err = av1_parse_render_size( parser, frame )) < 0 )
             return err;
         if( frame->allow_screen_content_tools && frame->UpscaledWidth == frame->FrameWidth )
@@ -1309,7 +1309,7 @@ static int av1_uncompressed_header
     {
         if( frame->frame_type == INTRA_ONLY_FRAME )
         {
-            if( (err = av1_parse_frame_size( parser, frame )) < 0
+            if( (err = av1_parse_frame_size( parser, frame )) < 0 ||
                 (err = av1_parse_render_size( parser, frame )) < 0 )
                 return err;
             if( frame->allow_screen_content_tools && frame->UpscaledWidth == frame->FrameWidth )
@@ -1344,7 +1344,7 @@ static int av1_uncompressed_header
             }
             else
             {
-                if( (err = av1_parse_frame_size( parser, frame )) < 0
+                if( (err = av1_parse_frame_size( parser, frame )) < 0 ||
                     (err = av1_parse_render_size( parser, frame )) < 0 )
                     return err;
             }
@@ -1439,7 +1439,7 @@ static int av1_parse_frame_header
             return err;
         if( frame->show_existing_frame )
         {
-            av1_decode_frame_wrapup( frame );
+            av1_decode_frame_wrapup( parser, frame );
             frame->SeenFrameHeader = 0;
         }
         else
@@ -1482,7 +1482,7 @@ static int av1_parse_tile_group
         return LSMASH_ERR_INVALID_DATA;
     if( tg_end == frame->NumTiles - 1 )
     {
-        av1_decode_frame_wrapup( frame );
+        av1_decode_frame_wrapup( parser, frame );
         frame->SeenFrameHeader = 0;
     }
     return 0;
@@ -1521,7 +1521,7 @@ int av1_get_access_unit
 {
     int err = 0;
     uint32_t remaining_bytes = au_length;
-    av1_temporal_unit_t tu = { .active_frame = NULL. .temporal_id = 1 << 3 };
+    av1_temporal_unit_t tu = { .active_frame = NULL, .temporal_id = 1 << 3 };
     /* Here, we do not treat Length delimited bitstream. Therefore, temporal_unit_size, frame_unit_size and
      * obu_length are not present at all. */
     while( remaining_bytes )
@@ -1577,7 +1577,7 @@ int av1_get_access_unit
             if( (err = lsmash_bs_set_empty_stream( obu_bs, obu_data + obu_header_size, obu_size )) < 0 )
                 return err;
             lsmash_bits_init( parser->bits, obu_bs );
-            case( obu_type )
+            switch( obu_type )
             {
                 case AV1_OBU_TYPE_SEQUENCE_HEADER :
                     if( (err = av1_parse_sequence_header( parser, summary )) < 0 )
@@ -1598,7 +1598,7 @@ int av1_get_access_unit
                         tu.temporal_id = temporal_id;
                     else if( tu.temporal_id != temporal_id )
                         return LSMASH_ERR_INVALID_DATA;
-                    int (*parse_func)( av1_parser_t *, av1_frame_t *, int, uint8_t, uint8_t ) =
+                    int (*parse_func)( av1_parser_t *, av1_frame_t *, int, int, uint8_t, uint8_t ) =
                         obu_type != AV1_OBU_TYPE_FRAME ? av1_parse_frame_header
                                                        : av1_parse_frame;
                     if( (err = parse_func( parser, frame, is_redundant_header, is_frame_obu, temporal_id, spatial_id )) < 0 )
