@@ -161,6 +161,10 @@ typedef struct
     uint8_t  decoder_model_present_for_this_op;
     uint8_t  initial_display_delay_present_for_this_op;
     uint8_t  initial_display_delay_minus_1;
+
+    uint16_t decoder_buffer_delay;
+    uint16_t encoder_buffer_delay;
+    uint16_t low_delay_mode_flag;
 } av1_operating_point_t;
 
 typedef struct
@@ -730,9 +734,9 @@ static int av1_parse_sequence_header
                 {
                     /* operating_parameters_info( i ) */
                     int n = sh->dmi.buffer_delay_length_minus_1 + 1;
-                    sh->op[i].opi.decoder_buffer_delay = lsmash_bits_get( bits, n );
-                    sh->op[i].opi.encoder_buffer_delay = lsmash_bits_get( bits, n );
-                    sh->op[i].opi.low_delay_mode_flag  = lsmash_bits_get( bits, 1 );
+                    sh->op[i].decoder_buffer_delay = lsmash_bits_get( bits, n );
+                    sh->op[i].encoder_buffer_delay = lsmash_bits_get( bits, n );
+                    sh->op[i].low_delay_mode_flag  = lsmash_bits_get( bits, 1 );
                 }
             }
             else
