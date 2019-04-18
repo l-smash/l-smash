@@ -936,8 +936,8 @@ static int av1_parse_frame_size_with_refs
     {
         av1_parse_superres_params( parser, frame );
         av1_compute_image_size( frame );
-        return 0;
     }
+    return 0;
 }
 
 static int av1_get_relative_dist
@@ -1681,6 +1681,8 @@ int lsmash_setup_av1_specific_parameters_from_access_unit
     }
 
     return 0;
+fail:
+    return err;
 }
 
 uint8_t *lsmash_create_av1_specific_info
