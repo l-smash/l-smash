@@ -288,6 +288,12 @@ enum
 
     /* filter */
     SWITCHABLE = 3,
+
+    /* tile */
+    MAX_TILE_WIDTH = 4096,
+    MAX_TILE_AREA = 4096 * 2304,
+    MAX_TILE_ROWS = 64,
+    MAX_TILE_COLS = 64,
 };
 
 static inline void *av1_allocate_obu( size_t sz )
