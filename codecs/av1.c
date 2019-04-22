@@ -433,6 +433,19 @@ static uint64_t av1_get_ns
     return (v << 1) - m + extra_bit;
 }
 
+static uint64_t tile_log2
+(
+    uint64_t blkSize,
+    uint64_t target
+)
+{
+    int k;
+
+    for (k = 0; (blkSize << k) < target; k++);
+
+    return k;
+}
+
 static lsmash_av1_config_obus_t *av1_allocate_configOBUs( void )
 {
     lsmash_av1_config_obus_t *configOBUs = lsmash_malloc_zero( sizeof(lsmash_av1_config_obus_t) );
