@@ -20,9 +20,12 @@
 
 /* This file is available under an ISC license. */
 
+#include <string.h>
+
 #include "common/internal.h" /* must be placed first */
 
 #include "core/box.h"
+#include "description.h"
 
 /*********************************************************************************
     Alliance for Open Media AV1
@@ -46,9 +49,85 @@ typedef struct
     uint8_t first_frame_in_temporal_unit;
     uint8_t frame_type;
     uint8_t show_frame;
+    uint8_t showable_frame;
     uint8_t show_existing_frame;
     uint8_t frame_to_show_map_idx;
     //uint8_t with_sequence_header;
+
+    uint8_t use_superres;
+    uint8_t coded_denom;
+    uint8_t SuperresDenom;
+
+    uint16_t UpscaledWidth;
+    uint16_t UpscaledHeight;
+
+    uint16_t render_width_minus_1;
+    uint16_t render_height_minus_1;
+    uint16_t RenderWidth;
+    uint16_t RenderHeight;
+
+    uint16_t frame_width_minus_1;
+    uint16_t frame_height_minus_1;
+    uint16_t FrameWidth;
+    uint16_t FrameHeight;
+
+    uint8_t render_and_frame_size_different;
+
+    int MiCols;
+    int MiRows;
+
+    int NumTiles;
+
+    uint8_t frame_size_override_flag;
+    uint8_t curFrameHint;
+    uint8_t earliestOrderHint;
+    uint8_t latestOrderHint;
+    uint8_t goldOrderHint;
+    uint8_t OrderHint;
+    uint8_t lastOrderHint;
+
+    int current_frame_id;
+    int order_hint;
+
+#define NUM_REF_FRAMES_ARRAY 8 // see below for NUM_REF_FRAMES
+    int OrderHints[NUM_REF_FRAMES_ARRAY];
+    int shiftedOrderHints[NUM_REF_FRAMES_ARRAY];
+    int usedFrame[NUM_REF_FRAMES_ARRAY];
+    int RefOrderHint[NUM_REF_FRAMES_ARRAY];
+    int RefValid[NUM_REF_FRAMES_ARRAY];
+    int ref_order_hint[NUM_REF_FRAMES_ARRAY];
+
+    int ref_frame_idx[NUM_REF_FRAMES_ARRAY];
+    uint8_t last_frame_idx;
+    uint8_t gold_frame_idx;
+
+    uint8_t is_filter_switchable;
+    uint8_t interpolation_filter;
+    uint8_t force_integer_mv;
+    uint8_t disable_cdf_update;
+
+    int TileColsLog2;
+    int TileCols;
+    int TileRowsLog2;
+    int TileRows;
+
+    uint8_t FrameIsIntra;
+    int frame_presentation_time;
+    uint8_t error_resilient_mode;
+    uint8_t buffer_removal_time_present_flag;
+    uint8_t allow_screen_content_tools;
+
+    int primary_ref_frame;
+    uint8_t refresh_frame_flags;
+    uint8_t frame_refs_short_signaling;
+    uint8_t allow_intrabc;
+    uint8_t allow_high_precision_mv;
+    uint8_t is_motion_mode_switchable;
+    uint8_t use_ref_frame_mvs;
+    uint8_t tile_start_and_end_present_flag;
+
+    uint16_t delta_frame_id_minus_1;
+    uint8_t disable_frame_end_update_cdf;
 } av1_frame_t;
 
 typedef struct
@@ -82,7 +161,28 @@ typedef struct
     uint8_t  decoder_model_present_for_this_op;
     uint8_t  initial_display_delay_present_for_this_op;
     uint8_t  initial_display_delay_minus_1;
+
+    uint16_t decoder_buffer_delay;
+    uint16_t encoder_buffer_delay;
+    uint16_t low_delay_mode_flag;
 } av1_operating_point_t;
+
+typedef struct
+{
+    uint8_t high_bitdepth;
+    uint8_t twelve_bit;
+    uint8_t mono_chrome;
+    uint8_t subsampling_x;
+    uint8_t subsampling_y;
+    uint8_t chroma_sample_position;
+    uint8_t separate_uv_delta_q;
+
+    uint8_t color_description_present_flag;
+    uint16_t color_primaries;
+    uint16_t transfer_characteristics;
+    uint16_t matrix_coefficients;
+    uint8_t color_range;
+} av1_color_config_t;
 
 typedef struct
 {
@@ -104,6 +204,30 @@ typedef struct
     uint8_t  use_128x128_superblock;
     uint8_t  enable_filter_intra;
     uint8_t  enable_intra_edge_filter;
+
+    av1_color_config_t cc;
+    uint32_t num_units_in_display_tick;
+    uint8_t enable_warped_motion;
+    uint8_t enable_dual_filter;
+    uint8_t enable_order_hint;
+    uint8_t enable_int_comp;
+    uint8_t enable_ref_frame_mvs;
+    uint8_t seq_force_screen_content_tools;
+    uint8_t seq_force_integer_mv;
+    uint8_t seq_choose_screen_content_tools;
+    uint8_t seq_choose_integer_mv;
+    uint8_t enable_interintra_compound;
+    uint8_t enable_restoration;
+    uint8_t enable_cdef;
+    uint8_t enable_superres;
+    uint8_t enable_masked_compound;
+
+    uint8_t order_hint_bits_minus_1;
+
+    uint16_t frame_width_bits_minus_1;
+    uint16_t frame_height_bits_minus_1;
+
+    int OrderHintBits;
 } av1_sequence_header_t;
 
 typedef struct
@@ -113,6 +237,15 @@ typedef struct
     /* */
     uint16_t MaxRenderWidth;
     uint16_t MaxRenderHeight;
+
+    lsmash_av1_specific_parameters_t param;
+
+    int RefValid[NUM_REF_FRAMES_ARRAY];
+    int RefFrameId[NUM_REF_FRAMES_ARRAY];
+    uint16_t RefUpscaledWidth[NUM_REF_FRAMES_ARRAY];
+    uint16_t RefFrameHeight[NUM_REF_FRAMES_ARRAY];
+    uint16_t RefRenderWidth[NUM_REF_FRAMES_ARRAY];
+    uint16_t RefRenderHeight[NUM_REF_FRAMES_ARRAY];
 } av1_parser_t;
 
 enum
@@ -138,13 +271,29 @@ enum
     PRIMARY_REF_NONE            = 7,
 
     /* RefFrame[*] */
+    NONE_FRAME = 0,
     LAST_FRAME = 1,
+    LAST2_FRAME = 2,
+    LAST3_FRAME = 3,
+    GOLDEN_FRAME = 4,
+    BWDREF_FRAME = 5,
+    ALTREF2_FRAME = 6,
+    ALTREF_FRAME = 7,
 
     /* frame_type */
     KEY_FRAME        = 0,
     INTER_FRAME      = 1,
     INTRA_ONLY_FRAME = 2,
     SWITCH_FRAME     = 3,
+
+    /* filter */
+    SWITCHABLE = 3,
+
+    /* tile */
+    MAX_TILE_WIDTH = 4096,
+    MAX_TILE_AREA = 4096 * 2304,
+    MAX_TILE_ROWS = 64,
+    MAX_TILE_COLS = 64,
 };
 
 static inline void *av1_allocate_obu( size_t sz )
@@ -284,6 +433,19 @@ static uint64_t av1_get_ns
     return (v << 1) - m + extra_bit;
 }
 
+static uint64_t tile_log2
+(
+    uint64_t blkSize,
+    uint64_t target
+)
+{
+    int k;
+
+    for (k = 0; (blkSize << k) < target; k++);
+
+    return k;
+}
+
 static lsmash_av1_config_obus_t *av1_allocate_configOBUs( void )
 {
     lsmash_av1_config_obus_t *configOBUs = lsmash_malloc_zero( sizeof(lsmash_av1_config_obus_t) );
@@ -346,28 +508,32 @@ static int av1_is_shown_frame
 (
 )
 {
+    int show_frame = 1;
+    int show_existing_frame = 1;
+
+    //XXX: TODO
+
     return show_frame || show_existing_frame;
 }
 
 static inline void av1_compute_pixel_aspect_ratio
 (
     av1_parser_t *parser,
-    uint32_t *par_h,
-    uint32_t *par_v
+    uint64_t *par_h,
+    uint64_t *par_v
 )
 {
     av1_sequence_header_t *sh = &parser->sequence_header;
     uint64_t hSpacing = parser->MaxRenderWidth  * (sh->max_frame_height_minus_1 + 1);
     uint64_t vSpacing = parser->MaxRenderHeight * (sh->max_frame_width_minus_1  + 1);
     lsmash_reduce_fraction( &hSpacing, &vSpacing );
-    par_h = h;
-    par_v = v;
+    *par_h = hSpacing;
+    *par_v = vSpacing;
 }
 
 static lsmash_video_summary_t *av1_create_summary
 (
-    av1_parser_t            *parser,
-    lsmash_video_summary_t **summary
+    av1_parser_t            *parser
 )
 {
     lsmash_video_summary_t *summary = (lsmash_video_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_VIDEO );
@@ -413,7 +579,7 @@ static lsmash_video_summary_t *av1_create_summary
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         return NULL;
     }
-    cs->data.unstructured = lsmash_create_av1_specific_info( param, &cs->size );
+    cs->data.unstructured = lsmash_create_av1_specific_info( &param, &cs->size );
     if( !cs->data.unstructured
      || lsmash_list_add_entry( &summary->opaque->list, cs ) < 0 )
     {
@@ -422,8 +588,8 @@ static lsmash_video_summary_t *av1_create_summary
         return NULL;
     }
     /* Set up the summary. */
-    uint32_t par_h;
-    uint32_t par_v;
+    uint64_t par_h;
+    uint64_t par_v;
     av1_compute_pixel_aspect_ratio( parser, &par_h, &par_v );
     summary->sample_type           = ISOM_CODEC_TYPE_AV01_VIDEO;
     summary->timescale             = sh->num_units_in_display_tick ? sh->num_units_in_display_tick : 0;
@@ -451,7 +617,7 @@ static void av1_parser_color_config
 {
     lsmash_bits_t         *bits = parser->bits;
     av1_sequence_header_t *sh   = &parser->sequence_header;
-    av1_color_config_t    *cc   = &sequence_header->color_config;
+    av1_color_config_t    *cc   = &sh->cc;
     cc->high_bitdepth = lsmash_bits_get( bits, 1 );
     if( sh->seq_profile == 2 && cc->high_bitdepth )
         cc->twelve_bit = lsmash_bits_get( bits, 1 );
@@ -476,7 +642,7 @@ static void av1_parser_color_config
         cc->color_range            = lsmash_bits_get( bits, 1 );
         cc->subsampling_x          = 1;
         cc->subsampling_y          = 1;
-        cc->chroma_sample_position = CSP_UNKNOWN;
+        cc->chroma_sample_position = LSMASH_AV1_CSP_UNKNOWN;
         cc->separate_uv_delta_q    = 0;
         return;
     }
@@ -537,7 +703,7 @@ static int av1_parse_sequence_header
     sh->seq_profile                  = lsmash_bits_get( bits, 3 );
     sh->still_picture                = lsmash_bits_get( bits, 1 );
     sh->reduced_still_picture_header = lsmash_bits_get( bits, 1 );
-    if( reduced_still_picture_header )
+    if( sh->reduced_still_picture_header )
     {
         sh->timing_info_present_flag           = 0;
         sh->decoder_model_info_present_flag    = 0;
@@ -587,9 +753,9 @@ static int av1_parse_sequence_header
                 {
                     /* operating_parameters_info( i ) */
                     int n = sh->dmi.buffer_delay_length_minus_1 + 1;
-                    sh->op[i].opi.decoder_buffer_delay = lsmash_bits_get( bits, n );
-                    sh->op[i].opi.encoder_buffer_delay = lsmash_bits_get( bits, n );
-                    sh->op[i].opi.low_delay_mode_flag  = lsmash_bits_get( bits, 1 );
+                    sh->op[i].decoder_buffer_delay = lsmash_bits_get( bits, n );
+                    sh->op[i].encoder_buffer_delay = lsmash_bits_get( bits, n );
+                    sh->op[i].low_delay_mode_flag  = lsmash_bits_get( bits, 1 );
                 }
             }
             else
@@ -609,7 +775,7 @@ static int av1_parse_sequence_header
     sh->max_frame_width_minus_1  = lsmash_bits_get( bits, sh->frame_width_bits_minus_1  + 1 );
     sh->max_frame_height_minus_1 = lsmash_bits_get( bits, sh->frame_height_bits_minus_1 + 1 );
 
-    sh->frame_id_numbers_present_flag = reduced_still_picture_header ? 0 : lsmash_bits_get( bits, 1 );
+    sh->frame_id_numbers_present_flag = sh->reduced_still_picture_header ? 0 : lsmash_bits_get( bits, 1 );
     if( sh->frame_id_numbers_present_flag )
     {
         sh->delta_frame_id_length_minus_2      = lsmash_bits_get( bits, 4 );
@@ -625,7 +791,7 @@ static int av1_parse_sequence_header
         sh->enable_warped_motion           = 0;
         sh->enable_dual_filter             = 0;
         sh->enable_order_hint              = 0;
-        sh->enable_jnt_comp                = 0;
+        sh->enable_int_comp                = 0;
         sh->enable_ref_frame_mvs           = 0;
         sh->seq_force_screen_content_tools = SELECT_SCREEN_CONTENT_TOOLS;
         sh->seq_force_integer_mv           = SELECT_INTEGER_MV;
@@ -640,12 +806,12 @@ static int av1_parse_sequence_header
         sh->enable_order_hint          = lsmash_bits_get( bits, 1 );
         if( sh->enable_order_hint )
         {
-            sh->enable_jnt_comp      = lsmash_bits_get( bits, 1 );
+            sh->enable_int_comp      = lsmash_bits_get( bits, 1 );
             sh->enable_ref_frame_mvs = lsmash_bits_get( bits, 1 );
         }
         else
         {
-            sh->enable_jnt_comp      = 0;
+            sh->enable_int_comp      = 0;
             sh->enable_ref_frame_mvs = 0;
         }
         sh->seq_choose_screen_content_tools = lsmash_bits_get( bits, 1 );
@@ -669,8 +835,9 @@ static int av1_parse_sequence_header
     sh->enable_superres    = lsmash_bits_get( bits, 1 );
     sh->enable_cdef        = lsmash_bits_get( bits, 1 );
     sh->enable_restoration = lsmash_bits_get( bits, 1 );
-    return av1_parser_color_config( parser );
+    av1_parser_color_config( parser );
     /* film_grain_params_present */
+    return 0;
 }
 
 static void av1_parse_superres_params
@@ -763,16 +930,17 @@ static int av1_parse_frame_size_with_refs
     uint8_t found_ref;
     for ( int i = 0; i < REFS_PER_FRAME; i++ )
     {
+        lsmash_bits_t *bits = parser->bits;
         found_ref = lsmash_bits_get( bits, 1 );
         if( found_ref )
         {
             /* To set up Ref*s, we need call av1_decode_frame_wrapup().
              * To set up ref_frame_idx[i], we may need to call av1_set_frame_refs(). */
-            frame->UpscaledWidth = RefUpscaledWidth[ frame->ref_frame_idx[i] ];
-            frame->FrameWidth    = UpscaledWidth;
-            frame->FrameHeight   = RefFrameHeight[ frame->ref_frame_idx[i] ];
-            frame->RenderWidth   = RefRenderWidth[ frame->ref_frame_idx[i] ];
-            frame->RenderHeight  = RefRenderHeight[ frame->ref_frame_idx[i] ];
+            frame->UpscaledWidth = parser->RefUpscaledWidth[ frame->ref_frame_idx[i] ];
+            frame->FrameWidth    = frame->UpscaledWidth; // XXX
+            frame->FrameHeight   = parser->RefFrameHeight[ frame->ref_frame_idx[i] ];
+            frame->RenderWidth   = parser->RefRenderWidth[ frame->ref_frame_idx[i] ];
+            frame->RenderHeight  = parser->RefRenderHeight[ frame->ref_frame_idx[i] ];
             break;
         }
     }
@@ -787,8 +955,8 @@ static int av1_parse_frame_size_with_refs
     {
         av1_parse_superres_params( parser, frame );
         av1_compute_image_size( frame );
-        return 0;
     }
+    return 0;
 }
 
 static int av1_get_relative_dist
@@ -811,7 +979,7 @@ static int av1_find_latest_backward
     av1_frame_t *frame
 )
 {
-    int ref = -1
+    int ref = -1;
     for( int i = 0; i < NUM_REF_FRAMES; i++ )
     {
         int hint = frame->shiftedOrderHints[i];
@@ -832,7 +1000,7 @@ static int av1_find_earliest_backward
     int ref = -1;
     for( int i = 0; i < NUM_REF_FRAMES; i++ )
     {
-        int hint = frame->shiftedOrderHints[i]
+        int hint = frame->shiftedOrderHints[i];
         if( !frame->usedFrame[i] && hint >= frame->curFrameHint && (ref < 0 || hint < frame->earliestOrderHint) )
         {
             ref = i;
@@ -877,10 +1045,10 @@ static int av1_set_frame_refs
     frame->usedFrame[ frame->last_frame_idx ] = 1;
     frame->usedFrame[ frame->gold_frame_idx ] = 1;
     frame->curFrameHint = 1 << (sh->OrderHintBits - 1);
-    for ( i = 0; i < NUM_REF_FRAMES; i++ )
+    for ( int i = 0; i < NUM_REF_FRAMES; i++ )
         frame->shiftedOrderHints[i] = frame->curFrameHint + av1_get_relative_dist( sh, frame->RefOrderHint[i], frame->OrderHint );
     frame->lastOrderHint = frame->shiftedOrderHints[ frame->last_frame_idx ];
-    frame->goldOrderHint = frame->shiftedOrderHints[ frame->gold_frame_idxx ];
+    frame->goldOrderHint = frame->shiftedOrderHints[ frame->gold_frame_idx ];
     IF_OUT_OF_SPEC( frame->lastOrderHint >= frame->curFrameHint || frame->goldOrderHint >= frame->curFrameHint )
         return LSMASH_ERR_INVALID_DATA;
     /* The ALTREF_FRAME reference is set to be a backward reference to the frame with highest output order */
@@ -911,12 +1079,12 @@ static int av1_set_frame_refs
             LAST2_FRAME, LAST3_FRAME, BWDREF_FRAME, ALTREF2_FRAME, ALTREF_FRAME
         };
         int refFrame = Ref_Frame_List[i];
-        if( ref_frame_idx[refFrame - LAST_FRAME] < 0 )
+        if( frame->ref_frame_idx[refFrame - LAST_FRAME] < 0 )
         {
             ref = av1_find_latest_forward( frame );
             if( ref >= 0 ) {
                 frame->ref_frame_idx[refFrame - LAST_FRAME] = ref;
-                usedFrame[ref] = 1;
+                frame->usedFrame[ref] = 1;
             }
         }
     }
@@ -953,89 +1121,91 @@ static int av1_parse_tile_info
     av1_frame_t  *frame
 )
 {
+    av1_sequence_header_t *sh = &parser->sequence_header;
+
     /* To compute NumTiles, we need TileCols and TileRows. */
-    sbCols  = sh->use_128x128_superblock ? ((frame->MiCols + 31) >> 5) : ((frame->MiCols + 15) >> 4);
-    sbRows  = sh->use_128x128_superblock ? ((frame->MiRows + 31) >> 5) : ((frame->MiRows + 15) >> 4);
-    sbShift = sh->use_128x128_superblock ? 5 : 4;
-    sbSize  = sbShift + 2;
-    maxTileWidthSb = MAX_TILE_WIDTH >> sbSize;
-    maxTileAreaSb = MAX_TILE_AREA >> (2 * sbSize);
-    minLog2TileCols = tile_log2(  maxTileWidthSb, sbCols );
-    maxLog2TileCols = tile_log2( 1, LSMASH_MIN( sbCols, MAX_TILE_COLS ) );
-    maxLog2TileRows = tile_log2( 1, LSMASH_MIN( sbRows, MAX_TILE_ROWS ) );
-    minLog2Tiles = LSMASH_MAX( minLog2TileCols, tile_log2( maxTileAreaSb, sbRows * sbCols ) );
-    uniform_tile_spacing_flag = lsmash_bits_get( bits, 1 );
+    int sbCols  = sh->use_128x128_superblock ? ((frame->MiCols + 31) >> 5) : ((frame->MiCols + 15) >> 4);
+    int sbRows  = sh->use_128x128_superblock ? ((frame->MiRows + 31) >> 5) : ((frame->MiRows + 15) >> 4);
+    int sbShift = sh->use_128x128_superblock ? 5 : 4;
+    int sbSize  = sbShift + 2;
+    int maxTileWidthSb = MAX_TILE_WIDTH >> sbSize;
+    int maxTileAreaSb = MAX_TILE_AREA >> (2 * sbSize);
+    int minLog2TileCols = tile_log2(  maxTileWidthSb, sbCols );
+    int maxLog2TileCols = tile_log2( 1, LSMASH_MIN( sbCols, MAX_TILE_COLS ) );
+    int maxLog2TileRows = tile_log2( 1, LSMASH_MIN( sbRows, MAX_TILE_ROWS ) );
+    int minLog2Tiles = LSMASH_MAX( minLog2TileCols, tile_log2( maxTileAreaSb, sbRows * sbCols ) );
+
+    lsmash_bits_t *bits = parser->bits;
+    uint8_t uniform_tile_spacing_flag = lsmash_bits_get( bits, 1 );
     if( uniform_tile_spacing_flag )
     {
         frame->TileColsLog2 = minLog2TileCols;
         while( frame->TileColsLog2 < maxLog2TileCols )
         {
-            increment_tile_cols_log2 = lsmash_bits_get( bits, 1 );
+            uint8_t increment_tile_cols_log2 = lsmash_bits_get( bits, 1 );
             if( increment_tile_cols_log2 == 1 )
                 ++ frame->TileColsLog2;
             else
                 break;
         }
-        tileWidthSb = (sbCols + (1 << frame->TileColsLog2) - 1) >> frame->TileColsLog2;
+        int tileWidthSb = (sbCols + (1 << frame->TileColsLog2) - 1) >> frame->TileColsLog2;
         int i = 0;
-        for( startSb = 0; startSb < sbCols; startSb += tileWidthSb )
-            MiColStarts[i++] = startSb << sbShift;
-        MiColStarts[i] = frame->MiCols;
+        for( int startSb = 0; startSb < sbCols; startSb += tileWidthSb )
+            i++;
         frame->TileCols = i;
-        minLog2TileRows = LSMASH_MAX( minLog2Tiles - frame->TileColsLog2, 0 );
+        int minLog2TileRows = LSMASH_MAX( minLog2Tiles - frame->TileColsLog2, 0 );
         frame->TileRowsLog2 = minLog2TileRows;
         while( frame->TileRowsLog2 < maxLog2TileRows )
         {
-            increment_tile_rows_log2 = lsmash_bits_get( bits, 1 );
+            int increment_tile_rows_log2 = lsmash_bits_get( bits, 1 );
             if( increment_tile_rows_log2 == 1 )
                 ++ frame->TileRowsLog2;
             else
-                break
+                break;
         }
-        tileHeightSb = (sbRows + (1 << frame->TileRowsLog2) - 1) >> frame->TileRowsLog2;
+        int tileHeightSb = (sbRows + (1 << frame->TileRowsLog2) - 1) >> frame->TileRowsLog2;
         i = 0;
-        for( startSb = 0; startSb < sbRows; startSb += tileHeightSb )
-            MiRowStarts[i++] = startSb << sbShift;
-        MiRowStarts[i] = frame->MiRows;
+        for( int startSb = 0; startSb < sbRows; startSb += tileHeightSb )
+            i++;
         frame->TileRows = i;
     }
     else
     {
-        widestTileSb = 0;
+        int sizeSb = 0;
+        int widestTileSb = 0;
         int i = 0;
-        for( startSb = 0; startSb < sbCols; startSb += sizeSb )
+        for( int startSb = 0; startSb < sbCols; startSb += sizeSb )
         {
-            MiColStarts[i++] = startSb << sbShift;
-            maxWidth = LSMASH_MIN( sbCols - startSb, maxTileWidthSb );
-            width_in_sbs_minus_1 = av1_get_ns( bits, maxWidth );
+            i++;
+            int maxWidth = LSMASH_MIN( sbCols - startSb, maxTileWidthSb );
+            int width_in_sbs_minus_1 = av1_get_ns( bits, maxWidth );
             sizeSb = width_in_sbs_minus_1 + 1;
             widestTileSb = LSMASH_MAX( sizeSb, widestTileSb );
         }
-        MiColStarts[i] = frame->MiCols;
         frame->TileCols = i;
         frame->TileColsLog2 = tile_log2( 1, frame->TileCols );
         if ( minLog2Tiles > 0 )
             maxTileAreaSb = (sbRows * sbCols) >> (minLog2Tiles + 1);
         else
             maxTileAreaSb = sbRows * sbCols;
-        maxTileHeightSb = LSMASH_MAX( maxTileAreaSb / widestTileSb, 1 );
+        int maxTileHeightSb = LSMASH_MAX( maxTileAreaSb / widestTileSb, 1 );
         i = 0;
-        for( startSb = 0; startSb < sbRows; startSb += sizeSb )
+        for( int startSb = 0; startSb < sbRows; startSb += sizeSb )
         {
-            MiRowStarts[i++] = startSb << sbShift;
-            maxHeight = LSMASH_MIN( sbRows - startSb, maxTileHeightSb );
-            height_in_sbs_minus_1 = av1_get_ns( bits, maxHeight );
+            i++;
+            int maxHeight = LSMASH_MIN( sbRows - startSb, maxTileHeightSb );
+            int height_in_sbs_minus_1 = av1_get_ns( bits, maxHeight );
             sizeSb = height_in_sbs_minus_1 + 1;
         }
-        MiRowStarts[i] = frame->MiRows;
         frame->TileRows = i;
         frame->TileRowsLog2 = tile_log2( 1, frame->TileRows );
     }
+    int context_update_tile_id; // XXX: unused
     if( frame->TileColsLog2 > 0 || frame->TileRowsLog2 > 0 )
     {
         context_update_tile_id  = lsmash_bits_get( bits, frame->TileRowsLog2 + frame->TileColsLog2 );
-        tile_size_bytes_minus_1 = lsmash_bits_get( bits, 2 );
-        TileSizeBytes = tile_size_bytes_minus_1 + 1;
+        int tile_size_bytes_minus_1 = lsmash_bits_get( bits, 2 );
+        int TileSizeBytes = tile_size_bytes_minus_1 + 1; // XXX: unused
     }
     else
         context_update_tile_id = 0;
@@ -1074,7 +1244,7 @@ static int av1_uncompressed_header
         if( frame->show_frame && sh->decoder_model_info_present_flag && !sh->ti.equal_picture_interval )
             frame->frame_presentation_time = lsmash_bits_get( bits, sh->dmi.frame_presentation_time_length_minus_1 + 1 );
         frame->showable_frame = frame->show_frame ? frame->frame_type != KEY_FRAME : lsmash_bits_get( bits, 1 );
-        if( frame_type == SWITCH_FRAME
+        if( frame->frame_type == SWITCH_FRAME
          || (frame->frame_type == KEY_FRAME && frame->show_frame) )
             frame->error_resilient_mode = 1;
         else
@@ -1100,7 +1270,7 @@ static int av1_uncompressed_header
         if( sh->seq_force_integer_mv == SELECT_INTEGER_MV )
             frame->force_integer_mv = lsmash_bits_get( bits, 1 );
         else
-            frame->force_integer_mv = seq_force_integer_mv;
+            frame->force_integer_mv = sh->seq_force_integer_mv;
     }
     else
         frame->force_integer_mv = 0;
@@ -1130,15 +1300,15 @@ static int av1_uncompressed_header
         if( frame->buffer_removal_time_present_flag )
             for( uint8_t opNum = 0; opNum <= sh->operating_points_cnt_minus_1; opNum++ )
             {
-                if( sh->decoder_model_present_for_this_op[opNum] )
+                if( sh->op[opNum].decoder_model_present_for_this_op )
                 {
-                    uint16_t opPtIdc    = operating_point_idc[opNum];
+                    uint16_t opPtIdc    = sh->op[opNum].operating_point_idc;
                     int inTemporalLayer = (opPtIdc >> temporal_id)      & 1;
                     int inSpatialLayer  = (opPtIdc >> (spatial_id + 8)) & 1;
                     if( opPtIdc == 0 || (inTemporalLayer && inSpatialLayer) )
                     {
-                        uint32_t n = buffer_removal_time_length_minus_1 + 1
-                        uint32_t buffer_removal_time[opNum] = lsmash_bits_get( bits, n );
+                        uint32_t n = sh->dmi.buffer_removal_time_length_minus_1 + 1;
+                        /*uint32_t buffer_removal_time[opNum] =*/ lsmash_bits_get( bits, n );
                     }
                 }
             }
@@ -1152,7 +1322,7 @@ static int av1_uncompressed_header
         if( frame->error_resilient_mode && sh->enable_order_hint )
             for( int i = 0; i < NUM_REF_FRAMES; i++ )
             {
-                frame->ref_order_hint[i] =  = lsmash_bits_get( bits, sh->order_hint_bits_minus_1 + 1 );
+                frame->ref_order_hint[i] = lsmash_bits_get( bits, sh->order_hint_bits_minus_1 + 1 );
                 if( frame->ref_order_hint[i] != frame->RefOrderHint[i] )
                     frame->RefValid[i] = 0;
             }
@@ -1160,7 +1330,7 @@ static int av1_uncompressed_header
     int err;
     if( frame->frame_type == KEY_FRAME )
     {
-        if( (err = av1_parse_frame_size( parser, frame )) < 0
+        if( (err = av1_parse_frame_size( parser, frame )) < 0 ||
             (err = av1_parse_render_size( parser, frame )) < 0 )
             return err;
         if( frame->allow_screen_content_tools && frame->UpscaledWidth == frame->FrameWidth )
@@ -1170,7 +1340,7 @@ static int av1_uncompressed_header
     {
         if( frame->frame_type == INTRA_ONLY_FRAME )
         {
-            if( (err = av1_parse_frame_size( parser, frame )) < 0
+            if( (err = av1_parse_frame_size( parser, frame )) < 0 ||
                 (err = av1_parse_render_size( parser, frame )) < 0 )
                 return err;
             if( frame->allow_screen_content_tools && frame->UpscaledWidth == frame->FrameWidth )
@@ -1196,7 +1366,7 @@ static int av1_uncompressed_header
                 if( !frame->frame_refs_short_signaling )
                     frame->ref_frame_idx[i] = lsmash_bits_get( bits, 3 );
                 if( sh->frame_id_numbers_present_flag )
-                    frame->delta_frame_id_minus_1 = lsmash_bits_get( bits, delta_frame_id_length_minus_2 + 2 );
+                    frame->delta_frame_id_minus_1 = lsmash_bits_get( bits, sh->delta_frame_id_length_minus_2 + 2 );
             }
             if( frame->frame_size_override_flag && !frame->error_resilient_mode )
             {
@@ -1205,7 +1375,7 @@ static int av1_uncompressed_header
             }
             else
             {
-                if( (err = av1_parse_frame_size( parser, frame )) < 0
+                if( (err = av1_parse_frame_size( parser, frame )) < 0 ||
                     (err = av1_parse_render_size( parser, frame )) < 0 )
                     return err;
             }
@@ -1218,6 +1388,7 @@ static int av1_uncompressed_header
                 frame->use_ref_frame_mvs = lsmash_bits_get( bits, 1 );
         }
     }
+    int RefFrameSignBias[NUM_REF_FRAMES_ARRAY];
     if( !frame->FrameIsIntra )
         for( int i = 0; i < REFS_PER_FRAME; i++ )
         {
@@ -1244,7 +1415,7 @@ static int av1_uncompressed_header
         /* load_cdfs( frame->ref_frame_idx[ frame->primary_ref_frame ] )
          * load_previous() */;
     }
-    if( sh->use_ref_frame_mvs )
+    if( frame->use_ref_frame_mvs )
         av1_motion_field_estimation();
     /* To call av1_decode_frame_wrapup() at the end of the tile group. We need parse tile_info(). */
     av1_parse_tile_info( parser, frame );
@@ -1265,12 +1436,12 @@ static int av1_decode_frame_wrapup
     for( int i; i < NUM_REF_FRAMES; i++ )
         if( (frame->refresh_frame_flags >> i) & 1 )
         {
-            RefValid[i]         = 1;
-            RefFrameId[i]       = frame->current_frame_id;
-            RefUpscaledWidth[i] = frame->UpscaledWidth;
-            RefFrameHeight[i]   = frame->FrameHeight;
-            RefRenderWidth[i]   = frame->RenderWidth;
-            RefRenderHeight[i]  = frame->RenderHeight;
+            parser->RefValid[i]         = 1;
+            parser->RefFrameId[i]       = frame->current_frame_id;
+            parser->RefUpscaledWidth[i] = frame->UpscaledWidth;
+            parser->RefFrameHeight[i]   = frame->FrameHeight;
+            parser->RefRenderWidth[i]   = frame->RenderWidth;
+            parser->RefRenderHeight[i]  = frame->RenderHeight;
         }
     return 0;
 }
@@ -1300,12 +1471,11 @@ static int av1_parse_frame_header
             return err;
         if( frame->show_existing_frame )
         {
-            av1_decode_frame_wrapup( frame );
+            av1_decode_frame_wrapup( parser, frame );
             frame->SeenFrameHeader = 0;
         }
         else
         {
-            TileNum = 0;
             frame->SeenFrameHeader = 1;
         }
     }
@@ -1319,6 +1489,9 @@ static int av1_parse_tile_group
     int           is_frame_obu
 )
 {
+    lsmash_bits_t *bits = parser->bits;
+    int tg_start, tg_end;
+
     if( !frame->SeenFrameHeader )
         return LSMASH_ERR_INVALID_DATA;
     frame->NumTiles = frame->TileCols * frame->TileRows;
@@ -1343,7 +1516,7 @@ static int av1_parse_tile_group
         return LSMASH_ERR_INVALID_DATA;
     if( tg_end == frame->NumTiles - 1 )
     {
-        av1_decode_frame_wrapup( frame );
+        av1_decode_frame_wrapup( parser, frame );
         frame->SeenFrameHeader = 0;
     }
     return 0;
@@ -1363,7 +1536,7 @@ static int av1_parse_frame
     int err = av1_parse_frame_header( parser, frame, is_redundant_header, 1, temporal_id, spatial_id );
     if( err < 0 )
         return err;
-    lsmash_bits_get_align( bit );
+    lsmash_bits_get_align( parser->bits );
     return av1_parse_tile_group( parser, frame, 1 );
 }
 
@@ -1382,7 +1555,7 @@ int av1_get_access_unit
 {
     int err = 0;
     uint32_t remaining_bytes = au_length;
-    av1_temporal_unit_t tu = { .active_frame = NULL. .temporal_id = 1 << 3 };
+    av1_temporal_unit_t tu = { .active_frame = NULL, .temporal_id = 1 << 3 };
     /* Here, we do not treat Length delimited bitstream. Therefore, temporal_unit_size, frame_unit_size and
      * obu_length are not present at all. */
     while( remaining_bytes )
@@ -1438,7 +1611,7 @@ int av1_get_access_unit
             if( (err = lsmash_bs_set_empty_stream( obu_bs, obu_data + obu_header_size, obu_size )) < 0 )
                 return err;
             lsmash_bits_init( parser->bits, obu_bs );
-            case( obu_type )
+            switch( obu_type )
             {
                 case AV1_OBU_TYPE_SEQUENCE_HEADER :
                     if( (err = av1_parse_sequence_header( parser, summary )) < 0 )
@@ -1459,7 +1632,7 @@ int av1_get_access_unit
                         tu.temporal_id = temporal_id;
                     else if( tu.temporal_id != temporal_id )
                         return LSMASH_ERR_INVALID_DATA;
-                    int (*parse_func)( av1_parser_t *, av1_frame_t *, int, uint8_t, uint8_t ) =
+                    int (*parse_func)( av1_parser_t *, av1_frame_t *, int, int, uint8_t, uint8_t ) =
                         obu_type != AV1_OBU_TYPE_FRAME ? av1_parse_frame_header
                                                        : av1_parse_frame;
                     if( (err = parse_func( parser, frame, is_redundant_header, is_frame_obu, temporal_id, spatial_id )) < 0 )
@@ -1476,7 +1649,7 @@ int av1_get_access_unit
                     assert( 0 );
             }
             /* No need byte alignment. */
-            lsmash_bits_empty( bits );  /* redundant though */
+            lsmash_bits_empty( parser->bits );  /* redundant though */
         }
         /* TODO: Temporal delimiter OBU. */
     }
@@ -1521,10 +1694,14 @@ int lsmash_setup_av1_specific_parameters_from_access_unit
             continue;
         }
         lsmash_bs_skip_bytes( bs, 1 + obu_extension_flag );
+        av1_parser_t parser;
+        av1_setup_parser(&parser, bs);
         av1_parse_sequence_header();
     }
 
     return 0;
+fail:
+    return err;
 }
 
 uint8_t *lsmash_create_av1_specific_info
