@@ -446,8 +446,8 @@ static int isom_write_mdcv( lsmash_bs_t *bs, isom_box_t *box )
     lsmash_bs_put_be16( bs, mdcv->display_primaries_r_y );
     lsmash_bs_put_be16( bs, mdcv->white_point_x );
     lsmash_bs_put_be16( bs, mdcv->white_point_y );
-    lsmash_bs_put_be16( bs, mdcv->max_display_mastering_luminance );
-    lsmash_bs_put_be16( bs, mdcv->min_display_mastering_luminance );
+    lsmash_bs_put_be32( bs, mdcv->max_display_mastering_luminance );
+    lsmash_bs_put_be32( bs, mdcv->min_display_mastering_luminance );
     return 0;
 }
 
