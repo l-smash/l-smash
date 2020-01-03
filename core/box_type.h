@@ -206,6 +206,7 @@ DEFINE_BOX_TYPE( ISOM_BOX_TYPE_CHPL, LSMASH_4CC( 'c', 'h', 'p', 'l' ), ISO );
 
 /* Decoder Specific Info */
 DEFINE_BOX_TYPE( ISOM_BOX_TYPE_ALAC, LSMASH_4CC( 'a', 'l', 'a', 'c' ), ISO );
+DEFINE_BOX_TYPE( ISOM_BOX_TYPE_AV1C, LSMASH_4CC( 'a', 'v', '1', 'C' ), ISO );
 DEFINE_BOX_TYPE( ISOM_BOX_TYPE_AVCC, LSMASH_4CC( 'a', 'v', 'c', 'C' ), ISO );
 DEFINE_BOX_TYPE( ISOM_BOX_TYPE_DAC3, LSMASH_4CC( 'd', 'a', 'c', '3' ), ISO );
 DEFINE_BOX_TYPE( ISOM_BOX_TYPE_DAMR, LSMASH_4CC( 'd', 'a', 'm', 'r' ), ISO );

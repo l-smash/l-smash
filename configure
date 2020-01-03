@@ -314,6 +314,7 @@ SRC_COMMON="   \
 SRC_CODECS="      \
     a52.c         \
     alac.c        \
+    av1.c         \
     description.c \
     dts.c         \
     h264.c        \

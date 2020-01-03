@@ -143,6 +143,7 @@ typedef enum
     ISOM_BRAND_TYPE_MFSM  = LSMASH_4CC( 'M', 'F', 'S', 'M' ),   /* Media File for Samsung video Metadata */
     ISOM_BRAND_TYPE_MPPI  = LSMASH_4CC( 'M', 'P', 'P', 'I' ),   /* Photo Player Multimedia Application Format */
     ISOM_BRAND_TYPE_ROSS  = LSMASH_4CC( 'R', 'O', 'S', 'S' ),   /* Ross Video */
+    ISOM_BRAND_TYPE_AV01  = LSMASH_4CC( 'a', 'v', '0', '1' ),   /* AV1 */
     ISOM_BRAND_TYPE_AVC1  = LSMASH_4CC( 'a', 'v', 'c', '1' ),   /* Advanced Video Coding extensions */
     ISOM_BRAND_TYPE_BBXM  = LSMASH_4CC( 'b', 'b', 'x', 'm' ),   /* Blinkbox Master File */
     ISOM_BRAND_TYPE_CAQV  = LSMASH_4CC( 'c', 'a', 'q', 'v' ),   /* Casio Digital Camera */
@@ -748,6 +749,7 @@ DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_GSM49_AUDIO,   0x6D730031 );              
 DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_NOT_SPECIFIED, 0x00000000 );                          /* either 'raw ' or 'twos' */
 
 /* Video CODEC identifiers */
+DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_AV01_VIDEO,  LSMASH_4CC( 'a', 'v', '0', '1' ) );    /* AV1 */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_AVC1_VIDEO,  LSMASH_4CC( 'a', 'v', 'c', '1' ) );    /* Advanced Video Coding
                                                                                              *   Any sample must not contain any paramerter set and filler data. */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_AVC2_VIDEO,  LSMASH_4CC( 'a', 'v', 'c', '2' ) );    /* Advanced Video Coding
@@ -919,6 +921,7 @@ typedef enum
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_HEVC,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_VC_1,
+    LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_AV1,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_DTS,
@@ -3368,6 +3371,58 @@ int lsmash_put_vc1_header
 uint8_t *lsmash_create_vc1_specific_info
 (
     lsmash_vc1_specific_parameters_t *param,
+    uint32_t                         *data_length
+);
+
+/* AV1 Specific Information
+ *   Mandatory :
+ *     ISOM_CODEC_TYPE_AV01_VIDEO
+ *
+ * For AV1 bitstream, ISOM_BRAND_TYPE_AV01 shall be present in compatible brands.
+ * For ISOM_CODEC_TYPE_AV01_VIDEO, a 'pasp' box shall be present. Users shall set par_h and par_v in lsmash_video_summary_t as follows.
+ *  par_h / par_v = MaxRenderWidth * (max_frame_height_minus_1 + 1) / ((max_frame_width_minus_1 + 1) * MaxRenderHeight) */
+
+typedef struct {
+    uint32_t sz;
+    uint8_t *data;
+} lsmash_av1_config_obus_t;
+
+/* chroma_sample_position */
+typedef enum
+{
+    LSMASH_AV1_CSP_UNKNOWN   = 0,   /* Unknown (in this case the source video transfer function must be signaled outside the AV1 bitstream) */
+    LSMASH_AV1_CSP_VERTICAL  = 1,   /* Horizontally co-located with (0, 0) luma sample, vertical position in the middle between two luma samples */
+    LSMASH_AV1_CSP_COLOCATED = 2,   /* co-located with (0, 0) luma sample */
+    LSMASH_AV1_CSP_RESERVED  = 3    /* reserved */
+} lsmash_av1_chroma_sample_position;
+
+typedef struct
+{
+    uint8_t seq_profile;                            /* the seq_profile value from the Sequence Header OBU */
+    uint8_t seq_level_idx_0;                        /* the value of seq_level_idx[0] in the Sequence Header OBU */
+    uint8_t seq_tier_0;                             /* the value of seq_tier[0] in the Sequence Header OBU */
+    uint8_t high_bitdepth;                          /* the high_bitdepth flag from the Sequence Header OBU */
+    uint8_t twelve_bit;                             /* the twelve_bit flag from the Sequence Header OBU */
+    uint8_t monochrome;                             /* the mono_chrome flag from the Sequence Header OBU */
+    uint8_t chroma_subsampling_x;                   /* the subsampling_x value from the Sequence Header OBU */
+    uint8_t chroma_subsampling_y;                   /* the subsampling_y value from the Sequence Header OBU */
+    lsmash_av1_chroma_sample_position chroma_sample_position;
+                                                    /* the chroma_sample_position value from the Sequence Header OBU */
+    uint8_t initial_presentation_delay_present;     /* This field indicates the presence of the initial_presentation_delay_minus_one field. */
+    uint8_t initial_presentation_delay_minus_one;   /* This field indicates the number of samples (minus one) that need to be decoded prior to starting the
+                                                     * presentation of the first sample associated with this sample entry in order to guarantee that each
+                                                     * sample will be decoded prior to its presentation time under the constraints of the first level value
+                                                     * indicated by seq_level_idx in the Sequence Header OBU (in the configOBUs field or in the associated
+                                                     * samples). */
+    lsmash_av1_config_obus_t configOBUs;            /* zero or more OBUs
+                                                     * This field SHALL contain at most one Sequence Header OBU and if present, it SHALL be the first OBU.
+                                                     * This field is expected to contain only one Sequence Header OBU and zero or more Metadata OBUs when
+                                                     * applicable to all the associated samples. */
+} lsmash_av1_specific_parameters_t;
+
+uint8_t *lsmash_create_av1_specific_info
+(
+    lsmash_av1_specific_parameters_t *param,
     uint32_t                         *data_length
 );
 
