@@ -191,7 +191,7 @@ LD="${CROSS}${LD}"
 RANLIB="${CROSS}${RANLIB}"
 STRIP="${CROSS}${STRIP}"
 for f in "$CC" "$AR" "$LD" "$RANLIB" "$STRIP"; do
-    test -n "$(which $f 2> /dev/null)" || error_exit "$f is not executable"
+    test -n "$(command -v "$f" 2> /dev/null)" || error_exit "$f is not executable"
 done
 
 
