@@ -2559,7 +2559,9 @@ int isom_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uin
     ++level;
     lsmash_box_type_t (*form_box_type_func)( lsmash_compact_box_type_t )   = NULL;
     int (*reader_func)( lsmash_file_t *, isom_box_t *, isom_box_t *, int ) = NULL;
-    if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) )
+    if( box->type.fourcc != ISOM_BOX_TYPE_FREE.fourcc
+     && box->type.fourcc != ISOM_BOX_TYPE_SKIP.fourcc
+     && lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) )
     {
         /* OK, this box is a sample entry.
          * Here, determine the suitable sample entry reader by media type if possible. */

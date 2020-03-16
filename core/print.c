@@ -2406,7 +2406,9 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
     if( LSMASH_IS_EXISTING_BOX( box->parent ) )
     {
         isom_box_t *parent = box->parent;
-        if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) )
+        if( !lsmash_check_box_type_identical( box->type, ISOM_BOX_TYPE_FREE )
+         && !lsmash_check_box_type_identical( box->type, ISOM_BOX_TYPE_SKIP )
+         && lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) )
         {
             /* OK, this box is a sample entry.
              * Here, determine the suitable sample entry printer by media type if possible. */
