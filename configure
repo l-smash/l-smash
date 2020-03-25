@@ -199,6 +199,8 @@ MAJVER=$(grep -e '#define LSMASH_VERSION_MAJOR' $SRCDIR/lsmash.h | sed -e 's/#de
 MINVER=$(grep -e '#define LSMASH_VERSION_MINOR' $SRCDIR/lsmash.h | sed -e 's/#define LSMASH_VERSION_MINOR //;s/ //g')
 MICVER=$(grep -e '#define LSMASH_VERSION_MICRO' $SRCDIR/lsmash.h | sed -e 's/#define LSMASH_VERSION_MICRO //;s/ //g')
 
+VERSION_SCRIPT_POSTPROCESS_CMD="cat"
+
 if test -n "$TARGET_OS"; then
     TARGET_OS=$(echo $TARGET_OS | tr '[A-Z]' '[a-z]')
 else
@@ -242,7 +244,8 @@ case "$TARGET_OS" in
         ;;
     *darwin*)
         SHARED_EXT=".dylib"
-        SO_LDFLAGS="-dynamiclib -Wl,-undefined,suppress -Wl,-read_only_relocs,suppress -Wl,-flat_namespace -Wl,--version-script,liblsmash.ver"
+        SO_LDFLAGS="-dynamiclib -Wl,-undefined,suppress -Wl,-read_only_relocs,suppress -Wl,-flat_namespace -Wl,-exported_symbols_list,liblsmash.ver"
+        VERSION_SCRIPT_POSTPROCESS_CMD='tr " " "\n" | sed -n /global:/,/local:/p | grep ";" | tr ";" "\n" | sed -E "s/(.+)/_\1/g" | sed -E "s/(.+[^*])$$$$/\1*/"'
         ;;
     *solaris*)
         #patches welcome
@@ -420,19 +423,22 @@ EOF
 
 sed "s/\\\$MAJOR/$MAJVER/" $SRCDIR/liblsmash.v > liblsmash.ver
 # Add non-public symbols which have lsmash_* prefix to local.
-find $SRCDIR/common/ $SRCDIR/importer/ -name "*.h" | xargs sed -e 's/^[ ]*//g' | \
+SYMS=$(find $SRCDIR/common/ $SRCDIR/importer/ -name "*.h" | xargs sed -e 's/^[ ]*//g' | \
     grep "^\(void\|lsmash_bits_t\|uint64_t\|int\|int64_t\|lsmash_bs_t\|uint8_t\|uint16_t\|uint32_t\|lsmash_entry_list_t\|lsmash_entry_t\|lsmash_multiple_buffers_t\|double\|float\|FILE\) \+\*\{0,1\}lsmash_" | \
-    sed -e "s/.*\(lsmash_.*\)(.*/\1/g" -e "s/.*\(lsmash_.*\)/\1;/g" | xargs -I% sed -i "/^};$/i \           %" liblsmash.ver
+    sed -e "s/.*\(lsmash_.*\)(.*/\1/g" -e "s/.*\(lsmash_.*\)/\1;/g" | tr '
+' ' ')
+sed -e "s/^};$/$SYMS };/" liblsmash.ver > liblsmash.ver.tmp
 # Get rid of non-public symbols for the cli tools from local.
-sed -i -e '/lsmash_win32_fopen/d' \
-    -e '/lsmash_string_from_wchar/d' \
-    -e '/lsmash_importer_open/d' \
-    -e '/lsmash_importer_close/d' \
-    -e '/lsmash_importer_get_access_unit/d' \
-    -e '/lsmash_importer_get_last_delta/d' \
-    -e '/lsmash_importer_construct_timeline/d' \
-    -e '/lsmash_importer_get_track_count/d' \
-    -e '/lsmash_duplicate_summary/d' liblsmash.ver
+sed -e 's/lsmash_win32_fopen //' \
+    -e 's/lsmash_string_from_wchar //' \
+    -e 's/lsmash_importer_open; //' \
+    -e 's/lsmash_importer_close; //' \
+    -e 's/lsmash_importer_get_access_unit; //' \
+    -e 's/lsmash_importer_get_last_delta; //' \
+    -e 's/lsmash_importer_construct_timeline; //' \
+    -e 's/lsmash_importer_get_track_count; //' \
+    -e 's/lsmash_duplicate_summary; //' liblsmash.ver.tmp | $VERSION_SCRIPT_POSTPROCESS_CMD > liblsmash.ver
+rm liblsmash.ver.tmp
 
 
 cat >> liblsmash.pc << EOF
