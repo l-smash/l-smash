@@ -781,6 +781,11 @@ static int open_input_files( muxer_t *muxer )
                 if( opt->isom )
                     add_brand( opt, ISOM_BRAND_TYPE_AVC1 );
             }
+            else if( lsmash_check_codec_type_identical( codec_type, ISOM_CODEC_TYPE_AV01_VIDEO ) )
+            {
+                if( !opt->isom && opt->qtff )
+                    return ERROR_MSG( "the input seems AV1, at present available only for ISO Base Media file format.\n" );
+            }
             else if( lsmash_check_codec_type_identical( codec_type, ISOM_CODEC_TYPE_HVC1_VIDEO ) )
             {
                 if( !opt->isom && opt->qtff )
