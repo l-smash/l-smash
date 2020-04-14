@@ -283,8 +283,16 @@ static int isom_initialize_structured_codec_specific_data( lsmash_codec_specific
             specific->size     = sizeof(lsmash_qt_audio_channel_layout_t);
             specific->destruct = lsmash_free;
             break;
-        case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_RTP_HINT_COMMON:
+        case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_RTP_HINT_COMMON :
             specific->size     = sizeof(lsmash_isom_rtp_reception_hint_t);
+            specific->destruct = lsmash_free;
+            break;
+        case LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_CONTENT_LIGHT_LEVEL_INFO :
+            specific->size     = sizeof(lsmash_qt_content_light_level_info_t);
+            specific->destruct = lsmash_free;
+            break;
+        case LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_MASTERING_DISPLAY_COLOR_VOLUME :
+            specific->size     = sizeof(lsmash_qt_mastering_display_color_volume_t);
             specific->destruct = lsmash_free;
             break;
         default :
@@ -2299,6 +2307,15 @@ static int isom_setup_qt_text_description( isom_stsd_t *stsd, lsmash_summary_t *
     return 0;
 }
 
+static int isom_setup_qt_clcp_description( isom_stsd_t *stsd, lsmash_summary_t *summary )
+{
+    isom_qt_clcp_entry_t *clcp = isom_add_qt_clcp_description( stsd, summary->sample_type );
+    if( LSMASH_IS_NON_EXISTING_BOX( clcp ) )
+        return LSMASH_ERR_NAMELESS;
+    clcp->data_reference_index = summary->data_ref_index;
+    return 0;
+}
+
 static int isom_setup_text_description( isom_stsd_t *stsd, lsmash_summary_t *summary )
 {
     lsmash_codec_type_t sample_type = summary->sample_type;
@@ -2306,6 +2323,15 @@ static int isom_setup_text_description( isom_stsd_t *stsd, lsmash_summary_t *sum
         return isom_setup_tx3g_description( stsd, summary );
     else if( lsmash_check_box_type_identical( sample_type, QT_CODEC_TYPE_TEXT_TEXT ) )
         return isom_setup_qt_text_description( stsd, summary );
+    else
+        return LSMASH_ERR_NAMELESS;
+}
+
+static int isom_setup_closed_captioning_description( isom_stsd_t *stsd, lsmash_summary_t *summary )
+{
+    lsmash_codec_type_t sample_type = summary->sample_type;
+    if( lsmash_check_box_type_identical( sample_type, QT_CODEC_TYPE_C708_CAPTION ) || lsmash_check_box_type_identical( sample_type, QT_CODEC_TYPE_C608_CAPTION ) )
+        return isom_setup_qt_clcp_description( stsd, summary );
     else
         return LSMASH_ERR_NAMELESS;
 }
@@ -2373,6 +2399,8 @@ int isom_setup_sample_description( isom_stsd_t *stsd, lsmash_media_type media_ty
         return isom_setup_audio_description( stsd, (lsmash_audio_summary_t *)summary );
     else if( media_type == ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK )
         return isom_setup_text_description( stsd, (lsmash_summary_t *)summary );
+    else if( media_type == ISOM_MEDIA_HANDLER_TYPE_CLOSED_CAPTIONING_TRACK )
+        return isom_setup_closed_captioning_description( stsd, (lsmash_summary_t *)summary );
     else if( media_type == ISOM_MEDIA_HANDLER_TYPE_HINT_TRACK )
         return isom_setup_hint_description( stsd, (lsmash_hint_summary_t *)summary );
     else
@@ -3037,6 +3065,19 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
 fail:
     lsmash_cleanup_summary( (lsmash_summary_t *)summary );
     return NULL;
+}
+
+lsmash_summary_t *isom_create_generic_summary_from_description( isom_sample_entry_t *sample_entry )
+{
+    if( LSMASH_IS_NON_EXISTING_BOX( sample_entry->file )
+     || LSMASH_IS_NON_EXISTING_BOX( sample_entry->parent ) )
+        return NULL;
+    lsmash_summary_t *summary = lsmash_create_summary( LSMASH_SUMMARY_TYPE_GENERIC );
+    if( !summary )
+        return NULL;
+    summary->sample_type = sample_entry->type;
+    summary->data_ref_index = sample_entry->data_reference_index;
+    return summary;
 }
 
 lsmash_codec_specific_t *lsmash_get_codec_specific_data( lsmash_summary_t *summary, uint32_t extension_number )

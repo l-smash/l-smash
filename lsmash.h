@@ -47,8 +47,8 @@ extern "C" {
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  2
-#define LSMASH_VERSION_MINOR 16
-#define LSMASH_VERSION_MICRO  1
+#define LSMASH_VERSION_MINOR 17
+#define LSMASH_VERSION_MICRO  0
 
 #define LSMASH_VERSION_INT( a, b, c ) (((a) << 16) | ((b) << 8) | (c))
 
@@ -857,6 +857,10 @@ DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_TX3G_TEXT,   LSMASH_4CC( 't', 'x', '3', 
 
 DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_TEXT_TEXT,     LSMASH_4CC( 't', 'e', 'x', 't' ) );    /* QuickTime Text Media */
 
+/* Closed Captioning identifiers */
+DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_C608_CAPTION,     LSMASH_4CC( 'c', '6', '0', '8' ) );    /* QuickTime CEA-608 Closed Caption Media */
+DEFINE_QTFF_CODEC_TYPE( QT_CODEC_TYPE_C708_CAPTION,     LSMASH_4CC( 'c', '7', '0', '8' ) );    /* QuickTime CEA-708 Closed Caption Media */
+
 /* Hint CODEC identifiers */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_FDP_HINT,    LSMASH_4CC( 'f', 'd', 'p', ' ' ) );    /* File delivery hints */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_M2TS_HINT,   LSMASH_4CC( 'm', '2', 't', 's' ) );    /* MPEG-2 transport stream for DMB */
@@ -906,6 +910,7 @@ typedef enum
     LSMASH_SUMMARY_TYPE_VIDEO,
     LSMASH_SUMMARY_TYPE_AUDIO,
     LSMASH_SUMMARY_TYPE_HINT,
+    LSMASH_SUMMARY_TYPE_GENERIC,
 } lsmash_summary_type;
 
 typedef enum
@@ -1655,6 +1660,7 @@ typedef enum
     ISOM_MEDIA_HANDLER_TYPE_OBJECT_DESCRIPTOR_STREAM            = LSMASH_4CC( 'o', 'd', 's', 'm' ),
     ISOM_MEDIA_HANDLER_TYPE_SCENE_DESCRIPTION_STREAM            = LSMASH_4CC( 's', 'd', 's', 'm' ),
     ISOM_MEDIA_HANDLER_TYPE_KEY_MANAGEMENT_MESSAGES             = LSMASH_4CC( 's', 'k', 'm', 'm' ),
+    ISOM_MEDIA_HANDLER_TYPE_CLOSED_CAPTIONING_TRACK             = LSMASH_4CC( 'c', 'l', 'c', 'p' ),
     ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK                         = LSMASH_4CC( 's', 'o', 'u', 'n' ),
     ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK                          = LSMASH_4CC( 't', 'e', 'x', 't' ),
     ISOM_MEDIA_HANDLER_TYPE_PROPRIETARY_DESCRIPTIVE_METADATA    = LSMASH_4CC( 'u', 'r', 'i', ' ' ),

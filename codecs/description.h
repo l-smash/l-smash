@@ -59,6 +59,11 @@ lsmash_summary_t *isom_create_audio_summary_from_description
     isom_sample_entry_t *sample_entry
 );
 
+lsmash_summary_t *isom_create_generic_summary_from_description
+(
+    isom_sample_entry_t *sample_entry
+);
+
 int isom_compare_opaque_extensions
 (
     lsmash_summary_t *a,
