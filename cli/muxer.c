@@ -1090,6 +1090,7 @@ static int do_mux( muxer_t *muxer )
     uint32_t num_active_input_tracks = out_movie->num_of_tracks;
     uint64_t total_media_size = 0;
     uint32_t progress_pos = 0;
+    int mux_ret = 0;
     while( 1 )
     {
         input_t *input = &muxer->input[current_input_number - 1];
@@ -1106,6 +1107,7 @@ static int do_mux( muxer_t *muxer )
                     return ERROR_MSG( "failed to alloc memory for buffer.\n" );
                 else if( ret <= -1 )
                 {
+                    mux_ret = LSMASH_ERR_INVALID_DATA;
                     lsmash_delete_sample( sample );
                     ERROR_MSG( "failed to get a frame from input file. Maybe corrupted.\n"
                                "Aborting muxing operation and trying to let output be valid file.\n" );
@@ -1138,10 +1140,7 @@ static int do_mux( muxer_t *muxer )
                     {
                         out_track->sample_entry = lsmash_add_sample_entry( output->root, out_track->track_ID, out_track->summary );
                         if( out_track->sample_entry == 0 )
-                        {
-                            ERROR_MSG( "failed to add sample description entry.\n" );
-                            break;
-                        }
+                            return ERROR_MSG( "failed to add sample description entry.\n" );
                     }
                 }
                 else if( ret == 2 ) /* EOF */
@@ -1152,7 +1151,10 @@ static int do_mux( muxer_t *muxer )
                     out_track->active = 0;
                     out_track->last_delta = lsmash_importer_get_last_delta( input->importer, input->current_track_number );
                     if( out_track->last_delta == 0 )
+                    {
+                        mux_ret = LSMASH_ERR_INVALID_DATA;
                         ERROR_MSG( "failed to get the last sample delta.\n" );
+                    }
                     out_track->last_delta *= out_track->timebase;
                     if( --num_active_input_tracks == 0 )
                         break;      /* Reached the end of whole tracks. */
@@ -1225,7 +1227,7 @@ static int do_mux( muxer_t *muxer )
         output_track_t *out_track = &out_movie->track[ out_movie->current_track_number - 1 ];
         uint32_t last_sample_delta = out_track->lpcm ? 1 : out_track->last_delta;
         if( lsmash_flush_pooled_samples( output->root, out_track->track_ID, last_sample_delta ) )
-            ERROR_MSG( "failed to flush the rest of samples.\n" );
+            return ERROR_MSG( "failed to flush the rest of samples.\n" );
         /* Create edit list.
          * Don't trust media duration basically. It's just duration of media, not duration of track presentation. */
         uint64_t actual_duration = out_track->lpcm
@@ -1236,10 +1238,12 @@ static int do_mux( muxer_t *muxer )
         edit.duration   = actual_duration * ((double)lsmash_get_movie_timescale( output->root ) / out_track->timescale);
         edit.start_time = out_track->priming_samples + out_track->start_offset;
         edit.rate       = ISOM_EDIT_MODE_NORMAL;
-        if( lsmash_create_explicit_timeline_map( output->root, out_track->track_ID, edit ) )
+        if( lsmash_create_explicit_timeline_map( output->root, out_track->track_ID, edit ) ) {
+            mux_ret = LSMASH_ERR_INVALID_DATA;
             ERROR_MSG( "failed to set timeline map.\n" );
+        }
     }
-    return 0;
+    return mux_ret;
 #undef LSMASH_MAX
 #undef LSMASH_MIN
 }
@@ -1278,6 +1282,7 @@ static int finish_movie( output_t *output, option_t *opt )
 
 int main( int argc, char *argv[] )
 {
+    int ret = 0;
     muxer_t muxer = { { 0 } };
     lsmash_get_mainargs( &argc, &argv );
     if( parse_global_options( argc, argv, &muxer ) )
@@ -1298,12 +1303,18 @@ int main( int argc, char *argv[] )
         return MUXER_ERR( "failed to open input files.\n" );
     if( prepare_output( &muxer ) )
         return MUXER_ERR( "failed to set up preparation for output.\n" );
-    if( do_mux( &muxer ) )
-        return MUXER_ERR( "failed to do muxing.\n" );
+    if( ( ret = do_mux( &muxer ) ) )
+    {
+        /* We wan't to finalize the movie if we only hit invalid input. */
+        if( ret == LSMASH_ERR_INVALID_DATA )
+            ret = -1;
+        else
+            return MUXER_ERR( "failed to do muxing.\n" );
+    }
     if( finish_movie( &muxer.output, &muxer.opt ) )
         return MUXER_ERR( "failed to finish movie.\n" );
     REFRESH_CONSOLE;
     eprintf( "Muxing completed!\n" );
     cleanup_muxer( &muxer );        /* including lsmash_destroy_root() */
-    return 0;
+    return ret;
 }
