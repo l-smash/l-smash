@@ -404,8 +404,11 @@ uint8_t lsmash_bs_show_byte( lsmash_bs_t *bs, uint32_t offset )
         if( offset >= lsmash_bs_get_remaining_buffer_size( bs ) )
         {
             if( bs->eof )
+            {
                 /* No more read from both the stream and the buffer. */
+                bs->eob = 1;
                 return 0;
+            }
             /* We need increase the buffer size. */
             bs_alloc( bs, bs->buffer.pos + offset + 1 );
             bs_fill_buffer( bs );
