@@ -227,8 +227,20 @@ typedef struct
 
 typedef struct
 {
+    uint8_t present;
+    uint16_t display_primaries_x[3];
+    uint16_t display_primaries_y[3];
+    uint16_t white_point_x;
+    uint16_t white_point_y;
+    uint32_t max_display_mastering_luminance;
+    uint32_t min_display_mastering_luminance;
+} hevc_mastering_display_t;
+
+typedef struct
+{
     hevc_pic_timing_t     pic_timing;
     hevc_recovery_point_t recovery_point;
+    hevc_mastering_display_t mastering_display;
 } hevc_sei_t;
 
 /* Slice segment */

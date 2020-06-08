@@ -47,8 +47,8 @@ extern "C" {
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  2
-#define LSMASH_VERSION_MINOR 16
-#define LSMASH_VERSION_MICRO  1
+#define LSMASH_VERSION_MINOR 17
+#define LSMASH_VERSION_MICRO  0
 
 #define LSMASH_VERSION_INT( a, b, c ) (((a) << 16) | ((b) << 8) | (c))
 
@@ -3300,6 +3300,22 @@ int lsmash_get_hevc_array_completeness
     lsmash_hevc_specific_parameters_t *param,
     lsmash_hevc_dcr_nalu_type          ps_type,
     int                               *array_completeness
+);
+
+/* Supported SEIs stored in hvcC */
+typedef enum
+{
+    HEVC_SEI_MASTERING_DISPLAY = 137,
+} lsmash_hevc_sei_payload_type;
+
+/* Check if a given SEIs is stored in hvcC samples.
+ * Return 0 if payload_type is found.
+ * Return a negative value otherwise. */
+int lsmash_get_hevc_array_sei_presence
+(
+    lsmash_hevc_specific_parameters_t *param,
+    lsmash_hevc_dcr_nalu_type          ps_type,
+    lsmash_hevc_sei_payload_type       payload_type
 );
 
 uint8_t *lsmash_create_hevc_specific_info

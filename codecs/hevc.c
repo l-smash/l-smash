@@ -1349,6 +1349,20 @@ int hevc_parse_sei
                 lsmash_bits_get( bits, 1 );     /* exact_match_flag */
                 sei->recovery_point.broken_link_flag = lsmash_bits_get( bits, 1 );
             }
+            else if( payloadType == HEVC_SEI_MASTERING_DISPLAY )
+            {
+                /* mastering_display */
+                sei->mastering_display.present = 2; /* so that only one is added */
+                for( size_t j = 0; j < 3; j++ )
+                {
+                    sei->mastering_display.display_primaries_x[j] = lsmash_bits_get( bits, 16 );
+                    sei->mastering_display.display_primaries_y[j] = lsmash_bits_get( bits, 16 );
+                }
+                sei->mastering_display.white_point_x = lsmash_bits_get( bits, 16 );
+                sei->mastering_display.white_point_y = lsmash_bits_get( bits, 16 );
+                sei->mastering_display.max_display_mastering_luminance = lsmash_bits_get( bits, 32 );
+                sei->mastering_display.min_display_mastering_luminance = lsmash_bits_get( bits, 32 );
+            }
             else
                 goto skip_sei_message;
         }
@@ -2749,6 +2763,32 @@ int lsmash_get_hevc_array_completeness
     return 0;
 }
 
+int lsmash_get_hevc_array_sei_presence
+(
+    lsmash_hevc_specific_parameters_t *param,
+    lsmash_hevc_dcr_nalu_type          ps_type,
+    lsmash_hevc_sei_payload_type       payload_type
+)
+{
+    if( hevc_alloc_parameter_arrays_if_needed( param ) < 0 )
+        return LSMASH_ERR_MEMORY_ALLOC;
+    hevc_parameter_array_t *ps_array = hevc_get_parameter_set_array( param, ps_type );
+    if( !ps_array )
+        return LSMASH_ERR_FUNCTION_PARAM;
+
+    if( ps_array->NAL_unit_type != HEVC_NALU_TYPE_PREFIX_SEI )
+        return LSMASH_ERR_FUNCTION_PARAM;
+
+    for( lsmash_entry_t *entry = ps_array->list->head; entry; entry = entry->next )
+    {
+        isom_dcr_ps_entry_t *ps = (isom_dcr_ps_entry_t *)entry->data;
+        if( ps->nalUnitLength > 2 && *(ps->nalUnit + 2) == payload_type )
+            return 0;
+    }
+
+    return LSMASH_ERR_INVALID_DATA;
+}
+
 static int hevc_parse_succeeded
 (
     hevc_info_t                       *info,
@@ -3079,9 +3119,17 @@ int hevc_print_codec_specific
         for( uint16_t j = 0; j < numNalus; j++ )
         {
             uint16_t nalUnitLength = lsmash_bs_get_be16( bs );
-            lsmash_bs_skip_bytes( bs, nalUnitLength );
             lsmash_ifprintf( fp, array_indent, "nalUnit[%"PRIu16"]\n", j );
             lsmash_ifprintf( fp, array_indent + 1, "nalUnitLength = %"PRIu16"\n", nalUnitLength );
+
+            if( (temp8 & 0x3F) == HEVC_NALU_TYPE_PREFIX_SEI )
+            {
+                lsmash_bs_skip_bytes( bs, 2 );
+                lsmash_ifprintf(fp, array_indent + 1, "seiPayloadType = %"PRIu8"\n", lsmash_bs_get_byte( bs ));
+                lsmash_bs_skip_bytes( bs, nalUnitLength - 3 );
+            }
+            else
+                lsmash_bs_skip_bytes( bs, nalUnitLength );
         }
     }
     lsmash_bs_cleanup( bs );
