@@ -449,6 +449,32 @@ uint64_t lsmash_bs_show_be64( lsmash_bs_t *bs, uint32_t offset )
          | ((uint64_t)lsmash_bs_show_byte( bs, offset + 7 ));
 }
 
+uint16_t lsmash_bs_show_le16( lsmash_bs_t *bs, uint32_t offset )
+{
+    return ((uint16_t)lsmash_bs_show_byte( bs, offset     )     )
+         | ((uint16_t)lsmash_bs_show_byte( bs, offset + 1 ) << 8);
+}
+
+uint32_t lsmash_bs_show_le32( lsmash_bs_t *bs, uint32_t offset )
+{
+    return ((uint32_t)lsmash_bs_show_byte( bs, offset     )      )
+         | ((uint32_t)lsmash_bs_show_byte( bs, offset + 1 ) <<  8)
+         | ((uint32_t)lsmash_bs_show_byte( bs, offset + 2 ) << 16)
+         | ((uint32_t)lsmash_bs_show_byte( bs, offset + 3 ) << 24);
+}
+
+uint64_t lsmash_bs_show_le64( lsmash_bs_t *bs, uint32_t offset )
+{
+    return ((uint64_t)lsmash_bs_show_byte( bs, offset     )      )
+         | ((uint64_t)lsmash_bs_show_byte( bs, offset + 1 ) <<  8)
+         | ((uint64_t)lsmash_bs_show_byte( bs, offset + 2 ) << 16)
+         | ((uint64_t)lsmash_bs_show_byte( bs, offset + 3 ) << 24)
+         | ((uint64_t)lsmash_bs_show_byte( bs, offset + 4 ) << 32)
+         | ((uint64_t)lsmash_bs_show_byte( bs, offset + 5 ) << 40)
+         | ((uint64_t)lsmash_bs_show_byte( bs, offset + 6 ) << 48)
+         | ((uint64_t)lsmash_bs_show_byte( bs, offset + 7 ) << 56);
+}
+
 uint8_t lsmash_bs_get_byte( lsmash_bs_t *bs )
 {
     if( bs->eob || bs->error )
@@ -632,6 +658,12 @@ uint32_t lsmash_bs_get_le32( lsmash_bs_t *bs )
 {
     uint32_t value = lsmash_bs_get_le16( bs );
     return value | (lsmash_bs_get_le16( bs ) << 16);
+}
+
+uint64_t lsmash_bs_get_le64( lsmash_bs_t *bs )
+{
+    uint64_t value = lsmash_bs_get_le32( bs );
+    return value | (((uint64_t) lsmash_bs_get_le32( bs )) << 16);
 }
 
 int lsmash_bs_read( lsmash_bs_t *bs, uint32_t size )

@@ -771,6 +771,7 @@ void isom_remove_sample_description( isom_sample_entry_t *sample )
         int i = 0;
 #define ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( type, func ) \
     description_remover_table[i++] = (struct description_remover_table_tag){ type, func }
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_AV01_VIDEO, isom_remove_visual_description );
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC1_VIDEO, isom_remove_visual_description );
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC2_VIDEO, isom_remove_visual_description );
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_AVC3_VIDEO, isom_remove_visual_description );

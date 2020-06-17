@@ -1321,6 +1321,7 @@ static int isom_print_sample_description_extesion( FILE *fp, lsmash_file_t *file
     extern int hevc_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
     extern int h264_print_bitrate( FILE *, lsmash_file_t *, isom_box_t *, int );
     extern int vc1_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
+    extern int av1_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
     extern int ac3_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
     extern int eac3_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
     extern int dts_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
@@ -1353,6 +1354,7 @@ static int isom_print_sample_description_extesion( FILE *fp, lsmash_file_t *file
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_WAVE, isom_print_wave );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_CHAN, isom_print_chan );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_ESDS, mp4sys_print_codec_specific );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_AV1C, av1_print_codec_specific );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_AVCC, h264_print_codec_specific );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_BTRT, h264_print_bitrate );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_HVCC, hevc_print_codec_specific );
