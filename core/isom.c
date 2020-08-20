@@ -4218,3 +4218,49 @@ int lsmash_set_copyright( lsmash_root_t *root, uint32_t track_ID, uint16_t ISO_l
     cprt->notice        = lsmash_memdup( notice, cprt->notice_length );
     return 0;
 }
+
+int lsmash_add_track_reference( lsmash_root_t *root, uint32_t track_ID, uint32_t ref_track_ID, isom_track_reference_type type )
+{
+    if( isom_check_initializer_present( root ) < 0
+     || !track_ID
+     || !ref_track_ID )
+        return LSMASH_ERR_FUNCTION_PARAM;
+    lsmash_file_t *file = root->file;
+    if( file->forbid_tref )
+        return LSMASH_ERR_NAMELESS;
+    isom_trak_t *trak = isom_get_trak( file, track_ID );
+    if( !trak )
+        return LSMASH_ERR_NAMELESS;
+    isom_tref_t *tref = trak->tref;
+    if( !tref && !(tref = isom_add_tref( trak )) )
+        return LSMASH_ERR_NAMELESS;
+    lsmash_entry_list_t *list = &(tref->ref_list);
+    /* check if this type of references already exist */
+    for( lsmash_entry_t *entry = list->head; entry; entry = entry->next )
+    {
+        isom_tref_type_t *tref_type = (isom_tref_type_t *)entry->data;
+        if( !tref_type )
+            return LSMASH_ERR_NAMELESS;
+        if( lsmash_check_box_type_identical( tref_type->type, lsmash_form_iso_box_type(type) ) )
+        {
+            /* increase the number of references */
+            uint32_t *temp = lsmash_malloc( sizeof(uint32_t)*(tref_type->ref_count + 1) );
+            if( tref_type->ref_count )
+            {
+                temp = lsmash_memdup( tref_type->track_ID, sizeof(uint32_t)*tref_type->ref_count );
+                lsmash_free( tref_type->track_ID );
+            }
+            *(temp + tref_type->ref_count) = ref_track_ID;
+            tref_type->track_ID = temp;
+            ++(tref_type->ref_count);
+            return 0;
+        }
+    }
+    isom_tref_type_t *tref_type = isom_add_track_reference_type( tref, type );
+    if( !tref_type )
+        return LSMASH_ERR_NAMELESS;
+    tref_type->track_ID = malloc( sizeof(uint32_t) );
+    *tref_type->track_ID = ref_track_ID;
+    tref_type->ref_count = 1;
+    return 0;
+}
