@@ -422,7 +422,8 @@ sed "s/\\\$MAJOR/$MAJVER/" $SRCDIR/liblsmash.v > liblsmash.ver
 # Add non-public symbols which have lsmash_* prefix to local.
 find $SRCDIR/common/ $SRCDIR/importer/ -name "*.h" | xargs sed -e 's/^[ ]*//g' | \
     grep "^\(void\|lsmash_bits_t\|uint64_t\|int\|int64_t\|lsmash_bs_t\|uint8_t\|uint16_t\|uint32_t\|lsmash_entry_list_t\|lsmash_entry_t\|lsmash_multiple_buffers_t\|double\|float\|FILE\) \+\*\{0,1\}lsmash_" | \
-    sed -e "s/.*\(lsmash_.*\)(.*/\1/g" -e "s/.*\(lsmash_.*\)/\1;/g" | xargs -I% sed -i "/^};$/i \           %" liblsmash.ver
+    sed -e "s/.*\(lsmash_.*\)(.*/\1/g" -e "s/.*\(lsmash_.*\)/\1;/g" | xargs -I% sed -i '/^};$/i\
+        %' liblsmash.ver
 # Get rid of non-public symbols for the cli tools from local.
 sed -i -e '/lsmash_win32_fopen/d' \
     -e '/lsmash_string_from_wchar/d' \
@@ -500,7 +501,7 @@ EOF
 done
 
 
-test "$SRCDIR" = "." || ln -sf ${SRCDIR}/Makefile .
+test "$SRCDIR" != "." || ln -sf ${SRCDIR}/Makefile .
 mkdir -p cli codecs common core importer
 
 
