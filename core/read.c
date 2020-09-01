@@ -1349,12 +1349,13 @@ static int isom_read_chan( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     chan->numberChannelDescriptions = lsmash_bs_get_be32( bs );
     if( chan->numberChannelDescriptions )
     {
-        isom_channel_description_t *desc = lsmash_malloc( chan->numberChannelDescriptions * sizeof(isom_channel_description_t) );
-        if( !desc )
+        isom_channel_description_t *channelDescriptions = lsmash_malloc( chan->numberChannelDescriptions * sizeof(isom_channel_description_t) );
+        if( !channelDescriptions )
             return LSMASH_ERR_MEMORY_ALLOC;
-        chan->channelDescriptions = desc;
+        chan->channelDescriptions = channelDescriptions;
         for( uint32_t i = 0; i < chan->numberChannelDescriptions; i++ )
         {
+            isom_channel_description_t *desc = &channelDescriptions[i];
             desc->channelLabel       = lsmash_bs_get_be32( bs );
             desc->channelFlags       = lsmash_bs_get_be32( bs );
             for( int j = 0; j < 3; j++ )
