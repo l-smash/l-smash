@@ -1200,9 +1200,9 @@ static int isom_print_chan( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
     lsmash_ifprintf( fp, indent, "numberChannelDescriptions = %"PRIu32"\n", chan->numberChannelDescriptions );
     if( chan->numberChannelDescriptions )
     {
-        isom_channel_description_t *desc = chan->channelDescriptions;
         for( uint32_t i = 0; i < chan->numberChannelDescriptions; i++ )
         {
+            isom_channel_description_t *desc = &chan->channelDescriptions[i];
             lsmash_ifprintf( fp, indent++, "ChannelDescriptions[%"PRIu32"]\n", i );
             lsmash_ifprintf( fp, indent, "channelLabel = 0x%08"PRIx32"\n", desc->channelLabel );
             lsmash_ifprintf( fp, indent, "channelFlags = 0x%08"PRIx32"\n", desc->channelFlags );
