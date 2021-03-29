@@ -44,22 +44,22 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "HAS_VERSION_TAG=$HAS_VERSION_TAG" >> $GITHUB_ENV
 
-      # - name: Build image
-      #   run: docker build . --file Dockerfile --tag $IMAGE_NAME
+      - name: Build image
+        run: docker build . --file Dockerfile --tag $IMAGE_NAME
 
       - name: Log into registry
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login docker.pkg.github.com -u ${{ github.actor }} --password-stdin
 
-      # - name: Echoing the publishing Variables
-      #   run: |
-      #     # ${{env.IMAGE_ID}} == $IMAGE_ID
-      #     echo IMAGE_ID="${{env.IMAGE_ID}}"
-      #     echo VERSION="${{env.VERSION}}"
+      - name: Echoing the publishing Variables
+        run: |
+          # ${{env.IMAGE_ID}} == $IMAGE_ID
+          echo IMAGE_ID="${{env.IMAGE_ID}}"
+          echo VERSION="${{env.VERSION}}"
 
-      # - name: Push image
-      #   run: |
-      #     docker tag $IMAGE_NAME $IMAGE_ID:$VERSION
-      #     docker push $IMAGE_ID:$VERSION
+      - name: Push image
+        run: |
+          docker tag $IMAGE_NAME $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
 
       - name: Extract Artifacts
         if: ${{ env.HAS_VERSION_TAG == 1}}
