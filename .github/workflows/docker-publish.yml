@@ -19,9 +19,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-
-
-
+      - name: Debugging
+        run: |
+          echo "${{ github.ref }}" 
       - name: Calculate Publishing Variables
         run: |
           IMAGE_ID=docker.pkg.github.com/${{ github.repository }}/$IMAGE_NAME
@@ -43,6 +43,7 @@ jobs:
           echo "EXPLICIT_VERSION=$EXPLICIT_VERSION" >> $GITHUB_ENV
 
       - name: Build image
+        if: false
         run: docker build . --file Dockerfile --tag $IMAGE_NAME
 
       - name: Log into registry
