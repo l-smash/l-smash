@@ -35,7 +35,7 @@ jobs:
           VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
 
           # Strip "v" prefix from tag name
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//') && HAS_VERSION_TAG=1 || $HAS_VERSION_TAG=0
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//') && HAS_VERSION_TAG=1 || HAS_VERSION_TAG=0
 
           # Use Docker `latest` tag convention
           [ "$VERSION" == "master" ] && VERSION=latest
@@ -69,12 +69,14 @@ jobs:
           ls -la ./artifacts
 
       - name: Packing Artifacts
+        if: ${{ env.HAS_VERSION_TAG == 1}}
         uses: papeloto/action-zip@v1
         with:
           files: ./artifacts/raw
           dest: ./artifacts/Artifacts.zip
 
       - name: Release
+        if: ${{ env.HAS_VERSION_TAG == 1}}
         uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
