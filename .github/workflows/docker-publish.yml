@@ -35,17 +35,15 @@ jobs:
           VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
 
           # Strip "v" prefix from tag name
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] &&  EXPLICIT_VERSION=$(echo $VERSION | sed -e 's/^v//') && VERSION=EXPLICIT_VERSION
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
 
           # Use Docker `latest` tag convention
           [ "$VERSION" == "master" ] && VERSION=latest
 
           echo "IMAGE_ID=$IMAGE_ID" >> $GITHUB_ENV
           echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "EXPLICIT_VERSION=$EXPLICIT_VERSION" >> $GITHUB_ENV
 
       - name: Build image
-        if: false
         run: docker build . --file Dockerfile --tag $IMAGE_NAME
 
       - name: Log into registry
@@ -56,10 +54,8 @@ jobs:
           # ${{env.IMAGE_ID}} == $IMAGE_ID
           echo IMAGE_ID="${{env.IMAGE_ID}}"
           echo VERSION="${{env.VERSION}}"
-          echo EXPLICIT_VERSION="${{env.EXPLICIT_VERSION}}"
 
       - name: Push image
         run: |
           docker tag $IMAGE_NAME $IMAGE_ID:$VERSION
-          [ ! -z "$EXPLICIT_VERSION" ] && docker tag $IMAGE_NAME $IMAGE_ID:$EXPLICIT_VERSION
           docker push $IMAGE_ID:$VERSION 
