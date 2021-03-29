@@ -20,11 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Build image
-        run: docker build . --file Dockerfile --tag $IMAGE_NAME
 
-      - name: Log into registry
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login docker.pkg.github.com -u ${{ github.actor }} --password-stdin
 
       - name: Calculate Publishing Variables
         run: |
@@ -37,13 +33,21 @@ jobs:
           VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
 
           # Strip "v" prefix from tag name
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] &&  EXPLICIT_VERSION=$(echo $VERSION | sed -e 's/^v//') && VERSION=EXPLICIT_VERSION
 
           # Use Docker `latest` tag convention
           [ "$VERSION" == "master" ] && VERSION=latest
 
           echo "IMAGE_ID=$IMAGE_ID" >> $GITHUB_ENV
           echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "EXPLICIT_VERSION=$EXPLICIT_VERSION" >> $GITHUB_ENV
+
+      - name: Build image
+        if: false
+        run: docker build . --file Dockerfile --tag $IMAGE_NAME
+
+      - name: Log into registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login docker.pkg.github.com -u ${{ github.actor }} --password-stdin
 
       - name: Echoing the publishing Variables
         run: |
@@ -54,4 +58,5 @@ jobs:
       - name: Push image
         run: |
           docker tag $IMAGE_NAME $IMAGE_ID:$VERSION
+          [ ! -z "$EXPLICIT_VERSION" ] && docker tag $IMAGE_NAME $IMAGE_ID:$EXPLICIT_VERSION
           docker push $IMAGE_ID:$VERSION 
