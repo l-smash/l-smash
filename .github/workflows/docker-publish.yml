@@ -44,7 +44,6 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Build image
-        if: false
         run: docker build . --file Dockerfile --tag $IMAGE_NAME
 
       - name: Log into registry
