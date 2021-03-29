@@ -58,4 +58,18 @@ jobs:
       - name: Push image
         run: |
           docker tag $IMAGE_NAME $IMAGE_ID:$VERSION
-          docker push $IMAGE_ID:$VERSION 
+          docker push $IMAGE_ID:$VERSION
+
+      - name: Extract Artifacts
+        run: |
+          mkdir -p /artifacts
+          docker run --rm -v '/artifacts:/artifacts' $IMAGE_ID bash -c "cp -r /build/* /artifacts/"
+          ls -la /artifacts
+      - name: Release
+        if: false
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: |
+            /artifacts
