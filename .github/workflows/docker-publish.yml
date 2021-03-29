@@ -62,7 +62,7 @@ jobs:
       #     docker push $IMAGE_ID:$VERSION
 
       - name: Extract Artifacts
-        if: ${{ $HAS_VERSION_TAG == 1}}
+        if: ${{ env.HAS_VERSION_TAG == 1}}
         run: |
           mkdir -p ./artifacts/raw
           docker run --rm -v "$PWD/artifacts/raw:/artifacts" $IMAGE_ID bash -c "cp -r /build/* /artifacts/"
