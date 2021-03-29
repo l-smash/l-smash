@@ -43,7 +43,6 @@ jobs:
           echo "EXPLICIT_VERSION=$EXPLICIT_VERSION" >> $GITHUB_ENV
 
       - name: Build image
-        if: false
         run: docker build . --file Dockerfile --tag $IMAGE_NAME
 
       - name: Log into registry
@@ -54,6 +53,7 @@ jobs:
           # ${{env.IMAGE_ID}} == $IMAGE_ID
           echo IMAGE_ID="${{env.IMAGE_ID}}"
           echo VERSION="${{env.VERSION}}"
+          echo EXPLICIT_VERSION="${{env.EXPLICIT_VERSION}}"
 
       - name: Push image
         run: |
