@@ -72,3 +72,5 @@ jobs:
         with:
           files: |
             ./artifacts/*
+            ./artifacts/*/*
+            ./artifacts/*/*/*
