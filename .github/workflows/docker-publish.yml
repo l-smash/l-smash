@@ -35,13 +35,14 @@ jobs:
           VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
 
           # Strip "v" prefix from tag name
-          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//') && HAS_VERSION_TAG=1 || $HAS_VERSION_TAG=0
 
           # Use Docker `latest` tag convention
           [ "$VERSION" == "master" ] && VERSION=latest
 
           echo "IMAGE_ID=$IMAGE_ID" >> $GITHUB_ENV
           echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "HAS_VERSION_TAG=$HAS_VERSION_TAG" >> $GITHUB_ENV
 
       # - name: Build image
       #   run: docker build . --file Dockerfile --tag $IMAGE_NAME
@@ -61,21 +62,21 @@ jobs:
       #     docker push $IMAGE_ID:$VERSION
 
       - name: Extract Artifacts
-        if: "${{ github.ref }}" == "refs/tags/"*
+        if: $HAS_VERSION_TAG
         run: |
           mkdir -p ./artifacts/raw
           docker run --rm -v "$PWD/artifacts/raw:/artifacts" $IMAGE_ID bash -c "cp -r /build/* /artifacts/"
           ls -la ./artifacts
 
       - name: Packing Artifacts
-        if: "${{ github.ref }}" == "refs/tags/"*
+        if: $HAS_VERSION_TAG
         uses: papeloto/action-zip@v1
         with:
           files: ./artifacts/raw
           dest: ./artifacts/Artifacts.zip
 
       - name: Release
-        if: "${{ github.ref }}" == "refs/tags/"*
+        if: $HAS_VERSION_TAG
         uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
