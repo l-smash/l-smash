@@ -19,3 +19,6 @@ RUN ./configure --prefix='/usr' --enable-shared --disable-static  \
 # use this to release
 # docker build . -t l-smash ^C
 # docker tag l-smash l-smash:2.14.6-beta
+
+# use this to copy artifacts:
+# docker run --rm -v "$PWD/artifacts:/artifacts" l-smash bash -c "cp -r /build/* /artifacts/" 

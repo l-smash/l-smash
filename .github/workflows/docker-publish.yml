@@ -64,7 +64,7 @@ jobs:
         run: |
           mkdir -p ./artifacts
           docker run --rm -v "$PWD/artifacts:/artifacts" $IMAGE_ID bash -c "cp -r /build/* /artifacts/"
-          ls -la /artifacts
+          ls -la ./artifacts
       - name: Release
         uses: softprops/action-gh-release@v1
         env:
