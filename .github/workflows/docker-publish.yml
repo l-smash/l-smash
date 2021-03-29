@@ -61,21 +61,21 @@ jobs:
       #     docker push $IMAGE_ID:$VERSION
 
       - name: Extract Artifacts
-        if: [[ "${{ github.ref }}" == "refs/tags/"* ]]
+        if: "${{ github.ref }}" == "refs/tags/"*
         run: |
           mkdir -p ./artifacts/raw
           docker run --rm -v "$PWD/artifacts/raw:/artifacts" $IMAGE_ID bash -c "cp -r /build/* /artifacts/"
           ls -la ./artifacts
 
       - name: Packing Artifacts
-        if: [[ "${{ github.ref }}" == "refs/tags/"* ]]
+        if: "${{ github.ref }}" == "refs/tags/"*
         uses: papeloto/action-zip@v1
         with:
           files: ./artifacts/raw
           dest: ./artifacts/Artifacts.zip
 
       - name: Release
-        if: [[ "${{ github.ref }}" == "refs/tags/"* ]]
+        if: "${{ github.ref }}" == "refs/tags/"*
         uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
