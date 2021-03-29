@@ -62,8 +62,8 @@ jobs:
 
       - name: Extract Artifacts
         run: |
-          mkdir -p /artifacts
-          docker run --rm -v '/artifacts:/artifacts' $IMAGE_ID bash -c "cp -r /build/* /artifacts/"
+          mkdir -p ./artifacts
+          docker run --rm -v "$PWD/artifacts:/artifacts" $IMAGE_ID bash -c "cp -r /build/* /artifacts/"
           ls -la /artifacts
       - name: Release
         uses: softprops/action-gh-release@v1
@@ -71,4 +71,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           files: |
-            /artifacts
+            ./artifacts
