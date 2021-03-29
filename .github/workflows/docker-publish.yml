@@ -66,7 +66,6 @@ jobs:
           docker run --rm -v '/artifacts:/artifacts' $IMAGE_ID bash -c "cp -r /build/* /artifacts/"
           ls -la /artifacts
       - name: Release
-        if: false
         uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
