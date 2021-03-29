@@ -9,8 +9,12 @@ RUN dos2unix configure && chmod +x configure
 
 RUN ./configure --prefix='/usr' --enable-shared --disable-static  \
     && make \
+    && make install \
+    && mkdir -p /build/bin \
+    && mkdir -p /build/lib \
+    && mkdir -p /build/include \
+    &&  ./configure --prefix='/build' --enable-shared --disable-static \
     && make install
-
 
 # use this to release
 # docker build . -t l-smash ^C
