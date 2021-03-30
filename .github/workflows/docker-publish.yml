@@ -60,6 +60,7 @@ jobs:
         run: |
           docker tag $IMAGE_NAME $IMAGE_ID:$VERSION
           docker push $IMAGE_ID:$VERSION
+          [ "$VERSION" != "latest" ] && docker tag $IMAGE_NAME $IMAGE_ID:latest && docker push $IMAGE_ID:latest
 
       - name: Extract Artifacts
         if: ${{ env.HAS_VERSION_TAG == 1}}
