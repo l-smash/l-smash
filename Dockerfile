@@ -1,3 +1,5 @@
+# FROM debian:bullseye
+
 FROM ubuntu:20.04
 RUN apt update && apt install -y git build-essential autoconf automake dos2unix
 
