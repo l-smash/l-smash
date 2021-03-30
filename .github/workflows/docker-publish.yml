@@ -1,0 +1,87 @@
+name: Docker
+
+on:
+  push:
+    branches:
+      - master
+
+    # Publish `v1.2.3` tags as releases.
+    tags:
+      - v*
+
+env:
+  IMAGE_NAME: l-smash
+
+jobs:
+  if: false # temp disabled
+  build_and_push:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Debugging
+        run: |
+          echo "${{ github.ref }}" 
+          echo "${{ github.event.head_commit.message }}" 
+ 
+      - name: Calculate Publishing Variables
+        run: |
+          IMAGE_ID=docker.pkg.github.com/${{ github.repository }}/$IMAGE_NAME
+
+          # Change all uppercase to lowercase
+          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+
+          # Strip git ref prefix from version
+          VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
+
+          # Strip "v" prefix from tag name
+          [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//') && HAS_VERSION_TAG=1 || HAS_VERSION_TAG=0
+
+          # Use Docker `latest` tag convention
+          [ "$VERSION" == "master" ] && VERSION=latest
+
+          echo "IMAGE_ID=$IMAGE_ID" >> $GITHUB_ENV
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "HAS_VERSION_TAG=$HAS_VERSION_TAG" >> $GITHUB_ENV
+
+      - name: Build image
+        run: docker build . --file Dockerfile --tag $IMAGE_NAME
+
+      - name: Log into registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login docker.pkg.github.com -u ${{ github.actor }} --password-stdin
+
+      - name: Echoing the publishing Variables
+        run: |
+          # ${{env.IMAGE_ID}} == $IMAGE_ID
+          echo IMAGE_ID="${{env.IMAGE_ID}}"
+          echo VERSION="${{env.VERSION}}"
+
+      - name: Push image
+        run: |
+          docker tag $IMAGE_NAME $IMAGE_ID:$VERSION
+          docker push $IMAGE_ID:$VERSION
+          [ "$VERSION" != "latest" ] && docker tag $IMAGE_NAME $IMAGE_ID:latest && docker push $IMAGE_ID:latest
+
+      - name: Extract Artifacts
+        if: ${{ env.HAS_VERSION_TAG == 1}}
+        run: |
+          mkdir -p ./artifacts/raw
+          docker run --rm -v "$PWD/artifacts/raw:/artifacts" $IMAGE_ID bash -c "cp -r /build/* /artifacts/"
+          ls -la ./artifacts
+
+      - name: Packing Artifacts
+        if: ${{ env.HAS_VERSION_TAG == 1}}
+        uses: papeloto/action-zip@v1
+        with:
+          files: ./artifacts/raw
+          dest: ./artifacts/Artifacts.zip
+
+      - name: Release
+        if: ${{ env.HAS_VERSION_TAG == 1}}
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: |
+            ./artifacts/Artifacts.zip
