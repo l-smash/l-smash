@@ -656,7 +656,9 @@ int64_t lsmash_read_file
             }
         }
     }
-    return ret;
+    if( ret < 0 )
+        return ret;
+    return ( file->size != UINT64_MAX ) ? (int64_t)file->size : 0;
 }
 
 int lsmash_activate_file
