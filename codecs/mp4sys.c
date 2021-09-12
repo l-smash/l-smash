@@ -619,7 +619,7 @@ static inline void *mp4sys_construct_descriptor_orig
 
 static mp4sys_DecoderSpecificInfo_t *mp4sys_add_DecoderSpecificInfo( mp4sys_DecoderConfigDescriptor_t *dcd )
 {
-    if( !dcd )
+    if( !dcd || dcd->header.tag != MP4SYS_DESCRIPTOR_TAG_DecoderConfigDescrTag )
         return NULL;
     MP4SYS_CONSTRUCT_DESCRIPTOR( dsi, DecoderSpecificInfo, dcd, NULL );
     dsi->header.tag = MP4SYS_DESCRIPTOR_TAG_DecSpecificInfoTag;
@@ -641,7 +641,7 @@ static mp4sys_DecoderConfigDescriptor_t *mp4sys_add_DecoderConfigDescriptor
     mp4sys_ES_Descriptor_t *esd
 )
 {
-    if( !esd )
+    if( !esd || esd->header.tag != MP4SYS_DESCRIPTOR_TAG_ES_DescrTag )
         return NULL;
     MP4SYS_CONSTRUCT_DESCRIPTOR( dcd, DecoderConfigDescriptor, esd, NULL );
     dcd->header.tag = MP4SYS_DESCRIPTOR_TAG_DecoderConfigDescrTag;
@@ -656,7 +656,7 @@ static mp4sys_DecoderConfigDescriptor_t *mp4sys_add_DecoderConfigDescriptor
 
 static mp4sys_SLConfigDescriptor_t *mp4sys_add_SLConfigDescriptor( mp4sys_ES_Descriptor_t *esd )
 {
-    if( !esd )
+    if( !esd || esd->header.tag != MP4SYS_DESCRIPTOR_TAG_ES_DescrTag )
         return NULL;
     MP4SYS_CONSTRUCT_DESCRIPTOR( slcd, SLConfigDescriptor, esd, NULL );
     slcd->header.tag = MP4SYS_DESCRIPTOR_TAG_SLConfigDescrTag;
@@ -1295,13 +1295,39 @@ mp4sys_descriptor_t *mp4sys_get_descriptor( lsmash_bs_t *bs, void *parent )
         case MP4SYS_DESCRIPTOR_TAG_ES_ID_IncTag :
             desc = (mp4sys_descriptor_t *)mp4sys_get_ES_ID_Inc( bs, &header, parent );
             break;
-        default :
+        case MP4SYS_DESCRIPTOR_TAG_ContentIdentDescrTag                :
+        case MP4SYS_DESCRIPTOR_TAG_SupplContentIdentDescrTag           :
+        case MP4SYS_DESCRIPTOR_TAG_IPI_DescrPointerTag                 :
+        case MP4SYS_DESCRIPTOR_TAG_IPMP_DescrPointerTag                :
+        case MP4SYS_DESCRIPTOR_TAG_IPMP_DescrTag                       :
+        case MP4SYS_DESCRIPTOR_TAG_QoS_DescrTag                        :
+        case MP4SYS_DESCRIPTOR_TAG_RegistrationDescrTag                :
+        case MP4SYS_DESCRIPTOR_TAG_ES_ID_RefTag                        :
+        case MP4SYS_DESCRIPTOR_TAG_IPI_DescrPointerRefTag              :
+        case MP4SYS_DESCRIPTOR_TAG_ExtendedProfileLevelDescrTag        :
+        case MP4SYS_DESCRIPTOR_TAG_profileLevelIndicationIndexDescrTag :
+        case MP4SYS_DESCRIPTOR_TAG_ContentClassificationDescrTag       :
+        case MP4SYS_DESCRIPTOR_TAG_KeyWordDescrTag                     :
+        case MP4SYS_DESCRIPTOR_TAG_RatingDescrTag                      :
+        case MP4SYS_DESCRIPTOR_TAG_LanguageDescrTag                    :
+        case MP4SYS_DESCRIPTOR_TAG_ShortTextualDescrTag                :
+        case MP4SYS_DESCRIPTOR_TAG_ExpandedTextualDescrTag             :
+        case MP4SYS_DESCRIPTOR_TAG_ContentCreatorNameDescrTag          :
+        case MP4SYS_DESCRIPTOR_TAG_ContentCreationDateDescrTag         :
+        case MP4SYS_DESCRIPTOR_TAG_OCICreatorNameDescrTag              :
+        case MP4SYS_DESCRIPTOR_TAG_OCICreationDateDescrTag             :
+        case MP4SYS_DESCRIPTOR_TAG_SmpteCameraPositionDescrTag         :
             desc = lsmash_malloc_zero( sizeof(mp4sys_descriptor_t) );
             if( desc )
             {
                 desc->parent = parent;
                 desc->header = header;
             }
+            break;
+        case MP4SYS_DESCRIPTOR_TAG_Forbidden  :
+        case MP4SYS_DESCRIPTOR_TAG_Forbidden1 :
+        default :
+            desc = NULL;
             break;
     }
     /* Skip extra bytes if present. */
@@ -1346,6 +1372,8 @@ static uint8_t *mp4sys_export_DecoderSpecificInfo( mp4sys_ES_Descriptor_t *esd, 
  * Currently, support audio's only. */
 int mp4sys_setup_summary_from_DecoderSpecificInfo( lsmash_audio_summary_t *summary, mp4sys_ES_Descriptor_t *esd )
 {
+    if( !esd || esd->header.tag != MP4SYS_DESCRIPTOR_TAG_ES_DescrTag )
+        return LSMASH_ERR_NAMELESS;
     uint32_t dsi_payload_length = UINT32_MAX;       /* arbitrary */
     uint8_t *dsi_payload = mp4sys_export_DecoderSpecificInfo( esd, &dsi_payload_length );
     if( !dsi_payload && dsi_payload_length )
