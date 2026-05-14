@@ -317,6 +317,7 @@ SRC_CODECS="      \
     av1.c         \
     description.c \
     dts.c         \
+    flac.c        \
     h264.c        \
     hevc.c        \
     id.c          \
@@ -335,6 +336,7 @@ SRC_IMPORTER="  \
     als_imp.c   \
     amr_imp.c   \
     dts_imp.c   \
+    flac_imp.c  \
     importer.c  \
     isobm_imp.c \
     ivf_imp.c   \

@@ -153,6 +153,7 @@
     <ClCompile Include="codecs\alac.c" />
     <ClCompile Include="codecs\description.c" />
     <ClCompile Include="codecs\dts.c" />
+    <ClCompile Include="codecs\flac.c" />
     <ClCompile Include="codecs\h264.c" />
     <ClCompile Include="codecs\hevc.c" />
     <ClCompile Include="codecs\id.c" />
@@ -189,6 +190,7 @@
     <ClCompile Include="importer\als_imp.c" />
     <ClCompile Include="importer\amr_imp.c" />
     <ClCompile Include="importer\dts_imp.c" />
+    <ClCompile Include="importer\flac_imp.c" />
     <ClCompile Include="importer\importer.c" />
     <ClCompile Include="importer\isobm_imp.c" />
     <ClCompile Include="importer\mp3_imp.c" />

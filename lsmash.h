@@ -48,8 +48,8 @@ extern "C" {
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  2
-#define LSMASH_VERSION_MINOR 22
-#define LSMASH_VERSION_MICRO  2
+#define LSMASH_VERSION_MINOR 23
+#define LSMASH_VERSION_MICRO  0
 
 #define LSMASH_VERSION_INT( a, b, c ) (((a) << 16) | ((b) << 8) | (c))
 
@@ -703,6 +703,7 @@ DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_DTSL_AUDIO,  LSMASH_4CC( 'd', 't', 's', 
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_DTSX_AUDIO,  LSMASH_4CC( 'd', 't', 's', 'x' ) );    /* DTS:X */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_EC_3_AUDIO,  LSMASH_4CC( 'e', 'c', '-', '3' ) );    /* Enhanced AC-3 audio */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_ENCA_AUDIO,  LSMASH_4CC( 'e', 'n', 'c', 'a' ) );    /* Encrypted/Protected audio */
+DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_FLAC_AUDIO,  LSMASH_4CC( 'f', 'L', 'a', 'C' ) );    /* Free Lossless Audio Codec */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_FPCM_AUDIO,  LSMASH_4CC( 'f', 'p', 'c', 'm' ) );    /* ISO/IEC 23003-5 IEEE 754 floating-point LPCM audio */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_G719_AUDIO,  LSMASH_4CC( 'g', '7', '1', '9' ) );    /* ITU-T Recommendation G.719 (2008) ); */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_G726_AUDIO,  LSMASH_4CC( 'g', '7', '2', '6' ) );    /* ITU-T Recommendation G.726 (1990) ); */
@@ -935,6 +936,7 @@ typedef enum
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_DTS,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_ALAC,
+    LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_FLAC,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_SA3D,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_ST3D,
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_PRHD,
@@ -3120,6 +3122,20 @@ int lsmash_append_dts_reserved_box
 void lsmash_remove_dts_reserved_box
 (
     lsmash_dts_specific_parameters_t *param
+);
+
+/* FLAC Audio Specific Infomation
+ *   Mandatory :
+ *     ISOM_CODEC_TYPE_FLAC_AUDIO
+ * The raw FLAC metadata blocks (STREAMINFO and optionally others) are stored
+ * as defined in the 'dfLa' box per the Encapsulation of FLAC in ISO Base Media
+ * File Format specification.
+ * This data is opaque; the caller provides the complete 'dfLa' box payload. */
+uint8_t *lsmash_create_flac_specific_info
+(
+    uint8_t *metadata_blocks,
+    uint32_t metadata_blocks_size,
+    uint32_t *data_length
 );
 
 /* Apple Lossless Audio Specific Information

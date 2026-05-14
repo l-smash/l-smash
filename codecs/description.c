@@ -1145,6 +1145,8 @@ static int description_check_valid_summary( lsmash_summary_t *summary )
     else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_ALAC_AUDIO )
           || lsmash_check_codec_type_identical( sample_type,   QT_CODEC_TYPE_ALAC_AUDIO ) )
         required_data_type = LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_ALAC;
+    else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_FLAC_AUDIO ))
+        required_data_type = LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_FLAC;
     else if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_RRTP_HINT ) )
         required_data_type = LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_RTP_HINT_COMMON;
     if( required_data_type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_UNSPECIFIED )
@@ -2203,6 +2205,7 @@ static lsmash_box_type_t description_guess_audio_codec_specific_box_type( lsmash
     GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE( ISOM_CODEC_TYPE_DTSEL_AUDIO, ISOM_BOX_TYPE_DDTS );
     GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE( ISOM_CODEC_TYPE_DTSDL_AUDIO, ISOM_BOX_TYPE_DDTS );
     GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE( ISOM_CODEC_TYPE_ALAC_AUDIO,  ISOM_BOX_TYPE_ALAC );
+    GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE( ISOM_CODEC_TYPE_FLAC_AUDIO, ISOM_BOX_TYPE_DFLA );
     GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE( ISOM_CODEC_TYPE_MP4A_AUDIO,  ISOM_BOX_TYPE_ESDS );
     GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE( ISOM_CODEC_TYPE_OPUS_AUDIO,  ISOM_BOX_TYPE_DOPS );
     GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE(   QT_CODEC_TYPE_ALAC_AUDIO,    QT_BOX_TYPE_ALAC );
@@ -2715,6 +2718,30 @@ static int description_set_isom_eac3_audio_description( isom_audio_entry_t *audi
     return description_set_isom_template_audio_description( audio, summary );
 }
 
+static int description_set_isom_flac_audio_description( isom_audio_entry_t *audio, lsmash_audio_summary_t *summary )
+{
+    audio->version        = 0;
+    audio->revision_level = 0;
+    audio->vendor         = 0;
+    audio->channelcount   = summary->channels;
+    audio->samplesize     = summary->sample_size;
+    audio->compression_ID = 0;
+    audio->packet_size    = 0;
+    /*
+     * Per the FLAC-in-ISOBMFF spec, samplerate is a 16.16 fixed-point value.
+     * When sample_rate > 65535, use the greatest expressible regular division.
+     * E.g. 96000→48000, 192000→48000, 88200→44100, 176400→44100.
+     * The actual rate is always available in the STREAMINFO inside dfLa.
+     */
+    {
+        uint32_t freq = summary->frequency;
+        while ( freq > UINT16_MAX )
+            freq /= 2;
+        audio->samplerate = freq << 16;        
+    }
+    return 0;
+}
+
 static int description_setup_audio_description( isom_stsd_t *stsd, lsmash_audio_summary_t *summary )
 {
     if( LSMASH_IS_NON_EXISTING_BOX( stsd->file ) || !summary )
@@ -2758,6 +2785,8 @@ static int description_setup_audio_description( isom_stsd_t *stsd, lsmash_audio_
         err = description_set_isom_dts_audio_description( audio, summary );
     else if( lsmash_check_codec_type_identical( audio_type, ISOM_CODEC_TYPE_EC_3_AUDIO ) )
         err = description_set_isom_eac3_audio_description( audio, summary );
+    else if( lsmash_check_codec_type_identical( audio_type, ISOM_CODEC_TYPE_FLAC_AUDIO ) )
+        err = description_set_isom_flac_audio_description( audio, summary );
     else if( lsmash_check_codec_type_identical( audio_type, ISOM_CODEC_TYPE_OPUS_AUDIO ) )
         err = description_set_isom_opus_audio_description( audio, summary );
     else if( file->qt_compatible )
@@ -3143,6 +3172,7 @@ static lsmash_codec_specific_data_type description_get_codec_specific_data_type(
         ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT( ISOM_BOX_TYPE_DAC3, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3 ),
         ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT( ISOM_BOX_TYPE_DEC3, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3 ),
         ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT( ISOM_BOX_TYPE_DDTS, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_DTS ),
+        ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT( ISOM_BOX_TYPE_DFLA, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_FLAC ),
         ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT( ISOM_BOX_TYPE_DOPS, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_OPUS ),
         ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT( ISOM_BOX_TYPE_ALAC, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_ALAC ),
         ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT( ISOM_BOX_TYPE_PCMC, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_PCM_CONFIG ),

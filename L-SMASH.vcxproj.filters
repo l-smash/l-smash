@@ -51,6 +51,12 @@
     <ClCompile Include="importer\dts_imp.c">
       <Filter>Sources</Filter>
     </ClCompile>
+    <ClCompile Include="codecs\flac.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="importer\flac_imp.c">
+      <Filter>Sources</Filter>
+    </ClCompile>
     <ClCompile Include="core\file.c">
       <Filter>Sources</Filter>
     </ClCompile>
