@@ -72,7 +72,7 @@ int waveform_audio_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_
         uint32_t nSamplesPerSec  = LSMASH_GET_LE32( &exdata[ 4] );
         uint16_t nFramesPerBlock = LSMASH_GET_LE16( &exdata[26] );
         uint16_t padding         = 0;   /* FIXME? */
-        uint16_t nBlockSize      = (144 * (avgBitrate / nSamplesPerSec) + padding) * nFramesPerBlock;
+        uint16_t nBlockSize      = nSamplesPerSec ? ((uint64_t)144 * avgBitrate / nSamplesPerSec + padding) * nFramesPerBlock : 0;
         LSMASH_SET_LE16( &exdata[24], nBlockSize );
     }
     return 0;
