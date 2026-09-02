@@ -407,6 +407,19 @@ int lsmash_get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, l
         return LSMASH_ERR_NAMELESS;
     metadata->item = metaitem->type.fourcc;
     metadata->type = isom_get_itunes_metadata_type( metadata->item );
+    if( metadata->item == ITUNES_METADATA_ITEM_CUSTOM )
+    {
+        if( metaitem->data->type_code == ITUNES_METADATA_SUBTYPE_UTF8
+         || metaitem->data->type_code == ITUNES_METADATA_SUBTYPE_UTF16
+         || metaitem->data->type_code == ITUNES_METADATA_SUBTYPE_SJIS
+         || metaitem->data->type_code == ITUNES_METADATA_SUBTYPE_ISRC
+         || metaitem->data->type_code == ITUNES_METADATA_SUBTYPE_MI3P
+         || metaitem->data->type_code == ITUNES_METADATA_SUBTYPE_URL
+         || metaitem->data->type_code == ITUNES_METADATA_SUBTYPE_UPC )
+            metadata->type = ITUNES_METADATA_TYPE_STRING;
+        else if( metaitem->data->type_code == ITUNES_METADATA_SUBTYPE_INTEGER )
+            metadata->type = ITUNES_METADATA_TYPE_INTEGER;
+    }
     /* Get 'meaning'. */
     int err = LSMASH_ERR_MEMORY_ALLOC;
     isom_mean_t *mean = metaitem->mean;
