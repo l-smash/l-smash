@@ -58,7 +58,7 @@ int wma_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, in
     lsmash_ifprintf( fp, indent, "nAvgBytesPerSec = %"PRIu32"\n", LSMASH_GET_LE32( &data[ 8] ) );
     lsmash_ifprintf( fp, indent, "nBlockAlign = %"PRIu16"\n",     LSMASH_GET_LE16( &data[12] ) );
     lsmash_ifprintf( fp, indent, "wBitsPerSample = %"PRIu16"\n",  LSMASH_GET_LE16( &data[14] ) );
-    uint16_t cbSize = LSMASH_GET_BYTE( &data[16] );
+    uint16_t cbSize = LSMASH_GET_LE16( &data[16] );
     lsmash_ifprintf( fp, indent, "cbSize = %"PRIu16"\n",           cbSize );
     switch( wFormatTag )
     {
