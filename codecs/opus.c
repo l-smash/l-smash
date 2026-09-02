@@ -160,20 +160,20 @@ int opus_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, i
             uint8_t channel = lsmash_bs_get_byte( bs );
             if( channel != 255 )
             {
-                if( ChannelMappingFamily == 1 )
+                if( ChannelMappingFamily == 1 && OutputChannelCount >= 1 && OutputChannelCount <= 8 )
                 {
                     static const char *channel_order[8][8] =
                     {
                         { "mono" },
-                        { "left", "stereo" },
+                        { "left", "right" },
                         { "left", "center", "right" },
                         { "front left", "front right", "rear left", "rear right" },
-                        { "front left", "fron center", "front right", "rear left", "rear right" },
-                        { "front left", "fron center", "front right", "rear left", "rear right", "LFE" },
-                        { "front left", "fron center", "front right", "side left", "side right", "rear center", "LFE" },
-                        { "front left", "fron center", "front right", "side left", "side right", "rear left", "rear right", "LFE" }
+                        { "front left", "front center", "front right", "rear left", "rear right" },
+                        { "front left", "front center", "front right", "rear left", "rear right", "LFE" },
+                        { "front left", "front center", "front right", "side left", "side right", "rear center", "LFE" },
+                        { "front left", "front center", "front right", "side left", "side right", "rear left", "rear right", "LFE" }
                     };
-                    lsmash_ifprintf( fp, indent, "%"PRIu8" -> %"PRIu8": %s\n", i, channel, channel_order[OutputChannelCount][i] );
+                    lsmash_ifprintf( fp, indent, "%"PRIu8" -> %"PRIu8": %s\n", i, channel, channel_order[OutputChannelCount - 1][i] );
                 }
                 else
                     lsmash_ifprintf( fp, indent, "%"PRIu8" -> %"PRIu8": unknown\n", i, channel );
