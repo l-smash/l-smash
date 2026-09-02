@@ -240,7 +240,11 @@ uint64_t nalu_get_codeNum
 {
     uint32_t leadingZeroBits = 0;
     for( int b = 0; !b; leadingZeroBits++ )
+    {
         b = lsmash_bits_get( bits, 1 );
+        if( leadingZeroBits >= 64 || bits->bs->eob || bits->bs->error )
+            return 0;
+    }
     --leadingZeroBits;
     return ((uint64_t)1 << leadingZeroBits) - 1 + lsmash_bits_get( bits, leadingZeroBits );
 }
