@@ -369,7 +369,9 @@ error_message:
 
 uint32_t lsmash_count_tyrant_chapter( lsmash_root_t *root )
 {
-    if( isom_check_initializer_present( root ) < 0
+    if( isom_check_initializer_present( root ) == 0
+     && LSMASH_IS_EXISTING_BOX( root->file->initializer->moov->udta )
+     && LSMASH_IS_EXISTING_BOX( root->file->initializer->moov->udta->chpl )
      && root->file->initializer->moov->udta->chpl->list )
         return root->file->initializer->moov->udta->chpl->list->entry_count;
     return 0;
