@@ -12,11 +12,21 @@ OBJS = $(SRCS:%.c=%.o)
 
 SRC_ALL = $(SRCS) $(SRC_TOOLS)
 
+TESTS = tests/test_main$(EXT)
+
 #### main rules ####
 
-.PHONY: all lib install install-lib clean distclean dep depend
+.PHONY: all lib install install-lib clean distclean dep depend test check
 
 all: $(STATICLIB) $(SHAREDLIB) $(TOOLS)
+
+test: $(STATICLIBNAME) $(TESTS)
+	./tests/test_main$(EXT)
+
+check: test
+
+tests/test_main$(EXT): tests/test_main.o $(STATICLIBNAME)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $< -llsmash $(LIBS)
 
 lib: $(STATICLIB) $(SHAREDLIB)
 
@@ -78,7 +88,7 @@ uninstall:
 	$(RM) $(addprefix $(DESTDIR)$(bindir)/, $(TOOLS_ALL) $(TOOLS_ALL:%=%.exe) liblsmash*.dll lsmash.lib cyglsmash.dll)
 
 clean:
-	$(RM) */*.o *.a *.so* *.def *.exp *.lib *.dll *.dylib $(addprefix cli/, *.exe $(TOOLS_ALL)) .depend
+	$(RM) */*.o *.a *.so* *.def *.exp *.lib *.dll *.dylib $(addprefix cli/, *.exe $(TOOLS_ALL)) $(addprefix tests/, *.exe test_main) .depend
 
 distclean: clean
 	$(RM) config.* *.pc *.ver
