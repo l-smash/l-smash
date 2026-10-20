@@ -293,7 +293,7 @@ typedef struct
 typedef struct
 {
     ISOM_FULLBOX_COMMON;        /* version is either 0 or 1 */
-    lsmash_entry_list_t *list;
+    lsm_list_t *list;
 } isom_elst_t;
 
 /* Edit Box
@@ -1168,7 +1168,7 @@ typedef struct
 typedef struct
 {
     ISOM_FULLBOX_COMMON;
-    lsmash_entry_list_t *list;
+    lsm_list_t *list;
 } isom_stts_t;
 
 /* Composition Time to Sample Box
@@ -1187,7 +1187,7 @@ typedef struct
 typedef struct
 {
     ISOM_FULLBOX_COMMON;
-    lsmash_entry_list_t *list;
+    lsm_list_t *list;
 } isom_ctts_t;
 
 /* Composition to Decode Box (Composition Shift Least Greatest Box)
@@ -1223,7 +1223,7 @@ typedef struct
     uint32_t sample_size;           /* the default sample size
                                      * If this field is set to 0, then the samples have different sizes. */
     uint32_t sample_count;          /* the number of samples in the media within the initial movie */
-    lsmash_entry_list_t *list;      /* available if sample_size == 0 */
+    lsm_list_t *list;               /* available if sample_size == 0 */
 } isom_stsz_t;
 
 typedef struct
@@ -1235,7 +1235,7 @@ typedef struct
                                      * entry[i]<<4 + entry[i+1]; if the sizes do not fill an integral number of bytes, the last byte is
                                      * padded with zero. */
     uint32_t     sample_count;      /* the number of entries in the following table */
-    lsmash_entry_list_t *list;      /* L-SMASH uses isom_stsz_entry_t for its internal processes. */
+    lsm_list_t  *list;              /* L-SMASH uses isom_stsz_entry_t for its internal processes. */
 } isom_stz2_t;
 
 /* Sync Sample Box
@@ -1250,7 +1250,7 @@ typedef struct
 typedef struct
 {
     ISOM_FULLBOX_COMMON;
-    lsmash_entry_list_t *list;
+    lsm_list_t *list;
 } isom_stss_t;
 
 /* Partial Sync Sample Box
@@ -1266,7 +1266,7 @@ typedef struct
 typedef struct
 {
     ISOM_FULLBOX_COMMON;
-    lsmash_entry_list_t *list;
+    lsm_list_t *list;
 } isom_stps_t;
 
 /* Independent and Disposable Samples Box */
@@ -1283,7 +1283,7 @@ typedef struct
     ISOM_FULLBOX_COMMON;
     /* According to the specification, the size of the table, sample_count, doesn't exist in this box.
      * Instead of this, it is taken from the sample_count in the stsz or the stz2 box. */
-    lsmash_entry_list_t *list;
+    lsm_list_t *list;
 } isom_sdtp_t;
 
 /* Sample To Chunk Box
@@ -1301,7 +1301,7 @@ typedef struct
 typedef struct
 {
     ISOM_FULLBOX_COMMON;
-    lsmash_entry_list_t *list;
+    lsm_list_t *list;
 } isom_stsc_t;
 
 /* Chunk Offset Box
@@ -1321,7 +1321,7 @@ typedef struct
 typedef struct
 {
     ISOM_FULLBOX_COMMON;        /* type = 'stco': 32-bit chunk offsets / type = 'co64': 64-bit chunk offsets */
-    lsmash_entry_list_t *list;
+    lsm_list_t *list;
 
         uint8_t large_presentation;     /* Set 1 to this if 64-bit chunk-offset are needed. */
 } isom_stco_t;      /* share with co64 box */
@@ -1334,7 +1334,7 @@ typedef struct
     uint32_t grouping_type;         /* an integer that identifies the sbgp that is associated with this sample group description */
     uint32_t default_length;        /* the length of every group entry (if the length is constant), or zero (if it is variable)
                                      * This field is available only if version == 1. */
-    lsmash_entry_list_t *list;
+    lsm_list_t *list;
 } isom_sgpd_t;
 
 /* Random Access Entry
@@ -1368,7 +1368,7 @@ typedef struct
     uint32_t grouping_type;             /* Links it to its sample group description table with the same value for grouping type. */
     uint32_t grouping_type_parameter;   /* an indication of the sub-type of the grouping
                                          * This field is available only if version == 1. */
-    lsmash_entry_list_t *list;
+    lsm_list_t *list;
 } isom_sbgp_t;
 
 typedef struct
@@ -1723,8 +1723,9 @@ typedef struct
 
 typedef struct
 {
-    isom_group_assignment_entry_t *assignment;      /* the address corresponding to the entry in Sample to Group Box */
-    isom_sgpd_t                   *sgpd;            /* the address to the active Sample Group Description Box */
+    isom_sbgp_t *sbgp;                              /* the address to the active Sample to Group Box */
+    isom_sgpd_t *sgpd;                              /* the address to the active Sample Group Description Box */
+    uint32_t     assignment_number;                 /* 1-based index of the entry in Sample to Group Box */
     uint32_t first_sample;                          /* the number of the first sample of the group */
     uint32_t recovery_point;                        /* the identifier necessary for the recovery from its starting point to be completed */
     uint64_t rp_cts;                                /* the CTS of the recovery point */
@@ -1742,7 +1743,7 @@ typedef struct
 
 typedef struct
 {
-    lsmash_entry_list_t *pool;  /* grouping pooled to delimit and describe */
+    lsm_list_t *pool;           /* grouping pooled to delimit and describe */
 } isom_grouping_t;
 
 typedef struct
@@ -2805,7 +2806,7 @@ int isom_check_large_offset_requirement( isom_moov_t *moov, uint64_t meta_size )
 void isom_add_preceding_box_size( isom_moov_t *moov, uint64_t preceding_size );
 int isom_establish_movie( lsmash_file_t *file );
 int isom_rap_grouping_established( isom_rap_group_t *group, int num_leading_samples_known, isom_sgpd_t *sgpd, int is_fragment );
-int isom_all_recovery_completed( isom_sbgp_t *sbgp, lsmash_entry_list_t *pool );
+int isom_all_recovery_completed( isom_sbgp_t *sbgp, lsm_list_t *pool );
 
 lsmash_file_t *isom_add_file_abstract( lsmash_root_t *root );
 isom_ftyp_t *isom_add_ftyp( lsmash_file_t *file );

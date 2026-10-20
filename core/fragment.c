@@ -113,9 +113,9 @@ static int isom_set_fragment_overall_duration( lsmash_file_t *file )
         else
         {
             duration = 0;
-            for( lsmash_entry_t *elst_entry = trak->edts->elst->list->head; elst_entry; elst_entry = elst_entry->next )
+            isom_elst_entry_t *data;
+            LSM_LIST_FOR_EACH( data, trak->edts->elst->list )
             {
-                isom_elst_entry_t *data = (isom_elst_entry_t *)elst_entry->data;
                 if( !data )
                     return LSMASH_ERR_NAMELESS;
                 if( data->segment_duration == ISOM_EDIT_DURATION_IMPLICIT )
@@ -162,9 +162,7 @@ static int isom_write_fragment_random_access_info( lsmash_file_t *file )
         isom_trak_t *trak = isom_get_trak( file, trex->track_ID );
         if( LSMASH_IS_NON_EXISTING_BOX( trak ) )
             return LSMASH_ERR_NAMELESS;
-        if( !trak->edts->elst->list
-         || !trak->edts->elst->list->head
-         || !trak->edts->elst->list->head->data )
+        if( !lsm_list_count( trak->edts->elst->list ) )
             continue;
         isom_elst_t *elst = trak->edts->elst;
         /* Get the Track Fragment Random Access Boxes of the track associated with the trex->track_ID.
@@ -173,8 +171,8 @@ static int isom_write_fragment_random_access_info( lsmash_file_t *file )
         if( LSMASH_IS_NON_EXISTING_BOX( tfra ) )
             continue;
         /* Reconstruct the Track Fragment Random Access Box. */
-        lsmash_entry_t    *edit_entry      = elst->list->head;
-        isom_elst_entry_t *edit            = edit_entry->data;
+        uint32_t           edit_idx        = 0;
+        isom_elst_entry_t *edit            = (isom_elst_entry_t *)lsm_list_at( elst->list, edit_idx );
         uint64_t           edit_offset     = 0;     /* units in media timescale */
         uint32_t           media_timescale = lsmash_get_media_timescale( file->root, trex->track_ID );
         for( uint32_t i = 0; i < lsm_list_count( tfra->list ); )
@@ -202,14 +200,7 @@ static int isom_write_fragment_random_access_info( lsmash_file_t *file )
                              *         1. A sync sample isn't in the presentation.
                              *         2. The other samples, which precede it in the composition timeline, is in the presentation. */
                 edit_offset += segment_duration;
-                edit_entry   = edit_entry->next;
-                if( !edit_entry )
-                {
-                    /* No more presentation. */
-                    edit = NULL;
-                    break;
-                }
-                edit = edit_entry->data;
+                edit = (isom_elst_entry_t *)lsm_list_at( elst->list, ++edit_idx );
             }
             if( !edit )
             {
@@ -411,21 +402,19 @@ static int isom_create_fragment_overall_default_settings( lsmash_file_t *file )
             return LSMASH_ERR_NAMELESS;
         isom_stbl_t *stbl = trak->mdia->minf->stbl;
         if( !stbl->stts->list
-         || (stbl->stts->list->tail && !stbl->stts->list->tail->data)
-         || (LSMASH_IS_NON_EXISTING_BOX( stbl->stsz ) && LSMASH_IS_NON_EXISTING_BOX( stbl->stz2 ))
-         || (LSMASH_IS_EXISTING_BOX( stbl->stsz ) && stbl->stsz->list && stbl->stsz->list->head && !stbl->stsz->list->head->data)
-         || (LSMASH_IS_EXISTING_BOX( stbl->stz2 ) && stbl->stz2->list && stbl->stz2->list->head && !stbl->stz2->list->head->data))
+         || (LSMASH_IS_NON_EXISTING_BOX( stbl->stsz ) && LSMASH_IS_NON_EXISTING_BOX( stbl->stz2 )) )
             return LSMASH_ERR_NAMELESS;
         isom_trex_t *trex = isom_add_trex( file->moov->mvex );
         if( LSMASH_IS_NON_EXISTING_BOX( trex ) )
             return LSMASH_ERR_NAMELESS;
         trex->track_ID = trak->tkhd->track_ID;
         /* Set up defaults. */
+        isom_stts_entry_t *last_stts_data      = (isom_stts_entry_t *)lsm_list_tail( stbl->stts->list );
         trex->default_sample_description_index = trak->cache->chunk.sample_description_index
                                                ? trak->cache->chunk.sample_description_index
                                                : 1;
-        trex->default_sample_duration          = stbl->stts->list->tail
-                                               ? ((isom_stts_entry_t *)stbl->stts->list->tail->data)->sample_delta
+        trex->default_sample_duration          = last_stts_data
+                                               ? last_stts_data->sample_delta
                                                : 1;
         trex->default_sample_size              = isom_get_first_sample_size( stbl );
         if( stbl->sdtp->list )
@@ -437,9 +426,9 @@ static int isom_create_fragment_overall_default_settings( lsmash_file_t *file )
                 uint32_t sample_is_depended_on[4];
                 uint32_t sample_has_redundancy[4];
             } stats = { { 0 }, { 0 }, { 0 }, { 0 } };
-            for( lsmash_entry_t *sdtp_entry = stbl->sdtp->list->head; sdtp_entry; sdtp_entry = sdtp_entry->next )
+            isom_sdtp_entry_t *data;
+            LSM_LIST_FOR_EACH( data, stbl->sdtp->list )
             {
-                isom_sdtp_entry_t *data = (isom_sdtp_entry_t *)sdtp_entry->data;
                 if( !data )
                     return LSMASH_ERR_NAMELESS;
                 ++ stats.is_leading           [ data->is_leading            ];
@@ -678,9 +667,8 @@ static int isom_make_segment_index_entry
             TEPT = LSMASH_TIMESTAMP_UNDEFINED;
             TPTF = LSMASH_TIMESTAMP_UNDEFINED;
             /* */
-            for( lsmash_entry_t *elst_entry = elst->list->head; elst_entry; elst_entry = elst_entry->next )
+            LSM_LIST_FOR_EACH( edit, elst->list )
             {
-                edit = (isom_elst_entry_t *)elst_entry->data;
                 if( !edit )
                     continue;
                 uint64_t edit_end_pts;

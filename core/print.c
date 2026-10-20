@@ -593,10 +593,10 @@ static int isom_print_elst( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
     int indent = level;
     uint32_t i = 0;
     isom_print_box_common( fp, indent++, box, "Edit List Box" );
-    lsmash_ifprintf( fp, indent, "entry_count = %"PRIu32"\n", elst->list->entry_count );
-    for( lsmash_entry_t *entry = elst->list->head; entry; entry = entry->next )
+    lsmash_ifprintf( fp, indent, "entry_count = %"PRIu32"\n", lsm_list_count( elst->list ) );
+    isom_elst_entry_t *data;
+    LSM_LIST_FOR_EACH( data, elst->list )
     {
-        isom_elst_entry_t *data = (isom_elst_entry_t *)entry->data;
         lsmash_ifprintf( fp, indent++, "entry[%"PRIu32"]\n", i++ );
         lsmash_ifprintf( fp, indent, "segment_duration = %"PRIu64"\n", data->segment_duration );
         lsmash_ifprintf( fp, indent, "media_time = %"PRId64"\n", data->media_time );
@@ -1658,10 +1658,10 @@ static int isom_print_stts( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
     int indent = level;
     uint32_t i = 0;
     isom_print_box_common( fp, indent++, box, "Decoding Time to Sample Box" );
-    lsmash_ifprintf( fp, indent, "entry_count = %"PRIu32"\n", stts->list->entry_count );
-    for( lsmash_entry_t *entry = stts->list->head; entry; entry = entry->next )
+    lsmash_ifprintf( fp, indent, "entry_count = %"PRIu32"\n", lsm_list_count( stts->list ) );
+    isom_stts_entry_t *data;
+    LSM_LIST_FOR_EACH( data, stts->list )
     {
-        isom_stts_entry_t *data = (isom_stts_entry_t *)entry->data;
         lsmash_ifprintf( fp, indent++, "entry[%"PRIu32"]\n", i++ );
         lsmash_ifprintf( fp, indent, "sample_count = %"PRIu32"\n", data->sample_count );
         lsmash_ifprintf( fp, indent--, "sample_delta = %"PRIu32"\n", data->sample_delta );
@@ -1677,11 +1677,11 @@ static int isom_print_ctts( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
     int indent = level;
     uint32_t i = 0;
     isom_print_box_common( fp, indent++, box, "Composition Time to Sample Box" );
-    lsmash_ifprintf( fp, indent, "entry_count = %"PRIu32"\n", ctts->list->entry_count );
+    lsmash_ifprintf( fp, indent, "entry_count = %"PRIu32"\n", lsm_list_count( ctts->list ) );
+    isom_ctts_entry_t *data;
     if( file->qt_compatible || ctts->version == 1 )
-        for( lsmash_entry_t *entry = ctts->list->head; entry; entry = entry->next )
+        LSM_LIST_FOR_EACH( data, ctts->list )
         {
-            isom_ctts_entry_t *data = (isom_ctts_entry_t *)entry->data;
             lsmash_ifprintf( fp, indent++, "entry[%"PRIu32"]\n", i++ );
             lsmash_ifprintf( fp, indent, "sample_count = %"PRIu32"\n", data->sample_count );
             if( data->sample_offset != ISOM_NON_OUTPUT_SAMPLE_OFFSET )
@@ -1690,9 +1690,8 @@ static int isom_print_ctts( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
                 lsmash_ifprintf( fp, indent--, "sample_offset = -2^31 (non-output sample)\n" );
         }
     else
-        for( lsmash_entry_t *entry = ctts->list->head; entry; entry = entry->next )
+        LSM_LIST_FOR_EACH( data, ctts->list )
         {
-            isom_ctts_entry_t *data = (isom_ctts_entry_t *)entry->data;
             lsmash_ifprintf( fp, indent++, "entry[%"PRIu32"]\n", i++ );
             lsmash_ifprintf( fp, indent, "sample_count = %"PRIu32"\n", data->sample_count );
             lsmash_ifprintf( fp, indent--, "sample_offset = %"PRIu32"\n", data->sample_offset );
@@ -1733,9 +1732,10 @@ static int isom_print_stss( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
     int indent = level;
     uint32_t i = 0;
     isom_print_box_common( fp, indent++, box, "Sync Sample Box" );
-    lsmash_ifprintf( fp, indent, "entry_count = %"PRIu32"\n", stss->list->entry_count );
-    for( lsmash_entry_t *entry = stss->list->head; entry; entry = entry->next )
-        lsmash_ifprintf( fp, indent, "sample_number[%"PRIu32"] = %"PRIu32"\n", i++, ((isom_stss_entry_t *)entry->data)->sample_number );
+    lsmash_ifprintf( fp, indent, "entry_count = %"PRIu32"\n", lsm_list_count( stss->list ) );
+    isom_stss_entry_t *data;
+    LSM_LIST_FOR_EACH( data, stss->list )
+        lsmash_ifprintf( fp, indent, "sample_number[%"PRIu32"] = %"PRIu32"\n", i++, data->sample_number );
     return 0;
 }
 
@@ -1747,9 +1747,10 @@ static int isom_print_stps( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
     int indent = level;
     uint32_t i = 0;
     isom_print_box_common( fp, indent++, box, "Partial Sync Sample Box" );
-    lsmash_ifprintf( fp, indent, "entry_count = %"PRIu32"\n", stps->list->entry_count );
-    for( lsmash_entry_t *entry = stps->list->head; entry; entry = entry->next )
-        lsmash_ifprintf( fp, indent, "sample_number[%"PRIu32"] = %"PRIu32"\n", i++, ((isom_stps_entry_t *)entry->data)->sample_number );
+    lsmash_ifprintf( fp, indent, "entry_count = %"PRIu32"\n", lsm_list_count( stps->list ) );
+    isom_stps_entry_t *data;
+    LSM_LIST_FOR_EACH( data, stps->list )
+        lsmash_ifprintf( fp, indent, "sample_number[%"PRIu32"] = %"PRIu32"\n", i++, data->sample_number );
     return 0;
 }
 
@@ -1761,9 +1762,9 @@ static int isom_print_sdtp( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
     int indent = level;
     uint32_t i = 0;
     isom_print_box_common( fp, indent++, box, "Independent and Disposable Samples Box" );
-    for( lsmash_entry_t *entry = sdtp->list->head; entry; entry = entry->next )
+    isom_sdtp_entry_t *data;
+    LSM_LIST_FOR_EACH( data, sdtp->list )
     {
-        isom_sdtp_entry_t *data = (isom_sdtp_entry_t *)entry->data;
         lsmash_ifprintf( fp, indent++, "entry[%"PRIu32"]\n", i++ );
         if( data->is_leading || data->sample_depends_on || data->sample_is_depended_on || data->sample_has_redundancy )
         {
@@ -1806,10 +1807,10 @@ static int isom_print_stsc( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
     int indent = level;
     uint32_t i = 0;
     isom_print_box_common( fp, indent++, box, "Sample To Chunk Box" );
-    lsmash_ifprintf( fp, indent, "entry_count = %"PRIu32"\n", stsc->list->entry_count );
-    for( lsmash_entry_t *entry = stsc->list->head; entry; entry = entry->next )
+    lsmash_ifprintf( fp, indent, "entry_count = %"PRIu32"\n", lsm_list_count( stsc->list ) );
+    isom_stsc_entry_t *data;
+    LSM_LIST_FOR_EACH( data, stsc->list )
     {
-        isom_stsc_entry_t *data = (isom_stsc_entry_t *)entry->data;
         lsmash_ifprintf( fp, indent++, "entry[%"PRIu32"]\n", i++ );
         lsmash_ifprintf( fp, indent, "first_chunk = %"PRIu32"\n", data->first_chunk );
         lsmash_ifprintf( fp, indent, "samples_per_chunk = %"PRIu32"\n", data->samples_per_chunk );
@@ -1830,11 +1831,11 @@ static int isom_print_stsz( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
         lsmash_ifprintf( fp, indent, "sample_size = %"PRIu32" (constant)\n", stsz->sample_size );
     lsmash_ifprintf( fp, indent, "sample_count = %"PRIu32"\n", stsz->sample_count );
     if( !stsz->sample_size && stsz->list )
-        for( lsmash_entry_t *entry = stsz->list->head; entry; entry = entry->next )
-        {
-            isom_stsz_entry_t *data = (isom_stsz_entry_t *)entry->data;
+    {
+        isom_stsz_entry_t *data;
+        LSM_LIST_FOR_EACH( data, stsz->list )
             lsmash_ifprintf( fp, indent, "entry_size[%"PRIu32"] = %"PRIu32"\n", i++, data->entry_size );
-        }
+    }
     return 0;
 }
 
@@ -1847,11 +1848,9 @@ static int isom_print_stz2( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
     lsmash_ifprintf( fp, indent, "reserved = 0x%06"PRIx32"\n", stz2->reserved );
     lsmash_ifprintf( fp, indent, "field_size = %"PRIu8"\n", stz2->field_size );
     lsmash_ifprintf( fp, indent, "sample_count = %"PRIu32"\n", stz2->sample_count );
-    for( lsmash_entry_t *entry = stz2->list->head; entry; entry = entry->next )
-    {
-        isom_stsz_entry_t *data = (isom_stsz_entry_t *)entry->data;
+    isom_stsz_entry_t *data;
+    LSM_LIST_FOR_EACH( data, stz2->list )
         lsmash_ifprintf( fp, indent, "entry_size[%"PRIu32"] = %"PRIu32"\n", i++, data->entry_size );
-    }
     return 0;
 }
 
@@ -1863,16 +1862,18 @@ static int isom_print_stco( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
     int indent = level;
     uint32_t i = 0;
     isom_print_box_common( fp, indent++, box, "Chunk Offset Box" );
-    lsmash_ifprintf( fp, indent, "entry_count = %"PRIu32"\n", stco->list->entry_count );
+    lsmash_ifprintf( fp, indent, "entry_count = %"PRIu32"\n", lsm_list_count( stco->list ) );
     if( lsmash_check_box_type_identical( stco->type, ISOM_BOX_TYPE_STCO ) )
     {
-        for( lsmash_entry_t *entry = stco->list->head; entry; entry = entry->next )
-            lsmash_ifprintf( fp, indent, "chunk_offset[%"PRIu32"] = %"PRIu32"\n", i++, ((isom_stco_entry_t *)entry->data)->chunk_offset );
+        isom_stco_entry_t *data;
+        LSM_LIST_FOR_EACH( data, stco->list )
+            lsmash_ifprintf( fp, indent, "chunk_offset[%"PRIu32"] = %"PRIu32"\n", i++, data->chunk_offset );
     }
     else
     {
-        for( lsmash_entry_t *entry = stco->list->head; entry; entry = entry->next )
-            lsmash_ifprintf( fp, indent, "chunk_offset[%"PRIu32"] = %"PRIu64"\n", i++, ((isom_co64_entry_t *)entry->data)->chunk_offset );
+        isom_co64_entry_t *data;
+        LSM_LIST_FOR_EACH( data, stco->list )
+            lsmash_ifprintf( fp, indent, "chunk_offset[%"PRIu32"] = %"PRIu64"\n", i++, data->chunk_offset );
     }
     return 0;
 }
@@ -1891,33 +1892,38 @@ static int isom_print_sgpd( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
         lsmash_ifprintf( fp, indent, "default_length = %"PRIu32, sgpd->default_length );
         fprintf( fp, " %s\n", sgpd->default_length ? "(constant)" : "(variable)" );
     }
-    lsmash_ifprintf( fp, indent, "entry_count = %"PRIu32"\n", sgpd->list->entry_count );
+    lsmash_ifprintf( fp, indent, "entry_count = %"PRIu32"\n", lsm_list_count( sgpd->list ) );
     switch( sgpd->grouping_type )
     {
         case ISOM_GROUP_TYPE_RAP :
-            for( lsmash_entry_t *entry = sgpd->list->head; entry; entry = entry->next )
+        {
+            isom_rap_entry_t *rap;
+            LSM_LIST_FOR_EACH( rap, sgpd->list )
             {
                 if( sgpd->version == 1 && !sgpd->default_length )
-                    lsmash_ifprintf( fp, indent, "description_length[%"PRIu32"] = %"PRIu32"\n", i++, ((isom_rap_entry_t *)entry->data)->description_length );
+                    lsmash_ifprintf( fp, indent, "description_length[%"PRIu32"] = %"PRIu32"\n", i++, rap->description_length );
                 else
                 {
-                    isom_rap_entry_t *rap = (isom_rap_entry_t *)entry->data;
                     lsmash_ifprintf( fp, indent++, "entry[%"PRIu32"]\n", i++ );
                     lsmash_ifprintf( fp, indent, "num_leading_samples_known = %"PRIu8"\n", rap->num_leading_samples_known );
                     lsmash_ifprintf( fp, indent--, "num_leading_samples = %"PRIu8"\n", rap->num_leading_samples );
                 }
             }
             break;
+        }
         case ISOM_GROUP_TYPE_ROLL :
         case ISOM_GROUP_TYPE_PROL :
-            for( lsmash_entry_t *entry = sgpd->list->head; entry; entry = entry->next )
+        {
+            isom_roll_entry_t *roll;
+            LSM_LIST_FOR_EACH( roll, sgpd->list )
             {
                 if( sgpd->version == 1 && !sgpd->default_length )
-                    lsmash_ifprintf( fp, indent, "description_length[%"PRIu32"] = %"PRIu32"\n", i++, ((isom_roll_entry_t *)entry->data)->description_length );
+                    lsmash_ifprintf( fp, indent, "description_length[%"PRIu32"] = %"PRIu32"\n", i++, roll->description_length );
                 else
-                    lsmash_ifprintf( fp, indent, "roll_distance[%"PRIu32"] = %"PRId16"\n", i++, ((isom_roll_entry_t *)entry->data)->roll_distance );
+                    lsmash_ifprintf( fp, indent, "roll_distance[%"PRIu32"] = %"PRId16"\n", i++, roll->roll_distance );
             }
             break;
+        }
         default :
             break;
     }
@@ -1936,10 +1942,10 @@ static int isom_print_sbgp( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
     lsmash_ifprintf( fp, indent, "grouping_type = %s\n", isom_4cc2str( sbgp->grouping_type ) );
     if( sbgp->version == 1 )
         lsmash_ifprintf( fp, indent, "grouping_type_parameter = %s\n", isom_4cc2str( sbgp->grouping_type_parameter ) );
-    lsmash_ifprintf( fp, indent, "entry_count = %"PRIu32"\n", sbgp->list->entry_count );
-    for( lsmash_entry_t *entry = sbgp->list->head; entry; entry = entry->next )
+    lsmash_ifprintf( fp, indent, "entry_count = %"PRIu32"\n", lsm_list_count( sbgp->list ) );
+    isom_group_assignment_entry_t *data;
+    LSM_LIST_FOR_EACH( data, sbgp->list )
     {
-        isom_group_assignment_entry_t *data = (isom_group_assignment_entry_t *)entry->data;
         lsmash_ifprintf( fp, indent++, "entry[%"PRIu32"]\n", i++ );
         lsmash_ifprintf( fp, indent, "sample_count = %"PRIu32"\n", data->sample_count );
         lsmash_ifprintf( fp, indent--, "group_description_index = %"PRIu32, data->group_description_index );

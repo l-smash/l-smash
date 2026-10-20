@@ -166,19 +166,17 @@ static int isom_write_elst( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_elst_t *elst = (isom_elst_t *)box;
     assert( elst->list );
-    if( elst->list->entry_count == 0 )
+    if( lsm_list_count( elst->list ) == 0 )
         return 0;
     elst->version = 0;
     lsmash_file_t *file = elst->file;
+    isom_elst_entry_t *data;
     if( LSMASH_IS_EXISTING_BOX( file ) )
     {
         /* Check the version. */
         if( !file->undefined_64_ver )
-            for( lsmash_entry_t *entry = elst->list->head; entry; entry = entry->next )
+            LSM_LIST_FOR_EACH( data, elst->list )
             {
-                isom_elst_entry_t *data = (isom_elst_entry_t *)entry->data;
-                if( !data )
-                    return LSMASH_ERR_NAMELESS;
                 if( data->segment_duration > UINT32_MAX
                  || data->media_time       >  INT32_MAX
                  || data->media_time       <  INT32_MIN )
@@ -190,10 +188,9 @@ static int isom_write_elst( lsmash_bs_t *bs, isom_box_t *box )
     }
     /* Write. */
     isom_bs_put_box_common( bs, elst );
-    lsmash_bs_put_be32( bs, elst->list->entry_count );
-    for( lsmash_entry_t *entry = elst->list->head; entry; entry = entry->next )
+    lsmash_bs_put_be32( bs, lsm_list_count( elst->list ) );
+    LSM_LIST_FOR_EACH( data, elst->list )
     {
-        isom_elst_entry_t *data = (isom_elst_entry_t *)entry->data;
         if( elst->version )
         {
             lsmash_bs_put_be64( bs, data->segment_duration );
@@ -932,12 +929,10 @@ static int isom_write_stts( lsmash_bs_t *bs, isom_box_t *box )
     isom_stts_t *stts = (isom_stts_t *)box;
     assert( stts->list );
     isom_bs_put_box_common( bs, stts );
-    lsmash_bs_put_be32( bs, stts->list->entry_count );
-    for( lsmash_entry_t *entry = stts->list->head; entry; entry = entry->next )
+    lsmash_bs_put_be32( bs, lsm_list_count( stts->list ) );
+    isom_stts_entry_t *data;
+    LSM_LIST_FOR_EACH( data, stts->list )
     {
-        isom_stts_entry_t *data = (isom_stts_entry_t *)entry->data;
-        if( !data )
-            return LSMASH_ERR_NAMELESS;
         lsmash_bs_put_be32( bs, data->sample_count );
         lsmash_bs_put_be32( bs, data->sample_delta );
     }
@@ -949,12 +944,10 @@ static int isom_write_ctts( lsmash_bs_t *bs, isom_box_t *box )
     isom_ctts_t *ctts = (isom_ctts_t *)box;
     assert( ctts->list );
     isom_bs_put_box_common( bs, ctts );
-    lsmash_bs_put_be32( bs, ctts->list->entry_count );
-    for( lsmash_entry_t *entry = ctts->list->head; entry; entry = entry->next )
+    lsmash_bs_put_be32( bs, lsm_list_count( ctts->list ) );
+    isom_ctts_entry_t *data;
+    LSM_LIST_FOR_EACH( data, ctts->list )
     {
-        isom_ctts_entry_t *data = (isom_ctts_entry_t *)entry->data;
-        if( !data )
-            return LSMASH_ERR_NAMELESS;
         lsmash_bs_put_be32( bs, data->sample_count );
         lsmash_bs_put_be32( bs, data->sample_offset );
     }
@@ -980,13 +973,11 @@ static int isom_write_stsz( lsmash_bs_t *bs, isom_box_t *box )
     lsmash_bs_put_be32( bs, stsz->sample_size );
     lsmash_bs_put_be32( bs, stsz->sample_count );
     if( stsz->sample_size == 0 && stsz->list )
-        for( lsmash_entry_t *entry = stsz->list->head; entry; entry = entry->next )
-        {
-            isom_stsz_entry_t *data = (isom_stsz_entry_t *)entry->data;
-            if( !data )
-                return LSMASH_ERR_NAMELESS;
+    {
+        isom_stsz_entry_t *data;
+        LSM_LIST_FOR_EACH( data, stsz->list )
             lsmash_bs_put_be32( bs, data->entry_size );
-        }
+    }
     return 0;
 }
 
@@ -997,30 +988,31 @@ static int isom_write_stz2( lsmash_bs_t *bs, isom_box_t *box )
     lsmash_bs_put_be32( bs, (stz2->reserved << 8) | stz2->field_size );
     lsmash_bs_put_be32( bs, stz2->sample_count );
     if( stz2->field_size == 16 )
-        for( lsmash_entry_t *entry = stz2->list->head; entry; entry = entry->next )
+    {
+        isom_stsz_entry_t *data;
+        LSM_LIST_FOR_EACH( data, stz2->list )
         {
-            isom_stsz_entry_t *data = (isom_stsz_entry_t *)entry->data;
-            if( !data )
-                return LSMASH_ERR_NAMELESS;
             assert( data->entry_size <= 0xffff );
             lsmash_bs_put_be16( bs, data->entry_size );
         }
+    }
     else if( stz2->field_size == 8 )
-        for( lsmash_entry_t *entry = stz2->list->head; entry; entry = entry->next )
+    {
+        isom_stsz_entry_t *data;
+        LSM_LIST_FOR_EACH( data, stz2->list )
         {
-            isom_stsz_entry_t *data = (isom_stsz_entry_t *)entry->data;
-            if( !data )
-                return LSMASH_ERR_NAMELESS;
             assert( data->entry_size <= 0xff );
             lsmash_bs_put_byte( bs, data->entry_size );
         }
+    }
     else if( stz2->field_size == 4 )
     {
         isom_stsz_entry_t zero_padding = { .entry_size = 0 };
-        for( lsmash_entry_t *entry = stz2->list->head; entry; entry = entry->next ? entry->next->next : entry->next )
+        uint32_t count = lsm_list_count( stz2->list );
+        for( uint32_t i = 0; i < count; i += 2 )
         {
-            isom_stsz_entry_t *data_o = (isom_stsz_entry_t *)entry->data;
-            isom_stsz_entry_t *data_e = (isom_stsz_entry_t *)(entry->next ? entry->next->data : &zero_padding);
+            isom_stsz_entry_t *data_o = (isom_stsz_entry_t *)lsm_list_at( stz2->list, i );
+            isom_stsz_entry_t *data_e = (i + 1 < count) ? (isom_stsz_entry_t *)lsm_list_at( stz2->list, i + 1 ) : &zero_padding;
             if( !data_o || !data_e )
                 return LSMASH_ERR_NAMELESS;
             assert( data_o->entry_size <= 0xf && data_e->entry_size <= 0xf );
@@ -1037,14 +1029,10 @@ static int isom_write_stss( lsmash_bs_t *bs, isom_box_t *box )
     isom_stss_t *stss = (isom_stss_t *)box;
     assert( stss->list );
     isom_bs_put_box_common( bs, stss );
-    lsmash_bs_put_be32( bs, stss->list->entry_count );
-    for( lsmash_entry_t *entry = stss->list->head; entry; entry = entry->next )
-    {
-        isom_stss_entry_t *data = (isom_stss_entry_t *)entry->data;
-        if( !data )
-            return LSMASH_ERR_NAMELESS;
+    lsmash_bs_put_be32( bs, lsm_list_count( stss->list ) );
+    isom_stss_entry_t *data;
+    LSM_LIST_FOR_EACH( data, stss->list )
         lsmash_bs_put_be32( bs, data->sample_number );
-    }
     return 0;
 }
 
@@ -1053,14 +1041,10 @@ static int isom_write_stps( lsmash_bs_t *bs, isom_box_t *box )
     isom_stps_t *stps = (isom_stps_t *)box;
     assert( stps->list );
     isom_bs_put_box_common( bs, stps );
-    lsmash_bs_put_be32( bs, stps->list->entry_count );
-    for( lsmash_entry_t *entry = stps->list->head; entry; entry = entry->next )
-    {
-        isom_stps_entry_t *data = (isom_stps_entry_t *)entry->data;
-        if( !data )
-            return LSMASH_ERR_NAMELESS;
+    lsmash_bs_put_be32( bs, lsm_list_count( stps->list ) );
+    isom_stps_entry_t *data;
+    LSM_LIST_FOR_EACH( data, stps->list )
         lsmash_bs_put_be32( bs, data->sample_number );
-    }
     return 0;
 }
 
@@ -1069,11 +1053,9 @@ static int isom_write_sdtp( lsmash_bs_t *bs, isom_box_t *box )
     isom_sdtp_t *sdtp = (isom_sdtp_t *)box;
     assert( sdtp->list );
     isom_bs_put_box_common( bs, sdtp );
-    for( lsmash_entry_t *entry = sdtp->list->head; entry; entry = entry->next )
+    isom_sdtp_entry_t *data;
+    LSM_LIST_FOR_EACH( data, sdtp->list )
     {
-        isom_sdtp_entry_t *data = (isom_sdtp_entry_t *)entry->data;
-        if( !data )
-            return LSMASH_ERR_NAMELESS;
         uint8_t temp = (data->is_leading            << 6)
                      | (data->sample_depends_on     << 4)
                      | (data->sample_is_depended_on << 2)
@@ -1088,12 +1070,10 @@ static int isom_write_stsc( lsmash_bs_t *bs, isom_box_t *box )
     isom_stsc_t *stsc = (isom_stsc_t *)box;
     assert( stsc->list );
     isom_bs_put_box_common( bs, stsc );
-    lsmash_bs_put_be32( bs, stsc->list->entry_count );
-    for( lsmash_entry_t *entry = stsc->list->head; entry; entry = entry->next )
+    lsmash_bs_put_be32( bs, lsm_list_count( stsc->list ) );
+    isom_stsc_entry_t *data;
+    LSM_LIST_FOR_EACH( data, stsc->list )
     {
-        isom_stsc_entry_t *data = (isom_stsc_entry_t *)entry->data;
-        if( !data )
-            return LSMASH_ERR_NAMELESS;
         lsmash_bs_put_be32( bs, data->first_chunk );
         lsmash_bs_put_be32( bs, data->samples_per_chunk );
         lsmash_bs_put_be32( bs, data->sample_description_index );
@@ -1106,14 +1086,10 @@ static int isom_write_co64( lsmash_bs_t *bs, isom_box_t *box )
     isom_stco_t *co64 = (isom_stco_t *)box;
     assert( co64->list );
     isom_bs_put_box_common( bs, co64 );
-    lsmash_bs_put_be32( bs, co64->list->entry_count );
-    for( lsmash_entry_t *entry = co64->list->head; entry; entry = entry->next )
-    {
-        isom_co64_entry_t *data = (isom_co64_entry_t *)entry->data;
-        if( !data )
-            return LSMASH_ERR_NAMELESS;
+    lsmash_bs_put_be32( bs, lsm_list_count( co64->list ) );
+    isom_co64_entry_t *data;
+    LSM_LIST_FOR_EACH( data, co64->list )
         lsmash_bs_put_be64( bs, data->chunk_offset );
-    }
     return 0;
 }
 
@@ -1124,14 +1100,10 @@ static int isom_write_stco( lsmash_bs_t *bs, isom_box_t *box )
         return isom_write_co64( bs, box );
     assert( stco->list );
     isom_bs_put_box_common( bs, stco );
-    lsmash_bs_put_be32( bs, stco->list->entry_count );
-    for( lsmash_entry_t *entry = stco->list->head; entry; entry = entry->next )
-    {
-        isom_stco_entry_t *data = (isom_stco_entry_t *)entry->data;
-        if( !data )
-            return LSMASH_ERR_NAMELESS;
+    lsmash_bs_put_be32( bs, lsm_list_count( stco->list ) );
+    isom_stco_entry_t *data;
+    LSM_LIST_FOR_EACH( data, stco->list )
         lsmash_bs_put_be32( bs, data->chunk_offset );
-    }
     return 0;
 }
 
@@ -1143,16 +1115,15 @@ static int isom_write_sgpd( lsmash_bs_t *bs, isom_box_t *box )
     lsmash_bs_put_be32( bs, sgpd->grouping_type );
     if( sgpd->version == 1 )
         lsmash_bs_put_be32( bs, sgpd->default_length );
-    lsmash_bs_put_be32( bs, sgpd->list->entry_count );
-    for( lsmash_entry_t *entry = sgpd->list->head; entry; entry = entry->next )
+    lsmash_bs_put_be32( bs, lsm_list_count( sgpd->list ) );
+    void *data;
+    LSM_LIST_FOR_EACH( data, sgpd->list )
     {
-        if( !entry->data )
-            return LSMASH_ERR_NAMELESS;
         switch( sgpd->grouping_type )
         {
             case ISOM_GROUP_TYPE_RAP :
             {
-                isom_rap_entry_t *rap = (isom_rap_entry_t *)entry->data;
+                isom_rap_entry_t *rap = (isom_rap_entry_t *)data;
                 uint8_t temp = (rap->num_leading_samples_known << 7)
                              |  rap->num_leading_samples;
                 lsmash_bs_put_byte( bs, temp );
@@ -1160,7 +1131,7 @@ static int isom_write_sgpd( lsmash_bs_t *bs, isom_box_t *box )
             }
             case ISOM_GROUP_TYPE_ROLL :
             case ISOM_GROUP_TYPE_PROL :
-                lsmash_bs_put_be16( bs, ((isom_roll_entry_t *)entry->data)->roll_distance );
+                lsmash_bs_put_be16( bs, ((isom_roll_entry_t *)data)->roll_distance );
                 break;
             default :
                 /* We don't consider other grouping types currently. */
@@ -1180,12 +1151,10 @@ static int isom_write_sbgp( lsmash_bs_t *bs, isom_box_t *box )
     lsmash_bs_put_be32( bs, sbgp->grouping_type );
     if( sbgp->version == 1 )
         lsmash_bs_put_be32( bs, sbgp->grouping_type_parameter );
-    lsmash_bs_put_be32( bs, sbgp->list->entry_count );
-    for( lsmash_entry_t *entry = sbgp->list->head; entry; entry = entry->next )
+    lsmash_bs_put_be32( bs, lsm_list_count( sbgp->list ) );
+    isom_group_assignment_entry_t *data;
+    LSM_LIST_FOR_EACH( data, sbgp->list )
     {
-        isom_group_assignment_entry_t *data = (isom_group_assignment_entry_t *)entry->data;
-        if( !data )
-            return LSMASH_ERR_NAMELESS;
         lsmash_bs_put_be32( bs, data->sample_count );
         lsmash_bs_put_be32( bs, data->group_description_index );
     }

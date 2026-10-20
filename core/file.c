@@ -237,9 +237,9 @@ int isom_check_mandatory_boxes
             return LSMASH_ERR_INVALID_DATA;
         if( !file->fragment
          && (!stbl->stsd->list.head
-          || !stbl->stts->list || !stbl->stts->list->head
-          || !stbl->stsc->list || !stbl->stsc->list->head
-          || !stbl->stco->list || !stbl->stco->list->head) )
+          || !lsm_list_count( stbl->stts->list )
+          || !lsm_list_count( stbl->stsc->list )
+          || !lsm_list_count( stbl->stco->list )) )
             return LSMASH_ERR_INVALID_DATA;
     }
     if( !file->fragment )

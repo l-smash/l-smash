@@ -581,16 +581,11 @@ static int isom_read_elst( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     ADD_BOX( elst, isom_edts_t );
     lsmash_bs_t *bs = file->bs;
     uint32_t entry_count = lsmash_bs_get_be32( bs );
-    for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && elst->list->entry_count < entry_count; pos = lsmash_bs_count( bs ) )
+    for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && lsm_list_count( elst->list ) < entry_count; pos = lsmash_bs_count( bs ) )
     {
-        isom_elst_entry_t *data = lsmash_malloc( sizeof(isom_elst_entry_t) );
+        isom_elst_entry_t *data = (isom_elst_entry_t *)lsm_list_append( elst->list );
         if( !data )
             return LSMASH_ERR_MEMORY_ALLOC;
-        if( lsmash_list_add_entry( elst->list, data ) < 0 )
-        {
-            lsmash_free( data );
-            return LSMASH_ERR_MEMORY_ALLOC;
-        }
         if( box->version == 1 )
         {
             data->segment_duration =          lsmash_bs_get_be64( bs );
@@ -1904,16 +1899,11 @@ static int isom_read_stts( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     ADD_BOX( stts, isom_stbl_t );
     lsmash_bs_t *bs = file->bs;
     uint32_t entry_count = lsmash_bs_get_be32( bs );
-    for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && stts->list->entry_count < entry_count; pos = lsmash_bs_count( bs ) )
+    for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && lsm_list_count( stts->list ) < entry_count; pos = lsmash_bs_count( bs ) )
     {
-        isom_stts_entry_t *data = lsmash_malloc( sizeof(isom_stts_entry_t) );
+        isom_stts_entry_t *data = (isom_stts_entry_t *)lsm_list_append( stts->list );
         if( !data )
             return LSMASH_ERR_MEMORY_ALLOC;
-        if( lsmash_list_add_entry( stts->list, data ) < 0 )
-        {
-            lsmash_free( data );
-            return LSMASH_ERR_MEMORY_ALLOC;
-        }
         data->sample_count = lsmash_bs_get_be32( bs );
         data->sample_delta = lsmash_bs_get_be32( bs );
     }
@@ -1928,16 +1918,11 @@ static int isom_read_ctts( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     ADD_BOX( ctts, isom_stbl_t );
     lsmash_bs_t *bs = file->bs;
     uint32_t entry_count = lsmash_bs_get_be32( bs );
-    for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && ctts->list->entry_count < entry_count; pos = lsmash_bs_count( bs ) )
+    for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && lsm_list_count( ctts->list ) < entry_count; pos = lsmash_bs_count( bs ) )
     {
-        isom_ctts_entry_t *data = lsmash_malloc( sizeof(isom_ctts_entry_t) );
+        isom_ctts_entry_t *data = (isom_ctts_entry_t *)lsm_list_append( ctts->list );
         if( !data )
             return LSMASH_ERR_MEMORY_ALLOC;
-        if( lsmash_list_add_entry( ctts->list, data ) < 0 )
-        {
-            lsmash_free( data );
-            return LSMASH_ERR_MEMORY_ALLOC;
-        }
         data->sample_count  = lsmash_bs_get_be32( bs );
         data->sample_offset = lsmash_bs_get_be32( bs );
     }
@@ -1967,16 +1952,11 @@ static int isom_read_stss( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     ADD_BOX( stss, isom_stbl_t );
     lsmash_bs_t *bs = file->bs;
     uint32_t entry_count = lsmash_bs_get_be32( bs );
-    for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && stss->list->entry_count < entry_count; pos = lsmash_bs_count( bs ) )
+    for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && lsm_list_count( stss->list ) < entry_count; pos = lsmash_bs_count( bs ) )
     {
-        isom_stss_entry_t *data = lsmash_malloc( sizeof(isom_stss_entry_t) );
+        isom_stss_entry_t *data = (isom_stss_entry_t *)lsm_list_append( stss->list );
         if( !data )
             return LSMASH_ERR_MEMORY_ALLOC;
-        if( lsmash_list_add_entry( stss->list, data ) < 0 )
-        {
-            lsmash_free( data );
-            return LSMASH_ERR_MEMORY_ALLOC;
-        }
         data->sample_number = lsmash_bs_get_be32( bs );
     }
     return isom_read_leaf_box_common_last_process( file, box, level, stss );
@@ -1990,16 +1970,11 @@ static int isom_read_stps( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     ADD_BOX( stps, isom_stbl_t );
     lsmash_bs_t *bs = file->bs;
     uint32_t entry_count = lsmash_bs_get_be32( bs );
-    for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && stps->list->entry_count < entry_count; pos = lsmash_bs_count( bs ) )
+    for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && lsm_list_count( stps->list ) < entry_count; pos = lsmash_bs_count( bs ) )
     {
-        isom_stps_entry_t *data = lsmash_malloc( sizeof(isom_stps_entry_t) );
+        isom_stps_entry_t *data = (isom_stps_entry_t *)lsm_list_append( stps->list );
         if( !data )
             return LSMASH_ERR_MEMORY_ALLOC;
-        if( lsmash_list_add_entry( stps->list, data ) < 0 )
-        {
-            lsmash_free( data );
-            return LSMASH_ERR_MEMORY_ALLOC;
-        }
         data->sample_number = lsmash_bs_get_be32( bs );
     }
     return isom_read_leaf_box_common_last_process( file, box, level, stps );
@@ -2016,14 +1991,9 @@ static int isom_read_sdtp( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     lsmash_bs_t *bs = file->bs;
     for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size; pos = lsmash_bs_count( bs ) )
     {
-        isom_sdtp_entry_t *data = lsmash_malloc( sizeof(isom_sdtp_entry_t) );
+        isom_sdtp_entry_t *data = (isom_sdtp_entry_t *)lsm_list_append( sdtp->list );
         if( !data )
             return LSMASH_ERR_MEMORY_ALLOC;
-        if( lsmash_list_add_entry( sdtp->list, data ) < 0 )
-        {
-            lsmash_free( data );
-            return LSMASH_ERR_MEMORY_ALLOC;
-        }
         uint8_t temp = lsmash_bs_get_byte( bs );
         data->is_leading            = (temp >> 6) & 0x3;
         data->sample_depends_on     = (temp >> 4) & 0x3;
@@ -2041,16 +2011,11 @@ static int isom_read_stsc( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     ADD_BOX( stsc, isom_stbl_t );
     lsmash_bs_t *bs = file->bs;
     uint32_t entry_count = lsmash_bs_get_be32( bs );
-    for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && stsc->list->entry_count < entry_count; pos = lsmash_bs_count( bs ) )
+    for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && lsm_list_count( stsc->list ) < entry_count; pos = lsmash_bs_count( bs ) )
     {
-        isom_stsc_entry_t *data = lsmash_malloc( sizeof(isom_stsc_entry_t) );
+        isom_stsc_entry_t *data = (isom_stsc_entry_t *)lsm_list_append( stsc->list );
         if( !data )
             return LSMASH_ERR_MEMORY_ALLOC;
-        if( lsmash_list_add_entry( stsc->list, data ) < 0 )
-        {
-            lsmash_free( data );
-            return LSMASH_ERR_MEMORY_ALLOC;
-        }
         data->first_chunk              = lsmash_bs_get_be32( bs );
         data->samples_per_chunk        = lsmash_bs_get_be32( bs );
         data->sample_description_index = lsmash_bs_get_be32( bs );
@@ -2070,19 +2035,14 @@ static int isom_read_stsz( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     uint64_t pos = lsmash_bs_count( bs );
     if( pos < box->size )
     {
-        stsz->list = lsmash_list_create_simple();
+        stsz->list = lsm_list_create_simple( sizeof(isom_stsz_entry_t) );
         if( !stsz->list )
             return LSMASH_ERR_MEMORY_ALLOC;
-        for( ; pos < box->size && stsz->list->entry_count < stsz->sample_count; pos = lsmash_bs_count( bs ) )
+        for( ; pos < box->size && lsm_list_count( stsz->list ) < stsz->sample_count; pos = lsmash_bs_count( bs ) )
         {
-            isom_stsz_entry_t *data = lsmash_malloc( sizeof(isom_stsz_entry_t) );
+            isom_stsz_entry_t *data = (isom_stsz_entry_t *)lsm_list_append( stsz->list );
             if( !data )
                 return LSMASH_ERR_MEMORY_ALLOC;
-            if( lsmash_list_add_entry( stsz->list, data ) < 0 )
-            {
-                lsmash_free( data );
-                return LSMASH_ERR_MEMORY_ALLOC;
-            }
             data->entry_size = lsmash_bs_get_be32( bs );
         }
     }
@@ -2111,16 +2071,11 @@ static int isom_read_stz2( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
                   lsmash_bs_get_be16_to_64
                 };
             uint64_t (*bs_get_entry_size)( lsmash_bs_t * ) = bs_get_funcs[ stz2->field_size == 16 ? 1 : 0 ];
-            for( ; pos < box->size && stz2->list->entry_count < stz2->sample_count; pos = lsmash_bs_count( bs ) )
+            for( ; pos < box->size && lsm_list_count( stz2->list ) < stz2->sample_count; pos = lsmash_bs_count( bs ) )
             {
-                isom_stsz_entry_t *data = lsmash_malloc( sizeof(isom_stsz_entry_t) );
+                isom_stsz_entry_t *data = (isom_stsz_entry_t *)lsm_list_append( stz2->list );
                 if( !data )
                     return LSMASH_ERR_MEMORY_ALLOC;
-                if( lsmash_list_add_entry( stz2->list, data ) < 0 )
-                {
-                    lsmash_free( data );
-                    return LSMASH_ERR_MEMORY_ALLOC;
-                }
                 data->entry_size = bs_get_entry_size( bs );
             }
         }
@@ -2128,16 +2083,11 @@ static int isom_read_stz2( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
         {
             int parity = 1;
             uint8_t temp8;
-            while( pos < box->size && stz2->list->entry_count < stz2->sample_count )
+            while( pos < box->size && lsm_list_count( stz2->list ) < stz2->sample_count )
             {
-                isom_stsz_entry_t *data = lsmash_malloc( sizeof(isom_stsz_entry_t) );
+                isom_stsz_entry_t *data = (isom_stsz_entry_t *)lsm_list_append( stz2->list );
                 if( !data )
                     return LSMASH_ERR_MEMORY_ALLOC;
-                if( lsmash_list_add_entry( stz2->list, data ) < 0 )
-                {
-                    lsmash_free( data );
-                    return LSMASH_ERR_MEMORY_ALLOC;
-                }
                 /* Read a byte by two entries. */
                 if( parity )
                 {
@@ -2173,30 +2123,20 @@ static int isom_read_stco( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     lsmash_bs_t *bs = file->bs;
     uint32_t entry_count = lsmash_bs_get_be32( bs );
     if( is_stco )
-        for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && stco->list->entry_count < entry_count; pos = lsmash_bs_count( bs ) )
+        for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && lsm_list_count( stco->list ) < entry_count; pos = lsmash_bs_count( bs ) )
         {
-            isom_stco_entry_t *data = lsmash_malloc( sizeof(isom_stco_entry_t) );
+            isom_stco_entry_t *data = (isom_stco_entry_t *)lsm_list_append( stco->list );
             if( !data )
                 return LSMASH_ERR_MEMORY_ALLOC;
-            if( lsmash_list_add_entry( stco->list, data ) < 0 )
-            {
-                lsmash_free( data );
-                return LSMASH_ERR_MEMORY_ALLOC;
-            }
             data->chunk_offset = lsmash_bs_get_be32( bs );
         }
     else
     {
-        for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && stco->list->entry_count < entry_count; pos = lsmash_bs_count( bs ) )
+        for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && lsm_list_count( stco->list ) < entry_count; pos = lsmash_bs_count( bs ) )
         {
-            isom_co64_entry_t *data = lsmash_malloc( sizeof(isom_co64_entry_t) );
+            isom_co64_entry_t *data = (isom_co64_entry_t *)lsm_list_append( stco->list );
             if( !data )
                 return LSMASH_ERR_MEMORY_ALLOC;
-            if( lsmash_list_add_entry( stco->list, data ) < 0 )
-            {
-                lsmash_free( data );
-                return LSMASH_ERR_MEMORY_ALLOC;
-            }
             data->chunk_offset = lsmash_bs_get_be64( bs );
         }
     }
@@ -2218,17 +2158,11 @@ static int isom_read_sgpd( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     {
         case ISOM_GROUP_TYPE_RAP :
         {
-            for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && sgpd->list->entry_count < entry_count; pos = lsmash_bs_count( bs ) )
+            for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && lsm_list_count( sgpd->list ) < entry_count; pos = lsmash_bs_count( bs ) )
             {
-                isom_rap_entry_t *data = lsmash_malloc( sizeof(isom_rap_entry_t) );
+                isom_rap_entry_t *data = (isom_rap_entry_t *)lsm_list_append( sgpd->list );
                 if( !data )
                     return LSMASH_ERR_MEMORY_ALLOC;
-                if( lsmash_list_add_entry( sgpd->list, data ) < 0 )
-                {
-                    lsmash_free( data );
-                    return LSMASH_ERR_MEMORY_ALLOC;
-                }
-                memset( data, 0, sizeof(isom_rap_entry_t) );
                 /* We don't know groups decided by variable description length. If encountering, skip getting of bytes of it. */
                 if( box->version == 1 && !sgpd->default_length )
                     data->description_length = lsmash_bs_get_be32( bs );
@@ -2244,17 +2178,11 @@ static int isom_read_sgpd( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
         case ISOM_GROUP_TYPE_ROLL :
         case ISOM_GROUP_TYPE_PROL :
         {
-            for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && sgpd->list->entry_count < entry_count; pos = lsmash_bs_count( bs ) )
+            for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && lsm_list_count( sgpd->list ) < entry_count; pos = lsmash_bs_count( bs ) )
             {
-                isom_roll_entry_t *data = lsmash_malloc( sizeof(isom_roll_entry_t) );
+                isom_roll_entry_t *data = (isom_roll_entry_t *)lsm_list_append( sgpd->list );
                 if( !data )
                     return LSMASH_ERR_MEMORY_ALLOC;
-                if( lsmash_list_add_entry( sgpd->list, data ) < 0 )
-                {
-                    lsmash_free( data );
-                    return LSMASH_ERR_MEMORY_ALLOC;
-                }
-                memset( data, 0, sizeof(isom_roll_entry_t) );
                 /* We don't know groups decided by variable description length. If encountering, skip getting of bytes of it. */
                 if( box->version == 1 && !sgpd->default_length )
                     data->description_length = lsmash_bs_get_be32( bs );
@@ -2280,16 +2208,11 @@ static int isom_read_sbgp( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     if( box->version == 1 )
         sbgp->grouping_type_parameter = lsmash_bs_get_be32( bs );
     uint32_t entry_count = lsmash_bs_get_be32( bs );
-    for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && sbgp->list->entry_count < entry_count; pos = lsmash_bs_count( bs ) )
+    for( uint64_t pos = lsmash_bs_count( bs ); pos < box->size && lsm_list_count( sbgp->list ) < entry_count; pos = lsmash_bs_count( bs ) )
     {
-        isom_group_assignment_entry_t *data = lsmash_malloc( sizeof(isom_group_assignment_entry_t) );
+        isom_group_assignment_entry_t *data = (isom_group_assignment_entry_t *)lsm_list_append( sbgp->list );
         if( !data )
             return LSMASH_ERR_MEMORY_ALLOC;
-        if( lsmash_list_add_entry( sbgp->list, data ) < 0 )
-        {
-            lsmash_free( data );
-            return LSMASH_ERR_MEMORY_ALLOC;
-        }
         data->sample_count            = lsmash_bs_get_be32( bs );
         data->group_description_index = lsmash_bs_get_be32( bs );
     }
