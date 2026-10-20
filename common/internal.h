@@ -28,6 +28,7 @@
 #include <assert.h>
 
 #include "lsmash.h"
+#include "alloc.h"
 
 #include "utils.h"
 #include "memint.h"

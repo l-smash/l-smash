@@ -65,6 +65,17 @@ L-SMASH is structured into four primary subsystems with strict directional depen
    - **Fragmented Mode (`core/fragment.c`)**: Emits an initialization movie (`ftyp` + `moov` with `mvex`/`trex`) followed by self-contained or indexed Movie Fragments (`sidx` + `moof`/`mfhd`/`traf`/`tfhd`/`tfdt`/`trun` + `mdat`) and an optional Movie Fragment Random Access (`mfra`/`tfra`/`mfro`) trailer.
    - **Timeline Abstraction (`core/timeline.c`)**: Flattens non-fragmented `stbl` tables and fragmented `moof`/`traf`/`trun` sequences into an in-memory random-accessible timeline (`info_list` for general samples, `bunch_list` for run-length-compressed LPCM frame bunches, `chunk_list` for portable media chunks) to support remuxing, edit list (`elst`) reconstruction, and random access lookup.
 
+### 2.2 Symbol Naming Conventions (structured Prefix Invariants)
+To keep L-SMASH's symbol namespace clean and enable complete encapsulation of internal symbols outside `lsmash.h`, all functions and symbols follow the **structured Prefix Invariants**:
+
+1. **Public API (External Public API): `lsmash_*` / `LSMASH_*`**
+   - Strictly reserved for public functions, types, and macros declared in `lsmash.h` and exposed to library consumers.
+2. **Internal Shared (Library-Internal Shared API): `lsm_{filename}_*`**
+   - Non-`static` internal functions shared across multiple `.c` translation units within `liblsmash` (e.g., `lsm_box_*` in `core/box.c`, `lsm_fragment_*` in `core/fragment.c`, `lsm_alloc_*` in `common/alloc.c`).
+3. **File-Local Static (File-Local Private API): `{filename}_*` (`static` mandatory)**
+   - Internal functions used only within a single `.c` translation unit must be declared `static` and prefixed with `{filename}_*` (e.g., `static ... write_*` in `core/write.c`, `static ... read_*` in `core/read.c`, `static ... alloc_*` in `common/alloc.c`).
+- **Incremental Application Policy**: Existing legacy internal functions (`isom_*`, etc.) are preserved without disruptive bulk renames during feature phases; all newly added internal functions and test/audit helpers from the implementation onward must adhere to this structured naming convention (using minimal local macro aliases only where required by existing token-pasting dispatch macros).
+
 ---
 
 ## 3. Core Subsystems

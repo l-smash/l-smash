@@ -911,13 +911,96 @@ static int test_ivf_mux_demux_roundtrip( void )
     return 0;
 }
 
+/*---------------------------------------------------------------------------
+ * Test 5: C99 Self-Contained Memory Audit Allocator Verification
+ *---------------------------------------------------------------------------*/
+static int test_memory_audit_allocator( void )
+{
+#ifdef LSMASH_DEBUG_ALLOC
+    TEST_ASSERT( lsm_alloc_get_active_count() == 0, "initial active block count == 0" );
+    TEST_ASSERT( lsm_alloc_get_active_bytes() == 0, "initial active byte count == 0" );
+
+    uint8_t *buf1 = (uint8_t *)lsmash_malloc( 128 );
+    TEST_ASSERT( buf1 != NULL, "lsmash_malloc(128) succeeds" );
+    TEST_ASSERT( ((uintptr_t)buf1 & 0xF) == 0, "lsmash_malloc returns 16-byte aligned pointer" );
+    TEST_ASSERT( buf1[0] == 0xCD && buf1[127] == 0xCD, "lsmash_malloc poisons uninitialized memory with 0xCD" );
+    TEST_ASSERT( lsm_alloc_get_active_count() == 1, "active block count == 1" );
+    TEST_ASSERT( lsm_alloc_get_active_bytes() == 128, "active byte count == 128" );
+
+    uint8_t *buf2 = (uint8_t *)lsmash_malloc_zero( 64 );
+    TEST_ASSERT( buf2 != NULL, "lsmash_malloc_zero(64) succeeds" );
+    for( int i = 0; i < 64; i++ )
+        if( buf2[i] != 0 )
+            TEST_ASSERT( 0, "lsmash_malloc_zero zeroes all bytes" );
+    TEST_ASSERT( lsm_alloc_get_active_count() == 2, "active block count == 2" );
+    TEST_ASSERT( lsm_alloc_get_active_bytes() == 192, "active byte count == 192" );
+
+    for( int i = 0; i < 64; i++ )
+        buf2[i] = (uint8_t)(i + 1);
+    uint8_t *buf3 = (uint8_t *)lsmash_memdup( buf2, 64 );
+    TEST_ASSERT( buf3 != NULL, "lsmash_memdup(buf2, 64) succeeds" );
+    TEST_ASSERT( memcmp( buf2, buf3, 64 ) == 0, "lsmash_memdup copies payload" );
+    TEST_ASSERT( lsm_alloc_get_active_count() == 3, "active block count == 3" );
+    TEST_ASSERT( lsm_alloc_get_active_bytes() == 256, "active byte count == 256" );
+
+    buf1 = (uint8_t *)lsmash_realloc( buf1, 256 );
+    TEST_ASSERT( buf1 != NULL, "lsmash_realloc(buf1, 256) succeeds" );
+    TEST_ASSERT( lsm_alloc_get_active_count() == 3, "active block count == 3 after realloc" );
+    TEST_ASSERT( lsm_alloc_get_active_bytes() == 384, "active byte count == 384 after realloc" );
+
+    lsmash_free( buf1 );
+    TEST_ASSERT( lsm_alloc_get_active_count() == 2, "active block count == 2 after lsmash_free" );
+    TEST_ASSERT( lsm_alloc_get_active_bytes() == 128, "active byte count == 128 after lsmash_free" );
+
+    lsmash_freep( &buf2 );
+    TEST_ASSERT( buf2 == NULL, "lsmash_freep sets pointer to NULL" );
+    TEST_ASSERT( lsm_alloc_get_active_count() == 1, "active block count == 1 after lsmash_freep" );
+    TEST_ASSERT( lsm_alloc_get_active_bytes() == 64, "active byte count == 64 after lsmash_freep" );
+
+    lsmash_freep( &buf3 );
+    TEST_ASSERT( buf3 == NULL, "lsmash_freep(buf3) sets pointer to NULL" );
+    TEST_ASSERT( lsm_alloc_get_active_count() == 0, "active block count == 0 after all frees" );
+    TEST_ASSERT( lsm_alloc_get_active_bytes() == 0, "active byte count == 0 after all frees" );
+    TEST_ASSERT( lsm_alloc_verify_no_leaks() == 0, "lsm_alloc_verify_no_leaks() == 0" );
+#endif
+    printf( "[PASS] test_memory_audit_allocator\n" );
+    return 0;
+}
+
+#ifdef LSMASH_DEBUG_ALLOC
+#define RUN_TEST( test_fn )                                                       \
+    do                                                                            \
+    {                                                                             \
+        if( (test_fn)() < 0 )                                                     \
+            return 1;                                                             \
+        if( lsm_alloc_verify_no_leaks() != 0 )                                    \
+        {                                                                         \
+            fprintf( stderr, "[FAIL] Memory leak detected after %s\n", #test_fn );\
+            ++g_tests_failed;                                                     \
+        }                                                                         \
+        assert( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0 ); \
+    } while( 0 )
+#else
+#define RUN_TEST( test_fn )                                                       \
+    do                                                                            \
+    {                                                                             \
+        if( (test_fn)() < 0 )                                                     \
+            return 1;                                                             \
+    } while( 0 )
+#endif
+
 int main( void )
 {
     printf( "=== L-SMASH Synthetic Test Suite ===\n" );
-    test_bitstream_primitives();
-    test_sequence_header_and_av1c();
-    test_frame_headers_and_tu_assembly();
-    test_ivf_mux_demux_roundtrip();
+    RUN_TEST( test_memory_audit_allocator );
+    RUN_TEST( test_bitstream_primitives );
+    RUN_TEST( test_sequence_header_and_av1c );
+    RUN_TEST( test_frame_headers_and_tu_assembly );
+    RUN_TEST( test_ivf_mux_demux_roundtrip );
+#ifdef LSMASH_DEBUG_ALLOC
+    assert( lsm_alloc_verify_no_leaks() == 0 );
+    assert( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0 );
+#endif
     printf( "=== Assertions run: %d, Failures: %d ===\n", g_tests_run, g_tests_failed );
     return g_tests_failed == 0 ? 0 : 1;
 }

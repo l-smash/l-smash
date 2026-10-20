@@ -9,6 +9,7 @@ vpath %.c $(SRCDIR)
 vpath %.h $(SRCDIR)
 
 OBJS = $(SRCS:%.c=%.o)
+TEST_OBJS = $(SRCS:%.c=%.test.o) tests/test_main.test.o
 
 SRC_ALL = $(SRCS) $(SRC_TOOLS)
 
@@ -20,13 +21,13 @@ TESTS = tests/test_main$(EXT)
 
 all: $(STATICLIB) $(SHAREDLIB) $(TOOLS)
 
-test: $(STATICLIBNAME) $(TESTS)
+test: $(TESTS)
 	./tests/test_main$(EXT)
 
 check: test
 
-tests/test_main$(EXT): tests/test_main.o $(STATICLIBNAME)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $< -llsmash $(LIBS)
+tests/test_main$(EXT): $(TEST_OBJS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $(TEST_OBJS) $(LIBS)
 
 lib: $(STATICLIB) $(SHAREDLIB)
 
@@ -51,6 +52,9 @@ include config.mak2
 
 %.o: %.c .depend config.h
 	$(CC) -c $(CFLAGS) -o $@ $<
+
+%.test.o: %.c .depend config.h
+	$(CC) -c $(CFLAGS) -DLSMASH_DEBUG_ALLOC -o $@ $<
 
 install: all install-lib
 	install -d $(DESTDIR)$(bindir)
