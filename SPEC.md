@@ -72,9 +72,9 @@ L-SMASH is structured into four primary subsystems with strict directional depen
 | Pillar | Specification Document | Target Scope & Objective |
 | :--- | :--- | :--- |
 | **Subsystem: C99 Memory & Container Modernization** | [`docs/specs/memory_architecture.md`](docs/specs/memory_architecture.md) | Replace high-volume doubly-linked lists (`lsmash_entry_list_t` / `lsmash_entry_t` with 24-byte node overhead and double `malloc` per sample) in Sample Tables, Fragments, and Timelines with cache-friendly C99 Paged Block Arrays / Flat Vectors while strictly preserving `box_default` (Null-Object Sentinel Pattern), `extensions` single-ownership invariants, and pointer stability in `sbgp`/`chunk_list`. |
-| **Subsystem: Native AV1 & Complete `obuparse` Removal** | [`docs/specs/av1_obuparse_removal.md`](docs/specs/av1_obuparse_removal.md) | Salvage and complete the original author's native AV1 OBU parser from the official `av1` branch (`2bd228c`, `96065d0`), fix all identified bitstream parsing bugs (`uvlc`, `leb128`, `show_existing_frame`, `order_hint`, `refresh_frame_flags`, `twelve_bit`), and completely remove `obuparse` from `codecs/`, `importer/`, and `configure`. |
+| **Subsystem: Native AV1 & Complete `obuparse` Removal (Completed in the implementation)** | [`docs/specs/av1_obuparse_removal.md`](docs/specs/av1_obuparse_removal.md) | Salvaged and completed the original author's native AV1 OBU parser from the official `av1` branch (`2bd228c`, `96065d0`), fixed all identified bitstream parsing bugs (`uvlc`, `leb128`, `show_existing_frame`, `order_hint`, `OrderHintBits`, `color_config`, `refresh_frame_flags`, `twelve_bit`, `lsmash_bs_get_le64`), and completely removed `obuparse` from `codecs/`, `importer/`, and `configure`. |
 | **Subsystem: ISO/IEC 23003-5 LPCM in Fragmented ISOBMFF** | [`docs/specs/lpcm_isobmff_fragmented.md`](docs/specs/lpcm_isobmff_fragmented.md) | Implement ISO/IEC 23003-5 (`ipcm`, `fpcm`, `pcmC`) and ISO/IEC 14496-12 (`chnl`, `srat`, `AudioSampleEntryV1`) with full multi-track Fragmented ISOBMFF support (`moof`/`traf`/`trun`), remove the hardcoded `fullbox_type_table[62]` limit in `core/box.c`, fix the `AudioSampleEntryV1` writer bug in `core/write.c`, and fix multi-track `trun->optional` allocation bugs in `core/fragment.c`. |
-| **Subsystem: Self-Contained Synthetic Test Suite** | [`docs/specs/testing_strategy.md`](docs/specs/testing_strategy.md) | Establish a zero-external-media-dependency C99 unit and integration test suite using programmatically synthesized LPCM waveforms, AV1 OBU bitstreams, and malformed Box byte sequences. |
+| **Subsystem: Self-Contained Synthetic Test Suite (Foundation Established in the implementation)** | [`docs/specs/testing_strategy.md`](docs/specs/testing_strategy.md) | Established zero-external-media-dependency C99 unit and integration test runner (`tests/test_main.c`, `make test`) with programmatically synthesized AV1 OBU bitstreams, `av1C` boxes, and IVF-to-ISOBMFF round-trip verification; to be expanded with LPCM and Paged Block Array suites in subsequent phases. |
 
 ---
 
@@ -122,8 +122,7 @@ L-SMASH is structured into four primary subsystems with strict directional depen
 | Path | Responsibility |
 | :--- | :--- |
 | `codecs/description.c`, `codecs/description.h` | Codec sample entry (`stsd` child) setup, validation, and summary extraction for video, audio (including QTFF LPCM and target ISO/IEC 23003-5 LPCM), and hint tracks. |
-| `codecs/av1.c`, `codecs/av1.h` | AV1 Codec Configuration Box (`av1C`) serialization/deserialization and (upon Subsystem completion) native AV1 OBU bitstream parsing and sample assembly. |
-| `codecs/av1_obu.c`, `codecs/av1_obu.h` | Temporary `vimeo`-fork wrapper around external `obuparse` (**scheduled for complete removal in Subsystem**). |
+| `codecs/av1.c`, `codecs/av1.h` | Native AV1 OBU bitstream parser (`av1_get_uvlc`, `av1_get_leb128`, `av1_parse_sequence_header`, `av1_parse_temporal_unit`), ITU-T T.35 HDR10+ metadata detection, sample assembly, and AV1 Codec Configuration Box (`av1C`) serialization/deserialization/printing. |
 | `codecs/h264.c`, `codecs/h264.h` | H.264/AVC NAL unit parser,SPS/PPS/SEI parsing, and `avcC` configuration handling. |
 | `codecs/hevc.c`, `codecs/hevc.h` | H.265/HEVC NAL unit parser, VPS/SPS/PPS/SEI parsing, and `hvcC` configuration handling. |
 | `codecs/nalu.c`, `codecs/nalu.h` | Shared NAL unit start-code scanner, emulation prevention byte removal, and length-prefixed AU conversion. |
@@ -139,7 +138,7 @@ L-SMASH is structured into four primary subsystems with strict directional depen
 | `importer/importer.c`, `importer/importer.h` | Importer plugin registry, probe/open/get_access_unit/close dispatch table, and public importer APIs. |
 | `importer/isobm_imp.c` | ISOBMFF/QTFF container importer leveraging `core/timeline.c`. |
 | `importer/wave_imp.c` | RIFF WAVE (`.wav`) LPCM audio importer (currently emits QTFF LPCM flags; scheduled for ISO/IEC 23003-5 & `WAVEFORMATEXTENSIBLE` enhancement in Subsystem). |
-| `importer/ivf_imp.c` | IVF container importer for AV1 streams (currently depends on `obuparse`; scheduled for native AV1 parser migration in Subsystem). |
+| `importer/ivf_imp.c` | IVF container importer for AV1 streams powered by L-SMASH's native AV1 OBU parser (`codecs/av1.{c,h}`). |
 | `importer/nalu_imp.c` | Raw H.264/AVC and H.265/HEVC Annex-B byte stream importer. |
 | `importer/adts_imp.c`, `importer/ac3_imp.c`, `importer/dts_imp.c`, `importer/amr_imp.c`, `importer/mp3_imp.c`, `importer/vc1_imp.c` | Elementary stream importers for ADTS AAC, AC-3/E-AC-3, DTS, AMR-NB/WB, MP3, and SMPTE VC-1. |
 
@@ -151,3 +150,8 @@ L-SMASH is structured into four primary subsystems with strict directional depen
 | `cli/remuxer.c` | Container-to-container remultiplexer and track/chapter editor. |
 | `cli/boxdumper.c` | Container Box hierarchy and sample table inspection utility. |
 | `cli/timelineeditor.c` | Edit list (`elst`) and timecode manipulation utility. |
+
+### 4.7 `tests/` — Self-Contained Synthetic Test Suite
+| Path | Responsibility |
+| :--- | :--- |
+| `tests/test_main.c` | Self-contained, copyright-free C99 synthetic unit and integration test suite (`make test` / `make check`). |

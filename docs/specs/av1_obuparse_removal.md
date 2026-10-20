@@ -131,7 +131,29 @@ for( int i = 0; i < 8; i++ )
 
 #### Bug 4: `lsmash_create_av1_specific_info()` Serialization Bug in `2bd228c` (`2bd228c:codecs/av1.c:1603-1615`)
 In `2bd228c`, `lsmash_create_av1_specific_info()` accidentally called `lsmash_bs_put_be32()` instead of `lsmash_bs_put_byte()` for the 4 header bytes of `av1C` and wrote `((param->high_bitdepth << 6) & 0x01)` (which always evaluates to `0`).
-- **Resolution**: Retain the already-corrected `lsmash_create_av1_specific_info()`, `isom_read_av1C()`, `isom_write_av1C()`, and `isom_print_av1C()` from `dev`'s `codecs/av1.c`, and merge the native OBU parser from `2bd228c:codecs/av1.{c,h}` into `codecs/av1.{c,h}`.
+- **Resolution**: Retain the already-corrected `lsmash_create_av1_specific_info()`, `av1_construct_specific_parameters()`, `av1_copy_codec_specific()`, and `av1_print_codec_specific()` from `dev`'s `codecs/av1.c`, and merge the native OBU parser from `2bd228c:codecs/av1.{c,h}` into `codecs/av1.{c,h}`.
+
+#### Bug 5: `av1_parser_color_config()` sRGB Condition Used `||` Instead of `&&` (`2bd228c:codecs/av1.c:457`)
+In `2bd228c:codecs/av1.c`:
+```c
+else if( cc->color_primaries          == CP_BT_709
+      || cc->transfer_characteristics == TC_SRGB
+      || cc->matrix_coefficients      == MC_IDENTITY )
+```
+- **Defect**: Per AV1 Spec Section 5.5.2, the implicit sRGB full-range 4:4:4 shortcut (`color_range = 1; subsampling_x = 0; subsampling_y = 0;`) applies **only** when `color_primaries == CP_BT_709 && transfer_characteristics == TC_SRGB && matrix_coefficients == MC_IDENTITY`. Using `||` caused any standard BT.709 stream (`CP_BT_709`, `TC_BT_709`, `MC_BT_709`) to skip reading `color_range` (`f(1)`), force 4:4:4 subsampling, and desynchronize subsequent Sequence Header bits.
+- **Resolution**: Fixed to `&&` and verified via dedicated BT.709 vs. sRGB unit test in `tests/test_main.c`.
+
+#### Bug 6: Missing `OrderHintBits` Derivation in `av1_parse_sequence_header()` (`2bd228c:codecs/av1.c:575`)
+- **Defect**: `av1_parse_sequence_header()` read `sh->order_hint_bits_minus_1` (`f(3)`) when `sh->enable_order_hint == 1` without setting `sh->OrderHintBits = sh->order_hint_bits_minus_1 + 1`, leaving `sh->OrderHintBits` as `0` during Frame Header parsing.
+- **Resolution**: Set `sh->OrderHintBits = sh->order_hint_bits_minus_1 + 1` when `sh->enable_order_hint == 1`, and `0` otherwise.
+
+#### Bug 7: Uninitialized Loop Counter in `av1_decode_frame_wrapup()` (`2bd228c:codecs/av1.c:1265`)
+- **Defect**: `for( int i; i < NUM_REF_FRAMES; i++ )` used an uninitialized `int i` and omitted `parser->RefOrderHint[i] = frame->OrderHint`.
+- **Resolution**: Initialized `int i = 0` and recorded `RefOrderHint[i] = frame->OrderHint`.
+
+#### Bug 8: 64-Bit Little-Endian Shift Bug in `lsmash_bs_get_le64()` (`common/bytes.c:666`)
+- **Defect**: `lsmash_bs_get_le64()` shifted the upper 32-bit word by `<< 16` instead of `<< 32`: `return ((uint64_t)lsmash_bs_get_le32( bs )) | ((uint64_t)lsmash_bs_get_le32( bs ) << 16);`, corrupting 64-bit little-endian fields (such as IVF 64-bit frame PTS in `importer/ivf_imp.c`). Similarly, `lsmash_bs_get_le32()` shifted `uint16_t << 16` without a `(uint32_t)` cast prior to shift.
+- **Resolution**: Fixed `<< 16` to `<< 32` in `lsmash_bs_get_le64()` and added `(uint32_t)` cast in `lsmash_bs_get_le32()`. Verified in `tests/test_main.c`.
 
 ---
 
@@ -157,16 +179,16 @@ Per the **AV1 Codec ISO Media File Format Binding Specification (v1.2.0)**:
 
 ---
 
-## 5. Step-by-Step Salvage & Integration Plan
+## 5. Implementation Status (Completed in the implementation)
 
-1. **Merge & Fix Native AV1 Parser in `codecs/av1.{c,h}`**:
-   - Integrate the native OBU parser structures (`av1_info_t`, `av1_sequence_header_t`, `av1_frame_header_t`, `av1_stream_ buffer` state) and functions from `2bd228c:codecs/av1.{c,h}` into `dev`'s `codecs/av1.{c,h}`.
-   - Apply all four bug fixes documented in Section 3.2 (`av1_get_uvlc`, `av1_get_leb128`/`av1_show_leb128`, `av1_uncompressed_header`, and `twelve_bit` propagation into `lsmash_av1_specific_parameters_t`).
-   - Support both low-overhead OBU streams (`obu_has_size_field == 1`) and size-less OBU streams (`obu_has_size_field == 0`, re-synthesizing LEB128 size fields).
-2. **Replace `importer/ivf_imp.c` with Native Implementation**:
-   - Salvage `96065d0:importer/ivf_imp.c` and integrate with `codecs/av1.{c,h}` so IVF frames (including superframes / multi-frame Temporal Units with `show_frame == 0` followed by `show_frame == 1` or `show_existing_frame == 1`) are parsed and assembled using 100% native L-SMASH routines.
-3. **Eliminate `obuparse` Completely**:
-   - `git rm codecs/av1_obu.c codecs/av1_obu.h`
-   - Update `configure` to remove `-lobuparse` from `LIBS` (line 119) and `codecs/av1_obu.c` from `SRCS` (line 318).
-4. **Verify via Synthetic AV1 OBU Test Suite**:
-   - Execute synthetic unit tests covering 8-bit, 10-bit, and 12-bit Sequence Headers, `uvlc`/`leb128` edge cases, `KEY_FRAME`, `INTER_FRAME`, `INTRA_ONLY_FRAME`, `SWITCH_FRAME`, `show_existing_frame`, and IVF muxing/remuxing without `obuparse`.
+1. **Merged & Fixed Native AV1 Parser in `codecs/av1.{c,h}`**:
+   - Integrated the native OBU parser structures (`av1_parser_t`, `av1_sequence_header_t`, `av1_frame_t`, `av1_color_config_t`) and functions from `2bd228c:codecs/av1.{c,h}` into `codecs/av1.{c,h}`.
+   - Applied all eight bug fixes documented in Section 3.2 (`av1_get_uvlc`, `av1_get_leb128`/`av1_show_leb128`, `av1_uncompressed_header`, `twelve_bit` propagation into `lsmash_av1_specific_parameters_t`, `av1_parser_color_config` `&&` fix, `OrderHintBits` derivation, `av1_decode_frame_wrapup` loop initialization, and `lsmash_bs_get_le64` `<< 32` fix).
+   - Added native ITU-T T.35 HDR10+ (`0xB5`, `0x003C`, `0x0001`, `0x04`, `0x01`) dynamic metadata detection in `av1_parse_metadata_obu()`.
+2. **Replaced `importer/ivf_imp.c` with Native Implementation**:
+   - Integrated `ivf_imp.c` with `av1_parse_temporal_unit()` so IVF frames (including multi-OBU Temporal Units with `show_frame == 0` followed by `show_existing_frame == 1`) are parsed and assembled using 100% native L-SMASH routines.
+3. **Eliminated `obuparse` Completely**:
+   - Deleted `codecs/av1_obu.c` and `codecs/av1_obu.h` (`git rm`).
+   - Updated `configure` to remove `-lobuparse` from `LIBS` and `av1_obu.c` from `SRC_CODECS`.
+4. **Verified via Synthetic AV1 OBU Test Suite (`tests/test_main.c`)**:
+   - All 134 synthetic assertions pass via `make test`, covering 8-bit, 10-bit, and 12-bit Sequence Headers, BT.709 vs. sRGB `color_config`, `uvlc`/`leb128` edge cases, `KEY_FRAME`, `INTER_FRAME`, `INTRA_ONLY_FRAME`, `SWITCH_FRAME`, `show_existing_frame`, `av1C` box creation/parsing/printing, and end-to-end synthetic IVF muxing/demuxing without `obuparse`.

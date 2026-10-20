@@ -49,17 +49,18 @@ tests/
 
 ---
 
-### 3.2 Suite 2: Native AV1 Parser & `obuparse` Removal (`tests/test_av1_obu.c`)
+### 3.2 Suite 2: Native AV1 Parser & `obuparse` Removal (`tests/test_main.c` — Implemented & Passing in the implementation)
 
 | Test ID | Target Component | Verification Description |
 | :--- | :--- | :--- |
+| `` | `lsmash_bs_get_le64()` & `lsmash_bs_get_le32()` | Verify 32-bit and 64-bit little-endian reads across upper-word bit boundaries (regression test for `<< 32` shift fix in `common/bytes.c`). |
 | `` | `av1_get_uvlc()` Bitstream Parser | Synthesize bitstreams encoding `uvlc()` values `0`, `1`, `2`, `7`, `65535`, `UINT32_MAX - 1`, and $\ge 32$ leading zeros; verify exact decoded values and bit consumption. |
 | `` | `av1_get_leb128()` & `av1_show_leb128()` | Test 1-byte to 8-byte LEB128 encodings (including non-minimal padded LEB128 and values with bit 28–31 set to catch 32-bit signed shift UB), plus rejection of $> 8$ bytes or values $> \text{UINT32\_MAX}$. |
-| `` | Sequence Header OBU (8/10/12-bit & Chroma) | Synthesize Sequence Header OBUs for Main Profile (8-bit, 10-bit 4:2:0), High Profile (4:4:4), and Professional Profile (**12-bit** `high_bitdepth=1, twelve_bit=1` 4:2:2 and Monochrome); verify `av1C` fields (`high_bitdepth`, `twelve_bit`, `monochrome`, `chroma_subsampling_x/y`, `chroma_sample_position`). |
-| `` | Frame Header OBU (`KEY`, `INTER`, `INTRA_ONLY`, `SWITCH`) | Synthesize Frame Headers with `enable_order_hint = 0` and `1`; verify `INTRA_ONLY_FRAME` and `INTER_FRAME` read 8-bit `refresh_frame_flags` (`f(8)`), whereas `SWITCH_FRAME` and `KEY_FRAME && show_frame` set `0xff` without consuming 8 bits. |
-| `` | `show_existing_frame == 1` & Reference Updates | Synthesize a multi-frame GOP containing a forward `KEY_FRAME` (`show_frame = 0`) followed by inter frames and a `show_existing_frame = 1` frame referencing the forward keyframe; verify reference slot updates, POC (`order_hint`) calculation, and `rap ` sample group assignment. |
-| `` | Sample Assembly & Forbidden OBU Filtering | Synthesize a Temporal Unit containing `OBU_TEMPORAL_DELIMITER`, `OBU_SEQUENCE_HEADER`, `OBU_METADATA`, `OBU_PADDING`, and `OBU_FRAME` (both with `obu_has_size_field = 1` and `0`); verify `OBU_TEMPORAL_DELIMITER` and `OBU_PADDING` are stripped and all output OBUs have `obu_has_size_field = 1`. |
-| `` | Synthetic IVF Importer & ISOBMFF Round-Trip | Generate an in-memory/temp IVF stream with a 10-frame AV1 sequence, import via `ivf_imp`, mux into ISOBMFF (`mp42`/`isom`/`av01`), read back `av1C` and timeline samples, and verify bit-exact sample payloads and timestamps. |
+| `` | Sequence Header OBU (8/10/12-bit, BT.709 vs. sRGB) | Synthesize Sequence Header OBUs for Main Profile (8-bit BT.709 4:2:0, sRGB 4:4:4, 10-bit 4:2:0) and Professional Profile (**12-bit** `high_bitdepth=1, twelve_bit=1` 4:2:2); verify `av1C` fields (`high_bitdepth`, `twelve_bit`, `monochrome`, `chroma_subsampling_x/y`, `chroma_sample_position`) and `av1C` box creation/deserialization/copy round-trip. |
+| `` | Frame Header OBU (`KEY`, `INTER`, `INTRA_ONLY`, `SWITCH`) | Synthesize Frame Headers with `enable_order_hint = 1`; verify `INTRA_ONLY_FRAME` and `INTER_FRAME` read 8-bit `refresh_frame_flags` (`f(8)`), whereas `SWITCH_FRAME` and `KEY_FRAME && show_frame` set `0xff` without consuming 8 bits. |
+| `` | `show_existing_frame == 1` & Reference Updates | Synthesize a multi-frame GOP containing a `KEY_FRAME`, an `INTER_FRAME` (`show_frame = 0`, refreshing slot 2), and a `show_existing_frame = 1` frame referencing slot 2; verify reference slot updates, `OrderHint` propagation, and `ra_flags` assignment. |
+| `` | Sample Assembly, Forbidden OBU Filtering & HDR10+ | Synthesize a Temporal Unit containing `OBU_TEMPORAL_DELIMITER`, `OBU_SEQUENCE_HEADER`, `OBU_METADATA` (ITU-T T.35 HDR10+), `OBU_PADDING`, and `OBU_FRAME`; verify `OBU_TEMPORAL_DELIMITER` and `OBU_PADDING` are stripped and `has_hdr10p == 1` is detected. |
+| `` | Synthetic IVF Importer & ISOBMFF Round-Trip | Generate a synthetic 3-frame AV1 IVF stream, import via `ivf_imp`, mux into ISOBMFF (`mp41`/`isom`/`av01`), verify `[av01: Visual Description]` and `[av1C: AV1 Configuration Box]` via `lsmash_print_movie()`, and verify bit-exact sample payloads and sync flags from `lsmash_construct_timeline()`. |
 
 ---
 

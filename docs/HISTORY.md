@@ -40,3 +40,10 @@ L-SMASH was created in 2010 by Yusuke Nakamura (`muken.the.vfrmaniac@gmail.com`)
   - `docs/specs/lpcm_isobmff_fragmented.md`
   - `docs/specs/testing_strategy.md`
   - `docs/HISTORY.md`
+
+### the implementation: Complete Removal of `obuparse`, Native AV1 OBU Parser Integration, and Synthetic Test Suite Establishment
+- Fixed `lsmash_bs_get_le64()` (`<< 16` $\rightarrow$ `<< 32`) and `lsmash_bs_get_le32()` (`(uint32_t)` cast before `<< 16`) in `common/bytes.c`.
+- Removed external `-lobuparse` dependency from `configure` and deleted `codecs/av1_obu.c` and `codecs/av1_obu.h`.
+- Salvaged the original author's native AV1 OBU parser from `origin/av1` (`2bd228c`, `96065d0`) into `codecs/av1.{c,h}` and `importer/ivf_imp.c`, fixing all identified bitstream bugs (`av1_get_uvlc`, `av1_get_leb128`/`av1_show_leb128`, `av1_parser_color_config`, `OrderHintBits`, `av1_uncompressed_header`, `av1_decode_frame_wrapup`, and 12-bit `twelve_bit` propagation into `av1C`).
+- Added `DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_AV01_VIDEO, AOM AV1 Video );` in `cli/muxer.c` and exported `lsmash_setup_av1_specific_parameters_from_access_unit` and `lsmash_destroy_av1_headers` in `lsmash.h`.
+- Created the self-contained, copyright-free synthetic test suite (`tests/test_main.c`, `make test` / `make check`) verifying bitstream primitives, Sequence Header OBUs (8/10/12-bit, BT.709 vs. sRGB), Frame Header OBUs, ITU-T T.35 HDR10+ metadata detection, `av1C` box round-trip, and synthetic IVF-to-ISOBMFF mux/demux round-trip (134 assertions passing with 0 warnings).
