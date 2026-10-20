@@ -106,6 +106,8 @@ All struct member names, bitstream parser variables, and `boxdumper` (`core/prin
 ### 4.1 Root & Configuration
 | Path | Responsibility |
 | :--- | :--- |
+| `README.md` | English project overview, supported container/codec matrix, build & test instructions, CLI quick start, and documentation index. |
+| `USAGE.md` | Comprehensive English CLI reference (`muxer`, `remuxer`, `boxdumper`, `timelineeditor`) and `liblsmash` C99 API programming manual. |
 | `lsmash.h` | Public C API header: box types, codec FourCCs, file parameters, summary structs, muxing/demuxing/timeline APIs, and codec-specific configuration structures. |
 | `configure` | POSIX shell build configurator: detects compiler/toolchain (supports POSIX/MSYS2 `sh`, `gcc`, `ar`, `ranlib`, `strip`), generates `config.h`, `config.mak`, `liblsmash.pc`, and `liblsmash.ver` (symbol version script parsed from `common/*.h` and `importer/*.h`). |
 | `Makefile` | Build rules for static/shared `liblsmash`, CLI tools (`cli/*`), installation, and test targets (verified with GNU Make 4.4.1 & GCC 14.2.0 via Read-Only MSYS2 MinGW64 toolchain). |
@@ -169,8 +171,8 @@ All struct member names, bitstream parser variables, and `boxdumper` (`core/prin
 | Path | Responsibility |
 | :--- | :--- |
 | `cli/cli.c`, `cli/cli.h` | Shared CLI initialization and argument/version helpers. |
-| `cli/muxer.c` | Elementary stream to ISOBMFF/QTFF/3GPP multiplexer (supports `--fragment` mode). |
-| `cli/remuxer.c` | Container-to-container remultiplexer and track/chapter editor. |
+| `cli/muxer.c` | Elementary stream to ISOBMFF/QTFF/3GPP multiplexer (Progressive Download `--optimize-pd`, chapters, iTunes metadata, HDR/Dolby Vision/Spatial Video & Audio signaling). |
+| `cli/remuxer.c` | Container-to-container remultiplexer, Movie Fragmenter (`--fragment`), MPEG-DASH segmenter (`--dash`), and track/chapter editor. |
 | `cli/boxdumper.c` | Container Box hierarchy and sample table inspection utility. |
 | `cli/timelineeditor.c` | Edit list (`elst`) and timecode manipulation utility. |
 
