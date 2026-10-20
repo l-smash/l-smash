@@ -50,3 +50,11 @@ Release/
 CLIRelease/
 *.sdf
 *.opensdf
+# Local workspace & temporary files
+/AI_BOOTSTRAP_TEMPLATE.md
+/WEB_GEMINI_ADVISOR*.md
+/ADVISOR_PROJECT_CONTEXT.md
+/AGENT_REPORT.md
+/.ignore
+*.bak
+*.tmp
