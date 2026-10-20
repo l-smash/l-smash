@@ -1,7 +1,7 @@
 /*****************************************************************************
  * av1.h
  *****************************************************************************
- * Copyright (C) 2017 L-SMASH project
+ * Copyright (C) 2017-2020 L-SMASH project
  * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
@@ -56,6 +56,9 @@ enum
     AV1_NUM_REF_FRAMES   = 8,
     AV1_TOTAL_REFS_COUNT = 8,
 
+    AV1_MAX_SEGMENTS = 8,
+    AV1_SEG_LVL_MAX  = 8,
+
     AV1_MAX_TILE_WIDTH = 4096,
     AV1_MAX_TILE_AREA  = 4096 * 2304,
     AV1_MAX_TILE_ROWS  = 64,
@@ -72,7 +75,9 @@ typedef struct
 {
     uint8_t  high_bitdepth;
     uint8_t  twelve_bit;
+    uint8_t  BitDepth;
     uint8_t  mono_chrome;
+    uint8_t  NumPlanes;
     uint8_t  color_description_present_flag;
     uint8_t  color_primaries;
     uint8_t  transfer_characteristics;
@@ -113,7 +118,7 @@ typedef struct
     uint8_t  seq_level_idx;
     uint8_t  seq_tier;
     uint8_t  decoder_model_present_for_this_op;
-    av1_operating_parameters_info_t opi;
+    av1_operating_parameters_info_t operating_parameters_info;
     uint8_t  initial_display_delay_present_for_this_op;
     uint8_t  initial_display_delay_minus_1;
 } av1_operating_point_t;
@@ -124,9 +129,9 @@ typedef struct
     uint8_t  still_picture;
     uint8_t  reduced_still_picture_header;
     uint8_t  timing_info_present_flag;
-    av1_timing_info_t ti;
+    av1_timing_info_t timing_info;
     uint8_t  decoder_model_info_present_flag;
-    av1_decoder_model_info_t dmi;
+    av1_decoder_model_info_t decoder_model_info;
     uint8_t  initial_display_delay_present_flag;
     uint8_t  operating_points_cnt_minus_1;
     av1_operating_point_t op[32];
@@ -156,7 +161,7 @@ typedef struct
     uint8_t  enable_superres;
     uint8_t  enable_cdef;
     uint8_t  enable_restoration;
-    av1_color_config_t cc;
+    av1_color_config_t color_config;
     uint8_t  film_grain_params_present;
 } av1_sequence_header_t;
 
@@ -232,13 +237,38 @@ typedef struct
     uint8_t  tile_size_bytes_minus_1;
     uint8_t  TileSizeBytes;
     uint32_t NumTiles;
+    uint32_t TileNum;
     uint8_t  tile_start_and_end_present_flag;
+    /* Quantization / Segmentation / Lossless state */
+    uint8_t  base_q_idx;
+    int8_t   DeltaQYDc;
+    int8_t   DeltaQUDc;
+    int8_t   DeltaQUAc;
+    int8_t   DeltaQVDc;
+    int8_t   DeltaQVAc;
+    uint8_t  segmentation_enabled;
+    uint8_t  FeatureEnabled[AV1_MAX_SEGMENTS][AV1_SEG_LVL_MAX];
+    int16_t  FeatureData   [AV1_MAX_SEGMENTS][AV1_SEG_LVL_MAX];
+    uint8_t  LosslessArray [AV1_MAX_SEGMENTS];
+    uint8_t  CodedLossless;
+    uint8_t  AllLossless;
+    uint8_t  delta_q_present;
+    uint8_t  delta_q_res;
+    uint8_t  delta_lf_present;
+    uint8_t  delta_lf_res;
+    uint8_t  delta_lf_multi;
+    uint8_t  reference_select;
+    uint8_t  skipModeAllowed;
+    uint8_t  skip_mode_present;
+    uint8_t  allow_warped_motion;
+    uint8_t  reduced_tx_set;
 } av1_frame_t;
 
 typedef struct
 {
     uint8_t temporal_id;
     uint8_t with_sequence_header;
+    uint8_t recording_config_obus;
     uint8_t seen_frame_header;
     uint8_t first_frame_type;
     uint8_t first_show_frame;
@@ -253,15 +283,17 @@ typedef struct
     uint8_t               seen_seq_header;
     uint8_t               has_hdr10p;
     /* Reference slot state (AV1 Spec Section 7.20) */
-    uint8_t               RefValid        [AV1_NUM_REF_FRAMES];
-    uint32_t              RefFrameId      [AV1_NUM_REF_FRAMES];
-    uint32_t              RefUpscaledWidth[AV1_NUM_REF_FRAMES];
-    uint32_t              RefFrameWidth   [AV1_NUM_REF_FRAMES];
-    uint32_t              RefFrameHeight  [AV1_NUM_REF_FRAMES];
-    uint32_t              RefRenderWidth  [AV1_NUM_REF_FRAMES];
-    uint32_t              RefRenderHeight [AV1_NUM_REF_FRAMES];
-    uint32_t              RefOrderHint    [AV1_NUM_REF_FRAMES];
-    uint8_t               RefFrameType    [AV1_NUM_REF_FRAMES];
+    uint8_t               RefValid         [AV1_NUM_REF_FRAMES];
+    uint32_t              RefFrameId       [AV1_NUM_REF_FRAMES];
+    uint32_t              RefUpscaledWidth [AV1_NUM_REF_FRAMES];
+    uint32_t              RefFrameWidth    [AV1_NUM_REF_FRAMES];
+    uint32_t              RefFrameHeight   [AV1_NUM_REF_FRAMES];
+    uint32_t              RefRenderWidth   [AV1_NUM_REF_FRAMES];
+    uint32_t              RefRenderHeight  [AV1_NUM_REF_FRAMES];
+    uint32_t              RefOrderHint     [AV1_NUM_REF_FRAMES];
+    uint8_t               RefFrameType     [AV1_NUM_REF_FRAMES];
+    uint8_t               RefFeatureEnabled[AV1_NUM_REF_FRAMES][AV1_MAX_SEGMENTS][AV1_SEG_LVL_MAX];
+    int16_t               RefFeatureData   [AV1_NUM_REF_FRAMES][AV1_MAX_SEGMENTS][AV1_SEG_LVL_MAX];
     /* Max render dimensions across stream */
     uint32_t              MaxRenderWidth;
     uint32_t              MaxRenderHeight;

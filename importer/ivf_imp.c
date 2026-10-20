@@ -285,10 +285,10 @@ static lsmash_video_summary_t *ivf_create_summary( ivf_importer_t *ivf_imp )
     summary->height                = seq_height;
     summary->par_h                 = (uint32_t)num;
     summary->par_v                 = (uint32_t)den;
-    summary->color.primaries_index = sh->cc.color_primaries;
-    summary->color.transfer_index  = sh->cc.transfer_characteristics;
-    summary->color.matrix_index    = sh->cc.matrix_coefficients;
-    summary->color.full_range      = sh->cc.color_range;
+    summary->color.primaries_index = sh->color_config.color_primaries;
+    summary->color.transfer_index  = sh->color_config.transfer_characteristics;
+    summary->color.matrix_index    = sh->color_config.matrix_coefficients;
+    summary->color.full_range      = sh->color_config.color_range;
     summary->max_au_length         = UINT32_MAX; /* unused */
 
     return summary;
@@ -374,7 +374,7 @@ static int ivf_importer_probe( importer_t *importer )
     lsmash_free( probe_buf );
     if( err < 0 )
         goto fail;
-    if( !ivf_imp->parser.seen_seq_header )
+    if( !ivf_imp->parser.seen_seq_header || !ivf_imp->parser.MaxRenderWidth )
     {
         err = LSMASH_ERR_INVALID_DATA;
         goto fail;

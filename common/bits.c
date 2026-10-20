@@ -68,6 +68,8 @@ void lsmash_bits_put_align( lsmash_bits_t *bits )
     if( !bits->store )
         return;
     lsmash_bs_put_byte( bits->bs, bits->cache << ( BITS_IN_BYTE - bits->store ) );
+    bits->store = 0;
+    bits->cache = 0;
 }
 
 void lsmash_bits_get_align( lsmash_bits_t *bits )
