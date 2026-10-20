@@ -99,9 +99,9 @@ Per ISO/IEC 23003-5 and ISO/IEC 14496-12:
 
 ---
 
-## 3. Critical Pre-Existing Bugs Identified in Audit (Must Be Fixed)
+## 3. Critical Pre-Existing Bugs Fixed in the implementation
 
-Our Read-Only codebase audit uncovered **five critical bugs** in `core/box.c`, `core/write.c`, and `core/fragment.c` that directly block ISO/IEC 23003-5 and multi-track Fragmented LPCM:
+Our Read-Only codebase audit and the implementation verification uncovered and resolved **six critical bugs** in `core/box.c`, `core/read.c`, `core/write.c`, and `core/fragment.c`:
 
 ### 3.1 Bug 1: `fullbox_type_table` Fixed-Size Array Overflow (`core/box.c:165`)
 In `core/box.c:163-228`:
@@ -224,19 +224,25 @@ In `core/fragment.c`:
    - Line 1598 computes `tfra->length_size_of_trun_num` using `for( length = 1; rap->traf_number >> (length * 8); length++ );` (`rap->traf_number` instead of `rap->trun_number`).
    - **Fix**: Change `rap->traf_number` on line 1598 to `rap->trun_number`.
 
+### 3.6 Bug 6: `isom_box_common_copy()` `stsd->version` Drop in `core/read.c:135`
+- In `core/read.c:135`, `isom_box_common_copy()` checked `if( lsmash_check_box_type_identical( ((isom_box_t *)src)->type, ISOM_BOX_TYPE_STSD ) )` (instead of checking `parent->type == ISOM_BOX_TYPE_STSD` as `core/box.c:149` does).
+- Because `stsd` is a FullBox (`stsd->version == 1` when containing `AudioSampleEntryV1`) while its child Sample Entries are BaseBoxes, checking `src->type == ISOM_BOX_TYPE_STSD` caused `isom_read_stsd()` to call `isom_basebox_common_copy()` and **discard `stsd->version = 1`**, leaving `stsd->version == 0`!
+- Consequently, `isom_read_audio_description()` (`core/read.c:1596`) saw `((isom_stsd_t *)parent)->version == 0` when reading an ISOBMFF `AudioSampleEntryV1` (`audio->version == 1`), misidentifying it as a QTFF Sound Sample Description v1 and consuming 16 bytes of child boxes (`srat`, `chnl`, `pcmC`) as bogus `samplesPerPacket` fields!
+- **Fix**: Changed `core/read.c:135` to check `parent && lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD )`, matching `core/box.c:149`.
+
 ---
 
-## 4. Comprehensive Module Modification Matrix
+## 4. Completed Module Modification Matrix (the implementation)
 
-| Module | File Path | Planned Changes |
+| Module | File Path | Implemented Changes |
 | :--- | :--- | :--- |
-| **Public API** | `lsmash.h` | Add `ISOM_CODEC_TYPE_IPCM_AUDIO` (`ipcm`), `ISOM_CODEC_TYPE_FPCM_AUDIO` (`fpcm`), `LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_PCM_CONFIG`, `LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_CHANNEL_LAYOUT`, `lsmash_isom_pcm_config_t`, and `lsmash_isom_channel_layout_t`. |
-| **Box Types** | `core/box_type.{c,h}` | Define `ISOM_BOX_TYPE_PCMC` (`pcmC`), `ISOM_BOX_TYPE_CHNL` (`chnl`), `ISOM_CODEC_TYPE_IPCM_AUDIO`, `ISOM_CODEC_TYPE_FPCM_AUDIO`. |
-| **Box Definitions** | `core/box.h`, `core/box_default.{c,h}`, `core/box.c` | Define `isom_pcmC_t` and `isom_chnl_t` (`isom_chnl_explicit_position_t`); add `isom_add_pcmC()`, `isom_add_chnl()`, destructors; remove fixed `fullbox_type_table[62]` limit and register `ISOM_BOX_TYPE_PCMC` & `ISOM_BOX_TYPE_CHNL` in `isom_is_fullbox()`; fix `audio->version == 1` size check in `isom_add_audio_description()`. |
-| **Box Reader** | `core/read.c` | Implement `isom_read_pcmC()` and `isom_read_chnl()`; dispatch `ISOM_BOX_TYPE_PCMC` and `ISOM_BOX_TYPE_CHNL` in `isom_read_children()` of `isom_audio_entry_t`; set `audio->constBytesPerAudioPacket` when reading `ipcm`/`fpcm`. |
-| **Box Writer** | `core/write.c` | Fix `isom_write_audio_description()` `data->version == 1 && (data->manager & LSMASH_QTFF_BASE)`; implement `isom_write_srat()`, `isom_write_pcmC()`, and `isom_write_chnl()`; register in `box_writer_table[]`. |
-| **Box Printer** | `core/print.c` | Implement `isom_print_pcmC()` and `isom_print_chnl()` and register in `isom_add_print_func()`. |
-| **Codec Description** | `codecs/description.{c,h}` | Implement `isom_set_isom_lpcm_description()` (`ipcm`/`fpcm` + `pcmC` + optional `chnl` + `srat` with `stsd->version = 1` / `AudioSampleEntryV1` when `frequency > UINT16_MAX`); support `ipcm`/`fpcm` summary extraction in `isom_get_audio_summary()` and `lsmash_check_codec_type_identical` tables. |
-| **ISOM Core & Timeline**| `core/isom.c`, `core/timeline.c` | Update `isom_is_lpcm_audio()` and `isom_is_uncompressed_audio()` to recognize `ISOM_CODEC_TYPE_IPCM_AUDIO` and `ISOM_CODEC_TYPE_FPCM_AUDIO`; ensure `isom_get_qt_fixed_comp_audio_sample_quants()` / `lsmash_construct_timeline()` handles `ipcm`/`fpcm` in both `stbl` and `moof`/`traf`/`trun` via `timeline->bunch_list`. |
-| **Fragment Engine** | `core/fragment.c` | Fix `ISOM_TR_FLAGS_OPTIONAL_ROWS_PRESENT_MASK` check at lines 1225, 1367, 1640; fix `useful_first_sample_flags` at line 948; fix `rap->trun_number` at line 1598. |
-| **WAVE Importer** | `importer/wave_imp.c` | Support both `WAVE_FORMAT_PCM` (`0x0001`), `WAVE_FORMAT_IEEE_FLOAT` (`0x0003`), and `WAVE_FORMAT_EXTENSIBLE` (`0xFFFE`) with integer/float subformats, populating ISO/IEC 23003-5 (`ipcm`/`fpcm`/`pcmC`/`chnl`) or QTFF LPCM summaries according to target container mode. |
+| **Public API** | `lsmash.h` | Added `ISOM_CODEC_TYPE_IPCM_AUDIO` (`ipcm`), `ISOM_CODEC_TYPE_FPCM_AUDIO` (`fpcm`), `LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_PCM_CONFIG`, `LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_CHANNEL_LAYOUT`, `lsmash_isom_pcm_config_t`, and `lsmash_isom_channel_layout_t`. |
+| **Box Types** | `core/box_type.{c,h}` | Defined `ISOM_BOX_TYPE_PCMC` (`pcmC`), `ISOM_BOX_TYPE_CHNL` (`chnl`), `ISOM_CODEC_TYPE_IPCM_AUDIO`, `ISOM_CODEC_TYPE_FPCM_AUDIO`. |
+| **Box Definitions** | `core/box.h`, `core/box_default.{c,h}`, `core/box.c` | Defined `isom_pcmC_t` and `isom_chnl_t` (`isom_chnl_explicit_position_t`); added `isom_add_pcmC()`, `isom_add_chnl()`, `box_destruct_chnl()`; replaced fixed `fullbox_type_table[62]` with compile-time `static const` unsized array and registered `ISOM_BOX_TYPE_PCMC` & `ISOM_BOX_TYPE_CHNL`; fixed `audio->version == 1` size check in `isom_add_audio_description()`. |
+| **Box Reader** | `core/read.c` | Fixed `isom_box_common_copy()` `stsd->version` copy bug; implemented `read_pcmC()` and `read_chnl()` (File-Local Static naming); registered `ISOM_CODEC_TYPE_IPCM_AUDIO` and `ISOM_CODEC_TYPE_FPCM_AUDIO` in `description_reader_table[]`; computed `audio->constBytesPerAudioPacket` when reading `pcmC`. |
+| **Box Writer** | `core/write.c` | Fixed `isom_write_audio_description()` `data->version == 1 && (data->manager & LSMASH_QTFF_BASE)`; implemented `isom_write_srat()`, `write_pcmC()`, and `write_chnl()`; registered in `box_writer_table[]`. |
+| **Box Printer** | `core/print.c` | Implemented `print_pcmC()` and `print_chnl()` and registered in `print_func_table[]`. |
+| **Codec Description** | `codecs/description.{c,h}` | Implemented `description_set_isom_lpcm()` (`ipcm`/`fpcm` + mandatory `pcmC` + optional `chnl` + `srat` with `stsd->version = 1` / `AudioSampleEntryV1` when `frequency > UINT16_MAX`, plus automatic fallback conversion from QTFF LPCM summary); added structured/unstructured converters, `isom_compare_opaque_extensions()`, and `ipcm`/`fpcm` summary extraction in `isom_get_audio_summary()`. |
+| **ISOM Core & Timeline**| `core/isom.c`, `core/timeline.c`, `core/summary.c` | Updated `isom_is_lpcm_audio()` and `isom_is_uncompressed_audio()` to recognize `ISOM_CODEC_TYPE_IPCM_AUDIO` and `ISOM_CODEC_TYPE_FPCM_AUDIO`; verified `timeline->bunch_list` aggregation across both non-fragmented `stbl` and multi-track fragmented `moof`/`traf`/`trun`. |
+| **Fragment Engine** | `core/fragment.c` | Fixed `ISOM_TR_FLAGS_OPTIONAL_ROWS_PRESENT_MASK` check at lines 1225, 1367, 1640; fixed `useful_first_sample_flags` at line 948; fixed `rap->trun_number` at line 1598. |
+| **WAVE Importer & CLI** | `importer/wave_imp.c`, `cli/muxer.c` | Added support for `WAVE_FORMAT_PCM` (`0x0001`), `WAVE_FORMAT_IEEE_FLOAT` (`0x0003`), and `WAVE_FORMAT_EXTENSIBLE` (`0xFFFE`) with integer/float subformats and `dwChannelMask` to CICP `definedLayout` mapping (`wave_imp_channel_mask_to_defined_layout`); added `ipcm`/`fpcm` display names in `cli/muxer.c`. |

@@ -27,9 +27,14 @@ tests/
   test_malformed_boxes.c   # Subsystem: Negative tests, boundary conditions, FullBox table verification
 ```
 
-### 2.1 Build System & Toolchain Integration (`configure` & `Makefile`)
+### 2.1 Build System, Toolchain & C99 Memory Audit Integration (`configure`, `Makefile`, `common/alloc.{c,h}`)
 - **Verified Toolchain**: Read-Only MSYS2 MinGW64 toolchain (`mingw64/bin` and `usr/bin`: `gcc 14.2.0`, `GNU Make 4.4.1`, `sh`, `ar`, `ranlib`, `strip`). Package manager operations (`pacman`, `pacboy`) and writes outside the workspace remain strictly prohibited.
-- **Test Target**: Add a `test` / `check` target in `Makefile` that compiles `tests/*.c` against `liblsmash.a` (or internal object files `$(OBJS)` when testing non-exported internal functions such as `lsmash_table_*`, `isom_is_fullbox`, or `av1_parse_*`) and executes the test binary.
+- **Test Target**: The `test` / `check` target in `Makefile` compiles all library and test translation units into `*.test.o` with **`-DLSMASH_DEBUG_ALLOC`** enabled, links `tests/test_main.exe`, and executes the test binary.
+- **C99 Self-Contained Memory Audit Mechanism (`common/alloc.{c,h}`)**:
+  - When compiled with `-DLSMASH_DEBUG_ALLOC`, all 6 allocation APIs (`lsmash_malloc`, `lsmash_malloc_zero`, `lsmash_realloc`, `lsmash_memdup`, `lsmash_free`, `lsmash_freep`) are wrapped by preprocessor macros capturing `__FILE__`, `__LINE__`, and the stringified call expression (`#size`, `#ptr`, `#ptrptr`).
+  - Each allocation prepends a 64-byte aligned `lsm_alloc_header_t` (recording `size`, active intrusive doubly-linked list pointers `prev`/`next`, `file`, `line`, `arg`, and `front_canary = 0xCAFEBABE5A5A5A5AULL`) and appends an 8-byte unaligned `rear_canary = 0xDEADC0DE3C3C3C3CULL` immediately after the user payload.
+  - Uninitialized memory from `lsmash_malloc` / `lsmash_realloc` growth is poisoned with `0xA5`, and freed blocks are poisoned with `0xDD` (`front_canary = 0xFEEEFEEEDEADBEEFULL`) to immediately expose Use-After-Free, Double-Free, Invalid-Free, and Heap Buffer Overrun bugs with `file(line)` + `arg` diagnostics and `abort()`.
+  - `RUN_TEST` in `tests/test_main.c` invokes `lsm_alloc_verify_no_leaks()` after every individual test suite and at program exit, enforcing `active_count == 0 && active_bytes == 0`.
 - All tests return exit code `0` on 100% pass and non-zero with file/line diagnostics on failure.
 
 ---
@@ -64,17 +69,18 @@ tests/
 
 ---
 
-### 3.3 Suite 3: ISO/IEC 23003-5 LPCM & Multi-Track Fragmented ISOBMFF (`tests/test_lpcm_isobmff.c`)
+### 3.3 Suite 3: ISO/IEC 23003-5 LPCM & Multi-Track Fragmented ISOBMFF (`tests/test_main.c` — Implemented & Passing in the implementation)
 
 | Test ID | Target Component | Verification Description |
 | :--- | :--- | :--- |
+| `` | `common/alloc.{c,h}` Memory Audit (`test_memory_audit_allocator`) | Verify `#ptr`/`#size` expression capture, `0xA5` uninitialized poisoning, zero-initialization, `lsmash_realloc` growth/shrinkage, `lsmash_memdup`, `lsmash_freep`, and active block/byte tracking across all 6 allocation macros. |
 | `` | `fullbox_type_table` Capacity & Registration | Verify `isom_is_fullbox()` returns `1` for `pcmC`, `chnl`, `srat`, and all 60+ existing FullBoxes, and `0` for non-FullBoxes (`wave`, `frma`, `enda`, `mdat`, `av1C`). |
-| `` | `ipcm` & `pcmC` Box Round-Trip (16/24/32-bit, LE/BE) | Mux and demux `ipcm` tracks across all 6 combinations of bit depth (`16`, `24`, `32`) and endianness (`pcm_sample_endian = 0` BE and `1` LE) at 48 kHz; verify 14-byte `pcmC` binary layout and bit-exact PCM sample data. |
+| `` | `ipcm` & `pcmC` Box Round-Trip (16/24/32-bit, LE/BE) | Mux and demux `ipcm` tracks across bit depths (`16`, `24`, `32`) and endianness (`pcm_sample_endian = 0` BE and `1` LE); verify 14-byte `pcmC` binary layout, structured/unstructured conversion, strict standard compliance invalid config rejection, and bit-exact PCM sample data. |
 | `` | `fpcm` & `pcmC` Box Round-Trip (32/64-bit IEEE 754 Float) | Mux and demux `fpcm` tracks with 32-bit and 64-bit IEEE 754 floating-point samples (LE and BE); verify `pcmC` and bit-exact sample reconstruction. |
 | `` | High Sample Rate (`> 65535` Hz) `AudioSampleEntryV1` + `srat` | Mux 96 kHz and 192 kHz `ipcm`/`fpcm` tracks; verify `stsd->version == 1`, `audio->version == 1` (**without** spurious 16-byte QTFF v1 fields!), and `srat->sampling_rate == 96000` / `192000`. |
-| `` | `chnl` (`ChannelLayoutBox`) Defined & Explicit Layouts | Test `chnl` serialization/deserialization for stereo (`definedLayout = 2`), 5.1 surround (`definedLayout = 6`), `omittedChannelsMap`, and custom speaker positions (`definedLayout = 0` including `speaker_position == 126` with explicit `azimuth` and `elevation`). |
-| `` | Multi-Track Fragmented ISOBMFF (`AV1` + `ipcm` / Dual `ipcm` + `fpcm`) | Mux a multi-track Fragmented ISOBMFF movie (`ftyp` + `moov`/`mvex` + multiple `sidx`/`moof`/`traf`/`trun`/`mdat` segments + `mfra`/`tfra`) combining video and `ipcm`/`fpcm` audio; verify: <br>1. **Zero `trun->optional` rows** are allocated/written for constant-frame-size LPCM `trun` boxes (`trun->flags == 0x000001`).<br>2. `lsmash_construct_timeline()` reconstructs both tracks across fragments (`timeline->info_list` and `timeline->bunch_list`) and extracts bit-exact samples. |
-| `` | Synthetic WAVE Importer (`wave_imp`) to Fragmented ISOBMFF | Generate synthetic `.wav` streams (`WAVE_FORMAT_PCM`, `WAVE_FORMAT_IEEE_FLOAT`, `WAVE_FORMAT_EXTENSIBLE` 24-bit 5.1), import via `wave_imp`, and mux into Fragmented ISOBMFF (`ipcm`/`fpcm`). |
+| `` | `chnl` (`ChannelLayoutBox`) Defined & Explicit Layouts | Test `chnl` serialization/deserialization/printing for Mono (`definedLayout = 1`), Stereo (`definedLayout = 2`), 5.1 surround (`definedLayout = 6`), 7.1 surround (`definedLayout = 12`), `objectStructured` (`object_count = 2`), and custom speaker positions (`definedLayout = 0` including `speaker_position == 126` with explicit `azimuth = -135` and `elevation = 45`). |
+| `` | Multi-Track Fragmented ISOBMFF (`test_multitrack_fragmented_lpcm_roundtrip`) | Mux a 2-track 5.1ch Fragmented ISOBMFF movie (`tid1`: 6ch 24-bit `ipcm` @ 48 kHz; `tid2`: 6ch 32-bit `fpcm` @ 96 kHz) across multiple fragments (`moof`/`traf`/`trun`/`mdat`); verify: <br>1. **Zero `trun->optional` rows** (`trun->optional == NULL`, `(trun->flags & 0x000f00) == 0`) on **both** Track 1 and Track 2 (`trun->flags == 0x000001`).<br>2. `lsmash_construct_timeline()` reconstructs all 400 + 800 frames via `timeline->bunch_list` with bit-exact payloads and timestamps. |
+| `` | Synthetic WAVE Importer (`test_wave_importer_isobmff_lpcm`) | Synthesize `WAVE_FORMAT_EXTENSIBLE` (24-bit 5.1ch PCM, `dwChannelMask = 0x3F`) and `WAVE_FORMAT_IEEE_FLOAT` (32-bit 96 kHz stereo float) `.wav` files, import via `wave_imp`, mux into ISOBMFF (`ipcm` + `chnl` `definedLayout=6` and `fpcm` + `srat` `96000`), and verify bit-exact round-trip. |
 
 ---
 
