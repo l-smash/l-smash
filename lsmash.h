@@ -48,7 +48,7 @@ extern "C" {
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  2
-#define LSMASH_VERSION_MINOR 21
+#define LSMASH_VERSION_MINOR 22
 #define LSMASH_VERSION_MICRO  0
 
 #define LSMASH_VERSION_INT( a, b, c ) (((a) << 16) | ((b) << 8) | (c))
@@ -703,8 +703,10 @@ DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_DTSL_AUDIO,  LSMASH_4CC( 'd', 't', 's', 
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_DTSX_AUDIO,  LSMASH_4CC( 'd', 't', 's', 'x' ) );    /* DTS:X */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_EC_3_AUDIO,  LSMASH_4CC( 'e', 'c', '-', '3' ) );    /* Enhanced AC-3 audio */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_ENCA_AUDIO,  LSMASH_4CC( 'e', 'n', 'c', 'a' ) );    /* Encrypted/Protected audio */
+DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_FPCM_AUDIO,  LSMASH_4CC( 'f', 'p', 'c', 'm' ) );    /* ISO/IEC 23003-5 IEEE 754 floating-point LPCM audio */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_G719_AUDIO,  LSMASH_4CC( 'g', '7', '1', '9' ) );    /* ITU-T Recommendation G.719 (2008) ); */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_G726_AUDIO,  LSMASH_4CC( 'g', '7', '2', '6' ) );    /* ITU-T Recommendation G.726 (1990) ); */
+DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_IPCM_AUDIO,  LSMASH_4CC( 'i', 'p', 'c', 'm' ) );    /* ISO/IEC 23003-5 integer LPCM audio */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_M4AE_AUDIO,  LSMASH_4CC( 'm', '4', 'a', 'e' ) );    /* MPEG-4 Audio Enhancement */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_MLPA_AUDIO,  LSMASH_4CC( 'm', 'l', 'p', 'a' ) );    /* MLP Audio */
 DEFINE_ISOM_CODEC_TYPE( ISOM_CODEC_TYPE_MP4A_AUDIO,  LSMASH_4CC( 'm', 'p', '4', 'a' ) );    /* MPEG-4 Audio */
@@ -963,6 +965,10 @@ typedef enum
 
     /* Added at the end because of the backward compatibility. */
     LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_OPUS,
+    LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_PCM_CONFIG,
+    LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_CHANNEL_LAYOUT,
+    LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_PCM_CONFIG     = LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_PCM_CONFIG,
+    LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_CHANNEL_LAYOUT = LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_CHANNEL_LAYOUT,
 } lsmash_codec_specific_data_type;
 
 typedef enum
@@ -4215,6 +4221,50 @@ typedef struct
 {
     lsmash_qt_audio_format_specific_flag format_flags;
 } lsmash_qt_audio_format_specific_flags_t;
+
+/* ISO/IEC 23003-5 PCM Configuration ('pcmC') */
+typedef enum
+{
+    ISOM_PCM_FORMAT_FLAG_BIG_ENDIAN      = 0x00,
+    ISOM_PCM_FORMAT_FLAG_LITTLE_ENDIAN   = 0x01,
+    LSMASH_PCM_FORMAT_FLAG_BIG_ENDIAN    = ISOM_PCM_FORMAT_FLAG_BIG_ENDIAN,
+    LSMASH_PCM_FORMAT_FLAG_LITTLE_ENDIAN = ISOM_PCM_FORMAT_FLAG_LITTLE_ENDIAN,
+} lsmash_pcm_format_flag;
+
+typedef struct
+{
+    uint8_t version;            /* FullBox version (0) */
+    uint8_t format_flags;       /* Bit 0 (0x01): 0 = Big-Endian, 1 = Little-Endian */
+    uint8_t PCM_sample_size;    /* 16, 24, 32 (for 'ipcm'); 32, 64 (for 'fpcm') */
+} lsmash_isom_pcm_config_t;
+
+/* ISO/IEC 14496-12 ChannelLayout ('chnl') */
+typedef enum
+{
+    ISOM_CHNL_STREAM_STRUCTURE_CHANNELS   = 0x01,
+    ISOM_CHNL_STREAM_STRUCTURE_OBJECTS    = 0x02,
+    LSMASH_CHANNEL_STREAM_STRUCTURE_CHANNEL = ISOM_CHNL_STREAM_STRUCTURE_CHANNELS,
+    LSMASH_CHANNEL_STREAM_STRUCTURE_OBJECT  = ISOM_CHNL_STREAM_STRUCTURE_OBJECTS,
+} lsmash_channel_stream_structure;
+
+#define LSMASH_ISOM_CHNL_MAX_CHANNELS 64
+
+typedef struct
+{
+    uint8_t speaker_position;   /* ISO/IEC 23091-3 OutputChannelPosition (126 = explicit azimuth/elevation) */
+    int16_t azimuth;            /* Present only when speaker_position == 126 */
+    int8_t  elevation;          /* Present only when speaker_position == 126 */
+} lsmash_isom_chnl_explicit_position_t;
+
+typedef struct
+{
+    uint8_t  stream_structure;
+    uint8_t  definedLayout;         /* CICP layout index (0 = explicit speaker positions) */
+    uint64_t omittedChannelsMap;    /* Valid when definedLayout != 0 */
+    uint8_t  object_count;          /* Valid when (stream_structure & ISOM_CHNL_STREAM_STRUCTURE_OBJECTS) */
+    uint16_t channel_count;         /* Number of explicit positions when definedLayout == 0 */
+    lsmash_isom_chnl_explicit_position_t positions[LSMASH_ISOM_CHNL_MAX_CHANNELS];
+} lsmash_isom_channel_layout_t;
 
 /* Global Header
  * Ut Video inside QuickTime file format requires this extension for storing CODEC specific information. */

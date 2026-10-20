@@ -796,6 +796,8 @@ static void display_codec_name( lsmash_codec_type_t codec_type, uint32_t track_n
     DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_SAWB_AUDIO, Wideband AMR voice );
     DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_SAMR_AUDIO, Narrowband AMR voice );
     DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_OPUS_AUDIO, Opus );
+    DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_IPCM_AUDIO, Integer Linear PCM );
+    DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_FPCM_AUDIO, Floating-Point Linear PCM );
     DISPLAY_CODEC_NAME(   QT_CODEC_TYPE_LPCM_AUDIO, Uncompressed Audio );
 #undef DISPLAY_CODEC_NAME
 }
@@ -926,10 +928,10 @@ static int open_input_files( muxer_t *muxer )
                 if( !opt->brand_3gx )
                     return ERROR_MSG( "the input seems AMR-NB/WB, available for 3GPP(2) file format.\n" );
             }
-            else if( lsmash_check_codec_type_identical( codec_type, QT_CODEC_TYPE_LPCM_AUDIO ) )
+            else if( lsmash_check_codec_type_identical( codec_type,   QT_CODEC_TYPE_LPCM_AUDIO )
+                  || lsmash_check_codec_type_identical( codec_type, ISOM_CODEC_TYPE_IPCM_AUDIO )
+                  || lsmash_check_codec_type_identical( codec_type, ISOM_CODEC_TYPE_FPCM_AUDIO ) )
             {
-                if( opt->isom && !opt->qtff )
-                    return ERROR_MSG( "the input seems Uncompressed Audio, at present available only for QuickTime file format.\n" );
                 in_track->lpcm = 1;
             }
             else
@@ -1251,7 +1253,7 @@ static int prepare_output( muxer_t *muxer )
                     }
                     media_param.timescale          = summary->frequency;
                     media_param.media_handler_name = track_opt->handler_name ? track_opt->handler_name : "L-SMASH Audio Handler";
-                    media_param.roll_grouping      = (opt->isom_version >= 2 || (opt->qtff && !in_track->lpcm));
+                    media_param.roll_grouping      = !in_track->lpcm && (opt->isom_version >= 2 || opt->qtff);
                     out_track->priming_samples = track_opt->encoder_delay;
                     out_track->timescale       = summary->frequency;
                     out_track->timebase        = 1;

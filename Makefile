@@ -53,7 +53,7 @@ include config.mak2
 %.o: %.c .depend config.h
 	$(CC) -c $(CFLAGS) -o $@ $<
 
-%.test.o: %.c .depend config.h
+%.test.o: %.c %.o .depend config.h
 	$(CC) -c $(CFLAGS) -DLSMASH_DEBUG_ALLOC -o $@ $<
 
 install: all install-lib

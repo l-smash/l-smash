@@ -1424,6 +1424,50 @@ static int isom_print_srat( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
     return 0;
 }
 
+static int print_pcmC( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
+{
+    isom_pcmC_t *pcmC = (isom_pcmC_t *)box;
+    int indent = level;
+    isom_print_box_common( fp, indent++, box, "PCM Configuration Box" );
+    lsmash_ifprintf( fp, indent, "format_flags = 0x%02"PRIx8" (%s-endian)\n",
+                     pcmC->format_flags,
+                     (pcmC->format_flags & ISOM_PCM_FORMAT_FLAG_LITTLE_ENDIAN) ? "little" : "big" );
+    lsmash_ifprintf( fp, indent, "PCM_sample_size = %"PRIu8"\n", pcmC->PCM_sample_size );
+    return 0;
+}
+#define isom_print_pcmC print_pcmC
+
+static int print_chnl( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
+{
+    isom_chnl_t *chnl = (isom_chnl_t *)box;
+    int indent = level;
+    isom_print_box_common( fp, indent++, box, "Channel Layout Box" );
+    lsmash_ifprintf( fp, indent, "stream_structure = 0x%02"PRIx8"\n", chnl->stream_structure );
+    if( chnl->stream_structure & ISOM_CHNL_STREAM_STRUCTURE_CHANNELS )
+    {
+        lsmash_ifprintf( fp, indent, "definedLayout = %"PRIu8"\n", chnl->definedLayout );
+        if( chnl->definedLayout == 0 )
+        {
+            for( uint16_t i = 0; i < chnl->channel_count && chnl->positions; i++ )
+            {
+                lsmash_ifprintf( fp, indent, "channel[%"PRIu16"]: speaker_position = %"PRIu8"\n",
+                                 i, chnl->positions[i].speaker_position );
+                if( chnl->positions[i].speaker_position == 126 )
+                {
+                    lsmash_ifprintf( fp, indent + 1, "azimuth = %"PRId16"\n", chnl->positions[i].azimuth );
+                    lsmash_ifprintf( fp, indent + 1, "elevation = %"PRId8"\n", chnl->positions[i].elevation );
+                }
+            }
+        }
+        else
+            lsmash_ifprintf( fp, indent, "omittedChannelsMap = 0x%016"PRIx64"\n", chnl->omittedChannelsMap );
+    }
+    if( chnl->stream_structure & ISOM_CHNL_STREAM_STRUCTURE_OBJECTS )
+        lsmash_ifprintf( fp, indent, "object_count = %"PRIu8"\n", chnl->object_count );
+    return 0;
+}
+#define isom_print_chnl print_chnl
+
 static int isom_print_text_description( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
 {
     isom_qt_text_entry_t *text = (isom_qt_text_entry_t *)box;
@@ -1558,6 +1602,8 @@ static int isom_print_sample_description_extesion( FILE *fp, lsmash_file_t *file
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_WAVE, isom_print_wave );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_CHAN, isom_print_chan );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_SRAT, isom_print_srat );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_PCMC, isom_print_pcmC );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_CHNL, isom_print_chnl );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_ESDS, mp4sys_print_codec_specific );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_AV1C, av1_print_codec_specific );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_AVCC, h264_print_codec_specific );
@@ -2781,6 +2827,8 @@ static isom_print_box_t isom_select_print_func( isom_box_t *box )
         ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_WAVE, isom_print_wave );
         ADD_PRINT_BOX_TABLE_ELEMENT(   QT_BOX_TYPE_CHAN, isom_print_chan );
         ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_SRAT, isom_print_srat );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_PCMC, isom_print_pcmC );
+        ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_CHNL, isom_print_chnl );
         ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_FTAB, isom_print_ftab );
         ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_STTS, isom_print_stts );
         ADD_PRINT_BOX_TABLE_ELEMENT( ISOM_BOX_TYPE_CTTS, isom_print_ctts );

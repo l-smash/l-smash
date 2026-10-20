@@ -132,7 +132,8 @@ static void isom_box_common_copy( void *dst, const void *src )
 {
     assert( LSMASH_IS_EXISTING_BOX( (isom_box_t *)dst )
          && LSMASH_IS_EXISTING_BOX( (isom_box_t *)src ) );
-    if( lsmash_check_box_type_identical( ((isom_box_t *)src)->type, ISOM_BOX_TYPE_STSD ) )
+    isom_box_t *parent = ((isom_box_t *)src)->parent;
+    if( parent && lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) )
     {
         isom_basebox_common_copy( (isom_box_t *)dst, (isom_box_t *)src );
         return;
@@ -1689,6 +1690,68 @@ static int isom_read_srat( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     return isom_read_leaf_box_common_last_process( file, box, level, srat );
 }
 
+static int read_pcmC( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( box->version != 0 )
+        return LSMASH_ERR_INVALID_DATA;
+    ADD_BOX( pcmC, isom_audio_entry_t );
+    lsmash_bs_t *bs = file->bs;
+    pcmC->format_flags    = lsmash_bs_get_byte( bs );
+    pcmC->PCM_sample_size = lsmash_bs_get_byte( bs );
+    if( parent && (parent->manager & LSMASH_AUDIO_DESCRIPTION) )
+    {
+        isom_audio_entry_t *audio = (isom_audio_entry_t *)parent;
+        audio->constBytesPerAudioPacket = ((uint32_t)audio->channelcount * pcmC->PCM_sample_size) / 8;
+    }
+    return isom_read_leaf_box_common_last_process( file, box, level, pcmC );
+}
+#define isom_read_pcmC read_pcmC
+
+static int read_chnl( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
+{
+    if( box->version != 0 )
+        return LSMASH_ERR_INVALID_DATA;
+    ADD_BOX( chnl, isom_audio_entry_t );
+    lsmash_bs_t *bs = file->bs;
+    chnl->stream_structure = lsmash_bs_get_byte( bs );
+    if( chnl->stream_structure & ISOM_CHNL_STREAM_STRUCTURE_CHANNELS )
+    {
+        uint16_t channel_count = (parent && (parent->manager & LSMASH_AUDIO_DESCRIPTION))
+                               ? ((isom_audio_entry_t *)parent)->channelcount
+                               : 0;
+        chnl->channel_count = channel_count;
+        chnl->definedLayout = lsmash_bs_get_byte( bs );
+        if( chnl->definedLayout == 0 )
+        {
+            if( channel_count > 0 )
+            {
+                chnl->positions = lsmash_malloc_zero( (size_t)channel_count * sizeof(isom_chnl_explicit_position_t) );
+                if( !chnl->positions )
+                    return LSMASH_ERR_MEMORY_ALLOC;
+                lsmash_bits_t bits = { 0 };
+                lsmash_bits_init( &bits, bs );
+                for( uint16_t i = 0; i < channel_count; i++ )
+                {
+                    uint8_t pos = (uint8_t)lsmash_bits_get( &bits, 7 );
+                    chnl->positions[i].speaker_position = pos;
+                    if( pos == 126 )
+                    {
+                        chnl->positions[i].azimuth   = (int16_t)lsmash_bits_get( &bits, 16 );
+                        chnl->positions[i].elevation = (int8_t)lsmash_bits_get( &bits, 8 );
+                    }
+                }
+                lsmash_bits_get_align( &bits );
+            }
+        }
+        else
+            chnl->omittedChannelsMap = lsmash_bs_get_be64( bs );
+    }
+    if( chnl->stream_structure & ISOM_CHNL_STREAM_STRUCTURE_OBJECTS )
+        chnl->object_count = lsmash_bs_get_byte( bs );
+    return isom_read_leaf_box_common_last_process( file, box, level, chnl );
+}
+#define isom_read_chnl read_chnl
+
 static int isom_read_qt_text_description( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) )
@@ -3060,8 +3123,10 @@ int isom_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uin
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSX_AUDIO, lsmash_form_iso_box_type );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_EC_3_AUDIO, lsmash_form_iso_box_type );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_ENCA_AUDIO, lsmash_form_iso_box_type );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_FPCM_AUDIO, lsmash_form_iso_box_type );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_G719_AUDIO, lsmash_form_iso_box_type );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_G726_AUDIO, lsmash_form_iso_box_type );
+            ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_IPCM_AUDIO, lsmash_form_iso_box_type );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_M4AE_AUDIO, lsmash_form_iso_box_type );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_MLPA_AUDIO, lsmash_form_iso_box_type );
             ADD_DESCRIPTION_READER_TABLE_ELEMENT( ISOM_CODEC_TYPE_MP4A_AUDIO, lsmash_form_iso_box_type );
@@ -3324,6 +3389,8 @@ int isom_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uin
             ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_DDTS, lsmash_form_iso_box_type,  isom_read_codec_specific );
             ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_DEC3, lsmash_form_iso_box_type,  isom_read_codec_specific );
             ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_DOPS, lsmash_form_iso_box_type,  isom_read_codec_specific );
+            ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_PCMC, lsmash_form_iso_box_type,  isom_read_pcmC );
+            ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_CHNL, lsmash_form_iso_box_type,  isom_read_chnl );
             ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_SRAT, lsmash_form_iso_box_type,  isom_read_srat );
             ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_WFEX, lsmash_form_iso_box_type,  isom_read_codec_specific );
             ADD_EXTENSION_READER_TABLE_ELEMENT( ISOM_BOX_TYPE_SA3D, lsmash_form_iso_box_type,  isom_read_SA3D );

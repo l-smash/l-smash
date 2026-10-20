@@ -964,6 +964,33 @@ typedef struct
                                  * and documents the actual sampling rate. */
 } isom_srat_t;
 
+/* ISO/IEC 23003-5 PCMConfigBox ('pcmC') */
+typedef struct
+{
+    ISOM_FULLBOX_COMMON;        /* version = 0, flags = 0 */
+    uint8_t format_flags;       /* Bit 0 (0x01): 0 = Big-Endian, 1 = Little-Endian */
+    uint8_t PCM_sample_size;    /* 16, 24, 32 (for 'ipcm'); 32, 64 (for 'fpcm') */
+} isom_pcmC_t;
+
+/* ISO/IEC 14496-12 ChannelLayout ('chnl') */
+typedef struct
+{
+    uint8_t speaker_position;   /* 7-bit OutputChannelPosition (ISO/IEC 23091-3) */
+    int16_t azimuth;            /* Present only if speaker_position == 126 */
+    int8_t  elevation;          /* Present only if speaker_position == 126 */
+} isom_chnl_explicit_position_t;
+
+typedef struct
+{
+    ISOM_FULLBOX_COMMON;        /* version = 0, flags = 0 */
+    uint8_t  stream_structure;  /* bit 0 (0x01): channelStructured, bit 1 (0x02): objectStructured */
+    uint8_t  definedLayout;     /* CICP layout index (if channelStructured) */
+    uint64_t omittedChannelsMap;/* Present if channelStructured && definedLayout != 0 */
+    uint8_t  object_count;      /* Present if objectStructured */
+    uint16_t channel_count;     /* Snapshot of parent AudioSampleEntry.channelcount for explicit positions */
+    isom_chnl_explicit_position_t *positions; /* Allocated array [channel_count] if definedLayout == 0 */
+} isom_chnl_t;
+
 /* ISOM: Audio Sample Entry / QTFF: Sound Description */
 typedef struct
 {
@@ -2344,6 +2371,8 @@ struct lsmash_root_tag
 #define LSMASH_BOX_PRECEDENCE_ISOM_PASP (LSMASH_BOX_PRECEDENCE_LP -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_STSL (LSMASH_BOX_PRECEDENCE_N  -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_CHAN (LSMASH_BOX_PRECEDENCE_LP -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_PCMC (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)
+#define LSMASH_BOX_PRECEDENCE_ISOM_CHNL (LSMASH_BOX_PRECEDENCE_LP -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_ISOM_SA3D (LSMASH_BOX_PRECEDENCE_HM - 1 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_QTFF_CHAN (LSMASH_BOX_PRECEDENCE_LP -  0 * LSMASH_BOX_PRECEDENCE_S)
 #define LSMASH_BOX_PRECEDENCE_QTFF_WAVE (LSMASH_BOX_PRECEDENCE_HM -  0 * LSMASH_BOX_PRECEDENCE_S)
@@ -2605,6 +2634,7 @@ void isom_init_box_common_orig
 );
 
 int isom_is_fullbox( const void *box );
+int lsm_box_is_iso_lpcm_audio( const void *box );
 int isom_is_lpcm_audio( const void *box );
 int isom_is_qt_audio( lsmash_codec_type_t type );
 int isom_is_uncompressed_ycbcr( lsmash_codec_type_t type );
@@ -2839,6 +2869,10 @@ isom_mp4a_t *isom_add_mp4a( isom_wave_t *wave );
 isom_terminator_t *isom_add_terminator( isom_wave_t *wave );
 isom_chan_t *isom_add_chan( isom_audio_entry_t *audio );
 isom_srat_t *isom_add_srat( isom_audio_entry_t *audio );
+isom_pcmC_t *lsm_box_add_pcmC( isom_audio_entry_t *audio );
+isom_chnl_t *lsm_box_add_chnl( isom_audio_entry_t *audio );
+#define isom_add_pcmC lsm_box_add_pcmC
+#define isom_add_chnl lsm_box_add_chnl
 isom_SA3D_t *isom_add_SA3D( isom_audio_entry_t *audio );
 isom_st3d_t *isom_add_st3d( isom_visual_entry_t *visual );
 isom_sv3d_t *isom_add_sv3d( isom_visual_entry_t *visual );

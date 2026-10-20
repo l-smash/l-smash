@@ -688,6 +688,53 @@ static int write_srat( lsmash_bs_t *bs, isom_box_t *box )
     return 0;
 }
 
+static int write_pcmC( lsmash_bs_t *bs, isom_box_t *box )
+{
+    isom_pcmC_t *pcmC = (isom_pcmC_t *)box;
+    isom_bs_put_box_common( bs, pcmC );
+    lsmash_bs_put_byte( bs, pcmC->format_flags );
+    lsmash_bs_put_byte( bs, pcmC->PCM_sample_size );
+    return 0;
+}
+
+static int write_chnl( lsmash_bs_t *bs, isom_box_t *box )
+{
+    isom_chnl_t *chnl = (isom_chnl_t *)box;
+    isom_bs_put_box_common( bs, chnl );
+    lsmash_bs_put_byte( bs, chnl->stream_structure );
+    if( chnl->stream_structure & ISOM_CHNL_STREAM_STRUCTURE_CHANNELS )
+    {
+        lsmash_bs_put_byte( bs, chnl->definedLayout );
+        if( chnl->definedLayout == 0 )
+        {
+            uint16_t channel_count = chnl->channel_count;
+            if( !channel_count && chnl->parent && (chnl->parent->manager & LSMASH_AUDIO_DESCRIPTION) )
+                channel_count = ((isom_audio_entry_t *)chnl->parent)->channelcount;
+            if( channel_count && chnl->positions )
+            {
+                lsmash_bits_t bits = { 0 };
+                lsmash_bits_init( &bits, bs );
+                for( uint16_t i = 0; i < channel_count; i++ )
+                {
+                    uint8_t pos = chnl->positions[i].speaker_position & 0x7f;
+                    lsmash_bits_put( &bits, 7, pos );
+                    if( pos == 126 )
+                    {
+                        lsmash_bits_put( &bits, 16, (uint16_t)chnl->positions[i].azimuth );
+                        lsmash_bits_put( &bits, 8,  (uint8_t)chnl->positions[i].elevation );
+                    }
+                }
+                lsmash_bits_put_align( &bits );
+            }
+        }
+        else
+            lsmash_bs_put_be64( bs, chnl->omittedChannelsMap );
+    }
+    if( chnl->stream_structure & ISOM_CHNL_STREAM_STRUCTURE_OBJECTS )
+        lsmash_bs_put_byte( bs, chnl->object_count );
+    return 0;
+}
+
 static int isom_write_hint_description( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_hint_entry_t *data = (isom_hint_entry_t *)box;
@@ -1816,6 +1863,8 @@ void isom_set_box_writer( isom_box_t *box )
         ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_MP4A, isom_write_mp4a );
         ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_CHAN, isom_write_chan );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SRAT, write_srat );
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_PCMC, write_pcmC );
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_CHNL, write_chnl );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_FTAB, isom_write_ftab );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STTS, isom_write_stts );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_CTTS, isom_write_ctts );

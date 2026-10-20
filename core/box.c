@@ -224,6 +224,8 @@ int isom_is_fullbox( const void *box )
         &ISOM_BOX_TYPE_HERO,
         &ISOM_BOX_TYPE_BLIN,
         &ISOM_BOX_TYPE_DADJ,
+        &ISOM_BOX_TYPE_PCMC,
+        &ISOM_BOX_TYPE_CHNL,
         NULL
     };
     for( int i = 0; fullbox_type_table[i]; i++ )
@@ -239,12 +241,26 @@ int isom_is_fullbox( const void *box )
     return 0;
 }
 
+/* Return 1 if the sample type is ISO/IEC 23003-5 LPCM audio ('ipcm' or 'fpcm'), Otherwise return 0. */
+int lsm_box_is_iso_lpcm_audio( const void *box )
+{
+    if( !box )
+        return 0;
+    const isom_box_t *current = (const isom_box_t *)box;
+    lsmash_box_type_t type = current->type;
+    return lsmash_check_codec_type_identical( type, ISOM_CODEC_TYPE_IPCM_AUDIO )
+        || lsmash_check_codec_type_identical( type, ISOM_CODEC_TYPE_FPCM_AUDIO );
+}
+
 /* Return 1 if the sample type is LPCM audio, Otherwise return 0. */
 int isom_is_lpcm_audio( const void *box )
 {
+    if( !box )
+        return 0;
     const isom_box_t *current = (const isom_box_t *)box;
     lsmash_box_type_t type = current->type;
-    return lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_23NI_AUDIO )
+    return lsm_box_is_iso_lpcm_audio( box )
+        || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_23NI_AUDIO )
         || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_NONE_AUDIO )
         || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_LPCM_AUDIO )
         || lsmash_check_codec_type_identical( type, QT_CODEC_TYPE_SOWT_AUDIO )
@@ -717,6 +733,12 @@ static void isom_remove_chan( isom_chan_t *chan )
     lsmash_free( chan->channelDescriptions );
 }
 
+static void box_remove_chnl( isom_chnl_t *chnl )
+{
+    lsmash_free( chnl->positions );
+}
+#define isom_remove_chnl box_remove_chnl
+
 static void isom_remove_must( isom_must_t *must )
 {
     lsmash_free( must->required_box_types );
@@ -883,6 +905,8 @@ void isom_remove_sample_description( isom_sample_entry_t *sample )
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSL_AUDIO, isom_remove_audio_description );
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_DTSX_AUDIO, isom_remove_audio_description );
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_EC_3_AUDIO, isom_remove_audio_description );
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_FPCM_AUDIO, isom_remove_audio_description );
+        ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_IPCM_AUDIO, isom_remove_audio_description );
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_OPUS_AUDIO, isom_remove_audio_description );
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAMR_AUDIO, isom_remove_audio_description );
         ADD_DESCRIPTION_REMOVER_TABLE_ELEMENT( ISOM_CODEC_TYPE_SAWB_AUDIO, isom_remove_audio_description );
@@ -1548,6 +1572,20 @@ DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_hfov, hfov, visual, ISOM_BOX_TYPE
 DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_wave, wave, audio,    QT_BOX_TYPE_WAVE, LSMASH_BOX_PRECEDENCE_QTFF_WAVE, 0, isom_audio_entry_t )
 DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_chan, chan, audio,    QT_BOX_TYPE_CHAN, LSMASH_BOX_PRECEDENCE_QTFF_CHAN, 1, isom_audio_entry_t )
 DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_srat, srat, audio,  ISOM_BOX_TYPE_SRAT, LSMASH_BOX_PRECEDENCE_ISOM_SRAT, 0, isom_audio_entry_t )
+#undef isom_add_pcmC
+#undef isom_add_chnl
+isom_pcmC_t *lsm_box_add_pcmC( isom_audio_entry_t *audio )
+{
+    CREATE_BOX( pcmC, audio, ISOM_BOX_TYPE_PCMC, LSMASH_BOX_PRECEDENCE_ISOM_PCMC, 0 );
+    return pcmC;
+}
+isom_chnl_t *lsm_box_add_chnl( isom_audio_entry_t *audio )
+{
+    CREATE_BOX( chnl, audio, ISOM_BOX_TYPE_CHNL, LSMASH_BOX_PRECEDENCE_ISOM_CHNL, 1 );
+    return chnl;
+}
+#define isom_add_pcmC lsm_box_add_pcmC
+#define isom_add_chnl lsm_box_add_chnl
 DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_SA3D, SA3D, audio,  ISOM_BOX_TYPE_SA3D, LSMASH_BOX_PRECEDENCE_ISOM_SA3D, 0, isom_audio_entry_t )
 DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_tims, tims, hint,   ISOM_BOX_TYPE_TIMS, LSMASH_BOX_PRECEDENCE_ISOM_TIMS, 0, isom_hint_entry_t )
 DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_tsro, tsro, hint,   ISOM_BOX_TYPE_TSRO, LSMASH_BOX_PRECEDENCE_ISOM_TSRO, 0, isom_hint_entry_t )

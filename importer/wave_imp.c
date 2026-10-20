@@ -41,6 +41,7 @@
 #define WAVE_MIN_FILESIZE 45
 
 #define WAVE_FORMAT_TYPE_ID_PCM        0x0001   /* WAVE_FORMAT_PCM */
+#define WAVE_FORMAT_TYPE_ID_IEEE_FLOAT 0x0003   /* WAVE_FORMAT_IEEE_FLOAT */
 #define WAVE_FORMAT_TYPE_ID_EXTENSIBLE 0xFFFE   /* WAVE_FORMAT_EXTENSIBLE */
 
 #define PASS_GUID( _0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15 ) \
@@ -53,6 +54,14 @@ DEFINE_WAVEFORMAT_EXTENSIBLE_SUBTYPE_GUID
 (
     WAVEFORMAT_EXTENSIBLE_SUBTYPE_GUID_PCM,
     PASS_GUID( 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00,
+               0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71 )
+);
+
+/* KSDATAFORMAT_SUBTYPE_IEEE_FLOAT := 00000003-0000-0010-8000-00aa00389b71 */
+DEFINE_WAVEFORMAT_EXTENSIBLE_SUBTYPE_GUID
+(
+    WAVEFORMAT_EXTENSIBLE_SUBTYPE_GUID_IEEE_FLOAT,
+    PASS_GUID( 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00,
                0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71 )
 );
 
@@ -165,6 +174,7 @@ static int wave_parse_fmt_chunk( wave_importer_t *wave_imp, lsmash_bs_t *bs )
     switch( wfx->wFormatTag )
     {
         case WAVE_FORMAT_TYPE_ID_PCM :
+        case WAVE_FORMAT_TYPE_ID_IEEE_FLOAT :
             return 0;
         case WAVE_FORMAT_TYPE_ID_EXTENSIBLE :
             wfx->cbSize = lsmash_bs_get_le16( bs );
@@ -174,8 +184,9 @@ static int wave_parse_fmt_chunk( wave_importer_t *wave_imp, lsmash_bs_t *bs )
             fmt->dwChannelMask               = lsmash_bs_get_le32( bs );
             if( lsmash_bs_get_bytes_ex( bs, 16, fmt->guid ) != 16 )
                 return LSMASH_ERR_NAMELESS;
-            /* We support only PCM audio currently. */
-            if( wave_fmt_subtype_cmp( fmt, WAVEFORMAT_EXTENSIBLE_SUBTYPE_GUID_PCM ) )
+            /* We support PCM and IEEE float audio. */
+            if( wave_fmt_subtype_cmp( fmt, WAVEFORMAT_EXTENSIBLE_SUBTYPE_GUID_PCM )
+             && wave_fmt_subtype_cmp( fmt, WAVEFORMAT_EXTENSIBLE_SUBTYPE_GUID_IEEE_FLOAT ) )
                 return LSMASH_ERR_INVALID_DATA;
             return 0;
         default :
@@ -209,7 +220,11 @@ static lsmash_audio_summary_t *wave_create_summary( waveformat_extensible_t *fmt
         lpcm->format_flags |= QT_AUDIO_FORMAT_FLAG_PACKED;
     else
         lpcm->format_flags |= QT_AUDIO_FORMAT_FLAG_ALIGNED_HIGH;
-    if( summary->sample_size > 8 )
+    if( wfx->wFormatTag == WAVE_FORMAT_TYPE_ID_IEEE_FLOAT
+     || (wfx->wFormatTag == WAVE_FORMAT_TYPE_ID_EXTENSIBLE
+      && !wave_fmt_subtype_cmp( fmt, WAVEFORMAT_EXTENSIBLE_SUBTYPE_GUID_IEEE_FLOAT )) )
+        lpcm->format_flags |= QT_AUDIO_FORMAT_FLAG_FLOAT;
+    else if( summary->sample_size > 8 )
         lpcm->format_flags |= QT_AUDIO_FORMAT_FLAG_SIGNED_INTEGER;
     if( lsmash_list_add_entry( &summary->opaque->list, cs ) < 0 )
     {

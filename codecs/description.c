@@ -329,6 +329,14 @@ static int isom_initialize_structured_codec_specific_data( lsmash_codec_specific
             specific->size     = sizeof(lsmash_qt_audio_channel_layout_t);
             specific->destruct = lsmash_free;
             break;
+        case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_PCM_CONFIG :
+            specific->size     = sizeof(lsmash_isom_pcm_config_t);
+            specific->destruct = lsmash_free;
+            break;
+        case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_CHANNEL_LAYOUT :
+            specific->size     = sizeof(lsmash_isom_channel_layout_t);
+            specific->destruct = lsmash_free;
+            break;
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_RTP_HINT_COMMON:
             specific->size     = sizeof(lsmash_isom_rtp_reception_hint_t);
             specific->destruct = lsmash_free;
@@ -509,6 +517,12 @@ static int isom_duplicate_structured_specific_data( lsmash_codec_specific_t *dst
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_CHANNEL_LAYOUT :
             *(lsmash_qt_audio_channel_layout_t *)dst_data = *(lsmash_qt_audio_channel_layout_t *)src_data;
             return 0;
+        case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_PCM_CONFIG :
+            *(lsmash_isom_pcm_config_t *)dst_data = *(lsmash_isom_pcm_config_t *)src_data;
+            return 0;
+        case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_CHANNEL_LAYOUT :
+            *(lsmash_isom_channel_layout_t *)dst_data = *(lsmash_isom_channel_layout_t *)src_data;
+            return 0;
         case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_RTP_HINT_COMMON:
             *(lsmash_isom_rtp_reception_hint_t *)dst_data = *(lsmash_isom_rtp_reception_hint_t *)src_data;
             return 0;
@@ -589,6 +603,131 @@ static int isom_construct_audio_channel_layout( lsmash_codec_specific_t *dst, ls
         return LSMASH_ERR_INVALID_DATA;
     layout->channelLayoutTag = LSMASH_GET_BE32( &data[0] );
     layout->channelBitmap    = LSMASH_GET_BE32( &data[4] );
+    return 0;
+}
+
+static int description_construct_isom_pcm_config( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
+{
+    if( src->size < ISOM_FULLBOX_COMMON_SIZE + 2 )
+        return LSMASH_ERR_INVALID_DATA;
+    uint8_t *data = src->data.unstructured;
+    uint64_t size = LSMASH_GET_BE32( data );
+    uint8_t *pos  = data + ISOM_BASEBOX_COMMON_SIZE;
+    if( size == 1 )
+    {
+        if( src->size < ISOM_FULLBOX_COMMON_SIZE + 8 + 2 )
+            return LSMASH_ERR_INVALID_DATA;
+        size = LSMASH_GET_BE64( pos );
+        pos += 8;
+    }
+    if( size != src->size )
+        return LSMASH_ERR_INVALID_DATA;
+    uint8_t version = pos[0];
+    if( version != 0 )
+        return LSMASH_ERR_INVALID_DATA;
+    pos += 4;
+    lsmash_isom_pcm_config_t *cfg = (lsmash_isom_pcm_config_t *)dst->data.structured;
+    cfg->version         = version;
+    cfg->format_flags    = pos[0];
+    cfg->PCM_sample_size = pos[1];
+    return 0;
+}
+
+static int description_construct_isom_channel_layout( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
+{
+    if( src->size < ISOM_FULLBOX_COMMON_SIZE + 1 )
+        return LSMASH_ERR_INVALID_DATA;
+    uint8_t *data = src->data.unstructured;
+    uint8_t *end  = data + src->size;
+    uint64_t size = LSMASH_GET_BE32( data );
+    uint8_t *pos  = data + ISOM_BASEBOX_COMMON_SIZE;
+    if( size == 1 )
+    {
+        if( src->size < ISOM_FULLBOX_COMMON_SIZE + 8 + 1 )
+            return LSMASH_ERR_INVALID_DATA;
+        size = LSMASH_GET_BE64( pos );
+        pos += 8;
+    }
+    if( size != src->size )
+        return LSMASH_ERR_INVALID_DATA;
+    uint8_t version = pos[0];
+    if( version != 0 )
+        return LSMASH_ERR_INVALID_DATA;
+    pos += 4;
+    if( pos >= end )
+        return LSMASH_ERR_INVALID_DATA;
+    lsmash_isom_channel_layout_t *chnl = (lsmash_isom_channel_layout_t *)dst->data.structured;
+    chnl->stream_structure = *pos++;
+    uint8_t *obj_end = (chnl->stream_structure & LSMASH_CHANNEL_STREAM_STRUCTURE_OBJECT) ? (end - 1) : end;
+    if( obj_end < pos )
+        return LSMASH_ERR_INVALID_DATA;
+    if( chnl->stream_structure & LSMASH_CHANNEL_STREAM_STRUCTURE_CHANNEL )
+    {
+        if( pos >= obj_end )
+            return LSMASH_ERR_INVALID_DATA;
+        chnl->definedLayout = *pos++;
+        if( chnl->definedLayout == 0 )
+        {
+            uint32_t bit_offset = 0;
+            uint32_t total_bits = (uint32_t)(obj_end - pos) * 8;
+            uint16_t ch_idx = 0;
+            while( bit_offset + 7 <= total_bits && ch_idx < 64 )
+            {
+                /* Read 7-bit speaker_position */
+                uint32_t spk = 0;
+                for( int b = 0; b < 7; b++ )
+                {
+                    uint32_t byte_idx = (bit_offset + b) >> 3;
+                    uint32_t bit_idx  = 7 - ((bit_offset + b) & 7);
+                    spk = (spk << 1) | ((pos[byte_idx] >> bit_idx) & 1);
+                }
+                bit_offset += 7;
+                chnl->positions[ch_idx].speaker_position = (uint8_t)spk;
+                if( spk == 126 )
+                {
+                    if( bit_offset + 24 > total_bits )
+                        return LSMASH_ERR_INVALID_DATA;
+                    uint32_t az = 0;
+                    for( int b = 0; b < 16; b++ )
+                    {
+                        uint32_t byte_idx = (bit_offset + b) >> 3;
+                        uint32_t bit_idx  = 7 - ((bit_offset + b) & 7);
+                        az = (az << 1) | ((pos[byte_idx] >> bit_idx) & 1);
+                    }
+                    bit_offset += 16;
+                    uint32_t el = 0;
+                    for( int b = 0; b < 8; b++ )
+                    {
+                        uint32_t byte_idx = (bit_offset + b) >> 3;
+                        uint32_t bit_idx  = 7 - ((bit_offset + b) & 7);
+                        el = (el << 1) | ((pos[byte_idx] >> bit_idx) & 1);
+                    }
+                    bit_offset += 8;
+                    chnl->positions[ch_idx].azimuth   = (int16_t)az;
+                    chnl->positions[ch_idx].elevation = (int8_t)el;
+                }
+                ch_idx++;
+                /* Stop if remaining bits in the last byte are all zero padding (< 7 bits left) */
+                if( total_bits - bit_offset < 7 )
+                    break;
+            }
+            chnl->channel_count = ch_idx;
+            pos = obj_end;
+        }
+        else
+        {
+            if( pos + 8 > obj_end )
+                return LSMASH_ERR_INVALID_DATA;
+            chnl->omittedChannelsMap = LSMASH_GET_BE64( pos );
+            pos += 8;
+        }
+    }
+    if( chnl->stream_structure & LSMASH_CHANNEL_STREAM_STRUCTURE_OBJECT )
+    {
+        if( pos >= end )
+            return LSMASH_ERR_INVALID_DATA;
+        chnl->object_count = *pos++;
+    }
     return 0;
 }
 
@@ -758,6 +897,65 @@ lsmash_codec_specific_t *lsmash_convert_codec_specific_format( lsmash_codec_spec
                     goto fail;
                 return dst;
             }
+            case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_PCM_CONFIG :
+            {
+                lsmash_bs_t *bs = lsmash_bs_create();
+                if( !bs )
+                    goto fail;
+                lsmash_isom_pcm_config_t *cfg = (lsmash_isom_pcm_config_t *)specific->data.structured;
+                lsmash_bs_put_be32( bs, ISOM_FULLBOX_COMMON_SIZE + 2 );
+                lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_PCMC.fourcc );
+                lsmash_bs_put_be32( bs, 0 );
+                lsmash_bs_put_byte( bs, cfg->format_flags );
+                lsmash_bs_put_byte( bs, cfg->PCM_sample_size );
+                dst->data.unstructured = lsmash_bs_export_data( bs, &dst->size );
+                lsmash_bs_cleanup( bs );
+                if( !dst->data.unstructured || dst->size != (ISOM_FULLBOX_COMMON_SIZE + 2) )
+                    goto fail;
+                return dst;
+            }
+            case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_CHANNEL_LAYOUT :
+            {
+                lsmash_bs_t *bs = lsmash_bs_create();
+                if( !bs )
+                    goto fail;
+                lsmash_isom_channel_layout_t *chnl = (lsmash_isom_channel_layout_t *)specific->data.structured;
+                lsmash_bs_put_be32( bs, 0 );
+                lsmash_bs_put_be32( bs, ISOM_BOX_TYPE_CHNL.fourcc );
+                lsmash_bs_put_be32( bs, 0 );
+                lsmash_bs_put_byte( bs, chnl->stream_structure );
+                if( chnl->stream_structure & LSMASH_CHANNEL_STREAM_STRUCTURE_CHANNEL )
+                {
+                    lsmash_bs_put_byte( bs, chnl->definedLayout );
+                    if( chnl->definedLayout == 0 )
+                    {
+                        lsmash_bits_t bits = { 0 };
+                        lsmash_bits_init( &bits, bs );
+                        uint16_t count = LSMASH_MIN( chnl->channel_count, 64 );
+                        for( uint16_t i = 0; i < count; i++ )
+                        {
+                            uint8_t pos = chnl->positions[i].speaker_position;
+                            lsmash_bits_put( &bits, 7, pos );
+                            if( pos == 126 )
+                            {
+                                lsmash_bits_put( &bits, 16, (uint16_t)chnl->positions[i].azimuth );
+                                lsmash_bits_put( &bits, 8,  (uint8_t)chnl->positions[i].elevation );
+                            }
+                        }
+                        lsmash_bits_put_align( &bits );
+                    }
+                    else
+                        lsmash_bs_put_be64( bs, chnl->omittedChannelsMap );
+                }
+                if( chnl->stream_structure & LSMASH_CHANNEL_STREAM_STRUCTURE_OBJECT )
+                    lsmash_bs_put_byte( bs, chnl->object_count );
+                dst->data.unstructured = lsmash_bs_export_data( bs, &dst->size );
+                lsmash_bs_cleanup( bs );
+                if( !dst->data.unstructured || dst->size < ISOM_FULLBOX_COMMON_SIZE + 1 )
+                    goto fail;
+                LSMASH_SET_BE32( dst->data.unstructured, dst->size );
+                return dst;
+            }
             default :
                 break;
         }
@@ -790,9 +988,11 @@ lsmash_codec_specific_t *lsmash_convert_codec_specific_format( lsmash_codec_spec
                 { LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_DTS,          dts_construct_specific_parameters },
                 { LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_OPUS,         opus_construct_specific_parameters },
                 { LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_ALAC,         alac_construct_specific_parameters },
-                { LSMASH_CODEC_SPECIFIC_DATA_TYPE_CODEC_GLOBAL_HEADER,     isom_construct_global_specific_header },
-                { LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_CHANNEL_LAYOUT, isom_construct_audio_channel_layout },
-                { LSMASH_CODEC_SPECIFIC_DATA_TYPE_UNKNOWN,               NULL }
+                { LSMASH_CODEC_SPECIFIC_DATA_TYPE_CODEC_GLOBAL_HEADER,       isom_construct_global_specific_header },
+                { LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_CHANNEL_LAYOUT,   isom_construct_audio_channel_layout },
+                { LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_PCM_CONFIG,     description_construct_isom_pcm_config },
+                { LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_CHANNEL_LAYOUT, description_construct_isom_channel_layout },
+                { LSMASH_CODEC_SPECIFIC_DATA_TYPE_UNKNOWN,                   NULL }
             };
         int (*constructor)( lsmash_codec_specific_t *, lsmash_codec_specific_t * ) = NULL;
         for( int i = 0; codec_specific_format_constructor_table[i].constructor; i++ )
@@ -883,6 +1083,13 @@ static int isom_check_valid_summary( lsmash_summary_t *summary )
     isom_box_t temp_box;
     temp_box.type    = summary->sample_type;
     temp_box.manager = summary->summary_type == LSMASH_SUMMARY_TYPE_AUDIO ? LSMASH_AUDIO_DESCRIPTION: 0;
+    if( lsm_box_is_iso_lpcm_audio( &temp_box ) )
+    {
+        if( isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_PCM_CONFIG )
+         || isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_FORMAT_SPECIFIC_FLAGS ) )
+            return 0;
+        return LSMASH_ERR_INVALID_DATA;
+    }
     if( isom_is_lpcm_audio( &temp_box ) )
     {
         if( isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_FORMAT_SPECIFIC_FLAGS ) )
@@ -1826,6 +2033,88 @@ static int isom_set_qtff_lpcm_description( isom_audio_entry_t *audio, lsmash_aud
     return 0;
 }
 
+static void isom_set_samplerate_division_of_media_timescale( isom_audio_entry_t *audio, int strict );
+
+static int description_set_isom_lpcm_description( isom_audio_entry_t *audio, lsmash_audio_summary_t *summary )
+{
+    if( summary->channels == 0 || summary->frequency == 0 )
+        return LSMASH_ERR_INVALID_DATA;
+    uint8_t format_flags    = 0;
+    uint8_t pcm_sample_size = 0;
+    lsmash_codec_specific_t *pcmc_cs = isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_PCM_CONFIG );
+    if( pcmc_cs )
+    {
+        lsmash_codec_specific_t *conv = lsmash_convert_codec_specific_format( pcmc_cs, LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+        if( !conv )
+            return LSMASH_ERR_INVALID_DATA;
+        lsmash_isom_pcm_config_t *cfg = (lsmash_isom_pcm_config_t *)conv->data.structured;
+        format_flags    = cfg->format_flags;
+        pcm_sample_size = cfg->PCM_sample_size;
+        lsmash_destroy_codec_specific_data( conv );
+    }
+    else
+    {
+        lsmash_codec_specific_t *qt_cs = isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_FORMAT_SPECIFIC_FLAGS );
+        if( !qt_cs || qt_cs->format != LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED || !qt_cs->data.structured )
+            return LSMASH_ERR_INVALID_DATA;
+        lsmash_qt_audio_format_specific_flags_t *lpcm = (lsmash_qt_audio_format_specific_flags_t *)qt_cs->data.structured;
+        int is_float    = !!(lpcm->format_flags & QT_AUDIO_FORMAT_FLAG_FLOAT);
+        int is_be       = !!(lpcm->format_flags & QT_AUDIO_FORMAT_FLAG_BIG_ENDIAN);
+        format_flags    = is_be ? LSMASH_PCM_FORMAT_FLAG_BIG_ENDIAN : LSMASH_PCM_FORMAT_FLAG_LITTLE_ENDIAN;
+        pcm_sample_size = (uint8_t)summary->sample_size;
+        if( !lsm_box_is_iso_lpcm_audio( audio ) )
+            audio->type = is_float ? ISOM_CODEC_TYPE_FPCM_AUDIO : ISOM_CODEC_TYPE_IPCM_AUDIO;
+    }
+    /* Strict validation per ISO/IEC 23003-5 */
+    if( (format_flags & ~LSMASH_PCM_FORMAT_FLAG_LITTLE_ENDIAN) != 0 )
+        return LSMASH_ERR_INVALID_DATA;
+    if( lsmash_check_codec_type_identical( audio->type, ISOM_CODEC_TYPE_IPCM_AUDIO ) )
+    {
+        if( pcm_sample_size != 16 && pcm_sample_size != 24 && pcm_sample_size != 32 )
+            return LSMASH_ERR_INVALID_DATA;
+    }
+    else if( lsmash_check_codec_type_identical( audio->type, ISOM_CODEC_TYPE_FPCM_AUDIO ) )
+    {
+        if( pcm_sample_size != 32 && pcm_sample_size != 64 )
+            return LSMASH_ERR_INVALID_DATA;
+    }
+    else
+        return LSMASH_ERR_INVALID_DATA;
+    audio->manager &= ~LSMASH_QTFF_BASE;
+    audio->revision_level                = 0;
+    audio->vendor                        = 0;
+    audio->channelcount                  = summary->channels;
+    audio->samplesize                    = 16;
+    audio->compression_ID                = 0;
+    audio->packet_size                   = 0;
+    audio->constBitsPerChannel           = pcm_sample_size;
+    audio->constBytesPerAudioPacket      = ((uint32_t)summary->channels * pcm_sample_size) / 8;
+    audio->constLPCMFramesPerAudioPacket = 1;
+    if( summary->frequency > UINT16_MAX )
+    {
+        ((isom_stsd_t *)audio->parent)->version = 1;
+        audio->version = 1;
+        isom_set_samplerate_division_of_media_timescale( audio, 0 );
+        isom_srat_t *srat = isom_add_srat( audio );
+        if( LSMASH_IS_NON_EXISTING_BOX( srat ) )
+            return LSMASH_ERR_NAMELESS;
+        srat->sampling_rate = summary->frequency;
+    }
+    else
+    {
+        audio->version    = 0;
+        audio->samplerate = summary->frequency << 16;
+    }
+    isom_pcmC_t *pcmC = lsm_box_add_pcmC( audio );
+    if( LSMASH_IS_NON_EXISTING_BOX( pcmC ) )
+        return LSMASH_ERR_NAMELESS;
+    pcmC->version         = 0;
+    pcmC->flags           = 0;
+    pcmC->format_flags    = format_flags;
+    pcmC->PCM_sample_size = pcm_sample_size;
+    return 0;
+}
+
 static int isom_set_isom_dts_audio_description( isom_audio_entry_t *audio, lsmash_audio_summary_t *summary )
 {
     audio->version        = 0;
@@ -1902,6 +2191,8 @@ static lsmash_box_type_t isom_guess_audio_codec_specific_box_type( lsmash_codec_
     GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE(   QT_CODEC_TYPE_ADPCM2_AUDIO,  QT_CODEC_TYPE_ADPCM2_AUDIO );
     GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE(   QT_CODEC_TYPE_ADPCM17_AUDIO, QT_CODEC_TYPE_ADPCM17_AUDIO );
     GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE(   QT_CODEC_TYPE_GSM49_AUDIO,   QT_CODEC_TYPE_GSM49_AUDIO );
+    GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE( LSMASH_CODEC_TYPE_UNSPECIFIED, ISOM_BOX_TYPE_PCMC );
+    GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE( LSMASH_CODEC_TYPE_UNSPECIFIED, ISOM_BOX_TYPE_CHNL );
     GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE( LSMASH_CODEC_TYPE_UNSPECIFIED, ISOM_BOX_TYPE_SA3D );
     GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE( LSMASH_CODEC_TYPE_UNSPECIFIED, QT_BOX_TYPE_CHAN );
     GUESS_AUDIO_CODEC_SPECIFIC_BOX_TYPE( LSMASH_CODEC_TYPE_UNSPECIFIED, QT_BOX_TYPE_GLBL );
@@ -2427,6 +2718,9 @@ static int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_audio_summary
         else
             err = isom_set_isom_mp4a_description( audio, summary );
     }
+    else if( lsm_box_is_iso_lpcm_audio( audio )
+          || (isom_is_lpcm_audio( audio ) && !file->qt_compatible && file->isom_compatible) )
+        err = description_set_isom_lpcm_description( audio, summary );
     else if( isom_is_lpcm_audio( audio ) )
         err = isom_set_qtff_lpcm_description( audio, summary );
     else if( file->isom_compatible && lsmash_check_codec_type_identical( audio_type, ISOM_CODEC_TYPE_ALAC_AUDIO ) )
@@ -2495,9 +2789,90 @@ static int isom_setup_audio_description( isom_stsd_t *stsd, lsmash_audio_summary
                 if( !file->qt_compatible
                  && !lsmash_check_codec_type_identical( audio->type, ISOM_CODEC_TYPE_ALAC_AUDIO )
                  && !lsmash_check_codec_type_identical( audio->type,   QT_CODEC_TYPE_ALAC_AUDIO ) )
+                {
+                    if( lsm_box_is_iso_lpcm_audio( audio )
+                     && !isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_CHANNEL_LAYOUT )
+                     && LSMASH_IS_NON_EXISTING_BOX( (isom_chnl_t *)isom_get_extension_box_format( &audio->extensions, ISOM_BOX_TYPE_CHNL ) ) )
+                    {
+                        lsmash_codec_specific_t *cs = lsmash_convert_codec_specific_format( specific, LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+                        if( !cs )
+                            goto fail;
+                        lsmash_qt_audio_channel_layout_t *qt_layout = (lsmash_qt_audio_channel_layout_t *)cs->data.structured;
+                        uint8_t cicp_layout = 0;
+                        if( summary->channels == 1 )
+                            cicp_layout = 1;
+                        else if( summary->channels == 2 )
+                            cicp_layout = 2;
+                        else if( summary->channels == 6
+                              && (qt_layout->channelBitmap == 0
+                               || qt_layout->channelBitmap == 0x3F
+                               || qt_layout->channelBitmap == 0x60F) )
+                            cicp_layout = 6;
+                        else if( summary->channels == 8
+                              && (qt_layout->channelBitmap == 0
+                               || qt_layout->channelBitmap == 0x63F) )
+                            cicp_layout = 12;
+                        lsmash_destroy_codec_specific_data( cs );
+                        if( cicp_layout != 0 )
+                        {
+                            isom_chnl_t *chnl = lsm_box_add_chnl( audio );
+                            if( LSMASH_IS_NON_EXISTING_BOX( chnl ) )
+                                goto fail;
+                            chnl->stream_structure   = ISOM_CHNL_STREAM_STRUCTURE_CHANNELS;
+                            chnl->definedLayout      = cicp_layout;
+                            chnl->omittedChannelsMap = 0;
+                            chnl->channel_count      = summary->channels;
+                        }
+                    }
                     continue;
+                }
                 if( (err = isom_append_channel_layout_extension( specific, audio, summary->channels )) < 0 )
                     goto fail;
+                break;
+            }
+            case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_PCM_CONFIG :
+                break;  /* Already set up in description_set_isom_lpcm_description */
+            case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_CHANNEL_LAYOUT :
+            {
+                lsmash_codec_specific_t *cs = lsmash_convert_codec_specific_format( specific, LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+                if( !cs )
+                    goto fail;
+                lsmash_isom_channel_layout_t *data = (lsmash_isom_channel_layout_t *)cs->data.structured;
+                isom_chnl_t *chnl = lsm_box_add_chnl( audio );
+                if( LSMASH_IS_NON_EXISTING_BOX( chnl ) )
+                {
+                    lsmash_destroy_codec_specific_data( cs );
+                    goto fail;
+                }
+                chnl->stream_structure   = data->stream_structure;
+                chnl->definedLayout      = data->definedLayout;
+                chnl->omittedChannelsMap = data->omittedChannelsMap;
+                chnl->object_count       = data->object_count;
+                uint16_t ch_count = data->channel_count ? data->channel_count : summary->channels;
+                chnl->channel_count = ch_count;
+                if( (chnl->stream_structure & ISOM_CHNL_STREAM_STRUCTURE_CHANNELS) && chnl->definedLayout == 0 && ch_count > 0 )
+                {
+                    if( ch_count > 64 )
+                    {
+                        lsmash_destroy_codec_specific_data( cs );
+                        err = LSMASH_ERR_INVALID_DATA;
+                        goto fail;
+                    }
+                    chnl->positions = lsmash_malloc_zero( (size_t)ch_count * sizeof(isom_chnl_explicit_position_t) );
+                    if( !chnl->positions )
+                    {
+                        lsmash_destroy_codec_specific_data( cs );
+                        err = LSMASH_ERR_MEMORY_ALLOC;
+                        goto fail;
+                    }
+                    for( uint16_t i = 0; i < ch_count; i++ )
+                    {
+                        chnl->positions[i].speaker_position = data->positions[i].speaker_position;
+                        chnl->positions[i].azimuth          = data->positions[i].azimuth;
+                        chnl->positions[i].elevation        = data->positions[i].elevation;
+                    }
+                }
+                lsmash_destroy_codec_specific_data( cs );
                 break;
             }
             case LSMASH_CODEC_SPECIFIC_DATA_TYPE_CODEC_GLOBAL_HEADER :
@@ -2752,6 +3127,8 @@ static lsmash_codec_specific_data_type isom_get_codec_specific_data_type( lsmash
         ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT( ISOM_BOX_TYPE_DDTS, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_DTS );
         ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT( ISOM_BOX_TYPE_DOPS, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_OPUS );
         ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT( ISOM_BOX_TYPE_ALAC, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_ALAC );
+        ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT( ISOM_BOX_TYPE_PCMC, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_PCM_CONFIG );
+        ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT( ISOM_BOX_TYPE_CHNL, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_CHANNEL_LAYOUT );
         ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT( ISOM_BOX_TYPE_SA3D, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_SA3D );
         ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT( ISOM_BOX_TYPE_ST3D, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_ST3D );
         ADD_CODEC_SPECIFIC_DATA_TYPE_TABLE_ELEMENT( ISOM_BOX_TYPE_PRHD, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_PRHD );
@@ -3315,6 +3692,10 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
         summary->channels  = 1;
         summary->frequency = 16000;
     }
+    else if( lsm_box_is_iso_lpcm_audio( audio ) )
+    {
+        summary->samples_in_frame = 1;
+    }
     uint32_t actual_sampling_rate = 0;
     for( lsmash_entry_t *entry = audio->extensions.head; entry; entry = entry->next )
     {
@@ -3333,6 +3714,56 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
                 lsmash_qt_audio_channel_layout_t *data = (lsmash_qt_audio_channel_layout_t *)specific->data.structured;
                 data->channelLayoutTag = chan->channelLayoutTag;
                 data->channelBitmap    = chan->channelBitmap;
+                if( lsmash_list_add_entry( &summary->opaque->list, specific ) < 0 )
+                {
+                    lsmash_destroy_codec_specific_data( specific );
+                    goto fail;
+                }
+            }
+            else if( lsmash_check_box_type_identical( box->type, ISOM_BOX_TYPE_PCMC ) )
+            {
+                lsmash_codec_specific_t *specific = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_PCM_CONFIG,
+                                                                                       LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+                if( !specific )
+                    goto fail;
+                isom_pcmC_t *pcmC = (isom_pcmC_t *)box;
+                lsmash_isom_pcm_config_t *data = (lsmash_isom_pcm_config_t *)specific->data.structured;
+                data->version         = pcmC->version;
+                data->format_flags    = pcmC->format_flags;
+                data->PCM_sample_size = pcmC->PCM_sample_size;
+                summary->sample_size      = pcmC->PCM_sample_size;
+                summary->samples_in_frame = 1;
+                summary->bytes_per_frame  = ((uint32_t)summary->channels * pcmC->PCM_sample_size) / 8;
+                summary->max_au_length    = summary->bytes_per_frame;
+                if( lsmash_list_add_entry( &summary->opaque->list, specific ) < 0 )
+                {
+                    lsmash_destroy_codec_specific_data( specific );
+                    goto fail;
+                }
+            }
+            else if( lsmash_check_box_type_identical( box->type, ISOM_BOX_TYPE_CHNL ) )
+            {
+                lsmash_codec_specific_t *specific = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_CHANNEL_LAYOUT,
+                                                                                       LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+                if( !specific )
+                    goto fail;
+                isom_chnl_t *chnl = (isom_chnl_t *)box;
+                lsmash_isom_channel_layout_t *data = (lsmash_isom_channel_layout_t *)specific->data.structured;
+                data->stream_structure   = chnl->stream_structure;
+                data->definedLayout      = chnl->definedLayout;
+                data->omittedChannelsMap = chnl->omittedChannelsMap;
+                data->object_count       = chnl->object_count;
+                data->channel_count      = chnl->channel_count;
+                if( chnl->positions )
+                {
+                    uint16_t count = LSMASH_MIN( chnl->channel_count, 64 );
+                    for( uint16_t i = 0; i < count; i++ )
+                    {
+                        data->positions[i].speaker_position = chnl->positions[i].speaker_position;
+                        data->positions[i].azimuth          = chnl->positions[i].azimuth;
+                        data->positions[i].elevation        = chnl->positions[i].elevation;
+                    }
+                }
                 if( lsmash_list_add_entry( &summary->opaque->list, specific ) < 0 )
                 {
                     lsmash_destroy_codec_specific_data( specific );
@@ -3513,7 +3944,8 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
             if( specific->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_DTS
              || specific->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3
              || specific->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3
-             || specific->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_OPUS )
+             || specific->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_OPUS
+             || specific->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_PCM_CONFIG )
             {
                 specific = lsmash_convert_codec_specific_format( specific, LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
                 if( !specific )
@@ -3549,6 +3981,15 @@ lsmash_summary_t *isom_create_audio_summary_from_description( isom_sample_entry_
                         summary->frequency        = 48000;
                         summary->channels         = param->OutputChannelCount;
                         summary->samples_in_frame = 0;  /* variable */
+                        break;
+                    }
+                    case LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_PCM_CONFIG :
+                    {
+                        lsmash_isom_pcm_config_t *param = (lsmash_isom_pcm_config_t *)specific->data.structured;
+                        summary->sample_size      = param->PCM_sample_size;
+                        summary->samples_in_frame = 1;
+                        summary->bytes_per_frame  = ((uint32_t)summary->channels * param->PCM_sample_size) / 8;
+                        summary->max_au_length    = summary->bytes_per_frame;
                         break;
                     }
                     default :
@@ -3603,7 +4044,9 @@ int isom_compare_opaque_extensions( lsmash_summary_t *a, lsmash_summary_t *b )
         {
             if( in_cs_orig->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_VIDEO_COMMON
              || in_cs_orig->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_COMMON
-             || in_cs_orig->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_FORMAT_SPECIFIC_FLAGS )
+             || in_cs_orig->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_QT_AUDIO_FORMAT_SPECIFIC_FLAGS
+             || in_cs_orig->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_PCM_CONFIG
+             || in_cs_orig->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_CHANNEL_LAYOUT )
             {
                 compare_format = LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED;
                 in_cs = in_cs_orig;
@@ -3666,6 +4109,27 @@ int isom_compare_opaque_extensions( lsmash_summary_t *a, lsmash_summary_t *b )
                     identical = in_data->revision_level == out_data->revision_level
                              && in_data->vendor         == out_data->vendor
                              && in_data->compression_ID == out_data->compression_ID;
+                }
+                else if( in_cs->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_PCM_CONFIG )
+                {
+                    lsmash_isom_pcm_config_t *in_data  = (lsmash_isom_pcm_config_t *)in_cs->data.structured;
+                    lsmash_isom_pcm_config_t *out_data = (lsmash_isom_pcm_config_t *)out_cs->data.structured;
+                    identical = in_data->version         == out_data->version
+                             && in_data->format_flags    == out_data->format_flags
+                             && in_data->PCM_sample_size == out_data->PCM_sample_size;
+                }
+                else if( in_cs->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_CHANNEL_LAYOUT )
+                {
+                    lsmash_isom_channel_layout_t *in_data  = (lsmash_isom_channel_layout_t *)in_cs->data.structured;
+                    lsmash_isom_channel_layout_t *out_data = (lsmash_isom_channel_layout_t *)out_cs->data.structured;
+                    identical = in_data->stream_structure   == out_data->stream_structure
+                             && in_data->definedLayout      == out_data->definedLayout
+                             && in_data->omittedChannelsMap == out_data->omittedChannelsMap
+                             && in_data->object_count       == out_data->object_count
+                             && (in_data->definedLayout != 0
+                              || (in_data->channel_count == out_data->channel_count
+                               && !memcmp( in_data->positions, out_data->positions,
+                                           LSMASH_MIN( in_data->channel_count, 64 ) * sizeof(in_data->positions[0]) )));
                 }
                 else
                 {
