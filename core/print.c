@@ -1557,6 +1557,7 @@ static int isom_print_sample_description_extesion( FILE *fp, lsmash_file_t *file
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_GLBL, isom_print_glbl );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_WAVE, isom_print_wave );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_CHAN, isom_print_chan );
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_SRAT, isom_print_srat );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_ESDS, mp4sys_print_codec_specific );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_AV1C, av1_print_codec_specific );
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_AVCC, h264_print_codec_specific );

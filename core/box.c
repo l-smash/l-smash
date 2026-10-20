@@ -162,75 +162,72 @@ int isom_is_fullbox( const void *box )
 {
     const isom_box_t *current = (const isom_box_t *)box;
     lsmash_box_type_t type = current->type;
-    static lsmash_box_type_t fullbox_type_table[62] = { LSMASH_BOX_TYPE_INITIALIZER };
-    if( !lsmash_check_box_type_specified( &fullbox_type_table[0] ) )
+    static const lsmash_box_type_t * const fullbox_type_table[] =
     {
-        /* Initialize the table. */
-        int i = 0;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_SIDX;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_MVHD;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_TKHD;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_IODS;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_ESDS;
-        fullbox_type_table[i++] = QT_BOX_TYPE_ESDS;
-        fullbox_type_table[i++] = QT_BOX_TYPE_CLEF;
-        fullbox_type_table[i++] = QT_BOX_TYPE_PROF;
-        fullbox_type_table[i++] = QT_BOX_TYPE_ENOF;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_ELST;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_MDHD;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_HDLR;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_VMHD;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_SMHD;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_HMHD;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_NMHD;
-        fullbox_type_table[i++] = QT_BOX_TYPE_GMIN;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_DREF;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_STSD;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_STSL;
-        fullbox_type_table[i++] = QT_BOX_TYPE_CHAN;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_SRAT;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_STTS;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_CTTS;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_CSLG;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_STSS;
-        fullbox_type_table[i++] = QT_BOX_TYPE_STPS;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_SDTP;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_STSC;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_STSZ;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_STZ2;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_STCO;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_CO64;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_SGPD;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_SBGP;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_CHPL;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_META;
-        fullbox_type_table[i++] = QT_BOX_TYPE_KEYS;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_MEAN;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_NAME;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_MEHD;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_TREX;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_MFHD;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_TFHD;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_TFDT;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_TRUN;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_TFRA;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_MFRO;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_ST3D;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_SVHD;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_PRHD;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_EQUI;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_CBMP;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_PRJI;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_EMSG;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_MUST;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_STRI;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_HERO;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_BLIN;
-        fullbox_type_table[i++] = ISOM_BOX_TYPE_DADJ;
-        fullbox_type_table[i]   = LSMASH_BOX_TYPE_UNSPECIFIED;
-    }
-    for( int i = 0; lsmash_check_box_type_specified( &fullbox_type_table[i] ); i++ )
-        if( lsmash_check_box_type_identical( type, fullbox_type_table[i] ) )
+        &ISOM_BOX_TYPE_SIDX,
+        &ISOM_BOX_TYPE_MVHD,
+        &ISOM_BOX_TYPE_TKHD,
+        &ISOM_BOX_TYPE_IODS,
+        &ISOM_BOX_TYPE_ESDS,
+        &QT_BOX_TYPE_ESDS,
+        &QT_BOX_TYPE_CLEF,
+        &QT_BOX_TYPE_PROF,
+        &QT_BOX_TYPE_ENOF,
+        &ISOM_BOX_TYPE_ELST,
+        &ISOM_BOX_TYPE_MDHD,
+        &ISOM_BOX_TYPE_HDLR,
+        &ISOM_BOX_TYPE_VMHD,
+        &ISOM_BOX_TYPE_SMHD,
+        &ISOM_BOX_TYPE_HMHD,
+        &ISOM_BOX_TYPE_NMHD,
+        &QT_BOX_TYPE_GMIN,
+        &ISOM_BOX_TYPE_DREF,
+        &ISOM_BOX_TYPE_STSD,
+        &ISOM_BOX_TYPE_STSL,
+        &QT_BOX_TYPE_CHAN,
+        &ISOM_BOX_TYPE_SRAT,
+        &ISOM_BOX_TYPE_STTS,
+        &ISOM_BOX_TYPE_CTTS,
+        &ISOM_BOX_TYPE_CSLG,
+        &ISOM_BOX_TYPE_STSS,
+        &QT_BOX_TYPE_STPS,
+        &ISOM_BOX_TYPE_SDTP,
+        &ISOM_BOX_TYPE_STSC,
+        &ISOM_BOX_TYPE_STSZ,
+        &ISOM_BOX_TYPE_STZ2,
+        &ISOM_BOX_TYPE_STCO,
+        &ISOM_BOX_TYPE_CO64,
+        &ISOM_BOX_TYPE_SGPD,
+        &ISOM_BOX_TYPE_SBGP,
+        &ISOM_BOX_TYPE_CHPL,
+        &ISOM_BOX_TYPE_META,
+        &QT_BOX_TYPE_KEYS,
+        &ISOM_BOX_TYPE_MEAN,
+        &ISOM_BOX_TYPE_NAME,
+        &ISOM_BOX_TYPE_MEHD,
+        &ISOM_BOX_TYPE_TREX,
+        &ISOM_BOX_TYPE_MFHD,
+        &ISOM_BOX_TYPE_TFHD,
+        &ISOM_BOX_TYPE_TFDT,
+        &ISOM_BOX_TYPE_TRUN,
+        &ISOM_BOX_TYPE_TFRA,
+        &ISOM_BOX_TYPE_MFRO,
+        &ISOM_BOX_TYPE_ST3D,
+        &ISOM_BOX_TYPE_SVHD,
+        &ISOM_BOX_TYPE_PRHD,
+        &ISOM_BOX_TYPE_EQUI,
+        &ISOM_BOX_TYPE_CBMP,
+        &ISOM_BOX_TYPE_PRJI,
+        &ISOM_BOX_TYPE_EMSG,
+        &ISOM_BOX_TYPE_MUST,
+        &ISOM_BOX_TYPE_STRI,
+        &ISOM_BOX_TYPE_HERO,
+        &ISOM_BOX_TYPE_BLIN,
+        &ISOM_BOX_TYPE_DADJ,
+        NULL
+    };
+    for( int i = 0; fullbox_type_table[i]; i++ )
+        if( lsmash_check_box_type_identical( type, *fullbox_type_table[i] ) )
             return 1;
     if( current->parent )
     {

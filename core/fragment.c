@@ -945,6 +945,8 @@ static int isom_finish_fragment_movie
                         }
                     }
             }
+            else if( !isom_compare_sample_flags( &trun->first_sample_flags, &tfhd->default_sample_flags ) )
+                useful_first_sample_flags = 0;
             if( useful_default_sample_flags )
             {
                 tfhd->flags |=  ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT;
@@ -1220,9 +1222,15 @@ int isom_set_fragment_last_duration
             tfhd->flags |= ISOM_TF_FLAGS_DEFAULT_SAMPLE_DURATION_PRESENT;
         tfhd->default_sample_duration = last_duration;
     }
+#define ISOM_TR_FLAGS_OPTIONAL_ROWS_PRESENT_MASK                \
+    ( ISOM_TR_FLAGS_SAMPLE_DURATION_PRESENT                     \
+    | ISOM_TR_FLAGS_SAMPLE_SIZE_PRESENT                         \
+    | ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT                        \
+    | ISOM_TR_FLAGS_SAMPLE_COMPOSITION_TIME_OFFSET_PRESENT )
+
     else if( last_duration != tfhd->default_sample_duration )
         trun->flags |= ISOM_TR_FLAGS_SAMPLE_DURATION_PRESENT;
-    if( trun->flags )
+    if( trun->flags & ISOM_TR_FLAGS_OPTIONAL_ROWS_PRESENT_MASK )
     {
         isom_trun_optional_row_t *row = isom_request_trun_optional_row( trun, tfhd, trun->sample_count );
         if( !row )
@@ -1364,7 +1372,7 @@ static int isom_update_fragment_previous_sample_duration( isom_traf_t *traf, iso
     /* Update the previous sample_duration if needed. */
     if( duration != tfhd->default_sample_duration )
         trun->flags |= ISOM_TR_FLAGS_SAMPLE_DURATION_PRESENT;
-    if( trun->flags )
+    if( trun->flags & ISOM_TR_FLAGS_OPTIONAL_ROWS_PRESENT_MASK )
     {
         uint32_t sample_number = trun->sample_count - !previous_run_has_previous_sample;
         isom_trun_optional_row_t *row = isom_request_trun_optional_row( trun, tfhd, sample_number );
@@ -1595,7 +1603,7 @@ static int isom_fragment_update_sample_tables( isom_traf_t *traf, lsmash_sample_
                 int length;
                 for( length = 1; rap->traf_number >> (length * 8); length++ );
                 tfra->length_size_of_traf_num = LSMASH_MAX( length - 1, tfra->length_size_of_traf_num );
-                for( length = 1; rap->traf_number >> (length * 8); length++ );
+                for( length = 1; rap->trun_number >> (length * 8); length++ );
                 tfra->length_size_of_trun_num = LSMASH_MAX( length - 1, tfra->length_size_of_trun_num );
                 for( length = 1; rap->sample_number >> (length * 8); length++ );
                 tfra->length_size_of_sample_num = LSMASH_MAX( length - 1, tfra->length_size_of_sample_num );
@@ -1637,7 +1645,7 @@ static int isom_fragment_update_sample_tables( isom_traf_t *traf, lsmash_sample_
             trun->version = 1;
         }
     }
-    if( trun->flags )
+    if( trun->flags & ISOM_TR_FLAGS_OPTIONAL_ROWS_PRESENT_MASK )
     {
         isom_trun_optional_row_t *row = isom_request_trun_optional_row( trun, tfhd, trun->sample_count );
         if( !row )

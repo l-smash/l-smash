@@ -659,7 +659,7 @@ static int isom_write_audio_description( lsmash_bs_t *bs, isom_box_t *box )
     lsmash_bs_put_be16( bs, data->compression_ID );
     lsmash_bs_put_be16( bs, data->packet_size );
     lsmash_bs_put_be32( bs, data->samplerate );
-    if( data->version == 1 )
+    if( data->version == 1 && (data->manager & LSMASH_QTFF_BASE) )
     {
         lsmash_bs_put_be32( bs, data->samplesPerPacket );
         lsmash_bs_put_be32( bs, data->bytesPerPacket );
@@ -677,6 +677,14 @@ static int isom_write_audio_description( lsmash_bs_t *bs, isom_box_t *box )
         lsmash_bs_put_be32( bs, data->constBytesPerAudioPacket );
         lsmash_bs_put_be32( bs, data->constLPCMFramesPerAudioPacket );
     }
+    return 0;
+}
+
+static int write_srat( lsmash_bs_t *bs, isom_box_t *box )
+{
+    isom_srat_t *srat = (isom_srat_t *)box;
+    isom_bs_put_box_common( bs, srat );
+    lsmash_bs_put_be32( bs, srat->sampling_rate );
     return 0;
 }
 
@@ -1807,6 +1815,7 @@ void isom_set_box_writer( isom_box_t *box )
         ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_WAVE, isom_write_wave );
         ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_MP4A, isom_write_mp4a );
         ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_CHAN, isom_write_chan );
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SRAT, write_srat );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_FTAB, isom_write_ftab );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STTS, isom_write_stts );
         ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_CTTS, isom_write_ctts );
