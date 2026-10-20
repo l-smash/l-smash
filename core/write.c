@@ -716,9 +716,9 @@ static int write_chnl( lsmash_bs_t *bs, isom_box_t *box )
                 lsmash_bits_init( &bits, bs );
                 for( uint16_t i = 0; i < channel_count; i++ )
                 {
-                    uint8_t pos = chnl->positions[i].speaker_position & 0x7f;
-                    lsmash_bits_put( &bits, 7, pos );
-                    if( pos == 126 )
+                    uint8_t speaker_position = chnl->positions[i].speaker_position & 0x7f;
+                    lsmash_bits_put( &bits, 7, speaker_position );
+                    if( speaker_position == 126 )
                     {
                         lsmash_bits_put( &bits, 16, (uint16_t)chnl->positions[i].azimuth );
                         lsmash_bits_put( &bits, 8,  (uint8_t)chnl->positions[i].elevation );

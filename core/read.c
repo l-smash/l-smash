@@ -1732,9 +1732,9 @@ static int read_chnl( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
                 lsmash_bits_init( &bits, bs );
                 for( uint16_t i = 0; i < channel_count; i++ )
                 {
-                    uint8_t pos = (uint8_t)lsmash_bits_get( &bits, 7 );
-                    chnl->positions[i].speaker_position = pos;
-                    if( pos == 126 )
+                    uint8_t speaker_position = (uint8_t)lsmash_bits_get( &bits, 7 );
+                    chnl->positions[i].speaker_position = speaker_position;
+                    if( speaker_position == 126 )
                     {
                         chnl->positions[i].azimuth   = (int16_t)lsmash_bits_get( &bits, 16 );
                         chnl->positions[i].elevation = (int8_t)lsmash_bits_get( &bits, 8 );
