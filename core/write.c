@@ -1480,9 +1480,10 @@ static int isom_write_trun( lsmash_bs_t *bs, isom_box_t *box )
     if( trun->flags & ISOM_TR_FLAGS_DATA_OFFSET_PRESENT        ) lsmash_bs_put_be32( bs, trun->data_offset );
     if( trun->flags & ISOM_TR_FLAGS_FIRST_SAMPLE_FLAGS_PRESENT ) isom_bs_put_sample_flags( bs, &trun->first_sample_flags );
     if( trun->optional )
-        for( lsmash_entry_t *entry = trun->optional->head; entry; entry = entry->next )
+    {
+        isom_trun_optional_row_t *data;
+        LSM_LIST_FOR_EACH( data, trun->optional )
         {
-            isom_trun_optional_row_t *data = (isom_trun_optional_row_t *)entry->data;
             if( !data )
                 return LSMASH_ERR_NAMELESS;
             if( trun->flags & ISOM_TR_FLAGS_SAMPLE_DURATION_PRESENT                ) lsmash_bs_put_be32( bs, data->sample_duration );
@@ -1490,6 +1491,7 @@ static int isom_write_trun( lsmash_bs_t *bs, isom_box_t *box )
             if( trun->flags & ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT                   ) isom_bs_put_sample_flags( bs, &data->sample_flags );
             if( trun->flags & ISOM_TR_FLAGS_SAMPLE_COMPOSITION_TIME_OFFSET_PRESENT ) lsmash_bs_put_be32( bs, data->sample_composition_time_offset );
         }
+    }
     return 0;
 }
 
@@ -1531,9 +1533,9 @@ static int isom_write_tfra( lsmash_bs_t *bs, isom_box_t *box )
         void (*bs_put_traf_number)  ( lsmash_bs_t *, uint64_t ) = bs_put_funcs[ tfra->length_size_of_traf_num   ];
         void (*bs_put_trun_number)  ( lsmash_bs_t *, uint64_t ) = bs_put_funcs[ tfra->length_size_of_trun_num   ];
         void (*bs_put_sample_number)( lsmash_bs_t *, uint64_t ) = bs_put_funcs[ tfra->length_size_of_sample_num ];
-        for( lsmash_entry_t *entry = tfra->list->head; entry; entry = entry->next )
+        isom_tfra_location_time_entry_t *data;
+        LSM_LIST_FOR_EACH( data, tfra->list )
         {
-            isom_tfra_location_time_entry_t *data = (isom_tfra_location_time_entry_t *)entry->data;
             if( !data )
                 return LSMASH_ERR_NAMELESS;
             bs_put_time         ( bs, data->time          );
@@ -1576,9 +1578,9 @@ static int isom_write_mdat( lsmash_bs_t *bs, isom_box_t *box )
             mdat->size += 8;    /* large_size */
         isom_bs_put_box_common( bs, mdat );
         /* Write the samples in the current movie fragment. */
-        for( lsmash_entry_t *entry = file->fragment->pool->head; entry; entry = entry->next )
+        isom_sample_pool_t *pool;
+        LSM_LIST_FOR_EACH( pool, file->fragment->pool )
         {
-            isom_sample_pool_t *pool = (isom_sample_pool_t *)entry->data;
             if( !pool )
                 return LSMASH_ERR_NAMELESS;
             lsmash_bs_put_bytes( bs, pool->size, pool->data );
@@ -1694,9 +1696,9 @@ static int isom_write_sidx( lsmash_bs_t *bs, isom_box_t *box )
     }
     lsmash_bs_put_be16( bs, sidx->reserved );
     lsmash_bs_put_be16( bs, sidx->reference_count );
-    for( lsmash_entry_t *entry = sidx->list->head; entry; entry = entry->next )
+    isom_sidx_referenced_item_t *data;
+    LSM_LIST_FOR_EACH( data, sidx->list )
     {
-        isom_sidx_referenced_item_t *data = (isom_sidx_referenced_item_t *)entry->data;
         if( !data )
             return LSMASH_ERR_NAMELESS;
         uint32_t temp32;

@@ -539,6 +539,19 @@ lsmash_entry_t *isom_get_entry_of_box
 #define REMOVE_LIST_BOX_IN_LIST( box_name ) \
         REMOVE_LIST_BOX_TEMPLATE( REMOVE_BOX_IN_LIST, box_name )
 
+#define REMOVE_PAGED_LIST_BOX_TEMPLATE( REMOVER, box_name ) \
+    do                                                      \
+    {                                                       \
+        lsm_list_destroy( box_name->list );                 \
+        REMOVER( box_name );                                \
+    } while( 0 )
+
+#define REMOVE_PAGED_LIST_BOX( box_name ) \
+        REMOVE_PAGED_LIST_BOX_TEMPLATE( REMOVE_BOX, box_name )
+
+#define REMOVE_PAGED_LIST_BOX_IN_LIST( box_name ) \
+        REMOVE_PAGED_LIST_BOX_TEMPLATE( REMOVE_BOX_IN_LIST, box_name )
+
 #define DEFINE_SIMPLE_BOX_REMOVER_TEMPLATE( ... ) \
         CALL_FUNC_DEFAULT_ARGS( DEFINE_SIMPLE_BOX_REMOVER_TEMPLATE, __VA_ARGS__ )
 #define DEFINE_SIMPLE_BOX_REMOVER_TEMPLATE_3( REMOVER, box_name, ... )  \
@@ -563,6 +576,12 @@ lsmash_entry_t *isom_get_entry_of_box
 
 #define DEFINE_SIMPLE_LIST_BOX_IN_LIST_REMOVER( func_name, box_name ) \
         DEFINE_SIMPLE_BOX_REMOVER_TEMPLATE( REMOVE_LIST_BOX_IN_LIST, box_name )
+
+#define DEFINE_SIMPLE_PAGED_LIST_BOX_REMOVER( func_name, box_name ) \
+        DEFINE_SIMPLE_BOX_REMOVER_TEMPLATE( REMOVE_PAGED_LIST_BOX, box_name )
+
+#define DEFINE_SIMPLE_PAGED_LIST_BOX_IN_LIST_REMOVER( func_name, box_name ) \
+        DEFINE_SIMPLE_BOX_REMOVER_TEMPLATE( REMOVE_PAGED_LIST_BOX_IN_LIST, box_name )
 
 static void isom_remove_predefined_box( void *opaque_box )
 {
@@ -639,7 +658,7 @@ static void isom_remove_file_abstract( isom_file_abstract_t *file_abstract )
     lsmash_importer_destroy( file_abstract->importer );
     if( file_abstract->fragment )
     {
-        lsmash_list_destroy( file_abstract->fragment->pool );
+        lsm_list_destroy( file_abstract->fragment->pool );
         lsmash_free( file_abstract->fragment );
     }
     REMOVE_BOX_IN_LIST( file_abstract );
@@ -1079,7 +1098,7 @@ DEFINE_SIMPLE_BOX_REMOVER( isom_remove_tfdt, tfdt )
 
 static void isom_remove_trun( isom_trun_t *trun )
 {
-    lsmash_list_destroy( trun->optional );
+    lsm_list_destroy( trun->optional );
     REMOVE_BOX_IN_LIST( trun );
 }
 
@@ -1094,8 +1113,8 @@ static void isom_remove_free( isom_free_t *skip )
 
 DEFINE_SIMPLE_BOX_REMOVER( isom_remove_mfra, mfra )
 DEFINE_SIMPLE_BOX_REMOVER( isom_remove_mfro, mfro )
-DEFINE_SIMPLE_LIST_BOX_IN_LIST_REMOVER( isom_remove_tfra, tfra )
-DEFINE_SIMPLE_LIST_BOX_IN_LIST_REMOVER( isom_remove_sidx, sidx )
+DEFINE_SIMPLE_PAGED_LIST_BOX_IN_LIST_REMOVER( isom_remove_tfra, tfra )
+DEFINE_SIMPLE_PAGED_LIST_BOX_IN_LIST_REMOVER( isom_remove_sidx, sidx )
 
 static void isom_remove_styp( isom_styp_t *styp )
 {
@@ -1116,9 +1135,7 @@ static void isom_remove_styp( isom_styp_t *styp )
 #define isom_remove_co64_entry lsmash_free
 #define isom_remove_sgpd_entry lsmash_free
 #define isom_remove_sbgp_entry lsmash_free
-#define isom_remove_trun_entry lsmash_free
-#define isom_remove_tfra_entry lsmash_free
-#define isom_remove_sidx_entry lsmash_free
+#define isom_elem_size_sidx sizeof(isom_sidx_referenced_item_t)
 
 static void isom_remove_ftab_entry( isom_font_record_t *font_record )
 {
@@ -1236,6 +1253,14 @@ uint64_t isom_update_box_size( void *opaque_box )
         lsmash_list_remove_entry_tail( &parent_name->extensions );                      \
         return isom_non_existing_##box_name();                                          \
     }
+#define CREATE_PAGED_LIST_BOX( box_name, parent_name, box_type, precedence, has_destructor ) \
+    CREATE_BOX( box_name, parent_name, box_type, precedence, has_destructor );               \
+    box_name->list = lsm_list_create_simple( isom_elem_size_##box_name );                    \
+    if( !box_name->list )                                                                    \
+    {                                                                                        \
+        lsmash_list_remove_entry_tail( &parent_name->extensions );                           \
+        return isom_non_existing_##box_name();                                               \
+    }
 
 #define ADD_BOX_TEMPLATE( box_name, parent_name, box_type, precedence, BOX_CREATOR ) \
     BOX_CREATOR( box_name, parent_name, box_type, precedence, 1 );                   \
@@ -1256,6 +1281,10 @@ uint64_t isom_update_box_size( void *opaque_box )
         ADD_BOX_TEMPLATE( box_name, parent_name, box_type, precedence, CREATE_LIST_BOX )
 #define ADD_LIST_BOX_IN_LIST( box_name, parent_name, box_type, precedence ) \
         ADD_BOX_IN_LIST_TEMPLATE( box_name, parent_name, box_type, precedence, CREATE_LIST_BOX )
+#define ADD_PAGED_LIST_BOX( box_name, parent_name, box_type, precedence ) \
+        ADD_BOX_TEMPLATE( box_name, parent_name, box_type, precedence, CREATE_PAGED_LIST_BOX )
+#define ADD_PAGED_LIST_BOX_IN_LIST( box_name, parent_name, box_type, precedence ) \
+        ADD_BOX_IN_LIST_TEMPLATE( box_name, parent_name, box_type, precedence, CREATE_PAGED_LIST_BOX )
 
 #define DEFINE_SIMPLE_BOX_ADDER_TEMPLATE( ... ) CALL_FUNC_DEFAULT_ARGS( DEFINE_SIMPLE_BOX_ADDER_TEMPLATE, __VA_ARGS__ )
 #define DEFINE_SIMPLE_BOX_ADDER_TEMPLATE_6( ADDER, box_name, parent_name, box_type, precedence, postprocess ) \
@@ -1274,6 +1303,8 @@ uint64_t isom_update_box_size( void *opaque_box )
         DEFINE_SIMPLE_BOX_ADDER_TEMPLATE( ADD_BOX_IN_LIST, __VA_ARGS__ )
 #define DEFINE_SIMPLE_LIST_BOX_ADDER( func_name, ... ) \
         DEFINE_SIMPLE_BOX_ADDER_TEMPLATE( ADD_LIST_BOX, __VA_ARGS__ )
+#define DEFINE_SIMPLE_PAGED_LIST_BOX_ADDER( func_name, ... ) \
+        DEFINE_SIMPLE_BOX_ADDER_TEMPLATE( ADD_PAGED_LIST_BOX, __VA_ARGS__ )
 
 #define DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( func_name, box_name, parent_name, box_type, precedence, has_destructor, parent_type ) \
     isom_##box_name##_t *isom_add_##box_name( parent_type *parent_name )                                                            \
@@ -1777,25 +1808,29 @@ DEFINE_SIMPLE_BOX_IN_LIST_ADDER( isom_add_styp, styp, file_abstract, ISOM_BOX_TY
 
 isom_sidx_t *isom_add_sidx( isom_file_abstract_t *file_abstract )
 {
-    ADD_LIST_BOX_IN_LIST( sidx, file_abstract, ISOM_BOX_TYPE_SIDX, LSMASH_BOX_PRECEDENCE_ISOM_SIDX );
+    ADD_PAGED_LIST_BOX_IN_LIST( sidx, file_abstract, ISOM_BOX_TYPE_SIDX, LSMASH_BOX_PRECEDENCE_ISOM_SIDX );
     return sidx;
 }
 
 #undef ATTACH_EXACTLY_ONE_BOX_TO_PARENT
 #undef CREATE_BOX
 #undef CREATE_LIST_BOX
+#undef CREATE_PAGED_LIST_BOX
 #undef ADD_BOX_TEMPLATE
 #undef ADD_BOX_IN_LIST_TEMPLATE
 #undef ADD_BOX
 #undef ADD_BOX_IN_LIST
 #undef ADD_LIST_BOX
 #undef ADD_LIST_BOX_IN_LIST
+#undef ADD_PAGED_LIST_BOX
+#undef ADD_PAGED_LIST_BOX_IN_LIST
 #undef DEFINE_SIMPLE_BOX_ADDER_TEMPLATE
 #undef DEFINE_SIMPLE_BOX_ADDER_TEMPLATE_6
 #undef DEFINE_SIMPLE_BOX_ADDER_TEMPLATE_5
 #undef DEFINE_SIMPLE_BOX_ADDER
 #undef DEFINE_SIMPLE_BOX_IN_LIST_ADDER
 #undef DEFINE_SIMPLE_LIST_BOX_ADDER
+#undef DEFINE_SIMPLE_PAGED_LIST_BOX_ADDER
 
 static int fake_file_read
 (

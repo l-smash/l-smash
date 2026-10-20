@@ -2906,6 +2906,14 @@ isom_sample_pool_t *isom_create_sample_pool( uint64_t size )
     return pool;
 }
 
+void lsm_isom_clear_sample_pool( void *opaque_pool )
+{
+    if( !opaque_pool )
+        return;
+    isom_sample_pool_t *pool = (isom_sample_pool_t *)opaque_pool;
+    lsmash_freep( &pool->data );
+}
+
 void isom_remove_sample_pool( isom_sample_pool_t *pool )
 {
     if( !pool )

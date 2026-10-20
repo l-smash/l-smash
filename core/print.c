@@ -410,9 +410,9 @@ static int isom_print_sidx( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
     lsmash_ifprintf( fp, indent, "reserved = %"PRIu16"\n", sidx->reserved );
     lsmash_ifprintf( fp, indent, "reference_count = %"PRIu16"\n", sidx->reference_count );
     uint32_t i = 0;
-    for( lsmash_entry_t *entry = sidx->list->head; entry; entry = entry->next )
+    isom_sidx_referenced_item_t *data;
+    LSM_LIST_FOR_EACH( data, sidx->list )
     {
-        isom_sidx_referenced_item_t *data = (isom_sidx_referenced_item_t *)entry->data;
         lsmash_ifprintf( fp, indent++, "entry[%"PRIu32"]\n", i++ );
         lsmash_ifprintf( fp, indent, "reference_type = %"PRIu8" (%s)\n", data->reference_type, data->reference_type ? "index" : "media" );
         lsmash_ifprintf( fp, indent, "reference_size = %"PRIu32"\n", data->reference_size );
@@ -2588,9 +2588,9 @@ static int isom_print_trun( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
     if( trun->optional )
     {
         uint32_t i = 0;
-        for( lsmash_entry_t *entry = trun->optional->head; entry; entry = entry->next )
+        isom_trun_optional_row_t *row;
+        LSM_LIST_FOR_EACH( row, trun->optional )
         {
-            isom_trun_optional_row_t *row = (isom_trun_optional_row_t *)entry->data;
             lsmash_ifprintf( fp, indent++, "sample[%"PRIu32"]\n", i++ );
             if( trun->flags & ISOM_TR_FLAGS_SAMPLE_DURATION_PRESENT )
                 lsmash_ifprintf( fp, indent, "sample_duration = %"PRIu32"\n", row->sample_duration );
@@ -2642,9 +2642,9 @@ static int isom_print_tfra( FILE *fp, lsmash_file_t *file, isom_box_t *box, int 
     if( tfra->list )
     {
         uint32_t i = 0;
-        for( lsmash_entry_t *entry = tfra->list->head; entry; entry = entry->next )
+        isom_tfra_location_time_entry_t *data;
+        LSM_LIST_FOR_EACH( data, tfra->list )
         {
-            isom_tfra_location_time_entry_t *data = (isom_tfra_location_time_entry_t *)entry->data;
             lsmash_ifprintf( fp, indent++, "entry[%"PRIu32"]\n", i++ );
             lsmash_ifprintf( fp, indent, "time = %"PRIu64"\n", data->time );
             lsmash_ifprintf( fp, indent, "moof_offset = %"PRIu64"\n", data->moof_offset );

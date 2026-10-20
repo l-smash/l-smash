@@ -1934,7 +1934,7 @@ typedef struct
                                                  * If this field is not present, then the data for this run starts immediately after the data of the previous run,
                                                  * or at the base_data_offset defined by the Track Fragment Header Box if this is the first run in a track fragment. */
     isom_sample_flags_t first_sample_flags;     /* a set of flags for the first sample only of this run */
-    lsmash_entry_list_t *optional;              /* all fields in this array are optional. */
+    lsm_list_t         *optional;               /* all fields in this array are optional. */
 } isom_trun_t;
 
 typedef struct
@@ -1986,7 +1986,7 @@ typedef struct
     unsigned int length_size_of_sample_num : 2;     /* the length in byte of the sample_number field minus one */
     uint32_t number_of_entry;                       /* the number of the entries for this track
                                                      * Value zero indicates that every sample is a sync sample and no table entry follows. */
-    lsmash_entry_list_t *list;                      /* entry_count corresponds to number_of_entry. */
+    lsm_list_t *list;                               /* entry_count corresponds to number_of_entry. */
 } isom_tfra_t;
 
 typedef struct
@@ -2041,7 +2041,7 @@ typedef struct
     uint64_t             first_moof_pos;
     uint64_t             pool_size;         /* the total sample size in the current movie fragment */
     uint64_t             sample_count;      /* the number of samples within the current movie fragment */
-    lsmash_entry_list_t *pool;              /* samples pooled to interleave for the current movie fragment */
+    lsm_list_t          *pool;              /* samples pooled to interleave for the current movie fragment */
 } isom_fragment_manager_t;
 
 /** **/
@@ -2187,7 +2187,7 @@ typedef struct
     /* */
     uint16_t reserved;          /* 0 */
     uint16_t reference_count;   /* the number of referenced items */
-    lsmash_entry_list_t *list;  /* entry_count corresponds to reference_count. */
+    lsm_list_t *list;           /* entry_count corresponds to reference_count. */
 } isom_sidx_t;
 
 /* Event message box
@@ -2944,6 +2944,7 @@ isom_emsg_t *isom_add_emsg( lsmash_file_t *file );
 void isom_remove_extension_box( isom_box_t *ext );
 void isom_remove_sample_description( isom_sample_entry_t *sample );
 void isom_remove_unknown_box( isom_unknown_box_t *unknown_box );
+void lsm_isom_clear_sample_pool( void *opaque_pool );
 void isom_remove_sample_pool( isom_sample_pool_t *pool );
 
 uint64_t isom_update_box_size( void *box );

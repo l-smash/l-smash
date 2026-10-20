@@ -344,17 +344,12 @@ static int isom_read_sidx( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     sidx->reserved        = lsmash_bs_get_be16( bs );
     sidx->reference_count = lsmash_bs_get_be16( bs );
     for( uint64_t pos = lsmash_bs_count( bs );
-         pos < box->size && sidx->list->entry_count < sidx->reference_count;
+         pos < box->size && lsm_list_count( sidx->list ) < sidx->reference_count;
          pos = lsmash_bs_count( bs ) )
     {
-        isom_sidx_referenced_item_t *data = lsmash_malloc( sizeof(isom_sidx_referenced_item_t) );
+        isom_sidx_referenced_item_t *data = (isom_sidx_referenced_item_t *)lsm_list_append( sidx->list );
         if( !data )
             return LSMASH_ERR_MEMORY_ALLOC;
-        if( lsmash_list_add_entry( sidx->list, data ) < 0 )
-        {
-            lsmash_free( data );
-            return LSMASH_ERR_MEMORY_ALLOC;
-        }
         uint32_t temp32;
         temp32 = lsmash_bs_get_be32( bs );
         data->reference_type = (temp32 >> 31) & 0x00000001;
@@ -2498,19 +2493,14 @@ static int isom_read_trun( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     if( box->flags & ISOM_TR_FLAGS_FIRST_SAMPLE_FLAGS_PRESENT ) trun->first_sample_flags = isom_bs_get_sample_flags( bs );
     if( trun->sample_count && has_optional_rows )
     {
-        trun->optional = lsmash_list_create_simple();
+        trun->optional = lsm_list_create_simple( sizeof(isom_trun_optional_row_t) );
         if( !trun->optional )
             return LSMASH_ERR_MEMORY_ALLOC;
         for( uint32_t i = 0; i < trun->sample_count; i++ )
         {
-            isom_trun_optional_row_t *data = lsmash_malloc( sizeof(isom_trun_optional_row_t) );
+            isom_trun_optional_row_t *data = (isom_trun_optional_row_t *)lsm_list_append( trun->optional );
             if( !data )
                 return LSMASH_ERR_MEMORY_ALLOC;
-            if( lsmash_list_add_entry( trun->optional, data ) < 0 )
-            {
-                lsmash_free( data );
-                return LSMASH_ERR_MEMORY_ALLOC;
-            }
             if( box->flags & ISOM_TR_FLAGS_SAMPLE_DURATION_PRESENT                ) data->sample_duration                = lsmash_bs_get_be32( bs );
             if( box->flags & ISOM_TR_FLAGS_SAMPLE_SIZE_PRESENT                    ) data->sample_size                    = lsmash_bs_get_be32( bs );
             if( box->flags & ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT                   ) data->sample_flags                   = isom_bs_get_sample_flags( bs );
@@ -2789,7 +2779,7 @@ static int isom_read_tfra( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
     tfra->length_size_of_sample_num =  temp       & 0x3;
     if( tfra->number_of_entry )
     {
-        tfra->list = lsmash_list_create_simple();
+        tfra->list = lsm_list_create_simple( sizeof(isom_tfra_location_time_entry_t) );
         if( !tfra->list )
             return LSMASH_ERR_MEMORY_ALLOC;
         uint64_t (*bs_get_funcs[5])( lsmash_bs_t * ) =
@@ -2807,14 +2797,9 @@ static int isom_read_tfra( lsmash_file_t *file, isom_box_t *box, isom_box_t *par
         uint64_t (*bs_put_sample_number)( lsmash_bs_t * ) = bs_get_funcs[ tfra->length_size_of_sample_num ];
         for( uint32_t i = 0; i < tfra->number_of_entry; i++ )
         {
-            isom_tfra_location_time_entry_t *data = lsmash_malloc( sizeof(isom_tfra_location_time_entry_t) );
+            isom_tfra_location_time_entry_t *data = (isom_tfra_location_time_entry_t *)lsm_list_append( tfra->list );
             if( !data )
                 return LSMASH_ERR_MEMORY_ALLOC;
-            if( lsmash_list_add_entry( tfra->list, data ) < 0 )
-            {
-                lsmash_free( data );
-                return LSMASH_ERR_MEMORY_ALLOC;
-            }
             data->time          = bs_put_time         ( bs );
             data->moof_offset   = bs_put_moof_offset  ( bs );
             data->traf_number   = bs_put_traf_number  ( bs );

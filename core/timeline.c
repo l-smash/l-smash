@@ -1108,9 +1108,9 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
     uint32_t sample_count = packet_number - 1;
     if( movie_fragments_present )
     {
-        isom_tfra_t                     *tfra       = isom_get_tfra( file->mfra, track_ID );
-        lsmash_entry_t                  *tfra_entry = tfra->list ? tfra->list->head : NULL;
-        isom_tfra_location_time_entry_t *rap        = tfra_entry ? (isom_tfra_location_time_entry_t *)tfra_entry->data : NULL;
+        isom_tfra_t                     *tfra     = isom_get_tfra( file->mfra, track_ID );
+        uint32_t                         tfra_idx = 0;
+        isom_tfra_location_time_entry_t *rap      = (isom_tfra_location_time_entry_t *)lsm_list_at( tfra->list, tfra_idx );
         chunk.data_offset = 0;
         chunk.length      = 0;
         /* Movie fragments */
@@ -1203,12 +1203,11 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
                         sdtp_data  = sdtp_entry && sdtp_entry->data ? (isom_sdtp_entry_t *)sdtp_entry->data : NULL;
                     }
                     /* Get info of each sample. */
-                    lsmash_entry_t *row_entry = trun->optional && trun->optional->head ? trun->optional->head : NULL;
                     sample_number = 1;
                     while( sample_number <= trun->sample_count )
                     {
                         isom_sample_info_t info = { 0 };
-                        isom_trun_optional_row_t *row = row_entry && row_entry->data ? (isom_trun_optional_row_t *)row_entry->data : NULL;
+                        isom_trun_optional_row_t *row = (isom_trun_optional_row_t *)lsm_list_get( trun->optional, sample_number );
                         /* Get sample_size */
                         if( row && (trun->flags & ISOM_TR_FLAGS_SAMPLE_SIZE_PRESENT) )
                             info.length = row->sample_size;
@@ -1319,9 +1318,7 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
                                     {
                                         if( info.prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE )
                                             info.prop.ra_flags |= ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
-                                        if( tfra_entry )
-                                            tfra_entry = tfra_entry->next;
-                                        rap = tfra_entry ? (isom_tfra_location_time_entry_t *)tfra_entry->data : NULL;
+                                        rap = (isom_tfra_location_time_entry_t *)lsm_list_at( tfra->list, ++tfra_idx );
                                     }
                                 }
                                 /* Set up distance from the previous random access point. */
@@ -1361,8 +1358,6 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
                         }
                         data_offset += info.length;
                         last_sample_end_pos = data_offset;
-                        if( row_entry )
-                            row_entry = row_entry->next;
                         ++sample_number;
                     }
                     if( !need_data_offset_only )

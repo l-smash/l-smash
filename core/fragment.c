@@ -177,15 +177,13 @@ static int isom_write_fragment_random_access_info( lsmash_file_t *file )
         isom_elst_entry_t *edit            = edit_entry->data;
         uint64_t           edit_offset     = 0;     /* units in media timescale */
         uint32_t           media_timescale = lsmash_get_media_timescale( file->root, trex->track_ID );
-        for( lsmash_entry_t *rap_entry = tfra->list->head; rap_entry; )
+        for( uint32_t i = 0; i < lsm_list_count( tfra->list ); )
         {
-            isom_tfra_location_time_entry_t *rap = (isom_tfra_location_time_entry_t *)rap_entry->data;
+            isom_tfra_location_time_entry_t *rap = (isom_tfra_location_time_entry_t *)lsm_list_at( tfra->list, i );
             if( !rap )
             {
                 /* Irregular case. Drop this entry. */
-                lsmash_entry_t *next = rap_entry->next;
-                lsmash_list_remove_entry_direct( tfra->list, rap_entry );
-                rap_entry = next;
+                lsm_list_remove( tfra->list, i + 1 );
                 continue;
             }
             uint64_t composition_time          = rap->time;
@@ -219,12 +217,8 @@ static int isom_write_fragment_random_access_info( lsmash_file_t *file )
                  * Drop the rest of sync samples since they are generally absent in the whole presentation.
                  * Though the exceptions are sync samples with earlier composition time, we ignore them. (SAP type 2: TEPT = TDEC = TSAP < TPTF)
                  * To support this exception, we need sorting entries of the list by composition times. */
-                while( rap_entry )
-                {
-                    lsmash_entry_t *next = rap_entry->next;
-                    lsmash_list_remove_entry_direct( tfra->list, rap_entry );
-                    rap_entry = next;
-                }
+                while( lsm_list_count( tfra->list ) > i )
+                    lsm_list_remove_tail( tfra->list );
                 break;
             }
             /* If the sync sample isn't in the presentation,
@@ -232,9 +226,9 @@ static int isom_write_fragment_random_access_info( lsmash_file_t *file )
             rap->time = edit_offset;
             if( composition_time >= edit->media_time )
                 rap->time += composition_time - edit->media_time;
-            rap_entry = rap_entry->next;
+            ++i;
         }
-        tfra->number_of_entry = tfra->list->entry_count;
+        tfra->number_of_entry = lsm_list_count( tfra->list );
     }
     /* Decide the size of the Movie Fragment Random Access Box. */
     if( isom_update_box_size( file->mfra ) == 0 )
@@ -342,9 +336,9 @@ static int isom_write_segment_indexes
             isom_tfra_t *tfra = (isom_tfra_t *)entry->data;
             if( LSMASH_IS_NON_EXISTING_BOX( tfra ) )
                 continue;
-            for( lsmash_entry_t *rap_entry = tfra->list->head; rap_entry; rap_entry = rap_entry->next )
+            isom_tfra_location_time_entry_t *rap;
+            LSM_LIST_FOR_EACH( rap, tfra->list )
             {
-                isom_tfra_location_time_entry_t *rap = (isom_tfra_location_time_entry_t *)rap_entry->data;
                 if( !rap )
                     continue;
                 rap->moof_offset += total_sidx_size;
@@ -499,7 +493,7 @@ static int isom_output_fragment_media_data( lsmash_file_t *file )
         file->mdat->size       = 0;
         file->mdat->media_size = 0;
     }
-    lsmash_list_remove_entries( frag_manager->pool );
+    lsm_list_clear( frag_manager->pool );
     frag_manager->pool_size    = 0;
     frag_manager->sample_count = 0;
     return 0;
@@ -654,15 +648,10 @@ static int isom_make_segment_index_entry
                 return ret;
         }
         /* One pair of a Movie Fragment Box with an associated Media Box per subsegment. */
-        isom_sidx_referenced_item_t *data = lsmash_malloc( sizeof(isom_sidx_referenced_item_t) );
+        isom_sidx_referenced_item_t *data = (isom_sidx_referenced_item_t *)lsm_list_append( sidx->list );
         if( !data )
-            return LSMASH_ERR_NAMELESS;
-        if( lsmash_list_add_entry( sidx->list, data ) < 0 )
-        {
-            lsmash_free( data );
             return LSMASH_ERR_MEMORY_ALLOC;
-        }
-        sidx->reference_count = sidx->list->entry_count;
+        sidx->reference_count = lsm_list_count( sidx->list );
         data->reference_type = 0;  /* media */
         data->reference_size = file->size - moof->pos;
         /* presentation */
@@ -871,9 +860,9 @@ static int isom_finish_fragment_movie
             {
                 if( !trun->optional )
                     return LSMASH_ERR_NAMELESS;
-                for( lsmash_entry_t *optional_entry = trun->optional->head; optional_entry; optional_entry = optional_entry->next )
+                isom_trun_optional_row_t *row;
+                LSM_LIST_FOR_EACH( row, trun->optional )
                 {
-                    isom_trun_optional_row_t *row = (isom_trun_optional_row_t *)optional_entry->data;
                     if( !row )
                         return LSMASH_ERR_NAMELESS;
                     sample_flags = &row->sample_flags;
@@ -924,20 +913,18 @@ static int isom_finish_fragment_movie
                 if( !isom_compare_sample_flags( &trun->first_sample_flags, &tfhd->default_sample_flags ) )
                     useful_first_sample_flags = 0;
             }
-            else if( trun->optional
-                  && trun->optional->head )
+            else if( lsm_list_count( trun->optional ) >= 2 )
             {
-                lsmash_entry_t           *optional_entry = trun->optional->head->next;
-                isom_trun_optional_row_t *row            = (isom_trun_optional_row_t *)optional_entry->data;
+                isom_trun_optional_row_t *row = (isom_trun_optional_row_t *)lsm_list_at( trun->optional, 1 );
                 isom_sample_flags_t representative_sample_flags = row->sample_flags;
                 if( isom_compare_sample_flags( &tfhd->default_sample_flags, &representative_sample_flags ) )
                     useful_default_sample_flags = 0;
                 if( !isom_compare_sample_flags( &trun->first_sample_flags, &representative_sample_flags ) )
                     useful_first_sample_flags = 0;
                 if( useful_default_sample_flags )
-                    for( optional_entry = optional_entry->next; optional_entry; optional_entry = optional_entry->next )
+                    for( uint32_t i = 2; i < lsm_list_count( trun->optional ); i++ )
                     {
-                        row = (isom_trun_optional_row_t *)optional_entry->data;
+                        row = (isom_trun_optional_row_t *)lsm_list_at( trun->optional, i );
                         if( isom_compare_sample_flags( &representative_sample_flags, &row->sample_flags ) )
                         {
                             useful_default_sample_flags = 0;
@@ -1114,15 +1101,15 @@ static isom_trun_optional_row_t *isom_request_trun_optional_row( isom_trun_t *tr
     isom_trun_optional_row_t *row = NULL;
     if( !trun->optional )
     {
-        trun->optional = lsmash_list_create_simple();
+        trun->optional = lsm_list_create_simple( sizeof(isom_trun_optional_row_t) );
         if( !trun->optional )
             return NULL;
     }
-    if( trun->optional->entry_count < sample_number )
+    if( lsm_list_count( trun->optional ) < sample_number )
     {
-        while( trun->optional->entry_count < sample_number )
+        while( lsm_list_count( trun->optional ) < sample_number )
         {
-            row = lsmash_malloc( sizeof(isom_trun_optional_row_t) );
+            row = (isom_trun_optional_row_t *)lsm_list_append( trun->optional );
             if( !row )
                 return NULL;
             /* Copy from default. */
@@ -1130,24 +1117,10 @@ static isom_trun_optional_row_t *isom_request_trun_optional_row( isom_trun_t *tr
             row->sample_size                    = tfhd->default_sample_size;
             row->sample_flags                   = tfhd->default_sample_flags;
             row->sample_composition_time_offset = 0;
-            if( lsmash_list_add_entry( trun->optional, row ) < 0 )
-            {
-                lsmash_free( row );
-                return NULL;
-            }
         }
         return row;
     }
-    uint32_t i = 0;
-    for( lsmash_entry_t *entry = trun->optional->head; entry; entry = entry->next )
-    {
-        row = (isom_trun_optional_row_t *)entry->data;
-        if( !row )
-            return NULL;
-        if( ++i == sample_number )
-            return row;
-    }
-    return NULL;
+    return (isom_trun_optional_row_t *)lsm_list_get( trun->optional, sample_number );
 }
 
 int lsmash_create_fragment_empty_duration
@@ -1252,12 +1225,17 @@ int isom_append_fragment_track_run
     isom_fragment_manager_t *frag_manager = file->fragment;
     /* Move data in the pool of the current track fragment to the pool of the current movie fragment.
      * Empty the pool of current track. We don't delete data of samples here. */
-    if( lsmash_list_add_entry( frag_manager->pool, chunk->pool ) < 0 )
+    if( lsm_list_add( frag_manager->pool, chunk->pool ) < 0 )
         return LSMASH_ERR_MEMORY_ALLOC;
     frag_manager->sample_count += chunk->pool->sample_count;
     frag_manager->pool_size    += chunk->pool->size;
-    chunk->pool = isom_create_sample_pool( chunk->pool->size );
-    return chunk->pool ? 0 : LSMASH_ERR_MEMORY_ALLOC;
+    uint64_t prev_size = chunk->pool->size;
+    memset( chunk->pool, 0, sizeof(isom_sample_pool_t) );
+    chunk->pool->data = lsmash_malloc( prev_size );
+    if( !chunk->pool->data )
+        return LSMASH_ERR_MEMORY_ALLOC;
+    chunk->pool->alloc = prev_size;
+    return 0;
 }
 
 static int isom_output_fragment_cache( isom_traf_t *traf )
@@ -1581,11 +1559,11 @@ static int isom_fragment_update_sample_tables( isom_traf_t *traf, lsmash_sample_
                 }
                 if( !tfra->list )
                 {
-                    tfra->list = lsmash_list_create_simple();
+                    tfra->list = lsm_list_create_simple( sizeof(isom_tfra_location_time_entry_t) );
                     if( !tfra->list )
                         return LSMASH_ERR_MEMORY_ALLOC;
                 }
-                isom_tfra_location_time_entry_t *rap = lsmash_malloc( sizeof(isom_tfra_location_time_entry_t) );
+                isom_tfra_location_time_entry_t *rap = (isom_tfra_location_time_entry_t *)lsm_list_append( tfra->list );
                 if( !rap )
                     return LSMASH_ERR_MEMORY_ALLOC;
                 rap->time          = sample->cts;   /* Set composition timestamp temporarily.
@@ -1594,12 +1572,7 @@ static int isom_fragment_update_sample_tables( isom_traf_t *traf, lsmash_sample_
                 rap->traf_number   = cache->fragment->traf_number;
                 rap->trun_number   = traf->trun_list.entry_count;
                 rap->sample_number = trun->sample_count;
-                if( lsmash_list_add_entry( tfra->list, rap ) < 0 )
-                {
-                    lsmash_free( rap );
-                    return LSMASH_ERR_MEMORY_ALLOC;
-                }
-                tfra->number_of_entry = tfra->list->entry_count;
+                tfra->number_of_entry = lsm_list_count( tfra->list );
                 int length;
                 for( length = 1; rap->traf_number >> (length * 8); length++ );
                 tfra->length_size_of_traf_num = LSMASH_MAX( length - 1, tfra->length_size_of_traf_num );
