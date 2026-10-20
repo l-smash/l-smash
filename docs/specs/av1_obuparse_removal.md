@@ -157,14 +157,40 @@ else if( cc->color_primaries          == CP_BT_709
 
 ---
 
+### 3.3 the implementation Regression Fixes & AV1 v1.0.0 Errata 1 / AV1-ISOBMFF v1.2.0 Full Compliance (`codecs/av1.{c,h}`, `common/bits.c`, `importer/ivf_imp.c`)
+
+When integrating `origin/av1` (`2bd228c`, authored against an early 2018 draft and AV1-ISOBMFF v1.0.0) over `vimeo` (`4a21f21`, updated through 2020 against AV1-ISOBMFF v1.2.0), the following regressions and specification updates were identified and resolved in the implementation:
+
+1. **Copyright Years & Specification Version Headers (`codecs/av1.{c,h}`)**:
+   - Restored `Copyright (C) 2017-2020 L-SMASH project` (+ `Copyright (c) 2026 Yusuke Nakamura`) in `codecs/av1.{c,h}` and updated the specification header comments in `codecs/av1.c` to `AV1 Bitstream & Decoding Process Specification Version 1.0.0 with Errata 1` and `AV1 Codec ISO Media File Format Binding v1.2.0, 12 December 2019`.
+2. **AV1-ISOBMFF v1.2.0 Section 2.4 Sync Sample (`stss`) Determination (`av1_parse_temporal_unit`)**:
+   - Previously, `av1_parse_temporal_unit()` checked `parser->SeenSeqHeader` (persistent across the stream), which falsely flagged subsequent Key Frame Temporal Units as Sync Samples (`ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC`) even when those Temporal Units did not contain a `SEQUENCE_HEADER` OBU.
+   - Fixed to check `tu.with_sequence_header && !tu.first_show_existing && tu.first_frame_type == AV1_KEY_FRAME && tu.first_show_frame` (requiring a `SEQUENCE_HEADER` OBU in the same Temporal Unit prior to the first Frame Header / Frame OBU). Key Frame Temporal Units without a preceding `SEQUENCE_HEADER` OBU in the same TU are marked as `ISOM_SAMPLE_RANDOM_ACCESS_FLAG_OPEN_RAP`.
+3. **Complete `uncompressed_header()`, `OBU_FRAME` `tile_group_obu()` Parsing, and Multi-Tile Split `OBU_FRAME` Support (`codecs/av1.c`, `common/bits.c`)**:
+   - Removed the erroneous `&& is_frame_obu` rejection on `tile_start_and_end_present_flag` in `av1_parse_tile_group()`.
+   - Implemented the remaining syntax of `uncompressed_header()` (AV1 Spec Section 5.9.2 through Section 5.9.30: `quantization_params()`, `segmentation_params()`, `delta_q_params()`, `delta_lf_params()`, `CodedLossless`/`AllLossless`, `loop_filter_params()`, `cdef_params()`, `lr_params()`, `read_tx_mode()`, `frame_reference_mode()`, `skip_mode_params()`, `allow_warped_motion`, `reduced_tx_set`, `global_motion_params()`, and `film_grain_params()`) so the bitstream reader reaches the exact byte-alignment boundary preceding `tile_group_obu()` in `OBU_FRAME`.
+   - Updated `av1_parse_frame()` to invoke `lsmash_bits_get_align()` and `av1_parse_tile_group()` when `!frame->show_existing_frame`, and only execute `av1_decode_frame_wrapup()` + `frame->SeenFrameHeader = 0` when `tg_end == frame->NumTiles - 1` (supporting `OBU_FRAME` with `tg_end < NumTiles - 1` followed by `OBU_TILE_GROUP` OBUs).
+   - Enforced `TileNum` continuity (`tg_start == frame->TileNum`) across multi-tile groups and verified `frame->SeenFrameHeader == 0` at the end of every Temporal Unit.
+   - Fixed a bitstream writer bug in `lsmash_bits_put_align()` (`common/bits.c`) where `bits->store` and `bits->cache` were not reset to `0` after flushing the aligned byte.
+4. **Restoration of `av1_print_codec_specific()` (`boxdumper` Output)**:
+   - Restored the box header title `"[%s: AV1CodecConfigurationBox]\n"`, human-readable `chroma_sample_position` strings (`"vertical"`, `"colocated"`, `"reserved (invalid)"`, `"unknown"`), and `configOBUs` / `size = %"PRIu32"\n` trailing output in `codecs/av1.c`.
+5. **Initial `OBU_METADATA` Retention in `param->configOBUs`**:
+   - Restored appending `AV1_OBU_TYPE_METADATA` OBUs appearing in the initial configuration Temporal Unit (`tu.recording_config_obus`) into `param->configOBUs` alongside the initial `OBU_SEQUENCE_HEADER`, per AV1-ISOBMFF v1.2.0 Section 2.3.3.
+6. **AV1-ISOBMFF v1.2.0 Section 2.2 Sample OBU Whitelist (`av1_is_sample_obu`)**:
+   - Replaced the OBU blacklist with an explicit whitelist (`av1_is_sample_obu()`) retaining only `SEQUENCE_HEADER`, `FRAME_HEADER`, `TILE_GROUP`, `METADATA`, and `FRAME` OBUs in sample payloads and stripping `TEMPORAL_DELIMITER`, `REDUNDANT_FRAME_HEADER`, `TILE_LIST`, `PADDING`, and reserved OBU types.
+7. **Preservation of Specification Syntax Identifiers (`SPEC.md` Section 2.4)**:
+   - Unified all AV1 syntax element names (`mono_chrome`, `subsampling_x`, `subsampling_y`, `leadingZeros`, `idLen`, `tg_start`, `tg_end`, etc.) and derived variable names (`SeenSeqHeader`, `SeenFrameHeader`, `FrameIsIntra`, `OrderHint`, `OrderHintBits`, `RefValid`, `RefFrameType`, `RefOrderHint`, `RefFrameId`, `UpscaledWidth`, `FrameWidth`, `FrameHeight`, `RenderWidth`, `RenderHeight`, `MiCols`, `MiRows`, `TileColsLog2`, `TileCols`, `TileRowsLog2`, `TileRows`, `NumTiles`, `TileSizeBytes`, `TileNum`, `CodedLossless`, `AllLossless`, `LosslessArray`, `SegQMLevel`, `SkipModeFrame`, `GmType`, `PrevGmParams`, `Leb128Bytes`) in `codecs/av1.{c,h}` to match the AV1 Bitstream Specification exact.
+
+---
+
 ## 4. AV1-ISOBMFF Sample & Configuration Box (`av1C`) Compliance Rules
 
 Per the **AV1 Codec ISO Media File Format Binding Specification (v1.2.0)**:
 
 1. **Temporal Unit (TU) & Sample Reconstruction**:
    - Each ISOBMFF sample corresponds to one Temporal Unit (all OBUs associated with a single presentation time, starting with a `TEMPORAL_DELIMITER` OBU in the raw stream).
-   - **Forbidden OBUs in Samples & `av1C`**:
-     - `OBU_TEMPORAL_DELIMITER` (`obu_type == 2`), `OBU_TILE_LIST` (`obu_type == 8`), and `OBU_PADDING` (`obu_type == 15`) **MUST BE STRIPPED** when assembling an ISOBMFF sample (and must not appear in `av1C.configOBUs`).
+   - **Sample OBU Whitelist (`av1_is_sample_obu`)**:
+     - Only `OBU_SEQUENCE_HEADER` (`1`), `OBU_FRAME_HEADER` (`3`), `OBU_TILE_GROUP` (`4`), `OBU_METADATA` (`5`), and `OBU_FRAME` (`6`) are retained in ISOBMFF samples. `OBU_TEMPORAL_DELIMITER` (`2`), `OBU_REDUNDANT_FRAME_HEADER` (`7`), `OBU_TILE_LIST` (`8`), `OBU_PADDING` (`15`), and reserved OBU types **MUST BE STRIPPED**.
    - **Mandatory `obu_has_size_field == 1`**:
      - Every OBU stored in an ISOBMFF sample or in `av1C.configOBUs` must have `obu_has_size_field = 1`. If an input stream contains an OBU with `obu_has_size_field == 0`, the sample assembler must synthesize the `obu_has_size_field = 1` header and encode its payload length using canonical LEB128.
 2. **`AV1CodecConfigurationBox` (`av1C`) Population**:
@@ -172,23 +198,23 @@ Per the **AV1 Codec ISO Media File Format Binding Specification (v1.2.0)**:
    - `seq_profile` (3 bits), `seq_level_idx_0` (5 bits).
    - `seq_tier_0` (1 bit), `high_bitdepth` (1 bit), `twelve_bit` (1 bit), `monochrome` (1 bit), `chroma_subsampling_x` (1 bit), `chroma_subsampling_y` (1 bit), `chroma_sample_position` (2 bits).
    - `reserved = 0` (3 bits), `initial_presentation_delay_present` (1 bit), `initial_presentation_delay_minus_1` / `reserved` (4 bits).
-   - `configOBUs`: Contains the `OBU_SEQUENCE_HEADER` (and any stream-level `OBU_METADATA` preceding the first frame).
+   - `configOBUs`: Contains the initial `OBU_SEQUENCE_HEADER` and any `OBU_METADATA` OBUs present in that initial configuration Temporal Unit.
 3. **Sync Sample (`stss` / `trun` Sample Flags) & Delayed Random Access Point (`rap ` Sample Group) Signaling**:
-   - **Sync Sample (`ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC`)**: Set when the sample's first frame is a `KEY_FRAME` with `show_frame == 1` (or an immediate `show_existing_frame == 1` pointing to a `KEY_FRAME` that refreshes all reference slots) and is preceded by an `OBU_SEQUENCE_HEADER` within the same sample.
+   - **Sync Sample (`ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC`)**: Set **only** when the sample's first frame is a `KEY_FRAME` with `show_frame == 1` (`!first_show_existing`) **and** is preceded by an `OBU_SEQUENCE_HEADER` within that **same** Temporal Unit (`tu.with_sequence_header == 1`). A `KEY_FRAME` with `show_frame == 1` not preceded by an `OBU_SEQUENCE_HEADER` in the same TU is marked `ISOM_SAMPLE_RANDOM_ACCESS_FLAG_OPEN_RAP`.
    - **Delayed Random Access Point (`rap ` Sample Group)**: When a sample contains a forward `KEY_FRAME` with `show_frame == 0` (ARF / delayed keyframe), it is marked for the `rap ` sample group (`num_leading_samples_known = 1`, `num_leading_samples = 0`) per AV1-ISOBMFF Section 2.4.
 
 ---
 
-## 5. Implementation Status (Completed in the implementation)
+## 5. Implementation Status (Completed in the implementation & the implementation)
 
 1. **Merged & Fixed Native AV1 Parser in `codecs/av1.{c,h}`**:
-   - Integrated the native OBU parser structures (`av1_parser_t`, `av1_sequence_header_t`, `av1_frame_t`, `av1_color_config_t`) and functions from `2bd228c:codecs/av1.{c,h}` into `codecs/av1.{c,h}`.
-   - Applied all eight bug fixes documented in Section 3.2 (`av1_get_uvlc`, `av1_get_leb128`/`av1_show_leb128`, `av1_uncompressed_header`, `twelve_bit` propagation into `lsmash_av1_specific_parameters_t`, `av1_parser_color_config` `&&` fix, `OrderHintBits` derivation, `av1_decode_frame_wrapup` loop initialization, and `lsmash_bs_get_le64` `<< 32` fix).
+   - Integrated the native OBU parser structures (`av1_parser_t`, `av1_sequence_header_t`, `av1_frame_t`, `av1_color_config_t`) and functions into `codecs/av1.{c,h}`.
+   - Applied all eight the implementation bitstream fixes (Section 3.2) and all seven the implementation regression/Errata 1/ISOBMFF v1.2.0 fixes (Section 3.3).
    - Added native ITU-T T.35 HDR10+ (`0xB5`, `0x003C`, `0x0001`, `0x04`, `0x01`) dynamic metadata detection in `av1_parse_metadata_obu()`.
 2. **Replaced `importer/ivf_imp.c` with Native Implementation**:
-   - Integrated `ivf_imp.c` with `av1_parse_temporal_unit()` so IVF frames (including multi-OBU Temporal Units with `show_frame == 0` followed by `show_existing_frame == 1`) are parsed and assembled using 100% native L-SMASH routines.
+   - Integrated `ivf_imp.c` with `av1_parse_temporal_unit()` so IVF frames (including multi-OBU Temporal Units with `show_frame == 0` followed by `show_existing_frame == 1`, and multi-tile `OBU_FRAME` + `OBU_TILE_GROUP` streams) are parsed and assembled using 100% native L-SMASH routines.
 3. **Eliminated `obuparse` Completely**:
    - Deleted `codecs/av1_obu.c` and `codecs/av1_obu.h` (`git rm`).
    - Updated `configure` to remove `-lobuparse` from `LIBS` and `av1_obu.c` from `SRC_CODECS`.
 4. **Verified via Synthetic AV1 OBU Test Suite (`tests/test_main.c`)**:
-   - All 134 synthetic assertions pass via `make test`, covering 8-bit, 10-bit, and 12-bit Sequence Headers, BT.709 vs. sRGB `color_config`, `uvlc`/`leb128` edge cases, `KEY_FRAME`, `INTER_FRAME`, `INTRA_ONLY_FRAME`, `SWITCH_FRAME`, `show_existing_frame`, `av1C` box creation/parsing/printing, and end-to-end synthetic IVF muxing/demuxing without `obuparse`.
+   - All 155 synthetic AV1 assertions (out of 6,257 total assertions) pass via `make test` with 0 memory leaks, covering 8-bit, 10-bit, and 12-bit Sequence Headers, BT.709 vs. sRGB `color_config`, `uvlc`/`leb128` edge cases, `KEY_FRAME`, `INTER_FRAME`, `INTRA_ONLY_FRAME`, `SWITCH_FRAME`, `show_existing_frame`, `av1C` box creation/parsing/printing (`AV1CodecConfigurationBox`, `chroma_sample_position` strings, `configOBUs` initial Metadata OBU retention), Sync Sample (`SYNC` vs. `OPEN_RAP`) rules, OBU sample whitelist filtering, and multi-tile split `OBU_FRAME` + `OBU_TILE_GROUP` parsing.

@@ -54,7 +54,7 @@ tests/
 
 ---
 
-### 3.2 Suite 2: Native AV1 Parser & `obuparse` Removal (`tests/test_main.c` — Implemented & Passing in the implementation)
+### 3.2 Suite 2: Native AV1 Parser & `obuparse` Removal (`tests/test_main.c` — Implemented & Passing in the implementation & the implementation)
 
 | Test ID | Target Component | Verification Description |
 | :--- | :--- | :--- |
@@ -64,8 +64,9 @@ tests/
 | `` | Sequence Header OBU (8/10/12-bit, BT.709 vs. sRGB) | Synthesize Sequence Header OBUs for Main Profile (8-bit BT.709 4:2:0, sRGB 4:4:4, 10-bit 4:2:0) and Professional Profile (**12-bit** `high_bitdepth=1, twelve_bit=1` 4:2:2); verify `av1C` fields (`high_bitdepth`, `twelve_bit`, `monochrome`, `chroma_subsampling_x/y`, `chroma_sample_position`) and `av1C` box creation/deserialization/copy round-trip. |
 | `` | Frame Header OBU (`KEY`, `INTER`, `INTRA_ONLY`, `SWITCH`) | Synthesize Frame Headers with `enable_order_hint = 1`; verify `INTRA_ONLY_FRAME` and `INTER_FRAME` read 8-bit `refresh_frame_flags` (`f(8)`), whereas `SWITCH_FRAME` and `KEY_FRAME && show_frame` set `0xff` without consuming 8 bits. |
 | `` | `show_existing_frame == 1` & Reference Updates | Synthesize a multi-frame GOP containing a `KEY_FRAME`, an `INTER_FRAME` (`show_frame = 0`, refreshing slot 2), and a `show_existing_frame = 1` frame referencing slot 2; verify reference slot updates, `OrderHint` propagation, and `ra_flags` assignment. |
-| `` | Sample Assembly, Forbidden OBU Filtering & HDR10+ | Synthesize a Temporal Unit containing `OBU_TEMPORAL_DELIMITER`, `OBU_SEQUENCE_HEADER`, `OBU_METADATA` (ITU-T T.35 HDR10+), `OBU_PADDING`, and `OBU_FRAME`; verify `OBU_TEMPORAL_DELIMITER` and `OBU_PADDING` are stripped and `has_hdr10p == 1` is detected. |
-| `` | Synthetic IVF Importer & ISOBMFF Round-Trip | Generate a synthetic 3-frame AV1 IVF stream, import via `ivf_imp`, mux into ISOBMFF (`mp41`/`isom`/`av01`), verify `[av01: Visual Description]` and `[av1C: AV1 Configuration Box]` via `lsmash_print_movie()`, and verify bit-exact sample payloads and sync flags from `lsmash_construct_timeline()`. |
+| `` | Sample Assembly, OBU Whitelist & Initial `configOBUs` Metadata | Synthesize a Temporal Unit containing `OBU_TEMPORAL_DELIMITER`, `OBU_SEQUENCE_HEADER`, `OBU_METADATA` (ITU-T T.35 HDR10+), `OBU_REDUNDANT_FRAME_HEADER`, `OBU_TILE_LIST`, `OBU_PADDING`, and `OBU_FRAME`; verify `av1_is_sample_obu()` whitelist strips `OBU_TEMPORAL_DELIMITER`, `OBU_REDUNDANT_FRAME_HEADER`, `OBU_TILE_LIST`, and `OBU_PADDING`, `has_hdr10p == 1` is detected, and `param->configOBUs` records both the initial `OBU_SEQUENCE_HEADER` and initial `OBU_METADATA`. |
+| `` | Synthetic IVF Importer & ISOBMFF Round-Trip | Generate a synthetic 3-frame AV1 IVF stream, import via `ivf_imp`, mux into ISOBMFF (`mp41`/`isom`/`av01`), verify `[av01: Visual Description]`, `[av1C: AV1CodecConfigurationBox]`, string `chroma_sample_position`, and `configOBUs` output via `lsmash_print_movie()`, and verify bit-exact sample payloads and sync flags from `lsmash_construct_timeline()`. |
+| `` | Multi-Tile Split `OBU_FRAME` + `OBU_TILE_GROUP` & Sync Sample (`stss`) Rules | Synthesize a 2-tile (`NumTiles = 2`) `OBU_FRAME` (`tg_start = 0, tg_end = 0`) followed by an `OBU_TILE_GROUP` (`tg_start = 1, tg_end = 1`) within a Temporal Unit; verify `SeenFrameHeader` remains `1` after the partial `OBU_FRAME` and wraps up (`SeenFrameHeader = 0`) after the completing `OBU_TILE_GROUP`. Verify that a subsequent `KEY_FRAME` Temporal Unit without an in-TU `OBU_SEQUENCE_HEADER` is marked `ISOM_SAMPLE_RANDOM_ACCESS_FLAG_OPEN_RAP` (not `SYNC`), whereas a `KEY_FRAME` TU preceded by an in-TU `OBU_SEQUENCE_HEADER` is marked `ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC`, and an incomplete multi-tile TU is rejected. |
 
 ---
 
