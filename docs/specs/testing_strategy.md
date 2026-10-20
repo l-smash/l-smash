@@ -41,16 +41,18 @@ tests/
 
 ## 3. Detailed Test Cases by Mission
 
-### 3.1 Suite 1: Memory Architecture & Container Invariants (`tests/test_containers.c`)
+### 3.1 Suite 1: Memory Architecture & Container Invariants (`tests/test_main.c` — Implemented & Passing in the implementation)
 
 | Test ID | Target Component | Verification Description |
 | :--- | :--- | :--- |
-| `` | Paged Block Array (`common/`) | Append $1,000,000$ 4-byte (`isom_stsz_entry_t`) and 48-byte (`isom_sample_info_t`) elements across $\sim 1,000$ page boundaries; verify $O(1)$ random access `get(i)` for all $i \in [1, 10^6]$. |
-| `` | Pointer Stability on Append | Record raw pointers to elements at index $1$, $1024$ (page boundary), and $1025$; append $500,000$ additional elements; assert recorded pointers remain valid and point to unmodified values. |
-| `` | Tail Pop & Reuse (`PopTail`) | Push $5,000$ elements, pop $3,000$ elements from tail (`sgpd->list` / `chunk_list` pattern), push $4,000$ new elements; verify counts and element integrity. |
-| `` | $O(1)$ Table Move (`stsz` $\rightarrow$ `stz2`) | Populate source table with $100,000$ entries, move to destination table (`isom_compress_sample_size_table` pattern); verify source is empty and destination retains all entries in $O(1)$ time. |
-| `` | `box_default` Null-Object Sentinel Pattern & `extensions` | Create a Box hierarchy (`root` $\rightarrow$ `file` $\rightarrow$ `moov` $\rightarrow$ `trak` $\rightarrow$ `mdia` $\rightarrow$ `minf` $\rightarrow$ `stbl`), destroy child boxes via `isom_remove_box_by_itself()`, and verify singleton pointers automatically restore to `isom_non_existing_*()` sentinels (`LSMASH_IS_NON_EXISTING_BOX`) with zero double-frees. |
-| `` | `sbgp` Roll Group Deduplication Stability | Simulate `isom_group_roll_recovery()` with multiple pending roll groups in `cache->roll.pool` where group $G_1$ is deduplicated via `isom_deduplicate_roll_group()` while group $G_2$ remains undetermined; verify $G_2$'s assignment in `sbgp->list` is not corrupted. |
+| `` | Zero-Init & `NULL` Container Safety (`common/list.h`) | Verify `lsm_list_count`, `lsm_list_at`, `lsm_list_get`, `lsm_list_head`, `lsm_list_tail`, `lsm_list_remove_tail`, `lsm_list_remove`, and `LSM_LIST_FOR_EACH` on `NULL` and `{ 0 }` zero-initialized `lsm_list_t` containers. |
+| `` | Multi-Page Append & $O(1)$ Lookup (`common/list.{c,h}`) | Append $20,000$ 24-byte elements across $79$ pages ($2^8 = 256$ elements/page); verify $O(1)$ random access via `lsm_list_at(i)` and `lsm_list_get(i + 1)` and sequential `LSM_LIST_FOR_EACH` traversal. |
+| `` | 100% Pointer Stability on Append | Record raw pointers to elements at indices `0`, `255` (page 0 end), `256` (page 1 start), and `511` (page 1 end); append $19,488$ additional elements across 77 new pages; assert recorded pointers never move in memory (`saved_ptrs[p] == lsm_list_at(&list, anchor_indices[p])`) and retain unmodified values. |
+| `` | Tail Pop, Mid-List Deletion & Eliminator Callback | Exercise `lsm_list_remove_tail()` and `lsm_list_remove()` (including mid-page and cross-page compaction) on elements owning heap buffers; verify exact custom eliminator invocation counts (`20,000` total frees) and zero memory leaks. |
+| `` | $O(1)$ Table Move (`lsm_list_move`) & `LSM_ENTRY_LIST_FOR_EACH` | Populate source `lsm_list_t` across 3 pages ($600$ entries), move to destination via `lsm_list_move(dst, src)` (`stsz` $\rightarrow$ `stz2` pattern); verify source is empty, destination retains all entries in $O(1)$ time, and `LSM_ENTRY_LIST_FOR_EACH` traverses `lsmash_entry_list_t` with unified syntax. |
+| `` | 10,500-Sample VFR Multi-Page Sample Tables & `sbgp` Roll Deduplication (`test_large_scale_paged_tables_and_roll_dedup` 11a) | Mux and demux $10,500$ VFR video samples across $42$ pages of `stts`, `ctts`, `stsz`, `sdtp`, `stss`, `sgpd`, `sbgp`, `elst`, and `timeline->info_list`/`chunk_list`, with 35 cycles of 30 consecutive post-roll (`roll_distance = 2`) groups triggering mid-table `isom_deduplicate_roll_group()` while `cache->roll.pool` holds pending entries; verify `sbgp->list` deduplicates to 70 entries without dangling pointers and all 10,500 samples round-trip bit-for-bit. |
+| `` | 4-Bit `stz2` Compact Sample Size Table Compression (`test_large_scale_paged_tables_and_roll_dedup` 11b) | Mux $600$ 4-bit-sized samples (`1..15` bytes) with `lsmash_compress_sample_size_table()`, exercising `lsm_list_move(stz2->list, stsz->list)` across 3 pages; verify `stz2->field_size == 4` and timeline reconstruction. |
+| `` | Multi-Page Fragmented VFR Movie with `mfra`/`tfra` & DASH `sidx` (`test_large_scale_paged_tables_and_roll_dedup` 11c) | Mux and demux 3 fragments $\times$ $300$ VFR samples ($900$ samples total, crossing page boundaries in `fragment->pool` and `trun->optional`) in both self-contained (`mfra`/`tfra->list`) and DASH indexed segment (`sidx->list`) modes; verify all 900 samples across both modes. |
 
 ---
 
