@@ -666,8 +666,8 @@ static int isom_get_roll_recovery_grouping_info
 )
 {
     isom_group_assignment_entry_t *assignment = (isom_group_assignment_entry_t *)sbgp_roll_cur->data;
-    if( !assignment )
-        return LSMASH_ERR_NAMELESS;
+    if( !assignment || assignment->sample_count == 0 )
+        return LSMASH_ERR_INVALID_DATA;
     if( assignment->group_description_index )
     {
         uint32_t group_description_index = assignment->group_description_index;
@@ -690,8 +690,12 @@ static int isom_get_roll_recovery_grouping_info
                     info->prop.ra_flags |= ISOM_SAMPLE_RANDOM_ACCESS_FLAG_PRE_ROLL_END;
             }
         }
-        else if( *sample_number_in_sbgp_roll_entry == 1 && group_description_index )
-            lsmash_log( timeline, LSMASH_LOG_WARNING, "a description of roll recoveries is not found in the Sample Group Description Box.\n" );
+        else
+        {
+            if( *sample_number_in_sbgp_roll_entry == 1 && group_description_index )
+                lsmash_log( timeline, LSMASH_LOG_WARNING, "a description of roll recoveries is not found in the Sample Group Description Box.\n" );
+            return LSMASH_ERR_INVALID_DATA;
+        }
     }
     isom_increment_sample_number_in_entry( sample_number_in_sbgp_roll_entry, sbgp_roll_cur, assignment->sample_count );
     return 0;
@@ -709,8 +713,8 @@ static int isom_get_random_access_point_grouping_info
 )
 {
     isom_group_assignment_entry_t *assignment = (isom_group_assignment_entry_t *)sbgp_rap_cur->data;
-    if( !assignment )
-        return LSMASH_ERR_NAMELESS;
+    if( !assignment || assignment->sample_count == 0 )
+        return LSMASH_ERR_INVALID_DATA;
     if( assignment->group_description_index && (info->prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE) )
     {
         uint32_t group_description_index = assignment->group_description_index;
@@ -724,8 +728,12 @@ static int isom_get_random_access_point_grouping_info
                                  : ISOM_SAMPLE_RANDOM_ACCESS_FLAG_RAP;
             *distance = 0;
         }
-        else if( *sample_number_in_sbgp_rap_entry == 1 && group_description_index )
-            lsmash_log( timeline, LSMASH_LOG_WARNING, "a description of random access points is not found in the Sample Group Description Box.\n" );
+        else
+        {
+            if( *sample_number_in_sbgp_rap_entry == 1 && group_description_index )
+                lsmash_log( timeline, LSMASH_LOG_WARNING, "a description of random access points is not found in the Sample Group Description Box.\n" );
+            return LSMASH_ERR_INVALID_DATA;
+        }
     }
     isom_increment_sample_number_in_entry( sample_number_in_sbgp_rap_entry, sbgp_rap_cur, assignment->sample_count );
     return 0;
@@ -809,7 +817,9 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
     isom_stsc_entry_t *stsc_data = (isom_stsc_entry_t *)stsc_cur.data;
     int err = LSMASH_ERR_INVALID_DATA;
     int movie_fragments_present = (LSMASH_IS_EXISTING_BOX( file->moov->mvex ) && file->moof_list.head);
-    if( !movie_fragments_present && (!stts_cur.data || !stsc_cur.data || !stco_cur.data) )
+    if( !movie_fragments_present
+     && (!stts_cur.data || !stsc_cur.data || !stco_cur.data
+      || stsc_data->first_chunk != 1 || stsc_data->samples_per_chunk == 0) )
         goto fail;
     isom_sample_entry_t *description = (isom_sample_entry_t *)lsmash_list_get_entry_data( &stsd->list, stsc_data ? stsc_data->sample_description_index : 1 );
     if( LSMASH_IS_NON_EXISTING_BOX( description ) )
@@ -843,6 +853,10 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
     {
         samples_per_packet   = 1;
         constant_sample_size = stsz ? stsz->sample_size : 0;
+        if( LSMASH_IS_EXISTING_BOX( stsz ) && stsz->sample_size == 0 && lsm_list_count( stsz->list ) < stsz->sample_count )
+            goto fail;
+        if( LSMASH_IS_EXISTING_BOX( stz2 ) && lsm_list_count( stz2->list ) < stz2->sample_count )
+            goto fail;
     }
     uint32_t sample_number          = samples_per_packet;
     uint32_t sample_number_in_chunk = samples_per_packet;
@@ -965,18 +979,18 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
             }
             /* Get roll recovery grouping info. */
             if( sbgp_roll_cur.data
-             && isom_get_roll_recovery_grouping_info( timeline,
-                                                      &sbgp_roll_cur, sgpd_roll, NULL,
-                                                      &sample_number_in_sbgp_roll_entry,
-                                                      &info, sample_number ) < 0 )
+             && (err = isom_get_roll_recovery_grouping_info( timeline,
+                                                             &sbgp_roll_cur, sgpd_roll, NULL,
+                                                             &sample_number_in_sbgp_roll_entry,
+                                                             &info, sample_number )) < 0 )
                 goto fail;
             info.prop.post_roll.identifier = sample_number;
             /* Get random access point grouping info. */
             if( sbgp_rap_cur.data
-             && isom_get_random_access_point_grouping_info( timeline,
-                                                            &sbgp_rap_cur, sgpd_rap, NULL,
-                                                            &sample_number_in_sbgp_rap_entry,
-                                                            &info, &distance ) < 0 )
+             && (err = isom_get_random_access_point_grouping_info( timeline,
+                                                                   &sbgp_rap_cur, sgpd_rap, NULL,
+                                                                   &sample_number_in_sbgp_rap_entry,
+                                                                   &info, &distance )) < 0 )
                 goto fail;
             /* Set up distance from the previous random access point. */
             if( distance != NO_RANDOM_ACCESS_POINT )
@@ -1276,18 +1290,18 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
                                 /* Get roll recovery grouping info. */
                                 uint32_t roll_id = sample_count + sample_number;
                                 if( sbgp_roll_cur.data
-                                 && isom_get_roll_recovery_grouping_info( timeline,
-                                                                          &sbgp_roll_cur, sgpd_roll, sgpd_frag_roll,
-                                                                          &sample_number_in_sbgp_roll_entry,
-                                                                          &info, roll_id ) < 0 )
+                                 && (err = isom_get_roll_recovery_grouping_info( timeline,
+                                                                                 &sbgp_roll_cur, sgpd_roll, sgpd_frag_roll,
+                                                                                 &sample_number_in_sbgp_roll_entry,
+                                                                                 &info, roll_id )) < 0 )
                                     goto fail;
                                 info.prop.post_roll.identifier = roll_id;
                                 /* Get random access point grouping info. */
                                 if( sbgp_rap_cur.data
-                                 && isom_get_random_access_point_grouping_info( timeline,
-                                                                                &sbgp_rap_cur, sgpd_rap, sgpd_frag_rap,
-                                                                                &sample_number_in_sbgp_rap_entry,
-                                                                                &info, &distance ) < 0 )
+                                 && (err = isom_get_random_access_point_grouping_info( timeline,
+                                                                                       &sbgp_rap_cur, sgpd_rap, sgpd_frag_rap,
+                                                                                       &sample_number_in_sbgp_rap_entry,
+                                                                                       &info, &distance )) < 0 )
                                     goto fail;
                                 /* Get the location of the sync sample from 'tfra' if it is not set up yet.
                                  * Note: there is no guarantee that its entries are placed in a specific order. */
@@ -1369,7 +1383,7 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
     return 0;
 fail:
     isom_timeline_destroy( timeline );
-    return err;
+    return err < 0 ? err : LSMASH_ERR_INVALID_DATA;
 }
 
 int lsmash_construct_timeline( lsmash_root_t *root, uint32_t track_ID )

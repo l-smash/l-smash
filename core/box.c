@@ -763,6 +763,16 @@ static void isom_remove_must( isom_must_t *must )
     lsmash_free( must->required_box_types );
 }
 
+static void isom_remove_svhd( isom_svhd_t *svhd )
+{
+    lsmash_free( svhd->metadata_source );
+}
+
+static void isom_remove_SA3D( isom_SA3D_t *SA3D )
+{
+    lsmash_list_remove_entries( &SA3D->channel_map );
+}
+
 DEFINE_SIMPLE_BOX_REMOVER( isom_remove_stsd, stsd )
 
 static void isom_remove_visual_description( isom_sample_entry_t *description )
@@ -1162,7 +1172,7 @@ static void isom_remove_emsg( isom_emsg_t *emsg )
     lsmash_free( emsg->scheme_id_uri );
     lsmash_free( emsg->value );
     lsmash_free( emsg->message_data );
-    REMOVE_BOX( emsg );
+    REMOVE_BOX_IN_LIST( emsg );
 }
 
 /* box size updater */
@@ -1580,7 +1590,7 @@ DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_dovi, dovi, visual, ISOM_BOX_TYPE
 DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_lhvC, lhvC, visual, ISOM_BOX_TYPE_LHVC, LSMASH_BOX_PRECEDENCE_ISOM_LHVC, 1, isom_visual_entry_t )
 DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_st3d, st3d, visual, ISOM_BOX_TYPE_ST3D, LSMASH_BOX_PRECEDENCE_ISOM_ST3D, 0, isom_visual_entry_t )
 DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_sv3d, sv3d, visual, ISOM_BOX_TYPE_SV3D, LSMASH_BOX_PRECEDENCE_ISOM_SV3D, 0, isom_visual_entry_t )
-DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_svhd, svhd, sv3d,   ISOM_BOX_TYPE_SVHD, LSMASH_BOX_PRECEDENCE_ISOM_SVHD, 0, isom_sv3d_t )
+DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_svhd, svhd, sv3d,   ISOM_BOX_TYPE_SVHD, LSMASH_BOX_PRECEDENCE_ISOM_SVHD, 1, isom_sv3d_t )
 DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_proj, proj, sv3d,   ISOM_BOX_TYPE_PROJ, LSMASH_BOX_PRECEDENCE_ISOM_PROJ, 0, isom_sv3d_t )
 DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_prhd, prhd, proj,   ISOM_BOX_TYPE_PRHD, LSMASH_BOX_PRECEDENCE_ISOM_PRHD, 0, isom_proj_t )
 DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_equi, equi, proj,   ISOM_BOX_TYPE_EQUI, LSMASH_BOX_PRECEDENCE_ISOM_EQUI, 0, isom_proj_t )
@@ -1613,7 +1623,7 @@ isom_chnl_t *lsm_box_add_chnl( isom_audio_entry_t *audio )
 }
 #define isom_add_pcmC lsm_box_add_pcmC
 #define isom_add_chnl lsm_box_add_chnl
-DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_SA3D, SA3D, audio,  ISOM_BOX_TYPE_SA3D, LSMASH_BOX_PRECEDENCE_ISOM_SA3D, 0, isom_audio_entry_t )
+DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_SA3D, SA3D, audio,  ISOM_BOX_TYPE_SA3D, LSMASH_BOX_PRECEDENCE_ISOM_SA3D, 1, isom_audio_entry_t )
 DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_tims, tims, hint,   ISOM_BOX_TYPE_TIMS, LSMASH_BOX_PRECEDENCE_ISOM_TIMS, 0, isom_hint_entry_t )
 DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_tsro, tsro, hint,   ISOM_BOX_TYPE_TSRO, LSMASH_BOX_PRECEDENCE_ISOM_TSRO, 0, isom_hint_entry_t )
 DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER( isom_add_tssy, tssy, hint,   ISOM_BOX_TYPE_TSSY, LSMASH_BOX_PRECEDENCE_ISOM_TSSY, 0, isom_hint_entry_t )

@@ -22,6 +22,10 @@
 
 #include "internal.h" /* must be placed first */
 
+/* Initialize a bit-level view borrowing an existing lsmash_bs_t.
+ * Note: Does NOT transfer ownership of `bs`. Callers borrowing an active
+ * stream (such as `file->bs`) must use lsmash_bits_get_align() / lsmash_bits_put_align()
+ * and must NEVER call lsmash_bits_empty(), which would wipe `bs`'s buffer. */
 void lsmash_bits_init( lsmash_bits_t *bits, lsmash_bs_t *bs )
 {
     debug_if( !bits || !bs )
@@ -42,8 +46,8 @@ lsmash_bits_t *lsmash_bits_create( lsmash_bs_t *bs )
     return bits;
 }
 
-/* Must be used ONLY for bits struct created with isom_create_bits.
- * Otherwise, just lsmash_free() the bits struct. */
+/* Must be used ONLY for bits struct created with lsmash_bits_create().
+ * Does not free `bits->bs`. */
 void lsmash_bits_cleanup( lsmash_bits_t *bits )
 {
     debug_if( !bits )
@@ -51,6 +55,9 @@ void lsmash_bits_cleanup( lsmash_bits_t *bits )
     lsmash_free( bits );
 }
 
+/* Clear bit cache AND empty the underlying `bits->bs` buffer.
+ * Note: Only call when `bits->bs` is a dedicated scratch buffer that
+ * should be reset; never call when borrowing an active parent `lsmash_bs_t`. */
 void lsmash_bits_empty( lsmash_bits_t *bits )
 {
     debug_if( !bits )
