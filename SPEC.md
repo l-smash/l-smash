@@ -84,8 +84,8 @@ L-SMASH is structured into four primary subsystems with strict directional depen
 | Path | Responsibility |
 | :--- | :--- |
 | `lsmash.h` | Public C API header: box types, codec FourCCs, file parameters, summary structs, muxing/demuxing/timeline APIs, and codec-specific configuration structures. |
-| `configure` | POSIX shell build configurator: detects compiler/toolchain, generates `config.h`, `config.mak`, `liblsmash.pc`, and `liblsmash.ver` (symbol version script parsed from `common/*.h` and `importer/*.h`). |
-| `Makefile` | Build rules for static/shared `liblsmash`, CLI tools (`cli/*`), installation, and test targets. |
+| `configure` | POSIX shell build configurator: detects compiler/toolchain (supports POSIX/MSYS2 `sh`, `gcc`, `ar`, `ranlib`, `strip`), generates `config.h`, `config.mak`, `liblsmash.pc`, and `liblsmash.ver` (symbol version script parsed from `common/*.h` and `importer/*.h`). |
+| `Makefile` | Build rules for static/shared `liblsmash`, CLI tools (`cli/*`), installation, and test targets (verified with GNU Make 4.4.1 & GCC 14.2.0 via Read-Only MSYS2 MinGW64 toolchain). |
 | `SPEC.md` | Master architectural specification and documentation index (this file). |
 | `docs/HISTORY.md` | Historical record of repository branches (`master`, `av1`, `vimeo`, `dev`), key architectural commits, and project revival milestones. |
 | `docs/specs/*.md` | Detailed technical specifications for each of the four modernization missions. |

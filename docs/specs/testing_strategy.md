@@ -27,8 +27,9 @@ tests/
   test_malformed_boxes.c   # Subsystem: Negative tests, boundary conditions, FullBox table verification
 ```
 
-### 2.1 Build System Integration (`Makefile`)
-- Add a `test` / `check` target in `Makefile` that compiles `tests/*.c` against `liblsmash.a` (or internal object files `$(OBJS)` when testing non-exported internal functions such as `lsmash_table_*`, `isom_is_fullbox`, or `av1_parse_*`) and executes the test binary.
+### 2.1 Build System & Toolchain Integration (`configure` & `Makefile`)
+- **Verified Toolchain**: Read-Only MSYS2 MinGW64 toolchain (`mingw64/bin` and `usr/bin`: `gcc 14.2.0`, `GNU Make 4.4.1`, `sh`, `ar`, `ranlib`, `strip`). Package manager operations (`pacman`, `pacboy`) and writes outside the workspace remain strictly prohibited.
+- **Test Target**: Add a `test` / `check` target in `Makefile` that compiles `tests/*.c` against `liblsmash.a` (or internal object files `$(OBJS)` when testing non-exported internal functions such as `lsmash_table_*`, `isom_is_fullbox`, or `av1_parse_*`) and executes the test binary.
 - All tests return exit code `0` on 100% pass and non-zero with file/line diagnostics on failure.
 
 ---
