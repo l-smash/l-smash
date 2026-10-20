@@ -1760,125 +1760,121 @@ void isom_set_box_writer( isom_box_t *box )
         box->write = isom_write_track_reference_type;
         return;
     }
-    static struct box_writer_table_tag
+    static const struct box_writer_table_tag
     {
-        lsmash_box_type_t       type;
-        isom_extension_writer_t writer_func;
-    } box_writer_table[128] = { { LSMASH_BOX_TYPE_INITIALIZER, NULL } };
-    if( !box_writer_table[0].writer_func )
+        const lsmash_box_type_t *type;
+        isom_extension_writer_t  writer_func;
+    } box_writer_table[] =
     {
-        /* Initialize the table. */
-        int i = 0;
-#define ADD_BOX_WRITER_TABLE_ELEMENT( type, reader_func ) \
-    box_writer_table[i++] = (struct box_writer_table_tag){ type, reader_func }
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_FTYP, isom_write_ftyp );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STYP, isom_write_ftyp );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SIDX, isom_write_sidx );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MOOV, isom_write_moov );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MVHD, isom_write_mvhd );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_IODS, isom_write_iods );
-        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_CTAB, isom_write_ctab );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_ESDS, isom_write_esds );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TRAK, isom_write_trak );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TKHD, isom_write_tkhd );
-        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_TAPT, isom_write_tapt );
-        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_CLEF, isom_write_clef );
-        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_PROF, isom_write_prof );
-        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_ENOF, isom_write_enof );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_EDTS, isom_write_edts );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_ELST, isom_write_elst );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TREF, isom_write_tref );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MDIA, isom_write_mdia );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MDHD, isom_write_mdhd );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_HDLR, isom_write_hdlr );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MINF, isom_write_minf );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_VMHD, isom_write_vmhd );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SMHD, isom_write_smhd );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_HMHD, isom_write_hmhd );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_NMHD, isom_write_nmhd );
-        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_GMHD, isom_write_gmhd );
-        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_GMIN, isom_write_gmin );
-        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_TEXT, isom_write_text );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_DINF, isom_write_dinf );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_DREF, isom_write_dref );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_URL,  isom_write_url  );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STBL, isom_write_stbl );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SA3D, isom_write_SA3D );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_ST3D, isom_write_st3d );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SV3D, isom_write_sv3d );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SVHD, isom_write_svhd );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_PROJ, isom_write_proj );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_PRHD, isom_write_prhd );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_EQUI, isom_write_equi );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_CBMP, isom_write_cbmp );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSD, isom_write_stsd );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_DVCC, isom_write_dovi );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_DVVC, isom_write_dovi );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_BTRT, isom_write_btrt );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TIMS, isom_write_tims );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TSRO, isom_write_tsro );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TSSY, isom_write_tssy );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_COLR, isom_write_colr );
-        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_COLR, isom_write_colr );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_CLAP, isom_write_clap );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_PASP, isom_write_pasp );
-        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_GLBL, isom_write_glbl );
-        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_GAMA, isom_write_gama );
-        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_FIEL, isom_write_fiel );
-        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_CLLI, isom_write_clli );
-        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_MDCV, isom_write_mdcv );
-        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_CSPC, isom_write_cspc );
-        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_SGBT, isom_write_sgbt );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSL, isom_write_stsl );
-        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_WAVE, isom_write_wave );
-        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_MP4A, isom_write_mp4a );
-        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_CHAN, isom_write_chan );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SRAT, write_srat );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_PCMC, write_pcmC );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_CHNL, write_chnl );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_FTAB, isom_write_ftab );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STTS, isom_write_stts );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_CTTS, isom_write_ctts );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_CSLG, isom_write_cslg );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSS, isom_write_stss );
-        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_STPS, isom_write_stps );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SDTP, isom_write_sdtp );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSC, isom_write_stsc );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSZ, isom_write_stsz );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STZ2, isom_write_stz2 );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STCO, isom_write_stco );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_CO64, isom_write_stco );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SGPD, isom_write_sgpd );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SBGP, isom_write_sbgp );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_UDTA, isom_write_udta );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_HNTI, isom_write_hnti );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_RTP,  isom_write_rtp  );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SDP,  isom_write_sdp  );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_CHPL, isom_write_chpl );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MVEX, isom_write_mvex );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MEHD, isom_write_mehd );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TREX, isom_write_trex );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MOOF, isom_write_moof );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MFHD, isom_write_mfhd );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TRAF, isom_write_traf );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TFHD, isom_write_tfhd );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TFDT, isom_write_tfdt );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TRUN, isom_write_trun );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MDAT, isom_write_mdat );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_FREE, isom_write_free );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SKIP, isom_write_free );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_META, isom_write_meta );
-        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_META, isom_write_meta );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_ILST, isom_write_ilst );
-        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_ILST, isom_write_ilst );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MFRA, isom_write_mfra );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TFRA, isom_write_tfra );
-        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MFRO, isom_write_mfro );
-        ADD_BOX_WRITER_TABLE_ELEMENT( LSMASH_BOX_TYPE_UNSPECIFIED, NULL );
+#define ADD_BOX_WRITER_TABLE_ELEMENT( type, writer_func ) { &(type), writer_func }
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_FTYP, isom_write_ftyp ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STYP, isom_write_ftyp ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SIDX, isom_write_sidx ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MOOV, isom_write_moov ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MVHD, isom_write_mvhd ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_IODS, isom_write_iods ),
+        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_CTAB, isom_write_ctab ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_ESDS, isom_write_esds ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TRAK, isom_write_trak ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TKHD, isom_write_tkhd ),
+        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_TAPT, isom_write_tapt ),
+        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_CLEF, isom_write_clef ),
+        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_PROF, isom_write_prof ),
+        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_ENOF, isom_write_enof ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_EDTS, isom_write_edts ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_ELST, isom_write_elst ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TREF, isom_write_tref ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MDIA, isom_write_mdia ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MDHD, isom_write_mdhd ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_HDLR, isom_write_hdlr ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MINF, isom_write_minf ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_VMHD, isom_write_vmhd ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SMHD, isom_write_smhd ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_HMHD, isom_write_hmhd ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_NMHD, isom_write_nmhd ),
+        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_GMHD, isom_write_gmhd ),
+        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_GMIN, isom_write_gmin ),
+        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_TEXT, isom_write_text ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_DINF, isom_write_dinf ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_DREF, isom_write_dref ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_URL,  isom_write_url  ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STBL, isom_write_stbl ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SA3D, isom_write_SA3D ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_ST3D, isom_write_st3d ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SV3D, isom_write_sv3d ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SVHD, isom_write_svhd ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_PROJ, isom_write_proj ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_PRHD, isom_write_prhd ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_EQUI, isom_write_equi ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_CBMP, isom_write_cbmp ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSD, isom_write_stsd ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_DVCC, isom_write_dovi ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_DVVC, isom_write_dovi ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_BTRT, isom_write_btrt ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TIMS, isom_write_tims ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TSRO, isom_write_tsro ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TSSY, isom_write_tssy ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_COLR, isom_write_colr ),
+        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_COLR, isom_write_colr ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_CLAP, isom_write_clap ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_PASP, isom_write_pasp ),
+        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_GLBL, isom_write_glbl ),
+        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_GAMA, isom_write_gama ),
+        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_FIEL, isom_write_fiel ),
+        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_CLLI, isom_write_clli ),
+        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_MDCV, isom_write_mdcv ),
+        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_CSPC, isom_write_cspc ),
+        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_SGBT, isom_write_sgbt ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSL, isom_write_stsl ),
+        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_WAVE, isom_write_wave ),
+        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_MP4A, isom_write_mp4a ),
+        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_CHAN, isom_write_chan ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SRAT, write_srat ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_PCMC, write_pcmC ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_CHNL, write_chnl ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_FTAB, isom_write_ftab ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STTS, isom_write_stts ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_CTTS, isom_write_ctts ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_CSLG, isom_write_cslg ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSS, isom_write_stss ),
+        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_STPS, isom_write_stps ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SDTP, isom_write_sdtp ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSC, isom_write_stsc ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STSZ, isom_write_stsz ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STZ2, isom_write_stz2 ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_STCO, isom_write_stco ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_CO64, isom_write_stco ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SGPD, isom_write_sgpd ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SBGP, isom_write_sbgp ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_UDTA, isom_write_udta ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_HNTI, isom_write_hnti ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_RTP,  isom_write_rtp  ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SDP,  isom_write_sdp  ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_CHPL, isom_write_chpl ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MVEX, isom_write_mvex ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MEHD, isom_write_mehd ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TREX, isom_write_trex ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MOOF, isom_write_moof ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MFHD, isom_write_mfhd ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TRAF, isom_write_traf ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TFHD, isom_write_tfhd ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TFDT, isom_write_tfdt ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TRUN, isom_write_trun ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MDAT, isom_write_mdat ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_FREE, isom_write_free ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_SKIP, isom_write_free ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_META, isom_write_meta ),
+        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_META, isom_write_meta ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_ILST, isom_write_ilst ),
+        ADD_BOX_WRITER_TABLE_ELEMENT(   QT_BOX_TYPE_ILST, isom_write_ilst ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MFRA, isom_write_mfra ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_TFRA, isom_write_tfra ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( ISOM_BOX_TYPE_MFRO, isom_write_mfro ),
+        ADD_BOX_WRITER_TABLE_ELEMENT( LSMASH_BOX_TYPE_UNSPECIFIED, NULL )
 #undef ADD_BOX_WRITER_TABLE_ELEMENT
-    }
+    };
     for( int i = 0; box_writer_table[i].writer_func; i++ )
-        if( lsmash_check_box_type_identical( box->type, box_writer_table[i].type ) )
+        if( lsmash_check_box_type_identical( box->type, *box_writer_table[i].type ) )
         {
             box->write = box_writer_table[i].writer_func;
             return;

@@ -227,34 +227,32 @@ lsmash_codec_type_t lsmash_dts_get_codingname( lsmash_dts_specific_parameters_t 
     assert( param->StreamConstruction <= DTS_MAX_STREAM_CONSTRUCTION );
     if( param->MultiAssetFlag )
         return ISOM_CODEC_TYPE_DTSH_AUDIO;  /* Multiple asset streams shall use the 'dtsh' coding_name. */
-    static lsmash_codec_type_t codingname_table[DTS_MAX_STREAM_CONSTRUCTION + 1] = { LSMASH_CODEC_TYPE_INITIALIZER };
-    if( lsmash_check_codec_type_identical( codingname_table[0], LSMASH_CODEC_TYPE_UNSPECIFIED ) )
+    static const lsmash_codec_type_t * const codingname_table[DTS_MAX_STREAM_CONSTRUCTION + 1] =
     {
-        int i = 0;
-        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO; /* Undefined stream types shall be set to 0 and the codingname shall default to 'dtsh'. */
-        codingname_table[i++] = ISOM_CODEC_TYPE_DTSC_AUDIO;
-        codingname_table[i++] = ISOM_CODEC_TYPE_DTSC_AUDIO;
-        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
-        codingname_table[i++] = ISOM_CODEC_TYPE_DTSC_AUDIO;
-        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
-        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
-        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
-        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
-        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
-        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
-        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
-        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
-        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
-        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
-        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
-        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
-        codingname_table[i++] = ISOM_CODEC_TYPE_DTSL_AUDIO;
-        codingname_table[i++] = ISOM_CODEC_TYPE_DTSE_AUDIO;
-        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
-        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
-        codingname_table[i++] = ISOM_CODEC_TYPE_DTSH_AUDIO;
-    }
-    lsmash_codec_type_t codingname = codingname_table[ param->StreamConstruction ];
+        &ISOM_CODEC_TYPE_DTSH_AUDIO, /* Undefined stream types shall be set to 0 and the codingname shall default to 'dtsh'. */
+        &ISOM_CODEC_TYPE_DTSC_AUDIO,
+        &ISOM_CODEC_TYPE_DTSC_AUDIO,
+        &ISOM_CODEC_TYPE_DTSH_AUDIO,
+        &ISOM_CODEC_TYPE_DTSC_AUDIO,
+        &ISOM_CODEC_TYPE_DTSH_AUDIO,
+        &ISOM_CODEC_TYPE_DTSH_AUDIO,
+        &ISOM_CODEC_TYPE_DTSH_AUDIO,
+        &ISOM_CODEC_TYPE_DTSH_AUDIO,
+        &ISOM_CODEC_TYPE_DTSH_AUDIO,
+        &ISOM_CODEC_TYPE_DTSH_AUDIO,
+        &ISOM_CODEC_TYPE_DTSH_AUDIO,
+        &ISOM_CODEC_TYPE_DTSH_AUDIO,
+        &ISOM_CODEC_TYPE_DTSH_AUDIO,
+        &ISOM_CODEC_TYPE_DTSH_AUDIO,
+        &ISOM_CODEC_TYPE_DTSH_AUDIO,
+        &ISOM_CODEC_TYPE_DTSH_AUDIO,
+        &ISOM_CODEC_TYPE_DTSL_AUDIO,
+        &ISOM_CODEC_TYPE_DTSE_AUDIO,
+        &ISOM_CODEC_TYPE_DTSH_AUDIO,
+        &ISOM_CODEC_TYPE_DTSH_AUDIO,
+        &ISOM_CODEC_TYPE_DTSH_AUDIO
+    };
+    lsmash_codec_type_t codingname = *codingname_table[ param->StreamConstruction ];
     /* Check the presence of DTSXParameters Box. */
     if( !lsmash_check_codec_type_identical( codingname, ISOM_CODEC_TYPE_DTSC_AUDIO )
      && !lsmash_check_codec_type_identical( codingname, ISOM_CODEC_TYPE_DTSE_AUDIO )
