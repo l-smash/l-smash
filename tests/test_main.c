@@ -2252,6 +2252,435 @@ static int test_paged_block_array( void )
     return 0;
 }
 
+/*---------------------------------------------------------------------------
+ * Test 11: Large-Scale Paged Sample Tables, Roll Dedup Hazard & Fragmented Stress
+ *---------------------------------------------------------------------------*/
+static lsmash_video_summary_t *create_synth_av01_summary( uint32_t width, uint32_t height )
+{
+    lsmash_video_summary_t *summary = (lsmash_video_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_VIDEO );
+    if( !summary )
+        return NULL;
+    summary->sample_type = ISOM_CODEC_TYPE_AV01_VIDEO;
+    summary->width       = width;
+    summary->height      = height;
+    summary->par_h       = 1;
+    summary->par_v       = 1;
+    summary->depth       = 0x0018;
+
+    lsmash_codec_specific_t *cs = lsmash_create_codec_specific_data(
+        LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_AV1,
+        LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+    if( !cs )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        return NULL;
+    }
+    lsmash_av1_specific_parameters_t *param = (lsmash_av1_specific_parameters_t *)cs->data.structured;
+    param->seq_profile           = 0;
+    param->seq_level_idx_0       = 4;
+    param->seq_tier_0            = 0;
+    param->high_bitdepth         = 0;
+    param->twelve_bit            = 0;
+    param->monochrome            = 0;
+    param->chroma_subsampling_x  = 1;
+    param->chroma_subsampling_y  = 1;
+    param->chroma_sample_position = LSMASH_AV1_CSP_UNKNOWN;
+    if( lsmash_add_codec_specific_data( (lsmash_summary_t *)summary, cs ) < 0 )
+    {
+        lsmash_destroy_codec_specific_data( cs );
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        return NULL;
+    }
+    lsmash_destroy_codec_specific_data( cs );
+    return summary;
+}
+
+static int test_large_scale_paged_tables_and_roll_dedup( void )
+{
+    /* 11a. 10,500-Sample VFR Movie + Roll Group Mid-Table Deduplication + Timeline Pointer Stability */
+    {
+        const char *mp4_path  = "tests/tmp_test_vfr_10500.mp4";
+        const char *dump_path = "tests/tmp_test_vfr_10500_dump.txt";
+        const uint32_t N = 10500; /* >41 pages of 256 elements */
+
+        lsmash_root_t *mux_root = lsmash_create_root();
+        TEST_ASSERT( mux_root != NULL, "11a: create mux root" );
+        lsmash_file_parameters_t mux_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( mp4_path, 0, &mux_param ) == 0, "11a: open output mp4" );
+        lsmash_brand_type brands[5] = {
+            ISOM_BRAND_TYPE_ISOM,
+            ISOM_BRAND_TYPE_ISO6,
+            ISOM_BRAND_TYPE_AVC1,
+            ISOM_BRAND_TYPE_AV01,
+            ISOM_BRAND_TYPE_MP42
+        };
+        mux_param.major_brand   = ISOM_BRAND_TYPE_MP42;
+        mux_param.brands        = brands;
+        mux_param.brand_count   = 5;
+        mux_param.minor_version = 0;
+        TEST_ASSERT( lsmash_set_file( mux_root, &mux_param ) != NULL, "11a: set output file" );
+
+        lsmash_movie_parameters_t movie_param;
+        lsmash_initialize_movie_parameters( &movie_param );
+        movie_param.timescale = 1000;
+        TEST_ASSERT( lsmash_set_movie_parameters( mux_root, &movie_param ) == 0, "11a: set movie params" );
+
+        uint32_t tid = lsmash_create_track( mux_root, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK );
+        TEST_ASSERT( tid == 1, "11a: create video track" );
+
+        lsmash_track_parameters_t track_param;
+        lsmash_initialize_track_parameters( &track_param );
+        track_param.mode           = ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE | ISOM_TRACK_IN_PREVIEW;
+        track_param.display_width  = 64 << 16;
+        track_param.display_height = 64 << 16;
+        TEST_ASSERT( lsmash_set_track_parameters( mux_root, tid, &track_param ) == 0, "11a: set track params" );
+
+        lsmash_media_parameters_t media_param;
+        lsmash_initialize_media_parameters( &media_param );
+        media_param.timescale     = 90000;
+        media_param.roll_grouping = 1;
+        media_param.rap_grouping  = 1;
+        TEST_ASSERT( lsmash_set_media_parameters( mux_root, tid, &media_param ) == 0, "11a: set media params" );
+
+        lsmash_video_summary_t *summary = create_synth_av01_summary( 64, 64 );
+        TEST_ASSERT( summary != NULL, "11a: create synth av01 summary" );
+        TEST_ASSERT( lsmash_add_sample_entry( mux_root, tid, summary ) == 1, "11a: add sample entry" );
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+
+        uint64_t cur_dts = 0;
+        for( uint32_t i = 0; i < N; i++ )
+        {
+            uint32_t sample_num = i + 1;
+            uint32_t sz         = 4 + (i % 13);
+            uint32_t delta      = 100 + (i % 5); /* every sample changes delta -> N stts entries */
+            uint32_t cts_off    = (i + 1 < N) ? ((i % 3) * 10) : 0; /* every sample changes offset -> N ctts entries */
+
+            lsmash_sample_t *s = lsmash_create_sample( sz );
+            TEST_ASSERT( s != NULL, "11a: create sample" );
+            for( uint32_t b = 0; b < sz; b++ )
+                s->data[b] = (uint8_t)((i * 17 + b) & 0xFF);
+            s->dts   = cur_dts;
+            s->cts   = cur_dts + cts_off;
+            s->index = 1;
+            s->prop.leading     = ISOM_SAMPLE_IS_NOT_LEADING;
+            s->prop.independent = (i % 2 == 0) ? ISOM_SAMPLE_IS_INDEPENDENT : ISOM_SAMPLE_IS_NOT_INDEPENDENT;
+            s->prop.disposable  = (i % 4 == 0) ? ISOM_SAMPLE_IS_DISPOSABLE  : ISOM_SAMPLE_IS_NOT_DISPOSABLE;
+            s->prop.redundant   = ISOM_SAMPLE_HAS_NO_REDUNDANCY;
+            s->prop.post_roll.identifier = sample_num;
+
+            /* Exercise SYNC, OPEN_RAP, and consecutive POST_ROLL_START groups across page boundaries */
+            if( i % 300 == 0 )
+            {
+                s->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+            }
+            else if( i % 300 == 150 )
+            {
+                s->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_OPEN_RAP;
+            }
+            else if( (i % 300) >= 10 && (i % 300) < 40 && i + 2 < N )
+            {
+                /* 30 consecutive post-roll start samples with identical roll_distance = 2!
+                 * Each creates an sbgp entry and a pool entry; as recovery completes while later
+                 * entries are still in cache->roll.pool, isom_deduplicate_roll_group merges them
+                 * via mid-table lsm_list_remove(sbgp->list, current_group_number)! */
+                s->prop.ra_flags           = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_POST_ROLL_START;
+                s->prop.post_roll.complete = sample_num + 2;
+            }
+            else
+            {
+                s->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE;
+            }
+
+            TEST_ASSERT( lsmash_append_sample( mux_root, tid, s ) == 0, "11a: append VFR sample" );
+            cur_dts += delta;
+        }
+
+        uint32_t last_delta = 100 + (N % 5);
+        TEST_ASSERT( lsmash_flush_pooled_samples( mux_root, tid, last_delta ) == 0, "11a: flush pooled samples" );
+        TEST_ASSERT( lsmash_update_track_duration( mux_root, tid, last_delta ) == 0, "11a: update track duration" );
+
+        /* Add 2 explicit edit list entries */
+        lsmash_edit_t edit1 = { .duration = 5000, .start_time = 0,   .rate = ISOM_EDIT_MODE_NORMAL };
+        lsmash_edit_t edit2 = { .duration = 6000, .start_time = 100, .rate = ISOM_EDIT_MODE_NORMAL };
+        TEST_ASSERT( lsmash_create_explicit_timeline_map( mux_root, tid, edit1 ) == 0, "11a: add edit 1" );
+        TEST_ASSERT( lsmash_create_explicit_timeline_map( mux_root, tid, edit2 ) == 0, "11a: add edit 2" );
+
+        TEST_ASSERT( lsmash_finish_movie( mux_root, NULL ) == 0, "11a: finish 10,500-sample movie" );
+        lsmash_close_file( &mux_param );
+        lsmash_destroy_root( mux_root );
+
+        /* Demux, verify multi-page stbl tables, construct timeline, and verify pointer stability */
+        lsmash_root_t *demux_root = lsmash_create_root();
+        TEST_ASSERT( demux_root != NULL, "11a: create demux root" );
+        lsmash_file_parameters_t demux_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( mp4_path, 1, &demux_param ) == 0, "11a: open mp4 for demux" );
+        demux_param.mode |= LSMASH_FILE_MODE_DUMP;
+        lsmash_file_t *demux_file = lsmash_set_file( demux_root, &demux_param );
+        TEST_ASSERT( demux_file != NULL, "11a: set demux file" );
+        TEST_ASSERT( lsmash_read_file( demux_file, &demux_param ) >= 0, "11a: read 10,500-sample mp4" );
+        TEST_ASSERT( lsmash_print_movie( demux_root, dump_path ) == 0, "11a: print movie dump" );
+        remove( dump_path );
+
+        isom_trak_t *trak = (isom_trak_t *)demux_file->moov->trak_list.head->data;
+        isom_stbl_t *stbl = trak->mdia->minf->stbl;
+        TEST_ASSERT( lsm_list_count( stbl->stts->list ) == N, "11a: stts has 10,500 entries across 42 pages" );
+        TEST_ASSERT( lsm_list_count( stbl->ctts->list ) == N, "11a: ctts has 10,500 entries across 42 pages" );
+        TEST_ASSERT( lsm_list_count( stbl->stsz->list ) == N, "11a: stsz has 10,500 entries across 42 pages" );
+        TEST_ASSERT( lsm_list_count( stbl->sdtp->list ) == N, "11a: sdtp has 10,500 entries across 42 pages" );
+        TEST_ASSERT( lsm_list_count( trak->edts->elst->list ) == 2, "11a: elst has 2 entries" );
+
+        isom_sgpd_t *sgpd_roll = (isom_sgpd_t *)stbl->sgpd_list.head->data;
+        isom_sbgp_t *sbgp_roll = (isom_sbgp_t *)stbl->sbgp_list.head->data;
+        TEST_ASSERT( sgpd_roll != NULL && lsm_list_count( sgpd_roll->list ) == 1,
+                     "11a: sgpd roll deduplicated to 1 unique roll_distance (+2)" );
+        /* 35 cycles of (non-roll -> 30 merged post-roll samples -> non-roll) = 71 sbgp entries (instead of 35*30 = 1050!) */
+        TEST_ASSERT( sbgp_roll != NULL && lsm_list_count( sbgp_roll->list ) == 71,
+                     "11a: sbgp roll deduplicated 30 consecutive post-roll groups per cycle into 1 entry" );
+
+        TEST_ASSERT( lsmash_construct_timeline( demux_root, tid ) == 0, "11a: construct 10,500-sample timeline" );
+        TEST_ASSERT( lsmash_get_sample_count_in_media_timeline( demux_root, tid ) == N, "11a: timeline sample count == 10,500" );
+        TEST_ASSERT( lsmash_count_explicit_timeline_map( demux_root, tid ) == 2, "11a: timeline edit count == 2" );
+
+        uint64_t exp_dts = 0;
+        for( uint32_t i = 0; i < N; i++ )
+        {
+            uint32_t sample_num = i + 1;
+            uint32_t exp_sz     = 4 + (i % 13);
+            uint32_t exp_delta  = (i + 1 < N) ? (100 + (i % 5)) : last_delta;
+            uint32_t exp_off    = (i + 1 < N) ? ((i % 3) * 10) : 0;
+
+            uint64_t got_dts = 0, got_cts = 0;
+            uint32_t got_delta = 0;
+            lsmash_sample_property_t got_prop = { 0 };
+            TEST_ASSERT( lsmash_get_dts_from_media_timeline( demux_root, tid, sample_num, &got_dts ) == 0, "11a: get dts" );
+            TEST_ASSERT( lsmash_get_cts_from_media_timeline( demux_root, tid, sample_num, &got_cts ) == 0, "11a: get cts" );
+            TEST_ASSERT( lsmash_get_sample_delta_from_media_timeline( demux_root, tid, sample_num, &got_delta ) == 0, "11a: get delta" );
+            TEST_ASSERT( lsmash_get_sample_property_from_media_timeline( demux_root, tid, sample_num, &got_prop ) == 0, "11a: get prop" );
+            TEST_ASSERT( got_dts == exp_dts && got_cts == exp_dts + exp_off && got_delta == exp_delta,
+                         "11a: timeline dts/cts/delta match across 42 pages" );
+
+            if( (i % 300) >= 10 && (i % 300) < 40 && i + 2 < N )
+            {
+                TEST_ASSERT( (got_prop.ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_POST_ROLL_START) != 0
+                          && got_prop.post_roll.complete == sample_num + 2,
+                             "11a: deduplicated roll group preserved exact post_roll.complete" );
+            }
+
+            /* Spot-check payload bytes across page boundaries */
+            if( (i & 0xFF) == 0 || (i & 0xFF) == 0xFF || i == N - 1 )
+            {
+                lsmash_sample_t *s = lsmash_get_sample_from_media_timeline( demux_root, tid, sample_num );
+                TEST_ASSERT( s != NULL && s->length == exp_sz, "11a: boundary sample length matches" );
+                TEST_ASSERT( s->data[0] == (uint8_t)((i * 17) & 0xFF), "11a: boundary sample payload matches" );
+                lsmash_delete_sample( s );
+            }
+            exp_dts += exp_delta;
+        }
+
+        /* Verify lsmash_get_media_timestamps & lsmash_set_media_timestamps on 10,500-sample timeline */
+        lsmash_media_ts_list_t ts_list = { 0 };
+        TEST_ASSERT( lsmash_get_media_timestamps( demux_root, tid, &ts_list ) == 0, "11a: get_media_timestamps" );
+        TEST_ASSERT( ts_list.sample_count == N && ts_list.timestamp != NULL, "11a: ts_list count == 10,500" );
+        TEST_ASSERT( lsmash_set_media_timestamps( demux_root, tid, &ts_list ) == 0, "11a: set_media_timestamps" );
+        lsmash_delete_media_timestamps( &ts_list );
+
+        lsmash_destruct_timeline( demux_root, tid );
+        lsmash_close_file( &demux_param );
+        lsmash_destroy_root( demux_root );
+        remove( mp4_path );
+    }
+
+    /* 11b. Compact Sample Size Table (stz2 4-bit field_size & lsm_list_move across 3 pages) */
+    {
+        const char *mp4_path = "tests/tmp_test_stz2_600.mp4";
+        const uint32_t M = 600; /* 3 pages */
+
+        lsmash_root_t *mux_root = lsmash_create_root();
+        lsmash_file_parameters_t mux_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( mp4_path, 0, &mux_param ) == 0, "11b: open stz2 mp4" );
+        lsmash_brand_type brands[3] = { ISOM_BRAND_TYPE_ISOM, ISOM_BRAND_TYPE_ISO6, ISOM_BRAND_TYPE_AV01 };
+        mux_param.major_brand = ISOM_BRAND_TYPE_ISOM;
+        mux_param.brands      = brands;
+        mux_param.brand_count = 3;
+        TEST_ASSERT( lsmash_set_file( mux_root, &mux_param ) != NULL, "11b: set stz2 file" );
+
+        lsmash_movie_parameters_t movie_param;
+        lsmash_initialize_movie_parameters( &movie_param );
+        TEST_ASSERT( lsmash_set_movie_parameters( mux_root, &movie_param ) == 0, "11b: set movie params" );
+
+        uint32_t tid = lsmash_create_track( mux_root, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK );
+        lsmash_track_parameters_t track_param;
+        lsmash_initialize_track_parameters( &track_param );
+        track_param.mode = ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE;
+        TEST_ASSERT( lsmash_set_track_parameters( mux_root, tid, &track_param ) == 0, "11b: set track params" );
+
+        lsmash_media_parameters_t media_param;
+        lsmash_initialize_media_parameters( &media_param );
+        media_param.timescale                 = 1000;
+        media_param.compact_sample_size_table = 1; /* Enable stsz -> stz2 compaction via lsm_list_move */
+        TEST_ASSERT( lsmash_set_media_parameters( mux_root, tid, &media_param ) == 0, "11b: set media params with compact_sample_size_table" );
+
+        lsmash_video_summary_t *summary = create_synth_av01_summary( 64, 64 );
+        TEST_ASSERT( lsmash_add_sample_entry( mux_root, tid, summary ) == 1, "11b: add sample entry" );
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+
+        for( uint32_t i = 0; i < M; i++ )
+        {
+            uint32_t sz = 1 + (i % 15); /* 1..15 bytes -> 4-bit stz2 field_size */
+            lsmash_sample_t *s = lsmash_create_sample( sz );
+            memset( s->data, (int)(i & 0xFF), sz );
+            s->dts   = i * 10;
+            s->cts   = i * 10;
+            s->index = 1;
+            s->prop.ra_flags = (i % 60 == 0) ? ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC : ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE;
+            TEST_ASSERT( lsmash_append_sample( mux_root, tid, s ) == 0, "11b: append 4-bit size sample" );
+        }
+        TEST_ASSERT( lsmash_flush_pooled_samples( mux_root, tid, 10 ) == 0, "11b: flush pooled samples" );
+        TEST_ASSERT( lsmash_finish_movie( mux_root, NULL ) == 0, "11b: finish movie (triggers stsz -> stz2 lsm_list_move)" );
+        lsmash_close_file( &mux_param );
+        lsmash_destroy_root( mux_root );
+
+        lsmash_root_t *demux_root = lsmash_create_root();
+        lsmash_file_parameters_t demux_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( mp4_path, 1, &demux_param ) == 0, "11b: open stz2 mp4 for demux" );
+        lsmash_file_t *demux_file = lsmash_set_file( demux_root, &demux_param );
+        TEST_ASSERT( lsmash_read_file( demux_file, &demux_param ) >= 0, "11b: read stz2 mp4" );
+
+        isom_trak_t *trak = (isom_trak_t *)demux_file->moov->trak_list.head->data;
+        isom_stbl_t *stbl = trak->mdia->minf->stbl;
+        TEST_ASSERT( LSMASH_IS_NON_EXISTING_BOX( stbl->stsz ) && LSMASH_IS_EXISTING_BOX( stbl->stz2 ),
+                     "11b: stsz compacted into stz2" );
+        TEST_ASSERT( stbl->stz2->field_size == 4 && lsm_list_count( stbl->stz2->list ) == M,
+                     "11b: stz2 has field_size=4 and 600 entries across 3 pages" );
+
+        TEST_ASSERT( lsmash_construct_timeline( demux_root, tid ) == 0, "11b: construct timeline from stz2" );
+        for( uint32_t i = 0; i < M; i++ )
+        {
+            lsmash_sample_t info = { 0 };
+            TEST_ASSERT( lsmash_get_sample_info_from_media_timeline( demux_root, tid, i + 1, &info ) == 0, "11b: get sample info" );
+            TEST_ASSERT( info.length == 1 + (i % 15), "11b: 4-bit stz2 entry_size matches across 3 pages" );
+        }
+        lsmash_destruct_timeline( demux_root, tid );
+        lsmash_close_file( &demux_param );
+        lsmash_destroy_root( demux_root );
+        remove( mp4_path );
+    }
+
+    /* 11c. Multi-Page Fragmented Movie (fragment->pool, trun->optional, tfra->list, sidx->list) */
+    for( int is_segment = 0; is_segment <= 1; is_segment++ )
+    {
+        const char *fmp4_path = "tests/tmp_test_frag_vfr_900.mp4";
+        const uint32_t FRAGS = 3;
+        const uint32_t SAMPLES_PER_FRAG = 300; /* >256 elements per fragment -> crosses page boundary in pool & trun->optional */
+
+        lsmash_root_t *mux_root = lsmash_create_root();
+        lsmash_file_parameters_t mux_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( fmp4_path, 0, &mux_param ) == 0, "11c: open fragmented mp4" );
+        mux_param.mode |= LSMASH_FILE_MODE_FRAGMENTED;
+        if( is_segment )
+            mux_param.mode |= LSMASH_FILE_MODE_INDEX | LSMASH_FILE_MODE_SEGMENT;
+        lsmash_brand_type brands[3] = { ISOM_BRAND_TYPE_ISO6, ISOM_BRAND_TYPE_DASH, ISOM_BRAND_TYPE_AV01 };
+        mux_param.major_brand = ISOM_BRAND_TYPE_DASH;
+        mux_param.brands      = brands;
+        mux_param.brand_count = 3;
+        TEST_ASSERT( lsmash_set_file( mux_root, &mux_param ) != NULL, "11c: set fragmented file" );
+
+        lsmash_movie_parameters_t movie_param;
+        lsmash_initialize_movie_parameters( &movie_param );
+        TEST_ASSERT( lsmash_set_movie_parameters( mux_root, &movie_param ) == 0, "11c: set movie params" );
+
+        uint32_t tid = lsmash_create_track( mux_root, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK );
+        lsmash_track_parameters_t track_param;
+        lsmash_initialize_track_parameters( &track_param );
+        track_param.mode = ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE;
+        TEST_ASSERT( lsmash_set_track_parameters( mux_root, tid, &track_param ) == 0, "11c: set track params" );
+
+        lsmash_media_parameters_t media_param;
+        lsmash_initialize_media_parameters( &media_param );
+        media_param.timescale = 90000;
+        TEST_ASSERT( lsmash_set_media_parameters( mux_root, tid, &media_param ) == 0, "11c: set media params" );
+
+        lsmash_video_summary_t *summary = create_synth_av01_summary( 64, 64 );
+        TEST_ASSERT( lsmash_add_sample_entry( mux_root, tid, summary ) == 1, "11c: add sample entry" );
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+
+        uint64_t cur_dts = 0;
+        for( uint32_t f = 0; f < FRAGS; f++ )
+        {
+            TEST_ASSERT( lsmash_create_fragment_movie( mux_root ) == 0, "11c: create fragment" );
+            for( uint32_t s_idx = 0; s_idx < SAMPLES_PER_FRAG; s_idx++ )
+            {
+                uint32_t g_idx = f * SAMPLES_PER_FRAG + s_idx;
+                uint32_t sz    = 8 + (g_idx % 19);
+                uint32_t delta = 300 + (g_idx % 7);
+                uint32_t off   = (g_idx % 4) * 50;
+
+                lsmash_sample_t *s = lsmash_create_sample( sz );
+                memset( s->data, (int)((g_idx * 13 + 5) & 0xFF), sz );
+                s->dts   = cur_dts;
+                s->cts   = cur_dts + off;
+                s->index = 1;
+                s->prop.ra_flags = (s_idx == 0) ? ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC : ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE;
+                TEST_ASSERT( lsmash_append_sample( mux_root, tid, s ) == 0, "11c: append fragmented VFR sample" );
+                cur_dts += delta;
+            }
+            uint32_t last_frag_delta = 300 + (((f + 1) * SAMPLES_PER_FRAG - 1) % 7);
+            TEST_ASSERT( lsmash_flush_pooled_samples( mux_root, tid, last_frag_delta ) == 0, "11c: flush fragment pool" );
+        }
+        lsmash_adhoc_remux_t remux = { .buffer_size = 65536 };
+        TEST_ASSERT( lsmash_finish_movie( mux_root, is_segment ? &remux : NULL ) == 0, "11c: finish fragmented movie" );
+        lsmash_close_file( &mux_param );
+        lsmash_destroy_root( mux_root );
+
+        lsmash_root_t *demux_root = lsmash_create_root();
+        lsmash_file_parameters_t demux_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( fmp4_path, 1, &demux_param ) == 0, "11c: open fragmented mp4 for demux" );
+        lsmash_file_t *demux_file = lsmash_set_file( demux_root, &demux_param );
+        TEST_ASSERT( lsmash_read_file( demux_file, &demux_param ) >= 0, "11c: read fragmented mp4" );
+
+        if( is_segment )
+        {
+            TEST_ASSERT( demux_file->sidx_list.head != NULL, "11c: sidx_list present" );
+            isom_sidx_t *sidx = (isom_sidx_t *)demux_file->sidx_list.head->data;
+            TEST_ASSERT( lsm_list_count( sidx->list ) == FRAGS, "11c: sidx->list has 3 subsegment entries" );
+        }
+        else
+        {
+            TEST_ASSERT( LSMASH_IS_EXISTING_BOX( demux_file->mfra ) && demux_file->mfra->tfra_list.head != NULL, "11c: mfra/tfra present" );
+            isom_tfra_t *tfra = (isom_tfra_t *)demux_file->mfra->tfra_list.head->data;
+            TEST_ASSERT( lsm_list_count( tfra->list ) == FRAGS, "11c: tfra->list has 3 sync sample entries" );
+        }
+
+        TEST_ASSERT( lsmash_construct_timeline( demux_root, tid ) == 0, "11c: construct fragmented VFR timeline" );
+        TEST_ASSERT( lsmash_get_sample_count_in_media_timeline( demux_root, tid ) == FRAGS * SAMPLES_PER_FRAG,
+                     "11c: fragmented timeline has 900 samples" );
+
+        uint64_t exp_dts = 0;
+        for( uint32_t g_idx = 0; g_idx < FRAGS * SAMPLES_PER_FRAG; g_idx++ )
+        {
+            uint32_t sz    = 8 + (g_idx % 19);
+            uint32_t delta = 300 + (g_idx % 7);
+            uint32_t off   = (g_idx % 4) * 50;
+            uint64_t got_dts = 0, got_cts = 0;
+            lsmash_sample_t info = { 0 };
+            TEST_ASSERT( lsmash_get_dts_from_media_timeline( demux_root, tid, g_idx + 1, &got_dts ) == 0, "11c: get frag dts" );
+            TEST_ASSERT( lsmash_get_cts_from_media_timeline( demux_root, tid, g_idx + 1, &got_cts ) == 0, "11c: get frag cts" );
+            TEST_ASSERT( lsmash_get_sample_info_from_media_timeline( demux_root, tid, g_idx + 1, &info ) == 0, "11c: get frag info" );
+            TEST_ASSERT( got_dts == exp_dts && got_cts == exp_dts + off && info.length == sz,
+                         "11c: fragmented VFR sample dts/cts/length match across page boundaries" );
+            exp_dts += delta;
+        }
+
+        lsmash_destruct_timeline( demux_root, tid );
+        lsmash_close_file( &demux_param );
+        lsmash_destroy_root( demux_root );
+        remove( fmp4_path );
+    }
+
+    printf( "[PASS] test_large_scale_paged_tables_and_roll_dedup\n" );
+    return 0;
+}
+
 #ifdef LSMASH_DEBUG_ALLOC
 #define RUN_TEST( test_fn )                                                       \
     do                                                                            \
@@ -2279,6 +2708,7 @@ int main( void )
     printf( "=== L-SMASH Synthetic Test Suite ===\n" );
     RUN_TEST( test_memory_audit_allocator );
     RUN_TEST( test_paged_block_array );
+    RUN_TEST( test_large_scale_paged_tables_and_roll_dedup );
     RUN_TEST( test_bitstream_primitives );
     RUN_TEST( test_sequence_header_and_av1c );
     RUN_TEST( test_frame_headers_and_tu_assembly );
