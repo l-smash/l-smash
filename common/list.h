@@ -115,3 +115,185 @@ void *lsmash_list_get_entry_data
     lsmash_entry_list_t *list,
     uint32_t             entry_number
 );
+
+/*---------------------------------------------------------------------------
+ * C99 Paged Block Array (lsm_list_t) and Unified Accessor / Iterator API
+ *
+ * Stores value elements contiguously inside fixed-size pages of 2^K elements.
+ * - Eliminates per-entry 24-byte linked-list node overhead and double malloc.
+ * - Provides true O(1) indexed lookup via bit-shift and bit-mask addressing.
+ * - Guarantees 100% pointer stability on append (existing pages never move).
+ * - Zero-initialized { 0 } or NULL containers safely behave as 0 elements.
+ *---------------------------------------------------------------------------*/
+#define LSM_LIST_PAGE_SHIFT 8U
+#define LSM_LIST_PAGE_SIZE  (1U << LSM_LIST_PAGE_SHIFT)
+#define LSM_LIST_PAGE_MASK  (LSM_LIST_PAGE_SIZE - 1U)
+
+typedef struct
+{
+    uint8_t                    **pages;
+    uint32_t                     entry_count;
+    uint32_t                     page_count;
+    uint32_t                     page_capacity;
+    uint32_t                     elem_size;
+    lsmash_entry_data_eliminator eliminator;
+} lsm_list_t;
+
+#define lsm_list_init( list, elem_size, eliminator ) \
+        lsm_list_init_orig( list, elem_size, (lsmash_entry_data_eliminator)(eliminator) )
+#define lsm_list_init_simple( list, elem_size ) \
+        lsm_list_init_orig( list, elem_size, NULL )
+
+#define lsm_list_create( elem_size, eliminator ) \
+        lsm_list_create_orig( elem_size, (lsmash_entry_data_eliminator)(eliminator) )
+#define lsm_list_create_simple( elem_size ) \
+        lsm_list_create_orig( elem_size, NULL )
+
+void lsm_list_init_orig
+(
+    lsm_list_t                  *list,
+    uint32_t                     elem_size,
+    lsmash_entry_data_eliminator eliminator
+);
+
+lsm_list_t *lsm_list_create_orig
+(
+    uint32_t                     elem_size,
+    lsmash_entry_data_eliminator eliminator
+);
+
+void lsm_list_destroy
+(
+    lsm_list_t *list
+);
+
+void lsm_list_clear
+(
+    lsm_list_t *list
+);
+
+void *lsm_list_append
+(
+    lsm_list_t *list
+);
+
+int lsm_list_add
+(
+    lsm_list_t *list,
+    const void *elem
+);
+
+int lsm_list_remove_at
+(
+    lsm_list_t *list,
+    uint32_t    index
+);
+
+int lsm_list_remove
+(
+    lsm_list_t *list,
+    uint32_t    entry_number
+);
+
+int lsm_list_remove_tail
+(
+    lsm_list_t *list
+);
+
+void lsm_list_move
+(
+    lsm_list_t *dst,
+    lsm_list_t *src
+);
+
+static inline uint32_t lsm_list_count( const lsm_list_t *list )
+{
+    return list ? list->entry_count : 0;
+}
+
+static inline void *lsm_list_at( const lsm_list_t *list, uint32_t index )
+{
+    if( !list || index >= list->entry_count )
+        return NULL;
+    return list->pages[index >> LSM_LIST_PAGE_SHIFT]
+         + (size_t)(index & LSM_LIST_PAGE_MASK) * list->elem_size;
+}
+
+static inline void *lsm_list_get( const lsm_list_t *list, uint32_t entry_number )
+{
+    if( !entry_number )
+        return NULL;
+    return lsm_list_at( list, entry_number - 1 );
+}
+
+static inline void *lsm_list_head( const lsm_list_t *list )
+{
+    return lsm_list_at( list, 0 );
+}
+
+static inline void *lsm_list_tail( const lsm_list_t *list )
+{
+    if( !list || !list->entry_count )
+        return NULL;
+    return lsm_list_at( list, list->entry_count - 1 );
+}
+
+/* Lockstep cursor for simultaneous multi-table traversal */
+typedef struct
+{
+    const lsm_list_t *list;
+    void             *data;
+    uint32_t          index;
+} lsm_list_cursor_t;
+
+static inline void lsm_list_cursor_init( lsm_list_cursor_t *cur, const lsm_list_t *list )
+{
+    cur->list  = list;
+    cur->index = 0;
+    cur->data  = lsm_list_at( list, 0 );
+}
+
+static inline void lsm_list_cursor_init_at( lsm_list_cursor_t *cur, const lsm_list_t *list, uint32_t index )
+{
+    cur->list  = list;
+    cur->index = index;
+    cur->data  = lsm_list_at( list, index );
+}
+
+static inline void *lsm_list_cursor_next( lsm_list_cursor_t *cur )
+{
+    if( !cur || !cur->data )
+        return NULL;
+    cur->index += 1;
+    cur->data   = lsm_list_at( cur->list, cur->index );
+    return cur->data;
+}
+
+static inline void *lsm_list_cursor_prev( lsm_list_cursor_t *cur )
+{
+    if( !cur || !cur->data || cur->index == 0 )
+    {
+        if( cur )
+            cur->data = NULL;
+        return NULL;
+    }
+    cur->index -= 1;
+    cur->data   = lsm_list_at( cur->list, cur->index );
+    return cur->data;
+}
+
+static inline lsmash_entry_t *lsm_entry_list_head( const lsmash_entry_list_t *list )
+{
+    return list ? list->head : NULL;
+}
+
+/* Single-loop C99 iteration macros (safe with break and continue) */
+#define LSM_LIST_FOR_EACH( var, list_ptr ) \
+    for( uint32_t lsm_idx_##var = 0; \
+         ((var) = lsm_list_at( (list_ptr), lsm_idx_##var )) != NULL; \
+         ++lsm_idx_##var )
+
+#define LSM_ENTRY_LIST_FOR_EACH( var, list_ptr ) \
+    for( lsmash_entry_t *lsm_ent_##var = lsm_entry_list_head( (list_ptr) ); \
+         ((var) = (lsm_ent_##var ? lsm_ent_##var->data : NULL)) != NULL; \
+         lsm_ent_##var = lsm_ent_##var->next )

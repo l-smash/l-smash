@@ -250,3 +250,210 @@ void *lsmash_list_get_entry_data
     lsmash_entry_t *entry = lsmash_list_get_entry( list, entry_number );
     return entry ? entry->data : NULL;
 }
+
+/*---------------------------------------------------------------------------
+ * C99 Paged Block Array (lsm_list_t) Implementation
+ *---------------------------------------------------------------------------*/
+#define LSM_LIST_INIT_PAGE_CAPACITY 8U
+
+static int list_ensure_page
+(
+    lsm_list_t *list,
+    uint32_t    page_index
+)
+{
+    if( page_index < list->page_count )
+        return 0;
+    if( page_index >= list->page_capacity )
+    {
+        uint32_t new_cap = list->page_capacity ? (list->page_capacity << 1) : LSM_LIST_INIT_PAGE_CAPACITY;
+        while( new_cap <= page_index )
+            new_cap <<= 1;
+        uint8_t **new_pages = lsmash_realloc( list->pages, (size_t)new_cap * sizeof(uint8_t *) );
+        if( !new_pages )
+            return LSMASH_ERR_MEMORY_ALLOC;
+        memset( new_pages + list->page_capacity, 0, (size_t)(new_cap - list->page_capacity) * sizeof(uint8_t *) );
+        list->pages         = new_pages;
+        list->page_capacity = new_cap;
+    }
+    while( list->page_count <= page_index )
+    {
+        uint8_t *page = lsmash_malloc( (size_t)LSM_LIST_PAGE_SIZE * list->elem_size );
+        if( !page )
+            return LSMASH_ERR_MEMORY_ALLOC;
+        list->pages[list->page_count++] = page;
+    }
+    return 0;
+}
+
+void lsm_list_init_orig
+(
+    lsm_list_t                  *list,
+    uint32_t                     elem_size,
+    lsmash_entry_data_eliminator eliminator
+)
+{
+    if( !list )
+        return;
+    assert( elem_size > 0 );
+    list->pages         = NULL;
+    list->entry_count   = 0;
+    list->page_count    = 0;
+    list->page_capacity = 0;
+    list->elem_size     = elem_size;
+    list->eliminator    = eliminator;
+}
+
+lsm_list_t *lsm_list_create_orig
+(
+    uint32_t                     elem_size,
+    lsmash_entry_data_eliminator eliminator
+)
+{
+    if( !elem_size )
+        return NULL;
+    lsm_list_t *list = lsmash_malloc( sizeof(lsm_list_t) );
+    if( !list )
+        return NULL;
+    lsm_list_init_orig( list, elem_size, eliminator );
+    return list;
+}
+
+void lsm_list_clear
+(
+    lsm_list_t *list
+)
+{
+    if( !list )
+        return;
+    if( list->eliminator )
+        for( uint32_t i = 0; i < list->entry_count; i++ )
+            list->eliminator( lsm_list_at( list, i ) );
+    for( uint32_t p = 0; p < list->page_count; p++ )
+        lsmash_free( list->pages[p] );
+    lsmash_freep( &list->pages );
+    list->entry_count   = 0;
+    list->page_count    = 0;
+    list->page_capacity = 0;
+}
+
+void lsm_list_destroy
+(
+    lsm_list_t *list
+)
+{
+    if( !list )
+        return;
+    lsm_list_clear( list );
+    lsmash_free( list );
+}
+
+void *lsm_list_append
+(
+    lsm_list_t *list
+)
+{
+    if( !list || !list->elem_size || list->entry_count == UINT32_MAX )
+        return NULL;
+    uint32_t index      = list->entry_count;
+    uint32_t page_index = index >> LSM_LIST_PAGE_SHIFT;
+    if( list_ensure_page( list, page_index ) < 0 )
+        return NULL;
+    void *slot = list->pages[page_index] + (size_t)(index & LSM_LIST_PAGE_MASK) * list->elem_size;
+    memset( slot, 0, list->elem_size );
+    list->entry_count = index + 1;
+    return slot;
+}
+
+int lsm_list_add
+(
+    lsm_list_t *list,
+    const void *elem
+)
+{
+    if( !list || !list->elem_size )
+        return LSMASH_ERR_FUNCTION_PARAM;
+    void *slot = lsm_list_append( list );
+    if( !slot )
+        return LSMASH_ERR_MEMORY_ALLOC;
+    if( elem )
+        memcpy( slot, elem, list->elem_size );
+    return 0;
+}
+
+int lsm_list_remove_at
+(
+    lsm_list_t *list,
+    uint32_t    index
+)
+{
+    if( !list || index >= list->entry_count )
+        return LSMASH_ERR_FUNCTION_PARAM;
+    void *target = lsm_list_at( list, index );
+    if( list->eliminator )
+        list->eliminator( target );
+    uint32_t last_index = list->entry_count - 1;
+    if( index < last_index )
+    {
+        uint32_t start_page = index >> LSM_LIST_PAGE_SHIFT;
+        uint32_t end_page   = last_index >> LSM_LIST_PAGE_SHIFT;
+        uint32_t start_off  = index & LSM_LIST_PAGE_MASK;
+        size_t   elem_size  = list->elem_size;
+        for( uint32_t p = start_page; p <= end_page; p++ )
+        {
+            uint32_t first_slot = (p == start_page) ? start_off : 0;
+            uint32_t last_slot  = (p == end_page)   ? (last_index & LSM_LIST_PAGE_MASK) : LSM_LIST_PAGE_MASK;
+            if( first_slot < last_slot )
+                memmove( list->pages[p] + (size_t)first_slot * elem_size,
+                         list->pages[p] + (size_t)(first_slot + 1) * elem_size,
+                         (size_t)(last_slot - first_slot) * elem_size );
+            if( p < end_page )
+                memcpy( list->pages[p] + (size_t)LSM_LIST_PAGE_MASK * elem_size,
+                        list->pages[p + 1],
+                        elem_size );
+        }
+    }
+    list->entry_count = last_index;
+    return 0;
+}
+
+int lsm_list_remove
+(
+    lsm_list_t *list,
+    uint32_t    entry_number
+)
+{
+    if( !entry_number )
+        return LSMASH_ERR_FUNCTION_PARAM;
+    return lsm_list_remove_at( list, entry_number - 1 );
+}
+
+int lsm_list_remove_tail
+(
+    lsm_list_t *list
+)
+{
+    if( !list || !list->entry_count )
+        return LSMASH_ERR_FUNCTION_PARAM;
+    uint32_t last_index = list->entry_count - 1;
+    if( list->eliminator )
+        list->eliminator( lsm_list_at( list, last_index ) );
+    list->entry_count = last_index;
+    return 0;
+}
+
+void lsm_list_move
+(
+    lsm_list_t *dst,
+    lsm_list_t *src
+)
+{
+    if( !dst || !src || dst == src )
+        return;
+    lsm_list_clear( dst );
+    *dst = *src;
+    src->pages         = NULL;
+    src->entry_count   = 0;
+    src->page_count    = 0;
+    src->page_capacity = 0;
+}

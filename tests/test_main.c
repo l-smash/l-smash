@@ -2049,6 +2049,209 @@ static int test_av1_multitile_and_sync_sample_compliance( void )
     return 0;
 }
 
+/*---------------------------------------------------------------------------
+ * Test 10: C99 Paged Block Array (lsm_list_t) & Unified Accessor / Iterator
+ *---------------------------------------------------------------------------*/
+typedef struct
+{
+    uint64_t id;
+    uint32_t tag;
+    uint32_t flags;
+    void    *owned_buf;
+} test_paged_elem_t;
+
+static uint32_t g_test_eliminator_calls = 0;
+
+static void test_paged_elem_eliminator( void *data )
+{
+    if( !data )
+        return;
+    test_paged_elem_t *elem = (test_paged_elem_t *)data;
+    if( elem->owned_buf )
+    {
+        lsmash_free( elem->owned_buf );
+        elem->owned_buf = NULL;
+    }
+    ++g_test_eliminator_calls;
+}
+
+static int test_paged_block_array( void )
+{
+    /* Zero-Initialization & NULL Container Safety */
+    {
+        lsm_list_t zero_list = { 0 };
+        TEST_ASSERT( lsm_list_count( NULL ) == 0, "lsm_list_count(NULL) == 0" );
+        TEST_ASSERT( lsm_list_count( &zero_list ) == 0, "lsm_list_count(&zero_list) == 0" );
+        TEST_ASSERT( lsm_list_at( NULL, 0 ) == NULL, "lsm_list_at(NULL, 0) == NULL" );
+        TEST_ASSERT( lsm_list_at( &zero_list, 0 ) == NULL, "lsm_list_at(&zero_list, 0) == NULL" );
+        TEST_ASSERT( lsm_list_get( NULL, 1 ) == NULL, "lsm_list_get(NULL, 1) == NULL" );
+        TEST_ASSERT( lsm_list_get( &zero_list, 0 ) == NULL, "lsm_list_get(&zero_list, 0) == NULL" );
+        TEST_ASSERT( lsm_list_get( &zero_list, 1 ) == NULL, "lsm_list_get(&zero_list, 1) == NULL" );
+        TEST_ASSERT( lsm_list_head( NULL ) == NULL, "lsm_list_head(NULL) == NULL" );
+        TEST_ASSERT( lsm_list_head( &zero_list ) == NULL, "lsm_list_head(&zero_list) == NULL" );
+        TEST_ASSERT( lsm_list_tail( NULL ) == NULL, "lsm_list_tail(NULL) == NULL" );
+        TEST_ASSERT( lsm_list_tail( &zero_list ) == NULL, "lsm_list_tail(&zero_list) == NULL" );
+        TEST_ASSERT( lsm_list_remove_tail( &zero_list ) < 0, "remove_tail on empty fails safely" );
+        TEST_ASSERT( lsm_list_remove( &zero_list, 1 ) < 0, "remove on empty fails safely" );
+
+        uint32_t iter_count = 0;
+        test_paged_elem_t *it = NULL;
+        LSM_LIST_FOR_EACH( it, &zero_list )
+        {
+            ++iter_count;
+        }
+        TEST_ASSERT( iter_count == 0 && it == NULL, "LSM_LIST_FOR_EACH on zero-init list executes 0 times" );
+        LSM_LIST_FOR_EACH( it, (lsm_list_t *)NULL )
+        {
+            ++iter_count;
+        }
+        TEST_ASSERT( iter_count == 0 && it == NULL, "LSM_LIST_FOR_EACH on NULL list executes 0 times" );
+
+        lsmash_entry_list_t zero_elist = { 0 };
+        void *eit = NULL;
+        LSM_ENTRY_LIST_FOR_EACH( eit, &zero_elist )
+        {
+            ++iter_count;
+        }
+        TEST_ASSERT( iter_count == 0 && eit == NULL, "LSM_ENTRY_LIST_FOR_EACH on zero-init list executes 0 times" );
+
+        lsm_list_clear( &zero_list );
+        lsm_list_clear( NULL );
+        lsm_list_destroy( NULL );
+    }
+
+    /* & Multi-Page Append, O(1) Random Access & 100% Pointer Stability Across 40+ Pages */
+    {
+        const uint32_t N = 10500; /* crosses >41 pages of 256 elements */
+        lsm_list_t list = { 0 };
+        lsm_list_init_simple( &list, sizeof(test_paged_elem_t) );
+
+        test_paged_elem_t **saved_ptrs = (test_paged_elem_t **)lsmash_malloc( N * sizeof(test_paged_elem_t *) );
+        TEST_ASSERT( saved_ptrs != NULL, "alloc saved_ptrs" );
+
+        for( uint32_t i = 0; i < N; i++ )
+        {
+            test_paged_elem_t *slot = (test_paged_elem_t *)lsm_list_append( &list );
+            TEST_ASSERT( slot != NULL, "lsm_list_append succeeds" );
+            TEST_ASSERT( slot->id == 0 && slot->tag == 0 && slot->flags == 0 && slot->owned_buf == NULL,
+                         "newly appended slot is zero-initialized" );
+            slot->id    = (uint64_t)i * 1000003ULL + 7ULL;
+            slot->tag   = i ^ 0xA5A55A5AU;
+            slot->flags = i + 1U;
+            saved_ptrs[i] = slot;
+
+            /* Verify page boundary transition stability right after crossing a 256-element boundary */
+            if( (i & LSM_LIST_PAGE_MASK) == 0 && i > 0 )
+            {
+                TEST_ASSERT( lsm_list_at( &list, 0 ) == saved_ptrs[0],
+                             "page 0 element 0 pointer never moves when new page is allocated" );
+                TEST_ASSERT( lsm_list_at( &list, i - 1 ) == saved_ptrs[i - 1],
+                             "previous page tail pointer never moves when new page is allocated" );
+            }
+        }
+
+        TEST_ASSERT( lsm_list_count( &list ) == N, "entry_count == 10500" );
+        TEST_ASSERT( list.page_count == ((N + LSM_LIST_PAGE_MASK) >> LSM_LIST_PAGE_SHIFT),
+                     "exact number of 256-element pages allocated" );
+        TEST_ASSERT( lsm_list_head( &list ) == saved_ptrs[0], "head matches element 0" );
+        TEST_ASSERT( lsm_list_tail( &list ) == saved_ptrs[N - 1], "tail matches element N-1" );
+
+        /* Verify 100% pointer stability and O(1) random access for all 10,500 elements */
+        for( uint32_t i = 0; i < N; i++ )
+        {
+            uint32_t perm = (i * 4099U + 123U) % N; /* pseudo-random index */
+            test_paged_elem_t *by_at  = (test_paged_elem_t *)lsm_list_at( &list, perm );
+            test_paged_elem_t *by_get = (test_paged_elem_t *)lsm_list_get( &list, perm + 1 );
+            TEST_ASSERT( by_at == saved_ptrs[perm], "pointer stability 100% preserved for all elements" );
+            TEST_ASSERT( by_get == by_at, "1-based lsm_list_get matches 0-based lsm_list_at" );
+            TEST_ASSERT( by_at->id == (uint64_t)perm * 1000003ULL + 7ULL && by_at->tag == (perm ^ 0xA5A55A5AU),
+                         "element payload intact across 42 pages" );
+        }
+
+        /* Verify LSM_LIST_FOR_EACH with continue and break */
+        uint32_t visited = 0;
+        test_paged_elem_t *elem = NULL;
+        LSM_LIST_FOR_EACH( elem, &list )
+        {
+            if( elem->flags == 10 )
+            {
+                ++visited;
+                continue;
+            }
+            if( elem->flags == 600 )
+                break;
+            ++visited;
+        }
+        TEST_ASSERT( visited == 599 && elem != NULL && elem->flags == 600,
+                     "LSM_LIST_FOR_EACH supports single-loop continue and break" );
+
+        /* Verify lockstep cursor forward & backward across page boundaries */
+        lsm_list_cursor_t cur;
+        lsm_list_cursor_init_at( &cur, &list, 254 );
+        TEST_ASSERT( cur.data == saved_ptrs[254], "cursor init at 254" );
+        TEST_ASSERT( lsm_list_cursor_next( &cur ) == saved_ptrs[255], "cursor next to 255 (page 0 end)" );
+        TEST_ASSERT( lsm_list_cursor_next( &cur ) == saved_ptrs[256], "cursor next to 256 (page 1 start)" );
+        TEST_ASSERT( lsm_list_cursor_prev( &cur ) == saved_ptrs[255], "cursor prev back to 255" );
+
+        lsmash_free( saved_ptrs );
+        lsm_list_clear( &list );
+        TEST_ASSERT( lsm_list_count( &list ) == 0 && list.pages == NULL, "lsm_list_clear frees pages" );
+    }
+
+    /* & Tail Removal, Mid-List Removal Across Pages, O(1) Move & Custom Eliminator Leak Check */
+    {
+        g_test_eliminator_calls = 0;
+        lsm_list_t *src = lsm_list_create( sizeof(test_paged_elem_t), test_paged_elem_eliminator );
+        TEST_ASSERT( src != NULL, "lsm_list_create succeeds" );
+
+        const uint32_t M = 600; /* 3 pages (0..255, 256..511, 512..599) */
+        for( uint32_t i = 0; i < M; i++ )
+        {
+            test_paged_elem_t item;
+            item.id        = i + 100;
+            item.tag       = i;
+            item.flags     = 1;
+            item.owned_buf = lsmash_malloc( 16 );
+            TEST_ASSERT( item.owned_buf != NULL, "alloc owned_buf" );
+            TEST_ASSERT( lsm_list_add( src, &item ) == 0, "lsm_list_add succeeds" );
+        }
+        TEST_ASSERT( lsm_list_count( src ) == M, "count == 600" );
+
+        /* Pop 10 elements from tail */
+        for( uint32_t i = 0; i < 10; i++ )
+            TEST_ASSERT( lsm_list_remove_tail( src ) == 0, "remove_tail succeeds" );
+        TEST_ASSERT( lsm_list_count( src ) == 590, "count == 590 after 10 tail pops" );
+        TEST_ASSERT( g_test_eliminator_calls == 10, "eliminator called 10 times for tail pops" );
+
+        /* Remove element at 1-based entry_number = 250 (in page 0, shifting elements from page 1 and page 2!) */
+        TEST_ASSERT( lsm_list_remove( src, 250 ) == 0, "mid-list remove at entry 250 across pages" );
+        TEST_ASSERT( lsm_list_count( src ) == 589, "count == 589 after mid-list removal" );
+        TEST_ASSERT( g_test_eliminator_calls == 11, "eliminator called on removed mid-list element" );
+
+        for( uint32_t i = 0; i < 589; i++ )
+        {
+            uint32_t expected_tag = (i < 249) ? i : (i + 1);
+            test_paged_elem_t *e = (test_paged_elem_t *)lsm_list_at( src, i );
+            TEST_ASSERT( e != NULL && e->tag == expected_tag && e->owned_buf != NULL,
+                         "cross-page shift after mid-list removal preserved exact order and pointers" );
+        }
+
+        /* O(1) move from src to dst */
+        lsm_list_t dst = { 0 };
+        lsm_list_init( &dst, sizeof(test_paged_elem_t), test_paged_elem_eliminator );
+        lsm_list_move( &dst, src );
+        TEST_ASSERT( lsm_list_count( src ) == 0 && src->pages == NULL, "src is empty after lsm_list_move" );
+        TEST_ASSERT( lsm_list_count( &dst ) == 589, "dst has all 589 elements after lsm_list_move" );
+
+        lsm_list_destroy( src );
+        lsm_list_clear( &dst );
+        TEST_ASSERT( g_test_eliminator_calls == M, "eliminator called for all 600 elements with 0 leaks" );
+    }
+
+    printf( "[PASS] test_paged_block_array\n" );
+    return 0;
+}
+
 #ifdef LSMASH_DEBUG_ALLOC
 #define RUN_TEST( test_fn )                                                       \
     do                                                                            \
@@ -2075,6 +2278,7 @@ int main( void )
 {
     printf( "=== L-SMASH Synthetic Test Suite ===\n" );
     RUN_TEST( test_memory_audit_allocator );
+    RUN_TEST( test_paged_block_array );
     RUN_TEST( test_bitstream_primitives );
     RUN_TEST( test_sequence_header_and_av1c );
     RUN_TEST( test_frame_headers_and_tu_assembly );
