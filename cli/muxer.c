@@ -2,6 +2,7 @@
  * muxer.c
  *****************************************************************************
  * Copyright (C) 2010-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *          Takashi Hirata <silverfilain@gmail.com>
@@ -782,6 +783,7 @@ static void display_codec_name( lsmash_codec_type_t codec_type, uint32_t track_n
     DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_AVC1_VIDEO, H.264 Advanced Video Coding );
     DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_HVC1_VIDEO, H.265 High Efficiency Video Coding );
     DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_VC_1_VIDEO, SMPTE VC-1 Advanced Profile );
+    DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_AV01_VIDEO, AOM AV1 Video );
     DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_MP4A_AUDIO, MPEG-4 Audio );
     DISPLAY_CODEC_NAME(   QT_CODEC_TYPE_MP4A_AUDIO, MPEG-4 Audio );
     DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_AC_3_AUDIO, AC-3 );

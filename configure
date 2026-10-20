@@ -116,7 +116,7 @@ TOOLS=""
 CFLAGS="-Wshadow -Wall -std=c99 -pedantic -I. -I$SRCDIR"
 LDFLAGS="-L."
 SO_LDFLAGS='-shared -Wl,-soname,$@ -Wl,--version-script,liblsmash.ver'
-LIBS="-lm -lobuparse"
+LIBS="-lm"
 
 for opt; do
     optarg="${opt#*=}"
@@ -315,7 +315,6 @@ SRC_CODECS="      \
     a52.c         \
     alac.c        \
     av1.c         \
-    av1_obu.c     \
     description.c \
     dts.c         \
     h264.c        \
@@ -469,6 +468,7 @@ AR = $AR
 LD = $LD
 RANLIB = $RANLIB
 STRIP = $STRIP
+EXT = $EXT
 STATICLIBNAME = $STATICLIBNAME
 STATICLIB = $STATICLIB
 SHAREDLIBNAME = $SHAREDLIBNAME
@@ -505,7 +505,7 @@ done
 
 
 test "$SRCDIR" = "." || ln -sf ${SRCDIR}/Makefile .
-mkdir -p cli codecs common core importer
+mkdir -p cli codecs common core importer tests
 
 
 cat << EOF
@@ -513,6 +513,7 @@ cat << EOF
 configure finished
 
   type 'make'             : compile library and tools
+  type 'make test'        : run synthetic test suite
   type 'make install'     : install all into system
   type 'make lib'         : compile library only
   type 'make install-lib' : install library and header into system

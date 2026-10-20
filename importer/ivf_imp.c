@@ -2,6 +2,7 @@
  * ivf_imp.c
  *****************************************************************************
  * Copyright (C) 2018-2020 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *          Derek Buitenhuis <derek.buitenhuis@gmail.com>
@@ -25,8 +26,6 @@
 
 #include <string.h>
 
-#include <obuparse.h>
-
 #define LSMASH_IMPORTER_INTERNAL
 #include "importer.h"
 
@@ -35,7 +34,6 @@
 **********************************************************************************/
 #include "common/utils.h"
 #include "codecs/av1.h"
-#include "codecs/av1_obu.h"
 
 #define IVF_LE_4CC( a, b, c, d ) (((d)<<24) | ((c)<<16) | ((b)<<8) | (a))
 
@@ -56,21 +54,23 @@ typedef struct
 
 typedef struct
 {
-    uint32_t au_length;
-    uint32_t au_number;
-    uint64_t pts;
-    uint64_t first_pts_delta;
-    uint32_t max_render_width;
-    uint32_t max_render_height;
-    ivf_global_header_t global_header;
-    obu_av1_sample_state_t sstate;
-    int (*get_access_unit)( lsmash_bs_t *bs, lsmash_sample_property_t *prop, uint32_t au_length );
+    uint32_t                         au_length;
+    uint32_t                         au_number;
+    uint64_t                         pts;
+    uint64_t                         first_pts_delta;
+    uint32_t                         max_render_width;
+    uint32_t                         max_render_height;
+    ivf_global_header_t              global_header;
+    av1_parser_t                     parser;
+    lsmash_av1_specific_parameters_t av1c_param;
 } ivf_importer_t;
 
 static void remove_ivf_importer( ivf_importer_t *ivf_imp )
 {
     if( !ivf_imp )
         return;
+    av1_cleanup_parser( &ivf_imp->parser );
+    lsmash_destroy_av1_headers( &ivf_imp->av1c_param );
     lsmash_free( ivf_imp );
 }
 
@@ -85,12 +85,12 @@ static void ivf_importer_cleanup( importer_t *importer )
         remove_ivf_importer( importer->info );
 }
 
-static int ivf_importer_get_access_unit( lsmash_bs_t *bs, importer_t *importer, ivf_importer_t *ivf_imp, lsmash_sample_property_t *prop )
+static int ivf_importer_get_access_unit( lsmash_bs_t *bs, importer_t *importer, ivf_importer_t *ivf_imp )
 {
     /* IVF frame header */
     ivf_imp->au_length = lsmash_bs_get_le32( bs );
     ivf_imp->pts       = lsmash_bs_get_le64( bs );
-    if( bs->error )/* TODO: eof handling */
+    if( bs->error )
     {
         importer->status = IMPORTER_EOF;
         if( ivf_imp->au_length == 0 )
@@ -111,17 +111,21 @@ static int ivf_importer_get_accessunit( importer_t *importer, uint32_t track_num
         return LSMASH_ERR_NAMELESS;
     if( current_status == IMPORTER_EOF )
         return IMPORTER_EOF;
-    if ( lsmash_bs_is_end( importer->bs, 12 ) )
+    if( lsmash_bs_is_end( importer->bs, 12 ) )
     {
         importer->status = IMPORTER_EOF;
         return IMPORTER_EOF;
     }
-    lsmash_sample_property_t prop = {0};
-    int err = ivf_importer_get_access_unit( importer->bs, importer, ivf_imp, &prop );
+    int err = ivf_importer_get_access_unit( importer->bs, importer, ivf_imp );
     if( err < 0 )
     {
         importer->status = IMPORTER_ERROR;
         return err;
+    }
+    if( ivf_imp->au_length == 0 )
+    {
+        importer->status = IMPORTER_ERROR;
+        return LSMASH_ERR_INVALID_DATA;
     }
     uint8_t *packetbuf = lsmash_malloc( ivf_imp->au_length );
     if( !packetbuf )
@@ -135,40 +139,45 @@ static int ivf_importer_get_accessunit( importer_t *importer, uint32_t track_num
         importer->status = IMPORTER_ERROR;
         return LSMASH_ERR_INVALID_DATA;
     }
-    uint32_t samplesize;
-    int issync;
-    uint32_t max_render_width  = ivf_imp->max_render_width;
-    uint32_t max_render_height = ivf_imp->max_render_height;
-    uint8_t *samplebuf = obu_av1_assemble_sample( packetbuf, ivf_imp->au_length, &samplesize,
-                                                  &ivf_imp->sstate, &max_render_width, &max_render_height, &issync );
-    lsmash_free( packetbuf );
+    uint8_t *samplebuf = lsmash_malloc( ivf_imp->au_length );
     if( !samplebuf )
     {
+        lsmash_free( packetbuf );
         importer->status = IMPORTER_ERROR;
-        return LSMASH_ERR_INVALID_DATA;
+        return LSMASH_ERR_MEMORY_ALLOC;
     }
-    if( issync )
-        prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
-    /*
-     * If, for some reason, we encounter a RenderWidth or RenderHeight larer than our current
-     * MaxRenderWidth or MaxRenderHeight, we need to create a new sample entry in order to
-     * keep the file legal, as per '2.2.4 Semantics' of the AV1-ISOBMFF spec.
-     *
-     * Ideally we would only have one sample entry that represents the whole file, but that
-     * would require scanning the entire file up front before we create our original sample
-     * entry.
-     */
-    if ( max_render_width > ivf_imp->max_render_width || max_render_height > ivf_imp->max_render_height ) {
+    uint32_t samplesize = 0;
+    lsmash_sample_property_t prop = { 0 };
+    err = av1_parse_temporal_unit( &ivf_imp->parser,
+                                   packetbuf,
+                                   ivf_imp->au_length,
+                                   samplebuf,
+                                   &samplesize,
+                                   &prop,
+                                   &ivf_imp->av1c_param );
+    lsmash_free( packetbuf );
+    if( err < 0 )
+    {
+        lsmash_free( samplebuf );
+        importer->status = IMPORTER_ERROR;
+        return err;
+    }
+    uint32_t max_render_width  = ivf_imp->parser.MaxRenderWidth;
+    uint32_t max_render_height = ivf_imp->parser.MaxRenderHeight;
+    if( max_render_width > ivf_imp->max_render_width || max_render_height > ivf_imp->max_render_height )
+    {
         lsmash_video_summary_t *summary = (lsmash_video_summary_t *)lsmash_list_get_entry_data( importer->summaries, track_number );
-        if( !summary ) {
+        if( !summary )
+        {
+            lsmash_free( samplebuf );
             return LSMASH_ERR_NAMELESS;
         }
-        uint64_t num = ((uint64_t) max_render_width) * ((uint64_t) summary->height);
-        uint64_t den = ((uint64_t) summary->width) * ((uint64_t) max_render_height);
+        uint64_t num = ((uint64_t)max_render_width)  * ((uint64_t)summary->height);
+        uint64_t den = ((uint64_t)summary->width)    * ((uint64_t)max_render_height);
         lsmash_reduce_fraction( &num, &den );
 
-        summary->par_h = num;
-        summary->par_v = den;
+        summary->par_h = (uint32_t)num;
+        summary->par_v = (uint32_t)den;
 
         ivf_imp->max_render_width  = max_render_width;
         ivf_imp->max_render_height = max_render_height;
@@ -177,19 +186,22 @@ static int ivf_importer_get_accessunit( importer_t *importer, uint32_t track_num
     }
 
     lsmash_sample_t *sample = lsmash_create_sample( samplesize );
-    if( !sample ) {
+    if( !sample )
+    {
         lsmash_free( samplebuf );
         return LSMASH_ERR_MEMORY_ALLOC;
     }
     *p_sample = sample;
-    memcpy( sample->data, samplebuf, samplesize );
+    if( samplesize > 0 )
+        memcpy( sample->data, samplebuf, samplesize );
     lsmash_free( samplebuf );
-    if( !ivf_imp->first_pts_delta )
+    if( !ivf_imp->first_pts_delta && ivf_imp->pts > 0 )
         ivf_imp->first_pts_delta = ivf_imp->pts;
     sample->length = samplesize;
     sample->dts    = ivf_imp->pts;
     sample->cts    = ivf_imp->pts;
     sample->prop   = prop;
+    ivf_imp->au_number++;
     return current_status;
 }
 
@@ -211,8 +223,12 @@ static lsmash_codec_type_t ivf_get_codec_type
     }
 }
 
-static lsmash_video_summary_t *ivf_create_summary( ivf_global_header_t *gh, lsmash_av1_specific_parameters_t *params, obu_av1_pixel_properties_t *props )
+static lsmash_video_summary_t *ivf_create_summary( ivf_importer_t *ivf_imp )
 {
+    ivf_global_header_t              *gh     = &ivf_imp->global_header;
+    av1_sequence_header_t            *sh     = &ivf_imp->parser.sequence_header;
+    lsmash_av1_specific_parameters_t *params = &ivf_imp->av1c_param;
+
     lsmash_video_summary_t *summary = (lsmash_video_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_VIDEO );
     if( !summary )
         return NULL;
@@ -229,43 +245,50 @@ static lsmash_video_summary_t *ivf_create_summary( ivf_global_header_t *gh, lsma
         return NULL;
     }
 
-    lsmash_av1_specific_parameters_t *src_param = (lsmash_av1_specific_parameters_t *) specific->data.structured;
-    *src_param = *params; /* from our probe */
-    params->configOBUs.sz = 0;
-    params->configOBUs.data = NULL; /* horrible hack. so horrible. but we own this pointer now. */
-
-    lsmash_codec_specific_t *dst_cs = lsmash_convert_codec_specific_format( specific, LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
-    lsmash_destroy_codec_specific_data( specific );
-    if( !dst_cs )
+    lsmash_av1_specific_parameters_t *dst_param = (lsmash_av1_specific_parameters_t *)specific->data.structured;
+    *dst_param = *params;
+    dst_param->configOBUs.data = NULL;
+    dst_param->configOBUs.sz   = 0;
+    if( params->configOBUs.sz > 0 && params->configOBUs.data )
     {
-        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-        lsmash_destroy_codec_specific_data( dst_cs );
-        return NULL;
-    }
-    if ( lsmash_list_add_entry( &summary->opaque->list, dst_cs ) < 0 )
-    {
-        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-        lsmash_destroy_codec_specific_data( dst_cs );
-        return NULL;
+        dst_param->configOBUs.data = lsmash_memdup( params->configOBUs.data, params->configOBUs.sz );
+        if( !dst_param->configOBUs.data )
+        {
+            lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+            lsmash_destroy_codec_specific_data( specific );
+            return NULL;
+        }
+        dst_param->configOBUs.sz = params->configOBUs.sz;
     }
 
-    uint64_t num = ((uint64_t) props->render_width) * ((uint64_t) props->seq_height);
-    uint64_t den = ((uint64_t) props->seq_width) * ((uint64_t) props->render_height);
+    if( lsmash_list_add_entry( &summary->opaque->list, specific ) < 0 )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        lsmash_destroy_codec_specific_data( specific );
+        return NULL;
+    }
+
+    uint32_t seq_width     = sh->max_frame_width_minus_1  + 1;
+    uint32_t seq_height    = sh->max_frame_height_minus_1 + 1;
+    uint32_t render_width  = ivf_imp->max_render_width  ? ivf_imp->max_render_width  : seq_width;
+    uint32_t render_height = ivf_imp->max_render_height ? ivf_imp->max_render_height : seq_height;
+    uint64_t num = ((uint64_t)render_width) * ((uint64_t)seq_height);
+    uint64_t den = ((uint64_t)seq_width)    * ((uint64_t)render_height);
     lsmash_reduce_fraction( &num, &den );
 
     summary->sample_type           = codec_type;
     summary->timescale             = gh->frame_rate;
     summary->timebase              = gh->time_scale;
-    summary->vfr                   = 0; /* TODO: VFR IVF? Does this actually exist in practice? :( */
+    summary->vfr                   = 0;
     summary->sample_per_field      = 0;
-    summary->width                 = props->seq_width;
-    summary->height                = props->seq_height;
-    summary->par_h                 = num;
-    summary->par_v                 = den;
-    summary->color.primaries_index = props->primaries_index;
-    summary->color.transfer_index  = props->transfer_index;
-    summary->color.matrix_index    = props->matrix_index;
-    summary->color.full_range      = props->full_range;
+    summary->width                 = seq_width;
+    summary->height                = seq_height;
+    summary->par_h                 = (uint32_t)num;
+    summary->par_v                 = (uint32_t)den;
+    summary->color.primaries_index = sh->cc.color_primaries;
+    summary->color.transfer_index  = sh->cc.transfer_characteristics;
+    summary->color.matrix_index    = sh->cc.matrix_coefficients;
+    summary->color.full_range      = sh->cc.color_range;
     summary->max_au_length         = UINT32_MAX; /* unused */
 
     return summary;
@@ -276,8 +299,15 @@ static int ivf_importer_probe( importer_t *importer )
     ivf_importer_t *ivf_imp = create_ivf_importer( importer );
     if( !ivf_imp )
         return LSMASH_ERR_MEMORY_ALLOC;
-    int err = 0;
+    int err = av1_setup_parser( &ivf_imp->parser, NULL );
+    if( err < 0 )
+        goto fail;
     lsmash_bs_t *bs = importer->bs;
+    if( lsmash_bs_is_end( bs, 31 ) )
+    {
+        err = LSMASH_ERR_INVALID_DATA;
+        goto fail;
+    }
     ivf_global_header_t *gh = &ivf_imp->global_header;
     gh->signature     = lsmash_bs_show_le32( bs, 0 );
     gh->version       = lsmash_bs_show_le16( bs, 4 );
@@ -294,7 +324,12 @@ static int ivf_importer_probe( importer_t *importer )
     gh->height           = lsmash_bs_show_le16( bs, 14 );
     gh->frame_rate       = lsmash_bs_show_le32( bs, 16 );
     gh->time_scale       = lsmash_bs_show_le32( bs, 20 );
-    gh->number_of_frames = lsmash_bs_show_le64( bs, 24 );
+    gh->number_of_frames = lsmash_bs_show_le32( bs, 24 );
+    if( gh->frame_rate == 0 || gh->time_scale == 0 )
+    {
+        err = LSMASH_ERR_INVALID_DATA;
+        goto fail;
+    }
     /* Set up the access unit parser. */
     lsmash_codec_type_t codec_type = ivf_get_codec_type( gh );
     if( lsmash_check_codec_type_identical( codec_type, LSMASH_CODEC_TYPE_UNSPECIFIED ) )
@@ -309,29 +344,53 @@ static int ivf_importer_probe( importer_t *importer )
         goto fail;
     }
     lsmash_bs_skip_bytes( bs, gh->header_length );
+    if( lsmash_bs_is_end( bs, 11 ) )
+    {
+        err = LSMASH_ERR_INVALID_DATA;
+        goto fail;
+    }
     /* Parse the first packet to get pixel aspect ratio and color information. */
     uint32_t au_length = lsmash_bs_show_le32( bs, 0 );
-    obu_av1_pixel_properties_t props = { 0 };
-    /*
-     * This is probably not OK, since we're calling av1_obu.c functions directly...
-     * We should probably make it go through proper channels.
-     */
-    lsmash_av1_specific_parameters_t *params = obu_av1_parse_first_tu( bs, au_length, 12, &props );
-    if ( !params )
+    if( au_length == 0 || lsmash_bs_is_end( bs, 12 + au_length - 1 ) )
+    {
+        err = LSMASH_ERR_INVALID_DATA;
+        goto fail;
+    }
+    uint8_t *probe_buf = lsmash_malloc( au_length );
+    if( !probe_buf )
+    {
+        err = LSMASH_ERR_MEMORY_ALLOC;
+        goto fail;
+    }
+    for( uint32_t i = 0; i < au_length; i++ )
+        probe_buf[i] = lsmash_bs_show_byte( bs, 12 + i );
+    err = av1_parse_temporal_unit( &ivf_imp->parser,
+                                   probe_buf,
+                                   au_length,
+                                   NULL,
+                                   NULL,
+                                   NULL,
+                                   &ivf_imp->av1c_param );
+    lsmash_free( probe_buf );
+    if( err < 0 )
+        goto fail;
+    if( !ivf_imp->parser.seen_seq_header )
     {
         err = LSMASH_ERR_INVALID_DATA;
         goto fail;
     }
 
     /* Stash for use later while reading samples. */
-    ivf_imp->max_render_width  = props.render_width;
-    ivf_imp->max_render_height = props.render_height;
+    ivf_imp->max_render_width  = ivf_imp->parser.MaxRenderWidth
+                               ? ivf_imp->parser.MaxRenderWidth
+                               : (ivf_imp->parser.sequence_header.max_frame_width_minus_1 + 1);
+    ivf_imp->max_render_height = ivf_imp->parser.MaxRenderHeight
+                               ? ivf_imp->parser.MaxRenderHeight
+                               : (ivf_imp->parser.sequence_header.max_frame_height_minus_1 + 1);
 
-    lsmash_video_summary_t *summary = ivf_create_summary( &ivf_imp->global_header, params, &props );
-    av1_destruct_specific_data( params );
+    lsmash_video_summary_t *summary = ivf_create_summary( ivf_imp );
     if( !summary )
     {
-        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         err = LSMASH_ERR_NAMELESS;
         goto fail;
     }
@@ -341,6 +400,17 @@ static int ivf_importer_probe( importer_t *importer )
         err = LSMASH_ERR_NAMELESS;
         goto fail;
     }
+
+    /* Reset parser frame/reference state so Frame 0 is parsed cleanly in get_accessunit. */
+    av1_sequence_header_t saved_sh = ivf_imp->parser.sequence_header;
+    uint8_t saved_hdr10p           = ivf_imp->parser.has_hdr10p;
+    av1_reset_parser( &ivf_imp->parser );
+    ivf_imp->parser.sequence_header = saved_sh;
+    ivf_imp->parser.seen_seq_header = 1;
+    ivf_imp->parser.has_hdr10p      = saved_hdr10p;
+    ivf_imp->parser.MaxRenderWidth  = ivf_imp->max_render_width;
+    ivf_imp->parser.MaxRenderHeight = ivf_imp->max_render_height;
+
     importer->info   = ivf_imp;
     importer->status = IMPORTER_OK;
     return 0;
@@ -360,8 +430,7 @@ static uint32_t ivf_importer_get_last_delta( importer_t *importer, uint32_t trac
     lsmash_video_summary_t *summary = (lsmash_video_summary_t *)lsmash_list_get_entry_data( importer->summaries, track_number );
     if( !summary )
         return 0;
-    /* only works for CFR... */
-    return ivf_imp->first_pts_delta;
+    return ivf_imp->first_pts_delta ? (uint32_t)ivf_imp->first_pts_delta : 1;
 }
 
 const importer_functions ivf_importer =

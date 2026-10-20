@@ -2,6 +2,7 @@
  * lsmash.h
  *****************************************************************************
  * Copyright (C) 2010-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -47,7 +48,7 @@ extern "C" {
  * Version
  ****************************************************************************/
 #define LSMASH_VERSION_MAJOR  2
-#define LSMASH_VERSION_MINOR 20
+#define LSMASH_VERSION_MINOR 21
 #define LSMASH_VERSION_MICRO  0
 
 #define LSMASH_VERSION_INT( a, b, c ) (((a) << 16) | ((b) << 8) | (c))
@@ -3622,6 +3623,18 @@ typedef struct
                                                      * This field is expected to contain only one Sequence Header OBU and zero or more Metadata OBUs when
                                                      * applicable to all the associated samples. */
 } lsmash_av1_specific_parameters_t;
+
+int lsmash_setup_av1_specific_parameters_from_access_unit
+(
+    lsmash_av1_specific_parameters_t *param,
+    uint8_t                          *data,
+    uint32_t                          data_length
+);
+
+void lsmash_destroy_av1_headers
+(
+    lsmash_av1_specific_parameters_t *param
+);
 
 uint8_t *lsmash_create_av1_specific_info
 (
