@@ -2,6 +2,7 @@
  * bytes.c
  *****************************************************************************
  * Copyright (C) 2010-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -657,13 +658,13 @@ uint16_t lsmash_bs_get_le16( lsmash_bs_t *bs )
 uint32_t lsmash_bs_get_le32( lsmash_bs_t *bs )
 {
     uint32_t value = lsmash_bs_get_le16( bs );
-    return value | (lsmash_bs_get_le16( bs ) << 16);
+    return value | ((uint32_t)lsmash_bs_get_le16( bs ) << 16);
 }
 
 uint64_t lsmash_bs_get_le64( lsmash_bs_t *bs )
 {
     uint64_t value = lsmash_bs_get_le32( bs );
-    return value | (((uint64_t) lsmash_bs_get_le32( bs )) << 16);
+    return value | (((uint64_t)lsmash_bs_get_le32( bs )) << 32);
 }
 
 int lsmash_bs_read( lsmash_bs_t *bs, uint32_t size )
