@@ -2681,6 +2681,680 @@ static int test_large_scale_paged_tables_and_roll_dedup( void )
     return 0;
 }
 
+/*---------------------------------------------------------------------------
+ * Test 12: AV1 Fragmented ISOBMFF Cross-Feature Mux/Demux Round-Trip
+ *---------------------------------------------------------------------------*/
+static int test_av1_fragmented_isobmff_roundtrip( void )
+{
+    const char *ivf_path  = "tests/tmp_test_av1_frag.ivf";
+    const char *fmp4_path = "tests/tmp_test_av1_frag.mp4";
+
+    synth_seq_cfg_t seq_cfg = {
+        .seq_profile               = 0,
+        .seq_level_idx_0           = 4,
+        .width                     = 128,
+        .height                    = 128,
+        .color_description_present = 1,
+        .color_primaries           = 1,
+        .transfer_characteristics  = 1,
+        .matrix_coefficients       = 1,
+        .color_range               = 1,
+        .subsampling_x             = 1,
+        .subsampling_y             = 1,
+        .enable_order_hint         = 1,
+        .order_hint_bits_minus_1   = 6, /* OrderHintBits = 7 */
+    };
+
+    uint8_t  frame_raw[6][512];
+    uint32_t frame_raw_len[6]      = { 0 };
+    uint8_t  frame_expected[6][512];
+    uint32_t frame_expected_len[6] = { 0 };
+
+    /* TU 0 (PTS = 0, Initial moov sample 1):
+     * TD + Sequence Header + 2x2 Multi-tile KEY_FRAME (show_frame=1, refresh=0xFF, order_hint=0) + Padding -> SYNC */
+    {
+        uint32_t rpos = 0, epos = 0;
+        rpos += build_obu( frame_raw[0] + rpos, AV1_OBU_TYPE_TEMPORAL_DELIMITER, 0, 0, 0, NULL, 0 );
+        uint32_t sh_len = build_seq_hdr_obu( frame_raw[0] + rpos, &seq_cfg );
+        memcpy( frame_expected[0] + epos, frame_raw[0] + rpos, sh_len );
+        rpos += sh_len;
+        epos += sh_len;
+        uint32_t kf_len = build_multitile_2x2_frame_obu( frame_raw[0] + rpos, AV1_OBU_TYPE_FRAME, AV1_KEY_FRAME, 1, 0xFF, 0, 1, 0, 3 );
+        memcpy( frame_expected[0] + epos, frame_raw[0] + rpos, kf_len );
+        rpos += kf_len;
+        epos += kf_len;
+        uint8_t pad[3] = { 0, 0, 0 };
+        rpos += build_obu( frame_raw[0] + rpos, AV1_OBU_TYPE_PADDING, 0, 0, 0, pad, sizeof(pad) );
+        frame_raw_len[0]      = rpos;
+        frame_expected_len[0] = epos;
+    }
+
+    /* TU 1 (PTS = 1, Initial moov sample 2):
+     * TD + Split Multi-Tile INTER_FRAME: OBU_FRAME (tiles 0..1) + OBU_REDUNDANT_FRAME_HEADER + OBU_TILE_GROUP (tiles 2..3) -> NONE */
+    {
+        uint32_t rpos = 0, epos = 0;
+        rpos += build_obu( frame_raw[1] + rpos, AV1_OBU_TYPE_TEMPORAL_DELIMITER, 0, 0, 0, NULL, 0 );
+        uint32_t f_len = build_multitile_2x2_frame_obu( frame_raw[1] + rpos, AV1_OBU_TYPE_FRAME, AV1_INTER_FRAME, 1, 0x01, 1, 1, 0, 1 );
+        memcpy( frame_expected[1] + epos, frame_raw[1] + rpos, f_len );
+        rpos += f_len;
+        epos += f_len;
+        /* Redundant Frame Header must be stripped by importer/parser */
+        rpos += build_multitile_2x2_frame_obu( frame_raw[1] + rpos, AV1_OBU_TYPE_REDUNDANT_FRAME_HEADER, AV1_INTER_FRAME, 1, 0x01, 1, 0, 0, 0 );
+        uint32_t tg_len = build_tile_group_obu( frame_raw[1] + rpos, 1, 2, 3 );
+        memcpy( frame_expected[1] + epos, frame_raw[1] + rpos, tg_len );
+        rpos += tg_len;
+        epos += tg_len;
+        frame_raw_len[1]      = rpos;
+        frame_expected_len[1] = epos;
+    }
+
+    /* TU 2 (PTS = 2, Fragment 1 sample 1):
+     * TD + Non-displayed ARF (INTER_FRAME, show_frame=0, refresh=0x02 -> slot 1, order_hint=2)
+     *    + OBU_FRAME_HEADER (show_existing_frame=1, frame_to_show_map_idx=1) -> NONE */
+    {
+        uint32_t rpos = 0, epos = 0;
+        rpos += build_obu( frame_raw[2] + rpos, AV1_OBU_TYPE_TEMPORAL_DELIMITER, 0, 0, 0, NULL, 0 );
+        uint32_t arf_len = build_multitile_2x2_frame_obu( frame_raw[2] + rpos, AV1_OBU_TYPE_FRAME, AV1_INTER_FRAME, 0, 0x02, 2, 1, 0, 3 );
+        memcpy( frame_expected[2] + epos, frame_raw[2] + rpos, arf_len );
+        rpos += arf_len;
+        epos += arf_len;
+        uint32_t sef_len = build_frame_obu( frame_raw[2] + rpos, AV1_OBU_TYPE_FRAME_HEADER, 1, 7, 1, 1, 0, 0, 0, 0, 0 );
+        memcpy( frame_expected[2] + epos, frame_raw[2] + rpos, sef_len );
+        rpos += sef_len;
+        epos += sef_len;
+        frame_raw_len[2]      = rpos;
+        frame_expected_len[2] = epos;
+    }
+
+    /* TU 3 (PTS = 3, Fragment 1 sample 2):
+     * TD + KEY_FRAME (show_frame=1) WITHOUT Sequence Header in TU 3 -> OPEN_RAP (NOT SYNC) */
+    {
+        uint32_t rpos = 0, epos = 0;
+        rpos += build_obu( frame_raw[3] + rpos, AV1_OBU_TYPE_TEMPORAL_DELIMITER, 0, 0, 0, NULL, 0 );
+        uint32_t kf_no_sh_len = build_multitile_2x2_frame_obu( frame_raw[3] + rpos, AV1_OBU_TYPE_FRAME, AV1_KEY_FRAME, 1, 0xFF, 3, 1, 0, 3 );
+        memcpy( frame_expected[3] + epos, frame_raw[3] + rpos, kf_no_sh_len );
+        rpos += kf_no_sh_len;
+        epos += kf_no_sh_len;
+        frame_raw_len[3]      = rpos;
+        frame_expected_len[3] = epos;
+    }
+
+    /* TU 4 (PTS = 4, Fragment 2 sample 1):
+     * TD + INTRA_ONLY_FRAME (show_frame=1, refresh=0xFF, order_hint=4) -> OPEN_RAP */
+    {
+        uint32_t rpos = 0, epos = 0;
+        rpos += build_obu( frame_raw[4] + rpos, AV1_OBU_TYPE_TEMPORAL_DELIMITER, 0, 0, 0, NULL, 0 );
+        uint32_t io_len = build_multitile_2x2_frame_obu( frame_raw[4] + rpos, AV1_OBU_TYPE_FRAME, AV1_INTRA_ONLY_FRAME, 1, 0xFF, 4, 1, 0, 3 );
+        memcpy( frame_expected[4] + epos, frame_raw[4] + rpos, io_len );
+        rpos += io_len;
+        epos += io_len;
+        frame_raw_len[4]      = rpos;
+        frame_expected_len[4] = epos;
+    }
+
+    /* TU 5 (PTS = 5, Fragment 2 sample 2):
+     * TD + Sequence Header + Split Multi-Tile KEY_FRAME (tiles 0..1 in OBU_FRAME + tiles 2..3 in OBU_TILE_GROUP) -> SYNC */
+    {
+        uint32_t rpos = 0, epos = 0;
+        rpos += build_obu( frame_raw[5] + rpos, AV1_OBU_TYPE_TEMPORAL_DELIMITER, 0, 0, 0, NULL, 0 );
+        uint32_t sh_len = build_seq_hdr_obu( frame_raw[5] + rpos, &seq_cfg );
+        memcpy( frame_expected[5] + epos, frame_raw[5] + rpos, sh_len );
+        rpos += sh_len;
+        epos += sh_len;
+        uint32_t kf_part1 = build_multitile_2x2_frame_obu( frame_raw[5] + rpos, AV1_OBU_TYPE_FRAME, AV1_KEY_FRAME, 1, 0xFF, 5, 1, 0, 1 );
+        memcpy( frame_expected[5] + epos, frame_raw[5] + rpos, kf_part1 );
+        rpos += kf_part1;
+        epos += kf_part1;
+        uint32_t kf_part2 = build_tile_group_obu( frame_raw[5] + rpos, 1, 2, 3 );
+        memcpy( frame_expected[5] + epos, frame_raw[5] + rpos, kf_part2 );
+        rpos += kf_part2;
+        epos += kf_part2;
+        frame_raw_len[5]      = rpos;
+        frame_expected_len[5] = epos;
+    }
+
+    /* Write synthetic 6-frame IVF file */
+    FILE *fp = fopen( ivf_path, "wb" );
+    TEST_ASSERT( fp != NULL, "12: create synthetic AV1 IVF file" );
+    uint8_t ivf_hdr[32] = { 0 };
+    memcpy( ivf_hdr, "DKIF", 4 );
+    put_le16( ivf_hdr + 4, 0 );
+    put_le16( ivf_hdr + 6, 32 );
+    memcpy( ivf_hdr + 8, "AV01", 4 );
+    put_le16( ivf_hdr + 12, 128 );
+    put_le16( ivf_hdr + 14, 128 );
+    put_le32( ivf_hdr + 16, 30 ); /* frame_rate */
+    put_le32( ivf_hdr + 20, 1 );  /* time_scale */
+    put_le32( ivf_hdr + 24, 6 );  /* number_of_frames */
+    fwrite( ivf_hdr, 1, 32, fp );
+    for( int i = 0; i < 6; i++ )
+    {
+        uint8_t fhdr[12];
+        put_le32( fhdr, frame_raw_len[i] );
+        put_le64( fhdr + 4, (uint64_t)i );
+        fwrite( fhdr, 1, 12, fp );
+        fwrite( frame_raw[i], 1, frame_raw_len[i], fp );
+    }
+    fclose( fp );
+
+    /* Import IVF and Mux into a Fragmented ISOBMFF MP4:
+     * - Initial moov: TU 0 (SYNC -> stss) and TU 1 (NONE)
+     * - Fragment 1 (moof 1): TU 2 (ARF + show_existing_frame=1 -> NONE) and TU 3 (KEY_FRAME without SH -> OPEN_RAP)
+     * - Fragment 2 (moof 2): TU 4 (INTRA_ONLY -> OPEN_RAP) and TU 5 (SH + split multi-tile KEY_FRAME -> SYNC) */
+    lsmash_root_t *in_root = lsmash_create_root();
+    TEST_ASSERT( in_root != NULL, "12: create in_root" );
+    importer_t *importer = lsmash_importer_open( in_root, ivf_path, "auto" );
+    TEST_ASSERT( importer != NULL, "12: open IVF importer" );
+
+    lsmash_video_summary_t *summary = (lsmash_video_summary_t *)lsmash_duplicate_summary( importer, 1 );
+    TEST_ASSERT( summary != NULL && summary->width == 128 && summary->height == 128, "12: IVF summary 128x128" );
+
+    lsmash_root_t *mux_root = lsmash_create_root();
+    lsmash_file_parameters_t mux_param = { 0 };
+    TEST_ASSERT( lsmash_open_file( fmp4_path, 0, &mux_param ) == 0, "12: open output fragmented MP4" );
+    mux_param.mode |= LSMASH_FILE_MODE_FRAGMENTED;
+    lsmash_brand_type brands[4] = {
+        ISOM_BRAND_TYPE_ISOM,
+        ISOM_BRAND_TYPE_ISO6,
+        ISOM_BRAND_TYPE_AV01,
+        ISOM_BRAND_TYPE_MP42
+    };
+    mux_param.major_brand   = ISOM_BRAND_TYPE_AV01;
+    mux_param.brands        = brands;
+    mux_param.brand_count   = 4;
+    mux_param.minor_version = 0;
+    TEST_ASSERT( lsmash_set_file( mux_root, &mux_param ) != NULL, "12: set fragmented MP4 file" );
+
+    lsmash_movie_parameters_t movie_param;
+    lsmash_initialize_movie_parameters( &movie_param );
+    TEST_ASSERT( lsmash_set_movie_parameters( mux_root, &movie_param ) == 0, "12: set movie params" );
+
+    uint32_t track_ID = lsmash_create_track( mux_root, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK );
+    TEST_ASSERT( track_ID == 1, "12: create video track" );
+    lsmash_track_parameters_t track_param;
+    lsmash_initialize_track_parameters( &track_param );
+    track_param.mode           = ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE | ISOM_TRACK_IN_PREVIEW;
+    track_param.display_width  = summary->width  << 16;
+    track_param.display_height = summary->height << 16;
+    TEST_ASSERT( lsmash_set_track_parameters( mux_root, track_ID, &track_param ) == 0, "12: set track params" );
+
+    lsmash_media_parameters_t media_param;
+    lsmash_initialize_media_parameters( &media_param );
+    media_param.timescale    = summary->timescale;
+    media_param.rap_grouping = 1;
+    TEST_ASSERT( lsmash_set_media_parameters( mux_root, track_ID, &media_param ) == 0, "12: set media params (rap_grouping=1)" );
+
+    uint32_t sample_entry = lsmash_add_sample_entry( mux_root, track_ID, summary );
+    TEST_ASSERT( sample_entry == 1, "12: add AV01 sample entry" );
+
+    static const lsmash_random_access_flag expected_ra[6] = {
+        ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC,     /* TU 0: SH + KEY_FRAME */
+        ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE,     /* TU 1: Split multi-tile INTER_FRAME */
+        ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE,     /* TU 2: ARF (show_frame=0) + show_existing_frame=1 */
+        ISOM_SAMPLE_RANDOM_ACCESS_FLAG_OPEN_RAP, /* TU 3: KEY_FRAME without SH */
+        ISOM_SAMPLE_RANDOM_ACCESS_FLAG_OPEN_RAP, /* TU 4: INTRA_ONLY_FRAME */
+        ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC,     /* TU 5: SH + Split multi-tile KEY_FRAME */
+    };
+
+    for( int i = 0; i < 6; i++ )
+    {
+        if( i == 2 || i == 4 )
+        {
+            TEST_ASSERT( lsmash_flush_pooled_samples( mux_root, track_ID, summary->timebase ) == 0, "12: flush before new fragment" );
+            TEST_ASSERT( lsmash_create_fragment_movie( mux_root ) == 0, "12: create movie fragment" );
+        }
+        lsmash_sample_t *sample = NULL;
+        int ret = lsmash_importer_get_access_unit( importer, 1, &sample );
+        TEST_ASSERT( ret == 0 && sample != NULL, "12: get_access_unit from AV1 IVF" );
+        TEST_ASSERT( sample->length == frame_expected_len[i], "12: imported TU length matches expected" );
+        TEST_ASSERT( memcmp( sample->data, frame_expected[i], frame_expected_len[i] ) == 0,
+                     "12: imported TU payload matches expected" );
+        TEST_ASSERT( sample->prop.ra_flags == expected_ra[i], "12: imported TU ra_flags match expected" );
+        sample->index = sample_entry;
+        sample->dts  *= summary->timebase;
+        sample->cts  *= summary->timebase;
+        TEST_ASSERT( lsmash_append_sample( mux_root, track_ID, sample ) == 0, "12: append sample to fragmented MP4" );
+    }
+    uint32_t last_delta = lsmash_importer_get_last_delta( importer, 1 );
+    TEST_ASSERT( lsmash_flush_pooled_samples( mux_root, track_ID, last_delta * summary->timebase ) == 0, "12: flush final fragment" );
+    TEST_ASSERT( lsmash_finish_movie( mux_root, NULL ) == 0, "12: finish fragmented AV1 movie" );
+
+    lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+    lsmash_importer_close( importer );
+    lsmash_destroy_root( in_root );
+    lsmash_close_file( &mux_param );
+    lsmash_destroy_root( mux_root );
+
+    /* Demux Fragmented AV1 MP4 and verify stss, trun sample_flags, traf RAP sample groups, tfra, and timeline */
+    lsmash_root_t *demux_root = lsmash_create_root();
+    lsmash_file_parameters_t demux_param = { 0 };
+    TEST_ASSERT( lsmash_open_file( fmp4_path, 1, &demux_param ) == 0, "12: open fragmented AV1 MP4 for demux" );
+    lsmash_file_t *demux_file = lsmash_set_file( demux_root, &demux_param );
+    TEST_ASSERT( demux_file != NULL, "12: set demux file" );
+    TEST_ASSERT( lsmash_read_file( demux_file, &demux_param ) >= 0, "12: read fragmented AV1 MP4" );
+
+    /* Verify initial moov stss: only sample 1 (TU 0) is a sync sample */
+    isom_trak_t *trak = (isom_trak_t *)demux_file->moov->trak_list.head->data;
+    isom_stbl_t *stbl = trak->mdia->minf->stbl;
+    TEST_ASSERT( LSMASH_IS_EXISTING_BOX( stbl->stss ) && lsm_list_count( stbl->stss->list ) == 1,
+                 "12: initial moov stss has 1 sync sample" );
+    isom_stss_entry_t *stss0 = (isom_stss_entry_t *)lsm_list_at( stbl->stss->list, 0 );
+    TEST_ASSERT( stss0 != NULL && stss0->sample_number == 1, "12: stss[0].sample_number == 1 (TU 0)" );
+
+    /* Verify 2 moof fragments and their trun sample_flags & RAP sample groups */
+    TEST_ASSERT( demux_file->moof_list.entry_count == 2, "12: 2 moof fragments present" );
+    isom_moof_t *moof1 = (isom_moof_t *)demux_file->moof_list.head->data;
+    isom_moof_t *moof2 = (isom_moof_t *)demux_file->moof_list.tail->data;
+    isom_traf_t *traf1 = (isom_traf_t *)moof1->traf_list.head->data;
+    isom_traf_t *traf2 = (isom_traf_t *)moof2->traf_list.head->data;
+    isom_trun_t *trun1 = (isom_trun_t *)traf1->trun_list.head->data;
+    isom_trun_t *trun2 = (isom_trun_t *)traf2->trun_list.head->data;
+    TEST_ASSERT( trun1 != NULL && trun1->sample_count == 2, "12: fragment 1 trun has 2 samples (TU 2, TU 3)" );
+    TEST_ASSERT( trun2 != NULL && trun2->sample_count == 2, "12: fragment 2 trun has 2 samples (TU 4, TU 5)" );
+    TEST_ASSERT( traf1->sbgp_list.head != NULL, "12: fragment 1 traf has sbgp (RAP grouping for TU 3 OPEN_RAP)" );
+    TEST_ASSERT( traf2->sbgp_list.head != NULL, "12: fragment 2 traf has sbgp (RAP grouping for TU 4 OPEN_RAP)" );
+
+    /* Verify Fragment 2 trun sample flags: sample 1 (TU 4, OPEN_RAP) is non-sync; sample 2 (TU 5, SYNC) is sync! */
+    isom_trex_t *trex = (isom_trex_t *)demux_file->moov->mvex->trex_list.head->data;
+    isom_trun_optional_row_t *f2_row1 = (isom_trun_optional_row_t *)lsm_list_at( trun2->optional, 0 );
+    isom_trun_optional_row_t *f2_row2 = (isom_trun_optional_row_t *)lsm_list_at( trun2->optional, 1 );
+    TEST_ASSERT( trex != NULL && f2_row1 != NULL && f2_row2 != NULL, "12: fragment 2 trun optional rows exist" );
+    isom_sample_flags_t def_flags   = (traf2->tfhd->flags & ISOM_TF_FLAGS_DEFAULT_SAMPLE_FLAGS_PRESENT)
+                                    ? traf2->tfhd->default_sample_flags : trex->default_sample_flags;
+    isom_sample_flags_t f2_s1_flags = (trun2->flags & ISOM_TR_FLAGS_FIRST_SAMPLE_FLAGS_PRESENT)
+                                    ? trun2->first_sample_flags
+                                    : ((trun2->flags & ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT) ? f2_row1->sample_flags : def_flags);
+    isom_sample_flags_t f2_s2_flags = (trun2->flags & ISOM_TR_FLAGS_SAMPLE_FLAGS_PRESENT)
+                                    ? f2_row2->sample_flags : def_flags;
+    TEST_ASSERT( f2_s1_flags.sample_is_non_sync_sample == 1, "12: TU 4 (INTRA_ONLY OPEN_RAP) has sample_is_non_sync_sample=1 in trun" );
+    TEST_ASSERT( f2_s2_flags.sample_is_non_sync_sample == 0 && f2_s2_flags.sample_depends_on != ISOM_SAMPLE_IS_NOT_INDEPENDENT,
+                 "12: TU 5 (SH + split multi-tile KEY_FRAME) has sample_is_non_sync_sample=0 in trun" );
+
+    /* Verify timeline reconstruction across initial moov + both fragments */
+    TEST_ASSERT( lsmash_construct_timeline( demux_root, 1 ) == 0, "12: construct fragmented AV1 timeline" );
+    TEST_ASSERT( lsmash_get_sample_count_in_media_timeline( demux_root, 1 ) == 6, "12: timeline has all 6 AV1 samples" );
+
+    for( uint32_t i = 1; i <= 6; i++ )
+    {
+        lsmash_sample_t *s = lsmash_get_sample_from_media_timeline( demux_root, 1, i );
+        TEST_ASSERT( s != NULL, "12: get sample from fragmented AV1 timeline" );
+        TEST_ASSERT( s->dts == (uint64_t)(i - 1) && s->cts == (uint64_t)(i - 1), "12: sample dts/cts match" );
+        TEST_ASSERT( s->length == frame_expected_len[i - 1], "12: sample length matches expected" );
+        TEST_ASSERT( memcmp( s->data, frame_expected[i - 1], frame_expected_len[i - 1] ) == 0,
+                     "12: sample payload matches expected bit-for-bit" );
+        if( i == 1 || i == 6 )
+        {
+            TEST_ASSERT( (s->prop.ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC) != 0,
+                         "12: TU 0 and TU 5 reconstructed as SYNC" );
+        }
+        else if( i == 4 || i == 5 )
+        {
+            TEST_ASSERT( (s->prop.ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC) == 0
+                      && (s->prop.ra_flags & (ISOM_SAMPLE_RANDOM_ACCESS_FLAG_OPEN_RAP | ISOM_SAMPLE_RANDOM_ACCESS_FLAG_RAP)) != 0,
+                         "12: TU 3 (KEY_FRAME no SH) and TU 4 (INTRA_ONLY) reconstructed as non-sync RAP" );
+        }
+        else
+        {
+            TEST_ASSERT( s->prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE,
+                         "12: TU 1 (split INTER) and TU 2 (ARF + show_existing_frame) reconstructed as NONE" );
+        }
+        lsmash_delete_sample( s );
+    }
+
+    lsmash_destruct_timeline( demux_root, 1 );
+    lsmash_close_file( &demux_param );
+    lsmash_destroy_root( demux_root );
+
+    remove( ivf_path );
+    remove( fmp4_path );
+
+    printf( "[PASS] test_av1_fragmented_isobmff_roundtrip\n" );
+    return 0;
+}
+
+/*---------------------------------------------------------------------------
+ * Test 13: Malformed Box & Sample Table Negative Tests (Rollback & 0-Leak Audit)
+ *---------------------------------------------------------------------------*/
+static void put_be32( uint8_t *p, uint32_t v )
+{
+    p[0] = (uint8_t)((v >> 24) & 0xFF);
+    p[1] = (uint8_t)((v >> 16) & 0xFF);
+    p[2] = (uint8_t)((v >>  8) & 0xFF);
+    p[3] = (uint8_t)( v        & 0xFF);
+}
+
+static int find_fourcc_offset( const uint8_t *buf, size_t len, uint32_t fourcc )
+{
+    uint8_t pat[4] = {
+        (uint8_t)((fourcc >> 24) & 0xFF),
+        (uint8_t)((fourcc >> 16) & 0xFF),
+        (uint8_t)((fourcc >>  8) & 0xFF),
+        (uint8_t)( fourcc        & 0xFF),
+    };
+    if( len < 8 )
+        return -1;
+    for( size_t i = 4; i + 4 <= len; i++ )
+        if( memcmp( buf + i, pat, 4 ) == 0 )
+            return (int)(i - 4); /* offset of box size field */
+    return -1;
+}
+
+static int test_malformed_boxes_and_sample_tables( void )
+{
+    const char *base_mp4 = "tests/tmp_test_malformed_base.mp4";
+    const char *bad_mp4  = "tests/tmp_test_malformed_bad.mp4";
+
+    /* Step 0: Generate a valid baseline MP4 containing video (with roll/rap sbgp+sgpd and variable stsz)
+     * and audio (ipcm with pcmC) so we can binary-patch specific boxes or synthesize malformed boxes. */
+    {
+        lsmash_root_t *mux_root = lsmash_create_root();
+        lsmash_file_parameters_t mux_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( base_mp4, 0, &mux_param ) == 0, "13: open base_mp4" );
+        lsmash_brand_type brands[3] = { ISOM_BRAND_TYPE_ISOM, ISOM_BRAND_TYPE_ISO6, ISOM_BRAND_TYPE_AV01 };
+        mux_param.major_brand = ISOM_BRAND_TYPE_ISOM;
+        mux_param.brands      = brands;
+        mux_param.brand_count = 3;
+        TEST_ASSERT( lsmash_set_file( mux_root, &mux_param ) != NULL, "13: set base_mp4" );
+
+        lsmash_movie_parameters_t movie_param;
+        lsmash_initialize_movie_parameters( &movie_param );
+        TEST_ASSERT( lsmash_set_movie_parameters( mux_root, &movie_param ) == 0, "13: set movie params" );
+
+        /* Track 1: Video with variable sample sizes + roll_grouping + rap_grouping */
+        uint32_t vtid = lsmash_create_track( mux_root, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK );
+        lsmash_track_parameters_t vtp;
+        lsmash_initialize_track_parameters( &vtp );
+        vtp.mode = ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE;
+        lsmash_set_track_parameters( mux_root, vtid, &vtp );
+        lsmash_media_parameters_t vmp;
+        lsmash_initialize_media_parameters( &vmp );
+        vmp.timescale     = 1000;
+        vmp.roll_grouping = 1;
+        vmp.rap_grouping  = 1;
+        lsmash_set_media_parameters( mux_root, vtid, &vmp );
+        lsmash_video_summary_t *vsum = create_synth_av01_summary( 64, 64 );
+        TEST_ASSERT( lsmash_add_sample_entry( mux_root, vtid, vsum ) == 1, "13: add video sample entry" );
+        lsmash_cleanup_summary( (lsmash_summary_t *)vsum );
+
+        for( uint32_t i = 0; i < 4; i++ )
+        {
+            uint32_t sz = 10 + i * 4;
+            lsmash_sample_t *s = lsmash_create_sample( sz );
+            memset( s->data, (int)(0x10 + i), sz );
+            s->dts   = i * 10;
+            s->cts   = i * 10;
+            s->index = 1;
+            s->prop.post_roll.identifier = i + 1;
+            if( i == 0 )
+                s->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+            else if( i == 1 )
+            {
+                s->prop.ra_flags           = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_POST_ROLL_START;
+                s->prop.post_roll.complete = i + 2;
+            }
+            else if( i == 2 )
+                s->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_OPEN_RAP;
+            else
+                s->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE;
+            TEST_ASSERT( lsmash_append_sample( mux_root, vtid, s ) == 0, "13: append base video sample" );
+        }
+        lsmash_flush_pooled_samples( mux_root, vtid, 10 );
+
+        /* Track 2: Audio ipcm 16-bit with pcmC */
+        uint32_t atid = lsmash_create_track( mux_root, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK );
+        lsmash_track_parameters_t atp;
+        lsmash_initialize_track_parameters( &atp );
+        atp.mode = ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE;
+        lsmash_set_track_parameters( mux_root, atid, &atp );
+        lsmash_media_parameters_t amp;
+        lsmash_initialize_media_parameters( &amp );
+        amp.timescale = 48000;
+        lsmash_set_media_parameters( mux_root, atid, &amp );
+
+        lsmash_audio_summary_t *asum = (lsmash_audio_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_AUDIO );
+        asum->sample_type      = ISOM_CODEC_TYPE_IPCM_AUDIO;
+        asum->frequency        = 48000;
+        asum->channels         = 1;
+        asum->sample_size      = 16;
+        asum->samples_in_frame = 1;
+        asum->bytes_per_frame  = 2;
+        lsmash_codec_specific_t *pcmc = lsmash_create_codec_specific_data(
+            LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_PCM_CONFIG,
+            LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
+        ((lsmash_isom_pcm_config_t *)pcmc->data.structured)->format_flags    = LSMASH_PCM_FORMAT_FLAG_LITTLE_ENDIAN;
+        ((lsmash_isom_pcm_config_t *)pcmc->data.structured)->PCM_sample_size = 16;
+        lsmash_add_codec_specific_data( (lsmash_summary_t *)asum, pcmc );
+        lsmash_destroy_codec_specific_data( pcmc );
+        TEST_ASSERT( lsmash_add_sample_entry( mux_root, atid, asum ) == 1, "13: add ipcm sample entry" );
+        lsmash_cleanup_summary( (lsmash_summary_t *)asum );
+
+        for( uint32_t i = 0; i < 4; i++ )
+        {
+            lsmash_sample_t *s = lsmash_create_sample( 2 );
+            s->data[0] = (uint8_t)i;
+            s->data[1] = (uint8_t)(i + 1);
+            s->dts     = i;
+            s->cts     = i;
+            s->index   = 1;
+            s->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+            TEST_ASSERT( lsmash_append_sample( mux_root, atid, s ) == 0, "13: append base audio sample" );
+        }
+        lsmash_flush_pooled_samples( mux_root, atid, 1 );
+        TEST_ASSERT( lsmash_finish_movie( mux_root, NULL ) == 0, "13: finish base_mp4" );
+        lsmash_close_file( &mux_param );
+        lsmash_destroy_root( mux_root );
+    }
+
+    FILE *bfp = fopen( base_mp4, "rb" );
+    TEST_ASSERT( bfp != NULL, "13: open base_mp4 for reading raw bytes" );
+    fseek( bfp, 0, SEEK_END );
+    size_t base_len = (size_t)ftell( bfp );
+    fseek( bfp, 0, SEEK_SET );
+    uint8_t *base_buf = (uint8_t *)lsmash_malloc( base_len );
+    TEST_ASSERT( base_buf != NULL && fread( base_buf, 1, base_len, bfp ) == base_len, "13: read base_mp4 bytes" );
+    fclose( bfp );
+
+    /* 13a. Malformed stsc: first_chunk = 0 (invalid 1-based chunk index) */
+    {
+        uint8_t *patched = (uint8_t *)lsmash_memdup( base_buf, base_len );
+        int stsc_off = find_fourcc_offset( patched, base_len, LSMASH_4CC( 's', 't', 's', 'c' ) );
+        TEST_ASSERT( stsc_off >= 0, "13a: locate stsc box" );
+        /* stsc layout: size(4) + 'stsc'(4) + version/flags(4) + entry_count(4) + first_chunk(4) */
+        put_be32( &patched[stsc_off + 16], 0 ); /* Corrupt first_chunk from 1 to 0 */
+        FILE *fp = fopen( bad_mp4, "wb" );
+        fwrite( patched, 1, base_len, fp );
+        fclose( fp );
+        lsmash_free( patched );
+
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( bad_mp4, 1, &param ) == 0, "13a: open bad_mp4 (stsc first_chunk=0)" );
+        lsmash_file_t *file = lsmash_set_file( root, &param );
+        TEST_ASSERT( lsmash_read_file( file, &param ) < 0, "13a: lsmash_read_file rejects stsc with first_chunk=0" );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 1, "13a: 100% rollback after malformed stsc (only base_buf active)" );
+#endif
+        remove( bad_mp4 );
+    }
+
+    /* 13b. Malformed stsz: sample_size = 0, sample_count = 500, but box only has 4 entries -> insufficient size */
+    {
+        uint8_t *patched = (uint8_t *)lsmash_memdup( base_buf, base_len );
+        int stsz_off = find_fourcc_offset( patched, base_len, LSMASH_4CC( 's', 't', 's', 'z' ) );
+        TEST_ASSERT( stsz_off >= 0, "13b: locate stsz box" );
+        /* stsz layout: size(4) + 'stsz'(4) + version/flags(4) + sample_size(4) + sample_count(4) */
+        put_be32( &patched[stsz_off + 16], 500 ); /* Claim 500 entries in a 4-entry box */
+        FILE *fp = fopen( bad_mp4, "wb" );
+        fwrite( patched, 1, base_len, fp );
+        fclose( fp );
+        lsmash_free( patched );
+
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( bad_mp4, 1, &param ) == 0, "13b: open bad_mp4 (stsz truncated)" );
+        lsmash_file_t *file = lsmash_set_file( root, &param );
+        TEST_ASSERT( lsmash_read_file( file, &param ) < 0, "13b: lsmash_read_file rejects truncated stsz" );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 1, "13b: 100% rollback after truncated stsz" );
+#endif
+        remove( bad_mp4 );
+    }
+
+    /* 13c. Malformed sbgp: out-of-bounds group_description_index = 99 (when sgpd has only 1 entry) */
+    {
+        uint8_t *patched = (uint8_t *)lsmash_memdup( base_buf, base_len );
+        int sbgp_off = find_fourcc_offset( patched, base_len, LSMASH_4CC( 's', 'b', 'g', 'p' ) );
+        TEST_ASSERT( sbgp_off >= 0, "13c: locate sbgp box" );
+        /* sbgp layout: size(4) + 'sbgp'(4) + version/flags(4) + grouping_type(4) + entry_count(4)
+         * + entry[0]: sample_count(4) + group_description_index(4)
+         * + entry[1]: sample_count(4) + group_description_index(4) */
+        put_be32( &patched[sbgp_off + 24], 99 ); /* Corrupt entry[0].group_description_index to 99 */
+        FILE *fp = fopen( bad_mp4, "wb" );
+        fwrite( patched, 1, base_len, fp );
+        fclose( fp );
+        lsmash_free( patched );
+
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( bad_mp4, 1, &param ) == 0, "13c: open bad_mp4 (sbgp invalid index)" );
+        lsmash_file_t *file = lsmash_set_file( root, &param );
+        TEST_ASSERT( lsmash_read_file( file, &param ) >= 0, "13c: read_file succeeds before timeline validation" );
+        TEST_ASSERT( lsmash_construct_timeline( root, 1 ) < 0,
+                     "13c: lsmash_construct_timeline rejects sbgp with out-of-bounds group_description_index=99" );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 1, "13c: 100% rollback after invalid sbgp index" );
+#endif
+        remove( bad_mp4 );
+    }
+
+    /* 13d. Malformed pcmC: invalid bit depth PCM_sample_size = 13 on ipcm */
+    {
+        uint8_t *patched = (uint8_t *)lsmash_memdup( base_buf, base_len );
+        int pcmc_off = find_fourcc_offset( patched, base_len, LSMASH_4CC( 'p', 'c', 'm', 'C' ) );
+        TEST_ASSERT( pcmc_off >= 0, "13d: locate pcmC box" );
+        /* pcmC layout: size(4) + 'pcmC'(4) + version/flags(4) + format_flags(1) + PCM_sample_size(1) */
+        patched[pcmc_off + 13] = 13; /* Invalid 13-bit PCM_sample_size */
+        FILE *fp = fopen( bad_mp4, "wb" );
+        fwrite( patched, 1, base_len, fp );
+        fclose( fp );
+        lsmash_free( patched );
+
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( bad_mp4, 1, &param ) == 0, "13d: open bad_mp4 (pcmC invalid bit depth)" );
+        lsmash_file_t *file = lsmash_set_file( root, &param );
+        TEST_ASSERT( lsmash_read_file( file, &param ) < 0, "13d: lsmash_read_file rejects pcmC with PCM_sample_size=13" );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 1, "13d: 100% rollback after malformed pcmC" );
+#endif
+        remove( bad_mp4 );
+    }
+
+    lsmash_free( base_buf );
+    remove( base_mp4 );
+
+    /* 13e. Truncated emsg box (underflow hazard on box->size - pos & string cleanup on destruction) */
+    {
+        /* Build a synthetic file with ftyp + truncated version-0 emsg box where box->size is 20 bytes,
+         * but scheme_id_uri("urn:test\0"=9) + value("v\0"=2) + 4*be32(16) consumes 12 + 27 = 39 > 20 bytes! */
+        lsmash_bs_t *bs = lsmash_bs_create();
+        /* ftyp (16 bytes) */
+        lsmash_bs_put_be32( bs, 16 );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'f', 't', 'y', 'p' ) );
+        lsmash_bs_put_be32( bs, ISOM_BRAND_TYPE_ISOM );
+        lsmash_bs_put_be32( bs, 0 );
+        /* truncated emsg (declared size = 20, version = 0, flags = 0) */
+        lsmash_bs_put_be32( bs, 20 );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'e', 'm', 's', 'g' ) );
+        lsmash_bs_put_be32( bs, 0 ); /* version=0, flags=0 (12 bytes so far) */
+        lsmash_bs_put_bytes( bs, 6, (void *)"urn:a" ); /* 6 bytes including '\0' -> pos=18 */
+        lsmash_bs_put_bytes( bs, 2, (void *)"v" );     /* 2 bytes including '\0' -> pos=20, followed by 4 be32 reads -> pos=36 > 20! */
+
+        uint32_t raw_len = 0;
+        uint8_t *raw = lsmash_bs_export_data( bs, &raw_len );
+        lsmash_bs_cleanup( bs );
+        FILE *fp = fopen( bad_mp4, "wb" );
+        fwrite( raw, 1, raw_len, fp );
+        fclose( fp );
+        lsmash_free( raw );
+
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( bad_mp4, 1, &param ) == 0, "13e: open bad_mp4 (truncated emsg)" );
+        lsmash_file_t *file = lsmash_set_file( root, &param );
+        TEST_ASSERT( lsmash_read_file( file, &param ) < 0,
+                     "13e: lsmash_read_file rejects truncated emsg without uint64 underflow" );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0,
+                     "13e: 100% rollback of emsg->scheme_id_uri and emsg->value on error" );
+#endif
+        remove( bad_mp4 );
+    }
+
+    /* 13f. Truncated sbgp box & malformed must box inside stsd/visual/vexu/eyes */
+    {
+        /* Truncated sbgp: declares entry_count = 10 but box ends after 1 entry */
+        lsmash_bs_t *bs = lsmash_bs_create();
+        /* ftyp (16 bytes) */
+        lsmash_bs_put_be32( bs, 16 );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'f', 't', 'y', 'p' ) );
+        lsmash_bs_put_be32( bs, ISOM_BRAND_TYPE_ISOM );
+        lsmash_bs_put_be32( bs, 0 );
+        /* moov -> trak -> mdia -> minf -> stbl -> sbgp (truncated) */
+        uint32_t sbgp_sz = 28; /* 12 (fullbox) + 4 (grouping_type) + 4 (entry_count=10) + 8 (only 1 entry!) */
+        uint32_t stbl_sz = 8 + sbgp_sz;
+        uint32_t minf_sz = 8 + stbl_sz;
+        uint32_t mdia_sz = 8 + minf_sz;
+        uint32_t trak_sz = 8 + mdia_sz;
+        uint32_t moov_sz = 8 + trak_sz;
+        lsmash_bs_put_be32( bs, moov_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'o', 'o', 'v' ) );
+        lsmash_bs_put_be32( bs, trak_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 't', 'r', 'a', 'k' ) );
+        lsmash_bs_put_be32( bs, mdia_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'd', 'i', 'a' ) );
+        lsmash_bs_put_be32( bs, minf_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'i', 'n', 'f' ) );
+        lsmash_bs_put_be32( bs, stbl_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 's', 't', 'b', 'l' ) );
+        lsmash_bs_put_be32( bs, sbgp_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 's', 'b', 'g', 'p' ) );
+        lsmash_bs_put_be32( bs, 0 ); /* version=0, flags=0 */
+        lsmash_bs_put_be32( bs, ISOM_GROUP_TYPE_ROLL );
+        lsmash_bs_put_be32( bs, 10 ); /* entry_count = 10, but only 1 entry follows */
+        lsmash_bs_put_be32( bs, 1 );
+        lsmash_bs_put_be32( bs, 1 );
+
+        uint32_t raw_len = 0;
+        uint8_t *raw = lsmash_bs_export_data( bs, &raw_len );
+        lsmash_bs_cleanup( bs );
+        FILE *fp = fopen( bad_mp4, "wb" );
+        fwrite( raw, 1, raw_len, fp );
+        fclose( fp );
+        lsmash_free( raw );
+
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( bad_mp4, 1, &param ) == 0, "13f: open bad_mp4 (truncated sbgp)" );
+        lsmash_file_t *file = lsmash_set_file( root, &param );
+        TEST_ASSERT( lsmash_read_file( file, &param ) < 0, "13f: lsmash_read_file rejects truncated sbgp" );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0,
+                     "13f: 100% rollback after truncated sbgp" );
+#endif
+        remove( bad_mp4 );
+    }
+
+    printf( "[PASS] test_malformed_boxes_and_sample_tables\n" );
+    return 0;
+}
+
 #ifdef LSMASH_DEBUG_ALLOC
 #define RUN_TEST( test_fn )                                                       \
     do                                                                            \
@@ -2714,9 +3388,11 @@ int main( void )
     RUN_TEST( test_frame_headers_and_tu_assembly );
     RUN_TEST( test_av1_multitile_and_sync_sample_compliance );
     RUN_TEST( test_ivf_mux_demux_roundtrip );
+    RUN_TEST( test_av1_fragmented_isobmff_roundtrip );
     RUN_TEST( test_lpcm_pcmc_chnl_srat_roundtrip );
     RUN_TEST( test_multitrack_fragmented_lpcm_roundtrip );
     RUN_TEST( test_wave_importer_isobmff_lpcm );
+    RUN_TEST( test_malformed_boxes_and_sample_tables );
 #ifdef LSMASH_DEBUG_ALLOC
     assert( lsm_alloc_verify_no_leaks() == 0 );
     assert( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0 );
