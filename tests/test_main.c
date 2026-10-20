@@ -538,9 +538,33 @@ static uint32_t build_frame_obu
         }
         /* tile_info(): 64x64 frame has 1 superblock -> minLog2TileCols=0, maxLog2TileCols=0, maxLog2TileRows=0 */
         lsmash_bits_put( &bits, 1, 1 ); /* uniform_tile_spacing_flag = 1 */
-        /* Dummy quantization/tile payload byte */
-        lsmash_bits_put_align( &bits );
-        lsmash_bs_put_byte( bs, 0xAC );
+        /* quantization_params(): base_q_idx = 0 (CodedLossless = 1, AllLossless = 1) */
+        lsmash_bits_put( &bits, 8, 0 ); /* base_q_idx = 0 */
+        lsmash_bits_put( &bits, 1, 0 ); /* DeltaQYDc: delta_coded = 0 */
+        lsmash_bits_put( &bits, 1, 0 ); /* DeltaQUDc: delta_coded = 0 */
+        lsmash_bits_put( &bits, 1, 0 ); /* DeltaQUAc: delta_coded = 0 */
+        lsmash_bits_put( &bits, 1, 0 ); /* using_qmatrix = 0 */
+        /* segmentation_params() */
+        lsmash_bits_put( &bits, 1, 0 ); /* segmentation_enabled = 0 */
+        /* frame_reference_mode() */
+        if( !is_intra )
+            lsmash_bits_put( &bits, 1, 0 ); /* reference_select = 0 */
+        /* reduced_tx_set */
+        lsmash_bits_put( &bits, 1, 0 ); /* reduced_tx_set = 0 */
+        /* global_motion_params() */
+        if( !is_intra )
+        {
+            for( int ref = 1; ref <= 7; ref++ )
+                lsmash_bits_put( &bits, 1, 0 ); /* is_global[ref] = 0 */
+        }
+        if( obu_type == AV1_OBU_TYPE_FRAME )
+        {
+            /* byte_alignment() + tile_group_obu() (NumTiles == 1 -> 1-byte tile payload) */
+            lsmash_bits_put_align( &bits );
+            lsmash_bs_put_byte( bs, 0xAC );
+        }
+        else
+            put_trailing_bits( &bits );
     }
 
     uint32_t payload_len = 0;
@@ -596,6 +620,10 @@ static int test_frame_headers_and_tu_assembly( void )
         /* TD and Padding must be stripped; SH + Metadata + Frame must remain */
         TEST_ASSERT( out_len == sh_len + meta_len + frm_len, "TD and Padding stripped from TU 0" );
         TEST_ASSERT( param.has_hdr10p == 1, "HDR10+ ITU-T T.35 detected" );
+        /* AV1-ISOBMFF v1.2.0 Section 2.3.3: configOBUs holds initial Sequence Header + Metadata OBUs */
+        TEST_ASSERT( param.configOBUs.sz == sh_len + meta_len
+                  && memcmp( param.configOBUs.data, tu_buf + 2, sh_len + meta_len ) == 0,
+                     "configOBUs preserves initial Sequence Header + Metadata OBU" );
         TEST_ASSERT( prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_OPEN_RAP, "Delayed KEY_FRAME marked as OPEN_RAP" );
         TEST_ASSERT( parser.RefValid[0] == 1 && parser.RefValid[1] == 0, "Only RefValid[0] refreshed by 0x01" );
         TEST_ASSERT( parser.RefFrameType[0] == AV1_KEY_FRAME && parser.RefOrderHint[0] == 10, "Slot 0 stores KEY_FRAME" );
@@ -876,11 +904,15 @@ static int test_ivf_mux_demux_roundtrip( void )
         TEST_ASSERT( dump_buf != NULL, "alloc dump_buf" );
         size_t nread = fread( dump_buf, 1, 16383, dfp );
         fclose( dfp );
-        int has_av01 = (nread > 0 && strstr( dump_buf, "[av01: Visual Description]" ) != NULL);
-        int has_av1c = (nread > 0 && strstr( dump_buf, "[av1C: AV1 Configuration Box]" ) != NULL);
+        int has_av01      = (nread > 0 && strstr( dump_buf, "[av01: Visual Description]" ) != NULL);
+        int has_av1c      = (nread > 0 && strstr( dump_buf, "[av1C: AV1CodecConfigurationBox]" ) != NULL);
+        int has_csp_str   = (nread > 0 && strstr( dump_buf, "chroma_sample_position = unknown" ) != NULL);
+        int has_cfg_obus  = (nread > 0 && strstr( dump_buf, "configOBUs" ) != NULL);
         free( dump_buf );
-        TEST_ASSERT( has_av01, "box dump contains [av01: Visual Description]" );
-        TEST_ASSERT( has_av1c, "box dump contains [av1C: AV1 Configuration Box]" );
+        TEST_ASSERT( has_av01,     "box dump contains [av01: Visual Description]" );
+        TEST_ASSERT( has_av1c,     "box dump contains [av1C: AV1CodecConfigurationBox]" );
+        TEST_ASSERT( has_csp_str,  "box dump prints string chroma_sample_position" );
+        TEST_ASSERT( has_cfg_obus, "box dump prints configOBUs size" );
     }
     remove( dump_path );
     TEST_ASSERT( lsmash_construct_timeline( demux_root, 1 ) == 0, "construct timeline" );
@@ -1750,6 +1782,273 @@ static int test_wave_importer_isobmff_lpcm( void )
     return 0;
 }
 
+/*---------------------------------------------------------------------------
+ * Test 9: the implementation AV1 Regressions, Multi-Tile OBU_FRAME/TILE_GROUP & Whitelist
+ *---------------------------------------------------------------------------*/
+static uint32_t build_multitile_2x2_frame_obu
+(
+    uint8_t *dst,
+    uint8_t  obu_type, /* AV1_OBU_TYPE_FRAME or AV1_OBU_TYPE_REDUNDANT_FRAME_HEADER */
+    uint8_t  frame_type,
+    int      show_frame,
+    uint8_t  refresh_frame_flags,
+    uint32_t order_hint,
+    int      present_flag,
+    uint32_t tg_start,
+    uint32_t tg_end
+)
+{
+    lsmash_bs_t *bs = lsmash_bs_create();
+    lsmash_bits_t bits = { 0 };
+    lsmash_bits_init( &bits, bs );
+
+    int is_intra = (frame_type == AV1_KEY_FRAME || frame_type == AV1_INTRA_ONLY_FRAME);
+    lsmash_bits_put( &bits, 1, 0 ); /* show_existing_frame = 0 */
+    lsmash_bits_put( &bits, 2, frame_type );
+    lsmash_bits_put( &bits, 1, show_frame ? 1 : 0 );
+    if( !show_frame )
+        lsmash_bits_put( &bits, 1, 1 ); /* showable_frame = 1 */
+    if( !(frame_type == AV1_SWITCH_FRAME || (frame_type == AV1_KEY_FRAME && show_frame)) )
+        lsmash_bits_put( &bits, 1, 1 ); /* error_resilient_mode = 1 */
+    lsmash_bits_put( &bits, 1, 1 ); /* disable_cdf_update = 1 */
+    lsmash_bits_put( &bits, 1, 0 ); /* allow_screen_content_tools = 0 */
+    if( frame_type != AV1_SWITCH_FRAME )
+        lsmash_bits_put( &bits, 1, 0 ); /* frame_size_override_flag = 0 */
+    lsmash_bits_put( &bits, 7, order_hint ); /* order_hint (7 bits) */
+    if( !(frame_type == AV1_SWITCH_FRAME || (frame_type == AV1_KEY_FRAME && show_frame)) )
+        lsmash_bits_put( &bits, 8, refresh_frame_flags );
+    if( !is_intra || refresh_frame_flags != 0xFF )
+    {
+        for( int i = 0; i < AV1_NUM_REF_FRAMES; i++ )
+            lsmash_bits_put( &bits, 7, 0 );
+    }
+    if( is_intra )
+        lsmash_bits_put( &bits, 1, 0 ); /* render_and_frame_size_different = 0 */
+    else
+    {
+        lsmash_bits_put( &bits, 1, 0 ); /* frame_refs_short_signaling = 0 */
+        for( int i = 0; i < AV1_REFS_PER_FRAME; i++ )
+            lsmash_bits_put( &bits, 3, 0 ); /* ref_frame_idx[i] = 0 */
+        lsmash_bits_put( &bits, 1, 0 ); /* render_and_frame_size_different = 0 */
+        lsmash_bits_put( &bits, 1, 0 ); /* allow_high_precision_mv = 0 */
+        lsmash_bits_put( &bits, 1, 1 ); /* is_filter_switchable = 1 */
+        lsmash_bits_put( &bits, 1, 0 ); /* is_motion_mode_switchable = 0 */
+    }
+    /* tile_info() for 128x128 frame (sbCols=2, sbRows=2 -> maxLog2TileCols=1, maxLog2TileRows=1):
+     * uniform_tile_spacing_flag=1, increment_tile_cols_log2=1 (TileCols=2), increment_tile_rows_log2=1 (TileRows=2) */
+    lsmash_bits_put( &bits, 1, 1 ); /* uniform_tile_spacing_flag = 1 */
+    lsmash_bits_put( &bits, 1, 1 ); /* increment_tile_cols_log2 = 1 -> TileColsLog2 = 1, TileCols = 2 */
+    lsmash_bits_put( &bits, 1, 1 ); /* increment_tile_rows_log2 = 1 -> TileRowsLog2 = 1, TileRows = 2 */
+    lsmash_bits_put( &bits, 2, 0 ); /* context_update_tile_id = 0 */
+    lsmash_bits_put( &bits, 2, 0 ); /* tile_size_bytes_minus_1 = 0 */
+    /* quantization_params(): non-lossless base_q_idx = 64 -> CodedLossless = 0, AllLossless = 0 */
+    lsmash_bits_put( &bits, 8, 64 ); /* base_q_idx = 64 */
+    lsmash_bits_put( &bits, 1, 0 );  /* DeltaQYDc: delta_coded = 0 */
+    lsmash_bits_put( &bits, 1, 0 );  /* DeltaQUDc: delta_coded = 0 */
+    lsmash_bits_put( &bits, 1, 0 );  /* DeltaQUAc: delta_coded = 0 */
+    lsmash_bits_put( &bits, 1, 0 );  /* using_qmatrix = 0 */
+    /* segmentation_params() */
+    lsmash_bits_put( &bits, 1, 0 );  /* segmentation_enabled = 0 */
+    /* delta_q_params(): base_q_idx > 0 -> delta_q_present = 0 */
+    lsmash_bits_put( &bits, 1, 0 );  /* delta_q_present = 0 */
+    /* loop_filter_params(): CodedLossless == 0 */
+    lsmash_bits_put( &bits, 6, 0 );  /* loop_filter_level[0] = 0 */
+    lsmash_bits_put( &bits, 6, 0 );  /* loop_filter_level[1] = 0 */
+    lsmash_bits_put( &bits, 3, 0 );  /* loop_filter_sharpness = 0 */
+    lsmash_bits_put( &bits, 1, 0 );  /* loop_filter_delta_enabled = 0 */
+    /* cdef_params(): CodedLossless == 0 && enable_cdef == 1 */
+    lsmash_bits_put( &bits, 2, 0 );  /* cdef_damping_minus_3 = 0 */
+    lsmash_bits_put( &bits, 2, 0 );  /* cdef_bits = 0 (1 entry) */
+    lsmash_bits_put( &bits, 4, 0 );  /* cdef_y_pri_strength[0] */
+    lsmash_bits_put( &bits, 2, 0 );  /* cdef_y_sec_strength[0] */
+    lsmash_bits_put( &bits, 4, 0 );  /* cdef_uv_pri_strength[0] */
+    lsmash_bits_put( &bits, 2, 0 );  /* cdef_uv_sec_strength[0] */
+    /* lr_params(): AllLossless == 0 && enable_restoration == 1 */
+    lsmash_bits_put( &bits, 2, 0 );  /* lr_type[0] = RESTORE_NONE */
+    lsmash_bits_put( &bits, 2, 0 );  /* lr_type[1] = RESTORE_NONE */
+    lsmash_bits_put( &bits, 2, 0 );  /* lr_type[2] = RESTORE_NONE */
+    /* read_tx_mode(): CodedLossless == 0 */
+    lsmash_bits_put( &bits, 1, 0 );  /* tx_mode_select = 0 */
+    /* frame_reference_mode() */
+    if( !is_intra )
+        lsmash_bits_put( &bits, 1, 0 ); /* reference_select = 0 */
+    /* reduced_tx_set */
+    lsmash_bits_put( &bits, 1, 0 );  /* reduced_tx_set = 0 */
+    /* global_motion_params() */
+    if( !is_intra )
+    {
+        for( int ref = 1; ref <= 7; ref++ )
+            lsmash_bits_put( &bits, 1, 0 ); /* is_global[ref] = 0 */
+    }
+    if( obu_type == AV1_OBU_TYPE_FRAME )
+    {
+        /* byte_alignment() before tile_group_obu() */
+        lsmash_bits_put_align( &bits );
+        /* tile_group_obu() with NumTiles == 4 (tileBits == 2) */
+        lsmash_bits_put( &bits, 1, present_flag ? 1 : 0 );
+        if( present_flag )
+        {
+            lsmash_bits_put( &bits, 2, tg_start );
+            lsmash_bits_put( &bits, 2, tg_end );
+        }
+        lsmash_bits_put_align( &bits );
+        lsmash_bs_put_byte( bs, 0xA5 );
+        lsmash_bs_put_byte( bs, 0x5A );
+    }
+    else
+        put_trailing_bits( &bits );
+
+    uint32_t payload_len = 0;
+    uint8_t *payload = lsmash_bs_export_data( bs, &payload_len );
+    lsmash_bs_cleanup( bs );
+    uint32_t obu_len = build_obu( dst, obu_type, 0, 0, 0, payload, payload_len );
+    lsmash_free( payload );
+    return obu_len;
+}
+
+static uint32_t build_tile_group_obu
+(
+    uint8_t *dst,
+    int      present_flag,
+    uint32_t tg_start,
+    uint32_t tg_end
+)
+{
+    lsmash_bs_t *bs = lsmash_bs_create();
+    lsmash_bits_t bits = { 0 };
+    lsmash_bits_init( &bits, bs );
+    lsmash_bits_put( &bits, 1, present_flag ? 1 : 0 );
+    if( present_flag )
+    {
+        lsmash_bits_put( &bits, 2, tg_start );
+        lsmash_bits_put( &bits, 2, tg_end );
+    }
+    lsmash_bits_put_align( &bits );
+    lsmash_bs_put_byte( bs, 0x55 );
+    lsmash_bs_put_byte( bs, 0xAA );
+    uint32_t payload_len = 0;
+    uint8_t *payload = lsmash_bs_export_data( bs, &payload_len );
+    lsmash_bs_cleanup( bs );
+    uint32_t obu_len = build_obu( dst, AV1_OBU_TYPE_TILE_GROUP, 0, 0, 0, payload, payload_len );
+    lsmash_free( payload );
+    return obu_len;
+}
+
+static int test_av1_multitile_and_sync_sample_compliance( void )
+{
+    av1_parser_t parser;
+    TEST_ASSERT( av1_setup_parser( &parser, NULL ) == 0, "setup parser for the implementation tests" );
+
+    synth_seq_cfg_t seq_cfg = {
+        .seq_profile = 0,
+        .seq_level_idx_0 = 4,
+        .width = 128,
+        .height = 128,
+        .color_range = 1,
+        .subsampling_x = 1,
+        .subsampling_y = 1,
+        .enable_order_hint = 1,
+        .order_hint_bits_minus_1 = 6,
+    };
+
+    uint8_t tu_buf[512];
+    uint8_t out_buf[512];
+    uint32_t out_len = 0;
+    lsmash_sample_property_t prop = { 0 };
+
+    /* 9a. Sync Sample (SYNC) vs Key Frame without Sequence Header in same TU (OPEN_RAP) */
+    {
+        /* TU 0: Sequence Header + Multi-tile OBU_FRAME (NumTiles=4, present_flag=1, tg_start=0, tg_end=3) */
+        uint32_t pos = 0;
+        pos += build_seq_hdr_obu( tu_buf + pos, &seq_cfg );
+        pos += build_multitile_2x2_frame_obu( tu_buf + pos, AV1_OBU_TYPE_FRAME, AV1_KEY_FRAME, 1, 0xFF, 0, 1, 0, 3 );
+        TEST_ASSERT( av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
+                     "parse TU 0 with SH + 2x2 multi-tile OBU_FRAME (present_flag=1)" );
+        TEST_ASSERT( prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC,
+                     "TU with Sequence Header before Key Frame (show_frame=1) is SYNC" );
+        TEST_ASSERT( parser.frame.SeenFrameHeader == 0 && parser.frame.NumTiles == 4,
+                     "Multi-tile OBU_FRAME completed all 4 tiles and reset SeenFrameHeader" );
+
+        /* TU 1: Key Frame (show_frame=1) WITHOUT Sequence Header in TU 1 -> must be OPEN_RAP, NOT SYNC! */
+        pos = build_multitile_2x2_frame_obu( tu_buf, AV1_OBU_TYPE_FRAME, AV1_KEY_FRAME, 1, 0xFF, 1, 0, 0, 3 );
+        TEST_ASSERT( av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
+                     "parse TU 1 with Key Frame (show_frame=1) but no SH in TU 1" );
+        TEST_ASSERT( prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_OPEN_RAP,
+                     "Key Frame without Sequence Header in same TU is OPEN_RAP (AV1-ISOBMFF v1.2.0 Sec 2.4)" );
+
+        /* TU 2: Key Frame (show_frame=1) followed by Sequence Header AFTER the frame -> must be OPEN_RAP, NOT SYNC! */
+        pos = build_multitile_2x2_frame_obu( tu_buf, AV1_OBU_TYPE_FRAME, AV1_KEY_FRAME, 1, 0xFF, 2, 0, 0, 3 );
+        pos += build_seq_hdr_obu( tu_buf + pos, &seq_cfg );
+        TEST_ASSERT( av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
+                     "parse TU 2 with Key Frame before SH" );
+        TEST_ASSERT( prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_OPEN_RAP,
+                     "Key Frame with Sequence Header appearing after first frame is OPEN_RAP" );
+    }
+
+    /* 9b. Split Multi-Tile: OBU_FRAME (tiles 0..1) + OBU_REDUNDANT_FRAME_HEADER + OBU_TILE_GROUP (tiles 2..3) */
+    {
+        uint32_t pos = 0;
+        uint32_t f_len = build_multitile_2x2_frame_obu( tu_buf + pos, AV1_OBU_TYPE_FRAME, AV1_INTER_FRAME, 1, 0x02, 42, 1, 0, 1 );
+        pos += f_len;
+        uint32_t rfh_len = build_multitile_2x2_frame_obu( tu_buf + pos, AV1_OBU_TYPE_REDUNDANT_FRAME_HEADER, AV1_INTER_FRAME, 1, 0x02, 42, 0, 0, 0 );
+        pos += rfh_len;
+        uint32_t tg_len = build_tile_group_obu( tu_buf + pos, 1, 2, 3 );
+        pos += tg_len;
+
+        TEST_ASSERT( av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
+                     "parse split multi-tile OBU_FRAME (0..1) + REDUNDANT_FRAME_HEADER + OBU_TILE_GROUP (2..3)" );
+        TEST_ASSERT( out_len == f_len + tg_len, "REDUNDANT_FRAME_HEADER stripped from split multi-tile TU" );
+        TEST_ASSERT( parser.frame.SeenFrameHeader == 0 && parser.frame.TileNum == 4,
+                     "Split multi-tile frame completed all 4 tiles" );
+        TEST_ASSERT( parser.RefOrderHint[1] == 42, "Reference slot 1 updated after final tile group (tg_end == 3)" );
+    }
+
+    /* 9c. Negative multi-tile conformance tests (incomplete tiles & discontinuous tg_start) */
+    {
+        /* Incomplete multi-tile frame at end of TU (only tiles 0..1 of 4) */
+        uint32_t pos = build_multitile_2x2_frame_obu( tu_buf, AV1_OBU_TYPE_FRAME, AV1_INTER_FRAME, 1, 0x04, 50, 1, 0, 1 );
+        TEST_ASSERT( av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == LSMASH_ERR_INVALID_DATA,
+                     "reject incomplete multi-tile frame at TU end" );
+        parser.frame.SeenFrameHeader = 0;
+
+        /* Discontinuous tg_start (tiles 0..1 followed by tile 3..3, skipping tile 2) */
+        pos = build_multitile_2x2_frame_obu( tu_buf, AV1_OBU_TYPE_FRAME, AV1_INTER_FRAME, 1, 0x04, 50, 1, 0, 1 );
+        pos += build_tile_group_obu( tu_buf + pos, 1, 3, 3 );
+        TEST_ASSERT( av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == LSMASH_ERR_INVALID_DATA,
+                     "reject discontinuous tg_start in OBU_TILE_GROUP" );
+        parser.frame.SeenFrameHeader = 0;
+    }
+
+    /* 9d. Sample OBU Whitelist (Reserved OBU stripped, TILE_LIST rejected) & Compound TU */
+    {
+        uint32_t pos = 0;
+        pos += build_obu( tu_buf + pos, AV1_OBU_TYPE_TEMPORAL_DELIMITER, 0, 0, 0, NULL, 0 );
+        uint8_t rsv_payload[3] = { 0x11, 0x22, 0x33 };
+        pos += build_obu( tu_buf + pos, 10 /* reserved OBU type */, 0, 0, 0, rsv_payload, sizeof(rsv_payload) );
+        /* Frame 1 in compound TU: delayed INTER_FRAME (show_frame=0, refresh=0x04 -> slot 2, OrderHint=77) */
+        uint32_t f1_len = build_multitile_2x2_frame_obu( tu_buf + pos, AV1_OBU_TYPE_FRAME, AV1_INTER_FRAME, 0, 0x04, 77, 1, 0, 3 );
+        pos += f1_len;
+        /* Frame 2 in compound TU: FRAME_HEADER (show_existing_frame=1, idx=2) */
+        uint32_t f2_len = build_frame_obu( tu_buf + pos, AV1_OBU_TYPE_FRAME_HEADER, 1, 7, 1, 2, 0, 0, 0, 0, 0 );
+        pos += f2_len;
+
+        TEST_ASSERT( av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
+                     "parse compound TU with reserved OBU type 10" );
+        TEST_ASSERT( out_len == f1_len + f2_len,
+                     "OBU whitelist strips TD and reserved OBU type 10 while keeping FRAME and FRAME_HEADER" );
+        TEST_ASSERT( parser.RefOrderHint[2] == 77, "Compound TU updated slot 2 and displayed it via show_existing_frame" );
+
+        /* TILE_LIST OBU (type 8) must be rejected */
+        uint32_t tl_len = build_obu( tu_buf, AV1_OBU_TYPE_TILE_LIST, 0, 0, 0, rsv_payload, sizeof(rsv_payload) );
+        TEST_ASSERT( av1_parse_temporal_unit( &parser, tu_buf, tl_len, out_buf, &out_len, &prop, NULL ) == LSMASH_ERR_INVALID_DATA,
+                     "reject OBU_TILE_LIST in AV1-ISOBMFF sample" );
+    }
+
+    av1_cleanup_parser( &parser );
+    printf( "[PASS] test_av1_multitile_and_sync_sample_compliance\n" );
+    return 0;
+}
+
 #ifdef LSMASH_DEBUG_ALLOC
 #define RUN_TEST( test_fn )                                                       \
     do                                                                            \
@@ -1779,6 +2078,7 @@ int main( void )
     RUN_TEST( test_bitstream_primitives );
     RUN_TEST( test_sequence_header_and_av1c );
     RUN_TEST( test_frame_headers_and_tu_assembly );
+    RUN_TEST( test_av1_multitile_and_sync_sample_compliance );
     RUN_TEST( test_ivf_mux_demux_roundtrip );
     RUN_TEST( test_lpcm_pcmc_chnl_srat_roundtrip );
     RUN_TEST( test_multitrack_fragmented_lpcm_roundtrip );
