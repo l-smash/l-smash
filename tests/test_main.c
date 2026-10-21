@@ -4468,6 +4468,165 @@ static int test_segmented_isobmff_and_abort_callback( void )
     return 0;
 }
 
+/*---------------------------------------------------------------------------
+ * Test 17: External data reference ('dref' with a non-self-contained 'url ')
+ *---------------------------------------------------------------------------*/
+#define DREF_SAMPLE_COUNT    12
+#define DREF_SAMPLE_DURATION 40
+
+static uint32_t dref_sample_size( uint32_t idx )
+{
+    return 24 + (idx % 5) * 11;
+}
+
+static int test_external_data_reference_roundtrip( void )
+{
+    const char *movie_path = "tests/tmp_test_dref_movie.mp4";
+    const char *media_name = "tmp_test_dref_media.bin";
+    const char *media_path = "tests/tmp_test_dref_media.bin";
+
+    /* 17a. Write: the movie boxes stay in the movie file while the sample data goes into a separate media file. */
+    uint32_t tid = 0;
+    {
+        lsmash_root_t *root = lsmash_create_root();
+        TEST_ASSERT( root != NULL, "17a: create root" );
+        lsmash_file_parameters_t movie_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( movie_path, 0, &movie_param ) == 0, "17a: open movie file" );
+        lsmash_file_t *movie_file = lsmash_set_file( root, &movie_param );
+        TEST_ASSERT( movie_file != NULL, "17a: set movie file" );
+        /* The referenced file is a raw media data container, i.e. it has neither box structure nor movie sample tables. */
+        lsmash_file_parameters_t media_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( media_path, 0, &media_param ) == 0, "17a: open external media file" );
+        media_param.mode = LSMASH_FILE_MODE_WRITE | LSMASH_FILE_MODE_MEDIA;
+        lsmash_file_t *media_file = lsmash_set_file( root, &media_param );
+        TEST_ASSERT( media_file != NULL, "17a: set external media file" );
+
+        lsmash_movie_parameters_t movie_pm;
+        lsmash_initialize_movie_parameters( &movie_pm );
+        TEST_ASSERT( lsmash_set_movie_parameters( root, &movie_pm ) == 0, "17a: set movie parameters" );
+        tid = lsmash_create_track( root, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK );
+        TEST_ASSERT( tid != 0, "17a: create track" );
+        lsmash_track_parameters_t track_pm;
+        lsmash_initialize_track_parameters( &track_pm );
+        track_pm.mode = ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE;
+        TEST_ASSERT( lsmash_set_track_parameters( root, tid, &track_pm ) == 0, "17a: set track parameters" );
+        lsmash_media_parameters_t media_pm;
+        lsmash_initialize_media_parameters( &media_pm );
+        media_pm.timescale = 1000;
+        TEST_ASSERT( lsmash_set_media_parameters( root, tid, &media_pm ) == 0, "17a: set media parameters" );
+
+        /* Index 1: self-contained, index 2: external file. */
+        lsmash_data_reference_t self_ref = { .index = 1, .location = NULL };
+        TEST_ASSERT( lsmash_create_data_reference( root, tid, &self_ref, movie_file ) == 0, "17a: create self-contained data reference" );
+        TEST_ASSERT( self_ref.index == 1, "17a: self-contained data reference is index 1" );
+        lsmash_data_reference_t ext_ref = { .index = 0, .location = (char *)media_name };
+        TEST_ASSERT( lsmash_create_data_reference( root, tid, &ext_ref, media_file ) == 0, "17a: create external data reference" );
+        TEST_ASSERT( ext_ref.index == 2, "17a: external data reference is index 2" );
+        TEST_ASSERT( lsmash_count_data_reference( root, tid ) == 2, "17a: two data references in the track" );
+
+        lsmash_video_summary_t *summary = create_synth_av01_summary( 64, 64 );
+        TEST_ASSERT( summary != NULL, "17a: create summary" );
+        summary->data_ref_index = ext_ref.index;
+        int entry = lsmash_add_sample_entry( root, tid, summary );
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        TEST_ASSERT( entry == 1, "17a: add sample entry referencing the external file" );
+
+        for( uint32_t i = 0; i < DREF_SAMPLE_COUNT; i++ )
+        {
+            lsmash_sample_t *s = lsmash_create_sample( dref_sample_size( i ) );
+            TEST_ASSERT( s != NULL, "17a: create sample" );
+            memset( s->data, (int)((i * 13 + 5) & 0xFF), s->length );
+            s->dts   = (uint64_t)i * DREF_SAMPLE_DURATION;
+            s->cts   = s->dts;
+            s->index = 1;
+            s->prop.ra_flags = (i == 0) ? ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC : ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE;
+            TEST_ASSERT( lsmash_append_sample( root, tid, s ) == 0, "17a: append sample" );
+        }
+        TEST_ASSERT( lsmash_flush_pooled_samples( root, tid, DREF_SAMPLE_DURATION ) == 0, "17a: flush samples" );
+        lsmash_adhoc_remux_t remux = { .buffer_size = 4096 };
+        TEST_ASSERT( lsmash_finish_movie( root, &remux ) == 0, "17a: finish movie" );
+        lsmash_close_file( &media_param );
+        lsmash_close_file( &movie_param );
+        lsmash_destroy_root( root );
+
+        /* The sample data must be in the external file only. */
+        uint32_t total = 0;
+        for( uint32_t i = 0; i < DREF_SAMPLE_COUNT; i++ )
+            total += dref_sample_size( i );
+        FILE *fp = fopen( media_path, "rb" );
+        TEST_ASSERT( fp != NULL, "17a: external media file exists" );
+        fseek( fp, 0, SEEK_END );
+        long media_size = ftell( fp );
+        fclose( fp );
+        TEST_ASSERT( media_size == (long)total, "17a: external media file holds exactly the sample payloads" );
+        /* The first sample is a run of 24 bytes filled with 0x05. It must not appear anywhere in the movie file. */
+        fp = fopen( movie_path, "rb" );
+        TEST_ASSERT( fp != NULL, "17a: movie file exists" );
+        int run = 0, found = 0, c;
+        while( !found && (c = fgetc( fp )) != EOF )
+        {
+            run = (c == 0x05) ? run + 1 : 0;
+            found = run >= (int)dref_sample_size( 0 );
+        }
+        fclose( fp );
+        TEST_ASSERT( !found, "17a: the movie file does not contain the sample payloads" );
+    }
+
+    /* 17b. Read: the data reference location is recovered and the Timeline restores samples from the external file. */
+    {
+        lsmash_root_t *root = lsmash_create_root();
+        TEST_ASSERT( root != NULL, "17b: create root" );
+        lsmash_file_parameters_t movie_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( movie_path, 1, &movie_param ) == 0, "17b: open movie file" );
+        lsmash_file_t *movie_file = lsmash_set_file( root, &movie_param );
+        TEST_ASSERT( movie_file != NULL, "17b: set movie file" );
+        TEST_ASSERT( lsmash_read_file( movie_file, &movie_param ) >= 0, "17b: read movie file" );
+        TEST_ASSERT( lsmash_count_data_reference( root, tid ) == 2, "17b: two data references recovered" );
+
+        lsmash_data_reference_t ref = { .index = 1, .location = NULL };
+        TEST_ASSERT( lsmash_get_data_reference( root, tid, &ref ) == 0, "17b: get self-contained data reference" );
+        TEST_ASSERT( ref.location == NULL, "17b: self-contained data reference has no location" );
+        lsmash_cleanup_data_reference( &ref );
+        ref.index = 2;
+        TEST_ASSERT( lsmash_get_data_reference( root, tid, &ref ) == 0, "17b: get external data reference" );
+        TEST_ASSERT( ref.location != NULL && strcmp( ref.location, media_name ) == 0, "17b: external location is recovered" );
+        lsmash_cleanup_data_reference( &ref );
+
+        /* Without the referenced file assigned, the sample data cannot be restored. */
+        TEST_ASSERT( lsmash_assign_data_reference( root, tid, 99, movie_file ) < 0, "17b: out-of-range data reference index is rejected" );
+
+        lsmash_file_parameters_t media_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( media_path, 1, &media_param ) == 0, "17b: open external media file" );
+        media_param.mode |= LSMASH_FILE_MODE_MEDIA;
+        lsmash_file_t *media_file = lsmash_set_file( root, &media_param );
+        TEST_ASSERT( media_file != NULL, "17b: set external media file" );
+        TEST_ASSERT( lsmash_assign_data_reference( root, tid, 2, media_file ) == 0, "17b: assign external media file" );
+
+        TEST_ASSERT( lsmash_construct_timeline( root, tid ) == 0, "17b: construct timeline" );
+        TEST_ASSERT( lsmash_get_sample_count_in_media_timeline( root, tid ) == DREF_SAMPLE_COUNT, "17b: all samples are in the timeline" );
+        for( uint32_t i = 0; i < DREF_SAMPLE_COUNT; i++ )
+        {
+            uint64_t dts = 0;
+            lsmash_sample_t *s = lsmash_get_sample_from_media_timeline( root, tid, i + 1 );
+            TEST_ASSERT( s != NULL, "17b: get sample from the external file" );
+            TEST_ASSERT( lsmash_get_dts_from_media_timeline( root, tid, i + 1, &dts ) == 0, "17b: get dts" );
+            int data_ok = s->length == dref_sample_size( i );
+            for( uint32_t b = 0; data_ok && b < s->length; b++ )
+                data_ok = s->data[b] == (uint8_t)((i * 13 + 5) & 0xFF);
+            TEST_ASSERT( data_ok && dts == (uint64_t)i * DREF_SAMPLE_DURATION, "17b: sample payload and dts match" );
+            lsmash_delete_sample( s );
+        }
+        lsmash_destruct_timeline( root, tid );
+        lsmash_close_file( &media_param );
+        lsmash_close_file( &movie_param );
+        lsmash_destroy_root( root );
+    }
+
+    remove( movie_path );
+    remove( media_path );
+    printf( "[PASS] test_external_data_reference_roundtrip\n" );
+    return 0;
+}
 #ifdef LSMASH_DEBUG_ALLOC
 #define RUN_TEST( test_fn )                                                       \
     do                                                                            \
@@ -4509,6 +4668,7 @@ int main( void )
     RUN_TEST( test_multibuf_resize_and_codec_regressions );
     RUN_TEST( test_flac_isobmff_roundtrip );
     RUN_TEST( test_segmented_isobmff_and_abort_callback );
+    RUN_TEST( test_external_data_reference_roundtrip );
 #ifdef LSMASH_DEBUG_ALLOC
     assert( lsm_alloc_verify_no_leaks() == 0 );
     assert( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0 );
