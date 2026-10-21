@@ -68,6 +68,13 @@ All Box and Codec dispatch tables across `core/` and `codecs/` are defined as **
 
 This guarantees thread safety across concurrent `lsmash_root_t` instances, places dispatch tables in read-only memory (`.rodata`), and eliminates fixed-size array bounds hazards.
 
+### 2.6 Segment, Index & External Reference Invariants (`core/`)
+1. **Deferred `styp` in separate Media Segments**: the leading `styp` of a separate Media Segment is emitted lazily, once, when the segment's first content is written, so it is never output twice.
+2. **`sidx` requires `iso6`**: `LSMASH_FILE_MODE_INDEX` is validated against the file brands; an `iso6` or later compatible brand is mandatory, otherwise the file is rejected.
+3. **No external Data Reference for Fragmented Movies**: `lsmash_create_data_reference()` rejects a fragmented movie or fragmented referenced file (see Section 7).
+4. **Remux callback abort**: when `lsmash_adhoc_remux_t::func` returns non-zero, remuxing stops immediately, the remux buffer is released, and `lsmash_finish_movie()` returns an error.
+5. **Sample ownership**: on success `lsmash_append_sample()` takes ownership of the sample; on failure the caller keeps it and must call `lsmash_delete_sample()`.
+
 ---
 
 ## 3. Core Subsystems

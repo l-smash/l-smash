@@ -775,6 +775,8 @@ If the Movie Timescale is coarser than the audio Media Timescale (or not an inte
 
 **Countermeasure:** when you need a Sample-Accurate Empty Edit on audio, set the Movie Timescale equal to the audio Media Timescale (the sampling rate, such as `48000` or `44100`). For audio-only movies (`.m4a` etc.) this is always the right choice, and L-SMASH `muxer` applies it when a single track is output (it resets the movie timescale to that track's media timescale). When audio and video share one file, either choose a Movie Timescale that is an integer multiple of the audio sampling rate, or avoid Empty Edit for the audio and express the offset with `start_time` (skip) instead. With `timelineeditor`, set `--movie-timescale` before `--delay`.
 
+**Why the Movie Timescale is not set to the LCM of the track timescales:** with several tracks (for example video `30000` and audio `44100`), the least common multiple (`4,410,000` here) would make every Movie Timescale tick extremely fine. Long durations and large sample durations expressed in such ticks can easily overflow `mvhd` / `tkhd` / `elst` `duration` fields and intermediate calculations, especially in Version 0 boxes where these fields are 32-bit. For multi-track output L-SMASH therefore deliberately keeps a safe, modest fixed value (such as `600` or `1000`) and accepts the coarser Empty Edit granularity as a design trade-off; use the countermeasures above when sample-accurate audio delay matters.
+
 #### Chapters and Container Metadata
 ```c
 /* Nero-style chapter list in moov/udta/chpl, from a Nero/Ogg-style chapter text file (same format as muxer --chapter) */

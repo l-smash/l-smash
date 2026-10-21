@@ -107,7 +107,7 @@ typedef enum
     LSMASH_FILE_MODE_BOX               = 1<<4,  /* box structure */
     LSMASH_FILE_MODE_INITIALIZATION    = 1<<5,  /* movie sample table */
     LSMASH_FILE_MODE_MEDIA             = 1<<6,  /* media data */
-    LSMASH_FILE_MODE_INDEX             = 1<<7,
+    LSMASH_FILE_MODE_INDEX             = 1<<7,  /* segment index ('sidx') generation. Requires 'iso6' or a later compatible brand. */
     LSMASH_FILE_MODE_SEGMENT           = 1<<8,  /* segment */
     LSMASH_FILE_MODE_WRITE_FRAGMENTED  = LSMASH_FILE_MODE_WRITE | LSMASH_FILE_MODE_FRAGMENTED,  /* deprecated */
 } lsmash_file_mode;
@@ -262,11 +262,14 @@ typedef struct
     uint64_t max_read_size;             /* max size of reading from the file at a time. 4*1024*1024 (4MiB) is default value. */
 } lsmash_file_parameters_t;
 
+/* Callback for the ad-hoc remuxing performed in lsmash_finish_movie() and similar functions.
+ * If the callback function 'func' returns a non-zero value, the remuxing is aborted immediately, the remux buffer is
+ * released, and lsmash_finish_movie() returns a negative value (error). */
 typedef int (*lsmash_adhoc_remux_callback)( void *param, uint64_t done, uint64_t total );
 typedef struct
 {
     uint64_t                    buffer_size;
-    lsmash_adhoc_remux_callback func;
+    lsmash_adhoc_remux_callback func;       /* progress callback. Returning non-zero aborts the remuxing. Can be NULL. */
     void                       *param;
 } lsmash_adhoc_remux_t;
 
@@ -1722,8 +1725,11 @@ void lsmash_delete_sample
 
 /* Append a sample to a track.
  * Note:
- *   The appended sample will be deleted by lsmash_delete_sample() internally.
- *   Users shall not deallocate the sample by lsmash_delete_sample() if successful to append the sample.
+ *   Ownership of the sample:
+ *     If successful (return 0), the ownership of the sample is transferred to liblsmash, which deletes it by
+ *     lsmash_delete_sample() internally. Users shall not deallocate or access the sample after that.
+ *     If failed (return a negative value), the ownership remains with the user, who shall deallocate the sample
+ *     by lsmash_delete_sample().
  *
  * Return 0 if successful.
  * Return a negative value otherwise. */
@@ -2183,8 +2189,10 @@ typedef struct
                              * If you have no interest in the duration of this edit but want to set the offset from media composition time to movie
                              * presentation time, ISOM_EDIT_DURATION_IMPLICIT is useful for the provision of the offset for the movie and subsequent
                              * movie fragments. The duration is expected to be constructed by demuxer. */
-    int64_t  start_time;    /* the starting composition time within the media of this edit
-                             * If set to ISOM_EDIT_MODE_EMPTY (-1), it construct an empty edit, which doesn't select any portion within the media. */
+    int64_t  start_time;    /* the starting composition time within the media of this edit, expressed in the media timescale units (mdhd.timescale)
+                             * If set to ISOM_EDIT_MODE_EMPTY (-1, LSMASH_TIMESTAMP_UNDEFINED), it construct an empty edit, which doesn't select any
+                             * portion within the media. An empty edit inserts a blank delay whose length is given only by 'duration', so its
+                             * granularity is the movie timescale (mvhd.timescale), not the media timescale. */
     int32_t  rate;          /* the relative rate at which to play the media corresponding to this edit, expressed as 16.16 fixed-point number
                              * If set to ISOM_EDIT_MODE_NORMAL (0x00010000), there is no rate change for timeline mapping.
                              * If set to ISOM_EDIT_MODE_DWELL (0), the media at start_time is presented for the duration. */
