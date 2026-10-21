@@ -17,9 +17,10 @@ This manual provides a comprehensive guide to the **L-SMASH** command-line utili
    - [3.2 Track & Media Creation (`trak`, `tkhd`, `mdia`, `mdhd`)](#32-track--media-creation-trak-tkhd-mdia-mdhd)
    - [3.3 Video Sample Entry Setup (H.264/AVC, HEVC, AV1)](#33-video-sample-entry-setup-h264avc-hevc-av1)
    - [3.4 Audio Sample Entry Setup (AAC & ISO/IEC 23003-5 LPCM)](#34-audio-sample-entry-setup-aac--isoiec-23003-5-lpcm)
-   - [3.5 Standard vs. Fragmented Multiplexing](#35-standard-vs-fragmented-multiplexing)
-   - [3.6 Demultiplexing & Media Timeline Reconstruction](#36-demultiplexing--media-timeline-reconstruction)
-   - [3.7 Complete End-to-End C API Example](#37-complete-end-to-end-c-api-example)
+   - [3.5 Standard, Fragmented & Segmented Multiplexing](#35-standard-fragmented--segmented-multiplexing)
+   - [3.6 Edit Lists, Chapters & Container Metadata](#36-edit-lists-chapters--container-metadata)
+   - [3.7 Demultiplexing & Media Timeline Reconstruction](#37-demultiplexing--media-timeline-reconstruction)
+   - [3.8 Complete End-to-End C API Example](#38-complete-end-to-end-c-api-example)
 
 ---
 
@@ -30,8 +31,20 @@ L-SMASH enforces strict compliance with the specifications governing each contai
 - **ISO/IEC 14496-12 (ISOBMFF)** and **Apple QuickTime File Format (QTFF)** share common historical roots (`ftyp`, `moov`, `trak`, `mdia`, `minf`, `stbl`), yet diverge significantly in their Sample Description (`stsd`), Channel Layout, Pixel Aspect Ratio / Clean Aperture, and Audio Sample Entry binary layouts.
 - L-SMASH **never mixes QTFF-only atoms or fields into ISOBMFF files**, nor ISOBMFF-only boxes into QuickTime `.mov` files.
 
-### 1.2 Architectural Separation of ISOBMFF and QTFF Audio
-A prime example of this strict boundary is uncompressed Linear PCM (LPCM) audio and high-sampling-rate signaling:
+### 1.2 Architectural Separation of ISOBMFF and QTFF
+The two standards are never mixed, on either the video side or the audio side. Each file is written entirely in the vocabulary of one family.
+
+#### Video
+| Aspect | ISOBMFF (`.mp4`, Fragmented MP4) | QTFF (`.mov`) |
+| :--- | :--- | :--- |
+| Colour space (`colr`) | `nclx` (explicit primaries / transfer / matrix / full-range flag) | `nclc` (primaries / transfer / matrix only) |
+| Clean aperture | `clap` in the sample entry | `clap` in the sample entry, plus track-level `tapt` containing `clef` / `prof` / `enof` |
+| Pixel aspect ratio | `pasp` | `pasp` |
+
+- `tapt` / `clef` / `prof` / `enof` and `nclc` are QTFF-only and are not emitted into ISOBMFF files. `nclx` is not emitted into QuickTime files.
+
+#### Audio
+Uncompressed Linear PCM (LPCM) audio and high-sampling-rate signaling show the same boundary:
 - **In ISOBMFF (`.mp4`, `.m4a`, Fragmented MP4)**:
   - Uncompressed LPCM uses **ISO/IEC 23003-5** (`ipcm` for 16/24/32-bit integer PCM, `fpcm` for 32/64-bit IEEE 754 floating-point PCM) paired with a mandatory **`pcmC`** (`PCMConfigBox`) specifying endianness and bit depth.
   - Multichannel speaker arrangements use **ISO/IEC 14496-12 `chnl`** (`ChannelLayout`), and sampling rates exceeding 65535 Hz (such as 88.2 kHz, 96 kHz, or 192 kHz) use ISOBMFF **`AudioSampleEntryV1`** (`stsd` version 1) with an **`srat`** (`SamplingRateBox`).
@@ -462,7 +475,7 @@ lsmash_cleanup_summary( (lsmash_summary_t *)asum );
 
 ---
 
-### 3.5 Standard vs. Fragmented Multiplexing
+### 3.5 Standard, Fragmented & Segmented Multiplexing
 
 #### Appending Samples (`lsmash_append_sample`)
 Allocate each sample with `lsmash_create_sample( size )`, populate `data`, `dts`, `cts`, `index` (1-based sample description index), and `prop.ra_flags`, and pass it to `lsmash_append_sample()`. Note that `lsmash_append_sample()` takes ownership of the `lsmash_sample_t *` pointer.
@@ -488,8 +501,28 @@ lsmash_update_track_duration( root, video_track_id, 0 );
 lsmash_flush_pooled_samples( root, audio_track_id, last_audio_sample_delta );
 lsmash_update_track_duration( root, audio_track_id, 0 );
 
-/* Pass NULL for standard placement, or an lsmash_adhoc_remux_t* to optimize for progressive download */
+/* NULL: the moov box stays after mdat (default placement) */
 lsmash_finish_movie( root, NULL );
+lsmash_close_file( &file_param );
+lsmash_destroy_root( root );
+```
+
+#### Progressive Download (`moov` at the Front)
+With `lsmash_finish_movie( root, NULL )`, `moov` is written after `mdat`. To place `moov` before `mdat` (FastStart), pass an `lsmash_adhoc_remux_t` instead. L-SMASH then rearranges the already-written file in place, moving the data through a working buffer of `buffer_size` bytes (internally raised to at least twice the `moov` size). This requires a seekable output. The optional `func` callback receives the bytes processed so far and the total; its return value is ignored, so it cannot abort the operation. Set `func` to `NULL` if no progress report is needed.
+
+```c
+static int on_progress( void *param, uint64_t done, uint64_t total )
+{
+    (void)param;
+    fprintf( stderr, "\rmoving moov: %" PRIu64 " / %" PRIu64, done, total );
+    return 0; /* ignored by the library */
+}
+
+lsmash_adhoc_remux_t remux = { 0 };
+remux.buffer_size = 4 * 1024 * 1024; /* 4 MiB working buffer */
+remux.func        = on_progress;
+remux.param       = NULL;
+lsmash_finish_movie( root, &remux );
 lsmash_close_file( &file_param );
 lsmash_destroy_root( root );
 ```
@@ -510,9 +543,133 @@ lsmash_create_fragment_movie( root );
 
 For constant-size, constant-duration audio tracks such as ISO/IEC 23003-5 LPCM, L-SMASH automatically hoists the common sample duration and byte size into `tfhd->default_sample_duration` and `tfhd->default_sample_size`, omitting redundant per-sample `trun` array rows.
 
+#### Segmented ISOBMFF (`LSMASH_FILE_MODE_SEGMENT`)
+`lsmash_open_file( path, 0, &param )` (write mode) pre-sets `param.mode` to `LSMASH_FILE_MODE_WRITE | LSMASH_FILE_MODE_BOX | LSMASH_FILE_MODE_INITIALIZATION | LSMASH_FILE_MODE_MEDIA`. Segment output is obtained by adjusting the flags before `lsmash_set_file()`:
+
+| Output | `param.mode` (starting from the write-mode default) | Resulting layout |
+| :--- | :--- | :--- |
+| Fragmented MP4 (self-contained) | `+ FRAGMENTED` | `ftyp` `moov` (`moof` `mdat`)... `mfra` (the trailing `mfra` is written only when seekable) |
+| Self-Initializing Media Segment (`remuxer --fragment --dash`) | `+ FRAGMENTED + INDEX + SEGMENT` | `ftyp` `moov` `sidx` (`moof` `mdat`)... (no `mfra`) |
+| Initialization Segment (separate file) | `- MEDIA + FRAGMENTED + SEGMENT` | `ftyp` `moov` (no samples can be appended) |
+| Media Segment (separate file) | `- INITIALIZATION + FRAGMENTED + INDEX + SEGMENT` (`MEDIA` kept) | `styp` `sidx` (`moof` `mdat`)... |
+
+The remaining abbreviations drop the `LSMASH_FILE_MODE_` prefix. These are the combinations that `cli/remuxer.c` builds, and they are the ones to use.
+
+**Self-Initializing Media Segment:**
+
+```c
+lsmash_file_parameters_t param = { 0 };
+lsmash_open_file( "seg.mp4", 0, &param );
+param.mode |= LSMASH_FILE_MODE_FRAGMENTED | LSMASH_FILE_MODE_INDEX | LSMASH_FILE_MODE_SEGMENT;
+
+/* sidx is generated only when the maximum brand is iso6 or later. */
+lsmash_brand_type brands[] = { ISOM_BRAND_TYPE_ISO6, ISOM_BRAND_TYPE_DASH };
+param.major_brand = ISOM_BRAND_TYPE_ISO6;
+param.brands      = brands;
+param.brand_count = 2;
+
+lsmash_file_t *file = lsmash_set_file( root, &param );
+/* ... create tracks, add sample entries; then per fragment:
+ *     lsmash_create_fragment_movie( root ); lsmash_append_sample( ... ); ...
+ * Flush the pooled samples of every track at the end. */
+
+lsmash_adhoc_remux_t remux = { 0 };
+remux.buffer_size = 4 * 1024 * 1024;
+lsmash_finish_movie( root, &remux ); /* writes the sidx; remux must not be NULL here */
+lsmash_close_file( &param );
+```
+
+**Separate Initialization Segment and Media Segments** with `lsmash_switch_media_segment()`:
+
+```c
+/* 1. Initialization Segment: no MEDIA flag, so it carries moov only. */
+lsmash_file_parameters_t init_param = { 0 };
+lsmash_open_file( "a.mp4", 0, &init_param );
+init_param.mode &= ~LSMASH_FILE_MODE_MEDIA;
+init_param.mode |= LSMASH_FILE_MODE_FRAGMENTED | LSMASH_FILE_MODE_SEGMENT;
+init_param.major_brand = ISOM_BRAND_TYPE_ISO6;
+init_param.brands      = brands;
+init_param.brand_count = 2;
+lsmash_file_t *init_file = lsmash_set_file( root, &init_param ); /* becomes the active file */
+/* ... create tracks and sample entries here (moov lives in init_file) ... */
+
+/* 2. Media Segment: it must not have INITIALIZATION, and must have MEDIA. */
+lsmash_file_parameters_t seg_param = { 0 };
+lsmash_open_file( "a_1.mp4", 0, &seg_param );
+seg_param.mode &= ~LSMASH_FILE_MODE_INITIALIZATION;
+seg_param.mode |= LSMASH_FILE_MODE_FRAGMENTED | LSMASH_FILE_MODE_INDEX | LSMASH_FILE_MODE_SEGMENT;
+seg_param.major_brand = ISOM_BRAND_TYPE_MSDH;
+lsmash_brand_type seg_brands[] = { ISOM_BRAND_TYPE_MSDH, ISOM_BRAND_TYPE_MSIX, ISOM_BRAND_TYPE_ISO6 };
+seg_param.brands      = seg_brands;
+seg_param.brand_count = 3;
+lsmash_file_t *seg1 = lsmash_set_file( root, &seg_param ); /* must be called with the same root */
+
+lsmash_adhoc_remux_t remux = { 0 };
+remux.buffer_size = 4 * 1024 * 1024;
+/* Finishes the current file (the initialization segment is completed as a moov-only file),
+ * links seg1 to it as the initializer, and makes seg1 the active file. */
+lsmash_switch_media_segment( root, seg1, &remux );
+/* ... lsmash_create_fragment_movie(), lsmash_append_sample() into seg1 ... */
+/* For the next segment, open and lsmash_set_file() another file with the same flags
+ * and call lsmash_switch_media_segment() again. The previous segment is finished at that point. */
+/* Finally: lsmash_finish_movie( root, &remux ), then close every file. */
+```
+
+`lsmash_switch_media_segment()` behaviour:
+- It finishes the currently active file by writing its final fragment (and, for a media segment, its `sidx`), then activates `successor`. `styp` is written lazily just before the first `moof` of a media segment; a default `styp` is generated from the brands if none was set.
+- The active file and the successor must both have `WRITE`, `BOX`, `FRAGMENTED` and `SEGMENT`. The successor must have `MEDIA` and must not have `INITIALIZATION`. The current file must have `MEDIA` or `INITIALIZATION`.
+- Both files must belong to `root`, they must differ, and `remux` must not be NULL. Otherwise `LSMASH_ERR_FUNCTION_PARAM` is returned.
+- Switching is one-way (previous to next). The caller closes each finished segment file.
+
+#### Supported Modes & Current Limitations
+- **Write requirements.** `LSMASH_FILE_MODE_INDEX` requires a seekable output. `lsmash_set_file()` returns NULL otherwise. Unseekable output (for example stdout) is possible only with `LSMASH_FILE_MODE_FRAGMENTED` and without `INDEX`, and no `sidx` or trailing `mfra` is produced.
+- **`sidx` needs iso6.** A `sidx` entry is generated only when `INDEX` is set and the highest ISO brand is `iso6` or later. With an older brand the flag has no visible effect and no `sidx` is written.
+- **Combinations outside the table are not supported.** Flag sets that do not satisfy the preconditions above (for example `SEGMENT` or `INDEX` without `FRAGMENTED`, or an `INITIALIZATION` file as the successor) are not covered by the library. They are rejected with `LSMASH_ERR_FUNCTION_PARAM` by `lsmash_switch_media_segment()`, and elsewhere their behaviour is not defined. The library does not return `LSMASH_ERR_PATCH_WELCOME` for any file-mode combination.
+- **Segment index scope.** The `sidx` is written for the single level of a segment (one entry per movie fragment). A daisy-chained or hierarchical index for live streaming is not implemented, and the segment index is generated only for seekable output.
+- **Initialization Segment cannot hold samples.** Without `MEDIA`, `lsmash_append_sample()` is rejected. Put samples only into media segments.
+- **Reading.** `styp` and `sidx` are parsed and shown by `boxdumper`, and a `moov` establishes the initializer of the file. The `sidx` is not used to build the media timeline. The timeline is constructed from `moov` plus the `moof` boxes found in the same `lsmash_file_t`. A Media Segment file that does not contain its own `moov` is not linked to a separate Initialization Segment file at read time, so read a Self-Initializing Media Segment (or a concatenation of the initialization segment and the media segments) instead.
+- **`LSMASH_ERR_PATCH_WELCOME` in the timeline API.** It is returned when a track mixes LPCM and non-LPCM sample descriptions during timeline construction, and when the timestamps of an LPCM track are changed by the timestamp-replacement API.
+
 ---
 
-### 3.6 Demultiplexing & Media Timeline Reconstruction
+### 3.6 Edit Lists, Chapters & Container Metadata
+
+#### Edit List (`edts` / `elst`)
+`lsmash_create_explicit_timeline_map()` appends one edit to a track. Call it after the track has been set up and before the movie is finished. Durations are in the movie timescale and `start_time` is in the media timescale.
+
+```c
+/* Skip 1024 samples of encoder delay (media timescale = 48000) and present the rest. */
+lsmash_edit_t edit;
+edit.duration   = presentation_duration_in_movie_timescale;
+edit.start_time = 1024;                 /* first composition time within the media */
+edit.rate       = ISOM_EDIT_MODE_NORMAL; /* 1.0x */
+lsmash_create_explicit_timeline_map( root, track_ID, edit );
+
+/* An empty edit (initial silence / delayed start) */
+lsmash_edit_t gap;
+gap.duration   = delay_in_movie_timescale;
+gap.start_time = ISOM_EDIT_MODE_EMPTY;
+gap.rate       = ISOM_EDIT_MODE_NORMAL;
+lsmash_create_explicit_timeline_map( root, track_ID, gap ); /* an empty edit must be appended before the edit that follows it */
+```
+
+`lsmash_count_explicit_timeline_map()`, `lsmash_get_explicit_timeline_map()` and `lsmash_modify_explicit_timeline_map()` inspect and change edits by 1-based edit number. `lsmash_delete_explicit_timeline_map()` removes all edits of a track.
+
+#### Chapters and Container Metadata
+```c
+/* Nero-style chapter list in moov/udta/chpl, from a Nero/Ogg-style chapter text file (same format as muxer --chapter) */
+lsmash_set_tyrant_chapter( root, "chapters.txt", 0 /* add_bom */ );
+uint32_t n = lsmash_count_tyrant_chapter( root );
+
+/* QuickTime-style chapter track referenced by a track */
+lsmash_create_reference_chapter_track( root, video_track_ID, "chapters.txt" );
+```
+
+Further container-level metadata is attached through `lsmash_set_itunes_metadata( root, metadata )` (iTunes-style `meta`/`ilst` items, given as an `lsmash_itunes_metadata_t` value) and `lsmash_set_copyright( root, track_ID, ISO_language, notice )` (`cprt`; `track_ID == 0` applies it to the whole presentation). Call these before `lsmash_finish_movie()`.
+
+---
+
+### 3.7 Demultiplexing & Media Timeline Reconstruction
 
 To read an existing standard or fragmented container and access samples in presentation/decode timeline order:
 
@@ -549,97 +706,133 @@ lsmash_destroy_root( root );
 
 ---
 
-### 3.7 Complete End-to-End C API Example
+### 3.8 Complete End-to-End C API Example
 
-The following self-contained C program (fully compatible with standard C99, C11, and C++) muxes a 24-bit 96 kHz Stereo ISO/IEC 23003-5 `ipcm` audio track into a Fragmented MP4 file and reads it back via the media timeline API:
+The following self-contained C program (compatible with C99, C11 and C++) muxes a codec-neutral workflow: an AAC-LC track (`mp4a` + `esds`, with a fixed AudioSpecificConfig) with an encoder-delay edit, finalizes it for progressive download (`moov` at the front), and reads it back through the media timeline API. Replace the dummy payloads and the sample entry setup of 3.3 / 3.4 to use any other codec.
 
 ```c
+#include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 #include <lsmash.h>
 
+#define FRAME_COUNT 100
+#define FRAME_SIZE  64
+#define TIMESCALE   48000
+
 int main( void )
 {
-    const char *path = "example_frag_lpcm.mp4";
+    const char *path = "example_faststart.mp4";
 
-    /* 1. Create Fragmented MP4 */
-    lsmash_root_t *mux_root = lsmash_create_root();
-    lsmash_file_parameters_t mux_param = { 0 };
-    if( lsmash_open_file( path, 0, &mux_param ) < 0 )
+    /* 1. Mux */
+    lsmash_root_t *root = lsmash_create_root();
+    lsmash_file_parameters_t param = { 0 };
+    if( !root || lsmash_open_file( path, 0, &param ) < 0 )
         return 1;
-    mux_param.mode |= LSMASH_FILE_MODE_FRAGMENTED;
-    lsmash_brand_type brands[2] = { ISOM_BRAND_TYPE_ISOM, ISOM_BRAND_TYPE_ISO6 };
-    mux_param.major_brand = ISOM_BRAND_TYPE_ISO6;
-    mux_param.brands      = brands;
-    mux_param.brand_count = 2;
-    lsmash_set_file( mux_root, &mux_param );
+    lsmash_brand_type brands[] = { ISOM_BRAND_TYPE_MP42, ISOM_BRAND_TYPE_ISOM };
+    param.major_brand = ISOM_BRAND_TYPE_MP42;
+    param.brands      = brands;
+    param.brand_count = 2;
+    if( !lsmash_set_file( root, &param ) )
+        return 1;
 
     lsmash_movie_parameters_t movie_param;
     lsmash_initialize_movie_parameters( &movie_param );
-    lsmash_set_movie_parameters( mux_root, &movie_param );
+    lsmash_set_movie_parameters( root, &movie_param );
+    uint32_t movie_timescale = lsmash_get_movie_timescale( root );
 
-    uint32_t tid = lsmash_create_track( mux_root, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK );
+    uint32_t tid = lsmash_create_track( root, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK );
     lsmash_track_parameters_t track_param;
     lsmash_initialize_track_parameters( &track_param );
     track_param.mode = ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE | ISOM_TRACK_IN_PREVIEW;
-    lsmash_set_track_parameters( mux_root, tid, &track_param );
+    lsmash_set_track_parameters( root, tid, &track_param );
 
     lsmash_media_parameters_t media_param;
     lsmash_initialize_media_parameters( &media_param );
-    media_param.timescale = 96000;
-    lsmash_set_media_parameters( mux_root, tid, &media_param );
+    media_param.timescale = TIMESCALE;
+    lsmash_set_media_parameters( root, tid, &media_param );
 
-    lsmash_audio_summary_t *sum =
+    /* AAC-LC, 48 kHz, stereo: AudioSpecificConfig = 0x11 0x90 */
+    static uint8_t asc[2] = { 0x11, 0x90 };
+    lsmash_audio_summary_t *asum =
         (lsmash_audio_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_AUDIO );
-    sum->sample_type      = ISOM_CODEC_TYPE_IPCM_AUDIO;
-    sum->frequency        = 96000;
-    sum->channels         = 2;
-    sum->sample_size      = 24;
-    sum->samples_in_frame = 1;
-    sum->bytes_per_frame  = 6;
-
-    lsmash_codec_specific_t *pcmc = lsmash_create_codec_specific_data(
-        LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_PCM_CONFIG,
+    asum->sample_type      = ISOM_CODEC_TYPE_MP4A_AUDIO;
+    asum->frequency        = TIMESCALE;
+    asum->channels         = 2;
+    asum->sample_size      = 16;
+    asum->samples_in_frame = 1024;
+    asum->aot              = MP4A_AUDIO_OBJECT_TYPE_AAC_LC;
+    asum->sbr_mode         = MP4A_AAC_SBR_NOT_SPECIFIED;
+    lsmash_codec_specific_t *esds_cs = lsmash_create_codec_specific_data(
+        LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG,
         LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
-    ((lsmash_isom_pcm_config_t *)pcmc->data.structured)->format_flags    = LSMASH_PCM_FORMAT_FLAG_LITTLE_ENDIAN;
-    ((lsmash_isom_pcm_config_t *)pcmc->data.structured)->PCM_sample_size = 24;
-    lsmash_add_codec_specific_data( (lsmash_summary_t *)sum, pcmc );
-    lsmash_destroy_codec_specific_data( pcmc );
+    lsmash_mp4sys_decoder_parameters_t *esds =
+        (lsmash_mp4sys_decoder_parameters_t *)esds_cs->data.structured;
+    esds->objectTypeIndication = MP4SYS_OBJECT_TYPE_Audio_ISO_14496_3;
+    esds->streamType           = MP4SYS_STREAM_TYPE_AudioStream;
+    lsmash_set_mp4sys_decoder_specific_info( esds, asc, sizeof(asc) );
+    lsmash_add_codec_specific_data( (lsmash_summary_t *)asum, esds_cs );
+    lsmash_destroy_codec_specific_data( esds_cs );
+    uint32_t entry = lsmash_add_sample_entry( root, tid, asum );
+    lsmash_cleanup_summary( (lsmash_summary_t *)asum );
+    if( entry == 0 )
+        return 1;
 
-    lsmash_add_sample_entry( mux_root, tid, sum );
-    lsmash_cleanup_summary( (lsmash_summary_t *)sum );
-
-    /* Write 1 fragment containing 100 stereo 24-bit LPCM frames */
-    lsmash_create_fragment_movie( mux_root );
-    for( uint32_t i = 0; i < 100; i++ )
+    for( uint32_t i = 0; i < FRAME_COUNT; i++ )
     {
-        lsmash_sample_t *s = lsmash_create_sample( 6 );
-        memset( s->data, (int)(i & 0xFF), 6 );
-        s->dts           = i;
-        s->cts           = i;
-        s->index         = 1;
+        lsmash_sample_t *s = lsmash_create_sample( FRAME_SIZE );
+        memset( s->data, (int)(i & 0xFF), FRAME_SIZE ); /* dummy payload */
+        s->dts           = (uint64_t)i * 1024;
+        s->cts           = s->dts;
+        s->index         = entry;
         s->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
-        lsmash_append_sample( mux_root, tid, s );
+        if( lsmash_append_sample( root, tid, s ) < 0 )
+        {
+            lsmash_delete_sample( s );
+            return 1;
+        }
     }
-    lsmash_flush_pooled_samples( mux_root, tid, 1 );
-    lsmash_finish_movie( mux_root, NULL );
-    lsmash_close_file( &mux_param );
-    lsmash_destroy_root( mux_root );
+    lsmash_flush_pooled_samples( root, tid, 1024 );
 
-    /* 2. Demux and verify via Media Timeline */
-    lsmash_root_t *demux_root = lsmash_create_root();
-    lsmash_file_parameters_t demux_param = { 0 };
-    lsmash_open_file( path, 1, &demux_param );
-    lsmash_file_t *file = lsmash_set_file( demux_root, &demux_param );
-    lsmash_read_file( file, &demux_param );
-    lsmash_construct_timeline( demux_root, 1 );
+    /* Edit list: skip 1024 samples of encoder delay. */
+    lsmash_edit_t edit;
+    edit.duration   = (uint64_t)(FRAME_COUNT * 1024 - 1024) * movie_timescale / TIMESCALE;
+    edit.start_time = 1024;
+    edit.rate       = ISOM_EDIT_MODE_NORMAL;
+    lsmash_create_explicit_timeline_map( root, tid, edit );
+    lsmash_update_track_duration( root, tid, 0 );
 
-    printf( "Read %u samples from fragmented ipcm track.\n",
-            lsmash_get_sample_count_in_media_timeline( demux_root, 1 ) );
+    /* Progressive download: move moov in front of mdat. */
+    lsmash_adhoc_remux_t remux = { 0 };
+    remux.buffer_size = 4 * 1024 * 1024;
+    if( lsmash_finish_movie( root, &remux ) < 0 )
+        return 1;
+    lsmash_close_file( &param );
+    lsmash_destroy_root( root );
 
-    lsmash_destruct_timeline( demux_root, 1 );
-    lsmash_close_file( &demux_param );
-    lsmash_destroy_root( demux_root );
+    /* 2. Demux and read back through the media timeline */
+    lsmash_root_t *rroot = lsmash_create_root();
+    lsmash_file_parameters_t rparam = { 0 };
+    if( !rroot || lsmash_open_file( path, 1, &rparam ) < 0 )
+        return 1;
+    lsmash_file_t *file = lsmash_set_file( rroot, &rparam );
+    if( !file || lsmash_read_file( file, &rparam ) < 0 )
+        return 1;
+    if( lsmash_construct_timeline( rroot, 1 ) < 0 )
+        return 1;
+    uint32_t count = lsmash_get_sample_count_in_media_timeline( rroot, 1 );
+    printf( "Read %" PRIu32 " samples.\n", count );
+    for( uint32_t i = 1; i <= count; i++ )
+    {
+        lsmash_sample_t *s = lsmash_get_sample_from_media_timeline( rroot, 1, i );
+        if( s )
+            lsmash_delete_sample( s );
+    }
+    lsmash_destruct_timeline( rroot, 1 );
+    lsmash_close_file( &rparam );
+    lsmash_destroy_root( rroot );
     return 0;
 }
 ```
+
+For fragmented or segmented output, apply the flag combinations of 3.5 to `param.mode` and replace the sample loop by one `lsmash_create_fragment_movie()` call per fragment.
