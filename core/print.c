@@ -1572,6 +1572,7 @@ static int print_sample_description_extension( FILE *fp, lsmash_file_t *file, is
     extern int lsm_a52_print_ac3_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
     extern int lsm_a52_print_eac3_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
     extern int lsm_dts_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
+    extern int lsm_flac_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
     extern int lsm_opus_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
     extern int lsm_alac_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
     extern int lsm_wma_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
@@ -1612,6 +1613,7 @@ static int print_sample_description_extension( FILE *fp, lsmash_file_t *file, is
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DAC3, lsm_a52_print_ac3_codec_specific ),
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DEC3, lsm_a52_print_eac3_codec_specific ),
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DDTS, lsm_dts_print_codec_specific ),
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DFLA, lsm_flac_print_codec_specific ),
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DOPS, lsm_opus_print_codec_specific ),
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_ALAC, lsm_alac_print_codec_specific ),
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_WFEX, lsm_wma_print_codec_specific ),

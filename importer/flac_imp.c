@@ -2,8 +2,10 @@
  * flac_imp.c
  *****************************************************************************
  * Copyright (C) 2026 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: XLWZ <xlwzforever@outlook.com>
+ *          Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -33,15 +35,45 @@
     https://github.com/xiph/flac/blob/master/doc/isoflac.txt
 ***************************************************************************/
 
-#define FLAC_MAX_FRAME_SIZE     65536
-#define FLAC_SYNC_BYTE1         0xFF
-#define FLAC_SYNC_MASK_BYTE2    0xFE
-#define FLAC_SYNC_MIN_BYTE2     0xF8
+#define FLAC_MAX_FRAME_SIZE         65536
+#define FLAC_MAX_METADATA_BLOCKS    128
+#define FLAC_MAX_METADATA_TOTAL     (16 * 1024 * 1024)
+#define FLAC_SYNC_BYTE1             0xFF
+#define FLAC_SYNC_MASK_BYTE2        0xFE
+#define FLAC_SYNC_MIN_BYTE2         0xF8
+
+extern int lsm_flac_parse_streaminfo
+(
+    const uint8_t *streaminfo,
+    uint32_t       size,
+    uint32_t      *sample_rate,
+    uint8_t       *channels,
+    uint8_t       *bits_per_sample,
+    uint32_t      *min_block_size,
+    uint32_t      *max_block_size,
+    uint64_t      *total_samples
+);
+
+extern int lsm_flac_parse_frame_header
+(
+    const uint8_t *frame_data,
+    uint32_t       size,
+    uint32_t      *block_size,
+    uint64_t      *coded_number,
+    int           *blocking_strategy
+);
 
 typedef struct
 {
-    uint8_t    *metadata_blocks;
-    uint32_t    metadata_blocks_size;
+    uint8_t  last;
+    uint8_t  type;
+    uint32_t length;
+    uint8_t *data;
+} flac_metadata_block_t;
+
+typedef struct
+{
+    lsm_list_t  metadata_blocks;
     uint32_t    sample_rate;
     uint8_t     channels;
     uint8_t     bits_per_sample;
@@ -53,42 +85,39 @@ typedef struct
     uint32_t    last_block_size;
 } flac_importer_t;
 
-static void remove_flac_importer( flac_importer_t *imp )
+static void flac_imp_cleanup_metadata_block( flac_metadata_block_t *block )
+{
+    if( !block )
+        return;
+    lsmash_free( block->data );
+}
+
+static void flac_imp_remove( flac_importer_t *imp )
 {
     if( !imp )
         return;
-    lsmash_free( imp->metadata_blocks );
+    lsm_list_clear( &imp->metadata_blocks );
     lsmash_free( imp );
 }
 
-static void flac_importer_cleanup( importer_t *imp )
+static void flac_imp_cleanup( importer_t *imp )
 {
     debug_if( imp && imp->info )
-        remove_flac_importer( imp->info );
+        flac_imp_remove( imp->info );
 }
 
-static flac_importer_t *create_flac_importer( void )
+static flac_importer_t *flac_imp_create( void )
 {
-    return (flac_importer_t *)lsmash_malloc_zero( sizeof(flac_importer_t) );
+    flac_importer_t *imp = (flac_importer_t *)lsmash_malloc_zero( sizeof(flac_importer_t) );
+    if( !imp )
+        return NULL;
+    lsm_list_init( &imp->metadata_blocks, sizeof(flac_metadata_block_t), flac_imp_cleanup_metadata_block );
+    return imp;
 }
 
-/* FLAC CRC-8: polynomial x^8 + x^2 + x^1 + x^0 (0x07), LSB-first 
- * Used for frame header validation. */
-static uint8_t flac_crc8( const uint8_t *data, uint32_t len )
-{
-    uint8_t crc = 0;
-    for( uint32_t i = 0; i < len; i++ )
-    {
-        crc ^= data[i];
-        for( int j = 0; j < 8; j++ )
-            crc = (crc & 0x80) ? (uint8_t)(crc << 1) ^ 0x07 : (crc << 1);
-    }
-    return crc;
-}
-
-/* Scan for a FLAC frame sync code in the buffer starting at 'offset'.
+/* Scan for a FLAC frame sync code in the buffer starting at 'start_offset'.
  * Return the offset of the sync code, or -1 if not found. */
-static int flac_find_sync( uint8_t *data, uint32_t size, uint32_t start_offset )
+static int flac_imp_find_sync( const uint8_t *data, uint32_t size, uint32_t start_offset )
 {
     for( uint32_t offset = start_offset; offset + 1 < size; offset++ )
     {
@@ -99,236 +128,18 @@ static int flac_find_sync( uint8_t *data, uint32_t size, uint32_t start_offset )
     return -1;
 }
 
-/* Get block size in sample from a FLAC frame header at 'frame_data'. 
- * 'frame_data' points to the sync code (2 bytes: 0xFF 0xF8/0xF9). */
-static uint32_t flac_get_frame_block_size
-(
-    uint8_t *frame_data,
-    uint32_t buf_size,
-    uint32_t offset
-)
-{
-    if( offset + 4 > buf_size )
-        return 0;
-    uint8_t byte2 = frame_data[offset + 2];
-    uint32_t bs_code = (byte2 >> 4)  & 0xF;
-    switch( bs_code )
-    {
-        case 0:
-            /* reserved, should not happen */
-            return 0;
-        case 1:
-            return 192;
-        case 2:
-        case 3:
-        case 4:
-        case 5:
-            return 576 << (bs_code - 2);
-        case 6:
-            if( offset + 5 > buf_size )
-                return 0;
-            return frame_data[offset + 4] + 1;
-        case 7:
-            if( offset + 6 > buf_size )
-                return 0;
-            return (((uint32_t)frame_data[offset + 4] << 8) | frame_data[offset + 5]) + 1;
-        default:
-            return 256 << (bs_code - 8);
-    }
-}
-
-/* Get the frame/sample number from a FLAC frame header. 
- * 'frame_date' + offset point to the sync code.
- * Returns the frame number (fixed block) or sample number (variable block) */
-static uint64_t flac_get_frame_number
-(
-    uint8_t *frame_data,
-    uint32_t buf_size,
-    uint32_t offset
-)
-{
-    /* First 4 bytes: sync(2) + block_size/sr(1) + ch/bps(1).
-     * After that: UTF-8 encoded frame/sample number (1-7 bytes).*/
-    uint32_t pos = offset + 4;
-    uint64_t number = 0;
-
-    if( pos >= buf_size )
-        return UINT64_MAX;
-    
-    uint8_t first = frame_data[pos];
-    int bytes;
-
-    if( (first & 0x80) == 0 )
-    {
-        /* 1-byte: 0xxxxxxx */
-        bytes = 1;
-        number = first;
-    }
-    else if( (first & 0xE0) == 0xC0 )
-    {
-        /* 2-byte: 110xxxxx 10xxxxxx*/
-        bytes = 2;
-        number = first & 0x1F;
-    }
-    else if( (first & 0xF0) == 0xE0 )
-    {
-        /* 3-byte: 1110xxxx 10xxxxxx 10xxxxxx */
-        bytes = 3;
-        number = first & 0x0F;
-    }
-    else if( (first & 0xF8) == 0xF0 )
-    {
-        /* 4-byte: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx */
-        bytes = 4;
-        number = first & 0x07;
-    }
-    else if( (first & 0xFC) == 0xF8 )
-    {
-        /* 5-byte: 111110xx 10xxxxxx ... */
-        bytes = 5;
-        number = first & 0x03;
-    }
-    else if( (first & 0xFE) == 0xFC )
-    {
-        /* 6-byte: 1111110x ... */
-        bytes = 6;
-        number = first & 0x01;
-    }
-    else if( (first & 0xFF) == 0xFE )
-    {
-        /* 7-byte: 11111110 ... */
-        bytes = 7;
-        number = 0;
-    }
-    else
-    {
-        /* Invalid UTF-8 */
-        return UINT64_MAX;
-    }
-
-    if( pos + bytes > buf_size )
-        return UINT64_MAX;
-    
-    for( int i = 1; i < bytes; i++ )
-    {
-        uint8_t b = frame_data[pos + i];
-        if( (b & 0xC0) != 0x80 )
-            return UINT64_MAX; /* Invalid UTF-8 continuation byte */
-        number = (number << 6) | (b & 0x3F);
-    }
-
-    return number;
-}
-
-static int flac_validate_sync_candidate
-(
-    uint8_t *data,
-    uint32_t size,
-    uint32_t candidate_offset
-)
-{
-    if( candidate_offset + 4 > size )
-        return 0;
-    uint8_t nbyte2 = data[candidate_offset + 2];
-    uint8_t nbyte3 = data[candidate_offset + 3];
-
-    uint32_t n_bs_code = (nbyte2 >> 4) & 0xF;
-    uint8_t  n_bps_idx = (nbyte3 >> 1) & 0x7;
-
-    if( n_bs_code == 0 || n_bps_idx == 7 )
-        return 0;
-    
-    /* Validate CRC-8 of the frame header. 
-     * CRC covers: sync byte 2 (byte[1]) + header bytes + frame/sample number. 
-     * The CRC-8 byte follow immediately after the coded number. */
-    uint32_t pos = candidate_offset + 4;
-    uint64_t number = 0;
-    int num_bytes;
-
-    if( pos >= size )
-        return 0;
-    
-    uint8_t first = data[pos];
-    if( (first & 0x80) == 0 )
-    {
-        /* 1-byte: 0xxxxxxx */
-        num_bytes = 1;
-        number = first;
-    }
-    else if( (first & 0xE0) == 0xC0 )
-    {
-        /* 2-byte: 110xxxxx 10xxxxxx*/
-        num_bytes = 2;
-        number = first & 0x1F;
-    }
-    else if( (first & 0xF0) == 0xE0 )
-    {
-        /* 3-byte: 1110xxxx 10xxxxxx 10xxxxxx */
-        num_bytes = 3;
-        number = first & 0x0F;
-    }
-    else if( (first & 0xF8) == 0xF0 )
-    {
-        /* 4-byte: 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx */
-        num_bytes = 4;
-        number = first & 0x07;
-    }
-    else if( (first & 0xFC) == 0xF8 )
-    {
-        /* 5-byte: 111110xx 10xxxxxx ... */
-        num_bytes = 5;
-        number = first & 0x03;
-    }
-    else if( (first & 0xFE) == 0xFC )
-    {
-        /* 6-byte: 1111110x ... */
-        num_bytes = 6;
-        number = first & 0x01;
-    }
-    else if( (first & 0xFF) == 0xFE )
-    {
-        /* 7-byte: 11111110 ... */
-        num_bytes = 7;
-        number = 0;
-    }
-    else
-    {
-        /* Invalid UTF-8 */
-        return 0;
-    }
-
-    if( pos + num_bytes + 1 > size )
-        return 0;
-    
-    for( int i = 1; i < num_bytes; i++ )
-    {
-        if( (data[pos + i] & 0xC0) != 0x80 )
-            return 0; /* Invalid UTF-8 continuation byte */
-        number = (number << 6) | (data[pos + i] & 0x3F);
-    }
-
-    /* CRC-8 covers all frame header bytes from candidate_ offset
-     * (including sync byte) through the last byte of the coded number */
-    uint8_t crc_computed = flac_crc8( &data[candidate_offset],
-                                      (pos + num_bytes) - candidate_offset );
-    if( crc_computed != data[pos + num_bytes] )
-        return 0; /* CRC mismatch */
-    
-    return 1; /* Valid sync candidate */
-}
-
 /* Probe function: check if the stream is a valid FLAC stream. */
-static int flac_importer_probe( importer_t *imp )
+static int flac_imp_probe( importer_t *imp )
 {
-    flac_importer_t *flac_imp = create_flac_importer();
+    flac_importer_t *flac_imp = flac_imp_create();
     if( !flac_imp )
         return LSMASH_ERR_MEMORY_ALLOC;
-    
+
     lsmash_bs_t *bs = imp->bs;
     int err;
 
     /* Read and check fLaC magic */
-    if( lsmash_bs_show_byte( bs, 0 ) != 'f' 
+    if( lsmash_bs_show_byte( bs, 0 ) != 'f'
      || lsmash_bs_show_byte( bs, 1 ) != 'L'
      || lsmash_bs_show_byte( bs, 2 ) != 'a'
      || lsmash_bs_show_byte( bs, 3 ) != 'C' )
@@ -338,115 +149,105 @@ static int flac_importer_probe( importer_t *imp )
     }
     lsmash_bs_skip_bytes( bs, 4 );
 
-    /* Read all metadata blocks after the fLaC marker.
+    /* Read all metadata blocks after the fLaC marker into the paged block array.
      * We compute the exact byte offset where audio frames start:
-     * audio_start = 4 (fLaC) + sum_of(4 + data_length) for each metadata block */
-    uint64_t metadata_total = 0;
-    uint32_t meta_alloc = 4096;
-    uint8_t *meta_data = lsmash_malloc( meta_alloc );
-    if( !meta_data )
-    {
-        err = LSMASH_ERR_MEMORY_ALLOC;
-        goto fail;
-    }
-    uint32_t meta_size = 0;
-    int found_streaminfo = 0;
+     * audio_start = 4 (fLaC) + sum_of(4 + data_length) for each metadata block. */
+    uint64_t metadata_total   = 0;
+    int      found_streaminfo = 0;
 
-    while ( 1 )
+    while( 1 )
     {
-        while ( lsmash_bs_get_remaining_buffer_size( bs ) < 4 )
+        while( lsmash_bs_get_remaining_buffer_size( bs ) < 4 )
         {
-            if ( bs->eof )
+            if( bs->eof )
                 break;
-            int ret = lsmash_bs_read( bs, meta_alloc);
-            if ( ret < 0 )
+            if( lsmash_bs_read( bs, 4096 ) < 0 )
             {
-                lsmash_free( meta_data );
                 err = LSMASH_ERR_INVALID_DATA;
                 goto fail;
             }
         }
-        if ( bs->eof && lsmash_bs_get_remaining_buffer_size( bs ) < 4 )
+        if( bs->eof && lsmash_bs_get_remaining_buffer_size( bs ) < 4 )
             break;
-        
+
         uint8_t header[4];
         if( lsmash_bs_get_bytes_ex( bs, 4, header ) < 0 )
         {
-            lsmash_free( meta_data );
             err = LSMASH_ERR_INVALID_DATA;
             goto fail;
         }
-        uint8_t last = (header[0] >> 7) & 1;
-        uint8_t type = header[0] & 0x7F;
-        uint32_t len = ((uint32_t)header[1] << 16) | ((uint32_t)header[2] << 8) | header[3];
+        uint8_t  last = (header[0] >> 7) & 0x01;
+        uint8_t  type =  header[0]       & 0x7F;
+        uint32_t len  = ((uint32_t)header[1] << 16) | ((uint32_t)header[2] << 8) | header[3];
 
-        while ( lsmash_bs_get_remaining_buffer_size( bs ) < len)
+        /* Per RFC 9639, BlockType 127 is invalid, and the first metadata block MUST be STREAMINFO (type 0, length 34). */
+        if( type == 127
+         || (lsm_list_count( &flac_imp->metadata_blocks ) == 0 && (type != 0 || len != 34))
+         || lsm_list_count( &flac_imp->metadata_blocks ) >= FLAC_MAX_METADATA_BLOCKS
+         || metadata_total + 4 + len > FLAC_MAX_METADATA_TOTAL )
+        {
+            err = LSMASH_ERR_INVALID_DATA;
+            goto fail;
+        }
+
+        while( lsmash_bs_get_remaining_buffer_size( bs ) < len )
         {
             if( bs->eof )
             {
-                lsmash_free( meta_data );
                 err = LSMASH_ERR_INVALID_DATA;
                 goto fail;
             }
-            int ret = lsmash_bs_read( bs, meta_alloc );
-            if( ret < 0 )
+            if( lsmash_bs_read( bs, LSMASH_MAX( len, 4096U ) ) < 0 )
             {
-                lsmash_free( meta_data );
                 err = LSMASH_ERR_INVALID_DATA;
                 goto fail;
             }
         }
-        
-        if( meta_size + 4 + len > meta_alloc )
+
+        uint8_t *block_payload = NULL;
+        if( len > 0 )
         {
-            meta_alloc = meta_size + 4 + len + 4096;
-            uint8_t *new_meta = lsmash_realloc( meta_data, meta_alloc );
-            if( !new_meta )
+            block_payload = lsmash_malloc( len );
+            if( !block_payload )
             {
-                lsmash_free( meta_data );
                 err = LSMASH_ERR_MEMORY_ALLOC;
                 goto fail;
             }
-            meta_data = new_meta;
+            if( lsmash_bs_get_bytes_ex( bs, len, block_payload ) < 0 )
+            {
+                lsmash_free( block_payload );
+                err = LSMASH_ERR_INVALID_DATA;
+                goto fail;
+            }
         }
 
-        meta_data[meta_size + 0] = header[0];
-        meta_data[meta_size + 1] = header[1];
-        meta_data[meta_size + 2] = header[2];
-        meta_data[meta_size + 3] = header[3];
-        meta_size += 4;
-        if( lsmash_bs_get_bytes_ex( bs, len, &meta_data[meta_size] ) < 0 )
+        flac_metadata_block_t *block = lsm_list_append( &flac_imp->metadata_blocks );
+        if( !block )
         {
-            lsmash_free( meta_data );
-            err = LSMASH_ERR_INVALID_DATA;
+            lsmash_free( block_payload );
+            err = LSMASH_ERR_MEMORY_ALLOC;
             goto fail;
         }
-        meta_size += len;
-        metadata_total += 4 + len;
+        block->last   = last;
+        block->type   = type;
+        block->length = len;
+        block->data   = block_payload;
 
-        if( type == 0 && ! found_streaminfo && len >= 34 )
+        metadata_total += 4 + (uint64_t)len;
+
+        if( type == 0 && !found_streaminfo )
         {
-            uint8_t *si = &meta_data[meta_size - len];
-            lsmash_bs_t sibs = { 0 };
-            sibs.buffer.data = si;
-            sibs.buffer.store = len;
-            sibs.buffer.alloc = len;
-            flac_imp->min_block_size = lsmash_bs_get_be16( &sibs );
-            flac_imp->max_block_size = lsmash_bs_get_be16( &sibs );
-            lsmash_bs_skip_bytes( &sibs, 3 );
-            lsmash_bs_skip_bytes( &sibs, 3 );
-            uint8_t *buf24 = lsmash_bs_get_bytes( &sibs, 3 );
-            flac_imp->sample_rate = (buf24[0] << 12) | (buf24[1] << 4) | (buf24[2] >> 4);
-            /* channels (3 bits) and bps (5 bits) span the lower 4 bits
-             * of the last sample_rate byte and the upper 4 bits of the next byte */
-            uint8_t next_byte = lsmash_bs_get_byte( &sibs );
-            uint8_t ch_bps = ((buf24[2] & 0x0F) << 4) | (next_byte >> 4);
-            flac_imp->channels = (ch_bps >> 5) + 1;
-            flac_imp->bits_per_sample = (ch_bps & 0x1F) + 1;
-            buf24 = lsmash_bs_get_bytes( &sibs, 5);
-            flac_imp->total_samples = ((uint64_t)buf24[0] << 28) | ((uint64_t)buf24[1] << 20) 
-                                    | ((uint64_t)buf24[2] << 12) | ((uint64_t)buf24[3] << 4)
-                                    | (buf24[4] >> 4);
+            if( lsm_flac_parse_streaminfo( block_payload, len,
+                                           &flac_imp->sample_rate,
+                                           &flac_imp->channels,
+                                           &flac_imp->bits_per_sample,
+                                           &flac_imp->min_block_size,
+                                           &flac_imp->max_block_size,
+                                           &flac_imp->total_samples ) < 0 )
+            {
+                err = LSMASH_ERR_INVALID_DATA;
+                goto fail;
+            }
             found_streaminfo = 1;
         }
 
@@ -454,26 +255,47 @@ static int flac_importer_probe( importer_t *imp )
             break;
     }
 
-    if( !found_streaminfo )
+    if( !found_streaminfo || metadata_total == 0 || metadata_total > FLAC_MAX_METADATA_TOTAL )
     {
-        lsmash_free( meta_data );
         err = LSMASH_ERR_INVALID_DATA;
         goto fail;
     }
 
-    flac_imp->metadata_blocks       = meta_data;
-    flac_imp->metadata_blocks_size  = meta_size;
-    
-    /* Seek to the start of audio data (after fLaC + all metadata blocks). 
+    uint32_t meta_size = (uint32_t)metadata_total;
+    uint8_t *meta_data = lsmash_malloc( meta_size );
+    if( !meta_data )
+    {
+        err = LSMASH_ERR_MEMORY_ALLOC;
+        goto fail;
+    }
+    uint32_t offset      = 0;
+    uint32_t block_count = lsm_list_count( &flac_imp->metadata_blocks );
+    uint32_t block_idx   = 0;
+    flac_metadata_block_t *block;
+    LSM_LIST_FOR_EACH( block, &flac_imp->metadata_blocks )
+    {
+        uint8_t is_last = (++block_idx == block_count) ? 0x80 : 0x00;
+        meta_data[offset + 0] = is_last | (block->type & 0x7F);
+        meta_data[offset + 1] = (uint8_t)((block->length >> 16) & 0xFF);
+        meta_data[offset + 2] = (uint8_t)((block->length >>  8) & 0xFF);
+        meta_data[offset + 3] = (uint8_t)( block->length        & 0xFF);
+        offset += 4;
+        if( block->length > 0 )
+        {
+            memcpy( &meta_data[offset], block->data, block->length );
+            offset += block->length;
+        }
+    }
+
+    /* Seek to the start of audio data (after fLaC + all metadata blocks).
      * This ensures the buffer is positioned correctly for frame reading. */
     lsmash_bs_read_seek( bs, (int64_t)(4 + metadata_total), SEEK_SET );
 
     /* Create summary with codec specific data */
-    lsmash_audio_summary_t *summary = 
-        (lsmash_audio_summary_t *)lsmash_create_summary
-        ( LSMASH_SUMMARY_TYPE_AUDIO );
+    lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_AUDIO );
     if( !summary )
     {
+        lsmash_free( meta_data );
         err = LSMASH_ERR_NAMELESS;
         goto fail;
     }
@@ -482,54 +304,53 @@ static int flac_importer_probe( importer_t *imp )
         LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
     if( !cs )
     {
-        lsmash_cleanup_summary( (lsmash_summary_t *) summary );
+        lsmash_free( meta_data );
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         err = LSMASH_ERR_MEMORY_ALLOC;
         goto fail;
     }
-    cs->data.unstructured = lsmash_create_flac_specific_info(
-         meta_data, 
-         meta_size, 
-         &cs->size );
-    if( !cs->data.unstructured 
+    cs->data.unstructured = lsmash_create_flac_specific_info( meta_data, meta_size, &cs->size );
+    lsmash_free( meta_data );
+    if( !cs->data.unstructured
      || lsmash_list_add_entry( &summary->opaque->list, cs ) < 0 )
     {
-        lsmash_cleanup_summary( (lsmash_summary_t *) summary );
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         lsmash_destroy_codec_specific_data( cs );
         err = LSMASH_ERR_NAMELESS;
         goto fail;
     }
 
-    summary->sample_type        = ISOM_CODEC_TYPE_FLAC_AUDIO;
-    summary->max_au_length      = FLAC_MAX_FRAME_SIZE;
+    summary->sample_type      = ISOM_CODEC_TYPE_FLAC_AUDIO;
+    summary->max_au_length    = FLAC_MAX_FRAME_SIZE;
     /* FLAC doesn't use MP4A AOT, so we set it to NULL. */
-    summary->aot                = MP4A_AUDIO_OBJECT_TYPE_NULL; 
-    summary->frequency          = flac_imp->sample_rate;
-    summary->channels           = flac_imp->channels;
-    summary->sample_size        = flac_imp->bits_per_sample;
+    summary->aot              = MP4A_AUDIO_OBJECT_TYPE_NULL;
+    summary->frequency        = flac_imp->sample_rate;
+    summary->channels         = flac_imp->channels;
+    summary->sample_size      = flac_imp->bits_per_sample;
     /* Use max block size as frame size hint. */
-    summary->samples_in_frame   = flac_imp->max_block_size; 
-    summary->sbr_mode           = MP4A_AAC_SBR_NOT_SPECIFIED;
+    summary->samples_in_frame = flac_imp->max_block_size;
+    summary->sbr_mode         = MP4A_AAC_SBR_NOT_SPECIFIED;
 
     if( lsmash_list_add_entry( imp->summaries, summary ) < 0 )
     {
-        lsmash_cleanup_summary( (lsmash_summary_t *) summary );
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         err = LSMASH_ERR_MEMORY_ALLOC;
         goto fail;
     }
 
-    imp->info = flac_imp;
+    imp->info   = flac_imp;
     imp->status = IMPORTER_OK;
     return 0;
 
 fail:
-    remove_flac_importer( flac_imp );
+    flac_imp_remove( flac_imp );
     return err;
 }
 
-static int flac_importer_get_accessunit
+static int flac_imp_get_accessunit
 (
-    importer_t *imp,
-    uint32_t track_number,
+    importer_t      *imp,
+    uint32_t         track_number,
     lsmash_sample_t **p_sample
 )
 {
@@ -537,30 +358,24 @@ static int flac_importer_get_accessunit
         return LSMASH_ERR_NAMELESS;
     if( track_number != 1 )
         return LSMASH_ERR_FUNCTION_PARAM;
-    
-    lsmash_audio_summary_t *summary = 
-        (lsmash_audio_summary_t *)lsmash_list_get_entry_data
-        ( imp->summaries, track_number );
+
+    lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_list_get_entry_data( imp->summaries, track_number );
     if( !summary )
         return LSMASH_ERR_NAMELESS;
-    
+
     flac_importer_t *flac_imp = (flac_importer_t *)imp->info;
     importer_status current_status = imp->status;
     if( current_status == IMPORTER_ERROR )
         return LSMASH_ERR_NAMELESS;
     if( current_status == IMPORTER_EOF )
         return IMPORTER_EOF;
-    
-    lsmash_bs_t *bs = imp->bs;
-    uint64_t remain;
-    uint8_t *buf;
 
-    remain = lsmash_bs_get_remaining_buffer_size( bs );
+    lsmash_bs_t *bs     = imp->bs;
+    uint64_t     remain = lsmash_bs_get_remaining_buffer_size( bs );
 
     if( remain < FLAC_MAX_FRAME_SIZE && !bs->eof )
     {
-        int err = lsmash_bs_read( bs, FLAC_MAX_FRAME_SIZE );
-        if( err < 0 )
+        if( lsmash_bs_read( bs, FLAC_MAX_FRAME_SIZE ) < 0 )
         {
             imp->status = IMPORTER_ERROR;
             return LSMASH_ERR_NAMELESS;
@@ -569,26 +384,28 @@ static int flac_importer_get_accessunit
     }
 
     /* Check for EOF */
-    if( (bs->eof || bs->eob) && remain < 4)
+    if( (bs->eof || bs->eob) && remain < 6 )
     {
         imp->status = IMPORTER_EOF;
         return IMPORTER_EOF;
     }
 
-    buf = lsmash_bs_get_buffer_data( bs );
+    uint8_t *buf = lsmash_bs_get_buffer_data( bs );
 
     /* Find first valid sync code */
-    int sync_offset;
-    uint32_t block_size = 0;
-    uint32_t search_from = 0;
+    int      sync_offset       = -1;
+    uint32_t block_size        = 0;
+    uint64_t frame_num         = UINT64_MAX;
+    int      blocking_strategy = 0;
+    uint32_t search_from       = 0;
 
     while( 1 )
     {
-        sync_offset = flac_find_sync
-            ( buf, (uint32_t)remain, search_from );
+        uint32_t search_limit = (remain > UINT32_MAX) ? UINT32_MAX : (uint32_t)remain;
+        sync_offset = flac_imp_find_sync( buf, search_limit, search_from );
         if( sync_offset < 0 )
         {
-            if( bs->eof | bs->eob )
+            if( bs->eof || bs->eob )
             {
                 imp->status = IMPORTER_EOF;
                 return IMPORTER_EOF;
@@ -597,102 +414,90 @@ static int flac_importer_get_accessunit
             return LSMASH_ERR_NAMELESS;
         }
 
-        block_size = flac_get_frame_block_size
-            ( buf, (uint32_t)remain, (uint32_t)sync_offset );
-        if( block_size >= flac_imp->min_block_size
-         && block_size <= flac_imp->max_block_size 
-         && flac_validate_sync_candidate
-            ( buf, (uint32_t)remain, (uint32_t)sync_offset ) )
+        if( lsm_flac_parse_frame_header( buf + sync_offset,
+                                         search_limit - (uint32_t)sync_offset,
+                                         &block_size,
+                                         &frame_num,
+                                         &blocking_strategy ) == 0
+         && block_size >= flac_imp->min_block_size
+         && block_size <= flac_imp->max_block_size )
         {
             /* Found a valid FLAC frame */
             break;
         }
-        
-        /* Invalid block size - skip this false positive */
-        search_from = (uint32_t)(sync_offset + 2);
-        if( search_from + 4 > (uint32_t)remain )
+
+        /* Invalid frame header or block size - skip this false positive */
+        search_from = (uint32_t)sync_offset + 2;
+        if( search_from + 6 > search_limit )
         {
             imp->status = IMPORTER_ERROR;
             return LSMASH_ERR_NAMELESS;
         }
     }
 
-    /* Get frame number for validating the next-frame boundary */
-    uint64_t frame_num = flac_get_frame_number
-        ( buf, (uint32_t)remain, (uint32_t)sync_offset );
-
     /* Find next frame boundary by searching for the next valid sync word */
-    uint32_t frame_end = (uint32_t)remain;
-    search_from = (uint32_t)sync_offset + 4;
+    uint32_t frame_end = (remain > UINT32_MAX) ? UINT32_MAX : (uint32_t)remain;
+    search_from = (uint32_t)sync_offset + 6;
 
     while( 1 )
     {
-        int next_sync = flac_find_sync
-            ( buf, (uint32_t)remain, search_from );
+        uint32_t search_limit = (remain > UINT32_MAX) ? UINT32_MAX : (uint32_t)remain;
+        int next_sync = flac_imp_find_sync( buf, search_limit, search_from );
         if( next_sync > sync_offset )
         {
-            if( flac_validate_sync_candidate
-                ( buf, (uint32_t)remain, (uint32_t)next_sync ) )
+            uint32_t next_block_size = 0;
+            uint64_t next_frame_num  = UINT64_MAX;
+            int      next_strategy   = 0;
+            if( lsm_flac_parse_frame_header( buf + next_sync,
+                                             search_limit - (uint32_t)next_sync,
+                                             &next_block_size,
+                                             &next_frame_num,
+                                             &next_strategy ) == 0
+             && next_strategy == blocking_strategy )
             {
-                /* Further validate using frame number. 
+                /* Further validate using frame/sample number:
                  * For fixed block size, frame number increments by 1.
-                 * For variable block, sample number increaments by block_size. */
-                uint64_t next_frame_num = flac_get_frame_number
-                    ( buf, (uint32_t)remain, (uint32_t)next_sync );
-                if( next_frame_num != UINT64_MAX )
+                 * For variable block size, sample number increments by block_size. */
+                uint64_t expected_next = (blocking_strategy == 0)
+                                       ? frame_num + 1
+                                       : frame_num + block_size;
+                if( next_frame_num == expected_next )
                 {
-                    int blocking_strategy = buf[sync_offset + 1] & 1;
-                    if( blocking_strategy == 0 )
-                    {
-                        /* Fixed block: frame number should be current + 1 */
-                        if( next_frame_num == frame_num + 1 )
-                        {
-                            frame_end = (uint32_t)next_sync;
-                            break;
-                        }
-                    }
-                    else
-                    {
-                        /* Variable block: sample number should be current + block_size */
-                        if( next_frame_num == frame_num + block_size )
-                        {
-                            frame_end = (uint32_t)next_sync;
-                            break;
-                        }
-                    }
+                    frame_end = (uint32_t)next_sync;
+                    break;
                 }
             }
-            search_from = (uint32_t)(next_sync + 2);
+            search_from = (uint32_t)next_sync + 2;
             continue;
         }
 
         /* No next sync found - need more data or EOF */
         if( bs->eof )
         {
-            frame_end = (uint32_t)remain;
+            frame_end = search_limit;
             break;
         }
         /* Read more data */
-        if( bs->buffer.pos > FLAC_MAX_FRAME_SIZE * 1000)
+        if( bs->buffer.pos > FLAC_MAX_FRAME_SIZE * 1000 )
             lsmash_bs_dispose_past_data( bs );
-        int rerr = lsmash_bs_read( bs, FLAC_MAX_FRAME_SIZE );
-        if (rerr < 0 )
+        if( lsmash_bs_read( bs, FLAC_MAX_FRAME_SIZE ) < 0 )
         {
             imp->status = IMPORTER_ERROR;
             return LSMASH_ERR_NAMELESS;
         }
         remain = lsmash_bs_get_remaining_buffer_size( bs );
-        if( remain < 4 )
+        search_limit = (remain > UINT32_MAX) ? UINT32_MAX : (uint32_t)remain;
+        if( search_limit < 6 )
         {
-            frame_end = (uint32_t)remain;
+            frame_end = search_limit;
             break;
         }
         buf = lsmash_bs_get_buffer_data( bs );
-        search_from = (uint32_t)sync_offset + 4;
+        search_from = (uint32_t)sync_offset + 6;
     }
 
     uint32_t frame_size = frame_end - (uint32_t)sync_offset;
-    if( frame_size < 4 || frame_size > FLAC_MAX_FRAME_SIZE )
+    if( frame_size < 6 || frame_size > FLAC_MAX_FRAME_SIZE )
     {
         imp->status = IMPORTER_ERROR;
         return LSMASH_ERR_NAMELESS;
@@ -706,31 +511,31 @@ static int flac_importer_get_accessunit
     }
     *p_sample = sample;
     memcpy( sample->data, &buf[sync_offset], frame_size );
-    sample->length          = frame_size;
-    sample->dts             = flac_imp->next_dts;
-    sample->cts             = sample->dts;
-    sample->prop.ra_flags   = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+    sample->length        = frame_size;
+    sample->dts           = flac_imp->next_dts;
+    sample->cts           = sample->dts;
+    sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
 
-    flac_imp->last_block_size   = block_size;
-    flac_imp->next_dts         += block_size;
-    summary->samples_in_frame   = block_size;
+    flac_imp->last_block_size = block_size;
+    flac_imp->next_dts       += block_size;
+    summary->samples_in_frame = block_size;
 
     /* Advance the buffer past this frame so the next call starts after it. */
     lsmash_bs_skip_bytes( bs, (uint32_t)sync_offset + frame_size );
 
     remain = lsmash_bs_get_remaining_buffer_size( bs );
-    if( (bs->eof || bs->eob) && remain < 4 )
+    if( (bs->eof || bs->eob) && remain < 6 )
         imp->status = IMPORTER_EOF;
     else
         imp->status = IMPORTER_OK;
-    
+
     return current_status;
 }
 
-static uint32_t flac_importer_get_last_delta
+static uint32_t flac_imp_get_last_delta
 (
     importer_t *imp,
-    uint32_t track_number
+    uint32_t    track_number
 )
 {
     debug_if( !imp || !imp->info )
@@ -745,8 +550,8 @@ const importer_functions flac_importer =
 {
     { "FLAC" },
     1, /* detectable */
-    flac_importer_probe,
-    flac_importer_get_accessunit,
-    flac_importer_get_last_delta,
-    flac_importer_cleanup,
+    flac_imp_probe,
+    flac_imp_get_accessunit,
+    flac_imp_get_last_delta,
+    flac_imp_cleanup,
 };

@@ -2730,15 +2730,13 @@ static int description_set_isom_flac_audio_description( isom_audio_entry_t *audi
     /*
      * Per the FLAC-in-ISOBMFF spec, samplerate is a 16.16 fixed-point value.
      * When sample_rate > 65535, use the greatest expressible regular division.
-     * E.g. 96000→48000, 192000→48000, 88200→44100, 176400→44100.
+     * E.g. 96000 -> 48000, 192000 -> 48000, 88200 -> 44100, 176400 -> 44100.
      * The actual rate is always available in the STREAMINFO inside dfLa.
      */
-    {
-        uint32_t freq = summary->frequency;
-        while ( freq > UINT16_MAX )
-            freq /= 2;
-        audio->samplerate = freq << 16;        
-    }
+    uint32_t freq = summary->frequency;
+    while( freq > UINT16_MAX )
+        freq /= 2;
+    audio->samplerate = freq << 16;
     return 0;
 }
 
@@ -3989,11 +3987,33 @@ lsmash_summary_t *lsm_description_create_audio_summary( isom_sample_entry_t *sam
                 lsmash_destroy_codec_specific_data( specific );
                 goto fail;
             }
-            if( specific->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_DTS
-             || specific->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3
-             || specific->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3
-             || specific->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_OPUS
-             || specific->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_PCM_CONFIG )
+            if( specific->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_FLAC )
+            {
+                extern int lsm_flac_parse_streaminfo( const uint8_t *, uint32_t, uint32_t *, uint8_t *, uint8_t *, uint32_t *, uint32_t *, uint64_t * );
+                if( specific->size >= ISOM_FULLBOX_COMMON_SIZE + 4 + 34
+                 && (specific->data.unstructured[ISOM_FULLBOX_COMMON_SIZE] & 0x7F) == 0 )
+                {
+                    uint32_t sr     = 0;
+                    uint8_t  ch     = 0;
+                    uint8_t  bps    = 0;
+                    uint32_t min_bs = 0;
+                    uint32_t max_bs = 0;
+                    if( lsm_flac_parse_streaminfo( specific->data.unstructured + ISOM_FULLBOX_COMMON_SIZE + 4,
+                                                   specific->size - ISOM_FULLBOX_COMMON_SIZE - 4,
+                                                   &sr, &ch, &bps, &min_bs, &max_bs, NULL ) == 0 )
+                    {
+                        summary->frequency        = sr;
+                        summary->channels         = ch;
+                        summary->sample_size      = bps;
+                        summary->samples_in_frame = max_bs;
+                    }
+                }
+            }
+            else if( specific->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_DTS
+                  || specific->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3
+                  || specific->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3
+                  || specific->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_OPUS
+                  || specific->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_PCM_CONFIG )
             {
                 specific = lsmash_convert_codec_specific_format( specific, LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED );
                 if( !specific )

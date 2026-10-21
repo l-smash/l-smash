@@ -3735,6 +3735,269 @@ static int test_multibuf_resize_and_codec_regressions( void )
     return 0;
 }
 
+/*---------------------------------------------------------------------------
+ * Test 15: FLAC-in-ISOBMFF (fLaC / dfLa) Importer & Mux/Demux Round-Trip
+ *---------------------------------------------------------------------------*/
+extern uint8_t lsm_flac_crc8( const uint8_t *data, uint32_t len );
+
+static uint32_t build_synth_flac_frame
+(
+    uint8_t *dst,
+    int      variable_block_strategy,
+    uint32_t block_size,
+    uint64_t coded_number,
+    uint32_t payload_bytes
+)
+{
+    uint32_t pos = 0;
+    dst[pos++] = 0xFF;
+    dst[pos++] = (uint8_t)(0xF8 | (variable_block_strategy & 1));
+    uint8_t bs_code = (block_size == 4096) ? 12 : 7; /* 12 -> 4096, 7 -> 16-bit uncommon (bs-1) after UTF-8 */
+    uint8_t sr_code = 10; /* 96 kHz */
+    dst[pos++] = (uint8_t)((bs_code << 4) | sr_code);
+    dst[pos++] = (uint8_t)((1 << 4) | (6 << 1) | 0); /* stereo (ch=1), 24-bit (bps=6), reserved=0 */
+
+    /* Encode UTF-8 frame/sample number */
+    if( coded_number < 0x80 )
+    {
+        dst[pos++] = (uint8_t)coded_number;
+    }
+    else if( coded_number < 0x800 )
+    {
+        dst[pos++] = (uint8_t)(0xC0 | ((coded_number >> 6) & 0x1F));
+        dst[pos++] = (uint8_t)(0x80 |  (coded_number       & 0x3F));
+    }
+    else
+    {
+        dst[pos++] = (uint8_t)(0xE0 | ((coded_number >> 12) & 0x0F));
+        dst[pos++] = (uint8_t)(0x80 | ((coded_number >>  6) & 0x3F));
+        dst[pos++] = (uint8_t)(0x80 |  (coded_number        & 0x3F));
+    }
+
+    if( bs_code == 7 )
+    {
+        uint16_t bs_m1 = (uint16_t)(block_size - 1);
+        dst[pos++] = (uint8_t)((bs_m1 >> 8) & 0xFF);
+        dst[pos++] = (uint8_t)( bs_m1       & 0xFF);
+    }
+
+    dst[pos] = lsm_flac_crc8( dst, pos );
+    pos++;
+
+    for( uint32_t i = 0; i < payload_bytes; i++ )
+    {
+        /* Embed a false sync word in the middle of the payload to test CRC-8 + frame number sync rejection */
+        if( i == 8 && payload_bytes >= 16 )
+        {
+            dst[pos++] = 0xFF;
+            dst[pos++] = (uint8_t)(0xF8 | (variable_block_strategy & 1));
+            dst[pos++] = 0xCA;
+            dst[pos++] = 0x1C;
+            dst[pos++] = 0x00;
+            dst[pos++] = 0x55; /* wrong CRC-8 */
+            i += 5;
+        }
+        else
+            dst[pos++] = (uint8_t)(((i * 37) + (uint32_t)coded_number) & 0x7F);
+    }
+    return pos;
+}
+
+static int test_flac_isobmff_roundtrip( void )
+{
+    /* 1. Verify CRC-8 lookup table against bit-by-bit reference */
+    for( uint32_t b = 0; b < 256; b++ )
+    {
+        uint8_t byte_val = (uint8_t)b;
+        uint8_t ref = byte_val;
+        for( int j = 0; j < 8; j++ )
+            ref = (ref & 0x80) ? (uint8_t)((ref << 1) ^ 0x07) : (uint8_t)(ref << 1);
+        TEST_ASSERT( lsm_flac_crc8( &byte_val, 1 ) == ref, "FLAC CRC-8 single-byte table match" );
+    }
+
+    /* 2. Negative checks for lsmash_create_flac_specific_info */
+    uint32_t dummy_len = 0;
+    uint8_t bad_meta[40] = { 0x84, 0x00, 0x00, 0x22 }; /* BlockType=4 instead of 0 (STREAMINFO) */
+    TEST_ASSERT( lsmash_create_flac_specific_info( NULL, 38, &dummy_len ) == NULL, "reject NULL metadata_blocks" );
+    TEST_ASSERT( lsmash_create_flac_specific_info( bad_meta, 20, &dummy_len ) == NULL, "reject short metadata_blocks" );
+    TEST_ASSERT( lsmash_create_flac_specific_info( bad_meta, 38, &dummy_len ) == NULL, "reject non-STREAMINFO first block" );
+
+    /* 3. Synthesize a raw .flac bitstream with 96 kHz 24-bit 2ch STREAMINFO, VORBIS_COMMENT, and 4 variable-block frames */
+    const char *flac_path = "test_synth_flac.flac";
+    const char *mp4_path  = "test_synth_flac.mp4";
+    const char *dump_path = "test_synth_flac_dump.txt";
+
+    uint8_t  frames[4][128];
+    uint32_t frame_sizes[4];
+    uint32_t block_sizes[4]  = { 4096, 4096, 4096, 1500 }; /* last frame uses uncommon 16-bit block size (bs_code=7) */
+    uint64_t sample_nums[4]  = { 0, 4096, 8192, 12288 };
+    for( int i = 0; i < 4; i++ )
+        frame_sizes[i] = build_synth_flac_frame( frames[i], 1, block_sizes[i], sample_nums[i], 32 );
+
+    {
+        lsmash_bs_t *bs = lsmash_bs_create();
+        TEST_ASSERT( bs != NULL, "create bs for synth flac" );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'f', 'L', 'a', 'C' ) );
+
+        /* Metadata Block 0: STREAMINFO (last=0, type=0, len=34) */
+        lsmash_bs_put_byte( bs, 0x00 );
+        lsmash_bs_put_be24( bs, 34 );
+        lsmash_bs_put_be16( bs, 1024 ); /* min_block_size = 1024 */
+        lsmash_bs_put_be16( bs, 4096 ); /* max_block_size = 4096 */
+        lsmash_bs_put_be24( bs, 32 );   /* min_frame_size */
+        lsmash_bs_put_be24( bs, 128 );  /* max_frame_size */
+        /* sample_rate (20b) = 96000 (0x17700), channels-1 (3b) = 1, bps-1 (5b) = 23 (0x17), total_samples (36b) = 13788 */
+        uint64_t sr_ch_bps_tot = ((uint64_t)96000 << 44)
+                               | ((uint64_t)1     << 41)
+                               | ((uint64_t)23    << 36)
+                               |  (uint64_t)13788;
+        lsmash_bs_put_be64( bs, sr_ch_bps_tot );
+        for( int i = 0; i < 16; i++ )
+            lsmash_bs_put_byte( bs, (uint8_t)(0xA0 + i) ); /* MD5 signature */
+
+        /* Metadata Block 1: VORBIS_COMMENT (last=1, type=4, len=12) */
+        lsmash_bs_put_byte( bs, 0x84 );
+        lsmash_bs_put_be24( bs, 12 );
+        lsmash_bs_put_le32( bs, 4 );
+        lsmash_bs_put_bytes( bs, 4, (void *)"L-SM" );
+        lsmash_bs_put_le32( bs, 0 );
+
+        /* Audio Frames */
+        for( int i = 0; i < 4; i++ )
+            lsmash_bs_put_bytes( bs, frame_sizes[i], frames[i] );
+
+        uint32_t raw_len = 0;
+        uint8_t *raw = lsmash_bs_export_data( bs, &raw_len );
+        lsmash_bs_cleanup( bs );
+        FILE *fp = fopen( flac_path, "wb" );
+        TEST_ASSERT( fp != NULL, "open synth flac file" );
+        fwrite( raw, 1, raw_len, fp );
+        fclose( fp );
+        lsmash_free( raw );
+    }
+
+    /* 4. Import raw FLAC and mux into ISOBMFF MP4 */
+    {
+        lsmash_root_t *imp_root = lsmash_create_root();
+        importer_t *imp = lsmash_importer_open( imp_root, flac_path, "auto" );
+        TEST_ASSERT( imp != NULL, "open flac importer" );
+
+        lsmash_audio_summary_t *sum = (lsmash_audio_summary_t *)lsmash_duplicate_summary( imp, 1 );
+        TEST_ASSERT( sum != NULL, "duplicate flac summary" );
+        TEST_ASSERT( lsmash_check_codec_type_identical( sum->sample_type, ISOM_CODEC_TYPE_FLAC_AUDIO ), "summary is fLaC" );
+        TEST_ASSERT( sum->frequency == 96000 && sum->channels == 2 && sum->sample_size == 24 && sum->samples_in_frame == 4096,
+                     "flac importer parsed 96kHz 2ch 24-bit max_bs=4096 from STREAMINFO" );
+
+        lsmash_root_t *mux_root = lsmash_create_root();
+        lsmash_file_parameters_t mux_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( mp4_path, 0, &mux_param ) == 0, "open flac mp4 for write" );
+        mux_param.major_brand   = ISOM_BRAND_TYPE_ISOM;
+        mux_param.minor_version = 512;
+        lsmash_brand_type brands[2] = { ISOM_BRAND_TYPE_ISOM, ISOM_BRAND_TYPE_ISO2 };
+        mux_param.brands      = brands;
+        mux_param.brand_count = 2;
+        TEST_ASSERT( lsmash_set_file( mux_root, &mux_param ) != NULL, "set flac mp4 file" );
+
+        lsmash_movie_parameters_t movie_param;
+        lsmash_initialize_movie_parameters( &movie_param );
+        TEST_ASSERT( lsmash_set_movie_parameters( mux_root, &movie_param ) == 0, "set movie params" );
+
+        uint32_t tid = lsmash_create_track( mux_root, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK );
+        TEST_ASSERT( tid == 1, "create audio track" );
+
+        lsmash_track_parameters_t track_param;
+        lsmash_initialize_track_parameters( &track_param );
+        track_param.mode = ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE | ISOM_TRACK_IN_PREVIEW;
+        TEST_ASSERT( lsmash_set_track_parameters( mux_root, tid, &track_param ) == 0, "set track params" );
+
+        lsmash_media_parameters_t media_param;
+        lsmash_initialize_media_parameters( &media_param );
+        media_param.timescale = sum->frequency;
+        TEST_ASSERT( lsmash_set_media_parameters( mux_root, tid, &media_param ) == 0, "set media params" );
+
+        TEST_ASSERT( lsmash_add_sample_entry( mux_root, tid, sum ) == 1, "add fLaC sample entry" );
+        lsmash_cleanup_summary( (lsmash_summary_t *)sum );
+
+        uint32_t imported_frames = 0;
+        lsmash_sample_t *sample = NULL;
+        while( lsmash_importer_get_access_unit( imp, 1, &sample ) == 0 && sample )
+        {
+            sample->index = 1;
+            TEST_ASSERT( lsmash_append_sample( mux_root, tid, sample ) == 0, "append flac sample" );
+            sample = NULL;
+            imported_frames++;
+        }
+        TEST_ASSERT( imported_frames == 4, "flac importer extracted all 4 frames" );
+        uint32_t last_delta = lsmash_importer_get_last_delta( imp, 1 );
+        TEST_ASSERT( last_delta == 1500, "flac importer last_delta == 1500 (uncommon 16-bit block size)" );
+        TEST_ASSERT( lsmash_flush_pooled_samples( mux_root, tid, last_delta ) == 0, "flush flac samples" );
+        TEST_ASSERT( lsmash_update_track_duration( mux_root, tid, last_delta ) == 0, "update flac track duration" );
+        TEST_ASSERT( lsmash_finish_movie( mux_root, NULL ) == 0, "finish flac mp4" );
+
+        lsmash_close_file( &mux_param );
+        lsmash_destroy_root( mux_root );
+        lsmash_importer_close( imp );
+        lsmash_destroy_root( imp_root );
+    }
+
+    /* 5. Demux and dump the FLAC MP4 and verify dfLa boxdumper output, summary recovery, and samples */
+    {
+        lsmash_root_t *demux_root = lsmash_create_root();
+        lsmash_file_parameters_t demux_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( mp4_path, 1, &demux_param ) == 0, "open flac mp4 for read" );
+        demux_param.mode |= LSMASH_FILE_MODE_DUMP;
+        lsmash_file_t *demux_file = lsmash_set_file( demux_root, &demux_param );
+        TEST_ASSERT( lsmash_read_file( demux_file, &demux_param ) >= 0, "read flac mp4" );
+
+        TEST_ASSERT( lsmash_print_movie( demux_root, dump_path ) == 0, "print flac movie" );
+        FILE *dfp = fopen( dump_path, "rb" );
+        TEST_ASSERT( dfp != NULL, "open flac dump" );
+        fseek( dfp, 0, SEEK_END );
+        long fsz = ftell( dfp );
+        fseek( dfp, 0, SEEK_SET );
+        char *dump_buf = (char *)lsmash_malloc( (size_t)fsz + 1 );
+        TEST_ASSERT( dump_buf != NULL, "alloc flac dump_buf" );
+        size_t nread = fread( dump_buf, 1, (size_t)fsz, dfp );
+        dump_buf[nread] = '\0';
+        fclose( dfp );
+        remove( dump_path );
+        TEST_ASSERT( nread > 0, "non-empty flac dump" );
+        TEST_ASSERT( strstr( dump_buf, "[fLaC: Audio Description]" ) != NULL, "dump contains fLaC Audio Description" );
+        TEST_ASSERT( strstr( dump_buf, "[dfLa: FLAC Specific Box]" ) != NULL, "dump contains dfLa FLAC Specific Box" );
+        TEST_ASSERT( strstr( dump_buf, "SampleRate = 96000" ) != NULL, "dump contains SampleRate = 96000" );
+        TEST_ASSERT( strstr( dump_buf, "VORBIS_COMMENT" ) != NULL, "dump contains VORBIS_COMMENT block" );
+        lsmash_free( dump_buf );
+
+        lsmash_audio_summary_t *dsum = (lsmash_audio_summary_t *)lsmash_get_summary( demux_root, 1, 1 );
+        TEST_ASSERT( dsum != NULL, "get demuxed flac summary" );
+        TEST_ASSERT( lsmash_check_codec_type_identical( dsum->sample_type, ISOM_CODEC_TYPE_FLAC_AUDIO ), "demuxed sample_type is fLaC" );
+        TEST_ASSERT( dsum->frequency == 96000 && dsum->channels == 2 && dsum->sample_size == 24 && dsum->samples_in_frame == 4096,
+                     "demuxed summary recovers exact 96000 Hz from dfLa STREAMINFO" );
+        lsmash_cleanup_summary( (lsmash_summary_t *)dsum );
+
+        TEST_ASSERT( lsmash_construct_timeline( demux_root, 1 ) == 0, "construct flac timeline" );
+        TEST_ASSERT( lsmash_get_sample_count_in_media_timeline( demux_root, 1 ) == 4, "4 flac frames in timeline" );
+        for( uint32_t i = 1; i <= 4; i++ )
+        {
+            lsmash_sample_t *s = lsmash_get_sample_from_media_timeline( demux_root, 1, i );
+            TEST_ASSERT( s != NULL && s->length == frame_sizes[i - 1], "demuxed flac frame length matches" );
+            TEST_ASSERT( s->dts == sample_nums[i - 1], "demuxed flac frame DTS matches" );
+            TEST_ASSERT( memcmp( s->data, frames[i - 1], frame_sizes[i - 1] ) == 0, "demuxed flac frame data matches bit-for-bit" );
+            lsmash_delete_sample( s );
+        }
+        lsmash_destruct_timeline( demux_root, 1 );
+
+        lsmash_close_file( &demux_param );
+        lsmash_destroy_root( demux_root );
+    }
+
+    remove( flac_path );
+    remove( mp4_path );
+
+    printf( "[PASS] test_flac_isobmff_roundtrip\n" );
+    return 0;
+}
+
 #ifdef LSMASH_DEBUG_ALLOC
 #define RUN_TEST( test_fn )                                                       \
     do                                                                            \
@@ -3774,6 +4037,7 @@ int main( void )
     RUN_TEST( test_wave_importer_isobmff_lpcm );
     RUN_TEST( test_malformed_boxes_and_sample_tables );
     RUN_TEST( test_multibuf_resize_and_codec_regressions );
+    RUN_TEST( test_flac_isobmff_roundtrip );
 #ifdef LSMASH_DEBUG_ALLOC
     assert( lsm_alloc_verify_no_leaks() == 0 );
     assert( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0 );
