@@ -149,15 +149,15 @@ typedef void mp4sys_descriptor_t;
 typedef void mp4sys_ES_Descriptor_t;
 typedef void mp4sys_ObjectDescriptor_t;
 
-void mp4sys_remove_descriptor( mp4sys_descriptor_t *descriptor );
+void lsm_mp4sys_remove_descriptor( mp4sys_descriptor_t *descriptor );
 
 /* ES_ID of the ES Descriptor is stored as 0 when the ES Descriptor is built into sample descriptions in MP4 file format
  * since the lower 16 bits of the track_ID is used, instead of ES_ID, for the identifier of the elemental stream within the track. */
-mp4sys_ES_Descriptor_t *mp4sys_create_ES_Descriptor( uint16_t ES_ID );
-mp4sys_ObjectDescriptor_t *mp4sys_create_ObjectDescriptor( uint16_t ObjectDescriptorID );
-int mp4sys_create_ES_ID_Inc( mp4sys_ObjectDescriptor_t *od, uint32_t Track_ID );
+mp4sys_ES_Descriptor_t *lsm_mp4sys_create_ES_Descriptor( uint16_t ES_ID );
+mp4sys_ObjectDescriptor_t *lsm_mp4sys_create_ObjectDescriptor( uint16_t ObjectDescriptorID );
+int lsm_mp4sys_create_ES_ID_Inc( mp4sys_ObjectDescriptor_t *od, uint32_t Track_ID );
 
-int mp4sys_to_InitialObjectDescriptor
+int lsm_mp4sys_to_InitialObjectDescriptor
 (
     mp4sys_ObjectDescriptor_t            *od,
     uint8_t                               include_inline_pli,
@@ -168,7 +168,7 @@ int mp4sys_to_InitialObjectDescriptor
     mp4sys_graphicsProfileLevelIndication graph_pli
 );
 
-int mp4sys_update_DecoderConfigDescriptor
+int lsm_mp4sys_update_DecoderConfigDescriptor
 (
     mp4sys_ES_Descriptor_t *esd,
     uint32_t                bufferSizeDB,
@@ -176,15 +176,15 @@ int mp4sys_update_DecoderConfigDescriptor
     uint32_t                avgBitrate
 );
 
-uint32_t mp4sys_update_descriptor_size( mp4sys_descriptor_t *descriptor );
-int mp4sys_write_descriptor( lsmash_bs_t *bs, mp4sys_descriptor_t *descriptor );
-void mp4sys_print_descriptor( FILE *fp, mp4sys_descriptor_t *descriptor, int indent );
-mp4sys_descriptor_t *mp4sys_get_descriptor( lsmash_bs_t *bs, mp4sys_descriptor_t *parent );
+uint32_t lsm_mp4sys_update_descriptor_size( mp4sys_descriptor_t *descriptor );
+int lsm_mp4sys_write_descriptor( lsmash_bs_t *bs, mp4sys_descriptor_t *descriptor );
+void lsm_mp4sys_print_descriptor( FILE *fp, mp4sys_descriptor_t *descriptor, int indent );
+mp4sys_descriptor_t *lsm_mp4sys_get_descriptor( lsmash_bs_t *bs, mp4sys_descriptor_t *parent );
 
-int mp4sys_setup_summary_from_DecoderSpecificInfo( lsmash_audio_summary_t *summary, mp4sys_ES_Descriptor_t *esd );
+int lsm_mp4sys_setup_summary_from_DecoderSpecificInfo( lsmash_audio_summary_t *summary, mp4sys_ES_Descriptor_t *esd );
 
 /* to facilitate to make ES_Descriptor */
-mp4sys_ES_Descriptor_t *mp4sys_setup_ES_Descriptor( mp4sys_ES_Descriptor_params_t *params );
+mp4sys_ES_Descriptor_t *lsm_mp4sys_setup_ES_Descriptor( mp4sys_ES_Descriptor_params_t *params );
 
 #endif /* #ifndef MP4SYS_INTERNAL */
 

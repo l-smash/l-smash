@@ -72,7 +72,7 @@ int lsm_movie_update_mvhd_duration( isom_moov_t *moov )
     return 0;
 }
 
-static inline uint64_t movie_get_current_mp4time( void )
+static uint64_t movie_get_current_mp4time( void )
 {
     return (uint64_t)time( NULL ) + ISOM_MAC_EPOCH_OFFSET;
 }
@@ -248,10 +248,10 @@ static int movie_scan_trak_profileLevelIndication
                 lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_AUDIO );
                 if( !summary )
                     continue;
-                if( mp4sys_setup_summary_from_DecoderSpecificInfo( summary, esds->ES ) < 0 )
+                if( lsm_mp4sys_setup_summary_from_DecoderSpecificInfo( summary, esds->ES ) < 0 )
                     *audio_pli = MP4A_AUDIO_PLI_NOT_SPECIFIED;
                 else
-                    *audio_pli = mp4a_max_audioProfileLevelIndication( *audio_pli, mp4a_get_audioProfileLevelIndication( summary ) );
+                    *audio_pli = lsm_mp4a_max_audioProfileLevelIndication( *audio_pli, lsm_mp4a_get_audioProfileLevelIndication( summary ) );
                 lsmash_cleanup_summary( (lsmash_summary_t *)summary );
             }
             else
@@ -270,7 +270,7 @@ int lsm_movie_setup_iods( isom_moov_t *moov )
         return LSMASH_ERR_NAMELESS;
     isom_iods_t *iods = moov->iods;
     int err = LSMASH_ERR_NAMELESS;
-    iods->OD = mp4sys_create_ObjectDescriptor( 1 ); /* NOTE: Use 1 for ObjectDescriptorID of IOD. */
+    iods->OD = lsm_mp4sys_create_ObjectDescriptor( 1 ); /* NOTE: Use 1 for ObjectDescriptorID of IOD. */
     if( !iods->OD )
         goto fail;
     mp4a_audioProfileLevelIndication     audio_pli = MP4A_AUDIO_PLI_NONE_REQUIRED;
@@ -283,14 +283,14 @@ int lsm_movie_setup_iods( isom_moov_t *moov )
             goto fail;
         if( (err = movie_scan_trak_profileLevelIndication( trak, &audio_pli, &visual_pli )) < 0 )
             goto fail;
-        if( (err = mp4sys_create_ES_ID_Inc( iods->OD, trak->tkhd->track_ID )) < 0 )
+        if( (err = lsm_mp4sys_create_ES_ID_Inc( iods->OD, trak->tkhd->track_ID )) < 0 )
             goto fail;
     }
-    if( (err = mp4sys_to_InitialObjectDescriptor( iods->OD,
-                                                  0, /* FIXME: I'm not quite sure what the spec says. */
-                                                  MP4SYS_OD_PLI_NONE_REQUIRED, MP4SYS_SCENE_PLI_NONE_REQUIRED,
-                                                  audio_pli, visual_pli,
-                                                  MP4SYS_GRAPHICS_PLI_NONE_REQUIRED )) < 0 )
+    if( (err = lsm_mp4sys_to_InitialObjectDescriptor( iods->OD,
+                                                      0, /* FIXME: I'm not quite sure what the spec says. */
+                                                      MP4SYS_OD_PLI_NONE_REQUIRED, MP4SYS_SCENE_PLI_NONE_REQUIRED,
+                                                      audio_pli, visual_pli,
+                                                      MP4SYS_GRAPHICS_PLI_NONE_REQUIRED )) < 0 )
         goto fail;
     return 0;
 fail:

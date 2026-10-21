@@ -78,7 +78,7 @@ static const importer_functions *importer_func_table[] =
 ***************************************************************************/
 
 /******** importer public functions ********/
-importer_t *lsmash_importer_alloc( lsmash_root_t *root )
+importer_t *lsm_importer_alloc( lsmash_root_t *root )
 {
     if( LSMASH_IS_NON_EXISTING_BOX( root ) )
         return NULL;
@@ -96,7 +96,7 @@ importer_t *lsmash_importer_alloc( lsmash_root_t *root )
     return importer;
 }
 
-void lsmash_importer_destroy( importer_t *importer )
+void lsm_importer_destroy( importer_t *importer )
 {
     if( !importer )
         return;
@@ -110,7 +110,7 @@ void lsmash_importer_destroy( importer_t *importer )
         file->importer = NULL;
 }
 
-int lsmash_importer_set_file( importer_t *importer, lsmash_file_t *file )
+int lsm_importer_set_file( importer_t *importer, lsmash_file_t *file )
 {
     if( !importer
      || lsmash_activate_file( importer->root, file ) < 0
@@ -127,10 +127,10 @@ void lsmash_importer_close( importer_t *importer )
     if( !importer )
         return;
     lsmash_close_file( &importer->file_param );
-    lsmash_importer_destroy( importer );
+    lsm_importer_destroy( importer );
 }
 
-int lsmash_importer_find( importer_t *importer, const char *format, int auto_detect )
+int lsm_importer_find( importer_t *importer, const char *format, int auto_detect )
 {
     importer->log_level = LSMASH_LOG_QUIET; /* Any error log is confusing for the probe step. */
     const importer_functions *funcs;
@@ -179,7 +179,7 @@ importer_t *lsmash_importer_open( lsmash_root_t *root, const char *identifier, c
     if( identifier == NULL )
         return NULL;
     int auto_detect = (format == NULL || !strcmp( format, "auto" ));
-    importer_t *importer = lsmash_importer_alloc( root );
+    importer_t *importer = lsm_importer_alloc( root );
     if( !importer )
         return NULL;
     importer->is_adhoc_open = 1;
@@ -204,8 +204,8 @@ importer_t *lsmash_importer_open( lsmash_root_t *root, const char *identifier, c
         lsmash_log( importer, LSMASH_LOG_ERROR, "failed to set opened file.\n" );
         goto fail;
     }
-    lsmash_importer_set_file( importer, file );
-    if( lsmash_importer_find( importer, format, auto_detect ) < 0 )
+    lsm_importer_set_file( importer, file );
+    if( lsm_importer_find( importer, format, auto_detect ) < 0 )
         goto fail;
     return importer;
 fail:
@@ -280,7 +280,7 @@ lsmash_summary_t *lsmash_duplicate_summary( importer_t *importer, uint32_t track
         lsmash_codec_specific_t *src_specific = (lsmash_codec_specific_t *)entry->data;
         if( !src_specific )
             continue;
-        lsmash_codec_specific_t *dup = isom_duplicate_codec_specific_data( src_specific );
+        lsmash_codec_specific_t *dup = lsm_description_duplicate_codec_specific_data( src_specific );
         if( lsmash_list_add_entry( &summary->opaque->list, dup ) < 0 )
         {
             lsmash_cleanup_summary( (lsmash_summary_t *)summary );
@@ -291,7 +291,7 @@ lsmash_summary_t *lsmash_duplicate_summary( importer_t *importer, uint32_t track
     return summary;
 }
 
-int lsmash_importer_make_fake_movie( importer_t *importer )
+int lsm_importer_make_fake_movie( importer_t *importer )
 {
     if( !importer || (importer->file->flags & LSMASH_FILE_MODE_BOX) )
         return LSMASH_ERR_FUNCTION_PARAM;
@@ -300,7 +300,7 @@ int lsmash_importer_make_fake_movie( importer_t *importer )
     return 0;
 }
 
-int lsmash_importer_make_fake_track( importer_t *importer, lsmash_media_type media_type, uint32_t *track_ID )
+int lsm_importer_make_fake_track( importer_t *importer, lsmash_media_type media_type, uint32_t *track_ID )
 {
     if( !importer || (importer->file->flags & LSMASH_FILE_MODE_BOX) || track_ID == 0 )
         return LSMASH_ERR_FUNCTION_PARAM;
@@ -322,7 +322,7 @@ fail:
     return err;
 }
 
-void lsmash_importer_break_fake_movie( importer_t *importer )
+void lsm_importer_break_fake_movie( importer_t *importer )
 {
     if( !importer )
         return;

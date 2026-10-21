@@ -341,18 +341,18 @@ struct hevc_info_tag
     hevc_stream_buffer_t buffer;
 };
 
-int hevc_setup_parser
+int lsm_hevc_setup_parser
 (
     hevc_info_t *info,
     int          parse_only
 );
 
-void hevc_cleanup_parser
+void lsm_hevc_cleanup_parser
 (
     hevc_info_t *info
 );
 
-uint64_t hevc_find_next_start_code
+uint64_t lsm_hevc_find_next_start_code
 (
     lsmash_bs_t        *bs,
     hevc_nalu_header_t *nuh,
@@ -360,21 +360,21 @@ uint64_t hevc_find_next_start_code
     uint64_t           *trailing_zero_bytes
 );
 
-int hevc_calculate_poc
+int lsm_hevc_calculate_poc
 (
     hevc_info_t         *info,
     hevc_picture_info_t *picture,
     hevc_picture_info_t *prev_picture
 );
 
-void hevc_update_picture_info_for_slice
+void lsm_hevc_update_picture_info_for_slice
 (
     hevc_info_t         *info,
     hevc_picture_info_t *picture,
     hevc_slice_info_t   *slice
 );
 
-void hevc_update_picture_info
+void lsm_hevc_update_picture_info
 (
     hevc_info_t         *info,
     hevc_picture_info_t *picture,
@@ -383,27 +383,27 @@ void hevc_update_picture_info
     hevc_sei_t          *sei
 );
 
-int hevc_find_au_delimit_by_slice_info
+int lsm_hevc_find_au_delimit_by_slice_info
 (
     hevc_info_t       *info,
     hevc_slice_info_t *slice,
     hevc_slice_info_t *prev_slice
 );
 
-int hevc_find_au_delimit_by_nalu_type
+int lsm_hevc_find_au_delimit_by_nalu_type
 (
     uint8_t nalu_type,
     uint8_t prev_nalu_type
 );
 
-int hevc_supplement_buffer
+int lsm_hevc_supplement_buffer
 (
     hevc_stream_buffer_t *hb,
     hevc_access_unit_t   *au,
     uint32_t              size
 );
 
-int hevc_parse_vps
+int lsm_hevc_parse_vps
 (
     hevc_info_t *info,
     uint8_t     *rbsp_buffer,
@@ -411,7 +411,7 @@ int hevc_parse_vps
     uint64_t     ebsp_size
 );
 
-int hevc_parse_sps
+int lsm_hevc_parse_sps
 (
     hevc_info_t *info,
     uint8_t     *rbsp_buffer,
@@ -419,7 +419,7 @@ int hevc_parse_sps
     uint64_t     ebsp_size
 );
 
-int hevc_parse_pps
+int lsm_hevc_parse_pps
 (
     hevc_info_t *info,
     uint8_t     *rbsp_buffer,
@@ -427,7 +427,7 @@ int hevc_parse_pps
     uint64_t     ebsp_size
 );
 
-int hevc_parse_sei
+int lsm_hevc_parse_sei
 (
     lsmash_bits_t      *bits,
     hevc_vps_t         *vps,
@@ -438,7 +438,7 @@ int hevc_parse_sei
     uint8_t            *ebsp,
     uint64_t            ebsp_size
 );
-int hevc_parse_slice_segment_header
+int lsm_hevc_parse_slice_segment_header
 (
     hevc_info_t        *info,
     hevc_nalu_header_t *nuh,
@@ -447,7 +447,7 @@ int hevc_parse_slice_segment_header
     uint64_t            ebsp_size
 );
 
-int hevc_try_to_append_dcr_nalu
+int lsm_hevc_try_to_append_dcr_nalu
 (
     hevc_info_t              *info,
     lsmash_hevc_dcr_nalu_type ps_type,
@@ -455,12 +455,12 @@ int hevc_try_to_append_dcr_nalu
     uint32_t                  ps_length
 );
 
-int hevc_move_pending_hvcC_param
+int lsm_hevc_move_pending_hvcC_param
 (
     hevc_info_t *info
 );
 
-void lhevc_free_arrays
+void lsm_hevc_free_lhevc_arrays
 (
     lsmash_lhevc_paramater_arrays_t *array,
     uint8_t numOfArrays

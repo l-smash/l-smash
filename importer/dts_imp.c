@@ -48,7 +48,7 @@ typedef struct
     uint32_t au_number;
 } dts_importer_t;
 
-static void remove_dts_importer( dts_importer_t *dts_imp )
+static void dts_imp_remove( dts_importer_t *dts_imp )
 {
     if( !dts_imp )
         return;
@@ -57,7 +57,7 @@ static void remove_dts_importer( dts_importer_t *dts_imp )
     lsmash_free( dts_imp );
 }
 
-static dts_importer_t *create_dts_importer( importer_t *importer )
+static dts_importer_t *dts_imp_create( importer_t *importer )
 {
     dts_importer_t *dts_imp = (dts_importer_t *)lsmash_malloc_zero( sizeof(dts_importer_t) );
     if( !dts_imp )
@@ -78,17 +78,17 @@ static dts_importer_t *create_dts_importer( importer_t *importer )
     }
     dts_imp->au            = lsmash_withdraw_buffer( dts_imp->au_buffers, 1 );
     dts_imp->incomplete_au = lsmash_withdraw_buffer( dts_imp->au_buffers, 2 );
-    dts_setup_parser( dts_info );
+    lsm_dts_setup_parser( dts_info );
     return dts_imp;
 }
 
-static void dts_importer_cleanup( importer_t *importer )
+static void dts_imp_cleanup( importer_t *importer )
 {
     debug_if( importer && importer->info )
-        remove_dts_importer( importer->info );
+        dts_imp_remove( importer->info );
 }
 
-static int dts_importer_get_next_accessunit_internal( importer_t *importer )
+static int dts_imp_get_next_accessunit_internal( importer_t *importer )
 {
     int au_completed = 0;
     dts_importer_t *dts_imp = (dts_importer_t *)importer->info;
@@ -132,13 +132,13 @@ static int dts_importer_get_next_accessunit_internal( importer_t *importer )
                 return 0;
             }
             if( !info->ddts_param_initialized )
-                dts_update_specific_param( info );
+                lsm_dts_update_specific_param( info );
         }
         else
         {
             /* Parse substream frame. */
             dts_substream_type prev_substream_type = info->substream_type;
-            info->substream_type = dts_get_substream_type( info );
+            info->substream_type = lsm_dts_get_substream_type( info );
             int err;
             int (*dts_parse_frame)( dts_info_t * ) = NULL;
             switch( info->substream_type )
@@ -147,12 +147,12 @@ static int dts_importer_get_next_accessunit_internal( importer_t *importer )
                 case DTS_SUBSTREAM_TYPE_CORE :
                     if( prev_substream_type != DTS_SUBSTREAM_TYPE_NONE )
                         au_completed = 1;
-                    dts_parse_frame = dts_parse_core_substream;
+                    dts_parse_frame = lsm_dts_parse_core_substream;
                     break;
                 case DTS_SUBSTREAM_TYPE_EXTENSION :
                 {
                     uint8_t prev_exss_index = info->exss_index;
-                    if( (err = dts_get_exss_index( info, &info->exss_index )) < 0 )
+                    if( (err = lsm_dts_get_exss_index( info, &info->exss_index )) < 0 )
                     {
                         lsmash_log( importer, LSMASH_LOG_ERROR, "failed to get the index of an extension substream.\n" );
                         return err;
@@ -160,7 +160,7 @@ static int dts_importer_get_next_accessunit_internal( importer_t *importer )
                     if( prev_substream_type == DTS_SUBSTREAM_TYPE_EXTENSION
                      && info->exss_index <= prev_exss_index )
                         au_completed = 1;
-                    dts_parse_frame = dts_parse_extension_substream;
+                    dts_parse_frame = lsm_dts_parse_extension_substream;
                     break;
                 }
                 default :
@@ -168,7 +168,7 @@ static int dts_importer_get_next_accessunit_internal( importer_t *importer )
                     return LSMASH_ERR_NAMELESS;
             }
             if( !info->ddts_param_initialized && au_completed )
-                dts_update_specific_param( info );
+                lsm_dts_update_specific_param( info );
             info->frame_size = 0;
             if( (err = dts_parse_frame( info )) < 0 )
             {
@@ -203,7 +203,7 @@ static int dts_importer_get_next_accessunit_internal( importer_t *importer )
     return bs->error ? LSMASH_ERR_NAMELESS : 0;
 }
 
-static int dts_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t **p_sample )
+static int dts_imp_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t **p_sample )
 {
     if( !importer->info )
         return LSMASH_ERR_NAMELESS;
@@ -236,12 +236,12 @@ static int dts_importer_get_accessunit( importer_t *importer, uint32_t track_num
         dts_imp->au_length = 0;
         return 0;
     }
-    if( dts_importer_get_next_accessunit_internal( importer ) < 0 )
+    if( dts_imp_get_next_accessunit_internal( importer ) < 0 )
         importer->status = IMPORTER_ERROR;
     return current_status;
 }
 
-static lsmash_audio_summary_t *dts_create_summary( dts_info_t *info )
+static lsmash_audio_summary_t *dts_imp_create_summary( dts_info_t *info )
 {
     lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_AUDIO );
     if( !summary )
@@ -304,23 +304,23 @@ static lsmash_audio_summary_t *dts_create_summary( dts_info_t *info )
     summary->samples_in_frame = (summary->frequency * info->frame_duration) / param->DTSSamplingFrequency;
     summary->max_au_length    = DTS_MAX_CORE_SIZE + DTS_MAX_NUM_EXSS * DTS_MAX_EXSS_SIZE;
     summary->sample_size      = param->pcmSampleDepth;
-    summary->channels         = dts_get_max_channel_count( info );
+    summary->channels         = lsm_dts_get_max_channel_count( info );
     return summary;
 }
 
-static int dts_importer_probe( importer_t *importer )
+static int dts_imp_probe( importer_t *importer )
 {
-    dts_importer_t *dts_imp = create_dts_importer( importer );
+    dts_importer_t *dts_imp = dts_imp_create( importer );
     if( !dts_imp )
         return LSMASH_ERR_MEMORY_ALLOC;
     lsmash_bits_t *bits = dts_imp->info.bits;
     lsmash_bs_t   *bs   = bits->bs;
     bs->buffer.max_size = DTS_MAX_EXSS_SIZE;
     importer->info = dts_imp;
-    int err = dts_importer_get_next_accessunit_internal( importer );
+    int err = dts_imp_get_next_accessunit_internal( importer );
     if( err < 0 )
         goto fail;
-    lsmash_audio_summary_t *summary = dts_create_summary( &dts_imp->info );
+    lsmash_audio_summary_t *summary = dts_imp_create_summary( &dts_imp->info );
     if( !summary )
     {
         err = LSMASH_ERR_NAMELESS;
@@ -337,12 +337,12 @@ static int dts_importer_probe( importer_t *importer )
     }
     return 0;
 fail:
-    remove_dts_importer( dts_imp );
+    dts_imp_remove( dts_imp );
     importer->info = NULL;
     return err;
 }
 
-static uint32_t dts_importer_get_last_delta( importer_t* importer, uint32_t track_number )
+static uint32_t dts_imp_get_last_delta( importer_t* importer, uint32_t track_number )
 {
     debug_if( !importer || !importer->info )
         return 0;
@@ -359,8 +359,8 @@ const importer_functions dts_importer =
 {
     { "DTS Coherent Acoustics", offsetof( importer_t, log_level ) },
     1,
-    dts_importer_probe,
-    dts_importer_get_accessunit,
-    dts_importer_get_last_delta,
-    dts_importer_cleanup
+    dts_imp_probe,
+    dts_imp_get_accessunit,
+    dts_imp_get_last_delta,
+    dts_imp_cleanup
 };

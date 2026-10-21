@@ -126,10 +126,10 @@ typedef struct
     lsmash_bits_t *bits;
 } dts_info_t;
 
-void dts_setup_parser( dts_info_t *info );
-int dts_parse_core_substream( dts_info_t *info );
-int dts_parse_extension_substream( dts_info_t *info );
-int dts_get_max_channel_count( dts_info_t *info );
-dts_substream_type dts_get_substream_type( dts_info_t *info );
-int dts_get_exss_index( dts_info_t *info, uint8_t *exss_index );
-void dts_update_specific_param( dts_info_t *info );
+void lsm_dts_setup_parser( dts_info_t *info );
+int lsm_dts_parse_core_substream( dts_info_t *info );
+int lsm_dts_parse_extension_substream( dts_info_t *info );
+int lsm_dts_get_max_channel_count( dts_info_t *info );
+dts_substream_type lsm_dts_get_substream_type( dts_info_t *info );
+int lsm_dts_get_exss_index( dts_info_t *info, uint8_t *exss_index );
+void lsm_dts_update_specific_param( dts_info_t *info );

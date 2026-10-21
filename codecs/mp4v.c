@@ -29,7 +29,7 @@
 #include "mp4a.h"   /* ugly hack for the definition of mp4a_audioProfileLevelIndication */
 #include "mp4sys.h"
 
-int mp4v_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index )
+int lsm_mp4v_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index )
 {
     isom_visual_entry_t *mp4v = (isom_visual_entry_t *)lsmash_list_get_entry_data( &stbl->stsd->list, sample_description_index );
     if( LSMASH_IS_NON_EXISTING_BOX( mp4v ) )
@@ -44,5 +44,5 @@ int mp4v_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_d
     if( err < 0 )
         return err;
     /* FIXME: avgBitrate is 0 only if VBR in proper. */
-    return mp4sys_update_DecoderConfigDescriptor( esds->ES, bufferSizeDB, maxBitrate, 0 );
+    return lsm_mp4sys_update_DecoderConfigDescriptor( esds->ES, bufferSizeDB, maxBitrate, 0 );
 }

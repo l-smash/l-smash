@@ -43,7 +43,7 @@ typedef struct
     uint32_t        au_number;
 } amr_importer_t;
 
-static void remove_amr_importer
+static void amr_imp_remove
 (
     amr_importer_t *amr_imp
 )
@@ -51,7 +51,7 @@ static void remove_amr_importer
     lsmash_free( amr_imp );
 }
 
-static amr_importer_t *create_amr_importer
+static amr_importer_t *amr_imp_create
 (
     importer_t *importer
 )
@@ -59,16 +59,16 @@ static amr_importer_t *create_amr_importer
     return (amr_importer_t *)lsmash_malloc_zero( sizeof(amr_importer_t) );
 }
 
-static void amr_cleanup
+static void amr_imp_cleanup
 (
     importer_t *importer
 )
 {
     debug_if( importer && importer->info )
-        remove_amr_importer( importer->info );
+        amr_imp_remove( importer->info );
 }
 
-static int amr_get_accessunit
+static int amr_imp_get_accessunit
 (
     importer_t       *importer,
     uint32_t          track_number,
@@ -132,7 +132,7 @@ static int amr_get_accessunit
     return 0;
 }
 
-static int amr_check_magic_number
+static int amr_imp_check_magic_number
 (
     lsmash_bs_t *bs
 )
@@ -161,7 +161,7 @@ static int amr_check_magic_number
 #undef AMR_AMRWB_EX_MAGIC_LENGTH
 }
 
-static int amr_create_damr
+static int amr_imp_create_damr
 (
     lsmash_audio_summary_t *summary,
     int                     wb
@@ -203,7 +203,7 @@ static int amr_create_damr
 #undef AMR_DAMR_LENGTH
 }
 
-static lsmash_audio_summary_t *amr_create_summary
+static lsmash_audio_summary_t *amr_imp_create_summary
 (
     importer_t *importer,
     int         wb
@@ -221,7 +221,7 @@ static lsmash_audio_summary_t *amr_create_summary
     summary->sample_size      = 16;
     summary->samples_in_frame = (160 << wb);
     summary->sbr_mode         = MP4A_AAC_SBR_NOT_SPECIFIED;     /* no effect */
-    if( amr_create_damr( summary, wb ) < 0
+    if( amr_imp_create_damr( summary, wb ) < 0
      || lsmash_list_add_entry( importer->summaries, summary ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
@@ -230,23 +230,23 @@ static lsmash_audio_summary_t *amr_create_summary
     return summary;
 }
 
-static int amr_probe
+static int amr_imp_probe
 (
     importer_t *importer
 )
 {
 
-    amr_importer_t *amr_imp = create_amr_importer( importer );
+    amr_importer_t *amr_imp = amr_imp_create( importer );
     if( !amr_imp )
         return LSMASH_ERR_MEMORY_ALLOC;
     int err;
-    int wb = amr_check_magic_number( importer->bs );
+    int wb = amr_imp_check_magic_number( importer->bs );
     if( wb < 0 )
     {
         err = wb;
         goto fail;
     }
-    lsmash_audio_summary_t *summary = amr_create_summary( importer, wb );
+    lsmash_audio_summary_t *summary = amr_imp_create_summary( importer, wb );
     if( !summary )
     {
         err = LSMASH_ERR_NAMELESS;
@@ -259,11 +259,11 @@ static int amr_probe
     importer->status = IMPORTER_OK;
     return 0;
 fail:
-    remove_amr_importer( amr_imp );
+    amr_imp_remove( amr_imp );
     return err;
 }
 
-static uint32_t amr_get_last_delta
+static uint32_t amr_imp_get_last_delta
 (
     importer_t *importer,
     uint32_t    track_number
@@ -281,8 +281,8 @@ const importer_functions amr_importer =
 {
     { "AMR", offsetof( importer_t, log_level ) },
     1,
-    amr_probe,
-    amr_get_accessunit,
-    amr_get_last_delta,
-    amr_cleanup
+    amr_imp_probe,
+    amr_imp_get_accessunit,
+    amr_imp_get_last_delta,
+    amr_imp_cleanup
 };

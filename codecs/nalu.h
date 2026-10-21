@@ -36,18 +36,18 @@ typedef struct
     int      unused;
 } isom_dcr_ps_entry_t;
 
-isom_dcr_ps_entry_t *isom_create_ps_entry
+isom_dcr_ps_entry_t *lsm_nalu_create_ps_entry
 (
     uint8_t *ps,
     uint32_t ps_size
 );
 
-void isom_remove_dcr_ps
+void lsm_nalu_remove_dcr_ps
 (
     isom_dcr_ps_entry_t *ps
 );
 
-int nalu_import_rbsp_from_ebsp
+int lsm_nalu_import_rbsp_from_ebsp
 (
     lsmash_bits_t *bits,
     uint8_t       *rbsp_buffer,
@@ -56,31 +56,31 @@ int nalu_import_rbsp_from_ebsp
     uint64_t       ebsp_size
 );
 
-int nalu_check_more_rbsp_data
+int lsm_nalu_check_more_rbsp_data
 (
     lsmash_bits_t *bits
 );
 
-int nalu_get_max_ps_length
+int lsm_nalu_get_max_ps_length
 (
     lsmash_entry_list_t *ps_list,
     uint32_t            *max_ps_length
 );
 
-int nalu_get_ps_count
+int lsm_nalu_get_ps_count
 (
     lsmash_entry_list_t *ps_list,
     uint32_t            *ps_count
 );
 
-int nalu_check_same_ps_existence
+int lsm_nalu_check_same_ps_existence
 (
     lsmash_entry_list_t *ps_list,
     void                *ps_data,
     uint32_t             ps_length
 );
 
-int nalu_get_dcr_ps
+int lsm_nalu_get_dcr_ps
 (
     lsmash_bs_t         *bs,
     lsmash_entry_list_t *list,
@@ -89,17 +89,17 @@ int nalu_get_dcr_ps
 
 /* Return the offset from the beginning of stream if a start code is found.
  * Return NALU_NO_START_CODE_FOUND otherwise. */
-uint64_t nalu_find_first_start_code
+uint64_t lsm_nalu_find_first_start_code
 (
     lsmash_bs_t *bs
 );
 
-uint64_t nalu_get_codeNum
+uint64_t lsm_nalu_get_codeNum
 (
     lsmash_bits_t *bits
 );
 
-static inline uint64_t nalu_decode_exp_golomb_ue
+static inline uint64_t lsm_nalu_decode_exp_golomb_ue
 (
     uint64_t codeNum
 )
@@ -107,7 +107,7 @@ static inline uint64_t nalu_decode_exp_golomb_ue
     return codeNum;
 }
 
-static inline int64_t nalu_decode_exp_golomb_se
+static inline int64_t lsm_nalu_decode_exp_golomb_se
 (
     uint64_t codeNum
 )
@@ -117,25 +117,25 @@ static inline int64_t nalu_decode_exp_golomb_se
     return -1 * (int64_t)(codeNum >> 1);
 }
 
-static inline uint64_t nalu_get_exp_golomb_ue
+static inline uint64_t lsm_nalu_get_exp_golomb_ue
 (
     lsmash_bits_t *bits
 )
 {
-    uint64_t codeNum = nalu_get_codeNum( bits );
-    return nalu_decode_exp_golomb_ue( codeNum );
+    uint64_t codeNum = lsm_nalu_get_codeNum( bits );
+    return lsm_nalu_decode_exp_golomb_ue( codeNum );
 }
 
-static inline uint64_t nalu_get_exp_golomb_se
+static inline uint64_t lsm_nalu_get_exp_golomb_se
 (
     lsmash_bits_t *bits
 )
 {
-    uint64_t codeNum = nalu_get_codeNum( bits );
-    return nalu_decode_exp_golomb_se( codeNum );
+    uint64_t codeNum = lsm_nalu_get_codeNum( bits );
+    return lsm_nalu_decode_exp_golomb_se( codeNum );
 }
 
-static inline int nalu_check_next_short_start_code
+static inline int lsm_nalu_check_next_short_start_code
 (
     uint8_t *buf_pos,
     uint8_t *buf_end

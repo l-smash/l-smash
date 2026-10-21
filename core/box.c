@@ -657,7 +657,7 @@ static void box_remove_file_abstract( isom_file_abstract_t *file_abstract )
     lsm_timeline_remove_all( file_abstract );
     lsmash_free( file_abstract->compatible_brands );
     lsmash_bs_cleanup( file_abstract->bs );
-    lsmash_importer_destroy( file_abstract->importer );
+    lsm_importer_destroy( file_abstract->importer );
     if( file_abstract->fragment )
     {
         lsm_list_destroy( file_abstract->fragment->pool );
@@ -676,7 +676,7 @@ static void box_remove_iods( isom_iods_t *iods )
 {
     if( LSMASH_IS_NON_EXISTING_BOX( iods ) )
         return;
-    mp4sys_remove_descriptor( iods->OD );
+    lsm_mp4sys_remove_descriptor( iods->OD );
     REMOVE_BOX( iods );
 }
 
@@ -732,14 +732,14 @@ static void box_remove_esds( isom_esds_t *esds )
 {
     if( LSMASH_IS_NON_EXISTING_BOX( esds ) )
         return;
-    mp4sys_remove_descriptor( esds->ES );
+    lsm_mp4sys_remove_descriptor( esds->ES );
 }
 
 static void box_remove_lhvC( isom_lhvC_t *lhvC )
 {
     if( LSMASH_IS_NON_EXISTING_BOX( lhvC ) )
         return;
-    lhevc_free_arrays( lhvC->array, lhvC->numOfArrays );
+    lsm_hevc_free_lhevc_arrays( lhvC->array, lhvC->numOfArrays );
 }
 
 DEFINE_SIMPLE_LIST_BOX_REMOVER( box_remove_ftab, ftab )

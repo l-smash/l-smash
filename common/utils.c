@@ -154,6 +154,69 @@ int lsmash_compare_cts
     return diff > 0 ? 1 : (diff == 0 ? 0 : -1);
 }
 
+uint64_t lsmash_get_gcd
+(
+    uint64_t a,
+    uint64_t b
+)
+{
+    if( !b )
+        return a;
+    while( 1 )
+    {
+        uint64_t c = a % b;
+        if( !c )
+            return b;
+        a = b;
+        b = c;
+    }
+}
+
+uint64_t lsmash_get_lcm
+(
+    uint64_t a,
+    uint64_t b
+)
+{
+    if( !a )
+        return 0;
+    return (a / lsmash_get_gcd( a, b )) * b;
+}
+
+void lsmash_reduce_fraction
+(
+    uint64_t *a,
+    uint64_t *b
+)
+{
+    if( !a || !b )
+        return;
+    uint64_t gcd = lsmash_get_gcd( *a, *b );
+    if( gcd )
+    {
+        *a /= gcd;
+        *b /= gcd;
+    }
+}
+
+void lsmash_reduce_fraction_su
+(
+    int64_t  *a,
+    uint64_t *b
+)
+{
+    if( !a || !b )
+        return;
+    uint64_t c = *a > 0 ? *a : -(*a);
+    uint64_t gcd = lsmash_get_gcd( c, *b );
+    if( gcd )
+    {
+        c /= gcd;
+        *b /= gcd;
+        *a = *a > 0 ? (signed)c : -(signed)c;
+    }
+}
+
 #ifdef _WIN32
 int lsmash_convert_ansi_to_utf8( const char *ansi, char *utf8, int length )
 {

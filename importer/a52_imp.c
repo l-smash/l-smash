@@ -44,7 +44,7 @@ typedef struct
     uint32_t   au_number;
 } ac3_importer_t;
 
-static void remove_ac3_importer( ac3_importer_t *ac3_imp )
+static void a52_imp_remove_ac3( ac3_importer_t *ac3_imp )
 {
     if( !ac3_imp )
         return;
@@ -52,7 +52,7 @@ static void remove_ac3_importer( ac3_importer_t *ac3_imp )
     lsmash_free( ac3_imp );
 }
 
-static ac3_importer_t *create_ac3_importer( importer_t *importer )
+static ac3_importer_t *a52_imp_create_ac3( importer_t *importer )
 {
     ac3_importer_t *ac3_imp = (ac3_importer_t *)lsmash_malloc_zero( sizeof(ac3_importer_t) );
     if( !ac3_imp )
@@ -66,10 +66,10 @@ static ac3_importer_t *create_ac3_importer( importer_t *importer )
     return ac3_imp;
 }
 
-static void ac3_importer_cleanup( importer_t *importer )
+static void a52_imp_ac3_cleanup( importer_t *importer )
 {
     debug_if( importer && importer->info )
-        remove_ac3_importer( importer->info );
+        a52_imp_remove_ac3( importer->info );
 }
 
 static const uint32_t ac3_frame_size_table[19][3] =
@@ -96,7 +96,7 @@ static const uint32_t ac3_frame_size_table[19][3] =
     { 2560,  2786,  3840 }
 };
 
-static lsmash_audio_summary_t *ac3_create_summary( ac3_info_t *info )
+static lsmash_audio_summary_t *a52_imp_ac3_create_summary( ac3_info_t *info )
 {
     lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_AUDIO );
     if( !summary )
@@ -120,15 +120,15 @@ static lsmash_audio_summary_t *ac3_create_summary( ac3_info_t *info )
     summary->sample_type      = ISOM_CODEC_TYPE_AC_3_AUDIO;
     summary->max_au_length    = AC3_MAX_SYNCFRAME_LENGTH;
     summary->aot              = MP4A_AUDIO_OBJECT_TYPE_NULL;    /* no effect */
-    summary->frequency        = ac3_get_sample_rate( param );
-    summary->channels         = ac3_get_channel_count( param );
+    summary->frequency        = lsm_a52_get_ac3_sample_rate( param );
+    summary->channels         = lsm_a52_get_ac3_channel_count( param );
     summary->sample_size      = 16;                             /* no effect */
     summary->samples_in_frame = AC3_SAMPLE_DURATION;
     summary->sbr_mode         = MP4A_AAC_SBR_NOT_SPECIFIED;     /* no effect */
     return summary;
 }
 
-static int ac3_compare_specific_param( lsmash_ac3_specific_parameters_t *a, lsmash_ac3_specific_parameters_t *b )
+static int a52_imp_ac3_compare_specific_param( lsmash_ac3_specific_parameters_t *a, lsmash_ac3_specific_parameters_t *b )
 {
     return (a->fscod             != b->fscod)
         || (a->bsid              != b->bsid)
@@ -138,7 +138,7 @@ static int ac3_compare_specific_param( lsmash_ac3_specific_parameters_t *a, lsma
         || ((a->frmsizecod >> 1) != (b->frmsizecod >> 1));
 }
 
-static int ac3_buffer_frame( uint8_t *buffer, lsmash_bs_t *bs )
+static int a52_imp_ac3_buffer_frame( uint8_t *buffer, lsmash_bs_t *bs )
 {
     uint64_t remain_size = lsmash_bs_get_remaining_buffer_size( bs );
     if( remain_size < AC3_MAX_SYNCFRAME_LENGTH )
@@ -155,7 +155,7 @@ static int ac3_buffer_frame( uint8_t *buffer, lsmash_bs_t *bs )
     return 0;
 }
 
-static int ac3_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t **p_sample )
+static int a52_imp_ac3_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t **p_sample )
 {
     if( !importer->info )
         return LSMASH_ERR_NAMELESS;
@@ -177,14 +177,14 @@ static int ac3_importer_get_accessunit( importer_t *importer, uint32_t track_num
         frame_size += 2;
     if( current_status == IMPORTER_CHANGE )
     {
-        lsmash_codec_specific_t *cs = isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3 );
+        lsmash_codec_specific_t *cs = lsm_description_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_AC_3 );
         if( cs )
         {
             cs->destruct( cs->data.unstructured );
             cs->data.unstructured = ac3_imp->next_dac3;
         }
-        summary->frequency  = ac3_get_sample_rate( param );
-        summary->channels   = ac3_get_channel_count( param );
+        summary->frequency  = lsm_a52_get_ac3_sample_rate( param );
+        summary->channels   = lsm_a52_get_ac3_channel_count( param );
         //summary->layout_tag = ac3_channel_layout_table[ param->acmod ][ param->lfeon ];
     }
     lsmash_sample_t *sample = lsmash_create_sample( frame_size );
@@ -212,14 +212,14 @@ static int ac3_importer_get_accessunit( importer_t *importer, uint32_t track_num
         /* Parse the next syncframe header. */
         if( syncword[0] != 0x0b
          || syncword[1] != 0x77
-         || ac3_buffer_frame( ac3_imp->buffer, bs ) < 0 )
+         || a52_imp_ac3_buffer_frame( ac3_imp->buffer, bs ) < 0 )
         {
             importer->status = IMPORTER_ERROR;
             return current_status;
         }
         lsmash_ac3_specific_parameters_t current_param = info->dac3_param;
-        ac3_parse_syncframe_header( info );
-        if( ac3_compare_specific_param( &current_param, &info->dac3_param ) )
+        lsm_a52_parse_ac3_syncframe_header( info );
+        if( a52_imp_ac3_compare_specific_param( &current_param, &info->dac3_param ) )
         {
             uint32_t dummy;
             uint8_t *dac3 = lsmash_create_ac3_specific_info( &info->dac3_param, &dummy );
@@ -237,9 +237,9 @@ static int ac3_importer_get_accessunit( importer_t *importer, uint32_t track_num
     return current_status;
 }
 
-static int ac3_importer_probe( importer_t *importer )
+static int a52_imp_ac3_probe( importer_t *importer )
 {
-    ac3_importer_t *ac3_imp = create_ac3_importer( importer );
+    ac3_importer_t *ac3_imp = a52_imp_create_ac3( importer );
     if( !ac3_imp )
         return LSMASH_ERR_MEMORY_ALLOC;
     lsmash_bits_t *bits = ac3_imp->info.bits;
@@ -253,10 +253,10 @@ static int ac3_importer_probe( importer_t *importer )
         err = LSMASH_ERR_INVALID_DATA;
         goto fail;
     }
-    if( (err = ac3_buffer_frame( ac3_imp->buffer, bs ))      < 0
-     || (err = ac3_parse_syncframe_header( &ac3_imp->info )) < 0 )
+    if( (err = a52_imp_ac3_buffer_frame( ac3_imp->buffer, bs ))      < 0
+     || (err = lsm_a52_parse_ac3_syncframe_header( &ac3_imp->info )) < 0 )
         goto fail;
-    lsmash_audio_summary_t *summary = ac3_create_summary( &ac3_imp->info );
+    lsmash_audio_summary_t *summary = a52_imp_ac3_create_summary( &ac3_imp->info );
     if( !summary )
     {
         err = LSMASH_ERR_NAMELESS;
@@ -273,11 +273,11 @@ static int ac3_importer_probe( importer_t *importer )
     importer->status = IMPORTER_OK;
     return 0;
 fail:
-    remove_ac3_importer( ac3_imp );
+    a52_imp_remove_ac3( ac3_imp );
     return err;
 }
 
-static uint32_t ac3_importer_get_last_delta( importer_t *importer, uint32_t track_number )
+static uint32_t a52_imp_ac3_get_last_delta( importer_t *importer, uint32_t track_number )
 {
     debug_if( !importer || !importer->info )
         return 0;
@@ -291,10 +291,10 @@ const importer_functions ac3_importer =
 {
     { "AC-3" },
     1,
-    ac3_importer_probe,
-    ac3_importer_get_accessunit,
-    ac3_importer_get_last_delta,
-    ac3_importer_cleanup
+    a52_imp_ac3_probe,
+    a52_imp_ac3_get_accessunit,
+    a52_imp_ac3_get_last_delta,
+    a52_imp_ac3_cleanup
 };
 
 /***************************************************************************
@@ -320,7 +320,7 @@ typedef struct
     uint32_t syncframe_count_in_au;
 } eac3_importer_t;
 
-static void remove_eac3_importer( eac3_importer_t *eac3_imp )
+static void a52_imp_remove_eac3( eac3_importer_t *eac3_imp )
 {
     if( !eac3_imp )
         return;
@@ -329,7 +329,7 @@ static void remove_eac3_importer( eac3_importer_t *eac3_imp )
     lsmash_free( eac3_imp );
 }
 
-static eac3_importer_t *create_eac3_importer( importer_t *importer )
+static eac3_importer_t *a52_imp_create_eac3( importer_t *importer )
 {
     eac3_importer_t *eac3_imp = (eac3_importer_t *)lsmash_malloc_zero( sizeof(eac3_importer_t) );
     if( !eac3_imp )
@@ -353,13 +353,13 @@ static eac3_importer_t *create_eac3_importer( importer_t *importer )
     return eac3_imp;
 }
 
-static void eac3_importer_cleanup( importer_t *importer )
+static void a52_imp_eac3_cleanup( importer_t *importer )
 {
     debug_if( importer && importer->info )
-        remove_eac3_importer( importer->info );
+        a52_imp_remove_eac3( importer->info );
 }
 
-static int eac3_importer_get_next_accessunit_internal( importer_t *importer )
+static int a52_imp_eac3_get_next_accessunit_internal( importer_t *importer )
 {
     int au_completed = 0;
     eac3_importer_t *eac3_imp = (eac3_importer_t *)importer->info;
@@ -408,7 +408,7 @@ static int eac3_importer_get_next_accessunit_internal( importer_t *importer )
                 return 0;
             }
             if( !info->dec3_param_initialized )
-                eac3_update_specific_param( info );
+                lsm_a52_update_eac3_specific_param( info );
         }
         else
         {
@@ -421,7 +421,7 @@ static int eac3_importer_get_next_accessunit_internal( importer_t *importer )
             }
             /* Parse syncframe. */
             info->frame_size = 0;
-            int err = eac3_parse_syncframe( info );
+            int err = lsm_a52_parse_eac3_syncframe( info );
             if( err < 0 )
             {
                 lsmash_log( importer, LSMASH_LOG_ERROR, "failed to parse syncframe.\n" );
@@ -490,7 +490,7 @@ static int eac3_importer_get_next_accessunit_internal( importer_t *importer )
     return bs->error ? LSMASH_ERR_NAMELESS : 0;
 }
 
-static int eac3_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t **p_sample )
+static int a52_imp_eac3_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t **p_sample )
 {
     if( !importer->info )
         return LSMASH_ERR_NAMELESS;
@@ -508,7 +508,7 @@ static int eac3_importer_get_accessunit( importer_t *importer, uint32_t track_nu
         return IMPORTER_EOF;
     if( current_status == IMPORTER_CHANGE )
     {
-        lsmash_codec_specific_t *cs = isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3 );
+        lsmash_codec_specific_t *cs = lsm_description_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3 );
         if( cs )
         {
             cs->destruct( cs->data.unstructured );
@@ -516,8 +516,8 @@ static int eac3_importer_get_accessunit( importer_t *importer, uint32_t track_nu
             cs->size              = eac3_imp->next_dec3_length;
         }
         summary->max_au_length = eac3_imp->syncframe_count_in_au * EAC3_MAX_SYNCFRAME_LENGTH;
-        eac3_update_sample_rate( &summary->frequency, &info->dec3_param, &eac3_imp->current_fscod2 );
-        eac3_update_channel_count( &summary->channels, &info->dec3_param );
+        lsm_a52_update_eac3_sample_rate( &summary->frequency, &info->dec3_param, &eac3_imp->current_fscod2 );
+        lsm_a52_update_eac3_channel_count( &summary->channels, &info->dec3_param );
     }
     lsmash_sample_t *sample = lsmash_create_sample( eac3_imp->au_length );
     if( !sample )
@@ -535,7 +535,7 @@ static int eac3_importer_get_accessunit( importer_t *importer, uint32_t track_nu
         return 0;
     }
     uint32_t old_syncframe_count_in_au = eac3_imp->syncframe_count_in_au;
-    if( eac3_importer_get_next_accessunit_internal( importer ) < 0 )
+    if( a52_imp_eac3_get_next_accessunit_internal( importer ) < 0 )
     {
         importer->status = IMPORTER_ERROR;
         return current_status;
@@ -550,7 +550,7 @@ static int eac3_importer_get_accessunit( importer_t *importer, uint32_t track_nu
             importer->status = IMPORTER_ERROR;
             return current_status;
         }
-        lsmash_codec_specific_t *cs = isom_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3 );
+        lsmash_codec_specific_t *cs = lsm_description_get_codec_specific( summary->opaque, LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_EC_3 );
         if( (eac3_imp->syncframe_count_in_au > old_syncframe_count_in_au)
          || (cs && (new_length != cs->size || memcmp( dec3, cs->data.unstructured, cs->size ))) )
         {
@@ -568,7 +568,7 @@ static int eac3_importer_get_accessunit( importer_t *importer, uint32_t track_nu
     return current_status;
 }
 
-static lsmash_audio_summary_t *eac3_create_summary( eac3_importer_t *eac3_imp )
+static lsmash_audio_summary_t *a52_imp_eac3_create_summary( eac3_importer_t *eac3_imp )
 {
     lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_AUDIO );
     if( !summary )
@@ -595,24 +595,24 @@ static lsmash_audio_summary_t *eac3_create_summary( eac3_importer_t *eac3_imp )
     summary->sample_size      = 16;                             /* no effect */
     summary->samples_in_frame = EAC3_MIN_SAMPLE_DURATION * 6;   /* 256 (samples per audio block) * 6 (audio blocks) */
     summary->sbr_mode         = MP4A_AAC_SBR_NOT_SPECIFIED;     /* no effect */
-    eac3_update_sample_rate( &summary->frequency, &info->dec3_param, &eac3_imp->current_fscod2 );
-    eac3_update_channel_count( &summary->channels, &info->dec3_param );
+    lsm_a52_update_eac3_sample_rate( &summary->frequency, &info->dec3_param, &eac3_imp->current_fscod2 );
+    lsm_a52_update_eac3_channel_count( &summary->channels, &info->dec3_param );
     return summary;
 }
 
-static int eac3_importer_probe( importer_t *importer )
+static int a52_imp_eac3_probe( importer_t *importer )
 {
-    eac3_importer_t *eac3_imp = create_eac3_importer( importer );
+    eac3_importer_t *eac3_imp = a52_imp_create_eac3( importer );
     if( !eac3_imp )
         return LSMASH_ERR_MEMORY_ALLOC;
     lsmash_bits_t *bits = eac3_imp->info.bits;
     lsmash_bs_t   *bs   = bits->bs;
     bs->buffer.max_size = EAC3_MAX_SYNCFRAME_LENGTH;
     importer->info = eac3_imp;
-    int err = eac3_importer_get_next_accessunit_internal( importer );
+    int err = a52_imp_eac3_get_next_accessunit_internal( importer );
     if( err < 0 )
         goto fail;
-    lsmash_audio_summary_t *summary = eac3_create_summary( eac3_imp );
+    lsmash_audio_summary_t *summary = a52_imp_eac3_create_summary( eac3_imp );
     if( !summary )
     {
         err = LSMASH_ERR_NAMELESS;
@@ -629,12 +629,12 @@ static int eac3_importer_probe( importer_t *importer )
     }
     return 0;
 fail:
-    remove_eac3_importer( eac3_imp );
+    a52_imp_remove_eac3( eac3_imp );
     importer->info      = NULL;
     return err;
 }
 
-static uint32_t eac3_importer_get_last_delta( importer_t *importer, uint32_t track_number )
+static uint32_t a52_imp_eac3_get_last_delta( importer_t *importer, uint32_t track_number )
 {
     debug_if( !importer || !importer->info )
         return 0;
@@ -648,8 +648,8 @@ const importer_functions eac3_importer =
 {
     { "Enhanced AC-3", offsetof( importer_t, log_level ) },
     1,
-    eac3_importer_probe,
-    eac3_importer_get_accessunit,
-    eac3_importer_get_last_delta,
-    eac3_importer_cleanup
+    a52_imp_eac3_probe,
+    a52_imp_eac3_get_accessunit,
+    a52_imp_eac3_get_last_delta,
+    a52_imp_eac3_cleanup
 };

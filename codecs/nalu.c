@@ -30,7 +30,7 @@
 
 #include "nalu.h"
 
-isom_dcr_ps_entry_t *isom_create_ps_entry
+isom_dcr_ps_entry_t *lsm_nalu_create_ps_entry
 (
     uint8_t *ps,
     uint32_t ps_size
@@ -50,7 +50,7 @@ isom_dcr_ps_entry_t *isom_create_ps_entry
     return entry;
 }
 
-void isom_remove_dcr_ps
+void lsm_nalu_remove_dcr_ps
 (
     isom_dcr_ps_entry_t *ps
 )
@@ -83,7 +83,7 @@ static uint8_t *nalu_remove_emulation_prevention
     return dst;
 }
 
-int nalu_import_rbsp_from_ebsp
+int lsm_nalu_import_rbsp_from_ebsp
 (
     lsmash_bits_t *bits,
     uint8_t       *rbsp_buffer,
@@ -100,7 +100,7 @@ int nalu_import_rbsp_from_ebsp
     return lsmash_bits_import_data( bits, rbsp_start, *rbsp_size );
 }
 
-int nalu_check_more_rbsp_data
+int lsm_nalu_check_more_rbsp_data
 (
     lsmash_bits_t *bits
 )
@@ -124,7 +124,7 @@ int nalu_check_more_rbsp_data
     return remainder_bits != rbsp_trailing_bits;
 }
 
-int nalu_get_max_ps_length
+int lsm_nalu_get_max_ps_length
 (
     lsmash_entry_list_t *ps_list,
     uint32_t            *max_ps_length
@@ -143,7 +143,7 @@ int nalu_get_max_ps_length
     return 0;
 }
 
-int nalu_get_ps_count
+int lsm_nalu_get_ps_count
 (
     lsmash_entry_list_t *ps_list,
     uint32_t            *ps_count
@@ -162,7 +162,7 @@ int nalu_get_ps_count
     return 0;
 }
 
-int nalu_check_same_ps_existence
+int lsm_nalu_check_same_ps_existence
 (
     lsmash_entry_list_t *ps_list,
     void                *ps_data,
@@ -182,7 +182,7 @@ int nalu_check_same_ps_existence
     return 0;
 }
 
-int nalu_get_dcr_ps
+int lsm_nalu_get_dcr_ps
 (
     lsmash_bs_t         *bs,
     lsmash_entry_list_t *list,
@@ -212,7 +212,7 @@ int nalu_get_dcr_ps
 
 /* Return the offset from the beginning of stream if a start code is found.
  * Return NALU_NO_START_CODE_FOUND otherwise. */
-uint64_t nalu_find_first_start_code
+uint64_t lsm_nalu_find_first_start_code
 (
     lsmash_bs_t *bs
 )
@@ -235,7 +235,7 @@ uint64_t nalu_find_first_start_code
     return first_sc_head_pos;
 }
 
-uint64_t nalu_get_codeNum
+uint64_t lsm_nalu_get_codeNum
 (
     lsmash_bits_t *bits
 )
@@ -251,7 +251,7 @@ uint64_t nalu_get_codeNum
     return ((uint64_t)1 << leadingZeroBits) - 1 + lsmash_bits_get( bits, leadingZeroBits );
 }
 
-int nalu_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index )
+int lsm_nalu_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index )
 {
     isom_visual_entry_t *sample_entry = (isom_visual_entry_t *)lsmash_list_get_entry_data( &stbl->stsd->list, sample_description_index );
     if( LSMASH_IS_NON_EXISTING_BOX( sample_entry ) )

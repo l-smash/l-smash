@@ -59,7 +59,7 @@ uint8_t *lsmash_create_opus_specific_info( lsmash_opus_specific_parameters_t *pa
     return data;
 }
 
-int opus_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
+int lsm_opus_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
 {
     assert( dst && dst->data.structured && src && src->data.unstructured );
     if( src->size < OPUS_SPECIFIC_BOX_MIN_LENGTH )
@@ -123,7 +123,7 @@ fail:
     return err;
 }
 
-int opus_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
+int lsm_opus_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
 {
     assert( fp && file && box && (box->manager & LSMASH_BINARY_CODED_BOX) );
     int indent = level;

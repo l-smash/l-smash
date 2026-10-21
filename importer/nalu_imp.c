@@ -61,37 +61,37 @@ typedef struct
     uint16_t reset;
 } nal_pic_timing_t;
 
-static void remove_h264_importer( h264_importer_t *h264_imp )
+static void nalu_imp_remove_h264( h264_importer_t *h264_imp )
 {
     if( !h264_imp )
         return;
     lsmash_list_remove_entries( h264_imp->avcC_list );
-    h264_cleanup_parser( &h264_imp->info );
+    lsm_h264_cleanup_parser( &h264_imp->info );
     lsmash_free( h264_imp->ts_list.timestamp );
     lsmash_free( h264_imp );
 }
 
-static void h264_importer_cleanup( importer_t *importer )
+static void nalu_imp_h264_cleanup( importer_t *importer )
 {
     debug_if( importer && importer->info )
-        remove_h264_importer( importer->info );
+        nalu_imp_remove_h264( importer->info );
 }
 
-static h264_importer_t *create_h264_importer( importer_t *importer )
+static h264_importer_t *nalu_imp_create_h264( importer_t *importer )
 {
     h264_importer_t *h264_imp = lsmash_malloc_zero( sizeof(h264_importer_t) );
     if( !h264_imp )
         return NULL;
-    if( h264_setup_parser( &h264_imp->info, 0 ) < 0 )
+    if( lsm_h264_setup_parser( &h264_imp->info, 0 ) < 0 )
     {
-        remove_h264_importer( h264_imp );
+        nalu_imp_remove_h264( h264_imp );
         return NULL;
     }
     lsmash_list_init( h264_imp->avcC_list, lsmash_destroy_codec_specific_data );
     return h264_imp;
 }
 
-static inline int h264_complete_au( h264_access_unit_t *au, int probe )
+static int nalu_imp_h264_complete_au( h264_access_unit_t *au, int probe )
 {
     if( !au->picture.has_primary || au->incomplete_length == 0 )
         return 0;
@@ -103,7 +103,7 @@ static inline int h264_complete_au( h264_access_unit_t *au, int probe )
     return 1;
 }
 
-static void h264_append_nalu_to_au( h264_access_unit_t *au, uint8_t *src_nalu, uint32_t nalu_length, int probe )
+static void nalu_imp_h264_append_nalu_to_au( h264_access_unit_t *au, uint8_t *src_nalu, uint32_t nalu_length, int probe )
 {
     if( !probe )
     {
@@ -113,25 +113,25 @@ static void h264_append_nalu_to_au( h264_access_unit_t *au, uint8_t *src_nalu, u
         memcpy( dst_nalu, src_nalu, nalu_length );
     }
     /* Note: au->incomplete_length shall be 0 immediately after AU has completed.
-     * Therefore, possible_au_length in h264_get_access_unit_internal() can't be used here
+     * Therefore, possible_au_length in nalu_imp_h264_get_access_unit_internal() can't be used here
      * to avoid increasing AU length monotonously through the entire stream. */
     au->incomplete_length += NALU_DEFAULT_NALU_LENGTH_SIZE + nalu_length;
 }
 
-static int h264_get_au_internal_succeeded( h264_importer_t *h264_imp, h264_access_unit_t *au )
+static int nalu_imp_h264_get_au_internal_succeeded( h264_importer_t *h264_imp, h264_access_unit_t *au )
 {
     au->number += 1;
     return 0;
 }
 
-static int h264_get_au_internal_failed( h264_importer_t *h264_imp, h264_access_unit_t *au, int complete_au, int ret )
+static int nalu_imp_h264_get_au_internal_failed( h264_importer_t *h264_imp, h264_access_unit_t *au, int complete_au, int ret )
 {
     if( complete_au )
         au->number += 1;
     return ret;
 }
 
-static lsmash_video_summary_t *h264_create_summary
+static lsmash_video_summary_t *nalu_imp_h264_create_summary
 (
     lsmash_h264_specific_parameters_t *param,
     h264_sps_t                        *sps,
@@ -142,7 +142,7 @@ static lsmash_video_summary_t *h264_create_summary
     if( !summary )
         return NULL;
     /* Update summary here.
-     * max_au_length is set at the last of mp4sys_h264_probe function. */
+     * max_au_length is set at the last of nalu_imp_h264_probe function. */
     lsmash_codec_specific_t *cs = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_H264,
                                                                      LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
     if( !cs )
@@ -175,7 +175,7 @@ static lsmash_video_summary_t *h264_create_summary
     return summary;
 }
 
-static int h264_store_codec_specific
+static int nalu_imp_h264_store_codec_specific
 (
     h264_importer_t                   *h264_imp,
     lsmash_h264_specific_parameters_t *avcC_param
@@ -203,7 +203,7 @@ static int h264_store_codec_specific
     return 0;
 }
 
-static inline void h264_new_access_unit
+static void nalu_imp_h264_new_access_unit
 (
     h264_access_unit_t *au
 )
@@ -219,7 +219,7 @@ static inline void h264_new_access_unit
 
 /* If probe equals 0, don't get the actual data (EBPS) of an access unit and only parse NALU.
  * Currently, you can get AU of AVC video elemental stream only, not AVC parameter set elemental stream defined in 14496-15. */
-static int h264_get_access_unit_internal
+static int nalu_imp_h264_get_access_unit_internal
 (
     importer_t *importer,
     int         probe
@@ -233,23 +233,23 @@ static int h264_get_access_unit_internal
     h264_stream_buffer_t *sb       = &info->buffer;
     lsmash_bs_t          *bs       = importer->bs;
     int complete_au = 0;
-    h264_new_access_unit( au );
+    nalu_imp_h264_new_access_unit( au );
     while( 1 )
     {
         h264_nalu_header_t nuh;
         uint64_t start_code_length;
         uint64_t trailing_zero_bytes;
-        uint64_t nalu_length = h264_find_next_start_code( bs, &nuh, &start_code_length, &trailing_zero_bytes );
+        uint64_t nalu_length = lsm_h264_find_next_start_code( bs, &nuh, &start_code_length, &trailing_zero_bytes );
         if( nalu_length == NALU_NO_START_CODE_FOUND )
         {
             /* For the last NALU.
              * This NALU already has been appended into the latest access unit and parsed. */
-            h264_update_picture_info( info, picture, slice, &info->sei );
-            complete_au = h264_complete_au( au, probe );
+            lsm_h264_update_picture_info( info, picture, slice, &info->sei );
+            complete_au = nalu_imp_h264_complete_au( au, probe );
             if( complete_au )
-                return h264_get_au_internal_succeeded( h264_imp, au );
+                return nalu_imp_h264_get_au_internal_succeeded( h264_imp, au );
             else
-                return h264_get_au_internal_failed( h264_imp, au, complete_au, LSMASH_ERR_INVALID_DATA );
+                return nalu_imp_h264_get_au_internal_failed( h264_imp, au, complete_au, LSMASH_ERR_INVALID_DATA );
         }
         uint8_t  nalu_type        = nuh.nal_unit_type;
         uint64_t next_sc_head_pos = h264_imp->sc_head_pos
@@ -272,7 +272,7 @@ static int h264_get_access_unit_internal
             /* We don't support streams with both filler and HRD yet.
              * Otherwise, just skip filler because 'avc1' and 'avc2' samples are forbidden to use filler. */
             if( info->sps.vui.hrd.present )
-                return h264_get_au_internal_failed( h264_imp, au, complete_au, LSMASH_ERR_PATCH_WELCOME );
+                return nalu_imp_h264_get_au_internal_failed( h264_imp, au, complete_au, LSMASH_ERR_PATCH_WELCOME );
         }
         else if( (nalu_type >= H264_NALU_TYPE_SLICE_N_IDR && nalu_type <= H264_NALU_TYPE_SPS_EXT)
               || nalu_type == H264_NALU_TYPE_SLICE_AUX )
@@ -281,10 +281,10 @@ static int h264_get_access_unit_internal
             /* Increase the buffer if needed. */
             uint64_t possible_au_length = au->incomplete_length + NALU_DEFAULT_NALU_LENGTH_SIZE + nalu_length;
             if( sb->bank->buffer_size < possible_au_length
-             && (err = h264_supplement_buffer( sb, au, 2 * possible_au_length )) < 0 )
+             && (err = lsm_h264_supplement_buffer( sb, au, 2 * possible_au_length )) < 0 )
             {
                 lsmash_log( importer, LSMASH_LOG_ERROR, "failed to increase the buffer size.\n" );
-                return h264_get_au_internal_failed( h264_imp, au, complete_au, err );
+                return nalu_imp_h264_get_au_internal_failed( h264_imp, au, complete_au, err );
             }
             /* Get the EBSP of the current NALU here.
              * AVC elemental stream defined in 14496-15 can recognizes from 0 to 13, and 19 of nal_unit_type.
@@ -294,67 +294,67 @@ static int h264_get_access_unit_internal
             {
                 /* VCL NALU (slice) */
                 h264_slice_info_t prev_slice = *slice;
-                if( (err = h264_parse_slice( info, &nuh, sb->rbsp, nalu + nuh.length, nalu_length - nuh.length )) < 0 )
-                    return h264_get_au_internal_failed( h264_imp, au, complete_au, err );
+                if( (err = lsm_h264_parse_slice( info, &nuh, sb->rbsp, nalu + nuh.length, nalu_length - nuh.length )) < 0 )
+                    return nalu_imp_h264_get_au_internal_failed( h264_imp, au, complete_au, err );
                 if( probe && info->avcC_pending )
                 {
                     /* Copy and append a Codec Specific info. */
-                    if( (err = h264_store_codec_specific( h264_imp, &info->avcC_param )) < 0 )
+                    if( (err = nalu_imp_h264_store_codec_specific( h264_imp, &info->avcC_param )) < 0 )
                         return err;
                 }
-                if( (err = h264_move_pending_avcC_param( info )) < 0 )
+                if( (err = lsm_h264_move_pending_avcC_param( info )) < 0 )
                     return err;
                 if( prev_slice.present )
                 {
                     /* Check whether the AU that contains the previous VCL NALU completed or not. */
-                    if( h264_find_au_delimit_by_slice_info( slice, &prev_slice ) )
+                    if( lsm_h264_find_au_delimit_by_slice_info( slice, &prev_slice ) )
                     {
                         /* The current NALU is the first VCL NALU of the primary coded picture of an new AU.
                          * Therefore, the previous slice belongs to the AU you want at this time. */
-                        h264_update_picture_info( info, picture, &prev_slice, &info->sei );
-                        complete_au = h264_complete_au( au, probe );
+                        lsm_h264_update_picture_info( info, picture, &prev_slice, &info->sei );
+                        complete_au = nalu_imp_h264_complete_au( au, probe );
                     }
                     else
-                        h264_update_picture_info_for_slice( info, picture, &prev_slice );
+                        lsm_h264_update_picture_info_for_slice( info, picture, &prev_slice );
                 }
-                h264_append_nalu_to_au( au, nalu, nalu_length, probe );
+                nalu_imp_h264_append_nalu_to_au( au, nalu, nalu_length, probe );
                 slice->present = 1;
             }
             else
             {
-                if( h264_find_au_delimit_by_nalu_type( nalu_type, info->prev_nalu_type ) )
+                if( lsm_h264_find_au_delimit_by_nalu_type( nalu_type, info->prev_nalu_type ) )
                 {
                     /* The last slice belongs to the AU you want at this time. */
-                    h264_update_picture_info( info, picture, slice, &info->sei );
-                    complete_au = h264_complete_au( au, probe );
+                    lsm_h264_update_picture_info( info, picture, slice, &info->sei );
+                    complete_au = nalu_imp_h264_complete_au( au, probe );
                 }
                 switch( nalu_type )
                 {
                     case H264_NALU_TYPE_SEI :
                     {
-                        if( (err = h264_parse_sei( info->bits, &info->sps, &info->sei, sb->rbsp,
-                                                   nalu        + nuh.length,
-                                                   nalu_length - nuh.length )) < 0 )
-                            return h264_get_au_internal_failed( h264_imp, au, complete_au, err );
-                        h264_append_nalu_to_au( au, nalu, nalu_length, probe );
+                        if( (err = lsm_h264_parse_sei( info->bits, &info->sps, &info->sei, sb->rbsp,
+                                                       nalu        + nuh.length,
+                                                       nalu_length - nuh.length )) < 0 )
+                            return nalu_imp_h264_get_au_internal_failed( h264_imp, au, complete_au, err );
+                        nalu_imp_h264_append_nalu_to_au( au, nalu, nalu_length, probe );
                         break;
                     }
                     case H264_NALU_TYPE_SPS :
-                        if( (err = h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_SPS, nalu, nalu_length )) < 0 )
-                            return h264_get_au_internal_failed( h264_imp, au, complete_au, err );
+                        if( (err = lsm_h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_SPS, nalu, nalu_length )) < 0 )
+                            return nalu_imp_h264_get_au_internal_failed( h264_imp, au, complete_au, err );
                         break;
                     case H264_NALU_TYPE_PPS :
-                        if( (err = h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_PPS, nalu, nalu_length )) < 0 )
-                            return h264_get_au_internal_failed( h264_imp, au, complete_au, err );
+                        if( (err = lsm_h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_PPS, nalu, nalu_length )) < 0 )
+                            return nalu_imp_h264_get_au_internal_failed( h264_imp, au, complete_au, err );
                         break;
                     case H264_NALU_TYPE_AUD :   /* We drop access unit delimiters. */
                         break;
                     case H264_NALU_TYPE_SPS_EXT :
-                        if( (err = h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_SPSEXT, nalu, nalu_length )) < 0 )
-                            return h264_get_au_internal_failed( h264_imp, au, complete_au, err );
+                        if( (err = lsm_h264_try_to_append_parameter_set( info, H264_PARAMETER_SET_TYPE_SPSEXT, nalu, nalu_length )) < 0 )
+                            return nalu_imp_h264_get_au_internal_failed( h264_imp, au, complete_au, err );
                         break;
                     default :
-                        h264_append_nalu_to_au( au, nalu, nalu_length, probe );
+                        nalu_imp_h264_append_nalu_to_au( au, nalu, nalu_length, probe );
                         break;
                 }
                 if( info->avcC_pending )
@@ -366,7 +366,7 @@ static int h264_get_access_unit_internal
         if( lsmash_bs_read_seek( bs, next_sc_head_pos, SEEK_SET ) != next_sc_head_pos )
         {
             lsmash_log( importer, LSMASH_LOG_ERROR, "failed to seek the next start code.\n" );
-            return h264_get_au_internal_failed( h264_imp, au, complete_au, LSMASH_ERR_NAMELESS );
+            return nalu_imp_h264_get_au_internal_failed( h264_imp, au, complete_au, LSMASH_ERR_NAMELESS );
         }
         /* Check if no more data to read from the stream. */
         if( !lsmash_bs_is_end( bs, NALU_SHORT_START_CODE_LENGTH ) )
@@ -374,16 +374,16 @@ static int h264_get_access_unit_internal
         /* If there is no more data in the stream, and flushed chunk of NALUs, flush it as complete AU here. */
         else if( au->incomplete_length && au->length == 0 )
         {
-            h264_update_picture_info( info, picture, slice, &info->sei );
-            h264_complete_au( au, probe );
-            return h264_get_au_internal_succeeded( h264_imp, au );
+            lsm_h264_update_picture_info( info, picture, slice, &info->sei );
+            nalu_imp_h264_complete_au( au, probe );
+            return nalu_imp_h264_get_au_internal_succeeded( h264_imp, au );
         }
         if( complete_au )
-            return h264_get_au_internal_succeeded( h264_imp, au );
+            return nalu_imp_h264_get_au_internal_succeeded( h264_imp, au );
     }
 }
 
-static inline void h264_importer_check_eof( importer_t *importer, h264_access_unit_t *au )
+static void nalu_imp_h264_check_eof( importer_t *importer, h264_access_unit_t *au )
 {
     /* AVC byte stream NALU consists of at least 4 bytes (start-code + NALU-header). */
     if( lsmash_bs_is_end( importer->bs, NALU_SHORT_START_CODE_LENGTH ) && au->incomplete_length == 0 )
@@ -392,7 +392,7 @@ static inline void h264_importer_check_eof( importer_t *importer, h264_access_un
         importer->status = IMPORTER_OK;
 }
 
-static int h264_importer_get_accessunit
+static int nalu_imp_h264_get_accessunit
 (
     importer_t       *importer,
     uint32_t          track_number,
@@ -410,13 +410,13 @@ static int h264_importer_get_accessunit
         return LSMASH_ERR_NAMELESS;
     if( current_status == IMPORTER_EOF )
         return IMPORTER_EOF;
-    int err = h264_get_access_unit_internal( importer, 0 );
+    int err = nalu_imp_h264_get_access_unit_internal( importer, 0 );
     if( err < 0 )
     {
         importer->status = IMPORTER_ERROR;
         return err;
     }
-    h264_importer_check_eof( importer, &info->au );
+    nalu_imp_h264_check_eof( importer, &info->au );
     if( importer->status == IMPORTER_CHANGE && !info->avcC_pending )
         current_status = IMPORTER_CHANGE;
     if( current_status == IMPORTER_CHANGE )
@@ -426,7 +426,7 @@ static int h264_importer_get_accessunit
         if( !cs )
             return LSMASH_ERR_NAMELESS;
         lsmash_h264_specific_parameters_t *avcC_param = (lsmash_h264_specific_parameters_t *)cs->data.structured;
-        lsmash_video_summary_t *summary = h264_create_summary( avcC_param, &info->sps, h264_imp->max_au_length );
+        lsmash_video_summary_t *summary = nalu_imp_h264_create_summary( avcC_param, &info->sps, h264_imp->max_au_length );
         if( !summary )
             return LSMASH_ERR_NAMELESS;
         lsmash_list_remove_entry( importer->summaries, track_number );
@@ -484,7 +484,7 @@ static int h264_importer_get_accessunit
     return current_status;
 }
 
-static void nalu_deduplicate_poc
+static void nalu_imp_deduplicate_poc
 (
     nal_pic_timing_t *npt,
     uint32_t         *max_composition_delay,
@@ -568,7 +568,7 @@ static void nalu_deduplicate_poc
     }
 }
 
-static void nalu_generate_timestamps_from_poc
+static void nalu_imp_generate_timestamps_from_poc
 (
     importer_t        *importer,
     lsmash_media_ts_t *timestamp,
@@ -671,7 +671,7 @@ static void nalu_generate_timestamps_from_poc
     }
 }
 
-static void nalu_reduce_timescale
+static void nalu_imp_reduce_timescale
 (
     lsmash_media_ts_t *timestamp,
     nal_pic_timing_t  *npt,
@@ -700,7 +700,7 @@ static void nalu_reduce_timescale
 #endif
 }
 
-static lsmash_video_summary_t *h264_setup_first_summary
+static lsmash_video_summary_t *nalu_imp_h264_setup_first_summary
 (
     importer_t *importer
 )
@@ -712,8 +712,8 @@ static lsmash_video_summary_t *h264_setup_first_summary
         lsmash_destroy_codec_specific_data( cs );
         return NULL;
     }
-    lsmash_video_summary_t *summary = h264_create_summary( (lsmash_h264_specific_parameters_t *)cs->data.structured,
-                                                           &h264_imp->info.sps, h264_imp->max_au_length );
+    lsmash_video_summary_t *summary = nalu_imp_h264_create_summary( (lsmash_h264_specific_parameters_t *)cs->data.structured,
+                                                                    &h264_imp->info.sps, h264_imp->max_au_length );
     if( !summary )
     {
         lsmash_destroy_codec_specific_data( cs );
@@ -728,7 +728,7 @@ static lsmash_video_summary_t *h264_setup_first_summary
     return summary;
 }
 
-static int h264_analyze_whole_stream
+static int nalu_imp_h264_analyze_whole_stream
 (
     importer_t *importer
 )
@@ -753,10 +753,10 @@ static int h264_analyze_whole_stream
 #endif
         h264_picture_info_t     *picture = &info->au.picture;
         h264_picture_info_t prev_picture = *picture;
-        if( (err = h264_get_access_unit_internal( importer, 1 ))       < 0
-         || (err = h264_calculate_poc( info, picture, &prev_picture )) < 0 )
+        if( (err = nalu_imp_h264_get_access_unit_internal( importer, 1 )) < 0
+         || (err = lsm_h264_calculate_poc( info, picture, &prev_picture )) < 0 )
             goto fail;
-        h264_importer_check_eof( importer, &info->au );
+        nalu_imp_h264_check_eof( importer, &info->au );
         if( npt_alloc <= num_access_units * sizeof(nal_pic_timing_t) )
         {
             uint32_t alloc = 2 * num_access_units * sizeof(nal_pic_timing_t);
@@ -795,10 +795,10 @@ static int h264_analyze_whole_stream
               + picture_stats[H264_PICTURE_TYPE_I_SI_P_SP_B],
                 picture_stats[H264_PICTURE_TYPE_NONE       ] );
     /* Copy and append the last Codec Specific info. */
-    if( (err = h264_store_codec_specific( h264_imp, &info->avcC_param )) < 0 )
+    if( (err = nalu_imp_h264_store_codec_specific( h264_imp, &info->avcC_param )) < 0 )
         goto fail;
     /* Set up the first summary. */
-    lsmash_video_summary_t *summary = h264_setup_first_summary( importer );
+    lsmash_video_summary_t *summary = nalu_imp_h264_setup_first_summary( importer );
     if( !summary )
     {
         err = LSMASH_ERR_NAMELESS;
@@ -817,13 +817,13 @@ static int h264_analyze_whole_stream
     }
     /* Deduplicate POCs. */
     uint32_t max_composition_delay = 0;
-    nalu_deduplicate_poc( npt, &max_composition_delay, num_access_units, 32 );
+    nalu_imp_deduplicate_poc( npt, &max_composition_delay, num_access_units, 32 );
     /* Generate timestamps. */
-    nalu_generate_timestamps_from_poc( importer, timestamp, npt,
-                                       &h264_imp->composition_reordering_present,
-                                       &h264_imp->last_delta,
-                                       max_composition_delay, num_access_units );
-    nalu_reduce_timescale( timestamp, npt, &h264_imp->last_delta, &summary->timescale, num_access_units );
+    nalu_imp_generate_timestamps_from_poc( importer, timestamp, npt,
+                                           &h264_imp->composition_reordering_present,
+                                           &h264_imp->last_delta,
+                                           max_composition_delay, num_access_units );
+    nalu_imp_reduce_timescale( timestamp, npt, &h264_imp->last_delta, &summary->timescale, num_access_units );
     lsmash_free( npt );
     h264_imp->ts_list.sample_count = num_access_units;
     h264_imp->ts_list.timestamp    = timestamp;
@@ -834,14 +834,14 @@ fail:
     return err;
 }
 
-static int h264_importer_probe( importer_t *importer )
+static int nalu_imp_h264_probe( importer_t *importer )
 {
     /* Find the first start code. */
-    h264_importer_t *h264_imp = create_h264_importer( importer );
+    h264_importer_t *h264_imp = nalu_imp_create_h264( importer );
     if( !h264_imp )
         return LSMASH_ERR_MEMORY_ALLOC;
     lsmash_bs_t *bs = importer->bs;
-    uint64_t first_sc_head_pos = nalu_find_first_start_code( bs );
+    uint64_t first_sc_head_pos = lsm_nalu_find_first_start_code( bs );
     int err;
     if( first_sc_head_pos == NALU_NO_START_CODE_FOUND )
     {
@@ -858,7 +858,7 @@ static int h264_importer_probe( importer_t *importer )
     h264_info_t *info = &h264_imp->info;
     lsmash_bs_read_seek( bs, first_sc_head_pos, SEEK_SET );
     h264_imp->sc_head_pos = first_sc_head_pos;
-    if( (err = h264_analyze_whole_stream( importer )) < 0 )
+    if( (err = nalu_imp_h264_analyze_whole_stream( importer )) < 0 )
         goto fail;
     /* Go back to the start code of the first NALU. */
     importer->status = IMPORTER_OK;
@@ -879,13 +879,13 @@ static int h264_importer_probe( importer_t *importer )
     lsmash_destroy_h264_parameter_sets( &info->avcC_param_next );
     return 0;
 fail:
-    remove_h264_importer( h264_imp );
+    nalu_imp_remove_h264( h264_imp );
     importer->info = NULL;
     lsmash_list_remove_entries( importer->summaries );
     return err;
 }
 
-static uint32_t h264_importer_get_last_delta( importer_t *importer, uint32_t track_number )
+static uint32_t nalu_imp_h264_get_last_delta( importer_t *importer, uint32_t track_number )
 {
     debug_if( !importer || !importer->info )
         return 0;
@@ -901,10 +901,10 @@ const importer_functions h264_importer =
 {
     { "H.264", offsetof( importer_t, log_level ) },
     1,
-    h264_importer_probe,
-    h264_importer_get_accessunit,
-    h264_importer_get_last_delta,
-    h264_importer_cleanup
+    nalu_imp_h264_probe,
+    nalu_imp_h264_get_accessunit,
+    nalu_imp_h264_get_last_delta,
+    nalu_imp_h264_cleanup
 };
 
 /***************************************************************************
@@ -930,30 +930,30 @@ typedef struct
     uint8_t  max_TemporalId;
 } hevc_importer_t;
 
-static void remove_hevc_importer( hevc_importer_t *hevc_imp )
+static void nalu_imp_remove_hevc( hevc_importer_t *hevc_imp )
 {
     if( !hevc_imp )
         return;
     lsmash_list_remove_entries( hevc_imp->hvcC_list );
-    hevc_cleanup_parser( &hevc_imp->info );
+    lsm_hevc_cleanup_parser( &hevc_imp->info );
     lsmash_free( hevc_imp->ts_list.timestamp );
     lsmash_free( hevc_imp );
 }
 
-static void hevc_importer_cleanup( importer_t *importer )
+static void nalu_imp_hevc_cleanup( importer_t *importer )
 {
     debug_if( importer && importer->info )
-        remove_hevc_importer( importer->info );
+        nalu_imp_remove_hevc( importer->info );
 }
 
-static hevc_importer_t *create_hevc_importer( importer_t *importer )
+static hevc_importer_t *nalu_imp_create_hevc( importer_t *importer )
 {
     hevc_importer_t *hevc_imp = lsmash_malloc_zero( sizeof(hevc_importer_t) );
     if( !hevc_imp )
         return NULL;
-    if( hevc_setup_parser( &hevc_imp->info, 0 ) < 0 )
+    if( lsm_hevc_setup_parser( &hevc_imp->info, 0 ) < 0 )
     {
-        remove_hevc_importer( hevc_imp );
+        nalu_imp_remove_hevc( hevc_imp );
         return NULL;
     }
     lsmash_list_init( hevc_imp->hvcC_list, lsmash_destroy_codec_specific_data );
@@ -961,7 +961,7 @@ static hevc_importer_t *create_hevc_importer( importer_t *importer )
     return hevc_imp;
 }
 
-static inline int hevc_complete_au( hevc_access_unit_t *au, int probe )
+static int nalu_imp_hevc_complete_au( hevc_access_unit_t *au, int probe )
 {
     if( !au->picture.has_primary || au->incomplete_length == 0 )
         return 0;
@@ -974,7 +974,7 @@ static inline int hevc_complete_au( hevc_access_unit_t *au, int probe )
     return 1;
 }
 
-static void hevc_append_nalu_to_au( hevc_access_unit_t *au, uint8_t *src_nalu, uint32_t nalu_length, int probe )
+static void nalu_imp_hevc_append_nalu_to_au( hevc_access_unit_t *au, uint8_t *src_nalu, uint32_t nalu_length, int probe )
 {
     if( !probe )
     {
@@ -984,25 +984,25 @@ static void hevc_append_nalu_to_au( hevc_access_unit_t *au, uint8_t *src_nalu, u
         memcpy( dst_nalu, src_nalu, nalu_length );
     }
     /* Note: picture->incomplete_au_length shall be 0 immediately after AU has completed.
-     * Therefore, possible_au_length in hevc_get_access_unit_internal() can't be used here
+     * Therefore, possible_au_length in nalu_imp_hevc_get_access_unit_internal() can't be used here
      * to avoid increasing AU length monotonously through the entire stream. */
     au->incomplete_length += NALU_DEFAULT_NALU_LENGTH_SIZE + nalu_length;
 }
 
-static int hevc_get_au_internal_succeeded( hevc_importer_t *hevc_imp, hevc_access_unit_t *au )
+static int nalu_imp_hevc_get_au_internal_succeeded( hevc_importer_t *hevc_imp, hevc_access_unit_t *au )
 {
     au->number += 1;
     return 0;
 }
 
-static int hevc_get_au_internal_failed( hevc_importer_t *hevc_imp, hevc_access_unit_t *au, int complete_au, int ret )
+static int nalu_imp_hevc_get_au_internal_failed( hevc_importer_t *hevc_imp, hevc_access_unit_t *au, int complete_au, int ret )
 {
     if( complete_au )
         au->number += 1;
     return ret;
 }
 
-static lsmash_video_summary_t *hevc_create_summary
+static lsmash_video_summary_t *nalu_imp_hevc_create_summary
 (
     lsmash_hevc_specific_parameters_t *param,
     hevc_sps_t                        *sps,
@@ -1013,7 +1013,7 @@ static lsmash_video_summary_t *hevc_create_summary
     if( !summary )
         return NULL;
     /* Update summary here.
-     * max_au_length is set at the last of hevc_importer_probe function. */
+     * max_au_length is set at the last of nalu_imp_hevc_probe function. */
     lsmash_codec_specific_t *specific = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_HEVC,
                                                                            LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED );
     if( !specific )
@@ -1047,7 +1047,7 @@ static lsmash_video_summary_t *hevc_create_summary
     return summary;
 }
 
-static int hevc_store_codec_specific
+static int nalu_imp_hevc_store_codec_specific
 (
     hevc_importer_t                   *hevc_imp,
     lsmash_hevc_specific_parameters_t *hvcC_param
@@ -1075,7 +1075,7 @@ static int hevc_store_codec_specific
     return 0;
 }
 
-static inline void hevc_new_access_unit( hevc_access_unit_t *au )
+static void nalu_imp_hevc_new_access_unit( hevc_access_unit_t *au )
 {
     au->length                    = 0;
     au->picture.type              = HEVC_PICTURE_TYPE_NONE;
@@ -1084,7 +1084,7 @@ static inline void hevc_new_access_unit( hevc_access_unit_t *au )
 }
 
 /* If probe equals 0, don't get the actual data (EBPS) of an access unit and only parse NALU. */
-static int hevc_get_access_unit_internal
+static int nalu_imp_hevc_get_access_unit_internal
 (
     importer_t *importer,
     int         probe
@@ -1098,23 +1098,23 @@ static int hevc_get_access_unit_internal
     hevc_stream_buffer_t *sb       = &info->buffer;
     lsmash_bs_t          *bs       = importer->bs;
     int complete_au = 0;
-    hevc_new_access_unit( au );
+    nalu_imp_hevc_new_access_unit( au );
     while( 1 )
     {
         hevc_nalu_header_t nuh;
         uint64_t start_code_length;
         uint64_t trailing_zero_bytes;
-        uint64_t nalu_length = hevc_find_next_start_code( bs, &nuh, &start_code_length, &trailing_zero_bytes );
+        uint64_t nalu_length = lsm_hevc_find_next_start_code( bs, &nuh, &start_code_length, &trailing_zero_bytes );
         if( nalu_length == NALU_NO_START_CODE_FOUND )
         {
             /* For the last NALU.
              * This NALU already has been appended into the latest access unit and parsed. */
-            hevc_update_picture_info( info, picture, slice, &info->sps, &info->sei );
-            complete_au = hevc_complete_au( au, probe );
+            lsm_hevc_update_picture_info( info, picture, slice, &info->sps, &info->sei );
+            complete_au = nalu_imp_hevc_complete_au( au, probe );
             if( complete_au )
-                return hevc_get_au_internal_succeeded( hevc_imp, au );
+                return nalu_imp_hevc_get_au_internal_succeeded( hevc_imp, au );
             else
-                return hevc_get_au_internal_failed( hevc_imp, au, complete_au, LSMASH_ERR_INVALID_DATA );
+                return nalu_imp_hevc_get_au_internal_failed( hevc_imp, au, complete_au, LSMASH_ERR_INVALID_DATA );
         }
         uint8_t  nalu_type        = nuh.nal_unit_type;
         uint64_t next_sc_head_pos = hevc_imp->sc_head_pos
@@ -1140,7 +1140,7 @@ static int hevc_get_access_unit_internal
         {
             /* We don't support streams with both filler and HRD yet. Otherwise, just skip filler. */
             if( info->sps.vui.hrd.present )
-                return hevc_get_au_internal_failed( hevc_imp, au, complete_au, LSMASH_ERR_PATCH_WELCOME );
+                return nalu_imp_hevc_get_au_internal_failed( hevc_imp, au, complete_au, LSMASH_ERR_PATCH_WELCOME );
         }
         else if( nalu_type <= HEVC_NALU_TYPE_RASL_R
              || (nalu_type >= HEVC_NALU_TYPE_BLA_W_LP && nalu_type <= HEVC_NALU_TYPE_CRA)
@@ -1151,10 +1151,10 @@ static int hevc_get_access_unit_internal
             /* Increase the buffer if needed. */
             uint64_t possible_au_length = au->incomplete_length + NALU_DEFAULT_NALU_LENGTH_SIZE + nalu_length;
             if( sb->bank->buffer_size < possible_au_length
-             && (err = hevc_supplement_buffer( sb, au, 2 * possible_au_length )) < 0 )
+             && (err = lsm_hevc_supplement_buffer( sb, au, 2 * possible_au_length )) < 0 )
             {
                 lsmash_log( importer, LSMASH_LOG_ERROR, "failed to increase the buffer size.\n" );
-                return hevc_get_au_internal_failed( hevc_imp, au, complete_au, err );
+                return nalu_imp_hevc_get_au_internal_failed( hevc_imp, au, complete_au, err );
             }
             /* Get the EBSP of the current NALU here. */
             uint8_t *nalu = lsmash_bs_get_buffer_data( bs ) + start_code_length;
@@ -1162,76 +1162,76 @@ static int hevc_get_access_unit_internal
             {
                 /* VCL NALU (slice) */
                 hevc_slice_info_t prev_slice = *slice;
-                if( (err = hevc_parse_slice_segment_header( info, &nuh, sb->rbsp,
-                                                            nalu        + nuh.length,
-                                                            nalu_length - nuh.length )) < 0 )
-                    return hevc_get_au_internal_failed( hevc_imp, au, complete_au, err );
+                if( (err = lsm_hevc_parse_slice_segment_header( info, &nuh, sb->rbsp,
+                                                                nalu        + nuh.length,
+                                                                nalu_length - nuh.length )) < 0 )
+                    return nalu_imp_hevc_get_au_internal_failed( hevc_imp, au, complete_au, err );
                 if( probe && info->hvcC_pending )
                 {
                     /* Copy and append a Codec Specific info. */
-                    if( (err = hevc_store_codec_specific( hevc_imp, &info->hvcC_param )) < 0 )
+                    if( (err = nalu_imp_hevc_store_codec_specific( hevc_imp, &info->hvcC_param )) < 0 )
                         return err;
                 }
-                if( (err = hevc_move_pending_hvcC_param( info )) < 0 )
+                if( (err = lsm_hevc_move_pending_hvcC_param( info )) < 0 )
                     return err;
                 if( prev_slice.present )
                 {
                     /* Check whether the AU that contains the previous VCL NALU completed or not. */
-                    if( hevc_find_au_delimit_by_slice_info( info, slice, &prev_slice ) )
+                    if( lsm_hevc_find_au_delimit_by_slice_info( info, slice, &prev_slice ) )
                     {
                         /* The current NALU is the first VCL NALU of the primary coded picture of a new AU.
                          * Therefore, the previous slice belongs to the AU you want at this time. */
-                        hevc_update_picture_info( info, picture, &prev_slice, &info->sps, &info->sei );
-                        complete_au = hevc_complete_au( au, probe );
+                        lsm_hevc_update_picture_info( info, picture, &prev_slice, &info->sps, &info->sei );
+                        complete_au = nalu_imp_hevc_complete_au( au, probe );
                     }
                     else
-                        hevc_update_picture_info_for_slice( info, picture, &prev_slice );
+                        lsm_hevc_update_picture_info_for_slice( info, picture, &prev_slice );
                 }
-                hevc_append_nalu_to_au( au, nalu, nalu_length, probe );
+                nalu_imp_hevc_append_nalu_to_au( au, nalu, nalu_length, probe );
                 slice->present = 1;
             }
             else
             {
-                if( hevc_find_au_delimit_by_nalu_type( nalu_type, info->prev_nalu_type ) )
+                if( lsm_hevc_find_au_delimit_by_nalu_type( nalu_type, info->prev_nalu_type ) )
                 {
                     /* The last slice belongs to the AU you want at this time. */
-                    hevc_update_picture_info( info, picture, slice, &info->sps, &info->sei );
-                    complete_au = hevc_complete_au( au, probe );
+                    lsm_hevc_update_picture_info( info, picture, slice, &info->sps, &info->sei );
+                    complete_au = nalu_imp_hevc_complete_au( au, probe );
                 }
                 switch( nalu_type )
                 {
                     case HEVC_NALU_TYPE_PREFIX_SEI :
                     case HEVC_NALU_TYPE_SUFFIX_SEI :
                     {
-                        if( (err = hevc_parse_sei( info->bits, &info->vps, &info->sps, &info->sei, &nuh,
-                                                   sb->rbsp, nalu + nuh.length, nalu_length - nuh.length )) < 0 )
-                            return hevc_get_au_internal_failed( hevc_imp, au, complete_au, err );
+                        if( (err = lsm_hevc_parse_sei( info->bits, &info->vps, &info->sps, &info->sei, &nuh,
+                                                       sb->rbsp, nalu + nuh.length, nalu_length - nuh.length )) < 0 )
+                            return nalu_imp_hevc_get_au_internal_failed( hevc_imp, au, complete_au, err );
                         if( info->sei.mastering_display.present == 2 )
                         {
-                            if( (err = hevc_try_to_append_dcr_nalu(info, HEVC_DCR_NALU_TYPE_PREFIX_SEI, nalu, nalu_length)) < 0 )
-                                return hevc_get_au_internal_failed( hevc_imp, au, complete_au, err );
+                            if( (err = lsm_hevc_try_to_append_dcr_nalu(info, HEVC_DCR_NALU_TYPE_PREFIX_SEI, nalu, nalu_length)) < 0 )
+                                return nalu_imp_hevc_get_au_internal_failed( hevc_imp, au, complete_au, err );
                             info->sei.mastering_display.present--; /* so that only one is added */
                         }
                         else
-                            hevc_append_nalu_to_au( au, nalu, nalu_length, probe );
+                            nalu_imp_hevc_append_nalu_to_au( au, nalu, nalu_length, probe );
                         break;
                     }
                     case HEVC_NALU_TYPE_VPS :
-                        if( (err = hevc_try_to_append_dcr_nalu( info, HEVC_DCR_NALU_TYPE_VPS, nalu, nalu_length )) < 0 )
-                            return hevc_get_au_internal_failed( hevc_imp, au, complete_au, err );
+                        if( (err = lsm_hevc_try_to_append_dcr_nalu( info, HEVC_DCR_NALU_TYPE_VPS, nalu, nalu_length )) < 0 )
+                            return nalu_imp_hevc_get_au_internal_failed( hevc_imp, au, complete_au, err );
                         break;
                     case HEVC_NALU_TYPE_SPS :
-                        if( (err = hevc_try_to_append_dcr_nalu( info, HEVC_DCR_NALU_TYPE_SPS, nalu, nalu_length )) < 0 )
-                            return hevc_get_au_internal_failed( hevc_imp, au, complete_au, err );
+                        if( (err = lsm_hevc_try_to_append_dcr_nalu( info, HEVC_DCR_NALU_TYPE_SPS, nalu, nalu_length )) < 0 )
+                            return nalu_imp_hevc_get_au_internal_failed( hevc_imp, au, complete_au, err );
                         break;
                     case HEVC_NALU_TYPE_PPS :
-                        if( (err = hevc_try_to_append_dcr_nalu( info, HEVC_DCR_NALU_TYPE_PPS, nalu, nalu_length )) < 0 )
-                            return hevc_get_au_internal_failed( hevc_imp, au, complete_au, err );
+                        if( (err = lsm_hevc_try_to_append_dcr_nalu( info, HEVC_DCR_NALU_TYPE_PPS, nalu, nalu_length )) < 0 )
+                            return nalu_imp_hevc_get_au_internal_failed( hevc_imp, au, complete_au, err );
                         break;
                     case HEVC_NALU_TYPE_AUD :   /* We drop access unit delimiters. */
                         break;
                     default :
-                        hevc_append_nalu_to_au( au, nalu, nalu_length, probe );
+                        nalu_imp_hevc_append_nalu_to_au( au, nalu, nalu_length, probe );
                         break;
                 }
                 if( info->hvcC_pending )
@@ -1243,23 +1243,23 @@ static int hevc_get_access_unit_internal
         if( lsmash_bs_read_seek( bs, next_sc_head_pos, SEEK_SET ) != next_sc_head_pos )
         {
             lsmash_log( importer, LSMASH_LOG_ERROR, "failed to seek the next start code.\n" );
-            return hevc_get_au_internal_failed( hevc_imp, au, complete_au, LSMASH_ERR_NAMELESS );
+            return nalu_imp_hevc_get_au_internal_failed( hevc_imp, au, complete_au, LSMASH_ERR_NAMELESS );
         }
         if( !lsmash_bs_is_end( bs, NALU_SHORT_START_CODE_LENGTH ) )
             hevc_imp->sc_head_pos = next_sc_head_pos;
         /* If there is no more data in the stream, and flushed chunk of NALUs, flush it as complete AU here. */
         else if( au->incomplete_length && au->length == 0 )
         {
-            hevc_update_picture_info( info, picture, slice, &info->sps, &info->sei );
-            hevc_complete_au( au, probe );
-            return hevc_get_au_internal_succeeded( hevc_imp, au );
+            lsm_hevc_update_picture_info( info, picture, slice, &info->sps, &info->sei );
+            nalu_imp_hevc_complete_au( au, probe );
+            return nalu_imp_hevc_get_au_internal_succeeded( hevc_imp, au );
         }
         if( complete_au )
-            return hevc_get_au_internal_succeeded( hevc_imp, au );
+            return nalu_imp_hevc_get_au_internal_succeeded( hevc_imp, au );
     }
 }
 
-static inline void hevc_importer_check_eof( importer_t *importer, hevc_access_unit_t *au )
+static void nalu_imp_hevc_check_eof( importer_t *importer, hevc_access_unit_t *au )
 {
     /* HEVC byte stream NALU consists of at least 5 bytes (start-code + NALU-header). */
     if( lsmash_bs_is_end( importer->bs, NALU_SHORT_START_CODE_LENGTH + 1 ) && au->incomplete_length == 0 )
@@ -1268,7 +1268,7 @@ static inline void hevc_importer_check_eof( importer_t *importer, hevc_access_un
         importer->status = IMPORTER_OK;
 }
 
-static int hevc_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t **p_sample )
+static int nalu_imp_hevc_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t **p_sample )
 {
     if( !importer->info )
         return LSMASH_ERR_NAMELESS;
@@ -1281,13 +1281,13 @@ static int hevc_importer_get_accessunit( importer_t *importer, uint32_t track_nu
         return LSMASH_ERR_NAMELESS;
     if( current_status == IMPORTER_EOF )
         return IMPORTER_EOF;
-    int err = hevc_get_access_unit_internal( importer, 0 );
+    int err = nalu_imp_hevc_get_access_unit_internal( importer, 0 );
     if( err < 0 )
     {
         importer->status = IMPORTER_ERROR;
         return err;
     }
-    hevc_importer_check_eof( importer, &info->au );
+    nalu_imp_hevc_check_eof( importer, &info->au );
     if( importer->status == IMPORTER_CHANGE && !info->hvcC_pending )
         current_status = IMPORTER_CHANGE;
     if( current_status == IMPORTER_CHANGE )
@@ -1297,7 +1297,7 @@ static int hevc_importer_get_accessunit( importer_t *importer, uint32_t track_nu
         if( !cs )
             return LSMASH_ERR_NAMELESS;
         lsmash_hevc_specific_parameters_t *hvcC_param = (lsmash_hevc_specific_parameters_t *)cs->data.structured;
-        lsmash_video_summary_t *summary = hevc_create_summary( hvcC_param, &info->sps, hevc_imp->max_au_length );
+        lsmash_video_summary_t *summary = nalu_imp_hevc_create_summary( hvcC_param, &info->sps, hevc_imp->max_au_length );
         if( !summary )
             return LSMASH_ERR_NAMELESS;
         lsmash_list_remove_entry( importer->summaries, track_number );
@@ -1367,7 +1367,7 @@ static int hevc_importer_get_accessunit( importer_t *importer, uint32_t track_nu
     return current_status;
 }
 
-static lsmash_video_summary_t *hevc_setup_first_summary
+static lsmash_video_summary_t *nalu_imp_hevc_setup_first_summary
 (
     importer_t *importer
 )
@@ -1385,8 +1385,8 @@ static lsmash_video_summary_t *hevc_setup_first_summary
     if( info->sei.hdr10p_present )
         hevc_cs->has_hdr10p = 1;
 
-    lsmash_video_summary_t *summary = hevc_create_summary( (lsmash_hevc_specific_parameters_t *)cs->data.structured,
-                                                           &hevc_imp->info.sps, hevc_imp->max_au_length );
+    lsmash_video_summary_t *summary = nalu_imp_hevc_create_summary( (lsmash_hevc_specific_parameters_t *)cs->data.structured,
+                                                                    &hevc_imp->info.sps, hevc_imp->max_au_length );
     if( !summary )
     {
         lsmash_destroy_codec_specific_data( cs );
@@ -1401,7 +1401,7 @@ static lsmash_video_summary_t *hevc_setup_first_summary
     return summary;
 }
 
-static int hevc_analyze_whole_stream
+static int nalu_imp_hevc_analyze_whole_stream
 (
     importer_t *importer
 )
@@ -1426,10 +1426,10 @@ static int hevc_analyze_whole_stream
 #endif
         hevc_picture_info_t     *picture = &info->au.picture;
         hevc_picture_info_t prev_picture = *picture;
-        if( (err = hevc_get_access_unit_internal( importer, 1 ))                 < 0
-         || (err = hevc_calculate_poc( info, &info->au.picture, &prev_picture )) < 0 )
+        if( (err = nalu_imp_hevc_get_access_unit_internal( importer, 1 ))         < 0
+         || (err = lsm_hevc_calculate_poc( info, &info->au.picture, &prev_picture )) < 0 )
             goto fail;
-        hevc_importer_check_eof( importer, &info->au );
+        nalu_imp_hevc_check_eof( importer, &info->au );
         if( npt_alloc <= num_access_units * sizeof(nal_pic_timing_t) )
         {
             uint32_t alloc = 2 * num_access_units * sizeof(nal_pic_timing_t);
@@ -1464,10 +1464,10 @@ static int hevc_analyze_whole_stream
                 picture_stats[HEVC_PICTURE_TYPE_I_P], picture_stats[HEVC_PICTURE_TYPE_I_P_B],
                 picture_stats[HEVC_PICTURE_TYPE_NONE]);
     /* Copy and append the last Codec Specific info. */
-    if( (err = hevc_store_codec_specific( hevc_imp, &info->hvcC_param )) < 0 )
+    if( (err = nalu_imp_hevc_store_codec_specific( hevc_imp, &info->hvcC_param )) < 0 )
         goto fail;
     /* Set up the first summary. */
-    lsmash_video_summary_t *summary = hevc_setup_first_summary( importer );
+    lsmash_video_summary_t *summary = nalu_imp_hevc_setup_first_summary( importer );
     if( !summary )
     {
         err = LSMASH_ERR_NAMELESS;
@@ -1486,16 +1486,16 @@ static int hevc_analyze_whole_stream
     }
     /* Deduplicate POCs. */
     uint32_t max_composition_delay = 0;
-    nalu_deduplicate_poc( npt, &max_composition_delay, num_access_units, 15 );
+    nalu_imp_deduplicate_poc( npt, &max_composition_delay, num_access_units, 15 );
     /* Generate timestamps. */
-    nalu_generate_timestamps_from_poc( importer, timestamp, npt,
-                                       &hevc_imp->composition_reordering_present,
-                                       &hevc_imp->last_delta,
-                                       max_composition_delay, num_access_units );
+    nalu_imp_generate_timestamps_from_poc( importer, timestamp, npt,
+                                           &hevc_imp->composition_reordering_present,
+                                           &hevc_imp->last_delta,
+                                           max_composition_delay, num_access_units );
     summary->timescale *= 2;    /* We assume that picture timing is in field level.
                                  * For HEVC, it seems time_scale is set in frame level basically.
                                  * So multiply by 2 for reducing timebase and timescale. */
-    nalu_reduce_timescale( timestamp, npt, &hevc_imp->last_delta, &summary->timescale, num_access_units );
+    nalu_imp_reduce_timescale( timestamp, npt, &hevc_imp->last_delta, &summary->timescale, num_access_units );
     lsmash_free( npt );
     hevc_imp->ts_list.sample_count = num_access_units;
     hevc_imp->ts_list.timestamp    = timestamp;
@@ -1506,14 +1506,14 @@ fail:
     return err;
 }
 
-static int hevc_importer_probe( importer_t *importer )
+static int nalu_imp_hevc_probe( importer_t *importer )
 {
     /* Find the first start code. */
-    hevc_importer_t *hevc_imp = create_hevc_importer( importer );
+    hevc_importer_t *hevc_imp = nalu_imp_create_hevc( importer );
     if( !hevc_imp )
         return LSMASH_ERR_MEMORY_ALLOC;
     lsmash_bs_t *bs = importer->bs;
-    uint64_t first_sc_head_pos = nalu_find_first_start_code( bs );
+    uint64_t first_sc_head_pos = lsm_nalu_find_first_start_code( bs );
     int err;
     if( first_sc_head_pos == NALU_NO_START_CODE_FOUND )
     {
@@ -1530,7 +1530,7 @@ static int hevc_importer_probe( importer_t *importer )
     hevc_info_t *info = &hevc_imp->info;
     lsmash_bs_read_seek( bs, first_sc_head_pos, SEEK_SET );
     hevc_imp->sc_head_pos = first_sc_head_pos;
-    if( (err = hevc_analyze_whole_stream( importer )) < 0 )
+    if( (err = nalu_imp_hevc_analyze_whole_stream( importer )) < 0 )
         goto fail;
     /* Go back to the start code of the first NALU. */
     importer->status = IMPORTER_OK;
@@ -1551,13 +1551,13 @@ static int hevc_importer_probe( importer_t *importer )
     lsmash_destroy_hevc_parameter_arrays( &info->hvcC_param_next );
     return 0;
 fail:
-    remove_hevc_importer( hevc_imp );
+    nalu_imp_remove_hevc( hevc_imp );
     importer->info = NULL;
     lsmash_list_remove_entries( importer->summaries );
     return err;
 }
 
-static uint32_t hevc_importer_get_last_delta( importer_t *importer, uint32_t track_number )
+static uint32_t nalu_imp_hevc_get_last_delta( importer_t *importer, uint32_t track_number )
 {
     debug_if( !importer || !importer->info )
         return 0;
@@ -1573,8 +1573,8 @@ const importer_functions hevc_importer =
 {
     { "HEVC", offsetof( importer_t, log_level ) },
     1,
-    hevc_importer_probe,
-    hevc_importer_get_accessunit,
-    hevc_importer_get_last_delta,
-    hevc_importer_cleanup
+    nalu_imp_hevc_probe,
+    nalu_imp_hevc_get_accessunit,
+    nalu_imp_hevc_get_last_delta,
+    nalu_imp_hevc_cleanup
 };

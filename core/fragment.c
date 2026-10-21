@@ -87,7 +87,7 @@ int lsmash_create_fragment_movie( lsmash_root_t *root )
     return 0;
 }
 
-static inline uint64_t fragment_get_implicit_segment_duration
+static uint64_t fragment_get_implicit_segment_duration
 (
     isom_cache_t *cache
 )
@@ -493,7 +493,7 @@ static int fragment_output_media_data( lsmash_file_t *file )
     return 0;
 }
 
-static inline void fragment_reset_sample_counts
+static void fragment_reset_sample_counts
 (
     isom_cache_t *cache
 )

@@ -251,7 +251,7 @@ static void timeline_get_qt_fixed_comp_audio_sample_quants
     if( audio->version == 0 )
     {
         uint32_t dummy;
-        if( !isom_get_implicit_qt_fixed_comp_audio_sample_quants( audio, samples_per_packet, constant_sample_size, &dummy ) )
+        if( !lsm_description_get_implicit_qt_fixed_comp_audio_sample_quants( audio, samples_per_packet, constant_sample_size, &dummy ) )
         {
             /* LPCM */
             if( !lsm_box_is_lpcm_audio( audio ) )
@@ -623,7 +623,7 @@ void lsm_timeline_set_lpcm_sample_getter_funcs
     timeline->get_sample_property    = timeline_get_lpcm_sample_property;
 }
 
-static inline void timeline_increment_sample_number_in_entry
+static void timeline_increment_sample_number_in_entry
 (
     uint32_t          *sample_number_in_entry,
     lsm_list_cursor_t *cursor,
@@ -639,7 +639,7 @@ static inline void timeline_increment_sample_number_in_entry
         *sample_number_in_entry += 1;
 }
 
-static inline isom_sgpd_t *timeline_select_appropriate_sgpd
+static isom_sgpd_t *timeline_select_appropriate_sgpd
 (
     isom_sgpd_t *sgpd,
     isom_sgpd_t *sgpd_frag,
@@ -1492,7 +1492,7 @@ static int timeline_get_closest_past_rap( isom_timeline_t *timeline, uint32_t sa
     return 0;
 }
 
-static inline int timeline_get_closest_future_rap( isom_timeline_t *timeline, uint32_t sample_number, uint32_t *rap_number )
+static int timeline_get_closest_future_rap( isom_timeline_t *timeline, uint32_t sample_number, uint32_t *rap_number )
 {
     isom_sample_info_t *info = (isom_sample_info_t *)lsm_list_get( timeline->info_list, sample_number++ );
     if( !info )

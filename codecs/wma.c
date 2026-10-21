@@ -32,7 +32,7 @@
 #define WAVE_FORMAT_TAG_ID_WMA_V2 0x0161
 #define WAVE_FORMAT_TAG_ID_WMA_V3 0x0162
 
-int wma_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
+int lsm_wma_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
 {
     assert( box->manager & LSMASH_BINARY_CODED_BOX );
     int indent = level;

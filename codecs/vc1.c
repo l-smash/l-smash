@@ -87,7 +87,7 @@ void lsmash_destroy_vc1_headers( lsmash_vc1_specific_parameters_t *param )
     param->ephdr  = NULL;
 }
 
-void vc1_destruct_specific_data( void *data )
+void lsm_vc1_destruct_specific_data( void *data )
 {
     if( !data )
         return;
@@ -95,7 +95,7 @@ void vc1_destruct_specific_data( void *data )
     lsmash_free( data );
 }
 
-void vc1_cleanup_parser( vc1_info_t *info )
+void lsm_vc1_cleanup_parser( vc1_info_t *info )
 {
     if( !info )
         return;
@@ -105,7 +105,7 @@ void vc1_cleanup_parser( vc1_info_t *info )
     info->bits = NULL;
 }
 
-int vc1_setup_parser
+int lsm_vc1_setup_parser
 (
     vc1_info_t *info,
     int         parse_only
@@ -133,7 +133,7 @@ int vc1_setup_parser
     return 0;
 }
 
-uint64_t vc1_find_next_start_code_prefix
+uint64_t lsm_vc1_find_next_start_code_prefix
 (
     lsmash_bs_t *bs,
     uint8_t     *bdu_type,
@@ -177,7 +177,7 @@ uint64_t vc1_find_next_start_code_prefix
     return length;
 }
 
-int vc1_check_next_start_code_suffix
+int lsm_vc1_check_next_start_code_suffix
 (
     lsmash_bs_t *bs,
     uint8_t     *p_bdu_type
@@ -193,7 +193,7 @@ int vc1_check_next_start_code_suffix
     return 0;
 }
 
-static inline uint8_t vc1_get_vlc( lsmash_bits_t *bits, int length )
+static uint8_t vc1_get_vlc( lsmash_bits_t *bits, int length )
 {
     uint8_t value = 0;
     for( int i = 0; i < length; i++ )
@@ -244,7 +244,7 @@ static void vc1_parse_hrd_param( lsmash_bits_t *bits, vc1_hrd_param_t *hrd_param
     }
 }
 
-int vc1_parse_sequence_header( vc1_info_t *info, uint8_t *ebdu, uint64_t ebdu_size, int try_append )
+int lsm_vc1_parse_sequence_header( vc1_info_t *info, uint8_t *ebdu, uint64_t ebdu_size, int try_append )
 {
     lsmash_bits_t *bits = info->bits;
     vc1_sequence_header_t *sequence = &info->sequence;
@@ -385,7 +385,7 @@ int vc1_parse_sequence_header( vc1_info_t *info, uint8_t *ebdu, uint64_t ebdu_si
     return bits->bs->error ? LSMASH_ERR_NAMELESS : 0;
 }
 
-int vc1_parse_entry_point_header( vc1_info_t *info, uint8_t *ebdu, uint64_t ebdu_size, int try_append )
+int lsm_vc1_parse_entry_point_header( vc1_info_t *info, uint8_t *ebdu, uint64_t ebdu_size, int try_append )
 {
     lsmash_bits_t *bits = info->bits;
     vc1_sequence_header_t *sequence = &info->sequence;
@@ -470,7 +470,7 @@ int vc1_parse_entry_point_header( vc1_info_t *info, uint8_t *ebdu, uint64_t ebdu
     return bits->bs->error ? LSMASH_ERR_NAMELESS : 0;
 }
 
-int vc1_parse_advanced_picture( lsmash_bits_t *bits,
+int lsm_vc1_parse_advanced_picture( lsmash_bits_t *bits,
                                 vc1_sequence_header_t *sequence, vc1_picture_info_t *picture,
                                 uint8_t *rbdu_buffer, uint8_t *ebdu, uint64_t ebdu_size )
 {
@@ -490,7 +490,7 @@ int vc1_parse_advanced_picture( lsmash_bits_t *bits,
     return bits->bs->error ? LSMASH_ERR_NAMELESS : 0;
 }
 
-void vc1_update_au_property( vc1_access_unit_t *access_unit, vc1_picture_info_t *picture )
+void lsm_vc1_update_au_property( vc1_access_unit_t *access_unit, vc1_picture_info_t *picture )
 {
     access_unit->random_accessible = picture->random_accessible;
     access_unit->closed_gop        = picture->closed_gop;
@@ -527,7 +527,7 @@ void vc1_update_au_property( vc1_access_unit_t *access_unit, vc1_picture_info_t 
     picture->random_accessible = 0;
 }
 
-int vc1_find_au_delimit_by_bdu_type( uint8_t bdu_type, uint8_t prev_bdu_type )
+int lsm_vc1_find_au_delimit_by_bdu_type( uint8_t bdu_type, uint8_t prev_bdu_type )
 {
     /* In any access unit, EBDU with smaller least significant 8-bits of BDU type doesn't precede EBDU with larger one.
      * Therefore, the condition: (bdu_type 0xF) > (prev_bdu_type & 0xF) is more precisely.
@@ -535,7 +535,7 @@ int vc1_find_au_delimit_by_bdu_type( uint8_t bdu_type, uint8_t prev_bdu_type )
     return bdu_type > prev_bdu_type || (bdu_type == 0x0D && prev_bdu_type == 0x0D);
 }
 
-int vc1_supplement_buffer( vc1_stream_buffer_t *sb, vc1_access_unit_t *access_unit, uint32_t size )
+int lsm_vc1_supplement_buffer( vc1_stream_buffer_t *sb, vc1_access_unit_t *access_unit, uint32_t size )
 {
     lsmash_multiple_buffers_t *bank = lsmash_resize_multiple_buffers( sb->bank, size );
     if( !bank )
@@ -644,17 +644,17 @@ static int vc1_parse_succeeded
     }
     else
         ret = LSMASH_ERR_INVALID_DATA;
-    vc1_cleanup_parser( info );
+    lsm_vc1_cleanup_parser( info );
     return ret;
 }
 
-static inline int vc1_parse_failed
+static int vc1_parse_failed
 (
     vc1_info_t *info,
     int         ret
 )
 {
-    vc1_cleanup_parser( info );
+    lsm_vc1_cleanup_parser( info );
     return ret;
 }
 
@@ -667,7 +667,7 @@ int lsmash_setup_vc1_specific_parameters_from_access_unit( lsmash_vc1_specific_p
     int err = lsmash_bs_set_empty_stream( bs, data, data_length );
     if( err < 0 )
         return err;
-    if( (err = vc1_setup_parser( info, 1 )) < 0 )
+    if( (err = lsm_vc1_setup_parser( info, 1 )) < 0 )
         return vc1_parse_failed( info, err );
     info->dvc1_param = *param;
     vc1_stream_buffer_t *sb = &info->buffer;
@@ -675,7 +675,7 @@ int lsmash_setup_vc1_specific_parameters_from_access_unit( lsmash_vc1_specific_p
     {
         uint8_t  bdu_type;
         uint64_t trailing_zero_bytes;
-        uint64_t ebdu_length = vc1_find_next_start_code_prefix( bs, &bdu_type, &trailing_zero_bytes );
+        uint64_t ebdu_length = lsm_vc1_find_next_start_code_prefix( bs, &bdu_type, &trailing_zero_bytes );
         if( ebdu_length <= VC1_START_CODE_LENGTH && lsmash_bs_is_end( bs, ebdu_length ) )
             /* For the last EBDU. This EBDU already has been parsed. */
             return vc1_parse_succeeded( info, param );
@@ -687,12 +687,12 @@ int lsmash_setup_vc1_specific_parameters_from_access_unit( lsmash_vc1_specific_p
         if( bdu_type >= 0x0A && bdu_type <= 0x0F )
         {
             /* Complete the current access unit if encountered delimiter of current access unit. */
-            if( vc1_find_au_delimit_by_bdu_type( bdu_type, info->prev_bdu_type ) )
+            if( lsm_vc1_find_au_delimit_by_bdu_type( bdu_type, info->prev_bdu_type ) )
                 /* The last video coded EBDU belongs to the access unit you want at this time. */
                 return vc1_parse_succeeded( info, param );
             /* Increase the buffer if needed. */
             if( sb->bank->buffer_size < ebdu_length
-             && (err = vc1_supplement_buffer( sb, NULL, 2 * ebdu_length )) < 0 )
+             && (err = lsm_vc1_supplement_buffer( sb, NULL, 2 * ebdu_length )) < 0 )
                 return vc1_parse_failed( info, err );
             /* Process EBDU by its BDU type. */
             uint8_t *ebdu = lsmash_bs_get_buffer_data( bs );
@@ -713,7 +713,7 @@ int lsmash_setup_vc1_specific_parameters_from_access_unit( lsmash_vc1_specific_p
                              * [FRM_SC][PIC_L][[FLD_SC][PIC_L] (optional)][[SLC_SC][SLC_L] (optional)] ...  */
                 {
                     vc1_picture_info_t *picture = &info->picture;
-                    if( (err = vc1_parse_advanced_picture( info->bits, &info->sequence, picture, info->buffer.rbdu, ebdu, ebdu_length )) < 0 )
+                    if( (err = lsm_vc1_parse_advanced_picture( info->bits, &info->sequence, picture, info->buffer.rbdu, ebdu, ebdu_length )) < 0 )
                         return vc1_parse_failed( info, err );
                     info->dvc1_param.bframe_present |= picture->frame_coding_mode == 0x3
                                                      ? picture->type >= VC1_ADVANCED_FIELD_PICTURE_TYPE_BB
@@ -740,12 +740,12 @@ int lsmash_setup_vc1_specific_parameters_from_access_unit( lsmash_vc1_specific_p
                              *   1. I-picture - progressive or frame interlace
                              *   2. I/I-picture, I/P-picture, or P/I-picture - field interlace
                              * [[SEQ_SC][SEQ_L] (optional)][EP_SC][EP_L][FRM_SC][PIC_L] ... */
-                    if( (err = vc1_parse_entry_point_header( info, ebdu, ebdu_length, 1 )) < 0 )
+                    if( (err = lsm_vc1_parse_entry_point_header( info, ebdu, ebdu_length, 1 )) < 0 )
                         return vc1_parse_failed( info, err );
                     break;
                 case 0x0F : /* Sequence header
                              * [SEQ_SC][SEQ_L][EP_SC][EP_L][FRM_SC][PIC_L] ... */
-                    if( (err = vc1_parse_sequence_header( info, ebdu, ebdu_length, 1 )) < 0 )
+                    if( (err = lsm_vc1_parse_sequence_header( info, ebdu, ebdu_length, 1 )) < 0 )
                         return vc1_parse_failed( info, err );
                     break;
                 default :   /* End-of-sequence (0x0A) */
@@ -764,12 +764,12 @@ int lsmash_setup_vc1_specific_parameters_from_access_unit( lsmash_vc1_specific_p
     }
 }
 
-static inline int vc1_check_next_start_code_prefix( uint8_t *buf_pos, uint8_t *buf_end )
+static int vc1_check_next_start_code_prefix( uint8_t *buf_pos, uint8_t *buf_end )
 {
     return ((buf_pos + 2) < buf_end) && !buf_pos[0] && !buf_pos[1] && (buf_pos[2] == 0x01);
 }
 
-int vc1_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
+int lsm_vc1_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
 {
     assert( dst && dst->data.structured && src && src->data.unstructured );
     if( src->size < ISOM_BASEBOX_COMMON_SIZE + 7 )
@@ -868,7 +868,7 @@ int vc1_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_code
     return 0;
 }
 
-int vc1_copy_codec_specific( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
+int lsm_vc1_copy_codec_specific( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
 {
     assert( src && src->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED && src->data.structured );
     assert( dst && dst->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED && dst->data.structured );
@@ -916,7 +916,7 @@ int vc1_copy_codec_specific( lsmash_codec_specific_t *dst, lsmash_codec_specific
     return 0;
 }
 
-int vc1_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
+int lsm_vc1_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
 {
     assert( box->manager & LSMASH_BINARY_CODED_BOX );
     int indent = level;

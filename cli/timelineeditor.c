@@ -346,7 +346,7 @@ static int get_movie( root_t *input, char *input_name )
     return 0;
 }
 
-static inline uint64_t get_gcd( uint64_t a, uint64_t b )
+static uint64_t get_gcd( uint64_t a, uint64_t b )
 {
     if( !b )
         return a;
@@ -360,7 +360,7 @@ static inline uint64_t get_gcd( uint64_t a, uint64_t b )
     }
 }
 
-static inline uint64_t get_lcm( uint64_t a, uint64_t b )
+static uint64_t get_lcm( uint64_t a, uint64_t b )
 {
     if( !a )
         return 0;
@@ -377,7 +377,7 @@ static uint64_t get_media_timebase( lsmash_media_ts_list_t *ts_list )
     return timebase;
 }
 
-static inline double sigexp10( double value, double *exponent )
+static double sigexp10( double value, double *exponent )
 {
     /* This function separates significand and exp10 from double floating point. */
     *exponent = 1;

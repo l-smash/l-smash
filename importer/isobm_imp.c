@@ -44,14 +44,14 @@ typedef struct
     uint32_t       au_number;
 } isobm_importer_t;
 
-static void remove_isobm_importer( isobm_importer_t *isobm_imp )
+static void isobm_imp_remove( isobm_importer_t *isobm_imp )
 {
     if( !isobm_imp )
         return;
     lsmash_free( isobm_imp );
 }
 
-static isobm_importer_t *create_isobm_importer( importer_t *importer )
+static isobm_importer_t *isobm_imp_create( importer_t *importer )
 {
     isobm_importer_t *isobm_imp = (isobm_importer_t *)lsmash_malloc_zero( sizeof(isobm_importer_t) );
     if( isobm_imp )
@@ -63,13 +63,13 @@ static isobm_importer_t *create_isobm_importer( importer_t *importer )
         return NULL;
 }
 
-static void isobm_importer_cleanup( importer_t *importer )
+static void isobm_imp_cleanup( importer_t *importer )
 {
     debug_if( importer && importer->info )
-        remove_isobm_importer( importer->info );
+        isobm_imp_remove( importer->info );
 }
 
-static int isobm_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t **p_sample )
+static int isobm_imp_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t **p_sample )
 {
     if( !importer->info )
         return LSMASH_ERR_NAMELESS;
@@ -124,9 +124,9 @@ static int isobm_importer_get_accessunit( importer_t *importer, uint32_t track_n
     return current_status;
 }
 
-static int isobm_importer_probe( importer_t *importer )
+static int isobm_imp_probe( importer_t *importer )
 {
-    isobm_importer_t *isobm_imp = create_isobm_importer( importer );
+    isobm_importer_t *isobm_imp = isobm_imp_create( importer );
     if( !isobm_imp )
         return LSMASH_ERR_MEMORY_ALLOC;
     int err = 0;
@@ -176,11 +176,11 @@ static int isobm_importer_probe( importer_t *importer )
     importer->status = IMPORTER_OK;
     return 0;
 fail:
-    remove_isobm_importer( isobm_imp );
+    isobm_imp_remove( isobm_imp );
     return err;
 }
 
-static uint32_t isobm_importer_get_last_delta( importer_t *importer, uint32_t track_number )
+static uint32_t isobm_imp_get_last_delta( importer_t *importer, uint32_t track_number )
 {
     debug_if( !importer || !importer->info )
         return 0;
@@ -193,7 +193,7 @@ static uint32_t isobm_importer_get_last_delta( importer_t *importer, uint32_t tr
     return last_sample_delta / isobm_imp->timebase;
 }
 
-static int isobm_importer_construct_timeline( importer_t *importer, uint32_t track_number )
+static int isobm_imp_construct_timeline( importer_t *importer, uint32_t track_number )
 {
     lsmash_root_t *root = importer->root;
     uint32_t track_ID = lsmash_get_track_ID( root, track_number );
@@ -235,9 +235,9 @@ const importer_functions isobm_importer =
 {
     { "ISOBMFF/QTFF", offsetof( importer_t, log_level ) },
     1,
-    isobm_importer_probe,
-    isobm_importer_get_accessunit,
-    isobm_importer_get_last_delta,
-    isobm_importer_cleanup,
-    isobm_importer_construct_timeline
+    isobm_imp_probe,
+    isobm_imp_get_accessunit,
+    isobm_imp_get_last_delta,
+    isobm_imp_cleanup,
+    isobm_imp_construct_timeline
 };

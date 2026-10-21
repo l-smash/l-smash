@@ -78,43 +78,43 @@ struct importer_tag
                                              * and the remuxer CLIs. */
 };
 
-int lsmash_importer_make_fake_movie
+int lsm_importer_make_fake_movie
 (
     importer_t *importer
 );
 
-int lsmash_importer_make_fake_track
+int lsm_importer_make_fake_track
 (
     importer_t       *importer,
     lsmash_media_type media_type,
     uint32_t         *track_ID
 );
 
-void lsmash_importer_break_fake_movie
+void lsm_importer_break_fake_movie
 (
     importer_t *importer
 );
 
 #else
 
-int lsmash_importer_set_file
+int lsm_importer_set_file
 (
     importer_t    *importer,
     lsmash_file_t *file
 );
 
 /* importing functions */
-importer_t *lsmash_importer_alloc
+importer_t *lsm_importer_alloc
 (
     lsmash_root_t *root
 );
 
-void lsmash_importer_destroy
+void lsm_importer_destroy
 (
     importer_t *importer
 );
 
-int lsmash_importer_find
+int lsm_importer_find
 (
     importer_t *importer,
     const char *format,

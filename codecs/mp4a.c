@@ -182,7 +182,7 @@ typedef struct
     unsigned aux_data_enabled     : 1;
 } mp4a_ALSSpecificConfig_t;
 
-static inline void mp4a_remove_GASpecificConfig( mp4a_GASpecificConfig_t* gasc )
+static void mp4a_remove_GASpecificConfig( mp4a_GASpecificConfig_t* gasc )
 {
     debug_if( !gasc )
         return;
@@ -190,12 +190,12 @@ static inline void mp4a_remove_GASpecificConfig( mp4a_GASpecificConfig_t* gasc )
     lsmash_free( gasc );
 }
 
-static inline void mp4a_remove_MPEG_1_2_SpecificConfig( mp4a_MPEG_1_2_SpecificConfig_t* mpeg_1_2_sc )
+static void mp4a_remove_MPEG_1_2_SpecificConfig( mp4a_MPEG_1_2_SpecificConfig_t* mpeg_1_2_sc )
 {
     lsmash_free( mpeg_1_2_sc );
 }
 
-void mp4a_remove_AudioSpecificConfig( mp4a_AudioSpecificConfig_t* asc )
+void lsm_mp4a_remove_AudioSpecificConfig( mp4a_AudioSpecificConfig_t* asc )
 {
     if( !asc )
         return;
@@ -298,7 +298,7 @@ static mp4a_ALSSpecificConfig_t *mp4a_create_ALSSpecificConfig( uint8_t *exdata,
    aot shall not be MP4A_AUDIO_OBJECT_TYPE_SBR even if you wish to signal SBR explicitly, use sbr_mode instead.
    Frequency/channels shall be base AAC's one, even if SBR/PS.
    If other than AAC with SBR, sbr_mode shall be MP4A_AAC_SBR_NOT_SPECIFIED. */
-mp4a_AudioSpecificConfig_t *mp4a_create_AudioSpecificConfig(
+mp4a_AudioSpecificConfig_t *lsm_mp4a_create_AudioSpecificConfig(
     lsmash_mp4a_AudioObjectType aot,
     uint32_t frequency,
     uint32_t channels,
@@ -454,7 +454,7 @@ static void mp4a_put_ALSSpecificConfig( lsmash_bits_t *bits, mp4a_ALSSpecificCon
     lsmash_bits_import_data( bits, alssc->data, alssc->size );
 }
 
-static inline void mp4a_put_AudioObjectType( lsmash_bits_t* bits, lsmash_mp4a_AudioObjectType aot )
+static void mp4a_put_AudioObjectType( lsmash_bits_t* bits, lsmash_mp4a_AudioObjectType aot )
 {
     if( aot > MP4A_AUDIO_OBJECT_TYPE_ESCAPE )
     {
@@ -465,7 +465,7 @@ static inline void mp4a_put_AudioObjectType( lsmash_bits_t* bits, lsmash_mp4a_Au
         lsmash_bits_put( bits, 5, aot );
 }
 
-static inline void mp4a_put_SamplingFrequencyIndex( lsmash_bits_t* bits, uint8_t samplingFrequencyIndex, uint32_t samplingFrequency )
+static void mp4a_put_SamplingFrequencyIndex( lsmash_bits_t* bits, uint8_t samplingFrequencyIndex, uint32_t samplingFrequency )
 {
     lsmash_bits_put( bits, 4, samplingFrequencyIndex );
     if( samplingFrequencyIndex == 0xF )
@@ -475,7 +475,7 @@ static inline void mp4a_put_SamplingFrequencyIndex( lsmash_bits_t* bits, uint8_t
 /* Currently, only normal AAC, MPEG_1_2 are supported.
    For AAC, other than normal AAC, such as AAC_scalable, ER_AAC_xxx, are not supported.
    ADIF/PCE(program config element) style AudioSpecificConfig is not supported either. */
-void mp4a_put_AudioSpecificConfig( lsmash_bs_t* bs, mp4a_AudioSpecificConfig_t* asc )
+void lsm_mp4a_put_AudioSpecificConfig( lsmash_bs_t* bs, mp4a_AudioSpecificConfig_t* asc )
 {
     debug_if( !bs || !asc )
         return;
@@ -663,7 +663,7 @@ fail:
     return NULL;
 }
 
-int mp4a_setup_summary_from_AudioSpecificConfig( lsmash_audio_summary_t *summary, uint8_t *dsi_payload, uint32_t dsi_payload_length )
+int lsm_mp4a_setup_summary_from_AudioSpecificConfig( lsmash_audio_summary_t *summary, uint8_t *dsi_payload, uint32_t dsi_payload_length )
 {
     mp4a_AudioSpecificConfig_t *asc = mp4a_get_AudioSpecificConfig( dsi_payload, dsi_payload_length );
     if( !asc )
@@ -704,7 +704,7 @@ int mp4a_setup_summary_from_AudioSpecificConfig( lsmash_audio_summary_t *summary
                 }
                 if( i == 0xc )
                 {
-                    mp4a_remove_AudioSpecificConfig( asc );
+                    lsm_mp4a_remove_AudioSpecificConfig( asc );
                     return LSMASH_ERR_INVALID_DATA;
                 }
             }
@@ -742,12 +742,12 @@ int mp4a_setup_summary_from_AudioSpecificConfig( lsmash_audio_summary_t *summary
         default :
             break;
     }
-    mp4a_remove_AudioSpecificConfig( asc );
+    lsm_mp4a_remove_AudioSpecificConfig( asc );
     return 0;
 }
 
 /* This function is very ad-hoc. */
-uint8_t *mp4a_export_AudioSpecificConfig( lsmash_mp4a_AudioObjectType aot,
+uint8_t *lsm_mp4a_export_AudioSpecificConfig( lsmash_mp4a_AudioObjectType aot,
                                           uint32_t frequency,
                                           uint32_t channels,
                                           lsmash_mp4a_aac_sbr_mode sbr_mode,
@@ -758,15 +758,15 @@ uint8_t *mp4a_export_AudioSpecificConfig( lsmash_mp4a_AudioObjectType aot,
     lsmash_bs_t *bs = lsmash_bs_create();
     if( !bs )
         return NULL;
-    mp4a_AudioSpecificConfig_t *asc = mp4a_create_AudioSpecificConfig( aot, frequency, channels, sbr_mode, exdata, exdata_length );
+    mp4a_AudioSpecificConfig_t *asc = lsm_mp4a_create_AudioSpecificConfig( aot, frequency, channels, sbr_mode, exdata, exdata_length );
     if( !asc )
     {
         lsmash_bs_cleanup( bs );
         return NULL;
     }
-    mp4a_put_AudioSpecificConfig( bs, asc );
+    lsm_mp4a_put_AudioSpecificConfig( bs, asc );
     uint8_t *data = lsmash_bs_export_data( bs, data_length );
-    mp4a_remove_AudioSpecificConfig( asc );
+    lsm_mp4a_remove_AudioSpecificConfig( asc );
     lsmash_bs_cleanup( bs );
     if( !data )
         return NULL;
@@ -838,7 +838,7 @@ static void mp4a_print_ALSSpecificConfig( FILE *fp, mp4a_AudioSpecificConfig_t *
     lsmash_ifprintf( fp, indent, "aux_data_enabled = %"PRIu8"\n", alssc->aux_data_enabled );
 }
 
-void mp4a_print_AudioSpecificConfig( FILE *fp, uint8_t *dsi_payload, uint32_t dsi_payload_length, int indent )
+void lsm_mp4a_print_AudioSpecificConfig( FILE *fp, uint8_t *dsi_payload, uint32_t dsi_payload_length, int indent )
 {
     assert( fp && dsi_payload && dsi_payload_length );
     mp4a_AudioSpecificConfig_t *asc = mp4a_get_AudioSpecificConfig( dsi_payload, dsi_payload_length );
@@ -938,10 +938,10 @@ void mp4a_print_AudioSpecificConfig( FILE *fp, uint8_t *dsi_payload, uint32_t ds
             default :
                 break;
         }
-    mp4a_remove_AudioSpecificConfig( asc );
+    lsm_mp4a_remove_AudioSpecificConfig( asc );
 }
 
-int mp4a_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index )
+int lsm_mp4a_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index )
 {
     isom_audio_entry_t *mp4a = (isom_audio_entry_t *)lsmash_list_get_entry_data( &stbl->stsd->list, sample_description_index );
     if( LSMASH_IS_NON_EXISTING_BOX( mp4a ) )
@@ -966,7 +966,7 @@ int mp4a_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_d
     if( err < 0 )
         return err;
     /* FIXME: avgBitrate is 0 only if VBR in proper. */
-    return mp4sys_update_DecoderConfigDescriptor( esds->ES, bufferSizeDB, maxBitrate, 0 );
+    return lsm_mp4sys_update_DecoderConfigDescriptor( esds->ES, bufferSizeDB, maxBitrate, 0 );
 }
 
 /***************************************************************************
@@ -974,7 +974,7 @@ int mp4a_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_d
 ***************************************************************************/
 /* NOTE: This function is not strictly preferable, but accurate.
    The spec of audioProfileLevelIndication is too much complicated. */
-mp4a_audioProfileLevelIndication mp4a_get_audioProfileLevelIndication( lsmash_audio_summary_t *summary )
+mp4a_audioProfileLevelIndication lsm_mp4a_get_audioProfileLevelIndication( lsmash_audio_summary_t *summary )
 {
     if( !summary || summary->summary_type != LSMASH_SUMMARY_TYPE_AUDIO )
         return MP4A_AUDIO_PLI_NONE_REQUIRED;    /* means error. */
@@ -1029,7 +1029,7 @@ mp4a_audioProfileLevelIndication mp4a_get_audioProfileLevelIndication( lsmash_au
     return pli;
 }
 
-static int mp4sys_is_same_profile( mp4a_audioProfileLevelIndication a, mp4a_audioProfileLevelIndication b )
+static int mp4a_is_same_profile( mp4a_audioProfileLevelIndication a, mp4a_audioProfileLevelIndication b )
 {
     switch( a )
     {
@@ -1128,7 +1128,7 @@ static int mp4sys_is_same_profile( mp4a_audioProfileLevelIndication a, mp4a_audi
 
 /* NOTE: This function is not strictly preferable, but accurate.
    The spec of audioProfileLevelIndication is too much complicated. */
-mp4a_audioProfileLevelIndication mp4a_max_audioProfileLevelIndication( mp4a_audioProfileLevelIndication a, mp4a_audioProfileLevelIndication b )
+mp4a_audioProfileLevelIndication lsm_mp4a_max_audioProfileLevelIndication( mp4a_audioProfileLevelIndication a, mp4a_audioProfileLevelIndication b )
 {
     /* NONE_REQUIRED is minimal priotity, and NOT_SPECIFIED is max priority. */
     if( a == MP4A_AUDIO_PLI_NOT_SPECIFIED || b == MP4A_AUDIO_PLI_NONE_REQUIRED )
@@ -1156,7 +1156,7 @@ mp4a_audioProfileLevelIndication mp4a_max_audioProfileLevelIndication( mp4a_audi
         return c > d ? c : d;
     }
     /* General */
-    if( mp4sys_is_same_profile( c, d ) )
+    if( mp4a_is_same_profile( c, d ) )
         return d;
     return MP4A_AUDIO_PLI_NOT_SPECIFIED;
 }

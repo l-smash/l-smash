@@ -88,7 +88,7 @@ void lsmash_bits_get_align( lsmash_bits_t *bits )
 }
 
 /* we can change value's type to unsigned int for 64-bit operation if needed. */
-static inline uint8_t lsmash_bits_mask_lsb8( uint32_t value, uint32_t width )
+static uint8_t bits_mask_lsb8( uint32_t value, uint32_t width )
 {
     return (uint8_t)( value & ~( ~0U << width ) );
 }
@@ -103,14 +103,14 @@ void lsmash_bits_put( lsmash_bits_t *bits, uint32_t width, uint64_t value )
         {
             /* cache can contain all of value's bits. */
             bits->cache <<= width;
-            bits->cache |= lsmash_bits_mask_lsb8( value, width );
+            bits->cache |= bits_mask_lsb8( value, width );
             bits->store += width;
             return;
         }
         /* flush cache with value's some leading bits. */
         uint32_t free_bits = BITS_IN_BYTE - bits->store;
         bits->cache <<= free_bits;
-        bits->cache |= lsmash_bits_mask_lsb8( value >> (width -= free_bits), free_bits );
+        bits->cache |= bits_mask_lsb8( value >> (width -= free_bits), free_bits );
         lsmash_bs_put_byte( bits->bs, bits->cache );
         bits->store = 0;
         bits->cache = 0;
@@ -122,7 +122,7 @@ void lsmash_bits_put( lsmash_bits_t *bits, uint32_t width, uint64_t value )
     /* bit unit operation for residual. */
     if( width )
     {
-        bits->cache = lsmash_bits_mask_lsb8( value, width );
+        bits->cache = bits_mask_lsb8( value, width );
         bits->store = width;
     }
 }
@@ -138,10 +138,10 @@ uint64_t lsmash_bits_get( lsmash_bits_t *bits, uint32_t width )
         {
             /* cache contains all of bits required. */
             bits->store -= width;
-            return lsmash_bits_mask_lsb8( bits->cache >> bits->store, width );
+            return bits_mask_lsb8( bits->cache >> bits->store, width );
         }
         /* fill value's leading bits with cache's residual. */
-        value = lsmash_bits_mask_lsb8( bits->cache, bits->store );
+        value = bits_mask_lsb8( bits->cache, bits->store );
         width -= bits->store;
         bits->store = 0;
         bits->cache = 0;
@@ -160,7 +160,7 @@ uint64_t lsmash_bits_get( lsmash_bits_t *bits, uint32_t width )
         bits->cache = lsmash_bs_get_byte( bits->bs );
         bits->store = BITS_IN_BYTE - width;
         value <<= width;
-        value |= lsmash_bits_mask_lsb8( bits->cache >> bits->store, width );
+        value |= bits_mask_lsb8( bits->cache >> bits->store, width );
     }
     return value;
 }

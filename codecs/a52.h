@@ -52,7 +52,7 @@ extern const uint32_t ac3_sample_rate_table  [4];
 extern const uint32_t ac3_channel_count_table[8];
 extern const uint8_t eac3_audio_block_table  [4];
 
-static inline uint32_t ac3_get_channel_count
+static inline uint32_t lsm_a52_get_ac3_channel_count
 (
     lsmash_ac3_specific_parameters_t *dac3_param
 )
@@ -60,34 +60,34 @@ static inline uint32_t ac3_get_channel_count
     return ac3_channel_count_table[ dac3_param->acmod ] + dac3_param->lfeon;
 }
 
-uint32_t ac3_get_sample_rate
+uint32_t lsm_a52_get_ac3_sample_rate
 (
     lsmash_ac3_specific_parameters_t *dac3_param
 );
 
-int ac3_parse_syncframe_header
+int lsm_a52_parse_ac3_syncframe_header
 (
     ac3_info_t *info
 );
 
-int eac3_parse_syncframe
+int lsm_a52_parse_eac3_syncframe
 (
     eac3_info_t *info
 );
 
-void eac3_update_specific_param
+void lsm_a52_update_eac3_specific_param
 (
     eac3_info_t *info
 );
 
-void eac3_update_sample_rate
+void lsm_a52_update_eac3_sample_rate
 (
     uint32_t                          *frequency,
     lsmash_eac3_specific_parameters_t *dec3_param,
     uint8_t                           *fscod2
 );
 
-void eac3_update_channel_count
+void lsm_a52_update_eac3_channel_count
 (
     uint32_t                          *channels,
     lsmash_eac3_specific_parameters_t *dec3_param

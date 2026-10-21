@@ -76,7 +76,7 @@ enum
     ALTREF_FRAME  = 7,
 };
 
-uint32_t av1_get_uvlc
+uint32_t lsm_av1_get_uvlc
 (
     lsmash_bits_t *bits
 )
@@ -107,7 +107,7 @@ uint32_t av1_get_uvlc
     return value + ((1u << leadingZeros) - 1);
 }
 
-uint64_t av1_get_leb128
+uint64_t lsm_av1_get_leb128
 (
     lsmash_bs_t *bs,
     uint8_t     *Leb128Bytes
@@ -147,7 +147,7 @@ uint64_t av1_get_leb128
     return value;
 }
 
-uint64_t av1_show_leb128
+uint64_t lsm_av1_show_leb128
 (
     lsmash_bs_t *bs,
     uint32_t     offset,
@@ -188,7 +188,7 @@ uint64_t av1_show_leb128
     return value;
 }
 
-int64_t av1_get_su
+int64_t lsm_av1_get_su
 (
     lsmash_bits_t *bits,
     unsigned int   n
@@ -203,7 +203,7 @@ int64_t av1_get_su
     return (int64_t)value;
 }
 
-uint64_t av1_get_ns
+uint64_t lsm_av1_get_ns
 (
     lsmash_bits_t *bits,
     unsigned int   n
@@ -220,7 +220,7 @@ uint64_t av1_get_ns
     return (v << 1) - m + extra_bit;
 }
 
-void av1_cleanup_parser
+void lsm_av1_cleanup_parser
 (
     av1_parser_t *parser
 )
@@ -231,7 +231,7 @@ void av1_cleanup_parser
     parser->bits = NULL;
 }
 
-int av1_setup_parser
+int lsm_av1_setup_parser
 (
     av1_parser_t *parser,
     lsmash_bs_t  *bs
@@ -249,7 +249,7 @@ int av1_setup_parser
     return 0;
 }
 
-void av1_reset_parser
+void lsm_av1_reset_parser
 (
     av1_parser_t *parser
 )
@@ -352,7 +352,7 @@ static void av1_parser_color_config
     cc->separate_uv_delta_q = (uint8_t)lsmash_bits_get( bits, 1 );
 }
 
-int av1_parse_sequence_header
+int lsm_av1_parse_sequence_header
 (
     av1_parser_t *parser
 )
@@ -394,7 +394,7 @@ int av1_parse_sequence_header
             sh->timing_info.equal_picture_interval    = (uint8_t)lsmash_bits_get( bits, 1 );
             if( sh->timing_info.equal_picture_interval )
             {
-                sh->timing_info.num_ticks_per_picture_minus_1 = av1_get_uvlc( bits );
+                sh->timing_info.num_ticks_per_picture_minus_1 = lsm_av1_get_uvlc( bits );
                 IF_OUT_OF_SPEC( sh->timing_info.num_ticks_per_picture_minus_1 == UINT32_MAX )
                     return LSMASH_ERR_INVALID_DATA;
             }
@@ -787,7 +787,7 @@ static int av1_set_frame_refs
     return 0;
 }
 
-static inline void av1_read_interpolation_filter
+static void av1_read_interpolation_filter
 (
     lsmash_bits_t *bits,
     av1_frame_t   *frame
@@ -886,7 +886,7 @@ static int av1_parse_tile_info
                 return LSMASH_ERR_INVALID_DATA;
             frame->MiColStarts[i++] = startSb << sbShift;
             uint32_t maxWidth = LSMASH_MIN( sbCols - startSb, maxTileWidthSb );
-            uint32_t width_in_sbs_minus_1 = (uint32_t)av1_get_ns( bits, maxWidth );
+            uint32_t width_in_sbs_minus_1 = (uint32_t)lsm_av1_get_ns( bits, maxWidth );
             sizeSb = width_in_sbs_minus_1 + 1;
             widestTileSb = LSMASH_MAX( sizeSb, widestTileSb );
         }
@@ -905,7 +905,7 @@ static int av1_parse_tile_info
                 return LSMASH_ERR_INVALID_DATA;
             frame->MiRowStarts[i++] = startSb << sbShift;
             uint32_t maxHeight = LSMASH_MIN( sbRows - startSb, maxTileHeightSb );
-            uint32_t height_in_sbs_minus_1 = (uint32_t)av1_get_ns( bits, maxHeight );
+            uint32_t height_in_sbs_minus_1 = (uint32_t)lsm_av1_get_ns( bits, maxHeight );
             sizeSb = height_in_sbs_minus_1 + 1;
         }
         frame->MiRowStarts[i] = frame->MiRows;
@@ -930,7 +930,7 @@ static int8_t av1_read_delta_q
 )
 {
     uint8_t delta_coded = (uint8_t)lsmash_bits_get( bits, 1 );
-    return delta_coded ? (int8_t)av1_get_su( bits, 1 + 6 ) : 0;
+    return delta_coded ? (int8_t)lsm_av1_get_su( bits, 1 + 6 ) : 0;
 }
 
 static void av1_parse_quantization_params
@@ -1015,7 +1015,7 @@ static void av1_parse_segmentation_params
                         int16_t feature_value;
                         if( Segmentation_Feature_Signed[j] )
                         {
-                            feature_value = (int16_t)av1_get_su( bits, 1 + bitsToRead );
+                            feature_value = (int16_t)lsm_av1_get_su( bits, 1 + bitsToRead );
                             clippedValue  = LSMASH_MIN( LSMASH_MAX( feature_value, -limit ), limit );
                         }
                         else
@@ -1105,10 +1105,10 @@ static void av1_parse_loop_filter_params
         {
             for( int i = 0; i < AV1_TOTAL_REFS_COUNT; i++ )
                 if( lsmash_bits_get( bits, 1 ) ) /* update_ref_delta */
-                    av1_get_su( bits, 1 + 6 );   /* loop_filter_ref_deltas[i] */
+                    lsm_av1_get_su( bits, 1 + 6 );   /* loop_filter_ref_deltas[i] */
             for( int i = 0; i < 2; i++ )
                 if( lsmash_bits_get( bits, 1 ) ) /* update_mode_delta */
-                    av1_get_su( bits, 1 + 6 );   /* loop_filter_mode_deltas[i] */
+                    lsm_av1_get_su( bits, 1 + 6 );   /* loop_filter_mode_deltas[i] */
         }
     }
 }
@@ -1252,7 +1252,7 @@ static uint32_t av1_decode_subexp
         uint32_t a  = 1u << b2;
         if( numSyms <= mk + 3 * a )
         {
-            uint32_t subexp_final_bits = (uint32_t)av1_get_ns( bits, numSyms - mk );
+            uint32_t subexp_final_bits = (uint32_t)lsm_av1_get_ns( bits, numSyms - mk );
             return subexp_final_bits + mk;
         }
         else
@@ -1868,7 +1868,7 @@ static void av1_parse_metadata_obu
     if( lsmash_bs_set_empty_stream( &bs, (uint8_t *)payload, payload_size ) < 0 )
         return;
     uint8_t Leb128Bytes = 0;
-    uint64_t metadata_type = av1_get_leb128( &bs, &Leb128Bytes );
+    uint64_t metadata_type = lsm_av1_get_leb128( &bs, &Leb128Bytes );
     if( Leb128Bytes == 0 || payload_size <= Leb128Bytes )
         return;
     if( metadata_type == AV1_METADATA_TYPE_ITUT_T35 )
@@ -1917,7 +1917,7 @@ static void av1_populate_specific_parameters_from_sequence_header
     }
 }
 
-static inline int av1_is_sample_obu
+static int av1_is_sample_obu
 (
     uint8_t obu_type
 )
@@ -1936,7 +1936,7 @@ static inline int av1_is_sample_obu
     }
 }
 
-int av1_parse_temporal_unit
+int lsm_av1_parse_temporal_unit
 (
     av1_parser_t                     *parser,
     const uint8_t                    *src_data,
@@ -1986,7 +1986,7 @@ int av1_parse_temporal_unit
         if( !obu_has_size_field )
             return LSMASH_ERR_INVALID_DATA;
         uint8_t Leb128Bytes = 0;
-        uint64_t obu_size64 = av1_show_leb128( &bs, obu_header_size, &Leb128Bytes );
+        uint64_t obu_size64 = lsm_av1_show_leb128( &bs, obu_header_size, &Leb128Bytes );
         if( Leb128Bytes == 0
          || obu_header_size + Leb128Bytes > remaining_bytes
          || obu_size64 > remaining_bytes - (obu_header_size + Leb128Bytes) )
@@ -2016,7 +2016,7 @@ int av1_parse_temporal_unit
                     return err;
                 lsmash_bs_t *orig_bs = parser->bits->bs;
                 lsmash_bits_init( parser->bits, &obu_bs );
-                err = av1_parse_sequence_header( parser );
+                err = lsm_av1_parse_sequence_header( parser );
                 parser->bits->bs    = orig_bs;
                 parser->bits->store = 0;
                 parser->bits->cache = 0;
@@ -2155,7 +2155,7 @@ void lsmash_destroy_av1_headers
     param->configOBUs.sz = 0;
 }
 
-void av1_destruct_specific_data
+void lsm_av1_destruct_specific_data
 (
     void *data
 )
@@ -2178,12 +2178,12 @@ int lsmash_setup_av1_specific_parameters_from_access_unit
     lsmash_destroy_av1_headers( param );
     memset( param, 0, sizeof(lsmash_av1_specific_parameters_t) );
     av1_parser_t parser;
-    int err = av1_setup_parser( &parser, NULL );
+    int err = lsm_av1_setup_parser( &parser, NULL );
     if( err < 0 )
         return err;
-    err = av1_parse_temporal_unit( &parser, data, data_length, NULL, NULL, NULL, param );
+    err = lsm_av1_parse_temporal_unit( &parser, data, data_length, NULL, NULL, NULL, param );
     int seen_seq = parser.seen_seq_header;
-    av1_cleanup_parser( &parser );
+    lsm_av1_cleanup_parser( &parser );
     if( err < 0 )
     {
         lsmash_destroy_av1_headers( param );
@@ -2244,7 +2244,7 @@ uint8_t *lsmash_create_av1_specific_info
     return data;
 }
 
-int av1_copy_codec_specific
+int lsm_av1_copy_codec_specific
 (
     lsmash_codec_specific_t *dst,
     lsmash_codec_specific_t *src
@@ -2267,7 +2267,7 @@ int av1_copy_codec_specific
     return 0;
 }
 
-int av1_construct_specific_parameters
+int lsm_av1_construct_specific_parameters
 (
     lsmash_codec_specific_t *dst,
     lsmash_codec_specific_t *src
@@ -2345,7 +2345,7 @@ fail:
     return err;
 }
 
-int av1_print_codec_specific
+int lsm_av1_print_codec_specific
 (
     FILE          *fp,
     lsmash_file_t *file,

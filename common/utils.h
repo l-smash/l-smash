@@ -166,67 +166,28 @@ int lsmash_compare_cts
     const lsmash_media_ts_t *b
 );
 
-static inline uint64_t lsmash_get_gcd
+uint64_t lsmash_get_gcd
 (
     uint64_t a,
     uint64_t b
-)
-{
-    if( !b )
-        return a;
-    while( 1 )
-    {
-        uint64_t c = a % b;
-        if( !c )
-            return b;
-        a = b;
-        b = c;
-    }
-}
+);
 
-static inline uint64_t lsmash_get_lcm
+uint64_t lsmash_get_lcm
 (
     uint64_t a,
     uint64_t b
-)
-{
-    if( !a )
-        return 0;
-    return (a / lsmash_get_gcd( a, b )) * b;
-}
+);
 
-static inline void lsmash_reduce_fraction
+void lsmash_reduce_fraction
 (
     uint64_t *a,
     uint64_t *b
-)
-{
-    if( !a || !b )
-        return;
-    uint64_t gcd = lsmash_get_gcd( *a, *b );
-    if( gcd )
-    {
-        *a /= gcd;
-        *b /= gcd;
-    }
-}
+);
 
-static inline void lsmash_reduce_fraction_su
+void lsmash_reduce_fraction_su
 (
     int64_t  *a,
     uint64_t *b
-)
-{
-    if( !a || !b )
-        return;
-    uint64_t c = *a > 0 ? *a : -(*a);
-    uint64_t gcd = lsmash_get_gcd( c, *b );
-    if( gcd )
-    {
-        c /= gcd;
-        *b /= gcd;
-        *a = *a > 0 ? (signed)c : -(signed)c;
-    }
-}
+);
 
 #endif

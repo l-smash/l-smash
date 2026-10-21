@@ -99,25 +99,25 @@ typedef struct
     isom_portable_chunk_t   chunk;
 } wave_importer_t;
 
-static void remove_wave_importer( wave_importer_t *wave_imp )
+static void wave_imp_remove( wave_importer_t *wave_imp )
 {
     if( !wave_imp )
         return;
     lsmash_free( wave_imp );
 }
 
-static wave_importer_t *create_wave_importer( importer_t *importer )
+static wave_importer_t *wave_imp_create( importer_t *importer )
 {
     return (wave_importer_t *)lsmash_malloc_zero( sizeof(wave_importer_t) );
 }
 
-static void wave_importer_cleanup( importer_t *importer )
+static void wave_imp_cleanup( importer_t *importer )
 {
     debug_if( importer && importer->info )
-        remove_wave_importer( importer->info );
+        wave_imp_remove( importer->info );
 }
 
-static int wave_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t **p_sample )
+static int wave_imp_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t **p_sample )
 {
     if( !importer->info )
         return LSMASH_ERR_NAMELESS;
@@ -157,12 +157,12 @@ static int wave_importer_get_accessunit( importer_t *importer, uint32_t track_nu
     return current_status;
 }
 
-static inline int wave_fmt_subtype_cmp( const waveformat_extensible_t *fmt, const uint8_t guid[16] )
+static int wave_imp_fmt_subtype_cmp( const waveformat_extensible_t *fmt, const uint8_t guid[16] )
 {
     return memcmp( fmt->guid, guid, 16 );
 }
 
-static int wave_parse_fmt_chunk( wave_importer_t *wave_imp, lsmash_bs_t *bs )
+static int wave_imp_parse_fmt_chunk( wave_importer_t *wave_imp, lsmash_bs_t *bs )
 {
     waveformat_extensible_t *fmt = &wave_imp->fmt;
     waveformat_extended_t   *wfx = &fmt->wfx;
@@ -186,8 +186,8 @@ static int wave_parse_fmt_chunk( wave_importer_t *wave_imp, lsmash_bs_t *bs )
             if( lsmash_bs_get_bytes_ex( bs, 16, fmt->guid ) != 16 )
                 return LSMASH_ERR_NAMELESS;
             /* We support PCM and IEEE float audio. */
-            if( wave_fmt_subtype_cmp( fmt, WAVEFORMAT_EXTENSIBLE_SUBTYPE_GUID_PCM )
-             && wave_fmt_subtype_cmp( fmt, WAVEFORMAT_EXTENSIBLE_SUBTYPE_GUID_IEEE_FLOAT ) )
+            if( wave_imp_fmt_subtype_cmp( fmt, WAVEFORMAT_EXTENSIBLE_SUBTYPE_GUID_PCM )
+             && wave_imp_fmt_subtype_cmp( fmt, WAVEFORMAT_EXTENSIBLE_SUBTYPE_GUID_IEEE_FLOAT ) )
                 return LSMASH_ERR_INVALID_DATA;
             return 0;
         default :
@@ -195,7 +195,7 @@ static int wave_parse_fmt_chunk( wave_importer_t *wave_imp, lsmash_bs_t *bs )
     }
 }
 
-static lsmash_audio_summary_t *wave_create_summary( waveformat_extensible_t *fmt )
+static lsmash_audio_summary_t *wave_imp_create_summary( waveformat_extensible_t *fmt )
 {
     lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_AUDIO );
     if( !summary )
@@ -223,7 +223,7 @@ static lsmash_audio_summary_t *wave_create_summary( waveformat_extensible_t *fmt
         lpcm->format_flags |= QT_AUDIO_FORMAT_FLAG_ALIGNED_HIGH;
     if( wfx->wFormatTag == WAVE_FORMAT_TYPE_ID_IEEE_FLOAT
      || (wfx->wFormatTag == WAVE_FORMAT_TYPE_ID_EXTENSIBLE
-      && !wave_fmt_subtype_cmp( fmt, WAVEFORMAT_EXTENSIBLE_SUBTYPE_GUID_IEEE_FLOAT )) )
+      && !wave_imp_fmt_subtype_cmp( fmt, WAVEFORMAT_EXTENSIBLE_SUBTYPE_GUID_IEEE_FLOAT )) )
         lpcm->format_flags |= QT_AUDIO_FORMAT_FLAG_FLOAT;
     else if( summary->sample_size > 8 )
         lpcm->format_flags |= QT_AUDIO_FORMAT_FLAG_SIGNED_INTEGER;
@@ -261,9 +261,9 @@ fail:
     return NULL;
 }
 
-static int wave_importer_probe( importer_t *importer )
+static int wave_imp_probe( importer_t *importer )
 {
-    wave_importer_t *wave_imp = create_wave_importer( importer );
+    wave_importer_t *wave_imp = wave_imp_create( importer );
     if( !wave_imp )
         return LSMASH_ERR_MEMORY_ALLOC;
     int err = 0;
@@ -291,7 +291,7 @@ static int wave_importer_probe( importer_t *importer )
                     err = LSMASH_ERR_INVALID_DATA;
                     goto fail;
                 }
-                if( (err = wave_parse_fmt_chunk( wave_imp, bs )) < 0 )
+                if( (err = wave_imp_parse_fmt_chunk( wave_imp, bs )) < 0 )
                     goto fail;
                 fmt_chunk_present = 1;
                 break;
@@ -338,8 +338,8 @@ static int wave_importer_probe( importer_t *importer )
     lsmash_track_parameters_t track_param = { 0 };
     lsmash_media_parameters_t media_param = { 0 };
     importer->file->qt_compatible = 1;
-    if( (err = lsmash_importer_make_fake_movie( importer )) < 0
-     || (err = lsmash_importer_make_fake_track( importer, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK, &track_ID )) < 0
+    if( (err = lsm_importer_make_fake_movie( importer )) < 0
+     || (err = lsm_importer_make_fake_track( importer, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK, &track_ID )) < 0
      || (err = lsmash_get_movie_parameters( importer->root, &movie_param )) < 0
      || (err = lsmash_get_track_parameters( importer->root, track_ID, &track_param )) < 0
      || (err = lsmash_get_media_parameters( importer->root, track_ID, &media_param )) < 0 )
@@ -350,7 +350,7 @@ static int wave_importer_probe( importer_t *importer )
      || (err = lsmash_set_track_parameters( importer->root, track_ID, &track_param )) < 0
      || (err = lsmash_set_media_parameters( importer->root, track_ID, &media_param )) < 0 )
         goto fail;
-    lsmash_audio_summary_t *summary = wave_create_summary( &wave_imp->fmt );
+    lsmash_audio_summary_t *summary = wave_imp_create_summary( &wave_imp->fmt );
     if( !summary || lsmash_add_sample_entry( importer->root, track_ID, summary ) != 1 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
@@ -366,14 +366,14 @@ static int wave_importer_probe( importer_t *importer )
     importer->status = IMPORTER_OK;
     return 0;
 fail:
-    lsmash_importer_break_fake_movie( importer );
-    remove_wave_importer( wave_imp );
+    lsm_importer_break_fake_movie( importer );
+    wave_imp_remove( wave_imp );
     importer->file->qt_compatible = 0;
     importer->info = NULL;
     return err;
 }
 
-static uint32_t wave_importer_get_last_delta( importer_t *importer, uint32_t track_number )
+static uint32_t wave_imp_get_last_delta( importer_t *importer, uint32_t track_number )
 {
     debug_if( !importer || !importer->info )
         return 0;
@@ -388,7 +388,7 @@ static uint32_t wave_importer_get_last_delta( importer_t *importer, uint32_t tra
          : (wave_imp->number_of_samples % summary->samples_in_frame);
 }
 
-static int wave_importer_construct_timeline( importer_t *importer, uint32_t track_number )
+static int wave_imp_construct_timeline( importer_t *importer, uint32_t track_number )
 {
     lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_list_get_entry_data( importer->summaries, track_number );
     if( !summary )
@@ -454,9 +454,9 @@ const importer_functions wave_importer =
 {
     { "WAVE", offsetof( importer_t, log_level ) },
     1,
-    wave_importer_probe,
-    wave_importer_get_accessunit,
-    wave_importer_get_last_delta,
-    wave_importer_cleanup,
-    wave_importer_construct_timeline
+    wave_imp_probe,
+    wave_imp_get_accessunit,
+    wave_imp_get_last_delta,
+    wave_imp_cleanup,
+    wave_imp_construct_timeline
 };

@@ -31,9 +31,9 @@
 #include "codecs/nalu.h"
 #include "importer/importer.h"
 
-int waveform_audio_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index );
-int wma_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level );
-int opus_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level );
+int lsm_qt_wfex_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index );
+int lsm_wma_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level );
+int lsm_opus_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level );
 
 static int g_tests_run    = 0;
 static int g_tests_failed = 0;
@@ -162,65 +162,65 @@ static int test_bitstream_primitives( void )
         lsmash_bits_t rbits = { 0 };
         lsmash_bits_init( &rbits, &rbs );
 
-        TEST_ASSERT( av1_get_uvlc( &rbits ) == 0, "uvlc(0)" );
-        TEST_ASSERT( av1_get_uvlc( &rbits ) == 1, "uvlc(1)" );
-        TEST_ASSERT( av1_get_uvlc( &rbits ) == 2, "uvlc(2)" );
-        TEST_ASSERT( av1_get_uvlc( &rbits ) == 3, "uvlc(3)" );
-        TEST_ASSERT( av1_get_uvlc( &rbits ) == 6, "uvlc(6)" );
-        TEST_ASSERT( av1_get_uvlc( &rbits ) == 7, "uvlc(7)" );
-        TEST_ASSERT( av1_get_uvlc( &rbits ) == 42, "uvlc(42)" );
-        TEST_ASSERT( av1_get_uvlc( &rbits ) == 0xFFFFFFFEU, "uvlc(0xFFFFFFFE max valid)" );
-        TEST_ASSERT( av1_get_uvlc( &rbits ) == UINT32_MAX, "uvlc(leadingZeros >= 32)" );
+        TEST_ASSERT( lsm_av1_get_uvlc( &rbits ) == 0, "uvlc(0)" );
+        TEST_ASSERT( lsm_av1_get_uvlc( &rbits ) == 1, "uvlc(1)" );
+        TEST_ASSERT( lsm_av1_get_uvlc( &rbits ) == 2, "uvlc(2)" );
+        TEST_ASSERT( lsm_av1_get_uvlc( &rbits ) == 3, "uvlc(3)" );
+        TEST_ASSERT( lsm_av1_get_uvlc( &rbits ) == 6, "uvlc(6)" );
+        TEST_ASSERT( lsm_av1_get_uvlc( &rbits ) == 7, "uvlc(7)" );
+        TEST_ASSERT( lsm_av1_get_uvlc( &rbits ) == 42, "uvlc(42)" );
+        TEST_ASSERT( lsm_av1_get_uvlc( &rbits ) == 0xFFFFFFFEU, "uvlc(0xFFFFFFFE max valid)" );
+        TEST_ASSERT( lsm_av1_get_uvlc( &rbits ) == UINT32_MAX, "uvlc(leadingZeros >= 32)" );
         lsmash_free( buf );
 
         /* Truncated all-zero stream at EOF should not hang and must return UINT32_MAX */
         uint8_t zero_byte[1] = { 0x00 };
         lsmash_bs_set_empty_stream( &rbs, zero_byte, 1 );
         lsmash_bits_init( &rbits, &rbs );
-        TEST_ASSERT( av1_get_uvlc( &rbits ) == UINT32_MAX, "uvlc truncated zero stream" );
+        TEST_ASSERT( lsm_av1_get_uvlc( &rbits ) == UINT32_MAX, "uvlc truncated zero stream" );
     }
 
-    /* 1c. Verify av1_get_leb128 and av1_show_leb128 */
+    /* 1c. Verify lsm_av1_get_leb128 and lsm_av1_show_leb128 */
     {
         /* 1-byte: 0 and 127 */
         uint8_t b1[2] = { 0x00, 0x7F };
         lsmash_bs_t bs = { 0 };
         uint8_t nbytes = 0;
         lsmash_bs_set_empty_stream( &bs, b1, sizeof(b1) );
-        TEST_ASSERT( av1_show_leb128( &bs, 0, &nbytes ) == 0 && nbytes == 1, "show_leb128(0)" );
-        TEST_ASSERT( av1_show_leb128( &bs, 1, &nbytes ) == 127 && nbytes == 1, "show_leb128(127)" );
-        TEST_ASSERT( av1_get_leb128( &bs, &nbytes ) == 0 && nbytes == 1, "get_leb128(0)" );
-        TEST_ASSERT( av1_get_leb128( &bs, &nbytes ) == 127 && nbytes == 1, "get_leb128(127)" );
+        TEST_ASSERT( lsm_av1_show_leb128( &bs, 0, &nbytes ) == 0 && nbytes == 1, "show_leb128(0)" );
+        TEST_ASSERT( lsm_av1_show_leb128( &bs, 1, &nbytes ) == 127 && nbytes == 1, "show_leb128(127)" );
+        TEST_ASSERT( lsm_av1_get_leb128( &bs, &nbytes ) == 0 && nbytes == 1, "get_leb128(0)" );
+        TEST_ASSERT( lsm_av1_get_leb128( &bs, &nbytes ) == 127 && nbytes == 1, "get_leb128(127)" );
 
         /* 5-byte: 0xFFFFFFFF (tests i = 4 shift into bits 28..31 without 32-bit signed UB) */
         uint8_t b_max32[5] = { 0xFF, 0xFF, 0xFF, 0xFF, 0x0F };
         lsmash_bs_set_empty_stream( &bs, b_max32, sizeof(b_max32) );
-        TEST_ASSERT( av1_show_leb128( &bs, 0, &nbytes ) == 0xFFFFFFFFULL && nbytes == 5, "show_leb128(UINT32_MAX)" );
-        TEST_ASSERT( av1_get_leb128( &bs, &nbytes ) == 0xFFFFFFFFULL && nbytes == 5, "get_leb128(UINT32_MAX)" );
+        TEST_ASSERT( lsm_av1_show_leb128( &bs, 0, &nbytes ) == 0xFFFFFFFFULL && nbytes == 5, "show_leb128(UINT32_MAX)" );
+        TEST_ASSERT( lsm_av1_get_leb128( &bs, &nbytes ) == 0xFFFFFFFFULL && nbytes == 5, "get_leb128(UINT32_MAX)" );
 
         /* 8-byte padded representation of 0xFFFFFFFF (legal 8-byte LEB128 <= UINT32_MAX) */
         uint8_t b_pad8[8] = { 0xFF, 0xFF, 0xFF, 0xFF, 0x8F, 0x80, 0x80, 0x00 };
         lsmash_bs_set_empty_stream( &bs, b_pad8, sizeof(b_pad8) );
-        TEST_ASSERT( av1_show_leb128( &bs, 0, &nbytes ) == 0xFFFFFFFFULL && nbytes == 8, "show_leb128 8-byte padded" );
-        TEST_ASSERT( av1_get_leb128( &bs, &nbytes ) == 0xFFFFFFFFULL && nbytes == 8, "get_leb128 8-byte padded" );
+        TEST_ASSERT( lsm_av1_show_leb128( &bs, 0, &nbytes ) == 0xFFFFFFFFULL && nbytes == 8, "show_leb128 8-byte padded" );
+        TEST_ASSERT( lsm_av1_get_leb128( &bs, &nbytes ) == 0xFFFFFFFFULL && nbytes == 8, "get_leb128 8-byte padded" );
 
         /* Overflow > UINT32_MAX: 0x100000000 (1ULL << 32) -> must fail with UINT64_MAX and nbytes == 0 */
         uint8_t b_over32[5] = { 0x80, 0x80, 0x80, 0x80, 0x10 };
         lsmash_bs_set_empty_stream( &bs, b_over32, sizeof(b_over32) );
-        TEST_ASSERT( av1_show_leb128( &bs, 0, &nbytes ) == UINT64_MAX && nbytes == 0, "show_leb128 > UINT32_MAX rejected" );
-        TEST_ASSERT( av1_get_leb128( &bs, &nbytes ) == UINT64_MAX && nbytes == 0, "get_leb128 > UINT32_MAX rejected" );
+        TEST_ASSERT( lsm_av1_show_leb128( &bs, 0, &nbytes ) == UINT64_MAX && nbytes == 0, "show_leb128 > UINT32_MAX rejected" );
+        TEST_ASSERT( lsm_av1_get_leb128( &bs, &nbytes ) == UINT64_MAX && nbytes == 0, "get_leb128 > UINT32_MAX rejected" );
 
         /* > 8 bytes (8th byte still has MSB 0x80 set) -> must fail */
         uint8_t b_9bytes[9] = { 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x00 };
         lsmash_bs_set_empty_stream( &bs, b_9bytes, sizeof(b_9bytes) );
-        TEST_ASSERT( av1_show_leb128( &bs, 0, &nbytes ) == UINT64_MAX && nbytes == 0, "show_leb128 > 8 bytes rejected" );
-        TEST_ASSERT( av1_get_leb128( &bs, &nbytes ) == UINT64_MAX && nbytes == 0, "get_leb128 > 8 bytes rejected" );
+        TEST_ASSERT( lsm_av1_show_leb128( &bs, 0, &nbytes ) == UINT64_MAX && nbytes == 0, "show_leb128 > 8 bytes rejected" );
+        TEST_ASSERT( lsm_av1_get_leb128( &bs, &nbytes ) == UINT64_MAX && nbytes == 0, "get_leb128 > 8 bytes rejected" );
 
         /* Truncated LEB128 at EOF -> must fail */
         uint8_t b_trunc[2] = { 0x81, 0x82 };
         lsmash_bs_set_empty_stream( &bs, b_trunc, sizeof(b_trunc) );
-        TEST_ASSERT( av1_show_leb128( &bs, 0, &nbytes ) == UINT64_MAX && nbytes == 0, "show_leb128 truncated rejected" );
-        TEST_ASSERT( av1_get_leb128( &bs, &nbytes ) == UINT64_MAX && nbytes == 0, "get_leb128 truncated rejected" );
+        TEST_ASSERT( lsm_av1_show_leb128( &bs, 0, &nbytes ) == UINT64_MAX && nbytes == 0, "show_leb128 truncated rejected" );
+        TEST_ASSERT( lsm_av1_get_leb128( &bs, &nbytes ) == UINT64_MAX && nbytes == 0, "get_leb128 truncated rejected" );
     }
 
     printf( "[PASS] test_bitstream_primitives\n" );
@@ -454,7 +454,7 @@ static int test_sequence_header_and_av1c( void )
             .data.structured = &reconstructed,
             .size = sizeof(reconstructed),
         };
-        TEST_ASSERT( av1_construct_specific_parameters( &dst_cs, &src_cs ) == 0, "reconstruct av1C" );
+        TEST_ASSERT( lsm_av1_construct_specific_parameters( &dst_cs, &src_cs ) == 0, "reconstruct av1C" );
         TEST_ASSERT( reconstructed.seq_profile == 2 && reconstructed.twelve_bit == 1 && reconstructed.seq_tier_0 == 1,
                      "reconstructed 12-bit fields match" );
         TEST_ASSERT( reconstructed.configOBUs.sz == len && memcmp( reconstructed.configOBUs.data, obu_buf, len ) == 0,
@@ -586,7 +586,7 @@ static uint32_t build_frame_obu
 static int test_frame_headers_and_tu_assembly( void )
 {
     av1_parser_t parser;
-    TEST_ASSERT( av1_setup_parser( &parser, NULL ) == 0, "setup parser" );
+    TEST_ASSERT( lsm_av1_setup_parser( &parser, NULL ) == 0, "setup parser" );
 
     synth_seq_cfg_t seq_cfg = {
         .seq_profile = 0,
@@ -620,7 +620,7 @@ static int test_frame_headers_and_tu_assembly( void )
         uint8_t pad_bytes[4] = { 0, 0, 0, 0 };
         pos += build_obu( tu_buf + pos, AV1_OBU_TYPE_PADDING, 0, 0, 0, pad_bytes, sizeof(pad_bytes) );
 
-        TEST_ASSERT( av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, &param ) == 0,
+        TEST_ASSERT( lsm_av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, &param ) == 0,
                      "parse TU 0 (delayed KEY_FRAME + TD + Padding + HDR10+)" );
         /* TD and Padding must be stripped; SH + Metadata + Frame must remain */
         TEST_ASSERT( out_len == sh_len + meta_len + frm_len, "TD and Padding stripped from TU 0" );
@@ -637,7 +637,7 @@ static int test_frame_headers_and_tu_assembly( void )
     /* TU 1: INTER_FRAME (show_frame=1, refresh_frame_flags=0x04 -> slot 2) */
     {
         uint32_t pos = build_frame_obu( tu_buf, AV1_OBU_TYPE_FRAME, 1, 7, 0, 0, AV1_INTER_FRAME, 1, 0, 0x04, 11 );
-        TEST_ASSERT( av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
+        TEST_ASSERT( lsm_av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
                      "parse TU 1 (INTER_FRAME)" );
         TEST_ASSERT( prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE, "INTER_FRAME is not RAP" );
         TEST_ASSERT( parser.RefValid[2] == 1 && parser.RefOrderHint[2] == 11, "Slot 2 refreshed by 8-bit refresh_frame_flags=0x04" );
@@ -646,7 +646,7 @@ static int test_frame_headers_and_tu_assembly( void )
     /* TU 2: INTRA_ONLY_FRAME (show_frame=1, refresh_frame_flags=0x08 -> slot 3) */
     {
         uint32_t pos = build_frame_obu( tu_buf, AV1_OBU_TYPE_FRAME, 1, 7, 0, 0, AV1_INTRA_ONLY_FRAME, 1, 0, 0x08, 12 );
-        TEST_ASSERT( av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
+        TEST_ASSERT( lsm_av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
                      "parse TU 2 (INTRA_ONLY_FRAME)" );
         TEST_ASSERT( prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_OPEN_RAP, "INTRA_ONLY_FRAME marked as OPEN_RAP" );
         TEST_ASSERT( parser.RefValid[3] == 1 && parser.RefFrameType[3] == AV1_INTRA_ONLY_FRAME,
@@ -656,7 +656,7 @@ static int test_frame_headers_and_tu_assembly( void )
     /* TU 3: SWITCH_FRAME (show_frame=1 -> refreshes all 8 slots) */
     {
         uint32_t pos = build_frame_obu( tu_buf, AV1_OBU_TYPE_FRAME, 1, 7, 0, 0, AV1_SWITCH_FRAME, 1, 0, 0xFF, 13 );
-        TEST_ASSERT( av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
+        TEST_ASSERT( lsm_av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
                      "parse TU 3 (SWITCH_FRAME)" );
         TEST_ASSERT( prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_OPEN_RAP, "SWITCH_FRAME marked as OPEN_RAP" );
         for( int i = 0; i < AV1_NUM_REF_FRAMES; i++ )
@@ -666,14 +666,14 @@ static int test_frame_headers_and_tu_assembly( void )
     /* Re-store a delayed KEY_FRAME into slot 0 (with OrderHint=20), then test show_existing_frame=1 pointing to slot 0 */
     {
         uint32_t pos = build_frame_obu( tu_buf, AV1_OBU_TYPE_FRAME, 1, 7, 0, 0, AV1_KEY_FRAME, 0, 1, 0x01, 20 );
-        TEST_ASSERT( av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
+        TEST_ASSERT( lsm_av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
                      "parse delayed KEY_FRAME into slot 0" );
         TEST_ASSERT( parser.RefOrderHint[0] == 20 && parser.RefOrderHint[1] == 13, "Slot 0 has OrderHint 20, Slot 1 has 13" );
 
         /* Now send OBU_FRAME_HEADER with show_existing_frame=1, frame_to_show_map_idx=0.
          * Since RefFrameType[0] == AV1_KEY_FRAME, it must refresh all 8 reference slots with slot 0's state! */
         pos = build_frame_obu( tu_buf, AV1_OBU_TYPE_FRAME_HEADER, 1, 7, 1, 0, 0, 0, 0, 0, 0 );
-        TEST_ASSERT( av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
+        TEST_ASSERT( lsm_av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
                      "parse show_existing_frame=1 pointing to slot 0 KEY_FRAME" );
         for( int i = 0; i < AV1_NUM_REF_FRAMES; i++ )
             TEST_ASSERT( parser.RefValid[i] == 1 && parser.RefOrderHint[i] == 20 && parser.RefFrameType[i] == AV1_KEY_FRAME,
@@ -682,23 +682,23 @@ static int test_frame_headers_and_tu_assembly( void )
 
     /* Also test enable_order_hint == 0 stream (regression test for unguarded order_hint read) */
     {
-        av1_reset_parser( &parser );
+        lsm_av1_reset_parser( &parser );
         synth_seq_cfg_t no_oh_cfg = seq_cfg;
         no_oh_cfg.enable_order_hint = 0;
         uint32_t pos = build_seq_hdr_obu( tu_buf, &no_oh_cfg );
         pos += build_frame_obu( tu_buf + pos, AV1_OBU_TYPE_FRAME, 0, 0, 0, 0, AV1_KEY_FRAME, 1, 0, 0xFF, 0 );
-        TEST_ASSERT( av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
+        TEST_ASSERT( lsm_av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
                      "parse KEY_FRAME with enable_order_hint=0" );
         TEST_ASSERT( prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC, "KEY_FRAME + show_frame=1 is SYNC" );
 
         pos = build_frame_obu( tu_buf, AV1_OBU_TYPE_FRAME, 0, 0, 0, 0, AV1_INTER_FRAME, 1, 0, 0x02, 0 );
-        TEST_ASSERT( av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
+        TEST_ASSERT( lsm_av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
                      "parse INTER_FRAME with enable_order_hint=0" );
         TEST_ASSERT( parser.frame.order_hint == 0 && parser.RefValid[1] == 1, "INTER_FRAME parsed cleanly with enable_order_hint=0" );
     }
 
     lsmash_destroy_av1_headers( &param );
-    av1_cleanup_parser( &parser );
+    lsm_av1_cleanup_parser( &parser );
     printf( "[PASS] test_frame_headers_and_tu_assembly\n" );
     return 0;
 }
@@ -1942,7 +1942,7 @@ static uint32_t build_tile_group_obu
 static int test_av1_multitile_and_sync_sample_compliance( void )
 {
     av1_parser_t parser;
-    TEST_ASSERT( av1_setup_parser( &parser, NULL ) == 0, "setup parser for multi-tile and sync sample tests" );
+    TEST_ASSERT( lsm_av1_setup_parser( &parser, NULL ) == 0, "setup parser for multi-tile and sync sample tests" );
 
     synth_seq_cfg_t seq_cfg = {
         .seq_profile = 0,
@@ -1967,7 +1967,7 @@ static int test_av1_multitile_and_sync_sample_compliance( void )
         uint32_t pos = 0;
         pos += build_seq_hdr_obu( tu_buf + pos, &seq_cfg );
         pos += build_multitile_2x2_frame_obu( tu_buf + pos, AV1_OBU_TYPE_FRAME, AV1_KEY_FRAME, 1, 0xFF, 0, 1, 0, 3 );
-        TEST_ASSERT( av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
+        TEST_ASSERT( lsm_av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
                      "parse TU 0 with SH + 2x2 multi-tile OBU_FRAME (present_flag=1)" );
         TEST_ASSERT( prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC,
                      "TU with Sequence Header before Key Frame (show_frame=1) is SYNC" );
@@ -1976,7 +1976,7 @@ static int test_av1_multitile_and_sync_sample_compliance( void )
 
         /* TU 1: Key Frame (show_frame=1) WITHOUT Sequence Header in TU 1 -> must be OPEN_RAP, NOT SYNC! */
         pos = build_multitile_2x2_frame_obu( tu_buf, AV1_OBU_TYPE_FRAME, AV1_KEY_FRAME, 1, 0xFF, 1, 0, 0, 3 );
-        TEST_ASSERT( av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
+        TEST_ASSERT( lsm_av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
                      "parse TU 1 with Key Frame (show_frame=1) but no SH in TU 1" );
         TEST_ASSERT( prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_OPEN_RAP,
                      "Key Frame without Sequence Header in same TU is OPEN_RAP (AV1-ISOBMFF v1.2.0 Sec 2.4)" );
@@ -1984,7 +1984,7 @@ static int test_av1_multitile_and_sync_sample_compliance( void )
         /* TU 2: Key Frame (show_frame=1) followed by Sequence Header AFTER the frame -> must be OPEN_RAP, NOT SYNC! */
         pos = build_multitile_2x2_frame_obu( tu_buf, AV1_OBU_TYPE_FRAME, AV1_KEY_FRAME, 1, 0xFF, 2, 0, 0, 3 );
         pos += build_seq_hdr_obu( tu_buf + pos, &seq_cfg );
-        TEST_ASSERT( av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
+        TEST_ASSERT( lsm_av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
                      "parse TU 2 with Key Frame before SH" );
         TEST_ASSERT( prop.ra_flags == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_OPEN_RAP,
                      "Key Frame with Sequence Header appearing after first frame is OPEN_RAP" );
@@ -2000,7 +2000,7 @@ static int test_av1_multitile_and_sync_sample_compliance( void )
         uint32_t tg_len = build_tile_group_obu( tu_buf + pos, 1, 2, 3 );
         pos += tg_len;
 
-        TEST_ASSERT( av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
+        TEST_ASSERT( lsm_av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
                      "parse split multi-tile OBU_FRAME (0..1) + REDUNDANT_FRAME_HEADER + OBU_TILE_GROUP (2..3)" );
         TEST_ASSERT( out_len == f_len + tg_len, "REDUNDANT_FRAME_HEADER stripped from split multi-tile TU" );
         TEST_ASSERT( parser.frame.SeenFrameHeader == 0 && parser.frame.TileNum == 4,
@@ -2012,14 +2012,14 @@ static int test_av1_multitile_and_sync_sample_compliance( void )
     {
         /* Incomplete multi-tile frame at end of TU (only tiles 0..1 of 4) */
         uint32_t pos = build_multitile_2x2_frame_obu( tu_buf, AV1_OBU_TYPE_FRAME, AV1_INTER_FRAME, 1, 0x04, 50, 1, 0, 1 );
-        TEST_ASSERT( av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == LSMASH_ERR_INVALID_DATA,
+        TEST_ASSERT( lsm_av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == LSMASH_ERR_INVALID_DATA,
                      "reject incomplete multi-tile frame at TU end" );
         parser.frame.SeenFrameHeader = 0;
 
         /* Discontinuous tg_start (tiles 0..1 followed by tile 3..3, skipping tile 2) */
         pos = build_multitile_2x2_frame_obu( tu_buf, AV1_OBU_TYPE_FRAME, AV1_INTER_FRAME, 1, 0x04, 50, 1, 0, 1 );
         pos += build_tile_group_obu( tu_buf + pos, 1, 3, 3 );
-        TEST_ASSERT( av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == LSMASH_ERR_INVALID_DATA,
+        TEST_ASSERT( lsm_av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == LSMASH_ERR_INVALID_DATA,
                      "reject discontinuous tg_start in OBU_TILE_GROUP" );
         parser.frame.SeenFrameHeader = 0;
     }
@@ -2037,7 +2037,7 @@ static int test_av1_multitile_and_sync_sample_compliance( void )
         uint32_t f2_len = build_frame_obu( tu_buf + pos, AV1_OBU_TYPE_FRAME_HEADER, 1, 7, 1, 2, 0, 0, 0, 0, 0 );
         pos += f2_len;
 
-        TEST_ASSERT( av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
+        TEST_ASSERT( lsm_av1_parse_temporal_unit( &parser, tu_buf, pos, out_buf, &out_len, &prop, NULL ) == 0,
                      "parse compound TU with reserved OBU type 10" );
         TEST_ASSERT( out_len == f1_len + f2_len,
                      "OBU whitelist strips TD and reserved OBU type 10 while keeping FRAME and FRAME_HEADER" );
@@ -2045,11 +2045,11 @@ static int test_av1_multitile_and_sync_sample_compliance( void )
 
         /* TILE_LIST OBU (type 8) must be rejected */
         uint32_t tl_len = build_obu( tu_buf, AV1_OBU_TYPE_TILE_LIST, 0, 0, 0, rsv_payload, sizeof(rsv_payload) );
-        TEST_ASSERT( av1_parse_temporal_unit( &parser, tu_buf, tl_len, out_buf, &out_len, &prop, NULL ) == LSMASH_ERR_INVALID_DATA,
+        TEST_ASSERT( lsm_av1_parse_temporal_unit( &parser, tu_buf, tl_len, out_buf, &out_len, &prop, NULL ) == LSMASH_ERR_INVALID_DATA,
                      "reject OBU_TILE_LIST in AV1-ISOBMFF sample" );
     }
 
-    av1_cleanup_parser( &parser );
+    lsm_av1_cleanup_parser( &parser );
     printf( "[PASS] test_av1_multitile_and_sync_sample_compliance\n" );
     return 0;
 }
@@ -3428,7 +3428,7 @@ static int test_multibuf_resize_and_codec_regressions( void )
         lsmash_destroy_multiple_buffers( bank );
     }
 
-    /* 14b. nalu_get_codeNum Exp-Golomb Valid Decoding, EOF & >=64 Zero Bits Non-Hang */
+    /* 14b. lsm_nalu_get_codeNum Exp-Golomb Valid Decoding, EOF & >=64 Zero Bits Non-Hang */
     {
         /* Valid Exp-Golomb codes packed into 1 byte:
          * '1' (0) + '010' (1) + '011' (2) + '1' (0) = 0b10100111 = 0xA7 */
@@ -3436,30 +3436,30 @@ static int test_multibuf_resize_and_codec_regressions( void )
         lsmash_bits_t *bits = lsmash_bits_adhoc_create();
         TEST_ASSERT( bits != NULL, "14b: create adhoc bits" );
         TEST_ASSERT( lsmash_bits_import_data( bits, valid_eg, sizeof(valid_eg) ) == 0, "14b: import valid Exp-Golomb" );
-        TEST_ASSERT( nalu_get_codeNum( bits ) == 0, "14b: Exp-Golomb '1' -> 0" );
-        TEST_ASSERT( nalu_get_codeNum( bits ) == 1, "14b: Exp-Golomb '010' -> 1" );
-        TEST_ASSERT( nalu_get_codeNum( bits ) == 2, "14b: Exp-Golomb '011' -> 2" );
-        TEST_ASSERT( nalu_get_codeNum( bits ) == 0, "14b: Exp-Golomb '1' -> 0" );
+        TEST_ASSERT( lsm_nalu_get_codeNum( bits ) == 0, "14b: Exp-Golomb '1' -> 0" );
+        TEST_ASSERT( lsm_nalu_get_codeNum( bits ) == 1, "14b: Exp-Golomb '010' -> 1" );
+        TEST_ASSERT( lsm_nalu_get_codeNum( bits ) == 2, "14b: Exp-Golomb '011' -> 2" );
+        TEST_ASSERT( lsm_nalu_get_codeNum( bits ) == 0, "14b: Exp-Golomb '1' -> 0" );
         lsmash_bits_adhoc_cleanup( bits );
 
         /* Truncated 1-byte all-zero stream -> hits EOB and returns 0 without infinite loop */
         uint8_t eof_zeros[1] = { 0x00 };
         bits = lsmash_bits_adhoc_create();
         TEST_ASSERT( lsmash_bits_import_data( bits, eof_zeros, sizeof(eof_zeros) ) == 0, "14b: import 1 zero byte" );
-        TEST_ASSERT( nalu_get_codeNum( bits ) == 0 && bits->bs->eob == 1,
-                     "14b: nalu_get_codeNum terminates on EOB and returns 0" );
+        TEST_ASSERT( lsm_nalu_get_codeNum( bits ) == 0 && bits->bs->eob == 1,
+                     "14b: lsm_nalu_get_codeNum terminates on EOB and returns 0" );
         lsmash_bits_adhoc_cleanup( bits );
 
         /* 16-byte all-zero stream (128 zero bits) -> hits leadingZeroBits >= 64 before EOB and returns 0 */
         uint8_t long_zeros[16] = { 0 };
         bits = lsmash_bits_adhoc_create();
         TEST_ASSERT( lsmash_bits_import_data( bits, long_zeros, sizeof(long_zeros) ) == 0, "14b: import 16 zero bytes" );
-        TEST_ASSERT( nalu_get_codeNum( bits ) == 0 && bits->bs->eob == 0,
-                     "14b: nalu_get_codeNum terminates at 64 leading zero bits without hanging" );
+        TEST_ASSERT( lsm_nalu_get_codeNum( bits ) == 0 && bits->bs->eob == 0,
+                     "14b: lsm_nalu_get_codeNum terminates at 64 leading zero bits without hanging" );
         lsmash_bits_adhoc_cleanup( bits );
     }
 
-    /* 14c. MP3 nBlockSize Calculation in waveform_audio_update_bitrate */
+    /* 14c. MP3 nBlockSize Calculation in lsm_qt_wfex_update_bitrate */
     {
         /* Build a minimal in-memory stbl + mdhd with a QT_CODEC_TYPE_FULLMP3_AUDIO sample entry and MPEGLAYER3WAVEFORMAT */
         lsmash_root_t *root = lsmash_create_root();
@@ -3515,8 +3515,8 @@ static int test_multibuf_resize_and_codec_regressions( void )
         stsc_e->samples_per_chunk        = 1;
         stsc_e->sample_description_index = 1;
 
-        TEST_ASSERT( waveform_audio_update_bitrate( stbl, mdhd, 1 ) == 0,
-                     "14c: waveform_audio_update_bitrate succeeds" );
+        TEST_ASSERT( lsm_qt_wfex_update_bitrate( stbl, mdhd, 1 ) == 0,
+                     "14c: lsm_qt_wfex_update_bitrate succeeds" );
         isom_box_t *wave_ext = lsm_box_get_extension_box( &wave->extensions, QT_CODEC_TYPE_FULLMP3_AUDIO );
         TEST_ASSERT( wave_ext != NULL && wave_ext->binary != NULL, "14c: get updated wave_ext" );
         uint16_t nBlockSize = LSMASH_GET_LE16( &wave_ext->binary[8 + 24] );
@@ -3525,15 +3525,15 @@ static int test_multibuf_resize_and_codec_regressions( void )
 
         /* Also verify cbSize < 12 is rejected without out-of-bounds write */
         put_le16( &wave_ext->binary[8 + 16], 4 );
-        TEST_ASSERT( waveform_audio_update_bitrate( stbl, mdhd, 1 ) == LSMASH_ERR_INVALID_DATA,
-                     "14c: waveform_audio_update_bitrate rejects MP3 wfex with cbSize < 12" );
+        TEST_ASSERT( lsm_qt_wfex_update_bitrate( stbl, mdhd, 1 ) == LSMASH_ERR_INVALID_DATA,
+                     "14c: lsm_qt_wfex_update_bitrate rejects MP3 wfex with cbSize < 12" );
 
         lsmash_close_file( &param );
         lsmash_destroy_root( root );
         remove( tmp_mov );
     }
 
-    /* 14d. WMA cbSize 16-bit LE Reading & Bounds Check in wma_print_codec_specific */
+    /* 14d. WMA cbSize 16-bit LE Reading & Bounds Check in lsm_wma_print_codec_specific */
     {
         uint8_t wma_bin[36] = { 0 };
         put_be32( &wma_bin[0], 36 );
@@ -3557,17 +3557,17 @@ static int test_multibuf_resize_and_codec_regressions( void )
         const char *tmp_wma_dump = "tests/tmp_wma_dump.txt";
         FILE *fp = fopen( tmp_wma_dump, "wb" );
         TEST_ASSERT( fp != NULL, "14d: open tmp_wma_dump" );
-        TEST_ASSERT( wma_print_codec_specific( fp, NULL, &box, 0 ) == 0,
-                     "14d: wma_print_codec_specific succeeds for valid WMA v2 wfex" );
+        TEST_ASSERT( lsm_wma_print_codec_specific( fp, NULL, &box, 0 ) == 0,
+                     "14d: lsm_wma_print_codec_specific succeeds for valid WMA v2 wfex" );
         /* Now set cbSize = 0x010A (266 in LE16, whose low byte is 10) while box.size remains 36 */
         put_le16( &d[16], 0x010A );
-        TEST_ASSERT( wma_print_codec_specific( fp, NULL, &box, 0 ) == LSMASH_ERR_INVALID_DATA,
-                     "14d: wma_print_codec_specific reads 16-bit LE cbSize=266 and rejects truncated box" );
+        TEST_ASSERT( lsm_wma_print_codec_specific( fp, NULL, &box, 0 ) == LSMASH_ERR_INVALID_DATA,
+                     "14d: lsm_wma_print_codec_specific reads 16-bit LE cbSize=266 and rejects truncated box" );
         fclose( fp );
         remove( tmp_wma_dump );
     }
 
-    /* 14e. Opus 2ch & 8ch Channel Order Lookup in opus_print_codec_specific */
+    /* 14e. Opus 2ch & 8ch Channel Order Lookup in lsm_opus_print_codec_specific */
     {
         lsmash_opus_specific_parameters_t opus_param = { 0 };
         opus_param.Version              = 0;
@@ -3595,8 +3595,8 @@ static int test_multibuf_resize_and_codec_regressions( void )
         const char *tmp_opus_dump = "tests/tmp_opus_dump.txt";
         FILE *fp = fopen( tmp_opus_dump, "wb" );
         TEST_ASSERT( fp != NULL, "14e: open tmp_opus_dump" );
-        TEST_ASSERT( opus_print_codec_specific( fp, &dummy_file, &box, 0 ) == 0,
-                     "14e: opus_print_codec_specific succeeds for 8ch ChannelMappingFamily=1" );
+        TEST_ASSERT( lsm_opus_print_codec_specific( fp, &dummy_file, &box, 0 ) == 0,
+                     "14e: lsm_opus_print_codec_specific succeeds for 8ch ChannelMappingFamily=1" );
         fclose( fp );
         lsmash_free( dops_bin );
 

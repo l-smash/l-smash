@@ -426,7 +426,7 @@ int lsm_stbl_replace_last_sample_delta( isom_stbl_t *stbl, uint32_t sample_delta
     return 0;
 }
 
-static inline int stbl_increment_sample_number_in_entry
+static int stbl_increment_sample_number_in_entry
 (
     uint32_t          *sample_number_in_entry,
     uint32_t           sample_count_in_entry,
@@ -632,7 +632,7 @@ int lsm_stbl_update_bitrate_description( isom_mdia_t *mdia )
         if( !sample_entry )
             return LSMASH_ERR_INVALID_DATA;
         ++sample_description_index;
-        isom_bitrate_updater_t func_update_bitrate = isom_get_bitrate_updater( sample_entry );
+        isom_bitrate_updater_t func_update_bitrate = lsm_description_get_bitrate_updater( sample_entry );
         if( func_update_bitrate )
         {
             int err = func_update_bitrate( stbl, mdia->mdhd, sample_description_index );
@@ -1163,7 +1163,7 @@ int lsm_stbl_group_random_access( isom_box_t *parent, isom_cache_t *cache, lsmas
     return 0;
 }
 
-static inline isom_group_assignment_entry_t *stbl_get_roll_assignment( isom_roll_group_t *group )
+static isom_group_assignment_entry_t *stbl_get_roll_assignment( isom_roll_group_t *group )
 {
     return group && group->sbgp
          ? (isom_group_assignment_entry_t *)lsm_list_get( group->sbgp->list, group->assignment_number )

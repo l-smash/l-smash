@@ -99,7 +99,7 @@ typedef enum {
 typedef void mp4a_AudioSpecificConfig_t;
 
 /* export for mp4sys / importer */
-mp4a_AudioSpecificConfig_t *mp4a_create_AudioSpecificConfig(
+mp4a_AudioSpecificConfig_t *lsm_mp4a_create_AudioSpecificConfig(
     lsmash_mp4a_AudioObjectType aot,
     uint32_t frequency,
     uint32_t channels,
@@ -107,10 +107,10 @@ mp4a_AudioSpecificConfig_t *mp4a_create_AudioSpecificConfig(
     uint8_t *exdata,
     uint32_t exdata_length
 );
-void mp4a_put_AudioSpecificConfig( lsmash_bs_t* bs, mp4a_AudioSpecificConfig_t* asc );
-void mp4a_remove_AudioSpecificConfig( mp4a_AudioSpecificConfig_t* asc );
+void lsm_mp4a_put_AudioSpecificConfig( lsmash_bs_t* bs, mp4a_AudioSpecificConfig_t* asc );
+void lsm_mp4a_remove_AudioSpecificConfig( mp4a_AudioSpecificConfig_t* asc );
 
-uint8_t *mp4a_export_AudioSpecificConfig( lsmash_mp4a_AudioObjectType aot,
+uint8_t *lsm_mp4a_export_AudioSpecificConfig( lsmash_mp4a_AudioObjectType aot,
                                           uint32_t frequency,
                                           uint32_t channels,
                                           lsmash_mp4a_aac_sbr_mode sbr_mode,
@@ -122,11 +122,11 @@ uint8_t *mp4a_export_AudioSpecificConfig( lsmash_mp4a_AudioObjectType aot,
 extern const uint32_t mp4a_sampling_frequency_table[13][5];
 
 /* setup for summary */
-int mp4a_setup_summary_from_AudioSpecificConfig( lsmash_audio_summary_t *summary, uint8_t *dsi_payload, uint32_t dsi_payload_length );
+int lsm_mp4a_setup_summary_from_AudioSpecificConfig( lsmash_audio_summary_t *summary, uint8_t *dsi_payload, uint32_t dsi_payload_length );
 
 /* profileLevelIndication relative functions. */
-mp4a_audioProfileLevelIndication mp4a_get_audioProfileLevelIndication( lsmash_audio_summary_t *summary );
-mp4a_audioProfileLevelIndication mp4a_max_audioProfileLevelIndication(
+mp4a_audioProfileLevelIndication lsm_mp4a_get_audioProfileLevelIndication( lsmash_audio_summary_t *summary );
+mp4a_audioProfileLevelIndication lsm_mp4a_max_audioProfileLevelIndication(
     mp4a_audioProfileLevelIndication a,
     mp4a_audioProfileLevelIndication b
 );

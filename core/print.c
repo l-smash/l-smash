@@ -158,7 +158,7 @@ static void print_ifprintf_sample_flags( FILE *fp, int indent, char *field_name,
     lsmash_ifprintf( fp, indent, "degradation_priority = %"PRIu16"\n", flags->sample_degradation_priority );
 }
 
-static inline int print_simple( FILE *fp, isom_box_t *box, int level, char *name )
+static int print_simple( FILE *fp, isom_box_t *box, int level, char *name )
 {
     int indent = level;
     if( box->type.fourcc != ISOM_BOX_TYPE_UUID.fourcc )
@@ -499,11 +499,11 @@ static int print_ctab( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level
 
 static int print_iods( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
 {
-    extern void mp4sys_print_descriptor( FILE *, void *, int );
+    extern void lsm_mp4sys_print_descriptor( FILE *, void *, int );
     isom_iods_t *iods = (isom_iods_t *)box;
     int indent = level;
     print_box_common( fp, indent, box, "Object Descriptor Box" );
-    mp4sys_print_descriptor( fp, iods->OD, indent + 1 );
+    lsm_mp4sys_print_descriptor( fp, iods->OD, indent + 1 );
     return 0;
 }
 
@@ -1561,20 +1561,20 @@ static int print_mp4s_description( FILE *fp, lsmash_file_t *file, isom_box_t *bo
 
 static int print_sample_description_extension( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
 {
-    extern int mp4sys_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
-    extern int h264_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
-    extern int hevc_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
-    extern int lhevc_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
-    extern int hevc_print_dovi( FILE *, lsmash_file_t *, isom_box_t *, int );
-    extern int h264_print_bitrate( FILE *, lsmash_file_t *, isom_box_t *, int );
-    extern int vc1_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
-    extern int av1_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
-    extern int ac3_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
-    extern int eac3_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
-    extern int dts_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
-    extern int opus_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
-    extern int alac_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
-    extern int wma_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
+    extern int lsm_mp4sys_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
+    extern int lsm_h264_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
+    extern int lsm_hevc_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
+    extern int lsm_hevc_print_lhevc_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
+    extern int lsm_hevc_print_dovi( FILE *, lsmash_file_t *, isom_box_t *, int );
+    extern int lsm_h264_print_bitrate( FILE *, lsmash_file_t *, isom_box_t *, int );
+    extern int lsm_vc1_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
+    extern int lsm_av1_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
+    extern int lsm_a52_print_ac3_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
+    extern int lsm_a52_print_eac3_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
+    extern int lsm_dts_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
+    extern int lsm_opus_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
+    extern int lsm_alac_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
+    extern int lsm_wma_print_codec_specific( FILE *, lsmash_file_t *, isom_box_t *, int );
     static const struct print_description_extension_table_tag
     {
         const lsmash_box_type_t *type;
@@ -1600,21 +1600,21 @@ static int print_sample_description_extension( FILE *fp, lsmash_file_t *file, is
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_SRAT, print_srat ),
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_PCMC, print_pcmC ),
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_CHNL, print_chnl ),
-        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_ESDS, mp4sys_print_codec_specific ),
-        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_AV1C, av1_print_codec_specific ),
-        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_AVCC, h264_print_codec_specific ),
-        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_BTRT, h264_print_bitrate ),
-        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DVCC, hevc_print_dovi ),
-        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DVVC, hevc_print_dovi ),
-        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_LHVC, lhevc_print_codec_specific ),
-        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_HVCC, hevc_print_codec_specific ),
-        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DVC1, vc1_print_codec_specific ),
-        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DAC3, ac3_print_codec_specific ),
-        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DEC3, eac3_print_codec_specific ),
-        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DDTS, dts_print_codec_specific ),
-        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DOPS, opus_print_codec_specific ),
-        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_ALAC, alac_print_codec_specific ),
-        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_WFEX, wma_print_codec_specific ),
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_ESDS, lsm_mp4sys_print_codec_specific ),
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_AV1C, lsm_av1_print_codec_specific ),
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_AVCC, lsm_h264_print_codec_specific ),
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_BTRT, lsm_h264_print_bitrate ),
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DVCC, lsm_hevc_print_dovi ),
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DVVC, lsm_hevc_print_dovi ),
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_LHVC, lsm_hevc_print_lhevc_codec_specific ),
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_HVCC, lsm_hevc_print_codec_specific ),
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DVC1, lsm_vc1_print_codec_specific ),
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DAC3, lsm_a52_print_ac3_codec_specific ),
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DEC3, lsm_a52_print_eac3_codec_specific ),
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DDTS, lsm_dts_print_codec_specific ),
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DOPS, lsm_opus_print_codec_specific ),
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_ALAC, lsm_alac_print_codec_specific ),
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_WFEX, lsm_wma_print_codec_specific ),
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_SA3D, print_SA3D ),
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_ST3D, print_st3d ),
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_SV3D, print_sv3d ),
@@ -1635,8 +1635,8 @@ static int print_sample_description_extension( FILE *fp, lsmash_file_t *file, is
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_DADJ, print_dadj ),
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_HFOV, print_hfov ),
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( ISOM_BOX_TYPE_FTAB, print_ftab ),
-        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_ESDS, mp4sys_print_codec_specific ),
-        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_ALAC, alac_print_codec_specific ),
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_ESDS, lsm_mp4sys_print_codec_specific ),
+        ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT(   QT_BOX_TYPE_ALAC, lsm_alac_print_codec_specific ),
         ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT( LSMASH_BOX_TYPE_UNSPECIFIED, NULL )
 #undef ADD_PRINT_DESCRIPTION_EXTENSION_TABLE_ELEMENT
     };
@@ -2892,7 +2892,7 @@ static isom_print_box_t print_select_func( isom_box_t *box )
     return print_unknown;
 }
 
-static inline void print_remove_plastic_box( isom_box_t *box )
+static void print_remove_plastic_box( isom_box_t *box )
 {
     if( box->manager & LSMASH_ABSENT_IN_FILE )
         /* free flagged box */

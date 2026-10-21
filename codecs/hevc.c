@@ -69,7 +69,7 @@ static lsmash_hevc_parameter_arrays_t *hevc_alloc_parameter_arrays( void )
     parameter_arrays->ps_array[HEVC_DCR_NALU_TYPE_SUFFIX_SEI].array_completeness = 0;
     parameter_arrays->ps_array[HEVC_DCR_NALU_TYPE_SUFFIX_SEI].NAL_unit_type      = HEVC_NALU_TYPE_SUFFIX_SEI;
     for( int i = 0; i < HEVC_DCR_NALU_TYPE_NUM; i++ )
-        lsmash_list_init( parameter_arrays->ps_array[i].list, isom_remove_dcr_ps );
+        lsmash_list_init( parameter_arrays->ps_array[i].list, lsm_nalu_remove_dcr_ps );
     return parameter_arrays;
 }
 
@@ -108,7 +108,7 @@ void lsmash_destroy_hevc_parameter_arrays
     hevc_deallocate_parameter_arrays( param );
 }
 
-void hevc_destruct_specific_data
+void lsm_hevc_destruct_specific_data
 (
     void *data
 )
@@ -131,7 +131,7 @@ static void hevc_remove_pps
     lsmash_free( pps );
 }
 
-void hevc_cleanup_parser
+void lsm_hevc_cleanup_parser
 (
     hevc_info_t *info
 )
@@ -148,7 +148,7 @@ void hevc_cleanup_parser
     info->bits = NULL;
 }
 
-int hevc_setup_parser
+int lsm_hevc_setup_parser
 (
     hevc_info_t *info,
     int          parse_only
@@ -234,7 +234,7 @@ static int hevc_check_nalu_header
     return 0;
 }
 
-uint64_t hevc_find_next_start_code
+uint64_t lsm_hevc_find_next_start_code
 (
     lsmash_bs_t        *bs,
     hevc_nalu_header_t *nuh,
@@ -383,7 +383,7 @@ static hevc_pps_t *hevc_get_pps
     return pps;
 }
 
-int hevc_calculate_poc
+int lsm_hevc_calculate_poc
 (
     hevc_info_t         *info,
     hevc_picture_info_t *picture,
@@ -453,7 +453,7 @@ int hevc_calculate_poc
     return 0;
 }
 
-static inline int hevc_activate_vps
+static int hevc_activate_vps
 (
     hevc_info_t *info,
     uint8_t      video_parameter_set_id
@@ -466,7 +466,7 @@ static inline int hevc_activate_vps
     return 0;
 }
 
-static inline int hevc_activate_sps
+static int hevc_activate_sps
 (
     hevc_info_t *info,
     uint8_t      seq_parameter_set_id
@@ -487,15 +487,15 @@ static void hevc_parse_scaling_list_data
     for( int sizeId = 0; sizeId < 4; sizeId++ )
         for( int matrixId = 0; matrixId < (sizeId == 3 ? 2 : 6); matrixId++ )
         {
-            if( !lsmash_bits_get( bits, 1 ) )       /* scaling_list_pred_mode_flag[sizeId][matrixId] */
-                nalu_get_exp_golomb_ue( bits );     /* scaling_list_pred_matrix_id_delta[sizeId][matrixId] */
+            if( !lsmash_bits_get( bits, 1 ) )           /* scaling_list_pred_mode_flag[sizeId][matrixId] */
+                lsm_nalu_get_exp_golomb_ue( bits );     /* scaling_list_pred_matrix_id_delta[sizeId][matrixId] */
             else
             {
                 int coefNum = LSMASH_MIN( 64, 1 << (4 + (sizeId << 1)) );
                 if( sizeId > 1 )
-                    nalu_get_exp_golomb_se( bits ); /* scaling_list_dc_coef_minus8[sizeId - 2][matrixId] */
+                    lsm_nalu_get_exp_golomb_se( bits ); /* scaling_list_dc_coef_minus8[sizeId - 2][matrixId] */
                 for( int i = 0; i < coefNum; i++ )
-                    nalu_get_exp_golomb_se( bits ); /* scaling_list_delta_coef */
+                    lsm_nalu_get_exp_golomb_se( bits ); /* scaling_list_delta_coef */
             }
         }
 }
@@ -511,9 +511,9 @@ static int hevc_short_term_ref_pic_set
     if( inter_ref_pic_set_prediction_flag )
     {
         /* delta_idx_minus1 is always 0 in SPS since stRpsIdx must not be equal to num_short_term_ref_pic_sets. */
-        uint64_t delta_idx_minus1     = stRpsIdx == sps->num_short_term_ref_pic_sets ? nalu_get_exp_golomb_ue( bits ) : 0;
+        uint64_t delta_idx_minus1     = stRpsIdx == sps->num_short_term_ref_pic_sets ? lsm_nalu_get_exp_golomb_ue( bits ) : 0;
         int      delta_rps_sign       = lsmash_bits_get( bits, 1 );
-        uint64_t abs_delta_rps_minus1 = nalu_get_exp_golomb_ue( bits );
+        uint64_t abs_delta_rps_minus1 = lsm_nalu_get_exp_golomb_ue( bits );
         int RefRpsIdx = stRpsIdx - (delta_idx_minus1 + 1);
         int deltaRps  = (delta_rps_sign ? -1 : 1) * (abs_delta_rps_minus1 + 1);
         hevc_st_rps_t *st_rps  = &sps->st_rps[stRpsIdx];
@@ -582,8 +582,8 @@ static int hevc_short_term_ref_pic_set
     }
     else
     {
-        uint64_t num_negative_pics = nalu_get_exp_golomb_ue( bits );
-        uint64_t num_positive_pics = nalu_get_exp_golomb_ue( bits );
+        uint64_t num_negative_pics = lsm_nalu_get_exp_golomb_ue( bits );
+        uint64_t num_positive_pics = lsm_nalu_get_exp_golomb_ue( bits );
         if( num_negative_pics >= HEVC_MAX_DPB_SIZE || num_positive_pics >= HEVC_MAX_DPB_SIZE )
             return LSMASH_ERR_INVALID_DATA;
         hevc_st_rps_t *st_rps = &sps->st_rps[stRpsIdx];
@@ -592,7 +592,7 @@ static int hevc_short_term_ref_pic_set
         st_rps->NumDeltaPocs    = st_rps->NumNegativePics + st_rps->NumPositivePics;
         for( int i = 0; i < num_negative_pics; i++ )
         {
-            uint64_t delta_poc_s0_minus1 = nalu_get_exp_golomb_ue( bits );
+            uint64_t delta_poc_s0_minus1 = lsm_nalu_get_exp_golomb_ue( bits );
             if( i == 0 )
                 st_rps->DeltaPocS0[i] = -(signed)(delta_poc_s0_minus1 + 1);
             else
@@ -601,7 +601,7 @@ static int hevc_short_term_ref_pic_set
         }
         for( int i = 0; i < num_positive_pics; i++ )
         {
-            uint64_t delta_poc_s1_minus1 = nalu_get_exp_golomb_ue( bits );
+            uint64_t delta_poc_s1_minus1 = lsm_nalu_get_exp_golomb_ue( bits );
             if( i == 0 )
                 st_rps->DeltaPocS1[i] = +(delta_poc_s1_minus1 + 1);
             else
@@ -612,7 +612,7 @@ static int hevc_short_term_ref_pic_set
     return 0;
 }
 
-static inline void hevc_parse_sub_layer_hrd_parameters
+static void hevc_parse_sub_layer_hrd_parameters
 (
     lsmash_bits_t *bits,
     int            CpbCnt,
@@ -621,14 +621,14 @@ static inline void hevc_parse_sub_layer_hrd_parameters
 {
     for( int i = 0; i <= CpbCnt; i++ )
     {
-        nalu_get_exp_golomb_ue( bits );         /* bit_rate_value_minus1[i] */
-        nalu_get_exp_golomb_ue( bits );         /* cpb_size_value_minus1[i] */
+        lsm_nalu_get_exp_golomb_ue( bits );         /* bit_rate_value_minus1[i] */
+        lsm_nalu_get_exp_golomb_ue( bits );         /* cpb_size_value_minus1[i] */
         if( sub_pic_hrd_params_present_flag )
         {
-            nalu_get_exp_golomb_ue( bits );     /* cpb_size_du_value_minus1[i] */
-            nalu_get_exp_golomb_ue( bits );     /* bit_rate_du_value_minus1[i] */
+            lsm_nalu_get_exp_golomb_ue( bits );     /* cpb_size_du_value_minus1[i] */
+            lsm_nalu_get_exp_golomb_ue( bits );     /* bit_rate_du_value_minus1[i] */
         }
-        lsmash_bits_get( bits, 1 );             /* cbr_flag[i] */
+        lsmash_bits_get( bits, 1 );                 /* cbr_flag[i] */
     }
 }
 
@@ -675,10 +675,10 @@ static void hevc_parse_hrd_parameters
     for( int i = 0; i <= maxNumSubLayersMinus1; i++ )
     {
         hrd->fixed_pic_rate_general_flag[i]     =                                        lsmash_bits_get( bits, 1 );
-        uint8_t  fixed_pic_rate_within_cvs_flag = !hrd->fixed_pic_rate_general_flag[i] ? lsmash_bits_get( bits, 1 )         : 1;
-        uint8_t  low_delay_hrd_flag             = !fixed_pic_rate_within_cvs_flag      ? lsmash_bits_get( bits, 1 )         : 0;
-        hrd->elemental_duration_in_tc[i]        =  fixed_pic_rate_within_cvs_flag      ? nalu_get_exp_golomb_ue( bits ) + 1 : 0;
-        uint8_t  cpb_cnt_minus1                 = !low_delay_hrd_flag                  ? nalu_get_exp_golomb_ue( bits )     : 0;
+        uint8_t  fixed_pic_rate_within_cvs_flag = !hrd->fixed_pic_rate_general_flag[i] ? lsmash_bits_get( bits, 1 )             : 1;
+        uint8_t  low_delay_hrd_flag             = !fixed_pic_rate_within_cvs_flag      ? lsmash_bits_get( bits, 1 )             : 0;
+        hrd->elemental_duration_in_tc[i]        =  fixed_pic_rate_within_cvs_flag      ? lsm_nalu_get_exp_golomb_ue( bits ) + 1 : 0;
+        uint8_t  cpb_cnt_minus1                 = !low_delay_hrd_flag                  ? lsm_nalu_get_exp_golomb_ue( bits )     : 0;
         if( nal_hrd_parameters_present_flag )
             hevc_parse_sub_layer_hrd_parameters( bits, cpb_cnt_minus1, hrd->sub_pic_hrd_params_present_flag );
         if( vcl_hrd_parameters_present_flag )
@@ -686,7 +686,7 @@ static void hevc_parse_hrd_parameters
     }
 }
 
-static inline void hevc_parse_profile_tier_level_common
+static void hevc_parse_profile_tier_level_common
 (
     lsmash_bits_t     *bits,
     hevc_ptl_common_t *ptlc,
@@ -744,7 +744,7 @@ static int hevc_parse_vps_minimally
 )
 {
     uint64_t rbsp_size;
-    int err = nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, &rbsp_size, ebsp, ebsp_size );
+    int err = lsm_nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, &rbsp_size, ebsp, ebsp_size );
     if( err < 0 )
         return err;
     memset( vps, 0, sizeof(hevc_vps_t) );
@@ -769,19 +769,19 @@ static int hevc_parse_vps_minimally
     int sub_layer_ordering_info_present_flag = lsmash_bits_get( bits, 1 );
     for( int i = sub_layer_ordering_info_present_flag ? 0 : vps->max_sub_layers_minus1; i <= vps->max_sub_layers_minus1; i++ )
     {
-        nalu_get_exp_golomb_ue( bits );  /* max_dec_pic_buffering_minus1[i] */
-        nalu_get_exp_golomb_ue( bits );  /* max_num_reorder_pics        [i] */
-        nalu_get_exp_golomb_ue( bits );  /* max_latency_increase_plus1  [i] */
+        lsm_nalu_get_exp_golomb_ue( bits );  /* max_dec_pic_buffering_minus1[i] */
+        lsm_nalu_get_exp_golomb_ue( bits );  /* max_num_reorder_pics        [i] */
+        lsm_nalu_get_exp_golomb_ue( bits );  /* max_latency_increase_plus1  [i] */
     }
     uint8_t  max_layer_id          = lsmash_bits_get( bits, 6 );
-    uint16_t num_layer_sets_minus1 = nalu_get_exp_golomb_ue( bits );
+    uint16_t num_layer_sets_minus1 = lsm_nalu_get_exp_golomb_ue( bits );
     for( int i = 1; i <= num_layer_sets_minus1; i++ )
         for( int j = 0; j <= max_layer_id; j++ )
             lsmash_bits_get( bits, 1 );     /* layer_id_included_flag[i][j] */
     return bits->bs->error ? LSMASH_ERR_NAMELESS : 0;
 }
 
-int hevc_parse_vps
+int lsm_hevc_parse_vps
 (
     hevc_info_t *info,
     uint8_t     *rbsp_buffer,
@@ -805,14 +805,14 @@ int hevc_parse_vps
     vps->timing_info_present_flag = lsmash_bits_get( bits, 1 );
     if( vps->timing_info_present_flag )
     {
-        lsmash_bits_get( bits, 32 );        /* num_units_in_tick */
-        lsmash_bits_get( bits, 32 );        /* time_scale */
-        if( lsmash_bits_get( bits,  1 ) )   /* poc_proportional_to_timing_flag */
-            nalu_get_exp_golomb_ue( bits ); /* num_ticks_poc_diff_one_minus1 */
-        vps->num_hrd_parameters = nalu_get_exp_golomb_ue( bits );
+        lsmash_bits_get( bits, 32 );            /* num_units_in_tick */
+        lsmash_bits_get( bits, 32 );            /* time_scale */
+        if( lsmash_bits_get( bits,  1 ) )       /* poc_proportional_to_timing_flag */
+            lsm_nalu_get_exp_golomb_ue( bits ); /* num_ticks_poc_diff_one_minus1 */
+        vps->num_hrd_parameters = lsm_nalu_get_exp_golomb_ue( bits );
         for( int i = 0; i < vps->num_hrd_parameters; i++ )
         {
-            nalu_get_exp_golomb_ue( bits );     /* hrd_layer_set_idx[i] */
+            lsm_nalu_get_exp_golomb_ue( bits );     /* hrd_layer_set_idx[i] */
             int cprms_present_flag = i > 0 ? lsmash_bits_get( bits, 1 ) : 1;
             /* Although the value of vps_num_hrd_parameters is required to be less than or equal to 1 in the spec
              * we refer to, decoders shall allow other values of vps_num_hrd_parameters in the range of 0 to 1024,
@@ -845,7 +845,7 @@ static int hevc_parse_sps_minimally
 )
 {
     uint64_t rbsp_size;
-    int err = nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, &rbsp_size, ebsp, ebsp_size );
+    int err = lsm_nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, &rbsp_size, ebsp, ebsp_size );
     if( err < 0 )
         return err;
     memset( sps, 0, sizeof(hevc_sps_t) );
@@ -853,41 +853,41 @@ static int hevc_parse_sps_minimally
     sps->max_sub_layers_minus1    = lsmash_bits_get( bits, 3 );
     sps->temporal_id_nesting_flag = lsmash_bits_get( bits, 1 );
     hevc_parse_profile_tier_level( bits, &sps->ptl, sps->max_sub_layers_minus1 );
-    sps->seq_parameter_set_id = nalu_get_exp_golomb_ue( bits );
-    sps->chroma_format_idc    = nalu_get_exp_golomb_ue( bits );
+    sps->seq_parameter_set_id = lsm_nalu_get_exp_golomb_ue( bits );
+    sps->chroma_format_idc    = lsm_nalu_get_exp_golomb_ue( bits );
     if( sps->chroma_format_idc == 3 )
         sps->separate_colour_plane_flag = lsmash_bits_get( bits, 1 );
     static const int SubWidthC [] = { 1, 2, 2, 1 };
     static const int SubHeightC[] = { 1, 2, 1, 1 };
-    uint64_t pic_width_in_luma_samples  = nalu_get_exp_golomb_ue( bits );
-    uint64_t pic_height_in_luma_samples = nalu_get_exp_golomb_ue( bits );
+    uint64_t pic_width_in_luma_samples  = lsm_nalu_get_exp_golomb_ue( bits );
+    uint64_t pic_height_in_luma_samples = lsm_nalu_get_exp_golomb_ue( bits );
     sps->cropped_width  = pic_width_in_luma_samples;
     sps->cropped_height = pic_height_in_luma_samples;
     if( lsmash_bits_get( bits, 1 ) )    /* conformance_window_flag */
     {
-        uint64_t conf_win_left_offset   = nalu_get_exp_golomb_ue( bits );
-        uint64_t conf_win_right_offset  = nalu_get_exp_golomb_ue( bits );
-        uint64_t conf_win_top_offset    = nalu_get_exp_golomb_ue( bits );
-        uint64_t conf_win_bottom_offset = nalu_get_exp_golomb_ue( bits );
+        uint64_t conf_win_left_offset   = lsm_nalu_get_exp_golomb_ue( bits );
+        uint64_t conf_win_right_offset  = lsm_nalu_get_exp_golomb_ue( bits );
+        uint64_t conf_win_top_offset    = lsm_nalu_get_exp_golomb_ue( bits );
+        uint64_t conf_win_bottom_offset = lsm_nalu_get_exp_golomb_ue( bits );
         sps->cropped_width  -= (conf_win_left_offset + conf_win_right_offset)  * SubWidthC [ sps->chroma_format_idc ];
         sps->cropped_height -= (conf_win_top_offset  + conf_win_bottom_offset) * SubHeightC[ sps->chroma_format_idc ];
     }
-    sps->bit_depth_luma_minus8               = nalu_get_exp_golomb_ue( bits );
-    sps->bit_depth_chroma_minus8             = nalu_get_exp_golomb_ue( bits );
-    sps->log2_max_pic_order_cnt_lsb          = nalu_get_exp_golomb_ue( bits ) + 4;
+    sps->bit_depth_luma_minus8               = lsm_nalu_get_exp_golomb_ue( bits );
+    sps->bit_depth_chroma_minus8             = lsm_nalu_get_exp_golomb_ue( bits );
+    sps->log2_max_pic_order_cnt_lsb          = lsm_nalu_get_exp_golomb_ue( bits ) + 4;
     int sub_layer_ordering_info_present_flag = lsmash_bits_get( bits, 1 );
     for( int i = sub_layer_ordering_info_present_flag ? 0 : sps->max_sub_layers_minus1; i <= sps->max_sub_layers_minus1; i++ )
     {
-        nalu_get_exp_golomb_ue( bits );  /* max_dec_pic_buffering_minus1[i] */
-        nalu_get_exp_golomb_ue( bits );  /* max_num_reorder_pics        [i] */
-        nalu_get_exp_golomb_ue( bits );  /* max_latency_increase_plus1  [i] */
+        lsm_nalu_get_exp_golomb_ue( bits );  /* max_dec_pic_buffering_minus1[i] */
+        lsm_nalu_get_exp_golomb_ue( bits );  /* max_num_reorder_pics        [i] */
+        lsm_nalu_get_exp_golomb_ue( bits );  /* max_latency_increase_plus1  [i] */
     }
-    uint64_t log2_min_luma_coding_block_size_minus3   = nalu_get_exp_golomb_ue( bits );
-    uint64_t log2_diff_max_min_luma_coding_block_size = nalu_get_exp_golomb_ue( bits );
-    nalu_get_exp_golomb_ue( bits );         /* log2_min_transform_block_size_minus2 */
-    nalu_get_exp_golomb_ue( bits );         /* log2_diff_max_min_transform_block_size */
-    nalu_get_exp_golomb_ue( bits );         /* max_transform_hierarchy_depth_inter */
-    nalu_get_exp_golomb_ue( bits );         /* max_transform_hierarchy_depth_intra */
+    uint64_t log2_min_luma_coding_block_size_minus3   = lsm_nalu_get_exp_golomb_ue( bits );
+    uint64_t log2_diff_max_min_luma_coding_block_size = lsm_nalu_get_exp_golomb_ue( bits );
+    lsm_nalu_get_exp_golomb_ue( bits );         /* log2_min_transform_block_size_minus2 */
+    lsm_nalu_get_exp_golomb_ue( bits );         /* log2_diff_max_min_transform_block_size */
+    lsm_nalu_get_exp_golomb_ue( bits );         /* max_transform_hierarchy_depth_inter */
+    lsm_nalu_get_exp_golomb_ue( bits );         /* max_transform_hierarchy_depth_intra */
     {
         int MinCbLog2SizeY = log2_min_luma_coding_block_size_minus3 + 3;
         int MinCbSizeY     = 1 << MinCbLog2SizeY;
@@ -907,20 +907,20 @@ static int hevc_parse_sps_minimally
     lsmash_bits_get( bits, 1 );             /* sample_adaptive_offset_enabled_flag */
     if( lsmash_bits_get( bits, 1 ) )        /* pcm_enabled_flag */
     {
-        lsmash_bits_get( bits, 4 );         /* pcm_sample_bit_depth_luma_minus1 */
-        lsmash_bits_get( bits, 4 );         /* pcm_sample_bit_depth_chroma_minus1 */
-        nalu_get_exp_golomb_ue( bits );     /* log2_min_pcm_luma_coding_block_size_minus3 */
-        nalu_get_exp_golomb_ue( bits );     /* log2_diff_max_min_pcm_luma_coding_block_size */
-        lsmash_bits_get( bits, 1 );         /* pcm_loop_filter_disabled_flag */
+        lsmash_bits_get( bits, 4 );             /* pcm_sample_bit_depth_luma_minus1 */
+        lsmash_bits_get( bits, 4 );             /* pcm_sample_bit_depth_chroma_minus1 */
+        lsm_nalu_get_exp_golomb_ue( bits );     /* log2_min_pcm_luma_coding_block_size_minus3 */
+        lsm_nalu_get_exp_golomb_ue( bits );     /* log2_diff_max_min_pcm_luma_coding_block_size */
+        lsmash_bits_get( bits, 1 );             /* pcm_loop_filter_disabled_flag */
     }
-    sps->num_short_term_ref_pic_sets = nalu_get_exp_golomb_ue( bits );
+    sps->num_short_term_ref_pic_sets = lsm_nalu_get_exp_golomb_ue( bits );
     for( int i = 0; i < sps->num_short_term_ref_pic_sets; i++ )
         if( (err = hevc_short_term_ref_pic_set( bits, sps, i )) < 0 )
             return err;
     sps->long_term_ref_pics_present_flag = lsmash_bits_get( bits, 1 );
     if( sps->long_term_ref_pics_present_flag )
     {
-        sps->num_long_term_ref_pics_sps = nalu_get_exp_golomb_ue( bits );
+        sps->num_long_term_ref_pics_sps = lsm_nalu_get_exp_golomb_ue( bits );
         for( int i = 0; i < sps->num_long_term_ref_pics_sps; i++ )
         {
             lsmash_bits_get( bits, sps->log2_max_pic_order_cnt_lsb );   /* lt_ref_pic_poc_lsb_sps      [i] */
@@ -995,8 +995,8 @@ static int hevc_parse_sps_minimally
         }
         if( lsmash_bits_get( bits, 1 ) )    /* chroma_loc_info_present_flag */
         {
-            nalu_get_exp_golomb_ue( bits ); /* chroma_sample_loc_type_top_field */
-            nalu_get_exp_golomb_ue( bits ); /* chroma_sample_loc_type_bottom_field */
+            lsm_nalu_get_exp_golomb_ue( bits ); /* chroma_sample_loc_type_top_field */
+            lsm_nalu_get_exp_golomb_ue( bits ); /* chroma_sample_loc_type_bottom_field */
         }
         lsmash_bits_get( bits, 1 );         /* neutral_chroma_indication_flag */
         sps->vui.field_seq_flag                = lsmash_bits_get( bits, 1 );
@@ -1010,18 +1010,18 @@ static int hevc_parse_sps_minimally
              *   A rectangular region for display specified by these values is not considered
              *   as cropped visual presentation size which decoder delivers.
              *   Maybe, these values shall be indicated by the clean aperture on container level. */
-            sps->vui.def_disp_win_offset.left   = (lsmash_rational_u32_t){ nalu_get_exp_golomb_ue( bits ) * SubWidthC [ sps->chroma_format_idc ], 1 };
-            sps->vui.def_disp_win_offset.right  = (lsmash_rational_u32_t){ nalu_get_exp_golomb_ue( bits ) * SubWidthC [ sps->chroma_format_idc ], 1 };
-            sps->vui.def_disp_win_offset.top    = (lsmash_rational_u32_t){ nalu_get_exp_golomb_ue( bits ) * SubHeightC[ sps->chroma_format_idc ], 1 };
-            sps->vui.def_disp_win_offset.bottom = (lsmash_rational_u32_t){ nalu_get_exp_golomb_ue( bits ) * SubHeightC[ sps->chroma_format_idc ], 1 };
+            sps->vui.def_disp_win_offset.left   = (lsmash_rational_u32_t){ lsm_nalu_get_exp_golomb_ue( bits ) * SubWidthC [ sps->chroma_format_idc ], 1 };
+            sps->vui.def_disp_win_offset.right  = (lsmash_rational_u32_t){ lsm_nalu_get_exp_golomb_ue( bits ) * SubWidthC [ sps->chroma_format_idc ], 1 };
+            sps->vui.def_disp_win_offset.top    = (lsmash_rational_u32_t){ lsm_nalu_get_exp_golomb_ue( bits ) * SubHeightC[ sps->chroma_format_idc ], 1 };
+            sps->vui.def_disp_win_offset.bottom = (lsmash_rational_u32_t){ lsm_nalu_get_exp_golomb_ue( bits ) * SubHeightC[ sps->chroma_format_idc ], 1 };
         }
         if( lsmash_bits_get( bits, 1 ) )    /* vui_timing_info_present_flag */
         {
             sps->vui.num_units_in_tick = lsmash_bits_get( bits, 32 );
             sps->vui.time_scale        = lsmash_bits_get( bits, 32 );
-            if( lsmash_bits_get( bits, 1 ) )    /* vui_poc_proportional_to_timing_flag */
-                nalu_get_exp_golomb_ue( bits ); /* vui_num_ticks_poc_diff_one_minus1 */
-            if( lsmash_bits_get( bits, 1 ) )    /* vui_hrd_parameters_present_flag */
+            if( lsmash_bits_get( bits, 1 ) )        /* vui_poc_proportional_to_timing_flag */
+                lsm_nalu_get_exp_golomb_ue( bits ); /* vui_num_ticks_poc_diff_one_minus1 */
+            if( lsmash_bits_get( bits, 1 ) )        /* vui_hrd_parameters_present_flag */
                 hevc_parse_hrd_parameters( bits, &sps->vui.hrd, 1, sps->max_sub_layers_minus1 );
         }
         else
@@ -1034,11 +1034,11 @@ static int hevc_parse_sps_minimally
             lsmash_bits_get( bits, 1 );     /* tiles_fixed_structure_flag */
             lsmash_bits_get( bits, 1 );     /* motion_vectors_over_pic_boundaries_flag */
             lsmash_bits_get( bits, 1 );     /* restricted_ref_pic_lists_flag */
-            sps->vui.min_spatial_segmentation_idc = nalu_get_exp_golomb_ue( bits );
-            nalu_get_exp_golomb_ue( bits ); /* max_bytes_per_pic_denom */
-            nalu_get_exp_golomb_ue( bits ); /* max_bits_per_min_cu_denom */
-            nalu_get_exp_golomb_ue( bits ); /* log2_max_mv_length_horizontal */
-            nalu_get_exp_golomb_ue( bits ); /* log2_max_mv_length_vertical */
+            sps->vui.min_spatial_segmentation_idc = lsm_nalu_get_exp_golomb_ue( bits );
+            lsm_nalu_get_exp_golomb_ue( bits ); /* max_bytes_per_pic_denom */
+            lsm_nalu_get_exp_golomb_ue( bits ); /* max_bits_per_min_cu_denom */
+            lsm_nalu_get_exp_golomb_ue( bits ); /* log2_max_mv_length_horizontal */
+            lsm_nalu_get_exp_golomb_ue( bits ); /* log2_max_mv_length_vertical */
         }
         else
             sps->vui.min_spatial_segmentation_idc = 0;
@@ -1060,7 +1060,7 @@ static int hevc_parse_sps_minimally
     return bits->bs->error ? LSMASH_ERR_NAMELESS : 0;
 }
 
-int hevc_parse_sps
+int lsm_hevc_parse_sps
 (
     hevc_info_t *info,
     uint8_t     *rbsp_buffer,
@@ -1132,36 +1132,36 @@ static int hevc_parse_pps_minimally
 )
 {
     uint64_t rbsp_size;
-    int err = nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, &rbsp_size, ebsp, ebsp_size );
+    int err = lsm_nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, &rbsp_size, ebsp, ebsp_size );
     if( err < 0 )
         return err;
     memset( pps, 0, SIZEOF_PPS_EXCLUDING_HEAP );
-    pps->pic_parameter_set_id                  = nalu_get_exp_golomb_ue( bits );
-    pps->seq_parameter_set_id                  = nalu_get_exp_golomb_ue( bits );
+    pps->pic_parameter_set_id                  = lsm_nalu_get_exp_golomb_ue( bits );
+    pps->seq_parameter_set_id                  = lsm_nalu_get_exp_golomb_ue( bits );
     pps->dependent_slice_segments_enabled_flag = lsmash_bits_get( bits, 1 );
     pps->output_flag_present_flag              = lsmash_bits_get( bits, 1 );
     pps->num_extra_slice_header_bits           = lsmash_bits_get( bits, 3 );
-    lsmash_bits_get( bits, 1 );         /* sign_data_hiding_enabled_flag */
-    lsmash_bits_get( bits, 1 );         /* cabac_init_present_flag */
-    nalu_get_exp_golomb_ue( bits );     /* num_ref_idx_l0_default_active_minus1 */
-    nalu_get_exp_golomb_ue( bits );     /* num_ref_idx_l1_default_active_minus1 */
-    nalu_get_exp_golomb_se( bits );     /* init_qp_minus26 */
-    lsmash_bits_get( bits, 1 );         /* constrained_intra_pred_flag */
-    lsmash_bits_get( bits, 1 );         /* transform_skip_enabled_flag */
-    if( lsmash_bits_get( bits, 1 ) )    /* cu_qp_delta_enabled_flag */
-        nalu_get_exp_golomb_ue( bits ); /* diff_cu_qp_delta_depth */
-    nalu_get_exp_golomb_se( bits );     /* cb_qp_offset */
-    nalu_get_exp_golomb_se( bits );     /* cr_qp_offset */
-    lsmash_bits_get( bits, 1 );         /* slice_chroma_qp_offsets_present_flag */
-    lsmash_bits_get( bits, 1 );         /* weighted_pred_flag */
-    lsmash_bits_get( bits, 1 );         /* weighted_bipred_flag */
-    lsmash_bits_get( bits, 1 )          /* transquant_bypass_enabled_flag */;
+    lsmash_bits_get( bits, 1 );             /* sign_data_hiding_enabled_flag */
+    lsmash_bits_get( bits, 1 );             /* cabac_init_present_flag */
+    lsm_nalu_get_exp_golomb_ue( bits );     /* num_ref_idx_l0_default_active_minus1 */
+    lsm_nalu_get_exp_golomb_ue( bits );     /* num_ref_idx_l1_default_active_minus1 */
+    lsm_nalu_get_exp_golomb_se( bits );     /* init_qp_minus26 */
+    lsmash_bits_get( bits, 1 );             /* constrained_intra_pred_flag */
+    lsmash_bits_get( bits, 1 );             /* transform_skip_enabled_flag */
+    if( lsmash_bits_get( bits, 1 ) )        /* cu_qp_delta_enabled_flag */
+        lsm_nalu_get_exp_golomb_ue( bits ); /* diff_cu_qp_delta_depth */
+    lsm_nalu_get_exp_golomb_se( bits );     /* cb_qp_offset */
+    lsm_nalu_get_exp_golomb_se( bits );     /* cr_qp_offset */
+    lsmash_bits_get( bits, 1 );             /* slice_chroma_qp_offsets_present_flag */
+    lsmash_bits_get( bits, 1 );             /* weighted_pred_flag */
+    lsmash_bits_get( bits, 1 );             /* weighted_bipred_flag */
+    lsmash_bits_get( bits, 1 )              /* transquant_bypass_enabled_flag */;
     pps->tiles_enabled_flag               = lsmash_bits_get( bits, 1 );
     pps->entropy_coding_sync_enabled_flag = lsmash_bits_get( bits, 1 );
     return bits->bs->error ? LSMASH_ERR_NAMELESS : 0;
 }
 
-int hevc_parse_pps
+int lsm_hevc_parse_pps
 (
     hevc_info_t *info,
     uint8_t     *rbsp_buffer,
@@ -1188,8 +1188,8 @@ int hevc_parse_pps
     hevc_sps_t *sps = &info->sps;
     if( pps->tiles_enabled_flag )
     {
-        pps->num_tile_columns_minus1 = nalu_get_exp_golomb_ue( bits );
-        pps->num_tile_rows_minus1    = nalu_get_exp_golomb_ue( bits );
+        pps->num_tile_columns_minus1 = lsm_nalu_get_exp_golomb_ue( bits );
+        pps->num_tile_rows_minus1    = lsm_nalu_get_exp_golomb_ue( bits );
         if( pps->num_tile_columns_minus1 >= sps->PicWidthInCtbsY
          || pps->num_tile_rows_minus1    >= sps->PicHeightInCtbsY )
         {
@@ -1212,13 +1212,13 @@ int hevc_parse_pps
             pps->colWidth[ pps->num_tile_columns_minus1 ] = sps->PicWidthInCtbsY;
             for( uint64_t i = 0; i < pps->num_tile_columns_minus1; i++ )
             {
-                pps->colWidth[i] = nalu_get_exp_golomb_ue( bits ) + 1;      /* column_width_minus1[i] */
+                pps->colWidth[i] = lsm_nalu_get_exp_golomb_ue( bits ) + 1;      /* column_width_minus1[i] */
                 pps->colWidth[ pps->num_tile_columns_minus1 ] -= pps->colWidth[i];
             }
             pps->rowHeight[ pps->num_tile_rows_minus1 ] = sps->PicHeightInCtbsY;
             for( uint64_t j = 0; j < pps->num_tile_rows_minus1; j++ )
             {
-                pps->rowHeight[j] = nalu_get_exp_golomb_ue( bits ) + 1;     /* row_height_minus1  [j] */
+                pps->rowHeight[j] = lsm_nalu_get_exp_golomb_ue( bits ) + 1;     /* row_height_minus1  [j] */
                 pps->rowHeight[ pps->num_tile_rows_minus1 ] -= pps->rowHeight[j];
             }
         }
@@ -1256,7 +1256,7 @@ fail:
     return err;
 }
 
-int hevc_parse_sei
+int lsm_hevc_parse_sei
 (
     lsmash_bits_t      *bits,
     hevc_vps_t         *vps,
@@ -1269,7 +1269,7 @@ int hevc_parse_sei
 )
 {
     uint64_t rbsp_size;
-    int err = nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, &rbsp_size, ebsp, ebsp_size );
+    int err = lsm_nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, &rbsp_size, ebsp, ebsp_size );
     if( err < 0 )
         return err;
     uint8_t *rbsp_start = rbsp_buffer;
@@ -1321,16 +1321,16 @@ int hevc_parse_sei
                         lsmash_bits_get( bits, hrd->dpb_output_delay_du_length );   /* pic_dpb_output_du_delay */
                         if( hrd->sub_pic_cpb_params_in_pic_timing_sei_flag )
                         {
-                            uint64_t num_decoding_units_minus1 = nalu_get_exp_golomb_ue( bits );
+                            uint64_t num_decoding_units_minus1 = lsm_nalu_get_exp_golomb_ue( bits );
                             int du_common_cpb_removal_delay_flag = lsmash_bits_get( bits, 1 );
                             if( du_common_cpb_removal_delay_flag )
                                 /* du_common_cpb_removal_delay_increment_minus1 */
                                 lsmash_bits_get( bits, hrd->du_cpb_removal_delay_increment_length );
                             for( uint64_t i = 0; i <= num_decoding_units_minus1; i++ )
                             {
-                                nalu_get_exp_golomb_ue( bits );         /* num_nalus_in_du_minus1 */
+                                lsm_nalu_get_exp_golomb_ue( bits );         /* num_nalus_in_du_minus1 */
                                 if( !du_common_cpb_removal_delay_flag && i < num_decoding_units_minus1 )
-                                    nalu_get_exp_golomb_ue( bits );     /* du_cpb_removal_delay_increment_minus1 */
+                                    lsm_nalu_get_exp_golomb_ue( bits );     /* du_cpb_removal_delay_increment_minus1 */
                             }
                         }
                     }
@@ -1346,7 +1346,7 @@ int hevc_parse_sei
             {
                 /* recovery_point */
                 sei->recovery_point.present          = 1;
-                sei->recovery_point.recovery_poc_cnt = nalu_get_exp_golomb_se( bits );
+                sei->recovery_point.recovery_poc_cnt = lsm_nalu_get_exp_golomb_se( bits );
                 lsmash_bits_get( bits, 1 );     /* exact_match_flag */
                 sei->recovery_point.broken_link_flag = lsmash_bits_get( bits, 1 );
             }
@@ -1426,7 +1426,7 @@ skip_sei_message:
     return bits->bs->error ? LSMASH_ERR_NAMELESS : 0;
 }
 
-int hevc_parse_slice_segment_header
+int lsm_hevc_parse_slice_segment_header
 (
     hevc_info_t        *info,
     hevc_nalu_header_t *nuh,
@@ -1437,7 +1437,7 @@ int hevc_parse_slice_segment_header
 {
     lsmash_bits_t *bits = info->bits;
     uint64_t rbsp_size;
-    int err = nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, &rbsp_size, ebsp, LSMASH_MIN( ebsp_size, 50 ) );
+    int err = lsm_nalu_import_rbsp_from_ebsp( bits, rbsp_buffer, &rbsp_size, ebsp, LSMASH_MIN( ebsp_size, 50 ) );
     if( err < 0 )
         return err;
     hevc_slice_info_t *slice = &info->slice;
@@ -1448,7 +1448,7 @@ int hevc_parse_slice_segment_header
     if( nuh->nal_unit_type >= HEVC_NALU_TYPE_BLA_W_LP
      && nuh->nal_unit_type <= HEVC_NALU_TYPE_RSV_IRAP_VCL23 )
         lsmash_bits_get( bits, 1 );     /* no_output_of_prior_pics_flag */
-    slice->pic_parameter_set_id = nalu_get_exp_golomb_ue( bits );
+    slice->pic_parameter_set_id = lsm_nalu_get_exp_golomb_ue( bits );
     /* Get PPS by slice_pic_parameter_set_id. */
     hevc_pps_t *pps = hevc_get_pps( info->pps_list, slice->pic_parameter_set_id );
     if( !pps )
@@ -1475,17 +1475,17 @@ int hevc_parse_slice_segment_header
          * The values of the slice segment header of dependent slice segment are inferred from the values
          * for the preceding independent slice segment in decoding order, if some of the values are not present. */
         for( int i = 0; i < pps->num_extra_slice_header_bits; i++ )
-            lsmash_bits_get( bits, 1 );         /* slice_reserved_flag[i] */
-        slice->type = nalu_get_exp_golomb_ue( bits );
+            lsmash_bits_get( bits, 1 );             /* slice_reserved_flag[i] */
+        slice->type = lsm_nalu_get_exp_golomb_ue( bits );
         if( pps->output_flag_present_flag )
-            lsmash_bits_get( bits, 1 );         /* pic_output_flag */
+            lsmash_bits_get( bits, 1 );             /* pic_output_flag */
         if( sps->separate_colour_plane_flag )
-            lsmash_bits_get( bits, 1 );         /* colour_plane_id */
+            lsmash_bits_get( bits, 1 );             /* colour_plane_id */
         if( nuh->nal_unit_type != HEVC_NALU_TYPE_IDR_W_RADL
          && nuh->nal_unit_type != HEVC_NALU_TYPE_IDR_N_LP )
         {
             slice->pic_order_cnt_lsb = lsmash_bits_get( bits, sps->log2_max_pic_order_cnt_lsb );
-            if( !lsmash_bits_get( bits, 1 ) )   /* short_term_ref_pic_set_sps_flag */
+            if( !lsmash_bits_get( bits, 1 ) )       /* short_term_ref_pic_set_sps_flag */
             {
                 if( (err = hevc_short_term_ref_pic_set( bits, sps, sps->num_short_term_ref_pic_sets )) < 0 )
                     return err;
@@ -1498,8 +1498,8 @@ int hevc_parse_slice_segment_header
             }
             if( sps->long_term_ref_pics_present_flag )
             {
-                uint64_t num_long_term_sps  = sps->num_long_term_ref_pics_sps > 0 ? nalu_get_exp_golomb_ue( bits ) : 0;
-                uint64_t num_long_term_pics = nalu_get_exp_golomb_ue( bits );
+                uint64_t num_long_term_sps  = sps->num_long_term_ref_pics_sps > 0 ? lsm_nalu_get_exp_golomb_ue( bits ) : 0;
+                uint64_t num_long_term_pics = lsm_nalu_get_exp_golomb_ue( bits );
                 for( uint64_t i = 0; i < num_long_term_sps + num_long_term_pics; i++ )
                 {
                     if( i < num_long_term_sps )
@@ -1514,7 +1514,7 @@ int hevc_parse_slice_segment_header
                         lsmash_bits_get( bits, 1 );                                 /* used_by_curr_pic_lt_flag[i] */
                     }
                     if( lsmash_bits_get( bits, 1 ) )                                /* delta_poc_msb_present_flag[i] */
-                        nalu_get_exp_golomb_ue( bits );                             /* delta_poc_msb_cycle_lt    [i] */
+                        lsm_nalu_get_exp_golomb_ue( bits );                         /* delta_poc_msb_cycle_lt    [i] */
                 }
             }
             if( sps->temporal_mvp_enabled_flag )
@@ -1563,7 +1563,7 @@ static int hevc_get_sps_id
     bs.buffer.alloc = 128;
     lsmash_bits_init( &bits, &bs );
     uint64_t rbsp_size;
-    int err = nalu_import_rbsp_from_ebsp( &bits, rbsp_buffer, &rbsp_size, ps_ebsp, LSMASH_MIN( ps_ebsp_length, 128 ) );
+    int err = lsm_nalu_import_rbsp_from_ebsp( &bits, rbsp_buffer, &rbsp_size, ps_ebsp, LSMASH_MIN( ps_ebsp_length, 128 ) );
     if( err < 0 )
         return err;
     /* Skip sps_video_parameter_set_id and sps_temporal_id_nesting_flag. */
@@ -1571,7 +1571,7 @@ static int hevc_get_sps_id
     /* profile_tier_level() costs at most 688 bits. */
     hevc_ptl_t sps_ptl;
     hevc_parse_profile_tier_level( &bits, &sps_ptl, sps_max_sub_layers_minus1 );
-    uint64_t sps_seq_parameter_set_id = nalu_get_exp_golomb_ue( &bits );
+    uint64_t sps_seq_parameter_set_id = lsm_nalu_get_exp_golomb_ue( &bits );
     if( sps_seq_parameter_set_id > HEVC_MAX_SPS_ID )
         return LSMASH_ERR_INVALID_DATA;
     *ps_id = sps_seq_parameter_set_id;
@@ -1596,17 +1596,17 @@ static int hevc_get_pps_id
     bs.buffer.alloc = 3;
     lsmash_bits_init( &bits, &bs );
     uint64_t rbsp_size;
-    int err = nalu_import_rbsp_from_ebsp( &bits, rbsp_buffer, &rbsp_size, ps_ebsp, LSMASH_MIN( ps_ebsp_length, 3 ) );
+    int err = lsm_nalu_import_rbsp_from_ebsp( &bits, rbsp_buffer, &rbsp_size, ps_ebsp, LSMASH_MIN( ps_ebsp_length, 3 ) );
     if( err < 0 )
         return err;
-    uint64_t pic_parameter_set_id = nalu_get_exp_golomb_ue( &bits );
+    uint64_t pic_parameter_set_id = lsm_nalu_get_exp_golomb_ue( &bits );
     if( pic_parameter_set_id > HEVC_MAX_PPS_ID )
         return LSMASH_ERR_INVALID_DATA;
     *ps_id = pic_parameter_set_id;
     return bs.error ? LSMASH_ERR_NAMELESS : 0;
 }
 
-static inline int hevc_get_ps_id
+static int hevc_get_ps_id
 (
     uint8_t                  *ps_ebsp,
     uint32_t                  ps_ebsp_length,
@@ -1622,7 +1622,7 @@ static inline int hevc_get_ps_id
     return get_ps_id ? get_ps_id( ps_ebsp, ps_ebsp_length, ps_id ) : LSMASH_ERR_INVALID_DATA;
 }
 
-static inline hevc_parameter_array_t *hevc_get_parameter_set_array
+static hevc_parameter_array_t *hevc_get_parameter_set_array
 (
     lsmash_hevc_specific_parameters_t *param,
     lsmash_hevc_dcr_nalu_type          ps_type
@@ -1635,7 +1635,7 @@ static inline hevc_parameter_array_t *hevc_get_parameter_set_array
     return &param->parameter_arrays->ps_array[ps_type];
 }
 
-static inline lsmash_entry_list_t *hevc_get_parameter_set_list
+static lsmash_entry_list_t *hevc_get_parameter_set_list
 (
     lsmash_hevc_specific_parameters_t *param,
     lsmash_hevc_dcr_nalu_type          ps_type
@@ -1680,7 +1680,7 @@ static lsmash_entry_t *hevc_get_ps_entry_from_param
     return NULL;
 }
 
-static inline void  hevc_update_picture_type
+static void hevc_update_picture_type
 (
     hevc_picture_info_t *picture,
     hevc_slice_info_t   *slice
@@ -1715,7 +1715,7 @@ static inline void  hevc_update_picture_type
 }
 
 /* Shall be called at least once per picture. */
-void hevc_update_picture_info_for_slice
+void lsm_hevc_update_picture_info_for_slice
 (
     hevc_info_t         *info,
     hevc_picture_info_t *picture,
@@ -1743,7 +1743,7 @@ void hevc_update_picture_info_for_slice
 }
 
 /* Shall be called exactly once per picture. */
-void hevc_update_picture_info
+void lsm_hevc_update_picture_info
 (
     hevc_info_t         *info,
     hevc_picture_info_t *picture,
@@ -1763,7 +1763,7 @@ void hevc_update_picture_info
     picture->TemporalId           = slice->TemporalId;
     picture->pic_parameter_set_id = slice->pic_parameter_set_id;
     picture->poc_lsb              = slice->pic_order_cnt_lsb;
-    hevc_update_picture_info_for_slice( info, picture, slice );
+    lsm_hevc_update_picture_info_for_slice( info, picture, slice );
     picture->independent = (picture->type == HEVC_PICTURE_TYPE_I);
     picture->field_coded = sps->vui.field_seq_flag;
     if( sei->pic_timing.present )
@@ -1819,7 +1819,7 @@ static uint64_t hevc_get_ctb_address_in_tile_scan
     return CtbAddrInTs;
 }
 
-int hevc_find_au_delimit_by_slice_info
+int lsm_hevc_find_au_delimit_by_slice_info
 (
     hevc_info_t       *info,
     hevc_slice_info_t *slice,
@@ -1857,7 +1857,7 @@ int hevc_find_au_delimit_by_slice_info
     return 1;
 }
 
-int hevc_find_au_delimit_by_nalu_type
+int lsm_hevc_find_au_delimit_by_nalu_type
 (
     uint8_t nalu_type,
     uint8_t prev_nalu_type
@@ -1889,7 +1889,7 @@ int hevc_find_au_delimit_by_nalu_type
         return (prev_nalu_type == HEVC_NALU_TYPE_EOB);
 }
 
-int hevc_supplement_buffer
+int lsm_hevc_supplement_buffer
 (
     hevc_stream_buffer_t *sb,
     hevc_access_unit_t   *au,
@@ -2022,7 +2022,7 @@ uint8_t *lsmash_create_hevc_specific_info
     return data;
 }
 
-static inline int hevc_validate_dcr_nalu_type
+static int hevc_validate_dcr_nalu_type
 (
     lsmash_hevc_dcr_nalu_type ps_type,
     void                     *ps_data,
@@ -2215,7 +2215,7 @@ lsmash_dcr_nalu_appendable lsmash_check_hevc_dcr_nalu_appendable
     lsmash_entry_list_t *ps_list = hevc_get_parameter_set_list( param, ps_type );
     if( !ps_list || !ps_list->head )
         return DCR_NALU_APPEND_POSSIBLE;    /* No parameter set */
-    switch( nalu_check_same_ps_existence( ps_list, ps_data, ps_length ) )
+    switch( lsm_nalu_check_same_ps_existence( ps_list, ps_data, ps_length ) )
     {
         case 0  : break;
         case 1  : return DCR_NALU_APPEND_DUPLICATED;    /* The same parameter set already exists. */
@@ -2223,7 +2223,7 @@ lsmash_dcr_nalu_appendable lsmash_check_hevc_dcr_nalu_appendable
     }
     /* Check the number of parameter sets in HEVC Decoder Configuration Record. */
     uint32_t ps_count;
-    if( nalu_get_ps_count( ps_list, &ps_count ) < 0 )
+    if( lsm_nalu_get_ps_count( ps_list, &ps_count ) < 0 )
         return DCR_NALU_APPEND_ERROR;
     if( (ps_type == HEVC_DCR_NALU_TYPE_VPS        && ps_count >= HEVC_MAX_VPS_ID)
      || (ps_type == HEVC_DCR_NALU_TYPE_SPS        && ps_count >= HEVC_MAX_SPS_ID)
@@ -2247,7 +2247,7 @@ lsmash_dcr_nalu_appendable lsmash_check_hevc_dcr_nalu_appendable
             return DCR_NALU_APPEND_ERROR;
         uint32_t max_ps_length;
         uint8_t *rbsp_buffer;
-        if( nalu_get_max_ps_length( ps_list, &max_ps_length ) < 0
+        if( lsm_nalu_get_max_ps_length( ps_list, &max_ps_length ) < 0
          || (rbsp_buffer = lsmash_malloc( LSMASH_MAX( max_ps_length, ps_length ) )) == NULL )
         {
             lsmash_bits_adhoc_cleanup( bits );
@@ -2264,7 +2264,7 @@ lsmash_dcr_nalu_appendable lsmash_check_hevc_dcr_nalu_appendable
     }
 }
 
-static inline void hevc_specific_parameters_ready
+static void hevc_specific_parameters_ready
 (
     lsmash_hevc_specific_parameters_t *param
 )
@@ -2278,7 +2278,7 @@ static inline void hevc_specific_parameters_ready
     param->temporalIdNested                    = 1;
 }
 
-static inline void hevc_specific_parameters_update_ptl
+static void hevc_specific_parameters_update_ptl
 (
     lsmash_hevc_specific_parameters_t *param,
     hevc_ptl_t                        *ptl
@@ -2296,7 +2296,7 @@ static inline void hevc_specific_parameters_update_ptl
     param->general_level_idc                    = LSMASH_MAX( param->general_level_idc, ptl->general.level_idc );
 }
 
-static inline void hevc_reorder_parameter_set_ascending_id
+static void hevc_reorder_parameter_set_ascending_id
 (
     lsmash_hevc_specific_parameters_t *param,
     lsmash_hevc_dcr_nalu_type          ps_type,
@@ -2376,12 +2376,12 @@ int lsmash_append_hevc_dcr_nalu
      || ps_type == HEVC_DCR_NALU_TYPE_SUFFIX_SEI )
     {
         /* Append a SEI anyway. */
-        isom_dcr_ps_entry_t *ps = isom_create_ps_entry( ps_data, ps_length );
+        isom_dcr_ps_entry_t *ps = lsm_nalu_create_ps_entry( ps_data, ps_length );
         if( !ps )
             return LSMASH_ERR_MEMORY_ALLOC;
         if( lsmash_list_add_entry( ps_list, ps ) < 0 )
         {
-            isom_remove_dcr_ps( ps );
+            lsm_nalu_remove_dcr_ps( ps );
             return LSMASH_ERR_MEMORY_ALLOC;
         }
         return 0;
@@ -2417,12 +2417,12 @@ int lsmash_append_hevc_dcr_nalu
     else
     {
         /* Create a new parameter set and append it into the list. */
-        ps = isom_create_ps_entry( ps_data, ps_length );
+        ps = lsm_nalu_create_ps_entry( ps_data, ps_length );
         if( !ps )
             return LSMASH_ERR_MEMORY_ALLOC;
         if( lsmash_list_add_entry( ps_list, ps ) < 0 )
         {
-            isom_remove_dcr_ps( ps );
+            lsm_nalu_remove_dcr_ps( ps );
             return LSMASH_ERR_MEMORY_ALLOC;
         }
         invoke_reorder = 1;
@@ -2430,7 +2430,7 @@ int lsmash_append_hevc_dcr_nalu
     lsmash_bits_t *bits        = NULL;
     uint8_t       *rbsp_buffer = NULL;
     uint32_t       ps_count;
-    if( (err = nalu_get_ps_count( ps_list, &ps_count )) < 0 )
+    if( (err = lsm_nalu_get_ps_count( ps_list, &ps_count )) < 0 )
         goto fail;
     if( (bits = lsmash_bits_adhoc_create()) == NULL
      || (rbsp_buffer = lsmash_malloc( ps_length )) == NULL )
@@ -2452,7 +2452,7 @@ int lsmash_append_hevc_dcr_nalu
                 /* Initialize if not initialized yet. */
                 lsmash_entry_list_t *sps_list = hevc_get_parameter_set_list( param, HEVC_DCR_NALU_TYPE_SPS );
                 uint32_t sps_count;
-                if( (err = nalu_get_ps_count( sps_list, &sps_count )) < 0 )
+                if( (err = lsm_nalu_get_ps_count( sps_list, &sps_count )) < 0 )
                     goto fail;
                 if( sps_count == 0 )
                     hevc_specific_parameters_ready( param );
@@ -2473,7 +2473,7 @@ int lsmash_append_hevc_dcr_nalu
                 /* Initialize if not initialized yet. */
                 lsmash_entry_list_t *vps_list = hevc_get_parameter_set_list( param, HEVC_DCR_NALU_TYPE_VPS );
                 uint32_t vps_count;
-                if( (err = nalu_get_ps_count( vps_list, &vps_count )) < 0 )
+                if( (err = lsm_nalu_get_ps_count( vps_list, &vps_count )) < 0 )
                     goto fail;
                 if( vps_count == 0 )
                     hevc_specific_parameters_ready( param );
@@ -2604,7 +2604,7 @@ clean:
     return err;
 }
 
-int hevc_try_to_append_dcr_nalu
+int lsm_hevc_try_to_append_dcr_nalu
 (
     hevc_info_t              *info,
     lsmash_hevc_dcr_nalu_type ps_type,
@@ -2634,21 +2634,21 @@ int hevc_try_to_append_dcr_nalu
     switch( ps_type )
     {
         case HEVC_DCR_NALU_TYPE_VPS :
-            if( (err = hevc_parse_vps( info, info->buffer.rbsp,
-                                       ps_data   + HEVC_MIN_NALU_HEADER_LENGTH,
-                                       ps_length - HEVC_MIN_NALU_HEADER_LENGTH )) < 0 )
+            if( (err = lsm_hevc_parse_vps( info, info->buffer.rbsp,
+                                           ps_data   + HEVC_MIN_NALU_HEADER_LENGTH,
+                                           ps_length - HEVC_MIN_NALU_HEADER_LENGTH )) < 0 )
                 return err;
             break;
         case HEVC_DCR_NALU_TYPE_SPS :
-            if( (err = hevc_parse_sps( info, info->buffer.rbsp,
-                                       ps_data   + HEVC_MIN_NALU_HEADER_LENGTH,
-                                       ps_length - HEVC_MIN_NALU_HEADER_LENGTH )) < 0 )
+            if( (err = lsm_hevc_parse_sps( info, info->buffer.rbsp,
+                                           ps_data   + HEVC_MIN_NALU_HEADER_LENGTH,
+                                           ps_length - HEVC_MIN_NALU_HEADER_LENGTH )) < 0 )
                 return err;
             break;
         case HEVC_DCR_NALU_TYPE_PPS :
-            if( (err = hevc_parse_pps( info, info->buffer.rbsp,
-                                       ps_data   + HEVC_MIN_NALU_HEADER_LENGTH,
-                                       ps_length - HEVC_MIN_NALU_HEADER_LENGTH )) < 0 )
+            if( (err = lsm_hevc_parse_pps( info, info->buffer.rbsp,
+                                           ps_data   + HEVC_MIN_NALU_HEADER_LENGTH,
+                                           ps_length - HEVC_MIN_NALU_HEADER_LENGTH )) < 0 )
                 return err;
             break;
         default :
@@ -2693,7 +2693,7 @@ static int hevc_move_dcr_nalu_entry
             {
                 /* Replace the old parameter set with the new one. */
                 assert( dst_entry->data != src_entry->data );
-                isom_remove_dcr_ps( dst_ps );
+                lsm_nalu_remove_dcr_ps( dst_ps );
                 dst_entry->data = src_entry->data;
                 src_entry->data = NULL;
                 break;
@@ -2710,7 +2710,7 @@ static int hevc_move_dcr_nalu_entry
     return 0;
 }
 
-int hevc_move_pending_hvcC_param
+int lsm_hevc_move_pending_hvcC_param
 (
     hevc_info_t *info
 )
@@ -2828,17 +2828,17 @@ static int hevc_parse_succeeded
     }
     else
         ret = LSMASH_ERR_INVALID_DATA;
-    hevc_cleanup_parser( info );
+    lsm_hevc_cleanup_parser( info );
     return ret;
 }
 
-static inline int hevc_parse_failed
+static int hevc_parse_failed
 (
     hevc_info_t *info,
     int          ret
 )
 {
-    hevc_cleanup_parser( info );
+    lsm_hevc_cleanup_parser( info );
     return ret;
 }
 
@@ -2856,12 +2856,12 @@ int lsmash_setup_hevc_specific_parameters_from_access_unit
     int err = lsmash_bs_set_empty_stream( bs, data, data_length );
     if( err < 0 )
         return err;
-    uint64_t sc_head_pos = nalu_find_first_start_code( bs );
+    uint64_t sc_head_pos = lsm_nalu_find_first_start_code( bs );
     if( sc_head_pos == NALU_NO_START_CODE_FOUND )
         return LSMASH_ERR_INVALID_DATA;
     else if( sc_head_pos == NALU_IO_ERROR )
         return LSMASH_ERR_IO;
-    if( (err = hevc_setup_parser( info, 1 )) < 0 )
+    if( (err = lsm_hevc_setup_parser( info, 1 )) < 0 )
         return hevc_parse_failed( info, err );
     hevc_stream_buffer_t *sb    = &info->buffer;
     hevc_slice_info_t    *slice = &info->slice;
@@ -2870,7 +2870,7 @@ int lsmash_setup_hevc_specific_parameters_from_access_unit
         hevc_nalu_header_t nuh;
         uint64_t start_code_length;
         uint64_t trailing_zero_bytes;
-        uint64_t nalu_length = hevc_find_next_start_code( bs, &nuh, &start_code_length, &trailing_zero_bytes );
+        uint64_t nalu_length = lsm_hevc_find_next_start_code( bs, &nuh, &start_code_length, &trailing_zero_bytes );
         if( nalu_length == NALU_NO_START_CODE_FOUND )
             /* For the last NALU. This NALU already has been parsed. */
             return hevc_parse_succeeded( info, param );
@@ -2892,7 +2892,7 @@ int lsmash_setup_hevc_specific_parameters_from_access_unit
             /* Increase the buffer if needed. */
             uint64_t possible_au_length = NALU_DEFAULT_NALU_LENGTH_SIZE + nalu_length;
             if( sb->bank->buffer_size < possible_au_length
-             && (err = hevc_supplement_buffer( sb, NULL, 2 * possible_au_length )) < 0 )
+             && (err = lsm_hevc_supplement_buffer( sb, NULL, 2 * possible_au_length )) < 0 )
                 return hevc_parse_failed( info, err );
             /* Get the EBSP of the current NALU here. */
             uint8_t *nalu = lsmash_bs_get_buffer_data( bs ) + start_code_length;
@@ -2900,12 +2900,12 @@ int lsmash_setup_hevc_specific_parameters_from_access_unit
             {
                 /* VCL NALU (slice) */
                 hevc_slice_info_t prev_slice = *slice;
-                if( (err = hevc_parse_slice_segment_header( info, &nuh, sb->rbsp, nalu + nuh.length, nalu_length - nuh.length )) < 0 )
+                if( (err = lsm_hevc_parse_slice_segment_header( info, &nuh, sb->rbsp, nalu + nuh.length, nalu_length - nuh.length )) < 0 )
                     return hevc_parse_failed( info, err );
                 if( prev_slice.present )
                 {
                     /* Check whether the AU that contains the previous VCL NALU completed or not. */
-                    if( hevc_find_au_delimit_by_slice_info( info, slice, &prev_slice ) )
+                    if( lsm_hevc_find_au_delimit_by_slice_info( info, slice, &prev_slice ) )
                         /* The current NALU is the first VCL NALU of the primary coded picture of a new AU.
                          * Therefore, the previous slice belongs to that new AU. */
                         return hevc_parse_succeeded( info, param );
@@ -2914,21 +2914,21 @@ int lsmash_setup_hevc_specific_parameters_from_access_unit
             }
             else
             {
-                if( hevc_find_au_delimit_by_nalu_type( nalu_type, info->prev_nalu_type ) )
+                if( lsm_hevc_find_au_delimit_by_nalu_type( nalu_type, info->prev_nalu_type ) )
                     /* The last slice belongs to the AU you want at this time. */
                     return hevc_parse_succeeded( info, param );
                 switch( nalu_type )
                 {
                     case HEVC_NALU_TYPE_VPS :
-                        if( (err = hevc_try_to_append_dcr_nalu( info, HEVC_DCR_NALU_TYPE_VPS, nalu, nalu_length )) < 0 )
+                        if( (err = lsm_hevc_try_to_append_dcr_nalu( info, HEVC_DCR_NALU_TYPE_VPS, nalu, nalu_length )) < 0 )
                             return hevc_parse_failed( info, err );
                         break;
                     case HEVC_NALU_TYPE_SPS :
-                        if( (err = hevc_try_to_append_dcr_nalu( info, HEVC_DCR_NALU_TYPE_SPS, nalu, nalu_length )) < 0 )
+                        if( (err = lsm_hevc_try_to_append_dcr_nalu( info, HEVC_DCR_NALU_TYPE_SPS, nalu, nalu_length )) < 0 )
                             return hevc_parse_failed( info, err );
                         break;
                     case HEVC_NALU_TYPE_PPS :
-                        if( (err = hevc_try_to_append_dcr_nalu( info, HEVC_DCR_NALU_TYPE_PPS, nalu, nalu_length )) < 0 )
+                        if( (err = lsm_hevc_try_to_append_dcr_nalu( info, HEVC_DCR_NALU_TYPE_PPS, nalu, nalu_length )) < 0 )
                             return hevc_parse_failed( info, err );
                         break;
                     default :
@@ -2948,7 +2948,7 @@ int lsmash_setup_hevc_specific_parameters_from_access_unit
     }
 }
 
-int hevc_construct_specific_parameters
+int lsm_hevc_construct_specific_parameters
 (
     lsmash_codec_specific_t *dst,
     lsmash_codec_specific_t *src
@@ -3009,7 +3009,7 @@ int hevc_construct_specific_parameters
         temp8 = lsmash_bs_get_byte( bs );
         param_array.array_completeness = (temp8 >> 7) & 0x01;
         param_array.NAL_unit_type      =  temp8       & 0x3F;
-        lsmash_list_init(param_array.list, isom_remove_dcr_ps);
+        lsmash_list_init(param_array.list, lsm_nalu_remove_dcr_ps);
         param_array.list->entry_count  = lsmash_bs_get_be16( bs );
         if( param_array.NAL_unit_type == HEVC_NALU_TYPE_VPS
          || param_array.NAL_unit_type == HEVC_NALU_TYPE_SPS
@@ -3017,7 +3017,7 @@ int hevc_construct_specific_parameters
          || param_array.NAL_unit_type == HEVC_NALU_TYPE_PREFIX_SEI
          || param_array.NAL_unit_type == HEVC_NALU_TYPE_SUFFIX_SEI )
         {
-            if( (err = nalu_get_dcr_ps( bs, param_array.list, param_array.list->entry_count )) < 0 )
+            if( (err = lsm_nalu_get_dcr_ps( bs, param_array.list, param_array.list->entry_count )) < 0 )
                 goto fail;
         }
         else
@@ -3055,7 +3055,7 @@ fail:
     return err;
 }
 
-static uint8_t derive_dovi_level
+static uint8_t hevc_derive_dovi_level
 (
     uint32_t timescale,
     uint32_t timebase,
@@ -3121,10 +3121,10 @@ void lsmash_dovi_set_config
 
     data->el_present_flag = dv_profile == 4 || dv_profile == 7;
 
-    data->dv_level = derive_dovi_level(timescale, timebase, width, height);
+    data->dv_level = hevc_derive_dovi_level(timescale, timebase, width, height);
 }
 
-int hevc_print_dovi
+int lsm_hevc_print_dovi
 (
     FILE          *fp,
     lsmash_file_t *file,
@@ -3157,7 +3157,7 @@ int hevc_print_dovi
     return 0;
 }
 
-int hevc_print_codec_specific
+int lsm_hevc_print_codec_specific
 (
     FILE          *fp,
     lsmash_file_t *file,
@@ -3260,7 +3260,7 @@ int hevc_print_codec_specific
     return 0;
 }
 
-static inline int hevc_copy_dcr_nalu_array
+static int hevc_copy_dcr_nalu_array
 (
     lsmash_hevc_specific_parameters_t *dst_data,
     lsmash_hevc_specific_parameters_t *src_data,
@@ -3279,7 +3279,7 @@ static inline int hevc_copy_dcr_nalu_array
         isom_dcr_ps_entry_t *src_ps = (isom_dcr_ps_entry_t *)entry->data;
         if( !src_ps || src_ps->unused )
             continue;
-        isom_dcr_ps_entry_t *dst_ps = isom_create_ps_entry( src_ps->nalUnit, src_ps->nalUnitLength );
+        isom_dcr_ps_entry_t *dst_ps = lsm_nalu_create_ps_entry( src_ps->nalUnit, src_ps->nalUnitLength );
         if( !dst_ps )
         {
             hevc_deallocate_parameter_arrays( dst_data );
@@ -3288,14 +3288,14 @@ static inline int hevc_copy_dcr_nalu_array
         if( lsmash_list_add_entry( dst_ps_list, dst_ps ) < 0 )
         {
             hevc_deallocate_parameter_arrays( dst_data );
-            isom_remove_dcr_ps( dst_ps );
+            lsm_nalu_remove_dcr_ps( dst_ps );
             return LSMASH_ERR_MEMORY_ALLOC;
         }
     }
     return 0;
 }
 
-int hevc_copy_codec_specific
+int lsm_hevc_copy_codec_specific
 (
     lsmash_codec_specific_t *dst,
     lsmash_codec_specific_t *src
@@ -3321,7 +3321,7 @@ int hevc_copy_codec_specific
     return 0;
 }
 
-void lhevc_free_arrays( lsmash_lhevc_paramater_arrays_t *array, uint8_t numOfArrays )
+void lsm_hevc_free_lhevc_arrays( lsmash_lhevc_paramater_arrays_t *array, uint8_t numOfArrays )
 {
     if( array )
     {
@@ -3335,7 +3335,7 @@ void lhevc_free_arrays( lsmash_lhevc_paramater_arrays_t *array, uint8_t numOfArr
     }
 }
 
-int lhevc_copy_codec_specific
+int lsm_hevc_copy_lhevc_codec_specific
 (
     lsmash_codec_specific_t *dst,
     lsmash_codec_specific_t *src
@@ -3345,7 +3345,7 @@ int lhevc_copy_codec_specific
     assert( dst && dst->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED && dst->data.structured );
     lsmash_lhevc_specific_parameters_t *src_data = (lsmash_lhevc_specific_parameters_t *)src->data.structured;
     lsmash_lhevc_specific_parameters_t *dst_data = (lsmash_lhevc_specific_parameters_t *)dst->data.structured;
-    lhevc_free_arrays( dst_data->array, dst_data->numOfArrays );
+    lsm_hevc_free_lhevc_arrays( dst_data->array, dst_data->numOfArrays );
     dst_data->array = NULL;
     *dst_data = *src_data;
     if( !src_data->array )
@@ -3371,7 +3371,7 @@ int lhevc_copy_codec_specific
     return 0;
 }
 
-void lhevc_destruct_specific_data
+void lsm_hevc_destruct_lhevc_specific_data
 (
     void *data
 )
@@ -3379,11 +3379,11 @@ void lhevc_destruct_specific_data
     if( !data )
         return;
     lsmash_lhevc_specific_parameters_t *cs = (lsmash_lhevc_specific_parameters_t *)data;
-    lhevc_free_arrays( cs->array, cs->numOfArrays );
+    lsm_hevc_free_lhevc_arrays( cs->array, cs->numOfArrays );
     lsmash_free( data );
 }
 
-int lhevc_print_codec_specific
+int lsm_hevc_print_lhevc_codec_specific
 (
     FILE          *fp,
     lsmash_file_t *file,

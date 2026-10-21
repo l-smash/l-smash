@@ -104,31 +104,31 @@ struct vc1_info_tag
     vc1_stream_buffer_t   buffer;
 };
 
-int vc1_setup_parser
+int lsm_vc1_setup_parser
 (
     vc1_info_t *info,
     int         parse_only
 );
 
-uint64_t vc1_find_next_start_code_prefix
+uint64_t lsm_vc1_find_next_start_code_prefix
 (
     lsmash_bs_t *bs,
     uint8_t     *bdu_type,
     uint64_t    *trailing_zero_bytes
 );
 
-int vc1_check_next_start_code_suffix
+int lsm_vc1_check_next_start_code_suffix
 (
     lsmash_bs_t *bs,
     uint8_t     *p_bdu_type
 );
 
-void vc1_cleanup_parser( vc1_info_t *info );
-int vc1_parse_sequence_header( vc1_info_t *info, uint8_t *ebdu, uint64_t ebdu_size, int probe );
-int vc1_parse_entry_point_header( vc1_info_t *info, uint8_t *ebdu, uint64_t ebdu_size, int probe );
-int vc1_parse_advanced_picture( lsmash_bits_t *bits,
+void lsm_vc1_cleanup_parser( vc1_info_t *info );
+int lsm_vc1_parse_sequence_header( vc1_info_t *info, uint8_t *ebdu, uint64_t ebdu_size, int probe );
+int lsm_vc1_parse_entry_point_header( vc1_info_t *info, uint8_t *ebdu, uint64_t ebdu_size, int probe );
+int lsm_vc1_parse_advanced_picture( lsmash_bits_t *bits,
                                 vc1_sequence_header_t *sequence, vc1_picture_info_t *picture,
                                 uint8_t *rbdu_buffer, uint8_t *ebdu, uint64_t ebdu_size );
-void vc1_update_au_property( vc1_access_unit_t *access_unit, vc1_picture_info_t *picture );
-int vc1_find_au_delimit_by_bdu_type( uint8_t bdu_type, uint8_t prev_bdu_type );
-int vc1_supplement_buffer( vc1_stream_buffer_t *buffer, vc1_access_unit_t *access_unit, uint32_t size );
+void lsm_vc1_update_au_property( vc1_access_unit_t *access_unit, vc1_picture_info_t *picture );
+int lsm_vc1_find_au_delimit_by_bdu_type( uint8_t bdu_type, uint8_t prev_bdu_type );
+int lsm_vc1_supplement_buffer( vc1_stream_buffer_t *buffer, vc1_access_unit_t *access_unit, uint32_t size );

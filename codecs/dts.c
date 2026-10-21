@@ -151,7 +151,7 @@ static const lsmash_dts_construction_flag construction_info[DTS_MAX_STREAM_CONST
         DTS_EXT_SUBSTREAM_CORE_FLAG  | DTS_EXT_SUBSTREAM_XLL_FLAG ,
     };
 
-void dts_setup_parser( dts_info_t *info )
+void lsm_dts_setup_parser( dts_info_t *info )
 {
     dts_extension_info_t *exss = &info->exss[0];
     /* By default the core substream data, if present, has the nuBcCoreExtSSIndex = 0 and the nuBcCoreAssetIndex = 0.
@@ -198,7 +198,7 @@ void lsmash_remove_dts_reserved_box( lsmash_dts_specific_parameters_t *param )
     lsmash_freep( &param->box );
 }
 
-void dts_destruct_specific_data( void *data )
+void lsm_dts_destruct_specific_data( void *data )
 {
     if( !data )
         return;
@@ -325,7 +325,7 @@ int lsmash_setup_dts_specific_parameters_from_frame( lsmash_dts_specific_paramet
     info->bits = &bits;
     lsmash_bits_init( &bits, &bs );
     memcpy( buffer, data, LSMASH_MIN( data_length, DTS_MAX_EXSS_SIZE ) );
-    dts_setup_parser( info );
+    lsm_dts_setup_parser( info );
     uint64_t next_frame_pos = 0;
     while( 1 )
     {
@@ -340,7 +340,7 @@ int lsmash_setup_dts_specific_parameters_from_frame( lsmash_dts_specific_paramet
             goto setup_param;   /* No more valid data. */
         /* Parse substream frame. */
         dts_substream_type prev_substream_type = info->substream_type;
-        info->substream_type = dts_get_substream_type( info );
+        info->substream_type = lsm_dts_get_substream_type( info );
         int (*dts_parse_frame)( dts_info_t * ) = NULL;
         switch( info->substream_type )
         {
@@ -348,16 +348,16 @@ int lsmash_setup_dts_specific_parameters_from_frame( lsmash_dts_specific_paramet
             case DTS_SUBSTREAM_TYPE_CORE :
                 if( prev_substream_type != DTS_SUBSTREAM_TYPE_NONE )
                     goto setup_param;
-                dts_parse_frame = dts_parse_core_substream;
+                dts_parse_frame = lsm_dts_parse_core_substream;
                 break;
             case DTS_SUBSTREAM_TYPE_EXTENSION :
             {
                 uint8_t prev_exss_index = info->exss_index;
-                if( (err = dts_get_exss_index( info, &info->exss_index )) < 0 )
+                if( (err = lsm_dts_get_exss_index( info, &info->exss_index )) < 0 )
                     return err;
                 if( prev_substream_type == DTS_SUBSTREAM_TYPE_EXTENSION && info->exss_index <= prev_exss_index )
                     goto setup_param;
-                dts_parse_frame = dts_parse_extension_substream;
+                dts_parse_frame = lsm_dts_parse_extension_substream;
                 break;
             }
             default :
@@ -370,24 +370,24 @@ int lsmash_setup_dts_specific_parameters_from_frame( lsmash_dts_specific_paramet
         next_frame_pos += info->frame_size;
     }
 setup_param:
-    dts_update_specific_param( info );
+    lsm_dts_update_specific_param( info );
     *param = info->ddts_param;
     return 0;
 }
 
-static inline uint64_t dts_bits_get( lsmash_bits_t *bits, uint32_t width, uint64_t *bits_pos )
+static uint64_t dts_bits_get( lsmash_bits_t *bits, uint32_t width, uint64_t *bits_pos )
 {
     *bits_pos += width;
     return lsmash_bits_get( bits, width );
 }
 
-static inline void dts_bits_align( lsmash_bits_t *bits, uint64_t *bits_pos )
+static void dts_bits_align( lsmash_bits_t *bits, uint64_t *bits_pos )
 {
     uint8_t remainder = 8 - (*bits_pos & 0x7);
     (void)dts_bits_get( bits, remainder, bits_pos );
 }
 
-static inline void dts_bits_align4( lsmash_bits_t *bits, uint64_t *bits_pos )
+static void dts_bits_align4( lsmash_bits_t *bits, uint64_t *bits_pos )
 {
     uint8_t remainder = 32 - (*bits_pos & 0x1f);
     (void)dts_bits_get( bits, remainder, bits_pos );
@@ -449,7 +449,7 @@ static uint32_t dts_get_channel_layout_from_ls_mask32( uint32_t mask )
 }
 
 /* for channels which cannot be expressed by ChannelLayout; CL, LL and RL */
-static inline uint8_t dts_get_lower_channels_from_ls_mask32( uint32_t mask )
+static uint8_t dts_get_lower_channels_from_ls_mask32( uint32_t mask )
 {
     return (mask >> 25) & 0x7;
 }
@@ -1160,7 +1160,7 @@ static int dts_parse_exss_core( dts_info_t *info, uint64_t *bits_pos, dts_audio_
     return bits->bs->error ? LSMASH_ERR_NAMELESS : 0;
 }
 
-int dts_parse_core_substream( dts_info_t *info )
+int lsm_dts_parse_core_substream( dts_info_t *info )
 {
     lsmash_bits_t *bits = info->bits;
     uint64_t bits_pos = 0;
@@ -1188,7 +1188,7 @@ parse_fail:
     return err;
 }
 
-int dts_parse_extension_substream( dts_info_t *info )
+int lsm_dts_parse_extension_substream( dts_info_t *info )
 {
     lsmash_bits_t *bits = info->bits;
     uint64_t bits_pos = 0;
@@ -1345,7 +1345,7 @@ parse_fail:
     return err;
 }
 
-dts_substream_type dts_get_substream_type( dts_info_t *info )
+dts_substream_type lsm_dts_get_substream_type( dts_info_t *info )
 {
     if( lsmash_bs_get_remaining_buffer_size( info->bits->bs ) < 4 )
         return DTS_SUBSTREAM_TYPE_NONE;
@@ -1362,7 +1362,7 @@ dts_substream_type dts_get_substream_type( dts_info_t *info )
     }
 }
 
-int dts_get_exss_index( dts_info_t *info, uint8_t *exss_index )
+int lsm_dts_get_exss_index( dts_info_t *info, uint8_t *exss_index )
 {
     if( lsmash_bs_get_remaining_buffer_size( info->bits->bs ) < 6 )
         return LSMASH_ERR_INVALID_DATA;
@@ -1370,7 +1370,7 @@ int dts_get_exss_index( dts_info_t *info, uint8_t *exss_index )
     return 0;
 }
 
-int dts_get_max_channel_count( dts_info_t *info )
+int lsm_dts_get_max_channel_count( dts_info_t *info )
 {
     int max_channel_count = 0;
     for( int nExtSSIndex = 0; nExtSSIndex < DTS_MAX_NUM_EXSS; nExtSSIndex++ )
@@ -1426,7 +1426,7 @@ int dts_get_max_channel_count( dts_info_t *info )
     return max_channel_count;
 }
 
-void dts_update_specific_param( dts_info_t *info )
+void lsm_dts_update_specific_param( dts_info_t *info )
 {
     lsmash_dts_specific_parameters_t *param = &info->ddts_param;
     /* Find the first valid substream.
@@ -1623,7 +1623,7 @@ param_initialized:
     info->ddts_param_initialized = 1;
 }
 
-int dts_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
+int lsm_dts_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
 {
     assert( dst && dst->data.structured && src && src->data.unstructured );
     if( src->size < DTS_SPECIFIC_BOX_MIN_LENGTH )
@@ -1661,7 +1661,7 @@ int dts_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_code
     return 0;
 }
 
-int dts_copy_codec_specific( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
+int lsm_dts_copy_codec_specific( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
 {
     assert( src && src->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED && src->data.structured );
     assert( dst && dst->format == LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED && dst->data.structured );
@@ -1677,7 +1677,7 @@ int dts_copy_codec_specific( lsmash_codec_specific_t *dst, lsmash_codec_specific
     return lsmash_append_dts_reserved_box( dst_data, src_data->box->data, src_data->box->size );
 }
 
-int dts_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
+int lsm_dts_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
 {
     assert( box->manager & LSMASH_BINARY_CODED_BOX );
     int indent = level;
@@ -1811,7 +1811,7 @@ int dts_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, in
     return 0;
 }
 
-int dts_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index )
+int lsm_dts_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index )
 {
     isom_audio_entry_t *dts_audio = (isom_audio_entry_t *)lsmash_list_get_entry_data( &stbl->stsd->list, sample_description_index );
     if( LSMASH_IS_NON_EXISTING_BOX( dts_audio ) )

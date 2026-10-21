@@ -55,13 +55,13 @@ int lsmash_setup_AudioSpecificConfig( lsmash_audio_summary_t *summary )
     }
     /* Create and add a new one. */
     uint32_t data_length;
-    uint8_t *data = mp4a_export_AudioSpecificConfig( summary->aot,
-                                                     summary->frequency,
-                                                     summary->channels,
-                                                     summary->sbr_mode,
-                                                     NULL,  /* FIXME */
-                                                     0,     /* FIXME */
-                                                     &data_length );
+    uint8_t *data = lsm_mp4a_export_AudioSpecificConfig( summary->aot,
+                                                         summary->frequency,
+                                                         summary->channels,
+                                                         summary->sbr_mode,
+                                                         NULL,  /* FIXME */
+                                                         0,     /* FIXME */
+                                                         &data_length );
     if( !data )
         return LSMASH_ERR_NAMELESS;
     lsmash_codec_specific_t *cs = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG,
@@ -147,7 +147,7 @@ int lsmash_add_codec_specific_data( lsmash_summary_t *summary, lsmash_codec_spec
 {
     if( !summary || !summary->opaque || !specific )
         return LSMASH_ERR_FUNCTION_PARAM;
-    lsmash_codec_specific_t *dup = isom_duplicate_codec_specific_data( specific );
+    lsmash_codec_specific_t *dup = lsm_description_duplicate_codec_specific_data( specific );
     if( !dup )
         return LSMASH_ERR_NAMELESS;
     if( lsmash_list_add_entry( &summary->opaque->list, dup ) < 0 )
@@ -192,9 +192,9 @@ lsmash_summary_t *lsmash_get_summary( lsmash_root_t *root, uint32_t track_ID, ui
         if( LSMASH_IS_NON_EXISTING_BOX( sample_entry ) )
             return NULL;
         if( LSMASH_IS_EXISTING_BOX( minf->vmhd ) )
-            return isom_create_video_summary_from_description( sample_entry );
+            return lsm_description_create_video_summary( sample_entry );
         else if( LSMASH_IS_EXISTING_BOX( minf->smhd ) )
-            return isom_create_audio_summary_from_description( sample_entry );
+            return lsm_description_create_audio_summary( sample_entry );
         else
             return NULL;
     }
@@ -251,7 +251,7 @@ int lsmash_compare_summary( lsmash_summary_t *a, lsmash_summary_t *b )
          || in_hint->maxpacketsize            != out_hint->maxpacketsize )
             return 1;
     }
-    return isom_compare_opaque_extensions( a, b );
+    return lsm_description_compare_opaque_extensions( a, b );
 }
 
 lsmash_codec_support_flag lsmash_check_codec_support( lsmash_codec_type_t sample_type )

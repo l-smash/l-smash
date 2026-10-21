@@ -299,17 +299,17 @@ typedef struct
     uint32_t              MaxRenderHeight;
 } av1_parser_t;
 
-uint32_t av1_get_uvlc( lsmash_bits_t *bits );
-uint64_t av1_get_leb128( lsmash_bs_t *bs, uint8_t *Leb128Bytes );
-uint64_t av1_show_leb128( lsmash_bs_t *bs, uint32_t offset, uint8_t *Leb128Bytes );
-int64_t  av1_get_su( lsmash_bits_t *bits, unsigned int n );
-uint64_t av1_get_ns( lsmash_bits_t *bits, unsigned int n );
+uint32_t lsm_av1_get_uvlc( lsmash_bits_t *bits );
+uint64_t lsm_av1_get_leb128( lsmash_bs_t *bs, uint8_t *Leb128Bytes );
+uint64_t lsm_av1_show_leb128( lsmash_bs_t *bs, uint32_t offset, uint8_t *Leb128Bytes );
+int64_t  lsm_av1_get_su( lsmash_bits_t *bits, unsigned int n );
+uint64_t lsm_av1_get_ns( lsmash_bits_t *bits, unsigned int n );
 
-int  av1_setup_parser( av1_parser_t *parser, lsmash_bs_t *bs );
-void av1_cleanup_parser( av1_parser_t *parser );
-void av1_reset_parser( av1_parser_t *parser );
-int  av1_parse_sequence_header( av1_parser_t *parser );
-int  av1_parse_temporal_unit
+int  lsm_av1_setup_parser( av1_parser_t *parser, lsmash_bs_t *bs );
+void lsm_av1_cleanup_parser( av1_parser_t *parser );
+void lsm_av1_reset_parser( av1_parser_t *parser );
+int  lsm_av1_parse_sequence_header( av1_parser_t *parser );
+int  lsm_av1_parse_temporal_unit
 (
     av1_parser_t                     *parser,
     const uint8_t                    *src_data,
@@ -320,8 +320,8 @@ int  av1_parse_temporal_unit
     lsmash_av1_specific_parameters_t *param
 );
 
-int av1_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src );
-int av1_copy_codec_specific( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src );
-int av1_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level );
+int lsm_av1_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src );
+int lsm_av1_copy_codec_specific( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src );
+int lsm_av1_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level );
 
 #endif /* LSMASH_AV1_H */

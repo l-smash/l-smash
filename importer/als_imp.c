@@ -59,25 +59,25 @@ typedef struct
     uint32_t               au_number;
 } mp4a_als_importer_t;
 
-static void remove_mp4a_als_importer( mp4a_als_importer_t *als_imp )
+static void als_imp_remove( mp4a_als_importer_t *als_imp )
 {
     lsmash_free( als_imp->alssc.ra_unit_size );
     lsmash_free( als_imp->alssc.sc_data );
     lsmash_free( als_imp );
 }
 
-static void mp4a_als_importer_cleanup( importer_t *importer )
+static void als_imp_cleanup( importer_t *importer )
 {
     debug_if( importer && importer->info )
-        remove_mp4a_als_importer( importer->info );
+        als_imp_remove( importer->info );
 }
 
-static mp4a_als_importer_t *create_mp4a_als_importer( importer_t *importer )
+static mp4a_als_importer_t *als_imp_create( importer_t *importer )
 {
     return (mp4a_als_importer_t *)lsmash_malloc_zero( sizeof(mp4a_als_importer_t) );
 }
 
-static void als_copy_from_buffer( als_specific_config_t *alssc, lsmash_bs_t *bs, uint64_t size )
+static void als_imp_copy_from_buffer( als_specific_config_t *alssc, lsmash_bs_t *bs, uint64_t size )
 {
     if( alssc->alloc < size )
     {
@@ -93,7 +93,7 @@ static void als_copy_from_buffer( als_specific_config_t *alssc, lsmash_bs_t *bs,
     lsmash_bs_read_seek( bs, size, SEEK_CUR );
 }
 
-static int als_parse_specific_config( lsmash_bs_t *bs, mp4a_als_importer_t *als_imp )
+static int als_imp_parse_specific_config( lsmash_bs_t *bs, mp4a_als_importer_t *als_imp )
 {
     /* Check ALS identifier( = 0x414C5300). */
     if( 0x414C5300 != lsmash_bs_show_be32( bs, 0 ) )
@@ -131,12 +131,12 @@ static int als_parse_specific_config( lsmash_bs_t *bs, mp4a_als_importer_t *als_
     temp8 = lsmash_bs_show_byte( bs, 21 );
     int crc_enabled      = !!(temp8 & 0x80);
     int aux_data_enabled = !!(temp8 & 0x1);
-    als_copy_from_buffer( alssc, bs, ALSSC_TWELVE_LENGTH );
+    als_imp_copy_from_buffer( alssc, bs, ALSSC_TWELVE_LENGTH );
     if( chan_config )
     {
         /* chan_config_info */
         lsmash_bs_read( bs, 2 );
-        als_copy_from_buffer( alssc, bs, 2 );
+        als_imp_copy_from_buffer( alssc, bs, 2 );
     }
     if( chan_sort )
     {
@@ -144,27 +144,27 @@ static int als_parse_specific_config( lsmash_bs_t *bs, mp4a_als_importer_t *als_
         uint32_t chan_pos_length = (alssc->channels + 1) * ChBits;
         chan_pos_length = ((uint64_t)chan_pos_length + 7) / 8;    /* byte_align */
         lsmash_bs_read( bs, chan_pos_length );
-        als_copy_from_buffer( alssc, bs, chan_pos_length );
+        als_imp_copy_from_buffer( alssc, bs, chan_pos_length );
     }
     /* orig_header, orig_trailer and crc. */
     {
         uint32_t header_size  = lsmash_bs_show_be32( bs, 0 );
         uint32_t trailer_size = lsmash_bs_show_be32( bs, 4 );
-        als_copy_from_buffer( alssc, bs, 8 );
+        als_imp_copy_from_buffer( alssc, bs, 8 );
         if( header_size != 0xffffffff )
         {
             lsmash_bs_read( bs, header_size );
-            als_copy_from_buffer( alssc, bs, header_size );
+            als_imp_copy_from_buffer( alssc, bs, header_size );
         }
         if( trailer_size != 0xffffffff )
         {
             lsmash_bs_read( bs, trailer_size );
-            als_copy_from_buffer( alssc, bs, trailer_size );
+            als_imp_copy_from_buffer( alssc, bs, trailer_size );
         }
         if( crc_enabled )
         {
             lsmash_bs_read( bs, 4 );
-            als_copy_from_buffer( alssc, bs, 4 );
+            als_imp_copy_from_buffer( alssc, bs, 4 );
         }
     }
     /* Random access units */
@@ -197,11 +197,11 @@ static int als_parse_specific_config( lsmash_bs_t *bs, mp4a_als_importer_t *als_
     if( aux_data_enabled )
     {
         uint32_t aux_size = lsmash_bs_show_be32( bs, 0 );
-        als_copy_from_buffer( alssc, bs, 4 );
+        als_imp_copy_from_buffer( alssc, bs, 4 );
         if( aux_size && aux_size != 0xffffffff )
         {
             lsmash_bs_read( bs, aux_size );
-            als_copy_from_buffer( alssc, bs, aux_size );
+            als_imp_copy_from_buffer( alssc, bs, aux_size );
         }
     }
     /* Set 0 to ra_flag. We will remove ra_unit_size in each access unit. */
@@ -209,7 +209,7 @@ static int als_parse_specific_config( lsmash_bs_t *bs, mp4a_als_importer_t *als_
     return 0;
 }
 
-static int mp4a_als_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t **p_sample )
+static int als_imp_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t **p_sample )
 {
     if( !importer->info )
         return LSMASH_ERR_NAMELESS;
@@ -265,7 +265,7 @@ static int mp4a_als_importer_get_accessunit( importer_t *importer, uint32_t trac
 
 #undef CHECK_UPDATE
 
-static lsmash_audio_summary_t *als_create_summary( lsmash_bs_t *bs, als_specific_config_t *alssc )
+static lsmash_audio_summary_t *als_imp_create_summary( lsmash_bs_t *bs, als_specific_config_t *alssc )
 {
     lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_AUDIO );
     if( !summary )
@@ -292,12 +292,12 @@ static lsmash_audio_summary_t *als_create_summary( lsmash_bs_t *bs, als_specific
             alssc->access_unit_size = lsmash_bs_get_remaining_buffer_size( bs );
         }
         summary->max_au_length    = alssc->access_unit_size;
-        summary->samples_in_frame = 0;      /* hack for mp4sys_als_importer_get_last_delta() */
+        summary->samples_in_frame = 0;      /* hack for als_imp_get_last_delta() */
     }
     uint32_t data_length;
-    uint8_t *data = mp4a_export_AudioSpecificConfig( MP4A_AUDIO_OBJECT_TYPE_ALS,
-                                                     summary->frequency, summary->channels, summary->sbr_mode,
-                                                     alssc->sc_data, alssc->size, &data_length );
+    uint8_t *data = lsm_mp4a_export_AudioSpecificConfig( MP4A_AUDIO_OBJECT_TYPE_ALS,
+                                                         summary->frequency, summary->channels, summary->sbr_mode,
+                                                         alssc->sc_data, alssc->size, &data_length );
     if( !data )
         goto fail;
     lsmash_codec_specific_t *specific = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_MP4SYS_DECODER_CONFIG,
@@ -328,16 +328,16 @@ fail:
     return NULL;
 }
 
-static int mp4a_als_importer_probe( importer_t *importer )
+static int als_imp_probe( importer_t *importer )
 {
-    mp4a_als_importer_t *als_imp = create_mp4a_als_importer( importer );
+    mp4a_als_importer_t *als_imp = als_imp_create( importer );
     if( !als_imp )
         return LSMASH_ERR_MEMORY_ALLOC;
     /* Parse ALS specific configuration. */
-    int err = als_parse_specific_config( importer->bs, als_imp );
+    int err = als_imp_parse_specific_config( importer->bs, als_imp );
     if( err < 0 )
         goto fail;
-    lsmash_audio_summary_t *summary = als_create_summary( importer->bs, &als_imp->alssc );
+    lsmash_audio_summary_t *summary = als_imp_create_summary( importer->bs, &als_imp->alssc );
     if( !summary )
     {
         err = LSMASH_ERR_NAMELESS;
@@ -355,11 +355,11 @@ static int mp4a_als_importer_probe( importer_t *importer )
     importer->status = IMPORTER_OK;
     return 0;
 fail:
-    remove_mp4a_als_importer( als_imp );
+    als_imp_remove( als_imp );
     return err;
 }
 
-static uint32_t mp4a_als_importer_get_last_delta( importer_t *importer, uint32_t track_number )
+static uint32_t als_imp_get_last_delta( importer_t *importer, uint32_t track_number )
 {
     debug_if( !importer || !importer->info )
         return 0;
@@ -368,7 +368,7 @@ static uint32_t mp4a_als_importer_get_last_delta( importer_t *importer, uint32_t
         return 0;
     als_specific_config_t *alssc = &als_imp->alssc;
     /* If alssc->number_of_ra_units == 0, then the last sample duration is just alssc->samples
-     * since als_create_summary sets 0 to summary->samples_in_frame i.e. als_imp->samples_in_frame. */
+     * since als_imp_create_summary sets 0 to summary->samples_in_frame i.e. als_imp->samples_in_frame. */
     return alssc->samples - (alssc->number_of_ra_units - 1) * als_imp->samples_in_frame;
 }
 
@@ -376,8 +376,8 @@ const importer_functions mp4a_als_importer =
 {
     { "MPEG-4 ALS", offsetof( importer_t, log_level ) },
     1,
-    mp4a_als_importer_probe,
-    mp4a_als_importer_get_accessunit,
-    mp4a_als_importer_get_last_delta,
-    mp4a_als_importer_cleanup
+    als_imp_probe,
+    als_imp_get_accessunit,
+    als_imp_get_last_delta,
+    als_imp_cleanup
 };

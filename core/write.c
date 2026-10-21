@@ -481,8 +481,8 @@ static int write_esds( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_esds_t *esds = (isom_esds_t *)box;
     lsm_box_bs_put_common( bs, esds );
-    mp4sys_update_descriptor_size( esds->ES );
-    return mp4sys_write_descriptor( bs, esds->ES );
+    lsm_mp4sys_update_descriptor_size( esds->ES );
+    return lsm_mp4sys_write_descriptor( bs, esds->ES );
 }
 
 static int write_btrt( lsmash_bs_t *bs, isom_box_t *box )
@@ -1301,8 +1301,8 @@ static int write_iods( lsmash_bs_t *bs, isom_box_t *box )
 {
     isom_iods_t *iods = (isom_iods_t *)box;
     lsm_box_bs_put_common( bs, iods );
-    mp4sys_update_descriptor_size( iods->OD );
-    return mp4sys_write_descriptor( bs, iods->OD );
+    lsm_mp4sys_update_descriptor_size( iods->OD );
+    return lsm_mp4sys_write_descriptor( bs, iods->OD );
 }
 
 static int write_mvhd( lsmash_bs_t *bs, isom_box_t *box )

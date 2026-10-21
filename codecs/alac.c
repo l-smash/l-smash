@@ -55,7 +55,7 @@ uint8_t *lsmash_create_alac_specific_info( lsmash_alac_specific_parameters_t *pa
     return lsmash_bs_export_data( &bs, data_length );
 }
 
-int alac_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
+int lsm_alac_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
 {
     assert( dst && dst->data.structured && src && src->data.unstructured );
     if( src->size < ALAC_SPECIFIC_BOX_LENGTH )
@@ -81,7 +81,7 @@ int alac_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_cod
     return 0;
 }
 
-int alac_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
+int lsm_alac_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
 {
     assert( box->manager & LSMASH_BINARY_CODED_BOX );
     int indent = level;
@@ -109,7 +109,7 @@ int alac_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, i
     return 0;
 }
 
-int alac_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index )
+int lsm_alac_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index )
 {
     isom_audio_entry_t *alac = (isom_audio_entry_t *)lsmash_list_get_entry_data( &stbl->stsd->list, sample_description_index );
     if( LSMASH_IS_NON_EXISTING_BOX( alac ) )

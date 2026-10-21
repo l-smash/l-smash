@@ -76,7 +76,7 @@ static const char *audio_coding_mode[] =
 const uint32_t ac3_sample_rate_table  [4] = { 48000, 44100, 32000, 0 };
 const uint32_t ac3_channel_count_table[8] = { 2, 1, 2, 3, 3, 4, 4, 5 };
 
-uint32_t ac3_get_sample_rate( lsmash_ac3_specific_parameters_t *dac3_param )
+uint32_t lsm_a52_get_ac3_sample_rate( lsmash_ac3_specific_parameters_t *dac3_param )
 {
     /* The value 3 (or 0b11) of fscod is reserved. */
     uint32_t samplerate = ac3_sample_rate_table[ dac3_param->fscod ];
@@ -141,14 +141,14 @@ int lsmash_setup_ac3_specific_parameters_from_syncframe( lsmash_ac3_specific_par
     ac3_info_t info = { .bits = &bits };
     lsmash_bits_init( &bits, &bs );
     memcpy( buffer, data, LSMASH_MIN( data_length, AC3_MAX_SYNCFRAME_LENGTH ) );
-    int err = ac3_parse_syncframe_header( &info );
+    int err = lsm_a52_parse_ac3_syncframe_header( &info );
     if( err < 0 )
         return err;
     *param = info.dac3_param;
     return 0;
 }
 
-static int ac3_check_syncframe_header( lsmash_ac3_specific_parameters_t *param )
+static int a52_check_ac3_syncframe_header( lsmash_ac3_specific_parameters_t *param )
 {
     if( param->fscod == 0x3 )
         return LSMASH_ERR_INVALID_DATA; /* unknown Sample Rate Code */
@@ -159,7 +159,7 @@ static int ac3_check_syncframe_header( lsmash_ac3_specific_parameters_t *param )
     return 0;
 }
 
-int ac3_parse_syncframe_header( ac3_info_t *info )
+int lsm_a52_parse_ac3_syncframe_header( ac3_info_t *info )
 {
     lsmash_bits_t *bits = info->bits;
     lsmash_ac3_specific_parameters_t *param = &info->dac3_param;
@@ -177,10 +177,10 @@ int ac3_parse_syncframe_header( ac3_info_t *info )
         lsmash_bits_get( bits, 2 );     /* dsurmod */
     param->lfeon = lsmash_bits_get( bits, 1 );
     lsmash_bits_get_align( bits );
-    return ac3_check_syncframe_header( param );
+    return a52_check_ac3_syncframe_header( param );
 }
 
-int ac3_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
+int lsm_a52_construct_ac3_specific_parameters( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
 {
     assert( dst && dst->data.structured && src && src->data.unstructured );
     if( src->size < AC3_SPECIFIC_BOX_LENGTH )
@@ -206,7 +206,7 @@ int ac3_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_code
     return 0;
 }
 
-int ac3_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
+int lsm_a52_print_ac3_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
 {
     assert( box->manager & LSMASH_BINARY_CODED_BOX );
     int indent = level;
@@ -321,7 +321,7 @@ int lsmash_setup_eac3_specific_parameters_from_frame( lsmash_eac3_specific_param
             goto setup_param;
         /* Parse syncframe. */
         info->frame_size = 0;
-        if( eac3_parse_syncframe( info ) < 0 )
+        if( lsm_a52_parse_eac3_syncframe( info ) < 0 )
             goto setup_param;
         if( remain_size < info->frame_size )
             goto setup_param;
@@ -353,7 +353,7 @@ setup_param:
     if( info->number_of_independent_substreams == 0 || info->number_of_independent_substreams > 8 )
         return LSMASH_ERR_INVALID_DATA;
     if( !info->dec3_param_initialized )
-        eac3_update_specific_param( info );
+        lsm_a52_update_eac3_specific_param( info );
     *param = info->dec3_param;
     return info->number_of_audio_blocks == 6 ? 0 : LSMASH_ERR_INVALID_DATA;
 }
@@ -363,7 +363,7 @@ uint16_t lsmash_eac3_get_chan_loc_from_chanmap( uint16_t chanmap )
     return ((chanmap & 0x7f8) >> 2) | ((chanmap & 0x2) >> 1);
 }
 
-static int eac3_check_syncframe_header( eac3_info_t *info )
+static int a52_check_eac3_syncframe_header( eac3_info_t *info )
 {
     if( info->strmtyp == 0x3 )
         return LSMASH_ERR_INVALID_DATA; /* unknown Stream type */
@@ -379,7 +379,7 @@ static int eac3_check_syncframe_header( eac3_info_t *info )
     return 0;
 }
 
-int eac3_parse_syncframe( eac3_info_t *info )
+int lsm_a52_parse_eac3_syncframe( eac3_info_t *info )
 {
     lsmash_bits_t *bits = info->bits;
     lsmash_bits_get( bits, 16 );                                                    /* syncword           (16) */
@@ -389,7 +389,7 @@ int eac3_parse_syncframe( eac3_info_t *info )
     if( info->strmtyp != 0x1 )
     {
         if( info->substreamid == 0x0 && info->number_of_independent_substreams )
-            eac3_update_specific_param( info );
+            lsm_a52_update_eac3_specific_param( info );
         info->current_independent_substream_id = info->substreamid;
         substream_info = &info->independent_info[ info->current_independent_substream_id ];
         substream_info->chan_loc = 0;
@@ -516,10 +516,10 @@ int eac3_parse_syncframe( eac3_info_t *info )
         lsmash_bits_get( bits, (addbsil + 1) * 8 );                                 /* addbsi             ((addbsil + 1) * 8) */
     }
     lsmash_bits_get_align( bits );
-    return eac3_check_syncframe_header( info );
+    return a52_check_eac3_syncframe_header( info );
 }
 
-void eac3_update_specific_param( eac3_info_t *info )
+void lsm_a52_update_eac3_specific_param( eac3_info_t *info )
 {
     lsmash_eac3_specific_parameters_t *param = &info->dec3_param;
     param->data_rate = 0;
@@ -531,7 +531,7 @@ void eac3_update_specific_param( eac3_info_t *info )
 
 #define EAC3_SPECIFIC_BOX_MIN_LENGTH 13
 
-int eac3_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
+int lsm_a52_construct_eac3_specific_parameters( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src )
 {
     assert( dst && dst->data.structured && src && src->data.unstructured );
     if( src->size < EAC3_SPECIFIC_BOX_MIN_LENGTH )
@@ -576,7 +576,7 @@ int eac3_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_cod
     return 0;
 }
 
-void eac3_update_sample_rate
+void lsm_a52_update_eac3_sample_rate
 (
     uint32_t                          *frequency,
     lsmash_eac3_specific_parameters_t *dec3_param,
@@ -653,7 +653,7 @@ static void eac3_update_channel_layout
 }
 #endif
 
-void eac3_update_channel_count
+void lsm_a52_update_eac3_channel_count
 (
     uint32_t                          *channels,
     lsmash_eac3_specific_parameters_t *dec3_param
@@ -675,7 +675,7 @@ void eac3_update_channel_count
               + independent_info->lfeon;                            /* LFE */
 }
 
-int eac3_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
+int lsm_a52_print_eac3_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level )
 {
     assert( box->manager & LSMASH_BINARY_CODED_BOX );
     int indent = level;
@@ -740,7 +740,7 @@ int eac3_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, i
     return 0;
 }
 
-int eac3_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index )
+int lsm_a52_update_eac3_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index )
 {
     isom_audio_entry_t *eac3 = (isom_audio_entry_t *)lsmash_list_get_entry_data( &stbl->stsd->list, sample_description_index );
     if( LSMASH_IS_NON_EXISTING_BOX( eac3 ) )

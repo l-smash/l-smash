@@ -247,7 +247,7 @@ int lsmash_add_sample_entry( lsmash_root_t *root, uint32_t track_ID, void *summa
         return 0;
     isom_stsd_t      *stsd       = trak->mdia->minf->stbl->stsd;
     lsmash_media_type media_type = trak->mdia->hdlr->componentSubtype;
-    if( isom_setup_sample_description( stsd, media_type, (lsmash_summary_t *)summary ) < 0 )
+    if( lsm_description_setup_sample_description( stsd, media_type, (lsmash_summary_t *)summary ) < 0 )
         return 0;
     else
         return stsd->list.entry_count;
@@ -497,7 +497,7 @@ int lsmash_update_track_duration( lsmash_root_t *root, uint32_t track_ID, uint32
     return err;
 }
 
-static inline uint64_t track_get_current_mp4time( void )
+static uint64_t track_get_current_mp4time( void )
 {
     return (uint64_t)time( NULL ) + ISOM_MAC_EPOCH_OFFSET;
 }
@@ -843,7 +843,7 @@ int lsmash_get_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     return 0;
 }
 
-static inline int track_check_dref_presence( isom_trak_t *trak )
+static int track_check_dref_presence( isom_trak_t *trak )
 {
     if( LSMASH_IS_NON_EXISTING_BOX( trak->mdia->minf->dinf->dref ) )
         return LSMASH_ERR_NAMELESS;

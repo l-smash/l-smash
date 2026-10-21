@@ -74,7 +74,7 @@ typedef struct
     uint32_t                      au_number;
 } mp4sys_adts_importer_t;
 
-static void remove_mp4sys_adts_importer
+static void adts_imp_remove
 (
     mp4sys_adts_importer_t *adts_imp
 )
@@ -82,7 +82,7 @@ static void remove_mp4sys_adts_importer
     lsmash_free( adts_imp );
 }
 
-static mp4sys_adts_importer_t *create_mp4sys_adts_importer
+static mp4sys_adts_importer_t *adts_imp_create
 (
     importer_t *importer
 )
@@ -90,13 +90,13 @@ static mp4sys_adts_importer_t *create_mp4sys_adts_importer
     return (mp4sys_adts_importer_t *)lsmash_malloc_zero( sizeof(mp4sys_adts_importer_t) );
 }
 
-static void mp4sys_adts_cleanup( importer_t *importer )
+static void adts_imp_cleanup( importer_t *importer )
 {
     debug_if( importer && importer->info )
-        remove_mp4sys_adts_importer( importer->info );
+        adts_imp_remove( importer->info );
 }
 
-static void mp4sys_adts_parse_fixed_header
+static void adts_imp_parse_fixed_header
 (
     uint8_t                    *buf,
     mp4sys_adts_fixed_header_t *header
@@ -115,7 +115,7 @@ static void mp4sys_adts_parse_fixed_header
 //  header->home                     = (buf[3] >> 4) & 0x1; /* we don't care currently. */
 }
 
-static int mp4sys_adts_check_fixed_header
+static int adts_imp_check_fixed_header
 (
     mp4sys_adts_fixed_header_t *header
 )
@@ -131,7 +131,7 @@ static int mp4sys_adts_check_fixed_header
     return 0;
 }
 
-static int mp4sys_adts_parse_variable_header
+static int adts_imp_parse_variable_header
 (
     lsmash_bs_t                   *bs,
     uint8_t                       *buf,
@@ -214,7 +214,7 @@ static int mp4sys_adts_parse_variable_header
     return 0;
 }
 
-static int mp4sys_adts_parse_headers
+static int adts_imp_parse_headers
 (
     lsmash_bs_t                   *bs,
     uint8_t                       *buf,
@@ -222,15 +222,15 @@ static int mp4sys_adts_parse_headers
     mp4sys_adts_variable_header_t *variable_header
 )
 {
-    mp4sys_adts_parse_fixed_header( buf, header );
-    int err = mp4sys_adts_check_fixed_header( header );
+    adts_imp_parse_fixed_header( buf, header );
+    int err = adts_imp_check_fixed_header( header );
     if( err < 0 )
         return err;
     /* get payload length & skip extra(crc) header */
-    return mp4sys_adts_parse_variable_header( bs, buf, header->protection_absent, variable_header );
+    return adts_imp_parse_variable_header( bs, buf, header->protection_absent, variable_header );
 }
 
-static lsmash_audio_summary_t *mp4sys_adts_create_summary
+static lsmash_audio_summary_t *adts_imp_create_summary
 (
     mp4sys_adts_fixed_header_t *header
 )
@@ -264,9 +264,9 @@ static lsmash_audio_summary_t *mp4sys_adts_create_summary
     }
 #endif
     uint32_t data_length;
-    uint8_t *data = mp4a_export_AudioSpecificConfig( header->profile_ObjectType + MP4A_AUDIO_OBJECT_TYPE_AAC_MAIN,
-                                                     summary->frequency, summary->channels, summary->sbr_mode,
-                                                     NULL, 0, &data_length );
+    uint8_t *data = lsm_mp4a_export_AudioSpecificConfig( header->profile_ObjectType + MP4A_AUDIO_OBJECT_TYPE_AAC_MAIN,
+                                                         summary->frequency, summary->channels, summary->sbr_mode,
+                                                         NULL, 0, &data_length );
     if( !data )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
@@ -300,7 +300,7 @@ static lsmash_audio_summary_t *mp4sys_adts_create_summary
     return summary;
 }
 
-static int mp4sys_adts_get_accessunit
+static int adts_imp_get_accessunit
 (
     importer_t       *importer,
     uint32_t          track_number,
@@ -323,7 +323,7 @@ static int mp4sys_adts_get_accessunit
         lsmash_entry_t *entry = lsmash_list_get_entry( importer->summaries, track_number );
         if( !entry || !entry->data )
             return LSMASH_ERR_NAMELESS;
-        lsmash_audio_summary_t *summary = mp4sys_adts_create_summary( &adts_imp->header );
+        lsmash_audio_summary_t *summary = adts_imp_create_summary( &adts_imp->header );
         if( !summary )
             return LSMASH_ERR_NAMELESS;
         lsmash_cleanup_summary( entry->data );
@@ -402,7 +402,7 @@ static int mp4sys_adts_get_accessunit
      */
     mp4sys_adts_fixed_header_t header = { 0 };
     mp4sys_adts_variable_header_t variable_header = { 0 };
-    if( mp4sys_adts_parse_headers( bs, buf, &header, &variable_header ) < 0 )
+    if( adts_imp_parse_headers( bs, buf, &header, &variable_header ) < 0 )
     {
         importer->status = IMPORTER_ERROR;
         return 0;
@@ -454,12 +454,12 @@ static int mp4sys_adts_get_accessunit
 }
 
 /* returns 0 if it seems adts. */
-static int mp4sys_adts_probe
+static int adts_imp_probe
 (
     importer_t *importer
 )
 {
-    mp4sys_adts_importer_t *adts_imp = create_mp4sys_adts_importer( importer );
+    mp4sys_adts_importer_t *adts_imp = adts_imp_create( importer );
     if( !adts_imp )
         return LSMASH_ERR_MEMORY_ALLOC;
     int err;
@@ -471,10 +471,10 @@ static int mp4sys_adts_probe
     }
     mp4sys_adts_fixed_header_t    header          = { 0 };
     mp4sys_adts_variable_header_t variable_header = { 0 };
-    if( (err = mp4sys_adts_parse_headers( importer->bs, buf, &header, &variable_header )) < 0 )
+    if( (err = adts_imp_parse_headers( importer->bs, buf, &header, &variable_header )) < 0 )
         goto fail;
     /* now the stream seems valid ADTS */
-    lsmash_audio_summary_t *summary = mp4sys_adts_create_summary( &header );
+    lsmash_audio_summary_t *summary = adts_imp_create_summary( &header );
     if( !summary )
     {
         err = LSMASH_ERR_NAMELESS;
@@ -495,11 +495,11 @@ static int mp4sys_adts_probe
     importer->status = IMPORTER_OK;
     return 0;
 fail:
-    remove_mp4sys_adts_importer( adts_imp );
+    adts_imp_remove( adts_imp );
     return err;
 }
 
-static uint32_t mp4sys_adts_get_last_delta
+static uint32_t adts_imp_get_last_delta
 (
     importer_t *importer,
     uint32_t    track_number
@@ -517,8 +517,8 @@ const importer_functions mp4sys_adts_importer =
 {
     { "adts" },
     1,
-    mp4sys_adts_probe,
-    mp4sys_adts_get_accessunit,
-    mp4sys_adts_get_last_delta,
-    mp4sys_adts_cleanup
+    adts_imp_probe,
+    adts_imp_get_accessunit,
+    adts_imp_get_last_delta,
+    adts_imp_cleanup
 };

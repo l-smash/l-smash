@@ -65,27 +65,27 @@ typedef struct
     lsmash_av1_specific_parameters_t av1c_param;
 } ivf_importer_t;
 
-static void remove_ivf_importer( ivf_importer_t *ivf_imp )
+static void ivf_imp_remove( ivf_importer_t *ivf_imp )
 {
     if( !ivf_imp )
         return;
-    av1_cleanup_parser( &ivf_imp->parser );
+    lsm_av1_cleanup_parser( &ivf_imp->parser );
     lsmash_destroy_av1_headers( &ivf_imp->av1c_param );
     lsmash_free( ivf_imp );
 }
 
-static ivf_importer_t *create_ivf_importer( importer_t *importer )
+static ivf_importer_t *ivf_imp_create( importer_t *importer )
 {
     return (ivf_importer_t *)lsmash_malloc_zero( sizeof(ivf_importer_t) );
 }
 
-static void ivf_importer_cleanup( importer_t *importer )
+static void ivf_imp_cleanup( importer_t *importer )
 {
     debug_if( importer && importer->info )
-        remove_ivf_importer( importer->info );
+        ivf_imp_remove( importer->info );
 }
 
-static int ivf_importer_get_access_unit( lsmash_bs_t *bs, importer_t *importer, ivf_importer_t *ivf_imp )
+static int ivf_imp_get_access_unit( lsmash_bs_t *bs, importer_t *importer, ivf_importer_t *ivf_imp )
 {
     /* IVF frame header */
     ivf_imp->au_length = lsmash_bs_get_le32( bs );
@@ -99,7 +99,7 @@ static int ivf_importer_get_access_unit( lsmash_bs_t *bs, importer_t *importer, 
     return 0;
 }
 
-static int ivf_importer_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t **p_sample )
+static int ivf_imp_get_accessunit( importer_t *importer, uint32_t track_number, lsmash_sample_t **p_sample )
 {
     if( !importer->info )
         return LSMASH_ERR_NAMELESS;
@@ -116,7 +116,7 @@ static int ivf_importer_get_accessunit( importer_t *importer, uint32_t track_num
         importer->status = IMPORTER_EOF;
         return IMPORTER_EOF;
     }
-    int err = ivf_importer_get_access_unit( importer->bs, importer, ivf_imp );
+    int err = ivf_imp_get_access_unit( importer->bs, importer, ivf_imp );
     if( err < 0 )
     {
         importer->status = IMPORTER_ERROR;
@@ -148,13 +148,13 @@ static int ivf_importer_get_accessunit( importer_t *importer, uint32_t track_num
     }
     uint32_t samplesize = 0;
     lsmash_sample_property_t prop = { 0 };
-    err = av1_parse_temporal_unit( &ivf_imp->parser,
-                                   packetbuf,
-                                   ivf_imp->au_length,
-                                   samplebuf,
-                                   &samplesize,
-                                   &prop,
-                                   &ivf_imp->av1c_param );
+    err = lsm_av1_parse_temporal_unit( &ivf_imp->parser,
+                                       packetbuf,
+                                       ivf_imp->au_length,
+                                       samplebuf,
+                                       &samplesize,
+                                       &prop,
+                                       &ivf_imp->av1c_param );
     lsmash_free( packetbuf );
     if( err < 0 )
     {
@@ -205,7 +205,7 @@ static int ivf_importer_get_accessunit( importer_t *importer, uint32_t track_num
     return current_status;
 }
 
-static lsmash_codec_type_t ivf_get_codec_type
+static lsmash_codec_type_t ivf_imp_get_codec_type
 (
     ivf_global_header_t *gh
 )
@@ -223,7 +223,7 @@ static lsmash_codec_type_t ivf_get_codec_type
     }
 }
 
-static lsmash_video_summary_t *ivf_create_summary( ivf_importer_t *ivf_imp )
+static lsmash_video_summary_t *ivf_imp_create_summary( ivf_importer_t *ivf_imp )
 {
     ivf_global_header_t              *gh     = &ivf_imp->global_header;
     av1_sequence_header_t            *sh     = &ivf_imp->parser.sequence_header;
@@ -232,7 +232,7 @@ static lsmash_video_summary_t *ivf_create_summary( ivf_importer_t *ivf_imp )
     lsmash_video_summary_t *summary = (lsmash_video_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_VIDEO );
     if( !summary )
         return NULL;
-    lsmash_codec_type_t codec_type = ivf_get_codec_type( gh );
+    lsmash_codec_type_t codec_type = ivf_imp_get_codec_type( gh );
     lsmash_codec_specific_t *specific = NULL;
     if( lsmash_check_codec_type_identical( codec_type, ISOM_CODEC_TYPE_AV01_VIDEO ) )
         specific = lsmash_create_codec_specific_data( LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_AV1,
@@ -294,12 +294,12 @@ static lsmash_video_summary_t *ivf_create_summary( ivf_importer_t *ivf_imp )
     return summary;
 }
 
-static int ivf_importer_probe( importer_t *importer )
+static int ivf_imp_probe( importer_t *importer )
 {
-    ivf_importer_t *ivf_imp = create_ivf_importer( importer );
+    ivf_importer_t *ivf_imp = ivf_imp_create( importer );
     if( !ivf_imp )
         return LSMASH_ERR_MEMORY_ALLOC;
-    int err = av1_setup_parser( &ivf_imp->parser, NULL );
+    int err = lsm_av1_setup_parser( &ivf_imp->parser, NULL );
     if( err < 0 )
         goto fail;
     lsmash_bs_t *bs = importer->bs;
@@ -331,7 +331,7 @@ static int ivf_importer_probe( importer_t *importer )
         goto fail;
     }
     /* Set up the access unit parser. */
-    lsmash_codec_type_t codec_type = ivf_get_codec_type( gh );
+    lsmash_codec_type_t codec_type = ivf_imp_get_codec_type( gh );
     if( lsmash_check_codec_type_identical( codec_type, LSMASH_CODEC_TYPE_UNSPECIFIED ) )
     {
         err = LSMASH_ERR_PATCH_WELCOME;
@@ -364,13 +364,13 @@ static int ivf_importer_probe( importer_t *importer )
     }
     for( uint32_t i = 0; i < au_length; i++ )
         probe_buf[i] = lsmash_bs_show_byte( bs, 12 + i );
-    err = av1_parse_temporal_unit( &ivf_imp->parser,
-                                   probe_buf,
-                                   au_length,
-                                   NULL,
-                                   NULL,
-                                   NULL,
-                                   &ivf_imp->av1c_param );
+    err = lsm_av1_parse_temporal_unit( &ivf_imp->parser,
+                                       probe_buf,
+                                       au_length,
+                                       NULL,
+                                       NULL,
+                                       NULL,
+                                       &ivf_imp->av1c_param );
     lsmash_free( probe_buf );
     if( err < 0 )
         goto fail;
@@ -388,7 +388,7 @@ static int ivf_importer_probe( importer_t *importer )
                                ? ivf_imp->parser.MaxRenderHeight
                                : (ivf_imp->parser.sequence_header.max_frame_height_minus_1 + 1);
 
-    lsmash_video_summary_t *summary = ivf_create_summary( ivf_imp );
+    lsmash_video_summary_t *summary = ivf_imp_create_summary( ivf_imp );
     if( !summary )
     {
         err = LSMASH_ERR_NAMELESS;
@@ -404,7 +404,7 @@ static int ivf_importer_probe( importer_t *importer )
     /* Reset parser frame/reference state so Frame 0 is parsed cleanly in get_accessunit. */
     av1_sequence_header_t saved_sh = ivf_imp->parser.sequence_header;
     uint8_t saved_hdr10p           = ivf_imp->parser.has_hdr10p;
-    av1_reset_parser( &ivf_imp->parser );
+    lsm_av1_reset_parser( &ivf_imp->parser );
     ivf_imp->parser.sequence_header = saved_sh;
     ivf_imp->parser.seen_seq_header = 1;
     ivf_imp->parser.has_hdr10p      = saved_hdr10p;
@@ -415,12 +415,12 @@ static int ivf_importer_probe( importer_t *importer )
     importer->status = IMPORTER_OK;
     return 0;
 fail:
-    remove_ivf_importer( ivf_imp );
+    ivf_imp_remove( ivf_imp );
     importer->info = NULL;
     return err;
 }
 
-static uint32_t ivf_importer_get_last_delta( importer_t *importer, uint32_t track_number )
+static uint32_t ivf_imp_get_last_delta( importer_t *importer, uint32_t track_number )
 {
     debug_if( !importer || !importer->info )
         return 0;
@@ -437,8 +437,8 @@ const importer_functions ivf_importer =
 {
     { "Indeo Video Format", offsetof( importer_t, log_level ) },
     1,
-    ivf_importer_probe,
-    ivf_importer_get_accessunit,
-    ivf_importer_get_last_delta,
-    ivf_importer_cleanup,
+    ivf_imp_probe,
+    ivf_imp_get_accessunit,
+    ivf_imp_get_last_delta,
+    ivf_imp_cleanup,
 };
