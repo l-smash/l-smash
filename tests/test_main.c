@@ -4660,6 +4660,103 @@ static int test_external_data_reference_roundtrip( void )
     printf( "[PASS] test_external_data_reference_roundtrip\n" );
     return 0;
 }
+/*---------------------------------------------------------------------------
+ * Test 18: Fake Box / Timeline flow of a raw stream through lsmash_read_file()
+ *---------------------------------------------------------------------------*/
+static int write_test_file( const char *path, const uint8_t *data, size_t size )
+{
+    FILE *fp = fopen( path, "wb" );
+    if( !fp )
+        return -1;
+    size_t written = fwrite( data, 1, size, fp );
+    fclose( fp );
+    return written == size ? 0 : -1;
+}
+
+static int test_read_file_fake_box_and_unsupported_stream( void )
+{
+    const char *wav_path = "tests/tmp_test_fake_box.wav";
+    const char *aac_path = "tests/tmp_test_unsupported.aac";
+
+    /* WAVE: mono 16-bit PCM, 8000 Hz, 20 frames. The importer builds a fake moov and trak. */
+    uint8_t wav[44 + 40];
+    {
+        static const uint8_t head[44] =
+        {
+            'R', 'I', 'F', 'F', 76, 0, 0, 0, 'W', 'A', 'V', 'E',
+            'f', 'm', 't', ' ', 16, 0, 0, 0, 1, 0, 1, 0,
+            0x40, 0x1F, 0, 0, 0x80, 0x3E, 0, 0, 2, 0, 16, 0,
+            'd', 'a', 't', 'a', 40, 0, 0, 0
+        };
+        memcpy( wav, head, sizeof(head) );
+        for( int i = 0; i < 40; i++ )
+            wav[44 + i] = (uint8_t)(i * 7 + 1);
+    }
+    TEST_ASSERT( write_test_file( wav_path, wav, sizeof(wav) ) == 0, "18a: write wav" );
+
+    lsmash_root_t *root = lsmash_create_root();
+    TEST_ASSERT( root != NULL, "18a: create root" );
+    lsmash_file_parameters_t param = { 0 };
+    TEST_ASSERT( lsmash_open_file( wav_path, 1, &param ) == 0, "18a: open wav" );
+    lsmash_file_t *file = lsmash_set_file( root, &param );
+    TEST_ASSERT( file != NULL, "18a: set wav file" );
+    TEST_ASSERT( lsmash_read_file( file, &param ) >= 0, "18a: read_file succeeds on WAVE via fake boxes" );
+
+    lsmash_movie_parameters_t movie_param;
+    TEST_ASSERT( lsmash_get_movie_parameters( root, &movie_param ) == 0, "18a: movie parameters from fake moov" );
+    TEST_ASSERT( movie_param.number_of_tracks == 1, "18a: one fake track" );
+    uint32_t track_ID = lsmash_get_track_ID( root, 1 );
+    TEST_ASSERT( track_ID != 0, "18a: fake track ID" );
+    lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_get_summary( root, track_ID, 1 );
+    TEST_ASSERT( summary != NULL, "18a: summary from fake track" );
+    if( summary )
+    {
+        TEST_ASSERT( summary->channels == 1 && summary->sample_size == 16 && summary->frequency == 8000,
+                     "18a: summary is mono 16-bit 8kHz" );
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+    }
+    TEST_ASSERT( lsmash_construct_timeline( root, track_ID ) == 0, "18a: construct timeline" );
+    uint32_t count = lsmash_get_sample_count_in_media_timeline( root, track_ID );
+    TEST_ASSERT( count > 0, "18a: timeline has samples" );
+    uint32_t total = 0;
+    for( uint32_t i = 1; i <= count; i++ )
+    {
+        lsmash_sample_t *samp = lsmash_get_sample_from_media_timeline( root, track_ID, i );
+        TEST_ASSERT( samp != NULL, "18a: get sample" );
+        if( !samp )
+            break;
+        for( uint32_t b = 0; b < samp->length && total < 40; b++, total++ )
+            if( samp->data[b] != wav[44 + total] )
+                TEST_ASSERT( 0, "18a: PCM payload matches" );
+        lsmash_delete_sample( samp );
+    }
+    TEST_ASSERT( total == 40, "18a: all 40 payload bytes read" );
+    lsmash_destruct_timeline( root, track_ID );
+    lsmash_close_file( &param );
+    lsmash_destroy_root( root );
+    remove( wav_path );
+
+    /* Raw ADTS: a seekable raw stream without fake box support must not yield a half-built success. */
+    uint8_t aac[16 * 5] = { 0 };
+    for( int f = 0; f < 5; f++ )
+    {
+        static const uint8_t adts[7] = { 0xFF, 0xF1, 0x50, 0x80, 0x02, 0x1F, 0xFC };
+        memcpy( aac + 16 * f, adts, sizeof(adts) );
+    }
+    TEST_ASSERT( write_test_file( aac_path, aac, sizeof(aac) ) == 0, "18b: write aac" );
+    root = lsmash_create_root();
+    memset( &param, 0, sizeof(param) );
+    TEST_ASSERT( lsmash_open_file( aac_path, 1, &param ) == 0, "18b: open aac" );
+    file = lsmash_set_file( root, &param );
+    TEST_ASSERT( file != NULL, "18b: set aac file" );
+    TEST_ASSERT( lsmash_read_file( file, &param ) < 0, "18b: raw stream without fake movie is rejected" );
+    lsmash_close_file( &param );
+    lsmash_destroy_root( root );
+    remove( aac_path );
+
+    printf( "[PASS] test_read_file_fake_box_and_unsupported_stream\n" );
+    return 0;
+}
 #ifdef LSMASH_DEBUG_ALLOC
 #define RUN_TEST( test_fn )                                                       \
     do                                                                            \
@@ -4702,6 +4799,7 @@ int main( void )
     RUN_TEST( test_flac_isobmff_roundtrip );
     RUN_TEST( test_segmented_isobmff_and_abort_callback );
     RUN_TEST( test_external_data_reference_roundtrip );
+    RUN_TEST( test_read_file_fake_box_and_unsupported_stream );
 #ifdef LSMASH_DEBUG_ALLOC
     assert( lsm_alloc_verify_no_leaks() == 0 );
     assert( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0 );

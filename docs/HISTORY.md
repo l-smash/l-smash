@@ -20,7 +20,7 @@
 
 ## 2. Historical Defect Analysis (Pre-`v2.17.0` Baseline)
 
-Prior to the `v2.21.0`–`v2.23.3` series on `dev`, the `vimeo` (`4a21f21`) and `av1` (`0715bf6`) branches exhibited several technical limitations and defects:
+Prior to the `v2.21.0`–`v2.23.4` series on `dev`, the `vimeo` (`4a21f21`) and `av1` (`0715bf6`) branches exhibited several technical limitations and defects:
 
 1. **64-Bit Little-Endian Shift Bug in `common/bytes.c` (`lsmash_bs_get_le64`)**:
    - `lsmash_bs_get_le64()` shifted the upper 32-bit word by `<< 16` instead of `<< 32` (`((uint64_t)lsmash_bs_get_le32( bs ) << 16) | lsmash_bs_get_le32( bs )`), corrupting 64-bit little-endian reads.
@@ -41,7 +41,7 @@ Prior to the `v2.21.0`–`v2.23.3` series on `dev`, the `vimeo` (`4a21f21`) and 
 
 ---
 
-## 3. Release Evolution (`v2.21.0` – `v2.23.3`)
+## 3. Release Evolution (`v2.21.0` – `v2.23.4`)
 
 ### 3.1 `v2.21.0`: Built-In AV1 OBU Parser, `le64` Fix & Synthetic Test Suite
 - **`common/bytes.c`**: Fixed `lsmash_bs_get_le64()` to shift the high 32-bit word by `<< 32` rather than `<< 16`.
@@ -137,3 +137,10 @@ Prior to the `v2.21.0`–`v2.23.3` series on `dev`, the `vimeo` (`4a21f21`) and 
 - **Sentinel Box predicate audit**: every use of `LSMASH_IS_NON_EXISTING_BOX` / `LSMASH_IS_EXISTING_BOX` under `core/`, `codecs/`, `importer/` and `cli/` was reviewed against the sentinel refactoring that introduced them. Besides the `styp` test fixed in `v2.23.2`, the audit found no other inverted predicate in the current tree (the `mean` / `name` inversions in `lsmash_get_itunes_metadata()` made by that refactoring were already corrected in later history).
 - **Tests**: added suite 17 `test_external_data_reference_roundtrip` (external media file write, `lsmash_get_data_reference()` / `lsmash_assign_data_reference()` read-back, Media Timeline sample restoration, fragmented-movie rejection). `make test` now runs 17 suites (147,569 assertions).
 - **Documentation**: `USAGE.md` section 3.8 describes the `dref` workflow and its limitations. `SPEC.md` (Section 7) narrows the pending task to external data references for Movie Fragments.
+
+### 3.11 `v2.23.4`: Importer Ownership Fix & Unsupported Raw Stream Guard
+- **Borrowed `root` ownership** (`importer/importer.c`): `lsm_importer_alloc()` destroyed the caller-owned `root` when allocating the summary list failed. It now releases only the importer it allocated and returns `NULL`.
+- **`lsm_importer_set_file()` result checks**: `lsmash_importer_open()` and `lsmash_read_file()` ignored a negative result. They now clean up and return the error.
+- **Unsupported raw stream guard** (`core/file.c`): `lsmash_read_file()` returned success for a seekable raw stream (such as ADTS or H.264) whose importer probed successfully but built neither real boxes (`LSMASH_FILE_MODE_BOX`) nor a fake `moov`. Such input is now rejected with `LSMASH_ERR_PATCH_WELCOME`. The WAVE importer, which builds a fake `moov`, is unaffected.
+- **Tests**: added suite 18 `test_read_file_fake_box_and_unsupported_stream`. `make test` now runs 18 suites (147,606 assertions).
+- **Documentation**: `SPEC.md` Section 6.4 no longer claims `lsmash_importer_*` is exported in `liblsmash.ver`; `docs/specs/codecs_and_importers.md` documents the importer position and the fake Box convention.

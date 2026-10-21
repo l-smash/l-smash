@@ -67,6 +67,9 @@ typedef struct
   11. ITU-T H.265 / HEVC Annex-B (`hevc_importer`)
   12. SMPTE VC-1 Advanced Profile (`vc1_importer`)
   13. Raw ISOBMFF Elementary Tracks (`isobm_importer`)
+- **Position in the Architecture**: `importer` is an internal implementation of the file abstraction layer (`lsmash_file_t`), not an independent public API. `lsmash_importer_*` is excluded from `liblsmash.ver` by `configure` and is a non-public symbol kept for CLI tool transition. A raw stream importer integrates with `lsmash_read_file()` and the Timeline API by building a fake `moov` with `lsm_importer_make_fake_movie()`, adding a fake `trak` per stream with `lsm_importer_make_fake_track()`, and providing `construct_timeline`.
+- **Real Box vs. Fake Box**: `LSMASH_FILE_MODE_BOX` set in `file->flags` means the file has a real Box structure (read by `isobm_importer` / `core/read.c`). When it is absent, any `moov` is a fake Box tree created by an importer, and `lsm_importer_make_fake_movie()` / `lsm_importer_make_fake_track()` reject real Box files. `wave_imp.c` is the reference implementation.
+- **Unsupported Raw Streams**: if the probe succeeds but neither `LSMASH_FILE_MODE_BOX` nor an existing `moov` results (for example ADTS or H.264, which do not yet build fake Boxes), `lsmash_read_file()` destroys the importer and returns `LSMASH_ERR_PATCH_WELCOME`.
 - **AU Allocation**: Importers assemble individual access units into dynamically allocated `lsmash_sample_t` packets, resolving media timestamps, random access flags, and durations before passing them to the movie multiplexing engine.
 
 ---

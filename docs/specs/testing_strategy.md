@@ -15,7 +15,7 @@ L-SMASH provides a self-contained C11 unit and integration test suite (`tests/te
 
 ## 2. Test Suite Architecture (`tests/test_main.c`)
 
-Running `make test` executes **17 test suites** (147,569 assertions):
+Running `make test` executes **18 test suites** (147,606 assertions):
 
 | Suite # | Function Name | Subsystem & Verification Scope |
 | :--- | :--- | :--- |
@@ -36,6 +36,7 @@ Running `make test` executes **17 test suites** (147,569 assertions):
 | **15** | `test_flac_isobmff_roundtrip` | Synthesizes a valid RFC 9639 FLAC stream (`fLaC` magic, `STREAMINFO` + `VORBIS_COMMENT` metadata blocks, and CRC-8-valid fixed and uncommon block-size audio frames), tests `lsm_flac_verify_crc8`, `lsm_flac_parse_streaminfo`, `lsm_flac_parse_frame_header` (plus negative CRC-8 corruption and reserved block-size rejection), imports via `importer/flac_imp.c`, muxes into ISOBMFF (`fLaC` + `dfLa`), verifies `[fLaC]` and `[dfLa]` boxdumper output, and verifies exact `STREAMINFO` and sample duration/payload recovery on demux. |
 | **16** | `test_segmented_isobmff_and_abort_callback` | Segmented ISOBMFF and progressive download abort verification:<br>- **Self-Initializing Media Segment** (`FRAGMENTED \| INDEX \| SEGMENT`, `iso6`/`dash`): `sidx` precedes the first `moof`, one `sidx` entry per fragment, and all 30 samples (payload and `dts`) are restored through the Media Timeline.<br>- **Initialization Segment + 2 Media Segments** switched by `lsmash_switch_media_segment()`: init file is exactly `ftyp`+`moov`, each media segment is exactly `styp`+`sidx`+`moof`+`mdat`.<br>- **`lsmash_adhoc_remux_t::func` abort**: a non-zero callback result makes `lsmash_finish_movie()` fail on both the `sidx` insertion and the `moov` relocation paths, with 0 leaks.<br>- **`INDEX` brand validation**: `lsmash_set_file()` returns `NULL` for `INDEX` combined with `isom`/`iso2` brands. |
 | **17** | `test_external_data_reference_roundtrip` | External data reference (`dref`) verification:<br>- **Write**: movie boxes in `movie.mp4` and sample payloads in a separate raw media file (`LSMASH_FILE_MODE_WRITE \| LSMASH_FILE_MODE_MEDIA`) referenced by a non-self-contained `'url '`. A self-contained entry keeps index 1 and the external entry gets index 2. The payload exists only in the media file and the movie file holds none of it.<br>- **Read**: `lsmash_count_data_reference` returns 2, `lsmash_get_data_reference` recovers the external location (and `NULL` for the self-contained entry), `lsmash_assign_data_reference` rejects an out-of-range index and binds the external file, and the Media Timeline restores all 12 samples (payload and `dts`) from the external file.<br>- **Movie Fragment limit**: `lsmash_create_data_reference` rejects an external file for a fragmented movie, leaves no entry behind, and still accepts a self-contained entry. |
+| **18** | `test_read_file_fake_box_and_unsupported_stream` | Fake Box / Timeline flow through the unified file API, without calling `lsmash_importer_*`:<br>- **WAVE**: `lsmash_open_file()` -> `lsmash_set_file()` -> `lsmash_read_file()` -> `lsmash_get_movie_parameters()` -> `lsmash_get_summary()` -> `lsmash_construct_timeline()` -> `lsmash_get_sample_from_media_timeline()` restores a mono 16-bit 8 kHz stream bit-exactly from the fake `moov` / `trak`.<br>- **Unsupported raw stream**: a seekable ADTS stream, whose importer probes successfully but builds no fake movie, makes `lsmash_read_file()` return an error instead of a half-built success. |
 
 ---
 
@@ -66,5 +67,5 @@ Expected output:
 [PASS] test_flac_isobmff_roundtrip
 [PASS] test_segmented_isobmff_and_abort_callback
 [PASS] test_external_data_reference_roundtrip
-=== Assertions run: 147569, Failures: 0 ===
+=== Assertions run: 147606, Failures: 0 ===
 ```
