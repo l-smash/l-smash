@@ -4757,6 +4757,328 @@ static int test_read_file_fake_box_and_unsupported_stream( void )
     printf( "[PASS] test_read_file_fake_box_and_unsupported_stream\n" );
     return 0;
 }
+
+/*---------------------------------------------------------------------------
+ * Test 19: FLAC and IVF (AV1) raw streams through lsmash_read_file() and the Media Timeline
+ *---------------------------------------------------------------------------*/
+static int check_timeline_sample_matches
+(
+    lsmash_root_t *root,
+    uint32_t       track_ID,
+    uint32_t       sample_number,
+    uint64_t       expected_dts,
+    const uint8_t *expected_data,
+    uint32_t       expected_length,
+    const char    *label
+)
+{
+    lsmash_sample_t *sample = lsmash_get_sample_from_media_timeline( root, track_ID, sample_number );
+    TEST_ASSERT( sample != NULL, label );
+    TEST_ASSERT( sample->dts == expected_dts && sample->cts == expected_dts, label );
+    TEST_ASSERT( sample->length == expected_length, label );
+    TEST_ASSERT( sample->index == 1, label );
+    TEST_ASSERT( memcmp( sample->data, expected_data, expected_length ) == 0, label );
+    lsmash_delete_sample( sample );
+    /* The info API and the timestamp APIs must agree with the sample itself. */
+    lsmash_sample_t info = { 0 };
+    uint64_t dts = UINT64_MAX;
+    uint64_t cts = UINT64_MAX;
+    TEST_ASSERT( lsmash_get_sample_info_from_media_timeline( root, track_ID, sample_number, &info ) == 0, label );
+    TEST_ASSERT( info.dts == expected_dts && info.length == expected_length && info.index == 1, label );
+    TEST_ASSERT( lsmash_get_dts_from_media_timeline( root, track_ID, sample_number, &dts ) == 0 && dts == expected_dts, label );
+    TEST_ASSERT( lsmash_get_cts_from_media_timeline( root, track_ID, sample_number, &cts ) == 0 && cts == expected_dts, label );
+    return 0;
+}
+
+static int test_read_file_flac_ivf_timeline( void )
+{
+    /*---- FLAC: 96 kHz 24-bit stereo, 4 variable block size frames (the last one uses an uncommon 16-bit block size) ----*/
+    const char *flac_path = "tests/tmp_test_fake_box.flac";
+    uint8_t     frames[4][128];
+    uint32_t    frame_sizes[4];
+    uint32_t    block_sizes[4]   = { 4096, 4096, 4096, 1500 };
+    uint64_t    sample_nums[4]   = { 0, 4096, 8192, 12288 };
+    uint32_t    max_frame_size   = 0;
+    for( int i = 0; i < 4; i++ )
+    {
+        frame_sizes[i] = build_synth_flac_frame( frames[i], 1, block_sizes[i], sample_nums[i], 32 );
+        max_frame_size = LSMASH_MAX( max_frame_size, frame_sizes[i] );
+    }
+    {
+        lsmash_bs_t *bs = lsmash_bs_create();
+        TEST_ASSERT( bs != NULL, "19a: create bs for flac" );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'f', 'L', 'a', 'C' ) );
+        lsmash_bs_put_byte( bs, 0x00 );
+        lsmash_bs_put_be24( bs, 34 );
+        lsmash_bs_put_be16( bs, 1024 );
+        lsmash_bs_put_be16( bs, 4096 );
+        lsmash_bs_put_be24( bs, 32 );
+        lsmash_bs_put_be24( bs, 128 );
+        lsmash_bs_put_be64( bs, ((uint64_t)96000 << 44) | ((uint64_t)1 << 41) | ((uint64_t)23 << 36) | (uint64_t)13788 );
+        for( int i = 0; i < 16; i++ )
+            lsmash_bs_put_byte( bs, (uint8_t)(0xA0 + i) );
+        lsmash_bs_put_byte( bs, 0x84 );
+        lsmash_bs_put_be24( bs, 12 );
+        lsmash_bs_put_le32( bs, 4 );
+        lsmash_bs_put_bytes( bs, 4, (void *)"L-SM" );
+        lsmash_bs_put_le32( bs, 0 );
+        for( int i = 0; i < 4; i++ )
+            lsmash_bs_put_bytes( bs, frame_sizes[i], frames[i] );
+        uint32_t raw_len = 0;
+        uint8_t *raw = lsmash_bs_export_data( bs, &raw_len );
+        lsmash_bs_cleanup( bs );
+        TEST_ASSERT( raw != NULL && write_test_file( flac_path, raw, raw_len ) == 0, "19a: write flac" );
+        lsmash_free( raw );
+    }
+    {
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( root != NULL && lsmash_open_file( flac_path, 1, &param ) == 0, "19a: open flac" );
+        lsmash_file_t *file = lsmash_set_file( root, &param );
+        TEST_ASSERT( file != NULL, "19a: set flac file" );
+        TEST_ASSERT( lsmash_read_file( file, &param ) >= 0, "19a: read_file succeeds on FLAC via fake boxes" );
+        lsmash_movie_parameters_t movie_param;
+        TEST_ASSERT( lsmash_get_movie_parameters( root, &movie_param ) == 0 && movie_param.number_of_tracks == 1,
+                     "19a: one fake flac track" );
+        TEST_ASSERT( movie_param.timescale == 96000, "19a: movie timescale is the sample rate" );
+        uint32_t track_ID = lsmash_get_track_ID( root, 1 );
+        TEST_ASSERT( track_ID != 0, "19a: flac track ID" );
+        lsmash_media_parameters_t media_param;
+        TEST_ASSERT( lsmash_get_media_parameters( root, track_ID, &media_param ) == 0 && media_param.timescale == 96000,
+                     "19a: media timescale is the sample rate" );
+        lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_get_summary( root, track_ID, 1 );
+        TEST_ASSERT( summary != NULL, "19a: summary from the fake fLaC entry" );
+        if( summary )
+        {
+            TEST_ASSERT( lsmash_check_codec_type_identical( summary->sample_type, ISOM_CODEC_TYPE_FLAC_AUDIO ), "19a: fLaC sample entry" );
+            TEST_ASSERT( summary->frequency == 96000 && summary->channels == 2 && summary->sample_size == 24,
+                         "19a: summary is 96 kHz 2ch 24-bit" );
+            lsmash_codec_specific_t *dfla = lsmash_get_codec_specific_data( (lsmash_summary_t *)summary, 1 );
+            TEST_ASSERT( dfla != NULL && dfla->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_FLAC, "19a: dfLa is attached" );
+            lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        }
+        TEST_ASSERT( lsmash_construct_timeline( root, track_ID ) == 0, "19a: construct flac timeline" );
+        TEST_ASSERT( lsmash_get_sample_count_in_media_timeline( root, track_ID ) == 4, "19a: 4 samples" );
+        TEST_ASSERT( lsmash_get_max_sample_size_in_media_timeline( root, track_ID ) == max_frame_size, "19a: max sample size" );
+        TEST_ASSERT( lsmash_get_media_duration_from_media_timeline( root, track_ID ) == 13788, "19a: media duration" );
+        uint32_t last_delta = 0;
+        TEST_ASSERT( lsmash_get_last_sample_delta_from_media_timeline( root, track_ID, &last_delta ) == 0 && last_delta == 1500,
+                     "19a: last sample delta is the last block size" );
+        /* Random order access exercises the cached DTS accumulation and the stream seek of every read. */
+        static const int order[] = { 3, 0, 2, 1, 3, 0 };
+        for( int k = 0; k < 6; k++ )
+        {
+            int i = order[k];
+            TEST_ASSERT( check_timeline_sample_matches( root, track_ID, (uint32_t)(i + 1), sample_nums[i], frames[i], frame_sizes[i], "19a: flac sample" ) == 0, "19a: flac sample" );
+        }
+        TEST_ASSERT( lsmash_get_sample_from_media_timeline( root, track_ID, 5 ) == NULL, "19a: no sample past the end" );
+        TEST_ASSERT( lsmash_check_sample_existence_in_media_timeline( root, track_ID, 4 ) == 1
+                  && lsmash_check_sample_existence_in_media_timeline( root, track_ID, 5 ) == 0, "19a: sample existence" );
+        TEST_ASSERT( lsmash_construct_timeline( root, track_ID ) == 0
+                  && lsmash_get_sample_count_in_media_timeline( root, track_ID ) == 4, "19a: constructing twice is harmless" );
+        lsmash_destruct_timeline( root, track_ID );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+    }
+    /* The sequential reader used by the muxer must stay consistent with the Media Timeline that moved the stream. */
+    {
+        lsmash_root_t *root = lsmash_create_root();
+        importer_t *imp = lsmash_importer_open( root, flac_path, "auto" );
+        TEST_ASSERT( imp != NULL, "19b: open flac importer" );
+        uint32_t track_ID = lsmash_get_track_ID( root, 1 );
+        lsmash_sample_t *sample = NULL;
+        for( int i = 0; i < 2; i++ )
+        {
+            TEST_ASSERT( lsmash_importer_get_access_unit( imp, 1, &sample ) == 0 && sample != NULL, "19b: access unit before timeline" );
+            TEST_ASSERT( sample && sample->length == frame_sizes[i] && memcmp( sample->data, frames[i], frame_sizes[i] ) == 0
+                      && sample->dts == sample_nums[i], "19b: access unit payload and dts before timeline" );
+            lsmash_delete_sample( sample );
+            sample = NULL;
+        }
+        TEST_ASSERT( lsmash_importer_construct_timeline( imp, 1 ) == 0, "19b: construct timeline in the middle of reading" );
+        TEST_ASSERT( check_timeline_sample_matches( root, track_ID, 4, sample_nums[3], frames[3], frame_sizes[3], "19b: timeline sample 4" ) == 0, "19b: timeline sample 4" );
+        TEST_ASSERT( check_timeline_sample_matches( root, track_ID, 1, sample_nums[0], frames[0], frame_sizes[0], "19b: timeline sample 1" ) == 0, "19b: timeline sample 1" );
+        for( int i = 2; i < 4; i++ )
+        {
+            TEST_ASSERT( lsmash_importer_get_access_unit( imp, 1, &sample ) == 0 && sample != NULL, "19b: access unit after timeline" );
+            TEST_ASSERT( sample && sample->length == frame_sizes[i] && memcmp( sample->data, frames[i], frame_sizes[i] ) == 0
+                      && sample->dts == sample_nums[i], "19b: access unit continues from where it stopped" );
+            lsmash_delete_sample( sample );
+            sample = NULL;
+            if( i == 2 )
+                TEST_ASSERT( check_timeline_sample_matches( root, track_ID, 2, sample_nums[1], frames[1], frame_sizes[1], "19b: timeline between reads" ) == 0, "19b: timeline between reads" );
+        }
+        TEST_ASSERT( lsmash_importer_get_access_unit( imp, 1, &sample ) == 2, "19b: EOF after the last frame" );
+        TEST_ASSERT( lsmash_importer_get_last_delta( imp, 1 ) == 1500, "19b: last delta" );
+        lsmash_importer_close( imp );
+        lsmash_destroy_root( root );
+    }
+    remove( flac_path );
+
+    /*---- IVF (AV1): 3 temporal units with a temporal delimiter and padding that a sample must not keep ----*/
+    const char *ivf_path = "tests/tmp_test_fake_box.ivf";
+    synth_seq_cfg_t seq_cfg =
+    {
+        .seq_profile = 0, .seq_level_idx_0 = 4, .width = 64, .height = 64,
+        .color_description_present = 1, .color_primaries = 1, .transfer_characteristics = 1, .matrix_coefficients = 1,
+        .color_range = 1, .subsampling_x = 1, .subsampling_y = 1, .enable_order_hint = 1, .order_hint_bits_minus_1 = 6,
+    };
+    uint8_t  raw[3][256];
+    uint32_t raw_len[3] = { 0 };
+    uint8_t  expected[3][256];
+    uint32_t expected_len[3] = { 0 };
+    {
+        uint32_t rpos = 0, epos = 0;
+        rpos += build_obu( raw[0] + rpos, AV1_OBU_TYPE_TEMPORAL_DELIMITER, 0, 0, 0, NULL, 0 );
+        uint32_t sh_len = build_seq_hdr_obu( raw[0] + rpos, &seq_cfg );
+        memcpy( expected[0] + epos, raw[0] + rpos, sh_len );
+        rpos += sh_len;
+        epos += sh_len;
+        uint32_t kf_len = build_frame_obu( raw[0] + rpos, AV1_OBU_TYPE_FRAME, 1, 7, 0, 0, AV1_KEY_FRAME, 1, 0, 0xFF, 0 );
+        memcpy( expected[0] + epos, raw[0] + rpos, kf_len );
+        rpos += kf_len;
+        epos += kf_len;
+        uint8_t pad[2] = { 0, 0 };
+        rpos += build_obu( raw[0] + rpos, AV1_OBU_TYPE_PADDING, 0, 0, 0, pad, sizeof(pad) );
+        raw_len[0]      = rpos;
+        expected_len[0] = epos;
+        rpos = epos = 0;
+        rpos += build_obu( raw[1] + rpos, AV1_OBU_TYPE_TEMPORAL_DELIMITER, 0, 0, 0, NULL, 0 );
+        uint32_t f_len = build_frame_obu( raw[1] + rpos, AV1_OBU_TYPE_FRAME, 1, 7, 0, 0, AV1_INTER_FRAME, 0, 1, 0x02, 1 );
+        memcpy( expected[1], raw[1] + rpos, f_len );
+        raw_len[1]      = rpos + f_len;
+        expected_len[1] = f_len;
+        rpos = 0;
+        rpos += build_obu( raw[2] + rpos, AV1_OBU_TYPE_TEMPORAL_DELIMITER, 0, 0, 0, NULL, 0 );
+        f_len = build_frame_obu( raw[2] + rpos, AV1_OBU_TYPE_FRAME_HEADER, 1, 7, 1, 1, 0, 0, 0, 0, 0 );
+        memcpy( expected[2], raw[2] + rpos, f_len );
+        raw_len[2]      = rpos + f_len;
+        expected_len[2] = f_len;
+    }
+    /* The IVF time base is 2/30 s per tick, so the media timescale is 30 and every tick lasts 2 units. */
+    {
+        FILE *fp = fopen( ivf_path, "wb" );
+        TEST_ASSERT( fp != NULL, "19c: create ivf" );
+        uint8_t hdr[32] = { 0 };
+        memcpy( hdr, "DKIF", 4 );
+        put_le16( hdr + 6, 32 );
+        memcpy( hdr + 8, "AV01", 4 );
+        put_le16( hdr + 12, 64 );
+        put_le16( hdr + 14, 64 );
+        put_le32( hdr + 16, 30 );
+        put_le32( hdr + 20, 2 );
+        put_le32( hdr + 24, 3 );
+        fwrite( hdr, 1, 32, fp );
+        for( int i = 0; i < 3; i++ )
+        {
+            uint8_t fhdr[12];
+            put_le32( fhdr, raw_len[i] );
+            put_le64( fhdr + 4, (uint64_t)i );
+            fwrite( fhdr, 1, 12, fp );
+            fwrite( raw[i], 1, raw_len[i], fp );
+        }
+        fclose( fp );
+    }
+    /* Reference sample properties from the sequential reader. */
+    lsmash_random_access_flag ref_ra_flags[3] = { 0 };
+    {
+        lsmash_root_t *root = lsmash_create_root();
+        importer_t *imp = lsmash_importer_open( root, ivf_path, "auto" );
+        TEST_ASSERT( imp != NULL, "19c: open ivf importer" );
+        for( int i = 0; i < 3; i++ )
+        {
+            lsmash_sample_t *sample = NULL;
+            TEST_ASSERT( lsmash_importer_get_access_unit( imp, 1, &sample ) == 0 && sample != NULL, "19c: reference access unit" );
+            if( sample )
+            {
+                ref_ra_flags[i] = sample->prop.ra_flags;
+                lsmash_delete_sample( sample );
+            }
+        }
+        lsmash_importer_close( imp );
+        lsmash_destroy_root( root );
+    }
+    TEST_ASSERT( ref_ra_flags[0] == ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC, "19c: first temporal unit is a sync sample" );
+    {
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( root != NULL && lsmash_open_file( ivf_path, 1, &param ) == 0, "19c: open ivf" );
+        lsmash_file_t *file = lsmash_set_file( root, &param );
+        TEST_ASSERT( file != NULL, "19c: set ivf file" );
+        TEST_ASSERT( lsmash_read_file( file, &param ) >= 0, "19c: read_file succeeds on IVF via fake boxes" );
+        lsmash_movie_parameters_t movie_param;
+        TEST_ASSERT( lsmash_get_movie_parameters( root, &movie_param ) == 0 && movie_param.number_of_tracks == 1,
+                     "19c: one fake ivf track" );
+        uint32_t track_ID = lsmash_get_track_ID( root, 1 );
+        TEST_ASSERT( track_ID != 0, "19c: ivf track ID" );
+        TEST_ASSERT( lsmash_get_media_timescale( root, track_ID ) == 30, "19c: media timescale is the IVF frame rate field" );
+        lsmash_video_summary_t *summary = (lsmash_video_summary_t *)lsmash_get_summary( root, track_ID, 1 );
+        TEST_ASSERT( summary != NULL, "19c: summary from the fake av01 entry" );
+        if( summary )
+        {
+            TEST_ASSERT( lsmash_check_codec_type_identical( summary->sample_type, ISOM_CODEC_TYPE_AV01_VIDEO ), "19c: av01 sample entry" );
+            TEST_ASSERT( summary->width == 64 && summary->height == 64, "19c: summary is 64x64" );
+            lsmash_codec_specific_t *av1c = lsmash_get_codec_specific_data( (lsmash_summary_t *)summary, 1 );
+            TEST_ASSERT( av1c != NULL && av1c->type == LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_VIDEO_AV1, "19c: av1C is attached" );
+            lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        }
+        TEST_ASSERT( lsmash_construct_timeline( root, track_ID ) == 0, "19c: construct ivf timeline" );
+        TEST_ASSERT( lsmash_get_sample_count_in_media_timeline( root, track_ID ) == 3, "19c: 3 samples" );
+        TEST_ASSERT( lsmash_get_max_sample_size_in_media_timeline( root, track_ID ) == LSMASH_MAX( expected_len[0], LSMASH_MAX( expected_len[1], expected_len[2] ) ),
+                     "19c: max sample size excludes the OBUs dropped from samples" );
+        TEST_ASSERT( lsmash_get_media_duration_from_media_timeline( root, track_ID ) == 6, "19c: media duration" );
+        uint32_t last_delta = 0;
+        TEST_ASSERT( lsmash_get_last_sample_delta_from_media_timeline( root, track_ID, &last_delta ) == 0 && last_delta == 2,
+                     "19c: last sample delta" );
+        static const int order[] = { 2, 0, 1, 2, 0 };
+        for( int k = 0; k < 5; k++ )
+        {
+            int i = order[k];
+            TEST_ASSERT( check_timeline_sample_matches( root, track_ID, (uint32_t)(i + 1), (uint64_t)i * 2, expected[i], expected_len[i], "19c: ivf sample" ) == 0, "19c: ivf sample" );
+            lsmash_sample_property_t prop = { 0 };
+            TEST_ASSERT( lsmash_get_sample_property_from_media_timeline( root, track_ID, (uint32_t)(i + 1), &prop ) == 0
+                      && prop.ra_flags == ref_ra_flags[i], "19c: random access property equals the sequential reader" );
+        }
+        TEST_ASSERT( raw_len[0] > expected_len[0], "19c: the stored frame is larger than the sample, so the OBU filter ran" );
+        lsmash_sample_t info = { 0 };
+        TEST_ASSERT( lsmash_get_sample_info_from_media_timeline( root, track_ID, 1, &info ) == 0 && info.pos == 32 + 12,
+                     "19c: sample position points at the IVF frame payload" );
+        TEST_ASSERT( lsmash_get_sample_from_media_timeline( root, track_ID, 4 ) == NULL, "19c: no sample past the end" );
+        lsmash_destruct_timeline( root, track_ID );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+    }
+    {
+        lsmash_root_t *root = lsmash_create_root();
+        importer_t *imp = lsmash_importer_open( root, ivf_path, "auto" );
+        TEST_ASSERT( imp != NULL, "19d: open ivf importer" );
+        uint32_t track_ID = lsmash_get_track_ID( root, 1 );
+        lsmash_sample_t *sample = NULL;
+        TEST_ASSERT( lsmash_importer_get_access_unit( imp, 1, &sample ) == 0 && sample != NULL, "19d: access unit before timeline" );
+        TEST_ASSERT( sample && sample->length == expected_len[0] && memcmp( sample->data, expected[0], expected_len[0] ) == 0,
+                     "19d: access unit payload before timeline" );
+        lsmash_delete_sample( sample );
+        sample = NULL;
+        TEST_ASSERT( lsmash_importer_construct_timeline( imp, 1 ) == 0, "19d: construct timeline in the middle of reading" );
+        TEST_ASSERT( check_timeline_sample_matches( root, track_ID, 3, 4, expected[2], expected_len[2], "19d: timeline sample 3" ) == 0, "19d: timeline sample 3" );
+        for( int i = 1; i < 3; i++ )
+        {
+            TEST_ASSERT( lsmash_importer_get_access_unit( imp, 1, &sample ) >= 0 && sample != NULL, "19d: access unit after timeline" );
+            TEST_ASSERT( sample && sample->length == expected_len[i] && memcmp( sample->data, expected[i], expected_len[i] ) == 0
+                      && sample->dts == (uint64_t)i, "19d: access unit continues from where it stopped" );
+            lsmash_delete_sample( sample );
+            sample = NULL;
+        }
+        TEST_ASSERT( lsmash_importer_get_access_unit( imp, 1, &sample ) == 2, "19d: EOF after the last frame" );
+        TEST_ASSERT( lsmash_importer_get_last_delta( imp, 1 ) == 1, "19d: last delta of the sequential reader is unchanged" );
+        lsmash_importer_close( imp );
+        lsmash_destroy_root( root );
+    }
+    remove( ivf_path );
+
+    printf( "[PASS] test_read_file_flac_ivf_timeline\n" );
+    return 0;
+}
 #ifdef LSMASH_DEBUG_ALLOC
 #define RUN_TEST( test_fn )                                                       \
     do                                                                            \
@@ -4800,6 +5122,7 @@ int main( void )
     RUN_TEST( test_segmented_isobmff_and_abort_callback );
     RUN_TEST( test_external_data_reference_roundtrip );
     RUN_TEST( test_read_file_fake_box_and_unsupported_stream );
+    RUN_TEST( test_read_file_flac_ivf_timeline );
 #ifdef LSMASH_DEBUG_ALLOC
     assert( lsm_alloc_verify_no_leaks() == 0 );
     assert( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0 );
