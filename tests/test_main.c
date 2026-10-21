@@ -4622,6 +4622,39 @@ static int test_external_data_reference_roundtrip( void )
         lsmash_destroy_root( root );
     }
 
+    /* 17c. External data references are not supported for movie fragments: reject them at creation time
+     *      instead of producing a file whose 'dref' disagrees with the actual sample location. */
+    {
+        const char *frag_path = "tests/tmp_test_dref_frag_movie.mp4";
+        lsmash_root_t *root = lsmash_create_root();
+        TEST_ASSERT( root != NULL, "17c: create root" );
+        lsmash_file_parameters_t movie_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( frag_path, 0, &movie_param ) == 0, "17c: open fragmented movie file" );
+        movie_param.mode |= LSMASH_FILE_MODE_FRAGMENTED;
+        lsmash_file_t *movie_file = lsmash_set_file( root, &movie_param );
+        TEST_ASSERT( movie_file != NULL, "17c: set fragmented movie file" );
+        lsmash_file_parameters_t media_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( media_path, 0, &media_param ) == 0, "17c: open external media file" );
+        media_param.mode = LSMASH_FILE_MODE_WRITE | LSMASH_FILE_MODE_MEDIA;
+        lsmash_file_t *media_file = lsmash_set_file( root, &media_param );
+        TEST_ASSERT( media_file != NULL, "17c: set external media file" );
+        lsmash_movie_parameters_t movie_pm;
+        lsmash_initialize_movie_parameters( &movie_pm );
+        TEST_ASSERT( lsmash_set_movie_parameters( root, &movie_pm ) == 0, "17c: set movie parameters" );
+        uint32_t frag_tid = lsmash_create_track( root, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK );
+        TEST_ASSERT( frag_tid != 0, "17c: create track" );
+        lsmash_data_reference_t ext_ref = { .index = 0, .location = (char *)media_name };
+        TEST_ASSERT( lsmash_create_data_reference( root, frag_tid, &ext_ref, media_file ) < 0,
+                     "17c: external data reference in a fragmented movie is rejected" );
+        TEST_ASSERT( lsmash_count_data_reference( root, frag_tid ) == 0, "17c: no data reference is left behind" );
+        lsmash_data_reference_t self_ref = { .index = 0, .location = NULL };
+        TEST_ASSERT( lsmash_create_data_reference( root, frag_tid, &self_ref, movie_file ) == 0,
+                     "17c: self-contained data reference in a fragmented movie is accepted" );
+        lsmash_close_file( &media_param );
+        lsmash_close_file( &movie_param );
+        lsmash_destroy_root( root );
+        remove( frag_path );
+    }
     remove( movie_path );
     remove( media_path );
     printf( "[PASS] test_external_data_reference_roundtrip\n" );

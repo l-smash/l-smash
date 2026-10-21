@@ -923,6 +923,9 @@ int lsmash_create_data_reference
      || (!(file->flags & LSMASH_FILE_MODE_MEDIA) && !(file->flags & LSMASH_FILE_MODE_INITIALIZATION))
      || !(file->flags & LSMASH_FILE_MODE_WRITE)
      || (root->file != file && ((file->flags & LSMASH_FILE_MODE_FRAGMENTED) || file->fragment))
+     /* The movie to which an external file is referenced shall not be fragmented either. Otherwise samples would be written
+      * into the movie file itself while 'dref' claims they are in the external file. */
+     || (root->file != file && LSMASH_IS_EXISTING_BOX( root->file ) && ((root->file->flags & LSMASH_FILE_MODE_FRAGMENTED) || root->file->fragment))
      || !data_ref )
         return LSMASH_ERR_FUNCTION_PARAM;
     isom_trak_t *trak = lsm_track_get_trak( root->file, track_ID );
