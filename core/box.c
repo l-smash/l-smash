@@ -72,7 +72,7 @@ void isom_init_box_common_orig
         box->version = 0;
         box->flags   = 0;
     }
-    isom_set_box_writer( box );
+    lsm_write_set_box_writer( box );
 }
 
 static void isom_reorder_tail_box( isom_box_t *parent )
@@ -433,7 +433,7 @@ int isom_add_extension_binary
         lsmash_free( ext );
         return LSMASH_ERR_MEMORY_ALLOC;
     }
-    isom_set_box_writer( ext );
+    lsm_write_set_box_writer( ext );
     return 0;
 }
 
@@ -653,7 +653,7 @@ static void isom_remove_file_abstract( isom_file_abstract_t *file_abstract )
 {
     if( LSMASH_IS_NON_EXISTING_BOX( file_abstract ) )
         return;
-    isom_printer_destory_list( file_abstract );
+    lsm_print_destroy_list( file_abstract );
     lsm_timeline_remove_all( file_abstract );
     lsmash_free( file_abstract->compatible_brands );
     lsmash_bs_cleanup( file_abstract->bs );
@@ -1340,7 +1340,7 @@ isom_tref_type_t *isom_add_track_reference_type( isom_tref_t *tref, isom_track_r
     tref_type->destruct   = (isom_extension_destructor_t)isom_remove_track_reference_type;
     tref_type->size       = 0;
     tref_type->type       = lsmash_form_iso_box_type( type );
-    isom_set_box_writer( (isom_box_t *)tref_type );
+    lsm_write_set_box_writer( (isom_box_t *)tref_type );
     if( isom_add_box_to_extension_list( tref, tref_type ) < 0 )
     {
         lsmash_free( tref_type );
@@ -2001,7 +2001,7 @@ lsmash_box_t *lsmash_create_box
     box->precedence = precedence;
     box->size       = ISOM_BASEBOX_COMMON_SIZE + size + (type.fourcc == ISOM_BOX_TYPE_UUID.fourcc ? 16 : 0);
     box->type       = type;
-    isom_set_box_writer( (isom_box_t *)box );
+    lsm_write_set_box_writer( (isom_box_t *)box );
     return (lsmash_box_t *)box;
 }
 
@@ -2092,7 +2092,7 @@ int lsmash_add_box_ex
     memcpy( buf + (uintptr_t)(box->size - box->unknown_size), box->unknown_field, box->unknown_size );
     /* Add a box as a child box and try to expand into struct format. */
     lsmash_box_t dummy = { 0 };
-    int ret = isom_read_box( file, &dummy, parent, 0, 0 );
+    int ret = lsm_read_box( file, &dummy, parent, 0, 0 );
     lsmash_free( buf );
     lsmash_bs_cleanup( bs );
     file->bs             = bs_backup;   /* Switch back to the normal file stream mode. */
@@ -2175,7 +2175,7 @@ int lsmash_write_top_level_box
 {
     if( !box || (isom_box_t *)box->file != box->parent )
         return LSMASH_ERR_FUNCTION_PARAM;
-    int ret = isom_write_box( box->file->bs, box );
+    int ret = lsm_write_box( box->file->bs, box );
     if( ret < 0 )
         return ret;
     box->file->size += box->size;
@@ -2193,7 +2193,7 @@ uint8_t *lsmash_export_box
     lsmash_bs_t *bs = lsmash_bs_create();
     if( !bs )
         return NULL;
-    if( isom_write_box( bs, box ) < 0 )
+    if( lsm_write_box( bs, box ) < 0 )
     {
         lsmash_bs_cleanup( bs );
         return NULL;

@@ -140,7 +140,7 @@ static int fragment_set_overall_duration( lsmash_file_t *file )
     lsmash_bs_t *bs = file->bs;
     uint64_t current_pos = bs->offset;
     lsmash_bs_write_seek( bs, mehd->pos, SEEK_SET );
-    int ret = isom_write_box( bs, (isom_box_t *)mehd );
+    int ret = lsm_write_box( bs, (isom_box_t *)mehd );
     lsmash_bs_write_seek( bs, current_pos, SEEK_SET );
     return ret;
 }
@@ -230,7 +230,7 @@ static int fragment_write_random_access_info( lsmash_file_t *file )
     if( isom_update_box_size( file->mfra ) == 0 )
         return LSMASH_ERR_NAMELESS;
     /* Write the Movie Fragment Random Access Box. */
-    return isom_write_box( file->bs, (isom_box_t *)file->mfra );
+    return lsm_write_box( file->bs, (isom_box_t *)file->mfra );
 }
 
 static int fragment_update_indexed_material_offset
@@ -315,7 +315,7 @@ static int fragment_write_segment_indexes
         isom_sidx_t *sidx = (isom_sidx_t *)entry->data;
         if( LSMASH_IS_NON_EXISTING_BOX( sidx ) )
             continue;
-        if( (ret = isom_write_box( file->bs, (isom_box_t *)sidx )) < 0 )
+        if( (ret = lsm_write_box( file->bs, (isom_box_t *)sidx )) < 0 )
             goto fail;
     }
     /* Rearrange subsequent data. */
@@ -480,7 +480,7 @@ static int fragment_output_media_data( lsmash_file_t *file )
         if( LSMASH_IS_NON_EXISTING_BOX( file->mdat ) && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_mdat( file ) ) )
             return LSMASH_ERR_NAMELESS;
         file->mdat->manager &= ~(LSMASH_INCOMPLETE_BOX | LSMASH_WRITTEN_BOX);
-        int ret = isom_write_box( file->bs, (isom_box_t *)file->mdat );
+        int ret = lsm_write_box( file->bs, (isom_box_t *)file->mdat );
         if( ret < 0 )
             return ret;
         file->size += file->mdat->size;
@@ -574,13 +574,13 @@ static int fragment_finish_initial_movie( lsmash_file_t *file )
     /* Write File Type Box here if it was not written yet. */
     if( LSMASH_IS_EXISTING_BOX( file->ftyp ) && !(file->ftyp->manager & LSMASH_WRITTEN_BOX) )
     {
-        if( (ret = isom_write_box( file->bs, (isom_box_t *)file->ftyp )) < 0 )
+        if( (ret = lsm_write_box( file->bs, (isom_box_t *)file->ftyp )) < 0 )
             return ret;
         file->size += file->ftyp->size;
     }
     /* Write Movie Box. */
-    if( (ret = isom_write_box( file->bs, (isom_box_t *)file->moov )) < 0
-     || (ret = isom_write_box( file->bs, (isom_box_t *)file->meta )) < 0 )
+    if( (ret = lsm_write_box( file->bs, (isom_box_t *)file->moov )) < 0
+     || (ret = lsm_write_box( file->bs, (isom_box_t *)file->meta )) < 0 )
         return ret;
     file->size += preceding_size;
     /* Output samples. */
@@ -1066,7 +1066,7 @@ static int fragment_finish_movie
     }
     /* Write Movie Fragment Box and its children. */
     moof->pos = file->size;
-    if( (ret = isom_write_box( file->bs, (isom_box_t *)moof )) < 0 )
+    if( (ret = lsm_write_box( file->bs, (isom_box_t *)moof )) < 0 )
         return ret;
     if( file->fragment->first_moof_pos == FIRST_MOOF_POS_UNDETERMINED )
         file->fragment->first_moof_pos = moof->pos;
@@ -1708,7 +1708,7 @@ int lsm_fragment_append_sample
         isom_styp_t *styp = (isom_styp_t *)file->styp_list.head->data;
         if( !(styp->manager & LSMASH_WRITTEN_BOX) )
         {
-            int ret = isom_write_box( file->bs, (isom_box_t *)styp );
+            int ret = lsm_write_box( file->bs, (isom_box_t *)styp );
             if( ret < 0 )
                 return ret;
             file->size += styp->size;

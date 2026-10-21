@@ -460,14 +460,14 @@ int lsmash_finish_movie
     /* Write the size of Media Data Box here. */
     lsmash_bs_t *bs = file->bs;
     file->mdat->manager &= ~LSMASH_INCOMPLETE_BOX;
-    if( (err = isom_write_box( bs, (isom_box_t *)file->mdat )) < 0 )
+    if( (err = lsm_write_box( bs, (isom_box_t *)file->mdat )) < 0 )
         return err;
     /* Write the Movie Box and a Meta Box if no optimization for progressive download. */
     uint64_t meta_size = LSMASH_IS_EXISTING_BOX( file->meta ) ? file->meta->size : 0;
     if( !remux )
     {
-        if( (err = isom_write_box( bs, (isom_box_t *)file->moov )) < 0
-         || (err = isom_write_box( bs, (isom_box_t *)file->meta )) < 0 )
+        if( (err = lsm_write_box( bs, (isom_box_t *)file->moov )) < 0
+         || (err = lsm_write_box( bs, (isom_box_t *)file->meta )) < 0 )
             return err;
         file->size += moov->size + meta_size;
         return 0;
@@ -498,8 +498,8 @@ int lsmash_finish_movie
     uint64_t read_pos = bs->offset;
     /* Write moov + meta there instead. */
     if( (err = lsmash_bs_write_seek( bs, placeholder_pos, SEEK_SET )) < 0
-     || (err = isom_write_box( bs, (isom_box_t *)file->moov ))        < 0
-     || (err = isom_write_box( bs, (isom_box_t *)file->meta ))        < 0 )
+     || (err = lsm_write_box( bs, (isom_box_t *)file->moov ))         < 0
+     || (err = lsm_write_box( bs, (isom_box_t *)file->meta ))         < 0 )
         goto fail;
     uint64_t write_pos = bs->offset;
     /* Update the positions */

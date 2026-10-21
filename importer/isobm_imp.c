@@ -143,7 +143,7 @@ static int isobm_importer_probe( importer_t *importer )
         bs->written = ret;
         lsmash_bs_read_seek( bs, 0, SEEK_SET );
     }
-    if( (err = isom_read_file( importer->file )) < 0 )
+    if( (err = lsm_read_file( importer->file )) < 0 )
         goto fail;
     if( !(importer->file->flags & (LSMASH_FILE_MODE_BOX
                                   | LSMASH_FILE_MODE_FRAGMENTED

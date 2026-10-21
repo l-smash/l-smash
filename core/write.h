@@ -2,6 +2,7 @@
  * write.h
  *****************************************************************************
  * Copyright (C) 2011-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Hiroki Taniura <boiled.sugar@gmail.com>
  *
@@ -23,7 +24,7 @@
 #ifndef LSMASH_WRITE_H
 #define LSMASH_WRITE_H
 
-int isom_write_box( lsmash_bs_t *bs, isom_box_t *box );
-void isom_set_box_writer( isom_box_t *box );
+int lsm_write_box( lsmash_bs_t *bs, isom_box_t *box );
+void lsm_write_set_box_writer( isom_box_t *box );
 
 #endif

@@ -2,6 +2,7 @@
  * print.h
  *****************************************************************************
  * Copyright (C) 2010-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -23,8 +24,8 @@
 #ifndef LSMASH_PRINT_H
 #define LSMASH_PRINT_H
 
-int isom_add_print_func( lsmash_file_t *file, void *box, int level );
-void isom_printer_destory_list( lsmash_file_t *file );
-lsmash_entry_list_t *isom_printer_create_list( void );
+int lsm_print_add_func( lsmash_file_t *file, void *box, int level );
+void lsm_print_destroy_list( lsmash_file_t *file );
+lsmash_entry_list_t *lsm_print_create_list( void );
 
 #endif /* LSMASH_PRINT_H */

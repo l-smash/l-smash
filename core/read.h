@@ -2,6 +2,7 @@
  * read.h
  *****************************************************************************
  * Copyright (C) 2010-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -23,7 +24,7 @@
 #ifndef LSMASH_READ_H
 #define LSMASH_READ_H
 
-int isom_read_file( lsmash_file_t *file );
-int isom_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uint64_t parent_pos, int level );
+int lsm_read_file( lsmash_file_t *file );
+int lsm_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uint64_t parent_pos, int level );
 
 #endif /* LSMASH_READ_H */

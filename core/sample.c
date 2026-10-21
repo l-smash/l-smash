@@ -411,7 +411,7 @@ static int sample_append
         if( mdat_absent && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_mdat( file ) ) )
             return LSMASH_ERR_NAMELESS;
         file->mdat->manager |= LSMASH_PLACEHOLDER;
-        if( (err = isom_write_box( file->bs, (isom_box_t *)file->mdat )) < 0 )
+        if( (err = lsm_write_box( file->bs, (isom_box_t *)file->mdat )) < 0 )
             return err;
         file->size += file->mdat->size;
     }
@@ -607,7 +607,7 @@ int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_
     {
         if( LSMASH_IS_EXISTING_BOX( file->ftyp ) && !(file->ftyp->manager & LSMASH_WRITTEN_BOX) )
         {
-            int err = isom_write_box( file->bs, (isom_box_t *)file->ftyp );
+            int err = lsm_write_box( file->bs, (isom_box_t *)file->ftyp );
             if( err < 0 )
                 return err;
             file->size += file->ftyp->size;
