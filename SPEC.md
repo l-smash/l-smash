@@ -94,7 +94,7 @@ Detailed specifications for each major subsystem reside in `docs/specs/` and are
 4. **Core Container Engine Module Architecture (`core/stbl.{c,h}`, `core/sample.{c,h}`, `core/track.{c,h}`, `core/movie.{c,h}`)**:
    - Section 6 below specifies the four-module architecture of the core container engine organized by ISOBMFF logical hierarchy (`stbl`, `sample`, `track`, `movie`), replacing the monolithic `core/isom.c` compilation unit, together with the unified symbol naming across `core/`, `codecs/`, and `importer/`.
 5. **Xiph FLAC (`fLaC` / `dfLa`) & Box Reader Hardening (`codecs/flac.c`, `importer/flac_imp.c`, `core/read.c`)**:
-   - Full RFC 9639 and FLAC-in-ISOBMFF encapsulation (`fLaC` Sample Entry and `dfLa` `FLACSpecificBox` containing `STREAMINFO` and metadata blocks), table-driven CRC-8 frame header verification, variable/fixed block size timestamp accumulation, and raw `.flac` stream reconstruction on demultiplexing.
+   - Full RFC 9639 and FLAC-in-ISOBMFF encapsulation (`fLaC` Sample Entry and `dfLa` `FLACSpecificBox` containing `STREAMINFO` and metadata blocks), table-driven CRC-8 frame header verification, variable/fixed block size timestamp accumulation, and raw `.flac` stream reconstruction on demultiplexing. A raw `.flac` stream (like `.ivf` AV1 and `.wav`) is also readable through `lsmash_read_file()` and the Media Timeline API through a fake `moov` / `trak` / `stsd` built by `importer/flac_imp.c`.
    - Box reader hardening in `core/read.c` enforcing `ISOM_MAX_BOX_NESTING_LEVEL` (64 levels), child box boundary checks against remaining parent box bytes, and integer overflow guards.
 
 ---
@@ -104,10 +104,10 @@ Detailed specifications for each major subsystem reside in `docs/specs/` and are
 | Document | Scope & Responsibility | Status |
 | :--- | :--- | :--- |
 | [`docs/CODING_STYLE.md`](docs/CODING_STYLE.md) | Official C11 coding style, Allman formatting, internal header policy, symbol naming, and Git contribution guidelines | Active (`v2.23.1`) |
-| [`docs/HISTORY.md`](docs/HISTORY.md) | Historical lineage (`master`, `av1`, `vimeo`, `dev`), forensic bug analysis, and release changelog | Synchronized (`v2.23.4`) |
+| [`docs/HISTORY.md`](docs/HISTORY.md) | Historical lineage (`master`, `av1`, `vimeo`, `dev`), forensic bug analysis, and release changelog | Synchronized (`v2.23.5`) |
 | [`docs/specs/memory_architecture.md`](docs/specs/memory_architecture.md) | C11 memory audit (`LSMASH_DEBUG_ALLOC`), `lsmash_multiple_buffers_t` resize invariants, and `lsm_list_t` Paged Block Array architecture | Synchronized (`v2.23.4`) |
-| [`docs/specs/codecs_and_importers.md`](docs/specs/codecs_and_importers.md) | Comprehensive architecture and container binding specification for all video and audio codecs and importers (`codecs/*`, `importer/*`) | Synchronized (`v2.23.4`) |
-| [`docs/specs/testing_strategy.md`](docs/specs/testing_strategy.md) | Self-contained synthetic test suite (`make test`), bitstream generators, malformed box negative tests, and regression suites | Synchronized (`v2.23.4`) |
+| [`docs/specs/codecs_and_importers.md`](docs/specs/codecs_and_importers.md) | Comprehensive architecture and container binding specification for all video and audio codecs and importers (`codecs/*`, `importer/*`) | Synchronized (`v2.23.5`) |
+| [`docs/specs/testing_strategy.md`](docs/specs/testing_strategy.md) | Self-contained synthetic test suite (`make test`), bitstream generators, malformed box negative tests, and regression suites | Synchronized (`v2.23.5`) |
 
 ---
 
@@ -122,7 +122,7 @@ Detailed specifications for each major subsystem reside in `docs/specs/` and are
 - **Quality Requirements**:
   1. Zero compiler warnings under `-Wall -Wshadow -std=c11 -pedantic` across `liblsmash.a`, CLI tools, and `tests/test_main.c`.
   2. Public header `lsmash.h` strictly passes standalone verification under `gcc -std=c99 -pedantic` and `g++ -std=c++11 -pedantic`.
-  3. All 18 synthetic test suites in `make test` must pass with **0 leaks** and **0 active blocks/bytes** reported by `lsm_alloc_verify_no_leaks()`.
+  3. All 19 synthetic test suites in `make test` must pass with **0 leaks** and **0 active blocks/bytes** reported by `lsm_alloc_verify_no_leaks()`.
 
 ---
 
@@ -229,7 +229,7 @@ All remaining `core/` compilation units likewise follow the `lsmash_*` (Public A
 | `core/box_default.{c,h}` | `lsm_box_default_allocate`, `lsm_box_default_non_existing_*` | — |
 | `core/file.{c,h}` | `lsm_file_check_compat_flags`, `lsm_file_check_brand_version`, `lsm_file_set_brands` | `file_clear_compat_flags`, `file_check_mandatory_boxes`, `file_close`, `file_set_brands` |
 | `core/fragment.{c,h}` | `lsm_fragment_create_empty_duration`, `lsm_fragment_update_track_duration`, `lsm_fragment_flush_pooled_samples`, `lsm_fragment_append_sample`, `lsm_fragment_finish_movie`, `lsm_fragment_set_last_sample_delta` | `fragment_write_mfra`, `fragment_update_sidx`, `fragment_flush`, `fragment_prepare_chunk_run`, `fragment_output_sample_flags`, `fragment_input_sample_flags`, `fragment_create_track_run`, `fragment_append_track_run`, `fragment_update_cache`, etc. |
-| `core/timeline.{c,h}` | `lsm_timeline_remove_all`, `lsm_timeline_destroy_track`, `lsm_timeline_get_dts`, `lsm_timeline_get_cts`, `lsm_timeline_get_sample_duration`, `lsm_timeline_check_sample_existence`, `lsm_timeline_get_sample`, `lsm_timeline_get_sample_info`, `lsm_timeline_get_sample_property`, `lsm_timeline_get_explicit_timeline_map`, `lsm_timeline_count_explicit_timeline_map` | `timeline_get_track`, `timeline_add_dref_entry`, `timeline_add_sample_description`, `timeline_get_portable_chunk`, `timeline_add_sample_info`, `timeline_construct`, etc. |
+| `core/timeline.{c,h}` | `lsm_timeline_remove_all`, `lsm_timeline_destroy_track`, `lsm_timeline_get_dts`, `lsm_timeline_get_cts`, `lsm_timeline_get_sample_duration`, `lsm_timeline_check_sample_existence`, `lsm_timeline_get_sample`, `lsm_timeline_get_sample_info`, `lsm_timeline_get_sample_property`, `lsm_timeline_get_explicit_timeline_map`, `lsm_timeline_count_explicit_timeline_map`, `lsm_timeline_setup_raw`, `lsm_timeline_add_sample_info_entry`, `lsm_timeline_set_sample_filter`, `lsm_timeline_finish_raw`, `lsm_timeline_register` | `timeline_get_track`, `timeline_add_dref_entry`, `timeline_add_sample_description`, `timeline_get_portable_chunk`, `timeline_add_sample_info`, `timeline_construct`, etc. |
 | `core/read.{c,h}` | `lsm_read_box`, `lsm_read_unknown_box`, `lsm_read_children`, `lsm_read_leaf_box_common_last_process`, `lsm_read_check_box_size`, `lsm_read_visual_description`, `lsm_read_audio_description` | `read_file`, `read_unknown_box`, `read_children`, `read_ftyp`, `read_moov`, `read_trak`, `read_stbl`, `read_pcmC`, `read_chnl`, `read_srat`, `read_emsg`, etc. |
 | `core/write.{c,h}` | `lsm_write_box`, `lsm_write_extension_boxes`, `lsm_write_set_box_writer`, `lsm_write_moov`, `lsm_write_mdat_header`, `lsm_write_mdat_size`, `lsm_write_ftyp`, `lsm_write_meta`, `lsm_write_free` | `write_children`, `write_unknown_box`, `write_ftyp`, `write_moov`, `write_trak`, `write_stbl`, `write_pcmC`, `write_chnl`, `write_srat`, `write_emsg`, etc. |
 | `core/print.{c,h}` | `lsm_print_indent`, `lsm_print_box_common`, `lsm_print_unknown`, `lsm_print_destroy_list`, `lsm_print_set_box_printer` | `print_iprintf`, `print_ifprintf`, `print_basebox_common`, `print_fullbox_common`, `print_box_common`, `print_children`, `print_ftyp`, `print_moov`, `print_trak`, `print_pcmC`, `print_chnl`, `print_srat`, `print_qt_color_table`, `print_sample_description_extension`, etc. |
@@ -243,11 +243,11 @@ All modules in `codecs/` and `importer/` enforce the identical symbol naming hie
 | Module | Internal Shared (`lsm_<filename>_*`) | File-Local (`static <filename>_*`) |
 | :--- | :--- | :--- |
 | `codecs/description.{c,h}` | `lsm_description_setup_from_summary`, `lsm_description_get_codec_specific`, `lsm_description_copy_opaque_extension`, `lsm_description_print_codec_specific`, `lsm_description_append_Binary` | `description_initialize_*`, `description_setup_*`, `description_get_*` |
-| `codecs/av1.{c,h}` | `lsm_av1_get_uvlc`, `lsm_av1_get_leb128`, `lsm_av1_show_leb128`, `lsm_av1_get_su`, `lsm_av1_get_ns`, `lsm_av1_parse_sequence_header`, `lsm_av1_parse_temporal_unit`, `lsm_av1_construct_specific_parameters`, `lsm_av1_copy_codec_specific`, `lsm_av1_print_codec_specific`, `lsm_av1_update_bitrate` | `av1_parse_*`, `av1_load_reference_frame_info`, `av1_update_reference_list`, etc. |
+| `codecs/av1.{c,h}` | `lsm_av1_get_uvlc`, `lsm_av1_get_leb128`, `lsm_av1_show_leb128`, `lsm_av1_get_su`, `lsm_av1_get_ns`, `lsm_av1_parse_sequence_header`, `lsm_av1_parse_temporal_unit`, `lsm_av1_extract_sample_obus`, `lsm_av1_construct_specific_parameters`, `lsm_av1_copy_codec_specific`, `lsm_av1_print_codec_specific`, `lsm_av1_update_bitrate` | `av1_parse_*`, `av1_load_reference_frame_info`, `av1_update_reference_list`, etc. |
 | `codecs/h264.{c,h}` / `codecs/hevc.{c,h}` / `codecs/nalu.{c,h}` | `lsm_h264_*`, `lsm_hevc_*`, `lsm_nalu_*` | `h264_*`, `hevc_*`, `nalu_*` |
 | `codecs/flac.{c,h}` | `lsm_flac_verify_crc8`, `lsm_flac_parse_streaminfo`, `lsm_flac_parse_frame_header`, `lsm_flac_construct_specific_parameters`, `lsm_flac_copy_codec_specific`, `lsm_flac_print_codec_specific` | `flac_read_utf8_uint64`, `flac_put_specific_Metadata_blocks`, `flac_print_*` |
 | `codecs/a52.{c,h}` / `codecs/dts.{c,h}` / `codecs/alac.{c,h}` / `codecs/opus.{c,h}` / `codecs/mp4a.{c,h}` / `codecs/mp4v.{c,h}` / `codecs/mp4sys.{c,h}` / `codecs/vc1.{c,h}` / `codecs/wma.{c,h}` / `codecs/qt_wfex.{c,h}` | `lsm_a52_*`, `lsm_dts_*`, `lsm_alac_*`, `lsm_opus_*`, `lsm_mp4a_*`, `lsm_mp4v_*`, `lsm_mp4sys_*`, `lsm_vc1_*`, `lsm_wma_*`, `lsm_qt_wfex_*` | `a52_*`, `dts_*`, `alac_*`, `opus_*`, `mp4a_*`, `mp4v_*`, `mp4sys_*`, `vc1_*`, `wma_*`, `qt_wfex_*` |
-| `importer/importer.{c,h}` & `importer/*_imp.c` | *(Non-public: `lsmash_importer_*` are excluded from `liblsmash.ver` by `configure` and are internal symbols for CLI tool transition only, not part of the shared library ABI)* | `importer_find`, `a52_imp_*`, `adts_imp_*`, `als_imp_*`, `amr_imp_*`, `dts_imp_*`, `flac_imp_*`, `isobm_imp_*`, `ivf_imp_*`, `mp3_imp_*`, `nalu_imp_*`, `vc1_imp_*`, `wave_imp_*` |
+| `importer/importer.{c,h}` & `importer/*_imp.c` | `lsm_importer_make_fake_movie`, `lsm_importer_make_fake_track`, `lsm_importer_setup_fake_track`, `lsm_importer_break_fake_movie` *(Non-public: `lsmash_importer_*` are excluded from `liblsmash.ver` by `configure` and are internal symbols for CLI tool transition only, not part of the shared library ABI)* | `importer_has_isobmff_signature`, `a52_imp_*`, `adts_imp_*`, `als_imp_*`, `amr_imp_*`, `dts_imp_*`, `flac_imp_*`, `isobm_imp_*`, `ivf_imp_*`, `mp3_imp_*`, `nalu_imp_*`, `vc1_imp_*`, `wave_imp_*` |
 
 ---
 

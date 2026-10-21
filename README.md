@@ -21,7 +21,7 @@ Designed for strict compliance with international standards, L-SMASH maintains a
 ### Video Codecs
 | Codec Family | Sample Entry / Config FourCC | Specification | Support Scope |
 | :--- | :--- | :--- | :--- |
-| **AOM AV1** | `av01` + `av1C` | AOM AV1 Bitstream v1.0.0 Errata 1 & AV1-ISOBMFF v1.2.0 | Summary Construct / Raw Importer (`.ivf`) / Media Demux (Standard & Fragmented) |
+| **AOM AV1** | `av01` + `av1C` | AOM AV1 Bitstream v1.0.0 Errata 1 & AV1-ISOBMFF v1.2.0 | Summary Construct / Raw Importer (`.ivf`, also readable through `lsmash_read_file()` and the Media Timeline) / Media Demux (Standard & Fragmented) |
 | **ITU-T H.264 / MPEG-4 AVC** | `avc1`–`avc4`, `avcp` + `avcC`, `btrt` | ITU-T H.264 / ISO/IEC 14496-10 & ISO/IEC 14496-15 | Summary Construct / Raw Importer (Annex-B) / Media Demux |
 | **ITU-T H.265 / MPEG-H HEVC** | `hvc1`, `hev1` + `hvcC`, `btrt` | ITU-T H.265 / ISO/IEC 23008-2 & ISO/IEC 14496-15 | Summary Construct / Raw Importer (Annex-B) / Media Demux |
 | **SMPTE VC-1** | `vc-1` + `dvc1`, `btrt` | SMPTE 421M & RP 2025 | Summary Construct / Raw Importer (Advanced Profile) / Media Demux |
@@ -33,13 +33,13 @@ Designed for strict compliance with international standards, L-SMASH maintains a
 ### Audio Codecs
 | Codec Family | Sample Entry / Config FourCC | Specification | Support Scope |
 | :--- | :--- | :--- | :--- |
-| **Xiph FLAC** | `fLaC` + `dfLa` | IETF RFC 9639 & FLAC-in-ISOBMFF | Summary Construct / Raw Importer (`.flac`) / Media Demux (Standard & Fragmented) |
+| **Xiph FLAC** | `fLaC` + `dfLa` | IETF RFC 9639 & FLAC-in-ISOBMFF | Summary Construct / Raw Importer (`.flac`, also readable through `lsmash_read_file()` and the Media Timeline) / Media Demux (Standard & Fragmented) |
 | **MPEG-4 Audio (AAC / HE-AAC / ALS)** | `mp4a` + `esds` (or QT `wave`/`frma`/`esds`) | ISO/IEC 14496-3 & ISO/IEC 14496-14 | Summary Construct / Raw Importer (ADTS `.aac`, `.als`) / Media Demux |
 | **IETF Opus** | `Opus` + `dOps` | IETF RFC 6716 & Opus-in-ISOBMFF with `'roll'` (`AudioRollRecoveryEntry`) pre-roll sample grouping and encoder-delay Edit List mapping | Summary Construct / Media Demux |
 | **Dolby AC-3 & Enhanced AC-3** | `ac-3` + `dac3`, `ec-3` + `dec3` | ATSC A/52 & ETSI TS 102 366 Annex F | Summary Construct / Raw Importer (`.ac3`, `.eac3`) / Media Demux |
 | **Apple Lossless (ALAC)** | `alac` + `alac` (or QT `wave`/`frma`/`alac`) | Apple Lossless Audio Codec / QTFF / ISOBMFF | Summary Construct / Media Demux |
 | **DTS & DTS-HD** | `dtsc`, `dtsh`, `dtse`, `dtsl`, `dtsx` + `ddts` | ETSI TS 102 114 & DTS ISO/IEC 14496-12 Annex | Summary Construct / Raw Importer (`.dts`, `.dtshd`) / Media Demux |
-| **ISOBMFF Uncompressed LPCM** | `ipcm`, `fpcm` + `pcmC` (+ `chnl`, `srat`) | ISO/IEC 23003-5 & ISO/IEC 14496-12 (`AudioSampleEntryV1`) | Summary Construct / Raw Importer (`.wav`) / Media Demux (Standard & Fragmented) |
+| **ISOBMFF Uncompressed LPCM** | `ipcm`, `fpcm` + `pcmC` (+ `chnl`, `srat`) | ISO/IEC 23003-5 & ISO/IEC 14496-12 (`AudioSampleEntryV1`) | Summary Construct / Raw Importer (`.wav`, also readable through `lsmash_read_file()` and the Media Timeline) / Media Demux (Standard & Fragmented) |
 | **QTFF Uncompressed LPCM** | `lpcm`, `sowt`, `twos`, `raw `, `in24`, `in32`, `fl32`, `fl64` (+ `wave`, `chan`) | Apple QuickTime File Format (QTFF Sound Desc v0/v1/v2) | Summary Construct / Raw Importer (`.wav`) / Media Demux |
 | **3GPP AMR-NB / AMR-WB** | `samr`, `sawb` + `damr` | 3GPP TS 26.244 | Summary Construct / Raw Importer (`.amr`, `.awb`) / Media Demux |
 | **MPEG-1/2 Audio Layer III (MP3)** | `mp4a` + `esds` / `.mp3` + `wave` | ISO/IEC 11172-3 / ISO/IEC 13818-3 / QTFF | Summary Construct / Raw Importer (`.mp3`) / Media Demux |
@@ -76,7 +76,7 @@ Designed for strict compliance with international standards, L-SMASH maintains a
 - **C11 Paged Block Array (`lsm_list_t`)**: High-volume Sample Tables (`stts`, `ctts`, `stsz`, `stz2`, `stss`, `stps`, `sdtp`, `stsc`, `stco`/`co64`, `sgpd`, `sbgp`, `elst`), Movie Fragment runs (`trun->optional`, `tfra`, `sidx`, `fragment->pool`), and Media Timelines (`info_list`, `bunch_list`, `chunk_list`) store value elements contiguously in `2^8 = 256`-element pages, providing `O(1)` bit-shift random access and pointer stability on append without per-entry linked-list node allocations.
 - **Sentinel Box Architecture (`box_default`)**: Singleton child box pointers on parent structs follow the Null-Object Sentinel Pattern and never hold `NULL`; when a box is absent, pointers reference static `LSMASH_NON_EXISTING_BOX` sentinels, enabling deep hierarchical traversal (`trak->mdia->minf->stbl->stsd`) without null-pointer branches.
 - **Compile-Time `static const` Dispatch Tables**: All Box readers, writers, destructors, printers, and codec summary dispatchers are immutable, thread-safe, ROM-placed (`static const`) tables.
-- **Self-Contained Synthetic Test Suite & Memory Auditor**: Includes a built-in C11 memory auditor (`-DLSMASH_DEBUG_ALLOC`) with `#ptr`/`#size` expression capture, 64-byte aligned headers, front/rear canaries, `0xA5`/`0xDD` memory poisoning, and zero-leak verification across 18 synthetic test suites (147,606 assertions, `v2.23.4`) requiring zero external media files.
+- **Self-Contained Synthetic Test Suite & Memory Auditor**: Includes a built-in C11 memory auditor (`-DLSMASH_DEBUG_ALLOC`) with `#ptr`/`#size` expression capture, 64-byte aligned headers, front/rear canaries, `0xA5`/`0xDD` memory poisoning, and zero-leak verification across 19 synthetic test suites (147,828 assertions, `v2.23.5`) requiring zero external media files.
 
 ---
 

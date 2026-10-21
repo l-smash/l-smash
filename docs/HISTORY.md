@@ -20,7 +20,7 @@
 
 ## 2. Historical Defect Analysis (Pre-`v2.17.0` Baseline)
 
-Prior to the `v2.21.0`–`v2.23.4` series on `dev`, the `vimeo` (`4a21f21`) and `av1` (`0715bf6`) branches exhibited several technical limitations and defects:
+Prior to the `v2.21.0`–`v2.23.5` series on `dev`, the `vimeo` (`4a21f21`) and `av1` (`0715bf6`) branches exhibited several technical limitations and defects:
 
 1. **64-Bit Little-Endian Shift Bug in `common/bytes.c` (`lsmash_bs_get_le64`)**:
    - `lsmash_bs_get_le64()` shifted the upper 32-bit word by `<< 16` instead of `<< 32` (`((uint64_t)lsmash_bs_get_le32( bs ) << 16) | lsmash_bs_get_le32( bs )`), corrupting 64-bit little-endian reads.
@@ -41,7 +41,7 @@ Prior to the `v2.21.0`–`v2.23.4` series on `dev`, the `vimeo` (`4a21f21`) and 
 
 ---
 
-## 3. Release Evolution (`v2.21.0` – `v2.23.4`)
+## 3. Release Evolution (`v2.21.0` – `v2.23.5`)
 
 ### 3.1 `v2.21.0`: Built-In AV1 OBU Parser, `le64` Fix & Synthetic Test Suite
 - **`common/bytes.c`**: Fixed `lsmash_bs_get_le64()` to shift the high 32-bit word by `<< 32` rather than `<< 16`.
@@ -144,3 +144,13 @@ Prior to the `v2.21.0`–`v2.23.4` series on `dev`, the `vimeo` (`4a21f21`) and 
 - **Unsupported raw stream guard** (`core/file.c`): `lsmash_read_file()` returned success for a seekable raw stream (such as ADTS or H.264) whose importer probed successfully but built neither real boxes (`LSMASH_FILE_MODE_BOX`) nor a fake `moov`. Such input is now rejected with `LSMASH_ERR_PATCH_WELCOME`. The WAVE importer, which builds a fake `moov`, is unaffected.
 - **Tests**: added suite 18 `test_read_file_fake_box_and_unsupported_stream`. `make test` now runs 18 suites (147,606 assertions).
 - **Documentation**: `SPEC.md` Section 6.4 no longer claims `lsmash_importer_*` is exported in `liblsmash.ver`; `docs/specs/codecs_and_importers.md` documents the importer position and the fake Box convention.
+
+### 3.12 `v2.23.5`: Shared Fake Track Setup, Container-First Importer Probing & FLAC / IVF (AV1) Media Timeline
+- **Shared fake track helper** (`importer/importer.{c,h}`): the fake `moov` / `trak` / `stsd` construction that only `wave_imp.c` had is extracted as `lsm_importer_setup_fake_track()` (movie / track / media parameters, sample entry, rollback of the fake movie on failure). `wave_imp.c` behaves as before.
+- **Container-first probing** (`lsm_importer_find()`): `isobm_importer` sat at the tail of `importer_func_table`, so opening a regular MP4/MOV through `lsmash_read_file()` ran every raw stream probe first. A stream that begins with a known top-level Box header is now handed to `isobm_importer` first; the table tail remains the fallback for any other beginning, so no previously accepted input is lost.
+- **FLAC and IVF (AV1) through the unified file API** (`importer/flac_imp.c`, `importer/ivf_imp.c`): the probes build a fake `moov` / `trak` / `stsd` (`fLaC` + `dfLa` / `av01` + `av1C`) and both importers provide `construct_timeline`, so `lsmash_read_file()` -> `lsmash_construct_timeline()` -> `lsmash_get_sample_from_media_timeline()` works on a raw `.flac` / `.ivf`. `cli/muxer.c` keeps using `importer->summaries`, `get_accessunit` and `get_last_delta` unchanged.
+- **Lesson: a bitstream shared by two readers needs an explicit resume position.** The Media Timeline seeks the same `lsmash_bs_t` that `get_accessunit` reads sequentially. Both importers now record where the sequential reader continues and seek back to it before reading, and `construct_timeline` leaves the sequential reader intact (`flac_imp.c` saves and restores its state, `ivf_imp.c` walks with a private AV1 parser). Suite 19 locks this by building and reading the Timeline in the middle of sequential reading.
+- **Timeline infrastructure** (`core/timeline.{c,h}`, `codecs/av1.{c,h}`): `isom_sample_info_t` moves to `timeline.h` with `raw_length` and an optional stateless sample filter, so a stored frame that is larger than the sample (IVF frames carry temporal delimiter and padding OBUs) is converted by `lsm_av1_extract_sample_obus()` on read. Raw stream helpers `lsm_timeline_setup_raw()` / `lsm_timeline_add_sample_info_entry()` / `lsm_timeline_finish_raw()` / `lsm_timeline_register()` are shared by importers, and the media / track duration setters take 64 bits so a long FLAC stream cannot truncate its duration.
+- **Fake file flavor**: `fLaC` and `av01` are ISOBMFF-only, so their fake files are marked `isom_compatible` (WAVE keeps `qt_compatible`). Without a flavor, `lsmash_set_media_parameters()` rejects the media language of the fake track.
+- **Tests**: added suite 19 `test_read_file_flac_ivf_timeline`. `make test` now runs 19 suites (147,828 assertions).
+- **Documentation**: `SPEC.md`, `README.md`, `docs/specs/codecs_and_importers.md` and `docs/specs/testing_strategy.md` describe the shared helper, the probing order, the FLAC / IVF Timeline and suite 19.
