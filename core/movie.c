@@ -99,12 +99,12 @@ static int movie_set_creation_time( lsmash_file_t *file )
 
 isom_moov_t *lsm_movie_create( lsmash_file_t *file )
 {
-    isom_moov_t *moov = isom_add_moov( file );
-    isom_mvhd_t *mvhd = isom_add_mvhd( moov );
+    isom_moov_t *moov = lsm_box_add_moov( file );
+    isom_mvhd_t *mvhd = lsm_box_add_mvhd( moov );
     if( LSMASH_IS_NON_EXISTING_BOX( mvhd ) )
     {
-        isom_remove_box_by_itself( moov );
-        return isom_non_existing_moov();
+        lsm_box_remove_by_itself( moov );
+        return lsm_box_default_non_existing_moov();
     }
     /* Default Movie Header Box. */
     mvhd->rate          = 0x00010000;
@@ -197,7 +197,7 @@ int lsmash_reserve_media_data_size
     if( LSMASH_IS_EXISTING_BOX( file->mdat )    /* whether the Media Data Box is already written or not */
      || file->fragment )                        /* For fragmented movies, this function makes no sense. */
         return LSMASH_ERR_NAMELESS;
-    if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_mdat( file ) ) )
+    if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_mdat( file ) ) )
         return LSMASH_ERR_NAMELESS;
     file->mdat->reserved_size = media_data_size;
     return 0;
@@ -242,7 +242,7 @@ static int movie_scan_trak_profileLevelIndication
             if( lsmash_check_codec_type_identical( sample_type, ISOM_CODEC_TYPE_MP4A_AUDIO ) )
             {
                 isom_audio_entry_t *audio = (isom_audio_entry_t *)sample_entry;
-                isom_esds_t *esds = (isom_esds_t *)isom_get_extension_box_format( &audio->extensions, ISOM_BOX_TYPE_ESDS );
+                isom_esds_t *esds = (isom_esds_t *)lsm_box_get_extension_box_format( &audio->extensions, ISOM_BOX_TYPE_ESDS );
                 if( LSMASH_IS_NON_EXISTING_BOX( esds ) || !esds->ES )
                     return LSMASH_ERR_INVALID_DATA;
                 lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_AUDIO );
@@ -266,7 +266,7 @@ static int movie_scan_trak_profileLevelIndication
 
 int lsm_movie_setup_iods( isom_moov_t *moov )
 {
-    if( LSMASH_IS_NON_EXISTING_BOX( moov->iods ) && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_iods( moov ) ) )
+    if( LSMASH_IS_NON_EXISTING_BOX( moov->iods ) && LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_iods( moov ) ) )
         return LSMASH_ERR_NAMELESS;
     isom_iods_t *iods = moov->iods;
     int err = LSMASH_ERR_NAMELESS;
@@ -294,7 +294,7 @@ int lsm_movie_setup_iods( isom_moov_t *moov )
         goto fail;
     return 0;
 fail:
-    isom_remove_box_by_itself( iods );
+    lsm_box_remove_by_itself( iods );
     return err;
 }
 
@@ -334,7 +334,7 @@ int lsm_movie_check_large_offset_requirement
         int err = lsm_stbl_convert_stco_to_co64( trak->mdia->minf->stbl );
         if( err < 0 )
             return err;
-        if( isom_update_box_size( moov ) == 0 )
+        if( lsm_box_update_size( moov ) == 0 )
             return LSMASH_ERR_INVALID_DATA;
         entry = moov->trak_list.head;   /* whenever any conversion, re-check all traks */
     }
@@ -391,7 +391,7 @@ int lsm_movie_establish( lsmash_file_t *file )
     if( (err = lsm_file_check_mandatory_boxes( file )) < 0
      || (err = movie_set_creation_time( file ))        < 0 )
         return err;
-    if( isom_update_box_size( file->moov ) == 0 )
+    if( lsm_box_update_size( file->moov ) == 0 )
         return LSMASH_ERR_INVALID_DATA;
     return 0;
 }
@@ -447,7 +447,7 @@ int lsmash_finish_movie
          && (err = stbl->compress_sample_size_table( stbl )) < 0 )
             return err;
         /* Add stss box if any samples aren't sync sample. */
-        if( !trak->cache->all_sync && !stbl->stss && !isom_add_stss( stbl ) )
+        if( !trak->cache->all_sync && !stbl->stss && !lsm_box_add_stss( stbl ) )
             return LSMASH_ERR_NAMELESS;
         if( (err = lsm_track_update_tkhd_duration( trak ))         < 0
          || (err = lsm_stbl_update_bitrate_description( trak->mdia )) < 0 )
@@ -482,7 +482,7 @@ int lsmash_finish_movie
     /* Split to 2 buffers. */
     uint8_t *buf[2] = { NULL, NULL };
     if( (buf[0] = (uint8_t*)lsmash_malloc( remux->buffer_size )) == NULL )
-        return LSMASH_ERR_MEMORY_ALLOC; /* NOTE: I think we still can fallback to "return isom_write_moov();" here. */
+        return LSMASH_ERR_MEMORY_ALLOC; /* NOTE: I think we still can fallback to "return lsm_movie_write_moov();" here. */
     size_t size = remux->buffer_size / 2;
     buf[1] = buf[0] + size;
     /* Now, the amount of the offset is fixed. apply it to stco/co64 */
@@ -544,27 +544,27 @@ int lsmash_set_sdp( lsmash_root_t *root, uint32_t track_ID, char *sdptext )
         if( LSMASH_IS_NON_EXISTING_BOX( trak ) )
             return LSMASH_ERR_NAMELESS;
         if( LSMASH_IS_NON_EXISTING_BOX( trak->udta )
-         && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_udta( trak ) ) )
+         && LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_udta( trak ) ) )
             return LSMASH_ERR_NAMELESS;
         udta = trak->udta;
     }
     else
     {
         if( LSMASH_IS_NON_EXISTING_BOX( file->moov->udta )
-         && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_udta( file->moov ) ) )
+         && LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_udta( file->moov ) ) )
             return LSMASH_ERR_NAMELESS;
         udta = file->moov->udta;
     }
     assert( LSMASH_IS_EXISTING_BOX( udta ) );
     if( LSMASH_IS_NON_EXISTING_BOX( udta->hnti )
-     && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_hnti( udta ) ) )
+     && LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_hnti( udta ) ) )
         return LSMASH_ERR_NAMELESS;
     isom_hnti_t *hnti = udta->hnti;
     /* If track ID is given, text is meant for track hnti box,
      * otherwise it is meant for movie 'hnti' box. */
     if( track_ID )
     {
-        if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_sdp( hnti ) ) )
+        if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_sdp( hnti ) ) )
             return LSMASH_ERR_NAMELESS;
         isom_sdp_t *sdp = hnti->sdp;
         sdp->sdp_length = strlen( sdptext );    /* leaves \0 out*/
@@ -574,7 +574,7 @@ int lsmash_set_sdp( lsmash_root_t *root, uint32_t track_ID, char *sdptext )
     }
     else
     {
-        if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_rtp( hnti ) ) )
+        if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_rtp( hnti ) ) )
             return LSMASH_ERR_NAMELESS;
         isom_rtp_t *rtp = hnti->rtp;
         rtp->descriptionformat = LSMASH_4CC( 's', 'd', 'p', ' ' );
@@ -599,13 +599,13 @@ int lsmash_set_copyright( lsmash_root_t *root, uint32_t track_ID, uint16_t ISO_l
     if( track_ID )
     {
         isom_trak_t *trak = lsm_track_get_trak( file, track_ID );
-        if( LSMASH_IS_NON_EXISTING_BOX( trak->udta ) && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_udta( trak ) ) )
+        if( LSMASH_IS_NON_EXISTING_BOX( trak->udta ) && LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_udta( trak ) ) )
             return LSMASH_ERR_NAMELESS;
         udta = trak->udta;
     }
     else
     {
-        if( LSMASH_IS_NON_EXISTING_BOX( file->moov->udta ) && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_udta( file->moov ) ) )
+        if( LSMASH_IS_NON_EXISTING_BOX( file->moov->udta ) && LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_udta( file->moov ) ) )
             return LSMASH_ERR_NAMELESS;
         udta = file->moov->udta;
     }
@@ -616,7 +616,7 @@ int lsmash_set_copyright( lsmash_root_t *root, uint32_t track_ID, uint16_t ISO_l
         if( LSMASH_IS_NON_EXISTING_BOX( cprt ) || cprt->language == ISO_language )
             return LSMASH_ERR_NAMELESS;
     }
-    if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_cprt( udta ) ) )
+    if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_cprt( udta ) ) )
         return LSMASH_ERR_NAMELESS;
     isom_cprt_t *cprt = (isom_cprt_t *)udta->cprt_list.tail->data;
     cprt->language      = ISO_language;

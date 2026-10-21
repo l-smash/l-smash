@@ -2,6 +2,7 @@
  * box_default.c
  *****************************************************************************
  * Copyright (C) 2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -277,14 +278,14 @@ DEFINE_SIMPLE_CONTAINER_BOX_DEFAULT_CONSTANT( file_abstract, ftyp, moov, mdat, m
 /* Box-lists predefined in the parent box definitions are initialized by 0s, thus the entry eliminator
  * of each list also be set to NULL (0). This must not be an issue since all box are deallocated through
  * the 'extensions' list of the parent box. Only 'entry' which holds the actual box data is deallocated
- * when the box is deallocated by the isom_remove_box_in_predefined_list() function. Because of that,
+ * when the box is deallocated by the box_remove_in_predefined_list() function. Because of that,
  * here, there are no explicit default constant definitions of indivisual predefined box-lists. */
 
 
 /* Allocate box by default settings.
  *
  * Use this function to allocate boxes as much as possible, it covers forgetful settings. */
-void *allocate_box_by_default
+void *lsm_box_default_allocate
 (
     const void  *nonexist_ptr,
     const size_t data_type_size
@@ -295,6 +296,6 @@ void *allocate_box_by_default
     if( !box )
         return (void *)nonexist_ptr;
     box->manager &= ~LSMASH_NON_EXISTING_BOX;
-    lsmash_list_init( &box->extensions, isom_remove_extension_box );
+    lsmash_list_init( &box->extensions, lsm_box_remove_extension_box );
     return (void *)box;
 }

@@ -26,7 +26,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
-#include <stdarg.h> /* for isom_iprintf */
+#include <stdarg.h> /* for print_iprintf */
 
 #include "box.h"
 #include "print.h"
@@ -163,7 +163,7 @@ static inline int print_simple( FILE *fp, isom_box_t *box, int level, char *name
     int indent = level;
     if( box->type.fourcc != ISOM_BOX_TYPE_UUID.fourcc )
     {
-        lsmash_ifprintf( fp, indent++, "[%s: %s]\n", isom_4cc2str( box->type.fourcc ), name );
+        lsmash_ifprintf( fp, indent++, "[%s: %s]\n", lsm_box_4cc2str( box->type.fourcc ), name );
         lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
         lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     }
@@ -173,8 +173,8 @@ static inline int print_simple( FILE *fp, isom_box_t *box, int level, char *name
         lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
         lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
         lsmash_ifprintf( fp, indent++, "usertype\n" );
-        if( isom_is_printable_4cc( box->type.user.fourcc ) )
-            lsmash_ifprintf( fp, indent, "type = %s\n", isom_4cc2str( box->type.user.fourcc ) );
+        if( lsm_box_is_printable_4cc( box->type.user.fourcc ) )
+            lsmash_ifprintf( fp, indent, "type = %s\n", lsm_box_4cc2str( box->type.user.fourcc ) );
         lsmash_ifprintf( fp, indent, "name = %s\n", name );
         lsmash_ifprintf( fp, indent, "uuid = 0x%08"PRIx32"-%04"PRIx16"-%04"PRIx16"-%04"PRIx16"-%04"PRIx16"0x%08"PRIx32"\n",
                          box->type.user.fourcc,
@@ -205,7 +205,7 @@ static void print_box_common( FILE *fp, int indent, isom_box_t *box, char *name 
         print_basebox_common( fp, indent, box, name );
         return;
     }
-    if( isom_is_fullbox( box ) )
+    if( lsm_box_is_fullbox( box ) )
         print_fullbox_common( fp, indent, box, name );
     else
         print_basebox_common( fp, indent, box, name );
@@ -216,7 +216,7 @@ static int print_unknown( FILE *fp, lsmash_file_t *file, isom_box_t *box, int le
     int indent = level;
     if( box->type.fourcc != ISOM_BOX_TYPE_UUID.fourcc )
     {
-        lsmash_ifprintf( fp, indent++, "[%s]\n", isom_4cc2str( box->type.fourcc ) );
+        lsmash_ifprintf( fp, indent++, "[%s]\n", lsm_box_4cc2str( box->type.fourcc ) );
         lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
         lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     }
@@ -226,8 +226,8 @@ static int print_unknown( FILE *fp, lsmash_file_t *file, isom_box_t *box, int le
         lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
         lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
         lsmash_ifprintf( fp, indent++, "usertype\n" );
-        if( isom_is_printable_4cc( box->type.user.fourcc ) )
-            lsmash_ifprintf( fp, indent, "type = %s\n", isom_4cc2str( box->type.user.fourcc ) );
+        if( lsm_box_is_printable_4cc( box->type.user.fourcc ) )
+            lsmash_ifprintf( fp, indent, "type = %s\n", lsm_box_4cc2str( box->type.user.fourcc ) );
         lsmash_ifprintf( fp, indent, "uuid = 0x%08"PRIx32"-%04"PRIx16"-%04"PRIx16"-%04"PRIx16"-%04"PRIx16"%08"PRIx32"\n",
                          box->type.user.fourcc,
                          (box->type.user.id[0] << 8) | box->type.user.id[1], (box->type.user.id[2] << 8) | box->type.user.id[3],
@@ -355,7 +355,7 @@ static void print_file_type
     uint32_t *compatible_brands
 )
 {
-    lsmash_ifprintf( fp, indent, "major_brand = %s", isom_4cc2str( major_brand ) );
+    lsmash_ifprintf( fp, indent, "major_brand = %s", lsm_box_4cc2str( major_brand ) );
     print_brand_description( fp, major_brand );
     lsmash_ifprintf( fp, indent, "minor_version = %"PRIu32"\n", minor_version );
     lsmash_ifprintf( fp, indent++, "compatible_brands\n" );
@@ -363,7 +363,7 @@ static void print_file_type
     {
         if( compatible_brands[i] )
         {
-            lsmash_ifprintf( fp, indent, "brand[%"PRIu32"] = %s", i, isom_4cc2str( compatible_brands[i] ) );
+            lsmash_ifprintf( fp, indent, "brand[%"PRIu32"] = %s", i, lsm_box_4cc2str( compatible_brands[i] ) );
             print_brand_description( fp, compatible_brands[i] );
         }
         else
@@ -659,9 +659,9 @@ static int print_hdlr( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level
     print_box_common( fp, indent++, box, "Handler Reference Box" );
     if( file->qt_compatible )
     {
-        lsmash_ifprintf( fp, indent, "componentType = %s\n", isom_4cc2str( hdlr->componentType ) );
-        lsmash_ifprintf( fp, indent, "componentSubtype = %s\n", isom_4cc2str( hdlr->componentSubtype ) );
-        lsmash_ifprintf( fp, indent, "componentManufacturer = %s\n", isom_4cc2str( hdlr->componentManufacturer ) );
+        lsmash_ifprintf( fp, indent, "componentType = %s\n", lsm_box_4cc2str( hdlr->componentType ) );
+        lsmash_ifprintf( fp, indent, "componentSubtype = %s\n", lsm_box_4cc2str( hdlr->componentSubtype ) );
+        lsmash_ifprintf( fp, indent, "componentManufacturer = %s\n", lsm_box_4cc2str( hdlr->componentManufacturer ) );
         lsmash_ifprintf( fp, indent, "componentFlags = 0x%08"PRIx32"\n", hdlr->componentFlags );
         lsmash_ifprintf( fp, indent, "componentFlagsMask = 0x%08"PRIx32"\n", hdlr->componentFlagsMask );
         if( hdlr->componentName_length )
@@ -672,7 +672,7 @@ static int print_hdlr( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level
     else
     {
         lsmash_ifprintf( fp, indent, "pre_defined = 0x%08"PRIx32"\n", hdlr->componentType );
-        lsmash_ifprintf( fp, indent, "handler_type = %s\n", isom_4cc2str( hdlr->componentSubtype ) );
+        lsmash_ifprintf( fp, indent, "handler_type = %s\n", lsm_box_4cc2str( hdlr->componentSubtype ) );
         lsmash_ifprintf( fp, indent, "reserved = 0x%08"PRIx32"\n", hdlr->componentManufacturer );
         lsmash_ifprintf( fp, indent, "reserved = 0x%08"PRIx32"\n", hdlr->componentFlags );
         lsmash_ifprintf( fp, indent, "reserved = 0x%08"PRIx32"\n", hdlr->componentFlagsMask );
@@ -999,7 +999,7 @@ static int print_visual_description( FILE *fp, lsmash_file_t *file, isom_box_t *
 {
     isom_visual_entry_t *visual = (isom_visual_entry_t *)box;
     int indent = level;
-    lsmash_ifprintf( fp, indent++, "[%s: Visual Description]\n", isom_4cc2str( visual->type.fourcc ) );
+    lsmash_ifprintf( fp, indent++, "[%s: Visual Description]\n", lsm_box_4cc2str( visual->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", visual->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", visual->size );
     print_ifprintf_sample_description_common_reserved( fp, indent, visual->reserved );
@@ -1008,7 +1008,7 @@ static int print_visual_description( FILE *fp, lsmash_file_t *file, isom_box_t *
     {
         lsmash_ifprintf( fp, indent, "version = %"PRId16"\n", visual->version );
         lsmash_ifprintf( fp, indent, "revision_level = %"PRId16"\n", visual->revision_level );
-        lsmash_ifprintf( fp, indent, "vendor = %s\n", isom_4cc2str( visual->vendor ) );
+        lsmash_ifprintf( fp, indent, "vendor = %s\n", lsm_box_4cc2str( visual->vendor ) );
         lsmash_ifprintf( fp, indent, "temporalQuality = %"PRIu32"\n", visual->temporalQuality );
         lsmash_ifprintf( fp, indent, "spatialQuality = %"PRIu32"\n", visual->spatialQuality );
         lsmash_ifprintf( fp, indent, "width = %"PRIu16"\n", visual->width );
@@ -1114,7 +1114,7 @@ static int print_colr( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level
     isom_colr_t *colr = (isom_colr_t *)box;
     int indent = level;
     print_box_common( fp, indent++, box, colr->manager & LSMASH_QTFF_BASE ? "Color Parameter Box" : "Colour Information Box" );
-    lsmash_ifprintf( fp, indent, "color_parameter_type = %s\n", isom_4cc2str( colr->color_parameter_type ) );
+    lsmash_ifprintf( fp, indent, "color_parameter_type = %s\n", lsm_box_4cc2str( colr->color_parameter_type ) );
     if( colr->color_parameter_type == QT_COLOR_PARAMETER_TYPE_NCLC
      || colr->color_parameter_type == ISOM_COLOR_PARAMETER_TYPE_NCLX )
     {
@@ -1243,7 +1243,7 @@ static int print_cspc( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level
             lsmash_ifprintf( fp, indent, "pixel_format = 0x%08"PRIx32" (%s)\n", cspc->pixel_format, unprintable_pixel_format_table[i].description );
             return 0;
         }
-    lsmash_ifprintf( fp, indent, "pixel_format = %s\n", isom_4cc2str( cspc->pixel_format ) );
+    lsmash_ifprintf( fp, indent, "pixel_format = %s\n", lsm_box_4cc2str( cspc->pixel_format ) );
     return 0;
 }
 
@@ -1282,7 +1282,7 @@ static int print_audio_description( FILE *fp, lsmash_file_t *file, isom_box_t *b
 {
     isom_audio_entry_t *audio = (isom_audio_entry_t *)box;
     int indent = level;
-    lsmash_ifprintf( fp, indent++, "[%s: Audio Description]\n", isom_4cc2str( audio->type.fourcc ) );
+    lsmash_ifprintf( fp, indent++, "[%s: Audio Description]\n", lsm_box_4cc2str( audio->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", audio->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", audio->size );
     print_ifprintf_sample_description_common_reserved( fp, indent, audio->reserved );
@@ -1291,7 +1291,7 @@ static int print_audio_description( FILE *fp, lsmash_file_t *file, isom_box_t *b
     {
         lsmash_ifprintf( fp, indent, "version = %"PRId16"\n", audio->version );
         lsmash_ifprintf( fp, indent, "revision_level = %"PRId16"\n", audio->revision_level );
-        lsmash_ifprintf( fp, indent, "vendor = %s\n", isom_4cc2str( audio->vendor ) );
+        lsmash_ifprintf( fp, indent, "vendor = %s\n", lsm_box_4cc2str( audio->vendor ) );
         lsmash_ifprintf( fp, indent, "channelcount = %"PRIu16"\n", audio->channelcount );
         lsmash_ifprintf( fp, indent, "samplesize = %"PRIu16"\n", audio->samplesize );
         lsmash_ifprintf( fp, indent, "compression_ID = %"PRId16"\n", audio->compression_ID );
@@ -1323,7 +1323,7 @@ static int print_audio_description( FILE *fp, lsmash_file_t *file, isom_box_t *b
         lsmash_ifprintf( fp, indent, "always7F000000 = 0x%08"PRIx32"\n", audio->always7F000000 );
         lsmash_ifprintf( fp, indent, "constBitsPerChannel = %"PRIu32"\n", audio->constBitsPerChannel );
         lsmash_ifprintf( fp, indent++, "formatSpecificFlags = 0x%08"PRIx32"\n", audio->formatSpecificFlags );
-        if( isom_is_lpcm_audio( audio ) )
+        if( lsm_box_is_lpcm_audio( audio ) )
         {
             lsmash_ifprintf( fp, indent, "sample format: " );
             if( audio->formatSpecificFlags & QT_LPCM_FORMAT_FLAG_FLOAT )
@@ -1370,7 +1370,7 @@ static int print_frma( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level
     isom_frma_t *frma = (isom_frma_t *)box;
     int indent = level;
     print_box_common( fp, indent++, box, "Format Box" );
-    lsmash_ifprintf( fp, indent, "data_format = %s\n", isom_4cc2str( frma->data_format ) );
+    lsmash_ifprintf( fp, indent, "data_format = %s\n", lsm_box_4cc2str( frma->data_format ) );
     return 0;
 }
 
@@ -1551,7 +1551,7 @@ static int print_mp4s_description( FILE *fp, lsmash_file_t *file, isom_box_t *bo
 {
     isom_mp4s_entry_t *mp4s = (isom_mp4s_entry_t *)box;
     int indent = level;
-    lsmash_ifprintf( fp, indent++, "[%s: MPEG-4 Systems Description]\n", isom_4cc2str( mp4s->type.fourcc ) );
+    lsmash_ifprintf( fp, indent++, "[%s: MPEG-4 Systems Description]\n", lsm_box_4cc2str( mp4s->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", mp4s->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", mp4s->size );
     print_ifprintf_sample_description_common_reserved( fp, indent, mp4s->reserved );
@@ -1882,7 +1882,7 @@ static int print_sgpd( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level
     int indent = level;
     uint32_t i = 0;
     print_box_common( fp, indent++, box, "Sample Group Description Box" );
-    lsmash_ifprintf( fp, indent, "grouping_type = %s\n", isom_4cc2str( sgpd->grouping_type ) );
+    lsmash_ifprintf( fp, indent, "grouping_type = %s\n", lsm_box_4cc2str( sgpd->grouping_type ) );
     if( sgpd->version == 1 )
     {
         lsmash_ifprintf( fp, indent, "default_length = %"PRIu32, sgpd->default_length );
@@ -1935,9 +1935,9 @@ static int print_sbgp( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level
     int is_fragment = lsmash_check_box_type_identical( sbgp->parent->type, ISOM_BOX_TYPE_TRAF );
     uint32_t i = 0;
     print_box_common( fp, indent++, box, "Sample to Group Box" );
-    lsmash_ifprintf( fp, indent, "grouping_type = %s\n", isom_4cc2str( sbgp->grouping_type ) );
+    lsmash_ifprintf( fp, indent, "grouping_type = %s\n", lsm_box_4cc2str( sbgp->grouping_type ) );
     if( sbgp->version == 1 )
-        lsmash_ifprintf( fp, indent, "grouping_type_parameter = %s\n", isom_4cc2str( sbgp->grouping_type_parameter ) );
+        lsmash_ifprintf( fp, indent, "grouping_type_parameter = %s\n", lsm_box_4cc2str( sbgp->grouping_type_parameter ) );
     lsmash_ifprintf( fp, indent, "entry_count = %"PRIu32"\n", lsm_list_count( sbgp->list ) );
     isom_group_assignment_entry_t *data;
     LSM_LIST_FOR_EACH( data, sbgp->list )
@@ -2031,7 +2031,7 @@ static int print_keys( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level
         isom_keys_entry_t *data = (isom_keys_entry_t *)entry->data;
         lsmash_ifprintf( fp, indent++, "[key %"PRIu32"]\n", i++ );
         lsmash_ifprintf( fp, indent, "key_size = %"PRIu32"\n", data->key_size );
-        lsmash_ifprintf( fp, indent, "key_namespace = %s\n", isom_4cc2str( data->key_namespace ) );
+        lsmash_ifprintf( fp, indent, "key_namespace = %s\n", lsm_box_4cc2str( data->key_namespace ) );
         uint32_t value_length = data->key_size - 8;
         char *str = lsmash_malloc( value_length + 1 );
         if( !str )
@@ -2718,9 +2718,9 @@ static isom_print_box_t print_select_func( isom_box_t *box )
         {
             /* OK, this box is a sample entry.
              * Here, determine the suitable sample entry printer by media type if possible. */
-            if( isom_check_media_hdlr_from_stsd( (isom_stsd_t *)parent ) )
+            if( lsm_box_check_media_hdlr_from_stsd( (isom_stsd_t *)parent ) )
             {
-                lsmash_media_type media_type = isom_get_media_type_from_stsd( (isom_stsd_t *)parent );
+                lsmash_media_type media_type = lsm_box_get_media_type_from_stsd( (isom_stsd_t *)parent );
                 if( media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK )
                     return print_visual_description;
                 else if( media_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK )
@@ -2896,7 +2896,7 @@ static inline void print_remove_plastic_box( isom_box_t *box )
 {
     if( box->manager & LSMASH_ABSENT_IN_FILE )
         /* free flagged box */
-        isom_remove_box_by_itself( box );
+        lsm_box_remove_by_itself( box );
 }
 
 int lsm_print_add_func( lsmash_file_t *file, void *box, int level )

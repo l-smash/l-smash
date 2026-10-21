@@ -1681,13 +1681,13 @@ int dts_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, in
 {
     assert( box->manager & LSMASH_BINARY_CODED_BOX );
     int indent = level;
-    lsmash_ifprintf( fp, indent++, "[%s: DTS Specific Box]\n", isom_4cc2str( box->type.fourcc ) );
+    lsmash_ifprintf( fp, indent++, "[%s: DTS Specific Box]\n", lsm_box_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     if( box->size < DTS_SPECIFIC_BOX_MIN_LENGTH )
         return LSMASH_ERR_INVALID_DATA;
     uint8_t *data = box->binary;
-    isom_skip_box_common( &data );
+    lsm_box_skip_common( &data );
     uint32_t DTSSamplingFrequency = LSMASH_GET_BE32( &data[0] );
     uint32_t maxBitrate           = LSMASH_GET_BE32( &data[4] );
     uint32_t avgBitrate           = LSMASH_GET_BE32( &data[8] );
@@ -1816,7 +1816,7 @@ int dts_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_de
     isom_audio_entry_t *dts_audio = (isom_audio_entry_t *)lsmash_list_get_entry_data( &stbl->stsd->list, sample_description_index );
     if( LSMASH_IS_NON_EXISTING_BOX( dts_audio ) )
         return LSMASH_ERR_INVALID_DATA;
-    isom_box_t *ext = isom_get_extension_box( &dts_audio->extensions, ISOM_BOX_TYPE_DDTS );
+    isom_box_t *ext = lsm_box_get_extension_box( &dts_audio->extensions, ISOM_BOX_TYPE_DDTS );
     if( !((ext->manager & LSMASH_BINARY_CODED_BOX) && ext->binary && ext->size >= 28) )
         return LSMASH_ERR_INVALID_DATA;
     uint32_t bufferSizeDB;

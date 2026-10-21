@@ -35,17 +35,17 @@ int waveform_audio_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_
     isom_sample_entry_t *sample_entry = (isom_sample_entry_t *)lsmash_list_get_entry_data( &stbl->stsd->list, sample_description_index );
     if( LSMASH_IS_NON_EXISTING_BOX( sample_entry ) )
         return LSMASH_ERR_INVALID_DATA;
-    isom_box_t *ext = isom_get_extension_box( &sample_entry->extensions, QT_BOX_TYPE_WAVE );
+    isom_box_t *ext = lsm_box_get_extension_box( &sample_entry->extensions, QT_BOX_TYPE_WAVE );
     if( LSMASH_IS_NON_EXISTING_BOX( ext ) )
         return LSMASH_ERR_INVALID_DATA;
     uint8_t *exdata      = NULL;
     uint32_t exdata_size = 0;
     if( ext->manager & LSMASH_BINARY_CODED_BOX )
-        exdata = isom_get_child_box_position( ext->binary, ext->size, sample_entry->type, &exdata_size );
+        exdata = lsm_box_get_child_position( ext->binary, ext->size, sample_entry->type, &exdata_size );
     else
     {
         isom_wave_t *wave     = (isom_wave_t *)ext;
-        isom_box_t  *wave_ext = isom_get_extension_box( &wave->extensions, sample_entry->type );
+        isom_box_t  *wave_ext = lsm_box_get_extension_box( &wave->extensions, sample_entry->type );
         if( !(wave_ext->manager & LSMASH_BINARY_CODED_BOX) )
             return LSMASH_ERR_INVALID_DATA;
         exdata      = wave_ext->binary;

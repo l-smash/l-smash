@@ -85,13 +85,13 @@ int alac_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, i
 {
     assert( box->manager & LSMASH_BINARY_CODED_BOX );
     int indent = level;
-    lsmash_ifprintf( fp, indent++, "[%s: ALAC Specific Box]\n", isom_4cc2str( box->type.fourcc ) );
+    lsmash_ifprintf( fp, indent++, "[%s: ALAC Specific Box]\n", lsm_box_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     if( box->size < ALAC_SPECIFIC_BOX_LENGTH )
         return LSMASH_ERR_INVALID_DATA;
     uint8_t *data = box->binary;
-    isom_skip_box_common( &data );
+    lsm_box_skip_common( &data );
     lsmash_ifprintf( fp, indent, "version = %"PRIu8"\n",           LSMASH_GET_BYTE( &data[0] ) );
     lsmash_ifprintf( fp, indent, "flags = 0x%06"PRIx32"\n",        LSMASH_GET_BE24( &data[1] ) );
     data += 4;
@@ -116,18 +116,18 @@ int alac_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_d
         return LSMASH_ERR_INVALID_DATA;
     uint8_t *exdata      = NULL;
     uint32_t exdata_size = 0;
-    isom_box_t *alac_ext = isom_get_extension_box( &alac->extensions, QT_BOX_TYPE_WAVE );
+    isom_box_t *alac_ext = lsm_box_get_extension_box( &alac->extensions, QT_BOX_TYPE_WAVE );
     if( LSMASH_IS_EXISTING_BOX( alac_ext ) )
     {
         /* Apple Lossless Audio inside QuickTime file format
          * Though average bitrate field we found is always set to 0 apparently,
          * we set up maxFrameBytes and avgBitRate fields. */
         if( alac_ext->manager & LSMASH_BINARY_CODED_BOX )
-            exdata = isom_get_child_box_position( alac_ext->binary, alac_ext->size, QT_BOX_TYPE_ALAC, &exdata_size );
+            exdata = lsm_box_get_child_position( alac_ext->binary, alac_ext->size, QT_BOX_TYPE_ALAC, &exdata_size );
         else
         {
             isom_wave_t *wave     = (isom_wave_t *)alac_ext;
-            isom_box_t  *wave_ext = isom_get_extension_box( &wave->extensions, QT_BOX_TYPE_ALAC );
+            isom_box_t  *wave_ext = lsm_box_get_extension_box( &wave->extensions, QT_BOX_TYPE_ALAC );
             if( !(wave_ext->manager & LSMASH_BINARY_CODED_BOX) )
                 return LSMASH_ERR_INVALID_DATA;
             exdata      = wave_ext->binary;
@@ -137,7 +137,7 @@ int alac_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_d
     else
     {
         /* Apple Lossless Audio inside ISO Base Media file format */
-        isom_box_t *ext = isom_get_extension_box( &alac->extensions, ISOM_BOX_TYPE_ALAC );
+        isom_box_t *ext = lsm_box_get_extension_box( &alac->extensions, ISOM_BOX_TYPE_ALAC );
         if( !(ext->manager & LSMASH_BINARY_CODED_BOX) )
             return LSMASH_ERR_INVALID_DATA;
         exdata      = ext->binary;

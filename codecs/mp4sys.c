@@ -2,6 +2,7 @@
  * mp4sys.c
  *****************************************************************************
  * Copyright (C) 2010-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Takashi Hirata <silverfilain@gmail.com>
  *          Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
@@ -1021,7 +1022,7 @@ int mp4sys_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box,
     assert( !(box->manager & LSMASH_BINARY_CODED_BOX) );
     isom_esds_t *esds = (isom_esds_t *)box;
     int indent = level;
-    lsmash_ifprintf( fp, indent++, "[%s: Elemental Stream Descriptor Box]\n", isom_4cc2str( esds->type.fourcc ) );
+    lsmash_ifprintf( fp, indent++, "[%s: Elemental Stream Descriptor Box]\n", lsm_box_4cc2str( esds->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", esds->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", esds->size );
     lsmash_ifprintf( fp, indent, "version = %"PRIu8"\n", esds->version );

@@ -95,7 +95,7 @@ static int read_bs_box_common( lsmash_bs_t *bs, isom_box_t *box )
 
 static int read_fullbox_common_extension( lsmash_bs_t *bs, isom_box_t *box )
 {
-    if( !isom_is_fullbox( box ) )
+    if( !lsm_box_is_fullbox( box ) )
         return 0;
     /* Get version and flags. */
     box->version  = lsmash_bs_get_byte( bs );
@@ -139,7 +139,7 @@ static void read_box_common_copy( void *dst, const void *src )
         read_basebox_common_copy( (isom_box_t *)dst, (isom_box_t *)src );
         return;
     }
-    if( isom_is_fullbox( src ) )
+    if( lsm_box_is_fullbox( src ) )
         read_fullbox_common_copy( (isom_box_t *)dst, (isom_box_t *)src );
     else
         read_basebox_common_copy( (isom_box_t *)dst, (isom_box_t *)src );
@@ -189,13 +189,13 @@ static void read_validate_box_size( lsmash_bs_t *bs, isom_box_t *box )
     }
     if( box->size < pos )
     {
-        fprintf( stderr, "[%s] box has less bytes than expected: %"PRId64"\n", isom_4cc2str( box->type.fourcc ), pos - box->size );
+        fprintf( stderr, "[%s] box has less bytes than expected: %"PRId64"\n", lsm_box_4cc2str( box->type.fourcc ), pos - box->size );
         box->size = pos;
     }
     else if( box->size > pos )
     {
         /* The box probably has extra padding bytes at the end. */
-        fprintf( stderr, "[%s] box has more bytes than expected: %"PRId64"\n", isom_4cc2str( box->type.fourcc ), box->size - pos );
+        fprintf( stderr, "[%s] box has more bytes than expected: %"PRId64"\n", lsm_box_4cc2str( box->type.fourcc ), box->size - pos );
         read_skip_box_rest( bs, box );
     }
 }
@@ -235,12 +235,12 @@ static int read_unknown_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *p
         return LSMASH_ERR_MEMORY_ALLOC;
     if( lsmash_list_add_entry( &parent->extensions, unknown ) < 0 )
     {
-        isom_remove_box_by_itself( unknown );
+        lsm_box_remove_by_itself( unknown );
         return LSMASH_ERR_MEMORY_ALLOC;
     }
     read_box_common_copy( unknown, box );
     unknown->manager |= LSMASH_UNKNOWN_BOX;
-    unknown->destruct = (isom_extension_destructor_t)isom_remove_unknown_box;
+    unknown->destruct = (isom_extension_destructor_t)lsm_box_remove_unknown_box;
     lsm_write_set_box_writer( (isom_box_t *)unknown );
     if( read_size )
     {
@@ -261,15 +261,15 @@ static int read_unknown_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *p
     int ret = lsm_print_add_func( file, dummy, level );
     if( ret < 0 )
     {
-        isom_remove_box_by_itself( dummy );
+        lsm_box_remove_by_itself( dummy );
         return ret;
     }
     return 0;
 }
 
-#define ADD_BOX( box_name, parent_type )                                          \
-    isom_##box_name##_t *box_name = isom_add_##box_name( (parent_type *)parent ); \
-    if( LSMASH_IS_NON_EXISTING_BOX( box_name ) )                                  \
+#define ADD_BOX( box_name, parent_type )                                             \
+    isom_##box_name##_t *box_name = lsm_box_add_##box_name( (parent_type *)parent ); \
+    if( LSMASH_IS_NON_EXISTING_BOX( box_name ) )                                     \
         return LSMASH_ERR_NAMELESS
 
 static int read_ftyp( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
@@ -621,7 +621,7 @@ static int read_track_reference_type( lsmash_file_t *file, isom_box_t *box, isom
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TREF ) )
         return read_unknown_box( file, box, parent, level );
-    isom_tref_type_t *ref = isom_add_track_reference_type( (isom_tref_t *)parent, box->type.fourcc );
+    isom_tref_type_t *ref = lsm_box_add_track_reference_type( (isom_tref_t *)parent, box->type.fourcc );
     if( !ref )
         return LSMASH_ERR_NAMELESS;
     lsmash_bs_t *bs = file->bs;
@@ -852,7 +852,7 @@ static int read_dref_entry( lsmash_file_t *file, isom_box_t *box, isom_box_t *pa
     isom_dref_t *dref = (isom_dref_t *)parent;
     if( !dref->list.head )
         dref->list.entry_count = 0; /* discard entry_count gotten from the file */
-    isom_dref_entry_t *ref = isom_add_dref_entry( dref, box->type );
+    isom_dref_entry_t *ref = lsm_box_add_dref_entry( dref, box->type );
     if( !ref )
         return LSMASH_ERR_NAMELESS;
     lsmash_bs_t *bs = file->bs;
@@ -1210,7 +1210,7 @@ static int read_codec_specific( lsmash_file_t *file, isom_box_t *box, isom_box_t
         ret = LSMASH_ERR_INVALID_DATA;
         goto fail;
     }
-    if( (ret = isom_add_extension_binary( parent, box->type, LSMASH_BOX_PRECEDENCE_N, exdata, box->size )) < 0 )
+    if( (ret = lsm_box_add_extension_binary( parent, box->type, LSMASH_BOX_PRECEDENCE_N, exdata, box->size )) < 0 )
         goto fail;
     isom_box_t *ext = (isom_box_t *)parent->extensions.tail->data;
     box->manager |= ext->manager;
@@ -1224,7 +1224,7 @@ fail:
 
 static void *read_sample_description_alloc( lsmash_codec_type_t sample_type, isom_stsd_t *stsd )
 {
-    assert( isom_check_media_hdlr_from_stsd( stsd ) );
+    assert( lsm_box_check_media_hdlr_from_stsd( stsd ) );
     void *sample_desc = NULL;
     lsmash_media_type media_type = ((isom_mdia_t *)stsd->parent->parent->parent)->hdlr->componentSubtype;
     if( media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK )
@@ -1243,7 +1243,7 @@ static void *read_sample_description_alloc( lsmash_codec_type_t sample_type, iso
     if( !sample_desc )
         return NULL;
     ((isom_box_t *)sample_desc)->offset_in_parent = offsetof( isom_stsd_t, list );
-    ((isom_box_t *)sample_desc)->destruct         = (isom_extension_destructor_t)isom_remove_sample_description;
+    ((isom_box_t *)sample_desc)->destruct         = (isom_extension_destructor_t)lsm_box_remove_sample_description;
     return sample_desc;
 }
 
@@ -1575,7 +1575,7 @@ static int read_audio_description( lsmash_file_t *file, isom_box_t *box, isom_bo
     audio->compression_ID       = lsmash_bs_get_be16( bs );
     audio->packet_size          = lsmash_bs_get_be16( bs );
     audio->samplerate           = lsmash_bs_get_be32( bs );
-    if( audio->version == 0 && isom_is_qt_audio( box->type ) )
+    if( audio->version == 0 && lsm_box_is_qt_audio( box->type ) )
     {
         /* Skip weird extra bytes.
          * About QTFF, extensions were first added with Sound Sample Description v1. */
@@ -2165,8 +2165,8 @@ static int read_stco( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
     box->type = lsmash_form_iso_box_type( box->type.fourcc );
     int is_stco = lsmash_check_box_type_identical( box->type, ISOM_BOX_TYPE_STCO );
     isom_stco_t *stco = is_stco
-                      ? isom_add_stco( (isom_stbl_t *)parent )
-                      : isom_add_co64( (isom_stbl_t *)parent );
+                      ? lsm_box_add_stco( (isom_stbl_t *)parent )
+                      : lsm_box_add_co64( (isom_stbl_t *)parent );
     if( !stco )
         return LSMASH_ERR_NAMELESS;
     lsmash_bs_t *bs = file->bs;
@@ -2502,7 +2502,7 @@ static int read_free( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
     int ret = lsm_print_add_func( file, skip, level );
     if( ret < 0 )
     {
-        isom_remove_box_by_itself( skip );
+        lsm_box_remove_by_itself( skip );
         return ret;
     }
     return 0;
@@ -2522,7 +2522,7 @@ static int read_mdat( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
     int ret = lsm_print_add_func( file, mdat, level );
     if( ret < 0 )
     {
-        isom_remove_box_by_itself( mdat );
+        lsm_box_remove_by_itself( mdat );
         return ret;
     }
     return 0;
@@ -2604,7 +2604,7 @@ static int read_metaitem( lsmash_file_t *file, isom_box_t *box, isom_box_t *pare
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_ILST )
      && !lsmash_check_box_type_identical( parent->type,   QT_BOX_TYPE_ILST ) )
         return read_unknown_box( file, box, parent, level );
-    isom_metaitem_t *metaitem = isom_add_metaitem( (isom_ilst_t *)parent, box->type.fourcc );
+    isom_metaitem_t *metaitem = lsm_box_add_metaitem( (isom_ilst_t *)parent, box->type.fourcc );
     if( !metaitem )
         return -1;
     box->parent = parent;
@@ -2984,9 +2984,9 @@ int lsm_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uint
     {
         /* OK, this box is a sample entry.
          * Here, determine the suitable sample entry reader by media type if possible. */
-        if( !isom_check_media_hdlr_from_stsd( (isom_stsd_t *)parent ) )
+        if( !lsm_box_check_media_hdlr_from_stsd( (isom_stsd_t *)parent ) )
             goto read_box;
-        lsmash_media_type media_type = isom_get_media_type_from_stsd( (isom_stsd_t *)parent );
+        lsmash_media_type media_type = lsm_box_get_media_type_from_stsd( (isom_stsd_t *)parent );
         if( media_type == ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK )
             reader_func = read_visual_description;
         else if( media_type == ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK )

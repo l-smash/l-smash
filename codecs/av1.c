@@ -2355,13 +2355,13 @@ int av1_print_codec_specific
 {
     assert( file && box && (box->manager & LSMASH_BINARY_CODED_BOX) );
     int indent = level;
-    lsmash_ifprintf( fp, indent++, "[%s: AV1CodecConfigurationBox]\n", isom_4cc2str( box->type.fourcc ) );
+    lsmash_ifprintf( fp, indent++, "[%s: AV1CodecConfigurationBox]\n", lsm_box_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     if( box->size < ISOM_BASEBOX_COMMON_SIZE + 4 )
         return LSMASH_ERR_INVALID_DATA;
     uint8_t *data = box->binary;
-    uint32_t offset = isom_skip_box_common( &data );
+    uint32_t offset = lsm_box_skip_common( &data );
     uint8_t marker                             = (data[0] >> 7) & 0x01;
     uint8_t version                            =  data[0]       & 0x7F;
     uint8_t seq_profile                        = (data[1] >> 5) & 0x07;

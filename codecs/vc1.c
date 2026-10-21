@@ -2,6 +2,7 @@
  * vc1.c
  *****************************************************************************
  * Copyright (C) 2012-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -919,13 +920,13 @@ int vc1_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, in
 {
     assert( box->manager & LSMASH_BINARY_CODED_BOX );
     int indent = level;
-    lsmash_ifprintf( fp, indent++, "[%s: VC1 Specific Box]\n", isom_4cc2str( box->type.fourcc ) );
+    lsmash_ifprintf( fp, indent++, "[%s: VC1 Specific Box]\n", lsm_box_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     if( box->size < ISOM_BASEBOX_COMMON_SIZE + 7 )
         return LSMASH_ERR_INVALID_DATA;
     uint8_t *data = box->binary;
-    isom_skip_box_common( &data );
+    lsm_box_skip_common( &data );
     uint8_t profile = (data[0] >> 4) & 0x0F;
     if( profile != 12 )
         return 0;   /* We don't support profile other than 12 (Advanced profile). */

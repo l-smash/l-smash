@@ -37,16 +37,16 @@
 static isom_sidx_t *fragment_get_sidx( lsmash_file_t *file, uint32_t reference_ID )
 {
     if( reference_ID == 0 || !file )
-        return isom_non_existing_sidx();
+        return lsm_box_default_non_existing_sidx();
     for( lsmash_entry_t *entry = file->sidx_list.head; entry; entry = entry->next )
     {
         isom_sidx_t *sidx = (isom_sidx_t *)entry->data;
         if( LSMASH_IS_NON_EXISTING_BOX( sidx ) )
-            return isom_non_existing_sidx();
+            return lsm_box_default_non_existing_sidx();
         if( sidx->reference_ID == reference_ID )
             return sidx;
     }
-    return isom_non_existing_sidx();
+    return lsm_box_default_non_existing_sidx();
 }
 
 static int fragment_finish_movie( lsmash_file_t *file );
@@ -73,8 +73,8 @@ int lsmash_create_fragment_movie( lsmash_root_t *root )
         if( LSMASH_IS_EXISTING_BOX( moof )
          && file->moof_list.entry_count != 1 )
             return LSMASH_ERR_NAMELESS;
-        moof = isom_add_moof( file );
-        if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_mfhd( moof ) ) )
+        moof = lsm_box_add_moof( file );
+        if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_mfhd( moof ) ) )
             return LSMASH_ERR_NAMELESS;
         file->fragment->movie = moof;
         moof->mfhd->sequence_number = ++ file->fragment_count;
@@ -82,7 +82,7 @@ int lsmash_create_fragment_movie( lsmash_root_t *root )
             return 0;
         /* Remove the previous movie fragment. */
         if( file->moof_list.head )
-            isom_remove_box_by_itself( file->moof_list.head->data );
+            lsm_box_remove_by_itself( file->moof_list.head->data );
     }
     return 0;
 }
@@ -135,7 +135,7 @@ static int fragment_set_overall_duration( lsmash_file_t *file )
     mehd->fragment_duration = longest_duration;
     mehd->version           = 1;
     mehd->manager          &= ~(LSMASH_PLACEHOLDER | LSMASH_WRITTEN_BOX);   /* Update per media segment. */
-    isom_update_box_size( mehd );
+    lsm_box_update_size( mehd );
     /* Write Movie Extends Header Box here. */
     lsmash_bs_t *bs = file->bs;
     uint64_t current_pos = bs->offset;
@@ -227,7 +227,7 @@ static int fragment_write_random_access_info( lsmash_file_t *file )
         tfra->number_of_entry = lsm_list_count( tfra->list );
     }
     /* Decide the size of the Movie Fragment Random Access Box. */
-    if( isom_update_box_size( file->mfra ) == 0 )
+    if( lsm_box_update_size( file->mfra ) == 0 )
         return LSMASH_ERR_NAMELESS;
     /* Write the Movie Fragment Random Access Box. */
     return lsm_write_box( file->bs, (isom_box_t *)file->mfra );
@@ -245,7 +245,7 @@ static int fragment_update_indexed_material_offset
         isom_sidx_t *sidx = (isom_sidx_t *)entry->data;
         if( LSMASH_IS_NON_EXISTING_BOX( sidx ) )
             continue;
-        if( isom_update_box_size( sidx ) == 0 )
+        if( lsm_box_update_size( sidx ) == 0 )
             return LSMASH_ERR_NAMELESS;
     }
     /* first_offset: the sum of the size of subsequent Segment Index Boxes
@@ -390,11 +390,11 @@ int lsm_fragment_finish_final_movie
 static int fragment_create_overall_default_settings( lsmash_file_t *file )
 {
     assert( file == file->initializer );
-    if( !isom_add_mvex( file->moov ) )
+    if( !lsm_box_add_mvex( file->moov ) )
         return LSMASH_ERR_NAMELESS;
     if( !file->bs->unseekable )
     {
-        if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_mehd( file->moov->mvex ) ) )
+        if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_mehd( file->moov->mvex ) ) )
             return LSMASH_ERR_NAMELESS;
         file->moov->mvex->mehd->manager |= LSMASH_PLACEHOLDER;
     }
@@ -409,7 +409,7 @@ static int fragment_create_overall_default_settings( lsmash_file_t *file )
         if( !stbl->stts->list
          || (LSMASH_IS_NON_EXISTING_BOX( stbl->stsz ) && LSMASH_IS_NON_EXISTING_BOX( stbl->stz2 )) )
             return LSMASH_ERR_NAMELESS;
-        isom_trex_t *trex = isom_add_trex( file->moov->mvex );
+        isom_trex_t *trex = lsm_box_add_trex( file->moov->mvex );
         if( LSMASH_IS_NON_EXISTING_BOX( trex ) )
             return LSMASH_ERR_NAMELESS;
         trex->track_ID = trak->tkhd->track_ID;
@@ -465,8 +465,8 @@ static int fragment_prepare_random_access_info( lsmash_file_t *file )
      || !(file->flags & LSMASH_FILE_MODE_MEDIA)
      ||  (file->flags & LSMASH_FILE_MODE_SEGMENT) )
         return 0;
-    if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_mfra( file ) )
-     || LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_mfro( file->mfra ) ) )
+    if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_mfra( file ) )
+     || LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_mfro( file->mfra ) ) )
         return LSMASH_ERR_NAMELESS;
     return 0;
 }
@@ -477,7 +477,7 @@ static int fragment_output_media_data( lsmash_file_t *file )
     /* If there is no available Media Data Box to write samples, add and write a new one. */
     if( frag_manager->sample_count )
     {
-        if( LSMASH_IS_NON_EXISTING_BOX( file->mdat ) && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_mdat( file ) ) )
+        if( LSMASH_IS_NON_EXISTING_BOX( file->mdat ) && LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_mdat( file ) ) )
             return LSMASH_ERR_NAMELESS;
         file->mdat->manager &= ~(LSMASH_INCOMPLETE_BOX | LSMASH_WRITTEN_BOX);
         int ret = lsm_write_box( file->bs, (isom_box_t *)file->mdat );
@@ -530,7 +530,7 @@ static int fragment_finish_initial_movie( lsmash_file_t *file )
             /* Add stss box if any samples aren't sync sample. */
             if( !trak->cache->all_sync
              && LSMASH_IS_NON_EXISTING_BOX( stbl->stss )
-             && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_stss( stbl ) ) )
+             && LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_stss( stbl ) ) )
                 return LSMASH_ERR_NAMELESS;
             if( (ret = lsm_track_update_tkhd_duration( trak )) < 0 )
                 return ret;
@@ -630,7 +630,7 @@ static int fragment_make_segment_index_entry
         assert( LSMASH_IS_EXISTING_BOX( traf->tfdt ) );
         if( LSMASH_IS_NON_EXISTING_BOX( sidx ) )
         {
-            sidx = isom_add_sidx( file );
+            sidx = lsm_box_add_sidx( file );
             if( LSMASH_IS_NON_EXISTING_BOX( sidx ) )
                 return LSMASH_ERR_NAMELESS;
             sidx->reference_ID    = tfhd->track_ID;
@@ -1029,7 +1029,7 @@ static int fragment_finish_movie
             }
         }
         /* Consider the update of tr_flags here. */
-        if( isom_update_box_size( moof ) == 0 )
+        if( lsm_box_update_size( moof ) == 0 )
             return LSMASH_ERR_NAMELESS;
         /* Now, we can calculate offsets in the current movie fragment, so do it. */
         for( lsmash_entry_t *entry = moof->traf_list.head; entry; entry = entry->next )
@@ -1054,7 +1054,7 @@ static int fragment_finish_movie
             traf->tfhd->flags |= ISOM_TF_FLAGS_BASE_DATA_OFFSET_PRESENT;
         }
         /* Consider the update of tf_flags here. */
-        if( isom_update_box_size( moof ) == 0 )
+        if( lsm_box_update_size( moof ) == 0 )
             return LSMASH_ERR_NAMELESS;
         /* Now, we can calculate offsets in the current movie fragment, so do it. */
         for( lsmash_entry_t *entry = moof->traf_list.head; entry; entry = entry->next )
@@ -1140,8 +1140,8 @@ int lsmash_create_fragment_empty_duration
     isom_traf_t *traf = lsm_track_get_traf( moof, track_ID );
     if( LSMASH_IS_EXISTING_BOX( traf ) )
         return LSMASH_ERR_NAMELESS;
-    traf = isom_add_traf( moof );
-    if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_tfhd( traf ) ) )
+    traf = lsm_box_add_traf( moof );
+    if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_tfhd( traf ) ) )
         return LSMASH_ERR_NAMELESS;
     isom_tfhd_t *tfhd = traf->tfhd;
     tfhd->flags                   = ISOM_TF_FLAGS_DURATION_IS_EMPTY;    /* no samples for this track fragment yet */
@@ -1376,7 +1376,7 @@ static int fragment_set_base_media_decode_time( lsmash_file_t *file, isom_traf_t
     if( file->max_isom_version >= 6 || file->media_segment )
     {
         assert( LSMASH_IS_NON_EXISTING_BOX( traf->tfdt ) );
-        if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_tfdt( traf ) ) )
+        if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_tfdt( traf ) ) )
             return LSMASH_ERR_NAMELESS;
         if( dts > UINT32_MAX )
             traf->tfdt->version = 1;
@@ -1512,7 +1512,7 @@ static int fragment_update_sample_tables( isom_traf_t *traf, lsmash_sample_t *sa
                 trun->flags |= ISOM_TR_FLAGS_DATA_OFFSET_PRESENT;
             trun->data_offset = file->fragment->pool_size;
         }
-        trun = isom_add_trun( traf );
+        trun = lsm_box_add_trun( traf );
         if( LSMASH_IS_NON_EXISTING_BOX( trun ) )
             return LSMASH_ERR_NAMELESS;
     }
@@ -1545,7 +1545,7 @@ static int fragment_update_sample_tables( isom_traf_t *traf, lsmash_sample_t *sa
                 isom_tfra_t *tfra = lsm_track_get_tfra( file->mfra, tfhd->track_ID );
                 if( LSMASH_IS_NON_EXISTING_BOX( tfra ) )
                 {
-                    tfra = isom_add_tfra( file->mfra );
+                    tfra = lsm_box_add_tfra( file->mfra );
                     if( LSMASH_IS_NON_EXISTING_BOX( tfra ) )
                         return LSMASH_ERR_NAMELESS;
                     tfra->track_ID = tfhd->track_ID;
@@ -1734,8 +1734,8 @@ int lsm_fragment_append_sample
         isom_traf_t *traf = lsm_track_get_traf( fragment->movie, trak->tkhd->track_ID );
         if( LSMASH_IS_NON_EXISTING_BOX( traf ) )
         {
-            traf = isom_add_traf( fragment->movie );
-            if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_tfhd( traf ) ) )
+            traf = lsm_box_add_traf( fragment->movie );
+            if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_tfhd( traf ) ) )
                 return LSMASH_ERR_NAMELESS;
             traf->tfhd->flags                  = ISOM_TF_FLAGS_DURATION_IS_EMPTY; /* no samples for this track fragment yet */
             traf->tfhd->track_ID               = trak->tkhd->track_ID;

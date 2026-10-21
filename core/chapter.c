@@ -37,7 +37,7 @@
 #define UTF8_BOM "\xEF\xBB\xBF"
 #define UTF8_BOM_LENGTH 3
 
-static int isom_get_start_time( char *chap_time, isom_chapter_entry_t *data )
+static int chapter_get_start_time( char *chap_time, isom_chapter_entry_t *data )
 {
     uint64_t hh, mm;
     double ss;
@@ -53,7 +53,7 @@ static int isom_get_start_time( char *chap_time, isom_chapter_entry_t *data )
     return 0;
 }
 
-static int isom_lumber_line( char *buff, int bufsize, FILE *chapter  )
+static int chapter_lumber_line( char *buff, int bufsize, FILE *chapter  )
 {
     char *tail;
     /* remove newline codes and skip empty line */
@@ -68,18 +68,18 @@ static int isom_lumber_line( char *buff, int bufsize, FILE *chapter  )
     return 0;
 }
 
-static int isom_read_simple_chapter( FILE *chapter, isom_chapter_entry_t *data )
+static int chapter_read_simple_chapter( FILE *chapter, isom_chapter_entry_t *data )
 {
     char buff[CHAPTER_BUFSIZE];
     /* get start_time */
-    if( isom_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) < 0 )
+    if( chapter_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) < 0 )
         return LSMASH_ERR_NAMELESS;
     char *chapter_time = strchr( buff, '=' );   /* find separator */
     if( !chapter_time++ )
         return LSMASH_ERR_INVALID_DATA;
-    if( isom_get_start_time( chapter_time, data ) < 0 )
+    if( chapter_get_start_time( chapter_time, data ) < 0 )
         return LSMASH_ERR_INVALID_DATA;
-    if( isom_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) < 0 )    /* get chapter_name */
+    if( chapter_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) < 0 )    /* get chapter_name */
         return LSMASH_ERR_NAMELESS;
     char *chapter_name = strchr( buff, '=' );   /* find separator */
     if( !chapter_name++ )
@@ -93,13 +93,13 @@ static int isom_read_simple_chapter( FILE *chapter, isom_chapter_entry_t *data )
     return 0;
 }
 
-static int isom_read_minimum_chapter( FILE *chapter, isom_chapter_entry_t *data )
+static int chapter_read_minimum_chapter( FILE *chapter, isom_chapter_entry_t *data )
 {
     char buff[CHAPTER_BUFSIZE];
-    if( isom_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) < 0 )    /* read newline */
+    if( chapter_lumber_line( buff, CHAPTER_BUFSIZE, chapter ) < 0 )    /* read newline */
         return LSMASH_ERR_NAMELESS;
     char *p_buff = &buff[ !memcmp( buff, UTF8_BOM, UTF8_BOM_LENGTH ) ? UTF8_BOM_LENGTH : 0 ];   /* BOM detection */
-    if( isom_get_start_time( p_buff, data ) < 0 )   /* get start_time */
+    if( chapter_get_start_time( p_buff, data ) < 0 )   /* get start_time */
         return LSMASH_ERR_INVALID_DATA;
     /* get chapter_name */
     char *chapter_name = strchr( buff, ' ' );   /* find separator */
@@ -116,7 +116,7 @@ static int isom_read_minimum_chapter( FILE *chapter, isom_chapter_entry_t *data 
 
 typedef int (*fn_get_chapter_data)( FILE *, isom_chapter_entry_t * );
 
-static fn_get_chapter_data isom_check_chap_line( char *file_name )
+static fn_get_chapter_data chapter_check_chap_line( char *file_name )
 {
     FILE *fp = lsmash_fopen( file_name, "rb" );
     if( !fp )
@@ -130,10 +130,10 @@ static fn_get_chapter_data isom_check_chap_line( char *file_name )
     {
         char *p_buff = &buff[ !memcmp( buff, UTF8_BOM, UTF8_BOM_LENGTH ) ? UTF8_BOM_LENGTH : 0 ];   /* BOM detection */
         if( !strncmp( p_buff, "CHAPTER", 7 ) )
-            fnc = isom_read_simple_chapter;
+            fnc = chapter_read_simple_chapter;
         else if( isdigit( (unsigned char)p_buff[0] ) && isdigit( (unsigned char)p_buff[1] ) && p_buff[2] == ':'
               && isdigit( (unsigned char)p_buff[3] ) && isdigit( (unsigned char)p_buff[4] ) && p_buff[5] == ':' )
-            fnc = isom_read_minimum_chapter;
+            fnc = chapter_read_minimum_chapter;
         else
             lsmash_log( NULL, LSMASH_LOG_ERROR, "the chapter file is malformed.\n" );
     }
@@ -141,7 +141,7 @@ static fn_get_chapter_data isom_check_chap_line( char *file_name )
     return fnc;
 }
 
-static int isom_add_chpl_entry( isom_chpl_t *chpl, isom_chapter_entry_t *chap_data )
+static int chapter_add_chpl_entry( isom_chpl_t *chpl, isom_chapter_entry_t *chap_data )
 {
     assert( LSMASH_IS_EXISTING_BOX( chpl ) );
     if( !chap_data->chapter_name || !chpl->list )
@@ -179,7 +179,7 @@ int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom
      || file->moov->mvhd->duration  == 0 )
         goto error_message;
     /* check each line format */
-    fn_get_chapter_data fnc = isom_check_chap_line( file_name );
+    fn_get_chapter_data fnc = chapter_check_chap_line( file_name );
     if( !fnc )
         goto error_message;
     FILE *chapter = lsmash_fopen( file_name, "rb" );
@@ -188,8 +188,8 @@ int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom
         lsmash_log( NULL, LSMASH_LOG_ERROR, "failed to open the chapter file \"%s\".\n", file_name );
         goto error_message;
     }
-    if( (LSMASH_IS_NON_EXISTING_BOX( file->moov->udta )       && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_udta( file->moov ) ))
-     || (LSMASH_IS_NON_EXISTING_BOX( file->moov->udta->chpl ) && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_chpl( file->moov->udta ) )) )
+    if( (LSMASH_IS_NON_EXISTING_BOX( file->moov->udta )       && LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_udta( file->moov ) ))
+     || (LSMASH_IS_NON_EXISTING_BOX( file->moov->udta->chpl ) && LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_chpl( file->moov->udta ) )) )
         goto fail;
     file->moov->udta->chpl->version = 1;    /* version = 1 is popular. */
     isom_chapter_entry_t data = { 0 };
@@ -213,7 +213,7 @@ int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom
             lsmash_free( data.chapter_name );
             break;
         }
-        if( isom_add_chpl_entry( file->moov->udta->chpl, &data ) < 0 )
+        if( chapter_add_chpl_entry( file->moov->udta->chpl, &data ) < 0 )
             goto fail2;
         lsmash_freep( &data.chapter_name );
     }
@@ -248,7 +248,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
         lsmash_log( NULL, LSMASH_LOG_ERROR, "the specified track ID to apply the chapter doesn't exist.\n" );
         goto error_message;
     }
-    if( LSMASH_IS_NON_EXISTING_BOX( trak->tref ) && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_tref( trak ) ) )
+    if( LSMASH_IS_NON_EXISTING_BOX( trak->tref ) && LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_tref( trak ) ) )
         goto error_message;
     /* Create a track_ID for a new chapter track. */
     uint32_t *id = (uint32_t *)lsmash_malloc( sizeof(uint32_t) );
@@ -256,7 +256,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
         goto error_message;
     uint32_t chapter_track_ID = *id = file->moov->mvhd->next_track_ID;
     /* Create a Track Reference Type Box. */
-    isom_tref_type_t *chap = isom_add_track_reference_type( trak->tref, QT_TREF_TYPE_CHAP );
+    isom_tref_type_t *chap = lsm_box_add_track_reference_type( trak->tref, QT_TREF_TYPE_CHAP );
     if( LSMASH_IS_NON_EXISTING_BOX( chap ) )
     {
         lsmash_free( id );
@@ -293,7 +293,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     if( sample_entry == 0 )
         goto fail;
     /* Check each line format. */
-    fn_get_chapter_data fnc = isom_check_chap_line( file_name );
+    fn_get_chapter_data fnc = chapter_check_chap_line( file_name );
     if( !fnc )
         goto fail;
     /* Open chapter format file. */
@@ -359,12 +359,12 @@ fail:
         fclose( chapter );
     /* Remove chapter track reference. */
     if( trak->tref->ref_list.tail )
-        isom_remove_box_by_itself( trak->tref->ref_list.tail->data );
+        lsm_box_remove_by_itself( trak->tref->ref_list.tail->data );
     if( trak->tref->ref_list.entry_count == 0 )
-        isom_remove_box_by_itself( trak->tref );
+        lsm_box_remove_by_itself( trak->tref );
     /* Remove the reference chapter track attached at tail of the list. */
     if( file->moov->trak_list.tail )
-        isom_remove_box_by_itself( file->moov->trak_list.tail->data );
+        lsm_box_remove_by_itself( file->moov->trak_list.tail->data );
 error_message:
     lsmash_log( NULL, LSMASH_LOG_ERROR, "failed to set reference chapter.\n" );
     return LSMASH_ERR_NAMELESS;
@@ -449,5 +449,5 @@ void lsmash_delete_tyrant_chapter( lsmash_root_t *root )
     if( lsm_movie_check_initializer_present( root ) < 0
      || LSMASH_IS_NON_EXISTING_BOX( root->file->initializer->moov->udta ) )
         return;
-    isom_remove_box_by_itself( root->file->initializer->moov->udta->chpl );
+    lsm_box_remove_by_itself( root->file->initializer->moov->udta->chpl );
 }

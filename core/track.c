@@ -156,63 +156,63 @@ isom_trak_t *lsm_track_get_trak( lsmash_file_t *file, uint32_t track_ID )
     if( track_ID == 0
      || LSMASH_IS_NON_EXISTING_BOX( file->moov )
      || file != file->initializer )
-        return isom_non_existing_trak();
+        return lsm_box_default_non_existing_trak();
     for( lsmash_entry_t *entry = file->moov->trak_list.head; entry; entry = entry->next )
     {
         isom_trak_t *trak = (isom_trak_t *)entry->data;
         if( LSMASH_IS_NON_EXISTING_BOX( trak )
          || LSMASH_IS_NON_EXISTING_BOX( trak->tkhd ) )
-            return isom_non_existing_trak();
+            return lsm_box_default_non_existing_trak();
         if( trak->tkhd->track_ID == track_ID )
             return trak;
     }
-    return isom_non_existing_trak();
+    return lsm_box_default_non_existing_trak();
 }
 
 isom_trex_t *lsm_track_get_trex( isom_mvex_t *mvex, uint32_t track_ID )
 {
     if( track_ID == 0 || LSMASH_IS_NON_EXISTING_BOX( mvex ) )
-        return isom_non_existing_trex();
+        return lsm_box_default_non_existing_trex();
     for( lsmash_entry_t *entry = mvex->trex_list.head; entry; entry = entry->next )
     {
         isom_trex_t *trex = (isom_trex_t *)entry->data;
         if( LSMASH_IS_NON_EXISTING_BOX( trex ) )
-            return isom_non_existing_trex();
+            return lsm_box_default_non_existing_trex();
         if( trex->track_ID == track_ID )
             return trex;
     }
-    return isom_non_existing_trex();
+    return lsm_box_default_non_existing_trex();
 }
 
 isom_traf_t *lsm_track_get_traf( isom_moof_t *moof, uint32_t track_ID )
 {
     if( track_ID == 0 || LSMASH_IS_NON_EXISTING_BOX( moof ) )
-        return isom_non_existing_traf();
+        return lsm_box_default_non_existing_traf();
     for( lsmash_entry_t *entry = moof->traf_list.head; entry; entry = entry->next )
     {
         isom_traf_t *traf = (isom_traf_t *)entry->data;
         if( LSMASH_IS_NON_EXISTING_BOX( traf )
          || LSMASH_IS_NON_EXISTING_BOX( traf->tfhd ) )
-            return isom_non_existing_traf();
+            return lsm_box_default_non_existing_traf();
         if( traf->tfhd->track_ID == track_ID )
             return traf;
     }
-    return isom_non_existing_traf();
+    return lsm_box_default_non_existing_traf();
 }
 
 isom_tfra_t *lsm_track_get_tfra( isom_mfra_t *mfra, uint32_t track_ID )
 {
     if( track_ID == 0 || LSMASH_IS_NON_EXISTING_BOX( mfra ) )
-        return isom_non_existing_tfra();
+        return lsm_box_default_non_existing_tfra();
     for( lsmash_entry_t *entry = mfra->tfra_list.head; entry; entry = entry->next )
     {
         isom_tfra_t *tfra = (isom_tfra_t *)entry->data;
         if( LSMASH_IS_NON_EXISTING_BOX( tfra ) )
-            return isom_non_existing_tfra();
+            return lsm_box_default_non_existing_tfra();
         if( tfra->track_ID == track_ID )
             return tfra;
     }
-    return isom_non_existing_tfra();
+    return lsm_box_default_non_existing_tfra();
 }
 
 static int track_add_elst_entry( isom_elst_t *elst, uint64_t segment_duration, int64_t media_time, int32_t media_rate )
@@ -415,7 +415,7 @@ static int track_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_d
             {
                 if( LSMASH_IS_NON_EXISTING_BOX( cslg ) )
                 {
-                    if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_cslg( trak->mdia->minf->stbl ) ) )
+                    if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_cslg( trak->mdia->minf->stbl ) ) )
                         return LSMASH_ERR_NAMELESS;
                     cslg = stbl->cslg;
                 }
@@ -426,7 +426,7 @@ static int track_update_mdhd_duration( isom_trak_t *trak, uint32_t last_sample_d
                 cslg->compositionEndTime           = composition_end_time;
             }
             else
-                isom_remove_box_by_itself( cslg );
+                lsm_box_remove_by_itself( cslg );
         }
     }
     if( mdhd->duration > UINT32_MAX && !file->undefined_64_ver )
@@ -531,9 +531,9 @@ int lsm_track_setup_handler_reference( isom_hdlr_t *hdlr, uint32_t media_type )
     if( LSMASH_IS_NON_EXISTING_BOX( parent )
      || LSMASH_IS_NON_EXISTING_BOX( file ) )
         return LSMASH_ERR_NAMELESS;
-    isom_mdia_t *mdia = lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MDIA ) ? (isom_mdia_t *)parent : isom_non_existing_mdia();
+    isom_mdia_t *mdia = lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MDIA ) ? (isom_mdia_t *)parent : lsm_box_default_non_existing_mdia();
     isom_meta_t *meta = lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_META ) ? (isom_meta_t *)parent
-                      : lsmash_check_box_type_identical( parent->type,   QT_BOX_TYPE_META ) ? (isom_meta_t *)parent : isom_non_existing_meta();
+                      : lsmash_check_box_type_identical( parent->type,   QT_BOX_TYPE_META ) ? (isom_meta_t *)parent : lsm_box_default_non_existing_meta();
     uint32_t type    = LSMASH_IS_EXISTING_BOX( mdia ) ? (file->qt_compatible ? QT_HANDLER_TYPE_MEDIA : 0)
                                                       : (LSMASH_IS_EXISTING_BOX( meta ) ? 0 : QT_HANDLER_TYPE_DATA);
     uint32_t subtype = media_type;
@@ -597,46 +597,46 @@ isom_trak_t *lsm_track_create( lsmash_file_t *file, lsmash_media_type media_type
     /* Don't allow to create a new track if the initial movie is already written. */
     if( (file->fragment && file->fragment->movie)
      || (LSMASH_IS_EXISTING_BOX( file->moov ) && (file->moov->manager & LSMASH_WRITTEN_BOX)) )
-        return isom_non_existing_trak();
-    isom_trak_t *trak = isom_add_trak( file->moov );
+        return lsm_box_default_non_existing_trak();
+    isom_trak_t *trak = lsm_box_add_trak( file->moov );
     if( LSMASH_IS_NON_EXISTING_BOX( trak->file->moov->mvhd ) )
         goto fail;
-    if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_tkhd( trak ) )
-     || LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_mdia( trak ) )
-     || LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_mdhd( trak->mdia ) )
-     || LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_minf( trak->mdia ) )
-     || LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_dinf( trak->mdia->minf ) )
-     || LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_dref( trak->mdia->minf->dinf ) )
-     || LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_stbl( trak->mdia->minf ) )
-     || LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_stsd( trak->mdia->minf->stbl ) )
-     || LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_stts( trak->mdia->minf->stbl ) )
-     || LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_stsc( trak->mdia->minf->stbl ) )
-     || LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_stco( trak->mdia->minf->stbl ) )
-     || LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_stsz( trak->mdia->minf->stbl ) ) )
+    if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_tkhd( trak ) )
+     || LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_mdia( trak ) )
+     || LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_mdhd( trak->mdia ) )
+     || LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_minf( trak->mdia ) )
+     || LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_dinf( trak->mdia->minf ) )
+     || LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_dref( trak->mdia->minf->dinf ) )
+     || LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_stbl( trak->mdia->minf ) )
+     || LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_stsd( trak->mdia->minf->stbl ) )
+     || LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_stts( trak->mdia->minf->stbl ) )
+     || LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_stsc( trak->mdia->minf->stbl ) )
+     || LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_stco( trak->mdia->minf->stbl ) )
+     || LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_stsz( trak->mdia->minf->stbl ) ) )
         goto fail;
-    if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_hdlr( trak->mdia ) )
+    if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_hdlr( trak->mdia ) )
      || lsm_track_setup_handler_reference( trak->mdia->hdlr, media_type ) < 0 )
         goto fail;
     if( file->qt_compatible )
     {
-        if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_hdlr( trak->mdia->minf ) )
+        if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_hdlr( trak->mdia->minf ) )
          || lsm_track_setup_handler_reference( trak->mdia->minf->hdlr, QT_REFERENCE_HANDLER_TYPE_URL ) < 0 )
             goto fail;
     }
     switch( media_type )
     {
         case ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK :
-            if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_vmhd( trak->mdia->minf ) ) )
+            if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_vmhd( trak->mdia->minf ) ) )
                 goto fail;
             trak->mdia->minf->vmhd->flags = 0x000001;
             break;
         case ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK :
-            if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_smhd( trak->mdia->minf ) ) )
+            if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_smhd( trak->mdia->minf ) ) )
                 goto fail;
             trak->cache->is_audio = 1;
             break;
         case ISOM_MEDIA_HANDLER_TYPE_HINT_TRACK :
-            if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_hmhd( trak->mdia->minf ) ) )
+            if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_hmhd( trak->mdia->minf ) ) )
                 goto fail;
             trak->mdia->minf->hmhd->combinedPDUsize = 0;
             trak->mdia->minf->hmhd->PDUcount        = 0;
@@ -645,9 +645,9 @@ isom_trak_t *lsm_track_create( lsmash_file_t *file, lsmash_media_type media_type
         case ISOM_MEDIA_HANDLER_TYPE_TEXT_TRACK :
             if( file->qt_compatible || file->itunes_movie )
             {
-                if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_gmhd( trak->mdia->minf ) )
-                 || LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_gmin( trak->mdia->minf->gmhd ) )
-                 || LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_text( trak->mdia->minf->gmhd ) ) )
+                if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_gmhd( trak->mdia->minf ) )
+                 || LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_gmin( trak->mdia->minf->gmhd ) )
+                 || LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_text( trak->mdia->minf->gmhd ) ) )
                     return 0;
                 /* Default Text Media Information Box. */
                 {
@@ -661,7 +661,7 @@ isom_trak_t *lsm_track_create( lsmash_file_t *file, lsmash_media_type media_type
                 goto fail;  /* We support only reference text media track for chapter yet. */
             break;
         default :
-            if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_nmhd( trak->mdia->minf ) ) )
+            if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_nmhd( trak->mdia->minf ) ) )
                 goto fail;
             break;
     }
@@ -679,8 +679,8 @@ isom_trak_t *lsm_track_create( lsmash_file_t *file, lsmash_media_type media_type
     trak->mdia->mdhd->language = file->qt_compatible ? 0 : ISOM_LANGUAGE_CODE_UNDEFINED;
     return trak;
 fail:
-    isom_remove_box_by_itself( trak );
-    return isom_non_existing_trak();
+    lsm_box_remove_by_itself( trak );
+    return lsm_box_default_non_existing_trak();
 }
 
 /*******************************
@@ -701,7 +701,7 @@ void lsmash_delete_track( lsmash_root_t *root, uint32_t track_ID )
             return;
         if( trak->tkhd->track_ID == track_ID )
         {
-            isom_remove_box_by_itself( trak );
+            lsm_box_remove_by_itself( trak );
             return;
         }
     }
@@ -752,16 +752,16 @@ int lsmash_set_track_parameters( lsmash_root_t *root, uint32_t track_ID, lsmash_
     /* Prepare Track Aperture Modes if required. */
     if( file->qt_compatible && param->aperture_modes )
     {
-        if( LSMASH_IS_NON_EXISTING_BOX( trak->tapt ) && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_tapt( trak ) ) )
+        if( LSMASH_IS_NON_EXISTING_BOX( trak->tapt ) && LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_tapt( trak ) ) )
             return LSMASH_ERR_NAMELESS;
         isom_tapt_t *tapt = trak->tapt;
-        if( (LSMASH_IS_NON_EXISTING_BOX( tapt->clef ) && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_clef( tapt ) ))
-         || (LSMASH_IS_NON_EXISTING_BOX( tapt->prof ) && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_prof( tapt ) ))
-         || (LSMASH_IS_NON_EXISTING_BOX( tapt->enof ) && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_enof( tapt ) )) )
+        if( (LSMASH_IS_NON_EXISTING_BOX( tapt->clef ) && LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_clef( tapt ) ))
+         || (LSMASH_IS_NON_EXISTING_BOX( tapt->prof ) && LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_prof( tapt ) ))
+         || (LSMASH_IS_NON_EXISTING_BOX( tapt->enof ) && LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_enof( tapt ) )) )
             return LSMASH_ERR_NAMELESS;
     }
     else
-        isom_remove_box_by_itself( trak->tapt );
+        lsm_box_remove_by_itself( trak->tapt );
     /* Set up Track Header. */
     uint32_t media_type = trak->mdia->hdlr->componentSubtype;
     isom_tkhd_t *tkhd = trak->tkhd;
@@ -928,7 +928,7 @@ int lsmash_create_data_reference
     isom_trak_t *trak = lsm_track_get_trak( root->file, track_ID );
     if( track_check_dref_presence( trak ) < 0 )
         return LSMASH_ERR_NAMELESS;
-    isom_dref_entry_t *url = isom_add_dref_entry( trak->mdia->minf->dinf->dref, ISOM_BOX_TYPE_URL );
+    isom_dref_entry_t *url = lsm_box_add_dref_entry( trak->mdia->minf->dinf->dref, ISOM_BOX_TYPE_URL );
     if( LSMASH_IS_NON_EXISTING_BOX( url ) )
         return LSMASH_ERR_NAMELESS;
     if( !data_ref->location || root->file == file )
@@ -944,7 +944,7 @@ int lsmash_create_data_reference
         url->location = lsmash_malloc( length + 1 );
         if( !url->location )
         {
-            isom_remove_box_by_itself( url );
+            lsm_box_remove_by_itself( url );
             return LSMASH_ERR_MEMORY_ALLOC;
         }
         memcpy( url->location, data_ref->location, length );
@@ -1352,7 +1352,7 @@ int lsm_track_complement_data_reference( isom_minf_t *minf )
     /* Complement data referece if absent. */
     if( !minf->dinf->dref->list.head )
     {
-        isom_dref_entry_t *url = isom_add_dref_entry( minf->dinf->dref, ISOM_BOX_TYPE_URL );
+        isom_dref_entry_t *url = lsm_box_add_dref_entry( minf->dinf->dref, ISOM_BOX_TYPE_URL );
         if( LSMASH_IS_NON_EXISTING_BOX( url ) )
             return LSMASH_ERR_NAMELESS;
         url->flags = 0x000001;  /* Media data is in the same file. */
@@ -1429,8 +1429,8 @@ int lsmash_create_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID,
                   : trak->tkhd->duration ? trak->tkhd->duration
                   : lsm_track_update_tkhd_duration( trak ) < 0 ? 0
                   : trak->tkhd->duration;
-    if( (LSMASH_IS_NON_EXISTING_BOX( trak->edts )       && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_edts( trak ) ))
-     || (LSMASH_IS_NON_EXISTING_BOX( trak->edts->elst ) && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_elst( trak->edts ) )) )
+    if( (LSMASH_IS_NON_EXISTING_BOX( trak->edts )       && LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_edts( trak ) ))
+     || (LSMASH_IS_NON_EXISTING_BOX( trak->edts->elst ) && LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_elst( trak->edts ) )) )
         return LSMASH_ERR_NAMELESS;
     int err = track_add_elst_entry( trak->edts->elst, edit.duration, edit.start_time, edit.rate );
     if( err < 0 )
@@ -1484,7 +1484,7 @@ int lsmash_delete_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID 
     isom_trak_t *trak = lsm_track_get_trak( root->file->initializer, track_ID );
     if( LSMASH_IS_NON_EXISTING_BOX( trak ) )
         return LSMASH_ERR_NAMELESS;
-    isom_remove_box_by_itself( trak->edts );
+    lsm_box_remove_by_itself( trak->edts );
     return lsm_track_update_tkhd_duration( trak );
 }
 

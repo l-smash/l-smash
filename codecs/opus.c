@@ -2,6 +2,7 @@
  * opus.c
  *****************************************************************************
  * Copyright (C) 2014 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -126,13 +127,13 @@ int opus_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, i
 {
     assert( fp && file && box && (box->manager & LSMASH_BINARY_CODED_BOX) );
     int indent = level;
-    lsmash_ifprintf( fp, indent++, "[%s: Opus Specific Box]\n", isom_4cc2str( box->type.fourcc ) );
+    lsmash_ifprintf( fp, indent++, "[%s: Opus Specific Box]\n", lsm_box_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     if( box->size < OPUS_SPECIFIC_BOX_MIN_LENGTH )
         return LSMASH_ERR_INVALID_DATA;
     uint8_t     *data   = box->binary;
-    uint32_t     offset = isom_skip_box_common( &data );
+    uint32_t     offset = lsm_box_skip_common( &data );
     lsmash_bs_t *bs     = lsmash_bs_create();
     if( !bs )
         return LSMASH_ERR_MEMORY_ALLOC;

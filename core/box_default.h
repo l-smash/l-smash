@@ -2,6 +2,7 @@
  * box_default.h
  *****************************************************************************
  * Copyright (C) 2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -21,14 +22,14 @@
 /* This file is available under an ISC license. */
 
 #define ALLOCATE_BOX( box_name ) \
-    (isom_##box_name##_t *)allocate_box_by_default( &isom_##box_name##_box_default, \
-                                                    sizeof(isom_##box_name##_box_default) )
+    (isom_##box_name##_t *)lsm_box_default_allocate( &isom_##box_name##_box_default, \
+                                                     sizeof(isom_##box_name##_box_default) )
 
-#define  DEFINE_BOX_DEFAULT_CONSTANT( box_name )                            \
-    extern const isom_##box_name##_t isom_##box_name##_box_default;         \
-    static inline isom_##box_name##_t *isom_non_existing_##box_name( void ) \
-    {                                                                       \
-        return (isom_##box_name##_t *)&isom_##box_name##_box_default;       \
+#define  DEFINE_BOX_DEFAULT_CONSTANT( box_name )                                    \
+    extern const isom_##box_name##_t isom_##box_name##_box_default;                 \
+    static inline isom_##box_name##_t *lsm_box_default_non_existing_##box_name( void ) \
+    {                                                                               \
+        return (isom_##box_name##_t *)&isom_##box_name##_box_default;               \
     }
 
 DEFINE_BOX_DEFAULT_CONSTANT( dummy )
@@ -168,7 +169,7 @@ DEFINE_BOX_DEFAULT_CONSTANT( emsg )
 DEFINE_BOX_DEFAULT_CONSTANT( file_abstract )
 DEFINE_BOX_DEFAULT_CONSTANT( root_abstract )
 
-void *allocate_box_by_default
+void *lsm_box_default_allocate
 (
     const void  *nonexist_ptr,
     const size_t data_type_size

@@ -210,13 +210,13 @@ int ac3_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, in
 {
     assert( box->manager & LSMASH_BINARY_CODED_BOX );
     int indent = level;
-    lsmash_ifprintf( fp, indent++, "[%s: AC3 Specific Box]\n", isom_4cc2str( box->type.fourcc ) );
+    lsmash_ifprintf( fp, indent++, "[%s: AC3 Specific Box]\n", lsm_box_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     if( box->size < AC3_SPECIFIC_BOX_LENGTH )
         return LSMASH_ERR_INVALID_DATA;
     uint8_t *data = box->binary;
-    isom_skip_box_common( &data );
+    lsm_box_skip_common( &data );
     uint8_t fscod         = (data[0] >> 6) & 0x03;
     uint8_t bsid          = (data[0] >> 1) & 0x1F;
     uint8_t bsmod         = ((data[0] & 0x01) << 2) | ((data[1] >> 6) & 0x03);
@@ -679,13 +679,13 @@ int eac3_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, i
 {
     assert( box->manager & LSMASH_BINARY_CODED_BOX );
     int indent = level;
-    lsmash_ifprintf( fp, indent++, "[%s: EC3 Specific Box]\n", isom_4cc2str( box->type.fourcc ) );
+    lsmash_ifprintf( fp, indent++, "[%s: EC3 Specific Box]\n", lsm_box_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     if( box->size < EAC3_SPECIFIC_BOX_MIN_LENGTH )
         return LSMASH_ERR_INVALID_DATA;
     uint8_t *data = box->binary;
-    isom_skip_box_common( &data );
+    lsm_box_skip_common( &data );
     lsmash_ifprintf( fp, indent, "data_rate = %"PRIu16" kbit/s\n", (data[0] << 5) | ((data[1] >> 3) & 0x1F) );
     uint8_t num_ind_sub = data[1] & 0x07;
     lsmash_ifprintf( fp, indent, "num_ind_sub = %"PRIu8"\n", num_ind_sub );
@@ -745,7 +745,7 @@ int eac3_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_d
     isom_audio_entry_t *eac3 = (isom_audio_entry_t *)lsmash_list_get_entry_data( &stbl->stsd->list, sample_description_index );
     if( LSMASH_IS_NON_EXISTING_BOX( eac3 ) )
         return LSMASH_ERR_INVALID_DATA;
-    isom_box_t *ext = isom_get_extension_box( &eac3->extensions, ISOM_BOX_TYPE_DEC3 );
+    isom_box_t *ext = lsm_box_get_extension_box( &eac3->extensions, ISOM_BOX_TYPE_DEC3 );
     if( !((ext->manager & LSMASH_BINARY_CODED_BOX) && ext->binary && ext->size >= 10) )
         return LSMASH_ERR_INVALID_DATA;
     uint16_t bitrate;

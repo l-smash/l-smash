@@ -318,7 +318,7 @@ int lsmash_importer_make_fake_track( importer_t *importer, lsmash_media_type med
     *track_ID = trak->tkhd->track_ID;
     return 0;
 fail:
-    isom_remove_box_by_itself( trak );
+    lsm_box_remove_by_itself( trak );
     return err;
 }
 
@@ -326,5 +326,5 @@ void lsmash_importer_break_fake_movie( importer_t *importer )
 {
     if( !importer )
         return;
-    isom_remove_box_by_itself( importer->file->moov );
+    lsm_box_remove_by_itself( importer->file->moov );
 }

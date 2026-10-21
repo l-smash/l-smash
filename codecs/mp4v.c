@@ -34,7 +34,7 @@ int mp4v_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_d
     isom_visual_entry_t *mp4v = (isom_visual_entry_t *)lsmash_list_get_entry_data( &stbl->stsd->list, sample_description_index );
     if( LSMASH_IS_NON_EXISTING_BOX( mp4v ) )
         return LSMASH_ERR_INVALID_DATA;
-    isom_esds_t *esds = (isom_esds_t *)isom_get_extension_box_format( &mp4v->extensions, ISOM_BOX_TYPE_ESDS );
+    isom_esds_t *esds = (isom_esds_t *)lsm_box_get_extension_box_format( &mp4v->extensions, ISOM_BOX_TYPE_ESDS );
     if( LSMASH_IS_NON_EXISTING_BOX( esds ) || !esds->ES )
         return LSMASH_ERR_INVALID_DATA;
     uint32_t bufferSizeDB;

@@ -254,7 +254,7 @@ static void timeline_get_qt_fixed_comp_audio_sample_quants
         if( !isom_get_implicit_qt_fixed_comp_audio_sample_quants( audio, samples_per_packet, constant_sample_size, &dummy ) )
         {
             /* LPCM */
-            if( !isom_is_lpcm_audio( audio ) )
+            if( !lsm_box_is_lpcm_audio( audio ) )
                 lsmash_log( timeline, LSMASH_LOG_WARNING, "unsupported implicit sample table!\n" );
             *samples_per_packet   = 1;
             *constant_sample_size = (audio->samplesize * audio->channelcount) / 8;
@@ -277,7 +277,7 @@ static int timeline_is_qt_fixed_compressed_audio
     isom_sample_entry_t *description
 )
 {
-    if( (description->manager & LSMASH_VIDEO_DESCRIPTION) || !isom_is_qt_audio( description->type ) )
+    if( (description->manager & LSMASH_VIDEO_DESCRIPTION) || !lsm_box_is_qt_audio( description->type ) )
         return 0;
     /* LPCM is a special case of fixed compression. */
     return (((isom_audio_entry_t *)description)->compression_ID != QT_AUDIO_COMPRESSION_ID_VARIABLE_COMPRESSION);
@@ -421,7 +421,7 @@ static int timeline_get_cts_from_info_list( isom_timeline_t *timeline, uint32_t 
     isom_sample_info_t *info = (isom_sample_info_t *)lsm_list_get( timeline->info_list, sample_number );
     if( !info )
         return LSMASH_ERR_NAMELESS;
-    *cts = isom_make_cts( *cts, info->offset, timeline->ctd_shift );
+    *cts = lsm_box_make_cts( *cts, info->offset, timeline->ctd_shift );
     return 0;
 }
 
@@ -515,7 +515,7 @@ static lsmash_sample_t *timeline_get_lpcm_sample( isom_timeline_t *timeline, uin
         return NULL;
     /* Get sample info. */
     sample->dts    = timeline->last_accessed_lpcm_bunch_dts + sample_number_offset * bunch->duration;
-    sample->cts    = isom_make_cts( sample->dts, bunch->offset, timeline->ctd_shift );
+    sample->cts    = lsm_box_make_cts( sample->dts, bunch->offset, timeline->ctd_shift );
     sample->pos    = sample_pos;
     sample->length = bunch->length;
     sample->index  = bunch->index;
@@ -538,7 +538,7 @@ static lsmash_sample_t *timeline_get_sample( isom_timeline_t *timeline, uint32_t
         return NULL;
     /* Get sample info. */
     sample->dts    = dts;
-    sample->cts    = isom_make_cts( dts, info->offset, timeline->ctd_shift );
+    sample->cts    = lsm_box_make_cts( dts, info->offset, timeline->ctd_shift );
     sample->pos    = info->pos;
     sample->length = info->length;
     sample->index  = info->index;
@@ -553,7 +553,7 @@ static int timeline_get_lpcm_sample_info( isom_timeline_t *timeline, uint32_t sa
         return LSMASH_ERR_NAMELESS;
     uint64_t sample_number_offset = sample_number - timeline->last_accessed_lpcm_bunch_first_sample_number;
     sample->dts    = timeline->last_accessed_lpcm_bunch_dts + sample_number_offset * bunch->duration;
-    sample->cts    = isom_make_cts( sample->dts, bunch->offset, timeline->ctd_shift );
+    sample->cts    = lsm_box_make_cts( sample->dts, bunch->offset, timeline->ctd_shift );
     sample->pos    = bunch->pos + sample_number_offset * bunch->length;
     sample->length = bunch->length;
     sample->index  = bunch->index;
@@ -571,7 +571,7 @@ static int timeline_get_sample_info( isom_timeline_t *timeline, uint32_t sample_
     if( !info )
         return LSMASH_ERR_NAMELESS;
     sample->dts    = dts;
-    sample->cts    = isom_make_cts( dts, info->offset, timeline->ctd_shift );
+    sample->cts    = lsm_box_make_cts( dts, info->offset, timeline->ctd_shift );
     sample->pos    = info->pos;
     sample->length = info->length;
     sample->index  = info->index;
@@ -832,7 +832,7 @@ int lsm_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
     isom_dref_entry_t *dref_entry = (isom_dref_entry_t *)lsmash_list_get_entry_data( dref_list, description->data_reference_index );
     int all_sync = LSMASH_IS_NON_EXISTING_BOX( stss );
     int large_presentation = stco->large_presentation || lsmash_check_box_type_identical( stco->type, ISOM_BOX_TYPE_CO64 );
-    int is_lpcm_audio          = isom_is_lpcm_audio( description );
+    int is_lpcm_audio          = lsm_box_is_lpcm_audio( description );
     int is_qt_fixed_comp_audio = timeline_is_qt_fixed_compressed_audio( description );
     int iso_sdtp = file->max_isom_version >= 2 || file->avc_extensions;
     int allow_negative_sample_offset = ctts && ((file->max_isom_version >= 4 && ctts->version == 1) || file->qt_compatible);
@@ -1052,7 +1052,7 @@ int lsm_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
                 stsc_data = (isom_stsc_entry_t *)stsc_cur.data;
                 /* Update sample description. */
                 description = (isom_sample_entry_t *)lsmash_list_get_entry_data( &stsd->list, stsc_data->sample_description_index );
-                is_lpcm_audio          = LSMASH_IS_EXISTING_BOX( description ) ? isom_is_lpcm_audio( description )                : 0;
+                is_lpcm_audio          = LSMASH_IS_EXISTING_BOX( description ) ? lsm_box_is_lpcm_audio( description )                : 0;
                 is_qt_fixed_comp_audio = LSMASH_IS_EXISTING_BOX( description ) ? timeline_is_qt_fixed_compressed_audio( description ) : 0;
                 if( is_qt_fixed_comp_audio )
                     timeline_get_qt_fixed_comp_audio_sample_quants( timeline, description, &samples_per_packet, &constant_sample_size );
@@ -1189,7 +1189,7 @@ int lsm_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
                         else
                             sample_description_index = trex->default_sample_description_index;
                         description   = (isom_sample_entry_t *)lsmash_list_get_entry_data( &stsd->list, sample_description_index );
-                        is_lpcm_audio = LSMASH_IS_EXISTING_BOX( description ) ? isom_is_lpcm_audio( description ) : 0;
+                        is_lpcm_audio = LSMASH_IS_EXISTING_BOX( description ) ? lsm_box_is_lpcm_audio( description ) : 0;
                         /* Reference media data. */
                         dref_entry = (isom_dref_entry_t *)lsmash_list_get_entry_data( dref_list, LSMASH_IS_EXISTING_BOX( description ) ? description->data_reference_index : 0 );
                         lsmash_file_t *ref_file = (!dref_entry || LSMASH_IS_NON_EXISTING_BOX( dref_entry->ref_file )) ? NULL : dref_entry->ref_file;
@@ -1577,7 +1577,7 @@ int lsmash_get_closest_random_accessible_point_detail_from_media_timeline( lsmas
             uint64_t dts;
             if( (ret = timeline_get_dts_from_info_list( timeline, *rap_number, &dts )) < 0 )
                 return ret;
-            uint64_t rap_cts = isom_make_cts_adjust( dts, info->offset, timeline->ctd_shift );
+            uint64_t rap_cts = lsm_box_make_cts_adjust( dts, info->offset, timeline->ctd_shift );
             do
             {
                 dts += info->duration;
@@ -1586,7 +1586,7 @@ int lsmash_get_closest_random_accessible_point_detail_from_media_timeline( lsmas
                 info = (isom_sample_info_t *)lsm_list_get( timeline->info_list, current_sample_number++ );
                 if( !info )
                     break;
-                uint64_t cts = isom_make_cts_adjust( dts, info->offset, timeline->ctd_shift );
+                uint64_t cts = lsm_box_make_cts_adjust( dts, info->offset, timeline->ctd_shift );
                 if( rap_cts != LSMASH_TIMESTAMP_UNDEFINED && rap_cts > cts )
                     ++ *leading;
             } while( 1 );
@@ -1820,8 +1820,8 @@ int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_
         src_ctd_shift       = src_trak->mdia->minf->stbl->cslg->compositionToDTSShift;
     }
     /* Generate the edit list if absent in the destination. */
-    if( (LSMASH_IS_NON_EXISTING_BOX( dst_trak->edts       ) && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_edts( dst_trak ) ))
-     || (LSMASH_IS_NON_EXISTING_BOX( dst_trak->edts->elst ) && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_elst( dst_trak->edts ) )) )
+    if( (LSMASH_IS_NON_EXISTING_BOX( dst_trak->edts       ) && LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_edts( dst_trak ) ))
+     || (LSMASH_IS_NON_EXISTING_BOX( dst_trak->edts->elst ) && LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_elst( dst_trak->edts ) )) )
         return LSMASH_ERR_NAMELESS;
     uint32_t dst_movie_timescale = dst_file->moov->mvhd->timescale;
     uint32_t dst_media_timescale = dst_trak->mdia->mdhd->timescale;
@@ -1946,7 +1946,7 @@ int lsmash_get_media_timestamps( lsmash_root_t *root, uint32_t track_ID, lsmash_
         LSM_LIST_FOR_EACH( info, timeline->info_list )
         {
             ts[i].dts = dts;
-            ts[i].cts = isom_make_cts( dts, info->offset, timeline->ctd_shift );
+            ts[i].cts = lsm_box_make_cts( dts, info->offset, timeline->ctd_shift );
             dts += info->duration;
             ++i;
         }
@@ -1959,7 +1959,7 @@ int lsmash_get_media_timestamps( lsmash_root_t *root, uint32_t track_ID, lsmash_
             for( uint32_t j = 0; j < bunch->sample_count; j++ )
             {
                 ts[i].dts = dts;
-                ts[i].cts = isom_make_cts( dts, bunch->offset, timeline->ctd_shift );
+                ts[i].cts = lsm_box_make_cts( dts, bunch->offset, timeline->ctd_shift );
                 dts += bunch->duration;
                 ++i;
             }

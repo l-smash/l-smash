@@ -2,6 +2,7 @@
  * hevc.c
  *****************************************************************************
  * Copyright (C) 2013-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -3133,7 +3134,7 @@ int hevc_print_dovi
 {
     assert( fp && LSMASH_IS_EXISTING_BOX( file ) && LSMASH_IS_EXISTING_BOX( box ) );
     int indent = level;
-    lsmash_ifprintf( fp, indent++, "[%s: Dolby Vision configuration box]\n", isom_4cc2str( box->type.fourcc ) );
+    lsmash_ifprintf( fp, indent++, "[%s: Dolby Vision configuration box]\n", lsm_box_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
 
@@ -3166,11 +3167,11 @@ int hevc_print_codec_specific
 {
     assert( box->manager & LSMASH_BINARY_CODED_BOX );
     int indent = level;
-    lsmash_ifprintf( fp, indent++, "[%s: HEVC Configuration Box]\n", isom_4cc2str( box->type.fourcc ) );
+    lsmash_ifprintf( fp, indent++, "[%s: HEVC Configuration Box]\n", lsm_box_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
     uint8_t     *data   = box->binary;
-    uint32_t     offset = isom_skip_box_common( &data );
+    uint32_t     offset = lsm_box_skip_common( &data );
     lsmash_bs_t *bs     = lsmash_bs_create();
     if( !bs )
         return LSMASH_ERR_MEMORY_ALLOC;
@@ -3392,7 +3393,7 @@ int lhevc_print_codec_specific
 {
     assert( fp && LSMASH_IS_EXISTING_BOX( file ) && LSMASH_IS_EXISTING_BOX( box ) );
     int indent = level;
-    lsmash_ifprintf( fp, indent++, "[%s: L-HEVC Configuration Box]\n", isom_4cc2str( box->type.fourcc ) );
+    lsmash_ifprintf( fp, indent++, "[%s: L-HEVC Configuration Box]\n", lsm_box_4cc2str( box->type.fourcc ) );
     lsmash_ifprintf( fp, indent, "position = %"PRIu64"\n", box->pos );
     lsmash_ifprintf( fp, indent, "size = %"PRIu64"\n", box->size );
 

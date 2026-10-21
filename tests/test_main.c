@@ -3481,13 +3481,13 @@ static int test_multibuf_resize_and_codec_regressions( void )
         mdhd->duration    = 1152;
         isom_stbl_t *stbl = trak->mdia->minf->stbl;
 
-        isom_audio_entry_t *mp3_entry = isom_add_audio_description( stbl->stsd, QT_CODEC_TYPE_FULLMP3_AUDIO );
+        isom_audio_entry_t *mp3_entry = lsm_box_add_audio_description( stbl->stsd, QT_CODEC_TYPE_FULLMP3_AUDIO );
         TEST_ASSERT( LSMASH_IS_EXISTING_BOX( mp3_entry ), "14c: add .mp3 audio description" );
-        isom_wave_t *wave = isom_add_wave( mp3_entry );
+        isom_wave_t *wave = lsm_box_add_wave( mp3_entry );
         TEST_ASSERT( LSMASH_IS_EXISTING_BOX( wave ), "14c: add wave box" );
 
         /* MPEGLAYER3WAVEFORMAT: 8 (box header) + 18 (WAVEFORMATEX) + 12 (cbSize=12) = 38 bytes
-         * Note: isom_add_extension_binary takes ownership of wfex_buf and frees it on root destruction. */
+         * Note: lsm_box_add_extension_binary takes ownership of wfex_buf and frees it on root destruction. */
         uint8_t *wfex_buf = (uint8_t *)lsmash_malloc_zero( 38 );
         TEST_ASSERT( wfex_buf != NULL, "14c: alloc wfex_buf" );
         put_be32( &wfex_buf[0], 38 );
@@ -3498,7 +3498,7 @@ static int test_multibuf_resize_and_codec_regressions( void )
         put_le32( &ex[4],  48000 );  /* nSamplesPerSec = 48000 */
         put_le16( &ex[16], 12 );     /* cbSize = 12 */
         put_le16( &ex[26], 1 );      /* nFramesPerBlock = 1 */
-        TEST_ASSERT( isom_add_extension_binary( wave, QT_CODEC_TYPE_FULLMP3_AUDIO, 0, wfex_buf, 38 ) == 0,
+        TEST_ASSERT( lsm_box_add_extension_binary( wave, QT_CODEC_TYPE_FULLMP3_AUDIO, 0, wfex_buf, 38 ) == 0,
                      "14c: attach MPEGLAYER3WAVEFORMAT binary box" );
 
         /* Add 1 sample of 384 bytes with duration 1152 at 48000 Hz -> avgBitrate = 384 * 8 * 48000 / 1152 = 128000 bps */
@@ -3517,7 +3517,7 @@ static int test_multibuf_resize_and_codec_regressions( void )
 
         TEST_ASSERT( waveform_audio_update_bitrate( stbl, mdhd, 1 ) == 0,
                      "14c: waveform_audio_update_bitrate succeeds" );
-        isom_box_t *wave_ext = isom_get_extension_box( &wave->extensions, QT_CODEC_TYPE_FULLMP3_AUDIO );
+        isom_box_t *wave_ext = lsm_box_get_extension_box( &wave->extensions, QT_CODEC_TYPE_FULLMP3_AUDIO );
         TEST_ASSERT( wave_ext != NULL && wave_ext->binary != NULL, "14c: get updated wave_ext" );
         uint16_t nBlockSize = LSMASH_GET_LE16( &wave_ext->binary[8 + 24] );
         /* 144 * 128000 / 48000 = 384 (previously truncated to 144 * (128000 / 48000) = 288!) */

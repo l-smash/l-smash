@@ -318,7 +318,7 @@ static int file_set_brands
         if( file->flags & LSMASH_FILE_MODE_INITIALIZATION )
         {
             /* Absence of File Type Box means this file is a QuickTime or MP4 version 1 format file. */
-            isom_remove_box_by_itself( file->ftyp );
+            lsm_box_remove_by_itself( file->ftyp );
             /* Anyway we use QTFF as a default file format. */
             file_clear_compat_flags( file );
             file->qt_compatible = 1;
@@ -328,7 +328,7 @@ static int file_set_brands
             /* The absence of the Segment Type Box is allowed.
              * We set brands from the initialization segment after switching to this segment. */
             for( lsmash_entry_t *entry = file->styp_list.head; entry; entry = entry->next )
-                isom_remove_box_by_itself( entry->data );
+                lsm_box_remove_by_itself( entry->data );
             if( LSMASH_IS_EXISTING_BOX( file->initializer ) )
             {
                 /* Copy flags for compatibility. */
@@ -356,7 +356,7 @@ static int file_set_brands
     if( file->flags & LSMASH_FILE_MODE_INITIALIZATION )
     {
         /* Add File Type Box if absent yet. */
-        if( LSMASH_IS_NON_EXISTING_BOX( file->ftyp ) && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_ftyp( file ) ) )
+        if( LSMASH_IS_NON_EXISTING_BOX( file->ftyp ) && LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_ftyp( file ) ) )
             return LSMASH_ERR_NAMELESS;
         ftyp = file->ftyp;
     }
@@ -365,7 +365,7 @@ static int file_set_brands
         /* Add Segment Type Box if absent yet. */
         ftyp = file->styp_list.head && LSMASH_IS_EXISTING_BOX( (isom_styp_t *)file->styp_list.head->data )
              ? (isom_styp_t *)file->styp_list.head->data
-             : isom_add_styp( file );
+             : lsm_box_add_styp( file );
         if( LSMASH_IS_NON_EXISTING_BOX( ftyp ) )
             return LSMASH_ERR_NAMELESS;
     }
@@ -502,7 +502,7 @@ void lsmash_discard_boxes
     if( LSMASH_IS_NON_EXISTING_BOX( root )
      || LSMASH_IS_NON_EXISTING_BOX( root->file ) )
         return;
-    isom_remove_all_extension_boxes( &root->file->extensions );
+    lsm_box_remove_all_extension_boxes( &root->file->extensions );
 }
 
 int lsmash_open_file
@@ -554,7 +554,7 @@ lsmash_file_t *lsmash_set_file
 {
     if( LSMASH_IS_NON_EXISTING_BOX( root ) || !param )
         return NULL;
-    lsmash_file_t *file = isom_add_file_abstract( root );
+    lsmash_file_t *file = lsm_box_add_file_abstract( root );
     if( LSMASH_IS_NON_EXISTING_BOX( file ) )
         return NULL;
     lsmash_bs_t *bs = lsmash_bs_create();
@@ -607,7 +607,7 @@ lsmash_file_t *lsmash_set_file
         root->file = file;
     return file;
 fail:
-    isom_remove_box_by_itself( file );
+    lsm_box_remove_by_itself( file );
     return NULL;
 }
 

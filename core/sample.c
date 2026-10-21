@@ -336,7 +336,7 @@ int lsm_sample_append_by_type
     int (*func_append_sample)( void *, lsmash_sample_t *, isom_sample_entry_t * )
 )
 {
-    if( isom_is_lpcm_audio( sample_entry ) )
+    if( lsm_box_is_lpcm_audio( sample_entry ) )
     {
         uint32_t frame_size = ((isom_audio_entry_t *)sample_entry)->constBytesPerAudioPacket;
         if( sample->length == frame_size )
@@ -408,7 +408,7 @@ static int sample_append
     int mdat_absent = LSMASH_IS_NON_EXISTING_BOX( file->mdat );
     if( mdat_absent || !(file->mdat->manager & LSMASH_INCOMPLETE_BOX) )
     {
-        if( mdat_absent && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_mdat( file ) ) )
+        if( mdat_absent && LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_mdat( file ) ) )
             return LSMASH_ERR_NAMELESS;
         file->mdat->manager |= LSMASH_PLACEHOLDER;
         if( (err = lsm_write_box( file->bs, (isom_box_t *)file->mdat )) < 0 )

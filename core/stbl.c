@@ -148,7 +148,7 @@ static int stbl_add_sdtp_entry( isom_box_t *parent, lsmash_sample_property_t *pr
 {
     if( !prop || LSMASH_IS_NON_EXISTING_BOX( parent ) )
         return LSMASH_ERR_NAMELESS;
-    isom_sdtp_t *sdtp = isom_non_existing_sdtp();
+    isom_sdtp_t *sdtp = lsm_box_default_non_existing_sdtp();
     if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STBL ) )
         sdtp = ((isom_stbl_t *)parent)->sdtp;
     else if( lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_TRAF ) )
@@ -195,7 +195,7 @@ int lsm_stbl_convert_stco_to_co64( isom_stbl_t *stbl )
     int err = 0;
     isom_stco_t *stco = stbl->stco;
     LSMASH_MAKE_BOX_NON_EXISTING( stbl->stco );
-    if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_co64( stbl ) ) )
+    if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_co64( stbl ) ) )
     {
         err = LSMASH_ERR_NAMELESS;
         goto fail;
@@ -208,7 +208,7 @@ int lsm_stbl_convert_stco_to_co64( isom_stbl_t *stbl )
             goto fail;
     }
 fail:
-    isom_remove_box_by_itself( stco );
+    lsm_box_remove_by_itself( stco );
     return err;
 }
 
@@ -239,11 +239,11 @@ static isom_sgpd_t *stbl_get_sample_group_description_common( lsmash_entry_list_
         isom_sgpd_t *sgpd = (isom_sgpd_t *)entry->data;
         if( LSMASH_IS_NON_EXISTING_BOX( sgpd )
          || !sgpd->list )
-            return isom_non_existing_sgpd();
+            return lsm_box_default_non_existing_sgpd();
         if( sgpd->grouping_type == grouping_type )
             return sgpd;
     }
-    return isom_non_existing_sgpd();
+    return lsm_box_default_non_existing_sgpd();
 }
 
 static isom_sbgp_t *stbl_get_sample_to_group_common( lsmash_entry_list_t *list, uint32_t grouping_type )
@@ -253,11 +253,11 @@ static isom_sbgp_t *stbl_get_sample_to_group_common( lsmash_entry_list_t *list, 
         isom_sbgp_t *sbgp = (isom_sbgp_t *)entry->data;
         if( LSMASH_IS_NON_EXISTING_BOX( sbgp )
          || !sbgp->list )
-            return isom_non_existing_sbgp();
+            return lsm_box_default_non_existing_sbgp();
         if( sbgp->grouping_type == grouping_type )
             return sbgp;
     }
-    return isom_non_existing_sbgp();
+    return lsm_box_default_non_existing_sbgp();
 }
 
 isom_sgpd_t *lsm_stbl_get_sample_group_description( isom_stbl_t *stbl, uint32_t grouping_type )
@@ -276,7 +276,7 @@ isom_sgpd_t *lsm_stbl_get_roll_recovery_sample_group_description( lsmash_entry_l
     if( ((sgpd = stbl_get_sample_group_description_common( list, ISOM_GROUP_TYPE_ROLL )), LSMASH_IS_EXISTING_BOX( sgpd ))
      || ((sgpd = stbl_get_sample_group_description_common( list, ISOM_GROUP_TYPE_PROL )), LSMASH_IS_EXISTING_BOX( sgpd )) )
         return sgpd;
-    return isom_non_existing_sgpd();
+    return lsm_box_default_non_existing_sgpd();
 }
 
 isom_sbgp_t *lsm_stbl_get_roll_recovery_sample_to_group( lsmash_entry_list_t *list )
@@ -285,7 +285,7 @@ isom_sbgp_t *lsm_stbl_get_roll_recovery_sample_to_group( lsmash_entry_list_t *li
     if( ((sbgp = stbl_get_sample_to_group_common( list, ISOM_GROUP_TYPE_ROLL )), LSMASH_IS_EXISTING_BOX( sbgp ))
      || ((sbgp = stbl_get_sample_to_group_common( list, ISOM_GROUP_TYPE_PROL )), LSMASH_IS_EXISTING_BOX( sbgp )) )
         return sbgp;
-    return isom_non_existing_sbgp();
+    return lsm_box_default_non_existing_sbgp();
 }
 
 isom_sgpd_t *lsm_stbl_get_fragment_sample_group_description( isom_traf_t *traf, uint32_t grouping_type )
@@ -647,8 +647,8 @@ int lsm_stbl_add_sample_grouping( isom_box_t *parent, isom_grouping_type groupin
 {
     isom_sgpd_t *sgpd;
     isom_sbgp_t *sbgp;
-    if( ((sgpd = isom_add_sgpd( parent )), LSMASH_IS_NON_EXISTING_BOX( sgpd ))
-     || ((sbgp = isom_add_sbgp( parent )), LSMASH_IS_NON_EXISTING_BOX( sbgp )) )
+    if( ((sgpd = lsm_box_add_sgpd( parent )), LSMASH_IS_NON_EXISTING_BOX( sgpd ))
+     || ((sbgp = lsm_box_add_sbgp( parent )), LSMASH_IS_NON_EXISTING_BOX( sbgp )) )
         return LSMASH_ERR_NAMELESS;
     sbgp->grouping_type = grouping_type;
     sgpd->grouping_type = grouping_type;
@@ -743,7 +743,7 @@ int lsm_stbl_compress_sample_size_table( isom_stbl_t *stbl )
                     return 0;   /* not compressible */
             }
         }
-        if( max_num_bits <= 16 && LSMASH_IS_BOX_ADDITION_SUCCESS( isom_add_stz2( stbl ) ) )
+        if( max_num_bits <= 16 && LSMASH_IS_BOX_ADDITION_SUCCESS( lsm_box_add_stz2( stbl ) ) )
         {
             /* The sample size table can be compressed by using 'stz2'. */
             isom_stsz_t *stsz = stbl->stsz;
@@ -756,7 +756,7 @@ int lsm_stbl_compress_sample_size_table( isom_stbl_t *stbl )
             else
                 stz2->field_size = 16;
             lsm_list_move( stz2->list, stsz->list );
-            isom_remove_box_by_itself( stsz );
+            lsm_box_remove_by_itself( stsz );
         }
     }
     return 0;
@@ -779,7 +779,7 @@ int lsm_stbl_add_dependency_type( isom_stbl_t *stbl, lsmash_file_t *file, lsmash
      && !prop->disposable
      && !prop->redundant )
         return 0;
-    if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_sdtp( (isom_box_t *)stbl ) ) )
+    if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_sdtp( (isom_box_t *)stbl ) ) )
         return LSMASH_ERR_NAMELESS;
     uint32_t count = stbl_get_sample_count_from_sample_table( stbl );
     /* fill past samples with ISOM_SAMPLE_*_UNKNOWN */
@@ -819,7 +819,7 @@ static uint32_t stbl_add_dts( isom_stbl_t *stbl, uint64_t dts, uint64_t prev_dts
 /* Add ctts box and the first ctts entry. */
 static int stbl_add_initial_sample_offset( isom_stbl_t *stbl, uint32_t sample_offset )
 {
-    if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_ctts( stbl ) ) )
+    if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_ctts( stbl ) ) )
         return LSMASH_ERR_NAMELESS;
     if( sample_offset == ISOM_NON_OUTPUT_SAMPLE_OFFSET )
         stbl->ctts->version = 1;
@@ -941,7 +941,7 @@ static int stbl_add_sync_point( isom_stbl_t *stbl, isom_cache_t *cache, uint32_t
         if( !cache->all_sync )
             return 0;
         if( LSMASH_IS_NON_EXISTING_BOX( stbl->stss )
-         && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_stss( stbl ) ) )
+         && LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_stss( stbl ) ) )
             return LSMASH_ERR_NAMELESS;
         int err = stbl_add_stss_entry( stbl, 1 );
         if( err < 0 )   /* Declare here the first sample is a sync sample. */
@@ -958,7 +958,7 @@ static int stbl_add_sync_point( isom_stbl_t *stbl, isom_cache_t *cache, uint32_t
             cache->all_sync = 1;    /* Also the first sample is a sync sample. */
             return 0;
         }
-        if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_stss( stbl ) ) )
+        if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_stss( stbl ) ) )
             return LSMASH_ERR_NAMELESS;
     }
     return stbl_add_stss_entry( stbl, sample_number );
@@ -972,7 +972,7 @@ static int stbl_add_partial_sync( isom_stbl_t *stbl, lsmash_file_t *file, uint32
         return 0;
     /* This sample is a partial sync sample. */
     if( LSMASH_IS_NON_EXISTING_BOX( stbl->stps )
-     && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_stps( stbl ) ) )
+     && LSMASH_IS_BOX_ADDITION_FAILURE( lsm_box_add_stps( stbl ) ) )
         return LSMASH_ERR_NAMELESS;
     return stbl_add_stps_entry( stbl, sample_number );
 }
@@ -1040,14 +1040,14 @@ int lsm_stbl_group_random_access( isom_box_t *parent, isom_cache_t *cache, lsmas
         isom_traf_t *traf = (isom_traf_t *)parent;
         sbgp  = lsm_stbl_get_fragment_sample_to_group         ( traf, ISOM_GROUP_TYPE_RAP );
         sgpd  = lsm_stbl_get_fragment_sample_group_description( traf, ISOM_GROUP_TYPE_RAP );
-        sample_count = cache->fragment->sample_count + 1;   /* Cached sample_count is incremented later in isom_fragment_update_cache(). */
+        sample_count = cache->fragment->sample_count + 1;   /* Cached sample_count is incremented later in lsm_fragment_update_cache(). */
         is_fragment  = 1;
     }
     else
     {
         assert( 0 );
-        sbgp  = isom_non_existing_sbgp();
-        sgpd  = isom_non_existing_sgpd();
+        sbgp  = lsm_box_default_non_existing_sbgp();
+        sgpd  = lsm_box_default_non_existing_sgpd();
         /* redundant initializations to suppress warnings from unclever compilers */
         sample_count = 0;
         is_fragment  = 0;
@@ -1340,7 +1340,7 @@ int lsm_stbl_group_roll_recovery( isom_box_t *parent, isom_cache_t *cache, lsmas
         isom_traf_t *traf = (isom_traf_t *)parent;
         sbgp_list = &traf->sbgp_list;
         sgpd_list = &traf->sgpd_list;
-        sample_count = cache->fragment->sample_count + 1;   /* Cached sample_count is incremented later in isom_fragment_update_cache(). */
+        sample_count = cache->fragment->sample_count + 1;   /* Cached sample_count is incremented later in lsm_fragment_update_cache(). */
         is_fragment  = 1;
     }
     else
