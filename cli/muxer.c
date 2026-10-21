@@ -546,7 +546,7 @@ static int parse_global_options( int argc, char **argv, muxer_t *muxer )
         }
         else if( !strcasecmp( argv[i], "--shift-timeline" ) )
             opt->timeline_shift = 1;
-        else if( !strcasecmp( argv[i], "compact-size-table" ) )
+        else if( !strcasecmp( argv[i], "--compact-size-table" ) || !strcasecmp( argv[i], "compact-size-table" ) )
             opt->compact_size_table = 1;
         else if( !strcasecmp( argv[i], "--chapter" ) )
         {
