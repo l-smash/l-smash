@@ -2,6 +2,7 @@
  * file.h
  *****************************************************************************
  * Copyright (C) 2014-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -20,17 +21,20 @@
 
 /* This file is available under an ISC license. */
 
-int isom_check_compatibility
+#ifndef LSMASH_FILE_H
+#define LSMASH_FILE_H
+
+int lsm_file_check_compatibility
 (
     lsmash_file_t *file
 );
 
-int isom_check_mandatory_boxes
+int lsm_file_check_mandatory_boxes
 (
     lsmash_file_t *file
 );
 
-int isom_rearrange_data
+int lsm_file_rearrange_data
 (
     lsmash_file_t        *file,
     lsmash_adhoc_remux_t *remux,
@@ -41,3 +45,5 @@ int isom_rearrange_data
     uint64_t              write_pos,
     uint64_t              file_size
 );
+
+#endif

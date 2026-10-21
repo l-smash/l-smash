@@ -1445,7 +1445,7 @@ int lsmash_get_explicit_timeline_map( lsmash_root_t *root, uint32_t track_ID, ui
     isom_elst_entry_t *data;
     isom_trak_t *trak = lsm_track_get_trak( root->file->initializer, track_ID );
     if( LSMASH_IS_NON_EXISTING_BOX( trak ) )
-        data = isom_timelime_get_explicit_timeline_map( root, track_ID, edit_number );
+        data = lsm_timeline_get_explicit_timeline_map( root, track_ID, edit_number );
     else
     {
         if( LSMASH_IS_NON_EXISTING_BOX( trak->edts->elst ) )
@@ -1472,7 +1472,7 @@ uint32_t lsmash_count_explicit_timeline_map( lsmash_root_t *root, uint32_t track
         return LSMASH_ERR_FUNCTION_PARAM;
     isom_trak_t *trak = lsm_track_get_trak( root->file->initializer, track_ID );
     if( LSMASH_IS_NON_EXISTING_BOX( trak ) )
-        return isom_timelime_count_explicit_timeline_map( root, track_ID );
+        return lsm_timeline_count_explicit_timeline_map( root, track_ID );
     else
         return lsm_list_count( trak->edts->elst->list );
 }

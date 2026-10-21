@@ -235,7 +235,7 @@ static int sample_output_cached_chunk( isom_trak_t *trak )
         /* Add a new chunk offset in this track. */
         if( (err = lsm_stbl_add_stco_entry( stbl, file->size + ISOM_BASEBOX_COMMON_SIZE + file->fragment->pool_size )) < 0 )
             return err;
-        return isom_append_fragment_track_run( file, chunk );
+        return lsm_fragment_append_track_run( file, chunk );
     }
     /* Add a new chunk offset in this track. */
     if( (err = lsm_stbl_add_stco_entry( stbl, file->size )) < 0 )
@@ -484,7 +484,7 @@ int lsmash_set_last_sample_delta( lsmash_root_t *root, uint32_t track_ID, uint32
          || LSMASH_IS_NON_EXISTING_BOX( traf->tfhd )
          || !traf->cache )
             return LSMASH_ERR_NAMELESS;
-        return isom_set_fragment_last_duration( traf, sample_delta );
+        return lsm_fragment_set_last_duration( traf, sample_delta );
     }
     if( file != file->initializer )
         return LSMASH_ERR_INVALID_DATA;
@@ -572,7 +572,7 @@ int lsmash_flush_pooled_samples( lsmash_root_t *root, uint32_t track_ID, uint32_
     lsmash_file_t *file = root->file;
     if( file->fragment
      && file->fragment->movie )
-        return isom_flush_fragment_pooled_samples( file, track_ID, last_sample_delta );
+        return lsm_fragment_flush_pooled_samples( file, track_ID, last_sample_delta );
     if( file != file->initializer )
         return LSMASH_ERR_INVALID_DATA;
     isom_trak_t *trak = lsm_track_get_trak( file, track_ID );
@@ -628,7 +628,7 @@ int lsmash_append_sample( lsmash_root_t *root, uint32_t track_ID, lsmash_sample_
     if( (file->flags & LSMASH_FILE_MODE_FRAGMENTED)
      && file->fragment
      && file->fragment->pool )
-        return isom_append_fragment_sample( file, trak, sample, sample_entry );
+        return lsm_fragment_append_sample( file, trak, sample, sample_entry );
     if( file != file->initializer )
         return LSMASH_ERR_INVALID_DATA;
     return sample_append( file, trak, sample, sample_entry );

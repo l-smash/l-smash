@@ -654,7 +654,7 @@ static void isom_remove_file_abstract( isom_file_abstract_t *file_abstract )
     if( LSMASH_IS_NON_EXISTING_BOX( file_abstract ) )
         return;
     isom_printer_destory_list( file_abstract );
-    isom_remove_timelines( file_abstract );
+    lsm_timeline_remove_all( file_abstract );
     lsmash_free( file_abstract->compatible_brands );
     lsmash_bs_cleanup( file_abstract->bs );
     lsmash_importer_destroy( file_abstract->importer );

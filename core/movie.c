@@ -388,8 +388,8 @@ int lsm_movie_establish( lsmash_file_t *file )
 {
     assert( file == file->initializer );
     int err;
-    if( (err = isom_check_mandatory_boxes( file )) < 0
-     || (err = movie_set_creation_time( file ))    < 0 )
+    if( (err = lsm_file_check_mandatory_boxes( file )) < 0
+     || (err = movie_set_creation_time( file ))        < 0 )
         return err;
     if( isom_update_box_size( file->moov ) == 0 )
         return LSMASH_ERR_INVALID_DATA;
@@ -409,7 +409,7 @@ int lsmash_finish_movie
      || LSMASH_IS_NON_EXISTING_BOX( file->initializer->moov ) )
         return LSMASH_ERR_INVALID_DATA;
     if( file->fragment )
-        return isom_finish_final_fragment_movie( file, remux );
+        return lsm_fragment_finish_final_movie( file, remux );
     if( file != file->initializer )
         return LSMASH_ERR_INVALID_DATA;
     int err;
@@ -505,7 +505,7 @@ int lsmash_finish_movie
     /* Update the positions */
     mdat->pos += mtf_size;
     /* Move Media Data Box. */
-    if( (err = isom_rearrange_data( file, remux, buf, read_num, size, read_pos, write_pos, total )) < 0 )
+    if( (err = lsm_file_rearrange_data( file, remux, buf, read_num, size, read_pos, write_pos, total )) < 0 )
         goto fail;
     file->size += mtf_size;
     lsmash_free( buf[0] );

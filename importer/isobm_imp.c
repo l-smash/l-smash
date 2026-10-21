@@ -2,6 +2,7 @@
  * isobm_imp.c
  *****************************************************************************
  * Copyright (C) 2014-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -196,7 +197,7 @@ static int isobm_importer_construct_timeline( importer_t *importer, uint32_t tra
 {
     lsmash_root_t *root = importer->root;
     uint32_t track_ID = lsmash_get_track_ID( root, track_number );
-    int err = isom_timeline_construct( root, track_ID );
+    int err = lsm_timeline_construct( root, track_ID );
     if( err < 0 )
         return err;
     if( importer->is_adhoc_open )

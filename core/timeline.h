@@ -2,6 +2,7 @@
  * timeline.h
  *****************************************************************************
  * Copyright (C) 2011-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -45,91 +46,91 @@ typedef struct
     uint32_t sample_count;          /* number of samples in this bunch */
 } isom_lpcm_bunch_t;
 
-isom_timeline_t *isom_timeline_create( void );
+isom_timeline_t *lsm_timeline_create( void );
 
-void isom_timeline_destroy
+void lsm_timeline_destroy
 (
     isom_timeline_t *timeline
 );
 
-int isom_timeline_set_track_ID
+int lsm_timeline_set_track_ID
 (
     isom_timeline_t *timeline,
     uint32_t         track_ID
 );
 
-int isom_timeline_set_movie_timescale
+int lsm_timeline_set_movie_timescale
 (
     isom_timeline_t *timeline,
     uint32_t         movie_timescale
 );
 
-int isom_timeline_set_media_timescale
+int lsm_timeline_set_media_timescale
 (
     isom_timeline_t *timeline,
     uint32_t         media_timescale
 );
 
-int isom_timeline_set_sample_count
+int lsm_timeline_set_sample_count
 (
     isom_timeline_t *timeline,
     uint32_t         sample_count
 );
 
-int isom_timeline_set_max_sample_size
+int lsm_timeline_set_max_sample_size
 (
     isom_timeline_t *timeline,
     uint32_t         max_sample_size
 );
 
-int isom_timeline_set_media_duration
+int lsm_timeline_set_media_duration
 (
     isom_timeline_t *timeline,
     uint32_t         media_duration
 );
 
-int isom_timeline_set_track_duration
+int lsm_timeline_set_track_duration
 (
     isom_timeline_t *timeline,
     uint32_t         track_duration
 );
 
-void isom_timeline_set_lpcm_sample_getter_funcs
+void lsm_timeline_set_lpcm_sample_getter_funcs
 (
     isom_timeline_t *timeline
 );
 
-isom_timeline_t *isom_get_timeline
+isom_timeline_t *lsm_timeline_get
 (
     lsmash_root_t *root,
     uint32_t       track_ID
 );
 
-void isom_remove_timelines
+void lsm_timeline_remove_all
 (
     lsmash_file_t *file
 );
 
-int isom_timeline_construct
+int lsm_timeline_construct
 (
     lsmash_root_t *root,
     uint32_t       track_ID
 );
 
-int isom_add_lpcm_bunch_entry
+int lsm_timeline_add_lpcm_bunch_entry
 (
     isom_timeline_t   *timeline,
     isom_lpcm_bunch_t *src_bunch
 );
 
-isom_elst_entry_t *isom_timelime_get_explicit_timeline_map
+isom_elst_entry_t *lsm_timeline_get_explicit_timeline_map
 (
     lsmash_root_t *root,
     uint32_t       track_ID,
     uint32_t       edit_number
 );
 
-uint32_t isom_timelime_count_explicit_timeline_map
+uint32_t lsm_timeline_count_explicit_timeline_map
 (
     lsmash_root_t *root,
     uint32_t       track_ID

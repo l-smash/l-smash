@@ -2,6 +2,7 @@
  * wave_imp.c
  *****************************************************************************
  * Copyright (C) 2014-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -392,15 +393,15 @@ static int wave_importer_construct_timeline( importer_t *importer, uint32_t trac
     lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_list_get_entry_data( importer->summaries, track_number );
     if( !summary )
         return LSMASH_ERR_NAMELESS;
-    isom_timeline_t *timeline = isom_timeline_create();
+    isom_timeline_t *timeline = lsm_timeline_create();
     if( !timeline )
         return LSMASH_ERR_NAMELESS;
     int err;
     lsmash_file_t *file = importer->file;
     if( !file->timeline )
     {
-        /* TODO: this is not a proper place. It should be enclosed in isom_timeline_create(). */
-        file->timeline = lsmash_list_create( isom_timeline_destroy );
+        /* TODO: this is not a proper place. It should be enclosed in lsm_timeline_create(). */
+        file->timeline = lsmash_list_create( lsm_timeline_destroy );
         if( !file->timeline )
         {
             err = LSMASH_ERR_MEMORY_ALLOC;
@@ -408,15 +409,15 @@ static int wave_importer_construct_timeline( importer_t *importer, uint32_t trac
         }
     }
     wave_importer_t *wave_imp = (wave_importer_t *)importer->info;
-    if( (err = isom_timeline_set_track_ID( timeline, 1 )) < 0
-     || (err = isom_timeline_set_movie_timescale( timeline, wave_imp->fmt.wfx.nSamplesPerSec )) < 0
-     || (err = isom_timeline_set_media_timescale( timeline, wave_imp->fmt.wfx.nSamplesPerSec )) < 0
-     || (err = isom_timeline_set_sample_count( timeline, wave_imp->number_of_samples )) < 0
-     || (err = isom_timeline_set_max_sample_size( timeline, summary->max_au_length )) < 0
-     || (err = isom_timeline_set_media_duration( timeline, wave_imp->number_of_samples )) < 0
-     || (err = isom_timeline_set_track_duration( timeline, wave_imp->number_of_samples )) < 0 )
+    if( (err = lsm_timeline_set_track_ID( timeline, 1 )) < 0
+     || (err = lsm_timeline_set_movie_timescale( timeline, wave_imp->fmt.wfx.nSamplesPerSec )) < 0
+     || (err = lsm_timeline_set_media_timescale( timeline, wave_imp->fmt.wfx.nSamplesPerSec )) < 0
+     || (err = lsm_timeline_set_sample_count( timeline, wave_imp->number_of_samples )) < 0
+     || (err = lsm_timeline_set_max_sample_size( timeline, summary->max_au_length )) < 0
+     || (err = lsm_timeline_set_media_duration( timeline, wave_imp->number_of_samples )) < 0
+     || (err = lsm_timeline_set_track_duration( timeline, wave_imp->number_of_samples )) < 0 )
         goto fail;
-    isom_timeline_set_lpcm_sample_getter_funcs( timeline );
+    lsm_timeline_set_lpcm_sample_getter_funcs( timeline );
     uint64_t data_offset = wave_imp->chunk.data_offset;
     for( uint32_t samples = 0; samples < wave_imp->number_of_samples; samples += summary->samples_in_frame )
     {
@@ -437,15 +438,15 @@ static int wave_importer_construct_timeline( importer_t *importer, uint32_t trac
             .sample_count = duration
         };
         data_offset += duration * wave_imp->fmt.wfx.nBlockAlign;
-        if( (err = isom_add_lpcm_bunch_entry( timeline, &bunch )) < 0 )
+        if( (err = lsm_timeline_add_lpcm_bunch_entry( timeline, &bunch )) < 0 )
             goto fail;
     }
     if( (err = lsmash_list_add_entry( file->timeline, timeline )) < 0 )
         goto fail;
     return 0;
 fail:
-    isom_timeline_destroy( timeline );
-    isom_remove_timelines( file );
+    lsm_timeline_destroy( timeline );
+    lsm_timeline_remove_all( file );
     return err;
 }
 

@@ -2,6 +2,7 @@
  * read.c
  *****************************************************************************
  * Copyright (C) 2010-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -3433,5 +3434,5 @@ int isom_read_file( lsmash_file_t *file )
     bs->error = 0;  /* Clear error flag. */
     if( ret < 0 )
         return ret;
-    return isom_check_compatibility( file );
+    return lsm_file_check_compatibility( file );
 }
