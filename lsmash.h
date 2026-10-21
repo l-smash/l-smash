@@ -2048,6 +2048,10 @@ uint32_t lsmash_count_data_reference
  * You can deallocate the allocated fields by lsmash_free().
  * Also you can deallocate all of the allocated fields by lsmash_cleanup_data_reference() at a time.
  *
+ * WARNING: The returned location comes from the input file and must be treated as untrusted.
+ *          Never open it as is. A crafted location (e.g. ../../keys/private.key or an absolute path)
+ *          can lead to arbitrary file disclosure when the referenced file is assigned and remuxed.
+ *
  * Return 0 if successful.
  * Return a negative value otherwise. */
 int lsmash_get_data_reference
@@ -2085,6 +2089,11 @@ int lsmash_create_data_reference
 );
 
 /* Assign a data reference in a track to a read file.
+ *
+ * WARNING: If the location of an untrusted input file is opened without validation and assigned here,
+ *          the contents of that file are copied as media samples when remuxing, which discloses arbitrary
+ *          local files (path traversal). Callers shall reject external references of untrusted input or
+ *          strictly validate and confine the location to a dedicated media directory.
  *
  * Return 0 if successful.
  * Return a negative value otherwise. */

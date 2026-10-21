@@ -802,6 +802,15 @@ lsmash_construct_timeline( root, track_ID );
 - **The referenced file must be a plain media container.** A box-structured file (for example another MP4) cannot be used as the referenced data yet.
 - **Reading never follows the location automatically.** The application is responsible for opening and assigning every external file. Samples of an external entry that was not assigned are not read from the external file, so assign every external entry before calling lsmash_construct_timeline().
 
+#### Security Warning (Arbitrary File Disclosure / Path Traversal via dref)
+
+> **Security Warning (Arbitrary File Disclosure / Path Traversal via dref):** An attacker can craft a container whose `dref` contains a non-self-contained `'url '` Box with a `location` such as `../../keys/private.key` or a local absolute path. If a media server or application passes the `location` obtained by `lsmash_get_data_reference()` unchecked to `lsmash_open_file()` / `fopen()`, binds it with `lsmash_assign_data_reference()`, and remuxes the movie into a file for delivery, the binary contents of the private key or confidential file are copied as media sample data into the `mdat` Box of the output. The attacker then obtains the file by playing or downloading the output.
+
+Application developers must follow these rules:
+
+1. When processing or remuxing media uploaded by untrusted users, reject external data references (non-self-contained `dref` entries) by default and do not call `lsmash_assign_data_reference()`.
+2. Even in a trusted workflow that allows external references, never pass `dref->location` directly to `fopen()` / `lsmash_open_file()`. Reject path traversal (`..`), absolute paths, scheme specifications (`file://`, `http://`, etc.) and symbolic links, and confine the resolved (canonicalized) path strictly inside a dedicated media directory.
+
 ---
 
 ### 3.9 Complete End-to-End C API Example
