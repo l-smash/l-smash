@@ -91,7 +91,6 @@ importer_t *lsm_importer_alloc( lsmash_root_t *root )
     importer->summaries = lsmash_list_create( lsmash_cleanup_summary );
     if( !importer->summaries )
     {
-        lsmash_destroy_root( importer->root );
         lsmash_free( importer );
         return NULL;
     }
@@ -206,7 +205,11 @@ importer_t *lsmash_importer_open( lsmash_root_t *root, const char *identifier, c
         lsmash_log( importer, LSMASH_LOG_ERROR, "failed to set opened file.\n" );
         goto fail;
     }
-    lsm_importer_set_file( importer, file );
+    if( lsm_importer_set_file( importer, file ) < 0 )
+    {
+        lsmash_log( importer, LSMASH_LOG_ERROR, "failed to activate opened file.\n" );
+        goto fail;
+    }
     if( lsm_importer_find( importer, format, auto_detect ) < 0 )
         goto fail;
     return importer;

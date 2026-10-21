@@ -633,10 +633,21 @@ int64_t lsmash_read_file
         importer_t *importer = lsm_importer_alloc( file->root );
         if( !importer )
             return (int64_t)LSMASH_ERR_MEMORY_ALLOC;
-        lsm_importer_set_file( importer, file );
+        if( lsm_importer_set_file( importer, file ) < 0 )
+        {
+            lsm_importer_destroy( importer );
+            return (int64_t)LSMASH_ERR_NAMELESS;
+        }
         ret = lsm_importer_find( importer, "ISOBMFF/QTFF", !file->bs->unseekable );
         if( ret < 0 )
             return ret;
+        /* A probed raw stream that built neither real boxes nor a fake movie is unsupported for this API. */
+        if( !(file->flags & LSMASH_FILE_MODE_BOX)
+         && LSMASH_IS_NON_EXISTING_BOX( file->moov ) )
+        {
+            lsm_importer_destroy( importer );
+            return (int64_t)LSMASH_ERR_PATCH_WELCOME;
+        }
         if( param )
         {
             if( LSMASH_IS_EXISTING_BOX( file->ftyp ) )
