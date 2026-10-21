@@ -43,6 +43,24 @@ typedef struct
     uint32_t sample_count;          /* number of samples in this bunch */
 } isom_lpcm_bunch_t;
 
+typedef struct
+{
+    uint64_t pos;
+    uint32_t duration;
+    uint32_t offset;
+    uint32_t length;        /* data size of the sample as users get it */
+    uint32_t index;
+    isom_portable_chunk_t *chunk;
+    lsmash_sample_property_t prop;
+    uint32_t raw_length;    /* data size stored at 'pos'. Set it only if it differs from 'length', that is, when a sample
+                             * filter set by lsm_timeline_set_sample_filter() shrinks the stored data. 0 means 'length'. */
+} isom_sample_info_t;
+
+/* Convert the data stored in the stream into the sample data users get. The filter is applied to the raw data of
+ * every sample read from the stream and shall set sample->length to the size of the converted data in place.
+ * It must be stateless since samples are read in arbitrary order. */
+typedef int (*lsm_timeline_sample_filter)( lsmash_sample_t *sample );
+
 isom_timeline_t *lsm_timeline_create( void );
 
 void lsm_timeline_destroy
@@ -83,13 +101,50 @@ int lsm_timeline_set_max_sample_size
 int lsm_timeline_set_media_duration
 (
     isom_timeline_t *timeline,
-    uint32_t         media_duration
+    uint64_t         media_duration
 );
 
 int lsm_timeline_set_track_duration
 (
     isom_timeline_t *timeline,
-    uint32_t         track_duration
+    uint64_t         track_duration
+);
+
+/* Timeline construction helpers for raw streams that an importer exposes as a fake track.
+ * Movie and media share the same timescale, so the track duration equals the media duration.
+ * The timeline reads each sample from info_list with the getters that lsm_timeline_setup_raw() installs. */
+int lsm_timeline_setup_raw
+(
+    isom_timeline_t *timeline,
+    uint32_t         track_ID,
+    uint32_t         timescale
+);
+
+int lsm_timeline_add_sample_info_entry
+(
+    isom_timeline_t    *timeline,
+    isom_sample_info_t *src_info
+);
+
+void lsm_timeline_set_sample_filter
+(
+    isom_timeline_t           *timeline,
+    lsm_timeline_sample_filter filter
+);
+
+int lsm_timeline_finish_raw
+(
+    isom_timeline_t *timeline,
+    uint32_t         sample_count,
+    uint32_t         max_sample_size,
+    uint64_t         media_duration
+);
+
+/* Register the finished timeline to the file. The file owns the timeline on success. */
+int lsm_timeline_register
+(
+    lsmash_file_t   *file,
+    isom_timeline_t *timeline
 );
 
 void lsm_timeline_set_lpcm_sample_getter_funcs

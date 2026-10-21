@@ -28,6 +28,7 @@
 
 #define LSMASH_IMPORTER_INTERNAL
 #include "importer.h"
+#include "core/timeline.h"
 
 /***************************************************************************
     FLAC importer
@@ -83,6 +84,13 @@ typedef struct
 
     uint64_t    next_dts;       /* cumulative DTS in samples, starts at 0 */
     uint32_t    last_block_size;
+
+    /* The stream position is shared with the Media Timeline, which seeks the same bitstream to read an arbitrary sample.
+     * Therefore get_accessunit remembers where it has to continue and seeks back to there before it reads. */
+    uint64_t    audio_start;    /* file offset of the first audio frame */
+    uint64_t    resume_pos;     /* file offset where the next get_accessunit starts to search a frame */
+    uint64_t    last_frame_pos; /* file offset of the frame get_accessunit has returned last */
+    isom_portable_chunk_t chunk;
 } flac_importer_t;
 
 static void flac_imp_cleanup_metadata_block( flac_metadata_block_t *block )
@@ -137,6 +145,7 @@ static int flac_imp_probe( importer_t *imp )
 
     lsmash_bs_t *bs = imp->bs;
     int err;
+    int fake_isom_compatible = 0;   /* whether this probe has marked the file as ISOBMFF-compatible */
 
     /* Read and check fLaC magic */
     if( lsmash_bs_show_byte( bs, 0 ) != 'f'
@@ -331,18 +340,35 @@ static int flac_imp_probe( importer_t *imp )
     summary->samples_in_frame = flac_imp->max_block_size;
     summary->sbr_mode         = MP4A_AAC_SBR_NOT_SPECIFIED;
 
+    /* Make fake movie, track and sample entry (fLaC + dfLa) so that this raw stream is readable
+     * through lsmash_read_file() and the Media Timeline as if it were an ISOBMFF file.
+     * fLaC is defined by ISOBMFF only, so the fake file is not a QuickTime file but an ISOBMFF file. */
+    uint32_t track_ID;
+    imp->file->isom_compatible = 1;
+    fake_isom_compatible       = 1;
+    if( (err = lsm_importer_setup_fake_track( imp, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK, flac_imp->sample_rate,
+                                              (lsmash_summary_t *)summary, &track_ID )) < 0 )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        goto fail;
+    }
     if( lsmash_list_add_entry( imp->summaries, summary ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        lsm_importer_break_fake_movie( imp );
         err = LSMASH_ERR_MEMORY_ALLOC;
         goto fail;
     }
 
+    flac_imp->audio_start = 4 + metadata_total;
+    flac_imp->resume_pos  = flac_imp->audio_start;
     imp->info   = flac_imp;
     imp->status = IMPORTER_OK;
     return 0;
 
 fail:
+    if( fake_isom_compatible )
+        imp->file->isom_compatible = 0;
     flac_imp_remove( flac_imp );
     return err;
 }
@@ -370,8 +396,17 @@ static int flac_imp_get_accessunit
     if( current_status == IMPORTER_EOF )
         return IMPORTER_EOF;
 
-    lsmash_bs_t *bs     = imp->bs;
-    uint64_t     remain = lsmash_bs_get_remaining_buffer_size( bs );
+    lsmash_bs_t *bs = imp->bs;
+    /* Continue from where the previous call has ended even if the Media Timeline has moved the stream position.
+     * The comparison keeps a sequential reader, including an unseekable one, from any needless seek. */
+    if( lsmash_bs_get_stream_pos( bs ) != flac_imp->resume_pos
+     && lsmash_bs_read_seek( bs, (int64_t)flac_imp->resume_pos, SEEK_SET ) < 0 )
+    {
+        imp->status = IMPORTER_ERROR;
+        return LSMASH_ERR_NAMELESS;
+    }
+    uint64_t base_pos = lsmash_bs_get_stream_pos( bs );
+    uint64_t remain   = lsmash_bs_get_remaining_buffer_size( bs );
 
     if( remain < FLAC_MAX_FRAME_SIZE && !bs->eof )
     {
@@ -512,16 +547,19 @@ static int flac_imp_get_accessunit
     *p_sample = sample;
     memcpy( sample->data, &buf[sync_offset], frame_size );
     sample->length        = frame_size;
+    sample->pos           = base_pos + sync_offset;
     sample->dts           = flac_imp->next_dts;
     sample->cts           = sample->dts;
     sample->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
 
-    flac_imp->last_block_size = block_size;
-    flac_imp->next_dts       += block_size;
-    summary->samples_in_frame = block_size;
+    flac_imp->last_frame_pos    = sample->pos;
+    flac_imp->last_block_size   = block_size;
+    flac_imp->next_dts         += block_size;
+    summary->samples_in_frame   = block_size;
 
     /* Advance the buffer past this frame so the next call starts after it. */
     lsmash_bs_skip_bytes( bs, (uint32_t)sync_offset + frame_size );
+    flac_imp->resume_pos = lsmash_bs_get_stream_pos( bs );
 
     remain = lsmash_bs_get_remaining_buffer_size( bs );
     if( (bs->eof || bs->eob) && remain < 6 )
@@ -546,6 +584,95 @@ static uint32_t flac_imp_get_last_delta
     return flac_imp->last_block_size;
 }
 
+/* Build the Media Timeline by walking all frames with get_accessunit, so that the frame boundaries, the timestamps and
+ * the sample sizes of the Timeline are by construction the same as what the muxer gets from the sequential reader.
+ * The walk moves the sequential reader, therefore its state is saved here and restored on every exit path:
+ * get_accessunit that is called after this function continues from the very frame it would have returned. */
+static int flac_imp_construct_timeline( importer_t *imp, uint32_t track_number )
+{
+    if( !imp->info || track_number != 1 )
+        return LSMASH_ERR_FUNCTION_PARAM;
+    lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_list_get_entry_data( imp->summaries, track_number );
+    uint32_t track_ID = lsmash_get_track_ID( imp->root, track_number );
+    if( !summary || track_ID == 0 )
+        return LSMASH_ERR_NAMELESS;
+    if( lsm_timeline_get( imp->root, track_ID ) )
+        return 0;   /* already constructed */
+    flac_importer_t *flac_imp = (flac_importer_t *)imp->info;
+    isom_timeline_t *timeline = lsm_timeline_create();
+    if( !timeline )
+        return LSMASH_ERR_MEMORY_ALLOC;
+    /* Save the state of the sequential reader. */
+    importer_status saved_status           = imp->status;
+    uint64_t        saved_next_dts         = flac_imp->next_dts;
+    uint32_t        saved_last_block_size  = flac_imp->last_block_size;
+    uint64_t        saved_last_frame_pos   = flac_imp->last_frame_pos;
+    uint64_t        saved_resume_pos       = flac_imp->resume_pos;
+    uint32_t        saved_samples_in_frame = summary->samples_in_frame;
+    flac_imp->next_dts        = 0;
+    flac_imp->last_block_size = 0;
+    flac_imp->resume_pos      = flac_imp->audio_start;
+    imp->status               = IMPORTER_OK;
+    int      err;
+    uint32_t sample_count    = 0;
+    uint32_t max_sample_size = 0;
+    uint64_t end_pos         = flac_imp->audio_start;
+    if( (err = lsm_timeline_setup_raw( timeline, track_ID, flac_imp->sample_rate )) < 0 )
+        goto fail;
+    while( 1 )
+    {
+        lsmash_sample_t *sample = NULL;
+        uint64_t prev_dts = flac_imp->next_dts;
+        err = flac_imp_get_accessunit( imp, track_number, &sample );
+        if( err < 0 )
+            goto fail;
+        if( err == IMPORTER_EOF || !sample )
+            break;
+        isom_sample_info_t info =
+        {
+            .pos      = sample->pos,
+            .duration = (uint32_t)(flac_imp->next_dts - prev_dts),
+            .offset   = 0,
+            .length   = sample->length,
+            .index    = 1,
+            .chunk    = &flac_imp->chunk,
+            .prop     = (lsmash_sample_property_t){ .ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC }
+        };
+        end_pos         = sample->pos + sample->length;
+        max_sample_size = LSMASH_MAX( max_sample_size, sample->length );
+        lsmash_delete_sample( sample );
+        if( sample_count == UINT32_MAX )
+        {
+            err = LSMASH_ERR_INVALID_DATA;
+            goto fail;
+        }
+        if( (err = lsm_timeline_add_sample_info_entry( timeline, &info )) < 0 )
+            goto fail;
+        ++sample_count;
+    }
+    flac_imp->chunk.data_offset = flac_imp->audio_start;
+    flac_imp->chunk.length      = end_pos - flac_imp->audio_start;
+    flac_imp->chunk.number      = 1;
+    flac_imp->chunk.file        = imp->file;
+    if( (err = lsm_timeline_finish_raw( timeline, sample_count, max_sample_size, flac_imp->next_dts )) < 0
+     || (err = lsm_timeline_register( imp->file, timeline )) < 0 )
+        goto fail;
+    err = 0;
+    goto restore;
+fail:
+    lsm_timeline_destroy( timeline );
+    if( err >= 0 )
+        err = LSMASH_ERR_INVALID_DATA;
+restore:
+    flac_imp->next_dts         = saved_next_dts;
+    flac_imp->last_block_size  = saved_last_block_size;
+    flac_imp->last_frame_pos   = saved_last_frame_pos;
+    flac_imp->resume_pos       = saved_resume_pos;
+    summary->samples_in_frame  = saved_samples_in_frame;
+    imp->status                = saved_status;
+    return err;
+}
+
 const importer_functions flac_importer =
 {
     { "FLAC" },
@@ -554,4 +681,5 @@ const importer_functions flac_importer =
     flac_imp_get_accessunit,
     flac_imp_get_last_delta,
     flac_imp_cleanup,
+    flac_imp_construct_timeline
 };

@@ -33,8 +33,10 @@
     Indeo Video Format (IVF) importer
 **********************************************************************************/
 #include "codecs/av1.h"
+#include "core/timeline.h"
 
 #define IVF_LE_4CC( a, b, c, d ) (((d)<<24) | ((c)<<16) | ((b)<<8) | (a))
+#define IVF_FRAME_HEADER_SIZE 12
 
 typedef struct
 {
@@ -62,6 +64,15 @@ typedef struct
     ivf_global_header_t              global_header;
     av1_parser_t                     parser;
     lsmash_av1_specific_parameters_t av1c_param;
+
+    /* The stream position is shared with the Media Timeline, which seeks the same bitstream to read an arbitrary sample.
+     * Therefore get_accessunit remembers where it has to continue and seeks back to there before it reads. */
+    uint64_t                         resume_pos;    /* file offset of the next IVF frame header */
+    isom_portable_chunk_t            chunk;
+
+    /* Parser state right after the probe, which is what a fresh walk over all frames starts from. */
+    av1_sequence_header_t            seed_sequence_header;
+    uint8_t                          seed_has_hdr10p;
 } ivf_importer_t;
 
 static void ivf_imp_remove( ivf_importer_t *ivf_imp )
@@ -110,6 +121,14 @@ static int ivf_imp_get_accessunit( importer_t *importer, uint32_t track_number, 
         return LSMASH_ERR_NAMELESS;
     if( current_status == IMPORTER_EOF )
         return IMPORTER_EOF;
+    /* Continue from where the previous call has ended even if the Media Timeline has moved the stream position.
+     * The comparison keeps a sequential reader, including an unseekable one, from any needless seek. */
+    if( lsmash_bs_get_stream_pos( importer->bs ) != ivf_imp->resume_pos
+     && lsmash_bs_read_seek( importer->bs, (int64_t)ivf_imp->resume_pos, SEEK_SET ) < 0 )
+    {
+        importer->status = IMPORTER_ERROR;
+        return LSMASH_ERR_NAMELESS;
+    }
     if( lsmash_bs_is_end( importer->bs, 12 ) )
     {
         importer->status = IMPORTER_EOF;
@@ -201,6 +220,7 @@ static int ivf_imp_get_accessunit( importer_t *importer, uint32_t track_number, 
     sample->cts    = ivf_imp->pts;
     sample->prop   = prop;
     ivf_imp->au_number++;
+    ivf_imp->resume_pos = lsmash_bs_get_stream_pos( importer->bs );
     return current_status;
 }
 
@@ -298,6 +318,7 @@ static int ivf_imp_probe( importer_t *importer )
     ivf_importer_t *ivf_imp = ivf_imp_create( importer );
     if( !ivf_imp )
         return LSMASH_ERR_MEMORY_ALLOC;
+    int fake_isom_compatible = 0;   /* whether this probe has marked the file as ISOBMFF-compatible */
     int err = lsm_av1_setup_parser( &ivf_imp->parser, NULL );
     if( err < 0 )
         goto fail;
@@ -393,9 +414,23 @@ static int ivf_imp_probe( importer_t *importer )
         err = LSMASH_ERR_NAMELESS;
         goto fail;
     }
+    /* Make fake movie, track and sample entry (av01 + av1C) so that this raw stream is readable
+     * through lsmash_read_file() and the Media Timeline as if it were an ISOBMFF file.
+     * The media timescale is the frame rate field of the IVF header. A time stamp counted in the time scale field of
+     * the IVF header is converted into it by multiplying the time scale, exactly as the muxer does with the timebase. */
+    uint32_t track_ID;
+    importer->file->isom_compatible = 1;
+    fake_isom_compatible            = 1;
+    if( (err = lsm_importer_setup_fake_track( importer, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK, gh->frame_rate,
+                                              (lsmash_summary_t *)summary, &track_ID )) < 0 )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        goto fail;
+    }
     if( (err = lsmash_list_add_entry( importer->summaries, summary )) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        lsm_importer_break_fake_movie( importer );
         err = LSMASH_ERR_NAMELESS;
         goto fail;
     }
@@ -409,11 +444,16 @@ static int ivf_imp_probe( importer_t *importer )
     ivf_imp->parser.has_hdr10p      = saved_hdr10p;
     ivf_imp->parser.MaxRenderWidth  = ivf_imp->max_render_width;
     ivf_imp->parser.MaxRenderHeight = ivf_imp->max_render_height;
+    ivf_imp->seed_sequence_header   = saved_sh;
+    ivf_imp->seed_has_hdr10p        = saved_hdr10p;
+    ivf_imp->resume_pos             = gh->header_length;
 
     importer->info   = ivf_imp;
     importer->status = IMPORTER_OK;
     return 0;
 fail:
+    if( fake_isom_compatible )
+        importer->file->isom_compatible = 0;
     ivf_imp_remove( ivf_imp );
     importer->info = NULL;
     return err;
@@ -432,6 +472,165 @@ static uint32_t ivf_imp_get_last_delta( importer_t *importer, uint32_t track_num
     return ivf_imp->first_pts_delta ? (uint32_t)ivf_imp->first_pts_delta : 1;
 }
 
+/* The IVF frame payload still holds the OBUs that are not a part of a sample, such as the temporal delimiter. */
+static int ivf_imp_filter_sample( lsmash_sample_t *sample )
+{
+    return lsm_av1_extract_sample_obus( sample->data, &sample->length );
+}
+
+/* Build the Media Timeline by walking all IVF frames with a private AV1 parser that starts from the same state as the
+ * sequential reader does after the probe. This way the sample size and the random access property of every sample are
+ * those that get_accessunit produces, while neither the sequential reader nor its parser is touched. The only shared
+ * resource is the stream position, which get_accessunit restores by itself before it reads.
+ * The time stamps are rebased so that the first sample has DTS 0, since a Media Timeline always starts from 0, and
+ * every IVF time stamp is multiplied by the time scale field to count it in the media timescale (frame rate field).
+ * The last sample has the duration of its predecessor, or the first time stamp (1 if it is 0) of a single frame stream,
+ * which is the same assumption as ivf_imp_get_last_delta. */
+static int ivf_imp_construct_timeline( importer_t *importer, uint32_t track_number )
+{
+    if( !importer->info || track_number != 1 )
+        return LSMASH_ERR_FUNCTION_PARAM;
+    uint32_t track_ID = lsmash_get_track_ID( importer->root, track_number );
+    if( track_ID == 0 )
+        return LSMASH_ERR_NAMELESS;
+    if( lsm_timeline_get( importer->root, track_ID ) )
+        return 0;   /* already constructed */
+    ivf_importer_t      *ivf_imp  = (ivf_importer_t *)importer->info;
+    ivf_global_header_t *gh       = &ivf_imp->global_header;
+    lsmash_bs_t         *bs       = importer->bs;
+    isom_timeline_t     *timeline = lsm_timeline_create();
+    if( !timeline )
+        return LSMASH_ERR_MEMORY_ALLOC;
+    av1_parser_t parser;
+    int err = lsm_av1_setup_parser( &parser, NULL );
+    if( err < 0 )
+    {
+        lsm_timeline_destroy( timeline );
+        return err;
+    }
+    lsm_av1_reset_parser( &parser );
+    parser.sequence_header = ivf_imp->seed_sequence_header;
+    parser.seen_seq_header = 1;
+    parser.has_hdr10p      = ivf_imp->seed_has_hdr10p;
+    uint8_t *packetbuf = NULL;
+    isom_sample_info_t info = { 0 };
+    uint64_t first_pts       = 0;
+    uint64_t pending_pts     = 0;
+    uint64_t media_duration  = 0;
+    uint32_t sample_count    = 0;
+    uint32_t max_sample_size = 0;
+    uint32_t last_duration   = 0;
+    uint64_t end_pos         = gh->header_length;
+    int      have_pending    = 0;
+    if( (err = lsm_timeline_setup_raw( timeline, track_ID, gh->frame_rate )) < 0 )
+        goto fail;
+    if( lsmash_bs_read_seek( bs, gh->header_length, SEEK_SET ) < 0 )
+    {
+        err = LSMASH_ERR_NAMELESS;
+        goto fail;
+    }
+    while( !lsmash_bs_is_end( bs, IVF_FRAME_HEADER_SIZE ) )
+    {
+        uint64_t frame_pos = lsmash_bs_get_stream_pos( bs );
+        uint32_t au_length = lsmash_bs_get_le32( bs );
+        uint64_t pts       = lsmash_bs_get_le64( bs );
+        if( bs->error || au_length == 0 )
+        {
+            err = LSMASH_ERR_INVALID_DATA;
+            goto fail;
+        }
+        packetbuf = lsmash_malloc( au_length );
+        if( !packetbuf )
+        {
+            err = LSMASH_ERR_MEMORY_ALLOC;
+            goto fail;
+        }
+        if( lsmash_bs_get_bytes_ex( bs, au_length, packetbuf ) != au_length )
+        {
+            err = LSMASH_ERR_INVALID_DATA;
+            goto fail;
+        }
+        uint32_t                 samplesize = 0;
+        lsmash_sample_property_t prop       = { 0 };
+        err = lsm_av1_parse_temporal_unit( &parser, packetbuf, au_length, NULL, &samplesize, &prop, NULL );
+        lsmash_freep( &packetbuf );
+        if( err < 0 )
+            goto fail;
+        if( samplesize == 0 || sample_count == UINT32_MAX )
+        {
+            err = LSMASH_ERR_INVALID_DATA;
+            goto fail;
+        }
+        if( have_pending )
+        {
+            /* The duration is known only when the next time stamp is seen. */
+            uint64_t delta = pts - pending_pts;
+            if( pts <= pending_pts || delta > UINT32_MAX / gh->time_scale )
+            {
+                err = LSMASH_ERR_INVALID_DATA;
+                goto fail;
+            }
+            info.duration  = (uint32_t)(delta * gh->time_scale);
+            last_duration  = info.duration;
+            media_duration += info.duration;
+            if( (err = lsm_timeline_add_sample_info_entry( timeline, &info )) < 0 )
+                goto fail;
+            ++sample_count;
+        }
+        else
+            first_pts = pts;
+        info = (isom_sample_info_t)
+        {
+            .pos        = frame_pos + IVF_FRAME_HEADER_SIZE,
+            .offset     = 0,
+            .length     = samplesize,
+            .index      = 1,
+            .chunk      = &ivf_imp->chunk,
+            .prop       = prop,
+            .raw_length = au_length
+        };
+        pending_pts     = pts;
+        have_pending    = 1;
+        max_sample_size = LSMASH_MAX( max_sample_size, samplesize );
+        end_pos         = info.pos + au_length;
+    }
+    if( !have_pending )
+    {
+        err = LSMASH_ERR_INVALID_DATA;
+        goto fail;
+    }
+    if( sample_count == 0 )
+    {
+        uint64_t delta = first_pts ? first_pts : 1;
+        if( delta > UINT32_MAX / gh->time_scale )
+        {
+            err = LSMASH_ERR_INVALID_DATA;
+            goto fail;
+        }
+        last_duration = (uint32_t)(delta * gh->time_scale);
+    }
+    info.duration   = last_duration;
+    media_duration += last_duration;
+    if( (err = lsm_timeline_add_sample_info_entry( timeline, &info )) < 0 )
+        goto fail;
+    ++sample_count;
+    ivf_imp->chunk.data_offset = gh->header_length;
+    ivf_imp->chunk.length      = end_pos - gh->header_length;
+    ivf_imp->chunk.number      = 1;
+    ivf_imp->chunk.file        = importer->file;
+    lsm_timeline_set_sample_filter( timeline, ivf_imp_filter_sample );
+    if( (err = lsm_timeline_finish_raw( timeline, sample_count, max_sample_size, media_duration )) < 0
+     || (err = lsm_timeline_register( importer->file, timeline )) < 0 )
+        goto fail;
+    lsm_av1_cleanup_parser( &parser );
+    return 0;
+fail:
+    lsmash_free( packetbuf );
+    lsm_av1_cleanup_parser( &parser );
+    lsm_timeline_destroy( timeline );
+    return err < 0 ? err : LSMASH_ERR_INVALID_DATA;
+}
+
 const importer_functions ivf_importer =
 {
     { "Indeo Video Format", offsetof( importer_t, log_level ) },
@@ -440,4 +639,5 @@ const importer_functions ivf_importer =
     ivf_imp_get_accessunit,
     ivf_imp_get_last_delta,
     ivf_imp_cleanup,
+    ivf_imp_construct_timeline
 };

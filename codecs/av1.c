@@ -1954,6 +1954,63 @@ static int av1_is_sample_obu
     }
 }
 
+/* Drop the OBUs that are not a part of a sample (temporal delimiter, padding, redundant frame header, etc.) in place.
+ * This performs the same OBU selection as the output of lsm_av1_parse_temporal_unit(), but depends only on the OBU
+ * type, so it can be applied to any temporal unit at any time without the parser state that frame header parsing needs. */
+int lsm_av1_extract_sample_obus
+(
+    uint8_t  *data,
+    uint32_t *length
+)
+{
+    if( !data || !length )
+        return LSMASH_ERR_FUNCTION_PARAM;
+    uint32_t src_length = *length;
+    uint32_t src_offset = 0;
+    uint32_t dst_offset = 0;
+    while( src_offset < src_length )
+    {
+        uint8_t  header_byte        = data[src_offset];
+        uint8_t  obu_forbidden_bit  = (header_byte >> 7) & 0x01;
+        uint8_t  obu_type           = (header_byte >> 3) & 0x0F;
+        uint8_t  obu_extension_flag = (header_byte >> 2) & 0x01;
+        uint8_t  obu_has_size_field = (header_byte >> 1) & 0x01;
+        uint32_t obu_header_size    = 1 + obu_extension_flag;
+        if( obu_forbidden_bit || !obu_has_size_field || src_length - src_offset < obu_header_size )
+            return LSMASH_ERR_INVALID_DATA;
+        /* leb128() occupies at most 8 bytes. */
+        uint64_t obu_size    = 0;
+        uint32_t leb128_size = 0;
+        for( uint32_t i = 0; i < 8; i++ )
+        {
+            uint32_t leb128_offset = src_offset + obu_header_size + i;
+            if( leb128_offset >= src_length )
+                return LSMASH_ERR_INVALID_DATA;
+            uint8_t leb128_byte = data[leb128_offset];
+            obu_size |= (uint64_t)(leb128_byte & 0x7F) << (i * 7);
+            leb128_size = i + 1;
+            if( !(leb128_byte & 0x80) )
+                break;
+            if( i == 7 )
+                return LSMASH_ERR_INVALID_DATA;
+        }
+        uint32_t remaining = src_length - src_offset;
+        if( obu_header_size + leb128_size > remaining
+         || obu_size > remaining - (obu_header_size + leb128_size) )
+            return LSMASH_ERR_INVALID_DATA;
+        uint32_t sz = obu_header_size + leb128_size + (uint32_t)obu_size;
+        if( av1_is_sample_obu( obu_type ) )
+        {
+            if( dst_offset != src_offset )
+                memmove( data + dst_offset, data + src_offset, sz );
+            dst_offset += sz;
+        }
+        src_offset += sz;
+    }
+    *length = dst_offset;
+    return 0;
+}
+
 int lsm_av1_parse_temporal_unit
 (
     av1_parser_t                     *parser,

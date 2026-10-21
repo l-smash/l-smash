@@ -306,6 +306,11 @@ int  lsm_av1_setup_parser( av1_parser_t *parser, lsmash_bs_t *bs );
 void lsm_av1_cleanup_parser( av1_parser_t *parser );
 void lsm_av1_reset_parser( av1_parser_t *parser );
 int  lsm_av1_parse_sequence_header( av1_parser_t *parser );
+int  lsm_av1_extract_sample_obus
+(
+    uint8_t  *data,
+    uint32_t *length
+);
 int  lsm_av1_parse_temporal_unit
 (
     av1_parser_t                     *parser,

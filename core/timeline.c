@@ -41,17 +41,6 @@
 
 #define NO_RANDOM_ACCESS_POINT 0xffffffff
 
-typedef struct
-{
-    uint64_t pos;
-    uint32_t duration;
-    uint32_t offset;
-    uint32_t length;
-    uint32_t index;
-    isom_portable_chunk_t *chunk;
-    lsmash_sample_property_t prop;
-} isom_sample_info_t;
-
 static const lsmash_class_t lsmash_timeline_class =
 {
     "timeline"
@@ -79,6 +68,7 @@ struct isom_timeline_tag
     lsm_list_t chunk_list[1];   /* list of chunks */
     lsm_list_t info_list [1];   /* list of sample info */
     lsm_list_t bunch_list[1];   /* list of LPCM bunch */
+    lsm_timeline_sample_filter filter;  /* optional conversion applied to the raw data read from the stream */
     int (*get_dts)( isom_timeline_t *timeline, uint32_t sample_number, uint64_t *dts );
     int (*get_cts)( isom_timeline_t *timeline, uint32_t sample_number, uint64_t *cts );
     int (*get_sample_duration)( isom_timeline_t *timeline, uint32_t sample_number, uint32_t *sample_duration );
@@ -218,7 +208,7 @@ int lsm_timeline_set_max_sample_size
 int lsm_timeline_set_media_duration
 (
     isom_timeline_t *timeline,
-    uint32_t         media_duration
+    uint64_t         media_duration
 )
 {
     if( !timeline || media_duration == 0 )
@@ -230,13 +220,40 @@ int lsm_timeline_set_media_duration
 int lsm_timeline_set_track_duration
 (
     isom_timeline_t *timeline,
-    uint32_t         track_duration
+    uint64_t         track_duration
 )
 {
     if( !timeline || track_duration == 0 )
         return LSMASH_ERR_FUNCTION_PARAM;
     timeline->track_duration = track_duration;
     return 0;
+}
+
+void lsm_timeline_set_sample_filter
+(
+    isom_timeline_t           *timeline,
+    lsm_timeline_sample_filter filter
+)
+{
+    if( timeline )
+        timeline->filter = filter;
+}
+
+int lsm_timeline_register
+(
+    lsmash_file_t   *file,
+    isom_timeline_t *timeline
+)
+{
+    if( LSMASH_IS_NON_EXISTING_BOX( file ) || !timeline )
+        return LSMASH_ERR_FUNCTION_PARAM;
+    if( !file->timeline )
+    {
+        file->timeline = lsmash_list_create( lsm_timeline_destroy );
+        if( !file->timeline )
+            return LSMASH_ERR_MEMORY_ALLOC;
+    }
+    return lsmash_list_add_entry( file->timeline, timeline );
 }
 
 static void timeline_get_qt_fixed_comp_audio_sample_quants
@@ -533,9 +550,21 @@ static lsmash_sample_t *timeline_get_sample( isom_timeline_t *timeline, uint32_t
      || !info->chunk )
         return NULL;
     /* Get data of a sample from the stream. */
-    lsmash_sample_t *sample = timeline_read_sample_data_from_stream( info->chunk->file, timeline, info->length, info->pos );
+    uint32_t read_length = info->raw_length ? info->raw_length : info->length;
+    lsmash_sample_t *sample = timeline_read_sample_data_from_stream( info->chunk->file, timeline, read_length, info->pos );
     if( !sample )
         return NULL;
+    if( timeline->filter )
+    {
+        /* The data in the stream is not the sample itself. Convert it and verify the result against the recorded size
+         * so that a corrupted stream never yields a sample whose length disagrees with the timeline. */
+        sample->length = read_length;
+        if( timeline->filter( sample ) < 0 || sample->length != info->length )
+        {
+            lsmash_delete_sample( sample );
+            return NULL;
+        }
+    }
     /* Get sample info. */
     sample->dts    = dts;
     sample->cts    = lsm_box_make_cts( dts, info->offset, timeline->ctd_shift );
@@ -607,6 +636,50 @@ static void timeline_set_sample_getter_funcs
     timeline->get_sample             = timeline_get_sample;
     timeline->get_sample_info        = timeline_get_sample_info;
     timeline->get_sample_property    = timeline_get_sample_property;
+}
+
+int lsm_timeline_setup_raw
+(
+    isom_timeline_t *timeline,
+    uint32_t         track_ID,
+    uint32_t         timescale
+)
+{
+    int err;
+    if( (err = lsm_timeline_set_track_ID( timeline, track_ID )) < 0
+     || (err = lsm_timeline_set_movie_timescale( timeline, timescale )) < 0
+     || (err = lsm_timeline_set_media_timescale( timeline, timescale )) < 0 )
+        return err;
+    timeline_set_sample_getter_funcs( timeline );
+    return 0;
+}
+
+int lsm_timeline_add_sample_info_entry
+(
+    isom_timeline_t    *timeline,
+    isom_sample_info_t *src_info
+)
+{
+    if( !timeline || !src_info )
+        return LSMASH_ERR_FUNCTION_PARAM;
+    return timeline_add_sample_info_entry( timeline, src_info );
+}
+
+int lsm_timeline_finish_raw
+(
+    isom_timeline_t *timeline,
+    uint32_t         sample_count,
+    uint32_t         max_sample_size,
+    uint64_t         media_duration
+)
+{
+    int err;
+    if( (err = lsm_timeline_set_sample_count( timeline, sample_count )) < 0
+     || (err = lsm_timeline_set_max_sample_size( timeline, max_sample_size )) < 0
+     || (err = lsm_timeline_set_media_duration( timeline, media_duration )) < 0
+     || (err = lsm_timeline_set_track_duration( timeline, media_duration )) < 0 )
+        return err;
+    return 0;
 }
 
 void lsm_timeline_set_lpcm_sample_getter_funcs
