@@ -26,13 +26,13 @@ L-SMASH models the hierarchical ISOBMFF/QTFF Box tree using a **Null-Object Sent
    can be dereferenced safely without intermediate `NULL` checks.
 5. **Lifecycle Rules**:
    - Always test box existence with `LSMASH_IS_EXISTING_BOX( box_ptr )` or `LSMASH_IS_NON_EXISTING_BOX( box_ptr )`—**never** `if( box_ptr != NULL )` on singleton box pointers.
-   - When allocating a box via `isom_add_<box>( parent )`, the parent's pointer is replaced with a heap-allocated struct. When destroying a box via `isom_remove_box_by_itself( box_ptr )`, the parent's pointer is automatically restored to `isom_non_existing_<box>()`.
+   - When allocating a box via `lsm_box_add_<box>( parent )`, the parent's pointer is replaced with a heap-allocated struct. When destroying a box via `lsm_box_remove_by_itself( box_ptr )`, the parent's pointer is automatically restored to `lsm_box_default_non_existing_<box>()`.
 
 ### 2.2 Dual-List Box Ownership (`extensions` vs. Type-Specific Lists)
 Every Box contains `lsmash_entry_list_t extensions` (part of `ISOM_BASEBOX_COMMON`):
-- When a child box is created and attached to a parent, it is registered in `parent->extensions` (which governs serialization order in `isom_write_children` / `isom_print_children` and destruction in `isom_remove_all_extension_boxes`).
-- Multi-instance boxes (such as `trak_list`, `sgpd_list`, `sbgp_list`, `moof_list`, `traf_list`, `trun_list`) are **also** referenced by a type-specific `lsmash_entry_list_t` on the parent whose `eliminator` is `isom_remove_dangling_box` (a no-op eliminator when the box is already owned by `extensions`), while `extensions` owns the actual destructor (`isom_remove_box_by_itself`).
-- Removing a box via `isom_remove_box_by_itself()` automatically unlinks it from both `parent->extensions` and any type-specific list, and resets the parent's singleton pointer to the `box_default` sentinel.
+- When a child box is created and attached to a parent, it is registered in `parent->extensions` (which governs serialization order in `write_children` / `print_children` and destruction in `lsm_box_remove_all_extension_boxes`).
+- Multi-instance boxes (such as `trak_list`, `sgpd_list`, `sbgp_list`, `moof_list`, `traf_list`, `trun_list`) are **also** referenced by a type-specific `lsmash_entry_list_t` on the parent, while `extensions` owns the actual destructor (`lsm_box_remove_extension_box` / `lsm_box_remove_by_itself`).
+- Removing a box via `lsm_box_remove_by_itself()` automatically unlinks it from both `parent->extensions` and any type-specific list, and resets the parent's singleton pointer to the `box_default` sentinel.
 
 ### 2.3 Bitstream & I/O Layer (`common/bytes.{c,h}`, `common/bits.{c,h}`, `common/multibuf.{c,h}`)
 - `lsmash_bs_t` (`common/bytes.h`) provides buffered byte-stream reading/writing over either a `FILE *` stream or an in-memory buffer (`lsmash_bs_set_empty_stream()`), tracking `eob` (end of buffer), `eof` (end of file), `error`, and `written` byte counters.
@@ -49,8 +49,8 @@ Every Box contains `lsmash_entry_list_t extensions` (part of `ISOM_BASEBOX_COMMO
 #### Symbol Naming Conventions
 To maintain clear module boundaries without breaking external callers of `<lsmash.h>`, symbols follow a structured naming convention across three visibility scopes:
 - **Public API (`lsmash_*`)**: Exported library functions, types, and macros declared in `lsmash.h` and exposed via `liblsmash.ver`. Existing public symbol names are strictly preserved for ABI/API compatibility.
-- **Internal Shared Functions (`lsm_<module>_*`)**: Non-`static` functions shared across compilation units inside `common/`, `core/`, `codecs/`, and `importer/` (for example, `lsm_alloc_get_active_count()`, `lsm_list_init()`, `lsm_stbl_get_sample_count()`, `lsm_sample_pool_push()`, `lsm_track_get_trak()`, `lsm_movie_check_initializer_present()`).
-- **File-Local Static Functions (`<module>_*`)**: `static` helper functions local to a single `.c` file (for example, `alloc_verify_block()`, `av1_parse_tile_info()`, `stbl_add_ctts_entry()`, `sample_append()`, `track_get_edts()`, `movie_update_chunk_offset()`).
+- **Internal Shared Functions (`lsm_<module>_*`)**: Non-`static` functions shared across compilation units inside `common/`, `core/`, `codecs/`, and `importer/` (for example, `lsm_alloc_get_active_count()`, `lsm_list_init()`, `lsm_box_add_trak()`, `lsm_box_default_non_existing_trak()`, `lsm_file_check_compat_flags()`, `lsm_fragment_flush_pooled_samples()`, `lsm_timeline_get_dts()`, `lsm_read_box()`, `lsm_write_box()`, `lsm_print_set_box_printer()`, `lsm_stbl_get_sample_count()`, `lsm_sample_pool_push()`, `lsm_track_get_trak()`, `lsm_movie_check_initializer_present()`).
+- **File-Local Static Functions (`<module>_*`)**: `static` helper functions local to a single `.c` file (for example, `alloc_verify_block()`, `av1_parse_tile_info()`, `box_remove_trak()`, `file_clear_compat_flags()`, `fragment_append_track_run()`, `timeline_construct()`, `read_trak()`, `write_trak()`, `print_trak()`, `summary_allocate_opaque()`, `meta_add_metadata()`, `chapter_read_simple_chapter()`, `stbl_add_ctts_entry()`, `sample_append()`, `track_get_edts()`, `movie_update_chunk_offset()`).
 
 #### Preservation of Specification Syntax Identifiers
 When a struct field, constant, or helper represents a syntax element defined by an international specification (ISO/IEC 14496-12, ISO/IEC 23003-5,ISO/IEC 23091-3, or AOM AV1), **the exact identifier spelling and casing from the official specification are preserved** so that the C source code can be cross-referenced directly against the standard text:
@@ -61,11 +61,11 @@ When a struct field, constant, or helper represents a syntax element defined by 
 
 ### 2.5 Compile-Time `static const` Dispatch Tables
 All Box and Codec dispatch tables across `core/` and `codecs/` are defined as **compile-time `static const` arrays** sized automatically by the compiler (`sizeof(table) / sizeof(table[0])`), with zero runtime initialization state:
-- `core/box.c`: `fullbox_type_table[]` in `isom_init_box_common()`
-- `core/read.c`: `box_reader_table[]` in `isom_read_unknown_box()`
-- `core/write.c`: `box_writer_table[]` in `isom_set_box_writer()`
-- `core/print.c`: `box_printer_table[]` in `isom_Ip_set_box_printer()`
-- `core/summary.c`: `summary_setup_table[]` in `lsmash_get_summary()`
+- `core/box.c`: `fullbox_type_table[]` in `lsm_box_init_common()`
+- `core/read.c`: `box_reader_table[]` in `lsm_read_unknown_box()`
+- `core/write.c`: `box_writer_table[]` in `lsm_write_set_box_writer()`
+- `core/print.c`: `box_printer_table[]` in `lsm_print_set_box_printer()`
+- `core/summary.c`: `codec_support_table[]` in `lsmash_check_codec_support()`
 - `codecs/description.c`: `codec_Construct_table[]`, `codec_Copy_table[]`, `codec_Print_table[]`, and `codec_pecific_conversion_table[]`
 - `codecs/dts.c`: `dts_extension_Substream_lbr_table[]`, `dts_channel_layout_table[]`, and `dts_audio_asset_descriptor_channel_table[]`
 
@@ -210,3 +210,20 @@ Owns `moov`, `mvhd`, `iods`, movie parameter management, `lsmash_finish_movie`, 
 | `static movie_*` | File-Local (`core/movie.c`) | `movie_update_chunk_offset`, `movie_validate_mandatory_boxes`, `movie_rearrange_for_pd` |
 
 *(Note: `lsmash_delete_tyrant_chapter()` resides in `core/chapter.c` alongside all other chapter manipulation APIs.)*
+
+### 6.3 Core Infrastructure Modules Symbol Mapping (`core/`)
+All remaining `core/` compilation units likewise follow the `lsmash_*` (Public API), `lsm_<filename>_*` (Internal Shared), and `static <filename>_*` (File-Local) naming hierarchy:
+
+| Module | Internal Shared (`lsm_<filename>_*`) | File-Local (`static <filename>_*`) |
+| :--- | :--- | :--- |
+| `core/box.{c,h}` | `lsm_box_init_common`, `lsm_box_is_fullbox`, `lsm_box_add_*`, `lsm_box_remove_by_itself`, `lsm_box_remove_extension_box`, `lsm_box_remove_all_extension_boxes`, `lsm_box_remove_sample_description`, `lsm_box_remove_unknown_box`, `lsm_box_update_size`, `lsm_box_add_extension_binary`, `lsm_box_get_extension_box`, `lsm_box_get_extension_box_format`, `lsm_box_bs_put_*`, `lsm_box_4cc2str`, `lsm_box_make_cts`, `lsm_box_check_media_hdlr_from_stsd`, `lsm_box_get_media_type_from_stsd` | `box_reorder_tail`, `box_add_to_extension_list`, `box_get_entry`, `box_remove_predefined`, `box_remove_in_predefined_list`, `box_remove_*`, `box_add_sample_description_entry`, `box_fake_file_read`, `box_fake_file_seek` |
+| `core/box_default.{c,h}` | `lsm_box_default_allocate`, `lsm_box_default_non_existing_*` | — |
+| `core/file.{c,h}` | `lsm_file_check_compat_flags`, `lsm_file_check_brand_version`, `lsm_file_set_brands` | `file_clear_compat_flags`, `file_check_mandatory_boxes`, `file_close`, `file_set_brands` |
+| `core/fragment.{c,h}` | `lsm_fragment_create_empty_duration`, `lsm_fragment_update_track_duration`, `lsm_fragment_flush_pooled_samples`, `lsm_fragment_append_sample`, `lsm_fragment_finish_movie`, `lsm_fragment_set_last_sample_delta` | `fragment_write_mfra`, `fragment_update_sidx`, `fragment_flush`, `fragment_prepare_chunk_run`, `fragment_output_sample_flags`, `fragment_input_sample_flags`, `fragment_create_track_run`, `fragment_append_track_run`, `fragment_update_cache`, etc. |
+| `core/timeline.{c,h}` | `lsm_timeline_remove_all`, `lsm_timeline_destroy_track`, `lsm_timeline_get_dts`, `lsm_timeline_get_cts`, `lsm_timeline_get_sample_duration`, `lsm_timeline_check_sample_existence`, `lsm_timeline_get_sample`, `lsm_timeline_get_sample_info`, `lsm_timeline_get_sample_property`, `lsm_timeline_get_explicit_timeline_map`, `lsm_timeline_count_explicit_timeline_map` | `timeline_get_track`, `timeline_add_dref_entry`, `timeline_add_sample_description`, `timeline_get_portable_chunk`, `timeline_add_sample_info`, `timeline_construct`, etc. |
+| `core/read.{c,h}` | `lsm_read_box`, `lsm_read_unknown_box`, `lsm_read_children`, `lsm_read_leaf_box_common_last_process`, `lsm_read_check_box_size`, `lsm_read_visual_description`, `lsm_read_audio_description` | `read_file`, `read_unknown_box`, `read_children`, `read_ftyp`, `read_moov`, `read_trak`, `read_stbl`, `read_pcmC`, `read_chnl`, `read_srat`, `read_emsg`, etc. |
+| `core/write.{c,h}` | `lsm_write_box`, `lsm_write_extension_boxes`, `lsm_write_set_box_writer`, `lsm_write_moov`, `lsm_write_mdat_header`, `lsm_write_mdat_size`, `lsm_write_ftyp`, `lsm_write_meta`, `lsm_write_free` | `write_children`, `write_unknown_box`, `write_ftyp`, `write_moov`, `write_trak`, `write_stbl`, `write_pcmC`, `write_chnl`, `write_srat`, `write_emsg`, etc. |
+| `core/print.{c,h}` | `lsm_print_indent`, `lsm_print_box_common`, `lsm_print_unknown`, `lsm_print_destroy_list`, `lsm_print_set_box_printer` | `print_iprintf`, `print_ifprintf`, `print_basebox_common`, `print_fullbox_common`, `print_box_common`, `print_children`, `print_ftyp`, `print_moov`, `print_trak`, `print_pcmC`, `print_chnl`, `print_srat`, `print_qt_color_table`, `print_sample_description_extension`, etc. |
+| `core/summary.{c,h}` | *(Public `lsmash_*` APIs only)* | `summary_allocate_opaque`, `summary_deallocate_opaque` |
+| `core/meta.{c,h}` | *(Public `lsmash_*` APIs only)* | `meta_add_metadata`, `meta_set_itunes_metadata_string`, `meta_set_itunes_metadata_integer`, `meta_set_itunes_metadata_boolean`, `meta_set_itunes_metadata_binary`, `meta_get_itunes_metadata_type` |
+| `core/chapter.{c,h}` | *(Public `lsmash_*` APIs only)* | `chapter_get_start_time`, `chapter_lumber_line`, `chapter_read_simple_chapter`, `chapter_read_minimum_chapter`, `chapter_check_chap_line`, `chapter_add_chpl_entry` |

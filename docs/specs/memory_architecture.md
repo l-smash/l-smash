@@ -99,7 +99,7 @@ typedef struct
   - `void *lsm_list_head( const lsm_list_t *list )`
   - `void *lsm_list_tail( const lsm_list_t *list )`
 - **Lockstep Multi-Table Cursor (`lsm_list_cursor_t`)**:
-  - Used in `core/timeline.c` (`isom_timeline_construct`, `lsmash_get_media_timestamps`, and `lsmash_set_media_timestamps`) where multiple sample tables (`stts`, `ctts`, `stss`, `stps`, `sdtp`, `stsz`, `sbgp`) are advanced simultaneously in lockstep:
+  - Used in `core/timeline.c` (`timeline_construct`, `lsmash_get_media_timestamps`, and `lsmash_set_media_timestamps`) where multiple sample tables (`stts`, `ctts`, `stss`, `stps`, `sdtp`, `stsz`, `sbgp`) are advanced simultaneously in lockstep:
     ```c
     lsm_list_cursor_t stts_cur;
     lsm_list_cursor_init( &stts_cur, stbl->stts->list );

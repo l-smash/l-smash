@@ -35,7 +35,7 @@ typedef struct
 } isom_pcmC_t;
 ```
 **Validation Rules**:
-- Mandatory for both `ipcm` and `fpcm`; `lsmash_add_sample_entry()` and `isom_read_pcmC()` reject missing or malformed `pcmC` boxes.
+- Mandatory for both `ipcm` and `fpcm`; `lsmash_add_sample_entry()` and `read_pcmC()` reject missing or malformed `pcmC` boxes.
 - `(format_flags & ~0x01) != 0` is rejected (`LSMASH_ERR_INVALID_DATA`).
 - For `ipcm`, `PCM_sample_size` must be `16`, `24`, or `32`.
 - For `fpcm`, `PCM_sample_size` must be `32` or `64`.
@@ -80,9 +80,9 @@ $$\text{bytes\_per\_frame} = \text{channels} \times \frac{\text{PCM\_sample\_siz
 
 ### 3.2 Multi-Track Fragmented MP4 (`moof`/`traf`/`trun`) Compaction (`core/fragment.c`)
 When multiplexing one or more LPCM tracks into a Fragmented ISOBMFF movie (`LSMASH_FILE_MODE_FRAGMENTED`):
-1. **Multi-Track `data_offset` Correctness (`isom_append_fragment_track_run`)**:
+1. **Multi-Track `data_offset` Correctness (`fragment_append_track_run`)**:
    - A `trun` box can only omit `ISOM_TR_FLAGS_DATA_OFFSET_PRESENT` if it is the first run of the track fragment AND its `traf` is currently the **last `traf` in `moof->traf_list.tail`**. Whenever samples are interleaved across multiple `traf` boxes in the same `moof`, `ISOM_TR_FLAGS_DATA_OFFSET_PRESENT` is explicitly set so each track fragment points to its exact byte offset in `mdat`.
-2. **Automatic `tfhd` Default Hoisting & `trun->optional` Omission (`isom_flush_fragment_pooled_samples`)**:
+2. **Automatic `tfhd` Default Hoisting & `trun->optional` Omission (`lsm_fragment_flush_pooled_samples`)**:
    - When flushing a fragment's sample pool, L-SMASH inspects whether all samples in the `trun` share the same duration, byte size, and sample flags.
    - For constant-size, constant-duration audio such as LPCM, the common `duration` ($1$) and `size` ($\text{bytes\_per\_frame}$) are hoisted into `tfhd->default_sample_duration` and `tfhd->default_sample_size`, clearing the per-sample flags (`0x000f00`) on `trun->flags` and freeing `trun->optional` (`trun->optional = NULL`).
    - During demultiplexing (`core/timeline.c`), when `trun->optional` is empty or omits per-sample fields, timeline reconstruction falls back to `tfhd->default_sample_duration` / `trex->default_sample_duration` and `tfhd->default_sample_size` / `trex->default_sample_size`.
