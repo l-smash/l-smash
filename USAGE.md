@@ -34,7 +34,7 @@ L-SMASH enforces strict compliance with the specifications governing each contai
 A prime example of this strict boundary is uncompressed Linear PCM (LPCM) audio and high-sampling-rate signaling:
 - **In ISOBMFF (`.mp4`, `.m4a`, Fragmented MP4)**:
   - Uncompressed LPCM uses **ISO/IEC 23003-5** (`ipcm` for 16/24/32-bit integer PCM, `fpcm` for 32/64-bit IEEE 754 floating-point PCM) paired with a mandatory **`pcmC`** (`PCMConfigBox`) specifying endianness and bit depth.
-  - Multichannel speaker arrangements use **ISO/IEC 14496-12 `chnl`** (`ChannelLayout`), and sampling rates exceeding $65535\text{ Hz}$ (such as $88.2\text{ kHz}$, $96\text{ kHz}$, or $192\text{ kHz}$) use ISOBMFF **`AudioSampleEntryV1`** (`stsd` version 1) with an **`srat`** (`SamplingRateBox`).
+  - Multichannel speaker arrangements use **ISO/IEC 14496-12 `chnl`** (`ChannelLayout`), and sampling rates exceeding 65535 Hz (such as 88.2 kHz, 96 kHz, or 192 kHz) use ISOBMFF **`AudioSampleEntryV1`** (`stsd` version 1) with an **`srat`** (`SamplingRateBox`).
 - **In QuickTime (`.mov`)**:
   - Uncompressed LPCM uses Apple QuickTime Sound Description v0/v1/v2 (`lpcm`, `sowt`, `twos`, `in24`, `in32`, `fl32`, `fl64`, `raw `) and QuickTime `chan` / `wave` atoms.
 
@@ -117,7 +117,7 @@ muxer [global_options] -i input1[?track_options] [-i input2[?track_options] ...]
 | `--chapter-track` | `<integer>` | Specify which track number the reference chapter track applies to (default: `1`). |
 | `--copyright-notice` | `<arg>` | Specify copyright notice as `<language>/<string>` (`mp4`/`m4v`/`m4a`/`3gp`/`3g2`). |
 | `--language` | `<string>` | Specify the default ISO-639-2/T language code for all tracks (`mp4`/`m4v`/`m4a`). |
-| `--compact-size-table` | *(none)* | Compress Sample Size boxes (`stsz` $\rightarrow$ `stz2`) when all sample sizes fit in 4, 8, or 16 bits. |
+| `--compact-size-table` | *(none)* | Compress Sample Size boxes (`stsz` → `stz2`) when all sample sizes fit in 4, 8, or 16 bits. |
 | `--isom-version` | `<1..6>` | Specify maximum compatible ISO Base Media version (`iso1`–`iso6`). |
 | `--shift-timeline` | *(none)* | Enable composition-to-decode timeline shift (uses negative `ctts` v1 offsets or Edit List). |
 | `--brands` | `<4CC,4CC,...>` | Specify comma-separated compatible brand FourCCs (`--brands help` lists known brands). |
@@ -420,7 +420,7 @@ For uncompressed LPCM in ISOBMFF:
 - Use `ISOM_CODEC_TYPE_IPCM_AUDIO` for integer PCM (16, 24, or 32 bits) or `ISOM_CODEC_TYPE_FPCM_AUDIO` for IEEE 754 floating-point PCM (32 or 64 bits).
 - Attach a mandatory `LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_PCM_CONFIG` (`pcmC` box) specifying `format_flags` (`LSMASH_PCM_FORMAT_FLAG_BIG_ENDIAN` or `LSMASH_PCM_FORMAT_FLAG_LITTLE_ENDIAN`) and `PCM_sample_size`.
 - Optionally attach `LSMASH_CODEC_SPECIFIC_DATA_TYPE_ISOM_AUDIO_CHANNEL_LAYOUT` (`chnl` box) to signal CICP `definedLayout`, explicit `speaker_position` arrays, `omittedChannelsMap`, or `object_count`.
-- When `asum->frequency > 65535` (e.g., $96000\text{ Hz}$ or $192000\text{ Hz}$), L-SMASH automatically emits an ISOBMFF **`AudioSampleEntryV1`** (`version = 1`) and child **`srat`** (`SamplingRateBox`).
+- When `asum->frequency > 65535` (e.g., 96000 Hz or 192000 Hz), L-SMASH automatically emits an ISOBMFF **`AudioSampleEntryV1`** (`version = 1`) and child **`srat`** (`SamplingRateBox`).
 
 ```c
 uint32_t audio_track_id = lsmash_create_track( root, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK );
@@ -551,7 +551,7 @@ lsmash_destroy_root( root );
 
 ### 3.7 Complete End-to-End C API Example
 
-The following self-contained C program (fully compatible with standard C99, C11, and C++) muxes a 24-bit $96\text{ kHz}$ Stereo ISO/IEC 23003-5 `ipcm` audio track into a Fragmented MP4 file and reads it back via the media timeline API:
+The following self-contained C program (fully compatible with standard C99, C11, and C++) muxes a 24-bit 96 kHz Stereo ISO/IEC 23003-5 `ipcm` audio track into a Fragmented MP4 file and reads it back via the media timeline API:
 
 ```c
 #include <stdio.h>

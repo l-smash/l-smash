@@ -8,7 +8,7 @@ Media container multiplexing and demultiplexing workloads exhibit two fundamenta
    - Require stable struct addresses (`isom_box_t *`) that are cross-referenced by both parent singleton pointers and `parent->extensions` lists.
 2. **High-Volume Homogeneous Sample & Timeline Tables (`stts`, `ctts`, `stsz`, `stz2`, `stss`, `stps`, `sdtp`, `stsc`, `stco`, `co64`, `sgpd`, `sbgp`, `elst`, `trun->optional`, `tfra`, `sidx`, `fragment->pool`, and `timeline` tables)**:
    - Store hundreds of thousands to millions of fixed-size, homogeneous value records (4 to 32 bytes each).
-   - Previously, storing these tables in doubly-linked node lists (`lsmash_entry_list_t`) required **two separate heap allocations per entry** (`sizeof(lsmash_entry_t) == 24` bytes for the node plus `malloc(sizeof(entry))` for the payload, plus allocator metadata overhead) and degraded random-access lookup to $O(N)$ pointer chasing whenever access patterns deviated from strictly sequential traversal.
+   - Previously, storing these tables in doubly-linked node lists (`lsmash_entry_list_t`) required **two separate heap allocations per entry** (`sizeof(lsmash_entry_t) == 24` bytes for the node plus `malloc(sizeof(entry))` for the payload, plus allocator metadata overhead) and degraded random-access lookup to `O(N)` pointer chasing whenever access patterns deviated from strictly sequential traversal.
 
 To address both workloads cleanly in standard C11, L-SMASH employs a **Hybrid Container Architecture** paired with a built-in **C11 Debug Memory Auditor (`LSMASH_DEBUG_ALLOC`)**.
 
@@ -52,7 +52,7 @@ All high-volume homogeneous value tables use the **C11 Paged Block Array (`lsm_l
 | | `isom_timeline_t` | `chunk_list` | `isom_portable_chunk_t` | 16 bytes |
 
 ### 2.3 Small Codec and Importer Lists (`lsmash_entry_list_t`)
-Small bounded parameter lists in `codecs/` and `importer/` (such as H.264 SPS/PPS lists, HEVC parameter set arrays, ADTS/AC-3/DTS importer track lists, and chapter entries, typically $\le 16$ elements) remain on `lsmash_entry_list_t` and use the `LSM_ENTRY_LIST_FOR_EACH` macro for traversal.
+Small bounded parameter lists in `codecs/` and `importer/` (such as H.264 SPS/PPS lists, HEVC parameter set arrays, ADTS/AC-3/DTS importer track lists, and chapter entries, typically ≤ 16 elements) remain on `lsmash_entry_list_t` and use the `LSM_ENTRY_LIST_FOR_EACH` macro for traversal.
 
 ---
 
@@ -76,10 +76,13 @@ typedef struct
 ```
 
 ### 3.2 Structural Guarantees & Complexity
-1. **True $O(1)$ Indexed Addressing**:
+1. **True `O(1)` Indexed Addressing**:
    Element at 0-based `index` resides at:
-   $$\text{page\_idx} = \text{index} \gg 8, \qquad \text{slot\_idx} = \text{index} \ \& \ \text{0xFF}$$
-   $$\text{address} = \text{list->pages}[\text{page\_idx}] + \text{slot\_idx} \times \text{list->elem\_size}$$
+   ```c
+   page_idx = index >> 8;
+   slot_idx = index & 0xFF;
+   address = list->pages[page_idx] + slot_idx * list->elem_size;
+   ```
 2. **100% Pointer Stability on Append (`lsm_list_append` / `lsm_list_add`)**:
    - Once a 256-element page is allocated, its base address (`pages[p]`) is **never reallocated or moved** when subsequent elements or pages are appended. Only the outer `uint8_t **pages` directory array grows via `lsmash_realloc` when `page_count` reaches `page_capacity`.
    - Therefore, any pointer to an existing element (such as `stts` or `stsc` last-entry pointers, or `timeline` sample/chunk pointers) remains valid across arbitrary future appends.
@@ -125,7 +128,7 @@ typedef struct
 
 ## 4. Multi-Buffer Bank Resize Architecture (`common/multibuf.{c,h}`)
 
-`lsmash_multiple_buffers_t` allocates a contiguous memory block of `number_of_buffers * buffer_size` bytes where buffer $b \in [1, \text{number\_of\_buffers}]$ resides at byte offset $(b - 1) \times \text{buffer\_size}$.
+`lsmash_multiple_buffers_t` allocates a contiguous memory block of `number_of_buffers * buffer_size` bytes where buffer `b` in `[1, number_of_buffers]` resides at byte offset `(b - 1) * buffer_size`.
 
 When `lsmash_resize_multiple_buffers( multiple_buffer, new_buffer_size )` is called:
 1. **Validation & Overflow Protection**:

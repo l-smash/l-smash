@@ -42,7 +42,7 @@ Every Box contains `lsmash_entry_list_t extensions` (part of `ISOM_BASEBOX_COMMO
   - **Never** call `lsmash_bits_empty( &bits )` when `bits` borrows an active parent `lsmash_bs_t` (such as `file->bs` during Box reading or writing), because `lsmash_bits_empty()` calls `lsmash_bs_empty( bits->bs )`, wiping the parent stream's internal read/write buffer. Use `lsmash_bits_get_align( &bits )` on read and `lsmash_bits_put_align( &bits )` on write.
   - `lsmash_bits_empty()` is only valid on a dedicated scratch `lsmash_bs_t` owned exclusively by that bit reader (such as one created via `lsmash_bits_adhoc_create()` or a codec parser's private scratch buffer).
 - `lsmash_multiple_buffers_t` (`common/multibuf.{c,h}`) manages a contiguous bank of `number_of_buffers` fixed-size buffers (`buffer_size` bytes each). When resizing via `lsmash_resize_multiple_buffers()`, buffers are re-strided cleanly: on expansion, buffers are moved in reverse index order (`number_of_buffers - 1` down to `1`) after `lsmash_realloc` and newly exposed tail bytes are zero-initialized; on shrinkage, buffers are compacted in forward index order (`1` up to `number_of_buffers - 1`) before `lsmash_realloc`.
-- All integer serialization in `common/bytes.c` uses explicit `uint64_t` casts before bit shifts $\ge 32$ bits (`lsmash_bs_get_be64`, `lsmash_bs_get_le64`) to prevent 32-bit signed integer promotion undefined behavior.
+- All integer serialization in `common/bytes.c` uses explicit `uint64_t` casts before bit shifts ≥ 32 bits (`lsmash_bs_get_be64`, `lsmash_bs_get_le64`) to prevent 32-bit signed integer promotion undefined behavior.
 
 ### 2.4 Coding Style, Header Policy & Symbol Naming Conventions
 The official coding style, formatting standards, translation unit header rules, and Git contribution policies are defined in **[`docs/CODING_STYLE.md`](docs/CODING_STYLE.md)**. Key invariants:
@@ -83,7 +83,7 @@ Detailed specifications for each major subsystem reside in `docs/specs/` and are
    - `trun` default sample duration/size compaction across multiple tracks in `core/fragment.c`, plus `WAVE_FORMAT_EXTENSIBLE` and `WAVE_FORMAT_IEEE_FLOAT` support in `importer/wave_imp.c`.
 3. **Hybrid Container Architecture & Paged Block Arrays (`common/alloc.{c,h}`, `common/list.{c,h}`, `core/`)**:
    - Built-in C11 memory auditor (`-DLSMASH_DEBUG_ALLOC`) with `#ptr`/`#size` expression capture, 64-byte aligned headers, front/rear canaries, `0xCD`/`0xDD` memory poisoning, and leak verification.
-   - Hybrid container model: `lsmash_entry_list_t` doubly-linked pointer lists for polymorphic Box trees (`extensions`, `trak_list`, `moof_list`) paired with **`lsm_list_t` C11 Paged Block Arrays** ($2^8 = 256$ elements per page) for high-volume sample tables (`stts`, `ctts`, `stsz`, `stz2`, `stss`, `stps`, `sdtp`, `stsc`, `stco`/`co64`, `sgpd`, `sbgp`, `elst`), fragment tables (`trun->optional`, `tfra`, `sidx`, `fragment->pool`), and media timelines (`info_list`, `bunch_list`, `chunk_list`).
+   - Hybrid container model: `lsmash_entry_list_t` doubly-linked pointer lists for polymorphic Box trees (`extensions`, `trak_list`, `moof_list`) paired with **`lsm_list_t` C11 Paged Block Arrays** (`2^8 = 256` elements per page) for high-volume sample tables (`stts`, `ctts`, `stsz`, `stz2`, `stss`, `stps`, `sdtp`, `stsc`, `stco`/`co64`, `sgpd`, `sbgp`, `elst`), fragment tables (`trun->optional`, `tfra`, `sidx`, `fragment->pool`), and media timelines (`info_list`, `bunch_list`, `chunk_list`).
 4. **Core Container Engine Module Architecture (`core/stbl.{c,h}`, `core/sample.{c,h}`, `core/track.{c,h}`, `core/movie.{c,h}`)**:
    - Section 6 below specifies the four-module architecture of the core container engine organized by ISOBMFF logical hierarchy (`stbl`, `sample`, `track`, `movie`), replacing the monolithic `core/isom.c` compilation unit, together with the unified symbol naming across `core/`, `codecs/`, and `importer/`.
 5. **Xiph FLAC (`fLaC` / `dfLa`) & Box Reader Hardening (`codecs/flac.c`, `importer/flac_imp.c`, `core/read.c`)**:
@@ -157,7 +157,7 @@ In accordance with the symbol naming conventions (Section 2.4):
 - File-local helpers are `static` with **`<filename>_*`** (`stbl_*`, `sample_*`, `track_*`, `movie_*`) names.
 
 #### Module 1: `core/stbl.{c,h}` — Sample Table & Sample Grouping Engine
-Owns Sample Table (`stts`, `ctts`, `cslg`, `stsz`/`stz2`, `stsc`, `stco`/`co64`, `stss`, `stps`, `sdtp`) entry manipulation, `stco` $\rightarrow$ `co64` 64-bit promotion, `stsz` $\rightarrow$ `stz2` compaction, bitrate calculation (`btrt`/`esds`), and Sample Grouping (`sgpd`/`sbgp`: `rap `, `'roll'` [negative `roll_distance` pre-roll / positive post-roll], `'prol'` [audio pre-roll for non-sync streams]) state machines and roll-group deduplication:
+Owns Sample Table (`stts`, `ctts`, `cslg`, `stsz`/`stz2`, `stsc`, `stco`/`co64`, `stss`, `stps`, `sdtp`) entry manipulation, `stco` → `co64` 64-bit promotion, `stsz` → `stz2` compaction, bitrate calculation (`btrt`/`esds`), and Sample Grouping (`sgpd`/`sbgp`: `rap `, `'roll'` [negative `roll_distance` pre-roll / positive post-roll], `'prol'` [audio pre-roll for non-sync streams]) state machines and roll-group deduplication:
 
 | Symbol | Scope | Signature / Role |
 | :--- | :--- | :--- |

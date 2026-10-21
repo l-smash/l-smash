@@ -36,7 +36,7 @@ Prior to the `v2.21.0`–`v2.23.1` series on `dev`, the `vimeo` (`4a21f21`) and 
    - Dispatch tables in `core/` and `codecs/` used lazy runtime initialization into fixed-size `static` arrays (e.g., `static ... table[128]`), creating data-race hazards in multi-threaded callers and silent bounds-overflow risks.
    - `isom_read_emsg()` in `core/read.c:735` checked `if( !emsg->scheme_id_uri )` twice instead of checking `if( !emsg->value )` after the second allocation.
 6. **`lsmash_resize_multiple_buffers` Memory Corruption & `cli/muxer.c` Option Bug**:
-   - `lsmash_resize_multiple_buffers()` in `common/multibuf.c` called `lsmash_realloc()` without re-striding buffers $1 \dots N-1$ from the old `buffer_size` stride to the new `buffer_size` stride.
+   - `lsmash_resize_multiple_buffers()` in `common/multibuf.c` called `lsmash_realloc()` without re-striding buffers 1 ... N-1 from the old `buffer_size` stride to the new `buffer_size` stride.
    - `cli/muxer.c:549` checked `else if( !strcasecmp( argv[i], "--compact-size-table" ) )` inside the `if( !strcasecmp( argv[i], "--language" ) )` block, making `--compact-size-table` unreachable on the command line.
 
 ---
@@ -61,10 +61,10 @@ Prior to the `v2.21.0`–`v2.23.1` series on `dev`, the `vimeo` (`4a21f21`) and 
 - **`core/fragment.c`**:
   - Fixed `isom_append_fragment_track_run()` to check whether `traf` is the last `traf` in `moof->traf_list.tail` before omitting `data_offset` across multi-track fragments.
   - Added automatic `trun` compaction when all samples in a track run match `tfhd->default_sample_duration`, `default_sample_size`, and `default_sample_flags`.
-- **`importer/wave_imp.c`**: Added support for `WAVE_FORMAT_IEEE_FLOAT` (`0x0003`), `WAVE_FORMAT_EXTENSIBLE` (`0xFFFE`), 24/32/64-bit PCM/Float, sampling rates $> 65535\text{ Hz}$, and Microsoft `dwChannelMask` to ISO/IEC 14496-12 `chnl` mapping.
+- **`importer/wave_imp.c`**: Added support for `WAVE_FORMAT_IEEE_FLOAT` (`0x0003`), `WAVE_FORMAT_EXTENSIBLE` (`0xFFFE`), 24/32/64-bit PCM/Float, sampling rates > 65535 Hz, and Microsoft `dwChannelMask` to ISO/IEC 14496-12 `chnl` mapping.
 
 ### 3.3 `v2.22.0` (Development): C99 Paged Block Array (`lsm_list_t`) & Sample Table Migration
-- **`common/list.{c,h}`**: Implemented `lsm_list_t`, a C99 Paged Block Array storing elements contiguously in $2^8 = 256$-element pages with $O(1)$ bit-shift lookup (`lsm_list_at`, `lsm_list_get`), 100% element pointer stability on append, lockstep multi-table cursors (`lsm_list_cursor_t`), and single-loop C99 iteration macros (`LSM_LIST_FOR_EACH`, `LSM_ENTRY_LIST_FOR_EACH`).
+- **`common/list.{c,h}`**: Implemented `lsm_list_t`, a C99 Paged Block Array storing elements contiguously in `2^8 = 256`-element pages with `O(1)` bit-shift lookup (`lsm_list_at`, `lsm_list_get`), 100% element pointer stability on append, lockstep multi-table cursors (`lsm_list_cursor_t`), and single-loop C99 iteration macros (`LSM_LIST_FOR_EACH`, `LSM_ENTRY_LIST_FOR_EACH`).
 - **`core/timeline.c`, `core/fragment.{c,h}`, `core/isom.c`, `core/read.c`, `core/write.c`, `core/print.c`, `codecs/*`**:
   - Migrated all high-volume sample tables (`stts`, `ctts`, `stsz`, `stz2`, `stss`, `stps`, `sdtp`, `stsc`, `stco`, `co64`, `sgpd`, `sbgp`, `elst`), fragment tables (`trun->optional`, `tfra`, `sidx`, `fragment->pool`), and media timeline tables (`info_list`, `bunch_list`, `chunk_list`) from `lsmash_entry_list_t` to `lsm_list_t`.
   - Fixed a latent pointer-invalidation hazard in `isom_add_roll_group_entry()` / `isom_deduplicate_roll_group()` by storing 1-based group indices (`roll_group_number`, `prev_group_number`, `first_sample_defined`) in `isom_roll_pool_entry_t` instead of raw pointers into `sbgp->list`.
@@ -78,7 +78,7 @@ Prior to the `v2.21.0`–`v2.23.1` series on `dev`, the `vimeo` (`4a21f21`) and 
 
 ### 3.5 `v2.22.1`: Codec, Metadata, Build, `multibuf` Resize & `--compact-size-table` Fixes
 - **Integrated Upstream Contributor Fixes (Preserving Original Git Author Attributions)**:
-  1. **NALU Exp-Golomb EOF & Overflow Handling** (`Xinyue Lu <i@7086.in>`): Fixed infinite loop in `nalu_get_codeNum()` (`codecs/nalu.c`) on EOF or $\ge 64$ leading zero bits.
+  1. **NALU Exp-Golomb EOF & Overflow Handling** (`Xinyue Lu <i@7086.in>`): Fixed infinite loop in `nalu_get_codeNum()` (`codecs/nalu.c`) on EOF or ≥ 64 leading zero bits.
   2. **MP3 `nBlockSize` Calculation** (`Xinyue Lu <i@7086.in>`): Fixed MP3 `nBlockSize` integer division truncation in `waveform_audio_update_bitrate()` (`codecs/qt_wfex.c`), plus added a `cbSize < 12` bounds check before writing `MPEGLAYER3WAVEFORMAT` fields.
   3. **WMA `cbSize` 16-Bit LE Reading** (`Xinyue Lu <i@7086.in>`): Fixed `cbSize` reading in `wma_print_codec_specific()` (`codecs/wma.c`) to use `LSMASH_GET_LE16` instead of `LSMASH_GET_BYTE`, plus added a box size bounds check (`box->size < 8 + (uint64_t)WAVEFORMATEX_MINIMUM_SIZE + cbSize`).
   4. **Opus 8-Channel Mapping Table Lookup** (`Xinyue Lu <i@7086.in>`): Fixed `channel_order` table lookup in `opus_print_codec_specific()` (`codecs/opus.c`) to index by `OutputChannelCount - 1` instead of `StreamCount + CoupledCount - 1`, and fixed the `"front center"` typo.
@@ -100,7 +100,7 @@ Prior to the `v2.21.0`–`v2.23.1` series on `dev`, the `vimeo` (`4a21f21`) and 
 - **Full `core/` Symbol Naming Convention Unification (`lsm_<filename>_*` / `static <filename>_*`)**:
   - Standardized all internal shared functions (`lsm_<filename>_*`) and file-local static functions (`static <filename>_*`) across all remaining `core/` modules (`core/file.{c,h}`, `core/fragment.{c,h}`, `core/timeline.{c,h}`, `core/read.{c,h}`, `core/write.{c,h}`, `core/print.{c,h}`, `core/summary.{c,h}`, `core/meta.{c,h}`, `core/chapter.{c,h}`, `core/box.{c,h}`, and `core/box_default.{c,h}`), while preserving all public `lsmash_*` API symbols in `lsmash.h`.
   - Unified token-concatenation macros (`DEFINE_SIMPLE_BOX_ADDER_TEMPLATE_6`, `DEFINE_SIMPLE_SAMPLE_EXTENSION_ADDER`, `DEFINE_SIMPLE_BOX_REMOVER_TEMPLATE` in `core/box.c`, `ADD_BOX` in `core/read.c`, and `DEFINE_BOX_DEFAULT_CONSTANT` in `core/box_default.h`) to emit `lsm_box_add_<box>`, `static box_remove_<box>`, and `lsm_box_default_non_existing_<box>` directly without preprocessor shims.
-  - Corrected historical identifier typos (`isom_timelime_*` $\rightarrow$ `lsm_timeline_*`, `isom_printer_destory_list` $\rightarrow$ `lsm_print_destroy_list`, `isom_pring_qt_color_table` $\rightarrow$ `print_qt_color_table`, `isom_print_sample_description_extesion` $\rightarrow$ `print_sample_description_extension`) and restricted `box_add_to_extension_list` and `box_get_entry` in `core/box.c` from undeclared external linkage to `static`.
+  - Corrected historical identifier typos (`isom_timelime_*` → `lsm_timeline_*`, `isom_printer_destory_list` → `lsm_print_destroy_list`, `isom_pring_qt_color_table` → `print_qt_color_table`, `isom_print_sample_description_extesion` → `print_sample_description_extension`) and restricted `box_add_to_extension_list` and `box_get_entry` in `core/box.c` from undeclared external linkage to `static`.
 
 ### 3.7 `v2.23.0`: `codecs/` & `importer/` Symbol Naming Unification, FLAC-in-ISOBMFF (`fLaC`/`dfLa`), Chimera Architecture Documentation & Box Reader Hardening
 - **Full `codecs/` & `importer/` Symbol Naming Unification (`lsm_<filename>_*` / `static <filename>_*`) & `static inline` Audit**:

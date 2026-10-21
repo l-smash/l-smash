@@ -191,3 +191,18 @@ L-SMASH follows strict semantic-like C library versioning defined by macros in t
 ### 6.2 Strict Commit Discipline for Version Bumps
 - **Code Change Commits Only**: Macro version updates in `lsmash.h` must take place directly within the code change commit (`feat`, `fix`, `refactor`, or `build`) that introduces the relevant feature, bug fix, or architecture change.
 - **Prohibition on `docs` and `test` Commits**: Version macros must **never** be modified in pure documentation (`docs(...)`) or test (`test(...)`) commits. Commits labeled `docs` or `test` must strictly contain only documentation or test files.
+
+
+---
+
+## 7. Markdown Documentation Rules
+
+These invariants apply to `README.md`, `USAGE.md`, `SPEC.md`, and `docs/**/*.md`.
+
+### 7.1 No LaTeX Math Blocks
+- Do not use LaTeX math notation (`$...$` or `$$...$$`) in Markdown documents.
+- Renderers such as GitHub and KaTeX interpret escapes differently (for example, `_` inside `\text{...}` causing syntax errors, or `&`, `->`, `<<`, `>>` being interfered with by HTML entity conversion), and the raw text becomes hard to read in plain-text viewers.
+
+### 7.2 Standard Alternative Notation
+- Write address calculations, bit operations, conditional expressions (formerly `cases` blocks), and structure layouts in C code blocks (` ```c `) or inline code (`` `...` ``).
+- Write complexity orders (`O(1)`, `O(N)`), mathematical functions (`floor(log2(n))`), units, and arrows as inline code or standard plain text.

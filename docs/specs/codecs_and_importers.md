@@ -92,7 +92,7 @@ NALU-based video codecs encapsulate variable-length Network Abstraction Layer Un
 ### 2.4 Advanced Sample Grouping & Professional Extensions
 - **Open-GOP (`rap `)**: For video streams containing non-IDR clean random access points (H.264 CRA or HEVC BLA/CRA), L-SMASH tags samples with `ISOM_SAMPLE_RANDOM_ACCESS_FLAG_OPEN_RAP` and emits `VisualRandomAccessEntry` records in the `rap ` Sample Group (`sgpd`/`sbgp`).
 - **Gradual Decoder Refresh (`roll`)**: For streams utilizing recovery point SEI messages, L-SMASH establishes a `'roll'` Sample Group (`AudioRollRecoveryEntry` / `VisualRollRecoveryEntry`) where `roll_distance > 0` indicates the number of frames required to achieve full visual reconstruction.
-- **Dolby Vision (`dvcC` / `dvvC`)**: Parses Dolby Vision RPU headers and serializes `DOVIConfigurationBox` (`dvcC` for Profiles $\le 7$, `dvvC` for Profile 8+) with `dv_version_major/minor`, `dv_profile`, `dv_level`, `rpu_present_flag`, `el_present_flag`, `bl_present_flag`, and `dv_bl_signal_compatibility_id`. Adds the `dby1` compatible brand.
+- **Dolby Vision (`dvcC` / `dvvC`)**: Parses Dolby Vision RPU headers and serializes `DOVIConfigurationBox` (`dvcC` for Profiles ≤ 7, `dvvC` for Profile 8+) with `dv_version_major/minor`, `dv_profile`, `dv_level`, `rpu_present_flag`, `el_present_flag`, `bl_present_flag`, and `dv_bl_signal_compatibility_id`. Adds the `dby1` compatible brand.
 - **Layered HEVC (`lhvC`)**: Serializes `LHEVCConfigurationBox` containing multi-layer parameter set arrays for stereoscopic 3D and multiview video profiles.
 
 ---
@@ -114,8 +114,8 @@ All AV1 variable-length and non-symmetric integer primitives are implemented dir
 2. **`lsm_av1_get_leb128( lsmash_bs_t *bs, uint8_t *Leb128Bytes )` & `lsm_av1_show_leb128(...)`** *(AV1 Spec Section 4.10.5)*:
    - Reads up to 8 bytes, shifting each 7-bit group as `(uint64_t)(leb128_byte & 0x7F) << (i * 7)`.
    - Enforces the AV1 constraint that `value <= (1ULL << 32) - 1` (`UINT32_MAX`) and `Leb128Bytes <= 8`; on violation or unexpected EOF, sets `*Leb128Bytes = 0` and returns `UINT64_MAX`.
-3. **`lsm_av1_get_su( lsmash_bits_t *bits, unsigned int n )`** *(AV1 Spec Section 4.10.6)*: Reads an $n$-bit signed two's-complement integer using `uint64_t signMask = 1ULL << (n - 1)`.
-4. **`lsm_av1_get_ns( lsmash_bits_t *bits, unsigned int n )`** *(AV1 Spec Section 4.10.7)*: Reads a non-symmetric unsigned integer in $[0, n - 1]$ using $w = \lfloor\log_2(n)\rfloor + 1$ and $m = 2^w - n$.
+3. **`lsm_av1_get_su( lsmash_bits_t *bits, unsigned int n )`** *(AV1 Spec Section 4.10.6)*: Reads an n-bit signed two's-complement integer using `uint64_t signMask = 1ULL << (n - 1)`.
+4. **`lsm_av1_get_ns( lsmash_bits_t *bits, unsigned int n )`** *(AV1 Spec Section 4.10.7)*: Reads a non-symmetric unsigned integer in `[0, n - 1]` using `w = floor(log2(n)) + 1` and `m = 2^w - n`.
 
 ### 3.2 Sequence Header & `av1C` Configuration
 `lsm_av1_parse_sequence_header()` parses `sequence_header_obu()` into `av1_sequence_header_t`:
@@ -220,7 +220,12 @@ Imports raw MPEG-4 Audio Lossless Coding (ALS) streams, verifies ALS frame heade
 ### 5.4 MPEG-1/2 Audio Layer III / MP3 (`importer/mp3_imp.c`)
 - **Frame Sync**: Locks onto sync words (`0xFFE` / `0xFFF`), decoding MPEG audio version (MPEG-1, MPEG-2, MPEG-2.5), layer, bitrate index, sample rate index, and padding bit.
 - **Frame Sizing**:
-  $$\text{frame\_size} = \begin{cases} \left\lfloor \frac{144 \times \text{bitrate}}{\text{samplerate}} \right\rfloor + \text{padding} & \text{(MPEG-1, 1152 samples/frame)} \\ \left\lfloor \frac{72 \times \text{bitrate}}{\text{samplerate}} \right\rfloor + \text{padding} & \text{(MPEG-2 / 2.5, 576 samples/frame)} \end{cases}$$
+  ```c
+  /* MPEG-1 (1152 samples/frame) */
+  frame_size = (144 * bitrate) / samplerate + padding;
+  /* MPEG-2 / 2.5 (576 samples/frame) */
+  frame_size = (72 * bitrate) / samplerate + padding;
+  ```
 - **Container Placement**: Encapsulates into ISOBMFF `mp4a` + `esds` (`objectTypeIndication = 0x6B`) or QuickTime `.mp3` sample entries.
 
 ---
@@ -229,23 +234,23 @@ Imports raw MPEG-4 Audio Lossless Coding (ALS) streams, verifies ALS frame heade
 
 ### 6.1 Dolby AC-3 & Enhanced AC-3 (`codecs/a52.{c,h}`, `importer/a52_imp.c`)
 - **AC-3 (Dolby Digital)**:
-  - Detects sync word `0x0B77`, parsing `fscod` (sampling frequency: $48\text{ kHz}, 44.1\text{ kHz}, 32\text{ kHz}$), `frmsizecod` (frame size and bitrate), `bsid` (bitstream identification), `bsmod` (bitstream mode), `acmod` (audio coding mode: $1/0$ to $3/2$), and `lfeon`.
+  - Detects sync word `0x0B77`, parsing `fscod` (sampling frequency: 48 kHz, 44.1 kHz, 32 kHz), `frmsizecod` (frame size and bitrate), `bsid` (bitstream identification), `bsmod` (bitstream mode), `acmod` (audio coding mode: 1/0 to 3/2), and `lfeon`.
   - Serializes `dac3` (`AC3SpecificBox`, 3 bytes payload) containing `fscod`, `bsid`, `bsmod`, `acmod`, `lfeon`, and `bit_rate_code`.
 - **Enhanced AC-3 (E-AC-3 / Dolby Digital Plus)**:
   - Parses stream types: Type 0 (independent), Type 1 (dependent, channel extension), Type 2 (transcoded).
-  - Evaluates `numblkscod` (blocks per frame: 1, 2, 3, or 6; allowing $256, 512, 768, 1536$ audio samples/frame).
+  - Evaluates `numblkscod` (blocks per frame: 1, 2, 3, or 6; allowing 256, 512, 768, 1536 audio samples/frame).
   - Serializes `dec3` (`EC3SpecificBox`) containing total `data_rate`, number of independent substreams (`num_ind_sub`), and individual substream descriptor entries (`fscod`, `bsid`, `asvc`, `bsmod`, `acmod`, `lfeon`, `num_dep_sub`, `chan_loc`).
 
 ### 6.2 DTS & DTS-HD (`codecs/dts.{c,h}`, `importer/dts_imp.c`)
 - **Core Substream**: Parses 14-bit and 16-bit core sync words (`0x7FFE8001` big-endian, `0x1FFFE800` 14-bit, `0xFE7F0180` little-endian), extracting core sample rate, bit rate, channel arrangement (`AMODE`), and LFE flags.
 - **Extension Substreams**: Identifies DTS-HD extension headers:
-  - `X96k`: $96\text{ kHz}$ sampling rate extension.
+  - `X96k`: 96 kHz sampling rate extension.
   - `XCh`: 6.1 channel extension (discrete back center).
   - `XXCH`: 7.1 channel extension.
   - `XLL`: DTS-HD Master Audio (lossless extension).
   - `LBR`: DTS Express (low bitrate audio).
 - **`ddts` Box Serialization**: Generates `DTSSpecificBox` per ETSI TS 102 114:
-  - `DTSSamplingFrequency`, `maxBitrate`, `avgBitrate`, `pcmSampleDepth`, `FrameDuration` code ($512, 1024, 2048, 4096$).
+  - `DTSSamplingFrequency`, `maxBitrate`, `avgBitrate`, `pcmSampleDepth`, `FrameDuration` code (512, 1024, 2048, 4096).
   - `StreamConstruction` bitmask indicating core and extension presence.
   - `CoreLFEPresent` and `CoreChannelMask`.
 
@@ -259,14 +264,14 @@ Complies with **IETF RFC 6716** and the **Opus-in-ISOBMFF Specification**:
   - `Version = 0` (8 bits)
   - `OutputChannelCount` (8 bits)
   - `PreSkip` (16 bits): encoder delay samples to discard at stream onset.
-  - `InputSampleRate` (32 bits, typically $48000\text{ Hz}$).
-  - `OutputGain` (16 bits, $0\text{ dB} = 0$).
+  - `InputSampleRate` (32 bits, typically 48000 Hz).
+  - `OutputGain` (16 bits, `0 dB = 0`).
   - `ChannelMappingFamily` (8 bits: 0 for mono/stereo; 1 for surround with `StreamCount`, `CoupledCount`, and channel mapping matrix).
 - **Pre-Roll Specification (`'roll'` vs. `'prol'`)**:
   - In ISO/IEC 14496-12, **`'roll'` (`AudioRollRecoveryEntry` / `VisualRollRecoveryEntry`)** carries a `signed int(16) roll_distance`:
     - Positive values (`> 0`) indicate *post-roll*.
     - Negative values (`< 0`) indicate **pre-roll**.
-  - **Opus Binding**: Every Opus sample is random-access capable (no `stss` Sync Sample box is present). Opus-in-ISOBMFF Section 4.4 specifies that pre-roll shall be signaled using **`'roll'` with a negative `roll_distance`** (typically representing 80 ms, or $-3840$ samples @ $48\text{ kHz}$), combined with an Edit List (`elst`) to skip the `PreSkip` / delay samples.
+  - **Opus Binding**: Every Opus sample is random-access capable (no `stss` Sync Sample box is present). Opus-in-ISOBMFF Section 4.4 specifies that pre-roll shall be signaled using **`'roll'` with a negative `roll_distance`** (typically representing 80 ms, or -3840 samples @ 48 kHz), combined with an Edit List (`elst`) to skip the `PreSkip` / delay samples.
   - **Role of `'prol'` (`AudioPreRollEntry`)**: `'prol'` is designated exclusively for audio codecs where not every sample is a Sync Sample (e.g., Dolby AC-4, MPEG-H 3D Audio / USAC) to describe pre-roll for designated random access recovery points. Opus never uses `'prol'`.
 
 ### 7.2 Xiph FLAC (`codecs/flac.{c,h}`, `importer/flac_imp.c`)
@@ -292,7 +297,7 @@ L-SMASH enforces strict isolation between QuickTime (`.mov`) and ISOBMFF (`.mp4`
 
 ### 8.1 Strict Container Separation
 - **QuickTime (`file->qt_compatible != 0`)**: Uses Apple Sound Description v0/v1/v2 (`lpcm`, `sowt`, `twos`, `in24`, `in32`, `fl32`, `fl64`, `raw `), QuickTime `chan` atoms, and `wave` decompression atoms.
-- **ISOBMFF (`!file->qt_compatible`)**: Uses ISO/IEC 23003-5 `ipcm` (integer PCM) and `fpcm` (IEEE 754 floating-point PCM) sample entries with mandatory `pcmC`, optional ISO/IEC 14496-12 `chnl`, and `AudioSampleEntryV1` + `srat` when sampling rates exceed $65535\text{ Hz}$.
+- **ISOBMFF (`!file->qt_compatible`)**: Uses ISO/IEC 23003-5 `ipcm` (integer PCM) and `fpcm` (IEEE 754 floating-point PCM) sample entries with mandatory `pcmC`, optional ISO/IEC 14496-12 `chnl`, and `AudioSampleEntryV1` + `srat` when sampling rates exceed 65535 Hz.
 
 ### 8.2 ISOBMFF Box Syntax
 1. **`pcmC` (`PCMConfigBox`, ISO/IEC 23003-5 Section 5.2)**:
@@ -305,11 +310,11 @@ L-SMASH enforces strict isolation between QuickTime (`.mov`) and ISOBMFF (`.mp4`
      - `definedLayout`: ISO/IEC 23091-3 (CICP) ChannelConfiguration index (e.g., 1 = Mono, 2 = Stereo, 6 = 5.1ch, 12 = 7.1ch). When non-zero, followed by 64-bit `omittedChannelsMap`.
      - `positions`: When `definedLayout == 0`, provides an explicit array of `speaker_position`, including `azimuth` and `elevation` when `speaker_position == 126` (`LSMASH_SPEAKER_POSITION_EXPLICIT`).
 3. **`srat` (`SamplingRateBox`, ISO/IEC 14496-12 Section 12.2.3.2)**:
-   - When sampling rate exceeds $65535\text{ Hz}$ (e.g., $88.2\text{ kHz}, 96\text{ kHz}, 192\text{ kHz}$), `AudioSampleEntry` is promoted to `version = 1` (`AudioSampleEntryV1`), setting `samplerate = 1 << 16` and appending `srat` containing the 32-bit `sampling_rate`.
+   - When sampling rate exceeds 65535 Hz (e.g., 88.2 kHz, 96 kHz, 192 kHz), `AudioSampleEntry` is promoted to `version = 1` (`AudioSampleEntryV1`), setting `samplerate = 1 << 16` and appending `srat` containing the 32-bit `sampling_rate`.
 
 ### 8.3 Multi-Track Fragmented ISOBMFF Compaction (`core/fragment.c`)
 - **Multi-Track Interleaving (`data_offset`)**: A `trun` box omits `ISOM_TR_FLAGS_DATA_OFFSET_PRESENT` only when it is the first run of the track fragment AND its `traf` is the last `traf` in `moof`. Interleaved tracks explicitly write `data_offset` to point precisely to sample offsets in `mdat`.
-- **`tfhd` Default Hoisting**: Constant-size, constant-duration LPCM audio ($1\text{ tick/sample}$, constant byte size $\text{channels} \times \frac{\text{sample\_size}}{8}$) hoists duration and size into `tfhd->default_sample_duration` and `tfhd->default_sample_size`, omitting per-sample rows (`trun->optional = NULL`).
+- **`tfhd` Default Hoisting**: Constant-size, constant-duration LPCM audio (1 tick/sample, constant byte size `channels * (sample_size / 8)`) hoists duration and size into `tfhd->default_sample_duration` and `tfhd->default_sample_size`, omitting per-sample rows (`trun->optional = NULL`).
 
 ### 8.4 RIFF WAVE Importer (`importer/wave_imp.c`)
 - **Formats**: Supports `WAVE_FORMAT_PCM` (`0x0001`), `WAVE_FORMAT_IEEE_FLOAT` (`0x0003`), and `WAVE_FORMAT_EXTENSIBLE` (`0xFFFE`).
