@@ -269,6 +269,9 @@ timelineeditor [options] input output
 | `--delay` | `<integer>` | Insert `<integer>` ticks of empty delay before the media presentation via Edit List. |
 | `--dts-compression` | *(none)* | Eliminate initial composition-to-decode delay (`ctts` offset) by shifting DTS and compensating via Edit List. |
 
+> [!WARNING]
+> **`--dts-compression` can break HRD / VBV conformance.** This option squeezes the DTS spacing of the first samples (the same trick once used in the CLI muxer layer of x264) and compensates with an Edit List. A video encoder's rate control (VBV / HRD) assumes frames leave the CPB / VBV buffer at the original, regular DTS spacing. After DTS compression, the decoder must remove data from its buffer *earlier* than the encoder planned, so the buffer model collapses and a **buffer underflow** can occur. This is especially serious for hardware decoders and strict broadcast or streaming profiles. For streams that must stay HRD / VBV conformant, do not use `--dts-compression`, and keep `--skip` / `--delay` edits minimal. See [3.6.1](#361-what-an-edit-list-really-is) for the underlying timeline model.
+
 ---
 
 ## 3. `liblsmash` C API Programming Guide
@@ -491,6 +494,14 @@ sample->prop.ra_flags = is_sync ? ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC
 lsmash_append_sample( root, track_id, sample );
 ```
 
+> [!IMPORTANT]
+> **Ownership and index cheat sheet**
+> - `lsmash_append_sample()`: on **success** ownership of the sample moves to `liblsmash` (never free it). On **failure** the caller must call `lsmash_delete_sample()`.
+> - Indexes (`sample->index`, sample description, edit number, `dref` index, track number from CLI) are **1-based**; `0` is invalid.
+> - `lsmash_flush_pooled_samples( root, track_id, last_sample_delta )` is required at the end because `stts` stores the difference between consecutive DTS values; the last sample's duration is unknown until you provide it.
+> - Pick `timescale` so that every frame / audio-frame duration is an integer (audio: sampling rate; video: e.g. 30000 for 29.97 fps with delta 1001).
+> - Raw stream vs. MP4 sample: strip Annex-B start codes and prefix each NAL unit with its length; strip ADTS headers; codec-specific data goes in `STRUCTURED` form (via `lsmash_set_codec_specific_data` with parsed structures) or `UNSTRUCTURED` (raw `avcC`/`esds` payload).
+
 #### Standard Movie Finalization
 After appending all samples to each track, flush the internal sample pool and finalize the movie:
 
@@ -654,6 +665,56 @@ lsmash_create_explicit_timeline_map( root, track_ID, gap ); /* an empty edit mus
 ```
 
 `lsmash_count_explicit_timeline_map()`, `lsmash_get_explicit_timeline_map()` and `lsmash_modify_explicit_timeline_map()` inspect and change edits by 1-based edit number. `lsmash_delete_explicit_timeline_map()` removes all edits of a track.
+
+#### 3.6.1 What an Edit List Really Is
+The name is literal: an **Edit List** is a list of *edits* in the editing sense. It was designed in QuickTime / ISOBMFF as a **non-destructive cut-editing mechanism**: without re-encoding or rewriting any media data on the Media Timeline, it picks arbitrary ranges (`start_time`, `duration`), optionally at another speed (`media_rate`) or as a gap (Empty Edit, `start_time = -1`), and lines them up on the Presentation Timeline.
+
+Many developers regard it as a charm for fixing A/V sync. Common uses are only special cases of the same cut-and-paste model: correcting the initial CTS offset of video, or skipping audio encoder delay (priming samples), both mean "cut the Media Timeline from a later point and paste it at Presentation time `0`".
+
+```
+Media Timeline (mdhd.timescale)         Presentation Timeline (mvhd.timescale)
+ 0    1024                     N
+ |-----|=======================|          Edit #1: empty, duration = D
+ priming   kept range                      Edit #2: start_time = 1024
+ (skipped)    \                            0     D
+               \  elst                     |-----|=======================|
+                +------------------------>  gap   kept range (rate 1.0)
+```
+
+#### 3.6.2 Dual Timelines and `cslg`
+```
+Presentation Timeline  (mvhd.timescale)   what the user sees; edits (elst) map into it
+        ^
+        | elst: Media Timeline -> Presentation Timeline
+        |
+Media Timeline         (mdhd.timescale)   per-track clock
+   +-- Decoding Timeline     DT  (stts)   when each sample is decoded
+   +-- Composition Timeline  CT  (ctts)   when each sample is shown;  CT = DT + offset
+```
+With B-frames, CT can become smaller than DT. To avoid negative offsets the Composition Timeline is shifted later, and the shift is declared by `cslg` (CompositionToDecodeBox: `compositionToDTSShift`, `leastDecodeToDisplayDelta`, and so on).
+
+```
+ DT : 0   1   2   3        without shift: CT(0) = -1  (negative, not allowed in version 0 ctts)
+ CT :-1   2   0   1
+ CT': 0   3   1   2        shifted by +1, declared by cslg  -> first CT' = 1 > 0 after shift
+```
+
+#### 3.6.3 No Edit List: the Implicit 1:1 Mapping and the Undefined Origin
+Without an Edit List, the two timelines map 1:1, but the standard does **not define which Media Timeline point corresponds to Presentation `0`**. If the first sample has `CT > 0` and no Edit List exists, players legitimately differ:
+
+```
+Media Timeline:      0     CT0=2002(first sample)
+                     |......|======== video ========
+Player A (QuickTime Player etc.): Media 0 -> Presentation 0
+Presentation:        0......|======== video ========   initial delay of CT0 (A/V offset)
+Player B (others):   first CT -> Presentation 0
+Presentation:        0======== video ========         no delay
+```
+Both behaviours are valid per the specification. To make every player present at the same timing, write an explicit Edit List (`start_time = CT0`, which maps the first sample to Presentation `0`).
+
+#### 3.6.4 Warning: Edit Lists and the Decoder Buffer (HRD / VBV)
+An Edit List only defines *which interval is shown*. It knows nothing about when the decoder reads the bitstream or removes frames from the CPB / VBV buffer. Skipping leading frames or splicing several ranges with careless edits forces the decoder to decode all preceding reference frames at once before the Presentation start time, which can cause **buffer underflow** and stutter. For the same reason, `--dts-compression` (see 2.4) can invalidate the encoder's HRD / VBV model. Keep edits minimal and start on a random access point for streams that must stay buffer-conformant.
+
 
 #### Chapters and Container Metadata
 ```c
