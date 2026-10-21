@@ -164,7 +164,7 @@ Building `all` (the default target) produces four command-line utilities in `cli
 ./cli/timelineeditor --track 1 --timecode timecodes_v2.txt movie.mp4 movie_vfr.mp4
 ```
 
-For the complete CLI option reference and the `liblsmash` C API programming manual, see **[`USAGE.md`](USAGE.md)**.
+For the complete CLI option reference and the `liblsmash` C API programming manual, see **[`USAGE.md`](USAGE.md)**: start with its [Quick Start & Tool Overview](USAGE.md#1-quick-start--tool-overview), and see the [C API Mental Model](USAGE.md#mental-model-workflow-and-object-hierarchy) if you program against `liblsmash`.
 
 ---
 
@@ -172,7 +172,7 @@ For the complete CLI option reference and the `liblsmash` C API programming manu
 
 | Document | Contents |
 | :--- | :--- |
-| **[`USAGE.md`](USAGE.md)** | Complete user guide for `muxer`, `remuxer`, `boxdumper`, and `timelineeditor`, plus the **`liblsmash` C API Programming Manual** with end-to-end code examples. |
+| **[`USAGE.md`](USAGE.md)** | Quick Start, complete user guide for `muxer`, `remuxer`, `boxdumper`, and `timelineeditor`, plus the **`liblsmash` C API Programming Manual** with end-to-end code examples. |
 | **[`SPEC.md`](SPEC.md)** | Master Architecture & Specification Index (strict standard compliance principles, `box_default` Sentinel Box Architecture, Dual-List Box ownership, symbol naming conventions, and specification syntax identifier preservation). |
 | **[`docs/CODING_STYLE.md`](docs/CODING_STYLE.md)** | Official C11 coding style, Allman layout conventions, internal header policy, symbol prefixes, and Git contribution guidelines. |
 | **[`docs/HISTORY.md`](docs/HISTORY.md)** | Project history, branch lineage (`master`, `av1`, `vimeo`, `dev`), and architectural evolution. |

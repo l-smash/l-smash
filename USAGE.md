@@ -6,13 +6,17 @@ This manual provides a comprehensive guide to the **L-SMASH** command-line utili
 
 ## Table of Contents
 
-1. [Core Design Principles](#1-core-design-principles)
+1. [Quick Start & Tool Overview](#1-quick-start--tool-overview)
+   - [1.1 Which Tool Do I Use?](#11-which-tool-do-i-use)
+   - [1.2 One-Minute Recipes](#12-one-minute-recipes)
 2. [Command-Line Tools (`cli/`)](#2-command-line-tools-cli)
    - [2.1 `muxer` — Elementary Stream Multiplexer](#21-muxer--elementary-stream-multiplexer)
    - [2.2 `remuxer` — Container Remultiplexer & Fragmenter](#22-remuxer--container-remultiplexer--fragmenter)
    - [2.3 `boxdumper` — Box Hierarchy, Timestamp & Chapter Inspector](#23-boxdumper--box-hierarchy-timestamp--chapter-inspector)
    - [2.4 `timelineeditor` — VFR Timecode & Edit List Editor](#24-timelineeditor--vfr-timecode--edit-list-editor)
+   - [2.5 CLI Concepts for Non-Experts and Text-File Examples](#25-cli-concepts-for-non-experts-and-text-file-examples)
 3. [`liblsmash` C API Programming Guide](#3-liblsmash-c-api-programming-guide)
+   - [Mental Model: Workflow and Object Hierarchy](#mental-model-workflow-and-object-hierarchy)
    - [3.1 Core Lifecycle: Root, File Parameters & Movie Setup](#31-core-lifecycle-root-file-parameters--movie-setup)
    - [3.2 Track & Media Creation (`trak`, `tkhd`, `mdia`, `mdhd`)](#32-track--media-creation-trak-tkhd-mdia-mdhd)
    - [3.3 Video Sample Entry Setup (H.264/AVC, HEVC, AV1)](#33-video-sample-entry-setup-h264avc-hevc-av1)
@@ -20,70 +24,42 @@ This manual provides a comprehensive guide to the **L-SMASH** command-line utili
    - [3.5 Standard, Fragmented & Segmented Multiplexing](#35-standard-fragmented--segmented-multiplexing)
    - [3.6 Edit Lists, Chapters & Container Metadata](#36-edit-lists-chapters--container-metadata)
    - [3.7 Demultiplexing & Media Timeline Reconstruction](#37-demultiplexing--media-timeline-reconstruction)
-   - [3.8 Complete End-to-End C API Example](#38-complete-end-to-end-c-api-example)
+   - [3.8 External Data References (`dref`)](#38-external-data-references-dref)
+   - [3.9 Complete End-to-End C API Example](#39-complete-end-to-end-c-api-example)
+4. [Container Architecture & Supported Formats Reference](#4-container-architecture--supported-formats-reference)
+   - [4.1 Strict Compliance with International Standards](#41-strict-compliance-with-international-standards)
+   - [4.2 Architectural Separation of ISOBMFF and QTFF](#42-architectural-separation-of-isobmff-and-qtff)
+   - [4.3 Supported Codecs, Timed Text, Sample Entry Extensions & Metadata](#43-supported-codecs-timed-text-sample-entry-extensions--metadata)
 
 ---
 
-## 1. Core Design Principles
+## 1. Quick Start & Tool Overview
 
-### 1.1 Strict Compliance with International Standards
-L-SMASH enforces strict compliance with the specifications governing each container family:
-- **ISO/IEC 14496-12 (ISOBMFF)** and **Apple QuickTime File Format (QTFF)** share common historical roots (`ftyp`, `moov`, `trak`, `mdia`, `minf`, `stbl`), yet diverge significantly in their Sample Description (`stsd`), Channel Layout, Pixel Aspect Ratio / Clean Aperture, and Audio Sample Entry binary layouts.
-- L-SMASH **never mixes QTFF-only atoms or fields into ISOBMFF files**, nor ISOBMFF-only boxes into QuickTime `.mov` files.
+### 1.1 Which Tool Do I Use?
 
-### 1.2 Architectural Separation of ISOBMFF and QTFF
-The two standards are never mixed, on either the video side or the audio side. Each file is written entirely in the vocabulary of one family.
-
-#### Video
-| Aspect | ISOBMFF (`.mp4`, Fragmented MP4) | QTFF (`.mov`) |
+| I want to... | Use | Section |
 | :--- | :--- | :--- |
-| Colour space (`colr`) | `nclx` (explicit primaries / transfer / matrix / full-range flag) | `nclc` (primaries / transfer / matrix only) |
-| Clean aperture | `clap` in the sample entry | `clap` in the sample entry, plus track-level `tapt` containing `clef` / `prof` / `enof` |
-| Pixel aspect ratio | `pasp` | `pasp` |
+| Turn raw streams (H.264, HEVC, AV1, AAC, WAVE, ...) into an `.mp4` / `.mov` / `.m4a` | `muxer` | [2.1](#21-muxer--elementary-stream-multiplexer) |
+| Convert an existing file: drop tracks, trim at a keyframe, make fragmented MP4 / DASH segments | `remuxer` | [2.2](#22-remuxer--container-remultiplexer--fragmenter) |
+| Look inside a file (Box tree, DTS/CTS, chapters) | `boxdumper` | [2.3](#23-boxdumper--box-hierarchy-timestamp--chapter-inspector) |
+| Apply a VFR timecode file, or change skip / delay / timescales of one track without re-encoding | `timelineeditor` | [2.4](#24-timelineeditor--vfr-timecode--edit-list-editor) |
+| Read or write MP4 / MOV from your own C/C++ program | `liblsmash` | [3](#3-liblsmash-c-api-programming-guide) |
 
-- `tapt` / `clef` / `prof` / `enof` and `nclc` are QTFF-only and are not emitted into ISOBMFF files. `nclx` is not emitted into QuickTime files.
+### 1.2 One-Minute Recipes
+```sh
+# 1. H.264 + AAC into a web-friendly MP4 (moov placed first so playback starts while downloading)
+./cli/muxer -i video.h264?fps=30000/1001 -i audio.aac?language=eng --optimize-pd -o movie.mp4
 
-#### Audio
-Uncompressed Linear PCM (LPCM) audio and high-sampling-rate signaling show the same boundary:
-- **In ISOBMFF (`.mp4`, `.m4a`, Fragmented MP4)**:
-  - Uncompressed LPCM uses **ISO/IEC 23003-5** (`ipcm` for 16/24/32-bit integer PCM, `fpcm` for 32/64-bit IEEE 754 floating-point PCM) paired with a mandatory **`pcmC`** (`PCMConfigBox`) specifying endianness and bit depth.
-  - Multichannel speaker arrangements use **ISO/IEC 14496-12 `chnl`** (`ChannelLayout`), and sampling rates exceeding 65535 Hz (such as 88.2 kHz, 96 kHz, or 192 kHz) use ISOBMFF **`AudioSampleEntryV1`** (`stsd` version 1) with an **`srat`** (`SamplingRateBox`).
-- **In QuickTime (`.mov`)**:
-  - Uncompressed LPCM uses Apple QuickTime Sound Description v0/v1/v2 (`lpcm`, `sowt`, `twos`, `in24`, `in32`, `fl32`, `fl64`, `raw `) and QuickTime `chan` / `wave` atoms.
+# 2. Make a fragmented MP4 (2-second fragments) from an existing MP4
+./cli/remuxer -i movie.mp4 --fragment 1 --min-frag-duration 2.0 -o movie_frag.mp4
 
-### 1.3 Supported Codecs, Timed Text, Sample Entry Extensions & Metadata
+# 3. See what is inside a file: Box tree to stdout
+./cli/boxdumper movie.mp4
 
-#### Video Codecs
-- **AOM AV1 (`av01` + `av1C`)** — AOM AV1 Bitstream v1.0.0 Errata 1 & AV1-ISOBMFF v1.2.0 (*Summary Construct / Raw `.ivf` Importer / Media Demux*)
-- **ITU-T H.264 / MPEG-4 AVC (`avc1`–`avc4`, `avcp` + `avcC`, `btrt`)** — ISO/IEC 14496-10 & ISO/IEC 14496-15 (*Summary Construct / Raw Annex-B Importer / Media Demux*)
-- **ITU-T H.265 / MPEG-H HEVC (`hvc1`, `hev1` + `hvcC`, `btrt`)** — ISO/IEC 23008-2 & ISO/IEC 14496-15 (*Summary Construct / Raw Annex-B Importer / Media Demux*)
-- **SMPTE VC-1 (`vc-1` + `dvc1`, `btrt`)** — SMPTE 421M & RP 2025 (*Summary Construct / Raw Advanced Profile Importer / Media Demux*)
-- **ISO/IEC 14496-2 MPEG-4 Visual (`mp4v` + `esds`)**, **Apple ProRes (`apch`, `apcn`, `apcs`, `apco`, `ap4h`, `ap4x`)**, **QTFF Uncompressed (`raw `, `2vuy`, `v210`, `v216`, `v308`, `v408`, `v410`, `yuv2`)**, **Dirac (`drac`)**, **Motion JPEG 2000 (`mjp2`)**, **Ut Video (`ULRA`, `ULRG`, `ULY0`, `ULY2`, `ULH0`, `ULH2`, `UQY2`)**, **CineForm (`CFHD`)** (*Summary Construct / Media Demux*)
-
-#### Audio Codecs
-- **Xiph FLAC (`fLaC` + `dfLa`)** — IETF RFC 9639 & FLAC-in-ISOBMFF (*Summary Construct / Raw `.flac` Importer / Media Demux*)
-- **MPEG-4 Audio (`mp4a` + `esds` / `wave`, `als `)** — ISO/IEC 14496-3 AAC-LC, HE-AAC v1/v2 (SBR/PS), MPEG-4 ALS (*Summary Construct / Raw ADTS `.aac` & `.als` Importers / Media Demux*)
-- **IETF Opus (`Opus` + `dOps`)** — IETF RFC 6716 & Opus-in-ISOBMFF with `'roll'` (`AudioRollRecoveryEntry`) pre-roll sample grouping and encoder-delay Edit List mapping (*Summary Construct / Media Demux*)
-- **Dolby AC-3 (`ac-3` + `dac3`) & Enhanced AC-3 (`ec-3` + `dec3`)** — ATSC A/52 & ETSI TS 102 366 Annex F (*Summary Construct / Raw `.ac3` & `.eac3` Importers / Media Demux*)
-- **Apple Lossless (`alac` + `alac` / `wave`)** — ALAC in ISOBMFF & QTFF (*Summary Construct / Media Demux*)
-- **DTS & DTS-HD (`dtsc`, `dtsh`, `dtse`, `dtsl`, `dtsx` + `ddts`)** — ETSI TS 102 114 (*Summary Construct / Raw `.dts` & `.dtshd` Importers / Media Demux*)
-- **ISOBMFF Uncompressed LPCM (`ipcm`, `fpcm` + `pcmC`)** — ISO/IEC 23003-5 & ISO/IEC 14496-12 (*Summary Construct / Raw `.wav` Importer / Media Demux*)
-- **QTFF Uncompressed LPCM (`lpcm`, `sowt`, `twos`, `raw `, `in24`, `in32`, `fl32`, `fl64`)** — Apple QuickTime Sound Description v0/v1/v2 (*Summary Construct / Raw `.wav` Importer / Media Demux*)
-- **3GPP AMR-NB / AMR-WB (`samr`, `sawb` + `damr`)**, **MPEG-1/2 Layer III (`mp4a` / `.mp3`)**, **Windows Media Audio (`owma` + `wfex`)**
-
-#### Timed Text & Subtitles
-- **3GPP Timed Text (`tx3g` + `ftab`)** — 3GPP TS 26.245 / ISO/IEC 14496-12 Timed Text sample entry and Font Table Box (*Summary Construct / Reference Chapter Track / Media Demux*)
-- **QuickTime Text Media (`text`)** — Apple QuickTime Text sample entry under `gmhd`/`gmin`/`text` (*Summary Construct / Reference Chapter Track / Media Demux*)
-
-#### Sample Entry Extensions, HDR, Spatial Media & Metadata
-- **HDR, Color & Mastering**: Color Parameter Box `colr` (`nclx` in ISOBMFF, `nclc` in QTFF), Mastering Display Color Volume (`mdcv`), Content Light Level Information (`clli`), Dolby Vision Configuration (`dvcC`, `dvvC`), Layered HEVC Configuration (`lhvC`), and QTFF `gama`, `fiel`, `cspc`, `sgbt`.
-- **Aperture & Pixel Aspect Ratio**: Clean Aperture (`clap`), Pixel Aspect Ratio (`pasp`), and QuickTime Track Aperture Mode Dimensions (`tapt` / `clef` / `prof` / `enof`).
-- **Spatial Video & Stereoscopic 3D**: Google Spherical Video v2 (`st3d`, `sv3d` / `svhd` / `proj` / `prhd` / `equi` / `cbmp` / `prji`) and Apple Spatial Video (`vexu` / `eyes` / `must` / `stri` / `hero` / `cams` / `blin` / `cmfy` / `dadj`, `hfov`).
-- **Spatial Audio & Channel Layout**: Google Spatial Audio Ambisonics (`SA3D`), QuickTime Audio Channel Layout (`chan`), ISO/IEC 14496-12 `chnl` (`ChannelLayout`) and `srat` (`SamplingRateBox`), and ISO/IEC 23003-5 `pcmC` (`PCMConfigBox`).
-- **Container Metadata & Chapters**:
-  1. **Apple iTunes Metadata (`moov.udta.meta.ilst`) & QuickTime Metadata (`meta` / `keys` / `ilst`)**: Container-level key-value metadata tags (title, artist, album, encoder, custom `----` `mean`/`name`/`data` items).
-  2. **QuickTime / iTunes Reference Chapter Tracks (`tref.chap`)**: A dedicated timed text track (`text` or `tx3g`) referenced from the media track via a `'chap'` Track Reference Box (`tref`), enabled via `--chapter` + `--chapter-track`.
-  3. **Nero Chapter List (`moov.udta.chpl`)**: A table-based chapter list box stored inside `moov.udta` for `.mp4`/`.m4v`/`.m4a` files, enabled via `--chapter` (and optional `--chpl-with-bom`).
+# 4. Apply per-frame timestamps (VFR) from a timecode v2 file to track 1
+./cli/timelineeditor --track 1 --timecode timecodes.txt movie.mp4 movie_vfr.mp4
+```
+See [2.5](#25-cli-concepts-for-non-experts-and-text-file-examples) for what `--optimize-pd`, `encoder-delay` and `--shift-timeline` mean and for the chapter / timecode file formats.
 
 ---
 
@@ -266,17 +242,78 @@ timelineeditor [options] input output
 | `--Media-timescale` | `<integer>` | Specify new media timescale (`mdhd.timescale`) and rescale existing timestamps after applying edits. |
 | `--movie-timescale` | `<integer>` | Specify new movie timescale (`mvhd.timescale`). |
 | `--skip` | `<integer>` | Skip `<integer>` ticks from the start of the media presentation via Edit List. |
-| `--delay` | `<integer>` | Insert `<integer>` ticks of empty delay before the media presentation via Edit List. |
+| `--delay` | `<integer>` | Insert `<integer>` ticks of empty delay before the media presentation via Edit List (ticks are in the movie timescale; see [3.6.5](#365-empty-edit-and-movie-timescale-precision-the-sample-accuracy-trap)). |
 | `--dts-compression` | *(none)* | Eliminate initial composition-to-decode delay (`ctts` offset) by shifting DTS and compensating via Edit List. |
 
 > [!WARNING]
 > **`--dts-compression` can break HRD / VBV conformance.** This option squeezes the DTS spacing of the first samples (the same trick once used in the CLI muxer layer of x264) and compensates with an Edit List. A video encoder's rate control (VBV / HRD) assumes frames leave the CPB / VBV buffer at the original, regular DTS spacing. After DTS compression, the decoder must remove data from its buffer *earlier* than the encoder planned, so the buffer model collapses and a **buffer underflow** can occur. This is especially serious for hardware decoders and strict broadcast or streaming profiles. For streams that must stay HRD / VBV conformant, do not use `--dts-compression`, and keep `--skip` / `--delay` edits minimal. See [3.6.1](#361-what-an-edit-list-really-is) for the underlying timeline model.
+
+### 2.5 CLI Concepts for Non-Experts and Text-File Examples
+
+- **`--optimize-pd` (FastStart / progressive download)**: A normal MP4 stores the index (`moov`) after the media data (`mdat`), so a player must fetch the whole file before it can start. `--optimize-pd` moves `moov` to the front so playback can start while the file is still downloading or streaming.
+- **`encoder-delay=<n>`**: Lossy audio encoders (such as AAC) emit `n` priming samples of silence at the start. This option writes an Edit List that skips them so audio and video stay in sync (see [3.6.1](#361-what-an-edit-list-really-is)).
+- **`--shift-timeline`**: With B-frames the first frame's display time can be earlier than its decode time (negative offset). This option shifts the composition timeline later (negative `ctts` version 1 offsets or an Edit List) so that it never starts below zero (see [3.6.2](#362-dual-timelines-and-cslg)).
+- **Delay precision**: `--delay` creates an Empty Edit whose length is counted in the *movie timescale*. See [3.6.5](#365-empty-edit-and-movie-timescale-precision-the-sample-accuracy-trap) before using it on audio.
+
+#### Chapter file for `--chapter` (Ogg / OGM style)
+```text
+CHAPTER01=00:00:00.000
+CHAPTER01NAME=Opening
+CHAPTER02=00:03:25.500
+CHAPTER02NAME=Main Story
+```
+Each chapter is a pair of lines: a start time (`hh:mm:ss.mmm`) and its name. Use it as `muxer --chapter chapters.txt ...`.
+
+#### Timecode file for `timelineeditor --timecode` (Matroska timecode format v2)
+```text
+# timecode format v2
+0
+41.708
+83.417
+125.125
+```
+The first line is the fixed header. Each following line is the presentation time in milliseconds of one frame, in decoding order, so the file needs exactly one line per frame of the target track.
 
 ---
 
 ## 3. `liblsmash` C API Programming Guide
 
 Include the public header `<lsmash.h>` and link with `-llsmash` (or `pkg-config --cflags --libs liblsmash`).
+
+### Mental Model: Workflow and Object Hierarchy
+
+#### Workflow at a Glance
+
+**Muxing (writing)**
+1. Create the Root and File (`lsmash_create_root`, `lsmash_open_file`, `lsmash_set_file`).
+2. Create the Track and Media (`lsmash_create_track`, `lsmash_set_media_parameters`).
+3. Register Summaries, i.e. Sample Entries with Codec Configuration (`lsmash_add_sample_entry`).
+4. Append Samples in a loop (`lsmash_append_sample`).
+5. Flush, Finish the Movie and Destroy (`lsmash_flush_pooled_samples`, `lsmash_finish_movie`, `lsmash_destroy_root`).
+
+**Demuxing (reading)**
+1. Open the File and read the headers (`lsmash_open_file`, `lsmash_read_file`).
+2. Get Summaries, i.e. codec information (`lsmash_get_summary`).
+3. Construct the Media Timeline and get Samples (`lsmash_construct_timeline`, `lsmash_get_sample_from_media_timeline`).
+4. Destroy the Timeline and close (`lsmash_destroy_root`).
+
+#### Why Are There Several Nested Structures?
+Think of the file as a small hierarchy of clocks and catalogs:
+
+| Level | Box | What it is for a programmer |
+| :--- | :--- | :--- |
+| Movie | `mvhd` | The common clock of the whole file (Movie Timescale = Presentation Timeline). |
+| Track | `tkhd` | The display frame on screen (width / height, enabled flag) plus the Edit List that maps the media onto the Presentation Timeline. |
+| Media | `mdhd` | The clock of one stream (Media Timescale) and its language code. |
+| Summary | `stsd` Sample Entry | A **catalog for initializing the decoder**: resolution, sample rate, and Codec Specific Data such as SPS/PPS or AudioSpecificConfig. |
+
+The catalog is registered first, separately from the frame data. Every frame (`lsmash_sample_t`) then only carries the catalog number, for example `sample->index = 1`.
+
+#### Codec Specific Data: Structured vs. Unstructured
+- `LSMASH_CODEC_SPECIFIC_FORMAT_STRUCTURED`: a C structure (for example `lsmash_h264_specific_parameters_t`) whose fields you can read and write directly.
+- `LSMASH_CODEC_SPECIFIC_FORMAT_UNSTRUCTURED`: the raw bytes of the Box as stored in the file.
+
+When demuxing, `lsmash_convert_codec_specific_format()` converts a codec-specific entry into the format you prefer. See the ownership and index cheat sheet in [3.5](#35-standard-fragmented--segmented-multiplexing) for pointer ownership, 1-based indexes and `lsmash_flush_pooled_samples`.
 
 ### 3.1 Core Lifecycle: Root, File Parameters & Movie Setup
 
@@ -716,6 +753,28 @@ Both behaviours are valid per the specification. To make every player present at
 An Edit List only defines *which interval is shown*. It knows nothing about when the decoder reads the bitstream or removes frames from the CPB / VBV buffer. Skipping leading frames or splicing several ranges with careless edits forces the decoder to decode all preceding reference frames at once before the Presentation start time, which can cause **buffer underflow** and stutter. For the same reason, `--dts-compression` (see 2.4) can invalidate the encoder's HRD / VBV model. Keep edits minimal and start on a random access point for streams that must stay buffer-conformant.
 
 
+#### 3.6.5 Empty Edit and Movie Timescale Precision: the Sample-Accuracy Trap
+In ISOBMFF / QTFF the **Presentation Timeline** and the **Movie Timeline** are the same time axis. Its clock is defined by the Movie Header Box (`mvhd.timescale`, the Movie Timescale).
+
+Each `elst` entry mixes two clocks:
+
+| Field | Meaning | Unit |
+| :--- | :--- | :--- |
+| `start_time` (`media_time`) | where to start cutting inside the media | **`mdhd.timescale`** (Media Timescale of the track) |
+| `duration` (`segment_duration`) | length on the Presentation Timeline | **`mvhd.timescale`** (Movie Timescale) |
+
+Skipping the head of a track (for example AAC `encoder-delay`) uses `start_time`, so it is always **Sample-Accurate**. An **Empty Edit** (`start_time = -1`, `LSMASH_TIMESTAMP_UNDEFINED`) has no media at all: it is a pure Presentation Timeline concept whose only parameter is `duration`. A delay inserted at the head can therefore only be specified in **Movie Timescale** granularity.
+
+If the Movie Timescale is coarser than the audio Media Timescale (or not an integer multiple of it), an Empty Edit cannot delay audio by an exact number of samples, and rounding causes A/V sync drift. Typical cases:
+
+| `mvhd.timescale` | 48 kHz audio | 44.1 kHz audio |
+| :--- | :--- | :--- |
+| `600` (QuickTime tradition, common multiple of 24/25/30/50/60 fps) | 1 tick = 80 samples; only multiples of 80 samples are possible | not divisible; always rounded |
+| `1000` | not divisible (48 samples per tick); always rounded | not divisible |
+| `9000` / `90000` | `90000` is not divisible by 48000; `9000` neither | not divisible |
+
+**Countermeasure:** when you need a Sample-Accurate Empty Edit on audio, set the Movie Timescale equal to the audio Media Timescale (the sampling rate, such as `48000` or `44100`). For audio-only movies (`.m4a` etc.) this is always the right choice, and L-SMASH `muxer` applies it when a single track is output (it resets the movie timescale to that track's media timescale). When audio and video share one file, either choose a Movie Timescale that is an integer multiple of the audio sampling rate, or avoid Empty Edit for the audio and express the offset with `start_time` (skip) instead. With `timelineeditor`, set `--movie-timescale` before `--delay`.
+
 #### Chapters and Container Metadata
 ```c
 /* Nero-style chapter list in moov/udta/chpl, from a Nero/Ogg-style chapter text file (same format as muxer --chapter) */
@@ -1004,3 +1063,66 @@ int main( void )
 ```
 
 For fragmented or segmented output, apply the flag combinations of 3.5 to `param.mode` and replace the sample loop by one `lsmash_create_fragment_movie()` call per fragment.
+
+---
+
+## 4. Container Architecture & Supported Formats Reference
+
+### 4.1 Strict Compliance with International Standards
+L-SMASH enforces strict compliance with the specifications governing each container family:
+- **ISO/IEC 14496-12 (ISOBMFF)** and **Apple QuickTime File Format (QTFF)** share common historical roots (`ftyp`, `moov`, `trak`, `mdia`, `minf`, `stbl`), yet diverge significantly in their Sample Description (`stsd`), Channel Layout, Pixel Aspect Ratio / Clean Aperture, and Audio Sample Entry binary layouts.
+- L-SMASH **never mixes QTFF-only atoms or fields into ISOBMFF files**, nor ISOBMFF-only boxes into QuickTime `.mov` files.
+
+### 4.2 Architectural Separation of ISOBMFF and QTFF
+The two standards are never mixed, on either the video side or the audio side. Each file is written entirely in the vocabulary of one family.
+
+#### Video
+| Aspect | ISOBMFF (`.mp4`, Fragmented MP4) | QTFF (`.mov`) |
+| :--- | :--- | :--- |
+| Colour space (`colr`) | `nclx` (explicit primaries / transfer / matrix / full-range flag) | `nclc` (primaries / transfer / matrix only) |
+| Clean aperture | `clap` in the sample entry | `clap` in the sample entry, plus track-level `tapt` containing `clef` / `prof` / `enof` |
+| Pixel aspect ratio | `pasp` | `pasp` |
+
+- `tapt` / `clef` / `prof` / `enof` and `nclc` are QTFF-only and are not emitted into ISOBMFF files. `nclx` is not emitted into QuickTime files.
+
+#### Audio
+Uncompressed Linear PCM (LPCM) audio and high-sampling-rate signaling show the same boundary:
+- **In ISOBMFF (`.mp4`, `.m4a`, Fragmented MP4)**:
+  - Uncompressed LPCM uses **ISO/IEC 23003-5** (`ipcm` for 16/24/32-bit integer PCM, `fpcm` for 32/64-bit IEEE 754 floating-point PCM) paired with a mandatory **`pcmC`** (`PCMConfigBox`) specifying endianness and bit depth.
+  - Multichannel speaker arrangements use **ISO/IEC 14496-12 `chnl`** (`ChannelLayout`), and sampling rates exceeding 65535 Hz (such as 88.2 kHz, 96 kHz, or 192 kHz) use ISOBMFF **`AudioSampleEntryV1`** (`stsd` version 1) with an **`srat`** (`SamplingRateBox`).
+- **In QuickTime (`.mov`)**:
+  - Uncompressed LPCM uses Apple QuickTime Sound Description v0/v1/v2 (`lpcm`, `sowt`, `twos`, `in24`, `in32`, `fl32`, `fl64`, `raw `) and QuickTime `chan` / `wave` atoms.
+
+### 4.3 Supported Codecs, Timed Text, Sample Entry Extensions & Metadata
+
+#### Video Codecs
+- **AOM AV1 (`av01` + `av1C`)** — AOM AV1 Bitstream v1.0.0 Errata 1 & AV1-ISOBMFF v1.2.0 (*Summary Construct / Raw `.ivf` Importer / Media Demux*)
+- **ITU-T H.264 / MPEG-4 AVC (`avc1`–`avc4`, `avcp` + `avcC`, `btrt`)** — ISO/IEC 14496-10 & ISO/IEC 14496-15 (*Summary Construct / Raw Annex-B Importer / Media Demux*)
+- **ITU-T H.265 / MPEG-H HEVC (`hvc1`, `hev1` + `hvcC`, `btrt`)** — ISO/IEC 23008-2 & ISO/IEC 14496-15 (*Summary Construct / Raw Annex-B Importer / Media Demux*)
+- **SMPTE VC-1 (`vc-1` + `dvc1`, `btrt`)** — SMPTE 421M & RP 2025 (*Summary Construct / Raw Advanced Profile Importer / Media Demux*)
+- **ISO/IEC 14496-2 MPEG-4 Visual (`mp4v` + `esds`)**, **Apple ProRes (`apch`, `apcn`, `apcs`, `apco`, `ap4h`, `ap4x`)**, **QTFF Uncompressed (`raw `, `2vuy`, `v210`, `v216`, `v308`, `v408`, `v410`, `yuv2`)**, **Dirac (`drac`)**, **Motion JPEG 2000 (`mjp2`)**, **Ut Video (`ULRA`, `ULRG`, `ULY0`, `ULY2`, `ULH0`, `ULH2`, `UQY2`)**, **CineForm (`CFHD`)** (*Summary Construct / Media Demux*)
+
+#### Audio Codecs
+- **Xiph FLAC (`fLaC` + `dfLa`)** — IETF RFC 9639 & FLAC-in-ISOBMFF (*Summary Construct / Raw `.flac` Importer / Media Demux*)
+- **MPEG-4 Audio (`mp4a` + `esds` / `wave`, `als `)** — ISO/IEC 14496-3 AAC-LC, HE-AAC v1/v2 (SBR/PS), MPEG-4 ALS (*Summary Construct / Raw ADTS `.aac` & `.als` Importers / Media Demux*)
+- **IETF Opus (`Opus` + `dOps`)** — IETF RFC 6716 & Opus-in-ISOBMFF with `'roll'` (`AudioRollRecoveryEntry`) pre-roll sample grouping and encoder-delay Edit List mapping (*Summary Construct / Media Demux*)
+- **Dolby AC-3 (`ac-3` + `dac3`) & Enhanced AC-3 (`ec-3` + `dec3`)** — ATSC A/52 & ETSI TS 102 366 Annex F (*Summary Construct / Raw `.ac3` & `.eac3` Importers / Media Demux*)
+- **Apple Lossless (`alac` + `alac` / `wave`)** — ALAC in ISOBMFF & QTFF (*Summary Construct / Media Demux*)
+- **DTS & DTS-HD (`dtsc`, `dtsh`, `dtse`, `dtsl`, `dtsx` + `ddts`)** — ETSI TS 102 114 (*Summary Construct / Raw `.dts` & `.dtshd` Importers / Media Demux*)
+- **ISOBMFF Uncompressed LPCM (`ipcm`, `fpcm` + `pcmC`)** — ISO/IEC 23003-5 & ISO/IEC 14496-12 (*Summary Construct / Raw `.wav` Importer / Media Demux*)
+- **QTFF Uncompressed LPCM (`lpcm`, `sowt`, `twos`, `raw `, `in24`, `in32`, `fl32`, `fl64`)** — Apple QuickTime Sound Description v0/v1/v2 (*Summary Construct / Raw `.wav` Importer / Media Demux*)
+- **3GPP AMR-NB / AMR-WB (`samr`, `sawb` + `damr`)**, **MPEG-1/2 Layer III (`mp4a` / `.mp3`)**, **Windows Media Audio (`owma` + `wfex`)**
+
+#### Timed Text & Subtitles
+- **3GPP Timed Text (`tx3g` + `ftab`)** — 3GPP TS 26.245 / ISO/IEC 14496-12 Timed Text sample entry and Font Table Box (*Summary Construct / Reference Chapter Track / Media Demux*)
+- **QuickTime Text Media (`text`)** — Apple QuickTime Text sample entry under `gmhd`/`gmin`/`text` (*Summary Construct / Reference Chapter Track / Media Demux*)
+
+#### Sample Entry Extensions, HDR, Spatial Media & Metadata
+- **HDR, Color & Mastering**: Color Parameter Box `colr` (`nclx` in ISOBMFF, `nclc` in QTFF), Mastering Display Color Volume (`mdcv`), Content Light Level Information (`clli`), Dolby Vision Configuration (`dvcC`, `dvvC`), Layered HEVC Configuration (`lhvC`), and QTFF `gama`, `fiel`, `cspc`, `sgbt`.
+- **Aperture & Pixel Aspect Ratio**: Clean Aperture (`clap`), Pixel Aspect Ratio (`pasp`), and QuickTime Track Aperture Mode Dimensions (`tapt` / `clef` / `prof` / `enof`).
+- **Spatial Video & Stereoscopic 3D**: Google Spherical Video v2 (`st3d`, `sv3d` / `svhd` / `proj` / `prhd` / `equi` / `cbmp` / `prji`) and Apple Spatial Video (`vexu` / `eyes` / `must` / `stri` / `hero` / `cams` / `blin` / `cmfy` / `dadj`, `hfov`).
+- **Spatial Audio & Channel Layout**: Google Spatial Audio Ambisonics (`SA3D`), QuickTime Audio Channel Layout (`chan`), ISO/IEC 14496-12 `chnl` (`ChannelLayout`) and `srat` (`SamplingRateBox`), and ISO/IEC 23003-5 `pcmC` (`PCMConfigBox`).
+- **Container Metadata & Chapters**:
+  1. **Apple iTunes Metadata (`moov.udta.meta.ilst`) & QuickTime Metadata (`meta` / `keys` / `ilst`)**: Container-level key-value metadata tags (title, artist, album, encoder, custom `----` `mean`/`name`/`data` items).
+  2. **QuickTime / iTunes Reference Chapter Tracks (`tref.chap`)**: A dedicated timed text track (`text` or `tx3g`) referenced from the media track via a `'chap'` Track Reference Box (`tref`), enabled via `--chapter` + `--chapter-track`.
+  3. **Nero Chapter List (`moov.udta.chpl`)**: A table-based chapter list box stored inside `moov.udta` for `.mp4`/`.m4v`/`.m4a` files, enabled via `--chapter` (and optional `--chpl-with-bom`).
