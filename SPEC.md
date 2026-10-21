@@ -8,7 +8,7 @@
 L-SMASH is designed around strict compliance with the international standards governing each container and codec format:
 - **Strict Separation of ISOBMFF and QTFF**: Even though ISOBMFF (`mp41`, `mp42`, `isom`, `iso2`–`iso6`) and QuickTime (`qt  `) share the same ancestral box/atom framing, their semantics, sample entry layouts, channel layout descriptors, and parameter boxes differ significantly. L-SMASH never conflates QTFF-only constructs with ISOBMFF constructs, and refuses to generate non-conformant, cross-polluted container structures.
 - **No Unstandardized Extensions in Pure ISOBMFF**: Proprietary QuickTime Sound Description v1/v2 fields (`lpcm` flags, `chan` atoms, `wave` decompression atoms) are restricted to QuickTime compatibility modes (`file->qt_compatible`). Pure ISOBMFF files use standardized ISO/IEC 14496-12 and ISO/IEC 23003-5 constructs (`ipcm`, `fpcm`, `pcmC`, `chnl`, `srat`, `AudioSampleEntryV1`).
-- **Zero External Runtime Dependencies**: All container and elementary stream parsers (including H.264/AVC, H.265/HEVC, AOM AV1 OBU, SMPTE VC-1, AAC/ADTS, AC-3/E-AC-3, DTS, and WAVE/LPCM) are self-contained in standard C99 (`common/`, `core/`, `codecs/`, `importer/`).
+- **Zero External Runtime Dependencies**: All container and elementary stream parsers (including H.264/AVC, H.265/HEVC, AOM AV1 OBU, SMPTE VC-1, AAC/ADTS, Xiph FLAC, AC-3/E-AC-3, DTS, and WAVE/LPCM) are self-contained in standard C99 (`common/`, `core/`, `codecs/`, `importer/`).
 
 ---
 
@@ -87,7 +87,10 @@ Detailed specifications for each major subsystem reside in `docs/specs/` and are
    - Built-in C99 memory auditor (`-DLSMASH_DEBUG_ALLOC`) with `#ptr`/`#size` expression capture, 64-byte aligned headers, front/rear canaries, `0xCD`/`0xDD` memory poisoning, and leak verification.
    - Hybrid container model: `lsmash_entry_list_t` doubly-linked pointer lists for polymorphic Box trees (`extensions`, `trak_list`, `moof_list`) paired with **`lsm_list_t` C99 Paged Block Arrays** ($2^8 = 256$ elements per page) for high-volume sample tables (`stts`, `ctts`, `stsz`, `stz2`, `stss`, `stps`, `sdtp`, `stsc`, `stco`/`co64`, `sgpd`, `sbgp`, `elst`), fragment tables (`trun->optional`, `tfra`, `sidx`, `fragment->pool`), and media timelines (`info_list`, `bunch_list`, `chunk_list`).
 4. **Core Container Engine Module Architecture (`core/stbl.{c,h}`, `core/sample.{c,h}`, `core/track.{c,h}`, `core/movie.{c,h}`)**:
-   - Section 6 below specifies the four-module architecture of the core container engine organized by ISOBMFF logical hierarchy (`stbl`, `sample`, `track`, `movie`), replacing the monolithic `core/isom.c` compilation unit.
+   - Section 6 below specifies the four-module architecture of the core container engine organized by ISOBMFF logical hierarchy (`stbl`, `sample`, `track`, `movie`), replacing the monolithic `core/isom.c` compilation unit, together with the unified symbol naming across `core/`, `codecs/`, and `importer/`.
+5. **Xiph FLAC (`fLaC` / `dfLa`) & Box Reader Hardening (`codecs/flac.{c,h}`, `importer/flac_imp.c`, `core/read.c`)**:
+   - Full RFC 9639 and FLAC-in-ISOBMFF encapsulation (`fLaC` Sample Entry and `dfLa` `FLACSpecificBox` containing `STREAMINFO` and metadata blocks), table-driven CRC-8 frame header verification, variable/fixed block size timestamp accumulation, and raw `.flac` stream reconstruction on demultiplexing.
+   - Box reader hardening in `core/read.c` enforcing `ISOM_MAX_BOX_NESTING_LEVEL` (64 levels), child box boundary checks against remaining parent box bytes, and integer overflow guards.
 
 ---
 
@@ -95,11 +98,11 @@ Detailed specifications for each major subsystem reside in `docs/specs/` and are
 
 | Document | Scope & Responsibility | Status |
 | :--- | :--- | :--- |
-| [`docs/HISTORY.md`](docs/HISTORY.md) | Historical lineage (`master`, `av1`, `vimeo`, `dev`), forensic bug analysis, and release changelog | Synchronized (`v2.22.0`) |
-| [`docs/specs/memory_architecture.md`](docs/specs/memory_architecture.md) | C99 memory audit (`LSMASH_DEBUG_ALLOC`), `lsmash_multiple_buffers_t` resize invariants, and `lsm_list_t` Paged Block Array architecture | Synchronized (`v2.22.0`) |
-| [`docs/specs/av1_obuparse_removal.md`](docs/specs/av1_obuparse_removal.md) | Built-in AV1 OBU parser (`codecs/av1.{c,h}`), Errata 1 & AV1-ISOBMFF v1.2.0 compliance, and IVF importer | Synchronized (`v2.22.0`) |
-| [`docs/specs/lpcm_isobmff_fragmented.md`](docs/specs/lpcm_isobmff_fragmented.md) | ISO/IEC 23003-5 (`ipcm`, `fpcm`, `pcmC`), ISO/IEC 14496-12 (`chnl`, `srat`, `AudioSampleEntryV1`), and Fragmented LPCM | Synchronized (`v2.22.0`) |
-| [`docs/specs/testing_strategy.md`](docs/specs/testing_strategy.md) | Self-contained synthetic test suite (`make test`), bitstream generators, malformed box negative tests, and regression suites | Synchronized (`v2.22.0`) |
+| [`docs/HISTORY.md`](docs/HISTORY.md) | Historical lineage (`master`, `av1`, `vimeo`, `dev`), forensic bug analysis, and release changelog | Synchronized (`v2.23.0`) |
+| [`docs/specs/memory_architecture.md`](docs/specs/memory_architecture.md) | C99 memory audit (`LSMASH_DEBUG_ALLOC`), `lsmash_multiple_buffers_t` resize invariants, and `lsm_list_t` Paged Block Array architecture | Synchronized (`v2.23.0`) |
+| [`docs/specs/av1_obuparse_removal.md`](docs/specs/av1_obuparse_removal.md) | Built-in AV1 OBU parser (`codecs/av1.{c,h}`), Errata 1 & AV1-ISOBMFF v1.2.0 compliance, and IVF importer | Synchronized (`v2.23.0`) |
+| [`docs/specs/lpcm_isobmff_fragmented.md`](docs/specs/lpcm_isobmff_fragmented.md) | ISO/IEC 23003-5 (`ipcm`, `fpcm`, `pcmC`), ISO/IEC 14496-12 (`chnl`, `srat`, `AudioSampleEntryV1`), and Fragmented LPCM | Synchronized (`v2.23.0`) |
+| [`docs/specs/testing_strategy.md`](docs/specs/testing_strategy.md) | Self-contained synthetic test suite (`make test`), bitstream generators, malformed box negative tests, and regression suites | Synchronized (`v2.23.0`) |
 
 ---
 
@@ -113,7 +116,7 @@ Detailed specifications for each major subsystem reside in `docs/specs/` and are
   ```
 - **Quality Requirements**:
   1. Zero compiler warnings under `-Wall -Wextra -std=c99` across `liblsmash.a`, CLI tools, and `tests/test_main.c`.
-  2. All 14 synthetic test suites in `make test` must pass with **0 leaks** and **0 active blocks/bytes** reported by `lsm_alloc_verify_no_leaks()`.
+  2. All 15 synthetic test suites in `make test` must pass with **0 leaks** and **0 active blocks/bytes** reported by `lsm_alloc_verify_no_leaks()`.
 
 ---
 
@@ -227,3 +230,15 @@ All remaining `core/` compilation units likewise follow the `lsmash_*` (Public A
 | `core/summary.{c,h}` | *(Public `lsmash_*` APIs only)* | `summary_allocate_opaque`, `summary_deallocate_opaque` |
 | `core/meta.{c,h}` | *(Public `lsmash_*` APIs only)* | `meta_add_metadata`, `meta_set_itunes_metadata_string`, `meta_set_itunes_metadata_integer`, `meta_set_itunes_metadata_boolean`, `meta_set_itunes_metadata_binary`, `meta_get_itunes_metadata_type` |
 | `core/chapter.{c,h}` | *(Public `lsmash_*` APIs only)* | `chapter_get_start_time`, `chapter_lumber_line`, `chapter_read_simple_chapter`, `chapter_read_minimum_chapter`, `chapter_check_chap_line`, `chapter_add_chpl_entry` |
+
+### 6.4 Codecs & Importer Modules Symbol Mapping (`codecs/` & `importer/`)
+All modules in `codecs/` and `importer/` enforce the identical symbol naming hierarchy:
+
+| Module | Internal Shared (`lsm_<filename>_*`) | File-Local (`static <filename>_*`) |
+| :--- | :--- | :--- |
+| `codecs/description.{c,h}` | `lsm_description_setup_from_summary`, `lsm_description_get_codec_specific`, `lsm_description_copy_opaque_extension`, `lsm_description_print_codec_specific`, `lsm_description_append_Binary` | `description_initialize_*`, `description_setup_*`, `description_get_*` |
+| `codecs/av1.{c,h}` | `lsm_av1_get_uvlc`, `lsm_av1_get_leb128`, `lsm_av1_show_leb128`, `lsm_av1_get_su`, `lsm_av1_get_ns`, `lsm_av1_parse_sequence_header`, `lsm_av1_parse_temporal_unit`, `lsm_av1_construct_specific_parameters`, `lsm_av1_copy_codec_specific`, `lsm_av1_print_codec_specific`, `lsm_av1_update_bitrate` | `av1_parse_*`, `av1_load_reference_frame_info`, `av1_update_reference_list`, etc. |
+| `codecs/h264.{c,h}` / `codecs/hevc.{c,h}` / `codecs/nalu.{c,h}` | `lsm_h264_*`, `lsm_hevc_*`, `lsm_nalu_*` | `h264_*`, `hevc_*`, `nalu_*` |
+| `codecs/flac.{c,h}` | `lsm_flac_verify_crc8`, `lsm_flac_parse_streaminfo`, `lsm_flac_parse_frame_header`, `lsm_flac_construct_specific_parameters`, `lsm_flac_copy_codec_specific`, `lsm_flac_print_codec_specific` | `flac_read_utf8_uint64`, `flac_put_specific_Metadata_blocks`, `flac_print_*` |
+| `codecs/a52.{c,h}` / `codecs/dts.{c,h}` / `codecs/alac.{c,h}` / `codecs/opus.{c,h}` / `codecs/mp4a.{c,h}` / `codecs/mp4v.{c,h}` / `codecs/mp4sys.{c,h}` / `codecs/vc1.{c,h}` / `codecs/wma.{c,h}` / `codecs/qt_wfex.{c,h}` | `lsm_a52_*`, `lsm_dts_*`, `lsm_alac_*`, `lsm_opus_*`, `lsm_mp4a_*`, `lsm_mp4v_*`, `lsm_mp4sys_*`, `lsm_vc1_*`, `lsm_wma_*`, `lsm_qt_wfex_*` | `a52_*`, `dts_*`, `alac_*`, `opus_*`, `mp4a_*`, `mp4v_*`, `mp4sys_*`, `vc1_*`, `wma_*`, `qt_wfex_*` |
+| `importer/importer.{c,h}` & `importer/*_imp.c` | *(Public `lsmash_importer_*` exported in `liblsmash.ver` for CLI tools)* | `importer_find`, `a52_imp_*`, `adts_imp_*`, `als_imp_*`, `amr_imp_*`, `dts_imp_*`, `flac_imp_*`, `isobm_imp_*`, `ivf_imp_*`, `mp3_imp_*`, `nalu_imp_*`, `vc1_imp_*`, `wave_imp_*` |

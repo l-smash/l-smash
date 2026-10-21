@@ -14,23 +14,23 @@ No external `obuparse` library is required or linked; all Open Bitstream Unit (O
 
 All AV1 variable-length and non-symmetric integer primitives are implemented directly over `lsmash_bits_t` and `lsmash_bs_t`:
 
-1. **`av1_get_uvlc( lsmash_bits_t *bits )`** *(AV1 Spec Section 4.10.3)*:
+1. **`lsm_av1_get_uvlc( lsmash_bits_t *bits )`** *(AV1 Spec Section 4.10.3)*:
    - Counts `leadingZeros` until a `1` bit is encountered.
    - If `leadingZeros >= 32`, consumes remaining zero bits up to the terminating `1` bit (or EOB/error) and returns `UINT32_MAX` (the maximum valid `uvlc()` value when `leadingZeros == 31` is `0xFFFFFFFE`).
    - If `bits->bs->eob` or `bits->bs->error` is reached before a `1` bit or during the `leadingZeros`-bit suffix read, returns `UINT32_MAX` without hanging.
-2. **`av1_get_leb128( lsmash_bs_t *bs, uint8_t *Leb128Bytes )` & `av1_show_leb128(...)`** *(AV1 Spec Section 4.10.5)*:
+2. **`lsm_av1_get_leb128( lsmash_bs_t *bs, uint8_t *Leb128Bytes )` & `lsm_av1_show_leb128(...)`** *(AV1 Spec Section 4.10.5)*:
    - Reads up to 8 bytes, shifting each 7-bit group as `(uint64_t)(leb128_byte & 0x7F) << (i * 7)`.
    - Enforces the AV1 specification constraint that `value <= (1ULL << 32) - 1` (`UINT32_MAX`) and `Leb128Bytes <= 8`; on violation or unexpected EOF, sets `*Leb128Bytes = 0` and returns `UINT64_MAX`.
-3. **`av1_get_su( lsmash_bits_t *bits, unsigned int n )`** *(AV1 Spec Section 4.10.6)*:
+3. **`lsm_av1_get_su( lsmash_bits_t *bits, unsigned int n )`** *(AV1 Spec Section 4.10.6)*:
    - Reads an $n$-bit signed two's-complement integer using `uint64_t signMask = 1ULL << (n - 1)`.
-4. **`av1_get_ns( lsmash_bits_t *bits, unsigned int n )`** *(AV1 Spec Section 4.10.7)*:
+4. **`lsm_av1_get_ns( lsmash_bits_t *bits, unsigned int n )`** *(AV1 Spec Section 4.10.7)*:
    - Reads a non-symmetric unsigned integer in $[0, n - 1]$ using $w = \lfloor\log_2(n)\rfloor + 1$ and $m = 2^w - n$.
 
 ---
 
-## 3. Sequence Header & `av1C` Configuration (`av1_parse_sequence_header`)
+## 3. Sequence Header & `av1C` Configuration (`lsm_av1_parse_sequence_header`)
 
-`av1_parse_sequence_header()` parses `sequence_header_obu()` (AV1 Spec Section 5.5) into `av1_sequence_header_t`:
+`lsm_av1_parse_sequence_header()` parses `sequence_header_obu()` (AV1 Spec Section 5.5) into `av1_sequence_header_t`:
 - Validates `seq_profile <= 2` and rejects `!still_picture && reduced_still_picture_header`.
 - Parses `timing_info()`, `decoder_model_info()`, and up to 32 `operating_point` entries (`operating_point_idc`, `seq_level_idx`, `seq_tier`, `operating_parameters_info()`, `initial_display_delay_minus_1`).
 - Parses `frame_width_bits_minus_1`, `frame_height_bits_minus_1`, `max_frame_width_minus_1`, `max_frame_height_minus_1`, and `frame_id_numbers_present_flag` (validating `additional_frame_id_length_minus_1 + delta_frame_id_length_minus_2 + 3 <= 16`).
@@ -68,13 +68,13 @@ To support multi-tile `OBU_FRAME` and split `OBU_FRAME_HEADER` + `OBU_TILE_GROUP
    - Reads `tile_start_and_end_present_flag`, `tg_start`, and `tg_end` (when `NumTiles > 1`).
    - Validates `tg_start == frame->TileNum` and `tg_start <= tg_end < frame->NumTiles`.
    - Advances `frame->TileNum = tg_end + 1`. Only when `tg_end == frame->NumTiles - 1` (the final tile of the frame) does the parser reset `frame->SeenFrameHeader = 0` and execute `av1_update_reference_list()` using the full 8-bit `refresh_frame_flags` mask (`(frame->refresh_frame_flags >> i) & 1`).
-   - At the end of a Temporal Unit, if `parser->frame.SeenFrameHeader != 0` (an incomplete multi-tile frame), `av1_parse_temporal_unit()` returns `LSMASH_ERR_INVALID_DATA`.
+   - At the end of a Temporal Unit, if `parser->frame.SeenFrameHeader != 0` (an incomplete multi-tile frame), `lsm_av1_parse_temporal_unit()` returns `LSMASH_ERR_INVALID_DATA`.
 
 ---
 
 ## 5. AV1-ISOBMFF v1.2.0 Sample Assembly & Sync Sample Classification
 
-`av1_parse_temporal_unit()` enforces the container binding rules of AV1-ISOBMFF v1.2.0:
+`lsm_av1_parse_temporal_unit()` enforces the container binding rules of AV1-ISOBMFF v1.2.0:
 1. **Sample OBU Whitelist (Section 2.4)**:
    - Retained in sample data: `OBU_SEQUENCE_HEADER`, `OBU_FRAME_HEADER`, `OBU_TILE_GROUP`, `OBU_METADATA`, `OBU_FRAME`.
    - Stripped from sample data: `OBU_TEMPORAL_DELIMITER`, `OBU_REDUNDANT_FRAME_HEADER`, `OBU_PADDING`, and reserved OBU types.

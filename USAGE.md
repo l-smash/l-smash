@@ -38,13 +38,47 @@ A prime example of this strict boundary is uncompressed Linear PCM (LPCM) audio 
 - **In QuickTime (`.mov`)**:
   - Uncompressed LPCM uses Apple QuickTime Sound Description v0/v1/v2 (`lpcm`, `sowt`, `twos`, `in24`, `in32`, `fl32`, `fl64`, `raw `) and QuickTime `chan` / `wave` atoms.
 
+### 1.3 Supported Codecs, Timed Text, Sample Entry Extensions & Metadata
+
+#### Video Codecs
+- **AOM AV1 (`av01` + `av1C`)** — AOM AV1 Bitstream v1.0.0 Errata 1 & AV1-ISOBMFF v1.2.0 (*Summary Construct / Raw `.ivf` Importer / Media Demux*)
+- **ITU-T H.264 / MPEG-4 AVC (`avc1`–`avc4`, `avcp` + `avcC`, `btrt`)** — ISO/IEC 14496-10 & ISO/IEC 14496-15 (*Summary Construct / Raw Annex-B Importer / Media Demux*)
+- **ITU-T H.265 / MPEG-H HEVC (`hvc1`, `hev1` + `hvcC`, `btrt`)** — ISO/IEC 23008-2 & ISO/IEC 14496-15 (*Summary Construct / Raw Annex-B Importer / Media Demux*)
+- **SMPTE VC-1 (`vc-1` + `dvc1`, `btrt`)** — SMPTE 421M & RP 2025 (*Summary Construct / Raw Advanced Profile Importer / Media Demux*)
+- **ISO/IEC 14496-2 MPEG-4 Visual (`mp4v` + `esds`)**, **Apple ProRes (`apch`, `apcn`, `apcs`, `apco`, `ap4h`, `ap4x`)**, **QTFF Uncompressed (`raw `, `2vuy`, `v210`, `v216`, `v308`, `v408`, `v410`, `yuv2`)**, **Dirac (`drac`)**, **Motion JPEG 2000 (`mjp2`)**, **Ut Video (`ULRA`, `ULRG`, `ULY0`, `ULY2`, `ULH0`, `ULH2`, `UQY2`)**, **CineForm (`CFHD`)** (*Summary Construct / Media Demux*)
+
+#### Audio Codecs
+- **Xiph FLAC (`fLaC` + `dfLa`)** — IETF RFC 9639 & FLAC-in-ISOBMFF (*Summary Construct / Raw `.flac` Importer / Media Demux*)
+- **MPEG-4 Audio (`mp4a` + `esds` / `wave`, `als `)** — ISO/IEC 14496-3 AAC-LC, HE-AAC v1/v2 (SBR/PS), MPEG-4 ALS (*Summary Construct / Raw ADTS `.aac` & `.als` Importers / Media Demux*)
+- **IETF Opus (`Opus` + `dOps`)** — IETF RFC 6716 & Opus-in-ISOBMFF with `prol` pre-roll sample grouping (*Summary Construct / Media Demux*)
+- **Dolby AC-3 (`ac-3` + `dac3`) & Enhanced AC-3 (`ec-3` + `dec3`)** — ATSC A/52 & ETSI TS 102 366 Annex F (*Summary Construct / Raw `.ac3` & `.eac3` Importers / Media Demux*)
+- **Apple Lossless (`alac` + `alac` / `wave`)** — ALAC in ISOBMFF & QTFF (*Summary Construct / Media Demux*)
+- **DTS & DTS-HD (`dtsc`, `dtsh`, `dtse`, `dtsl`, `dtsx` + `ddts`)** — ETSI TS 102 114 (*Summary Construct / Raw `.dts` & `.dtshd` Importers / Media Demux*)
+- **ISOBMFF Uncompressed LPCM (`ipcm`, `fpcm` + `pcmC`)** — ISO/IEC 23003-5 & ISO/IEC 14496-12 (*Summary Construct / Raw `.wav` Importer / Media Demux*)
+- **QTFF Uncompressed LPCM (`lpcm`, `sowt`, `twos`, `raw `, `in24`, `in32`, `fl32`, `fl64`)** — Apple QuickTime Sound Description v0/v1/v2 (*Summary Construct / Raw `.wav` Importer / Media Demux*)
+- **3GPP AMR-NB / AMR-WB (`samr`, `sawb` + `damr`)**, **MPEG-1/2 Layer III (`mp4a` / `.mp3`)**, **Windows Media Audio (`owma` + `wfex`)**
+
+#### Timed Text & Subtitles
+- **3GPP Timed Text (`tx3g` + `ftab`)** — 3GPP TS 26.245 / ISO/IEC 14496-12 Timed Text sample entry and Font Table Box (*Summary Construct / Reference Chapter Track / Media Demux*)
+- **QuickTime Text Media (`text`)** — Apple QuickTime Text sample entry under `gmhd`/`gmin`/`text` (*Summary Construct / Reference Chapter Track / Media Demux*)
+
+#### Sample Entry Extensions, HDR, Spatial Media & Metadata
+- **HDR, Color & Mastering**: Color Parameter Box `colr` (`nclx` in ISOBMFF, `nclc` in QTFF), Mastering Display Color Volume (`mdcv`), Content Light Level Information (`clli`), Dolby Vision Configuration (`dvcC`, `dvvC`), Layered HEVC Configuration (`lhvC`), and QTFF `gama`, `fiel`, `cspc`, `sgbt`.
+- **Aperture & Pixel Aspect Ratio**: Clean Aperture (`clap`), Pixel Aspect Ratio (`pasp`), and QuickTime Track Aperture Mode Dimensions (`tapt` / `clef` / `prof` / `enof`).
+- **Spatial Video & Stereoscopic 3D**: Google Spherical Video v2 (`st3d`, `sv3d` / `svhd` / `proj` / `prhd` / `equi` / `cbmp` / `prji`) and Apple Spatial Video (`vexu` / `eyes` / `must` / `stri` / `hero` / `cams` / `blin` / `cmfy` / `dadj`, `hfov`).
+- **Spatial Audio & Channel Layout**: Google Spatial Audio Ambisonics (`SA3D`), QuickTime Audio Channel Layout (`chan`), ISO/IEC 14496-12 `chnl` (`ChannelLayout`) and `srat` (`SamplingRateBox`), and ISO/IEC 23003-5 `pcmC` (`PCMConfigBox`).
+- **Container Metadata & Chapters**:
+  1. **Apple iTunes Metadata (`moov.udta.meta.ilst`) & QuickTime Metadata (`meta` / `keys` / `ilst`)**: Container-level key-value metadata tags (title, artist, album, encoder, custom `----` `mean`/`name`/`data` items).
+  2. **QuickTime / iTunes Reference Chapter Tracks (`tref.chap`)**: A dedicated timed text track (`text` or `tx3g`) referenced from the media track via a `'chap'` Track Reference Box (`tref`), enabled via `--chapter` + `--chapter-track`.
+  3. **Nero Chapter List (`moov.udta.chpl`)**: A table-based chapter list box stored inside `moov.udta` for `.mp4`/`.m4v`/`.m4a` files, enabled via `--chapter` (and optional `--chpl-with-bom`).
+
 ---
 
 ## 2. Command-Line Tools (`cli/`)
 
 ### 2.1 `muxer` — Elementary Stream Multiplexer
 
-`muxer` imports raw elementary streams (or single-track WAVE containers) and multiplexes them into `.mp4`, `.mov`, `.m4a`, `.m4v`, `.3gp`, or `.3g2`.
+`muxer` imports raw elementary streams (or single-track WAVE/FLAC containers) and multiplexes them into `.mp4`, `.mov`, `.m4a`, `.m4v`, `.3gp`, or `.3g2`.
 
 #### Synopsis
 ```sh
@@ -58,6 +92,7 @@ muxer [global_options] -i input1[?track_options] [-i input2[?track_options] ...]
   - AOM AV1 in IVF container (`.ivf`)
   - SMPTE VC-1 Advanced Profile elementary stream (`.vc1`)
 - **Audio**:
+  - Xiph FLAC stream (`.flac`, RFC 9639 / FLAC-in-ISOBMFF `fLaC`/`dfLa`)
   - Raw AAC ADTS stream (`.aac`, `.adts`)
   - Raw MPEG-4 ALS stream (`.als`)
   - Raw Dolby AC-3 (`.ac3`) and Enhanced AC-3 (`.eac3`, `.ec3`)

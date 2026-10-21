@@ -14,33 +14,69 @@ Designed for strict compliance with international standards, L-SMASH maintains a
 - **ISO/IEC 14496-12** — ISO Base Media File Format (ISOBMFF `iso1`–`iso6`, Standard & Fragmented Movies `moof`/`traf`/`trun`, Segment Index `sidx`, Random Access `mfra`/`tfra`, Sample Groups `sgpd`/`sbgp` for `rap `, `roll`, `prol`)
 - **ISO/IEC 14496-14** — MP4 File Format (`mp41`, `mp42`, MPEG-4 Systems `iods`/`esds`)
 - **ISO/IEC 23009-1** — MPEG-DASH ISOBMFF Media Segments (`dash`, `msdh`, `msix`, Event Message `emsg`)
-- **Apple QuickTime File Format (QTFF)** — QuickTime Movie (`qt  `) with native Sound Description v0/v1/v2, reference chapter tracks, and Clean Aperture (`clap`) / Pixel Aspect Ratio (`pasp`) extensions
+- **Apple QuickTime File Format (QTFF)** — QuickTime Movie (`qt  `) with native Sound Description v0/v1/v2, reference chapter tracks, and Track Aperture (`tapt`) / Clean Aperture (`clap`) / Pixel Aspect Ratio (`pasp`) extensions
 - **3GPP / 3GPP2** — `3gp4`–`3gp6`, `3g2a`
-- **Apple iTunes Metadata** — `M4A `, `M4V ` (`meta`/`ilst` tagging and Nero `chpl` chapters)
+- **Apple iTunes M4A / M4V** — `M4A `, `M4V `
 
 ### Video Codecs
-- **ITU-T H.264 / ISO/IEC 14496-10 AVC (`avc1`, `avc3`)** — Built-in Annex-B NAL unit importer, SPS/PPS/SEI parser, `avcC` configuration, Recovery Point (`roll`) and Random Access Point (`rap `) sample grouping
-- **ITU-T H.265 / ISO/IEC 23008-2 HEVC (`hvc1`, `hev1`)** — Built-in Annex-B NAL unit importer, VPS/SPS/PPS/SEI parser, `hvcC` configuration, CRA/BLA open-GOP (`rap `) and Gradual Decoding Refresh (`roll`) sample grouping
-- **AOM AV1 (`av01`)** — Built-in OBU parser (**AV1 Bitstream & Decoding Process v1.0.0 Errata 1** and **AV1-ISOBMFF v1.2.0**), `av1C` configuration, IVF elementary stream importer, multi-tile `OBU_FRAME` / `OBU_TILE_GROUP` reconstruction, `stss` Sync Sample vs. `OPEN_RAP` classification, ITU-T T.35 HDR10+ detection, and Fragmented MP4 support
-- **SMPTE VC-1 (`vc-1`)** — Advanced Profile elementary stream importer and `dvc1` configuration
-- **ISO/IEC 14496-2 MPEG-4 Visual (`mp4v`)**
-- **Apple ProRes (`apch`, `apcn`, `apcs`, `apco`, `ap4h`, `ap4x`)** & **QTFF Uncompressed Y'CbCr / RGB (`raw `, `2vuy`, `v210`, `v216`, `v308`, `v408`, `v410`, `r408`)**
-- **HDR, Dolby Vision & Spatial Video Signaling** — Mastering Display Color Volume (`mdcv`), Content Light Level Info (`clli`), Dolby Vision (`dvcC`/`dvvC`, `dby1`), Stereoscopic 3D (`st3d`), and Spherical Video v1/v2 (`sv3d`/`svhd`/`proj`/`prhd`/`equi`/`cbmp`)
+| Codec Family | Sample Entry / Config FourCC | Specification | Support Scope |
+| :--- | :--- | :--- | :--- |
+| **AOM AV1** | `av01` + `av1C` | AOM AV1 Bitstream v1.0.0 Errata 1 & AV1-ISOBMFF v1.2.0 | Summary Construct / Raw Importer (`.ivf`) / Media Demux (Standard & Fragmented) |
+| **ITU-T H.264 / MPEG-4 AVC** | `avc1`–`avc4`, `avcp` + `avcC`, `btrt` | ITU-T H.264 / ISO/IEC 14496-10 & ISO/IEC 14496-15 | Summary Construct / Raw Importer (Annex-B) / Media Demux |
+| **ITU-T H.265 / MPEG-H HEVC** | `hvc1`, `hev1` + `hvcC`, `btrt` | ITU-T H.265 / ISO/IEC 23008-2 & ISO/IEC 14496-15 | Summary Construct / Raw Importer (Annex-B) / Media Demux |
+| **SMPTE VC-1** | `vc-1` + `dvc1`, `btrt` | SMPTE 421M & RP 2025 | Summary Construct / Raw Importer (Advanced Profile) / Media Demux |
+| **MPEG-4 Visual** | `mp4v` + `esds` | ISO/IEC 14496-2 & ISO/IEC 14496-14 | Summary Construct / Media Demux |
+| **Apple ProRes** | `apch`, `apcn`, `apcs`, `apco`, `ap4h`, `ap4x` | Apple QuickTime File Format (QTFF) | Summary Construct / Media Demux |
+| **QTFF Uncompressed Y'CbCr / RGB** | `raw `, `2vuy`, `v210`, `v216`, `v308`, `v408`, `v410`, `yuv2` | Apple QuickTime File Format (QTFF) | Summary Construct / Media Demux |
+| **Dirac / Motion JPEG / Ut Video / Legacy QT** | `drac`, `mjp2`, `jpeg`, `mjpa`, `mjpb`, `png `, `ULRA`, `ULRG`, `ULY0`, `ULY2`, `ULH0`, `ULH2`, `UQY2`, `CFHD`, `dv*` | SMPTE ST 2042 / ISO/IEC 15444-3 / QTFF | Summary Construct / Media Demux |
 
 ### Audio Codecs
-- **ISO/IEC 14496-3 MPEG-4 Audio (`mp4a`)** — AAC-LC, HE-AAC v1/v2 (explicit/implicit SBR & PS signaling, ADTS elementary stream importer, `esds` descriptor configuration), and MPEG-4 ALS (`als `)
-- **ATSC A/52 AC-3 (`ac-3` / `dac3`) & Enhanced AC-3 (`ec-3` / `dec3`)** — Built-in elementary stream importers and specific configuration boxes
-- **IETF Opus (`Opus` / `dOps`)** — With pre-roll (`prol`) sample grouping and encoder delay Edit List mapping
-- **Apple Lossless (`alac`)**
-- **DTS Coherent Acoustics & DTS-HD (`dtsc`, `dtsh`, `dtse`, `dtsl` / `ddts`)** — Built-in elementary stream importer and `ddts` configuration
-- **3GPP AMR-NB (`samr`) & AMR-WB (`sawb`)**, **MPEG-1/2 Layer III (`mp4a` / `.mp3`)**, **Windows Media Audio (`owma` / `wfex`)**, **Google Spatial Audio Ambisonics (`SA3D`)**
-- **Uncompressed LPCM (ISO/IEC 23003-5 & QTFF)** — Native ISOBMFF integer (`ipcm`: 16/24/32-bit big/little-endian) and IEEE 754 floating-point (`fpcm`: 32/64-bit) audio with `pcmC`, `chnl` (ISO/IEC 14496-12 CICP / explicit speaker positions / object counts), `srat`, and `AudioSampleEntryV1` (`> 65535 Hz`) across standard and Fragmented ISOBMFF; QTFF Sound Description v0/v1/v2 (`raw `, `sowt`, `twos`, `in24`, `in32`, `fl32`, `fl64`, `lpcm`, `chan`, `wave`); and RIFF WAVE (`.wav`) importer supporting `WAVE_FORMAT_PCM`, `WAVE_FORMAT_IEEE_FLOAT`, and `WAVE_FORMAT_EXTENSIBLE`
+| Codec Family | Sample Entry / Config FourCC | Specification | Support Scope |
+| :--- | :--- | :--- | :--- |
+| **Xiph FLAC** | `fLaC` + `dfLa` | IETF RFC 9639 & FLAC-in-ISOBMFF | Summary Construct / Raw Importer (`.flac`) / Media Demux (Standard & Fragmented) |
+| **MPEG-4 Audio (AAC / HE-AAC / ALS)** | `mp4a` + `esds` (or QT `wave`/`frma`/`esds`) | ISO/IEC 14496-3 & ISO/IEC 14496-14 | Summary Construct / Raw Importer (ADTS `.aac`, `.als`) / Media Demux |
+| **IETF Opus** | `Opus` + `dOps` | IETF RFC 6716 & Opus-in-ISOBMFF (`prol` pre-roll) | Summary Construct / Media Demux |
+| **Dolby AC-3 & Enhanced AC-3** | `ac-3` + `dac3`, `ec-3` + `dec3` | ATSC A/52 & ETSI TS 102 366 Annex F | Summary Construct / Raw Importer (`.ac3`, `.eac3`) / Media Demux |
+| **Apple Lossless (ALAC)** | `alac` + `alac` (or QT `wave`/`frma`/`alac`) | Apple Lossless Audio Codec / QTFF / ISOBMFF | Summary Construct / Media Demux |
+| **DTS & DTS-HD** | `dtsc`, `dtsh`, `dtse`, `dtsl`, `dtsx` + `ddts` | ETSI TS 102 114 & DTS ISO/IEC 14496-12 Annex | Summary Construct / Raw Importer (`.dts`, `.dtshd`) / Media Demux |
+| **ISOBMFF Uncompressed LPCM** | `ipcm`, `fpcm` + `pcmC` (+ `chnl`, `srat`) | ISO/IEC 23003-5 & ISO/IEC 14496-12 (`AudioSampleEntryV1`) | Summary Construct / Raw Importer (`.wav`) / Media Demux (Standard & Fragmented) |
+| **QTFF Uncompressed LPCM** | `lpcm`, `sowt`, `twos`, `raw `, `in24`, `in32`, `fl32`, `fl64` (+ `wave`, `chan`) | Apple QuickTime File Format (QTFF Sound Desc v0/v1/v2) | Summary Construct / Raw Importer (`.wav`) / Media Demux |
+| **3GPP AMR-NB / AMR-WB** | `samr`, `sawb` + `damr` | 3GPP TS 26.244 | Summary Construct / Raw Importer (`.amr`, `.awb`) / Media Demux |
+| **MPEG-1/2 Audio Layer III (MP3)** | `mp4a` + `esds` / `.mp3` + `wave` | ISO/IEC 11172-3 / ISO/IEC 13818-3 / QTFF | Summary Construct / Raw Importer (`.mp3`) / Media Demux |
+| **Windows Media Audio / Waveform** | `owma` + `wfex` | Microsoft `WAVEFORMATEX` / QTFF | Summary Construct / Media Demux |
+
+### Timed Text & Subtitles
+| Format | Sample Entry / Extension FourCC | Specification | Support Scope |
+| :--- | :--- | :--- | :--- |
+| **3GPP Timed Text** | `tx3g` + `ftab` (`FontTableBox`) | 3GPP TS 26.245 / ISO/IEC 14496-12 | Summary Construct / Reference Chapter Track / Media Demux |
+| **QuickTime Text Media** | `text` (inside `gmhd`/`gmin`/`text`) | Apple QuickTime File Format (QTFF) | Summary Construct / Reference Chapter Track / Media Demux |
+
+### Sample Entry Extensions, HDR, Spatial Media & Metadata
+- **HDR, Color & Layered Video Extensions**:
+  - **Color Parameter Box (`colr`)**: ISO/IEC 14496-12 `nclx` (with `full_range_flag`) and QuickTime `nclc` color primaries, transfer characteristics, and matrix coefficients, plus QTFF `gama`, `fiel`, `cspc`, and `sgbt`.
+  - **HDR10 Static Metadata (`mdcv`, `clli`)**: SMPTE ST 2086 Mastering Display Color Volume (`mdcv`) and CTA-861.3 / ISO/IEC 14496-12 Content Light Level Information (`clli`).
+  - **Dolby Vision (`dvcC`, `dvvC`)**: Dolby Vision Configuration Boxes (`dv_version_major/minor`, `dv_profile`, `dv_level`, `rpu/el/bl_present_flag`, `dv_bl_signal_compatibility_id`) and `dby1` compatible brand.
+  - **Layered HEVC (`lhvC`)**: ISO/IEC 14496-15 L-HEVC Configuration Box parameter arrays.
+- **Aperture & Pixel Aspect Ratio**:
+  - **Clean Aperture (`clap`) & Pixel Aspect Ratio (`pasp`)**: Rational aperture dimensions/offsets and horizontal/vertical pixel spacing on visual sample entries.
+  - **QuickTime Track Aperture Mode Dimensions (`tapt`)**: Track-level `clef` (Clean Aperture), `prof` (Production Aperture), and `enof` (Encoded Pixels) boxes.
+- **Spatial Video & Stereoscopic 3D**:
+  - **Google Spherical Video v2 & Stereoscopic 3D (`st3d`, `sv3d`)**: `st3d` stereoscopic mode signaling and `sv3d` (`svhd` metadata header + `proj` projection container with `prhd` pose header and `equi` equirectangular / `cbmp` cubemap / `prji` projection boxes).
+  - **Apple Spatial Video (`vexu`, `hfov`)**: QuickTime / MV-HEVC Video Extended Usage (`vexu`) container with Stereo View (`eyes`), Required Box Types (`must`), Stereo View Information (`stri`), Hero Eye (`hero`), Camera System (`cams` + `blin` baseline in micrometers), Comfort Adjustment (`cmfy` + `dadj` disparity adjustment), and Horizontal Field of View (`hfov`).
+- **Spatial Audio, Channel Layout & PCM Signaling**:
+  - **Google Spatial Audio (`SA3D`)**: Ambisonic type, order, channel ordering, normalization, and channel map.
+  - **QuickTime Audio Channel Layout (`chan`)**: CoreAudio channel layout tags, bitmaps, and per-channel `channelDescriptions` (`channelLabel`, `channelFlags`, `coordinates[3]`).
+  - **ISO/IEC 14496-12 Audio Signaling (`chnl`, `srat`) & ISO/IEC 23003-5 (`pcmC`)**: CICP `definedLayout` / explicit `speaker_position` (`azimuth`, `elevation`) / `omittedChannelsMap` / `object_count` in `chnl`, 32-bit `sampling_rate` in `srat` for `AudioSampleEntryV1`, and endianness/bit-depth in `pcmC`.
+- **Container Metadata & Chapters (Three Distinct Mechanisms)**:
+  1. **Apple iTunes Metadata (`moov.udta.meta.ilst`) & QuickTime Metadata (`meta` / `keys` / `ilst`)**: Key-value tagging (album, artist, title, encoder, BPM, cover art, and custom `----` `mean`/`name`/`data` items) stored inside the Item List Box (`ilst`) under an ISO FullBox `meta` (`hdlr` subtype `'mdir'`) or QTFF BaseBox `meta` (`hdlr` subtype `'mdta'` with `keys`).
+  2. **QuickTime / iTunes Reference Chapter Tracks (`tref.chap`)**: A dedicated timed text track (`text` in QTFF `.mov` or `tx3g` in `.mp4`/`.m4a`/`.m4v`) whose samples hold chapter titles at their exact presentation timestamps, linked from the main media track via a Track Reference Box (`tref`) of type `'chap'`.
+  3. **Nero Chapter List (`moov.udta.chpl`)**: A single table-based FullBox (`chpl`) stored directly inside `moov.udta` listing chapter start timestamps ($100\text{ ns}$ units) and UTF-8 chapter title strings (supported in `.mp4`/`.m4v`/`.m4a` alongside or independently of reference chapter tracks).
 
 ### Architecture Highlights
 - **C99 Paged Block Array (`lsm_list_t`)**: High-volume Sample Tables (`stts`, `ctts`, `stsz`, `stz2`, `stss`, `stps`, `sdtp`, `stsc`, `stco`/`co64`, `sgpd`, `sbgp`, `elst`), Movie Fragment runs (`trun->optional`, `tfra`, `sidx`, `fragment->pool`), and Media Timelines (`info_list`, `bunch_list`, `chunk_list`) store value elements contiguously in $2^8 = 256$-element pages, providing $O(1)$ bit-shift random access and pointer stability on append without per-entry linked-list node allocations.
 - **Sentinel Box Architecture (`box_default`)**: Singleton child box pointers on parent structs follow the Null-Object Sentinel Pattern and never hold `NULL`; when a box is absent, pointers reference static `LSMASH_NON_EXISTING_BOX` sentinels, enabling deep hierarchical traversal (`trak->mdia->minf->stbl->stsd`) without null-pointer branches.
 - **Compile-Time `static const` Dispatch Tables**: All Box readers, writers, destructors, printers, and codec summary dispatchers are immutable, thread-safe, ROM-placed (`static const`) tables.
-- **Self-Contained Synthetic Test Suite & Memory Auditor**: Includes a built-in C99 memory auditor (`-DLSMASH_DEBUG_ALLOC`) with `#ptr`/`#size` expression capture, 64-byte aligned headers, front/rear canaries, `0xA5`/`0xDD` memory poisoning, and zero-leak verification across 14 synthetic test suites requiring zero external media files.
+- **Self-Contained Synthetic Test Suite & Memory Auditor**: Includes a built-in C99 memory auditor (`-DLSMASH_DEBUG_ALLOC`) with `#ptr`/`#size` expression capture, 64-byte aligned headers, front/rear canaries, `0xA5`/`0xDD` memory poisoning, and zero-leak verification across 15 synthetic test suites requiring zero external media files.
 
 ---
 
@@ -104,7 +140,7 @@ Building `all` (the default target) produces four command-line utilities in `cli
 
 | Tool | Purpose |
 | :--- | :--- |
-| **`muxer`** | Multiplexes raw elementary streams (H.264, HEVC, AV1 `.ivf`, AAC ADTS, AC-3/E-AC-3, DTS, `.wav` LPCM, AMR, MP3, VC-1) or single-track containers into ISOBMFF (`.mp4`, `.m4a`, `.m4v`), QTFF (`.mov`), or 3GPP (`.3gp`, `.3g2`). |
+| **`muxer`** | Multiplexes raw elementary streams (H.264, HEVC, AV1 `.ivf`, AAC ADTS, FLAC `.flac`, AC-3/E-AC-3, DTS, `.wav` LPCM, AMR, MP3, VC-1) or single-track containers into ISOBMFF (`.mp4`, `.m4a`, `.m4v`), QTFF (`.mov`), or 3GPP (`.3gp`, `.3g2`). |
 | **`remuxer`** | Remultiplexes existing ISOBMFF/QTFF containers, converts standard movies to **Fragmented MP4** (`--fragment`) or **MPEG-DASH segments** (`--dash`), filters tracks, and performs RAP-aligned seeking. |
 | **`boxdumper`** | Dumps the complete hierarchical Box tree (`--box`), per-sample DTS/CTS timestamps (`--timestamp`), or chapter lists (`--chapter`). |
 | **`timelineeditor`** | Edits track timescales, rewrites VFR timestamps from Matroska timecode v2 files (`--timecode`), and constructs explicit Edit Lists (`--skip`, `--delay`, `--dts-compression`). |
