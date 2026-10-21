@@ -4673,10 +4673,61 @@ static int write_test_file( const char *path, const uint8_t *data, size_t size )
     return written == size ? 0 : -1;
 }
 
+typedef struct
+{
+    uint8_t *buf;
+    uint32_t pos;   /* in bits */
+} test_bit_writer_t;
+
+static void bw_put( test_bit_writer_t *bw, uint32_t bits, uint32_t value )
+{
+    for( int i = (int)bits - 1; i >= 0; i-- )
+    {
+        if( (value >> i) & 1 )
+            bw->buf[bw->pos >> 3] |= (uint8_t)(0x80 >> (bw->pos & 7));
+        ++bw->pos;
+    }
+}
+
+static void bw_put_ue( test_bit_writer_t *bw, uint32_t value )
+{
+    uint32_t v    = value + 1;
+    uint32_t bits = 0;
+    while( (v >> (bits + 1)) != 0 )
+        ++bits;
+    bw_put( bw, bits, 0 );
+    bw_put( bw, bits + 1, v );
+}
+
+static void bw_put_trailing( test_bit_writer_t *bw )
+{
+    bw_put( bw, 1, 1 );
+    while( bw->pos & 7 )
+        bw_put( bw, 1, 0 );
+}
+
+static void fill_pattern( uint8_t *dst, uint32_t size, uint8_t seed )
+{
+    for( uint32_t i = 0; i < size; i++ )
+        dst[i] = (uint8_t)(seed + i * 7 + (i >> 3));
+}
+
+static void append_bytes( uint8_t *dst, uint32_t *pos, const uint8_t *src, uint32_t size )
+{
+    memcpy( dst + *pos, src, size );
+    *pos += size;
+}
+
+static void put_be16( uint8_t *p, uint16_t v )
+{
+    p[0] = (uint8_t)(v >> 8);
+    p[1] = (uint8_t)v;
+}
+
 static int test_read_file_fake_box_and_unsupported_stream( void )
 {
     const char *wav_path = "tests/tmp_test_fake_box.wav";
-    const char *aac_path = "tests/tmp_test_unsupported.aac";
+    const char *h264_path = "tests/tmp_test_unsupported.h264";
 
     /* WAVE: mono 16-bit PCM, 8000 Hz, 20 frames. The importer builds a fake moov and trak. */
     uint8_t wav[44 + 40];
@@ -4736,24 +4787,103 @@ static int test_read_file_fake_box_and_unsupported_stream( void )
     lsmash_destroy_root( root );
     remove( wav_path );
 
-    /* Raw ADTS: a seekable raw stream without fake box support must not yield a half-built success. */
-    uint8_t aac[16 * 5] = { 0 };
-    for( int f = 0; f < 5; f++ )
+    /* Raw H.264 Annex B: the importer detects the stream, but it has no fake box support yet. Opening it through
+     * lsmash_read_file() must be rejected explicitly instead of yielding a half-built success. */
+    uint8_t  h264[256] = { 0 };
+    uint32_t h264_length = 0;
     {
-        static const uint8_t adts[7] = { 0xFF, 0xF1, 0x50, 0x80, 0x02, 0x1F, 0xFC };
-        memcpy( aac + 16 * f, adts, sizeof(adts) );
+        static const uint8_t start_code[4] = { 0, 0, 0, 1 };
+        uint8_t           nal[64];
+        test_bit_writer_t bw;
+        /* Sequence Parameter Set: Baseline profile, 64x64, picture order count type 2 */
+        memset( nal, 0, sizeof(nal) );
+        nal[0] = 0x67;
+        bw = (test_bit_writer_t){ nal + 1, 0 };
+        bw_put( &bw, 8, 66 );       /* profile_idc */
+        bw_put( &bw, 8, 0xC0 );     /* constraint_set0_flag and constraint_set1_flag */
+        bw_put( &bw, 8, 30 );       /* level_idc */
+        bw_put_ue( &bw, 0 );        /* seq_parameter_set_id */
+        bw_put_ue( &bw, 0 );        /* log2_max_frame_num_minus4 */
+        bw_put_ue( &bw, 2 );        /* pic_order_cnt_type */
+        bw_put_ue( &bw, 1 );        /* max_num_ref_frames */
+        bw_put( &bw, 1, 0 );        /* gaps_in_frame_num_value_allowed_flag */
+        bw_put_ue( &bw, 3 );        /* pic_width_in_mbs_minus1 */
+        bw_put_ue( &bw, 3 );        /* pic_height_in_map_units_minus1 */
+        bw_put( &bw, 1, 1 );        /* frame_mbs_only_flag */
+        bw_put( &bw, 1, 1 );        /* direct_8x8_inference_flag */
+        bw_put( &bw, 1, 0 );        /* frame_cropping_flag */
+        bw_put( &bw, 1, 0 );        /* vui_parameters_present_flag */
+        bw_put_trailing( &bw );
+        append_bytes( h264, &h264_length, start_code, 4 );
+        append_bytes( h264, &h264_length, nal, 1 + bw.pos / 8 );
+        /* Picture Parameter Set */
+        memset( nal, 0, sizeof(nal) );
+        nal[0] = 0x68;
+        bw = (test_bit_writer_t){ nal + 1, 0 };
+        bw_put_ue( &bw, 0 );        /* pic_parameter_set_id */
+        bw_put_ue( &bw, 0 );        /* seq_parameter_set_id */
+        bw_put( &bw, 1, 0 );        /* entropy_coding_mode_flag */
+        bw_put( &bw, 1, 0 );        /* bottom_field_pic_order_in_frame_present_flag */
+        bw_put_ue( &bw, 0 );        /* num_slice_groups_minus1 */
+        bw_put_ue( &bw, 0 );        /* num_ref_idx_l0_default_active_minus1 */
+        bw_put_ue( &bw, 0 );        /* num_ref_idx_l1_default_active_minus1 */
+        bw_put( &bw, 1, 0 );        /* weighted_pred_flag */
+        bw_put( &bw, 2, 0 );        /* weighted_bipred_idc */
+        bw_put( &bw, 1, 1 );        /* pic_init_qp_minus26 (se: 0) */
+        bw_put( &bw, 1, 1 );        /* pic_init_qs_minus26 (se: 0) */
+        bw_put( &bw, 1, 1 );        /* chroma_qp_index_offset (se: 0) */
+        bw_put( &bw, 1, 1 );        /* deblocking_filter_control_present_flag */
+        bw_put( &bw, 1, 0 );        /* constrained_intra_pred_flag */
+        bw_put( &bw, 1, 0 );        /* redundant_pic_cnt_present_flag */
+        bw_put_trailing( &bw );
+        append_bytes( h264, &h264_length, start_code, 4 );
+        append_bytes( h264, &h264_length, nal, 1 + bw.pos / 8 );
+        /* IDR slice, then a non-IDR slice of the next picture */
+        for( int i = 0; i < 2; i++ )
+        {
+            memset( nal, 0, sizeof(nal) );
+            nal[0] = i == 0 ? 0x65 : 0x41;
+            bw = (test_bit_writer_t){ nal + 1, 0 };
+            bw_put_ue( &bw, 0 );                    /* first_mb_in_slice */
+            bw_put_ue( &bw, i == 0 ? 7 : 5 );       /* slice_type: I or P */
+            bw_put_ue( &bw, 0 );                    /* pic_parameter_set_id */
+            bw_put( &bw, 4, (uint32_t)i );          /* frame_num */
+            if( i == 0 )
+            {
+                bw_put_ue( &bw, 0 );                /* idr_pic_id */
+                bw_put( &bw, 1, 0 );                /* no_output_of_prior_pics_flag */
+                bw_put( &bw, 1, 0 );                /* long_term_reference_flag */
+            }
+            else
+            {
+                bw_put( &bw, 1, 0 );                /* num_ref_idx_active_override_flag */
+                bw_put( &bw, 1, 0 );                /* ref_pic_list_modification_flag_l0 */
+                bw_put( &bw, 1, 0 );                /* adaptive_ref_pic_marking_mode_flag */
+            }
+            bw_put( &bw, 1, 1 );                    /* slice_qp_delta (se: 0) */
+            bw_put_ue( &bw, 1 );                    /* disable_deblocking_filter_idc */
+            bw_put( &bw, 8, 0xA5 );                 /* slice data */
+            bw_put_trailing( &bw );
+            append_bytes( h264, &h264_length, start_code, 4 );
+            append_bytes( h264, &h264_length, nal, 1 + bw.pos / 8 );
+        }
     }
-    TEST_ASSERT( write_test_file( aac_path, aac, sizeof(aac) ) == 0, "18b: write aac" );
+    TEST_ASSERT( write_test_file( h264_path, h264, h264_length ) == 0, "18b: write h264" );
     root = lsmash_create_root();
+    {
+        /* The sequential importer still accepts the stream, so the rejection below comes from the guard of lsmash_read_file(). */
+        importer_t *imp = lsmash_importer_open( root, h264_path, "auto" );
+        TEST_ASSERT( imp != NULL, "18b: the h264 importer detects the stream" );
+        lsmash_importer_close( imp );
+    }
     memset( &param, 0, sizeof(param) );
-    TEST_ASSERT( lsmash_open_file( aac_path, 1, &param ) == 0, "18b: open aac" );
+    TEST_ASSERT( lsmash_open_file( h264_path, 1, &param ) == 0, "18b: open h264" );
     file = lsmash_set_file( root, &param );
-    TEST_ASSERT( file != NULL, "18b: set aac file" );
-    TEST_ASSERT( lsmash_read_file( file, &param ) < 0, "18b: raw stream without fake movie is rejected" );
+    TEST_ASSERT( file != NULL, "18b: set h264 file" );
+    TEST_ASSERT( lsmash_read_file( file, &param ) == LSMASH_ERR_PATCH_WELCOME, "18b: raw stream without fake movie is rejected" );
     lsmash_close_file( &param );
     lsmash_destroy_root( root );
-    remove( aac_path );
-
+    remove( h264_path );
     printf( "[PASS] test_read_file_fake_box_and_unsupported_stream\n" );
     return 0;
 }
@@ -5079,6 +5209,576 @@ static int test_read_file_flac_ivf_timeline( void )
     printf( "[PASS] test_read_file_flac_ivf_timeline\n" );
     return 0;
 }
+/*---------------------------------------------------------------------------
+ * Test 20: ADTS, AC-3, E-AC-3, DTS, MP3, AMR and ALS raw streams through lsmash_read_file() and the Media Timeline
+ *---------------------------------------------------------------------------*/
+#define AUDIO_EXPECT_MAX_SAMPLES 6
+#define AUDIO_EXPECT_MAX_LENGTH  512
+
+typedef struct
+{
+    uint32_t count;
+    uint32_t length[AUDIO_EXPECT_MAX_SAMPLES];
+    uint64_t dts   [AUDIO_EXPECT_MAX_SAMPLES];
+    uint32_t index [AUDIO_EXPECT_MAX_SAMPLES];
+    uint8_t  data  [AUDIO_EXPECT_MAX_SAMPLES][AUDIO_EXPECT_MAX_LENGTH];
+} audio_expect_t;
+
+/* Add a frame to the expectation: its data is what a sample is expected to be. */
+static void expect_add_sample( audio_expect_t *exp, const uint8_t *data, uint32_t length, uint64_t dts, uint32_t index )
+{
+    exp->length[exp->count] = length;
+    exp->dts   [exp->count] = dts;
+    exp->index [exp->count] = index;
+    memcpy( exp->data[exp->count], data, length );
+    ++exp->count;
+}
+
+typedef struct
+{
+    const char         *path;
+    const audio_expect_t *exp;
+    lsmash_codec_type_t sample_type;
+    uint32_t            frequency;
+    uint32_t            channels;
+    uint32_t            channels2;      /* expected channels of the second sample entry if the stream changes its summary */
+    uint32_t            summary_count;
+    uint64_t            media_duration;
+    uint32_t            last_delta;
+} audio_stream_check_t;
+
+static int check_raw_audio_stream( const audio_stream_check_t *chk )
+{
+    const audio_expect_t *exp = chk->exp;
+    const char *path = chk->path;
+    /* The image of the file tells where each sample is actually stored. */
+    FILE *fp = fopen( path, "rb" );
+    TEST_ASSERT( fp != NULL, "20: open the written stream" );
+    fseek( fp, 0, SEEK_END );
+    long image_size = ftell( fp );
+    fseek( fp, 0, SEEK_SET );
+    uint8_t *image = (uint8_t *)malloc( (size_t)image_size );
+    TEST_ASSERT( image != NULL && fread( image, 1, (size_t)image_size, fp ) == (size_t)image_size, "20: load the stream image" );
+    fclose( fp );
+
+    /*---- The sequential reader is the reference of the stream. ----*/
+    lsmash_sample_property_t ref_prop[AUDIO_EXPECT_MAX_SAMPLES] = { { 0 } };
+    {
+        lsmash_root_t *root = lsmash_create_root();
+        importer_t *imp = lsmash_importer_open( root, path, "auto" );
+        TEST_ASSERT( imp != NULL, "20: open the importer" );
+        for( uint32_t i = 0; i < exp->count; i++ )
+        {
+            lsmash_sample_t *sample = NULL;
+            TEST_ASSERT( lsmash_importer_get_access_unit( imp, 1, &sample ) >= 0 && sample != NULL, "20: reference access unit" );
+            TEST_ASSERT( sample->length == exp->length[i] && memcmp( sample->data, exp->data[i], exp->length[i] ) == 0
+                      && sample->dts == exp->dts[i] && sample->cts == exp->dts[i], "20: reference access unit is the expected frame" );
+            ref_prop[i] = sample->prop;
+            lsmash_delete_sample( sample );
+        }
+        lsmash_sample_t *eof = NULL;
+        TEST_ASSERT( lsmash_importer_get_access_unit( imp, 1, &eof ) == 2 && eof == NULL, "20: reference reader reaches EOF" );
+        TEST_ASSERT( lsmash_importer_get_last_delta( imp, 1 ) == chk->last_delta, "20: reference last delta" );
+        lsmash_importer_close( imp );
+        lsmash_destroy_root( root );
+    }
+
+    /*---- lsmash_read_file() and the Media Timeline ----*/
+    {
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( root != NULL && lsmash_open_file( path, 1, &param ) == 0, "20: open the stream" );
+        lsmash_file_t *file = lsmash_set_file( root, &param );
+        TEST_ASSERT( file != NULL, "20: set the stream file" );
+        TEST_ASSERT( lsmash_read_file( file, &param ) >= 0, "20: read_file succeeds on the raw stream via fake boxes" );
+        lsmash_movie_parameters_t movie_param;
+        TEST_ASSERT( lsmash_get_movie_parameters( root, &movie_param ) == 0 && movie_param.number_of_tracks == 1, "20: one fake track" );
+        TEST_ASSERT( movie_param.timescale == chk->frequency, "20: movie timescale is the sample rate" );
+        uint32_t track_ID = lsmash_get_track_ID( root, 1 );
+        TEST_ASSERT( track_ID != 0, "20: track ID" );
+        TEST_ASSERT( lsmash_get_media_timescale( root, track_ID ) == chk->frequency, "20: media timescale is the sample rate" );
+        TEST_ASSERT( lsmash_count_summary( root, track_ID ) == 1, "20: one sample entry before the timeline is built" );
+        lsmash_audio_summary_t *summary = (lsmash_audio_summary_t *)lsmash_get_summary( root, track_ID, 1 );
+        TEST_ASSERT( summary != NULL, "20: first summary" );
+        TEST_ASSERT( lsmash_check_codec_type_identical( summary->sample_type, chk->sample_type ), "20: sample entry type" );
+        TEST_ASSERT( summary->frequency == chk->frequency && summary->channels == chk->channels, "20: first summary frequency and channels" );
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        TEST_ASSERT( lsmash_construct_timeline( root, track_ID ) == 0, "20: construct timeline" );
+        /* A change of the stream in the middle adds sample entries while the Timeline is built. */
+        TEST_ASSERT( lsmash_count_summary( root, track_ID ) == chk->summary_count, "20: number of sample entries" );
+        if( chk->channels2 )
+        {
+            summary = (lsmash_audio_summary_t *)lsmash_get_summary( root, track_ID, 2 );
+            TEST_ASSERT( summary != NULL && summary->channels == chk->channels2, "20: second summary channels" );
+            lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        }
+        TEST_ASSERT( lsmash_get_sample_count_in_media_timeline( root, track_ID ) == exp->count, "20: sample count" );
+        uint32_t max_length = 0;
+        for( uint32_t i = 0; i < exp->count; i++ )
+            max_length = LSMASH_MAX( max_length, exp->length[i] );
+        TEST_ASSERT( lsmash_get_max_sample_size_in_media_timeline( root, track_ID ) == max_length, "20: max sample size" );
+        TEST_ASSERT( lsmash_get_media_duration_from_media_timeline( root, track_ID ) == chk->media_duration, "20: media duration" );
+        uint32_t last_delta = 0;
+        TEST_ASSERT( lsmash_get_last_sample_delta_from_media_timeline( root, track_ID, &last_delta ) == 0 && last_delta == chk->last_delta,
+                     "20: last sample delta" );
+        /* Random order access exercises the cached DTS accumulation and the stream seek of every read. */
+        for( uint32_t k = 0; k < exp->count * 2; k++ )
+        {
+            uint32_t i = (k < exp->count) ? (exp->count - 1 - k) : (k - exp->count);
+            lsmash_sample_t *sample = lsmash_get_sample_from_media_timeline( root, track_ID, i + 1 );
+            TEST_ASSERT( sample != NULL, "20: timeline sample" );
+            TEST_ASSERT( sample->length == exp->length[i] && memcmp( sample->data, exp->data[i], exp->length[i] ) == 0, "20: timeline sample data" );
+            TEST_ASSERT( sample->dts == exp->dts[i] && sample->cts == exp->dts[i], "20: timeline sample timestamps" );
+            TEST_ASSERT( sample->index == exp->index[i], "20: timeline sample entry index" );
+            TEST_ASSERT( sample->prop.ra_flags == ref_prop[i].ra_flags && sample->prop.pre_roll.distance == ref_prop[i].pre_roll.distance,
+                         "20: timeline sample property equals the sequential reader" );
+            TEST_ASSERT( (long)(sample->pos + sample->length) <= image_size && memcmp( image + sample->pos, exp->data[i], exp->length[i] ) == 0,
+                         "20: sample position points at the sample data in the stream" );
+            lsmash_delete_sample( sample );
+            lsmash_sample_t info = { 0 };
+            uint64_t dts = UINT64_MAX;
+            TEST_ASSERT( lsmash_get_sample_info_from_media_timeline( root, track_ID, i + 1, &info ) == 0
+                      && info.dts == exp->dts[i] && info.length == exp->length[i] && info.index == exp->index[i], "20: sample info" );
+            TEST_ASSERT( lsmash_get_dts_from_media_timeline( root, track_ID, i + 1, &dts ) == 0 && dts == exp->dts[i], "20: dts getter" );
+        }
+        TEST_ASSERT( lsmash_get_sample_from_media_timeline( root, track_ID, exp->count + 1 ) == NULL, "20: no sample past the end" );
+        TEST_ASSERT( lsmash_construct_timeline( root, track_ID ) == 0
+                  && lsmash_get_sample_count_in_media_timeline( root, track_ID ) == exp->count, "20: constructing twice is harmless" );
+        lsmash_destruct_timeline( root, track_ID );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+    }
+
+    /*---- The sequential reader must continue from where it stopped after the Media Timeline moved the stream. ----*/
+    {
+        lsmash_root_t *root = lsmash_create_root();
+        importer_t *imp = lsmash_importer_open( root, path, "auto" );
+        TEST_ASSERT( imp != NULL, "20: open the importer again" );
+        uint32_t track_ID = lsmash_get_track_ID( root, 1 );
+        uint32_t before = exp->count / 2;
+        for( uint32_t i = 0; i < before; i++ )
+        {
+            lsmash_sample_t *sample = NULL;
+            TEST_ASSERT( lsmash_importer_get_access_unit( imp, 1, &sample ) >= 0 && sample != NULL, "20: access unit before timeline" );
+            TEST_ASSERT( sample->length == exp->length[i] && memcmp( sample->data, exp->data[i], exp->length[i] ) == 0, "20: access unit data before timeline" );
+            lsmash_delete_sample( sample );
+        }
+        TEST_ASSERT( lsmash_importer_construct_timeline( imp, 1 ) == 0, "20: construct timeline in the middle of reading" );
+        for( uint32_t k = 0; k < exp->count; k++ )
+        {
+            uint32_t i = exp->count - 1 - k;
+            lsmash_sample_t *sample = lsmash_get_sample_from_media_timeline( root, track_ID, i + 1 );
+            TEST_ASSERT( sample != NULL && sample->length == exp->length[i] && memcmp( sample->data, exp->data[i], exp->length[i] ) == 0,
+                         "20: timeline sample read in the middle of reading" );
+            lsmash_delete_sample( sample );
+        }
+        for( uint32_t i = before; i < exp->count; i++ )
+        {
+            lsmash_sample_t *sample = NULL;
+            TEST_ASSERT( lsmash_importer_get_access_unit( imp, 1, &sample ) >= 0 && sample != NULL, "20: access unit after timeline" );
+            TEST_ASSERT( sample->length == exp->length[i] && memcmp( sample->data, exp->data[i], exp->length[i] ) == 0
+                      && sample->dts == exp->dts[i], "20: access unit continues from where it stopped" );
+            lsmash_delete_sample( sample );
+            if( i == before )
+            {
+                /* The timeline is also usable between sequential reads. */
+                lsmash_sample_t *first = lsmash_get_sample_from_media_timeline( root, track_ID, 1 );
+                TEST_ASSERT( first != NULL && first->length == exp->length[0] && memcmp( first->data, exp->data[0], exp->length[0] ) == 0,
+                             "20: timeline between sequential reads" );
+                lsmash_delete_sample( first );
+            }
+        }
+        lsmash_sample_t *eof = NULL;
+        TEST_ASSERT( lsmash_importer_get_access_unit( imp, 1, &eof ) == 2, "20: EOF after the last frame" );
+        TEST_ASSERT( lsmash_importer_get_last_delta( imp, 1 ) == chk->last_delta, "20: last delta of the sequential reader is unchanged" );
+        lsmash_importer_close( imp );
+        lsmash_destroy_root( root );
+    }
+    free( image );
+    return 0;
+}
+
+static uint32_t build_adts_frame( uint8_t *dst, uint32_t payload_length, int crc, int channel_config, uint8_t seed )
+{
+    uint32_t header_length = crc ? 9 : 7;
+    uint32_t frame_length  = header_length + payload_length;
+    dst[0] = 0xFF;
+    dst[1] = crc ? 0xF0 : 0xF1;     /* MPEG-4, layer 0, protection_absent */
+    dst[2] = (uint8_t)(0x50 | ((channel_config >> 2) & 1));    /* AAC LC, 44.1 kHz */
+    dst[3] = (uint8_t)(((channel_config & 3) << 6) | ((frame_length >> 11) & 3));
+    dst[4] = (uint8_t)(frame_length >> 3);
+    dst[5] = (uint8_t)(((frame_length & 7) << 5) | 0x1F);
+    dst[6] = 0xFC;
+    if( crc )
+    {
+        dst[7] = 0xA5;
+        dst[8] = 0x5A;
+    }
+    fill_pattern( dst + header_length, payload_length, seed );
+    return frame_length;
+}
+
+static uint32_t build_ac3_frame( uint8_t *dst, uint32_t frmsizecod, uint8_t seed )
+{
+    static const uint32_t size_table[3] = { 128, 160, 192 };    /* 32, 40 and 48 kbit/s at 48 kHz */
+    uint32_t size = size_table[frmsizecod >> 1];
+    fill_pattern( dst, size, seed );
+    memset( dst, 0, 8 );
+    dst[0] = 0x0B;
+    dst[1] = 0x77;
+    test_bit_writer_t bw = { dst + 4, 0 };
+    bw_put( &bw, 2, 0 );            /* fscod: 48 kHz */
+    bw_put( &bw, 6, frmsizecod );
+    bw_put( &bw, 5, 8 );            /* bsid */
+    bw_put( &bw, 3, 0 );            /* bsmod */
+    bw_put( &bw, 3, 2 );            /* acmod: 2/0 */
+    bw_put( &bw, 2, 0 );            /* dsurmod */
+    bw_put( &bw, 1, 0 );            /* lfeon */
+    return size;
+}
+
+static uint32_t build_eac3_frame( uint8_t *dst, uint32_t strmtyp, uint32_t size, uint8_t seed )
+{
+    fill_pattern( dst, size, seed );
+    memset( dst, 0, 12 );
+    dst[0] = 0x0B;
+    dst[1] = 0x77;
+    test_bit_writer_t bw = { dst + 2, 0 };
+    bw_put( &bw, 2, strmtyp );
+    bw_put( &bw, 3, 0 );            /* substreamid */
+    bw_put( &bw, 11, size / 2 - 1 );
+    bw_put( &bw, 2, 0 );            /* fscod: 48 kHz */
+    bw_put( &bw, 2, 3 );            /* numblkscod: 6 blocks */
+    bw_put( &bw, 3, 2 );            /* acmod: 2/0 */
+    bw_put( &bw, 1, 0 );            /* lfeon */
+    bw_put( &bw, 5, 16 );           /* bsid */
+    bw_put( &bw, 5, 27 );           /* dialnorm */
+    bw_put( &bw, 1, 0 );            /* compre */
+    if( strmtyp == 1 )
+        bw_put( &bw, 1, 0 );        /* chanmape */
+    bw_put( &bw, 1, 0 );            /* mixmdate */
+    bw_put( &bw, 1, 0 );            /* infomdate */
+    bw_put( &bw, 1, 0 );            /* addbsie */
+    return size;
+}
+
+static uint32_t build_dts_core_frame( uint8_t *dst, uint32_t size, uint8_t seed )
+{
+    fill_pattern( dst, size, seed );
+    memset( dst, 0, 16 );
+    dst[0] = 0x7F;
+    dst[1] = 0xFE;
+    dst[2] = 0x80;
+    dst[3] = 0x01;
+    test_bit_writer_t bw = { dst + 4, 0 };
+    bw_put( &bw, 1, 1 );            /* FTYPE: normal frame */
+    bw_put( &bw, 5, 31 );           /* SHORT */
+    bw_put( &bw, 1, 0 );            /* CPF */
+    bw_put( &bw, 7, 15 );           /* NBLKS: 16 blocks, 512 samples */
+    bw_put( &bw, 14, size - 1 );    /* FSIZE */
+    bw_put( &bw, 6, 2 );            /* AMODE: stereo */
+    bw_put( &bw, 4, 13 );           /* SFREQ: 48 kHz */
+    bw_put( &bw, 10, 0 );           /* RATE, MIX, DYNF, TIMEF, AUXF, HDCD */
+    bw_put( &bw, 3, 0 );            /* EXT_AUDIO_ID */
+    bw_put( &bw, 1, 0 );            /* EXT_AUDIO */
+    bw_put( &bw, 1, 0 );            /* ASPF */
+    bw_put( &bw, 2, 0 );            /* LFF */
+    bw_put( &bw, 8, 0 );            /* HFLAG, FILTS, VERNUM, CHIST */
+    bw_put( &bw, 3, 0 );            /* PCMR: 16 bits */
+    bw_put( &bw, 6, 0 );            /* SUMF, SUMS, DIALNORM */
+    return size;
+}
+
+static uint32_t build_mp3_frame( uint8_t *dst, int padding, int xing, uint16_t main_data_begin, uint8_t seed )
+{
+    uint32_t size = 417 + (padding ? 1 : 0);    /* MPEG-1 Layer III, 128 kbit/s, 44.1 kHz */
+    fill_pattern( dst, size, seed );
+    dst[0] = 0xFF;
+    dst[1] = 0xFB;
+    dst[2] = (uint8_t)(0x90 | (padding ? 0x02 : 0x00));
+    dst[3] = 0x00;                  /* stereo */
+    dst[4] = (uint8_t)(main_data_begin >> 1);
+    dst[5] = (uint8_t)((main_data_begin & 1) << 7);
+    if( xing )
+    {
+        memset( dst + 6, 0, size - 6 );
+        memcpy( dst + 36, "Info", 4 );
+    }
+    return size;
+}
+
+static uint32_t build_amr_frame( uint8_t *dst, uint32_t frame_type, uint32_t size, uint8_t seed )
+{
+    fill_pattern( dst, size, seed );
+    dst[0] = (uint8_t)((frame_type << 3) | 0x04);
+    return size;
+}
+
+static uint32_t build_als_header( uint8_t *dst, uint32_t samples, uint8_t random_access, uint8_t ra_flag, uint32_t unit_count, const uint32_t *unit_sizes )
+{
+    memset( dst, 0, 64 );
+    memcpy( dst, "ALS\0", 4 );
+    put_be32( dst + 4, 44100 );
+    put_be32( dst + 8, samples );
+    put_be16( dst + 12, 1 );         /* two channels */
+    dst[14] = 0x04;                         /* 16 bits */
+    put_be16( dst + 15, 1023 );      /* 1024 samples per frame */
+    dst[17] = random_access;
+    dst[18] = (uint8_t)(ra_flag << 6);
+    uint32_t pos = 22;
+    put_be32( dst + pos, 0xFFFFFFFF );   /* no original header */
+    pos += 4;
+    put_be32( dst + pos, 0xFFFFFFFF );   /* no original trailer */
+    pos += 4;
+    if( ra_flag == 2 && random_access )
+        for( uint32_t i = 0; i < unit_count; i++, pos += 4 )
+            put_be32( dst + pos, unit_sizes[i] );
+    return pos;
+}
+
+static int test_read_file_audio_raw_streams( void )
+{
+    uint8_t        stream[4096];
+    uint8_t        frame[AUDIO_EXPECT_MAX_LENGTH];
+    uint32_t       pos;
+    audio_expect_t *exp = (audio_expect_t *)malloc( sizeof(audio_expect_t) );
+    TEST_ASSERT( exp != NULL, "20: allocate the expectation" );
+
+    /*---- ADTS: a CRC protected frame and a mono frame at the end, which makes the stream change its sample entry ----*/
+    {
+        const char *path = "tests/tmp_test_fake_box.aac";
+        static const uint32_t payload[4] = { 20, 24, 18, 30 };
+        static const int      crc[4]     = { 0, 1, 0, 1 };
+        static const int      config[4]  = { 2, 2, 2, 1 };
+        memset( exp, 0, sizeof(*exp) );
+        pos = 0;
+        for( int i = 0; i < 4; i++ )
+        {
+            uint32_t length = build_adts_frame( frame, payload[i], crc[i], config[i], (uint8_t)(0x10 + i) );
+            uint32_t header = crc[i] ? 9 : 7;
+            expect_add_sample( exp, frame + header, length - header, (uint64_t)i * 1024, config[i] == 2 ? 1 : 2 );
+            append_bytes( stream, &pos, frame, length );
+        }
+        TEST_ASSERT( write_test_file( path, stream, pos ) == 0, "20a: write adts" );
+        audio_stream_check_t chk =
+        {
+            .path = path, .exp = exp, .sample_type = ISOM_CODEC_TYPE_MP4A_AUDIO, .frequency = 44100, .channels = 2, .channels2 = 1,
+            .summary_count = 2, .media_duration = 4096, .last_delta = 1024
+        };
+        int ret = check_raw_audio_stream( &chk );
+        remove( path );
+        if( ret < 0 )
+            return ret;
+    }
+
+    /*---- AC-3: the bit rate of the stream changes in the middle ----*/
+    {
+        const char *path = "tests/tmp_test_fake_box.ac3";
+        static const uint32_t frmsizecod[4] = { 0, 0, 2, 2 };
+        memset( exp, 0, sizeof(*exp) );
+        pos = 0;
+        for( int i = 0; i < 4; i++ )
+        {
+            uint32_t length = build_ac3_frame( frame, frmsizecod[i], (uint8_t)(0x20 + i) );
+            expect_add_sample( exp, frame, length, (uint64_t)i * 1536, i < 2 ? 1 : 2 );
+            append_bytes( stream, &pos, frame, length );
+        }
+        TEST_ASSERT( write_test_file( path, stream, pos ) == 0, "20b: write ac-3" );
+        audio_stream_check_t chk =
+        {
+            .path = path, .exp = exp, .sample_type = ISOM_CODEC_TYPE_AC_3_AUDIO, .frequency = 48000, .channels = 2, .channels2 = 2,
+            .summary_count = 2, .media_duration = 6144, .last_delta = 1536
+        };
+        int ret = check_raw_audio_stream( &chk );
+        remove( path );
+        if( ret < 0 )
+            return ret;
+    }
+
+    /*---- E-AC-3: the second access unit has a dependent substream, so does its sample entry ----*/
+    {
+        const char *path = "tests/tmp_test_fake_box.eac3";
+        memset( exp, 0, sizeof(*exp) );
+        pos = 0;
+        static const uint32_t indep_size[4] = { 128, 128, 160, 128 };
+        static const uint32_t dep_size[4]   = { 0, 64, 0, 0 };
+        for( int i = 0; i < 4; i++ )
+        {
+            uint8_t  au[AUDIO_EXPECT_MAX_LENGTH];
+            uint32_t au_length = build_eac3_frame( au, 0, indep_size[i], (uint8_t)(0x30 + i) );
+            if( dep_size[i] )
+                au_length += build_eac3_frame( au + au_length, 1, dep_size[i], (uint8_t)(0x40 + i) );
+            expect_add_sample( exp, au, au_length, (uint64_t)i * 1536, (i == 1) ? 2 : 1 );
+            append_bytes( stream, &pos, au, au_length );
+        }
+        TEST_ASSERT( write_test_file( path, stream, pos ) == 0, "20c: write e-ac-3" );
+        audio_stream_check_t chk =
+        {
+            .path = path, .exp = exp, .sample_type = ISOM_CODEC_TYPE_EC_3_AUDIO, .frequency = 48000, .channels = 2, .channels2 = 0,
+            .summary_count = 2, .media_duration = 6144, .last_delta = 1536
+        };
+        int ret = check_raw_audio_stream( &chk );
+        remove( path );
+        if( ret < 0 )
+            return ret;
+    }
+
+    /*---- DTS: core substreams of different sizes ----*/
+    {
+        const char *path = "tests/tmp_test_fake_box.dts";
+        static const uint32_t size[4] = { 128, 128, 160, 128 };
+        memset( exp, 0, sizeof(*exp) );
+        pos = 0;
+        for( int i = 0; i < 4; i++ )
+        {
+            uint32_t length = build_dts_core_frame( frame, size[i], (uint8_t)(0x50 + i) );
+            expect_add_sample( exp, frame, length, (uint64_t)i * 512, 1 );
+            append_bytes( stream, &pos, frame, length );
+        }
+        TEST_ASSERT( write_test_file( path, stream, pos ) == 0, "20d: write dts" );
+        audio_stream_check_t chk =
+        {
+            .path = path, .exp = exp, .sample_type = ISOM_CODEC_TYPE_DTSC_AUDIO, .frequency = 48000, .channels = 2, .channels2 = 0,
+            .summary_count = 1, .media_duration = 2048, .last_delta = 512
+        };
+        int ret = check_raw_audio_stream( &chk );
+        remove( path );
+        if( ret < 0 )
+            return ret;
+    }
+
+    /*---- MP3: ID3v2 tag, Xing frame that is not a sample, bit reservoir dependency, ID3v1 tag ----*/
+    {
+        const char *path = "tests/tmp_test_fake_box.mp3";
+        static const int      padding[4]         = { 0, 1, 0, 1 };
+        static const uint16_t main_data_begin[4] = { 0, 1, 0, 3 };
+        memset( exp, 0, sizeof(*exp) );
+        pos = 0;
+        static const uint8_t id3v2[16] = { 'I', 'D', '3', 4, 0, 0, 0, 0, 0, 6, 1, 2, 3, 4, 5, 6 };
+        append_bytes( stream, &pos, id3v2, sizeof(id3v2) );
+        uint32_t length = build_mp3_frame( frame, 0, 1, 0, 0x60 );     /* Xing */
+        append_bytes( stream, &pos, frame, length );
+        for( int i = 0; i < 4; i++ )
+        {
+            length = build_mp3_frame( frame, padding[i], 0, main_data_begin[i], (uint8_t)(0x61 + i) );
+            expect_add_sample( exp, frame, length, (uint64_t)i * 1152, 1 );
+            append_bytes( stream, &pos, frame, length );
+        }
+        uint8_t id3v1[128] = { 'T', 'A', 'G' };
+        append_bytes( stream, &pos, id3v1, sizeof(id3v1) );
+        TEST_ASSERT( write_test_file( path, stream, pos ) == 0, "20e: write mp3" );
+        audio_stream_check_t chk =
+        {
+            .path = path, .exp = exp, .sample_type = ISOM_CODEC_TYPE_MP4A_AUDIO, .frequency = 44100, .channels = 2, .channels2 = 0,
+            .summary_count = 1, .media_duration = 4608, .last_delta = 1152
+        };
+        int ret = check_raw_audio_stream( &chk );
+        remove( path );
+        if( ret < 0 )
+            return ret;
+    }
+
+    /*---- AMR-NB and AMR-WB ----*/
+    {
+        const char *path = "tests/tmp_test_fake_box.amr";
+        static const uint32_t nb_type[4] = { 0, 7, 3, 7 };
+        static const uint32_t nb_size[4] = { 13, 32, 18, 32 };
+        memset( exp, 0, sizeof(*exp) );
+        pos = 0;
+        append_bytes( stream, &pos, (const uint8_t *)"#!AMR\n", 6 );
+        for( int i = 0; i < 4; i++ )
+        {
+            uint32_t length = build_amr_frame( frame, nb_type[i], nb_size[i], (uint8_t)(0x70 + i) );
+            expect_add_sample( exp, frame, length, (uint64_t)i * 160, 1 );
+            append_bytes( stream, &pos, frame, length );
+        }
+        TEST_ASSERT( write_test_file( path, stream, pos ) == 0, "20f: write amr-nb" );
+        audio_stream_check_t chk =
+        {
+            .path = path, .exp = exp, .sample_type = ISOM_CODEC_TYPE_SAMR_AUDIO, .frequency = 8000, .channels = 1, .channels2 = 0,
+            .summary_count = 1, .media_duration = 640, .last_delta = 160
+        };
+        int ret = check_raw_audio_stream( &chk );
+        remove( path );
+        if( ret < 0 )
+            return ret;
+
+        static const uint32_t wb_type[3] = { 0, 8, 2 };
+        static const uint32_t wb_size[3] = { 18, 61, 33 };
+        memset( exp, 0, sizeof(*exp) );
+        pos = 0;
+        append_bytes( stream, &pos, (const uint8_t *)"#!AMR-WB\n", 9 );
+        for( int i = 0; i < 3; i++ )
+        {
+            uint32_t length = build_amr_frame( frame, wb_type[i], wb_size[i], (uint8_t)(0x78 + i) );
+            expect_add_sample( exp, frame, length, (uint64_t)i * 320, 1 );
+            append_bytes( stream, &pos, frame, length );
+        }
+        TEST_ASSERT( write_test_file( path, stream, pos ) == 0, "20f: write amr-wb" );
+        audio_stream_check_t chk_wb =
+        {
+            .path = path, .exp = exp, .sample_type = ISOM_CODEC_TYPE_SAWB_AUDIO, .frequency = 16000, .channels = 1, .channels2 = 0,
+            .summary_count = 1, .media_duration = 960, .last_delta = 320
+        };
+        ret = check_raw_audio_stream( &chk_wb );
+        remove( path );
+        if( ret < 0 )
+            return ret;
+    }
+
+    /*---- ALS: random access units with the size in the stream, with the size table in the header, and the whole stream as one unit ----*/
+    {
+        const char *path = "tests/tmp_test_fake_box.als";
+        static const uint32_t unit_size[3] = { 50, 60, 40 };
+        for( int variant = 0; variant < 3; variant++ )
+        {
+            memset( exp, 0, sizeof(*exp) );
+            uint8_t  header[64];
+            uint32_t header_length;
+            pos = 0;
+            if( variant == 2 )
+            {
+                header_length = build_als_header( header, 2500, 0, 1, 0, NULL );
+                append_bytes( stream, &pos, header, header_length );
+                uint32_t length = 90;
+                fill_pattern( frame, length, 0x90 );
+                expect_add_sample( exp, frame, length, 0, 1 );
+                append_bytes( stream, &pos, frame, length );
+            }
+            else
+            {
+                header_length = build_als_header( header, 2500, 1, (uint8_t)(variant + 1), 3, unit_size );
+                append_bytes( stream, &pos, header, header_length );
+                for( int i = 0; i < 3; i++ )
+                {
+                    fill_pattern( frame, unit_size[i], (uint8_t)(0x80 + i) );
+                    if( variant == 0 )
+                    {
+                        uint8_t size_field[4];
+                        put_be32( size_field, unit_size[i] );
+                        append_bytes( stream, &pos, size_field, 4 );
+                    }
+                    expect_add_sample( exp, frame, unit_size[i], (uint64_t)i * 1024, 1 );
+                    append_bytes( stream, &pos, frame, unit_size[i] );
+                }
+            }
+            TEST_ASSERT( write_test_file( path, stream, pos ) == 0, "20g: write als" );
+            audio_stream_check_t chk =
+            {
+                .path = path, .exp = exp, .sample_type = ISOM_CODEC_TYPE_MP4A_AUDIO, .frequency = 44100, .channels = 2, .channels2 = 0,
+                .summary_count = 1, .media_duration = 2500, .last_delta = (variant == 2) ? 2500 : 452
+            };
+            int ret = check_raw_audio_stream( &chk );
+            remove( path );
+            if( ret < 0 )
+                return ret;
+        }
+    }
+    free( exp );
+    printf( "[PASS] test_read_file_audio_raw_streams\n" );
+    return 0;
+}
+
 #ifdef LSMASH_DEBUG_ALLOC
 #define RUN_TEST( test_fn )                                                       \
     do                                                                            \
@@ -5123,6 +5823,7 @@ int main( void )
     RUN_TEST( test_external_data_reference_roundtrip );
     RUN_TEST( test_read_file_fake_box_and_unsupported_stream );
     RUN_TEST( test_read_file_flac_ivf_timeline );
+    RUN_TEST( test_read_file_audio_raw_streams );
 #ifdef LSMASH_DEBUG_ALLOC
     assert( lsm_alloc_verify_no_leaks() == 0 );
     assert( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0 );
