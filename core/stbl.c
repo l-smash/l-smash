@@ -444,6 +444,26 @@ static int stbl_increment_sample_number_in_entry
     return 0;
 }
 
+/*---------------------------------------------------------------------------
+ * Technical & Historical Background: Bitrate Calculation (btrt / esds)
+ *
+ * In ISO/IEC 14496-1 (`esds` DecoderConfigDescriptor) and ISO/IEC 14496-12
+ * (`btrt` MPEG4BitRateBox), the fields `bufferSizeDB`, `maxBitrate`, and
+ * `avgBitrate` were formally conceived within the hypothetical decoder
+ * system model (HRD / VBV / CPB) to define the scheduled delivery rate
+ * into the *input* of the decoding buffer (Delivery Rate).
+ *
+ * However, the encoder's delivery schedule and transmission rate constraints
+ * cannot always be deduced from standalone elementary streams or demuxed
+ * container samples alone. Furthermore, general media inspection utilities
+ * and end users historically expect bitrate metrics to reflect the decoding
+ * consumption rate at the *output* of the decoding buffer (the sum of sample
+ * sizes decoded and consumed within a 1-second sliding window).
+ *
+ * To reconcile formal delivery requirements with practical inspection needs,
+ * L-SMASH calculates `bufferSizeDB`, `maxBitrate`, and `avgBitrate` as a
+ * 1-second sliding window decoding consumption rate and buffer simulation.
+ *---------------------------------------------------------------------------*/
 int lsm_stbl_calculate_bitrate_description
 (
     isom_stbl_t *stbl,

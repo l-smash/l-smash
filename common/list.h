@@ -117,7 +117,7 @@ void *lsmash_list_get_entry_data
 );
 
 /*---------------------------------------------------------------------------
- * C99 Paged Block Array (lsm_list_t) and Unified Accessor / Iterator API
+ * C11 Paged Block Array (lsm_list_t) and Unified Accessor / Iterator API
  *
  * Architectural Why & How:
  * High-frequency sample tables (`stts`, `ctts`, `stsz`, `stz2`, `stss`, `stps`,
@@ -150,6 +150,11 @@ void *lsmash_list_get_entry_data
 #define LSM_LIST_PAGE_SHIFT 8U
 #define LSM_LIST_PAGE_SIZE  (1U << LSM_LIST_PAGE_SHIFT)
 #define LSM_LIST_PAGE_MASK  (LSM_LIST_PAGE_SIZE - 1U)
+
+_Static_assert( (LSM_LIST_PAGE_SIZE & (LSM_LIST_PAGE_SIZE - 1U)) == 0,
+                "LSM_LIST_PAGE_SIZE must be a power of two" );
+_Static_assert( LSM_LIST_PAGE_MASK == (LSM_LIST_PAGE_SIZE - 1U),
+                "LSM_LIST_PAGE_MASK must match LSM_LIST_PAGE_SIZE - 1" );
 
 typedef struct
 {
@@ -309,7 +314,7 @@ static inline lsmash_entry_t *lsm_entry_list_head( const lsmash_entry_list_t *li
     return list ? list->head : NULL;
 }
 
-/* Single-loop C99 iteration macros (safe with break and continue) */
+/* Single-loop iteration macros (safe with break and continue) */
 #define LSM_LIST_FOR_EACH( var, list_ptr ) \
     for( uint32_t lsm_idx_##var = 0; \
          ((var) = lsm_list_at( (list_ptr), lsm_idx_##var )) != NULL; \

@@ -53,6 +53,16 @@ static const lsmash_class_t isom_box_default_class =
     "box_default"
 };
 
+_Static_assert( offsetof( isom_box_t, class ) == 0,
+                "isom_box_t must have class at offset 0" );
+_Static_assert( offsetof( isom_box_t, root ) == offsetof( isom_unknown_box_t, root )
+             && offsetof( isom_box_t, file ) == offsetof( isom_unknown_box_t, file )
+             && offsetof( isom_box_t, parent ) == offsetof( isom_unknown_box_t, parent )
+             && offsetof( isom_box_t, extensions ) == offsetof( isom_unknown_box_t, extensions )
+             && offsetof( isom_box_t, size ) == offsetof( isom_unknown_box_t, size )
+             && offsetof( isom_box_t, type ) == offsetof( isom_unknown_box_t, type ),
+                "ISOM_BASEBOX_COMMON layout must be consistent across box structs" );
+
 typedef isom_box_t isom_opaque_t;
 static const isom_box_t isom_opaque_box_default =
 {

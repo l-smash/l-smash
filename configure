@@ -4,7 +4,7 @@
 #  configure script for L-SMASH
 #
 #  Currently, this script is considering only GCC.
-#  If you want to use other compiler based on C99 standerd (e.g. llvm),
+#  If you want to use other compiler based on C11 standard (e.g. llvm),
 #  we just say to you "patches welcome."
 #----------------------------------------------------------------------------
 
@@ -113,7 +113,7 @@ IMPLIB=""
 
 TOOLS=""
 
-CFLAGS="-Wshadow -Wall -std=c99 -pedantic -I. -I$SRCDIR"
+CFLAGS="-Wshadow -Wall -std=c11 -pedantic -I. -I$SRCDIR"
 LDFLAGS="-L."
 SO_LDFLAGS='-shared -Wl,-soname,$@ -Wl,--version-script,liblsmash.ver'
 LIBS="-lm"
