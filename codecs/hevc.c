@@ -3246,7 +3246,7 @@ int lsm_hevc_print_codec_specific
             lsmash_ifprintf( fp, array_indent, "nalUnit[%"PRIu16"]\n", j );
             lsmash_ifprintf( fp, array_indent + 1, "nalUnitLength = %"PRIu16"\n", nalUnitLength );
 
-            if( (temp8 & 0x3F) == HEVC_NALU_TYPE_PREFIX_SEI )
+            if( (temp8 & 0x3F) == HEVC_NALU_TYPE_PREFIX_SEI && nalUnitLength >= 3 )
             {
                 lsmash_bs_skip_bytes( bs, 2 );
                 lsmash_ifprintf(fp, array_indent + 1, "seiPayloadType = %"PRIu8"\n", lsmash_bs_get_byte( bs ));

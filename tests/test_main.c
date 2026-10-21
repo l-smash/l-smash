@@ -3356,6 +3356,160 @@ static int test_malformed_boxes_and_sample_tables( void )
         remove( bad_mp4 );
     }
 
+    /* 13g. Excessive box nesting depth (> ISOM_MAX_BOX_NESTING_LEVEL = 64) */
+    {
+        const int depth = 70;
+        lsmash_bs_t *bs = lsmash_bs_create();
+        /* ftyp (16 bytes) */
+        lsmash_bs_put_be32( bs, 16 );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'f', 't', 'y', 'p' ) );
+        lsmash_bs_put_be32( bs, ISOM_BRAND_TYPE_ISOM );
+        lsmash_bs_put_be32( bs, 0 );
+        /* 70 nested proj boxes: each box header is 8 bytes, innermost has 0 payload */
+        for( int d = depth; d >= 1; d-- )
+        {
+            lsmash_bs_put_be32( bs, (uint32_t)(d * 8) );
+            lsmash_bs_put_be32( bs, LSMASH_4CC( 'p', 'r', 'o', 'j' ) );
+        }
+
+        uint32_t raw_len = 0;
+        uint8_t *raw = lsmash_bs_export_data( bs, &raw_len );
+        lsmash_bs_cleanup( bs );
+        FILE *fp = fopen( bad_mp4, "wb" );
+        fwrite( raw, 1, raw_len, fp );
+        fclose( fp );
+        lsmash_free( raw );
+
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( bad_mp4, 1, &param ) == 0, "13g: open bad_mp4 (deeply nested boxes)" );
+        lsmash_file_t *file = lsmash_set_file( root, &param );
+        TEST_ASSERT( lsmash_read_file( file, &param ) == LSMASH_ERR_INVALID_DATA,
+                     "13g: lsmash_read_file rejects box nesting depth > 64" );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0,
+                     "13g: 100% rollback after excessive box nesting depth" );
+#endif
+        remove( bad_mp4 );
+    }
+
+    /* 13h. Child box size exceeding parent box boundary & invalid largesize (< 16) */
+    {
+        lsmash_bs_t *bs = lsmash_bs_create();
+        /* ftyp (16 bytes) */
+        lsmash_bs_put_be32( bs, 16 );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'f', 't', 'y', 'p' ) );
+        lsmash_bs_put_be32( bs, ISOM_BRAND_TYPE_ISOM );
+        lsmash_bs_put_be32( bs, 0 );
+        /* moov claiming 24 bytes total, containing a child trak claiming 1024 bytes */
+        lsmash_bs_put_be32( bs, 24 );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'o', 'o', 'v' ) );
+        lsmash_bs_put_be32( bs, 1024 );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 't', 'r', 'a', 'k' ) );
+        lsmash_bs_put_be64( bs, 0 );
+
+        uint32_t raw_len = 0;
+        uint8_t *raw = lsmash_bs_export_data( bs, &raw_len );
+        lsmash_bs_cleanup( bs );
+        FILE *fp = fopen( bad_mp4, "wb" );
+        fwrite( raw, 1, raw_len, fp );
+        fclose( fp );
+        lsmash_free( raw );
+
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( bad_mp4, 1, &param ) == 0, "13h: open bad_mp4 (child size > parent size)" );
+        lsmash_file_t *file = lsmash_set_file( root, &param );
+        TEST_ASSERT( lsmash_read_file( file, &param ) == LSMASH_ERR_INVALID_DATA,
+                     "13h: lsmash_read_file rejects child box exceeding parent boundary" );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0,
+                     "13h: 100% rollback after child box exceeding parent boundary" );
+#endif
+        remove( bad_mp4 );
+    }
+
+    /* 13i. Truncated chan box with excessive numberChannelDescriptions */
+    {
+        lsmash_bs_t *bs = lsmash_bs_create();
+        /* ftyp (16 bytes) */
+        lsmash_bs_put_be32( bs, 16 );
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 'f', 't', 'y', 'p' ) );
+        lsmash_bs_put_be32( bs, ISOM_BRAND_TYPE_QT );
+        lsmash_bs_put_be32( bs, 0 );
+        /* moov -> trak -> mdia -> (hdlr + minf -> stbl -> stsd -> lpcm -> chan) */
+        uint32_t chan_sz = 24; /* 12 (FullBox) + 4 (layoutTag) + 4 (bitmap) + 4 (numberChannelDescriptions=0x10000000) */
+        uint32_t lpcm_sz = 36 + chan_sz;
+        uint32_t stsd_sz = 16 + lpcm_sz;
+        uint32_t stbl_sz = 8 + stsd_sz;
+        uint32_t minf_sz = 8 + stbl_sz;
+        uint32_t hdlr_sz = 33;
+        uint32_t mdia_sz = 8 + hdlr_sz + minf_sz;
+        uint32_t trak_sz = 8 + mdia_sz;
+        uint32_t moov_sz = 8 + trak_sz;
+        lsmash_bs_put_be32( bs, moov_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'o', 'o', 'v' ) );
+        lsmash_bs_put_be32( bs, trak_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 't', 'r', 'a', 'k' ) );
+        lsmash_bs_put_be32( bs, mdia_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'd', 'i', 'a' ) );
+        /* hdlr (soun) */
+        lsmash_bs_put_be32( bs, hdlr_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'h', 'd', 'l', 'r' ) );
+        lsmash_bs_put_be32( bs, 0 ); /* version/flags */
+        lsmash_bs_put_be32( bs, 0 ); /* componentType */
+        lsmash_bs_put_be32( bs, LSMASH_4CC( 's', 'o', 'u', 'n' ) );
+        lsmash_bs_put_be32( bs, 0 );
+        lsmash_bs_put_be32( bs, 0 );
+        lsmash_bs_put_be32( bs, 0 );
+        lsmash_bs_put_byte( bs, 0 );
+        /* minf -> stbl -> stsd -> lpcm -> chan */
+        lsmash_bs_put_be32( bs, minf_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'm', 'i', 'n', 'f' ) );
+        lsmash_bs_put_be32( bs, stbl_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 's', 't', 'b', 'l' ) );
+        lsmash_bs_put_be32( bs, stsd_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 's', 't', 's', 'd' ) );
+        lsmash_bs_put_be32( bs, 0 ); /* version/flags */
+        lsmash_bs_put_be32( bs, 1 ); /* entry_count */
+        lsmash_bs_put_be32( bs, lpcm_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'l', 'p', 'c', 'm' ) );
+        lsmash_bs_put_be32( bs, 0 ); lsmash_bs_put_be16( bs, 0 ); /* reserved[6] */
+        lsmash_bs_put_be16( bs, 1 ); /* data_reference_index */
+        lsmash_bs_put_be16( bs, 0 ); /* version = 0 */
+        lsmash_bs_put_be16( bs, 0 ); /* revision_level */
+        lsmash_bs_put_be32( bs, 0 ); /* vendor */
+        lsmash_bs_put_be16( bs, 2 ); /* channelcount */
+        lsmash_bs_put_be16( bs, 16 ); /* samplesize */
+        lsmash_bs_put_be16( bs, 0 ); /* compression_ID */
+        lsmash_bs_put_be16( bs, 0 ); /* packet_size */
+        lsmash_bs_put_be32( bs, 48000U << 16 ); /* samplerate */
+        /* chan box claiming 0x10000000 channel descriptions in a 24-byte box */
+        lsmash_bs_put_be32( bs, chan_sz ); lsmash_bs_put_be32( bs, LSMASH_4CC( 'c', 'h', 'a', 'n' ) );
+        lsmash_bs_put_be32( bs, 0 ); /* version/flags */
+        lsmash_bs_put_be32( bs, 0 ); /* channelLayoutTag */
+        lsmash_bs_put_be32( bs, 0 ); /* channelBitmap */
+        lsmash_bs_put_be32( bs, 0x10000000U ); /* numberChannelDescriptions */
+
+        uint32_t raw_len = 0;
+        uint8_t *raw = lsmash_bs_export_data( bs, &raw_len );
+        lsmash_bs_cleanup( bs );
+        FILE *fp = fopen( bad_mp4, "wb" );
+        fwrite( raw, 1, raw_len, fp );
+        fclose( fp );
+        lsmash_free( raw );
+
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( bad_mp4, 1, &param ) == 0, "13i: open bad_mp4 (truncated chan)" );
+        lsmash_file_t *file = lsmash_set_file( root, &param );
+        TEST_ASSERT( lsmash_read_file( file, &param ) == LSMASH_ERR_INVALID_DATA,
+                     "13i: lsmash_read_file rejects truncated chan with excessive numberChannelDescriptions" );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+#ifdef LSMASH_DEBUG_ALLOC
+        TEST_ASSERT( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0,
+                     "13i: 100% rollback after truncated chan" );
+#endif
+        remove( bad_mp4 );
+    }
+
     printf( "[PASS] test_malformed_boxes_and_sample_tables\n" );
     return 0;
 }
