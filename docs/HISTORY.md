@@ -20,7 +20,7 @@
 
 ## 2. Historical Defect Analysis (Pre-`v2.17.0` Baseline)
 
-Prior to the `v2.21.0`–`v2.23.2` series on `dev`, the `vimeo` (`4a21f21`) and `av1` (`0715bf6`) branches exhibited several technical limitations and defects:
+Prior to the `v2.21.0`–`v2.23.3` series on `dev`, the `vimeo` (`4a21f21`) and `av1` (`0715bf6`) branches exhibited several technical limitations and defects:
 
 1. **64-Bit Little-Endian Shift Bug in `common/bytes.c` (`lsmash_bs_get_le64`)**:
    - `lsmash_bs_get_le64()` shifted the upper 32-bit word by `<< 16` instead of `<< 32` (`((uint64_t)lsmash_bs_get_le32( bs ) << 16) | lsmash_bs_get_le32( bs )`), corrupting 64-bit little-endian reads.
@@ -41,7 +41,7 @@ Prior to the `v2.21.0`–`v2.23.2` series on `dev`, the `vimeo` (`4a21f21`) and 
 
 ---
 
-## 3. Release Evolution (`v2.21.0` – `v2.23.2`)
+## 3. Release Evolution (`v2.21.0` – `v2.23.3`)
 
 ### 3.1 `v2.21.0`: Built-In AV1 OBU Parser, `le64` Fix & Synthetic Test Suite
 - **`common/bytes.c`**: Fixed `lsmash_bs_get_le64()` to shift the high 32-bit word by `<< 32` rather than `<< 16`.
@@ -131,3 +131,9 @@ Prior to the `v2.21.0`–`v2.23.2` series on `dev`, the `vimeo` (`4a21f21`) and 
 - **`styp` emission fix**: the existence test guarding the lazy write of the Segment Type Box in `lsm_fragment_append_sample()` (`core/fragment.c`) was inverted by the non-existing-box sentinel refactoring, so media segments were written without `styp`. The test is corrected, and segments now begin with `styp`.
 - **Tests**: added suite 16 `test_segmented_isobmff_and_abort_callback` (self-initializing segment with `sidx` round-trip, Initialization Segment + Media Segments via `lsmash_switch_media_segment()`, callback abort with zero leaks, `INDEX` vs. old brands rejection). `make test` now runs 16 suites (147,462 assertions).
 - **Pending work recorded in `SPEC.md` (Section 7)**: reading separate Media Segments against an Initialization Segment, and Data Reference (`dref`) external media resolution.
+
+### 3.10 `v2.23.3`: External Data Reference Guard for Fragmented Movies, `dref` Test & Sentinel Box Audit
+- **`lsmash_create_data_reference()` guard** (`core/track.c`): the function checked only whether the referenced file was fragmented. A fragmented movie file combined with a plain external media file was accepted, although movie fragments write their samples into the movie file, producing a `dref` that pointed to an external file which never received the samples. The combination is now rejected up front, matching the documented restriction. Self-contained entries in a fragmented movie are unaffected.
+- **Sentinel Box predicate audit**: every use of `LSMASH_IS_NON_EXISTING_BOX` / `LSMASH_IS_EXISTING_BOX` under `core/`, `codecs/`, `importer/` and `cli/` was reviewed against the sentinel refactoring that introduced them. Besides the `styp` test fixed in `v2.23.2`, the audit found no other inverted predicate in the current tree (the `mean` / `name` inversions in `lsmash_get_itunes_metadata()` made by that refactoring were already corrected in later history).
+- **Tests**: added suite 17 `test_external_data_reference_roundtrip` (external media file write, `lsmash_get_data_reference()` / `lsmash_assign_data_reference()` read-back, Media Timeline sample restoration, fragmented-movie rejection). `make test` now runs 17 suites (147,569 assertions).
+- **Documentation**: `USAGE.md` section 3.8 describes the `dref` workflow and its limitations. `SPEC.md` (Section 7) narrows the pending task to external data references for Movie Fragments.

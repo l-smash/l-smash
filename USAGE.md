@@ -706,7 +706,105 @@ lsmash_destroy_root( root );
 
 ---
 
-### 3.8 Complete End-to-End C API Example
+### 3.8 External Data References (`dref`)
+
+#### Mechanism
+
+Every track owns a Data Reference Box (`dref`) inside `minf` / `dinf`. Each entry (a `'url '` Box) tells where the media data of the sample descriptions that point to it (`data_reference_index` in the sample entry, `lsmash_summary_t::data_ref_index` in the API) is stored:
+
+- **Self-contained** entry: the `'url '` flags have bit 0 (`0x000001`) set and carry no location. The samples are in the same file as the movie boxes. L-SMASH adds this entry automatically when a track has none.
+- **External** entry: the flags are `0` and the `'url '` carries the location (a URL or file name) of another file that holds the samples. The movie file then contains only `moov` and the sample tables (`stsc`, `stco`, `stsz`, ...), whose chunk offsets address the external file.
+
+The public type is `lsmash_data_reference_t`: `index` is the 1-based position in the `dref`, and `location` is the string of the referenced file (`NULL` for a self-contained entry).
+
+#### Writing: movie file plus external media file
+
+The referenced file is an ordinary output file opened with `lsmash_open_file()` and registered with `lsmash_set_file()`. It carries samples only, so replace its mode with `LSMASH_FILE_MODE_WRITE | LSMASH_FILE_MODE_MEDIA` (no `BOX`, no `INITIALIZATION`) after opening it.
+
+```c
+lsmash_root_t *root = lsmash_create_root();
+
+/* The movie file keeps the boxes (moov). */
+lsmash_file_parameters_t movie_param = { 0 };
+lsmash_open_file( "movie.mp4", 0, &movie_param );
+lsmash_file_t *movie_file = lsmash_set_file( root, &movie_param );
+
+/* The external file keeps only the raw sample data. */
+lsmash_file_parameters_t media_param = { 0 };
+lsmash_open_file( "media.bin", 0, &media_param );
+media_param.mode = LSMASH_FILE_MODE_WRITE | LSMASH_FILE_MODE_MEDIA;
+lsmash_file_t *media_file = lsmash_set_file( root, &media_param );
+
+/* ... lsmash_set_movie_parameters(), lsmash_create_track(), lsmash_set_track_parameters(),
+ *     lsmash_set_media_parameters() ... */
+
+/* Entries are numbered in creation order.
+ * Optional: pass the movie file with location == NULL to create the self-contained entry as index 1. */
+lsmash_data_reference_t ref = { .index = 0, .location = "media.bin" };  /* location as it will be resolved by a reader */
+lsmash_create_data_reference( root, track_ID, &ref, media_file );       /* ref.index is set to the new index */
+
+/* Point the sample descriptions of the track to the entry before adding them. */
+summary->data_ref_index = ref.index;
+lsmash_add_sample_entry( root, track_ID, summary );
+
+/* Append samples as usual. They are written to the external file. */
+lsmash_append_sample( root, track_ID, sample );
+lsmash_flush_pooled_samples( root, track_ID, last_sample_delta );
+lsmash_finish_movie( root, NULL );
+
+lsmash_close_file( &media_param );
+lsmash_close_file( &movie_param );
+lsmash_destroy_root( root );
+```
+
+`lsmash_create_data_reference()` returns a negative value when the file does not belong to `root`, is not writable, lacks both `MEDIA` and `INITIALIZATION`, or when a fragmented file is involved (see the limitations below). Passing the movie file itself or a `NULL` location creates a self-contained entry.
+
+#### Reading: resolving the external file
+
+The library never opens a referenced file by itself. The application reads the location, opens the file, and assigns it to the entry before constructing the timeline.
+
+```c
+lsmash_root_t *root = lsmash_create_root();
+lsmash_file_parameters_t movie_param = { 0 };
+lsmash_open_file( "movie.mp4", 1 /* read mode */, &movie_param );
+lsmash_file_t *movie_file = lsmash_set_file( root, &movie_param );
+lsmash_read_file( movie_file, &movie_param );
+
+uint32_t count = lsmash_count_data_reference( root, track_ID );
+for( uint32_t i = 1; i <= count; i++ )
+{
+    lsmash_data_reference_t ref = { .index = i, .location = NULL };
+    if( lsmash_get_data_reference( root, track_ID, &ref ) < 0 )
+        continue;
+    if( ref.location )      /* external entry (NULL means self-contained) */
+    {
+        /* Resolve ref.location relative to the movie file yourself. */
+        lsmash_file_parameters_t media_param = { 0 };
+        lsmash_open_file( resolved_path, 1, &media_param );
+        media_param.mode |= LSMASH_FILE_MODE_MEDIA;
+        lsmash_file_t *media_file = lsmash_set_file( root, &media_param );
+        lsmash_assign_data_reference( root, track_ID, ref.index, media_file );
+        /* Keep media_param open until the timeline is destructed. */
+    }
+    lsmash_cleanup_data_reference( &ref );
+}
+
+lsmash_construct_timeline( root, track_ID );
+/* lsmash_get_sample_from_media_timeline() now reads each sample from the file that its chunk references. */
+```
+
+`lsmash_assign_data_reference()` only affects external entries; calling it for a self-contained entry succeeds and changes nothing. `cli/remuxer.c` follows exactly this procedure when it opens an input movie that has external references.
+
+#### Current Limitations
+
+- **Movie Fragments are not supported with external data references.** A normal movie (`moov` / `stbl`) can reference external files, but a Movie Fragment (`moof` / `traf`) layout with a non-self-contained `'url '` is not implemented. Fragments address their samples relative to the Movie Fragment Box and write them into the movie file itself, so `lsmash_create_data_reference()` returns `LSMASH_ERR_FUNCTION_PARAM` when either the movie file or the referenced file is fragmented. A self-contained entry in a fragmented movie is still accepted.
+- **Only `'url '` entries are written.** `'urn '` entries are not generated.
+- **The referenced file must be a plain media container.** A box-structured file (for example another MP4) cannot be used as the referenced data yet.
+- **Reading never follows the location automatically.** The application is responsible for opening and assigning every external file. Samples of an external entry that was not assigned are not read from the external file, so assign every external entry before calling lsmash_construct_timeline().
+
+---
+
+### 3.9 Complete End-to-End C API Example
 
 The following self-contained C program (compatible with C99, C11 and C++) muxes a codec-neutral workflow: an AAC-LC track (`mp4a` + `esds`, with a fixed AudioSpecificConfig) with an encoder-delay edit, finalizes it for progressive download (`moov` at the front), and reads it back through the media timeline API. Replace the dummy payloads and the sample entry setup of 3.3 / 3.4 to use any other codec.
 

@@ -97,10 +97,10 @@ Detailed specifications for each major subsystem reside in `docs/specs/` and are
 | Document | Scope & Responsibility | Status |
 | :--- | :--- | :--- |
 | [`docs/CODING_STYLE.md`](docs/CODING_STYLE.md) | Official C11 coding style, Allman formatting, internal header policy, symbol naming, and Git contribution guidelines | Active (`v2.23.1`) |
-| [`docs/HISTORY.md`](docs/HISTORY.md) | Historical lineage (`master`, `av1`, `vimeo`, `dev`), forensic bug analysis, and release changelog | Synchronized (`v2.23.2`) |
-| [`docs/specs/memory_architecture.md`](docs/specs/memory_architecture.md) | C11 memory audit (`LSMASH_DEBUG_ALLOC`), `lsmash_multiple_buffers_t` resize invariants, and `lsm_list_t` Paged Block Array architecture | Synchronized (`v2.23.2`) |
-| [`docs/specs/codecs_and_importers.md`](docs/specs/codecs_and_importers.md) | Comprehensive architecture and container binding specification for all video and audio codecs and importers (`codecs/*`, `importer/*`) | Synchronized (`v2.23.2`) |
-| [`docs/specs/testing_strategy.md`](docs/specs/testing_strategy.md) | Self-contained synthetic test suite (`make test`), bitstream generators, malformed box negative tests, and regression suites | Synchronized (`v2.23.2`) |
+| [`docs/HISTORY.md`](docs/HISTORY.md) | Historical lineage (`master`, `av1`, `vimeo`, `dev`), forensic bug analysis, and release changelog | Synchronized (`v2.23.3`) |
+| [`docs/specs/memory_architecture.md`](docs/specs/memory_architecture.md) | C11 memory audit (`LSMASH_DEBUG_ALLOC`), `lsmash_multiple_buffers_t` resize invariants, and `lsm_list_t` Paged Block Array architecture | Synchronized (`v2.23.3`) |
+| [`docs/specs/codecs_and_importers.md`](docs/specs/codecs_and_importers.md) | Comprehensive architecture and container binding specification for all video and audio codecs and importers (`codecs/*`, `importer/*`) | Synchronized (`v2.23.3`) |
+| [`docs/specs/testing_strategy.md`](docs/specs/testing_strategy.md) | Self-contained synthetic test suite (`make test`), bitstream generators, malformed box negative tests, and regression suites | Synchronized (`v2.23.3`) |
 
 ---
 
@@ -115,7 +115,7 @@ Detailed specifications for each major subsystem reside in `docs/specs/` and are
 - **Quality Requirements**:
   1. Zero compiler warnings under `-Wall -Wshadow -std=c11 -pedantic` across `liblsmash.a`, CLI tools, and `tests/test_main.c`.
   2. Public header `lsmash.h` strictly passes standalone verification under `gcc -std=c99 -pedantic` and `g++ -std=c++11 -pedantic`.
-  3. All 16 synthetic test suites in `make test` must pass with **0 leaks** and **0 active blocks/bytes** reported by `lsm_alloc_verify_no_leaks()`.
+  3. All 17 synthetic test suites in `make test` must pass with **0 leaks** and **0 active blocks/bytes** reported by `lsm_alloc_verify_no_leaks()`.
 
 ---
 
@@ -247,4 +247,4 @@ All modules in `codecs/` and `importer/` enforce the identical symbol naming hie
 ## 7. Future Roadmap / Pending Tasks
 
 1. **Read support for separate Media Segments.** A Media Segment (`.m4s` × N) that has no `moov` is not yet linked to its Initialization Segment (`init.mp4`) at read time. The read path must associate each segment with the initializer (`file->initializer` and `lsmash_activate_file()`) so that a Media Timeline spanning several segment files can be built and demuxed directly, without concatenating the files first. Writing such segments is already supported (`lsmash_switch_media_segment()`).
-2. **Data Reference (`dref`) external media files.** Resolving and reading media data that a `dref` entry places in an external file is not complete and remains to be finished.
+2. **External Data Reference for Movie Fragments (`moof` / `traf`).** External file references through a non-self-contained `'url '` entry of `dref` are already implemented for a normal movie (`moov` / `stbl`): `lsmash_create_data_reference()` writes them, `lsmash_get_data_reference()` / `lsmash_assign_data_reference()` resolve them at read time, and `tests/test_main.c` covers the round trip. What remains is completing external data references for Movie Fragments. Fragment sample offsets are relative to the Movie Fragment Box (default-base-is-moof) and the samples are written into the movie file, so `lsmash_create_data_reference()` currently rejects a fragmented movie or fragmented referenced file, and the read path for `traf` / `trun` data offsets into a separate file is not covered by any test.
