@@ -49,8 +49,8 @@ Every Box contains `lsmash_entry_list_t extensions` (part of `ISOM_BASEBOX_COMMO
 #### Symbol Naming Conventions
 To maintain clear module boundaries without breaking external callers of `<lsmash.h>`, symbols follow a structured naming convention across three visibility scopes:
 - **Public API (`lsmash_*`)**: Exported library functions, types, and macros declared in `lsmash.h` and exposed via `liblsmash.ver`. Existing public symbol names are strictly preserved for ABI/API compatibility.
-- **Internal Shared Functions (`lsm_<module>_*`)**: Non-`static` functions shared across compilation units inside `common/`, `core/`, `codecs/`, and `importer/` (for example, `lsm_alloc_get_active_count()`, `lsm_list_init()`, `lsm_isom_get_trak()`).
-- **File-Local Static Functions (`<module>_*`)**: `static` helper functions local to a single `.c` file (for example, `alloc_verify_block()`, `av1_parse_tile_info()`, `isom_write_pcmC()`).
+- **Internal Shared Functions (`lsm_<module>_*`)**: Non-`static` functions shared across compilation units inside `common/`, `core/`, `codecs/`, and `importer/` (for example, `lsm_alloc_get_active_count()`, `lsm_list_init()`, `lsm_stbl_get_sample_count()`, `lsm_sample_pool_push()`, `lsm_track_get_trak()`, `lsm_movie_check_initializer_present()`).
+- **File-Local Static Functions (`<module>_*`)**: `static` helper functions local to a single `.c` file (for example, `alloc_verify_block()`, `av1_parse_tile_info()`, `stbl_add_ctts_entry()`, `sample_append()`, `track_get_edts()`, `movie_update_chunk_offset()`).
 
 #### Preservation of Specification Syntax Identifiers
 When a struct field, constant, or helper represents a syntax element defined by an international specification (ISO/IEC 14496-12, ISO/IEC 23003-5,ISO/IEC 23091-3, or AOM AV1), **the exact identifier spelling and casing from the official specification are preserved** so that the C source code can be cross-referenced directly against the standard text:
@@ -86,8 +86,8 @@ Detailed specifications for each major subsystem reside in `docs/specs/` and are
 3. **Hybrid Container Architecture & Paged Block Arrays (`common/alloc.{c,h}`, `common/list.{c,h}`, `core/`)**:
    - Built-in C99 memory auditor (`-DLSMASH_DEBUG_ALLOC`) with `#ptr`/`#size` expression capture, 64-byte aligned headers, front/rear canaries, `0xCD`/`0xDD` memory poisoning, and leak verification.
    - Hybrid container model: `lsmash_entry_list_t` doubly-linked pointer lists for polymorphic Box trees (`extensions`, `trak_list`, `moof_list`) paired with **`lsm_list_t` C99 Paged Block Arrays** ($2^8 = 256$ elements per page) for high-volume sample tables (`stts`, `ctts`, `stsz`, `stz2`, `stss`, `stps`, `sdtp`, `stsc`, `stco`/`co64`, `sgpd`, `sbgp`, `elst`), fragment tables (`trun->optional`, `tfra`, `sidx`, `fragment->pool`), and media timelines (`info_list`, `bunch_list`, `chunk_list`).
-4. **Core Module Decomposition Design (`core/isom.{c,h}`)**:
-   - Section 6 below specifies the planned decomposition of `core/isom.{c,h}` into focused compilation units (`core/isom.c`, `core/track.c`, `core/sample.c`, `core/stbl.c`).
+4. **Core Container Engine Module Architecture (`core/stbl.{c,h}`, `core/sample.{c,h}`, `core/track.{c,h}`, `core/movie.{c,h}`)**:
+   - Section 6 below specifies the four-module architecture of the core container engine organized by ISOBMFF logical hierarchy (`stbl`, `sample`, `track`, `movie`), replacing the monolithic `core/isom.c` compilation unit.
 
 ---
 
@@ -95,11 +95,11 @@ Detailed specifications for each major subsystem reside in `docs/specs/` and are
 
 | Document | Scope & Responsibility | Status |
 | :--- | :--- | :--- |
-| [`docs/HISTORY.md`](docs/HISTORY.md) | Historical lineage (`master`, `av1`, `vimeo`, `dev`), forensic bug analysis, and release changelog | Synchronized (`v2.21.1`) |
-| [`docs/specs/memory_architecture.md`](docs/specs/memory_architecture.md) | C99 memory audit (`LSMASH_DEBUG_ALLOC`), `lsmash_multiple_buffers_t` resize invariants, and `lsm_list_t` Paged Block Array architecture | Synchronized (`v2.21.1`) |
-| [`docs/specs/av1_obuparse_removal.md`](docs/specs/av1_obuparse_removal.md) | Built-in AV1 OBU parser (`codecs/av1.{c,h}`), Errata 1 & AV1-ISOBMFF v1.2.0 compliance, and IVF importer | Synchronized (`v2.21.1`) |
-| [`docs/specs/lpcm_isobmff_fragmented.md`](docs/specs/lpcm_isobmff_fragmented.md) | ISO/IEC 23003-5 (`ipcm`, `fpcm`, `pcmC`), ISO/IEC 14496-12 (`chnl`, `srat`, `AudioSampleEntryV1`), and Fragmented LPCM | Synchronized (`v2.21.1`) |
-| [`docs/specs/testing_strategy.md`](docs/specs/testing_strategy.md) | Self-contained synthetic test suite (`make test`), bitstream generators, malformed box negative tests, and regression suites | Synchronized (`v2.21.1`) |
+| [`docs/HISTORY.md`](docs/HISTORY.md) | Historical lineage (`master`, `av1`, `vimeo`, `dev`), forensic bug analysis, and release changelog | Synchronized (`v2.22.0`) |
+| [`docs/specs/memory_architecture.md`](docs/specs/memory_architecture.md) | C99 memory audit (`LSMASH_DEBUG_ALLOC`), `lsmash_multiple_buffers_t` resize invariants, and `lsm_list_t` Paged Block Array architecture | Synchronized (`v2.22.0`) |
+| [`docs/specs/av1_obuparse_removal.md`](docs/specs/av1_obuparse_removal.md) | Built-in AV1 OBU parser (`codecs/av1.{c,h}`), Errata 1 & AV1-ISOBMFF v1.2.0 compliance, and IVF importer | Synchronized (`v2.22.0`) |
+| [`docs/specs/lpcm_isobmff_fragmented.md`](docs/specs/lpcm_isobmff_fragmented.md) | ISO/IEC 23003-5 (`ipcm`, `fpcm`, `pcmC`), ISO/IEC 14496-12 (`chnl`, `srat`, `AudioSampleEntryV1`), and Fragmented LPCM | Synchronized (`v2.22.0`) |
+| [`docs/specs/testing_strategy.md`](docs/specs/testing_strategy.md) | Self-contained synthetic test suite (`make test`), bitstream generators, malformed box negative tests, and regression suites | Synchronized (`v2.22.0`) |
 
 ---
 
@@ -117,15 +117,15 @@ Detailed specifications for each major subsystem reside in `docs/specs/` and are
 
 ---
 
-## 6. `core/isom.{c,h}` Decomposition Design (`core/isom.c`, `core/track.c`, `core/sample.c`, `core/stbl.c`)
+## 6. Core Container Engine Architecture (`core/stbl.{c,h}`, `core/sample.{c,h}`, `core/track.{c,h}`, `core/movie.{c,h}`)
 
-Currently, `core/isom.c` (~3,490 lines) and `core/isom.h` (68 lines) combine four distinct responsibilities in a single compilation unit:
-1. **Sample Table (`stbl`) & Sample Group (`sgpd`/`sbgp`) Entry Manipulation** (~1,420 lines)
-2. **Track (`trak`), Edit List (`edts`/`elst`), Track Reference (`tref`), & Handler (`hdlr`) Management** (~940 lines)
-3. **Sample Pooling, Non-Fragmented Sample Appending, & Bitrate/DTS/Duration Updates** (~750 lines)
-4. **Movie (`moov`), Brand (`ftyp`), File Initialization, Progressive Download Remuxing, & Finish Lifecycle** (~380 lines)
+The core ISOBMFF/QTFF container manipulation engine in `core/` is decomposed along the container's logical hierarchy into four focused modules (plus `core/chapter.c` for chapter list operations), completely replacing the legacy monolithic `core/isom.c`:
+1. **`core/stbl.{c,h}` — Sample Table (`stbl`) & Sample Grouping (`sgpd`/`sbgp`) Engine**
+2. **`core/sample.{c,h}` — Sample Lifecycle, Pooling & Chunk Interleaving Engine**
+3. **`core/track.{c,h}` — Track (`trak`/`tkhd`), Media (`mdia`/`mdhd`/`hdlr`), Data Reference (`dref`) & Edit List (`elst`) Management**
+4. **`core/movie.{c,h}` — Movie (`moov`/`mvhd`/`iods`), Progressive Download Rearrangement & User Data (`cprt`/`hnti`)**
 
-### 6.1 Target 4-Module Decomposition (`core/`)
+### 6.1 4-Module Hierarchy (`core/`)
 
 ```
                   +---------------------------------------+
@@ -137,90 +137,76 @@ Currently, `core/isom.c` (~3,490 lines) and `core/isom.h` (68 lines) combine fou
         |                    |                 |                    |
         v                    v                 v                    v
 +---------------+    +---------------+ +---------------+    +---------------+
-|  core/stbl.c  |    | core/track.c  | | core/sample.c |    |  core/isom.c  |
-|  Sample Table |    | Track, Media, | | Sample Alloc, |    | Movie, Brands,|
-|  stts/ctts/   |    | Handler, tref,| | Pool, Append, |    | File Finish,  |
-|  stsz/stz2/   |    | edts/elst,    | | Flush, Bitrate|    | Progressive   |
-|  stsc/stco/   |    | Track Dur.    | | & Timestamps  |    | Download      |
-|  sgpd/sbgp    |    |               | |               |    |               |
+|  core/stbl.c  |    | core/sample.c | | core/track.c  |    | core/movie.c  |
+|  Sample Table |    | Sample Alloc, | | Track, Media, |    | Movie, mvhd,  |
+|  stts/ctts/   |    | Sample Pool,  | | Handler, tref,|    | iods, Finish, |
+|  stsz/stz2/   |    | Chunk Flush,  | | dref, edts/   |    | Progressive   |
+|  stsc/stco/   |    | LPCM/RTP      | | elst, Track   |    | Download,     |
+|  sgpd/sbgp &  |    | Interleaving  | | Duration      |    | User Data     |
+|  Bitrates     |    |               | |               |    | (cprt/hnti)   |
 +---------------+    +---------------+ +---------------+    +---------------+
 ```
 
-### 6.2 Function-by-Function Assignment & `lsm_isom_*` Internal Renaming
+### 6.2 Module Responsibilities & Symbol Mapping
 
 In accordance with the symbol naming conventions (Section 2.4):
-- Public API functions declared in `lsmash.h` keep their `lsmash_*` names.
-- Module-local helpers remain `static` with `<module>_*` (`isom_*`) names.
-- Internal functions called across `.c` files in `core/`, `codecs/`, or `importer/` use the **`lsm_isom_*`** prefix and are declared in `core/isom.h` (or `core/box.h`).
+- Public API functions declared in `lsmash.h` preserve their `lsmash_*` names.
+- Internal functions shared across compilation units in `core/`, `codecs/`, or `importer/` use the **`lsm_<filename>_*`** prefix (`lsm_stbl_*`, `lsm_sample_*`, `lsm_track_*`, `lsm_movie_*`) and are declared in `core/<filename>.h`.
+- File-local helpers are `static` with **`<filename>_*`** (`stbl_*`, `sample_*`, `track_*`, `movie_*`) names.
 
-#### Module 1: `core/stbl.c` — Sample Table & Sample Group Operations
-Owns `stsd` codec description lookup, `stts`, `ctts`, `cslg`, `stsz`, `stz2`, `stsc`, `stco`/`co64`, `stss`, `stps`, `sdtp`, and `sgpd`/`sbgp` (`rap `, `roll`, `prol`) entry manipulation:
+#### Module 1: `core/stbl.{c,h}` — Sample Table & Sample Grouping Engine
+Owns Sample Table (`stts`, `ctts`, `cslg`, `stsz`/`stz2`, `stsc`, `stco`/`co64`, `stss`, `stps`, `sdtp`) entry manipulation, `stco` $\rightarrow$ `co64` 64-bit promotion, `stsz` $\rightarrow$ `stz2` compaction, bitrate calculation (`btrt`/`esds`), and Sample Grouping (`sgpd`/`sbgp`: `rap `, `roll`, `prol`) state machines and roll-group deduplication:
 
-| Current Symbol | Visibility | Target Symbol & Signature | Callers Outside `core/stbl.c` |
-| :--- | :--- | :--- | :--- |
-| `isom_get_sample_count` | Cross-file (`core/`, `codecs/`) | `uint32_t lsm_isom_get_sample_count( isom_trak_t *trak )` | `core/sample.c`, `core/timeline.c`, `codecs/*.c` |
-| `isom_get_dts_elist_duration` | File-local `static` | *(inline / `core/track.c`)* | `core/track.c` |
-| `isom_add_stts_entry` | File-local `static` | `static int isom_add_stts_entry( ... )` | Local to `core/stbl.c` |
-| `isom_add_ctts_entry` | File-local `static` | `static int isom_add_ctts_entry( ... )` | Local to `core/stbl.c` |
-| `isom_add_stsc_entry` | File-local `static` | `static int isom_add_stsc_entry( ... )` | Local to `core/stbl.c` |
-| `isom_add_stco_entry` | File-local `static` | `static int isom_add_stco_entry( ... )` | Local to `core/stbl.c` |
-| `isom_add_co64_entry` | File-local `static` | `static int isom_add_co64_entry( ... )` | Local to `core/stbl.c` |
-| `isom_convert_stco_to_co64` | Cross-file (`core/`) | `int lsm_isom_convert_stco_to_co64( isom_stbl_t *stbl )` | `core/isom.c`, `core/stbl.c` |
-| `isom_add_chunk_offset_entry` | File-local `static` | `static int isom_add_chunk_offset_entry( ... )` | Local to `core/stbl.c` |
-| `isom_add_stsz_entry` | File-local `static` | `static int isom_add_stsz_entry( ... )` | Local to `core/stbl.c` |
-| `isom_add_stz2_entry` | File-local `static` | `static int isom_add_stz2_entry( ... )` | Local to `core/stbl.c` |
-| `isom_Paid_field_size` / `isom_compact_sample_size_table` | Cross-file (`core/`) | `int lsm_isom_compact_sample_size_table( isom_stbl_t *stbl )` | `core/isom.c` |
-| `isom_add_SampleSize_entry` | Cross-file (`core/`) | `int lsm_isom_add_sample_size_entry( isom_stbl_t *stbl, uint32_t sample_size )` | `core/sample.c` |
-| `isom_add_stss_entry` | Cross-file (`core/`) | `int lsm_isom_add_stss_entry( isom_stbl_t *stbl, uint32_t sample_number )` | `core/sample.c` |
-| `isom_add_stps_entry` | Cross-file (`core/`) | `int lsm_isom_add_stps_entry( isom_stbl_t *stbl, uint32_t sample_number )` | `core/sample.c` |
-| `isom_add_sdtp_entry` | Cross-file (`core/`) | `int lsm_isom_add_sdtp_entry( isom_box_t *parent, lsmash_sample_property_t *prop, uint8_t avc_extensions )` | `core/sample.c`, `core/fragment.c`, `core/timeline.c` |
-| `isom_replace_last_sample_delta` | Cross-file (`core/`) | `int lsm_isom_replace_last_sample_delta( isom_stbl_t *stbl, uint32_t sample_delta )` | `core/sample.c`, `core/timeline.c` |
-| `isom_update_time_tables` | Cross-file (`core/`) | `int lsm_isom_update_time_tables( isom_trak_t *trak, lsmash_sample_t *sample, uint32_t *samples_per_packet )` | `core/sample.c` |
-| `isom_append_chunk` | Cross-file (`core/`) | `int lsm_isom_append_chunk( isom_trak_t *trak, lsmash_sample_t *sample, uint32_t samples_per_packet )` | `core/sample.c` |
-| `isom_get_roll_group_entry` / `isom_add_roll_group_entry` / `isom_deduplicate_roll_group` / `isom_update_roll_group` / `isom_all_recovery_completed` | Cross-file (`core/`) | `lsm_isom_add_roll_group_entry`, `lsm_isom_update_roll_group`, `lsm_isom_all_recovery_completed` | `core/sample.c`, `core/fragment.c`, `core/timeline.c` |
-| `isom_get_rap_group_entry` / `isom_add_rap_group_entry` / `isom_update_rap_group` | Cross-file (`core/`) | `lsm_isom_add_rap_group_entry`, `lsm_isom_update_rap_group` | `core/sample.c`, `core/fragment.c`, `core/timeline.c` |
-| `isom_get_sample_group_description` / `isom_get_sample_to_group` | Cross-file (`core/`) | `lsm_isom_get_sample_group_description`, `lsm_isom_get_sample_to_group` | `core/fragment.c`, `core/timeline.c`, `core/stbl.c` |
-| `isom_setup_sample_grouping` | Cross-file (`core/`) | `int lsm_isom_setup_sample_grouping( isom_box_t *parent, isom_grouping_type grouping_type )` | `core/track.c`, `core/fragment.c`, `core/timeline.c` |
-| `isom_group_random_access` / `isom_group_roll_recovery` | Cross-file (`core/`) | `lsm_isom_group_random_access`, `lsm_isom_group_roll_recovery` | `core/sample.c`, `core/fragment.c`, `core/timeline.c` |
+| Symbol | Scope | Signature / Role |
+| :--- | :--- | :--- |
+| `lsm_stbl_add_stts_entry` / `lsm_stbl_add_stsc_entry` / `lsm_stbl_add_stco_entry` | Internal Shared (`core/stbl.h`) | Append entries to `stts`, `stsc`, and `stco`/`co64` tables |
+| `lsm_stbl_convert_stco_to_co64` | Internal Shared (`core/stbl.h`) | Promote 32-bit `stco` chunk offsets to 64-bit `co64` (`core/stbl.c`, `core/movie.c`, `core/fragment.c`) |
+| `lsm_stbl_compress_sample_size_table` | Internal Shared (`core/stbl.h`) | Compact `stsz` into 1/2/4/8/16-bit `stz2` when beneficial (`core/movie.c`, `core/fragment.c`) |
+| `lsm_stbl_get_sample_count` / `lsm_stbl_get_dts` / `lsm_stbl_replace_last_sample_delta` | Internal Shared (`core/stbl.h`) | Query total samples, compute cumulative DTS, and update the final sample delta |
+| `lsm_stbl_calculate_bitrate_description` / `lsm_stbl_is_variable_size` / `lsm_stbl_get_first_sample_size` / `lsm_stbl_update_bitrate_description` | Internal Shared (`core/stbl.h`) | Compute `bufferSizeDB`, `maxBitrate`, and `avgBitrate` across sample tables and movie fragments (`core/`, `codecs/`) |
+| `lsm_stbl_get_sample_group_description` / `lsm_stbl_get_sample_to_group` / `lsm_stbl_get_roll_recovery_*` / `lsm_stbl_get_fragment_*` | Internal Shared (`core/stbl.h`) | Retrieve `sgpd` and `sbgp` boxes for standard tracks and track fragments |
+| `lsm_stbl_add_sample_grouping` / `lsm_stbl_create_sample_grouping` / `lsm_stbl_add_dependency_type` | Internal Shared (`core/stbl.h`) | Initialize `sgpd`/`sbgp` pairings and append `sdtp` entries |
+| `lsm_stbl_update_cache_timestamp` / `lsm_stbl_rap_grouping_established` / `lsm_stbl_group_random_access` / `lsm_stbl_all_recovery_completed` / `lsm_stbl_group_roll_recovery` | Internal Shared (`core/stbl.h`) | Random access (`rap `) and roll recovery (`roll`/`prol`) sample grouping state machines |
+| `lsm_stbl_update_chunk_tables` / `lsm_stbl_update_sample_tables` | Internal Shared (`core/stbl.h`) | Commit pooled chunks and per-sample timing/size/sync/grouping entries into `stbl` |
+| `static stbl_*` | File-Local (`core/stbl.c`) | `stbl_add_ctts_entry`, `stbl_add_stsz_entry`, `stbl_add_stss_entry`, `stbl_add_stps_entry`, `stbl_deduplicate_roll_group`, `stbl_update_roll_group`, `stbl_update_rap_group`, `stbl_create_bitrate_Au_info`, etc. |
 
-#### Module 2: `core/track.c` — Track, Media, Handler, Track Reference & Edit List Management
-Owns `trak`, `tkhd`, `tapt`, `edts`/`elst`, `tref`, `mdia`, `mdhd`, `hdlr`, `minf`, and track duration/parameter APIs:
+#### Module 2: `core/sample.{c,h}` — Sample Lifecycle, Pooling & Chunk Interleaving Engine
+Owns `lsmash_sample_t` allocation/destruction, `isom_sample_pool_t` management, chunk interleaving across tracks, LPCM frame splitting, RTP hint sample aggregation, and `mdat` flushing:
 
-| Current Symbol | Visibility | Target Symbol & Signature | Callers Outside `core/track.c` |
-| :--- | :--- | :--- | :--- |
-| `isom_get_trak` | Cross-file (`core/`, `codecs/`) | `isom_trak_t *lsm_isom_get_trak( lsmash_file_t *file, uint32_t track_ID )` | `core/*.c`, `codecs/*.c` |
-| `isom_set_media_handler_name` | File-local `static` | `static int isom_set_media_handler_name( ... )` | Local to `core/track.c` |
-| `isom_check_mandatory_boxes` / `isom_check_minf_boxes` / `isom_check_stbl_boxes` | Cross-file (`core/`) | `int lsm_isom_check_mandatory_boxes( lsmash_file_t *file )` | `core/isom.c`, `core/fragment.c` |
-| `lsmash_create_track` / `lsmash_delete_track` | Public API (`lsmash.h`) | `lsmash_create_track`, `lsmash_delete_track` | Public |
-| `lsmash_get_track_ID` / `lsmash_get_track_parameters` / `lsmash_set_track_parameters` | Public API (`lsmash.h`) | `lsmash_*` | Public |
-| `lsmash_get_media_parameters` / `lsmash_set_media_parameters` | Public API (`lsmash.h`) | `lsmash_*` | Public |
-| `lsmash_update_track_duration` | Public API (`lsmash.h`) | `lsmash_update_track_duration` | Public, `core/isom.c`, `core/fragment.c` |
-| `lsmash_create_explicit_timeline_map` / `lsmash_modify_explicit_timeline_map` / `lsmash_get_explicit_timeline_map` / `lsmash_delete_explicit_timeline_map` / `lsmash_count_explicit_timeline_map` | Public API (`lsmash.h`) | `lsmash_*` | Public |
-| `lsmash_set_track_reference` | Public API (`lsmash.h`) | `lsmash_set_track_reference` | Public |
+| Symbol | Scope | Signature / Role |
+| :--- | :--- | :--- |
+| `lsmash_create_sample` / `lsmash_sample_alloc` / `lsmash_delete_sample` | Public API (`lsmash.h`) | Public sample allocation, buffer sizing, and deallocation |
+| `lsmash_append_sample` / `lsmash_flush_pooled_samples` / `lsmash_set_last_sample_delta` | Public API (`lsmash.h`) | Public sample multiplexing, pool flushing, and final duration assignment |
+| `lsm_sample_create_pool` / `lsm_sample_clear_pool` / `lsm_sample_remove_pool` | Internal Shared (`core/sample.h`) | Lifecycle management for `isom_sample_pool_t` (`core/box.c`, `core/track.c`, `core/fragment.c`) |
+| `lsm_sample_update_tables` | Internal Shared (`core/sample.h`) | Update sample tables and chunk state for a new sample (`core/sample.c`, `core/fragment.c`) |
+| `lsm_sample_pool_push` | Internal Shared (`core/sample.h`) | Append sample payload bytes into a track or fragment sample pool |
+| `lsm_sample_append_by_type` | Internal Shared (`core/sample.h`) | Dispatch media vs. hint vs. LPCM frame-sliced sample appending (`core/sample.c`, `core/fragment.c`) |
+| `static sample_*` | File-Local (`core/sample.c`) | `sample_check_chunk_Alive`, `sample_flush_pool`, `sample_append_raw_lpcm`, `sample_append_media`, `sample_append_hint`, `sample_append`, `sample_set_last_delta` |
 
-#### Module 3: `core/sample.c` — Sample Allocation, Sample Pool, Appending, & Bitrate/Timestamp Updates
-Owns `lsmash_sample_t` lifecycle, `isom_sample_pool_t` management, `lsmash_append_sample`, `lsmash_flush_pooled_samples`, and bitrate/timestamp table extraction:
+#### Module 3: `core/track.{c,h}` — Track, Media, Data Reference & Edit List Management
+Owns `trak`, `tkhd`, `tapt`, `trex`, `traf`, `tfra`, `tref`, `mdia`, `mdhd`, `hdlr`, `minf`, `dref`, `stsd` sample entry registration (`lsmash_add_sample_entry`), and `edts`/`elst` explicit timeline maps:
 
-| Current Symbol | Visibility | Target Symbol & Signature | Callers Outside `core/sample.c` |
-| :--- | :--- | :--- | :--- |
-| `lsmash_create_sample` / `lsmash_Sample_alloc` / `lsmash_delete_sample` | Public API (`lsmash.h`) | `lsmash_*` | Public |
-| `isom_create_sample_pool` / `isom_remove_sample_pool` | Cross-file (`core/`) | `lsm_isom_create_sample_pool`, `lsm_isom_remove_sample_pool` | `core/box.c`, `core/track.c`, `core/fragment.c` |
-| `isom_pool_sample` | Cross-file (`core/`) | `int lsm_isom_pool_sample( isom_sample_pool_t *pool, lsmash_sample_t *sample, uint32_t samples_per_packet )` | `core/fragment.c`, `core/sample.c` |
-| `isom_append_sample_by_type` / `isom_flush_pooled_samples` | File-local `static` | `static int isom_append_sample_by_type( ... )` | Local to `core/sample.c` |
-| `lsmash_append_sample` / `lsmash_flush_pooled_samples` | Public API (`lsmash.h`) | `lsmash_*` | Public |
-| `isom_update_bitrate_description` | Cross-file (`core/`) | `int lsm_isom_update_bitrate_description( isom_mdia_t *mdia )` | `core/isom.c`, `core/fragment.c` |
-| `isom_check_Variablesize_stsz` / `isom_get_sample_info_from_stbl` | File-local `static` | `static ...` | Local to `core/sample.c` |
-| `lsmash_get_media_timestamps` / `lsmash_set_media_timestamps` / `lsmash_delete_media_timestamps` / `lsmash_sort_dts` | Public API (`lsmash.h`) | `lsmash_*` | Public |
+| Symbol | Scope | Signature / Role |
+| :--- | :--- | :--- |
+| `lsmash_create_track` / `lsmash_delete_track` / `lsmash_get_track_ID` / `lsmash_get_track_parameters` / `lsmash_set_track_parameters` / `lsmash_update_track_duration` | Public API (`lsmash.h`) | Public track lifecycle, parameter configuration, and duration calculation |
+| `lsmash_get_media_parameters` / `lsmash_set_media_parameters` / `lsmash_pack_iso_language` / `lsmash_add_sample_entry` | Public API (`lsmash.h`) | Public media handler, ISO-639-2/T language packing, and codec sample description registration |
+| `lsmash_create_data_reference` / `lsmash_get_data_reference` / `lsmash_count_data_reference` | Public API (`lsmash.h`) | Public `dref` (`url `) data reference management |
+| `lsmash_create_explicit_timeline_map` / `lsmash_modify_explicit_timeline_map` / `lsmash_get_explicit_timeline_map` / `lsmash_delete_explicit_timeline_map` / `lsmash_count_explicit_timeline_map` | Public API (`lsmash.h`) | Public `edts`/`elst` edit list manipulation |
+| `lsm_track_get_trak` / `lsm_track_get_trex` / `lsm_track_get_traf` / `lsm_track_get_tfra` | Internal Shared (`core/track.h`) | Track-ID lookup across `moov`, `mvex`, `moof`, and `mfra` |
+| `lsm_track_create` / `lsm_track_update_tkhd_duration` / `lsm_track_set_creation_time` / `lsm_track_setup_handler_reference` | Internal Shared (`core/track.h`) | Internal track construction, `tkhd` duration scaling, and `hdlr` initialization |
+| `lsm_track_complement_data_reference` / `lsm_track_get_written_media_file` | Internal Shared (`core/track.h`) | Default `dref` completion and target media file resolution |
+| `static track_*` | File-Local (`core/track.c`) | `track_set_aperature_modes`, `track_prepare_sample_Groups`, `track_add_sample_description_entry`, `track_get_edts` |
 
-#### Module 4: `core/isom.c` — Movie Context, Compatibility Brands, File Finalization & Progressive Download
-Retains movie-level setup, brand compatibility validation, `lsmash_finish_movie`, progressive download (`moov`-before-`mdat`) rewriting, and root/file helpers:
+#### Module 4: `core/movie.{c,h}` — Movie Context, Progressive Download & User Data
+Owns `moov`, `mvhd`, `iods`, movie parameter management, `lsmash_finish_movie`, progressive download (`moov`-before-`mdat` rearrangement and chunk offset shifting), and movie/track user data (`cprt`, `hnti`/`sdp `/`rtp `):
 
-| Current Symbol | Visibility | Target Symbol & Signature | Callers Outside `core/isom.c` |
-| :--- | :--- | :--- | :--- |
-| `isom_check_initializer_present` | Cross-file (`core/`, `codecs/`) | `int lsm_isom_check_initializer_present( lsmash_root_t *root )` | `core/*.c`, `codecs/*.c` |
-| `isom_check_compatibility` | Cross-file (`core/`) | `int lsm_isom_check_compatibility( lsmash_file_t *file )` | `core/read.c`, `core/file.c`, `core/track.c` |
-| `isom_establish_movie` | Cross-file (`core/`) | `int lsm_isom_establish_movie( lsmash_file_t *file )` | `core/file.c` |
-| `isom_complement_data_reference` | Cross-file (`core/`) | `int lsm_isom_complement_data_reference( isom_minf_t *minf )` | `core/track.c`, `core/isom.c` |
-| `lsmash_initialize_movie_parameters` / `lsmash_set_movie_parameters` / `lsmash_get_movie_parameters` | Public API (`lsmash.h`) | `lsmash_*` | Public |
-| `lsmash_set_copyright` / `lsmash_set_free_space` / `lsmash_write_free_space` | Public API (`lsmash.h`) | `lsmash_*` | Public |
-| `lsmash_finish_movie` / `lsmash_write_lsmash_indicator` | Public API (`lsmash.h`) | `lsmash_*` | Public |
+| Symbol | Scope | Signature / Role |
+| :--- | :--- | :--- |
+| `lsmash_initialize_movie_parameters` / `lsmash_set_movie_parameters` / `lsmash_get_movie_parameters` | Public API (`lsmash.h`) | Public movie header (`mvhd`) configuration and inspection |
+| `lsmash_finish_movie` / `lsmash_reserve_media_data_size` / `lsmash_create_object_descriptor` | Public API (`lsmash.h`) | Public movie finalization, progressive download remuxing, `mdat` reservation, and `iods` creation |
+| `lsmash_set_copyright` / `lsmash_set_sdp` | Public API (`lsmash.h`) | Public `udta` copyright (`cprt`) and RTP Session Description Protocol (`hnti`/`sdp `) APIs |
+| `lsm_movie_check_initializer_present` / `lsm_movie_create` / `lsm_movie_establish` | Internal Shared (`core/movie.h`) | Initializer validation, `moov` box creation, and post-read movie establishment |
+| `lsm_movie_update_mvhd_duration` / `lsm_movie_setup_iods` / `lsm_movie_check_large_offset_requirement` / `lsm_movie_add_preceding_box_size` | Internal Shared (`core/movie.h`) | Movie duration aggregation, `iods` synthesis, and `stco`/`co64` offset adjustment |
+| `static movie_*` | File-Local (`core/movie.c`) | `movie_update_chunk_offset`, `movie_validate_mandatory_boxes`, `movie_rearrange_for_pd` |
+
+*(Note: `lsmash_delete_tyrant_chapter()` resides in `core/chapter.c` alongside all other chapter manipulation APIs.)*

@@ -88,7 +88,7 @@ typedef struct
 4. **In-Place Zero-Initialized Slot Allocation (`lsm_list_append`)**:
    - `void *lsm_list_append( lsm_list_t *list )` allocates the next slot in the current page (allocating a new 256-element page on page boundaries), zeroes the `elem_size` bytes with `memset`, increments `entry_count`, and returns a direct pointer to the slot—requiring **zero per-element `malloc` calls**.
 5. **Cross-Page Mid-List Removal (`lsm_list_remove_at` / `lsm_list_remove`)**:
-   - When an element at `index < entry_count - 1` is removed (such as in `isom_deduplicate_roll_group()`), `lsm_list_remove_at()` invokes `list->eliminator` (if non-`NULL`) on the target slot, shifts subsequent slots within each page via `memmove`, and copies the first element of `pages[p + 1]` into the last slot (`255`) of `pages[p]` across `[start_page .. end_page]`.
+   - When an element at `index < entry_count - 1` is removed (such as in `stbl_deduplicate_roll_group()` in `core/stbl.c`), `lsm_list_remove_at()` invokes `list->eliminator` (if non-`NULL`) on the target slot, shifts subsequent slots within each page via `memmove`, and copies the first element of `pages[p + 1]` into the last slot (`255`) of `pages[p]` across `[start_page .. end_page]`.
    - Because mid-list removal shifts elements after `index`, `isom_roll_pool_entry_t` in `core/box.h` stores 1-based group numbers (`roll_group_number`, `prev_group_number`, `first_sample_defined`) rather than raw `isom_group_assignment_entry_t *` pointers into `sbgp->list`.
 
 ### 3.3 Unified Accessor, Cursor & Iteration API (`common/list.h`)
@@ -99,7 +99,7 @@ typedef struct
   - `void *lsm_list_head( const lsm_list_t *list )`
   - `void *lsm_list_tail( const lsm_list_t *list )`
 - **Lockstep Multi-Table Cursor (`lsm_list_cursor_t`)**:
-  - Used in `core/timeline.c` (`isom_timeline_construct`) and `core/isom.c` (`lsmash_get_media_timestamps` / `lsmash_set_media_timestamps`) where multiple sample tables (`stts`, `ctts`, `stss`, `stps`, `sdtp`, `stsz`, `sbgp`) are advanced simultaneously in lockstep:
+  - Used in `core/timeline.c` (`isom_timeline_construct`, `lsmash_get_media_timestamps`, and `lsmash_set_media_timestamps`) where multiple sample tables (`stts`, `ctts`, `stss`, `stps`, `sdtp`, `stsz`, `sbgp`) are advanced simultaneously in lockstep:
     ```c
     lsm_list_cursor_t stts_cur;
     lsm_list_cursor_init( &stts_cur, stbl->stts->list );

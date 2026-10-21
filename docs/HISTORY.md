@@ -41,7 +41,7 @@ Prior to the `v2.17.0`–`v2.21.1` series on `dev`, the `vimeo` (`4a21f21`) and 
 
 ---
 
-## 3. Release Evolution (`v2.17.0` – `v2.21.1`)
+## 3. Release Evolution (`v2.17.0` – `v2.22.0`)
 
 ### 3.1 `v2.17.0`: Built-In AV1 OBU Parser, `le64` Fix & Synthetic Test Suite
 - **`common/bytes.c`**: Fixed `lsmash_bs_get_le64()` to shift the high 32-bit word by `<< 32` rather than `<< 16`.
@@ -87,3 +87,13 @@ Prior to the `v2.17.0`–`v2.21.1` series on `dev`, the `vimeo` (`4a21f21`) and 
   7. **macOS Shared Library Linker Flag Detection** (`Anton Mitrofanov <BugMaster@narod.ru>`): Fixed macOS shared library linker flags in `configure` by testing `-Wl,-version_script` before enabling it (with a follow-up cleanup removing a stray `cat liblsmash.ver`).
 - **`common/multibuf.c`**: Rewrote `lsmash_resize_multiple_buffers()` to check for integer multiplication overflow, compact buffers in forward order before `lsmash_realloc` when shrinking, and move buffers in reverse order after `lsmash_realloc` (zero-filling newly exposed tail bytes) when expanding.
 - **`cli/muxer.c`**: Moved `else if( !strcasecmp( argv[i], "--compact-size-table" ) )` out of the `--language` conditional block into the top-level option loop in `parse_global_options()`.
+
+### 3.6 `v2.22.0`: Decomposition of `core/isom.c` into `stbl`, `sample`, `track`, and `movie` Modules
+- **Elimination of `core/isom.c` and 4-Module Logical Decomposition**:
+  - Decomposed the monolithic `core/isom.c` (~4,150 lines) along ISOBMFF logical hierarchy boundaries into four dedicated modules and removed `core/isom.c`:
+    1. **`core/stbl.{c,h}`** (*Sample Table & Sample Grouping Engine*): `stts`, `ctts`, `cslg`, `stsz`/`stz2` compaction, `stsc`, `stco`/`co64` 64-bit promotion, `stss`, `stps`, `sdtp`, `btrt`/`esds` bitrate calculation, and `sgpd`/`sbgp` (`rap `, `roll`, `prol`) state machines and roll-group deduplication (`lsm_stbl_*`, `static stbl_*`).
+    2. **`core/sample.{c,h}`** (*Sample Lifecycle, Pooling & Chunk Interleaving Engine*): `lsmash_create_sample`, `lsmash_sample_alloc`, `lsmash_delete_sample`, `isom_sample_pool_t` management (`lsm_sample_*`), LPCM frame-sliced accumulation, RTP hint sample aggregation, chunk flushing, `lsmash_append_sample`, `lsmash_flush_pooled_samples`, and `lsmash_set_last_sample_delta` (`static sample_*`).
+    3. **`core/track.{c,h}`** (*Track, Media, Data Reference & Edit List Management*): `trak`/`tkhd`/`trex`/`traf`/`tfra` lookup and lifecycle (`lsm_track_*`), media handler and ISO language setup, `lsmash_add_sample_entry`, `dref` (`url `) data references, and `edts`/`elst` explicit timeline maps (`static track_*`).
+    4. **`core/movie.{c,h}`** (*Movie Context, Progressive Download & User Data*): `moov`/`mvhd`/`iods` lifecycle (`lsm_movie_*`), `lsmash_finish_movie`, progressive download `moov` rearrangement and offset recalculation (`static movie_*`), `lsmash_reserve_media_data_size`, `lsmash_create_object_descriptor`, `lsmash_set_copyright` (`cprt`), and `lsmash_set_sdp` (`hnti`/`sdp `/`rtp `).
+  - **`core/chapter.c`**: Relocated `lsmash_delete_tyrant_chapter()` from `core/isom.c` to `core/chapter.c` alongside the other chapter manipulation APIs.
+  - **`core/box.h` & `configure`**: Extracted internal prototypes and sample/grouping structs from `core/box.h` into `core/stbl.h`, `core/sample.h`, `core/track.h`, and `core/movie.h`, and updated `SRC_CORE` in `configure` and all callers across `core/`, `codecs/`, and `importer/`.
