@@ -4152,6 +4152,322 @@ static int test_flac_isobmff_roundtrip( void )
     return 0;
 }
 
+/*---------------------------------------------------------------------------
+ * Test 16: Segmented ISOBMFF (Self-Initializing / Separate Segments),
+ *          Progressive Download Abort and sidx Brand Validation
+ *---------------------------------------------------------------------------*/
+#define SEG_TRACK_TIMESCALE 1000
+#define SEG_SAMPLE_DURATION 40
+#define SEG_FRAGMENT_COUNT  3
+#define SEG_FRAGMENT_SAMPLES 10
+
+static uint32_t seg_sample_size( uint32_t g_idx )
+{
+    return 16 + (g_idx % 11);
+}
+
+static int seg_scan_top_level_boxes( const char *path, uint32_t *types, int max_types )
+{
+    FILE *fp = fopen( path, "rb" );
+    if( !fp )
+        return -1;
+    int count = 0;
+    uint8_t hdr[16];
+    while( fread( hdr, 1, 8, fp ) == 8 )
+    {
+        uint64_t size = ((uint32_t)hdr[0] << 24) | ((uint32_t)hdr[1] << 16) | ((uint32_t)hdr[2] << 8) | hdr[3];
+        uint32_t type = ((uint32_t)hdr[4] << 24) | ((uint32_t)hdr[5] << 16) | ((uint32_t)hdr[6] << 8) | hdr[7];
+        uint64_t header_size = 8;
+        if( size == 1 )
+        {
+            if( fread( hdr + 8, 1, 8, fp ) != 8 )
+                break;
+            size = 0;
+            for( int i = 8; i < 16; i++ )
+                size = (size << 8) | hdr[i];
+            header_size = 16;
+        }
+        if( count < max_types )
+            types[count] = type;
+        count++;
+        if( size < header_size )
+            break;
+        if( fseek( fp, (long)(size - header_size), SEEK_CUR ) != 0 )
+            break;
+    }
+    fclose( fp );
+    return count;
+}
+
+static int seg_boxes_match( const char *path, const uint32_t *expected, int expected_count )
+{
+    uint32_t types[16];
+    int count = seg_scan_top_level_boxes( path, types, 16 );
+    if( count != expected_count )
+        return 0;
+    for( int i = 0; i < count; i++ )
+        if( types[i] != expected[i] )
+            return 0;
+    return 1;
+}
+
+static uint32_t seg_create_video_track( lsmash_root_t *root )
+{
+    lsmash_movie_parameters_t movie_param;
+    lsmash_initialize_movie_parameters( &movie_param );
+    if( lsmash_set_movie_parameters( root, &movie_param ) < 0 )
+        return 0;
+    uint32_t tid = lsmash_create_track( root, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK );
+    if( !tid )
+        return 0;
+    lsmash_track_parameters_t track_param;
+    lsmash_initialize_track_parameters( &track_param );
+    track_param.mode = ISOM_TRACK_ENABLED | ISOM_TRACK_IN_MOVIE;
+    if( lsmash_set_track_parameters( root, tid, &track_param ) < 0 )
+        return 0;
+    lsmash_media_parameters_t media_param;
+    lsmash_initialize_media_parameters( &media_param );
+    media_param.timescale = SEG_TRACK_TIMESCALE;
+    if( lsmash_set_media_parameters( root, tid, &media_param ) < 0 )
+        return 0;
+    lsmash_video_summary_t *summary = create_synth_av01_summary( 64, 64 );
+    if( !summary )
+        return 0;
+    int index = lsmash_add_sample_entry( root, tid, summary );
+    lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+    return index == 1 ? tid : 0;
+}
+
+/* Append SEG_FRAGMENT_SAMPLES samples as one movie fragment, starting from the global sample index 'first'. */
+static int seg_write_fragment( lsmash_root_t *root, uint32_t tid, uint32_t first )
+{
+    if( lsmash_create_fragment_movie( root ) < 0 )
+        return -1;
+    for( uint32_t i = 0; i < SEG_FRAGMENT_SAMPLES; i++ )
+    {
+        uint32_t g_idx = first + i;
+        lsmash_sample_t *s = lsmash_create_sample( seg_sample_size( g_idx ) );
+        if( !s )
+            return -1;
+        memset( s->data, (int)((g_idx * 7 + 3) & 0xFF), s->length );
+        s->dts   = (uint64_t)g_idx * SEG_SAMPLE_DURATION;
+        s->cts   = s->dts;
+        s->index = 1;
+        s->prop.ra_flags = (i == 0) ? ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC : ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE;
+        if( lsmash_append_sample( root, tid, s ) < 0 )
+            return -1;
+    }
+    return lsmash_flush_pooled_samples( root, tid, SEG_SAMPLE_DURATION );
+}
+
+static int seg_abort_callback( void *param, uint64_t done, uint64_t total )
+{
+    (void)done;
+    (void)total;
+    int *calls = (int *)param;
+    ++*calls;
+    return 1;
+}
+
+static int test_segmented_isobmff_and_abort_callback( void )
+{
+    const uint32_t T_FTYP = LSMASH_4CC( 'f', 't', 'y', 'p' );
+    const uint32_t T_STYP = LSMASH_4CC( 's', 't', 'y', 'p' );
+    const uint32_t T_SIDX = LSMASH_4CC( 's', 'i', 'd', 'x' );
+    const uint32_t T_MOOV = LSMASH_4CC( 'm', 'o', 'o', 'v' );
+    const uint32_t T_MOOF = LSMASH_4CC( 'm', 'o', 'o', 'f' );
+    const uint32_t T_MDAT = LSMASH_4CC( 'm', 'd', 'a', 't' );
+    const lsmash_brand_type dash_brands[2] = { ISOM_BRAND_TYPE_ISO6, ISOM_BRAND_TYPE_DASH };
+
+    /* 16a. Self-Initializing Media Segment: sidx must be generated and all samples must be restored. */
+    {
+        const char *path = "tests/tmp_test_self_init_segment.mp4";
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( path, 0, &param ) == 0, "16a: open self-initializing segment" );
+        param.mode |= LSMASH_FILE_MODE_FRAGMENTED | LSMASH_FILE_MODE_INDEX | LSMASH_FILE_MODE_SEGMENT;
+        param.major_brand = ISOM_BRAND_TYPE_ISO6;
+        param.brands      = (lsmash_brand_type *)dash_brands;
+        param.brand_count = 2;
+        TEST_ASSERT( lsmash_set_file( root, &param ) != NULL, "16a: set file with iso6/dash and INDEX" );
+        uint32_t tid = seg_create_video_track( root );
+        TEST_ASSERT( tid != 0, "16a: create track" );
+        for( uint32_t f = 0; f < SEG_FRAGMENT_COUNT; f++ )
+            TEST_ASSERT( seg_write_fragment( root, tid, f * SEG_FRAGMENT_SAMPLES ) == 0, "16a: write fragment" );
+        lsmash_adhoc_remux_t remux = { .buffer_size = 65536 };
+        TEST_ASSERT( lsmash_finish_movie( root, &remux ) == 0, "16a: finish self-initializing segment" );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+
+        uint32_t types[16];
+        int count = seg_scan_top_level_boxes( path, types, 16 );
+        int sidx_pos = -1, first_moof = -1, has_ftyp = 0, has_moov = 0;
+        for( int i = 0; i < count && i < 16; i++ )
+        {
+            has_ftyp |= (types[i] == T_FTYP);
+            has_moov |= (types[i] == T_MOOV);
+            if( types[i] == T_SIDX && sidx_pos < 0 )
+                sidx_pos = i;
+            if( types[i] == T_MOOF && first_moof < 0 )
+                first_moof = i;
+        }
+        TEST_ASSERT( has_ftyp && has_moov, "16a: ftyp and moov are present" );
+        TEST_ASSERT( sidx_pos >= 0 && first_moof > sidx_pos, "16a: sidx precedes the first moof" );
+
+        lsmash_root_t *demux_root = lsmash_create_root();
+        lsmash_file_parameters_t demux_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( path, 1, &demux_param ) == 0, "16a: open for demux" );
+        lsmash_file_t *demux_file = lsmash_set_file( demux_root, &demux_param );
+        TEST_ASSERT( lsmash_read_file( demux_file, &demux_param ) >= 0, "16a: read self-initializing segment" );
+        TEST_ASSERT( demux_file->sidx_list.head != NULL, "16a: sidx parsed" );
+        isom_sidx_t *sidx = (isom_sidx_t *)demux_file->sidx_list.head->data;
+        TEST_ASSERT( lsm_list_count( sidx->list ) == SEG_FRAGMENT_COUNT, "16a: one sidx entry per fragment" );
+        TEST_ASSERT( lsmash_construct_timeline( demux_root, tid ) == 0, "16a: construct timeline" );
+        TEST_ASSERT( lsmash_get_sample_count_in_media_timeline( demux_root, tid ) == SEG_FRAGMENT_COUNT * SEG_FRAGMENT_SAMPLES,
+                     "16a: all samples restored" );
+        for( uint32_t g_idx = 0; g_idx < SEG_FRAGMENT_COUNT * SEG_FRAGMENT_SAMPLES; g_idx++ )
+        {
+            uint64_t dts = 0;
+            lsmash_sample_t *s = lsmash_get_sample_from_media_timeline( demux_root, tid, g_idx + 1 );
+            TEST_ASSERT( s != NULL, "16a: get sample" );
+            TEST_ASSERT( lsmash_get_dts_from_media_timeline( demux_root, tid, g_idx + 1, &dts ) == 0, "16a: get dts" );
+            int data_ok = s->length == seg_sample_size( g_idx );
+            for( uint32_t b = 0; data_ok && b < s->length; b++ )
+                data_ok = s->data[b] == (uint8_t)((g_idx * 7 + 3) & 0xFF);
+            TEST_ASSERT( data_ok && dts == (uint64_t)g_idx * SEG_SAMPLE_DURATION, "16a: sample payload and dts match" );
+            lsmash_delete_sample( s );
+        }
+        lsmash_destruct_timeline( demux_root, tid );
+        lsmash_close_file( &demux_param );
+        lsmash_destroy_root( demux_root );
+        remove( path );
+    }
+
+    /* 16b. Initialization Segment + Media Segments switched by lsmash_switch_media_segment(). */
+    {
+        const char *init_path = "tests/tmp_test_seg_init.mp4";
+        const char *seg_path[2] = { "tests/tmp_test_seg_1.m4s", "tests/tmp_test_seg_2.m4s" };
+        const lsmash_brand_type seg_brands[3] = { ISOM_BRAND_TYPE_MSDH, ISOM_BRAND_TYPE_MSIX, ISOM_BRAND_TYPE_ISO6 };
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t init_param = { 0 };
+        TEST_ASSERT( lsmash_open_file( init_path, 0, &init_param ) == 0, "16b: open init segment" );
+        init_param.mode &= ~LSMASH_FILE_MODE_MEDIA;
+        init_param.mode |= LSMASH_FILE_MODE_FRAGMENTED | LSMASH_FILE_MODE_SEGMENT;
+        init_param.major_brand = ISOM_BRAND_TYPE_ISO6;
+        init_param.brands      = (lsmash_brand_type *)dash_brands;
+        init_param.brand_count = 2;
+        TEST_ASSERT( lsmash_set_file( root, &init_param ) != NULL, "16b: set init segment" );
+        uint32_t tid = seg_create_video_track( root );
+        TEST_ASSERT( tid != 0, "16b: create track in init segment" );
+
+        lsmash_file_parameters_t seg_param[2] = { { 0 }, { 0 } };
+        lsmash_file_t *seg_file[2];
+        lsmash_adhoc_remux_t remux = { .buffer_size = 65536 };
+        for( int s = 0; s < 2; s++ )
+        {
+            TEST_ASSERT( lsmash_open_file( seg_path[s], 0, &seg_param[s] ) == 0, "16b: open media segment" );
+            seg_param[s].mode &= ~LSMASH_FILE_MODE_INITIALIZATION;
+            seg_param[s].mode |= LSMASH_FILE_MODE_FRAGMENTED | LSMASH_FILE_MODE_INDEX | LSMASH_FILE_MODE_SEGMENT;
+            seg_param[s].major_brand = ISOM_BRAND_TYPE_MSDH;
+            seg_param[s].brands      = (lsmash_brand_type *)seg_brands;
+            seg_param[s].brand_count = 3;
+            seg_file[s] = lsmash_set_file( root, &seg_param[s] );
+            TEST_ASSERT( seg_file[s] != NULL, "16b: set media segment" );
+            TEST_ASSERT( lsmash_switch_media_segment( root, seg_file[s], &remux ) == 0, "16b: switch media segment" );
+            TEST_ASSERT( seg_write_fragment( root, tid, (uint32_t)s * SEG_FRAGMENT_SAMPLES ) == 0, "16b: write fragment into segment" );
+        }
+        TEST_ASSERT( lsmash_finish_movie( root, &remux ) == 0, "16b: finish last media segment" );
+        lsmash_close_file( &init_param );
+        lsmash_close_file( &seg_param[0] );
+        lsmash_close_file( &seg_param[1] );
+        lsmash_destroy_root( root );
+
+        const uint32_t init_expect[2] = { T_FTYP, T_MOOV };
+        const uint32_t seg_expect[4]  = { T_STYP, T_SIDX, T_MOOF, T_MDAT };
+        TEST_ASSERT( seg_boxes_match( init_path, init_expect, 2 ), "16b: init segment is ftyp+moov" );
+        TEST_ASSERT( seg_boxes_match( seg_path[0], seg_expect, 4 ), "16b: media segment 1 is styp+sidx+moof+mdat" );
+        TEST_ASSERT( seg_boxes_match( seg_path[1], seg_expect, 4 ), "16b: media segment 2 is styp+sidx+moof+mdat" );
+        remove( init_path );
+        remove( seg_path[0] );
+        remove( seg_path[1] );
+    }
+
+    /* 16c. A non-zero return value of the remux callback aborts the operation safely. */
+    for( int mode = 0; mode <= 1; mode++ )
+    {
+        const char *path = "tests/tmp_test_remux_abort.mp4";
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( path, 0, &param ) == 0, "16c: open output" );
+        if( mode == 0 )
+        {
+            /* Segment Index insertion path. */
+            param.mode |= LSMASH_FILE_MODE_FRAGMENTED | LSMASH_FILE_MODE_INDEX | LSMASH_FILE_MODE_SEGMENT;
+            param.major_brand = ISOM_BRAND_TYPE_ISO6;
+            param.brands      = (lsmash_brand_type *)dash_brands;
+            param.brand_count = 2;
+        }
+        TEST_ASSERT( lsmash_set_file( root, &param ) != NULL, "16c: set file" );
+        uint32_t tid = seg_create_video_track( root );
+        TEST_ASSERT( tid != 0, "16c: create track" );
+        if( mode == 0 )
+            for( uint32_t f = 0; f < SEG_FRAGMENT_COUNT; f++ )
+                TEST_ASSERT( seg_write_fragment( root, tid, f * SEG_FRAGMENT_SAMPLES ) == 0, "16c: write fragment" );
+        else
+        {
+            /* moov relocation path (FastStart). */
+            for( uint32_t g_idx = 0; g_idx < SEG_FRAGMENT_COUNT * SEG_FRAGMENT_SAMPLES; g_idx++ )
+            {
+                lsmash_sample_t *s = lsmash_create_sample( seg_sample_size( g_idx ) );
+                TEST_ASSERT( s != NULL, "16c: create sample" );
+                memset( s->data, (int)(g_idx & 0xFF), s->length );
+                s->dts   = (uint64_t)g_idx * SEG_SAMPLE_DURATION;
+                s->cts   = s->dts;
+                s->index = 1;
+                s->prop.ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
+                TEST_ASSERT( lsmash_append_sample( root, tid, s ) == 0, "16c: append sample" );
+            }
+            TEST_ASSERT( lsmash_flush_pooled_samples( root, tid, SEG_SAMPLE_DURATION ) == 0, "16c: flush samples" );
+        }
+        int calls = 0;
+        lsmash_adhoc_remux_t remux = { .buffer_size = 64, .func = seg_abort_callback, .param = &calls };
+        TEST_ASSERT( lsmash_finish_movie( root, &remux ) < 0, "16c: finish is aborted by the callback" );
+        TEST_ASSERT( calls == 1, "16c: callback is not called again after aborting" );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+        remove( path );
+    }
+
+    /* 16d. LSMASH_FILE_MODE_INDEX must be rejected when the brands cannot allow sidx. */
+    {
+        const lsmash_brand_type old_brands[2] = { ISOM_BRAND_TYPE_ISOM, ISOM_BRAND_TYPE_ISO2 };
+        const char *path = "tests/tmp_test_index_brand.mp4";
+        lsmash_root_t *root = lsmash_create_root();
+        lsmash_file_parameters_t param = { 0 };
+        TEST_ASSERT( lsmash_open_file( path, 0, &param ) == 0, "16d: open output" );
+        param.mode |= LSMASH_FILE_MODE_FRAGMENTED | LSMASH_FILE_MODE_INDEX | LSMASH_FILE_MODE_SEGMENT;
+        param.major_brand = ISOM_BRAND_TYPE_ISOM;
+        param.brands      = (lsmash_brand_type *)old_brands;
+        param.brand_count = 2;
+        TEST_ASSERT( lsmash_set_file( root, &param ) == NULL, "16d: INDEX with isom/iso2 is rejected" );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+
+        root = lsmash_create_root();
+        memset( &param, 0, sizeof(param) );
+        TEST_ASSERT( lsmash_open_file( path, 0, &param ) == 0, "16d: open output again" );
+        param.mode |= LSMASH_FILE_MODE_FRAGMENTED | LSMASH_FILE_MODE_INDEX | LSMASH_FILE_MODE_SEGMENT;
+        param.major_brand = ISOM_BRAND_TYPE_ISOM;
+        TEST_ASSERT( lsmash_set_file( root, &param ) == NULL, "16d: INDEX with the isom brand only is rejected" );
+        lsmash_close_file( &param );
+        lsmash_destroy_root( root );
+        remove( path );
+    }
+
+    printf( "[PASS] test_segmented_isobmff_and_abort_callback\n" );
+    return 0;
+}
+
 #ifdef LSMASH_DEBUG_ALLOC
 #define RUN_TEST( test_fn )                                                       \
     do                                                                            \
@@ -4192,6 +4508,7 @@ int main( void )
     RUN_TEST( test_malformed_boxes_and_sample_tables );
     RUN_TEST( test_multibuf_resize_and_codec_regressions );
     RUN_TEST( test_flac_isobmff_roundtrip );
+    RUN_TEST( test_segmented_isobmff_and_abort_callback );
 #ifdef LSMASH_DEBUG_ALLOC
     assert( lsm_alloc_verify_no_leaks() == 0 );
     assert( lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0 );

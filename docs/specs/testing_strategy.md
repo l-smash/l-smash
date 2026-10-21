@@ -15,7 +15,7 @@ L-SMASH provides a self-contained C11 unit and integration test suite (`tests/te
 
 ## 2. Test Suite Architecture (`tests/test_main.c`)
 
-Running `make test` executes **15 test suites** (147,264 assertions):
+Running `make test` executes **16 test suites** (147,462 assertions):
 
 | Suite # | Function Name | Subsystem & Verification Scope |
 | :--- | :--- | :--- |
@@ -34,6 +34,7 @@ Running `make test` executes **15 test suites** (147,264 assertions):
 | **13** | `test_malformed_boxes_and_sample_tables` | Negative testing of malformed boxes and sample tables with zero-leak rollback verification:<br>- `stsc` with invalid 1-based `first_chunk = 0`<br>- Truncated `stsz` claiming `sample_count = 500` in a 4-entry box<br>- `sbgp` with out-of-bounds `group_description_index = 99`<br>- `pcmC` with invalid `PCM_sample_size = 13`<br>- Truncated `emsg` box testing `pos > box->size` underflow guard and `scheme_id_uri`/`value` cleanup<br>- Truncated `sbgp` box ending mid-table<br>- Excessive box nesting depth (> 64 levels) rejected with `LSMASH_ERR_INVALID_DATA`<br>- Child box size exceeding parent box boundary rejected with `LSMASH_ERR_INVALID_DATA`<br>- Truncated `chan` box claiming `0x10000000` channel descriptions rejected with `LSMASH_ERR_INVALID_DATA` |
 | **14** | `test_multibuf_resize_and_codec_regressions` | Regression suite for `lsmash_multiple_buffers_t` and codec/metadata fixes:<br>- `lsmash_resize_multiple_buffers` expansion (32 → 96 bytes), shrinkage (96 → 20 bytes), data preservation across all 4 buffers, zero-initialized expansion tail, and overflow rejection.<br>- `lsm_nalu_get_codeNum` Exp-Golomb decoding, EOF termination, and ≥ 64 leading zero bits non-hang.<br>- MP3 `nBlockSize` calculation (`144 × 128000 / 48000 = 384`) and `cbSize < 12` rejection in `lsm_qt_wfex_update_bitrate`.<br>- WMA 16-bit LE `cbSize` reading and truncated box rejection in `lsm_wma_print_codec_specific`.<br>- Opus 8-channel `channel_order[OutputChannelCount - 1]` lookup and `"front center"` output in `lsm_opus_print_codec_specific`.<br>- `lsmash_count_tyrant_chapter` and custom iTunes metadata (`ITUNES_METADATA_ITEM_CUSTOM` string & integer) retrieval round-trip. |
 | **15** | `test_flac_isobmff_roundtrip` | Synthesizes a valid RFC 9639 FLAC stream (`fLaC` magic, `STREAMINFO` + `VORBIS_COMMENT` metadata blocks, and CRC-8-valid fixed and uncommon block-size audio frames), tests `lsm_flac_verify_crc8`, `lsm_flac_parse_streaminfo`, `lsm_flac_parse_frame_header` (plus negative CRC-8 corruption and reserved block-size rejection), imports via `importer/flac_imp.c`, muxes into ISOBMFF (`fLaC` + `dfLa`), verifies `[fLaC]` and `[dfLa]` boxdumper output, and verifies exact `STREAMINFO` and sample duration/payload recovery on demux. |
+| **16** | `test_segmented_isobmff_and_abort_callback` | Segmented ISOBMFF and progressive download abort verification:<br>- **Self-Initializing Media Segment** (`FRAGMENTED \| INDEX \| SEGMENT`, `iso6`/`dash`): `sidx` precedes the first `moof`, one `sidx` entry per fragment, and all 30 samples (payload and `dts`) are restored through the Media Timeline.<br>- **Initialization Segment + 2 Media Segments** switched by `lsmash_switch_media_segment()`: init file is exactly `ftyp`+`moov`, each media segment is exactly `styp`+`sidx`+`moof`+`mdat`.<br>- **`lsmash_adhoc_remux_t::func` abort**: a non-zero callback result makes `lsmash_finish_movie()` fail on both the `sidx` insertion and the `moov` relocation paths, with 0 leaks.<br>- **`INDEX` brand validation**: `lsmash_set_file()` returns `NULL` for `INDEX` combined with `isom`/`iso2` brands. |
 
 ---
 
@@ -62,5 +63,6 @@ Expected output:
 [PASS] test_malformed_boxes_and_sample_tables
 [PASS] test_multibuf_resize_and_codec_regressions
 [PASS] test_flac_isobmff_roundtrip
-=== Assertions run: 147264, Failures: 0 ===
+[PASS] test_segmented_isobmff_and_abort_callback
+=== Assertions run: 147462, Failures: 0 ===
 ```

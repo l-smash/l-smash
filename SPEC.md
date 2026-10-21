@@ -97,10 +97,10 @@ Detailed specifications for each major subsystem reside in `docs/specs/` and are
 | Document | Scope & Responsibility | Status |
 | :--- | :--- | :--- |
 | [`docs/CODING_STYLE.md`](docs/CODING_STYLE.md) | Official C11 coding style, Allman formatting, internal header policy, symbol naming, and Git contribution guidelines | Active (`v2.23.1`) |
-| [`docs/HISTORY.md`](docs/HISTORY.md) | Historical lineage (`master`, `av1`, `vimeo`, `dev`), forensic bug analysis, and release changelog | Synchronized (`v2.23.1`) |
-| [`docs/specs/memory_architecture.md`](docs/specs/memory_architecture.md) | C11 memory audit (`LSMASH_DEBUG_ALLOC`), `lsmash_multiple_buffers_t` resize invariants, and `lsm_list_t` Paged Block Array architecture | Synchronized (`v2.23.1`) |
-| [`docs/specs/codecs_and_importers.md`](docs/specs/codecs_and_importers.md) | Comprehensive architecture and container binding specification for all video and audio codecs and importers (`codecs/*`, `importer/*`) | Synchronized (`v2.23.1`) |
-| [`docs/specs/testing_strategy.md`](docs/specs/testing_strategy.md) | Self-contained synthetic test suite (`make test`), bitstream generators, malformed box negative tests, and regression suites | Synchronized (`v2.23.1`) |
+| [`docs/HISTORY.md`](docs/HISTORY.md) | Historical lineage (`master`, `av1`, `vimeo`, `dev`), forensic bug analysis, and release changelog | Synchronized (`v2.23.2`) |
+| [`docs/specs/memory_architecture.md`](docs/specs/memory_architecture.md) | C11 memory audit (`LSMASH_DEBUG_ALLOC`), `lsmash_multiple_buffers_t` resize invariants, and `lsm_list_t` Paged Block Array architecture | Synchronized (`v2.23.2`) |
+| [`docs/specs/codecs_and_importers.md`](docs/specs/codecs_and_importers.md) | Comprehensive architecture and container binding specification for all video and audio codecs and importers (`codecs/*`, `importer/*`) | Synchronized (`v2.23.2`) |
+| [`docs/specs/testing_strategy.md`](docs/specs/testing_strategy.md) | Self-contained synthetic test suite (`make test`), bitstream generators, malformed box negative tests, and regression suites | Synchronized (`v2.23.2`) |
 
 ---
 
@@ -115,7 +115,7 @@ Detailed specifications for each major subsystem reside in `docs/specs/` and are
 - **Quality Requirements**:
   1. Zero compiler warnings under `-Wall -Wshadow -std=c11 -pedantic` across `liblsmash.a`, CLI tools, and `tests/test_main.c`.
   2. Public header `lsmash.h` strictly passes standalone verification under `gcc -std=c99 -pedantic` and `g++ -std=c++11 -pedantic`.
-  3. All 15 synthetic test suites in `make test` must pass with **0 leaks** and **0 active blocks/bytes** reported by `lsm_alloc_verify_no_leaks()`.
+  3. All 16 synthetic test suites in `make test` must pass with **0 leaks** and **0 active blocks/bytes** reported by `lsm_alloc_verify_no_leaks()`.
 
 ---
 
@@ -241,3 +241,10 @@ All modules in `codecs/` and `importer/` enforce the identical symbol naming hie
 | `codecs/flac.{c,h}` | `lsm_flac_verify_crc8`, `lsm_flac_parse_streaminfo`, `lsm_flac_parse_frame_header`, `lsm_flac_construct_specific_parameters`, `lsm_flac_copy_codec_specific`, `lsm_flac_print_codec_specific` | `flac_read_utf8_uint64`, `flac_put_specific_Metadata_blocks`, `flac_print_*` |
 | `codecs/a52.{c,h}` / `codecs/dts.{c,h}` / `codecs/alac.{c,h}` / `codecs/opus.{c,h}` / `codecs/mp4a.{c,h}` / `codecs/mp4v.{c,h}` / `codecs/mp4sys.{c,h}` / `codecs/vc1.{c,h}` / `codecs/wma.{c,h}` / `codecs/qt_wfex.{c,h}` | `lsm_a52_*`, `lsm_dts_*`, `lsm_alac_*`, `lsm_opus_*`, `lsm_mp4a_*`, `lsm_mp4v_*`, `lsm_mp4sys_*`, `lsm_vc1_*`, `lsm_wma_*`, `lsm_qt_wfex_*` | `a52_*`, `dts_*`, `alac_*`, `opus_*`, `mp4a_*`, `mp4v_*`, `mp4sys_*`, `vc1_*`, `wma_*`, `qt_wfex_*` |
 | `importer/importer.{c,h}` & `importer/*_imp.c` | *(Public `lsmash_importer_*` exported in `liblsmash.ver` for CLI tools)* | `importer_find`, `a52_imp_*`, `adts_imp_*`, `als_imp_*`, `amr_imp_*`, `dts_imp_*`, `flac_imp_*`, `isobm_imp_*`, `ivf_imp_*`, `mp3_imp_*`, `nalu_imp_*`, `vc1_imp_*`, `wave_imp_*` |
+
+---
+
+## 7. Future Roadmap / Pending Tasks
+
+1. **Read support for separate Media Segments.** A Media Segment (`.m4s` × N) that has no `moov` is not yet linked to its Initialization Segment (`init.mp4`) at read time. The read path must associate each segment with the initializer (`file->initializer` and `lsmash_activate_file()`) so that a Media Timeline spanning several segment files can be built and demuxed directly, without concatenating the files first. Writing such segments is already supported (`lsmash_switch_media_segment()`).
+2. **Data Reference (`dref`) external media files.** Resolving and reading media data that a `dref` entry places in an external file is not complete and remains to be finished.

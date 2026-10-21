@@ -20,7 +20,7 @@
 
 ## 2. Historical Defect Analysis (Pre-`v2.17.0` Baseline)
 
-Prior to the `v2.21.0`–`v2.23.1` series on `dev`, the `vimeo` (`4a21f21`) and `av1` (`0715bf6`) branches exhibited several technical limitations and defects:
+Prior to the `v2.21.0`–`v2.23.2` series on `dev`, the `vimeo` (`4a21f21`) and `av1` (`0715bf6`) branches exhibited several technical limitations and defects:
 
 1. **64-Bit Little-Endian Shift Bug in `common/bytes.c` (`lsmash_bs_get_le64`)**:
    - `lsmash_bs_get_le64()` shifted the upper 32-bit word by `<< 16` instead of `<< 32` (`((uint64_t)lsmash_bs_get_le32( bs ) << 16) | lsmash_bs_get_le32( bs )`), corrupting 64-bit little-endian reads.
@@ -41,7 +41,7 @@ Prior to the `v2.21.0`–`v2.23.1` series on `dev`, the `vimeo` (`4a21f21`) and 
 
 ---
 
-## 3. Release Evolution (`v2.21.0` – `v2.23.1`)
+## 3. Release Evolution (`v2.21.0` – `v2.23.2`)
 
 ### 3.1 `v2.21.0`: Built-In AV1 OBU Parser, `le64` Fix & Synthetic Test Suite
 - **`common/bytes.c`**: Fixed `lsmash_bs_get_le64()` to shift the high 32-bit word by `<< 32` rather than `<< 16`.
@@ -124,3 +124,10 @@ Prior to the `v2.21.0`–`v2.23.1` series on `dev`, the `vimeo` (`4a21f21`) and 
   - Audited all internal headers across `common/`, `core/`, `codecs/`, `importer/`, and `cli/`, removing redundant `#ifndef ... #define ... #endif` include guards in accordance with L-SMASH design conventions (reserving header guards strictly for public `lsmash.h`), and removed duplicate header inclusion in `importer/ivf_imp.c`.
   - Documented technical and historical background comments in `core/stbl.c` (`lsm_stbl_calculate_bitrate_description`) on `btrt`/`esds` 1-second sliding window consumption bitrate calculation.
   - Created standalone official coding guidelines in `docs/CODING_STYLE.md` and synchronized `SPEC.md`, `README.md`, and subsystem specifications.
+
+### 3.9 `v2.23.2`: Progressive Download Abort Callback, `sidx` Brand Validation, `styp` Emission Fix & Segmented ISOBMFF Tests
+- **`lsmash_adhoc_remux_t::func` abort support**: `lsm_file_rearrange_data()` (`core/file.c`) previously ignored the return value of the progress callback (`FIXME`). A non-zero return now stops the in-place rearrangement of both the `moov` relocation and the `sidx` insertion paths, frees the working buffer and makes `lsmash_finish_movie()` / `lsmash_switch_media_segment()` return a negative error code. The partially rearranged output must be discarded by the caller.
+- **`LSMASH_FILE_MODE_INDEX` brand validation**: `lsmash_set_file()` now returns `NULL` when `INDEX` is requested for an initializing file whose brands do not reach `iso6`, instead of silently producing a file without `sidx`.
+- **`styp` emission fix**: the existence test guarding the lazy write of the Segment Type Box in `lsm_fragment_append_sample()` (`core/fragment.c`) was inverted by the non-existing-box sentinel refactoring, so media segments were written without `styp`. The test is corrected, and segments now begin with `styp`.
+- **Tests**: added suite 16 `test_segmented_isobmff_and_abort_callback` (self-initializing segment with `sidx` round-trip, Initialization Segment + Media Segments via `lsmash_switch_media_segment()`, callback abort with zero leaks, `INDEX` vs. old brands rejection). `make test` now runs 16 suites (147,462 assertions).
+- **Pending work recorded in `SPEC.md` (Section 7)**: reading separate Media Segments against an Initialization Segment, and Data Reference (`dref`) external media resolution.
