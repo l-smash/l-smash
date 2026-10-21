@@ -291,14 +291,14 @@ int lsm_file_rearrange_data
         if( ret < 0 )
             return ret;
         write_pos = bs->offset;
-        if( remux->func )
-            remux->func( remux->param, write_pos, file_size ); // FIXME:
+        if( remux->func && remux->func( remux->param, write_pos, file_size ) != 0 )
+            return LSMASH_ERR_NAMELESS;     /* aborted by the callback */
     }
     ret = lsmash_bs_write_data( bs, buf[buf_switch ^ 0x1], read_num );
     if( ret < 0 )
         return ret;
-    if( remux->func )
-        remux->func( remux->param, file_size, file_size ); // FIXME:
+    if( remux->func && remux->func( remux->param, file_size, file_size ) != 0 )
+        return LSMASH_ERR_NAMELESS;         /* aborted by the callback */
     return 0;
 }
 
@@ -598,6 +598,12 @@ lsmash_file_t *lsmash_set_file
         if( file_set_brands( file, param->major_brand,
                                    param->minor_version,
                                    param->brands, param->brand_count ) < 0 )
+            goto fail;
+        /* Segment Index Box is available only with ISO Base Media File Format version 6 or later.
+         * Do not silently drop it when the brands cannot allow it. */
+        if( (file->flags & LSMASH_FILE_MODE_INDEX)
+         && (file->flags & LSMASH_FILE_MODE_INITIALIZATION)
+         && file->max_isom_version < 6 )
             goto fail;
         /* Create the movie header if the initialization of the streams is required. */
         if( (file->flags & LSMASH_FILE_MODE_INITIALIZATION) && !lsm_movie_create( file ) )

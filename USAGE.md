@@ -508,7 +508,7 @@ lsmash_destroy_root( root );
 ```
 
 #### Progressive Download (`moov` at the Front)
-With `lsmash_finish_movie( root, NULL )`, `moov` is written after `mdat`. To place `moov` before `mdat` (FastStart), pass an `lsmash_adhoc_remux_t` instead. L-SMASH then rearranges the already-written file in place, moving the data through a working buffer of `buffer_size` bytes (internally raised to at least twice the `moov` size). This requires a seekable output. The optional `func` callback receives the bytes processed so far and the total; its return value is ignored, so it cannot abort the operation. Set `func` to `NULL` if no progress report is needed.
+With `lsmash_finish_movie( root, NULL )`, `moov` is written after `mdat`. To place `moov` before `mdat` (FastStart), pass an `lsmash_adhoc_remux_t` instead. L-SMASH then rearranges the already-written file in place, moving the data through a working buffer of `buffer_size` bytes (internally raised to at least twice the `moov` size). This requires a seekable output. The optional `func` callback receives the bytes processed so far and the total; if it returns non-zero, the operation is aborted and `lsmash_finish_movie()` returns a negative error code. Since the file is being rearranged in place, an aborted output must be discarded. Set `func` to `NULL` if no progress report is needed.
 
 ```c
 static int on_progress( void *param, uint64_t done, uint64_t total )
@@ -623,7 +623,7 @@ lsmash_switch_media_segment( root, seg1, &remux );
 
 #### Supported Modes & Current Limitations
 - **Write requirements.** `LSMASH_FILE_MODE_INDEX` requires a seekable output. `lsmash_set_file()` returns NULL otherwise. Unseekable output (for example stdout) is possible only with `LSMASH_FILE_MODE_FRAGMENTED` and without `INDEX`, and no `sidx` or trailing `mfra` is produced.
-- **`sidx` needs iso6.** A `sidx` entry is generated only when `INDEX` is set and the highest ISO brand is `iso6` or later. With an older brand the flag has no visible effect and no `sidx` is written.
+- **`sidx` needs iso6.** A `sidx` entry is generated only when `INDEX` is set and the highest ISO brand is `iso6` or later. If `lsmash_set_file()` is given `INDEX` for an initializing file whose brands do not reach `iso6`, it returns NULL instead of silently dropping the `sidx`.
 - **Combinations outside the table are not supported.** Flag sets that do not satisfy the preconditions above (for example `SEGMENT` or `INDEX` without `FRAGMENTED`, or an `INITIALIZATION` file as the successor) are not covered by the library. They are rejected with `LSMASH_ERR_FUNCTION_PARAM` by `lsmash_switch_media_segment()`, and elsewhere their behaviour is not defined. The library does not return `LSMASH_ERR_PATCH_WELCOME` for any file-mode combination.
 - **Segment index scope.** The `sidx` is written for the single level of a segment (one entry per movie fragment). A daisy-chained or hierarchical index for live streaming is not implemented, and the segment index is generated only for seekable output.
 - **Initialization Segment cannot hold samples.** Without `MEDIA`, `lsmash_append_sample()` is rejected. Put samples only into media segments.

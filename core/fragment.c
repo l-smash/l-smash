@@ -1721,7 +1721,7 @@ int lsm_fragment_append_sample
     /* Write the Segment Type Box here if required and if it was not written yet. */
     if( !(file->flags & LSMASH_FILE_MODE_INITIALIZATION)
      && file->styp_list.head
-     && LSMASH_IS_NON_EXISTING_BOX( (isom_styp_t *)file->styp_list.head->data ) )
+     && LSMASH_IS_EXISTING_BOX( (isom_styp_t *)file->styp_list.head->data ) )
     {
         isom_styp_t *styp = (isom_styp_t *)file->styp_list.head->data;
         if( !(styp->manager & LSMASH_WRITTEN_BOX) )
