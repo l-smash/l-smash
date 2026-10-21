@@ -50,7 +50,7 @@ A prime example of this strict boundary is uncompressed Linear PCM (LPCM) audio 
 #### Audio Codecs
 - **Xiph FLAC (`fLaC` + `dfLa`)** — IETF RFC 9639 & FLAC-in-ISOBMFF (*Summary Construct / Raw `.flac` Importer / Media Demux*)
 - **MPEG-4 Audio (`mp4a` + `esds` / `wave`, `als `)** — ISO/IEC 14496-3 AAC-LC, HE-AAC v1/v2 (SBR/PS), MPEG-4 ALS (*Summary Construct / Raw ADTS `.aac` & `.als` Importers / Media Demux*)
-- **IETF Opus (`Opus` + `dOps`)** — IETF RFC 6716 & Opus-in-ISOBMFF with `prol` pre-roll sample grouping (*Summary Construct / Media Demux*)
+- **IETF Opus (`Opus` + `dOps`)** — IETF RFC 6716 & Opus-in-ISOBMFF with `'roll'` (`AudioRollRecoveryEntry`) pre-roll sample grouping and encoder-delay Edit List mapping (*Summary Construct / Media Demux*)
 - **Dolby AC-3 (`ac-3` + `dac3`) & Enhanced AC-3 (`ec-3` + `dec3`)** — ATSC A/52 & ETSI TS 102 366 Annex F (*Summary Construct / Raw `.ac3` & `.eac3` Importers / Media Demux*)
 - **Apple Lossless (`alac` + `alac` / `wave`)** — ALAC in ISOBMFF & QTFF (*Summary Construct / Media Demux*)
 - **DTS & DTS-HD (`dtsc`, `dtsh`, `dtse`, `dtsl`, `dtsx` + `ddts`)** — ETSI TS 102 114 (*Summary Construct / Raw `.dts` & `.dtshd` Importers / Media Demux*)

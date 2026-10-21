@@ -74,9 +74,10 @@ This guarantees thread safety across concurrent `lsmash_root_t` instances, place
 
 Detailed specifications for each major subsystem reside in `docs/specs/` and are indexed in Section 4:
 
-1. **Built-In AOM AV1 OBU Parser (`codecs/av1.{c,h}`, `importer/ivf_imp.c`)**:
-   - Self-contained C11 implementation of the AV1 Bitstream & Decoding Process Specification (v1.0.0 with Errata 1) and AV1 Codec ISO Media File Format Binding (v1.2.0), with no external `obuparse` dependency.
-   - Full `uncompressed_header()` parsing through `tile_info()`, `quantization_params()`, `segmentation_params()`, `loop_filter_params()`, `cdef_params()`, `lr_params()`, `read_tx_mode()`, `skip_mode_params()`, and `global_motion_params()`, plus multi-tile `OBU_FRAME` / `OBU_TILE_GROUP` tracking, `stss` Sync Sample vs. `OPEN_RAP` classification, and sample OBU whitelisting.
+1. **Comprehensive Codecs & Stream Importers Architecture (`codecs/`, `importer/`, `docs/specs/codecs_and_importers.md`)**:
+   - Self-contained C11 implementation of all video and audio codecs (H.264/AVC, H.265/HEVC, AOM AV1, SMPTE VC-1, MPEG-4 Visual/Audio, ProRes, QTFF uncompressed video, Xiph FLAC, IETF Opus, Dolby AC-3/E-AC-3, DTS/DTS-HD, Apple Lossless, ISO/IEC 23003-5 LPCM, 3GPP AMR, MP3, WMA) with zero external dependencies.
+   - Decoupled `lsmash_summary_t` and `lsmash_codec_specific_t` structured/unstructured conversion model, compile-time `static const` dispatch tables, and uniform `importer_functions` streaming interface.
+   - Comprehensive container binding specifications for ISOBMFF and QuickTime (QTFF), including NALU start-code conversion, complete AV1 `uncompressed_header()` and multi-tile tracking, ISO/IEC 23003-5 `ipcm`/`fpcm` with `pcmC`/`chnl`/`srat`, and Opus `'roll'` pre-roll sample grouping with Edit List mapping.
 2. **ISO/IEC 23003-5 LPCM & ISO/IEC 14496-12 Audio Signaling (`core/`, `codecs/description.c`, `importer/wave_imp.c`)**:
    - Support for uncompressed integer (`ipcm`: 16/24/32-bit big/little-endian) and floating-point (`fpcm`: 32/64-bit IEEE 754) audio in standard and multi-track Fragmented ISOBMFF (`moof`/`traf`/`trun`), including `pcmC`, `chnl`, `srat`, and ISOBMFF `AudioSampleEntryV1`.
    - `trun` default sample duration/size compaction across multiple tracks in `core/fragment.c`, plus `WAVE_FORMAT_EXTENSIBLE` and `WAVE_FORMAT_IEEE_FLOAT` support in `importer/wave_imp.c`.
@@ -98,8 +99,7 @@ Detailed specifications for each major subsystem reside in `docs/specs/` and are
 | [`docs/CODING_STYLE.md`](docs/CODING_STYLE.md) | Official C11 coding style, Allman formatting, internal header policy, symbol naming, and Git contribution guidelines | Active (`v2.23.1`) |
 | [`docs/HISTORY.md`](docs/HISTORY.md) | Historical lineage (`master`, `av1`, `vimeo`, `dev`), forensic bug analysis, and release changelog | Synchronized (`v2.23.1`) |
 | [`docs/specs/memory_architecture.md`](docs/specs/memory_architecture.md) | C11 memory audit (`LSMASH_DEBUG_ALLOC`), `lsmash_multiple_buffers_t` resize invariants, and `lsm_list_t` Paged Block Array architecture | Synchronized (`v2.23.1`) |
-| [`docs/specs/av1_obuparse_removal.md`](docs/specs/av1_obuparse_removal.md) | Built-in AV1 OBU parser (`codecs/av1.{c,h}`), Errata 1 & AV1-ISOBMFF v1.2.0 compliance, and IVF importer | Synchronized (`v2.23.1`) |
-| [`docs/specs/lpcm_isobmff_fragmented.md`](docs/specs/lpcm_isobmff_fragmented.md) | ISO/IEC 23003-5 (`ipcm`, `fpcm`, `pcmC`), ISO/IEC 14496-12 (`chnl`, `srat`, `AudioSampleEntryV1`), and Fragmented LPCM | Synchronized (`v2.23.1`) |
+| [`docs/specs/codecs_and_importers.md`](docs/specs/codecs_and_importers.md) | Comprehensive architecture and container binding specification for all video and audio codecs and importers (`codecs/*`, `importer/*`) | Synchronized (`v2.23.1`) |
 | [`docs/specs/testing_strategy.md`](docs/specs/testing_strategy.md) | Self-contained synthetic test suite (`make test`), bitstream generators, malformed box negative tests, and regression suites | Synchronized (`v2.23.1`) |
 
 ---
@@ -157,7 +157,7 @@ In accordance with the symbol naming conventions (Section 2.4):
 - File-local helpers are `static` with **`<filename>_*`** (`stbl_*`, `sample_*`, `track_*`, `movie_*`) names.
 
 #### Module 1: `core/stbl.{c,h}` — Sample Table & Sample Grouping Engine
-Owns Sample Table (`stts`, `ctts`, `cslg`, `stsz`/`stz2`, `stsc`, `stco`/`co64`, `stss`, `stps`, `sdtp`) entry manipulation, `stco` $\rightarrow$ `co64` 64-bit promotion, `stsz` $\rightarrow$ `stz2` compaction, bitrate calculation (`btrt`/`esds`), and Sample Grouping (`sgpd`/`sbgp`: `rap `, `roll`, `prol`) state machines and roll-group deduplication:
+Owns Sample Table (`stts`, `ctts`, `cslg`, `stsz`/`stz2`, `stsc`, `stco`/`co64`, `stss`, `stps`, `sdtp`) entry manipulation, `stco` $\rightarrow$ `co64` 64-bit promotion, `stsz` $\rightarrow$ `stz2` compaction, bitrate calculation (`btrt`/`esds`), and Sample Grouping (`sgpd`/`sbgp`: `rap `, `'roll'` [negative `roll_distance` pre-roll / positive post-roll], `'prol'` [audio pre-roll for non-sync streams]) state machines and roll-group deduplication:
 
 | Symbol | Scope | Signature / Role |
 | :--- | :--- | :--- |
@@ -168,7 +168,7 @@ Owns Sample Table (`stts`, `ctts`, `cslg`, `stsz`/`stz2`, `stsc`, `stco`/`co64`,
 | `lsm_stbl_calculate_bitrate_description` / `lsm_stbl_is_variable_size` / `lsm_stbl_get_first_sample_size` / `lsm_stbl_update_bitrate_description` | Internal Shared (`core/stbl.h`) | Compute `bufferSizeDB`, `maxBitrate`, and `avgBitrate` across sample tables and movie fragments (`core/`, `codecs/`) |
 | `lsm_stbl_get_sample_group_description` / `lsm_stbl_get_sample_to_group` / `lsm_stbl_get_roll_recovery_*` / `lsm_stbl_get_fragment_*` | Internal Shared (`core/stbl.h`) | Retrieve `sgpd` and `sbgp` boxes for standard tracks and track fragments |
 | `lsm_stbl_add_sample_grouping` / `lsm_stbl_create_sample_grouping` / `lsm_stbl_add_dependency_type` | Internal Shared (`core/stbl.h`) | Initialize `sgpd`/`sbgp` pairings and append `sdtp` entries |
-| `lsm_stbl_update_cache_timestamp` / `lsm_stbl_rap_grouping_established` / `lsm_stbl_group_random_access` / `lsm_stbl_all_recovery_completed` / `lsm_stbl_group_roll_recovery` | Internal Shared (`core/stbl.h`) | Random access (`rap `) and roll recovery (`roll`/`prol`) sample grouping state machines |
+| `lsm_stbl_update_cache_timestamp` / `lsm_stbl_rap_grouping_established` / `lsm_stbl_group_random_access` / `lsm_stbl_all_recovery_completed` / `lsm_stbl_group_roll_recovery` | Internal Shared (`core/stbl.h`) | Random access (`rap `) and roll recovery (`roll` pre/post-roll, `prol` non-sync audio pre-roll) sample grouping state machines |
 | `lsm_stbl_update_chunk_tables` / `lsm_stbl_update_sample_tables` | Internal Shared (`core/stbl.h`) | Commit pooled chunks and per-sample timing/size/sync/grouping entries into `stbl` |
 | `static stbl_*` | File-Local (`core/stbl.c`) | `stbl_add_ctts_entry`, `stbl_add_stsz_entry`, `stbl_add_stss_entry`, `stbl_add_stps_entry`, `stbl_deduplicate_roll_group`, `stbl_update_roll_group`, `stbl_update_rap_group`, `stbl_create_bitrate_Au_info`, etc. |
 

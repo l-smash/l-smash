@@ -11,7 +11,7 @@ Designed for strict compliance with international standards, L-SMASH maintains a
 ## Key Features & Supported Formats
 
 ### Container Standards
-- **ISO/IEC 14496-12** — ISO Base Media File Format (ISOBMFF `iso1`–`iso6`, Standard & Fragmented Movies `moof`/`traf`/`trun`, Segment Index `sidx`, Random Access `mfra`/`tfra`, Sample Groups `sgpd`/`sbgp` for `rap `, `roll`, `prol`)
+- **ISO/IEC 14496-12** — ISO Base Media File Format (ISOBMFF `iso1`–`iso6`, Standard & Fragmented Movies `moof`/`traf`/`trun`, Segment Index `sidx`, Random Access `mfra`/`tfra`, Sample Groups `sgpd`/`sbgp` for `rap `, `'roll'` [negative `roll_distance` pre-roll / positive post-roll], `'prol'` [audio pre-roll for non-sync streams])
 - **ISO/IEC 14496-14** — MP4 File Format (`mp41`, `mp42`, MPEG-4 Systems `iods`/`esds`)
 - **ISO/IEC 23009-1** — MPEG-DASH ISOBMFF Media Segments (`dash`, `msdh`, `msix`, Event Message `emsg`)
 - **Apple QuickTime File Format (QTFF)** — QuickTime Movie (`qt  `) with native Sound Description v0/v1/v2, reference chapter tracks, and Track Aperture (`tapt`) / Clean Aperture (`clap`) / Pixel Aspect Ratio (`pasp`) extensions
@@ -35,7 +35,7 @@ Designed for strict compliance with international standards, L-SMASH maintains a
 | :--- | :--- | :--- | :--- |
 | **Xiph FLAC** | `fLaC` + `dfLa` | IETF RFC 9639 & FLAC-in-ISOBMFF | Summary Construct / Raw Importer (`.flac`) / Media Demux (Standard & Fragmented) |
 | **MPEG-4 Audio (AAC / HE-AAC / ALS)** | `mp4a` + `esds` (or QT `wave`/`frma`/`esds`) | ISO/IEC 14496-3 & ISO/IEC 14496-14 | Summary Construct / Raw Importer (ADTS `.aac`, `.als`) / Media Demux |
-| **IETF Opus** | `Opus` + `dOps` | IETF RFC 6716 & Opus-in-ISOBMFF (`prol` pre-roll) | Summary Construct / Media Demux |
+| **IETF Opus** | `Opus` + `dOps` | IETF RFC 6716 & Opus-in-ISOBMFF with `'roll'` (`AudioRollRecoveryEntry`) pre-roll sample grouping and encoder-delay Edit List mapping | Summary Construct / Media Demux |
 | **Dolby AC-3 & Enhanced AC-3** | `ac-3` + `dac3`, `ec-3` + `dec3` | ATSC A/52 & ETSI TS 102 366 Annex F | Summary Construct / Raw Importer (`.ac3`, `.eac3`) / Media Demux |
 | **Apple Lossless (ALAC)** | `alac` + `alac` (or QT `wave`/`frma`/`alac`) | Apple Lossless Audio Codec / QTFF / ISOBMFF | Summary Construct / Media Demux |
 | **DTS & DTS-HD** | `dtsc`, `dtsh`, `dtse`, `dtsl`, `dtsx` + `ddts` | ETSI TS 102 114 & DTS ISO/IEC 14496-12 Annex | Summary Construct / Raw Importer (`.dts`, `.dtshd`) / Media Demux |
@@ -177,8 +177,7 @@ For the complete CLI option reference and the `liblsmash` C API programming manu
 | **[`docs/CODING_STYLE.md`](docs/CODING_STYLE.md)** | Official C11 coding style, Allman layout conventions, internal header policy, symbol prefixes, and Git contribution guidelines. |
 | **[`docs/HISTORY.md`](docs/HISTORY.md)** | Project history, branch lineage (`master`, `av1`, `vimeo`, `dev`), and architectural evolution. |
 | **[`docs/specs/memory_architecture.md`](docs/specs/memory_architecture.md)** | C11 Paged Block Array (`lsm_list_t`) architecture, hybrid container design, and `-DLSMASH_DEBUG_ALLOC` memory audit specification. |
-| **[`docs/specs/av1_obuparse_removal.md`](docs/specs/av1_obuparse_removal.md)** | Built-in AV1 OBU parser and AV1-ISOBMFF v1.2.0 specification. |
-| **[`docs/specs/lpcm_isobmff_fragmented.md`](docs/specs/lpcm_isobmff_fragmented.md)** | ISO/IEC 23003-5 LPCM (`ipcm`/`fpcm`/`pcmC`) and ISO/IEC 14496-12 (`chnl`, `srat`, `AudioSampleEntryV1`) in standard and Fragmented ISOBMFF specification. |
+| **[`docs/specs/codecs_and_importers.md`](docs/specs/codecs_and_importers.md)** | Comprehensive architecture and container binding specification for all video and audio codecs and stream importers (`codecs/*`, `importer/*`). |
 | **[`docs/specs/testing_strategy.md`](docs/specs/testing_strategy.md)** | Self-contained synthetic bitstream generation and negative testing strategy. |
 
 ---

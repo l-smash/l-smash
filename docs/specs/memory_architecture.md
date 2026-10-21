@@ -39,7 +39,7 @@ All high-volume homogeneous value tables use the **C11 Paged Block Array (`lsm_l
 | | `isom_sdtp_t` | `list` | `isom_sdtp_entry_t` | 1 byte |
 | | `isom_stsc_t` | `list` | `isom_stsc_entry_t` | 12 bytes |
 | | `isom_stco_t` (`stco`/`co64`) | `list` | `isom_stco_entry_t` / `isom_co64_entry_t` | 4 / 8 bytes |
-| | `isom_sgpd_t` (`rap `, `roll`, `prol`) | `list` | `isom_rap_entry_t` / `isom_roll_entry_t` | 2 bytes |
+| | `isom_sgpd_t` (`rap `, `roll`, `prol`) | `list` | `isom_rap_entry_t` / `isom_roll_entry_t` (`roll_distance` for `roll`/`prol`) | 2 bytes |
 | | `isom_sbgp_t` | `list` | `isom_group_assignment_entry_t` | 8 bytes |
 | **Edit List & Cache** | `isom_elst_t` | `list` | `isom_elst_entry_t` | 20 bytes |
 | | `isom_cache_t` (`roll.pool`) | `pool` | `isom_roll_pool_entry_t` | 20 bytes |
