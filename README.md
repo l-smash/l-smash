@@ -34,15 +34,15 @@ Designed for strict compliance with international standards, L-SMASH maintains a
 | Codec Family | Sample Entry / Config FourCC | Specification | Support Scope |
 | :--- | :--- | :--- | :--- |
 | **Xiph FLAC** | `fLaC` + `dfLa` | IETF RFC 9639 & FLAC-in-ISOBMFF | Summary Construct / Raw Importer (`.flac`, also readable through `lsmash_read_file()` and the Media Timeline) / Media Demux (Standard & Fragmented) |
-| **MPEG-4 Audio (AAC / HE-AAC / ALS)** | `mp4a` + `esds` (or QT `wave`/`frma`/`esds`) | ISO/IEC 14496-3 & ISO/IEC 14496-14 | Summary Construct / Raw Importer (ADTS `.aac`, `.als`) / Media Demux |
+| **MPEG-4 Audio (AAC / HE-AAC / ALS)** | `mp4a` + `esds` (or QT `wave`/`frma`/`esds`) | ISO/IEC 14496-3 & ISO/IEC 14496-14 | Summary Construct / Raw Importer (ADTS `.aac`, `.als`; also readable through `lsmash_read_file()` and the Media Timeline) / Media Demux |
 | **IETF Opus** | `Opus` + `dOps` | IETF RFC 6716 & Opus-in-ISOBMFF with `'roll'` (`AudioRollRecoveryEntry`) pre-roll sample grouping and encoder-delay Edit List mapping | Summary Construct / Media Demux |
-| **Dolby AC-3 & Enhanced AC-3** | `ac-3` + `dac3`, `ec-3` + `dec3` | ATSC A/52 & ETSI TS 102 366 Annex F | Summary Construct / Raw Importer (`.ac3`, `.eac3`) / Media Demux |
+| **Dolby AC-3 & Enhanced AC-3** | `ac-3` + `dac3`, `ec-3` + `dec3` | ATSC A/52 & ETSI TS 102 366 Annex F | Summary Construct / Raw Importer (`.ac3`, `.eac3`; also readable through `lsmash_read_file()` and the Media Timeline) / Media Demux |
 | **Apple Lossless (ALAC)** | `alac` + `alac` (or QT `wave`/`frma`/`alac`) | Apple Lossless Audio Codec / QTFF / ISOBMFF | Summary Construct / Media Demux |
-| **DTS & DTS-HD** | `dtsc`, `dtsh`, `dtse`, `dtsl`, `dtsx` + `ddts` | ETSI TS 102 114 & DTS ISO/IEC 14496-12 Annex | Summary Construct / Raw Importer (`.dts`, `.dtshd`) / Media Demux |
+| **DTS & DTS-HD** | `dtsc`, `dtsh`, `dtse`, `dtsl`, `dtsx` + `ddts` | ETSI TS 102 114 & DTS ISO/IEC 14496-12 Annex | Summary Construct / Raw Importer (`.dts`, `.dtshd`; also readable through `lsmash_read_file()` and the Media Timeline) / Media Demux |
 | **ISOBMFF Uncompressed LPCM** | `ipcm`, `fpcm` + `pcmC` (+ `chnl`, `srat`) | ISO/IEC 23003-5 & ISO/IEC 14496-12 (`AudioSampleEntryV1`) | Summary Construct / Raw Importer (`.wav`, also readable through `lsmash_read_file()` and the Media Timeline) / Media Demux (Standard & Fragmented) |
 | **QTFF Uncompressed LPCM** | `lpcm`, `sowt`, `twos`, `raw `, `in24`, `in32`, `fl32`, `fl64` (+ `wave`, `chan`) | Apple QuickTime File Format (QTFF Sound Desc v0/v1/v2) | Summary Construct / Raw Importer (`.wav`) / Media Demux |
-| **3GPP AMR-NB / AMR-WB** | `samr`, `sawb` + `damr` | 3GPP TS 26.244 | Summary Construct / Raw Importer (`.amr`, `.awb`) / Media Demux |
-| **MPEG-1/2 Audio Layer III (MP3)** | `mp4a` + `esds` / `.mp3` + `wave` | ISO/IEC 11172-3 / ISO/IEC 13818-3 / QTFF | Summary Construct / Raw Importer (`.mp3`) / Media Demux |
+| **3GPP AMR-NB / AMR-WB** | `samr`, `sawb` + `damr` | 3GPP TS 26.244 | Summary Construct / Raw Importer (`.amr`, `.awb`; also readable through `lsmash_read_file()` and the Media Timeline) / Media Demux |
+| **MPEG-1/2 Audio Layer III (MP3)** | `mp4a` + `esds` / `.mp3` + `wave` | ISO/IEC 11172-3 / ISO/IEC 13818-3 / QTFF | Summary Construct / Raw Importer (`.mp3`; also readable through `lsmash_read_file()` and the Media Timeline) / Media Demux |
 | **Windows Media Audio / Waveform** | `owma` + `wfex` | Microsoft `WAVEFORMATEX` / QTFF | Summary Construct / Media Demux |
 
 ### Timed Text & Subtitles

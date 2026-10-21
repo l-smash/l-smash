@@ -20,7 +20,7 @@
 
 ## 2. Historical Defect Analysis (Pre-`v2.17.0` Baseline)
 
-Prior to the `v2.21.0`–`v2.23.5` series on `dev`, the `vimeo` (`4a21f21`) and `av1` (`0715bf6`) branches exhibited several technical limitations and defects:
+Prior to the `v2.21.0`–`v2.23.6` series on `dev`, the `vimeo` (`4a21f21`) and `av1` (`0715bf6`) branches exhibited several technical limitations and defects:
 
 1. **64-Bit Little-Endian Shift Bug in `common/bytes.c` (`lsmash_bs_get_le64`)**:
    - `lsmash_bs_get_le64()` shifted the upper 32-bit word by `<< 16` instead of `<< 32` (`((uint64_t)lsmash_bs_get_le32( bs ) << 16) | lsmash_bs_get_le32( bs )`), corrupting 64-bit little-endian reads.
@@ -41,7 +41,7 @@ Prior to the `v2.21.0`–`v2.23.5` series on `dev`, the `vimeo` (`4a21f21`) and 
 
 ---
 
-## 3. Release Evolution (`v2.21.0` – `v2.23.5`)
+## 3. Release Evolution (`v2.21.0` – `v2.23.6`)
 
 ### 3.1 `v2.21.0`: Built-In AV1 OBU Parser, `le64` Fix & Synthetic Test Suite
 - **`common/bytes.c`**: Fixed `lsmash_bs_get_le64()` to shift the high 32-bit word by `<< 32` rather than `<< 16`.
@@ -154,3 +154,12 @@ Prior to the `v2.21.0`–`v2.23.5` series on `dev`, the `vimeo` (`4a21f21`) and 
 - **Fake file flavor**: `fLaC` and `av01` are ISOBMFF-only, so their fake files are marked `isom_compatible` (WAVE keeps `qt_compatible`). Without a flavor, `lsmash_set_media_parameters()` rejects the media language of the fake track.
 - **Tests**: added suite 19 `test_read_file_flac_ivf_timeline`. `make test` now runs 19 suites (147,828 assertions).
 - **Documentation**: `SPEC.md`, `README.md`, `docs/specs/codecs_and_importers.md` and `docs/specs/testing_strategy.md` describe the shared helper, the probing order, the FLAC / IVF Timeline and suite 19.
+
+### 3.13 `v2.23.6`: Fake Boxes and Media Timeline for All Audio Importers
+- **ADTS, AC-3, E-AC-3, DTS, MP3, AMR and ALS through the unified file API** (`importer/adts_imp.c`, `a52_imp.c`, `dts_imp.c`, `mp3_imp.c`, `amr_imp.c`, `als_imp.c`): the probes build a fake `moov` / `trak` / `stsd` (`mp4a` + `esds`, `ac-3` + `dac3`, `ec-3` + `dec3`, `dtsc` etc. + `ddts`, `samr` / `sawb` + `damr`) with `lsm_importer_setup_fake_track()`, and a raw stream of every audio importer is readable by `lsmash_read_file()`, `lsmash_construct_timeline()` and the `lsmash_*_from_media_timeline()` getters. `importer->summaries`, `get_accessunit` and `get_last_delta` used by the muxer keep their behavior except that `get_accessunit` now also tells where the sample is stored (`lsmash_sample_t::pos`).
+- **Common Timeline walk** (`lsm_importer_construct_timeline_by_walk()`): instead of saving and restoring the private state of six very different importers (bit readers, half-built access units, pending `dac3` / `dec3` data, bit reservoir history, ALS unit tables), the Timeline is built by a private clone of the importer (`importer_t::is_walker`) that shares the file and the byte stream, re-probes from the head and walks the stream with the own `get_accessunit`. Timestamps, sample boundaries, properties and `last_delta` equal those of the sequential reader by construction. A summary change reported as `IMPORTER_CHANGE` is compared with the existing sample entries by `lsmash_compare_summary()`, and a new one is appended before the `index` of the following samples is updated. The helper `lsm_timeline_add_raw_chunk()` lets the timeline own the chunk that samples refer to.
+- **Lesson: restore the stream position in one place, not in every importer.** The Media Timeline seeks the same `lsmash_bs_t` that the sequential reader uses, and each importer relies on a different amount of lookahead. Instead of repeating the resume logic of FLAC / IVF six more times, `importer_t::resume_enabled` / `resume_pos` are maintained by `lsmash_importer_get_access_unit()` itself: it seeks back to the position recorded after the previous call, only if the position differs, so that an unseekable sequential reader never seeks.
+- **Fake file flavor**: `lsm_importer_setup_fake_track()` now marks the file as `isom_compatible` (restored on failure) unless the importer has already marked it `qt_compatible` (WAVE), so no importer has to set and roll back the flag by itself. `description_setup_audio_description()` took a file without `ftyp` and `iods` for a QuickTime file and wrote `mp4a` in the QuickTime `wave` flavor, which made a raw ADTS / MP3 stream read back as a QuickTime `mp4a` entry. A file explicitly marked ISOBMFF-compatible is no longer taken for QuickTime.
+- **Defects found by the new tests**: `lsm_mp4sys_setup_summary_from_DecoderSpecificInfo()` failed when `DecoderSpecificInfo` was absent, as it is for the Legacy Interface MP3, because `mp4sys_export_DecoderSpecificInfo()` did not set the length to 0 for a missing descriptor, so `lsmash_get_summary()` returned NULL for an MP3 sample entry. `lsm_mp4a_remove_AudioSpecificConfig()` did not free the raw `ALSSpecificConfig` data kept by the ALS configuration. For `random_access == 0`, the ALS importer reads the whole stream from its byte stream buffer, which is emptied by a seek, so `get_accessunit` now fills it again.
+- **Tests**: added suite 20 `test_read_file_audio_raw_streams`. Suite 18 now uses a synthetic H.264 Annex-B stream as the unsupported raw stream. `make test` now runs 20 suites (148,846 assertions).
+- **Documentation**: `SPEC.md`, `README.md`, `docs/specs/codecs_and_importers.md` and `docs/specs/testing_strategy.md` describe the flavor decision, the common walk, the resume position and suite 20.
