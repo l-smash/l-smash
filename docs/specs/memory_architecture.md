@@ -1,296 +1,157 @@
-# Memory Architecture & C99 Container Modernization Specification (`docs/specs/memory_architecture.md`)
+# Memory Architecture & Container Specification (`docs/specs/memory_architecture.md`)
 
-## 1. Executive Summary & Historical Context
+## 1. Overview & Motivation
 
-`lsmash_entry_list_t` / `lsmash_entry_t` (`common/list.{c,h}`) was originally introduced as a generic doubly-linked list to support edit-list (`elst`) splicing and arbitrary Box tree manipulation. Over time, it was reused for **all** collections in L-SMASH, including high-volume Sample Table boxes (`stts`, `ctts`, `stsz`, `stz2`, `stss`, `stps`, `sdtp`, `stsc`, `stco`/`co64`, `sgpd`, `sbgp`), Movie Fragment Track Runs (`trun->optional`, `tfra->list`, `sidx->list`), and Media Timelines (`timeline->info_list`, `timeline->bunch_list`, `timeline->chunk_list`).
+Media container multiplexing and demultiplexing workloads exhibit two fundamentally different data-structure access patterns:
+1. **Polymorphic Hierarchical Box Trees (`moov`, `trak`, `mdia`, `minf`, `stbl`, `moof`, `traf`, `extensions`)**:
+   - Contain heterogeneous Box structs of varying byte sizes linked dynamically during file parsing, construction, and destruction.
+   - Require stable struct addresses (`isom_box_t *`) that are cross-referenced by both parent singleton pointers and `parent->extensions` lists.
+2. **High-Volume Homogeneous Sample & Timeline Tables (`stts`, `ctts`, `stsz`, `stz2`, `stss`, `stps`, `sdtp`, `stsc`, `stco`, `co64`, `sgpd`, `sbgp`, `elst`, `trun->optional`, `tfra`, `sidx`, `fragment->pool`, and `timeline` tables)**:
+   - Store hundreds of thousands to millions of fixed-size, homogeneous value records (4 to 32 bytes each).
+   - Previously, storing these tables in doubly-linked node lists (`lsmash_entry_list_t`) required **two separate heap allocations per entry** (`sizeof(lsmash_entry_t) == 24` bytes for the node plus `malloc(sizeof(entry))` for the payload, plus allocator metadata overhead) and degraded random-access lookup to $O(N)$ pointer chasing whenever access patterns deviated from strictly sequential traversal.
 
-### 1.1 The Cost of Doubly-Linked Lists at Sample Scale
-On 64-bit targets (`LP64` / `LLP64`), each `lsmash_entry_t` node occupies **24 bytes**:
-```c
-struct lsmash_entry_tag
-{
-    lsmash_entry_t *next; /* 8 bytes */
-    lsmash_entry_t *prev; /* 8 bytes */
-    void           *data; /* 8 bytes */
-};
-```
-Every sample table entry addition performs **two separate heap allocations**:
-1. `lsmash_malloc(sizeof(entry_struct))` (typically 4 to 16 bytes for `stsz`, `stts`, `ctts`, `sdtp`, `stco`, `trun_optional_row`, etc.).
-2. `lsmash_malloc(sizeof(lsmash_entry_t))` inside `lsmash_list_add_entry()` (24 bytes).
-
-When accounting for standard C heap allocator metadata (16 bytes of header/alignment per `malloc` chunk on 64-bit glibc/jemalloc/Windows UCRT):
-- A single 4-byte `isom_stsz_entry_t` or 1-byte `isom_sdtp_entry_t` consumes **$32\text{ B (data chunk)} + 40\text{ B (node chunk)} = 72\text{ bytes}$** of physical RAM — an **18x to 72x memory overhead**.
-- For a 2-hour 60fps video track ($432,000$ samples), `stsz->list` + `sdtp->list` + `ctts->list` + `timeline->info_list` alone execute **$>3.4\text{ million}$ `malloc`/`free` calls** and consume **$>150\text{ MB}$** of fragmented heap nodes.
-- **CPU Cache & Algorithmic Penalty**: Although `lsmash_entry_list_t` caches `last_accessed_entry` and `last_accessed_number` (`common/list.c:75-120`), any non-monotonic index lookup with distance $> \text{entry\_count}/2$ or alternating lookups forces $O(N)$ pointer chasing across non-contiguous heap lines.
-  - **Historical Proof (`04e39f1`)**: Commit `04e39f1` (*"Optimize DTS calculation to fix linear access slowdown"*, `core/timeline.c:412-436`) was an emergency workaround because `isom_get_dts_from_info_list()` was called in composition order (non-monotonic sample numbers when B-frames are present), defeating `last_accessed_entry` when distance checks misfired and causing catastrophic $O(N^2)$ pointer-chasing stalls.
+To address both workloads cleanly in standard C99, L-SMASH employs a **Hybrid Container Architecture** paired with a built-in **C99 Debug Memory Auditor (`LSMASH_DEBUG_ALLOC`)**.
 
 ---
 
-## 2. Sacred Layer Invariants (MUST NEVER BE BROKEN)
+## 2. Hybrid Container Classification
 
-Before modifying any list structure in `core/`, two foundational architectural mechanisms in `core/box.{c,h}` and `core/box_default.{c,h}` must be preserved with 100% fidelity.
+### 2.1 Box-Tree Pointer Lists (`lsmash_entry_list_t`)
+Polymorphic Box lists and dual-ownership Box registries continue to use `lsmash_entry_list_t` (`common/list.{c,h}`):
+- `box->extensions` (all child/extension boxes attached to any `isom_box_t`)
+- `root->file_list`, `file->moof_list`, `moov->trak_list`, `mvex->trex_list`, `moof->traf_list`, `traf->trun_list`, `mfra->tfra_list`
+- `stsd->list` (polymorphic sample description entries), `stbl->sgpd_list`, `stbl->sbgp_list`, `traf->sgpd_list`, `traf->sbgp_list`
+- `dref->list`, `udta->meta->ilst->item_list`, `WMA`/`QuickTime`/`ISOBMFF` extension box lists
 
-### 2.1 Invariant A: The `box_default` Null-Object Sentinel Pattern Pattern
-- Every Box struct starts with `ISOM_BASE_BOX` (`core/box.h:65-80`).
-- Every singleton child Box pointer inside a parent Box struct (e.g., `file->moov`, `moov->mvhd`, `trak->tkhd`, `trak->mdia`, `mdia->minf`, `minf->stbl`, `stbl->stsd`, `stbl->stts`, `stbl->ctts`, `stbl->stsz`, `stbl->stsc`, `stbl->stco`, `traf->tfhd`, `traf->tfdt`) is initialized via `isom_init_box_fields()` (`core/box_default.c`) to point to a static immutable sentinel struct (`def_*`) whose `manager` field has `LSMASH_NON_EXISTING_BOX` set.
-- `LSMASH_IS_NON_EXISTING_BOX(box)` checks `((box)->manager & LSMASH_NON_EXISTING_BOX)` without requiring NULL checks on intermediate parent pointers:
-  ```c
-  /* Safe even if trak, mdia, minf, or stbl is a non-existing sentinel! */
-  if( LSMASH_IS_NON_EXISTING_BOX( trak->mdia->minf->stbl->stsd ) )
-  ```
-- Every allocated Box stores:
-  - `box->nonexist_ptr`: pointer to the static default sentinel (`def_*`) for its concrete type.
-  - `box->offset_in_parent`: `offsetof(parent_type, child_member)` recording the byte offset within its `parent` struct where the child pointer (or child list) resides.
+These lists contain a small number of polymorphic heap-allocated Box structs where each node holds an owning or non-owning `void *data` pointer to a variable-sized `isom_box_t` derivative.
 
-### 2.2 Invariant B: Dual-List Ownership (`extensions` vs. Typed Child Lists) & `offset_in_parent` Restoration
-Every Box instance has an embedded `lsmash_entry_list_t extensions` field (`ISOM_BASE_BOX`). Child boxes are managed through a strict single-ownership protocol (`core/box.c:520-625`):
+### 2.2 High-Volume Paged Tables (`lsm_list_t`)
+All high-volume homogeneous value tables use the **C99 Paged Block Array (`lsm_list_t`)**:
 
-```
-Parent Box (e.g., isom_moov_t)
-  |
-  +-- extensions (lsmash_entry_list_t)  [OWNER: eliminator = isom_remove_extension_box]
-  |     |
-  |     +--> [entry] ---> isom_mvhd_t (Singleton Child)
-  |     +--> [entry] ---> isom_trak_t #1 (List Child)
-  |     +--> [entry] ---> isom_trak_t #2 (List Child)
-  |
-  +-- mvhd (isom_mvhd_t *) -------------> points to isom_mvhd_t
-  |     (offset_in_parent = offsetof(isom_moov_t, mvhd))
-  |
-  +-- trak_list (lsmash_entry_list_t)   [NON-OWNER VIEW: eliminator = isom_do_nothing]
-        (offset_in_parent = offsetof(isom_moov_t, trak_list))
-        |
-        +--> [entry] ---> points to isom_trak_t #1
-        +--> [entry] ---> points to isom_trak_t #2
-```
-
-When `isom_remove_box_by_itself(box)` (`core/box.c:592-624`) destroys a Box:
-1. If `box->manager & LSMASH_IN_PREDEFINED_LIST` is set:
-   - It locates the typed list on the parent using `(lsmash_entry_list_t *)((int8_t *)parent + box->offset_in_parent)`.
-   - It iterates that `lsmash_entry_list_t` and calls `lsmash_list_remove_entry_direct(list, entry)` (`core/box.c:606`), which frees **only the `lsmash_entry_t` node** (`eliminator == isom_do_nothing`).
-2. Otherwise (Singleton Predefined Box):
-   - `isom_Predefined_Box_Restore(parent, box)` (`core/box.c:563-570`) writes `box->nonexist_ptr` back into `*(void **)((int8_t *)parent + box->offset_in_parent)` if it still points to `box`.
-3. Finally, `isom_remove_box_in_extension_list(parent, box)` (`core/box.c:576-589`) finds `box` in `parent->extensions` and calls `lsmash_list_remove_entry_direct(&parent->extensions, entry)`, invoking `isom_remove_extension_box(box)` $\rightarrow$ `box->destruct(box)` $\rightarrow$ `isom_remove_all_extension_boxes(&box->extensions)` $\rightarrow$ `lsmash_free(box)`.
-
-> [!IMPORTANT]
-> **Hard Architectural Rule**:
-> `box->extensions` and all predefined Box lists that use `LSMASH_IN_PREDEFINED_LIST` / `offset_in_parent` (`moov->trak_list`, `stsd->list`, `dref->list`, `stbl->sgpd_list`, `stbl->sbgp_list`, `moof->traf_list`, `traf->trun_list`, `traf->sgpd_list`, `traf->sbgp_list`, `tref->ref_list`, `udta->cprt_list`, `ilst->metaitem_list`, `mvex->trex_list`, `mfra->tfra_list`, `file->styp_list`, `file->sidx_list`, `file->moof_list`, `file->emsg_list`) have small cardinality ($1 \sim 10^2$) and are tightly coupled to `isom_remove_box_by_itself()` via `(lsmash_entry_list_t *)((int8_t *)parent + box->offset_in_parent)`. These Box-tree lists **must remain `lsmash_entry_list_t`**.
-
----
-
-## 3. Complete Quantitative Audit of All `lsmash_entry_list_t` Instances
-
-Every occurrence of `lsmash_entry_list_t` across `core/`, `codecs/`, and `importer/` has been audited and classified below by:
-- **Storage Form**: Value-embedded (`lsmash_entry_list_t`) vs. Heap-allocated pointer (`lsmash_entry_list_t *`).
-- **Element Type & Size**: Concrete C struct stored in `entry->data` and its `sizeof`.
-- **Scale ($N$)**: Typical cardinality in real-world media files:
-  - **Small ($S$)**: $1 \sim 10^2$ elements (Box trees, tracks, parameter sets).
-  - **Medium ($M$)**: $10^2 \sim 10^4$ elements (Chunks, fragments, edit segments, roll groups).
-  - **Large ($L$)**: $10^5 \sim 10^7$ elements (Per-sample tables, timelines, LPCM bunches).
-- **Pointer Stability Requirement**: Whether external structs hold raw C pointers to elements inside the list across subsequent insertions or deletions.
-- **Access & Mutation Pattern**: Append-only + sequential scan (`Seq`), 1-based random index lookup (`Idx`), tail removal (`PopTail`), mid-list removal (`MidDel`), bulk move (`Move`).
-
-### 3.1 Box-tree pointer lists: Box Tree & Predefined Box Lists (Retain `lsmash_entry_list_t`)
-| Container Field | Defined In | Element Type | Scale | Ptr Stability | Operations | Notes / Invariant Coupling |
-| :--- | :--- | :--- | :---: | :---: | :--- | :--- |
-| `box->extensions` | `core/box.h:70` (`ISOM_BASE_BOX`) | `isom_box_t *` (polymorphic) | $S$ | Yes | `Seq`, `PopTail`, `MidDel` (`direct`) | Sole owner of all child boxes (`isom_remove_extension_box`). |
-| `file->styp_list` | `core/file.h:122` | `isom_styp_t *` | $S$ | Yes | `Seq`, `MidDel` | Predefined Box list (`offset_in_parent`). |
-| `file->sidx_list` | `core/file.h:123` | `isom_sidx_t *` | $S$ | Yes | `Seq`, `MidDel` | Predefined Box list (`offset_in_parent`). |
-| `file->moof_list` | `core/file.h:124` | `isom_moof_t *` | $S\sim M$ | Yes | `Seq`, `MidDel` | Holds 1 active `moof` during write; all `moof`s during read/dump. |
-| `file->emsg_list` | `core/file.h:125` | `isom_emsg_t *` | $S$ | Yes | `Seq`, `MidDel` | Predefined Box list (`offset_in_parent`). |
-| `moov->trak_list` | `core/box.h:616` | `isom_trak_t *` | $S$ | Yes | `Seq`, `Idx`, `MidDel` | Predefined Box list (`offset_in_parent`). |
-| `tref->ref_list` | `core/box.h:146` | `isom_tref_type_t *` | $S$ | Yes | `Seq`, `MidDel` | Predefined Box list (`offset_in_parent`). |
-| `dref->list` | `core/box.h:221` | `isom_dref_entry_t *` | $S$ | Yes | `Seq`, `Idx`, `MidDel` | Predefined Box list (`offset_in_parent`). |
-| `stsd->list` | `core/box.h:240` | `isom_sample_entry_t *` | $S$ | Yes | `Seq`, `Idx`, `MidDel` | Predefined Box list (`offset_in_parent`). |
-| `stbl->sgpd_list` | `core/box.h:595` | `isom_sgpd_t *` | $S$ | Yes | `Seq`, `MidDel` | Predefined Box list (`offset_in_parent`). |
-| `stbl->sbgp_list` | `core/box.h:596` | `isom_sbgp_t *` | $S$ | Yes | `Seq`, `MidDel` | Predefined Box list (`offset_in_parent`). |
-| `udta->cprt_list` | `core/box.h:609` | `isom_cprt_t *` | $S$ | Yes | `Seq`, `MidDel` | Predefined Box list (`offset_in_parent`). |
-| `ilst->metaitem_list`| `core/box.h:642` | `isom_metaitem_t *` | $S$ | Yes | `Seq`, `MidDel` | Predefined Box list (`offset_in_parent`). |
-| `mvex->trex_list` | `core/box.h:667` | `isom_trex_t *` | $S$ | Yes | `Seq`, `MidDel` | Predefined Box list (`offset_in_parent`). |
-| `moof->traf_list` | `core/box.h:739` | `isom_traf_t *` | $S$ | Yes | `Seq`, `MidDel` | Predefined Box list (`offset_in_parent`). |
-| `traf->trun_list` | `core/box.h:731` | `isom_trun_t *` | $S\sim M$ | Yes | `Seq`, `MidDel` | Predefined Box list (`offset_in_parent`); uses `tail->prev` (`core/fragment.c:1348`). |
-| `traf->sgpd_list` | `core/box.h:732` | `isom_sgpd_t *` | $S$ | Yes | `Seq`, `MidDel` | Predefined Box list (`offset_in_parent`). |
-| `traf->sbgp_list` | `core/box.h:733` | `isom_sbgp_t *` | $S$ | Yes | `Seq`, `MidDel` | Predefined Box list (`offset_in_parent`). |
-| `mfra->tfra_list` | `core/box.h:769` | `isom_tfra_t *` | $S$ | Yes | `Seq`, `MidDel` | Predefined Box list (`offset_in_parent`). |
-| `root->print` | `core/file.h:158` | `isom_print_entry_t *` | $S\sim M$ | No | `Seq` | Created only during `lsmash_print_movie()`. |
-| `root->file_list` | `core/file.h:159` | `lsmash_file_t *` | $S$ | Yes | `Seq`, `MidDel` | Predefined Box list (`offset_in_parent`). |
-| `file->timeline` | `core/file.h:126` | `isom_timeline_t *` | $S$ | Yes | `Seq`, `Idx`, `MidDel` | One `isom_timeline_t` per track (`core/timeline.c:148`). |
-
-### 3.2 High-volume paged tables: High-Volume Sample Table, Fragment & Timeline Lists (Primary Modernization Targets)
-| Container Field | Defined In | Element Struct | `sizeof` | Scale | Ptr Stability Required? | Operations | Hot-Path Bottlenecks & Special Constraints |
-| :--- | :--- | :--- | :---: | :---: | :---: | :--- | :--- |
-| `stts->list` | `core/box.h:428` | `isom_stts_entry_t` | 8 B | $M\sim L$ | No (only `tail->data` modified in place) | `Seq`, `Tail` | Run-length encoded (`sample_count`, `sample_delta`), but reaches $10^5+$ in VFR streams. |
-| `ctts->list` | `core/box.h:440` | `isom_ctts_entry_t` | 8 B | $L$ | No (only `tail->data` modified in place) | `Seq`, `Head`, `Tail` | Reaches $10^5\sim 10^6$ in B-frame video streams (almost 1 entry per sample). |
-| `stsz->list` | `core/box.h:468` | `isom_stsz_entry_t` | 4 B | $L$ | No | `Seq`, `Head`, `Move` (`stz2`) | **1 entry per sample** for all variable-size video/audio tracks ($10^5\sim 10^7$). Moved to `stz2->list` in `core/isom.c:1988`. |
-| `stz2->list` | `core/box.h:481` | `isom_stsz_entry_t` | 4 B | $L$ | No | `Seq`, `Head`, `Move` | Same element struct as `stsz->list`. |
-| `stss->list` | `core/box.h:449` | `isom_stss_entry_t` | 4 B | $M\sim L$ | No | `Seq` | 1 entry per sync sample (IDR/keyframe). |
-| `stps->list` | `core/box.h:458` | `isom_stps_entry_t` | 4 B | $M$ | No | `Seq` | 1 entry per partial sync sample. |
-| `sdtp->list` | `core/box.h:498` | `isom_sdtp_entry_t` | 4 B | $L$ | No | `Seq` | **1 entry per sample** whenever sample dependency box is active ($10^5\sim 10^7$). |
-| `stsc->list` | `core/box.h:510` | `isom_stsc_entry_t` | 12 B | $M\sim L$ | No (reads `tail->data`) | `Seq`, `Tail` | 1 entry per chunk run. |
-| `stco->list` | `core/box.h:524` | `isom_stco_entry_t` (4B) / `isom_co64_entry_t` (8B) | 4 / 8 B | $M\sim L$ | No (reads `tail->data`) | `Seq`, `Tail` | 1 entry per media chunk; converted 32$\rightarrow$64-bit in `isom_convert_stco_to_co64()`. |
-| `trun->optional` | `core/box.h:715` | `isom_trun_optional_row_t` | 16 B | $M\sim L$ | No | `Seq`, `Idx` (linear scan in `fragment.c:1140`) | Reaches $10^3\sim 10^5$ per fragment; currently scanned linearly in `isom_request_trun_optional_row()`! |
-| `tfra->list` | `core/box.h:754` | `isom_tfra_location_time_entry_t` | 28 B | $M$ | No | `Seq`, `MidDel` (`direct` in `fragment.c:187, 225`) | 1 entry per fragment RAP; removes non-RAP entries during `isom_setup_tfra()`. |
-| `sidx->list` | `core/box.h:788` | `isom_sidx_referenced_item_t` | 20 B | $M$ | No | `Seq` | 1 entry per subsegment. |
-| `elst->list` | `core/box.h:168` | `isom_elst_entry_t` | 24 B | $S\sim M$ | No | `Seq`, `Idx` | Edit list segments (`lsmash_get_explicit_timeline_map`). |
-| `sgpd->list` | `core/box.h:557` | `isom_rap_entry_t` (6B) / `isom_roll_entry_t` (6B) / `isom_Unknown_group_entry_t` | 6~16 B | $S\sim M$ | **YES (`tail->data`)** | `Seq`, `Idx`, `PopTail` | `cache->rap->random_access` holds a raw pointer to `sgpd->list->tail->data` across samples until deduplicated via `lsmash_list_remove_entry_tail(sgpd->list)` (`core/isom.c:3106, 3120`). |
-| `sbgp->list` | `core/box.h:572` | `isom_group_assignment_entry_t` | 8 B | $M\sim L$ | **YES (`assignment`, `prev_assignment`)** | `Seq`, `Idx`, **`MidDel` (by index!)** | **CRITICAL HAZARD**: `cache->rap->assignment` and `cache->roll.pool` (`isom_roll_group_t.assignment`) hold raw C pointers into `sbgp->list` while `isom_deduplicate_roll_group()` (`core/isom.c:3331`) deletes entries by index! (See Section 3.4). |
-| `cache->roll.pool` | `core/isom.h:61` | `isom_roll_group_t` | 48 B | $S\sim M$ | No | `Seq`, `Idx` (`tail`), `MidDel` (`direct`) | Queue of pending roll recovery groups awaiting distance determination (`core/isom.c:3317-3405`). |
-| `fragment->pool` | `core/fragment.h:83` | `isom_sample_pool_t` | 24 B | $S\sim M$ | No | `Seq`, `Clear` | Pools chunk buffers for the active Movie Fragment (`core/fragment.c:1247`). |
-| `timeline->info_list` | `core/timeline.c:55` | `isom_sample_info_t` | 48 B | $L$ | No | `Seq`, **`Idx` (heavy random access!)** | **1 entry per non-LPCM sample ($10^5\sim 10^7$)**; heavily queried by 1-based `sample_number` in `lsmash_get_sample_from_media_timeline()`, `lsmash_get_dts_from_media_timeline()`, etc. |
-| `timeline->bunch_list` | `core/timeline.c:56` | `isom_lpcm_bunch_t` | 56 B | $M\sim L$ | No | `Seq`, **`Idx` (random access in `isom_get_bunch`)** | Run-length-grouped LPCM frames; queried by `bunch_number` in `isom_get_bunch()` (`core/timeline.c:350-375`). |
-| `timeline->chunk_list` | `core/timeline.c:57` | `isom_portable_chunk_t` | 32 B | $M\sim L$ | **YES (`info.chunk`, `bunch.chunk`)** | `Seq`, `PopTail` (`timeline.c:1149`) | **CRITICAL HAZARD**: Every `isom_sample_info_t.chunk` and `isom_lpcm_bunch_t.chunk` holds a raw `isom_portable_chunk_t *` pointing into `timeline->chunk_list` (`core/timeline.c:1053, 1268`)! |
-
-### 3.3 Small codec and importer lists: Codec, Summary & Importer Small Lists (Low Volume: $1 \sim 10^2$)
-| Container Field | Defined In | Element Type | Scale | Operations | Notes |
-| :--- | :--- | :--- | :---: | :--- | :--- |
-| `summary->opaque->list` | `lsmash.h:1049` | `lsmash_codec_specific_t *` | $S$ | `Seq`, `Idx`, `MidDel` (`direct`) | Part of `lsmash_codec_specific_list_t` (`core/summary.c:51`). |
-| `avcC->sequenceParameterSets->list`, `pictureParameterSets->list`, `sequenceParameterSetExt->list` | `codecs/h264.h:41` (`isom_dcr_ps_list_t`) | `isom_dcr_ps_entry_t *` | $S$ | `Seq`, `PopTail` | H.264 parameter sets (typically $1\sim 4$ entries). |
-| `hvcC->parameter_arrays.ps_array[i].list` | `codecs/hevc.c:150` | `isom_dcr_ps_entry_t *` | $S$ | `Seq`, `PopTail` | HEVC VPS/SPS/PPS/SEI arrays (typically $1\sim 8$ entries). |
-| `esds->ES->...` descriptor lists | `codecs/mp4sys.c:76-135` | `mp4sys_*_t *` | $S$ | `Seq`, `PopTail`, `MidDel` (`direct`) | MPEG-4 Systems descriptor tree (`mp4sys.c:268, 309`). |
-| `chpl->list`, `keys->list`, `WMA` / `dts` / `description` temp lists | `core/box.h:281, 623`, `codecs/*.c` | Small metadata structs | $S$ | `Seq`, `Idx` | Chapter list ($<100$), metadata keys ($<100$). |
-| `importer->summaries` | `importer/importer.h:57` | `lsmash_summary_t *` | $S$ | `Seq`, `Idx`, `MidDel` | 1 entry per elementary stream/track ($1\sim 16$). |
-| `adts_imp`, `ac3_imp`, `dts_imp`, `mp3_imp`, `amr_imp`, `vc1_imp` temporary `au_list` | `importer/*_imp.c` | Small AU buffers | $S$ | `Seq` | Small lookahead/frame lists. |
-
----
-
-### 3.4 Deep-Dive Analysis of Pointer Stability & Mid-List Deletion Hazards
-
-Our audit uncovered three critical pointer-stability hazards that would cause **Use-After-Free (UAF)** or **silent data corruption** if a naive 1D `realloc`-based Flat Vector were dropped in:
-
-#### Hazard 1: `timeline->chunk_list` Raw Pointers in `info_list` and `bunch_list`
-In `lsmash_construct_timeline()` (`core/timeline.c:1053, 1268`):
-```c
-info.chunk = (isom_portable_chunk_t *)timeline->chunk_list->tail->data;
-```
-Every single `isom_sample_info_t` (in `timeline->info_list`) and `isom_lpcm_bunch_t` (in `timeline->bunch_list`) stores a raw C pointer `isom_portable_chunk_t *chunk` pointing directly to an element inside `timeline->chunk_list` while new chunks continue to be appended to `timeline->chunk_list`!
-- If `timeline->chunk_list` stored `isom_portable_chunk_t` values in a 1D flat array that grew via `realloc()`, any reallocation of `chunk_list` would immediately invalidate `info.chunk` and `bunch.chunk` in all previously added samples!
-- By contrast, a **Paged Block Array** (which allocates fixed-size pages of `isom_portable_chunk_t` and only `realloc`s the top-level directory of page pointers) guarantees **100% address stability** of every `isom_portable_chunk_t` element for the entire lifetime of `timeline->chunk_list`.
-
-#### Hazard 2: `sbgp->list` Raw Pointers + Mid-List Deletion in `isom_deduplicate_roll_group()`
-In `core/isom.c:3194-3540`:
-- `isom_rap_group_t` (`cache->rap`) holds raw C pointers `group->assignment` and `group->prev_assignment` (`isom_group_assignment_entry_t *`) pointing directly to elements inside `sbgp->list`.
-- `isom_roll_group_t` (stored in `cache->roll.pool`) holds `group->assignment` (`isom_group_assignment_entry_t *`) pointing directly to its corresponding entry inside `sbgp->list`.
-- Worse still, examine `isom_deduplicate_roll_group()` (`core/isom.c:3312-3344`):
-  ```c
-  uint32_t current_group_number = sbgp->list->entry_count - pool->entry_count + 1;
-  isom_group_assignment_entry_t *prev_assignment =
-      (isom_group_assignment_entry_t *)lsmash_list_get_entry_data( sbgp->list, current_group_number - 1 );
-  for( lsmash_entry_t *entry = pool->head; entry; )
-  {
-      isom_roll_group_t *group = (isom_roll_group_t *)entry->data;
-      if( !group || !group->assignment )
-          return LSMASH_ERR_INVALID_DATA;
-      if( !group->delimited || group->described != ROLL_DISTANCE_DETERMINED )
-          return 0;
-      if( prev_assignment && prev_assignment->group_description_index == group->assignment->group_description_index )
-      {
-          /* Merge the current group with the previous. */
-          lsmash_entry_t *next_entry = entry->next;
-          prev_assignment->sample_count += group->assignment->sample_count;
-          int err;
-          if( (err = lsmash_list_remove_entry( sbgp->list, current_group_number )) < 0
-           || (err = lsmash_list_remove_entry_direct( pool, entry ))               < 0 )
-              return err;
-          entry = next_entry;
-      }
-      ...
-  ```
-  Consider what happens when `pool` contains two groups: $G_1$ (at `sbgp->list` index $N-1$, `delimited == 1 && described == ROLL_DISTANCE_DETERMINED`) and $G_2$ (at `sbgp->list` index $N$, still undetermined: `!delimited` or `described != ROLL_DISTANCE_DETERMINED`):
-  1. $G_1$ matches `prev_assignment->group_description_index`, so `lsmash_list_remove_entry(sbgp->list, N - 1)` deletes index $N-1$ from `sbgp->list`.
-  2. Next iteration inspects $G_2$, sees `!group->delimited || group->described != ROLL_DISTANCE_DETERMINED`, and returns `0` early (`core/isom.c:3324`).
-  3. $G_2$ remains alive in `pool` with its raw pointer `G2->assignment`!
-  - If `sbgp->list` were a contiguous array (or even a Paged Block Array that shifted elements left on mid-array deletion), deleting index $N-1$ would shift $G_2$'s entry from index $N$ to index $N-1$, leaving `G2->assignment` pointing to the vacated tail slot (one past the end of `sbgp->list`)!
-  - **Implemented Resolution for `sbgp->list` (`core/isom.c`, `core/isom.h`)**:
-    1. `isom_roll_group_t` in `core/isom.h` replaces the raw pointer `isom_group_assignment_entry_t *assignment` with `isom_sbgp_t *sbgp` and 1-based `uint32_t assignment_number`, looked up on demand via `lsm_list_get(group->sbgp->list, group->assignment_number)`.
-    2. When `isom_deduplicate_roll_group()` removes entry `current_group_number` from `sbgp->list` (`lsm_list_remove(sbgp->list, current_group_number)`), it decrements `g->assignment_number` for all subsequent pending groups in `cache->roll.pool` (`assignment_number > current_group_number`), completely eliminating any possibility of dangling pointers across mid-table deletions.
-    3. For `RAP` groups (`cache->rap`), `sbgp` entries are only ever appended at the tail and never deleted mid-table; since `lsm_list_t` guarantees 100% address stability on append, `group->assignment` and `group->prev_assignment` remain valid throughout the track lifetime.
-
-#### Hazard 3: `stsz->list` $\rightarrow$ `stz2->list` Ownership Transfer (`lsm_list_move`)
-In `isom_compress_sample_size_table()` (`core/isom.c`), `lsm_list_move(stz2->list, stsz->list)` transfers all `isom_stsz_entry_t` pages from `stsz->list` to `stz2->list` in $O(1)$ time by moving the `pages` pointer directory and metadata fields.
-
----
-
-## 4. Architectural Comparison & Implemented C99 Container Design (`lsm_list_t`)
-
-We evaluate the three candidate architectures against L-SMASH's quantitative requirements:
-
-| Evaluation Criterion | Legacy `lsmash_entry_list_t` | ① Flat Vector (1D `realloc`) | ② Paged Block Array ($2^K$ chunks) | ③ Hybrid: Paged Block Array (Tables) + `lsmash_entry_list_t` (Box Tree) |
+| Subsystem | Parent Struct / Box | Field Name | Element Type | `sizeof(Element)` |
 | :--- | :--- | :--- | :--- | :--- |
-| **Random Access Complexity** | $O(N)$ worst-case (B-frame / non-monotonic) | $O(1)$ (`data[i]`) | $O(1)$ (`pages[i >> K][i & mask]`) | **$O(1)$ for all Sample/Timeline tables** |
-| **Memory Overhead ($10^6$ `stsz` entries)** | ~64–72 MB (2 `malloc`s/entry) | ~4–8 MB (1 buffer, up to 2x slack) | **~4.03 MB** (exact 256-element pages, zero `realloc` copy) | **~4.03 MB (significant reduction)** |
-| **Pointer Stability on Append** | Yes | **NO** (`realloc` invalidates all pointers!) | **YES** (existing pages never move in memory!) | **YES (100% stable on append)** |
-| **Large Allocation Failure Risk** | Low (tiny allocations) | **High** (contiguous multi-MB `realloc` can fail or copy tens of MBs) | **Zero** (fixed 1 KB–14 KB page allocations; only tiny pointer directory grows) | **Zero** |
-| **`box_default` & `offset_in_parent` Compatibility** | Native | Breaks `isom_remove_box_by_itself` if applied to Box lists | Breaks `isom_remove_box_by_itself` if applied to Box lists | **100% Compatible (Box tree keeps `lsmash_entry_list_t`)** |
+| **Sample Tables (`stbl`)** | `isom_stts_t` | `list` | `isom_stts_entry_t` | 8 bytes |
+| | `isom_ctts_t` | `list` | `isom_ctts_entry_t` | 8 bytes |
+| | `isom_stsz_t` | `list` | `isom_stsz_entry_t` | 4 bytes |
+| | `isom_stz2_t` | `list` | `isom_stsz_entry_t` | 4 bytes |
+| | `isom_stss_t` | `list` | `isom_stss_entry_t` | 4 bytes |
+| | `isom_stps_t` | `list` | `isom_stps_entry_t` | 4 bytes |
+| | `isom_sdtp_t` | `list` | `isom_sdtp_entry_t` | 1 byte |
+| | `isom_stsc_t` | `list` | `isom_stsc_entry_t` | 12 bytes |
+| | `isom_stco_t` (`stco`/`co64`) | `list` | `isom_stco_entry_t` / `isom_co64_entry_t` | 4 / 8 bytes |
+| | `isom_sgpd_t` (`rap `, `roll`, `prol`) | `list` | `isom_rap_entry_t` / `isom_roll_entry_t` | 2 bytes |
+| | `isom_sbgp_t` | `list` | `isom_group_assignment_entry_t` | 8 bytes |
+| **Edit List & Cache** | `isom_elst_t` | `list` | `isom_elst_entry_t` | 20 bytes |
+| | `isom_cache_t` (`roll.pool`) | `pool` | `isom_roll_pool_entry_t` | 20 bytes |
+| | `isom_sample_pool_t` | `pool` | `lsmash_sample_t *` | 8 bytes |
+| **Movie Fragments (`moof`/`sidx`/`mfra`)** | `isom_trun_t` | `optional` | `isom_trun_optional_row_t` | 16 bytes |
+| | `isom_tfra_t` | `list` | `isom_tfra_location_time_entry_t` | 28 bytes |
+| | `isom_sidx_t` | `list` | `isom_sidx_referenced_item_t` | 16 bytes |
+| **Media Timeline (`timeline`)** | `isom_timeline_t` | `info_list` | `isom_sample_info_t` | 32 bytes |
+| | `isom_timeline_t` | `bunch_list` | `isom_portable_chunk_bunch_t` | 24 bytes |
+| | `isom_timeline_t` | `chunk_list` | `isom_portable_chunk_t` | 16 bytes |
 
-### 4.1 Implemented Architecture: Option ③ (Hybrid + C99 Paged Block Array `lsm_list_t` with Unified Accessors)
-
-1. **Retain `lsmash_entry_list_t` for Box-tree pointer lists & C (Box Trees, Codec Parameter Sets, Importer Summaries)**:
-   - Zero risk to `box_default` (`LSMASH_NON_EXISTING_BOX`), `parent->extensions` ownership, and `offset_in_parent` pointer restoration in `core/box.c`.
-2. **C99 Paged Block Array (`lsm_list_t` in `common/list.{c,h}`) for High-volume paged tables (Sample Tables, Fragment Tables, and Media Timelines)**:
-   - Stores homogeneous elements of `elem_size` bytes in fixed-capacity pages of $2^8 = 256$ elements (`LSM_LIST_PAGE_SHIFT = 8U`, `LSM_LIST_PAGE_SIZE = 256U`, `LSM_LIST_PAGE_MASK = 0xFFU`).
-   - **Data Layout (`common/list.h`)**:
-     ```c
-     #define LSM_LIST_PAGE_SHIFT 8U
-     #define LSM_LIST_PAGE_SIZE  (1U << LSM_LIST_PAGE_SHIFT) /* 256 elements/page */
-     #define LSM_LIST_PAGE_MASK  (LSM_LIST_PAGE_SIZE - 1U)
-
-     typedef struct
-     {
-         uint8_t               **pages;          /* Dynamic directory of page pointers */
-         uint32_t                entry_count;    /* Total number of active elements */
-         uint32_t                page_count;     /* Number of allocated pages */
-         uint32_t                page_capacity;  /* Capacity of the pages[] pointer directory */
-         uint32_t                elem_size;      /* sizeof(element) in bytes */
-         lsmash_entry_data_eliminator eliminator;/* Optional per-element cleanup callback */
-     } lsm_list_t;
-     ```
-   - **$O(1)$ Branchless Element Lookup (0-based `lsm_list_at` & 1-based `lsm_list_get`)**:
-     ```c
-     static inline void *lsm_list_at( const lsm_list_t *list, uint32_t idx )
-     {
-         if( !list || idx >= list->entry_count )
-             return NULL;
-         return (void *)(list->pages[idx >> LSM_LIST_PAGE_SHIFT]
-                       + ((size_t)(idx & LSM_LIST_PAGE_MASK) * list->elem_size));
-     }
-
-     static inline void *lsm_list_get( const lsm_list_t *list, uint32_t entry_number )
-     {
-         if( entry_number == 0 )
-             return NULL;
-         return lsm_list_at( list, entry_number - 1U );
-     }
-     ```
-   - **Unified C99 Iterator Macros**:
-     - `LSM_LIST_FOR_EACH( elem_ptr, list_ptr )`: Iterates all elements in an `lsm_list_t` (safe when `list_ptr` is `NULL` or zero-initialized `{ 0 }`).
-     - `LSM_ENTRY_LIST_FOR_EACH( elem_ptr, list_ptr )`: Iterates all `entry->data` pointers in an `lsmash_entry_list_t` with identical visual syntax.
-   - **Key Properties**:
-     - **Zero Per-Entry `malloc`**: Only 1 page allocation per 256 entries (a **substantial reduction** in heap allocator calls).
-     - **Zero `lsmash_entry_t` Node Overhead**: Saves 24 bytes + 32 bytes of heap headers per entry.
-     - **100% Pointer Stability on Append**: Existing pages are never `realloc`ed or moved when new pages are appended. `timeline->chunk_list` pointers (`info.chunk`, `bunch.chunk`), `sgpd->list` tail pointers (`cache->rap->random_access`), `sbgp->list` RAP pointers (`group->assignment`), and `stts`/`ctts`/`stsc` tail pointers remain valid across arbitrary appends.
-     - **$O(1)$ Tail Access & Tail Pop**: `lsm_list_tail(list)` and `lsm_list_remove_tail(list)` access `entry_count - 1` in $O(1)$ time while keeping allocated pages warm for subsequent appends.
-     - **$O(1)$ Move (`stsz` $\rightarrow$ `stz2`)**: `lsm_list_move(dst, src)` transfers all pages in $O(1)$ time.
-     - **Zero-Initialization Safety**: Any `lsm_list_t` initialized with `{ 0 }` (or `NULL` `lsm_list_t *` in `box_default` static sentinels) safely reports `lsm_list_count() == 0` and `NULL` for `lsm_list_head()`, `lsm_list_tail()`, `lsm_list_at()`, and `lsm_list_get()`.
-
-### 4.2 Build System Constraint (`configure` Symbol Version Script)
-During our audit of `configure` (line 428), we identified how `liblsmash.ver` is generated for shared libraries:
-```sh
-sed -n 's/^lsmash_.*(/&/p; ...' $SRCDIR/common/*.h $SRCDIR/importer/*.h
-```
-- Because all `lsm_list_*` functions in `common/list.h` follow the Internal Shared `lsm_` prefix (`lsm_list_*`), `configure`'s `sed` filter (which matches only `^lsmash_`) ignores them cleanly, keeping `liblsmash.ver` strictly limited to public Public API `lsmash_*` exports.
+### 2.3 Small Codec and Importer Lists (`lsmash_entry_list_t`)
+Small bounded parameter lists in `codecs/` and `importer/` (such as H.264 SPS/PPS lists, HEVC parameter set arrays, ADTS/AC-3/DTS importer track lists, and chapter entries, typically $\le 16$ elements) remain on `lsmash_entry_list_t` and use the `LSM_ENTRY_LIST_FOR_EACH` macro for traversal.
 
 ---
 
-## 5. Completed Phased Migration Summary (the implementation)
+## 3. C99 Paged Block Array (`lsm_list_t`) Specification
 
-All three migration steps were executed and verified in atomic commits on `dev`:
+### 3.1 Data Structure (`common/list.h`)
+```c
+#define LSM_LIST_PAGE_SHIFT 8U
+#define LSM_LIST_PAGE_SIZE  (1U << LSM_LIST_PAGE_SHIFT) /* 256 elements per page */
+#define LSM_LIST_PAGE_MASK  (LSM_LIST_PAGE_SIZE - 1U)   /* 0xFF */
 
-1. **Step 1 — Container Primitive & Unit Tests (`common/list.{c,h}`, `tests/test_main.c`)**:
-   - Implemented `lsm_list_t` and unified accessors/iterators in `common/list.{c,h}`.
-   - Added `test_paged_block_array()` (`` through ``) verifying zero-init/NULL safety, 20,000-element multi-page append and $O(1)$ random access across 79 pages, 100% pointer address stability across page boundaries, mid-list/tail deletion with custom eliminator callbacks, and $O(1)$ `lsm_list_move()`.
-2. **Step 2 — Timeline & Fragment Table Migration (`core/timeline.c`, `core/fragment.c`, `core/box.{c,h}`, `core/file.c`, `core/isom.c`, `core/read.c`, `core/write.c`, `core/print.c`)**:
-   - Migrated `timeline->edit_list`, `timeline->chunk_list`, `timeline->info_list`, and `timeline->bunch_list` in `core/timeline.c`, simplifying `isom_get_dts_from_info_list()`, `isom_get_cts_from_info_list()`, and `isom_get_bunch()` to direct $O(1)$ `lsm_list_get()` calls.
-   - Migrated `trun->optional`, `tfra->list`, `sidx->list`, and `fragment->pool`, replacing the $O(N)$ scan in `isom_request_trun_optional_row()` with $O(1)$ `lsm_list_get()`.
-3. **Step 3 — Sample Table (`stbl`) & Edit List (`elst`) Migration (`core/`)**:
-   - Migrated `elst->list`, `stts->list`, `ctts->list`, `stsz->list`, `stz2->list`, `stss->list`, `stps->list`, `sdtp->list`, `stsc->list`, `stco->list`/`co64->list`, `sgpd->list`, `sbgp->list`, and `cache->roll.pool` to `lsm_list_t`, with index-safe `isom_roll_group_t` resolution in `isom_deduplicate_roll_group()`.
-   - Added `test_large_scale_paged_tables_and_roll_dedup()` (``..``) testing a 10,500-sample VFR track across 42 pages with mid-table `sbgp` roll group deduplication, 600-sample 4-bit `stz2` compaction (`lsm_list_move`), and 900-sample fragmented VFR MP4 with `mfra`/`tfra` and DASH `sidx` (146,276 total assertions passing with 0 memory leaks).
+typedef struct
+{
+    uint8_t                    **pages;
+    uint32_t                     entry_count;
+    uint32_t                     page_count;
+    uint32_t                     page_capacity;
+    uint32_t                     elem_size;
+    lsmash_entry_data_eliminator eliminator;
+} lsm_list_t;
+```
+
+### 3.2 Structural Guarantees & Complexity
+1. **True $O(1)$ Indexed Addressing**:
+   Element at 0-based `index` resides at:
+   $$\text{page\_idx} = \text{index} \gg 8, \qquad \text{slot\_idx} = \text{index} \ \& \ \text{0xFF}$$
+   $$\text{address} = \text{list->pages}[\text{page\_idx}] + \text{slot\_idx} \times \text{list->elem\_size}$$
+2. **100% Pointer Stability on Append (`lsm_list_append` / `lsm_list_add`)**:
+   - Once a 256-element page is allocated, its base address (`pages[p]`) is **never reallocated or moved** when subsequent elements or pages are appended. Only the outer `uint8_t **pages` directory array grows via `lsmash_realloc` when `page_count` reaches `page_capacity`.
+   - Therefore, any pointer to an existing element (such as `stts` or `stsc` last-entry pointers, or `timeline` sample/chunk pointers) remains valid across arbitrary future appends.
+3. **Zero-Initialized & `NULL` Container Safety**:
+   - All read accessors (`lsm_list_count`, `lsm_list_at`, `lsm_list_get`, `lsm_list_head`, `lsm_list_tail`, `lsm_list_cursor_init`, `LSM_LIST_FOR_EACH`) safely handle both `list == NULL` and a zero-initialized `lsm_list_t list = { 0 }` struct without dereferencing `NULL`.
+4. **In-Place Zero-Initialized Slot Allocation (`lsm_list_append`)**:
+   - `void *lsm_list_append( lsm_list_t *list )` allocates the next slot in the current page (allocating a new 256-element page on page boundaries), zeroes the `elem_size` bytes with `memset`, increments `entry_count`, and returns a direct pointer to the slot—requiring **zero per-element `malloc` calls**.
+5. **Cross-Page Mid-List Removal (`lsm_list_remove_at` / `lsm_list_remove`)**:
+   - When an element at `index < entry_count - 1` is removed (such as in `isom_deduplicate_roll_group()`), `lsm_list_remove_at()` invokes `list->eliminator` (if non-`NULL`) on the target slot, shifts subsequent slots within each page via `memmove`, and copies the first element of `pages[p + 1]` into the last slot (`255`) of `pages[p]` across `[start_page .. end_page]`.
+   - Because mid-list removal shifts elements after `index`, `isom_roll_pool_entry_t` in `core/box.h` stores 1-based group numbers (`roll_group_number`, `prev_group_number`, `first_sample_defined`) rather than raw `isom_group_assignment_entry_t *` pointers into `sbgp->list`.
+
+### 3.3 Unified Accessor, Cursor & Iteration API (`common/list.h`)
+- **0-Based & 1-Based Accessors**:
+  - `uint32_t lsm_list_count( const lsm_list_t *list )`
+  - `void *lsm_list_at( const lsm_list_t *list, uint32_t index )` *(0-based)*
+  - `void *lsm_list_get( const lsm_list_t *list, uint32_t entry_number )` *(1-based ISOBMFF index)*
+  - `void *lsm_list_head( const lsm_list_t *list )`
+  - `void *lsm_list_tail( const lsm_list_t *list )`
+- **Lockstep Multi-Table Cursor (`lsm_list_cursor_t`)**:
+  - Used in `core/timeline.c` (`isom_timeline_construct`) and `core/isom.c` (`lsmash_get_media_timestamps` / `lsmash_set_media_timestamps`) where multiple sample tables (`stts`, `ctts`, `stss`, `stps`, `sdtp`, `stsz`, `sbgp`) are advanced simultaneously in lockstep:
+    ```c
+    lsm_list_cursor_t stts_cur;
+    lsm_list_cursor_init( &stts_cur, stbl->stts->list );
+    isom_stts_entry_t *stts_data = (isom_stts_entry_t *)stts_cur.data;
+    /* Advance to next entry: */
+    stts_data = (isom_stts_entry_t *)lsm_list_cursor_next( &stts_cur );
+    ```
+- **Single-Loop C99 Iteration Macros**:
+  ```c
+  #define LSM_LIST_FOR_EACH( var, list_ptr ) \
+      for( uint32_t lsm_idx_##var = 0; \
+           ((var) = lsm_list_at( (list_ptr), lsm_idx_##var )) != NULL; \
+           ++lsm_idx_##var )
+
+  #define LSM_ENTRY_LIST_FOR_EACH( var, list_ptr ) \
+      for( lsmash_entry_t *lsm_ent_##var = lsm_entry_list_head( (list_ptr) ); \
+           ((var) = (lsm_ent_##var ? lsm_ent_##var->data : NULL)) != NULL; \
+           lsm_ent_##var = lsm_ent_##var->next )
+  ```
+  Both expand to a single `for` loop, so `break` and `continue` inside the loop body behave naturally without hidden outer-loop traps.
+
+---
+
+## 4. Multi-Buffer Bank Resize Architecture (`common/multibuf.{c,h}`)
+
+`lsmash_multiple_buffers_t` allocates a contiguous memory block of `number_of_buffers * buffer_size` bytes where buffer $b \in [1, \text{number\_of\_buffers}]$ resides at byte offset $(b - 1) \times \text{buffer\_size}$.
+
+When `lsmash_resize_multiple_buffers( multiple_buffer, new_buffer_size )` is called:
+1. **Validation & Overflow Protection**:
+   - Rejects `!multiple_buffer`, `!multiple_buffer->buffers`, or `new_buffer_size == 0`.
+   - If `new_buffer_size == old_buffer_size`, returns `multiple_buffer` immediately.
+   - Verifies `(uint64_t)count * new_buffer_size <= UINT32_MAX` to prevent 32-bit multiplication overflow.
+2. **Shrinking (`new_buffer_size < old_buffer_size`)**:
+   - Before calling `lsmash_realloc()`, iterates forward for `i = 1` up to `count - 1` and moves `new_buffer_size` bytes from `buffers + i * old_buffer_size` to `buffers + i * new_buffer_size` using `memmove()`.
+   - Calls `lsmash_realloc( multiple_buffer->buffers, count * new_buffer_size )`. If `lsmash_realloc` fails, restores the original stride in reverse order so the existing buffer bank remains intact before returning `NULL`.
+3. **Expanding (`new_buffer_size > old_buffer_size`)**:
+   - Calls `lsmash_realloc( multiple_buffer->buffers, count * new_buffer_size )` first.
+   - Iterates in **reverse order** (`i = count - 1` down to `0`), moving `old_buffer_size` bytes from `temp + i * old_buffer_size` to `temp + i * new_buffer_size` via `memmove()`, and zero-initializing the newly exposed tail `[old_buffer_size .. new_buffer_size - 1]` of each buffer via `memset()`.
+
+---
+
+## 5. C99 Debug Memory Auditor (`common/alloc.{c,h}`)
+
+When configured with `--enable-debug-alloc` (or compiled with `-DLSMASH_DEBUG_ALLOC`, which `make test` enables automatically), all `lsmash_malloc`, `lsmash_malloc_zero`, `lsmash_realloc`, `lsmash_memdup`, `lsmash_free`, and `lsmash_freep` calls are routed through `common/alloc.c`:
+
+1. **64-Byte Aligned Intrusive Header (`lsm_alloc_header_t`) & Redzone**:
+   - Prepends a 64-byte header (`magic`, `size`, doubly-linked `prev`/`next`, `__FILE__`, `__LINE__`, `#size`/`#ptr` stringified expression, and 8-byte `front_canary = 0xC0DEC0DEC0DEC0DEULL`) and appends a 16-byte rear redzone filled with `0xA5`.
+   - Because `sizeof(lsm_alloc_header_t) == 64`, the returned user pointer preserves 16-byte alignment on 64-bit platforms.
+2. **Uninitialized & Freed Memory Poisoning**:
+   - `lsmash_malloc` fills newly allocated user bytes with `0xCD` (`LSM_ALLOC_POISON_ALLOC`) to immediately expose uninitialized memory reads.
+   - `lsmash_free` verifies front and rear canaries, marks `hdr->magic = 0xDEAD7EEDDEAD7EEDULL` to catch double-frees, and overwrites the payload with `0xDD` (`LSM_ALLOC_POISON_FREE`) to catch use-after-free bugs.
+3. **Function-Pointer Compatibility**:
+   - `common/alloc.c` defines `#define LSMASH_ALLOC_IMPLEMENTATION` before including `common/internal.h` and provides real linkable functions for `lsmash_malloc`, `lsmash_free`, etc. alongside the macro wrappers in `common/alloc.h`, so passing `lsmash_free` as an `lsmash_entry_data_eliminator` callback works seamlessly.
+4. **Zero-Leak Verification API**:
+   - `lsm_alloc_get_active_count()`, `lsm_alloc_get_active_bytes()`, `lsm_alloc_dump_leaks()`, and `lsm_alloc_verify_no_leaks()` allow every test suite in `tests/test_main.c` to assert that 0 blocks and 0 bytes remain allocated at test completion and after error-path rollbacks.

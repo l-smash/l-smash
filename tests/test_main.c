@@ -1042,7 +1042,7 @@ static int test_lpcm_pcmc_chnl_srat_roundtrip( void )
         TEST_ASSERT( lsmash_set_track_parameters( mux_root, track_id[t], &track_param ) == 0, "set track params" );
     }
 
-    /* 6a. strict standard compliance validation checks: reject invalid PCM_sample_size or missing pcmC */
+    /* 6a. ISO/IEC 23003-5 validation checks: reject invalid PCM_sample_size or missing pcmC */
     {
         lsmash_audio_summary_t *bad_sum = (lsmash_audio_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_AUDIO );
         TEST_ASSERT( bad_sum != NULL, "create bad_sum" );
@@ -1236,7 +1236,7 @@ static int test_lpcm_pcmc_chnl_srat_roundtrip( void )
         TEST_ASSERT( lsmash_add_sample_entry( mux_root, track_id[3], orig_summary[3] ) == 1, "add sample entry t3" );
     }
 
-    /* strict standard compliance validation & additional bit-depth/endianness combinations (ipcm 32-bit BE/LE, fpcm 32-bit BE, fpcm 64-bit LE) */
+    /* ISO/IEC 23003-5 validation & additional bit-depth/endianness combinations (ipcm 32-bit BE/LE, fpcm 32-bit BE, fpcm 64-bit LE) */
     {
         static const struct
         {
@@ -1269,7 +1269,7 @@ static int test_lpcm_pcmc_chnl_srat_roundtrip( void )
             lsmash_destroy_codec_specific_data( cs );
         }
 
-        /* strict standard compliance rejection: ipcm without pcmC must fail lsmash_add_sample_entry */
+        /* ISO/IEC 23003-5 rejection: ipcm without pcmC must fail lsmash_add_sample_entry */
         lsmash_audio_summary_t *bad_sum = (lsmash_audio_summary_t *)lsmash_create_summary( LSMASH_SUMMARY_TYPE_AUDIO );
         bad_sum->sample_type      = ISOM_CODEC_TYPE_IPCM_AUDIO;
         bad_sum->frequency        = 48000;
@@ -1280,7 +1280,7 @@ static int test_lpcm_pcmc_chnl_srat_roundtrip( void )
         TEST_ASSERT( lsmash_add_sample_entry( mux_root, track_id[0], bad_sum ) == 0,
                      "reject ipcm without mandatory pcmC" );
 
-        /* strict standard compliance rejection: fpcm with 24-bit integer sample size must fail lsmash_add_sample_entry */
+        /* ISO/IEC 23003-5 rejection: fpcm with 24-bit integer sample size must fail lsmash_add_sample_entry */
         bad_sum->sample_type = ISOM_CODEC_TYPE_FPCM_AUDIO;
         bad_sum->sample_size = 24;
         lsmash_codec_specific_t *bad_pcmc = lsmash_create_codec_specific_data(
@@ -1788,7 +1788,7 @@ static int test_wave_importer_isobmff_lpcm( void )
 }
 
 /*---------------------------------------------------------------------------
- * Test 9: the implementation AV1 Regressions, Multi-Tile OBU_FRAME/TILE_GROUP & Whitelist
+ * Test 9: AV1 Multi-Tile OBU_FRAME/TILE_GROUP, Sync Sample & OBU Whitelist
  *---------------------------------------------------------------------------*/
 static uint32_t build_multitile_2x2_frame_obu
 (
@@ -1942,7 +1942,7 @@ static uint32_t build_tile_group_obu
 static int test_av1_multitile_and_sync_sample_compliance( void )
 {
     av1_parser_t parser;
-    TEST_ASSERT( av1_setup_parser( &parser, NULL ) == 0, "setup parser for the implementation tests" );
+    TEST_ASSERT( av1_setup_parser( &parser, NULL ) == 0, "setup parser for multi-tile and sync sample tests" );
 
     synth_seq_cfg_t seq_cfg = {
         .seq_profile = 0,
@@ -2082,7 +2082,7 @@ static void test_paged_elem_eliminator( void *data )
 
 static int test_paged_block_array( void )
 {
-    /* Zero-Initialization & NULL Container Safety */
+    /* 10a. Zero-Initialization & NULL Container Safety */
     {
         lsm_list_t zero_list = { 0 };
         TEST_ASSERT( lsm_list_count( NULL ) == 0, "lsm_list_count(NULL) == 0" );
@@ -2125,7 +2125,7 @@ static int test_paged_block_array( void )
         lsm_list_destroy( NULL );
     }
 
-    /* & Multi-Page Append, O(1) Random Access & 100% Pointer Stability Across 40+ Pages */
+    /* 10b. Multi-Page Append, O(1) Random Access & 100% Pointer Stability Across 40+ Pages */
     {
         const uint32_t N = 10500; /* crosses >41 pages of 256 elements */
         lsm_list_t list = { 0 };
@@ -2203,7 +2203,7 @@ static int test_paged_block_array( void )
         TEST_ASSERT( lsm_list_count( &list ) == 0 && list.pages == NULL, "lsm_list_clear frees pages" );
     }
 
-    /* & Tail Removal, Mid-List Removal Across Pages, O(1) Move & Custom Eliminator Leak Check */
+    /* 10c. Tail Removal, Mid-List Removal Across Pages, O(1) Move & Custom Eliminator Leak Check */
     {
         g_test_eliminator_calls = 0;
         lsm_list_t *src = lsm_list_create( sizeof(test_paged_elem_t), test_paged_elem_eliminator );
@@ -3361,7 +3361,7 @@ static int test_malformed_boxes_and_sample_tables( void )
 }
 
 /*---------------------------------------------------------------------------
- * Test 14: the implementation Multi-Buffer Resize & Open PR Regressions
+ * Test 14: Multi-Buffer Resize & Codec / Metadata Regressions
  *---------------------------------------------------------------------------*/
 static int test_multibuf_resize_and_codec_regressions( void )
 {

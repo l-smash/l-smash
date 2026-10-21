@@ -1,97 +1,64 @@
-# Self-Contained Synthetic Test Suite Specification (`docs/specs/testing_strategy.md`)
+# Self-Contained Synthetic Testing Strategy (`docs/specs/testing_strategy.md`)
 
-## 1. Philosophy & Design Principles
+## 1. Overview & Principles
 
-Historically, L-SMASH lacked an automated, self-contained unit and integration test suite in the repository tree, relying instead on manual CLI testing (`muxer`, `remuxer`, `boxdumper`, `timelineeditor`) against external media files.
-
-To guarantee **strict standard compliance (Strict International Standard Compliance)** without copyright, licensing, or binary-blob bloat in Git:
-1. **100% Copyright-Free & Zero External Media Files**:
-   - No `.mp4`, `.mov`, `.wav`, `.ivf`, or `.h264` binary asset files shall ever be committed to the repository or downloaded over the network.
-   - Every test case programmatically synthesizes its own bitstreams (RIFF WAVE headers + LPCM waveforms, IVF headers + AV1 OBU bitstreams, and raw ISOBMFF/QTFF Box byte sequences) directly in C99 memory buffers or temporary files created and cleaned up during the test run.
-2. **Deterministic, Bit-Exact Round-Trip Verification**:
-   - Tests verify both **structural Box layout** (exact byte-for-byte serialized headers for `av1C`, `pcmC`, `chnl`, `srat`, `AudioSampleEntryV1`, `moof`/`traf`/`trun`) and **sample-level round-trip integrity** (muxing $\rightarrow$ reading $\rightarrow$ `lsmash_construct_timeline()` $\rightarrow$ `lsmash_get_sample_from_media_timeline()` $\rightarrow$ bit-exact payload, DTS, CTS, and sync-flag comparison).
-3. **Negative & Boundary Testing (Malformed Input Resilience)**:
-   - Synthetic byte generators intentionally construct malformed or out-of-spec boxes and bitstreams (e.g., `leb128 > UINT32_MAX`, `uvlc` with $\ge 32$ leading zeros, `pcmC` with invalid bit depths, truncated `chnl` or `av1C` boxes) to assert that L-SMASH rejects invalid data cleanly without buffer overflows, undefined behavior, or memory leaks.
+L-SMASH provides a self-contained C99 unit and integration test suite (`tests/test_main.c`) executed via `make test`:
+1. **Zero External Test Media Dependencies**:
+   - All test bitstreams—including AV1 Open Bitstream Units (OBUs), IVF containers, RIFF WAVE (`WAVE_FORMAT_PCM`, `WAVE_FORMAT_IEEE_FLOAT`, `WAVE_FORMAT_EXTENSIBLE`) files, standard and Fragmented MP4 movies, and binary-patched malformed containers—are synthesized programmatically in memory or temporary files and cleaned up upon completion.
+2. **Active C99 Memory Audit (`-DLSMASH_DEBUG_ALLOC`)**:
+   - The `tests/test_main` binary is compiled with `-DLSMASH_DEBUG_ALLOC` and linked against `liblsmash.a`.
+   - Every test suite is wrapped in the `RUN_TEST( test_fn )` macro, which executes `lsm_alloc_verify_no_leaks()` and asserts `lsm_alloc_get_active_count() == 0 && lsm_alloc_get_active_bytes() == 0` immediately after each suite completes.
+3. **Positive & Negative Coverage**:
+   - Tests verify both valid specification-compliant multiplexing/demultiplexing round-trips and negative error-handling paths (truncated boxes, invalid bit depths, out-of-bounds table indices, and malformed bitstreams), confirming 100% memory rollback on error.
 
 ---
 
-## 2. Test Suite Architecture & Directory Layout
+## 2. Test Suite Architecture (`tests/test_main.c`)
 
+Running `make test` executes **14 test suites** (146,947 assertions):
+
+| Suite # | Function Name | Subsystem & Verification Scope |
+| :--- | :--- | :--- |
+| **1** | `test_memory_audit_allocator` | Verifies `-DLSMASH_DEBUG_ALLOC` intrusive headers, 16-byte user pointer alignment, `0xCD` uninitialized memory poisoning, `lsmash_malloc_zero`, `lsmash_memdup`, `lsmash_realloc`, `lsmash_free`, `lsmash_freep`, and `lsm_alloc_verify_no_leaks()`. |
+| **2** | `test_paged_block_array` | Verifies `lsm_list_t` (`common/list.{c,h}`): zero-initialized `{ 0 }` and `NULL` container safety, 10,500-element append across 42 pages of 256 elements, $O(1)$ random access (`lsm_list_at` / `lsm_list_get`), 100% element pointer stability across page allocations, `LSM_LIST_FOR_EACH` with `continue`/`break`, `lsm_list_cursor_t` forward/backward traversal across page boundaries, tail removal, cross-page mid-list removal (`lsm_list_remove`), `lsm_list_move`, and custom eliminator cleanup. |
+| **3** | `test_large_scale_paged_tables_and_roll_dedup` | End-to-end stress test of `lsm_list_t` inside `core/`:<br>- **10,500-sample VFR movie** (42 pages of `stts`, `ctts`, `stsz`, `sdtp`) with 35 cycles of 30 consecutive post-roll recovery samples (`roll_distance = +2`), verifying `isom_deduplicate_roll_group()` mid-table removal without pointer invalidation.<br>- **600-sample `stz2` compact sample size table** (`field_size = 4` bits) exercising `isom_compact_sample_size_table()` and `lsm_list_move()`.<br>- **900-sample Fragmented VFR & DASH Segment (`sidx` / `tfra`) movies** (3 fragments $\times$ 300 samples/fragment) crossing page boundaries in `fragment->pool` and `trun->optional`. |
+| **4** | `test_bitstream_primitives` | Verifies `lsmash_bs_get_le64` 64-bit shift (`<< 32`), `av1_get_uvlc` (standard values, max valid `0xFFFFFFFE`, `leadingZeros >= 32` rejection, and truncated all-zero EOF non-hang), and `av1_get_leb128` / `av1_show_leb128` (1-byte, 5-byte `UINT32_MAX`, 8-byte padded `UINT32_MAX`, `> UINT32_MAX` overflow rejection, `> 8` bytes rejection, and truncated EOF rejection). |
+| **5** | `test_sequence_header_and_av1c` | Verifies `av1_parse_sequence_header` and `av1C` box creation/reconstruction across 8-bit Main Profile (4:2:0 BT.709, confirming `color_config` does not misclassify BT.709 as sRGB 4:4:4) and 12-bit Professional Profile (Profile 2, `high_bitdepth = 1, twelve_bit = 1`, 4:2:2). |
+| **6** | `test_frame_headers_and_tu_assembly` | Verifies AV1 Temporal Unit assembly (`av1_parse_temporal_unit`): `OBU_TEMPORAL_DELIMITER` and `OBU_PADDING` stripping, ITU-T T.35 HDR10+ `OBU_METADATA` detection and `configOBUs` inclusion, `KEY_FRAME` / `INTER_FRAME` / `INTRA_ONLY_FRAME` / `SWITCH_FRAME` parsing, 8-bit `refresh_frame_flags` slot updates, `show_existing_frame = 1` pointing to a `KEY_FRAME` refreshing all 8 reference slots, and `enable_order_hint = 0` streams. |
+| **7** | `test_av1_multitile_and_sync_sample_compliance` | Verifies AV1-ISOBMFF v1.2.0 and multi-tile compliance:<br>- `SYNC` (`stss`) when `OBU_SEQUENCE_HEADER` precedes `KEY_FRAME (show_frame=1)` in the same TU vs. `OPEN_RAP` when `OBU_SEQUENCE_HEADER` is absent or appears after the first frame.<br>- Multi-tile $2 \times 2$ (`NumTiles = 4`) `OBU_FRAME` and split `OBU_FRAME` (tiles $0..1$) + `OBU_REDUNDANT_FRAME_HEADER` (stripped) + `OBU_TILE_GROUP` (tiles $2..3$).<br>- Rejection of incomplete multi-tile frames and discontinuous `tg_start`, stripping of reserved OBU types, and rejection of `OBU_TILE_LIST`. |
+| **8** | `test_ivf_mux_demux_roundtrip` | Synthesizes a 3-frame AV1 IVF file, imports via `importer/ivf_imp.c`, muxes to MP4, verifies `[av01]` and `[av1C]` box dump formatting (`lsmash_print_movie`), and verifies bit-exact sample payload and sync-flag reconstruction via the media timeline. |
+| **9** | `test_av1_fragmented_isobmff_roundtrip` | Synthesizes a 6-TU AV1 IVF stream combining `SYNC` keyframes, split multi-tile inter frames, non-displayed ARF + `show_existing_frame = 1` compound TUs, `KEY_FRAME` without in-band `OBU_SEQUENCE_HEADER` (`OPEN_RAP`), and `INTRA_ONLY_FRAME` (`OPEN_RAP`), muxes across an initial `moov` and 2 `moof` fragments, and verifies `stss`, `trun` sample flags, `traf` `rap ` sample groups, and timeline reconstruction. |
+| **10** | `test_lpcm_pcmc_chnl_srat_roundtrip` | Verifies ISO/IEC 23003-5 `ipcm`/`fpcm` and `pcmC` (`16`/`24`/`32`-bit BE/LE integer and `32`/`64`-bit BE/LE IEEE 754 float), ISO/IEC 14496-12 `chnl` (`definedLayout` CICP, explicit `speaker_position = 126` with `azimuth`/`elevation`, and `object_count`), and `AudioSampleEntryV1` + `srat` for $96\text{ kHz}$ and $192\text{ kHz}$ tracks, plus rejection of missing `pcmC` or invalid sample sizes. |
+| **11** | `test_multitrack_fragmented_lpcm_roundtrip` | Muxes two 5.1ch LPCM tracks (`ipcm` 24-bit @ $48\text{ kHz}$ and `fpcm` 32-bit @ $96\text{ kHz}$) across 2 movie fragments, verifying multi-track `trun` `data_offset` placement, `tfhd` default duration/size hoisting, `trun->optional == NULL` compaction, and bit-exact timeline demultiplexing. |
+| **12** | `test_wave_importer_isobmff_lpcm` | Synthesizes a 6-channel 24-bit $48\text{ kHz}$ `WAVE_FORMAT_EXTENSIBLE` (`dwChannelMask = 0x3F`) WAV file and a 2-channel 32-bit float $96\text{ kHz}$ `WAVE_FORMAT_IEEE_FLOAT` WAV file, imports both via `importer/wave_imp.c`, muxes into ISOBMFF MP4, and verifies automatic conversion to `ipcm`/`fpcm` with `pcmC`, `chnl`, and `srat`. |
+| **13** | `test_malformed_boxes_and_sample_tables` | Negative testing of malformed boxes and sample tables with zero-leak rollback verification:<br>- `stsc` with invalid 1-based `first_chunk = 0`<br>- Truncated `stsz` claiming `sample_count = 500` in a 4-entry box<br>- `sbgp` with out-of-bounds `group_description_index = 99`<br>- `pcmC` with invalid `PCM_sample_size = 13`<br>- Truncated `emsg` box testing `pos > box->size` underflow guard and `scheme_id_uri`/`value` cleanup<br>- Truncated `sbgp` box ending mid-table |
+| **14** | `test_multibuf_resize_and_codec_regressions` | Regression suite for `lsmash_multiple_buffers_t` and codec/metadata fixes:<br>- `lsmash_resize_multiple_buffers` expansion ($32 \rightarrow 96$ bytes), shrinkage ($96 \rightarrow 20$ bytes), data preservation across all 4 buffers, zero-initialized expansion tail, and overflow rejection.<br>- `nalu_get_codeNum` Exp-Golomb decoding, EOF termination, and $\ge 64$ leading zero bits non-hang.<br>- MP3 `nBlockSize` calculation ($144 \times 128000 / 48000 = 384$) and `cbSize < 12` rejection in `waveform_audio_update_bitrate`.<br>- WMA 16-bit LE `cbSize` reading and truncated box rejection in `wma_print_codec_specific`.<br>- Opus 8-channel `channel_order[OutputChannelCount - 1]` lookup and `"front center"` output in `opus_print_codec_specific`.<br>- `lsmash_count_tyrant_chapter` and custom iTunes metadata (`ITUNES_METADATA_ITEM_CUSTOM` string & integer) retrieval round-trip. |
+
+---
+
+## 3. Running the Test Suite
+
+```sh
+./configure
+make -j8 all test
 ```
-tests/
-  test_main.c              # Lightweight C99 test runner & assertion harness
-  test_util.h              # Bitstream/byte-buffer builders & temporary file helpers
-  test_containers.c        # Subsystem: Paged Block Array, box_default, sbgp/chunk_list stability
-  test_av1_obu.c           # Subsystem: Native AV1 OBU parser, uvlc/leb128, av1C, IVF round-trip
-  test_lpcm_isobmff.c      # Subsystem: ISO/IEC 23003-5 ipcm/fpcm, pcmC, chnl, srat, Multi-Track Fragmented
-  test_malformed_boxes.c   # Subsystem: Negative tests, boundary conditions, FullBox table verification
+
+Expected output:
+```text
+=== L-SMASH Synthetic Test Suite ===
+[PASS] test_memory_audit_allocator
+[PASS] test_paged_block_array
+[PASS] test_large_scale_paged_tables_and_roll_dedup
+[PASS] test_bitstream_primitives
+[PASS] test_sequence_header_and_av1c
+[PASS] test_frame_headers_and_tu_assembly
+[PASS] test_av1_multitile_and_sync_sample_compliance
+[PASS] test_ivf_mux_demux_roundtrip
+[PASS] test_av1_fragmented_isobmff_roundtrip
+[PASS] test_lpcm_pcmc_chnl_srat_roundtrip
+[PASS] test_multitrack_fragmented_lpcm_roundtrip
+[PASS] test_wave_importer_isobmff_lpcm
+[PASS] test_malformed_boxes_and_sample_tables
+[PASS] test_multibuf_resize_and_codec_regressions
+=== Assertions run: 146947, Failures: 0 ===
 ```
-
-### 2.1 Build System, Toolchain & C99 Memory Audit Integration (`configure`, `Makefile`, `common/alloc.{c,h}`)
-- **Verified Toolchain**: Read-Only MSYS2 MinGW64 toolchain (`mingw64/bin` and `usr/bin`: `gcc 14.2.0`, `GNU Make 4.4.1`, `sh`, `ar`, `ranlib`, `strip`). Package manager operations (`pacman`, `pacboy`) and writes outside the workspace remain strictly prohibited.
-- **Test Target**: The `test` / `check` target in `Makefile` compiles all library and test translation units into `*.test.o` with **`-DLSMASH_DEBUG_ALLOC`** enabled, links `tests/test_main.exe`, and executes the test binary.
-- **C99 Self-Contained Memory Audit Mechanism (`common/alloc.{c,h}`)**:
-  - When compiled with `-DLSMASH_DEBUG_ALLOC`, all 6 allocation APIs (`lsmash_malloc`, `lsmash_malloc_zero`, `lsmash_realloc`, `lsmash_memdup`, `lsmash_free`, `lsmash_freep`) are wrapped by preprocessor macros capturing `__FILE__`, `__LINE__`, and the stringified call expression (`#size`, `#ptr`, `#ptrptr`).
-  - Each allocation prepends a 64-byte aligned `lsm_alloc_header_t` (recording `size`, active intrusive doubly-linked list pointers `prev`/`next`, `file`, `line`, `arg`, and `front_canary = 0xCAFEBABE5A5A5A5AULL`) and appends an 8-byte unaligned `rear_canary = 0xDEADC0DE3C3C3C3CULL` immediately after the user payload.
-  - Uninitialized memory from `lsmash_malloc` / `lsmash_realloc` growth is poisoned with `0xA5`, and freed blocks are poisoned with `0xDD` (`front_canary = 0xFEEEFEEEDEADBEEFULL`) to immediately expose Use-After-Free, Double-Free, Invalid-Free, and Heap Buffer Overrun bugs with `file(line)` + `arg` diagnostics and `abort()`.
-  - `RUN_TEST` in `tests/test_main.c` invokes `lsm_alloc_verify_no_leaks()` after every individual test suite and at program exit, enforcing `active_count == 0 && active_bytes == 0`.
-- All tests return exit code `0` on 100% pass and non-zero with file/line diagnostics on failure.
-
----
-
-## 3. Detailed Test Cases by Mission
-
-### 3.1 Suite 1: Memory Architecture & Container Invariants (`tests/test_main.c` — Implemented & Passing in the implementation)
-
-| Test ID | Target Component | Verification Description |
-| :--- | :--- | :--- |
-| `` | Zero-Init & `NULL` Container Safety (`common/list.h`) | Verify `lsm_list_count`, `lsm_list_at`, `lsm_list_get`, `lsm_list_head`, `lsm_list_tail`, `lsm_list_remove_tail`, `lsm_list_remove`, and `LSM_LIST_FOR_EACH` on `NULL` and `{ 0 }` zero-initialized `lsm_list_t` containers. |
-| `` | Multi-Page Append & $O(1)$ Lookup (`common/list.{c,h}`) | Append $20,000$ 24-byte elements across $79$ pages ($2^8 = 256$ elements/page); verify $O(1)$ random access via `lsm_list_at(i)` and `lsm_list_get(i + 1)` and sequential `LSM_LIST_FOR_EACH` traversal. |
-| `` | 100% Pointer Stability on Append | Record raw pointers to elements at indices `0`, `255` (page 0 end), `256` (page 1 start), and `511` (page 1 end); append $19,488$ additional elements across 77 new pages; assert recorded pointers never move in memory (`saved_ptrs[p] == lsm_list_at(&list, anchor_indices[p])`) and retain unmodified values. |
-| `` | Tail Pop, Mid-List Deletion & Eliminator Callback | Exercise `lsm_list_remove_tail()` and `lsm_list_remove()` (including mid-page and cross-page compaction) on elements owning heap buffers; verify exact custom eliminator invocation counts (`20,000` total frees) and zero memory leaks. |
-| `` | $O(1)$ Table Move (`lsm_list_move`) & `LSM_ENTRY_LIST_FOR_EACH` | Populate source `lsm_list_t` across 3 pages ($600$ entries), move to destination via `lsm_list_move(dst, src)` (`stsz` $\rightarrow$ `stz2` pattern); verify source is empty, destination retains all entries in $O(1)$ time, and `LSM_ENTRY_LIST_FOR_EACH` traverses `lsmash_entry_list_t` with unified syntax. |
-| `` | 10,500-Sample VFR Multi-Page Sample Tables & `sbgp` Roll Deduplication (`test_large_scale_paged_tables_and_roll_dedup` 11a) | Mux and demux $10,500$ VFR video samples across $42$ pages of `stts`, `ctts`, `stsz`, `sdtp`, `stss`, `sgpd`, `sbgp`, `elst`, and `timeline->info_list`/`chunk_list`, with 35 cycles of 30 consecutive post-roll (`roll_distance = 2`) groups triggering mid-table `isom_deduplicate_roll_group()` while `cache->roll.pool` holds pending entries; verify `sbgp->list` deduplicates to 70 entries without dangling pointers and all 10,500 samples round-trip bit-for-bit. |
-| `` | 4-Bit `stz2` Compact Sample Size Table Compression (`test_large_scale_paged_tables_and_roll_dedup` 11b) | Mux $600$ 4-bit-sized samples (`1..15` bytes) with `lsmash_compress_sample_size_table()`, exercising `lsm_list_move(stz2->list, stsz->list)` across 3 pages; verify `stz2->field_size == 4` and timeline reconstruction. |
-| `` | Multi-Page Fragmented VFR Movie with `mfra`/`tfra` & DASH `sidx` (`test_large_scale_paged_tables_and_roll_dedup` 11c) | Mux and demux 3 fragments $\times$ $300$ VFR samples ($900$ samples total, crossing page boundaries in `fragment->pool` and `trun->optional`) in both self-contained (`mfra`/`tfra->list`) and DASH indexed segment (`sidx->list`) modes; verify all 900 samples across both modes. |
-
----
-
-### 3.2 Suite 2: Native AV1 Parser & `obuparse` Removal (`tests/test_main.c` — Implemented & Passing in the implementation & the implementation)
-
-| Test ID | Target Component | Verification Description |
-| :--- | :--- | :--- |
-| `` | `lsmash_bs_get_le64()` & `lsmash_bs_get_le32()` | Verify 32-bit and 64-bit little-endian reads across upper-word bit boundaries (regression test for `<< 32` shift fix in `common/bytes.c`). |
-| `` | `av1_get_uvlc()` Bitstream Parser | Synthesize bitstreams encoding `uvlc()` values `0`, `1`, `2`, `7`, `65535`, `UINT32_MAX - 1`, and $\ge 32$ leading zeros; verify exact decoded values and bit consumption. |
-| `` | `av1_get_leb128()` & `av1_show_leb128()` | Test 1-byte to 8-byte LEB128 encodings (including non-minimal padded LEB128 and values with bit 28–31 set to catch 32-bit signed shift UB), plus rejection of $> 8$ bytes or values $> \text{UINT32\_MAX}$. |
-| `` | Sequence Header OBU (8/10/12-bit, BT.709 vs. sRGB) | Synthesize Sequence Header OBUs for Main Profile (8-bit BT.709 4:2:0, sRGB 4:4:4, 10-bit 4:2:0) and Professional Profile (**12-bit** `high_bitdepth=1, twelve_bit=1` 4:2:2); verify `av1C` fields (`high_bitdepth`, `twelve_bit`, `monochrome`, `chroma_subsampling_x/y`, `chroma_sample_position`) and `av1C` box creation/deserialization/copy round-trip. |
-| `` | Frame Header OBU (`KEY`, `INTER`, `INTRA_ONLY`, `SWITCH`) | Synthesize Frame Headers with `enable_order_hint = 1`; verify `INTRA_ONLY_FRAME` and `INTER_FRAME` read 8-bit `refresh_frame_flags` (`f(8)`), whereas `SWITCH_FRAME` and `KEY_FRAME && show_frame` set `0xff` without consuming 8 bits. |
-| `` | `show_existing_frame == 1` & Reference Updates | Synthesize a multi-frame GOP containing a `KEY_FRAME`, an `INTER_FRAME` (`show_frame = 0`, refreshing slot 2), and a `show_existing_frame = 1` frame referencing slot 2; verify reference slot updates, `OrderHint` propagation, and `ra_flags` assignment. |
-| `` | Sample Assembly, OBU Whitelist & Initial `configOBUs` Metadata | Synthesize a Temporal Unit containing `OBU_TEMPORAL_DELIMITER`, `OBU_SEQUENCE_HEADER`, `OBU_METADATA` (ITU-T T.35 HDR10+), `OBU_REDUNDANT_FRAME_HEADER`, `OBU_TILE_LIST`, `OBU_PADDING`, and `OBU_FRAME`; verify `av1_is_sample_obu()` whitelist strips `OBU_TEMPORAL_DELIMITER`, `OBU_REDUNDANT_FRAME_HEADER`, `OBU_TILE_LIST`, and `OBU_PADDING`, `has_hdr10p == 1` is detected, and `param->configOBUs` records both the initial `OBU_SEQUENCE_HEADER` and initial `OBU_METADATA`. |
-| `` | Synthetic IVF Importer & ISOBMFF Round-Trip | Generate a synthetic 3-frame AV1 IVF stream, import via `ivf_imp`, mux into ISOBMFF (`mp41`/`isom`/`av01`), verify `[av01: Visual Description]`, `[av1C: AV1CodecConfigurationBox]`, string `chroma_sample_position`, and `configOBUs` output via `lsmash_print_movie()`, and verify bit-exact sample payloads and sync flags from `lsmash_construct_timeline()`. |
-| `` | Multi-Tile Split `OBU_FRAME` + `OBU_TILE_GROUP` & Sync Sample (`stss`) Rules | Synthesize a 2-tile (`NumTiles = 2`) `OBU_FRAME` (`tg_start = 0, tg_end = 0`) followed by an `OBU_TILE_GROUP` (`tg_start = 1, tg_end = 1`) within a Temporal Unit; verify `SeenFrameHeader` remains `1` after the partial `OBU_FRAME` and wraps up (`SeenFrameHeader = 0`) after the completing `OBU_TILE_GROUP`. Verify that a subsequent `KEY_FRAME` Temporal Unit without an in-TU `OBU_SEQUENCE_HEADER` is marked `ISOM_SAMPLE_RANDOM_ACCESS_FLAG_OPEN_RAP` (not `SYNC`), whereas a `KEY_FRAME` TU preceded by an in-TU `OBU_SEQUENCE_HEADER` is marked `ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC`, and an incomplete multi-tile TU is rejected. |
-| `` | AV1 Fragmented ISOBMFF Cross-Feature Round-Trip (`test_av1_fragmented_isobmff_roundtrip`) | Synthesize a 6-frame 128x128 2x2 multi-tile AV1 IVF stream containing Key Frame with Sequence Header (`SYNC`), split multi-tile Inter Frame with stripped `OBU_REDUNDANT_FRAME_HEADER` (`NONE`), non-displayed ARF (`show_frame=0`) + `show_existing_frame=1` (`NONE`), Key Frame without Sequence Header (`OPEN_RAP`), Intra-Only Frame (`OPEN_RAP`), and split multi-tile Key Frame with Sequence Header (`SYNC`); mux and demux across initial `moov` + 2 `moof` fragments (`rap_grouping = 1`) and verify `stss`, `trun` `sample_flags`, `traf` `sbgp`/`sgpd` RAP groups, and bit-exact timeline reconstruction. |
-
----
-
-### 3.3 Suite 3: ISO/IEC 23003-5 LPCM & Multi-Track Fragmented ISOBMFF (`tests/test_main.c` — Implemented & Passing in the implementation)
-
-| Test ID | Target Component | Verification Description |
-| :--- | :--- | :--- |
-| `` | `common/alloc.{c,h}` Memory Audit (`test_memory_audit_allocator`) | Verify `#ptr`/`#size` expression capture, `0xA5` uninitialized poisoning, zero-initialization, `lsmash_realloc` growth/shrinkage, `lsmash_memdup`, `lsmash_freep`, and active block/byte tracking across all 6 allocation macros. |
-| `` | `fullbox_type_table` Capacity & Registration | Verify `isom_is_fullbox()` returns `1` for `pcmC`, `chnl`, `srat`, and all 60+ existing FullBoxes, and `0` for non-FullBoxes (`wave`, `frma`, `enda`, `mdat`, `av1C`). |
-| `` | `ipcm` & `pcmC` Box Round-Trip (16/24/32-bit, LE/BE) | Mux and demux `ipcm` tracks across bit depths (`16`, `24`, `32`) and endianness (`pcm_sample_endian = 0` BE and `1` LE); verify 14-byte `pcmC` binary layout, structured/unstructured conversion, strict standard compliance invalid config rejection, and bit-exact PCM sample data. |
-| `` | `fpcm` & `pcmC` Box Round-Trip (32/64-bit IEEE 754 Float) | Mux and demux `fpcm` tracks with 32-bit and 64-bit IEEE 754 floating-point samples (LE and BE); verify `pcmC` and bit-exact sample reconstruction. |
-| `` | High Sample Rate (`> 65535` Hz) `AudioSampleEntryV1` + `srat` | Mux 96 kHz and 192 kHz `ipcm`/`fpcm` tracks; verify `stsd->version == 1`, `audio->version == 1` (**without** spurious 16-byte QTFF v1 fields!), and `srat->sampling_rate == 96000` / `192000`. |
-| `` | `chnl` (`ChannelLayoutBox`) Defined & Explicit Layouts | Test `chnl` serialization/deserialization/printing for Mono (`definedLayout = 1`), Stereo (`definedLayout = 2`), 5.1 surround (`definedLayout = 6`), 7.1 surround (`definedLayout = 12`), `objectStructured` (`object_count = 2`), and custom speaker positions (`definedLayout = 0` including `speaker_position == 126` with explicit `azimuth = -135` and `elevation = 45`). |
-| `` | Multi-Track Fragmented ISOBMFF (`test_multitrack_fragmented_lpcm_roundtrip`) | Mux a 2-track 5.1ch Fragmented ISOBMFF movie (`tid1`: 6ch 24-bit `ipcm` @ 48 kHz; `tid2`: 6ch 32-bit `fpcm` @ 96 kHz) across multiple fragments (`moof`/`traf`/`trun`/`mdat`); verify: <br>1. **Zero `trun->optional` rows** (`trun->optional == NULL`, `(trun->flags & 0x000f00) == 0`) on **both** Track 1 and Track 2 (`trun->flags == 0x000001`).<br>2. `lsmash_construct_timeline()` reconstructs all 400 + 800 frames via `timeline->bunch_list` with bit-exact payloads and timestamps. |
-| `` | Synthetic WAVE Importer (`test_wave_importer_isobmff_lpcm`) | Synthesize `WAVE_FORMAT_EXTENSIBLE` (24-bit 5.1ch PCM, `dwChannelMask = 0x3F`) and `WAVE_FORMAT_IEEE_FLOAT` (32-bit 96 kHz stereo float) `.wav` files, import via `wave_imp`, mux into ISOBMFF (`ipcm` + `chnl` `definedLayout=6` and `fpcm` + `srat` `96000`), and verify bit-exact round-trip. |
-
----
-
-### 3.4 Suite 4: Malformed Box & strict standard compliance Strict Validation (`tests/test_main.c` — Implemented & Passing in the implementation)
-
-| Test ID | Target Component | Verification Description |
-| :--- | :--- | :--- |
-| `` | strict standard compliance Brand Separation | Verify that attempting to mux QTFF-only LPCM (`lpcm`/`sowt`/`twos`) into a pure ISOBMFF Fragmented container without QT compatibility is rejected, and `ipcm`/`fpcm` without valid `pcmC` is rejected. |
-| `` | Malformed `stsc`, `stsz` & `sbgp` Sample Tables (`test_malformed_boxes_and_sample_tables` 13a, 13b, 13c, 13f) | Feed `stsc` with invalid `first_chunk = 0`, truncated `stsz` (`sample_size = 0, sample_count = 500` in a 4-entry box), `sbgp` with out-of-bounds `group_description_index = 99`, and truncated `sbgp` (`entry_count = 10` in a 1-entry box); verify clean error return from `lsmash_read_file()` / `lsmash_construct_timeline()` and 100% rollback deallocation via `lsmash_destroy_root()` under `-DLSMASH_DEBUG_ALLOC`. |
-| `` | Malformed `pcmC` & Truncated `emsg` (`test_malformed_boxes_and_sample_tables` 13d, 13e) | Feed `pcmC` with invalid bit depth (`PCM_sample_size = 13`) and a truncated `emsg` box (whose payload exceeds `box->size`, guarding against `box->size - pos` unsigned underflow); verify `lsmash_read_file()` returns `< 0` and `lsmash_destroy_root()` frees all allocations (including `emsg->scheme_id_uri`, `emsg->value`, and `file->emsg_list` entry nodes) with 0 leaks. |

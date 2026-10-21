@@ -1,182 +1,226 @@
-# L-SMASH Master Specification & Architecture Index (`SPEC.md`)
+# L-SMASH Master Architecture & Specification (`SPEC.md`)
 
-## 1. Core Philosophy & Architectural Mandates
+## 1. Project Identity & Design Philosophy
 
-### 1.1 strict standard compliance: Zero Tolerance for Non-Conformant Bitstreams & Containers
-L-SMASH ("Loyal to Spec of Mpeg4 and Ad-hoc Simple Hackwork") is engineered as a reference-grade implementation of ISO Base Media File Format (ISOBMFF: ISO/IEC 14496-12) and QuickTime File Format (QTFF). All code and specifications in this repository operate under **strict standard compliance (Strict International Standard Compliance)**:
-- **No Spec-Violating Hacks**: Multiplexed outputs must strictly conform to the target specification brands (`ftyp` / `styp` major and compatible brands). Never emit proprietary or out-of-spec boxes into a container whose negotiated brands forbid them.
-- **Strict Separation of ISOBMFF and QTFF**:
-  - ISOBMFF (ISO/IEC 14496-12, ISO/IEC 14496-14, ISO/IEC 14496-15, ISO/IEC 23003-5, AOM AV1-ISOBMFF) and QTFF share historical roots in `stsd`, `tkhd`, `hdlr`, `ctts`, `sdtp`, and `udta`, but diverge in critical binary layouts and semantics.
-  - Runtime dispatch and box serialization must strictly distinguish between ISOBMFF and QTFF via `file->qt_compatible`, `file->isom_compatible`, `file->max_isom_version`, and box-level `box->manager & LSMASH_QTFF_BASE`.
-  - Uncompressed PCM audio in Fragmented ISOBMFF must never rely on QTFF Sound Description v1/v2 (`lpcm`, `sowt`, `twos`, `in24`, `fl32`, `chan`, `wave`), because QTFF has no official Movie Fragment (`moof`/`traf`/`trun`) specification. Fragmented PCM audio in ISOBMFF must strictly implement **ISO/IEC 23003-5 (`ipcm` / `fpcm` Sample Entry + `pcmC` Box)** and **ISO/IEC 14496-12 (`chnl` ChannelLayout Box + `srat` SamplingRate Box + `AudioSampleEntryV1`)**.
-- **ISC License Integrity & Engineering**:
-  - All core library, codec parser, and importer code in L-SMASH is distributed under the **ISC License**.
-  - External third-party dependencies with incompatible licenses or unnecessary coupling (specifically the external `obuparse` library introduced in the `vimeo` fork) must be eliminated in favor of L-SMASH's native implementations authored under the ISC License.
+**L-SMASH** (*Loyal to Spec of Mpeg4 and Ad-hoc Simple Hackwork*) is a pure C99 library (`liblsmash`) and command-line toolset (`muxer`, `remuxer`, `boxdumper`, `timelineeditor`) for reading, writing, remuxing, and inspecting **ISO Base Media File Format (ISOBMFF, ISO/IEC 14496-12)** and **QuickTime File Format (QTFF)** media containers.
+
+### 1.1 Strict Compliance with International Standards
+L-SMASH is designed around strict compliance with the international standards governing each container and codec format:
+- **Strict Separation of ISOBMFF and QTFF**: Even though ISOBMFF (`mp41`, `mp42`, `isom`, `iso2`–`iso6`) and QuickTime (`qt  `) share the same ancestral box/atom framing, their semantics, sample entry layouts, channel layout descriptors, and parameter boxes differ significantly. L-SMASH never conflates QTFF-only constructs with ISOBMFF constructs, and refuses to generate non-conformant, cross-polluted container structures.
+- **No Unstandardized Extensions in Pure ISOBMFF**: Proprietary QuickTime Sound Description v1/v2 fields (`lpcm` flags, `chan` atoms, `wave` decompression atoms) are restricted to QuickTime compatibility modes (`file->qt_compatible`). Pure ISOBMFF files use standardized ISO/IEC 14496-12 and ISO/IEC 23003-5 constructs (`ipcm`, `fpcm`, `pcmC`, `chnl`, `srat`, `AudioSampleEntryV1`).
+- **Zero External Runtime Dependencies**: All container and elementary stream parsers (including H.264/AVC, H.265/HEVC, AOM AV1 OBU, SMPTE VC-1, AAC/ADTS, AC-3/E-AC-3, DTS, and WAVE/LPCM) are self-contained in standard C99 (`common/`, `core/`, `codecs/`, `importer/`).
 
 ---
 
-## 2. System Architecture Overview
+## 2. Core Architectural Invariants (`core/` & `common/`)
 
-L-SMASH is structured into four primary subsystems with strict directional dependencies (`cli/` $\rightarrow$ `importer/` $\rightarrow$ `codecs/` $\leftrightarrow$ `core/` $\rightarrow$ `common/`):
+### 2.1 The `box_default` Sentinel Box Architecture (`core/box_default.{c,h}`)
+L-SMASH models the hierarchical ISOBMFF/QTFF Box tree using a **Null-Object Sentinel Pattern** (`box_default`):
+1. Every concrete Box struct (`isom_moov_t`, `isom_trak_t`, `isom_mdia_t`, `isom_minf_t`, `isom_stbl_t`, `isom_stts_t`, etc.) begins with the common header macro `ISOM_BASEBOX_COMMON` or `ISOM_FULLBOX_COMMON`.
+2. **Non-Null Singleton Child Pointers**: Singleton child box pointers on a parent struct (such as `file->moov`, `trak->tkhd`, `trak->mdia`, `mdia->minf`, `minf->stbl`, `stbl->stsd`, `stbl->stts`) **never hold `NULL`**.
+3. When a child box does not exist, its pointer points to a static, immutable sentinel instance allocated in `core/box_default.c` whose `manager` field has the `LSMASH_NON_EXISTING_BOX` bit set (`0x02`).
+4. Because every sentinel's own child pointers recursively point to the corresponding child sentinels, deep pointer chains such as:
+   ```c
+   if( LSMASH_IS_EXISTING_BOX( trak->mdia->minf->stbl->stsd ) )
+   ```
+   can be dereferenced safely without intermediate `NULL` checks.
+5. **Lifecycle Rules**:
+   - Always test box existence with `LSMASH_IS_EXISTING_BOX( box_ptr )` or `LSMASH_IS_NON_EXISTING_BOX( box_ptr )`—**never** `if( box_ptr != NULL )` on singleton box pointers.
+   - When allocating a box via `isom_add_<box>( parent )`, the parent's pointer is replaced with a heap-allocated struct. When destroying a box via `isom_remove_box_by_itself( box_ptr )`, the parent's pointer is automatically restored to `isom_non_existing_<box>()`.
 
-```
-+-----------------------------------------------------------------------+
-|                           Public API (lsmash.h)                       |
-+-----------------------------------------------------------------------+
-        |                           |                           |
-        v                           v                           v
-+---------------+           +---------------+           +---------------+
-|     cli/      | --------> |   importer/   | --------> |    codecs/    |
-|  muxer.c      |           |  isobm_imp.c  |           |  description  |
-|  remuxer.c    |           |  wave_imp.c   |           |  h264 / hevc  |
-|  boxdumper.c  |           |  ivf_imp.c    |           |  av1 (native) |
-|  timeline...  |           |  nalu/adts... |           |  mp4a/ac3/dts |
-+---------------+           +---------------+           +---------------+
-        |                           |                           |
-        +---------------------------+---------------------------+
-                                    |
-                                    v
-+-----------------------------------------------------------------------+
-|                              core/                                    |
-|  box.{c,h} | box_default.{c,h} | box_type.{c,h} | file.{c,h}          |
-|  isom.{c,h}| read.{c,h}        | write.{c,h}    | fragment.{c,h}      |
-|  timeline.{c,h}                | print.{c,h}    | summary.{c,h}       |
-+-----------------------------------------------------------------------+
-                                    |
-                                    v
-+-----------------------------------------------------------------------+
-|                             common/                                   |
-|  internal.h | alloc.h | bytes.{c,h} | bits.{c,h} | list.{c,h}         |
-|  math.h     | multichar.h           | osdep.{c,h}| utils.{c,h}        |
-+-----------------------------------------------------------------------+
-```
+### 2.2 Dual-List Box Ownership (`extensions` vs. Type-Specific Lists)
+Every Box contains `lsmash_entry_list_t extensions` (part of `ISOM_BASEBOX_COMMON`):
+- When a child box is created and attached to a parent, it is registered in `parent->extensions` (which governs serialization order in `isom_write_children` / `isom_print_children` and destruction in `isom_remove_all_extension_boxes`).
+- Multi-instance boxes (such as `trak_list`, `sgpd_list`, `sbgp_list`, `moof_list`, `traf_list`, `trun_list`) are **also** referenced by a type-specific `lsmash_entry_list_t` on the parent whose `eliminator` is `isom_remove_dangling_box` (a no-op eliminator when the box is already owned by `extensions`), while `extensions` owns the actual destructor (`isom_remove_box_by_itself`).
+- Removing a box via `isom_remove_box_by_itself()` automatically unlinks it from both `parent->extensions` and any type-specific list, and resets the parent's singleton pointer to the `box_default` sentinel.
 
-### 2.1 Core Architectural Pillars
-1. **Hierarchical Box Tree & `box_default` (Null-Object Sentinel Pattern Pattern)**:
-   - Every ISOBMFF/QTFF Box struct begins with `ISOM_BASE_BOX` (`core/box.h`), embedding common metadata (`class`, `root`, `file`, `parent`, `destruct`, `extensions`, `offset_in_parent`, `nonexist_ptr`, `manager`, `precedence`, `size`, `type`, `pos`).
-   - Singleton child box pointers on parent structs (e.g., `moov->mvhd`, `trak->tkhd`, `stbl->stts`) never hold `NULL`. When absent, they point to immutable static sentinel instances allocated in `core/box_default.c` carrying `manager = LSMASH_NON_EXISTING_BOX`.
-   - This eliminates null-pointer dereferences across deep Box hierarchies (`trak->mdia->minf->stbl->stsd->...` evaluates safely to a non-existing box sentinel if any intermediate box is absent).
-2. **Dual-List Box Ownership & Lifetime Management**:
-   - Every Box owns a value-embedded `lsmash_entry_list_t extensions` list (`core/box.h`).
-   - When a child box is instantiated via `isom_add_*`, it is always registered in `parent->extensions` with `eliminator = isom_remove_extension_box`, which is the **sole owner** responsible for calling `box->destruct(box)` and `lsmash_free(box)`.
-   - When a child box is also indexed in a typed parent list (e.g., `moov->trak_list`, `stsd->list`, `moof->traf_list`, `traf->trun_list`), that typed list uses `eliminator = isom_do_nothing`. Upon destruction (`isom_remove_box_by_itself`), the node in the typed list is unlinked via `parent + box->offset_in_parent` without freeing the box payload twice, while singleton child pointers are automatically restored to `box->nonexist_ptr`.
-3. **Sample Tables, Fragmented Multiplexing, and Media Timelines**:
-   - **Non-Fragmented Mode (`core/isom.c`)**: Accumulates per-sample metadata in `stbl` child boxes (`stts`, `ctts`, `stsz`, `stsc`, `stco`/`co64`, `stss`, `stps`, `sdtp`, `sgpd`, `sbgp`) and flushes media chunks to `mdat`.
-   - **Fragmented Mode (`core/fragment.c`)**: Emits an initialization movie (`ftyp` + `moov` with `mvex`/`trex`) followed by self-contained or indexed Movie Fragments (`sidx` + `moof`/`mfhd`/`traf`/`tfhd`/`tfdt`/`trun` + `mdat`) and an optional Movie Fragment Random Access (`mfra`/`tfra`/`mfro`) trailer.
-   - **Timeline Abstraction (`core/timeline.c`)**: Flattens non-fragmented `stbl` tables and fragmented `moof`/`traf`/`trun` sequences into an in-memory random-accessible timeline (`info_list` for general samples, `bunch_list` for run-length-compressed LPCM frame bunches, `chunk_list` for portable media chunks) to support remuxing, edit list (`elst`) reconstruction, and random access lookup.
+### 2.3 Bitstream & I/O Layer (`common/bytes.{c,h}`, `common/bits.{c,h}`, `common/multibuf.{c,h}`)
+- `lsmash_bs_t` (`common/bytes.h`) provides buffered byte-stream reading/writing over either a `FILE *` stream or an in-memory buffer (`lsmash_bs_set_empty_stream()`), tracking `eob` (end of buffer), `eof` (end of file), `error`, and `written` byte counters.
+- `lsmash_bits_t` (`common/bits.h`) wraps `lsmash_bs_t` to provide bit-level reading/writing (`lsmash_bits_get`, `lsmash_bits_put`, `lsmash_bits_get_align`, `lsmash_bits_put_align`).
+- **Bitstream Ownership & Borrowing Contract (`lsmash_bits_t`)**:
+  - `lsmash_bits_init( &bits, bs )` and `lsmash_bits_create( bs )` attach `bits` to an existing `lsmash_bs_t` as a **non-owning borrow**.
+  - **Never** call `lsmash_bits_empty( &bits )` when `bits` borrows an active parent `lsmash_bs_t` (such as `file->bs` during Box reading or writing), because `lsmash_bits_empty()` calls `lsmash_bs_empty( bits->bs )`, wiping the parent stream's internal read/write buffer. Use `lsmash_bits_get_align( &bits )` on read and `lsmash_bits_put_align( &bits )` on write.
+  - `lsmash_bits_empty()` is only valid on a dedicated scratch `lsmash_bs_t` owned exclusively by that bit reader (such as one created via `lsmash_bits_adhoc_create()` or a codec parser's private scratch buffer).
+- `lsmash_multiple_buffers_t` (`common/multibuf.{c,h}`) manages a contiguous bank of `number_of_buffers` fixed-size buffers (`buffer_size` bytes each). When resizing via `lsmash_resize_multiple_buffers()`, buffers are re-strided cleanly: on expansion, buffers are moved in reverse index order (`number_of_buffers - 1` down to `1`) after `lsmash_realloc` and newly exposed tail bytes are zero-initialized; on shrinkage, buffers are compacted in forward index order (`1` up to `number_of_buffers - 1`) before `lsmash_realloc`.
+- All integer serialization in `common/bytes.c` uses explicit `uint64_t` casts before bit shifts $\ge 32$ bits (`lsmash_bs_get_be64`, `lsmash_bs_get_le64`) to prevent 32-bit signed integer promotion undefined behavior.
 
-### 2.2 Symbol Naming Conventions (structured Prefix Invariants)
-To keep L-SMASH's symbol namespace clean and enable complete encapsulation of internal symbols outside `lsmash.h`, all functions and symbols follow the **structured Prefix Invariants**:
+### 2.4 Symbol Naming Conventions & Specification Syntax Identifiers
 
-1. **Public API (External Public API): `lsmash_*` / `LSMASH_*`**
-   - Strictly reserved for public functions, types, and macros declared in `lsmash.h` and exposed to library consumers.
-2. **Internal Shared (Library-Internal Shared API): `lsm_{filename}_*`**
-   - Non-`static` internal functions shared across multiple `.c` translation units within `liblsmash` (e.g., `lsm_box_*` in `core/box.c`, `lsm_fragment_*` in `core/fragment.c`, `lsm_alloc_*` in `common/alloc.c`).
-3. **File-Local Static (File-Local Private API): `{filename}_*` (`static` mandatory)**
-   - Internal functions used only within a single `.c` translation unit must be declared `static` and prefixed with `{filename}_*` (e.g., `static ... write_*` in `core/write.c`, `static ... read_*` in `core/read.c`, `static ... alloc_*` in `common/alloc.c`).
-- **Incremental Application Policy**: Existing legacy internal functions (`isom_*`, etc.) are preserved without disruptive bulk renames during feature phases; all newly added internal functions and test/audit helpers from the implementation onward must adhere to this structured naming convention (using minimal local macro aliases only where required by existing token-pasting dispatch macros).
+#### Symbol Naming Conventions
+To maintain clear module boundaries without breaking external callers of `<lsmash.h>`, symbols follow a structured naming convention across three visibility scopes:
+- **Public API (`lsmash_*`)**: Exported library functions, types, and macros declared in `lsmash.h` and exposed via `liblsmash.ver`. Existing public symbol names are strictly preserved for ABI/API compatibility.
+- **Internal Shared Functions (`lsm_<module>_*`)**: Non-`static` functions shared across compilation units inside `common/`, `core/`, `codecs/`, and `importer/` (for example, `lsm_alloc_get_active_count()`, `lsm_list_init()`, `lsm_isom_get_trak()`).
+- **File-Local Static Functions (`<module>_*`)**: `static` helper functions local to a single `.c` file (for example, `alloc_verify_block()`, `av1_parse_tile_info()`, `isom_write_pcmC()`).
 
-### 2.4 Preservation of Specification Syntax Identifiers (規格書ビットストリームシンタックス名の完全一致原則)
-All struct member names, bitstream parser variables, and `boxdumper` (`core/print.c`, `codecs/*.c`) dump labels representing bitstream syntax elements or specification-defined derived variables must obey the following invariant:
+#### Preservation of Specification Syntax Identifiers
+When a struct field, constant, or helper represents a syntax element defined by an international specification (ISO/IEC 14496-12, ISO/IEC 23003-5,ISO/IEC 23091-3, or AOM AV1), **the exact identifier spelling and casing from the official specification are preserved** so that the C source code can be cross-referenced directly against the standard text:
+- **ISO/IEC 23003-5 (`pcmC`)**: `format_flags`, `PCM_sample_size`
+- **ISO/IEC 14496-12 (`chnl`)**: `stream_structure`, `definedLayout`, `speaker_position`, `azimuth`, `elevation`, `omittedChannelsMap`, `object_count`
+- **ISO/IEC 14496-12 (`srat`)**: `sampling_rate`
+- **AOM AV1 Specification**: `seq_profile`, `seq_level_idx`, `seq_tier`, `high_bitdepth`, `twelve_bit`, `mono_chrome`, `color_description_present_flag`, `subsampling_x`, `subsampling_y`, `chroma_sample_position`, `SeenFrameHeader`, `show_existing_frame`, `frame_to_show_map_idx`, `refresh_frame_flags`, `OrderHintBits`, `TileColsLog2`, `TileRowsLog2`, `NumTiles`, `TileNum`, `CodedLossless`, `AllLossless`, etc.
 
-1. **Exact Case & Underscore Preservation (一字一句の完全一致)**:
-   - Syntax elements and derived variables defined in media specifications (ISO/IEC 14496-12, ISO/IEC 23003-5, QTFF, AV1 Bitstream & Decoding Process Specification v1.0.0 with Errata 1, AV1 Codec ISO Media File Format Binding v1.2.0, etc.) must be written **character-for-character identically** to the specification — preserving uppercase/lowercase letters, CamelCase vs. `snake_case`, and underscores without arbitrary case conversion or abbreviation.
-   - **Concrete Examples**:
-     - **ISO/IEC 23003-5 (`pcmC` — `PCMConfigBox`)**: Use **`PCM_sample_size`** (never `pcm_sample_size`) and **`format_flags`**.
-     - **ISO/IEC 14496-12 (`chnl` — `ChannelLayout`, `srat` — `SamplingRateBox`)**: Use **`definedLayout`**, **`omittedChannelsMap`**, **`stream_structure`**, **`speaker_position`**, **`azimuth`**, **`elevation`**, **`object_count`**, and **`sampling_rate`** (never `defined_layout`, `omitted_channels_map`, `spk`, `az`, `el`, etc.).
-     - **AV1 Bitstream Spec vs. AV1-ISOBMFF Spec**: In the AV1 OBU parser (`codecs/av1.{c,h}`), strictly preserve bitstream syntax element names (**`mono_chrome`**, **`subsampling_x`**, **`subsampling_y`**, **`leadingZeros`**, **`timing_info`**, **`decoder_model_info`**, **`operating_parameters_info`**, **`color_config`**) and specification-defined derived variables (**`OrderHintBits`**, **`SeenFrameHeader`**, **`FrameIsIntra`**, **`Leb128Bytes`**, **`UpscaledWidth`**, **`BitDepth`**, **`NumPlanes`**, **`TileNum`**, **`CodedLossless`**, **`AllLossless`**), whereas in the `av1C` (`AV1CodecConfigurationRecord`) struct (`lsmash_av1_specific_parameters_t`) preserve AV1-ISOBMFF specification names (**`monochrome`**, **`chroma_subsampling_x`**, **`chroma_subsampling_y`**, **`initial_presentation_delay_present`**, **`initial_presentation_delay_minus_one`**, **`configOBUs`**).
-2. **Rationale (Bidirectional Grep/Search Guarantee)**:
-   - Maintaining a strict exact identifier mapping guarantees that engineers can `grep` directly from any field name in a specification PDF to its exact definition, parser assignment, serializer, and `boxdumper` output in the codebase — and vice versa — without translation ambiguity.
+### 2.5 Compile-Time `static const` Dispatch Tables
+All Box and Codec dispatch tables across `core/` and `codecs/` are defined as **compile-time `static const` arrays** sized automatically by the compiler (`sizeof(table) / sizeof(table[0])`), with zero runtime initialization state:
+- `core/box.c`: `fullbox_type_table[]` in `isom_init_box_common()`
+- `core/read.c`: `box_reader_table[]` in `isom_read_unknown_box()`
+- `core/write.c`: `box_writer_table[]` in `isom_set_box_writer()`
+- `core/print.c`: `box_printer_table[]` in `isom_Ip_set_box_printer()`
+- `core/summary.c`: `summary_setup_table[]` in `lsmash_get_summary()`
+- `codecs/description.c`: `codec_Construct_table[]`, `codec_Copy_table[]`, `codec_Print_table[]`, and `codec_pecific_conversion_table[]`
+- `codecs/dts.c`: `dts_extension_Substream_lbr_table[]`, `dts_channel_layout_table[]`, and `dts_audio_asset_descriptor_channel_table[]`
+
+This guarantees thread safety across concurrent `lsmash_root_t` instances, places dispatch tables in read-only memory (`.rodata`), and eliminates fixed-size array bounds hazards.
 
 ---
 
 ## 3. Core Subsystems
 
-| Pillar | Specification Document | Target Scope & Objective |
-| :--- | :--- | :--- |
-| **Subsystem: C99 Memory & Container Modernization (Completed in the implementation)** | [`docs/specs/memory_architecture.md`](docs/specs/memory_architecture.md) | Replaced high-volume doubly-linked lists (`lsmash_entry_list_t` / `lsmash_entry_t` with 24-byte node overhead and double `malloc` per sample) across all High-volume paged tables Sample Tables (`stts`, `ctts`, `stsz`, `stz2`, `stss`, `stps`, `sdtp`, `stsc`, `stco`/`co64`, `sgpd`, `sbgp`, `elst`), Fragments (`trun->optional`, `tfra->list`, `sidx->list`, `fragment->pool`), and Timelines (`timeline->info_list`, `timeline->bunch_list`, `timeline->chunk_list`, `timeline->edit_list`) with a C99 Paged Block Array (`lsm_list_t`, $2^8=256$ elements/page, $O(1)$ bit-shift lookup, 100% pointer stability on append) and unified C99 iterator/accessor primitives (`LSM_LIST_FOR_EACH`, `LSM_ENTRY_LIST_FOR_EACH`), while strictly preserving `box_default` (Null-Object Sentinel Pattern), `extensions` single-ownership invariants, and index-safe mid-table roll group deduplication (`isom_deduplicate_roll_group`). |
-| **Subsystem: Native AV1 & Complete `obuparse` Removal (Completed in the implementation, Audited & Hardened in the implementation)** | [`docs/specs/av1_obuparse_removal.md`](docs/specs/av1_obuparse_removal.md) | Salvaged and completed the original author's native AV1 OBU parser from the official `av1` branch (`2bd228c`, `96065d0`), completely removed `obuparse`, and in the implementation completed full AV1 Spec v1.0.0 Errata 1 `uncompressed_header()` parsing through `film_grain_params()`, multi-tile `OBU_FRAME` / `OBU_TILE_GROUP` splitting (`TileNum`), strict AV1-ISOBMFF v1.2.0 Sync Sample (`stss`) vs. `OPEN_RAP` classification, initial `METADATA` OBU retention in `param->configOBUs`, sample OBU whitelisting, and `av1_print_codec_specific()` restoration. |
-| **Subsystem: ISO/IEC 23003-5 LPCM in Fragmented ISOBMFF (Completed in the implementation, Audited in the implementation)** | [`docs/specs/lpcm_isobmff_fragmented.md`](docs/specs/lpcm_isobmff_fragmented.md) | Implemented ISO/IEC 23003-5 (`ipcm`, `fpcm`, `pcmC`) and ISO/IEC 14496-12 (`chnl`, `srat`, `AudioSampleEntryV1`) with full multi-track Fragmented ISOBMFF support (`moof`/`traf`/`trun`), eliminated the hardcoded `fullbox_type_table[62]` limit in `core/box.c`, fixed the `AudioSampleEntryV1` writer and `stsd->version` copy bugs in `core/write.c` / `core/read.c`, implemented `isom_write_srat()`, fixed multi-track `trun->optional` allocation bugs in `core/fragment.c`, added `WAVE_FORMAT_IEEE_FLOAT` / `WAVE_FORMAT_EXTENSIBLE` support in `importer/wave_imp.c`, and enforced the Preservation of Specification Syntax Identifiers in the implementation. |
-| **Subsystem: Self-Contained Synthetic Test Suite & Memory Audit (Expanded in the implementation)** | [`docs/specs/testing_strategy.md`](docs/specs/testing_strategy.md) | Established zero-external-media-dependency C99 unit and integration test runner (`tests/test_main.c`, `make test`) with a self-contained C99 Memory Audit Mechanism (`common/alloc.{c,h}`, `-DLSMASH_DEBUG_ALLOC`: `#ptr` expression capture, intrusive doubly-linked list header, front/rear canaries, `0xCD`/`0xDD` poisoning, and zero-leak enforcement) covering C99 Paged Block Array (`lsm_list_t`), 10,500-sample multi-page VFR Sample Table & `sbgp` roll group deduplication stress tests, AV1 OBU/IVF and Fragmented MP4 round-trips, ISO/IEC 23003-5 LPCM / Fragmented MP4 round-trips, and malformed Box / Sample Table negative tests with 100% rollback verification (13 test suites, 146,407 assertions passing with 0 leaks). |
+Detailed specifications for each major subsystem reside in `docs/specs/` and are indexed in Section 4:
+
+1. **Built-In AOM AV1 OBU Parser (`codecs/av1.{c,h}`, `importer/ivf_imp.c`)**:
+   - Self-contained C99 implementation of the AV1 Bitstream & Decoding Process Specification (v1.0.0 with Errata 1) and AV1 Codec ISO Media File Format Binding (v1.2.0), with no external `obuparse` dependency.
+   - Full `uncompressed_header()` parsing through `tile_info()`, `quantization_params()`, `segmentation_params()`, `loop_filter_params()`, `cdef_params()`, `lr_params()`, `read_tx_mode()`, `skip_mode_params()`, and `global_motion_params()`, plus multi-tile `OBU_FRAME` / `OBU_TILE_GROUP` tracking, `stss` Sync Sample vs. `OPEN_RAP` classification, and sample OBU whitelisting.
+2. **ISO/IEC 23003-5 LPCM & ISO/IEC 14496-12 Audio Signaling (`core/`, `codecs/description.c`, `importer/wave_imp.c`)**:
+   - Support for uncompressed integer (`ipcm`: 16/24/32-bit big/little-endian) and floating-point (`fpcm`: 32/64-bit IEEE 754) audio in standard and multi-track Fragmented ISOBMFF (`moof`/`traf`/`trun`), including `pcmC`, `chnl`, `srat`, and ISOBMFF `AudioSampleEntryV1`.
+   - `trun` default sample duration/size compaction across multiple tracks in `core/fragment.c`, plus `WAVE_FORMAT_EXTENSIBLE` and `WAVE_FORMAT_IEEE_FLOAT` support in `importer/wave_imp.c`.
+3. **Hybrid Container Architecture & Paged Block Arrays (`common/alloc.{c,h}`, `common/list.{c,h}`, `core/`)**:
+   - Built-in C99 memory auditor (`-DLSMASH_DEBUG_ALLOC`) with `#ptr`/`#size` expression capture, 64-byte aligned headers, front/rear canaries, `0xCD`/`0xDD` memory poisoning, and leak verification.
+   - Hybrid container model: `lsmash_entry_list_t` doubly-linked pointer lists for polymorphic Box trees (`extensions`, `trak_list`, `moof_list`) paired with **`lsm_list_t` C99 Paged Block Arrays** ($2^8 = 256$ elements per page) for high-volume sample tables (`stts`, `ctts`, `stsz`, `stz2`, `stss`, `stps`, `sdtp`, `stsc`, `stco`/`co64`, `sgpd`, `sbgp`, `elst`), fragment tables (`trun->optional`, `tfra`, `sidx`, `fragment->pool`), and media timelines (`info_list`, `bunch_list`, `chunk_list`).
+4. **Core Module Decomposition Design (`core/isom.{c,h}`)**:
+   - Section 6 below specifies the planned decomposition of `core/isom.{c,h}` into focused compilation units (`core/isom.c`, `core/track.c`, `core/sample.c`, `core/stbl.c`).
 
 ---
 
-## 4. Directory & Module Index
+## 4. Detailed Specification Index (`docs/specs/`)
 
-### 4.1 Root & Configuration
-| Path | Responsibility |
-| :--- | :--- |
-| `README.md` | English project overview, supported container/codec matrix, build & test instructions, CLI quick start, and documentation index. |
-| `USAGE.md` | Comprehensive English CLI reference (`muxer`, `remuxer`, `boxdumper`, `timelineeditor`) and `liblsmash` C99 API programming manual. |
-| `lsmash.h` | Public C API header: box types, codec FourCCs, file parameters, summary structs, muxing/demuxing/timeline APIs, and codec-specific configuration structures. |
-| `configure` | POSIX shell build configurator: detects compiler/toolchain (supports POSIX/MSYS2 `sh`, `gcc`, `ar`, `ranlib`, `strip`), generates `config.h`, `config.mak`, `liblsmash.pc`, and `liblsmash.ver` (symbol version script parsed from `common/*.h` and `importer/*.h`). |
-| `Makefile` | Build rules for static/shared `liblsmash`, CLI tools (`cli/*`), installation, and test targets (verified with GNU Make 4.4.1 & GCC 14.2.0 via Read-Only MSYS2 MinGW64 toolchain). |
-| `SPEC.md` | Master architectural specification and documentation index (this file). |
-| `docs/HISTORY.md` | Historical record of repository branches (`master`, `av1`, `vimeo`, `dev`), key architectural commits, and project revival milestones. |
-| `docs/specs/*.md` | Detailed technical specifications for each of the four modernization missions. |
+| Document | Scope & Responsibility | Status |
+| :--- | :--- | :--- |
+| [`docs/HISTORY.md`](docs/HISTORY.md) | Historical lineage (`master`, `av1`, `vimeo`, `dev`), forensic bug analysis, and release changelog | Synchronized (`v2.21.1`) |
+| [`docs/specs/memory_architecture.md`](docs/specs/memory_architecture.md) | C99 memory audit (`LSMASH_DEBUG_ALLOC`), `lsmash_multiple_buffers_t` resize invariants, and `lsm_list_t` Paged Block Array architecture | Synchronized (`v2.21.1`) |
+| [`docs/specs/av1_obuparse_removal.md`](docs/specs/av1_obuparse_removal.md) | Built-in AV1 OBU parser (`codecs/av1.{c,h}`), Errata 1 & AV1-ISOBMFF v1.2.0 compliance, and IVF importer | Synchronized (`v2.21.1`) |
+| [`docs/specs/lpcm_isobmff_fragmented.md`](docs/specs/lpcm_isobmff_fragmented.md) | ISO/IEC 23003-5 (`ipcm`, `fpcm`, `pcmC`), ISO/IEC 14496-12 (`chnl`, `srat`, `AudioSampleEntryV1`), and Fragmented LPCM | Synchronized (`v2.21.1`) |
+| [`docs/specs/testing_strategy.md`](docs/specs/testing_strategy.md) | Self-contained synthetic test suite (`make test`), bitstream generators, malformed box negative tests, and regression suites | Synchronized (`v2.21.1`) |
 
-### 4.2 `common/` — Low-Level Primitives & Containers
-| Path | Responsibility |
-| :--- | :--- |
-| `common/internal.h` | Internal umbrella header included first by all translation units (`config.h`, `lsmash.h`, `alloc.h`, `math.h`, `utils.h`, `osdep.h`, `bytes.h`, `bits.h`, `list.h`, `multichar.h`). |
-| `common/alloc.c`, `common/alloc.h` | Memory allocation wrappers (`lsmash_malloc`, `lsmash_malloc_zero`, `lsmash_realloc`, `lsmash_memdup`, `lsmash_free`, `lsmash_freep`) and the C99 Memory Audit Mechanism (`-DLSMASH_DEBUG_ALLOC`: `#ptr`/`#size` expression capture, 64-byte aligned header with front/rear canaries, `0xA5`/`0xDD` poisoning, and `lsm_alloc_verify_no_leaks()`). |
-| `common/bytes.c`, `common/bytes.h` | Byte-stream I/O (`lsmash_bs_t`): buffered file/memory reading and writing, big/little-endian integer serialization, and byte counter tracking. |
-| `common/bits.c`, `common/bits.h` | Bit-level reader/writer (`lsmash_bits_t`) built on `lsmash_bs_t` and in-memory bitbuffers (`lsmash_multiple_buffers_t`). |
-| `common/list.c`, `common/list.h` | Hybrid container architecture: C99 Paged Block Array (`lsm_list_t`, $2^8=256$ elements/page, $O(1)$ bit-shift lookup, 100% pointer stability on append) for high-volume High-volume paged tables Sample Tables, Fragments, and Timelines, alongside doubly-linked list (`lsmash_entry_list_t`, `lsmash_entry_t`) for Box-tree pointer lists/C Box trees (`LSMASH_IN_PREDEFINED_LIST`) and small codec lists, with unified C99 iterators (`LSM_LIST_FOR_EACH`, `LSM_ENTRY_LIST_FOR_EACH`). |
-| `common/math.h` | GCD/LCM, rational reduction, min/max/clip macros, and integer overflow helpers. |
-| `common/multichar.h` | FourCC and ISO language packing macros (`LSMASH_4CC`, `LSMASH_PACK_ISO_LANGUAGE`). |
-| `common/osdep.c`, `common/osdep.h` | OS-specific large-file (`fseeko`/`ftello`) and Windows UTF-8/wide-char file/console wrappers. |
-| `common/utils.c`, `common/utils.h` | Logging (`lsmash_log`), buffer bank management (`lsmash_multiple_buffers_t`), and general helpers. |
+---
 
-### 4.3 `core/` — ISOBMFF & QTFF Container Engine
-| Path | Responsibility |
-| :--- | :--- |
-| `core/box.c`, `core/box.h` | In-memory Box definitions (`isom_*_t`), `ISOM_BASE_BOX` hierarchy, box creation (`isom_add_*`), destruction (`isom_remove_box_by_itself`), precedence ordering, and `isom_is_fullbox()` registry. |
-| `core/box_default.c`, `core/box_default.h` | Static default sentinel instances (`isom_non_existing_*`) implementing the Null-Object Sentinel Pattern pattern (`LSMASH_NON_EXISTING_BOX`) and automatic pointer restoration on child destruction. |
-| `core/box_type.c`, `core/box_type.h` | Box and Codec FourCC/UUID type constants (`ISOM_BOX_TYPE_*`, `QT_BOX_TYPE_*`, `ISOM_CODEC_TYPE_*`, `QT_CODEC_TYPE_*`) and type matching helpers. |
-| `core/file.c`, `core/file.h` | File lifecycle, brand compatibility flags (`isom_compatible`, `qt_compatible`, `max_isom_version`, `avc_extensions`, etc.), and read/write mode management. |
-| `core/isom.c`, `core/isom.h` | Track/movie manipulation, sample table population (`stts`, `ctts`, `stsz`, `stsc`, `stco`/`co64`, `sdtp`, `sgpd`/`sbgp` for `rap ` and `roll`), chunk caching/interleaving, and movie finalization. |
-| `core/fragment.c`, `core/fragment.h` | Movie Fragment (`moof`/`traf`/`trun`) and Segment Index (`sidx`) creation, default sample flag optimization, `tfra`/`mfra` random access tables, and multi-track fragment pooling. |
-| `core/read.c`, `core/read.h` | Binary Box parser (`isom_read_*`) deserializing ISOBMFF/QTFF streams into the in-memory Box hierarchy. |
-| `core/write.c`, `core/write.h` | Binary Box serializer (`isom_write_*`) computing box sizes (`isom_update_box_size`) and writing boxes to `lsmash_bs_t`. |
-| `core/timeline.c`, `core/timeline.h` | Timeline construction (`lsmash_construct_timeline`) from non-fragmented or fragmented movies, DTS/CTS lookup, LPCM bunch aggregation, and sample extraction. |
-| `core/print.c`, `core/print.h` | Human-readable Box tree dumper (`lsmash_print_movie`, `isom_print_*`). |
-| `core/summary.c`, `core/summary.h` | Media stream summary lifecycle (`lsmash_summary_t`, `lsmash_audio_summary_t`, `lsmash_video_summary_t`) and codec-specific opaque data list management. |
+## 5. Build, Toolchain & Verification
 
-### 4.4 `codecs/` — Elementary Stream Parsers & Codec Descriptions
-| Path | Responsibility |
-| :--- | :--- |
-| `codecs/description.c`, `codecs/description.h` | Codec sample entry (`stsd` child) setup, validation, and summary extraction for video, audio (including QTFF LPCM and target ISO/IEC 23003-5 LPCM), and hint tracks. |
-| `codecs/av1.c`, `codecs/av1.h` | Native AV1 OBU bitstream parser (`av1_get_uvlc`, `av1_get_leb128`, `av1_parse_sequence_header`, `av1_parse_temporal_unit`), ITU-T T.35 HDR10+ metadata detection, sample assembly, and AV1 Codec Configuration Box (`av1C`) serialization/deserialization/printing. |
-| `codecs/h264.c`, `codecs/h264.h` | H.264/AVC NAL unit parser,SPS/PPS/SEI parsing, and `avcC` configuration handling. |
-| `codecs/hevc.c`, `codecs/hevc.h` | H.265/HEVC NAL unit parser, VPS/SPS/PPS/SEI parsing, and `hvcC` configuration handling. |
-| `codecs/nalu.c`, `codecs/nalu.h` | Shared NAL unit start-code scanner, emulation prevention byte removal, and length-prefixed AU conversion. |
-| `codecs/mp4sys.c`, `codecs/mp4sys.h` | MPEG-4 Systems (`esds` ObjectDescriptor, ES_Descriptor, DecoderConfigDescriptor, DecoderSpecificInfo) implementation. |
-| `codecs/mp4a.c`, `codecs/mp4a.h` | MPEG-4 Audio (`AudioSpecificConfig`, SBR/PS signaling, profile/level indication) support. |
-| `codecs/ac3.c`, `codecs/ac3.h` | AC-3 (`dac3`) and Enhanced AC-3 (`dec3`) bitstream parser and specific box support. |
-| `codecs/dts.c`, `codecs/dts.h` | DTS (`ddts`) coherent acoustics and HD substream parser and specific box support. |
-| `codecs/alac.c`, `codecs/opus.c`, `codecs/vc1.c`, `codecs/wma.c`, `codecs/a52.c`, `codecs/id3.c`, `codecs/qt_wfex.c` | Codec-specific box and header parsers for ALAC (`alac`), Opus (`dOps`), VC-1 (`dvc1`), WMA, A/52, ID3v2, and WAVEFORMATEX. |
+- **Toolchain**: POSIX `sh` + GNU `make` + C99 compiler (`gcc` or `clang`). On Windows, verified with the MSYS2 MinGW64 toolchain (`x86_64-w64-mingw32-gcc`).
+- **Build & Test Command**:
+  ```sh
+  ./configure
+  make -j8 all test
+  ```
+- **Quality Requirements**:
+  1. Zero compiler warnings under `-Wall -Wextra -std=c99` across `liblsmash.a`, CLI tools, and `tests/test_main.c`.
+  2. All 14 synthetic test suites in `make test` must pass with **0 leaks** and **0 active blocks/bytes** reported by `lsm_alloc_verify_no_leaks()`.
 
-### 4.5 `importer/` — Raw & Container Stream Importers
-| Path | Responsibility |
-| :--- | :--- |
-| `importer/importer.c`, `importer/importer.h` | Importer plugin registry, probe/open/get_access_unit/close dispatch table, and public importer APIs. |
-| `importer/isobm_imp.c` | ISOBMFF/QTFF container importer leveraging `core/timeline.c`. |
-| `importer/wave_imp.c` | RIFF WAVE (`.wav`) LPCM audio importer supporting `WAVE_FORMAT_PCM` (`0x0001`), `WAVE_FORMAT_IEEE_FLOAT` (`0x0003`), and `WAVE_FORMAT_EXTENSIBLE` (`0xFFFE`), with automatic conversion to ISO/IEC 23003-5 (`ipcm`/`fpcm`/`pcmC`/`chnl`) when multiplexing into ISOBMFF containers. |
-| `importer/ivf_imp.c` | IVF container importer for AV1 streams powered by L-SMASH's native AV1 OBU parser (`codecs/av1.{c,h}`). |
-| `importer/nalu_imp.c` | Raw H.264/AVC and H.265/HEVC Annex-B byte stream importer. |
-| `importer/adts_imp.c`, `importer/ac3_imp.c`, `importer/dts_imp.c`, `importer/amr_imp.c`, `importer/mp3_imp.c`, `importer/vc1_imp.c` | Elementary stream importers for ADTS AAC, AC-3/E-AC-3, DTS, AMR-NB/WB, MP3, and SMPTE VC-1. |
+---
 
-### 4.6 `cli/` — Command-Line Applications
-| Path | Responsibility |
-| :--- | :--- |
-| `cli/cli.c`, `cli/cli.h` | Shared CLI initialization and argument/version helpers. |
-| `cli/muxer.c` | Elementary stream to ISOBMFF/QTFF/3GPP multiplexer (Progressive Download `--optimize-pd`, chapters, iTunes metadata, HDR/Dolby Vision/Spatial Video & Audio signaling). |
-| `cli/remuxer.c` | Container-to-container remultiplexer, Movie Fragmenter (`--fragment`), MPEG-DASH segmenter (`--dash`), and track/chapter editor. |
-| `cli/boxdumper.c` | Container Box hierarchy and sample table inspection utility. |
-| `cli/timelineeditor.c` | Edit list (`elst`) and timecode manipulation utility. |
+## 6. `core/isom.{c,h}` Decomposition Design (`core/isom.c`, `core/track.c`, `core/sample.c`, `core/stbl.c`)
 
-### 4.7 `tests/` — Self-Contained Synthetic Test Suite
-| Path | Responsibility |
-| :--- | :--- |
-| `tests/test_main.c` | Self-contained, copyright-free C99 synthetic unit and integration test suite (`make test` / `make check`). |
+Currently, `core/isom.c` (~3,490 lines) and `core/isom.h` (68 lines) combine four distinct responsibilities in a single compilation unit:
+1. **Sample Table (`stbl`) & Sample Group (`sgpd`/`sbgp`) Entry Manipulation** (~1,420 lines)
+2. **Track (`trak`), Edit List (`edts`/`elst`), Track Reference (`tref`), & Handler (`hdlr`) Management** (~940 lines)
+3. **Sample Pooling, Non-Fragmented Sample Appending, & Bitrate/DTS/Duration Updates** (~750 lines)
+4. **Movie (`moov`), Brand (`ftyp`), File Initialization, Progressive Download Remuxing, & Finish Lifecycle** (~380 lines)
+
+### 6.1 Target 4-Module Decomposition (`core/`)
+
+```
+                  +---------------------------------------+
+                  |             core/box.h                |
+                  |  (Box structs, sentinels, prototypes) |
+                  +-------------------+-------------------+
+                                      |
+        +--------------------+--------+--------+--------------------+
+        |                    |                 |                    |
+        v                    v                 v                    v
++---------------+    +---------------+ +---------------+    +---------------+
+|  core/stbl.c  |    | core/track.c  | | core/sample.c |    |  core/isom.c  |
+|  Sample Table |    | Track, Media, | | Sample Alloc, |    | Movie, Brands,|
+|  stts/ctts/   |    | Handler, tref,| | Pool, Append, |    | File Finish,  |
+|  stsz/stz2/   |    | edts/elst,    | | Flush, Bitrate|    | Progressive   |
+|  stsc/stco/   |    | Track Dur.    | | & Timestamps  |    | Download      |
+|  sgpd/sbgp    |    |               | |               |    |               |
++---------------+    +---------------+ +---------------+    +---------------+
+```
+
+### 6.2 Function-by-Function Assignment & `lsm_isom_*` Internal Renaming
+
+In accordance with the symbol naming conventions (Section 2.4):
+- Public API functions declared in `lsmash.h` keep their `lsmash_*` names.
+- Module-local helpers remain `static` with `<module>_*` (`isom_*`) names.
+- Internal functions called across `.c` files in `core/`, `codecs/`, or `importer/` use the **`lsm_isom_*`** prefix and are declared in `core/isom.h` (or `core/box.h`).
+
+#### Module 1: `core/stbl.c` — Sample Table & Sample Group Operations
+Owns `stsd` codec description lookup, `stts`, `ctts`, `cslg`, `stsz`, `stz2`, `stsc`, `stco`/`co64`, `stss`, `stps`, `sdtp`, and `sgpd`/`sbgp` (`rap `, `roll`, `prol`) entry manipulation:
+
+| Current Symbol | Visibility | Target Symbol & Signature | Callers Outside `core/stbl.c` |
+| :--- | :--- | :--- | :--- |
+| `isom_get_sample_count` | Cross-file (`core/`, `codecs/`) | `uint32_t lsm_isom_get_sample_count( isom_trak_t *trak )` | `core/sample.c`, `core/timeline.c`, `codecs/*.c` |
+| `isom_get_dts_elist_duration` | File-local `static` | *(inline / `core/track.c`)* | `core/track.c` |
+| `isom_add_stts_entry` | File-local `static` | `static int isom_add_stts_entry( ... )` | Local to `core/stbl.c` |
+| `isom_add_ctts_entry` | File-local `static` | `static int isom_add_ctts_entry( ... )` | Local to `core/stbl.c` |
+| `isom_add_stsc_entry` | File-local `static` | `static int isom_add_stsc_entry( ... )` | Local to `core/stbl.c` |
+| `isom_add_stco_entry` | File-local `static` | `static int isom_add_stco_entry( ... )` | Local to `core/stbl.c` |
+| `isom_add_co64_entry` | File-local `static` | `static int isom_add_co64_entry( ... )` | Local to `core/stbl.c` |
+| `isom_convert_stco_to_co64` | Cross-file (`core/`) | `int lsm_isom_convert_stco_to_co64( isom_stbl_t *stbl )` | `core/isom.c`, `core/stbl.c` |
+| `isom_add_chunk_offset_entry` | File-local `static` | `static int isom_add_chunk_offset_entry( ... )` | Local to `core/stbl.c` |
+| `isom_add_stsz_entry` | File-local `static` | `static int isom_add_stsz_entry( ... )` | Local to `core/stbl.c` |
+| `isom_add_stz2_entry` | File-local `static` | `static int isom_add_stz2_entry( ... )` | Local to `core/stbl.c` |
+| `isom_Paid_field_size` / `isom_compact_sample_size_table` | Cross-file (`core/`) | `int lsm_isom_compact_sample_size_table( isom_stbl_t *stbl )` | `core/isom.c` |
+| `isom_add_SampleSize_entry` | Cross-file (`core/`) | `int lsm_isom_add_sample_size_entry( isom_stbl_t *stbl, uint32_t sample_size )` | `core/sample.c` |
+| `isom_add_stss_entry` | Cross-file (`core/`) | `int lsm_isom_add_stss_entry( isom_stbl_t *stbl, uint32_t sample_number )` | `core/sample.c` |
+| `isom_add_stps_entry` | Cross-file (`core/`) | `int lsm_isom_add_stps_entry( isom_stbl_t *stbl, uint32_t sample_number )` | `core/sample.c` |
+| `isom_add_sdtp_entry` | Cross-file (`core/`) | `int lsm_isom_add_sdtp_entry( isom_box_t *parent, lsmash_sample_property_t *prop, uint8_t avc_extensions )` | `core/sample.c`, `core/fragment.c`, `core/timeline.c` |
+| `isom_replace_last_sample_delta` | Cross-file (`core/`) | `int lsm_isom_replace_last_sample_delta( isom_stbl_t *stbl, uint32_t sample_delta )` | `core/sample.c`, `core/timeline.c` |
+| `isom_update_time_tables` | Cross-file (`core/`) | `int lsm_isom_update_time_tables( isom_trak_t *trak, lsmash_sample_t *sample, uint32_t *samples_per_packet )` | `core/sample.c` |
+| `isom_append_chunk` | Cross-file (`core/`) | `int lsm_isom_append_chunk( isom_trak_t *trak, lsmash_sample_t *sample, uint32_t samples_per_packet )` | `core/sample.c` |
+| `isom_get_roll_group_entry` / `isom_add_roll_group_entry` / `isom_deduplicate_roll_group` / `isom_update_roll_group` / `isom_all_recovery_completed` | Cross-file (`core/`) | `lsm_isom_add_roll_group_entry`, `lsm_isom_update_roll_group`, `lsm_isom_all_recovery_completed` | `core/sample.c`, `core/fragment.c`, `core/timeline.c` |
+| `isom_get_rap_group_entry` / `isom_add_rap_group_entry` / `isom_update_rap_group` | Cross-file (`core/`) | `lsm_isom_add_rap_group_entry`, `lsm_isom_update_rap_group` | `core/sample.c`, `core/fragment.c`, `core/timeline.c` |
+| `isom_get_sample_group_description` / `isom_get_sample_to_group` | Cross-file (`core/`) | `lsm_isom_get_sample_group_description`, `lsm_isom_get_sample_to_group` | `core/fragment.c`, `core/timeline.c`, `core/stbl.c` |
+| `isom_setup_sample_grouping` | Cross-file (`core/`) | `int lsm_isom_setup_sample_grouping( isom_box_t *parent, isom_grouping_type grouping_type )` | `core/track.c`, `core/fragment.c`, `core/timeline.c` |
+| `isom_group_random_access` / `isom_group_roll_recovery` | Cross-file (`core/`) | `lsm_isom_group_random_access`, `lsm_isom_group_roll_recovery` | `core/sample.c`, `core/fragment.c`, `core/timeline.c` |
+
+#### Module 2: `core/track.c` — Track, Media, Handler, Track Reference & Edit List Management
+Owns `trak`, `tkhd`, `tapt`, `edts`/`elst`, `tref`, `mdia`, `mdhd`, `hdlr`, `minf`, and track duration/parameter APIs:
+
+| Current Symbol | Visibility | Target Symbol & Signature | Callers Outside `core/track.c` |
+| :--- | :--- | :--- | :--- |
+| `isom_get_trak` | Cross-file (`core/`, `codecs/`) | `isom_trak_t *lsm_isom_get_trak( lsmash_file_t *file, uint32_t track_ID )` | `core/*.c`, `codecs/*.c` |
+| `isom_set_media_handler_name` | File-local `static` | `static int isom_set_media_handler_name( ... )` | Local to `core/track.c` |
+| `isom_check_mandatory_boxes` / `isom_check_minf_boxes` / `isom_check_stbl_boxes` | Cross-file (`core/`) | `int lsm_isom_check_mandatory_boxes( lsmash_file_t *file )` | `core/isom.c`, `core/fragment.c` |
+| `lsmash_create_track` / `lsmash_delete_track` | Public API (`lsmash.h`) | `lsmash_create_track`, `lsmash_delete_track` | Public |
+| `lsmash_get_track_ID` / `lsmash_get_track_parameters` / `lsmash_set_track_parameters` | Public API (`lsmash.h`) | `lsmash_*` | Public |
+| `lsmash_get_media_parameters` / `lsmash_set_media_parameters` | Public API (`lsmash.h`) | `lsmash_*` | Public |
+| `lsmash_update_track_duration` | Public API (`lsmash.h`) | `lsmash_update_track_duration` | Public, `core/isom.c`, `core/fragment.c` |
+| `lsmash_create_explicit_timeline_map` / `lsmash_modify_explicit_timeline_map` / `lsmash_get_explicit_timeline_map` / `lsmash_delete_explicit_timeline_map` / `lsmash_count_explicit_timeline_map` | Public API (`lsmash.h`) | `lsmash_*` | Public |
+| `lsmash_set_track_reference` | Public API (`lsmash.h`) | `lsmash_set_track_reference` | Public |
+
+#### Module 3: `core/sample.c` — Sample Allocation, Sample Pool, Appending, & Bitrate/Timestamp Updates
+Owns `lsmash_sample_t` lifecycle, `isom_sample_pool_t` management, `lsmash_append_sample`, `lsmash_flush_pooled_samples`, and bitrate/timestamp table extraction:
+
+| Current Symbol | Visibility | Target Symbol & Signature | Callers Outside `core/sample.c` |
+| :--- | :--- | :--- | :--- |
+| `lsmash_create_sample` / `lsmash_Sample_alloc` / `lsmash_delete_sample` | Public API (`lsmash.h`) | `lsmash_*` | Public |
+| `isom_create_sample_pool` / `isom_remove_sample_pool` | Cross-file (`core/`) | `lsm_isom_create_sample_pool`, `lsm_isom_remove_sample_pool` | `core/box.c`, `core/track.c`, `core/fragment.c` |
+| `isom_pool_sample` | Cross-file (`core/`) | `int lsm_isom_pool_sample( isom_sample_pool_t *pool, lsmash_sample_t *sample, uint32_t samples_per_packet )` | `core/fragment.c`, `core/sample.c` |
+| `isom_append_sample_by_type` / `isom_flush_pooled_samples` | File-local `static` | `static int isom_append_sample_by_type( ... )` | Local to `core/sample.c` |
+| `lsmash_append_sample` / `lsmash_flush_pooled_samples` | Public API (`lsmash.h`) | `lsmash_*` | Public |
+| `isom_update_bitrate_description` | Cross-file (`core/`) | `int lsm_isom_update_bitrate_description( isom_mdia_t *mdia )` | `core/isom.c`, `core/fragment.c` |
+| `isom_check_Variablesize_stsz` / `isom_get_sample_info_from_stbl` | File-local `static` | `static ...` | Local to `core/sample.c` |
+| `lsmash_get_media_timestamps` / `lsmash_set_media_timestamps` / `lsmash_delete_media_timestamps` / `lsmash_sort_dts` | Public API (`lsmash.h`) | `lsmash_*` | Public |
+
+#### Module 4: `core/isom.c` — Movie Context, Compatibility Brands, File Finalization & Progressive Download
+Retains movie-level setup, brand compatibility validation, `lsmash_finish_movie`, progressive download (`moov`-before-`mdat`) rewriting, and root/file helpers:
+
+| Current Symbol | Visibility | Target Symbol & Signature | Callers Outside `core/isom.c` |
+| :--- | :--- | :--- | :--- |
+| `isom_check_initializer_present` | Cross-file (`core/`, `codecs/`) | `int lsm_isom_check_initializer_present( lsmash_root_t *root )` | `core/*.c`, `codecs/*.c` |
+| `isom_check_compatibility` | Cross-file (`core/`) | `int lsm_isom_check_compatibility( lsmash_file_t *file )` | `core/read.c`, `core/file.c`, `core/track.c` |
+| `isom_establish_movie` | Cross-file (`core/`) | `int lsm_isom_establish_movie( lsmash_file_t *file )` | `core/file.c` |
+| `isom_complement_data_reference` | Cross-file (`core/`) | `int lsm_isom_complement_data_reference( isom_minf_t *minf )` | `core/track.c`, `core/isom.c` |
+| `lsmash_initialize_movie_parameters` / `lsmash_set_movie_parameters` / `lsmash_get_movie_parameters` | Public API (`lsmash.h`) | `lsmash_*` | Public |
+| `lsmash_set_copyright` / `lsmash_set_free_space` / `lsmash_write_free_space` | Public API (`lsmash.h`) | `lsmash_*` | Public |
+| `lsmash_finish_movie` / `lsmash_write_lsmash_indicator` | Public API (`lsmash.h`) | `lsmash_*` | Public |

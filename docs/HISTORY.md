@@ -1,98 +1,89 @@
 # L-SMASH Project History & Architectural Evolution (`docs/HISTORY.md`)
 
-## 1. Repository Lineage & Branch Topology
+## 1. Upstream & Fork Lineage (`master`, `av1`, `vimeo`, `dev`)
 
-L-SMASH was created in 2010 by Yusuke Nakamura (`muken.the.vfrmaniac@gmail.com`) as a clean, specification-loyal ISOBMFF and QTFF library and toolset under the ISC License.
+### 1.1 Original L-SMASH (`master`: `r1` – `r1485`, 2010–2017)
+- Created and maintained primarily by **Yusuke Nakamura (`muken.the.vfrmaniac@gmail.com`)** and contributors (**Takashi Hirata**, **astrataro**, ** Yusuke** et al.).
+- Established a pure C99 library (`liblsmash`) and CLI toolset (`muxer`, `remuxer`, `boxdumper`, `timelineeditor`) for reading, writing, and remuxing ISO Base Media File Format (ISOBMFF, ISO/IEC 14496-12) and QuickTime File Format (QTFF).
+- Introduced the `box_default` Sentinel Box Architecture (`core/box_default.{c,h}`), dual-list Box ownership (`extensions` + type-specific lists), and self-contained elementary stream importers (`H.264/AVC`, `H.265/HEVC`, `VC-1`, `AAC/ADTS`, `ALS`, `AC-3/E-AC-3`, `DTS`, `AMR`, `MP3`, `WAVE`).
+- Upstream `master` reached `v2.14.5` (`59030f5`, `r1485`).
 
-### 1.1 Key Historical Branches Audited at Project Revival
-| Branch / Ref | Tip Commit | Summary of State |
-| :--- | :---: | :--- |
-| `master` (`origin/master`) | `18a9ed2` | Last official upstream `master` commit (2016-12-23: *"osdep: add missing fallback definitions of fseeko and ftello"*). |
-| `av1` (`origin/av1`) | `96065d0` | Official WIP branch by Yusuke Nakamura (2 commits ahead of `master`: `2bd228c` *"[WIP] av1: Add Support Alliance for Open Media AV1"* and `96065d0` *"[WIP] Add IVF importer for AV1"*), containing a 1,747-line native AV1 OBU parser in `codecs/av1.{c,h}` and IVF importer in `importer/ivf_imp.c`. |
-| `origin/memcheck` | `d549d80` | Experimental branch by Yusuke Nakamura introducing `common/memint.h` (`lsmash_mem_alloc_B` checked allocation wrappers). |
-| `vimeo` (`vimeo/master`) | `4a21f21` | Community fork (49 commits ahead of `master`) adding Opus (`dOps`), Spherical Video v1/v2 (`st3d`, `sv3d`), HDR metadata (`mdcv`, `clli`), ProRes, RTP Hint Track authoring, `srat` Box reader/printer, and an external `obuparse`-based AV1 implementation (`codecs/av1_obu.{c,h}`). |
-| `dev` | Branched from `4a21f21` | Active development branch for the official L-SMASH revival by original author Yusuke Nakamura. |
+### 1.2 Experimental `av1` Branch (`0715bf6`)
+- Added initial experimental AV1 (`av01` / `av1C`) support and an IVF importer (`importer/ivf_imp.c`), originally relying on an external `obuparse` library dependency.
 
----
-
-## 2. Notable Historical Commits & Architectural Lessons
-
-1. **Commit `04e39f1` (`2017-01-31`, `core/timeline.c`): *"Optimize DTS calculation to fix linear access slowdown"***
-   - Demonstrated that `lsmash_entry_list_t`'s single `last_accessed_entry` cursor degrades to $O(N)$ linear pointer-chasing per sample ($O(N^2)$ overall) when sample queries arrive out of monotonic order (such as B-frame CTS-ordered lookups in `isom_get_dts_from_info_list()`).
-   - Serves as direct empirical motivation for Subsystem's migration of high-volume sample and timeline lists (`info_list`, `bunch_list`, `chunk_list`, `stts`, `ctts`, `stsz`, `sdtp`, `trun->optional`) to $O(1)$ Paged Block Arrays.
-2. **Commit `9bc5dc3` (`2017-02-23`, `core/box.c`): *"Update fullbox_type_table size"***
-   - Expanded `static lsmash_box_type_t fullbox_type_table[50]` to `fullbox_type_table[62]` while adding 12 FullBoxes (`svhd`, `proj`, `prhd`, `cbmp`, `equi`, `mshp`, `st3d`, `GULL`, `SAND`, `stvi`, `alac`, `srat`), leaving **60 FullBoxes + 1 terminator = 61 used slots out of 62 (only 1 free slot)**.
-   - Confirmed the latent buffer-overflow hazard when adding the 2 FullBoxes required for ISO/IEC 23003-5 LPCM (`pcmC` and `chnl`).
-3. **Commits `2bd228c` & `96065d0` (`2017-04-28` / `2018-09-21`, `origin/av1`) vs. `ff5e5fe` (`2019-06-14`, `vimeo`)**
-   - While `vimeo` introduced an external dependency on `obuparse` (`codecs/av1_obu.{c,h}`), the official `av1` branch already contained the original author's native OBU bitstream parser (`codecs/av1.{c,h}`) and IVF importer (`importer/ivf_imp.c`), requiring only targeted bitstream bug fixes (`av1_get_uvlc`, `av1_get_leb128`, `av1_uncompressed_header`, and `av1C` `twelve_bit` propagation) to achieve complete dependency-free AV1 support.
+### 1.3 Vimeo Fork (`vimeo`: `r1486` – `r1526`, `4a21f21`, 2017–2020)
+- Maintained by **Derek Buitenhuis** and contributors at Vimeo (`vimeo/l-smash`).
+- Added HDR / Dolby Vision (`dvcC`/`dvvC`, `dby1`), Mastering Display Color Volume (`mdcv`), Content Light Level Info (`clli`), Spherical Video v1/v2 (`sv3d`), Stereoscopic 3D (`st3d`), Google Spatial Audio (`SA3D`), and initial AV1 (`av01`/`av1C`) support.
+- Reached `v2.16.1` (`4a21f21`, `r1526`).
 
 ---
 
-## 3. Revival Milestones
+## 2. Historical Defect Analysis (Pre-`v2.17.0` Baseline)
 
-### the implementation: Project Revival, Branch Establishment & Full Read-Only Audit
-- Established `dev` branch from `vimeo` (`4a21f21`) and installed local workspace/session protection hooks (`commit-msg`, `pre-commit`, `.gitignore`, `.ignore`, remote push lock).
-- Executed a comprehensive Read-Only audit across `common/`, `core/`, `codecs/`, `importer/`, `cli/`, and build scripts (`configure`, `Makefile`).
-- Authored the initial hierarchical specification suite:
-  - `SPEC.md`
-  - `docs/specs/memory_architecture.md`
-  - `docs/specs/av1_obuparse_removal.md`
-  - `docs/specs/lpcm_isobmff_fragmented.md`
-  - `docs/specs/testing_strategy.md`
-  - `docs/HISTORY.md`
+Prior to the `v2.17.0`–`v2.21.1` series on `dev`, the `vimeo` (`4a21f21`) and `av1` (`0715bf6`) branches exhibited several technical limitations and defects:
 
-### the implementation: Complete Removal of `obuparse`, Native AV1 OBU Parser Integration, and Synthetic Test Suite Establishment
-- Fixed `lsmash_bs_get_le64()` (`<< 16` $\rightarrow$ `<< 32`) and `lsmash_bs_get_le32()` (`(uint32_t)` cast before `<< 16`) in `common/bytes.c`.
-- Removed external `-lobuparse` dependency from `configure` and deleted `codecs/av1_obu.c` and `codecs/av1_obu.h`.
-- Salvaged the original author's native AV1 OBU parser from `origin/av1` (`2bd228c`, `96065d0`) into `codecs/av1.{c,h}` and `importer/ivf_imp.c`, fixing all identified bitstream bugs (`av1_get_uvlc`, `av1_get_leb128`/`av1_show_leb128`, `av1_parser_color_config`, `OrderHintBits`, `av1_uncompressed_header`, `av1_decode_frame_wrapup`, and 12-bit `twelve_bit` propagation into `av1C`).
-- Added `DISPLAY_CODEC_NAME( ISOM_CODEC_TYPE_AV01_VIDEO, AOM AV1 Video );` in `cli/muxer.c` and exported `lsmash_setup_av1_specific_parameters_from_access_unit` and `lsmash_destroy_av1_headers` in `lsmash.h`.
-- Created the self-contained, copyright-free synthetic test suite (`tests/test_main.c`, `make test` / `make check`) verifying bitstream primitives, Sequence Header OBUs (8/10/12-bit, BT.709 vs. sRGB), Frame Header OBUs, ITU-T T.35 HDR10+ metadata detection, `av1C` box round-trip, and synthetic IVF-to-ISOBMFF mux/demux round-trip (134 assertions passing with 0 warnings).
+1. **64-Bit Little-Endian Shift Bug in `common/bytes.c` (`lsmash_bs_get_le64`)**:
+   - `lsmash_bs_get_le64()` shifted the upper 32-bit word by `<< 16` instead of `<< 32` (`((uint64_t)lsmash_bs_get_le32( bs ) << 16) | lsmash_bs_get_le32( bs )`), corrupting 64-bit little-endian reads.
+2. **External `obuparse` Dependency & Incomplete AV1 Bitstream Compliance**:
+   - The `vimeo` branch required an external `obuparse` library for AV1 importing, breaking L-SMASH's self-contained build design.
+   - The experimental `av1` branch (`0715bf6`) only parsed `sequence_header_obu()` and the top of `uncompressed_header()`, stopping before `tile_info()` and failing to parse multi-tile `OBU_FRAME` / `OBU_TILE_GROUP` bitstreams or update reference slots on `show_existing_frame == 1`.
+3. **Lack of ISO/IEC 23003-5 LPCM (`ipcm`/`fpcm`/`pcmC`) & ISO/IEC 14496-12 `chnl` Support**:
+   - L-SMASH only supported uncompressed PCM inside QuickTime `.mov` (or legacy `mp4a`), lacking ISO/IEC 23003-5 `ipcm`/`fpcm`/`pcmC` and ISO/IEC 14496-12 `chnl` / `srat` / `AudioSampleEntryV1` for standard and Fragmented ISOBMFF.
+   - In addition, `core/box.c` (`fullbox_type_table` fixed at 60 slots), `core/write.c` (`isom_write_audio_description` writing QTFF fields into ISOBMFF `version == 1`, and `isom_write_srat` writing a 16.16 fixed-point shift), and `core/fragment.c` (`isom_append_fragment_track_run` checking `traf->trun_list.tail` instead of `moof->traf_list.tail`) had latent bugs affecting multi-track fragmented audio.
+4. **Per-Sample Doubly-Linked List Overhead (`lsmash_entry_list_t`)**:
+   - Storing high-volume Sample Tables (`stts`, `ctts`, `stsz`, `stsc`, `stco`, `sdtp`), Movie Fragment tables (`trun`, `tfra`, `sidx`), and Media Timelines (`info_list`, `bunch_list`, `chunk_list`) as heap-allocated doubly-linked nodes incurred two `malloc` calls and 24 bytes of pointer overhead per sample.
+5. **Runtime-Initialized Fixed-Size `static` Dispatch Tables & `emsg` Reader Bug**:
+   - Dispatch tables in `core/` and `codecs/` used lazy runtime initialization into fixed-size `static` arrays (e.g., `static ... table[128]`), creating data-race hazards in multi-threaded callers and silent bounds-overflow risks.
+   - `isom_read_emsg()` in `core/read.c:735` checked `if( !emsg->scheme_id_uri )` twice instead of checking `if( !emsg->value )` after the second allocation.
+6. **`lsmash_resize_multiple_buffers` Memory Corruption & `cli/muxer.c` Option Bug**:
+   - `lsmash_resize_multiple_buffers()` in `common/multibuf.c` called `lsmash_realloc()` without re-striding buffers $1 \dots N-1$ from the old `buffer_size` stride to the new `buffer_size` stride.
+   - `cli/muxer.c:549` checked `else if( !strcasecmp( argv[i], "--compact-size-table" ) )` inside the `if( !strcasecmp( argv[i], "--language" ) )` block, making `--compact-size-table` unreachable on the command line.
 
-### the implementation: ISO/IEC 23003-5 LPCM-in-ISOBMFF, Multi-Track Fragmented Audio, C99 Memory Audit Mechanism, and structured Naming Convention
-- Established the **Symbol Naming Conventions** in `SPEC.md` (`lsmash_*`/`LSMASH_*` for Public API Public API, `lsm_{filename}_*` for Internal Shared Library-Internal Shared API, and `static {filename}_*` for File-Local Static File-Local Private API).
-- Implemented the self-contained C99 Memory Audit Mechanism in `common/alloc.{c,h}` (enabled via `-DLSMASH_DEBUG_ALLOC` in `make test`), wrapping all 6 allocation functions (`lsmash_malloc`, `lsmash_malloc_zero`, `lsmash_realloc`, `lsmash_memdup`, `lsmash_free`, `lsmash_freep`) with `#ptr`/`#size` stringified expression capture, 64-byte aligned intrusive doubly-linked list headers, front/rear canaries, `0xA5`/`0xDD` memory poisoning, and zero-leak assertion enforcement (`lsm_alloc_verify_no_leaks()`).
-- Resolved 6 critical pre-existing container/fragment bugs:
-  1. Replaced the fixed-size `fullbox_type_table[62]` in `core/box.c` with a compile-time `static const` unsized array and registered `ISOM_BOX_TYPE_PCMC` (`pcmC`) and `ISOM_BOX_TYPE_CHNL` (`chnl`).
-  2. Fixed `isom_write_audio_description()` (`core/write.c`) and `isom_add_audio_description()` (`core/box.c`) to check `audio->manager & LSMASH_QTFF_BASE` before emitting 16-byte QTFF v1 fields, and fixed `isom_box_common_copy()` (`core/read.c:135`) so `stsd->version = 1` is preserved when reading `AudioSampleEntryV1`.
-  3. Implemented `isom_write_srat()` and registered `ISOM_BOX_TYPE_SRAT` in `box_writer_table[]` (`core/write.c`).
-  4. Replaced `if( trun->flags )` with `if( trun->flags & ISOM_TR_FLAGS_OPTIONAL_ROWS_PRESENT_MASK )` (`0x000f00`) in `core/fragment.c`, preventing tens of thousands of redundant `isom_trun_optional_row_t` allocations on secondary tracks in multi-track Fragmented MP4.
-  5. Fixed `useful_first_sample_flags` (`core/fragment.c:948`) and the `rap->trun_number` shift typo (`core/fragment.c:1598`).
-- Implemented full strict standard compliance support for ISO/IEC 23003-5 (`ipcm`, `fpcm`, `pcmC`) and ISO/IEC 14496-12 (`chnl`, `srat`, `AudioSampleEntryV1`) across `lsmash.h`, `core/`, `codecs/description.c`, `importer/wave_imp.c` (including `WAVE_FORMAT_IEEE_FLOAT` and `WAVE_FORMAT_EXTENSIBLE` 5.1ch/7.1ch CICP channel layout mapping), and `cli/muxer.c`.
-- Expanded `tests/test_main.c` to 8 test suites and 6,236 assertions (100% passing with 0 memory leaks).
+---
 
-### the implementation: Preservation of Specification Syntax Identifiers & the implementation/3 AV1 v1.0.0 Errata 1 / AV1-ISOBMFF v1.2.0 Compliance Audit
-- Codified the **Preservation of Specification Syntax Identifiers** in `SPEC.md` (Section 2.4): all bitstream syntax element names (`mono_chrome`, `subsampling_x`, `leadingZeros`, `PCM_sample_size`, `definedLayout`, `omittedChannelsMap`, `speaker_position`, `azimuth`, `elevation`, etc.) and derived variable names (`SeenSeqHeader`, `SeenFrameHeader`, `FrameIsIntra`, `OrderHintBits`, `Leb128Bytes`, `UpscaledWidth`, etc.) must match the governing specifications character-for-character without case conversion or abbreviation.
-- Audited and aligned all the implementation (`codecs/av1.{c,h}`, `importer/ivf_imp.c`) and the implementation (`core/read.c`, `core/write.c`, `codecs/description.c`) struct member and local variable names to the Preservation of Specification Syntax Identifiers.
-- Resolved all 6 regressions in `codecs/av1.{c,h}` from the `origin/av1` (`2bd228c`) integration:
-  1. Restored `Copyright (C) 2017-2020 L-SMASH project` (+ `Copyright (c) 2026 Yusuke Nakamura`) in `codecs/av1.{c,h}` and updated specification references to `AV1 Bitstream & Decoding Process Specification Version 1.0.0 with Errata 1` and `AV1 Codec ISO Media File Format Binding v1.2.0, 12 December 2019`.
-  2. Fixed Sync Sample (`stss`) determination in `av1_parse_temporal_unit()` (`codecs/av1.c`) to require an `OBU_SEQUENCE_HEADER` within the same Temporal Unit prior to the first Frame Header / Frame OBU (`tu.with_sequence_header`), marking Key Frame Temporal Units without an in-TU Sequence Header as `ISOM_SAMPLE_RANDOM_ACCESS_FLAG_OPEN_RAP` per AV1-ISOBMFF v1.2.0 Section 2.4.
-  3. Implemented the full `uncompressed_header()` through `film_grain_params()` in `codecs/av1.c`, removed the erroneous `&& is_frame_obu` check in `av1_parse_tile_group()`, updated `av1_parse_frame()` to align and parse `tile_group_obu()`, and deferred `av1_decode_frame_wrapup()` + `SeenFrameHeader = 0` until `tg_end == frame->NumTiles - 1` (supporting multi-tile split `OBU_FRAME` + `OBU_TILE_GROUP` streams).
-  4. Restored `av1_print_codec_specific()` (`"[%s: AV1CodecConfigurationBox]\n"`, human-readable `chroma_sample_position` strings, and trailing `configOBUs` / `size = %"PRIu32"\n`).
-  5. Restored appending initial `OBU_METADATA` OBUs into `param->configOBUs` in the initial configuration Temporal Unit (`tu.recording_config_obus`) per AV1-ISOBMFF v1.2.0 Section 2.3.3.
-  6. Replaced the OBU sample filtering blacklist with a strict AV1-ISOBMFF v1.2.0 Section 2.2 whitelist (`av1_is_sample_obu()`).
-- Fixed a bitstream writer bug in `lsmash_bits_put_align()` (`common/bits.c`) where `bits->store` and `bits->cache` were not reset to `0` after flushing the aligned byte.
-- Enforced `TileNum` continuity (`tg_start == frame->TileNum`), end-of-TU `SeenFrameHeader == 0` validation, and `ivf_importer_probe()` frame presence validation.
-- Expanded `tests/test_main.c` to 9 test suites and 6,257 assertions (100% passing with 0 memory leaks).
+## 3. Release Evolution (`v2.17.0` – `v2.21.1`)
 
-### the implementation: C99 Memory Architecture & Container Modernization (`lsm_list_t` Paged Block Array Migration)
-- Implemented the C99 Paged Block Array container (`lsm_list_t`, $2^8 = 256$ fixed-capacity element pages) and unified C99 iterator/accessor primitives (`LSM_LIST_FOR_EACH`, `LSM_ENTRY_LIST_FOR_EACH`, `lsm_list_count`, `lsm_list_at`, `lsm_list_get`, `lsm_list_head`, `lsm_list_tail`, `lsm_list_append`, `lsm_list_add`, `lsm_list_remove_tail`, `lsm_list_remove`, `lsm_list_move`) in `common/list.{c,h}`.
-- Eliminated per-entry doubly-linked list node (`lsmash_entry_t`) and double-`malloc` overhead across all High-volume paged tables high-volume tables while preserving 100% compatibility with Box-tree pointer lists Box-tree ownership (`box_default` Null-Object Sentinel Pattern, `parent->extensions`, `LSMASH_IN_PREDEFINED_LIST`, `offset_in_parent`):
-  1. **Media Timeline (`core/timeline.c`)**: Migrated `timeline->edit_list`, `timeline->chunk_list`, `timeline->info_list`, and `timeline->bunch_list` to `lsm_list_t`, guaranteeing 100% pointer stability for `info.chunk`/`bunch.chunk` references into `chunk_list` and simplifying `isom_get_dts_from_info_list()`, `isom_get_cts_from_info_list()`, and `isom_get_bunch()` to direct $O(1)$ indexed lookups.
-  2. **Movie Fragments (`core/fragment.c`, `core/box.{c,h}`, `core/file.c`, `core/isom.c`, `core/read.c`, `core/write.c`, `core/print.c`)**: Migrated `trun->optional`, `tfra->list`, `sidx->list`, and `fragment->pool` to `lsm_list_t`, replacing the $O(N)$ linear scan in `isom_request_trun_optional_row()` with $O(1)$ `lsm_list_get()`.
-  3. **Sample Tables & Edit Lists (`core/`)**: Migrated `elst->list`, `stts->list`, `ctts->list`, `stsz->list`, `stz2->list`, `stss->list`, `stps->list`, `sdtp->list`, `stsc->list`, `stco->list`/`co64->list`, `sgpd->list`, `sbgp->list`, and `cache->roll.pool` to `lsm_list_t`.
-  4. **Index-Safe Roll Group Deduplication (`core/isom.{c,h}`)**: Replaced raw `sbgp->list` pointer caching in `isom_roll_group_t` (`cache->roll.pool`) with `isom_sbgp_t *sbgp` and 1-based `uint32_t assignment_number` (decremented for subsequent pending groups upon mid-table merge in `isom_deduplicate_roll_group()`), eliminating dangling pointer hazards during mid-table deletion.
-- Added `test_paged_block_array()` (``..``) and `test_large_scale_paged_tables_and_roll_dedup()` (``..``) to `tests/test_main.c`, expanding the synthetic test suite to 11 test suites and 146,276 assertions (100% passing with 0 warnings, 0 memory leaks, and 0 canary corruptions under `-DLSMASH_DEBUG_ALLOC`).
+### 3.1 `v2.17.0`: Built-In AV1 OBU Parser, `le64` Fix & Synthetic Test Suite
+- **`common/bytes.c`**: Fixed `lsmash_bs_get_le64()` to shift the high 32-bit word by `<< 32` rather than `<< 16`.
+- **`codecs/av1.{c,h}` & `importer/ivf_imp.c`**: Replaced the external `obuparse` dependency with a built-in C99 AV1 OBU parser compliant with the AV1 Bitstream & Decoding Process Specification (v1.0.0 with Errata 1) and AV1 Codec ISO Media File Format Binding (v1.2.0):
+  - Implemented `av1_get_uvlc()`, `av1_get_leb128()`, `av1_show_leb128()`, `av1_get_su()`, and `av1_get_ns()`.
+  - Implemented full `sequence_header_obu()` and `uncompressed_header()` parsing through `tile_info()`, `quantization_params()`, `segmentation_params()`, `loop_filter_params()`, `cdef_params()`, `lr_params()`, `read_tx_mode()`, `skip_mode_params()`, and `global_motion_params()`.
+  - Implemented multi-tile `OBU_FRAME` and `OBU_TILE_GROUP` tracking (`TileNum`, `tg_start`, `tg_end`), `show_existing_frame` keyframe reference slot refresh, `stss` Sync Sample vs. `OPEN_RAP` classification, sample OBU whitelisting, and ITU-T T.35 HDR10+ metadata detection.
+- **`configure`, `Makefile`, `tests/test_main.c`**: Removed `--enable-obuparse` and added the self-contained synthetic test runner (`make test`).
 
-### the implementation: Compile-Time `static const` Dispatch Tables, Box Reader/Destructor Hardening, `lsmash_bits_t` Borrowing Invariants, and AV1 Fragmented / Malformed Box Test Expansion
-- Replaced all 10 remaining runtime-initialized fixed-size `static` dispatch tables across `core/box.c` (`description_remover_table`), `core/read.c` (`description_reader_table`, `box_reader_table`, `box_parent_type_table`), `core/write.c` (`box_writer_table`), `core/print.c` (`print_func_table`, `box_type_table`), `core/summary.c` (`summary_table`), `codecs/description.c` (`codec_Public_initialize_table`, `summary_setup_table`), and `codecs/dts.c` (`extension_substream_NuAsset_descript_func_table`) with unsized compile-time `static const` arrays (thread-safe, ROM-placed in `.rodata`, zero fixed-capacity overflow risk).
-- Fixed multiple Box Reader / Destructor / Timeline construction bugs uncovered during horizontal audit and negative testing:
-  1. Fixed the copy-paste NULL check bug in `isom_read_emsg()` (`!emsg->scheme_id_uri || !emsg->scheme_id_uri` $\rightarrow$ `!emsg->scheme_id_uri || !emsg->value`), guarded `box->size - pos` against `uint64_t` underflow on truncated `emsg` boxes, and fixed `isom_remove_emsg()` (`core/box.c`) to call `REMOVE_BOX_IN_LIST( emsg )` instead of `REMOVE_BOX( emsg )` (eliminating a 24-byte `lsmash_entry_t` leak in `file->emsg_list` on every `emsg` destruction).
-  2. Added box size and `PCM_sample_size` bit-depth validation (`16/24/32` for `ipcm`, `32/64` for `fpcm`) in `read_pcmC()`, entry count and monotonic `first_chunk` validation in `isom_read_stsc()`, entry table size validation in `isom_read_stsz()` and `isom_read_sbgp()`, and out-of-bounds `group_description_index` rejection + `err` propagation at `fail:` in `isom_timeline_construct()` (`core/timeline.c`).
-  3. Fixed a 4x heap buffer allocation under-sizing bug in `isom_read_must()` (`lsmash_malloc( num + 1 )` $\rightarrow$ `lsmash_malloc( (num + 1) * sizeof(uint32_t) )`), uninitialized pointer free hazards on error in `isom_read_lhvC()` and `isom_read_keys()` (`lsmash_malloc` $\rightarrow$ `lsmash_malloc_zero`), a double-free on allocation failure in `isom_read_chpl()`, missing destructors for `svhd` (`metadata_source`) and `SA3D` (`channel_map`) in `core/box.c`, and `box->size - pos` unsigned underflow guards across `core/read.c`.
-- Documented the non-owning borrow vs. dedicated ownership `Note:` contract for `lsmash_bits_init()` and `lsmash_bits_empty()` in `common/bits.h` and `common/bits.c`.
-- Added `test_av1_fragmented_isobmff_roundtrip()` and `test_malformed_boxes_and_sample_tables()` to `tests/test_main.c`, expanding the synthetic test suite to 13 test suites and 146,407 assertions (100% passing with 0 warnings and 0 leaks).
+### 3.2 `v2.19.0`: C99 Memory Auditor & ISO/IEC 23003-5 LPCM (`ipcm`/`fpcm`/`pcmC`/`chnl`/`srat`)
+- **`common/alloc.{c,h}` & `common/internal.h`**: Implemented the built-in C99 memory audit mechanism (`--enable-debug-alloc` / `-DLSMASH_DEBUG_ALLOC`) featuring `#ptr`/`#size` expression capture, 64-byte aligned intrusive headers, front/rear canaries, `0xCD`/`0xDD` memory poisoning, and `lsm_alloc_verify_no_leaks()`.
+- **`core/box.{c,h}`, `core/read.c`, `core/write.c`, `core/print.c`, `codecs/description.c`, `lsmash.h`**:
+  - Converted `fullbox_type_table` in `core/box.c` to an unbounded `static const` array.
+  - Fixed `isom_write_audio_description()` and `isom_read_audio_description()` to support ISOBMFF `AudioSampleEntryV1` (`version == 1`) without emitting QTFF-only Sound Description v1 fields when `!file->qt_compatible`.
+  - Fixed `isom_write_srat()` to write a plain 32-bit integer `sampling_rate` (`lsmash_bs_put_be32( bs, srat->sampling_rate )`) per ISO/IEC 14496-12 Section 12.2.3.2.
+  - Implemented ISO/IEC 23003-5 `ipcm`/`fpcm` and `pcmC` (`PCMConfigBox`: `format_flags`, `PCM_sample_size`) and ISO/IEC 14496-12 `chnl` (`ChannelLayout`: `stream_structure`, `definedLayout`, `speaker_position`, `azimuth`, `elevation`, `omittedChannelsMap`, `object_count`).
+- **`core/fragment.c`**:
+  - Fixed `isom_append_fragment_track_run()` to check whether `traf` is the last `traf` in `moof->traf_list.tail` before omitting `data_offset` across multi-track fragments.
+  - Added automatic `trun` compaction when all samples in a track run match `tfhd->default_sample_duration`, `default_sample_size`, and `default_sample_flags`.
+- **`importer/wave_imp.c`**: Added support for `WAVE_FORMAT_IEEE_FLOAT` (`0x0003`), `WAVE_FORMAT_EXTENSIBLE` (`0xFFFE`), 24/32/64-bit PCM/Float, sampling rates $> 65535\text{ Hz}$, and Microsoft `dwChannelMask` to ISO/IEC 14496-12 `chnl` mapping.
 
-### the implementation: Official English `README.md`, User & C API Manual (`USAGE.md`), and the implementation `core/isom.c` Modularization Design
-- Authored `README.md` as the English front-door documentation for the repository, detailing L-SMASH's strict standard compliance strict international standard compliance, supported video/audio codecs (including the zero-dependency AV1 OBU parser and ISO/IEC 23003-5 LPCM in standard and Multi-Track Fragmented ISOBMFF), C99 Paged Block Array (`lsm_list_t`) and `box_default` Null-Object Sentinel Pattern architecture highlights, build/configure options, self-contained synthetic test execution (`make test`), and CLI quick-start examples.
-- Authored `USAGE.md` as the comprehensive English CLI manual (`muxer`, `remuxer`, `boxdumper`, `timelineeditor`) and `liblsmash` C99 API programming guide with end-to-end code examples for AV1 (`av1C`), ISO/IEC 23003-5 LPCM (`ipcm`/`fpcm` + `pcmC` + `chnl` + `srat`), standard progressive-download muxing, multi-track Fragmented ISOBMFF muxing, and $O(1)$ timeline demuxing.
-- Audited `cli/*.c` and `core/isom.c` (4,149 lines) + `core/box.h` (2,959 lines), corrected the `cli/muxer.c` vs. `cli/remuxer.c` (`--fragment` / `--dash`) responsibility description in `SPEC.md`, and formulated the the implementation modularization and structured Prefix (`lsm_{filename}_*` / `static {filename}_*`) architecture plan for `core/isom.c`.
+### 3.3 `v2.20.0`: C99 Paged Block Array (`lsm_list_t`) & Sample Table Migration
+- **`common/list.{c,h}`**: Implemented `lsm_list_t`, a C99 Paged Block Array storing elements contiguously in $2^8 = 256$-element pages with $O(1)$ bit-shift lookup (`lsm_list_at`, `lsm_list_get`), 100% element pointer stability on append, lockstep multi-table cursors (`lsm_list_cursor_t`), and single-loop C99 iteration macros (`LSM_LIST_FOR_EACH`, `LSM_ENTRY_LIST_FOR_EACH`).
+- **`core/timeline.c`, `core/fragment.{c,h}`, `core/isom.c`, `core/read.c`, `core/write.c`, `core/print.c`, `codecs/*`**:
+  - Migrated all high-volume sample tables (`stts`, `ctts`, `stsz`, `stz2`, `stss`, `stps`, `sdtp`, `stsc`, `stco`, `co64`, `sgpd`, `sbgp`, `elst`), fragment tables (`trun->optional`, `tfra`, `sidx`, `fragment->pool`), and media timeline tables (`info_list`, `bunch_list`, `chunk_list`) from `lsmash_entry_list_t` to `lsm_list_t`.
+  - Fixed a latent pointer-invalidation hazard in `isom_add_roll_group_entry()` / `isom_deduplicate_roll_group()` by storing 1-based group indices (`roll_group_number`, `prev_group_number`, `first_sample_defined`) in `isom_roll_pool_entry_t` instead of raw pointers into `sbgp->list`.
+
+### 3.4 `v2.21.0`: Compile-Time `static const` Dispatch Tables, `emsg` Reader Fix & User Documentation
+- **`core/read.c`, `core/write.c`, `core/print.c`, `core/summary.c`, `codecs/description.c`, `codecs/dts.c`**: Converted all remaining lazy runtime-initialized `static` dispatch tables to compile-time `static const` arrays.
+- **`core/read.c`, `core/box.c`, `common/bits.{c,h}`**:
+  - Fixed `isom_read_emsg()` (`core/read.c:735`) to check `if( !emsg->value )`, added an explicit `pos > box->size` underflow guard before computing `emsg->message_data_length`, and updated `isom_remove_emsg()` (`core/box.c`) to free `scheme_id_uri`, `value`, and `message_data`.
+  - Documented the non-owning borrow contract of `lsmash_bits_t` in `common/bits.{c,h}`.
+- **`README.md` & `USAGE.md`**: Added English project overview (`README.md`) and user/C API manual (`USAGE.md`), and documented the `core/isom.{c,h}` 4-module decomposition design in `SPEC.md`.
+
+### 3.5 `v2.21.1`: Codec, Metadata, Build, `multibuf` Resize & `--compact-size-table` Fixes
+- **Integrated Upstream Contributor Fixes (Preserving Original Git Author Attributions)**:
+  1. **NALU Exp-Golomb EOF & Overflow Handling** (`Xinyue Lu <i@7086.in>`): Fixed infinite loop in `nalu_get_codeNum()` (`codecs/nalu.c`) on EOF or $\ge 64$ leading zero bits.
+  2. **MP3 `nBlockSize` Calculation** (`Xinyue Lu <i@7086.in>`): Fixed MP3 `nBlockSize` integer division truncation in `waveform_audio_update_bitrate()` (`codecs/qt_wfex.c`), plus added a `cbSize < 12` bounds check before writing `MPEGLAYER3WAVEFORMAT` fields.
+  3. **WMA `cbSize` 16-Bit LE Reading** (`Xinyue Lu <i@7086.in>`): Fixed `cbSize` reading in `wma_print_codec_specific()` (`codecs/wma.c`) to use `LSMASH_GET_LE16` instead of `LSMASH_GET_BYTE`, plus added a box size bounds check (`box->size < 8 + (uint64_t)WAVEFORMATEX_MINIMUM_SIZE + cbSize`).
+  4. **Opus 8-Channel Mapping Table Lookup** (`Xinyue Lu <i@7086.in>`): Fixed `channel_order` table lookup in `opus_print_codec_specific()` (`codecs/opus.c`) to index by `OutputChannelCount - 1` instead of `StreamCount + CoupledCount - 1`, and fixed the `"front center"` typo.
+  5. **Custom iTunes Metadata Type Retrieval** (`Xinyue Lu <i@7086.in>`): Fixed custom iTunes metadata retrieval in `lsmash_get_itunes_metadata()` (`core/meta.c`) to inspect `mean`/`name`/`data` boxes for `ITUNES_METADATA_ITEM_CUSTOM` instead of hardcoding `ITUNES_METADATA_TYPE_NONE`.
+  6. **Tyrant Chapter Presence Check** (`Xinyue Lu <i@7086.in>`): Fixed `lsmash_count_tyrant_chapter()` (`core/chapter.c`) to check `LSMASH_IS_NON_EXISTING_BOX( root->file->moov->udta->chpl )`.
+  7. **macOS Shared Library Linker Flag Detection** (`Anton Mitrofanov <BugMaster@narod.ru>`): Fixed macOS shared library linker flags in `configure` by testing `-Wl,-version_script` before enabling it (with a follow-up cleanup removing a stray `cat liblsmash.ver`).
+- **`common/multibuf.c`**: Rewrote `lsmash_resize_multiple_buffers()` to check for integer multiplication overflow, compact buffers in forward order before `lsmash_realloc` when shrinking, and move buffers in reverse order after `lsmash_realloc` (zero-filling newly exposed tail bytes) when expanding.
+- **`cli/muxer.c`**: Moved `else if( !strcasecmp( argv[i], "--compact-size-table" ) )` out of the `--language` conditional block into the top-level option loop in `parse_global_options()`.

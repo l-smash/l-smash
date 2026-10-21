@@ -21,7 +21,7 @@
 /* This file is available under an ISC license. */
 
 /*****************************************************************************
- * Note: Bitstream Ownership & Borrowing Contract for lsmash_bits_t
+ * Bitstream Ownership & Borrowing Contract for lsmash_bits_t
  * ---------------------------------------------------------------------------
  * 1. Non-Owning Borrow (`lsmash_bits_init` / `lsmash_bits_create`):
  *    - `lsmash_bits_init( &bits, bs )` attaches `bits` to an existing
@@ -53,7 +53,7 @@ typedef struct
 } lsmash_bits_t;
 
 /* Attach `bits` to an existing `bs` (non-owning borrow).
- * See Note: above: do NOT call lsmash_bits_empty() on a borrowed active `bs`. */
+ * Note: do NOT call lsmash_bits_empty() on a borrowed active `bs`. */
 void lsmash_bits_init( lsmash_bits_t* bits, lsmash_bs_t *bs );
 lsmash_bits_t *lsmash_bits_create( lsmash_bs_t *bs );
 void lsmash_bits_cleanup( lsmash_bits_t *bits );
