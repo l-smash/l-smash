@@ -2,6 +2,7 @@
  * importer.h
  *****************************************************************************
  * Copyright (C) 2010-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Takashi Hirata <silverfilain@gmail.com>
  * Contributors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
@@ -90,6 +91,15 @@ int lsm_importer_make_fake_track
 void lsm_importer_break_fake_movie
 (
     importer_t *importer
+);
+
+int lsm_importer_setup_fake_track
+(
+    importer_t       *importer,
+    lsmash_media_type media_type,
+    uint32_t          timescale,
+    lsmash_summary_t *summary,
+    uint32_t         *track_ID
 );
 
 #else

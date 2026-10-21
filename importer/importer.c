@@ -131,6 +131,35 @@ void lsmash_importer_close( importer_t *importer )
     lsm_importer_destroy( importer );
 }
 
+/* Check the leading 8 bytes for the Box / Atom header of a top-level box that a real ISOBMFF/QTFF file begins with.
+ * The 4CC at offset 4 is a magic number strong enough to tell a container from a raw elementary stream.
+ * This is only a hint to choose the probing order, so a false positive costs one failed probe at most and
+ * a false negative (e.g. a file starting with an unlisted box) still reaches isobm_importer at the table tail. */
+static int importer_has_isobmff_signature( importer_t *importer )
+{
+    lsmash_bs_t *bs = importer->bs;
+    uint32_t type = ((uint32_t)lsmash_bs_show_byte( bs, 4 ) << 24)
+                  | ((uint32_t)lsmash_bs_show_byte( bs, 5 ) << 16)
+                  | ((uint32_t)lsmash_bs_show_byte( bs, 6 ) <<  8)
+                  |  (uint32_t)lsmash_bs_show_byte( bs, 7 );
+    switch( type )
+    {
+        case LSMASH_4CC( 'f', 't', 'y', 'p' ) :
+        case LSMASH_4CC( 's', 't', 'y', 'p' ) :
+        case LSMASH_4CC( 'm', 'o', 'o', 'v' ) :
+        case LSMASH_4CC( 'm', 'o', 'o', 'f' ) :
+        case LSMASH_4CC( 's', 'i', 'd', 'x' ) :
+        case LSMASH_4CC( 'm', 'd', 'a', 't' ) :
+        case LSMASH_4CC( 'w', 'i', 'd', 'e' ) :
+        case LSMASH_4CC( 'f', 'r', 'e', 'e' ) :
+        case LSMASH_4CC( 's', 'k', 'i', 'p' ) :
+        case LSMASH_4CC( 'p', 'n', 'o', 't' ) :
+            return 1;
+        default :
+            return 0;
+    }
+}
+
 int lsm_importer_find( importer_t *importer, const char *format, int auto_detect )
 {
     importer->log_level = LSMASH_LOG_QUIET; /* Any error log is confusing for the probe step. */
@@ -139,17 +168,37 @@ int lsm_importer_find( importer_t *importer, const char *format, int auto_detect
     if( auto_detect )
     {
         size_t old_bs_max_size = importer->bs->buffer.max_size;
-        /* just rely on detector. */
-        for( int i = 0; (funcs = importer_func_table[i]) != NULL; i++ )
+        /* A container is tried first when its signature is found so that opening a regular MP4/MOV file does not run
+         * every raw stream probe beforehand, which also removes the risk of misdetecting the container as a raw stream. */
+        const importer_functions *first = NULL;
+        if( importer_has_isobmff_signature( importer ) )
         {
-            importer->bs->buffer.max_size = old_bs_max_size;
-            importer->class = &funcs->class;
-            if( !funcs->detectable )
-                continue;
-            if( (err = funcs->probe( importer )) == 0
-             || lsmash_bs_read_seek( importer->bs, 0, SEEK_SET ) != 0 )
-                break;
+            first = &isobm_importer;
+            importer->class = &first->class;
+            if( (err = first->probe( importer )) == 0 )
+                funcs = first;
+            else if( lsmash_bs_read_seek( importer->bs, 0, SEEK_SET ) != 0 )
+                funcs = first;
+            else
+            {
+                funcs = NULL;
+                err   = LSMASH_ERR_NAMELESS;
+            }
         }
+        else
+            funcs = NULL;
+        /* just rely on detector. */
+        if( !funcs )
+            for( int i = 0; (funcs = importer_func_table[i]) != NULL; i++ )
+            {
+                importer->bs->buffer.max_size = old_bs_max_size;
+                importer->class = &funcs->class;
+                if( funcs == first || !funcs->detectable )
+                    continue;
+                if( (err = funcs->probe( importer )) == 0
+                 || lsmash_bs_read_seek( importer->bs, 0, SEEK_SET ) != 0 )
+                    break;
+            }
     }
     else
     {
@@ -332,4 +381,54 @@ void lsm_importer_break_fake_movie( importer_t *importer )
     if( !importer )
         return;
     lsm_box_remove_by_itself( importer->file->moov );
+}
+
+/* Build a fake moov / trak / stsd for a raw stream so that it can be treated as if it were an ISOBMFF/QTFF file.
+ * The movie and the media share the same timescale so that the timeline durations equal the media durations.
+ * The summary is only read here: it stays owned by the caller, who registers it in importer->summaries.
+ * On failure, everything built here is rolled back, therefore the caller must not break the fake movie again
+ * on behalf of this function, though doing it is harmless. */
+int lsm_importer_setup_fake_track
+(
+    importer_t       *importer,
+    lsmash_media_type media_type,
+    uint32_t          timescale,
+    lsmash_summary_t *summary,
+    uint32_t         *track_ID
+)
+{
+    if( !importer || !summary || !track_ID || timescale == 0 )
+        return LSMASH_ERR_FUNCTION_PARAM;
+    int err;
+    lsmash_movie_parameters_t movie_param = { 0 };
+    lsmash_track_parameters_t track_param = { 0 };
+    lsmash_media_parameters_t media_param = { 0 };
+    if( (err = lsm_importer_make_fake_movie( importer )) < 0 )
+        return err;
+    if( (err = lsm_importer_make_fake_track( importer, media_type, track_ID )) < 0
+     || (err = lsmash_get_movie_parameters( importer->root, &movie_param )) < 0
+     || (err = lsmash_get_track_parameters( importer->root, *track_ID, &track_param )) < 0
+     || (err = lsmash_get_media_parameters( importer->root, *track_ID, &media_param )) < 0 )
+        goto fail;
+    movie_param.timescale = timescale;
+    media_param.timescale = timescale;
+    if( summary->summary_type == LSMASH_SUMMARY_TYPE_VIDEO )
+    {
+        /* The display size is a 16.16 fixed-point number. */
+        track_param.display_width  = ((lsmash_video_summary_t *)summary)->width  << 16;
+        track_param.display_height = ((lsmash_video_summary_t *)summary)->height << 16;
+    }
+    if( (err = lsmash_set_movie_parameters( importer->root, &movie_param )) < 0
+     || (err = lsmash_set_track_parameters( importer->root, *track_ID, &track_param )) < 0
+     || (err = lsmash_set_media_parameters( importer->root, *track_ID, &media_param )) < 0 )
+        goto fail;
+    if( lsmash_add_sample_entry( importer->root, *track_ID, summary ) != 1 )
+    {
+        err = LSMASH_ERR_NAMELESS;
+        goto fail;
+    }
+    return 0;
+fail:
+    lsm_importer_break_fake_movie( importer );
+    return err;
 }

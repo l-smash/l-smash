@@ -334,27 +334,18 @@ static int wave_imp_probe( importer_t *importer )
     /* Make fake movie.
      * Treat WAVE file format as if it's QuickTime file format. */
     uint32_t track_ID;
-    lsmash_movie_parameters_t movie_param = { 0 };
-    lsmash_track_parameters_t track_param = { 0 };
-    lsmash_media_parameters_t media_param = { 0 };
     importer->file->qt_compatible = 1;
-    if( (err = lsm_importer_make_fake_movie( importer )) < 0
-     || (err = lsm_importer_make_fake_track( importer, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK, &track_ID )) < 0
-     || (err = lsmash_get_movie_parameters( importer->root, &movie_param )) < 0
-     || (err = lsmash_get_track_parameters( importer->root, track_ID, &track_param )) < 0
-     || (err = lsmash_get_media_parameters( importer->root, track_ID, &media_param )) < 0 )
-        goto fail;
-    movie_param.timescale = wave_imp->fmt.wfx.nSamplesPerSec;
-    media_param.timescale = wave_imp->fmt.wfx.nSamplesPerSec;
-    if( (err = lsmash_set_movie_parameters( importer->root, &movie_param )) < 0
-     || (err = lsmash_set_track_parameters( importer->root, track_ID, &track_param )) < 0
-     || (err = lsmash_set_media_parameters( importer->root, track_ID, &media_param )) < 0 )
-        goto fail;
     lsmash_audio_summary_t *summary = wave_imp_create_summary( &wave_imp->fmt );
-    if( !summary || lsmash_add_sample_entry( importer->root, track_ID, summary ) != 1 )
+    if( !summary )
+    {
+        err = LSMASH_ERR_NAMELESS;
+        goto fail;
+    }
+    if( (err = lsm_importer_setup_fake_track( importer, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK,
+                                              wave_imp->fmt.wfx.nSamplesPerSec,
+                                              (lsmash_summary_t *)summary, &track_ID )) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
-        err = LSMASH_ERR_NAMELESS;
         goto fail;
     }
     if( (err = lsmash_list_add_entry( importer->summaries, summary )) < 0 )
