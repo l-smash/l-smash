@@ -2,6 +2,7 @@
  * meta.c
  *****************************************************************************
  * Copyright (C) 2012-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -27,6 +28,8 @@
 
 #include "box.h"
 #include "box_default.h"
+#include "movie.h"
+#include "track.h"
 
 static isom_data_t *isom_add_metadata( lsmash_file_t *file,
                                        lsmash_itunes_metadata_item item,
@@ -44,7 +47,7 @@ static isom_data_t *isom_add_metadata( lsmash_file_t *file,
     if( LSMASH_IS_NON_EXISTING_BOX( file->moov->udta->meta->hdlr ) )
     {
         if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_hdlr( file->moov->udta->meta ) )
-         || isom_setup_handler_reference( file->moov->udta->meta->hdlr, ISOM_META_HANDLER_TYPE_ITUNES_METADATA ) < 0 )
+         || lsm_track_setup_handler_reference( file->moov->udta->meta->hdlr, ISOM_META_HANDLER_TYPE_ITUNES_METADATA ) < 0 )
             return isom_non_existing_data();
     }
     isom_ilst_t *ilst = file->moov->udta->meta->ilst;
@@ -241,7 +244,7 @@ static int isom_set_itunes_metadata_binary( lsmash_file_t *file,
 
 int lsmash_set_itunes_metadata( lsmash_root_t *root, lsmash_itunes_metadata_t metadata )
 {
-    if( isom_check_initializer_present( root ) < 0 )
+    if( lsm_movie_check_initializer_present( root ) < 0 )
         return LSMASH_ERR_FUNCTION_PARAM;
     static const struct
     {
@@ -392,7 +395,7 @@ static lsmash_itunes_metadata_type isom_get_itunes_metadata_type( lsmash_itunes_
 
 int lsmash_get_itunes_metadata( lsmash_root_t *root, uint32_t metadata_number, lsmash_itunes_metadata_t *metadata )
 {
-    if( isom_check_initializer_present( root ) < 0 || !metadata )
+    if( lsm_movie_check_initializer_present( root ) < 0 || !metadata )
         return LSMASH_ERR_FUNCTION_PARAM;
     memset( metadata, 0, sizeof( *metadata ) );
     lsmash_file_t *file = root->file->initializer;
@@ -495,7 +498,7 @@ fail:
 
 uint32_t lsmash_count_itunes_metadata( lsmash_root_t *root )
 {
-    if( isom_check_initializer_present( root ) < 0
+    if( lsm_movie_check_initializer_present( root ) < 0
      || LSMASH_IS_NON_EXISTING_BOX( root->file->initializer->moov->udta->meta->ilst ) )
         return 0;
     return root->file->initializer->moov->udta->meta->ilst->metaitem_list.entry_count;

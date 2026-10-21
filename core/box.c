@@ -2,6 +2,7 @@
  * box.c
  *****************************************************************************
  * Copyright (C) 2012-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -31,6 +32,7 @@
 #include "read.h"
 #include "print.h"
 #include "timeline.h"
+#include "sample.h"
 
 #include "codecs/mp4a.h"
 #include "codecs/mp4sys.h"
@@ -682,7 +684,7 @@ static void isom_remove_trak( isom_trak_t *trak )
 {
     if( trak->cache )
     {
-        isom_remove_sample_pool( trak->cache->chunk.pool );
+        lsm_sample_remove_pool( trak->cache->chunk.pool );
         lsm_list_destroy( trak->cache->roll.pool );
         lsmash_free( trak->cache->rap );
         lsmash_free( trak->cache->fragment );

@@ -2,6 +2,7 @@
  * chapter.c
  *****************************************************************************
  * Copyright (C) 2010-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  * Contributors: Takashi Hirata <silverfilain@gmail.com>
@@ -29,6 +30,8 @@
 #include <ctype.h>
 
 #include "box.h"
+#include "movie.h"
+#include "track.h"
 
 #define CHAPTER_BUFSIZE 512
 #define UTF8_BOM "\xEF\xBB\xBF"
@@ -167,7 +170,7 @@ static int isom_add_chpl_entry( isom_chpl_t *chpl, isom_chapter_entry_t *chap_da
 
 int lsmash_set_tyrant_chapter( lsmash_root_t *root, char *file_name, int add_bom )
 {
-    if( isom_check_initializer_present( root ) < 0 )
+    if( lsm_movie_check_initializer_present( root ) < 0 )
         goto error_message;
     /* This function should be called after updating of the latest movie duration. */
     lsmash_file_t *file = root->file;
@@ -227,7 +230,7 @@ error_message:
 
 int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_ID, char *file_name )
 {
-    if( isom_check_initializer_present( root ) < 0 )
+    if( lsm_movie_check_initializer_present( root ) < 0 )
         goto error_message;
     lsmash_file_t *file = root->file;
     if( LSMASH_IS_NON_EXISTING_BOX( file->moov->mvhd ) )
@@ -239,7 +242,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     }
     FILE *chapter = NULL;       /* shut up 'uninitialized' warning */
     /* Create a Track Reference Box. */
-    isom_trak_t *trak = isom_get_trak( file, track_ID );
+    isom_trak_t *trak = lsm_track_get_trak( file, track_ID );
     if( LSMASH_IS_NON_EXISTING_BOX( trak ) )
     {
         lsmash_log( NULL, LSMASH_LOG_ERROR, "the specified track ID to apply the chapter doesn't exist.\n" );
@@ -344,7 +347,7 @@ int lsmash_create_reference_chapter_track( lsmash_root_t *root, uint32_t track_I
     }
     if( lsmash_flush_pooled_samples( root, chapter_track_ID, 0 ) < 0 )
         goto fail;
-    isom_trak_t *chapter_trak = isom_get_trak( file, chapter_track_ID );
+    isom_trak_t *chapter_trak = lsm_track_get_trak( file, chapter_track_ID );
     if( LSMASH_IS_NON_EXISTING_BOX( chapter_trak ) )
         goto fail;
     fclose( chapter );
@@ -369,7 +372,7 @@ error_message:
 
 uint32_t lsmash_count_tyrant_chapter( lsmash_root_t *root )
 {
-    if( isom_check_initializer_present( root ) == 0
+    if( lsm_movie_check_initializer_present( root ) == 0
      && LSMASH_IS_EXISTING_BOX( root->file->initializer->moov->udta )
      && LSMASH_IS_EXISTING_BOX( root->file->initializer->moov->udta->chpl )
      && root->file->initializer->moov->udta->chpl->list )
@@ -379,7 +382,7 @@ uint32_t lsmash_count_tyrant_chapter( lsmash_root_t *root )
 
 char *lsmash_get_tyrant_chapter( lsmash_root_t *root, uint32_t index, double *timestamp )
 {
-    if( isom_check_initializer_present( root ) < 0 )
+    if( lsm_movie_check_initializer_present( root ) < 0 )
         return NULL;
     lsmash_file_t *file = root->file->initializer;
     if( LSMASH_IS_NON_EXISTING_BOX( file->moov->mvhd )
@@ -399,7 +402,7 @@ char *lsmash_get_tyrant_chapter( lsmash_root_t *root, uint32_t index, double *ti
 
 int lsmash_print_chapter_list( lsmash_root_t *root )
 {
-    if( isom_check_initializer_present( root ) < 0
+    if( lsm_movie_check_initializer_present( root ) < 0
      || !(root->file->initializer->flags & LSMASH_FILE_MODE_READ) )
         return LSMASH_ERR_FUNCTION_PARAM;
     lsmash_file_t *file = root->file->initializer;
@@ -439,4 +442,12 @@ int lsmash_print_chapter_list( lsmash_root_t *root )
     }
     lsmash_log( NULL, LSMASH_LOG_ERROR, "this file doesn't have a chapter list.\n" );
     return LSMASH_ERR_NAMELESS;
+}
+
+void lsmash_delete_tyrant_chapter( lsmash_root_t *root )
+{
+    if( lsm_movie_check_initializer_present( root ) < 0
+     || LSMASH_IS_NON_EXISTING_BOX( root->file->initializer->moov->udta ) )
+        return;
+    isom_remove_box_by_itself( root->file->initializer->moov->udta->chpl );
 }

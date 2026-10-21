@@ -350,12 +350,15 @@ SRC_CORE="        \
     chapter.c     \
     file.c        \
     fragment.c    \
-    isom.c        \
     meta.c        \
+    movie.c       \
     print.c       \
     read.c        \
+    sample.c      \
+    stbl.c        \
     summary.c     \
     timeline.c    \
+    track.c       \
     write.c"
 
 SRCS=""

@@ -2,6 +2,7 @@
  * qt_wfex.c
  *****************************************************************************
  * Copyright (C) 2014-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -23,6 +24,7 @@
 #include "common/internal.h" /* must be placed first */
 
 #include "core/box.h"
+#include "core/stbl.h"
 
 /*********************************************************************************
     QuickTime Waveform Audio
@@ -60,7 +62,7 @@ int waveform_audio_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_
     uint32_t bufferSizeDB;
     uint32_t maxBitrate;
     uint32_t avgBitrate;
-    int err = isom_calculate_bitrate_description( stbl, mdhd, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index );
+    int err = lsm_stbl_calculate_bitrate_description( stbl, mdhd, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index );
     if( err < 0 )
         return err;
     uint32_t nAvgBytesPerSec = avgBitrate / 8;

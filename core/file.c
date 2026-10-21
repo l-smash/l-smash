@@ -2,6 +2,7 @@
  * file.c
  *****************************************************************************
  * Copyright (C) 2010-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -33,6 +34,8 @@
 #include "box.h"
 #include "read.h"
 #include "fragment.h"
+#include "movie.h"
+#include "sample.h"
 
 #include "importer/importer.h"
 
@@ -583,7 +586,7 @@ lsmash_file_t *lsmash_set_file
             if( !file->fragment )
                 goto fail;
             file->fragment->first_moof_pos = FIRST_MOOF_POS_UNDETERMINED;
-            file->fragment->pool = lsm_list_create( sizeof(isom_sample_pool_t), lsm_isom_clear_sample_pool );
+            file->fragment->pool = lsm_list_create( sizeof(isom_sample_pool_t), lsm_sample_clear_pool );
             if( !file->fragment->pool )
                 goto fail;
         }
@@ -596,7 +599,7 @@ lsmash_file_t *lsmash_set_file
                                    param->brands, param->brand_count ) < 0 )
             goto fail;
         /* Create the movie header if the initialization of the streams is required. */
-        if( (file->flags & LSMASH_FILE_MODE_INITIALIZATION) && !isom_movie_create( file ) )
+        if( (file->flags & LSMASH_FILE_MODE_INITIALIZATION) && !lsm_movie_create( file ) )
             goto fail;
     }
     if( LSMASH_IS_NON_EXISTING_BOX( root->file ) )

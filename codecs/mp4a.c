@@ -2,6 +2,7 @@
  * mp4a.c
  *****************************************************************************
  * Copyright (C) 2010-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Takashi Hirata <silverfilain@gmail.com>
  *
@@ -24,6 +25,7 @@
 
 #define MP4A_INTERNAL
 #include "core/box.h"
+#include "core/stbl.h"
 
 #include "mp4a.h"
 #include "mp4sys.h"
@@ -960,7 +962,7 @@ int mp4a_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_d
     uint32_t bufferSizeDB;
     uint32_t maxBitrate;
     uint32_t avgBitrate;
-    int err = isom_calculate_bitrate_description( stbl, mdhd, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index );
+    int err = lsm_stbl_calculate_bitrate_description( stbl, mdhd, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index );
     if( err < 0 )
         return err;
     /* FIXME: avgBitrate is 0 only if VBR in proper. */

@@ -2,6 +2,7 @@
  * a52.c
  *****************************************************************************
  * Copyright (C) 2012-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -27,6 +28,7 @@
 #include <inttypes.h>
 
 #include "core/box.h"
+#include "core/stbl.h"
 
 static const char *bit_stream_mode[] =
     {
@@ -747,18 +749,18 @@ int eac3_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_d
     if( !((ext->manager & LSMASH_BINARY_CODED_BOX) && ext->binary && ext->size >= 10) )
         return LSMASH_ERR_INVALID_DATA;
     uint16_t bitrate;
-    if( isom_is_variable_size( stbl ) )
+    if( lsm_stbl_is_variable_size( stbl ) )
     {
         uint32_t bufferSizeDB;
         uint32_t maxBitrate;
         uint32_t avgBitrate;
-        int err = isom_calculate_bitrate_description( stbl, mdhd, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index );
+        int err = lsm_stbl_calculate_bitrate_description( stbl, mdhd, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index );
         if( err < 0 )
             return err;
         bitrate = maxBitrate / 1000;    /* Use maximum bitrate if VBR. */
     }
     else
-        bitrate = isom_get_first_sample_size( stbl ) * (eac3->samplerate >> 16) / 192000;   /* 192000 == 1536 * 1000 / 8 */
+        bitrate = lsm_stbl_get_first_sample_size( stbl ) * (eac3->samplerate >> 16) / 192000;   /* 192000 == 1536 * 1000 / 8 */
     uint8_t *exdata = ext->binary + 8;
     exdata[0] = (bitrate >> 5) & 0xff;
     exdata[1] = (bitrate & 0x1f) << 3;

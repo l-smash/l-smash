@@ -2,6 +2,7 @@
  * dts.c
  *****************************************************************************
  * Copyright (C) 2012-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -27,6 +28,7 @@
 #include <inttypes.h>
 
 #include "core/box.h"
+#include "core/stbl.h"
 
 /*****************************************************************************
     ETSI TS 102 114 V1.2.1 (2002-12)
@@ -1820,10 +1822,10 @@ int dts_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_de
     uint32_t bufferSizeDB;
     uint32_t maxBitrate;
     uint32_t avgBitrate;
-    int err = isom_calculate_bitrate_description( stbl, mdhd, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index );
+    int err = lsm_stbl_calculate_bitrate_description( stbl, mdhd, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index );
     if( err < 0 )
         return err;
-    if( !isom_is_variable_size( stbl ) )
+    if( !lsm_stbl_is_variable_size( stbl ) )
         maxBitrate = avgBitrate;
     uint8_t *exdata = ext->binary + 12;
     LSMASH_SET_BE32( &exdata[0], maxBitrate );

@@ -2,6 +2,7 @@
  * fragment.c
  *****************************************************************************
  * Copyright (C) 2011-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -28,6 +29,10 @@
 #include "file.h"
 #include "write.h"
 #include "fragment.h"
+#include "movie.h"
+#include "track.h"
+#include "stbl.h"
+#include "sample.h"
 
 static isom_sidx_t *isom_get_sidx( lsmash_file_t *file, uint32_t reference_ID )
 {
@@ -50,7 +55,7 @@ static int isom_finish_fragment_movie( lsmash_file_t *file );
  * So you must call this function before switching sample descriptions. */
 int lsmash_create_fragment_movie( lsmash_root_t *root )
 {
-    if( isom_check_initializer_present( root ) < 0 )
+    if( lsm_movie_check_initializer_present( root ) < 0 )
         return LSMASH_ERR_FUNCTION_PARAM;
     lsmash_file_t *file = root->file;
     if( !file->bs
@@ -159,7 +164,7 @@ static int isom_write_fragment_random_access_info( lsmash_file_t *file )
             return LSMASH_ERR_NAMELESS;
         /* Get the edit list of the track associated with the trex->track_ID.
          * If failed or absent, implicit timeline mapping edit is used, and skip this operation for the track. */
-        isom_trak_t *trak = isom_get_trak( file, trex->track_ID );
+        isom_trak_t *trak = lsm_track_get_trak( file, trex->track_ID );
         if( LSMASH_IS_NON_EXISTING_BOX( trak ) )
             return LSMASH_ERR_NAMELESS;
         if( !lsm_list_count( trak->edts->elst->list ) )
@@ -167,7 +172,7 @@ static int isom_write_fragment_random_access_info( lsmash_file_t *file )
         isom_elst_t *elst = trak->edts->elst;
         /* Get the Track Fragment Random Access Boxes of the track associated with the trex->track_ID.
          * If failed or absent, skip reconstructing the Track Fragment Random Access Box of the track. */
-        isom_tfra_t *tfra = isom_get_tfra( file->mfra, trex->track_ID );
+        isom_tfra_t *tfra = lsm_track_get_tfra( file->mfra, trex->track_ID );
         if( LSMASH_IS_NON_EXISTING_BOX( tfra ) )
             continue;
         /* Reconstruct the Track Fragment Random Access Box. */
@@ -416,7 +421,7 @@ static int isom_create_fragment_overall_default_settings( lsmash_file_t *file )
         trex->default_sample_duration          = last_stts_data
                                                ? last_stts_data->sample_delta
                                                : 1;
-        trex->default_sample_size              = isom_get_first_sample_size( stbl );
+        trex->default_sample_size              = lsm_stbl_get_first_sample_size( stbl );
         if( stbl->sdtp->list )
         {
             struct sample_flags_stats_t
@@ -513,10 +518,10 @@ static int isom_finish_fragment_initial_movie( lsmash_file_t *file )
          || LSMASH_IS_NON_EXISTING_BOX( trak->mdia->minf->stbl )
          || !trak->cache )
             return LSMASH_ERR_NAMELESS;
-        if( (ret = isom_complement_data_reference( trak->mdia->minf )) < 0 )
+        if( (ret = lsm_track_complement_data_reference( trak->mdia->minf )) < 0 )
             return ret;
         isom_stbl_t *stbl = trak->mdia->minf->stbl;
-        if( isom_get_sample_count( trak ) )
+        if( lsm_stbl_get_sample_count( trak ) )
         {
             /* Compress sample size table. */
             if( stbl->compress_sample_size_table
@@ -527,45 +532,45 @@ static int isom_finish_fragment_initial_movie( lsmash_file_t *file )
              && LSMASH_IS_NON_EXISTING_BOX( stbl->stss )
              && LSMASH_IS_BOX_ADDITION_FAILURE( isom_add_stss( stbl ) ) )
                 return LSMASH_ERR_NAMELESS;
-            if( (ret = isom_update_tkhd_duration( trak )) < 0 )
+            if( (ret = lsm_track_update_tkhd_duration( trak )) < 0 )
                 return ret;
         }
         else
             trak->tkhd->duration = 0;
-        if( (ret = isom_update_bitrate_description( trak->mdia )) < 0 )
+        if( (ret = lsm_stbl_update_bitrate_description( trak->mdia )) < 0 )
             return ret;
         /* Complete the last sample groups within tracks in the initial movie. */
         if( trak->cache->rap )
         {
-            isom_sgpd_t *sgpd = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_RAP );
+            isom_sgpd_t *sgpd = lsm_stbl_get_sample_group_description( stbl, ISOM_GROUP_TYPE_RAP );
             if( LSMASH_IS_NON_EXISTING_BOX( sgpd ) )
                 return LSMASH_ERR_NAMELESS;
-            if( (ret = isom_rap_grouping_established( trak->cache->rap, 1, sgpd, 0 )) < 0 )
+            if( (ret = lsm_stbl_rap_grouping_established( trak->cache->rap, 1, sgpd, 0 )) < 0 )
                 return ret;
             lsmash_freep( &trak->cache->rap );
         }
         if( trak->cache->roll.pool )
         {
-            isom_sbgp_t *sbgp = isom_get_roll_recovery_sample_to_group( &stbl->sbgp_list );
+            isom_sbgp_t *sbgp = lsm_stbl_get_roll_recovery_sample_to_group( &stbl->sbgp_list );
             if( LSMASH_IS_NON_EXISTING_BOX( sbgp ) )
                 return LSMASH_ERR_NAMELESS;
-            if( (ret = isom_all_recovery_completed( sbgp, trak->cache->roll.pool )) < 0 )
+            if( (ret = lsm_stbl_all_recovery_completed( sbgp, trak->cache->roll.pool )) < 0 )
                 return ret;
         }
     }
-    if( file->mp4_version1 == 1 && (ret = isom_setup_iods( moov )) < 0 )
+    if( file->mp4_version1 == 1 && (ret = lsm_movie_setup_iods( moov )) < 0 )
         return ret;
     if( (ret = isom_create_fragment_overall_default_settings( file )) < 0
      || (ret = isom_prepare_random_access_info              ( file )) < 0
-     || (ret = isom_establish_movie                         ( file )) < 0 )
+     || (ret = lsm_movie_establish                          ( file )) < 0 )
         return ret;
     /* stco->co64 conversion, depending on last chunk's offset */
     uint64_t meta_size = LSMASH_IS_EXISTING_BOX( file->meta ) ? file->meta->size : 0;
-    if( (ret = isom_check_large_offset_requirement( moov, meta_size )) < 0 )
+    if( (ret = lsm_movie_check_large_offset_requirement( moov, meta_size )) < 0 )
         return ret;
     /* Now, the amount of the offset is fixed. apply it to stco/co64 */
     uint64_t preceding_size = moov->size + meta_size;
-    isom_add_preceding_box_size( moov, preceding_size );
+    lsm_movie_add_preceding_box_size( moov, preceding_size );
     /* Write File Type Box here if it was not written yet. */
     if( LSMASH_IS_EXISTING_BOX( file->ftyp ) && !(file->ftyp->manager & LSMASH_WRITTEN_BOX) )
     {
@@ -619,7 +624,7 @@ static int isom_make_segment_index_entry
         isom_fragment_t   *track_fragment = traf->cache->fragment;
         isom_subsegment_t *subsegment     = &track_fragment->subsegment;
         isom_sidx_t       *sidx           = isom_get_sidx( file,              tfhd->track_ID );
-        isom_trak_t       *trak           = isom_get_trak( file->initializer, tfhd->track_ID );
+        isom_trak_t       *trak           = lsm_track_get_trak( file->initializer, tfhd->track_ID );
         if( LSMASH_IS_NON_EXISTING_BOX( trak->mdia->mdhd ) )
             return LSMASH_ERR_NAMELESS;
         assert( LSMASH_IS_EXISTING_BOX( traf->tfdt ) );
@@ -827,7 +832,7 @@ static int isom_finish_fragment_movie
          || LSMASH_IS_NON_EXISTING_BOX( traf->file->initializer->moov->mvex ) )
             return LSMASH_ERR_NAMELESS;
         isom_tfhd_t *tfhd = traf->tfhd;
-        isom_trex_t *trex = isom_get_trex( file->initializer->moov->mvex, tfhd->track_ID );
+        isom_trex_t *trex = lsm_track_get_trex( file->initializer->moov->mvex, tfhd->track_ID );
         if( LSMASH_IS_NON_EXISTING_BOX( trex ) )
             return LSMASH_ERR_NAMELESS;
         struct sample_flags_stats_t
@@ -956,19 +961,19 @@ static int isom_finish_fragment_movie
         assert( LSMASH_IS_EXISTING_BOX( traf ) );
         if( traf->cache->rap )
         {
-            isom_sgpd_t *sgpd = isom_get_fragment_sample_group_description( traf, ISOM_GROUP_TYPE_RAP );
+            isom_sgpd_t *sgpd = lsm_stbl_get_fragment_sample_group_description( traf, ISOM_GROUP_TYPE_RAP );
             if( LSMASH_IS_NON_EXISTING_BOX( sgpd ) )
                 return LSMASH_ERR_NAMELESS;
-            if( (ret = isom_rap_grouping_established( traf->cache->rap, 1, sgpd, 1 )) < 0 )
+            if( (ret = lsm_stbl_rap_grouping_established( traf->cache->rap, 1, sgpd, 1 )) < 0 )
                 return ret;
             lsmash_freep( &traf->cache->rap );
         }
         if( traf->cache->roll.pool )
         {
-            isom_sbgp_t *sbgp = isom_get_roll_recovery_sample_to_group( &traf->sbgp_list );
+            isom_sbgp_t *sbgp = lsm_stbl_get_roll_recovery_sample_to_group( &traf->sbgp_list );
             if( LSMASH_IS_NON_EXISTING_BOX( sbgp ) )
                 return LSMASH_ERR_NAMELESS;
-            if( (ret = isom_all_recovery_completed( sbgp, traf->cache->roll.pool )) < 0 )
+            if( (ret = lsm_stbl_all_recovery_completed( sbgp, traf->cache->roll.pool )) < 0 )
                 return ret;
         }
     }
@@ -1118,21 +1123,21 @@ int lsmash_create_fragment_empty_duration
     uint32_t       duration
 )
 {
-    if( isom_check_initializer_present( root ) < 0 )
+    if( lsm_movie_check_initializer_present( root ) < 0 )
         return LSMASH_ERR_FUNCTION_PARAM;
     lsmash_file_t *file = root->file;
     if( !file->fragment
      || !file->fragment->movie
      || LSMASH_IS_NON_EXISTING_BOX( file->initializer->moov ) )
         return LSMASH_ERR_NAMELESS;
-    isom_trak_t *trak = isom_get_trak( file->initializer, track_ID );
+    isom_trak_t *trak = lsm_track_get_trak( file->initializer, track_ID );
     if( LSMASH_IS_NON_EXISTING_BOX( trak->tkhd ) )
         return LSMASH_ERR_NAMELESS;
-    isom_trex_t *trex = isom_get_trex( file->initializer->moov->mvex, track_ID );
+    isom_trex_t *trex = lsm_track_get_trex( file->initializer->moov->mvex, track_ID );
     if( LSMASH_IS_NON_EXISTING_BOX( trex ) )
         return LSMASH_ERR_NAMELESS;
     isom_moof_t *moof = file->fragment->movie;
-    isom_traf_t *traf = isom_get_traf( moof, track_ID );
+    isom_traf_t *traf = lsm_track_get_traf( moof, track_ID );
     if( LSMASH_IS_EXISTING_BOX( traf ) )
         return LSMASH_ERR_NAMELESS;
     traf = isom_add_traf( moof );
@@ -1161,7 +1166,7 @@ int isom_set_fragment_last_duration
      || !traf->trun_list.tail->data )
     {
         /* There are no track runs in this track fragment, so it is a empty-duration. */
-        isom_trex_t *trex = isom_get_trex( traf->file->initializer->moov->mvex, tfhd->track_ID );
+        isom_trex_t *trex = lsm_track_get_trex( traf->file->initializer->moov->mvex, tfhd->track_ID );
         if( LSMASH_IS_NON_EXISTING_BOX( trex ) )
             return LSMASH_ERR_NAMELESS;
         tfhd->flags |= ISOM_TF_FLAGS_DURATION_IS_EMPTY;
@@ -1176,7 +1181,7 @@ int isom_set_fragment_last_duration
     if( trun->sample_count          == 1
      && traf->trun_list.entry_count == 1 )
     {
-        isom_trex_t *trex = isom_get_trex( traf->file->initializer->moov->mvex, tfhd->track_ID );
+        isom_trex_t *trex = lsm_track_get_trex( traf->file->initializer->moov->mvex, tfhd->track_ID );
         if( LSMASH_IS_NON_EXISTING_BOX( trex ) )
             return LSMASH_ERR_NAMELESS;
         if( last_duration != trex->default_sample_duration )
@@ -1263,10 +1268,10 @@ static int isom_output_fragment_cache( isom_traf_t *traf )
                     else
                         return LSMASH_ERR_NAMELESS;
                 }
-                isom_sbgp_t *sbgp = isom_get_roll_recovery_sample_to_group( &traf->sbgp_list );
+                isom_sbgp_t *sbgp = lsm_stbl_get_roll_recovery_sample_to_group( &traf->sbgp_list );
                 if( LSMASH_IS_NON_EXISTING_BOX( sbgp ) )
                     return LSMASH_ERR_NAMELESS;
-                if( (ret = isom_all_recovery_completed( sbgp, cache->roll.pool )) < 0 )
+                if( (ret = lsm_stbl_all_recovery_completed( sbgp, cache->roll.pool )) < 0 )
                     return ret;
                 break;
             default :
@@ -1283,7 +1288,7 @@ int isom_flush_fragment_pooled_samples
     uint32_t       last_sample_duration
 )
 {
-    isom_traf_t *traf = isom_get_traf( file->fragment->movie, track_ID );
+    isom_traf_t *traf = lsm_track_get_traf( file->fragment->movie, track_ID );
     if( LSMASH_IS_NON_EXISTING_BOX( traf ) )
         /* No samples. We don't return as an error here since user might call the flushing function even if the
          * current movie fragment has no track fragment with this track_ID. */
@@ -1472,7 +1477,7 @@ static void isom_fragment_update_cache
 static int isom_fragment_update_sample_tables( isom_traf_t *traf, lsmash_sample_t *sample )
 {
     isom_tfhd_t *tfhd = traf->tfhd;
-    isom_trex_t *trex = isom_get_trex( traf->file->initializer->moov->mvex, tfhd->track_ID );
+    isom_trex_t *trex = lsm_track_get_trex( traf->file->initializer->moov->mvex, tfhd->track_ID );
     if( LSMASH_IS_NON_EXISTING_BOX( trex ) )
         return LSMASH_ERR_NAMELESS;
     lsmash_file_t *file    = traf->file;
@@ -1481,7 +1486,7 @@ static int isom_fragment_update_sample_tables( isom_traf_t *traf, lsmash_sample_
     if( !current->pool )
     {
         /* Very initial settings, just once per track */
-        current->pool = isom_create_sample_pool( 0 );
+        current->pool = lsm_sample_create_pool( 0 );
         if( !current->pool )
             return LSMASH_ERR_MEMORY_ALLOC;
     }
@@ -1537,7 +1542,7 @@ static int isom_fragment_update_sample_tables( isom_traf_t *traf, lsmash_sample_
              && LSMASH_IS_EXISTING_BOX( file->mfra )
              && (sample->prop.ra_flags & ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC) )
             {
-                isom_tfra_t *tfra = isom_get_tfra( file->mfra, tfhd->track_ID );
+                isom_tfra_t *tfra = lsm_track_get_tfra( file->mfra, tfhd->track_ID );
                 if( LSMASH_IS_NON_EXISTING_BOX( tfra ) )
                 {
                     tfra = isom_add_tfra( file->mfra );
@@ -1617,8 +1622,8 @@ static int isom_fragment_update_sample_tables( isom_traf_t *traf, lsmash_sample_
     }
     /* Set up the sample groupings for random access. */
     int ret;
-    if( (ret = isom_group_random_access( (isom_box_t *)traf, cache, sample )) < 0
-     || (ret = isom_group_roll_recovery( (isom_box_t *)traf, cache, sample )) < 0 )
+    if( (ret = lsm_stbl_group_random_access( (isom_box_t *)traf, cache, sample )) < 0
+     || (ret = lsm_stbl_group_roll_recovery( (isom_box_t *)traf, cache, sample )) < 0 )
         return ret;
     /* Set up the previous sample_duration if this sample is not the first sample in the overall movie. */
     uint32_t sample_duration;
@@ -1636,7 +1641,7 @@ static int isom_fragment_update_sample_tables( isom_traf_t *traf, lsmash_sample_
     }
     else
         sample_duration = cache->fragment->last_duration;
-    isom_update_cache_timestamp( cache, sample->dts, sample->cts, ctd_shift, sample_duration, non_output_sample );
+    lsm_stbl_update_cache_timestamp( cache, sample->dts, sample->cts, ctd_shift, sample_duration, non_output_sample );
     return delimit;
 }
 
@@ -1650,14 +1655,14 @@ static int isom_append_fragment_sample_internal_initial
     /* Update the sample tables of this track fragment enclosing the initial movie.
      * If a new chunk was created, append the previous one to the pool of this movie fragment. */
     uint32_t samples_per_packet;
-    int ret = isom_update_sample_tables( trak, sample, &samples_per_packet, sample_entry );
+    int ret = lsm_sample_update_tables( trak, sample, &samples_per_packet, sample_entry );
     if( ret < 0 )
         return ret;
     else if( ret == 1 )
         isom_append_fragment_track_run( trak->file, &trak->cache->chunk );
     isom_fragment_update_cache( trak->cache, sample, trak->file );
     /* Add a new sample into the pool of this track fragment. */
-    if( (ret = isom_pool_sample( trak->cache->chunk.pool, sample, samples_per_packet )) < 0 )
+    if( (ret = lsm_sample_pool_push( trak->cache->chunk.pool, sample, samples_per_packet )) < 0 )
         return ret;
     return 0;
 }
@@ -1678,7 +1683,7 @@ static int isom_append_fragment_sample_internal
         isom_append_fragment_track_run( traf->file, &traf->cache->chunk );
     isom_fragment_update_cache( traf->cache, sample, traf->file );
     /* Add a new sample into the pool of this track fragment. */
-    if( (ret = isom_pool_sample( traf->cache->chunk.pool, sample, 1 )) < 0 )
+    if( (ret = lsm_sample_pool_push( traf->cache->chunk.pool, sample, 1 )) < 0 )
         return ret;
     return 0;
 }
@@ -1726,7 +1731,7 @@ int isom_append_fragment_sample
          * as a safety, reject non-output samples here. */
         if( sample->cts == LSMASH_TIMESTAMP_UNDEFINED )
             return LSMASH_ERR_INVALID_DATA;
-        isom_traf_t *traf = isom_get_traf( fragment->movie, trak->tkhd->track_ID );
+        isom_traf_t *traf = lsm_track_get_traf( fragment->movie, trak->tkhd->track_ID );
         if( LSMASH_IS_NON_EXISTING_BOX( traf ) )
         {
             traf = isom_add_traf( fragment->movie );
@@ -1737,8 +1742,8 @@ int isom_append_fragment_sample
             traf->cache                        = trak->cache;
             traf->cache->fragment->traf_number = fragment->movie->traf_list.entry_count;
             int ret;
-            if( (traf->cache->fragment->rap_grouping  && (ret = isom_add_sample_grouping( (isom_box_t *)traf, ISOM_GROUP_TYPE_RAP  )) < 0)
-             || (traf->cache->fragment->roll_grouping && (ret = isom_add_sample_grouping( (isom_box_t *)traf, ISOM_GROUP_TYPE_ROLL )) < 0) )
+            if( (traf->cache->fragment->rap_grouping  && (ret = lsm_stbl_add_sample_grouping( (isom_box_t *)traf, ISOM_GROUP_TYPE_RAP  )) < 0)
+             || (traf->cache->fragment->roll_grouping && (ret = lsm_stbl_add_sample_grouping( (isom_box_t *)traf, ISOM_GROUP_TYPE_ROLL )) < 0) )
                 return ret;
         }
         else if( LSMASH_IS_NON_EXISTING_BOX( traf->file->initializer->moov->mvex )
@@ -1748,5 +1753,5 @@ int isom_append_fragment_sample
         func_append_sample = (int (*)( void *, lsmash_sample_t *, isom_sample_entry_t * ))isom_append_fragment_sample_internal;
         track_fragment = traf;
     }
-    return isom_append_sample_by_type( track_fragment, sample, sample_entry, func_append_sample );
+    return lsm_sample_append_by_type( track_fragment, sample, sample_entry, func_append_sample );
 }

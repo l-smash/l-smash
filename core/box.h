@@ -2,6 +2,7 @@
  * box.h
  *****************************************************************************
  * Copyright (C) 2010-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -1690,13 +1691,7 @@ typedef struct
 } isom_udta_t;
 
 /** Caches for handling tracks **/
-typedef struct
-{
-    uint64_t alloc;             /* total buffer size for the pool */
-    uint64_t size;              /* total size of samples in the pool */
-    uint32_t sample_count;      /* number of samples in the pool */
-    uint8_t *data;              /* actual data of samples in the pool */
-} isom_sample_pool_t;
+typedef struct isom_sample_pool_tag isom_sample_pool_t;
 
 typedef struct
 {
@@ -1713,33 +1708,7 @@ typedef struct
     int32_t  ctd_shift;
 } isom_timestamp_t;
 
-typedef struct
-{
-    isom_group_assignment_entry_t *assignment;          /* the address corresponding to the entry in Sample to Group Box */
-    isom_group_assignment_entry_t *prev_assignment;     /* the address of the previous assignment */
-    isom_rap_entry_t              *random_access;       /* the address corresponding to the random access entry in Sample Group Description Box */
-    uint8_t                        is_prev_rap;         /* whether the previous sample is a random access point or not */
-} isom_rap_group_t;
-
-typedef struct
-{
-    isom_sbgp_t *sbgp;                              /* the address to the active Sample to Group Box */
-    isom_sgpd_t *sgpd;                              /* the address to the active Sample Group Description Box */
-    uint32_t     assignment_number;                 /* 1-based index of the entry in Sample to Group Box */
-    uint32_t first_sample;                          /* the number of the first sample of the group */
-    uint32_t recovery_point;                        /* the identifier necessary for the recovery from its starting point to be completed */
-    uint64_t rp_cts;                                /* the CTS of the recovery point */
-    int16_t  roll_distance;                         /* the current roll_distance
-                                                     * The value may be updated when 'described' is set to ROLL_DISTANCE_INITIALIZED. */
-#define MAX_ROLL_WAIT_AND_SEE_COUNT 64
-    uint8_t  wait_and_see_count;                    /* Wait-and-see after initialization of roll_distance until reaching MAX_ROLL_WAIT_AND_SEE. */
-    uint8_t  is_fragment;                           /* the flag if the current group is in fragment */
-    uint8_t  prev_is_recovery_start;                /* whether the previous sample is a starting point of recovery or not */
-    uint8_t  delimited;                             /* the flag if the sample_count is determined */
-#define ROLL_DISTANCE_INITIALIZED 1
-#define ROLL_DISTANCE_DETERMINED  2
-    uint8_t  described;                             /* the status of the group description */
-} isom_roll_group_t;
+typedef struct isom_rap_group_tag isom_rap_group_t;
 
 typedef struct
 {
@@ -2477,120 +2446,6 @@ enum isom_data_reference_type
     QT_REFERENCE_HANDLER_TYPE_URL       = LSMASH_4CC( 'u', 'r', 'l', ' ' ),
 };
 
-/* Lanuage codes */
-typedef struct
-{
-    uint16_t mac_value;
-    uint16_t iso_name;
-} isom_language_t;
-
-static const isom_language_t isom_languages[] =
-{
-    {   0, ISOM_LANGUAGE_CODE_ENGLISH },
-    {   1, ISOM_LANGUAGE_CODE_FRENCH },
-    {   2, ISOM_LANGUAGE_CODE_GERMAN },
-    {   3, ISOM_LANGUAGE_CODE_ITALIAN },
-    {   4, ISOM_LANGUAGE_CODE_DUTCH_M },
-    {   5, ISOM_LANGUAGE_CODE_SWEDISH },
-    {   6, ISOM_LANGUAGE_CODE_SPANISH },
-    {   7, ISOM_LANGUAGE_CODE_DANISH },
-    {   8, ISOM_LANGUAGE_CODE_PORTUGUESE },
-    {   9, ISOM_LANGUAGE_CODE_NORWEGIAN },
-    {  10, ISOM_LANGUAGE_CODE_HEBREW },
-    {  11, ISOM_LANGUAGE_CODE_JAPANESE },
-    {  12, ISOM_LANGUAGE_CODE_ARABIC },
-    {  13, ISOM_LANGUAGE_CODE_FINNISH },
-    {  14, ISOM_LANGUAGE_CODE_GREEK },
-    {  15, ISOM_LANGUAGE_CODE_ICELANDIC },
-    {  16, ISOM_LANGUAGE_CODE_MALTESE },
-    {  17, ISOM_LANGUAGE_CODE_TURKISH },
-    {  18, ISOM_LANGUAGE_CODE_CROATIAN },
-    {  19, ISOM_LANGUAGE_CODE_CHINESE },
-    {  20, ISOM_LANGUAGE_CODE_URDU },
-    {  21, ISOM_LANGUAGE_CODE_HINDI },
-    {  22, ISOM_LANGUAGE_CODE_THAI },
-    {  23, ISOM_LANGUAGE_CODE_KOREAN },
-    {  24, ISOM_LANGUAGE_CODE_LITHUANIAN },
-    {  25, ISOM_LANGUAGE_CODE_POLISH },
-    {  26, ISOM_LANGUAGE_CODE_HUNGARIAN },
-    {  27, ISOM_LANGUAGE_CODE_ESTONIAN },
-    {  28, ISOM_LANGUAGE_CODE_LATVIAN },
-    {  29, ISOM_LANGUAGE_CODE_SAMI },
-    {  30, ISOM_LANGUAGE_CODE_FAROESE },
-    {  32, ISOM_LANGUAGE_CODE_RUSSIAN },
-    {  33, ISOM_LANGUAGE_CODE_CHINESE },
-    {  34, ISOM_LANGUAGE_CODE_DUTCH },
-    {  35, ISOM_LANGUAGE_CODE_IRISH },
-    {  36, ISOM_LANGUAGE_CODE_ALBANIAN },
-    {  37, ISOM_LANGUAGE_CODE_ROMANIAN },
-    {  38, ISOM_LANGUAGE_CODE_CZECH },
-    {  39, ISOM_LANGUAGE_CODE_SLOVAK },
-    {  40, ISOM_LANGUAGE_CODE_SLOVENIA },
-    {  41, ISOM_LANGUAGE_CODE_YIDDISH },
-    {  42, ISOM_LANGUAGE_CODE_SERBIAN },
-    {  43, ISOM_LANGUAGE_CODE_MACEDONIAN },
-    {  44, ISOM_LANGUAGE_CODE_BULGARIAN },
-    {  45, ISOM_LANGUAGE_CODE_UKRAINIAN },
-    {  46, ISOM_LANGUAGE_CODE_BELARUSIAN },
-    {  47, ISOM_LANGUAGE_CODE_UZBEK },
-    {  48, ISOM_LANGUAGE_CODE_KAZAKH },
-    {  49, ISOM_LANGUAGE_CODE_AZERBAIJANI },
-    {  51, ISOM_LANGUAGE_CODE_ARMENIAN },
-    {  52, ISOM_LANGUAGE_CODE_GEORGIAN },
-    {  53, ISOM_LANGUAGE_CODE_MOLDAVIAN },
-    {  54, ISOM_LANGUAGE_CODE_KIRGHIZ },
-    {  55, ISOM_LANGUAGE_CODE_TAJIK },
-    {  56, ISOM_LANGUAGE_CODE_TURKMEN },
-    {  57, ISOM_LANGUAGE_CODE_MONGOLIAN },
-    {  59, ISOM_LANGUAGE_CODE_PASHTO },
-    {  60, ISOM_LANGUAGE_CODE_KURDISH },
-    {  61, ISOM_LANGUAGE_CODE_KASHMIRI },
-    {  62, ISOM_LANGUAGE_CODE_SINDHI },
-    {  63, ISOM_LANGUAGE_CODE_TIBETAN },
-    {  64, ISOM_LANGUAGE_CODE_NEPALI },
-    {  65, ISOM_LANGUAGE_CODE_SANSKRIT },
-    {  66, ISOM_LANGUAGE_CODE_MARATHI },
-    {  67, ISOM_LANGUAGE_CODE_BENGALI },
-    {  68, ISOM_LANGUAGE_CODE_ASSAMESE },
-    {  69, ISOM_LANGUAGE_CODE_GUJARATI },
-    {  70, ISOM_LANGUAGE_CODE_PUNJABI },
-    {  71, ISOM_LANGUAGE_CODE_ORIYA },
-    {  72, ISOM_LANGUAGE_CODE_MALAYALAM },
-    {  73, ISOM_LANGUAGE_CODE_KANNADA },
-    {  74, ISOM_LANGUAGE_CODE_TAMIL },
-    {  75, ISOM_LANGUAGE_CODE_TELUGU },
-    {  76, ISOM_LANGUAGE_CODE_SINHALESE },
-    {  77, ISOM_LANGUAGE_CODE_BURMESE },
-    {  78, ISOM_LANGUAGE_CODE_KHMER },
-    {  79, ISOM_LANGUAGE_CODE_LAO },
-    {  80, ISOM_LANGUAGE_CODE_VIETNAMESE },
-    {  81, ISOM_LANGUAGE_CODE_INDONESIAN },
-    {  82, ISOM_LANGUAGE_CODE_TAGALOG },
-    {  83, ISOM_LANGUAGE_CODE_MALAY_ROMAN },
-    {  84, ISOM_LANGUAGE_CODE_MAYAY_ARABIC },
-    {  85, ISOM_LANGUAGE_CODE_AMHARIC },
-    {  87, ISOM_LANGUAGE_CODE_OROMO },
-    {  88, ISOM_LANGUAGE_CODE_SOMALI },
-    {  89, ISOM_LANGUAGE_CODE_SWAHILI },
-    {  90, ISOM_LANGUAGE_CODE_KINYARWANDA },
-    {  91, ISOM_LANGUAGE_CODE_RUNDI },
-    {  92, ISOM_LANGUAGE_CODE_CHEWA },
-    {  93, ISOM_LANGUAGE_CODE_MALAGASY },
-    {  94, ISOM_LANGUAGE_CODE_ESPERANTO },
-    { 128, ISOM_LANGUAGE_CODE_WELSH },
-    { 129, ISOM_LANGUAGE_CODE_BASQUE },
-    { 130, ISOM_LANGUAGE_CODE_CATALAN },
-    { 131, ISOM_LANGUAGE_CODE_LATIN },
-    { 132, ISOM_LANGUAGE_CODE_QUECHUA },
-    { 133, ISOM_LANGUAGE_CODE_GUARANI },
-    { 134, ISOM_LANGUAGE_CODE_AYMARA },
-    { 135, ISOM_LANGUAGE_CODE_TATAR },
-    { 136, ISOM_LANGUAGE_CODE_UIGHUR },
-    { 137, ISOM_LANGUAGE_CODE_DZONGKHA },
-    { 138, ISOM_LANGUAGE_CODE_JAVANESE },
-    { UINT16_MAX, 0 }
-};
-
 /* Color parameters */
 enum isom_color_patameter_type
 {
@@ -2667,89 +2522,6 @@ void isom_bs_put_box_common( lsmash_bs_t *bs, void *box );
 
 #define isom_4cc2str( fourcc ) (const char [5]){ (fourcc) >> 24, (fourcc) >> 16, (fourcc) >> 8, (fourcc), 0 }
 
-int isom_check_initializer_present( lsmash_root_t *root );
-
-isom_trak_t *isom_get_trak( lsmash_file_t *file, uint32_t track_ID );
-isom_trex_t *isom_get_trex( isom_mvex_t *mvex, uint32_t track_ID );
-isom_traf_t *isom_get_traf( isom_moof_t *moof, uint32_t track_ID );
-isom_tfra_t *isom_get_tfra( isom_mfra_t *mfra, uint32_t track_ID );
-isom_sgpd_t *isom_get_sample_group_description( isom_stbl_t *stbl, uint32_t grouping_type );
-isom_sbgp_t *isom_get_sample_to_group( isom_stbl_t *stbl, uint32_t grouping_type );
-isom_sgpd_t *isom_get_roll_recovery_sample_group_description( lsmash_entry_list_t *list );
-isom_sbgp_t *isom_get_roll_recovery_sample_to_group( lsmash_entry_list_t *list );
-isom_sgpd_t *isom_get_fragment_sample_group_description( isom_traf_t *traf, uint32_t grouping_type );
-isom_sbgp_t *isom_get_fragment_sample_to_group( isom_traf_t *traf, uint32_t grouping_type );
-
-isom_trak_t *isom_track_create( lsmash_file_t *file, lsmash_media_type media_type );
-isom_moov_t *isom_movie_create( lsmash_file_t *file );
-
-int isom_setup_handler_reference( isom_hdlr_t *hdlr, uint32_t media_type );
-int isom_setup_iods( isom_moov_t *moov );
-
-uint32_t isom_get_sample_count
-(
-    isom_trak_t *trak
-);
-
-isom_sample_pool_t *isom_create_sample_pool
-(
-    uint64_t size
-);
-
-int isom_update_sample_tables
-(
-    isom_trak_t         *trak,
-    lsmash_sample_t     *sample,
-    uint32_t            *samples_per_packet,
-    isom_sample_entry_t *sample_entry
-);
-
-int isom_pool_sample
-(
-    isom_sample_pool_t *pool,
-    lsmash_sample_t    *sample,
-    uint32_t            samples_per_packet
-);
-
-int isom_append_sample_by_type
-(
-    void                *track,
-    lsmash_sample_t     *sample,
-    isom_sample_entry_t *sample_entry,
-    int (*func_append_sample)( void *, lsmash_sample_t *, isom_sample_entry_t * )
-);
-
-int isom_calculate_bitrate_description
-(
-    isom_stbl_t *stbl,
-    isom_mdhd_t *mdhd,
-    uint32_t    *bufferSizeDB,
-    uint32_t    *maxBitrate,
-    uint32_t    *avgBitrate,
-    uint32_t     sample_description_index
-);
-
-int isom_is_variable_size
-(
-    isom_stbl_t *stbl
-);
-
-uint32_t isom_get_first_sample_size
-(
-    isom_stbl_t *stbl
-);
-
-
-void isom_update_cache_timestamp
-(
-    isom_cache_t *cache,
-    uint64_t      dts,
-    uint64_t      cts,
-    int32_t       ctd_shift,
-    uint32_t      sample_duration,
-    int           non_output_sample
-);
-
 /* Make CTS from DTS and sample_offset.
  * This function does NOT add the value of composition to decode timeline shift to the result. */
 static inline uint64_t isom_make_cts
@@ -2794,19 +2566,6 @@ static inline lsmash_media_type isom_get_media_type_from_stsd( isom_stsd_t *stsd
     assert( isom_check_media_hdlr_from_stsd( stsd ) );
     return ((isom_mdia_t *)stsd->parent->parent->parent)->hdlr->componentSubtype;
 }
-
-int isom_add_sample_grouping( isom_box_t *parent, isom_grouping_type grouping_type );
-int isom_group_random_access( isom_box_t *parent, isom_cache_t *cache, lsmash_sample_t *sample );
-int isom_group_roll_recovery( isom_box_t *parent, isom_cache_t *cache, lsmash_sample_t *sample );
-
-int isom_update_tkhd_duration( isom_trak_t *trak );
-int isom_update_bitrate_description( isom_mdia_t *mdia );
-int isom_complement_data_reference( isom_minf_t *minf );
-int isom_check_large_offset_requirement( isom_moov_t *moov, uint64_t meta_size );
-void isom_add_preceding_box_size( isom_moov_t *moov, uint64_t preceding_size );
-int isom_establish_movie( lsmash_file_t *file );
-int isom_rap_grouping_established( isom_rap_group_t *group, int num_leading_samples_known, isom_sgpd_t *sgpd, int is_fragment );
-int isom_all_recovery_completed( isom_sbgp_t *sbgp, lsm_list_t *pool );
 
 lsmash_file_t *isom_add_file_abstract( lsmash_root_t *root );
 isom_ftyp_t *isom_add_ftyp( lsmash_file_t *file );
@@ -2945,8 +2704,6 @@ isom_emsg_t *isom_add_emsg( lsmash_file_t *file );
 void isom_remove_extension_box( isom_box_t *ext );
 void isom_remove_sample_description( isom_sample_entry_t *sample );
 void isom_remove_unknown_box( isom_unknown_box_t *unknown_box );
-void lsm_isom_clear_sample_pool( void *opaque_pool );
-void isom_remove_sample_pool( isom_sample_pool_t *pool );
 
 uint64_t isom_update_box_size( void *box );
 

@@ -2,6 +2,7 @@
  * summary.c
  *****************************************************************************
  * Copyright (C) 2010-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Takashi Hirata <silverfilain@gmail.com>
  *
@@ -26,6 +27,8 @@
 #include <string.h>
 
 #include "box.h"
+#include "movie.h"
+#include "track.h"
 
 #include "codecs/mp4a.h"
 #include "codecs/mp4sys.h"
@@ -157,9 +160,9 @@ int lsmash_add_codec_specific_data( lsmash_summary_t *summary, lsmash_codec_spec
 
 uint32_t lsmash_count_summary( lsmash_root_t *root, uint32_t track_ID )
 {
-    if( isom_check_initializer_present( root ) < 0 || track_ID == 0 )
+    if( lsm_movie_check_initializer_present( root ) < 0 || track_ID == 0 )
         return 0;
-    isom_trak_t *trak = isom_get_trak( root->file->initializer, track_ID );
+    isom_trak_t *trak = lsm_track_get_trak( root->file->initializer, track_ID );
     if( LSMASH_IS_NON_EXISTING_BOX( trak )
      || LSMASH_IS_NON_EXISTING_BOX( trak->mdia->mdhd )
      || LSMASH_IS_NON_EXISTING_BOX( trak->mdia->hdlr ) )
@@ -169,9 +172,9 @@ uint32_t lsmash_count_summary( lsmash_root_t *root, uint32_t track_ID )
 
 lsmash_summary_t *lsmash_get_summary( lsmash_root_t *root, uint32_t track_ID, uint32_t description_number )
 {
-    if( isom_check_initializer_present( root ) < 0 || track_ID == 0 || description_number == 0 )
+    if( lsm_movie_check_initializer_present( root ) < 0 || track_ID == 0 || description_number == 0 )
         return NULL;
-    isom_trak_t *trak = isom_get_trak( root->file->initializer, track_ID );
+    isom_trak_t *trak = lsm_track_get_trak( root->file->initializer, track_ID );
     if( LSMASH_IS_NON_EXISTING_BOX( trak->mdia->mdhd )
      || LSMASH_IS_NON_EXISTING_BOX( trak->mdia->hdlr ) )
         return NULL;

@@ -2,6 +2,7 @@
  * write.c
  *****************************************************************************
  * Copyright (C) 2010-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -28,6 +29,7 @@
 
 #include "box.h"
 #include "write.h"
+#include "sample.h"
 
 #include "codecs/mp4a.h"
 #include "codecs/mp4sys.h"

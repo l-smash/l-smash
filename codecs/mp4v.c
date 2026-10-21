@@ -2,6 +2,7 @@
  * mp4v.c
  *****************************************************************************
  * Copyright (C) 2011-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -23,6 +24,7 @@
 #include "common/internal.h" /* must be placed first */
 
 #include "core/box.h"
+#include "core/stbl.h"
 
 #include "mp4a.h"   /* ugly hack for the definition of mp4a_audioProfileLevelIndication */
 #include "mp4sys.h"
@@ -38,7 +40,7 @@ int mp4v_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_d
     uint32_t bufferSizeDB;
     uint32_t maxBitrate;
     uint32_t avgBitrate;
-    int err = isom_calculate_bitrate_description( stbl, mdhd, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index );
+    int err = lsm_stbl_calculate_bitrate_description( stbl, mdhd, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index );
     if( err < 0 )
         return err;
     /* FIXME: avgBitrate is 0 only if VBR in proper. */

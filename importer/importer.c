@@ -2,6 +2,7 @@
  * importer.c
  *****************************************************************************
  * Copyright (C) 2010-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Takashi Hirata <silverfilain@gmail.com>
  * Contributors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
@@ -27,6 +28,8 @@
 
 #define LSMASH_IMPORTER_INTERNAL
 #include "importer.h"
+#include "core/movie.h"
+#include "core/track.h"
 
 /***************************************************************************
     importer classes
@@ -292,7 +295,7 @@ int lsmash_importer_make_fake_movie( importer_t *importer )
 {
     if( !importer || (importer->file->flags & LSMASH_FILE_MODE_BOX) )
         return LSMASH_ERR_FUNCTION_PARAM;
-    if( LSMASH_IS_BOX_ADDITION_FAILURE( isom_movie_create( importer->file ) ) )
+    if( LSMASH_IS_BOX_ADDITION_FAILURE( lsm_movie_create( importer->file ) ) )
         return LSMASH_ERR_NAMELESS;
     return 0;
 }
@@ -301,7 +304,7 @@ int lsmash_importer_make_fake_track( importer_t *importer, lsmash_media_type med
 {
     if( !importer || (importer->file->flags & LSMASH_FILE_MODE_BOX) || track_ID == 0 )
         return LSMASH_ERR_FUNCTION_PARAM;
-    isom_trak_t *trak = isom_track_create( importer->file, media_type );
+    isom_trak_t *trak = lsm_track_create( importer->file, media_type );
     int err;
     if( LSMASH_IS_NON_EXISTING_BOX( trak->tkhd )
      || LSMASH_IS_NON_EXISTING_BOX( trak->mdia->minf )
@@ -310,7 +313,7 @@ int lsmash_importer_make_fake_track( importer_t *importer, lsmash_media_type med
         err = LSMASH_ERR_NAMELESS;
         goto fail;
     }
-    if( (err = isom_complement_data_reference( trak->mdia->minf )) < 0 )
+    if( (err = lsm_track_complement_data_reference( trak->mdia->minf )) < 0 )
         goto fail;
     *track_ID = trak->tkhd->track_ID;
     return 0;

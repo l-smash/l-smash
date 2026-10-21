@@ -2,6 +2,7 @@
  * timeline.c
  *****************************************************************************
  * Copyright (C) 2011-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -28,6 +29,9 @@
 
 #include "box.h"
 #include "timeline.h"
+#include "movie.h"
+#include "track.h"
+#include "stbl.h"
 
 #include "codecs/mp4a.h"
 #include "codecs/mp4sys.h"
@@ -86,7 +90,7 @@ struct isom_timeline_tag
 
 isom_timeline_t *isom_get_timeline( lsmash_root_t *root, uint32_t track_ID )
 {
-    if( isom_check_initializer_present( root ) < 0
+    if( lsm_movie_check_initializer_present( root ) < 0
      || track_ID == 0
      || !root->file->timeline )
         return NULL;
@@ -741,14 +745,14 @@ static int isom_get_random_access_point_grouping_info
 
 int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
 {
-    if( isom_check_initializer_present( root ) < 0 )
+    if( lsm_movie_check_initializer_present( root ) < 0 )
         return LSMASH_ERR_FUNCTION_PARAM;
     lsmash_file_t *file = root->file;
     if( LSMASH_IS_NON_EXISTING_BOX( file->moov->mvhd )
      ||  file->moov->mvhd->timescale == 0 )
         return LSMASH_ERR_INVALID_DATA;
     /* Get track by track_ID. */
-    isom_trak_t *trak = isom_get_trak( file, track_ID );
+    isom_trak_t *trak = lsm_track_get_trak( file, track_ID );
     if( LSMASH_IS_NON_EXISTING_BOX( trak->tkhd )
      || LSMASH_IS_NON_EXISTING_BOX( trak->mdia->mdhd )
      || LSMASH_IS_NON_EXISTING_BOX( trak->mdia->minf->stbl->stco )
@@ -786,10 +790,10 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
     isom_stsz_t *stsz = stbl->stsz;
     isom_stz2_t *stz2 = stbl->stz2;
     isom_stco_t *stco = stbl->stco;
-    isom_sgpd_t *sgpd_rap  = isom_get_sample_group_description( stbl, ISOM_GROUP_TYPE_RAP );
-    isom_sbgp_t *sbgp_rap  = isom_get_sample_to_group         ( stbl, ISOM_GROUP_TYPE_RAP );
-    isom_sgpd_t *sgpd_roll = isom_get_roll_recovery_sample_group_description( &stbl->sgpd_list );
-    isom_sbgp_t *sbgp_roll = isom_get_roll_recovery_sample_to_group         ( &stbl->sbgp_list );
+    isom_sgpd_t *sgpd_rap  = lsm_stbl_get_sample_group_description( stbl, ISOM_GROUP_TYPE_RAP );
+    isom_sbgp_t *sbgp_rap  = lsm_stbl_get_sample_to_group         ( stbl, ISOM_GROUP_TYPE_RAP );
+    isom_sgpd_t *sgpd_roll = lsm_stbl_get_roll_recovery_sample_group_description( &stbl->sgpd_list );
+    isom_sbgp_t *sbgp_roll = lsm_stbl_get_roll_recovery_sample_to_group         ( &stbl->sbgp_list );
     lsm_list_cursor_t elst_cur;
     lsm_list_cursor_t stts_cur;
     lsm_list_cursor_t ctts_cur;
@@ -1110,7 +1114,7 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
     uint32_t sample_count = packet_number - 1;
     if( movie_fragments_present )
     {
-        isom_tfra_t                     *tfra     = isom_get_tfra( file->mfra, track_ID );
+        isom_tfra_t                     *tfra     = lsm_track_get_tfra( file->mfra, track_ID );
         uint32_t                         tfra_idx = 0;
         isom_tfra_location_time_entry_t *rap      = (isom_tfra_location_time_entry_t *)lsm_list_at( tfra->list, tfra_idx );
         chunk.data_offset = 0;
@@ -1128,7 +1132,7 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
             {
                 isom_traf_t *traf = (isom_traf_t *)traf_entry->data;
                 isom_tfhd_t *tfhd = traf->tfhd;
-                isom_trex_t *trex = isom_get_trex( file->moov->mvex, tfhd->track_ID );
+                isom_trex_t *trex = lsm_track_get_trex( file->moov->mvex, tfhd->track_ID );
                 if( LSMASH_IS_NON_EXISTING_BOX( trex ) )
                     goto fail;
                 /* Ignore ISOM_TF_FLAGS_DURATION_IS_EMPTY flag even if set. */
@@ -1148,11 +1152,11 @@ int isom_timeline_construct( lsmash_root_t *root, uint32_t track_ID )
                 /* sample grouping */
                 isom_sgpd_t *sgpd_frag_rap;
                 isom_sgpd_t *sgpd_frag_roll;
-                sgpd_frag_rap   = isom_get_fragment_sample_group_description( traf, ISOM_GROUP_TYPE_RAP );
-                sbgp_rap        = isom_get_fragment_sample_to_group         ( traf, ISOM_GROUP_TYPE_RAP );
+                sgpd_frag_rap   = lsm_stbl_get_fragment_sample_group_description( traf, ISOM_GROUP_TYPE_RAP );
+                sbgp_rap        = lsm_stbl_get_fragment_sample_to_group         ( traf, ISOM_GROUP_TYPE_RAP );
                 lsm_list_cursor_init( &sbgp_rap_cur, sbgp_rap->list );
-                sgpd_frag_roll  = isom_get_roll_recovery_sample_group_description( &traf->sgpd_list );
-                sbgp_roll       = isom_get_roll_recovery_sample_to_group         ( &traf->sbgp_list );
+                sgpd_frag_roll  = lsm_stbl_get_roll_recovery_sample_group_description( &traf->sgpd_list );
+                sbgp_roll       = lsm_stbl_get_roll_recovery_sample_to_group         ( &traf->sbgp_list );
                 lsm_list_cursor_init( &sbgp_roll_cur, sbgp_roll->list );
                 int need_data_offset_only = (tfhd->track_ID != track_ID);
                 /* Track runs */
@@ -1753,11 +1757,11 @@ uint32_t isom_timelime_count_explicit_timeline_map
 
 int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_root_t *src, uint32_t src_track_ID )
 {
-    if( isom_check_initializer_present( dst ) < 0
-     || isom_check_initializer_present( src ) < 0 )
+    if( lsm_movie_check_initializer_present( dst ) < 0
+     || lsm_movie_check_initializer_present( src ) < 0 )
         return LSMASH_ERR_FUNCTION_PARAM;
     lsmash_file_t *dst_file = dst->file->initializer;
-    isom_trak_t   *dst_trak = isom_get_trak( dst_file, dst_track_ID );
+    isom_trak_t   *dst_trak = lsm_track_get_trak( dst_file, dst_track_ID );
     if( LSMASH_IS_NON_EXISTING_BOX( dst_file->moov->mvhd )
      || LSMASH_IS_NON_EXISTING_BOX( dst_trak->mdia->mdhd )
      || LSMASH_IS_NON_EXISTING_BOX( dst_trak->mdia->minf->stbl )
@@ -1774,7 +1778,7 @@ int lsmash_copy_timeline_map( lsmash_root_t *dst, uint32_t dst_track_ID, lsmash_
                                  * Therefore, call this function as later as possible. */
     lsm_list_t    *src_edit_list = NULL;
     lsmash_file_t *src_file      = src->file->initializer;
-    isom_trak_t   *src_trak      = isom_get_trak( src_file, src_track_ID );
+    isom_trak_t   *src_trak      = lsm_track_get_trak( src_file, src_track_ID );
     int src_fragmented = !!(src_file->flags & LSMASH_FILE_MODE_FRAGMENTED);
     if( !src_trak->edts->elst->list
      || src_fragmented )

@@ -2,6 +2,7 @@
  * description.c
  *****************************************************************************
  * Copyright (C) 2012-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -26,6 +27,7 @@
 #include <string.h>
 
 #include "core/box.h"
+#include "core/stbl.h"
 
 #include "a52.h"
 #include "mp4a.h"
@@ -4197,7 +4199,7 @@ int hint_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_d
     uint32_t bufferSizeDB;
     uint32_t maxBitrate = 0;
     uint32_t avgBitrate = 0;
-    int err = isom_calculate_bitrate_description( stbl, mdhd, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index );
+    int err = lsm_stbl_calculate_bitrate_description( stbl, mdhd, &bufferSizeDB, &maxBitrate, &avgBitrate, sample_description_index );
     isom_hmhd_t *hmhd = ((isom_mdia_t*)(mdhd->parent))->minf->hmhd;
     hmhd->maxbitrate = maxBitrate;
     hmhd->avgbitrate = avgBitrate;
