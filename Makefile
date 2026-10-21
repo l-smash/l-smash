@@ -78,7 +78,7 @@ ifneq ($(SLIB_CMD),)
 	install -m 644 lsmash.lib $(DESTDIR)$(bindir)
 endif
 else
-	install -m 644 $(SHAREDLIB) $(DESTDIR)$(libdir)
+	install -m 755 $(SHAREDLIB) $(DESTDIR)$(libdir)
 ifeq ($(SHAREDLIB), liblsmash.so.$(MAJVER))
 	ln -sf $(SHAREDLIB) $(DESTDIR)$(libdir)/liblsmash.so
 endif
