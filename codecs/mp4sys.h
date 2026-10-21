@@ -21,9 +21,6 @@
 
 /* This file is available under an ISC license. */
 
-#ifndef MP4SYS_H
-#define MP4SYS_H
-
 /***************************************************************************
     MPEG-4 Systems
 ***************************************************************************/
@@ -187,5 +184,3 @@ int lsm_mp4sys_setup_summary_from_DecoderSpecificInfo( lsmash_audio_summary_t *s
 mp4sys_ES_Descriptor_t *lsm_mp4sys_setup_ES_Descriptor( mp4sys_ES_Descriptor_params_t *params );
 
 #endif /* #ifndef MP4SYS_INTERNAL */
-
-#endif /* #ifndef MP4SYS_H */

@@ -22,9 +22,6 @@
 
 /* This file is available under an ISC license. */
 
-#ifndef LSMASH_STBL_H
-#define LSMASH_STBL_H
-
 struct isom_rap_group_tag
 {
     isom_group_assignment_entry_t *assignment;          /* the address corresponding to the entry in Sample to Group Box */
@@ -117,5 +114,3 @@ int lsm_stbl_update_sample_tables
     uint32_t            *samples_per_packet,
     isom_sample_entry_t *sample_entry
 );
-
-#endif

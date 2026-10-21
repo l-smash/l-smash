@@ -21,9 +21,6 @@
 
 /* This file is available under an ISC license. */
 
-#ifndef OSDEP_H
-#define OSDEP_H
-
 #define _FILE_OFFSET_BITS 64
 #define _LARGEFILE_SOURCE
 
@@ -56,6 +53,4 @@
 #  include <wchar.h>
    int lsmash_string_to_wchar( int cp, const char *from, wchar_t **to );
    int lsmash_string_from_wchar( int cp, const wchar_t *from, char **to );
-#endif
-
 #endif

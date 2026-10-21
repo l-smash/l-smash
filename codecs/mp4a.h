@@ -20,9 +20,6 @@
 
 /* This file is available under an ISC license. */
 
-#ifndef MP4A_H
-#define MP4A_H
-
 /***************************************************************************
     MPEG-4 Systems for MPEG-4 Audio
 ***************************************************************************/
@@ -130,7 +127,5 @@ mp4a_audioProfileLevelIndication lsm_mp4a_max_audioProfileLevelIndication(
     mp4a_audioProfileLevelIndication a,
     mp4a_audioProfileLevelIndication b
 );
-
-#endif
 
 #endif

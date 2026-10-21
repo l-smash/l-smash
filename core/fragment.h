@@ -21,9 +21,6 @@
 
 /* This file is available under an ISC license. */
 
-#ifndef LSMASH_FRAGMENT_H
-#define LSMASH_FRAGMENT_H
-
 int lsm_fragment_finish_final_movie
 (
     lsmash_file_t        *file,
@@ -56,5 +53,3 @@ int lsm_fragment_append_sample
     lsmash_sample_t     *sample,
     isom_sample_entry_t *sample_entry
 );
-
-#endif

@@ -20,9 +20,6 @@
 
 /* This file is available under an ISC license. */
 
-#ifndef CLI_H
-#define CLI_H
-
 #include "config.h"
 #include "common/osdep.h"
 #include "lsmash.h"
@@ -52,5 +49,3 @@ int dry_close_file
 (
     lsmash_file_parameters_t *param
 );
-
-#endif

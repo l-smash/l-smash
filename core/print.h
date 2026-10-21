@@ -21,11 +21,6 @@
 
 /* This file is available under an ISC license. */
 
-#ifndef LSMASH_PRINT_H
-#define LSMASH_PRINT_H
-
 int lsm_print_add_func( lsmash_file_t *file, void *box, int level );
 void lsm_print_destroy_list( lsmash_file_t *file );
 lsmash_entry_list_t *lsm_print_create_list( void );
-
-#endif /* LSMASH_PRINT_H */

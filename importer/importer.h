@@ -21,9 +21,6 @@
 
 /* This file is available under an ISC license. */
 
-#ifndef LSMASH_IMPORTER_H
-#define LSMASH_IMPORTER_H
-
 /***************************************************************************
     importer
 ***************************************************************************/
@@ -164,5 +161,3 @@ lsmash_summary_t *lsmash_duplicate_summary
 );
 
 #endif /* #ifdef LSMASH_IMPORTER_INTERNAL */
-
-#endif /* #ifndef LSMASH_IMPORTER_H */

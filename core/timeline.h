@@ -21,9 +21,6 @@
 
 /* This file is available under an ISC license. */
 
-#ifndef LSMASH_TIMELINE_H
-#define LSMASH_TIMELINE_H
-
 typedef struct isom_timeline_tag isom_timeline_t;
 
 typedef struct
@@ -135,5 +132,3 @@ uint32_t lsm_timeline_count_explicit_timeline_map
     lsmash_root_t *root,
     uint32_t       track_ID
 );
-
-#endif /* LSMASH_TIMELINE_H */

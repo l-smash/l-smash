@@ -21,10 +21,5 @@
 
 /* This file is available under an ISC license. */
 
-#ifndef LSMASH_READ_H
-#define LSMASH_READ_H
-
 int lsm_read_file( lsmash_file_t *file );
 int lsm_read_box( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, uint64_t parent_pos, int level );
-
-#endif /* LSMASH_READ_H */

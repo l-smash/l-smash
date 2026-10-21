@@ -21,9 +21,6 @@
 
 /* This file is available under an ISC license. */
 
-#ifndef LSMASH_BOX_H
-#define LSMASH_BOX_H
-
 /* For generating creation_time and modification_time.
  * According to ISO/IEC-14496-5-2001, the difference between Unix time and Mac OS time is 2082758400.
  * However this is wrong and 2082844800 is correct. */
@@ -2724,5 +2721,3 @@ void lsm_box_remove_all_extension_boxes( lsmash_entry_list_t *extensions );
 isom_box_t *lsm_box_get_extension_box( lsmash_entry_list_t *extensions, lsmash_box_type_t box_type );
 void *lsm_box_get_extension_box_format( lsmash_entry_list_t *extensions, lsmash_box_type_t box_type );
 void lsm_box_remove_by_itself( void *opaque_box );
-
-#endif

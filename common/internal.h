@@ -20,9 +20,6 @@
 
 /* This file is available under an ISC license. */
 
-#ifndef INTERNAL_H
-#define INTERNAL_H
-
 #include "osdep.h" /* must be placed before stdio.h */
 #include <stdio.h>
 #include <assert.h>
@@ -36,5 +33,3 @@
 #include "bits.h"
 #include "multibuf.h"
 #include "list.h"
-
-#endif

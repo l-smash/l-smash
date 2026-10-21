@@ -20,9 +20,6 @@
 
 /* This file is available under an ISC license. */
 
-#ifndef LSMASH_ALLOC_H
-#define LSMASH_ALLOC_H
-
 #include <stddef.h>
 
 #ifdef LSMASH_DEBUG_ALLOC
@@ -49,5 +46,3 @@ int    lsm_alloc_verify_no_leaks( void );
 #endif /* !LSMASH_ALLOC_IMPLEMENTATION */
 
 #endif /* LSMASH_DEBUG_ALLOC */
-
-#endif /* LSMASH_ALLOC_H */

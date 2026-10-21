@@ -21,9 +21,6 @@
 
 /* This file is available under an ISC license. */
 
-#ifndef LSMASH_FILE_H
-#define LSMASH_FILE_H
-
 int lsm_file_check_compatibility
 (
     lsmash_file_t *file
@@ -45,5 +42,3 @@ int lsm_file_rearrange_data
     uint64_t              write_pos,
     uint64_t              file_size
 );
-
-#endif

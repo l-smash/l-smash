@@ -22,9 +22,6 @@
 
 /* This file is available under an ISC license. */
 
-#ifndef LSMASH_TRACK_H
-#define LSMASH_TRACK_H
-
 isom_trak_t *lsm_track_get_trak( lsmash_file_t *file, uint32_t track_ID );
 isom_trex_t *lsm_track_get_trex( isom_mvex_t *mvex, uint32_t track_ID );
 isom_traf_t *lsm_track_get_traf( isom_moof_t *moof, uint32_t track_ID );
@@ -41,5 +38,3 @@ lsmash_file_t *lsm_track_get_written_media_file
     isom_trak_t *trak,
     uint32_t     sample_description_index
 );
-
-#endif

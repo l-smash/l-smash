@@ -20,9 +20,6 @@
 
 /* This file is available under an ISC license. */
 
-#ifndef LSMASH_UTIL_H
-#define LSMASH_UTIL_H
-
 #define debug_if(x) if(x)
 
 #define LSMASH_MAX( a, b ) ((a) > (b) ? (a) : (b))
@@ -189,5 +186,3 @@ void lsmash_reduce_fraction_su
     int64_t  *a,
     uint64_t *b
 );
-
-#endif

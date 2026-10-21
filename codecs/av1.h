@@ -22,9 +22,6 @@
 
 /* This file is available under an ISC license. */
 
-#ifndef LSMASH_AV1_H
-#define LSMASH_AV1_H
-
 #define AV1_CODEC_CONFIGURATION_RECORD_MARKER (1)
 #define AV1_CODEC_CONFIGURATION_RECORD_VERSION_1 (1)
 
@@ -323,5 +320,3 @@ int  lsm_av1_parse_temporal_unit
 int lsm_av1_construct_specific_parameters( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src );
 int lsm_av1_copy_codec_specific( lsmash_codec_specific_t *dst, lsmash_codec_specific_t *src );
 int lsm_av1_print_codec_specific( FILE *fp, lsmash_file_t *file, isom_box_t *box, int level );
-
-#endif /* LSMASH_AV1_H */

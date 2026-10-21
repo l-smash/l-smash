@@ -22,9 +22,6 @@
 
 /* This file is available under an ISC license. */
 
-#ifndef LSMASH_SAMPLE_H
-#define LSMASH_SAMPLE_H
-
 struct isom_sample_pool_tag
 {
     uint64_t alloc;             /* total buffer size for the pool */
@@ -59,5 +56,3 @@ int lsm_sample_append_by_type
     isom_sample_entry_t *sample_entry,
     int (*func_append_sample)( void *, lsmash_sample_t *, isom_sample_entry_t * )
 );
-
-#endif

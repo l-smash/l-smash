@@ -21,10 +21,5 @@
 
 /* This file is available under an ISC license. */
 
-#ifndef LSMASH_WRITE_H
-#define LSMASH_WRITE_H
-
 int lsm_write_box( lsmash_bs_t *bs, isom_box_t *box );
 void lsm_write_set_box_writer( isom_box_t *box );
-
-#endif
