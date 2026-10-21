@@ -53,7 +53,11 @@ include config.mak2
 %.o: %.c .depend config.h
 	$(CC) -c $(CFLAGS) -o $@ $<
 
-%.test.o: %.c %.o .depend config.h
+# Test objects are built independently of the release objects so that every library module
+# and tests/test_main.c are always compiled with -DLSMASH_DEBUG_ALLOC. They are linked directly
+# (not via liblsmash.a), so the release liblsmash.a and CLI tools are never affected.
+TEST_HEADERS = $(wildcard $(SRCDIR)/*.h $(SRCDIR)/*/*.h)
+%.test.o: %.c $(TEST_HEADERS) .depend config.h
 	$(CC) -c $(CFLAGS) -DLSMASH_DEBUG_ALLOC -o $@ $<
 
 install: all install-lib
