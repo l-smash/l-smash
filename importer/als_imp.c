@@ -2,6 +2,7 @@
  * als_imp.c
  *****************************************************************************
  * Copyright (C) 2011-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -226,10 +227,26 @@ static int als_imp_get_accessunit( importer_t *importer, uint32_t track_number, 
     als_specific_config_t *alssc = &als_imp->alssc;
     if( alssc->number_of_ra_units == 0 )
     {
+        /* The whole remainder of the stream is the only access unit and is read from the buffer.
+         * The Media Timeline may have moved the stream position and emptied the buffer, so fill it again. */
+        while( lsmash_bs_get_remaining_buffer_size( bs ) < alssc->access_unit_size && !bs->eof )
+        {
+            if( lsmash_bs_read( bs, bs->buffer.max_size ) < 0 )
+            {
+                importer->status = IMPORTER_ERROR;
+                return LSMASH_ERR_NAMELESS;
+            }
+        }
+        if( lsmash_bs_get_remaining_buffer_size( bs ) < alssc->access_unit_size )
+        {
+            importer->status = IMPORTER_ERROR;
+            return LSMASH_ERR_INVALID_DATA;
+        }
         lsmash_sample_t *sample = lsmash_create_sample( alssc->access_unit_size );
         if( !sample )
             return LSMASH_ERR_MEMORY_ALLOC;
         *p_sample = sample;
+        sample->pos = lsmash_bs_get_stream_pos( bs );
         memcpy( sample->data, lsmash_bs_get_buffer_data( bs ), alssc->access_unit_size );
         sample->length        = alssc->access_unit_size;
         sample->cts           = 0;
@@ -248,6 +265,8 @@ static int als_imp_get_accessunit( importer_t *importer, uint32_t track_number, 
     if( !sample )
         return LSMASH_ERR_MEMORY_ALLOC;
     *p_sample = sample;
+    /* The size field of ra_flag == 1 has been consumed already, so the position is that of the access unit itself. */
+    sample->pos = lsmash_bs_get_stream_pos( bs );
     if( lsmash_bs_get_bytes_ex( bs, au_length, sample->data ) != au_length )
     {
         lsmash_log( importer, LSMASH_LOG_WARNING, "failed to read an access unit.\n" );
@@ -345,14 +364,23 @@ static int als_imp_probe( importer_t *importer )
     }
     /* importer status */
     als_imp->samples_in_frame = summary->samples_in_frame;
+    uint32_t track_ID;
+    if( (err = lsm_importer_setup_fake_track( importer, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK, summary->frequency,
+                                              (lsmash_summary_t *)summary, &track_ID )) < 0 )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        goto fail;
+    }
     if( lsmash_list_add_entry( importer->summaries, summary ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        lsm_importer_break_fake_movie( importer );
         err = LSMASH_ERR_MEMORY_ALLOC;
         goto fail;
     }
     importer->info   = als_imp;
     importer->status = IMPORTER_OK;
+    lsm_importer_mark_resume_pos( importer );
     return 0;
 fail:
     als_imp_remove( als_imp );
@@ -379,5 +407,6 @@ const importer_functions mp4a_als_importer =
     als_imp_probe,
     als_imp_get_accessunit,
     als_imp_get_last_delta,
-    als_imp_cleanup
+    als_imp_cleanup,
+    lsm_importer_construct_timeline_by_walk
 };

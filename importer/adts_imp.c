@@ -2,6 +2,7 @@
  * adts_imp.c
  *****************************************************************************
  * Copyright (C) 2010-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Takashi Hirata <silverfilain@gmail.com>
  * Contributors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
@@ -336,6 +337,8 @@ static int adts_imp_get_accessunit
     if( !sample )
         return LSMASH_ERR_MEMORY_ALLOC;
     *p_sample = sample;
+    /* The payload of a raw_data_block() is stored as it is in the stream, so the Media Timeline can point to it. */
+    sample->pos = lsmash_bs_get_stream_pos( bs );
     if( lsmash_bs_get_bytes_ex( bs, raw_data_block_size, sample->data ) != raw_data_block_size )
     {
         importer->status = IMPORTER_ERROR;
@@ -481,9 +484,17 @@ static int adts_imp_probe
         goto fail;
     }
     /* importer status */
+    uint32_t track_ID;
+    if( (err = lsm_importer_setup_fake_track( importer, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK, summary->frequency,
+                                              (lsmash_summary_t *)summary, &track_ID )) < 0 )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        goto fail;
+    }
     if( lsmash_list_add_entry( importer->summaries, summary ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        lsm_importer_break_fake_movie( importer );
         err = LSMASH_ERR_MEMORY_ALLOC;
         goto fail;
     }
@@ -493,6 +504,7 @@ static int adts_imp_probe
     adts_imp->samples_in_frame   = summary->samples_in_frame;
     importer->info   = adts_imp;
     importer->status = IMPORTER_OK;
+    lsm_importer_mark_resume_pos( importer );
     return 0;
 fail:
     adts_imp_remove( adts_imp );
@@ -520,5 +532,6 @@ const importer_functions mp4sys_adts_importer =
     adts_imp_probe,
     adts_imp_get_accessunit,
     adts_imp_get_last_delta,
-    adts_imp_cleanup
+    adts_imp_cleanup,
+    lsm_importer_construct_timeline_by_walk
 };

@@ -2,6 +2,7 @@
  * amr_imp.c
  *****************************************************************************
  * Copyright (C) 2010-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Takashi Hirata <silverfilain@gmail.com>
  * Contributors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
@@ -119,6 +120,7 @@ static int amr_imp_get_accessunit
     if( !sample )
         return LSMASH_ERR_MEMORY_ALLOC;
     *p_sample = sample;
+    sample->pos = lsmash_bs_get_stream_pos( bs );
     if( lsmash_bs_get_bytes_ex( bs, read_size, sample->data ) != read_size )
     {
         lsmash_log( importer, LSMASH_LOG_WARNING, "the stream is truncated at the end.\n" );
@@ -221,8 +223,7 @@ static lsmash_audio_summary_t *amr_imp_create_summary
     summary->sample_size      = 16;
     summary->samples_in_frame = (160 << wb);
     summary->sbr_mode         = MP4A_AAC_SBR_NOT_SPECIFIED;     /* no effect */
-    if( amr_imp_create_damr( summary, wb ) < 0
-     || lsmash_list_add_entry( importer->summaries, summary ) < 0 )
+    if( amr_imp_create_damr( summary, wb ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
         return NULL;
@@ -252,11 +253,26 @@ static int amr_imp_probe
         err = LSMASH_ERR_NAMELESS;
         goto fail;
     }
+    uint32_t track_ID;
+    if( (err = lsm_importer_setup_fake_track( importer, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK, summary->frequency,
+                                              (lsmash_summary_t *)summary, &track_ID )) < 0 )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        goto fail;
+    }
+    if( lsmash_list_add_entry( importer->summaries, summary ) < 0 )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        lsm_importer_break_fake_movie( importer );
+        err = LSMASH_ERR_MEMORY_ALLOC;
+        goto fail;
+    }
     amr_imp->wb               = wb;
     amr_imp->samples_in_frame = summary->samples_in_frame;
     amr_imp->au_number        = 0;
     importer->info   = amr_imp;
     importer->status = IMPORTER_OK;
+    lsm_importer_mark_resume_pos( importer );
     return 0;
 fail:
     amr_imp_remove( amr_imp );
@@ -284,5 +300,6 @@ const importer_functions amr_importer =
     amr_imp_probe,
     amr_imp_get_accessunit,
     amr_imp_get_last_delta,
-    amr_imp_cleanup
+    amr_imp_cleanup,
+    lsm_importer_construct_timeline_by_walk
 };

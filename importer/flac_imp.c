@@ -145,7 +145,6 @@ static int flac_imp_probe( importer_t *imp )
 
     lsmash_bs_t *bs = imp->bs;
     int err;
-    int fake_isom_compatible = 0;   /* whether this probe has marked the file as ISOBMFF-compatible */
 
     /* Read and check fLaC magic */
     if( lsmash_bs_show_byte( bs, 0 ) != 'f'
@@ -344,8 +343,6 @@ static int flac_imp_probe( importer_t *imp )
      * through lsmash_read_file() and the Media Timeline as if it were an ISOBMFF file.
      * fLaC is defined by ISOBMFF only, so the fake file is not a QuickTime file but an ISOBMFF file. */
     uint32_t track_ID;
-    imp->file->isom_compatible = 1;
-    fake_isom_compatible       = 1;
     if( (err = lsm_importer_setup_fake_track( imp, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK, flac_imp->sample_rate,
                                               (lsmash_summary_t *)summary, &track_ID )) < 0 )
     {
@@ -367,8 +364,6 @@ static int flac_imp_probe( importer_t *imp )
     return 0;
 
 fail:
-    if( fake_isom_compatible )
-        imp->file->isom_compatible = 0;
     flac_imp_remove( flac_imp );
     return err;
 }

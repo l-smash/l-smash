@@ -2,6 +2,7 @@
  * a52_imp.c
  *****************************************************************************
  * Copyright (C) 2011-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -193,6 +194,7 @@ static int a52_imp_ac3_get_accessunit( importer_t *importer, uint32_t track_numb
     *p_sample = sample;
     memcpy( sample->data, ac3_imp->buffer, frame_size );
     sample->length                 = frame_size;
+    sample->pos                    = ac3_imp->next_frame_pos;
     sample->dts                    = ac3_imp->au_number++ * summary->samples_in_frame;
     sample->cts                    = sample->dts;
     sample->prop.ra_flags          = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
@@ -262,15 +264,24 @@ static int a52_imp_ac3_probe( importer_t *importer )
         err = LSMASH_ERR_NAMELESS;
         goto fail;
     }
+    uint32_t track_ID;
+    if( (err = lsm_importer_setup_fake_track( importer, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK, summary->frequency,
+                                              (lsmash_summary_t *)summary, &track_ID )) < 0 )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        goto fail;
+    }
     if( lsmash_list_add_entry( importer->summaries, summary ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        lsm_importer_break_fake_movie( importer );
         err = LSMASH_ERR_MEMORY_ALLOC;
         goto fail;
     }
     ac3_imp->au_number = 0;
     importer->info   = ac3_imp;
     importer->status = IMPORTER_OK;
+    lsm_importer_mark_resume_pos( importer );
     return 0;
 fail:
     a52_imp_remove_ac3( ac3_imp );
@@ -294,7 +305,8 @@ const importer_functions ac3_importer =
     a52_imp_ac3_probe,
     a52_imp_ac3_get_accessunit,
     a52_imp_ac3_get_last_delta,
-    a52_imp_ac3_cleanup
+    a52_imp_ac3_cleanup,
+    lsm_importer_construct_timeline_by_walk
 };
 
 /***************************************************************************
@@ -314,6 +326,8 @@ typedef struct
     lsmash_multiple_buffers_t *au_buffers;
     uint8_t *au;
     uint8_t *incomplete_au;
+    uint64_t au_pos;                /* file offset of the first byte of au */
+    uint64_t incomplete_au_pos;     /* file offset of the first byte of incomplete_au */
     uint32_t au_length;
     uint32_t incomplete_au_length;
     uint32_t au_number;
@@ -465,6 +479,7 @@ static int a52_imp_eac3_get_next_accessunit_internal( importer_t *importer )
         {
             memcpy( eac3_imp->au, eac3_imp->incomplete_au, eac3_imp->incomplete_au_length );
             eac3_imp->au_length             = eac3_imp->incomplete_au_length;
+            eac3_imp->au_pos                = eac3_imp->incomplete_au_pos;
             eac3_imp->incomplete_au_length  = 0;
             eac3_imp->syncframe_count_in_au = info->syncframe_count;
             info->syncframe_count = 0;
@@ -482,7 +497,9 @@ static int a52_imp_eac3_get_next_accessunit_internal( importer_t *importer )
             eac3_imp->au            = lsmash_withdraw_buffer( eac3_imp->au_buffers, 1 );
             eac3_imp->incomplete_au = lsmash_withdraw_buffer( eac3_imp->au_buffers, 2 );
         }
-        /* Append syncframe data. */
+        /* Append syncframe data. The syncframes of an access unit are contiguous in the stream. */
+        if( eac3_imp->incomplete_au_length == 0 )
+            eac3_imp->incomplete_au_pos = eac3_imp->next_frame_pos;
         memcpy( eac3_imp->incomplete_au + eac3_imp->incomplete_au_length, eac3_imp->buffer, info->frame_size );
         eac3_imp->incomplete_au_length += info->frame_size;
         ++ info->syncframe_count;
@@ -525,6 +542,7 @@ static int a52_imp_eac3_get_accessunit( importer_t *importer, uint32_t track_num
     *p_sample = sample;
     memcpy( sample->data, eac3_imp->au, eac3_imp->au_length );
     sample->length                 = eac3_imp->au_length;
+    sample->pos                    = eac3_imp->au_pos;
     sample->dts                    = eac3_imp->au_number++ * summary->samples_in_frame;
     sample->cts                    = sample->dts;
     sample->prop.ra_flags          = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
@@ -621,12 +639,21 @@ static int a52_imp_eac3_probe( importer_t *importer )
     if( importer->status != IMPORTER_EOF )
         importer->status = IMPORTER_OK;
     eac3_imp->au_number = 0;
+    uint32_t track_ID;
+    if( (err = lsm_importer_setup_fake_track( importer, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK, summary->frequency,
+                                              (lsmash_summary_t *)summary, &track_ID )) < 0 )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        goto fail;
+    }
     if( lsmash_list_add_entry( importer->summaries, summary ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        lsm_importer_break_fake_movie( importer );
         err = LSMASH_ERR_MEMORY_ALLOC;
         goto fail;
     }
+    lsm_importer_mark_resume_pos( importer );
     return 0;
 fail:
     a52_imp_remove_eac3( eac3_imp );
@@ -651,5 +678,6 @@ const importer_functions eac3_importer =
     a52_imp_eac3_probe,
     a52_imp_eac3_get_accessunit,
     a52_imp_eac3_get_last_delta,
-    a52_imp_eac3_cleanup
+    a52_imp_eac3_cleanup,
+    lsm_importer_construct_timeline_by_walk
 };

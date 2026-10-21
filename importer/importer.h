@@ -74,6 +74,12 @@ struct importer_tag
                                              * framework and ISOBMFF demuxer framework. The importer shall be hidden inside
                                              * the file handling abstraction layer. That'll achieve integration of the muxer
                                              * and the remuxer CLIs. */
+    int                      is_walker;     /* If set to 1, this importer is a private clone that only walks the bitstream to build a
+                                             * Media Timeline. It shares the file and the byte stream with the original importer but
+                                             * never touches the fake boxes. */
+    int                      resume_enabled;/* If set to 1, lsmash_importer_get_access_unit() seeks back to resume_pos before reading. */
+    uint64_t                 resume_pos;    /* file offset where the sequential reader continues. The Media Timeline moves the shared
+                                             * byte stream, so the position has to be remembered here. */
 };
 
 int lsm_importer_make_fake_movie
@@ -100,6 +106,23 @@ int lsm_importer_setup_fake_track
     uint32_t          timescale,
     lsmash_summary_t *summary,
     uint32_t         *track_ID
+);
+
+/* Remember the current stream position as where the sequential reader continues and make the importer seek back there
+ * before every get_accessunit. Call this at the very end of a probe that exposes a fake track. */
+void lsm_importer_mark_resume_pos
+(
+    importer_t *importer
+);
+
+/* Build the Media Timeline of the only track by walking every access unit with a private clone of the importer.
+ * The clone re-probes the stream from its head and runs the own get_accessunit of the importer, so that the sample
+ * boundaries, the timestamps, the properties and the sample entries of the Timeline are by construction identical to
+ * what the muxer gets. The original importer is never touched except for the shared stream position, which is restored. */
+int lsm_importer_construct_timeline_by_walk
+(
+    importer_t *importer,
+    uint32_t    track_number
 );
 
 #else

@@ -195,6 +195,15 @@ static void mp4a_remove_MPEG_1_2_SpecificConfig( mp4a_MPEG_1_2_SpecificConfig_t*
     lsmash_free( mpeg_1_2_sc );
 }
 
+static void mp4a_remove_ALSSpecificConfig( mp4a_ALSSpecificConfig_t *alssc )
+{
+    if( !alssc )
+        return;
+    /* The raw ALSSpecificConfig kept to build the AudioSpecificConfig is owned by this structure. */
+    lsmash_free( alssc->data );
+    lsmash_free( alssc );
+}
+
 void lsm_mp4a_remove_AudioSpecificConfig( mp4a_AudioSpecificConfig_t* asc )
 {
     if( !asc )
@@ -219,6 +228,9 @@ void lsm_mp4a_remove_AudioSpecificConfig( mp4a_AudioSpecificConfig_t* asc )
     case MP4A_AUDIO_OBJECT_TYPE_Layer_2:
     case MP4A_AUDIO_OBJECT_TYPE_Layer_3:
         mp4a_remove_MPEG_1_2_SpecificConfig( (mp4a_MPEG_1_2_SpecificConfig_t*)asc->deepAudioSpecificConfig );
+        break;
+    case MP4A_AUDIO_OBJECT_TYPE_ALS:
+        mp4a_remove_ALSSpecificConfig( (mp4a_ALSSpecificConfig_t *)asc->deepAudioSpecificConfig );
         break;
     default:
         lsmash_free( asc->deepAudioSpecificConfig );

@@ -2756,9 +2756,11 @@ static int description_setup_audio_description( isom_stsd_t *stsd, lsmash_audio_
     if( lsmash_check_codec_type_identical( audio_type, ISOM_CODEC_TYPE_MP4A_AUDIO )
      || lsmash_check_codec_type_identical( audio_type,   QT_CODEC_TYPE_MP4A_AUDIO ) )
     {
+        /* A file without 'ftyp' and 'iods' is regarded as a QuickTime file unless it is explicitly marked as ISOBMFF-compatible,
+         * as the fake file of a raw stream exposed by an importer is. */
         if( (LSMASH_IS_EXISTING_BOX( file->ftyp ) && file->ftyp->major_brand == ISOM_BRAND_TYPE_QT)
          || (LSMASH_IS_NON_EXISTING_BOX( file->ftyp )
-          && (file->qt_compatible || (LSMASH_IS_EXISTING_BOX( file->moov ) && LSMASH_IS_NON_EXISTING_BOX( file->moov->iods )))) )
+          && (file->qt_compatible || (!file->isom_compatible && LSMASH_IS_EXISTING_BOX( file->moov ) && LSMASH_IS_NON_EXISTING_BOX( file->moov->iods )))) )
             err = description_set_qtff_mp4a_description( audio, summary );
         else
             err = description_set_isom_mp4a_description( audio, summary );

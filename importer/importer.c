@@ -30,6 +30,7 @@
 #include "importer.h"
 #include "core/movie.h"
 #include "core/track.h"
+#include "core/timeline.h"
 
 /***************************************************************************
     importer classes
@@ -275,7 +276,20 @@ int lsmash_importer_get_access_unit( importer_t *importer, uint32_t track_number
     if( !importer->funcs.get_accessunit )
         return LSMASH_ERR_NAMELESS;
     *p_sample = NULL;
-    return importer->funcs.get_accessunit( importer, track_number, p_sample );
+    if( !importer->resume_enabled )
+        return importer->funcs.get_accessunit( importer, track_number, p_sample );
+    /* The Media Timeline shares the byte stream, so it may have moved the position since the last call.
+     * The comparison keeps a sequential reader, including an unseekable one, from any needless seek. */
+    lsmash_bs_t *bs = importer->bs;
+    if( lsmash_bs_get_stream_pos( bs ) != importer->resume_pos
+     && lsmash_bs_read_seek( bs, (int64_t)importer->resume_pos, SEEK_SET ) < 0 )
+    {
+        importer->status = IMPORTER_ERROR;
+        return LSMASH_ERR_NAMELESS;
+    }
+    int ret = importer->funcs.get_accessunit( importer, track_number, p_sample );
+    importer->resume_pos = lsmash_bs_get_stream_pos( bs );
+    return ret;
 }
 
 /* Return 0 if failed, otherwise succeeded. */
@@ -378,9 +392,12 @@ fail:
 
 void lsm_importer_break_fake_movie( importer_t *importer )
 {
-    if( !importer )
+    /* A walker shares the file with the original importer and owns no fake boxes. */
+    if( !importer || importer->is_walker )
         return;
     lsm_box_remove_by_itself( importer->file->moov );
+    /* The compatibility flag is set only together with a fake movie by lsm_importer_setup_fake_track(). */
+    importer->file->isom_compatible = 0;
 }
 
 /* Build a fake moov / trak / stsd for a raw stream so that it can be treated as if it were an ISOBMFF/QTFF file.
@@ -399,12 +416,27 @@ int lsm_importer_setup_fake_track
 {
     if( !importer || !summary || !track_ID || timescale == 0 )
         return LSMASH_ERR_FUNCTION_PARAM;
+    if( importer->is_walker )
+    {
+        /* The original importer has already made the fake boxes of the same stream. */
+        *track_ID = 0;
+        return 0;
+    }
     int err;
     lsmash_movie_parameters_t movie_param = { 0 };
     lsmash_track_parameters_t track_param = { 0 };
     lsmash_media_parameters_t media_param = { 0 };
+    /* The flavor of the fake file is decided here. An importer that exposes a QuickTime flavored stream (WAVE) has marked the
+     * file as QuickTime-compatible beforehand and keeps it so. Any other codec exposed through a fake track is defined by
+     * ISOBMFF, so the file is marked as ISOBMFF-compatible, which lsmash_set_media_parameters() and lsmash_add_sample_entry()
+     * require. The flag is restored on failure. */
+    if( !importer->file->qt_compatible )
+        importer->file->isom_compatible = 1;
     if( (err = lsm_importer_make_fake_movie( importer )) < 0 )
+    {
+        importer->file->isom_compatible = 0;
         return err;
+    }
     if( (err = lsm_importer_make_fake_track( importer, media_type, track_ID )) < 0
      || (err = lsmash_get_movie_parameters( importer->root, &movie_param )) < 0
      || (err = lsmash_get_track_parameters( importer->root, *track_ID, &track_param )) < 0
@@ -430,5 +462,232 @@ int lsm_importer_setup_fake_track
     return 0;
 fail:
     lsm_importer_break_fake_movie( importer );
+    return err;
+}
+
+void lsm_importer_mark_resume_pos( importer_t *importer )
+{
+    if( !importer )
+        return;
+    importer->resume_enabled = 1;
+    importer->resume_pos     = lsmash_bs_get_stream_pos( importer->bs );
+}
+
+/* Find the sample entry of the fake track that is identical to the summary, or append it as a new one. */
+static int importer_get_sample_entry_index
+(
+    importer_t       *importer,
+    uint32_t          track_ID,
+    lsmash_summary_t *summary,
+    uint32_t         *index
+)
+{
+    uint32_t count = lsmash_count_summary( importer->root, track_ID );
+    for( uint32_t i = 1; i <= count; i++ )
+    {
+        lsmash_summary_t *existing = lsmash_get_summary( importer->root, track_ID, i );
+        if( !existing )
+            return LSMASH_ERR_NAMELESS;
+        int diff = lsmash_compare_summary( existing, summary );
+        lsmash_cleanup_summary( existing );
+        if( diff < 0 )
+            return diff;
+        if( diff == 0 )
+        {
+            *index = i;
+            return 0;
+        }
+    }
+    int added = lsmash_add_sample_entry( importer->root, track_ID, summary );
+    if( added <= 0 )
+        return LSMASH_ERR_NAMELESS;
+    *index = (uint32_t)added;
+    return 0;
+}
+
+int lsm_importer_construct_timeline_by_walk
+(
+    importer_t *importer,
+    uint32_t    track_number
+)
+{
+    if( !importer
+     || track_number != 1
+     || !importer->funcs.probe
+     || !importer->funcs.get_accessunit
+     || !importer->file
+     || !importer->bs )
+        return LSMASH_ERR_FUNCTION_PARAM;
+    uint32_t track_ID = lsmash_get_track_ID( importer->root, track_number );
+    if( track_ID == 0 )
+        return LSMASH_ERR_NAMELESS;
+    if( lsm_timeline_get( importer->root, track_ID ) )
+        return 0;   /* already constructed */
+    uint32_t timescale = lsmash_get_media_timescale( importer->root, track_ID );
+    if( timescale == 0 )
+        return LSMASH_ERR_NAMELESS;
+    lsmash_bs_t *bs        = importer->bs;
+    uint64_t     saved_pos = lsmash_bs_get_stream_pos( bs );
+    size_t       saved_max = bs->buffer.max_size;
+    /* The walker is a private clone which runs the same functions on the same byte stream.
+     * Its own state keeps the original importer untouched. */
+    importer_t walker =
+    {
+        .class     = importer->class,
+        .log_level = LSMASH_LOG_QUIET,
+        .root      = importer->root,
+        .file      = importer->file,
+        .bs        = bs,
+        .funcs     = importer->funcs,
+        .is_walker = 1
+    };
+    int err;
+    isom_timeline_t *timeline = lsm_timeline_create();
+    if( !timeline )
+        return LSMASH_ERR_MEMORY_ALLOC;
+    walker.summaries = lsmash_list_create( lsmash_cleanup_summary );
+    if( !walker.summaries )
+    {
+        lsm_timeline_destroy( timeline );
+        return LSMASH_ERR_MEMORY_ALLOC;
+    }
+    isom_portable_chunk_t *chunk = NULL;
+    uint32_t sample_count    = 0;
+    uint32_t max_sample_size = 0;
+    uint64_t media_duration  = 0;
+    if( lsmash_bs_read_seek( bs, 0, SEEK_SET ) < 0 )
+    {
+        err = LSMASH_ERR_NAMELESS;
+        goto fail;
+    }
+    if( (err = walker.funcs.probe( &walker )) < 0 )
+        goto fail;
+    if( (err = lsm_timeline_setup_raw( timeline, track_ID, timescale )) < 0 )
+        goto cleanup_walker;
+    if( !(chunk = lsm_timeline_add_raw_chunk( timeline, importer->file )) )
+    {
+        err = LSMASH_ERR_MEMORY_ALLOC;
+        goto cleanup_walker;
+    }
+    /* Walk all access units. A sample has to wait for its successor since its duration is the difference of the DTSs. */
+    isom_sample_info_t pending       = { 0 };
+    uint64_t           pending_dts   = 0;
+    uint32_t           index         = 1;
+    uint32_t           last_duration = 0;
+    uint32_t           last_delta    = 0;
+    int                has_pending   = 0;
+    uint64_t           first_pos     = 0;
+    uint64_t           end_pos       = 0;
+    while( 1 )
+    {
+        importer_status  status_before = walker.status;
+        lsmash_sample_t *sample        = NULL;
+        err = walker.funcs.get_accessunit( &walker, track_number, &sample );
+        if( err < 0 )
+        {
+            lsmash_delete_sample( sample );
+            goto cleanup_walker;
+        }
+        if( err == IMPORTER_EOF || !sample )
+        {
+            lsmash_delete_sample( sample );
+            break;
+        }
+        if( status_before == IMPORTER_CHANGE )
+        {
+            /* The importer has switched the summary of the stream, so does the sample entry that the samples refer to. */
+            lsmash_summary_t *summary = (lsmash_summary_t *)lsmash_list_get_entry_data( walker.summaries, track_number );
+            if( !summary
+             || (err = importer_get_sample_entry_index( importer, track_ID, summary, &index )) < 0 )
+            {
+                lsmash_delete_sample( sample );
+                if( err >= 0 )
+                    err = LSMASH_ERR_NAMELESS;
+                goto cleanup_walker;
+            }
+        }
+        if( has_pending )
+        {
+            if( sample->dts < pending_dts )
+            {
+                lsmash_delete_sample( sample );
+                err = LSMASH_ERR_INVALID_DATA;
+                goto cleanup_walker;
+            }
+            pending.duration = (uint32_t)(sample->dts - pending_dts);
+            last_duration    = pending.duration;
+            if( (err = lsm_timeline_add_sample_info_entry( timeline, &pending )) < 0 )
+            {
+                lsmash_delete_sample( sample );
+                goto cleanup_walker;
+            }
+            media_duration += pending.duration;
+            ++sample_count;
+        }
+        else
+            first_pos = sample->pos;
+        if( sample_count == UINT32_MAX - 1 )
+        {
+            lsmash_delete_sample( sample );
+            err = LSMASH_ERR_INVALID_DATA;
+            goto cleanup_walker;
+        }
+        pending = (isom_sample_info_t)
+        {
+            .pos      = sample->pos,
+            .duration = 0,
+            .offset   = (uint32_t)(sample->cts - sample->dts),
+            .length   = sample->length,
+            .index    = index,
+            .chunk    = chunk,
+            .prop     = sample->prop
+        };
+        pending_dts     = sample->dts;
+        has_pending     = 1;
+        end_pos         = LSMASH_MAX( end_pos, sample->pos + sample->length );
+        max_sample_size = LSMASH_MAX( max_sample_size, sample->length );
+        lsmash_delete_sample( sample );
+        /* The importer tells the duration of the last sample once it has reached the end of the stream. */
+        if( walker.status == IMPORTER_EOF
+         && (last_delta = walker.funcs.get_last_delta ? walker.funcs.get_last_delta( &walker, track_number ) : 0) > 0 )
+            break;
+    }
+    if( has_pending )
+    {
+        if( last_delta == 0 && walker.funcs.get_last_delta )
+            last_delta = walker.funcs.get_last_delta( &walker, track_number );
+        if( last_delta == 0 )
+            last_delta = last_duration;
+        pending.duration = last_delta;
+        if( (err = lsm_timeline_add_sample_info_entry( timeline, &pending )) < 0 )
+            goto cleanup_walker;
+        media_duration += pending.duration;
+        ++sample_count;
+    }
+    if( sample_count == 0 )
+    {
+        err = LSMASH_ERR_INVALID_DATA;
+        goto cleanup_walker;
+    }
+    chunk->data_offset = first_pos;
+    chunk->length      = end_pos - first_pos;
+
+    if( (err = lsm_timeline_finish_raw( timeline, sample_count, max_sample_size, media_duration )) < 0
+     || (err = lsm_timeline_register( importer->file, timeline )) < 0 )
+        goto cleanup_walker;
+    timeline = NULL;    /* owned by the file */
+    err = 0;
+cleanup_walker:
+    if( walker.info && walker.funcs.cleanup )
+        walker.funcs.cleanup( &walker );
+fail:
+    lsmash_list_destroy( walker.summaries );
+    lsm_timeline_destroy( timeline );
+    /* Give the shared byte stream back to the sequential reader. */
+    bs->buffer.max_size = saved_max;
+    if( lsmash_bs_get_stream_pos( bs ) != saved_pos
+     && lsmash_bs_read_seek( bs, (int64_t)saved_pos, SEEK_SET ) < 0
+     && err >= 0 )
+        err = LSMASH_ERR_NAMELESS;
     return err;
 }

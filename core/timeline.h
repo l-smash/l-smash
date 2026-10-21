@@ -126,6 +126,14 @@ int lsm_timeline_add_sample_info_entry
     isom_sample_info_t *src_info
 );
 
+/* Append a chunk that belongs to the timeline and return it. The returned chunk stays valid as long as the timeline does,
+ * so that a raw stream importer need not keep a chunk of its own alive. The caller sets the extent of the chunk. */
+isom_portable_chunk_t *lsm_timeline_add_raw_chunk
+(
+    isom_timeline_t *timeline,
+    lsmash_file_t   *file
+);
+
 void lsm_timeline_set_sample_filter
 (
     isom_timeline_t           *timeline,

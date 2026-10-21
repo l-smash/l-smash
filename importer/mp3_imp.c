@@ -2,6 +2,7 @@
  * mp3_imp.c
  *****************************************************************************
  * Copyright (C) 2010-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Takashi Hirata <silverfilain@gmail.com>
  * Contributors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
@@ -316,6 +317,8 @@ static int mp3_imp_get_accessunit( importer_t *importer, uint32_t track_number, 
         *p_sample = sample;
     }
     uint8_t *frame_data = sample->data;
+    /* The frame is stored as it is in the stream. Its header has been consumed already. */
+    sample->pos = lsmash_bs_get_stream_pos( importer->bs ) - MP4SYS_MP3_HEADER_LENGTH;
     memcpy( frame_data, mp3_imp->raw_header, MP4SYS_MP3_HEADER_LENGTH );
     frame_size -= MP4SYS_MP3_HEADER_LENGTH;
     if( lsmash_bs_get_bytes_ex( importer->bs, frame_size, frame_data + MP4SYS_MP3_HEADER_LENGTH ) != frame_size )
@@ -475,9 +478,17 @@ static int mp3_imp_probe( importer_t *importer )
         goto fail;
     }
     /* importer status */
+    uint32_t track_ID;
+    if( (err = lsm_importer_setup_fake_track( importer, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK, summary->frequency,
+                                              (lsmash_summary_t *)summary, &track_ID )) < 0 )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        goto fail;
+    }
     if( lsmash_list_add_entry( importer->summaries, summary ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        lsm_importer_break_fake_movie( importer );
         err = LSMASH_ERR_MEMORY_ALLOC;
         goto fail;
     }
@@ -486,6 +497,7 @@ static int mp3_imp_probe( importer_t *importer )
     memcpy( mp3_imp->raw_header, buf, MP4SYS_MP3_HEADER_LENGTH );
     importer->info   = mp3_imp;
     importer->status = IMPORTER_OK;
+    lsm_importer_mark_resume_pos( importer );
     return 0;
 fail:
     mp3_imp_remove( mp3_imp );
@@ -509,5 +521,6 @@ const importer_functions mp4sys_mp3_importer =
     mp3_imp_probe,
     mp3_imp_get_accessunit,
     mp3_imp_get_last_delta,
-    mp3_imp_cleanup
+    mp3_imp_cleanup,
+    lsm_importer_construct_timeline_by_walk
 };

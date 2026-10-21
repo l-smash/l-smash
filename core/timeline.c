@@ -665,6 +665,26 @@ int lsm_timeline_add_sample_info_entry
     return timeline_add_sample_info_entry( timeline, src_info );
 }
 
+isom_portable_chunk_t *lsm_timeline_add_raw_chunk
+(
+    isom_timeline_t *timeline,
+    lsmash_file_t   *file
+)
+{
+    if( !timeline || !file )
+        return NULL;
+    isom_portable_chunk_t chunk =
+    {
+        .data_offset = 0,
+        .length      = 0,
+        .number      = 1,
+        .file        = file
+    };
+    if( timeline_add_portable_chunk_entry( timeline, &chunk ) < 0 )
+        return NULL;
+    return (isom_portable_chunk_t *)lsm_list_tail( timeline->chunk_list );
+}
+
 int lsm_timeline_finish_raw
 (
     isom_timeline_t *timeline,

@@ -318,7 +318,6 @@ static int ivf_imp_probe( importer_t *importer )
     ivf_importer_t *ivf_imp = ivf_imp_create( importer );
     if( !ivf_imp )
         return LSMASH_ERR_MEMORY_ALLOC;
-    int fake_isom_compatible = 0;   /* whether this probe has marked the file as ISOBMFF-compatible */
     int err = lsm_av1_setup_parser( &ivf_imp->parser, NULL );
     if( err < 0 )
         goto fail;
@@ -419,8 +418,6 @@ static int ivf_imp_probe( importer_t *importer )
      * The media timescale is the frame rate field of the IVF header. A time stamp counted in the time scale field of
      * the IVF header is converted into it by multiplying the time scale, exactly as the muxer does with the timebase. */
     uint32_t track_ID;
-    importer->file->isom_compatible = 1;
-    fake_isom_compatible            = 1;
     if( (err = lsm_importer_setup_fake_track( importer, ISOM_MEDIA_HANDLER_TYPE_VIDEO_TRACK, gh->frame_rate,
                                               (lsmash_summary_t *)summary, &track_ID )) < 0 )
     {
@@ -452,8 +449,6 @@ static int ivf_imp_probe( importer_t *importer )
     importer->status = IMPORTER_OK;
     return 0;
 fail:
-    if( fake_isom_compatible )
-        importer->file->isom_compatible = 0;
     ivf_imp_remove( ivf_imp );
     importer->info = NULL;
     return err;

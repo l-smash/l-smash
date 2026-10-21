@@ -2,6 +2,7 @@
  * dts_imp.c
  *****************************************************************************
  * Copyright (C) 2012-2017 L-SMASH project
+ * Copyright (c) 2026 Yusuke Nakamura
  *
  * Authors: Yusuke Nakamura <muken.the.vfrmaniac@gmail.com>
  *
@@ -45,6 +46,8 @@ typedef struct
     uint32_t au_length;
     uint8_t *incomplete_au;
     uint32_t incomplete_au_length;
+    uint64_t au_pos;                /* file offset of the first byte of au */
+    uint64_t incomplete_au_pos;     /* file offset of the first byte of incomplete_au */
     uint32_t au_number;
 } dts_importer_t;
 
@@ -180,6 +183,7 @@ static int dts_imp_get_next_accessunit_internal( importer_t *importer )
         {
             memcpy( dts_imp->au, dts_imp->incomplete_au, dts_imp->incomplete_au_length );
             dts_imp->au_length            = dts_imp->incomplete_au_length;
+            dts_imp->au_pos               = dts_imp->incomplete_au_pos;
             dts_imp->incomplete_au_length = 0;
             info->exss_count = (info->substream_type == DTS_SUBSTREAM_TYPE_EXTENSION);
             if( importer->status == IMPORTER_EOF )
@@ -196,7 +200,9 @@ static int dts_imp_get_next_accessunit_internal( importer_t *importer )
             dts_imp->au            = lsmash_withdraw_buffer( dts_imp->au_buffers, 1 );
             dts_imp->incomplete_au = lsmash_withdraw_buffer( dts_imp->au_buffers, 2 );
         }
-        /* Append frame data. */
+        /* Append frame data. The frames of an access unit are contiguous in the stream. */
+        if( dts_imp->incomplete_au_length == 0 )
+            dts_imp->incomplete_au_pos = dts_imp->next_frame_pos;
         memcpy( dts_imp->incomplete_au + dts_imp->incomplete_au_length, dts_imp->buffer, info->frame_size );
         dts_imp->incomplete_au_length += info->frame_size;
     }
@@ -227,6 +233,7 @@ static int dts_imp_get_accessunit( importer_t *importer, uint32_t track_number, 
     *p_sample = sample;
     memcpy( sample->data, dts_imp->au, dts_imp->au_length );
     sample->length                 = dts_imp->au_length;
+    sample->pos                    = dts_imp->au_pos;
     sample->dts                    = dts_imp->au_number++ * summary->samples_in_frame;
     sample->cts                    = sample->dts;
     sample->prop.ra_flags          = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC;
@@ -329,12 +336,21 @@ static int dts_imp_probe( importer_t *importer )
     if( importer->status != IMPORTER_EOF )
         importer->status = IMPORTER_OK;
     dts_imp->au_number = 0;
+    uint32_t track_ID;
+    if( (err = lsm_importer_setup_fake_track( importer, ISOM_MEDIA_HANDLER_TYPE_AUDIO_TRACK, summary->frequency,
+                                              (lsmash_summary_t *)summary, &track_ID )) < 0 )
+    {
+        lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        goto fail;
+    }
     if( lsmash_list_add_entry( importer->summaries, summary ) < 0 )
     {
         lsmash_cleanup_summary( (lsmash_summary_t *)summary );
+        lsm_importer_break_fake_movie( importer );
         err = LSMASH_ERR_MEMORY_ALLOC;
         goto fail;
     }
+    lsm_importer_mark_resume_pos( importer );
     return 0;
 fail:
     dts_imp_remove( dts_imp );
@@ -362,5 +378,6 @@ const importer_functions dts_importer =
     dts_imp_probe,
     dts_imp_get_accessunit,
     dts_imp_get_last_delta,
-    dts_imp_cleanup
+    dts_imp_cleanup,
+    lsm_importer_construct_timeline_by_walk
 };

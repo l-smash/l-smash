@@ -1329,6 +1329,10 @@ mp4sys_descriptor_t *lsm_mp4sys_get_descriptor( lsmash_bs_t *bs, void *parent )
 
 static uint8_t *mp4sys_export_DecoderSpecificInfo( mp4sys_ES_Descriptor_t *esd, uint32_t *dsi_payload_length )
 {
+    /* DecoderSpecificInfo can be absent, e.g. a stream of the Legacy Interface of MPEG-1/2 Audio. Tell that its length is 0
+     * so that the caller does not take the absence for a failure. */
+    if( dsi_payload_length )
+        *dsi_payload_length = 0;
     if( !esd || !esd->decConfigDescr || !esd->decConfigDescr->decSpecificInfo )
         return NULL;
     mp4sys_DecoderSpecificInfo_t *dsi = (mp4sys_DecoderSpecificInfo_t *)esd->decConfigDescr->decSpecificInfo;
