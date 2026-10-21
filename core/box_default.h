@@ -21,6 +21,31 @@
 
 /* This file is available under an ISC license. */
 
+/*---------------------------------------------------------------------------
+ * Null-Object Sentinel Pattern for Box Hierarchy Navigation
+ *
+ * In ISOBMFF / QTFF, deeply nested box chains such as:
+ *   trak->mdia->minf->stbl->stsd
+ * are accessed pervasively throughout muxing, demuxing, and timeline construction.
+ * If absent predefined child pointers were represented as NULL, every intermediate
+ * dereference would require a defensive NULL check.
+ *
+ * Instead, L-SMASH initializes every absent predefined child pointer in a container
+ * box to a read-only static sentinel constant (`isom_<box>_box_default`) flagged with
+ * `LSMASH_NON_EXISTING_BOX`. Each container sentinel's own child pointers recursively
+ * point to their respective child sentinels (defined in `core/box_default.c`).
+ *
+ * Consequently:
+ * 1. Arbitrary multi-level pointer chains (`trak->mdia->minf->stbl->stts`) can be
+ *    dereferenced unconditionally without intermediate NULL checks; if any ancestor
+ *    is absent, the chain safely resolves to the leaf's read-only sentinel constant.
+ * 2. Callers only need a single `LSMASH_IS_EXISTING_BOX( leaf )` or
+ *    `LSMASH_IS_NON_EXISTING_BOX( leaf )` check at the end of the chain.
+ * 3. `ALLOCATE_BOX( box_name )` clones the sentinel template via `lsmash_memdup()`
+ *    and clears `LSMASH_NON_EXISTING_BOX`, guaranteeing that newly allocated boxes
+ *    automatically start with all child pointers wired to valid non-existing sentinels.
+ *---------------------------------------------------------------------------*/
+
 #define ALLOCATE_BOX( box_name ) \
     (isom_##box_name##_t *)lsm_box_default_allocate( &isom_##box_name##_box_default, \
                                                      sizeof(isom_##box_name##_box_default) )

@@ -858,6 +858,27 @@ static int stbl_add_cts( isom_stbl_t *stbl, uint64_t dts, uint64_t cts, int non_
     return sample_offset != 0 ? stbl_add_initial_sample_offset( stbl, sample_offset ) : 0;
 }
 
+/* Chimera specification boundary for Composition Time to Sample (`ctts`):
+ *
+ * `ctts` `sample_offset` has three distinct specification regimes:
+ * 1. ISOBMFF `ctts` version 0 (ISO/IEC 14496-12 prior to `iso4`):
+ *    `sample_offset` is an unsigned 32-bit integer (`uint32_t`). Negative composition
+ *    offsets (`cts < dts`) are forbidden at the `ctts` level and must instead be
+ *    compensated via an Edit List (`elst`).
+ * 2. ISOBMFF `ctts` version 1 (`iso4` and later brands):
+ *    `sample_offset` is a signed 32-bit two's-complement integer (`int32_t`), with
+ *    `INT32_MIN` (`0x80000000`, `ISOM_NON_OUTPUT_SAMPLE_OFFSET`) reserved to signal
+ *    non-output samples.
+ * 3. QuickTime File Format (QTFF):
+ *    QTFF only defines `ctts` version 0, yet defines `sample_offset` as a SIGNED
+ *    32-bit two's-complement integer (`int32_t`) and pairs it with the `cslg`
+ *    (Composition Shift Least Greatest) atom to signal the decode-to-composition
+ *    timeline shift (`ctd_shift`).
+ *
+ * Therefore, if `cts < dts` is encountered in a hybrid ISOBMFF+QTFF file where
+ * `max_isom_version >= 4` and `qt_compatible == 1`, we cannot use `ctts` v1
+ * (undefined in QTFF) nor negative offsets in `ctts` v0 (illegal in ISOBMFF v0),
+ * so `stbl_check_sample_offset_compatibility` rejects the incompatible combination. */
 static int stbl_check_sample_offset_compatibility( lsmash_file_t *file, uint64_t dts, uint64_t cts, int non_output_sample )
 {
     if( non_output_sample )
@@ -1199,6 +1220,28 @@ static int stbl_roll_grouping_established( isom_roll_group_t *group )
     return 0;
 }
 
+/* Roll Recovery Sample Group (`sbgp` / `sgpd`) Deferred Deduplication:
+ *
+ * Why can't adjacent `sbgp` group assignment entries be merged immediately as samples
+ * arrive?
+ * For post-roll recovery (e.g., H.264/HEVC GDR recovery points), the exact recovery
+ * distance (`roll_distance`) or completeness of a group is not known when the first
+ * sample of the group is appended; it is only determined once the target recovery sample
+ * arrives later in the stream (`group->described == ROLL_DISTANCE_DETERMINED`) and the
+ * group boundary is closed (`group->delimited == 1`).
+ *
+ * Consequently, in-flight groups are buffered in `cache->roll.pool` while placeholder
+ * assignment entries are appended to `sbgp->list`. Each pooled `isom_roll_group_t`
+ * references its corresponding `sbgp->list` slot by 1-based index (`assignment_number`)
+ * rather than a raw pointer, because `lsm_list_remove()` shifts subsequent slots.
+ *
+ * `current_group_number` starts at `lsm_list_count(sbgp->list) - lsm_list_count(pool) + 1`
+ * (the 1-based index of the oldest still-pooled group in `sbgp->list`), and `prev_assignment`
+ * points to the already-finalized entry immediately preceding the pool (`current_group_number - 1`).
+ * Whenever a newly determined group has the same `group_description_index` as `prev_assignment`,
+ * its `sample_count` is folded into `prev_assignment`, the redundant `sbgp->list` entry is
+ * removed, and `next_group->assignment_number` is decremented for all remaining pooled groups
+ * to keep their 1-based indices synchronized with the compacted `sbgp->list`. */
 static int stbl_deduplicate_roll_group( isom_sbgp_t *sbgp, lsm_list_t *pool )
 {
     /* Deduplication */

@@ -282,9 +282,18 @@ DEFINE_SIMPLE_CONTAINER_BOX_DEFAULT_CONSTANT( file_abstract, ftyp, moov, mdat, m
  * here, there are no explicit default constant definitions of indivisual predefined box-lists. */
 
 
-/* Allocate box by default settings.
+/* Allocate a live box instance by cloning its static non-existing sentinel template.
  *
- * Use this function to allocate boxes as much as possible, it covers forgetful settings. */
+ * Why clone `nonexist_ptr` instead of `lsmash_malloc_zero()`?
+ * Cloning `isom_<box>_box_default` copies two critical invariants in a single `memcpy`:
+ * 1. `box->nonexist_ptr` is pre-populated with `&isom_<box>_box_default`, allowing
+ *    `box_remove_predefined()` to restore the parent's struct member pointer back to
+ *    the exact type-specific sentinel when the child box is destroyed.
+ * 2. Any predefined child box pointers inside a container box (`moov`, `trak`, `mdia`,
+ *    `minf`, `stbl`, etc.) are pre-wired to their own static non-existing sentinels
+ *    rather than `NULL`, preserving the Null-Object Sentinel invariant immediately upon
+ *    allocation. If allocation fails, returning `nonexist_ptr` allows the caller to
+ *    handle failure uniformly via `LSMASH_IS_NON_EXISTING_BOX()`. */
 void *lsm_box_default_allocate
 (
     const void  *nonexist_ptr,

@@ -2035,6 +2035,26 @@ static int description_set_qtff_lpcm_description( isom_audio_entry_t *audio, lsm
 
 static void description_set_samplerate_division_of_media_timescale( isom_audio_entry_t *audio, int strict );
 
+/* ISO/IEC 23003-5 Uncompressed Audio (`ipcm` / `fpcm`) Sample Entry Construction:
+ *
+ * Unlike QuickTime LPCM (which uses codec 4CCs `'lpcm'`, `'sowt'`, `'twos'`, `'in24'`,
+ * `'in32'`, `'fl32'`, `'fl64'` and QTFF Sound Sample Description v1/v2 with `'wave'`/`'enda'`
+ * or `formatSpecificFlags`), ISO/IEC 23003-5 defines two canonical SampleEntry 4CCs
+ * for pure ISOBMFF containers:
+ *   - `'ipcm'`: Integer Linear PCM (valid `PCM_sample_size`: 16, 24, or 32 bits)
+ *   - `'fpcm'`: IEEE 754 Floating-Point PCM (valid `PCM_sample_size`: 32 or 64 bits)
+ *
+ * Key specification requirements enforced here:
+ * 1. Mandatory `pcmC` (PCM Configuration Box): Carries `format_flags` (`0x00` = big-endian,
+ *    `0x01` = little-endian; all other bits reserved 0) and `PCM_sample_size`.
+ * 2. High Sampling Rate (`summary->frequency > 65535 Hz`): Because the legacy 16.16
+ *    fixed-point `samplerate` field in `AudioSampleEntry` v0 overflows above 65535 Hz,
+ *    ISO/IEC 14496-12 requires upgrading both `stsd->version = 1` and `audio->version = 1`
+ *    (`AudioSampleEntryV1`, which unlike QTFF v1 has NO 16-byte extension fields) and
+ *    attaching a `srat` (Sampling Rate Box) holding the full 32-bit integer sampling rate.
+ * 3. Channel Layout (`chnl`): Attached by `lsm_description_setup_audio_sample_entry` when
+ *    ISO/IEC 23003-5 `chnl` codec-specific data is present (or synthesized by the WAVE
+ *    importer for multi-channel PCM). */
 static int description_set_isom_lpcm_description( isom_audio_entry_t *audio, lsmash_audio_summary_t *summary )
 {
     if( summary->channels == 0 || summary->frequency == 0 )

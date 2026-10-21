@@ -48,8 +48,22 @@ typedef int (*isom_extension_writer_t)( lsmash_bs_t *bs, isom_box_t *box );
 
 typedef int (*isom_bitrate_updater_t)( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_t sample_description_index );
 
-/* If size is 1, then largesize is actual size.
- * If size is 0, then this box is the last one in the file. */
+/* BaseBox common header fields shared by all L-SMASH box structs (`isom_*_t`).
+ *
+ * Architectural notes on parent/child ownership and teardown:
+ * - `extensions`: Every child box (whether predefined in the parent struct or an arbitrary
+ *   extension box) is registered in `parent->extensions`. This list is the SOLE owner of
+ *   the child box memory and invokes `lsm_box_remove_extension_box` during teardown.
+ * - `offset_in_parent` & `nonexist_ptr`: When a box is attached to a predefined member of
+ *   its parent struct (e.g., `stbl->stsd` or `moov->trak_list`), `offset_in_parent` records
+ *   `offsetof(parent_type, member)`. When the box is later destroyed via `parent->extensions`,
+ *   `box_remove_predefined()` uses `offset_in_parent` to locate the pointer field inside
+ *   `box->parent` and resets it to `box->nonexist_ptr` (the static sentinel constant),
+ *   preventing dangling pointers while preserving the Null-Object Sentinel invariant.
+ *
+ * Per ISO/IEC 14496-12:
+ * - If `size == 1`, the actual 64-bit box size is stored in the `largesize` field.
+ * - If `size == 0`, this box extends to the end of the file. */
 #define ISOM_BASEBOX_COMMON                                                                             \
         const lsmash_class_t       *class;                                                              \
         lsmash_root_t              *root;               /* pointer to root */                           \

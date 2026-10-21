@@ -253,6 +253,12 @@ void *lsmash_list_get_entry_data
 
 /*---------------------------------------------------------------------------
  * C99 Paged Block Array (lsm_list_t) Implementation
+ *
+ * `list_ensure_page` grows only the outer pointer directory (`list->pages`)
+ * geometrically while allocating each 256-element page block (`pages[p]`) once.
+ * Existing page blocks are never relocated by `lsmash_realloc`, guaranteeing
+ * that pointers returned by `lsm_list_append()` or `lsm_list_at()` remain valid
+ * for the lifetime of the element across any number of subsequent appends.
  *---------------------------------------------------------------------------*/
 #define LSM_LIST_INIT_PAGE_CAPACITY 8U
 

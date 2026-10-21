@@ -67,6 +67,15 @@ void lsm_box_init_common_orig
     box->destruct   = destructor;
     box->size       = 0;
     box->type       = box_type;
+    /* Chimera specification boundary (`stsd` vs. SampleEntry):
+     * Although `stsd` (Sample Description Box) is a FullBox, its immediate children
+     * (VisualSampleEntry, AudioSampleEntry, etc.) are BaseBoxes that start with 6 reserved
+     * bytes + 16-bit `data_reference_index`, followed by a format-specific 16-bit `version`
+     * field (used by QTFF Sound/Video Sample Description v0/v1/v2 and ISOBMFF AudioSampleEntryV1).
+     * Moreover, certain SampleEntry 4CCs (such as `'mp4a'`, `'alac'`, or `'text'`) collide
+     * with 4CCs of nested FullBoxes/atoms (`QT_BOX_TYPE_MP4A`, `ISOM_BOX_TYPE_ALAC`, etc.).
+     * Checking `parent->type != ISOM_BOX_TYPE_STSD` ensures a SampleEntry is never
+     * misclassified as a FullBox even when its 4CC appears in `fullbox_type_table`. */
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) && lsm_box_is_fullbox( box ) )
     {
         box->version = 0;
@@ -147,6 +156,12 @@ void lsm_box_bs_put_common( lsmash_bs_t *bs, void *box )
         bs->error = 1;
         return;
     }
+    /* SampleEntry boxes directly under `stsd` must always emit an 8-byte BaseBox header
+     * (or 16-byte largesize header), never a 12-byte FullBox header (`version` + `flags`),
+     * even if `box->version` is non-zero (e.g., QTFF Sound Sample Description v1/v2 or
+     * ISOBMFF AudioSampleEntryV1) or if the SampleEntry 4CC matches a FullBox type.
+     * The SampleEntry's own 16-bit `version` field is serialized later inside the
+     * type-specific writer (`write_visual_description`, `write_audio_description`, etc.). */
     isom_box_t *parent = ((isom_box_t *)box)->parent;
     if( parent && lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) )
     {
@@ -585,6 +600,27 @@ static lsmash_entry_t *box_get_entry
 #define DEFINE_SIMPLE_PAGED_LIST_BOX_IN_LIST_REMOVER( func_name, box_name ) \
         DEFINE_SIMPLE_BOX_REMOVER_TEMPLATE( REMOVE_PAGED_LIST_BOX_IN_LIST, box_name )
 
+/*---------------------------------------------------------------------------
+ * Dual-Registration & Single-Ownership Box Teardown Architecture
+ *
+ * Every child box in L-SMASH is registered in `parent->extensions` (which owns
+ * the box allocation and frees the box struct via `lsm_box_remove_extension_box`),
+ * and optionally referenced by either:
+ *   (a) a singleton pointer member in `parent` (e.g. `moov->mvhd`, `stbl->stsd`), or
+ *   (b) a typed predefined linked list in `parent` (e.g. `moov->trak_list`, `stsd->list`).
+ *
+ * When a box is destroyed:
+ * 1. For singleton predefined children (`REMOVE_BOX` -> `box_remove_predefined`):
+ *    `box->offset_in_parent` holds `offsetof(parent_type, child_field)`. Using byte-offset
+ *    pointer arithmetic on `box->parent`, `box_remove_predefined()` locates the parent's
+ *    member pointer and restores it to `box->nonexist_ptr` (the static sentinel constant),
+ *    preserving the Null-Object Sentinel invariant without knowing the concrete parent type.
+ * 2. For predefined list children (`REMOVE_BOX_IN_LIST` -> `box_remove_in_predefined_list`):
+ *    `box->offset_in_parent` holds `offsetof(parent_type, child_list)`. The function locates
+ *    the `lsmash_entry_list_t` inside `box->parent`, zeroes `entry->data = NULL` so the
+ *    list's eliminator does not double-free the box, and frees only the `lsmash_entry_t`
+ *    link node. The actual box memory is freed once by `parent->extensions`.
+ *---------------------------------------------------------------------------*/
 static void box_remove_predefined( void *opaque_box )
 {
     isom_box_t *box = (isom_box_t *)opaque_box;

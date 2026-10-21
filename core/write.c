@@ -658,6 +658,9 @@ static int write_audio_description( lsmash_bs_t *bs, isom_box_t *box )
     lsmash_bs_put_be16( bs, data->compression_ID );
     lsmash_bs_put_be16( bs, data->packet_size );
     lsmash_bs_put_be32( bs, data->samplerate );
+    /* Only emit the 16-byte Sound Sample Description v1 extension fields when
+     * `LSMASH_QTFF_BASE` is set; ISOBMFF `AudioSampleEntryV1` (`stsd` v1 + `audio` v1)
+     * has no fields between `samplerate` and child extension boxes (`srat`, `pcmC`, `chnl`). */
     if( data->version == 1 && (data->manager & LSMASH_QTFF_BASE) )
     {
         lsmash_bs_put_be32( bs, data->samplesPerPacket );

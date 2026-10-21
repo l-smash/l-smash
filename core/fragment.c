@@ -940,6 +940,24 @@ static int fragment_finish_movie
             if( useful_first_sample_flags )
                 trun->flags |= ISOM_TR_FLAGS_FIRST_SAMPLE_FLAGS_PRESENT;
         }
+        /* `trex` -> `tfhd` Default Inheritance Optimization (4-Byte Saving Trick):
+         *
+         * In ISO/IEC 14496-12 Fragmented MP4, sample defaults follow a three-tier
+         * inheritance hierarchy:
+         *   `moov->mvex->trex` (movie-wide default)
+         *     -> `moof->traf->tfhd` (track-fragment default, optional via `tf_flags`)
+         *       -> `moof->traf->trun` (per-sample override, optional via `tr_flags`)
+         *
+         * When `useful_default_sample_duration` or `useful_default_sample_size` is true,
+         * the `trun` table omits per-sample durations/sizes and relies on the fragment's
+         * `tfhd` default. However, if `tfhd->default_sample_duration` (or `size` / `flags`)
+         * happens to equal the movie-wide `trex->default_sample_duration` established in
+         * the initial `moov`, signaling `ISOM_TF_FLAGS_DEFAULT_SAMPLE_*_PRESENT` in `tfhd`
+         * would waste 4 bytes per field in every single Movie Fragment!
+         *
+         * By leaving `ISOM_TF_FLAGS_DEFAULT_SAMPLE_*_PRESENT` cleared whenever the fragment's
+         * default matches `trex`, compliant demuxers automatically inherit the value from
+         * `trex` while L-SMASH saves up to 12 bytes per `tfhd` box. */
         if( useful_default_sample_duration && tfhd->default_sample_duration != trex->default_sample_duration )
             tfhd->flags |= ISOM_TF_FLAGS_DEFAULT_SAMPLE_DURATION_PRESENT;
         else

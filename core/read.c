@@ -680,6 +680,17 @@ static int read_mdhd( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
     return read_leaf_box_common_last_process( file, box, level, mdhd );
 }
 
+/* Chimera specification boundary for Handler Reference Box (`hdlr`):
+ *
+ * In QuickTime File Format (QTFF), `hdlr` is used in two distinct places:
+ *   1. Media Handler (`componentType == 'mhlr'`) inside `mdia`
+ *   2. Data Handler  (`componentType == 'dhlr'`) inside `minf` (to resolve `dref`)
+ * Furthermore, QTFF formats `componentName` as a Pascal string (1-byte length prefix).
+ *
+ * In ISO/IEC 14496-12 (ISOBMFF), `minf->hdlr` does not exist, `hdlr` may instead
+ * appear inside `mdia` or `meta`, `pre_defined` (`componentType`) is 0, and `name`
+ * is a null-terminated UTF-8 string. L-SMASH accepts `hdlr` under `mdia`, `meta`
+ * (both ISO FullBox and QTFF BaseBox), and `minf` to transparently demux both specs. */
 static int read_hdlr( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( (!lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_MDIA )
@@ -1556,6 +1567,34 @@ static int read_stsl( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
     return read_leaf_box_common_last_process( file, box, level, stsl );
 }
 
+/* Chimera specification boundary for `AudioSampleEntry` v0 / v1 / v2:
+ *
+ * Inside `stsd`, an audio sample entry starts with a BaseBox header + 6 reserved bytes
+ * + 16-bit `data_reference_index`, followed by a 16-bit `version` field whose layout
+ * and semantics diverge sharply between QTFF and ISOBMFF:
+ *
+ * 1. `audio->version == 0`:
+ *    Classic 20-byte body (`channelcount`, `samplesize`, `compression_ID`, `packet_size`,
+ *    and 16.16 fixed-point `samplerate` capped at 65535 Hz). Some legacy QTFF v0 files
+ *    append non-box trailing padding bytes which must be skipped before child boxes.
+ *
+ * 2. `audio->version == 1`:
+ *    CRITICAL AMBIGUITY: Both QTFF Sound Sample Description v1 AND ISO/IEC 14496-12
+ *    `AudioSampleEntryV1` set `audio->version == 1`, but their binary layouts differ!
+ *    - In QTFF (`parent->version == 0`, i.e., `stsd` version 0), Sound Sample Description v1
+ *      appends four 32-bit fields (`samplesPerPacket`, `bytesPerPacket`, `bytesPerFrame`,
+ *      `bytesPerSample` = 16 bytes) before any child extension atoms (`wave`, `chan`).
+ *    - In ISOBMFF (`parent->version == 1`, i.e., `stsd` version 1 per ISO/IEC 14496-12),
+ *      `AudioSampleEntryV1` appends NO extra fields before child boxes (such as `srat`,
+ *      `pcmC`, `chnl`). Checking `((isom_stsd_t *)parent)->version == 0` is the sole way
+ *      to disambiguate QTFF v1 from ISOBMFF `AudioSampleEntryV1`.
+ *
+ * 3. `audio->version == 2`:
+ *    QTFF Sound Sample Description v2 (`sizeOfStructOnly == 72`), used when `channels > 2`
+ *    or `samplerate > 65535 Hz` in QTFF. Replaces the 16.16 fixed-point rate and 16-bit
+ *    channel count with a 64-bit IEEE 754 float `audioSampleRate`, 32-bit `numAudioChannels`,
+ *    `constBitsPerChannel`, `formatSpecificFlags`, `constBytesPerAudioPacket`, and
+ *    `constLPCMFramesPerAudioPacket`. */
 static int read_audio_description( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( !lsmash_check_box_type_identical( parent->type, ISOM_BOX_TYPE_STSD ) )
@@ -2528,6 +2567,19 @@ static int read_mdat( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, 
     return 0;
 }
 
+/* Chimera specification boundary for Metadata Box (`meta`) and User Data Box (`udta`):
+ *
+ * `meta` exists in three distinct ecosystem conventions:
+ * 1. ISO/IEC 14496-12 `meta`: A FullBox (12-byte header with `version` and `flags`)
+ *    that may reside at file level, inside `moov`, or inside `trak`.
+ * 2. Apple iTunes Metadata `meta`: A FullBox placed inside `moov->udta->meta` containing
+ *    an `'mdir'` Handler Reference Box (`hdlr`) and an Item List Box (`ilst`).
+ * 3. QuickTime File Format (QTFF) Metadata Atom (`QT_BOX_TYPE_META`): A BaseBox (8-byte
+ *    header WITHOUT `version` or `flags`!) containing `hdlr` (`'mdta'`), `keys`, and `ilst`.
+ *
+ * By inspecting whether `box->type` was dispatched as `QT_BOX_TYPE_META` vs.
+ * `ISOM_BOX_TYPE_META`, L-SMASH sets `LSMASH_QTFF_BASE` so child boxes (`keys`, `ilst`)
+ * and box writers preserve the exact BaseBox vs. FullBox framing. */
 static int read_meta( lsmash_file_t *file, isom_box_t *box, isom_box_t *parent, int level )
 {
     if( (!lsmash_check_box_type_identical( parent->type, LSMASH_BOX_TYPE_UNSPECIFIED )

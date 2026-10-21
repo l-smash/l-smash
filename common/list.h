@@ -119,11 +119,33 @@ void *lsmash_list_get_entry_data
 /*---------------------------------------------------------------------------
  * C99 Paged Block Array (lsm_list_t) and Unified Accessor / Iterator API
  *
- * Stores value elements contiguously inside fixed-size pages of 2^K elements.
- * - Eliminates per-entry 24-byte linked-list node overhead and double malloc.
- * - Provides true O(1) indexed lookup via bit-shift and bit-mask addressing.
- * - Guarantees 100% pointer stability on append (existing pages never move).
- * - Zero-initialized { 0 } or NULL containers safely behave as 0 elements.
+ * Architectural Why & How:
+ * High-frequency sample tables (`stts`, `ctts`, `stsz`, `stz2`, `stss`, `stps`,
+ * `sdtp`, `stsc`, `stco`/`co64`, `sgpd`, `sbgp`, `trun`, `tfra`, `sidx`, `elst`)
+ * and timeline caches (`sample_pool`, `chunk_list`, `roll.pool`, `fragment->pool`)
+ * can easily grow to hundreds of thousands or millions of entries.
+ *
+ * Using a traditional doubly-linked list (`lsmash_entry_list_t`) for these tables
+ * incurs two heap allocations per entry (`lsmash_entry_t` + payload), 24 bytes of
+ * `next`/`prev`/`data` pointer overhead per element on 64-bit targets, poor CPU
+ * cache locality, and O(N) random access when jumping across indices.
+ * Conversely, a flat `realloc`-backed dynamic vector invalidates all existing
+ * element addresses whenever capacity doubles—which would fatally corrupt active
+ * pointers such as `trak->cache->chunk.current` pointing into `chunk_list`.
+ *
+ * `lsm_list_t` solves all three constraints simultaneously by partitioning elements
+ * into fixed-size pages of 2^8 = 256 contiguous value slots (`LSM_LIST_PAGE_SIZE`):
+ * 1. Zero double-malloc & zero node overhead: Elements are stored inline by value
+ *    inside 256-slot page blocks (`256 * elem_size` bytes per page).
+ * 2. True O(1) bit-shift addressing: Because the page size is a power of two (2^8),
+ *    `lsm_list_at(list, index)` resolves the page via `index >> 8` and the slot
+ *    offset via `index & 0xFF` in two CPU instructions without integer division.
+ * 3. 100% pointer address stability on append: Growing the container only reallocates
+ *    the top-level `uint8_t **pages` directory and allocates new 256-element pages;
+ *    previously allocated pages are never moved or reallocated in memory, so raw
+ *    element pointers (e.g., `chunk_list` entries referenced by `cache->chunk.current`)
+ *    remain 100% valid across arbitrary appends.
+ * 4. Zero-initialized `{ 0 }` or `NULL` containers safely report 0 elements.
  *---------------------------------------------------------------------------*/
 #define LSM_LIST_PAGE_SHIFT 8U
 #define LSM_LIST_PAGE_SIZE  (1U << LSM_LIST_PAGE_SHIFT)

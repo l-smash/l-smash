@@ -1418,6 +1418,24 @@ static int av1_parse_film_grain_params
     return 0;
 }
 
+/* Full Bit-Exact `uncompressed_header()` Parser (AV1 Bitstream Spec Section 5.9.2):
+ *
+ * Why must a container muxer/importer parse every single bit of `uncompressed_header()`
+ * down to quantization, segmentation, loop filter, CDEF, loop restoration, skip mode,
+ * global motion (including sub-exponential `decode_subexp`), and film grain parameters?
+ *
+ * In AV1, an `OBU_FRAME` concatenates `uncompressed_header()`, `byte_alignment()`, and
+ * `tile_group_obu()` inside a single OBU payload WITHOUT an explicit header-size field!
+ * Furthermore:
+ * 1. To determine when a multi-tile frame completes decoding (and thus when `decode_frame_wrapup()`
+ *    must update the 8 reference frame slots `RefValid[]`, `RefOrderHint[]`, `RefFrameType[]`,
+ *    and `RefFrameId[]`), the parser must read `tg_start` and `tg_end` at the beginning of
+ *    each `tile_group_obu()` and verify `tg_end == NumTiles - 1`.
+ * 2. For `OBU_FRAME`, `tile_group_obu()` starts at the byte boundary immediately after
+ *    `uncompressed_header()`. Even a 1-bit miscalculation in any conditional syntax element
+ *    of `uncompressed_header()` (such as `CodedLossless`, `AllLossless`, `skipModeAllowed`
+ *    derived from `RefOrderHint` relative distances, or `film_grain_params`) would misalign
+ *    the bit reader and read garbage for `tg_start`/`tg_end`. */
 static int av1_uncompressed_header
 (
     av1_parser_t *parser,
@@ -2130,6 +2148,20 @@ int lsm_av1_parse_temporal_unit
         *dst_length = out_offset;
     if( prop )
     {
+        /* Strict Random Access Classification (AV1-ISOBMFF v1.2.0 Section 2.4):
+         *
+         * A Temporal Unit (sample) is a Sync Sample (`stss` / `ISOM_SAMPLE_RANDOM_ACCESS_FLAG_SYNC`)
+         * IF AND ONLY IF:
+         *   1. Its first frame header has `frame_type == KEY_FRAME` and `show_frame == 1`
+         *      (and `show_existing_frame == 0`), AND
+         *   2. An `OBU_SEQUENCE_HEADER` appears BEFORE that first frame header within the
+         *      SAME Temporal Unit (`tu.with_sequence_header == 1`).
+         *
+         * Any intra/switching random access point that lacks an in-band Sequence Header
+         * in the same Temporal Unit, or is a delayed `KEY_FRAME` (`show_frame == 0`),
+         * `INTRA_ONLY_FRAME`, or `SWITCH_FRAME`, is NOT a Sync Sample in `stss`; it is
+         * instead classified as `ISOM_SAMPLE_RANDOM_ACCESS_FLAG_OPEN_RAP` (mapped to the
+         * `'rap '` Sample Group when ISOBMFF version >= 6). */
         prop->ra_flags = ISOM_SAMPLE_RANDOM_ACCESS_FLAG_NONE;
         if( tu.seen_frame_header && !tu.first_show_existing )
         {
