@@ -69,6 +69,8 @@ int waveform_audio_update_bitrate( isom_stbl_t *stbl, isom_mdhd_t *mdhd, uint32_
      || lsmash_check_codec_type_identical( sample_entry->type, QT_CODEC_TYPE_MP3_AUDIO ) )
     {
         /* MPEGLAYER3WAVEFORMAT.nBlockSize */
+        if( cbSize < 12 )
+            return LSMASH_ERR_INVALID_DATA;
         uint32_t nSamplesPerSec  = LSMASH_GET_LE32( &exdata[ 4] );
         uint16_t nFramesPerBlock = LSMASH_GET_LE16( &exdata[26] );
         uint16_t padding         = 0;   /* FIXME? */

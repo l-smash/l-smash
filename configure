@@ -438,7 +438,6 @@ sed -i.orig -e '/lsmash_win32_fopen/d' \
     -e '/lsmash_importer_construct_timeline/d' \
     -e '/lsmash_importer_get_track_count/d' \
     -e '/lsmash_duplicate_summary/d' liblsmash.ver
-cat liblsmash.ver
 # Remove backup file
 rm -f liblsmash.ver.orig
 
